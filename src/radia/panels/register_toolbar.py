@@ -654,50 +654,40 @@ class InductanceDialog(QDialog):
 		self.esim_group = QGroupBox("Workpiece Surface Impedance")
 		esim_layout = QGridLayout(self.esim_group)
 
-		esim_layout.addWidget(QLabel("Solver:"), 0, 0)
-		self.solver_combo = QComboBox()
-		self.solver_combo.addItems(["FEM", "BEM"])
-		self.solver_combo.setToolTip("FEM: 3D volume mesh (accurate, default)\n"
-		                             "BEM: surface mesh only (fast)")
-		esim_layout.addWidget(self.solver_combo, 0, 1)
-
-		esim_layout.addWidget(QLabel("Impedance:"), 1, 0)
+		esim_layout.addWidget(QLabel("Impedance:"), 0, 0)
 		self.model_combo = QComboBox()
 		self.model_combo.addItems(["SIBC", "ESIM", "Dowell"])
 		self.model_combo.setToolTip("SIBC: classical Z_s=(1+j)/sigma*delta (default)\n"
 		                            "ESIM: 1D cell problem (nonlinear OK)\n"
 		                            "Dowell: analytical slab (linear only)")
-		esim_layout.addWidget(self.model_combo, 1, 1)
+		esim_layout.addWidget(self.model_combo, 0, 1)
 
-		esim_layout.addWidget(QLabel("Material:"), 2, 0)
+		esim_layout.addWidget(QLabel("Material:"), 1, 0)
 		self.material_combo = QComboBox()
 		self.material_combo.addItems(["Steel", "Copper", "Aluminum"])
-		esim_layout.addWidget(self.material_combo, 2, 1)
+		esim_layout.addWidget(self.material_combo, 1, 1)
 
-		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 3, 0)
+		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 2, 0)
 		self.freq_edit = QLineEdit("50000")
-		esim_layout.addWidget(self.freq_edit, 3, 1)
+		esim_layout.addWidget(self.freq_edit, 2, 1)
 
-		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 4, 0)
+		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 3, 0)
 		self.sigma_edit = QLineEdit("2.0e6")
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
-		esim_layout.addWidget(self.sigma_edit, 4, 1)
+		esim_layout.addWidget(self.sigma_edit, 3, 1)
 
-		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 5, 0)
+		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 4, 0)
 		self.thickness_edit = QLineEdit("0.005")
 		self.thickness_edit.setToolTip("Half-thickness (slab) or radius (cylinder) for ESIM cell problem")
-		esim_layout.addWidget(self.thickness_edit, 5, 1)
+		esim_layout.addWidget(self.thickness_edit, 4, 1)
 
-		esim_layout.addWidget(QLabel("Curvature:"), 6, 0)
+		esim_layout.addWidget(QLabel("Curvature:"), 5, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
 			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
-			"  uses half-thickness as local radius of curvature.\n"
-			"  Accurate for delta/R > 0.1 where curvature affects Z_s by >2%.\n"
-			"None (flat): planar slab cell problem (cosh/sinh).\n"
-			"  Good approximation when delta << half-thickness.")
-		esim_layout.addWidget(self.curvature_combo, 6, 1)
+			"None (flat): planar slab cell problem (cosh/sinh).")
+		esim_layout.addWidget(self.curvature_combo, 5, 1)
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -737,52 +727,22 @@ class InductanceDialog(QDialog):
 		self.debug_text.setStyleSheet("color: gray; font-size: 10px;")
 		layout.addWidget(self.debug_text)
 
-		# --- Action buttons (two rows: BEM / FEM) ---
-		bem_row = QHBoxLayout()
-		bem_label = QLabel("BEM:")
-		bem_label.setStyleSheet("font-weight: bold;")
-		bem_row.addWidget(bem_label)
-		self.solve_btn = QPushButton("Solve L")
+		# --- Action buttons ---
+		btn_row = QHBoxLayout()
+		btn_row.addStretch()
+		self.solve_btn = QPushButton("Solve")
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(False)
-		self.solve_btn.setToolTip("BEM inductance: surface mesh, source/sink EFIE")
-		bem_row.addWidget(self.solve_btn)
-		self.post_btn = QPushButton("Post B")
-		self.post_btn.clicked.connect(self._post_process)
-		self.post_btn.setEnabled(True)
-		self.post_btn.setToolTip("B-field volume + GMSH export (requires Solve L)")
-		bem_row.addWidget(self.post_btn)
-		self.ih_bem_btn = QPushButton("IH (BEM)")
-		self.ih_bem_btn.clicked.connect(self._extract)
-		self.ih_bem_btn.setEnabled(False)
-		self.ih_bem_btn.setToolTip("BEM inductance + workpiece SIBC heating")
-		bem_row.addWidget(self.ih_bem_btn)
-		bem_row.addStretch()
-		layout.addLayout(bem_row)
-
-		fem_row = QHBoxLayout()
-		fem_label = QLabel("FEM:")
-		fem_label.setStyleSheet("font-weight: bold;")
-		fem_row.addWidget(fem_label)
-		self.solve_p_btn = QPushButton("IH (FEM)")
-		self.solve_p_btn.clicked.connect(self._solve_heating)
-		self.solve_p_btn.setEnabled(False)
-		self.solve_p_btn.setToolTip("FEM-ESIM: Kelvin + HCurl + SIBC Robin BC on workpiece")
-		fem_row.addWidget(self.solve_p_btn)
-		fem_row.addStretch()
-		layout.addLayout(fem_row)
-
-		# --- Bottom row ---
-		bottom_row = QHBoxLayout()
-		bottom_row.addStretch()
+		self.solve_btn.setToolTip("BEM: L extraction + workpiece heating + B-field post")
+		btn_row.addWidget(self.solve_btn)
 		self.open_gmsh_btn = QPushButton("Open Result")
 		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
 		self.open_gmsh_btn.setEnabled(False)
-		bottom_row.addWidget(self.open_gmsh_btn)
+		btn_row.addWidget(self.open_gmsh_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
-		bottom_row.addWidget(close_btn)
-		layout.addLayout(bottom_row)
+		btn_row.addWidget(close_btn)
+		layout.addLayout(btn_row)
 
 	def _default_torus_journal(self):
 		"""Default BEM journal: coil surface mesh + workpiece (no air volume)."""
@@ -1075,18 +1035,12 @@ class InductanceDialog(QDialog):
 			self.workpiece_label.setStyleSheet("font-weight: bold; color: gray;")
 			self.esim_group.setVisible(False)
 
-		# Enable buttons based on detected blocks
-		can_solve_L = (self._source_block is not None
-		               and self._sink_block is not None
-		               and self._ext_python is not None)
-		can_ih_bem = (can_solve_L and self._workpiece_block is not None)
-		can_ih_fem = (self._workpiece_block is not None
-		              and self._ext_python is not None)
-		self.solve_btn.setEnabled(can_solve_L)
-		self.post_btn.setEnabled(can_solve_L)
-		self.ih_bem_btn.setEnabled(can_ih_bem)
-		self.solve_p_btn.setEnabled(can_ih_fem)
-		if not can_solve_L and self._ext_python:
+		# Enable Solve when source+sink found
+		can_solve = (self._source_block is not None
+		             and self._sink_block is not None
+		             and self._ext_python is not None)
+		self.solve_btn.setEnabled(can_solve)
+		if not can_solve and self._ext_python:
 			self.debug_text.setText(
 				'Define blocks named "source" and "sink" in your journal.')
 
@@ -1146,22 +1100,12 @@ class InductanceDialog(QDialog):
 			"--output", self._json_output,
 		]
 
-		# Workpiece parameters (only when workpiece block exists)
+		# Workpiece parameters (BEM + impedance model)
 		if self._workpiece_block:
 			_curv = self.curvature_combo.currentText()
 			_curv_arg = "local_curvature" if "Local" in _curv else "none"
-			# Map (Solver, Impedance) -> --impedance-model value
-			_solver = self.solver_combo.currentText()   # "BEM" or "FEM"
-			_imp = self.model_combo.currentText()       # "ESIM", "Dowell", "SIBC"
-			if _solver == "BEM" and _imp == "SIBC":
-				_model_arg = "bem-sibc"
-			elif _solver == "FEM":
-				# FEM + Robin BC with Z_s from selected impedance model
-				_model_arg = {"ESIM": "fem-esim", "Dowell": "fem-dowell",
-				              "SIBC": "fem-sibc"}[_imp]
-			else:
-				# BEM + ESIM or BEM + Dowell (per-panel)
-				_model_arg = _imp.lower()
+			_imp = self.model_combo.currentText()  # "SIBC", "ESIM", "Dowell"
+			_model_arg = "bem-sibc" if _imp == "SIBC" else _imp.lower()
 			args += [
 				"--workpiece", self._workpiece_block,
 				"--impedance-model", _model_arg,
@@ -1702,6 +1646,260 @@ class InductanceDialog(QDialog):
 
 
 # ================================================================
+# IH (FEM) Dialog
+# ================================================================
+
+class IHFEMDialog(QDialog):
+	"""Dialog for FEM-ESIM induction heating with Kelvin transform."""
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setWindowTitle("IH (FEM): Kelvin + ESIM")
+		self.setMinimumWidth(550)
+		self.setMinimumHeight(500)
+		self._ext_python = _find_external_python()
+		self._process = None
+		self._setup_ui()
+
+	def _setup_ui(self):
+		layout = QVBoxLayout(self)
+
+		# --- Journal editor ---
+		jou_label = QLabel("Cubit Journal (FEM: coil + air + Kelvin):")
+		jou_label.setStyleSheet("font-weight: bold;")
+		layout.addWidget(jou_label)
+		self.jou_edit = QPlainTextEdit()
+		self.jou_edit.setFont(QFont("Consolas", 9))
+		self.jou_edit.setPlainText(InductanceDialog._default_fem_journal())
+		self.jou_edit.setMaximumHeight(200)
+		layout.addWidget(self.jou_edit)
+
+		jou_btn_row = QHBoxLayout()
+		load_btn = QPushButton("Load .jou...")
+		load_btn.clicked.connect(self._load_journal)
+		jou_btn_row.addWidget(load_btn)
+		run_btn = QPushButton("Run Journal")
+		run_btn.clicked.connect(self._run_journal)
+		jou_btn_row.addWidget(run_btn)
+		jou_btn_row.addStretch()
+		layout.addLayout(jou_btn_row)
+
+		# --- Block detection ---
+		block_group = QGridLayout()
+		for row, (lbl, attr) in enumerate([
+			("coil:", "_coil_block"),
+			("air:", "_air_block"),
+			("kelvin:", "_kelvin_block"),
+			("wp_surface:", "_wp_surface"),
+			("outer:", "_outer_surface"),
+		]):
+			block_group.addWidget(QLabel(lbl), row, 0)
+			w = QLabel("(not found)")
+			w.setStyleSheet("font-weight: bold; color: red;")
+			setattr(self, f"label{attr}", w)
+			block_group.addWidget(w, row, 1)
+		layout.addLayout(block_group)
+
+		# --- Workpiece settings ---
+		wp_group = QGroupBox("Workpiece (SIBC)")
+		wp_layout = QGridLayout(wp_group)
+
+		wp_layout.addWidget(QLabel("Impedance:"), 0, 0)
+		self.model_combo = QComboBox()
+		self.model_combo.addItems(["SIBC", "ESIM"])
+		wp_layout.addWidget(self.model_combo, 0, 1)
+
+		wp_layout.addWidget(QLabel("Material:"), 1, 0)
+		self.material_combo = QComboBox()
+		self.material_combo.addItems(["Steel", "Copper", "Aluminum"])
+		wp_layout.addWidget(self.material_combo, 1, 1)
+
+		wp_layout.addWidget(QLabel("Frequency [Hz]:"), 2, 0)
+		self.freq_edit = QLineEdit("7000")
+		wp_layout.addWidget(self.freq_edit, 2, 1)
+
+		wp_layout.addWidget(QLabel("Sigma [S/m]:"), 3, 0)
+		self.sigma_edit = QLineEdit("2.0e6")
+		self.material_combo.currentTextChanged.connect(self._on_material_changed)
+		wp_layout.addWidget(self.sigma_edit, 3, 1)
+
+		layout.addWidget(wp_group)
+
+		# --- Result ---
+		self.result_label = QLabel("")
+		self.result_label.setWordWrap(True)
+		layout.addWidget(self.result_label)
+
+		# --- Buttons ---
+		btn_row = QHBoxLayout()
+		btn_row.addStretch()
+		self.solve_btn = QPushButton("Solve")
+		self.solve_btn.clicked.connect(self._solve)
+		self.solve_btn.setToolTip("FEM-ESIM: Kelvin + HCurl + SIBC Karl iteration")
+		btn_row.addWidget(self.solve_btn)
+		self.open_btn = QPushButton("Open Result")
+		self.open_btn.clicked.connect(self._open_result)
+		self.open_btn.setEnabled(False)
+		btn_row.addWidget(self.open_btn)
+		close_btn = QPushButton("Close")
+		close_btn.clicked.connect(self.accept)
+		btn_row.addWidget(close_btn)
+		layout.addLayout(btn_row)
+
+		# Python info
+		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
+		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
+		layout.addWidget(py_label)
+
+	def _on_material_changed(self, text):
+		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
+		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
+
+	def _load_journal(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load Cubit Journal", "",
+			"Cubit Journal (*.jou);;All Files (*)")
+		if path:
+			try:
+				with open(path, "r", encoding="utf-8") as f:
+					self.jou_edit.setPlainText(f.read())
+			except Exception as e:
+				QMessageBox.warning(self, "Error", f"Failed to load: {e}")
+
+	def _run_journal(self):
+		text = self.jou_edit.toPlainText().strip()
+		if not text:
+			return
+		for line in text.splitlines():
+			line = line.strip()
+			if not line or line.startswith("#"):
+				continue
+			cubit.cmd(line)
+		self._detect_blocks()
+
+	def _detect_blocks(self):
+		"""Detect FEM blocks: coil, air, kelvin, wp_surface, outer."""
+		found = {}
+		try:
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+		except Exception:
+			pass
+
+		for key, attr in [("coil", "_coil_block"), ("air", "_air_block"),
+		                   ("kelvin", "_kelvin_block"),
+		                   ("wp_surface", "_wp_surface"),
+		                   ("outer", "_outer_surface")]:
+			label_w = getattr(self, f"label{attr}")
+			if key in found:
+				label_w.setText(key)
+				label_w.setStyleSheet("font-weight: bold; color: green;")
+			else:
+				label_w.setText("(not found)")
+				label_w.setStyleSheet("font-weight: bold; color: red;")
+
+		has_all = all(k in found for k in ("coil", "air", "wp_surface"))
+		self.solve_btn.setEnabled(has_all and self._ext_python is not None)
+
+	def _solve(self):
+		"""Run FEM-ESIM via external Python (calc_heating.py)."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		self.solve_btn.setEnabled(False)
+		self.solve_btn.setText("Solving...")
+		self.result_label.setText("Computing FEM-ESIM (Kelvin + SIBC)...")
+
+		# Save current Cubit model
+		tmpdir = tempfile.mkdtemp(prefix="radia_fem_")
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		freq = self.freq_edit.text().strip() or "7000"
+		sigma = self.sigma_edit.text().strip() or "2e6"
+		material = self.material_combo.currentText().lower()
+
+		self._heat_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
+		calc_script = os.path.join(_this_dir, "calc_heating.py")
+
+		# Get geometry from Cubit bounding boxes
+		try:
+			r_coil, a_coil, r_wp, h_wp = 0.03, 0.003, 0.01, 0.02
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				if name == "coil":
+					vids = list(cubit.get_block_volumes(bid))
+					if vids:
+						bb = cubit.get_bounding_box("volume", vids[0])
+						r_coil = (abs(bb[1]) + abs(bb[0])) / 2
+						a_coil = min(abs(bb[1] - bb[0]),
+						             abs(bb[5] - bb[4])) / 4
+		except Exception:
+			pass
+
+		args = [
+			calc_script,
+			"--r-coil", str(round(r_coil, 6)),
+			"--a-coil", str(round(a_coil, 6)),
+			"--r-wp", str(round(r_wp, 6)),
+			"--h-wp", str(round(h_wp, 6)),
+			"--frequency", freq,
+			"--sigma", sigma,
+			"--material", material,
+			"--output", self._heat_json,
+		]
+
+		self._process = QProcess(self)
+		self._process.finished.connect(self._on_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_finished(self, exit_code, exit_status):
+		self.solve_btn.setEnabled(True)
+		self.solve_btn.setText("Solve")
+		self._process = None
+
+		data = None
+		json_path = getattr(self, '_heat_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
+		if data is None:
+			self.result_label.setText(f"Error (exit code {exit_code})")
+			return
+		if "error" in data:
+			self.result_label.setText(f"Error: {data['error']}")
+			return
+
+		P = data.get("P_total", 0)
+		L = data.get("L_coil", 0)
+		self.result_label.setText(
+			f"P = {P:.4e} W, L = {L*1e9:.2f} nH\n"
+			f"H_t = {data.get('H_t_rms', 0):.2f} A/m, "
+			f"|Z_s| = {abs(complex(data.get('Z_s', '0'))):.4e}")
+		self.open_btn.setEnabled(True)
+
+	def _open_result(self):
+		"""Open GMSH result file."""
+		json_path = getattr(self, '_heat_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+				msh = data.get("msh_file", "")
+				if msh and os.path.exists(msh):
+					import subprocess
+					subprocess.Popen(["gmsh", msh])
+			except Exception:
+				pass
+
+
+# ================================================================
 # Menu Registration
 # ================================================================
 
@@ -1779,13 +1977,7 @@ def register_menu():
 	action_ih_fem.setStatusTip("Induction heating: FEM + Kelvin + ESIM (volume mesh)")
 	def _show_ih_fem():
 		if not hasattr(main_window, '_radia_fem_dlg') or main_window._radia_fem_dlg is None:
-			main_window._radia_fem_dlg = InductanceDialog(main_window)
-			main_window._radia_fem_dlg.setWindowTitle("IH (FEM): Kelvin + ESIM")
-			# Load FEM journal (Kelvin-enabled)
-			fem_jou = InductanceDialog._default_fem_journal()
-			main_window._radia_fem_dlg.jou_edit.setPlainText(fem_jou)
-			# Pre-select FEM solver
-			main_window._radia_fem_dlg.solver_combo.setCurrentText("FEM")
+			main_window._radia_fem_dlg = IHFEMDialog(main_window)
 		main_window._radia_fem_dlg.show()
 		main_window._radia_fem_dlg.raise_()
 	action_ih_fem.triggered.connect(_show_ih_fem)
