@@ -87,6 +87,8 @@ def lint_ngsolve_script(filepath: str) -> str:
     - Joule heat missing Conj() for complex fields (MODERATE)
     - PEEC n_seg too low for coupling accuracy (MODERATE)
     - Classical EFIE 1/kappa^2 low-frequency breakdown (MODERATE)
+    - BEM GenerateMesh without curvaturesafety (MODERATE)
+    - TaskManager with BEM non-determinism (LOW)
 
     Args:
         filepath: Absolute or relative path to the Python file to check.
@@ -477,6 +479,7 @@ def ngsbem_inductance(topic: str = "all") -> str:
             "stabilized"     - Weggler's stabilized BEM for low-frequency
             "examples"       - Runnable examples (circular loop, Cubit torus)
             "best_practices" - Common pitfalls, validation, performance tips
+            "known_limitations" - curvaturesafety, TaskManager, QUAD hang, grad(G) gap
     """
     return get_ngsbem_inductance_documentation(topic)
 

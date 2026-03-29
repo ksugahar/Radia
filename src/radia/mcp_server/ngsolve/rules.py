@@ -729,35 +729,78 @@ def check_scattered_field_sibc_missing_nxH(filepath: str, lines: List[str]) -> L
     return findings
 
 
-# All rules in execution order
-ALL_RULES = [
-    # NGSolve FEM rules
-    check_hcurl_missing_nograds,
-    check_ngsolve_precond_after_assemble,
-    check_ngsolve_missing_trace_bem,
-    check_ngsolve_overwrite_xyz,
-    check_ngsolve_vec_assign,
-    check_ngsolve_dim2_occ,
-    check_ngsolve_cg_on_saddle_point,
-    check_ngsolve_vectorh1_for_em,
-    check_ngsolve_pinvit_no_projection,
-    check_eddy_current_missing_complex,
-    check_joule_heat_missing_conj,
-    check_ngsolve_kelvin_missing_bonus_intorder,
-    check_axisymmetric_h1_over_r,
-    # Shared PEEC/BEM rules
-    check_bessel_jv_for_sibc,
-    check_peec_low_nseg,
-    check_efie_v_minus_sign,
-    check_classical_efie_breakdown,
-    check_peec_p_over_jw,
-    # BEM mesh rules
-    check_ngsbem_volume_mesh,
-    # FEM-SIBC rules
-    check_scattered_field_sibc_missing_nxH,
-    # Scalar BIE recommendation
-    check_efie_sibc_use_scalar_bie,
-]
+
+# ALL_RULES is defined at the end of the file (after all function definitions)
+
+
+def check_ngsbem_missing_curvaturesafety(filepath: str, lines: List[str]) -> List[Dict]:
+    """MODERATE: OCC mesh for BEM should set curvaturesafety to prevent degenerate elements."""
+    findings = []
+    has_bem = any(
+        kw in line
+        for line in lines
+        for kw in ['LaplaceSL', 'LaplaceDL', 'HelmholtzSL', 'HDivSurface']
+    )
+    if not has_bem:
+        return findings
+
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        if re.search(r'\.GenerateMesh\s*\(', stripped):
+            if 'curvaturesafety' not in stripped:
+                findings.append({
+                    'line': i,
+                    'severity': 'MODERATE',
+                    'rule': 'ngsbem-missing-curvaturesafety',
+                    'message': (
+                        'GenerateMesh() for BEM without curvaturesafety parameter. '
+                        'OCC meshing can produce degenerate elements on curved surfaces, '
+                        'causing zero eigenvalues in BEM operators. '
+                        'Add curvaturesafety=1: geo.GenerateMesh(maxh=h, curvaturesafety=1)'
+                    ),
+                })
+    return findings
+
+
+def check_ngsbem_taskmanager_reproducibility(filepath: str, lines: List[str]) -> List[Dict]:
+    """LOW: TaskManager with BEM causes non-deterministic results."""
+    findings = []
+    has_bem = any(
+        kw in line
+        for line in lines
+        for kw in ['LaplaceSL', 'LaplaceDL', 'HelmholtzSL']
+    )
+    if not has_bem:
+        return findings
+
+    has_taskmanager = False
+    has_setnumthreads_1 = False
+    tm_line = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            continue
+        if re.search(r'TaskManager\s*\(', stripped):
+            has_taskmanager = True
+            tm_line = i
+        if re.search(r'SetNumThreads\s*\(\s*1\s*\)', stripped):
+            has_setnumthreads_1 = True
+
+    if has_taskmanager and not has_setnumthreads_1:
+        findings.append({
+            'line': tm_line,
+            'severity': 'LOW',
+            'rule': 'ngsbem-taskmanager-nondeterministic',
+            'message': (
+                'TaskManager with BEM operators causes non-deterministic results '
+                '(~1.4% fluctuation at 8 threads) due to parallel summation order. '
+                'For reproducible results, remove TaskManager or add SetNumThreads(1). '
+                'See ngsbem_inductance topic "known_limitations".'
+            ),
+        })
+    return findings
 
 
 def check_efie_sibc_use_scalar_bie(filepath: str, lines: List[str]) -> List[Dict]:
@@ -796,3 +839,37 @@ def check_efie_sibc_use_scalar_bie(filepath: str, lines: List[str]) -> List[Dict
             })
             break
     return findings
+
+
+# All rules in execution order
+ALL_RULES = [
+    # NGSolve FEM rules
+    check_hcurl_missing_nograds,
+    check_ngsolve_precond_after_assemble,
+    check_ngsolve_missing_trace_bem,
+    check_ngsolve_overwrite_xyz,
+    check_ngsolve_vec_assign,
+    check_ngsolve_dim2_occ,
+    check_ngsolve_cg_on_saddle_point,
+    check_ngsolve_vectorh1_for_em,
+    check_ngsolve_pinvit_no_projection,
+    check_eddy_current_missing_complex,
+    check_joule_heat_missing_conj,
+    check_ngsolve_kelvin_missing_bonus_intorder,
+    check_axisymmetric_h1_over_r,
+    # Shared PEEC/BEM rules
+    check_bessel_jv_for_sibc,
+    check_peec_low_nseg,
+    check_efie_v_minus_sign,
+    check_classical_efie_breakdown,
+    check_peec_p_over_jw,
+    # BEM mesh rules
+    check_ngsbem_volume_mesh,
+    # FEM-SIBC rules
+    check_scattered_field_sibc_missing_nxH,
+    # Scalar BIE recommendation
+    check_efie_sibc_use_scalar_bie,
+    # BEM mesh/assembly pitfalls
+    check_ngsbem_missing_curvaturesafety,
+    check_ngsbem_taskmanager_reproducibility,
+]

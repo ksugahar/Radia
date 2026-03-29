@@ -108,7 +108,7 @@ def main():
     print("[3/3] Installing Cubit panels...")
     try:
         r = subprocess.run(
-            [sys.executable, "-m", "radia.install_panels"],
+            [sys.executable, "-m", "radia.install_panels", "--all-users"],
             timeout=30)
         if r.returncode != 0:
             print("  Skipped (Cubit not found)")

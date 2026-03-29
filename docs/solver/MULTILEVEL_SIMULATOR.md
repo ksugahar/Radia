@@ -253,14 +253,28 @@ L = np.imag(Z) / (2*np.pi*1e6)
 7. **Yano-Sugahara**: eval_point = (face_center + element_center) / 2
 8. **Point charge correction**: Required for multi-element (650% error without)
 9. **Loop port**: Split loop with two nodes at same position, not `add_port(n,n)`
-10. **Nonlinear: Newton→Picard order**: Start Newton (fast), finish Picard (stable).
-    Newton can excite zero-eigenvalue modes → wrong solution. Use `keep_magnetization`:
+10. **Nonlinear: Newton->Picard order**: Start Newton (fast), finish Picard (stable).
+    Newton can excite zero-eigenvalue modes -> wrong solution. Use `keep_magnetization`:
     ```python
     rad.SolverConfig(newton_method=True)
     rad.Solve(obj, 1e-3, 10, 2)   # Newton phase
     rad.SolverConfig(newton_method=False, keep_magnetization=True)
     rad.Solve(obj, 1e-3, 100, 2)  # Picard continues
     ```
+11. **BEM EFIE-SIBC wrong for finite Z_s**: The EFIE `Z_s*J + jw*mu0*SL(J) = -jw*A_inc`
+    has SL eigenvalue R/3 (not R) for l=1 on sphere. Gives factor-of-3 error in Z_s term.
+    Only correct for PEC (Z_s -> 0). Use **FEM-SIBC** (`fem_esim_3d.py`) instead.
+    Fix requires MFIE (not available in ngsolve.bem).
+13. **BEM formulation selection for MQS-SIBC**: Not all BEM formulations work in MQS.
+    - **EFIE**: Only valid when `Z_s/(jw*mu0*R) < 0.1` (copper at high freq). Fails for steel.
+    - **MFIE tangential** (n x H): Gives PEC solution only (no Z_s dependence).
+    - **MFIE normal** (Sugahara): Supports finite Z_s via Biot-Savart + surface divergence,
+      but requires custom matrix assembly (not in ngsolve.bem).
+    - **PMCHWT-SIBC**: Impossible in MQS (`jw*eps*SL(M)` is O((kR)^2) ~ 10^{-14}).
+    - **FEM-SIBC**: Recommended for all finite Z_s problems (total-field formulation).
+12. **Scattered-field SIBC RHS**: Must include BOTH `-(jw/Z_s)*<A_inc, v>` AND
+    `-<n x H_inc, v>` on the SIBC boundary. Missing the second term causes factor-of-3
+    error. Total-field formulation (`fem_esim_3d.py`) does not have this issue.
 
 ## Implementation Status (2026-03-28)
 
