@@ -583,7 +583,7 @@ class InductanceDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("DC Inductance (source/sink EFIE)")
+		self.setWindowTitle("IH (BEM): Inductance + SIBC")
 		self.setMinimumWidth(600)
 		self.setMinimumHeight(700)
 		self._ext_python = _find_external_python()
@@ -742,16 +742,21 @@ class InductanceDialog(QDialog):
 		bem_label = QLabel("BEM:")
 		bem_label.setStyleSheet("font-weight: bold;")
 		bem_row.addWidget(bem_label)
-		self.solve_btn = QPushButton("Solve L (BEM)")
+		self.solve_btn = QPushButton("Solve L")
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(False)
-		self.solve_btn.setToolTip("BEM inductance: surface mesh only, source/sink EFIE")
+		self.solve_btn.setToolTip("BEM inductance: surface mesh, source/sink EFIE")
 		bem_row.addWidget(self.solve_btn)
 		self.post_btn = QPushButton("Post B")
 		self.post_btn.clicked.connect(self._post_process)
 		self.post_btn.setEnabled(True)
-		self.post_btn.setToolTip("B-field volume + GMSH export (requires BEM solve)")
+		self.post_btn.setToolTip("B-field volume + GMSH export (requires Solve L)")
 		bem_row.addWidget(self.post_btn)
+		self.ih_bem_btn = QPushButton("IH (BEM)")
+		self.ih_bem_btn.clicked.connect(self._extract)
+		self.ih_bem_btn.setEnabled(False)
+		self.ih_bem_btn.setToolTip("BEM inductance + workpiece SIBC heating")
+		bem_row.addWidget(self.ih_bem_btn)
 		bem_row.addStretch()
 		layout.addLayout(bem_row)
 
@@ -759,7 +764,7 @@ class InductanceDialog(QDialog):
 		fem_label = QLabel("FEM:")
 		fem_label.setStyleSheet("font-weight: bold;")
 		fem_row.addWidget(fem_label)
-		self.solve_p_btn = QPushButton("Solve P (FEM)")
+		self.solve_p_btn = QPushButton("IH (FEM)")
 		self.solve_p_btn.clicked.connect(self._solve_heating)
 		self.solve_p_btn.setEnabled(False)
 		self.solve_p_btn.setToolTip("FEM-ESIM: Kelvin + HCurl + SIBC Robin BC on workpiece")
@@ -780,12 +785,49 @@ class InductanceDialog(QDialog):
 		layout.addLayout(bottom_row)
 
 	def _default_torus_journal(self):
-		"""Default journal: coil + workpiece hole + air + Kelvin.
+		"""Default BEM journal: coil surface mesh + workpiece (no air volume)."""
+		lines = [
+			"# IH (BEM): Torus coil + workpiece cylinder",
+			"# Coil: R=30mm, a=3mm, 355deg (surface mesh for BEM EFIE)",
+			"# Workpiece: R=10mm, H=20mm cylinder (SIBC heating)",
+			"reset",
+			"",
+			"# --- Coil: revolve circle to create gapped torus ---",
+			"create surface circle radius 0.003 yplane",
+			"move surface 1 x 0.03 include_merged",
+			"sweep surface 1 zaxis angle 355",
+			"",
+			"# Hex sweep mesh (coil surface)",
+			"volume 1 scheme sweep source surface 1 target surface 3",
+			"surface 1 size 0.003",
+			"surface 1 scheme pave",
+			"mesh surface 1",
+			"mesh volume 1",
+			"",
+			"# --- Workpiece: cylinder at center ---",
+			"create cylinder height 0.020 radius 0.010",
+			"volume 2 scheme tetmesh",
+			"volume 2 size 0.003",
+			"mesh volume 2",
+			"",
+			"# --- Blocks ---",
+			"set duplicate block elements on",
+			"block 1 add volume 1",
+			'block 1 name "conductor"',
+			"block 2 add face in surface 1",
+			'block 2 name "source"',
+			"block 3 add face in surface 3",
+			'block 3 name "sink"',
+			"block 4 add face in surface all in volume 1",
+			'block 4 name "boundary"',
+			"block 5 add volume 2",
+			'block 5 name "workpiece"',
+		]
+		return "\n".join(lines) + "\n"
 
-		Uses create_induction_model.py for robust boolean operations
-		(volume IDs are classified by geometry, not tracked by order).
-		"""
-		# Find create_induction_model.py relative to this panel
+	@staticmethod
+	def _default_fem_journal():
+		"""Default FEM journal: coil + air + Kelvin (via create_induction_model)."""
 		script_candidates = [
 			os.path.join(_this_dir, "..", "..", "..",
 			             "examples", "cubit_panels", "inductance",
@@ -794,56 +836,22 @@ class InductanceDialog(QDialog):
 			             "examples", "cubit_panels", "inductance",
 			             "create_induction_model.py"),
 		]
-		script_path = None
 		for c in script_candidates:
 			p = os.path.normpath(c)
 			if os.path.isfile(p):
-				script_path = p.replace("\\", "/")
-				break
-
-		if script_path:
-			lines = [
-				"# Induction heating model: coil + workpiece + air + Kelvin",
-				"# Coil: R=30mm, a=5mm torus (355deg gap)",
-				"# Workpiece: R=15mm, H=40mm cylinder (hole, SIBC)",
-				"# Air: R=100mm sphere, Kelvin: R=200mm shell",
-				"# Kelvin weight: nu = nu0 * (a/r')^2 (conformal symmetry)",
-				"",
-				f'play "{script_path}"',
-			]
-		else:
-			# Fallback: simple coil + workpiece (no Kelvin)
-			lines = [
-				"# Torus coil (R=30mm, a=3mm, 355deg) + workpiece",
-				"reset",
-				"",
-				"create surface circle radius 0.003 yplane",
-				"move surface 1 x 0.03 include_merged",
-				"sweep surface 1 zaxis angle 355",
-				"volume 1 scheme sweep source surface 1 target surface 3",
-				"surface 1 size 0.003",
-				"surface 1 scheme pave",
-				"mesh surface 1",
-				"mesh volume 1",
-				"",
-				"create cylinder height 0.020 radius 0.010",
-				"volume 2 scheme tetmesh",
-				"volume 2 size 0.003",
-				"mesh volume 2",
-				"",
-				"set duplicate block elements on",
-				"block 1 add volume 1",
-				'block 1 name "conductor"',
-				"block 2 add face in surface 1",
-				'block 2 name "source"',
-				"block 3 add face in surface 3",
-				'block 3 name "sink"',
-				"block 4 add face in surface all in volume 1",
-				'block 4 name "boundary"',
-				"block 5 add volume 2",
-				'block 5 name "workpiece"',
-			]
-		return "\n".join(lines) + "\n"
+				return (
+					"# IH (FEM): coil + air + Kelvin + workpiece hole\n"
+					"# Coil: R=30mm, a=5mm torus\n"
+					"# Air: R=100mm, Kelvin: R=200mm\n"
+					"# Kelvin weight: nu = nu0 * (a/r')^2\n"
+					"\n"
+					f'play "{p.replace(chr(92), "/")}"\n'
+				)
+		# Fallback
+		return (
+			"# IH (FEM): create_induction_model.py not found\n"
+			"# Please load a .cub5 with coil/air/kelvin/wp_surface blocks\n"
+		)
 
 	def _load_journal(self):
 		"""Load a .jou file into the editor."""
@@ -1035,15 +1043,17 @@ class InductanceDialog(QDialog):
 			self.workpiece_label.setStyleSheet("font-weight: bold; color: gray;")
 			self.esim_group.setVisible(False)
 
-		# Enable Solve L when source+sink found, Solve P when workpiece found
+		# Enable buttons based on detected blocks
 		can_solve_L = (self._source_block is not None
 		               and self._sink_block is not None
 		               and self._ext_python is not None)
-		can_solve_P = (self._workpiece_block is not None
-		               and self._ext_python is not None)
+		can_ih_bem = (can_solve_L and self._workpiece_block is not None)
+		can_ih_fem = (self._workpiece_block is not None
+		              and self._ext_python is not None)
 		self.solve_btn.setEnabled(can_solve_L)
 		self.post_btn.setEnabled(can_solve_L)
-		self.solve_p_btn.setEnabled(can_solve_P)
+		self.ih_bem_btn.setEnabled(can_ih_bem)
+		self.solve_p_btn.setEnabled(can_ih_fem)
 		if not can_solve_L and self._ext_python:
 			self.debug_text.setText(
 				'Define blocks named "source" and "sink" in your journal.')
@@ -1692,7 +1702,7 @@ def register_menu():
 			if sub:
 				sub.deleteLater()
 			# Close stale modeless dialogs
-			for attr in ('_radia_ind_dlg',):
+			for attr in ('_radia_ind_dlg', '_radia_fem_dlg'):
 				dlg = getattr(main_window, attr, None)
 				if dlg is not None:
 					dlg.close()
@@ -1721,17 +1731,33 @@ def register_menu():
 	action_surf.triggered.connect(lambda: SurfaceAreaDialog(main_window).exec())
 	radia_menu.addAction(action_surf)
 
-	# Inductance Extractor action
-	action_ind = QAction("Inductance...", main_window)
-	action_ind.setStatusTip("Solve inductance using ngsolve.bem LaplaceSL BEM")
-	def _show_inductance():
-		# Keep reference to prevent garbage collection (modeless)
+	# IH (BEM): BEM inductance + SIBC heating (surface mesh only)
+	action_ih_bem = QAction("IH (BEM)...", main_window)
+	action_ih_bem.setStatusTip("Induction heating: BEM inductance + SIBC (surface mesh)")
+	def _show_ih_bem():
 		if not hasattr(main_window, '_radia_ind_dlg') or main_window._radia_ind_dlg is None:
 			main_window._radia_ind_dlg = InductanceDialog(main_window)
 		main_window._radia_ind_dlg.show()
 		main_window._radia_ind_dlg.raise_()
-	action_ind.triggered.connect(_show_inductance)
-	radia_menu.addAction(action_ind)
+	action_ih_bem.triggered.connect(_show_ih_bem)
+	radia_menu.addAction(action_ih_bem)
+
+	# IH (FEM): FEM-ESIM with Kelvin (volume mesh + SIBC Robin BC)
+	action_ih_fem = QAction("IH (FEM)...", main_window)
+	action_ih_fem.setStatusTip("Induction heating: FEM + Kelvin + ESIM (volume mesh)")
+	def _show_ih_fem():
+		if not hasattr(main_window, '_radia_fem_dlg') or main_window._radia_fem_dlg is None:
+			main_window._radia_fem_dlg = InductanceDialog(main_window)
+			main_window._radia_fem_dlg.setWindowTitle("IH (FEM): Kelvin + ESIM")
+			# Load FEM journal (Kelvin-enabled)
+			fem_jou = InductanceDialog._default_fem_journal()
+			main_window._radia_fem_dlg.jou_edit.setPlainText(fem_jou)
+			# Pre-select FEM solver
+			main_window._radia_fem_dlg.solver_combo.setCurrentText("FEM")
+		main_window._radia_fem_dlg.show()
+		main_window._radia_fem_dlg.raise_()
+	action_ih_fem.triggered.connect(_show_ih_fem)
+	radia_menu.addAction(action_ih_fem)
 
 	# Separator + Reload
 	radia_menu.addSeparator()
