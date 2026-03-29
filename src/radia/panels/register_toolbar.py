@@ -780,6 +780,9 @@ class InductanceDialog(QDialog):
 			'block 5 name "workpiece"',
 			"block 6 add volume 3",
 			'block 6 name "air"',
+			"",
+			"# Hide air volume (post-processing only)",
+			"volume 3 visibility off",
 		]
 		return "\n".join(lines) + "\n"
 
