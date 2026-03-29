@@ -318,6 +318,66 @@ The key: imprinting ensures matching topology on both faces.
 
 Source: forum.coreform.com/t/2507 (Copy surface mesh for cyclic condition)
 
+## Copy Mesh for Kelvin Transform (Periodic Sphere BC)
+
+For NGSolve Periodic Kelvin transform, two spheres need identical surface meshes.
+ACIS spheres have no curves/vertices, so `copy mesh surface` fails without webcut.
+
+```python
+R = 0.060       # sphere radius
+offset = 0.300  # exterior sphere offset
+
+# 1. Create sphere + webcut to add curves at equator
+cubit.cmd(f"create sphere radius {R}")
+cubit.cmd("webcut volume 1 with plane zplane")
+# -> volume 1 (upper half), volume 2 (lower half)
+# Webcut creates a curve at the equator for mesh copy mapping
+
+# 2. Copy halves to create exterior sphere (no mesh)
+cubit.cmd(f"volume 1 2 copy move x {offset} nomesh")
+# -> volumes 3, 4 (exterior copies with identical topology)
+
+# 3. Mesh interior halves
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume 1 2 size 0.010")
+cubit.cmd("mesh volume 1 2")
+
+# 4. Copy mesh from interior to exterior hemisphere surfaces
+# Must specify source/target curve + vertex for mapping
+for src_vid, dst_vid in [(1, 3), (2, 4)]:
+    src_sids = cubit.get_relatives("volume", src_vid, "surface")
+    dst_sids = cubit.get_relatives("volume", dst_vid, "surface")
+    # Hemisphere = largest area surface (not the flat equator cut)
+    src_hemi = max(src_sids, key=lambda s: cubit.surface(s).area())
+    dst_hemi = max(dst_sids, key=lambda s: cubit.surface(s).area())
+    src_c = cubit.get_relatives("surface", src_hemi, "curve")[0]
+    dst_c = cubit.get_relatives("surface", dst_hemi, "curve")[0]
+    src_v = int(cubit.curve(src_c).vertices()[0].entity_name().split()[1])
+    dst_v = int(cubit.curve(dst_c).vertices()[0].entity_name().split()[1])
+    cubit.cmd(
+        f"copy mesh surface {src_hemi} onto surface {dst_hemi} "
+        f"source curve {src_c} source vertex {src_v} "
+        f"target curve {dst_c} target vertex {dst_v}")
+
+# 5. Mesh exterior volumes (boundary mesh already copied)
+cubit.cmd("volume 3 4 size 0.015")
+cubit.cmd("mesh volume 3 4")
+
+# 6. Create surface blocks for NGSolve periodic identification
+cubit.cmd("set duplicate block elements on")
+# kelvin_int: hemisphere surfaces of interior
+# kelvin_ext: hemisphere surfaces of exterior
+```
+
+Key points:
+- **Webcut is required**: ACIS spheres have 0 curves; copy mesh needs curve/vertex
+- **Volume copy nomesh**: ensures identical topology between interior/exterior
+- **Node positions match exactly** (max dist ~1e-17) after copy mesh
+- NGSolve `IdentifyPeriodicBoundaries("kelvin", "kelvin_int", Trafo(...), point_tolerance=1e-3)`
+  then `Mesh(ngmesh)` re-wrap + `Periodic(HCurl)` constrains matching DOFs
+
+Source: S:\CoreformCubit\2021_07_19_Kelvin_Pythonscript\ (verified 2026-03-29)
+
 ## Interval Matching: Over-Constrained Systems
 
 When sweep meshing fails with "Matching intervals UNSUCCESSFUL":
