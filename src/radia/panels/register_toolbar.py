@@ -1782,6 +1782,7 @@ class IHFEMDialog(QDialog):
 		# --- Block detection ---
 		block_group = QGridLayout()
 		for row, (lbl, attr) in enumerate([
+			("workpiece:", "_workpiece_block"),
 			("coil:", "_coil_block"),
 			("air:", "_air_block"),
 			("kelvin:", "_kelvin_block"),
@@ -1943,7 +1944,8 @@ class IHFEMDialog(QDialog):
 				name = cubit.get_exodus_entity_name("block", bid)
 				found[name] = bid
 
-		for key, attr in [("coil", "_coil_block"), ("air", "_air_block"),
+		for key, attr in [("workpiece", "_workpiece_block"),
+		                   ("coil", "_coil_block"), ("air", "_air_block"),
 		                   ("kelvin", "_kelvin_block"),
 		                   ("wp_surface", "_wp_surface"),
 		                   ("outer", "_outer_surface")]:
@@ -1959,26 +1961,23 @@ class IHFEMDialog(QDialog):
 		self.solve_btn.setEnabled(has_all and self._ext_python is not None)
 
 	def _auto_create_wp_surface(self, found):
-		"""Auto-detect workpiece hole surfaces on air volume."""
-		import math
+		"""Auto-detect workpiece surface = shared faces between workpiece and air."""
 		try:
-			air_bid = found["air"]
-			air_vids = list(cubit.get_block_volumes(air_bid))
-			if not air_vids:
+			# Find workpiece volume IDs
+			wp_vids = set()
+			if "workpiece" in found:
+				for v in cubit.get_block_volumes(found["workpiece"]):
+					wp_vids.add(v)
+			if not wp_vids:
 				return
-			# Find free surfaces near the center (wp hole)
+
+			# Find surfaces shared between workpiece and air
 			wp_sids = []
-			for vid in air_vids:
+			for vid in wp_vids:
 				for sid in cubit.get_relatives("volume", vid, "surface"):
-					adj = cubit.get_relatives("surface", sid, "volume")
-					if len(adj) > 1:
-						continue  # shared interface
-					s = cubit.surface(sid)
-					cx, cy, cz = s.center_point()
-					d = math.sqrt(cx**2 + cy**2 + cz**2)
-					# Inner free surface (not the Kelvin boundary)
-					air_R = 0.060  # default
-					if d < air_R * 0.7:
+					adj = set(cubit.get_relatives("surface", sid, "volume"))
+					# Shared with another volume (air) = interface = wp_surface
+					if len(adj) > 1 and not adj.issubset(wp_vids):
 						wp_sids.append(sid)
 
 			if wp_sids:
