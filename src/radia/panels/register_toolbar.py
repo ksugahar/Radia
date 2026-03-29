@@ -668,29 +668,23 @@ class InductanceDialog(QDialog):
 		                            "Dowell: analytical slab (linear only)")
 		esim_layout.addWidget(self.model_combo, 0, 1)
 
-		esim_layout.addWidget(QLabel("Material:"), 1, 0)
-		self.material_combo = QComboBox()
-		self.material_combo.addItems(["Steel", "Copper", "Aluminum"])
-		esim_layout.addWidget(self.material_combo, 1, 1)
-
-		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 2, 0)
+		esim_layout.addWidget(QLabel("Frequency [Hz]:"), 1, 0)
 		self.freq_edit = QLineEdit("50000")
-		esim_layout.addWidget(self.freq_edit, 2, 1)
+		esim_layout.addWidget(self.freq_edit, 1, 1)
 
-		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 3, 0)
+		esim_layout.addWidget(QLabel("Sigma [S/m]:"), 2, 0)
 		self.sigma_edit = QLineEdit("2.0e6")
-		self.material_combo.currentTextChanged.connect(self._on_material_changed)
-		esim_layout.addWidget(self.sigma_edit, 3, 1)
+		esim_layout.addWidget(self.sigma_edit, 2, 1)
 
 		# mu_r row (SIBC/Dowell only)
 		self.mur_label = QLabel("mu_r:")
-		esim_layout.addWidget(self.mur_label, 4, 0)
+		esim_layout.addWidget(self.mur_label, 3, 0)
 		self.mur_edit = QLineEdit("100")
-		esim_layout.addWidget(self.mur_edit, 4, 1)
+		esim_layout.addWidget(self.mur_edit, 3, 1)
 
 		# BH curve row (ESIM only)
 		self.bh_label = QLabel("BH curve:")
-		esim_layout.addWidget(self.bh_label, 5, 0)
+		esim_layout.addWidget(self.bh_label, 4, 0)
 		bh_row = QHBoxLayout()
 		self.bh_edit = QLineEdit("(built-in Steel)")
 		self.bh_edit.setReadOnly(True)
@@ -700,17 +694,17 @@ class InductanceDialog(QDialog):
 		self.bh_browse.setFixedWidth(30)
 		self.bh_browse.clicked.connect(self._browse_bh)
 		bh_row.addWidget(self.bh_browse)
-		esim_layout.addLayout(bh_row, 5, 1)
+		esim_layout.addLayout(bh_row, 4, 1)
 
 		# Curvature row (ESIM only)
 		self.curv_label = QLabel("Curvature:")
-		esim_layout.addWidget(self.curv_label, 6, 0)
+		esim_layout.addWidget(self.curv_label, 5, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
 			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
 			"None (flat): planar slab cell problem (cosh/sinh).")
-		esim_layout.addWidget(self.curvature_combo, 6, 1)
+		esim_layout.addWidget(self.curvature_combo, 5, 1)
 
 		# Connect impedance model change -> show/hide mu_r vs BH
 		self.model_combo.currentTextChanged.connect(self._on_impedance_changed)
@@ -1034,17 +1028,6 @@ class InductanceDialog(QDialog):
 		self.curv_label.setVisible(is_esim)
 		self.curvature_combo.setVisible(is_esim)
 
-	def _on_material_changed(self, text):
-		"""Update sigma, mu_r, and BH curve when material combo changes."""
-		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
-		mur_map = {"Steel": "100", "Copper": "1", "Aluminum": "1"}
-		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
-		self.mur_edit.setText(mur_map.get(text, "1"))
-		if text == "Steel":
-			self.bh_edit.setText("(built-in Steel)")
-		else:
-			self.bh_edit.setText("(linear, mu_r=1)")
-
 	def _browse_bh(self):
 		"""Browse for BH curve file (2-column: H[A/m] B[T])."""
 		path, _ = QFileDialog.getOpenFileName(
@@ -1052,7 +1035,6 @@ class InductanceDialog(QDialog):
 			"Text files (*.txt *.csv *.dat);;All Files (*)")
 		if path:
 			self.bh_edit.setText(path)
-			self.material_combo.setCurrentText("Steel")
 
 	def _populate_blocks(self):
 		"""Auto-detect source/sink/workpiece from Cubit block names."""
@@ -1202,7 +1184,7 @@ class InductanceDialog(QDialog):
 				"--frequency", self.freq_edit.text().strip(),
 				"--sigma", self.sigma_edit.text().strip(),
 				"--half-thickness", str(round(half_t, 6)),
-				"--material", self.material_combo.currentText().lower(),
+				"--material", "steel",
 				"--mu-r", self.mur_edit.text().strip(),
 				"--esim-geometry", _curv_arg,
 			]
@@ -1272,7 +1254,7 @@ class InductanceDialog(QDialog):
 		freq = float(self.freq_edit.text().strip() or "50000")
 		sigma_str = self.sigma_edit.text().strip() or "2e6"
 		sigma_val = float(sigma_str)
-		material = self.material_combo.currentText().lower()
+		material = "steel"  # material selection removed; BH/mu_r set directly
 
 		# Build command
 		calc_script = os.path.join(_this_dir, "calc_heating.py")
@@ -1822,29 +1804,23 @@ class IHFEMDialog(QDialog):
 		self.model_combo.addItems(["SIBC", "ESIM"])
 		wp_layout.addWidget(self.model_combo, 0, 1)
 
-		wp_layout.addWidget(QLabel("Material:"), 1, 0)
-		self.material_combo = QComboBox()
-		self.material_combo.addItems(["Steel", "Copper", "Aluminum"])
-		wp_layout.addWidget(self.material_combo, 1, 1)
-
-		wp_layout.addWidget(QLabel("Frequency [Hz]:"), 2, 0)
+		wp_layout.addWidget(QLabel("Frequency [Hz]:"), 1, 0)
 		self.freq_edit = QLineEdit("7000")
-		wp_layout.addWidget(self.freq_edit, 2, 1)
+		wp_layout.addWidget(self.freq_edit, 1, 1)
 
-		wp_layout.addWidget(QLabel("Sigma [S/m]:"), 3, 0)
+		wp_layout.addWidget(QLabel("Sigma [S/m]:"), 2, 0)
 		self.sigma_edit = QLineEdit("2.0e6")
-		self.material_combo.currentTextChanged.connect(self._on_material_changed)
-		wp_layout.addWidget(self.sigma_edit, 3, 1)
+		wp_layout.addWidget(self.sigma_edit, 2, 1)
 
 		# mu_r (SIBC only, linear)
 		self.mur_label = QLabel("mu_r:")
-		wp_layout.addWidget(self.mur_label, 4, 0)
+		wp_layout.addWidget(self.mur_label, 3, 0)
 		self.mur_edit = QLineEdit("100")
-		wp_layout.addWidget(self.mur_edit, 4, 1)
+		wp_layout.addWidget(self.mur_edit, 3, 1)
 
 		# BH curve (ESIM only, nonlinear)
 		self.bh_label = QLabel("BH curve:")
-		wp_layout.addWidget(self.bh_label, 5, 0)
+		wp_layout.addWidget(self.bh_label, 4, 0)
 		bh_row = QHBoxLayout()
 		self.bh_edit = QLineEdit("(built-in Steel)")
 		self.bh_edit.setReadOnly(True)
@@ -1853,7 +1829,7 @@ class IHFEMDialog(QDialog):
 		self.bh_browse.setFixedWidth(30)
 		self.bh_browse.clicked.connect(self._browse_bh)
 		bh_row.addWidget(self.bh_browse)
-		wp_layout.addLayout(bh_row, 5, 1)
+		wp_layout.addLayout(bh_row, 4, 1)
 
 		# Toggle visibility based on impedance model
 		self.model_combo.currentTextChanged.connect(self._on_impedance_changed)
@@ -1895,16 +1871,6 @@ class IHFEMDialog(QDialog):
 		self.bh_label.setVisible(is_esim)
 		self.bh_edit.setVisible(is_esim)
 		self.bh_browse.setVisible(is_esim)
-
-	def _on_material_changed(self, text):
-		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
-		mur_map = {"Steel": "100", "Copper": "1", "Aluminum": "1"}
-		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
-		self.mur_edit.setText(mur_map.get(text, "1"))
-		if text == "Steel":
-			self.bh_edit.setText("(built-in Steel)")
-		else:
-			self.bh_edit.setText("(linear, mu_r=1)")
 
 	def _browse_bh(self):
 		path, _ = QFileDialog.getOpenFileName(
@@ -2053,7 +2019,7 @@ class IHFEMDialog(QDialog):
 
 		freq = self.freq_edit.text().strip() or "7000"
 		sigma = self.sigma_edit.text().strip() or "2e6"
-		material = self.material_combo.currentText().lower()
+		material = "steel"  # material selection removed; BH/mu_r set directly
 
 		self._heat_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
 		calc_script = os.path.join(_this_dir, "calc_heating.py")
