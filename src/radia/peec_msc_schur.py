@@ -41,44 +41,6 @@ _bicgstab_tol_kwarg = 'rtol' if _scipy_version >= (1, 12) else 'tol'
 MU_0 = 4.0 * np.pi * 1e-7  # H/m
 
 
-def biot_savart_finite_filament(p1, p2, obs_point):
-    """
-    H-field at obs_point from a finite current filament (p1 -> p2), I = 1 A.
-
-    Returns H-field vector [Hx, Hy, Hz] in A/m.
-    """
-    p1 = np.asarray(p1, dtype=float)
-    p2 = np.asarray(p2, dtype=float)
-    r = np.asarray(obs_point, dtype=float)
-
-    dl = p2 - p1
-    L = np.linalg.norm(dl)
-    if L < 1e-20:
-        return np.zeros(3)
-
-    e_l = dl / L
-    r1 = r - p1
-    r2 = r - p2
-
-    cross = np.cross(e_l, r1)
-    d = np.linalg.norm(cross)
-    if d < 1e-20:
-        return np.zeros(3)
-
-    e_perp = cross / d
-
-    r1_mag = np.linalg.norm(r1)
-    r2_mag = np.linalg.norm(r2)
-    if r1_mag < 1e-20 or r2_mag < 1e-20:
-        return np.zeros(3)
-
-    cos_alpha1 = np.dot(e_l, r1) / r1_mag
-    cos_alpha2 = np.dot(e_l, r2) / r2_mag
-
-    H = (1.0 / (4.0 * np.pi * d)) * (cos_alpha1 - cos_alpha2) * e_perp
-    return H
-
-
 class SchurComplementSolver:
     """
     Schur complement solver for PEEC-MSC coupled system.
@@ -250,7 +212,8 @@ class SchurComplementSolver:
             p2 = self._seg_p2[k]
             for i in range(n_msc):
                 obs = self._msc_eval_points[i]
-                H = biot_savart_finite_filament(p1, p2, obs)
+                # TODO: Replace with ngsolve.bem MaxwellDL(J*dC)
+                raise NotImplementedError("biot_savart removed")
                 # Project H onto face normal for MSC surface charge formulation
                 B_pm[i, k] = np.dot(H, self._msc_face_normals[i])
 
@@ -348,7 +311,8 @@ class SchurComplementSolver:
             p2 = self._seg_p2[k]
             for i in range(n_msc):
                 obs = self._msc_eval_points[i]
-                H = biot_savart_finite_filament(p1, p2, obs)
+                # TODO: Replace with ngsolve.bem MaxwellDL(J*dC)
+                raise NotImplementedError("biot_savart removed")
                 B_pm[i, k] = np.dot(H, self._msc_face_normals[i])
 
         # M_mp via Radia: solve MSC for each PEEC segment's field,

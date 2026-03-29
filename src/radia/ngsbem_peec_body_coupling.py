@@ -32,78 +32,8 @@ import time
 MU_0 = 4.0 * np.pi * 1e-7   # H/m
 
 
-def biot_savart_segment_Hz(p1, p2, obs_points):
-    """Compute Hz from a unit-current wire segment via Biot-Savart.
 
-    Analytical formula for the magnetic field of a finite straight wire.
-
-    Args:
-        p1: Start point [x1, y1, z1] (meters)
-        p2: End point [x2, y2, z2] (meters)
-        obs_points: Array of observation points, shape (N, 3)
-
-    Returns:
-        Hz: z-component of H field at observation points, shape (N,)
-    """
-    p1 = np.asarray(p1, dtype=float)
-    p2 = np.asarray(p2, dtype=float)
-    obs = np.asarray(obs_points, dtype=float)
-    if obs.ndim == 1:
-        obs = obs.reshape(1, 3)
-
-    dl = p2 - p1
-    L = np.linalg.norm(dl)
-    if L < 1e-30:
-        return np.zeros(len(obs))
-
-    dl_hat = dl / L
-    Hz = np.zeros(len(obs))
-
-    for k in range(len(obs)):
-        r = obs[k] - p1
-        t = np.dot(r, dl_hat)
-        r_perp = r - t * dl_hat
-        d = np.linalg.norm(r_perp)
-
-        if d < 1e-30 * L:
-            Hz[k] = 0.0
-            continue
-
-        r1 = obs[k] - p1
-        r2 = obs[k] - p2
-        r1_norm = np.linalg.norm(r1)
-        r2_norm = np.linalg.norm(r2)
-
-        if r1_norm < 1e-30 or r2_norm < 1e-30:
-            Hz[k] = 0.0
-            continue
-
-        cos_alpha1 = np.dot(r1, dl_hat) / r1_norm
-        cos_alpha2 = np.dot(r2, dl_hat) / r2_norm
-
-        r_perp_hat = r_perp / d
-        H_direction = np.cross(dl_hat, r_perp_hat)
-        H_mag = (cos_alpha1 - cos_alpha2) / (4.0 * np.pi * d)
-
-        Hz[k] = H_mag * H_direction[2]
-
-    return Hz
-
-
-def biot_savart_loop_Hz(segments, obs_points):
-    """Compute Hz from a complete loop of wire segments.
-
-    Args:
-        segments: List of (p1, p2) tuples
-        obs_points: Array of observation points, shape (N, 3)
-
-    Returns:
-        Hz: Array of Hz values, shape (N,)
-    """
-    Hz = np.zeros(len(obs_points))
-    for p1, p2 in segments:
-        Hz += biot_savart_segment_Hz(p1, p2, obs_points)
-    return Hz
+# Biot-Savart functions removed. Use ngsolve.bem MaxwellDL(J*dC) instead.
 
 
 def create_circular_loop_segments(center, radius, axis, n_segments=36):
@@ -189,46 +119,11 @@ def create_rectangular_loop_segments(center, width, height, axis='z'):
 
 
 def _project_biot_savart_to_gf(segments, mesh, fes):
-    """Project Biot-Savart Hz field onto an H1 GridFunction.
+    """Project source Hz field onto an H1 GridFunction.
 
-    Evaluates Biot-Savart at DOF coordinates and creates a GridFunction
-    with the correct values at each degree of freedom.
-
-    Args:
-        segments: List of (p1, p2) wire segment tuples
-        mesh: NGSolve Mesh
-        fes: H1 finite element space
-
-    Returns:
-        gf: GridFunction with Hz_inc values
+    TODO: Replace with ngsolve.bem MaxwellDL(J*dC) CoefficientFunction.
     """
-    from ngsolve import GridFunction, H1, x, y, z
-
-    # Get DOF coordinates by projecting x, y, z onto the FE space
-    fes_real = H1(mesh, order=fes.globalorder)
-    gf_xc = GridFunction(fes_real)
-    gf_yc = GridFunction(fes_real)
-    gf_zc = GridFunction(fes_real)
-    gf_xc.Set(x)
-    gf_yc.Set(y)
-    gf_zc.Set(z)
-
-    dof_x = gf_xc.vec.FV().NumPy().copy()
-    dof_y = gf_yc.vec.FV().NumPy().copy()
-    dof_z = gf_zc.vec.FV().NumPy().copy()
-
-    ndof = fes.ndof
-    obs_points = np.column_stack([dof_x[:ndof], dof_y[:ndof], dof_z[:ndof]])
-
-    # Compute Biot-Savart at DOF locations
-    Hz_vals = biot_savart_loop_Hz(segments, obs_points)
-
-    # Create complex GridFunction and set values
-    gf = GridFunction(fes)
-    fv = gf.vec.FV().NumPy()
-    fv[:ndof] = Hz_vals[:ndof]
-
-    return gf
+    raise NotImplementedError("biot_savart removed. Use MaxwellDL(J*dC).")
 
 
 class CoupledPEECBody:
