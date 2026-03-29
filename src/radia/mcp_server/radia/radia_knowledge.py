@@ -1240,10 +1240,22 @@ To accurately model DC permeability enhancement of magnetic bodies via BEM,
 the PMCHWT (Poggio-Miller-Chang-Harrington-Wu-Tsai) formulation is required:
 - Coupled EFIE + MFIE with both electric (J) and magnetic (M) surface currents
 - Low-frequency stabilized version uses quasi-Helmholtz projectors for O(1)
-  condition number as κ → 0
+  condition number as kappa -> 0
 - Reference: arxiv:2408.01321 (2024)
   "Low-Frequency Stabilizations of the PMCHWT Equation"
 - Not yet available in ngsbem
+
+### BEM EFIE-SIBC: Known SL Eigenvalue Limitation (2026-03-28)
+
+The BEM EFIE `Z_s*J + jw*mu0*SL(J) = -jw*A_inc` uses `A_scat = mu0*SL(J_s)`, but
+the Laplace SL eigenvalue for l=1 on a sphere is R/3 (not R).  This gives denominator
+`(3*Z_s + jw*mu0*R)` instead of `(Z_s + jw*mu0*R)`, producing BEM/Analytical ratios
+of 0.35-1.0 depending on Z_s. Only correct for PEC (Z_s -> 0).
+
+Fix requires MFIE `n x curl(SL)` (not available in ngsolve.bem).
+**Use FEM-SIBC (fem_esim_3d.py) for finite Z_s problems.**
+
+See: `examples/cubit_panels/inductance/debug_efie_sibc.py`
 
 ## Loop-Star Solver Modes (FIXED 2026-02-22)
 
@@ -3605,6 +3617,167 @@ Implementation: `peec_msc_schur.py::SchurComplementSolver`
 """
 
 
+RADIA_FEM_KELVIN_CUBIT = """
+# Kelvin Transform: Periodic Kelvin for All Formulations
+
+## Fundamental Result (Sugahara, IEEE Trans. Magn. 2022)
+
+The Kelvin transformation conserves the conformal symmetry of Maxwell's equations.
+ALL material properties (mu, epsilon, sigma) transform with the SAME factor:
+
+| Dimension | Material scaling | Formulation-independent |
+|-----------|-----------------|------------------------|
+| **2D** (circle inversion) | In-plane: **1** (no change), Out-of-plane: **(a/r')^4** | Yes |
+| **3D** (sphere inversion) | ALL components: **(a/r')^2** | Yes |
+
+This is a property of electromagnetism, not of any particular formulation.
+All formulations (A, H, phi, E) use the same Kelvin weight.
+
+### 3D Material Properties in Exterior Domain
+
+```
+mu'_r / mu_r = mu'_theta / mu_theta = mu'_phi / mu_phi = (a/r')^2
+sigma'_r / sigma_r = sigma'_theta / sigma_theta = sigma'_phi / sigma_phi = (a/r')^2
+```
+
+where a = Kelvin radius, r' = distance from exterior domain center.
+
+## Periodic Kelvin Implementation (Verified)
+
+Two separate mesh domains connected by Periodic identification:
+- Interior sphere (origin): physical domain, standard material
+- Exterior sphere (offset): Kelvin-mapped exterior, modified material
+
+```python
+# 3D HCurl (A-formulation): verified +1.2% L error
+# ALL material constants scale by (a/r')^2 (conformal symmetry)
+# mu_kelvin = mu0 * (a/r')^2, nu_kelvin = nu0 * (a/r')^2
+# sigma_kelvin = sigma0 * (a/r')^2
+r_prime_sq = (x - offset)**2 + y**2 + z**2
+kelvin_fac = R_K**2 / (r_prime_sq + 1e-20)  # (a/r')^2
+
+nu_cf = mesh.MaterialCF({
+    "kelvin": NU_0 * kelvin_fac,
+    "air": NU_0, "coil": NU_0,
+}, default=NU_0)
+
+# Periodic identification between sphere surfaces
+kelvin_int_face.Identify(kelvin_ext_face, "periodic",
+                          IdentificationType.PERIODIC)
+fes = Periodic(HCurl(mesh, order=1, dirichlet_bbnd="GND"))
+
+# GND at exterior center (maps to physical infinity)
+# bonus_intorder=4 for spatially varying nu
+a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+```
+
+## Performance: Periodic vs Dirichlet vs Shell
+
+| Method | L error | Extra DOFs | Truncation |
+|--------|---------|------------|------------|
+| Dirichlet at R=120mm | **+7%** | 0 | PEC wall error |
+| Kelvin shell (DEPRECATED) | +1.2% | +20-30% | Small (R_outer) |
+| **Periodic Kelvin** | **+1.5%** | **0** | **None (exact)** |
+
+Periodic Kelvin is the recommended method. Shell approach is deprecated.
+
+## Geometry Pattern (OCC)
+
+```python
+# Interior: physical domain at origin
+inner_sphere = Sphere(Pnt(0, 0, 0), R_K)
+inner_air = inner_sphere - coil_shape - workpiece_shape
+inner_air.name = "air"
+
+# Exterior: Kelvin-mapped domain at offset
+offset = 2.5 * R_K  # separation distance
+outer_sphere = Sphere(Pnt(offset, 0, 0), R_K)
+outer_sphere.name = "kelvin"
+
+# GND at exterior center
+gnd = Vertex(Pnt(offset, 0, 0)); gnd.name = "GND"
+
+# Periodic identification BEFORE Glue
+int_face = [f for f in inner_air.faces if f.name == "kelvin_int"][0]
+ext_face = [f for f in outer_sphere.faces if f.name == "kelvin_ext"][0]
+int_face.Identify(ext_face, "periodic", IdentificationType.PERIODIC)
+
+shape = Glue([inner_air, coil, outer_sphere, gnd])
+```
+
+## SIBC + Kelvin for Eddy Current (Induction Heating)
+
+```python
+# Robin BC on workpiece surface:
+robin = -1j * omega / Z_s
+a_bf += robin * u.Trace() * v.Trace() * ds("wp_surface")
+
+# ESIM Karl iteration for nonlinear Z_s:
+sol = esim_solver.solve(H_t_rms)
+Z_s = relax * sol['Z'] + (1 - relax) * Z_s_old
+```
+
+## Cubit Workflow
+
+For Cubit mesh (ACIS-based):
+1. Create interior sphere (air + coil + wp hole) in Cubit
+2. Create exterior sphere (offset) in Cubit
+3. export_NGSolveCurvedMesh for both volumes
+4. Post-process: add Periodic identification to ngmesh
+5. Solve with Periodic(HCurl(...))
+
+## Known Issues
+
+1. **Cubit scipy conflict**: Import scipy BEFORE cubit on Windows
+2. **NGSolve DLL conflict**: Import ngsolve BEFORE adding Cubit to sys.path
+3. **bonus_intorder=4**: Required for Kelvin domain integration accuracy
+4. **Gauge regularization**: Small mass term (1e-8 * nu0 * u*v dx)
+5. **Verify Periodic**: Check FreeDofs reduced after Periodic() wrapping
+
+## Reference
+
+Sugahara, K., "Electromagnetic Analysis of Eddy Current Testing With
+Kelvin Transformation," IEEE Trans. Magn., 2022.
+"""
+
+RADIA_NGSBEM_MQS_LIMITS = """
+# ngsolve.bem MQS Limitations for Eddy Current SIBC (2026-03-28)
+
+## Critical: BEM Formulations Have Severe Limitations in MQS-SIBC
+
+When using ngsolve.bem for eddy current analysis with Surface Impedance Boundary
+Condition (SIBC) in the MQS regime, most BEM formulations fail or are limited.
+
+### Formulation Summary
+
+| Formulation | Works in MQS? | Limitation |
+|-------------|---------------|------------|
+| EFIE-SIBC (LaplaceSL) | Only Z_s/(jw*mu0*R) < 0.1 | SL eigenvalue R/3 != R, factor-of-3 error |
+| MFIE tangential (LaplaceDL) | PEC only | No Z_s dependence (always gives J_pec) |
+| MFIE normal (Sugahara) | All Z_s | Not in ngsolve.bem (needs Biot-Savart matrix) |
+| PMCHWT-SIBC | Impossible | jw*eps*SL(M) ~ 10^{-14} in MQS |
+| FEM-SIBC | All Z_s | Not BEM (uses NGSolve FEM + Robin penalty) |
+
+### When to Use What
+
+- **PEC conductors**: BEM EFIE or MFIE tangential (ngsolve.bem)
+- **Copper at high frequency** (Z_s/(jw*mu0*R) < 0.1): BEM EFIE-SIBC
+- **Steel, ferrite, any finite Z_s**: FEM-SIBC (`fem_esim_3d.py`)
+- **Circuit extraction (L, R)**: Radia PEEC pipeline (not affected by this limitation)
+
+### Impact on Radia Multi-Level Simulator
+
+Level 1 (PEEC) and Level 2 (ngsolve.bem inductance extraction for PEC/low-Z_s)
+are unaffected. The limitation only affects eddy current SIBC problems at Level 2
+with high-Z_s materials. Use FEM-SIBC (Level 3) for these cases.
+
+### Verification
+
+- `examples/cubit_panels/inductance/verify_sphere_sibc.py` -- Sphere benchmark
+- `examples/cubit_panels/inductance/fem_esim_3d.py` -- FEM-SIBC reference
+"""
+
+
 def get_radia_documentation(topic: str = "all") -> str:
     """Return Radia usage documentation by topic."""
     topics = {
@@ -3630,6 +3803,8 @@ def get_radia_documentation(topic: str = "all") -> str:
         "magnetic_core_guide": RADIA_MAGNETIC_CORE_SOLVER_GUIDE,
         "peec_core_pitfalls": RADIA_PEEC_CORE_PITFALLS,
         "multilevel": RADIA_MULTILEVEL_SIMULATOR,
+        "ngsbem_mqs_limits": RADIA_NGSBEM_MQS_LIMITS,
+        "fem_kelvin_cubit": RADIA_FEM_KELVIN_CUBIT,
     }
 
     topic = topic.lower().strip()
