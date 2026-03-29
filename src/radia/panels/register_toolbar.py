@@ -682,18 +682,13 @@ class InductanceDialog(QDialog):
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
 		esim_layout.addWidget(self.sigma_edit, 3, 1)
 
-		esim_layout.addWidget(QLabel("Half-thickness [m]:"), 4, 0)
-		self.thickness_edit = QLineEdit("0.005")
-		self.thickness_edit.setToolTip("Half-thickness (slab) or radius (cylinder) for ESIM cell problem")
-		esim_layout.addWidget(self.thickness_edit, 4, 1)
-
-		esim_layout.addWidget(QLabel("Curvature:"), 5, 0)
+		esim_layout.addWidget(QLabel("Curvature:"), 4, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
 			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
 			"None (flat): planar slab cell problem (cosh/sinh).")
-		esim_layout.addWidget(self.curvature_combo, 5, 1)
+		esim_layout.addWidget(self.curvature_combo, 4, 1)
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -780,7 +775,7 @@ class InductanceDialog(QDialog):
 			"block 3 add face in surface 3",
 			'block 3 name "sink"',
 			"block 4 add face in surface all in volume 1",
-			'block 4 name "boundary"',
+			'block 4 name "coil"',
 			"block 5 add volume 2",
 			'block 5 name "workpiece"',
 			"block 6 add volume 3",
@@ -1120,12 +1115,28 @@ class InductanceDialog(QDialog):
 			_curv_arg = "local_curvature" if "Local" in _curv else "none"
 			_imp = self.model_combo.currentText()  # "SIBC", "ESIM", "Dowell"
 			_model_arg = "bem-sibc" if _imp == "SIBC" else _imp.lower()
+			# Auto-detect half-thickness from workpiece bounding box
+			half_t = 0.005  # fallback
+			try:
+				for bid in cubit.get_block_id_list():
+					name = cubit.get_exodus_entity_name("block", bid)
+					if name == self._workpiece_block:
+						for vid in cubit.get_block_volumes(bid):
+							bb = cubit.get_bounding_box("volume", vid)
+							r_wp = max(abs(bb[1]), abs(bb[0]),
+							           abs(bb[3]), abs(bb[2]))
+							half_t = r_wp
+							break
+						break
+			except Exception:
+				pass
+
 			args += [
 				"--workpiece", self._workpiece_block,
 				"--impedance-model", _model_arg,
 				"--frequency", self.freq_edit.text().strip(),
 				"--sigma", self.sigma_edit.text().strip(),
-				"--half-thickness", self.thickness_edit.text().strip(),
+				"--half-thickness", str(round(half_t, 6)),
 				"--material", self.material_combo.currentText().lower(),
 				"--esim-geometry", _curv_arg,
 			]
