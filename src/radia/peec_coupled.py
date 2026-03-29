@@ -188,12 +188,12 @@ class CoupledPEECSolver(PEECCircuitSolver):
             p1_j = self.seg_p1[j]
             p2_j = self.seg_p2[j]
 
-            # H-field from unit current in segment j
-            # TODO: Replace with ngsolve.bem MaxwellDL(J*dC) when available
+            # H-field from unit current in segment j (analytical)
             def h_field_from_seg_j(point, _p1=p1_j, _p2=p2_j):
-                raise NotImplementedError(
-                    "biot_savart_finite_filament removed. "
-                    "Use ngsolve.bem MaxwellDL(J*dC) instead.")
+                from radia.biot_savart import h_filament, MU0
+                H = h_filament(_p1, _p2, point, current=1.0)
+                B = MU0 * H
+                return B.tolist()
 
             # Create background field
             bkg = ObjBckg(h_field_from_seg_j)

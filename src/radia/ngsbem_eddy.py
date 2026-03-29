@@ -1938,12 +1938,12 @@ class ShieldBEMSIBC:
 
 
 def _biot_savart_A(points, center, direction, length):
-    """Vector potential from a finite current filament.
-
-    TODO: Replace with ngsolve.bem LaplaceSL(J*dC) for A field.
-    """
-    raise NotImplementedError(
-        "Biot-Savart removed. Use ngsolve.bem LaplaceSL(J*dC) for A field.")
+    """Vector potential A from a finite current filament (unit current)."""
+    from radia.biot_savart import a_filament
+    points = np.atleast_2d(points)
+    p1 = np.array(center) - 0.5 * length * np.array(direction)
+    p2 = np.array(center) + 0.5 * length * np.array(direction)
+    return np.array([a_filament(p1, p2, pt) for pt in points])
 
 
 # ====================================================================

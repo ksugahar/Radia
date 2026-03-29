@@ -212,10 +212,9 @@ class SchurComplementSolver:
             p2 = self._seg_p2[k]
             for i in range(n_msc):
                 obs = self._msc_eval_points[i]
-                # TODO: Replace with ngsolve.bem MaxwellDL(J*dC)
-                raise NotImplementedError("biot_savart removed")
-                # Project H onto face normal for MSC surface charge formulation
-                B_pm[i, k] = np.dot(H, self._msc_face_normals[i])
+                from radia.biot_savart import h_filament, MU0
+                H = h_filament(p1, p2, obs, current=1.0)
+                B_pm[i, k] = MU0 * np.dot(H, self._msc_face_normals[i])
 
         # M_mp: Flux linkage at PEEC segments from MSC magnetization
         if self._field_computer is not None:
@@ -311,9 +310,9 @@ class SchurComplementSolver:
             p2 = self._seg_p2[k]
             for i in range(n_msc):
                 obs = self._msc_eval_points[i]
-                # TODO: Replace with ngsolve.bem MaxwellDL(J*dC)
-                raise NotImplementedError("biot_savart removed")
-                B_pm[i, k] = np.dot(H, self._msc_face_normals[i])
+                from radia.biot_savart import h_filament, MU0
+                H = h_filament(p1, p2, obs, current=1.0)
+                B_pm[i, k] = MU0 * np.dot(H, self._msc_face_normals[i])
 
         # M_mp via Radia: solve MSC for each PEEC segment's field,
         # then compute A at all segments.

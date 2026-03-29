@@ -1,40 +1,133 @@
 """
-Biot-Savart field computation via ngsolve.bem BiotSavartCF.
+Biot-Savart field computation.
 
-Provides H and B field from wire currents as NGSolve CoefficientFunctions.
-All implementations use ngsolve.bem's multipole-accelerated BiotSavartCF.
+Two APIs:
+  1. Point evaluation (PEEC coupling, ObjBckg callbacks):
+     h_filament(p1, p2, obs) -> H [A/m] at a single point (analytical, exact)
 
-Usage:
-    from radia.biot_savart import biot_savart_wire, biot_savart_loop
+  2. CoefficientFunction (FEM source, IH coil field):
+     biot_savart_wire(segments) -> CF(dim=3) H field (BiotSavartCF multipole)
+     biot_savart_loop(center, radius) -> CF
+     biot_savart_coilbuilder(path) -> CF
 
-    # Wire segments: list of (p1, p2) tuples
-    H_cf = biot_savart_wire(segments, current=1.0)
-    B_cf = MU0 * H_cf
-
-    # Circular loop
-    H_cf = biot_savart_loop(center, radius, normal, current=1.0)
-
-    # Evaluate on any mesh
-    B_at_point = (MU0 * H_cf)(mesh(x, y, z))
-
-Note: BiotSavartCF returns H field (A/m), not B field (T).
-      Multiply by mu_0 to get B.
-      Uses multipole expansion: accurate for observation points outside
-      the source region (r_obs > r_source from expansion center).
+BiotSavartCF returns H field (A/m). Multiply by mu_0 for B (Tesla).
 """
 
 import math
 import numpy as np
-from ngsolve.bem import BiotSavartCF
-from ngsolve.bla import Vec3D
 
 
 MU0 = 4e-7 * math.pi
+INV_4PI = 1.0 / (4.0 * math.pi)
+
+
+# ============================================================
+# Point evaluation (analytical, no mesh required)
+# ============================================================
+
+def h_filament(p1, p2, obs_point, current=1.0):
+    """H-field at obs_point from a finite current filament (p1 -> p2).
+
+    Exact analytical formula:
+        H = I/(4*pi*d) * (cos(alpha1) - cos(alpha2)) * e_perp
+
+    Args:
+        p1, p2: filament endpoints [x, y, z] in meters
+        obs_point: observation point [x, y, z] in meters
+        current: current [A] (default 1.0)
+
+    Returns:
+        H-field vector (3,) in A/m
+    """
+    p1 = np.asarray(p1, dtype=float)
+    p2 = np.asarray(p2, dtype=float)
+    r = np.asarray(obs_point, dtype=float)
+
+    dl = p2 - p1
+    L = np.linalg.norm(dl)
+    if L < 1e-30:
+        return np.zeros(3)
+    e_l = dl / L
+
+    r1 = r - p1
+    cross = np.cross(e_l, r1)
+    d = np.linalg.norm(cross)
+    if d < 1e-30:
+        return np.zeros(3)
+
+    e_perp = cross / d
+    r1_mag = np.linalg.norm(r1)
+    r2_mag = np.linalg.norm(r - p2)
+    if r1_mag < 1e-30 or r2_mag < 1e-30:
+        return np.zeros(3)
+
+    cos_a1 = np.dot(e_l, r1) / r1_mag
+    cos_a2 = np.dot(e_l, r - p2) / r2_mag
+
+    return current * INV_4PI / d * (cos_a1 - cos_a2) * e_perp
+
+
+def h_segments(segments, obs_point, current=1.0):
+    """H-field at obs_point from multiple wire segments.
+
+    Args:
+        segments: list of (p1, p2) endpoint tuples
+        obs_point: observation point [x, y, z]
+        current: current [A]
+
+    Returns:
+        H-field vector (3,) in A/m
+    """
+    H = np.zeros(3)
+    for p1, p2 in segments:
+        H += h_filament(p1, p2, obs_point, current)
+    return H
+
+
+def a_filament(p1, p2, obs_point, current=1.0):
+    """Vector potential A at obs_point from a finite current filament.
+
+    A = mu0/(4*pi) * I * direction * [arsinh((L-t)/d) + arsinh(t/d)]
+
+    Args:
+        p1, p2: filament endpoints [x, y, z] in meters
+        obs_point: observation point [x, y, z] in meters
+        current: current [A]
+
+    Returns:
+        A vector (3,) in T*m
+    """
+    p1 = np.asarray(p1, dtype=float)
+    p2 = np.asarray(p2, dtype=float)
+    r = np.asarray(obs_point, dtype=float)
+
+    dl = p2 - p1
+    L = np.linalg.norm(dl)
+    if L < 1e-30:
+        return np.zeros(3)
+    e_l = dl / L
+
+    r1 = r - p1
+    t = np.dot(r1, e_l)
+    perp = r1 - t * e_l
+    d = np.linalg.norm(perp)
+    if d < 1e-15:
+        d = 1e-15
+
+    integral = np.arcsinh((L - t) / d) + np.arcsinh(t / d)
+    return current * MU0 * INV_4PI * integral * e_l
+
+
+# ============================================================
+# CoefficientFunction API (BiotSavartCF multipole, needs mesh)
+# ============================================================
 
 
 def biot_savart_wire(segments, current=1.0, center=(0, 0, 0), rad=None,
                      order=15, n_quad=10):
     """Create H-field CoefficientFunction from wire current segments.
+
+    Uses ngsolve.bem BiotSavartCF (multipole-accelerated).
 
     Args:
         segments: list of ((x1,y1,z1), (x2,y2,z2)) wire segment endpoints [m]
@@ -47,6 +140,9 @@ def biot_savart_wire(segments, current=1.0, center=(0, 0, 0), rad=None,
     Returns:
         CoefficientFunction (dim=3) giving H field [A/m]
     """
+    from ngsolve.bem import BiotSavartCF
+    from ngsolve.bla import Vec3D
+
     segments = list(segments)
     if not segments:
         raise ValueError("No wire segments provided")
