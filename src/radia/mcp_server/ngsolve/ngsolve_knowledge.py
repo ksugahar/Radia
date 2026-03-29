@@ -565,15 +565,15 @@ from ngsolve.bem import LaplaceSL, LaplaceDL, HelmholtzSL, HelmholtzDL
 - `LameSL` -- Lame single layer for elasticity BEM
 
 ### Evaluation & Utility
-- `BiotSavartCF` -- CoefficientFunction for Biot-Savart field evaluation
+- `BiotSavartCF` -- Multipole-accelerated H field from wire currents (returns H in A/m)
 - `PotentialOperator` -- Modern variational form wrapper
-- `IntegralOperator` -- Legacy operator wrapper
+- `IntegralOperator` -- Legacy operator wrapper (has `.mat`, `.GetPotential()`)
 
 ### Two API Styles
 
 ```python
 # Modern variational API (recommended):
-V = LaplaceSL(u*ds("surf")) * v*ds("surf")  # Returns PotentialOperator
+V = LaplaceSL(u*ds("surf")) * v*ds("surf")  # Returns IntegralOperator
 V.mat  # Access NGSolve BaseMatrix
 
 # Legacy API:
@@ -581,14 +581,63 @@ slp = SingleLayerPotentialOperator(fes, intorder=3)
 slp.mat  # Dense matrix
 ```
 
+## BiotSavartCF -- Wire Coil H-Field
+
+Multipole-accelerated CoefficientFunction for Biot-Savart from wire segments.
+Returns H field (A/m). Multiply by mu_0 for B (Tesla).
+
+```python
+from ngsolve.bem import BiotSavartCF
+from ngsolve.bla import Vec3D
+
+# Create CF with multipole expansion
+bs = BiotSavartCF(order=15, kappa=1e-10, center=Vec3D(0,0,0), rad=0.05)
+# IMPORTANT: kappa=0 gives NaN. Use kappa=1e-10 for static fields.
+
+# Add wire segments (p1, p2, current, n_quad)
+bs.AddCurrent(Vec3D(x1,y1,z1), Vec3D(x2,y2,z2), I, 10)
+
+# Evaluate as CoefficientFunction on any mesh
+H = bs(mesh(x, y, z))       # H field [A/m]
+B = mu0 * bs(mesh(x, y, z))  # B field [T]
+```
+
+Accuracy: +0.24% at r=1.7*R_coil. Multipole expansion requires r_obs > r_source.
+
+Radia wrapper: `from radia.biot_savart import biot_savart_wire, biot_savart_loop`
+
+## MaxwellDL -- Biot-Savart BEM Operator
+
+BEM integral operator for curl(G) kernel. Creates IntegralOperator for EFIE assembly.
+
+```python
+from ngsolve.bem import MaxwellDL
+
+fes = HCurl(mesh, order=0)
+u, v = fes.TnT()
+
+# Surface source (BND)
+io = MaxwellDL(u*ds, kappa) * v * ds
+
+# Curve source (BBND -- edges on boundary)
+io = MaxwellDL(u*ds(element_vb=BBND), kappa) * v * ds
+
+# Volume source (dx): NOT SUPPORTED
+# MaxwellDL(u*dx, kappa) -> error "need boundary integral"
+
+io.mat           # BEM matrix
+io.GetPotential(gf)  # PotentialCF (evaluate on BND via Integrate only)
+```
+
 ## Available BEM Operators (Summary)
 
-| Operator | Function | Kernel |
-|----------|----------|--------|
-| Single Layer (V) | `LaplaceSL` / `HelmholtzSL` | G(r) or G_k(r) |
-| Double Layer (K) | `LaplaceDL` / `HelmholtzDL` | dG/dn |
-| Hypersingular (D) | Via curl of SL | d^2G/dn^2 |
-| Biot-Savart | `BiotSavartCF` | curl G(r) |
+| Operator | Function | Kernel | Source |
+|----------|----------|--------|--------|
+| Single Layer (V) | `LaplaceSL` / `HelmholtzSL` | G(r) | ds |
+| Double Layer (K) | `LaplaceDL` / `HelmholtzDL` | dG/dn | ds |
+| Hypersingular (D) | Via curl of SL | d^2G/dn^2 | ds |
+| Biot-Savart (BEM) | `MaxwellDL` | curl G(r) | ds, ds(BBND) |
+| Biot-Savart (CF) | `BiotSavartCF` | curl G(r) | AddCurrent() |
 
 ## Basic BEM Assembly
 
