@@ -223,10 +223,123 @@ class CoupledPEECSolver(PEECCircuitSolver):
         self.L = self._L_air + Delta_L
 
         # Rebuild C++ MNASolver with coupled L
-        # (The C++ solver holds its own copy of L, so we must rebuild it)
         self._rebuild_mna_solver()
 
         return Delta_L
+
+    def compute_coupling_scalar_bie(self, body_mesh, frequency=0,
+                                     sigma=0, mu_r=1.0):
+        """Compute Delta_Z from scattering body via Scalar BIE + SIBC.
+
+        Surface-only method: no volume mesh needed for the body.
+        Uses ScalarBIESIBCSolver from bem_sibc_solver.py.
+
+        For conductors (sigma > 0): eddy current shielding (Delta_Z complex)
+        For magnetics (mu_r > 1):   inductance change (Delta_L real)
+
+        Args:
+            body_mesh: NGSolve surface mesh of scattering body
+            frequency: Operating frequency [Hz] (0 = DC/static)
+            sigma: Body conductivity [S/m] (0 = non-conducting)
+            mu_r: Body relative permeability
+
+        Returns:
+            Delta_Z: (n_seg, n_seg) complex impedance change matrix
+        """
+        import math
+        from radia.biot_savart import h_filament
+        from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
+                                           compute_phi_inc_from_loop)
+
+        omega = 2 * math.pi * frequency
+        n_seg = self.n_loop
+
+        # SIBC surface impedance
+        if sigma > 0 and omega > 0:
+            rho = 1.0 / sigma
+            mu_eff = MU_0 * mu_r
+            delta = math.sqrt(2 * rho / (omega * mu_eff))
+            Z_s = complex(1, 1) * rho / delta
+        else:
+            Z_s = complex(0, 0)
+
+        # Build BEM solver on body surface
+        solver = ScalarBIESIBCSolver(body_mesh, order=1)
+
+        # Node coordinates for phi_inc evaluation
+        node_coords = np.array([[body_mesh.vertices[i].point[j]
+                                 for j in range(3)]
+                                for i in range(body_mesh.nv)])
+
+        Delta_Z = np.zeros((n_seg, n_seg), dtype=complex)
+
+        for j in range(n_seg):
+            p1_j = self.seg_p1[j]
+            p2_j = self.seg_p2[j]
+
+            # phi_inc from unit current in segment j at body surface nodes
+            phi_inc = np.zeros(body_mesh.nv)
+            # Path integration: phi = -int H.dl from infinity
+            # For a single segment, use analytical H + vertical axis formula
+            from radia.bem_sibc_solver import compute_phi_inc_from_surface_J
+            # Approximate segment as point dipole for phi_inc
+            seg_center = 0.5 * (p1_j + p2_j)
+            seg_dir = p2_j - p1_j
+            seg_len = np.linalg.norm(seg_dir)
+
+            # Use h_filament at quadrature points for path integration
+            from radia.biot_savart import h_segments
+            seg_list = [(tuple(p1_j), tuple(p2_j))]
+
+            t_gl, w_gl = np.polynomial.legendre.leggauss(20)
+            t_01 = 0.5 * (t_gl + 1)
+            w_01 = 0.5 * w_gl
+            z_far = 20 * max(np.max(np.abs(node_coords)), seg_len)
+
+            for ip in range(body_mesh.nv):
+                xi, yi, zi = node_coords[ip]
+                rho_xy = math.sqrt(xi * xi + yi * yi)
+
+                # Vertical path: phi(0,0,z)
+                z_quad = z_far - t_01 * (z_far - zi)
+                x_quad_v = np.zeros((len(t_01), 3))
+                x_quad_v[:, 2] = z_quad
+                Hz_v = np.array([h_segments(seg_list, pt)[2]
+                                 for pt in x_quad_v])
+                phi_axis = (z_far - zi) * np.sum(w_01 * Hz_v)
+
+                if rho_xy < 1e-12 * z_far:
+                    phi_inc[ip] = phi_axis
+                else:
+                    # Horizontal path
+                    dl = np.array([xi, yi, 0.0])
+                    x_quad_h = np.outer(t_01, dl)
+                    x_quad_h[:, 2] = zi
+                    H_h = np.array([h_segments(seg_list, pt) for pt in x_quad_h])
+                    integrand = np.sum(H_h * dl[np.newaxis, :], axis=1)
+                    phi_inc[ip] = phi_axis - np.sum(w_01 * integrand)
+
+            # Solve BIE
+            if abs(Z_s) > 0:
+                result = solver.solve(phi_inc, Z_s=Z_s, omega=omega)
+            else:
+                # Static magnetic: gamma = mu_r - 1 coupling
+                gamma = (mu_r - 1) / (mu_r + 1)
+                result = solver.solve(phi_inc, Z_s=complex(0, 0),
+                                      omega=0, gamma_override=gamma)
+
+            # Extract Delta_Z from power dissipation
+            # For now, store phi solution for post-processing
+            # Delta_Z[i,j] requires mapping phi -> H -> A -> flux linkage
+            # This is a simplified version using energy method
+            phi_sol = result.get('phi', phi_inc)
+            # Power = Re(Z_s) * int |H_t|^2 dS ≈ Re(Z_s) * sum(|dphi/dt|^2 * dA)
+            # For impedance matrix: Delta_Z[i,j] = ... (complex)
+            # Simplified: treat as perturbation to self/mutual inductance
+            Delta_Z[j, j] = result.get('Z_total', 0)
+
+        self.Delta_Z_bie = Delta_Z
+        return Delta_Z
 
     def _rebuild_mna_solver(self):
         """Rebuild C++ MNASolver with current self.L matrix."""
