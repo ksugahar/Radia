@@ -656,17 +656,17 @@ class InductanceDialog(QDialog):
 
 		esim_layout.addWidget(QLabel("Solver:"), 0, 0)
 		self.solver_combo = QComboBox()
-		self.solver_combo.addItems(["BEM", "FEM"])
-		self.solver_combo.setToolTip("BEM: surface mesh only (fast)\n"
-		                             "FEM: 3D volume mesh (reference)")
+		self.solver_combo.addItems(["FEM", "BEM"])
+		self.solver_combo.setToolTip("FEM: 3D volume mesh (accurate, default)\n"
+		                             "BEM: surface mesh only (fast)")
 		esim_layout.addWidget(self.solver_combo, 0, 1)
 
 		esim_layout.addWidget(QLabel("Impedance:"), 1, 0)
 		self.model_combo = QComboBox()
-		self.model_combo.addItems(["ESIM", "Dowell", "SIBC"])
-		self.model_combo.setToolTip("ESIM: 1D cell problem (nonlinear OK)\n"
-		                            "Dowell: analytical (linear only)\n"
-		                            "SIBC: BIE surface Laplacian (BEM only)")
+		self.model_combo.addItems(["SIBC", "ESIM", "Dowell"])
+		self.model_combo.setToolTip("SIBC: classical Z_s=(1+j)/sigma*delta (default)\n"
+		                            "ESIM: 1D cell problem (nonlinear OK)\n"
+		                            "Dowell: analytical slab (linear only)")
 		esim_layout.addWidget(self.model_combo, 1, 1)
 
 		esim_layout.addWidget(QLabel("Material:"), 2, 0)
