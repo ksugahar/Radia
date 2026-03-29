@@ -1796,6 +1796,23 @@ class IHFEMDialog(QDialog):
 			block_group.addWidget(w, row, 1)
 		layout.addLayout(block_group)
 
+		# --- Mesh / FE order ---
+		order_group = QGridLayout()
+		order_group.addWidget(QLabel("Curve order:"), 0, 0)
+		self.curve_spin = QSpinBox()
+		self.curve_spin.setRange(1, 3)
+		self.curve_spin.setValue(2)
+		self.curve_spin.setToolTip("Mesh geometry order (2 = curved elements)")
+		order_group.addWidget(self.curve_spin, 0, 1)
+
+		order_group.addWidget(QLabel("FES order:"), 0, 2)
+		self.fes_spin = QSpinBox()
+		self.fes_spin.setRange(1, 3)
+		self.fes_spin.setValue(1)
+		self.fes_spin.setToolTip("HCurl polynomial order")
+		order_group.addWidget(self.fes_spin, 0, 3)
+		layout.addLayout(order_group)
+
 		# --- Workpiece settings ---
 		wp_group = QGroupBox("Workpiece (SIBC)")
 		wp_layout = QGridLayout(wp_group)
