@@ -31,8 +31,8 @@ R_COIL = 0.030       # Coil center (major) radius [m]
 A_COIL = 0.005       # Coil wire (minor) radius [m]
 R_WP = 0.015         # Workpiece cylinder radius [m]
 H_WP = 0.040         # Workpiece cylinder height [m]
-R_AIR = 0.300        # Air sphere radius [m] (large enough for Dirichlet truncation)
-R_KELVIN = 0.0       # Kelvin shell outer radius [m] (0 = no Kelvin)
+R_AIR = 0.100        # Air sphere / Kelvin boundary radius [m]
+R_KELVIN = 0.200     # Kelvin shell outer radius [m] (Dirichlet at physical infinity)
 MESH_SIZE = 0.008    # Global mesh size [m]
 MESH_SIZE_COIL = 0.004  # Coil mesh size [m]
 

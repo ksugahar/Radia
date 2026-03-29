@@ -139,7 +139,7 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
     """
     from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction,
                          Integrate, curl, dx, ds, CF, TaskManager,
-                         Conj, VOL, Preconditioner)
+                         Conj, VOL, BND, Preconditioner)
     from ngsolve.krylovspace import CGSolver, GMResSolver
     from ngsolve import x, y, z, sqrt, IfPos
     from esim_cell_problem import ESIMFiniteSlabSolver
@@ -171,10 +171,11 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
     print(f"  Boundaries: {boundaries}")
 
     # --- Coefficient functions ---
-    # Reluctivity: nu0 in air/coil, nu0*(r/R_air)^4 in Kelvin shell
-    r_xyz = sqrt(x*x + y*y + z*z)
-    r_safe = IfPos(r_xyz - 1e-10, r_xyz, 1e-10)
-    kelvin_fac = (r_safe / R_air)**4
+    # Kelvin weight: ALL material constants scale by (a/r')^2
+    # (conformal symmetry of Maxwell's equations, Sugahara IEEE Trans. Magn. 2022)
+    # nu_kelvin = nu0 * (R_air/r)^2 where r = distance from origin
+    r_sq = x*x + y*y + z*z
+    kelvin_fac = R_air**2 / (r_sq + 1e-20)  # (a/r)^2
 
     nu_dict = {}
     for m in materials:
@@ -280,8 +281,9 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
         robin = -1j * omega / Z_s
 
         # Assemble (gauge regularization for curl-curl kernel stability)
+        # bonus_intorder=4 required for Kelvin domain (spatially varying nu)
         a_bf = BilinearForm(fes)
-        a_bf += nu_cf * curl(u) * curl(v) * dx
+        a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
         a_bf += 1e-6 * NU_0 * u * v * dx  # gauge regularization
         a_bf += robin * u.Trace() * v.Trace() * ds("wp_surface")
 
@@ -302,7 +304,7 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
                     fes.FreeDofs(), inverse="pardiso") * f_lf.vec
             else:
                 inv = GMResSolver(a_bf.mat, pre.mat,
-                                  maxsteps=2000, precision=1e-8,
+                                  maxiter=2000, tol=1e-8,
                                   printrates=False)
                 gfu.vec.data = inv * f_lf.vec
         t_solve = time.perf_counter() - t0_iter
@@ -348,9 +350,10 @@ def solve(mesh, R_coil=0.030, a_coil=0.005,
     Q_total = 0.5 * omega**2 * Z_s.imag / abs(Z_s)**2 * int_A2_final
     panel_results = []  # per-panel not available from boundary integral
 
-    # Energy method for L
+    # Energy method for L (high integration order for Kelvin nu)
     W_mag = Integrate(
-        0.5 * nu_cf * curl(gfu) * Conj(curl(gfu)), mesh).real
+        0.5 * nu_cf * curl(gfu) * Conj(curl(gfu)), mesh,
+        order=10).real
     L = 2 * W_mag / I_total**2
 
     # --- Summary ---

@@ -122,28 +122,56 @@ def run():
 
         P_total = result['P_density'] * result['area']
 
-        # Back-reaction: J_wp → A_back at coil
+        # Back-reaction: SCATTERED surface current from phi
+        # phi_scat = phi_total - phi_inc (large, represents workpiece reflection)
+        # J_s_scat = n x (-grad_s(phi_scat))
         phi_vec = result['phi_vec']
-        gf_re = GridFunction(solver.wp_solver.fes)
-        gf_re.vec.FV().NumPy()[:] = phi_vec.real
+        gf_scat_re = GridFunction(solver.wp_solver.fes)
+        gf_scat_im = GridFunction(solver.wp_solver.fes)
+        gf_scat_re.vec.FV().NumPy()[:] = phi_vec.real - phi_inc
+        gf_scat_im.vec.FV().NumPy()[:] = phi_vec.imag
 
         elem_A_wp = Integrate(CF(1), mesh_wp, BND, element_wise=True)
-        grad_comps = [Integrate(grad(gf_re)[k], mesh_wp, BND, element_wise=True)
-                      for k in range(3)]
+        grad_re = [Integrate(grad(gf_scat_re)[k], mesh_wp, BND, element_wise=True)
+                   for k in range(3)]
+        grad_im = [Integrate(grad(gf_scat_im)[k], mesh_wp, BND, element_wise=True)
+                   for k in range(3)]
 
-        wp_c, wp_a, wp_J = [], [], []
+        wp_c, wp_a, wp_Js_re, wp_Js_im = [], [], [], []
         for el in mesh_wp.Elements(BND):
             area = abs(elem_A_wp[el.nr])
             if area < 1e-30:
                 continue
-            j = np.array([-grad_comps[k][el.nr] / area for k in range(3)])
+            ht_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
+            ht_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
+            # Compute outward normal from vertex cross product
+            verts = [np.array(mesh_wp.vertices[v.nr].point) for v in el.vertices]
+            e1 = verts[1] - verts[0]
+            e2 = verts[2] - verts[0]
+            n_vec = np.cross(e1, e2)
+            n_mag = np.linalg.norm(n_vec)
+            if n_mag > 1e-30:
+                n_vec /= n_mag
+            # Ensure outward: normal should point away from origin for convex shape
+            centroid = np.mean(verts, axis=0)
+            if np.dot(n_vec, centroid) < 0:
+                n_vec = -n_vec
+            # J_s = n x H_t
+            js_re = np.cross(n_vec, ht_re)
+            js_im = np.cross(n_vec, ht_im)
             verts = [mesh_wp.vertices[v.nr].point for v in el.vertices]
             c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-            wp_c.append(c); wp_a.append(area); wp_J.append(j)
-        wp_c = np.array(wp_c); wp_a = np.array(wp_a); wp_J = np.array(wp_J)
+            wp_c.append(c); wp_a.append(area)
+            wp_Js_re.append(js_re); wp_Js_im.append(js_im)
+        wp_c = np.array(wp_c); wp_a = np.array(wp_a)
+        wp_Js_re = np.array(wp_Js_re); wp_Js_im = np.array(wp_Js_im)
 
-        A_back = vector_potential_from_J(coil_c, wp_c, wp_a, wp_J)
-        Delta_L = MU_0 * np.sum(np.sum(coil_J * A_back, axis=1) * coil_a)
+        # Delta_L from complex coupling:
+        # Delta_Z = -jw * mu0 * J_coil . A(J_wp_complex)
+        # Delta_L = -mu0 * J_coil . A(J_wp_re)
+        A_back_re = vector_potential_from_J(coil_c, wp_c, wp_a, wp_Js_re)
+        coupling_re = MU_0 * np.sum(np.sum(coil_J * A_back_re, axis=1) * coil_a)
+        Delta_L = -coupling_re
         L_total = L_self + Delta_L
 
         dL = abs(L_total - L_prev) / max(abs(L_prev), 1e-30)
