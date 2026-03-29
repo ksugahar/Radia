@@ -1316,6 +1316,8 @@ def main():
                         help="Slab half-thickness [m]")
     parser.add_argument("--material", default="steel",
                         choices=["steel", "copper", "aluminum"])
+    parser.add_argument("--mu-r", type=float, default=0,
+                        help="Relative permeability for SIBC/Dowell (0=auto from material)")
     parser.add_argument("--esim-geometry", default="local_curvature",
                         choices=["local_curvature", "none"],
                         help="ESIM curvature: local_curvature=Bessel (R=half_thickness), "
