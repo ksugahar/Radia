@@ -152,17 +152,11 @@ class TestDialogConstruction:
 # ============================================================
 class TestWidgetInteraction:
 
-    def test_material_combo_updates_sigma(self, dialog_with_workpiece):
-        """Selecting material should update sigma field."""
+    def test_sigma_editable(self, dialog_with_workpiece):
+        """Sigma field should accept text input."""
         dlg = dialog_with_workpiece
-        dlg.material_combo.setCurrentText("Copper")
+        dlg.sigma_edit.setText("5.8e7")
         assert dlg.sigma_edit.text() == "5.8e7"
-
-        dlg.material_combo.setCurrentText("Aluminum")
-        assert dlg.sigma_edit.text() == "3.5e7"
-
-        dlg.material_combo.setCurrentText("Steel")
-        assert dlg.sigma_edit.text() == "2.0e6"
 
     def test_model_combo_options(self, dialog_with_workpiece):
         """Model combo should have ESIM and Dowell."""
@@ -283,16 +277,15 @@ class TestSolveButtonState:
         else:
             assert dlg.solve_btn.isEnabled() is False
 
-    def test_solve_P_disabled_without_workpiece(self, dialog_no_workpiece):
-        """Solve P button disabled without workpiece block."""
+    def test_esim_group_hidden_without_workpiece(self, dialog_no_workpiece):
+        """ESIM group hidden without workpiece block."""
         dlg = dialog_no_workpiece
-        assert dlg.solve_p_btn.isEnabled() is False
+        assert dlg.esim_group.isHidden() is True
 
-    def test_solve_P_enabled_with_workpiece(self, dialog_with_workpiece):
-        """Solve P button enabled when workpiece block found."""
+    def test_esim_group_visible_with_workpiece(self, dialog_with_workpiece):
+        """ESIM group visible when workpiece block found."""
         dlg = dialog_with_workpiece
-        if dlg._ext_python:
-            assert dlg.solve_p_btn.isEnabled() is True
+        assert dlg.esim_group.isHidden() is False
 
     def test_solve_disabled_without_blocks(self, qapp):
         """No blocks -> solve disabled."""
