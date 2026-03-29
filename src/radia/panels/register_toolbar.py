@@ -737,63 +737,112 @@ class InductanceDialog(QDialog):
 		self.debug_text.setStyleSheet("color: gray; font-size: 10px;")
 		layout.addWidget(self.debug_text)
 
-		# --- Action buttons ---
-		btn_row = QHBoxLayout()
-		btn_row.addStretch()
-		self.solve_btn = QPushButton("Solve L")
+		# --- Action buttons (two rows: BEM / FEM) ---
+		bem_row = QHBoxLayout()
+		bem_label = QLabel("BEM:")
+		bem_label.setStyleSheet("font-weight: bold;")
+		bem_row.addWidget(bem_label)
+		self.solve_btn = QPushButton("Solve L (BEM)")
 		self.solve_btn.clicked.connect(self._extract)
 		self.solve_btn.setEnabled(False)
-		self.solve_btn.setToolTip("Stage 1: BEM inductance (surface mesh only)")
-		btn_row.addWidget(self.solve_btn)
-		self.solve_p_btn = QPushButton("Solve P")
-		self.solve_p_btn.clicked.connect(self._solve_heating)
-		self.solve_p_btn.setEnabled(False)
-		self.solve_p_btn.setToolTip("Stage 2: FEM-ESIM workpiece heating (auto air mesh)")
-		btn_row.addWidget(self.solve_p_btn)
-		self.post_btn = QPushButton("Post")
+		self.solve_btn.setToolTip("BEM inductance: surface mesh only, source/sink EFIE")
+		bem_row.addWidget(self.solve_btn)
+		self.post_btn = QPushButton("Post B")
 		self.post_btn.clicked.connect(self._post_process)
 		self.post_btn.setEnabled(True)
-		self.post_btn.setToolTip("B-field + GMSH export (runs Solve L first if needed)")
-		btn_row.addWidget(self.post_btn)
+		self.post_btn.setToolTip("B-field volume + GMSH export (requires BEM solve)")
+		bem_row.addWidget(self.post_btn)
+		bem_row.addStretch()
+		layout.addLayout(bem_row)
+
+		fem_row = QHBoxLayout()
+		fem_label = QLabel("FEM:")
+		fem_label.setStyleSheet("font-weight: bold;")
+		fem_row.addWidget(fem_label)
+		self.solve_p_btn = QPushButton("Solve P (FEM)")
+		self.solve_p_btn.clicked.connect(self._solve_heating)
+		self.solve_p_btn.setEnabled(False)
+		self.solve_p_btn.setToolTip("FEM-ESIM: Kelvin + HCurl + SIBC Robin BC on workpiece")
+		fem_row.addWidget(self.solve_p_btn)
+		fem_row.addStretch()
+		layout.addLayout(fem_row)
+
+		# --- Bottom row ---
+		bottom_row = QHBoxLayout()
+		bottom_row.addStretch()
 		self.open_gmsh_btn = QPushButton("Open Result")
 		self.open_gmsh_btn.clicked.connect(self._open_gmsh_result)
 		self.open_gmsh_btn.setEnabled(False)
-		btn_row.addWidget(self.open_gmsh_btn)
+		bottom_row.addWidget(self.open_gmsh_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
-		btn_row.addWidget(close_btn)
-		layout.addLayout(btn_row)
+		bottom_row.addWidget(close_btn)
+		layout.addLayout(bottom_row)
 
 	def _default_torus_journal(self):
-		"""Default journal: hex sweep torus (736 quads, ~2208 DOFs)."""
-		lines = [
-			"# 1-turn torus coil (R=50mm, a=5mm, 355deg)",
-			"# Hex sweep -> 736 surface quads -> ~30s solve",
-			"reset",
-			"",
-			"# Geometry: revolve circle to create gapped torus",
-			"create surface circle radius 0.005 yplane",
-			"move surface 1 x 0.05 include_merged",
-			"sweep surface 1 zaxis angle 355",
-			"",
-			"# Hex sweep mesh (coarse)",
-			"volume 1 scheme sweep source surface 1 target surface 3",
-			"surface 1 size 0.005",
-			"surface 1 scheme pave",
-			"mesh surface 1",
-			"mesh volume 1",
-			"",
-			"# Blocks: source/sink before boundary",
-			"set duplicate block elements on",
-			"block 1 add volume all",
-			'block 1 name "conductor"',
-			"block 2 add face in surface 1",
-			'block 2 name "source"',
-			"block 3 add face in surface 3",
-			'block 3 name "sink"',
-			"block 4 add face in surface all",
-			'block 4 name "boundary"',
+		"""Default journal: coil + workpiece hole + air + Kelvin.
+
+		Uses create_induction_model.py for robust boolean operations
+		(volume IDs are classified by geometry, not tracked by order).
+		"""
+		# Find create_induction_model.py relative to this panel
+		script_candidates = [
+			os.path.join(_this_dir, "..", "..", "..",
+			             "examples", "cubit_panels", "inductance",
+			             "create_induction_model.py"),
+			os.path.join(os.path.dirname(_this_dir),
+			             "examples", "cubit_panels", "inductance",
+			             "create_induction_model.py"),
 		]
+		script_path = None
+		for c in script_candidates:
+			p = os.path.normpath(c)
+			if os.path.isfile(p):
+				script_path = p.replace("\\", "/")
+				break
+
+		if script_path:
+			lines = [
+				"# Induction heating model: coil + workpiece + air + Kelvin",
+				"# Coil: R=30mm, a=5mm torus (355deg gap)",
+				"# Workpiece: R=15mm, H=40mm cylinder (hole, SIBC)",
+				"# Air: R=100mm sphere, Kelvin: R=200mm shell",
+				"# Kelvin weight: nu = nu0 * (a/r')^2 (conformal symmetry)",
+				"",
+				f'play "{script_path}"',
+			]
+		else:
+			# Fallback: simple coil + workpiece (no Kelvin)
+			lines = [
+				"# Torus coil (R=30mm, a=3mm, 355deg) + workpiece",
+				"reset",
+				"",
+				"create surface circle radius 0.003 yplane",
+				"move surface 1 x 0.03 include_merged",
+				"sweep surface 1 zaxis angle 355",
+				"volume 1 scheme sweep source surface 1 target surface 3",
+				"surface 1 size 0.003",
+				"surface 1 scheme pave",
+				"mesh surface 1",
+				"mesh volume 1",
+				"",
+				"create cylinder height 0.020 radius 0.010",
+				"volume 2 scheme tetmesh",
+				"volume 2 size 0.003",
+				"mesh volume 2",
+				"",
+				"set duplicate block elements on",
+				"block 1 add volume 1",
+				'block 1 name "conductor"',
+				"block 2 add face in surface 1",
+				'block 2 name "source"',
+				"block 3 add face in surface 3",
+				'block 3 name "sink"',
+				"block 4 add face in surface all in volume 1",
+				'block 4 name "boundary"',
+				"block 5 add volume 2",
+				'block 5 name "workpiece"',
+			]
 		return "\n".join(lines) + "\n"
 
 	def _load_journal(self):
