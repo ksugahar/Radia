@@ -217,22 +217,25 @@ class CoupledBEMSolver:
             H_t_rms = wp_result['H_t_rms']
             phi_vec = wp_result['phi_vec']
 
-            # Extract J_wp from phi (tangential gradient)
-            # J_wp = -grad_s(phi) per element
-            gf_phi_re = GridFunction(self.wp_solver.fes)
-            gf_phi_im = GridFunction(self.wp_solver.fes)
-            gf_phi_re.vec.FV().NumPy()[:] = phi_vec.real
-            gf_phi_im.vec.FV().NumPy()[:] = phi_vec.imag
+            # Extract SCATTERED surface current from phi:
+            # phi_scat = phi_total - phi_inc  (scattered potential)
+            # H_scat = -grad_s(phi_scat) = -grad_s(phi_total) + grad_s(phi_inc)
+            # J_s = n x H_scat (surface current producing the scattered field)
+            #
+            # NOTE: phi_total is small (~0.03 A) because SIBC is near-PEC,
+            # but phi_scat is large (~0.5 A) because it represents the
+            # workpiece reflection of the incident field.
+            gf_scat_re = GridFunction(self.wp_solver.fes)
+            gf_scat_im = GridFunction(self.wp_solver.fes)
+            gf_scat_re.vec.FV().NumPy()[:] = phi_vec.real - phi_inc
+            gf_scat_im.vec.FV().NumPy()[:] = phi_vec.imag
 
             elem_A_wp = Integrate(CF(1), self.mesh_wp, BND, element_wise=True)
-            wp_c, wp_a, wp_J = [], [], []
-            for comp_re, comp_im in [(gf_phi_re, gf_phi_im)]:
-                pass  # will compute below
 
-            # Compute per-element J_wp = -grad_s(phi)
-            grad_re = [Integrate(grad(gf_phi_re)[i], self.mesh_wp, BND,
+            # Compute per-element H_scat = -grad_s(phi_scat)
+            grad_re = [Integrate(grad(gf_scat_re)[i], self.mesh_wp, BND,
                                  element_wise=True) for i in range(3)]
-            grad_im = [Integrate(grad(gf_phi_im)[i], self.mesh_wp, BND,
+            grad_im = [Integrate(grad(gf_scat_im)[i], self.mesh_wp, BND,
                                  element_wise=True) for i in range(3)]
 
             wp_c, wp_a, wp_J_re, wp_J_im = [], [], [], []
@@ -240,9 +243,25 @@ class CoupledBEMSolver:
                 area = abs(elem_A_wp[el.nr])
                 if area < 1e-30:
                     continue
-                # J_wp = -grad_s(phi) (negative tangential gradient)
-                j_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
-                j_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
+                # H_t = -grad_s(phi) per element
+                ht_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
+                ht_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
+                # Outward normal from vertex cross product
+                verts = [np.array(self.mesh_wp.vertices[v.nr].point)
+                         for v in el.vertices]
+                e1 = verts[1] - verts[0]
+                e2 = verts[2] - verts[0]
+                n_vec = np.cross(e1, e2)
+                n_mag = np.linalg.norm(n_vec)
+                if n_mag > 1e-30:
+                    n_vec /= n_mag
+                # Ensure outward: normal points away from centroid of shape
+                centroid = np.mean(verts, axis=0)
+                if np.dot(n_vec, centroid) < 0:
+                    n_vec = -n_vec
+                # J_s = n x H_t (surface current)
+                j_re = np.cross(n_vec, ht_re)
+                j_im = np.cross(n_vec, ht_im)
                 verts = [self.mesh_wp.vertices[v.nr].point for v in el.vertices]
                 c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
                 wp_c.append(c)
@@ -255,32 +274,24 @@ class CoupledBEMSolver:
             wp_J_re = np.array(wp_J_re)
             wp_J_im = np.array(wp_J_im)
 
-            # Back-reaction: A_wp at coil element centroids (real part only for DC/MQS)
-            # A = mu0 * SL[J_wp], take real part (DC coupling dominates at low freq)
-            A_back = vector_potential_from_J(coil_c, wp_c, wp_a, wp_J_re)
+            # Back-reaction: A_wp at coil from COMPLEX J_s
+            # Delta_Z = -jw * mu0 * J_coil . A(J_wp)
+            # Re(Delta_Z) = w * mu0 * J_coil . A(J_wp_im)  (resistance increase)
+            # Im(Delta_Z) = -w * mu0 * J_coil . A(J_wp_re)  (= w*Delta_L)
+            # So Delta_L = -mu0 * J_coil . A(J_wp_re)
+            A_back_re = vector_potential_from_J(coil_c, wp_c, wp_a, wp_J_re)
+            A_back_im = vector_potential_from_J(coil_c, wp_c, wp_a, wp_J_im)
 
-            # Project A_back onto coil HDivSurface DOFs via ΔL approach:
-            # ΔL = mu0 * integral_S_coil J_coil . A_wp dS
-            #    ≈ mu0 * sum_i (J_coil_i . A_wp(c_i)) * area_i
-            # This is equivalent to f_back . J_coil = ΔL / mu0
-            # For the EFIE RHS modification, we need f_back per DOF.
-            # Use: f_back = SL_cross^T @ J_wp_effective
-            # But simpler: compute ΔL directly and skip EFIE re-solve.
-            #
-            # The ΔL approach: L_total = L_self + ΔL
-            # ΔL = 2 * mu0 * sum_i (J_coil_i . A_wp_i) * area_coil_i
-            Delta_L_elem = MU_0 * np.sum(
-                np.sum(coil_J * A_back, axis=1) * coil_a)
+            # Compute Delta_L and Delta_R from complex A_back:
+            # Delta_L = -mu0 * sum(J_coil . A_back_re * area_coil)
+            # Delta_R = omega * mu0 * sum(J_coil . A_back_im * area_coil)
+            coupling_re = MU_0 * np.sum(
+                np.sum(coil_J * A_back_re, axis=1) * coil_a)
+            coupling_im = MU_0 * np.sum(
+                np.sum(coil_J * A_back_im, axis=1) * coil_a)
+            Delta_L_elem = -coupling_re  # inductance change (reactive)
 
-            # For f_back projection onto HDivSurface DOFs:
-            # Approximate: f_back_dof = sum over elem contributions
-            # For each coil element j with area_j and A_back_j:
-            #   contribution to DOF i = (A_back_j . n_edge_i) * edge_length * area_j / 3
-            # This is complex for general meshes. Instead, use the relation:
-            #   f_back . J_coil_vec ≈ sum(J_coil_elem . A_back_elem * area)
-            # and distribute proportionally:
-            #   f_back ≈ alpha * SL_coil @ J_coil  where alpha = ΔL / (mu0 * L_self)
-            # This captures the correct magnitude and distributes via SL structure.
+            # f_back for EFIE re-solve: distribute via SL structure
             alpha = Delta_L_elem / max(abs(L_self), 1e-30)
             f_back_new = alpha * (self.SL_coil @ J_coil)
 

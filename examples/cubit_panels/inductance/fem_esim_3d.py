@@ -41,9 +41,11 @@ MU_0 = 4e-7 * np.pi
 def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         R_wp=0.010, H_wp=0.020,
         sigma=2e6, frequency=7000, material="steel",
-        R_air=0.12, maxh_air=0.015, maxh_coil=0.005,
-        order=1, esim_geometry='cylinder'):
-    """3D FEM-SIBC with internal interface (workpiece meshed as air).
+        R_air=0.06, maxh_air=0.012, maxh_coil=0.005,
+        R_kelvin=0.12,
+        order=1, esim_geometry='cylinder',
+        approach='hole'):
+    """3D FEM-SIBC with Kelvin transform for open boundary.
 
     Args:
         R_coil, a_coil: Torus major/minor radius [m]
@@ -52,9 +54,10 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         sigma: Workpiece conductivity [S/m]
         frequency: [Hz]
         material: steel/copper/aluminum
-        R_air: Air sphere radius [m]
+        R_air: Air sphere / Kelvin boundary radius [m]
         maxh_air: Air mesh size [m]
         maxh_coil: Coil mesh size [m]
+        R_kelvin: Kelvin shell outer radius [m] (0 = no Kelvin, Dirichlet on R_air)
         order: HCurl polynomial order
         esim_geometry: 'cylinder' (Bessel I0/I1) or 'slab' (cosh/sinh)
     """
@@ -93,8 +96,8 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     print(f"Air sphere: R={R_air*1e3:.0f}mm")
     print()
 
-    # === Geometry: workpiece as separate material (NOT a hole) ===
-    print("[1/3] Building 3D geometry (workpiece meshed as air)...")
+    # === Geometry ===
+    print(f"[1/3] Building 3D geometry (approach={approach})...")
     t0 = time.perf_counter()
 
     # Gapped torus (coil volume)
@@ -105,29 +108,49 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     torus.name = "coil"
     torus.maxh = maxh_coil
 
-    # Air sphere (label outer surface for Dirichlet)
+    # Air sphere (inner physical domain)
     air_sphere = Sphere(Pnt(0, 0, 0), R_air)
     air_sphere.name = "air"
-    for f in air_sphere.faces:
-        f.name = "outer"
 
-    # Workpiece cylinder: KEPT as separate material (not subtracted!)
+    # Kelvin shell (exterior mapped domain)
+    use_kelvin = R_kelvin > R_air
+    if use_kelvin:
+        kelvin_outer = Sphere(Pnt(0, 0, 0), R_kelvin)
+        kelvin_shell = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
+        kelvin_shell.name = "kelvin"
+        kelvin_shell.maxh = maxh_air * 2
+        for f in kelvin_outer.faces:
+            f.name = "outer"
+    else:
+        for f in air_sphere.faces:
+            f.name = "outer"
+
+    # Workpiece cylinder
     wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
-    wp_cyl.name = "workpiece"
     for f in wp_cyl.faces:
         f.name = "wp_surface"
         f.maxh = min(R_wp / 4, maxh_coil)
 
-    # Boolean: air = sphere - coil - workpiece (outside workpiece)
-    air = air_sphere - torus - wp_cyl
-    air.name = "air"
+    if approach == 'hole':
+        air = air_sphere - torus - wp_cyl
+        air.name = "air"
+        parts = [air, torus]
+    else:
+        wp_cyl.name = "workpiece"
+        air = air_sphere - torus - wp_cyl
+        air.name = "air"
+        parts = [air, wp_cyl, torus]
 
-    # Glue ALL THREE volumes: air + workpiece_interior + coil
-    shape = Glue([air, wp_cyl, torus])
+    if use_kelvin:
+        parts.append(kelvin_shell)
+
+    shape = Glue(parts)
+
     geo = OCCGeometry(shape)
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
     mesh = Mesh(ngmesh)
+    mesh.Curve(order + 1)  # High-order curving for sphere/cylinder/torus geometry
     t_mesh = time.perf_counter() - t0
 
     ne = mesh.ne
@@ -137,8 +160,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     print(f"  Materials: {mats}")
     print(f"  Boundaries: {bnds}")
 
-    # Verify workpiece material exists
-    if "workpiece" not in mats:
+    if approach == 'interface' and "workpiece" not in mats:
         print("  ERROR: 'workpiece' material not found!")
         print("  Workpiece was probably not meshed as a separate volume.")
         return None
@@ -208,10 +230,61 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     # Determine SIBC boundary name
     sibc_bnd = "wp_surface" if has_wp else None
 
+    # Reluctivity: nu0 everywhere, nu0*(r/R_air)^4 in Kelvin shell
+    has_kelvin = "kelvin" in mats
+    if has_kelvin:
+        r_sq = x * x + y * y + z * z
+        kelvin_fac = R_air**2 / (r_sq + 1e-20)  # (a/r)^2
+        nu_dict = {}
+        for m in mats:
+            if m == "kelvin":
+                nu_dict[m] = nu0 * kelvin_fac
+            elif m == "workpiece" and approach == 'interface':
+                mu_r_eff = 1.0
+                if bh_curve:
+                    for i in range(len(bh_curve) - 1):
+                        if bh_curve[i][0] <= 500 <= bh_curve[i + 1][0]:
+                            B_mid = (bh_curve[i][1] +
+                                     (bh_curve[i + 1][1] - bh_curve[i][1]) *
+                                     (500 - bh_curve[i][0]) /
+                                     (bh_curve[i + 1][0] - bh_curve[i][0]))
+                            mu_r_eff = B_mid / (MU_0 * 500)
+                            break
+                    if mu_r_eff < 1:
+                        mu_r_eff = 1.0
+                elif mu_r is not None:
+                    mu_r_eff = mu_r
+                nu_dict[m] = nu0 / mu_r_eff
+                print(f"  Workpiece mu_r_eff = {mu_r_eff:.0f}")
+            else:
+                nu_dict[m] = nu0
+        nu_cf = mesh.MaterialCF(nu_dict, default=nu0)
+        print(f"  Kelvin transform: R_air={R_air*1e3:.0f}mm, "
+              f"R_kelvin={R_kelvin*1e3:.0f}mm")
+    elif approach == 'interface' and "workpiece" in mats:
+        mu_r_eff = 1.0
+        if bh_curve:
+            for i in range(len(bh_curve) - 1):
+                if bh_curve[i][0] <= 500 <= bh_curve[i + 1][0]:
+                    B_mid = (bh_curve[i][1] +
+                             (bh_curve[i + 1][1] - bh_curve[i][1]) *
+                             (500 - bh_curve[i][0]) /
+                             (bh_curve[i + 1][0] - bh_curve[i][0]))
+                    mu_r_eff = B_mid / (MU_0 * 500)
+                    break
+            if mu_r_eff < 1:
+                mu_r_eff = 1.0
+        elif mu_r is not None:
+            mu_r_eff = mu_r
+        nu_cf = mesh.MaterialCF({"workpiece": nu0 / mu_r_eff}, default=nu0)
+        print(f"  Workpiece mu_r_eff = {mu_r_eff:.0f}")
+    else:
+        nu_cf = nu0
+
     for iteration in range(max_iter):
-        # Assemble: curl-curl + SIBC penalty on internal interface
+        # Assemble: curl-curl (with mu_r in workpiece) + SIBC penalty
         a_bf = BilinearForm(fes)
-        a_bf += nu0 * curl(u) * curl(v) * dx
+        a_bf += nu_cf * curl(u) * curl(v) * dx
         if sibc_bnd:
             sibc_coeff = 1j * omega / Z_s
             a_bf += sibc_coeff * u.Trace() * v.Trace() * ds(sibc_bnd)
@@ -311,9 +384,15 @@ if __name__ == "__main__":
     parser.add_argument("--freq", type=float, default=7000)
     parser.add_argument("--material", default="steel")
     parser.add_argument("--maxh", type=float, default=0.012)
+    parser.add_argument("--order", type=int, default=1,
+                        help="HCurl polynomial order (1 or 2)")
     parser.add_argument("--geometry", default="local_curvature",
                         choices=["local_curvature", "none"],
                         help="ESIM curvature: local_curvature (Bessel) or none (flat slab)")
+    parser.add_argument("--approach", default="hole",
+                        choices=["hole", "interface"],
+                        help="hole: cavity (PMC baseline, Karl's FEM-ESIM), "
+                             "interface: workpiece as air (transparent baseline)")
     args = parser.parse_args()
 
     # Material-dependent sigma
@@ -322,7 +401,8 @@ if __name__ == "__main__":
     _geom_map = {"local_curvature": "cylinder", "none": "slab"}
     esim_geom = _geom_map.get(args.geometry, "cylinder")
     r = run(frequency=args.freq, material=args.material, sigma=sigma,
-            maxh_air=args.maxh, esim_geometry=esim_geom)
+            maxh_air=args.maxh, esim_geometry=esim_geom,
+            approach=args.approach, order=args.order)
 
     if r is None:
         sys.exit(1)
