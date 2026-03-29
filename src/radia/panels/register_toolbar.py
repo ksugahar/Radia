@@ -682,7 +682,13 @@ class InductanceDialog(QDialog):
 		self.material_combo.currentTextChanged.connect(self._on_material_changed)
 		esim_layout.addWidget(self.sigma_edit, 3, 1)
 
-		esim_layout.addWidget(QLabel("BH curve:"), 4, 0)
+		esim_layout.addWidget(QLabel("mu_r (SIBC/Dowell):"), 4, 0)
+		self.mur_edit = QLineEdit("100")
+		self.mur_edit.setToolTip("Relative permeability for SIBC/Dowell\n"
+		                         "(ESIM uses BH curve instead)")
+		esim_layout.addWidget(self.mur_edit, 4, 1)
+
+		esim_layout.addWidget(QLabel("BH curve (ESIM):"), 5, 0)
 		bh_row = QHBoxLayout()
 		self.bh_edit = QLineEdit("(built-in Steel)")
 		self.bh_edit.setReadOnly(True)
@@ -693,15 +699,15 @@ class InductanceDialog(QDialog):
 		bh_browse.setFixedWidth(30)
 		bh_browse.clicked.connect(self._browse_bh)
 		bh_row.addWidget(bh_browse)
-		esim_layout.addLayout(bh_row, 4, 1)
+		esim_layout.addLayout(bh_row, 5, 1)
 
-		esim_layout.addWidget(QLabel("Curvature:"), 5, 0)
+		esim_layout.addWidget(QLabel("Curvature:"), 7, 0)
 		self.curvature_combo = QComboBox()
 		self.curvature_combo.addItems(["Local curvature", "None (flat)"])
 		self.curvature_combo.setToolTip(
 			"Local curvature: cylindrical cell problem (Bessel I0/I1),\n"
 			"None (flat): planar slab cell problem (cosh/sinh).")
-		esim_layout.addWidget(self.curvature_combo, 5, 1)
+		esim_layout.addWidget(self.curvature_combo, 7, 1)
 
 		self.esim_group.setVisible(False)
 		layout.addWidget(self.esim_group)
@@ -1001,9 +1007,11 @@ class InductanceDialog(QDialog):
 				pass
 
 	def _on_material_changed(self, text):
-		"""Update sigma and BH curve when material combo changes."""
+		"""Update sigma, mu_r, and BH curve when material combo changes."""
 		sigma_map = {"Steel": "2.0e6", "Copper": "5.8e7", "Aluminum": "3.5e7"}
+		mur_map = {"Steel": "100", "Copper": "1", "Aluminum": "1"}
 		self.sigma_edit.setText(sigma_map.get(text, "2.0e6"))
+		self.mur_edit.setText(mur_map.get(text, "1"))
 		if text == "Steel":
 			self.bh_edit.setText("(built-in Steel)")
 		else:
@@ -1167,6 +1175,7 @@ class InductanceDialog(QDialog):
 				"--sigma", self.sigma_edit.text().strip(),
 				"--half-thickness", str(round(half_t, 6)),
 				"--material", self.material_combo.currentText().lower(),
+				"--mu-r", self.mur_edit.text().strip(),
 				"--esim-geometry", _curv_arg,
 			]
 			# BH curve file (if user-specified)
