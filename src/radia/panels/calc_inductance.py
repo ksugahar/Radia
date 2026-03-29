@@ -1092,76 +1092,14 @@ def _write_comsol_txt(filename, nodes, field_data, field_name, comp_names):
 
 def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0,
                      lx=0, ly=0, lz=0, maxh_vol=0):
-    """Compute B field in air volume via direct Biot-Savart.
+    """Compute B field in air volume.
 
-    Args:
-        lx, ly, lz: Box half-sizes [m]. 0 = auto (conductor bbox + 30%).
-        maxh_vol: Volume mesh element size [m]. 0 = auto (10% of extent).
-
-    Returns:
-        B_nodes: (nv_vol, 3) B field at volume vertices
-        vol_nodes: list of (x, y, z) volume vertex coordinates
-        vol_elems: list of (v0, v1, v2, v3) tet connectivity (0-indexed)
+    TODO: Replace with ngsolve.bem MaxwellDL(J*ds) for H-matrix accelerated
+    Biot-Savart from surface current J.
     """
-    import numpy as np
-    from ngsolve import Mesh, BND, CF, Integrate, VOL
-    from netgen.occ import Box, Pnt, OCCGeometry
-    from netgen.meshing import MeshingParameters
-
-    INV_4PI = 1.0 / (4.0 * np.pi)
-
-    # Extract per-element J and geometry
-    elem_Jx = Integrate(gf_J[0], mesh_surf, VOL_or_BND=BND, element_wise=True)
-    elem_Jy = Integrate(gf_J[1], mesh_surf, VOL_or_BND=BND, element_wise=True)
-    elem_Jz = Integrate(gf_J[2], mesh_surf, VOL_or_BND=BND, element_wise=True)
-
-    centroids, areas, J_vecs = [], [], []
-    for el in mesh_surf.Elements(BND):
-        area = abs(elem_A[el.nr])
-        if area < 1e-30:
-            continue
-        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
-        verts = [mesh_surf.vertices[v.nr].point for v in el.vertices]
-        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-        centroids.append(c); areas.append(area); J_vecs.append(jvec)
-
-    centroids = np.array(centroids)
-    areas = np.array(areas)
-    J_vecs = np.array(J_vecs)
-
-    # Create air volume mesh
-    coords = np.array([(v.point[0], v.point[1], v.point[2])
-                       for v in mesh_surf.vertices])
-    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
-    extent = bbox_max - bbox_min
-    center = (bbox_min + bbox_max) / 2
-
-    half = np.array([lx, ly, lz])
-    box = Box(Pnt(*(center - half)), Pnt(*(center + half)))
-    mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
-        mp=MeshingParameters(maxh=maxh_vol)))
-
-    nv_vol = mesh_vol.nv
-    obs_pts = np.array([(v.point[0], v.point[1], v.point[2])
-                        for v in mesh_vol.vertices])
-
-    sys.stderr.write(f"B_PROGRESS:{len(centroids)} elems -> {nv_vol} pts\n")
-    sys.stderr.flush()
-
-    # Biot-Savart B (vectorized)
-    dx = obs_pts[:, None, :] - centroids[None, :, :]
-    r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-30))
-    r3_inv = areas[None, :] / (r ** 3)
-    cross = np.cross(J_vecs[None, :, :], dx)
-    B_nodes = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)
-
-    # Extract volume mesh topology
-    vol_nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_vol.vertices]
-    vol_elems = []
-    for el in mesh_vol.Elements(VOL):
-        vol_elems.append([v.nr for v in el.vertices])
-
-    return B_nodes, vol_nodes, vol_elems
+    raise NotImplementedError(
+        "Biot-Savart B-distribution removed. "
+        "Use ngsolve.bem MaxwellDL(J*ds) instead.")
 
 
 def _write_combined_msh(filename, mesh_surf, J_nodes, vol_nodes, vol_elems, B_nodes):

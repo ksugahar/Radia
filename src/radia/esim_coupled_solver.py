@@ -206,45 +206,12 @@ class InductionHeatingCoil:
             return B_total
 
     def _biot_savart_loop(self, point, center, radius, normal, current):
+        """Compute B field from a circular current loop.
+
+        TODO: Replace with ngsolve.bem MaxwellDL(J*dC).
         """
-        Compute B field from a circular current loop using Biot-Savart law.
-
-        Uses the analytical formula for on-axis field and approximation for off-axis.
-        """
-        # Vector from loop center to point
-        r = point - center
-
-        # Component along loop axis
-        z = np.dot(r, normal)
-
-        # Perpendicular distance from axis
-        r_perp = r - z * normal
-        rho = np.linalg.norm(r_perp)
-
-        # Simple on-axis formula (accurate for rho << radius)
-        denom = (radius**2 + z**2)**(3/2)
-        if denom < 1e-20:
-            return np.zeros(3, dtype=complex)
-
-        # Bz on axis
-        Bz = mu_0 * current * radius**2 / (2 * denom)
-
-        # Off-axis correction (first order)
-        if rho > 1e-10 and radius > 1e-10:
-            # Radial component (approximate)
-            Br = 3 * mu_0 * current * radius**2 * z * rho / (4 * denom * (radius**2 + z**2))
-
-            # Unit radial direction
-            if rho > 1e-10:
-                r_hat = r_perp / rho
-            else:
-                r_hat = np.array([1, 0, 0])
-
-            B = Bz * normal + Br * r_hat
-        else:
-            B = Bz * normal
-
-        return B.astype(complex)
+        raise NotImplementedError(
+            "Biot-Savart removed. Use ngsolve.bem MaxwellDL(J*dC).")
 
     def compute_field_batch(self, points):
         """

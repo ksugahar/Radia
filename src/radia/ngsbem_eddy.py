@@ -1938,55 +1938,12 @@ class ShieldBEMSIBC:
 
 
 def _biot_savart_A(points, center, direction, length):
-    """Vector potential from a finite current filament (unit current).
+    """Vector potential from a finite current filament.
 
-    A(r) = mu_0/(4*pi) * I * integral(dl / |r - r'|)
-
-    For a straight filament from p1 to p2 with unit current:
-    A(r) = mu_0/(4*pi) * direction * [arsinh((s2)/d) - arsinh((s1)/d)]
-    where s1, s2 are projections along filament, d is perpendicular distance.
-
-    Args:
-        points: (n, 3) observation points
-        center: (3,) filament center
-        direction: (3,) unit direction
-        length: filament length [m]
-
-    Returns:
-        A: (n, 3) vector potential [T*m]
+    TODO: Replace with ngsolve.bem LaplaceSL(J*dC) for A field.
     """
-    mu0_4pi = 1e-7  # mu_0 / (4*pi)
-
-    p1 = np.array(center) - 0.5 * length * np.array(direction)
-    p2 = np.array(center) + 0.5 * length * np.array(direction)
-    dl = np.array(direction)
-
-    points = np.atleast_2d(points)
-    n_pts = len(points)
-    A = np.zeros((n_pts, 3))
-
-    for k in range(n_pts):
-        r = points[k]
-        # Vector from p1 to observation point
-        r1 = r - p1
-
-        # Projection along filament direction = t
-        t = np.dot(r1, dl)
-
-        # Perpendicular distance
-        perp = r1 - t * dl
-        d = np.linalg.norm(perp)
-        if d < 1e-15:
-            d = 1e-15  # avoid singularity
-
-        # Analytical integral: int_0^L ds / sqrt((s-t)^2 + d^2)
-        # = arsinh((L-t)/d) - arsinh(-t/d)
-        # = arsinh((L-t)/d) + arsinh(t/d)
-        integral = np.arcsinh((length - t) / d) + np.arcsinh(t / d)
-
-        A[k] = mu0_4pi * integral * dl
-
-    return A
+    raise NotImplementedError(
+        "Biot-Savart removed. Use ngsolve.bem LaplaceSL(J*dC) for A field.")
 
 
 # ====================================================================
