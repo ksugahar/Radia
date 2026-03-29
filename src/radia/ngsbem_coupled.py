@@ -230,10 +230,10 @@ class CoupledPEECMMM:
             p1_j = edge_data[j]['p1']
             p2_j = edge_data[j]['p2']
 
-            # TODO: Replace with ngsolve.bem MaxwellDL(J*dC)
             def h_field_from_edge_j(point, _p1=p1_j, _p2=p2_j):
-                raise NotImplementedError(
-                    "biot_savart removed. Use MaxwellDL(J*dC).")
+                from radia.biot_savart import h_filament, MU0
+                H = h_filament(_p1, _p2, point, current=1.0)
+                return (MU0 * H).tolist()
 
             # Create background field and solve
             bkg = rad.ObjBckg(h_field_from_edge_j)

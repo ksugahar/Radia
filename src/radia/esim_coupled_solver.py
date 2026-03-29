@@ -206,12 +206,25 @@ class InductionHeatingCoil:
             return B_total
 
     def _biot_savart_loop(self, point, center, radius, normal, current):
-        """Compute B field from a circular current loop.
-
-        TODO: Replace with ngsolve.bem MaxwellDL(J*dC).
-        """
-        raise NotImplementedError(
-            "Biot-Savart removed. Use ngsolve.bem MaxwellDL(J*dC).")
+        """Compute B field from a circular current loop."""
+        from radia.biot_savart import h_filament, MU0
+        center = np.asarray(center); normal = np.asarray(normal)
+        normal = normal / np.linalg.norm(normal)
+        if abs(normal[2]) < 0.9:
+            t1 = np.cross(normal, [0, 0, 1])
+        else:
+            t1 = np.cross(normal, [1, 0, 0])
+        t1 = t1 / np.linalg.norm(t1)
+        t2 = np.cross(normal, t1)
+        n_seg = 100
+        H = np.zeros(3, dtype=complex)
+        for i in range(n_seg):
+            a1 = 2 * np.pi * i / n_seg
+            a2 = 2 * np.pi * (i + 1) / n_seg
+            p1 = center + radius * (np.cos(a1) * t1 + np.sin(a1) * t2)
+            p2 = center + radius * (np.cos(a2) * t1 + np.sin(a2) * t2)
+            H += h_filament(p1, p2, point, current=float(np.real(current)))
+        return (MU0 * H).astype(complex)
 
     def compute_field_batch(self, points):
         """

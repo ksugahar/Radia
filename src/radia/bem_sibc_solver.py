@@ -184,33 +184,129 @@ class ScalarBIESIBCSolver:
 
 
 
-# biot_savart_filament removed. Use ngsolve.bem MaxwellDL(J*dC) instead.
-
-
 def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
                               n_quad=30, gap_deg=0):
     """Compute incident scalar magnetic potential from a circular current loop.
 
-    TODO: Reimplement with ngsolve.bem MaxwellDL(J*dC).
+    Uses path integration: phi(P) = phi_axis(z) - int_axis^P H.dl
+    H field from radia.biot_savart.h_segments (analytical formula).
     """
-    raise NotImplementedError(
-        "Biot-Savart removed. Use ngsolve.bem MaxwellDL(J*dC) for H field, "
-        "then path-integrate for phi_inc.")
+    from radia.biot_savart import h_segments
 
+    obs = np.asarray(obs_points, dtype=float)
+    center = np.asarray(loop_center, dtype=float)
+    a = float(loop_radius)
+    I = float(current)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
 
+    obs_local = obs - center[np.newaxis, :]
 
-# biot_savart_surface_current removed. Use ngsolve.bem MaxwellDL(J*ds) instead.
+    # Build coil wire segments
+    arc_deg = 360 - gap_deg
+    n_seg = max(200, int(arc_deg))
+    theta = np.linspace(0, np.radians(arc_deg), n_seg + 1)
+    coil_segs = [(
+        (a * np.cos(theta[i]), a * np.sin(theta[i]), 0),
+        (a * np.cos(theta[i + 1]), a * np.sin(theta[i + 1]), 0),
+    ) for i in range(n_seg)]
+
+    frac = arc_deg / 360.0
+
+    # Gauss-Legendre quadrature for horizontal integration
+    t_gl, w_gl = np.polynomial.legendre.leggauss(n_quad)
+    t_01 = 0.5 * (t_gl + 1)
+    w_01 = 0.5 * w_gl
+
+    n_pts = len(obs_local)
+    phi = np.zeros(n_pts)
+
+    for ip in range(n_pts):
+        x, y, z = obs_local[ip]
+        rho = math.sqrt(x * x + y * y)
+
+        # Analytical phi on z-axis for circular loop
+        r_za = math.sqrt(z * z + a * a)
+        phi_axis = (I / 2.0) * (1.0 - z / r_za) * frac
+
+        if rho < 1e-12 * a:
+            phi[ip] = phi_axis
+        else:
+            # Horizontal path integration from (0,0,z) to (x,y,z)
+            dl_vec = np.array([x, y, 0.0])
+            x_quad = np.outer(t_01, dl_vec)
+            x_quad[:, 2] = z
+
+            H_z_integrand = np.zeros(n_quad)
+            for iq in range(n_quad):
+                H = h_segments(coil_segs, x_quad[iq], current=I)
+                H_z_integrand[iq] = np.dot(H, dl_vec)
+
+            phi[ip] = phi_axis - np.sum(w_01 * H_z_integrand)
+
+    return phi
+
 
 
 def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
                                     src_J_vecs, n_quad=20):
-    """Compute phi_inc from solved surface current.
+    """Compute phi_inc from solved surface current via path integration.
 
-    TODO: Reimplement with ngsolve.bem MaxwellDL(J*ds).
+    H field computed as sum of dipole contributions from surface elements.
+    Uses vectorized NumPy for efficiency.
     """
-    raise NotImplementedError(
-        "Biot-Savart removed. Use ngsolve.bem MaxwellDL(J*ds) for H field, "
-        "then path-integrate for phi_inc.")
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+
+    centers = np.asarray(src_centroids, dtype=float)
+    areas = np.asarray(src_areas, dtype=float)
+    J = np.asarray(src_J_vecs, dtype=float)
+
+    INV_4PI = 1.0 / (4.0 * np.pi)
+
+    def _H_at_points(pts):
+        """Vectorized H field from surface current elements."""
+        dx = pts[:, None, :] - centers[None, :, :]  # (N, M, 3)
+        r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-60))  # (N, M)
+        r3_inv = areas[None, :] / (r ** 3)  # (N, M)
+        cross = np.cross(J[None, :, :], dx)  # (N, M, 3)
+        return INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)
+
+    t_gl, w_gl = np.polynomial.legendre.leggauss(n_quad)
+    t_01 = 0.5 * (t_gl + 1)
+    w_01 = 0.5 * w_gl
+
+    src_extent = np.max(np.abs(centers))
+    z_far = 20 * src_extent
+
+    # Stage 1: phi(0,0,z) for each unique z
+    z_vals = np.unique(obs[:, 2])
+    phi_axis = {}
+    for z_i in z_vals:
+        z_quad = z_far - t_01 * (z_far - z_i)
+        x_quad = np.zeros((n_quad, 3))
+        x_quad[:, 2] = z_quad
+        H_quad = _H_at_points(x_quad)
+        phi_axis[z_i] = (z_far - z_i) * np.sum(w_01 * H_quad[:, 2])
+
+    # Stage 2: horizontal path for each node
+    phi = np.zeros(len(obs))
+    for ip in range(len(obs)):
+        x_i, y_i, z_i = obs[ip]
+        rho = math.sqrt(x_i * x_i + y_i * y_i)
+
+        if rho < 1e-12 * src_extent:
+            phi[ip] = phi_axis[z_i]
+        else:
+            dl_vec = np.array([x_i, y_i, 0.0])
+            x_quad = np.outer(t_01, dl_vec)
+            x_quad[:, 2] = z_i
+            H_quad = _H_at_points(x_quad)
+            integrand = np.sum(H_quad * dl_vec[np.newaxis, :], axis=1)
+            phi[ip] = phi_axis[z_i] - np.sum(w_01 * integrand)
+
+    return phi
 
 
 # Legacy alias

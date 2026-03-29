@@ -119,11 +119,14 @@ def create_rectangular_loop_segments(center, width, height, axis='z'):
 
 
 def _project_biot_savart_to_gf(segments, mesh, fes):
-    """Project source Hz field onto an H1 GridFunction.
+    """Project source Hz field onto an H1 GridFunction via BiotSavartCF."""
+    from ngsolve import GridFunction
+    from radia.biot_savart import biot_savart_wire
 
-    TODO: Replace with ngsolve.bem MaxwellDL(J*dC) CoefficientFunction.
-    """
-    raise NotImplementedError("biot_savart removed. Use MaxwellDL(J*dC).")
+    H_cf = biot_savart_wire(segments, current=1.0)
+    gf = GridFunction(fes)
+    gf.Set(H_cf[2])  # Hz component
+    return gf
 
 
 class CoupledPEECBody:
