@@ -81,6 +81,7 @@ def lint_radia_script(filepath: str) -> str:
     - PEEC n_seg too low for circular coil coupling (MODERATE)
     - Classical EFIE 1/kappa^2 low-frequency breakdown (MODERATE)
     - PEEC P/(jw) low-frequency breakdown (HIGH)
+    - Scattered-field SIBC missing n x H_inc RHS term (HIGH)
     - Docstrings hardcoding "in mm" (MODERATE)
     - Outdated build/Release path imports (LOW)
 

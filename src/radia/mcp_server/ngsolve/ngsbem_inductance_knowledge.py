@@ -838,25 +838,29 @@ NGBEM_BEST_PRACTICES = """
    - If area error > 1%, inductance will be inaccurate
    - Use `Integrate(CF(1), mesh, VOL_or_BND=BND)` vs analytical
 
-3. **Use Curve(3) for curved surfaces**
+3. **Set curvaturesafety for OCC meshes** (prevents degenerate elements)
+   - `geo.GenerateMesh(maxh=maxh, curvaturesafety=1)`
+   - Without it, curved surfaces may produce zero-eigenvalue BEM operators
+
+4. **Use Curve(3) for curved surfaces**
    - Curve(1) = polygon approximation -> 5-15% inductance error
    - Curve(2) = quadratic -> ~0.5% error
    - Curve(3) = cubic -> ~0.05% error (usually sufficient)
 
-4. **Use export_NGSolveCurvedMesh()** for Cubit meshes
+5. **Use export_NGSolveCurvedMesh()** for Cubit meshes
    - Handles curving automatically via ACIS CallbackGeometry
    - No SetGeomInfo, no STEP files, no OCC geometry needed
 
-5. **Laplace kernel for MQS** (DC to ~1 MHz)
+6. **Laplace kernel for MQS** (DC to ~1 MHz)
    - Do NOT use HelmholtzSL for inductance extraction
    - LaplaceSL is exact in the MQS regime
 
-6. **HDivSurface order=0** (RT0) is sufficient for inductance
+7. **HDivSurface order=0** (RT0) is sufficient for inductance
    - Higher order (order=1, 2) improves current distribution accuracy
    - But increases DOF count significantly (quadratic growth)
    - For total inductance (scalar), order=0 is usually adequate
 
-7. **Check matrix rank** before solving
+8. **Check matrix rank** before solving
    ```python
    rank = np.linalg.matrix_rank(L_matrix)
    if rank < n_dof:
@@ -1706,6 +1710,115 @@ Workpiece eddy current problem:
 """
 
 
+NGBEM_KNOWN_LIMITATIONS = """
+# ngsolve.bem Known Limitations and Workarounds (2026-03-29)
+
+## 1. curvaturesafety Required for OCC Surface Meshes
+
+Netgen's default OCC meshing can produce **degenerate elements** on curved surfaces
+when `curvaturesafety` is not set. This leads to:
+- Zero eigenvalues in BEM operators (LaplaceSL, LaplaceDL)
+- Non-invertible matrices / random results from LU solve
+
+**Fix**: Always set `curvaturesafety=1` (or higher) for BEM surface meshes:
+
+```python
+# WRONG - may produce degenerate mesh on curved surfaces
+mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+
+# CORRECT - curvaturesafety prevents degenerate elements
+mesh = Mesh(geo.GenerateMesh(maxh=maxh, curvaturesafety=1))
+mesh.Curve(3)
+```
+
+**Origin**: Reported by Joachim Schöberl (2026-03-29). Coarse torus mesh produced
+topologically incorrect mesh with many zero eigenvalues in SL operator.
+
+## 2. TaskManager Non-Determinism with BEM Operators
+
+`TaskManager()` causes **non-deterministic results** with BEM operator assembly
+(LaplaceSL, LaplaceDL) due to floating-point summation order in parallel integration.
+
+| Threads | Fluctuation | Spread (370 nH case) |
+|---------|-------------|---------------------|
+| 1 | 0 | 0 |
+| 2-4 | ~0.3% | ~1 nH |
+| 8 | ~1.4% | ~5 nH |
+
+**Workaround**: For reproducible results, do NOT use TaskManager for BEM assembly:
+
+```python
+# For reproducibility - no TaskManager
+DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
+SL_bf = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+
+# If TaskManager is needed for speed, pin to 1 thread:
+from ngsolve import SetNumThreads
+with TaskManager():
+    SetNumThreads(1)
+    SL_bf = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+```
+
+TaskManager does improve assembly speed for large problems (~5x at 8 cores for
+N=5000), but the non-determinism may be unacceptable for validation notebooks.
+
+## 3. ET_QUAD Elements Hang ngsolve.bem (Triangles Only)
+
+ngsolve.bem currently supports **only triangular surface elements** (ET_TRIG).
+Passing quad elements (ET_QUAD) to LaplaceSL or LaplaceDL causes the computation
+to **hang indefinitely** (no error, no exception).
+
+**Root cause** (ngbem.cpp):
+- Line ~152: `ET_QUAD` sets `classnr = -1` (skipped from element grouping)
+- Line ~558: `IntegrationRule irtrig(ET_TRIG, intorder)` -- hardcoded to TRIG
+- Line ~797: `MappedIntegrationRule<2,3>` -- TRIG reference element only
+
+**Workaround**: Split quads into triangles before BEM assembly.
+
+Minimal reproducer (no Cubit needed):
+```python
+from netgen.meshing import Mesh as NetgenMesh, MeshPoint, Pnt, Element2D, FaceDescriptor
+from ngsolve import Mesh, H1, ds
+from ngsolve.bem import LaplaceSL
+
+ngm = NetgenMesh(dim=3)
+ngm.Add(FaceDescriptor(surfnr=1, domin=0, domout=0, bc=1))
+fd = ngm.Add(FaceDescriptor(surfnr=1, domin=0, domout=0, bc=1))
+pts = [ngm.Add(MeshPoint(Pnt(x, y, 0))) for x, y in [(0,0), (1,0), (1,1), (0,1)]]
+ngm.Add(Element2D(fd, pts))  # quad element -> will hang
+mesh = Mesh(ngm)
+fes = H1(mesh, order=1)
+u, v = fes.TnT()
+sl = LaplaceSL(u.Trace() * ds) * v.Trace() * ds  # HANGS HERE
+```
+
+## 4. grad(G) Kernel Not Available (Cross-Mesh Biot-Savart)
+
+ngsolve.bem provides:
+- `LaplaceSL`: kernel `G = 1/(4*pi*r)` ✓
+- `LaplaceDL`: kernel `dG/dn' = n' . grad' G` ✓ (normal component only)
+- `grad G = -(x-x') / (4*pi*|x-x'|^3)` ✗ NOT AVAILABLE
+
+This limits cross-mesh field evaluation. On a **single mesh**, `n_src = n_obs`
+so the DL operator provides the needed normal derivative. For **cross-mesh**
+evaluation (e.g., coil surface → workpiece surface), the full gradient is needed
+because `n_src ≠ n_obs`.
+
+**Use case**: Biot-Savart law for surface currents:
+```
+H_inc(x_wp) = (1/4pi) * int_{S_coil} J(x') x grad_x G(x, x') dS'
+```
+
+**Current workaround**: Direct numerical Biot-Savart with vectorized NumPy,
+using per-element J solved by EFIE. This works but lacks ngsolve.bem's
+optimized quadrature and singularity handling.
+
+**Status**: Feature request submitted to Joachim Schöberl (2026-03-29).
+Cross-mesh LaplaceSL/DL assembly already works (verified). Only the full
+gradient kernel is missing.
+"""
+
+
 def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
     """Return ngsolve.bem inductance extraction documentation by topic."""
     topics = {
@@ -1719,6 +1832,7 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "hodge": NGBEM_HODGE_DECOMPOSITION,
         "esim_workpiece": NGBEM_ESIM_WORKPIECE,
         "mqs_formulation_limits": NGBEM_MQS_FORMULATION_LIMITS,
+        "known_limitations": NGBEM_KNOWN_LIMITATIONS,
         # Aliases
         "cubit": NGBEM_CUBIT_WORKFLOW,
         "setgeominfo": NGBEM_CUBIT_WORKFLOW,
@@ -1740,6 +1854,12 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
         "scalar_bie": NGBEM_MQS_FORMULATION_LIMITS,
         "scalar_bie_sibc": NGBEM_MQS_FORMULATION_LIMITS,
         "scalar_potential": NGBEM_MQS_FORMULATION_LIMITS,
+        "curvaturesafety": NGBEM_KNOWN_LIMITATIONS,
+        "taskmanager": NGBEM_KNOWN_LIMITATIONS,
+        "quad": NGBEM_KNOWN_LIMITATIONS,
+        "grad_g": NGBEM_KNOWN_LIMITATIONS,
+        "biot_savart": NGBEM_KNOWN_LIMITATIONS,
+        "limitations": NGBEM_KNOWN_LIMITATIONS,
     }
 
     topic = topic.lower().strip()
@@ -1750,7 +1870,7 @@ def get_ngsbem_inductance_documentation(topic: str = "all") -> str:
             NGBEM_CURVE_ORDER_STUDY, NGBEM_STABILIZED,
             NGBEM_EXAMPLES, NGBEM_BEST_PRACTICES,
             NGBEM_HODGE_DECOMPOSITION, NGBEM_ESIM_WORKPIECE,
-            NGBEM_MQS_FORMULATION_LIMITS,
+            NGBEM_MQS_FORMULATION_LIMITS, NGBEM_KNOWN_LIMITATIONS,
         ]
         return "\n\n".join(main)
     elif topic in topics:
