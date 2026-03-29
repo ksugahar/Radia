@@ -1320,6 +1320,8 @@ def main():
                         choices=["local_curvature", "none"],
                         help="ESIM curvature: local_curvature=Bessel (R=half_thickness), "
                              "none=flat slab (cosh/sinh)")
+    parser.add_argument("--bh-file", default="",
+                        help="BH curve file (2-column: H[A/m] B[T], overrides --material)")
     # Post mode args
     parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (post mode)")
     parser.add_argument("--mesh-vol", default="", help="surface_mesh.vol path (post mode)")
@@ -1337,6 +1339,16 @@ def main():
             # Map user-facing curvature name to internal ESIM geometry
             _geom_map = {"local_curvature": "cylinder", "none": "slab"}
             esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
+            # Load BH curve from file if provided
+            bh_file = getattr(args, 'bh_file', '')
+            if bh_file and os.path.isfile(bh_file):
+                import numpy as _np
+                bh_data = _np.loadtxt(bh_file).tolist()
+                material_override = "steel"  # force steel path with custom BH
+            else:
+                bh_data = None
+                material_override = args.material
+
             result = extract_inductance(args.cub5, args.order,
                                         args.source, args.sink,
                                         args.fes_order, args.msh_output,
@@ -1345,7 +1357,7 @@ def main():
                                         frequency=args.frequency,
                                         sigma=args.sigma,
                                         half_thickness=args.half_thickness,
-                                        material=args.material,
+                                        material=material_override,
                                         esim_geometry=esim_geom)
         else:
             result = post_process(args.mesh_vol, args.fes_order,
