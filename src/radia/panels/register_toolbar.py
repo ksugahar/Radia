@@ -808,69 +808,79 @@ class InductanceDialog(QDialog):
 
 	@staticmethod
 	def _default_fem_journal():
-		"""Default FEM journal: Periodic Kelvin (2 spheres) + coil + wp hole.
+		"""Default FEM journal: Periodic Kelvin (2-sphere + mesh copy).
 
-		Interior sphere at origin: air + coil + workpiece hole
-		Exterior sphere at offset: Kelvin-mapped domain (same radius)
-		Periodic identification via matching surface labels.
+		Webcut is required: ACIS spheres have no curves, but
+		`copy mesh surface` requires curve/vertex mapping.
+
+		User must select source/sink gap surfaces manually after
+		boolean operations change surface IDs.
 		"""
 		lines = [
-			"# IH (FEM): Periodic Kelvin (2-sphere) + coil + workpiece",
-			"# Interior: R=60mm sphere at origin (air + coil + workpiece)",
-			"# Exterior: R=60mm sphere at x=150mm (Kelvin domain)",
-			"# Kelvin weight: nu = nu0 * (a/r')^2 (conformal symmetry)",
-			"# Coil: R=30mm, a=3mm torus (355deg gap)",
+			"# IH (FEM): Source/sink + Periodic Kelvin (2-sphere)",
+			"# Coil: R=30mm, a=3mm gapped torus (355deg, source/sink on gap)",
 			"# Workpiece: R=10mm, H=20mm cylinder (SIBC on interface)",
+			"# Kelvin: R=60mm interior + exterior sphere (periodic BC)",
 			"reset",
+			"",
+			"# === Coil: gapped torus ===",
+			"create surface circle radius 0.003 yplane",
+			"move surface 1 x 0.030 include_merged",
+			"sweep surface 1 zaxis angle 355",
 			"",
 			"# === Workpiece cylinder ===",
 			"create cylinder height 0.020 radius 0.010",
-			"# -> workpiece (volume 1)",
 			"",
-			"# === Coil torus ===",
-			"create torus major radius 0.030 minor radius 0.003",
-			"# -> coil (volume 2)",
-			"",
-			"# === Air sphere (subtract coil and wp, then recreate them) ===",
+			"# === Interior sphere + webcut for mesh copy topology ===",
 			"create sphere radius 0.060",
-			"create cylinder height 0.020 radius 0.010",
-			"create torus major radius 0.030 minor radius 0.003",
-			"subtract volume 4 5 from volume 3",
-			"# -> air (volume 6)",
+			"webcut volume 3 with plane zplane",
+			"# Webcut creates curves at equator for copy mesh mapping",
 			"",
-			"# === Exterior domain (Kelvin, offset x=150mm) ===",
-			"create sphere radius 0.060",
-			"move volume 7 x 0.150 include_merged",
-			"# -> kelvin (volume 7)",
+			"# === Copy to create exterior sphere (nomesh) ===",
+			"volume 3 4 copy move x 0.300 nomesh",
 			"",
-			"# === Imprint and merge (conformal interfaces) ===",
+			"# === Boolean: air = interior sphere halves - coil - wp ===",
+			"volume 1 copy",
+			"volume 2 copy",
+			"subtract volume 7 8 from volume 3 4",
+			"",
+			"# === Imprint and merge ===",
 			"imprint volume all",
 			"merge volume all",
 			"",
-			"# === Mesh ===",
+			"# === Mesh interior domain ===",
 			"volume all scheme tetmesh",
 			"volume 1 size 0.003",
 			"volume 2 size 0.003",
-			"volume 6 size 0.008",
-			"volume 7 size 0.015",
-			"mesh volume all",
+			"volume 3 4 size 0.008",
+			"mesh volume 1 2 3 4",
+			"# Kelvin: mesh copy + tet done by dialog (_setup_kelvin)",
 			"",
-			"# === Blocks ===",
+			"# === Blocks (volume) ===",
 			"set duplicate block elements on",
 			"block 1 add volume 1",
-			'block 1 name "workpiece"',
+			'block 1 name "coil"',
 			"block 2 add volume 2",
-			'block 2 name "coil"',
-			"block 3 add volume 6",
+			'block 2 name "workpiece"',
+			"block 3 add volume 3 4",
 			'block 3 name "air"',
-			"block 4 add volume 7",
+			"block 4 add volume 5 6",
 			'block 4 name "kelvin"',
 			"",
-			"# wp_surface and outer blocks are auto-created by _detect_blocks()",
+			"# === Blocks (surface) ===",
+			"# NOTE: Select gap faces in Cubit GUI, surface IDs vary",
+			"# after boolean. Use: pick surface on coil gap -> add to block.",
+			"# block 5 add face in surface <SOURCE_SID>",
+			'# block 5 name "source"',
+			"# block 6 add face in surface <SINK_SID>",
+			'# block 6 name "sink"',
+			"# (Without source/sink, J_theta fallback is used)",
 			"",
-			"# === Hide non-essential volumes ===",
-			"volume 6 visibility off",
-			"volume 7 visibility off",
+			"# wp_surface, kelvin_int/ext, outer: auto-created by dialog",
+			"",
+			"# === Hide non-essential ===",
+			"volume 3 4 visibility off",
+			"volume 5 6 visibility off",
 		]
 		return "\n".join(lines) + "\n"
 
@@ -1731,7 +1741,7 @@ class IHFEMDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("IH (FEM): Kelvin + ESIM")
+		self.setWindowTitle("IH (FEM): Source/Sink + SIBC")
 		self.setMinimumWidth(550)
 		self.setMinimumHeight(500)
 		self._ext_python = _find_external_python()
@@ -1742,7 +1752,7 @@ class IHFEMDialog(QDialog):
 		layout = QVBoxLayout(self)
 
 		# --- Journal editor ---
-		jou_label = QLabel("Cubit Journal (FEM: coil + air + Kelvin):")
+		jou_label = QLabel("Cubit Journal (FEM: coil + air + source/sink):")
 		jou_label.setStyleSheet("font-weight: bold;")
 		layout.addWidget(jou_label)
 		self.jou_edit = QPlainTextEdit()
@@ -1764,10 +1774,11 @@ class IHFEMDialog(QDialog):
 		# --- Block detection ---
 		block_group = QGridLayout()
 		for row, (lbl, attr) in enumerate([
-			("workpiece:", "_workpiece_block"),
 			("coil:", "_coil_block"),
+			("workpiece:", "_workpiece_block"),
 			("air:", "_air_block"),
-			("kelvin:", "_kelvin_block"),
+			("source:", "_source_block"),
+			("sink:", "_sink_block"),
 			("wp_surface:", "_wp_surface"),
 			("outer:", "_outer_surface"),
 		]):
@@ -1847,7 +1858,7 @@ class IHFEMDialog(QDialog):
 		btn_row.addStretch()
 		self.solve_btn = QPushButton("Solve")
 		self.solve_btn.clicked.connect(self._solve)
-		self.solve_btn.setToolTip("FEM-ESIM: Kelvin + HCurl + SIBC Karl iteration")
+		self.solve_btn.setToolTip("3D FEM-SIBC: source/sink + HCurl + Karl iteration")
 		btn_row.addWidget(self.solve_btn)
 		self.open_btn = QPushButton("Open Result")
 		self.open_btn.clicked.connect(self._open_result)
@@ -1921,15 +1932,30 @@ class IHFEMDialog(QDialog):
 				name = cubit.get_exodus_entity_name("block", bid)
 				found[name] = bid
 
+		if "kelvin" in found:
+			self._setup_kelvin(found)
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+
 		if "outer" not in found and "kelvin" in found:
 			self._auto_create_outer(found)
 			for bid in cubit.get_block_id_list():
 				name = cubit.get_exodus_entity_name("block", bid)
 				found[name] = bid
 
-		for key, attr in [("workpiece", "_workpiece_block"),
-		                   ("coil", "_coil_block"), ("air", "_air_block"),
-		                   ("kelvin", "_kelvin_block"),
+		# Auto-create outer from air sphere free surfaces (no kelvin needed)
+		if "outer" not in found and "air" in found:
+			self._auto_create_outer_from_air(found)
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+
+		for key, attr in [("coil", "_coil_block"),
+		                   ("workpiece", "_workpiece_block"),
+		                   ("air", "_air_block"),
+		                   ("source", "_source_block"),
+		                   ("sink", "_sink_block"),
 		                   ("wp_surface", "_wp_surface"),
 		                   ("outer", "_outer_surface")]:
 			label_w = getattr(self, f"label{attr}")
@@ -1940,8 +1966,109 @@ class IHFEMDialog(QDialog):
 				label_w.setText("(not found)")
 				label_w.setStyleSheet("font-weight: bold; color: red;")
 
-		has_all = all(k in found for k in ("coil", "air", "wp_surface"))
+		# Coil + air required; source/sink optional (fallback to J_theta)
+		has_all = all(k in found for k in ("coil", "air"))
 		self.solve_btn.setEnabled(has_all and self._ext_python is not None)
+
+	def _setup_kelvin(self, found):
+		"""Setup Kelvin mesh: mesh copy + kelvin_int/kelvin_ext surface blocks.
+
+		Sphere must be webcut (e.g., zplane) BEFORE meshing to create curves
+		for the copy mesh command. The journal should use:
+		  create sphere radius R
+		  webcut volume X with plane zplane
+		  volume X Y copy move x OFFSET nomesh
+
+		Finds hemisphere surface pairs via get_similar_surfaces, copies mesh
+		from interior to exterior hemisphere, tets the kelvin volumes,
+		then creates kelvin_int/kelvin_ext surface blocks for periodic ID.
+		"""
+		try:
+			kelvin_bid = found.get("kelvin")
+			air_bid = found.get("air")
+			if not kelvin_bid or not air_bid:
+				return
+
+			kelvin_vids = list(cubit.get_block_volumes(kelvin_bid))
+			air_vids = list(cubit.get_block_volumes(air_bid))
+			if not kelvin_vids or not air_vids:
+				return
+
+			# Check if any kelvin volume is already meshed
+			all_meshed = all(
+				len(cubit.get_volume_tets(v)) + len(cubit.get_volume_hexes(v)) > 0
+				for v in kelvin_vids)
+			if all_meshed:
+				return
+
+			# Find hemisphere surface pairs:
+			# Interior = largest free surface per air volume
+			# Exterior = corresponding surface per kelvin volume (via similar)
+			int_hemis = []
+			for av in air_vids:
+				best_sid, best_area = None, 0
+				for sid in cubit.get_relatives("volume", av, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					if len(adj) == 1:  # free (not shared with coil/wp)
+						area = cubit.surface(sid).area()
+						if area > best_area:
+							best_area = area
+							best_sid = sid
+				if best_sid is not None:
+					int_hemis.append(best_sid)
+
+			ext_hemis = []
+			for kv in kelvin_vids:
+				best_sid, best_area = None, 0
+				for sid in cubit.get_relatives("volume", kv, "surface"):
+					area = cubit.surface(sid).area()
+					if area > best_area:
+						best_area = area
+						best_sid = sid
+				if best_sid is not None:
+					ext_hemis.append(best_sid)
+
+			if not int_hemis or not ext_hemis:
+				return
+
+			# Copy mesh from interior to exterior hemispheres
+			cubit.cmd("set duplicate block elements on")
+			for src_sid, dst_sid in zip(int_hemis, ext_hemis):
+				src_curves = cubit.get_relatives("surface", src_sid, "curve")
+				dst_curves = cubit.get_relatives("surface", dst_sid, "curve")
+				if not src_curves or not dst_curves:
+					continue
+				src_c = src_curves[0]
+				dst_c = dst_curves[0]
+				src_v = int(cubit.curve(src_c).vertices()[0]
+				            .entity_name().split()[1])
+				dst_v = int(cubit.curve(dst_c).vertices()[0]
+				            .entity_name().split()[1])
+				cubit.cmd(
+					f"copy mesh surface {src_sid} onto surface {dst_sid} "
+					f"source curve {src_c} source vertex {src_v} "
+					f"target curve {dst_c} target vertex {dst_v}")
+
+			# Tet mesh kelvin volumes
+			for kv in kelvin_vids:
+				if len(cubit.get_volume_tets(kv)) == 0:
+					cubit.cmd(f"volume {kv} scheme tetmesh")
+					cubit.cmd(f"volume {kv} size 0.015")
+					cubit.cmd(f"mesh volume {kv}")
+
+			# Create kelvin_int and kelvin_ext surface blocks
+			bid_next = max(cubit.get_block_id_list()) + 1
+			for sid in int_hemis:
+				cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_int"')
+			bid_next += 1
+			for sid in ext_hemis:
+				cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_ext"')
+
+		except Exception as e:
+			import traceback
+			traceback.print_exc()
 
 	def _auto_create_wp_surface(self, found):
 		"""Auto-detect workpiece surface = shared faces between workpiece and air."""
@@ -2002,15 +2129,47 @@ class IHFEMDialog(QDialog):
 		except Exception:
 			pass
 
+	def _auto_create_outer_from_air(self, found):
+		"""Auto-detect outer surface on air volume (free surfaces = far boundary)."""
+		try:
+			air_bid = found.get("air")
+			if not air_bid:
+				return
+			air_vids = list(cubit.get_block_volumes(air_bid))
+			if not air_vids:
+				return
+			# Collect all volume IDs in the model
+			all_block_vids = set()
+			for bid in cubit.get_block_id_list():
+				for v in cubit.get_block_volumes(bid):
+					all_block_vids.add(v)
+			outer_sids = []
+			for vid in air_vids:
+				for sid in cubit.get_relatives("volume", vid, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					# Free surface on air = outer boundary
+					if len(adj) == 1:
+						outer_sids.append(sid)
+			if outer_sids:
+				bid_next = max(cubit.get_block_id_list()) + 1
+				cubit.cmd("set duplicate block elements on")
+				for sid in outer_sids:
+					tris = cubit.get_surface_tris(sid)
+					if tris:
+						cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+				cubit.cmd(f'block {bid_next} name "outer"')
+		except Exception:
+			pass
+
 	def _solve(self):
-		"""Run FEM-ESIM via external Python (calc_heating.py)."""
+		"""Run 3D FEM-SIBC via external Python (calc_fem_kelvin.py)."""
 		if not self._ext_python:
 			QMessageBox.warning(self, "Error", "External Python not found.")
 			return
 
 		self.solve_btn.setEnabled(False)
 		self.solve_btn.setText("Solving...")
-		self.result_label.setText("Computing FEM-ESIM (Kelvin + SIBC)...")
+		self.result_label.setText("Computing 3D FEM-SIBC...")
 
 		# Save current Cubit model
 		tmpdir = tempfile.mkdtemp(prefix="radia_fem_")
@@ -2019,37 +2178,56 @@ class IHFEMDialog(QDialog):
 
 		freq = self.freq_edit.text().strip() or "7000"
 		sigma = self.sigma_edit.text().strip() or "2e6"
-		material = "steel"  # material selection removed; BH/mu_r set directly
+		impedance = self.model_combo.currentText().lower()  # "sibc" or "esim"
 
-		self._heat_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
-		calc_script = os.path.join(_this_dir, "calc_heating.py")
+		self._fem_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
+		msh_output = os.path.join(tmpdir, "result.msh").replace("\\", "/")
+		calc_script = os.path.join(_this_dir, "calc_fem_kelvin.py")
 
-		# Get geometry from Cubit bounding boxes
+		# Detect coil wire radius from Cubit bounding box
+		a_coil = 0.003
+		r_wp = 0.010
 		try:
-			r_coil, a_coil, r_wp, h_wp = 0.03, 0.003, 0.01, 0.02
 			for bid in cubit.get_block_id_list():
 				name = cubit.get_exodus_entity_name("block", bid)
 				if name == "coil":
 					vids = list(cubit.get_block_volumes(bid))
 					if vids:
 						bb = cubit.get_bounding_box("volume", vids[0])
-						r_coil = (abs(bb[1]) + abs(bb[0])) / 2
 						a_coil = min(abs(bb[1] - bb[0]),
 						             abs(bb[5] - bb[4])) / 4
+				elif name == "workpiece":
+					vids = list(cubit.get_block_volumes(bid))
+					if vids:
+						bb = cubit.get_bounding_box("volume", vids[0])
+						r_wp = max(abs(bb[1] - bb[0]),
+						           abs(bb[3] - bb[2])) / 2
 		except Exception:
 			pass
 
 		args = [
 			calc_script,
-			"--r-coil", str(round(r_coil, 6)),
-			"--a-coil", str(round(a_coil, 6)),
-			"--r-wp", str(round(r_wp, 6)),
-			"--h-wp", str(round(h_wp, 6)),
+			"--cub5", cub5_file,
+			"--order", str(self.curve_spin.value()),
+			"--fes-order", str(self.fes_spin.value()),
 			"--frequency", freq,
 			"--sigma", sigma,
-			"--material", material,
-			"--output", self._heat_json,
+			"--impedance", impedance,
+			"--a-coil", str(round(a_coil, 6)),
+			"--r-wp", str(round(r_wp, 6)),
+			"--msh-output", msh_output,
+			"--output", self._fem_json,
 		]
+
+		# SIBC: pass mu_r; ESIM: pass BH file
+		if impedance == "sibc":
+			mu_r = self.mur_edit.text().strip() or "100"
+			args += ["--mu-r", mu_r]
+		else:
+			bh = self.bh_edit.text().strip()
+			if bh and bh != "(built-in Steel)":
+				args += ["--bh-file", bh]
+			args += ["--material", "steel"]
 
 		self._process = QProcess(self)
 		self._process.finished.connect(self._on_finished)
@@ -2061,7 +2239,7 @@ class IHFEMDialog(QDialog):
 		self._process = None
 
 		data = None
-		json_path = getattr(self, '_heat_json', '')
+		json_path = getattr(self, '_fem_json', '')
 		if json_path and os.path.exists(json_path):
 			try:
 				with open(json_path, "r") as f:
@@ -2077,26 +2255,42 @@ class IHFEMDialog(QDialog):
 			return
 
 		P = data.get("P_total", 0)
-		L = data.get("L_coil", 0)
+		L = data.get("L", 0)
+		src = data.get("source_type", "?")
 		self.result_label.setText(
 			f"P = {P:.4e} W, L = {L*1e9:.2f} nH\n"
 			f"H_t = {data.get('H_t_rms', 0):.2f} A/m, "
-			f"|Z_s| = {abs(complex(data.get('Z_s', '0'))):.4e}")
+			f"|Z_s| = {abs(complex(data.get('Z_s', '0'))):.4e}\n"
+			f"DOFs={data.get('ndof', 0)}, source={src}, "
+			f"t={data.get('t_total', 0):.1f}s")
 		self.open_btn.setEnabled(True)
 
 	def _open_result(self):
 		"""Open GMSH result file."""
-		json_path = getattr(self, '_heat_json', '')
-		if json_path and os.path.exists(json_path):
-			try:
-				with open(json_path, "r") as f:
-					data = json.load(f)
-				msh = data.get("msh_file", "")
-				if msh and os.path.exists(msh):
-					import subprocess
-					subprocess.Popen(["gmsh", msh])
-			except Exception:
-				pass
+		json_path = getattr(self, '_fem_json', '')
+		if not json_path or not os.path.exists(json_path):
+			return
+		try:
+			with open(json_path, "r") as f:
+				data = json.load(f)
+			msh = data.get("msh_file", "")
+			if not msh or not os.path.exists(msh):
+				return
+			import subprocess as _sp
+			ext_py = self._ext_python
+			if ext_py:
+				ext_pyw = ext_py.replace("python.exe", "pythonw.exe")
+				if not os.path.exists(ext_pyw):
+					ext_pyw = ext_py
+				code = (
+					"import sys, gmsh; "
+					"gmsh.initialize(sys.argv, run=True); "
+					"gmsh.finalize()")
+				_sp.Popen([ext_pyw, "-c", code, msh])
+			else:
+				os.startfile(msh)
+		except Exception:
+			pass
 
 
 # ================================================================

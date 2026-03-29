@@ -28,30 +28,18 @@ import os
 import sys
 
 
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_dir not in sys.path:
+    sys.path.insert(0, _this_dir)
+
+from calc_common import setup_cubit as _setup_cubit_common, setup_paths, MU_0
+
+
 def _setup_cubit():
     """Import cubit with path cleanup (NGSolve already imported)."""
-    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    from install_panels import find_cubit_bin
-
-    cubit_path = find_cubit_bin()
-    if cubit_path and cubit_path not in sys.path:
-        sys.path.append(cubit_path)
-
-    for p in list(sys.path):
-        if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):
-            sys.path.remove(p)
-
-    import cubit
-    import io, contextlib
-    with contextlib.redirect_stderr(io.StringIO()):
-        cubit.init(["cubit", "-nojournal", "-batch", "-noinit"])
-
-    for p in list(sys.path):
-        if "site-packages" in p and ("cubit" in p.lower() or "Cubit" in p):
-            sys.path.remove(p)
-
+    cubit = _setup_cubit_common()
+    if cubit is None:
+        raise RuntimeError("Cubit not available")
     return cubit
 
 
@@ -78,10 +66,8 @@ def extract_inductance(cub5_file, order, source_label="source",
     import time as _time
     from ngsolve import Integrate, CF, BND, GridFunction
 
-    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    from bem_inductance import compute_inductance_source_sink, MU_0
+    setup_paths()
+    from bem_inductance import compute_inductance_source_sink
 
     t_total_start = _time.perf_counter()
 
@@ -115,14 +101,10 @@ def extract_inductance(cub5_file, order, source_label="source",
                 f"Define source/sink blocks in Cubit journal."}
 
     # Export surface mesh (block names -> boundary labels)
-    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    import cubit_mesh_export
+    from calc_common import export_mesh
 
     t0_export = _time.perf_counter()
-    mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
-        cubit, order=order, surface_only=True, split_quads=True)
+    mesh = export_mesh(cubit, order=order, surface_only=True)
     t_export = _time.perf_counter() - t0_export
 
     nse = mesh.GetNE(BND)
@@ -319,17 +301,9 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
     H_t_mag = np.linalg.norm(H_t_vec, axis=1)
 
     # --- Step 3: Surface impedance per panel ---
-    # BH curve for steel
-    STEEL_BH = [
-        [0.0, 0.0], [50.0, 0.10], [100.0, 0.25], [200.0, 0.55],
-        [500.0, 0.95], [1000.0, 1.20], [2000.0, 1.40], [5000.0, 1.55],
-        [10000.0, 1.65], [20000.0, 1.75], [50000.0, 1.90], [100000.0, 2.00],
-    ]
+    from calc_common import create_esim_solver, get_bh_curve
 
-    bh_curve = STEEL_BH if material == "steel" else None
-    mu_r = 1.0 if material in ("copper", "aluminum") else None
-
-    from esim_cell_problem import ESIMFiniteSlabSolver
+    bh_curve, mu_r = get_bh_curve(material)
 
     P_total = 0.0
     Q_total = 0.0
@@ -338,11 +312,9 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
     delta_max = 0.0
 
     if impedance_model == "esim":
-        solver = ESIMFiniteSlabSolver(
-            half_thickness=half_thickness, bh_curve=bh_curve,
-            sigma=sigma, frequency=frequency,
-            mu_r=mu_r if bh_curve is None else None, n_nodes=200,
-            geometry=esim_geometry)
+        solver = create_esim_solver(
+            material=material, frequency=frequency, sigma=sigma,
+            half_thickness=half_thickness, geometry=esim_geometry)
 
         for i in range(n_panels):
             H0 = max(float(H_t_mag[i]), 1e-3)
@@ -885,11 +857,6 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     import time as _time
     from ngsolve import Mesh, Integrate, CF, BND, HDivSurface, GridFunction
     from netgen.meshing import Mesh as NetgenMesh
-
-    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    from bem_inductance import MU_0
 
     t0 = _time.perf_counter()
 
