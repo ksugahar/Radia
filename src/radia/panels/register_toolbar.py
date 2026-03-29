@@ -1780,6 +1780,7 @@ class IHFEMDialog(QDialog):
 			("source:", "_source_block"),
 			("sink:", "_sink_block"),
 			("wp_surface:", "_wp_surface"),
+			("kelvin:", "_kelvin_block"),
 			("outer:", "_outer_surface"),
 		]):
 			block_group.addWidget(QLabel(lbl), row, 0)
@@ -1805,6 +1806,33 @@ class IHFEMDialog(QDialog):
 		self.fes_spin.setToolTip("HCurl polynomial order")
 		order_group.addWidget(self.fes_spin, 0, 3)
 		layout.addLayout(order_group)
+
+		# --- Kelvin (open boundary) ---
+		kelvin_group = QGroupBox("Kelvin (Open Boundary)")
+		kelvin_layout = QGridLayout(kelvin_group)
+
+		kelvin_layout.addWidget(QLabel("Radius [m]:"), 0, 0)
+		self.kelvin_radius_edit = QLineEdit("")
+		self.kelvin_radius_edit.setPlaceholderText("auto from bounding box")
+		self.kelvin_radius_edit.setToolTip(
+			"Kelvin sphere radius [m]. Leave empty to auto-compute "
+			"from model bounding box (1.5x enclosing radius).")
+		kelvin_layout.addWidget(self.kelvin_radius_edit, 0, 1)
+
+		self.add_kelvin_btn = QPushButton("Add Kelvin")
+		self.add_kelvin_btn.setToolTip(
+			"Create Kelvin sphere pair in Cubit:\n"
+			"1. Sphere at centroid -> webcut air\n"
+			"2. Exterior sphere at offset -> kelvin volume\n"
+			"3. Mesh copy for periodic identification")
+		self.add_kelvin_btn.clicked.connect(self._add_kelvin)
+		kelvin_layout.addWidget(self.add_kelvin_btn, 0, 2)
+
+		self.kelvin_status = QLabel("")
+		self.kelvin_status.setWordWrap(True)
+		kelvin_layout.addWidget(self.kelvin_status, 1, 0, 1, 3)
+
+		layout.addWidget(kelvin_group)
 
 		# --- Workpiece settings ---
 		wp_group = QGroupBox("Workpiece (SIBC)")
@@ -1912,6 +1940,282 @@ class IHFEMDialog(QDialog):
 			cubit.cmd(line)
 		self._detect_blocks()
 
+	def _add_kelvin(self):
+		"""Auto-create Kelvin sphere pair in Cubit for open boundary.
+
+		Steps:
+		  1. Compute bounding box of all model volumes -> centroid + enclosing R
+		  2. Webcut air volume with sphere at centroid
+		  3. Create exterior sphere at offset -> kelvin volume
+		  4. Webcut both hemispheres (zplane) for copy mesh to work
+		  5. Mesh air sphere surface, copy to exterior, tet kelvin
+		  6. Create kelvin/kelvin_int/kelvin_ext blocks
+		"""
+		import math
+
+		# Check that 'air' block exists
+		found = {}
+		try:
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+		except Exception:
+			pass
+
+		if "kelvin" in found:
+			self.kelvin_status.setText("Kelvin block already exists.")
+			self.kelvin_status.setStyleSheet("color: orange;")
+			return
+
+		air_bid = found.get("air")
+		if not air_bid:
+			QMessageBox.warning(self, "Error",
+				'No "air" block found. Run journal first to create blocks.')
+			return
+
+		# Get all volume IDs in blocks (coil, workpiece, air)
+		all_vids = set()
+		for bid in cubit.get_block_id_list():
+			for v in cubit.get_block_volumes(bid):
+				all_vids.add(v)
+
+		if not all_vids:
+			QMessageBox.warning(self, "Error", "No meshed volumes found.")
+			return
+
+		# Compute bounding box of all volumes -> centroid + enclosing radius
+		bb_min = [1e30, 1e30, 1e30]
+		bb_max = [-1e30, -1e30, -1e30]
+		for vid in all_vids:
+			bb = cubit.get_bounding_box("volume", vid)
+			# bb = (xmin, xmax, xrange, ymin, ymax, yrange, zmin, zmax, zrange, ...)
+			bb_min[0] = min(bb_min[0], bb[0])
+			bb_max[0] = max(bb_max[0], bb[1])
+			bb_min[1] = min(bb_min[1], bb[3])
+			bb_max[1] = max(bb_max[1], bb[4])
+			bb_min[2] = min(bb_min[2], bb[6])
+			bb_max[2] = max(bb_max[2], bb[7])
+
+		cx = (bb_min[0] + bb_max[0]) / 2
+		cy = (bb_min[1] + bb_max[1]) / 2
+		cz = (bb_min[2] + bb_max[2]) / 2
+		half_diag = math.sqrt(
+			(bb_max[0] - bb_min[0])**2 +
+			(bb_max[1] - bb_min[1])**2 +
+			(bb_max[2] - bb_min[2])**2) / 2
+
+		# Kelvin radius: user-specified or auto (1.5x enclosing radius)
+		r_text = self.kelvin_radius_edit.text().strip()
+		if r_text:
+			try:
+				R_kelvin = float(r_text)
+			except ValueError:
+				QMessageBox.warning(self, "Error", "Invalid radius value.")
+				return
+		else:
+			R_kelvin = half_diag * 1.5
+			self.kelvin_radius_edit.setText(f"{R_kelvin:.6f}")
+
+		if R_kelvin <= half_diag * 0.9:
+			QMessageBox.warning(self, "Error",
+				f"Kelvin radius ({R_kelvin:.4f}) is smaller than "
+				f"model extent ({half_diag:.4f}). Increase radius.")
+			return
+
+		# Offset for exterior sphere (10x radius, along x)
+		offset = R_kelvin * 10
+		ext_cx = cx + offset
+
+		self.kelvin_status.setText("Creating Kelvin sphere...")
+		self.kelvin_status.setStyleSheet("color: blue;")
+		QApplication.processEvents()
+
+		try:
+			# Suppress journal logging during auto-commands
+			cubit.cmd("set journal off")
+
+			air_vids = list(cubit.get_block_volumes(air_bid))
+
+			# 1. Create interior sphere at centroid
+			cubit.cmd(f"create sphere radius {R_kelvin}")
+			sphere_id = cubit.get_last_id("volume")
+
+			# Move to centroid if not at origin
+			if abs(cx) > 1e-10 or abs(cy) > 1e-10 or abs(cz) > 1e-10:
+				cubit.cmd(f"move volume {sphere_id} x {cx} y {cy} z {cz}")
+
+			# 2. Webcut air with sphere (keep interior part as air)
+			#    First check if air is already inside the sphere
+			air_bb = cubit.get_bounding_box("volume", air_vids[0])
+			air_diag = math.sqrt(air_bb[2]**2 + air_bb[5]**2 + air_bb[8]**2) / 2
+			if air_diag > R_kelvin * 1.05:
+				# Air extends beyond sphere - webcut needed
+				cubit.cmd(
+					f"webcut volume {' '.join(str(v) for v in air_vids)} "
+					f"with sheet body {sphere_id}")
+				# Remove the sphere tool body
+				cubit.cmd(f"delete volume {sphere_id}")
+				# Identify which new volumes are inside/outside sphere
+				# The inside ones keep the "air" block assignment
+				# The outside ones are deleted
+				new_all_vids = set(cubit.get_entities("volume"))
+				new_vids = new_all_vids - all_vids
+				for nv in new_vids:
+					bb = cubit.get_bounding_box("volume", nv)
+					nc = ((bb[0]+bb[1])/2, (bb[3]+bb[4])/2, (bb[6]+bb[7])/2)
+					dist = math.sqrt((nc[0]-cx)**2 + (nc[1]-cy)**2 + (nc[2]-cz)**2)
+					if dist > R_kelvin * 0.8:
+						cubit.cmd(f"delete volume {nv}")
+			else:
+				# Air already fits inside sphere - no webcut needed
+				cubit.cmd(f"delete volume {sphere_id}")
+
+			# 3. Webcut air hemispheres with zplane (for copy mesh curves)
+			# Re-read air volumes after possible webcut
+			air_vids_new = list(cubit.get_block_volumes(air_bid))
+			if not air_vids_new:
+				# Re-detect: volumes that were in air block
+				air_vids_new = air_vids
+
+			# Webcut air sphere with z-plane through centroid
+			cubit.cmd(
+				f"webcut volume {' '.join(str(v) for v in air_vids_new)} "
+				f"with plane zplane offset {cz}")
+
+			# 4. Create exterior sphere pair (2 hemispheres)
+			cubit.cmd(f"create sphere radius {R_kelvin}")
+			ext_sphere = cubit.get_last_id("volume")
+			cubit.cmd(f"move volume {ext_sphere} x {ext_cx} y {cy} z {cz}")
+			cubit.cmd(
+				f"webcut volume {ext_sphere} "
+				f"with plane zplane offset {cz}")
+			# Get the two kelvin hemisphere volume IDs
+			kelvin_vids = []
+			for vid in cubit.get_entities("volume"):
+				if vid not in all_vids and vid not in air_vids_new:
+					bb = cubit.get_bounding_box("volume", vid)
+					nc_x = (bb[0] + bb[1]) / 2
+					if abs(nc_x - ext_cx) < R_kelvin:
+						kelvin_vids.append(vid)
+
+			if not kelvin_vids:
+				# Fallback: last 2 volumes created
+				all_now = sorted(cubit.get_entities("volume"))
+				kelvin_vids = all_now[-2:]
+
+			# 5. Set mesh scheme and size for kelvin
+			kelvin_size = R_kelvin / 3
+			for kv in kelvin_vids:
+				cubit.cmd(f"volume {kv} scheme tetmesh")
+				cubit.cmd(f"volume {kv} size {kelvin_size}")
+
+			# 6. Find hemisphere surface pairs and copy mesh
+			# Interior hemispheres = free surfaces on air volumes (not shared)
+			# Re-read air after webcut
+			air_vids_final = []
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				if name == "air":
+					air_vids_final.extend(cubit.get_block_volumes(bid))
+
+			int_hemis = []
+			for av in air_vids_final:
+				for sid in cubit.get_relatives("volume", av, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					if len(adj) == 1:  # free surface (outer boundary)
+						area = cubit.surface(sid).area()
+						# Hemisphere area ~ 2*pi*R^2
+						expected = 2 * math.pi * R_kelvin**2
+						if area > expected * 0.3:  # at least 30% of hemisphere
+							int_hemis.append(sid)
+
+			ext_hemis = []
+			for kv in kelvin_vids:
+				best_sid, best_area = None, 0
+				for sid in cubit.get_relatives("volume", kv, "surface"):
+					area = cubit.surface(sid).area()
+					if area > best_area:
+						best_area = area
+						best_sid = sid
+				if best_sid is not None:
+					ext_hemis.append(best_sid)
+
+			# Sort both lists by z-position of centroid (match upper/lower)
+			def _surf_cz(sid):
+				pts = cubit.get_relatives("surface", sid, "vertex")
+				if pts:
+					zs = [cubit.vertex(v).coordinates()[2] for v in pts]
+					return sum(zs) / len(zs)
+				return 0
+
+			int_hemis.sort(key=_surf_cz)
+			ext_hemis.sort(key=_surf_cz)
+
+			# Copy mesh from interior to exterior hemispheres
+			for src_sid, dst_sid in zip(int_hemis, ext_hemis):
+				src_curves = cubit.get_relatives("surface", src_sid, "curve")
+				dst_curves = cubit.get_relatives("surface", dst_sid, "curve")
+				if not src_curves or not dst_curves:
+					continue
+				src_c = src_curves[0]
+				dst_c = dst_curves[0]
+				try:
+					src_v = cubit.get_relatives("curve", src_c, "vertex")[0]
+					dst_v = cubit.get_relatives("curve", dst_c, "vertex")[0]
+					cubit.cmd(
+						f"copy mesh surface {src_sid} onto surface {dst_sid} "
+						f"source curve {src_c} source vertex {src_v} "
+						f"target curve {dst_c} target vertex {dst_v}")
+				except Exception:
+					# Fallback: try without vertex specification
+					cubit.cmd(
+						f"copy mesh surface {src_sid} onto surface {dst_sid} "
+						f"source curve {src_c} target curve {dst_c}")
+
+			# 7. Tet mesh kelvin volumes
+			for kv in kelvin_vids:
+				n_tets = len(cubit.get_volume_tets(kv))
+				if n_tets == 0:
+					cubit.cmd(f"mesh volume {kv}")
+
+			# 8. Create blocks: kelvin (volume), kelvin_int, kelvin_ext (surfaces)
+			cubit.cmd("set duplicate block elements on")
+			bid_next = max(cubit.get_block_id_list()) + 1
+			for kv in kelvin_vids:
+				cubit.cmd(f"block {bid_next} add volume {kv}")
+			cubit.cmd(f'block {bid_next} name "kelvin"')
+			bid_next += 1
+			for sid in int_hemis:
+				tris = cubit.get_surface_tris(sid)
+				if tris:
+					cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_int"')
+			bid_next += 1
+			for sid in ext_hemis:
+				tris = cubit.get_surface_tris(sid)
+				if tris:
+					cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_ext"')
+
+			# Report
+			n_kelvin_tets = sum(len(cubit.get_volume_tets(kv)) for kv in kelvin_vids)
+			self.kelvin_status.setText(
+				f"Kelvin added: R={R_kelvin:.4f}m, "
+				f"{len(kelvin_vids)} vols, {n_kelvin_tets} tets, "
+				f"{len(int_hemis)} int + {len(ext_hemis)} ext surfaces")
+			self.kelvin_status.setStyleSheet("color: green;")
+
+		except Exception as e:
+			import traceback
+			traceback.print_exc()
+			self.kelvin_status.setText(f"Error: {e}")
+			self.kelvin_status.setStyleSheet("color: red;")
+		finally:
+			cubit.cmd("set journal on")
+
+		# Re-detect blocks
+		self._detect_blocks()
+
 	def _detect_blocks(self):
 		"""Detect FEM blocks and auto-create wp_surface/outer from geometry."""
 		import math
@@ -1951,17 +2255,23 @@ class IHFEMDialog(QDialog):
 				name = cubit.get_exodus_entity_name("block", bid)
 				found[name] = bid
 
+		# Required blocks (red if missing), optional blocks (orange if missing)
+		_optional = {"source", "sink", "wp_surface", "kelvin", "outer"}
 		for key, attr in [("coil", "_coil_block"),
 		                   ("workpiece", "_workpiece_block"),
 		                   ("air", "_air_block"),
 		                   ("source", "_source_block"),
 		                   ("sink", "_sink_block"),
 		                   ("wp_surface", "_wp_surface"),
+		                   ("kelvin", "_kelvin_block"),
 		                   ("outer", "_outer_surface")]:
 			label_w = getattr(self, f"label{attr}")
 			if key in found:
 				label_w.setText(key)
 				label_w.setStyleSheet("font-weight: bold; color: green;")
+			elif key in _optional:
+				label_w.setText("(optional)")
+				label_w.setStyleSheet("font-weight: bold; color: orange;")
 			else:
 				label_w.setText("(not found)")
 				label_w.setStyleSheet("font-weight: bold; color: red;")
@@ -1969,6 +2279,12 @@ class IHFEMDialog(QDialog):
 		# Coil + air required; source/sink optional (fallback to J_theta)
 		has_all = all(k in found for k in ("coil", "air"))
 		self.solve_btn.setEnabled(has_all and self._ext_python is not None)
+
+		# Warn about J_theta fallback
+		if has_all and "source" not in found:
+			self.result_label.setText(
+				"Note: No source/sink blocks. "
+				"J0*e_theta fallback (axisymmetric torus only).")
 
 	def _setup_kelvin(self, found):
 		"""Setup Kelvin mesh: mesh copy + kelvin_int/kelvin_ext surface blocks.

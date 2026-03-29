@@ -122,17 +122,19 @@ def calculate_surface(cub5_file, order):
 
 
 def main():
+    _panels_dir = os.path.dirname(os.path.abspath(__file__))
+    if _panels_dir not in sys.path:
+        sys.path.insert(0, _panels_dir)
+    from calc_common import calc_main
+
     parser = argparse.ArgumentParser(description="NGSolve surface area calculator")
     parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
     parser.add_argument("--order", type=int, default=1, help="Curve order (1-5)")
-    args = parser.parse_args()
 
-    try:
-        result = calculate_surface(args.cub5, args.order)
-        print(json.dumps(result))
-    except Exception as e:
-        print(json.dumps({"error": str(e)}))
-        sys.exit(1)
+    def run(args):
+        return calculate_surface(args.cub5, args.order)
+
+    calc_main(run, parser)
 
 
 if __name__ == "__main__":

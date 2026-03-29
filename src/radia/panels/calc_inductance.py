@@ -32,7 +32,8 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import setup_cubit as _setup_cubit_common, setup_paths, MU_0
+from calc_common import (setup_cubit as _setup_cubit_common, setup_paths, MU_0,
+                          progress, calc_main)
 
 
 def _setup_cubit():
@@ -838,6 +839,100 @@ def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     }
 
 
+def _compute_B_field_cf(mesh_surf, gf_J, elem_A, lx=0, ly=0, lz=0, maxh_vol=0):
+    """Compute B field CoefficientFunction via BiotSavartCF.
+
+    Converts EFIE-solved surface current J into wire segments,
+    then builds a BiotSavartCF (multipole-accelerated) for fast evaluation
+    on any volume mesh.
+
+    Args:
+        mesh_surf: Surface mesh (from BEM solve)
+        gf_J: HDivSurface GridFunction (solved J)
+        elem_A: Per-element areas
+        lx, ly, lz: Box half-sizes [m] for volume mesh
+        maxh_vol: Volume mesh element size [m]
+
+    Returns:
+        (B_cf, mesh_vol): CoefficientFunction for B [T] and volume mesh
+    """
+    import numpy as np
+    import math
+    from ngsolve import Mesh, BND, Integrate
+    from netgen.occ import Box, Pnt, OCCGeometry
+    from netgen.meshing import MeshingParameters
+
+    setup_paths()
+    from biot_savart import biot_savart_wire
+
+    # Extract per-element J and geometry
+    elem_Jx = Integrate(gf_J[0], mesh_surf, VOL_or_BND=BND, element_wise=True)
+    elem_Jy = Integrate(gf_J[1], mesh_surf, VOL_or_BND=BND, element_wise=True)
+    elem_Jz = Integrate(gf_J[2], mesh_surf, VOL_or_BND=BND, element_wise=True)
+
+    # Convert surface current elements to wire segments:
+    # Each triangle with J -> short filament at centroid with current I = |J|*A/(2*eps)
+    # Filament endpoints: centroid +/- eps * J_hat, length = 2*eps
+    # This preserves the magnetic dipole moment: m = I * area = J * A * eps
+    segments = []
+    currents = []
+    for el in mesh_surf.Elements(BND):
+        area = abs(elem_A[el.nr])
+        if area < 1e-30:
+            continue
+        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
+        j_mag = np.linalg.norm(jvec)
+        if j_mag < 1e-30:
+            continue
+
+        verts = [mesh_surf.vertices[v.nr].point for v in el.vertices]
+        centroid = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+
+        # Filament length ~ element size
+        eps = math.sqrt(area) * 0.5
+        j_hat = jvec / j_mag
+        p1 = centroid - eps * j_hat
+        p2 = centroid + eps * j_hat
+        I_fil = j_mag * area / (2 * eps)
+
+        segments.append((tuple(p1), tuple(p2)))
+        currents.append(I_fil)
+
+    progress("BIOT_SAVART", f"{len(segments)} filaments from surface J")
+
+    # Build BiotSavartCF with per-segment current
+    from ngsolve.bem import BiotSavartCF
+    from ngsolve.bla import Vec3D
+
+    # Compute center and radius from all segment endpoints
+    all_pts = np.array([p for seg in segments for p in seg])
+    center = np.mean(all_pts, axis=0)
+    dists = np.linalg.norm(all_pts - center[np.newaxis, :], axis=1)
+    rad = float(max(np.max(dists) * 1.5, 1e-10))
+
+    bs = BiotSavartCF(order=15, kappa=1e-10,
+                      center=Vec3D(*center), rad=rad)
+    for (p1, p2), I in zip(segments, currents):
+        bs.AddCurrent(Vec3D(*p1), Vec3D(*p2), complex(I), 4)
+
+    # BiotSavartCF returns complex CF; take real part for DC problems
+    B_cf = MU_0 * bs.real  # H [A/m] -> B [T], real part only
+
+    # Create volume mesh for visualization
+    coords = np.array([(v.point[0], v.point[1], v.point[2])
+                       for v in mesh_surf.vertices])
+    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
+    vol_center = (bbox_min + bbox_max) / 2
+    half = np.array([lx, ly, lz])
+
+    box = Box(Pnt(*(vol_center - half)), Pnt(*(vol_center + half)))
+    mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
+        mp=MeshingParameters(maxh=maxh_vol)))
+
+    progress("BIOT_SAVART", f"vol mesh {mesh_vol.nv} verts")
+    return B_cf, mesh_vol
+
+
 def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
                  lx=0, ly=0, lz=0, maxh_vol=0):
     """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
@@ -857,7 +952,8 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     """
     import numpy as np
     import time as _time
-    from ngsolve import Mesh, Integrate, CF, BND, HDivSurface, GridFunction
+    from ngsolve import (Mesh, Integrate, CF, BND, HDivSurface, GridFunction,
+                         Norm, HDiv)
     from netgen.meshing import Mesh as NetgenMesh
 
     t0 = _time.perf_counter()
@@ -896,35 +992,48 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     for k in range(3):
         J_nodes[:, k] = np.where(nc_count > 0, J_nodes[:, k] / nc_count, 0.0)
 
-    sys.stderr.write(f"FIELD_READY:J computed\n")
-    sys.stderr.flush()
+    progress("FIELD_READY", "J computed")
 
-    # B-distribution (volume B via Biot-Savart)
-    B_nodes, vol_nodes, vol_elems = _compute_B_field(
-        mesh, gf_J, elem_A, MU_0,
-        lx=lx, ly=ly, lz=lz, maxh_vol=maxh_vol)
+    # B-distribution via BiotSavartCF + GridFunction.Set()
+    B_cf, mesh_vol = _compute_B_field_cf(
+        mesh, gf_J, elem_A, lx=lx, ly=ly, lz=lz, maxh_vol=maxh_vol)
 
-    sys.stderr.write(f"B_FIELD_READY:B computed\n")
-    sys.stderr.flush()
+    progress("B_FIELD_READY", "B computed")
 
-    # Write single combined .msh
-    gmsh_file = os.path.join(base_dir, "inductance.msh").replace("\\", "/")
-    _write_combined_msh(gmsh_file, mesh, J_nodes, vol_nodes, vol_elems, B_nodes)
+    # Write output via GmshPostExport
+    gmsh_file_B = os.path.join(base_dir, "inductance_B.msh").replace("\\", "/")
+    gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
 
-    # Companion .geo
+    from gmsh_post_export import GmshPostExport
+
+    # Volume B-field via BiotSavartCF -> GridFunction.Set()
+    fes_B = HDiv(mesh_vol, order=1)
+    gf_B = GridFunction(fes_B)
+    gf_B.Set(B_cf)
+    post_B = GmshPostExport(mesh_vol)
+    post_B.add_vector_field("B", gf_B)
+    post_B.add_scalar_field("|B|", Norm(gf_B))
+    post_B.write(gmsh_file_B)
+    progress("GMSH", f"B written: {gmsh_file_B}")
+
+    # Surface J-field (high-order curved elements)
+    post_J = GmshPostExport(mesh, boundary=True)
+    post_J.add_field("|J|", np.linalg.norm(J_nodes, axis=1), ncomp=1)
+    post_J.add_field("J", J_nodes, ncomp=3)
+    post_J.write(gmsh_file_J)
+    progress("GMSH", f"J written: {gmsh_file_J}")
+
+    # Companion .geo (Merge both files)
     geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
     with open(geo_file, 'w', encoding='utf-8') as f:
-        f.write(f'Merge "{os.path.basename(gmsh_file)}";\n')
+        f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
+        f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
-        f.write('View[0].ArrowSizeMin = 20;\n')
-        f.write('View[0].ArrowSizeMax = 20;\n')
-        f.write('View[1].ArrowSizeMin = 20;\n')
-        f.write('View[1].ArrowSizeMax = 20;\n')
 
     # COMSOL-compatible text interpolation files
-    _write_comsol_txt(os.path.join(base_dir, "B_field.txt"), vol_nodes, B_nodes,
-                      "B", ["Bx", "By", "Bz"])
+    vol_nodes_list = [(v.point[0], v.point[1], v.point[2])
+                      for v in mesh_vol.vertices]
     _write_comsol_txt(os.path.join(base_dir, "J_surface.txt"),
                       [(mesh.vertices[i].point[0], mesh.vertices[i].point[1],
                         mesh.vertices[i].point[2]) for i in range(nv)],
@@ -1092,172 +1201,6 @@ def _write_comsol_txt(filename, nodes, field_data, field_name, comp_names):
             f.write(f'{x:.15e} {y:.15e} {z:.15e} {vals}\n')
 
 
-def _compute_B_field(mesh_surf, gf_J, elem_A, MU_0,
-                     lx=0, ly=0, lz=0, maxh_vol=0):
-    """Compute B field in air volume from surface current J.
-
-    Vectorized dipole summation: B = mu0/(4pi) * sum(J x r / r^3 * dA).
-
-    Args:
-        lx, ly, lz: Box half-sizes [m]. 0 = auto.
-        maxh_vol: Volume mesh element size [m]. 0 = auto.
-
-    Returns:
-        B_nodes: (nv_vol, 3) B field at volume vertices
-        vol_nodes: list of (x, y, z) volume vertex coordinates
-        vol_elems: list of (v0, v1, v2, v3) tet connectivity (0-indexed)
-    """
-    import numpy as np
-    from ngsolve import Mesh, BND, Integrate, VOL
-    from netgen.occ import Box, Pnt, OCCGeometry
-    from netgen.meshing import MeshingParameters
-
-    INV_4PI = 1.0 / (4.0 * np.pi)
-
-    # Extract per-element J and geometry
-    elem_Jx = Integrate(gf_J[0], mesh_surf, VOL_or_BND=BND, element_wise=True)
-    elem_Jy = Integrate(gf_J[1], mesh_surf, VOL_or_BND=BND, element_wise=True)
-    elem_Jz = Integrate(gf_J[2], mesh_surf, VOL_or_BND=BND, element_wise=True)
-
-    centroids, areas, J_vecs = [], [], []
-    for el in mesh_surf.Elements(BND):
-        area = abs(elem_A[el.nr])
-        if area < 1e-30:
-            continue
-        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
-        verts = [mesh_surf.vertices[v.nr].point for v in el.vertices]
-        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-        centroids.append(c)
-        areas.append(area)
-        J_vecs.append(jvec)
-
-    centroids = np.array(centroids)
-    areas = np.array(areas)
-    J_vecs = np.array(J_vecs)
-
-    # Create air volume mesh
-    coords = np.array([(v.point[0], v.point[1], v.point[2])
-                       for v in mesh_surf.vertices])
-    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
-    center = (bbox_min + bbox_max) / 2
-
-    half = np.array([lx, ly, lz])
-    box = Box(Pnt(*(center - half)), Pnt(*(center + half)))
-    mesh_vol = Mesh(OCCGeometry(box).GenerateMesh(
-        mp=MeshingParameters(maxh=maxh_vol)))
-
-    obs_pts = np.array([(v.point[0], v.point[1], v.point[2])
-                        for v in mesh_vol.vertices])
-
-    sys.stderr.write(f"B_PROGRESS:{len(centroids)} elems -> {len(obs_pts)} pts\n")
-    sys.stderr.flush()
-
-    # Vectorized Biot-Savart: B = mu0/(4pi) * sum(J x (r-r')/|r-r'|^3 * dA)
-    dx = obs_pts[:, None, :] - centroids[None, :, :]
-    r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-30))
-    r3_inv = areas[None, :] / (r ** 3)
-    cross = np.cross(J_vecs[None, :, :], dx)
-    B_nodes = MU_0 * INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)
-
-    vol_nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_vol.vertices]
-    vol_elems = []
-    for el in mesh_vol.Elements(VOL):
-        vol_elems.append([v.nr for v in el.vertices])
-
-    return B_nodes, vol_nodes, vol_elems
-
-
-def _write_combined_msh(filename, mesh_surf, J_nodes, vol_nodes, vol_elems, B_nodes):
-    """Write single .msh v2.2 with volume B + surface J + coil wireframe.
-
-    Node numbering:
-      1..nv_vol                  : volume mesh vertices (B field)
-      nv_vol+1..nv_vol+nv_surf   : surface mesh vertices (J field)
-    Elements:
-      1..ne_vol                  : volume tets (physical group "air")
-      ne_vol+1..ne_vol+ne_surf   : surface tris (physical group "coil_surface")
-      after that                 : coil wireframe lines (physical group "coil_wire")
-    """
-    import numpy as np
-    from ngsolve import BND
-
-    nv_vol = len(vol_nodes)
-    nv_surf = mesh_surf.nv
-    surf_offset = nv_vol  # surface node IDs start after volume nodes
-
-    # Surface nodes
-    surf_nodes = [(v.point[0], v.point[1], v.point[2]) for v in mesh_surf.vertices]
-
-    # Surface triangles
-    surf_elems = []
-    for el in mesh_surf.Elements(BND):
-        surf_elems.append([v.nr for v in el.vertices])
-
-    # Coil wireframe edges
-    edges = set()
-    for el in mesh_surf.Elements(BND):
-        verts = [v.nr for v in el.vertices]
-        nv = len(verts)
-        for i in range(nv):
-            a, b = verts[i], verts[(i + 1) % nv]
-            edges.add((min(a, b), max(a, b)))
-    edges = sorted(edges)
-
-    n_nodes = nv_vol + nv_surf
-    ne_vol = len(vol_elems)
-    ne_surf = len(surf_elems)
-    ne_wire = len(edges)
-    n_elems = ne_vol + ne_surf + ne_wire
-
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
-
-        # Physical groups
-        f.write('$PhysicalNames\n3\n')
-        f.write('3 1 "air"\n')
-        f.write('2 2 "coil_surface"\n')
-        f.write('1 3 "coil_wire"\n')
-        f.write('$EndPhysicalNames\n')
-
-        # Nodes: volume then surface
-        f.write(f'$Nodes\n{n_nodes}\n')
-        for i, (x, y, z) in enumerate(vol_nodes):
-            f.write(f'{i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
-        for i, (x, y, z) in enumerate(surf_nodes):
-            f.write(f'{surf_offset + i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
-        f.write('$EndNodes\n')
-
-        # Elements: volume tets + surface tris + wireframe lines
-        f.write(f'$Elements\n{n_elems}\n')
-        eid = 1
-        for verts in vol_elems:
-            ns = ' '.join(str(v + 1) for v in verts)
-            f.write(f'{eid} 4 2 1 1 {ns}\n')  # type 4 = tet
-            eid += 1
-        for verts in surf_elems:
-            ns = ' '.join(str(v + surf_offset + 1) for v in verts)
-            f.write(f'{eid} 2 2 2 2 {ns}\n')  # type 2 = tri
-            eid += 1
-        for a, b in edges:
-            f.write(f'{eid} 1 2 3 3 {a + surf_offset + 1} {b + surf_offset + 1}\n')
-            eid += 1
-        f.write('$EndElements\n')
-
-        # NodeData: B on volume nodes
-        f.write('$NodeData\n1\n"B"\n1\n0.0\n3\n0\n3\n')
-        f.write(f'{nv_vol}\n')
-        for i in range(nv_vol):
-            bx, by, bz = B_nodes[i]
-            f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
-        f.write('$EndNodeData\n')
-
-        # NodeData: J on surface nodes (offset IDs)
-        f.write('$NodeData\n1\n"J"\n1\n0.0\n3\n0\n3\n')
-        f.write(f'{nv_surf}\n')
-        for i in range(nv_surf):
-            jx, jy, jz = J_nodes[i]
-            f.write(f'{surf_offset + i + 1} {jx:.15e} {jy:.15e} {jz:.15e}\n')
-        f.write('$EndNodeData\n')
 
 
 def main():
@@ -1301,49 +1244,37 @@ def main():
     parser.add_argument("--ly", type=float, default=0.07, help="Box half-size Y [m]")
     parser.add_argument("--lz", type=float, default=0.07, help="Box half-size Z [m]")
     parser.add_argument("--maxh-vol", type=float, default=0.01, help="Volume mesh size [m]")
-    args = parser.parse_args()
 
-    import io as _io
-    real_stdout = sys.stdout
-    sys.stdout = _io.StringIO()
-    try:
+    def run(args):
         if args.mode == "solve":
-            # Map user-facing curvature name to internal ESIM geometry
             _geom_map = {"local_curvature": "cylinder", "none": "slab"}
             esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
-            # Load BH curve from file if provided
             bh_file = getattr(args, 'bh_file', '')
             if bh_file and os.path.isfile(bh_file):
                 import numpy as _np
                 bh_data = _np.loadtxt(bh_file).tolist()
-                material_override = "steel"  # force steel path with custom BH
+                material_override = "steel"
             else:
                 bh_data = None
                 material_override = args.material
 
-            result = extract_inductance(args.cub5, args.order,
-                                        args.source, args.sink,
-                                        args.fes_order, args.msh_output,
-                                        workpiece=args.workpiece,
-                                        impedance_model=args.impedance_model,
-                                        frequency=args.frequency,
-                                        sigma=args.sigma,
-                                        half_thickness=args.half_thickness,
-                                        material=material_override,
-                                        esim_geometry=esim_geom)
+            return extract_inductance(args.cub5, args.order,
+                                      args.source, args.sink,
+                                      args.fes_order, args.msh_output,
+                                      workpiece=args.workpiece,
+                                      impedance_model=args.impedance_model,
+                                      frequency=args.frequency,
+                                      sigma=args.sigma,
+                                      half_thickness=args.half_thickness,
+                                      material=material_override,
+                                      esim_geometry=esim_geom)
         else:
-            result = post_process(args.mesh_vol, args.fes_order,
-                                  args.msh_output, args.j_npy,
-                                  args.lx, args.ly, args.lz,
-                                  args.maxh_vol)
-    except Exception as e:
-        result = {"error": str(e)}
-    sys.stdout = real_stdout
+            return post_process(args.mesh_vol, args.fes_order,
+                                args.msh_output, args.j_npy,
+                                args.lx, args.ly, args.lz,
+                                args.maxh_vol)
 
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(result, f)
-    print(json.dumps(result))
+    calc_main(run, parser)
 
 
 if __name__ == "__main__":
