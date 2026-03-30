@@ -69,7 +69,7 @@ def convert_vol_to_gmsh(vol_file, gmsh_file=None, format='gmsh2'):
 
     ngmesh.Export(gmsh_file, format_str)
 
-    print(f"✓ Conversion complete: {gmsh_file}")
+    print(f"[OK] Conversion complete: {gmsh_file}")
     print(f"\nTo view in Gmsh:")
     print(f"  gmsh {gmsh_file}")
 
@@ -98,7 +98,7 @@ def convert_vol_to_vtk(vol_file, vtk_file=None):
     vtk = VTKOutput(mesh, coefs=[], names=[], filename=vtk_file)
     vtk.Do()
 
-    print(f"✓ VTK export complete: {vtk_file}.vtk")
+    print(f"[OK] VTK export complete: {vtk_file}.vtk")
     print(f"\nTo view in ParaView:")
     print(f"  paraview {vtk_file}.vtk")
 

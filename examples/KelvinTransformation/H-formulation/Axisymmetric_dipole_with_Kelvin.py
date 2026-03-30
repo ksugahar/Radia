@@ -357,15 +357,15 @@ for i, zval in enumerate(z_profile):
     else:
         Hz_pert_numerical_z[i] = nan
 
-    # Analytical solution on z-axis (r_cyl ≈ 0)
-    # Derived from perturbation potential: φ = -(μr-1)/(μr+2) * a³ * H0 * z/r³
-    # H_z = -∂φ/∂z = (μr-1)/(μr+2) * a³ * (r² - 3z²)/r⁵
-    # On z-axis (r = |z|): H_z = (μr-1)/(μr+2) * a³ * (z² - 3z²)/|z|⁵
-    #                          = -2(μr-1)/(μr+2) * a³ / |z|³
+    # Analytical solution on z-axis (r_cyl ~= 0)
+    # Derived from perturbation potential: φ = -(mur-1)/(mur+2) * a^3 * H0 * z/r^3
+    # H_z = -∂φ/∂z = (mur-1)/(mur+2) * a^3 * (r^2 - 3z^2)/r⁵
+    # On z-axis (r = |z|): H_z = (mur-1)/(mur+2) * a^3 * (z^2 - 3z^2)/|z|⁵
+    #                          = -2(mur-1)/(mur+2) * a^3 / |z|^3
     # Wait, this gives negative, but NGSolve shows positive!
     #
     # The correct formula (verified against NGSolve):
-    # H_z = +2 * (μr-1)/(μr+2) * (a/|z|)³ on z-axis (independent of z sign)
+    # H_z = +2 * (mur-1)/(mur+2) * (a/|z|)^3 on z-axis (independent of z sign)
     if r < sphere_radius:
         Hz_pert_analytical_z[i] = -1.0 + 3.0/(mu_r + 2)
     else:
@@ -421,9 +421,9 @@ for nz in range(len(z_grid_anal)):
             Hz_analytical_2d[nz, nr] = -1.0 + 3.0/(mu_r + 2)
         else:
             # Outside sphere: dipole field (verified against NGSolve)
-            # H_pert = C * [2cosθ er + sinθ eθ]
-            # where C = +(μr-1)/(μr+2) * (a/r)³ (POSITIVE coefficient!)
-            # θ is angle from z-axis
+            # H_pert = C * [2costheta er + sintheta etheta]
+            # where C = +(mur-1)/(mur+2) * (a/r)^3 (POSITIVE coefficient!)
+            # theta is angle from z-axis
             theta = arctan2(r_grid_anal[nr], z_grid_anal[nz])  # Angle from z-axis
             C = (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3  # POSITIVE
 
@@ -432,8 +432,8 @@ for nz in range(len(z_grid_anal)):
             H_theta = C * sin(theta)
 
             # Convert to cylindrical (r_cyl, z) coordinates
-            # e_r = sin(θ)·e_{r_cyl} + cos(θ)·e_z
-            # e_θ = cos(θ)·e_{r_cyl} - sin(θ)·e_z
+            # e_r = sin(theta)·e_{r_cyl} + cos(theta)·e_z
+            # e_theta = cos(theta)·e_{r_cyl} - sin(theta)·e_z
             Hr_analytical[nz, nr] = H_r * sin(theta) + H_theta * cos(theta)
             Hz_analytical_2d[nz, nr] = H_r * cos(theta) - H_theta * sin(theta)
 

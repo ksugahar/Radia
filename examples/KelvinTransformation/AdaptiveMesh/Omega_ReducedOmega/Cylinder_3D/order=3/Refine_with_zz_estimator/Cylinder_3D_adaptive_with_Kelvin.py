@@ -498,8 +498,8 @@ def mark_elements_adaptive_theta(element_errors, current_ne, target_ratio=2.0):
 
 	# For 3D with bisection: each marked element creates ~8 new elements
 	# DOF ~ elements, so to get target_ratio growth:
-	# new_elements = current_ne + 8 * n_marked ≈ target_ratio * current_ne
-	# => n_marked ≈ current_ne * (target_ratio - 1) / 8
+	# new_elements = current_ne + 8 * n_marked ~= target_ratio * current_ne
+	# => n_marked ~= current_ne * (target_ratio - 1) / 8
 	# But empirically, 3D refinement is more aggressive, use expansion_factor
 	expansion_factor = 28.0  # Empirical: adjusted based on observed 3x growth
 	target_marked = int(current_ne * (target_ratio - 1) / expansion_factor)
@@ -1031,7 +1031,7 @@ while True:
 	print(f"  Vertices: {mesh.nv}")
 	print(f"  DOFs: {fes.ndof}")
 	print(f"  Error estimator: {total_error:.6e}")
-	print(f"  Energy (8×1/8): {energy_full:.6e} J")
+	print(f"  Energy (8x1/8): {energy_full:.6e} J")
 	print(f"    Total region (mag+air_total): {energy_total_region_full:.6e} J")
 	print(f"    Reduced region (air_in+air_out): {energy_reduced_region_full:.6e} J")
 	print(f"    Per-region: magnetic={energy_magnetic_full:.6e}, air_total={energy_air_total_full:.6e}")

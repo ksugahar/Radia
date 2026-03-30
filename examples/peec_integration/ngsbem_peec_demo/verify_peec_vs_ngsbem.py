@@ -31,13 +31,13 @@ def analytical_wire_inductance(length, width, height):
 
     Grover formula: L = (mu_0 * l) / (2*pi) * (ln(2*l / GMD) - 1 + GMD/(3*l))
     where GMD is the geometric mean distance of the cross-section.
-    For square: GMD ≈ 0.2235 * (w + h) (Rosa's approximation)
+    For square: GMD ~= 0.2235 * (w + h) (Rosa's approximation)
     """
     # GMD for rectangular cross-section (Hoer & Love, 1965)
     w, h = width, height
     if abs(w - h) < 1e-15:
         # Square cross-section
-        gmd = 0.447 * w  # exp(-1/4) * sqrt(2) * w / (sqrt(pi)) ≈ 0.447*w
+        gmd = 0.447 * w  # exp(-1/4) * sqrt(2) * w / (sqrt(pi)) ~= 0.447*w
     else:
         gmd = np.exp(-0.25) * np.sqrt(w * h)  # approximate
 

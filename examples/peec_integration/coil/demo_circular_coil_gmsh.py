@@ -136,13 +136,13 @@ def create_circular_coil(mean_radius=0.05, wire_width=0.004, wire_height=0.004,
     if vol_elements[1] and any(len(e) > 0 for e in vol_elements[1]):
         print("    ⚠️  WARNING: Volume elements found - PEEC only needs surface!")
     else:
-        print("    ✅ No volume elements - correct for PEEC")
+        print("    [OK] No volume elements - correct for PEEC")
 
     # Save mesh
     msh_file = 'circular_coil.msh'
     gmsh.write(msh_file)
     print(f"\n[8] Saved mesh: {msh_file}")
-    print("    ✅ Surface mesh only - ready for PEEC")
+    print("    [OK] Surface mesh only - ready for PEEC")
 
     # Show in GMSH GUI
     if show_gui:
@@ -233,8 +233,8 @@ def create_coil_with_field_data(mean_radius=0.05, wire_width=0.004,
     print("\n[11] Opening GMSH GUI with field data...")
     print("    View controls:")
     print("      - Press '1' to toggle current density view")
-    print("      - Tools → Visibility: Control view display")
-    print("      - Tools → Options → View: Colormap settings")
+    print("      - Tools -> Visibility: Control view display")
+    print("      - Tools -> Options -> View: Colormap settings")
 
     gmsh.fltk.run()
     gmsh.finalize()

@@ -221,7 +221,7 @@ def compute_analytical_inductance(loop_radius, wire_width, wire_height):
     For rectangular cross-section, use GMD (Geometric Mean Distance).
     L = mu_0 * R * (ln(8R/GMD) - 2)
 
-    GMD for rectangle: GMD ≈ 0.2235 * (w + h)
+    GMD for rectangle: GMD ~= 0.2235 * (w + h)
     """
     mu_0 = 4 * np.pi * 1e-7
 
@@ -289,7 +289,7 @@ def test_peec_resistance():
     mu_0 = 4 * np.pi * 1e-7
 
     # Use equivalent radius for skin depth calculation
-    # For rectangle, equivalent radius ≈ sqrt(w*h/pi)
+    # For rectangle, equivalent radius ~= sqrt(w*h/pi)
     equiv_radius = np.sqrt(wire_width * wire_height / np.pi)
 
     print(f"\nEquivalent radius for skin depth: a_eq = {equiv_radius*1000:.3f} mm")

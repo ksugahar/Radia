@@ -510,7 +510,7 @@ Comparison with Full Model
 ==========================
 
 Full 3D model (expected):
-  W_total ≈ 1.659e-05 J
+  W_total ~= 1.659e-05 J
 
 1/8 model x 8:
   W_total = {energy_total_pert:.4e} J

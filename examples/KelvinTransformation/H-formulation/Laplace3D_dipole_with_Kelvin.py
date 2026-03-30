@@ -6,7 +6,7 @@ Boundary conditions:
 - Magnetic sphere surface: φ = z (dipole potential)
 - Periodic BC at r = R connecting interior and exterior domains
 
-Goal: Verify that φ ≠ 0 at domain boundaries (Kelvin transformation working)
+Goal: Verify that φ != 0 at domain boundaries (Kelvin transformation working)
 """
 import os, sys
 from numpy import *
@@ -120,8 +120,8 @@ u = fes.TrialFunction()
 v = fes.TestFunction()
 
 # Material properties with Kelvin transformation
-# Interior: μ = μ₀
-# Exterior: μ' = (R²/r'²)·μ₀
+# Interior: mu = mu_0
+# Exterior: mu' = (R^2/r'^2)·mu_0
 x_local = x - offset_x
 y_local = y
 z_local = z
@@ -136,11 +136,11 @@ print(f"	Interior: mu = mu0")
 print(f"	Exterior: mu' = (R^2/r'^2)*mu0")
 
 # ============================================================
-# Weak Form (Laplace Equation: div(μ∇φ) = 0)
+# Weak Form (Laplace Equation: div(mu∇φ) = 0)
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫μ(∇u)·(∇v) dΩ
+# Bilinear form: a(u,v) = ∫mu(∇u)·(∇v) dOmega
 a = BilinearForm(fes)
 a += mu * grad(u) * grad(v) * dx
 
@@ -230,7 +230,7 @@ try:
 except:
 	print(f"\n  At boundary (2.0, 0, 0): Cannot evaluate")
 
-# Check if φ ≠ 0 at domain boundaries
+# Check if φ != 0 at domain boundaries
 print(f"\n  VERIFICATION: phi at boundaries should be NON-ZERO for Kelvin transformation")
 
 # ============================================================

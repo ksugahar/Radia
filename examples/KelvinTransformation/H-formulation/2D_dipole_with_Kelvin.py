@@ -154,19 +154,19 @@ mu = CoefficientFunction([mu_d[mat] for mat in mesh.GetMaterials()])
 # Kelvin transformation based on TMAG3194371.pdf (Sugahara, 2022)
 #
 # For 2D problems, using the metric-based formulation in equation (5):
-#   - In-plane components (r, θ): μ'_r/μ_r = μ'_θ/μ_θ = 1 (no spatial modulation)
-#   - Out-of-plane component (z): μ'_z/μ_z = (a/r)^4
+#   - In-plane components (r, theta): mu'_r/mu_r = mu'_theta/mu_theta = 1 (no spatial modulation)
+#   - Out-of-plane component (z): mu'_z/mu_z = (a/r)^4
 #
 # For a uniform field H = (0, 1) in physical space (r > R):
-#   In polar coordinates: H_r = sin θ, H_θ = cos θ
+#   In polar coordinates: H_r = sin theta, H_theta = cos theta
 #
 # After Kelvin transformation to computational space (r' < R):
-#   H'_r(r', θ') = -H_r(R²/r', θ') = -sin θ'  (in-plane: ratio = 1, but negative metric)
-#   H'_θ(r', θ') = -H_θ(R²/r', θ') = -cos θ'  (in-plane: ratio = 1, but negative metric)
+#   H'_r(r', theta') = -H_r(R^2/r', theta') = -sin theta'  (in-plane: ratio = 1, but negative metric)
+#   H'_theta(r', theta') = -H_theta(R^2/r', theta') = -cos theta'  (in-plane: ratio = 1, but negative metric)
 #
 # Converting back to Cartesian coordinates:
-#   H'_x = H'_r cos θ' - H'_θ sin θ' = -sin θ' cos θ' + cos θ' sin θ' = 0
-#   H'_y = H'_r sin θ' + H'_θ cos θ' = -sin² θ' - cos² θ' = -1
+#   H'_x = H'_r cos theta' - H'_theta sin theta' = -sin theta' cos theta' + cos theta' sin theta' = 0
+#   H'_y = H'_r sin theta' + H'_theta cos theta' = -sin^2 theta' - cos^2 theta' = -1
 #
 # Result: H' = (0, -1) - spatially uniform, satisfies div·H' = 0
 
@@ -189,14 +189,14 @@ Hs_y = (1.0 - is_exterior) * Hy_inner + is_exterior * Hs_y_outer
 Hs = CoefficientFunction((Hs_x, Hs_y))
 
 print(f"  Background field: H_s with Kelvin transformation")
-print(f"  Relative permeability: μ_r = {mu_r}")
+print(f"  Relative permeability: mu_r = {mu_r}")
 
 # ============================================================
 # Weak Form (Perturbation Potential Formulation)
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫(∇v)·(μ∇u)dΩ
+# Bilinear form: a(u,v) = ∫(∇v)·(mu∇u)dOmega
 a = BilinearForm(fes)
 a += mu*grad(u)*grad(v)*dx
 
@@ -305,7 +305,7 @@ for i, xval in enumerate(x_profile):
 		Hy_pert_analytical_x[i] = -1.0 + 2.0/(mu_r + 1)
 	else:
 		# 2D exterior with background in y-direction:
-		# On x-axis (θ=0 or π from +x): Hy_pert = -(μr-1)/(μr+1) * (a/r)^2
+		# On x-axis (theta=0 or pi from +x): Hy_pert = -(mur-1)/(mur+1) * (a/r)^2
 		Hy_pert_analytical_x[i] = -(mu_r - 1)/(mu_r + 1) * (circle_radius/r)**2
 
 # Y-axis profile
@@ -327,7 +327,7 @@ for i, yval in enumerate(y_profile):
 	if r < circle_radius:
 		Hy_pert_analytical_y[i] = -1.0 + 2.0/(mu_r + 1)
 	else:
-		# On y-axis (θ=π/2 from +x): Hy_pert = (μr-1)/(μr+1) * (a/r)^2
+		# On y-axis (theta=pi/2 from +x): Hy_pert = (mur-1)/(mur+1) * (a/r)^2
 		Hy_pert_analytical_y[i] = (mu_r - 1)/(mu_r + 1) * (circle_radius/r)**2
 
 # Error statistics

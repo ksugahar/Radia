@@ -113,7 +113,7 @@ def main():
 
 	# Test cases
 	test_cases = [
-		{'n': 5, 'name': 'Small (Sequential)'},    # 125 elements (≈ threshold)
+		{'n': 5, 'name': 'Small (Sequential)'},    # 125 elements (~= threshold)
 		{'n': 7, 'name': 'Medium (Parallel)'},     # 343 elements
 		{'n': 10, 'name': 'Large (Parallel)'},     # 1000 elements
 	]

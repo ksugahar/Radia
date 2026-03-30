@@ -33,7 +33,7 @@ def analytical_square_loop(side, trace_w):
 
     L = (2*mu_0*a/pi) * [ln(2*a/GMD) - 0.774]
     where a = side length, GMD = geometric mean distance of cross-section.
-    For thin strip: GMD ≈ 0.2235 * trace_w
+    For thin strip: GMD ~= 0.2235 * trace_w
     """
     a = side
     gmd = 0.2235 * trace_w  # thin strip approximation

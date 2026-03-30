@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Simple test to verify B→H conversion in rad.ObjBckg()
+Simple test to verify B->H conversion in rad.ObjBckg()
 
 Tests that quadrupole background field defined in Tesla is correctly
 converted to H field internally.
@@ -18,7 +18,7 @@ import radia as rd
 mm = 1e-3  # 1 mm in meters
 
 print("=" * 70)
-print("ObjBckg B→H Conversion Test")
+print("ObjBckg B->H Conversion Test")
 print("=" * 70)
 
 # Parameters
@@ -108,7 +108,7 @@ else:
 print("\n[Test 4] Compare with Analytical Solution")
 print("-" * 70)
 
-# Test points outside the cube (field ≈ background + stray field from cube)
+# Test points outside the cube (field ~= background + stray field from cube)
 # Note: The magnetized cube produces stray fields that decay with distance.
 # Points farther from the cube give closer agreement with the pure background.
 test_points = [
@@ -139,7 +139,7 @@ for pt in test_points:
 	By_analytical = gradient * pt[0]  # T
 	Bz_analytical = 0.0
 
-	# Analytical H field: H = B/μ₀
+	# Analytical H field: H = B/mu_0
 	Hx_analytical = Bx_analytical / mu_0
 	Hy_analytical = By_analytical / mu_0
 	Hz_analytical = 0.0
@@ -160,7 +160,7 @@ for pt in test_points:
 	print(f"{pt_mm_str:<25} {B_radia_str:>30} {H_radia_str:>30} {B_analytical_str:>30} {H_analytical_str:>30} {error_pct:>14.4f}%")
 
 # ============================================================================
-# Test 5: Verify B/H ratio = μ₀ at multiple points
+# Test 5: Verify B/H ratio = mu_0 at multiple points
 # ============================================================================
 
 print("\n[Test 5] Verify B/H Ratio = mu_0 at Multiple Points")

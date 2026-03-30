@@ -194,7 +194,7 @@ Hs_y = (1.0 - is_exterior) * Hy_inner + is_exterior * Hs_y_outer
 Hs = CoefficientFunction((Hs_x, Hs_y))
 
 print(f"  Background field: H_s with Kelvin transformation")
-print(f"  Relative permeability: μ_r = {mu_r}")
+print(f"  Relative permeability: mu_r = {mu_r}")
 
 # ============================================================
 # Weak Form (Perturbation Potential Formulation)

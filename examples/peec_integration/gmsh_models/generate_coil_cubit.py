@@ -34,7 +34,7 @@ sys.path.insert(0, "S:/CoreformCubit/01_GitHub")
 import cubit_mesh_export
 
 print("=" * 70)
-print("Circular Coil Surface Mesh Generation (Cubit → GMSH)")
+print("Circular Coil Surface Mesh Generation (Cubit -> GMSH)")
 print("=" * 70)
 
 # Coil parameters (in mm)
@@ -92,14 +92,14 @@ print("    Block 1: 'conductor' (surface triangles)")
 output_file = "circular_coil.msh"
 print(f"\n[5] Exporting to GMSH v2.2 format...")
 cubit_mesh_export.export_gmsh_v2(cubit, output_file)
-print(f"    ✅ Created: {output_file}")
+print(f"    [OK] Created: {output_file}")
 print(f"    Format: GMSH v2.2 (use GMSH Python API to load)")
 
 # Verify: should have NO volume elements
 if cubit.get_tet_count() > 0 or cubit.get_hex_count() > 0:
     print("    ⚠️  WARNING: Volume elements found - PEEC only needs surface!")
 else:
-    print("    ✅ No volume elements - correct for PEEC")
+    print("    [OK] No volume elements - correct for PEEC")
 
 print("\n" + "=" * 70)
 print("Next Steps")
@@ -115,5 +115,5 @@ print("   cd ..")
 print("   python demo_gmsh_to_peec.py")
 
 print("\n" + "=" * 70)
-print("✅ Coil mesh generation completed!")
+print("[OK] Coil mesh generation completed!")
 print("=" * 70)
