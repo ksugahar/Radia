@@ -260,10 +260,12 @@ class radTInteraction : public radTg {
 	// Reference: ELF-style optimization avoiding B_comp() overhead
 	//-------------------------------------------------------------------------
 	bool m_tetraGeomReady;                        // True if geometry is pre-computed
-	std::vector<double> m_tetraCenters;           // n_elem * 3: element centers
-	std::vector<double> m_tetraFaceVertices;      // n_elem * 4 * 3 * 3: face vertices (4 faces, 3 verts, xyz)
-	std::vector<double> m_tetraFaceNormals;       // n_elem * 4 * 3: outward face normals
-	std::vector<double> m_tetraFaceAreas;         // n_elem * 4: face areas
+	std::vector<double> m_tetraCenters;           // n_tet * 3: element centers
+	std::vector<double> m_tetraFaceVertices;      // n_tet * 4 * 3 * 3: face vertices (4 faces, 3 verts, xyz)
+	std::vector<double> m_tetraFaceNormals;       // n_tet * 4 * 3: outward face normals
+	std::vector<double> m_tetraFaceAreas;         // n_tet * 4: face areas
+	std::vector<int> m_tetraElemIndices;          // Maps tet index to element index (like m_hexaElemIndices)
+	std::vector<int> m_globalToTetraIdx;          // Maps global element index to tet index (-1 if not tet)
 
 	//-------------------------------------------------------------------------
 	// Pre-computed hexahedron geometry for fast 6x6 block computation
