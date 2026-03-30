@@ -17,7 +17,7 @@ MU_0 = 4e-7 * math.pi
 # Build mesh: FULL model, no symmetry, no Kelvin
 print("Building mesh (full, no symmetry, no Kelvin)...")
 mesh, info = build_mesh_from_step(
-    'yoke_dipole_raw.step',
+    'yoke.step',
     symmetry='full',
     curve_order=1,
     add_kelvin=False,
