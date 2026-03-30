@@ -9,13 +9,13 @@ Demonstrates:
 - Automatic surface element generation
 
 Workflow:
-    CAD (STEP) → GMSH → .msh → NGSolve → Radia
+    CAD (STEP) -> GMSH -> .msh -> NGSolve -> Radia
 
 Advantages over Cubit:
-- ✅ Free (no license required)
-- ✅ Open source
-- ✅ Cross-platform
-- ✅ Python scriptable
+- [OK] Free (no license required)
+- [OK] Open source
+- [OK] Cross-platform
+- [OK] Python scriptable
 
 Requirements:
 - gmsh (pip install gmsh)
@@ -63,7 +63,7 @@ def import_cad_and_mesh(step_file, mesh_size=0.01):
     try:
         # GMSH can import: STEP, IGES, BREP, STL
         gmsh.merge(step_file)
-        print("    ✅ CAD file imported successfully")
+        print("    [OK] CAD file imported successfully")
     except Exception as e:
         print(f"    ❌ Failed to import: {e}")
         gmsh.finalize()
@@ -113,7 +113,7 @@ def import_cad_and_mesh(step_file, mesh_size=0.01):
     if surf_elements[1]:
         total_surf = sum(len(e) for e in surf_elements[1])
         print(f"    Surface elements: {total_surf}")
-        print("    ✅ Surface elements present - Netgen GUI compatible")
+        print("    [OK] Surface elements present - Netgen GUI compatible")
 
     # Save mesh
     msh_file = step_file.replace('.step', '.msh').replace('.stp', '.msh')
@@ -134,13 +134,13 @@ def workflow_example():
     print("Complete Open Source Workflow")
     print("="*60)
     print("\nWorkflow:")
-    print("  CAD (STEP) → GMSH → .msh → NGSolve → Radia")
+    print("  CAD (STEP) -> GMSH -> .msh -> NGSolve -> Radia")
     print("\nAdvantages:")
-    print("  ✅ 100% open source (no Cubit license)")
-    print("  ✅ Cross-platform (Windows/Linux/Mac)")
-    print("  ✅ Python scriptable")
-    print("  ✅ Surface elements automatically generated")
-    print("  ✅ Can import: STEP, IGES, BREP, STL")
+    print("  [OK] 100% open source (no Cubit license)")
+    print("  [OK] Cross-platform (Windows/Linux/Mac)")
+    print("  [OK] Python scriptable")
+    print("  [OK] Surface elements automatically generated")
+    print("  [OK] Can import: STEP, IGES, BREP, STL")
 
     # Example: If you have a STEP file
     step_file = 'motor_rotor.step'  # Replace with your STEP file
@@ -185,22 +185,22 @@ def comparison_table():
     print("="*60)
     print("\n| Tool | License | GUI | Python API | CAD Import | Platforms |")
     print("|------|---------|-----|------------|------------|-----------|")
-    print("| **GMSH** | Free/OSS | ✅ | ✅ | ✅ STEP/IGES | Win/Lin/Mac |")
-    print("| **Netgen** | Free/OSS | ✅ | ✅ | ✅ STEP/OCC | Win/Lin/Mac |")
-    print("| **Cubit** | Commercial* | ✅ | ✅ | ✅ STEP/IGES | Win/Lin/Mac |")
+    print("| **GMSH** | Free/OSS | [OK] | [OK] | [OK] STEP/IGES | Win/Lin/Mac |")
+    print("| **Netgen** | Free/OSS | [OK] | [OK] | [OK] STEP/OCC | Win/Lin/Mac |")
+    print("| **Cubit** | Commercial* | [OK] | [OK] | [OK] STEP/IGES | Win/Lin/Mac |")
     print("\n*Cubit: Free for academic use with restrictions")
 
     print("\n" + "="*60)
     print("Recommendation for Open Source Workflow")
     print("="*60)
     print("\nSimple geometry:")
-    print("  → Netgen (Python API: netgen.occ)")
+    print("  -> Netgen (Python API: netgen.occ)")
     print("\nComplex geometry from CAD:")
-    print("  → GMSH (import STEP, auto-mesh)")
+    print("  -> GMSH (import STEP, auto-mesh)")
     print("\nHexahedral meshes:")
-    print("  → Cubit (required, Netgen cannot do 3D hex)")
+    print("  -> Cubit (required, Netgen cannot do 3D hex)")
     print("\nFully open source preference:")
-    print("  → GMSH + Netgen")
+    print("  -> GMSH + Netgen")
 
 
 def main():
@@ -211,11 +211,11 @@ def main():
     print("Summary")
     print("="*60)
     print("\nGMSH経由は完全に有効な選択肢です:")
-    print("  ✅ オープンソース（無料）")
-    print("  ✅ クロスプラットフォーム")
-    print("  ✅ CAD直接読込（STEP, IGES）")
-    print("  ✅ 表面要素自動生成")
-    print("  ✅ NGSolve統合")
+    print("  [OK] オープンソース（無料）")
+    print("  [OK] クロスプラットフォーム")
+    print("  [OK] CAD直接読込（STEP, IGES）")
+    print("  [OK] 表面要素自動生成")
+    print("  [OK] NGSolve統合")
     print("\n特に、Cubitライセンスが不要な点が大きなメリットです。")
 
 

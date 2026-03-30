@@ -11,23 +11,23 @@ A-Φ法 (ベクトルポテンシャル-スカラーポテンシャル法):
 - Φ: 電気スカラーポテンシャル (H1空間、全領域)
 - B = curl(A_total) = curl(A_ext) + curl(A_r) (磁束密度)
 - E = -∂A_total/∂t - grad(Φ) (電場)
-- J = σE = -σ(∂A_total/∂t + grad(Φ)) (渦電流密度)
+- J = sigmaE = -sigma(∂A_total/∂t + grad(Φ)) (渦電流密度)
 
 支配方程式（導体内、A_rに関する方程式）:
-式1: ∇×(1/μ ∇×A_r) + σ(∂A_r/∂t + ∇φ) = -σ∂A_ext/∂t  (アンペール＋ファラデー)
-式2: ∇·[σ(∂A_r/∂t + ∇φ)] = -∇·[σ∂A_ext/∂t]  (電流連続性)
+式1: ∇x(1/mu ∇xA_r) + sigma(∂A_r/∂t + ∇φ) = -sigma∂A_ext/∂t  (アンペール＋ファラデー)
+式2: ∇·[sigma(∂A_r/∂t + ∇φ)] = -∇·[sigma∂A_ext/∂t]  (電流連続性)
 
 弱形式（時間離散化後、Backward Euler法）:
 左辺:
-  (1/μ)∫curl(A_r)·curl(W) + (σ/Δt)∫A_r·W + (σ/Δt)∫∇φ·W  (式1)
-  (σ/Δt)∫A_r·∇ψ + (σ/Δt)∫∇φ·∇ψ  (式2)
+  (1/mu)∫curl(A_r)·curl(W) + (sigma/Δt)∫A_r·W + (sigma/Δt)∫∇φ·W  (式1)
+  (sigma/Δt)∫A_r·∇ψ + (sigma/Δt)∫∇φ·∇ψ  (式2)
 右辺:
-  (σ/Δt)∫A_r,old·W  (式1: A_r履歴項)
-  (σ/Δt)∫∇φ_old·W  (式1: Φ履歴項)
-  -(σ/Δt)∫(A_ext - A_ext,old)·W  (式1: 外部ポテンシャル変化)
-  (σ/Δt)∫A_r,old·∇ψ  (式2: A_r履歴項)
-  (σ/Δt)∫∇φ_old·∇ψ  (式2: Φ履歴項)
-  -(σ/Δt)∫(A_ext - A_ext,old)·∇ψ  (式2: 外部ポテンシャル変化)
+  (sigma/Δt)∫A_r,old·W  (式1: A_r履歴項)
+  (sigma/Δt)∫∇φ_old·W  (式1: Φ履歴項)
+  -(sigma/Δt)∫(A_ext - A_ext,old)·W  (式1: 外部ポテンシャル変化)
+  (sigma/Δt)∫A_r,old·∇ψ  (式2: A_r履歴項)
+  (sigma/Δt)∫∇φ_old·∇ψ  (式2: Φ履歴項)
+  -(sigma/Δt)∫(A_ext - A_ext,old)·∇ψ  (式2: 外部ポテンシャル変化)
 
 重要: A_extの正しい取得方法
 - rad.RadiaField(magnet, 'a') でA_extを直接取得可能
@@ -38,9 +38,9 @@ A-Φ法 (ベクトルポテンシャル-スカラーポテンシャル法):
 nograds=True により tree-cotree gauge が自動適用される
 明示的な div(A) = 0 項は不要（両方を混在させると問題が発生）
 
-T-Ω法との違い:
-- T-Ω法: 電流ポテンシャルT、J = curl(T)
-- A-Φ法: 磁気ポテンシャルA、J = -σ(∂A/∂t + grad(Φ))
+T-Omega法との違い:
+- T-Omega法: 電流ポテンシャルT、J = curl(T)
+- A-Φ法: 磁気ポテンシャルA、J = -sigma(∂A/∂t + grad(Φ))
 
 更新履歴:
 - 2025-12-31: Radiaから'a'フィールドでA_extを取得するように修正
@@ -49,7 +49,7 @@ T-Ω法との違い:
   - 外部磁場の時間微分をGridFunctionで正しく計算（参照渡し問題の回避）
 - 2025-12-26 (第2回): ユーザー指摘により符号と係数を完全修正
   - 電流連続性の符号を正に修正（部分積分なし）
-  - 渦電流密度でΦ項を復活（J = -σ(dA/dt + ∇Φ)）
+  - 渦電流密度でΦ項を復活（J = -sigma(dA/dt + ∇Φ)）
   - Φ項は「渦を巻く」ために不可欠
 - 2025-12-26 (第1回): 支配方程式に基づいて定式化を完全に見直し
   式1（アンペール＋ファラデー）と式2（電流連続性）を正しく実装
@@ -145,7 +145,7 @@ measurement_grid_range = 0.006  # m - 測定範囲 [-6, 6] mm
 measurement_grid_points = 31  # 各軸のグリッド点数 (31x31 = 961点, 0.4mm間隔)
 
 # 回転周波数の計算（渦電流計算用）
-# 2回転を2秒で実行 → 1 Hz
+# 2回転を2秒で実行 -> 1 Hz
 frequency = total_rotation / 360.0 / total_simulation_time  # Hz
 
 print(f"\n[渦電流計算パラメータ]")
@@ -154,7 +154,7 @@ print(f"  タイムステップ数: {time_steps}")
 print(f"  時間刻み dt: {dt:.6f} s ({dt*1000:.3f} ms)")
 print(f"  銅の導電率: {copper_conductivity:.3e} S/m")
 print(f"  銅の抵抗率: {copper_resistivity:.3e} Ohm*m")
-print(f"  移動範囲: X={x_start*1000:.1f}mm → {x_end*1000:.1f}mm")
+print(f"  移動範囲: X={x_start*1000:.1f}mm -> {x_end*1000:.1f}mm")
 print(f"  回転: {rotation_per_step}°/step")
 
 # 出力設定
@@ -221,16 +221,16 @@ def get_magnet_position_and_rotation(step):
     指定ステップでの磁石の位置と回転角を計算
 
     ELFMAGICのMOV1コマンドに基づく:
-    - X位置: 線形補間 (-6mm → 4mm)
-    - 回転角: 90ステップごとにリセット (0°→360°を2回繰り返し)
+    - X位置: 線形補間 (-6mm -> 4mm)
+    - 回転角: 90ステップごとにリセット (0°->360°を2回繰り返し)
 
-    ステップ0-90: 0° → 360° (4°/step)
-    ステップ91-180: 0° → 360° (4°/step)
+    ステップ0-90: 0° -> 360° (4°/step)
+    ステップ91-180: 0° -> 360° (4°/step)
     """
     # X位置の線形補間
     x_pos = x_start + (x_end - x_start) * step / time_steps
 
-    # 回転角の計算（T-Ω法と同じく連続的に増加）
+    # 回転角の計算（T-Omega法と同じく連続的に増加）
     rotation_angle = step * rotation_per_step
 
     return x_pos, rotation_angle
@@ -272,7 +272,7 @@ print(f"\n[Step 2] A-Φ法の有限要素空間設定...")
 # A: ベクトルポテンシャル (HCurl空間、銅板のみで定義)
 # 2026-01-05修正: 定義領域を銅板のみに制限（T-Omega法と同じ方針）
 # 理由: 空気中に不要な自由度を持たせない（物理的に妥当）
-# 境界条件: 全境界でA×n = 0 (接線成分ゼロ)
+# 境界条件: 全境界でAxn = 0 (接線成分ゼロ)
 fesA = HCurl(mesh, order=2, nograds=True, definedon=mesh.Materials("copper"),
              dirichlet=".*", complex=False)
 
@@ -405,7 +405,7 @@ for step in range(time_steps + 1):
     # 重要: A-Phi法で直接使用するため、CoefficientFunctionを保持
     A_ext_cf = A_cf
 
-    # ★修正: 外部磁場BもRadiaFieldから直接取得（T-Ω法と同様）
+    # ★修正: 外部磁場BもRadiaFieldから直接取得（T-Omega法と同様）
     # curl(A_ext)ではなく、Radiaから直接Bを取得することで数値微分誤差を回避
     B_ext_cf = rad.RadiaField(magnet, 'b',
                                         origin=origin,
@@ -426,7 +426,7 @@ for step in range(time_steps + 1):
             A_ext_val = gfA_ext(mip_center)
             print(f"  [NGSolve] A_ext: ({A_ext_val[0]:.6e}, {A_ext_val[1]:.6e}, {A_ext_val[2]:.6e})")
 
-            # Maxwell関係式 curl(A_ext) = B_ext/μ₀ の検証
+            # Maxwell関係式 curl(A_ext) = B_ext/mu_0 の検証
             MU_0 = 4 * np.pi * 1e-7  # H/m
             B_from_curl_A = curl(gfA_ext)(mip_center)
 
@@ -440,7 +440,7 @@ for step in range(time_steps + 1):
             print(f"  [検証] curl(A_ext) (NGSolve): ({B_from_curl_A[0]:.6e}, {B_from_curl_A[1]:.6e}, {B_from_curl_A[2]:.6e})")
             print(f"  [検証] B_direct (rad.RadiaField): ({B_direct[0]:.6e}, {B_direct[1]:.6e}, {B_direct[2]:.6e})")
 
-            # curl(A)/B比は 1/μ₀ になるはず
+            # curl(A)/B比は 1/mu_0 になるはず
             B_ratio = [B_from_curl_A[i] / B_direct[i] if abs(B_direct[i]) > 1e-12 else 0
                        for i in range(3)]
             expected_ratio = 1.0 / MU_0
@@ -678,9 +678,9 @@ for step in range(time_steps + 1):
     # ★重要な修正: B = curl(A) のみ！
     # Φは電気スカラーポテンシャルであり、磁場には寄与しない
     # grad(Φ)を含めていたのは根本的な誤り
-    B_internal = curl(gfA)  # ← grad(gfPhi)を削除
+    B_internal = curl(gfA)  # <- grad(gfPhi)を削除
     # ★修正: 外部磁場はRadiaFieldから直接取得（curl(A_ext)ではなく）
-    # これによりT-Ω法と同じ外部磁場を使用し、数値微分誤差を回避
+    # これによりT-Omega法と同じ外部磁場を使用し、数値微分誤差を回避
     B_ext = gfB_ext  # Radiaから直接取得した外部磁場
     # 全磁束密度: B_total = B_internal + B_ext
     B_total = B_internal + B_ext
@@ -711,14 +711,14 @@ for step in range(time_steps + 1):
     # ------------------------------------------------------------------
     # 3.4.5: ジュール発熱量の計算
     # ------------------------------------------------------------------
-    # P [W] = ∫_Ω (1/σ) |J|^2 dΩ
-    # ρ = 1/σ: 抵抗率 [Ω·m]
+    # P [W] = ∫_Omega (1/sigma) |J|^2 dOmega
+    # ρ = 1/sigma: 抵抗率 [Omega·m]
     # 導体領域（copper）のみで積分
     try:
-        # 抵抗率 ρ = 1/σ
-        rho_copper = copper_resistivity  # Ω·m (= 1.0 / copper_conductivity)
+        # 抵抗率 ρ = 1/sigma
+        rho_copper = copper_resistivity  # Omega·m (= 1.0 / copper_conductivity)
 
-        # 発熱密度: q = ρ |J|^2 = (1/σ) |J|^2 [W/m^3]
+        # 発熱密度: q = ρ |J|^2 = (1/sigma) |J|^2 [W/m^3]
         # T-Omega法と同じスカラー定数を使用（CoefficientFunctionの1/Sigmaは空気領域で不安定）
         q_density = rho_copper * J_sq
 
@@ -748,17 +748,17 @@ for step in range(time_steps + 1):
     # ------------------------------------------------------------------
     # 3.4.6: ローレンツ力の計算
     # ------------------------------------------------------------------
-    # ローレンツ力密度: f = J × B
+    # ローレンツ力密度: f = J x B
     # J_eddy: 渦電流密度 [A/m^2]
     # ★試行3修正: ローレンツ力計算にはB_ext（外部磁場）のみを使用
-    # 理由: B_internalは渦電流自身が作る磁場であり、T-Ω法との比較で
+    # 理由: B_internalは渦電流自身が作る磁場であり、T-Omega法との比較で
     #       B_internal計算方法の違いによる誤差を排除するため
     try:
         # Cross積でローレンツ力密度を計算（B_extのみ使用）
         from ngsolve import Cross
-        f_lorentz_density = Cross(J_eddy, gfB_ext)  # B_total → gfB_ext に変更
+        f_lorentz_density = Cross(J_eddy, gfB_ext)  # B_total -> gfB_ext に変更
 
-        # 銅板領域での全ローレンツ力を積分（T-Ω法と同じorder=5を使用）
+        # 銅板領域での全ローレンツ力を積分（T-Omega法と同じorder=5を使用）
         integration_order = 5
         force_x = Integrate(f_lorentz_density[0], mesh, definedon=mesh.Materials("copper"), order=integration_order)
         force_y = Integrate(f_lorentz_density[1], mesh, definedon=mesh.Materials("copper"), order=integration_order)
@@ -790,10 +790,10 @@ for step in range(time_steps + 1):
     })
 
     # ------------------------------------------------------------------
-    # 3.4.7: A-Φ法とT-Ω法の比較用データ出力（B_internal）
+    # 3.4.7: A-Φ法とT-Omega法の比較用データ出力（B_internal）
     # ------------------------------------------------------------------
     # A-Φ法: B_internal = curl(A_r) （渦電流による反応磁束密度）
-    # T-Ω法: B_internal = μ(T + ∇Ω)
+    # T-Omega法: B_internal = mu(T + ∇Omega)
     # この比較により、両手法の内部整合性を検証
     if step == 0 or step == 30 or step == 60 or step == 90 or step == 120 or step == 150 or step == 180:
         print(f"\n  [比較用データ] B_internal (curl(A_r)) をグリッド点で出力...")

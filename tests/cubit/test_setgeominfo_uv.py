@@ -31,7 +31,9 @@ sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
 
 # Use locally built NGSolve (ksugahar fork with SetGeomInfo API)
-sys.path.insert(0, "s:/NGSolve/01_GitHub/install_ksugahar/Lib/site-packages")
+_fork_path = os.environ.get("NGSOLVE_FORK_PATH")
+if _fork_path:
+    sys.path.insert(0, _fork_path)
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit

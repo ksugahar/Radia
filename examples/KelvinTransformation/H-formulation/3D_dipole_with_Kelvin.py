@@ -3,7 +3,7 @@ H-formulation for magnetostatics with perturbation potential
 Geometry created internally using OCC
 Updated: 2026-02-19
 
-TEST RESULTS SUMMARY (μ_r = 100):
+TEST RESULTS SUMMARY (mu_r = 100):
 ================================
 
 Configuration: Kelvin transformation with periodic BC
@@ -11,7 +11,7 @@ Configuration: Kelvin transformation with periodic BC
   - Exterior domain: air_outer (r' < 1.0m), Kelvin-mapped, centered at offset_x = 3.0m
   - Periodic BC between interior (r=R) and exterior (r'=R) at R = 1.0m
   - GND (Dirichlet) at exterior center (r'=0, maps to r=infinity)
-  - Modulated permeability in exterior: μ'(r') = (R/r')² · μ₀
+  - Modulated permeability in exterior: mu'(r') = (R/r')^2 · mu_0
 
 Results:
   - Origin (0,0,0):   Hz = -0.970588, analytical = -0.970588, error = 0.000%
@@ -169,7 +169,7 @@ v = fes.TestFunction()
 mu_r = 100  # Relative permeability (PRIORITY)
 
 # For air_outer domain (cutoff_radius < r' < kelvin_radius):
-# μ'(r') = (R²/r'²)·μ₀ with metric-based Kelvin transformation
+# mu'(r') = (R^2/r'^2)·mu_0 with metric-based Kelvin transformation
 # Note: r' is measured from (offset_x, 0, 0)
 r_prime_sq = (x-offset_x)**2 + y**2 + z**2
 mu_outer = kelvin_radius**2/(r_prime_sq+1e-20)*mu0
@@ -184,32 +184,32 @@ mu = CoefficientFunction([mu_d[mat] for mat in mesh.GetMaterials()])
 # This automatically ensures rot(H_s) = 0
 #
 # Interior domain (r < R):
-#   φ_s = -z  →  H_s = -∇φ_s = (0, 0, 1)
+#   φ_s = -z  ->  H_s = -∇φ_s = (0, 0, 1)
 #
 # Exterior domain (r' < R, Kelvin transformed):
 #   Need to find φ'_s such that boundary conditions are satisfied
-#   At r' = R: H'_r = -H_r and H'_θ = -H_θ
+#   At r' = R: H'_r = -H_r and H'_theta = -H_theta
 #
 #   For uniform field H_s = (0,0,1) in physical space:
-#     In spherical: H_r = cos θ, H_θ = -sin θ
+#     In spherical: H_r = cos theta, H_theta = -sin theta
 #   At boundary r' = R:
-#     H'_r(R) = -cos θ = -z/R
-#     H'_θ(R) = +sin θ = ρ/R
+#     H'_r(R) = -cos theta = -z/R
+#     H'_theta(R) = +sin theta = ρ/R
 #
 #   Try φ'_s = z_local·f(r') where z_local is measured from exterior center
-#   Then: H'_r = -∂φ'/∂r' = -z·f'/r - z·f/r²
-#         H'_θ = -(1/r')∂φ'/∂θ = (something with f)
+#   Then: H'_r = -∂φ'/∂r' = -z·f'/r - z·f/r^2
+#         H'_theta = -(1/r')∂φ'/∂theta = (something with f)
 #
-#   For simplicity, start with: φ'_s = z_local·(R/r')²
+#   For simplicity, start with: φ'_s = z_local·(R/r')^2
 #   This gives: H'_s = -∇φ'_s
 #
 # Let's compute gradient in Cartesian coordinates:
-#   φ'_s = z_local·(R/r')²
-#   ∂φ'/∂x = ∂/∂x[z_local·R²/(x_local² + y_local² + z_local²)]
-#          = z_local·R²·(-2x_local)/(r')⁴
-#   ∂φ'/∂z = R²/(r')² + z_local·R²·(-2z_local)/(r')⁴
-#          = R²/(r')² - 2z_local²·R²/(r')⁴
-#          = R²/(r')²[1 - 2z_local²/(r')²]
+#   φ'_s = z_local·(R/r')^2
+#   ∂φ'/∂x = ∂/∂x[z_local·R^2/(x_local^2 + y_local^2 + z_local^2)]
+#          = z_local·R^2·(-2x_local)/(r')⁴
+#   ∂φ'/∂z = R^2/(r')^2 + z_local·R^2·(-2z_local)/(r')⁴
+#          = R^2/(r')^2 - 2z_local^2·R^2/(r')⁴
+#          = R^2/(r')^2[1 - 2z_local^2/(r')^2]
 
 # Detect which domain we're in based on material region
 # air_outer is the Kelvin-transformed domain centered at (offset_x, 0, 0)
@@ -239,29 +239,29 @@ Hz_inner = 1.0
 # Exterior domain potential - Solve from boundary condition and PDE
 #
 # Boundary conditions (USER CORRECTED):
-#   r' = R: φ' = R·cos θ
+#   r' = R: φ' = R·cos theta
 #   r' = 0: φ' = 0 (regularity)
 #
-# PDE from user (with modulated permeability μ' = R²/r'²):
-#   ∂²φ'/∂r'² + (1/r')∂²φ'/∂r'∂θ = 0
+# PDE from user (with modulated permeability mu' = R^2/r'^2):
+#   ∂^2φ'/∂r'^2 + (1/r')∂^2φ'/∂r'∂theta = 0
 #
 # User's key insight: "変調された透磁率を含めた球座標ラプラシアンが必要"
-# The standard spherical Laplacian doesn't apply because μ' is spatially varying!
+# The standard spherical Laplacian doesn't apply because mu' is spatially varying!
 #
-# Try solution: φ' = f(r')cos θ + g(r')sin θ
+# Try solution: φ' = f(r')cos theta + g(r')sin theta
 #
 # Compute derivatives:
-#   ∂φ'/∂r' = f'cos θ + g'sin θ
-#   ∂²φ'/∂r'² = f''cos θ + g''sin θ
-#   ∂φ'/∂θ = -f·sin θ + g·cos θ
-#   ∂²φ'/∂r'∂θ = -f'sin θ + g'cos θ
+#   ∂φ'/∂r' = f'cos theta + g'sin theta
+#   ∂^2φ'/∂r'^2 = f''cos theta + g''sin theta
+#   ∂φ'/∂theta = -f·sin theta + g·cos theta
+#   ∂^2φ'/∂r'∂theta = -f'sin theta + g'cos theta
 #
 # Substitute into PDE:
-#   [f''cos θ + g''sin θ] + (1/r')[-f'sin θ + g'cos θ] = 0
+#   [f''cos theta + g''sin theta] + (1/r')[-f'sin theta + g'cos theta] = 0
 #
-# Separate cos θ and sin θ terms:
-#   cos θ: f'' + g'/r' = 0
-#   sin θ: g'' - f'/r' = 0
+# Separate cos theta and sin theta terms:
+#   cos theta: f'' + g'/r' = 0
+#   sin theta: g'' - f'/r' = 0
 #
 # From first equation: g' = -r'f''
 # Integrate: g = -∫r'f''dr' = -r'f' + ∫f'dr' = -r'f' + f + C₁
@@ -269,78 +269,78 @@ Hz_inner = 1.0
 # From second equation: g'' = f'/r'
 # But g' = -r'f'', so g'' = -f'' - r'f'''
 # Therefore: -f'' - r'f''' = f'/r'
-#           -r'²f'' - r'³f''' = r'f'
-#           r'³f''' + r'²f'' + r'f' = 0
-#           r'²f''' + r'f'' + f' = 0
+#           -r'^2f'' - r'^3f''' = r'f'
+#           r'^3f''' + r'^2f'' + r'f' = 0
+#           r'^2f''' + r'f'' + f' = 0
 #
 # This is getting complex. Let me try a power law: f = r'ⁿ
-#   f' = nr'ⁿ⁻¹, f'' = n(n-1)r'ⁿ⁻², f''' = n(n-1)(n-2)r'ⁿ⁻³
+#   f' = nr'ⁿ⁻¹, f'' = n(n-1)r'ⁿ⁻^2, f''' = n(n-1)(n-2)r'ⁿ⁻^3
 #
-#   r'²·n(n-1)(n-2)r'ⁿ⁻³ + r'·n(n-1)r'ⁿ⁻² + nr'ⁿ⁻¹ = 0
+#   r'^2·n(n-1)(n-2)r'ⁿ⁻^3 + r'·n(n-1)r'ⁿ⁻^2 + nr'ⁿ⁻¹ = 0
 #   n(n-1)(n-2)r'ⁿ⁻¹ + n(n-1)r'ⁿ⁻¹ + nr'ⁿ⁻¹ = 0
 #   r'ⁿ⁻¹[n(n-1)(n-2) + n(n-1) + n] = 0
 #   n[(n-1)(n-2) + (n-1) + 1] = 0
-#   n[n² - 3n + 2 + n - 1 + 1] = 0
-#   n[n² - 2n + 2] = 0
+#   n[n^2 - 3n + 2 + n - 1 + 1] = 0
+#   n[n^2 - 2n + 2] = 0
 #
-# So n = 0 or n² - 2n + 2 = 0 → n = 1 ± i (complex!)
+# So n = 0 or n^2 - 2n + 2 = 0 -> n = 1 ± i (complex!)
 #
 # This suggests the power law solution doesn't work simply.
 # Let me try: f(r') = Ar' + B/r'
-#   Then g = -r'f' + f = -r'(A - B/r'²) + (Ar' + B/r')
+#   Then g = -r'f' + f = -r'(A - B/r'^2) + (Ar' + B/r')
 #              = -Ar' + B/r' + Ar' + B/r' = 2B/r'
 #
-# So: φ' = (Ar' + B/r')cos θ + (2B/r')sin θ
+# So: φ' = (Ar' + B/r')cos theta + (2B/r')sin theta
 #
-# Boundary r' = R: φ' = R·cos θ
-#   (AR + B/R)cos θ + (2B/R)sin θ = R·cos θ
-#   This gives: AR + B/R = R and 2B/R = 0 → B = 0, A = 1
+# Boundary r' = R: φ' = R·cos theta
+#   (AR + B/R)cos theta + (2B/R)sin theta = R·cos theta
+#   This gives: AR + B/R = R and 2B/R = 0 -> B = 0, A = 1
 #
-# User's key insight: "外部領域の解をr->0のときに、R^2/rcosθとする必要"
-# At r'→0 (physical r→∞), we need asymptotic behavior: φ' ~ (R²/r')cos θ
+# User's key insight: "外部領域の解をr->0のときに、R^2/rcosthetaとする必要"
+# At r'->0 (physical r->∞), we need asymptotic behavior: φ' ~ (R^2/r')cos theta
 #
-# General solution: φ' = (Ar' + B/r')cos θ
-# - At r'=R: φ' = R·cos θ  →  AR + B/R = R
-# - At r'→0: φ' ~ (R²/r')cos θ  →  B = R²
+# General solution: φ' = (Ar' + B/r')cos theta
+# - At r'=R: φ' = R·cos theta  ->  AR + B/R = R
+# - At r'->0: φ' ~ (R^2/r')cos theta  ->  B = R^2
 #
-# From AR + B/R = R and B = R²:
-#   AR + R²/R = R  →  AR + R = R  →  A = 0
+# From AR + B/R = R and B = R^2:
+#   AR + R^2/R = R  ->  AR + R = R  ->  A = 0
 #
-# Therefore: φ' = (R²/r')cos θ
+# Therefore: φ' = (R^2/r')cos theta
 cos_theta = z_local / r_safe
 
-# CORRECTED with asymptotic behavior at r'→0:
+# CORRECTED with asymptotic behavior at r'->0:
 # Using NEGATIVE sign to match Kelvin BC at r'=R
-phi_s_outer = -(kelvin_radius**2 / r_safe) * cos_theta  # = -(R²/r')·cos θ
+phi_s_outer = -(kelvin_radius**2 / r_safe) * cos_theta  # = -(R^2/r')·cos theta
 
 # Compute H'_s = -∇φ'_s
 #
-# φ' = -(R²/r')·cos θ
+# φ' = -(R^2/r')·cos theta
 #
 # In spherical coordinates:
-# H'_r = -∂φ'/∂r' = -∂/∂r'[-(R²/r')·cos θ] = -[(R²/r'²)·cos θ] = -(R²/r'²)·cos θ
-# H'_θ = -(1/r')∂φ'/∂θ = -(1/r')·[-(R²/r')·(−sin θ)] = -(R²/r'²)·sin θ
+# H'_r = -∂φ'/∂r' = -∂/∂r'[-(R^2/r')·cos theta] = -[(R^2/r'^2)·cos theta] = -(R^2/r'^2)·cos theta
+# H'_theta = -(1/r')∂φ'/∂theta = -(1/r')·[-(R^2/r')·(−sin theta)] = -(R^2/r'^2)·sin theta
 #
 # At r' = R:
-#   H'_r(R) = -(R²/R²)·cos θ = -cos θ  ✓ (Kelvin BC H'_r = -H_r satisfied!)
-#   H'_θ(R) = -(R²/R²)·sin θ = -sin θ  (need +sin θ from H'_θ = -H_θ = -(-sin θ))
+#   H'_r(R) = -(R^2/R^2)·cos theta = -cos theta  [OK] (Kelvin BC H'_r = -H_r satisfied!)
+#   H'_theta(R) = -(R^2/R^2)·sin theta = -sin theta  (need +sin theta from H'_theta = -H_theta = -(-sin theta))
 #
-# Wait - interior has H_θ = -sin θ, so Kelvin BC gives H'_θ = -H_θ = +sin θ
-# But I'm getting H'_θ = -sin θ from the potential...
+# Wait - interior has H_theta = -sin theta, so Kelvin BC gives H'_theta = -H_theta = +sin theta
+# But I'm getting H'_theta = -sin theta from the potential...
 #
-# Let me recalculate H_θ more carefully:
-# H_θ = -(1/r)∂φ/∂θ where φ = -z = -r·cos θ for interior
-# H_θ = -(1/r)∂(-r·cos θ)/∂θ = -(1/r)(-r)(-sin θ) = -sin θ  ✓
+# Let me recalculate H_theta more carefully:
+# H_theta = -(1/r)∂φ/∂theta where φ = -z = -r·cos theta for interior
+# H_theta = -(1/r)∂(-r·cos theta)/∂theta = -(1/r)(-r)(-sin theta) = -sin theta  [OK]
 #
 # So the boundary condition should be:
-#   Interior at r=R: H_r = cos θ, H_θ = -sin θ
-#   Exterior at r'=R: H'_r = -cos θ, H'_θ = -(-sin θ) = +sin θ
+#   Interior at r=R: H_r = cos theta, H_theta = -sin theta
+#   Exterior at r'=R: H'_r = -cos theta, H'_theta = -(-sin theta) = +sin theta
 #
-# From φ' = -(R²/r')cos θ:
-#   H'_r = -(R²/r'²)cos θ  →  at R: -cos θ ✓
-#   H'_θ = -(R²/r'²)sin θ  →  at R: -sin θ ✗ (need +sin θ)
+# From φ' = -(R^2/r')cos theta:
+#   H'_r = -(R^2/r'^2)cos theta  ->  at R: -cos theta [OK]
+#   H'_theta = -(R^2/r'^2)sin theta  ->  at R: -sin theta ✗ (need +sin theta)
 #
-# The issue is that a pure cos θ solution cannot give both signs correct.
+# The issue is that a pure cos theta solution cannot give both signs correct.
 # However, user says periodic BC is working (field changes when H_s changes).
 # Let me trust the formulation and implement it:
 
@@ -375,7 +375,7 @@ print(f"  GND vertex at exterior domain center (r'=0 -> r=infinity)")
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫(∇v)·(μ∇u)dΩ
+# Bilinear form: a(u,v) = ∫(∇v)·(mu∇u)dOmega
 a = BilinearForm(fes)
 a += mu*grad(u)*grad(v)*dx
 
@@ -470,7 +470,7 @@ print(f"  Potential at origin: {center_value:.6e}")
 print(f"  Field at origin: Hz = {H[2](mesh(0,0,0)):.6f} A/m")
 
 # Expected analytical value (perturbation field interior, z-component)
-Hz_analytical = -1.0 + 3.0/(mu_r + 2)  # For μr=100: -0.970588
+Hz_analytical = -1.0 + 3.0/(mu_r + 2)  # For mur=100: -0.970588
 print(f"  Analytical (interior): Hz = {Hz_analytical:.6f} A/m")
 print(f"  Relative error: {abs(H[2](mesh(0,0,0)) - Hz_analytical)/abs(Hz_analytical)*100:.3f}%")
 
@@ -538,7 +538,7 @@ for i, xval in enumerate(x_profile):
 
     # Analytical solution for PERTURBATION field Hz component
     if r < sphere_radius:
-        Hz_pert_analytical_x[i] = -1.0 + 3.0/(mu_r + 2)  # = -0.75 for μr=10
+        Hz_pert_analytical_x[i] = -1.0 + 3.0/(mu_r + 2)  # = -0.75 for mur=10
     else:
         Hz_pert_analytical_x[i] = -(mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3
 
@@ -596,7 +596,7 @@ print("\nComputing analytical H field...")
 
 # For analytical solution, compute H_pert in x-z plane
 # Note: This is the H field, not the B field (flux density)
-# B = μH where μ varies spatially (μ_r×μ0 inside sphere, μ0 outside)
+# B = muH where mu varies spatially (mu_rxmu0 inside sphere, mu0 outside)
 Hx_xz_analytical = zeros((shape(xx_xz)))
 Hz_xz_analytical = zeros((shape(xx_xz)))
 
@@ -612,10 +612,10 @@ for nz in range(len(z)):
             Hz_xz_analytical[nz, nx] = -1.0 + 3.0/(mu_r + 2)
         else:
             # Outside sphere: dipole field
-            # H_pert = C * [2cosθ er + sinθ eθ]
-            # where C = +(μr-1)/(μr+2) * (a/r)³ (POSITIVE coefficient)
-            # In Cartesian: Hx = H_r * sinθ + H_θ * cosθ
-            #               Hz = H_r * cosθ - H_θ * sinθ
+            # H_pert = C * [2costheta er + sintheta etheta]
+            # where C = +(mur-1)/(mur+2) * (a/r)^3 (POSITIVE coefficient)
+            # In Cartesian: Hx = H_r * sintheta + H_theta * costheta
+            #               Hz = H_r * costheta - H_theta * sintheta
             theta = arctan2(x[nx], z[nz])  # Angle from z-axis
             C = (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3
 
@@ -720,7 +720,7 @@ savemat(mat_file, mat_data)
 print(f"  MAT file saved to: {mat_file}")
 
 # Compute B field for exterior domain
-# In Kelvin-transformed exterior domain, μ' = (R/r')^2 * μ0
+# In Kelvin-transformed exterior domain, mu' = (R/r')^2 * mu0
 # where r' is the distance from exterior domain center
 Bx_ext = zeros(shape(xx_ext))
 Bz_ext = zeros(shape(xx_ext))

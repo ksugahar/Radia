@@ -86,20 +86,20 @@ Hs = CoefficientFunction((0, 1))
 Hsb = BoundaryFromVolumeCF(Hs)
 
 print(f"  Background field: H_s = [0, 1] A/m (y-direction)")
-print(f"  Relative permeability: μ_r = {mu_r}")
+print(f"  Relative permeability: mu_r = {mu_r}")
 
 # ============================================================
 # Weak Form (Perturbation Potential Formulation)
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫(∇v)·(μ∇u)dΩ
-# Note: 境界項 -∫v(n·μ∇u)dΓ は自然境界条件として省略される
+# Bilinear form: a(u,v) = ∫(∇v)·(mu∇u)dOmega
+# Note: 境界項 -∫v(n·mu∇u)dΓ は自然境界条件として省略される
 a = BilinearForm(fes)
 a += mu*grad(u)*grad(v)*dx
 
 # Linear form (PERTURBATION FORMULATION):
-# f(v) = ∫(∇v)·(μH_s)dΩ - ∫v(n·μH_s)dΓ
+# f(v) = ∫(∇v)·(muH_s)dOmega - ∫v(n·muH_s)dΓ
 # 注意: Kelvin変換なし（有限領域）では外部境界での境界項が必要
 #       外部境界を通る磁束を考慮するため
 f = LinearForm(fes)
@@ -168,7 +168,7 @@ print(f"  Field at origin: Hy = {H[1](mesh(0,0)):.6f} A/m")
 
 # Expected analytical value (perturbation field interior, y-component)
 # For background field [0, 1] in y-direction
-Hy_analytical = -1.0 + 2.0/(mu_r + 1)  # 2D formula: -H0 + 2*H0/(μr+1)
+Hy_analytical = -1.0 + 2.0/(mu_r + 1)  # 2D formula: -H0 + 2*H0/(mur+1)
 print(f"  Analytical (interior): Hy = {Hy_analytical:.6f} A/m")
 print(f"  Relative error: {abs(H[1](mesh(0,0)) - Hy_analytical)/abs(Hy_analytical)*100:.3f}%")
 
@@ -199,7 +199,7 @@ for i, xval in enumerate(x_profile):
         Hy_pert_analytical_x[i] = -1.0 + 2.0/(mu_r + 1)
     else:
         # 2D exterior with background in y-direction:
-        # On x-axis (θ=0 or π from +x): Hy_pert = -(μr-1)/(μr+1) * (a/r)^2
+        # On x-axis (theta=0 or pi from +x): Hy_pert = -(mur-1)/(mur+1) * (a/r)^2
         Hy_pert_analytical_x[i] = -(mu_r - 1)/(mu_r + 1) * (circle_radius/r)**2
 
 # Y-axis profile (evaluating Hy along y-axis with background in y-direction)
@@ -221,7 +221,7 @@ for i, yval in enumerate(y_profile):
     if r < circle_radius:
         Hy_pert_analytical_y[i] = -1.0 + 2.0/(mu_r + 1)
     else:
-        # On y-axis (θ=π/2 from +x): Hy_pert = (μr-1)/(μr+1) * (a/r)^2
+        # On y-axis (theta=pi/2 from +x): Hy_pert = (mur-1)/(mur+1) * (a/r)^2
         Hy_pert_analytical_y[i] = (mu_r - 1)/(mu_r + 1) * (circle_radius/r)**2
 
 # Error statistics
@@ -261,7 +261,7 @@ for ny in range(len(y)):
         else:
             # Outside circle: 2D dipole with background in y-direction [0,1]
             # The 2D dipole solution for background in y-direction:
-            # H_pert = C * (a/r)² * [sin(2θ), -cos(2θ)] where θ from +x axis
+            # H_pert = C * (a/r)^2 * [sin(2theta), -cos(2theta)] where theta from +x axis
             theta = arctan2(y[ny], x[nx])  # Angle from +x axis
             C = (mu_r - 1)/(mu_r + 1) * (circle_radius/r)**2
 

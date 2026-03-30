@@ -152,16 +152,16 @@ mu = CoefficientFunction([mu_d[mat] for mat in mesh.GetMaterials()])
 
 # Background field: H_s = (x, -y) A/m (QUADRUPOLE field)
 # This satisfies div(H_s) = 0, making it physically valid
-# In polar: H_r = r cos(2θ), H_θ = -r sin(2θ)
-# Corresponds to potential φ_s = -(1/2)r² cos(2θ)
+# In polar: H_r = r cos(2theta), H_theta = -r sin(2theta)
+# Corresponds to potential φ_s = -(1/2)r^2 cos(2theta)
 #
 # Kelvin transformation for quadrupole field:
 # For H_s = (x, -y) in physical space (r > R):
-#   In polar coordinates: H_r = r cos(2θ), H_θ = r sin(2θ)
+#   In polar coordinates: H_r = r cos(2theta), H_theta = r sin(2theta)
 #
 # After Kelvin transformation to computational space (r' < R):
 #   The field components transform with sign reversal for 2D in-plane components
-#   and the radial coordinate transforms as r' = R²/r
+#   and the radial coordinate transforms as r' = R^2/r
 #
 # For quadrupole, the transformed field is: H' = (-x', y')
 # where (x', y') are coordinates in the exterior (Kelvin) domain
@@ -190,14 +190,14 @@ Hs_y = (1.0 - is_exterior) * Hs_y_inner + is_exterior * Hs_y_outer
 Hs = CoefficientFunction((Hs_x, Hs_y))
 
 print(f"  Background field: H_s = (x, -y) (quadrupole) with Kelvin transformation")
-print(f"  Relative permeability: μ_r = {mu_r}")
+print(f"  Relative permeability: mu_r = {mu_r}")
 
 # ============================================================
 # Weak Form (Perturbation Potential Formulation)
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫(∇v)·(μ∇u)dΩ
+# Bilinear form: a(u,v) = ∫(∇v)·(mu∇u)dOmega
 a = BilinearForm(fes)
 a += mu*grad(u)*grad(v)*dx
 
@@ -233,8 +233,8 @@ print("\nPost-processing...")
 H = -grad(gfu)
 
 # Analytical coefficients for quadrupole
-# Interior: φ_pert = A r² cos2θ, where A = (μ_r-1)/(2(μ_r+1))
-# Exterior: φ = B(a⁴/r²)cos2θ
+# Interior: φ_pert = A r^2 cos2theta, where A = (mu_r-1)/(2(mu_r+1))
+# Exterior: φ = B(a⁴/r^2)cos2theta
 A_coeff = (mu_r - 1.0)/(2.0*(mu_r + 1.0))
 B_coeff = A_coeff  # Same coefficient for continuity
 
@@ -245,7 +245,7 @@ try:
     print(f"  Field at ({x_test}, 0) (interior): Hx = {Hx_origin:.6f} A/m")
 
     # Expected analytical value (perturbation field interior, x-component at y=0)
-    # H_r = -2Ar cos2θ, at θ=0: H_x = H_r = -2*A*r*1
+    # H_r = -2Ar cos2theta, at theta=0: H_x = H_r = -2*A*r*1
     Hx_analytical = -2.0 * A_coeff * x_test * 1.0  # cos(2*0) = 1
     print(f"  Analytical (interior): Hx = {Hx_analytical:.6f} A/m")
     print(f"  Relative error: {abs(Hx_origin - Hx_analytical)/abs(Hx_analytical)*100:.3f}%")
@@ -309,14 +309,14 @@ for i, xval in enumerate(x_profile):
 	else:
 		Hx_pert_numerical_x[i] = nan
 
-	# Analytical solution for H_s = (x, -y) at (x, 0): θ=0 or π
+	# Analytical solution for H_s = (x, -y) at (x, 0): theta=0 or pi
 	r = abs(xval)
-	theta = arctan2(0, xval)  # θ=0 or π
+	theta = arctan2(0, xval)  # theta=0 or pi
 	if r < circle_radius:
-		# Interior: H_r = -2Ar cos2θ, at y=0: H_x = H_r
+		# Interior: H_r = -2Ar cos2theta, at y=0: H_x = H_r
 		Hx_pert_analytical_x[i] = -2.0 * A_coeff * r * cos(2*theta)
 	else:
-		# Exterior: H_r = 2B(a⁴/r³)cos2θ, at y=0: H_x = H_r
+		# Exterior: H_r = 2B(a⁴/r^3)cos2theta, at y=0: H_x = H_r
 		Hx_pert_analytical_x[i] = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
 
 # Y-axis profile: Hy vs y at x=0 (quadrupole field)
@@ -335,17 +335,17 @@ for i, yval in enumerate(y_profile):
 	else:
 		Hy_pert_numerical_y[i] = nan
 
-	# Analytical solution for H_s = (x, -y) at (0, y): θ=π/2 or -π/2
+	# Analytical solution for H_s = (x, -y) at (0, y): theta=pi/2 or -pi/2
 	r = abs(yval)
-	theta = arctan2(yval, 0)  # θ=±π/2
+	theta = arctan2(yval, 0)  # theta=±pi/2
 	if r < circle_radius:
-		# Interior: H_r = -2Ar cos2θ, H_θ = 2Ar sin2θ
-		# At x=0: H_y = H_r sinθ + H_θ cosθ
+		# Interior: H_r = -2Ar cos2theta, H_theta = 2Ar sin2theta
+		# At x=0: H_y = H_r sintheta + H_theta costheta
 		Hr = -2.0 * A_coeff * r * cos(2*theta)
 		Htheta = 2.0 * A_coeff * r * sin(2*theta)
 		Hy_pert_analytical_y[i] = Hr * sin(theta) + Htheta * cos(theta)
 	else:
-		# Exterior: H_r = 2B(a⁴/r³)cos2θ, H_θ = -2B(a⁴/r³)sin2θ
+		# Exterior: H_r = 2B(a⁴/r^3)cos2theta, H_theta = -2B(a⁴/r^3)sin2theta
 		Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
 		Htheta = -2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
 		Hy_pert_analytical_y[i] = Hr * sin(theta) + Htheta * cos(theta)
@@ -387,18 +387,18 @@ for ny in range(len(y)):
 		theta = arctan2(y[ny], x[nx])
 
 		if r < circle_radius:
-			# Interior: φ_pert = Ar²cos2θ
-			# H_r = -∂φ/∂r = -2Ar cos2θ
-			# H_θ = -(1/r)∂φ/∂θ = 2Ar sin2θ
+			# Interior: φ_pert = Ar^2cos2theta
+			# H_r = -∂φ/∂r = -2Ar cos2theta
+			# H_theta = -(1/r)∂φ/∂theta = 2Ar sin2theta
 			Hr = -2.0 * A_coeff * r * cos(2*theta)
 			Htheta = 2.0 * A_coeff * r * sin(2*theta)
 			# Convert to Cartesian
 			Hx_analytical[ny, nx] = Hr * cos(theta) - Htheta * sin(theta)
 			Hy_analytical[ny, nx] = Hr * sin(theta) + Htheta * cos(theta)
 		else:
-			# Exterior: φ = B(a⁴/r²)cos2θ
-			# H_r = -∂φ/∂r = 2B(a⁴/r³)cos2θ
-			# H_θ = -(1/r)∂φ/∂θ = 2B(a⁴/r³)sin2θ
+			# Exterior: φ = B(a⁴/r^2)cos2theta
+			# H_r = -∂φ/∂r = 2B(a⁴/r^3)cos2theta
+			# H_theta = -(1/r)∂φ/∂theta = 2B(a⁴/r^3)sin2theta
 			Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
 			Htheta = 2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
 			# Convert to Cartesian

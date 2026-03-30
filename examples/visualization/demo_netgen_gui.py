@@ -9,11 +9,11 @@ Demonstrates:
 - Integrated mesh generation workflow
 
 Advantages over webgui:
-- ✅ Lightweight (no browser overhead)
-- ✅ Native GUI (Tcl/Tk, fast and stable)
-- ✅ Integrated workflow (shape → mesh → check)
-- ✅ Better for shape/mesh verification
-- ✅ Works from .py script (Jupyter not required)
+- [OK] Lightweight (no browser overhead)
+- [OK] Native GUI (Tcl/Tk, fast and stable)
+- [OK] Integrated workflow (shape -> mesh -> check)
+- [OK] Better for shape/mesh verification
+- [OK] Works from .py script (Jupyter not required)
 
 Use case: Geometry verification, mesh quality check, CAD import verification
 

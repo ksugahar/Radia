@@ -492,8 +492,8 @@ def mark_elements_adaptive_theta(element_errors, current_ne, target_ratio=2.0):
 
 	# For 3D with bisection: each marked element creates ~8 new elements
 	# DOF ~ elements, so to get target_ratio growth:
-	# new_elements = current_ne + 8 * n_marked ≈ target_ratio * current_ne
-	# => n_marked ≈ current_ne * (target_ratio - 1) / 8
+	# new_elements = current_ne + 8 * n_marked ~= target_ratio * current_ne
+	# => n_marked ~= current_ne * (target_ratio - 1) / 8
 	# But empirically, 3D refinement is more aggressive, use expansion_factor
 	expansion_factor = 28.0  # Empirical: adjusted based on observed 3x growth
 	target_marked = int(current_ne * (target_ratio - 1) / expansion_factor)

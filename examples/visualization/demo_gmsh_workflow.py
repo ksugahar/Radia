@@ -9,12 +9,12 @@ Demonstrates:
 - Visualization options
 
 Advantages of GMSH:
-- ✅ Open source (free)
-- ✅ Cross-platform (Windows/Linux/Mac)
-- ✅ Python API + GUI
-- ✅ Native NGSolve support
-- ✅ Surface elements automatically included
-- ✅ Can import CAD (STEP, IGES, etc.)
+- [OK] Open source (free)
+- [OK] Cross-platform (Windows/Linux/Mac)
+- [OK] Python API + GUI
+- [OK] Native NGSolve support
+- [OK] Surface elements automatically included
+- [OK] Can import CAD (STEP, IGES, etc.)
 
 Requirements:
 - gmsh (pip install gmsh)
@@ -152,7 +152,7 @@ def use_with_ngsolve_and_radia(msh_file):
     # Check surface elements
     print(f"    Surface elements: {mesh.ngmesh.nse}")
     if mesh.ngmesh.nse > 0:
-        print("    ✅ Surface elements present - Netgen GUI compatible")
+        print("    [OK] Surface elements present - Netgen GUI compatible")
 
     # Convert to Radia (example)
     print("\n[4] Radia field computation...")
