@@ -171,9 +171,9 @@ def test_cleanup():
 def main():
 	"""Run all tests"""
 	print("\n")
-	print("╔" + "=" * 58 + "╗")
-	print("║" + " " * 14 + "RADIA MODULE TEST SUITE" + " " * 21 + "║")
-	print("╚" + "=" * 58 + "╝")
+	print("+" + "=" * 58 + "+")
+	print("|" + " " * 14 + "RADIA MODULE TEST SUITE" + " " * 21 + "|")
+	print("+" + "=" * 58 + "+")
 	print()
 
 	# Test 1: Import

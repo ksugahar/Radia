@@ -104,7 +104,7 @@ def run():
     print("-" * 85)
 
     for outer in range(max_outer):
-        # Forward: coil → phi_inc at workpiece
+        # Forward: coil -> phi_inc at workpiece
         phi_inc = compute_phi_inc_from_surface_J(
             wp_nodes, coil_c, coil_a, coil_J, n_quad=20)
 

@@ -5,7 +5,7 @@ GMSH Surface Mesh for PEEC Conductors
 CRITICAL: PEEC requires SURFACE MESH ONLY, not volume mesh.
 
 Workflow:
-    GMSH surface mesh → .msh → NGSolve → Radia PEEC
+    GMSH surface mesh -> .msh -> NGSolve -> Radia PEEC
 
 Key Points:
     - Conductors: Surface elements (Tri3, Quad4) only
@@ -120,14 +120,14 @@ def create_coil_surface_mesh(radius, width, height, n_radial=8, n_axial=4):
     if surf_elements[1]:
         total_surf = sum(len(e) for e in surf_elements[1])
         print(f"    Surface elements: {total_surf}")
-        print("    ✅ Surface mesh only - correct for PEEC")
+        print("    [OK] Surface mesh only - correct for PEEC")
 
     # Check for volume elements (should be ZERO for PEEC)
     vol_elements = gmsh.model.mesh.getElements(3)
     if vol_elements[1] and any(len(e) > 0 for e in vol_elements[1]):
         print("    ⚠️  WARNING: Volume elements found - PEEC only needs surface!")
     else:
-        print("    ✅ No volume elements - correct for PEEC")
+        print("    [OK] No volume elements - correct for PEEC")
 
     # Save mesh
     msh_file = 'coil_surface.msh'

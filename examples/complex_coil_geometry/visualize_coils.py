@@ -91,7 +91,7 @@ def main():
 	print(f"[OK] Coil model loaded")
 	print(f"     Description: {params['description']}")
 	print(f"     Current: {params['current']} A")
-	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}×{params['cross_section']['height']/mm:.0f} mm")
+	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
 	print(f"     Segments: {params['num_segments']}")
 
 	# Get geometry info

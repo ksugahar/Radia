@@ -11,7 +11,7 @@ Key improvements:
 Mathematical justification:
 - Vector potential A ∈ H(curl): ensures curl(A) is well-defined
 - Magnetic flux B ∈ H(div): ensures div(B) = 0 (Maxwell's equation)
-- curl: H(curl) → H(div) is the natural mapping
+- curl: H(curl) -> H(div) is the natural mapping
 """
 
 import sys
@@ -203,8 +203,8 @@ if len(results) >= 2:
 		# log(e1/e2) = rate * log(h1/h2)
 		if e1 > 0 and e2 > 0 and h1 != h2:
 			rate = np.log(e1/e2) / np.log(h1/h2)
-			print(f"  h: {h1*1000:.1f}mm → {h2*1000:.1f}mm: "
-			      f"error: {e1:.3e} → {e2:.3e}, rate = {rate:.2f}")
+			print(f"  h: {h1*1000:.1f}mm -> {h2*1000:.1f}mm: "
+			      f"error: {e1:.3e} -> {e2:.3e}, rate = {rate:.2f}")
 
 # ============================================================================
 # Step 5: VTK export (finest mesh only)

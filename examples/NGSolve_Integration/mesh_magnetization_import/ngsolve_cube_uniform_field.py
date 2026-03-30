@@ -3,7 +3,7 @@
 NGSolve H-formulation for cube with uniform external field
 
 This script computes the reference solution for:
-- Magnetic cube (0.1m x 0.1m x 0.1m) with μr = 100
+- Magnetic cube (0.1m x 0.1m x 0.1m) with mur = 100
 - Uniform external field H_ext = 1000 A/m (z-direction)
 - High-precision solution using H-formulation perturbation method
 

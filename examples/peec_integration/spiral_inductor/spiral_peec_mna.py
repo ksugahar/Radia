@@ -6,18 +6,18 @@ Proper PEEC MNA frequency sweep for the spiral inductor.
 Replaces the incorrect M_LS Schur complement approach with the standard
 PEEC Modified Nodal Analysis:
 
-    Y_node = A × Z_branch⁻¹ × A^T + jω × C_eff
+    Y_node = A x Z_branch⁻¹ x A^T + jomega x C_eff
 
 where:
-    C_eff = G × P⁻¹ × G^T  (panel-to-node gathered capacitance)
+    C_eff = G x P⁻¹ x G^T  (panel-to-node gathered capacitance)
 
 This correctly produces self-resonance because:
-    - Low freq:  Z ≈ jωL  (inductive)
-    - High freq: Z ≈ -j/(ωC)  (capacitive)
+    - Low freq:  Z ~= jomegaL  (inductive)
+    - High freq: Z ~= -j/(omegaC)  (capacitive)
     - SRF:       Im(Z) = 0  (resonance)
 
 The previous Schur complement Z_eff = Z_LL - Z_LS Z_SS⁻¹ Z_SL gives:
-    Z_eff = R + jωL + jω³ × M_LS P⁻¹ M_LS^T
+    Z_eff = R + jomegaL + jomega^3 x M_LS P⁻¹ M_LS^T
 which is ALWAYS inductive — no resonance possible.
 """
 
@@ -163,16 +163,16 @@ print(f"G shape: {G.shape}, non-zeros: {np.count_nonzero(G)}")
 # Apply dielectric: half-space image method
 # ============================================================
 # For charges on a dielectric half-space (FR4 below, air above):
-#   P_eff = P_free × (1 - alpha)  for self/mutual at same height
+#   P_eff = P_free x (1 - alpha)  for self/mutual at same height
 #   where alpha = -(eps_r - 1) / (eps_r + 1)
 #
 # For EMQS quasi-static image:
 #   G_image(r, r') = alpha / |r - r'_image|
 #   where r'_image is reflected through substrate surface
 #
-# For a flat spiral (all conductors at same z ≈ 0):
-#   Image distance ≈ original distance (since conductor thickness << lateral dims)
-#   So P_image ≈ P_free, and P_total = P_free × (1 + alpha)
+# For a flat spiral (all conductors at same z ~= 0):
+#   Image distance ~= original distance (since conductor thickness << lateral dims)
+#   So P_image ~= P_free, and P_total = P_free x (1 + alpha)
 #
 # Effective permittivity for charges on interface: eps_eff = (1 + eps_r) / 2
 # This is equivalent to P_total = P_free / eps_eff
@@ -183,12 +183,12 @@ print(f"Dielectric model: half-space image, eps_eff = (1+{EPS_R})/2 = {eps_eff:.
 P_eff = P_mat / eps_eff
 
 # ============================================================
-# Compute C_eff = G × P_eff⁻¹ × G^T (n_nodes x n_nodes)
+# Compute C_eff = G x P_eff⁻¹ x G^T (n_nodes x n_nodes)
 # ============================================================
 print("Computing C_eff = G * inv(P) * G^T ...")
 t0 = time.perf_counter()
 
-# Solve P_eff × X = G^T for X  (more stable than explicit inversion)
+# Solve P_eff x X = G^T for X  (more stable than explicit inversion)
 X = np.linalg.solve(P_eff, G.T)  # (n_star x n_nodes)
 C_eff = G @ X  # (n_nodes x n_nodes)
 
@@ -260,17 +260,17 @@ for fi, freq in enumerate(freqs):
 	# Surface impedance
 	Zs = Zs_func(freq)
 
-	# Z_branch = diag(R_dc + Zs) + jω L
+	# Z_branch = diag(R_dc + Zs) + jomega L
 	Z_branch = np.diag(R_dc + Zs) + 1j * omega * L_mat
 
 	# Y_branch = Z_branch^{-1}
 	Y_branch = np.linalg.inv(Z_branch)
 
-	# Y_node = A^T × Y_branch × A + jω × C_eff  (reduced system)
-	# Note: A_red is (n_reduced × n_loop), so A_red @ Y_branch @ A_red.T is correct
+	# Y_node = A^T x Y_branch x A + jomega x C_eff  (reduced system)
+	# Note: A_red is (n_reduced x n_loop), so A_red @ Y_branch @ A_red.T is correct
 	Y_node = A_red @ Y_branch @ A_red.T + 1j * omega * C_red
 
-	# Solve Y_node × V = I_port
+	# Solve Y_node x V = I_port
 	V_node = np.linalg.solve(Y_node, I_port)
 
 	# Z_port = V_pos (since I = 1A, ground at neg)

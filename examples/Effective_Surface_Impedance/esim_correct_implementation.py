@@ -16,7 +16,7 @@ For nonlinear mu(H):
 4. Apply Dowell formula with xi_eff
 
 This is the homogenization approach (Igarashi's method):
-- Solve local (micro) problem → get effective properties
+- Solve local (micro) problem -> get effective properties
 - Apply effective properties to macro formula
 """
 
@@ -185,7 +185,7 @@ class ESIMHomogenizationSolver:
         """
         Solve for H(z) using finite differences.
 
-        Equation: rho * d²H/dz² + jωμ(z)*H = 0
+        Equation: rho * d^2H/dz^2 + jomegamu(z)*H = 0
         BC: H(0) = H0, dH/dz(a) = 0
         """
         n = len(z)
@@ -224,12 +224,12 @@ class ESIMHomogenizationSolver:
 
     def _compute_effective_mu(self, z, H, mu_dist):
         """
-        Compute effective permeability using |H|²-weighted average.
+        Compute effective permeability using |H|^2-weighted average.
 
         This gives more weight to regions with high field, which dominate
         the power dissipation and skin effect.
 
-        mu_eff = integral{|H|² * mu} dz / integral{|H|²} dz
+        mu_eff = integral{|H|^2 * mu} dz / integral{|H|^2} dz
         """
         H_sq = np.abs(H) ** 2
 
@@ -399,7 +399,7 @@ if __name__ == '__main__':
        - Power loss method with symmetric BC - gives 4/3 at DC
 
     4. The homogenization approach:
-       - Solve cell problem → get mu(z)
+       - Solve cell problem -> get mu(z)
        - Compute mu_eff (|H|^2-weighted average)
        - Apply Dowell(xi_eff) where xi_eff = a / delta(mu_eff)
     """)

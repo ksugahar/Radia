@@ -211,7 +211,7 @@ error = abs(L_total - L_analytical) / L_analytical * 100
 print(f"    Error: {error:.1f}%")
 
 if error < 10:
-    print(f"    ✓ Error < 10% - PEEC solver validated!")
+    print(f"    [OK] Error < 10% - PEEC solver validated!")
 elif error < 20:
     print(f"    ⚠ Error 10-20% - Acceptable for mesh approximation")
 else:

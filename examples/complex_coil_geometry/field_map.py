@@ -57,7 +57,7 @@ def calculate_field_grid(coil_obj, grid_params):
 
 	X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
 
-	print(f"  Grid size: {x_range[2]} × {y_range[2]} × {z_range[2]} = {X.size} points")
+	print(f"  Grid size: {x_range[2]} x {y_range[2]} x {z_range[2]} = {X.size} points")
 	print(f"  X range: [{x_range[0]/mm:.1f}, {x_range[1]/mm:.1f}] mm")
 	print(f"  Y range: [{y_range[0]/mm:.1f}, {y_range[1]/mm:.1f}] mm")
 	print(f"  Z range: [{z_range[0]/mm:.1f}, {z_range[1]/mm:.1f}] mm")
@@ -158,7 +158,7 @@ def export_field_to_vtk(field_data, filename):
 
 	print(f"  [OK] Created: {vtk_file}")
 	print(f"       File size: {file_size_mb:.2f} MB")
-	print(f"       Grid: {nx}×{ny}×{nz} = {X.size} points")
+	print(f"       Grid: {nx}x{ny}x{nz} = {X.size} points")
 	print(f"\n  Open in ParaView to visualize:")
 	print(f"    - Use 'Glyph' filter to show field vectors")
 	print(f"    - Use 'Contour' filter to show field isosurfaces")
@@ -177,7 +177,7 @@ def main():
 	print(f"[OK] Coil model loaded")
 	print(f"     Description: {params['description']}")
 	print(f"     Current: {params['current']} A")
-	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}×{params['cross_section']['height']/mm:.0f} mm")
+	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
 	print(f"     Segments: {params['num_segments']}")
 
 	# Get coil bounding box

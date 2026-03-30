@@ -9,7 +9,7 @@ Rotating Magnet with Copper Plate Eddy Current (Transient Analysis - T-Omega Met
 
 モデルパラメータ（S:\ELF_MAGIC\2025_11_06_回転磁石\渦電流込\Sample3.mai より）:
 - 磁石サイズ: 1mm x 1mm x 1mm
-- 移動範囲: X方向 -6mm → 4mm (合計10mm)
+- 移動範囲: X方向 -6mm -> 4mm (合計10mm)
 - Y位置: 2mm (固定)
 - Z位置: 0mm (固定)
 - 回転: Z軸周りに反時計回り(CCW), 4°/step
@@ -20,8 +20,8 @@ Rotating Magnet with Copper Plate Eddy Current (Transient Analysis - T-Omega Met
 銅板パラメータ（Sample3.mai より）:
 - サイズ: X=[-6, 6]mm, Y=[-0.5, 0]mm, Z=[-6, 6]mm
 - 厚さ: 0.5mm (THIN 2 0.0005)
-- 電気抵抗率: 1.7241×10⁻⁸ Ω·m (OHM2 2 0 1.7241e-8)
-- 導電率: σ = 5.8×10⁷ S/m
+- 電気抵抗率: 1.7241x10⁻⁸ Omega·m (OHM2 2 0 1.7241e-8)
+- 導電率: sigma = 5.8x10⁷ S/m
 
 実装方式:
 - RadiaFieldの座標変換機能（origin, u_axis, v_axis, w_axis）で回転・並進
@@ -110,7 +110,7 @@ total_simulation_time = 2.0  # s - 2回転に相当する時間
 # メッシュパラメータ - 単位をメートルに統一
 mesh_domain = 0.006  # m - メッシュの範囲を12mmの立方体に変更 ([-6, 6]^3 mm^3)
 mesh_maxh = 0.0005  # m - 空気領域のメッシュサイズ (0.5mm - 高精度)
-mesh_maxh_magnet = 0.0004  # m - 磁石領域のメッシュサイズ（速度重視のため2倍: 0.2mm → 0.4mm）
+mesh_maxh_magnet = 0.0004  # m - 磁石領域のメッシュサイズ（速度重視のため2倍: 0.2mm -> 0.4mm）
 
 # 磁場測定グリッドのパラメータ
 measurement_plane_y = 0.0  # m - 測定平面のY座標 (Y=0mm, 銅板上面, A-Phi法と一致)
@@ -125,7 +125,7 @@ copper_y_max = 0.0     # m
 copper_z_min = -0.006  # m
 copper_z_max = 0.006   # m
 copper_thickness = 0.0005  # m (0.5mm)
-copper_resistivity = 1.7241e-8  # Ω·m (Sample3.mai: OHM2 2 0 1.7241e-8)
+copper_resistivity = 1.7241e-8  # Omega·m (Sample3.mai: OHM2 2 0 1.7241e-8)
 copper_conductivity = 1.0 / copper_resistivity  # S/m (約 5.8e7 S/m)
 
 # 渦電流計算を有効化
@@ -133,7 +133,7 @@ calculate_eddy_currents = True
 
 # T-Omega法の時間積分パラメータ
 dt = total_simulation_time / time_steps  # s - タイムステップ幅（約0.0111秒）
-mu_copper = mu0  # H/m - 銅の透磁率（非磁性体なのでμ₀）
+mu_copper = mu0  # H/m - 銅の透磁率（非磁性体なのでmu_0）
 
 print(f"\n[渦電流計算パラメータ]")
 print(f"  総シミュレーション時間: {total_simulation_time} s")
@@ -150,7 +150,7 @@ output_dir.mkdir(exist_ok=True)
 print(f"  磁石サイズ: {magnet_size*1000:.1f}x{magnet_size*1000:.1f}x{magnet_size*1000:.1f} mm (立方体)")
 print(f"  残留磁束密度 Br: {Br} T")
 print(f"  保磁力 Hc: {Hc} A/m")
-print(f"  移動範囲: X={x_start*1000:.1f}mm → {x_end*1000:.1f}mm (Y={y_fixed*1000:.1f}mm, Z={z_fixed*1000:.1f}mm固定)")
+print(f"  移動範囲: X={x_start*1000:.1f}mm -> {x_end*1000:.1f}mm (Y={y_fixed*1000:.1f}mm, Z={z_fixed*1000:.1f}mm固定)")
 print(f"  回転: {rotation_per_step}°/step, 反時計回り")
 print(f"  総回転: {total_rotation/360:.0f}回転")
 print(f"  タイムステップ数: {time_steps}")
@@ -174,7 +174,7 @@ copper_plate.maxh = 0.0005  # 銅板メッシュサイズ（0.5mm）
 air_region = Box((-domain_m, -domain_m, -domain_m),(domain_m, domain_m, domain_m)).mat("air")
 air_region.maxh = mesh_maxh
 
-# Ωのポイント接地用頂点（解の一意性のため）
+# Omegaのポイント接地用頂点（解の一意性のため）
 from netgen.occ import Vertex, Pnt
 gnd_vertex = Vertex(Pnt(domain_m, domain_m, domain_m))
 gnd_vertex.name = "GND"
@@ -582,8 +582,8 @@ for step in range(0, time_steps + 1):  # 0から180まで
 	J_eddy = J_eddy_cf
 	J_magnitude = sqrt(J_eddy * J_eddy)
 
-	# 内部磁束密度: B_internal = μH_r = μ(T - ∇Ω)
-	# H_r = T - ∇Ω（論文の定式化に従う）
+	# 内部磁束密度: B_internal = muH_r = mu(T - ∇Omega)
+	# H_r = T - ∇Omega（論文の定式化に従う）
 	B_internal = mu * (gfT - grad(gfOmega))
 
 	# 全磁束密度: B_total = B_internal + B_ext
@@ -658,12 +658,12 @@ for step in range(0, time_steps + 1):  # 0から180まで
 	# 2.3.4.7: A-Φ法との比較用データ出力（B_reaction: 渦電流による反応磁場）
 	# ------------------------------------------------------------------
 	# ★重要な修正（2026-01-22）:
-	# T-Ω法: B_total = μ(T + ∇Ω) は「全磁束密度」
-	#        B_reaction = B_total - B_ext = μ(T + ∇Ω) - B_ext が「渦電流反応磁場」
+	# T-Omega法: B_total = mu(T + ∇Omega) は「全磁束密度」
+	#        B_reaction = B_total - B_ext = mu(T + ∇Omega) - B_ext が「渦電流反応磁場」
 	# A-Φ法: B_reaction = curl(A_r) が「渦電流反応磁場」
 	# 比較すべきは両方の「反応磁場」部分
 	if step == 0 or step == 30 or step == 60 or step == 90 or step == 120 or step == 150 or step == 180:
-		print(f"\n  [比較用データ] B_internal (μ(T+∇Ω)) をグリッド点で出力...")
+		print(f"\n  [比較用データ] B_internal (mu(T+∇Omega)) をグリッド点で出力...")
 		B_internal_data = []
 
 		# 銅板内のグリッド点
@@ -672,7 +672,7 @@ for step in range(0, time_steps + 1):  # 0から180まで
 		test_y = np.linspace(-0.0004, -0.0001, 4)  # Y=[-0.4, -0.1]mm（銅板内部）
 		test_z = np.linspace(-0.003, 0.003, 7)
 
-		# 渦電流反応磁場 = B_total - B_ext = μ(T+∇Ω) - B_ext
+		# 渦電流反応磁場 = B_total - B_ext = mu(T+∇Omega) - B_ext
 		B_reaction = B_internal - gfB_ext
 
 		for px in test_x:
@@ -712,7 +712,7 @@ for step in range(0, time_steps + 1):  # 0から180まで
 	# 理由: B_internalは渦電流自身が作る磁場であり、A-Φ法との比較で
 	#       B_internal計算方法の違いによる誤差を排除するため
 	try:
-		f_lorentz = Cross(J_eddy, gfB_ext)  # B_total → gfB_ext に変更
+		f_lorentz = Cross(J_eddy, gfB_ext)  # B_total -> gfB_ext に変更
 
 		integration_order = 5
 		force_x = Integrate(f_lorentz[0], mesh, definedon=mesh.Materials("copper"), order=integration_order)
@@ -933,7 +933,7 @@ with open(summary_file, 'w', encoding='utf-8') as f:
 	f.write(f"残留磁束密度 Br: {Br} T\n")
 	f.write(f"保磁力 Hc: {Hc} A/m\n")
 	f.write(f"磁化方向: Y方向（磁石と同期回転）\n")
-	f.write(f"移動範囲: X={x_start*1000:.1f}mm → {x_end*1000:.1f}mm (Y={y_fixed*1000:.1f}mm, Z={z_fixed*1000:.1f}mm固定)\n")
+	f.write(f"移動範囲: X={x_start*1000:.1f}mm -> {x_end*1000:.1f}mm (Y={y_fixed*1000:.1f}mm, Z={z_fixed*1000:.1f}mm固定)\n")
 	f.write(f"回転: Z軸周り {rotation_per_step}°/step, 反時計回り, {total_rotation/360:.0f}回転\n")
 	f.write(f"シミュレーション時間: {total_simulation_time} s\n")
 	f.write(f"ソルバー: BDDC+CG法（CF形式アプローチ）\n\n")

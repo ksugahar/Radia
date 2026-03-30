@@ -603,7 +603,7 @@ def run_fem(resolution='coarse', current_at=20000.0, fes_order=1,
         sys.path.insert(0, panels_dir)
     from calc_common import add_periodic_kelvin
     # Offset = TRANSLATION from int sphere to ext sphere (NOT ext center!)
-    # int sphere at (0, sy, 0), ext at (offset_x, sy, 0) → translation = (offset_x, 0, 0)
+    # int sphere at (0, sy, 0), ext at (offset_x, sy, 0) -> translation = (offset_x, 0, 0)
     kelvin_center = (offset_x * scale, 0.0, 0.0)
     has_kelvin = add_periodic_kelvin(mesh, kelvin_center)
     if has_kelvin:
