@@ -1346,8 +1346,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
 			// Compute the interaction block based on DOF types
-			// For now, only support 3x3 blocks (standard elements)
-			// TODO: Add support for 3x6, 6x3, 6x6 blocks for MSC elements
+			// 3x3 blocks use B_comp; 6x6/5x5/cross-DOF use ComputeMixedBlockFast
 
 			if(dof_row == 3 && dof_col == 3)
 			{
