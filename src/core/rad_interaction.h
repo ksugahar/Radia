@@ -329,41 +329,10 @@ public:
 	// Netgen face ordering: DOFs [0, 1, 2, 3, 4, 5] = z-, x+, y-, x-, y+, z+
 	// (Matches NETGEN_FACES in radia_pybind.cpp)
 	//
-	// IMA simply adds mirrored kernel contributions:
-	//   K_IMA[i,j] = K[i,j] + K[i, mirror(j)] * sign
-	//
-	// The mirrored geometry automatically handles face position changes.
-	// No DOF permutation matrices are needed - the kernel-based approach
-	// computes field contributions directly from mirrored face positions.
-	//
-	// Legacy permutation arrays (DEPRECATED - kept for reference only)
-	static constexpr int IMA_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap x+ and x- (faces 1,3)
-	static constexpr int IMA_PERM_Y[6] = {0, 1, 4, 3, 2, 5};  // Swap y- and y+ (faces 2,4)
-	static constexpr int IMA_PERM_Z[6] = {5, 1, 2, 3, 4, 0};  // Swap z- and z+ (faces 0,5)
-
-	// IMA kernel formula (no permutation needed):
-	//            = K_AA + Q @ K_BA
-	//
-	// IMA row permutation based on Netgen face ordering: 0=z-, 1=x+, 2=y-, 3=x-, 4=y+, 5=z+
-	// Using Compute6x6BlockMirroredTarget to get K_BA directly,
-	// we apply the Q row permutation that accounts for face swapping after mirroring.
-	// NOTE: Compute6x6BlockIMA (which uses these arrays) is currently dead code.
-	// The active IMA path uses kernel-based Compute6x6BlockFast which needs no permutation.
-	//
-	// For x-mirror: faces 1 (x+) and 3 (x-) swap
-	//   Q_x = [0, 3, 2, 1, 4, 5]
-	static constexpr int IMA_ROW_PERM_X[6] = {0, 3, 2, 1, 4, 5};  // Swap Face 1 <-> Face 3
-	static constexpr int IMA_COL_PERM_X[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
-
-	// For y-mirror: faces 2 (y-) and 4 (y+) swap
-	//   Q_y = [0, 1, 4, 3, 2, 5]
-	static constexpr int IMA_ROW_PERM_Y[6] = {0, 1, 4, 3, 2, 5};  // Swap Face 2 <-> Face 4
-	static constexpr int IMA_COL_PERM_Y[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
-
-	// For z-mirror: faces 0 (z-) and 5 (z+) swap
-	//   Q_z = [5, 1, 2, 3, 4, 0]
-	static constexpr int IMA_ROW_PERM_Z[6] = {5, 1, 2, 3, 4, 0};  // Swap Face 0 <-> Face 5
-	static constexpr int IMA_COL_PERM_Z[6] = {0, 1, 2, 3, 4, 5};  // Identity (unused)
+	// IMA mirror contributions are computed inline in the kernel functions:
+	//   Compute6x6BlockFast: scalar IMA sign (MSC surface charge is scalar)
+	//   Compute3x3BlockFast: component sign matrix S[beta] (MMM magnetization is pseudovector)
+	// No DOF permutation matrices are needed.
 
 	int AmOfRelaxSubInterv;
 
@@ -530,24 +499,9 @@ public:
 	// Sign determined by m_imaSign: +1 (symmetric BC) or -1 (antisymmetric BC)
 	int SetupInteractMatrix_IMA(bool skipDenseMatrix = false);
 
-	// Apply DOF permutation to 6x6 block: result = input @ P
-	// perm: permutation array (e.g., IMA_PERM_X)
-	void ApplyDOFPermutation(const double* input, const int* perm, double* result) const;
-
-	// Compute IMA 6x6 block: direct + sum of mirror contributions
-	void Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) const;
-
-	// Compute 6x6 block with virtually mirrored source element j (DEPRECATED - not ELF compatible)
-	// For quarter model support: element j's geometry is mirrored on-the-fly
-	void Compute6x6BlockMirrored(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
-
-	// Compute 6x6 block with virtually mirrored target element i (ELF-compatible)
-	// K_BA = K[mirror(i), j]: field at mirrored target from original source
-	void Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mirrorAxis, double* K_mat) const;
-
-	// Apply row permutation Q: result[perm[i], j] = input[i, j]
-	// Used for ELF IMA formula: K_IMA = K_AA + Q @ K_BA
-	void ApplyRowPermutation(const double* input, const int* perm, double* result) const;
+	// Legacy IMA functions removed (2026-03-31): ApplyDOFPermutation, ApplyRowPermutation,
+	// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget
+	// IMA mirror logic is now inline in Compute6x6BlockFast and Compute3x3BlockFast.
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
