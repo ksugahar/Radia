@@ -190,6 +190,7 @@ RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
     , m_n_elem(0)
     , m_nffc(3)
     , m_is_6dof(false)
+    , m_is_5dof(false)
     , m_is_mixed_dof(false)
     , m_geometry_3dof_ready(false)
     , m_diag_cached(false)
@@ -273,28 +274,34 @@ void RadHACApKManager::ExtractElementCoordinates() {
                   << n_6dof << " MSC elements (5/6DOF), total " << total_dof << " DOF" << std::endl;
 #endif
     } else if (n_6dof > 0) {
-        // Check if ALL are 6DOF hexahedra or if we have 5DOF wedges
-        bool allHex = true;
-        for (int i = 0; i < m_n_elem && allHex; i++) {
-            if (m_interaction->GetElementDOF(i) != 6) allHex = false;
+        // Check element types: pure hex, pure wedge, or mixed
+        bool allHex = true, allWedge = true;
+        for (int i = 0; i < m_n_elem; i++) {
+            int dof = m_interaction->GetElementDOF(i);
+            if (dof != 6) allHex = false;
+            if (dof != 5) allWedge = false;
         }
         if (allHex) {
             m_nffc = 6;
-            m_is_6dof = true;  // Pure hex (fast path with Compute6x6BlockFast)
+            m_is_6dof = true;   // Pure hex (fast path with Compute6x6BlockFast)
+            m_is_5dof = false;
+            m_is_mixed_dof = false;
+        } else if (allWedge) {
+            m_nffc = 5;
+            m_is_6dof = false;
+            m_is_5dof = true;   // Pure wedge (fast path with Compute5x5BlockFast)
             m_is_mixed_dof = false;
         } else {
-            // Has 5DOF wedges: use variable DOF mode
+            // Mixed hex+wedge: use variable DOF mode (flat matrix)
             m_nffc = 0;
             m_is_6dof = false;
+            m_is_5dof = false;
             m_is_mixed_dof = true;
-#ifdef HACAPK_RADIA_LOGGING
-            std::cout << "[HACApK] Variable DOF mode (wedge+hex): total "
-                      << total_dof << " DOF" << std::endl;
-#endif
         }
     } else {
         m_nffc = 3;
         m_is_6dof = false;
+        m_is_5dof = false;
         m_is_mixed_dof = false;
     }
 
@@ -511,8 +518,8 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // This ensures that matrix element caches from previous solves are not reused
     RadHACApKCallback::IncrementGeneration();
 
-    // Verify DOF was configured correctly (3DOF, 6DOF, or mixed=0)
-    if (m_ndof == 0 || (m_nffc != 0 && m_nffc != 3 && m_nffc != 6)) {
+    // Verify DOF was configured correctly (3DOF, 5DOF, 6DOF, or mixed=0)
+    if (m_ndof == 0 || (m_nffc != 0 && m_nffc != 3 && m_nffc != 5 && m_nffc != 6)) {
         std::cerr << "[HACApK] Error: Invalid DOF configuration (nffc=" << m_nffc << ")" << std::endl;
         return false;
     }
@@ -527,13 +534,17 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     // ELF-style pre-computation for 3DOF tetrahedra (2025-12-26)
     // PrecomputeGeometry3DOF extracts face vertices/normals for direct field computation
     // This allows on-demand matrix element computation without O(N^2) SetupInteractMatrix()
-    if (!m_is_6dof && !m_is_mixed_dof) {
+    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof) {
         PrecomputeGeometry3DOF();
+    }
+    // For pure wedge: precompute wedge geometry via radTInteraction
+    if (m_is_5dof && m_interaction) {
+        m_interaction->PrecomputeWedgeGeometry();
     }
     // FIX (2025-12-26): For 3DOF tetrahedra, use PrecomputeFlatInteractMatrix()
     // if InteractMatrix was already computed (fallback path)
     // This provides O(1) matrix element access during H-matrix construction
-    if (!m_is_6dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
+    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
         PrecomputeFlatInteractMatrix();
     }
     // For mixed DOF mode (including 5-DOF wedges): precompute flat interaction matrix
@@ -594,8 +605,8 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
     int result;
 
-    if (m_is_mixed_dof) {
-        // Variable DOF mode: use new varDOF wrapper
+    if (m_is_mixed_dof || m_is_5dof) {
+        // Variable DOF mode: use varDOF wrapper (mixed meshes and pure wedge)
         result = HACApK_build_hmatrix_varDOF_wrapper(
             m_leafmtxp,
             m_control,
@@ -943,9 +954,12 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
     } else if (dof_elem_i == 6 && dof_elem_j == 3) {
         // 6DOF-3DOF: hex-tetra interaction (6x3 block)
         return GetMixed6x3Element(elem_i, elem_j, local_i, local_j);
+    } else if (dof_elem_i == 5 && dof_elem_j == 5) {
+        // 5DOF-5DOF: wedge-wedge interaction (fast kernel path)
+        return GetCached5x5Element(elem_i, elem_j, local_i, local_j);
     }
 
-    // Generic path for variable DOF (5-DOF wedges, mixed wedge+hex, etc.)
+    // Generic path for variable DOF (mixed wedge+hex, etc.)
     // Uses pre-computed flat interaction matrix for O(1) access
     return GetGenericElement(elem_i, elem_j, local_i, local_j);
 }
@@ -1049,6 +1063,75 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     std::memcpy(tl_cache_N_mat[hash_idx], N_mat, 9 * sizeof(double));
 
     return N_mat[comp_i * 3 + comp_j];
+}
+
+//=========================================================================
+// GetCached5x5Element: On-demand 5x5 block for wedges with hash cache
+// Same pattern as GetCached6x6Element / GetCached3x3Element
+// Delegates to radTInteraction::Compute5x5BlockFast (IMA-aware)
+//=========================================================================
+
+static constexpr int TL_HASH_SIZE_5DOF = 512;
+static constexpr int TL_HASH_MASK_5DOF = TL_HASH_SIZE_5DOF - 1;
+
+double RadHACApKManager::GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const {
+    static thread_local uint64_t tl_cached_generation = 0;
+    static thread_local int tl_single_elem_i = -1;
+    static thread_local int tl_single_elem_j = -1;
+    static thread_local double tl_single_K_mat[25];
+    static thread_local int tl_cache_elem_i[TL_HASH_SIZE_5DOF];
+    static thread_local int tl_cache_elem_j[TL_HASH_SIZE_5DOF];
+    static thread_local double tl_cache_K_mat[TL_HASH_SIZE_5DOF][25];
+    static thread_local bool tl_initialized = false;
+
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen) {
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE_5DOF; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;
+    }
+    if (!tl_initialized) {
+        for (int i = 0; i < TL_HASH_SIZE_5DOF; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_initialized = true;
+    }
+
+    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+        return tl_single_K_mat[face_i * 5 + face_j];
+    }
+
+    int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK_5DOF;
+    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+        std::memcpy(tl_single_K_mat, tl_cache_K_mat[hash_idx], 25 * sizeof(double));
+        tl_single_elem_i = elem_i;
+        tl_single_elem_j = elem_j;
+        return tl_single_K_mat[face_i * 5 + face_j];
+    }
+
+    // Cache miss: compute via radTInteraction::Compute5x5BlockFast (IMA-aware)
+    double K_mat[25];
+    if (m_interaction) {
+        m_interaction->Compute5x5BlockFast(elem_i, elem_j, K_mat);
+    } else {
+        std::memset(K_mat, 0, 25 * sizeof(double));
+    }
+
+    std::memcpy(tl_single_K_mat, K_mat, 25 * sizeof(double));
+    tl_single_elem_i = elem_i;
+    tl_single_elem_j = elem_j;
+
+    tl_cache_elem_i[hash_idx] = elem_i;
+    tl_cache_elem_j[hash_idx] = elem_j;
+    std::memcpy(tl_cache_K_mat[hash_idx], K_mat, 25 * sizeof(double));
+
+    return K_mat[face_i * 5 + face_j];
 }
 
 //=========================================================================
