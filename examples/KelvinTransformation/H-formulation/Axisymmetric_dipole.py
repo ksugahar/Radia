@@ -145,16 +145,16 @@ use_r_weighting = True  # Must be True to match 3D_dipole.py results
 
 # For semicircular (half-disk) domain:
 # The axisymmetric weak form with r-weighting is:
-#   a(u,v) = ∫ μ grad(u)·grad(v) r dr dz
-#   f(v)   = ∫ μ Hs·grad(v) r dr dz - ∫ μ v (n·Hs) r ds
+#   a(u,v) = ∫ mu grad(u)·grad(v) r dr dz
+#   f(v)   = ∫ mu Hs·grad(v) r dr dz - ∫ mu v (n·Hs) r ds
 # The boundary integral on the semicircular "outer" boundary is essential.
 
 if use_r_weighting:
-    # Bilinear form: a(u,v) = ∫ μ grad(u)·grad(v) r dr dz
+    # Bilinear form: a(u,v) = ∫ mu grad(u)·grad(v) r dr dz
     a = BilinearForm(fes)
     a += mu * grad(u) * grad(v) * r_coord * dx
 
-    # Linear form: f(v) = ∫ μ Hs·grad(v) r dr dz - ∫ μ v (n·Hs) r ds
+    # Linear form: f(v) = ∫ mu Hs·grad(v) r dr dz - ∫ mu v (n·Hs) r ds
     f = LinearForm(fes)
     f += mu * InnerProduct(grad(v), Hs) * r_coord * dx
     # Boundary term on outer boundary (use mu_boundary for boundary integrals)
@@ -303,9 +303,9 @@ for i, zval in enumerate(z_profile):
     else:
         Hz_pert_numerical_z[i] = nan
 
-    # Analytical solution on z-axis (r_cyl ≈ 0)
+    # Analytical solution on z-axis (r_cyl ~= 0)
     # The correct formula (verified against NGSolve):
-    # H_z = +2 * (μr-1)/(μr+2) * (a/|z|)³ on z-axis (independent of z sign)
+    # H_z = +2 * (mur-1)/(mur+2) * (a/|z|)^3 on z-axis (independent of z sign)
     if r < sphere_radius:
         Hz_pert_analytical_z[i] = -1.0 + 3.0/(mu_r + 2)
     else:
@@ -361,9 +361,9 @@ for nz in range(len(z_grid)):
             Hz_analytical_2d[nz, nr] = -1.0 + 3.0/(mu_r + 2)
         else:
             # Outside sphere: dipole field (verified against NGSolve)
-            # H_pert = C * [2cosθ er + sinθ eθ]
-            # where C = +(μr-1)/(μr+2) * (a/r)³ (POSITIVE coefficient!)
-            # θ is angle from z-axis
+            # H_pert = C * [2costheta er + sintheta etheta]
+            # where C = +(mur-1)/(mur+2) * (a/r)^3 (POSITIVE coefficient!)
+            # theta is angle from z-axis
             theta = arctan2(r_grid[nr], z_grid[nz])  # Angle from z-axis
             C = (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3  # POSITIVE
 

@@ -367,7 +367,7 @@ HField = BField / Mu
 #
 # The "demagnetization" interpretation:
 # H_in = H0 - N*M where N=1/3 for sphere
-# For high mu_r: H_in ≈ 3*H0/mu_r (very small)
+# For high mu_r: H_in ~= 3*H0/mu_r (very small)
 
 Hz_analytical_interior = 3.0 / (mu_r + 2) * H0  # = 0.029412 A/m for mu_r=100
 

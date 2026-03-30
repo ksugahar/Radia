@@ -42,7 +42,7 @@ def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):
 	Returns:
 		Radia container object with hexahedral elements
 	"""
-	print(f"	Creating meshed disk: {n_radial} radial × {n_angular} angular × {n_z} vertical = {n_radial * n_angular * n_z} elements")
+	print(f"	Creating meshed disk: {n_radial} radial x {n_angular} angular x {n_z} vertical = {n_radial * n_angular * n_z} elements")
 
 	hex_elements = []
 
@@ -179,7 +179,7 @@ def create_smco_magnet_array(
 	)
 
 	# Apply iron material properties for magnetic yoke behavior
-	mat = rad.MatLin(1000)  # μr = 1000 (isotropic)
+	mat = rad.MatLin(1000)  # mur = 1000 (isotropic)
 	rad.MatApl(base_plate, mat)
 
 	# Create hexagonal array of magnets

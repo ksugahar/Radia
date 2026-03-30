@@ -450,7 +450,7 @@ ax2.axvline(half_height, color='red', linestyle='--', alpha=0.7, label='Cylinder
 ax2.axhline(H0, color='gray', linestyle=':', alpha=0.7, label=f'$H_0$ = {H0} A/m')
 ax2.set_xlabel('$z$ (m)', fontsize=11)
 ax2.set_ylabel('$H_z$ (A/m)', fontsize=11)
-ax2.set_title('Z-axis Profile (r≈0)', fontsize=12)
+ax2.set_title('Z-axis Profile (r~=0)', fontsize=12)
 ax2.legend(loc='best', fontsize=9)
 ax2.grid(True, alpha=0.3)
 

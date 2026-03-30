@@ -84,19 +84,19 @@ Hs = CoefficientFunction((0, 0, 1))
 Hsb = BoundaryFromVolumeCF(Hs)
 
 print(f"  Background field: H_s = [0, 0, 1] A/m (z-direction)")
-print(f"  Relative permeability: μ_r = {mu_r}")
+print(f"  Relative permeability: mu_r = {mu_r}")
 
 # ============================================================
 # Weak Form (Perturbation Potential Formulation)
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫(∇v)·(μ∇u)dΩ
+# Bilinear form: a(u,v) = ∫(∇v)·(mu∇u)dOmega
 a = BilinearForm(fes)
 a += mu*grad(u)*grad(v)*dx
 
 # Linear form (PERTURBATION FORMULATION):
-# f(v) = ∫(∇v)·(μH_s)dΩ - ∫v(n·μH_s)dΓ
+# f(v) = ∫(∇v)·(muH_s)dOmega - ∫v(n·muH_s)dΓ
 # 注意: Kelvin変換なし（有限領域）では外部境界での境界項が必要
 #       外部境界を通る磁束を考慮するため
 f = LinearForm(fes)
@@ -186,7 +186,7 @@ print(f"  Potential at origin: {center_value:.6e}")
 print(f"  Field at origin: Hz = {H[2](mesh(0,0,0)):.6f} A/m")
 
 # Expected analytical value (perturbation field interior, z-component)
-Hz_analytical = -1.0 + 3.0/(mu_r + 2)  # = -0.75 for μr=10
+Hz_analytical = -1.0 + 3.0/(mu_r + 2)  # = -0.75 for mur=10
 print(f"  Analytical (interior): Hz = {Hz_analytical:.6f} A/m")
 print(f"  Relative error: {abs(H[2](mesh(0,0,0)) - Hz_analytical)/abs(Hz_analytical)*100:.3f}%")
 
@@ -218,7 +218,7 @@ for i, xval in enumerate(x_profile):
 
     # Analytical solution for PERTURBATION field Hz component
     if r < sphere_radius:
-        Hz_pert_analytical_x[i] = -1.0 + 3.0/(mu_r + 2)  # = -0.75 for μr=10
+        Hz_pert_analytical_x[i] = -1.0 + 3.0/(mu_r + 2)  # = -0.75 for mur=10
     else:
         Hz_pert_analytical_x[i] = -(mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3
 
@@ -290,10 +290,10 @@ for nz in range(len(z)):
             Hz_xz_analytical[nz, nx] = -1.0 + 3.0/(mu_r + 2)
         else:
             # Outside sphere: dipole field
-            # H_pert = C * [2cosθ er + sinθ eθ]
-            # where C = +(μr-1)/(μr+2) * (a/r)³ (POSITIVE coefficient)
-            # In Cartesian: Hx = H_r * sinθ + H_θ * cosθ
-            #               Hz = H_r * cosθ - H_θ * sinθ
+            # H_pert = C * [2costheta er + sintheta etheta]
+            # where C = +(mur-1)/(mur+2) * (a/r)^3 (POSITIVE coefficient)
+            # In Cartesian: Hx = H_r * sintheta + H_theta * costheta
+            #               Hz = H_r * costheta - H_theta * sintheta
             theta = arctan2(x[nx], z[nz])  # Angle from z-axis
             C = (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3
 

@@ -77,7 +77,7 @@ print("=" * 60)
 # ============================================================
 cube_size = 1.0          # Magnetic cube size [m] (cube from 0 to 1 in each direction, per CubeMesh.py)
 air_total_radius = 1.5   # Total region air box size [m] (A_domain extends to 1.5, per CubeMesh.py)
-kelvin_radius = 3.0      # Kelvin transformation radius [m] (rk: must be > sqrt(3)*air_total_radius ≈ 2.6)
+kelvin_radius = 3.0      # Kelvin transformation radius [m] (rk: must be > sqrt(3)*air_total_radius ~= 2.6)
 mu_r = 1000              # Relative permeability (per CubeMesh.py default)
 mu0 = 4 * pi * 1e-7      # Vacuum permeability [H/m]
 
@@ -363,15 +363,15 @@ def compute_error_estimator(mesh, fes, B_pert_cf):
 	Compute equilibrated error estimator using PatchwiseSolveWithInterface.
 
 	For Omega-Reduced Omega formulation, the physical law is div(B) = 0.
-	We construct σ_eq ∈ H(div) satisfying div(σ_eq) = 0 exactly,
-	then compute ||B_h - σ_eq|| as the error estimator.
+	We construct sigma_eq ∈ H(div) satisfying div(sigma_eq) = 0 exactly,
+	then compute ||B_h - sigma_eq|| as the error estimator.
 
 	Uses PatchwiseSolveWithInterface to properly handle material interfaces
 	(BBND elements) where B may have discontinuities.
 
 	Prager-Synge theorem guarantees this is a reliable upper bound.
 	"""
-	flux = B_pert_cf  # B_h = μ H_h from numerical solution
+	flux = B_pert_cf  # B_h = mu H_h from numerical solution
 
 	# Use order p for H(div) space (same as H1 order for efficiency)
 	recovery_order = max(1, fes.globalorder)
@@ -380,12 +380,12 @@ def compute_error_estimator(mesh, fes, B_pert_cf):
 	sigma = fes_flux.TrialFunction()
 	tau = fes_flux.TestFunction()
 
-	# Bilinear form for patchwise solve: (σ, τ)
+	# Bilinear form for patchwise solve: (sigma, τ)
 	bf = InnerProduct(sigma, tau) * dx
 
 	# Linear form: (B_h, τ)
-	# For equilibration: we want div(σ_eq) = 0
-	# The patchwise solve minimizes ||σ - B_h|| subject to div constraints
+	# For equilibration: we want div(sigma_eq) = 0
+	# The patchwise solve minimizes ||sigma - B_h|| subject to div constraints
 	lf = InnerProduct(flux, tau) * dx
 
 	# Grid function for equilibrated flux
@@ -412,14 +412,14 @@ def compute_error_estimator(mesh, fes, B_pert_cf):
 
 			gf_sigma_eq.vec.data = a_flux.mat.Inverse(fes_flux.FreeDofs(), inverse="sparsecholesky") * f_flux.vec
 
-	# Error estimator: ||B_h - σ_eq||²
+	# Error estimator: ||B_h - sigma_eq||^2
 	err = InnerProduct(flux - gf_sigma_eq, flux - gf_sigma_eq)
 	element_errors = Integrate(err, mesh, element_wise=True)
 
-	# Check equilibration quality (div(σ_eq) should be small)
+	# Check equilibration quality (div(sigma_eq) should be small)
 	div_residual = Integrate(div(gf_sigma_eq)**2 * dx, mesh)
 	if div_residual > 1e-10:
-		print(f"  Equilibration quality: ||div(σ_eq)|| = {sqrt(div_residual):.2e}")
+		print(f"  Equilibration quality: ||div(sigma_eq)|| = {sqrt(div_residual):.2e}")
 
 	return element_errors
 

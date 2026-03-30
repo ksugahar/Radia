@@ -31,7 +31,7 @@ gradient = 10.0  # T/m
 R_sphere = 5.0 * mm   # half-size of cube (sphere approximation)
 permeability_values = [10, 100, 1000]
 
-# Test points outside the cube (field ≈ background + stray field from cube)
+# Test points outside the cube (field ~= background + stray field from cube)
 # Note: The magnetized cube produces stray fields that decay with distance.
 # Points farther from the cube give closer agreement with the pure background.
 test_points = [

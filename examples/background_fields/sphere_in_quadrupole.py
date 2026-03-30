@@ -96,7 +96,7 @@ else:
 print("\n[Step 4] Compare with Analytical Quadrupole Field")
 print("-" * 80)
 
-# Test points outside the cube (field ≈ background + stray field from cube)
+# Test points outside the cube (field ~= background + stray field from cube)
 # Note: The magnetized cube produces stray fields that decay with distance.
 # Points farther from the cube give closer agreement with the pure background.
 test_points = [

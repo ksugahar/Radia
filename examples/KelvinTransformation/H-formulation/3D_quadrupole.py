@@ -88,19 +88,19 @@ Hs = CoefficientFunction((-z, 0, -x))
 Hsb = BoundaryFromVolumeCF(Hs)
 
 print(f"  Background field: H_s = (-z, 0, -x) A/m (quadrupole in X-Z plane)")
-print(f"  Relative permeability: μ_r = {mu_r}")
+print(f"  Relative permeability: mu_r = {mu_r}")
 
 # ============================================================
 # Weak Form (Perturbation Potential Formulation)
 # ============================================================
 print("\nAssembling system...")
 
-# Bilinear form: a(u,v) = ∫(∇v)·(μ∇u)dΩ
+# Bilinear form: a(u,v) = ∫(∇v)·(mu∇u)dOmega
 a = BilinearForm(fes)
 a += mu*grad(u)*grad(v)*dx
 
 # Linear form (PERTURBATION FORMULATION):
-# f(v) = ∫(∇v)·(μH_s)dΩ - ∫v(n·μH_s)dΓ
+# f(v) = ∫(∇v)·(muH_s)dOmega - ∫v(n·muH_s)dΓ
 # 注意: Kelvin変換なし（有限領域）では外部境界での境界項が必要
 #       外部境界を通る磁束を考慮するため
 f = LinearForm(fes)
@@ -195,12 +195,12 @@ print(f"  Potential at origin: {center_value:.6e}")
 #
 # Interior solution (r < a):
 #   φ_pert = B * xz
-#   where B = -2(μr-1)/(2μr+5) (from boundary conditions)
+#   where B = -2(mur-1)/(2mur+5) (from boundary conditions)
 #   H_pert = -∇φ_pert = (-B*z, 0, -B*x)
 #
 # Exterior solution (r > a):
 #   φ_pert = A * (a⁵/r⁵) * xz
-#   where A = -2(μr-1)/(2μr+5)
+#   where A = -2(mur-1)/(2mur+5)
 #   H_pert = -∇(A*a⁵*xz/r⁵)
 
 # Coefficient for interior perturbation potential
@@ -231,7 +231,7 @@ print("\nComputing axis profiles...")
 profile_range = linspace(-plot_range, plot_range, 221)
 
 # X-axis profile: (x, 0, 0) - evaluate Hz component
-# On x-axis (z=0): φ_pert = B*x*0 = 0, but Hz = -∂φ/∂z = -B*x ≠ 0
+# On x-axis (z=0): φ_pert = B*x*0 = 0, but Hz = -∂φ/∂z = -B*x != 0
 x_profile = profile_range
 Hz_pert_numerical_x = zeros(len(x_profile))
 Hz_pert_analytical_x = zeros(len(x_profile))
@@ -250,7 +250,7 @@ for i, xval in enumerate(x_profile):
     # Analytical solution for PERTURBATION field Hz component on x-axis
     # Interior (r < a): φ_pert = B·xz, Hz_pert = -∂φ_pert/∂z = -B·x
     # Exterior (r > a): φ_pert = A·xz/r^5, Hz_pert = -A·x/r^5 (at z=0)
-    # Coefficients: B = -2(μ_r-1)/(2μ_r+5), A = B × a^5
+    # Coefficients: B = -2(mu_r-1)/(2mu_r+5), A = B x a^5
     r = abs(xval)
     if r < sphere_radius:
         # Inside sphere
@@ -264,7 +264,7 @@ for i, xval in enumerate(x_profile):
         Hz_pert_analytical_x[i] = 0.0
 
 # Z-axis profile: (0, 0, z) - evaluate Hx component
-# On z-axis (x=0): φ_pert = B*0*z = 0, but Hx = -∂φ/∂x = -B*z ≠ 0
+# On z-axis (x=0): φ_pert = B*0*z = 0, but Hx = -∂φ/∂x = -B*z != 0
 z_profile = profile_range
 Hx_pert_numerical_z = zeros(len(z_profile))
 Hx_pert_analytical_z = zeros(len(z_profile))
@@ -283,7 +283,7 @@ for i, zval in enumerate(z_profile):
     # Analytical solution for PERTURBATION field Hx component on z-axis
     # Interior (r < a): φ_pert = B·xz, Hx_pert = -∂φ_pert/∂x = -B·z
     # Exterior (r > a): φ_pert = A·xz/r^5, Hx_pert = -A·z/r^5 (at x=0)
-    # Coefficients: B = -2(μ_r-1)/(2μ_r+5), A = B × a^5
+    # Coefficients: B = -2(mu_r-1)/(2mu_r+5), A = B x a^5
     r = abs(zval)
     if r < sphere_radius:
         # Inside sphere
@@ -339,10 +339,10 @@ for nz in range(len(z)):
             Hz_xz_analytical[nz, nx] = -B_coeff * xval
         else:
             # Outside sphere: φ_pert = A * (a⁵/r⁵) * xz where A = B
-            # Let f = a⁵/r⁵ = a⁵ * (x² + z²)^(-5/2)
+            # Let f = a⁵/r⁵ = a⁵ * (x^2 + z^2)^(-5/2)
             # ∂f/∂x = -5 * a⁵ * x / r⁷
-            # ∂(f*xz)/∂x = z*f + xz*∂f/∂x = a⁵*z/r⁷ * (r² - 5x²)
-            # ∂(f*xz)/∂z = a⁵*x/r⁷ * (r² - 5z²)
+            # ∂(f*xz)/∂x = z*f + xz*∂f/∂x = a⁵*z/r⁷ * (r^2 - 5x^2)
+            # ∂(f*xz)/∂z = a⁵*x/r⁷ * (r^2 - 5z^2)
             A = -2*(mu_r - 1)/(2*mu_r + 5) * (sphere_radius**5)
             Hx_xz_analytical[nz, nx] = -A * zval / r**7 * (r**2 - 5*xval**2)
             Hz_xz_analytical[nz, nx] = -A * xval / r**7 * (r**2 - 5*zval**2)

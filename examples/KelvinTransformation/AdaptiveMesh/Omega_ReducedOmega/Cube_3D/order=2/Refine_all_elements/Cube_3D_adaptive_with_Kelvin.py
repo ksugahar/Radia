@@ -71,7 +71,7 @@ print("=" * 60)
 # ============================================================
 cube_size = 1.0          # Magnetic cube size [m] (cube from 0 to 1 in each direction, per CubeMesh.py)
 air_total_radius = 1.5   # Total region air box size [m] (A_domain extends to 1.5, per CubeMesh.py)
-kelvin_radius = 3.0      # Kelvin transformation radius [m] (rk: must be > sqrt(3)*air_total_radius ≈ 2.6)
+kelvin_radius = 3.0      # Kelvin transformation radius [m] (rk: must be > sqrt(3)*air_total_radius ~= 2.6)
 mu_r = 1000              # Relative permeability (per CubeMesh.py default)
 mu0 = 4 * pi * 1e-7      # Vacuum permeability [H/m]
 

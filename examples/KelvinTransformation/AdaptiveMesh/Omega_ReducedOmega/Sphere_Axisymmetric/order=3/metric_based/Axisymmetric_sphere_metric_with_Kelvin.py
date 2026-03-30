@@ -89,7 +89,7 @@ grading = 0.3            # Mesh grading parameter
 # DOF growth target: 2x per iteration
 # For 2D: DOF ~ h^(-2), so h_ratio = dof_growth^(-1/2) = 0.707 for 2x
 dof_growth_target = 2.0
-h_ratio_target = dof_growth_target ** (-0.5)  # ≈ 0.707 for 2x
+h_ratio_target = dof_growth_target ** (-0.5)  # ~= 0.707 for 2x
 eta_target_factor = h_ratio_target ** (order + 1)  # Computed based on order
 
 print(f"\nProblem parameters:")

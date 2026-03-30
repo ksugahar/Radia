@@ -108,10 +108,10 @@ for seg in ngmesh.Elements1D():
     cy = (p0[1] + p1[1]) / 2
     dist = sqrt(cx**2 + cy**2)
 
-    # Check if on axis (x ≈ 0)
+    # Check if on axis (x ~= 0)
     if abs(cx) < 0.001 and abs(p0[0]) < 0.001 and abs(p1[0]) < 0.001:
         ngmesh.SetBCName(seg.index - 1, 'axis')
-    # Check if on outer arc (dist ≈ R_outer)
+    # Check if on outer arc (dist ~= R_outer)
     elif abs(dist - R_outer) < 0.1:
         ngmesh.SetBCName(seg.index - 1, 'outer')
     # Otherwise interface

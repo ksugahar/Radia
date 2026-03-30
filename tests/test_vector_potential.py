@@ -31,7 +31,7 @@ def field_with_A(coords):
 	x, y, z = coords
 	Bx, By, Bz = 0.0, 0.0, 1.0  # Uniform field in z direction
 
-	# Vector potential for uniform Bz: A = (1/2) * B × r = [-By/2, Bx/2, 0]
+	# Vector potential for uniform Bz: A = (1/2) * B x r = [-By/2, Bx/2, 0]
 	Ax = -y * Bz / 2.0
 	Ay = x * Bz / 2.0
 	Az = 0.0

@@ -38,8 +38,8 @@ def create_beam_steering_coil():
 	"""
 	# Coil parameters
 	I = 1265.0       # Current (A)
-	W = 122 * mm     # Width: 122 mm → 0.122 m
-	H = 122 * mm     # Height: 122 mm → 0.122 m
+	W = 122 * mm     # Width: 122 mm -> 0.122 m
+	H = 122 * mm     # Height: 122 mm -> 0.122 m
 
 	# Initial orientation and position
 	V = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).T
@@ -121,7 +121,7 @@ if __name__ == '__main__':
 	print("\nCoil Parameters:")
 	print(f"  Description: {params['description']}")
 	print(f"  Current: {params['current']} A")
-	print(f"  Cross-section: {params['cross_section']['width']/mm:.0f}×{params['cross_section']['height']/mm:.0f} mm")
+	print(f"  Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
 	print(f"  Segments: {params['num_segments']}")
 
 	# Get geometry info

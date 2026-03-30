@@ -355,8 +355,8 @@ def main():
     # Key: for edge e shared by T1 and T2, the outward edge normal from T1
     # points OPPOSITE to the outward edge normal from T2.
     # So if the global direction is "from T1 to T2", then:
-    #   T1: outward = +global → div contribution = +1
-    #   T2: outward = -global → div contribution = -1
+    #   T1: outward = +global -> div contribution = +1
+    #   T2: outward = -global -> div contribution = -1
     #
     # The actual sign can be determined by the cross product of the
     # triangle normal and the edge direction.

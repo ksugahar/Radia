@@ -36,8 +36,8 @@ def plot_solver_speedup():
 	fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
 	# Solving time comparison
-	ax1.semilogy(n_elements, standard_time, 'o-', label='Standard (O(N³))', linewidth=2, markersize=8)
-	ax1.semilogy(n_elements, hmatrix_time, 's-', label='H-Matrix (O(N² log N))', linewidth=2, markersize=8)
+	ax1.semilogy(n_elements, standard_time, 'o-', label='Standard (O(N^3))', linewidth=2, markersize=8)
+	ax1.semilogy(n_elements, hmatrix_time, 's-', label='H-Matrix (O(N^2 log N))', linewidth=2, markersize=8)
 	ax1.set_xlabel('Number of Elements', fontsize=12)
 	ax1.set_ylabel('Solving Time (s)', fontsize=12)
 	ax1.set_title('Solver Performance Comparison', fontsize=14, fontweight='bold')
@@ -151,7 +151,7 @@ def plot_memory_usage():
 	n_elements = np.array([125, 343, 729, 1000, 1331, 2197])
 
 	# Standard solver: O(N^2) memory for full interaction matrix
-	# 9 matrices (3x3 tensor) × N^2 × 8 bytes/double
+	# 9 matrices (3x3 tensor) x N^2 x 8 bytes/double
 	standard_memory = 9 * n_elements**2 * 8 / 1024 / 1024  # MB
 
 	# H-matrix: O(N log N) memory
@@ -162,7 +162,7 @@ def plot_memory_usage():
 	# Plot
 	fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 
-	ax.semilogy(n_elements, standard_memory, 'o-', label='Standard (O(N²))',
+	ax.semilogy(n_elements, standard_memory, 'o-', label='Standard (O(N^2))',
 	            linewidth=2, markersize=8)
 	ax.semilogy(n_elements, hmatrix_memory, 's-', label='H-Matrix (O(N log N))',
 	            linewidth=2, markersize=8)

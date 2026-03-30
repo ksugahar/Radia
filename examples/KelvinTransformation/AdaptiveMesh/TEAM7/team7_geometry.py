@@ -42,7 +42,7 @@ NI = n_turns * I_coil  # Total ampere-turns [A]
 freq_50 = 50.0   # Hz
 freq_200 = 200.0 # Hz
 
-# Skin depth at 50 Hz: delta = sqrt(2/(omega*mu*sigma)) ≈ 12 mm
+# Skin depth at 50 Hz: delta = sqrt(2/(omega*mu*sigma)) ~= 12 mm
 omega_50 = 2 * pi * freq_50
 delta_50 = sqrt(2 / (omega_50 * mu0 * sigma_al))
 print(f"Skin depth at 50 Hz: {delta_50*1000:.2f} mm")
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     print("=" * 70)
     print(f"""
 Summary:
-  Plate: 294 x 294 x 19 mm aluminum (σ = {sigma_al:.3e} S/m)
+  Plate: 294 x 294 x 19 mm aluminum (sigma = {sigma_al:.3e} S/m)
   Hole:  108 x 108 mm at (18,18) to (126,126) mm
   Coil:  Racetrack, {n_turns} turns, {I_coil:.1f} A
   Frequencies: {freq_50} Hz and {freq_200} Hz
