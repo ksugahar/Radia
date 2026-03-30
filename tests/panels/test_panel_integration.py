@@ -43,15 +43,11 @@ def _find_python():
 
 
 def _find_cubit():
-    path = os.environ.get("CUBIT_PATH")
-    if path:
-        return path
-    import glob
-    for pattern in [r"C:\Program Files\Coreform Cubit *\bin"]:
-        matches = sorted(glob.glob(pattern), reverse=True)
-        if matches:
-            return matches[0]
-    return None
+    try:
+        from radia.install_panels import find_cubit_bin
+        return find_cubit_bin()
+    except ImportError:
+        return os.environ.get("CUBIT_PATH")
 
 
 # ============================================================

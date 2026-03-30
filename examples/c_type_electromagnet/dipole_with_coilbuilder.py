@@ -22,7 +22,12 @@ import math
 import numpy as np
 
 # Paths
-cubit_path = os.environ.get("CUBIT_PATH", r"C:\Program Files\Coreform Cubit 2025.3\bin")
+# Auto-detect Cubit installation
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src', 'radia'))
+from install_panels import find_cubit_bin as _fcb
+_cubit_path = _fcb()
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.append(_cubit_path)
 if cubit_path not in sys.path:
     sys.path.insert(0, cubit_path)
 

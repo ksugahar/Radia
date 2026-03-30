@@ -17,9 +17,12 @@ import sys
 import os
 import math
 
-cubit_path = os.environ.get("CUBIT_PATH")
-if cubit_path:
-	sys.path.append(cubit_path)
+# Auto-detect Cubit installation
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
+from install_panels import find_cubit_bin as _fcb
+_cubit_path = _fcb()
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.append(_cubit_path)
 
 work_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(os.path.dirname(work_dir))
@@ -27,7 +30,6 @@ sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
 
 # Use locally built NGSolve (ksugahar fork with SetGeomInfo API)
-sys.path.insert(0, "s:/NGSolve/01_GitHub/install_ksugahar/Lib/site-packages")
 
 from netgen.occ import Box, Cylinder, gp_Ax2, gp_Dir, gp_Pnt
 from ngsolve import Mesh, Integrate, CF, BND
