@@ -396,6 +396,7 @@ public:
 
 	// Triangle precomputation accessors (for HACApK sharing)
 	const double* GetHexaTriData() const { return m_hexaTriData.data(); }
+	bool IsTetraGeomReady() const { return m_tetraGeomReady; }
 	bool IsHexaTriDataReady() const { return m_hexaTriDataReady; }
 	int GetNumHexElements() const { return (int)m_hexaElemIndices.size(); }
 	const std::vector<int>& GetHexaElemIndices() const { return m_hexaElemIndices; }
