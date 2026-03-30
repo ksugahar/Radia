@@ -194,9 +194,10 @@ private:
     bool m_valid;
     int m_ndof;
     int m_n_elem;
-    int m_nffc;  // DOF per element (3 for tetra, 6 for hexa, 0 for mixed)
+    int m_nffc;  // DOF per element (3 for tetra, 5 for wedge, 6 for hexa, 0 for mixed)
     bool m_is_6dof;  // true if using 6DOF MSC hexahedra
-    bool m_is_mixed_dof;  // true if mesh contains both 3DOF and 6DOF elements
+    bool m_is_5dof;  // true if using 5DOF MSC wedges
+    bool m_is_mixed_dof;  // true if mesh contains mixed DOF elements
 
     // DOF permutation for cluster ordering
     std::vector<int> m_permutation;
@@ -285,6 +286,9 @@ private:
 
     // Field computation from pre-computed tetrahedron faces
     void FieldFromTetraFace(int elem, int face, const double* obs, const double* M_unit, double& H_n) const;
+
+    // 5DOF wedge methods (delegates to radTInteraction::Compute5x5BlockFast)
+    double GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const;
 
     // Mixed element methods (3DOF tetra + 6DOF hexa)
     double GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const;
