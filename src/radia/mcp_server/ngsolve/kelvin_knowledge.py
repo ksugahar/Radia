@@ -31,22 +31,48 @@ magnetostatic/electromagnetic problems without artificial truncation.
    - Exterior (Kelvin): inverted image of the outer space
 
 2. **Permeability Modulation** (exterior domain):
-   - mu' = (R / rho')^2 * mu_0  (3D)
-   - Accounts for the Jacobian of the Kelvin map
+   - mu' = (R / rho')^2 * mu_0  (both 2D and 3D)
+   - This is the metric-based Kelvin factor for electromagnetic problems
+   - Same factor regardless of formulation (H, A, or Omega)
 
 3. **Background Field Modulation** (exterior domain):
-   - Hs' = -(rho' / R)^2 * Hs_interior
-   - Sign flip + spatial scaling to maintain field continuity
+   - Physical Kelvin-transformed field: H'_i = -(R/r')^2 * H_i(R^2/r')
+   - The sign flip comes from the negative Jacobian (orientation reversal)
+   - For uniform dipole H_s=(0,0,1): exterior H'_s = (0, 0, -(R/r')^2)
+   - For quadrupole H_s=(-z,0,-x): exterior H'_s = +(R^4/r'^4)*(z',0,x')
+     (positive because the double negation: field already negative + Kelvin sign flip)
+   - At the Kelvin boundary r'=R, the rule simplifies to H'(R) = -H(R)
 
 4. **Periodic Boundary Conditions**:
    - Identify interior outer boundary with exterior outer boundary
    - Ensures field continuity at the inversion sphere/circle
    - Uses NGSolve `Periodic()` FE space wrapper
+   - Boundary terms in the weak form AUTO-CANCEL with periodic BC
 
 5. **GND Point (Dirichlet at Infinity)**:
    - Place vertex at exterior domain center (r'=0)
    - Corresponds to physical infinity
    - Essential for unique solution: `dirichlet_bbnd="GND"`
+
+## Weak Form Factors (from coordinate substitution)
+
+The Kelvin transformation introduces different weight factors for
+the bilinear and linear forms in the exterior domain:
+
+| | 2D | 3D |
+|---|---|---|
+| Volume element | dA = (R/r')^4 dA' | dV = (R/r')^6 dV' |
+| Gradient scaling | nabla = (r'/R)^2 nabla' | nabla = (r'/R)^2 nabla' |
+| Bilinear factor | 1 (cancels) | (R/r')^2 |
+| Linear factor (uniform Hs) | (R/r')^2 | (R/r')^4 |
+
+**2D**: Only the linear form needs a Kelvin weight factor.
+**3D**: Both bilinear AND linear forms need Kelvin weight factors.
+
+In the current implementation, the bilinear factor is absorbed into
+mu_outer = (R/r')^2 * mu0, and the background field Hs is set such
+that mu_outer * Hs gives the correct boundary value at r'=R.
+The periodic BC constrains the interior solution to high accuracy.
 
 ## Supported Formulations
 
@@ -346,10 +372,17 @@ Hz_analytical = 3.0 / (mu_r + 2)  # Interior field
 | Aspect | 2D | 3D |
 |--------|----|----|
 | Inversion | Circle: r' = R^2/r | Sphere: rho' = R^2/rho |
-| Metric | (R/r')^1 | (R/rho')^2 |
-| mu modulation | R^2/r'^2 * mu0 | R^2/rho'^2 * mu0 |
-| Hs modulation | -(r'/R)^2 | -(rho'/R)^2 |
+| Volume element | dA = (R/r')^4 dA' | dV = (R/r')^6 dV' |
+| mu modulation (metric) | (R/r')^2 * mu0 | (R/r')^2 * mu0 |
+| Bilinear form Kelvin factor | 1 (cancels) | (R/r')^2 |
+| Linear form Kelvin factor | (R/r')^2 | (R/r')^4 |
+| Physical H' (uniform) | H' = -H (no spatial variation) | H'_z = -(R/r')^2 |
 | Analytical (dipole) | 2/(mu_r+1) | 3/(mu_r+2) |
+
+**Note on 2D anisotropy**: In 2D, the metric-based permeability is
+anisotropic: constant in the r-direction, (R/r')^2 in the theta-direction.
+However, in Cartesian coordinates with isotropic materials, these factors
+cancel in the bilinear form, so the effective isotropic mu' = mu0 suffices.
 """
 
 KELVIN_ADAPTIVE = """
@@ -803,11 +836,14 @@ KELVIN_TIPS = """
 
 1. **Forgetting permeability modulation in exterior domain**
    - mu' = (R/rho')^2 * mu0, NOT just mu0
-   - This accounts for the Jacobian of the Kelvin map
+   - This is the universal Kelvin factor for EM problems (2D and 3D)
 
 2. **Wrong sign on background field modulation**
-   - Exterior Hs has OPPOSITE sign to interior Hs
-   - Hs_outer = -(rho'/R)^2 * Hs_inner
+   - The Kelvin BC at r'=R requires: H'(R) = -H(R) (sign flip)
+   - For uniform dipole field: sign flip needed (interior positive -> exterior negative)
+   - For quadrupole H_s=(-z,0,-x): NO explicit sign flip needed in code
+     (interior already negative -> Kelvin negation makes it positive)
+   - Rule: the physical transformed field is H'_i = -(R/r')^2 * H_i(R^2/r')
 
 3. **Missing GND point**
    - Without Dirichlet at infinity (GND), solution is non-unique

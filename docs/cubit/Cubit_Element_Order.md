@@ -97,11 +97,11 @@ This is intentional! Netgen's `mesh.Curve(order)` generates high-order nodes fro
 ```python
 # Even with TET10, exports as 1st order for Netgen
 cubit.cmd("block 1 element type tetra10")
-ngmesh = cubit_mesh_export.export_netgen(cubit, "geometry.step")
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, "geometry.step")
 # ngmesh contains 4-node tets, mesh.Curve() adds high-order nodes
 ```
 
-### export_Gmsh_ver2()
+### export_Gmesh()
 
 Uses `get_expanded_connectivity()` to export 2nd order elements:
 
@@ -110,9 +110,9 @@ Uses `get_expanded_connectivity()` to export 2nd order elements:
 
 ## Design Philosophy
 
-### Why export_netgen Uses 1st Order Only
+### Why export_NGSolveCurvedMesh Uses 1st Order Base Mesh
 
-The design philosophy for `export_netgen()`:
+The design philosophy for `export_NGSolveCurvedMesh()`:
 
 1. **Cubit's role**: Generate high-quality 1st order mesh (topology)
 2. **Netgen's role**: Add high-order nodes based on CAD geometry
@@ -154,7 +154,7 @@ print(f"1st order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"1st order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 1st order Gmsh
-cubit_mesh_export.export_gmsh_v2(cubit, "sphere_1st.msh")
+cubit_mesh_export.export_Gmesh(cubit, "sphere_1st.msh")
 
 # Convert to 2nd order
 cubit.cmd("block 1 element type tetra10")
@@ -165,7 +165,7 @@ print(f"2nd order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"2nd order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 2nd order Gmsh
-cubit_mesh_export.export_gmsh_v2(cubit, "sphere_2nd.msh")
+cubit_mesh_export.export_Gmesh(cubit, "sphere_2nd.msh")
 ```
 
 Output:
@@ -180,11 +180,11 @@ Output:
 
 | Export Function | API Used | Respects Block Element Type |
 |----------------|----------|----------------------------|
-| `export_Gmsh_ver2()` | `get_expanded_connectivity()` | Yes - exports actual order |
-| `export_NGSolveCurvedMesh()` | `get_connectivity()` | No - curves via ACIS |
+| `export_Gmesh()` | `get_expanded_connectivity()` | Yes - exports actual order |
+| `export_NGSolveCurvedMesh()` | `get_connectivity()` | No - curves via geometry |
 | `export_Nastran()` | `get_connectivity()` | No - 1st order only |
 
 ## See Also
 
-- [export_NetgenMesh.md](export_NetgenMesh.md) - NGSolve curved mesh export (`export_NGSolveCurvedMesh`)
+- [export_NetgenMesh.md](export_NetgenMesh.md) - Cubit to Netgen mesh export with high-order curving (`export_NGSolveCurvedMesh`)
 - [Cubit Documentation](https://coreform.com/products/coreform-cubit/documentation/)
