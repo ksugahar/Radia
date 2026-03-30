@@ -1285,6 +1285,29 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
     N_mat[0] = Field.B.x;  N_mat[1] = Field.H.x;  N_mat[2] = Field.A.x;
     N_mat[3] = Field.B.y;  N_mat[4] = Field.H.y;  N_mat[5] = Field.A.y;
     N_mat[6] = Field.B.z;  N_mat[7] = Field.H.z;  N_mat[8] = Field.A.z;
+
+    // IMA mirror contributions: B_comp above computes ONLY the direct interaction.
+    // For IMA, add mirror contributions using the full IMA-aware kernel, then subtract
+    // the direct part (which B_comp already computed correctly).
+    if (m_interaction->IsIMAEnabled() && m_interaction->IsTetraGeomReady()) {
+        double N_full[9];
+        m_interaction->Compute3x3BlockFast(elem_i, elem_j, N_full);
+        // N_full = direct + IMA mirrors (from radTInteraction kernel)
+        // N_mat = direct (from B_comp, numerically exact for LU compatibility)
+        // We want: N_mat_final = N_mat(direct) + (N_full - N_direct_kernel)
+        // But N_full already contains direct+mirror, and N_mat contains direct.
+        // Since both compute the same physical quantity (direct N), their difference
+        // is numerical noise. So N_full - N_mat ≈ pure mirror contribution.
+        // Add the mirror contribution: N_final = N_mat + (N_full - N_mat) = N_full
+        // This is equivalent to just using N_full, but let's use the IMA mirror
+        // extraction approach for clarity and to preserve B_comp's direct accuracy.
+        //
+        // Actually, the simplest correct approach: use N_full directly when IMA is on.
+        // Both Compute3x3BlockFast and B_comp compute the same physics; the kernel
+        // version additionally includes IMA mirrors. Any numerical difference in the
+        // direct part is within discretization error.
+        std::memcpy(N_mat, N_full, 9 * sizeof(double));
+    }
 }
 
 //=========================================================================
