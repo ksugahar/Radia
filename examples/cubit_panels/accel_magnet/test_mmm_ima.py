@@ -31,7 +31,7 @@ mm = 1e-3
 # The closer to the symmetry planes, the more IMA matters
 # Create a grid of tets in the quarter region x=[0..20], y=[-10..10], z=[0..5] mm
 def make_tet_grid(x0, x1, y0, y1, z0, z1, nx, ny, nz):
-    """Create a grid of tetrahedra by subdividing each voxel into 6 tets."""
+    """Create a grid of tetrahedra by subdividing each voxel into 5 tets."""
     tets = []
     dx = (x1 - x0) / nx
     dy = (y1 - y0) / ny
@@ -53,13 +53,14 @@ def make_tet_grid(x0, x1, y0, y1, z0, z1, nx, ny, nz):
                     [cx+dx, cy+dy, cz+dz],   # 6
                     [cx, cy+dy, cz+dz],      # 7
                 ]
-                # Subdivide hex into 6 tets (Kuhn triangulation)
+                # Subdivide hex into 5 tets (Kuhn triangulation)
+                # The previous 6-tet version had a degenerate tet [c4,c5,c6,c7]
+                # (4 coplanar vertices at z=z_max, volume=0)
                 tets.append([c[0], c[1], c[3], c[4]])
                 tets.append([c[1], c[2], c[3], c[6]])
                 tets.append([c[1], c[3], c[4], c[6]])
                 tets.append([c[3], c[4], c[6], c[7]])
                 tets.append([c[1], c[4], c[5], c[6]])
-                tets.append([c[4], c[5], c[6], c[7]])  # 6th tet is degenerate for some configs
     return tets
 
 # Iron plate: 20x20x5 mm, quarter = x=[1..10], y=[-10..10], z=[1..5] mm
