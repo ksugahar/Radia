@@ -4625,8 +4625,11 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6/5x5/3x3BlockFast
-	if(skipDenseMatrix)
+	// For HACApK: skip dense matrix only for pure element types
+	// Pure hex/wedge/tet: kernel functions handle IMA inline
+	// Mixed DOF: HACApK reads from flat matrix via GetGenericElement(),
+	// so we MUST build the dense IMA matrix for mixed meshes
+	if(skipDenseMatrix && (allHex || allWedge || allTet))
 	{
 		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
 		m_hexaGeomReady = false;
