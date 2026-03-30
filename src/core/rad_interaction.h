@@ -279,6 +279,23 @@ class radTInteraction : public radTg {
 	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
 
 	//-------------------------------------------------------------------------
+	// Pre-computed wedge geometry for fast 5x5 block computation
+	// Wedge: 5 faces (2 tri + 3 quad), each quad split into 2 triangles
+	// Max triangles per wedge: 2*1 + 3*2 = 8
+	//-------------------------------------------------------------------------
+	bool m_wedgeGeomReady;
+	std::vector<double> m_wedgeCenters;          // n_wedge * 3
+	std::vector<double> m_wedgeEvalPoints;       // n_wedge * 5 * 3: Yano-Sugahara eval pts
+	std::vector<double> m_wedgeFaceNormals;      // n_wedge * 5 * 3
+	std::vector<double> m_wedgeFaceAreas;        // n_wedge * 5
+	std::vector<int> m_wedgeFaceNumTris;         // n_wedge * 5: 1 for tri face, 2 for quad face
+	std::vector<double> m_wedgeTriVertices;      // n_wedge * 8 * 3 * 3: up to 8 tris, 3 verts, xyz
+	std::vector<double> m_wedgeTriSigns;         // n_wedge * 8: sign correction per triangle
+	std::vector<int> m_wedgeTriOffset;           // n_wedge * 5: start index into TriVertices for each face
+	std::vector<int> m_wedgeElemIndices;         // Maps wedge index to element index
+	static constexpr int WEDGE_MAX_TRIS = 8;    // Max triangles per wedge element
+
+	//-------------------------------------------------------------------------
 	// Pre-computed triangle local coordinate systems (for fast field computation)
 	// Eliminates redundant sqrt/div operations during FieldFromChargedTriangle
 	// Layout per triangle (32 doubles):
@@ -478,6 +495,12 @@ public:
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	//-------------------------------------------------------------------------
+	// Fast wedge matrix build (same pattern as hex, 5 faces: 2 tri + 3 quad)
+	//-------------------------------------------------------------------------
+	void PrecomputeWedgeGeometry();  // Pre-compute face triangles/normals/eval points
+	void Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_mat) const;  // Fast 5x5 block
+
+	//-------------------------------------------------------------------------
 	// IMA (Image) Symmetry Methods
 	// Reference: ELF_MAGIC IMA approach - matrix construction with image summation
 	//-------------------------------------------------------------------------
@@ -501,7 +524,7 @@ public:
 
 	// Legacy IMA functions removed (2026-03-31): ApplyDOFPermutation, ApplyRowPermutation,
 	// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget
-	// IMA mirror logic is now inline in Compute6x6BlockFast and Compute3x3BlockFast.
+	// IMA mirror logic is now inline in Compute6x6BlockFast, Compute5x5BlockFast, and Compute3x3BlockFast.
 
 	// IMA accessors
 	bool IsIMAEnabled() const { return m_imaEnabled; }
