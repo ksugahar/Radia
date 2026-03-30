@@ -2,7 +2,7 @@
 
 ## Overview
 
-`export_NetgenMesh()` creates a `netgen.meshing.Mesh` object directly from Cubit mesh data. When combined with a geometry file, it enables high-order curved mesh generation using `mesh.Curve(order)` method.
+`export_NGSolveCurvedMesh()` creates a `netgen.meshing.Mesh` object directly from Cubit mesh data. When combined with a geometry file, it enables high-order curved mesh generation using `mesh.Curve(order)` method.
 
 This function bridges Cubit's powerful mesh generation capabilities with Netgen/NGSolve's high-order finite element analysis.
 
@@ -33,7 +33,7 @@ This approach separates mesh topology from geometry approximation:
 
 ### Comparison with Gmsh Export
 
-| Feature | export_NetgenMesh() | export_Gmsh_ver2() |
+| Feature | export_NGSolveCurvedMesh() | export_Gmesh() |
 |---------|-----------------|-------------------|
 | Max order | Unlimited (via Curve) | 2nd order |
 | Intermediate file | None | .msh file |
@@ -78,7 +78,7 @@ cubit.cmd("block 1 element type tetra10")
 cubit.cmd("block 2 element type tri6")
 
 # 3. Export and load
-cubit_mesh_export.export_Gmsh_ver2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 mesh = Mesh(ReadGmsh("mesh.msh"))
 ```
 
@@ -115,7 +115,7 @@ cubit.cmd("block 2 name 'boundary'")
 cubit.cmd('export step "geometry.step" overwrite')
 
 # Convert to Netgen mesh
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, geometry_file="geometry.step")
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, geometry_file="geometry.step")
 
 # Wrap with NGSolve for FEM analysis
 mesh = ngsolve.Mesh(ngmesh)
@@ -131,7 +131,7 @@ print(mesh.GetBoundaries())  # ('boundary',)
 ### Without Geometry (No Curve Support)
 
 ```python
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit)
 mesh = ngsolve.Mesh(ngmesh)
 # mesh.Curve() will not work without geometry
 ```
@@ -160,13 +160,13 @@ cubit.cmd("block 4 add wedge all")
 cubit.cmd("block 4 name 'wedge_region'")
 
 # Export all
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, "geometry.step")
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, "geometry.step")
 ```
 
 ## Function Signature
 
 ```python
-def export_NetgenMesh(cubit, geometry_file: str = None) -> netgen.meshing.Mesh:
+def export_NGSolveCurvedMesh(cubit, geometry_file: str = None) -> netgen.meshing.Mesh:
     """Export Cubit mesh to Netgen mesh format.
 
     Args:
@@ -206,7 +206,7 @@ def export_NetgenMesh(cubit, geometry_file: str = None) -> netgen.meshing.Mesh:
 
 ## High-Order Curving with mesh.Curve()
 
-The key advantage of `export_NetgenMesh()` is the ability to use Netgen's `mesh.Curve(order)` method for high-order geometry approximation.
+The key advantage of `export_NGSolveCurvedMesh()` is the ability to use Netgen's `mesh.Curve(order)` method for high-order geometry approximation.
 
 ### How It Works
 
@@ -230,7 +230,7 @@ The key advantage of `export_NetgenMesh()` is the ability to use Netgen's `mesh.
 
 ```python
 # Create mesh and attach geometry
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, "geometry.step")
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, "geometry.step")
 mesh = ngsolve.Mesh(ngmesh)
 
 # Apply different curve orders
@@ -241,7 +241,7 @@ for order in [2, 3, 4, 5]:
 
 ## Node Ordering Conversion
 
-`export_NetgenMesh()` automatically handles node ordering differences between Cubit and Netgen:
+`export_NGSolveCurvedMesh()` automatically handles node ordering differences between Cubit and Netgen:
 
 | Element | Cubit Order | Netgen Order |
 |---------|-------------|--------------|
@@ -270,7 +270,7 @@ mesh.GetBoundaries()  # ('dirichlet_bc',)
 
 ## Examples
 
-Example scripts are available in the `examples/cubit/netgen/` folder:
+Example scripts are available in the `examples/cubit_mesh_export/netgen/` folder:
 
 | File | Description |
 |------|-------------|
@@ -286,9 +286,9 @@ Example scripts are available in the `examples/cubit/netgen/` folder:
 ### Running Examples
 
 ```bash
-python examples/cubit/netgen/occ_cubit_workflow.py
-python examples/cubit/netgen/netgen_sphere_example.py
-python examples/cubit/netgen/netgen_poisson_example.py
+python examples/cubit_mesh_export/netgen/occ_cubit_workflow.py
+python examples/cubit_mesh_export/netgen/netgen_sphere_example.py
+python examples/cubit_mesh_export/netgen/netgen_poisson_example.py
 ```
 
 ## Complete Example: FEM Analysis
@@ -323,7 +323,7 @@ cubit.cmd("block 2 name 'dirichlet'")
 cubit.cmd('export step "sphere.step" overwrite')
 
 # Convert to Netgen mesh, then wrap with NGSolve
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, "sphere.step")
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, "sphere.step")
 mesh = Mesh(ngmesh)
 mesh.Curve(3)
 
@@ -402,7 +402,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Step 4: Export with OCC geometry reference
-ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, geometry=geo)
 
 # Now Curve() works!
 mesh = Mesh(ngmesh)
@@ -420,7 +420,7 @@ For **planar or simple geometries**, the standard workflow (Cubit → STEP → N
 
 ### Example Script
 
-See `examples/cubit/netgen/occ_cubit_workflow.py` for a complete working example.
+See `examples/cubit_mesh_export/netgen/occ_cubit_workflow.py` for a complete working example.
 
 ## Alternative: SetDeformation Approach
 
@@ -481,7 +481,7 @@ area = Integrate(CF(1), mesh, VOL_or_BND=BND)  # Exact!
 
 ### Example Script
 
-See `examples/cubit/netgen/setdeformation_curving.py` for complete examples including:
+See `examples/cubit_mesh_export/netgen/setdeformation_curving.py` for complete examples including:
 - `apply_cylinder_deformation()` - For cylindrical surfaces
 - `apply_sphere_deformation()` - For spherical surfaces
 
@@ -494,7 +494,7 @@ See `examples/cubit/netgen/setdeformation_curving.py` for complete examples incl
 **Solution**: Ensure the STEP file is exported from the same geometry:
 ```python
 cubit.cmd('export step "geometry.step" overwrite')
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, "geometry.step")
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, "geometry.step")
 ```
 
 **Cause 2**: Seam line problem on curved surfaces (cylinder, cone, etc.).
@@ -545,7 +545,7 @@ pip install ngsolve
 import os
 step_file = os.path.abspath("geometry.step")
 cubit.cmd(f'export step "{step_file}" overwrite')
-ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, step_file)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, step_file)
 ```
 
 ## Netgen vs NGSolve Mesh
@@ -554,7 +554,7 @@ ngmesh = cubit_mesh_export.export_NetgenMesh(cubit, step_file)
 |---|---|---|
 | Role | Core mesh data structure | Wrapper/view for FEM |
 | Usage | Mesh manipulation, generation | Finite element analysis |
-| Returned by | `export_NetgenMesh()` | `ngsolve.Mesh(ngmesh)` |
+| Returned by | `export_NGSolveCurvedMesh()` | `ngsolve.Mesh(ngmesh)` |
 
 ## Requirements
 

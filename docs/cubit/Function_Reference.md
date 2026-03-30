@@ -7,10 +7,9 @@ Reference documentation for `cubit_mesh_export` module functions.
 | Function | Format | 1st Order | 2nd Order | 3rd+ Order |
 |----------|--------|-----------|-----------|------------|
 | `export_exodus()` | Exodus II (.exo) | Yes | Yes | Yes |
-| `export_netgen()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
-| `export_netgen_with_names()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
-| `export_gmesh()` | Gmsh v2.2/v4.1 | Yes | Yes | No |
-| `export_nastran()` | Nastran BDF | Yes | No | No |
+| `export_NGSolveCurvedMesh()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
+| `export_Gmesh()` | Gmsh v2.2/v4.1 | Yes | Yes | No |
+| `export_Nastran()` | Nastran BDF | Yes | No | No |
 | `export_meg()` | MEG (ELF) | Yes | No | No |
 
 ---
@@ -29,7 +28,7 @@ export_exodus(cubit, FileName, large_model=False)
 
 **Features**: All element types, 1st/2nd order, nodesets, sidesets, block definitions.
 
-[Full documentation](export_exodus.md) | [Examples](../../examples/cubit/exodus/)
+[Full documentation](export_exodus.md) | [Examples](../../examples/cubit_mesh_export/exodus/)
 
 ---
 
@@ -63,7 +62,7 @@ export_gmesh(cubit, FileName, version="2.2", DIM="auto")
 | Radia mesh import | **Supported** | Not supported |
 | GMSH visualization | Supported | **Recommended** |
 
-[v2.2 documentation](export_Gmsh_ver2.md) | [v4.1 documentation](export_Gmsh_ver4.md) | [Examples](../../examples/cubit/gmsh/)
+[v2.2 documentation](export_Gmsh_ver2.md) | [v4.1 documentation](export_Gmsh_ver4.md) | [Examples](../../examples/cubit_mesh_export/gmsh/)
 
 ---
 
@@ -94,7 +93,7 @@ export_nastran(cubit, FileName, DIM="3D", PYRAM=True)
 
 **Limitation**: 1st order elements only.
 
-[Full documentation](export_Nastran.md) | [Examples](../../examples/cubit/nastran/)
+[Full documentation](export_Nastran.md) | [Examples](../../examples/cubit_mesh_export/nastran/)
 
 ---
 
@@ -127,83 +126,32 @@ export_meg(cubit, FileName, DIM='T', MGR2=None)
 
 **Limitation**: 1st order elements only.
 
-[Full documentation](export_meg.md) | [Examples](../../examples/cubit/meg/)
+[Full documentation](export_meg.md) | [Examples](../../examples/cubit_mesh_export/meg/)
 
 ---
 
-## Netgen Export
-
-### Standard Export
+## Netgen Export (with High-Order Curving)
 
 ```python
-export_netgen(cubit, geometry_file=None, geometry=None)
+export_NGSolveCurvedMesh(cubit, order=2, surface_only=False, ...)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `cubit` | object | required | Cubit Python interface |
-| `geometry_file` | str | None | Path to STEP/BREP/IGES file for Curve() support |
-| `geometry` | OCCGeometry | None | OCC geometry object (takes precedence over geometry_file) |
+| `order` | int | 2 | Curve order for high-order elements |
+| `surface_only` | bool | False | Export surface mesh only (for BEM/PEEC) |
 
-**Returns**: `netgen.meshing.Mesh` object.
+**Returns**: `netgen.meshing.Mesh` object with high-order curving applied.
 
-**Use case**: Simple geometries (cylinder, sphere, torus, cone) or any geometry loaded from STEP.
+**Features**: Automatically detects curved surfaces (cylinders, spheres, tori, cones), sets UV parameters, and applies `mesh.Curve(order)`.
 
-### Name-based Export (Complex Geometry)
-
-```python
-export_netgen_with_names(cubit, geometry)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `geometry` | OCCGeometry | required | OCC geometry with named faces |
-
-**Returns**: `netgen.meshing.Mesh` object with exact OCC face mapping.
-
-**Use case**: Complex geometries with Boolean operations (e.g., brick with cylindrical hole). Requires prior face naming with `name_occ_faces()`.
-
-### Choosing the Right Workflow
-
-| Geometry | Recommended Function |
+| Geometry | Recommended Approach |
 |----------|---------------------|
-| Simple shape (cylinder, sphere, etc.) | `export_netgen()` |
-| Complex shape (Boolean ops) | `export_netgen_with_names()` |
-| 2nd order only (no Curve(3+)) | `export_gmsh_v2()` + `ReadGmsh` |
+| Simple shape (cylinder, sphere, etc.) | `export_NGSolveCurvedMesh(cubit, order=N)` |
+| 2nd order only (no Curve(3+)) | `export_Gmesh()` with 2nd-order blocks + `ReadGmsh` |
 
-[Full documentation](export_NetgenMesh.md) | [Examples](../../examples/cubit/netgen/)
-
----
-
-## OCC Face Naming Utility
-
-```python
-name_occ_faces(shape, prefix="occ_face_")
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `shape` | OCC shape | required | OCC geometry shape object |
-| `prefix` | str | "occ_face_" | Prefix for face names |
-
-**Returns**: Number of faces named.
-
-**Use case**: Assign unique names to OCC faces before STEP export, so that `export_netgen_with_names()` can map Cubit surfaces to OCC faces after reimport.
-
----
-
-## Automatic High-Order Curving
-
-Use `export_curved()` for automatic high-order curving of curved surfaces. This replaces the removed manual `set_*_geominfo()` and `compute_*_uv()` functions.
-
-```python
-ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
-```
-
-`export_curved()` automatically detects curved surfaces (cylinders, spheres, tori, cones) and sets the correct UV parameters for `mesh.Curve(order)`.
-
-[Full documentation](export_NetgenMesh.md) | [Examples](../../examples/cubit/netgen/)
+[Full documentation](export_NetgenMesh.md) | [Examples](../../examples/cubit_mesh_export/netgen/)
 
 ---
 

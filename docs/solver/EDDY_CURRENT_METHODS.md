@@ -974,7 +974,7 @@ See: `examples/cubit_panels/inductance/scalar_bie_sibc.py`
 
 ### Literature
 
-SIBC references in `W:\03_文献・論文\00_電磁界解析\SIBC\`:
+SIBC references (local library):
 
 | File | Topic |
 |------|-------|

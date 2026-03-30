@@ -10,12 +10,10 @@
 ## Solver Architecture
 
 - [SOLVER_ARCHITECTURE.md](solver/SOLVER_ARCHITECTURE.md) - Solver design philosophy and architecture overview
-- [BEAM_TRACKING_DESIGN.md](solver/BEAM_TRACKING_DESIGN.md) - Beam tracking design for charged particle trajectories
 - [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
 - [ELF_COMPATIBILITY_GUIDE.md](solver/ELF_COMPATIBILITY_GUIDE.md) - Compatibility guide between Radia and ELF/MAGIC solvers
 - [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
-- [PLAN_GPU_TRAJECTORY.md](solver/PLAN_GPU_TRAJECTORY.md) - GPU-accelerated multi-particle trajectory plan (CUDA/RTX)
 
 ## PEEC (Partial Element Equivalent Circuit)
 
@@ -29,7 +27,6 @@
 
 ## Visualization
 
-- [VISUALIZATION_GUIDE.md](visualization/VISUALIZATION_GUIDE.md) - Radia-NGSolve viewer selection and visualization workflows
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows for GMSH, Netgen, and Cubit
 
 ## Research
@@ -37,7 +34,7 @@
 - [APPLICATION_ROADMAP.md](research/APPLICATION_ROADMAP.md) - Research laboratory applications and collaboration roadmap
 - [B_INPUT_PLAY_MODEL.md](research/B_INPUT_PLAY_MODEL.md) - B-input Play hysteresis model definition and formulation
 - [CYLINDRICAL_MAGNET.md](research/CYLINDRICAL_MAGNET.md) - Analytical field computation for uniformly magnetized cylindrical magnets
-- [Handover_EnergyHysteresis.md](research/Handover_EnergyHysteresis.md) - Table-based energy hysteresis model handover notes
+- [ENERGY_BASED_B_INPUT_PLAY.md](research/ENERGY_BASED_B_INPUT_PLAY.md) - Energy-based B-input Play model with reversible/irreversible separation
 - [KAN_INSPIRED_URN.md](research/KAN_INSPIRED_URN.md) - KAN-inspired Universal Relaxation Network for circuit synthesis from frequency data
 - [MAGNETIC_AFTEREFFECT_RESEARCH.md](research/MAGNETIC_AFTEREFFECT_RESEARCH.md) - Magnetic aftereffect research plan (Sugahara Lab / Hane Lab collaboration)
 

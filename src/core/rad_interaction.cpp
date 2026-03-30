@@ -4149,22 +4149,28 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		return 0;
 	}
 
-	// Check all elements are MSC (DOF >= 5)
+	// Check all elements have valid DOF (3=tet MMM, 5=wedge MSC, 6=hex MSC)
 	bool allHex = true;
+	bool allTet = true;
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
-		if(m_elemDOF[i] < 5)
+		if(m_elemDOF[i] < 3)
 		{
-			std::cerr << "[Radia] Error: IMA requires MSC elements (DOF >= 5)" << std::endl;
+			std::cerr << "[Radia] Error: IMA requires elements with DOF >= 3" << std::endl;
 			return 0;
 		}
 		if(m_elemDOF[i] != 6) allHex = false;
+		if(m_elemDOF[i] != 3) allTet = false;
 	}
 
-	// Pre-compute hexahedron geometry for hex elements
+	// Pre-compute geometry for fast path
 	if(!m_hexaGeomReady && allHex)
 	{
 		PrecomputeHexaGeometry();
+	}
+	if(!m_tetraGeomReady && allTet)
+	{
+		PrecomputeTetraGeometry();
 	}
 
 	// Compute IMA DOF count from actual element DOFs
@@ -4277,6 +4283,17 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		}
 	}
 
+	// Build mapping from IMA index to full element index (for tet fast path)
+	// For tet, Compute3x3BlockFast uses the full element index directly
+	std::vector<int> imaToTet(m_imaNumElements, -1);
+	if(allTet && m_tetraGeomReady)
+	{
+		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+		{
+			imaToTet[ima_i] = m_imaToFull[ima_i];
+		}
+	}
+
 	// Build IMA interaction matrix with TaskManager parallelization
 	ngcore::ParallelFor(ngcore::IntRange(m_imaNumElements), [&](size_t ima_col)
 	{
@@ -4308,6 +4325,162 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 					for(int i = 0; i < 6; i++)
 						for(int j = 0; j < 6; j++)
 							block[(size_t)i * imaDOF + j] = K_ima[i * 6 + j];
+					continue;
+				}
+			}
+
+			// Fast path: 3DOF-3DOF tet (MMM) with IMA mirror contributions
+			if(dof_row == 3 && dof_col == 3)
+			{
+				int tet_row = imaToTet[ima_row];
+				int tet_col = imaToTet[ima_col];
+				if(tet_row >= 0 && tet_col >= 0)
+				{
+					// Direct contribution
+					double N_direct[9];
+					Compute3x3BlockFast(tet_row, tet_col, N_direct);
+
+					// IMA mirror contributions
+					double N_total[9];
+					std::memcpy(N_total, N_direct, 9 * sizeof(double));
+
+					int imaSym = m_imaSymmetry;
+					int signX = m_imaSignX;
+					int signY = m_imaSignY;
+					int signZ = m_imaSignZ;
+
+					// Mirror sign matrices for MMM (pseudovector reflection):
+					// Mirror about axis with sign s: S_k = s * (1 - 2*delta_k_axis)
+					// +x: S = diag(-1,1,1), -x: S = diag(1,-1,-1)
+					// +z: S = diag(1,1,-1), -z: S = diag(-1,-1,1)
+					auto addMirrorMMM = [&](int mirrorAxis, int combinedSign) {
+						// Mirror source tet geometry
+						double mirCenters[3], mirFaceVerts[4*3*3], mirFaceNormals[4*3], mirFaceAreas[4];
+
+						// Copy source tet data (vertices and center only)
+						for(int k = 0; k < 3; k++)
+							mirCenters[k] = m_tetraCenters[tet_col * 3 + k];
+						for(int f = 0; f < 4; f++)
+						{
+							mirFaceAreas[f] = m_tetraFaceAreas[tet_col * 4 + f];
+							for(int v = 0; v < 3; v++)
+								for(int k = 0; k < 3; k++)
+									mirFaceVerts[(f*3+v)*3+k] = m_tetraFaceVertices[((tet_col*4+f)*3+v)*3+k];
+						}
+
+						// Apply mirror to vertices and center
+						int numAxes = 0;
+						if(mirrorAxis & IMA_X) { numAxes++;
+							mirCenters[0] = -mirCenters[0];
+							for(int f = 0; f < 4; f++)
+								for(int v = 0; v < 3; v++) mirFaceVerts[(f*3+v)*3] = -mirFaceVerts[(f*3+v)*3];
+						}
+						if(mirrorAxis & IMA_Y) { numAxes++;
+							mirCenters[1] = -mirCenters[1];
+							for(int f = 0; f < 4; f++)
+								for(int v = 0; v < 3; v++) mirFaceVerts[(f*3+v)*3+1] = -mirFaceVerts[(f*3+v)*3+1];
+						}
+						if(mirrorAxis & IMA_Z) { numAxes++;
+							mirCenters[2] = -mirCenters[2];
+							for(int f = 0; f < 4; f++)
+								for(int v = 0; v < 3; v++) mirFaceVerts[(f*3+v)*3+2] = -mirFaceVerts[(f*3+v)*3+2];
+						}
+
+						// Fix winding for odd number of mirrors (swap V1, V2)
+						if(numAxes % 2 == 1) {
+							for(int f = 0; f < 4; f++)
+								for(int k = 0; k < 3; k++) std::swap(mirFaceVerts[(f*3+1)*3+k], mirFaceVerts[(f*3+2)*3+k]);
+						}
+
+						// Recompute normals from mirrored vertices: n = (V1-V0) x (V2-V0), normalized
+						for(int f = 0; f < 4; f++)
+						{
+							const double* V0 = &mirFaceVerts[(f*3+0)*3];
+							const double* V1 = &mirFaceVerts[(f*3+1)*3];
+							const double* V2 = &mirFaceVerts[(f*3+2)*3];
+							double e1[3] = {V1[0]-V0[0], V1[1]-V0[1], V1[2]-V0[2]};
+							double e2[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
+							double nx = e1[1]*e2[2] - e1[2]*e2[1];
+							double ny = e1[2]*e2[0] - e1[0]*e2[2];
+							double nz = e1[0]*e2[1] - e1[1]*e2[0];
+							double len = sqrt(nx*nx + ny*ny + nz*nz);
+							if(len > 1e-20) { nx /= len; ny /= len; nz /= len; }
+							mirFaceNormals[f*3+0] = nx;
+							mirFaceNormals[f*3+1] = ny;
+							mirFaceNormals[f*3+2] = nz;
+						}
+
+						// Compute N_mirror: field at obs from mirrored source with unit M
+						const double* obs = &m_tetraCenters[tet_row * 3];
+						double H_from_M[3][3] = {{0,0,0},{0,0,0},{0,0,0}};  // H_from_M[beta][alpha]
+						double total_charge[3] = {0,0,0};
+
+						for(int f = 0; f < 4; f++)
+						{
+							const double* n_f = &mirFaceNormals[f*3];
+							double area = mirFaceAreas[f];
+							const double* V0 = &mirFaceVerts[(f*3+0)*3];
+							const double* V1 = &mirFaceVerts[(f*3+1)*3];
+							const double* V2 = &mirFaceVerts[(f*3+2)*3];
+
+							for(int beta = 0; beta < 3; beta++)
+							{
+								double sigma = n_f[beta];  // M=e_beta dot n
+								total_charge[beta] += sigma * area;
+								if(fabs(sigma) > 1e-20) {
+									double H_f[3];
+									FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma, H_f);
+									H_from_M[beta][0] += H_f[0];
+									H_from_M[beta][1] += H_f[1];
+									H_from_M[beta][2] += H_f[2];
+								}
+							}
+						}
+
+						// Point charge cancellation
+						double r[3] = {obs[0]-mirCenters[0], obs[1]-mirCenters[1], obs[2]-mirCenters[2]};
+						double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+						double dist = sqrt(dist_sq);
+						if(dist > 1e-15) {
+							double inv_dist3 = 1.0 / (dist * dist_sq);
+							for(int beta = 0; beta < 3; beta++) {
+								for(int alpha = 0; alpha < 3; alpha++)
+									H_from_M[beta][alpha] += -total_charge[beta] * r[alpha] * inv_dist3;
+							}
+						}
+
+						// Sign matrix S for MMM (pseudovector reflection):
+						// For mirror about axis k with IMA sign s:
+						//   S[k] = -s (component along mirror axis flips)
+						//   S[other] = s (components perpendicular preserved)
+						double S[3] = {(double)combinedSign, (double)combinedSign, (double)combinedSign};
+						if(mirrorAxis & IMA_X) S[0] = -S[0];
+						if(mirrorAxis & IMA_Y) S[1] = -S[1];
+						if(mirrorAxis & IMA_Z) S[2] = -S[2];
+
+						// N_total[alpha][beta] += N_mirror[alpha][gamma] * S[gamma] * delta(gamma,beta)
+						// = N_mirror[alpha][beta] * S[beta]
+						for(int alpha = 0; alpha < 3; alpha++)
+							for(int beta = 0; beta < 3; beta++)
+								N_total[alpha*3+beta] += H_from_M[beta][alpha] * RadConst::INV_FOUR_PI * S[beta];
+					};
+
+					// Single axis mirrors
+					if(imaSym & IMA_X) addMirrorMMM(IMA_X, signX);
+					if(imaSym & IMA_Y) addMirrorMMM(IMA_Y, signY);
+					if(imaSym & IMA_Z) addMirrorMMM(IMA_Z, signZ);
+					// Dual axis
+					if((imaSym & IMA_X) && (imaSym & IMA_Y)) addMirrorMMM(IMA_XY, signX * signY);
+					if((imaSym & IMA_X) && (imaSym & IMA_Z)) addMirrorMMM(IMA_XZ, signX * signZ);
+					if((imaSym & IMA_Y) && (imaSym & IMA_Z)) addMirrorMMM(IMA_YZ, signY * signZ);
+					// Triple axis
+					if((imaSym & IMA_X) && (imaSym & IMA_Y) && (imaSym & IMA_Z))
+						addMirrorMMM(IMA_XYZ, signX * signY * signZ);
+
+					// Store
+					for(int i = 0; i < 3; i++)
+						for(int j = 0; j < 3; j++)
+							block[(size_t)i * imaDOF + j] = N_total[i * 3 + j];
 					continue;
 				}
 			}
