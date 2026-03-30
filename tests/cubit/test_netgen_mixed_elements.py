@@ -11,9 +11,12 @@ import os
 # IMPORTANT: Import NGSolve/Netgen BEFORE Cubit to avoid DLL conflicts
 import ngsolve
 
-cubit_path = os.environ.get("CUBIT_PATH")
-if cubit_path:
-	sys.path.append(cubit_path)
+# Auto-detect Cubit installation (single source of truth)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
+from install_panels import find_cubit_bin
+_cubit_path = find_cubit_bin()
+if _cubit_path and _cubit_path not in sys.path:
+	sys.path.append(_cubit_path)
 
 print("=" * 60)
 print("Testing export_NGSolveCurvedMesh() with mixed elements")

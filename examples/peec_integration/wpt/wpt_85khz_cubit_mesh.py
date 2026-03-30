@@ -27,14 +27,12 @@ Date: 2026-01-16
 import sys
 import os
 
-# Cubit path
-CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
-CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
-
-sys.path.insert(0, CUBIT_PATH)
-sys.path.insert(0, CUBIT_EXPORT_PATH)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build/Release'))
+# Auto-detect Cubit installation
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'src', 'radia'))
+from install_panels import find_cubit_bin
+_cubit_path = find_cubit_bin()
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.insert(0, _cubit_path)
 
 # numpy not needed for mesh generation
 

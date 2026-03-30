@@ -52,17 +52,12 @@ def _check_module(name):
     except (ImportError, OSError, Exception):
         return False
 
-# Add CUBIT_PATH to sys.path before checking cubit availability
-# (CI runner sets CUBIT_PATH env var; cubit test files also do this individually)
-_cubit_path = os.environ.get("CUBIT_PATH")
-if not _cubit_path:
-    # Auto-detect Coreform Cubit installation
-    _prog = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-    for _d in sorted(_prog.glob("Coreform Cubit *"), reverse=True):
-        _bin = _d / "bin"
-        if _bin.exists():
-            _cubit_path = str(_bin)
-            break
+# Auto-detect Cubit via install_panels.find_cubit_bin() (single source of truth)
+try:
+    from radia.install_panels import find_cubit_bin
+    _cubit_path = find_cubit_bin()
+except ImportError:
+    _cubit_path = None
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
 
