@@ -2972,23 +2972,126 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 		H_from_Mz[0] += H_point_Mz[0]; H_from_Mz[1] += H_point_Mz[1]; H_from_Mz[2] += H_point_Mz[2];
 	}
 
+	// =========== IMA: Mirrored source contributions ===========
+	// Same pattern as Compute6x6BlockFast: mirror source geometry inline
+	// For MMM (tet), M is a pseudovector: sign matrix S[beta] per component
+	if(m_imaEnabled)
+	{
+		auto addMirrorTet = [&](int mirrorAxis, int combinedSign) {
+			// Mirror source center
+			double mirCenter[3] = {col_center[0], col_center[1], col_center[2]};
+			if(mirrorAxis & IMA_X) mirCenter[0] = -mirCenter[0];
+			if(mirrorAxis & IMA_Y) mirCenter[1] = -mirCenter[1];
+			if(mirrorAxis & IMA_Z) mirCenter[2] = -mirCenter[2];
+
+			int numMirrors = 0;
+			if(mirrorAxis & IMA_X) numMirrors++;
+			if(mirrorAxis & IMA_Y) numMirrors++;
+			if(mirrorAxis & IMA_Z) numMirrors++;
+			bool flipWinding = (numMirrors % 2 == 1);
+
+			// Sign matrix for pseudovector M: S[k] = combinedSign, flip mirrored axes
+			double S[3] = {(double)combinedSign, (double)combinedSign, (double)combinedSign};
+			if(mirrorAxis & IMA_X) S[0] = -S[0];
+			if(mirrorAxis & IMA_Y) S[1] = -S[1];
+			if(mirrorAxis & IMA_Z) S[2] = -S[2];
+
+			// Accumulate mirror H for each unit M direction
+			double mirH_Mx[3] = {0,0,0}, mirH_My[3] = {0,0,0}, mirH_Mz[3] = {0,0,0};
+			double mirCharge_Mx = 0, mirCharge_My = 0, mirCharge_Mz = 0;
+
+			for(int f = 0; f < 4; f++)
+			{
+				// Copy and mirror face vertices
+				int fvIdx = (elem_j * 4 + f) * 3 * 3;
+				double V0[3], V1[3], V2[3];
+				for(int k = 0; k < 3; k++)
+				{
+					V0[k] = m_tetraFaceVertices[fvIdx + 0*3 + k];
+					V1[k] = m_tetraFaceVertices[fvIdx + 1*3 + k];
+					V2[k] = m_tetraFaceVertices[fvIdx + 2*3 + k];
+				}
+				if(mirrorAxis & IMA_X) { V0[0] = -V0[0]; V1[0] = -V1[0]; V2[0] = -V2[0]; }
+				if(mirrorAxis & IMA_Y) { V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1]; }
+				if(mirrorAxis & IMA_Z) { V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2]; }
+				if(flipWinding) {
+					std::swap(V0[0], V0[0]); // no-op, swap V1<->V2
+					for(int k = 0; k < 3; k++) std::swap(V1[k], V2[k]);
+				}
+
+				// Recompute normal from mirrored vertices
+				double e1[3] = {V1[0]-V0[0], V1[1]-V0[1], V1[2]-V0[2]};
+				double e2[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
+				double n_f[3] = {e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]};
+				double nLen = sqrt(n_f[0]*n_f[0] + n_f[1]*n_f[1] + n_f[2]*n_f[2]);
+				double area = 0.5 * nLen;
+				if(nLen > 1e-20) { n_f[0] /= nLen; n_f[1] /= nLen; n_f[2] /= nLen; }
+
+				// sigma = M_unit dot n for each unit M direction
+				double sigma_Mx = n_f[0], sigma_My = n_f[1], sigma_Mz = n_f[2];
+				mirCharge_Mx += sigma_Mx * area;
+				mirCharge_My += sigma_My * area;
+				mirCharge_Mz += sigma_Mz * area;
+
+				double H_f[3];
+				if(fabs(sigma_Mx) > 1e-20) {
+					FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma_Mx, H_f);
+					mirH_Mx[0] += H_f[0]; mirH_Mx[1] += H_f[1]; mirH_Mx[2] += H_f[2];
+				}
+				if(fabs(sigma_My) > 1e-20) {
+					FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma_My, H_f);
+					mirH_My[0] += H_f[0]; mirH_My[1] += H_f[1]; mirH_My[2] += H_f[2];
+				}
+				if(fabs(sigma_Mz) > 1e-20) {
+					FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma_Mz, H_f);
+					mirH_Mz[0] += H_f[0]; mirH_Mz[1] += H_f[1]; mirH_Mz[2] += H_f[2];
+				}
+			}
+
+			// Point charge cancellation at mirrored center
+			double r[3] = {obs[0]-mirCenter[0], obs[1]-mirCenter[1], obs[2]-mirCenter[2]};
+			double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+			if(dist_sq > 1e-30)
+			{
+				double dist = sqrt(dist_sq);
+				double inv_dist3 = 1.0 / (dist * dist_sq);
+				mirH_Mx[0] += -mirCharge_Mx*r[0]*inv_dist3; mirH_Mx[1] += -mirCharge_Mx*r[1]*inv_dist3; mirH_Mx[2] += -mirCharge_Mx*r[2]*inv_dist3;
+				mirH_My[0] += -mirCharge_My*r[0]*inv_dist3; mirH_My[1] += -mirCharge_My*r[1]*inv_dist3; mirH_My[2] += -mirCharge_My*r[2]*inv_dist3;
+				mirH_Mz[0] += -mirCharge_Mz*r[0]*inv_dist3; mirH_Mz[1] += -mirCharge_Mz*r[1]*inv_dist3; mirH_Mz[2] += -mirCharge_Mz*r[2]*inv_dist3;
+			}
+
+			// Add with sign matrix: H_from_Mx[alpha] += S[0] * mirH_Mx[alpha]
+			for(int a = 0; a < 3; a++) {
+				H_from_Mx[a] += S[0] * mirH_Mx[a];
+				H_from_My[a] += S[1] * mirH_My[a];
+				H_from_Mz[a] += S[2] * mirH_Mz[a];
+			}
+		};
+
+		bool hasX = (m_imaSymmetry & IMA_X) != 0;
+		bool hasY = (m_imaSymmetry & IMA_Y) != 0;
+		bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
+
+		if(hasX) addMirrorTet(IMA_X, m_imaSignX);
+		if(hasY) addMirrorTet(IMA_Y, m_imaSignY);
+		if(hasZ) addMirrorTet(IMA_Z, m_imaSignZ);
+		if(hasX && hasY) addMirrorTet(IMA_XY, m_imaSignX * m_imaSignY);
+		if(hasX && hasZ) addMirrorTet(IMA_XZ, m_imaSignX * m_imaSignZ);
+		if(hasY && hasZ) addMirrorTet(IMA_YZ, m_imaSignY * m_imaSignZ);
+		if(hasX && hasY && hasZ) addMirrorTet(IMA_XYZ, m_imaSignX * m_imaSignY * m_imaSignZ);
+	}
+
 	// Store in ROW-MAJOR format (same as flat matrix)
 	// N[i][j] = H_i due to unit M_j (i = Hx,Hy,Hz; j = Mx,My,Mz)
-	// Row 0: Hx from Mx, Hx from My, Hx from Mz
-	// Row 1: Hy from Mx, Hy from My, Hy from Mz
-	// Row 2: Hz from Mx, Hz from My, Hz from Mz
-	//
-	// NOTE: B_comp returns H * INV_FOUR_PI (no negation) for PreRelax mode
-	// To match B_comp output, we apply INV_FOUR_PI without negation
-	N_mat[0] = H_from_Mx[0] * RadConst::INV_FOUR_PI;  // Hx/Mx / 4pi
-	N_mat[1] = H_from_My[0] * RadConst::INV_FOUR_PI;  // Hx/My / 4pi
-	N_mat[2] = H_from_Mz[0] * RadConst::INV_FOUR_PI;  // Hx/Mz / 4pi
-	N_mat[3] = H_from_Mx[1] * RadConst::INV_FOUR_PI;  // Hy/Mx / 4pi
-	N_mat[4] = H_from_My[1] * RadConst::INV_FOUR_PI;  // Hy/My / 4pi
-	N_mat[5] = H_from_Mz[1] * RadConst::INV_FOUR_PI;  // Hy/Mz / 4pi
-	N_mat[6] = H_from_Mx[2] * RadConst::INV_FOUR_PI;  // Hz/Mx / 4pi
-	N_mat[7] = H_from_My[2] * RadConst::INV_FOUR_PI;  // Hz/My / 4pi
-	N_mat[8] = H_from_Mz[2] * RadConst::INV_FOUR_PI;  // Hz/Mz / 4pi
+	N_mat[0] = H_from_Mx[0] * RadConst::INV_FOUR_PI;
+	N_mat[1] = H_from_My[0] * RadConst::INV_FOUR_PI;
+	N_mat[2] = H_from_Mz[0] * RadConst::INV_FOUR_PI;
+	N_mat[3] = H_from_Mx[1] * RadConst::INV_FOUR_PI;
+	N_mat[4] = H_from_My[1] * RadConst::INV_FOUR_PI;
+	N_mat[5] = H_from_Mz[1] * RadConst::INV_FOUR_PI;
+	N_mat[6] = H_from_Mx[2] * RadConst::INV_FOUR_PI;
+	N_mat[7] = H_from_My[2] * RadConst::INV_FOUR_PI;
+	N_mat[8] = H_from_Mz[2] * RadConst::INV_FOUR_PI;
 }
 
 //=========================================================================
@@ -3714,13 +3817,13 @@ int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
 	return best_match;
 }
 
-//-------------------------------------------------------------------------
-// ApplyDOFPermutation: Apply permutation to 6x6 block columns
-// result[i][perm[j]] = input[i][j]  (permute columns)
-// For IMA: we need result = input @ P, where P is permutation matrix
-// This is equivalent to: result[i][k] = input[i][j] where perm[j] = k
-// i.e., result[i][perm[j]] = input[i][j]
-//-------------------------------------------------------------------------
+// Legacy IMA functions removed (2026-03-31):
+// - ApplyDOFPermutation, ApplyRowPermutation: ELF-style face permutation (replaced by kernel-based IMA)
+// - Compute6x6BlockIMA: used ELF permutations, never called
+// - Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget: helper for Compute6x6BlockIMA
+
+// REMOVED_BLOCK_START (was ApplyDOFPermutation through Compute6x6BlockMirroredTarget)
+#if 0  // Dead code preserved for reference only
 void radTInteraction::ApplyDOFPermutation(const double* input, const int* perm, double* result) const
 {
 	// result = input @ P
@@ -4134,12 +4237,13 @@ void radTInteraction::Compute6x6BlockMirroredTarget(int hex_i, int hex_j, int mi
 		}
 	}
 }
+#endif  // Dead code end
+// REMOVED_BLOCK_END
 
 //-------------------------------------------------------------------------
 // SetupInteractMatrix_IMA: Build IMA interaction matrix
-// Matrix size is (n_ima * 6) x (n_ima * 6)
-// N_IMA[i,j] = N[full_i, full_j] + sign * N[full_i, mirror_j] @ P
-// sign = +1 for symmetric BC, -1 for antisymmetric BC
+// Both hex and tet fast paths now delegate to kernel functions that
+// handle IMA mirror contributions internally (Compute6x6BlockFast, Compute3x3BlockFast).
 //-------------------------------------------------------------------------
 int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 {
@@ -4256,11 +4360,12 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6BlockFast
+	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6/3x3BlockFast
 	if(skipDenseMatrix)
 	{
 		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
 		m_hexaGeomReady = false;
+		m_tetraGeomReady = false;
 		return 1;
 	}
 
@@ -4329,158 +4434,18 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 				}
 			}
 
-			// Fast path: 3DOF-3DOF tet (MMM) with IMA mirror contributions
+			// Fast path: 3DOF-3DOF tet (MMM) - Compute3x3BlockFast handles IMA inline
 			if(dof_row == 3 && dof_col == 3)
 			{
 				int tet_row = imaToTet[ima_row];
 				int tet_col = imaToTet[ima_col];
 				if(tet_row >= 0 && tet_col >= 0)
 				{
-					// Direct contribution
-					double N_direct[9];
-					Compute3x3BlockFast(tet_row, tet_col, N_direct);
-
-					// IMA mirror contributions
-					double N_total[9];
-					std::memcpy(N_total, N_direct, 9 * sizeof(double));
-
-					int imaSym = m_imaSymmetry;
-					int signX = m_imaSignX;
-					int signY = m_imaSignY;
-					int signZ = m_imaSignZ;
-
-					// Mirror sign matrices for MMM (pseudovector reflection):
-					// Mirror about axis with sign s: S_k = s * (1 - 2*delta_k_axis)
-					// +x: S = diag(-1,1,1), -x: S = diag(1,-1,-1)
-					// +z: S = diag(1,1,-1), -z: S = diag(-1,-1,1)
-					auto addMirrorMMM = [&](int mirrorAxis, int combinedSign) {
-						// Mirror source tet geometry
-						double mirCenters[3], mirFaceVerts[4*3*3], mirFaceNormals[4*3], mirFaceAreas[4];
-
-						// Copy source tet data (vertices and center only)
-						for(int k = 0; k < 3; k++)
-							mirCenters[k] = m_tetraCenters[tet_col * 3 + k];
-						for(int f = 0; f < 4; f++)
-						{
-							mirFaceAreas[f] = m_tetraFaceAreas[tet_col * 4 + f];
-							for(int v = 0; v < 3; v++)
-								for(int k = 0; k < 3; k++)
-									mirFaceVerts[(f*3+v)*3+k] = m_tetraFaceVertices[((tet_col*4+f)*3+v)*3+k];
-						}
-
-						// Apply mirror to vertices and center
-						int numAxes = 0;
-						if(mirrorAxis & IMA_X) { numAxes++;
-							mirCenters[0] = -mirCenters[0];
-							for(int f = 0; f < 4; f++)
-								for(int v = 0; v < 3; v++) mirFaceVerts[(f*3+v)*3] = -mirFaceVerts[(f*3+v)*3];
-						}
-						if(mirrorAxis & IMA_Y) { numAxes++;
-							mirCenters[1] = -mirCenters[1];
-							for(int f = 0; f < 4; f++)
-								for(int v = 0; v < 3; v++) mirFaceVerts[(f*3+v)*3+1] = -mirFaceVerts[(f*3+v)*3+1];
-						}
-						if(mirrorAxis & IMA_Z) { numAxes++;
-							mirCenters[2] = -mirCenters[2];
-							for(int f = 0; f < 4; f++)
-								for(int v = 0; v < 3; v++) mirFaceVerts[(f*3+v)*3+2] = -mirFaceVerts[(f*3+v)*3+2];
-						}
-
-						// Fix winding for odd number of mirrors (swap V1, V2)
-						if(numAxes % 2 == 1) {
-							for(int f = 0; f < 4; f++)
-								for(int k = 0; k < 3; k++) std::swap(mirFaceVerts[(f*3+1)*3+k], mirFaceVerts[(f*3+2)*3+k]);
-						}
-
-						// Recompute normals from mirrored vertices: n = (V1-V0) x (V2-V0), normalized
-						for(int f = 0; f < 4; f++)
-						{
-							const double* V0 = &mirFaceVerts[(f*3+0)*3];
-							const double* V1 = &mirFaceVerts[(f*3+1)*3];
-							const double* V2 = &mirFaceVerts[(f*3+2)*3];
-							double e1[3] = {V1[0]-V0[0], V1[1]-V0[1], V1[2]-V0[2]};
-							double e2[3] = {V2[0]-V0[0], V2[1]-V0[1], V2[2]-V0[2]};
-							double nx = e1[1]*e2[2] - e1[2]*e2[1];
-							double ny = e1[2]*e2[0] - e1[0]*e2[2];
-							double nz = e1[0]*e2[1] - e1[1]*e2[0];
-							double len = sqrt(nx*nx + ny*ny + nz*nz);
-							if(len > 1e-20) { nx /= len; ny /= len; nz /= len; }
-							mirFaceNormals[f*3+0] = nx;
-							mirFaceNormals[f*3+1] = ny;
-							mirFaceNormals[f*3+2] = nz;
-						}
-
-						// Compute N_mirror: field at obs from mirrored source with unit M
-						const double* obs = &m_tetraCenters[tet_row * 3];
-						double H_from_M[3][3] = {{0,0,0},{0,0,0},{0,0,0}};  // H_from_M[beta][alpha]
-						double total_charge[3] = {0,0,0};
-
-						for(int f = 0; f < 4; f++)
-						{
-							const double* n_f = &mirFaceNormals[f*3];
-							double area = mirFaceAreas[f];
-							const double* V0 = &mirFaceVerts[(f*3+0)*3];
-							const double* V1 = &mirFaceVerts[(f*3+1)*3];
-							const double* V2 = &mirFaceVerts[(f*3+2)*3];
-
-							for(int beta = 0; beta < 3; beta++)
-							{
-								double sigma = n_f[beta];  // M=e_beta dot n
-								total_charge[beta] += sigma * area;
-								if(fabs(sigma) > 1e-20) {
-									double H_f[3];
-									FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma, H_f);
-									H_from_M[beta][0] += H_f[0];
-									H_from_M[beta][1] += H_f[1];
-									H_from_M[beta][2] += H_f[2];
-								}
-							}
-						}
-
-						// Point charge cancellation
-						double r[3] = {obs[0]-mirCenters[0], obs[1]-mirCenters[1], obs[2]-mirCenters[2]};
-						double dist_sq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
-						double dist = sqrt(dist_sq);
-						if(dist > 1e-15) {
-							double inv_dist3 = 1.0 / (dist * dist_sq);
-							for(int beta = 0; beta < 3; beta++) {
-								for(int alpha = 0; alpha < 3; alpha++)
-									H_from_M[beta][alpha] += -total_charge[beta] * r[alpha] * inv_dist3;
-							}
-						}
-
-						// Sign matrix S for MMM (pseudovector reflection):
-						// For mirror about axis k with IMA sign s:
-						//   S[k] = -s (component along mirror axis flips)
-						//   S[other] = s (components perpendicular preserved)
-						double S[3] = {(double)combinedSign, (double)combinedSign, (double)combinedSign};
-						if(mirrorAxis & IMA_X) S[0] = -S[0];
-						if(mirrorAxis & IMA_Y) S[1] = -S[1];
-						if(mirrorAxis & IMA_Z) S[2] = -S[2];
-
-						// N_total[alpha][beta] += N_mirror[alpha][gamma] * S[gamma] * delta(gamma,beta)
-						// = N_mirror[alpha][beta] * S[beta]
-						for(int alpha = 0; alpha < 3; alpha++)
-							for(int beta = 0; beta < 3; beta++)
-								N_total[alpha*3+beta] += H_from_M[beta][alpha] * RadConst::INV_FOUR_PI * S[beta];
-					};
-
-					// Single axis mirrors
-					if(imaSym & IMA_X) addMirrorMMM(IMA_X, signX);
-					if(imaSym & IMA_Y) addMirrorMMM(IMA_Y, signY);
-					if(imaSym & IMA_Z) addMirrorMMM(IMA_Z, signZ);
-					// Dual axis
-					if((imaSym & IMA_X) && (imaSym & IMA_Y)) addMirrorMMM(IMA_XY, signX * signY);
-					if((imaSym & IMA_X) && (imaSym & IMA_Z)) addMirrorMMM(IMA_XZ, signX * signZ);
-					if((imaSym & IMA_Y) && (imaSym & IMA_Z)) addMirrorMMM(IMA_YZ, signY * signZ);
-					// Triple axis
-					if((imaSym & IMA_X) && (imaSym & IMA_Y) && (imaSym & IMA_Z))
-						addMirrorMMM(IMA_XYZ, signX * signY * signZ);
-
-					// Store
+					double N_ima[9];
+					Compute3x3BlockFast(tet_row, tet_col, N_ima);
 					for(int i = 0; i < 3; i++)
 						for(int j = 0; j < 3; j++)
-							block[(size_t)i * imaDOF + j] = N_total[i * 3 + j];
+							block[(size_t)i * imaDOF + j] = N_ima[i * 3 + j];
 					continue;
 				}
 			}
