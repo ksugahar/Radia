@@ -11,7 +11,7 @@ ELF coil geometry (mm):
     Arc radius: 22.5 mm (centerline, inner=5, outer=40)
     Current: 2000 A-turns
 
-Coordinate system (matching yoke_dipole.jou):
+Coordinate system (matching yoke.jou):
     y = gap direction (pole tip at y~0, main leg at y~0.15)
     z = beam direction (symmetry at z=0)
     x = depth/thickness (symmetry at x=0)

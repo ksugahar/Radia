@@ -365,11 +365,11 @@ if __name__ == "__main__":
     import os
 
     if len(sys.argv) < 2:
-        # Default test with yoke_dipole.step
+        # Default test with yoke.step
         step_file = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             '..', '..', 'examples', 'cubit_panels', 'accel_magnet',
-            'yoke_dipole.step')
+            'yoke.step')
     else:
         step_file = sys.argv[1]
 
