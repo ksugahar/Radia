@@ -34,19 +34,16 @@ import sys
 import os
 
 # ============================================================
-# Paths
+# Paths (auto-detect Cubit via install_panels.find_cubit_bin)
 # ============================================================
-CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
-CUBIT_EXPORT_PATH = "S:/CoreformCubit/01_GitHub"
-
-sys.path.insert(0, CUBIT_PATH)
-sys.path.insert(0, CUBIT_EXPORT_PATH)
-
 work_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Use custom NGSolve with GUI support and patches (PR#231, PR#232)
-NGSOLVE_PATH = r'S:\NGSolve\01_GitHub\install_ngsolve\lib\site-packages'
-sys.path.insert(0, NGSOLVE_PATH)
+repo_root = os.path.dirname(os.path.dirname(work_dir))
+sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
+from install_panels import find_cubit_bin
+_cubit_path = find_cubit_bin()
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.insert(0, _cubit_path)
+# cubit_mesh_export is in src/radia (already on sys.path above)
 
 from ngsolve import Mesh, VTKOutput
 import cubit

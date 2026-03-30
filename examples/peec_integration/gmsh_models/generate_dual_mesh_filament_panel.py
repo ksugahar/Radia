@@ -20,15 +20,17 @@ import os
 import numpy as np
 
 # Add Cubit to path
-cubit_path = os.environ.get("CUBIT_PATH")
-if cubit_path:
-	sys.path.append(cubit_path)
+# Auto-detect Cubit installation
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
+from install_panels import find_cubit_bin as _fcb
+_cubit_path = _fcb()
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.append(_cubit_path)
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
 # Add cubit_mesh_export to path
-sys.path.insert(0, "S:/CoreformCubit/01_GitHub")
 import cubit_mesh_export
 
 print("=" * 70)
