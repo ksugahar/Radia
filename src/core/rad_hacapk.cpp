@@ -441,17 +441,12 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
     int64_t total_size = (int64_t)m_n_elem * m_n_elem * 9;
     m_flat_N_data.resize(total_size);
 
-    // Copy from InteractMatrix[i][j] to flat array with sign flip (-N)
-    // The system matrix is A = -N - diag(1/chi) (ELF-compatible), so we store -N
+    // Copy from InteractMatrix[i][j] to flat array as +N (physical quantity).
+    // ComputeEntry() handles the sign flip to -N for the system matrix.
     //
-    // MATRIX LAYOUT FIX (2025-12-24):
     // InteractMatrix[i][j] stores TMatrix3df where:
-    //   Str0 = dH/dMx = (dHx/dMx, dHy/dMx, dHz/dMx) <- COLUMN vector (response to Mx)
-    //   Str1 = dH/dMy = (dHx/dMy, dHy/dMy, dHz/dMy) <- COLUMN vector (response to My)
-    //   Str2 = dH/dMz = (dHx/dMz, dHy/dMz, dHz/dMz) <- COLUMN vector (response to Mz)
-    //
-    // For row k of the 3x3 block, we need N[i][j] element (k, l) = dH_k/dM_l
-    // This requires transposed access: row k gets Str0[k], Str1[k], Str2[k]
+    //   Str0 = dH/dMx, Str1 = dH/dMy, Str2 = dH/dMz (COLUMN vectors)
+    // We store row-major: N[row][col] = dH_row / dM_col
     int total_collapse = m_n_elem * m_n_elem;
     ngcore::ParallelFor(ngcore::IntRange(total_collapse), [&](size_t idx)
     {
@@ -460,18 +455,15 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
             const TMatrix3df& M = m_interaction->InteractMatrix[i][j];
             int64_t base_idx = ((int64_t)i * m_n_elem + j) * 9;
 
-            // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
-            m_flat_N_data[base_idx + 0] = -static_cast<double>(M.Str0.x);  // -dHx/dMx
-            m_flat_N_data[base_idx + 1] = -static_cast<double>(M.Str1.x);  // -dHx/dMy
-            m_flat_N_data[base_idx + 2] = -static_cast<double>(M.Str2.x);  // -dHx/dMz
-            // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
-            m_flat_N_data[base_idx + 3] = -static_cast<double>(M.Str0.y);  // -dHy/dMx
-            m_flat_N_data[base_idx + 4] = -static_cast<double>(M.Str1.y);  // -dHy/dMy
-            m_flat_N_data[base_idx + 5] = -static_cast<double>(M.Str2.y);  // -dHy/dMz
-            // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
-            m_flat_N_data[base_idx + 6] = -static_cast<double>(M.Str0.z);  // -dHz/dMx
-            m_flat_N_data[base_idx + 7] = -static_cast<double>(M.Str1.z);  // -dHz/dMy
-            m_flat_N_data[base_idx + 8] = -static_cast<double>(M.Str2.z);  // -dHz/dMz
+            m_flat_N_data[base_idx + 0] = static_cast<double>(M.Str0.x);  // dHx/dMx
+            m_flat_N_data[base_idx + 1] = static_cast<double>(M.Str1.x);  // dHx/dMy
+            m_flat_N_data[base_idx + 2] = static_cast<double>(M.Str2.x);  // dHx/dMz
+            m_flat_N_data[base_idx + 3] = static_cast<double>(M.Str0.y);  // dHy/dMx
+            m_flat_N_data[base_idx + 4] = static_cast<double>(M.Str1.y);  // dHy/dMy
+            m_flat_N_data[base_idx + 5] = static_cast<double>(M.Str2.y);  // dHy/dMz
+            m_flat_N_data[base_idx + 6] = static_cast<double>(M.Str0.z);  // dHz/dMx
+            m_flat_N_data[base_idx + 7] = static_cast<double>(M.Str1.z);  // dHz/dMy
+            m_flat_N_data[base_idx + 8] = static_cast<double>(M.Str2.z);  // dHz/dMz
     });
 
     m_flat_N_ready = true;
@@ -1049,6 +1041,8 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
     } else {
         Compute3x3Block_OnDemand(elem_i, elem_j, N_mat);
     }
+    // Both paths now return +N (physical quantity).
+    // ComputeEntry() handles the sign flip to -N for the system matrix.
 
     // Update single-entry cache
     std::memcpy(tl_single_N_mat, N_mat, 9 * sizeof(double));
@@ -1199,8 +1193,9 @@ double RadHACApKManager::GetCachedMixedElement(int elem_i, int elem_j,
 	tl_cache_dof_i[hash_idx] = dof_i; tl_cache_dof_j[hash_idx] = dof_j;
 	std::memcpy(tl_cache_block[hash_idx], block, bs * sizeof(double));
 
-	// Sign flip: ComputeMixedBlockFast returns +N, HACApK system uses -N
-	return -block[local_i * dof_j + local_j];
+	// ComputeMixedBlockFast returns +N (physical quantity) for all DOF types.
+	// ComputeEntry() handles the sign flip to -N for the system matrix.
+	return block[local_i * dof_j + local_j];
 }
 
 //=========================================================================
@@ -1260,7 +1255,8 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
     // Compute interaction from element j to observation at element i center
     // using B_comp() directly (same approach as SetupInteractMatrix)
     //
-    // IMPORTANT: Returns -N to match system matrix A = -N - diag(1/chi) (ELF-compatible)
+    // Returns +N (physical demagnetization tensor).
+    // ComputeEntry() handles the sign flip to -N for the system matrix.
 
     std::memset(N_mat, 0, 9 * sizeof(double));
 
@@ -1273,10 +1269,8 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
     radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_j];
     if (!elem_row || !elem_col) return;
 
-    // Get observation point (center of element i) in global coordinates
     TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
 
-    // Set up field computation with interaction keys
     radTFieldKey FieldKeyInteract;
     FieldKeyInteract.B_ = FieldKeyInteract.H_ = FieldKeyInteract.PreRelax_ = 1;
 
@@ -1285,28 +1279,13 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
                    ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
     Field.AmOfIntrctElemWithSym = m_interaction->CountRelaxElemsWithSym();
 
-    // Compute field contribution from element j
     elem_col->B_comp(&Field);
 
-    // Field.B = response to unit Mx (dH/dMx)
-    // Field.H = response to unit My (dH/dMy)
-    // Field.A = response to unit Mz (dH/dMz)
-    //
-    // For the system matrix, we need -N:
-    // N_mat[row * 3 + col] = -dH_row/dM_col
-
-    // Row 0 (Hx response): -dHx/dMx, -dHx/dMy, -dHx/dMz
-    N_mat[0] = -Field.B.x;  // -dHx/dMx
-    N_mat[1] = -Field.H.x;  // -dHx/dMy
-    N_mat[2] = -Field.A.x;  // -dHx/dMz
-    // Row 1 (Hy response): -dHy/dMx, -dHy/dMy, -dHy/dMz
-    N_mat[3] = -Field.B.y;  // -dHy/dMx
-    N_mat[4] = -Field.H.y;  // -dHy/dMy
-    N_mat[5] = -Field.A.y;  // -dHy/dMz
-    // Row 2 (Hz response): -dHz/dMx, -dHz/dMy, -dHz/dMz
-    N_mat[6] = -Field.B.z;  // -dHz/dMx
-    N_mat[7] = -Field.H.z;  // -dHz/dMy
-    N_mat[8] = -Field.A.z;  // -dHz/dMz
+    // PreRelax mode: Field.B = dH/dMx, Field.H = dH/dMy, Field.A = dH/dMz
+    // Return +N (physical): N_mat[row][col] = dH_row / dM_col
+    N_mat[0] = Field.B.x;  N_mat[1] = Field.H.x;  N_mat[2] = Field.A.x;
+    N_mat[3] = Field.B.y;  N_mat[4] = Field.H.y;  N_mat[5] = Field.A.y;
+    N_mat[6] = Field.B.z;  N_mat[7] = Field.H.z;  N_mat[8] = Field.A.z;
 }
 
 //=========================================================================
@@ -1389,172 +1368,24 @@ void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat
             // Compute field using pre-computed basis (fast path)
             TVector3d H = RadFieldFromTriangleFaceWithBasis(basis, sigma, obsPoint);
 
-            // Accumulate into tensor: N_mat[i*3+j] = dH_i / dM_j
-            // System matrix uses -N, so negate here
-            N_mat[0*3 + j] -= H.x;
-            N_mat[1*3 + j] -= H.y;
-            N_mat[2*3 + j] -= H.z;
+            // Accumulate into tensor: N_mat[i*3+j] = dH_i / dM_j (+N convention)
+            // ComputeEntry() handles the sign flip to -N for the system matrix.
+            N_mat[0*3 + j] += H.x;
+            N_mat[1*3 + j] += H.y;
+            N_mat[2*3 + j] += H.z;
         }
     }
 }
 
-//=========================================================================
-// Mixed element methods: 3x6 and 6x3 blocks for tetra-hex interactions
-// Following ELF_MAGIC convention for mixed element meshes
-//=========================================================================
-
-double RadHACApKManager::GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const {
-    // 3x6 block: tetra row (3DOF), hex column (6DOF)
-    // K(comp, face) = H_field_comp at tetra center from unit sigma on hex face
-    // Returns -K/(4*pi) to match the sign convention of the system matrix
-
-    if (!m_interaction) return 0.0;
-
-    // For mixed elements, we need to access the pre-computed interaction matrix
-    // The variable DOF matrix m_flatInteractMatrix stores blocks sequentially
-    if (m_interaction->m_flatInteractMatrix.empty()) {
-        // Fall back to computing on-demand (slower but correct)
-        double K_mat[18];
-        Compute3x6Block(elem_tetra, elem_hex, K_mat);
-        return K_mat[comp * 6 + face];
-    }
-
-    // Access from pre-computed flat matrix
-    int offset_i = m_dof_offset[elem_tetra];
-    int offset_j = m_dof_offset[elem_hex];
-    int total_dof = m_interaction->m_totalDOF;
-
-    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
-    // Row = offset_i + comp (tetra target), Col = offset_j + face (hex source)
-    return m_interaction->m_flatInteractMatrix[(offset_i + comp) * total_dof + (offset_j + face)];
-}
-
-double RadHACApKManager::GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const {
-    // 6x3 block: hex row (6DOF), tetra column (3DOF)
-    // K(face, comp) = normal_face dot N_mat(:, comp) where N_mat is demagnetization tensor
-    // Returns -K/(4*pi) to match the sign convention
-
-    if (!m_interaction) return 0.0;
-
-    // Access from pre-computed flat matrix if available
-    if (m_interaction->m_flatInteractMatrix.empty()) {
-        double K_mat[18];
-        Compute6x3Block(elem_hex, elem_tetra, K_mat);
-        return K_mat[face * 3 + comp];
-    }
-
-    int offset_i = m_dof_offset[elem_hex];
-    int offset_j = m_dof_offset[elem_tetra];
-    int total_dof = m_interaction->m_totalDOF;
-
-    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
-    // Row = offset_i + face (hex target), Col = offset_j + comp (tetra source)
-    return m_interaction->m_flatInteractMatrix[(offset_i + face) * total_dof + (offset_j + comp)];
-}
-
 double RadHACApKManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
-    // Generic path for any DOF combination (5-DOF wedges, mixed wedge+hex, etc.)
-    // Uses pre-computed flat interaction matrix from SetupInteractMatrix_VariableDOF()
-
+    // Generic path: access pre-computed flat interaction matrix (+N convention)
     if (!m_interaction || m_interaction->m_flatInteractMatrix.empty()) return 0.0;
 
     int offset_i = m_dof_offset[elem_i];
     int offset_j = m_dof_offset[elem_j];
     int total_dof = m_interaction->m_totalDOF;
 
-    // ROW-MAJOR access: A(row, col) at [row * total_dof + col]
     return m_interaction->m_flatInteractMatrix[(offset_i + local_i) * total_dof + (offset_j + local_j)];
-}
-
-void RadHACApKManager::Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const {
-    // 3x6 block: H-field at tetra center from hex face charges
-    // K(comp, face) = H_comp at tetra center due to unit sigma on hex face
-    // Following rad_interaction.cpp 3x6 block implementation
-
-    std::memset(K_mat, 0, 18 * sizeof(double));
-
-    if (!m_interaction) return;
-
-    radTg3dRelax* elem_row = m_interaction->g3dRelaxPtrVect[elem_tetra];
-    radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_hex];
-    if (!elem_row || !elem_col) return;
-
-    radTPolyhedron* poly_col = dynamic_cast<radTPolyhedron*>(elem_col);
-    if (!poly_col || !poly_col->Use6DOF_MSC) return;
-
-    // Observation point: tetra center
-    TVector3d obs = elem_row->CentrPoint;
-
-    for (int face_j = 0; face_j < 6; face_j++) {
-        // Field from unit sigma on face j
-        TVector3d H_face = poly_col->FieldFromQuadFace(obs, face_j, 1.0);
-
-        // Point charge contribution (m = -sigma * area)
-        double unit_charge = -1.0 * poly_col->FaceArea[face_j];
-        TVector3d H_point = poly_col->FieldFromPointCharge(obs, unit_charge);
-
-        TVector3d H_total;
-        H_total.x = H_face.x + H_point.x;
-        H_total.y = H_face.y + H_point.y;
-        H_total.z = H_face.z + H_point.z;
-
-        // Store with sign flip (-K/(4*pi))
-        // Row-major: K_mat[comp * 6 + face]
-        K_mat[0 * 6 + face_j] = -H_total.x * RadConst::INV_FOUR_PI;  // Mx
-        K_mat[1 * 6 + face_j] = -H_total.y * RadConst::INV_FOUR_PI;  // My
-        K_mat[2 * 6 + face_j] = -H_total.z * RadConst::INV_FOUR_PI;  // Mz
-    }
-}
-
-void RadHACApKManager::Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const {
-    // 6x3 block: normal dot demagnetization tensor at hex eval points from tetra
-    // K(face, comp) = normal_face dot N_mat(:, comp)
-    // Following rad_interaction.cpp 6x3 block implementation
-
-    std::memset(K_mat, 0, 18 * sizeof(double));
-
-    if (!m_interaction) return;
-
-    radTg3dRelax* elem_row = m_interaction->g3dRelaxPtrVect[elem_hex];
-    radTg3dRelax* elem_col = m_interaction->g3dRelaxPtrVect[elem_tetra];
-    if (!elem_row || !elem_col) return;
-
-    radTPolyhedron* poly_row = dynamic_cast<radTPolyhedron*>(elem_row);
-    if (!poly_row || !poly_row->Use6DOF_MSC) return;
-
-    radTFieldKey FieldKeyInteract;
-    FieldKeyInteract.B_ = FieldKeyInteract.H_ = FieldKeyInteract.PreRelax_ = 1;
-
-    for (int face_i = 0; face_i < 6; face_i++) {
-        // Yano-Sugahara evaluation point: midpoint between face center and element center
-        TVector3d EvalPt;
-        EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-        EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-        EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
-
-        // Compute demagnetization tensor at this point
-        radTField Field(FieldKeyInteract, m_interaction->CompCriterium, EvalPt,
-                       TVector3d(0., 0., 0.), TVector3d(0., 0., 0.),
-                       TVector3d(0., 0., 0.), TVector3d(0., 0., 0.), 0.);
-        Field.AmOfIntrctElemWithSym = m_interaction->CountRelaxElemsWithSym();
-
-        elem_col->B_comp(&Field);
-
-        // N_mat columns from Field (response to unit M)
-        // Field.B = response to unit Mx, Field.H = My, Field.A = Mz
-        TVector3d& n = poly_row->FaceNormal[face_i];
-
-        // K(face_i, Mj) = normal dot N_mat(:, j) / (4*pi)
-        double K_Mx = n.x * Field.B.x + n.y * Field.B.y + n.z * Field.B.z;
-        double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
-        double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
-
-        // Store with sign flip (-K/(4*pi))
-        // Row-major: K_mat[face * 3 + comp]
-        K_mat[face_i * 3 + 0] = -K_Mx * RadConst::INV_FOUR_PI;
-        K_mat[face_i * 3 + 1] = -K_My * RadConst::INV_FOUR_PI;
-        K_mat[face_i * 3 + 2] = -K_Mz * RadConst::INV_FOUR_PI;
-    }
 }
 
 //=========================================================================
