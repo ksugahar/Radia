@@ -1488,8 +1488,6 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 				else
 				{
 					// Soft material: compute mirror contributions for field
-					const double BOUNDARY_TOL = 1.0e-6;
-
 					for(int i = 0; i < nFaces; i++)
 					{
 						const TVector3d& MV0 = mirrorVerts[i][0];
@@ -1497,46 +1495,8 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 						const TVector3d& MV2 = mirrorVerts[i][2];
 						const TVector3d& MV3 = mirrorVerts[i][3];
 
-						// Check if this face is ON the symmetry plane (boundary face)
-						double faceCenterX = 0.25 * (MV0.x + MV1.x + MV2.x + MV3.x);
-						double faceCenterY = 0.25 * (MV0.y + MV1.y + MV2.y + MV3.y);
-						double faceCenterZ = 0.25 * (MV0.z + MV1.z + MV2.z + MV3.z);
-
-						bool isBoundaryFace = false;
-						if((mirrorAxis & radTInteraction::IMA_X) && std::abs(faceCenterX) < BOUNDARY_TOL)
-							isBoundaryFace = true;
-						if((mirrorAxis & radTInteraction::IMA_Y) && std::abs(faceCenterY) < BOUNDARY_TOL)
-							isBoundaryFace = true;
-						if((mirrorAxis & radTInteraction::IMA_Z) && std::abs(faceCenterZ) < BOUNDARY_TOL)
-							isBoundaryFace = true;
-
-						TVector3d H_face;
-						// DEBUG: Skip boundary face special handling to test if non-boundary works
-						if(false && isBoundaryFace)  // TEMPORARILY DISABLED
-						{
-							// BOUNDARY FACE FIX:
-							// For boundary faces at symmetry plane (e.g., z=0 under z-mirror):
-							// - c1's face 0 (z-) at z=0: normal = (0,0,-1), sigma = -Mz
-							// - c2's face 1 (z+) at z=0: normal = (0,0,+1), sigma = +Mz
-							//
-							// When we mirror c1's face 0 vertices, they stay at z=0.
-							// The cross product with forward winding gives normal (0,0,-1) - WRONG.
-							// We need normal (0,0,+1) to match c2's face 1.
-							//
-							// Solution:
-							// - mirrorSigma = -Sigma[i] = -(-Mz) = +Mz (matches sigma_c2_f1)
-							// - reverseWinding = true to flip normal from (0,0,-1) to (0,0,+1)
-							double mirrorSigma = -Sigma[i];  // Negate sigma for boundary faces
-							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, true, mirrorCenter);  // true = reverse winding
-						}
-						else
-						{
-							// NON-BOUNDARY FACE:
-							// Mirror sigma = sign * Sigma (accounts for IMA symmetry type)
-							// Use winding reversal to flip the computed normal
-							double mirrorSigma = sign * Sigma[i];
-							H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, reverseWinding, mirrorCenter);
-						}
+						double mirrorSigma = sign * Sigma[i];
+						TVector3d H_face = FieldFromQuadFaceMirrored(obsPoint, MV0, MV1, MV2, MV3, mirrorSigma, reverseWinding, mirrorCenter);
 
 						H_mirror.x += H_face.x;
 						H_mirror.y += H_face.y;
