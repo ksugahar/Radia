@@ -760,6 +760,33 @@ config = rad.GetSolverConfig()  # Returns dict with all settings
 
 See `docs/HMATRIX_EVALUATION.md` for full evaluation report.
 
+### Sign Convention: +N (Physical) Everywhere
+
+**POLICY**: All kernel computation functions return **+N** (positive physical quantity). The sign flip to **-N** for the system matrix happens in **ONE place only**: `ComputeEntry()` in `rad_hacapk.cpp`.
+
+```
+Compute*BlockFast() returns +N (physical demagnetization tensor)
+       ↓
+GetInteractionMatrixElement() returns +N
+       ↓
+ComputeEntry(): A_val = -N_val + delta_ij * inv_chi[i]
+       ↓
+H-matrix stores system matrix A = -N + diag(1/chi)
+```
+
+**Sign convention applies uniformly to ALL DOF types** (MMM 3DOF, MSC 5/6DOF, mixed). No DOF-type-specific sign conditionals.
+
+| Layer | Sign | Description |
+|-------|------|-------------|
+| `Compute*BlockFast` | **+N** | Physical quantity (rad_interaction.cpp) |
+| `m_flatInteractMatrix` | **+N** | Flat storage for LU/BiCGSTAB |
+| `m_flat_N_data` | **+N** | HACApK pre-computed flat (rad_hacapk.cpp) |
+| `ComputeEntry` callback | **-N+1/chi** | System matrix for H-matrix fill |
+| LU/BiCGSTAB MatVec | **alpha=-1.0** | BLAS negates +N to get -N |
+| `UpdateDiagonal` | **-diag_N+inv_chi** | Diagonal update after chi change |
+
+**Do NOT** add sign flips in `GetCached*Element` or `GetCachedMixedElement`. These must return +N.
+
 ### Under-Relaxation for Nonlinear Problems
 
 ```python
