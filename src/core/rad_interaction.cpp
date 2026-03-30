@@ -71,8 +71,9 @@ radTInteraction::radTInteraction()
 	RelaxSubIntervArray = nullptr; // New
 	mKeepTransData = 0;
 
-	// Tetrahedron/Hexahedron geometry cache
+	// Tetrahedron/Wedge/Hexahedron geometry cache
 	m_tetraGeomReady = false;
+	m_wedgeGeomReady = false;
 	m_hexaGeomReady = false;
 	m_hexaTriDataReady = false;
 
@@ -109,8 +110,9 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	RelaxSubIntervArray = nullptr; // New
 	AmOfRelaxSubInterv = 0; // New
 
-	// Tetrahedron/Hexahedron geometry cache
+	// Tetrahedron/Wedge/Hexahedron geometry cache
 	m_tetraGeomReady = false;
+	m_wedgeGeomReady = false;
 	m_hexaGeomReady = false;
 	m_hexaTriDataReady = false;
 
@@ -1010,6 +1012,45 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 			return 1;
 		}
 		// Fall through to MEDIUM PATH if geometry precompute failed
+	}
+
+	// Check if all MSC elements are wedges (for pure-wedge fast path)
+	bool allWedge = hasMSCElements;
+	for(int i = 0; i < AmOfMainElem && allWedge; i++)
+	{
+		if(m_elemDOF[i] != 5) allWedge = false;
+	}
+
+	// ULTRA-FAST PATH: Pure wedges without symmetry
+	if(!hasSymmetry && allWedge)
+	{
+		PrecomputeWedgeGeometry();
+		if(m_wedgeGeomReady)
+		{
+			int nWedge = (int)m_wedgeElemIndices.size();
+
+			ngcore::ParallelFor(ngcore::IntRange(nWedge), [&](size_t w_col)
+			{
+				int col = m_wedgeElemIndices[(int)w_col];
+				int offset_col = m_elemDOFOffset[col];
+
+				for(int w_row = 0; w_row < nWedge; w_row++)
+				{
+					int row = m_wedgeElemIndices[w_row];
+					int offset_row = m_elemDOFOffset[row];
+
+					double K_block[25];
+					Compute5x5BlockFast(w_row, (int)w_col, K_block);
+
+					double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
+					for(int i = 0; i < 5; i++)
+						for(int j = 0; j < 5; j++)
+							block[(size_t)i * m_totalDOF + j] = K_block[i * 5 + j];
+				}
+			});
+
+			return 1;
+		}
 	}
 
 	// MEDIUM PATH: MSC hexahedra without symmetry - uses OpenMP
@@ -3435,6 +3476,230 @@ void radTInteraction::FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, con
 }
 
 //=========================================================================
+// PrecomputeWedgeGeometry: Pre-compute wedge face geometry
+// Wedge: 5 faces (2 triangular + 3 quadrilateral)
+// Each tri face -> 1 triangle, each quad face -> 2 triangles
+// Total: up to 8 triangles per wedge (same approach as hex)
+//=========================================================================
+
+void radTInteraction::PrecomputeWedgeGeometry()
+{
+	if(m_wedgeGeomReady || AmOfMainElem == 0) return;
+
+	int nWedge = 0;
+	m_wedgeElemIndices.clear();
+	for(int e = 0; e < AmOfMainElem; e++)
+	{
+		if(m_elemDOF[e] == 5)
+		{
+			m_wedgeElemIndices.push_back(e);
+			nWedge++;
+		}
+	}
+	if(nWedge == 0) return;
+
+	m_wedgeCenters.resize(nWedge * 3);
+	m_wedgeEvalPoints.resize(nWedge * 5 * 3);
+	m_wedgeFaceNormals.resize(nWedge * 5 * 3);
+	m_wedgeFaceAreas.resize(nWedge * 5);
+	m_wedgeFaceNumTris.resize(nWedge * 5);
+	m_wedgeTriOffset.resize(nWedge * 5);
+	m_wedgeTriVertices.resize(nWedge * WEDGE_MAX_TRIS * 3 * 3);
+	m_wedgeTriSigns.resize(nWedge * WEDGE_MAX_TRIS);
+
+	for(int w = 0; w < nWedge; w++)
+	{
+		int elemIdx = m_wedgeElemIndices[w];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 5) continue;
+
+		int cIdx = w * 3;
+		m_wedgeCenters[cIdx + 0] = poly->CentrPoint.x;
+		m_wedgeCenters[cIdx + 1] = poly->CentrPoint.y;
+		m_wedgeCenters[cIdx + 2] = poly->CentrPoint.z;
+
+		int triCount = 0;
+		for(int f = 0; f < 5; f++)
+		{
+			m_wedgeFaceNormals[(w*5+f)*3+0] = poly->FaceNormal[f].x;
+			m_wedgeFaceNormals[(w*5+f)*3+1] = poly->FaceNormal[f].y;
+			m_wedgeFaceNormals[(w*5+f)*3+2] = poly->FaceNormal[f].z;
+			m_wedgeFaceAreas[w*5+f] = poly->FaceArea[f];
+			m_wedgeEvalPoints[(w*5+f)*3+0] = 0.5*(poly->FaceCenter[f].x + poly->CentrPoint.x);
+			m_wedgeEvalPoints[(w*5+f)*3+1] = 0.5*(poly->FaceCenter[f].y + poly->CentrPoint.y);
+			m_wedgeEvalPoints[(w*5+f)*3+2] = 0.5*(poly->FaceCenter[f].z + poly->CentrPoint.z);
+
+			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+			radTPolygon* pgn = hpt.PgnHndl.rep;
+			radTrans* tr = hpt.TransHndl.rep;
+			const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+			int nv = (int)verts2d.size();
+
+			m_wedgeTriOffset[w*5+f] = triCount;
+
+			TVector3d V[4];
+			for(int v = 0; v < nv && v < 4; v++)
+				V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+
+			int numTris = (nv == 3) ? 1 : 2;
+			m_wedgeFaceNumTris[w*5+f] = numTris;
+
+			// Build triangles: nv==3 -> 1 tri (V0,V1,V2), nv==4 -> 2 tris (V0,V1,V2) + (V0,V2,V3)
+			TVector3d tri_v[2][3];
+			tri_v[0][0] = V[0]; tri_v[0][1] = V[1]; tri_v[0][2] = V[2];
+			if(numTris == 2) { tri_v[1][0] = V[0]; tri_v[1][1] = V[2]; tri_v[1][2] = V[3]; }
+
+			for(int t = 0; t < numTris; t++)
+			{
+				int tvIdx = (w * WEDGE_MAX_TRIS + triCount) * 3 * 3;
+				for(int vi = 0; vi < 3; vi++)
+				{
+					m_wedgeTriVertices[tvIdx + vi*3 + 0] = tri_v[t][vi].x;
+					m_wedgeTriVertices[tvIdx + vi*3 + 1] = tri_v[t][vi].y;
+					m_wedgeTriVertices[tvIdx + vi*3 + 2] = tri_v[t][vi].z;
+				}
+
+				TVector3d e1 = {tri_v[t][1].x-tri_v[t][0].x, tri_v[t][1].y-tri_v[t][0].y, tri_v[t][1].z-tri_v[t][0].z};
+				TVector3d e2 = {tri_v[t][2].x-tri_v[t][0].x, tri_v[t][2].y-tri_v[t][0].y, tri_v[t][2].z-tri_v[t][0].z};
+				TVector3d tn = {e1.y*e2.z-e1.z*e2.y, e1.z*e2.x-e1.x*e2.z, e1.x*e2.y-e1.y*e2.x};
+				double nLen = sqrt(tn.x*tn.x + tn.y*tn.y + tn.z*tn.z);
+				double sign = 1.0;
+				if(nLen > 1e-20)
+				{
+					tn.x /= nLen; tn.y /= nLen; tn.z /= nLen;
+					TVector3d tc = {(tri_v[t][0].x+tri_v[t][1].x+tri_v[t][2].x)/3.0,
+					                (tri_v[t][0].y+tri_v[t][1].y+tri_v[t][2].y)/3.0,
+					                (tri_v[t][0].z+tri_v[t][1].z+tri_v[t][2].z)/3.0};
+					TVector3d toTri = {tc.x-poly->CentrPoint.x, tc.y-poly->CentrPoint.y, tc.z-poly->CentrPoint.z};
+					sign = (tn.x*toTri.x + tn.y*toTri.y + tn.z*toTri.z >= 0) ? 1.0 : -1.0;
+				}
+				m_wedgeTriSigns[w * WEDGE_MAX_TRIS + triCount] = sign;
+				triCount++;
+			}
+		}
+	}
+
+	m_wedgeGeomReady = true;
+}
+
+//=========================================================================
+// Compute5x5BlockFast: Fast 5x5 interaction block for wedges (MSC)
+// Same pattern as Compute6x6BlockFast: Yano-Sugahara eval points,
+// face-triangle decomposition, IMA inline with scalar sign.
+//=========================================================================
+
+void radTInteraction::Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_mat) const
+{
+	std::memset(K_mat, 0, 25 * sizeof(double));
+	if(!m_wedgeGeomReady) return;
+
+	int nWedge = (int)m_wedgeElemIndices.size();
+	if(wedge_i < 0 || wedge_i >= nWedge || wedge_j < 0 || wedge_j >= nWedge) return;
+
+	const double src_center[3] = {m_wedgeCenters[wedge_j*3+0],
+	                               m_wedgeCenters[wedge_j*3+1],
+	                               m_wedgeCenters[wedge_j*3+2]};
+
+	for(int fi = 0; fi < 5; fi++)
+	{
+		int epIdx = (wedge_i*5+fi)*3;
+		const double obs[3] = {m_wedgeEvalPoints[epIdx+0], m_wedgeEvalPoints[epIdx+1], m_wedgeEvalPoints[epIdx+2]};
+		int fnIdx_i = (wedge_i*5+fi)*3;
+		const double n_i[3] = {m_wedgeFaceNormals[fnIdx_i+0], m_wedgeFaceNormals[fnIdx_i+1], m_wedgeFaceNormals[fnIdx_i+2]};
+
+		for(int fj = 0; fj < 5; fj++)
+		{
+			double H_total[3] = {0,0,0};
+
+			// Original source: triangles of face fj
+			int triOff = m_wedgeTriOffset[wedge_j*5+fj];
+			int numTris = m_wedgeFaceNumTris[wedge_j*5+fj];
+			for(int t = 0; t < numTris; t++)
+			{
+				int tvIdx = (wedge_j*WEDGE_MAX_TRIS + triOff + t) * 3 * 3;
+				const double* V0 = &m_wedgeTriVertices[tvIdx+0];
+				const double* V1 = &m_wedgeTriVertices[tvIdx+3];
+				const double* V2 = &m_wedgeTriVertices[tvIdx+6];
+				double sign_tri = m_wedgeTriSigns[wedge_j*WEDGE_MAX_TRIS + triOff + t];
+				double H_tri[3];
+				FieldFromChargedTriangleLocal(obs, V0, V1, V2, sign_tri, H_tri);
+				H_total[0] += H_tri[0]; H_total[1] += H_tri[1]; H_total[2] += H_tri[2];
+			}
+
+			// Point charge cancellation
+			double area_j = m_wedgeFaceAreas[wedge_j*5+fj];
+			{
+				double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
+				double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+				if(d2 > 1e-30) {
+					double id3 = 1.0 / (sqrt(d2)*d2);
+					double c = -area_j * id3;
+					H_total[0] += c*r[0]; H_total[1] += c*r[1]; H_total[2] += c*r[2];
+				}
+			}
+
+			// IMA: mirrored source contributions (scalar sign, same as hex)
+			if(m_imaEnabled)
+			{
+				auto addMirrorWedge = [&](int mirrorAxis, int sign) {
+					double imaSign = (double)sign;
+					double mir_center[3] = {src_center[0], src_center[1], src_center[2]};
+					if(mirrorAxis & IMA_X) mir_center[0] = -mir_center[0];
+					if(mirrorAxis & IMA_Y) mir_center[1] = -mir_center[1];
+					if(mirrorAxis & IMA_Z) mir_center[2] = -mir_center[2];
+
+					int numMir = 0;
+					if(mirrorAxis & IMA_X) numMir++;
+					if(mirrorAxis & IMA_Y) numMir++;
+					if(mirrorAxis & IMA_Z) numMir++;
+					bool flipW = (numMir % 2 == 1);
+
+					for(int t = 0; t < numTris; t++)
+					{
+						int tvIdx = (wedge_j*WEDGE_MAX_TRIS + triOff + t) * 3 * 3;
+						double V0[3] = {m_wedgeTriVertices[tvIdx+0], m_wedgeTriVertices[tvIdx+1], m_wedgeTriVertices[tvIdx+2]};
+						double V1[3] = {m_wedgeTriVertices[tvIdx+3], m_wedgeTriVertices[tvIdx+4], m_wedgeTriVertices[tvIdx+5]};
+						double V2[3] = {m_wedgeTriVertices[tvIdx+6], m_wedgeTriVertices[tvIdx+7], m_wedgeTriVertices[tvIdx+8]};
+						if(mirrorAxis & IMA_X) { V0[0]=-V0[0]; V1[0]=-V1[0]; V2[0]=-V2[0]; }
+						if(mirrorAxis & IMA_Y) { V0[1]=-V0[1]; V1[1]=-V1[1]; V2[1]=-V2[1]; }
+						if(mirrorAxis & IMA_Z) { V0[2]=-V0[2]; V1[2]=-V1[2]; V2[2]=-V2[2]; }
+						if(flipW) { for(int k=0;k<3;k++) std::swap(V1[k],V2[k]); }
+
+						double st = m_wedgeTriSigns[wedge_j*WEDGE_MAX_TRIS + triOff + t];
+						double H_tri[3];
+						FieldFromChargedTriangleLocal(obs, V0, V1, V2, st, H_tri);
+						H_total[0] += imaSign*H_tri[0]; H_total[1] += imaSign*H_tri[1]; H_total[2] += imaSign*H_tri[2];
+					}
+
+					// Mirror point charge
+					double r[3] = {obs[0]-mir_center[0], obs[1]-mir_center[1], obs[2]-mir_center[2]};
+					double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+					if(d2 > 1e-30) {
+						double id3 = 1.0/(sqrt(d2)*d2);
+						double c = -area_j * id3 * imaSign;
+						H_total[0] += c*r[0]; H_total[1] += c*r[1]; H_total[2] += c*r[2];
+					}
+				};
+
+				bool hasX = (m_imaSymmetry & IMA_X) != 0;
+				bool hasY = (m_imaSymmetry & IMA_Y) != 0;
+				bool hasZ = (m_imaSymmetry & IMA_Z) != 0;
+				if(hasX) addMirrorWedge(IMA_X, m_imaSignX);
+				if(hasY) addMirrorWedge(IMA_Y, m_imaSignY);
+				if(hasZ) addMirrorWedge(IMA_Z, m_imaSignZ);
+				if(hasX && hasY) addMirrorWedge(IMA_XY, m_imaSignX*m_imaSignY);
+				if(hasX && hasZ) addMirrorWedge(IMA_XZ, m_imaSignX*m_imaSignZ);
+				if(hasY && hasZ) addMirrorWedge(IMA_YZ, m_imaSignY*m_imaSignZ);
+				if(hasX && hasY && hasZ) addMirrorWedge(IMA_XYZ, m_imaSignX*m_imaSignY*m_imaSignZ);
+			}
+
+			double K_ij = (n_i[0]*H_total[0] + n_i[1]*H_total[1] + n_i[2]*H_total[2]) * RadConst::INV_FOUR_PI;
+			K_mat[fi*5+fj] = K_ij;
+		}
+	}
+}
+
+//=========================================================================
 // Compute6x6BlockFast: Fast 6x6 interaction block for hexahedra
 // Uses pre-computed geometry (avoiding FieldFromQuadFace overhead)
 // Reference: Yano-Sugahara MSC method
@@ -4256,6 +4521,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 	// Check all elements have valid DOF (3=tet MMM, 5=wedge MSC, 6=hex MSC)
 	bool allHex = true;
 	bool allTet = true;
+	bool allWedge = true;
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
 		if(m_elemDOF[i] < 3)
@@ -4264,18 +4530,17 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 			return 0;
 		}
 		if(m_elemDOF[i] != 6) allHex = false;
+		if(m_elemDOF[i] != 5) allWedge = false;
 		if(m_elemDOF[i] != 3) allTet = false;
 	}
 
 	// Pre-compute geometry for fast path
 	if(!m_hexaGeomReady && allHex)
-	{
 		PrecomputeHexaGeometry();
-	}
+	if(!m_wedgeGeomReady && allWedge)
+		PrecomputeWedgeGeometry();
 	if(!m_tetraGeomReady && allTet)
-	{
 		PrecomputeTetraGeometry();
-	}
 
 	// Compute IMA DOF count from actual element DOFs
 	int imaDOF = 0;
@@ -4360,11 +4625,12 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6/3x3BlockFast
+	// For HACApK: skip dense matrix fill, kernel handles IMA via Compute6x6/5x5/3x3BlockFast
 	if(skipDenseMatrix)
 	{
 		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
 		m_hexaGeomReady = false;
+		m_wedgeGeomReady = false;
 		m_tetraGeomReady = false;
 		return 1;
 	}
@@ -4388,8 +4654,25 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		}
 	}
 
+	// Build mapping from IMA index to wedge index (for Compute5x5BlockFast fast path)
+	std::vector<int> imaToWedge(m_imaNumElements, -1);
+	if(allWedge && m_wedgeGeomReady)
+	{
+		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
+		{
+			int full_i = m_imaToFull[ima_i];
+			for(int w = 0; w < (int)m_wedgeElemIndices.size(); w++)
+			{
+				if(m_wedgeElemIndices[w] == full_i)
+				{
+					imaToWedge[ima_i] = w;
+					break;
+				}
+			}
+		}
+	}
+
 	// Build mapping from IMA index to full element index (for tet fast path)
-	// For tet, Compute3x3BlockFast uses the full element index directly
 	std::vector<int> imaToTet(m_imaNumElements, -1);
 	if(allTet && m_tetraGeomReady)
 	{
@@ -4430,6 +4713,22 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 					for(int i = 0; i < 6; i++)
 						for(int j = 0; j < 6; j++)
 							block[(size_t)i * imaDOF + j] = K_ima[i * 6 + j];
+					continue;
+				}
+			}
+
+			// Fast path: 5DOF-5DOF wedge - Compute5x5BlockFast handles IMA inline
+			if(dof_row == 5 && dof_col == 5)
+			{
+				int w_row = imaToWedge[ima_row];
+				int w_col = imaToWedge[(int)ima_col];
+				if(w_row >= 0 && w_col >= 0)
+				{
+					double K_ima[25];
+					Compute5x5BlockFast(w_row, w_col, K_ima);
+					for(int i = 0; i < 5; i++)
+						for(int j = 0; j < 5; j++)
+							block[(size_t)i * imaDOF + j] = K_ima[i * 5 + j];
 					continue;
 				}
 			}
