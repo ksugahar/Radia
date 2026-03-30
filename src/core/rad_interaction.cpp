@@ -3025,7 +3025,6 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 				if(mirrorAxis & IMA_Y) { V0[1] = -V0[1]; V1[1] = -V1[1]; V2[1] = -V2[1]; }
 				if(mirrorAxis & IMA_Z) { V0[2] = -V0[2]; V1[2] = -V1[2]; V2[2] = -V2[2]; }
 				if(flipWinding) {
-					std::swap(V0[0], V0[0]); // no-op, swap V1<->V2
 					for(int k = 0; k < 3; k++) std::swap(V1[k], V2[k]);
 				}
 
@@ -4874,13 +4873,15 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		return 1;
 	}
 
-	// Build mapping from IMA index to hex index (for Compute6x6BlockFast fast path)
+	// Build mapping from IMA index to type-specific geometry index
 	// Uses geometry precomputed from the full model (before system reduction)
+	// NOTE: Always populate for ALL element types (not just pure meshes) to support mixed meshes
 	std::vector<int> imaToHex(m_imaNumElements, -1);
-	if(allHex && m_hexaGeomReady)
+	if(m_hexaGeomReady)
 	{
 		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
 		{
+			if(m_elemDOF[ima_i] != 6) continue;
 			int full_i = m_imaToFull[ima_i];
 			for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
 			{
@@ -4893,12 +4894,12 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		}
 	}
 
-	// Build mapping from IMA index to wedge index (for Compute5x5BlockFast fast path)
 	std::vector<int> imaToWedge(m_imaNumElements, -1);
-	if(allWedge && m_wedgeGeomReady)
+	if(m_wedgeGeomReady)
 	{
 		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
 		{
+			if(m_elemDOF[ima_i] != 5) continue;
 			int full_i = m_imaToFull[ima_i];
 			for(int w = 0; w < (int)m_wedgeElemIndices.size(); w++)
 			{
@@ -4911,12 +4912,13 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		}
 	}
 
-	// Build mapping from IMA index to full element index (for tet fast path)
+	// Tet mapping: stores full model index (Compute3x3BlockFast resolves internally)
 	std::vector<int> imaToTet(m_imaNumElements, -1);
-	if(allTet && m_tetraGeomReady)
+	if(m_tetraGeomReady)
 	{
 		for(int ima_i = 0; ima_i < m_imaNumElements; ima_i++)
 		{
+			if(m_elemDOF[ima_i] != 3) continue;
 			imaToTet[ima_i] = m_imaToFull[ima_i];
 		}
 	}
@@ -4988,123 +4990,18 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 				}
 			}
 
-			// Generic variable DOF path: MSC-to-MSC with IMA mirror contributions
-			// Extract source face vertices
-			int nFacesCol = dof_col;
-			std::array<int, 8> colFaceNumVerts;
-			std::array<std::array<TVector3d, 4>, 8> colFaceVerts;
-			for(int f = 0; f < nFacesCol; f++)
+			// Unified kernel path: handles ALL DOF combinations (same-type and cross-DOF)
+			// including IMA mirror contributions, using precomputed geometry from full model.
+			// ComputeMixedBlockFast takes full model element indices and resolves type-specific
+			// geometry indices internally.
 			{
-				const radTHandlePgnAndTrans& hpt = poly_col->VectHandlePgnAndTrans[f];
-				radTPolygon* pgn = hpt.PgnHndl.rep;
-				radTrans* tr = hpt.TransHndl.rep;
-				const radTVect2dVect& v2d = pgn->EdgePointsVector;
-				int nv = (int)v2d.size();
-				if(nv > 4) nv = 4;
-				colFaceNumVerts[f] = nv;
-				for(int v = 0; v < nv; v++)
-					colFaceVerts[f][v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-			}
-
-			for(int face_i = 0; face_i < dof_row; face_i++)
-			{
-				// Yano-Sugahara evaluation point
-				TVector3d EvalPt;
-				EvalPt.x = 0.5 * (poly_row->FaceCenter[face_i].x + poly_row->CentrPoint.x);
-				EvalPt.y = 0.5 * (poly_row->FaceCenter[face_i].y + poly_row->CentrPoint.y);
-				EvalPt.z = 0.5 * (poly_row->FaceCenter[face_i].z + poly_row->CentrPoint.z);
-
-				for(int face_j = 0; face_j < dof_col; face_j++)
-				{
-					// Direct contribution
-					TVector3d H_face = poly_col->FieldFromFace(EvalPt, face_j, 1.0);
-					double unit_charge = -1.0 * poly_col->FaceArea[face_j];
-					TVector3d H_point = poly_col->FieldFromPointCharge(EvalPt, unit_charge);
-
-					TVector3d H_total;
-					H_total.x = H_face.x + H_point.x;
-					H_total.y = H_face.y + H_point.y;
-					H_total.z = H_face.z + H_point.z;
-
-					// IMA mirror contributions
-					auto addMirrorContribution = [&](int mirrorAxis, int sign) {
-						// Mirror source face vertices
-						TVector3d mirVerts[4];
-						int nv = colFaceNumVerts[face_j];
-						for(int v = 0; v < nv; v++)
-						{
-							mirVerts[v] = colFaceVerts[face_j][v];
-							if(mirrorAxis & IMA_X) mirVerts[v].x = -mirVerts[v].x;
-							if(mirrorAxis & IMA_Y) mirVerts[v].y = -mirVerts[v].y;
-							if(mirrorAxis & IMA_Z) mirVerts[v].z = -mirVerts[v].z;
-						}
-
-						int numAxes = 0;
-						if(mirrorAxis & IMA_X) numAxes++;
-						if(mirrorAxis & IMA_Y) numAxes++;
-						if(mirrorAxis & IMA_Z) numAxes++;
-						bool reverseWinding = (numAxes % 2 == 1);
-
-						TVector3d mirCenter = poly_col->CentrPoint;
-						if(mirrorAxis & IMA_X) mirCenter.x = -mirCenter.x;
-						if(mirrorAxis & IMA_Y) mirCenter.y = -mirCenter.y;
-						if(mirrorAxis & IMA_Z) mirCenter.z = -mirCenter.z;
-
-						// Field from mirrored face
-						TVector3d H_mir = poly_col->FieldFromFaceMirrored(
-							EvalPt, mirVerts, nv, (double)sign, reverseWinding, mirCenter);
-
-						// Mirror point charge (at mirrored ELEMENT center, not face center)
-						TVector3d mirPCPt = poly_col->CentrPoint;
-						if(mirrorAxis & IMA_X) mirPCPt.x = -mirPCPt.x;
-						if(mirrorAxis & IMA_Y) mirPCPt.y = -mirPCPt.y;
-						if(mirrorAxis & IMA_Z) mirPCPt.z = -mirPCPt.z;
-						TVector3d r;
-						r.x = EvalPt.x - mirPCPt.x;
-						r.y = EvalPt.y - mirPCPt.y;
-						r.z = EvalPt.z - mirPCPt.z;
-						double dist = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
-						TVector3d H_mir_pc(0., 0., 0.);
-						if(dist > 1e-20) {
-							double mir_charge = (double)sign * unit_charge;
-							double coeff = mir_charge / (dist * dist * dist);
-							H_mir_pc.x = coeff * r.x;
-							H_mir_pc.y = coeff * r.y;
-							H_mir_pc.z = coeff * r.z;
-						}
-
-						H_total.x += H_mir.x + H_mir_pc.x;
-						H_total.y += H_mir.y + H_mir_pc.y;
-						H_total.z += H_mir.z + H_mir_pc.z;
-					};
-
-					int imaSym = m_imaSymmetry;
-					int signX = m_imaSignX;
-					int signY = m_imaSignY;
-					int signZ = m_imaSignZ;
-
-					// Single axis
-					if(imaSym & IMA_X) addMirrorContribution(IMA_X, signX);
-					if(imaSym & IMA_Y) addMirrorContribution(IMA_Y, signY);
-					if(imaSym & IMA_Z) addMirrorContribution(IMA_Z, signZ);
-					// Dual axis
-					if((imaSym & IMA_X) && (imaSym & IMA_Y))
-						addMirrorContribution(IMA_XY, signX * signY);
-					if((imaSym & IMA_X) && (imaSym & IMA_Z))
-						addMirrorContribution(IMA_XZ, signX * signZ);
-					if((imaSym & IMA_Y) && (imaSym & IMA_Z))
-						addMirrorContribution(IMA_YZ, signY * signZ);
-					// Triple axis
-					if((imaSym & IMA_X) && (imaSym & IMA_Y) && (imaSym & IMA_Z))
-						addMirrorContribution(IMA_XYZ, signX * signY * signZ);
-
-					// K_ij = normal_i dot H_total * INV_FOUR_PI
-					double K_ij = H_total.x * poly_row->FaceNormal[face_i].x +
-					              H_total.y * poly_row->FaceNormal[face_i].y +
-					              H_total.z * poly_row->FaceNormal[face_i].z;
-
-					block[(size_t)face_i * imaDOF + face_j] = K_ij * RadConst::INV_FOUR_PI;
-				}
+				int full_row = m_imaToFull[ima_row];
+				int full_col = m_imaToFull[(int)ima_col];
+				double mixed_block[36];  // max 6x6
+				ComputeMixedBlockFast(full_row, dof_row, full_col, dof_col, mixed_block);
+				for(int i = 0; i < dof_row; i++)
+					for(int j = 0; j < dof_col; j++)
+						block[(size_t)i * imaDOF + j] = mixed_block[i * dof_col + j];
 			}
 		}
 	});
