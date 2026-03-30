@@ -12,7 +12,7 @@ MU_0 = 4e-7 * math.pi
 
 # Build mesh: quarter x-z from full STEP
 print("Building mesh...")
-mesh, info = build_mesh_from_step('yoke_dipole.step', symmetry='quarter_xz',
+mesh, info = build_mesh_from_step('yoke.step', symmetry='quarter_xz',
                                    curve_order=1, add_kelvin=False,
                                    mesh_size=0.015)
 print('Materials:', set(mesh.GetMaterials()))
