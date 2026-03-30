@@ -3908,7 +3908,266 @@ void radTInteraction::Compute6x6BlockFast(int hex_i, int hex_j, double* K_mat) c
 // Reference: IMA approach - matrix construction with image summation
 //-------------------------------------------------------------------------
 
-// Note: Static constexpr arrays IMA_PERM_X/Y/Z are defined inline in rad_interaction.h
+//=========================================================================
+// ComputeMixedBlockFast: Unified cross-DOF interaction block computation
+// Handles ALL element type pairs: 3x3, 3x5, 3x6, 5x3, 5x5, 5x6, 6x3, 6x5, 6x6
+//
+// Row element (target): observation points from precomputed geometry
+//   3DOF (tet): obs = element center, result = H components directly
+//   5DOF (wedge): obs = Yano-Sugahara midpoint per face, result = n_i dot H
+//   6DOF (hex): obs = Yano-Sugahara midpoint per face, result = n_i dot H
+//
+// Col element (source): field from precomputed triangles + point charge
+//   3DOF (tet): for each unit M_beta, sigma = n_f dot e_beta
+//   5DOF (wedge): sigma on source face (1-2 triangles per face)
+//   6DOF (hex): sigma on source face (2 triangles per face)
+//
+// IMA: MSC source -> scalar sign, MMM source -> component sign matrix S[beta]
+//=========================================================================
+
+void radTInteraction::ComputeMixedBlockFast(
+	int elem_row, int dof_row, int elem_col, int dof_col,
+	double* block_out) const
+{
+	std::memset(block_out, 0, dof_row * dof_col * sizeof(double));
+
+	// Helper: convert global element index to type-specific index
+	auto globalToHexIdx = [&](int globalIdx) -> int {
+		for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
+			if(m_hexaElemIndices[h] == globalIdx) return h;
+		return -1;
+	};
+	auto globalToWedgeIdx = [&](int globalIdx) -> int {
+		for(int w = 0; w < (int)m_wedgeElemIndices.size(); w++)
+			if(m_wedgeElemIndices[w] == globalIdx) return w;
+		return -1;
+	};
+	// Tet uses global index directly (PrecomputeTetraGeometry indexes by AmOfMainElem)
+
+	// Get type-specific indices
+	int hex_row = -1, wedge_row = -1, hex_col = -1, wedge_col = -1;
+	if(dof_row == 6) hex_row = globalToHexIdx(elem_row);
+	else if(dof_row == 5) wedge_row = globalToWedgeIdx(elem_row);
+	if(dof_col == 6) hex_col = globalToHexIdx(elem_col);
+	else if(dof_col == 5) wedge_col = globalToWedgeIdx(elem_col);
+
+	// Helper: compute H field at obs from MSC source face (scalar sigma = 1)
+	// Returns H without 4pi factor. Includes IMA mirror contributions.
+	auto fieldFromMSCSourceFace = [&](const double* obs, int src_elem_type, int src_elem_idx, int src_face,
+	                                   double* H_out) {
+		H_out[0] = H_out[1] = H_out[2] = 0.0;
+		double src_center[3];
+		int triOff, numTris;
+		const double* triVerts;
+		const double* triSigns;
+		double faceArea;
+		int maxTris;
+
+		if(src_elem_type == 6 && m_hexaGeomReady) {
+			src_center[0] = m_hexaCenters[src_elem_idx*3+0];
+			src_center[1] = m_hexaCenters[src_elem_idx*3+1];
+			src_center[2] = m_hexaCenters[src_elem_idx*3+2];
+			triOff = (src_elem_idx * 6 + src_face) * 2;
+			numTris = 2;
+			triVerts = &m_hexaTriVertices[triOff * 3 * 3];
+			triSigns = &m_hexaTriSigns[triOff];
+			faceArea = m_hexaFaceAreas[src_elem_idx*6 + src_face];
+			maxTris = 2;
+		} else if(src_elem_type == 5 && m_wedgeGeomReady) {
+			src_center[0] = m_wedgeCenters[src_elem_idx*3+0];
+			src_center[1] = m_wedgeCenters[src_elem_idx*3+1];
+			src_center[2] = m_wedgeCenters[src_elem_idx*3+2];
+			int off = m_wedgeTriOffset[src_elem_idx*5 + src_face];
+			numTris = m_wedgeFaceNumTris[src_elem_idx*5 + src_face];
+			triVerts = &m_wedgeTriVertices[(src_elem_idx*WEDGE_MAX_TRIS + off) * 3 * 3];
+			triSigns = &m_wedgeTriSigns[src_elem_idx*WEDGE_MAX_TRIS + off];
+			faceArea = m_wedgeFaceAreas[src_elem_idx*5 + src_face];
+			maxTris = numTris;
+		} else return;
+
+		// Direct contribution
+		for(int t = 0; t < numTris; t++) {
+			const double* V0 = &triVerts[t*9+0];
+			const double* V1 = &triVerts[t*9+3];
+			const double* V2 = &triVerts[t*9+6];
+			double H_tri[3];
+			FieldFromChargedTriangleLocal(obs, V0, V1, V2, triSigns[t], H_tri);
+			H_out[0] += H_tri[0]; H_out[1] += H_tri[1]; H_out[2] += H_tri[2];
+		}
+		// Point charge
+		double r[3] = {obs[0]-src_center[0], obs[1]-src_center[1], obs[2]-src_center[2]};
+		double d2 = r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+		if(d2 > 1e-30) { double id3=1.0/(sqrt(d2)*d2); double c=-faceArea*id3;
+			H_out[0]+=c*r[0]; H_out[1]+=c*r[1]; H_out[2]+=c*r[2]; }
+
+		// IMA mirrors
+		if(m_imaEnabled) {
+			auto addMir = [&](int mirrorAxis, int sign) {
+				double imaSign = (double)sign;
+				double mc[3] = {src_center[0], src_center[1], src_center[2]};
+				if(mirrorAxis & IMA_X) mc[0]=-mc[0];
+				if(mirrorAxis & IMA_Y) mc[1]=-mc[1];
+				if(mirrorAxis & IMA_Z) mc[2]=-mc[2];
+				int nm=0; if(mirrorAxis&IMA_X) nm++; if(mirrorAxis&IMA_Y) nm++; if(mirrorAxis&IMA_Z) nm++;
+				bool fw = (nm%2==1);
+				for(int t=0;t<numTris;t++) {
+					double V0[3]={triVerts[t*9+0],triVerts[t*9+1],triVerts[t*9+2]};
+					double V1[3]={triVerts[t*9+3],triVerts[t*9+4],triVerts[t*9+5]};
+					double V2[3]={triVerts[t*9+6],triVerts[t*9+7],triVerts[t*9+8]};
+					if(mirrorAxis&IMA_X){V0[0]=-V0[0];V1[0]=-V1[0];V2[0]=-V2[0];}
+					if(mirrorAxis&IMA_Y){V0[1]=-V0[1];V1[1]=-V1[1];V2[1]=-V2[1];}
+					if(mirrorAxis&IMA_Z){V0[2]=-V0[2];V1[2]=-V1[2];V2[2]=-V2[2];}
+					if(fw) for(int k=0;k<3;k++) std::swap(V1[k],V2[k]);
+					double H_tri[3]; FieldFromChargedTriangleLocal(obs, V0, V1, V2, triSigns[t], H_tri);
+					H_out[0]+=imaSign*H_tri[0]; H_out[1]+=imaSign*H_tri[1]; H_out[2]+=imaSign*H_tri[2];
+				}
+				double r[3]={obs[0]-mc[0],obs[1]-mc[1],obs[2]-mc[2]};
+				double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+				if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);double c=-faceArea*id3*imaSign;
+					H_out[0]+=c*r[0];H_out[1]+=c*r[1];H_out[2]+=c*r[2];}
+			};
+			bool hX=(m_imaSymmetry&IMA_X)!=0, hY=(m_imaSymmetry&IMA_Y)!=0, hZ=(m_imaSymmetry&IMA_Z)!=0;
+			if(hX) addMir(IMA_X,m_imaSignX); if(hY) addMir(IMA_Y,m_imaSignY); if(hZ) addMir(IMA_Z,m_imaSignZ);
+			if(hX&&hY) addMir(IMA_XY,m_imaSignX*m_imaSignY);
+			if(hX&&hZ) addMir(IMA_XZ,m_imaSignX*m_imaSignZ);
+			if(hY&&hZ) addMir(IMA_YZ,m_imaSignY*m_imaSignZ);
+			if(hX&&hY&&hZ) addMir(IMA_XYZ,m_imaSignX*m_imaSignY*m_imaSignZ);
+		}
+	};
+
+	// --- Case 1: MSC row x MSC col (5x5, 5x6, 6x5, 6x6) ---
+	if(dof_row >= 5 && dof_col >= 5)
+	{
+		for(int fi = 0; fi < dof_row; fi++) {
+			double obs[3], n_i[3];
+			if(dof_row == 6 && m_hexaGeomReady && hex_row >= 0) {
+				int ep=(hex_row*6+fi)*3; obs[0]=m_hexaEvalPoints[ep]; obs[1]=m_hexaEvalPoints[ep+1]; obs[2]=m_hexaEvalPoints[ep+2];
+				int fn=(hex_row*6+fi)*3; n_i[0]=m_hexaFaceNormals[fn]; n_i[1]=m_hexaFaceNormals[fn+1]; n_i[2]=m_hexaFaceNormals[fn+2];
+			} else if(dof_row == 5 && m_wedgeGeomReady && wedge_row >= 0) {
+				int ep=(wedge_row*5+fi)*3; obs[0]=m_wedgeEvalPoints[ep]; obs[1]=m_wedgeEvalPoints[ep+1]; obs[2]=m_wedgeEvalPoints[ep+2];
+				int fn=(wedge_row*5+fi)*3; n_i[0]=m_wedgeFaceNormals[fn]; n_i[1]=m_wedgeFaceNormals[fn+1]; n_i[2]=m_wedgeFaceNormals[fn+2];
+			} else continue;
+
+			int col_idx = (dof_col == 6) ? hex_col : wedge_col;
+			for(int fj = 0; fj < dof_col; fj++) {
+				double H[3];
+				fieldFromMSCSourceFace(obs, dof_col, col_idx, fj, H);
+				block_out[fi * dof_col + fj] = (n_i[0]*H[0]+n_i[1]*H[1]+n_i[2]*H[2]) * RadConst::INV_FOUR_PI;
+			}
+		}
+		return;
+	}
+
+	// --- Case 2: MMM row (3DOF) x MSC col (5/6DOF) ---
+	if(dof_row == 3 && dof_col >= 5)
+	{
+		if(!m_tetraGeomReady) return;
+		const double* obs = &m_tetraCenters[elem_row * 3];
+		int col_idx = (dof_col == 6) ? hex_col : wedge_col;
+		for(int fj = 0; fj < dof_col; fj++) {
+			double H[3];
+			fieldFromMSCSourceFace(obs, dof_col, col_idx, fj, H);
+			// N[alpha][fj] = H_alpha (directly, no n_i projection)
+			for(int a = 0; a < 3; a++)
+				block_out[a * dof_col + fj] = H[a] * RadConst::INV_FOUR_PI;
+		}
+		return;
+	}
+
+	// --- Case 3: MSC row (5/6DOF) x MMM col (3DOF) ---
+	if(dof_row >= 5 && dof_col == 3)
+	{
+		// For each target face i, for each unit M_beta:
+		// Compute sigma=n_f dot e_beta on each source tet face, field at obs, dot n_i
+		if(!m_tetraGeomReady) return;
+		const double* col_center = &m_tetraCenters[elem_col * 3];
+
+		for(int fi = 0; fi < dof_row; fi++) {
+			double obs[3], n_i[3];
+			if(dof_row == 6 && m_hexaGeomReady && hex_row >= 0) {
+				int ep=(hex_row*6+fi)*3; obs[0]=m_hexaEvalPoints[ep]; obs[1]=m_hexaEvalPoints[ep+1]; obs[2]=m_hexaEvalPoints[ep+2];
+				int fn=(hex_row*6+fi)*3; n_i[0]=m_hexaFaceNormals[fn]; n_i[1]=m_hexaFaceNormals[fn+1]; n_i[2]=m_hexaFaceNormals[fn+2];
+			} else if(dof_row == 5 && m_wedgeGeomReady && wedge_row >= 0) {
+				int ep=(wedge_row*5+fi)*3; obs[0]=m_wedgeEvalPoints[ep]; obs[1]=m_wedgeEvalPoints[ep+1]; obs[2]=m_wedgeEvalPoints[ep+2];
+				int fn=(wedge_row*5+fi)*3; n_i[0]=m_wedgeFaceNormals[fn]; n_i[1]=m_wedgeFaceNormals[fn+1]; n_i[2]=m_wedgeFaceNormals[fn+2];
+			} else continue;
+
+			// Compute H at obs for each unit M_beta from tet source
+			for(int beta = 0; beta < 3; beta++) {
+				double H_total[3] = {0,0,0};
+				double total_charge = 0;
+				for(int f = 0; f < 4; f++) {
+					int fvIdx = (elem_col*4+f)*3*3;
+					const double* V0=&m_tetraFaceVertices[fvIdx]; const double* V1=&m_tetraFaceVertices[fvIdx+3]; const double* V2=&m_tetraFaceVertices[fvIdx+6];
+					double sigma = m_tetraFaceNormals[(elem_col*4+f)*3+beta];
+					total_charge += sigma * m_tetraFaceAreas[elem_col*4+f];
+					if(fabs(sigma) > 1e-20) {
+						double H_f[3]; FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma, H_f);
+						H_total[0]+=H_f[0]; H_total[1]+=H_f[1]; H_total[2]+=H_f[2];
+					}
+				}
+				// Point charge
+				double r[3]={obs[0]-col_center[0],obs[1]-col_center[1],obs[2]-col_center[2]};
+				double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+				if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);
+					H_total[0]+=-total_charge*r[0]*id3; H_total[1]+=-total_charge*r[1]*id3; H_total[2]+=-total_charge*r[2]*id3;}
+
+				// IMA for MMM source: sign matrix S[beta]
+				if(m_imaEnabled) {
+					auto addMirTet = [&](int mirrorAxis, int combinedSign) {
+						double S_beta = (double)combinedSign;
+						if((mirrorAxis & IMA_X) && beta==0) S_beta = -S_beta;
+						if((mirrorAxis & IMA_Y) && beta==1) S_beta = -S_beta;
+						if((mirrorAxis & IMA_Z) && beta==2) S_beta = -S_beta;
+
+						double mc[3]={col_center[0],col_center[1],col_center[2]};
+						if(mirrorAxis&IMA_X)mc[0]=-mc[0]; if(mirrorAxis&IMA_Y)mc[1]=-mc[1]; if(mirrorAxis&IMA_Z)mc[2]=-mc[2];
+						int nm=0; if(mirrorAxis&IMA_X)nm++; if(mirrorAxis&IMA_Y)nm++; if(mirrorAxis&IMA_Z)nm++;
+						bool fw=(nm%2==1);
+						double mirH[3]={0,0,0}; double mirCharge=0;
+						for(int f=0;f<4;f++){
+							int fvIdx=(elem_col*4+f)*3*3;
+							double V0[3],V1[3],V2[3];
+							for(int k=0;k<3;k++){V0[k]=m_tetraFaceVertices[fvIdx+k];V1[k]=m_tetraFaceVertices[fvIdx+3+k];V2[k]=m_tetraFaceVertices[fvIdx+6+k];}
+							if(mirrorAxis&IMA_X){V0[0]=-V0[0];V1[0]=-V1[0];V2[0]=-V2[0];}
+							if(mirrorAxis&IMA_Y){V0[1]=-V0[1];V1[1]=-V1[1];V2[1]=-V2[1];}
+							if(mirrorAxis&IMA_Z){V0[2]=-V0[2];V1[2]=-V1[2];V2[2]=-V2[2];}
+							if(fw) for(int k=0;k<3;k++) std::swap(V1[k],V2[k]);
+							double e1[3]={V1[0]-V0[0],V1[1]-V0[1],V1[2]-V0[2]};
+							double e2[3]={V2[0]-V0[0],V2[1]-V0[1],V2[2]-V0[2]};
+							double n_f[3]={e1[1]*e2[2]-e1[2]*e2[1],e1[2]*e2[0]-e1[0]*e2[2],e1[0]*e2[1]-e1[1]*e2[0]};
+							double nL=sqrt(n_f[0]*n_f[0]+n_f[1]*n_f[1]+n_f[2]*n_f[2]);
+							double area=0.5*nL; if(nL>1e-20){n_f[0]/=nL;n_f[1]/=nL;n_f[2]/=nL;}
+							double sigma=n_f[beta]; mirCharge+=sigma*area;
+							if(fabs(sigma)>1e-20){double H_f[3];FieldFromChargedTriangleLocal(obs,V0,V1,V2,sigma,H_f);
+								mirH[0]+=H_f[0];mirH[1]+=H_f[1];mirH[2]+=H_f[2];}
+						}
+						double r[3]={obs[0]-mc[0],obs[1]-mc[1],obs[2]-mc[2]};
+						double d2=r[0]*r[0]+r[1]*r[1]+r[2]*r[2];
+						if(d2>1e-30){double id3=1.0/(sqrt(d2)*d2);
+							mirH[0]+=-mirCharge*r[0]*id3;mirH[1]+=-mirCharge*r[1]*id3;mirH[2]+=-mirCharge*r[2]*id3;}
+						for(int a=0;a<3;a++) H_total[a]+=S_beta*mirH[a];
+					};
+					bool hX=(m_imaSymmetry&IMA_X)!=0,hY=(m_imaSymmetry&IMA_Y)!=0,hZ=(m_imaSymmetry&IMA_Z)!=0;
+					if(hX) addMirTet(IMA_X,m_imaSignX); if(hY) addMirTet(IMA_Y,m_imaSignY); if(hZ) addMirTet(IMA_Z,m_imaSignZ);
+					if(hX&&hY) addMirTet(IMA_XY,m_imaSignX*m_imaSignY);
+					if(hX&&hZ) addMirTet(IMA_XZ,m_imaSignX*m_imaSignZ);
+					if(hY&&hZ) addMirTet(IMA_YZ,m_imaSignY*m_imaSignZ);
+					if(hX&&hY&&hZ) addMirTet(IMA_XYZ,m_imaSignX*m_imaSignY*m_imaSignZ);
+				}
+
+				block_out[fi * 3 + beta] = (n_i[0]*H_total[0]+n_i[1]*H_total[1]+n_i[2]*H_total[2]) * RadConst::INV_FOUR_PI;
+			}
+		}
+		return;
+	}
+
+	// --- Case 4: MMM row x MMM col (3x3) - delegate to Compute3x3BlockFast ---
+	if(dof_row == 3 && dof_col == 3) {
+		Compute3x3BlockFast(elem_row, elem_col, block_out);
+		return;
+	}
+}
 
 //-------------------------------------------------------------------------
 // SetIMASymmetry: Configure IMA symmetry mode

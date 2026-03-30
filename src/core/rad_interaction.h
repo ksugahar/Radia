@@ -501,6 +501,12 @@ public:
 	void Compute5x5BlockFast(int wedge_i, int wedge_j, double* K_mat) const;  // Fast 5x5 block
 
 	//-------------------------------------------------------------------------
+	// Unified mixed-DOF block computation (handles ALL element type pairs)
+	// Eliminates flat matrix dependency for mixed meshes in HACApK
+	//-------------------------------------------------------------------------
+	void ComputeMixedBlockFast(int elem_row, int dof_row, int elem_col, int dof_col, double* block_out) const;
+
+	//-------------------------------------------------------------------------
 	// IMA (Image) Symmetry Methods
 	// Reference: ELF_MAGIC IMA approach - matrix construction with image summation
 	//-------------------------------------------------------------------------
