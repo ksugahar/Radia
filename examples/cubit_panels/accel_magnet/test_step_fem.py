@@ -219,15 +219,14 @@ if __name__ == '__main__':
                         help='Yoke mesh size [m]')
     parser.add_argument('--kelvin-radius', type=float, default=None)
     parser.add_argument('--step', type=str, default=None,
-                        help='STEP file (default: yoke_dipole.step)')
+                        help='STEP file (default: yoke.step)')
     args = parser.parse_args()
 
     step_file = args.step or os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), 'yoke_dipole.step')
+        os.path.dirname(os.path.abspath(__file__)), 'yoke.step')
 
     if not os.path.exists(step_file):
         print(f"ERROR: STEP file not found: {step_file}")
-        print("Run export_yoke_step.py first.")
         sys.exit(1)
 
     from step_mesh_builder import build_mesh_from_step

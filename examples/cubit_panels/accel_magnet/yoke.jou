@@ -1,5 +1,5 @@
 # C-type dipole yoke - quarter model, HEX mesh
-# Geometry from ELF (CEFC 2020), verified in examples/c_type_electromagnet
+# Canonical geometry: ELF CEFC 2020 C-Type model (yoke.jou -> yoke.step)
 # Units: meters
 #
 # Coordinate system:
