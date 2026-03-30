@@ -710,6 +710,98 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 			FieldPtr->Phi += Phi_total;
 		}
+
+		// =====================================================================
+		// IMA (Image Method) Field Contributions for tetrahedral elements
+		// Same pattern as B_comp_hexahedron_MSC IMA permanent magnet path
+		// Magnetization is a pseudo-vector: mirror flips component along axis
+		// =====================================================================
+		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
+		{
+			int imaSym = RadIMAFieldContext::GetSymmetry();
+			int signX = RadIMAFieldContext::GetSignX();
+			int signY = RadIMAFieldContext::GetSignY();
+			int signZ = RadIMAFieldContext::GetSignZ();
+
+			// Helper lambda to compute field from mirrored tetrahedral geometry
+			auto computeMirroredField = [&](int mirrorAxis, int sign) -> TVector3d {
+				TVector3d H_mirror(0., 0., 0.);
+
+				// Create mirrored face vertices
+				std::array<std::array<TVector3d, 3>, 4> mirrorVerts;
+				for(int i = 0; i < nFaces; i++)
+				{
+					for(int j = 0; j < 3; j++)
+					{
+						mirrorVerts[i][j] = faceVertices[i][j];
+						if(mirrorAxis & radTInteraction::IMA_X) mirrorVerts[i][j].x = -mirrorVerts[i][j].x;
+						if(mirrorAxis & radTInteraction::IMA_Y) mirrorVerts[i][j].y = -mirrorVerts[i][j].y;
+						if(mirrorAxis & radTInteraction::IMA_Z) mirrorVerts[i][j].z = -mirrorVerts[i][j].z;
+					}
+				}
+
+				// Count mirror axes: odd number requires winding reversal
+				int numAxes = 0;
+				if(mirrorAxis & radTInteraction::IMA_X) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Y) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Z) numAxes++;
+				bool reverseWinding = (numAxes % 2 == 1);
+
+				// Mirrored center point
+				TVector3d mirrorCenter = CentrPoint;
+				if(mirrorAxis & radTInteraction::IMA_X) mirrorCenter.x = -mirrorCenter.x;
+				if(mirrorAxis & radTInteraction::IMA_Y) mirrorCenter.y = -mirrorCenter.y;
+				if(mirrorAxis & radTInteraction::IMA_Z) mirrorCenter.z = -mirrorCenter.z;
+
+				// Mirror magnetization: pseudo-vector flip + BC sign
+				TVector3d mirrorMagn = Magn;
+				if(mirrorAxis & radTInteraction::IMA_X) mirrorMagn.x = -mirrorMagn.x;
+				if(mirrorAxis & radTInteraction::IMA_Y) mirrorMagn.y = -mirrorMagn.y;
+				if(mirrorAxis & radTInteraction::IMA_Z) mirrorMagn.z = -mirrorMagn.z;
+				mirrorMagn = mirrorMagn * (double)sign;
+
+				// Compute field from mirrored triangular faces
+				for(int i = 0; i < nFaces; i++)
+				{
+					const TVector3d& MV0 = mirrorVerts[i][0];
+					const TVector3d& MV1 = mirrorVerts[i][1];
+					const TVector3d& MV2 = mirrorVerts[i][2];
+
+					if(reverseWinding)
+						H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV1, mirrorMagn, obsPoint, mirrorCenter);
+					else
+						H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV1, MV2, mirrorMagn, obsPoint, mirrorCenter);
+				}
+
+				return H_mirror;
+			};
+
+			TVector3d H_ima(0., 0., 0.);
+
+			// Single axis contributions
+			if(imaSym & radTInteraction::IMA_X)
+				H_ima += computeMirroredField(radTInteraction::IMA_X, signX);
+			if(imaSym & radTInteraction::IMA_Y)
+				H_ima += computeMirroredField(radTInteraction::IMA_Y, signY);
+			if(imaSym & radTInteraction::IMA_Z)
+				H_ima += computeMirroredField(radTInteraction::IMA_Z, signZ);
+
+			// Dual axis contributions
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y))
+				H_ima += computeMirroredField(radTInteraction::IMA_XY, signX * signY);
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XZ, signX * signZ);
+			if((imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_YZ, signY * signZ);
+
+			// Triple axis contribution
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XYZ, signX * signY * signZ);
+
+			// Add IMA contributions
+			if(FldKey.H_) FieldPtr->H += H_ima;
+			if(FldKey.B_) FieldPtr->B += H_ima;
+		}
 	}
 }
 
@@ -911,6 +1003,119 @@ void radTPolyhedron::B_comp_wedge_analytical(radTField* FieldPtr)
 			{
 				FieldPtr->M += Magn;
 			}
+		}
+
+		// =====================================================================
+		// IMA (Image Method) Field Contributions for wedge elements (analytical 3DOF)
+		// Same pattern as tetrahedral IMA, but handles both tri and quad faces
+		// =====================================================================
+		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
+		{
+			int imaSym = RadIMAFieldContext::GetSymmetry();
+			int signX = RadIMAFieldContext::GetSignX();
+			int signY = RadIMAFieldContext::GetSignY();
+			int signZ = RadIMAFieldContext::GetSignZ();
+
+			auto computeMirroredField = [&](int mirrorAxis, int sign) -> TVector3d {
+				TVector3d H_mirror(0., 0., 0.);
+
+				// Create mirrored face vertices
+				std::array<std::array<TVector3d, 4>, 8> mirrorVerts;
+				std::array<int, 8> mirrorNumVerts;
+				for(int i = 0; i < nFaces; i++)
+				{
+					mirrorNumVerts[i] = faceNumVerts[i];
+					int nv = faceNumVerts[i];
+					for(int j = 0; j < nv; j++)
+					{
+						mirrorVerts[i][j] = faceVertices[i][j];
+						if(mirrorAxis & radTInteraction::IMA_X) mirrorVerts[i][j].x = -mirrorVerts[i][j].x;
+						if(mirrorAxis & radTInteraction::IMA_Y) mirrorVerts[i][j].y = -mirrorVerts[i][j].y;
+						if(mirrorAxis & radTInteraction::IMA_Z) mirrorVerts[i][j].z = -mirrorVerts[i][j].z;
+					}
+				}
+
+				// Count mirror axes: odd number requires winding reversal
+				int numAxes = 0;
+				if(mirrorAxis & radTInteraction::IMA_X) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Y) numAxes++;
+				if(mirrorAxis & radTInteraction::IMA_Z) numAxes++;
+				bool reverseWinding = (numAxes % 2 == 1);
+
+				// Mirrored center point
+				TVector3d mirrorCenter = CentrPoint;
+				if(mirrorAxis & radTInteraction::IMA_X) mirrorCenter.x = -mirrorCenter.x;
+				if(mirrorAxis & radTInteraction::IMA_Y) mirrorCenter.y = -mirrorCenter.y;
+				if(mirrorAxis & radTInteraction::IMA_Z) mirrorCenter.z = -mirrorCenter.z;
+
+				// Mirror magnetization: pseudo-vector flip + BC sign
+				TVector3d mirrorMagn = Magn;
+				if(mirrorAxis & radTInteraction::IMA_X) mirrorMagn.x = -mirrorMagn.x;
+				if(mirrorAxis & radTInteraction::IMA_Y) mirrorMagn.y = -mirrorMagn.y;
+				if(mirrorAxis & radTInteraction::IMA_Z) mirrorMagn.z = -mirrorMagn.z;
+				mirrorMagn = mirrorMagn * (double)sign;
+
+				// Compute field from mirrored faces
+				for(int i = 0; i < nFaces; i++)
+				{
+					int nv = mirrorNumVerts[i];
+					if(nv == 3)
+					{
+						const TVector3d& MV0 = mirrorVerts[i][0];
+						const TVector3d& MV1 = mirrorVerts[i][1];
+						const TVector3d& MV2 = mirrorVerts[i][2];
+						if(reverseWinding)
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV1, mirrorMagn, obsPoint, mirrorCenter);
+						else
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV1, MV2, mirrorMagn, obsPoint, mirrorCenter);
+					}
+					else if(nv == 4)
+					{
+						const TVector3d& MV0 = mirrorVerts[i][0];
+						const TVector3d& MV1 = mirrorVerts[i][1];
+						const TVector3d& MV2 = mirrorVerts[i][2];
+						const TVector3d& MV3 = mirrorVerts[i][3];
+						if(reverseWinding)
+						{
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV3, MV2, mirrorMagn, obsPoint, mirrorCenter);
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV1, mirrorMagn, obsPoint, mirrorCenter);
+						}
+						else
+						{
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV1, MV2, mirrorMagn, obsPoint, mirrorCenter);
+							H_mirror += RadFieldFromTriangleFaceGlobal(MV0, MV2, MV3, mirrorMagn, obsPoint, mirrorCenter);
+						}
+					}
+				}
+
+				return H_mirror;
+			};
+
+			TVector3d H_ima(0., 0., 0.);
+
+			// Single axis contributions
+			if(imaSym & radTInteraction::IMA_X)
+				H_ima += computeMirroredField(radTInteraction::IMA_X, signX);
+			if(imaSym & radTInteraction::IMA_Y)
+				H_ima += computeMirroredField(radTInteraction::IMA_Y, signY);
+			if(imaSym & radTInteraction::IMA_Z)
+				H_ima += computeMirroredField(radTInteraction::IMA_Z, signZ);
+
+			// Dual axis contributions
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y))
+				H_ima += computeMirroredField(radTInteraction::IMA_XY, signX * signY);
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XZ, signX * signZ);
+			if((imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_YZ, signY * signZ);
+
+			// Triple axis contribution
+			if((imaSym & radTInteraction::IMA_X) && (imaSym & radTInteraction::IMA_Y) && (imaSym & radTInteraction::IMA_Z))
+				H_ima += computeMirroredField(radTInteraction::IMA_XYZ, signX * signY * signZ);
+
+			// Add IMA contributions
+			if(FldKey.H_) FieldPtr->H += H_ima;
+			if(FldKey.B_) FieldPtr->B += H_ima;
 		}
 	}
 }
