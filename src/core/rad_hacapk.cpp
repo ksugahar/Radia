@@ -547,10 +547,12 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
         PrecomputeFlatInteractMatrix();
     }
-    // For mixed DOF mode (including 5-DOF wedges): precompute flat interaction matrix
-    // This provides O(1) element access for H-matrix ACA+ fill via GetGenericElement()
-    if (m_is_mixed_dof && m_interaction->m_flatInteractMatrix.empty()) {
-        m_interaction->SetupInteractMatrix_VariableDOF();
+    // For mixed DOF mode: precompute ALL element type geometries
+    // ComputeMixedBlockFast needs geometry for each element type present
+    if (m_is_mixed_dof && m_interaction) {
+        m_interaction->PrecomputeTetraGeometry();
+        m_interaction->PrecomputeWedgeGeometry();
+        m_interaction->PrecomputeHexaGeometry();
     }
 
     // Initialize inverse susceptibility with ELF-style initial chi from BH curve point 2
@@ -959,9 +961,9 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
         return GetCached5x5Element(elem_i, elem_j, local_i, local_j);
     }
 
-    // Generic path for variable DOF (mixed wedge+hex, etc.)
-    // Uses pre-computed flat interaction matrix for O(1) access
-    return GetGenericElement(elem_i, elem_j, local_i, local_j);
+    // Mixed DOF: use unified ComputeMixedBlockFast kernel (IMA-aware)
+    // This eliminates the flat matrix dependency for mixed meshes
+    return GetCachedMixedElement(elem_i, elem_j, dof_elem_i, dof_elem_j, local_i, local_j);
 }
 
 //=========================================================================
@@ -1132,6 +1134,76 @@ double RadHACApKManager::GetCached5x5Element(int elem_i, int elem_j, int face_i,
     std::memcpy(tl_cache_K_mat[hash_idx], K_mat, 25 * sizeof(double));
 
     return K_mat[face_i * 5 + face_j];
+}
+
+//=========================================================================
+// GetCachedMixedElement: On-demand mixed-DOF block with hash cache
+// Delegates to radTInteraction::ComputeMixedBlockFast (IMA-aware)
+// Handles all cross-DOF pairs: 3x5, 3x6, 5x3, 5x6, 6x3, 6x5
+//=========================================================================
+
+static constexpr int TL_HASH_SIZE_MIXED = 256;
+static constexpr int TL_HASH_MASK_MIXED = TL_HASH_SIZE_MIXED - 1;
+static constexpr int MAX_BLOCK_SIZE = 36;  // max DOF product: 6x6
+
+double RadHACApKManager::GetCachedMixedElement(int elem_i, int elem_j,
+	int dof_i, int dof_j, int local_i, int local_j) const
+{
+	static thread_local uint64_t tl_cached_generation = 0;
+	static thread_local int tl_single_elem_i = -1;
+	static thread_local int tl_single_elem_j = -1;
+	static thread_local int tl_single_dof_i = 0;
+	static thread_local int tl_single_dof_j = 0;
+	static thread_local double tl_single_block[MAX_BLOCK_SIZE];
+	static thread_local int tl_cache_elem_i[TL_HASH_SIZE_MIXED];
+	static thread_local int tl_cache_elem_j[TL_HASH_SIZE_MIXED];
+	static thread_local int tl_cache_dof_i[TL_HASH_SIZE_MIXED];
+	static thread_local int tl_cache_dof_j[TL_HASH_SIZE_MIXED];
+	static thread_local double tl_cache_block[TL_HASH_SIZE_MIXED][MAX_BLOCK_SIZE];
+	static thread_local bool tl_initialized = false;
+
+	uint64_t current_gen = RadHACApKCallback::GetGeneration();
+	if (tl_cached_generation != current_gen) {
+		tl_single_elem_i = -1; tl_single_elem_j = -1;
+		for (int i = 0; i < TL_HASH_SIZE_MIXED; i++) { tl_cache_elem_i[i] = -1; tl_cache_elem_j[i] = -1; }
+		tl_cached_generation = current_gen; tl_initialized = true;
+	}
+	if (!tl_initialized) {
+		for (int i = 0; i < TL_HASH_SIZE_MIXED; i++) { tl_cache_elem_i[i] = -1; tl_cache_elem_j[i] = -1; }
+		tl_initialized = true;
+	}
+
+	if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+		return tl_single_block[local_i * tl_single_dof_j + local_j];
+	}
+
+	int hash_idx = ((elem_i * 73856093) ^ (elem_j * 19349663)) & TL_HASH_MASK_MIXED;
+	if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+		int bs = tl_cache_dof_i[hash_idx] * tl_cache_dof_j[hash_idx];
+		std::memcpy(tl_single_block, tl_cache_block[hash_idx], bs * sizeof(double));
+		tl_single_elem_i = elem_i; tl_single_elem_j = elem_j;
+		tl_single_dof_i = tl_cache_dof_i[hash_idx]; tl_single_dof_j = tl_cache_dof_j[hash_idx];
+		return tl_single_block[local_i * tl_single_dof_j + local_j];
+	}
+
+	// Cache miss: compute via unified kernel
+	double block[MAX_BLOCK_SIZE];
+	if (m_interaction) {
+		m_interaction->ComputeMixedBlockFast(elem_i, dof_i, elem_j, dof_j, block);
+	} else {
+		std::memset(block, 0, MAX_BLOCK_SIZE * sizeof(double));
+	}
+
+	int bs = dof_i * dof_j;
+	std::memcpy(tl_single_block, block, bs * sizeof(double));
+	tl_single_elem_i = elem_i; tl_single_elem_j = elem_j;
+	tl_single_dof_i = dof_i; tl_single_dof_j = dof_j;
+
+	tl_cache_elem_i[hash_idx] = elem_i; tl_cache_elem_j[hash_idx] = elem_j;
+	tl_cache_dof_i[hash_idx] = dof_i; tl_cache_dof_j[hash_idx] = dof_j;
+	std::memcpy(tl_cache_block[hash_idx], block, bs * sizeof(double));
+
+	return block[local_i * dof_j + local_j];
 }
 
 //=========================================================================

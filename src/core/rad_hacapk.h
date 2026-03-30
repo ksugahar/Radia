@@ -290,7 +290,10 @@ private:
     // 5DOF wedge methods (delegates to radTInteraction::Compute5x5BlockFast)
     double GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const;
 
-    // Mixed element methods (3DOF tetra + 6DOF hexa)
+    // Unified mixed-DOF cache (all cross-DOF pairs via ComputeMixedBlockFast)
+    double GetCachedMixedElement(int elem_i, int elem_j, int dof_i, int dof_j, int local_i, int local_j) const;
+
+    // Mixed element methods (3DOF tetra + 6DOF hexa) - legacy, kept for compatibility
     double GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const;
     double GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const;
     void Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const;
