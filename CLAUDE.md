@@ -787,6 +787,22 @@ H-matrix stores system matrix A = -N + diag(1/chi)
 
 **Do NOT** add sign flips in `GetCached*Element` or `GetCachedMixedElement`. These must return +N.
 
+### 1/(4pi) Factor Convention
+
+**POLICY**: Two field computation functions exist with DIFFERENT 1/(4pi) conventions. Do NOT mix them.
+
+| Function | Location | 1/(4pi) | Use in |
+|----------|----------|---------|--------|
+| `RadFieldFromTriangleFaceWithBasis` | `rad_poly_analytical.cpp` | **Included** (in weight W) | `RadHACApKManager::Compute3x3BlockFast` |
+| `FieldFromChargedTriangleLocal` | `rad_interaction.cpp` | **NOT included** | `radTInteraction::Compute3x3BlockFast`, `ComputeMixedBlockFast` |
+
+- Functions using `FieldFromChargedTriangleLocal` MUST multiply by `RadConst::INV_FOUR_PI` at output
+- Functions using `RadFieldFromTriangleFaceWithBasis` must NOT multiply again
+- Both produce the same final result (+N with 1/(4pi)), but the intermediate values differ
+- `B_comp()` (PreRelax mode) includes 1/(4pi) internally — do NOT scale its output
+
+**Geometry indexing**: Tet, hex, and wedge all use **type-specific indices** (via `m_tetraElemIndices`, `m_hexaElemIndices`, `m_wedgeElemIndices`). Convert global element indices using `m_globalToTetraIdx` (O(1) lookup) or linear search for hex/wedge.
+
 ### Under-Relaxation for Nonlinear Problems
 
 ```python
