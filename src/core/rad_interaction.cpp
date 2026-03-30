@@ -1094,45 +1094,25 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				if(dof_row == 3 && dof_col == 3)
 				{
 					// 3x3 N-matrix block: H-field at row center from col magnetization
-					// Must compute N[:, k] = H-field from unit magnetization M_k
+					// PreRelax mode computes ALL 3 unit responses in ONE call:
+					//   Field.B = dH/dMx, Field.H = dH/dMy, Field.A = dH/dMz
 					TVector3d ObsPoiVect = elem_row->ReturnCentrPoint();
 
-					// Save original magnetization
-					radTPolyhedron* poly_col_3dof = dynamic_cast<radTPolyhedron*>(elem_col);
-					TVector3d orig_magn(0., 0., 0.);
-					if(poly_col_3dof) {
-						orig_magn = poly_col_3dof->Magn;
-					}
+					radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+					Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+					elem_col->B_comp(&Field);
 
-					// Compute N-matrix columns by setting unit magnetizations
-					for(int m_dir = 0; m_dir < 3; m_dir++)
-					{
-						// Set unit magnetization in direction m_dir
-						TVector3d unit_M(0., 0., 0.);
-						if(m_dir == 0) unit_M.x = 1.0;
-						else if(m_dir == 1) unit_M.y = 1.0;
-						else unit_M.z = 1.0;
-
-						if(poly_col_3dof) {
-							poly_col_3dof->Magn = unit_M;
-						}
-
-						// Compute H field at observation point
-						radTField Field(FieldKeyInteract, CompCriterium, ObsPoiVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-						elem_col->B_comp(&Field);
-
-						// Store H-field as column m_dir of N-matrix (row-major storage)
-						// N[i][m_dir] = H_i from unit M in direction m_dir
-						block[(size_t)0 * m_totalDOF + m_dir] = Field.H.x;
-						block[(size_t)1 * m_totalDOF + m_dir] = Field.H.y;
-						block[(size_t)2 * m_totalDOF + m_dir] = Field.H.z;
-					}
-
-					// Restore original magnetization
-					if(poly_col_3dof) {
-						poly_col_3dof->Magn = orig_magn;
-					}
+					// Store N-matrix (row-major): N[row_comp][col_comp]
+					// Field.B = response to Mx, Field.H = response to My, Field.A = response to Mz
+					block[(size_t)0 * m_totalDOF + 0] = Field.B.x;  // dHx/dMx
+					block[(size_t)0 * m_totalDOF + 1] = Field.H.x;  // dHx/dMy
+					block[(size_t)0 * m_totalDOF + 2] = Field.A.x;  // dHx/dMz
+					block[(size_t)1 * m_totalDOF + 0] = Field.B.y;  // dHy/dMx
+					block[(size_t)1 * m_totalDOF + 1] = Field.H.y;  // dHy/dMy
+					block[(size_t)1 * m_totalDOF + 2] = Field.A.y;  // dHy/dMz
+					block[(size_t)2 * m_totalDOF + 0] = Field.B.z;  // dHz/dMx
+					block[(size_t)2 * m_totalDOF + 1] = Field.H.z;  // dHz/dMy
+					block[(size_t)2 * m_totalDOF + 2] = Field.A.z;  // dHz/dMz
 				}
 				else if(dof_row == 6 && dof_col == 6 && poly_row && poly_col)
 				{
@@ -1196,15 +1176,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				{
 					// 6x3 block: MSC hexahedron from 3DOF polyhedron (tetra/wedge)
 					// K(face_i, Mj) = normal_i · H_j where H_j is H-field from unit M in direction j
+					// PreRelax mode computes ALL 3 unit responses in ONE call:
+					//   Field.B = dH/dMx, Field.H = dH/dMy, Field.A = dH/dMz
 
-					// Save original magnetization
-					radTPolyhedron* poly_col_3dof = dynamic_cast<radTPolyhedron*>(elem_col);
-					TVector3d orig_magn(0., 0., 0.);
-					if(poly_col_3dof) {
-						orig_magn = poly_col_3dof->Magn;
-					}
-
-					for(int face_i = 0; face_i < 6; face_i++)
+					for(int face_i = 0; face_i < dof_row; face_i++)
 					{
 						// Yano-Sugahara evaluation point
 						TVector3d EvalPt;
@@ -1214,38 +1189,21 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 						TVector3d& n = poly_row->FaceNormal[face_i];
 
-						// Compute K(face_i, Mj) for each unit magnetization direction
-						for(int m_dir = 0; m_dir < 3; m_dir++)
-						{
-							// Set unit magnetization in direction m_dir
-							TVector3d unit_M(0., 0., 0.);
-							if(m_dir == 0) unit_M.x = 1.0;
-							else if(m_dir == 1) unit_M.y = 1.0;
-							else unit_M.z = 1.0;
+						radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
+						Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
+						elem_col->B_comp(&Field);
 
-							if(poly_col_3dof) {
-								poly_col_3dof->Magn = unit_M;
-							}
+						// K(face_i, m_dir) = normal · H_response
+						// Field.B = response to Mx, Field.H = response to My, Field.A = response to Mz
+						double K_Mx = n.x * Field.B.x + n.y * Field.B.y + n.z * Field.B.z;
+						double K_My = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
+						double K_Mz = n.x * Field.A.x + n.y * Field.A.y + n.z * Field.A.z;
 
-							radTField Field(FieldKeyInteract, CompCriterium, EvalPt, ZeroVect, ZeroVect, ZeroVect, ZeroVect, 0.);
-							Field.AmOfIntrctElemWithSym = AmOfElemWithSym;
-							elem_col->B_comp(&Field);
-
-							// K(face_i, m_dir) = normal · H
-							// NOTE: Field.H from B_comp_wedge_analytical already includes 1/(4pi) factor
-							// (from RadFieldFromTriangleFaceGlobal -> RadAnalyticalFieldFromPolygonCharge)
-							// Do NOT multiply by INV_FOUR_PI again - this was a bug causing wedge
-							// contribution to hex to be too weak by factor of 1/(4pi) ≈ 0.08
-							double K_val = n.x * Field.H.x + n.y * Field.H.y + n.z * Field.H.z;
-
-							// ROW-MAJOR: A[target_face_i][source_m_dir]
-							block[(size_t)face_i * m_totalDOF + m_dir] = K_val;  // No INV_FOUR_PI - already included in H
-						}
-					}
-
-					// Restore original magnetization
-					if(poly_col_3dof) {
-						poly_col_3dof->Magn = orig_magn;
+						// ROW-MAJOR: A[target_face_i][source_m_dir]
+						// No INV_FOUR_PI - already included in field computation
+						block[(size_t)face_i * m_totalDOF + 0] = K_Mx;
+						block[(size_t)face_i * m_totalDOF + 1] = K_My;
+						block[(size_t)face_i * m_totalDOF + 2] = K_Mz;
 					}
 				}
 				else if(dof_row >= 5 && dof_col >= 5 && poly_row && poly_col)
