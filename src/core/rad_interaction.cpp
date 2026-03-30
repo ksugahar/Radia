@@ -2635,32 +2635,36 @@ void radTInteraction::PrecomputeTetraGeometry()
 {
 	if(m_tetraGeomReady || AmOfMainElem == 0) return;
 
-	// Check if all elements are 3DOF tetrahedra
-	bool allTetra = true;
+	// Count tetrahedra and build index map (like PrecomputeHexaGeometry)
+	// Works for both pure-tet and mixed meshes
+	int nTet = 0;
+	m_tetraElemIndices.clear();
+	m_globalToTetraIdx.assign(AmOfMainElem, -1);
 	for(int e = 0; e < AmOfMainElem; e++)
 	{
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[e]);
-		if(!poly || poly->AmOfFaces != 4)
+		if(m_elemDOF[e] == 3)
 		{
-			allTetra = false;
-			break;
+			m_globalToTetraIdx[e] = nTet;
+			m_tetraElemIndices.push_back(e);
+			nTet++;
 		}
 	}
-	if(!allTetra) return;
+	if(nTet == 0) return;
 
-	// Allocate arrays
-	m_tetraCenters.resize(AmOfMainElem * 3);
-	m_tetraFaceVertices.resize(AmOfMainElem * 4 * 3 * 3);
-	m_tetraFaceNormals.resize(AmOfMainElem * 4 * 3);
-	m_tetraFaceAreas.resize(AmOfMainElem * 4);
+	// Allocate arrays indexed by type-specific tet index (not global element index)
+	m_tetraCenters.resize(nTet * 3);
+	m_tetraFaceVertices.resize(nTet * 4 * 3 * 3);
+	m_tetraFaceNormals.resize(nTet * 4 * 3);
+	m_tetraFaceAreas.resize(nTet * 4);
 
-	for(int e = 0; e < AmOfMainElem; e++)
+	for(int t = 0; t < nTet; t++)
 	{
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[e]);
-		if(!poly) continue;
+		int elemIdx = m_tetraElemIndices[t];
+		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
+		if(!poly || poly->AmOfFaces != 4) continue;
 
 		// Store element center
-		int cIdx = e * 3;
+		int cIdx = t * 3;
 		m_tetraCenters[cIdx + 0] = poly->CentrPoint.x;
 		m_tetraCenters[cIdx + 1] = poly->CentrPoint.y;
 		m_tetraCenters[cIdx + 2] = poly->CentrPoint.z;
@@ -2676,7 +2680,7 @@ void radTInteraction::PrecomputeTetraGeometry()
 			const radTVect2dVect& verts2d = pgn->EdgePointsVector;
 			if(verts2d.size() < 3) continue;
 
-			int fvIdx = (e * 4 + f) * 3 * 3;
+			int fvIdx = (t * 4 + f) * 3 * 3;
 			TVector3d V[3];
 			for(int v = 0; v < 3; v++)
 			{
@@ -2693,7 +2697,7 @@ void radTInteraction::PrecomputeTetraGeometry()
 			double nLen = sqrt(n.x*n.x + n.y*n.y + n.z*n.z);
 
 			// Face area = 0.5 * |cross product|
-			m_tetraFaceAreas[e * 4 + f] = 0.5 * nLen;
+			m_tetraFaceAreas[t * 4 + f] = 0.5 * nLen;
 
 			// Normalize and check orientation (outward from centroid)
 			if(nLen > 1e-20)
@@ -2716,7 +2720,7 @@ void radTInteraction::PrecomputeTetraGeometry()
 			}
 
 			// Store normalized outward normal
-			int fnIdx = (e * 4 + f) * 3;
+			int fnIdx = (t * 4 + f) * 3;
 			m_tetraFaceNormals[fnIdx + 0] = n.x;
 			m_tetraFaceNormals[fnIdx + 1] = n.y;
 			m_tetraFaceNormals[fnIdx + 2] = n.z;
@@ -2872,11 +2876,18 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 		return;
 	}
 
+	// Convert global element indices to type-specific tet indices
+	// m_globalToTetraIdx provides O(1) lookup (built in PrecomputeTetraGeometry)
+	if(m_globalToTetraIdx.empty()) return;
+	int tet_i = m_globalToTetraIdx[elem_i];
+	int tet_j = m_globalToTetraIdx[elem_j];
+	if(tet_i < 0 || tet_j < 0) return;
+
 	// Observation point: center of element i
-	const double* obs = &m_tetraCenters[elem_i * 3];
+	const double* obs = &m_tetraCenters[tet_i * 3];
 
 	// Column element center (for point charge cancellation)
-	const double* col_center = &m_tetraCenters[elem_j * 3];
+	const double* col_center = &m_tetraCenters[tet_j * 3];
 
 	// Unit magnetization vectors
 	const double M_x[3] = {1.0, 0.0, 0.0};
@@ -2896,7 +2907,7 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 	// Process each of the 4 triangular faces
 	for(int f = 0; f < 4; f++)
 	{
-		int fnIdx = (elem_j * 4 + f) * 3;
+		int fnIdx = (tet_j * 4 + f) * 3;
 		const double* n_f = &m_tetraFaceNormals[fnIdx];
 
 		// Surface charge density sigma = M dot n for each unit M
@@ -2905,13 +2916,13 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 		double sigma_Mz = M_z[0]*n_f[0] + M_z[1]*n_f[1] + M_z[2]*n_f[2];
 
 		// Accumulate total charge for each M direction
-		double area = m_tetraFaceAreas[elem_j * 4 + f];
+		double area = m_tetraFaceAreas[tet_j * 4 + f];
 		total_charge_Mx += sigma_Mx * area;
 		total_charge_My += sigma_My * area;
 		total_charge_Mz += sigma_Mz * area;
 
 		// Get face vertices
-		int fvIdx = (elem_j * 4 + f) * 3 * 3;
+		int fvIdx = (tet_j * 4 + f) * 3 * 3;
 		const double* V0 = &m_tetraFaceVertices[fvIdx + 0];
 		const double* V1 = &m_tetraFaceVertices[fvIdx + 3];
 		const double* V2 = &m_tetraFaceVertices[fvIdx + 6];
@@ -3002,7 +3013,7 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 			for(int f = 0; f < 4; f++)
 			{
 				// Copy and mirror face vertices
-				int fvIdx = (elem_j * 4 + f) * 3 * 3;
+				int fvIdx = (tet_j * 4 + f) * 3 * 3;
 				double V0[3], V1[3], V2[3];
 				for(int k = 0; k < 3; k++)
 				{
@@ -3900,14 +3911,21 @@ void radTInteraction::ComputeMixedBlockFast(
 			if(m_wedgeElemIndices[w] == globalIdx) return w;
 		return -1;
 	};
-	// Tet uses global index directly (PrecomputeTetraGeometry indexes by AmOfMainElem)
+	// Tet: O(1) reverse lookup via m_globalToTetraIdx (built in PrecomputeTetraGeometry)
+	auto globalToTetIdx = [&](int globalIdx) -> int {
+		if(globalIdx < 0 || globalIdx >= (int)m_globalToTetraIdx.size()) return -1;
+		return m_globalToTetraIdx[globalIdx];
+	};
 
 	// Get type-specific indices
 	int hex_row = -1, wedge_row = -1, hex_col = -1, wedge_col = -1;
+	int tet_row = -1, tet_col = -1;
 	if(dof_row == 6) hex_row = globalToHexIdx(elem_row);
 	else if(dof_row == 5) wedge_row = globalToWedgeIdx(elem_row);
+	else if(dof_row == 3) tet_row = globalToTetIdx(elem_row);
 	if(dof_col == 6) hex_col = globalToHexIdx(elem_col);
 	else if(dof_col == 5) wedge_col = globalToWedgeIdx(elem_col);
+	else if(dof_col == 3) tet_col = globalToTetIdx(elem_col);
 
 	// Helper: compute H field at obs from MSC source face (scalar sigma = 1)
 	// Returns H without 4pi factor. Includes IMA mirror contributions.
@@ -4019,8 +4037,8 @@ void radTInteraction::ComputeMixedBlockFast(
 	// --- Case 2: MMM row (3DOF) x MSC col (5/6DOF) ---
 	if(dof_row == 3 && dof_col >= 5)
 	{
-		if(!m_tetraGeomReady) return;
-		const double* obs = &m_tetraCenters[elem_row * 3];
+		if(!m_tetraGeomReady || tet_row < 0) return;
+		const double* obs = &m_tetraCenters[tet_row * 3];
 		int col_idx = (dof_col == 6) ? hex_col : wedge_col;
 		for(int fj = 0; fj < dof_col; fj++) {
 			double H[3];
@@ -4037,8 +4055,8 @@ void radTInteraction::ComputeMixedBlockFast(
 	{
 		// For each target face i, for each unit M_beta:
 		// Compute sigma=n_f dot e_beta on each source tet face, field at obs, dot n_i
-		if(!m_tetraGeomReady) return;
-		const double* col_center = &m_tetraCenters[elem_col * 3];
+		if(!m_tetraGeomReady || tet_col < 0) return;
+		const double* col_center = &m_tetraCenters[tet_col * 3];
 
 		for(int fi = 0; fi < dof_row; fi++) {
 			double obs[3], n_i[3];
@@ -4055,10 +4073,10 @@ void radTInteraction::ComputeMixedBlockFast(
 				double H_total[3] = {0,0,0};
 				double total_charge = 0;
 				for(int f = 0; f < 4; f++) {
-					int fvIdx = (elem_col*4+f)*3*3;
+					int fvIdx = (tet_col*4+f)*3*3;
 					const double* V0=&m_tetraFaceVertices[fvIdx]; const double* V1=&m_tetraFaceVertices[fvIdx+3]; const double* V2=&m_tetraFaceVertices[fvIdx+6];
-					double sigma = m_tetraFaceNormals[(elem_col*4+f)*3+beta];
-					total_charge += sigma * m_tetraFaceAreas[elem_col*4+f];
+					double sigma = m_tetraFaceNormals[(tet_col*4+f)*3+beta];
+					total_charge += sigma * m_tetraFaceAreas[tet_col*4+f];
 					if(fabs(sigma) > 1e-20) {
 						double H_f[3]; FieldFromChargedTriangleLocal(obs, V0, V1, V2, sigma, H_f);
 						H_total[0]+=H_f[0]; H_total[1]+=H_f[1]; H_total[2]+=H_f[2];
@@ -4084,7 +4102,7 @@ void radTInteraction::ComputeMixedBlockFast(
 						bool fw=(nm%2==1);
 						double mirH[3]={0,0,0}; double mirCharge=0;
 						for(int f=0;f<4;f++){
-							int fvIdx=(elem_col*4+f)*3*3;
+							int fvIdx=(tet_col*4+f)*3*3;
 							double V0[3],V1[3],V2[3];
 							for(int k=0;k<3;k++){V0[k]=m_tetraFaceVertices[fvIdx+k];V1[k]=m_tetraFaceVertices[fvIdx+3+k];V2[k]=m_tetraFaceVertices[fvIdx+6+k];}
 							if(mirrorAxis&IMA_X){V0[0]=-V0[0];V1[0]=-V1[0];V2[0]=-V2[0];}
@@ -4751,12 +4769,12 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		if(m_elemDOF[i] != 3) allTet = false;
 	}
 
-	// Pre-compute geometry for fast path
-	if(!m_hexaGeomReady && allHex)
+	// Pre-compute geometry for fast path (all element types, including mixed meshes)
+	if(!m_hexaGeomReady)
 		PrecomputeHexaGeometry();
-	if(!m_wedgeGeomReady && allWedge)
+	if(!m_wedgeGeomReady)
 		PrecomputeWedgeGeometry();
-	if(!m_tetraGeomReady && allTet)
+	if(!m_tetraGeomReady)
 		PrecomputeTetraGeometry();
 
 	// Compute IMA DOF count from actual element DOFs
@@ -4842,11 +4860,12 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix only for pure element types
-	// Pure hex/wedge/tet: kernel functions handle IMA inline
-	// Mixed DOF: HACApK reads from flat matrix via GetGenericElement(),
-	// so we MUST build the dense IMA matrix for mixed meshes
-	if(skipDenseMatrix && (allHex || allWedge || allTet))
+	// For HACApK: skip dense matrix, let kernel functions compute on demand.
+	// All element types (pure and mixed) are handled by kernel functions:
+	// - Same-type: Compute6x6BlockFast, Compute5x5BlockFast, Compute3x3BlockFast
+	// - Cross-DOF: ComputeMixedBlockFast (with type-specific indexing)
+	// Reset geometry so it gets recomputed for the reduced IMA element set.
+	if(skipDenseMatrix)
 	{
 		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
 		m_hexaGeomReady = false;

@@ -937,20 +937,19 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
 
     // Dispatch based on DOF type of each element
     if (dof_elem_i == 6 && dof_elem_j == 6) {
-        // 6DOF-6DOF: hex-hex interaction
+        // 6DOF-6DOF: hex-hex interaction (Compute6x6BlockFast has IMA support)
         return GetCached6x6Element(elem_i, elem_j, local_i, local_j);
     } else if (dof_elem_i == 3 && dof_elem_j == 3) {
         // 3DOF-3DOF: tetra-tetra interaction
+        // For mixed+IMA: Compute3x3Block_OnDemand handles IMA via B_comp() + IMA field context
         return GetCached3x3Element(elem_i, elem_j, local_i, local_j);
     } else if (dof_elem_i == 5 && dof_elem_j == 5) {
-        // 5DOF-5DOF: wedge-wedge interaction (fast kernel path)
+        // 5DOF-5DOF: wedge-wedge interaction (Compute5x5BlockFast has IMA support)
         return GetCached5x5Element(elem_i, elem_j, local_i, local_j);
     }
 
     // All cross-DOF pairs (3x5, 3x6, 5x3, 5x6, 6x3, 6x5):
     // Use unified ComputeMixedBlockFast kernel (IMA-aware, +N sign convention)
-    // NOTE: GetMixed3x6Element/GetMixed6x3Element use -N sign convention
-    // (for flat matrix access) and are NOT used in HACApK mode.
     return GetCachedMixedElement(elem_i, elem_j, dof_elem_i, dof_elem_j, local_i, local_j);
 }
 
