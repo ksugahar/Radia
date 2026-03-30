@@ -950,19 +950,15 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
     } else if (dof_elem_i == 3 && dof_elem_j == 3) {
         // 3DOF-3DOF: tetra-tetra interaction
         return GetCached3x3Element(elem_i, elem_j, local_i, local_j);
-    } else if (dof_elem_i == 3 && dof_elem_j == 6) {
-        // 3DOF-6DOF: tetra-hex interaction (3x6 block)
-        return GetMixed3x6Element(elem_i, elem_j, local_i, local_j);
-    } else if (dof_elem_i == 6 && dof_elem_j == 3) {
-        // 6DOF-3DOF: hex-tetra interaction (6x3 block)
-        return GetMixed6x3Element(elem_i, elem_j, local_i, local_j);
     } else if (dof_elem_i == 5 && dof_elem_j == 5) {
         // 5DOF-5DOF: wedge-wedge interaction (fast kernel path)
         return GetCached5x5Element(elem_i, elem_j, local_i, local_j);
     }
 
-    // Mixed DOF: use unified ComputeMixedBlockFast kernel (IMA-aware)
-    // This eliminates the flat matrix dependency for mixed meshes
+    // All cross-DOF pairs (3x5, 3x6, 5x3, 5x6, 6x3, 6x5):
+    // Use unified ComputeMixedBlockFast kernel (IMA-aware, +N sign convention)
+    // NOTE: GetMixed3x6Element/GetMixed6x3Element use -N sign convention
+    // (for flat matrix access) and are NOT used in HACApK mode.
     return GetCachedMixedElement(elem_i, elem_j, dof_elem_i, dof_elem_j, local_i, local_j);
 }
 
@@ -1203,7 +1199,8 @@ double RadHACApKManager::GetCachedMixedElement(int elem_i, int elem_j,
 	tl_cache_dof_i[hash_idx] = dof_i; tl_cache_dof_j[hash_idx] = dof_j;
 	std::memcpy(tl_cache_block[hash_idx], block, bs * sizeof(double));
 
-	return block[local_i * dof_j + local_j];
+	// Sign flip: ComputeMixedBlockFast returns +N, HACApK system uses -N
+	return -block[local_i * dof_j + local_j];
 }
 
 //=========================================================================
