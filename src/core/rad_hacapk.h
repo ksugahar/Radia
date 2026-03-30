@@ -293,13 +293,7 @@ private:
     // Unified mixed-DOF cache (all cross-DOF pairs via ComputeMixedBlockFast)
     double GetCachedMixedElement(int elem_i, int elem_j, int dof_i, int dof_j, int local_i, int local_j) const;
 
-    // Mixed element methods (3DOF tetra + 6DOF hexa) - legacy, kept for compatibility
-    double GetMixed3x6Element(int elem_tetra, int elem_hex, int comp, int face) const;
-    double GetMixed6x3Element(int elem_hex, int elem_tetra, int face, int comp) const;
-    void Compute3x6Block(int elem_tetra, int elem_hex, double* K_mat) const;
-    void Compute6x3Block(int elem_hex, int elem_tetra, double* K_mat) const;
-
-    // Generic variable DOF element access (5-DOF wedges, mixed wedge+hex, etc.)
+    // Generic variable DOF element access (flat matrix fallback)
     double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
 
     // Disable copy
