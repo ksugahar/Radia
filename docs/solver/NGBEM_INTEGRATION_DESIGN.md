@@ -826,14 +826,14 @@ fes_bem = HDivSurface(mesh_surf, order=2)
 
 ### Status: Verified (2026-02-22)
 
-Low-frequency BEM は ngbem の既存 product space (`HDivSurface × SurfaceL2`) で実現済み。
-専用の MQS カーネルは不要 — Weggler stabilized EFIE と等価な定式化が自然に得られる。
+Low-frequency BEM is already implemented using ngbem's existing product space (`HDivSurface x SurfaceL2`).
+A dedicated MQS kernel is unnecessary -- the Weggler stabilized EFIE equivalent formulation is obtained naturally.
 
 **Reference implementation**: `examples/peec_integration/ngsbem_peec_demo/`
 
 ### Verified Approach: Product Space = Weggler EFIE
 
-ngbem の `HDivSurface × SurfaceL2` product space が自然に Loop-Star 分解を与える:
+The ngbem `HDivSurface x SurfaceL2` product space naturally provides the Loop-Star decomposition:
 
 ```
 | Z_LL    M_LS^T |   | I_loop |   | V_port |
@@ -875,20 +875,20 @@ Added as callable `Zs_func` for frequency-dependent excess resistance.
 
 | Model | Domain | μ_r | Status | Notes |
 |-------|--------|-----|--------|-------|
-| fembem (Calderon) | Unbounded | =1 only | Verified | Hz scalar; **μ_r≠1 で不正確** |
+| fembem (Calderon) | Unbounded | =1 only | Verified | Hz scalar; **inaccurate for mu_r!=1** |
 | vector_fembem | Unbounded | Any | Verified | Full vector formulation |
 | fem | Bounded | Any | Verified | Truncated domain |
-| radia (MMM) | Unbounded | Nonlinear | Verified | Static/time-domain向き |
+| radia (MMM) | Unbounded | Nonlinear | Verified | Best for static/time-domain |
 | BEM+SIBC | Fast | N/A | Verified | Mesh-independent loss via compute_loss_sibc() |
 
 ### Known Limitations (Practical)
 
-1. **fembem は μ_r=1 のみ** — Calderon Hz scalar formulation の制約
-2. **Loop-Star order=0 のみ完全** — 高次 Helmholtz decomposition (Andriulli 2008) 未実装
-3. **Radia core: 静的 μ_r のみ** — 周波数依存 eddy current 未対応
-4. **BEM+SIBC: maxh >> δ で PEC 極限** — compute_loss_sibc() で回避
-5. **T matrix 条件数 > 1e14** — pseudoinverse で対処済み
-6. **COCG 単体は BEM で収束不安定** — GMRes over COCG を推奨
+1. **fembem limited to mu_r=1** -- Calderon Hz scalar formulation constraint
+2. **Loop-Star complete only for order=0** -- high-order Helmholtz decomposition (Andriulli 2008) not implemented
+3. **Radia core: static mu_r only** -- frequency-dependent eddy current not supported
+4. **BEM+SIBC: PEC limit when maxh >> delta** -- mitigated by compute_loss_sibc()
+5. **T matrix condition number > 1e14** -- handled via pseudoinverse
+6. **COCG alone is unstable for BEM** -- GMRes over COCG recommended
 
 ### Verified Parameters
 

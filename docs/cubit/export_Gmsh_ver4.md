@@ -5,7 +5,7 @@ Export mesh to Gmsh format version 4.1.
 ## Synopsis
 
 ```python
-cubit_mesh_export.export_Gmsh_ver4(cubit, FileName, DIM="auto")
+cubit_mesh_export.export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
 ```
 
 ## Parameters
@@ -82,7 +82,7 @@ cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 
-cubit_mesh_export.export_Gmsh_ver4(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 ```
 
 ### 2D Export with Normal Orientation
@@ -94,7 +94,7 @@ cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 
 # Force 2D mode to ensure normals point in +z direction
-cubit_mesh_export.export_Gmsh_ver4(cubit, "plate.msh", DIM="2D")
+cubit_mesh_export.export_Gmesh(cubit, "plate.msh", DIM="2D")
 ```
 
 ### 2nd Order Elements
@@ -106,7 +106,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
 
-cubit_mesh_export.export_Gmsh_ver4(cubit, "mesh_2nd_order.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh_2nd_order.msh")
 ```
 
 ## Differences from v2

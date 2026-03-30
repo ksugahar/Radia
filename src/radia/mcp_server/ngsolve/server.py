@@ -3,7 +3,7 @@ NGSolve FEM MCP Server
 
 Provides tools for:
 - Linting Python scripts against NGSolve conventions (18 rules)
-- NGSolve FEM usage documentation (21 topics incl. EM formulations, axisymmetric, material modeling)
+- NGSolve FEM usage documentation (22 topics incl. EM formulations, axisymmetric, material modeling, TEAM-7 benchmark)
 - ngsolve.bem (BEM operators: LaplaceSL/DL, HelmholtzSL/DL, Maxwell, BiotSavart)
 - ngsolve.la (Compact AMS/COCR/ICCG, formerly ngsolve-sparsesolv) solver documentation
 - Kelvin transformation reference for open boundary FEM
@@ -372,6 +372,7 @@ def ngsolve_usage(topic: str = "all") -> str:
             "material"         - Material modeling: anisotropy, BH curves, Fixed-Point method
             "ironloss"         - Iron loss estimation: decomposition, FEM computation, steel grades
             "practical"        - Practical techniques: voltage source, force/torque, rotation, coupling
+            "team7"            - TEAM Problem 7: eddy current benchmark (A-formulation, OCC geometry, BDDC/AMS solver)
     """
     return get_ngsolve_documentation(topic)
 

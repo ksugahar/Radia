@@ -562,6 +562,85 @@ rad.FldVTS() is removed. Use rad.Fld() for point evaluation only.
 all_M = rad.ObjM(container)    # [[center, [Mx,My,Mz]], ...]
 rad.ObjSetM(obj, [Mx, My, Mz])  # Set magnetization manually
 ```
+
+## CoilBuilder: Racetrack Coil for C-Type Dipole
+
+CoilBuilder creates racetrack coils from straight + arc segments.
+
+### Key Parameters
+
+- `set_start(position, orientation=None)`: start position and optional 3x3 orientation matrix.
+  Default orientation: Y_local = +y (forward), X_local = +x (lateral), Z_local = +z.
+  The first `add_straight()` goes along Y_local.
+- `set_cross_section(width, height)`: width = radial (in loop plane), height = axial (perpendicular to loop plane).
+- `add_arc(radius, arc_angle)`: radius is CENTER-LINE radius, NOT inner radius.
+  Inner R = radius - width/2, Outer R = radius + width/2.
+- `close()`: optimizes arc angles to close the loop.
+
+### Racetrack Geometry (Rounded Rectangle)
+
+For a racetrack with rounded corners (4 straights + 4 x 90-degree arcs):
+
+```python
+# Rectangle center-line half-dimensions
+cl_half_a = inner_half_a + cs_width / 2  # a direction
+cl_half_b = inner_half_b + cs_width / 2  # b direction
+
+# Straight section lengths = full side minus 2 arc radii
+straight_a = 2 * (cl_half_a - r_centerline)
+straight_b = 2 * (cl_half_b - r_centerline)
+```
+
+### Example: C-Type Dipole Coil
+
+```python
+from radia_coil_builder import CoilBuilder
+mm = 1e-3
+
+# Coil in x-y plane (default orientation), flux along z
+# Straight sections along y, arcs turn in x-y plane
+r_cl = 22.5 * mm      # center-line R (inner 5mm + width/2)
+cs_w = 35 * mm         # cross-section radial width
+cs_h = 105 * mm        # cross-section axial height (z)
+
+coil = (CoilBuilder(current=20000.0)
+    .set_start([cl_half_x, -straight_y/2, 0])
+    .set_cross_section(width=cs_w, height=cs_h)
+    .add_straight(straight_y)
+    .add_arc(radius=r_cl, arc_angle=90)
+    .add_straight(straight_x)
+    .add_arc(radius=r_cl, arc_angle=90)
+    .add_straight(straight_y)
+    .add_arc(radius=r_cl, arc_angle=90)
+    .add_straight(straight_x)
+    .add_arc(radius=r_cl, arc_angle=90)
+    .close())
+
+coil.write_step("coil.step")       # OCC STEP export
+objs = coil.to_radia()             # Radia current objects
+container = rad.ObjCnt(objs)
+B = rad.Fld(container, 'b', [0, 0, 0])
+```
+
+### GMSH Visualization: Full Model from Quarter
+
+```python
+import gmsh
+gmsh.initialize()
+gmsh.merge("yoke_quarter.step")
+vols = gmsh.model.getEntities(3)
+# Mirror about x=0 and z=0 for full model
+cx = gmsh.model.occ.copy(vols); gmsh.model.occ.mirror(cx, 1, 0, 0, 0)
+cz = gmsh.model.occ.copy(vols); gmsh.model.occ.mirror(cz, 0, 0, 1, 0)
+cxz = gmsh.model.occ.copy(vols)
+gmsh.model.occ.mirror(cxz, 1, 0, 0, 0)
+gmsh.model.occ.mirror(cxz, 0, 0, 1, 0)
+gmsh.model.occ.synchronize()
+gmsh.merge("coil.step")           # Add coil overlay
+gmsh.model.occ.synchronize()
+gmsh.option.setNumber("Mesh.VolumeEdges", 0)
+gmsh.fltk.run()
+```
 """
 
 RADIA_MESH_IMPORT = """
@@ -3729,14 +3808,127 @@ sol = esim_solver.solve(H_t_rms)
 Z_s = relax * sol['Z'] + (1 - relax) * Z_s_old
 ```
 
-## Cubit Workflow
+## Cubit Workflow for Quarter-Sphere Periodic Kelvin
 
-For Cubit mesh (ACIS-based):
-1. Create interior sphere (air + coil + wp hole) in Cubit
-2. Create exterior sphere (offset) in Cubit
-3. export_NGSolveCurvedMesh for both volumes
-4. Post-process: add Periodic identification to ngmesh
-5. Solve with Periodic(HCurl(...))
+CRITICAL: The operation order matters. Mesh air FIRST, then create kelvin and copy mesh.
+
+### Correct Order (verified 2026-03-30)
+
+```
+1. Build yoke hex mesh in Cubit (e.g., from journal)
+2. Create air sphere at model center, webcut for symmetry (z=0, x=0)
+3. Imprint/merge air with yoke
+4. Tet mesh air volumes (creates triangle mesh on hemisphere boundary)
+5. Create kelvin sphere at offset (e.g., offset_x = R * 10)
+   - webcut with z=0 and x=offset_x for quarter
+   - delete pieces: keep x > offset_x AND z > 0
+6. copy mesh surface <int_hemis> onto surface <ext_hemis>
+   source curve <src_c> source vertex <src_v>
+   target curve <dst_c> target vertex <dst_v>
+7. Tet mesh kelvin volumes (copied surface constrains boundary)
+8. Create blocks: yoke, air, kelvin, kelvin_int, kelvin_ext
+9. export_NGSolveCurvedMesh -> Scale(mm_to_m) -> add_periodic_kelvin
+```
+
+### Why This Order
+
+- `copy mesh surface` requires the SOURCE surface to already have triangles
+- If you try to create both spheres first and mesh surfaces independently,
+  `imprint` with yoke changes interior hemisphere topology and copy fails:
+  "Source surface and target surface must be topologically identical"
+
+### Hemisphere Surface Detection
+
+Distinguish curved hemisphere from flat symmetry faces:
+- Check vertex distance to sphere center (on sphere? distance ~ R)
+- ALSO check bounding box span: hemisphere spans all 3 axes,
+  flat faces (z=0, x=0) have zero span in one axis
+
+### Kelvin Offset for IdentifyPeriodicBoundaries
+
+The offset is the TRANSLATION vector from int to ext sphere, NOT the ext center:
+```python
+# Int sphere at (0, sy, 0), ext at (offset_x, sy, 0)
+# Translation = (offset_x, 0, 0), NOT (offset_x, sy, 0)
+kelvin_offset = (offset_x * scale, 0.0, 0.0)
+add_periodic_kelvin(mesh, kelvin_offset)
+```
+
+detect_kelvin_offset() returns the centroid of kelvin region (= ext center),
+which is WRONG for asymmetric placement. Compute offset directly.
+
+### Symmetry BC for Omega-Reduced (Quarter C-type Dipole)
+
+```python
+# Omega is ODD about z=0 (source ~ H0*z is odd)
+#   -> Omega=0 on z=0 (sym_normal, Dirichlet)
+# Omega is EVEN about x=0 (symmetric coil + yoke)
+#   -> dOmega/dn=0 on x=0 (natural, no constraint)
+# For A-formulation, swap: sym_tangential gets Dirichlet
+dir_parts = []
+if "sym_normal" in boundaries:
+    dir_parts.append("sym_normal")  # Omega: Dirichlet
+# sym_tangential: natural (no constraint for Omega)
+```
+
+### Verify Periodic BC
+
+```python
+freedof_before = sum(1 for d in fes_base.FreeDofs() if d)
+fes = Periodic(fes_base)
+freedof_after = sum(1 for d in fes.FreeDofs() if d)
+assert freedof_after < freedof_before, "Periodic BC not working!"
+```
+
+## Air Gap Mesh (CRITICAL for Accuracy)
+
+For C-type magnets with narrow gaps, the air in the gap MUST have its own
+fine mesh, separate from the far-field air mesh. Without this, the FEM solution
+can be 30-50% too low.
+
+### Pattern: air_gap box (from Keiko Sugahara's CEFC 2020 work)
+
+```
+# In Cubit: create a small box around the gap region
+create brick x 42 y 73 z 13      # slightly larger than gap
+move volume {id} x 21 y 0 z 6.5  # center on gap
+
+# Imprint with air sphere and yoke
+imprint volume all
+merge volume all
+
+# Mesh air_gap with fine size (2mm for 10mm gap)
+volume {air_gap_vid} size 2.0
+mesh volume {air_gap_vid}
+
+# Mesh outer air with coarse size
+volume {air_vid} size 37.0
+mesh volume {air_vid}
+```
+
+### Naming Convention
+
+| Block | Mesh size | Purpose |
+|-------|-----------|---------|
+| `air_gap` | 1-3mm (gap/5) | Gap region, fine mesh for field resolution |
+| `air` | R_kelvin/5 | Far-field air, coarse |
+| `kelvin` | R_kelvin/3 | Kelvin exterior domain |
+
+### Why This Matters
+
+The magnetic field in the gap changes rapidly over the gap width (5-10mm).
+Without resolving this gradient:
+- Linear mu=1000: Bz = -709 mT (without air_gap) vs -879 mT (with air_gap)
+- Reference MSC: Bz = -976 mT
+- Factor 1.24x improvement from gap mesh alone
+
+### Pyramid Element Warning
+
+Cubit `imprint` between hex volumes and tet volumes creates pyramid transition
+elements. These DO NOT support order >= 2 in NGSolve (DOF count mismatch).
+For order=2, either:
+- Use pure tet mesh for all air regions (no hex-tet transition)
+- Or avoid imprint and use conformal tet-only near yoke interface
 
 ## Known Issues
 
@@ -3745,6 +3937,8 @@ For Cubit mesh (ACIS-based):
 3. **bonus_intorder=4**: Required for Kelvin domain integration accuracy
 4. **Gauge regularization**: Small mass term (1e-8 * nu0 * u*v dx)
 5. **Verify Periodic**: Check FreeDofs reduced after Periodic() wrapping
+6. **Cubit copy mesh**: Fails if source surface has no mesh or topology differs
+7. **Pyramid order>=2**: Cubit imprint creates pyramids; NGSolve order=2 fails on them
 
 ## Reference
 

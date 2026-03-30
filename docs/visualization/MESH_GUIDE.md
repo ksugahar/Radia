@@ -18,55 +18,55 @@ This guide consolidates the mesh generation workflows for Radia, covering GMSH, 
 |  Mesh file formats:                                              |
 |    - GMSH:   .msh -> NGSolve -> Radia                            |
 |    - Netgen:  .vol -> NGSolve -> Radia                            |
-|    - Cubit:  export_netgen() -> NGSolve -> Radia                  |
+|    - Cubit:  export_NGSolveCurvedMesh() -> NGSolve -> Radia       |
 |                                                                  |
 +-----------------------------------------------------------------+
 ```
 
 ---
 
-## 1. Mesh Types (メッシュタイプの使い分け)
+## 1. Mesh Types
 
-### 1.1 Volume Elements (体積要素)
+### 1.1 Volume Elements
 
 Volume elements -- tetrahedra, hexahedra, wedges -- fill the interior of a 3-D domain. They are required for magnetic material modelling (permanent magnets, soft magnetic materials).
 
-**要求**: 体積メッシュ（Volume Mesh）
+**Requirement**: Volume Mesh
 
-| 要素タイプ | GMSH要素 | Radia API | 用途 |
+| Element Type | GMSH Element | Radia API | Use Case |
 |----------|---------|----------|------|
-| Tetrahedron | Tet4 | `ObjTetrahedron()` | 複雑形状 |
-| Hexahedron | Hex8 | `ObjHexahedron()` | 構造格子 |
-| Wedge/Prism | Wedge6 | `ObjWedge()` | 遷移要素 |
+| Tetrahedron | Tet4 | `ObjTetrahedron()` | Complex shapes |
+| Hexahedron | Hex8 | `ObjHexahedron()` | Structured grid |
+| Wedge/Prism | Wedge6 | `ObjWedge()` | Transition elements |
 
-**GMSH生成**:
+**GMSH generation**:
 ```python
-gmsh.model.mesh.generate(3)  # 3D体積メッシュ
+gmsh.model.mesh.generate(3)  # 3D volume mesh
 ```
 
-### 1.2 Surface Elements (表面要素)
+### 1.2 Surface Elements
 
 Surface elements -- triangles or quadrilaterals -- cover the **boundary** of a 3-D domain. They are the outer skin of a mesh and serve two purposes:
 
 1. **PEEC conductors**: Surface mesh is all that is needed for surface-current modelling.
 2. **Netgen GUI display**: The Netgen GUI renders surface elements, not volume elements directly.
 
-| 要素タイプ | GMSH要素 | 用途 |
+| Element Type | GMSH Element | Use Case |
 |----------|---------|------|
-| Triangle | Tri3 | 表面電流分布 / 境界表示 |
-| Quadrilateral | Quad4 | 表面電流分布 / 境界表示 |
+| Triangle | Tri3 | Surface current distribution / Boundary display |
+| Quadrilateral | Quad4 | Surface current distribution / Boundary display |
 
-**PEEC用GMSH生成**:
+**GMSH generation for PEEC**:
 ```python
-gmsh.model.mesh.generate(2)  # 2D表面メッシュのみ
+gmsh.model.mesh.generate(2)  # 2D surface mesh only
 ```
 
-**重要**: PEECは表面電流モデルのため、**体積メッシュは不要**
+**Important**: PEEC uses a surface current model, so **volume mesh is not required**
 
-**理由**:
-- 表皮効果: SIBC (Surface Impedance Boundary Condition) で処理
-- 導体内部: 電流密度は指数減衰（表面インピーダンスで表現）
-- 計算効率: 表面のみで十分な精度
+**Reason**:
+- Skin effect: Handled by SIBC (Surface Impedance Boundary Condition)
+- Conductor interior: Current density decays exponentially (represented by surface impedance)
+- Computational efficiency: Surface only provides sufficient accuracy
 
 ### 1.3 Auto-Generation in Standard Workflows
 
@@ -76,7 +76,7 @@ In every standard mesh-generation workflow surface elements are created automati
 |----------|-----------------|--------|
 | **Netgen direct** (`geo.GenerateMesh()`) | Auto | Boundary mesh generated automatically |
 | **NGSolve `Mesh()`** | Auto | STEP/OCC import recognises boundaries |
-| **Cubit -> `export_netgen()`** | Auto | Cubit sidesets are converted to boundary elements |
+| **Cubit -> `export_NGSolveCurvedMesh()`** | Auto | Cubit sidesets are converted to boundary elements |
 | **GMSH -> NGSolve** | Auto | `.msh` files include boundary elements |
 
 **In short, normal mesh generation requires no extra steps.**
@@ -111,9 +111,9 @@ All NGSolve sample `.vol` files display correctly in the Netgen GUI.
 
 ## 2. GMSH Workflows
 
-### 2.1 Workflow 1: 磁性体（体積メッシュ）
+### 2.1 Workflow 1: Magnetic Material (Volume Mesh)
 
-#### CADファイルからの読込
+#### Loading from CAD File
 
 ```python
 import gmsh
@@ -121,51 +121,51 @@ from ngsolve import Mesh
 from netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
 
-# GMSH初期化
+# GMSH initialization
 gmsh.initialize()
 gmsh.option.setNumber("General.Terminal", 1)
 gmsh.model.add("magnetic_core")
 
-# CADファイル読込（STEP, IGES, BREP, STL対応）
+# CAD file loading (supports STEP, IGES, BREP, STL)
 gmsh.merge("core.step")
 gmsh.model.geo.synchronize()
 
-# メッシュサイズ設定
+# Mesh size settings
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", 0.002)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.005)
 
-# 物理グループ定義（重要！）
+# Physical group definition (important!)
 volumes = gmsh.model.getEntities(3)
 if volumes:
     volume_tags = [v[1] for v in volumes]
     gmsh.model.addPhysicalGroup(3, volume_tags, 1)
     gmsh.model.setPhysicalName(3, 1, "core")
 
-# 体積メッシュ生成
+# Volume mesh generation
 gmsh.model.mesh.generate(3)  # 3D volume mesh
 
-# エクスポート
+# Export
 gmsh.write('core.msh')
 gmsh.finalize()
 
-# NGSolve経由でRadia変換
+# Convert to Radia via NGSolve
 mesh = Mesh('core.msh')
 mag_obj = netgen_mesh_to_radia(mesh,
                                 material={'magnetization': [0, 0, 0]},
                                 units='m',
                                 material_filter='core')
 
-# 材料適用
+# Apply material
 mat = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(mag_obj, mat)
 
-# 解く
+# Solve
 rad.Solve(mag_obj, 0.0001, 1000, 1)
 ```
 
-### 2.2 Workflow 2: 導体（表面メッシュ / PEEC）
+### 2.2 Workflow 2: Conductor (Surface Mesh / PEEC)
 
-#### コイル表面メッシュ生成
+#### Coil Surface Mesh Generation
 
 ```python
 import gmsh
@@ -174,7 +174,7 @@ import numpy as np
 gmsh.initialize()
 gmsh.model.add("coil_surface")
 
-# コイル断面（矩形）をXZ平面で定義
+# Define coil cross-section (rectangular) in XZ plane
 r_inner = 0.048  # m
 r_outer = 0.052  # m
 z_bottom = -0.001  # m
@@ -193,30 +193,30 @@ l4 = gmsh.model.geo.addLine(p4, p1)
 loop = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
 surf = gmsh.model.geo.addPlaneSurface([loop])
 
-# Z軸周りに回転（完全なコイル表面生成）
+# Revolve around Z axis (generate full coil surface)
 gmsh.model.geo.revolve(
     [(2, surf)],
-    0, 0, 0,  # 回転軸原点
-    0, 0, 1,  # 回転軸方向（Z）
-    2 * np.pi  # 角度（全周）
+    0, 0, 0,  # Rotation axis origin
+    0, 0, 1,  # Rotation axis direction (Z)
+    2 * np.pi  # Angle (full revolution)
 )
 
 gmsh.model.geo.synchronize()
 
-# メッシュサイズ
+# Mesh size
 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", 0.0005)
 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.001)
 
-# 物理グループ（表面のみ！）
+# Physical group (surface only!)
 surfaces = gmsh.model.getEntities(2)
 surface_tags = [s[1] for s in surfaces]
 gmsh.model.addPhysicalGroup(2, surface_tags, 1)
 gmsh.model.setPhysicalName(2, 1, "conductor")
 
-# 表面メッシュのみ生成（dim=2）
+# Generate surface mesh only (dim=2)
 gmsh.model.mesh.generate(2)  # Surface mesh ONLY
 
-# 確認: 体積要素がないことを確認
+# Verify: confirm no volume elements exist
 vol_elements = gmsh.model.mesh.getElements(3)
 if vol_elements[1] and any(len(e) > 0 for e in vol_elements[1]):
     print("WARNING: Volume elements found - PEEC only needs surface!")
@@ -224,22 +224,22 @@ if vol_elements[1] and any(len(e) > 0 for e in vol_elements[1]):
 gmsh.write('coil_surface.msh')
 gmsh.finalize()
 
-# PEEC変換（将来のAPI）
+# PEEC conversion (future API)
 # from peec_mesh_import import surface_mesh_to_peec
 # conductor = surface_mesh_to_peec(mesh, sigma=5.8e7)
 ```
 
-**現状の代替手段**:
+**Current workaround**:
 
 ```python
-# 単純形状の場合は CndLoop を使用
+# For simple shapes, use CndLoop
 coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r',
                    0.002, 0.002, 5.8e7, 8, 36)
 ```
 
-### 2.3 Workflow 3: 磁性体+導体の統合モデル
+### 2.3 Workflow 3: Combined Model (Magnetic Material + Conductor)
 
-#### 例: 電磁石（鉄心+コイル）
+#### Example: Electromagnet (Iron Core + Coil)
 
 ```python
 import gmsh
@@ -248,13 +248,13 @@ from netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
 
 # ===============================
-# 1. 鉄心（体積メッシュ）
+# 1. Iron Core (Volume Mesh)
 # ===============================
 gmsh.initialize()
 gmsh.model.add("core")
-gmsh.merge("core.step")  # CAD読込
+gmsh.merge("core.step")  # Load CAD
 
-# 体積メッシュ
+# Volume mesh
 gmsh.model.mesh.generate(3)
 gmsh.write('core.msh')
 gmsh.finalize()
@@ -267,24 +267,24 @@ mat_iron = rad.MatLin(1000)
 rad.MatApl(core_obj, mat_iron)
 
 # ===============================
-# 2. コイル（表面メッシュまたは解析形状）
+# 2. Coil (Surface Mesh or Analytical Shape)
 # ===============================
-# 現状: CndLoopを使用（簡易コイル）
+# Current approach: Use CndLoop (simple coil)
 coil_obj = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r',
                        0.002, 0.002, 5.8e7, 8, 36)
 
-# 将来: GMSH表面メッシュからPEEC変換
+# Future: PEEC conversion from GMSH surface mesh
 # gmsh.initialize()
 # ... (coil surface mesh generation)
 # coil_obj = surface_mesh_to_peec(mesh_coil, sigma=5.8e7)
 
 # ===============================
-# 3. 統合して解く
+# 3. Combine and Solve
 # ===============================
 container = rad.ObjCnt([core_obj, coil_obj])
 rad.Solve(container, 0.0001, 1000, 1)
 
-# フィールド計算
+# Field calculation
 B = rad.Fld(container, 'b', [0, 0, 0.1])
 print(f"Field at (0, 0, 0.1): {B} T")
 ```
@@ -334,7 +334,8 @@ cyl = Cylinder(gp_Ax2(gp_Pnt(0,0,-2), gp_Dir(0,0,1)), 0.3, 4)
 shape = brick - cyl
 
 # 2. Name faces (critical for correct mapping!)
-cubit_mesh_export.name_occ_faces(shape)
+# NOTE: name_occ_faces() does not exist in cubit_mesh_export; face naming
+#       is handled internally by export_NGSolveCurvedMesh().
 
 # 3. Export STEP
 shape.WriteStep("geometry.step")
@@ -349,19 +350,19 @@ geo = OCCGeometry("geometry.step")
 # cubit.cmd("mesh volume all")
 
 # 6. Export with name-based mapping
-ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, geo)
 
-# 7. High-order curving (export_curved handles SetGeomInfo automatically)
-ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
+# 7. High-order curving (export_NGSolveCurvedMesh handles SetGeomInfo automatically)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
 mesh = Mesh(ngmesh)
 ```
 
 ### 3.5 Automatic Curving
 
-Use `export_curved()` which handles SetGeomInfo automatically:
+Use `export_NGSolveCurvedMesh()` which handles SetGeomInfo automatically:
 
 ```python
-ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
 ```
 
 ### 3.6 Accuracy Results
@@ -493,7 +494,7 @@ mesh.ngmesh.Save('with_surface.vol')
 
 ### 4.9 Cubit Meshes and Surface Elements
 
-When you define a **sideset** in Cubit and export via `export_netgen()`, the sideset surfaces become surface elements:
+When you define a **sideset** in Cubit and export via `export_NGSolveCurvedMesh()`, the sideset surfaces become surface elements:
 
 ```python
 import cubit
@@ -512,7 +513,7 @@ cubit.cmd("sideset 1 surface all")
 cubit.cmd("sideset 1 name 'boundary'")
 
 # Export to Netgen (surface elements included)
-ngmesh = cubit_mesh_export.export_netgen(cubit)
+ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit)
 mesh = Mesh(ngmesh)
 
 # Verify
@@ -619,58 +620,58 @@ mesh.Save('test.vol')
 
 ## 6. Tool Comparison (GMSH vs Netgen vs Cubit)
 
-| 観点 | GMSH | Netgen | Coreform Cubit |
+| Aspect | GMSH | Netgen | Coreform Cubit |
 |------|------|--------|----------------|
-| **CAD読込** | STEP/IGES直接 | STEP/OCC | STEP/IGES直接 |
-| **ライセンス** | オープンソース | オープンソース | 商用 |
-| **NGSolve連携** | .msh直接読込 | ネイティブ | `export_netgen()` |
-| **2D/軸対称** | 対応 | 3Dのみ推奨 | 対応 |
-| **表面メッシュ** | `generate(2)` | 自動生成 | sidesetで自動 |
-| **体積メッシュ** | Tet/Hex対応 | Tet（Hexは外部） | Tet/Hex対応 |
-| **六面体メッシュ** | 構造格子のみ | 非対応（外部ツール） | 高品質（推奨） |
-| **High-order curving** | 未対応（外部で処理） | ネイティブ | SetGeomInfo API経由 |
-| **可視化** | GMSH GUI | Netgen GUI | Cubit GUI |
+| **CAD Import** | STEP/IGES direct | STEP/OCC | STEP/IGES direct |
+| **License** | Open source | Open source | Commercial |
+| **NGSolve Integration** | Direct .msh import | Native | `export_NGSolveCurvedMesh()` |
+| **2D/Axisymmetric** | Supported | 3D only recommended | Supported |
+| **Surface Mesh** | `generate(2)` | Auto-generated | Auto via sideset |
+| **Volume Mesh** | Tet/Hex supported | Tet (Hex via external tools) | Tet/Hex supported |
+| **Hexahedral Mesh** | Structured grid only | Not supported (external tools) | High quality (recommended) |
+| **High-order curving** | Not supported (external processing) | Native | Via SetGeomInfo API |
+| **Visualization** | GMSH GUI | Netgen GUI | Cubit GUI |
 
-**推奨**:
-- **標準ワークフロー**: GMSH（CAD読込、表面メッシュ、NGSolve統合）
-- **単純形状**: Netgen OCC（コード生成、自動メッシュ）
-- **高品質Hex / High-order curving**: Coreform Cubit + SetGeomInfo API
+**Recommended**:
+- **Standard workflow**: GMSH (CAD import, surface mesh, NGSolve integration)
+- **Simple shapes**: Netgen OCC (code generation, automatic meshing)
+- **High-quality Hex / High-order curving**: Coreform Cubit + SetGeomInfo API
 
-### GMSHとNetgenの使い分け
+### Choosing Between GMSH and Netgen
 
-| 用途 | ツール |
+| Use Case | Tool |
 |------|--------|
-| **CADファイル読込** | GMSH（より対応形式が多い） |
-| **単純形状（OCC）** | Netgen（コード生成が簡潔） |
-| **表面メッシュのみ** | GMSH（`generate(2)`で明示的） |
-| **高品質Tetメッシュ** | Netgen（メッシュ品質が良い） |
+| **CAD file import** | GMSH (supports more formats) |
+| **Simple shapes (OCC)** | Netgen (concise code generation) |
+| **Surface mesh only** | GMSH (explicit with `generate(2)`) |
+| **High-quality Tet mesh** | Netgen (better mesh quality) |
 
 ---
 
-## 7. FAQ (よくある質問)
+## 7. FAQ
 
-### Q1: PEECに体積メッシュは必要ないのか？
+### Q1: Is volume mesh not needed for PEEC?
 
-**A: 不要です。** PEECは表面電流近似を使用します。
+**A: Not required.** PEEC uses a surface current approximation.
 
-**理由**:
-1. **表皮効果**: 高周波では電流は表面に集中
-2. **SIBC**: 表面インピーダンスで導体内部の電流分布を表現
-3. **計算効率**: 表面メッシュのみで十分な精度
+**Reason**:
+1. **Skin effect**: At high frequencies, current concentrates at the surface
+2. **SIBC**: Surface impedance represents the current distribution inside the conductor
+3. **Computational efficiency**: Surface mesh alone provides sufficient accuracy
 
-**適用範囲**: 周波数 x サイズ が表皮深さより大きい場合
+**Applicable range**: When frequency x size is larger than the skin depth
 
-### Q2: GMSHで六面体メッシュは生成できるか？
+### Q2: Can GMSH generate hexahedral meshes?
 
-**A: 限定的です。**
+**A: Only in limited cases.**
 
-- **Tet（四面体）**: 完全自動生成
-- **Hex（六面体）**: 構造格子のみ
-- **複雑形状のHex**: Coreform Cubit推奨
+- **Tet (tetrahedron)**: Fully automatic generation
+- **Hex (hexahedron)**: Structured grid only
+- **Hex for complex shapes**: Coreform Cubit recommended
 
-**GMSH Hexメッシュ生成方法**:
+**GMSH Hex mesh generation method**:
 ```python
-# 構造格子（ブロック形状のみ）
+# Structured grid (block shapes only)
 gmsh.model.mesh.setTransfiniteSurface(surf_tag)
 gmsh.model.mesh.setTransfiniteVolume(vol_tag)
 gmsh.model.mesh.setRecombine(3, vol_tag)
@@ -688,47 +689,47 @@ gmsh.model.mesh.setRecombine(3, vol_tag)
 
 ## 8. References
 
-### サンプルスクリプト
+### Sample Scripts
 
-| ファイル | 説明 |
+| File | Description |
 |---------|------|
-| `examples/visualization/demo_gmsh_cad_import.py` | CAD読込と体積メッシュ |
-| `examples/peec_integration/demo_gmsh_surface_mesh.py` | 表面メッシュ（PEEC導体） |
-| `examples/visualization/demo_gmsh_workflow.py` | 基本的なGMSH Python API |
+| `examples/visualization/demo_gmsh_cad_import.py` | CAD import and volume mesh |
+| `examples/peec_integration/demo_gmsh_surface_mesh.py` | Surface mesh (PEEC conductor) |
+| `examples/visualization/demo_gmsh_workflow.py` | Basic GMSH Python API |
 
-### Radiaでの推奨ワークフロー (まとめ)
+### Recommended Radia Workflows (Summary)
 
 ```
-磁性体（永久磁石・鉄心）:
-  CAD -> GMSH -> 体積メッシュ(.msh) -> NGSolve -> Radia (MMM/MSC)
+Magnetic materials (permanent magnets / iron cores):
+  CAD -> GMSH -> Volume mesh (.msh) -> NGSolve -> Radia (MMM/MSC)
 
-導体（コイル・シールド）:
-  CAD -> GMSH -> 表面メッシュ(.msh) -> (将来: PEEC変換)
-  現状: rad.CndLoop() で代替
+Conductors (coils / shields):
+  CAD -> GMSH -> Surface mesh (.msh) -> (Future: PEEC conversion)
+  Current approach: rad.CndLoop() as alternative
 
-統合モデル（電磁石等）:
-  磁性体 + 導体 -> rad.ObjCnt() -> rad.Solve()
+Combined model (electromagnets, etc.):
+  Magnetic material + Conductor -> rad.ObjCnt() -> rad.Solve()
 
 High-order curving (Cubit):
-  OCC -> STEP -> Cubit -> export_netgen() -> SetGeomInfo -> mesh.Curve(order)
+  OCC -> STEP -> Cubit -> export_NGSolveCurvedMesh() -> SetGeomInfo -> mesh.Curve(order)
 ```
 
-### キーポイント
+### Key Points
 
-1. **GMSH標準**: CAD読込、オープンソース、NGSolve統合
-2. **メッシュタイプ**: 磁性体=体積、導体=表面
-3. **表面メッシュのみ**: PEECは体積メッシュ不要
-4. **NGSolve経由**: `.msh`ファイルをシームレスに読込
-5. **High-order curving**: SetGeomInfo APIで外部メッシュもCurve()対応
+1. **GMSH standard**: CAD import, open source, NGSolve integration
+2. **Mesh types**: Magnetic material = volume, Conductor = surface
+3. **Surface mesh only**: PEEC does not require volume mesh
+4. **Via NGSolve**: Seamless `.msh` file import
+5. **High-order curving**: SetGeomInfo API enables Curve() for external meshes
 
 ### External Links
 
 - Netgen PR #232: [NGSolve/netgen#232](https://github.com/NGSolve/netgen/pull/232)
 - SetGeomInfo Forum: [Feature Request - SetGeomInfo API](https://forum.ngsolve.org/t/feature-request-python-api-for-high-order-curving-of-externally-imported-meshes/3810)
 - cubit_mesh_export PyPI: [coreform-cubit-mesh-export](https://pypi.org/project/Coreform-Cubit-Mesh-Export/)
-- [PEEC_INTEGRATION.md](PEEC_INTEGRATION.md)（将来作成予定）
+- [PEEC_INTEGRATION.md](PEEC_INTEGRATION.md) (to be created in the future)
 
 ---
 
-**作成日**: 2026-02-22
-**対象**: Radia メッシュ生成ワークフロー（GMSH, Netgen, Cubit）
+**Created**: 2026-02-22
+**Scope**: Radia Mesh Generation Workflows (GMSH, Netgen, Cubit)

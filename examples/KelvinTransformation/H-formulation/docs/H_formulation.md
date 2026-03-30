@@ -114,7 +114,7 @@ $$
 Kelvin変換後の外部領域では：
 
 $$
-\mu'(\rho') = \mu_0 \left(\frac{R}{\rho'}\right)^4
+\mu'(\rho') = \mu_0 \left(\frac{R}{\rho'}\right)^2
 $$
 
 ## 4. 源磁界 $\mathbf{H}_s$ の変換則
@@ -139,10 +139,10 @@ Z方向一様磁界 $\mathbf{H}_s = H_0 \hat{z}$ に対して：
 
 ### 4.3 3次元での変換
 
-一様磁界 $\mathbf{H}_s = H_0 \hat{z}$ に対して、球面Kelvin変換後：
+一様磁界 $\mathbf{H}_s = H_0 \hat{z}$ に対して、球面Kelvin変換後（計量テンソルに基づく）：
 
 $$
-\mathbf{H}'_s = -H_0 \left(\frac{\rho'}{R}\right)^3 \hat{z}'
+\mathbf{H}'_s = -H_0 \left(\frac{R}{\rho'}\right)^2 \hat{z}'
 $$
 
 双極子場（dipole）の場合：$\phi_s = z$ に対応

@@ -229,3 +229,32 @@ CEFC 2026 Thessaloniki: Cubit hex mesh + BEM inductance extraction + Curve order
 - `ds('face_0')` works; `ds` (no label, all boundaries) works
 - This is the same issue for ALL labeled ds operations on geometry-mapped meshes
 - **Fix**: Use `ds` (all boundaries) or query `mesh.GetBoundaries()` for actual names
+
+## Future: MSC法の Div-Conforming Element 化
+
+### 背景（2026-03-29 いだ先生との議論）
+
+高橋先生のMSC法では、面電流 **K** の divergence-free 制約が**要素ごと**に課される。
+6DoF/要素のうち1つが制約 → 実質5DoF/要素。
+
+- 制約を課さないと**零固有値が要素数個**発生（AΦ法のゲージ不定性と同構造）
+- これがマルチグリッド法適用不可の原因
+- 高橋先生の論文では制約の処理方法（消去 or ラグランジュ法）が明記されていない
+
+### 提案: ELF基底を div-conforming element（RT要素）にする
+
+**利点:**
+1. Div-free制約が基底関数レベルで組み込まれる → ラグランジュ乗数不要
+2. 零固有値（スプリアス解）が大幅に削減される
+3. H行列が通常の対称系としてそのまま適用可能（鞍点系を回避）
+4. 反復法（BiCGSTAB等）の収束改善が期待できる
+5. RadiaのPEEC側で既にNGSolve HDivSurface（RT要素）を使用 → 統一可能
+
+**高橋先生との差別化ポイント:**
+- Div-conforming基底 + H行列圧縮の組み合わせは高橋論文にない
+- 零固有値回避による反復法収束性の優位性を示せる
+
+**注意点:**
+- RT要素の次数選択（RT0 vs RT1）で精度・計算量トレードオフ
+- 非線形反復（磁性体BH曲線）との組み合わせでヤコビアン構造が変わる可能性
+- いだ先生: 「ラグランジュ法の困難を回避できるのが最大のメリット」

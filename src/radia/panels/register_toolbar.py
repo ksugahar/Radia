@@ -51,7 +51,7 @@ import cubit
 try:
 	from PySide6.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
+		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox, QCheckBox,
 		QFileDialog, QMainWindow, QMessageBox,
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
 		QPlainTextEdit,
@@ -61,7 +61,7 @@ try:
 except ImportError:
 	from PyQt5.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox,
+		QLabel, QLineEdit, QComboBox, QPushButton, QSpinBox, QCheckBox,
 		QFileDialog, QMainWindow, QMessageBox,
 		QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
 		QPlainTextEdit, QAction,
@@ -1828,9 +1828,19 @@ class IHFEMDialog(QDialog):
 		self.add_kelvin_btn.clicked.connect(self._add_kelvin)
 		kelvin_layout.addWidget(self.add_kelvin_btn, 0, 2)
 
+		kelvin_layout.addWidget(QLabel("Symmetry:"), 1, 0)
+		self.kelvin_sym_combo = QComboBox()
+		self.kelvin_sym_combo.addItems([
+			"Full", "Half (Z)", "Quarter (X,Z)", "Eighth (X,Y,Z)"])
+		self.kelvin_sym_combo.setToolTip(
+			"Full: no symmetry planes (2 hemispheres)\n"
+			"Half (Z): z-symmetry plane (1 hemisphere)\n"
+			"Quarter (X,Z): x + z symmetry planes (1 quadrant)\n"
+			"Eighth (X,Y,Z): x + y + z symmetry planes (1 octant)")
+		kelvin_layout.addWidget(self.kelvin_sym_combo, 1, 1)
 		self.kelvin_status = QLabel("")
 		self.kelvin_status.setWordWrap(True)
-		kelvin_layout.addWidget(self.kelvin_status, 1, 0, 1, 3)
+		kelvin_layout.addWidget(self.kelvin_status, 2, 0, 1, 3)
 
 		layout.addWidget(kelvin_group)
 
@@ -1941,19 +1951,19 @@ class IHFEMDialog(QDialog):
 		self._detect_blocks()
 
 	def _add_kelvin(self):
-		"""Auto-create Kelvin sphere pair in Cubit for open boundary.
+		"""Create Kelvin sphere pair with symmetry support.
 
-		Steps:
-		  1. Compute bounding box of all model volumes -> centroid + enclosing R
-		  2. Webcut air volume with sphere at centroid
-		  3. Create exterior sphere at offset -> kelvin volume
-		  4. Webcut both hemispheres (zplane) for copy mesh to work
-		  5. Mesh air sphere surface, copy to exterior, tet kelvin
-		  6. Create kelvin/kelvin_int/kelvin_ext blocks
+		Symmetry modes:
+		  Full:          2 hemispheres (z-webcut), sphere at model centroid
+		  Half (Z):      1 hemisphere, sphere centered on z-symmetry plane
+		  Quarter (X,Z): 1 quadrant, sphere centered on x,z-symmetry planes
+		  Eighth (X,Y,Z):1 octant, sphere centered on x,y,z-symmetry planes
 		"""
 		import math
 
-		# Check that 'air' block exists
+		symmetry = self.kelvin_sym_combo.currentText()
+
+		# Check blocks
 		found = {}
 		try:
 			for bid in cubit.get_block_id_list():
@@ -1973,7 +1983,6 @@ class IHFEMDialog(QDialog):
 				'No "air" block found. Run journal first to create blocks.')
 			return
 
-		# Get all volume IDs in blocks (coil, workpiece, air)
 		all_vids = set()
 		for bid in cubit.get_block_id_list():
 			for v in cubit.get_block_volumes(bid):
@@ -1983,12 +1992,11 @@ class IHFEMDialog(QDialog):
 			QMessageBox.warning(self, "Error", "No meshed volumes found.")
 			return
 
-		# Compute bounding box of all volumes -> centroid + enclosing radius
+		# Bounding box of all model volumes
 		bb_min = [1e30, 1e30, 1e30]
 		bb_max = [-1e30, -1e30, -1e30]
 		for vid in all_vids:
 			bb = cubit.get_bounding_box("volume", vid)
-			# bb = (xmin, xmax, xrange, ymin, ymax, yrange, zmin, zmax, zrange, ...)
 			bb_min[0] = min(bb_min[0], bb[0])
 			bb_max[0] = max(bb_max[0], bb[1])
 			bb_min[1] = min(bb_min[1], bb[3])
@@ -1999,12 +2007,32 @@ class IHFEMDialog(QDialog):
 		cx = (bb_min[0] + bb_max[0]) / 2
 		cy = (bb_min[1] + bb_max[1]) / 2
 		cz = (bb_min[2] + bb_max[2]) / 2
-		half_diag = math.sqrt(
-			(bb_max[0] - bb_min[0])**2 +
-			(bb_max[1] - bb_min[1])**2 +
-			(bb_max[2] - bb_min[2])**2) / 2
 
-		# Kelvin radius: user-specified or auto (1.5x enclosing radius)
+		# Sphere center: at symmetry plane intersection
+		# Symmetry plane = bounding box face closest to 0
+		def _sym_coord(lo, hi):
+			return lo if abs(lo) <= abs(hi) else hi
+
+		if "Quarter" in symmetry or "Eighth" in symmetry:
+			sx = _sym_coord(bb_min[0], bb_max[0])
+		else:
+			sx = cx
+		if "Eighth" in symmetry:
+			sy = _sym_coord(bb_min[1], bb_max[1])
+		else:
+			sy = cy
+		if symmetry != "Full":
+			sz = _sym_coord(bb_min[2], bb_max[2])
+		else:
+			sz = cz
+
+		# R_kelvin: must enclose model from sphere center
+		corners = [(x, y, z) for x in (bb_min[0], bb_max[0])
+		                      for y in (bb_min[1], bb_max[1])
+		                      for z in (bb_min[2], bb_max[2])]
+		max_dist = max(math.sqrt((x - sx)**2 + (y - sy)**2 + (z - sz)**2)
+		              for x, y, z in corners)
+
 		r_text = self.kelvin_radius_edit.text().strip()
 		if r_text:
 			try:
@@ -2013,122 +2041,182 @@ class IHFEMDialog(QDialog):
 				QMessageBox.warning(self, "Error", "Invalid radius value.")
 				return
 		else:
-			R_kelvin = half_diag * 1.5
+			R_kelvin = max_dist * 1.3
 			self.kelvin_radius_edit.setText(f"{R_kelvin:.6f}")
 
-		if R_kelvin <= half_diag * 0.9:
+		if R_kelvin <= max_dist * 0.9:
 			QMessageBox.warning(self, "Error",
-				f"Kelvin radius ({R_kelvin:.4f}) is smaller than "
-				f"model extent ({half_diag:.4f}). Increase radius.")
+				f"Kelvin radius ({R_kelvin:.4f}) smaller than "
+				f"model extent ({max_dist:.4f}) from sphere center.")
 			return
 
-		# Offset for exterior sphere (10x radius, along x)
+		# Offset for exterior sphere (along x, away from model)
 		offset = R_kelvin * 10
-		ext_cx = cx + offset
+		ext_sx = sx + offset
 
-		self.kelvin_status.setText("Creating Kelvin sphere...")
+		self.kelvin_status.setText(f"Creating Kelvin sphere ({symmetry})...")
 		self.kelvin_status.setStyleSheet("color: blue;")
 		QApplication.processEvents()
 
 		try:
-			# Suppress journal logging during auto-commands
 			cubit.cmd("set journal off")
-
 			air_vids = list(cubit.get_block_volumes(air_bid))
 
-			# 1. Create interior sphere at centroid
+			# 1. Create interior sphere at symmetry center
 			cubit.cmd(f"create sphere radius {R_kelvin}")
 			sphere_id = cubit.get_last_id("volume")
+			if abs(sx) > 1e-10 or abs(sy) > 1e-10 or abs(sz) > 1e-10:
+				cubit.cmd(f"move volume {sphere_id} x {sx} y {sy} z {sz}")
 
-			# Move to centroid if not at origin
-			if abs(cx) > 1e-10 or abs(cy) > 1e-10 or abs(cz) > 1e-10:
-				cubit.cmd(f"move volume {sphere_id} x {cx} y {cy} z {cz}")
-
-			# 2. Webcut air with sphere (keep interior part as air)
-			#    First check if air is already inside the sphere
+			# 2. Webcut air with sphere (trim air to sphere boundary)
 			air_bb = cubit.get_bounding_box("volume", air_vids[0])
-			air_diag = math.sqrt(air_bb[2]**2 + air_bb[5]**2 + air_bb[8]**2) / 2
+			air_diag = math.sqrt(
+				air_bb[2]**2 + air_bb[5]**2 + air_bb[8]**2) / 2
 			if air_diag > R_kelvin * 1.05:
-				# Air extends beyond sphere - webcut needed
 				cubit.cmd(
 					f"webcut volume {' '.join(str(v) for v in air_vids)} "
 					f"with sheet body {sphere_id}")
-				# Remove the sphere tool body
 				cubit.cmd(f"delete volume {sphere_id}")
-				# Identify which new volumes are inside/outside sphere
-				# The inside ones keep the "air" block assignment
-				# The outside ones are deleted
 				new_all_vids = set(cubit.get_entities("volume"))
 				new_vids = new_all_vids - all_vids
 				for nv in new_vids:
 					bb = cubit.get_bounding_box("volume", nv)
 					nc = ((bb[0]+bb[1])/2, (bb[3]+bb[4])/2, (bb[6]+bb[7])/2)
-					dist = math.sqrt((nc[0]-cx)**2 + (nc[1]-cy)**2 + (nc[2]-cz)**2)
+					dist = math.sqrt(
+						(nc[0]-sx)**2 + (nc[1]-sy)**2 + (nc[2]-sz)**2)
 					if dist > R_kelvin * 0.8:
 						cubit.cmd(f"delete volume {nv}")
 			else:
-				# Air already fits inside sphere - no webcut needed
 				cubit.cmd(f"delete volume {sphere_id}")
 
-			# 3. Webcut air hemispheres with zplane (for copy mesh curves)
-			# Re-read air volumes after possible webcut
+			# 3. Webcut air with z-plane (creates topology curves for mesh copy)
 			air_vids_new = list(cubit.get_block_volumes(air_bid))
 			if not air_vids_new:
-				# Re-detect: volumes that were in air block
 				air_vids_new = air_vids
-
-			# Webcut air sphere with z-plane through centroid
 			cubit.cmd(
 				f"webcut volume {' '.join(str(v) for v in air_vids_new)} "
-				f"with plane zplane offset {cz}")
+				f"with plane zplane offset {sz}")
 
-			# 4. Create exterior sphere pair (2 hemispheres)
+			# Track all known model volumes (before exterior sphere)
+			all_known = set()
+			for bid in cubit.get_block_id_list():
+				for v in cubit.get_block_volumes(bid):
+					all_known.add(v)
+
+			# 4. Create exterior sphere at offset
 			cubit.cmd(f"create sphere radius {R_kelvin}")
 			ext_sphere = cubit.get_last_id("volume")
-			cubit.cmd(f"move volume {ext_sphere} x {ext_cx} y {cy} z {cz}")
+			cubit.cmd(
+				f"move volume {ext_sphere} x {ext_sx} y {sy} z {sz}")
+
+			# 5. Webcut exterior sphere: z-plane (always)
 			cubit.cmd(
 				f"webcut volume {ext_sphere} "
-				f"with plane zplane offset {cz}")
-			# Get the two kelvin hemisphere volume IDs
+				f"with plane zplane offset {sz}")
+
+			# 6. Additional webcuts for symmetry (exterior only)
+			if "Quarter" in symmetry or "Eighth" in symmetry:
+				ext_now = [v for v in cubit.get_entities("volume")
+				           if v not in all_known]
+				if ext_now:
+					cubit.cmd(
+						f"webcut volume "
+						f"{' '.join(str(v) for v in ext_now)} "
+						f"with plane xplane offset {ext_sx}")
+
+			if "Eighth" in symmetry:
+				ext_now = [v for v in cubit.get_entities("volume")
+				           if v not in all_known]
+				if ext_now:
+					cubit.cmd(
+						f"webcut volume "
+						f"{' '.join(str(v) for v in ext_now)} "
+						f"with plane yplane offset {sy}")
+
+			# 7. Find all exterior volumes (near ext_sx)
 			kelvin_vids = []
 			for vid in cubit.get_entities("volume"):
-				if vid not in all_vids and vid not in air_vids_new:
+				if vid not in all_known:
 					bb = cubit.get_bounding_box("volume", vid)
 					nc_x = (bb[0] + bb[1]) / 2
-					if abs(nc_x - ext_cx) < R_kelvin:
+					if abs(nc_x - ext_sx) < R_kelvin * 1.1:
 						kelvin_vids.append(vid)
 
 			if not kelvin_vids:
-				# Fallback: last 2 volumes created
 				all_now = sorted(cubit.get_entities("volume"))
 				kelvin_vids = all_now[-2:]
 
-			# 5. Set mesh scheme and size for kelvin
+			# 8. For symmetry modes, keep only matching piece(s)
+			if symmetry != "Full":
+				dir_x = cx - sx  # model direction from sphere center
+				dir_y = cy - sy
+				dir_z = cz - sz
+				eps = R_kelvin * 0.01
+
+				keep = []
+				for kv in kelvin_vids:
+					bb = cubit.get_bounding_box("volume", kv)
+					nc = ((bb[0]+bb[1])/2, (bb[3]+bb[4])/2,
+					      (bb[6]+bb[7])/2)
+					ok = True
+					# z-check (all symmetry modes)
+					if dir_z >= 0 and nc[2] < sz - eps:
+						ok = False
+					elif dir_z < 0 and nc[2] > sz + eps:
+						ok = False
+					# x-check (Quarter, Eighth)
+					if ok and ("Quarter" in symmetry
+					           or "Eighth" in symmetry):
+						if dir_x >= 0 and nc[0] < ext_sx - eps:
+							ok = False
+						elif dir_x < 0 and nc[0] > ext_sx + eps:
+							ok = False
+					# y-check (Eighth)
+					if ok and "Eighth" in symmetry:
+						if dir_y >= 0 and nc[1] < sy - eps:
+							ok = False
+						elif dir_y < 0 and nc[1] > sy + eps:
+							ok = False
+
+					if ok:
+						keep.append(kv)
+					else:
+						cubit.cmd(f"delete volume {kv}")
+				kelvin_vids = keep
+
+			# 9. Set mesh scheme and size
 			kelvin_size = R_kelvin / 3
 			for kv in kelvin_vids:
 				cubit.cmd(f"volume {kv} scheme tetmesh")
 				cubit.cmd(f"volume {kv} size {kelvin_size}")
 
-			# 6. Find hemisphere surface pairs and copy mesh
-			# Interior hemispheres = free surfaces on air volumes (not shared)
-			# Re-read air after webcut
+			# 10. Find interior sphere surfaces (free surfaces on air)
 			air_vids_final = []
 			for bid in cubit.get_block_id_list():
 				name = cubit.get_exodus_entity_name("block", bid)
 				if name == "air":
 					air_vids_final.extend(cubit.get_block_volumes(bid))
 
+			full_area = 4 * math.pi * R_kelvin**2
+			if symmetry == "Full":
+				min_area = full_area * 0.15  # hemisphere ~2*pi*R^2
+			elif "Half" in symmetry:
+				min_area = full_area * 0.15
+			elif "Quarter" in symmetry:
+				min_area = full_area * 0.05  # quadrant ~pi*R^2
+			else:  # Eighth
+				min_area = full_area * 0.02  # octant ~pi*R^2/2
+
 			int_hemis = []
 			for av in air_vids_final:
 				for sid in cubit.get_relatives("volume", av, "surface"):
 					adj = cubit.get_relatives("surface", sid, "volume")
-					if len(adj) == 1:  # free surface (outer boundary)
+					if len(adj) == 1:  # free surface (sphere boundary)
 						area = cubit.surface(sid).area()
-						# Hemisphere area ~ 2*pi*R^2
-						expected = 2 * math.pi * R_kelvin**2
-						if area > expected * 0.3:  # at least 30% of hemisphere
+						if area > min_area:
 							int_hemis.append(sid)
 
+			# 11. Find exterior sphere surfaces (largest per kelvin vol)
 			ext_hemis = []
 			for kv in kelvin_vids:
 				best_sid, best_area = None, 0
@@ -2140,45 +2228,51 @@ class IHFEMDialog(QDialog):
 				if best_sid is not None:
 					ext_hemis.append(best_sid)
 
-			# Sort both lists by z-position of centroid (match upper/lower)
-			def _surf_cz(sid):
+			# Sort by (z, x) for consistent matching
+			def _surf_key(sid):
 				pts = cubit.get_relatives("surface", sid, "vertex")
 				if pts:
-					zs = [cubit.vertex(v).coordinates()[2] for v in pts]
-					return sum(zs) / len(zs)
-				return 0
+					cs = [cubit.vertex(v).coordinates() for v in pts]
+					z = sum(c[2] for c in cs) / len(cs)
+					x = sum(c[0] for c in cs) / len(cs)
+					return (z, x)
+				return (0, 0)
 
-			int_hemis.sort(key=_surf_cz)
-			ext_hemis.sort(key=_surf_cz)
+			int_hemis.sort(key=_surf_key)
+			ext_hemis.sort(key=_surf_key)
 
-			# Copy mesh from interior to exterior hemispheres
+			# 12. Copy mesh from interior to exterior
 			for src_sid, dst_sid in zip(int_hemis, ext_hemis):
-				src_curves = cubit.get_relatives("surface", src_sid, "curve")
-				dst_curves = cubit.get_relatives("surface", dst_sid, "curve")
+				src_curves = cubit.get_relatives(
+					"surface", src_sid, "curve")
+				dst_curves = cubit.get_relatives(
+					"surface", dst_sid, "curve")
 				if not src_curves or not dst_curves:
 					continue
 				src_c = src_curves[0]
 				dst_c = dst_curves[0]
 				try:
-					src_v = cubit.get_relatives("curve", src_c, "vertex")[0]
-					dst_v = cubit.get_relatives("curve", dst_c, "vertex")[0]
+					src_v = cubit.get_relatives(
+						"curve", src_c, "vertex")[0]
+					dst_v = cubit.get_relatives(
+						"curve", dst_c, "vertex")[0]
 					cubit.cmd(
-						f"copy mesh surface {src_sid} onto surface {dst_sid} "
-						f"source curve {src_c} source vertex {src_v} "
-						f"target curve {dst_c} target vertex {dst_v}")
+						f"copy mesh surface {src_sid} onto surface "
+						f"{dst_sid} source curve {src_c} source vertex "
+						f"{src_v} target curve {dst_c} target vertex "
+						f"{dst_v}")
 				except Exception:
-					# Fallback: try without vertex specification
 					cubit.cmd(
-						f"copy mesh surface {src_sid} onto surface {dst_sid} "
-						f"source curve {src_c} target curve {dst_c}")
+						f"copy mesh surface {src_sid} onto surface "
+						f"{dst_sid} source curve {src_c} "
+						f"target curve {dst_c}")
 
-			# 7. Tet mesh kelvin volumes
+			# 13. Tet mesh kelvin volumes
 			for kv in kelvin_vids:
-				n_tets = len(cubit.get_volume_tets(kv))
-				if n_tets == 0:
+				if len(cubit.get_volume_tets(kv)) == 0:
 					cubit.cmd(f"mesh volume {kv}")
 
-			# 8. Create blocks: kelvin (volume), kelvin_int, kelvin_ext (surfaces)
+			# 14. Create blocks: kelvin, kelvin_int, kelvin_ext
 			cubit.cmd("set duplicate block elements on")
 			bid_next = max(cubit.get_block_id_list()) + 1
 			for kv in kelvin_vids:
@@ -2188,21 +2282,23 @@ class IHFEMDialog(QDialog):
 			for sid in int_hemis:
 				tris = cubit.get_surface_tris(sid)
 				if tris:
-					cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+					cubit.cmd(
+						f"block {bid_next} add tri in surface {sid}")
 			cubit.cmd(f'block {bid_next} name "kelvin_int"')
 			bid_next += 1
 			for sid in ext_hemis:
 				tris = cubit.get_surface_tris(sid)
 				if tris:
-					cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+					cubit.cmd(
+						f"block {bid_next} add tri in surface {sid}")
 			cubit.cmd(f'block {bid_next} name "kelvin_ext"')
 
-			# Report
-			n_kelvin_tets = sum(len(cubit.get_volume_tets(kv)) for kv in kelvin_vids)
+			n_tets = sum(
+				len(cubit.get_volume_tets(kv)) for kv in kelvin_vids)
 			self.kelvin_status.setText(
-				f"Kelvin added: R={R_kelvin:.4f}m, "
-				f"{len(kelvin_vids)} vols, {n_kelvin_tets} tets, "
-				f"{len(int_hemis)} int + {len(ext_hemis)} ext surfaces")
+				f"Kelvin added ({symmetry}): R={R_kelvin:.4f}m, "
+				f"{len(kelvin_vids)} vol, {n_tets} tets, "
+				f"{len(int_hemis)} int + {len(ext_hemis)} ext surf")
 			self.kelvin_status.setStyleSheet("color: green;")
 
 		except Exception as e:
@@ -2213,7 +2309,6 @@ class IHFEMDialog(QDialog):
 		finally:
 			cubit.cmd("set journal on")
 
-		# Re-detect blocks
 		self._detect_blocks()
 
 	def _detect_blocks(self):
@@ -2610,6 +2705,1163 @@ class IHFEMDialog(QDialog):
 
 
 # ================================================================
+# Accelerator Magnet Dialog
+# ================================================================
+
+class AccelMagnetDialog(QDialog):
+	"""Dialog for accelerator magnet analysis (Omega-reduced / A-formulation).
+
+	Inputs:
+	  - Coil Python script: defines build_coil() -> CoilBuilder
+	  - Yoke Cubit journal: iron yoke + air mesh
+	  - Formulation: omega (scalar H1) or a (vector HCurl)
+
+	Coil is NOT meshed -- Biot-Savart source from wire path.
+	"""
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setWindowTitle("Accelerator Magnet")
+		self.setMinimumWidth(580)
+		self.setMinimumHeight(580)
+		self._ext_python = _find_external_python()
+		self._process = None
+		self._setup_ui()
+
+	def _setup_ui(self):
+		layout = QVBoxLayout(self)
+
+		# --- Coil script ---
+		coil_group = QGroupBox("Coil (Biot-Savart source)")
+		coil_layout = QHBoxLayout(coil_group)
+		coil_layout.addWidget(QLabel("Python script:"))
+		self.coil_edit = QLineEdit()
+		self.coil_edit.setPlaceholderText("path/to/coil.py (must define build_coil())")
+		coil_layout.addWidget(self.coil_edit)
+		coil_browse = QPushButton("...")
+		coil_browse.setFixedWidth(30)
+		coil_browse.clicked.connect(self._browse_coil)
+		coil_layout.addWidget(coil_browse)
+		preview_btn = QPushButton("Preview")
+		preview_btn.setToolTip(
+			"Run coil script, generate STEP, import into Cubit.\n"
+			"Coil geometry is shown but NOT meshed.")
+		preview_btn.clicked.connect(self._preview_coil)
+		coil_layout.addWidget(preview_btn)
+		layout.addWidget(coil_group)
+
+		# --- Yoke journal editor ---
+		jou_label = QLabel("Yoke Journal (iron + air blocks, NO coil):")
+		jou_label.setStyleSheet("font-weight: bold;")
+		layout.addWidget(jou_label)
+		self.jou_edit = QPlainTextEdit()
+		self.jou_edit.setFont(QFont("Consolas", 9))
+		self.jou_edit.setPlainText(self._default_yoke_journal())
+		self.jou_edit.setMaximumHeight(180)
+		layout.addWidget(self.jou_edit)
+
+		jou_btn_row = QHBoxLayout()
+		load_btn = QPushButton("Load .jou...")
+		load_btn.clicked.connect(self._load_journal)
+		jou_btn_row.addWidget(load_btn)
+		run_btn = QPushButton("Run Journal")
+		run_btn.clicked.connect(self._run_journal)
+		jou_btn_row.addWidget(run_btn)
+		jou_btn_row.addStretch()
+		layout.addLayout(jou_btn_row)
+
+		# --- Block detection ---
+		block_group = QGridLayout()
+		for row, (lbl, attr) in enumerate([
+			("yoke:", "_yoke_block"),
+			("air:", "_air_block"),
+			("sym_tangential:", "_sym_tan"),
+			("sym_normal:", "_sym_nor"),
+			("kelvin:", "_kelvin_block"),
+			("outer:", "_outer_surface"),
+		]):
+			block_group.addWidget(QLabel(lbl), row, 0)
+			w = QLabel("(not found)")
+			w.setStyleSheet("font-weight: bold; color: red;")
+			setattr(self, f"label{attr}", w)
+			block_group.addWidget(w, row, 1)
+		layout.addLayout(block_group)
+
+		# --- Formulation + order ---
+		form_group = QGridLayout()
+		form_group.addWidget(QLabel("Formulation:"), 0, 0)
+		self.form_combo = QComboBox()
+		self.form_combo.addItems([
+			"Omega-reduced (H1)", "A-formulation (HCurl)",
+			"MMM (Radia tet)", "MSC (Radia hex)"])
+		self.form_combo.setToolTip(
+			"Omega-reduced: scalar potential FEM (fastest)\n"
+			"A-formulation: vector potential FEM (eddy-current ready)\n"
+			"MMM: Radia integral (tet, open boundary, no air mesh)\n"
+			"MSC: Radia integral (hex, open boundary, no air mesh)")
+		self.form_combo.currentTextChanged.connect(self._on_formulation_changed)
+		form_group.addWidget(self.form_combo, 0, 1)
+
+		form_group.addWidget(QLabel("Curve order:"), 1, 0)
+		self.curve_spin = QSpinBox()
+		self.curve_spin.setRange(1, 3)
+		self.curve_spin.setValue(2)
+		form_group.addWidget(self.curve_spin, 1, 1)
+
+		form_group.addWidget(QLabel("FES order:"), 1, 2)
+		self.fes_spin = QSpinBox()
+		self.fes_spin.setRange(1, 3)
+		self.fes_spin.setValue(1)
+		form_group.addWidget(self.fes_spin, 1, 3)
+		layout.addLayout(form_group)
+
+		# --- Kelvin (open boundary) ---
+		kelvin_group = QGroupBox("Kelvin (Open Boundary)")
+		kelvin_layout = QGridLayout(kelvin_group)
+		kelvin_layout.addWidget(QLabel("Radius [m]:"), 0, 0)
+		self.kelvin_radius_edit = QLineEdit("")
+		self.kelvin_radius_edit.setPlaceholderText("auto from bounding box")
+		kelvin_layout.addWidget(self.kelvin_radius_edit, 0, 1)
+		self.add_kelvin_btn = QPushButton("Add Kelvin")
+		self.add_kelvin_btn.setToolTip(
+			"Create Kelvin sphere pair in Cubit:\n"
+			"1. Sphere at centroid -> webcut air\n"
+			"2. Exterior sphere at offset -> kelvin volume\n"
+			"3. Mesh copy for periodic identification")
+		self.add_kelvin_btn.clicked.connect(self._add_kelvin)
+		kelvin_layout.addWidget(self.add_kelvin_btn, 0, 2)
+		kelvin_layout.addWidget(QLabel("Symmetry:"), 1, 0)
+		self.kelvin_sym_combo = QComboBox()
+		self.kelvin_sym_combo.addItems([
+			"Full", "Half (Z)", "Quarter (X,Z)", "Eighth (X,Y,Z)"])
+		self.kelvin_sym_combo.setToolTip(
+			"Full: no symmetry planes (2 hemispheres)\n"
+			"Half (Z): z-symmetry plane (1 hemisphere)\n"
+			"Quarter (X,Z): x + z symmetry planes (1 quadrant)\n"
+			"Eighth (X,Y,Z): x + y + z symmetry planes (1 octant)")
+		kelvin_layout.addWidget(self.kelvin_sym_combo, 1, 1)
+		self.kelvin_status = QLabel("")
+		self.kelvin_status.setWordWrap(True)
+		kelvin_layout.addWidget(self.kelvin_status, 2, 0, 1, 3)
+		layout.addWidget(kelvin_group)
+
+		# --- Iron material ---
+		mat_group = QGroupBox("Iron Yoke Material")
+		mat_layout = QGridLayout(mat_group)
+
+		mat_layout.addWidget(QLabel("Model:"), 0, 0)
+		self.mat_combo = QComboBox()
+		self.mat_combo.addItems(["Nonlinear (BH curve)", "Linear (mu_r)",
+		                         "Hysteresis (Play .hys)"])
+		self.mat_combo.currentTextChanged.connect(self._on_material_changed)
+		mat_layout.addWidget(self.mat_combo, 0, 1)
+
+		self.mur_label = QLabel("mu_r:")
+		mat_layout.addWidget(self.mur_label, 1, 0)
+		self.mur_edit = QLineEdit("1000")
+		mat_layout.addWidget(self.mur_edit, 1, 1)
+
+		self.bh_label = QLabel("BH curve:")
+		mat_layout.addWidget(self.bh_label, 2, 0)
+		bh_row = QHBoxLayout()
+		self.bh_combo = QComboBox()
+		self.bh_combo.addItems(["ELF Steel (100 pts)", "Custom file..."])
+		self.bh_combo.setToolTip(
+			"ELF Steel: 100-point curve from ELF_MAGIC (CEFC 2020)\n"
+			"Custom file: 2-column text file (H [A/m], B [T])")
+		self.bh_combo.currentTextChanged.connect(self._on_bh_changed)
+		bh_row.addWidget(self.bh_combo)
+		self.bh_edit = QLineEdit("")
+		self.bh_edit.setReadOnly(True)
+		self.bh_edit.setVisible(False)
+		bh_row.addWidget(self.bh_edit)
+		self.bh_browse = QPushButton("...")
+		self.bh_browse.setFixedWidth(30)
+		self.bh_browse.setVisible(False)
+		self.bh_browse.clicked.connect(self._browse_bh)
+		bh_row.addWidget(self.bh_browse)
+		mat_layout.addLayout(bh_row, 2, 1)
+
+		# BH curve info display
+		self.bh_info = QLabel("ELF Steel: 100 points, Bmax=2.6T (CEFC 2020)")
+		self.bh_info.setStyleSheet("color: #666; font-size: 9pt;")
+		self.bh_info.setWordWrap(True)
+		mat_layout.addWidget(self.bh_info, 3, 0, 1, 2)
+
+		# .hys file (Hysteresis mode)
+		self.hys_label = QLabel(".hys file:")
+		mat_layout.addWidget(self.hys_label, 4, 0)
+		hys_row = QHBoxLayout()
+		self.hys_edit = QLineEdit("")
+		self.hys_edit.setPlaceholderText("JMAG .hys file")
+		hys_row.addWidget(self.hys_edit)
+		self.hys_browse = QPushButton("...")
+		self.hys_browse.setFixedWidth(30)
+		self.hys_browse.clicked.connect(self._browse_hys)
+		hys_row.addWidget(self.hys_browse)
+		mat_layout.addLayout(hys_row, 4, 1)
+
+		self.hys_info = QLabel("")
+		self.hys_info.setStyleSheet("color: #666; font-size: 9pt;")
+		self.hys_info.setWordWrap(True)
+		mat_layout.addWidget(self.hys_info, 5, 0, 1, 2)
+
+		# Quasi-static steps (Hysteresis mode)
+		self.nsteps_label = QLabel("Steps (0->I->0):")
+		mat_layout.addWidget(self.nsteps_label, 6, 0)
+		self.nsteps_spin = QSpinBox()
+		self.nsteps_spin.setRange(1, 200)
+		self.nsteps_spin.setValue(10)
+		self.nsteps_spin.setToolTip(
+			"Number of quasi-static steps.\n"
+			"1 = single excitation (no ramp).\n"
+			"N>1 = ramp up then down (hysteresis loop).")
+		mat_layout.addWidget(self.nsteps_spin, 6, 1)
+
+		self._on_material_changed(self.mat_combo.currentText())
+		layout.addWidget(mat_group)
+
+		# --- Picard iteration ---
+		iter_group = QGridLayout()
+		iter_group.addWidget(QLabel("Max iterations:"), 0, 0)
+		self.maxiter_spin = QSpinBox()
+		self.maxiter_spin.setRange(1, 200)
+		self.maxiter_spin.setValue(30)
+		iter_group.addWidget(self.maxiter_spin, 0, 1)
+
+		iter_group.addWidget(QLabel("Relaxation:"), 0, 2)
+		self.relax_edit = QLineEdit("0.3")
+		self.relax_edit.setToolTip("Under-relaxation (0=full, 0.5=half)")
+		iter_group.addWidget(self.relax_edit, 0, 3)
+
+		self.newton_check = QCheckBox("Newton")
+		self.newton_check.setToolTip(
+			"Newton: anisotropic tangent (quadratic convergence)\n"
+			"Picard: isotropic chord (linear convergence, more robust)")
+		self.newton_check.setChecked(True)
+		iter_group.addWidget(self.newton_check, 0, 4)
+		layout.addLayout(iter_group)
+
+		# --- Result ---
+		self.result_label = QLabel("")
+		self.result_label.setWordWrap(True)
+		layout.addWidget(self.result_label)
+
+		# --- Buttons ---
+		btn_row = QHBoxLayout()
+		btn_row.addStretch()
+		self.solve_btn = QPushButton("Solve")
+		self.solve_btn.clicked.connect(self._solve)
+		btn_row.addWidget(self.solve_btn)
+		self.open_btn = QPushButton("Open Result")
+		self.open_btn.clicked.connect(self._open_result)
+		self.open_btn.setEnabled(False)
+		btn_row.addWidget(self.open_btn)
+		close_btn = QPushButton("Close")
+		close_btn.clicked.connect(self.accept)
+		btn_row.addWidget(close_btn)
+		layout.addLayout(btn_row)
+
+		# Python info
+		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
+		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
+		layout.addWidget(py_label)
+
+	@staticmethod
+	def _default_yoke_journal():
+		"""Default journal: simple C-dipole yoke + air sphere."""
+		lines = [
+			"# Accelerator dipole yoke (simplified C-magnet)",
+			"# Units: meters",
+			"reset",
+			"",
+			"# === Iron yoke (C-shape) ===",
+			"# Outer frame",
+			"brick x 0.300 y 0.200 z 0.400",
+			"# Aperture (beam pipe hole)",
+			"brick x 0.100 y 0.200 z 0.060",
+			"move volume 2 x 0 y 0 z 0",
+			"subtract volume 2 from volume 1",
+			"",
+			"# === Air sphere ===",
+			"create sphere radius 0.300",
+			"subtract volume 1 from volume 3 keep",
+			"# Volume 1 = yoke, Volume 3 = air (sphere - yoke)",
+			"",
+			"# === Imprint and merge ===",
+			"imprint volume all",
+			"merge volume all",
+			"",
+			"# === Mesh ===",
+			"volume all scheme tetmesh",
+			"volume 1 size 0.020",
+			"volume 3 size 0.030",
+			"mesh volume 1 3",
+			"",
+			"# === Blocks ===",
+			"set duplicate block elements on",
+			"block 1 add volume 1",
+			'block 1 name "yoke"',
+			"block 2 add volume 3",
+			'block 2 name "air"',
+			"",
+			"# Kelvin: use 'Add Kelvin' button in dialog",
+			"# outer: auto-created by dialog",
+		]
+		return "\n".join(lines) + "\n"
+
+	def _on_material_changed(self, text):
+		is_linear = "Linear" in text
+		is_hys = "Hysteresis" in text
+		is_bh = not is_linear and not is_hys
+		self.mur_label.setVisible(is_linear)
+		self.mur_edit.setVisible(is_linear)
+		self.bh_label.setVisible(is_bh)
+		self.bh_edit.setVisible(is_bh)
+		self.bh_browse.setVisible(is_bh)
+		self.bh_info.setVisible(is_bh)
+		self.hys_label.setVisible(is_hys)
+		self.hys_edit.setVisible(is_hys)
+		self.hys_browse.setVisible(is_hys)
+		self.hys_info.setVisible(is_hys)
+		self.nsteps_label.setVisible(is_hys)
+		self.nsteps_spin.setVisible(is_hys)
+		# Hysteresis works with both formulations (Hantila decomposition)
+
+	def _browse_coil(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Select Coil Script", "",
+			"Python Files (*.py);;All Files (*)")
+		if path:
+			self.coil_edit.setText(path)
+
+	def _preview_coil(self):
+		"""Run coil script -> STEP -> import into Cubit for visualization."""
+		coil_path = self.coil_edit.text().strip()
+		if not coil_path or not os.path.exists(coil_path):
+			QMessageBox.warning(self, "Error", "Set a valid coil script path first.")
+			return
+
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		# Generate STEP via external Python (needs scipy for CoilBuilder)
+		step_file = os.path.join(
+			tempfile.gettempdir(), "radia_coil_preview.step").replace("\\", "/")
+		code = (
+			f"import sys, os; "
+			f"sys.path.insert(0, os.path.dirname(r'{coil_path}')); "
+			f"sys.path.insert(0, r'{_pkg_root}'); "
+			f"import importlib.util; "
+			f"spec = importlib.util.spec_from_file_location('cm', r'{coil_path}'); "
+			f"mod = importlib.util.module_from_spec(spec); "
+			f"spec.loader.exec_module(mod); "
+			f"coil = mod.build_coil(); "
+			f"coil.write_step(r'{step_file}'); "
+			f"print('OK')")
+
+		try:
+			r = subprocess.run(
+				[self._ext_python, "-c", code],
+				capture_output=True, text=True, timeout=30)
+			if r.returncode != 0 or "OK" not in r.stdout:
+				err = r.stderr.strip().split("\n")[-1] if r.stderr else "Unknown error"
+				QMessageBox.warning(self, "Coil Error", f"STEP generation failed:\n{err}")
+				return
+		except subprocess.TimeoutExpired:
+			QMessageBox.warning(self, "Error", "Coil script timed out.")
+			return
+
+		if not os.path.exists(step_file):
+			QMessageBox.warning(self, "Error", "STEP file not generated.")
+			return
+
+		# Import STEP as free body (not added to any block -> not meshed)
+		try:
+			cubit.cmd(f'import step "{step_file}" heal')
+			# Find newly imported volumes (not in any block)
+			coil_vids = []
+			block_vids = set()
+			for bid in cubit.get_block_id_list():
+				for v in cubit.get_block_volumes(bid):
+					block_vids.add(v)
+			for v in cubit.get_entities("volume"):
+				if v not in block_vids:
+					coil_vids.append(v)
+			# Style: lightblue, transparent, no mesh scheme
+			for v in coil_vids:
+				cubit.cmd(f"color volume {v} lightblue")
+				cubit.cmd(f"volume {v} visibility on")
+		except Exception as e:
+			QMessageBox.warning(self, "Import Error", str(e))
+
+	def _on_bh_changed(self, text):
+		"""Update BH curve info and show/hide custom file widgets."""
+		is_custom = "Custom" in text
+		self.bh_edit.setVisible(is_custom)
+		self.bh_browse.setVisible(is_custom)
+		if "ELF" in text:
+			self.bh_info.setText(
+				"ELF Steel: 100 points, Bmax=2.6T (CEFC 2020)")
+		elif "Simple" in text:
+			self.bh_info.setText(
+				"Simple Steel: 12 points, Bmax=2.0T")
+		elif is_custom and self.bh_edit.text():
+			pass  # keep current info from _browse_bh
+		else:
+			self.bh_info.setText("")
+
+	def _browse_bh(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load BH Curve", "",
+			"Text files (*.txt *.csv *.dat);;All Files (*)")
+		if path:
+			self.bh_edit.setText(path)
+			try:
+				import numpy as _np
+				data = _np.loadtxt(path)
+				if data.ndim == 2 and data.shape[1] >= 2:
+					self.bh_info.setText(
+						f"{os.path.basename(path)}: {data.shape[0]} pts, "
+						f"Hmax={data[-1,0]:.0f} A/m, Bmax={data[-1,1]:.2f} T")
+			except Exception:
+				self.bh_info.setText(f"Loaded: {os.path.basename(path)}")
+
+	def _browse_hys(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load Hysteresis Data", "",
+			"HYS files (*.hys);;MAT files (*.mat);;All Files (*)")
+		if path:
+			self.hys_edit.setText(path)
+			try:
+				# Read .hys header to show info
+				with open(path, 'r') as f:
+					_model = f.readline().strip()
+					dims = f.readline().split()
+					nx, ny = int(dims[1]), int(dims[2])
+				self.hys_info.setText(
+					f"{os.path.basename(path)}: {ny} loops, "
+					f"{nx} pts/loop")
+			except Exception:
+				self.hys_info.setText(f"Loaded: {os.path.basename(path)}")
+
+	def _load_journal(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load Cubit Journal", "",
+			"Cubit Journal (*.jou);;All Files (*)")
+		if path:
+			try:
+				with open(path, "r", encoding="utf-8") as f:
+					self.jou_edit.setPlainText(f.read())
+			except Exception as e:
+				QMessageBox.warning(self, "Error", f"Failed to load: {e}")
+
+	def _run_journal(self):
+		text = self.jou_edit.toPlainText().strip()
+		if not text:
+			return
+		for line in text.splitlines():
+			line = line.strip()
+			if not line or line.startswith("#"):
+				continue
+			cubit.cmd(line)
+		self._detect_blocks()
+
+	def _on_formulation_changed(self, text):
+		"""Enable/disable UI elements based on formulation selection.
+
+		FEM (Omega/A): needs Kelvin, air block, curve/fes order.
+		Radia (MMM/MSC): no air, no Kelvin, no FES order.
+		"""
+		is_radia = "Radia" in text
+		self.add_kelvin_btn.setEnabled(not is_radia)
+		self.kelvin_radius_edit.setEnabled(not is_radia)
+		self.kelvin_sym_combo.setEnabled(not is_radia)
+		self.curve_spin.setEnabled(not is_radia)
+		self.fes_spin.setEnabled(not is_radia)
+		if is_radia:
+			self.kelvin_status.setText(
+				"Radia solver: no air/Kelvin needed (natural open BC)")
+			self.kelvin_status.setStyleSheet("color: gray;")
+
+	def _add_kelvin(self):
+		"""Create Kelvin sphere pair with symmetry support.
+
+		Symmetry modes:
+		  Full:          2 hemispheres (z-webcut), sphere at model centroid
+		  Half (Z):      1 hemisphere, sphere centered on z-symmetry plane
+		  Quarter (X,Z): 1 quadrant, sphere centered on x,z-symmetry planes
+		  Eighth (X,Y,Z):1 octant, sphere centered on x,y,z-symmetry planes
+		"""
+		import math
+
+		symmetry = self.kelvin_sym_combo.currentText()
+
+		# Check blocks
+		found = {}
+		try:
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+		except Exception:
+			pass
+
+		if "kelvin" in found:
+			self.kelvin_status.setText("Kelvin block already exists.")
+			self.kelvin_status.setStyleSheet("color: orange;")
+			return
+
+		air_bid = found.get("air")
+		if not air_bid:
+			QMessageBox.warning(self, "Error",
+				'No "air" block found. Run journal first to create blocks.')
+			return
+
+		all_vids = set()
+		for bid in cubit.get_block_id_list():
+			for v in cubit.get_block_volumes(bid):
+				all_vids.add(v)
+
+		if not all_vids:
+			QMessageBox.warning(self, "Error", "No meshed volumes found.")
+			return
+
+		# Bounding box of all model volumes
+		bb_min = [1e30, 1e30, 1e30]
+		bb_max = [-1e30, -1e30, -1e30]
+		for vid in all_vids:
+			bb = cubit.get_bounding_box("volume", vid)
+			bb_min[0] = min(bb_min[0], bb[0])
+			bb_max[0] = max(bb_max[0], bb[1])
+			bb_min[1] = min(bb_min[1], bb[3])
+			bb_max[1] = max(bb_max[1], bb[4])
+			bb_min[2] = min(bb_min[2], bb[6])
+			bb_max[2] = max(bb_max[2], bb[7])
+
+		cx = (bb_min[0] + bb_max[0]) / 2
+		cy = (bb_min[1] + bb_max[1]) / 2
+		cz = (bb_min[2] + bb_max[2]) / 2
+
+		# Sphere center: at symmetry plane intersection
+		# Symmetry plane = bounding box face closest to 0
+		def _sym_coord(lo, hi):
+			return lo if abs(lo) <= abs(hi) else hi
+
+		if "Quarter" in symmetry or "Eighth" in symmetry:
+			sx = _sym_coord(bb_min[0], bb_max[0])
+		else:
+			sx = cx
+		if "Eighth" in symmetry:
+			sy = _sym_coord(bb_min[1], bb_max[1])
+		else:
+			sy = cy
+		if symmetry != "Full":
+			sz = _sym_coord(bb_min[2], bb_max[2])
+		else:
+			sz = cz
+
+		# R_kelvin: must enclose model from sphere center
+		corners = [(x, y, z) for x in (bb_min[0], bb_max[0])
+		                      for y in (bb_min[1], bb_max[1])
+		                      for z in (bb_min[2], bb_max[2])]
+		max_dist = max(math.sqrt((x - sx)**2 + (y - sy)**2 + (z - sz)**2)
+		              for x, y, z in corners)
+
+		r_text = self.kelvin_radius_edit.text().strip()
+		if r_text:
+			try:
+				R_kelvin = float(r_text)
+			except ValueError:
+				QMessageBox.warning(self, "Error", "Invalid radius value.")
+				return
+		else:
+			R_kelvin = max_dist * 1.3
+			self.kelvin_radius_edit.setText(f"{R_kelvin:.6f}")
+
+		if R_kelvin <= max_dist * 0.9:
+			QMessageBox.warning(self, "Error",
+				f"Kelvin radius ({R_kelvin:.4f}) smaller than "
+				f"model extent ({max_dist:.4f}) from sphere center.")
+			return
+
+		# Offset for exterior sphere (along x, away from model)
+		offset = R_kelvin * 10
+		ext_sx = sx + offset
+
+		self.kelvin_status.setText(f"Creating Kelvin sphere ({symmetry})...")
+		self.kelvin_status.setStyleSheet("color: blue;")
+		QApplication.processEvents()
+
+		try:
+			cubit.cmd("set journal off")
+			air_vids = list(cubit.get_block_volumes(air_bid))
+
+			# 1. Create interior sphere at symmetry center
+			cubit.cmd(f"create sphere radius {R_kelvin}")
+			sphere_id = cubit.get_last_id("volume")
+			if abs(sx) > 1e-10 or abs(sy) > 1e-10 or abs(sz) > 1e-10:
+				cubit.cmd(f"move volume {sphere_id} x {sx} y {sy} z {sz}")
+
+			# 2. Webcut air with sphere (trim air to sphere boundary)
+			air_bb = cubit.get_bounding_box("volume", air_vids[0])
+			air_diag = math.sqrt(
+				air_bb[2]**2 + air_bb[5]**2 + air_bb[8]**2) / 2
+			if air_diag > R_kelvin * 1.05:
+				cubit.cmd(
+					f"webcut volume {' '.join(str(v) for v in air_vids)} "
+					f"with sheet body {sphere_id}")
+				cubit.cmd(f"delete volume {sphere_id}")
+				new_all_vids = set(cubit.get_entities("volume"))
+				new_vids = new_all_vids - all_vids
+				for nv in new_vids:
+					bb = cubit.get_bounding_box("volume", nv)
+					nc = ((bb[0]+bb[1])/2, (bb[3]+bb[4])/2, (bb[6]+bb[7])/2)
+					dist = math.sqrt(
+						(nc[0]-sx)**2 + (nc[1]-sy)**2 + (nc[2]-sz)**2)
+					if dist > R_kelvin * 0.8:
+						cubit.cmd(f"delete volume {nv}")
+			else:
+				cubit.cmd(f"delete volume {sphere_id}")
+
+			# 3. Webcut air with z-plane (creates topology curves for mesh copy)
+			air_vids_new = list(cubit.get_block_volumes(air_bid))
+			if not air_vids_new:
+				air_vids_new = air_vids
+			cubit.cmd(
+				f"webcut volume {' '.join(str(v) for v in air_vids_new)} "
+				f"with plane zplane offset {sz}")
+
+			# Track all known model volumes (before exterior sphere)
+			all_known = set()
+			for bid in cubit.get_block_id_list():
+				for v in cubit.get_block_volumes(bid):
+					all_known.add(v)
+
+			# 4. Create exterior sphere at offset
+			cubit.cmd(f"create sphere radius {R_kelvin}")
+			ext_sphere = cubit.get_last_id("volume")
+			cubit.cmd(
+				f"move volume {ext_sphere} x {ext_sx} y {sy} z {sz}")
+
+			# 5. Webcut exterior sphere: z-plane (always)
+			cubit.cmd(
+				f"webcut volume {ext_sphere} "
+				f"with plane zplane offset {sz}")
+
+			# 6. Additional webcuts for symmetry (exterior only)
+			if "Quarter" in symmetry or "Eighth" in symmetry:
+				ext_now = [v for v in cubit.get_entities("volume")
+				           if v not in all_known]
+				if ext_now:
+					cubit.cmd(
+						f"webcut volume "
+						f"{' '.join(str(v) for v in ext_now)} "
+						f"with plane xplane offset {ext_sx}")
+
+			if "Eighth" in symmetry:
+				ext_now = [v for v in cubit.get_entities("volume")
+				           if v not in all_known]
+				if ext_now:
+					cubit.cmd(
+						f"webcut volume "
+						f"{' '.join(str(v) for v in ext_now)} "
+						f"with plane yplane offset {sy}")
+
+			# 7. Find all exterior volumes (near ext_sx)
+			kelvin_vids = []
+			for vid in cubit.get_entities("volume"):
+				if vid not in all_known:
+					bb = cubit.get_bounding_box("volume", vid)
+					nc_x = (bb[0] + bb[1]) / 2
+					if abs(nc_x - ext_sx) < R_kelvin * 1.1:
+						kelvin_vids.append(vid)
+
+			if not kelvin_vids:
+				all_now = sorted(cubit.get_entities("volume"))
+				kelvin_vids = all_now[-2:]
+
+			# 8. For symmetry modes, keep only matching piece(s)
+			if symmetry != "Full":
+				dir_x = cx - sx  # model direction from sphere center
+				dir_y = cy - sy
+				dir_z = cz - sz
+				eps = R_kelvin * 0.01
+
+				keep = []
+				for kv in kelvin_vids:
+					bb = cubit.get_bounding_box("volume", kv)
+					nc = ((bb[0]+bb[1])/2, (bb[3]+bb[4])/2,
+					      (bb[6]+bb[7])/2)
+					ok = True
+					# z-check (all symmetry modes)
+					if dir_z >= 0 and nc[2] < sz - eps:
+						ok = False
+					elif dir_z < 0 and nc[2] > sz + eps:
+						ok = False
+					# x-check (Quarter, Eighth)
+					if ok and ("Quarter" in symmetry
+					           or "Eighth" in symmetry):
+						if dir_x >= 0 and nc[0] < ext_sx - eps:
+							ok = False
+						elif dir_x < 0 and nc[0] > ext_sx + eps:
+							ok = False
+					# y-check (Eighth)
+					if ok and "Eighth" in symmetry:
+						if dir_y >= 0 and nc[1] < sy - eps:
+							ok = False
+						elif dir_y < 0 and nc[1] > sy + eps:
+							ok = False
+
+					if ok:
+						keep.append(kv)
+					else:
+						cubit.cmd(f"delete volume {kv}")
+				kelvin_vids = keep
+
+			# 9. Set mesh scheme and size
+			kelvin_size = R_kelvin / 3
+			for kv in kelvin_vids:
+				cubit.cmd(f"volume {kv} scheme tetmesh")
+				cubit.cmd(f"volume {kv} size {kelvin_size}")
+
+			# 10. Find interior sphere surfaces (free surfaces on air)
+			air_vids_final = []
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				if name == "air":
+					air_vids_final.extend(cubit.get_block_volumes(bid))
+
+			full_area = 4 * math.pi * R_kelvin**2
+			if symmetry == "Full":
+				min_area = full_area * 0.15  # hemisphere ~2*pi*R^2
+			elif "Half" in symmetry:
+				min_area = full_area * 0.15
+			elif "Quarter" in symmetry:
+				min_area = full_area * 0.05  # quadrant ~pi*R^2
+			else:  # Eighth
+				min_area = full_area * 0.02  # octant ~pi*R^2/2
+
+			int_hemis = []
+			for av in air_vids_final:
+				for sid in cubit.get_relatives("volume", av, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					if len(adj) == 1:  # free surface (sphere boundary)
+						area = cubit.surface(sid).area()
+						if area > min_area:
+							int_hemis.append(sid)
+
+			# 11. Find exterior sphere surfaces (largest per kelvin vol)
+			ext_hemis = []
+			for kv in kelvin_vids:
+				best_sid, best_area = None, 0
+				for sid in cubit.get_relatives("volume", kv, "surface"):
+					area = cubit.surface(sid).area()
+					if area > best_area:
+						best_area = area
+						best_sid = sid
+				if best_sid is not None:
+					ext_hemis.append(best_sid)
+
+			# Sort by (z, x) for consistent matching
+			def _surf_key(sid):
+				pts = cubit.get_relatives("surface", sid, "vertex")
+				if pts:
+					cs = [cubit.vertex(v).coordinates() for v in pts]
+					z = sum(c[2] for c in cs) / len(cs)
+					x = sum(c[0] for c in cs) / len(cs)
+					return (z, x)
+				return (0, 0)
+
+			int_hemis.sort(key=_surf_key)
+			ext_hemis.sort(key=_surf_key)
+
+			# 12. Copy mesh from interior to exterior
+			for src_sid, dst_sid in zip(int_hemis, ext_hemis):
+				src_curves = cubit.get_relatives(
+					"surface", src_sid, "curve")
+				dst_curves = cubit.get_relatives(
+					"surface", dst_sid, "curve")
+				if not src_curves or not dst_curves:
+					continue
+				src_c = src_curves[0]
+				dst_c = dst_curves[0]
+				try:
+					src_v = cubit.get_relatives(
+						"curve", src_c, "vertex")[0]
+					dst_v = cubit.get_relatives(
+						"curve", dst_c, "vertex")[0]
+					cubit.cmd(
+						f"copy mesh surface {src_sid} onto surface "
+						f"{dst_sid} source curve {src_c} source vertex "
+						f"{src_v} target curve {dst_c} target vertex "
+						f"{dst_v}")
+				except Exception:
+					cubit.cmd(
+						f"copy mesh surface {src_sid} onto surface "
+						f"{dst_sid} source curve {src_c} "
+						f"target curve {dst_c}")
+
+			# 13. Tet mesh kelvin volumes
+			for kv in kelvin_vids:
+				if len(cubit.get_volume_tets(kv)) == 0:
+					cubit.cmd(f"mesh volume {kv}")
+
+			# 14. Create blocks: kelvin, kelvin_int, kelvin_ext
+			cubit.cmd("set duplicate block elements on")
+			bid_next = max(cubit.get_block_id_list()) + 1
+			for kv in kelvin_vids:
+				cubit.cmd(f"block {bid_next} add volume {kv}")
+			cubit.cmd(f'block {bid_next} name "kelvin"')
+			bid_next += 1
+			for sid in int_hemis:
+				tris = cubit.get_surface_tris(sid)
+				if tris:
+					cubit.cmd(
+						f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_int"')
+			bid_next += 1
+			for sid in ext_hemis:
+				tris = cubit.get_surface_tris(sid)
+				if tris:
+					cubit.cmd(
+						f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_ext"')
+
+			n_tets = sum(
+				len(cubit.get_volume_tets(kv)) for kv in kelvin_vids)
+			self.kelvin_status.setText(
+				f"Kelvin added ({symmetry}): R={R_kelvin:.4f}m, "
+				f"{len(kelvin_vids)} vol, {n_tets} tets, "
+				f"{len(int_hemis)} int + {len(ext_hemis)} ext surf")
+			self.kelvin_status.setStyleSheet("color: green;")
+
+		except Exception as e:
+			import traceback
+			traceback.print_exc()
+			self.kelvin_status.setText(f"Error: {e}")
+			self.kelvin_status.setStyleSheet("color: red;")
+		finally:
+			cubit.cmd("set journal on")
+
+		self._detect_blocks()
+
+	def _detect_blocks(self):
+		"""Detect yoke/air/kelvin blocks and auto-create outer."""
+		found = {}
+		try:
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+		except Exception:
+			pass
+
+		# Auto-create outer from air/kelvin free surfaces
+		if "outer" not in found:
+			self._auto_create_outer(found)
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+
+		# Setup kelvin mesh if needed
+		if "kelvin" in found and "kelvin_int" not in found:
+			self._setup_kelvin(found)
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+
+		_optional = {"sym_tangential", "sym_normal", "kelvin", "outer"}
+		for key, attr in [("yoke", "_yoke_block"),
+		                   ("air", "_air_block"),
+		                   ("sym_tangential", "_sym_tan"),
+		                   ("sym_normal", "_sym_nor"),
+		                   ("kelvin", "_kelvin_block"),
+		                   ("outer", "_outer_surface")]:
+			label_w = getattr(self, f"label{attr}")
+			if key in found:
+				label_w.setText(key)
+				label_w.setStyleSheet("font-weight: bold; color: green;")
+			elif key in _optional:
+				label_w.setText("(optional)")
+				label_w.setStyleSheet("font-weight: bold; color: orange;")
+			else:
+				label_w.setText("(not found)")
+				label_w.setStyleSheet("font-weight: bold; color: red;")
+
+		has_all = all(k in found for k in ("yoke", "air"))
+		has_coil = bool(self.coil_edit.text().strip())
+		self.solve_btn.setEnabled(
+			has_all and has_coil and self._ext_python is not None)
+
+		if has_all and not has_coil:
+			self.result_label.setText("Set coil script path to enable Solve.")
+
+	def _setup_kelvin(self, found):
+		"""Delegate to IHFEMDialog._setup_kelvin pattern."""
+		try:
+			kelvin_bid = found.get("kelvin")
+			air_bid = found.get("air")
+			if not kelvin_bid or not air_bid:
+				return
+			kelvin_vids = list(cubit.get_block_volumes(kelvin_bid))
+			air_vids = list(cubit.get_block_volumes(air_bid))
+			if not kelvin_vids or not air_vids:
+				return
+			all_meshed = all(
+				len(cubit.get_volume_tets(v)) + len(cubit.get_volume_hexes(v)) > 0
+				for v in kelvin_vids)
+			if all_meshed:
+				return
+
+			int_hemis = []
+			for av in air_vids:
+				best_sid, best_area = None, 0
+				for sid in cubit.get_relatives("volume", av, "surface"):
+					adj = cubit.get_relatives("surface", sid, "volume")
+					if len(adj) == 1:
+						area = cubit.surface(sid).area()
+						if area > best_area:
+							best_area = area
+							best_sid = sid
+				if best_sid is not None:
+					int_hemis.append(best_sid)
+
+			ext_hemis = []
+			for kv in kelvin_vids:
+				best_sid, best_area = None, 0
+				for sid in cubit.get_relatives("volume", kv, "surface"):
+					area = cubit.surface(sid).area()
+					if area > best_area:
+						best_area = area
+						best_sid = sid
+				if best_sid is not None:
+					ext_hemis.append(best_sid)
+
+			if not int_hemis or not ext_hemis:
+				return
+
+			cubit.cmd("set duplicate block elements on")
+			for src_sid, dst_sid in zip(int_hemis, ext_hemis):
+				src_curves = cubit.get_relatives("surface", src_sid, "curve")
+				dst_curves = cubit.get_relatives("surface", dst_sid, "curve")
+				if not src_curves or not dst_curves:
+					continue
+				src_c = src_curves[0]
+				dst_c = dst_curves[0]
+				src_v = int(cubit.curve(src_c).vertices()[0]
+				            .entity_name().split()[1])
+				dst_v = int(cubit.curve(dst_c).vertices()[0]
+				            .entity_name().split()[1])
+				cubit.cmd(
+					f"copy mesh surface {src_sid} onto surface {dst_sid} "
+					f"source curve {src_c} source vertex {src_v} "
+					f"target curve {dst_c} target vertex {dst_v}")
+
+			for kv in kelvin_vids:
+				if len(cubit.get_volume_tets(kv)) == 0:
+					cubit.cmd(f"volume {kv} scheme tetmesh")
+					cubit.cmd(f"volume {kv} size 0.015")
+					cubit.cmd(f"mesh volume {kv}")
+
+			bid_next = max(cubit.get_block_id_list()) + 1
+			for sid in int_hemis:
+				cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_int"')
+			bid_next += 1
+			for sid in ext_hemis:
+				cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+			cubit.cmd(f'block {bid_next} name "kelvin_ext"')
+
+		except Exception:
+			import traceback
+			traceback.print_exc()
+
+	def _auto_create_outer(self, found):
+		"""Auto-detect outer surface on air/kelvin free surfaces."""
+		try:
+			# Prefer kelvin outer surfaces, then air
+			for block_name in ("kelvin", "air"):
+				bid = found.get(block_name)
+				if not bid:
+					continue
+				vids = list(cubit.get_block_volumes(bid))
+				if not vids:
+					continue
+				outer_sids = []
+				for vid in vids:
+					for sid in cubit.get_relatives("volume", vid, "surface"):
+						adj = cubit.get_relatives("surface", sid, "volume")
+						if len(adj) == 1:
+							outer_sids.append(sid)
+				if outer_sids:
+					bid_next = max(cubit.get_block_id_list()) + 1
+					cubit.cmd("set duplicate block elements on")
+					for sid in outer_sids:
+						tris = cubit.get_surface_tris(sid)
+						if tris:
+							cubit.cmd(f"block {bid_next} add tri in surface {sid}")
+					cubit.cmd(f'block {bid_next} name "outer"')
+					return
+		except Exception:
+			pass
+
+	def _solve(self):
+		"""Run accelerator magnet solver via external Python."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		coil_path = self.coil_edit.text().strip()
+		if not coil_path:
+			QMessageBox.warning(self, "Error", "Coil script path required.")
+			return
+
+		self.solve_btn.setEnabled(False)
+		self.solve_btn.setText("Solving...")
+		self.result_label.setText("Computing...")
+
+		# Save current Cubit model
+		tmpdir = tempfile.mkdtemp(prefix="radia_accel_")
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		self._accel_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
+		msh_output = os.path.join(tmpdir, "result.msh").replace("\\", "/")
+		calc_script = os.path.join(_this_dir, "calc_accel_magnet.py")
+
+		form_text = self.form_combo.currentText()
+		if "Omega" in form_text:
+			formulation = "omega"
+		elif "HCurl" in form_text:
+			formulation = "a"
+		elif "MMM" in form_text:
+			formulation = "mmm"
+		else:
+			formulation = "msc"
+		mat_text = self.mat_combo.currentText()
+		is_linear = "Linear" in mat_text
+		is_hys = "Hysteresis" in mat_text
+
+		args = [
+			calc_script,
+			"--coil-script", coil_path,
+			"--cub5", cub5_file,
+			"--formulation", formulation,
+			"--order", str(self.curve_spin.value()),
+			"--fes-order", str(self.fes_spin.value()),
+			"--max-iter", str(self.maxiter_spin.value()),
+			"--relax", self.relax_edit.text().strip() or "0.3",
+			] + (["--newton"] if self.newton_check.isChecked() else []) + [
+			"--msh-output", msh_output,
+			"--output", self._accel_json,
+		]
+
+		if is_linear:
+			args += ["--material", "linear",
+			         "--mu-r", self.mur_edit.text().strip() or "1000"]
+		elif is_hys:
+			hys = self.hys_edit.text().strip()
+			if not hys or not os.path.exists(hys):
+				QMessageBox.warning(self, "Error", ".hys file required.")
+				self.solve_btn.setEnabled(True)
+				self.solve_btn.setText("Solve")
+				return
+			args += ["--material", "hysteresis",
+			         "--hys-file", hys,
+			         "--n-steps", str(self.nsteps_spin.value())]
+		else:
+			bh_sel = self.bh_combo.currentText()
+			args += ["--material", "steel"]
+			if "Custom" in bh_sel:
+				bh = self.bh_edit.text().strip()
+				if bh:
+					args += ["--bh-file", bh]
+
+		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
+		self._process.finished.connect(self._on_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_stderr(self):
+		"""Read progress from subprocess stderr."""
+		if self._process is None:
+			return
+		data = self._process.readAllStandardError()
+		text = bytes(data).decode("utf-8", errors="replace").strip()
+		if text:
+			# Show last line of progress
+			last_line = text.strip().split("\n")[-1]
+			self.result_label.setText(last_line)
+
+	def _on_finished(self, exit_code, exit_status):
+		self.solve_btn.setEnabled(True)
+		self.solve_btn.setText("Solve")
+		self._process = None
+
+		data = None
+		json_path = getattr(self, '_accel_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
+		if data is None:
+			self.result_label.setText(f"Error (exit code {exit_code})")
+			return
+		if "error" in data:
+			self.result_label.setText(f"Error: {data['error']}")
+			return
+
+		B0 = data.get("B_origin_mag", 0)
+		L = data.get("L", 0)
+		form = data.get("formulation", "?")
+		n_iter = data.get("iterations", 0)
+		conv = "Yes" if data.get("converged") else "No"
+		n_steps = data.get("n_steps", 1)
+		hys = "Yes" if data.get("hysteresis") else "No"
+		info = (f"|B(0)|={B0:.6f} T, L={L*1e6:.4f} uH\n"
+		        f"Formulation={form}, iter={n_iter}, converged={conv}\n"
+		        f"DOFs={data.get('ndof', 0)}, t={data.get('t_total', 0):.1f}s")
+		if data.get("hysteresis"):
+			info += f"\nHysteresis: {n_steps} steps"
+			steps = data.get("step_results", [])
+			if steps:
+				info += " | B(0)=[" + ", ".join(
+					f"{s['B_center']:.4f}" for s in steps[-3:]) + "]"
+		self.result_label.setText(info)
+		self.open_btn.setEnabled(True)
+
+	def _open_result(self):
+		"""Open GMSH result file."""
+		json_path = getattr(self, '_accel_json', '')
+		if not json_path or not os.path.exists(json_path):
+			return
+		try:
+			with open(json_path, "r") as f:
+				data = json.load(f)
+			msh = data.get("msh_file", "")
+			if not msh or not os.path.exists(msh):
+				return
+			import subprocess as _sp
+			ext_py = self._ext_python
+			if ext_py:
+				ext_pyw = ext_py.replace("python.exe", "pythonw.exe")
+				if not os.path.exists(ext_pyw):
+					ext_pyw = ext_py
+				code = (
+					"import sys, gmsh; "
+					"gmsh.initialize(sys.argv, run=True); "
+					"gmsh.finalize()")
+				_sp.Popen([ext_pyw, "-c", code, msh])
+			else:
+				os.startfile(msh)
+		except Exception:
+			pass
+
+
+# ================================================================
 # Menu Registration
 # ================================================================
 
@@ -2642,7 +3894,7 @@ def register_menu():
 			if sub:
 				sub.deleteLater()
 			# Close stale modeless dialogs
-			for attr in ('_radia_ind_dlg', '_radia_fem_dlg'):
+			for attr in ('_radia_ind_dlg', '_radia_fem_dlg', '_radia_accel_dlg'):
 				dlg = getattr(main_window, attr, None)
 				if dlg is not None:
 					dlg.close()
@@ -2692,6 +3944,17 @@ def register_menu():
 		main_window._radia_fem_dlg.raise_()
 	action_ih_fem.triggered.connect(_show_ih_fem)
 	radia_menu.addAction(action_ih_fem)
+
+	# Accelerator Magnet: Omega-reduced / A-formulation
+	action_accel = QAction("Accelerator Magnet...", main_window)
+	action_accel.setStatusTip("Accelerator magnet: Omega-reduced or A-formulation + Kelvin")
+	def _show_accel():
+		if not hasattr(main_window, '_radia_accel_dlg') or main_window._radia_accel_dlg is None:
+			main_window._radia_accel_dlg = AccelMagnetDialog(main_window)
+		main_window._radia_accel_dlg.show()
+		main_window._radia_accel_dlg.raise_()
+	action_accel.triggered.connect(_show_accel)
+	radia_menu.addAction(action_accel)
 
 	# Separator + Reload
 	radia_menu.addSeparator()
