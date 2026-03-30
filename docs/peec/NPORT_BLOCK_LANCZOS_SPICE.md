@@ -249,7 +249,7 @@ kan_model.train_from_esim_data(H_values, f_values, Zs_data)
 spice_pwl = kan_model.to_spice_pwl(H_export, f_ref)
 ```
 
-## CLN I型 Coordinate Transform Verification
+## CLN Type-I Coordinate Transform Verification
 
 This section documents the verification of the CLN I (Cauer Ladder Network Type I) coordinate transform used in PEEC model order reduction. The CLN I transform is the s=0 (DC) expansion variant of the Lanczos algorithm that converts dense PEEC matrices into sparse tridiagonal/diagonal form.
 

@@ -300,12 +300,12 @@ Then click "Add Kelvin" in the panel to auto-add the Kelvin sphere pair.
 
 | File | Runs in | Purpose |
 |------|---------|---------|
-| `panels/register_toolbar.py` | Cubit GUI Python | Qt dialogs + menu |
-| `panels/calc_common.py` | External Python | Shared utilities |
-| `panels/calc_volume.py` | External Python | Volume integration |
-| `panels/calc_surface.py` | External Python | Surface area |
-| `panels/calc_inductance.py` | External Python | BEM inductance |
-| `panels/calc_fem_kelvin.py` | External Python | FEM-SIBC + Kelvin |
-| `panels/calc_heating.py` | External Python | 2D axi heating |
-| `panels/startup.py` | Cubit GUI Python | Entry point |
+| `src/radia/panels/register_toolbar.py` | Cubit GUI Python | Qt dialogs + menu |
+| `src/radia/panels/calc_common.py` | External Python | Shared utilities |
+| `src/radia/panels/calc_volume.py` | External Python | Volume integration |
+| `src/radia/panels/calc_surface.py` | External Python | Surface area |
+| `src/radia/panels/calc_inductance.py` | External Python | BEM inductance |
+| `src/radia/panels/calc_fem_kelvin.py` | External Python | FEM-SIBC + Kelvin |
+| `src/radia/panels/calc_heating.py` | External Python | 2D axi heating |
+| `src/radia/panels/startup.py` | Cubit GUI Python | Entry point |
 | `install_panels.py` | System Python | Installer |

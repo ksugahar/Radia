@@ -5,7 +5,7 @@ Export mesh to Gmsh format version 2.2.
 ## Synopsis
 
 ```python
-cubit_mesh_export.export_Gmsh_ver2(cubit, FileName)
+cubit_mesh_export.export_Gmesh(cubit, FileName)
 ```
 
 ## Parameters
@@ -74,7 +74,7 @@ cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 
-cubit_mesh_export.export_Gmsh_ver2(cubit, "mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
 ```
 
 ### 2nd Order Elements
@@ -86,7 +86,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
 
-cubit_mesh_export.export_Gmsh_ver2(cubit, "mesh_2nd_order.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mesh_2nd_order.msh")
 ```
 
 ### Mixed Element Types
@@ -98,7 +98,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")  # Boundary triangles
 
-cubit_mesh_export.export_Gmsh_ver2(cubit, "mixed.msh")
+cubit_mesh_export.export_Gmesh(cubit, "mixed.msh")
 ```
 
 ## Comparison with v4

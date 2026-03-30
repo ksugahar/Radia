@@ -223,16 +223,23 @@ class ArcSegment(CoilSegment):
 	def to_occ_shape(self):
 		"""Generate OCC revolved shape for this arc segment."""
 		from netgen.occ import WorkPlane, Axes, Pnt, Axis, Vec, Z, X, Y
-		# Cross-section rectangle at (radius, 0) in local frame
+		# Cross-section rectangle at (radius - width/2, 0) in local frame.
+		# radius is center-line radius (distance from arc center to
+		# cross-section center). Inner edge at radius - width/2.
 		r_inner = self.radius - self.width / 2
+		if r_inner < 1e-10:
+			raise ValueError(
+				f"Arc inner radius {r_inner} <= 0: radius={self.radius}, "
+				f"width={self.width}. Use radius >= width/2 (center-line radius).")
 		wp = WorkPlane(Axes(Pnt(r_inner, 0, -self.height/2), n=-Y, h=X))
 		face = wp.Rectangle(self.width, self.height).Face()
 		# Revolve around Z axis
 		shape = face.Revolve(Axis(Pnt(0, 0, 0), Z), self.arc_angle)
-		# Apply ZX Euler rotation + translation to arc center
+		# Apply ZXZ Euler rotation + translation to arc center
 		ea = self.euler_angles
 		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[2])
 		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[0])
 		shape = shape.Move(Vec(*self.arc_center))
 		return shape
 
@@ -480,6 +487,42 @@ class CoilBuilder:
 		shape = self.to_occ()
 		shape.WriteStep(filename)
 		return filename
+
+	# ============================================================
+	# Wire segment extraction (for Biot-Savart)
+	# ============================================================
+
+	def to_wire_segments(self, n_arc=20):
+		"""Extract centerline wire segments for Biot-Savart field computation.
+
+		Straight segments become a single wire segment (start -> end).
+		Arc segments are discretized into n_arc straight sub-segments.
+
+		Args:
+			n_arc: Number of straight segments per arc (default 20)
+
+		Returns:
+			(segments, current) where:
+				segments: list of ((x1,y1,z1), (x2,y2,z2)) endpoint pairs [m]
+				current: coil current [A]
+		"""
+		wire_segments = []
+		for seg in self.segments:
+			if isinstance(seg, StraightSegment):
+				wire_segments.append((tuple(seg.start_pos), tuple(seg.end_pos)))
+			elif isinstance(seg, ArcSegment):
+				angle_rad = np.deg2rad(seg.arc_angle)
+				for i in range(n_arc):
+					t1 = angle_rad * i / n_arc
+					t2 = angle_rad * (i + 1) / n_arc
+					p1 = seg.arc_center + seg.radius * (
+						np.cos(t1) * seg.orientation[0, :] +
+						np.sin(t1) * seg.orientation[1, :])
+					p2 = seg.arc_center + seg.radius * (
+						np.cos(t2) * seg.orientation[0, :] +
+						np.sin(t2) * seg.orientation[1, :])
+					wire_segments.append((tuple(p1), tuple(p2)))
+		return wire_segments, self.current
 
 	# ============================================================
 	# Loop closure and symmetry

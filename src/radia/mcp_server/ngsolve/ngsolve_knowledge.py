@@ -4263,6 +4263,274 @@ Separation ensures:
 """
 
 
+NGSOLVE_TEAM7 = """
+# TEAM Problem 7 - Asymmetrical Conductor with a Hole (A-Formulation)
+
+Reference: https://www.compumag.org/wp/wp-content/uploads/2018/06/problem7.pdf
+NGSolve implementation: https://ngsolve.github.io/TEAM-problems/TEAM-7/team7.html
+
+## Problem Description
+
+3D eddy current benchmark: a rectangular aluminium plate with a rectangular hole,
+excited by a racetrack coil above it. Solve the frequency-domain A-formulation:
+
+    curl(nu * curl(A)) + j*omega*sigma*A = J_src
+
+Boundary condition: A x n = 0 on the far boundary (airbox).
+
+### Physical Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| mu_0 | 4*pi*1e-7 H/m |
+| sigma_Al | 35.26e6 S/m |
+| Frequency | 50 Hz and 200 Hz |
+| Coil turns | 2742 |
+
+## Geometry (NetGen OCC)
+
+Three regions: aluminium plate, racetrack coil, air box.
+
+```python
+from netgen.occ import *
+from ngsolve import *
+import numpy as np
+
+# ---- Aluminium plate (294 x 294 x 19 mm) with rectangular hole ----
+wpplate = WorkPlane(Axes((0,0,0), Z, X))
+f = wpplate.Rectangle(0.294, 0.294).MoveTo(0.018, 0.018).Rectangle(0.108, 0.108).Reverse().Face()
+plate = f.Extrude(0.019)
+plate.faces.maxh = 0.04
+plate.solids.name = "plate"
+
+# ---- Racetrack coil (25 mm cross-section, 50 mm offset, 100 mm extent) ----
+wp = WorkPlane(Axes(p=(0.294, 0.000, 0.049), n=Z, h=Y))
+coil2di = wp.MoveTo(0.100, 0.100).RectangleC(0.100, 0.100).Offset(0.025).Face()
+coil2di.edges.name = "coili"
+coil2do = wp.MoveTo(0.100, 0.100).RectangleC(0.100, 0.100).Offset(0.050).Face()
+coil2d = coil2do - coil2di
+
+# Split coil at corners for current direction assignment
+cutout = wp.MoveTo(0.100, 0.100).RectangleC(0.300, 0.100).Face() + \\
+         wp.MoveTo(0.100, 0.100).RectangleC(0.100, 0.300).Face()
+coil2d = Glue([coil2d * cutout, coil2d - cutout])
+coil = coil2d.Extrude(0.100)
+coil.solids.name = "coil"
+
+# ---- Air box ----
+airbox = Box(Pnt(-0.2, -0.2, -0.2), Pnt(0.5, 0.5, 0.5))
+airbox.faces.name = "outer"
+airbox.solids.name = "air"
+airbox = airbox - coil - plate
+
+shape = Glue([coil, plate, airbox])
+geo = OCCGeometry(shape)
+```
+
+## Mesh Generation
+
+All-tet mesh with high-order curving:
+
+```python
+mesh = Mesh(geo.GenerateMesh(maxh=0.2))
+mesh.Curve(5)
+print("materials:", set(mesh.GetMaterials()))
+print("number of elements:", mesh.ne)
+```
+
+## Coil Current Model
+
+The coil current density uses a projection-based tangential vector field and
+a divergence-free correction via a scalar potential:
+
+```python
+coilrect_xmin, coilrect_xmax = 0.294 - 0.150, 0.294 - 0.050
+coilrect_ymin, coilrect_ymax = 0.050, 0.150
+
+def Project(val, minval, maxval):
+    return IfPos(val - minval, IfPos(val - maxval, maxval, val), minval)
+
+projx = Project(x, coilrect_xmin, coilrect_xmax)
+projy = Project(y, coilrect_ymin, coilrect_ymax)
+
+# Tangential direction (follows racetrack path)
+tau_coil = CF((projy - y, x - projx, 0))
+tau_coil /= Norm(tau_coil)
+
+# Scalar potential for div-free correction
+pot_coil = CF((0, 0, sqrt((projy - y)**2 + (projx - x)**2) - 0.05))
+```
+
+## FEM Solve (A-Formulation)
+
+Key features of this implementation:
+- HCurl order=5 for high accuracy
+- `gradientdomains="plate"` for tree-cotree gauge in the conducting region
+- Boundary current + div-free correction (not volume current density)
+- BDDC preconditioner with sparse Cholesky
+
+```python
+mu = 4 * pi * 1e-7
+sigma = mesh.MaterialCF({"plate": 35.26e6}, default=1)
+turns = 2742
+
+def Solve(freq):
+    omega = 2 * pi * freq
+    fes = HCurl(mesh, order=5, complex=True, dirichlet="outer",
+                gradientdomains="plate")
+    print("free dofs:", sum(fes.FreeDofs()))
+    u, v = fes.TnT()
+
+    a = BilinearForm(fes, symmetric=True, condense=True)
+    a += 1/mu * curl(u) * curl(v) * dx
+    a += 1j * omega * sigma * u * v * dx
+
+    # Coil excitation: boundary current + div-free correction
+    f = LinearForm(
+        -turns / 0.100 * tau_coil * v.Trace() * ds("coili.*", bonus_intorder=4)
+        + turns / (0.025 * 0.100) * pot_coil * curl(v) * dx("coil.*", bonus_intorder=4)
+    )
+
+    A = GridFunction(fes)
+    pre = Preconditioner(a, type="bddc", inverse="sparsecholesky")
+    solvers.BVP(bf=a, lf=f, gf=A, pre=pre,
+                solver=solvers.CGSolver,
+                solver_flags={"plotrates": True, "tol": 1e-12})
+
+    B = curl(A)
+    J = -1j * omega * sigma * A
+    return {"A": A, "B": B, "J": J}
+
+with TaskManager():
+    ret = Solve(freq=50)
+B, J = ret["B"], ret["J"]
+```
+
+### Notes on the LinearForm (Coil Excitation)
+
+Two equivalent approaches are available:
+
+1. **Volume current density** (simpler but requires coil mesh refinement):
+   ```python
+   f = LinearForm(-turns / (0.025 * 0.100) * tau_coil * v * dx("coil.*", bonus_intorder=4))
+   ```
+
+2. **Boundary current + div-free correction** (used in TEAM-7, more accurate):
+   ```python
+   f = LinearForm(
+       -turns / 0.100 * tau_coil * v.Trace() * ds("coili.*", bonus_intorder=4)
+       + turns / (0.025 * 0.100) * pot_coil * curl(v) * dx("coil.*", bonus_intorder=4)
+   )
+   ```
+   The second form uses a surface integral on the inner coil boundary ("coili")
+   plus a curl(v) volume integral with a scalar potential for divergence-free correction.
+   This is more accurate because it avoids discretization error from approximating
+   a uniform current density in the coil cross-section.
+
+### Key Implementation Details
+
+| Feature | Choice | Reason |
+|---------|--------|--------|
+| `symmetric=True` | Complex symmetric (not Hermitian) | A-formulation with jωσ gives complex symmetric matrix |
+| `condense=True` | Static condensation | Eliminates internal DOFs, reduces system size |
+| `gradientdomains="plate"` | Tree-cotree gauge | Removes gradient null space in conducting region |
+| `dirichlet="outer"` | Essential BC on airbox | A x n = 0 (zero tangential A) |
+| `bonus_intorder=4` | Extra quadrature | Accurate integration of coil source term |
+| `inverse="sparsecholesky"` | BDDC subdomain solver | Exact local solves for robustness |
+| `order=5` | High polynomial order | Benchmark accuracy with coarse mesh |
+
+## Post-Processing: Comparison with Benchmark Data
+
+Measurement lines for validation:
+- A1-B1: Bz at y=72mm, z=34mm (above plate)
+- A2-B2: Bz at y=144mm, z=34mm (above plate, offset)
+- A3-B3: Jy at y=72mm, z=19mm (plate top surface)
+- A4-B4: Jy at y=72mm, z=0mm (plate bottom surface)
+
+```python
+xi_msm = np.array([0, 18, 36, 54, 72, 90, 108, 126, 144, 162,
+                    180, 198, 216, 234, 252, 270, 288]) * 1e-3
+xi_sim = np.linspace(0, 0.288, 500)
+
+# Evaluate Bz along line A1-B1
+Bz_A1B1_sim = np.array([B[2](mesh(xi, 0.072, 0.034)) for xi in xi_sim])
+
+# Evaluate Jy along line A3-B3 (plate top)
+Jy_A3B3_sim = np.array([1e-6 * 1j * J[1](mesh(xi, 0.072, 0.019 - 1e-5))
+                         for xi in xi_sim])
+```
+
+### Reference Values (50 Hz)
+
+```python
+# Bz on A1-B1 (Gauss = 1e-4 T)
+Bz_A1B1_50Hz_ref = np.array([
+    -4.9-1.16j, -17.88+2.48j, -22.13+4.15j, -20.19+4.j, -15.67+3.07j,
+    0.36+2.31j, 43.64+1.89j, 78.11+4.97j, 71.55+12.61j, 60.44+14.15j,
+    53.91+13.04j, 52.62+12.4j, 53.81+12.05j, 56.91+12.27j, 59.24+12.66j,
+    52.78+9.96j, 27.61+2.26j])
+
+# Bz on A2-B2 (Gauss)
+Bz_A2B2_50Hz_ref = np.array([
+    -1.83-1.63j, -8.5-0.6j, -13.6-0.43j, -15.21+0.11j, -14.48+1.26j,
+    -5.62+3.4j, 28.77+6.53j, 60.34+10.25j, 61.84+11.83j, 56.64+11.83j,
+    53.4+11.01j, 52.36+10.58j, 53.93+10.8j, 56.82+10.54j, 59.48+10.62j,
+    52.08+9.03j, 26.56+1.79j])
+
+# Jy on A3-B3 (1e6 A/m^2)
+Jy_A3B3_50Hz_ref = np.array([
+    0.249-0.629j, 0.685-0.873j, 0+0j, 0+0j, 0+0j, 0+0j, 0+0j,
+    -0.015-0.593j, -0.103-0.249j, -0.061-0.101j, -0.004-0.001j,
+    0.051+0.087j, 0.095+0.182j, 0.135+0.322j, 0.104+0.555j,
+    -0.321+0.822j, -0.687+0.855j])
+
+# Jy on A4-B4 (1e6 A/m^2)
+Jy_A4B4_50Hz_ref = np.array([
+    0.461-0.662j, 0.621-0.664j, 0+0j, 0+0j, 0+0j, 0+0j, 0+0j,
+    1.573-1.027j, 0.556-0.757j, 0.237-0.364j, 0.097-0.149j,
+    -0.034+0.015j, -0.157+0.154j, -0.305+0.311j, -0.478+0.508j,
+    -0.66+0.747j, -1.217+1.034j])
+```
+
+## Applicability to Shifted AMS + COCR
+
+This TEAM-7 problem is an ideal test case for the shifted AMS preconditioner:
+- Complex symmetric system (A-formulation with jωσ)
+- Air + conductor domains (σ=0 in air makes system singular)
+- Standard approach uses `gradientdomains` for gauge fixing; shifted AMS
+  provides an alternative that regularizes only the preconditioner
+
+To use shifted AMS + COCR instead of BDDC:
+
+```python
+from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+
+# Original system (no regularization)
+a = BilinearForm(fes, symmetric=True)
+a += 1/mu * curl(u) * curl(v) * dx
+a += 1j * omega * sigma * u * v * dx
+
+# Shifted system (preconditioner only)
+a_shift = BilinearForm(fes, symmetric=True)
+a_shift += 1/mu * curl(u) * curl(v) * dx
+a_shift += 1j * omega * sigma * u * v * dx
+a_shift += eps_shift * u * v * dx  # shift in all domains
+
+a.Assemble()
+a_shift.Assemble()
+
+ams = CompactAMSPreconditioner(a_shift.mat, fes, coarsetype="sparsecholesky")
+cocr = COCRSolver(a.mat, ams, tol=1e-12, maxiter=200)
+A.vec.data = cocr * f.vec
+```
+
+## Reference
+
+- COMPUMAG TEAM Problem 7: https://www.compumag.org/wp/wp-content/uploads/2018/06/problem7.pdf
+- NGSolve TEAM Problems: https://ngsolve.github.io/TEAM-problems/TEAM-7/team7.html
+"""
+
+
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
@@ -4288,6 +4556,7 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "practical": NGSOLVE_PRACTICAL_TECHNIQUES,
         "axisymmetric": NGSOLVE_AXISYMMETRIC,
         "accelerator": NGSOLVE_ACCELERATOR_MAGNET,
+        "team7": NGSOLVE_TEAM7,
     }
 
     topic = topic.lower().strip()

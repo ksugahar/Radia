@@ -180,7 +180,7 @@ cubit.cmd(f"block 1 add curve {curve_id}")
 cubit.cmd("block 1 name 'conductor'")
 
 # Export to GMSH v2.2
-cubit_mesh_export.export_gmsh_v2(cubit, "coil_mesh.msh")
+cubit_mesh_export.export_Gmesh(cubit, "coil_mesh.msh")
 ```
 
 ### 3.2 Step 2 -- Import to Radia PEEC
@@ -406,7 +406,7 @@ cubit.cmd("block 1 attribute index 2 6.0")   # height [mm]
 cubit.cmd("block 1 attribute index 3 5.8e7") # sigma [S/m]
 
 # Export
-cubit_mesh_export.export_gmsh_v2(cubit, "induction_coil.msh")
+cubit_mesh_export.export_Gmesh(cubit, "induction_coil.msh")
 ```
 
 #### Radia Python Script
