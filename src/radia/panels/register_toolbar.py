@@ -57,7 +57,7 @@ try:
 		QPlainTextEdit,
 	)
 	from PySide6.QtGui import QAction, QFont
-	from PySide6.QtCore import Qt, QProcess, QSettings
+	from PySide6.QtCore import Qt, QProcess
 except ImportError:
 	from PyQt5.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -67,66 +67,97 @@ except ImportError:
 		QPlainTextEdit, QAction,
 	)
 	from PyQt5.QtGui import QFont
-	from PyQt5.QtCore import Qt, QProcess, QSettings
+	from PyQt5.QtCore import Qt, QProcess
+
+
+def _panels_settings_path():
+	"""Return path to ~/.cubit/radia_panels.json."""
+	return os.path.join(os.path.expanduser("~"), ".cubit", "radia_panels.json")
+
+
+def _load_all_settings():
+	"""Load all panel settings from JSON file."""
+	path = _panels_settings_path()
+	if os.path.isfile(path):
+		try:
+			with open(path, "r", encoding="utf-8") as f:
+				return json.load(f)
+		except Exception:
+			pass
+	return {}
+
+
+def _save_all_settings(data):
+	"""Save all panel settings to JSON file."""
+	path = _panels_settings_path()
+	os.makedirs(os.path.dirname(path), exist_ok=True)
+	try:
+		with open(path, "w", encoding="utf-8") as f:
+			json.dump(data, f, indent=2, ensure_ascii=False)
+	except Exception:
+		pass
 
 
 def _save_dialog_state(dialog, keys):
-	"""Save dialog widget values to QSettings.
+	"""Save dialog widget values to ~/.cubit/radia_panels.json.
 
 	Args:
-		dialog: QDialog instance (class name used as settings group)
+		dialog: QDialog instance (class name used as JSON key)
 		keys: dict mapping setting_name -> widget attribute name
 	"""
-	s = QSettings("Radia", "CubitPanels")
 	group = dialog.__class__.__name__
-	s.beginGroup(group)
+	all_data = _load_all_settings()
+	section = all_data.get(group, {})
 	for key, attr in keys.items():
 		w = getattr(dialog, attr, None)
 		if w is None:
 			continue
 		if isinstance(w, QLineEdit):
-			s.setValue(key, w.text())
+			section[key] = w.text()
 		elif isinstance(w, QComboBox):
-			s.setValue(key, w.currentIndex())
+			section[key] = w.currentIndex()
 		elif isinstance(w, QSpinBox):
-			s.setValue(key, w.value())
+			section[key] = w.value()
 		elif isinstance(w, QCheckBox):
-			s.setValue(key, w.isChecked())
+			section[key] = w.isChecked()
 		elif isinstance(w, QPlainTextEdit):
-			s.setValue(key, w.toPlainText())
-	s.endGroup()
+			section[key] = w.toPlainText()
+	all_data[group] = section
+	_save_all_settings(all_data)
 
 
 def _restore_dialog_state(dialog, keys):
-	"""Restore dialog widget values from QSettings.
+	"""Restore dialog widget values from ~/.cubit/radia_panels.json.
 
 	Args:
 		dialog: QDialog instance
 		keys: dict mapping setting_name -> widget attribute name
 	"""
-	s = QSettings("Radia", "CubitPanels")
 	group = dialog.__class__.__name__
-	s.beginGroup(group)
+	all_data = _load_all_settings()
+	section = all_data.get(group, {})
 	for key, attr in keys.items():
-		if not s.contains(key):
+		if key not in section:
 			continue
 		w = getattr(dialog, attr, None)
 		if w is None:
 			continue
-		val = s.value(key)
-		if isinstance(w, QLineEdit):
-			w.setText(str(val))
-		elif isinstance(w, QComboBox):
-			idx = int(val)
-			if 0 <= idx < w.count():
-				w.setCurrentIndex(idx)
-		elif isinstance(w, QSpinBox):
-			w.setValue(int(val))
-		elif isinstance(w, QCheckBox):
-			w.setChecked(val in (True, "true", "True", 1, "1"))
-		elif isinstance(w, QPlainTextEdit):
-			w.setPlainText(str(val))
-	s.endGroup()
+		val = section[key]
+		try:
+			if isinstance(w, QLineEdit):
+				w.setText(str(val))
+			elif isinstance(w, QComboBox):
+				idx = int(val)
+				if 0 <= idx < w.count():
+					w.setCurrentIndex(idx)
+			elif isinstance(w, QSpinBox):
+				w.setValue(int(val))
+			elif isinstance(w, QCheckBox):
+				w.setChecked(bool(val))
+			elif isinstance(w, QPlainTextEdit):
+				w.setPlainText(str(val))
+		except (ValueError, TypeError):
+			pass
 
 
 def _find_main_window():
