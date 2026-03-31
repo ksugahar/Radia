@@ -5,8 +5,8 @@
 """
 Tests for SparseSolv iterative solvers and preconditioners.
 
-Tests SparseSolvSolver (ICCG, SGSMRTR) and standalone
-preconditioners (IC, SGS) for use with NGSolve's Krylov solvers.
+Tests SparseSolvSolver (ICCG) and standalone
+preconditioners (IC) for use with NGSolve's Krylov solvers.
 
 Factory functions (ICPreconditioner, etc.) auto-dispatch real/complex
 based on mat.IsComplex() and auto-call Update() on construction.
@@ -16,7 +16,7 @@ import pytest
 from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 from ngsolve import *
-from sparsesolv_ngsolve import ICPreconditioner, SGSPreconditioner
+from sparsesolv_ngsolve import ICPreconditioner
 from sparsesolv_ngsolve import SparseSolvSolver
 from ngsolve.krylovspace import CGSolver
 
@@ -79,7 +79,7 @@ def poisson_3d():
 # SparseSolvSolver tests
 # ============================================================================
 
-@pytest.mark.parametrize("method", ["ICCG", "SGSMRTR"])
+@pytest.mark.parametrize("method", ["ICCG"])
 def test_sparsesolv_solver_2d_poisson(poisson_2d, method):
     """All solver methods converge on 2D Poisson."""
     mesh, fes, a, f, gfu_bc, exact = poisson_2d
@@ -145,7 +145,6 @@ def test_sparsesolv_solver_vs_direct(poisson_2d):
 
 @pytest.mark.parametrize("PreClass,kwargs", [
     (ICPreconditioner, {"shift": 1.05}),
-    (SGSPreconditioner, {}),
 ])
 def test_preconditioners_with_ngsolve_cg(poisson_2d, PreClass, kwargs):
     """Preconditioners work with NGSolve's CGSolver."""
@@ -258,9 +257,6 @@ def test_properties(poisson_2d):
     assert solver.divergence_check is False
     assert abs(solver.divergence_threshold - 1000.0) < 1e-10
     assert solver.divergence_count == 100
-
-    solver.method = "SGSMRTR"
-    assert solver.method == "SGSMRTR"
 
     solver.tol = 1e-8
     assert abs(solver.tol - 1e-8) < 1e-15
@@ -421,7 +417,6 @@ def test_factory_auto_dispatch_complex_solver(poisson_2d_complex):
 
 @pytest.mark.parametrize("Factory,kwargs", [
     (ICPreconditioner, {"shift": 1.05}),
-    (SGSPreconditioner, {}),
 ])
 def test_factory_auto_dispatch_complex_precond(poisson_2d_complex, Factory, kwargs):
     """Preconditioner factories auto-dispatch for complex matrix."""
@@ -489,7 +484,7 @@ def eddy_current_3d():
     return mesh, fes, a, f_form
 
 
-@pytest.mark.parametrize("method", ["ICCG", "SGSMRTR"])
+@pytest.mark.parametrize("method", ["ICCG"])
 def test_complex_eddy_current(eddy_current_3d, method):
     """All solver methods converge on complex eddy current (complex-symmetric)."""
     mesh, fes, a, f = eddy_current_3d
@@ -668,7 +663,7 @@ def test_conjugate_factory_parameter(poisson_2d_complex):
     assert solver.conjugate is True
 
 
-@pytest.mark.parametrize("method", ["ICCG", "SGSMRTR"])
+@pytest.mark.parametrize("method", ["ICCG"])
 def test_hermitian_system_with_conjugate(poisson_2d_complex, method):
     """Hermitian system (real coefficients, complex space) solves with conjugate=True."""
     mesh, fes, a, f = poisson_2d_complex
@@ -1123,7 +1118,7 @@ class TestGMRESSolver:
         assert inv.iterations < 200
 
     def test_gmres_with_preconditioner(self):
-        """GMRESSolver works with SGS preconditioner."""
+        """GMRESSolver works with IC preconditioner."""
         from sparsesolv_ngsolve import GMRESSolver
 
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
@@ -1139,7 +1134,7 @@ class TestGMRESSolver:
         f += 1 * v * dx
         f.Assemble()
 
-        pre = SGSPreconditioner(a.mat, freedofs=fes.FreeDofs())
+        pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
         inv = GMRESSolver(a.mat, pre, maxiter=500, tol=1e-8)
 
         gfu = GridFunction(fes)

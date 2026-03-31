@@ -18,12 +18,10 @@
 
 // Preconditioners
 #include "preconditioners/ic_preconditioner.hpp"
-#include "preconditioners/sgs_preconditioner.hpp"
 // Solvers
 #include "solvers/iterative_solver.hpp"
 #include "solvers/cg_solver.hpp"
 #include "solvers/cocr_solver.hpp"
-#include "solvers/sgs_mrtr_solver.hpp"
 
 namespace sparsesolv {
 
@@ -117,37 +115,6 @@ template<typename Scalar = double>
     }
     return solve_iccg(A, b.data(), x.data(), static_cast<index_t>(b.size()),
                       config);
-}
-
-/// Convenience function: Solve Ax=b using SGS-MRTR
-template<typename Scalar = double>
-[[nodiscard]] inline SolverResult solve_sgsmrtr(
-    const SparseMatrixView<Scalar>& A,
-    const Scalar* b,
-    Scalar* x,
-    index_t size,
-    const SolverConfig& config = SolverConfig()
-) {
-    // Use specialized SGS-MRTR solver with split formula
-    SGSMRTRSolver<Scalar> solver;
-    solver.set_config(config);
-
-    // Solve
-    return solver.solve(A, b, x, size);
-}
-
-/// Convenience function: Solve Ax=b using SGS-MRTR with std::vector
-template<typename Scalar = double>
-[[nodiscard]] inline SolverResult solve_sgsmrtr(
-    const SparseMatrixView<Scalar>& A,
-    const std::vector<Scalar>& b,
-    std::vector<Scalar>& x,
-    const SolverConfig& config = SolverConfig()
-) {
-    if (x.size() != b.size()) {
-        x.resize(b.size());
-    }
-    return solve_sgsmrtr(A, b.data(), x.data(), static_cast<index_t>(b.size()), config);
 }
 
 /// Convenience function: Solve Ax=b using COCR (IC preconditioned)

@@ -50,7 +50,7 @@ namespace sparsesolv {
  *          or reallocated while the view exists, the behavior is undefined.
  *
  * @note For preconditioners that need to outlive the source matrix,
- *       use ICPreconditioner or SGSPreconditioner, which copy the data.
+ *       use ICPreconditioner, which copies the data.
  *
  * @tparam Scalar The scalar type (double or complex<double>)
  */

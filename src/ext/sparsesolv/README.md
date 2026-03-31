@@ -10,7 +10,6 @@
 - **Compact AMS** — HCurl向け補助空間前処理 (Hiptmair-Xu 2007)。HYPRE不要、ヘッダオンリーC++
 - **COCR** — 複素対称系 (A^T=A) 向け短漸化式クリロフソルバー (Sogabe-Zhang 2007)
 - **ICCG** — auto-shift IC(0) + ABMC並列三角求解
-- **SGS-MRTR** — 分割公式内蔵MRTR法
 
 SparseSolvは [JP-MARs/SparseSolv](https://github.com/JP-MARs/SparseSolv) からのフォーク。
 ヘッダオンリーC++17、`double` と `std::complex<double>` の両方に対応。
@@ -167,7 +166,7 @@ print(f"Converged in {inv.iterations} iterations")
 ### 前処理 + NGSolve CGSolver
 
 ```python
-from sparsesolv_ngsolve import ICPreconditioner, SGSPreconditioner
+from sparsesolv_ngsolve import ICPreconditioner
 from ngsolve.krylovspace import CGSolver
 
 # IC前処理 + NGSolve CG
@@ -180,7 +179,7 @@ gfu.vec.data = inv * f.vec
 
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|------|---------|------|
-| `method` | str | `"ICCG"` | ソルバー手法: `ICCG`, `SGSMRTR`, `CG`, `COCR` |
+| `method` | str | `"ICCG"` | ソルバー手法: `ICCG`, `CG`, `COCR` |
 | `tol` | float | `1e-10` | 収束判定閾値 |
 | `maxiter` | int | `1000` | 最大反復回数 |
 | `shift` | float | `1.05` | ICシフトパラメータ（安定化） |
@@ -200,12 +199,11 @@ from sparsesolv_ngsolve import (
     CompactAMSPreconditioner,      # 実数HCurl（静磁界）+ CG
     ComplexCompactAMSPreconditioner,   # 複素渦電流、Re/Im融合 + COCR
 
-    # IC/SGS前処理
+    # IC前処理
     ICPreconditioner,              # NGSolve CGSolverと併用
-    SGSPreconditioner,             # NGSolve CGSolverと併用
 
     # ソルバー
-    SparseSolvSolver,              # 統合ソルバー (ICCG, SGSMRTR)
+    SparseSolvSolver,              # 統合ソルバー (ICCG)
     COCRSolver,                    # COCR（複素対称系、C++ネイティブ）
     GMRESSolver,                   # GMRES（非対称系、左前処理）
     SparseSolvResult,              # 解結果
@@ -237,13 +235,12 @@ ngsolve-sparsesolv/
 │   ├── core/                   # 型定義、設定、行列ビュー
 │   │   ├── parallel.hpp        # 並列化抽象層 (TaskManager/OpenMP/逐次)
 │   │   └── abmc_ordering.hpp   # ABMC順序付け
-│   ├── preconditioners/        # IC, SGS, Compact AMS実装
+│   ├── preconditioners/        # IC, Compact AMS実装
 │   │   ├── ic_preconditioner.hpp          # 不完全コレスキー (auto-shift)
-│   │   ├── sgs_preconditioner.hpp         # 対称ガウスザイデル
 │   │   ├── compact_amg.hpp                # 古典的AMG (PMIS, l1-ヤコビ, DualMult)
 │   │   ├── compact_ams.hpp                # AMS前処理 (Hiptmair-Xu 2007)
 │   │   └── complex_compact_ams.hpp        # Re/Im融合ComplexCompactAMS
-│   ├── solvers/                # CG, COCR, SGS-MRTR実装
+│   ├── solvers/                # CG, COCR実装
 │   └── ngsolve/                # NGSolve BaseMatrixラッパー + pybind11
 ├── examples/
 │   └── hiruma/                 # 渦電流ベンチマーク (30 kHz)
@@ -260,7 +257,7 @@ ngsolve-sparsesolv/
 
 詳細なドキュメントは [docs/](docs/) にある：
 - [Compact AMS + COCR](docs/compact_ams_cocr.md) — 複素渦電流問題向け補助空間前処理
-- [アルゴリズム](docs/algorithms.md) — アルゴリズム詳説（IC、SGS-MRTR、CG、ABMC、Compact AMS）
+- [アルゴリズム](docs/algorithms.md) — アルゴリズム詳説（IC、CG、ABMC、Compact AMS）
 - [APIリファレンス](docs/api_reference.md) — Python API
 - [チュートリアル](docs/tutorials.md) — 実用例
 - [開発者情報](docs/development.md) — ビルド、テスト、アーキテクチャ
