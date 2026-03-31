@@ -9,22 +9,23 @@ Install or update the complete Radia environment:
 
 Steps:
   1. pip install --upgrade radia  -- from PyPI (NGSolve 6.2.2602, MKL, MCP servers)
-  2. pip install netgen-mesher    -- upstream (CallbackGeometry included since 6.2.2602)
+  2. Install ksugahar/netgen fork -- CallbackGeometry + SetGeomInfo (if not already installed)
   3. Install Cubit panels         -- if Coreform Cubit is detected
-  4. Install Cubit plugin         -- copy .ccm + .pyd + Netgen DLLs to Cubit plugins dir
+  4. Install Cubit plugin (.ccm)  -- copy plugin + Netgen DLLs to Cubit plugins dir
 
 Requirements:
     Python 3.12+ on Windows (x64)
 """
 
+import json
 import platform
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 
-NETGEN_VERSION = "6.2.2602"
 NETGEN_FORK_REPO = "ksugahar/netgen"
 NETGEN_FORK_TAG = "v6.2.2602.post1-setgeominfo"
 
@@ -34,18 +35,6 @@ CUBIT_INSTALL_DIRS = [
     Path(r"C:\Program Files\Coreform Cubit 2025.3"),
     Path(r"C:\Program Files\Coreform Cubit 2024.8"),
 ]
-
-
-def _has_netgen_fork():
-    """Check if netgen fork (with SetGeomInfo) is already installed."""
-    try:
-        r = subprocess.run(
-            [sys.executable, "-c",
-             "from netgen.meshing import Mesh; print(hasattr(Mesh, 'SetGeomInfo'))"],
-            capture_output=True, text=True, timeout=30)
-        return "True" in r.stdout
-    except Exception:
-        return False
 
 
 def _py_tag():
@@ -60,7 +49,6 @@ def _plat_tag():
 
 
 def _fetch_netgen_wheel_url():
-    """Fetch netgen fork wheel URL from GitHub Releases."""
     py, plat = _py_tag(), _plat_tag()
     api_url = (f"https://api.github.com/repos/{NETGEN_FORK_REPO}"
                f"/releases/tags/{NETGEN_FORK_TAG}")
@@ -128,20 +116,16 @@ def _find_netgen_dlls():
     return None, None
 
 
-def _find_plugin_pyd():
-    """Find radia_cubit_mesh .pyd: next to this script, in dist/, or in build dir."""
-    here = Path(__file__).resolve().parent
-    py, plat = _py_tag(), _plat_tag()
-    pyd_name = f"radia_cubit_mesh.{py}-{plat}.pyd"
-    candidates = [
-        here / pyd_name,
-        here / "dist" / pyd_name,
-        here / "src" / "cubit_plugin" / "build-pyd" / pyd_name,
-    ]
-    for p in candidates:
-        if p.is_file():
-            return p
-    return None
+def _has_netgen_fork():
+    """Check if netgen fork is already installed."""
+    try:
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "from netgen.meshing import Mesh; print(hasattr(Mesh, 'SetGeomInfo'))"],
+            capture_output=True, text=True, timeout=30)
+        return "True" in r.stdout
+    except Exception:
+        return False
 
 
 def main():
@@ -161,23 +145,18 @@ def main():
     _pip("--upgrade", "radia")
     print()
 
-    # Step 2: netgen fork (CallbackGeometry + SetGeomInfo)
-    print("[2/4] Netgen fork (ksugahar/netgen)...")
+    # Step 2: netgen fork (skip if already installed)
+    print("[2/4] Netgen fork...")
     if _has_netgen_fork():
         print("  Already installed (SetGeomInfo found). Skipping.")
     else:
-        print("  Installing from GitHub Releases...")
+        print("  Installing ksugahar/netgen fork...")
         try:
             url, name = _fetch_netgen_wheel_url()
             print(f"  Wheel: {name}")
             _pip(url, "--force-reinstall")
         except Exception as e:
-            print(f"  WARNING: Fork install failed: {e}")
-            print(f"  Falling back to upstream netgen-mesher=={NETGEN_VERSION}")
-            try:
-                _pip("netgen-mesher==" + NETGEN_VERSION)
-            except Exception:
-                pass
+            print(f"  WARNING: {e}")
     print()
 
     # Step 3: Cubit panels (always update)
@@ -193,8 +172,8 @@ def main():
         print(f"  Skipped ({e})")
     print()
 
-    # Step 4: Cubit plugin (.ccm + .pyd + Netgen DLLs)
-    print("[4/4] Cubit plugin (.ccm + .pyd + Netgen DLLs)...")
+    # Step 4: Cubit plugin + Netgen DLLs
+    print("[4/4] Cubit plugin (radia_cubit.ccm + Netgen DLLs)...")
     cubit_dir = _find_cubit_dir()
     if cubit_dir:
         plugins_dir = cubit_dir / "bin" / "plugins"
@@ -205,14 +184,6 @@ def main():
             print(f"  Copied {ccm.name} -> {dst}")
         else:
             print(f"  WARNING: {CUBIT_PLUGIN_NAME} not found (build it first)")
-
-        pyd = _find_plugin_pyd()
-        if pyd:
-            dst = plugins_dir / pyd.name
-            shutil.copy2(pyd, dst)
-            print(f"  Copied {pyd.name} -> {dst}")
-        else:
-            print("  WARNING: radia_cubit_mesh .pyd not found (build it first)")
 
         nglib, ngcore = _find_netgen_dlls()
         if nglib:
