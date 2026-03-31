@@ -129,6 +129,9 @@ def _save_dialog_state(dialog, keys):
 def _restore_dialog_state(dialog, keys):
 	"""Restore dialog widget values from ~/.cubit/radia_panels.json.
 
+	- Keys in JSON but not in dialog's _SETTINGS are removed (stale settings).
+	- Keys in _SETTINGS but not in JSON use widget default (new settings).
+
 	Args:
 		dialog: QDialog instance
 		keys: dict mapping setting_name -> widget attribute name
@@ -136,6 +139,16 @@ def _restore_dialog_state(dialog, keys):
 	group = dialog.__class__.__name__
 	all_data = _load_all_settings()
 	section = all_data.get(group, {})
+
+	# Remove stale keys (in JSON but not in current _SETTINGS)
+	stale = [k for k in section if k not in keys]
+	if stale:
+		for k in stale:
+			del section[k]
+		all_data[group] = section
+		_save_all_settings(all_data)
+
+	# Restore known keys (missing keys keep widget default)
 	for key, attr in keys.items():
 		if key not in section:
 			continue
