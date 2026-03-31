@@ -162,7 +162,7 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
                 bh_file=None, material="steel", mu_r=1000.0,
                 hys_file="", n_steps=1,
                 max_iter=30, tol=1e-3, relax=0.3,
-                newton=False, msh_output=""):
+                newton=False, solver="auto", msh_output=""):
     """Accelerator magnet solver (Omega-reduced or A-formulation).
 
     Args:
@@ -871,6 +871,10 @@ def main():
                         help="Under-relaxation (0-1)")
     parser.add_argument("--newton", action="store_true",
                         help="Use Newton iteration (default: Picard)")
+    parser.add_argument("--solver", default="auto",
+                        choices=["auto", "pardiso", "bddc", "iccg", "ams"],
+                        help="auto (PARDISO/BDDC by size, A+p=1->AMS), "
+                             "pardiso, bddc, iccg (shifted IC+CG), ams (Compact AMS+COCR)")
     parser.add_argument("--msh-output", default="",
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
@@ -892,6 +896,7 @@ def main():
             tol=args.tol,
             relax=args.relax,
             newton=args.newton,
+            solver=args.solver,
             msh_output=args.msh_output,
         )
 
