@@ -8,26 +8,23 @@ Install or update the complete Radia environment:
     python install_full.py --all-users    # all existing user profiles (admin)
 
 Steps:
-  1. pip install --upgrade radia  -- from PyPI (NGSolve 6.2.2602, MKL, MCP servers)
-  2. Install ksugahar/netgen fork -- CallbackGeometry + SetGeomInfo (if not already installed)
-  3. Install Cubit panels         -- if Coreform Cubit is detected
-  4. Install Cubit plugin (.ccm)  -- copy plugin + Netgen DLLs to Cubit plugins dir
+  1. pip install --upgrade radia  -- from PyPI (NGSolve, MKL, MCP servers)
+  2. Install Cubit panels         -- if Coreform Cubit is detected
+  3. Install Cubit plugin (.ccm)  -- copy plugin + Netgen DLLs to Cubit plugins dir
+
+High-order mesh curving is handled by the Cubit plugin (C++ ACIS kernel),
+not by netgen fork. Standard upstream netgen-mesher is sufficient.
 
 Requirements:
     Python 3.12+ on Windows (x64)
 """
 
-import json
 import platform
 import shutil
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
-
-NETGEN_FORK_REPO = "ksugahar/netgen"
-NETGEN_FORK_TAG = "v6.2.2602.post1-setgeominfo"
 
 # Cubit plugin
 CUBIT_PLUGIN_NAME = "radia_cubit.ccm"
@@ -35,37 +32,6 @@ CUBIT_INSTALL_DIRS = [
     Path(r"C:\Program Files\Coreform Cubit 2025.3"),
     Path(r"C:\Program Files\Coreform Cubit 2024.8"),
 ]
-
-
-def _py_tag():
-    v = sys.version_info
-    return f"cp{v.major}{v.minor}"
-
-
-def _plat_tag():
-    if sys.platform == "win32" and platform.machine().lower() in ("amd64", "x86_64"):
-        return "win_amd64"
-    raise RuntimeError(f"Unsupported platform: {sys.platform} {platform.machine()}")
-
-
-def _fetch_netgen_wheel_url():
-    py, plat = _py_tag(), _plat_tag()
-    api_url = (f"https://api.github.com/repos/{NETGEN_FORK_REPO}"
-               f"/releases/tags/{NETGEN_FORK_TAG}")
-    req = urllib.request.Request(
-        api_url, headers={"Accept": "application/vnd.github.v3+json"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
-    for asset in data.get("assets", []):
-        name = asset["name"]
-        if name.endswith(".whl") and py in name and plat in name:
-            return asset["browser_download_url"], name
-    available = [a["name"] for a in data.get("assets", [])
-                 if a["name"].endswith(".whl")]
-    raise RuntimeError(
-        f"No matching wheel for {py}-{plat}.\n"
-        f"Available: {available}\n"
-        f"https://github.com/{NETGEN_FORK_REPO}/releases/tag/{NETGEN_FORK_TAG}")
 
 
 def _pip(*args):
@@ -91,6 +57,7 @@ def _find_plugin_ccm():
         here / CUBIT_PLUGIN_NAME,
         here / "dist" / CUBIT_PLUGIN_NAME,
         here / "build-cubit-plugin" / "Release" / CUBIT_PLUGIN_NAME,
+        here / "src" / "cubit_plugin" / "build-test" / CUBIT_PLUGIN_NAME,
     ]
     for p in candidates:
         if p.is_file():
@@ -116,18 +83,6 @@ def _find_netgen_dlls():
     return None, None
 
 
-def _has_netgen_fork():
-    """Check if netgen fork is already installed."""
-    try:
-        r = subprocess.run(
-            [sys.executable, "-c",
-             "from netgen.meshing import Mesh; print(hasattr(Mesh, 'SetGeomInfo'))"],
-            capture_output=True, text=True, timeout=30)
-        return "True" in r.stdout
-    except Exception:
-        return False
-
-
 def main():
     all_users = "--all-users" in sys.argv
 
@@ -141,26 +96,12 @@ def main():
     print()
 
     # Step 1: radia from PyPI (always upgrade)
-    print("[1/4] Installing/updating radia from PyPI...")
+    print("[1/3] Installing/updating radia from PyPI...")
     _pip("--upgrade", "radia")
     print()
 
-    # Step 2: netgen fork (skip if already installed)
-    print("[2/4] Netgen fork...")
-    if _has_netgen_fork():
-        print("  Already installed (SetGeomInfo found). Skipping.")
-    else:
-        print("  Installing ksugahar/netgen fork...")
-        try:
-            url, name = _fetch_netgen_wheel_url()
-            print(f"  Wheel: {name}")
-            _pip(url, "--force-reinstall")
-        except Exception as e:
-            print(f"  WARNING: {e}")
-    print()
-
-    # Step 3: Cubit panels (always update)
-    print("[3/4] Installing Cubit panels...")
+    # Step 2: Cubit panels (always update)
+    print("[2/3] Installing Cubit panels...")
     try:
         cmd = [sys.executable, "-m", "radia.install_panels"]
         if all_users:
@@ -172,8 +113,8 @@ def main():
         print(f"  Skipped ({e})")
     print()
 
-    # Step 4: Cubit plugin + Netgen DLLs
-    print("[4/4] Cubit plugin (radia_cubit.ccm + Netgen DLLs)...")
+    # Step 3: Cubit plugin (.ccm + Netgen DLLs for high-order curving)
+    print("[3/3] Cubit plugin (radia_cubit.ccm + Netgen DLLs)...")
     cubit_dir = _find_cubit_dir()
     if cubit_dir:
         plugins_dir = cubit_dir / "bin" / "plugins"
@@ -192,7 +133,7 @@ def main():
                 shutil.copy2(dll, dst)
                 print(f"  Copied {dll.name} -> {dst}")
         else:
-            print("  WARNING: Netgen DLLs not found (high-order disabled)")
+            print("  WARNING: Netgen DLLs not found (high-order curving disabled)")
     else:
         print("  Skipped (Cubit not found)")
     print()
