@@ -63,6 +63,8 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
               bh_file=None, material="steel",
               I_total=1.0, a_coil=0.003, R_wp=0.010,
               max_iter=15, tol=1e-3, relax=0.5,
+              solver="pardiso", reg=1e-6, shift_eps=1e-6,
+              nthreads=0,
               msh_output=""):
     """3D FEM-SIBC solver for Cubit mesh.
 
@@ -82,6 +84,11 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
         max_iter: Max Karl iterations
         tol: Z_s convergence tolerance
         relax: Under-relaxation (0-1)
+        solver: "pardiso" (direct), "bddc" (iterative), "iccg" (shifted IC+CG),
+                "ams" (Compact AMS+COCR)
+        reg: Gauge regularization parameter (add reg*nu0*u*v*dx to system)
+        shift_eps: Shifted preconditioner eps (AMS/ICCG, add eps*nu*u*v*dx to prec)
+        nthreads: TaskManager thread count (0=auto, 1=single thread)
         msh_output: Optional GMSH .msh output path
 
     Returns:
@@ -218,8 +225,12 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
     ndof = fes.ndof
     _log(f"FES:ndof={ndof}")
 
-    # Solver: PARDISO (small) or BDDC+BVP (large)
-    use_direct = ndof < 200000
+    _log(f"SOLVER:{solver}, reg={reg}, shift_eps={shift_eps}, threads={nthreads}")
+
+    # TaskManager thread count
+    if nthreads > 0:
+        import ngsolve
+        ngsolve.SetNumThreads(nthreads)
 
     # RHS (constant across Karl iterations)
     f_lf = LinearForm(fes)
@@ -242,26 +253,61 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
 
         robin = -1j * omega / Z_s if has_wp else 0
 
+        # System bilinear form
         a_bf = BilinearForm(fes)
         a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
-        a_bf += 1e-6 * NU_0 * u * v * dx  # gauge regularization
+        if reg > 0:
+            a_bf += reg * NU_0 * u * v * dx  # gauge regularization
 
         if has_wp and abs(robin) > 0:
             a_bf += robin * u.Trace() * v.Trace() * ds("wp_surface")
 
-        if not use_direct:
+        # Solver-specific setup
+        if solver == "ams":
+            # Shifted preconditioner (AMS+COCR)
+            a_shifted = BilinearForm(fes)
+            a_shifted += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+            a_shifted += shift_eps * NU_0 * u * v * dx  # shift for prec only
+            if reg > 0:
+                a_shifted += reg * NU_0 * u * v * dx
+            if has_wp and abs(robin) > 0:
+                a_shifted += robin * u.Trace() * v.Trace() * ds("wp_surface")
+
+            from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+            pre_ams = CompactAMSPreconditioner(a_shifted, fes)
+            a_shifted.Assemble()
+            a_bf.Assemble()
+
+            with TaskManager():
+                cocr = COCRSolver(a_bf.mat, pre_ams, maxiter=500, tol=1e-8,
+                                  freedofs=fes.FreeDofs())
+                gfu.vec.data = cocr * f_lf.vec
+        elif solver == "iccg":
+            # Shifted ICCG (IC preconditioned CG, single-thread efficient)
+            a_bf.Assemble()
+
+            import sparsesolv_ngsolve as ssn
+            iccg = ssn.SparseSolvSolver(
+                a_bf.mat, method="ICCG",
+                freedofs=fes.FreeDofs(),
+                tol=1e-8, maxiter=500, shift=shift_eps,
+                save_best_result=True, printrates=False,
+                use_abmc=True, abmc_block_size=4, abmc_num_colors=4)
+            iccg.auto_shift = True
+            gfu.vec.data = iccg * f_lf.vec
+        elif solver == "bddc":
             pre = Preconditioner(a_bf, "bddc")
-
-        a_bf.Assemble()
-
-        with TaskManager():
-            if use_direct:
-                gfu.vec.data = a_bf.mat.Inverse(
-                    fes.FreeDofs(), inverse="pardiso") * f_lf.vec
-            else:
+            a_bf.Assemble()
+            with TaskManager():
                 from ngsolve import solvers
                 solvers.BVP(bf=a_bf, lf=f_lf, gf=gfu,
                             pre=pre, maxsteps=500, tol=1e-8)
+        else:
+            # pardiso (direct)
+            a_bf.Assemble()
+            with TaskManager():
+                gfu.vec.data = a_bf.mat.Inverse(
+                    fes.FreeDofs(), inverse="pardiso") * f_lf.vec
 
         t_solve_iter = time.perf_counter() - t0_iter
 
@@ -406,6 +452,16 @@ def main():
                         help="Workpiece radius [m]")
     parser.add_argument("--max-iter", type=int, default=15,
                         help="Max Karl iterations")
+    parser.add_argument("--solver", default="pardiso",
+                        choices=["pardiso", "bddc", "iccg", "ams"],
+                        help="pardiso (direct), bddc (iterative), "
+                             "iccg (shifted IC+CG), ams (Compact AMS+COCR)")
+    parser.add_argument("--reg", type=float, default=1e-6,
+                        help="Gauge regularization (add reg*nu0*u*v*dx)")
+    parser.add_argument("--shift-eps", type=float, default=1e-6,
+                        help="Shifted preconditioner eps (AMS/ICCG)")
+    parser.add_argument("--nthreads", type=int, default=0,
+                        help="TaskManager threads (0=auto, 1=single)")
     parser.add_argument("--msh-output", default="",
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
@@ -426,6 +482,10 @@ def main():
             a_coil=args.a_coil,
             R_wp=args.r_wp,
             max_iter=args.max_iter,
+            solver=args.solver,
+            reg=args.reg,
+            shift_eps=args.shift_eps,
+            nthreads=args.nthreads,
             msh_output=args.msh_output,
         )
 
