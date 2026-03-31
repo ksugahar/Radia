@@ -57,7 +57,7 @@ try:
 		QPlainTextEdit,
 	)
 	from PySide6.QtGui import QAction, QFont
-	from PySide6.QtCore import Qt, QProcess
+	from PySide6.QtCore import Qt, QProcess, QSettings
 except ImportError:
 	from PyQt5.QtWidgets import (
 		QApplication, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -67,7 +67,66 @@ except ImportError:
 		QPlainTextEdit, QAction,
 	)
 	from PyQt5.QtGui import QFont
-	from PyQt5.QtCore import Qt, QProcess
+	from PyQt5.QtCore import Qt, QProcess, QSettings
+
+
+def _save_dialog_state(dialog, keys):
+	"""Save dialog widget values to QSettings.
+
+	Args:
+		dialog: QDialog instance (class name used as settings group)
+		keys: dict mapping setting_name -> widget attribute name
+	"""
+	s = QSettings("Radia", "CubitPanels")
+	group = dialog.__class__.__name__
+	s.beginGroup(group)
+	for key, attr in keys.items():
+		w = getattr(dialog, attr, None)
+		if w is None:
+			continue
+		if isinstance(w, QLineEdit):
+			s.setValue(key, w.text())
+		elif isinstance(w, QComboBox):
+			s.setValue(key, w.currentIndex())
+		elif isinstance(w, QSpinBox):
+			s.setValue(key, w.value())
+		elif isinstance(w, QCheckBox):
+			s.setValue(key, w.isChecked())
+		elif isinstance(w, QPlainTextEdit):
+			s.setValue(key, w.toPlainText())
+	s.endGroup()
+
+
+def _restore_dialog_state(dialog, keys):
+	"""Restore dialog widget values from QSettings.
+
+	Args:
+		dialog: QDialog instance
+		keys: dict mapping setting_name -> widget attribute name
+	"""
+	s = QSettings("Radia", "CubitPanels")
+	group = dialog.__class__.__name__
+	s.beginGroup(group)
+	for key, attr in keys.items():
+		if not s.contains(key):
+			continue
+		w = getattr(dialog, attr, None)
+		if w is None:
+			continue
+		val = s.value(key)
+		if isinstance(w, QLineEdit):
+			w.setText(str(val))
+		elif isinstance(w, QComboBox):
+			idx = int(val)
+			if 0 <= idx < w.count():
+				w.setCurrentIndex(idx)
+		elif isinstance(w, QSpinBox):
+			w.setValue(int(val))
+		elif isinstance(w, QCheckBox):
+			w.setChecked(val in (True, "true", "True", 1, "1"))
+		elif isinstance(w, QPlainTextEdit):
+			w.setPlainText(str(val))
+	s.endGroup()
 
 
 def _find_main_window():
@@ -232,11 +291,21 @@ class ExportMeshDialog(QDialog):
 		("ELF .meg",     "meg",     ".meg", "MEG Files (*.meg)",          False, False, False, False),
 	]
 
+	_SETTINGS = {
+		"format": "fmt_combo", "order": "order_combo", "dim": "dim_combo",
+		"ver": "ver_combo", "nopyramid": "pyram_check", "file": "file_edit",
+	}
+
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self.setWindowTitle("Export Mesh")
 		self.setMinimumWidth(450)
 		self._setup_ui()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -419,11 +488,9 @@ class ExportMeshDialog(QDialog):
 # ================================================================
 
 class MeshEvaluationDialog(QDialog):
-	"""Mesh evaluation: CAD vs NGSolve volume/area for p=1..5.
+	"""Mesh evaluation: CAD vs NGSolve volume/area for p=1..5."""
 
-	Compares ACIS kernel CAD values with NGSolve curved mesh integration
-	at each polynomial order. Shows convergence of geometry error.
-	"""
+	_SETTINGS = {"max_order": "order_spin"}
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
@@ -434,6 +501,11 @@ class MeshEvaluationDialog(QDialog):
 		self._process = None
 		self._setup_ui()
 		self._show_cad_values()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -643,11 +715,12 @@ class MeshEvaluationDialog(QDialog):
 # ================================================================
 
 class PCBPEECDialog(QDialog):
-	"""Dialog for PCB impedance extraction via PEEC.
+	"""Dialog for PCB impedance extraction via PEEC."""
 
-	Input: FastHenry .inp file (inline editor or file browse)
-	Output: Z(f), L(f), R(f) frequency sweep + optional SPICE netlist
-	"""
+	_SETTINGS = {
+		"inp_text": "inp_edit", "fmin": "fmin_edit", "fmax": "fmax_edit",
+		"nfreq": "nfreq_spin", "spice": "spice_check",
+	}
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
@@ -657,6 +730,11 @@ class PCBPEECDialog(QDialog):
 		self._ext_python = _find_external_python()
 		self._process = None
 		self._setup_ui()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -898,6 +976,12 @@ class PCBPEECDialog(QDialog):
 class InductanceDialog(QDialog):
 	"""Dialog for DC inductance extraction via source/sink EFIE."""
 
+	_SETTINGS = {
+		"jou_text": "jou_edit",
+		"curve_order": "curve_spin", "fes_order": "fes_spin",
+		"frequency": "freq_edit", "sigma": "sigma_edit", "mu_r": "mur_edit",
+	}
+
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self.setWindowTitle("IH (BEM): Inductance + SIBC")
@@ -909,6 +993,11 @@ class InductanceDialog(QDialog):
 		self._setup_ui()
 		self._populate_blocks()
 		self._try_load_existing_result()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -2056,6 +2145,16 @@ class InductanceDialog(QDialog):
 class IHFEMDialog(QDialog):
 	"""Dialog for FEM-ESIM induction heating with Kelvin transform."""
 
+	_SETTINGS = {
+		"jou_text": "jou_edit",
+		"curve_order": "curve_spin", "fes_order": "fes_spin",
+		"solver": "solver_combo", "shift_eps": "shift_edit", "reg": "reg_edit",
+		"nthreads": "nthreads_spin",
+		"kelvin_radius": "kelvin_radius_edit", "kelvin_sym": "kelvin_sym_combo",
+		"impedance": "model_combo", "frequency": "freq_edit",
+		"sigma": "sigma_edit", "mu_r": "mur_edit",
+	}
+
 	def __init__(self, parent=None):
 		super().__init__(parent)
 		self.setWindowTitle("IH (FEM): Source/Sink + SIBC")
@@ -2064,6 +2163,11 @@ class IHFEMDialog(QDialog):
 		self._ext_python = _find_external_python()
 		self._process = None
 		self._setup_ui()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -3108,18 +3212,15 @@ class IHFEMDialog(QDialog):
 # ================================================================
 
 class ElectromagnetMSCDialog(QDialog):
-	"""Dialog for accelerator magnet analysis using Radia MSC (hex mesh).
+	"""Dialog for accelerator magnet analysis using Radia MSC (hex mesh)."""
 
-	Inputs:
-	  - Coil Python script: defines build_coil() -> CoilBuilder
-	  - Yoke Cubit journal: iron yoke hex mesh (no air mesh needed)
-
-	Pipeline:
-	  Cubit hex (.jou) -> export_Gmesh (.msh) -> gmsh_to_radia -> Radia MSC Solve
-
-	Coil is NOT meshed -- Biot-Savart analytical source.
-	Open boundary via natural integral formulation (no Kelvin needed).
-	"""
+	_SETTINGS = {
+		"coil_script": "coil_edit", "jou_text": "jou_edit",
+		"solver": "solver_combo", "ima": "ima_combo",
+		"material": "mat_combo", "mu_r": "mur_edit",
+		"bh_curve": "bh_combo",
+		"maxiter": "maxiter_spin", "tol": "tol_edit", "relax": "relax_edit",
+	}
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
@@ -3129,6 +3230,11 @@ class ElectromagnetMSCDialog(QDialog):
 		self._ext_python = _find_external_python()
 		self._process = None
 		self._setup_ui()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -3730,24 +3836,32 @@ class ElectromagnetMSCDialog(QDialog):
 # ================================================================
 
 class AccelMagnetDialog(QDialog):
-	"""Dialog for accelerator magnet analysis (Omega-reduced / A-formulation).
+	"""Dialog for accelerator magnet FEM (Omega-reduced / A-formulation)."""
 
-	Inputs:
-	  - Coil Python script: defines build_coil() -> CoilBuilder
-	  - Yoke Cubit journal: iron yoke + air mesh
-	  - Formulation: omega (scalar H1) or a (vector HCurl)
-
-	Coil is NOT meshed -- Biot-Savart source from wire path.
-	"""
+	_SETTINGS = {
+		"coil_script": "coil_edit", "jou_text": "jou_edit",
+		"formulation": "form_combo", "solver": "solver_combo",
+		"curve_order": "curve_spin", "fes_order": "fes_spin",
+		"kelvin_radius": "kelvin_radius_edit", "kelvin_sym": "kelvin_sym_combo",
+		"material": "mat_combo", "mu_r": "mur_edit",
+		"bh_curve": "bh_combo",
+		"maxiter": "maxiter_spin", "relax": "relax_edit",
+		"newton": "newton_check",
+	}
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Accelerator Magnet")
+		self.setWindowTitle("Electromagnet (FEM)")
 		self.setMinimumWidth(580)
 		self.setMinimumHeight(580)
 		self._ext_python = _find_external_python()
 		self._process = None
 		self._setup_ui()
+		_restore_dialog_state(self, self._SETTINGS)
+
+	def closeEvent(self, event):
+		_save_dialog_state(self, self._SETTINGS)
+		super().closeEvent(event)
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
