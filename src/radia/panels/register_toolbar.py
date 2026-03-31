@@ -149,65 +149,250 @@ def _get_all_volume_ids():
 	return list(cubit.get_entities("volume"))
 
 
+def _open_gmsh_with_coil(ext_python, msh_file, coil_script=None):
+	"""Open GMSH with result .msh + coil STEP overlay.
+
+	If coil_script is set and valid, generates coil STEP via CoilBuilder
+	and merges it with the .msh file in GMSH.
+	"""
+	if not ext_python:
+		try:
+			os.startfile(msh_file)
+		except Exception:
+			pass
+		return
+
+	ext_pyw = ext_python.replace("python.exe", "pythonw.exe")
+	if not os.path.exists(ext_pyw):
+		ext_pyw = ext_python
+
+	merge_files = [msh_file]
+
+	# Generate coil STEP if script is available
+	if coil_script and os.path.exists(coil_script):
+		_pkg_root = os.path.dirname(os.path.dirname(
+			os.path.abspath(__file__))).replace("\\", "/")
+		coil_step = os.path.join(
+			tempfile.gettempdir(), "radia_coil_overlay.step").replace("\\", "/")
+		code = (
+			f"import sys, os; "
+			f"sys.path.insert(0, os.path.dirname(r'{coil_script}')); "
+			f"sys.path.insert(0, r'{_pkg_root}'); "
+			f"import importlib.util; "
+			f"spec = importlib.util.spec_from_file_location('cm', r'{coil_script}'); "
+			f"mod = importlib.util.module_from_spec(spec); "
+			f"spec.loader.exec_module(mod); "
+			f"coil = mod.build_coil(); "
+			f"coil.write_step(r'{coil_step}'); "
+			f"print('OK')")
+		try:
+			r = subprocess.run(
+				[ext_python, "-c", code],
+				capture_output=True, text=True, timeout=30)
+			if r.returncode == 0 and "OK" in r.stdout and os.path.exists(coil_step):
+				merge_files.append(coil_step)
+		except Exception:
+			pass  # coil overlay is optional
+
+	# Open GMSH with all files merged
+	code = (
+		"import sys, gmsh; "
+		"gmsh.initialize(); "
+		+ "".join(f'gmsh.merge(r"{f}"); ' for f in merge_files)
+		+ "gmsh.fltk.run(); "
+		"gmsh.finalize()")
+	try:
+		subprocess.Popen([ext_pyw, "-c", code])
+	except Exception:
+		pass
+
+
 # ================================================================
-# Export Gmsh Dialog
+# Export Mesh Dialog
 # ================================================================
 
-class ExportGmshDialog(QDialog):
-	"""Dialog for Gmsh export parameters."""
+class ExportMeshDialog(QDialog):
+	"""Dialog for mesh export via Cubit plugin commands.
+
+	Uses 'radia export ...' Cubit plugin commands (C++ SDK).
+	Each format shows only its applicable options.
+
+	Plugin commands:
+	  radia export gmsh    "<f>" [order 1|2] [version 2|4] [dimension 2|3] [overwrite]
+	  radia export nastran "<f>" [order 1|2] [dimension 2|3] [nopyramid] [overwrite]
+	  radia export vtk     "<f>" [order 1|2] [dimension 2|3] [overwrite]
+	  radia export meg     "<f>" [overwrite]
+	"""
+
+	# (display_name, command, extension, filter, has_order, has_dim, has_ver, has_nopyramid)
+	FORMATS = [
+		("GMSH .msh",    "gmsh",    ".msh", "GMSH Files (*.msh)",         True,  True,  True,  False),
+		("Nastran BDF",  "nastran", ".bdf", "Nastran Files (*.bdf *.nas)", True,  True,  False, True),
+		("VTK",          "vtk",     ".vtk", "VTK Files (*.vtk)",          True,  True,  False, False),
+		("ELF .meg",     "meg",     ".meg", "MEG Files (*.meg)",          False, False, False, False),
+	]
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Export Gmsh")
-		self.setMinimumWidth(400)
+		self.setWindowTitle("Export Mesh")
+		self.setMinimumWidth(450)
 		self._setup_ui()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
 
-		# File name
-		row1 = QHBoxLayout()
-		row1.addWidget(QLabel("File Name:"))
+		# --- Format selector ---
+		fmt_row = QHBoxLayout()
+		fmt_row.addWidget(QLabel("Format:"))
+		self.fmt_combo = QComboBox()
+		self.fmt_combo.addItems([f[0] for f in self.FORMATS])
+		self.fmt_combo.currentIndexChanged.connect(self._on_format_changed)
+		fmt_row.addWidget(self.fmt_combo)
+		layout.addLayout(fmt_row)
+
+		# --- Options grid ---
+		opts_group = QGroupBox("Options")
+		opts = QGridLayout(opts_group)
+
+		# Row 0: Order
+		self.order_label = QLabel("Element order:")
+		self.order_combo = QComboBox()
+		self.order_combo.addItems(["1 (linear)", "2 (quadratic)"])
+		self.order_combo.setToolTip(
+			"1: linear elements (tet4, hex8, tri3, quad4)\n"
+			"2: quadratic elements (tet10, hex20, tri6, quad8)")
+		opts.addWidget(self.order_label, 0, 0)
+		opts.addWidget(self.order_combo, 0, 1)
+
+		# Row 1: Dimension
+		self.dim_label = QLabel("Dimension:")
+		self.dim_combo = QComboBox()
+		self.dim_combo.addItems(["3 (solid)", "2 (shell)"])
+		self.dim_combo.setToolTip(
+			"3: volume elements (tet, hex, wedge, pyramid)\n"
+			"2: surface elements (tri, quad)")
+		opts.addWidget(self.dim_label, 1, 0)
+		opts.addWidget(self.dim_combo, 1, 1)
+
+		# Row 2: GMSH version
+		self.ver_label = QLabel("MSH version:")
+		self.ver_combo = QComboBox()
+		self.ver_combo.addItems(["2 (v2.2)", "4 (v4.1)"])
+		self.ver_combo.setToolTip(
+			"v2.2: standard, NGSolve ReadGmsh compatible\n"
+			"v4.1: extended, large-scale with Physical Groups")
+		opts.addWidget(self.ver_label, 2, 0)
+		opts.addWidget(self.ver_combo, 2, 1)
+
+		# Row 3: Nastran nopyramid
+		self.pyram_check = QCheckBox("No pyramids (degenerate hex)")
+		self.pyram_check.setToolTip(
+			"Convert pyramid elements to degenerate CHEXA.\n"
+			"Required for JMAG import (no CPYRAM support).")
+		opts.addWidget(self.pyram_check, 3, 0, 1, 2)
+
+		layout.addWidget(opts_group)
+
+		# --- File name ---
+		file_row = QHBoxLayout()
+		file_row.addWidget(QLabel("Output:"))
 		self.file_edit = QLineEdit()
 		self.file_edit.setPlaceholderText("output.msh")
-		row1.addWidget(self.file_edit)
-		self.browse_btn = QPushButton("...")
-		self.browse_btn.setFixedWidth(30)
-		self.browse_btn.clicked.connect(self._browse_file)
-		row1.addWidget(self.browse_btn)
-		layout.addLayout(row1)
+		file_row.addWidget(self.file_edit)
+		browse_btn = QPushButton("...")
+		browse_btn.setFixedWidth(30)
+		browse_btn.clicked.connect(self._browse_file)
+		file_row.addWidget(browse_btn)
+		layout.addLayout(file_row)
 
-		# Version
-		row2 = QHBoxLayout()
-		row2.addWidget(QLabel("Version:"))
-		self.version_combo = QComboBox()
-		self.version_combo.addItems(["2.2", "4.1"])
-		row2.addWidget(self.version_combo)
-		layout.addLayout(row2)
+		# --- Command preview ---
+		self.cmd_preview = QLabel("")
+		self.cmd_preview.setStyleSheet(
+			"color: #666; font-family: Consolas; font-size: 9pt;")
+		self.cmd_preview.setWordWrap(True)
+		layout.addWidget(self.cmd_preview)
 
-		# DIM (v4.1 only)
-		row3 = QHBoxLayout()
-		row3.addWidget(QLabel("DIM (v4.1 only):"))
-		self.dim_combo = QComboBox()
-		self.dim_combo.addItems(["auto", "2D", "3D"])
-		row3.addWidget(self.dim_combo)
-		layout.addLayout(row3)
-
-		# Buttons
+		# --- Buttons ---
 		btn_row = QHBoxLayout()
 		btn_row.addStretch()
-		self.export_btn = QPushButton("Export")
-		self.export_btn.clicked.connect(self._do_export)
-		btn_row.addWidget(self.export_btn)
-		self.cancel_btn = QPushButton("Cancel")
-		self.cancel_btn.clicked.connect(self.reject)
-		btn_row.addWidget(self.cancel_btn)
+		export_btn = QPushButton("Export")
+		export_btn.clicked.connect(self._do_export)
+		btn_row.addWidget(export_btn)
+		cancel_btn = QPushButton("Cancel")
+		cancel_btn.clicked.connect(self.reject)
+		btn_row.addWidget(cancel_btn)
 		layout.addLayout(btn_row)
 
+		# Connect all option changes to preview update
+		self.order_combo.currentIndexChanged.connect(self._update_preview)
+		self.dim_combo.currentIndexChanged.connect(self._update_preview)
+		self.ver_combo.currentIndexChanged.connect(self._update_preview)
+		self.pyram_check.stateChanged.connect(self._update_preview)
+		self.file_edit.textChanged.connect(self._update_preview)
+
+		self._on_format_changed(0)
+
+	def _on_format_changed(self, idx):
+		"""Show/hide options based on format capabilities."""
+		_, _, _, _, has_order, has_dim, has_ver, has_nopyramid = self.FORMATS[idx]
+
+		self.order_label.setVisible(has_order)
+		self.order_combo.setVisible(has_order)
+		self.dim_label.setVisible(has_dim)
+		self.dim_combo.setVisible(has_dim)
+		self.ver_label.setVisible(has_ver)
+		self.ver_combo.setVisible(has_ver)
+		self.pyram_check.setVisible(has_nopyramid)
+
+		ext = self.FORMATS[idx][2]
+		self.file_edit.setPlaceholderText(f"output{ext}")
+		self._update_preview()
+
+	def _build_command(self):
+		"""Build the cubit command string from current UI state."""
+		idx = self.fmt_combo.currentIndex()
+		fmt = self.FORMATS[idx]
+		cmd = fmt[1]
+		ext = fmt[2]
+		has_order, has_dim, has_ver, has_nopyramid = fmt[4], fmt[5], fmt[6], fmt[7]
+
+		file_name = self.file_edit.text().strip()
+		if not file_name:
+			file_name = f"output{ext}"
+		elif not file_name.endswith(ext):
+			file_name += ext
+		file_path = file_name.replace("\\", "/")
+
+		parts = [f'radia export {cmd} "{file_path}"']
+
+		if has_order:
+			order = "1" if "1" in self.order_combo.currentText() else "2"
+			parts.append(f"order {order}")
+
+		if has_dim:
+			dim = "3" if "3" in self.dim_combo.currentText() else "2"
+			parts.append(f"dimension {dim}")
+
+		if has_ver:
+			ver = "2" if "2" in self.ver_combo.currentText() else "4"
+			parts.append(f"version {ver}")
+
+		if has_nopyramid and self.pyram_check.isChecked():
+			parts.append("nopyramid")
+
+		parts.append("overwrite")
+		return " ".join(parts), file_name
+
+	def _update_preview(self, _=None):
+		"""Update command preview label."""
+		cmd_str, _ = self._build_command()
+		self.cmd_preview.setText(cmd_str)
+
 	def _browse_file(self):
+		idx = self.fmt_combo.currentIndex()
+		filt = self.FORMATS[idx][3] + ";;All Files (*)"
 		path, _ = QFileDialog.getSaveFileName(
-			self, "Save Gmsh File", "", "Gmsh Files (*.msh);;All Files (*)"
-		)
+			self, "Save Mesh File", "", filt)
 		if path:
 			self.file_edit.setText(path)
 
@@ -217,361 +402,493 @@ class ExportGmshDialog(QDialog):
 			QMessageBox.warning(self, "Error", "Please specify an output file name.")
 			return
 
-		if not file_name.endswith(".msh"):
-			file_name += ".msh"
-
-		version = self.version_combo.currentText()
-		dim = self.dim_combo.currentText()
+		cubit_cmd, file_name = self._build_command()
 
 		try:
-			import cubit_mesh_export
-			if version == "4.1":
-				cubit_mesh_export.export_Gmesh(cubit, file_name, version=version, DIM=dim)
-			else:
-				cubit_mesh_export.export_Gmesh(cubit, file_name, version=version)
+			cubit.cmd(cubit_cmd)
 			QMessageBox.information(self, "Success", f"Exported: {file_name}")
 			self.accept()
 		except Exception as e:
-			QMessageBox.critical(self, "Export Error", str(e))
+			QMessageBox.critical(self, "Export Error",
+				f"Command:\n  {cubit_cmd}\n\nError: {e}\n\n"
+				"Make sure the Radia Cubit plugin (radia_cubit.ccm) is installed.")
 
 
 # ================================================================
 # Volume Calculator Dialog
 # ================================================================
 
-class VolumeCalculatorDialog(QDialog):
-	"""Dialog for volume calculation with optional NGSolve integration."""
+class MeshEvaluationDialog(QDialog):
+	"""Mesh evaluation: CAD vs NGSolve volume/area for p=1..5.
+
+	Compares ACIS kernel CAD values with NGSolve curved mesh integration
+	at each polynomial order. Shows convergence of geometry error.
+	"""
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Volume Calculator")
-		self.setMinimumWidth(550)
-		self.setMinimumHeight(350)
+		self.setWindowTitle("Mesh Evaluation")
+		self.setMinimumWidth(650)
+		self.setMinimumHeight(450)
 		self._ext_python = _find_external_python()
+		self._process = None
 		self._setup_ui()
-		self._calculate_cad_volumes()
+		self._show_cad_values()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
 
-		# Volume table
-		self.table = QTableWidget()
-		self.table.setColumnCount(4)
-		self.table.setHorizontalHeaderLabels(["ID", "Name", "CAD Volume", "NGSolve Volume"])
-		self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-		self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-		self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-		self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-		self.table.setSelectionBehavior(QTableWidget.SelectRows)
-		layout.addWidget(self.table)
+		# CAD reference values
+		cad_group = QGroupBox("CAD Reference (ACIS kernel)")
+		cad_layout = QGridLayout(cad_group)
+		self.cad_table = QTableWidget()
+		self.cad_table.setColumnCount(4)
+		self.cad_table.setHorizontalHeaderLabels(
+			["ID", "Name", "CAD Volume", "CAD Area"])
+		self.cad_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		for c in (2, 3):
+			self.cad_table.horizontalHeader().setSectionResizeMode(
+				c, QHeaderView.ResizeToContents)
+		self.cad_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.cad_table.setMaximumHeight(150)
+		cad_layout.addWidget(self.cad_table)
+		layout.addWidget(cad_group)
 
-		# NGSolve group
-		ngsolve_group = QGroupBox("NGSolve Volume (external Python)")
-		ngsolve_layout = QGridLayout()
+		# NGSolve evaluation table (p=1..5)
+		eval_group = QGroupBox("NGSolve Curved Mesh (p=1..5)")
+		eval_layout = QVBoxLayout(eval_group)
+		self.eval_table = QTableWidget()
+		self.eval_table.setColumnCount(6)
+		self.eval_table.setHorizontalHeaderLabels(
+			["Order", "Volume", "Vol Error %", "Area", "Area Error %", "Time"])
+		for c in range(6):
+			self.eval_table.horizontalHeader().setSectionResizeMode(
+				c, QHeaderView.ResizeToContents)
+		self.eval_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.eval_table.setRowCount(5)
+		for row in range(5):
+			self.eval_table.setItem(row, 0, QTableWidgetItem(f"p={row+1}"))
+			for c in range(1, 6):
+				self.eval_table.setItem(row, c, QTableWidgetItem("--"))
+		eval_layout.addWidget(self.eval_table)
+		layout.addWidget(eval_group)
 
-		ngsolve_layout.addWidget(QLabel("Order:"), 0, 0)
+		# Controls
+		ctrl_row = QHBoxLayout()
+		ctrl_row.addWidget(QLabel("Max order:"))
 		self.order_spin = QSpinBox()
 		self.order_spin.setRange(1, 5)
-		self.order_spin.setValue(1)
-		ngsolve_layout.addWidget(self.order_spin, 0, 1)
+		self.order_spin.setValue(5)
+		ctrl_row.addWidget(self.order_spin)
 
-		ngsolve_layout.addWidget(QLabel("Python:"), 1, 0)
-		self.python_label = QLabel(self._ext_python or "Not found")
-		self.python_label.setStyleSheet(
-			"color: green;" if self._ext_python else "color: red;"
-		)
-		ngsolve_layout.addWidget(self.python_label, 1, 1)
-
-		self.calc_btn = QPushButton("Calculate")
-		self.calc_btn.clicked.connect(self._calculate_ngsolve)
+		self.calc_btn = QPushButton("Evaluate")
+		self.calc_btn.clicked.connect(self._run_evaluation)
 		self.calc_btn.setEnabled(self._ext_python is not None)
-		ngsolve_layout.addWidget(self.calc_btn, 0, 2)
+		ctrl_row.addWidget(self.calc_btn)
+		ctrl_row.addStretch()
 
-		ngsolve_group.setLayout(ngsolve_layout)
-		layout.addWidget(ngsolve_group)
-
-		# Close button
-		btn_row = QHBoxLayout()
-		btn_row.addStretch()
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
-		btn_row.addWidget(close_btn)
-		layout.addLayout(btn_row)
+		ctrl_row.addWidget(close_btn)
+		layout.addLayout(ctrl_row)
 
-	def _calculate_cad_volumes(self):
-		"""Calculate CAD volumes for selected volumes."""
+		# Python info
+		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
+		py_label.setStyleSheet(
+			"color: green;" if self._ext_python else "color: red;")
+		layout.addWidget(py_label)
+
+	def _show_cad_values(self):
+		"""Populate CAD reference table from Cubit."""
 		vol_ids = _get_all_volume_ids()
-		self.table.setRowCount(len(vol_ids) + 1)  # +1 for total row
+		self.cad_table.setRowCount(len(vol_ids) + 1)
 
-		total = 0.0
-		self._vol_ids = vol_ids
+		vol_total = 0.0
+		area_total = 0.0
 		for row, vid in enumerate(vol_ids):
 			v = cubit.volume(vid)
 			vol = v.volume()
+			surfaces = cubit.get_relatives("volume", vid, "surface")
+			area = sum(cubit.surface(sid).area() for sid in surfaces)
 			name = cubit.get_entity_name("volume", vid) or f"Volume {vid}"
-			total += vol
+			vol_total += vol
+			area_total += area
 
-			self.table.setItem(row, 0, QTableWidgetItem(str(vid)))
-			self.table.setItem(row, 1, QTableWidgetItem(name))
-			item = QTableWidgetItem(f"{vol:.6e}")
-			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-			self.table.setItem(row, 2, item)
-			self.table.setItem(row, 3, QTableWidgetItem("--"))
+			self.cad_table.setItem(row, 0, QTableWidgetItem(str(vid)))
+			self.cad_table.setItem(row, 1, QTableWidgetItem(name))
+			vi = QTableWidgetItem(f"{vol:.6e}")
+			vi.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+			self.cad_table.setItem(row, 2, vi)
+			ai = QTableWidgetItem(f"{area:.6e}")
+			ai.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+			self.cad_table.setItem(row, 3, ai)
 
 		# Total row
 		total_row = len(vol_ids)
-		font_bold = self.table.font()
+		font_bold = self.cad_table.font()
 		font_bold.setBold(True)
+		lbl = QTableWidgetItem("Total")
+		lbl.setFont(font_bold)
+		self.cad_table.setItem(total_row, 1, lbl)
+		self.cad_table.setItem(total_row, 0, QTableWidgetItem(""))
+		for c, val in ((2, vol_total), (3, area_total)):
+			it = QTableWidgetItem(f"{val:.6e}")
+			it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+			it.setFont(font_bold)
+			self.cad_table.setItem(total_row, c, it)
 
-		item_label = QTableWidgetItem("Total")
-		item_label.setFont(font_bold)
-		self.table.setItem(total_row, 1, item_label)
-		item_total = QTableWidgetItem(f"{total:.6e}")
-		item_total.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-		item_total.setFont(font_bold)
-		self.table.setItem(total_row, 2, item_total)
-		self.table.setItem(total_row, 0, QTableWidgetItem(""))
-		self.table.setItem(total_row, 3, QTableWidgetItem("--"))
-
-		self._cad_total = total
-
-	def _calculate_ngsolve(self):
-		"""Run NGSolve volume calculation via external Python + cub5."""
+	def _run_evaluation(self):
+		"""Run p=1..N evaluation via external Python."""
 		if not self._ext_python:
-			QMessageBox.warning(self, "Error", "External Python with NGSolve not found.\n"
-			                    "Set RADIA_PYTHON environment variable.")
 			return
-
-		vol_ids = self._vol_ids
-		if not vol_ids:
-			return
-
-		order = self.order_spin.value()
 
 		self.calc_btn.setEnabled(False)
-		self.calc_btn.setText("Calculating...")
+		self.calc_btn.setText("Evaluating...")
 
-		# Save current model to temp cub5
-		tmpdir = tempfile.mkdtemp(prefix="radia_vol_")
+		# Reset eval table
+		max_order = self.order_spin.value()
+		self.eval_table.setRowCount(max_order)
+		for row in range(max_order):
+			self.eval_table.setItem(row, 0, QTableWidgetItem(f"p={row+1}"))
+			for c in range(1, 6):
+				self.eval_table.setItem(row, c, QTableWidgetItem("..."))
+
+		tmpdir = tempfile.mkdtemp(prefix="radia_eval_")
 		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
 		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
 
-		# Build command
-		calc_script = os.path.join(_this_dir, "calc_volume.py")
-		args = ["--cub5", cub5_file, "--order", str(order)]
+		self._eval_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
+		calc_script = os.path.join(_this_dir, "calc_mesh_eval.py")
+		args = [calc_script,
+		        "--cub5", cub5_file,
+		        "--max-order", str(max_order),
+		        "--output", self._eval_json]
 
-		# Run async via QProcess
 		self._process = QProcess(self)
-		self._process.finished.connect(self._on_calc_finished)
-		self._process.start(self._ext_python, [calc_script] + args)
+		self._process.readyReadStandardError.connect(self._on_stderr)
+		self._process.finished.connect(self._on_finished)
+		self._process.start(self._ext_python, args)
 
-	def _on_calc_finished(self, exit_code, exit_status):
-		"""Handle async calculation result."""
+	def _on_stderr(self):
+		if self._process is None:
+			return
+		data = self._process.readAllStandardError()
+		text = bytes(data).decode("utf-8", errors="replace").strip()
+		if text:
+			# Update current row being computed
+			last = text.strip().split("\n")[-1]
+			self.calc_btn.setText(last.split(":")[-1] if ":" in last else last)
+
+	def _on_finished(self, exit_code, exit_status):
 		self.calc_btn.setEnabled(True)
-		self.calc_btn.setText("Calculate")
-
-		data = _parse_json_output(self._process)
+		self.calc_btn.setText("Evaluate")
 		self._process = None
+
+		data = None
+		json_path = getattr(self, '_eval_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
 		if data is None:
 			return
-
 		if "error" in data:
-			QMessageBox.critical(self, "NGSolve Error", data["error"])
+			QMessageBox.warning(self, "Error", data["error"])
 			return
 
-		if "warning" in data:
-			QMessageBox.warning(self, "Warning", data["warning"])
+		orders = data.get("orders", [])
+		self.eval_table.setRowCount(len(orders))
 
-		# Update table with NGSolve results
-		ng_total = data["ngsolve_total"]
-		ng_volumes = data.get("volumes", [])
-		vol_ids = self._vol_ids
+		for row, entry in enumerate(orders):
+			p = entry.get("order", row + 1)
+			self.eval_table.setItem(row, 0, QTableWidgetItem(f"p={p}"))
 
-		# Update per-volume NGSolve results
-		if ng_volumes and len(ng_volumes) == len(vol_ids):
-			for row, vol_info in enumerate(ng_volumes):
-				ng_vol = vol_info.get("ngsolve_volume")
-				if ng_vol is None:
-					continue
-				cad_vol_text = self.table.item(row, 2).text()
-				cad_vol = float(cad_vol_text)
-				if cad_vol != 0:
-					error_pct = (ng_vol - cad_vol) / cad_vol * 100
-					text = f"{ng_vol:.6e} ({error_pct:+.2e}%)"
+			if "error" in entry:
+				err_item = QTableWidgetItem(f"Error: {entry['error']}")
+				self.eval_table.setItem(row, 1, err_item)
+				for c in range(2, 6):
+					self.eval_table.setItem(row, c, QTableWidgetItem("--"))
+				continue
+
+			for c, key, fmt in [
+				(1, "ng_volume", "{:.6e}"),
+				(2, "vol_error_pct", "{:+.4f}"),
+				(3, "ng_area", "{:.6e}"),
+				(4, "area_error_pct", "{:+.4f}"),
+				(5, "time", "{:.2f}s"),
+			]:
+				val = entry.get(key)
+				if val is not None:
+					text = fmt.format(val)
 				else:
-					text = f"{ng_vol:.6e}"
-				item = QTableWidgetItem(text)
-				item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-				self.table.setItem(row, 3, item)
-
-		# Update total row
-		total_row = len(vol_ids)
-		if self._cad_total != 0:
-			error_pct = (ng_total - self._cad_total) / self._cad_total * 100
-			text = f"{ng_total:.6e} ({error_pct:+.2e}%)"
-		else:
-			text = f"{ng_total:.6e}"
-		item = QTableWidgetItem(text)
-		item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-		font_bold = self.table.font()
-		font_bold.setBold(True)
-		item.setFont(font_bold)
-		self.table.setItem(total_row, 3, item)
+					text = "--"
+				it = QTableWidgetItem(text)
+				it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+				# Color error cells
+				if "error_pct" in key and val is not None:
+					if abs(val) < 0.01:
+						it.setForeground(Qt.darkGreen)
+					elif abs(val) < 1.0:
+						it.setForeground(Qt.darkYellow)
+					else:
+						it.setForeground(Qt.red)
+				self.eval_table.setItem(row, c, it)
 
 
 # ================================================================
-# Surface Area Calculator Dialog
+# PCB (PEEC) Dialog
 # ================================================================
 
-class SurfaceAreaDialog(QDialog):
-	"""Dialog for surface area calculation with optional NGSolve integration."""
+class PCBPEECDialog(QDialog):
+	"""Dialog for PCB impedance extraction via PEEC.
+
+	Input: FastHenry .inp file (inline editor or file browse)
+	Output: Z(f), L(f), R(f) frequency sweep + optional SPICE netlist
+	"""
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
-		self.setWindowTitle("Surface Area Calculator")
-		self.setMinimumWidth(550)
-		self.setMinimumHeight(350)
+		self.setWindowTitle("PCB (PEEC)")
+		self.setMinimumWidth(620)
+		self.setMinimumHeight(550)
 		self._ext_python = _find_external_python()
+		self._process = None
 		self._setup_ui()
-		self._calculate_cad_areas()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
 
-		# Surface table
-		self.table = QTableWidget()
-		self.table.setColumnCount(4)
-		self.table.setHorizontalHeaderLabels(["ID", "Name", "CAD Area", "NGSolve Area"])
-		self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-		self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-		self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-		self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-		self.table.setSelectionBehavior(QTableWidget.SelectRows)
-		layout.addWidget(self.table)
+		# --- .inp editor ---
+		inp_label = QLabel("FastHenry .inp:")
+		inp_label.setStyleSheet("font-weight: bold;")
+		layout.addWidget(inp_label)
+		self.inp_edit = QPlainTextEdit()
+		self.inp_edit.setFont(QFont("Consolas", 9))
+		self.inp_edit.setPlainText(self._default_inp())
+		self.inp_edit.setMaximumHeight(200)
+		layout.addWidget(self.inp_edit)
 
-		# NGSolve group
-		ngsolve_group = QGroupBox("NGSolve Surface Area (external Python)")
-		ngsolve_layout = QHBoxLayout()
-		ngsolve_layout.addWidget(QLabel("Order:"))
-		self.order_spin = QSpinBox()
-		self.order_spin.setRange(1, 5)
-		self.order_spin.setValue(1)
-		ngsolve_layout.addWidget(self.order_spin)
-		self.calc_btn = QPushButton("Calculate")
-		self.calc_btn.clicked.connect(self._calculate_ngsolve)
-		self.calc_btn.setEnabled(self._ext_python is not None)
-		ngsolve_layout.addWidget(self.calc_btn)
-		ngsolve_group.setLayout(ngsolve_layout)
-		layout.addWidget(ngsolve_group)
+		inp_btn_row = QHBoxLayout()
+		load_btn = QPushButton("Load .inp...")
+		load_btn.clicked.connect(self._load_inp)
+		inp_btn_row.addWidget(load_btn)
+		inp_btn_row.addStretch()
+		layout.addLayout(inp_btn_row)
 
-		# Close
+		# --- Frequency sweep settings ---
+		freq_group = QGroupBox("Frequency Sweep")
+		freq_layout = QGridLayout(freq_group)
+		freq_layout.addWidget(QLabel("f_min [Hz]:"), 0, 0)
+		self.fmin_edit = QLineEdit("1e3")
+		freq_layout.addWidget(self.fmin_edit, 0, 1)
+		freq_layout.addWidget(QLabel("f_max [Hz]:"), 0, 2)
+		self.fmax_edit = QLineEdit("1e9")
+		freq_layout.addWidget(self.fmax_edit, 0, 3)
+		freq_layout.addWidget(QLabel("Points:"), 1, 0)
+		self.nfreq_spin = QSpinBox()
+		self.nfreq_spin.setRange(5, 500)
+		self.nfreq_spin.setValue(50)
+		freq_layout.addWidget(self.nfreq_spin, 1, 1)
+		self.spice_check = QCheckBox("SPICE netlist (PRIMA MOR)")
+		self.spice_check.setToolTip(
+			"Extract reduced-order SPICE netlist via Lanczos/PRIMA.")
+		freq_layout.addWidget(self.spice_check, 1, 2, 1, 2)
+		layout.addWidget(freq_group)
+
+		# --- Result display ---
+		self.result_label = QLabel("")
+		self.result_label.setWordWrap(True)
+		layout.addWidget(self.result_label)
+
+		# Result table (key values)
+		self.result_table = QTableWidget()
+		self.result_table.setColumnCount(4)
+		self.result_table.setHorizontalHeaderLabels(
+			["Frequency", "R [mOhm]", "L [nH]", "|Z| [Ohm]"])
+		for c in range(4):
+			self.result_table.horizontalHeader().setSectionResizeMode(
+				c, QHeaderView.Stretch)
+		self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.result_table.setMaximumHeight(150)
+		layout.addWidget(self.result_table)
+
+		# --- Buttons ---
 		btn_row = QHBoxLayout()
 		btn_row.addStretch()
+		self.solve_btn = QPushButton("Solve")
+		self.solve_btn.clicked.connect(self._solve)
+		self.solve_btn.setEnabled(self._ext_python is not None)
+		btn_row.addWidget(self.solve_btn)
 		close_btn = QPushButton("Close")
 		close_btn.clicked.connect(self.accept)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
 
-	def _calculate_cad_areas(self):
-		"""Calculate CAD surface areas."""
-		vol_ids = _get_all_volume_ids()
-		self.table.setRowCount(len(vol_ids) + 1)
-		total = 0.0
-		self._vol_ids = vol_ids
+		# Python info
+		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
+		py_label.setStyleSheet(
+			"color: green;" if self._ext_python else "color: red;")
+		layout.addWidget(py_label)
 
-		for row, vid in enumerate(vol_ids):
-			surfaces = cubit.get_relatives("volume", vid, "surface")
-			area = sum(cubit.surface(sid).area() for sid in surfaces)
-			name = cubit.get_entity_name("volume", vid) or f"Volume {vid}"
-			total += area
+	@staticmethod
+	def _default_inp():
+		"""Default .inp: simple copper trace."""
+		return (
+			"* Simple PCB trace (copper)\n"
+			".Units mm\n"
+			".default sigma=5.8e7 nwinc=3 nhinc=1\n"
+			"\n"
+			"N1 x=0 y=0 z=0\n"
+			"N2 x=50 y=0 z=0\n"
+			"\n"
+			"E1 N1 N2 w=0.5 h=0.035\n"
+			"\n"
+			".external N1 N2\n"
+			".freq fmin=1e3 fmax=1e9 ndec=10\n"
+			".end\n")
 
-			self.table.setItem(row, 0, QTableWidgetItem(str(vid)))
-			self.table.setItem(row, 1, QTableWidgetItem(name))
-			item = QTableWidgetItem(f"{area:.6e}")
-			item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-			self.table.setItem(row, 2, item)
-			self.table.setItem(row, 3, QTableWidgetItem("--"))
+	def _load_inp(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load FastHenry .inp", "",
+			"FastHenry Files (*.inp);;All Files (*)")
+		if path:
+			try:
+				with open(path, "r", encoding="utf-8") as f:
+					self.inp_edit.setPlainText(f.read())
+			except Exception as e:
+				QMessageBox.warning(self, "Error", f"Failed to load: {e}")
 
-		# Total row
-		total_row = len(vol_ids)
-		font_bold = self.table.font()
-		font_bold.setBold(True)
-		item_label = QTableWidgetItem("Total")
-		item_label.setFont(font_bold)
-		self.table.setItem(total_row, 1, item_label)
-		item_total = QTableWidgetItem(f"{total:.6e}")
-		item_total.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-		item_total.setFont(font_bold)
-		self.table.setItem(total_row, 2, item_total)
-		self.table.setItem(total_row, 0, QTableWidgetItem(""))
-		self.table.setItem(total_row, 3, QTableWidgetItem("--"))
-		self._cad_total = total
-
-	def _calculate_ngsolve(self):
-		"""Run NGSolve surface area calculation via QProcess."""
+	def _solve(self):
+		"""Run PEEC solver via external Python."""
 		if not self._ext_python:
 			return
 
-		self.calc_btn.setEnabled(False)
-		self.calc_btn.setText("Calculating...")
-
-		tmpdir = tempfile.mkdtemp(prefix="radia_surf_")
-		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
-		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
-
-		calc_script = os.path.join(_this_dir, "calc_surface.py")
-		order = self.order_spin.value()
-		args = ["--cub5", cub5_file, "--order", str(order)]
-
-		self._process = QProcess(self)
-		self._process.finished.connect(self._on_calc_finished)
-		self._process.start(self._ext_python, [calc_script] + args)
-
-	def _on_calc_finished(self, exit_code, exit_status):
-		"""Handle async result."""
-		self.calc_btn.setEnabled(True)
-		self.calc_btn.setText("Calculate")
-
-		data = _parse_json_output(self._process)
-		self._process = None
-		if data is None or "error" in data:
-			if data and "error" in data:
-				QMessageBox.critical(self, "Error", data["error"])
+		inp_text = self.inp_edit.toPlainText().strip()
+		if not inp_text:
+			QMessageBox.warning(self, "Error", "No .inp content.")
 			return
 
-		ng_total = data["ngsolve_total"]
-		ng_volumes = data.get("volumes", [])
-		vol_ids = self._vol_ids
-		n_bnd = data.get("n_bnd_elements", 0)
+		self.solve_btn.setEnabled(False)
+		self.solve_btn.setText("Solving...")
+		self.result_label.setText("Computing...")
 
-		if ng_volumes and len(ng_volumes) == len(vol_ids):
-			for row, vol_info in enumerate(ng_volumes):
-				ng_area = vol_info.get("ngsolve_area")
-				if ng_area is None:
-					continue
-				cad_area = float(self.table.item(row, 2).text())
-				if cad_area != 0:
-					error_pct = (ng_area - cad_area) / cad_area * 100
-					text = f"{ng_area:.6e} ({error_pct:+.2e}%)"
+		tmpdir = tempfile.mkdtemp(prefix="radia_peec_")
+		inp_file = os.path.join(tmpdir, "circuit.inp").replace("\\", "/")
+		with open(inp_file, "w", encoding="utf-8") as f:
+			f.write(inp_text)
+
+		self._peec_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
+		calc_script = os.path.join(_this_dir, "calc_pcb_peec.py")
+
+		args = [
+			calc_script,
+			"--inp", inp_file,
+			"--freq-min", self.fmin_edit.text().strip() or "1e3",
+			"--freq-max", self.fmax_edit.text().strip() or "1e9",
+			"--n-freq", str(self.nfreq_spin.value()),
+			"--output", self._peec_json,
+		]
+
+		if self.spice_check.isChecked():
+			spice_path = os.path.join(tmpdir, "extracted.ckt").replace("\\", "/")
+			args += ["--spice-output", spice_path]
+
+		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
+		self._process.finished.connect(self._on_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_stderr(self):
+		if self._process is None:
+			return
+		data = self._process.readAllStandardError()
+		text = bytes(data).decode("utf-8", errors="replace").strip()
+		if text:
+			last = text.strip().split("\n")[-1]
+			self.result_label.setText(last)
+
+	def _on_finished(self, exit_code, exit_status):
+		self.solve_btn.setEnabled(True)
+		self.solve_btn.setText("Solve")
+		self._process = None
+
+		data = None
+		json_path = getattr(self, '_peec_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
+		if data is None:
+			self.result_label.setText(f"Error (exit code {exit_code})")
+			return
+		if "error" in data:
+			self.result_label.setText(f"Error: {data['error']}")
+			return
+
+		L_dc = data.get("L_dc_nH", 0)
+		R_dc = data.get("R_dc_mOhm", 0)
+		n_loops = data.get("n_loops", 0)
+		n_ports = data.get("n_ports", 0)
+		has_mag = data.get("has_magnetic", False)
+		t = data.get("t_total", 0)
+		spice = data.get("spice_file", "")
+
+		info = (f"L_DC={L_dc:.4f} nH, R_DC={R_dc:.4f} mOhm\n"
+		        f"{n_loops} loops, {n_ports} ports"
+		        f"{', magnetic coupling' if has_mag else ''}"
+		        f", t={t:.1f}s")
+		if spice:
+			info += f"\nSPICE: {os.path.basename(spice)}"
+		self.result_label.setText(info)
+
+		# Populate result table with sampled frequencies
+		freqs = data.get("freqs", [])
+		R_arr = data.get("R", [])
+		L_arr = data.get("L", [])
+
+		if freqs and R_arr and L_arr:
+			# Show ~10 representative rows (log-spaced indices)
+			n = len(freqs)
+			if n <= 12:
+				indices = list(range(n))
+			else:
+				indices = sorted(set(
+					int(round(i)) for i in
+					[0] + [n * (k / 10) for k in range(1, 10)] + [n - 1]
+					if 0 <= int(round(i)) < n))
+
+			self.result_table.setRowCount(len(indices))
+			for row, idx in enumerate(indices):
+				f = freqs[idx]
+				R = R_arr[idx]
+				L = L_arr[idx]
+				Z_mag = abs(complex(R, 2 * 3.14159265 * f * L))
+
+				# Format frequency nicely
+				if f >= 1e9:
+					f_str = f"{f/1e9:.2f} GHz"
+				elif f >= 1e6:
+					f_str = f"{f/1e6:.2f} MHz"
+				elif f >= 1e3:
+					f_str = f"{f/1e3:.2f} kHz"
 				else:
-					text = f"{ng_area:.6e}"
-				item = QTableWidgetItem(text)
-				item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-				self.table.setItem(row, 3, item)
+					f_str = f"{f:.1f} Hz"
 
-		# Total row
-		total_row = len(vol_ids)
-		if self._cad_total != 0:
-			error_pct = (ng_total - self._cad_total) / self._cad_total * 100
-			text = f"{ng_total:.6e} ({error_pct:+.2e}%) [{n_bnd} elems]"
-		else:
-			text = f"{ng_total:.6e}"
-		item = QTableWidgetItem(text)
-		item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-		font_bold = self.table.font()
-		font_bold.setBold(True)
-		item.setFont(font_bold)
-		self.table.setItem(total_row, 3, item)
+				for c, text in enumerate([
+					f_str,
+					f"{R*1e3:.4f}",
+					f"{L*1e9:.4f}",
+					f"{Z_mag:.4e}",
+				]):
+					it = QTableWidgetItem(text)
+					it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+					self.result_table.setItem(row, c, it)
 
 
 # ================================================================
@@ -1805,6 +2122,51 @@ class IHFEMDialog(QDialog):
 		self.fes_spin.setValue(1)
 		self.fes_spin.setToolTip("HCurl polynomial order")
 		order_group.addWidget(self.fes_spin, 0, 3)
+
+		order_group.addWidget(QLabel("Solver:"), 1, 0)
+		self.solver_combo = QComboBox()
+		self.solver_combo.addItems([
+			"PARDISO (direct)",
+			"BDDC (iterative)",
+			"ICCG (shifted IC)",
+			"AMS+COCR (Compact HX)"])
+		self.solver_combo.setToolTip(
+			"PARDISO: direct solver (reliable, slow for large)\n"
+			"BDDC: domain decomposition (NGSolve built-in)\n"
+			"ICCG: IC preconditioned CG with auto-shift (single thread, robust)\n"
+			"AMS+COCR: Compact Hiptmair-Xu + COCR\n"
+			"  (TaskManager parallel, best for HCurl, p=1 only)")
+		self.solver_combo.currentTextChanged.connect(self._on_solver_changed)
+		order_group.addWidget(self.solver_combo, 1, 1)
+
+		self.shift_label = QLabel("Shift eps:")
+		self.shift_edit = QLineEdit("1e-6")
+		self.shift_edit.setToolTip(
+			"Shifted preconditioner: add eps*nu*u*v*dx to preconditioner\n"
+			"(NOT to system matrix). Required for air regions (sigma=0).\n"
+			"Typical: 1e-6. Does NOT affect the solution.")
+		order_group.addWidget(self.shift_label, 1, 2)
+		order_group.addWidget(self.shift_edit, 1, 3)
+
+		order_group.addWidget(QLabel("Regularization:"), 2, 0)
+		self.reg_edit = QLineEdit("1e-6")
+		self.reg_edit.setToolTip(
+			"Gauge regularization: add reg*nu0*u*v*dx to system matrix.\n"
+			"Required for PARDISO/BDDC (singular without it).\n"
+			"AMS+COCR: set to 0 (shifted preconditioner handles it).\n"
+			"Typical: 1e-6.")
+		order_group.addWidget(self.reg_edit, 2, 1)
+
+		self.nthreads_label = QLabel("Threads:")
+		self.nthreads_spin = QSpinBox()
+		self.nthreads_spin.setRange(0, 128)
+		self.nthreads_spin.setValue(0)
+		self.nthreads_spin.setToolTip(
+			"NGSolve TaskManager threads.\n"
+			"0 = auto (use all cores).\n"
+			"1 = single thread (ICCG optimal).")
+		order_group.addWidget(self.nthreads_label, 2, 2)
+		order_group.addWidget(self.nthreads_spin, 2, 3)
 		layout.addLayout(order_group)
 
 		# --- Kelvin (open boundary) ---
@@ -1880,9 +2242,10 @@ class IHFEMDialog(QDialog):
 		bh_row.addWidget(self.bh_browse)
 		wp_layout.addLayout(bh_row, 4, 1)
 
-		# Toggle visibility based on impedance model
+		# Toggle visibility based on impedance model and solver
 		self.model_combo.currentTextChanged.connect(self._on_impedance_changed)
 		self._on_impedance_changed(self.model_combo.currentText())
+		self._on_solver_changed(self.solver_combo.currentText())
 
 		layout.addWidget(wp_group)
 
@@ -1911,6 +2274,12 @@ class IHFEMDialog(QDialog):
 		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
 		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
 		layout.addWidget(py_label)
+
+	def _on_solver_changed(self, text):
+		"""Show shift eps for AMS and ICCG (both use shifted preconditioner)."""
+		needs_shift = "AMS" in text or "ICCG" in text
+		self.shift_label.setVisible(needs_shift)
+		self.shift_edit.setVisible(needs_shift)
 
 	def _on_impedance_changed(self, text):
 		"""Show mu_r for SIBC (linear), BH for ESIM (nonlinear)."""
@@ -2616,6 +2985,17 @@ class IHFEMDialog(QDialog):
 		except Exception:
 			pass
 
+		# Solver selection
+		solver_text = self.solver_combo.currentText()
+		if "PARDISO" in solver_text:
+			solver_arg = "pardiso"
+		elif "BDDC" in solver_text:
+			solver_arg = "bddc"
+		elif "ICCG" in solver_text:
+			solver_arg = "iccg"
+		else:
+			solver_arg = "ams"
+
 		args = [
 			calc_script,
 			"--cub5", cub5_file,
@@ -2624,11 +3004,20 @@ class IHFEMDialog(QDialog):
 			"--frequency", freq,
 			"--sigma", sigma,
 			"--impedance", impedance,
+			"--solver", solver_arg,
+			"--reg", self.reg_edit.text().strip() or "1e-6",
 			"--a-coil", str(round(a_coil, 6)),
 			"--r-wp", str(round(r_wp, 6)),
 			"--msh-output", msh_output,
 			"--output", self._fem_json,
 		]
+
+		if solver_arg in ("ams", "iccg"):
+			args += ["--shift-eps", self.shift_edit.text().strip() or "1e-6"]
+
+		nthreads = self.nthreads_spin.value()
+		if nthreads > 0:
+			args += ["--nthreads", str(nthreads)]
 
 		# SIBC: pass mu_r; ESIM: pass BH file
 		if impedance == "sibc":
@@ -2641,8 +3030,18 @@ class IHFEMDialog(QDialog):
 			args += ["--material", "steel"]
 
 		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
 		self._process.finished.connect(self._on_finished)
 		self._process.start(self._ext_python, args)
+
+	def _on_stderr(self):
+		if self._process is None:
+			return
+		data = self._process.readAllStandardError()
+		text = bytes(data).decode("utf-8", errors="replace").strip()
+		if text:
+			last_line = text.strip().split("\n")[-1]
+			self.result_label.setText(last_line)
 
 	def _on_finished(self, exit_code, exit_status):
 		self.solve_btn.setEnabled(True)
@@ -2705,7 +3104,629 @@ class IHFEMDialog(QDialog):
 
 
 # ================================================================
-# Accelerator Magnet Dialog
+# Electromagnet (MSC) Dialog
+# ================================================================
+
+class ElectromagnetMSCDialog(QDialog):
+	"""Dialog for accelerator magnet analysis using Radia MSC (hex mesh).
+
+	Inputs:
+	  - Coil Python script: defines build_coil() -> CoilBuilder
+	  - Yoke Cubit journal: iron yoke hex mesh (no air mesh needed)
+
+	Pipeline:
+	  Cubit hex (.jou) -> export_Gmesh (.msh) -> gmsh_to_radia -> Radia MSC Solve
+
+	Coil is NOT meshed -- Biot-Savart analytical source.
+	Open boundary via natural integral formulation (no Kelvin needed).
+	"""
+
+	def __init__(self, parent=None):
+		super().__init__(parent)
+		self.setWindowTitle("Electromagnet (MSC)")
+		self.setMinimumWidth(560)
+		self.setMinimumHeight(480)
+		self._ext_python = _find_external_python()
+		self._process = None
+		self._setup_ui()
+
+	def _setup_ui(self):
+		layout = QVBoxLayout(self)
+
+		# --- Coil script ---
+		coil_group = QGroupBox("Coil (Biot-Savart source)")
+		coil_layout = QHBoxLayout(coil_group)
+		coil_layout.addWidget(QLabel("Python script:"))
+		self.coil_edit = QLineEdit()
+		self.coil_edit.setPlaceholderText("path/to/coil.py (must define build_coil())")
+		coil_layout.addWidget(self.coil_edit)
+		coil_browse = QPushButton("...")
+		coil_browse.setFixedWidth(30)
+		coil_browse.clicked.connect(self._browse_coil)
+		coil_layout.addWidget(coil_browse)
+		preview_btn = QPushButton("Preview")
+		preview_btn.setToolTip(
+			"Run coil script, generate STEP, import into Cubit.\n"
+			"Coil geometry is shown but NOT meshed.")
+		preview_btn.clicked.connect(self._preview_coil)
+		coil_layout.addWidget(preview_btn)
+		layout.addWidget(coil_group)
+
+		# --- Yoke journal editor ---
+		jou_label = QLabel("Yoke Journal (iron hex mesh, NO air/coil):")
+		jou_label.setStyleSheet("font-weight: bold;")
+		layout.addWidget(jou_label)
+		self.jou_edit = QPlainTextEdit()
+		self.jou_edit.setFont(QFont("Consolas", 9))
+		self.jou_edit.setPlainText(self._default_msc_journal())
+		self.jou_edit.setMaximumHeight(180)
+		layout.addWidget(self.jou_edit)
+
+		jou_btn_row = QHBoxLayout()
+		load_btn = QPushButton("Load .jou...")
+		load_btn.clicked.connect(self._load_journal)
+		jou_btn_row.addWidget(load_btn)
+		run_btn = QPushButton("Run Journal")
+		run_btn.clicked.connect(self._run_journal)
+		jou_btn_row.addWidget(run_btn)
+		jou_btn_row.addStretch()
+		gmsh_preview_btn = QPushButton("Preview GMSH")
+		gmsh_preview_btn.setToolTip(
+			"Export yoke STEP from Cubit + coil STEP from CoilBuilder,\n"
+			"then open both in GMSH for geometry check.")
+		gmsh_preview_btn.clicked.connect(self._preview_gmsh)
+		jou_btn_row.addWidget(gmsh_preview_btn)
+		layout.addLayout(jou_btn_row)
+
+		# --- Block detection ---
+		block_group = QGridLayout()
+		block_group.addWidget(QLabel("yoke:"), 0, 0)
+		self.label_yoke = QLabel("(not found)")
+		self.label_yoke.setStyleSheet("font-weight: bold; color: red;")
+		block_group.addWidget(self.label_yoke, 0, 1)
+		self.label_hex_info = QLabel("")
+		self.label_hex_info.setStyleSheet("color: #666; font-size: 9pt;")
+		block_group.addWidget(self.label_hex_info, 0, 2)
+		layout.addLayout(block_group)
+
+		# --- Solver + IMA ---
+		solver_group = QGridLayout()
+		solver_group.addWidget(QLabel("Solver:"), 0, 0)
+		self.solver_combo = QComboBox()
+		self.solver_combo.addItems(["LU (direct)", "BiCGSTAB", "HACApK (H-matrix)"])
+		self.solver_combo.setToolTip(
+			"LU: direct, guaranteed convergence (N<500)\n"
+			"BiCGSTAB: iterative, fastest for medium (500-2000)\n"
+			"HACApK: H-matrix, memory-efficient for large (N>2000)")
+		solver_group.addWidget(self.solver_combo, 0, 1)
+
+		solver_group.addWidget(QLabel("IMA Symmetry:"), 1, 0)
+		self.ima_combo = QComboBox()
+		self.ima_combo.addItems([
+			"Full (no IMA)", "Half +x", "Half -z",
+			"Quarter +x-z", "Quarter -x+z"])
+		self.ima_combo.setToolTip(
+			"Image Method of Analysis for symmetry exploitation.\n"
+			"+x: mirror plane at x=0 (B parallel to x)\n"
+			"-z: mirror plane at z=0 (B perpendicular to z)\n"
+			"+x-z: quarter model (x>0, z>0)\n\n"
+			"Sign: + = field parallel to mirror, - = field perpendicular")
+		self.ima_combo.setCurrentIndex(3)  # Quarter +x-z default
+		solver_group.addWidget(self.ima_combo, 1, 1)
+		layout.addLayout(solver_group)
+
+		# --- Iron material ---
+		mat_group = QGroupBox("Iron Yoke Material")
+		mat_layout = QGridLayout(mat_group)
+
+		mat_layout.addWidget(QLabel("Model:"), 0, 0)
+		self.mat_combo = QComboBox()
+		self.mat_combo.addItems(["Nonlinear (BH curve)", "Linear (mu_r)"])
+		self.mat_combo.currentTextChanged.connect(self._on_material_changed)
+		mat_layout.addWidget(self.mat_combo, 0, 1)
+
+		self.mur_label = QLabel("mu_r:")
+		mat_layout.addWidget(self.mur_label, 1, 0)
+		self.mur_edit = QLineEdit("1000")
+		mat_layout.addWidget(self.mur_edit, 1, 1)
+
+		self.bh_label = QLabel("BH curve:")
+		mat_layout.addWidget(self.bh_label, 2, 0)
+		bh_row = QHBoxLayout()
+		self.bh_combo = QComboBox()
+		self.bh_combo.addItems(["ELF Steel (100 pts)", "Custom file..."])
+		self.bh_combo.currentTextChanged.connect(self._on_bh_changed)
+		bh_row.addWidget(self.bh_combo)
+		self.bh_edit = QLineEdit("")
+		self.bh_edit.setReadOnly(True)
+		self.bh_edit.setVisible(False)
+		bh_row.addWidget(self.bh_edit)
+		self.bh_browse = QPushButton("...")
+		self.bh_browse.setFixedWidth(30)
+		self.bh_browse.setVisible(False)
+		self.bh_browse.clicked.connect(self._browse_bh)
+		bh_row.addWidget(self.bh_browse)
+		mat_layout.addLayout(bh_row, 2, 1)
+
+		self.bh_info = QLabel("ELF Steel: 100 points, Bmax=2.6T (CEFC 2020)")
+		self.bh_info.setStyleSheet("color: #666; font-size: 9pt;")
+		self.bh_info.setWordWrap(True)
+		mat_layout.addWidget(self.bh_info, 3, 0, 1, 2)
+
+		self._on_material_changed(self.mat_combo.currentText())
+		layout.addWidget(mat_group)
+
+		# --- Iteration settings ---
+		iter_group = QGridLayout()
+		iter_group.addWidget(QLabel("Max iterations:"), 0, 0)
+		self.maxiter_spin = QSpinBox()
+		self.maxiter_spin.setRange(1, 500)
+		self.maxiter_spin.setValue(100)
+		iter_group.addWidget(self.maxiter_spin, 0, 1)
+
+		iter_group.addWidget(QLabel("Tolerance:"), 0, 2)
+		self.tol_edit = QLineEdit("1e-3")
+		iter_group.addWidget(self.tol_edit, 0, 3)
+
+		iter_group.addWidget(QLabel("Relaxation:"), 1, 0)
+		self.relax_edit = QLineEdit("0.0")
+		self.relax_edit.setToolTip("Under-relaxation (0=full step, 0.3=30% damping)")
+		iter_group.addWidget(self.relax_edit, 1, 1)
+		layout.addLayout(iter_group)
+
+		# --- Result ---
+		self.result_label = QLabel("")
+		self.result_label.setWordWrap(True)
+		layout.addWidget(self.result_label)
+
+		# --- Buttons ---
+		btn_row = QHBoxLayout()
+		btn_row.addStretch()
+		self.solve_btn = QPushButton("Solve")
+		self.solve_btn.clicked.connect(self._solve)
+		btn_row.addWidget(self.solve_btn)
+		self.open_btn = QPushButton("Open Result")
+		self.open_btn.clicked.connect(self._open_result)
+		self.open_btn.setEnabled(False)
+		btn_row.addWidget(self.open_btn)
+		close_btn = QPushButton("Close")
+		close_btn.clicked.connect(self.accept)
+		btn_row.addWidget(close_btn)
+		layout.addLayout(btn_row)
+
+		# Python info
+		py_label = QLabel(f"Python: {self._ext_python or 'Not found'}")
+		py_label.setStyleSheet("color: green;" if self._ext_python else "color: red;")
+		layout.addWidget(py_label)
+
+	@staticmethod
+	def _default_msc_journal():
+		"""Default journal: C-dipole hex mesh (quarter model for IMA +x-z)."""
+		lines = [
+			"# Accelerator dipole yoke: hex mesh, quarter model (x>0, z>0)",
+			"# Units: mm (Cubit default). Radia converts to meters.",
+			"reset",
+			"",
+			"# === Quarter yoke geometry (C-shape) ===",
+			"# Outer frame: 62.5 x 105 x 25 mm",
+			"brick x 62.5 y 105 z 25",
+			"# Return yoke: 80 x 50 x 25 mm",
+			"brick x 80 y 50 z 25",
+			"move Volume 2 location 71.25 -27.5 0",
+			"# End cap: 40 x 100 x 25 mm",
+			"brick x 40 y 100 z 25",
+			"move Volume 3 location 131.25 -2.5 0",
+			"",
+			"# Chamfer and webcut for mesh control",
+			"modify curve 35 26 36 chamfer radius 8",
+			"webcut volume 3 with plane yplane offset 39.5",
+			"webcut volume 3 with plane yplane offset 27.5",
+			"webcut volume 1 3 with plane yplane offset -2.5",
+			"imprint volume 7 3 2 1 6",
+			"merge volume 7 3 2 1 6",
+			"imprint volume 5 4",
+			"merge volume 5 4",
+			"",
+			"# === Hex mesh ===",
+			"curve 62 41 42 60 47 32 interval 4",
+			"curve 62 41 42 60 47 32 scheme equal",
+			"mesh curve 62 41 42 60 47 32",
+			"curve 61 40 38 46 45 63 interval 2",
+			"curve 61 40 38 46 45 63 scheme equal",
+			"mesh curve 61 40 38 46 45 63",
+			"curve 32 37 64 46 45 63 interval 2",
+			"curve 32 37 64 46 45 63 scheme equal",
+			"mesh curve 32 37 64 46 45 63",
+			"volume 5 4 size auto factor 8",
+			"mesh volume 5 4",
+			"volume 1 2 3 6 7 size auto factor 8",
+			"mesh volume 1 2 3 6 7",
+			"",
+			"# === Block (yoke only, no air) ===",
+			"set duplicate block elements on",
+			"block 1 add volume all",
+			'block 1 name "yoke"',
+		]
+		return "\n".join(lines)
+
+	def _browse_coil(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Select Coil Script", "",
+			"Python Files (*.py);;All Files (*)")
+		if path:
+			self.coil_edit.setText(path)
+
+	def _preview_coil(self):
+		"""Run coil script -> STEP -> import into Cubit for visualization."""
+		coil_path = self.coil_edit.text().strip()
+		if not coil_path or not os.path.exists(coil_path):
+			QMessageBox.warning(self, "Error", "Set a valid coil script path first.")
+			return
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		_pkg_root = os.path.dirname(os.path.dirname(
+			os.path.abspath(__file__))).replace("\\", "/")
+		step_file = os.path.join(
+			tempfile.gettempdir(), "radia_coil_preview.step").replace("\\", "/")
+		code = (
+			f"import sys, os; "
+			f"sys.path.insert(0, os.path.dirname(r'{coil_path}')); "
+			f"sys.path.insert(0, r'{_pkg_root}'); "
+			f"import importlib.util; "
+			f"spec = importlib.util.spec_from_file_location('cm', r'{coil_path}'); "
+			f"mod = importlib.util.module_from_spec(spec); "
+			f"spec.loader.exec_module(mod); "
+			f"coil = mod.build_coil(); "
+			f"coil.write_step(r'{step_file}'); "
+			f"print('OK')")
+		try:
+			r = subprocess.run(
+				[self._ext_python, "-c", code],
+				capture_output=True, text=True, timeout=30)
+			if r.returncode != 0 or "OK" not in r.stdout:
+				err = r.stderr.strip().split("\n")[-1] if r.stderr else "Unknown error"
+				QMessageBox.warning(self, "Coil Error", f"STEP generation failed:\n{err}")
+				return
+		except subprocess.TimeoutExpired:
+			QMessageBox.warning(self, "Error", "Coil script timed out.")
+			return
+
+		if not os.path.exists(step_file):
+			QMessageBox.warning(self, "Error", "STEP file not generated.")
+			return
+
+		try:
+			cubit.cmd(f'import step "{step_file}" heal')
+			block_vids = set()
+			for bid in cubit.get_block_id_list():
+				for v in cubit.get_block_volumes(bid):
+					block_vids.add(v)
+			for v in cubit.get_entities("volume"):
+				if v not in block_vids:
+					cubit.cmd(f"color volume {v} lightblue")
+					cubit.cmd(f"volume {v} visibility on")
+		except Exception as e:
+			QMessageBox.warning(self, "Import Error", str(e))
+
+	def _preview_gmsh(self):
+		"""Export yoke STEP + coil STEP, open both in GMSH."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		tmp = tempfile.gettempdir()
+		yoke_step = os.path.join(tmp, "radia_yoke_preview.step").replace("\\", "/")
+		coil_step = os.path.join(tmp, "radia_coil_preview.step").replace("\\", "/")
+		step_files = []
+
+		# Export yoke from Cubit
+		try:
+			yoke_vids = []
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid).lower()
+				if "yoke" in name or "iron" in name:
+					for v in cubit.get_block_volumes(bid):
+						yoke_vids.append(v)
+			if yoke_vids:
+				vid_str = " ".join(str(v) for v in yoke_vids)
+				cubit.cmd(f'export step "{yoke_step}" volume {vid_str} overwrite')
+				if os.path.exists(yoke_step):
+					step_files.append(yoke_step)
+		except Exception:
+			pass
+
+		# Export coil STEP
+		coil_path = self.coil_edit.text().strip()
+		if coil_path and os.path.exists(coil_path):
+			_pkg_root = os.path.dirname(os.path.dirname(
+				os.path.abspath(__file__))).replace("\\", "/")
+			code = (
+				f"import sys, os; "
+				f"sys.path.insert(0, os.path.dirname(r'{coil_path}')); "
+				f"sys.path.insert(0, r'{_pkg_root}'); "
+				f"import importlib.util; "
+				f"spec = importlib.util.spec_from_file_location('cm', r'{coil_path}'); "
+				f"mod = importlib.util.module_from_spec(spec); "
+				f"spec.loader.exec_module(mod); "
+				f"coil = mod.build_coil(); "
+				f"coil.write_step(r'{coil_step}'); "
+				f"print('OK')")
+			try:
+				r = subprocess.run(
+					[self._ext_python, "-c", code],
+					capture_output=True, text=True, timeout=30)
+				if r.returncode == 0 and "OK" in r.stdout and os.path.exists(coil_step):
+					step_files.append(coil_step)
+			except Exception:
+				pass
+
+		if not step_files:
+			QMessageBox.warning(self, "Error",
+				"No geometry to preview.\n"
+				"Run journal (yoke) and/or set coil script first.")
+			return
+
+		ext_pyw = self._ext_python.replace("python.exe", "pythonw.exe")
+		if not os.path.exists(ext_pyw):
+			ext_pyw = self._ext_python
+		code = (
+			"import sys, gmsh; "
+			"gmsh.initialize(); "
+			+ "".join(f'gmsh.merge(r"{f}"); ' for f in step_files)
+			+ "gmsh.fltk.run(); "
+			"gmsh.finalize()")
+		try:
+			subprocess.Popen([ext_pyw, "-c", code])
+		except Exception as e:
+			QMessageBox.warning(self, "Error", f"Failed to open GMSH: {e}")
+
+	def _on_material_changed(self, text):
+		is_linear = "Linear" in text
+		is_bh = "BH" in text or "Nonlinear" in text
+		self.mur_label.setVisible(is_linear)
+		self.mur_edit.setVisible(is_linear)
+		self.bh_label.setVisible(is_bh)
+		self.bh_combo.setVisible(is_bh)
+		self.bh_info.setVisible(is_bh)
+		self.bh_edit.setVisible(False)
+		self.bh_browse.setVisible(False)
+
+	def _on_bh_changed(self, text):
+		is_custom = "Custom" in text
+		self.bh_edit.setVisible(is_custom)
+		self.bh_browse.setVisible(is_custom)
+		if "ELF" in text:
+			self.bh_info.setText("ELF Steel: 100 points, Bmax=2.6T (CEFC 2020)")
+		elif is_custom and self.bh_edit.text():
+			pass
+		else:
+			self.bh_info.setText("")
+
+	def _browse_bh(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load BH Curve", "",
+			"Text files (*.txt *.csv *.dat);;All Files (*)")
+		if path:
+			self.bh_edit.setText(path)
+			try:
+				import numpy as _np
+				data = _np.loadtxt(path)
+				if data.ndim == 2 and data.shape[1] >= 2:
+					self.bh_info.setText(
+						f"{os.path.basename(path)}: {data.shape[0]} pts, "
+						f"Hmax={data[-1,0]:.0f} A/m, Bmax={data[-1,1]:.2f} T")
+			except Exception:
+				self.bh_info.setText(f"Loaded: {os.path.basename(path)}")
+
+	def _load_journal(self):
+		path, _ = QFileDialog.getOpenFileName(
+			self, "Load Cubit Journal", "",
+			"Cubit Journal (*.jou);;All Files (*)")
+		if path:
+			try:
+				with open(path, "r", encoding="utf-8") as f:
+					self.jou_edit.setPlainText(f.read())
+			except Exception as e:
+				QMessageBox.warning(self, "Error", f"Failed to load: {e}")
+
+	def _run_journal(self):
+		text = self.jou_edit.toPlainText().strip()
+		if not text:
+			return
+		for line in text.splitlines():
+			line = line.strip()
+			if not line or line.startswith("#"):
+				continue
+			cubit.cmd(line)
+		self._detect_blocks()
+
+	def _detect_blocks(self):
+		"""Detect yoke block and count hex elements."""
+		found = {}
+		try:
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid)
+				found[name] = bid
+		except Exception:
+			pass
+
+		if "yoke" in found:
+			self.label_yoke.setText("yoke")
+			self.label_yoke.setStyleSheet("font-weight: bold; color: green;")
+			# Count hex elements
+			try:
+				n_hex = 0
+				for v in cubit.get_block_volumes(found["yoke"]):
+					n_hex += len(cubit.get_volume_hexes(v))
+				n_dof = n_hex * 6
+				self.label_hex_info.setText(
+					f"({n_hex} hex, {n_dof} DOF)")
+			except Exception:
+				self.label_hex_info.setText("")
+		else:
+			self.label_yoke.setText("(not found)")
+			self.label_yoke.setStyleSheet("font-weight: bold; color: red;")
+			self.label_hex_info.setText("")
+
+		has_yoke = "yoke" in found
+		has_coil = bool(self.coil_edit.text().strip())
+		self.solve_btn.setEnabled(
+			has_yoke and has_coil and self._ext_python is not None)
+		if has_yoke and not has_coil:
+			self.result_label.setText("Set coil script path to enable Solve.")
+
+	def _get_ima_string(self):
+		"""Convert IMA combo selection to Radia IMA string."""
+		text = self.ima_combo.currentText()
+		if "Full" in text:
+			return ""
+		elif "+x-z" in text:
+			return "+x-z"
+		elif "-x+z" in text:
+			return "-x+z"
+		elif "+x" in text:
+			return "+x"
+		elif "-z" in text:
+			return "-z"
+		return ""
+
+	def _get_solver_id(self):
+		"""Convert solver combo selection to integer."""
+		text = self.solver_combo.currentText()
+		if "LU" in text:
+			return 0
+		elif "BiCGSTAB" in text:
+			return 1
+		elif "HACApK" in text:
+			return 2
+		return 0
+
+	def _solve(self):
+		"""Run MSC solver via external Python."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		coil_path = self.coil_edit.text().strip()
+		if not coil_path:
+			QMessageBox.warning(self, "Error", "Coil script path required.")
+			return
+
+		self.solve_btn.setEnabled(False)
+		self.solve_btn.setText("Solving...")
+		self.result_label.setText("Computing...")
+
+		# Save current Cubit model
+		tmpdir = tempfile.mkdtemp(prefix="radia_msc_")
+		cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
+		cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+
+		self._msc_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
+		msh_output = os.path.join(tmpdir, "result.msh").replace("\\", "/")
+		calc_script = os.path.join(_this_dir, "calc_accel_msc.py")
+
+		mat_text = self.mat_combo.currentText()
+		is_linear = "Linear" in mat_text
+
+		args = [
+			calc_script,
+			"--coil-script", coil_path,
+			"--cub5", cub5_file,
+			"--ima", self._get_ima_string(),
+			"--solver", str(self._get_solver_id()),
+			"--max-iter", str(self.maxiter_spin.value()),
+			"--tol", self.tol_edit.text().strip() or "1e-3",
+			"--relax", self.relax_edit.text().strip() or "0.0",
+			"--msh-output", msh_output,
+			"--output", self._msc_json,
+		]
+
+		if is_linear:
+			args += ["--material", "linear",
+			         "--mu-r", self.mur_edit.text().strip() or "1000"]
+		else:
+			bh_sel = self.bh_combo.currentText()
+			args += ["--material", "steel"]
+			if "Custom" in bh_sel:
+				bh = self.bh_edit.text().strip()
+				if bh:
+					args += ["--bh-file", bh]
+
+		self._process = QProcess(self)
+		self._process.readyReadStandardError.connect(self._on_stderr)
+		self._process.finished.connect(self._on_finished)
+		self._process.start(self._ext_python, args)
+
+	def _on_stderr(self):
+		if self._process is None:
+			return
+		data = self._process.readAllStandardError()
+		text = bytes(data).decode("utf-8", errors="replace").strip()
+		if text:
+			last_line = text.strip().split("\n")[-1]
+			self.result_label.setText(last_line)
+
+	def _on_finished(self, exit_code, exit_status):
+		self.solve_btn.setEnabled(True)
+		self.solve_btn.setText("Solve")
+		self._process = None
+
+		data = None
+		json_path = getattr(self, '_msc_json', '')
+		if json_path and os.path.exists(json_path):
+			try:
+				with open(json_path, "r") as f:
+					data = json.load(f)
+			except Exception:
+				pass
+
+		if data is None:
+			self.result_label.setText(f"Error (exit code {exit_code})")
+			return
+		if "error" in data:
+			self.result_label.setText(f"Error: {data['error']}")
+			return
+
+		B = data.get("B_center", [0, 0, 0])
+		B_mag = data.get("B_center_mag", 0)
+		n_elem = data.get("n_elem", 0)
+		ndof = data.get("ndof", 0)
+		solver = data.get("solver", "?")
+		ima = data.get("ima", "")
+		n_iter = data.get("iterations", 0)
+		res = data.get("residual", 0)
+		conv = "Yes" if data.get("converged") else "No"
+		info = (
+			f"B(0)=({B[0]*1e3:.2f}, {B[1]*1e3:.2f}, {B[2]*1e3:.2f}) mT, "
+			f"|B|={B_mag*1e3:.2f} mT\n"
+			f"{n_elem} elem, {ndof} DOF, solver={solver}, "
+			f"IMA={ima or 'none'}\n"
+			f"iter={n_iter}, residual={res:.2e}, converged={conv}, "
+			f"t={data.get('t_total', 0):.1f}s")
+		self.result_label.setText(info)
+		self.open_btn.setEnabled(True)
+
+	def _open_result(self):
+		"""Open GMSH result .msh + coil STEP overlay."""
+		json_path = getattr(self, '_msc_json', '')
+		if not json_path or not os.path.exists(json_path):
+			return
+		try:
+			with open(json_path, "r") as f:
+				data = json.load(f)
+			msh = data.get("msh_file", "")
+			if not msh or not os.path.exists(msh):
+				return
+			coil_path = self.coil_edit.text().strip()
+			_open_gmsh_with_coil(self._ext_python, msh, coil_path)
+		except Exception:
+			pass
+
+
+# ================================================================
+# Accelerator Magnet Dialog (FEM)
 # ================================================================
 
 class AccelMagnetDialog(QDialog):
@@ -2768,6 +3789,12 @@ class AccelMagnetDialog(QDialog):
 		run_btn.clicked.connect(self._run_journal)
 		jou_btn_row.addWidget(run_btn)
 		jou_btn_row.addStretch()
+		gmsh_preview_btn = QPushButton("Preview GMSH")
+		gmsh_preview_btn.setToolTip(
+			"Export yoke STEP from Cubit + coil STEP from CoilBuilder,\n"
+			"then open both in GMSH for geometry check.")
+		gmsh_preview_btn.clicked.connect(self._preview_gmsh)
+		jou_btn_row.addWidget(gmsh_preview_btn)
 		layout.addLayout(jou_btn_row)
 
 		# --- Block detection ---
@@ -2792,13 +3819,11 @@ class AccelMagnetDialog(QDialog):
 		form_group.addWidget(QLabel("Formulation:"), 0, 0)
 		self.form_combo = QComboBox()
 		self.form_combo.addItems([
-			"Omega-reduced (H1)", "A-formulation (HCurl)",
-			"MMM (Radia tet)", "MSC (Radia hex)"])
+			"Omega-reduced (H1)", "A-formulation (HCurl)"])
 		self.form_combo.setToolTip(
-			"Omega-reduced: scalar potential FEM (fastest)\n"
-			"A-formulation: vector potential FEM (eddy-current ready)\n"
-			"MMM: Radia integral (tet, open boundary, no air mesh)\n"
-			"MSC: Radia integral (hex, open boundary, no air mesh)")
+			"Omega-reduced: scalar potential FEM (fastest, H1)\n"
+			"A-formulation: vector potential FEM (HCurl, eddy-current ready)\n\n"
+			"For Radia integral solvers, use Electromagnet (MSC) dialog.")
 		self.form_combo.currentTextChanged.connect(self._on_formulation_changed)
 		form_group.addWidget(self.form_combo, 0, 1)
 
@@ -2812,7 +3837,22 @@ class AccelMagnetDialog(QDialog):
 		self.fes_spin = QSpinBox()
 		self.fes_spin.setRange(1, 3)
 		self.fes_spin.setValue(1)
+		self.fes_spin.valueChanged.connect(self._on_solver_options_changed)
 		form_group.addWidget(self.fes_spin, 1, 3)
+
+		form_group.addWidget(QLabel("Solver:"), 2, 0)
+		self.solver_combo = QComboBox()
+		self.solver_combo.addItems([
+			"Auto", "PARDISO (direct)", "BDDC (iterative)",
+			"ICCG (shifted IC)", "AMS+COCR (Compact HX)"])
+		self.solver_combo.setToolTip(
+			"Auto: PARDISO (small) / BDDC (large)\n"
+			"       A-form + p=1 -> AMS+COCR\n"
+			"PARDISO: direct solver\n"
+			"BDDC: domain decomposition\n"
+			"ICCG: IC preconditioned CG (single thread)\n"
+			"AMS+COCR: Compact HX (HCurl p=1 only)")
+		form_group.addWidget(self.solver_combo, 2, 1, 1, 3)
 		layout.addLayout(form_group)
 
 		# --- Kelvin (open boundary) ---
@@ -3096,6 +4136,80 @@ class AccelMagnetDialog(QDialog):
 		except Exception as e:
 			QMessageBox.warning(self, "Import Error", str(e))
 
+	def _preview_gmsh(self):
+		"""Export yoke STEP + coil STEP, open both in GMSH for geometry check."""
+		if not self._ext_python:
+			QMessageBox.warning(self, "Error", "External Python not found.")
+			return
+
+		tmp = tempfile.gettempdir()
+		yoke_step = os.path.join(tmp, "radia_yoke_preview.step").replace("\\", "/")
+		coil_step = os.path.join(tmp, "radia_coil_preview.step").replace("\\", "/")
+		step_files = []
+
+		# --- Export yoke from Cubit ---
+		try:
+			# Find yoke volume IDs from blocks
+			yoke_vids = []
+			for bid in cubit.get_block_id_list():
+				name = cubit.get_exodus_entity_name("block", bid).lower()
+				if "yoke" in name or "iron" in name:
+					for v in cubit.get_block_volumes(bid):
+						yoke_vids.append(v)
+			if yoke_vids:
+				vid_str = " ".join(str(v) for v in yoke_vids)
+				cubit.cmd(f'export step "{yoke_step}" volume {vid_str} overwrite')
+				if os.path.exists(yoke_step):
+					step_files.append(yoke_step)
+		except Exception:
+			pass  # yoke export is optional
+
+		# --- Export coil STEP via external Python ---
+		coil_path = self.coil_edit.text().strip()
+		if coil_path and os.path.exists(coil_path):
+			_pkg_root = os.path.dirname(os.path.dirname(
+				os.path.abspath(__file__))).replace("\\", "/")
+			code = (
+				f"import sys, os; "
+				f"sys.path.insert(0, os.path.dirname(r'{coil_path}')); "
+				f"sys.path.insert(0, r'{_pkg_root}'); "
+				f"import importlib.util; "
+				f"spec = importlib.util.spec_from_file_location('cm', r'{coil_path}'); "
+				f"mod = importlib.util.module_from_spec(spec); "
+				f"spec.loader.exec_module(mod); "
+				f"coil = mod.build_coil(); "
+				f"coil.write_step(r'{coil_step}'); "
+				f"print('OK')")
+			try:
+				r = subprocess.run(
+					[self._ext_python, "-c", code],
+					capture_output=True, text=True, timeout=30)
+				if r.returncode == 0 and "OK" in r.stdout and os.path.exists(coil_step):
+					step_files.append(coil_step)
+			except Exception:
+				pass  # coil export is optional
+
+		if not step_files:
+			QMessageBox.warning(self, "Error",
+				"No geometry to preview.\n"
+				"Run journal (yoke) and/or set coil script first.")
+			return
+
+		# --- Open in GMSH: merge all STEP files ---
+		ext_pyw = self._ext_python.replace("python.exe", "pythonw.exe")
+		if not os.path.exists(ext_pyw):
+			ext_pyw = self._ext_python
+		code = (
+			"import sys, gmsh; "
+			"gmsh.initialize(); "
+			+ "".join(f'gmsh.merge(r"{f}"); ' for f in step_files)
+			+ "gmsh.fltk.run(); "
+			"gmsh.finalize()")
+		try:
+			subprocess.Popen([ext_pyw, "-c", code])
+		except Exception as e:
+			QMessageBox.warning(self, "Error", f"Failed to open GMSH: {e}")
+
 	def _on_bh_changed(self, text):
 		"""Update BH curve info and show/hide custom file widgets."""
 		is_custom = "Custom" in text
@@ -3169,21 +4283,14 @@ class AccelMagnetDialog(QDialog):
 		self._detect_blocks()
 
 	def _on_formulation_changed(self, text):
-		"""Enable/disable UI elements based on formulation selection.
+		"""Update UI based on formulation (Omega or A)."""
+		self._on_solver_options_changed()
 
-		FEM (Omega/A): needs Kelvin, air block, curve/fes order.
-		Radia (MMM/MSC): no air, no Kelvin, no FES order.
-		"""
-		is_radia = "Radia" in text
-		self.add_kelvin_btn.setEnabled(not is_radia)
-		self.kelvin_radius_edit.setEnabled(not is_radia)
-		self.kelvin_sym_combo.setEnabled(not is_radia)
-		self.curve_spin.setEnabled(not is_radia)
-		self.fes_spin.setEnabled(not is_radia)
-		if is_radia:
-			self.kelvin_status.setText(
-				"Radia solver: no air/Kelvin needed (natural open BC)")
-			self.kelvin_status.setStyleSheet("color: gray;")
+	def _on_solver_options_changed(self, _=None):
+		"""Auto-select solver based on formulation + FES order."""
+		if self.solver_combo.currentText() != "Auto":
+			return
+		# Auto logic will be applied in _solve()
 
 	def _add_kelvin(self):
 		"""Create Kelvin sphere pair with symmetry support.
@@ -3528,12 +4635,22 @@ class AccelMagnetDialog(QDialog):
 						f"block {bid_next} add tri in surface {sid}")
 			cubit.cmd(f'block {bid_next} name "kelvin_ext"')
 
+			# 15. GND vertex at exterior sphere center (= physical infinity)
+			# H1 (Omega-reduced): Dirichlet Omega=0 at mapped infinity
+			# HCurl (A-form): not used (gauge regularization instead)
+			bid_next += 1
+			cubit.cmd(f"create vertex {ext_sx} {sy} {sz}")
+			gnd_vid = cubit.get_last_id("vertex")
+			cubit.cmd(f"block {bid_next} add vertex {gnd_vid}")
+			cubit.cmd(f'block {bid_next} name "GND"')
+
 			n_tets = sum(
 				len(cubit.get_volume_tets(kv)) for kv in kelvin_vids)
 			self.kelvin_status.setText(
 				f"Kelvin added ({symmetry}): R={R_kelvin:.4f}m, "
 				f"{len(kelvin_vids)} vol, {n_tets} tets, "
-				f"{len(int_hemis)} int + {len(ext_hemis)} ext surf")
+				f"{len(int_hemis)} int + {len(ext_hemis)} ext surf, "
+				f"GND={gnd_vid}")
 			self.kelvin_status.setStyleSheet("color: green;")
 
 		except Exception as e:
@@ -3730,23 +4847,33 @@ class AccelMagnetDialog(QDialog):
 		calc_script = os.path.join(_this_dir, "calc_accel_magnet.py")
 
 		form_text = self.form_combo.currentText()
-		if "Omega" in form_text:
-			formulation = "omega"
-		elif "HCurl" in form_text:
-			formulation = "a"
-		elif "MMM" in form_text:
-			formulation = "mmm"
-		else:
-			formulation = "msc"
+		formulation = "omega" if "Omega" in form_text else "a"
 		mat_text = self.mat_combo.currentText()
 		is_linear = "Linear" in mat_text
 		is_hys = "Hysteresis" in mat_text
+
+		# Solver selection (Auto resolves here)
+		solver_text = self.solver_combo.currentText()
+		if "Auto" in solver_text:
+			if formulation == "a" and self.fes_spin.value() == 1:
+				solver_arg = "ams"
+			else:
+				solver_arg = "auto"  # PARDISO/BDDC by ndof
+		elif "PARDISO" in solver_text:
+			solver_arg = "pardiso"
+		elif "BDDC" in solver_text:
+			solver_arg = "bddc"
+		elif "ICCG" in solver_text:
+			solver_arg = "iccg"
+		else:
+			solver_arg = "ams"
 
 		args = [
 			calc_script,
 			"--coil-script", coil_path,
 			"--cub5", cub5_file,
 			"--formulation", formulation,
+			"--solver", solver_arg,
 			"--order", str(self.curve_spin.value()),
 			"--fes-order", str(self.fes_spin.value()),
 			"--max-iter", str(self.maxiter_spin.value()),
@@ -3834,7 +4961,7 @@ class AccelMagnetDialog(QDialog):
 		self.open_btn.setEnabled(True)
 
 	def _open_result(self):
-		"""Open GMSH result file."""
+		"""Open GMSH result .msh + coil STEP overlay."""
 		json_path = getattr(self, '_accel_json', '')
 		if not json_path or not os.path.exists(json_path):
 			return
@@ -3844,19 +4971,8 @@ class AccelMagnetDialog(QDialog):
 			msh = data.get("msh_file", "")
 			if not msh or not os.path.exists(msh):
 				return
-			import subprocess as _sp
-			ext_py = self._ext_python
-			if ext_py:
-				ext_pyw = ext_py.replace("python.exe", "pythonw.exe")
-				if not os.path.exists(ext_pyw):
-					ext_pyw = ext_py
-				code = (
-					"import sys, gmsh; "
-					"gmsh.initialize(sys.argv, run=True); "
-					"gmsh.finalize()")
-				_sp.Popen([ext_pyw, "-c", code, msh])
-			else:
-				os.startfile(msh)
+			coil_path = self.coil_edit.text().strip()
+			_open_gmsh_with_coil(self._ext_python, msh, coil_path)
 		except Exception:
 			pass
 
@@ -3894,7 +5010,9 @@ def register_menu():
 			if sub:
 				sub.deleteLater()
 			# Close stale modeless dialogs
-			for attr in ('_radia_ind_dlg', '_radia_fem_dlg', '_radia_accel_dlg'):
+			for attr in ('_radia_ind_dlg', '_radia_fem_dlg',
+			             '_radia_accel_dlg', '_radia_msc_dlg',
+			             '_radia_peec_dlg'):
 				dlg = getattr(main_window, attr, None)
 				if dlg is not None:
 					dlg.close()
@@ -3905,23 +5023,17 @@ def register_menu():
 	# Create Radia submenu under Tools
 	radia_menu = tools_menu.addMenu("Radia-NGSolve")
 
-	# Export Gmsh action
-	action_gmsh = QAction("Export Gmsh...", main_window)
-	action_gmsh.setStatusTip("Export mesh to Gmsh format (.msh)")
-	action_gmsh.triggered.connect(lambda: ExportGmshDialog(main_window).exec())
-	radia_menu.addAction(action_gmsh)
+	# Export Mesh action
+	action_mesh = QAction("Export Mesh...", main_window)
+	action_mesh.setStatusTip("Export mesh to various formats (.msh, .nas, .vtk, .meg)")
+	action_mesh.triggered.connect(lambda: ExportMeshDialog(main_window).exec())
+	radia_menu.addAction(action_mesh)
 
-	# Volume Calculator action
-	action_vol = QAction("Volume Calculator...", main_window)
-	action_vol.setStatusTip("Calculate volume of selected volumes (CAD + NGSolve)")
-	action_vol.triggered.connect(lambda: VolumeCalculatorDialog(main_window).exec())
-	radia_menu.addAction(action_vol)
-
-	# Surface Area Calculator action
-	action_surf = QAction("Surface Area...", main_window)
-	action_surf.setStatusTip("Calculate surface area (CAD + NGSolve)")
-	action_surf.triggered.connect(lambda: SurfaceAreaDialog(main_window).exec())
-	radia_menu.addAction(action_surf)
+	# Mesh Evaluation action
+	action_eval = QAction("Mesh Evaluation...", main_window)
+	action_eval.setStatusTip("Evaluate mesh: CAD vs NGSolve volume/area (p=1..5)")
+	action_eval.triggered.connect(lambda: MeshEvaluationDialog(main_window).exec())
+	radia_menu.addAction(action_eval)
 
 	# IH (BEM): BEM inductance + SIBC heating (surface mesh only)
 	action_ih_bem = QAction("IH (BEM)...", main_window)
@@ -3945,16 +5057,38 @@ def register_menu():
 	action_ih_fem.triggered.connect(_show_ih_fem)
 	radia_menu.addAction(action_ih_fem)
 
-	# Accelerator Magnet: Omega-reduced / A-formulation
-	action_accel = QAction("Accelerator Magnet...", main_window)
-	action_accel.setStatusTip("Accelerator magnet: Omega-reduced or A-formulation + Kelvin")
-	def _show_accel():
+	# Electromagnet (FEM): Omega-reduced / A-formulation + Kelvin
+	action_fem = QAction("Electromagnet (FEM)...", main_window)
+	action_fem.setStatusTip("Electromagnet FEM: STEP input, Netgen mesh, Omega/A + Kelvin")
+	def _show_fem_accel():
 		if not hasattr(main_window, '_radia_accel_dlg') or main_window._radia_accel_dlg is None:
 			main_window._radia_accel_dlg = AccelMagnetDialog(main_window)
 		main_window._radia_accel_dlg.show()
 		main_window._radia_accel_dlg.raise_()
-	action_accel.triggered.connect(_show_accel)
-	radia_menu.addAction(action_accel)
+	action_fem.triggered.connect(_show_fem_accel)
+	radia_menu.addAction(action_fem)
+
+	# Electromagnet (MSC): Radia hex/tet integral solver
+	action_msc = QAction("Electromagnet (MSC)...", main_window)
+	action_msc.setStatusTip("Electromagnet MSC: Cubit hex mesh, Radia integral solver + IMA")
+	def _show_msc():
+		if not hasattr(main_window, '_radia_msc_dlg') or main_window._radia_msc_dlg is None:
+			main_window._radia_msc_dlg = ElectromagnetMSCDialog(main_window)
+		main_window._radia_msc_dlg.show()
+		main_window._radia_msc_dlg.raise_()
+	action_msc.triggered.connect(_show_msc)
+	radia_menu.addAction(action_msc)
+
+	# PCB (PEEC): FastHenry .inp -> impedance extraction
+	action_peec = QAction("PCB (PEEC)...", main_window)
+	action_peec.setStatusTip("PCB impedance extraction: FastHenry .inp, PEEC + SPICE MOR")
+	def _show_peec():
+		if not hasattr(main_window, '_radia_peec_dlg') or main_window._radia_peec_dlg is None:
+			main_window._radia_peec_dlg = PCBPEECDialog(main_window)
+		main_window._radia_peec_dlg.show()
+		main_window._radia_peec_dlg.raise_()
+	action_peec.triggered.connect(_show_peec)
+	radia_menu.addAction(action_peec)
 
 	# Separator + Reload
 	radia_menu.addSeparator()

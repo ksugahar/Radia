@@ -4,12 +4,14 @@ Radia Full Installation
 
 Install or update the complete Radia environment:
 
-    python install_full.py
+    python install_full.py                # current user
+    python install_full.py --all-users    # all existing user profiles (admin)
 
 Steps:
   1. pip install --upgrade radia  -- from PyPI (NGSolve 6.2.2602, MKL, MCP servers)
   2. Install ksugahar/netgen fork -- CallbackGeometry + SetGeomInfo (if not already installed)
   3. Install Cubit panels         -- if Coreform Cubit is detected
+  4. Install Cubit plugin (.ccm)  -- copy plugin + Netgen DLLs to Cubit plugins dir
 
 Requirements:
     Python 3.12+ on Windows (x64)
@@ -17,13 +19,22 @@ Requirements:
 
 import json
 import platform
+import shutil
 import subprocess
 import sys
 import urllib.request
+from pathlib import Path
 
 
 NETGEN_FORK_REPO = "ksugahar/netgen"
 NETGEN_FORK_TAG = "v6.2.2602.post1-setgeominfo"
+
+# Cubit plugin
+CUBIT_PLUGIN_NAME = "radia_cubit.ccm"
+CUBIT_INSTALL_DIRS = [
+    Path(r"C:\Program Files\Coreform Cubit 2025.3"),
+    Path(r"C:\Program Files\Coreform Cubit 2024.8"),
+]
 
 
 def _py_tag():
@@ -65,6 +76,46 @@ def _pip(*args):
         raise RuntimeError(f"pip install failed: {' '.join(args)}")
 
 
+def _find_cubit_dir():
+    """Find Cubit installation directory."""
+    for d in CUBIT_INSTALL_DIRS:
+        if (d / "bin" / "plugins").is_dir():
+            return d
+    return None
+
+
+def _find_plugin_ccm():
+    """Find radia_cubit.ccm: next to this script, in dist/, or in build dir."""
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here / CUBIT_PLUGIN_NAME,
+        here / "dist" / CUBIT_PLUGIN_NAME,
+        here / "build-cubit-plugin" / "Release" / CUBIT_PLUGIN_NAME,
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
+def _find_netgen_dlls():
+    """Find nglib.dll and ngcore.dll from pip-installed netgen package."""
+    try:
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "import netgen; print(netgen.__file__)"],
+            capture_output=True, text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            ng_dir = Path(r.stdout.strip()).parent
+            nglib = ng_dir / "nglib.dll"
+            ngcore = ng_dir / "ngcore.dll"
+            if nglib.is_file() and ngcore.is_file():
+                return nglib, ngcore
+    except Exception:
+        pass
+    return None, None
+
+
 def _has_netgen_fork():
     """Check if netgen fork is already installed."""
     try:
@@ -78,20 +129,24 @@ def _has_netgen_fork():
 
 
 def main():
+    all_users = "--all-users" in sys.argv
+
     print("=" * 60)
     print("  Radia Full Installation")
     print("=" * 60)
     print(f"  Python: {sys.version}")
     print(f"  Platform: {sys.platform} {platform.machine()}")
+    if all_users:
+        print("  Mode: --all-users (all existing user profiles)")
     print()
 
     # Step 1: radia from PyPI (always upgrade)
-    print("[1/3] Installing/updating radia from PyPI...")
+    print("[1/4] Installing/updating radia from PyPI...")
     _pip("--upgrade", "radia")
     print()
 
     # Step 2: netgen fork (skip if already installed)
-    print("[2/3] Netgen fork...")
+    print("[2/4] Netgen fork...")
     if _has_netgen_fork():
         print("  Already installed (SetGeomInfo found). Skipping.")
     else:
@@ -105,15 +160,41 @@ def main():
     print()
 
     # Step 3: Cubit panels (always update)
-    print("[3/3] Installing Cubit panels...")
+    print("[3/4] Installing Cubit panels...")
     try:
-        r = subprocess.run(
-            [sys.executable, "-m", "radia.install_panels", "--all-users"],
-            timeout=30)
+        cmd = [sys.executable, "-m", "radia.install_panels"]
+        if all_users:
+            cmd.append("--all-users")
+        r = subprocess.run(cmd, timeout=30)
         if r.returncode != 0:
             print("  Skipped (Cubit not found)")
     except Exception as e:
         print(f"  Skipped ({e})")
+    print()
+
+    # Step 4: Cubit plugin + Netgen DLLs
+    print("[4/4] Cubit plugin (radia_cubit.ccm + Netgen DLLs)...")
+    cubit_dir = _find_cubit_dir()
+    if cubit_dir:
+        plugins_dir = cubit_dir / "bin" / "plugins"
+        ccm = _find_plugin_ccm()
+        if ccm:
+            dst = plugins_dir / CUBIT_PLUGIN_NAME
+            shutil.copy2(ccm, dst)
+            print(f"  Copied {ccm.name} -> {dst}")
+        else:
+            print(f"  WARNING: {CUBIT_PLUGIN_NAME} not found (build it first)")
+
+        nglib, ngcore = _find_netgen_dlls()
+        if nglib:
+            for dll in (nglib, ngcore):
+                dst = plugins_dir / dll.name
+                shutil.copy2(dll, dst)
+                print(f"  Copied {dll.name} -> {dst}")
+        else:
+            print("  WARNING: Netgen DLLs not found (high-order disabled)")
+    else:
+        print("  Skipped (Cubit not found)")
     print()
 
     # Summary
