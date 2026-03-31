@@ -781,7 +781,7 @@ class PCBPEECDialog(QDialog):
 
 	def closeEvent(self, event):
 		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		event.ignore(); self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -1045,7 +1045,7 @@ class InductanceDialog(QDialog):
 
 	def closeEvent(self, event):
 		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		event.ignore(); self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -2216,7 +2216,7 @@ class IHFEMDialog(QDialog):
 
 	def closeEvent(self, event):
 		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		event.ignore(); self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -3284,7 +3284,7 @@ class ElectromagnetMSCDialog(QDialog):
 
 	def closeEvent(self, event):
 		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		event.ignore(); self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -3912,7 +3912,7 @@ class AccelMagnetDialog(QDialog):
 
 	def closeEvent(self, event):
 		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		event.ignore(); self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -5184,6 +5184,11 @@ def register_menu():
 					setattr(main_window, attr, None)
 			is_reload = True
 			break
+
+	# Prevent Qt from quitting Cubit when dialogs are closed
+	app = QApplication.instance()
+	if app is not None:
+		app.setQuitOnLastWindowClosed(False)
 
 	# Create Radia submenu under Tools
 	radia_menu = tools_menu.addMenu("Radia-NGSolve")
