@@ -5248,6 +5248,23 @@ def register_menu():
 	action_reload.triggered.connect(_reload_panels)
 	radia_menu.addAction(action_reload)
 
+	# Clean stale entries from radia_panels.json
+	_active_dialogs = {
+		"ExportMeshDialog", "MeshEvaluationDialog", "PCBPEECDialog",
+		"InductanceDialog", "IHFEMDialog",
+		"ElectromagnetMSCDialog", "AccelMagnetDialog",
+	}
+	try:
+		all_data = _load_all_settings()
+		stale = [k for k in all_data if k not in _active_dialogs]
+		if stale:
+			for k in stale:
+				del all_data[k]
+			_save_all_settings(all_data)
+			print(f"Cleaned stale panel settings: {stale}")
+	except Exception:
+		pass
+
 	if is_reload:
 		print("Radia-NGSolve menu re-registered (code updated).")
 	else:
