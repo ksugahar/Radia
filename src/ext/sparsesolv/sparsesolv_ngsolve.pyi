@@ -1,6 +1,6 @@
 """Type stubs for sparsesolv_ngsolve — SparseSolv iterative solvers for NGSolve.
 
-Provides IC/SGS preconditioners, ICCG/SGSMRTR iterative solvers,
+Provides IC preconditioner, ICCG iterative solver,
 Compact AMS preconditioners for HCurl eddy-current problems,
 and COCR/GMRES Krylov solvers.
 """
@@ -11,12 +11,9 @@ __all__ = [
     "SparseSolvResult",
     "ICPreconditionerD",
     "ICPreconditionerC",
-    "SGSPreconditionerD",
-    "SGSPreconditionerC",
     "SparseSolvSolverD",
     "SparseSolvSolverC",
     "ICPreconditioner",
-    "SGSPreconditioner",
     "SparseSolvSolver",
     "COCRSolverD",
     "COCRSolverC",
@@ -89,24 +86,6 @@ class ICPreconditionerC(BaseMatrix):
         ...
 
 # =============================================================================
-# SGS Preconditioner types
-# =============================================================================
-
-class SGSPreconditionerD(BaseMatrix):
-    """Symmetric Gauss-Seidel preconditioner for real (double) matrices."""
-
-    def Update(self) -> None:
-        """Recompute the SGS factorization."""
-        ...
-
-class SGSPreconditionerC(BaseMatrix):
-    """Symmetric Gauss-Seidel preconditioner for complex matrices."""
-
-    def Update(self) -> None:
-        """Recompute the SGS factorization."""
-        ...
-
-# =============================================================================
 # Solver types
 # =============================================================================
 
@@ -114,7 +93,7 @@ class SparseSolvSolverD(BaseMatrix):
     """Iterative solver for real (double) matrices."""
 
     method: str
-    """Solver method: ``"ICCG"``, ``"SGSMRTR"``, ``"CG"``, or ``"COCR"``."""
+    """Solver method: ``"ICCG"``, ``"CG"``, or ``"COCR"``."""
     tol: float
     """Convergence tolerance (relative residual)."""
     maxiter: int
@@ -227,21 +206,6 @@ def ICPreconditioner(
     """
     ...
 
-def SGSPreconditioner(
-    mat: BaseMatrix,
-    freedofs: BitArray | None = None,
-) -> SGSPreconditionerD | SGSPreconditionerC:
-    """Symmetric Gauss-Seidel (SGS) Preconditioner.
-
-    Auto-dispatches to real/complex based on ``mat.IsComplex()``.
-    Calls ``Update()`` automatically on construction.
-
-    Args:
-        mat: SPD sparse matrix (real or complex).
-        freedofs: Free DOFs. Constrained DOFs treated as identity.
-    """
-    ...
-
 def SparseSolvSolver(
     mat: BaseMatrix,
     method: str = "ICCG",
@@ -259,7 +223,7 @@ def SparseSolvSolver(
     abmc_reorder_spmv: bool = False,
     abmc_use_rcm: bool = False,
 ) -> SparseSolvSolverD | SparseSolvSolverC:
-    """Iterative solver (ICCG / SGSMRTR / CG / COCR).
+    """Iterative solver (ICCG / CG / COCR).
 
     Can be used as a BaseMatrix inverse operator (``solver * rhs``) or
     via ``Solve()`` for detailed convergence results.
@@ -268,7 +232,7 @@ def SparseSolvSolver(
 
     Args:
         mat: SPD sparse matrix (real or complex).
-        method: ``"ICCG"``, ``"SGSMRTR"``, ``"CG"``, or ``"COCR"``.
+        method: ``"ICCG"``, ``"CG"``, or ``"COCR"``.
         freedofs: Free DOFs.
         tol: Convergence tolerance (default: 1e-10).
         maxiter: Maximum iterations (default: 1000).

@@ -23,16 +23,14 @@ ngsolve-sparsesolv/
 │   │   └── rcm_ordering.hpp      # RCMバンド幅縮小順序付け
 │   ├── preconditioners/          # 前処理の実装
 │   │   ├── ic_preconditioner.hpp # 不完全コレスキー (IC) 分解
-│   │   ├── sgs_preconditioner.hpp # 対称ガウス・ザイデル (SGS)
 │   │   ├── compact_amg.hpp     # CompactAMG（古典的AMG、ヘッダオンリー）
 │   │   ├── compact_ams.hpp     # CompactAMS（Hiptmair-Xu補助空間前処理）
 │   │   └── complex_compact_ams.hpp # ComplexCompactAMS（渦電流向け融合Re/Im）
 │   ├── solvers/                  # 反復法ソルバー
 │   │   ├── iterative_solver.hpp  # 反復法ソルバー基底クラス
 │   │   ├── cg_solver.hpp         # 共役勾配法 (CG)
-│   │   └── sgs_mrtr_solver.hpp   # SGS-MRTR（分割公式）
 │   └── ngsolve/                  # NGSolve統合レイヤ
-│       ├── sparsesolv_precond.hpp # BaseMatrixラッパー (IC, SGS, Compact AMS, Solver)
+│       ├── sparsesolv_precond.hpp # BaseMatrixラッパー (IC, Compact AMS, Solver)
 │       └── sparsesolv_python_export.hpp # pybind11バインディング + ファクトリ関数
 ├── ngsolve/
 │   └── python_module.cpp         # pybind11モジュールエントリポイント
@@ -93,14 +91,10 @@ sparsesolv.hpp (メインヘッダ)
 ├── preconditioners/ic_preconditioner.hpp
 │   ← core/preconditioner.hpp, core/level_schedule.hpp,
 │      core/abmc_ordering.hpp, core/rcm_ordering.hpp
-├── preconditioners/sgs_preconditioner.hpp
-│   ← core/preconditioner.hpp
 ├── solvers/iterative_solver.hpp
 │   ← core/preconditioner.hpp, core/sparse_matrix_view.hpp
 ├── solvers/cg_solver.hpp
 │   ← solvers/iterative_solver.hpp
-└── solvers/sgs_mrtr_solver.hpp
-    ← solvers/iterative_solver.hpp, core/level_schedule.hpp
 ```
 
 NGSolve統合レイヤ（NGSolveとビルドする場合のみ）:
@@ -137,8 +131,7 @@ NGSolveの`CGSolver`との互換性のために`Mult()` / `MultAdd()`を実装�
 ```
 SparseSolvPrecondBase<SCAL>  （抽象基底）
 ├── SparseSolvICPreconditioner<SCAL>    → ICPreconditioner<SCAL>
-├── SparseSolvSGSPreconditioner<SCAL>   → SGSPreconditioner<SCAL>
-└── SparseSolvSolver<SCAL>              → ICCG/SGSMRTR/CG
+└── SparseSolvSolver<SCAL>              → ICCG/CG
 
 CompactAMS  （BaseMatrixを直接継承）
   → 実数HCurl AMS前処理（静磁場、Update()対応）
@@ -240,7 +233,7 @@ python -m pytest tests/test_sparsesolv.py -v --tb=short
 
 テスト構成:
 - `test_sparsesolv.py`: ソルバーおよび前処理のテスト（46ケース）
-  - ICCG、SGSMRTR、CG、IC、SGS（各種問題に対して）
+  - ICCG、CG、IC（各種問題に対して）
   - 2D/3D、H1/VectorH1/HCurl、実数/複素数
   - ABMC順序付け、対角スケーリング、自動シフト
 
@@ -283,16 +276,6 @@ sum += a[i] * b[i];
 
 **教訓**: 複素FEM問題では常に非共役内積を使用すること。
 これはNGSolveの`CGSolver(conjugate=False)`に対応する。
-
-### 3. SGS-MRTRの複素比較
-
-**問題**: SGS-MRTRのzeta計算で`denom >= 0`を使用していたが、
-`std::complex<double>`には`>=`演算子が存在しない。
-
-```cpp
-// 修正後:
-denom = (std::real(denom) >= 0) ? ... : ...;
-```
 
 ---
 

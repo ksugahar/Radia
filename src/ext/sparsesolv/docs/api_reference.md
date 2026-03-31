@@ -5,9 +5,8 @@
 ```python
 import ngsolve  # Must be imported first (loads shared libraries)
 from sparsesolv_ngsolve import (
-    # Preconditioners (IC/SGS)
+    # Preconditioners (IC)
     ICPreconditioner,      # Incomplete Cholesky preconditioner
-    SGSPreconditioner,     # Symmetric Gauss-Seidel preconditioner
 
     # Compact AMG/AMS Preconditioners
     CompactAMGPreconditioner,            # Classical AMG (for H1)
@@ -18,7 +17,7 @@ from sparsesolv_ngsolve import (
     has_compact_ams,                     # Check Compact AMG/AMS availability
 
     # Iterative Solvers
-    SparseSolvSolver,      # Unified iterative solver (ICCG/SGSMRTR/CG/COCR)
+    SparseSolvSolver,      # Unified iterative solver (ICCG/CG/COCR)
     SparseSolvResult,      # Solve result
     COCRSolver,            # COCR (complex symmetric systems, native C++)
     GMRESSolver,           # GMRES (non-symmetric systems, left-preconditioned)
@@ -69,40 +68,9 @@ gfu.vec.data = inv * f.vec
 
 ---
 
-## SGSPreconditioner
-
-対称ガウス・ザイデル（SGS）前処理。
-
-### コンストラクタ
-
-```python
-pre = SGSPreconditioner(mat, freedofs=None)
-```
-
-| パラメータ | 型 | デフォルト | 説明 |
-|-----------|------|---------|-------------|
-| `mat` | `SparseMatrix` | - | SPD行列 |
-| `freedofs` | `BitArray` or `None` | `None` | 自由度 |
-
-### メソッド
-
-| メソッド | 説明 |
-|--------|-------------|
-| `Update()` | 前処理を再計算する |
-
-### 使用例
-
-```python
-pre = SGSPreconditioner(a.mat, freedofs=fes.FreeDofs())
-inv = CGSolver(a.mat, pre, tol=1e-10)
-gfu.vec.data = inv * f.vec
-```
-
----
-
 ## SparseSolvSolver
 
-統合反復ソルバー。ICCG、SGSMRTR、CG、COCRメソッドに対応。
+統合反復ソルバー。ICCG、CG、COCRメソッドに対応。
 `BaseMatrix` として使用可能であり、`gfu.vec.data = solver * f.vec` の形式で利用できる。
 
 ### コンストラクタ
@@ -123,7 +91,7 @@ solver = SparseSolvSolver(mat, method="ICCG", freedofs=None,
 | パラメータ | 型 | デフォルト | 説明 |
 |-----------|------|---------|-------------|
 | `mat` | `SparseMatrix` | - | SPD行列 |
-| `method` | `str` | `"ICCG"` | `"ICCG"`, `"SGSMRTR"`, `"CG"`, `"COCR"` |
+| `method` | `str` | `"ICCG"` | `"ICCG"`, `"CG"`, `"COCR"` |
 | `freedofs` | `BitArray` | `None` | 自由度 |
 | `tol` | `float` | `1e-10` | 収束判定閾値 |
 | `maxiter` | `int` | `1000` | 最大反復回数 |
@@ -433,7 +401,7 @@ inv = CGSolver(a.mat, pre, conjugate=False, maxiter=500, tol=1e-8)
 左前処理付きGMRES（Generalized Minimal Residual）ソルバー。ネイティブC++実装。
 非対称行列に対応。前処理が非対称な場合に使用する。
 
-**注意**: 対称前処理（IC、SGS、Compact AMS）の場合はCGまたはCOCRを推奨する。
+**注意**: 対称前処理（IC、Compact AMS）の場合はCGまたはCOCRを推奨する。
 GMRESは前処理が非対称な場合にのみ使用すること。
 
 ### コンストラクタ
@@ -468,8 +436,8 @@ print(f"GMRES converged in {inv.iterations} iterations")
 import sparsesolv_ngsolve as ssn
 from ngsolve.krylovspace import CGSolver
 
-# SGS preconditioner (non-symmetric) + GMRES
-pre = ssn.SGSPreconditioner(a.mat, freedofs=fes.FreeDofs())
+# IC preconditioner + GMRES
+pre = ssn.ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
 inv = ssn.GMRESSolver(a.mat, pre, freedofs=fes.FreeDofs(),
                        maxiter=500, tol=1e-10, restart=30)
 gfu.vec.data = inv * f.vec
