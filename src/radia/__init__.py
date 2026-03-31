@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "3.9.0"
+__version__ = "4.0.0"
 
 # DLL loader for Windows
 # MKL DLLs are installed via pip dependency (mkl>=2024.2.0)
@@ -68,22 +68,8 @@ if sys.platform == 'win32':
 
     del _dirs_to_add, _mkl_bin
 
-# Check for netgen fork (CallbackGeometry + SetGeomInfo)
-# Required for: export_NGSolveCurvedMesh(), Cubit panels, high-order mesh curving
-# Install: python install_full.py (or manual wheel from https://github.com/ksugahar/netgen/releases)
-try:
-    from netgen.meshing import Mesh as _NetgenMesh
-    if not hasattr(_NetgenMesh, 'SetGeomInfo'):
-        import warnings
-        warnings.warn(
-            "Netgen fork (ksugahar/netgen) is NOT installed. "
-            "Standard pip netgen lacks CallbackGeometry and SetGeomInfo APIs "
-            "required for Cubit mesh curving (export_NGSolveCurvedMesh). "
-            "Install: python install_full.py",
-            stacklevel=2)
-    del _NetgenMesh
-except ImportError:
-    pass
+# High-order mesh curving is handled by the Cubit C++ plugin (ACIS kernel).
+# Netgen fork (SetGeomInfo) is no longer required.
 
 # Import all symbols from the pybind11 C++ extension module (_radia_pybind.pyd)
 try:
