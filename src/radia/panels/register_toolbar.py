@@ -349,8 +349,12 @@ class ExportMeshDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -550,8 +554,12 @@ class MeshEvaluationDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		super().closeEvent(event)
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -780,8 +788,12 @@ class PCBPEECDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		event.ignore(); self.hide()
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -1044,8 +1056,12 @@ class InductanceDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		event.ignore(); self.hide()
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -2215,8 +2231,12 @@ class IHFEMDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		event.ignore(); self.hide()
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -3283,8 +3303,12 @@ class ElectromagnetMSCDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		event.ignore(); self.hide()
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -3911,8 +3935,12 @@ class AccelMagnetDialog(QDialog):
 		_restore_dialog_state(self, self._SETTINGS)
 
 	def closeEvent(self, event):
-		_save_dialog_state(self, self._SETTINGS)
-		event.ignore(); self.hide()
+		try:
+			_save_dialog_state(self, self._SETTINGS)
+		except Exception:
+			pass
+		event.ignore()
+		self.hide()
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -5175,7 +5203,8 @@ def register_menu():
 			if sub:
 				sub.deleteLater()
 			# Close stale modeless dialogs
-			for attr in ('_radia_ind_dlg', '_radia_fem_dlg',
+			for attr in ('_radia_mesh_dlg', '_radia_eval_dlg',
+			             '_radia_ind_dlg', '_radia_fem_dlg',
 			             '_radia_accel_dlg', '_radia_msc_dlg',
 			             '_radia_peec_dlg'):
 				dlg = getattr(main_window, attr, None)
@@ -5196,13 +5225,23 @@ def register_menu():
 	# Export Mesh action
 	action_mesh = QAction("Export Mesh...", main_window)
 	action_mesh.setStatusTip("Export mesh to various formats (.msh, .nas, .vtk, .meg)")
-	action_mesh.triggered.connect(lambda: ExportMeshDialog(main_window).exec())
+	def _show_export_mesh():
+		if not hasattr(main_window, '_radia_mesh_dlg') or main_window._radia_mesh_dlg is None:
+			main_window._radia_mesh_dlg = ExportMeshDialog(main_window)
+		main_window._radia_mesh_dlg.show()
+		main_window._radia_mesh_dlg.raise_()
+	action_mesh.triggered.connect(_show_export_mesh)
 	radia_menu.addAction(action_mesh)
 
 	# Mesh Evaluation action
 	action_eval = QAction("Mesh Evaluation...", main_window)
 	action_eval.setStatusTip("Evaluate mesh: CAD vs NGSolve volume/area (p=1..5)")
-	action_eval.triggered.connect(lambda: MeshEvaluationDialog(main_window).exec())
+	def _show_eval():
+		if not hasattr(main_window, '_radia_eval_dlg') or main_window._radia_eval_dlg is None:
+			main_window._radia_eval_dlg = MeshEvaluationDialog(main_window)
+		main_window._radia_eval_dlg.show()
+		main_window._radia_eval_dlg.raise_()
+	action_eval.triggered.connect(_show_eval)
 	radia_menu.addAction(action_eval)
 
 	# IH (BEM): BEM inductance + SIBC heating (surface mesh only)
