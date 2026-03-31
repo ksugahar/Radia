@@ -342,6 +342,7 @@ class ExportMeshDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("Export Mesh")
 		self.setMinimumWidth(450)
 		self._setup_ui()
@@ -538,6 +539,7 @@ class MeshEvaluationDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("Mesh Evaluation")
 		self.setMinimumWidth(650)
 		self.setMinimumHeight(450)
@@ -604,7 +606,7 @@ class MeshEvaluationDialog(QDialog):
 		ctrl_row.addStretch()
 
 		close_btn = QPushButton("Close")
-		close_btn.clicked.connect(self.accept)
+		close_btn.clicked.connect(self.close)
 		ctrl_row.addWidget(close_btn)
 		layout.addLayout(ctrl_row)
 
@@ -768,6 +770,7 @@ class PCBPEECDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("PCB (PEEC)")
 		self.setMinimumWidth(620)
 		self.setMinimumHeight(550)
@@ -845,7 +848,7 @@ class PCBPEECDialog(QDialog):
 		self.solve_btn.setEnabled(self._ext_python is not None)
 		btn_row.addWidget(self.solve_btn)
 		close_btn = QPushButton("Close")
-		close_btn.clicked.connect(self.accept)
+		close_btn.clicked.connect(self.close)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
 
@@ -1028,6 +1031,7 @@ class InductanceDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("IH (BEM): Inductance + SIBC")
 		self.setMinimumWidth(600)
 		self.setMinimumHeight(700)
@@ -1199,7 +1203,7 @@ class InductanceDialog(QDialog):
 		self.open_gmsh_btn.setEnabled(False)
 		btn_row.addWidget(self.open_gmsh_btn)
 		close_btn = QPushButton("Close")
-		close_btn.clicked.connect(self.accept)
+		close_btn.clicked.connect(self.close)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
 
@@ -2201,6 +2205,7 @@ class IHFEMDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("IH (FEM): Source/Sink + SIBC")
 		self.setMinimumWidth(550)
 		self.setMinimumHeight(500)
@@ -2414,7 +2419,7 @@ class IHFEMDialog(QDialog):
 		self.open_btn.setEnabled(False)
 		btn_row.addWidget(self.open_btn)
 		close_btn = QPushButton("Close")
-		close_btn.clicked.connect(self.accept)
+		close_btn.clicked.connect(self.close)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
 
@@ -3268,6 +3273,7 @@ class ElectromagnetMSCDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("Electromagnet (MSC)")
 		self.setMinimumWidth(560)
 		self.setMinimumHeight(480)
@@ -3440,7 +3446,7 @@ class ElectromagnetMSCDialog(QDialog):
 		self.open_btn.setEnabled(False)
 		btn_row.addWidget(self.open_btn)
 		close_btn = QPushButton("Close")
-		close_btn.clicked.connect(self.accept)
+		close_btn.clicked.connect(self.close)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
 
@@ -3895,6 +3901,7 @@ class AccelMagnetDialog(QDialog):
 
 	def __init__(self, parent=None):
 		super().__init__(parent)
+		self.setAttribute(Qt.WA_QuitOnClose, False)
 		self.setWindowTitle("Electromagnet (FEM)")
 		self.setMinimumWidth(580)
 		self.setMinimumHeight(580)
@@ -4156,7 +4163,7 @@ class AccelMagnetDialog(QDialog):
 		self.open_btn.setEnabled(False)
 		btn_row.addWidget(self.open_btn)
 		close_btn = QPushButton("Close")
-		close_btn.clicked.connect(self.accept)
+		close_btn.clicked.connect(self.close)
 		btn_row.addWidget(close_btn)
 		layout.addLayout(btn_row)
 
