@@ -6,7 +6,7 @@
 /// @brief SparseSolv iterative solvers as NGSolve BaseMatrix wrappers
 ///
 /// Separated from sparsesolv_precond.hpp for clarity of responsibility:
-/// - sparsesolv_precond.hpp: preconditioners (IC, SGS, Compact AMS)
+/// - sparsesolv_precond.hpp: preconditioners (IC, Compact AMS)
 /// - sparsesolv_solvers.hpp: iterative solvers (SparseSolvSolver, COCRSolverNGS, GMRESSolverNGS)
 
 #ifndef NGSOLVE_SPARSESOLV_SOLVERS_HPP
@@ -25,10 +25,10 @@ using SparseSolvResult = sparsesolv::SolverResult;
 // SparseSolv Iterative Solver
 // ============================================================================
 
-/// Unified iterative solver: ICCG, SGSMRTR, CG, COCR.
+/// Unified iterative solver: ICCG, CG, COCR.
 /// Use as BaseMatrix (inv * rhs) or call .Solve() for detailed results.
 ///
-/// Uses internal preconditioner (IC for ICCG, SGS for SGSMRTR, none for CG/COCR).
+/// Uses internal preconditioner (IC for ICCG, none for CG/COCR).
 /// For external preconditioner with COCR, use COCRSolverNGS instead.
 template<typename SCAL = double>
 class SparseSolvSolver : public BaseMatrix {
@@ -111,8 +111,6 @@ public:
 
         if (method_ == "ICCG" || method_ == "iccg") {
             result = sparsesolv::solve_iccg(view, b_ptr, x_ptr, height_, config);
-        } else if (method_ == "SGSMRTR" || method_ == "sgsmrtr") {
-            result = sparsesolv::solve_sgsmrtr(view, b_ptr, x_ptr, height_, config);
         } else if (method_ == "CG" || method_ == "cg") {
             sparsesolv::CGSolver<SCAL> solver;
             solver.set_config(config);
@@ -124,7 +122,7 @@ public:
         } else {
             throw std::runtime_error(
                 "SparseSolvSolver: Unknown method '" + method_ +
-                "'. Available: ICCG, SGSMRTR, CG, COCR");
+                "'. Available: ICCG, CG, COCR");
         }
 
         // Copy solution back (only free DOFs)
@@ -245,7 +243,7 @@ private:
 /// COCR solver as NGSolve BaseMatrix, accepting an external preconditioner.
 ///
 /// Use this when you have a custom preconditioner (any BaseMatrix).
-/// For internal IC/SGS preconditioner, use SparseSolvSolver(method="COCR") instead.
+/// For internal IC preconditioner, use SparseSolvSolver(method="COCR") instead.
 ///
 /// Note on convergence criterion: uses true residual norm ||r|| / ||rhs||.
 /// This differs from the raw COCRSolver<SCAL> which uses the same criterion

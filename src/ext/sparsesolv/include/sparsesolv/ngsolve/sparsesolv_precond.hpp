@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /// @file sparsesolv_precond.hpp
-/// @brief SparseSolv preconditioners (IC, SGS) as NGSolve BaseMatrix wrappers
+/// @brief SparseSolv preconditioners (IC) as NGSolve BaseMatrix wrappers
 
 #ifndef NGSOLVE_SPARSESOLV_PRECOND_HPP
 #define NGSOLVE_SPARSESOLV_PRECOND_HPP
@@ -223,35 +223,8 @@ private:
     }
 };
 
-// ============================================================================
-// SGS Preconditioner
-// ============================================================================
-template<typename SCAL = double>
-class SparseSolvSGSPreconditioner : public SparseSolvPrecondBase<SCAL> {
-public:
-    SparseSolvSGSPreconditioner(shared_ptr<SparseMatrix<SCAL>> mat,
-                                 shared_ptr<BitArray> freedofs = nullptr)
-        : SparseSolvPrecondBase<SCAL>(mat, freedofs)
-        , precond_(std::make_shared<sparsesolv::SGSPreconditioner<SCAL>>())
-    {}
-
-    void Update() {
-        auto view = this->prepare_matrix_view();
-        precond_->setup(view);
-    }
-
-protected:
-    void apply_precond(const SCAL* x, SCAL* y) const override {
-        precond_->apply(x, y, this->height_);
-    }
-
-private:
-    shared_ptr<sparsesolv::SGSPreconditioner<SCAL>> precond_;
-};
-
 // Type aliases for convenience
 using ICPreconditioner = SparseSolvICPreconditioner<double>;
-using SGSPreconditioner = SparseSolvSGSPreconditioner<double>;
 
 } // namespace ngla
 

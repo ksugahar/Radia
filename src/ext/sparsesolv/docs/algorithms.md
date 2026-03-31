@@ -185,91 +185,6 @@ A_scaled[i,j] = scaling[i] * A[i,j] * scaling[j]
 
 ---
 
-## 3. SGS-MRTR
-
-### 3.1 概要
-
-SGS-MRTRは**対称ガウス-ザイデル (SGS)** 前処理を**MRTR反復法**に組み込んだソルバーである。
-分割公式を用いて、前処理の前進部分 *L* と後退部分 *L^T* を個別に適用する。
-
-**特徴**:
-- IC分解が不要（分解コストなし）
-- DAD変換（対角スケーリング）を内蔵
-- 複素対称行列をサポート（精度は限定的）
-
-**実装ファイル**: `solvers/sgs_mrtr_solver.hpp`
-
-**参考文献**:
-- T. Tsuburaya, Y. Mifune, T. Iwashita, E. Takahashi,
-  "Numerical Experiments on Preconditioned Iterative Methods Based on the MRTR Method",
-  *IEEJ Technical Meeting on Static Apparatus*, SA-12-64, 2012.
-- T. Tsuburaya, Y. Okamoto, K. Fujiwara, S. Sato,
-  "Improvement of the Preconditioned MRTR Method With Eisenstat's Technique
-  in Real Symmetric Sparse Matrices",
-  *IEEE Trans. Magnetics*, Vol. 49, No. 5, pp. 1641-1644, 2013.
-  [DOI: 10.1109/TMAG.2013.2240283](https://doi.org/10.1109/TMAG.2013.2240283)
-
-### 3.2 DAD変換
-
-行列 *A* の対角スケーリング:
-
-```
-D = diag(|A|)^{-1/2}
-A' = D * A * D
-b' = D * b
-x  = D * x'
-```
-
-スケーリング後、A'の全対角成分は1に近くなり、条件数が改善される。
-
-### 3.3 分割公式
-
-SGSの前進部分Lと後退部分L^Tを個別に適用する。
-MRTR反復の各ステップにおいて:
-
-```
-rd = L^{-1} * r          （前進ソルブ）
-u  = L^{-T} * rd         （後退ソルブ）
-ARd = u + L^{-1}(rd - u) （M^{-1}Ardの近似）
-```
-
-### 3.4 MRTR反復
-
-MRTRは二項再帰を用いて解を更新する最小残差型反復法である:
-
-```
-p_{k+1} = u_k + (eta_k zeta_{k-1} / zeta_k) p_k
-x_{k+1} = x_k + zeta_k p_k
-```
-
-ここでzeta_kとeta_kは最適化パラメータである。
-
-### 3.5 CSR対角位置の前提条件
-
-SGS-MRTRの前進・後退代入は、CSR行列の各行において**対角要素が行インデックス位置に
-存在すること**を前提とする。NGSolveの`SparseMatrix`はこの条件を満たすが、
-任意のCSR行列では保証されない。
-
-具体的には、行 *i* の列インデックス `col_idx[row_ptr[i]:row_ptr[i+1]]` は
-ソートされており、対角成分 `A[i,i]` が存在しなければならない。
-
-### 3.6 複素数サポートに関する注意
-
-SGS-MRTRのzeta_k計算で除算が発生する場合、複素数の比較に`std::real()`を使用する:
-
-```cpp
-// sgs_mrtr_solver.hpp
-if (std::abs(denom) < constants::DENOMINATOR_BREAKDOWN) {
-    denom = (std::real(denom) >= 0) ? ... : ...;
-}
-```
-
-複素対称行列 (A^T = A) の渦電流問題では、DAD変換が最適でない場合があり、
-収束精度が約5%に限定されることがある。
-そのような場合はICCG+ABMC、COCR、またはCompact AMS+COCRを推奨する。
-
----
-
 ## 4. ABMC順序付け (Algebraic Block Multi-Color Ordering)
 
 本節ではSparseSolvで使用されるAlgebraic Block Multi-Color (ABMC) 順序付け法の
@@ -918,7 +833,7 @@ RCMはバンド幅削減によりABMC色数を減少させる可能性がある�
 
 ### 4.13 謝辞
 
-ABMC順序付けの実装は、鶴谷祐紀氏（福岡大学）が[JP-MARs/SparseSolv](https://github.com/JP-MARs/SparseSolv)で提供したコードに基づく。このコードは岩下武史教授（京都大学）のグループによるABMC法 [5] およびSGS-MRTR前処理の研究を実装したものである。本リポジトリはヘッダオンリー再構成、NGSolve統合、auto_shift IC、Compact AMS前処理、COCRソルバーなどの独自拡張を加えている。
+ABMC順序付けの実装は、鶴谷祐紀氏（福岡大学）が[JP-MARs/SparseSolv](https://github.com/JP-MARs/SparseSolv)で提供したコードに基づく。このコードは岩下武史教授（京都大学）のグループによるABMC法 [5] の研究を実装したものである。本リポジトリはヘッダオンリー再構成、NGSolve統合、auto_shift IC、Compact AMS前処理、COCRソルバーなどの独自拡張を加えている。
 
 ---
 
@@ -1038,11 +953,10 @@ ngsolve-sparsesolv は複数の研究者のコードを統合・拡張してい�
 | ABMC順序付け | 比留間 | 比留間慎吾 | `MatSolvers_ABMCICCG.cpp` |
 | ABMC並列IC分解および並列前進/後退代入 | 比留間 | 比留間慎吾 | `MatSolvers_ABMCICCG.cpp` |
 | IC-MRTR反復 | 円谷 -> 佐藤 | 円谷友紀（理論）、佐藤（実装） | `MatSolvers_ICMRTR.cpp` |
-| SGS-MRTR反復（Eisenstatテクニック） | 円谷 -> 佐藤 | 円谷友紀（理論）、佐藤（実装） | `MatSolvers_SGSMRTR.cpp` |
 
 ### 7.2 元のコード
 
-- **円谷のコード**: IC-MRTRおよびSGS-MRTR反復公式のリファレンス実装（C言語、1始まりインデックス）。
+- **円谷のコード**: IC-MRTR反復公式のリファレンス実装（C言語、1始まりインデックス）。
   シフトパラメータ付きIC分解のauto_shiftループ（gamma = 1.05、+0.05刻み）はこのコードに由来する
 
 - **JP-MARs/SparseSolv**: `https://github.com/JP-MARs/SparseSolv`
