@@ -7,7 +7,7 @@
 
 ## 1. H1 Poisson 3D
 
-3D単位立方体上のPoisson方程式。BDDC（NGSolve組込み）、IC、SGSの3手法を比較します。
+3D単位立方体上のPoisson方程式。BDDC（NGSolve組込み）とICの2手法を比較します。
 
 ```python
 import time
@@ -15,7 +15,7 @@ import ngsolve
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
-from sparsesolv_ngsolve import ICPreconditioner, SGSPreconditioner
+from sparsesolv_ngsolve import ICPreconditioner
 
 # Mesh generation
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
@@ -71,20 +71,6 @@ err = sqrt(Integrate((gfu - gfu_ref)**2, mesh)) / ref_norm
 print(f"IC+CG:   setup={t_setup:.3f}s, solve={t_solve:.3f}s, "
       f"iters={inv.iterations}, error={err:.2e}")
 
-# --- SGS + CG ---
-t0 = time.perf_counter()
-pre_sgs = SGSPreconditioner(a.mat, freedofs=fes.FreeDofs())
-t_setup = time.perf_counter() - t0
-
-gfu = GridFunction(fes)
-inv = CGSolver(a.mat, pre_sgs, printrates=False, tol=1e-10, maxiter=2000)
-t0 = time.perf_counter()
-gfu.vec.data = inv * f.vec
-t_solve = time.perf_counter() - t0
-
-err = sqrt(Integrate((gfu - gfu_ref)**2, mesh)) / ref_norm
-print(f"SGS+CG:  setup={t_setup:.3f}s, solve={t_solve:.3f}s, "
-      f"iters={inv.iterations}, error={err:.2e}")
 ```
 
 **典型的な出力** (maxh=0.3, order=3):
@@ -92,7 +78,6 @@ print(f"SGS+CG:  setup={t_setup:.3f}s, solve={t_solve:.3f}s, "
 DOF: ~8000
 BDDC+CG: setup=0.15s, solve=0.01s, iters=2,   error=2.5e-11
 IC+CG:   setup=0.02s, solve=0.08s, iters=58,  error=3.1e-11
-SGS+CG:  setup=0.00s, solve=0.25s, iters=180, error=4.2e-11
 ```
 
 ---

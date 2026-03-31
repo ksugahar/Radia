@@ -79,15 +79,6 @@ void ExportSparseSolvTyped(py::module& m, const std::string& suffix) {
           &SparseSolvICPreconditioner<SCAL>::SetDiagonalScaling);
   }
 
-  // SGS Preconditioner type registration
-  {
-    std::string cls_name = "SGSPreconditioner" + suffix;
-    py::class_<SparseSolvSGSPreconditioner<SCAL>,
-               shared_ptr<SparseSolvSGSPreconditioner<SCAL>>,
-               BaseMatrix>(m, cls_name.c_str())
-      .def("Update", &SparseSolvSGSPreconditioner<SCAL>::Update);
-  }
-
   // SparseSolv Solver type registration
   {
     std::string cls_name = "SparseSolvSolver" + suffix;
@@ -206,38 +197,6 @@ shift : float
   Shift parameter (default: 1.05).
 )raw_string");
 
-  // ---- SGSPreconditioner factory ----
-  m.def("SGSPreconditioner", [](shared_ptr<BaseMatrix> mat,
-                                  py::object freedofs) {
-    auto sp_freedofs = ExtractFreeDofs(freedofs);
-    shared_ptr<BaseMatrix> result;
-    if (mat->IsComplex()) {
-      auto sp = dynamic_pointer_cast<SparseMatrix<Complex>>(mat);
-      if (!sp) throw py::type_error("SGSPreconditioner: expected SparseMatrix");
-      auto p = make_shared<SparseSolvSGSPreconditioner<Complex>>(sp, sp_freedofs);
-      p->Update();
-      result = p;
-    } else {
-      auto sp = dynamic_pointer_cast<SparseMatrix<double>>(mat);
-      if (!sp) throw py::type_error("SGSPreconditioner: expected SparseMatrix");
-      auto p = make_shared<SparseSolvSGSPreconditioner<double>>(sp, sp_freedofs);
-      p->Update();
-      result = p;
-    }
-    return result;
-  },
-  py::arg("mat"), py::arg("freedofs") = py::none(),
-  R"raw_string(
-Symmetric Gauss-Seidel (SGS) Preconditioner.
-
-Parameters:
-
-mat : SparseMatrix
-  SPD matrix (real or complex, auto-detected).
-freedofs : BitArray, optional
-  Free DOFs. Constrained DOFs treated as identity.
-)raw_string");
-
   // ---- SparseSolvSolver factory ----
   m.def("SparseSolvSolver", [](shared_ptr<BaseMatrix> mat,
                                  const string& method, py::object freedofs,
@@ -293,7 +252,7 @@ freedofs : BitArray, optional
   py::arg("abmc_reorder_spmv") = false,
   py::arg("abmc_use_rcm") = false,
   R"raw_string(
-Iterative solver (ICCG / SGSMRTR / CG / COCR). Auto-detects real/complex.
+Iterative solver (ICCG / CG / COCR). Auto-detects real/complex.
 
 Can be used as BaseMatrix (inverse operator) or via Solve() for detailed results.
 
@@ -302,7 +261,7 @@ Parameters:
 mat : SparseMatrix
   System matrix (real or complex).
 method : str
-  "ICCG", "SGSMRTR", "CG", or "COCR".
+  "ICCG", "CG", or "COCR".
   COCR: Conjugate Orthogonal Conjugate Residual for complex-symmetric A^T=A.
   For non-symmetric systems, use GMRESSolver instead.
 freedofs : BitArray, optional

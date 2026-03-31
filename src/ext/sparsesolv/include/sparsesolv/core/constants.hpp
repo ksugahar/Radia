@@ -18,15 +18,10 @@ namespace sparsesolv {
 namespace constants {
 
 /// Threshold for detecting numerical breakdown in CG (pAp ~ 0)
-/// and SGS-MRTR first-iteration (v_w ~ 0)
 constexpr double BREAKDOWN_THRESHOLD = 1e-30;
 
-/// Threshold for detecting denominator collapse in SGS-MRTR
-/// general iterations (denom ~ 0)
-constexpr double DENOMINATOR_BREAKDOWN = 1e-60;
-
 /// Minimum absolute diagonal value for safe inversion in preconditioners
-/// (Jacobi, SGS, IC diagonal checks)
+/// (Jacobi, IC diagonal checks)
 constexpr double MIN_DIAGONAL_TOLERANCE = 1e-15;
 
 } // namespace constants
