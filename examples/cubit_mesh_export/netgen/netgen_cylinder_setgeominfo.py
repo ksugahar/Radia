@@ -23,9 +23,9 @@ work_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(os.path.dirname(work_dir))
 sys.path.insert(0, repo_root)
 
-from ngsolve import Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 # ============================================================
 # Parameters
@@ -61,7 +61,7 @@ print(f"  Tets: {cubit.get_tet_count()}")
 # ============================================================
 print("\nStep 2: export_NGSolveCurvedMesh(order=2)")
 
-mesh2 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
+mesh2 = Mesh(extract_curved_mesh(cubit, order=2))
 print(f"  Boundaries: {mesh2.GetBoundaries()}")
 
 # ============================================================
@@ -84,7 +84,7 @@ print(f"  order=2:   Area={area2:.6f} ({abs(area2-expected_area)/expected_area*1
 # ============================================================
 print("\nStep 3: export_NGSolveCurvedMesh(order=3)")
 
-mesh3 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh3 = Mesh(extract_curved_mesh(cubit, order=3))
 
 area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
 vol3 = Integrate(CF(1), mesh3)

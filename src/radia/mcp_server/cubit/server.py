@@ -83,9 +83,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R, H, ORDER = 0.5, 2.0, 3
 
@@ -101,7 +101,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Export with curving - single function call, no STEP, no OCC, no SetGeomInfo
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 expected_vol = math.pi * R**2 * H
 vol = Integrate(CF(1), mesh)
@@ -115,9 +115,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF
+from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R, ORDER = 0.5, 3
 
@@ -131,7 +131,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 expected_vol = 4/3 * math.pi * R**3
 vol = Integrate(CF(1), mesh)
@@ -145,9 +145,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF
+from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R_MAJOR, R_MINOR, ORDER = 1.0, 0.3, 3
 
@@ -161,7 +161,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 expected_vol = 2 * math.pi**2 * R_MAJOR * R_MINOR**2
 vol = Integrate(CF(1), mesh)
@@ -175,9 +175,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF
+from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R_BASE, H, ORDER = 0.5, 2.0, 3
 
@@ -191,7 +191,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 expected_vol = 1/3 * math.pi * R_BASE**2 * H
 vol = Integrate(CF(1), mesh)
@@ -205,9 +205,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF
+from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R, H = 0.5, 2.0
 
@@ -226,7 +226,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 2 add quad all")
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 
 expected_vol = math.pi * R**2 * H
 vol = Integrate(CF(1), mesh)
@@ -240,9 +240,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF
+from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 BRICK_SIZE, R_HOLE, ORDER = 2.0, 0.3, 3
 
@@ -261,7 +261,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Export with curving - works for any geometry
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
 vol = Integrate(CF(1), mesh)
@@ -278,7 +278,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R = 1.0
 
@@ -296,7 +296,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")
 
 # Export to Gmsh v2.2
-cubit_mesh_export.export_Gmesh(cubit, "sphere_2nd.msh")
+cubit.cmd('radia export gmsh "sphere_2nd.msh" overwrite')
 
 # Read into NGSolve (no geometry reference needed!)
 mesh = Mesh(ReadGmsh("sphere_2nd.msh"))
@@ -315,7 +315,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import *
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 R, ORDER = 1.0, 3
 
@@ -332,7 +332,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd('block 2 name "boundary"')
 
 # --- export_NGSolveCurvedMesh handles everything ---
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 # --- Solve Poisson equation ---
 fes = H1(mesh, order=ORDER, dirichlet="boundary")
@@ -642,9 +642,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 # === PARAMETERS ===
 MESH_SIZE = 0.15
@@ -668,7 +668,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd('block 2 name "boundary"')
 
 # === EXPORT WITH CURVING (single function call) ===
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=CURVE_ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=CURVE_ORDER))
 
 # === VERIFY ===
 vol = Integrate(CF(1), mesh)
@@ -683,9 +683,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 MESH_SIZE = 0.15
 CURVE_ORDER = 3
@@ -706,7 +706,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # === EXPORT WITH CURVING (works for any geometry) ===
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=CURVE_ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=CURVE_ORDER))
 
 vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
@@ -722,7 +722,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 MESH_SIZE = 0.15
 
@@ -742,7 +742,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")
 
 # === EXPORT ===
-cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 
 # === IMPORT TO NGSOLVE ===
 mesh = Mesh(ReadGmsh("mesh.msh"))
@@ -757,9 +757,9 @@ if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ngsolve import Integrate, CF
+from ngsolve import Mesh, Integrate, CF
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 MESH_SIZE = 0.15
 CURVE_ORDER = 3
@@ -785,7 +785,7 @@ cubit.cmd("block 2 add quad all")
 cubit.cmd('block 2 name "boundary"')
 
 # === EXPORT WITH CURVING ===
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=CURVE_ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=CURVE_ORDER))
 
 vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
@@ -1022,7 +1022,7 @@ def get_lint_rules() -> str:
 			'severity': 'MODERATE',
 			'description': 'Manual mesh.Curve() without export_NGSolveCurvedMesh. Use export_NGSolveCurvedMesh for Cubit meshes.',
 			'trigger': 'mesh.Curve(3) without export_NGSolveCurvedMesh()',
-			'fix': 'Use mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)',
+			'fix': 'Use mesh = Mesh(extract_curved_mesh(cubit, order=3))',
 		},
 		{
 			'rule': 'missing-block-names',

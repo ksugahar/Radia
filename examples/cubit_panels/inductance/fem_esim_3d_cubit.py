@@ -86,8 +86,9 @@ def load_cubit_mesh(cub5_path, order=2):
     cubit = _init_cubit()
     cubit.cmd(f'open "{cub5_path}"')
 
-    from cubit_mesh_export import export_NGSolveCurvedMesh
-    return export_NGSolveCurvedMesh(cubit, order=order)
+    from cubit_netgen_bridge import extract_curved_mesh
+    from ngsolve import Mesh
+    return Mesh(extract_curved_mesh(cubit, order=order))
 
 
 def create_and_load(order=2, mesh_size=0.008):
@@ -102,8 +103,9 @@ def create_and_load(order=2, mesh_size=0.008):
     from create_induction_model import create_induction_model
     info = create_induction_model(cubit, mesh_size=mesh_size)
 
-    from cubit_mesh_export import export_NGSolveCurvedMesh
-    mesh = export_NGSolveCurvedMesh(cubit, order=order)
+    from cubit_netgen_bridge import extract_curved_mesh
+    from ngsolve import Mesh
+    mesh = Mesh(extract_curved_mesh(cubit, order=order))
     return mesh, info
 
 

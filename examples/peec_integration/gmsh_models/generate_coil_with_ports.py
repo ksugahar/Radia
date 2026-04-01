@@ -11,7 +11,7 @@ Output:
 
 Requirements:
     - Coreform Cubit 2025.3+
-    - cubit_mesh_export module (from S:\CoreformCubit\01_GitHub)
+    - cubit_netgen_bridge module (via radia package)
 """
 
 import sys
@@ -29,8 +29,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-# Add cubit_mesh_export to path
-import cubit_mesh_export
 
 print("=" * 70)
 print("Circular Coil with PORT Definitions (Cubit -> GMSH)")
@@ -132,7 +130,7 @@ else:
 # Export to GMSH v2.2 format
 output_file = "circular_coil_with_ports.msh"
 print(f"\n[6] Exporting to GMSH v2.2 format...")
-cubit_mesh_export.export_gmsh_v2(cubit, output_file)
+cubit.cmd(f'radia export gmsh "{output_file}" version 2 overwrite')
 print(f"    OK Created: {output_file}")
 print(f"    Format: GMSH v2.2 (with port physical groups)")
 

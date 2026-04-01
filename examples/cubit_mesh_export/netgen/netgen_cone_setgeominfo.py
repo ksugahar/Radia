@@ -21,9 +21,9 @@ work_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(os.path.dirname(work_dir))
 sys.path.insert(0, repo_root)
 
-from ngsolve import Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 # ============================================================
 # Parameters
@@ -63,7 +63,7 @@ expected_vol = (1/3) * math.pi * R * R * H
 
 for order in [2, 3]:
 	print(f"\nexport_NGSolveCurvedMesh(order={order})")
-	mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
+	mesh = Mesh(extract_curved_mesh(cubit, order=order))
 
 	area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 	vol = Integrate(CF(1), mesh)

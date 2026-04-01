@@ -24,7 +24,7 @@ Cubit GUI (PyQt5)                    External Python (NGSolve + Cubit)
 ## Completed Steps
 
 ### Step 1: HDivSurface on Cubit mesh
-- `cubit_mesh_export.export_netgen(cubit)` -> NGSolve Mesh
+- `radia_cubit_mesh.extract_curved_mesh()` -> NGSolve Mesh
 - `HDivSurface(mesh, order=0)` -> RT0 surface current DOFs
 - Verified: 888 tris -> 1332 DOFs
 
@@ -100,14 +100,14 @@ Cubit create geometry
 `HDivSurface` on dim=3 mesh gives ndof for ALL edges (interior + boundary).
 BEM only needs boundary edges -> interior DOFs have zero L entries -> rank-deficient.
 
-**Solution**: Create `export_surface_netgen()` in `cubit_mesh_export.py`:
+**Solution**: Create `extract_surface_mesh()` in `radia_cubit_mesh`:
 1. Read surface triangles/quads from Cubit blocks
 2. Build `Netgen Mesh(dim=2)` with `Element2D` only (no `Element3D`)
 3. Map Cubit block names to Netgen boundary/material labels
 
 ```python
 # Target API
-ngmesh = cubit_mesh_export.export_surface_netgen(cubit)  # dim=2
+ngmesh = radia_cubit_mesh.extract_surface_mesh()  # dim=2
 mesh = Mesh(ngmesh)
 # HDivSurface(mesh, order=0) -> ndof = surface edges only
 ```

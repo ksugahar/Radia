@@ -2,40 +2,61 @@
 
 Export mesh to NX Nastran bulk data format.
 
-## Synopsis
+## Cubit Plugin (Recommended)
 
-```python
-cubit_mesh_export.export_Nastran(cubit, FileName, DIM="3D", PYRAM=True)
+The Radia Cubit plugin provides a native APREPRO command — no Python or block assignment required:
+
+```
+radia export nastran "mesh.bdf"
+radia export nastran "mesh.bdf" dimension 2
+radia export nastran "mesh.bdf" nopyramid
+radia export nastran "mesh.bdf" dimension 2 nopyramid overwrite
 ```
 
-## Parameters
+### Syntax
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface object |
-| `FileName` | str | required | Output file path for the .nas or .bdf file |
-| `DIM` | str | `"3D"` | Dimension mode (see below) |
-| `PYRAM` | bool | `True` | Pyramid element handling (see below) |
+```
+radia export nastran <"filename"> [dimension <2|3>] [nopyramid] [overwrite]
+```
 
-### DIM Parameter Options
+### Options
 
-| Value | Description |
-|-------|-------------|
-| `"3D"` | 3D mode - exports volume elements (CTETRA, CHEXA, CPENTA, CPYRAM) |
-| `"2D"` | 2D mode - exports surface elements (CTRIA3, CQUAD4), orients normals to +z |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `dimension 3` | yes | 3D solid mesh (CTETRA, CHEXA, CPENTA, CPYRAM) |
+| `dimension 2` | | 2D shell mesh (CTRIA3, CQUAD4), normals oriented to +z |
+| `nopyramid` | off | Convert pyramid elements to degenerate CHEXA (JMAG compatible) |
+| `overwrite` | off | Overwrite existing file without warning |
 
-### PYRAM Parameter Options
+**Advantages over Python API:**
+- No `block` assignment needed — exports all mesh elements automatically
+- No `#!python` block — pure APREPRO/journal command
+- Usable directly in `.jou` files
 
-| Value | Description |
-|-------|-------------|
-| `True` | Export pyramids as CPYRAM elements |
-| `False` | Convert pyramids to degenerate CHEXA (8-node hex with duplicate nodes) |
+**Installation:** Copy `radia_cubit.ccm` to `<Cubit install>/bin/plugins/` or set `CUBIT_PLUGIN_DIR`.
 
-**Background**: In hybrid meshes combining tetrahedra and hexahedra, pyramid elements are required at the interface between element types. However, some solvers (e.g., JMAG) cannot import pyramid elements from Nastran files and interpret them as degenerate hexahedra. Use `PYRAM=False` for compatibility with such solvers.
+**Build:** See [src/cubit_plugin/CMakeLists.txt](../../src/cubit_plugin/CMakeLists.txt).
 
-## Returns
+---
 
-Returns the `cubit` object for method chaining.
+## Plugin Command
+
+```python
+cubit.cmd('radia export nastran "mesh.bdf" dimension 3 overwrite')
+```
+
+> **Note**: The old `cubit_mesh_export.export_Nastran()` Python function has been replaced by the `radia export nastran` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `dimension 3` | yes | 3D mode - exports volume elements (CTETRA, CHEXA, CPENTA, CPYRAM) |
+| `dimension 2` | | 2D mode - exports surface elements (CTRIA3, CQUAD4), orients normals to +z |
+| `nopyramid` | off | Convert pyramids to degenerate CHEXA (8-node hex with duplicate nodes) |
+| `overwrite` | off | Overwrite existing file |
+
+**Background**: In hybrid meshes combining tetrahedra and hexahedra, pyramid elements are required at the interface between element types. However, some solvers (e.g., JMAG) cannot import pyramid elements from Nastran files and interpret them as degenerate hexahedra. Use `nopyramid` for compatibility with such solvers.
 
 ## Supported Elements
 
@@ -103,15 +124,13 @@ ENDDATA
 
 ```python
 import cubit
-import cubit_mesh_export
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
-cubit.cmd("block 1 add tet all")
 
-cubit_mesh_export.export_Nastran(cubit, "mesh.nas", DIM="3D")
+cubit.cmd('radia export nastran "mesh.bdf" dimension 3 overwrite')
 ```
 
 ### 2D Plate Export
@@ -120,20 +139,19 @@ cubit_mesh_export.export_Nastran(cubit, "mesh.nas", DIM="3D")
 cubit.cmd("create surface rectangle width 1 height 1 zplane")
 cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("mesh surface 1")
-cubit.cmd("block 1 add tri all")
 
 # Export as 2D - normals oriented to +z
-cubit_mesh_export.export_Nastran(cubit, "plate.nas", DIM="2D")
+cubit.cmd('radia export nastran "plate.bdf" dimension 2 overwrite')
 ```
 
 ### Handling Pyramids
 
 ```python
 # Export pyramids as CPYRAM (default)
-cubit_mesh_export.export_Nastran(cubit, "mesh.nas", PYRAM=True)
+cubit.cmd('radia export nastran "mesh.bdf" overwrite')
 
 # Convert pyramids to degenerate hex (for solver compatibility)
-cubit_mesh_export.export_Nastran(cubit, "mesh.nas", PYRAM=False)
+cubit.cmd('radia export nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 ## 2D Mode Normal Orientation

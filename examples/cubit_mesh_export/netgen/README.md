@@ -54,7 +54,7 @@ The best approach for accurate high-order curving combines **name-based face map
 ## Code Example
 
 ```python
-import cubit_mesh_export
+import radia_cubit_mesh
 from netgen.occ import OCCGeometry, Box, Cylinder, gp_Pnt, gp_Ax2, gp_Dir
 from ngsolve import Mesh
 
@@ -64,7 +64,7 @@ cyl = Cylinder(gp_Ax2(gp_Pnt(0,0,-2), gp_Dir(0,0,1)), 0.3, 4)
 shape = brick - cyl
 
 # 2. Name faces (critical for correct mapping!)
-cubit_mesh_export.name_occ_faces(shape)
+radia_cubit_mesh.name_occ_faces(shape)
 
 # 3. Export STEP
 shape.WriteStep("geometry.step")
@@ -81,10 +81,10 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # 6. Export with name-based mapping
-ngmesh = cubit_mesh_export.export_netgen_with_names(cubit, geo)
+ngmesh = radia_cubit_mesh.export_netgen_with_names(cubit, geo)
 
 # 7. High-order curving (export_curved handles SetGeomInfo automatically)
-ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
+ngmesh = radia_cubit_mesh.export_curved(cubit, order=2)
 mesh = Mesh(ngmesh)
 ```
 
@@ -104,7 +104,7 @@ export_netgen_with_names(cubit, geometry) -> ngmesh
 
 ```python
 # Automatic curving (replaces manual set_*_geominfo functions)
-ngmesh = cubit_mesh_export.export_curved(cubit, order=2)
+ngmesh = radia_cubit_mesh.export_curved(cubit, order=2)
 ```
 
 ## Why This Works

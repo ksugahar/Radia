@@ -1,5 +1,5 @@
 """
-Test script for export_NGSolveCurvedMesh() with mixed element types (Hex, Wedge, Pyramid, Tet)
+Test script for extract_curved_mesh() with mixed element types (Hex, Wedge, Pyramid, Tet)
 
 Run this script:
   python test_ngsolve_mixed_elements.py
@@ -19,7 +19,7 @@ if _cubit_path and _cubit_path not in sys.path:
 	sys.path.append(_cubit_path)
 
 print("=" * 60)
-print("Testing export_NGSolveCurvedMesh() with mixed elements")
+print("Testing extract_curved_mesh() with mixed elements")
 print("=" * 60)
 
 # Step 1: Import and initialize Cubit
@@ -106,12 +106,12 @@ step_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_mixed
 cubit.cmd(f'export step "{step_file}" overwrite')
 print(f"  [OK] Exported to {step_file}")
 
-# Step 4: Use export_NGSolveCurvedMesh function
-print("\nStep 4: Using export_NGSolveCurvedMesh() function...")
+# Step 4: Use extract_curved_mesh function
+print("\nStep 4: Using extract_curved_mesh() function...")
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_export
+import radia_cubit_mesh
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
+mesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 print(f"  [OK] Created ngsolve.Mesh: ne={mesh.ne}, nv={mesh.nv}")
 
 # Step 5: Check materials and boundaries

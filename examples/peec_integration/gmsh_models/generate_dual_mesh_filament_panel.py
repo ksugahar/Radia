@@ -30,8 +30,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-# Add cubit_mesh_export to path
-import cubit_mesh_export
 
 print("=" * 70)
 print("Dual Mesh Generation: Filament (1D) + Panel (2D)")
@@ -145,7 +143,7 @@ print(f"    Block 2: 'panel' (2D surface elements)")
 output_file = "dual_mesh_filament_panel.msh"
 print(f"\n[8] Exporting to GMSH v2.2 format...")
 
-cubit_mesh_export.export_gmsh_v2(cubit, output_file)
+cubit.cmd(f'radia export gmsh "{output_file}" version 2 overwrite')
 
 print(f"    OK Created: {output_file}")
 print(f"    Format: GMSH v2.2 (1D Filament + 2D Panel)")

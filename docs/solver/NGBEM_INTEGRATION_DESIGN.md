@@ -462,7 +462,7 @@ class NGBEMLoopStarESIMSolver(NGBEMLoopStarSolver):
 Coreform Cubit (.cub5)
         |
         v
-GMSH Format (.msh)  <-- cubit_mesh_export tool
+GMSH Format (.msh)  <-- radia Cubit plugin (radia export gmsh)
         |
         v
 NGSolve Mesh (via Mesh() constructor)
@@ -497,7 +497,7 @@ Coreform (.cub5) -> GMSH (.msh) -> NGSolve Mesh
 ```
 
 ```python
-from coreform_cubit_mesh_export import export_to_gmsh
+# Use: cubit.cmd('radia export gmsh "model.msh" overwrite')
 from ngsolve import Mesh
 
 # Export hex mesh from Cubit to GMSH
@@ -583,7 +583,7 @@ When extracting surface from hex mesh:
 
 1. **Verify NGSolve hex import**: Test GMSH hex -> NGSolve pipeline
 2. **Test NGBEM quad support**: Check if HDivSurface works on quad faces
-3. **Create Coreform export tool**: Extend cubit_mesh_export for hex
+3. **Create Coreform export tool**: Extend the radia Cubit plugin for hex
 4. **End-to-end test**: Coreform hex -> NGSolve -> NGBEM -> Radia
 
 ### Validation
@@ -598,7 +598,7 @@ When extracting surface from hex mesh:
 
 ```python
 from ngsolve import Mesh
-from coreform_cubit_mesh_export import export_to_gmsh
+# Use: cubit.cmd('radia export gmsh "model.msh" overwrite')
 
 def import_coreform_hex_mesh(cubit_file, surface_names=None):
     """

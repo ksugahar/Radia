@@ -1,36 +1,37 @@
 """
-Export format documentation for cubit_mesh_export MCP server.
+Export format documentation for Radia mesh export MCP server.
 
 Provides API reference, parameter tables, supported element types,
 and usage guidance for each mesh export format.
 """
 
 EXPORT_OVERVIEW = """
-# cubit_mesh_export - Export Functions Overview
+# Radia Mesh Export - Export Functions Overview
 
-| Function | Format | 1st Order | 2nd Order | 3rd+ Order |
-|----------|--------|-----------|-----------|------------|
-| `export_NGSolveCurvedMesh()` | ngsolve.Mesh (curved) | Yes | Yes | Yes |
-| `export_exodus()` | Exodus II (.exo) | Yes | Yes | Yes |
-| `export_Gmesh(version="2.2")` | Gmsh v2.2 (.msh) | Yes | Yes | No |
-| `export_Gmesh(version="4.1")` | Gmsh v4.1 (.msh) | Yes | Yes | No |
-| `export_nastran()` | Nastran BDF (.bdf) | Yes | No | No |
-| `export_meg()` | MEG/ELF (.meg) | Yes | No | No |
+| Function / Command | Format | 1st Order | 2nd Order | 3rd+ Order |
+|--------------------|--------|-----------|-----------|------------|
+| `extract_curved_mesh(cubit, ...)` | ngsolve.Mesh (curved) | Yes | Yes | Yes |
+| `cubit.cmd('export mesh "f" overwrite')` | Exodus II (.exo) | Yes | Yes | Yes |
+| `cubit.cmd('radia export gmsh "f" overwrite')` | Gmsh v2.2 (.msh) | Yes | Yes | No |
+| `cubit.cmd('radia export gmsh "f" version 4 overwrite')` | Gmsh v4.1 (.msh) | Yes | Yes | No |
+| `cubit.cmd('radia export nastran "f" overwrite')` | Nastran BDF (.bdf) | Yes | No | No |
+| `cubit.cmd('radia export meg "f" overwrite')` | MEG/ELF (.meg) | Yes | No | No |
 
 ## API
 
 ```python
-# Unified Gmsh export (version argument selects format)
-export_Gmesh(cubit, FileName, version="2.2", DIM="auto")
-#   version: "2.2" (default, for NGSolve ReadGmsh) or "4.1"
-#   DIM: "auto", "2D", "3D" (v4.1 only)
+# Gmsh export via Cubit command (version argument selects format)
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')          # v2.2 default
+cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')  # v4.1
 ```
 
-## Removed Functions (replaced by export_NGSolveCurvedMesh)
+## Removed Functions (replaced by cubit_netgen_bridge / radia export commands)
 
 `export_NetgenMesh`, `export_netgen`, `export_netgen_with_names`,
-`name_occ_faces`, `set_*_geominfo`, `compute_*_uv` are all DELETED.
-Use `export_NGSolveCurvedMesh()` instead.
+`name_occ_faces`, `set_*_geominfo`, `compute_*_uv` are all DELETED
+along with cubit_mesh_export.py.
+Use `extract_curved_mesh(cubit, ...)` for curved NGSolve mesh,
+or `cubit.cmd('radia export ...')` for file-based formats.
 
 ## Common Usage Pattern
 
@@ -42,8 +43,6 @@ if cubit_path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-import cubit_mesh_export
-
 # Create geometry and mesh
 cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
@@ -54,7 +53,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Export
-cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 ```
 """
 
@@ -93,7 +92,7 @@ from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
 cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
-cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 mesh = Mesh(ReadGmsh("mesh.msh"))  # ~0.001% volume error
 ```
 """
@@ -160,7 +159,9 @@ EXPORT_CURVED = """
 # Curved Mesh Export (export_NGSolveCurvedMesh)
 
 ```python
-mesh = export_NGSolveCurvedMesh(cubit, order=3, surface_only=False, split_quads=False)
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
+mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=False, split_quads=False))
 ```
 
 | Parameter | Type | Default | Description |
@@ -170,7 +171,7 @@ mesh = export_NGSolveCurvedMesh(cubit, order=3, surface_only=False, split_quads=
 | `surface_only` | bool | False | Export surface elements only (for BEM) |
 | `split_quads` | bool | False | Split quad elements into triangles |
 
-**Returns**: `ngsolve.Mesh` object (**already curved**, ready for use).
+**Returns**: `netgen.meshing.Mesh` object (**already curved**). Wrap with `Mesh()` for NGSolve use.
 
 ## How It Works
 
@@ -376,10 +377,10 @@ provides full fidelity including all element types, nodesets, sidesets, etc.
 
 ```python
 # Standard export
-cubit_mesh_export.export_exodus(cubit, "mesh.exo")
+cubit.cmd('export mesh "mesh.exo" overwrite')
 
 # Large model (64-bit integers)
-cubit_mesh_export.export_exodus(cubit, "mesh.exo", large_model=True)
+cubit.cmd('export mesh "mesh.exo" overwrite large')
 ```
 
 The `large` flag is passed to Cubit's `export mesh` command, which writes
@@ -446,9 +447,11 @@ EXPORT_DECISION_GUIDE = """
 
 -> Use `export_NGSolveCurvedMesh()` (recommended for any order):
   ```python
+  from cubit_netgen_bridge import extract_curved_mesh
+  from ngsolve import Mesh
   cubit.cmd("block 1 add tet all")
   cubit.cmd("block 2 add tri all")
-  mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+  mesh = Mesh(extract_curved_mesh(cubit, order=3))
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
@@ -458,7 +461,7 @@ EXPORT_DECISION_GUIDE = """
   cubit.cmd("block 1 element type tetra10")
   cubit.cmd("block 2 add tri all")
   cubit.cmd("block 2 element type tri6")
-  cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
+  cubit.cmd('radia export gmsh "mesh.msh" overwrite')
   mesh = Mesh(ReadGmsh("mesh.msh"))
   ```
 
@@ -477,7 +480,7 @@ the interface. Two solutions:
 
 1. **Use PYRAM=False** (recommended): Writes pyramids as degenerate CHEXA
    ```python
-   cubit_mesh_export.export_nastran(cubit, "mesh.bdf", PYRAM=False)
+   cubit.cmd('radia export nastran "mesh.bdf" nopyramid overwrite')
    ```
 
 2. **Use pure tet mesh**: Avoids pyramids entirely

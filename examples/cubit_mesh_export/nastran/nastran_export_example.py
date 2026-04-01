@@ -21,9 +21,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'src', 'radia'))
-import cubit_mesh_export
-
 # ============================================================
 # 3D Mesh Export
 # ============================================================
@@ -38,7 +35,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'solid'")
 
 print("\nExporting to Nastran (3D)...")
-cubit_mesh_export.export_nastran(cubit, "cube_3d.bdf", DIM="3D")
+cubit.cmd('radia export nastran "cube_3d.bdf" dimension 3 overwrite')
 print("  Created: cube_3d.bdf")
 
 # ============================================================
@@ -55,7 +52,7 @@ cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'plate'")
 
 print("\nExporting to Nastran (2D)...")
-cubit_mesh_export.export_nastran(cubit, "plate_2d.bdf", DIM="2D")
+cubit.cmd('radia export nastran "plate_2d.bdf" dimension 2 overwrite')
 print("  Created: plate_2d.bdf")
 
 # ============================================================
@@ -78,13 +75,13 @@ cubit.cmd("block 1 add pyramid all")
 cubit.cmd("block 1 name 'mixed'")
 
 # Export with pyramid as CPYRAM
-print("\nExporting with pyramids (PYRAM=True)...")
-cubit_mesh_export.export_nastran(cubit, "mixed_with_pyramid.bdf", DIM="3D", PYRAM=True)
+print("\nExporting with pyramids...")
+cubit.cmd('radia export nastran "mixed_with_pyramid.bdf" dimension 3 overwrite')
 print("  Created: mixed_with_pyramid.bdf")
 
 # Export with pyramid as degenerate hex (for JMAG compatibility)
-print("\nExporting without pyramids (PYRAM=False, for JMAG)...")
-cubit_mesh_export.export_nastran(cubit, "mixed_for_jmag.bdf", DIM="3D", PYRAM=False)
+print("\nExporting without pyramids (for JMAG)...")
+cubit.cmd('radia export nastran "mixed_for_jmag.bdf" dimension 3 nopyramid overwrite')
 print("  Created: mixed_for_jmag.bdf")
 
 print("\nDone!")

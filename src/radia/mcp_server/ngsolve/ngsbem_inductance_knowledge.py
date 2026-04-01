@@ -234,7 +234,7 @@ edge orientation to be inconsistent.
 
 ```python
 # export_NGSolveCurvedMesh handles this automatically:
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3, surface_only=True)
+mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=True))
 
 # For manual mesh construction (rare), call explicitly:
 # ngmesh.CalcSurfacesOfNode()
@@ -485,7 +485,7 @@ cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 MU_0 = 4.0 * math.pi * 1e-7
 R = 0.05   # Major radius [m]
@@ -505,8 +505,8 @@ cubit.cmd('block 2 add tri all')
 cubit.cmd('block 2 name "conductor"')
 
 # --- Step 4: Export with curving (1st order mesh, curved by Netgen) ---
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
-    cubit, order=2, surface_only=True, split_quads=True)
+mesh = Mesh(extract_curved_mesh(cubit,
+    order=2, surface_only=True, split_quads=True))
 
 # --- Step 5: BEM inductance (energy method) ---
 fes = HDivSurface(mesh, order=0)
@@ -566,8 +566,8 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 2 add face all")  # quad elements
 
 # Export handles both:
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
-    cubit, order=2, surface_only=True, split_quads=True)
+mesh = Mesh(extract_curved_mesh(cubit,
+    order=2, surface_only=True, split_quads=True))
 ```
 
 Register **both** tri and face blocks to support mixed meshes:
@@ -817,8 +817,8 @@ cubit.cmd('block 3 add tri in surface {source_sid}; block 3 name "source"')
 cubit.cmd('block 4 add tri in surface {sink_sid};   block 4 name "sink"')
 
 # Export with curving (1st order mesh, curved by Netgen)
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
-    cubit, order=2, surface_only=True, split_quads=True)
+mesh = Mesh(extract_curved_mesh(cubit,
+    order=2, surface_only=True, split_quads=True))
 
 # Energy method
 L_total = MU_0 * float(J_vec @ SL @ J_vec)
@@ -897,10 +897,10 @@ L_op = LaplaceSL(j.Trace() * ds("conductor")) * jt.Trace() * ds("conductor")
 ### Using Old API Instead of export_NGSolveCurvedMesh
 ```python
 # OLD (DELETED): Do not use export_NetgenMesh or set_*_geominfo
-# cubit_mesh_export.set_torus_geominfo(ngmesh, ...)
+# cubit_mesh_export.set_torus_geominfo(ngmesh, ...)  # DELETED along with cubit_mesh_export.py
 
 # NEW: Single function call handles everything
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ```
 
 ## use_fmm: FMM vs Dense (No H-matrix in ngsolve.bem)
