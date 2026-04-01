@@ -54,24 +54,16 @@ def main():
 
     # Step 1: pip install
     if wheel_path:
-        print(f"[1/2] pip install --force-reinstall {os.path.basename(wheel_path)}")
+        print(f"[1/1] pip install --force-reinstall {os.path.basename(wheel_path)}")
         r = subprocess.run([sys.executable, "-m", "pip", "install",
                             "--force-reinstall", wheel_path])
     else:
-        print("[1/2] pip install --upgrade radia")
+        print("[1/1] pip install --upgrade radia")
         r = subprocess.run([sys.executable, "-m", "pip", "install",
                             "--upgrade", "radia"])
     if r.returncode != 0:
         print("ERROR: pip install failed")
         sys.exit(1)
-    print()
-
-    # Step 2: radia-setup (Cubit plugin + panels)
-    print("[2/2] radia-setup")
-    cmd = [sys.executable, "-m", "radia.setup_cubit"]
-    if all_users:
-        cmd.append("--all-users")
-    subprocess.run(cmd)
     print()
 
     print("Verify:")

@@ -1,22 +1,11 @@
 """
 Export Gmsh - Command Panel Apply Script
 
-Exports the current Cubit mesh to Gmsh format (.msh) using cubit_mesh_export.
+Exports the current Cubit mesh to Gmsh format (.msh) using the radia plugin command.
 """
 
 import cubit
 from cubit import cubitgui
-
-import sys
-import os
-
-# Add repository root to path for cubit_mesh_export
-script_dir = os.path.dirname(os.path.abspath(__file__))
-repo_root = os.path.dirname(os.path.dirname(script_dir))
-if repo_root not in sys.path:
-	sys.path.insert(0, repo_root)
-
-import cubit_mesh_export
 
 # Get values from panel widgets
 file_name = cubitgui.UserPanel.line_edit_text("file_name")
@@ -33,9 +22,15 @@ else:
 
 	print(f"Exporting to Gmsh {version}: {file_name}")
 
-	if version == "4.1":
-		cubit_mesh_export.export_Gmesh(cubit, file_name, version=version, DIM=dim)
-	else:
-		cubit_mesh_export.export_Gmesh(cubit, file_name, version=version)
+	# Map version string to command parameter
+	ver = "4" if version == "4.1" else "2"
 
+	# Build command
+	cmd = f'radia export gmsh "{file_name}" version {ver}'
+	if version == "4.1" and dim in ("2D", "3D"):
+		d = "2" if dim == "2D" else "3"
+		cmd += f" dimension {d}"
+	cmd += " overwrite"
+
+	cubit.cmd(cmd)
 	print(f"Done: {file_name}")
