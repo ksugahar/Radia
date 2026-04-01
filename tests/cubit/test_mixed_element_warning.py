@@ -17,10 +17,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 import tempfile
 
-# Add parent directory to path for cubit_mesh_export
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_export
-
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
@@ -44,8 +40,8 @@ cubit.cmd("block 1 name 'solid'")
 with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling export_gmsh_v2 (should see no warning):")
-cubit_mesh_export._export_gmsh_v2(cubit, vtk_file)
+print("  Calling radia export gmsh (should see no warning):")
+cubit.cmd(f'radia export gmsh "{vtk_file}" overwrite')
 os.unlink(vtk_file)
 
 # Test 2: Mixed element types in block (warning expected)
@@ -72,8 +68,8 @@ cubit.cmd("block 1 name 'mixed'")
 with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling export_gmsh_v2 (should see warning about mixed types):")
-cubit_mesh_export._export_gmsh_v2(cubit, vtk_file)
+print("  Calling radia export gmsh (should see warning about mixed types):")
+cubit.cmd(f'radia export gmsh "{vtk_file}" overwrite')
 os.unlink(vtk_file)
 
 # Test 3: Multiple separate blocks (no warning expected)
@@ -100,8 +96,8 @@ cubit.cmd("block 2 name 'hexes'")
 with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 	vtk_file = f.name
 
-print("  Calling export_gmsh_v2 (should see no warning):")
-cubit_mesh_export._export_gmsh_v2(cubit, vtk_file)
+print("  Calling radia export gmsh (should see no warning):")
+cubit.cmd(f'radia export gmsh "{vtk_file}" overwrite')
 os.unlink(vtk_file)
 
 print("\n" + "=" * 70)

@@ -1,6 +1,7 @@
-"""Basic tests for cubit_mesh_export module.
+"""Basic tests for radia_cubit_mesh module.
 
-Note: These tests require Cubit to be installed and available.
+Note: These tests require Cubit to be installed and available
+with the radia_cubit_mesh plugin loaded.
 They are primarily placeholder tests to establish the testing structure.
 """
 
@@ -11,83 +12,31 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
 
-import cubit_mesh_export
+import radia_cubit_mesh
 
 
 class TestModuleImport(unittest.TestCase):
 	"""Test that the module can be imported successfully."""
 
 	def test_module_exists(self):
-		"""Test that cubit_mesh_export module exists."""
-		self.assertIsNotNone(cubit_mesh_export)
+		"""Test that radia_cubit_mesh module exists."""
+		self.assertIsNotNone(radia_cubit_mesh)
 
-	def test_functions_exist(self):
-		"""Test that all main export functions exist."""
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_exodus'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_Gmesh'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_gmesh'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_nastran'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_NGSolveCurvedMesh'))
-		self.assertTrue(hasattr(cubit_mesh_export, 'export_meg'))
+	def test_extract_curved_mesh_exists(self):
+		"""Test that extract_curved_mesh function exists."""
+		self.assertTrue(hasattr(radia_cubit_mesh, 'extract_curved_mesh'))
 
-	def test_functions_callable(self):
-		"""Test that export functions are callable."""
-		self.assertTrue(callable(cubit_mesh_export.export_exodus))
-		self.assertTrue(callable(cubit_mesh_export.export_Gmesh))
-		self.assertTrue(callable(cubit_mesh_export.export_gmesh))
-		self.assertTrue(callable(cubit_mesh_export.export_nastran))
-		self.assertTrue(callable(cubit_mesh_export.export_NGSolveCurvedMesh))
-		self.assertTrue(callable(cubit_mesh_export.export_meg))
+	def test_extract_curved_mesh_callable(self):
+		"""Test that extract_curved_mesh is callable."""
+		self.assertTrue(callable(radia_cubit_mesh.extract_curved_mesh))
 
-	def test_aliases_point_to_same_function(self):
-		"""Test that snake_case aliases point to the same functions."""
-		self.assertIs(cubit_mesh_export.export_gmesh, cubit_mesh_export.export_Gmesh)
-		self.assertIs(cubit_mesh_export.export_nastran, cubit_mesh_export.export_Nastran)
+	def test_extract_mesh_data_exists(self):
+		"""Test that extract_mesh_data function exists."""
+		self.assertTrue(hasattr(radia_cubit_mesh, 'extract_mesh_data'))
 
-	def test_export_gmesh_signature(self):
-		"""Test export_Gmesh has correct parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_Gmesh)
-		params = list(sig.parameters.keys())
-		self.assertIn('cubit', params)
-		self.assertIn('FileName', params)
-		self.assertIn('version', params)
-		self.assertIn('DIM', params)
-		self.assertEqual(sig.parameters['version'].default, "2.2")
-		self.assertEqual(sig.parameters['DIM'].default, "auto")
-
-
-class TestFunctionSignatures(unittest.TestCase):
-	"""Test function signatures and default parameters."""
-
-	def test_export_nastran_defaults(self):
-		"""Test export_nastran has correct default parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_nastran)
-		self.assertEqual(sig.parameters['DIM'].default, "3D")
-		self.assertEqual(sig.parameters['PYRAM'].default, True)
-
-	def test_export_meg_defaults(self):
-		"""Test export_meg has correct default parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_meg)
-		self.assertEqual(sig.parameters['DIM'].default, 'T')
-		self.assertEqual(sig.parameters['MGR2'].default, None)
-
-	def test_export_NGSolveCurvedMesh_signature(self):
-		"""Test export_NGSolveCurvedMesh has correct parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_NGSolveCurvedMesh)
-		params = list(sig.parameters.keys())
-		self.assertIn('cubit', params)
-		self.assertIn('order', params)
-
-	def test_export_exodus_defaults(self):
-		"""Test export_exodus has correct default parameters."""
-		import inspect
-		sig = inspect.signature(cubit_mesh_export.export_exodus)
-		self.assertEqual(sig.parameters['overwrite'].default, True)
-		self.assertEqual(sig.parameters['large_model'].default, False)
+	def test_extract_mesh_data_callable(self):
+		"""Test that extract_mesh_data is callable."""
+		self.assertTrue(callable(radia_cubit_mesh.extract_mesh_data))
 
 
 if __name__ == '__main__':

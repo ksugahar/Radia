@@ -49,7 +49,7 @@ sys.path.insert(0, repo_root)
 
 from ngsolve import Mesh, Integrate, CF, BND, HDivSurface, TaskManager, ds
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 MU_0 = 4.0 * math.pi * 1e-7
 
@@ -202,7 +202,7 @@ def main():
     for order in [1, 2, 3]:
         print(f"\n  export_NGSolveCurvedMesh(order={order}):")
 
-        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
+        mesh = Mesh(extract_curved_mesh(cubit, order=order))
 
         # Surface area
         area = Integrate(CF(1), mesh, VOL_or_BND=BND)

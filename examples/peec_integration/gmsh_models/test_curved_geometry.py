@@ -28,7 +28,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-import cubit_mesh_export
 
 print("=" * 70)
 print("Test: Curved Geometry with Piecewise-Linear Elements")

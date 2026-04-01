@@ -176,6 +176,26 @@ echo ========================================
 if errorlevel 1 ( echo WARNING: mmm_core build failed )
 
 echo.
+echo ========================================
+echo   Building radia_cubit_mesh (Cubit plugin .pyd)
+echo ========================================
+set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
+set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
+set "CUBIT_DIR=C:\Program Files\Coreform Cubit 2025.3\cmake"
+set "NETGEN_DIR=C:\Program Files\Python312\Lib\site-packages\netgen"
+
+if exist "%CUBIT_DIR%\CubitConfig.cmake" (
+    if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
+    cd /d "%CUBIT_PLUGIN_BUILD%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" --build . --config Release --target radia_cubit_mesh -j
+    if errorlevel 1 ( echo WARNING: radia_cubit_mesh build failed )
+    cd /d "$BUILD_DIR"
+) else (
+    echo SKIP: Cubit SDK not found at %CUBIT_DIR%
+)
+
+echo.
 echo Build completed.
 exit /b 0
 "@
@@ -218,6 +238,25 @@ try {
         @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false },
         @{ src = "mmm_core.cp312-win_amd64.pyd";       dst = "mmm_core.pyd";      required = $false }
     )
+
+    # Cubit plugin files (built in separate build dirs)
+    $cubitFiles = @(
+        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\radia_cubit_mesh.cp312-win_amd64.pyd";
+           dst = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd" },
+        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-test\radia_cubit.ccm";
+           dst = "$PROJECT_DIR\src\radia\radia_cubit.ccm" }
+    )
+    foreach ($cf in $cubitFiles) {
+        if (Test-Path $cf.src) {
+            Copy-Item $cf.src $cf.dst -Force
+            $info = Get-Item $cf.dst
+            $name = Split-Path $cf.dst -Leaf
+            Write-Host "  ${name}: $([math]::Round($info.Length / 1KB, 1)) KB" -ForegroundColor Green
+        } else {
+            $name = Split-Path $cf.dst -Leaf
+            Write-Host "  ${name}: skipped (not built)" -ForegroundColor Yellow
+        }
+    }
 
     foreach ($mod in $modules) {
         $srcPath = "$BUILD_DIR\$($mod.src)"

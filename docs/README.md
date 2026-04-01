@@ -40,7 +40,7 @@
 
 ## Cubit Mesh Export
 
-- [Function_Reference.md](cubit/Function_Reference.md) - Function reference index for `cubit_mesh_export` module
+- [Function_Reference.md](cubit/Function_Reference.md) - Function reference index for the radia Cubit plugin and `radia_cubit_mesh` module
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
 - [export_Gmsh_ver2.md](cubit/export_Gmsh_ver2.md) - Export to Gmsh format version 2.2
 - [export_Gmsh_ver4.md](cubit/export_Gmsh_ver4.md) - Export to Gmsh format version 4.1

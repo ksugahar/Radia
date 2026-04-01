@@ -14,11 +14,11 @@ Workflow:
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
-      Use cubit_mesh_export.export_NGSolveCurvedMesh() for direct Cubit -> NGSolve conversion.
+      Use cubit_netgen_bridge.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
 
 Requirements:
     - Coreform Cubit 2025.3+
-    - cubit_mesh_export from S:\CoreformCubit\01_GitHub
+    - cubit_netgen_bridge module (via radia package)
 
 Author: Radia Development Team
 Date: 2026-01-16
@@ -39,7 +39,7 @@ if _cubit_path and _cubit_path not in sys.path:
 # Check if Cubit is available
 try:
     import cubit
-    import cubit_mesh_export
+    from cubit_netgen_bridge import extract_curved_mesh
     CUBIT_AVAILABLE = True
 except ImportError:
     CUBIT_AVAILABLE = False
@@ -52,11 +52,12 @@ def create_wpt_geometry_cubit():
 
     Returns NGSolve Mesh objects directly (no intermediate file format).
 
-    Uses cubit_mesh_export.export_NGSolveCurvedMesh() for direct Cubit -> NGSolve conversion.
+    Uses cubit_netgen_bridge.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
     """
     if not CUBIT_AVAILABLE:
         return None
 
+    from ngsolve import Mesh
     cubit.init(['cubit', '-nojournal', '-batch'])
 
     # ============================================================
@@ -125,7 +126,7 @@ def create_wpt_geometry_cubit():
 
     # Export Tx assembly to NGSolve directly (no Nastran intermediate)
     print("Exporting Tx assembly to NGSolve mesh...")
-    tx_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
+    tx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
     # ============================================================
     # Create Rx Assembly (mirror of Tx)
@@ -167,7 +168,7 @@ def create_wpt_geometry_cubit():
 
     # Export Rx assembly to NGSolve directly (no Nastran intermediate)
     print("Exporting Rx assembly to NGSolve mesh...")
-    rx_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
+    rx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
     return {
         'tx_mesh': tx_mesh,
@@ -181,7 +182,7 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
     Load NGSolve mesh and create Radia objects.
 
     Parameters:
-        mesh: NGSolve Mesh object (from cubit_mesh_export.export_NGSolveCurvedMesh())
+        mesh: NGSolve Mesh object (from cubit_netgen_bridge.extract_curved_mesh())
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
@@ -242,7 +243,7 @@ def analyze_wpt_system():
         print("This example requires Coreform Cubit for hex mesh generation.")
         print("\nTo run this example:")
         print("  1. Install Coreform Cubit 2025.3+")
-        print("  2. Ensure cubit_mesh_export is in S:\\CoreformCubit\\01_GitHub")
+        print("  2. Ensure cubit_netgen_bridge module is available")
         return
 
     # Load meshes into Radia via Netgen
@@ -308,7 +309,7 @@ def main():
         print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
         print("  1. Install Coreform Cubit 2025.3")
-        print("  2. Ensure cubit_mesh_export is available")
+        print("  2. Ensure cubit_netgen_bridge module is available")
         print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
     # Analyze system

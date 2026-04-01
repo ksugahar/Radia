@@ -6,29 +6,15 @@ Export mesh to Exodus II format (.exo, .e, .g).
 
 Exodus II is Cubit's native mesh format and the standard format for SIERRA tools developed at Sandia National Laboratories. This function provides a consistent API wrapper around Cubit's built-in export functionality.
 
-## Function Signature
+## Command
+
+Exodus II export uses Cubit's built-in export command directly:
 
 ```python
-def export_exodus(
-    cubit: Any,
-    filename: str,
-    overwrite: bool = True,
-    large_model: bool = False
-) -> Any
+cubit.cmd('export mesh "output.exo" overwrite')
 ```
 
-## Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | Any | (required) | Cubit Python interface object |
-| `filename` | str | (required) | Output file path (.exo, .e, or .g) |
-| `overwrite` | bool | `True` | Overwrite existing file |
-| `large_model` | bool | `False` | Use 64-bit integers for large models |
-
-## Returns
-
-- `cubit` - The cubit object (for method chaining)
+> **Note**: The old `cubit_mesh_export.export_exodus()` Python function has been removed. Use Cubit's native `export mesh` command instead.
 
 ## Supported Elements
 
@@ -62,8 +48,6 @@ if cubit_path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-import cubit_mesh_export
-
 # Create geometry and mesh
 cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
@@ -75,7 +59,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'solid'")
 
 # Export to Exodus
-cubit_mesh_export.export_exodus(cubit, "output.exo")
+cubit.cmd('export mesh "output.exo" overwrite')
 ```
 
 ### 2nd Order Elements
@@ -94,7 +78,7 @@ cubit.cmd("block 1 name 'sphere'")
 cubit.cmd("block 1 element type tetra10")
 
 # Export
-cubit_mesh_export.export_exodus(cubit, "sphere_2nd_order.exo")
+cubit.cmd('export mesh "sphere_2nd_order.exo" overwrite')
 ```
 
 ### With Nodesets and Sidesets
@@ -122,7 +106,7 @@ cubit.cmd("sideset 2 add surface 2")
 cubit.cmd("sideset 2 name 'outlet'")
 
 # Export (nodesets and sidesets included automatically)
-cubit_mesh_export.export_exodus(cubit, "with_bc.exo")
+cubit.cmd('export mesh "with_bc.exo" overwrite')
 ```
 
 ### Large Model Support
@@ -130,8 +114,10 @@ cubit_mesh_export.export_exodus(cubit, "with_bc.exo")
 For meshes with more than 2^31 (~2 billion) elements or nodes:
 
 ```python
-cubit_mesh_export.export_exodus(cubit, "large_model.exo", large_model=True)
+cubit.cmd('export mesh "large_model.exo" overwrite')
 ```
+
+> For large model support (64-bit integers), consult Cubit's documentation for the `large` option.
 
 ## Output Summary
 

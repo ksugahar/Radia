@@ -8,7 +8,7 @@ meshes with tetrahedra (~1 mm element size), and exports to Nastran .bdf format.
 
 Requires:
     - Coreform Cubit (adjust CUBIT_PATH below for your installation)
-    - cubit_mesh_export module
+    - cubit_netgen_bridge module (via radia package)
 """
 
 import os
@@ -54,6 +54,5 @@ for i in range(1, num_volumes + 1):
 output_dir = os.path.dirname(os.path.abspath(__file__))
 filename = os.path.join(output_dir, 'sphere')
 
-import cubit_mesh_export
-cubit_mesh_export.export_Nastran(cubit, filename + '.bdf', DIM='3D', PYRAM=False)
+cubit.cmd(f'radia export nastran "{filename}.bdf" dimension 3 nopyramid overwrite')
 print(f"Exported: {filename}.bdf")

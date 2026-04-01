@@ -242,7 +242,7 @@ To handle complex field sources efficiently, the framework employs state-of-the-
 ### 3. Visualization & Export
 *   **PyVista Viewer**: Modern, interactive 3D visualization within Python/Jupyter.
 *   **VTK Export**: Compatible with ParaView.
-*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via Coreform Cubit (integrated `cubit_mesh_export` module).
+*   **GMSH/STEP**: Mesh import via GMSH, CAD interoperability via Coreform Cubit (integrated radia Cubit plugin and `radia_cubit_mesh` module).
 
 ---
 
@@ -272,21 +272,20 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 
 ### Installation
 
-**First install** — download [`install_full.py`](https://raw.githubusercontent.com/ksugahar/Radia/main/install_full.py) and run:
-
 ```bash
-python install_full.py
+pip install radia
+radia-setup            # Cubit plugin + panels (skip if no Cubit)
 ```
 
 This installs:
-1. **radia** from PyPI (includes NGSolve 6.2.2602, MKL, MCP servers)
-2. **ksugahar/netgen fork** from GitHub Releases (CallbackGeometry + SetGeomInfo for Cubit mesh curving, [PR#232](https://github.com/NGSolve/netgen/pull/232) pending upstream)
-3. **Cubit panels** (if Coreform Cubit is detected)
+1. **radia** from PyPI (includes NGSolve, MKL, Cubit plugin binaries, MCP servers)
+2. **radia-setup** deploys Cubit plugin (.ccm, .pyd, Netgen DLLs) and registers toolbar panels
 
-**Update** — same command (upgrades radia + panels, preserves netgen fork):
+**Update** — same two commands:
 
 ```bash
-python install_full.py
+pip install --upgrade radia
+radia-setup
 ```
 
 ### Example 1: Magnetostatic Source Field
@@ -377,21 +376,20 @@ Radia includes a mesh export module for [Coreform Cubit](https://coreform.com/pr
 
 ```python
 import cubit
-import cubit_mesh_export
+import radia_cubit_mesh
 
 # Export to Gmsh v2.2 (for Radia import) or v4.1 (for visualization)
-cubit_mesh_export.export_gmesh(cubit, "model.msh", version="2.2")
+cubit.cmd('radia export gmsh "model.msh" overwrite')
 
 # Export to NGSolve mesh with high-order curving
-ngmesh = cubit_mesh_export.export_netgen(cubit, geometry_file="geometry.step")
+ngmesh = radia_cubit_mesh.extract_curved_mesh(order=3)
 mesh = ngsolve.Mesh(ngmesh)
-mesh.Curve(3)  # 3rd order curved elements
 ```
 
 ### Installation
 
-The `cubit_mesh_export` module and Cubit panels are included in Radia.
-`python install_full.py` installs everything including the Cubit panels.
+The `radia_cubit_mesh` module and Cubit panels are included in Radia.
+`pip install radia` + `radia-setup` installs everything including the Cubit panels.
 
 To reinstall panels only (e.g., after Cubit update):
 

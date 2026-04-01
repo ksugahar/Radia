@@ -1,5 +1,5 @@
 """
-Test export_Nastran() function.
+Test Nastran export via cubit.cmd('radia export nastran ...').
 
 Tests:
 1. 3D mesh export (tet, hex)
@@ -18,10 +18,6 @@ if _cubit_path and _cubit_path not in sys.path:
 	sys.path.append(_cubit_path)
 
 import cubit
-
-# Add parent directory to path for cubit_mesh_export
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_export
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -78,7 +74,7 @@ def test_3d_tet_mesh():
 	print(f"  Cubit mesh: {num_tets} tets")
 
 	bdf_file = "test_tet.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 overwrite')
 
 	result = parse_nastran_file(bdf_file)
 	print(f"  Nastran file: {result['grids']} GRIDs")
@@ -111,7 +107,7 @@ def test_3d_hex_mesh():
 	print(f"  Cubit mesh: {num_hexes} hexes")
 
 	bdf_file = "test_hex.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 overwrite')
 
 	result = parse_nastran_file(bdf_file)
 	print(f"  Nastran file: {result['grids']} GRIDs")
@@ -144,7 +140,7 @@ def test_2d_tri_mesh():
 	print(f"  Cubit mesh: {num_tris} tris")
 
 	bdf_file = "test_tri.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='2D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 2 overwrite')
 
 	result = parse_nastran_file(bdf_file)
 	print(f"  Nastran file: {result['grids']} GRIDs")
@@ -177,7 +173,7 @@ def test_2d_quad_mesh():
 	print(f"  Cubit mesh: {num_quads} quads")
 
 	bdf_file = "test_quad.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='2D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 2 overwrite')
 
 	result = parse_nastran_file(bdf_file)
 	print(f"  Nastran file: {result['grids']} GRIDs")
@@ -221,7 +217,7 @@ def test_mixed_3d_mesh():
 	print(f"  Cubit mesh: {num_hexes} hexes, {num_tets} tets")
 
 	bdf_file = "test_mixed.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 overwrite')
 
 	result = parse_nastran_file(bdf_file)
 	print(f"  Nastran file: {result['grids']} GRIDs")
@@ -262,7 +258,7 @@ def test_wedge_mesh():
 	print(f"  Cubit mesh: {num_wedges} wedges")
 
 	bdf_file = "test_wedge.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 overwrite')
 
 	result = parse_nastran_file(bdf_file)
 	print(f"  Nastran file: {result['grids']} GRIDs")
@@ -292,7 +288,7 @@ def test_nastran_format():
 	cubit.cmd("block 1 add tet all")
 
 	bdf_file = "test_format.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D')
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 overwrite')
 
 	with open(bdf_file, 'r') as f:
 		content = f.read()
@@ -338,16 +334,16 @@ def test_pyram_option():
 
 	cubit.cmd("block 1 add tet all")
 
-	# Test with PYRAM=True (default)
+	# Test with PYRAM=True (default - pyramids allowed)
 	bdf_file = "test_pyram_true.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D', PYRAM=True)
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 overwrite')
 	result_true = parse_nastran_file(bdf_file)
 	print(f"  PYRAM=True: {result_true['elements']}")
 	os.remove(bdf_file)
 
-	# Test with PYRAM=False
+	# Test with PYRAM=False (nopyramid)
 	bdf_file = "test_pyram_false.bdf"
-	cubit_mesh_export.export_Nastran(cubit, bdf_file, DIM='3D', PYRAM=False)
+	cubit.cmd(f'radia export nastran "{bdf_file}" dimension 3 nopyramid overwrite')
 	result_false = parse_nastran_file(bdf_file)
 	print(f"  PYRAM=False: {result_false['elements']}")
 	os.remove(bdf_file)
@@ -358,7 +354,7 @@ def test_pyram_option():
 
 if __name__ == "__main__":
 	print("\n" + "=" * 60)
-	print("export_Nastran() Test Suite")
+	print("Nastran Export Test Suite (via cubit.cmd)")
 	print("=" * 60)
 
 	all_passed = True
