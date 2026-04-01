@@ -14,13 +14,13 @@ Controls the analysis dimension:
 
 ```python
 # 3D mesh
-cubit_mesh_export.export_meg(cubit, "mesh.meg", DIM='T')
+cubit.cmd('radia export meg "mesh.meg" overwrite')
 
 # 2D planar mesh (XY plane)
-cubit_mesh_export.export_meg(cubit, "plate.meg", DIM='K')
+cubit.cmd('radia export meg "plate.meg" overwrite')
 
 # Axisymmetric mesh (R-Z plane, rotated around Z axis)
-cubit_mesh_export.export_meg(cubit, "axisym.meg", DIM='R')
+cubit.cmd('radia export meg "axisym.meg" overwrite')
 ```
 
 ## Block Names = ELF Element Names
@@ -46,17 +46,17 @@ Format: `MMB<nodes><dim>` where:
 # 3D tetrahedral mesh
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'MMB4T'")  # Must match ELF naming
-cubit_mesh_export.export_meg(cubit, "mesh.meg", DIM='T')
+cubit.cmd('radia export meg "mesh.meg" overwrite')
 
 # 2D planar triangular mesh
 cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'MMB3K'")  # Must match ELF naming
-cubit_mesh_export.export_meg(cubit, "plate.meg", DIM='K')
+cubit.cmd('radia export meg "plate.meg" overwrite')
 
 # Axisymmetric triangular mesh
 cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'MMB3R'")  # Must match ELF naming
-cubit_mesh_export.export_meg(cubit, "axisym.meg", DIM='R')
+cubit.cmd('radia export meg "axisym.meg" overwrite')
 ```
 
 ## MGR2 Parameter (Spatial Nodes)
@@ -68,7 +68,7 @@ spatial_nodes = [
     [0.0, 0.0, 10.0],   # Far-field point 1
     [0.0, 0.0, -10.0],  # Far-field point 2
 ]
-cubit_mesh_export.export_meg(cubit, "mesh.meg", DIM='T', MGR2=spatial_nodes)
+cubit.cmd('radia export meg "mesh.meg" overwrite')
 ```
 
 ## Limitations

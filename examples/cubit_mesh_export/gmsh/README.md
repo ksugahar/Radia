@@ -4,7 +4,7 @@ Export Cubit mesh to Gmsh format (.msh).
 
 ## v2.2 vs v4.1 Format
 
-| Feature | v2.2 (`export_gmsh_v2`) | v4.1 (`export_gmsh_v4`) |
+| Feature | v2.2 (`radia export gmsh`) | v4.1 (`radia export gmsh version 4`) |
 |---------|-------------------------|-------------------------|
 | Format version | 2.2 | 4.1 |
 | Structure | Flat lists | Entity blocks |
@@ -31,16 +31,15 @@ Export Cubit mesh to Gmsh format (.msh).
 
 ```python
 import cubit
-import cubit_mesh_export
 
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Gmsh v2.2 (recommended for NGSolve)
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 
 # Gmsh v4.1 (with $Entities section)
-cubit_mesh_export.export_gmsh_v4(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')
 ```
 
 ## NGSolve Integration
@@ -51,7 +50,6 @@ This is the recommended workflow for Cubit to NGSolve:
 
 ```python
 import cubit
-import cubit_mesh_export
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
@@ -67,7 +65,7 @@ cubit.cmd("block 1 element type tetra10")
 cubit.cmd("block 2 element type tri6")
 
 # 3. Export to Gmsh v2.2 and load into NGSolve
-cubit_mesh_export.export_gmsh_v2(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 mesh = Mesh(ReadGmsh("mesh.msh"))
 ```
 
@@ -86,13 +84,13 @@ The v4.1 format supports dimension control:
 
 ```python
 # Auto-detect dimension (default)
-cubit_mesh_export.export_gmsh_v4(cubit, "mesh.msh", DIM="auto")
+cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')
 
 # Force 2D mode (normals to +z, z=0)
-cubit_mesh_export.export_gmsh_v4(cubit, "plate.msh", DIM="2D")
+cubit.cmd('radia export gmsh "plate.msh" version 4 dimension 2 overwrite')
 
 # Force 3D mode
-cubit_mesh_export.export_gmsh_v4(cubit, "solid.msh", DIM="3D")
+cubit.cmd('radia export gmsh "solid.msh" version 4 dimension 3 overwrite')
 ```
 
 ## Sample Files

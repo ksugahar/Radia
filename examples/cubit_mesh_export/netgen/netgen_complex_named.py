@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.join(repo_root, 'src', 'radia'))
 from netgen.occ import Box, Cylinder, gp_Ax2, gp_Dir, gp_Pnt
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 # ============================================================
 # Parameters
@@ -98,7 +98,7 @@ print(f"  Tets: {cubit.get_tet_count()}")
 # ============================================================
 print(f"\nStep 4: export_NGSolveCurvedMesh(order={ORDER}) and accuracy")
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=ORDER)
+mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
 
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
 vol = Integrate(CF(1), mesh)
@@ -109,7 +109,7 @@ print(f"  Error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 
 # Compare with order=3
 print("\nCompare with order=3:")
-mesh3 = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh3 = Mesh(extract_curved_mesh(cubit, order=3))
 vol3 = Integrate(CF(1), mesh3)
 print(f"  Error: {abs(vol3-expected_vol)/expected_vol*100:.4f}%")
 

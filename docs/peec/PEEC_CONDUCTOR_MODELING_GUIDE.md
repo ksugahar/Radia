@@ -158,7 +158,7 @@ builder.connect_parallel([coil1, coil2])
 
 ```python
 import cubit
-import cubit_mesh_export
+import radia_cubit_mesh
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 
@@ -180,7 +180,7 @@ cubit.cmd(f"block 1 add curve {curve_id}")
 cubit.cmd("block 1 name 'conductor'")
 
 # Export to GMSH v2.2
-cubit_mesh_export.export_Gmesh(cubit, "coil_mesh.msh")
+cubit.cmd('radia export gmsh "coil_mesh.msh" overwrite')
 ```
 
 ### 3.2 Step 2 -- Import to Radia PEEC
@@ -315,7 +315,7 @@ port_positive_nodes = get_nodeset(mesh, "port_positive")
 port_negative_nodes = get_nodeset(mesh, "port_negative")
 ```
 
-**Note**: `cubit_mesh_export` does NOT currently support nodeset export to GMSH format. Until that support is added, the coordinate-based search remains the workaround.
+**Note**: The radia Cubit plugin does NOT currently support nodeset export to GMSH format. Until that support is added, the coordinate-based search remains the workaround.
 
 ### 3.4 Helper Function
 
@@ -386,7 +386,7 @@ L, R, P, M_LS = builder.build()
 
 ```python
 import cubit
-import cubit_mesh_export
+import radia_cubit_mesh
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 
@@ -406,7 +406,7 @@ cubit.cmd("block 1 attribute index 2 6.0")   # height [mm]
 cubit.cmd("block 1 attribute index 3 5.8e7") # sigma [S/m]
 
 # Export
-cubit_mesh_export.export_Gmesh(cubit, "induction_coil.msh")
+cubit.cmd('radia export gmsh "induction_coil.msh" overwrite')
 ```
 
 #### Radia Python Script
@@ -450,7 +450,7 @@ print(f"Z @ 50 kHz: {Z:.4e} Ohm")
 
 #### Phase 3: Port Handling (Future)
 
-- [ ] Request nodeset support in `cubit_mesh_export`
+- [ ] Request nodeset support in the radia Cubit plugin
 - [ ] Implement port auto-detection from nodesets
 - [ ] Fallback to coordinate-based search
 

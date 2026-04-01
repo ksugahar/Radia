@@ -30,8 +30,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-# Add cubit_mesh_export to path
-import cubit_mesh_export
 
 print("=" * 70)
 print("1D Circular Coil Mesh for PEEC (Cubit -> GMSH)")
@@ -82,12 +80,12 @@ cubit.cmd("block 1 name 'conductor'")
 # Note: element type specification not needed for 1D edge elements
 print("    Block 1: 'conductor' (1D edge elements)")
 print("    NOTE: Ports will be defined by coordinate-based search in Python")
-print("          (nodeset/sideset not supported by cubit_mesh_export)")
+print("          (nodeset/sideset not supported by radia export gmsh)")
 
 # Export to GMSH v2.2 format
 output_file = "circular_coil_1d.msh"
 print(f"\n[6] Exporting to GMSH v2.2 format...")
-cubit_mesh_export.export_gmsh_v2(cubit, output_file)
+cubit.cmd(f'radia export gmsh "{output_file}" version 2 overwrite')
 print(f"    OK Created: {output_file}")
 print(f"    Format: GMSH v2.2 (1D edge elements with port nodes)")
 

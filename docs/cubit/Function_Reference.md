@@ -1,30 +1,53 @@
 # Function Reference
 
-Reference documentation for `cubit_mesh_export` module functions.
+Reference documentation for the Radia Cubit plugin mesh export commands and the `radia_cubit_mesh` module.
 
-## Export Functions Overview
+## Cubit Plugin Commands (Recommended)
+
+Native APREPRO commands — no Python, no block assignment required:
+
+| Command | Format | Block Required |
+|---------|--------|---------------|
+| `radia export nastran "f.bdf" [dimension <2\|3>] [nopyramid]` | Nastran BDF | **No** |
+| `radia export gmsh "f.msh" [version <2\|4>] [dimension <2\|3>]` | Gmsh v2.2/v4.1 | **No** |
+| `radia export meg "f.meg"` | MEG (ELF/MAGIC) | **No** |
+
+**Installation:** Copy `radia_cubit.ccm` to `<Cubit install>/bin/plugins/` or set `CUBIT_PLUGIN_DIR`.
+
+**Build:**
+
+```bash
+cmake -G "Visual Studio 17 2022" -A x64 \
+  -DCubit_DIR="C:/Program Files/Coreform Cubit 2025.3/cmake" \
+  ../src/cubit_plugin
+cmake --build . --config Release
+```
+
+---
+
+## Python API Functions (Legacy)
+
+> **Note**: The `cubit_mesh_export` Python module has been replaced by the `radia_cubit_mesh` C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`). For file exports, use the Cubit Plugin commands above (`cubit.cmd('radia export ...')`). For NGSolve mesh extraction, use `radia_cubit_mesh.extract_curved_mesh()`.
 
 | Function | Format | 1st Order | 2nd Order | 3rd+ Order |
 |----------|--------|-----------|-----------|------------|
-| `export_exodus()` | Exodus II (.exo) | Yes | Yes | Yes |
-| `export_NGSolveCurvedMesh()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
-| `export_Gmesh()` | Gmsh v2.2/v4.1 | Yes | Yes | No |
-| `export_Nastran()` | Nastran BDF | Yes | No | No |
-| `export_meg()` | MEG (ELF) | Yes | No | No |
+| `cubit.cmd('export mesh ...')` | Exodus II (.exo) | Yes | Yes | Yes |
+| `radia_cubit_mesh.extract_curved_mesh()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
+| `cubit.cmd('radia export gmsh ...')` | Gmsh v2.2/v4.1 | Yes | Yes | No |
+| `cubit.cmd('radia export nastran ...')` | Nastran BDF | Yes | No | No |
+| `cubit.cmd('radia export meg ...')` | MEG (ELF) | Yes | No | No |
+
+> Note: The `radia export` plugin commands require no block assignment. The `radia_cubit_mesh.extract_curved_mesh()` function requires blocks for NGSolve mesh extraction.
 
 ---
 
 ## Exodus II Export
 
 ```python
-export_exodus(cubit, FileName, large_model=False)
+cubit.cmd('export mesh "output.exo" overwrite')
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .exo file path |
-| `large_model` | bool | False | Use 64-bit integers for large meshes |
+Exodus II is Cubit's native format. Use Cubit's built-in export command directly.
 
 **Features**: All element types, 1st/2nd order, nodesets, sidesets, block definitions.
 
@@ -35,22 +58,9 @@ export_exodus(cubit, FileName, large_model=False)
 ## Gmsh Export
 
 ```python
-export_gmesh(cubit, FileName, version="2.2", DIM="auto")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')              # v2.2 (default)
+cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')    # v4.1
 ```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .msh file path |
-| `version` | str | "2.2" | Format version: "2.2" or "4.1" |
-| `DIM` | str | "auto" | Dimension mode (v4.1 only): "auto", "2D", or "3D" |
-
-**DIM Options** (v4.1 only):
-| Value | Description |
-|-------|-------------|
-| `"auto"` | Auto-detect (3D if volume elements exist) |
-| `"2D"` | Orient normals to +z, z-coordinates set to 0 |
-| `"3D"` | No normal orientation |
 
 ### v2.2 vs v4.1
 
@@ -69,27 +79,20 @@ export_gmesh(cubit, FileName, version="2.2", DIM="auto")
 ## Nastran BDF Export
 
 ```python
-export_nastran(cubit, FileName, DIM="3D", PYRAM=True)
+cubit.cmd('radia export nastran "mesh.bdf" dimension 3 overwrite')
 ```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .bdf file path |
-| `DIM` | str | "3D" | "3D" or "2D" |
-| `PYRAM` | bool | True | Pyramid handling |
 
 **DIM Options**:
 | Value | Elements |
 |-------|----------|
-| `"3D"` | CTETRA, CHEXA, CPENTA, CPYRAM |
-| `"2D"` | CTRIA3, CQUAD4 (normals to +z) |
+| `dimension 3` | CTETRA, CHEXA, CPENTA, CPYRAM |
+| `dimension 2` | CTRIA3, CQUAD4 (normals to +z) |
 
 **PYRAM Options**:
-| Value | Output | Use Case |
-|-------|--------|----------|
-| `True` | CPYRAM (5-node) | Standard Nastran |
-| `False` | Degenerate CHEXA | JMAG compatibility |
+| Option | Output | Use Case |
+|--------|--------|----------|
+| (default) | CPYRAM (5-node) | Standard Nastran |
+| `nopyramid` | Degenerate CHEXA | JMAG compatibility |
 
 **Limitation**: 1st order elements only.
 
@@ -100,22 +103,8 @@ export_nastran(cubit, FileName, DIM="3D", PYRAM=True)
 ## MEG Export (ELF/MAGIC)
 
 ```python
-export_meg(cubit, FileName, DIM='T', MGR2=None)
+cubit.cmd('radia export meg "mesh.meg" overwrite')
 ```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .meg file path |
-| `DIM` | str | 'T' | 'T', 'K', or 'R' |
-| `MGR2` | list | None | Spatial nodes [[x,y,z], ...] |
-
-**DIM Options**:
-| Value | Description | Coordinate System |
-|-------|-------------|-------------------|
-| `'T'` | 3D | X, Y, Z |
-| `'K'` | 2D Planar | X, Y (Z=0) |
-| `'R'` | Axisymmetric | R (X), Z |
 
 **Block Names = ELF Element Names**:
 | DIM | Tri | Quad | Tet | Wedge | Hex |
@@ -133,14 +122,13 @@ export_meg(cubit, FileName, DIM='T', MGR2=None)
 ## Netgen Export (with High-Order Curving)
 
 ```python
-export_NGSolveCurvedMesh(cubit, order=2, surface_only=False, ...)
+import radia_cubit_mesh
+ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
 | `order` | int | 2 | Curve order for high-order elements |
-| `surface_only` | bool | False | Export surface mesh only (for BEM/PEEC) |
 
 **Returns**: `netgen.meshing.Mesh` object with high-order curving applied.
 
@@ -148,8 +136,8 @@ export_NGSolveCurvedMesh(cubit, order=2, surface_only=False, ...)
 
 | Geometry | Recommended Approach |
 |----------|---------------------|
-| Simple shape (cylinder, sphere, etc.) | `export_NGSolveCurvedMesh(cubit, order=N)` |
-| 2nd order only (no Curve(3+)) | `export_Gmesh()` with 2nd-order blocks + `ReadGmsh` |
+| Simple shape (cylinder, sphere, etc.) | `radia_cubit_mesh.extract_curved_mesh(order=N)` |
+| 2nd order only (no Curve(3+)) | `cubit.cmd('radia export gmsh ...')` with 2nd-order blocks + `ReadGmsh` |
 
 [Full documentation](export_NetgenMesh.md) | [Examples](../../examples/cubit_mesh_export/netgen/)
 

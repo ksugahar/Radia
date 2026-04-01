@@ -10,8 +10,8 @@ Radia is a **monorepo** containing all components. Only 2 repositories exist:
 
 | Repository | Purpose |
 |-----------|---------|
-| **ksugahar/Radia** | Everything (C++, Python, MCP servers, sparsesolv) |
-| **ksugahar/netgen** | Netgen fork (CallbackGeometry + SetGeomInfo, PR pending) |
+| **ksugahar/Radia** | Everything (C++, Python, MCP servers, sparsesolv, Cubit plugin) |
+| **ksugahar/netgen** | Netgen fork (historical, no longer required for installation) |
 
 ```
 S:\Radia\01_GitHub\
@@ -36,8 +36,8 @@ S:\Radia\01_GitHub\
 
 **Installation**:
 ```bash
-python install_full.py          # Full (recommended): radia + netgen fork
-pip install radia               # Basic: without netgen fork
+pip install radia               # Python package (includes Cubit plugin binaries)
+radia-setup                     # Deploy Cubit plugin + panels (skip if no Cubit)
 ```
 
 **Deleted repositories** (integrated into Radia):
@@ -476,18 +476,26 @@ for (int i = 0; i < n; i++) { ... }
 
 **POLICY**: PyPI publishing is automatic. Push a version tag (`v*`) and CI/CD handles the rest.
 
-**Release Steps**:
+**Release Flow**:
 1. Bump version in `pyproject.toml` AND `src/radia/__init__.py` (must match)
 2. Update `CHANGELOG.md`
-3. Build locally: `Build.ps1 -Rebuild -Test` (verify tests pass)
-4. Commit, tag, and push:
+3. `git commit` (do NOT push yet)
+4. `/deploy` — build wheel, deploy to 100号機 & mdx via S: drive / base64
+5. Test on remote machines (Cubit panels, Mesh Evaluation, etc.)
+6. If tests pass: `git push origin main`
+7. Wait for CI to pass: `gh run list --limit 3`
+8. Tag and push (triggers PyPI publish):
    ```bash
-   git commit -m "Release vX.Y.Z: description"
    git tag vX.Y.Z
-   git push origin main vX.Y.Z
+   git push origin vX.Y.Z
    ```
-5. CI builds, tests, builds wheel, then Release workflow publishes to PyPI
-6. Monitor: `gh run list --limit 5`
+9. Monitor: `gh run list --workflow release.yml --limit 3`
+
+**General User Install** (after PyPI publish):
+```bash
+pip install radia
+radia-setup            # Cubit plugin + panels
+```
 
 **CI/CD Pipeline** (`.github/workflows/`):
 ```
@@ -558,25 +566,20 @@ Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regre
 
 Official PyPI ngsolve 6.2.2601+ includes: **MKL**, **PARDISO**, Periodic BC fix.
 
-**REQUIRED**: ksugahar/netgen fork for `export_curved()` (CallbackGeometry + SetGeomInfo).
-Standard pip netgen does NOT include these APIs.
+**Netgen fork is NOT required**. High-order mesh curving is handled by the
+Cubit C++ plugin (`radia_cubit_mesh.pyd`) which embeds CallbackGeometry directly.
+Standard upstream `netgen-mesher` (installed automatically by `pip install radia`) is sufficient.
 
 ```bash
-# Recommended: one-command full installation
-python install_full.py
-
-# Or manual:
-pip install radia  # NGSolve, sparsesolv, MKL, MCP servers
-pip install <wheel> --force-reinstall  # netgen fork from https://github.com/ksugahar/netgen/releases
+pip install radia      # Installs everything (NGSolve, MKL, Cubit plugin binaries)
+radia-setup            # Deploys Cubit plugin + panels
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
 
-For high-order mesh curving of externally imported meshes (from Cubit, GMSH),
-the SetGeomInfo API patch is needed. It is maintained in the `ksugahar/netgen` fork
-(branch `add-setgeominfo-api`). PR: https://github.com/NGSolve/netgen/pull/232
-
-When the PR is merged upstream, the fork becomes unnecessary.
+SetGeomInfo is no longer needed for typical workflows. The Cubit plugin handles
+UV coordinates and geometry projection internally via CallbackGeometry (embedded in C++).
+PR: https://github.com/NGSolve/netgen/pull/232 (historical reference)
 
 ### NGSolve Recommended Configuration
 
@@ -691,7 +694,7 @@ from gmsh_mesh_import import gmsh_to_radia
 core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
 ```
 
-Cubit workflow for journal files: define blocks before export, use `cubit_mesh_export` utilities.
+Cubit workflow for journal files: define blocks before export, use the radia Cubit plugin commands (`cubit.cmd('radia export ...')`).
 
 ### PEEC Conductor Mesh
 
@@ -1328,7 +1331,7 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 - All results returned as JSON on stdout (last line)
 - NGSolve must be imported BEFORE cubit (numpy DLL conflict avoidance)
 - `cubit.init()` banner suppressed via `contextlib.redirect_stderr`
-- `_auto_register_panels()` in `cubit_mesh_export.py` checks Qt availability before running
+- `_auto_register_panels()` in the panels module checks Qt availability before running
 - External Python detected via: `RADIA_PYTHON` env var > `py -3` > `python`
 - Cubit path detected via: `CUBIT_PATH` env var > platform-specific glob search
 
@@ -1438,11 +1441,11 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 
 ## Cubit Mesh Export Module
 
-The `cubit_mesh_export` module provides mesh export from Coreform Cubit to various formats.
+The radia Cubit plugin (`radia_cubit_mesh` C++ pybind11 module) provides mesh export from Coreform Cubit to various formats. The old `cubit_mesh_export.py` Python module has been replaced by `src/cubit_plugin/radia_cubit_pybind.cpp`.
 
 ### Module Location
 
-- **Main module**: `src/radia/cubit_mesh_export.py`
+- **C++ plugin**: `src/cubit_plugin/radia_cubit_pybind.cpp`
 - **BEM extractor**: `src/radia/cubit_bem_extractor.py`
 - **Panel installer**: `src/radia/install_panels.py`
 - **Toolbar panels**: `src/radia/panels/`
@@ -1450,10 +1453,9 @@ The `cubit_mesh_export` module provides mesh export from Coreform Cubit to vario
 - **Examples**: `examples/cubit/`
 - **Tests**: `tests/cubit/`
 
-### Coding Conventions (cubit_mesh_export)
+### Coding Conventions (radia_cubit_mesh)
 
-- **Indentation**: Tab characters (different from Radia's main codebase)
-- **Single module**: All export functions are in `cubit_mesh_export.py`
+- **C++ module**: Export functions are in `radia_cubit_pybind.cpp`
 
 ### Testing with System Python
 
@@ -1467,15 +1469,14 @@ Then run tests with system Python (which provides both NGSolve and Cubit access)
 python tests/cubit/test_xxx.py
 ```
 
-Test files use `sys.path` to locate the module:
+Test files import the module:
 ```python
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_export
+import radia_cubit_mesh
 ```
 
 **Important**: When both NGSolve and Cubit are used in the same script, NGSolve must be imported BEFORE adding Cubit to sys.path and importing cubit. This avoids DLL conflicts on Windows.
 
-### Important Notes (cubit_mesh_export)
+### Important Notes (radia_cubit_mesh)
 
 - Use `cubit.cmd()` to execute Cubit commands
 - Convert elements to 2nd order using `block X element type tetra10` (not `modify mesh volume X order 2`)

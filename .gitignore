@@ -31,6 +31,7 @@ radia-*/
 # Compiled Files
 # ============================================================================
 *.pyd
+*.ccm
 *.so
 *.dll
 *.dylib
@@ -244,6 +245,8 @@ rad.ObjBckgCF/
 # Generated mesh/visualization files (keep only if near corresponding .py)
 *.vol
 *.npz
+*.npy
+*.cub5
 *.msh
 !examples/**/gmsh_models/*.msh
 

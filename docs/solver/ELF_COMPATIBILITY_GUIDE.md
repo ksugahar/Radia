@@ -337,7 +337,7 @@ Without the transpose:
 
 Netgen generates tetrahedral meshes by default. For hexahedral meshes:
 1. Use Coreform Cubit to generate hex mesh
-2. Export via `cubit_mesh_export` to Netgen format
+2. Export via the radia Cubit plugin to Netgen format
 3. Import into Radia using `ObjHexahedron` with faces in ELF order
 
 Face ordering verification:

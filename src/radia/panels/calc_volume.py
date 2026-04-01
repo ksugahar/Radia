@@ -68,7 +68,7 @@ def calculate_volume(cub5_file, order):
     for high-order curving. No STEP files or OCC geometry needed.
     """
     # 1. Import NGSolve FIRST
-    from ngsolve import Integrate, CF
+    from ngsolve import Mesh as NGMesh, Integrate, CF
 
     # 2. Import cubit
     cubit = _setup_cubit()
@@ -106,13 +106,10 @@ def calculate_volume(cub5_file, order):
         }
 
     # 7. Export Cubit mesh with curving (ACIS kernel, no STEP needed)
-    radia_src = os.path.join(os.path.dirname(__file__), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    import cubit_mesh_export
+    from cubit_netgen_bridge import extract_curved_mesh
 
     try:
-        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
+        mesh = NGMesh(extract_curved_mesh(cubit, order=order))
     except Exception as e:
         return {
             "volumes": results,

@@ -53,7 +53,7 @@ def calculate_surface(cub5_file, order):
     Uses export_NGSolveCurvedMesh() which works directly with Cubit's ACIS kernel
     for high-order curving. No STEP files or OCC geometry needed.
     """
-    from ngsolve import Integrate, CF, BND
+    from ngsolve import Mesh as NGMesh, Integrate, CF, BND
 
     cubit = _setup_cubit()
     cubit.cmd(f'open "{cub5_file}"')
@@ -84,13 +84,10 @@ def calculate_surface(cub5_file, order):
                 "error": "Volumes are not meshed."}
 
     # Export to NGSolve mesh with curving (ACIS kernel, no STEP needed)
-    radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    if os.path.abspath(radia_src) not in sys.path:
-        sys.path.insert(0, os.path.abspath(radia_src))
-    import cubit_mesh_export
+    from cubit_netgen_bridge import extract_curved_mesh
 
     try:
-        mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=order)
+        mesh = NGMesh(extract_curved_mesh(cubit, order=order))
     except Exception as e:
         return {"volumes": results, "cad_total": cad_total,
                 "error": f"export_NGSolveCurvedMesh(order={order}) failed: {e}"}
