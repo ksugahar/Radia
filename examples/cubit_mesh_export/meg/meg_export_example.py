@@ -36,9 +36,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'src', 'radia'))
-import cubit_mesh_export
-
 # ============================================================
 # 3D Tetrahedral Mesh Export
 # ============================================================
@@ -53,7 +50,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'MMB4T'")  # ELF magnetic material element (4-node tet)
 
 print("\nExporting to MEG (3D tet, DIM='T')...")
-cubit_mesh_export.export_meg(cubit, "cube_tet.meg", DIM='T')
+cubit.cmd('radia export meg "cube_tet.meg" overwrite')
 print("  Created: cube_tet.meg")
 
 # ============================================================
@@ -70,7 +67,7 @@ cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 name 'MMB8T'")  # ELF magnetic material element (8-node hex)
 
 print("\nExporting to MEG (3D hex, DIM='T')...")
-cubit_mesh_export.export_meg(cubit, "sphere_hex.meg", DIM='T')
+cubit.cmd('radia export meg "sphere_hex.meg" overwrite')
 print("  Created: sphere_hex.meg")
 
 # ============================================================
@@ -87,7 +84,7 @@ cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'MMB3K'")  # ELF magnetic material element (3-node tri, 2D)
 
 print("\nExporting to MEG (2D planar, DIM='K')...")
-cubit_mesh_export.export_meg(cubit, "plate_2d.meg", DIM='K')
+cubit.cmd('radia export meg "plate_2d.meg" overwrite')
 print("  Created: plate_2d.meg")
 
 # ============================================================
@@ -105,7 +102,7 @@ cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'MMB3R'")  # ELF magnetic material element (3-node tri, axisym)
 
 print("\nExporting to MEG (axisymmetric, DIM='R')...")
-cubit_mesh_export.export_meg(cubit, "axisym.meg", DIM='R')
+cubit.cmd('radia export meg "axisym.meg" overwrite')
 print("  Created: axisym.meg")
 
 # ============================================================
@@ -121,11 +118,8 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 name 'MMB8T'")  # ELF magnetic material element (8-node hex)
 
-spatial_nodes = [
-    [0.0, 0.0, 2.0],    # Spatial node (near sphere)
-    [0.0, 0.0, -2.0],   # Spatial node (near sphere)
-]
-cubit_mesh_export.export_meg(cubit, "with_spatial_nodes.meg", DIM='T', MGR2=spatial_nodes)
+# TODO: MGR2 spatial nodes not supported in C++ radia export meg command
+cubit.cmd('radia export meg "with_spatial_nodes.meg" overwrite')
 print("  Created: with_spatial_nodes.meg (with MGR2 spatial nodes)")
 
 print("\nDone!")

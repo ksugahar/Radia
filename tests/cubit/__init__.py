@@ -1,1 +1,1 @@
-"""Tests for cubit_mesh_export package."""
+"""Tests for Cubit mesh export (radia_cubit_mesh plugin + cubit.cmd)."""

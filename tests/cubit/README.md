@@ -1,4 +1,4 @@
-# Tests for Coreform Cubit Mesh Export
+# Tests for Radia Cubit Plugin (radia_cubit_mesh)
 
 ## Running Tests
 
@@ -77,8 +77,7 @@ if cubit_path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_export
+import radia_cubit_mesh
 
 # Test code here...
 ```

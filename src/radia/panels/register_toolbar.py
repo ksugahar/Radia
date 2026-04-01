@@ -423,12 +423,11 @@ class ExportMeshDialog(QDialog):
 		file_row.addWidget(browse_btn)
 		layout.addLayout(file_row)
 
-		# --- Command preview ---
-		self.cmd_preview = QLabel("")
-		self.cmd_preview.setStyleSheet(
-			"color: #666; font-family: Consolas; font-size: 9pt;")
-		self.cmd_preview.setWordWrap(True)
-		layout.addWidget(self.cmd_preview)
+		# --- Command (editable, copyable) ---
+		layout.addWidget(QLabel("Command:"))
+		self.cmd_edit = QLineEdit()
+		self.cmd_edit.setFont(QFont("Consolas", 9))
+		layout.addWidget(self.cmd_edit)
 
 		# --- Buttons ---
 		btn_row = QHBoxLayout()
@@ -502,9 +501,9 @@ class ExportMeshDialog(QDialog):
 		return " ".join(parts), file_name
 
 	def _update_preview(self, _=None):
-		"""Update command preview label."""
+		"""Update command text box."""
 		cmd_str, _ = self._build_command()
-		self.cmd_preview.setText(cmd_str)
+		self.cmd_edit.setText(cmd_str)
 
 	def _browse_file(self):
 		idx = self.fmt_combo.currentIndex()
@@ -520,12 +519,15 @@ class ExportMeshDialog(QDialog):
 			QMessageBox.warning(self, "Error", "Please specify an output file name.")
 			return
 
-		cubit_cmd, file_name = self._build_command()
+		# Use the command from the text box (user may have edited it)
+		cubit_cmd = self.cmd_edit.text().strip()
+		if not cubit_cmd:
+			QMessageBox.warning(self, "Error", "Command is empty.")
+			return
 
 		try:
 			cubit.cmd(cubit_cmd)
 			QMessageBox.information(self, "Success", f"Exported: {file_name}")
-			self.accept()
 		except Exception as e:
 			QMessageBox.critical(self, "Export Error",
 				f"Command:\n  {cubit_cmd}\n\nError: {e}\n\n"

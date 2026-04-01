@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the `cubit_mesh_export` functions.
+This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the radia Cubit plugin export commands and the `radia_cubit_mesh` module.
 
 ## Creating 2nd Order Elements
 
@@ -85,7 +85,7 @@ print(f"get_expanded_connectivity: {len(nodes_2nd)} nodes")  # 10
 
 ## Impact on Export Functions
 
-### export_NGSolveCurvedMesh()
+### radia_cubit_mesh.extract_curved_mesh()
 
 Uses `get_connectivity()` to export **only 1st order elements**:
 
@@ -97,11 +97,12 @@ This is intentional! Netgen's `mesh.Curve(order)` generates high-order nodes fro
 ```python
 # Even with TET10, exports as 1st order for Netgen
 cubit.cmd("block 1 element type tetra10")
-ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, "geometry.step")
+import radia_cubit_mesh
+ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 # ngmesh contains 4-node tets, mesh.Curve() adds high-order nodes
 ```
 
-### export_Gmesh()
+### radia export gmsh
 
 Uses `get_expanded_connectivity()` to export 2nd order elements:
 
@@ -110,9 +111,9 @@ Uses `get_expanded_connectivity()` to export 2nd order elements:
 
 ## Design Philosophy
 
-### Why export_NGSolveCurvedMesh Uses 1st Order Base Mesh
+### Why extract_curved_mesh Uses 1st Order Base Mesh
 
-The design philosophy for `export_NGSolveCurvedMesh()`:
+The design philosophy for `radia_cubit_mesh.extract_curved_mesh()`:
 
 1. **Cubit's role**: Generate high-quality 1st order mesh (topology)
 2. **Netgen's role**: Add high-order nodes based on CAD geometry
@@ -133,8 +134,6 @@ if cubit_path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-import cubit_mesh_export
-
 # Create geometry and mesh
 cubit.cmd("reset")
 cubit.cmd("create sphere radius 1")
@@ -154,7 +153,7 @@ print(f"1st order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"1st order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 1st order Gmsh
-cubit_mesh_export.export_Gmesh(cubit, "sphere_1st.msh")
+cubit.cmd('radia export gmsh "sphere_1st.msh" overwrite')
 
 # Convert to 2nd order
 cubit.cmd("block 1 element type tetra10")
@@ -165,7 +164,7 @@ print(f"2nd order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"2nd order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 2nd order Gmsh
-cubit_mesh_export.export_Gmesh(cubit, "sphere_2nd.msh")
+cubit.cmd('radia export gmsh "sphere_2nd.msh" overwrite')
 ```
 
 Output:
@@ -180,11 +179,11 @@ Output:
 
 | Export Function | API Used | Respects Block Element Type |
 |----------------|----------|----------------------------|
-| `export_Gmesh()` | `get_expanded_connectivity()` | Yes - exports actual order |
-| `export_NGSolveCurvedMesh()` | `get_connectivity()` | No - curves via geometry |
-| `export_Nastran()` | `get_connectivity()` | No - 1st order only |
+| `radia export gmsh` | `get_expanded_connectivity()` | Yes - exports actual order |
+| `radia_cubit_mesh.extract_curved_mesh()` | `get_connectivity()` | No - curves via geometry |
+| `radia export nastran` | `get_connectivity()` | No - 1st order only |
 
 ## See Also
 
-- [export_NetgenMesh.md](export_NetgenMesh.md) - Cubit to Netgen mesh export with high-order curving (`export_NGSolveCurvedMesh`)
+- [export_NetgenMesh.md](export_NetgenMesh.md) - Cubit to Netgen mesh export with high-order curving (`radia_cubit_mesh.extract_curved_mesh`)
 - [Cubit Documentation](https://coreform.com/products/coreform-cubit/documentation/)

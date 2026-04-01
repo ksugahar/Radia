@@ -448,7 +448,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     # --- Workpiece surface mesh ---
     # Try Cubit export first (ACIS curved, order=2), fallback to OCC
     t0 = _time.perf_counter()
-    import cubit_mesh_export
+    from cubit_netgen_bridge import extract_curved_mesh
     try:
         # Mesh workpiece volumes in Cubit if not already meshed
         for vid in wp_vol_ids:
@@ -466,8 +466,8 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
         hidden = [v for v in all_vids if v not in wp_vol_ids]
         for v in hidden:
             cubit_mod.cmd(f'volume {v} visibility off')
-        wp_mesh = cubit_mesh_export.export_NGSolveCurvedMesh(
-            cubit_mod, order=2, surface_only=True, split_quads=True)
+        wp_mesh = Mesh(extract_curved_mesh(
+            cubit_mod, order=2, surface_only=True, split_quads=True))
         for v in hidden:
             cubit_mod.cmd(f'volume {v} visibility on')
         sys.stderr.write(f"BEM-SIBC: Cubit export OK (ACIS order=2)\n")

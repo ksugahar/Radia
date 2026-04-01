@@ -2,41 +2,25 @@
 
 Export mesh to ELF/MAGIC MEG format.
 
-## Synopsis
+## Cubit Plugin (Recommended)
 
-```python
-cubit_mesh_export.export_meg(cubit, FileName, DIM='T', MGR2=None)
+```
+radia export meg "mesh.meg"
 ```
 
-## Parameters
+No block assignment or `#!python` required.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface object |
-| `FileName` | str | required | Output file path for the .meg file |
-| `DIM` | str | `'T'` | Dimension mode (see below) |
-| `MGR2` | list | `None` | Optional spatial nodes for boundary conditions |
+**Installation:** Copy `radia_cubit.ccm` to `<Cubit install>/bin/plugins/`.
 
-### DIM Parameter Options
+---
 
-| Value | Description |
-|-------|-------------|
-| `'T'` | 3D mode (three-dimensional analysis) |
-| `'R'` | Axisymmetric mode (2D axisymmetric analysis) |
-| `'K'` | 2D mode (plane stress/strain analysis) |
+## Plugin Command
 
-### MGR2 Parameter
-
-Optional list of spatial node coordinates for additional boundary condition nodes:
 ```python
-MGR2 = [[x1, y1, z1], [x2, y2, z2], ...]
+cubit.cmd('radia export meg "mesh.meg" overwrite')
 ```
 
-These nodes are written as MGR2 records in the MEG file.
-
-## Returns
-
-Returns the `cubit` object for method chaining.
+> **Note**: The old `cubit_mesh_export.export_meg()` Python function has been replaced by the `radia export meg` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
 
 ## Supported Elements
 
@@ -103,7 +87,6 @@ MGEND
 
 ```python
 import cubit
-import cubit_mesh_export
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("create brick x 1 y 1 z 1")
@@ -111,7 +94,7 @@ cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 
-cubit_mesh_export.export_meg(cubit, "mesh.meg", DIM='T')
+cubit.cmd('radia export meg "mesh.meg" overwrite')
 ```
 
 ### 2D Planar Export
@@ -122,7 +105,7 @@ cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 
-cubit_mesh_export.export_meg(cubit, "plate.meg", DIM='K')
+cubit.cmd('radia export meg "plate.meg" overwrite')
 ```
 
 ### Axisymmetric Export
@@ -133,19 +116,7 @@ cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 
-cubit_mesh_export.export_meg(cubit, "axisym.meg", DIM='R')
-```
-
-### With Spatial Nodes
-
-```python
-# Define spatial nodes for boundary conditions
-spatial_nodes = [
-    [0.0, 0.0, 10.0],  # Far-field node 1
-    [0.0, 0.0, -10.0]  # Far-field node 2
-]
-
-cubit_mesh_export.export_meg(cubit, "mesh.meg", DIM='T', MGR2=spatial_nodes)
+cubit.cmd('radia export meg "axisym.meg" overwrite')
 ```
 
 ## Compatibility

@@ -1,5 +1,5 @@
 """
-Test export_Gmesh(version="2.2") function.
+Test Gmsh v2.2 export via cubit.cmd('radia export gmsh ...').
 
 Tests:
 1. 1st order elements export
@@ -18,10 +18,6 @@ if _cubit_path and _cubit_path not in sys.path:
 	sys.path.append(_cubit_path)
 
 import cubit
-
-# Add parent directory to path for cubit_mesh_export
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-import cubit_mesh_export
 
 # Initialize Cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
@@ -117,7 +113,7 @@ def test_1st_order_tet_mesh():
 	print(f"  Nodes per tet: {len(nodes)} (expected: 4)")
 
 	msh_file = "test_1st_order_tet.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 
 	# Parse and validate
 	result = parse_gmsh_file(msh_file)
@@ -163,7 +159,7 @@ def test_2nd_order_tet_mesh():
 	print(f"  Nodes per tet: {len(nodes)} (expected: 10)")
 
 	msh_file = "test_2nd_order_tet.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 
 	# Parse and validate
 	result = parse_gmsh_file(msh_file)
@@ -201,7 +197,7 @@ def test_hex_mesh():
 
 	# Test 1st order
 	msh_file = "test_hex_1st.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  1st order - Element types: {result['element_types']}")
 	assert GMSH_TYPES['HEX8'] in result['element_types'], "HEX8 not found!"
@@ -213,7 +209,7 @@ def test_hex_mesh():
 	cubit.cmd("block 2 element type quad8")
 
 	msh_file = "test_hex_2nd.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  2nd order - Element types: {result['element_types']}")
 	assert GMSH_TYPES['HEX20'] in result['element_types'], "HEX20 not found!"
@@ -249,7 +245,7 @@ def test_wedge_mesh():
 	print(f"  Cubit mesh: {num_wedges} wedges")
 
 	msh_file = "test_wedge.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  Element types: {result['element_types']}")
 
@@ -290,7 +286,7 @@ def test_pyramid_mesh():
 	print(f"  Cubit mesh: {num_pyramids} pyramids")
 
 	msh_file = "test_pyramid.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  Element types: {result['element_types']}")
 
@@ -335,7 +331,7 @@ def test_mixed_elements():
 	print(f"  Cubit mesh: {num_hexes} hexes, {num_tets} tets")
 
 	msh_file = "test_mixed.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 	result = parse_gmsh_file(msh_file)
 	print(f"  Element types: {result['element_types']}")
 
@@ -364,7 +360,7 @@ def test_gmsh_format_validation():
 	cubit.cmd("block 1 name 'solid'")
 
 	msh_file = "test_format.msh"
-	cubit_mesh_export.export_Gmesh(cubit, msh_file)
+	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
 
 	with open(msh_file, 'r') as f:
 		content = f.read()
@@ -391,7 +387,7 @@ def test_gmsh_format_validation():
 
 if __name__ == "__main__":
 	print("\n" + "=" * 60)
-	print("export_Gmesh(version='2.2') Test Suite")
+	print("Gmsh v2.2 Export Test Suite (via cubit.cmd)")
 	print("=" * 60)
 
 	all_passed = True

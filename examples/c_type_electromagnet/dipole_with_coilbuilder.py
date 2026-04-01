@@ -170,13 +170,9 @@ print(f"  Tets: {cubit.get_tet_count()}")
 # ============================================================
 print("\nStep 4: Export to NGSolve")
 
-# Force reload to get latest version (Cubit startup may load old version)
-import importlib
-import cubit_mesh_export
-if not hasattr(cubit_mesh_export, 'export_NGSolveCurvedMesh'):
-    importlib.reload(cubit_mesh_export)
+from cubit_netgen_bridge import extract_curved_mesh
 try:
-    mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
+    mesh = Mesh(extract_curved_mesh(cubit, order=2))
 except (ImportError, AttributeError):
     # Fallback: order=1 without CallbackGeometry (pip netgen)
     print("  Note: CallbackGeometry not available, using order=1")
@@ -184,7 +180,7 @@ except (ImportError, AttributeError):
     from netgen.csg import Pnt as NgPnt
     # Use basic Gmsh v2 export + ReadGmsh as fallback
     msh_tmp = os.path.join(work_dir, "_temp_dipole.msh")
-    cubit_mesh_export.export_Gmesh(cubit, msh_tmp, version="2.2")
+    cubit.cmd(f'radia export gmsh "{msh_tmp}" version 2 overwrite')
     from netgen.read_gmsh import ReadGmsh
     mesh = Mesh(ReadGmsh(msh_tmp))
     os.remove(msh_tmp)

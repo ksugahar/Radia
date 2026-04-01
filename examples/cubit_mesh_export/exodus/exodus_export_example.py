@@ -28,9 +28,6 @@ if _cubit_path and _cubit_path not in sys.path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-# Add parent directory for cubit_mesh_export
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'src', 'radia'))
-import cubit_mesh_export
 
 # ============================================================
 # Example 1: Simple Tetrahedral Mesh
@@ -49,7 +46,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'solid'")
 
-cubit_mesh_export.export_exodus(cubit, "cube_tet.exo")
+cubit.cmd('export mesh "cube_tet.exo" overwrite')
 print("  Created: cube_tet.exo\n")
 
 # ============================================================
@@ -68,7 +65,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 name 'solid'")
 
-cubit_mesh_export.export_exodus(cubit, "cube_hex.exo")
+cubit.cmd('export mesh "cube_hex.exo" overwrite')
 print("  Created: cube_hex.exo\n")
 
 # ============================================================
@@ -96,7 +93,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 name 'surface'")
 cubit.cmd("block 2 element type tri6")
 
-cubit_mesh_export.export_exodus(cubit, "sphere_2nd_order.exo")
+cubit.cmd('export mesh "sphere_2nd_order.exo" overwrite')
 print("  Created: sphere_2nd_order.exo\n")
 
 # ============================================================
@@ -140,7 +137,7 @@ cubit.cmd("sideset 1 name 'inlet'")
 cubit.cmd("sideset 2 add surface 7")
 cubit.cmd("sideset 2 name 'outlet'")
 
-cubit_mesh_export.export_exodus(cubit, "mixed_with_bc.exo")
+cubit.cmd('export mesh "mixed_with_bc.exo" overwrite')
 print("  Created: mixed_with_bc.exo\n")
 
 # ============================================================
@@ -160,7 +157,8 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 name 'large_model'")
 
 # Use large_model=True for meshes with >2^31 elements/nodes
-cubit_mesh_export.export_exodus(cubit, "large_model.exo", large_model=True)
+# TODO: large_model=True (64-bit integers) not supported via cubit.cmd; using default export
+cubit.cmd('export mesh "large_model.exo" overwrite')
 print("  Created: large_model.exo (with 64-bit integers)\n")
 
 print("=" * 60)

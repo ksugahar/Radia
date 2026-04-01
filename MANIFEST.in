@@ -13,8 +13,9 @@ recursive-include src/radia *.py
 # Include Cubit toolbar panels
 recursive-include src/radia/panels *.txt *.ui
 
-# Include compiled extension modules (.pyd files)
+# Include compiled extension modules (.pyd) and Cubit plugin (.ccm)
 recursive-include src/radia *.pyd
+recursive-include src/radia *.ccm
 
 # Include examples
 recursive-include examples *.py

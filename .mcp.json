@@ -11,6 +11,10 @@
     "mcp-server-cubit": {
       "command": "mcp-server-cubit",
       "args": []
+    },
+    "mcp-server-gmsh": {
+      "command": "mcp-server-gmsh",
+      "args": []
     }
   }
 }

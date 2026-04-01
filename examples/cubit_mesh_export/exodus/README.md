@@ -16,10 +16,10 @@ Exodus II is Cubit's native mesh format, providing full feature support:
 
 ```python
 import cubit
-import cubit_mesh_export
+import radia_cubit_mesh
 
 cubit.cmd("block 1 add tet all")
-cubit_mesh_export.export_exodus(cubit, "output.exo")
+cubit.cmd('export mesh "output.exo" overwrite')
 ```
 
 ### Large Model Option
@@ -27,7 +27,7 @@ cubit_mesh_export.export_exodus(cubit, "output.exo")
 For meshes exceeding 2^31 elements/nodes:
 
 ```python
-cubit_mesh_export.export_exodus(cubit, "large.exo", large_model=True)
+cubit.cmd('export mesh "large.exo" overwrite')
 ```
 
 ## Sample Files

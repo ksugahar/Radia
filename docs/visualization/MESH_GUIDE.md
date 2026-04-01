@@ -18,7 +18,7 @@ This guide consolidates the mesh generation workflows for Radia, covering GMSH, 
 |  Mesh file formats:                                              |
 |    - GMSH:   .msh -> NGSolve -> Radia                            |
 |    - Netgen:  .vol -> NGSolve -> Radia                            |
-|    - Cubit:  export_NGSolveCurvedMesh() -> NGSolve -> Radia       |
+|    - Cubit:  radia_cubit_mesh.extract_curved_mesh() -> NGSolve -> Radia       |
 |                                                                  |
 +-----------------------------------------------------------------+
 ```
@@ -76,7 +76,7 @@ In every standard mesh-generation workflow surface elements are created automati
 |----------|-----------------|--------|
 | **Netgen direct** (`geo.GenerateMesh()`) | Auto | Boundary mesh generated automatically |
 | **NGSolve `Mesh()`** | Auto | STEP/OCC import recognises boundaries |
-| **Cubit -> `export_NGSolveCurvedMesh()`** | Auto | Cubit sidesets are converted to boundary elements |
+| **Cubit -> `radia_cubit_mesh.extract_curved_mesh()`** | Auto | Cubit sidesets are converted to boundary elements |
 | **GMSH -> NGSolve** | Auto | `.msh` files include boundary elements |
 
 **In short, normal mesh generation requires no extra steps.**
@@ -324,7 +324,7 @@ Element2d.SetGeomInfo(vertex_index, u, v, trignum=0)
 ### 3.4 Code Example
 
 ```python
-import cubit_mesh_export
+import radia_cubit_mesh
 from netgen.occ import OCCGeometry, Box, Cylinder, gp_Pnt, gp_Ax2, gp_Dir
 from ngsolve import Mesh
 
@@ -334,8 +334,8 @@ cyl = Cylinder(gp_Ax2(gp_Pnt(0,0,-2), gp_Dir(0,0,1)), 0.3, 4)
 shape = brick - cyl
 
 # 2. Name faces (critical for correct mapping!)
-# NOTE: name_occ_faces() does not exist in cubit_mesh_export; face naming
-#       is handled internally by export_NGSolveCurvedMesh().
+# NOTE: name_occ_faces() does not exist in radia_cubit_mesh; face naming
+#       is handled internally by radia_cubit_mesh.extract_curved_mesh().
 
 # 3. Export STEP
 shape.WriteStep("geometry.step")
@@ -350,19 +350,19 @@ geo = OCCGeometry("geometry.step")
 # cubit.cmd("mesh volume all")
 
 # 6. Export with name-based mapping
-ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, geo)
+ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 
-# 7. High-order curving (export_NGSolveCurvedMesh handles SetGeomInfo automatically)
-ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
+# 7. High-order curving (extract_curved_mesh handles SetGeomInfo automatically)
+ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 mesh = Mesh(ngmesh)
 ```
 
 ### 3.5 Automatic Curving
 
-Use `export_NGSolveCurvedMesh()` which handles SetGeomInfo automatically:
+Use `radia_cubit_mesh.extract_curved_mesh()` which handles SetGeomInfo automatically:
 
 ```python
-ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)
+ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 ```
 
 ### 3.6 Accuracy Results
@@ -494,11 +494,11 @@ mesh.ngmesh.Save('with_surface.vol')
 
 ### 4.9 Cubit Meshes and Surface Elements
 
-When you define a **sideset** in Cubit and export via `export_NGSolveCurvedMesh()`, the sideset surfaces become surface elements:
+When you define a **sideset** in Cubit and export via `radia_cubit_mesh.extract_curved_mesh()`, the sideset surfaces become surface elements:
 
 ```python
 import cubit
-import cubit_mesh_export
+import radia_cubit_mesh
 from ngsolve import Mesh
 from netgen.gui import StartGUI
 
@@ -513,7 +513,7 @@ cubit.cmd("sideset 1 surface all")
 cubit.cmd("sideset 1 name 'boundary'")
 
 # Export to Netgen (surface elements included)
-ngmesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit)
+ngmesh = radia_cubit_mesh.extract_curved_mesh()
 mesh = Mesh(ngmesh)
 
 # Verify
@@ -624,7 +624,7 @@ mesh.Save('test.vol')
 |------|------|--------|----------------|
 | **CAD Import** | STEP/IGES direct | STEP/OCC | STEP/IGES direct |
 | **License** | Open source | Open source | Commercial |
-| **NGSolve Integration** | Direct .msh import | Native | `export_NGSolveCurvedMesh()` |
+| **NGSolve Integration** | Direct .msh import | Native | `radia_cubit_mesh.extract_curved_mesh()` |
 | **2D/Axisymmetric** | Supported | 3D only recommended | Supported |
 | **Surface Mesh** | `generate(2)` | Auto-generated | Auto via sideset |
 | **Volume Mesh** | Tet/Hex supported | Tet (Hex via external tools) | Tet/Hex supported |
@@ -683,7 +683,7 @@ gmsh.model.mesh.setRecombine(3, vol_tag)
 
 ### Q4: What if `mesh.Curve(order)` fails on an imported mesh?
 
-**A:** This happens because UV parametric coordinates (geominfo) are not set for externally imported meshes. Use the `SetGeomInfo` API (Section 3) to set these coordinates programmatically, or use the `cubit_mesh_export` helper functions for standard geometric shapes.
+**A:** This happens because UV parametric coordinates (geominfo) are not set for externally imported meshes. Use the `SetGeomInfo` API (Section 3) to set these coordinates programmatically, or use the `radia_cubit_mesh` helper functions for standard geometric shapes.
 
 ---
 
@@ -711,7 +711,7 @@ Combined model (electromagnets, etc.):
   Magnetic material + Conductor -> rad.ObjCnt() -> rad.Solve()
 
 High-order curving (Cubit):
-  OCC -> STEP -> Cubit -> export_NGSolveCurvedMesh() -> SetGeomInfo -> mesh.Curve(order)
+  OCC -> STEP -> Cubit -> radia_cubit_mesh.extract_curved_mesh() -> SetGeomInfo -> mesh.Curve(order)
 ```
 
 ### Key Points
@@ -726,7 +726,7 @@ High-order curving (Cubit):
 
 - Netgen PR #232: [NGSolve/netgen#232](https://github.com/NGSolve/netgen/pull/232)
 - SetGeomInfo Forum: [Feature Request - SetGeomInfo API](https://forum.ngsolve.org/t/feature-request-python-api-for-high-order-curving-of-externally-imported-meshes/3810)
-- cubit_mesh_export PyPI: [coreform-cubit-mesh-export](https://pypi.org/project/Coreform-Cubit-Mesh-Export/)
+- radia Cubit plugin: see `src/cubit_plugin/` (replaces the old `cubit_mesh_export` PyPI package)
 - [PEEC_INTEGRATION.md](PEEC_INTEGRATION.md) (to be created in the future)
 
 ---

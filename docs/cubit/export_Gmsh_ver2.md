@@ -2,22 +2,45 @@
 
 Export mesh to Gmsh format version 2.2.
 
-## Synopsis
+## Cubit Plugin (Recommended)
 
-```python
-cubit_mesh_export.export_Gmesh(cubit, FileName)
+The Radia Cubit plugin provides a native APREPRO command:
+
+```
+radia export gmsh "mesh.msh"
+radia export gmsh "mesh.msh" version 4
+radia export gmsh "mesh.msh" version 4 dimension 2
 ```
 
-## Parameters
+### Syntax
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface object |
-| `FileName` | str | required | Output file path for the .msh file |
+```
+radia export gmsh <"filename"> [version <2|4>] [dimension <2|3>] [overwrite]
+```
 
-## Returns
+### Options
 
-Returns the `cubit` object for method chaining.
+| Option | Default | Description |
+|--------|---------|-------------|
+| `version 2` | yes | Gmsh v2.2 format |
+| `version 4` | | Gmsh v4.1 format |
+| `dimension 3` | yes | 3D mode |
+| `dimension 2` | | 2D mode (orient surface normals to +z) |
+| `overwrite` | off | Overwrite existing file |
+
+**Advantages:** No block assignment, no `#!python`, pure APREPRO command.
+
+**Installation:** Copy `radia_cubit.ccm` to `<Cubit install>/bin/plugins/`.
+
+---
+
+## Python API (via Plugin Command)
+
+```python
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+```
+
+> **Note**: The old `cubit_mesh_export.export_Gmesh()` Python function has been replaced by the `radia export gmsh` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
 
 ## Supported Elements
 
@@ -66,15 +89,13 @@ This format is simpler than v4 but lacks geometry topology information.
 
 ```python
 import cubit
-import cubit_mesh_export
 
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
-cubit.cmd("block 1 add tet all")
 
-cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 ```
 
 ### 2nd Order Elements
@@ -86,7 +107,7 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
 
-cubit_mesh_export.export_Gmesh(cubit, "mesh_2nd_order.msh")
+cubit.cmd('radia export gmsh "mesh_2nd_order.msh" overwrite')
 ```
 
 ### Mixed Element Types
@@ -95,10 +116,8 @@ cubit_mesh_export.export_Gmesh(cubit, "mesh_2nd_order.msh")
 cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")  # Boundary triangles
 
-cubit_mesh_export.export_Gmesh(cubit, "mixed.msh")
+cubit.cmd('radia export gmsh "mixed.msh" overwrite')
 ```
 
 ## Comparison with v4

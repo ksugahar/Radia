@@ -87,7 +87,7 @@ for i, elem_type in enumerate(elem_types):
 print(f"    Triangles: {len(triangles)}")
 
 # Define port regions using coordinate-based selection
-# (Sideset not exported by cubit_mesh_export, use coordinates instead)
+# (Sideset not exported by radia export gmsh, use coordinates instead)
 print("\n[2] Defining port regions (coordinate-based)...")
 
 # Triangle ID -> nodes mapping

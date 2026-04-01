@@ -66,6 +66,23 @@ def prepare_package_data():
 
 	# radia_ngsolve is now pure Python (radia_ngsolve.py), no .pyd needed
 
+	# Copy Cubit plugin files (Build.ps1 normally handles this)
+	cubit_files = [
+		("src/cubit_plugin/build-pyd/radia_cubit_mesh.cp312-win_amd64.pyd",
+		 "radia_cubit_mesh.pyd"),
+		("src/cubit_plugin/build-test/radia_cubit.ccm",
+		 "radia_cubit.ccm"),
+	]
+	root = Path(__file__).parent
+	for src_rel, dst_name in cubit_files:
+		src = root / src_rel
+		dst = package_dir / dst_name
+		if src.exists() and not dst.exists():
+			shutil.copy2(src, dst)
+			print(f"Copied {src.name} to {package_dir}")
+		elif not dst.exists():
+			print(f"Warning: {dst_name} not found (Cubit features disabled)")
+
 	return package_dir
 
 # Prepare package data before setup
@@ -107,8 +124,9 @@ setup(
 	package_dir={"": "src"},
 	package_data={
 		"radia": [
-			"*.pyd",  # Include all .pyd files (_radia_pybind.pyd, radia_ngsolve.pyd, etc.)
-			"*.py",   # Include all Python utility modules
+			"*.pyd",  # C++ extensions (_radia_pybind.pyd, radia_cubit_mesh.pyd, etc.)
+			"*.ccm",  # Cubit plugin (radia_cubit.ccm)
+			"*.py",   # Python utility modules
 			# MKL DLLs are NOT bundled - installed via pip dependency (mkl>=2024.2.0)
 			"panels/**/*.py",   # Cubit toolbar panel scripts
 			"panels/**/*.ui",   # Cubit toolbar panel UI files

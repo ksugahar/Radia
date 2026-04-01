@@ -130,12 +130,14 @@ def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
         ngsolve.Mesh
     """
     setup_paths()
-    import cubit_mesh_export
+    from ngsolve import Mesh as NGMesh
+    from cubit_netgen_bridge import extract_curved_mesh
     if split_quads is None:
         split_quads = surface_only
-    return cubit_mesh_export.export_NGSolveCurvedMesh(
+    ng_mesh = extract_curved_mesh(
         cubit_mod, order=order, surface_only=surface_only,
         split_quads=split_quads)
+    return NGMesh(ng_mesh)
 
 
 # ============================================================

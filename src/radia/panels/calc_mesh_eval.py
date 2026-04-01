@@ -37,7 +37,7 @@ def evaluate_mesh(cub5_file, max_order=5):
 
     Returns dict with per-volume CAD values and per-order NGSolve results.
     """
-    from ngsolve import Integrate, CF, BND, VOL
+    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, VOL
 
     setup_paths()
     cubit = setup_cubit(cub5_file)
@@ -81,7 +81,7 @@ def evaluate_mesh(cub5_file, max_order=5):
     _log(f"MESH: {total_elems} elements")
 
     # Evaluate p=1..max_order
-    import cubit_mesh_export
+    from cubit_netgen_bridge import extract_curved_mesh
 
     orders = []
     for p in range(1, max_order + 1):
@@ -89,7 +89,14 @@ def evaluate_mesh(cub5_file, max_order=5):
         t0 = time.perf_counter()
 
         try:
-            mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=p)
+            if p == 1:
+                # p=1: linear mesh (no curving needed)
+                ng_mesh = extract_curved_mesh(cubit, order=2)
+                mesh = NGMesh(ng_mesh)
+                mesh.Curve(1)  # reset to linear
+            else:
+                ng_mesh = extract_curved_mesh(cubit, order=p)
+                mesh = NGMesh(ng_mesh)
         except Exception as e:
             orders.append({
                 "order": p,

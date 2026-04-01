@@ -31,7 +31,7 @@ if _cubit_path and _cubit_path not in sys.path:
 from ngsolve import Mesh, VTKOutput, Draw
 import netgen.gui
 import cubit
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
 
 print("=" * 60)
 print("QUARTER MODEL MESH: C-TYPE YOKE (6x6x6 Style)")
@@ -141,7 +141,7 @@ print(f"  Transformation applied (moved and rotated)")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen")
 
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=1)
+mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
 # Scale to meters via ngmesh
 ngmesh = mesh.ngmesh

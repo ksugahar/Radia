@@ -30,7 +30,7 @@ The overall workflow is simply:
 ```
 1. Create geometry in Cubit
 2. Mesh with Cubit
-3. mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+3. mesh = Mesh(extract_curved_mesh(cubit, order=3))
 4. Done — mesh is already curved, ready for NGSolve
 ```
 
@@ -82,7 +82,7 @@ WORKFLOW_EXPORT_CURVED = """
 ## Signature
 
 ```python
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3, surface_only=False, split_quads=False)
+mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=False, split_quads=False))
 ```
 
 ## Parameters
@@ -120,7 +120,8 @@ mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3, surface_only=F
 ## Example: Basic Usage
 
 ```python
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
 
 # Create and mesh geometry in Cubit
 cubit.cmd("create cylinder height 2 radius 0.5")
@@ -131,7 +132,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Export with curving — that's it!
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 
 # Verify
 from ngsolve import Integrate, CF
@@ -146,7 +147,7 @@ print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 
 ```python
 # Surface mesh for BEM inductance extraction
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3, surface_only=True)
+mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=True))
 ```
 
 ## Example: Any Geometry Shape
@@ -163,7 +164,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Works for any geometry — cylinder holes, fillets, chamfers, BSplines...
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ```
 
 ## Requirements
@@ -179,7 +180,8 @@ WORKFLOW_CYLINDER = """
 ## Step-by-Step
 
 ```python
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
 
@@ -199,7 +201,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd('block 2 name "boundary"')
 
 # Step 3: Export with curving (no STEP, no OCC, no SetGeomInfo!)
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 
 # Step 4: Verify
 expected_vol = math.pi * R**2 * H
@@ -219,7 +221,8 @@ WORKFLOW_SPHERE = """
 ## Step-by-Step
 
 ```python
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
 
@@ -236,7 +239,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Step 3: Export with curving
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 
 # Step 4: Verify
 expected_vol = 4/3 * math.pi * R**3
@@ -251,7 +254,8 @@ WORKFLOW_TORUS = """
 ## Step-by-Step
 
 ```python
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
 
@@ -269,7 +273,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Step 3: Export with curving
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 
 # Step 4: Verify
 expected_vol = 2 * math.pi**2 * R_MAJOR * R_MINOR**2
@@ -288,7 +292,8 @@ are handled automatically by the ACIS kernel.
 ## Example: Brick with Cylindrical Hole
 
 ```python
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
 
@@ -308,7 +313,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Step 3: Export with curving — works for any geometry
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 
 # Step 4: Verify
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
@@ -339,7 +344,8 @@ this is an alternative approach with excellent accuracy (~0.001%).
 ## Step-by-Step
 
 ```python
-import cubit_mesh_export
+from cubit_netgen_bridge import extract_curved_mesh
+from ngsolve import Mesh
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
@@ -356,7 +362,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")       # 2nd order boundary
 
 # Step 3: Export to Gmsh v2.2
-cubit_mesh_export.export_Gmesh(cubit, "mesh.msh")
+cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 
 # Step 4: Read into NGSolve
 mesh = Mesh(ReadGmsh("mesh.msh"))
@@ -553,7 +559,7 @@ the very top of the script, before adding Cubit to `sys.path` or importing `cubi
 DELETED_APIS = """
 # Deleted APIs (Replaced by export_NGSolveCurvedMesh)
 
-The following APIs have been **completely removed** from cubit_mesh_export.py.
+The following APIs have been **completely removed** along with cubit_mesh_export.py.
 Do NOT use them — they no longer exist.
 
 ## Removed Functions
@@ -593,8 +599,8 @@ kernel directly, without any STEP file exchange or OCC geometry.
 ```python
 # This code NO LONGER WORKS — all these functions are deleted
 geo = OCCGeometry("cylinder.step")
-ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)
-cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=R, height=H)
+ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)    # DELETED
+cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=R, height=H)  # DELETED
 mesh = Mesh(ngmesh)
 mesh.Curve(3)
 ```
@@ -602,7 +608,7 @@ mesh.Curve(3)
 ### New Code
 ```python
 # Single function call replaces everything
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ```
 
 ### Old Complex Workflow (REMOVED)
@@ -625,7 +631,7 @@ cubit.cmd("create brick x 2 y 2 z 2")
 cubit.cmd("create cylinder height 4 radius 0.3")
 cubit.cmd("subtract volume 2 from volume 1")
 # ... mesh and blocks ...
-mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)
+mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ```
 """
 
