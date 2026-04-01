@@ -20,6 +20,7 @@ All bindings now use pybind11 exclusively via _radia_pybind.pyd.
 
 from setuptools import setup, find_packages
 from pathlib import Path
+import os
 import shutil
 import sys
 
@@ -86,9 +87,16 @@ def prepare_package_data():
 	return package_dir
 
 # Prepare package data before setup
-if "sdist" not in sys.argv:
-	# Only copy files for binary distributions, not source distributions
-	package_dir = prepare_package_data()
+# Skip for editable installs (pyd already in src/radia/) and sdist
+# pip runs setup.py via build_meta without "editable" in sys.argv,
+# so we check if the pyd is already present and not locked.
+_skip_copy = "sdist" in sys.argv or os.environ.get("RADIA_SKIP_PYD_COPY")
+if not _skip_copy:
+	try:
+		package_dir = prepare_package_data()
+	except PermissionError:
+		print("Warning: .pyd files locked (editable install?). Skipping copy.")
+		package_dir = Path(__file__).parent / "src" / "radia"
 
 setup(
 	name="radia",
@@ -131,6 +139,8 @@ setup(
 			"panels/**/*.py",   # Cubit toolbar panel scripts
 			"panels/**/*.ui",   # Cubit toolbar panel UI files
 			"panels/**/*.txt",  # Cubit toolbar panel marker files
+			"resources/*.png",  # App icons
+			"resources/*.ico",  # Windows icons
 		],
 	},
 	entry_points={
