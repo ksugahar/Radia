@@ -110,11 +110,8 @@ def _clean_panels_json():
         if not isinstance(data, dict):
             return
         # Remove keys for dialogs that no longer exist
-        valid_dialogs = {
-            "ExportMeshDialog", "MeshEvaluationDialog", "PCBPEECDialog",
-            "InductanceDialog", "IHFEMDialog",
-            "ElectromagnetMSCDialog", "AccelMagnetDialog",
-        }
+        # (all Qt dialogs removed; standalone app uses radia_app.json)
+        valid_dialogs = set()
         stale = [k for k in data if k not in valid_dialogs]
         if stale:
             for k in stale:

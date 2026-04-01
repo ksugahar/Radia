@@ -42,6 +42,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gui = [
+    "PySide6>=6.5",
+]
 viz = [
     "pyvista>=0.40",
     "matplotlib>=3.5",
@@ -68,6 +71,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 
 [project.scripts]
 radia-setup = "radia.setup_cubit:main"
+radia-app = "radia.radia_app:main"
 cubit-install-panels = "radia.install_panels:main"
 mcp-server-radia = "radia.mcp_server.radia.server:main"
 mcp-server-ngsolve = "radia.mcp_server.ngsolve.server:main"

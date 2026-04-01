@@ -27,8 +27,13 @@ import sys
 
 
 # Marker comments to identify our block in .cubit file
-_MARKER_BEGIN = "## BEGIN cubit_mesh_export toolbar"
-_MARKER_END = "## END cubit_mesh_export toolbar"
+_MARKER_BEGIN = "## BEGIN radia toolbar"
+_MARKER_END = "## END radia toolbar"
+
+# Legacy markers (from older cubit_mesh_export package) — cleaned up on install
+_LEGACY_MARKERS = [
+	("## BEGIN cubit_mesh_export toolbar", "## END cubit_mesh_export toolbar"),
+]
 
 
 def find_cubit_bin():
@@ -144,37 +149,30 @@ def _get_panels_dir():
 def _generate_startup_script(panels_dir):
 	"""Generate startup.py with paths baked in (avoids __file__ issues in Cubit play).
 
-	Paths are determined at install time, not hardcoded in source.
+	The register_toolbar.py path is baked in at install time.
+	Cubit's site-packages path is detected dynamically at runtime
+	(version-independent: works across Cubit upgrades without reinstalling).
 	"""
 	register_path = os.path.join(panels_dir, "register_toolbar.py").replace("\\", "/")
 	startup_path = os.path.join(panels_dir, "startup.py")
 
-	# Find Cubit's site-packages for PyQt5/PySide6
-	cubit_site = find_cubit_site_packages()
-	if cubit_site:
-		cubit_site = cubit_site.replace("\\", "/")
-		site_line = f'_cs = r"{cubit_site}"; sys.path.insert(0, _cs) if _cs not in sys.path else None; '
-	else:
-		site_line = ""
-
 	# Write startup.py as a single-line script (Cubit play executes line by line)
 	# Uses try/except to silently skip if Qt is not available
 	# (e.g., when external Python opens a .cub5 and triggers .cubit replay)
+	#
+	# site-packages detection: find python*/lib/site-packages relative to
+	# cubit.py's directory.  This avoids baking in version-specific paths
+	# like ".../Cubit 2025.3/bin/python3/lib/site-packages".
 	content = (
-		f'import sys, os; '
-	)
-	if cubit_site:
-		cubit_site_fwd = cubit_site.replace("\\", "/")
-		content += (
-			f'_cs = r"{cubit_site_fwd}"; '
-			f'sys.path.insert(0, _cs) if _cs not in sys.path else None; '
-		)
-	content += (
+		f'import sys, os, glob; '
+		f'_cb = os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(sys.executable), "cubit.py"))) if not hasattr(sys, "_cubit_bin") else sys._cubit_bin; '
+		f'_sp = glob.glob(os.path.join(_cb, "python*", "lib", "site-packages")) + glob.glob(os.path.join(_cb, "python*", "lib", "python*", "site-packages")); '
+		f'sys.path.insert(0, _sp[0]) if _sp and _sp[0] not in sys.path else None; '
 		f'__file__ = r"{register_path}"; '
 		f"exec(\"try:\\n"
 		f" exec(open(r'{register_path}').read())\\n"
-		f"except:\\n"
-		f" pass\")\n"
+		f"except Exception as e:\\n"
+		f" import traceback; traceback.print_exc()\")\n"
 	)
 
 	with open(startup_path, "w", encoding="utf-8") as f:
@@ -195,14 +193,16 @@ def _build_startup_block(startup_script_path):
 
 
 def _remove_existing_block(lines):
-	"""Remove existing cubit_mesh_export block from lines."""
+	"""Remove existing toolbar block (current and legacy markers) from lines."""
+	# Collect all begin/end marker pairs to remove
+	markers = [(_MARKER_BEGIN, _MARKER_END)] + _LEGACY_MARKERS
 	result = []
 	inside_block = False
 	for line in lines:
-		if _MARKER_BEGIN in line:
+		if any(begin in line for begin, _ in markers):
 			inside_block = True
 			continue
-		if _MARKER_END in line:
+		if any(end in line for _, end in markers):
 			inside_block = False
 			continue
 		if not inside_block:
