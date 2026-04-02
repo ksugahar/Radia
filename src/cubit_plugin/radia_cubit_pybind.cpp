@@ -160,6 +160,15 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
                     if (pair.size() >= 2)
                         ei.segments.push_back({pair[0], pair[1]});
                 }
+                // dist (normalized curve parameter) per segment endpoint
+                if (d.contains("dists")) {
+                    auto dist_list = d["dists"].cast<py::list>();
+                    for (auto dd : dist_list) {
+                        auto dv = dd.cast<std::vector<double>>();
+                        if (dv.size() >= 2)
+                            ei.dists.push_back({dv[0], dv[1]});
+                    }
+                }
                 edges.push_back(std::move(ei));
             }
 

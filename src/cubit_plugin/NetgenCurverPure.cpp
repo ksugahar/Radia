@@ -189,29 +189,37 @@ bool NetgenCurverPure::build_netgen_mesh(
   //   surfnr1/2    : 0-based indices of the two adjacent surfaces
   //   epgeominfo[] : EdgePointGeomInfo with edgenr and u/v (set to 0 for now)
   //
+  // Match OCC .vol format exactly:
+  //   edgenr  si(0-based)  p1  p2  surfnr1(-1)  surfnr2(-1)  0  0  edgenr  dist0  0  dist1
   int edgenr = 1;
   for (auto& ei : edge_elements) {
-    for (auto& seg : ei.segments) {
+    for (size_t s = 0; s < ei.segments.size(); s++) {
+      auto& seg = ei.segments[s];
       auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
       auto it1 = cubit_nid_to_ng_pi_.find(seg[1]);
       if (it0 == cubit_nid_to_ng_pi_.end() || it1 == cubit_nid_to_ng_pi_.end())
         continue;
 
+      double dist0 = 0, dist1 = 0;
+      if (s < ei.dists.size()) {
+        dist0 = ei.dists[s][0];
+        dist1 = ei.dists[s][1];
+      }
+
       ng::Segment nseg;
       nseg[0] = it0->second;
       nseg[1] = it1->second;
-      nseg.si = ei.surfnr1;              // 1-based FD index
+      nseg.si = edgenr - 1;            // 0-based (matches OCC: edge descriptor index)
       nseg.edgenr = edgenr;
-      nseg.surfnr1 = ei.surfnr1 - 1;    // 0-based
-      nseg.surfnr2 = ei.surfnr2 - 1;    // 0-based
+      nseg.surfnr1 = -1;               // -1 = not set (matches OCC)
+      nseg.surfnr2 = -1;
 
-      // EdgePointGeomInfo: edgenr must match, u/v = 0 (not used for projection)
       nseg.epgeominfo[0].edgenr = edgenr;
-      nseg.epgeominfo[0].dist = 0;
+      nseg.epgeominfo[0].dist = dist0;
       nseg.epgeominfo[0].u = 0;
       nseg.epgeominfo[0].v = 0;
       nseg.epgeominfo[1].edgenr = edgenr;
-      nseg.epgeominfo[1].dist = 0;
+      nseg.epgeominfo[1].dist = dist1;
       nseg.epgeominfo[1].u = 0;
       nseg.epgeominfo[1].v = 0;
 
