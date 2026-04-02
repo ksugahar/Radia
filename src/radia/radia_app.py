@@ -211,6 +211,9 @@ class IHBEMTab(ModeTab):
         self._add_line("freq", "Frequency [Hz]:", "50000")
         self._add_line("sigma", "Sigma [S/m]:", "2e6")
         self._add_line("mu_r", "mu_r:", "100")
+        self._add_line("half_thickness", "Half thickness [m]:", "0.005")
+        self._add_combo("esim_geometry", "ESIM geometry:",
+                        ["local_curvature", "planar"])
         self._add_combo("material", "Material:", ["steel", "copper", "custom"])
         self._add_browse("bh_file", "BH file:",
                          filter_str="Text files (*.txt *.csv);;All (*)")
@@ -233,6 +236,8 @@ class IHBEMTab(ModeTab):
                     "--frequency", self._val("freq"),
                     "--sigma", self._val("sigma"),
                     "--mu-r", self._val("mu_r"),
+                    "--half-thickness", self._val("half_thickness"),
+                    "--esim-geometry", self._val("esim_geometry"),
                     "--material", self._val("material")]
         bh = self._val("bh_file")
         if bh:
@@ -256,11 +261,13 @@ class IHFEMTab(ModeTab):
         self._add_combo("solver", "Solver:",
                         ["pardiso", "bddc", "iccg", "ams"])
         self._add_spin("max_iter", "Max iterations:", 15, 1, 200)
+        self._add_browse("bh_file", "BH file:",
+                         filter_str="Text files (*.txt *.csv);;All (*)")
 
     def build_command(self, cub5):
         if not cub5:
             raise ValueError("No .cub5 file specified.")
-        return [_PYTHON, _calc_script("calc_fem_kelvin.py"),
+        cmd = [_PYTHON, _calc_script("calc_fem_kelvin.py"),
                 "--cub5", cub5,
                 "--order", self._val("order"),
                 "--fes-order", self._val("fes_order"),
@@ -275,23 +282,35 @@ class IHFEMTab(ModeTab):
                 "--solver", self._val("solver"),
                 "--max-iter", self._val("max_iter"),
                 "--msh-output", self._msh_output(cub5, "_fem")]
+        bh = self._val("bh_file")
+        if bh:
+            cmd += ["--bh-file", bh]
+        return cmd
 
 
 class EMFEMTab(ModeTab):
     def _build_ui(self):
+        self._add_combo("formulation", "Formulation:",
+                        ["omega", "a-phi"])
+        self._add_spin("order", "Curve order:", 2, 1, 5)
+        self._add_spin("fes_order", "FES order:", 1, 1, 5)
         self._add_browse("coil_script", "Coil script:",
                          filter_str="Python (*.py);;All (*)")
         self._add_combo("material", "Material:", ["steel", "custom"])
         self._add_line("mu_r", "mu_r:", "1000")
         self._add_browse("bh_file", "BH file:",
                          filter_str="Text files (*.txt *.csv);;All (*)")
+        self._add_browse("hys_file", "Hysteresis file:",
+                         filter_str="HYS files (*.hys);;All (*)")
         self._add_combo("solver", "Solver:",
                         ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"])
         self._add_line("ima", "IMA symmetry:", "",
                        placeholder="e.g. +x-z")
         self._add_line("tol", "Tolerance:", "1e-3")
         self._add_spin("max_iter", "Max iterations:", 100, 1, 9999)
+        self._add_spin("n_steps", "N steps:", 1, 1, 100)
         self._add_line("relax", "Relaxation:", "0.0")
+        self._add_combo("method", "Method:", ["Picard", "Newton"])
 
     def build_command(self, cub5):
         coil = self._val("coil_script")
@@ -299,12 +318,16 @@ class EMFEMTab(ModeTab):
             raise ValueError("No coil script specified.")
         solver_id = self._val("solver").split()[0]
         cmd = [_PYTHON, _calc_script("calc_accel_magnet.py"),
+               "--formulation", self._val("formulation"),
+               "--order", self._val("order"),
+               "--fes-order", self._val("fes_order"),
                "--coil-script", coil,
                "--material", self._val("material"),
                "--mu-r", self._val("mu_r"),
                "--solver", solver_id,
                "--tol", self._val("tol"),
                "--max-iter", self._val("max_iter"),
+               "--n-steps", self._val("n_steps"),
                "--relax", self._val("relax")]
         if cub5:
             cmd += ["--cub5", cub5]
@@ -314,6 +337,11 @@ class EMFEMTab(ModeTab):
         bh = self._val("bh_file")
         if bh:
             cmd += ["--bh-file", bh]
+        hys = self._val("hys_file")
+        if hys:
+            cmd += ["--hys-file", hys]
+        if self._val("method") == "Newton":
+            cmd += ["--newton"]
         cmd += ["--msh-output", self._msh_output(
             cub5 or coil, "_emfem")]
         return cmd
@@ -333,6 +361,7 @@ class EMMSCTab(ModeTab):
                        placeholder="e.g. +x-z")
         self._add_line("tol", "Tolerance:", "1e-3")
         self._add_spin("max_iter", "Max iterations:", 100, 1, 9999)
+        self._add_line("relax", "Relaxation:", "0.0")
         self._add_line("unit_scale", "Unit scale:", "0.001")
 
     def build_command(self, cub5):
@@ -347,6 +376,7 @@ class EMMSCTab(ModeTab):
                "--solver", solver_id,
                "--tol", self._val("tol"),
                "--max-iter", self._val("max_iter"),
+               "--relax", self._val("relax"),
                "--unit-scale", self._val("unit_scale")]
         if cub5:
             cmd += ["--cub5", cub5]
@@ -370,18 +400,24 @@ class PCBPEECTab(ModeTab):
         self._add_spin("n_freq", "N freq points:", 50, 1, 1000)
         self._add_combo("solver", "Solver:",
                         ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"])
+        self._add_line("spice_output", "SPICE output:", "",
+                       placeholder="e.g. output.cir")
 
     def build_command(self, cub5):
         inp = self._val("inp_file")
         if not inp:
             raise ValueError("No FastHenry .inp file specified.")
         solver_id = self._val("solver").split()[0]
-        return [_PYTHON, _calc_script("calc_pcb_peec.py"),
-                "--inp", inp,
-                "--freq-min", self._val("freq_min"),
-                "--freq-max", self._val("freq_max"),
-                "--n-freq", self._val("n_freq"),
-                "--solver-method", solver_id]
+        cmd = [_PYTHON, _calc_script("calc_pcb_peec.py"),
+               "--inp", inp,
+               "--freq-min", self._val("freq_min"),
+               "--freq-max", self._val("freq_max"),
+               "--n-freq", self._val("n_freq"),
+               "--solver-method", solver_id]
+        spice = self._val("spice_output")
+        if spice:
+            cmd += ["--spice-output", spice]
+        return cmd
 
 
 # ============================================================
