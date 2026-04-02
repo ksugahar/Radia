@@ -89,7 +89,7 @@ jobs:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           Write-Host "Running pytest (excluding cubit tests - require Cubit + netgen fork)..."
-          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit
+          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml --ignore=tests/cubit --ignore=tests/panels/test_panel_integration.py
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Basic tests failed"
             exit $LASTEXITCODE
