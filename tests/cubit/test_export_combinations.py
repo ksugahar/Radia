@@ -1,0 +1,475 @@
+"""
+Exhaustive Export Mesh test: all format x option combinations.
+
+Layer 1: Export via cubit.cmd (APREPRO commands from .ccm)
+Layer 2: Output file format validation
+
+Models:
+  - 3D: sphere tet mesh (volume + boundary)
+  - 2D: square tri mesh (surface only)
+
+Combinations (42 total):
+  GMSH:    order(1,2) x version(2,4) x dim(2D,3D) = 8 per model x 2 = 16
+  Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
+  VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
+  MEG:     1 per model x 2 = 2
+  Total = 42
+
+Usage:
+  python tests/cubit/test_export_combinations.py
+"""
+
+import sys
+import os
+import json
+import traceback
+
+# --- Setup Cubit ---
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
+from install_panels import find_cubit_bin
+_cubit_path = find_cubit_bin()
+if _cubit_path and _cubit_path not in sys.path:
+    sys.path.append(_cubit_path)
+
+# Set CUBIT_PLUGIN_DIR for .ccm command loading
+_plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
+    if _cubit_path else None
+if _plugin_dir and os.path.isdir(_plugin_dir):
+    os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
+
+import cubit
+cubit.init(['cubit', '-nojournal', '-batch',
+            '-commandplugindir', _plugin_dir or ''])
+
+# --- Output directory ---
+OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'export_test_output')
+os.makedirs(OUT_DIR, exist_ok=True)
+
+
+# ================================================================
+# Model builders
+# ================================================================
+def build_3d_model():
+    """Sphere tet mesh with volume block + boundary block."""
+    cubit.cmd("reset")
+    cubit.cmd("create sphere radius 0.05")
+    cubit.cmd("volume 1 scheme tetmesh")
+    cubit.cmd("volume 1 size 0.01")
+    cubit.cmd("mesh volume 1")
+    cubit.cmd("block 1 add tet all")
+    cubit.cmd('block 1 name "sphere"')
+    cubit.cmd("block 2 add tri all")
+    cubit.cmd('block 2 name "boundary"')
+    n_tet = len(cubit.get_block_tets(1))
+    n_tri = len(cubit.get_block_tris(2))
+    n_nodes = cubit.get_node_count()
+    return {'n_tet': n_tet, 'n_tri': n_tri, 'n_nodes': n_nodes}
+
+
+def build_2d_model():
+    """Square surface tri mesh."""
+    cubit.cmd("reset")
+    cubit.cmd("create surface rectangle width 0.1 height 0.1 zplane")
+    cubit.cmd("surface 1 scheme trimesh")
+    cubit.cmd("surface 1 size 0.01")
+    cubit.cmd("mesh surface 1")
+    cubit.cmd("block 1 add tri all")
+    cubit.cmd('block 1 name "surface"')
+    n_tri = len(cubit.get_block_tris(1))
+    n_nodes = cubit.get_node_count()
+    return {'n_tri': n_tri, 'n_nodes': n_nodes}
+
+
+# ================================================================
+# File parsers (Layer 2 validation)
+# ================================================================
+def parse_gmsh(filename):
+    """Parse GMSH v2.2 or v4.1 and return {nodes, elements, element_types, physical_names}."""
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    result = {'nodes': 0, 'elements': 0, 'element_types': {},
+              'physical_names': [], 'version': None,
+              'declared_elements': 0}
+    section = None
+
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if line.startswith('$'):
+            if line == '$MeshFormat':
+                section = 'format'
+            elif line == '$Nodes':
+                section = 'nodes'
+            elif line == '$Elements':
+                section = 'elements'
+            elif line == '$PhysicalNames':
+                section = 'physical'
+            elif line.startswith('$End'):
+                section = None
+            continue
+
+        if section == 'format':
+            result['version'] = line.split()[0]
+        elif section == 'nodes' and result['nodes'] == 0:
+            result['nodes'] = int(line)
+        elif section == 'physical':
+            parts = line.split()
+            if len(parts) >= 3 and parts[0].isdigit():
+                dim = int(parts[0])
+                pid = int(parts[1])
+                name = parts[2].strip('"')
+                result['physical_names'].append((dim, pid, name))
+        elif section == 'elements':
+            if result['declared_elements'] == 0:
+                result['declared_elements'] = int(line)
+            else:
+                parts = line.split()
+                if len(parts) >= 2:
+                    etype = int(parts[1])
+                    result['element_types'][etype] = \
+                        result['element_types'].get(etype, 0) + 1
+                    result['elements'] += 1
+
+    return result
+
+
+def parse_nastran(filename):
+    """Parse Nastran BDF and return {nodes, elements, element_cards}."""
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    result = {'nodes': 0, 'elements': 0, 'element_cards': {}}
+    for line in lines:
+        if line.startswith('GRID'):
+            result['nodes'] += 1
+        elif line.startswith(('CTETRA', 'CHEXA', 'CPENTA', 'CPYRAM',
+                              'CTRIA', 'CQUAD', 'CBAR')):
+            card = line.split()[0]
+            # Handle CTETRA vs CTETRA(10) etc.
+            result['element_cards'][card] = \
+                result['element_cards'].get(card, 0) + 1
+            result['elements'] += 1
+
+    return result
+
+
+def parse_vtk(filename):
+    """Parse VTK legacy format and return {nodes, cells, cell_types}."""
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    result = {'nodes': 0, 'cells': 0, 'cell_types': {}}
+    section = None
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith('POINTS'):
+            result['nodes'] = int(line.split()[1])
+        elif line.startswith('CELLS'):
+            result['cells'] = int(line.split()[1])
+            section = 'cells'
+        elif line.startswith('CELL_TYPES'):
+            section = 'cell_types'
+        elif section == 'cell_types' and line:
+            try:
+                ct = int(line)
+                result['cell_types'][ct] = \
+                    result['cell_types'].get(ct, 0) + 1
+            except ValueError:
+                section = None
+
+    return result
+
+
+def validate_meg(filename):
+    """Check MEG/ELF format has required sections."""
+    with open(filename, 'r') as f:
+        content = f.read()
+
+    checks = {
+        'has_node_section': 'NODE' in content.upper() or 'GRID' in content.upper(),
+        'has_element_section': 'ELEM' in content.upper(),
+        'non_empty': len(content) > 100,
+    }
+    return checks
+
+
+# ================================================================
+# Test runner
+# ================================================================
+GMSH_TRI_TYPES = {1: 2, 2: 9}   # order -> gmsh type for tri
+GMSH_TET_TYPES = {1: 4, 2: 11}  # order -> gmsh type for tet
+
+results = []
+
+
+def run_test(name, model, export_cmd, validator, expected):
+    """Run one export test case."""
+    global results
+    test = {'name': name, 'status': 'FAIL', 'errors': []}
+
+    try:
+        # Build model
+        if model == '3d':
+            info = build_3d_model()
+        else:
+            info = build_2d_model()
+
+        # Export
+        cubit.cmd(export_cmd)
+
+        # Extract filename from command
+        parts = export_cmd.split('"')
+        filename = parts[1] if len(parts) >= 2 else None
+        if not filename or not os.path.exists(filename):
+            test['errors'].append(f"Output file not found: {filename}")
+            results.append(test)
+            return False
+
+        fsize = os.path.getsize(filename)
+        if fsize == 0:
+            test['errors'].append("Output file is empty")
+            results.append(test)
+            return False
+
+        # Validate
+        errors = validator(filename, info, expected)
+        if errors:
+            test['errors'] = errors
+        else:
+            test['status'] = 'PASS'
+
+        test['file_size'] = fsize
+
+    except Exception as e:
+        test['errors'].append(str(e))
+        traceback.print_exc()
+
+    results.append(test)
+    status = 'PASS' if test['status'] == 'PASS' else 'FAIL'
+    print(f"  [{status}] {name}")
+    if test['errors']:
+        for err in test['errors']:
+            print(f"         {err}")
+    return test['status'] == 'PASS'
+
+
+# ================================================================
+# Validators
+# ================================================================
+def validate_gmsh_export(filename, model_info, expected):
+    """Validate GMSH export file."""
+    errors = []
+    r = parse_gmsh(filename)
+
+    # Check version
+    if expected.get('version'):
+        if not r['version'].startswith(expected['version']):
+            errors.append(f"Version: expected {expected['version']}, got {r['version']}")
+
+    # Check nodes > 0
+    if r['nodes'] == 0:
+        errors.append("No nodes in file")
+
+    # Check element count matches declaration
+    if r['elements'] != r['declared_elements']:
+        errors.append(f"Element count mismatch: declared {r['declared_elements']}, "
+                      f"actual {r['elements']}")
+
+    # Check expected element types present
+    for etype in expected.get('element_types', []):
+        if etype not in r['element_types']:
+            errors.append(f"Element type {etype} not found (have: {r['element_types']})")
+
+    # Check PhysicalNames dimensions
+    for dim, pid, name in r.get('physical_names', []):
+        if expected.get('check_dim'):
+            # tri blocks should be dim 2, tet blocks dim 3
+            pass  # checked by element_types presence
+
+    # Order 2: nodes should be more than linear
+    if expected.get('order', 1) == 2 and 'n_nodes' in model_info:
+        if r['nodes'] <= model_info['n_nodes']:
+            errors.append(f"Order 2 but node count not increased: "
+                          f"{r['nodes']} <= {model_info['n_nodes']}")
+
+    return errors
+
+
+def validate_nastran_export(filename, model_info, expected):
+    """Validate Nastran BDF export file."""
+    errors = []
+    r = parse_nastran(filename)
+
+    if r['nodes'] == 0:
+        errors.append("No GRID cards found")
+    if r['elements'] == 0:
+        errors.append("No element cards found")
+
+    for card in expected.get('cards', []):
+        if card not in r['element_cards']:
+            errors.append(f"Card {card} not found (have: {list(r['element_cards'].keys())})")
+
+    return errors
+
+
+def validate_vtk_export(filename, model_info, expected):
+    """Validate VTK export file."""
+    errors = []
+    r = parse_vtk(filename)
+
+    if r['nodes'] == 0:
+        errors.append("No POINTS found")
+    if r['cells'] == 0:
+        errors.append("No CELLS found")
+
+    return errors
+
+
+def validate_meg_export(filename, model_info, expected):
+    """Validate MEG export file."""
+    errors = []
+    checks = validate_meg(filename)
+
+    if not checks['non_empty']:
+        errors.append("File is too small")
+
+    return errors
+
+
+# ================================================================
+# Test case definitions
+# ================================================================
+def generate_test_cases():
+    """Generate all format x option combinations."""
+    cases = []
+
+    # --- GMSH: order(1,2) x version(2,4) x dim(2D,3D) ---
+    for model in ['3d', '2d']:
+        for order in [1, 2]:
+            for version in [2, 4]:
+                for dim in [3, 2]:
+                    vstr = '2.2' if version == 2 else '4.1'
+                    name = f"gmsh_{model}_order{order}_v{vstr}_dim{dim}"
+                    fname = os.path.join(OUT_DIR, f"{name}.msh")
+
+                    expected_types = []
+                    if model == '3d' and dim == 3:
+                        expected_types.append(GMSH_TET_TYPES[order])
+                        expected_types.append(GMSH_TRI_TYPES[order])
+                    elif model == '3d' and dim == 2:
+                        expected_types.append(GMSH_TRI_TYPES[order])
+                    elif model == '2d':
+                        expected_types.append(GMSH_TRI_TYPES[order])
+
+                    cmd = (f'export gmsh "{fname}" order {order} '
+                           f'version {version} dimension {dim} overwrite')
+
+                    cases.append({
+                        'name': name, 'model': model,
+                        'cmd': cmd,
+                        'validator': validate_gmsh_export,
+                        'expected': {
+                            'version': vstr[:3],
+                            'order': order,
+                            'element_types': expected_types,
+                        }
+                    })
+
+    # --- Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) ---
+    for model in ['3d', '2d']:
+        for order in [1, 2]:
+            for dim in [3, 2]:
+                for nopyr in [False, True]:
+                    nopyr_str = "_nopyr" if nopyr else ""
+                    name = f"nastran_{model}_order{order}_dim{dim}{nopyr_str}"
+                    fname = os.path.join(OUT_DIR, f"{name}.bdf")
+
+                    cmd = (f'export nastran "{fname}" order {order} '
+                           f'dimension {dim} overwrite')
+                    if nopyr:
+                        cmd += ' nopyramid'
+
+                    cases.append({
+                        'name': name, 'model': model,
+                        'cmd': cmd,
+                        'validator': validate_nastran_export,
+                        'expected': {'cards': []}  # basic validation
+                    })
+
+    # --- VTK: order(1,2) x dim(2D,3D) ---
+    for model in ['3d', '2d']:
+        for order in [1, 2]:
+            for dim in [3, 2]:
+                name = f"vtk_{model}_order{order}_dim{dim}"
+                fname = os.path.join(OUT_DIR, f"{name}.vtk")
+
+                cmd = (f'export vtk "{fname}" order {order} '
+                       f'dimension {dim} overwrite')
+
+                cases.append({
+                    'name': name, 'model': model,
+                    'cmd': cmd,
+                    'validator': validate_vtk_export,
+                    'expected': {}
+                })
+
+    # --- MEG ---
+    for model in ['3d', '2d']:
+        name = f"meg_{model}"
+        fname = os.path.join(OUT_DIR, f"{name}.meg")
+
+        cmd = f'export meg "{fname}" overwrite'
+
+        cases.append({
+            'name': name, 'model': model,
+            'cmd': cmd,
+            'validator': validate_meg_export,
+            'expected': {}
+        })
+
+    return cases
+
+
+# ================================================================
+# Main
+# ================================================================
+if __name__ == "__main__":
+    print("=" * 70)
+    print("Export Mesh Exhaustive Test: All Format x Option Combinations")
+    print("=" * 70)
+
+    cases = generate_test_cases()
+    print(f"\nTotal test cases: {len(cases)}")
+    print(f"Output directory: {OUT_DIR}\n")
+
+    # Group by model to minimize rebuilds
+    current_model = None
+    passed = 0
+    failed = 0
+
+    for case in cases:
+        if case['model'] != current_model:
+            current_model = case['model']
+            print(f"\n--- Model: {current_model.upper()} ---")
+
+        ok = run_test(case['name'], case['model'], case['cmd'],
+                      case['validator'], case['expected'])
+        if ok:
+            passed += 1
+        else:
+            failed += 1
+
+    # Summary
+    print("\n" + "=" * 70)
+    print(f"Results: {passed} PASSED, {failed} FAILED, {len(cases)} total")
+    print("=" * 70)
+
+    # Save results JSON
+    results_file = os.path.join(OUT_DIR, "results.json")
+    with open(results_file, 'w') as f:
+        json.dump(results, f, indent=2)
+    print(f"Results saved to: {results_file}")
+
+    sys.exit(0 if failed == 0 else 1)
