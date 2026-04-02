@@ -20,7 +20,13 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QProcess>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -98,6 +104,11 @@ void RadiaComp::setup_menus()
   a_meg->setStatusTip("Export mesh to MEG/ELF format (.meg)");
   QObject::connect(a_meg, SIGNAL(triggered()), handler, SLOT(export_meg()));
   menu_list.push_back(a_meg);
+
+  QAction* a_netgen = new QAction("Netgen Vol + Pkl...", handler);
+  a_netgen->setStatusTip("Export mesh as Netgen .vol (linear) + .pkl (curved)");
+  QObject::connect(a_netgen, SIGNAL(triggered()), handler, SLOT(export_netgen()));
+  menu_list.push_back(a_netgen);
 
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
@@ -232,13 +243,85 @@ void RadiaMenuHandler::export_vtk()     { run_export(ExportDialog::VTK); }
 void RadiaMenuHandler::export_meg()     { run_export(ExportDialog::MEG); }
 
 // ============================================================
+// Helpers for subprocess-based operations (Netgen export, Mesh Eval)
+// ============================================================
+static QString find_external_python();
+static QString find_calc_script(const QString &python, const QString &name);
+
+void RadiaMenuHandler::export_netgen()
+{
+  if (CubitInterface::get_volume_count() == 0) {
+    ensure_model();
+    if (CubitInterface::get_volume_count() == 0) return;
+  }
+
+  // Ask for order
+  bool ok;
+  int order = QInputDialog::getInt(nullptr, "Netgen Export",
+    "Curve order (2-5):", 3, 2, 5, 1, &ok);
+  if (!ok) return;
+
+  // Get output path
+  QString jouPath;
+  std::string jf = CubitInterface::get_current_journal_file();
+  if (!jf.empty()) jouPath = QString::fromStdString(jf);
+  if (jouPath.isEmpty()) jouPath = s_lastJouPath;
+
+  QString defaultDir = jouPath.isEmpty()
+    ? QDir::currentPath() : QFileInfo(jouPath).absolutePath();
+  QString baseName = jouPath.isEmpty()
+    ? "ExportedMesh" : QFileInfo(jouPath).completeBaseName();
+
+  QString volPath = defaultDir + "/" + baseName + ".vol";
+  QString pklPath = defaultDir + "/" + baseName + "_curved.pkl";
+  volPath.replace("\\", "/");
+  pklPath.replace("\\", "/");
+
+  // Save temp .cub5
+  QString cub5 = QDir::tempPath() + "/radia_netgen_export.cub5";
+  cub5.replace("\\", "/");
+  CubitInterface::cmd(("save cub5 \"" + cub5.toStdString() + "\" overwrite").c_str());
+
+  QString python = find_external_python();
+  QString script = find_calc_script(python, "calc_export_netgen");
+  if (script.isEmpty()) {
+    PRINT_ERROR("Cannot find calc_export_netgen.py.\n");
+    return;
+  }
+
+  PRINT_INFO("Exporting Netgen .vol + .pkl (order %d)...\n", order);
+
+  QProcess proc;
+  QStringList args;
+  if (python == "py") args << "-3";
+  args << script << "--cub5" << cub5 << "--order" << QString::number(order)
+       << "--vol" << volPath << "--pkl" << pklPath;
+
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  for (const QString &key : env.keys()) {
+    if (key.toUpper().contains("QT") || key.toUpper().contains("PYSIDE"))
+      env.remove(key);
+  }
+  proc.setProcessEnvironment(env);
+
+  proc.start(python, args);
+  if (!proc.waitForFinished(300000)) {
+    PRINT_ERROR("Netgen export timed out.\n");
+    return;
+  }
+  if (proc.exitCode() != 0) {
+    PRINT_ERROR("Netgen export failed:\n%s\n",
+      proc.readAllStandardError().left(2000).constData());
+    return;
+  }
+
+  PRINT_INFO("Exported:\n  %s (linear)\n  %s (curved, order %d)\n",
+    volPath.toStdString().c_str(), pklPath.toStdString().c_str(), order);
+}
+
+// ============================================================
 // Mesh Evaluation — subprocess to calc_mesh_eval.py (p=1..5)
 // ============================================================
-#include <QMessageBox>
-#include <QProcess>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
 
 // Find external Python 3.12 (not Cubit's 3.10)
 static QString find_external_python()
