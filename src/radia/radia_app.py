@@ -33,7 +33,7 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PANELS_DIR = os.path.join(_THIS_DIR, "panels")
 _RESOURCES_DIR = os.path.join(_THIS_DIR, "resources")
 _PYTHON = sys.executable
-_SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".cubit", "radia_app.json")
+_SETTINGS_PATH = os.path.join(os.path.expanduser("~"), ".radia", "radia_app.json")
 
 
 def _icon_path():
