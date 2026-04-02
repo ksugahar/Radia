@@ -92,9 +92,28 @@ def parse_gmsh(filename):
     result = {'nodes': 0, 'elements': 0, 'element_types': {},
               'physical_names': [], 'version': None,
               'declared_elements': 0}
-    section = None
 
-    for i, line in enumerate(lines):
+    # Detect version first
+    for line in lines:
+        if line.strip().startswith('4.1') or line.strip().startswith('4.0'):
+            result['version'] = line.strip().split()[0]
+            break
+        elif line.strip().startswith('2.2') or line.strip().startswith('2.'):
+            result['version'] = line.strip().split()[0]
+            break
+
+    is_v4 = result['version'] is not None and result['version'].startswith('4')
+
+    if is_v4:
+        return _parse_gmsh_v41(lines, result)
+    else:
+        return _parse_gmsh_v22(lines, result)
+
+
+def _parse_gmsh_v22(lines, result):
+    """Parse GMSH v2.2 format."""
+    section = None
+    for line in lines:
         line = line.strip()
         if line.startswith('$'):
             if line == '$MeshFormat':
@@ -116,10 +135,8 @@ def parse_gmsh(filename):
         elif section == 'physical':
             parts = line.split()
             if len(parts) >= 3 and parts[0].isdigit():
-                dim = int(parts[0])
-                pid = int(parts[1])
-                name = parts[2].strip('"')
-                result['physical_names'].append((dim, pid, name))
+                result['physical_names'].append(
+                    (int(parts[0]), int(parts[1]), parts[2].strip('"')))
         elif section == 'elements':
             if result['declared_elements'] == 0:
                 result['declared_elements'] = int(line)
@@ -130,6 +147,67 @@ def parse_gmsh(filename):
                     result['element_types'][etype] = \
                         result['element_types'].get(etype, 0) + 1
                     result['elements'] += 1
+    return result
+
+
+def _parse_gmsh_v41(lines, result):
+    """Parse GMSH v4.1 format."""
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        if line == '$MeshFormat':
+            i += 1
+            result['version'] = lines[i].strip().split()[0]
+            i += 1
+            continue
+
+        if line == '$PhysicalNames':
+            i += 1
+            n = int(lines[i].strip())
+            i += 1
+            for _ in range(n):
+                parts = lines[i].strip().split()
+                if len(parts) >= 3:
+                    result['physical_names'].append(
+                        (int(parts[0]), int(parts[1]), parts[2].strip('"')))
+                i += 1
+            continue
+
+        if line == '$Nodes':
+            i += 1
+            header = lines[i].strip().split()
+            num_blocks = int(header[0])
+            total_nodes = int(header[1])
+            result['nodes'] = total_nodes
+            i += 1
+            for _ in range(num_blocks):
+                bh = lines[i].strip().split()
+                num_block_nodes = int(bh[3])
+                i += 1
+                i += num_block_nodes  # skip node tags
+                i += num_block_nodes  # skip node coords
+            continue
+
+        if line == '$Elements':
+            i += 1
+            header = lines[i].strip().split()
+            num_blocks = int(header[0])
+            total_elems = int(header[1])
+            result['declared_elements'] = total_elems
+            i += 1
+            for _ in range(num_blocks):
+                bh = lines[i].strip().split()
+                etype = int(bh[2])
+                num_block_elems = int(bh[3])
+                i += 1
+                result['element_types'][etype] = \
+                    result['element_types'].get(etype, 0) + num_block_elems
+                result['elements'] += num_block_elems
+                i += num_block_elems  # skip element lines
+            continue
+
+        i += 1
 
     return result
 
