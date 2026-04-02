@@ -29,7 +29,9 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QTextEdit>
+#include <QHeaderView>
+#include <QLabel>
+#include <QTableWidget>
 #include <QApplication>
 #include <QClipboard>
 #include <QVBoxLayout>
@@ -417,39 +419,51 @@ void RadiaMenuHandler::mesh_volume()
   double cad_v = r["cad_vol_total"].toDouble();
   double cad_a = r["cad_area_total"].toDouble();
 
-  // Build TSV table (tab-separated, copy-pasteable to Excel)
-  QString tsv;
-  tsv += QString("CAD Volume\t%1\tm^3\n").arg(cad_v, 0, 'e', 6);
-  tsv += QString("CAD Area\t%1\tm^2\n\n").arg(cad_a, 0, 'e', 6);
-  tsv += "p\tVolume\tV err [%]\tArea\tA err [%]\n";
-
   QJsonArray orders = r["orders"].toArray();
-  for (int i = 0; i < orders.size(); i++) {
-    QJsonObject o = orders[i].toObject();
-    if (o.contains("error")) {
-      tsv += QString("%1\t%2\n").arg(o["order"].toInt()).arg(o["error"].toString());
-      continue;
-    }
-    tsv += QString("%1\t%2\t%3\t%4\t%5\n")
-      .arg(o["order"].toInt())
-      .arg(o["ng_volume"].toDouble(), 0, 'e', 6)
-      .arg(o["vol_error_pct"].toDouble(), 0, 'f', 5)
-      .arg(o["ng_area"].toDouble(), 0, 'e', 6)
-      .arg(o["area_error_pct"].toDouble(), 0, 'f', 5);
-  }
+  int nrows = orders.size();
 
-  // Show in a dialog with selectable/copyable QTextEdit
+  // --- Dialog with QTableWidget ---
   QDialog dlg;
   dlg.setWindowTitle("Mesh Evaluation - Volume / Surface Area");
-  dlg.setMinimumSize(550, 300);
+  dlg.setMinimumSize(620, 320);
   QVBoxLayout *layout = new QVBoxLayout(&dlg);
 
-  QTextEdit *text = new QTextEdit(&dlg);
-  text->setReadOnly(true);
-  text->setFont(QFont("Consolas", 10));
-  text->setPlainText(tsv);
-  layout->addWidget(text);
+  // CAD reference labels
+  QLabel *cadLabel = new QLabel(
+    QString("CAD Volume: %1 m^3     CAD Area: %2 m^2")
+      .arg(cad_v, 0, 'e', 6).arg(cad_a, 0, 'e', 6), &dlg);
+  layout->addWidget(cadLabel);
 
+  // Table
+  QTableWidget *table = new QTableWidget(nrows, 5, &dlg);
+  table->setHorizontalHeaderLabels({"p", "Volume", "V err [%]", "Area", "A err [%]"});
+  table->horizontalHeader()->setStretchLastSection(true);
+  table->verticalHeader()->setVisible(false);
+  table->setSelectionMode(QAbstractItemView::ContiguousSelection);
+  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+  for (int i = 0; i < nrows; i++) {
+    QJsonObject o = orders[i].toObject();
+    int p = o["order"].toInt();
+    table->setItem(i, 0, new QTableWidgetItem(QString::number(p)));
+
+    if (o.contains("error")) {
+      table->setItem(i, 1, new QTableWidgetItem(o["error"].toString()));
+    } else {
+      table->setItem(i, 1, new QTableWidgetItem(
+        QString::number(o["ng_volume"].toDouble(), 'e', 6)));
+      table->setItem(i, 2, new QTableWidgetItem(
+        QString::number(o["vol_error_pct"].toDouble(), 'f', 5)));
+      table->setItem(i, 3, new QTableWidgetItem(
+        QString::number(o["ng_area"].toDouble(), 'e', 6)));
+      table->setItem(i, 4, new QTableWidgetItem(
+        QString::number(o["area_error_pct"].toDouble(), 'f', 5)));
+    }
+  }
+  table->resizeColumnsToContents();
+  layout->addWidget(table);
+
+  // Buttons: OK + Copy
   QDialogButtonBox *buttons = new QDialogButtonBox(
     QDialogButtonBox::Ok | QDialogButtonBox::Save, &dlg);
   buttons->button(QDialogButtonBox::Save)->setText("Copy to Clipboard");
@@ -457,7 +471,16 @@ void RadiaMenuHandler::mesh_volume()
 
   QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
   QObject::connect(buttons->button(QDialogButtonBox::Save), &QPushButton::clicked,
-    [&tsv]() {
+    [&]() {
+      QString tsv = "p\tVolume\tV err [%]\tArea\tA err [%]\n";
+      for (int i = 0; i < nrows; i++) {
+        for (int j = 0; j < 5; j++) {
+          if (j > 0) tsv += "\t";
+          QTableWidgetItem *item = table->item(i, j);
+          tsv += item ? item->text() : "";
+        }
+        tsv += "\n";
+      }
       QApplication::clipboard()->setText(tsv);
     });
 
