@@ -27,12 +27,13 @@ std::shared_ptr<ng::Mesh> NetgenCurverPure::build(
     ProjectFunc project_func,
     NormalFunc  normal_func,
     int order,
-    EdgeProjectFunc edge_project_func)
+    EdgeProjectFunc edge_project_func,
+    const std::vector<EdgeInfo>& edge_elements)
 {
   if (order < 2)
     throw std::runtime_error("NetgenCurverPure: order must be >= 2");
 
-  if (!build_netgen_mesh(node_coords, node_ids, vol_elems, surfaces))
+  if (!build_netgen_mesh(node_coords, node_ids, vol_elems, surfaces, edge_elements))
     throw std::runtime_error("NetgenCurverPure: failed to build Netgen mesh");
 
   if (!attach_callback_geometry(project_func, normal_func, (int)surfaces.size(),
@@ -52,7 +53,8 @@ bool NetgenCurverPure::build_netgen_mesh(
     const std::vector<double>& node_coords,
     const std::vector<int>&    node_ids,
     const std::vector<VolumeElement>& vol_elems,
-    const std::vector<SurfaceInfo>& surfaces)
+    const std::vector<SurfaceInfo>& surfaces,
+    const std::vector<EdgeInfo>& edge_elements)
 {
   ng_mesh_ = std::make_shared<ng::Mesh>();
   ng_mesh_->SetDimension(3);
@@ -175,6 +177,47 @@ bool NetgenCurverPure::build_netgen_mesh(
         break;
       }
     }
+  }
+
+  // Add 1D segment elements on geometry edges (curves).
+  // Required for BuildCurvedElements to call PointBetweenEdge for edge snapping.
+  //
+  // Key fields in ng::Segment:
+  //   [0], [1]     : PointIndex of endpoints
+  //   si           : FaceDescriptor index (1-based) of one adjacent surface
+  //   edgenr       : unique edge identifier (1-based, same for all segs on one curve)
+  //   surfnr1/2    : 0-based indices of the two adjacent surfaces
+  //   epgeominfo[] : EdgePointGeomInfo with edgenr and u/v (set to 0 for now)
+  //
+  int edgenr = 1;
+  for (auto& ei : edge_elements) {
+    for (auto& seg : ei.segments) {
+      auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
+      auto it1 = cubit_nid_to_ng_pi_.find(seg[1]);
+      if (it0 == cubit_nid_to_ng_pi_.end() || it1 == cubit_nid_to_ng_pi_.end())
+        continue;
+
+      ng::Segment nseg;
+      nseg[0] = it0->second;
+      nseg[1] = it1->second;
+      nseg.si = ei.surfnr1;              // 1-based FD index
+      nseg.edgenr = edgenr;
+      nseg.surfnr1 = ei.surfnr1 - 1;    // 0-based
+      nseg.surfnr2 = ei.surfnr2 - 1;    // 0-based
+
+      // EdgePointGeomInfo: edgenr must match, u/v = 0 (not used for projection)
+      nseg.epgeominfo[0].edgenr = edgenr;
+      nseg.epgeominfo[0].dist = 0;
+      nseg.epgeominfo[0].u = 0;
+      nseg.epgeominfo[0].v = 0;
+      nseg.epgeominfo[1].edgenr = edgenr;
+      nseg.epgeominfo[1].dist = 0;
+      nseg.epgeominfo[1].u = 0;
+      nseg.epgeominfo[1].v = 0;
+
+      ng_mesh_->AddSegment(nseg);
+    }
+    edgenr++;
   }
 
   ng_mesh_->UpdateTopology();
