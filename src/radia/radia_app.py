@@ -186,6 +186,30 @@ class ModeTab(QWidget):
                 pass
 
 
+class VolumeTab(ModeTab):
+    """Volume integration with high-order curving."""
+
+    def _build_ui(self):
+        self._add_spin("order", "Curve order:", 3, 1, 5)
+        self._add_line("maxh", "Max mesh size (STEP):", "0.01",
+                       placeholder="Only used for STEP files")
+
+    def build_command(self, model_path):
+        if not model_path:
+            raise ValueError("No model file specified.")
+        order = self._val("order")
+        ext = os.path.splitext(model_path)[1].lower()
+        if ext in (".step", ".stp"):
+            return [_PYTHON, _calc_script("calc_volume.py"),
+                    "--step", model_path,
+                    "--order", order,
+                    "--maxh", self._val("maxh")]
+        else:
+            return [_PYTHON, _calc_script("calc_volume.py"),
+                    "--cub5", model_path,
+                    "--order", order]
+
+
 class MeshEvalTab(ModeTab):
     def _build_ui(self):
         self._add_spin("max_order", "Max polynomial order:", 5, 1, 10)
@@ -391,6 +415,7 @@ class PCBPEECTab(ModeTab):
 class RadiaApp(QMainWindow):
 
     TAB_CLASSES = [
+        ("Volume",     VolumeTab),
         ("Mesh Eval",  MeshEvalTab),
         ("IH (BEM)",   IHBEMTab),
         ("IH (FEM)",   IHFEMTab),
@@ -425,7 +450,7 @@ class RadiaApp(QMainWindow):
         model_row = QHBoxLayout()
         model_row.addWidget(QLabel("Model:"))
         self._cub5 = QLineEdit(cub5_path)
-        self._cub5.setPlaceholderText(".cub5 or .step file")
+        self._cub5.setPlaceholderText(".cub5 (Cubit) or .step (OCC) file")
         model_row.addWidget(self._cub5, 1)
         browse_btn = QPushButton("Browse...")
         browse_btn.clicked.connect(self._browse_model)
