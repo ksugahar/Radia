@@ -131,6 +131,38 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         nx, ny, nz = surf.normal_at((x, y, z))
         return (nx, ny, nz)
 
+    # --- Phase D2: Build edge (curve) projection callback ---
+    # Map (surfnr1, surfnr2) -> Cubit curve ID for edge projection
+    curve_ids = list(cubit_mod.parse_cubit_list("curve", "all"))
+    edge_map = {}  # (surfnr1, surfnr2) -> cubit curve object
+    for cid in curve_ids:
+        parent_surfs = list(cubit_mod.parse_cubit_list("surface", f"in curve {cid}"))
+        if len(parent_surfs) >= 2:
+            # Map surface pair (as FD indices) to curve
+            for i in range(len(parent_surfs)):
+                for j in range(i + 1, len(parent_surfs)):
+                    si = parent_surfs[i]
+                    sj = parent_surfs[j]
+                    # FD index = 1-based position in surface_ids list
+                    if si in surface_ids and sj in surface_ids:
+                        fi = surface_ids.index(si) + 1
+                        fj = surface_ids.index(sj) + 1
+                        crv = cubit_mod.curve(cid)
+                        edge_map[(fi, fj)] = crv
+                        edge_map[(fj, fi)] = crv
+
+    def edge_project_func(surfnr1, surfnr2, x, y, z):
+        key = (surfnr1, surfnr2)
+        crv = edge_map.get(key)
+        if crv is not None:
+            xp, yp, zp = crv.closest_point_trimmed((x, y, z))
+            return (xp, yp, zp)
+        # Fallback: project onto surfnr1
+        sid = surface_ids[surfnr1 - 1]
+        surf = surface_objects[sid]
+        xp, yp, zp = surf.closest_point_trimmed((x, y, z))
+        return (xp, yp, zp)
+
     # --- Phase E: Call C++ for high-order curving ---
     # For surface_only: pass empty volume elements to avoid
     # ClearVolumeElements() segfault in NGSolve Mesh() constructor.
@@ -139,5 +171,6 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         node_coords, node_ids, ve, surface_data,
         project_func, normal_func,
         order=order, surface_only=False, split_quads=split_quads,
+        edge_project_func=edge_project_func if edge_map else None,
     )
     return ng_mesh
