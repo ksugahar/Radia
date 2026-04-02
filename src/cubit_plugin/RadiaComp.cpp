@@ -378,9 +378,10 @@ QString ExportDialog::cubitCommand() const
       break;
     }
     case MEG: {
-      // Extract T/K/R from combo text
-      QChar megDim = mDimension->currentText().at(0);
-      cmd = QString("export meg \"%1\" dimension %2").arg(file).arg(megDim);
+      // Map combo selection to keyword
+      QChar c = mDimension->currentText().at(0);
+      QString kw = (c == 'K') ? "twod" : (c == 'R') ? "axisymmetric" : "threed";
+      cmd = QString("export meg \"%1\" %2").arg(file).arg(kw);
       break;
     }
   }
