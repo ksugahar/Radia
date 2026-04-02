@@ -1,15 +1,15 @@
 """
-Register a single "Launch Radia App" button in Coreform Cubit.
+Register Radia menus in Coreform Cubit.
 
-This script runs inside Cubit on startup (via ~/.cubit) and adds
-a toolbar button that saves the current model as .cub5 and launches
-the standalone Radia app (Python 3.12 + tkinter).
+This script runs inside Cubit on startup (via ~/.cubit) and adds:
+  - Radia-NGSolve: save .cub5 -> launch standalone PySide6 app
+  - Reload Panels: re-read this script (debug)
 
 Architecture:
   Cubit GUI (Python 3.10 + PySide6):
     1 button -> save .cub5 -> subprocess.run([python3.12, radia_app.py, path.cub5])
 
-  Radia App (Python 3.12 + tkinter):
+  Radia App (Python 3.12 + PySide6):
     All settings, computation, and result display
 """
 
@@ -60,9 +60,9 @@ def _find_external_python():
     """Find external Python 3.12 (not Cubit's bundled Python 3.10).
 
     Search order:
-      1. RADIA_PYTHON environment variable
-      2. py -3 (Windows Python Launcher)
-      3. python (from PATH, skip if Cubit's Python)
+      1. RADIA_PYTHON env var
+      2. py -3 launcher (Windows)
+      3. python in PATH (if not Cubit's)
     """
     radia_py = os.environ.get("RADIA_PYTHON")
     if radia_py and os.path.isfile(radia_py):
@@ -147,13 +147,16 @@ _last_jou_dir = [None]
 def _ensure_model():
     """Ensure Cubit has a model. If empty, prompt for .jou file.
 
-    Returns the .jou directory if a journal was loaded, or cwd if model
-    already existed. Returns None if the user cancelled or .jou failed.
+    Returns the working directory, or None if user cancelled.
     """
     if _has_model():
         return _last_jou_dir[0] or os.getcwd()
 
     start_dir = _last_jou_dir[0] or os.getcwd()
+    try:
+        from PySide6.QtWidgets import QFileDialog
+    except ImportError:
+        from PyQt5.QtWidgets import QFileDialog
     jou_path, _ = QFileDialog.getOpenFileName(
         None, "Select Journal File",
         start_dir,
@@ -167,61 +170,65 @@ def _ensure_model():
     cubit.cmd(f'play "{jou_path}"')
 
     if not _has_model():
-        QMessageBox.warning(
-            None, "Warning",
-            "Journal file did not create any geometry."
-        )
+        print("WARNING: Journal file did not create any geometry.")
         return None
 
     return jou_dir
 
 
 def _launch_radia_app():
-    """Save current Cubit model as .cub5 and launch Radia app."""
-    ext_python = _find_external_python()
-    if not ext_python:
-        QMessageBox.critical(
-            None, "Error",
-            "External Python 3.12 not found.\n\n"
-            "Set RADIA_PYTHON environment variable or install Python 3.12."
-        )
-        return
+    """Save current Cubit model as .cub5 and launch Radia app.
 
-    work_dir = _ensure_model()
-    if work_dir is None:
-        return
+    Two-phase:
+      1. No model -> prompt for .jou, play, save .cub5, STOP.
+         User clicks again to launch.
+      2. Model exists -> save .cub5, launch subprocess.
+    """
+    try:
+        # Phase 1: no model -> load .jou and save .cub5 only
+        if not _has_model():
+            work_dir = _ensure_model()
+            if work_dir is None:
+                return
+            cub5_path = os.path.join(work_dir, "radia_cubit_model.cub5")
+            cub5_path = cub5_path.replace("\\", "/")
+            cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
+            print(f"Model saved: {cub5_path}")
+            print("Click Radia-NGSolve again to launch the analysis app.")
+            return
 
-    # Save .cub5 in the working directory
-    cub5_path = os.path.join(work_dir, "radia_cubit_model.cub5")
-    cub5_path = cub5_path.replace("\\", "/")
-    cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
+        # Phase 2: model exists -> save and launch
+        work_dir = _last_jou_dir[0] or os.getcwd()
+        cub5_path = os.path.join(work_dir, "radia_cubit_model.cub5")
+        cub5_path = cub5_path.replace("\\", "/")
+        cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
 
-    # Launch standalone app (non-blocking)
-    # Clean environment: remove Cubit's Qt paths to avoid PySide6 conflicts
-    env = os.environ.copy()
-    for key in list(env.keys()):
-        if "QT" in key.upper() or "PYSIDE" in key.upper():
-            del env[key]
-    # Remove Cubit bin from PATH to avoid DLL conflicts
-    cubit_bin = os.path.dirname(ext_python)  # not Cubit's bin
-    cubit_install = os.environ.get("CUBIT_DIR", "")
-    if cubit_install:
-        env["PATH"] = ";".join(
-            p for p in env.get("PATH", "").split(";")
-            if "Cubit" not in p and "cubit" not in p
-        )
+        ext_python = _find_external_python()
+        if not ext_python:
+            print("ERROR: Python 3.12 not found. Set RADIA_PYTHON env var.")
+            return
 
-    radia_app = _find_radia_app()
-    if radia_app:
+        radia_app = _find_radia_app()
+        if not radia_app:
+            print("ERROR: radia_app.py not found. Is radia installed? (pip install radia)")
+            return
+
+        # Clean environment to avoid Qt5/Qt6 and MKL DLL conflicts
+        env = os.environ.copy()
+        for key in list(env.keys()):
+            if "QT" in key.upper() or "PYSIDE" in key.upper():
+                del env[key]
+
         cmd = [ext_python, radia_app, cub5_path]
-    else:
-        cmd = [ext_python, "-m", "radia.radia_app", cub5_path]
-    subprocess.Popen(cmd, cwd=work_dir, env=env)
+        print(f"Launching: {' '.join(cmd)}")
+        subprocess.Popen(cmd, cwd=work_dir, env=env)
 
+    except Exception as e:
+        print(f"ERROR in _launch_radia_app: {e}")
 
 
 def register_menu():
-    """Register three top-level menus in Cubit's menu bar."""
+    """Register menus in Cubit's menu bar."""
     main_window = _find_main_window()
     if main_window is None:
         return
