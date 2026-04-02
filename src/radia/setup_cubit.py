@@ -6,10 +6,11 @@ After `pip install radia`, run:
     radia-setup --all-users        # all user profiles (admin)
 
 This command:
-  1. Copies radia_cubit.ccm to Cubit plugins/ (C++ SDK plugin)
-  2. Copies radia_cubit_mesh.pyd to Cubit plugins/ (high-order mesh curving)
-  3. Copies Netgen DLLs (nglib.dll, ngcore.dll) to Cubit plugins/
-  4. Registers toolbar panels in ~/.cubit startup
+  1. Copies radia_cubit.ccm to Cubit plugins/ (APREPRO export commands)
+  2. Copies radia_cubit.ccl to Cubit bin/ (Qt5 GUI Export Mesh menu)
+  3. Copies radia_cubit_mesh.pyd to Cubit plugins/ (high-order mesh curving)
+  4. Copies Netgen DLLs (nglib.dll, ngcore.dll) to Cubit plugins/
+  5. Registers toolbar panels in ~/.cubit startup
 """
 
 import glob
@@ -176,7 +177,14 @@ def setup_cubit(all_users=False):
     else:
         print(f"  [--] radia_cubit.ccm not found in {radia_dir}")
 
-    # 2. Copy .pyd
+    # 2. Copy .ccl (GUI component -> bin/, NOT plugins/)
+    ccl_src = radia_dir / "radia_cubit.ccl"
+    if ccl_src.is_file():
+        dst = cubit_bin / "radia_cubit.ccl"
+        shutil.copy2(ccl_src, dst)
+        print(f"  [OK] radia_cubit.ccl -> {dst}")
+
+    # 3. Copy .pyd
     pyd_src = radia_dir / "radia_cubit_mesh.pyd"
     if pyd_src.is_file():
         dst = plugins_dir / "radia_cubit_mesh.cp312-win_amd64.pyd"
@@ -185,7 +193,7 @@ def setup_cubit(all_users=False):
     else:
         print(f"  [--] radia_cubit_mesh.pyd not found in {radia_dir}")
 
-    # 3. Copy Netgen DLLs
+    # 4. Copy Netgen DLLs
     nglib, ngcore = _find_netgen_dlls()
     if nglib:
         for dll in (nglib, ngcore):
