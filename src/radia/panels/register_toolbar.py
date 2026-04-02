@@ -197,12 +197,26 @@ def _launch_radia_app():
     cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
 
     # Launch standalone app (non-blocking)
+    # Clean environment: remove Cubit's Qt paths to avoid PySide6 conflicts
+    env = os.environ.copy()
+    for key in list(env.keys()):
+        if "QT" in key.upper() or "PYSIDE" in key.upper():
+            del env[key]
+    # Remove Cubit bin from PATH to avoid DLL conflicts
+    cubit_bin = os.path.dirname(ext_python)  # not Cubit's bin
+    cubit_install = os.environ.get("CUBIT_DIR", "")
+    if cubit_install:
+        env["PATH"] = ";".join(
+            p for p in env.get("PATH", "").split(";")
+            if "Cubit" not in p and "cubit" not in p
+        )
+
     radia_app = _find_radia_app()
     if radia_app:
         cmd = [ext_python, radia_app, cub5_path]
     else:
         cmd = [ext_python, "-m", "radia.radia_app", cub5_path]
-    subprocess.Popen(cmd, cwd=work_dir)
+    subprocess.Popen(cmd, cwd=work_dir, env=env)
 
 
 
