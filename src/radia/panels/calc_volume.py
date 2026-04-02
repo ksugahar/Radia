@@ -133,6 +133,10 @@ def calculate_volume(cub5_file, order, output_pkl=None):
     mesh = NGMesh(ng_mesh)
     total_vol = Integrate(CF(1), mesh)
 
+    # Surface area
+    from ngsolve import BND
+    total_area = Integrate(CF(1), mesh, BND)
+
     # Per-material volumes
     mats = mesh.GetMaterials()
     for i, mat in enumerate(mats):
@@ -147,6 +151,7 @@ def calculate_volume(cub5_file, order, output_pkl=None):
         "volumes": results,
         "cad_total": cad_total,
         "ngsolve_total": total_vol,
+        "ngsolve_area": total_area,
         "order": order,
     }
     if output_pkl:
@@ -190,6 +195,9 @@ def calculate_volume_step(step_file, order, maxh=0.01, output_pkl=None):
     mesh = NGMesh(ng)
     total_vol = Integrate(CF(1), mesh)
 
+    from ngsolve import BND
+    total_area = Integrate(CF(1), mesh, BND)
+
     # Per-material volumes
     mats = mesh.GetMaterials()
     for i, mat in enumerate(mats):
@@ -204,6 +212,7 @@ def calculate_volume_step(step_file, order, maxh=0.01, output_pkl=None):
         "volumes": results,
         "cad_total": cad_total,
         "ngsolve_total": total_vol,
+        "ngsolve_area": total_area,
         "order": order,
         "maxh": maxh,
     }
