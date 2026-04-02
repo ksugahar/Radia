@@ -1,0 +1,20 @@
+# Test high-order mesh export with NetgenCurver
+# Creates a sphere octant with tet mesh, exports at order 2
+
+reset
+
+# Create a sphere octant (1/8 sphere)
+brick x 10 y 10 z 10
+sphere radius 10
+intersect volume all
+
+# Mesh with tets
+volume all scheme tetmesh
+volume all size 3
+mesh volume all
+
+# Test exports
+export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o1.bdf" order 1 overwrite
+export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o2.bdf" order 2 overwrite
+export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o1.msh" order 1 overwrite
+export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_sphere_o2.msh" order 2 overwrite
