@@ -62,11 +62,16 @@ def _remove_cubit_site_packages():
 
 
 
-def calculate_volume(cub5_file, order):
+def calculate_volume(cub5_file, order, output_pkl=None):
     """Calculate volume using NGSolve integration.
 
-    Uses export_NGSolveCurvedMesh() which works directly with Cubit's ACIS kernel
-    for high-order curving. No STEP files or OCC geometry needed.
+    Uses extract_curved_mesh() with Cubit's ACIS kernel for high-order curving.
+
+    Args:
+        cub5_file: Path to Cubit .cub5 model file.
+        order: Polynomial order for curving (1-5).
+        output_pkl: If set, save curved netgen.Mesh to this pickle file.
+                    Uses SetGeometry(None) to detach ACIS callbacks before pickle.
     """
     # 1. Import NGSolve FIRST
     from ngsolve import Mesh as NGMesh, Integrate, CF
@@ -110,14 +115,22 @@ def calculate_volume(cub5_file, order):
     from cubit_netgen_bridge import extract_curved_mesh
 
     try:
-        mesh = NGMesh(extract_curved_mesh(cubit, order=order))
+        ng_mesh = extract_curved_mesh(cubit, order=order)
     except Exception as e:
         return {
             "volumes": results,
             "cad_total": cad_total,
-            "error": f"export_NGSolveCurvedMesh(order={order}) failed: {e}",
+            "error": f"extract_curved_mesh(order={order}) failed: {e}",
         }
 
+    # 8. Save curved mesh to pickle if requested
+    if output_pkl:
+        import pickle
+        ng_mesh.SetGeometry(None)  # detach ACIS callbacks for serialization
+        with open(output_pkl, "wb") as f:
+            pickle.dump(ng_mesh, f, protocol=2)
+
+    mesh = NGMesh(ng_mesh)
     total_vol = Integrate(CF(1), mesh)
 
     # Per-material volumes
@@ -130,15 +143,18 @@ def calculate_volume(cub5_file, order):
             except Exception:
                 results[i]["ngsolve_volume"] = None
 
-    return {
+    result = {
         "volumes": results,
         "cad_total": cad_total,
         "ngsolve_total": total_vol,
         "order": order,
     }
+    if output_pkl:
+        result["output_pkl"] = output_pkl
+    return result
 
 
-def calculate_volume_step(step_file, order, maxh=0.01):
+def calculate_volume_step(step_file, order, maxh=0.01, output_pkl=None):
     """Calculate volume from STEP file using OCC + Netgen.
 
     No Cubit needed. Uses NGSolve OCC for geometry, Netgen for meshing,
@@ -151,9 +167,8 @@ def calculate_volume_step(step_file, order, maxh=0.01):
     ng = geo.GenerateMesh(maxh=maxh)
 
     # CAD volume from OCC
-    import netgen.occ as occ
-    shape = occ.OCCGeometry(step_file).shape
-    cad_total = shape.mass  # volume for solids
+    shape = geo.shape
+    cad_total = shape.mass
 
     results = []
     for i, solid in enumerate(shape.solids):
@@ -165,6 +180,12 @@ def calculate_volume_step(step_file, order, maxh=0.01):
 
     if order >= 2:
         ng.Curve(order)
+
+    # Save curved mesh to pickle if requested
+    if output_pkl:
+        import pickle
+        with open(output_pkl, "wb") as f:
+            pickle.dump(ng, f, protocol=2)
 
     mesh = NGMesh(ng)
     total_vol = Integrate(CF(1), mesh)
@@ -179,13 +200,16 @@ def calculate_volume_step(step_file, order, maxh=0.01):
             except Exception:
                 results[i]["ngsolve_volume"] = None
 
-    return {
+    result = {
         "volumes": results,
         "cad_total": cad_total,
         "ngsolve_total": total_vol,
         "order": order,
         "maxh": maxh,
     }
+    if output_pkl:
+        result["output_pkl"] = output_pkl
+    return result
 
 
 def main():
@@ -202,12 +226,15 @@ def main():
     parser.add_argument("--order", type=int, default=2, help="Curve order (1-5)")
     parser.add_argument("--maxh", type=float, default=0.01,
                         help="Max mesh size (STEP path only)")
+    parser.add_argument("--output-pkl", default=None,
+                        help="Save curved netgen.Mesh to pickle file")
 
     def run(args):
         if args.step:
-            return calculate_volume_step(args.step, args.order, args.maxh)
+            return calculate_volume_step(args.step, args.order, args.maxh,
+                                         args.output_pkl)
         else:
-            return calculate_volume(args.cub5, args.order)
+            return calculate_volume(args.cub5, args.order, args.output_pkl)
 
     calc_main(run, parser)
 
