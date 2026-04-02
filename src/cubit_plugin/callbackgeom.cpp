@@ -38,9 +38,9 @@ void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
 {
   if (!project_func) return;
 
-  if (edge_project_func && surfind > 0 && surfind2 > 0) {
-    // Direct edge/curve projection
-    auto [xp, yp, zp] = edge_project_func(surfind, surfind2, p[0], p[1], p[2]);
+  if (edge_project_func && surfind >= 0 && surfind2 >= 0) {
+    // Direct edge/curve projection (surfind is 0-based from BuildCurvedElements)
+    auto [xp, yp, zp] = edge_project_func(surfind + 1, surfind2 + 1, p[0], p[1], p[2]);
     p = Point<3>(xp, yp, zp);
   } else {
     // Fallback: project onto first surface only
@@ -95,9 +95,9 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
   // Linear interpolation, then project onto edge (curve)
   newp = p1 + secpoint * (p2 - p1);
 
-  if (edge_project_func && surfi1 > 0 && surfi2 > 0) {
-    // Direct edge/curve projection
-    auto [xp, yp, zp] = edge_project_func(surfi1, surfi2, newp[0], newp[1], newp[2]);
+  if (edge_project_func && surfi1 >= 0 && surfi2 >= 0) {
+    // Direct edge/curve projection (surfi1/2 are 0-based from BuildCurvedElements)
+    auto [xp, yp, zp] = edge_project_func(surfi1 + 1, surfi2 + 1, newp[0], newp[1], newp[2]);
     newp = Point<3>(xp, yp, zp);
   } else if (project_func && surfi1 > 0) {
     // Fallback: project onto first surface

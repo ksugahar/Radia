@@ -1,0 +1,3 @@
+# Try explicit plugin load
+load plugin "C:/Program Files/Coreform Cubit 2025.3/bin/plugins/radia_cubit.ccm"
+help radia

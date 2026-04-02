@@ -1,0 +1,8 @@
+reset
+brick x 10 y 10 z 10
+sphere radius 10
+intersect volume all
+volume all scheme tetmesh
+volume all size 5
+mesh volume all
+export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o2.bdf" order 2 overwrite
