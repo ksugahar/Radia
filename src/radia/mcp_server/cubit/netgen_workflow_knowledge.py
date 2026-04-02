@@ -60,11 +60,24 @@ The overall workflow is simply:
    Works for ANY geometry shape — cylinder, sphere, torus, cone,
    Boolean operations, freeform surfaces, etc.
 
-## Accuracy Comparison
+## Accuracy: p-Convergence Results (Verified 2026-04-02)
 
-| Method | Curve(2) Error | Curve(3) Error | Max Order | Complexity |
-|--------|----------------|----------------|-----------|------------|
-| export_NGSolveCurvedMesh (ACIS) | ~0.003% | ~0.0006% | Unlimited | Low |
+All shapes tested with ACIS CallbackGeometry + edge snapping:
+
+| Shape | Surfaces | Curves | p=2 V err | p=3 V err | p=5 V err | p=5 A err |
+|-------|----------|--------|-----------|-----------|-----------|-----------|
+| Sphere | 1 | 0 | -0.023% | +0.002% | -0.000003% | -0.000003% |
+| Cylinder | 3 | 2 | -0.003% | +0.001% | -0.000001% | -0.000001% |
+| Frustum (cone) | 3 | 2 | -0.009% | +0.002% | -0.000006% | -0.000009% |
+| Torus | 1 | 0 | -0.026% | +0.004% | -0.000018% | -0.000011% |
+| Box with hole | 7 | 14 | +0.004% | -0.001% | +0.000003% | +0.000003% |
+
+Key: p=5 achieves 10^-5 to 10^-6 % error for ALL shapes, matching OCC native accuracy.
+
+| Method | p=2 Error | p=5 Error | Max Order | Complexity |
+|--------|-----------|-----------|-----------|------------|
+| extract_curved_mesh (ACIS) | ~0.003-0.03% | ~1e-6% | 5+ (tet) | Low |
+| OCC mesh.Curve() | ~0.003-0.03% | ~1e-6% | 5+ (tet) | Low |
 | Gmsh 2nd order (ReadGmsh) | ~0.001% | N/A | 2 | Low |
 | 1st order (no curving) | ~1.4% | N/A | 1 | None |
 
