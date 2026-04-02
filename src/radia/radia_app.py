@@ -64,8 +64,10 @@ def _load_settings():
 
 
 def _save_settings(data):
-    os.makedirs(os.path.dirname(_SETTINGS_PATH), exist_ok=True)
     try:
+        settings_dir = os.path.dirname(_SETTINGS_PATH)
+        if settings_dir and not os.path.isdir(settings_dir):
+            os.makedirs(settings_dir, exist_ok=True)
         with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception:
@@ -668,10 +670,16 @@ class RadiaApp(QMainWindow):
             tab.restore_state(data.get(f"tab_{i}", {}))
 
     def closeEvent(self, event):
-        self._save_settings()
+        try:
+            self._save_settings()
+        except Exception:
+            pass  # never crash on close
         if self._process:
-            self._process.kill()
-            self._process.waitForFinished(3000)
+            try:
+                self._process.kill()
+                self._process.waitForFinished(3000)
+            except Exception:
+                pass
         super().closeEvent(event)
 
 
