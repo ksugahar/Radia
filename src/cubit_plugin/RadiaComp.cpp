@@ -232,146 +232,134 @@ void RadiaMenuHandler::export_vtk()     { run_export(ExportDialog::VTK); }
 void RadiaMenuHandler::export_meg()     { run_export(ExportDialog::MEG); }
 
 // ============================================================
-// Mesh Volume / Surface Area — subprocess to calc_volume.py
+// Mesh Evaluation — subprocess to calc_mesh_eval.py (p=1..5)
 // ============================================================
 #include <QMessageBox>
-#include <QInputDialog>
 #include <QProcess>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QTemporaryFile>
+
+// Find external Python 3.12 (not Cubit's 3.10)
+static QString find_external_python()
+{
+  QByteArray env = qgetenv("RADIA_PYTHON");
+  if (!env.isEmpty()) return QString::fromLocal8Bit(env);
+#ifdef _WIN32
+  QProcess probe;
+  probe.start("py", {"-3", "-c", "print('ok')"});
+  if (probe.waitForFinished(5000) && probe.exitCode() == 0) return "py";
+#endif
+  return "python";
+}
+
+// Find calc_mesh_eval.py without importing radia
+static QString find_calc_script(const QString &python, const QString &name)
+{
+  QProcess p;
+  QStringList args;
+  if (python == "py") args << "-3";
+  args << "-c" << QString("import radia.panels.%1 as m; import os; "
+                           "print(os.path.abspath(m.__file__))").arg(name);
+  p.start(python, args);
+  if (p.waitForFinished(10000) && p.exitCode() == 0)
+    return QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+  return QString();
+}
 
 void RadiaMenuHandler::mesh_volume()
 {
   if (CubitInterface::get_volume_count() == 0) {
     ensure_model();
-    if (CubitInterface::get_volume_count() == 0)
-      return;
+    if (CubitInterface::get_volume_count() == 0) return;
   }
 
-  // Ask for curve order
-  bool ok;
-  int order = QInputDialog::getInt(nullptr, "Mesh Evaluation",
-    "Curve order (1=linear, 2-5=high-order):", 3, 1, 5, 1, &ok);
-  if (!ok) return;
-
-  // Save to temporary .cub5
-  QString tmpDir = QDir::tempPath();
-  QString cub5 = tmpDir + "/radia_mesh_eval.cub5";
+  // Save to temp .cub5
+  QString cub5 = QDir::tempPath() + "/radia_mesh_eval.cub5";
   cub5.replace("\\", "/");
-  std::string save_cmd = "save cub5 \"" + cub5.toStdString() + "\" overwrite";
-  CubitInterface::cmd(save_cmd.c_str());
+  CubitInterface::cmd(("save cub5 \"" + cub5.toStdString() + "\" overwrite").c_str());
 
-  // Find external Python (system Python 3.12, not Cubit's 3.10)
-  QString python;
-#ifdef _WIN32
-  // Try RADIA_PYTHON env, then py -3, then python
-  QByteArray env = qgetenv("RADIA_PYTHON");
-  if (!env.isEmpty()) {
-    python = QString::fromLocal8Bit(env);
-  } else {
-    // Try "py -3" first (Windows launcher)
-    QProcess probe;
-    probe.start("py", {"-3", "-c", "print('ok')"});
-    if (probe.waitForFinished(5000) && probe.exitCode() == 0) {
-      python = "py";
-    } else {
-      python = "python";
-    }
-  }
-#else
-  python = "python3";
-#endif
-
-  // Find calc_volume.py (installed via pip in radia/panels/)
-  QString script;
-  QProcess findScript;
-  QStringList findArgs;
-  if (python == "py")
-    findArgs << "-3";
-  findArgs << "-c" << "import radia.panels.calc_volume as m; import os; print(os.path.abspath(m.__file__))";
-  findScript.start(python, findArgs);
-  if (findScript.waitForFinished(10000) && findScript.exitCode() == 0) {
-    script = QString::fromUtf8(findScript.readAllStandardOutput()).trimmed();
-  }
-  if (script.isEmpty() || !QFile::exists(script)) {
-    QMessageBox::critical(nullptr, "Error",
-      "Cannot find calc_volume.py. Is radia installed?\n"
-      "  pip install radia");
+  QString python = find_external_python();
+  QString script = find_calc_script(python, "calc_mesh_eval");
+  if (script.isEmpty()) {
+    PRINT_ERROR("Cannot find calc_mesh_eval.py. Is radia installed?\n");
     return;
   }
 
-  // Run calc_volume.py as subprocess
-  PRINT_INFO("Running: %s calc_volume.py --cub5 %s --order %d\n",
-             python.toStdString().c_str(), cub5.toStdString().c_str(), order);
+  // Run calc_mesh_eval.py --cub5 ... --max-order 5
+  PRINT_INFO("Running mesh evaluation (p=1..5)...\n");
 
   QProcess proc;
   QStringList args;
-  if (python == "py")
-    args << "-3";
-  args << script << "--cub5" << cub5 << "--order" << QString::number(order);
+  if (python == "py") args << "-3";
+  args << script << "--cub5" << cub5 << "--max-order" << "5";
+
+  // Clean Qt env to avoid conflicts
+  QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+  for (const QString &key : env.keys()) {
+    if (key.toUpper().contains("QT") || key.toUpper().contains("PYSIDE"))
+      env.remove(key);
+  }
+  proc.setProcessEnvironment(env);
+
   proc.start(python, args);
-  if (!proc.waitForFinished(300000)) {  // 5 min timeout
-    QMessageBox::critical(nullptr, "Error", "calc_volume.py timed out (5 min).");
+  if (!proc.waitForFinished(600000)) {  // 10 min
+    PRINT_ERROR("calc_mesh_eval.py timed out.\n");
     return;
   }
-
   if (proc.exitCode() != 0) {
-    QString err = QString::fromUtf8(proc.readAllStandardError());
-    QMessageBox::critical(nullptr, "Error",
-      "calc_volume.py failed:\n" + err.left(2000));
+    PRINT_ERROR("calc_mesh_eval.py failed:\n%s\n",
+      proc.readAllStandardError().left(2000).constData());
     return;
   }
 
-  // Parse JSON from last line of stdout
+  // Parse JSON from last line
   QString out = QString::fromUtf8(proc.readAllStandardOutput());
   QStringList lines = out.split('\n', Qt::SkipEmptyParts);
-  if (lines.isEmpty()) {
-    QMessageBox::critical(nullptr, "Error", "No output from calc_volume.py");
-    return;
-  }
+  if (lines.isEmpty()) { PRINT_ERROR("No output.\n"); return; }
 
   QJsonDocument doc = QJsonDocument::fromJson(lines.last().toUtf8());
-  if (doc.isNull() || !doc.isObject()) {
-    QMessageBox::critical(nullptr, "Error",
-      "Invalid JSON from calc_volume.py:\n" + lines.last().left(500));
+  if (!doc.isObject()) { PRINT_ERROR("Invalid JSON.\n"); return; }
+
+  QJsonObject r = doc.object();
+  if (r.contains("error")) {
+    PRINT_ERROR("Error: %s\n", r["error"].toString().toStdString().c_str());
     return;
   }
 
-  QJsonObject result = doc.object();
-  if (result.contains("error")) {
-    QMessageBox::warning(nullptr, "Mesh Evaluation",
-      "Error: " + result["error"].toString());
-    return;
-  }
+  // Build result table
+  double cad_v = r["cad_vol_total"].toDouble();
+  double cad_a = r["cad_area_total"].toDouble();
 
-  // Build result message
   QString msg;
-  double cad_total = result["cad_total"].toDouble();
-  double ng_total = result["ngsolve_total"].toDouble();
-  double ng_area = result["ngsolve_area"].toDouble();
-  double err_pct = (cad_total > 0) ? (ng_total - cad_total) / cad_total * 100.0 : 0;
+  msg += QString("CAD Volume: %1 m^3\n").arg(cad_v, 0, 'e', 6);
+  msg += QString("CAD Area:   %1 m^2\n\n").arg(cad_a, 0, 'e', 6);
+  msg += QString("%1  %2  %3  %4  %5\n")
+    .arg("p", -3).arg("Volume", 14).arg("V err", 10).arg("Area", 14).arg("A err", 10);
+  msg += QString("-").repeated(55) + "\n";
 
-  msg += QString("Curve order: %1\n\n").arg(order);
-  msg += QString("CAD Volume:     %1\n").arg(cad_total, 0, 'e', 6);
-  msg += QString("NGSolve Volume: %1\n").arg(ng_total, 0, 'e', 6);
-  msg += QString("Volume Error:   %1%\n\n").arg(err_pct, 0, 'f', 4);
-  msg += QString("Surface Area:   %1\n").arg(ng_area, 0, 'e', 6);
-
-  QJsonArray vols = result["volumes"].toArray();
-  if (vols.size() > 1) {
-    msg += "\nPer volume:\n";
-    for (int i = 0; i < vols.size(); i++) {
-      QJsonObject v = vols[i].toObject();
-      msg += QString("  %1: CAD=%2  NGSolve=%3\n")
-        .arg(v["name"].toString())
-        .arg(v["cad_volume"].toDouble(), 0, 'e', 4)
-        .arg(v.contains("ngsolve_volume") ? v["ngsolve_volume"].toDouble() : 0, 0, 'e', 4);
+  QJsonArray orders = r["orders"].toArray();
+  for (int i = 0; i < orders.size(); i++) {
+    QJsonObject o = orders[i].toObject();
+    if (o.contains("error")) {
+      msg += QString("%1  %2\n").arg(o["order"].toInt(), -3).arg(o["error"].toString());
+      continue;
     }
+    msg += QString("%1  %2  %3%  %4  %5%\n")
+      .arg(o["order"].toInt(), -3)
+      .arg(o["ng_volume"].toDouble(), 14, 'e', 6)
+      .arg(o["vol_error_pct"].toDouble(), 9, 'f', 5, ' ')
+      .arg(o["ng_area"].toDouble(), 14, 'e', 6)
+      .arg(o["area_error_pct"].toDouble(), 9, 'f', 5, ' ');
   }
 
-  QMessageBox::information(nullptr, "Mesh Evaluation - Volume", msg);
+  QMessageBox box;
+  box.setWindowTitle("Mesh Evaluation - Volume / Surface Area");
+  box.setText(msg);
+  box.setTextInteractionFlags(Qt::TextSelectableByMouse);
+  QFont font("Consolas", 9);
+  box.setFont(font);
+  box.exec();
 }
 
 // ============================================================
