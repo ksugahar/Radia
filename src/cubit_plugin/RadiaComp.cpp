@@ -29,6 +29,9 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QTextEdit>
+#include <QApplication>
+#include <QClipboard>
 #include <QVBoxLayout>
 #include <vector>
 
@@ -414,35 +417,51 @@ void RadiaMenuHandler::mesh_volume()
   double cad_v = r["cad_vol_total"].toDouble();
   double cad_a = r["cad_area_total"].toDouble();
 
-  QString msg;
-  msg += QString("CAD Volume: %1 m^3\n").arg(cad_v, 0, 'e', 6);
-  msg += QString("CAD Area:   %1 m^2\n\n").arg(cad_a, 0, 'e', 6);
-  msg += QString("%1  %2  %3  %4  %5\n")
-    .arg("p", -3).arg("Volume", 14).arg("V err", 10).arg("Area", 14).arg("A err", 10);
-  msg += QString("-").repeated(55) + "\n";
+  // Build TSV table (tab-separated, copy-pasteable to Excel)
+  QString tsv;
+  tsv += QString("CAD Volume\t%1\tm^3\n").arg(cad_v, 0, 'e', 6);
+  tsv += QString("CAD Area\t%1\tm^2\n\n").arg(cad_a, 0, 'e', 6);
+  tsv += "p\tVolume\tV err [%]\tArea\tA err [%]\n";
 
   QJsonArray orders = r["orders"].toArray();
   for (int i = 0; i < orders.size(); i++) {
     QJsonObject o = orders[i].toObject();
     if (o.contains("error")) {
-      msg += QString("%1  %2\n").arg(o["order"].toInt(), -3).arg(o["error"].toString());
+      tsv += QString("%1\t%2\n").arg(o["order"].toInt()).arg(o["error"].toString());
       continue;
     }
-    msg += QString("%1  %2  %3%  %4  %5%\n")
-      .arg(o["order"].toInt(), -3)
-      .arg(o["ng_volume"].toDouble(), 14, 'e', 6)
-      .arg(o["vol_error_pct"].toDouble(), 9, 'f', 5, ' ')
-      .arg(o["ng_area"].toDouble(), 14, 'e', 6)
-      .arg(o["area_error_pct"].toDouble(), 9, 'f', 5, ' ');
+    tsv += QString("%1\t%2\t%3\t%4\t%5\n")
+      .arg(o["order"].toInt())
+      .arg(o["ng_volume"].toDouble(), 0, 'e', 6)
+      .arg(o["vol_error_pct"].toDouble(), 0, 'f', 5)
+      .arg(o["ng_area"].toDouble(), 0, 'e', 6)
+      .arg(o["area_error_pct"].toDouble(), 0, 'f', 5);
   }
 
-  QMessageBox box;
-  box.setWindowTitle("Mesh Evaluation - Volume / Surface Area");
-  box.setText(msg);
-  box.setTextInteractionFlags(Qt::TextSelectableByMouse);
-  QFont font("Consolas", 9);
-  box.setFont(font);
-  box.exec();
+  // Show in a dialog with selectable/copyable QTextEdit
+  QDialog dlg;
+  dlg.setWindowTitle("Mesh Evaluation - Volume / Surface Area");
+  dlg.setMinimumSize(550, 300);
+  QVBoxLayout *layout = new QVBoxLayout(&dlg);
+
+  QTextEdit *text = new QTextEdit(&dlg);
+  text->setReadOnly(true);
+  text->setFont(QFont("Consolas", 10));
+  text->setPlainText(tsv);
+  layout->addWidget(text);
+
+  QDialogButtonBox *buttons = new QDialogButtonBox(
+    QDialogButtonBox::Ok | QDialogButtonBox::Save, &dlg);
+  buttons->button(QDialogButtonBox::Save)->setText("Copy to Clipboard");
+  layout->addWidget(buttons);
+
+  QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  QObject::connect(buttons->button(QDialogButtonBox::Save), &QPushButton::clicked,
+    [&tsv]() {
+      QApplication::clipboard()->setText(tsv);
+    });
+
+  dlg.exec();
 }
 
 // ============================================================
