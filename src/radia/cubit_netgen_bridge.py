@@ -165,18 +165,36 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         fi = surface_ids.index(si) + 1  # 1-based FD index
         fj = surface_ids.index(sj) + 1
 
+        crv_obj = cubit_mod.curve(cid)
+        crv_length = crv_obj.length()
         edge_ids_on_curve = cubit_mod.parse_cubit_list("edge", f"in curve {cid}")
         segs = []
+        dists = []
         for eid in edge_ids_on_curve:
             conn = list(cubit_mod.get_connectivity("edge", eid))
             if len(conn) >= 2:
                 segs.append(conn[:2])
+                # Normalized curve parameter (0~1) for each endpoint
+                c0 = cubit_mod.get_nodal_coordinates(conn[0])
+                c1 = cubit_mod.get_nodal_coordinates(conn[1])
+                u0 = crv_obj.u_from_position(c0)
+                u1 = crv_obj.u_from_position(c1)
+                # Normalize to [0, 1] using arc length fraction
+                # length_from_u(u_start, u) returns arc length between parameters
+                u_start = crv_obj.u_from_position(
+                    crv_obj.position_from_fraction(0))
+                arc0 = crv_obj.length_from_u(u_start, u0)
+                arc1 = crv_obj.length_from_u(u_start, u1)
+                d0 = arc0 / crv_length if crv_length > 0 else 0
+                d1 = arc1 / crv_length if crv_length > 0 else 0
+                dists.append([d0, d1])
 
         if segs:
             edge_elements.append({
                 "surfnr1": fi,
                 "surfnr2": fj,
                 "segments": segs,
+                "dists": dists,
             })
 
     def edge_project_func(surfnr1, surfnr2, x, y, z):
@@ -200,9 +218,6 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         project_func, normal_func,
         order=order, surface_only=False, split_quads=split_quads,
         edge_project_func=edge_project_func if edge_map else None,
-        # edge_elements disabled: Segment setup causes curving to diverge.
-        # Need Joachim's guidance on correct Segment attributes.
-        # edge_elements=edge_elements if edge_elements else [],
-        edge_elements=[],
+        edge_elements=edge_elements if edge_elements else [],
     )
     return ng_mesh
