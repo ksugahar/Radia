@@ -151,6 +151,34 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
                         edge_map[(fi, fj)] = crv
                         edge_map[(fj, fi)] = crv
 
+    # --- Phase D3: Extract edge (segment) elements on curves ---
+    # Each segment lies on a curve shared by two surfaces.
+    # Netgen needs these as 1D elements for BuildCurvedElements edge snapping.
+    edge_elements = []  # list of dicts: {surfnr1, surfnr2, segments: [[n0,n1], ...]}
+    for cid in curve_ids:
+        parent_surfs = list(cubit_mod.parse_cubit_list("surface", f"in curve {cid}"))
+        if len(parent_surfs) < 2:
+            continue
+        si, sj = parent_surfs[0], parent_surfs[1]
+        if si not in surface_ids or sj not in surface_ids:
+            continue
+        fi = surface_ids.index(si) + 1  # 1-based FD index
+        fj = surface_ids.index(sj) + 1
+
+        edge_ids_on_curve = cubit_mod.parse_cubit_list("edge", f"in curve {cid}")
+        segs = []
+        for eid in edge_ids_on_curve:
+            conn = list(cubit_mod.get_connectivity("edge", eid))
+            if len(conn) >= 2:
+                segs.append(conn[:2])
+
+        if segs:
+            edge_elements.append({
+                "surfnr1": fi,
+                "surfnr2": fj,
+                "segments": segs,
+            })
+
     def edge_project_func(surfnr1, surfnr2, x, y, z):
         key = (surfnr1, surfnr2)
         crv = edge_map.get(key)
@@ -172,5 +200,9 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         project_func, normal_func,
         order=order, surface_only=False, split_quads=split_quads,
         edge_project_func=edge_project_func if edge_map else None,
+        # edge_elements disabled: Segment setup causes curving to diverge.
+        # Need Joachim's guidance on correct Segment attributes.
+        # edge_elements=edge_elements if edge_elements else [],
+        edge_elements=[],
     )
     return ng_mesh

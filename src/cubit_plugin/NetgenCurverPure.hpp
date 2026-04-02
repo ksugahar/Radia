@@ -46,21 +46,25 @@ struct VolumeElement {
   std::vector<int> conn;   // node IDs
 };
 
+// Edge (segment) elements on geometry curves
+struct EdgeInfo {
+  int surfnr1, surfnr2;                    // 1-based FaceDescriptor indices
+  std::vector<std::array<int,2>> segments;  // node ID pairs
+};
+
 class NetgenCurverPure
 {
 public:
-  // Build a curved netgen::Mesh from externally-provided data.
-  //
-  // Returns shared_ptr to the curved Netgen mesh, or nullptr on failure.
   std::shared_ptr<netgen::Mesh> build(
-      const std::vector<double>& node_coords,      // N*3 flat [x0,y0,z0,x1,y1,z1,...]
-      const std::vector<int>&    node_ids,          // N node IDs
-      const std::vector<VolumeElement>& vol_elems,  // volume elements
-      const std::vector<SurfaceInfo>& surfaces,     // per-surface mesh + UVs
+      const std::vector<double>& node_coords,
+      const std::vector<int>&    node_ids,
+      const std::vector<VolumeElement>& vol_elems,
+      const std::vector<SurfaceInfo>& surfaces,
       ProjectFunc project_func,
       NormalFunc  normal_func,
       int order,
-      EdgeProjectFunc edge_project_func = nullptr);
+      EdgeProjectFunc edge_project_func = nullptr,
+      const std::vector<EdgeInfo>& edge_elements = {});
 
   // Access the built mesh
   std::shared_ptr<netgen::Mesh> get_mesh() const { return ng_mesh_; }
@@ -70,7 +74,8 @@ private:
       const std::vector<double>& node_coords,
       const std::vector<int>&    node_ids,
       const std::vector<VolumeElement>& vol_elems,
-      const std::vector<SurfaceInfo>& surfaces);
+      const std::vector<SurfaceInfo>& surfaces,
+      const std::vector<EdgeInfo>& edge_elements);
 
   bool attach_callback_geometry(ProjectFunc proj, NormalFunc norm, int num_surfaces,
                                 EdgeProjectFunc edge_proj = nullptr);
