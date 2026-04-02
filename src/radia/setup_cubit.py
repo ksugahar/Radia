@@ -180,7 +180,7 @@ def setup_cubit(all_users=False):
     # 2. Copy .ccl (GUI component -> bin/, NOT plugins/)
     ccl_src = radia_dir / "radia_cubit.ccl"
     if ccl_src.is_file():
-        dst = cubit_bin / "radia_cubit.ccl"
+        dst = cubit_dir / "bin" / "radia_cubit.ccl"
         shutil.copy2(ccl_src, dst)
         print(f"  [OK] radia_cubit.ccl -> {dst}")
 
