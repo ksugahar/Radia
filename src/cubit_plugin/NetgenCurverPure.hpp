@@ -50,6 +50,7 @@ struct VolumeElement {
 struct EdgeInfo {
   int surfnr1, surfnr2;                    // 1-based FaceDescriptor indices
   std::vector<std::array<int,2>> segments;  // node ID pairs
+  std::vector<std::array<double,2>> dists;  // normalized curve parameter [0,1] per segment endpoint
 };
 
 class NetgenCurverPure
