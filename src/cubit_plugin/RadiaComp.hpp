@@ -41,6 +41,7 @@ public slots:
   void export_nastran();
   void export_vtk();
   void export_meg();
+  void mesh_volume();
 };
 
 //! Export options dialog.
