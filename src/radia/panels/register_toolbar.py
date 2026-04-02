@@ -49,20 +49,11 @@ import cubit
 # Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit ships PyQt5)
 try:
     from PySide6.QtWidgets import (QApplication, QMainWindow, QMessageBox,
-                                   QToolBar, QFileDialog, QDialog,
-                                   QVBoxLayout, QHBoxLayout, QFormLayout,
-                                   QComboBox, QSpinBox, QLineEdit,
-                                   QPushButton, QDialogButtonBox)
-    from PySide6.QtGui import QAction, QIcon
-    from PySide6.QtCore import QSize
+                                   QToolBar)
+    from PySide6.QtGui import QAction
 except ImportError:
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QMessageBox,
-                                 QToolBar, QAction, QFileDialog, QDialog,
-                                 QVBoxLayout, QHBoxLayout, QFormLayout,
-                                 QComboBox, QSpinBox, QLineEdit,
-                                 QPushButton, QDialogButtonBox)
-    from PyQt5.QtGui import QIcon
-    from PyQt5.QtCore import QSize
+                                 QToolBar, QAction)
 
 
 def _find_external_python():
@@ -149,10 +140,44 @@ def _has_model():
         return False
 
 
+# Remembers the directory of the last .jou file loaded
+_last_jou_dir = [None]
+
+
+def _ensure_model():
+    """Ensure Cubit has a model. If empty, prompt for .jou file.
+
+    Returns the .jou directory if a journal was loaded, or cwd if model
+    already existed. Returns None if the user cancelled or .jou failed.
+    """
+    if _has_model():
+        return _last_jou_dir[0] or os.getcwd()
+
+    start_dir = _last_jou_dir[0] or os.getcwd()
+    jou_path, _ = QFileDialog.getOpenFileName(
+        None, "Select Journal File",
+        start_dir,
+        "Cubit Journal (*.jou);;All Files (*)"
+    )
+    if not jou_path:
+        return None  # cancelled
+    jou_path = jou_path.replace("\\", "/")
+    jou_dir = os.path.dirname(jou_path)
+    _last_jou_dir[0] = jou_dir
+    cubit.cmd(f'play "{jou_path}"')
+
+    if not _has_model():
+        QMessageBox.warning(
+            None, "Warning",
+            "Journal file did not create any geometry."
+        )
+        return None
+
+    return jou_dir
+
+
 def _launch_radia_app():
     """Save current Cubit model as .cub5 and launch Radia app."""
-    import tempfile
-
     ext_python = _find_external_python()
     if not ext_python:
         QMessageBox.critical(
@@ -162,33 +187,17 @@ def _launch_radia_app():
         )
         return
 
-    # If no model, ask for .jou file
-    if not _has_model():
-        jou_path, _ = QFileDialog.getOpenFileName(
-            None, "Select Journal File",
-            os.getcwd(),
-            "Cubit Journal (*.jou);;All Files (*)"
-        )
-        if not jou_path:
-            return  # cancelled
-        jou_path = jou_path.replace("\\", "/")
-        cubit.cmd(f'play "{jou_path}"')
+    work_dir = _ensure_model()
+    if work_dir is None:
+        return
 
-        if not _has_model():
-            QMessageBox.warning(
-                None, "Warning",
-                "Journal file did not create any geometry."
-            )
-            return
-
-    # Save .cub5 in current working directory
-    cub5_path = os.path.join(os.getcwd(), "radia_cubit_model.cub5")
+    # Save .cub5 in the working directory
+    cub5_path = os.path.join(work_dir, "radia_cubit_model.cub5")
     cub5_path = cub5_path.replace("\\", "/")
     cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
 
     # Launch standalone app (non-blocking)
     radia_app = _find_radia_app()
-    work_dir = os.path.dirname(cub5_path)
     if radia_app:
         cmd = [ext_python, radia_app, cub5_path]
     else:
@@ -197,236 +206,57 @@ def _launch_radia_app():
 
 
 
-class ExportMeshDialog(QDialog):
-    """Dialog for mesh export via radia .ccm plugin commands.
-
-    Shows all options per format. Command preview updates live.
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Export Mesh")
-        self.setMinimumWidth(450)
-
-        layout = QVBoxLayout(self)
-        form = QFormLayout()
-
-        # Format
-        self._format = QComboBox()
-        self._format.addItems(["GMSH", "Nastran BDF", "VTK", "MEG"])
-        self._format.currentTextChanged.connect(self._on_format_changed)
-        form.addRow("Format:", self._format)
-
-        # Order (GMSH/Nastran/VTK: 1-2, MEG: fixed 1)
-        self._order = QSpinBox()
-        self._order.setRange(1, 2)
-        self._order.setValue(1)
-        self._order.valueChanged.connect(self._update_command)
-        form.addRow("Order:", self._order)
-
-        # Version (GMSH only)
-        self._version = QComboBox()
-        self._version.addItems(["2.2", "4.1"])
-        self._version.currentTextChanged.connect(self._update_command)
-        self._version_row = ("Version:", self._version)
-        form.addRow(*self._version_row)
-
-        # Dimension (GMSH, Nastran, VTK)
-        self._dimension = QComboBox()
-        self._dimension.addItems(["3D", "2D"])
-        self._dimension.currentTextChanged.connect(self._update_command)
-        self._dimension_row = ("Dimension:", self._dimension)
-        form.addRow(*self._dimension_row)
-
-        # NoPyramid (Nastran only)
-        self._nopyramid = QComboBox()
-        self._nopyramid.addItems(["Keep pyramids", "Convert to degenerate hex (JMAG)"])
-        self._nopyramid.currentTextChanged.connect(self._update_command)
-        self._nopyramid_row = ("Pyramids:", self._nopyramid)
-        form.addRow(*self._nopyramid_row)
-
-        # File
-        file_row = QHBoxLayout()
-        self._filename = QLineEdit("mesh.msh")
-        self._filename.textChanged.connect(self._update_command)
-        browse = QPushButton("...")
-        browse.setFixedWidth(30)
-        browse.clicked.connect(self._browse)
-        file_row.addWidget(self._filename)
-        file_row.addWidget(browse)
-        form.addRow("File:", file_row)
-
-        layout.addLayout(form)
-
-        # Command preview (read-only, shows the Cubit command)
-        self._cmd_preview = QLineEdit()
-        self._cmd_preview.setReadOnly(True)
-        form_cmd = QFormLayout()
-        form_cmd.addRow("Command:", self._cmd_preview)
-        layout.addLayout(form_cmd)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-        self._on_format_changed(self._format.currentText())
-
-    def _on_format_changed(self, fmt):
-        is_gmsh = (fmt == "GMSH")
-        is_nastran = (fmt == "Nastran BDF")
-        is_meg = (fmt == "MEG")
-
-        # Order: MEG is always 1
-        self._order.setEnabled(not is_meg)
-        if is_meg:
-            self._order.setValue(1)
-
-        # Version: GMSH only
-        self._version.setVisible(is_gmsh)
-        self._version.setEnabled(is_gmsh)
-
-        # Dimension: GMSH, Nastran, VTK (not MEG)
-        has_dim = not is_meg
-        self._dimension.setVisible(has_dim)
-        self._dimension.setEnabled(has_dim)
-
-        # NoPyramid: Nastran only
-        self._nopyramid.setVisible(is_nastran)
-        self._nopyramid.setEnabled(is_nastran)
-
-        # File extension
-        ext_map = {"GMSH": ".msh", "Nastran BDF": ".bdf", "VTK": ".vtk", "MEG": ".meg"}
-        base = os.path.splitext(self._filename.text())[0]
-        self._filename.setText(base + ext_map.get(fmt, ".msh"))
-
-        self._update_command()
-
-    def _browse(self):
-        ext_map = {"GMSH": ".msh", "Nastran BDF": ".bdf", "VTK": ".vtk", "MEG": ".meg"}
-        ext = ext_map.get(self._format.currentText(), ".*")
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export Mesh",
-            os.path.join(os.getcwd(), self._filename.text()),
-            f"Mesh (*{ext});;All Files (*)")
-        if path:
-            self._filename.setText(path)
-
-    def _update_command(self):
-        self._cmd_preview.setText(self.get_cubit_command())
-
-    def get_cubit_command(self):
-        fmt = self._format.currentText()
-        filename = self._filename.text().replace("\\", "/")
-        order = self._order.value()
-
-        if fmt == "GMSH":
-            ver = "2" if self._version.currentText() == "2.2" else "4"
-            dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = f'radia export gmsh "{filename}" order {order} version {ver} dimension {dim}'
-        elif fmt == "Nastran BDF":
-            dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = f'radia export nastran "{filename}" order {order} dimension {dim}'
-            if self._nopyramid.currentIndex() == 1:
-                cmd += " nopyramid"
-        elif fmt == "VTK":
-            dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = f'radia export vtk "{filename}" order {order} dimension {dim}'
-        elif fmt == "MEG":
-            cmd = f'radia export meg "{filename}"'
-        else:
-            cmd = ""
-
-        cmd += " overwrite"
-        return cmd
-
-
-def _export_mesh():
-    """Show export dialog and run radia export command."""
-    if not _has_model():
-        QMessageBox.warning(None, "Warning", "No mesh to export.\nMesh the geometry first.")
-        return
-    dlg = ExportMeshDialog()
-    if dlg.exec() == QDialog.Accepted:
-        cmd = dlg.get_cubit_command()
-        print(f"Running: {cmd}")
-        cubit.cmd(cmd)
-
-
 def register_menu():
-    """Register 'Radia-NGSolve' menu in the menu bar."""
+    """Register three top-level menus in Cubit's menu bar."""
     main_window = _find_main_window()
     if main_window is None:
         return
 
     menu_bar = main_window.menuBar()
 
-    # Remove existing Radia menu (for reload)
+    # Remove existing menus (for reload)
     is_reload = False
-    for action in list(menu_bar.actions()):
-        if action.text().replace("&", "") == "Radia-NGSolve":
-            sub = action.menu()
-            menu_bar.removeAction(action)
-            if sub:
-                sub.deleteLater()
-            is_reload = True
-            break
+    for name in ("Radia-NGSolve", "Export Mesh", "Reload Panels"):
+        for action in list(menu_bar.actions()):
+            if action.text().replace("&", "") == name:
+                sub = action.menu()
+                menu_bar.removeAction(action)
+                if sub:
+                    sub.deleteLater()
+                is_reload = True
+
+    # Remove old toolbar (cleanup from previous versions)
+    for tb in main_window.findChildren(QToolBar, "RadiaToolBar"):
+        main_window.removeToolBar(tb)
+        tb.deleteLater()
 
     app = QApplication.instance()
     if app is not None:
         app.setQuitOnLastWindowClosed(False)
 
-    # Add Radia-NGSolve menu to the menu bar (top level)
-    _icon_file = os.path.join(os.path.dirname(_this_dir), "resources", "radia_icon.png")
-    radia_menu = menu_bar.addMenu("Radia-NGSolve")
+    # Export Mesh menu is provided by the C++ .ccl component (RadiaComp).
+    # Do NOT register a Python Export Mesh menu here.
 
-    action_launch = QAction("Launch Radia App...", main_window)
-    if os.path.isfile(_icon_file):
-        action_launch.setIcon(QIcon(_icon_file))
+    # --- Menu 1: Radia-NGSolve (direct action, no submenu) ---
+    action_launch = QAction("Radia-NGSolve", main_window)
     action_launch.setStatusTip(
-        "Save model as .cub5 and launch Radia standalone app (Python 3.12)"
-    )
+        "Save model as .cub5 and launch Radia standalone app (Python 3.12)")
     action_launch.triggered.connect(_launch_radia_app)
-    radia_menu.addAction(action_launch)
+    menu_bar.addAction(action_launch)
 
-    # Export Mesh
-    action_export = QAction("Export Mesh...", main_window)
-    action_export.setStatusTip("Export mesh (GMSH, Nastran, VTK, MEG) via radia plugin")
-    action_export.triggered.connect(_export_mesh)
-    radia_menu.addAction(action_export)
-
-    # Separator + Reload (development)
-    radia_menu.addSeparator()
-    action_reload = QAction("Reload Panels", main_window)
-    action_reload.setStatusTip("Re-read register_toolbar.py from disk")
+    # --- Menu 2: Reload Panels (debug, direct action) ---
     def _reload_panels():
         startup = os.path.join(_this_dir, "startup.py").replace("\\", "/")
         cubit.cmd(f'play "{startup}"')
+    action_reload = QAction("Reload Panels", main_window)
+    action_reload.setStatusTip("Re-read register_toolbar.py from disk (debug)")
     action_reload.triggered.connect(_reload_panels)
-    radia_menu.addAction(action_reload)
-
-    # Toolbar button with icon
-    # Remove existing toolbar (for reload)
-    for tb in main_window.findChildren(QToolBar, "RadiaToolBar"):
-        main_window.removeToolBar(tb)
-        tb.deleteLater()
-
-    if os.path.isfile(_icon_file):
-        toolbar = QToolBar("RadiaToolBar", main_window)
-        toolbar.setObjectName("RadiaToolBar")
-        toolbar.setIconSize(QSize(32, 32))
-        tb_action = toolbar.addAction(QIcon(_icon_file), "Radia")
-        tb_action.setToolTip("Launch Radia App (save .cub5 + open standalone app)")
-        tb_action.triggered.connect(_launch_radia_app)
-        main_window.addToolBar(toolbar)
-        toolbar.setVisible(True)
-        toolbar.show()
+    menu_bar.addAction(action_reload)
 
     if is_reload:
-        print("Radia-NGSolve menu re-registered.")
+        print("Radia-NGSolve menus re-registered.")
     else:
-        print("Radia-NGSolve menu registered.")
+        print("Radia-NGSolve menus registered.")
 
 
 # Auto-register when this script is executed
