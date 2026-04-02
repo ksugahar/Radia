@@ -113,22 +113,22 @@ def _find_main_window():
 
 
 def _find_radia_app():
-    """Find radia_app.py path."""
+    """Find radia_app.py path without importing radia package.
+
+    IMPORTANT: Do NOT use importlib.util.find_spec("radia") here.
+    It triggers radia/__init__.py which loads _radia_pybind.pyd,
+    causing DLL conflicts inside Cubit's process.
+    """
     # Same directory as this file -> ../radia_app.py
-    pkg_root = os.path.dirname(_this_dir)  # src/radia/
+    pkg_root = os.path.dirname(_this_dir)  # src/radia/ or site-packages/radia/
     app_path = os.path.join(pkg_root, "radia_app.py")
     if os.path.isfile(app_path):
         return app_path
-    # Fallback: try importlib to find installed radia package
-    try:
-        import importlib.util
-        spec = importlib.util.find_spec("radia")
-        if spec and spec.origin:
-            app_path = os.path.join(os.path.dirname(spec.origin), "radia_app.py")
-            if os.path.isfile(app_path):
-                return app_path
-    except Exception:
-        pass
+    # Fallback: search site-packages directly (no import)
+    for sp in sys.path:
+        candidate = os.path.join(sp, "radia", "radia_app.py")
+        if os.path.isfile(candidate):
+            return candidate
     return None
 
 
