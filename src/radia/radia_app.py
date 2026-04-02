@@ -186,18 +186,6 @@ class ModeTab(QWidget):
                 pass
 
 
-class MeshEvalTab(ModeTab):
-    def _build_ui(self):
-        self._add_spin("max_order", "Max polynomial order:", 5, 1, 10)
-
-    def build_command(self, cub5):
-        if not cub5:
-            raise ValueError("No .cub5 file specified.")
-        return [_PYTHON, _calc_script("calc_mesh_eval.py"),
-                "--cub5", cub5,
-                "--max-order", self._val("max_order")]
-
-
 class IHBEMTab(ModeTab):
     def _build_ui(self):
         self._add_spin("order", "Curve order:", 2, 1, 5)
