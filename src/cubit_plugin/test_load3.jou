@@ -1,0 +1,2 @@
+# Test: new plugin should be loaded, try the full command
+export nastran "test.bdf"

@@ -100,13 +100,33 @@ mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=False, split_quads=
 
 ## How It Works Internally
 
-1. Reads mesh topology (nodes, elements) from Cubit blocks
-2. Creates a `netgen.meshing.Mesh` with 1st order elements
-3. Uses **CallbackGeometry** to register Python callbacks that:
-   - Project a point onto the nearest Cubit surface (using Cubit's ACIS kernel)
-   - Return the projected point coordinates
-4. Calls `mesh.Curve(order)` using the CallbackGeometry
-5. Returns the curved `ngsolve.Mesh`
+1. Reads mesh topology (nodes, elements, surface tris/quads) from Cubit
+2. Extracts **1D segment elements** on geometry curves (edges between surfaces)
+   - Each segment has surfnr1/surfnr2 (0-based FD indices of adjacent surfaces)
+   - Arc-length normalized dist parameter for each endpoint
+3. Creates a `netgen.meshing.Mesh` with volume + surface + segment elements
+4. Uses **CallbackGeometry** to register Python callbacks:
+   - `project_func`: Project point onto Cubit surface (ACIS closest_point_trimmed)
+   - `normal_func`: Surface normal at a point (ACIS normal_at)
+   - `edge_project_func`: Project point onto Cubit curve (ACIS curve.closest_point_trimmed)
+5. Calls `BuildCurvedElements(order)`:
+   - Surface nodes: projected via `PointBetween` (surface callback)
+   - Edge nodes (on curves between surfaces): projected via `PointBetweenEdge` (curve callback)
+   - Requires segments with correct surfnr1/surfnr2 for `use_edge` flag
+6. Returns the curved `netgen.meshing.Mesh`
+
+### Critical Implementation Details (Edge Snapping)
+
+- **1D segments are required**: Without them, `BuildCurvedElements` does not set
+  `use_edge[edgenr]=1` and edge curving is skipped entirely.
+- **surfnr1/surfnr2 must be 0-based** FD indices (not -1). BuildCurvedElements passes
+  these directly to `PointBetweenEdge` as surfi1/surfi2.
+- **CallbackGeometry receives 0-based surfnr**: The `PointBetweenEdge` implementation
+  must check `surfi >= 0` (not `> 0`) and convert to 1-based before calling
+  `edge_project_func` (which uses 1-based Cubit surface/curve indices).
+- **Without edge snapping**: Sphere (1 surface, no edges) works perfectly, but
+  cylinder (3 surfaces, 2 edges) area does not p-converge (stuck at -0.4%).
+- **With edge snapping**: Both sphere and cylinder converge to 1e-6% at p=5.
 
 ## Why ACIS (Not OCC)?
 
@@ -362,7 +382,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")       # 2nd order boundary
 
 # Step 3: Export to Gmsh v2.2
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+cubit.cmd('export gmsh "mesh.msh" overwrite')
 
 # Step 4: Read into NGSolve
 mesh = Mesh(ReadGmsh("mesh.msh"))

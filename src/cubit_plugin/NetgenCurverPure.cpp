@@ -179,53 +179,40 @@ bool NetgenCurverPure::build_netgen_mesh(
     }
   }
 
-  // Add 1D segment elements on geometry edges (curves).
-  // Required for BuildCurvedElements to call PointBetweenEdge for edge snapping.
-  //
-  // Key fields in ng::Segment:
-  //   [0], [1]     : PointIndex of endpoints
-  //   si           : FaceDescriptor index (1-based) of one adjacent surface
-  //   edgenr       : unique edge identifier (1-based, same for all segs on one curve)
-  //   surfnr1/2    : 0-based indices of the two adjacent surfaces
-  //   epgeominfo[] : EdgePointGeomInfo with edgenr and u/v (set to 0 for now)
-  //
-  // Match OCC .vol format exactly:
-  //   edgenr  si(0-based)  p1  p2  surfnr1(-1)  surfnr2(-1)  0  0  edgenr  dist0  0  dist1
-  int edgenr = 1;
-  for (auto& ei : edge_elements) {
-    for (size_t s = 0; s < ei.segments.size(); s++) {
-      auto& seg = ei.segments[s];
-      auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
-      auto it1 = cubit_nid_to_ng_pi_.find(seg[1]);
-      if (it0 == cubit_nid_to_ng_pi_.end() || it1 == cubit_nid_to_ng_pi_.end())
-        continue;
+  // Add 1D segments BEFORE UpdateTopology so edgenr is preserved.
+  {
+    int edgenr = 1;
+    for (auto& ei : edge_elements) {
+      for (size_t s = 0; s < ei.segments.size(); s++) {
+        auto& seg = ei.segments[s];
+        auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
+        auto it1 = cubit_nid_to_ng_pi_.find(seg[1]);
+        if (it0 == cubit_nid_to_ng_pi_.end() || it1 == cubit_nid_to_ng_pi_.end())
+          continue;
 
-      double dist0 = 0, dist1 = 0;
-      if (s < ei.dists.size()) {
-        dist0 = ei.dists[s][0];
-        dist1 = ei.dists[s][1];
+        double dist0 = 0, dist1 = 0;
+        if (s < ei.dists.size()) {
+          dist0 = ei.dists[s][0];
+          dist1 = ei.dists[s][1];
+        }
+
+        ng::Segment nseg;
+        nseg[0] = it0->second;
+        nseg[1] = it1->second;
+        nseg.si = 0;
+        nseg.edgenr = edgenr;
+        // surfnr1/2 MUST be set to 0-based FD indices (NOT -1).
+        // BuildCurvedElements reads these and passes to PointBetweenEdge.
+        nseg.surfnr1 = ei.surfnr1 - 1;  // 0-based
+        nseg.surfnr2 = ei.surfnr2 - 1;  // 0-based
+        nseg.epgeominfo[0].edgenr = edgenr;
+        nseg.epgeominfo[0].dist = dist0;
+        nseg.epgeominfo[1].edgenr = edgenr;
+        nseg.epgeominfo[1].dist = dist1;
+        ng_mesh_->AddSegment(nseg);
       }
-
-      ng::Segment nseg;
-      nseg[0] = it0->second;
-      nseg[1] = it1->second;
-      nseg.si = edgenr - 1;            // 0-based (matches OCC: edge descriptor index)
-      nseg.edgenr = edgenr;
-      nseg.surfnr1 = -1;               // -1 = not set (matches OCC)
-      nseg.surfnr2 = -1;
-
-      nseg.epgeominfo[0].edgenr = edgenr;
-      nseg.epgeominfo[0].dist = dist0;
-      nseg.epgeominfo[0].u = 0;
-      nseg.epgeominfo[0].v = 0;
-      nseg.epgeominfo[1].edgenr = edgenr;
-      nseg.epgeominfo[1].dist = dist1;
-      nseg.epgeominfo[1].u = 0;
-      nseg.epgeominfo[1].v = 0;
-
-      ng_mesh_->AddSegment(nseg);
+      edgenr++;
     }
-    edgenr++;
   }
 
   ng_mesh_->UpdateTopology();
