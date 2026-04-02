@@ -15,7 +15,7 @@ std::vector<std::string> ExportMegCommand::get_syntax()
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
     "export meg <string:label='filename',help='<filename>'> "
-    "[dimension <string:label='dimension',help='<T|K|R>'>] "
+    "[threed] [twod] [axisymmetric] "
     "[overwrite]"
   );
   return syntax_list;
@@ -25,7 +25,7 @@ std::vector<std::string> ExportMegCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export meg \"filename\" [dimension {T|K|R}] [overwrite]"
+    "export meg \"filename\" [threed|twod|axisymmetric] [overwrite]"
   );
   return help;
 }
@@ -37,9 +37,9 @@ std::vector<std::string> ExportMegCommand::get_help()
     "Export mesh to ELF/MAGIC MEG format.\n"
     "Block names are used as ELF element identifiers (first 4 chars + DIM).\n\n"
     "Options:\n"
-    "  dimension T    3D analysis (default)\n"
-    "  dimension K    2D planar (z forced to 0)\n"
-    "  dimension R    Axisymmetric (y forced to 0, R-Z plane)\n"
+    "  threed         3D analysis (default, DIM=T)\n"
+    "  twod           2D planar analysis (DIM=K, z forced to 0)\n"
+    "  axisymmetric   Axisymmetric analysis (DIM=R, y forced to 0)\n"
     "  overwrite      Overwrite existing file\n"
   );
   return help;
@@ -50,15 +50,11 @@ bool ExportMegCommand::execute(CubitCommandData &data)
   std::string filename;
   data.get_string("filename", filename);
 
-  std::string dim_str;
-  char dim = 'T';
-  if (data.get_string("dimension", dim_str) && !dim_str.empty()) {
-    char c = (char)toupper(dim_str[0]);
-    if (c == 'T' || c == 'K' || c == 'R')
-      dim = c;
-    else
-      PRINT_WARNING("Unknown dimension '%s'. Using T (3D).\n", dim_str.c_str());
-  }
+  char dim = 'T';  // default: 3D
+  if (data.find_keyword("twod"))
+    dim = 'K';
+  else if (data.find_keyword("axisymmetric"))
+    dim = 'R';
 
   return write_meg(filename, dim);
 }
