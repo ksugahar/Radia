@@ -56,7 +56,8 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
            int order,
            bool surface_only,
            bool split_quads,
-           py::object edge_project_func) -> py::object
+           py::object edge_project_func,
+           py::list edge_elements) -> py::object
         {
             // Import netgen.meshing so pybind11 knows the Mesh type
             py::module_::import("netgen.meshing");
@@ -146,10 +147,26 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
                 };
             }
 
+            // --- Convert edge elements ---
+            std::vector<EdgeInfo> edges;
+            for (auto item : edge_elements) {
+                auto d = item.cast<py::dict>();
+                EdgeInfo ei;
+                ei.surfnr1 = d["surfnr1"].cast<int>();
+                ei.surfnr2 = d["surfnr2"].cast<int>();
+                auto seg_list = d["segments"].cast<py::list>();
+                for (auto s : seg_list) {
+                    auto pair = s.cast<std::vector<int>>();
+                    if (pair.size() >= 2)
+                        ei.segments.push_back({pair[0], pair[1]});
+                }
+                edges.push_back(std::move(ei));
+            }
+
             // --- Build curved mesh ---
             NetgenCurverPure curver;
             auto ng_mesh = curver.build(coords, nids, velems, surfs,
-                                         proj, norm, order, edge_proj);
+                                         proj, norm, order, edge_proj, edges);
 
             // --- surface_only: remove volume elements ---
             if (surface_only) {
@@ -208,6 +225,7 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
         py::arg("surface_only") = false,
         py::arg("split_quads") = false,
         py::arg("edge_project_func") = py::none(),
+        py::arg("edge_elements") = py::list(),
         R"pbdoc(
             Build a curved Netgen mesh from external mesh data and geometry callbacks.
 
