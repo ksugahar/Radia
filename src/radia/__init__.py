@@ -107,12 +107,9 @@ try:
         compute_coupling_coefficient,
         analyze_coil_coupling,
     )
-    from .esim_vtk_export import (
-        ESIMVTKOutput,
-        export_esim_workpiece_vtk,
-        export_esim_coil_field_vtk,
-        export_esim_combined_vtk,
-    )
+    # VTK export is not maintained by Radia — use NGSolve VTKOutput instead.
+    # esim_vtk_export.py is kept for backwards compatibility but not re-exported.
+    pass
     ESIM_AVAILABLE = True
 except ImportError:
     # ESIM requires scipy, which may not be installed

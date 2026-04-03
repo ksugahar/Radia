@@ -240,36 +240,36 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
 def _set_labels(ng_mesh, cubit_mod, surface_ids):
     """Set material and boundary labels from Cubit blocks/sidesets/entity names.
 
-    Label priority (user-friendly — any attribute the user sets will work):
+    Cubit allows blocks/sidesets/nodesets to contain any combination of
+    entities, so we detect material vs boundary usage by content:
 
-    Material (volume domain):
-      1. Block name (volume block with matching element type)
+    Material (volume domain) — priority:
+      1. Block that contains the volume (parse_cubit_list "volume in block")
       2. Cubit volume entity name (if user renamed it)
       3. Fallback: "volume_N"
 
-    Boundary (surface bcname):
-      1. Sideset name (most natural for FEM boundary conditions)
-      2. Block name (block containing surface tris/faces)
+    Boundary (surface bcname) — priority:
+      1. Sideset containing the surface (parse_cubit_list "surface in sideset")
+      2. Block whose tris/faces overlap the surface's tris/faces
       3. Cubit surface entity name (if user renamed it)
       4. Fallback: "surface_N"
+
+    A single block may serve BOTH roles (e.g., block contains volume AND
+    surface tris). Material and boundary detection are independent.
     """
     block_ids = list(cubit_mod.get_block_id_list())
     vol_ids = list(cubit_mod.get_entities("volume"))
 
     # --- Material labels (per-domain, multi-volume) ---
-    # Build volume_id → block name mapping
+    # Detect by volume membership, NOT element type
     vol_block_names = {}  # vid -> name
     for bid in block_ids:
         bvols = list(cubit_mod.parse_cubit_list("volume", f"in block {bid}"))
-        if not bvols:
-            continue
-        bname = cubit_mod.get_exodus_entity_name("block", bid)
-        etype = cubit_mod.get_block_element_type(bid)
-        if etype in ("TETRA", "TETRA4", "TET", "TET4",
-                     "HEX", "HEX8", "WEDGE", "WEDGE6",
-                     "PYRAMID", "PYRAMID5"):
+        if bvols:
+            bname = cubit_mod.get_exodus_entity_name("block", bid)
             for vid in bvols:
-                vol_block_names[vid] = bname
+                if vid not in vol_block_names:
+                    vol_block_names[vid] = bname
 
     for domain_idx, vid in enumerate(vol_ids, start=1):
         if vid in vol_block_names:
@@ -283,23 +283,22 @@ def _set_labels(ng_mesh, cubit_mod, surface_ids):
         ng_mesh.SetMaterial(domain_idx, name)
 
     # --- Boundary labels ---
-    # Priority 1: Sideset names
     surf_names = {}  # sid -> name
+
+    # Priority 1: Sideset names (surface membership)
     try:
-        sideset_ids = list(cubit_mod.get_sideset_id_list())
-        for ssid in sideset_ids:
+        for ssid in cubit_mod.get_sideset_id_list():
             ssname = cubit_mod.get_exodus_entity_name("sideset", ssid)
-            ss_surfs = list(cubit_mod.parse_cubit_list(
-                "surface", f"in sideset {ssid}"))
-            for sid in ss_surfs:
-                if sid in surface_ids:
+            for sid in cubit_mod.parse_cubit_list(
+                    "surface", f"in sideset {ssid}"):
+                if sid in surface_ids and sid not in surf_names:
                     surf_names[sid] = ssname
     except Exception:
         pass
 
-    # Priority 2: Block names (blocks containing surface tris/faces)
+    # Priority 2: Block names (tri/face overlap with surface)
+    # Independent of material detection — same block can provide both
     for bid in block_ids:
-        bname = cubit_mod.get_exodus_entity_name("block", bid)
         btris = set(cubit_mod.get_block_tris(bid))
         try:
             bfaces = set(cubit_mod.get_block_faces(bid))
@@ -307,6 +306,7 @@ def _set_labels(ng_mesh, cubit_mod, surface_ids):
             bfaces = set()
         if not btris and not bfaces:
             continue
+        bname = cubit_mod.get_exodus_entity_name("block", bid)
         for sid in surface_ids:
             if sid in surf_names:
                 continue  # sideset takes priority
@@ -328,3 +328,8 @@ def _set_labels(ng_mesh, cubit_mod, surface_ids):
             else:
                 name = f"surface_{sid}"
         ng_mesh.SetBCName(i, name)
+
+    # --- Edge labels (BBND / codim-2) ---
+    # TODO: Sideset on curves → SetCD2Name for NGSolve BBND boundary conditions
+    # Disabled: SetCD2Name crashes on some mesh configurations.
+    # Needs investigation on valid edgenr range after UpdateTopology.
