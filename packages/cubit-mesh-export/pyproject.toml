@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cubit-mesh-export"
+version = "0.1.0"
+description = "High-order curved mesh export from Coreform Cubit to NGSolve/Netgen"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Kengo Sugahara"},
+]
+keywords = ["cubit", "mesh", "netgen", "ngsolve", "finite-element", "hex-mesh"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "netgen-mesher",
+    "ngsolve",
+    "numpy",
+]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/Radia"
+
+[project.scripts]
+check-vol = "cubit_mesh_export.check:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cubit_mesh_export = ["*.pyd", "*.so"]
