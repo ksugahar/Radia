@@ -31,7 +31,7 @@ if _cubit_path and _cubit_path not in sys.path:
 from ngsolve import Mesh, VTKOutput, Draw
 import netgen.gui
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 print("=" * 60)
 print("QUARTER MODEL MESH: C-TYPE YOKE (6x6x6 Style)")

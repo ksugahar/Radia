@@ -37,7 +37,7 @@ def test_setcd2name():
     cubit.cmd('sideset 100 name "test_edge"')
 
     # Extract mesh with edge labels
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
     print("\nExtracting curved mesh (order=2)...", flush=True)
     sys.stdout.flush()
     ng_mesh = extract_curved_mesh(cubit, order=2)

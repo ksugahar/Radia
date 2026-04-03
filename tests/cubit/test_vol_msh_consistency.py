@@ -43,7 +43,7 @@ def test_vol_vs_msh(cub5_path=None, order=2):
     msh_path = os.path.join(tmpdir, "model.msh")
 
     # --- Export .vol (Python + C++ curving) ---
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
     build_order = max(order, 2)
     ng_mesh = extract_curved_mesh(cubit, order=build_order)
     ng_mesh.Save(vol_path)

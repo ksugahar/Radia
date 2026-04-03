@@ -39,7 +39,7 @@ if _cubit_path and _cubit_path not in sys.path:
 # Check if Cubit is available
 try:
     import cubit
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
     CUBIT_AVAILABLE = True
 except ImportError:
     CUBIT_AVAILABLE = False

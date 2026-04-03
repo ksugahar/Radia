@@ -425,7 +425,7 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 
 
 def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
-	"""HIGH: nodeset/sideset used with non-Exodus radia export functions."""
+	"""HIGH: nodeset/sideset used with non-Exodus export functions."""
 	findings = []
 	nodeset_pattern = re.compile(
 		r'cubit\.cmd\s*\(\s*["\'].*\b(?:nodeset|sideset)\b', re.IGNORECASE
@@ -454,7 +454,7 @@ def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
 			'severity': 'HIGH',
 			'rule': 'nodeset-sideset-usage',
 			'message': (
-				'nodeset/sideset commands found but radia export uses '
+				'nodeset/sideset commands found but export uses '
 				'blocks-only policy. Nodesets and sidesets are ignored by '
 				'non-Exodus export functions. Use blocks for boundary conditions: '
 				'cubit.cmd("block N add tri all in surface X"). '
