@@ -1,9 +1,10 @@
 name: Release cubit-mesh-export
 
+# Triggered after CI succeeds, only when the tag matches cubit-mesh-export-v*
 on:
-  push:
-    tags:
-      - 'cubit-mesh-export-v*'
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 permissions:
   id-token: write
@@ -11,21 +12,43 @@ permissions:
 
 jobs:
   publish:
+    # Only publish when CI succeeded on a cubit-mesh-export tag
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'cubit-mesh-export-v')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - name: Download cubit-mesh-export wheel
+        uses: actions/download-artifact@v4
         with:
-          python-version: '3.12'
+          name: cubit-mesh-export-wheel
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build wheel
+      - name: Verify wheel
         run: |
-          pip install build
-          cd packages/cubit-mesh-export
-          python -m build
+          echo "=== cubit-mesh-export wheel ==="
+          ls -la dist/
+          WHL=$(find dist -name '*.whl' | head -1)
+          if [ -z "$WHL" ]; then
+            echo "::error::No wheel found"
+            exit 1
+          fi
+          echo "Wheel: $WHL"
+          # Verify .pyd is included
+          python3 -c "
+          import zipfile, sys
+          whl = zipfile.ZipFile('$WHL')
+          pyds = [f.filename for f in whl.infolist() if f.filename.endswith('.pyd')]
+          print('Bundled .pyd files:', pyds)
+          if not pyds:
+              print('WARNING: No .pyd in wheel (pure Python fallback)')
+          "
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: packages/cubit-mesh-export/dist/
+          packages-dir: dist/

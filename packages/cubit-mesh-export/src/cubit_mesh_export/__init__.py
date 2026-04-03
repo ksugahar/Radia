@@ -18,7 +18,7 @@ Usage:
     from cubit_mesh_export.check import check_consistency  # API
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .bridge import extract_curved_mesh
 
