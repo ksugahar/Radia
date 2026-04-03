@@ -590,7 +590,7 @@ def run_fem(resolution='coarse', current_at=20000.0, fes_order=1,
     radia_src = os.path.join(repo_root, 'src', 'radia')
     if radia_src not in sys.path:
         sys.path.insert(0, radia_src)
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
     mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
     ngmesh = mesh.ngmesh

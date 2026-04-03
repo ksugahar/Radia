@@ -70,10 +70,15 @@ def setup_paths():
         sys.path.insert(0, abs_src)
 
 
-def setup_cubit(cub5_path=None):
+def setup_cubit(cub5_path=None, load_plugins=False):
     """Initialize Cubit and optionally open a .cub5 file.
 
     Handles path cleanup to avoid scipy/numpy DLL conflicts.
+
+    Args:
+        cub5_path: Optional .cub5 file to open after init.
+        load_plugins: If True, set CUBIT_PLUGIN_DIR so radia .ccm
+            plugin commands (export gmsh/nastran/meg/vtk) are available.
 
     Returns:
         cubit module (or None if Cubit unavailable)
@@ -90,6 +95,12 @@ def setup_cubit(cub5_path=None):
 
     if cubit_path not in sys.path:
         sys.path.append(cubit_path)
+
+    # Set CUBIT_PLUGIN_DIR before cubit.init() so .ccm plugins are loaded
+    if load_plugins:
+        plugin_dir = os.path.join(cubit_path, "plugins")
+        if os.path.isdir(plugin_dir):
+            os.environ["CUBIT_PLUGIN_DIR"] = plugin_dir
 
     # Remove Cubit's bundled site-packages (scipy/numpy conflicts)
     _clean_cubit_paths()
@@ -131,7 +142,7 @@ def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
     """
     setup_paths()
     from ngsolve import Mesh as NGMesh
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
     if split_quads is None:
         split_quads = surface_only
     ng_mesh = extract_curved_mesh(

@@ -86,7 +86,7 @@ def test_volume(mesh_type, build_func, mesh_size, orders):
     cad_err = (cad_vol - V_EXACT) / V_EXACT * 100
     print(f"  CAD volume: {cad_vol:.6e} (err={cad_err:+.4f}%)")
 
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     results = []
     for order in orders:

@@ -6,7 +6,7 @@
 // high-order curving via BuildCurvedElements.
 //
 // Usage (external Python 3.12):
-//   from radia.cubit_netgen_bridge import extract_curved_mesh
+//   from cubit_mesh_export import extract_curved_mesh
 //   ng_mesh = extract_curved_mesh(cubit, order=3)
 //   mesh = ngsolve.Mesh(ng_mesh)
 // ============================================================
@@ -35,8 +35,8 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
         builds a curved Netgen mesh using BuildCurvedElements.
         Does NOT link to any Cubit C++ libraries.
 
-        Typical usage via cubit_netgen_bridge.py:
-            from radia.cubit_netgen_bridge import extract_curved_mesh
+        Typical usage via cubit_mesh_export:
+            from cubit_mesh_export import extract_curved_mesh
             mesh = extract_curved_mesh(cubit, order=3)
     )doc";
 

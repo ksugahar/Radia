@@ -85,7 +85,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R, H, ORDER = 0.5, 2.0, 3
 
@@ -117,7 +117,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R, ORDER = 0.5, 3
 
@@ -147,7 +147,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R_MAJOR, R_MINOR, ORDER = 1.0, 0.3, 3
 
@@ -177,7 +177,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R_BASE, H, ORDER = 0.5, 2.0, 3
 
@@ -207,7 +207,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R, H = 0.5, 2.0
 
@@ -242,7 +242,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 BRICK_SIZE, R_HOLE, ORDER = 2.0, 0.3, 3
 
@@ -278,7 +278,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R = 1.0
 
@@ -296,7 +296,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")
 
 # Export to Gmsh v2.2
-cubit.cmd('radia export gmsh "sphere_2nd.msh" overwrite')
+cubit.cmd('export gmsh "sphere_2nd.msh" overwrite')
 
 # Read into NGSolve (no geometry reference needed!)
 mesh = Mesh(ReadGmsh("sphere_2nd.msh"))
@@ -315,7 +315,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import *
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 R, ORDER = 1.0, 3
 
@@ -644,7 +644,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 # === PARAMETERS ===
 MESH_SIZE = 0.15
@@ -685,7 +685,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 MESH_SIZE = 0.15
 CURVE_ORDER = 3
@@ -722,7 +722,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 MESH_SIZE = 0.15
 
@@ -742,7 +742,7 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 element type tri6")
 
 # === EXPORT ===
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+cubit.cmd('export gmsh "mesh.msh" overwrite')
 
 # === IMPORT TO NGSOLVE ===
 mesh = Mesh(ReadGmsh("mesh.msh"))
@@ -759,7 +759,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 MESH_SIZE = 0.15
 CURVE_ORDER = 3

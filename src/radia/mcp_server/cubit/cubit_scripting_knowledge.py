@@ -342,7 +342,7 @@ import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
 # cubit_netgen_bridge is available after loading the Cubit plugin
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 ```
 
 ## With NGSolve (System Python + CUBIT_PATH)
@@ -369,7 +369,7 @@ import sys, os
 import ngsolve
 from netgen.occ import OCCGeometry
 from ngsolve import Mesh
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 # Step 2: Then import Cubit via CUBIT_PATH
 cubit_path = os.environ.get("CUBIT_PATH")
@@ -509,7 +509,7 @@ ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)       # DELETED
 cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.5, height=2.0)  # DELETED
 
 # RIGHT: Use extract_curved_mesh() — single function, no STEP, no OCC
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ```
@@ -977,7 +977,7 @@ print(f"1st order nodes: {n1}, Actual nodes: {n2}")
 # cubit_mesh_export.set_cylinder_geominfo(ngmesh, ...)            # DELETED
 
 # NEW: Single function call
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ```
@@ -1227,7 +1227,7 @@ pip install radia
 
 # The plugin is loaded via Cubit's plugin system
 # cubit_netgen_bridge is available after plugin load
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 ```
 
 ## APREPRO Variables
