@@ -92,6 +92,12 @@ void RadiaComp::setup_menus()
 
   QAction* a_gmsh = new QAction("GMSH...", handler);
   a_gmsh->setStatusTip("Export mesh to GMSH format (.msh)");
+  // Menu order follows lab priority: .vol > .msh > .bdf > .vtk > .meg
+  QAction* a_netgen = new QAction("Netgen Vol (.vol)...", handler);
+  a_netgen->setStatusTip("Export curved mesh with labels (.vol, order 1-5)");
+  QObject::connect(a_netgen, SIGNAL(triggered()), handler, SLOT(export_netgen()));
+  menu_list.push_back(a_netgen);
+
   QObject::connect(a_gmsh, SIGNAL(triggered()), handler, SLOT(export_gmsh()));
   menu_list.push_back(a_gmsh);
 
@@ -109,11 +115,6 @@ void RadiaComp::setup_menus()
   a_meg->setStatusTip("Export mesh to MEG/ELF format (.meg)");
   QObject::connect(a_meg, SIGNAL(triggered()), handler, SLOT(export_meg()));
   menu_list.push_back(a_meg);
-
-  QAction* a_netgen = new QAction("Netgen Vol + Pkl...", handler);
-  a_netgen->setStatusTip("Export mesh as Netgen .vol (linear) + .pkl (curved)");
-  QObject::connect(a_netgen, SIGNAL(triggered()), handler, SLOT(export_netgen()));
-  menu_list.push_back(a_netgen);
 
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
@@ -262,7 +263,7 @@ void RadiaMenuHandler::export_netgen()
 
   // Ask for order
   bool ok;
-  int order = QInputDialog::getInt(nullptr, "Netgen Export",
+  int order = QInputDialog::getInt(nullptr, "Netgen Vol Export",
     "Curve order (1-5):", 3, 1, 5, 1, &ok);
   if (!ok) return;
 
@@ -278,9 +279,7 @@ void RadiaMenuHandler::export_netgen()
     ? "ExportedMesh" : QFileInfo(jouPath).completeBaseName();
 
   QString volPath = defaultDir + "/" + baseName + ".vol";
-  QString pklPath = defaultDir + "/" + baseName + "_curved.pkl";
   volPath.replace("\\", "/");
-  pklPath.replace("\\", "/");
 
   // Save temp .cub5
   QString cub5 = QDir::tempPath() + "/radia_netgen_export.cub5";
@@ -294,20 +293,13 @@ void RadiaMenuHandler::export_netgen()
     return;
   }
 
-  if (order == 1) {
-    PRINT_INFO("Exporting Netgen .vol (linear, order 1)...\n");
-  } else {
-    PRINT_INFO("Exporting Netgen .vol + .pkl (order %d)...\n", order);
-  }
+  PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
 
   QProcess proc;
   QStringList args;
   if (python == "py") args << "-3";
   args << script << "--cub5" << cub5 << "--order" << QString::number(order)
        << "--vol" << volPath;
-  // .pkl only for order >= 2 (curving not preserved in .vol)
-  if (order >= 2)
-    args << "--pkl" << pklPath;
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   for (const QString &key : env.keys()) {
@@ -327,13 +319,114 @@ void RadiaMenuHandler::export_netgen()
     return;
   }
 
-  if (order == 1) {
-    PRINT_INFO("Exported:\n  %s (linear)\n",
-      volPath.toStdString().c_str());
-  } else {
-    PRINT_INFO("Exported:\n  %s (linear)\n  %s (curved, order %d)\n",
-      volPath.toStdString().c_str(), pklPath.toStdString().c_str(), order);
+  // Parse JSON result
+  QString out = QString::fromUtf8(proc.readAllStandardOutput());
+  QStringList lines = out.split('\n', Qt::SkipEmptyParts);
+  if (lines.isEmpty()) { PRINT_ERROR("No output.\n"); return; }
+
+  QJsonDocument doc = QJsonDocument::fromJson(lines.last().toUtf8());
+  if (!doc.isObject()) { PRINT_ERROR("Invalid JSON.\n"); return; }
+
+  QJsonObject r = doc.object();
+  if (r.contains("error")) {
+    PRINT_ERROR("Error: %s\n", r["error"].toString().toStdString().c_str());
+    return;
   }
+
+  // --- Show consistency check dialog ---
+  QJsonArray mats = r["materials"].toArray();
+  QJsonArray bnds = r["boundaries"].toArray();
+  QJsonArray warns = r["warnings"].toArray();
+  int nMats = mats.size();
+  int nBnds = bnds.size();
+
+  QDialog dlg;
+  dlg.setWindowTitle(QString("Netgen Vol Export - Order %1").arg(order));
+  dlg.setMinimumSize(700, 400);
+  QVBoxLayout *layout = new QVBoxLayout(&dlg);
+
+  // File info
+  layout->addWidget(new QLabel(
+    QString("Output: %1\nElements: %2, Order: %3")
+      .arg(volPath).arg(r["n_elements"].toInt()).arg(order)));
+
+  // Material table
+  if (nMats > 0) {
+    layout->addWidget(new QLabel("Materials (Volume):"));
+    QTableWidget *matTable = new QTableWidget(nMats, 4, &dlg);
+    matTable->setHorizontalHeaderLabels({"Name", "CAD Volume", "NGSolve Volume", "Error [%]"});
+    matTable->horizontalHeader()->setStretchLastSection(true);
+    matTable->verticalHeader()->setVisible(false);
+    matTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    for (int i = 0; i < nMats; i++) {
+      QJsonObject m = mats[i].toObject();
+      matTable->setItem(i, 0, new QTableWidgetItem(m["name"].toString()));
+      matTable->setItem(i, 1, new QTableWidgetItem(
+        QString::number(m["cad_volume"].toDouble(), 'e', 6)));
+      matTable->setItem(i, 2, new QTableWidgetItem(
+        m.contains("ng_volume") ?
+          QString::number(m["ng_volume"].toDouble(), 'e', 6) : "N/A"));
+      if (m.contains("error_pct")) {
+        double err = m["error_pct"].toDouble();
+        auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
+        if (std::abs(err) > 1.0)
+          item->setBackground(QColor(255, 200, 200));
+        matTable->setItem(i, 3, item);
+      }
+    }
+    matTable->resizeColumnsToContents();
+    layout->addWidget(matTable);
+  }
+
+  // Boundary table
+  if (nBnds > 0) {
+    layout->addWidget(new QLabel("Boundaries (Surface Area):"));
+    QTableWidget *bndTable = new QTableWidget(nBnds, 4, &dlg);
+    bndTable->setHorizontalHeaderLabels({"Name", "CAD Area", "NGSolve Area", "Error [%]"});
+    bndTable->horizontalHeader()->setStretchLastSection(true);
+    bndTable->verticalHeader()->setVisible(false);
+    bndTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    for (int i = 0; i < nBnds; i++) {
+      QJsonObject b = bnds[i].toObject();
+      bndTable->setItem(i, 0, new QTableWidgetItem(b["name"].toString()));
+      bndTable->setItem(i, 1, new QTableWidgetItem(
+        QString::number(b["cad_area"].toDouble(), 'e', 6)));
+      bndTable->setItem(i, 2, new QTableWidgetItem(
+        b.contains("ng_area") ?
+          QString::number(b["ng_area"].toDouble(), 'e', 6) : "N/A"));
+      if (b.contains("error_pct")) {
+        double err = b["error_pct"].toDouble();
+        auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
+        if (std::abs(err) > 1.0)
+          item->setBackground(QColor(255, 200, 200));
+        bndTable->setItem(i, 3, item);
+      }
+    }
+    bndTable->resizeColumnsToContents();
+    layout->addWidget(bndTable);
+  }
+
+  // Warnings
+  if (!warns.isEmpty()) {
+    QString warnText = "<b style='color:red'>Warnings:</b><ul>";
+    for (auto w : warns)
+      warnText += "<li>" + w.toString() + "</li>";
+    warnText += "</ul>";
+    QLabel *warnLabel = new QLabel(warnText);
+    warnLabel->setTextFormat(Qt::RichText);
+    layout->addWidget(warnLabel);
+  }
+
+  // Buttons
+  QDialogButtonBox *buttons = new QDialogButtonBox(
+    QDialogButtonBox::Ok, &dlg);
+  layout->addWidget(buttons);
+  QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+
+  PRINT_INFO("Exported: %s (order %d)\n",
+    volPath.toStdString().c_str(), order);
+
+  dlg.exec();
 }
 
 // ============================================================
