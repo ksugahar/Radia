@@ -12,7 +12,7 @@ module for high-order curving via Netgen's BuildCurvedElements.
 Usage:
     import netgen  # MUST import before cubit to avoid DLL conflicts
     import cubit
-    from radia.cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     cubit.init(['cubit', '-nojournal', '-batch', '-nographics'])
     cubit.cmd('open "model.cub5"')

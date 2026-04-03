@@ -448,7 +448,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     # --- Workpiece surface mesh ---
     # Try Cubit export first (ACIS curved, order=2), fallback to OCC
     t0 = _time.perf_counter()
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
     try:
         # Mesh workpiece volumes in Cubit if not already meshed
         for vid in wp_vol_ids:

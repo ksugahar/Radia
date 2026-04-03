@@ -141,7 +141,7 @@ def export_netgen(cub5_file, order, vol_path=None):
         })
 
     # --- Extract curved mesh with labels ---
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     build_order = max(order, 2)
     ng_mesh = extract_curved_mesh(cubit, order=build_order)

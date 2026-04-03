@@ -485,7 +485,7 @@ cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
 import cubit
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 
 MU_0 = 4.0 * math.pi * 1e-7
 R = 0.05   # Major radius [m]

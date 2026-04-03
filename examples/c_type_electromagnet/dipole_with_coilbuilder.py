@@ -170,7 +170,7 @@ print(f"  Tets: {cubit.get_tet_count()}")
 # ============================================================
 print("\nStep 4: Export to NGSolve")
 
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 try:
     mesh = Mesh(extract_curved_mesh(cubit, order=2))
 except (ImportError, AttributeError):

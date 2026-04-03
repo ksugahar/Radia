@@ -81,7 +81,7 @@ def evaluate_mesh(cub5_file, max_order=5):
     _log(f"MESH: {total_elems} elements")
 
     # Evaluate p=1..max_order
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     orders = []
     for p in range(1, max_order + 1):
