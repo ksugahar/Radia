@@ -47,10 +47,9 @@ void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
     auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2], 0, 0);
     p = Point<3>(xp, yp, zp);
   }
-  // Get UV on surfind
-  auto [xf, yf, zf, uf, vf] = project_func(surfind, p[0], p[1], p[2], 0, 0);
-  p = Point<3>(xf, yf, zf);
+  // Get UV on surfind (query only, do NOT move the point again)
   if (gi) {
+    auto [xf, yf, zf, uf, vf] = project_func(surfind, p[0], p[1], p[2], 0, 0);
     gi->edgenr = 0;
     gi->body = 0;
     gi->dist = 0;

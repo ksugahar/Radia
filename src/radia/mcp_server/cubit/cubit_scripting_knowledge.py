@@ -11,7 +11,7 @@ CUBIT_OVERVIEW = """
 # Cubit Mesh Generation Overview
 
 Coreform Cubit provides structured and unstructured meshing with export to
-multiple formats via Cubit plugin commands (`radia export ...`) and the `cubit_netgen_bridge` module.
+multiple formats via Cubit plugin commands (`export ...`) and the `cubit_netgen_bridge` module.
 
 ## Typical Workflow
 
@@ -49,7 +49,7 @@ CUBIT_BLOCKS = """
 
 ## Why Blocks are Required
 
-All `radia export` commands and `cubit_netgen_bridge` functions read mesh data from blocks.
+All `export` commands and `cubit_netgen_bridge` functions read mesh data from blocks.
 **No blocks = no export.** This is the most common mistake.
 
 ## Mesh Element Blocks (Recommended)
@@ -180,6 +180,40 @@ print(len(nodes_all))   # 10 for TET10, 4 for TET4
 CallbackGeometry. This enables arbitrary orders (2, 3, 4, 5, ...) with
 exact placement on ACIS CAD surfaces. Cubit's role is topology (1st order
 mesh) AND surface projection; Netgen's role is p-refinement via Curve().
+
+## Curving Test Results (netgen 6.2.2602.post26, 2026-04-03)
+
+| Shape | Elems | p=2 V_err | p=5 V_err | Status |
+|-------|-------|-----------|-----------|--------|
+| Sphere tet | 482t | -0.08% | -0.00% | OK |
+| Cylinder tet | 2198t | -0.003% | -0.00% | OK |
+| Torus tet | 19348t | -0.003% | -0.00% | OK |
+| Gap torus tet | 12525t | -0.028% | -0.00% | OK |
+| Cone tet | 1145t | -0.010% | -0.00% | OK |
+| Cylinder hex | 308h | -0.007% | +0.00% | OK |
+| Sphere hex | 32h | -1.86% | -1.39% | Volume stops (face bubble blocked) |
+
+**Tet**: all shapes p-converge perfectly at p=5.
+**Hex cylinder**: edge blending exact for ruled surfaces.
+**Hex sphere**: volume stops (CalcElementTransformation returns false for hex order>=2).
+  Area converges (surface quad face bubbles work).
+
+## Multi-Surface Topology Warning
+
+Models with multiple adjacent curved surfaces (e.g., torus with inner/outer walls
+split into separate ACIS faces) cause curving divergence. `closest_point_trimmed`
+projects edge midpoints to the wrong surface sheet.
+
+**Fix**: Ensure each logical surface is a single ACIS face. Use `sweep` to create
+bodies (produces 1 curved lateral surface). Do NOT split curved surfaces.
+
+## Netgen Export Menu
+
+The Cubit Export Mesh > Netgen Vol + Pkl menu supports order 1-5:
+- order=1: .vol only (linear mesh, no curving needed)
+- order>=2: .vol (linear) + .pkl (curving preserved)
+
+.vol files now preserve curving data (netgen post26 curvedelements section).
 """
 
 CUBIT_MESH_SCHEMES = """
@@ -424,12 +458,12 @@ CUBIT_COMMON_MISTAKES = """
 ```python
 # WRONG: Export without blocks -> empty file!
 cubit.cmd("mesh volume 1")
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+cubit.cmd('export gmsh "mesh.msh" overwrite')
 
 # RIGHT: Register blocks first
 cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+cubit.cmd('export gmsh "mesh.msh" overwrite')
 ```
 
 ## 2. CRITICAL: Geometry Block with 2nd Order Conversion
@@ -545,10 +579,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 add pyramid all")
-cubit.cmd('radia export nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
+cubit.cmd('export nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
 
 # RIGHT: Use nopyramid for JMAG
-cubit.cmd('radia export nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
 # Or use pure tet mesh to avoid pyramids entirely
 ```
 
@@ -703,7 +737,7 @@ JMAG requires degenerate hex pyramids, not standard CPYRAM elements:
 
 ```python
 # For JMAG: use nopyramid
-cubit.cmd('radia export nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 With `nopyramid`, pyramid elements are written as degenerate CHEXA
@@ -762,10 +796,10 @@ CUBIT_2D_MESH_WORKFLOW = """
 ## Overview
 
 Several export formats support 2D mesh export:
-- `cubit.cmd('radia export nastran "file.bdf" dimension 2 overwrite')`
-- `cubit.cmd('radia export meg "file.meg" overwrite')` (planar, DIM='K' default)
-- `cubit.cmd('radia export meg "file.meg" overwrite')` (axisymmetric, DIM='R')
-- `cubit.cmd('radia export gmsh "file.msh" version 4 dimension 2 overwrite')`
+- `cubit.cmd('export nastran "file.bdf" dimension 2 overwrite')`
+- `cubit.cmd('export meg "file.meg" overwrite')` (planar, DIM='K' default)
+- `cubit.cmd('export meg "file.meg" overwrite')` (axisymmetric, DIM='R')
+- `cubit.cmd('export gmsh "file.msh" version 4 dimension 2 overwrite')`
 
 ## Surface Creation
 
@@ -826,7 +860,7 @@ cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 cubit.cmd('block 1 name "plate"')
-cubit.cmd('radia export nastran "plate.bdf" dimension 2 overwrite')
+cubit.cmd('export nastran "plate.bdf" dimension 2 overwrite')
 ```
 
 ### MEG 2D Planar (DIM='K')
@@ -837,7 +871,7 @@ cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'MMB3K'")
-cubit.cmd('radia export meg "plate.meg" overwrite')
+cubit.cmd('export meg "plate.meg" overwrite')
 ```
 
 ### MEG Axisymmetric (DIM='R')
@@ -849,7 +883,7 @@ cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 cubit.cmd("block 1 name 'MMB3R'")
-cubit.cmd('radia export meg "axisym.meg" overwrite')
+cubit.cmd('export meg "axisym.meg" overwrite')
 ```
 
 ### Gmsh v4 2D
@@ -859,7 +893,7 @@ cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
-cubit.cmd('radia export gmsh "plate.msh" version 4 dimension 2 overwrite')
+cubit.cmd('export gmsh "plate.msh" version 4 dimension 2 overwrite')
 ```
 
 ## 2D Normal Orientation
@@ -1033,7 +1067,7 @@ When Cubit produces mixed hex-tet meshes, pyramid transition elements are genera
 
 **Fix**: Use `nopyramid` to write pyramids as degenerate CHEXA:
 ```python
-cubit.cmd('radia export nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 **Alternative**: Avoid pyramids entirely by using pure tet mesh:
@@ -1041,7 +1075,7 @@ cubit.cmd('radia export nastran "mesh.bdf" nopyramid overwrite')
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add tet all")
-cubit.cmd('radia export nastran "mesh.bdf" overwrite')
+cubit.cmd('export nastran "mesh.bdf" overwrite')
 ```
 
 ## Problem: Hex Meshing Fails on Complex Geometry
@@ -1142,9 +1176,9 @@ cubit.cmd('export nastran "mesh.bdf"')  # Does not exist
 
 **Always** use the module functions:
 ```python
-# RIGHT: Use radia export Cubit commands
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
-cubit.cmd('radia export nastran "mesh.bdf" dimension 3 overwrite')
+# RIGHT: Use export Cubit commands
+cubit.cmd('export gmsh "mesh.msh" overwrite')
+cubit.cmd('export nastran "mesh.bdf" dimension 3 overwrite')
 ```
 """
 
@@ -1180,12 +1214,12 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd('block 2 name "boundary"')
 
 # Export to desired format
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+cubit.cmd('export gmsh "mesh.msh" overwrite')
 ```
 
 ## Prerequisites
 
-The `cubit_netgen_bridge` module and `radia export` commands are part of the Radia Cubit plugin:
+The `cubit_netgen_bridge` module and `export` commands are part of the Radia Cubit plugin:
 
 ```bash
 # Install Radia (includes Cubit plugin)
@@ -1565,7 +1599,7 @@ cubit.cmd('create volume surface 7 to 12 heal')
 |--------|--------|--------|----------|
 | Cubit | VTU/VTK | meshio | ParaView visualization |
 | Cubit | Netgen | cubit_netgen_bridge | NGSolve FEM (part of Radia) |
-| Cubit | Gmsh | radia export gmsh | GMSH post-processing |
+| Cubit | Gmsh | export gmsh | GMSH post-processing |
 | Cubit | Patran | built-in export | Coordinate transforms |
 | Gmsh GEO | Cubit | geo2jou converter | Geometry migration |
 

@@ -44,6 +44,7 @@ enum PureElemType { PURE_TET = 0, PURE_HEX = 1, PURE_PRISM = 2, PURE_PYRAMID = 3
 struct VolumeElement {
   PureElemType type;
   std::vector<int> conn;   // node IDs
+  int domain = 1;          // domain index (1-based, maps to material)
 };
 
 // Edge (segment) elements on geometry curves
