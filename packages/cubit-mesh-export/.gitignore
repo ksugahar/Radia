@@ -1,0 +1,9 @@
+# Pre-built binaries (copied by Build.ps1 at build time)
+*.pyd
+*.so
+*.dll
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

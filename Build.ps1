@@ -258,6 +258,14 @@ try {
         }
     }
 
+    # Copy radia_cubit_mesh.pyd to cubit-mesh-export package (for v0.2.0+ wheel)
+    $cmePydSrc = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd"
+    $cmePydDst = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export\radia_cubit_mesh.pyd"
+    if (Test-Path $cmePydSrc) {
+        Copy-Item $cmePydSrc $cmePydDst -Force
+        Write-Host "  cubit-mesh-export/radia_cubit_mesh.pyd: copied" -ForegroundColor Green
+    }
+
     foreach ($mod in $modules) {
         $srcPath = "$BUILD_DIR\$($mod.src)"
         $dstPath = "$PROJECT_DIR\src\radia\$($mod.dst)"
