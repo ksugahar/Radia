@@ -175,7 +175,10 @@ bool NetgenCurverPure::build_netgen_mesh(
         ng::Segment nseg;
         nseg[0] = it0->second;
         nseg[1] = it1->second;
-        nseg.si = 0;
+        // Use surfnr2 as si to give each curve a unique surface reference.
+        // surfnr1 is often shared (e.g., both curves touch the same surface),
+        // but surfnr2 differs, which helps Netgen topology distinguish edges.
+        nseg.si = ei.surfnr2;  // 1-based FD index
         nseg.edgenr = edgenr;
         // surfnr1/2 MUST be set to 0-based FD indices (NOT -1).
         // BuildCurvedElements reads these and passes to PointBetweenEdge.
@@ -189,6 +192,11 @@ bool NetgenCurverPure::build_netgen_mesh(
       }
       edgenr++;
     }
+    // Pre-allocate cd2names array so Python SetCD2Name doesn't segfault.
+    // Segment edgenr is 1-based (1..n_edges), cd2names uses same indices.
+    // edgenr is now max_edgenr + 1, so allocate edgenr entries (0..edgenr-1).
+    if (edgenr > 1)
+      ng_mesh_->SetNCD2Names(edgenr);
   }
 
   ng_mesh_->UpdateTopology();

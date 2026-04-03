@@ -111,6 +111,35 @@ def export_netgen(cub5_file, order, vol_path=None):
             "cad_area": cubit.surface(sid).area(),
         })
 
+    # --- CAD reference values: curves (edges / BBND) ---
+    curve_ids = list(cubit.parse_cubit_list("curve", "all"))
+    cad_edges = []
+    # Build curve -> label mapping (same priority as _set_labels edge logic)
+    curve_labels = {}
+    try:
+        for ssid in cubit.get_sideset_id_list():
+            ssname = cubit.get_exodus_entity_name("sideset", ssid)
+            for cid in cubit.parse_cubit_list("curve", f"in sideset {ssid}"):
+                if cid not in curve_labels:
+                    curve_labels[cid] = ssname
+    except Exception:
+        pass
+    # Only include curves that have >= 2 parent surfaces (boundary curves)
+    for cid in curve_ids:
+        parent_surfs = list(cubit.parse_cubit_list("surface", f"in curve {cid}"))
+        if len(parent_surfs) < 2:
+            continue
+        if cid not in curve_labels:
+            ename = cubit.get_entity_name("curve", cid)
+            if ename and not ename.startswith("Curve"):
+                curve_labels[cid] = ename
+            else:
+                curve_labels[cid] = f"curve_{cid}"
+        cad_edges.append({
+            "name": curve_labels[cid],
+            "cad_length": cubit.curve(cid).length(),
+        })
+
     # --- Extract curved mesh with labels ---
     from cubit_netgen_bridge import extract_curved_mesh
 
@@ -156,18 +185,40 @@ def export_netgen(cub5_file, order, vol_path=None):
                             f"Boundary \"{bnd}\": A error {err:+.2e}% (>{1.0}%)")
                 break
 
-    # --- Save .vol ---
+    # --- Consistency check: total edge length (BBND) ---
+    # NOTE: BBND requires .vol round-trip (Mesh(ng_mesh) has empty BBoundaries).
+    # Edge length check is deferred to the standalone checker (check_vol_consistency.py).
+    # CAD reference lengths are saved in the companion JSON for offline checking.
+
+    # --- Save .vol + companion JSON ---
     result = {
         "order": order,
         "n_elements": total_elems,
         "materials": cad_materials,
         "boundaries": cad_boundaries,
+        "edges": cad_edges,
         "warnings": warnings,
     }
 
     if vol_path:
         ng_mesh.Save(vol_path)
         result["vol_file"] = vol_path
+
+        # Write companion JSON with CAD reference values
+        json_path = vol_path + ".json"
+        cad_ref = {
+            "vol_file": os.path.basename(vol_path),
+            "order": order,
+            "materials": {m["name"]: m["cad_volume"]
+                          for m in cad_materials},
+            "boundaries": {b["name"]: b["cad_area"]
+                           for b in cad_boundaries},
+            "edges": {e["name"]: e["cad_length"]
+                      for e in cad_edges},
+        }
+        with open(json_path, "w") as f:
+            json.dump(cad_ref, f, indent=2)
+        result["json_file"] = json_path
 
     return result
 

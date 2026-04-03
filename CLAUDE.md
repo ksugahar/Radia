@@ -1389,7 +1389,7 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 **Rules**:
 - `calc_*.py` scripts must NOT import PySide6, PyQt5, or any GUI library
 - All results returned as JSON on stdout (last line)
-- NGSolve must be imported BEFORE cubit (numpy DLL conflict avoidance)
+- **CRITICAL**: NGSolve must be imported BEFORE cubit (numpy DLL conflict avoidance). Cubit bundles Python 3.10 site-packages with its own numpy/scipy DLLs which conflict with Python 3.12's MKL-linked numpy. Order: `import netgen` → `import ngsolve` → `setup_cubit()` → `import cubit`
 - `cubit.init()` banner suppressed via `contextlib.redirect_stderr`
 - `_auto_register_panels()` in the panels module checks Qt availability before running
 - External Python detected via: `RADIA_PYTHON` env var > `py -3` > `python`
@@ -1406,6 +1406,15 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 | `install_panels.py` | System Python | Generates startup.py, registers in ~/.cubit |
 
 **Export Mesh is C++ only** (see Cubit Mesh Export Module section below). Do NOT add Python export dialogs or panels.
+
+### Cubit Plugin: C++ First, No Python ABI Dependency
+
+**POLICY**: Cubit plugin functionality MUST be implemented in C++ to avoid Python ABI mismatch. Cubit embeds Python 3.10; NGSolve/Radia use Python 3.12. Sharing Python objects between them causes segfaults and DLL conflicts.
+
+- `.ccm`/`.ccl`: Link Cubit C++ API (cubiti, cubit_util) directly — no Python dependency
+- `radia_cubit_mesh.pyd`: pybind11 for Python 3.12 — does NOT link Cubit C++ libraries
+- Netgen `SetNCD2Names()` is not exposed to Python — call from C++ side in `NetgenCurverPure`
+- Interface between Cubit and NGSolve: **.vol file** (text format, no ABI dependency)
 
 ---
 

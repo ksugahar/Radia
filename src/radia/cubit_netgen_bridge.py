@@ -165,6 +165,7 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
     # Each segment lies on a curve shared by two surfaces.
     # Netgen needs these as 1D elements for BuildCurvedElements edge snapping.
     edge_elements = []  # list of dicts: {surfnr1, surfnr2, segments: [[n0,n1], ...]}
+    edge_curve_ids = []  # Cubit curve ID for each edge_element (edgenr = index + 1)
     for cid in curve_ids:
         parent_surfs = list(cubit_mod.parse_cubit_list("surface", f"in curve {cid}"))
         if len(parent_surfs) < 2:
@@ -206,6 +207,7 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
                 "segments": segs,
                 "dists": dists,
             })
+            edge_curve_ids.append(cid)
 
     def edge_project_func(surfnr1, surfnr2, x, y, z):
         key = (surfnr1, surfnr2)
@@ -232,12 +234,12 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
     )
 
     # --- Phase F: Set labels from Cubit blocks ---
-    _set_labels(ng_mesh, cubit_mod, surface_ids)
+    _set_labels(ng_mesh, cubit_mod, surface_ids, edge_curve_ids)
 
     return ng_mesh
 
 
-def _set_labels(ng_mesh, cubit_mod, surface_ids):
+def _set_labels(ng_mesh, cubit_mod, surface_ids, edge_curve_ids=None):
     """Set material and boundary labels from Cubit blocks/sidesets/entity names.
 
     Cubit allows blocks/sidesets/nodesets to contain any combination of
@@ -330,6 +332,33 @@ def _set_labels(ng_mesh, cubit_mod, surface_ids):
         ng_mesh.SetBCName(i, name)
 
     # --- Edge labels (BBND / codim-2) ---
-    # TODO: Sideset on curves → SetCD2Name for NGSolve BBND boundary conditions
-    # Disabled: SetCD2Name crashes on some mesh configurations.
-    # Needs investigation on valid edgenr range after UpdateTopology.
+    # edgenr in C++ is 1-based, one per edge_curve_ids entry.
+    # SetCD2Name uses 1-based index (matching edgenr and read_gmsh convention).
+    if edge_curve_ids:
+        # Priority 1: Sideset on curves
+        curve_sideset_names = {}  # cid -> name
+        try:
+            for ssid in cubit_mod.get_sideset_id_list():
+                ssname = cubit_mod.get_exodus_entity_name("sideset", ssid)
+                for cid in cubit_mod.parse_cubit_list(
+                        "curve", f"in sideset {ssid}"):
+                    if cid not in curve_sideset_names:
+                        curve_sideset_names[cid] = ssname
+        except Exception:
+            pass
+
+        for i, cid in enumerate(edge_curve_ids):
+            if cid in curve_sideset_names:
+                name = curve_sideset_names[cid]
+            else:
+                ename = cubit_mod.get_entity_name("curve", cid)
+                if ename and not ename.startswith("Curve"):
+                    name = ename
+                else:
+                    name = f"curve_{cid}"
+            # edgenr is 1-based (matching segment edgenr in C++)
+            cd2nr = i + 1
+            try:
+                ng_mesh.SetCD2Name(cd2nr, name)
+            except Exception as e:
+                print(f"Warning: SetCD2Name({cd2nr}, '{name}') failed: {e}")
