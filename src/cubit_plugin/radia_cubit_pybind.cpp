@@ -77,12 +77,14 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
             }
 
             // --- Convert volume elements ---
+            // Each element is (type_code, conn_list) or (type_code, conn_list, domain)
             std::vector<VolumeElement> velems;
             for (auto item : vol_elements) {
                 auto tup = item.cast<py::tuple>();
                 VolumeElement ve;
                 ve.type = static_cast<PureElemType>(tup[0].cast<int>());
                 ve.conn = tup[1].cast<std::vector<int>>();
+                ve.domain = (py::len(tup) > 2) ? tup[2].cast<int>() : 1;
                 velems.push_back(ve);
             }
 
@@ -244,8 +246,9 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
             Args:
                 node_coords: Node coordinates, shape (N, 3), float64.
                 node_ids: Node IDs, shape (N,), int32.
-                vol_elements: Volume elements as list of (type_code, conn_list).
+                vol_elements: Volume elements as list of (type_code, conn_list[, domain]).
                     type_code: 0=TET, 1=HEX, 2=PRISM, 3=PYRAMID.
+                    domain: 1-based material domain index (default 1).
                 surface_data: Per-surface data as list of dicts with keys:
                     id (int), tris (flat list), quads (flat list),
                     uvs (dict {node_id: (u, v)}).
