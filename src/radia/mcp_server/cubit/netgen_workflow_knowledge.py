@@ -153,7 +153,7 @@ mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=False, split_quads=
 ## Example: Basic Usage
 
 ```python
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 
 # Create and mesh geometry in Cubit
@@ -213,7 +213,7 @@ WORKFLOW_CYLINDER = """
 ## Step-by-Step
 
 ```python
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
@@ -254,7 +254,7 @@ WORKFLOW_SPHERE = """
 ## Step-by-Step
 
 ```python
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
@@ -287,7 +287,7 @@ WORKFLOW_TORUS = """
 ## Step-by-Step
 
 ```python
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
@@ -325,7 +325,7 @@ are handled automatically by the ACIS kernel.
 ## Example: Brick with Cylindrical Hole
 
 ```python
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 from ngsolve import Mesh, Integrate, CF
 import math
@@ -377,7 +377,7 @@ this is an alternative approach with excellent accuracy (~0.001%).
 ## Step-by-Step
 
 ```python
-from cubit_netgen_bridge import extract_curved_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh

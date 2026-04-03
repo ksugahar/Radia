@@ -77,7 +77,7 @@ def demo_acis_path():
     import cubit
     cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
                 '-commandplugindir', plugin_dir])
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     print("\n" + "=" * 70)
     print("  Path 2: Cubit ACIS trampoline (CallbackGeometry)")

@@ -42,6 +42,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+cubit = [
+    "cubit-mesh-export",
+]
 gui = [
     "PySide6>=6.5",
 ]

@@ -96,7 +96,7 @@ def calculate_volume(cub5_file, order):
             "error": "Volumes are not meshed.",
         }
 
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     try:
         build_order = max(order, 2)

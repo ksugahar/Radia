@@ -164,6 +164,7 @@ def _generate_startup_script(panels_dir):
 	# cubit.py's directory.  This avoids baking in version-specific paths
 	# like ".../Cubit 2025.3/bin/python3/lib/site-packages".
 	content = (
+		f'#!python\n'
 		f'import sys, os, glob; '
 		f'_cb = os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(sys.executable), "cubit.py"))) if not hasattr(sys, "_cubit_bin") else sys._cubit_bin; '
 		f'_sp = glob.glob(os.path.join(_cb, "python*", "lib", "site-packages")) + glob.glob(os.path.join(_cb, "python*", "lib", "python*", "site-packages")); '
@@ -181,7 +182,7 @@ def _generate_startup_script(panels_dir):
 	return startup_path
 
 
-def _build_startup_block(startup_script_path):
+def _build_startup_block(startup_script_path, cubit_bin=None):
 	"""Build the block to insert into .cubit file."""
 	startup_script_path = startup_script_path.replace("\\", "/")
 	return (
@@ -190,6 +191,38 @@ def _build_startup_block(startup_script_path):
 		f"play \"{startup_script_path}\"\n"
 		f"{_MARKER_END}\n"
 	)
+
+
+def _create_launcher(cubit_bin):
+	"""Create a launcher batch file for Cubit with radia plugin support.
+
+	Sets CUBIT_PLUGIN_DIR (for Python API) and passes
+	-commandplugindir (for GUI) so export commands work in both modes.
+	"""
+	if sys.platform != "win32":
+		return None
+
+	cubit_exe = os.path.join(cubit_bin, "coreform_cubit.exe")
+	if not os.path.isfile(cubit_exe):
+		return None
+
+	plugin_dir = os.path.join(cubit_bin, "plugins")
+	launcher_path = os.path.join(cubit_bin, "cubit_radia.bat")
+	# 'start' treats the first quoted string as window title, making it
+	# impossible to quote paths with spaces as the executable. We use
+	# a temporary variable to hold the plugin dir (may contain spaces).
+	content = (
+		f'@set CUBIT_PLUGIN_DIR={plugin_dir}\n'
+		f'@set _P={plugin_dir}\n'
+		f'@start "" "{cubit_exe}" -commandplugindir "%_P%" %*\n'
+	)
+
+	try:
+		with open(launcher_path, "w", encoding="utf-8") as f:
+			f.write(content)
+		return launcher_path
+	except PermissionError:
+		return None
 
 
 def _remove_existing_block(lines):
@@ -210,6 +243,90 @@ def _remove_existing_block(lines):
 	return result
 
 
+def _get_cubit_ini_paths(all_users=False):
+	"""Get paths to all Cubit.ini files (Qt settings).
+
+	Returns list of paths:
+	  - Current user: %APPDATA%/Coreform/Cubit.ini
+	  - --all-users: all existing user profiles
+	"""
+	paths = []
+	if sys.platform == "win32":
+		appdata = os.environ.get("APPDATA", "")
+		if appdata:
+			paths.append(os.path.join(appdata, "Coreform", "Cubit.ini"))
+		if all_users:
+			users_dir = os.path.join(os.environ.get("SystemDrive", "C:"),
+			                         os.sep, "Users")
+			skip = {"Default", "Public", "All Users", "Default User"}
+			for entry in os.listdir(users_dir):
+				if entry in skip:
+					continue
+				user_dir = os.path.join(users_dir, entry)
+				ini = os.path.join(user_dir, "AppData", "Roaming",
+				                   "Coreform", "Cubit.ini")
+				if ini not in paths and os.path.isfile(ini):
+					paths.append(ini)
+	return paths
+
+
+def _ensure_plugin_path_in_ini(ini_path, plugin_dir):
+	"""Ensure plugin_dir is registered in Cubit.ini plugin\\paths.
+
+	Cubit only loads third-party .ccm plugins from directories listed
+	in plugin\\paths (Cubit.ini [clarofw] section).  Without this,
+	the plugin DLL is found but cubit_plugin_instance() is never called.
+	"""
+	plugin_dir = plugin_dir.replace("\\", "/")
+
+	if not os.path.isfile(ini_path):
+		# Create minimal Cubit.ini with plugin path
+		os.makedirs(os.path.dirname(ini_path), exist_ok=True)
+		with open(ini_path, "w", encoding="utf-8") as f:
+			f.write("[clarofw]\n")
+			f.write(f"plugin\\paths={plugin_dir}\n")
+		return True
+
+	with open(ini_path, "r", encoding="utf-8") as f:
+		content = f.read()
+	lines = content.splitlines(keepends=True)
+
+	found = False
+	updated = False
+	for i, line in enumerate(lines):
+		if line.startswith("plugin\\paths="):
+			found = True
+			current = line.split("=", 1)[1].strip()
+			# Check if our path is already there
+			existing = [p.strip() for p in current.split(",") if p.strip()]
+			normalized = [p.replace("\\", "/") for p in existing]
+			if plugin_dir not in normalized:
+				if current:
+					lines[i] = f"plugin\\paths={current}, {plugin_dir}\n"
+				else:
+					lines[i] = f"plugin\\paths={plugin_dir}\n"
+				updated = True
+			break
+
+	if not found:
+		# Add under [clarofw] section
+		for i, line in enumerate(lines):
+			if line.strip() == "[clarofw]":
+				lines.insert(i + 1, f"plugin\\paths={plugin_dir}\n")
+				updated = True
+				break
+		else:
+			# No [clarofw] section, append one
+			lines.append("\n[clarofw]\n")
+			lines.append(f"plugin\\paths={plugin_dir}\n")
+			updated = True
+
+	if updated:
+		with open(ini_path, "w", encoding="utf-8") as f:
+			f.writelines(lines)
+	return updated
+
+
 def install_panels(all_users=False):
 	"""Register custom toolbar for Coreform Cubit.
 
@@ -217,6 +334,9 @@ def install_panels(all_users=False):
 	The toolbar script location is detected automatically:
 	  - pip install -e . (editable): repo's panels/ directory
 	  - pip install (normal):        site-packages panels/ directory
+
+	Also sets CUBIT_PLUGIN_DIR so the radia_cubit.ccm plugin commands
+	are available in journal files.
 
 	Args:
 	  all_users: If True, install to all existing user profiles (admin).
@@ -257,6 +377,27 @@ def install_panels(all_users=False):
 			print(f"Updated: {cubit_file}")
 		except PermissionError:
 			print(f"SKIP (no permission): {cubit_file}")
+
+	# Step 3: Register plugin directory in Cubit.ini + CUBIT_PLUGIN_DIR
+	if cubit_bin:
+		plugin_dir = os.path.join(cubit_bin, "plugins")
+
+		# 3a. Cubit.ini (GUI plugin dialog)
+		ini_paths = _get_cubit_ini_paths(all_users=all_users)
+		for ini_path in ini_paths:
+			try:
+				if _ensure_plugin_path_in_ini(ini_path, plugin_dir):
+					print(f"Plugin path registered: {ini_path}")
+				else:
+					print(f"Plugin path OK: {ini_path}")
+			except PermissionError:
+				print(f"SKIP (no permission): {ini_path}")
+
+		# 3b. Launcher batch file (sets CUBIT_PLUGIN_DIR before Cubit starts)
+		launcher = _create_launcher(cubit_bin)
+		if launcher:
+			print(f"Launcher created: {launcher}")
+			print(f"  -> Start Cubit via this launcher for plugin support")
 
 	print()
 	print("=== Installation Complete ===")

@@ -84,7 +84,7 @@ def calculate_surface(cub5_file, order):
                 "error": "Volumes are not meshed."}
 
     # Export to NGSolve mesh with curving (ACIS kernel, no STEP needed)
-    from cubit_netgen_bridge import extract_curved_mesh
+    from cubit_mesh_export import extract_curved_mesh
 
     try:
         mesh = NGMesh(extract_curved_mesh(cubit, order=order))

@@ -468,7 +468,7 @@ def ngsbem_inductance(topic: str = "all") -> str:
     Sources:
       - https://docu.ngsolve.org/latest/how_to/ngsbem.html
       - https://github.com/Weggler/docu-ngsbem/ (stabilized BEM)
-      - https://github.com/ksugahar/Radia (cubit_netgen_bridge / radia export plugin)
+      - https://github.com/ksugahar/Radia (cubit_netgen_bridge / export plugin)
 
     Args:
         topic: Documentation topic. Options:
