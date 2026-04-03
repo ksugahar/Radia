@@ -35,11 +35,13 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
     Returns:
         netgen.meshing.Mesh: Curved mesh ready for ngsolve.Mesh().
     """
-    import netgen  # noqa: F401 — must import before _cubit_mesh (DLL setup)
+    import netgen  # noqa: F401 — must import before radia_cubit_mesh (DLL setup)
     try:
-        from cubit_mesh_export import _cubit_mesh as radia_cubit_mesh
+        # v0.2.0+: .pyd bundled inside cubit_mesh_export package
+        from cubit_mesh_export import radia_cubit_mesh
     except ImportError:
         try:
+            # Fallback: .pyd installed separately (e.g., radia package)
             import radia_cubit_mesh
         except ImportError:
             # Fallback: .pyd in same directory
