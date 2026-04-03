@@ -137,46 +137,22 @@ bool NetgenCurverPure::build_netgen_mesh(
     fd_idx++;
   }
 
-  // Add volume elements
+  // Add volume elements (domain index from ve.domain, 1-based)
   for (auto& ve : vol_elems) {
+    int nnodes = 0;
+    ng::ELEMENT_TYPE etype = ng::TET;
     switch (ve.type) {
-      case PURE_TET: {
-        if (ve.conn.size() < 4) continue;
-        ng::Element el(ng::TET);
-        for (int k = 0; k < 4; k++)
-          el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
-        el.SetIndex(1);
-        ng_mesh_->AddVolumeElement(el);
-        break;
-      }
-      case PURE_HEX: {
-        if (ve.conn.size() < 8) continue;
-        ng::Element el(ng::HEX);
-        for (int k = 0; k < 8; k++)
-          el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
-        el.SetIndex(1);
-        ng_mesh_->AddVolumeElement(el);
-        break;
-      }
-      case PURE_PRISM: {
-        if (ve.conn.size() < 6) continue;
-        ng::Element el(ng::PRISM);
-        for (int k = 0; k < 6; k++)
-          el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
-        el.SetIndex(1);
-        ng_mesh_->AddVolumeElement(el);
-        break;
-      }
-      case PURE_PYRAMID: {
-        if (ve.conn.size() < 5) continue;
-        ng::Element el(ng::PYRAMID);
-        for (int k = 0; k < 5; k++)
-          el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
-        el.SetIndex(1);
-        ng_mesh_->AddVolumeElement(el);
-        break;
-      }
+      case PURE_TET:     nnodes = 4; etype = ng::TET;     break;
+      case PURE_HEX:     nnodes = 8; etype = ng::HEX;     break;
+      case PURE_PRISM:   nnodes = 6; etype = ng::PRISM;   break;
+      case PURE_PYRAMID: nnodes = 5; etype = ng::PYRAMID; break;
     }
+    if ((int)ve.conn.size() < nnodes) continue;
+    ng::Element el(etype);
+    for (int k = 0; k < nnodes; k++)
+      el[k] = cubit_nid_to_ng_pi_[ve.conn[k]];
+    el.SetIndex(ve.domain);
+    ng_mesh_->AddVolumeElement(el);
   }
 
   // Add 1D segments BEFORE UpdateTopology so edgenr is preserved.

@@ -54,23 +54,33 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
     for i, nid in enumerate(node_id_list):
         node_coords[i] = cubit_mod.get_nodal_coordinates(nid)
 
-    # --- Phase B: Extract volume elements ---
+    # --- Phase B: Extract volume elements (with per-volume domain index) ---
     vol_elements = []
-    TYPE_MAP = {
-        "TETRA4": 0, "TETRA": 0, "TET4": 0, "TET": 0,
-        "HEX8": 1, "HEX": 1,
-        "WEDGE6": 2, "WEDGE": 2,
-        "PYRAMID5": 3, "PYRAMID": 3,
-    }
-    tet_ids = cubit_mod.parse_cubit_list("tet", "all")
-    for tid in tet_ids:
-        conn = list(cubit_mod.get_connectivity("tet", tid))
-        vol_elements.append((0, conn))  # TET
+    volume_ids = list(cubit_mod.get_entities("volume"))
 
+    tet_ids = cubit_mod.parse_cubit_list("tet", "all")
     hex_ids = cubit_mod.parse_cubit_list("hex", "all")
-    for hid in hex_ids:
-        conn = list(cubit_mod.get_connectivity("hex", hid))
-        vol_elements.append((1, conn))  # HEX
+
+    for domain_idx, vid in enumerate(volume_ids, start=1):
+        for tid in cubit_mod.get_volume_tets(vid):
+            conn = list(cubit_mod.get_connectivity("tet", tid))
+            vol_elements.append((0, conn, domain_idx))  # TET
+        for hid in cubit_mod.get_volume_hexes(vid):
+            conn = list(cubit_mod.get_connectivity("hex", hid))
+            vol_elements.append((1, conn, domain_idx))  # HEX
+        # Wedges and pyramids (hex-tet transition)
+        try:
+            for wid in cubit_mod.get_volume_wedges(vid):
+                conn = list(cubit_mod.get_connectivity("wedge", wid))
+                vol_elements.append((2, conn, domain_idx))  # PRISM/WEDGE
+        except Exception:
+            pass
+        try:
+            for pid in cubit_mod.get_volume_pyramids(vid):
+                conn = list(cubit_mod.get_connectivity("pyramid", pid))
+                vol_elements.append((3, conn, domain_idx))  # PYRAMID
+        except Exception:
+            pass
 
     # --- Phase C: Extract surface mesh + UVs ---
     surface_ids = list(cubit_mod.parse_cubit_list("surface", "all"))
@@ -79,8 +89,8 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
 
     # Determine surface element type: Cubit uses "tri" for tet meshes,
     # "face" for hex meshes (returns 4-node quads)
-    has_tets = len(tet_ids) > 0
-    has_hexes = len(hex_ids) > 0
+    has_tets = len(list(tet_ids)) > 0
+    has_hexes = len(list(hex_ids)) > 0
 
     for sid in surface_ids:
         surf = cubit_mod.surface(sid)
@@ -220,4 +230,101 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         edge_project_func=edge_project_func if edge_map else None,
         edge_elements=edge_elements if edge_elements else [],
     )
+
+    # --- Phase F: Set labels from Cubit blocks ---
+    _set_labels(ng_mesh, cubit_mod, surface_ids)
+
     return ng_mesh
+
+
+def _set_labels(ng_mesh, cubit_mod, surface_ids):
+    """Set material and boundary labels from Cubit blocks/sidesets/entity names.
+
+    Label priority (user-friendly — any attribute the user sets will work):
+
+    Material (volume domain):
+      1. Block name (volume block with matching element type)
+      2. Cubit volume entity name (if user renamed it)
+      3. Fallback: "volume_N"
+
+    Boundary (surface bcname):
+      1. Sideset name (most natural for FEM boundary conditions)
+      2. Block name (block containing surface tris/faces)
+      3. Cubit surface entity name (if user renamed it)
+      4. Fallback: "surface_N"
+    """
+    block_ids = list(cubit_mod.get_block_id_list())
+    vol_ids = list(cubit_mod.get_entities("volume"))
+
+    # --- Material labels (per-domain, multi-volume) ---
+    # Build volume_id → block name mapping
+    vol_block_names = {}  # vid -> name
+    for bid in block_ids:
+        bvols = list(cubit_mod.parse_cubit_list("volume", f"in block {bid}"))
+        if not bvols:
+            continue
+        bname = cubit_mod.get_exodus_entity_name("block", bid)
+        etype = cubit_mod.get_block_element_type(bid)
+        if etype in ("TETRA", "TETRA4", "TET", "TET4",
+                     "HEX", "HEX8", "WEDGE", "WEDGE6",
+                     "PYRAMID", "PYRAMID5"):
+            for vid in bvols:
+                vol_block_names[vid] = bname
+
+    for domain_idx, vid in enumerate(vol_ids, start=1):
+        if vid in vol_block_names:
+            name = vol_block_names[vid]
+        else:
+            ename = cubit_mod.get_entity_name("volume", vid)
+            if ename and not ename.startswith("Volume"):
+                name = ename
+            else:
+                name = f"volume_{vid}"
+        ng_mesh.SetMaterial(domain_idx, name)
+
+    # --- Boundary labels ---
+    # Priority 1: Sideset names
+    surf_names = {}  # sid -> name
+    try:
+        sideset_ids = list(cubit_mod.get_sideset_id_list())
+        for ssid in sideset_ids:
+            ssname = cubit_mod.get_exodus_entity_name("sideset", ssid)
+            ss_surfs = list(cubit_mod.parse_cubit_list(
+                "surface", f"in sideset {ssid}"))
+            for sid in ss_surfs:
+                if sid in surface_ids:
+                    surf_names[sid] = ssname
+    except Exception:
+        pass
+
+    # Priority 2: Block names (blocks containing surface tris/faces)
+    for bid in block_ids:
+        bname = cubit_mod.get_exodus_entity_name("block", bid)
+        btris = set(cubit_mod.get_block_tris(bid))
+        try:
+            bfaces = set(cubit_mod.get_block_faces(bid))
+        except Exception:
+            bfaces = set()
+        if not btris and not bfaces:
+            continue
+        for sid in surface_ids:
+            if sid in surf_names:
+                continue  # sideset takes priority
+            stris = set(cubit_mod.parse_cubit_list(
+                "tri", f"in surface {sid}"))
+            sfaces = set(cubit_mod.parse_cubit_list(
+                "face", f"in surface {sid}"))
+            if (stris and stris & btris) or (sfaces and sfaces & bfaces):
+                surf_names[sid] = bname
+
+    # Priority 3/4: Entity name or fallback
+    for i, sid in enumerate(surface_ids):
+        if sid in surf_names:
+            name = surf_names[sid]
+        else:
+            ename = cubit_mod.get_entity_name("surface", sid)
+            if ename and not ename.startswith("Surface"):
+                name = ename
+            else:
+                name = f"surface_{sid}"
+        ng_mesh.SetBCName(i, name)
