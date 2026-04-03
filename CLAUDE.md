@@ -1252,6 +1252,12 @@ Use **snake_case** with functional prefixes:
 ### VTK Export
 
 
+### Error Display Policy: Scientific Notation
+
+**POLICY**: Volume error and area error MUST use **scientific notation** (e.g., `-8.24e-02%`, `+2.35e-04%`). Do NOT use fixed-point notation like `-0.08%` or `+0.0002%` — this hides significant digits at small values and makes p-convergence trends unreadable.
+
+Apply this to: Mesh Evaluation tables, Joachim correspondence, benchmark results, test output.
+
 ### Benchmark Policy
 
 **POLICY**: 全てのベンチマークスクリプト (`bench_*.py`) は JSON 形式の結果ファイルを出力すること。

@@ -47,8 +47,12 @@ def export_netgen(cub5_file, order, vol_path=None, pkl_path=None):
 
     from cubit_netgen_bridge import extract_curved_mesh
 
-    ng_mesh = extract_curved_mesh(cubit, order=order)
+    # order=1: build with order=2 (C++ requires >=2), then reset to linear
+    build_order = max(order, 2)
+    ng_mesh = extract_curved_mesh(cubit, order=build_order)
     mesh = NGMesh(ng_mesh)
+    if order == 1:
+        mesh.Curve(1)
 
     result = {
         "order": order,

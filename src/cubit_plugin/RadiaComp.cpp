@@ -263,7 +263,7 @@ void RadiaMenuHandler::export_netgen()
   // Ask for order
   bool ok;
   int order = QInputDialog::getInt(nullptr, "Netgen Export",
-    "Curve order (2-5):", 3, 2, 5, 1, &ok);
+    "Curve order (1-5):", 3, 1, 5, 1, &ok);
   if (!ok) return;
 
   // Get output path
@@ -294,13 +294,20 @@ void RadiaMenuHandler::export_netgen()
     return;
   }
 
-  PRINT_INFO("Exporting Netgen .vol + .pkl (order %d)...\n", order);
+  if (order == 1) {
+    PRINT_INFO("Exporting Netgen .vol (linear, order 1)...\n");
+  } else {
+    PRINT_INFO("Exporting Netgen .vol + .pkl (order %d)...\n", order);
+  }
 
   QProcess proc;
   QStringList args;
   if (python == "py") args << "-3";
   args << script << "--cub5" << cub5 << "--order" << QString::number(order)
-       << "--vol" << volPath << "--pkl" << pklPath;
+       << "--vol" << volPath;
+  // .pkl only for order >= 2 (curving not preserved in .vol)
+  if (order >= 2)
+    args << "--pkl" << pklPath;
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   for (const QString &key : env.keys()) {
@@ -320,8 +327,13 @@ void RadiaMenuHandler::export_netgen()
     return;
   }
 
-  PRINT_INFO("Exported:\n  %s (linear)\n  %s (curved, order %d)\n",
-    volPath.toStdString().c_str(), pklPath.toStdString().c_str(), order);
+  if (order == 1) {
+    PRINT_INFO("Exported:\n  %s (linear)\n",
+      volPath.toStdString().c_str());
+  } else {
+    PRINT_INFO("Exported:\n  %s (linear)\n  %s (curved, order %d)\n",
+      volPath.toStdString().c_str(), pklPath.toStdString().c_str(), order);
+  }
 }
 
 // ============================================================
