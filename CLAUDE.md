@@ -170,19 +170,63 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ### GMSH .msh Format Version Policy
 
-**POLICY**: v2.2 が標準フォーマット。v4.1 は大規模・将来拡張用。
+**POLICY**: Cubit plugin は **v2.2 のみ**、Radia-NGSolve パネルは **v4.1 のみ**。各コンポーネントは片方だけ考えればよい。
 
-| Direction | Format | Purpose | Tool |
-|-----------|--------|---------|------|
-| **Input** (→ NGSolve) | **v2.2** | Mesh import into NGSolve | `ReadGmsh()` |
-| **Output** (default) | **v2.2** | NGSolve ReadGmsh(), COMSOL import, GMSH GUI | `GmshPostExport.write()` |
-| **Output** (optional) | **v4.1** | Large-scale, structured Physical Groups | `GmshPostExport.write(version="4.1")` |
+| Component | Version | Purpose | Test scope |
+|-----------|---------|---------|------------|
+| **Cubit plugin** (C++) | **v2.2 only** | Mesh export → GMSH viewer / NGSolve | v2.2 export のみ |
+| **Radia-NGSolve panel** (Python) | **v4.1 only** | Field post-processing (transient, NodeData) | v4.1 post のみ |
 
-- `GmshPostExport.write()` defaults to v2.2 (changed from v4.1, 2026-03-22)
-- v2.2 includes NodeData (field data: |J|, |B| etc.) for physics import
+**Separation of concerns**:
+- Cubit plugin 開発者は v2.2 のテストのみ必要
+- Radia-NGSolve パネル開発者は v4.1 のテストのみ必要
+- 結合テストは **.vol 渡し** の round-trip のみ（.msh は各コンポーネント内で完結）
+- Radia-NGSolve は v2.2/v4.1 両方のコードをメンテするが、各コンポーネントの開発・テストは独立
+
+**Post-processing**: GMSH .msh v4.1 only (`GmshPostExport`). VTK output is NOT maintained by Radia — use NGSolve's built-in VTK export (`VTKOutput`) if needed.
+
+**Interface between components**: `.vol` (Cubit export → Radia-NGSolve calculation)
+
 - Element type codes (Tri6=9, Tri10=21, Tri15=23, Tri21=25) are identical in both versions
 - High-order elements (arbitrary order) are supported in both v2.2 and v4.1
-- COMSOL can import v2.2 with NodeData directly
+
+### Mesh Export Consistency Check Policy
+
+**POLICY**: Before exporting .vol, verify mesh correctness by comparing NGSolve integration values against Cubit ACIS CAD values, per label:
+
+| Check | NGSolve | Cubit CAD | Threshold |
+|-------|---------|-----------|-----------|
+| **Volume** (per material) | `Integrate(CF(1), mesh, definedon=mesh.Materials(mat))` | `cubit.volume(vid).volume()` | > 1% warning |
+| **Area** (per boundary) | `Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries(bnd))` | `cubit.surface(sid).area()` | > 1% warning |
+| **Length** (per BBND) | `Integrate(CF(1), mesh, BBND, definedon=mesh.BBoundaries(bnd))` | `cubit.curve(cid).length()` | > 1% warning |
+
+All three checks (Volume, Area, Length) passing per label confirms the mesh is geometrically correct.
+
+### Cubit Block/Sideset Label Convention
+
+**POLICY**: Separate blocks for material and boundary labels. Do NOT mix volume elements and surface elements in the same block.
+
+```python
+# CORRECT: separate blocks
+block 1 add volume 1           # material block
+block 1 name "iron"
+block 2 add tri in surface 1   # boundary block  
+block 2 name "source"
+
+# ALSO CORRECT: use sideset for boundaries (preferred for FEM)
+sideset 1 add surface 1
+sideset 1 name "source"
+
+# WRONG: mixed volume + surface in one block
+block 1 add volume 1
+block 1 add tri in surface 1   # tris invisible via get_block_tris when type=TETRA
+block 1 name "mixed"           # boundary label LOST
+```
+
+**Label priority** (Netgen Vol export):
+- Material: block (volume membership) > entity name > `volume_N`
+- Boundary: sideset > block (tri/face overlap) > entity name > `surface_N`
+- Edge (BBND): sideset on curve > entity name (TODO: SetCD2Name crashes, needs investigation)
 
 ---
 

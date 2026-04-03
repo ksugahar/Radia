@@ -133,16 +133,16 @@ class GmshPostExport:
         arr = self._resolve_data(data, ncomp=3, cell_data=cell_data)
         self._fields.append((name, 3, arr, cell_data, material))
 
-    def write(self, filename, time=0.0, timestep=0, version="2.2"):
+    def write(self, filename, time=0.0, timestep=0, version="4.1"):
         """Write mesh + field data to GMSH .msh format.
 
         Args:
             filename: Output .msh file path
             time: Time value for time series
             timestep: Time step index
-            version: GMSH format version ("2.2" or "4.1")
-                     v2.2 (default): NGSolve ReadGmsh(), COMSOL import, high-order elements
-                     v4.1: structured physical groups, NodeData + ElementData
+            version: GMSH format version ("4.1" or "2.2")
+                     v4.1 (default): structured physical groups, NodeData, transient support
+                     v2.2: NGSolve ReadGmsh() compatible, legacy
         """
         if version == "2.2":
             return self.write_v22(filename)
