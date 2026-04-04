@@ -6,7 +6,7 @@
 #include <vector>
 
 /// APREPRO command: export netgen "file.vol" [order N]
-/// Runs Python subprocess (calc_export_netgen.py) for high-order curving.
+/// Pure C++ export via MeshData + NetgenCurver (no subprocess).
 /// Produces .vol + companion .json with CAD reference values.
 class ExportNetgenCommand : public CubitCommand
 {

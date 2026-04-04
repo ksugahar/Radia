@@ -2,7 +2,7 @@
 Verify exported Netgen .vol mesh against CAD reference JSON.
 
 Called as subprocess from Cubit Export Mesh GUI (after C++ exports .vol + .json):
-    python calc_export_netgen.py --vol model.vol
+    python calc_verify_vol.py --vol model.vol
 
 Reads .vol (NGSolve), reads companion .vol.json (CAD values from C++),
 computes NGSolve Integrate per label, updates JSON with ng_* values and errors.
