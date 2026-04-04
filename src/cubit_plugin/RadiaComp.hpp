@@ -54,7 +54,7 @@ class ExportDialog : public QDialog
   Q_OBJECT
 
 public:
-  enum Format { GMSH, Nastran, VTK, MEG };
+  enum Format { NETGEN_VOL, GMSH, Nastran, VTK, MEG };
 
   ExportDialog(Format format, const QString &jouPath = QString(),
                QWidget* parent = nullptr);

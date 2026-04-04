@@ -261,24 +261,17 @@ void RadiaMenuHandler::export_netgen()
     if (CubitInterface::get_volume_count() == 0) return;
   }
 
-  // Ask for order
-  bool ok;
-  int order = QInputDialog::getInt(nullptr, "Netgen Vol Export",
-    "Curve order (1-5):", 3, 1, 5, 1, &ok);
-  if (!ok) return;
-
-  // Get output path
+  // Show export dialog (shared with GMSH/Nastran/VTK/MEG)
   QString jouPath;
   std::string jf = CubitInterface::get_current_journal_file();
   if (!jf.empty()) jouPath = QString::fromStdString(jf);
   if (jouPath.isEmpty()) jouPath = s_lastJouPath;
 
-  QString defaultDir = jouPath.isEmpty()
-    ? QDir::currentPath() : QFileInfo(jouPath).absolutePath();
-  QString baseName = jouPath.isEmpty()
-    ? "ExportedMesh" : QFileInfo(jouPath).completeBaseName();
+  ExportDialog dlgOpt(ExportDialog::NETGEN_VOL, jouPath);
+  if (dlgOpt.exec() != QDialog::Accepted) return;
 
-  QString volPath = defaultDir + "/" + baseName + ".vol";
+  int order = dlgOpt.order();
+  QString volPath = dlgOpt.filePath();
   volPath.replace("\\", "/");
 
   // Save temp .cub5
@@ -406,6 +399,46 @@ void RadiaMenuHandler::export_netgen()
     layout->addWidget(bndTable);
   }
 
+  // Edge table (Length / BBND)
+  QJsonArray edges = r["edges"].toArray();
+  int nEdges = edges.size();
+  if (nEdges > 0) {
+    // Filter out entries without ng_length (default labels with no BBND data)
+    QJsonArray validEdges;
+    for (auto e : edges) {
+      QJsonObject eo = e.toObject();
+      if (eo.contains("ng_length") || eo.contains("cad_length"))
+        validEdges.append(e);
+    }
+    int nValid = validEdges.size();
+    if (nValid > 0) {
+      layout->addWidget(new QLabel("Edges (BBND Length):"));
+      QTableWidget *edgeTable = new QTableWidget(nValid, 4, &dlg);
+      edgeTable->setHorizontalHeaderLabels({"Name", "CAD Length", "NGSolve Length", "Error [%]"});
+      edgeTable->horizontalHeader()->setStretchLastSection(true);
+      edgeTable->verticalHeader()->setVisible(false);
+      edgeTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+      for (int i = 0; i < nValid; i++) {
+        QJsonObject e = validEdges[i].toObject();
+        edgeTable->setItem(i, 0, new QTableWidgetItem(e["name"].toString()));
+        edgeTable->setItem(i, 1, new QTableWidgetItem(
+          QString::number(e["cad_length"].toDouble(), 'e', 6)));
+        edgeTable->setItem(i, 2, new QTableWidgetItem(
+          e.contains("ng_length") ?
+            QString::number(e["ng_length"].toDouble(), 'e', 6) : "N/A"));
+        if (e.contains("error_pct")) {
+          double err = e["error_pct"].toDouble();
+          auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
+          if (std::abs(err) > 1.0)
+            item->setBackground(QColor(255, 200, 200));
+          edgeTable->setItem(i, 3, item);
+        }
+      }
+      edgeTable->resizeColumnsToContents();
+      layout->addWidget(edgeTable);
+    }
+  }
+
   // Warnings
   if (!warns.isEmpty()) {
     QString warnText = "<b style='color:red'>Warnings:</b><ul>";
@@ -523,25 +556,27 @@ void RadiaMenuHandler::mesh_volume()
   // Build result table
   double cad_v = r["cad_vol_total"].toDouble();
   double cad_a = r["cad_area_total"].toDouble();
+  double cad_l = r["cad_length_total"].toDouble();
 
   QJsonArray orders = r["orders"].toArray();
   int nrows = orders.size();
 
   // --- Dialog with QTableWidget ---
   QDialog dlg;
-  dlg.setWindowTitle("Mesh Evaluation - Volume / Surface Area");
-  dlg.setMinimumSize(620, 320);
+  dlg.setWindowTitle("Mesh Evaluation - Volume / Area / Length");
+  dlg.setMinimumSize(820, 320);
   QVBoxLayout *layout = new QVBoxLayout(&dlg);
 
   // CAD reference labels
   QLabel *cadLabel = new QLabel(
-    QString("CAD Volume: %1 m^3     CAD Area: %2 m^2")
-      .arg(cad_v, 0, 'e', 6).arg(cad_a, 0, 'e', 6), &dlg);
+    QString("CAD Volume: %1 m^3     CAD Area: %2 m^2     CAD Length: %3 m")
+      .arg(cad_v, 0, 'e', 6).arg(cad_a, 0, 'e', 6).arg(cad_l, 0, 'e', 6), &dlg);
   layout->addWidget(cadLabel);
 
   // Table
-  QTableWidget *table = new QTableWidget(nrows, 5, &dlg);
-  table->setHorizontalHeaderLabels({"p", "Volume", "V err [%]", "Area", "A err [%]"});
+  QTableWidget *table = new QTableWidget(nrows, 7, &dlg);
+  table->setHorizontalHeaderLabels(
+    {"p", "Volume", "V err [%]", "Area", "A err [%]", "Length", "L err [%]"});
   table->horizontalHeader()->setStretchLastSection(true);
   table->verticalHeader()->setVisible(false);
   table->setSelectionMode(QAbstractItemView::ContiguousSelection);
@@ -563,6 +598,10 @@ void RadiaMenuHandler::mesh_volume()
         QString::number(o["ng_area"].toDouble(), 'e', 6)));
       table->setItem(i, 4, new QTableWidgetItem(
         QString::number(o["area_error_pct"].toDouble(), 'f', 5)));
+      table->setItem(i, 5, new QTableWidgetItem(
+        QString::number(o["ng_length"].toDouble(), 'e', 6)));
+      table->setItem(i, 6, new QTableWidgetItem(
+        QString::number(o["len_error_pct"].toDouble(), 'f', 5)));
     }
   }
   table->resizeColumnsToContents();
@@ -577,9 +616,9 @@ void RadiaMenuHandler::mesh_volume()
   QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
   QObject::connect(buttons->button(QDialogButtonBox::Save), &QPushButton::clicked,
     [&]() {
-      QString tsv = "p\tVolume\tV err [%]\tArea\tA err [%]\n";
+      QString tsv = "p\tVolume\tV err [%]\tArea\tA err [%]\tLength\tL err [%]\n";
       for (int i = 0; i < nrows; i++) {
-        for (int j = 0; j < 5; j++) {
+        for (int j = 0; j < 7; j++) {
           if (j > 0) tsv += "\t";
           QTableWidgetItem *item = table->item(i, j);
           tsv += item ? item->text() : "";
@@ -601,7 +640,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     mVersion(nullptr), mNoPyramid(nullptr)
 {
   // Window title
-  const char* titles[] = {"Export GMSH", "Export Nastran BDF", "Export VTK", "Export MEG"};
+  const char* titles[] = {"Export Netgen Vol", "Export GMSH", "Export Nastran BDF", "Export VTK", "Export MEG"};
   setWindowTitle(titles[format]);
   setMinimumWidth(500);
 
@@ -609,7 +648,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   QFormLayout* form = new QFormLayout();
 
   // Determine default directory and base name
-  const char* exts[] = {".msh", ".bdf", ".vtk", ".meg"};
+  const char* exts[] = {".vol", ".msh", ".bdf", ".vtk", ".meg"};
   QString defaultDir;
   QString baseName = "ExportedMesh";
 
@@ -651,9 +690,14 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   connect(mFileName, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
   form->addRow("Filename:", mFileName);
 
-  // Order (not for MEG)
+  // Order
   mOrderCombo = new QComboBox();
-  mOrderCombo->addItems({"1 (linear)", "2 (quadratic)"});
+  if (format == NETGEN_VOL) {
+    mOrderCombo->addItems({"1", "2", "3", "4", "5"});
+    mOrderCombo->setCurrentIndex(2);  // default order 3
+  } else {
+    mOrderCombo->addItems({"1 (linear)", "2 (quadratic)"});
+  }
   connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
   if (format != MEG) {
     form->addRow("Order:", mOrderCombo);
@@ -667,7 +711,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     form->addRow("Version:", mVersion);
   }
 
-  // Dimension
+  // Dimension (not for NETGEN_VOL)
   mDimension = new QComboBox();
   if (format == MEG) {
     mDimension->addItems({"T (3D)", "K (2D)", "R (Axisymmetric)"});
@@ -675,7 +719,9 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     mDimension->addItems({"3D", "2D"});
   }
   connect(mDimension, SIGNAL(currentTextChanged(QString)), this, SLOT(updatePreview()));
-  form->addRow("Dimension:", mDimension);
+  if (format != NETGEN_VOL) {
+    form->addRow("Dimension:", mDimension);
+  }
 
   // NoPyramid (Nastran only)
   if (format == Nastran) {
@@ -729,6 +775,11 @@ QString ExportDialog::cubitCommand() const
 
   QString cmd;
   switch (mFormat) {
+    case NETGEN_VOL: {
+      // Not a Cubit APREPRO command — shown as preview only
+      cmd = QString("export netgen \"%1\" order %2").arg(file).arg(order);
+      break;
+    }
     case GMSH: {
       QString ver = (mVersion && mVersion->currentText() == "4.1") ? "4" : "2";
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
