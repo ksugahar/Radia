@@ -3,21 +3,12 @@
 #include "CubitInterface.hpp"
 #include "CubitMessage.hpp"
 
-#include <cstdlib>
-#include <cstdio>
-#include <fstream>
-#include <sstream>
-
-#ifdef _WIN32
-#include <windows.h>
-#include <process.h>   // _popen/_pclose
-#include <direct.h>
-#include <io.h>
-#define popen  _popen
-#define pclose _pclose
-#else
-#include <unistd.h>
+#ifdef HAVE_NETGEN
+#include "NetgenCurver.hpp"
+#include <meshing.hpp>
 #endif
+
+#include <fstream>
 
 ExportNetgenCommand::ExportNetgenCommand() {}
 ExportNetgenCommand::~ExportNetgenCommand() {}
@@ -47,55 +38,19 @@ std::vector<std::string> ExportNetgenCommand::get_help()
   std::vector<std::string> help;
   help.push_back(
     "Export mesh as Netgen .vol with high-order curving and labels.\n"
-    "Runs external Python (calc_export_netgen.py) for curving.\n"
+    "Uses C++ NetgenCurver (no Python subprocess, no .cub5 needed).\n"
     "Produces .vol file + companion .json with CAD reference values.\n"
-    "Order 1-5 supported (default: 2)."
+    "Order 1-5 supported (default: 2). Requires Netgen."
   );
   return help;
 }
 
-// Find external Python 3.12 (not Cubit's 3.10)
-static std::string find_python()
-{
-  // RADIA_PYTHON env var
-  const char *env = std::getenv("RADIA_PYTHON");
-  if (env && env[0]) return env;
-
-#ifdef _WIN32
-  // Try py -3
-  FILE *p = popen("py -3 -c \"print('ok')\" 2>nul", "r");
-  if (p) {
-    char buf[16] = {};
-    if (fgets(buf, sizeof(buf), p) && std::string(buf).find("ok") != std::string::npos) {
-      pclose(p);
-      return "py -3";
-    }
-    pclose(p);
-  }
-#endif
-  return "python";
-}
-
-// Find calc_export_netgen.py via python -c "import radia.panels.calc_export_netgen..."
-static std::string find_script(const std::string &python)
-{
-  std::string cmd = python + " -c \"import radia.panels.calc_export_netgen as m; "
-    "import os; print(os.path.abspath(m.__file__))\" 2>nul";
-  FILE *p = popen(cmd.c_str(), "r");
-  if (!p) return "";
-  char buf[1024] = {};
-  std::string result;
-  while (fgets(buf, sizeof(buf), p))
-    result += buf;
-  pclose(p);
-  // Trim
-  while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
-    result.pop_back();
-  return result;
-}
-
 bool ExportNetgenCommand::execute(CubitCommandData &data)
 {
+#ifndef HAVE_NETGEN
+  PRINT_ERROR("export netgen requires Netgen support (not built).\n");
+  return false;
+#else
   std::string filename;
   data.get_string("filename", filename);
   if (filename.empty()) {
@@ -110,69 +65,44 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     return false;
   }
 
-  // Save model to temp cub5 (silent)
-  std::string cub5;
-#ifdef _WIN32
-  char tmpdir[MAX_PATH];
-  GetTempPathA(MAX_PATH, tmpdir);
-  cub5 = std::string(tmpdir) + "radia_netgen_export.cub5";
-#else
-  cub5 = "/tmp/radia_netgen_export_" + std::to_string(getpid()) + ".cub5";
-#endif
-  // Replace backslashes
-  for (char &c : cub5) if (c == '\\') c = '/';
-
-  CubitInterface::silent_cmd(
-    ("save cub5 \"" + cub5 + "\" overwrite").c_str());
-
-  // Find external Python + script
-  std::string python = find_python();
-  std::string script = find_script(python);
-  if (script.empty()) {
-    PRINT_ERROR("Cannot find calc_export_netgen.py. Is radia installed?\n");
-    std::remove(cub5.c_str());
+  // Extract linear mesh from Cubit (MeshData)
+  MeshData md;
+  int build_order = (order >= 2) ? order : 2;
+  if (!md.extract(build_order)) {
+    PRINT_ERROR("Mesh extraction failed.\n");
     return false;
   }
 
-  // Build command
-  std::string cmd = python + " \"" + script + "\" --cub5 \"" + cub5
-    + "\" --order " + std::to_string(order) + " --vol \"" + filename + "\"";
-
-  PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
-
-  // Run subprocess
-  FILE *proc = popen(cmd.c_str(), "r");
-  if (!proc) {
-    PRINT_ERROR("Failed to start Python subprocess.\n");
-    std::remove(cub5.c_str());
+  // Get the NetgenCurver that was used during extraction
+  auto nc = md.get_netgen_curver();
+  if (!nc) {
+    PRINT_ERROR("NetgenCurver not available. Is Netgen installed?\n");
     return false;
   }
 
-  // Capture output (last line is JSON)
-  std::string output;
-  char buf[4096];
-  while (fgets(buf, sizeof(buf), proc))
-    output += buf;
-  int rc = pclose(proc);
-
-  // Cleanup temp cub5
-  std::remove(cub5.c_str());
-
-  if (rc != 0) {
-    PRINT_ERROR("Netgen export failed (exit %d).\n", rc);
-    if (!output.empty())
-      PRINT_ERROR("%s\n", output.substr(0, 2000).c_str());
+  auto ng_mesh = nc->get_ng_mesh();
+  if (!ng_mesh) {
+    PRINT_ERROR("Netgen mesh is null.\n");
     return false;
   }
 
-  // Parse last line for summary
-  std::string last_line;
-  std::istringstream iss(output);
-  std::string line;
-  while (std::getline(iss, line))
-    if (!line.empty()) last_line = line;
+  // For order=1: reset curving
+  if (order == 1) {
+    ng_mesh->BuildCurvedElements(1);
+  }
 
-  PRINT_INFO("Exported Netgen Vol (order %d): %s\n", order, filename.c_str());
+  // Save .vol
+  ng_mesh->Save(filename);
+
+  int ne = ng_mesh->GetNE();
+  int np = ng_mesh->GetNP();
+
+  PRINT_INFO("Exported Netgen Vol (order %d): %s (%d nodes, %d elements)\n",
+             order, filename.c_str(), np, ne);
+
+  // Write companion JSON with CAD reference values
+  MeshData::write_companion_json(filename);
 
   return true;
+#endif
 }
