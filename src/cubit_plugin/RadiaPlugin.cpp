@@ -1,4 +1,5 @@
 #include "RadiaPlugin.hpp"
+#include "ExportNetgenCommand.hpp"
 #include "ExportNastranCommand.hpp"
 #include "ExportGmshCommand.hpp"
 #include "ExportMegCommand.hpp"
@@ -15,6 +16,7 @@ RadiaPlugin::~RadiaPlugin() {}
 std::vector<std::string> RadiaPlugin::get_keys()
 {
   std::vector<std::string> keys;
+  keys.push_back("ExportNetgenCommand");
   keys.push_back("ExportNastranCommand");
   keys.push_back("ExportGmshCommand");
   keys.push_back("ExportMegCommand");
@@ -24,7 +26,9 @@ std::vector<std::string> RadiaPlugin::get_keys()
 
 CubitCommand* RadiaPlugin::create_command(const std::string &key)
 {
-  if (key == "ExportNastranCommand")
+  if (key == "ExportNetgenCommand")
+    return new ExportNetgenCommand();
+  else if (key == "ExportNastranCommand")
     return new ExportNastranCommand();
   else if (key == "ExportGmshCommand")
     return new ExportGmshCommand();
