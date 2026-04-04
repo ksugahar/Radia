@@ -326,118 +326,94 @@ void RadiaMenuHandler::export_netgen()
     return;
   }
 
-  // --- Show consistency check dialog ---
+  // --- Show consistency check dialog (modeless: user can interact with Cubit) ---
   QJsonArray mats = r["materials"].toArray();
   QJsonArray bnds = r["boundaries"].toArray();
   QJsonArray warns = r["warnings"].toArray();
   int nMats = mats.size();
   int nBnds = bnds.size();
 
-  QDialog dlg;
-  dlg.setWindowTitle(QString("Netgen Vol Export - Order %1").arg(order));
-  dlg.setMinimumSize(700, 400);
-  QVBoxLayout *layout = new QVBoxLayout(&dlg);
+  QDialog *dlg = new QDialog();
+  dlg->setAttribute(Qt::WA_DeleteOnClose);
+  dlg->setWindowTitle(QString("Netgen Vol Export - Order %1").arg(order));
+  dlg->setMinimumSize(700, 400);
+  QVBoxLayout *layout = new QVBoxLayout(dlg);
 
   // File info
   layout->addWidget(new QLabel(
     QString("Output: %1\nElements: %2, Order: %3")
       .arg(volPath).arg(r["n_elements"].toInt()).arg(order)));
 
-  // Material table
-  if (nMats > 0) {
-    layout->addWidget(new QLabel("Materials (Volume):"));
-    QTableWidget *matTable = new QTableWidget(nMats, 4, &dlg);
-    matTable->setHorizontalHeaderLabels({"Name", "CAD Volume", "NGSolve Volume", "Error [%]"});
-    matTable->horizontalHeader()->setStretchLastSection(true);
-    matTable->verticalHeader()->setVisible(false);
-    matTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    for (int i = 0; i < nMats; i++) {
-      QJsonObject m = mats[i].toObject();
-      matTable->setItem(i, 0, new QTableWidgetItem(m["name"].toString()));
-      matTable->setItem(i, 1, new QTableWidgetItem(
+  // Helper lambda for table creation
+  auto makeTable = [&](const char *label, const QStringList &headers,
+                       const QJsonArray &data,
+                       std::function<void(QTableWidget*, int, const QJsonObject&)> fillRow) {
+    layout->addWidget(new QLabel(label));
+    int n = data.size();
+    if (n == 0) {
+      layout->addWidget(new QLabel("  (none)"));
+      return;
+    }
+    QTableWidget *tbl = new QTableWidget(n, headers.size(), dlg);
+    tbl->setHorizontalHeaderLabels(headers);
+    tbl->horizontalHeader()->setStretchLastSection(true);
+    tbl->verticalHeader()->setVisible(false);
+    tbl->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    for (int i = 0; i < n; i++)
+      fillRow(tbl, i, data[i].toObject());
+    tbl->resizeColumnsToContents();
+    layout->addWidget(tbl);
+  };
+
+  auto errItem = [](double err) {
+    auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
+    if (std::abs(err) > 1.0)
+      item->setBackground(QColor(255, 200, 200));
+    return item;
+  };
+
+  // Material table (Volume)
+  makeTable("Materials (Volume):",
+    {"Name", "CAD Volume", "NGSolve Volume", "Error [%]"},
+    mats, [&](QTableWidget *t, int i, const QJsonObject &m) {
+      t->setItem(i, 0, new QTableWidgetItem(m["name"].toString()));
+      t->setItem(i, 1, new QTableWidgetItem(
         QString::number(m["cad_volume"].toDouble(), 'e', 6)));
-      matTable->setItem(i, 2, new QTableWidgetItem(
+      t->setItem(i, 2, new QTableWidgetItem(
         m.contains("ng_volume") ?
           QString::number(m["ng_volume"].toDouble(), 'e', 6) : "N/A"));
-      if (m.contains("error_pct")) {
-        double err = m["error_pct"].toDouble();
-        auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
-        if (std::abs(err) > 1.0)
-          item->setBackground(QColor(255, 200, 200));
-        matTable->setItem(i, 3, item);
-      }
-    }
-    matTable->resizeColumnsToContents();
-    layout->addWidget(matTable);
-  }
+      if (m.contains("error_pct"))
+        t->setItem(i, 3, errItem(m["error_pct"].toDouble()));
+    });
 
-  // Boundary table
-  if (nBnds > 0) {
-    layout->addWidget(new QLabel("Boundaries (Surface Area):"));
-    QTableWidget *bndTable = new QTableWidget(nBnds, 4, &dlg);
-    bndTable->setHorizontalHeaderLabels({"Name", "CAD Area", "NGSolve Area", "Error [%]"});
-    bndTable->horizontalHeader()->setStretchLastSection(true);
-    bndTable->verticalHeader()->setVisible(false);
-    bndTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    for (int i = 0; i < nBnds; i++) {
-      QJsonObject b = bnds[i].toObject();
-      bndTable->setItem(i, 0, new QTableWidgetItem(b["name"].toString()));
-      bndTable->setItem(i, 1, new QTableWidgetItem(
+  // Boundary table (Area)
+  makeTable("Boundaries (Surface Area):",
+    {"Name", "CAD Area", "NGSolve Area", "Error [%]"},
+    bnds, [&](QTableWidget *t, int i, const QJsonObject &b) {
+      t->setItem(i, 0, new QTableWidgetItem(b["name"].toString()));
+      t->setItem(i, 1, new QTableWidgetItem(
         QString::number(b["cad_area"].toDouble(), 'e', 6)));
-      bndTable->setItem(i, 2, new QTableWidgetItem(
+      t->setItem(i, 2, new QTableWidgetItem(
         b.contains("ng_area") ?
           QString::number(b["ng_area"].toDouble(), 'e', 6) : "N/A"));
-      if (b.contains("error_pct")) {
-        double err = b["error_pct"].toDouble();
-        auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
-        if (std::abs(err) > 1.0)
-          item->setBackground(QColor(255, 200, 200));
-        bndTable->setItem(i, 3, item);
-      }
-    }
-    bndTable->resizeColumnsToContents();
-    layout->addWidget(bndTable);
-  }
+      if (b.contains("error_pct"))
+        t->setItem(i, 3, errItem(b["error_pct"].toDouble()));
+    });
 
-  // Edge table (Length / BBND)
+  // Edge table (Length / BBND) — always shown, even if empty
   QJsonArray edges = r["edges"].toArray();
-  int nEdges = edges.size();
-  if (nEdges > 0) {
-    // Filter out entries without ng_length (default labels with no BBND data)
-    QJsonArray validEdges;
-    for (auto e : edges) {
-      QJsonObject eo = e.toObject();
-      if (eo.contains("ng_length") || eo.contains("cad_length"))
-        validEdges.append(e);
-    }
-    int nValid = validEdges.size();
-    if (nValid > 0) {
-      layout->addWidget(new QLabel("Edges (BBND Length):"));
-      QTableWidget *edgeTable = new QTableWidget(nValid, 4, &dlg);
-      edgeTable->setHorizontalHeaderLabels({"Name", "CAD Length", "NGSolve Length", "Error [%]"});
-      edgeTable->horizontalHeader()->setStretchLastSection(true);
-      edgeTable->verticalHeader()->setVisible(false);
-      edgeTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
-      for (int i = 0; i < nValid; i++) {
-        QJsonObject e = validEdges[i].toObject();
-        edgeTable->setItem(i, 0, new QTableWidgetItem(e["name"].toString()));
-        edgeTable->setItem(i, 1, new QTableWidgetItem(
-          QString::number(e["cad_length"].toDouble(), 'e', 6)));
-        edgeTable->setItem(i, 2, new QTableWidgetItem(
-          e.contains("ng_length") ?
-            QString::number(e["ng_length"].toDouble(), 'e', 6) : "N/A"));
-        if (e.contains("error_pct")) {
-          double err = e["error_pct"].toDouble();
-          auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
-          if (std::abs(err) > 1.0)
-            item->setBackground(QColor(255, 200, 200));
-          edgeTable->setItem(i, 3, item);
-        }
-      }
-      edgeTable->resizeColumnsToContents();
-      layout->addWidget(edgeTable);
-    }
-  }
+  makeTable("Edges (BBND Length):",
+    {"Name", "CAD Length", "NGSolve Length", "Error [%]"},
+    edges, [&](QTableWidget *t, int i, const QJsonObject &e) {
+      t->setItem(i, 0, new QTableWidgetItem(e["name"].toString()));
+      t->setItem(i, 1, new QTableWidgetItem(
+        QString::number(e["cad_length"].toDouble(), 'e', 6)));
+      t->setItem(i, 2, new QTableWidgetItem(
+        e.contains("ng_length") ?
+          QString::number(e["ng_length"].toDouble(), 'e', 6) : "N/A"));
+      if (e.contains("error_pct"))
+        t->setItem(i, 3, errItem(e["error_pct"].toDouble()));
+    });
 
   // Warnings
   if (!warns.isEmpty()) {
@@ -452,14 +428,14 @@ void RadiaMenuHandler::export_netgen()
 
   // Buttons
   QDialogButtonBox *buttons = new QDialogButtonBox(
-    QDialogButtonBox::Ok, &dlg);
+    QDialogButtonBox::Ok, dlg);
   layout->addWidget(buttons);
-  QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  QObject::connect(buttons, &QDialogButtonBox::accepted, dlg, &QDialog::close);
 
   PRINT_INFO("Exported: %s (order %d)\n",
     volPath.toStdString().c_str(), order);
 
-  dlg.exec();
+  dlg->show();  // modeless: user can interact with Cubit
 }
 
 // ============================================================
