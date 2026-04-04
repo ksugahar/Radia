@@ -15,7 +15,7 @@ Output:
 
 Requirements:
     - Coreform Cubit 2025.3+
-    - cubit_netgen_bridge module (via radia package)
+    - cubit_mesh_export module (via radia package)
 """
 
 import sys

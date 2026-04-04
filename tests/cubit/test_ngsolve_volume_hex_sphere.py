@@ -1,7 +1,7 @@
 """
 Test Radia-NGSolve volume panel pipeline with hex sphere mesh.
 
-Creates a hex-meshed sphere in Cubit, exports via cubit_netgen_bridge
+Creates a hex-meshed sphere in Cubit, exports via cubit_mesh_export
 at order=1,2,3, integrates volume in NGSolve, compares with analytical.
 
 This tests the FULL panel pipeline:

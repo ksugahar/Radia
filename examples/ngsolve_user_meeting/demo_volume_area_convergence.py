@@ -7,7 +7,7 @@ Demonstrates:
   3. Comparison: OCC native Curve() vs ACIS Python callback
 
 Requirements:
-  pip install radia   (includes radia_cubit_mesh.pyd + ngsolve + cubit bridge)
+  pip install radia   (includes radia_cubit_mesh.pyd + ngsolve + cubit_mesh_export)
   Coreform Cubit 2025.3 installed
 
 Usage:

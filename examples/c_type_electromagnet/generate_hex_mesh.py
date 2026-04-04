@@ -13,7 +13,7 @@ Workflow:
    - Transform to final orientation
 2. Cubit: Save database (.cub)
 3. Cubit: Export STEP (geometry for NGSolve tet mesh)
-4. cubit_netgen_bridge: Export hex mesh to Netgen (for Radia)
+4. cubit_mesh_export: Export hex mesh to Netgen (for Radia)
 
 Output:
 - yoke.cub  : Cubit database (for editing)
@@ -24,7 +24,7 @@ Run: python generate_mesh.py
 
 Requirements:
 - Coreform Cubit 2025.3+
-- cubit_netgen_bridge module (via radia package)
+- cubit_mesh_export module (via radia package)
 - NGSolve / Netgen
 
 Reference: S:\ELF_MAGIC\2020_03_07_CEFC_2020\model_C-Type\Cubit\6x6x6\Trelis.jou
@@ -43,7 +43,7 @@ from install_panels import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.insert(0, _cubit_path)
-# cubit_netgen_bridge is imported from src/radia
+# cubit_mesh_export is imported from src/radia
 
 from ngsolve import Mesh, VTKOutput
 import cubit
