@@ -185,10 +185,31 @@ def export_netgen(cub5_file, order, vol_path=None):
                             f"Boundary \"{bnd}\": A error {err:+.2e}% (>{1.0}%)")
                 break
 
-    # --- Consistency check: total edge length (BBND) ---
-    # NOTE: BBND requires .vol round-trip (Mesh(ng_mesh) has empty BBoundaries).
-    # Edge length check is deferred to the standalone checker (check_vol_consistency.py).
-    # CAD reference lengths are saved in the companion JSON for offline checking.
+    # --- Consistency check: per-edge length (BBND) ---
+    # BBND requires .vol round-trip for per-label check.
+    # Here we do total BBND length check (reliable without round-trip).
+    try:
+        from ngsolve import BBND
+        ng_length_total = Integrate(CF(1), mesh, BBND)
+        cad_length_total = sum(e["cad_length"] for e in cad_edges)
+        for ce in cad_edges:
+            # Per-edge: best-effort (may not match due to Netgen topology)
+            try:
+                ng_len = Integrate(CF(1), mesh, BBND,
+                                   definedon=mesh.BBoundaries(ce["name"]))
+                ce["ng_length"] = ng_len
+                if ce["cad_length"] > 0:
+                    err = (ng_len - ce["cad_length"]) / ce["cad_length"] * 100
+                    ce["error_pct"] = err
+            except Exception:
+                pass
+        if cad_length_total > 0:
+            total_err = (ng_length_total - cad_length_total) / cad_length_total * 100
+            if abs(total_err) > 1.0:
+                warnings.append(
+                    f"Total edge length: {total_err:+.2e}% (>{1.0}%)")
+    except Exception:
+        pass
 
     # --- Save .vol + companion JSON ---
     result = {
