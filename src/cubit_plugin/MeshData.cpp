@@ -366,6 +366,7 @@ int MeshData::total_element_count() const
 // ================================================================
 // write_companion_json — CAD reference values for consistency check
 // ================================================================
+#if 0  // DISABLED: investigating crash
 bool MeshData::write_companion_json(const std::string &mesh_filename)
 {
   // JSON path: mesh_filename + ".json"
@@ -445,3 +446,4 @@ bool MeshData::write_companion_json(const std::string &mesh_filename)
   PRINT_INFO("Companion JSON: %s\n", json_path.c_str());
   return true;
 }
+#endif  // DISABLED
