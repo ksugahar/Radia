@@ -6,7 +6,7 @@ meshes with identical Volume and Area per label (within tolerance).
 
 This validates the Mesh Exporter by cross-checking two independent
 code paths:
-  - .vol: Python (cubit_netgen_bridge) + C++ (NetgenCurverPure)
+  - .vol: Python (cubit_mesh_export) + C++ (NetgenCurverPure)
   - .msh: C++ (ExportGmshCommand) + ReadGmsh (Netgen)
 
 Requires: Cubit with radia plugin (.ccm loaded).

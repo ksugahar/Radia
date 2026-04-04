@@ -14,11 +14,11 @@ Workflow:
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
-      Use cubit_netgen_bridge.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
+      Use cubit_mesh_export.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
 
 Requirements:
     - Coreform Cubit 2025.3+
-    - cubit_netgen_bridge module (via radia package)
+    - cubit_mesh_export module (via radia package)
 
 Author: Radia Development Team
 Date: 2026-01-16
@@ -52,7 +52,7 @@ def create_wpt_geometry_cubit():
 
     Returns NGSolve Mesh objects directly (no intermediate file format).
 
-    Uses cubit_netgen_bridge.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
+    Uses cubit_mesh_export.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
     """
     if not CUBIT_AVAILABLE:
         return None
@@ -182,7 +182,7 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
     Load NGSolve mesh and create Radia objects.
 
     Parameters:
-        mesh: NGSolve Mesh object (from cubit_netgen_bridge.extract_curved_mesh())
+        mesh: NGSolve Mesh object (from cubit_mesh_export.extract_curved_mesh())
         material_type: 'conductor', 'ferrite', or 'shield'
 
     Returns:
@@ -243,7 +243,7 @@ def analyze_wpt_system():
         print("This example requires Coreform Cubit for hex mesh generation.")
         print("\nTo run this example:")
         print("  1. Install Coreform Cubit 2025.3+")
-        print("  2. Ensure cubit_netgen_bridge module is available")
+        print("  2. Ensure cubit_mesh_export module is available")
         return
 
     # Load meshes into Radia via Netgen
@@ -309,7 +309,7 @@ def main():
         print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
         print("  1. Install Coreform Cubit 2025.3")
-        print("  2. Ensure cubit_netgen_bridge module is available")
+        print("  2. Ensure cubit_mesh_export module is available")
         print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
     # Analyze system

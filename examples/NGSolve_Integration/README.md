@@ -115,7 +115,7 @@ from netgen_mesh_import import netgen_mesh_to_radia
 cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("import geometry 'model.step'")
 cubit.cmd("mesh volume all")
-ngmesh = cubit_mesh_export.export_netgen(cubit)
+ngmesh = cubit_mesh_export.extract_curved_mesh()
 mesh = Mesh(ngmesh)
 cube = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]}, units='m')
 
@@ -293,7 +293,7 @@ When adding new examples:
 
 - `src/radia/radia_pybind.cpp` - C++ pybind11 implementation (includes RadiaField)
 - `src/radia/netgen_mesh_import.py` - Mesh importer (tet/hex)
-- `S:/CoreformCubit/01_GitHub/cubit_mesh_export.py` - Cubit -> Netgen export
+- `src/cubit_plugin/` - Cubit mesh export plugin (C++ + pybind11)
 - `tests/` - Unit tests for integration features
 
 ---
