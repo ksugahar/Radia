@@ -18,7 +18,10 @@
 // They live in plugins/ which may not be on the DLL search path.
 static void ensure_netgen_dll_path()
 {
-#ifdef _WIN32
+#ifdef COMPACT_NETGEN
+  // Static link: no DLL path setup needed
+  return;
+#elif defined(_WIN32)
   // Find plugins/ directory relative to this DLL's location
   // or use CUBIT_PLUGIN_DIR environment variable
   const char *pd = std::getenv("CUBIT_PLUGIN_DIR");
