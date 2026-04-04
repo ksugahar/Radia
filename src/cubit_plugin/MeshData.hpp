@@ -130,6 +130,10 @@ public:
   int total_node_count() const { return (int)nodes.size(); }
   int total_element_count() const;  // block elements + all sideset faces
 
+  // Write companion JSON with CAD reference values (volume/area/length per label).
+  // Called after successful mesh export. filename = exported mesh path.
+  static bool write_companion_json(const std::string &mesh_filename);
+
 private:
   void extract_nodes(MeshExportInterface *iface);
   void extract_elements(MeshExportInterface *iface);
