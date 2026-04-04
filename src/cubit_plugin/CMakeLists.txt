@@ -156,6 +156,11 @@ if(HAVE_NETGEN)
     "${NETGEN_DIR}/include/include"
   )
   target_link_libraries(radia_cubit_ccl netgen::nglib netgen::ngcore)
+  # DELAYLOAD Netgen DLLs — they live in plugins/, not bin/ where .ccl is
+  if(MSVC)
+    set_property(TARGET radia_cubit_ccl APPEND_STRING PROPERTY
+      LINK_FLAGS " /DELAYLOAD:nglib.dll /DELAYLOAD:ngcore.dll")
+  endif()
 endif()
 
 # --------------------------------------------------------
