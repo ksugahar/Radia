@@ -2,37 +2,49 @@
 Netgen/NGSolve high-order curving workflow knowledge base.
 
 This is the most important knowledge module. It covers:
-- The export_NGSolveCurvedMesh() API (the ONLY mesh export function for curved meshes)
-- Workflow: Cubit geometry -> mesh -> export_NGSolveCurvedMesh(order=N) -> done
-- CallbackGeometry and ACIS UV curving
-- Gmsh 2nd order alternative workflow
+- Two export paths: APREPRO command (C++) and Python extract_curved_mesh
+- Workflow: Cubit geometry -> mesh -> export netgen -> NGSolve Mesh()
+- CallbackGeometry and ACIS curving (compact_netgen)
+- .vol file as sole interface between Cubit and NGSolve
 - Troubleshooting guide
 """
 
 WORKFLOW_OVERVIEW = """
 # Netgen High-Order Curving: Workflow Overview
 
-## Background: How export_NGSolveCurvedMesh() Works
+## Two Export Paths (produce identical results)
 
-`export_NGSolveCurvedMesh()` is the single unified function for exporting Cubit meshes
-to NGSolve with high-order curving. It uses **CallbackGeometry** (from the
-ksugahar/netgen fork) to delegate surface projection directly to Cubit's
-**ACIS kernel** via Python callbacks. This eliminates the need for:
+### Path A: APREPRO Command (recommended, fast)
+```
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+# -> mesh.vol (with curvedelements section) + mesh.vol.json (CAD reference)
+```
+Uses NetgenCurver (compact_netgen C++ static link). No Python, no DLL dependency.
 
-- STEP files (no STEP export/reimport)
-- OCC geometry (no OCCGeometry needed)
-- SetGeomInfo / UV parameter computation
-- Manual per-shape geominfo functions (set_cylinder_geominfo, etc.)
-- Seam line workarounds (ACIS has no seam lines)
+### Path B: Python (reference, slower)
+```python
+from cubit_mesh_export import extract_curved_mesh
+ng_mesh = extract_curved_mesh(cubit, order=3)
+ng_mesh.Save("mesh.vol")
+```
+Uses radia_cubit_mesh.pyd + full Netgen. Python overhead but same curving.
 
-The overall workflow is simply:
+Both paths use **CallbackGeometry** to delegate surface/edge projection
+to Cubit's ACIS kernel via `closest_point_trimmed`. No STEP files,
+no OCC geometry, no SetGeomInfo needed.
+
+## .vol as Sole Interface
 
 ```
-1. Create geometry in Cubit
-2. Mesh with Cubit
-3. mesh = Mesh(extract_curved_mesh(cubit, order=3))
-4. Done — mesh is already curved, ready for NGSolve
+Cubit (ACIS geometry) -> export netgen -> .vol (self-contained)
+                                           |
+                              NGSolve: Mesh("mesh.vol")
+                              (no Cubit, no STEP needed)
 ```
+
+The .vol file contains: mesh points, volume elements, surface elements,
+material labels, boundary labels, and curvedelements section (high-order
+curving coefficients). NGSolve reads it without any geometry file.
 
 ## Choose Your Workflow
 
