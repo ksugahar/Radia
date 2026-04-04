@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <set>
+#include <sstream>
 
 // ================================================================
 // extract() — main entry point
@@ -360,4 +361,87 @@ int MeshData::total_element_count() const
   for (auto &sg : sidesets)
     total += (int)sg.faces.size();
   return total;
+}
+
+// ================================================================
+// write_companion_json — CAD reference values for consistency check
+// ================================================================
+bool MeshData::write_companion_json(const std::string &mesh_filename)
+{
+  // JSON path: mesh_filename + ".json"
+  std::string json_path = mesh_filename + ".json";
+
+  // Collect CAD reference values from Cubit ACIS kernel via get_total_volume
+  // and APREPRO variable queries for area/length.
+  auto vol_ids = CubitInterface::parse_cubit_list("volume", "all");
+  auto surf_ids = CubitInterface::parse_cubit_list("surface", "all");
+  auto curve_ids = CubitInterface::parse_cubit_list("curve", "all");
+
+  // Build JSON manually (no JSON library dependency)
+  std::ostringstream js;
+  js << std::scientific;
+  js.precision(10);
+
+  js << "{\n";
+  js << "  \"mesh_file\": \"" << mesh_filename << "\",\n";
+
+  // Materials (volumes) — use get_total_volume({vid})
+  js << "  \"materials\": {\n";
+  for (size_t i = 0; i < vol_ids.size(); i++) {
+    int vid = vol_ids[i];
+    std::string name = CubitInterface::get_entity_name("volume", vid);
+    if (name.empty() || name.substr(0, 6) == "Volume")
+      name = "volume_" + std::to_string(vid);
+    double vol = CubitInterface::get_total_volume({vid});
+    js << "    \"" << name << "\": " << vol;
+    if (i + 1 < vol_ids.size()) js << ",";
+    js << "\n";
+  }
+  js << "  },\n";
+
+  // Boundaries (surfaces) — use get_meshed_volume_or_area("surface", {sid})
+  js << "  \"boundaries\": {\n";
+  for (size_t i = 0; i < surf_ids.size(); i++) {
+    int sid = surf_ids[i];
+    std::string name = CubitInterface::get_entity_name("surface", sid);
+    if (name.empty() || name.substr(0, 7) == "Surface")
+      name = "surface_" + std::to_string(sid);
+    double area = CubitInterface::get_meshed_volume_or_area("surface", {sid});
+    js << "    \"" << name << "\": " << area;
+    if (i + 1 < surf_ids.size()) js << ",";
+    js << "\n";
+  }
+  js << "  },\n";
+
+  // Edges (boundary curves: shared by >= 2 surfaces)
+  // Use APREPRO: "#{Curve(cid).Length}" to get exact CAD length
+  js << "  \"edges\": {\n";
+  bool first_edge = true;
+  for (int cid : curve_ids) {
+    auto parent_surfs = CubitInterface::parse_cubit_list(
+      "surface", ("in curve " + std::to_string(cid)).c_str());
+    if (parent_surfs.size() < 2) continue;
+    std::string name = CubitInterface::get_entity_name("curve", cid);
+    if (name.empty() || name.substr(0, 5) == "Curve")
+      name = "curve_" + std::to_string(cid);
+    // Get length via APREPRO: set variable, then read it
+    std::string cmd = "{_radia_tmp_len = Curve(" + std::to_string(cid) + ").Length}";
+    CubitInterface::silent_cmd(cmd.c_str());
+    double length = CubitInterface::get_aprepro_numeric_value("_radia_tmp_len");
+    if (!first_edge) js << ",\n";
+    first_edge = false;
+    js << "    \"" << name << "\": " << length;
+  }
+  js << "\n  }\n";
+  js << "}\n";
+
+  std::ofstream f(json_path);
+  if (!f.is_open()) {
+    PRINT_WARNING("Could not write companion JSON: %s\n", json_path.c_str());
+    return false;
+  }
+  f << js.str();
+  f.close();
+  PRINT_INFO("Companion JSON: %s\n", json_path.c_str());
+  return true;
 }
