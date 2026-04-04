@@ -238,6 +238,12 @@ static void run_export(ExportDialog::Format fmt)
   if (dlg.exec() != QDialog::Accepted)
     return;
 
+  // Set Cubit working directory to output file's directory
+  // (prevents intermediate files landing in repo root)
+  QString outDir = QFileInfo(dlg.filePath()).absolutePath();
+  outDir.replace("\\", "/");
+  CubitInterface::silent_cmd(("cd \"" + outDir.toStdString() + "\"").c_str());
+
   // Execute export via APREPRO command (same codepath as journal playback)
   std::string cmd = dlg.cubitCommand().toStdString();
   if (cmd.empty()) {
@@ -291,6 +297,11 @@ void RadiaMenuHandler::export_netgen()
 
   // Ensure Netgen DLLs are on search path before export netgen command
   ensure_netgen_dll_path();
+
+  // Set Cubit working directory to output file's directory
+  QString outDir = QFileInfo(volPath).absolutePath();
+  outDir.replace("\\", "/");
+  CubitInterface::silent_cmd(("cd \"" + outDir.toStdString() + "\"").c_str());
 
   // --- Phase 1: C++ export .vol + companion JSON (no subprocess, no cub5) ---
   PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
