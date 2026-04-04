@@ -681,13 +681,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     form->addRow("Order:", mOrderCombo);
   }
 
-  // Version (GMSH only)
-  if (format == GMSH) {
-    mVersion = new QComboBox();
-    mVersion->addItems({"2.2", "4.1"});
-    connect(mVersion, SIGNAL(currentTextChanged(QString)), this, SLOT(updatePreview()));
-    form->addRow("Version:", mVersion);
-  }
+  // Version: GMSH is always v2.2 (v4.1 is for post-processing only)
 
   // Dimension (not for NETGEN_VOL)
   mDimension = new QComboBox();
@@ -769,10 +763,9 @@ QString ExportDialog::cubitCommand() const
       break;
     }
     case GMSH: {
-      QString ver = (mVersion && mVersion->currentText() == "4.1") ? "4" : "2";
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
-      cmd = QString("export gmsh \"%1\" order %2 version %3 dimension %4")
-                .arg(file).arg(order).arg(ver).arg(dim);
+      cmd = QString("export gmsh \"%1\" order %2 version 2 dimension %3")
+                .arg(file).arg(order).arg(dim);
       break;
     }
     case Nastran: {
