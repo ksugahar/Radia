@@ -297,3 +297,10 @@ examples/cubit/inductance_torus_result.cub5
 examples/c_type_electromagnet/dipole_coils.step
 examples/c_type_electromagnet/dipole_field.msh
 .code-workspace
+
+# Cubit intermediate files (pwd = repo root when launched from GUI)
+ExportedMesh.*
+radia_cubit_model.cub5
+sphere_o3.vol
+p_convergence_sphere.png
+cubit[0-9]*.jou
