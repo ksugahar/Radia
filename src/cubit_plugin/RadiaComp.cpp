@@ -613,6 +613,27 @@ void RadiaMenuHandler::mesh_volume()
 // ExportDialog - format-specific options
 // ============================================================
 
+// --- Settings persistence ---
+static QString settingsPath()
+{
+  return QDir::homePath() + "/.cubit/radia_export_settings.json";
+}
+
+static QJsonObject loadSettings()
+{
+  QFile f(settingsPath());
+  if (!f.open(QIODevice::ReadOnly)) return {};
+  return QJsonDocument::fromJson(f.readAll()).object();
+}
+
+static void saveSettings(const QJsonObject &obj)
+{
+  QDir().mkpath(QDir::homePath() + "/.cubit");
+  QFile f(settingsPath());
+  if (f.open(QIODevice::WriteOnly))
+    f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
+}
+
 ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* parent)
   : QDialog(parent), mFormat(format),
     mVersion(nullptr), mNoPyramid(nullptr)
@@ -725,9 +746,34 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   // OK / Cancel
   QDialogButtonBox* buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-  connect(buttons, SIGNAL(accepted()), this, SLOT(accept()));
-  connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
+  connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+  connect(buttons, &QDialogButtonBox::accepted, [this]() {
+    // Save settings before accepting
+    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "meg"};
+    QJsonObject all = loadSettings();
+    QJsonObject s;
+    s["dir"] = mDir->text();
+    s["order"] = mOrderCombo->currentIndex();
+    if (mDimension) s["dimension"] = mDimension->currentIndex();
+    if (mNoPyramid) s["nopyramid"] = mNoPyramid->currentIndex();
+    all[keys[mFormat]] = s;
+    saveSettings(all);
+    accept();
+  });
   layout->addWidget(buttons);
+
+  // Load saved settings (override defaults with previous values)
+  {
+    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "meg"};
+    QJsonObject all = loadSettings();
+    QJsonObject s = all[keys[format]].toObject();
+    if (s.contains("dir")) mDir->setText(s["dir"].toString());
+    if (s.contains("order")) mOrderCombo->setCurrentIndex(s["order"].toInt());
+    if (s.contains("dimension") && mDimension)
+      mDimension->setCurrentIndex(s["dimension"].toInt());
+    if (s.contains("nopyramid") && mNoPyramid)
+      mNoPyramid->setCurrentIndex(s["nopyramid"].toInt());
+  }
 
   updatePreview();
 }
