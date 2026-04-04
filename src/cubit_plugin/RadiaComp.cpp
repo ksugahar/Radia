@@ -37,6 +37,47 @@
 #include <QVBoxLayout>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+// Ensure Netgen DLLs can be found for DELAYLOAD resolution.
+// nglib.dll/ngcore.dll live in plugins/, not bin/ where .ccl lives.
+static void ensure_netgen_dll_path()
+{
+#ifdef _WIN32
+  static bool done = false;
+  if (done) return;
+  done = true;
+
+  const char *pd = std::getenv("CUBIT_PLUGIN_DIR");
+  if (pd && pd[0]) {
+    SetDllDirectoryA(pd);
+    return;
+  }
+  // Derive plugins/ from Cubit bin/ path
+  HMODULE hm = nullptr;
+  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                     (LPCSTR)&ensure_netgen_dll_path, &hm);
+  if (hm) {
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(hm, path, MAX_PATH)) {
+      std::string dir(path);
+      auto pos = dir.find_last_of("\\/");
+      if (pos != std::string::npos) {
+        dir = dir.substr(0, pos);
+        std::string plugins = dir + "\\plugins";
+        DWORD attr = GetFileAttributesA(plugins.c_str());
+        if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY))
+          dir = plugins;
+        SetDllDirectoryA(dir.c_str());
+      }
+    }
+  }
+#endif
+}
+
 // ============================================================
 // COMPONENT_PLUGIN exports (Claro framework .ccl)
 // ============================================================
@@ -274,6 +315,9 @@ void RadiaMenuHandler::export_netgen()
   QString volPath = dlgOpt.filePath();
   volPath.replace("\\", "/");
 
+  // Ensure Netgen DLLs are on search path before export netgen command
+  ensure_netgen_dll_path();
+
   // --- Phase 1: C++ export .vol + companion JSON (no subprocess, no cub5) ---
   PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
   std::string cmd = "export netgen \"" + volPath.toStdString()
@@ -484,6 +528,9 @@ void RadiaMenuHandler::mesh_volume()
     ensure_model();
     if (CubitInterface::get_volume_count() == 0) return;
   }
+
+  // Ensure Netgen DLLs are on search path before export netgen commands
+  ensure_netgen_dll_path();
 
   // --- Phase 1: C++ export .vol for p=1..5 ---
   PRINT_INFO("Exporting .vol for p=1..5...\n");
