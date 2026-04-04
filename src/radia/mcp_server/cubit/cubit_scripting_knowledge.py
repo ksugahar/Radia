@@ -11,7 +11,7 @@ CUBIT_OVERVIEW = """
 # Cubit Mesh Generation Overview
 
 Coreform Cubit provides structured and unstructured meshing with export to
-multiple formats via Cubit plugin commands (`export ...`) and the `cubit_netgen_bridge` module.
+multiple formats via Cubit plugin commands (`export ...`) and the `cubit_mesh_export` package.
 
 ## Typical Workflow
 
@@ -49,7 +49,7 @@ CUBIT_BLOCKS = """
 
 ## Why Blocks are Required
 
-All `export` commands and `cubit_netgen_bridge` functions read mesh data from blocks.
+All `export` commands and `cubit_mesh_export` functions read mesh data from blocks.
 **No blocks = no export.** This is the most common mistake.
 
 ## Mesh Element Blocks (Recommended)
@@ -341,7 +341,7 @@ if cubit_path:
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-# cubit_netgen_bridge is available after loading the Cubit plugin
+# cubit_mesh_export is available after loading the Cubit plugin
 from cubit_mesh_export import extract_curved_mesh
 ```
 
@@ -1219,14 +1219,14 @@ cubit.cmd('export gmsh "mesh.msh" overwrite')
 
 ## Prerequisites
 
-The `cubit_netgen_bridge` module and `export` commands are part of the Radia Cubit plugin:
+The `cubit_mesh_export` package and `export` commands are part of the Radia Cubit plugin:
 
 ```bash
 # Install Radia (includes Cubit plugin)
 pip install radia
 
 # The plugin is loaded via Cubit's plugin system
-# cubit_netgen_bridge is available after plugin load
+# cubit_mesh_export is available after plugin load
 from cubit_mesh_export import extract_curved_mesh
 ```
 
@@ -1598,7 +1598,7 @@ cubit.cmd('create volume surface 7 to 12 heal')
 | Source | Target | Method | Use Case |
 |--------|--------|--------|----------|
 | Cubit | VTU/VTK | meshio | ParaView visualization |
-| Cubit | Netgen | cubit_netgen_bridge | NGSolve FEM (part of Radia) |
+| Cubit | Netgen | cubit_mesh_export | NGSolve FEM (part of Radia) |
 | Cubit | Gmsh | export gmsh | GMSH post-processing |
 | Cubit | Patran | built-in export | Coordinate transforms |
 | Gmsh GEO | Cubit | geo2jou converter | Geometry migration |

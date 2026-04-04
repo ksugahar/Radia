@@ -22,11 +22,18 @@ S:\Radia\01_GitHub\
       ngsolve/server.py   # mcp-server-ngsolve
       cubit/server.py     # mcp-server-cubit
     panels/               # Cubit GUI panels
+    cubit_netgen_bridge.py # Thin backward-compat re-export → cubit_mesh_export
     *.py                  # Python modules
   src/core/               # C++ source
   src/ext/
     HACApK_LH-Cimplm/    # H-matrix library (MIT)
     sparsesolv/           # Compact AMS/COCR (source, build is separate PyPI)
+  packages/
+    cubit-mesh-export/    # Independent PyPI package (pip install cubit-mesh-export)
+      src/cubit_mesh_export/
+        bridge.py         # extract_curved_mesh() — canonical source
+        check.py          # check-vol CLI + check_consistency() API
+        radia_cubit_mesh.pyd  # C++ pybind11 module (bundled)
   tests/                  # Radia tests + tests/mcp/
   examples/
   docs/
@@ -34,9 +41,17 @@ S:\Radia\01_GitHub\
   install_full.py          # One-command full setup
 ```
 
+**PyPI packages** (2 independent packages in same monorepo):
+
+| Package | Install | Purpose |
+|---------|---------|---------|
+| **radia** | `pip install radia` | C++ core + Python (MMM/MSC/PEEC, panels, MCP) |
+| **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
+
 **Installation**:
 ```bash
 pip install radia               # Python package (includes Cubit plugin binaries)
+pip install radia[cubit]        # Also installs cubit-mesh-export
 radia-setup                     # Deploy Cubit plugin + panels (skip if no Cubit)
 ```
 
@@ -736,17 +751,36 @@ Path B: Cubit (recommended for hex)
 | `netgen_mesh_import` | `create_hex_mesh_grid(...)` | Structured hex grid (no external tool) |
 | `gmsh_mesh_import` | `gmsh_to_radia(file, mu_r, ...)` | .msh file -> Radia (for Cubit exports) |
 
-### Coreform Cubit Mesh Export
+### Cubit Mesh Export (cubit-mesh-export)
 
-For complex hexahedral meshes, use the **Coreform Cubit Mesh Export** tool.
+For high-order curved mesh export from Coreform Cubit, use the **cubit-mesh-export** package.
 
-**Repository**: https://github.com/ksugahar/Coreform_Cubit_Mesh_Export
+**Install**: `pip install cubit-mesh-export` (or `pip install radia[cubit]`)
+**Source**: `packages/cubit-mesh-export/` in the Radia monorepo
 
 ```python
-# Cubit -> .msh -> Radia (recommended for complex hex)
-from gmsh_mesh_import import gmsh_to_radia
-core = gmsh_to_radia('cubit_exported.msh', mu_r=1000)
+# Export curved mesh (requires Cubit)
+from cubit_mesh_export import extract_curved_mesh
+ng_mesh = extract_curved_mesh(cubit, order=3)
+
+# Backward-compat import (thin re-export wrapper)
+from cubit_netgen_bridge import extract_curved_mesh  # same function
 ```
+
+**Consistency checking** (does NOT require Cubit):
+```bash
+check-vol model.vol                         # CLI (installed with cubit-mesh-export)
+check-vol model.vol --json model.vol.json   # With companion JSON from export
+```
+```python
+from cubit_mesh_export.check import check_consistency  # API
+```
+
+**Module names**:
+- `cubit_mesh_export` — canonical Python package (PyPI: cubit-mesh-export)
+- `radia_cubit_mesh` — C++ pybind11 module (bundled in cubit_mesh_export, unchanged)
+- `cubit_netgen_bridge` — thin backward-compat re-export in `src/radia/` (imports from cubit_mesh_export)
+- `check_vol_consistency` — thin backward-compat re-export in `src/radia/panels/` (imports from cubit_mesh_export.check)
 
 Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/nastran/meg/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `radia-setup`).
 
