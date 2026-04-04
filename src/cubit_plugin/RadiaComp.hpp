@@ -67,7 +67,7 @@ public:
 
   //! Accessors
   int order() const { return mOrderCombo->currentIndex() + 1; }
-  int gmshVersion() const { return (mVersion && mVersion->currentText() == "4.1") ? 4 : 2; }
+  int gmshVersion() const { return 2; }  // always v2.2 (v4.1 is post-processing only)
   int dimension() const { return (mDimension->currentText() == "2D") ? 2 : 3; }
   bool noPyramid() const { return mNoPyramid && mNoPyramid->currentIndex() == 1; }
   char megDimension() const { return mDimension ? mDimension->currentText().at(0).toLatin1() : 'T'; }
