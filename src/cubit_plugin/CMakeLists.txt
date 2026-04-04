@@ -54,8 +54,6 @@ set(CCM_SOURCES
     HighOrderMesh.hpp
     NetgenCurver.cpp
     NetgenCurver.hpp
-    ExportNetgenCommand.cpp
-    ExportNetgenCommand.hpp
     ExportNastranCommand.cpp
     ExportNastranCommand.hpp
     ExportGmshCommand.cpp
@@ -66,9 +64,13 @@ set(CCM_SOURCES
     ExportVtkCommand.hpp
 )
 
-# callbackgeom requires Netgen headers (meshing.hpp)
+# Netgen-dependent sources: callbackgeom + ExportNetgenCommand
+# ExportNetgenCommand uses MeshData+NetgenCurver, requires Netgen DLLs
 if(HAVE_NETGEN)
-  list(APPEND CCM_SOURCES callbackgeom.cpp callbackgeom.hpp)
+  list(APPEND CCM_SOURCES
+    callbackgeom.cpp callbackgeom.hpp
+    ExportNetgenCommand.cpp ExportNetgenCommand.hpp
+  )
 endif()
 
 add_library(radia_cubit_ccm MODULE ${CCM_SOURCES})
