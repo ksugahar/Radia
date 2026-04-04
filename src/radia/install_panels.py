@@ -193,38 +193,6 @@ def _build_startup_block(startup_script_path, cubit_bin=None):
 	)
 
 
-def _create_launcher(cubit_bin):
-	"""Create a launcher batch file for Cubit with radia plugin support.
-
-	Sets CUBIT_PLUGIN_DIR (for Python API) and passes
-	-commandplugindir (for GUI) so export commands work in both modes.
-	"""
-	if sys.platform != "win32":
-		return None
-
-	cubit_exe = os.path.join(cubit_bin, "coreform_cubit.exe")
-	if not os.path.isfile(cubit_exe):
-		return None
-
-	plugin_dir = os.path.join(cubit_bin, "plugins")
-	launcher_path = os.path.join(cubit_bin, "cubit_radia.bat")
-	# 'start' treats the first quoted string as window title, making it
-	# impossible to quote paths with spaces as the executable. We use
-	# a temporary variable to hold the plugin dir (may contain spaces).
-	content = (
-		f'@set CUBIT_PLUGIN_DIR={plugin_dir}\n'
-		f'@set _P={plugin_dir}\n'
-		f'@start "" "{cubit_exe}" -commandplugindir "%_P%" %*\n'
-	)
-
-	try:
-		with open(launcher_path, "w", encoding="utf-8") as f:
-			f.write(content)
-		return launcher_path
-	except PermissionError:
-		return None
-
-
 def _remove_existing_block(lines):
 	"""Remove existing toolbar block (current and legacy markers) from lines."""
 	# Collect all begin/end marker pairs to remove
@@ -392,12 +360,6 @@ def install_panels(all_users=False):
 					print(f"Plugin path OK: {ini_path}")
 			except PermissionError:
 				print(f"SKIP (no permission): {ini_path}")
-
-		# 3b. Launcher batch file (sets CUBIT_PLUGIN_DIR before Cubit starts)
-		launcher = _create_launcher(cubit_bin)
-		if launcher:
-			print(f"Launcher created: {launcher}")
-			print(f"  -> Start Cubit via this launcher for plugin support")
 
 	print()
 	print("=== Installation Complete ===")
