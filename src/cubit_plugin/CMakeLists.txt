@@ -17,7 +17,7 @@ set(COMPACT_NETGEN_OVERRIDES "" CACHE PATH "Compact Netgen overrides directory")
 # No separate build, no DLL, no .lib — just source files.
 if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
   if(NOT COMPACT_NETGEN_OVERRIDES)
-    set(COMPACT_NETGEN_OVERRIDES "C:/compact_netgen_build/overrides")
+    set(COMPACT_NETGEN_OVERRIDES "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")
   endif()
   if(EXISTS "${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp")
     message(STATUS "Compact Netgen: sources from ${NETGEN_SRC_DIR}")
