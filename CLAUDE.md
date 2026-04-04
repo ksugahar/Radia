@@ -635,13 +635,17 @@ Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regre
 
 Official PyPI ngsolve 6.2.2601+ includes: **MKL**, **PARDISO**, Periodic BC fix.
 
-**Netgen fork is NOT required**. High-order mesh curving is handled by the
-Cubit C++ plugin (`radia_cubit_mesh.pyd`) which embeds CallbackGeometry directly.
-Standard upstream `netgen-mesher` (installed automatically by `pip install radia`) is sufficient.
+**Netgen fork** (`C:\netgen_build\netgen_fork`): Required for curvedelements .vol Load + netgen.gui.
+Upstream Netgen master has curvedelements support, but the current PyPI release (6.2.2602.post1) does not.
+Fork build: `USE_GUI=ON` superbuild → nglib.dll + ngcore.dll + libnggui.dll + libngguipy.pyd.
+Deploy: replace pip's DLLs in `site-packages/netgen/` + copy libnggui.dll to `bin/`.
+
+Once next PyPI release includes curvedelements, the fork becomes unnecessary.
 
 ```bash
 pip install radia      # Installs everything (NGSolve, MKL, Cubit plugin binaries)
 radia-setup            # Deploys Cubit plugin + panels
+# + deploy netgen fork DLLs (nglib, ngcore, libnggui, libngguipy)
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
@@ -1598,9 +1602,34 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 | MEG | `export meg "f.meg"` | Order 1 only | ELF format |
 
 **High-order mesh curving** (order >= 2):
-- `HighOrderMesh` (no Netgen): ACIS `RefFace::find_closest_point_trimmed()` / `RefEdge::closest_point_trimmed()`
-- `NetgenCurver` (with Netgen): `CallbackGeometry` + `BuildCurvedElements` for order 2-4
+- `NetgenCurver` (compact_netgen, static link): `CallbackGeometry` + `BuildCurvedElements` for order 1-5
+- **No fallback**: `HighOrderMesh` is removed. NetgenCurver failure = error.
+- ACIS projection via `closest_point_trimmed` (global search, not `uv_guess`)
+- Surface elements: `parse_cubit_list("tri/face") + get_connectivity` (shared FEM nodes)
+- Segment elements on curves: `parse_cubit_list("edge", "in curve N")` for PointBetweenEdge
+- Edge projection callback: `RefEdge::get_curve_ptr()->closest_point_trimmed()`
 - Requires `cubit_geom.dll` (DELAYLOAD)
+- **ACIS is NOT thread-safe**: OpenMP parallelization of BuildCurvedElements is impossible
+
+### Path A == Path B Policy
+
+**POLICY**: `export netgen` (Path A, C++ compact_netgen) must produce **bit-identical** curving results as `extract_curved_mesh()` (Path B, Python bridge.py). Any difference is a bug. Run `test_vol_multi_geometry.py` (10 shapes) after any NetgenCurver or bridge.py change.
+
+### Companion JSON (.vol.json)
+
+`export netgen` writes a companion JSON alongside the .vol file:
+```json
+{
+  "materials": {"sphere": 5.235988e-04},
+  "boundaries": {"surface_1": 3.141593e-02},
+  "edges": {"curve_1": 3.141593e-01},
+  "n_elements": 10359, "n_points": 2071, "order": 3
+}
+```
+- CAD volume per material (RefVolume::measure)
+- CAD area per boundary (RefFace::area)
+- CAD length per edge (RefEdge::measure)
+- calc_verify_vol.py reads .vol.json for consistency checks
 
 ### Source Files
 
@@ -1610,22 +1639,17 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 | `src/cubit_plugin/ExportNastranCommand.cpp` | Nastran BDF writer |
 | `src/cubit_plugin/ExportVtkCommand.cpp` | VTK Legacy writer |
 | `src/cubit_plugin/ExportMegCommand.cpp` | MEG/ELF writer |
+| `src/cubit_plugin/ExportNetgenCommand.cpp` | Netgen .vol writer + companion JSON |
 | `src/cubit_plugin/MeshData.cpp` | Shared mesh extraction from Cubit |
-| `src/cubit_plugin/HighOrderMesh.cpp` | Order 2 mid-node generation + ACIS projection |
-| `src/cubit_plugin/NetgenCurver.cpp` | Order 2-4 via Netgen (optional) |
+| `src/cubit_plugin/NetgenCurver.cpp` | Order 1-5 curving via compact_netgen |
+| `src/cubit_plugin/callbackgeom.cpp` | ACIS projection callbacks for CallbackGeometry |
 | `src/cubit_plugin/RadiaComp.cpp` | Qt5 GUI component (.ccl) |
 | `src/cubit_plugin/RadiaPlugin.cpp` | Command plugin registration (.ccm) |
 | `src/cubit_plugin/radia_cubit_pybind.cpp` | pybind11 module (.pyd) |
 
 ### Build
 
-```bat
-rem No-Netgen build (HighOrderMesh only, order 1-2):
-build-test.bat
-
-rem With-Netgen build (+ NetgenCurver, order 1-4):
-rem Set NETGEN_DIR in CMakeLists.txt or build script
-```
+Compact Netgen is statically linked — no nglib.dll/ngcore.dll needed for the Cubit plugin.
 
 ### Testing
 
