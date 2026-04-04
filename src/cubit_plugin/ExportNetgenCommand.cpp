@@ -13,6 +13,7 @@
 #endif
 
 #include <fstream>
+#include <map>
 
 // Ensure Netgen DLLs (nglib.dll, ngcore.dll) can be found.
 // They live in plugins/ which may not be on the DLL search path.
@@ -133,12 +134,102 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     return false;
   }
 
+  // ---- Set material labels (block name -> domain index) ----
+  // Build domain_index map: block_id -> 1-based domain index
+  std::map<int, int> block_to_domain;
+  int dom_idx = 1;
+  for (int bid : md.block_ids) {
+    block_to_domain[bid] = dom_idx++;
+  }
+  int ndomains = (int)md.block_ids.size();
+
+  // Set material names from Cubit block names
+  for (int bid : md.block_ids) {
+    std::string bname = CubitInterface::get_block_name(bid);
+    if (bname.empty())
+      bname = "volume_" + std::to_string(bid);
+    ng_mesh->SetMaterial(block_to_domain[bid], bname);
+  }
+
+  // Update volume element domain indices (was hardcoded to 1)
+  for (int ve_idx = 1; ve_idx <= ng_mesh->GetNE(); ve_idx++) {
+    int elem_i = ve_idx - 1;  // 0-based into md.elements
+    if (elem_i < (int)md.elements.size()) {
+      auto it = block_to_domain.find(md.elements[elem_i].group_id);
+      int di = (it != block_to_domain.end()) ? it->second : 1;
+      ng_mesh->VolumeElement(ve_idx).SetIndex(di);
+    }
+  }
+
+  // ---- Set boundary labels (sideset name -> bc number) ----
+  // FaceDescriptors already have BCProperty set to Cubit surface ID.
+  // Map sideset names to BCProperty values.
+  int nfd = ng_mesh->GetNFD();
+  if (!md.sidesets.empty()) {
+    // Build sideset_id -> name map
+    std::map<int, std::string> ss_name;
+    for (auto &sg : md.sidesets) {
+      if (!sg.name.empty())
+        ss_name[sg.id] = sg.name;
+    }
+
+    // Also map surface_id -> sideset name (sideset references surface)
+    std::map<int, std::string> surf_to_ssname;
+    for (auto &sg : md.sidesets) {
+      // Get surface IDs in this sideset
+      std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
+      for (int sid : ss_surfs) {
+        if (!sg.name.empty())
+          surf_to_ssname[sid] = sg.name;
+      }
+    }
+
+    // Set BCName for each FaceDescriptor
+    ng_mesh->SetNBCNames(nfd);
+    for (int fi = 1; fi <= nfd; fi++) {
+      int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+      auto it = surf_to_ssname.find(bc_prop);
+      if (it != surf_to_ssname.end()) {
+        ng_mesh->SetBCName(fi - 1, it->second);
+        ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
+      } else {
+        // Use Cubit entity name as fallback
+        std::string sname = CubitInterface::get_entity_name("surface", bc_prop);
+        if (sname.empty())
+          sname = "surface_" + std::to_string(bc_prop);
+        ng_mesh->SetBCName(fi - 1, sname);
+        ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
+      }
+    }
+
+    // Update FaceDescriptor DomainIn/Out from volume element adjacency
+    for (int fi = 1; fi <= nfd; fi++) {
+      auto &fd = ng_mesh->GetFaceDescriptor(fi);
+      // DomainIn/Out already set by surface element adjacency in build_netgen_mesh.
+      // For now keep as-is (domain 1 for single-volume, needs improvement for multi-volume).
+    }
+  } else {
+    // No sidesets: use Cubit surface entity names
+    ng_mesh->SetNBCNames(nfd);
+    for (int fi = 1; fi <= nfd; fi++) {
+      int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+      std::string sname = CubitInterface::get_entity_name("surface", bc_prop);
+      if (sname.empty())
+        sname = "surface_" + std::to_string(bc_prop);
+      ng_mesh->SetBCName(fi - 1, sname);
+      ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
+    }
+  }
+
   // For order=1: reset curving
   if (order == 1) {
     ng_mesh->BuildCurvedElements(1);
   }
 
-  // Save .vol
+  // Save .vol — detect format from extension
+  // .vol.bin = binary archive (includes curved elements)
+  // .vol     = text format (no curved data, NGSolve must re-curve)
+  // Recommendation: use .vol for compatibility; NGSolve re-curves via Curve(order)
   ng_mesh->Save(filename);
 
   int ne = ng_mesh->GetNE();
@@ -146,8 +237,6 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
 
   PRINT_INFO("Exported Netgen Vol (order %d): %s (%d nodes, %d elements)\n",
              order, filename.c_str(), np, ne);
-
-  // TODO: companion JSON (write_companion_json) disabled pending API fix
 
   return true;
 #endif
