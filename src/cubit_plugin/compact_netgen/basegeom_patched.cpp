@@ -361,6 +361,7 @@ namespace netgen
       find_primary(faces);
   }
 
+#if 0  // --- REMOVED: Analyse, Divide, FindEdges (mesher functions) ---
   void NetgenGeometry :: Analyse(Mesh& mesh,
                                  const MeshingParameters& mparam) const
   {
@@ -789,6 +790,8 @@ namespace netgen
     mesh.CalcSurfacesOfNode();
     multithread.task = savetask;
   }
+
+#endif  // --- END REMOVED: Analyse, Divide, FindEdges ---
 
 #ifndef COMPACT_NETGEN
   bool NetgenGeometry :: MeshFace(Mesh& mesh, const MeshingParameters& mparam,
