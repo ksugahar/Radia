@@ -226,10 +226,13 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     ng_mesh->BuildCurvedElements(1);
   }
 
-  // Save .vol — detect format from extension
-  // .vol.bin = binary archive (includes curved elements)
-  // .vol     = text format (no curved data, NGSolve must re-curve)
-  // Recommendation: use .vol for compatibility; NGSolve re-curves via Curve(order)
+  // Detach CallbackGeometry — it has function pointers, not serializable.
+  // Curving data is preserved in CurvedElements (written as "curvedelements"
+  // section in .vol text format, upstream Netgen master feature).
+  ng_mesh->SetGeometry(nullptr);
+
+  // Save .vol text format (includes curvedelements section for order >= 2).
+  // NGSolve reads this with Mesh("file.vol") — no STEP/Cubit needed.
   ng_mesh->Save(filename);
 
   int ne = ng_mesh->GetNE();
