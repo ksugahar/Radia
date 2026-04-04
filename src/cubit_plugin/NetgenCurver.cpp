@@ -59,22 +59,38 @@ bool NetgenCurver::build(const MeshData &md, int order)
 // ============================================================
 bool NetgenCurver::build_netgen_mesh(const MeshData &md)
 {
-  ng_mesh_ = std::make_shared<ng::Mesh>();
+  PRINT_INFO("  Phase1a: creating ng::Mesh...\n");
+  fflush(stdout);
+  try {
+    ng_mesh_ = std::make_shared<ng::Mesh>();
+  } catch (const std::exception &e) {
+    PRINT_ERROR("  Phase1a FAILED (exception): %s\n", e.what());
+    return false;
+  } catch (...) {
+    PRINT_ERROR("  Phase1a FAILED (unknown exception)\n");
+    return false;
+  }
+  PRINT_INFO("  Phase1a: ng::Mesh created OK\n");
+  PRINT_INFO("  Phase1b: SetDimension(3)\n");
   ng_mesh_->SetDimension(3);
 
   int num_nodes = (int)md.nodes.size();
-  PRINT_INFO("  Phase1: %d nodes from MeshData\n", num_nodes);
+  PRINT_INFO("  Phase1c: AddPoint for %d nodes\n", num_nodes);
 
-  for (auto &nd : md.nodes) {
+  for (int i = 0; i < num_nodes; i++) {
+    auto &nd = md.nodes[i];
     ng::PointIndex pi = ng_mesh_->AddPoint(
         ng::MeshPoint(ng::Point<3>(nd.x, nd.y, nd.z)));
     cubit_nid_to_ng_pi_[nd.id] = pi;
     ng_pi_to_cubit_nid_[pi] = nd.id;
+    if (i == 0 || i == num_nodes - 1)
+      PRINT_INFO("  Phase1c: node %d/%d OK\n", i + 1, num_nodes);
   }
 
   next_node_id_ = md.max_original_node_id + 1;
   total_nodes_ = num_nodes;
 
+  PRINT_INFO("  Phase1d: FaceDescriptors\n");
   // --- Build FaceDescriptors for each Cubit surface ---
   std::vector<int> surface_ids = CubitInterface::get_entities("surface");
   int fd_idx = 1;  // Netgen FD indices are 1-based

@@ -12,11 +12,19 @@
 // ============================================================
 CUBIT_PLUGIN(RadiaPlugin)
 
-RadiaPlugin::RadiaPlugin() {}
+static void dbglog(const char* msg) {
+  FILE* f = fopen("C:\\compact_netgen_debug.log", "a");
+  if (f) { fprintf(f, "%s\n", msg); fclose(f); }
+}
+
+RadiaPlugin::RadiaPlugin() {
+  dbglog("RadiaPlugin constructor called");
+}
 RadiaPlugin::~RadiaPlugin() {}
 
 std::vector<std::string> RadiaPlugin::get_keys()
 {
+  dbglog("get_keys() called");
   std::vector<std::string> keys;
 #ifdef HAVE_NETGEN
   keys.push_back("ExportNetgenCommand");
