@@ -116,17 +116,17 @@ void RadiaComp::setup_menus()
   QObject::connect(a_meg, SIGNAL(triggered()), handler, SLOT(export_meg()));
   menu_list.push_back(a_meg);
 
-  gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
+  // Separator before evaluation tools
+  QAction* sep = new QAction(handler);
+  sep->setSeparator(true);
+  menu_list.push_back(sep);
 
-  // --- Mesh Evaluation menu ---
-  std::vector<QAction*> eval_list;
-
-  QAction* a_vol = new QAction("Volume / Surface Area...", handler);
-  a_vol->setStatusTip("Compute mesh volume and surface area using NGSolve integration");
+  QAction* a_vol = new QAction("Mesh Evaluation...", handler);
+  a_vol->setStatusTip("Volume/Area p-convergence check (order 1-5) against CAD");
   QObject::connect(a_vol, SIGNAL(triggered()), handler, SLOT(mesh_volume()));
-  eval_list.push_back(a_vol);
+  menu_list.push_back(a_vol);
 
-  gui->add_to_menu("Mesh &Evaluation", eval_list, "radiacomp");
+  gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
   mMenuInitialized = true;
 }
