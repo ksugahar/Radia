@@ -1,115 +1,57 @@
 """
-Mesh evaluation: CAD vs NGSolve (p=1..max_order) volume and surface area.
+Mesh evaluation: verify .vol files (p=1..N) against CAD reference JSON.
 
-Called as subprocess from Cubit panel:
-    python calc_mesh_eval.py --cub5 model.cub5 --max-order 5
+Called as subprocess from Cubit Mesh Evaluation GUI:
+    python calc_mesh_eval.py --vol base_p1.vol base_p2.vol ... base_p5.vol
 
-Workflow:
-  1. Open .cub5, get CAD volumes and surface areas (exact from ACIS kernel)
-  2. For p = 1..max_order:
-     export_NGSolveCurvedMesh(cubit, order=p) -> NGSolve Mesh
-     Integrate(CF(1), mesh) for volume
-     Integrate(CF(1), mesh, BND) for surface area
-  3. Output error table: CAD vs NGSolve for each order
+Each .vol has a companion .json (from C++ export) with CAD reference values.
+Reads each .vol with NGSolve, computes Volume/Area/Length, outputs results.
 
-IMPORTANT: NGSolve must be imported BEFORE cubit.
-Outputs JSON to stdout.
+Does NOT require Cubit — only NGSolve.
+Outputs JSON to stdout (last line).
 """
 
 import argparse
-import os
+import json
 import sys
-import time
-
-_this_dir = os.path.dirname(os.path.abspath(__file__))
-if _this_dir not in sys.path:
-    sys.path.insert(0, _this_dir)
-
-from calc_common import setup_paths, setup_cubit, progress, calc_main
 
 
-def _log(msg):
-    progress("EVAL", msg)
+def evaluate_vols(vol_paths):
+    """Evaluate list of .vol files against their companion JSONs.
 
-
-def evaluate_mesh(cub5_file, max_order=5):
-    """Evaluate mesh: CAD vs NGSolve for p=1..max_order.
-
-    Returns dict with per-volume CAD values and per-order NGSolve results.
+    Returns dict with cad_* totals and per-order NGSolve results.
     """
-    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND, VOL
+    from ngsolve import Mesh, Integrate, CF, BND, BBND, VOL
+    import os
 
-    setup_paths()
-    cubit = setup_cubit(cub5_file)
-    if cubit is None:
-        return {"error": "Cubit not available"}
+    if not vol_paths:
+        return {"error": "No .vol files provided"}
 
-    vol_ids = list(cubit.get_entities("volume"))
-    if not vol_ids:
-        return {"error": "No volumes found in model"}
+    # Read CAD reference from first companion JSON
+    json_path = vol_paths[0] + ".json"
+    cad_ref = {}
+    if os.path.exists(json_path):
+        with open(json_path, "r") as f:
+            cad_ref = json.load(f)
 
-    # CAD values (exact from ACIS kernel)
-    volumes = []
-    for vid in vol_ids:
-        v = cubit.volume(vid)
-        surfaces = cubit.get_relatives("volume", vid, "surface")
-        cad_area = sum(cubit.surface(sid).area() for sid in surfaces)
-        volumes.append({
-            "id": vid,
-            "name": cubit.get_entity_name("volume", vid) or f"Volume {vid}",
-            "cad_volume": v.volume(),
-            "cad_area": cad_area,
-        })
-    cad_vol_total = sum(r["cad_volume"] for r in volumes)
-    cad_area_total = sum(r["cad_area"] for r in volumes)
-
-    # CAD edge lengths: boundary curves (shared by >= 2 surfaces)
-    curve_ids = list(cubit.parse_cubit_list("curve", "all"))
-    cad_length_total = 0.0
-    for cid in curve_ids:
-        parent_surfs = list(cubit.parse_cubit_list("surface", f"in curve {cid}"))
-        if len(parent_surfs) >= 2:
-            cad_length_total += cubit.curve(cid).length()
-
-    _log(f"CAD: {len(vol_ids)} volumes, V={cad_vol_total:.6e}, A={cad_area_total:.6e}, L={cad_length_total:.6e}")
-
-    # Check if meshed
-    total_elems = sum(
-        len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
-        + len(cubit.get_volume_wedges(vid))
-        for vid in vol_ids)
-    if total_elems == 0:
-        return {
-            "volumes": volumes,
-            "cad_vol_total": cad_vol_total,
-            "cad_area_total": cad_area_total,
-            "error": "Volumes are not meshed.",
-        }
-
-    _log(f"MESH: {total_elems} elements")
-
-    # Evaluate p=1..max_order
-    from cubit_mesh_export import extract_curved_mesh
+    cad_mats = cad_ref.get("materials", {})
+    cad_bnds = cad_ref.get("boundaries", {})
+    cad_edges = cad_ref.get("edges", {})
+    cad_vol_total = sum(cad_mats.values())
+    cad_area_total = sum(cad_bnds.values())
+    cad_length_total = sum(cad_edges.values())
 
     orders = []
-    for p in range(1, max_order + 1):
-        _log(f"p={p}: exporting curved mesh...")
-        t0 = time.perf_counter()
+    for i, vp in enumerate(vol_paths):
+        p = i + 1
+        if not os.path.exists(vp):
+            orders.append({"order": p, "error": f"File not found: {vp}"})
+            continue
 
         try:
-            if p == 1:
-                # p=1: linear mesh (no curving needed)
-                ng_mesh = extract_curved_mesh(cubit, order=2)
-                mesh = NGMesh(ng_mesh)
-                mesh.Curve(1)  # reset to linear
-            else:
-                ng_mesh = extract_curved_mesh(cubit, order=p)
-                mesh = NGMesh(ng_mesh)
+            mesh = Mesh(vp)
         except Exception as e:
-            orders.append({
-                "order": p,
-                "error": str(e),
-            })
+            orders.append({"order": p, "error": str(e)})
             continue
 
         ng_vol = Integrate(CF(1), mesh)
@@ -118,17 +60,15 @@ def evaluate_mesh(cub5_file, max_order=5):
             ng_length = Integrate(CF(1), mesh, BBND)
         except Exception:
             ng_length = 0.0
+
         n_vol = sum(1 for _ in mesh.Elements(VOL))
         n_bnd = sum(1 for _ in mesh.Elements(BND))
-        t_elapsed = time.perf_counter() - t0
 
         vol_err = (ng_vol - cad_vol_total) / cad_vol_total * 100 if cad_vol_total else 0
         area_err = (ng_area - cad_area_total) / cad_area_total * 100 if cad_area_total else 0
         len_err = (ng_length - cad_length_total) / cad_length_total * 100 if cad_length_total else 0
 
-        _log(f"p={p}: V_err={vol_err:+.4f}%, A_err={area_err:+.4f}%, L_err={len_err:+.4f}%, t={t_elapsed:.2f}s")
-
-        entry = {
+        orders.append({
             "order": p,
             "ng_volume": ng_vol,
             "ng_area": ng_area,
@@ -138,43 +78,25 @@ def evaluate_mesh(cub5_file, max_order=5):
             "len_error_pct": len_err,
             "n_vol_elems": n_vol,
             "n_bnd_elems": n_bnd,
-            "time": t_elapsed,
-        }
-
-        # Per-material volumes
-        mats = mesh.GetMaterials()
-        per_mat = []
-        for i, mat in enumerate(mats):
-            try:
-                mv = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
-                per_mat.append({"name": mat, "ng_volume": mv})
-            except Exception:
-                pass
-        entry["materials"] = per_mat
-
-        orders.append(entry)
+        })
 
     return {
-        "volumes": volumes,
         "cad_vol_total": cad_vol_total,
         "cad_area_total": cad_area_total,
         "cad_length_total": cad_length_total,
         "orders": orders,
-        "max_order": max_order,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Mesh evaluation: CAD vs NGSolve (p=1..N)")
-    parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
-    parser.add_argument("--max-order", type=int, default=5,
-                        help="Maximum curve order (1-5, default 5)")
+        description="Mesh evaluation: verify .vol files against CAD JSON")
+    parser.add_argument("--vol", nargs="+", required=True,
+                        help=".vol files (one per order, p=1..N)")
 
-    def run(args):
-        return evaluate_mesh(args.cub5, args.max_order)
-
-    calc_main(run, parser)
+    args = parser.parse_args()
+    result = evaluate_vols(args.vol)
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":
