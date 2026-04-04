@@ -1,16 +1,21 @@
 """
-Cubit integration setup: install plugin + panels in one command.
+Cubit integration setup: the SINGLE entry point for all Cubit deployment.
 
 After `pip install radia`, run:
     radia-setup                    # current user
     radia-setup --all-users        # all user profiles (admin)
 
 This command:
-  1. Copies radia_cubit.ccm to Cubit plugins/ (APREPRO export commands)
-  2. Copies radia_cubit.ccl to Cubit bin/ (Qt5 GUI Export Mesh menu)
-  3. Copies radia_cubit_mesh.pyd to Cubit plugins/ (high-order mesh curving)
-  4. Copies Netgen DLLs (nglib.dll, ngcore.dll) to Cubit plugins/
-  5. Registers toolbar panels in ~/.cubit startup
+  0. Installs cubit-mesh-export package (pip install cubit-mesh-export)
+  1. Cleans ALL old radia files from Cubit (plugins/, bin/)
+  2. Copies radia_cubit.ccm to Cubit plugins/ (APREPRO export commands)
+  3. Copies radia_cubit.ccl to Cubit bin/ (Qt5 GUI Export Mesh menu)
+  4. Copies radia_cubit_mesh.pyd to Cubit plugins/ (high-order mesh curving)
+  5. Copies Netgen DLLs (nglib.dll, ngcore.dll) to Cubit plugins/
+  6. Registers toolbar panels in ~/.cubit startup
+
+Maintenance policy: all deployment logic lives in this script.
+Local, 100-goki, and mdx deployments all go through `radia-setup`.
 """
 
 import glob
@@ -149,10 +154,48 @@ def _clean_panels_json():
         pass
 
 
-def setup_cubit(all_users=False):
-    """Install Cubit plugin + panels.
+def _ensure_cubit_mesh_export():
+    """Install or upgrade cubit-mesh-export package."""
+    import subprocess
+    try:
+        import cubit_mesh_export
+        current = getattr(cubit_mesh_export, "__version__", "unknown")
+        print(f"  cubit-mesh-export: {current} (installed)")
+        # Upgrade to latest
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade",
+             "--quiet", "cubit-mesh-export"],
+            capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            # Re-check version after upgrade
+            import importlib
+            importlib.reload(cubit_mesh_export)
+            new_ver = getattr(cubit_mesh_export, "__version__", "unknown")
+            if new_ver != current:
+                print(f"  cubit-mesh-export: upgraded to {new_ver}")
+        return True
+    except ImportError:
+        print("  cubit-mesh-export: not installed, installing...")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--quiet",
+             "cubit-mesh-export"],
+            capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            print("  cubit-mesh-export: installed OK")
+            return True
+        else:
+            print(f"  [--] cubit-mesh-export install failed: {result.stderr.strip()}")
+            return False
 
-    Cleans old installations first, then installs fresh.
+
+def setup_cubit(all_users=False):
+    """Install Cubit plugin + panels + cubit-mesh-export.
+
+    Single entry point for ALL Cubit deployment:
+      - Installs cubit-mesh-export (pip)
+      - Cleans old plugin files from Cubit
+      - Copies fresh binaries
+      - Registers panels for all users
 
     Args:
         all_users: Install panels for all user profiles.
@@ -167,6 +210,10 @@ def setup_cubit(all_users=False):
 
     radia_dir = _find_radia_package_dir()
     cubit_dir = _find_cubit_dir()
+
+    # 0. Ensure cubit-mesh-export is installed
+    _ensure_cubit_mesh_export()
+    print()
 
     # Clean pip artifacts
     n = _clean_pip_artifacts()
