@@ -274,25 +274,33 @@ void RadiaMenuHandler::export_netgen()
   QString volPath = dlgOpt.filePath();
   volPath.replace("\\", "/");
 
-  // Save temp .cub5
-  QString cub5 = QDir::tempPath() + "/radia_netgen_export.cub5";
-  cub5.replace("\\", "/");
-  CubitInterface::cmd(("save cub5 \"" + cub5.toStdString() + "\" overwrite").c_str());
+  // --- Phase 1: C++ export .vol + companion JSON (no subprocess, no cub5) ---
+  PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
+  std::string cmd = "export netgen \"" + volPath.toStdString()
+    + "\" order " + std::to_string(order) + " overwrite";
+  CubitInterface::silent_cmd(cmd.c_str());
 
+  // Check .vol was created
+  if (!QFile::exists(volPath)) {
+    PRINT_ERROR("export netgen command failed.\n");
+    return;
+  }
+  PRINT_INFO("Exported: %s\n", volPath.toStdString().c_str());
+
+  // --- Phase 2: subprocess to verify .vol with NGSolve ---
   QString python = find_external_python();
-  QString script = find_calc_script(python, "calc_export_netgen");
+  QString script = find_calc_script(python, "calc_verify_vol");
   if (script.isEmpty()) {
-    PRINT_ERROR("Cannot find calc_export_netgen.py.\n");
+    PRINT_WARNING("calc_verify_vol.py not found. Skipping NGSolve verification.\n");
     return;
   }
 
-  PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
+  PRINT_INFO("Verifying mesh with NGSolve...\n");
 
   QProcess proc;
   QStringList args;
   if (python == "py") args << "-3";
-  args << script << "--cub5" << cub5 << "--order" << QString::number(order)
-       << "--vol" << volPath;
+  args << script << "--vol" << volPath;
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   for (const QString &key : env.keys()) {
@@ -303,26 +311,27 @@ void RadiaMenuHandler::export_netgen()
 
   proc.start(python, args);
   if (!proc.waitForFinished(300000)) {
-    PRINT_ERROR("Netgen export timed out.\n");
+    PRINT_WARNING("NGSolve verification timed out.\n");
     return;
   }
   if (proc.exitCode() != 0) {
-    PRINT_ERROR("Netgen export failed:\n%s\n",
+    PRINT_WARNING("NGSolve verification failed:\n%s\n",
       proc.readAllStandardError().left(2000).constData());
     return;
   }
 
-  // Parse JSON result
+  // Parse JSON result from subprocess
   QString out = QString::fromUtf8(proc.readAllStandardOutput());
   QStringList lines = out.split('\n', Qt::SkipEmptyParts);
-  if (lines.isEmpty()) { PRINT_ERROR("No output.\n"); return; }
+  if (lines.isEmpty()) { PRINT_WARNING("No verification output.\n"); return; }
 
   QJsonDocument doc = QJsonDocument::fromJson(lines.last().toUtf8());
-  if (!doc.isObject()) { PRINT_ERROR("Invalid JSON.\n"); return; }
+  if (!doc.isObject()) { PRINT_WARNING("Invalid verification JSON.\n"); return; }
 
   QJsonObject r = doc.object();
   if (r.contains("error")) {
-    PRINT_ERROR("Error: %s\n", r["error"].toString().toStdString().c_str());
+    PRINT_WARNING("Verification error: %s\n",
+      r["error"].toString().toStdString().c_str());
     return;
   }
 
