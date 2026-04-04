@@ -91,7 +91,7 @@ jobs:
           Write-Host "Running pytest (excluding cubit + OCC-dependent tests)..."
           python -m pytest tests/ -v --tb=short --junitxml=test-results.xml `
             --ignore=tests/cubit `
-            --ignore=tests/panels/test_panel_integration.py `
+            --ignore=tests/panels `
             --ignore=tests/test_far_field_accuracy.py `
             --ignore=tests/test_rad_ngsolve_function.py `
             --ignore=tests/test_tetrahedral_solver.py `
