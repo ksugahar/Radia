@@ -76,11 +76,21 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
 
   int num_nodes = (int)md.nodes.size();
   PRINT_INFO("  Phase1c: AddPoint for %d nodes\n", num_nodes);
+  fflush(stdout);
 
   for (int i = 0; i < num_nodes; i++) {
     auto &nd = md.nodes[i];
-    ng::PointIndex pi = ng_mesh_->AddPoint(
-        ng::MeshPoint(ng::Point<3>(nd.x, nd.y, nd.z)));
+    if (i == 0) { PRINT_INFO("  Phase1c: first AddPoint (id=%d, %.4f, %.4f, %.4f)\n", nd.id, nd.x, nd.y, nd.z); fflush(stdout); }
+    ng::PointIndex pi;
+    try {
+      pi = ng_mesh_->AddPoint(ng::MeshPoint(ng::Point<3>(nd.x, nd.y, nd.z)));
+    } catch (const std::exception &e) {
+      PRINT_ERROR("  Phase1c: AddPoint FAILED at node %d: %s\n", i, e.what());
+      return false;
+    } catch (...) {
+      PRINT_ERROR("  Phase1c: AddPoint FAILED at node %d (unknown)\n", i);
+      return false;
+    }
     cubit_nid_to_ng_pi_[nd.id] = pi;
     ng_pi_to_cubit_nid_[pi] = nd.id;
     if (i == 0 || i == num_nodes - 1)
@@ -91,8 +101,13 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
   total_nodes_ = num_nodes;
 
   PRINT_INFO("  Phase1d: FaceDescriptors\n");
+  fflush(stdout);
   // --- Build FaceDescriptors for each Cubit surface ---
+  PRINT_INFO("  Phase1d: calling get_entities('surface')...\n");
+  fflush(stdout);
   std::vector<int> surface_ids = CubitInterface::get_entities("surface");
+  PRINT_INFO("  Phase1d: got %d surfaces\n", (int)surface_ids.size());
+  fflush(stdout);
   int fd_idx = 1;  // Netgen FD indices are 1-based
   for (int sid : surface_ids) {
     ng::FaceDescriptor fd(fd_idx, 1, 0, fd_idx);
@@ -103,28 +118,40 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     fd_idx++;
   }
 
+  PRINT_INFO("  Phase1e: Add surface elements with UV geominfo\n");
+  fflush(stdout);
   // --- Add surface elements with UV geominfo ---
   for (int sid : surface_ids) {
     int ng_fd = cubit_sid_to_ng_fd_[sid];
 
     // Get RefFace for UV computation
+    PRINT_INFO("  Phase1e: GeometryQueryTool::instance() for surface %d\n", sid);
+    fflush(stdout);
     RefFace* rf = GeometryQueryTool::instance()->get_ref_face(sid);
+    PRINT_INFO("  Phase1e: RefFace=%p\n", (void*)rf);
+    fflush(stdout);
     if (!rf) continue;
 
     // Get surface tri/quad elements
+    PRINT_INFO("  Phase1e: get_surface_tris(%d)...\n", sid); fflush(stdout);
     std::vector<int> tri_list = CubitInterface::get_surface_tris(sid);
+    PRINT_INFO("  Phase1e: got %d tri nodes (%d tris)\n", (int)tri_list.size(), (int)tri_list.size()/3); fflush(stdout);
     for (size_t t = 0; t < tri_list.size(); t += 3) {
+      if (t == 0) { PRINT_INFO("  Phase1e: first tri processing...\n"); fflush(stdout); }
       ng::Element2d el(ng::TRIG);
       el.SetIndex(ng_fd);
       for (int k = 0; k < 3; k++) {
         int cubit_nid = tri_list[t + k];
+        if (t == 0 && k == 0) { PRINT_INFO("  Phase1e: get coords nid=%d...\n", cubit_nid); fflush(stdout); }
         el[k] = cubit_nid_to_ng_pi_[cubit_nid];
 
         // Compute UV via RefFace::u_v_from_position
         auto coords = CubitInterface::get_nodal_coordinates(cubit_nid);
+        if (t == 0 && k == 0) { PRINT_INFO("  Phase1e: u_v_from_position...\n"); fflush(stdout); }
         CubitVector loc(coords[0], coords[1], coords[2]);
         double u, v;
         rf->u_v_from_position(loc, u, v);
+        if (t == 0 && k == 0) { PRINT_INFO("  Phase1e: UV=(%g,%g) OK\n", u, v); fflush(stdout); }
         ng::PointGeomInfo gi;
         gi.trignum = ng_fd;
         gi.u = u;
@@ -132,6 +159,8 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         el.GeomInfo()[k] = gi;
       }
       ng_mesh_->AddSurfaceElement(el);
+      if (t == 0) { PRINT_INFO("  Phase1e: first tri added OK\n"); fflush(stdout); }
+      if (t + 3 >= tri_list.size()) { PRINT_INFO("  Phase1e: all %d tris added\n", (int)(tri_list.size()/3)); fflush(stdout); }
     }
 
     std::vector<int> quad_list = CubitInterface::get_surface_quads(sid);
@@ -156,6 +185,9 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     }
   }
 
+  PRINT_INFO("  Phase1f: Add volume elements (%d)\n", (int)md.elements.size());
+  fflush(stdout);
+  int vol_count = 0;
   // --- Add volume elements from MeshData ---
   for (auto &elem : md.elements) {
     int nn = elem.nv;
@@ -167,6 +199,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
       el.SetIndex(1);
       ng_mesh_->AddVolumeElement(el);
+      vol_count++;
     }
     else if (nn == 8 && (et == ::HEX8 || et == ::HEX)) {
       ng::Element el(ng::HEX);
@@ -191,7 +224,14 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     }
   }
 
+  PRINT_INFO("  Phase1f: %d volume elements added\n", vol_count);
+  fflush(stdout);
+
+  PRINT_INFO("  Phase1g: UpdateTopology...\n");
+  fflush(stdout);
   ng_mesh_->UpdateTopology();
+  PRINT_INFO("  Phase1g: UpdateTopology done\n");
+  fflush(stdout);
 
   return true;
 }
