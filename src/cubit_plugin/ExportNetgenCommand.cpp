@@ -8,7 +8,48 @@
 #include <meshing.hpp>
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <fstream>
+
+// Ensure Netgen DLLs (nglib.dll, ngcore.dll) can be found.
+// They live in plugins/ which may not be on the DLL search path.
+static void ensure_netgen_dll_path()
+{
+#ifdef _WIN32
+  // Find plugins/ directory relative to this DLL's location
+  // or use CUBIT_PLUGIN_DIR environment variable
+  const char *pd = std::getenv("CUBIT_PLUGIN_DIR");
+  if (pd && pd[0]) {
+    SetDllDirectoryA(pd);
+    return;
+  }
+  // Fallback: add Cubit's bin/plugins/ to DLL search path
+  HMODULE hm = nullptr;
+  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                     (LPCSTR)&ensure_netgen_dll_path, &hm);
+  if (hm) {
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(hm, path, MAX_PATH)) {
+      // path = .../plugins/radia_cubit.ccm or .../bin/radia_cubit.ccl
+      std::string dir(path);
+      auto pos = dir.find_last_of("\\/");
+      if (pos != std::string::npos) {
+        dir = dir.substr(0, pos);
+        // If we're in bin/, try bin/plugins/
+        std::string plugins = dir + "\\plugins";
+        if (GetFileAttributesA(plugins.c_str()) != INVALID_FILE_ATTRIBUTES)
+          dir = plugins;
+        AddDllDirectory(std::wstring(dir.begin(), dir.end()).c_str());
+        SetDllDirectoryA(dir.c_str());
+      }
+    }
+  }
+#endif
+}
 
 ExportNetgenCommand::ExportNetgenCommand() {}
 ExportNetgenCommand::~ExportNetgenCommand() {}
@@ -64,6 +105,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     PRINT_ERROR("Order must be 1-5.\n");
     return false;
   }
+
+  // Ensure Netgen DLLs are findable (DELAYLOAD resolution)
+  ensure_netgen_dll_path();
 
   // Extract linear mesh from Cubit (MeshData)
   MeshData md;
