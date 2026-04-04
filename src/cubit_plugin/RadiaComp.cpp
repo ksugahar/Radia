@@ -485,11 +485,28 @@ void RadiaMenuHandler::mesh_volume()
     if (CubitInterface::get_volume_count() == 0) return;
   }
 
-  // Save to temp .cub5
-  QString cub5 = QDir::tempPath() + "/radia_mesh_eval.cub5";
-  cub5.replace("\\", "/");
-  CubitInterface::cmd(("save cub5 \"" + cub5.toStdString() + "\" overwrite").c_str());
+  // --- Phase 1: C++ export .vol for p=1..5 ---
+  PRINT_INFO("Exporting .vol for p=1..5...\n");
+  QString tmpDir = QDir::tempPath();
+  tmpDir.replace("\\", "/");
+  if (!tmpDir.endsWith('/')) tmpDir += '/';
 
+  QStringList volPaths;
+  for (int p = 1; p <= 5; p++) {
+    QString vp = tmpDir + QString("radia_eval_p%1.vol").arg(p);
+    std::string cmd = "export netgen \"" + vp.toStdString()
+      + "\" order " + std::to_string(p) + " overwrite";
+    PRINT_INFO("  p=%d: exporting...\n", p);
+    CubitInterface::silent_cmd(cmd.c_str());
+    if (QFile::exists(vp)) {
+      volPaths << vp;
+    } else {
+      PRINT_WARNING("  p=%d: export failed, skipping.\n", p);
+      volPaths << "";  // placeholder
+    }
+  }
+
+  // --- Phase 2: subprocess to verify all .vol with NGSolve ---
   QString python = find_external_python();
   QString script = find_calc_script(python, "calc_mesh_eval");
   if (script.isEmpty()) {
@@ -497,15 +514,16 @@ void RadiaMenuHandler::mesh_volume()
     return;
   }
 
-  // Run calc_mesh_eval.py --cub5 ... --max-order 5
-  PRINT_INFO("Running mesh evaluation (p=1..5)...\n");
+  PRINT_INFO("Verifying with NGSolve...\n");
 
   QProcess proc;
   QStringList args;
   if (python == "py") args << "-3";
-  args << script << "--cub5" << cub5 << "--max-order" << "5";
+  args << script << "--vol";
+  for (auto &vp : volPaths) {
+    if (!vp.isEmpty()) args << vp;
+  }
 
-  // Clean Qt env to avoid conflicts
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   for (const QString &key : env.keys()) {
     if (key.toUpper().contains("QT") || key.toUpper().contains("PYSIDE"))
@@ -514,14 +532,22 @@ void RadiaMenuHandler::mesh_volume()
   proc.setProcessEnvironment(env);
 
   proc.start(python, args);
-  if (!proc.waitForFinished(600000)) {  // 10 min
-    PRINT_ERROR("calc_mesh_eval.py timed out.\n");
+  if (!proc.waitForFinished(600000)) {
+    PRINT_ERROR("Mesh evaluation timed out.\n");
     return;
   }
   if (proc.exitCode() != 0) {
-    PRINT_ERROR("calc_mesh_eval.py failed:\n%s\n",
+    PRINT_ERROR("Mesh evaluation failed:\n%s\n",
       proc.readAllStandardError().left(2000).constData());
     return;
+  }
+
+  // Cleanup temp .vol files
+  for (auto &vp : volPaths) {
+    if (!vp.isEmpty()) {
+      QFile::remove(vp);
+      QFile::remove(vp + ".json");
+    }
   }
 
   // Parse JSON from last line
