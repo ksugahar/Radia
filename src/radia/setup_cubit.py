@@ -64,22 +64,48 @@ def _find_netgen_dlls():
     return None, None
 
 
-def _clean_old_plugins(plugins_dir):
-    """Remove old radia plugin files from Cubit plugins/ before installing new ones."""
-    old_patterns = [
+def _clean_old_plugins(cubit_dir):
+    """Remove ALL radia plugin files from a Cubit installation.
+
+    Cleans:
+      - plugins/*.ccm, *.pyd (APREPRO commands, pybind11 modules)
+      - plugins/nglib.dll, ngcore.dll (Netgen dependencies)
+      - bin/radia_cubit.ccl (Qt5 GUI component)
+      - bin/cubit_radia.bat (deprecated launcher)
+    """
+    plugins_dir = cubit_dir / "bin" / "plugins"
+    bin_dir = cubit_dir / "bin"
+    removed = 0
+
+    # plugins/ directory
+    plugin_patterns = [
         "radia_cubit.ccm",
         "radia_cubit_mesh*.pyd",
         "nglib.dll",
         "ngcore.dll",
     ]
-    removed = 0
-    for pattern in old_patterns:
+    for pattern in plugin_patterns:
         for f in plugins_dir.glob(pattern):
             try:
                 f.unlink()
                 removed += 1
             except OSError:
                 pass
+
+    # bin/ directory (ccl, deprecated launcher)
+    bin_files = [
+        "radia_cubit.ccl",
+        "cubit_radia.bat",
+    ]
+    for name in bin_files:
+        f = bin_dir / name
+        if f.is_file():
+            try:
+                f.unlink()
+                removed += 1
+            except OSError:
+                pass
+
     return removed
 
 
@@ -162,8 +188,8 @@ def setup_cubit(all_users=False):
     print(f"  Radia:  {radia_dir}")
     print()
 
-    # 0. Clean old plugin files
-    n = _clean_old_plugins(plugins_dir)
+    # 0. Clean ALL old radia files from Cubit (plugins/, bin/)
+    n = _clean_old_plugins(cubit_dir)
     if n:
         print(f"  Cleaned {n} old plugin file(s)")
         print()
