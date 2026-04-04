@@ -232,55 +232,29 @@ static void run_export(ExportDialog::Format fmt)
   else
     jouPath = s_lastJouPath;
 
+  // Modal dialog — Cubit command execution requires the GUI thread,
+  // so the dialog must block until the user clicks OK/Cancel.
   ExportDialog dlg(fmt, jouPath);
   if (dlg.exec() != QDialog::Accepted)
     return;
 
-  std::string file = dlg.filePath().toStdString();
-  int order = dlg.order();
-
-  bool ok = false;
-  switch (fmt) {
-    case ExportDialog::GMSH: {
-      ExportGmshCommand cmd;
-      std::string ver = dlg.gmshVersion() >= 4 ? "4.1" : "2.2";
-      ok = cmd.write_gmsh(file, ver, order);
-      break;
-    }
-    case ExportDialog::Nastran: {
-      ExportNastranCommand cmd;
-      std::string dim = dlg.dimension() == 2 ? "2" : "3";
-      ok = cmd.write_nastran(file, dim, !dlg.noPyramid(), order);
-      break;
-    }
-    case ExportDialog::VTK: {
-      ExportVtkCommand cmd;
-      std::string dim = dlg.dimension() == 2 ? "2" : "3";
-      ok = cmd.write_vtk(file, dim, order);
-      break;
-    }
-    case ExportDialog::MEG: {
-      ExportMegCommand cmd;
-      // Extract T/K/R from combo text (first char)
-      char megDim = dlg.megDimension();
-      ok = cmd.write_meg(file, megDim);
-      break;
-    }
+  // Execute export via APREPRO command (same codepath as journal playback)
+  std::string cmd = dlg.cubitCommand().toStdString();
+  if (cmd.empty()) {
+    PRINT_ERROR("No export command.\n");
+    return;
   }
 
-  if (ok) {
-    PRINT_INFO("Export complete: %s\n", file.c_str());
+  CubitInterface::cmd(cmd.c_str());
+  PRINT_INFO("Export complete: %s\n", dlg.filePath().toStdString().c_str());
 
-    // Auto-save .cub5 alongside the export (same base name)
-    QString qfile = QString::fromStdString(file);
-    int dot = qfile.lastIndexOf('.');
-    if (dot > qfile.lastIndexOf('/')) {
-      QString cub5 = qfile.left(dot) + ".cub5";
-      std::string save_cmd = "save cub5 \"" + cub5.toStdString() + "\" overwrite";
-      CubitInterface::cmd(save_cmd.c_str());
-    }
-  } else {
-    PRINT_ERROR("Export failed: %s\n", file.c_str());
+  // Auto-save .cub5 alongside the export (same base name)
+  QString qfile = dlg.filePath();
+  int dot = qfile.lastIndexOf('.');
+  if (dot > qfile.lastIndexOf('/')) {
+    QString cub5 = qfile.left(dot) + ".cub5";
+    std::string save_cmd = "save cub5 \"" + cub5.toStdString() + "\" overwrite";
+    CubitInterface::cmd(save_cmd.c_str());
   }
 }
 
@@ -302,7 +276,7 @@ void RadiaMenuHandler::export_netgen()
     if (CubitInterface::get_volume_count() == 0) return;
   }
 
-  // Show export dialog (shared with GMSH/Nastran/VTK/MEG)
+  // Modal dialog — Cubit commands require GUI thread
   QString jouPath;
   std::string jf = CubitInterface::get_current_journal_file();
   if (!jf.empty()) jouPath = QString::fromStdString(jf);
@@ -488,7 +462,7 @@ void RadiaMenuHandler::export_netgen()
   PRINT_INFO("Exported: %s (order %d)\n",
     volPath.toStdString().c_str(), order);
 
-  dlg->show();  // modeless: user can interact with Cubit
+  dlg->show();  // modeless result dialog: user can interact with Cubit
 }
 
 // ============================================================
@@ -532,44 +506,35 @@ void RadiaMenuHandler::mesh_volume()
   // Ensure Netgen DLLs are on search path before export netgen commands
   ensure_netgen_dll_path();
 
-  // --- Phase 1: C++ export .vol for p=1..5 ---
-  PRINT_INFO("Exporting .vol for p=1..5...\n");
+  // --- Phase 1: Save temp .cub5 for subprocess ---
   QString tmpDir = QDir::tempPath();
   tmpDir.replace("\\", "/");
   if (!tmpDir.endsWith('/')) tmpDir += '/';
-
-  QStringList volPaths;
-  for (int p = 1; p <= 5; p++) {
-    QString vp = tmpDir + QString("radia_eval_p%1.vol").arg(p);
-    std::string cmd = "export netgen \"" + vp.toStdString()
-      + "\" order " + std::to_string(p) + " overwrite";
-    PRINT_INFO("  p=%d: exporting...\n", p);
+  QString cub5Path = tmpDir + "radia_eval_temp.cub5";
+  {
+    std::string cmd = "save cub5 \"" + cub5Path.toStdString() + "\" overwrite";
     CubitInterface::silent_cmd(cmd.c_str());
-    if (QFile::exists(vp)) {
-      volPaths << vp;
-    } else {
-      PRINT_WARNING("  p=%d: export failed, skipping.\n", p);
-      volPaths << "";  // placeholder
+    if (!QFile::exists(cub5Path)) {
+      PRINT_ERROR("Failed to save temp .cub5\n");
+      return;
     }
   }
 
-  // --- Phase 2: subprocess to verify all .vol with NGSolve ---
+  // --- Phase 2: subprocess — calc_mesh_eval.py does extract_curved_mesh p=1..5 ---
   QString python = find_external_python();
   QString script = find_calc_script(python, "calc_mesh_eval");
   if (script.isEmpty()) {
     PRINT_ERROR("Cannot find calc_mesh_eval.py. Is radia installed?\n");
+    QFile::remove(cub5Path);
     return;
   }
 
-  PRINT_INFO("Verifying with NGSolve...\n");
+  PRINT_INFO("Evaluating mesh p=1..5 with NGSolve...\n");
 
   QProcess proc;
   QStringList args;
   if (python == "py") args << "-3";
-  args << script << "--vol";
-  for (auto &vp : volPaths) {
-    if (!vp.isEmpty()) args << vp;
-  }
+  args << script << "--cub5" << cub5Path;
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   for (const QString &key : env.keys()) {
@@ -589,13 +554,8 @@ void RadiaMenuHandler::mesh_volume()
     return;
   }
 
-  // Cleanup temp .vol files
-  for (auto &vp : volPaths) {
-    if (!vp.isEmpty()) {
-      QFile::remove(vp);
-      QFile::remove(vp + ".json");
-    }
-  }
+  // Cleanup temp .cub5
+  QFile::remove(cub5Path);
 
   // Parse JSON from last line
   QString out = QString::fromUtf8(proc.readAllStandardOutput());

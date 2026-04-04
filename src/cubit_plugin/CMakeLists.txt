@@ -51,6 +51,7 @@ if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
       ${NETGEN_SRC_DIR}/libsrc/general/optmem.cpp
       ${NETGEN_SRC_DIR}/libsrc/gprim/geom3d.cpp
       ${NETGEN_SRC_DIR}/libsrc/gprim/transform3d.cpp
+      ${NETGEN_SRC_DIR}/libsrc/linalg/densemat.cpp
     )
     # Group D: meshing
     list(APPEND COMPACT_NETGEN_SOURCES
@@ -79,8 +80,14 @@ if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
     set(COMPACT_NETGEN_DEFS
       COMPACT_NETGEN              # Skip mesher-dependent code paths
       COMPACT_NETGEN_STATIC       # DLL_HEADER / NGCORE_API = empty
-      NO_PARALLEL_THREADS         # NgMutex = empty class (single-threaded)
+      NO_PARALLEL_THREADS         # NgMutex = empty class (TaskManager disabled)
+      # OpenMP is still used for BuildCurvedElements parallelization
     )
+    # Enable OpenMP for edge/face curving parallelization
+    find_package(OpenMP)
+    if(OpenMP_CXX_FOUND)
+      message(STATUS "Compact Netgen: OpenMP enabled for BuildCurvedElements")
+    endif()
   else()
     message(WARNING "NETGEN_SRC_DIR set but overrides not found at ${COMPACT_NETGEN_OVERRIDES}")
     set(HAVE_NETGEN OFF)
@@ -129,8 +136,7 @@ set(CCM_SOURCES
     RadiaPlugin.hpp
     MeshData.cpp
     MeshData.hpp
-    HighOrderMesh.cpp
-    HighOrderMesh.hpp
+    # HighOrderMesh removed — NetgenCurver is the sole curving path (no fallback)
     NetgenCurver.cpp
     NetgenCurver.hpp
     ExportNastranCommand.cpp
@@ -178,6 +184,9 @@ if(HAVE_NETGEN)
     target_compile_definitions(radia_cubit_ccm PRIVATE ${COMPACT_NETGEN_DEFS})
     if(MSVC)
       target_compile_options(radia_cubit_ccm PRIVATE /bigobj)
+    endif()
+    if(OpenMP_CXX_FOUND)
+      target_link_libraries(radia_cubit_ccm OpenMP::OpenMP_CXX)
     endif()
   else()
     target_include_directories(radia_cubit_ccm PRIVATE

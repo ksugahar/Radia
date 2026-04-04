@@ -6,8 +6,8 @@
 //
 // Shared mesh data extraction from Cubit's MeshExportInterface.
 // Extracts blocks, sidesets, nodesets in one pass.  High-order
-// node generation (NetgenCurver or HighOrderMesh fallback) is
-// applied uniformly to both block elements and sideset faces.
+// node generation (NetgenCurver) is applied uniformly to both
+// block elements and sideset faces.
 //
 // Each exporter reads from MeshData and writes format-specific
 // output; no exporter touches MeshExportInterface directly.
@@ -19,7 +19,6 @@
 #include <unordered_map>
 
 class MeshExportInterface;
-class HighOrderMesh;
 #ifdef HAVE_NETGEN
 class NetgenCurver;
 #endif
@@ -140,7 +139,6 @@ private:
   void extract_nodesets(MeshExportInterface *iface);
 
   // Apply HO connectivity to elements and sideset faces
-  void apply_ho(const HighOrderMesh &ho);
 #ifdef HAVE_NETGEN
   void apply_ho(const NetgenCurver &nc);
 

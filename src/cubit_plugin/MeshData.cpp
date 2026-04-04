@@ -1,5 +1,4 @@
 #include "MeshData.hpp"
-#include "HighOrderMesh.hpp"
 #ifdef HAVE_NETGEN
 #include "NetgenCurver.hpp"
 #endif
@@ -52,30 +51,16 @@ bool MeshData::extract(int req_order)
       netgen_curver_ = nc;  // keep alive for pybind11 export
       apply_ho(*nc);
     } else {
-      PRINT_INFO("build_high_order: NetgenCurver failed, trying HighOrderMesh...\n");
-      if (order > 2) {
-        PRINT_WARNING("NetgenCurver failed. Order %d requires Netgen. "
-                      "Falling back to order 2.\n", order);
-        order = 2;
-      }
+      PRINT_ERROR("NetgenCurver failed for order %d. "
+                  "No fallback — check mesh and geometry.\n", order);
+      CubitInterface::release_interface(iface);
+      return false;
 #else
     {
-      if (order > 2) {
-        PRINT_WARNING("Order %d requires Netgen. Falling back to order 2.\n", order);
-        order = 2;
-      }
+      PRINT_ERROR("Order %d requires Netgen support (not built).\n", order);
+      CubitInterface::release_interface(iface);
+      return false;
 #endif
-      // HighOrderMesh still needs iface — re-initialize iteration state
-      iface->initialize_export();
-      HighOrderMesh ho;
-      if (!ho.build(iface)) {
-        PRINT_ERROR("Failed to build high-order mesh.\n");
-        CubitInterface::release_interface(iface);
-        return false;
-      }
-      PRINT_INFO("build_high_order: HighOrderMesh succeeded (%d nodes).\n",
-                 ho.get_num_nodes());
-      apply_ho(ho);
     }
   }
 
@@ -229,50 +214,6 @@ void MeshData::extract_nodesets(MeshExportInterface *iface)
 }
 
 // ================================================================
-// apply_ho(HighOrderMesh) — fill ho_conn + append generated nodes
-// ================================================================
-void MeshData::apply_ho(const HighOrderMesh &ho)
-{
-  // Append generated mid-nodes
-  int n_ho = ho.get_num_nodes() - num_original_nodes;
-  int idx = (int)nodes.size();
-  for (int i = 0; i < n_ho; i++) {
-    int nid = max_original_node_id + 1 + i;
-    auto c = ho.get_node_coords(nid);
-    nodes.push_back({nid, c[0], c[1], c[2]});
-    node_id_to_index[nid] = idx++;
-  }
-
-  // Fill ho_conn for block elements
-  for (auto &elem : elements) {
-    if (elem.nv == 4 && (elem.type == TETRA4 || elem.type == TETRA))
-      elem.ho_conn = ho.tet4_to_tet10(elem.conn.data());
-    else if (elem.nv == 8 && (elem.type == HEX8 || elem.type == HEX))
-      elem.ho_conn = ho.hex8_to_hex20(elem.conn.data());
-    else if (elem.nv == 6 && (elem.type == WEDGE6 || elem.type == WEDGE))
-      elem.ho_conn = ho.wedge6_to_wedge15(elem.conn.data());
-    else if (elem.nv == 5 && (elem.type == PYRAMID5 || elem.type == PYRAMID))
-      elem.ho_conn = ho.pyramid5_to_pyramid13(elem.conn.data());
-    else if (elem.nv == 3 && (elem.type == TRI3 || elem.type == CUBIT_TRI
-                           || elem.type == TRISHELL || elem.type == TRISHELL3))
-      elem.ho_conn = ho.tri3_to_tri6(elem.conn.data());
-    else if (elem.nv == 4 && (elem.type == QUAD4 || elem.type == QUAD
-                           || elem.type == SHEL || elem.type == SHELL4))
-      elem.ho_conn = ho.quad4_to_quad8(elem.conn.data());
-  }
-
-  // Fill ho_conn for sideset faces
-  for (auto &sg : sidesets) {
-    for (auto &face : sg.faces) {
-      if (face.nv == 3)
-        face.ho_conn = ho.tri3_to_tri6(face.conn.data());
-      else if (face.nv == 4)
-        face.ho_conn = ho.quad4_to_quad8(face.conn.data());
-    }
-  }
-}
-
-// ================================================================
 // apply_ho(NetgenCurver) — fill ho_conn + append generated nodes
 // ================================================================
 #ifdef HAVE_NETGEN
@@ -336,12 +277,17 @@ std::vector<int> MeshData::build_ho_conn_nc(
   // Edge nodes
   for (int e = 0; e < num_edges; e++) {
     auto en = nc.get_edge_nodes(conn[edges[e][0]], conn[edges[e][1]]);
+    if (en.empty()) {
+      // Edge not found in NetgenCurver — element not in curved mesh
+      // (e.g., standalone tri block not part of any volume).
+      // Fall back to linear connectivity.
+      return {};
+    }
     for (int nid : en)
       ho.push_back(nid);
-    // If edge not found (shouldn't happen), pad with 0
     int expected = nc.get_order() - 1;
     for (int k = (int)en.size(); k < expected; k++)
-      ho.push_back(0);
+      ho.push_back(en.back());  // repeat last node (safe fallback)
   }
 
   // TODO: face interior nodes and volume interior nodes for order >= 3
