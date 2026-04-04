@@ -100,8 +100,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   PRINT_INFO("Exported Netgen Vol (order %d): %s (%d nodes, %d elements)\n",
              order, filename.c_str(), np, ne);
 
-  // Write companion JSON with CAD reference values
-  MeshData::write_companion_json(filename);
+  // TODO: companion JSON (write_companion_json) disabled pending API fix
 
   return true;
 #endif
