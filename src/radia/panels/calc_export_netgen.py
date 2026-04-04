@@ -150,11 +150,13 @@ def export_netgen(cub5_file, order, vol_path=None):
         mesh.Curve(1)
 
     # --- Consistency check: per-material volume ---
+    # Use NGSolve label as display name (overrides CAD-side fallback)
     warnings = []
-    materials = mesh.GetMaterials()
+    materials = list(dict.fromkeys(mesh.GetMaterials()))  # unique, order preserved
     for i, mat in enumerate(materials):
         ng_vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
         if i < len(cad_materials):
+            cad_materials[i]["name"] = mat  # use NGSolve label
             cad_materials[i]["ng_volume"] = ng_vol
             cad_v = cad_materials[i]["cad_volume"]
             if cad_v > 0:
@@ -165,25 +167,20 @@ def export_netgen(cub5_file, order, vol_path=None):
                         f"Material \"{mat}\": V error {err:+.2e}% (>{1.0}%)")
 
     # --- Consistency check: per-boundary area ---
-    boundaries = mesh.GetBoundaries()
-    checked_bnd = set()
+    # Match by index (surface order is consistent between Cubit and _set_labels)
+    boundaries = list(dict.fromkeys(mesh.GetBoundaries()))  # unique
     for i, bnd in enumerate(boundaries):
-        if bnd in checked_bnd:
-            continue
-        checked_bnd.add(bnd)
         ng_area = Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries(bnd))
-        # Find matching CAD boundary
-        for cb in cad_boundaries:
-            if cb["name"] == bnd and "ng_area" not in cb:
-                cb["ng_area"] = ng_area
-                cad_a = cb["cad_area"]
-                if cad_a > 0:
-                    err = (ng_area - cad_a) / cad_a * 100
-                    cb["error_pct"] = err
-                    if abs(err) > 1.0:
-                        warnings.append(
-                            f"Boundary \"{bnd}\": A error {err:+.2e}% (>{1.0}%)")
-                break
+        if i < len(cad_boundaries):
+            cad_boundaries[i]["name"] = bnd  # use NGSolve label
+            cad_boundaries[i]["ng_area"] = ng_area
+            cad_a = cad_boundaries[i]["cad_area"]
+            if cad_a > 0:
+                err = (ng_area - cad_a) / cad_a * 100
+                cad_boundaries[i]["error_pct"] = err
+                if abs(err) > 1.0:
+                    warnings.append(
+                        f"Boundary \"{bnd}\": A error {err:+.2e}% (>{1.0}%)")
 
     # --- Consistency check: per-edge length (BBND) ---
     # BBND requires .vol round-trip for per-label check.
