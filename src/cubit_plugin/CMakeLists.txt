@@ -54,6 +54,8 @@ set(CCM_SOURCES
     HighOrderMesh.hpp
     NetgenCurver.cpp
     NetgenCurver.hpp
+    ExportNetgenCommand.cpp
+    ExportNetgenCommand.hpp
     ExportNastranCommand.cpp
     ExportNastranCommand.hpp
     ExportGmshCommand.cpp
@@ -108,6 +110,8 @@ set(CCL_SOURCES
     MeshData.hpp
     HighOrderMesh.cpp
     HighOrderMesh.hpp
+    ExportNetgenCommand.cpp
+    ExportNetgenCommand.hpp
     ExportGmshCommand.cpp
     ExportGmshCommand.hpp
     ExportNastranCommand.cpp
