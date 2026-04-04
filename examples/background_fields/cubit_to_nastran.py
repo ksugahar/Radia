@@ -8,7 +8,7 @@ meshes with tetrahedra (~1 mm element size), and exports to Nastran .bdf format.
 
 Requires:
     - Coreform Cubit (adjust CUBIT_PATH below for your installation)
-    - cubit_netgen_bridge module (via radia package)
+    - cubit_mesh_export module (via radia package)
 """
 
 import os

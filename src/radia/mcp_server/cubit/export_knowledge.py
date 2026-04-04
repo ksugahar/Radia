@@ -25,7 +25,7 @@ cubit.cmd('export gmsh "mesh.msh" overwrite')          # v2.2 default
 cubit.cmd('export gmsh "mesh.msh" version 4 overwrite')  # v4.1
 ```
 
-## Removed Functions (replaced by cubit_netgen_bridge / export commands)
+## Removed Functions (replaced by cubit_mesh_export / export commands)
 
 `export_NetgenMesh`, `export_netgen`, `export_netgen_with_names`,
 `name_occ_faces`, `set_*_geominfo`, `compute_*_uv` are all DELETED
