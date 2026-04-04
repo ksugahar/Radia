@@ -17,6 +17,7 @@ def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Di
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
 		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|meg|'
 		r'curved|exodus)\s*\('
+		r'|export\s+(?:netgen|gmsh|nastran|vtk|meg)\s'
 	)
 	block_pattern = re.compile(r'cubit\.cmd\s*\(\s*["\'].*\bblock\b', re.IGNORECASE)
 

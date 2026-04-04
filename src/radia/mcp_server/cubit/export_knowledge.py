@@ -8,53 +8,86 @@ and usage guidance for each mesh export format.
 EXPORT_OVERVIEW = """
 # Radia Mesh Export - Export Functions Overview
 
-| Function / Command | Format | 1st Order | 2nd Order | 3rd+ Order |
-|--------------------|--------|-----------|-----------|------------|
-| `extract_curved_mesh(cubit, ...)` | ngsolve.Mesh (curved) | Yes | Yes | Yes |
-| `cubit.cmd('export mesh "f" overwrite')` | Exodus II (.exo) | Yes | Yes | Yes |
-| `cubit.cmd('export gmsh "f" overwrite')` | Gmsh v2.2 (.msh) | Yes | Yes | No |
-| `cubit.cmd('export gmsh "f" version 4 overwrite')` | Gmsh v4.1 (.msh) | Yes | Yes | No |
-| `cubit.cmd('export nastran "f" overwrite')` | Nastran BDF (.bdf) | Yes | No | No |
-| `cubit.cmd('export meg "f" overwrite')` | MEG/ELF (.meg) | Yes | No | No |
+## Two Export Paths (must produce identical results for tet meshes)
+
+| Path | Method | Speed | Use Case |
+|------|--------|-------|----------|
+| **Path A** (C++) | `cubit.cmd('export netgen/gmsh/...')` | Fast | APREPRO journal, GUI menu |
+| **Path B** (Python) | `extract_curved_mesh(cubit, order=N)` | Slower | Python scripting, reference |
+
+Path A and Path B MUST produce bit-identical curving for tet meshes.
+Run `test_vol_multi_geometry.py` after any NetgenCurver or bridge.py change.
+
+## Supported Formats
+
+| Command | Format | Order 1 | Order 2 | Order 3-5 |
+|---------|--------|---------|---------|-----------|
+| `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | Yes | Yes | Yes |
+| `export gmsh "f.msh" version 2` | Gmsh v2.2 (.msh) | Yes | Yes | Yes |
+| `export gmsh "f.msh" version 4` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
+| `export nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
+| `export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
+| `export meg "f.meg"` | MEG/ELF (.meg) | Yes | No | No |
+| `extract_curved_mesh(cubit, order=N)` | ngsolve.Mesh (in-memory) | No (>=2) | Yes | Yes |
+
+All formats use NetgenCurver (compact_netgen BuildCurvedElements) for curving.
+No fallback to HighOrderMesh (removed).
 
 ## API
 
 ```python
-# Gmsh export via Cubit command (version argument selects format)
-cubit.cmd('export gmsh "mesh.msh" overwrite')          # v2.2 default
-cubit.cmd('export gmsh "mesh.msh" version 4 overwrite')  # v4.1
+# Netgen .vol (recommended for NGSolve FEM computation)
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+# -> produces mesh.vol + mesh.vol.json (CAD reference values)
+
+# Gmsh v2.2 (for GMSH visualization)
+cubit.cmd('export gmsh "mesh.msh" order 2 version 2 overwrite')
+
+# Python path (reference, slower)
+from cubit_mesh_export import extract_curved_mesh
+ng_mesh = extract_curved_mesh(cubit, order=3)
+ng_mesh.Save("mesh.vol")
 ```
 
-## Removed Functions (replaced by cubit_mesh_export / export commands)
+## Companion JSON (.vol.json)
 
-`export_NetgenMesh`, `export_netgen`, `export_netgen_with_names`,
-`name_occ_faces`, `set_*_geominfo`, `compute_*_uv` are all DELETED
-along with cubit_mesh_export.py.
-Use `extract_curved_mesh(cubit, ...)` for curved NGSolve mesh,
-or `cubit.cmd('export ...')` for file-based formats.
+`export netgen` writes a companion JSON with CAD reference values:
+```json
+{
+  "materials": {"iron": 5.24e-04, "air": 3.38e-03},
+  "boundaries": {"surface_1": 3.14e-02, "coil": 1.26e-02},
+  "edges": {"curve_1": 3.14e-01},
+  "n_elements": 10359, "n_points": 2071, "order": 3
+}
+```
+
+`calc_verify_vol.py` reads this JSON for per-label consistency checks.
 
 ## Common Usage Pattern
 
 ```python
-import sys, os
-cubit_path = os.environ.get("CUBIT_PATH")
-if cubit_path:
-    sys.path.append(cubit_path)
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
 
-# Create geometry and mesh
-cubit.cmd("create brick x 1 y 1 z 1")
+cubit.cmd("create sphere radius 0.05")
 cubit.cmd("volume 1 scheme tetmesh")
+cubit.cmd("volume 1 size auto factor 5")
 cubit.cmd("mesh volume 1")
 
-# Register blocks (REQUIRED before export)
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+# Blocks define material labels
+cubit.cmd("block 1 add volume 1")
+cubit.cmd('block 1 name "sphere"')
 
-# Export
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+# Sidesets define boundary labels (optional)
+cubit.cmd("sideset 1 add surface 1")
+cubit.cmd('sideset 1 name "outer"')
+
+# Export (surface elements extracted automatically from volume faces)
+cubit.cmd('export netgen "sphere.vol" order 3 overwrite')
 ```
+
+**Note**: `block 2 add tri all` is NOT needed for export netgen.
+Surface elements are extracted from volume element faces automatically.
 """
 
 EXPORT_GMSH_V2 = """
