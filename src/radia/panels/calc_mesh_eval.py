@@ -37,7 +37,7 @@ def evaluate_mesh(cub5_file, max_order=5):
 
     Returns dict with per-volume CAD values and per-order NGSolve results.
     """
-    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, VOL
+    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND, VOL
 
     setup_paths()
     cubit = setup_cubit(cub5_file)
@@ -63,7 +63,15 @@ def evaluate_mesh(cub5_file, max_order=5):
     cad_vol_total = sum(r["cad_volume"] for r in volumes)
     cad_area_total = sum(r["cad_area"] for r in volumes)
 
-    _log(f"CAD: {len(vol_ids)} volumes, V={cad_vol_total:.6e}, A={cad_area_total:.6e}")
+    # CAD edge lengths: boundary curves (shared by >= 2 surfaces)
+    curve_ids = list(cubit.parse_cubit_list("curve", "all"))
+    cad_length_total = 0.0
+    for cid in curve_ids:
+        parent_surfs = list(cubit.parse_cubit_list("surface", f"in curve {cid}"))
+        if len(parent_surfs) >= 2:
+            cad_length_total += cubit.curve(cid).length()
+
+    _log(f"CAD: {len(vol_ids)} volumes, V={cad_vol_total:.6e}, A={cad_area_total:.6e}, L={cad_length_total:.6e}")
 
     # Check if meshed
     total_elems = sum(
@@ -106,21 +114,28 @@ def evaluate_mesh(cub5_file, max_order=5):
 
         ng_vol = Integrate(CF(1), mesh)
         ng_area = Integrate(CF(1), mesh, VOL_or_BND=BND)
+        try:
+            ng_length = Integrate(CF(1), mesh, BBND)
+        except Exception:
+            ng_length = 0.0
         n_vol = sum(1 for _ in mesh.Elements(VOL))
         n_bnd = sum(1 for _ in mesh.Elements(BND))
         t_elapsed = time.perf_counter() - t0
 
         vol_err = (ng_vol - cad_vol_total) / cad_vol_total * 100 if cad_vol_total else 0
         area_err = (ng_area - cad_area_total) / cad_area_total * 100 if cad_area_total else 0
+        len_err = (ng_length - cad_length_total) / cad_length_total * 100 if cad_length_total else 0
 
-        _log(f"p={p}: V_err={vol_err:+.4f}%, A_err={area_err:+.4f}%, t={t_elapsed:.2f}s")
+        _log(f"p={p}: V_err={vol_err:+.4f}%, A_err={area_err:+.4f}%, L_err={len_err:+.4f}%, t={t_elapsed:.2f}s")
 
         entry = {
             "order": p,
             "ng_volume": ng_vol,
             "ng_area": ng_area,
+            "ng_length": ng_length,
             "vol_error_pct": vol_err,
             "area_error_pct": area_err,
+            "len_error_pct": len_err,
             "n_vol_elems": n_vol,
             "n_bnd_elems": n_bnd,
             "time": t_elapsed,
@@ -143,6 +158,7 @@ def evaluate_mesh(cub5_file, max_order=5):
         "volumes": volumes,
         "cad_vol_total": cad_vol_total,
         "cad_area_total": cad_area_total,
+        "cad_length_total": cad_length_total,
         "orders": orders,
         "max_order": max_order,
     }
