@@ -26,10 +26,13 @@ if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
 
     # Minimal Netgen sources (mesh + curving + save only)
     # NOTE: To bisect static init failures, comment out groups below
-    # All file-scope statics converted to function-local statics
-    # to avoid DLL static init issues.
+    # Bisect static init: add sources incrementally.
+    # Group A: core only (stubs + safe sources)
     set(COMPACT_NETGEN_SOURCES
       ${COMPACT_NETGEN_OVERRIDES}/core_stubs.cpp
+    )
+    # Group B: core originals
+    list(APPEND COMPACT_NETGEN_SOURCES
       ${NETGEN_SRC_DIR}/libsrc/core/archive.cpp
       ${NETGEN_SRC_DIR}/libsrc/core/bitarray.cpp
       ${NETGEN_SRC_DIR}/libsrc/core/exception.cpp
@@ -39,15 +42,18 @@ if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
       ${COMPACT_NETGEN_OVERRIDES}/utils_patched.cpp
       ${COMPACT_NETGEN_OVERRIDES}/version_patched.cpp
       ${COMPACT_NETGEN_OVERRIDES}/statushandler_patched.cpp
-      # General
+    )
+    # Group C: general + gprim
+    list(APPEND COMPACT_NETGEN_SOURCES
       ${NETGEN_SRC_DIR}/libsrc/general/hashtabl.cpp
       ${NETGEN_SRC_DIR}/libsrc/general/mystring.cpp
       ${NETGEN_SRC_DIR}/libsrc/general/table.cpp
       ${NETGEN_SRC_DIR}/libsrc/general/optmem.cpp
-      # Geometric primitives
       ${NETGEN_SRC_DIR}/libsrc/gprim/geom3d.cpp
       ${NETGEN_SRC_DIR}/libsrc/gprim/transform3d.cpp
-      # Meshing (minimal)
+    )
+    # Group D: meshing
+    list(APPEND COMPACT_NETGEN_SOURCES
       ${COMPACT_NETGEN_OVERRIDES}/meshtype_patched.cpp
       ${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp
       ${NETGEN_SRC_DIR}/libsrc/meshing/curvedelems.cpp
@@ -73,6 +79,7 @@ if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
     set(COMPACT_NETGEN_DEFS
       COMPACT_NETGEN              # Skip mesher-dependent code paths
       COMPACT_NETGEN_STATIC       # DLL_HEADER / NGCORE_API = empty
+      NO_PARALLEL_THREADS         # NgMutex = empty class (single-threaded)
     )
   else()
     message(WARNING "NETGEN_SRC_DIR set but overrides not found at ${COMPACT_NETGEN_OVERRIDES}")
