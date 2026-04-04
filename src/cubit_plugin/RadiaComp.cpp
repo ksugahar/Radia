@@ -573,11 +573,12 @@ void RadiaMenuHandler::mesh_volume()
       .arg(cad_v, 0, 'e', 6).arg(cad_a, 0, 'e', 6).arg(cad_l, 0, 'e', 6), &dlg);
   layout->addWidget(cadLabel);
 
-  // Table
-  QTableWidget *table = new QTableWidget(nrows, 7, &dlg);
+  // Table: empty column between Area and Length for visual separation
+  QTableWidget *table = new QTableWidget(nrows, 8, &dlg);
   table->setHorizontalHeaderLabels(
-    {"p", "Volume", "V err [%]", "Area", "A err [%]", "Length", "L err [%]"});
+    {"p", "Volume", "V err [%]", "Area", "A err [%]", "", "Length", "L err [%]"});
   table->horizontalHeader()->setStretchLastSection(true);
+  table->setColumnWidth(5, 10);  // narrow separator column
   table->verticalHeader()->setVisible(false);
   table->setSelectionMode(QAbstractItemView::ContiguousSelection);
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -593,15 +594,16 @@ void RadiaMenuHandler::mesh_volume()
       table->setItem(i, 1, new QTableWidgetItem(
         QString::number(o["ng_volume"].toDouble(), 'e', 6)));
       table->setItem(i, 2, new QTableWidgetItem(
-        QString::number(o["vol_error_pct"].toDouble(), 'f', 5)));
+        QString::number(o["vol_error_pct"].toDouble(), 'e', 2)));
       table->setItem(i, 3, new QTableWidgetItem(
         QString::number(o["ng_area"].toDouble(), 'e', 6)));
       table->setItem(i, 4, new QTableWidgetItem(
-        QString::number(o["area_error_pct"].toDouble(), 'f', 5)));
-      table->setItem(i, 5, new QTableWidgetItem(
-        QString::number(o["ng_length"].toDouble(), 'e', 6)));
+        QString::number(o["area_error_pct"].toDouble(), 'e', 2)));
+      // col 5 = empty separator
       table->setItem(i, 6, new QTableWidgetItem(
-        QString::number(o["len_error_pct"].toDouble(), 'f', 5)));
+        QString::number(o["ng_length"].toDouble(), 'e', 6)));
+      table->setItem(i, 7, new QTableWidgetItem(
+        QString::number(o["len_error_pct"].toDouble(), 'e', 2)));
     }
   }
   table->resizeColumnsToContents();
@@ -618,8 +620,10 @@ void RadiaMenuHandler::mesh_volume()
     [&]() {
       QString tsv = "p\tVolume\tV err [%]\tArea\tA err [%]\tLength\tL err [%]\n";
       for (int i = 0; i < nrows; i++) {
-        for (int j = 0; j < 7; j++) {
-          if (j > 0) tsv += "\t";
+        for (int j = 0; j < 8; j++) {
+          if (j == 5) continue;  // skip separator column
+          if (j > 0 && j != 6) tsv += "\t";
+          if (j == 6) tsv += "\t";  // tab before Length
           QTableWidgetItem *item = table->item(i, j);
           tsv += item ? item->text() : "";
         }
@@ -733,10 +737,20 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
 
   layout->addLayout(form);
 
-  // Command preview
+  // Command preview: left-aligned, click to select all for easy copy
   QFormLayout* previewForm = new QFormLayout();
   mPreview = new QLineEdit();
   mPreview->setReadOnly(true);
+  mPreview->setAlignment(Qt::AlignLeft);
+  connect(mPreview, &QLineEdit::cursorPositionChanged, [this](int, int) {
+    if (!mPreview->hasSelectedText())
+      mPreview->setCursorPosition(0);
+  });
+  // Focus = select all (click or tab)
+  auto *prevPtr = mPreview;  // capture for lambda
+  connect(qApp, &QApplication::focusChanged, [prevPtr](QWidget*, QWidget *now) {
+    if (now == prevPtr) prevPtr->selectAll();
+  });
   previewForm->addRow("Command:", mPreview);
   layout->addLayout(previewForm);
 
@@ -816,4 +830,5 @@ QString ExportDialog::cubitCommand() const
 void ExportDialog::updatePreview()
 {
   mPreview->setText(cubitCommand());
+  mPreview->setCursorPosition(0);  // show beginning of command
 }
