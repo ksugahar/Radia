@@ -8,6 +8,12 @@
 #include <meshing.hpp>
 #endif
 
+// Cubit geometry for CAD reference values (companion JSON)
+#include "RefFace.hpp"
+#include "RefEdge.hpp"
+#include "RefVolume.hpp"
+#include "GeometryQueryTool.hpp"
+
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -190,13 +196,16 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
       auto it = surf_to_ssname.find(bc_prop);
       if (it != surf_to_ssname.end()) {
-        ng_mesh->SetBCName(fi - 1, it->second);
+        std::string ssname = it->second;
+        for (auto &ch : ssname) if (ch == ' ') ch = '_';
+        ng_mesh->SetBCName(fi - 1, ssname);
         ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
       } else {
         // Use Cubit entity name as fallback
         std::string sname = CubitInterface::get_entity_name("surface", bc_prop);
         if (sname.empty())
           sname = "surface_" + std::to_string(bc_prop);
+        for (auto &ch : sname) if (ch == ' ') ch = '_';
         ng_mesh->SetBCName(fi - 1, sname);
         ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
       }
@@ -216,6 +225,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       std::string sname = CubitInterface::get_entity_name("surface", bc_prop);
       if (sname.empty())
         sname = "surface_" + std::to_string(bc_prop);
+      // Replace spaces with underscores — Netgen .vol bcnames parser
+      // splits on whitespace, so names with spaces get truncated.
+      for (auto &ch : sname) if (ch == ' ') ch = '_';
       ng_mesh->SetBCName(fi - 1, sname);
       ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
     }
@@ -240,6 +252,75 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
 
   PRINT_INFO("Exported Netgen Vol (order %d): %s (%d nodes, %d elements)\n",
              order, filename.c_str(), np, ne);
+
+  // --- Write companion JSON with CAD reference values ---
+  {
+    std::string json_path = filename + ".json";
+    std::ofstream jf(json_path);
+    if (jf.is_open()) {
+      jf << "{\n";
+
+      // Materials (per-block volume)
+      jf << "  \"materials\": {";
+      bool first = true;
+      for (int bid : md.block_ids) {
+        std::string bname = CubitInterface::get_block_name(bid);
+        if (bname.empty()) bname = "volume_" + std::to_string(bid);
+        // Get volumes in this block
+        double total_vol = 0.0;
+        std::vector<int> vols_in_block = CubitInterface::parse_cubit_list(
+            "volume", "in block " + std::to_string(bid));
+        for (int vid : vols_in_block) {
+          RefVolume* rv = GeometryQueryTool::instance()->get_ref_volume(vid);
+          if (rv) total_vol += rv->measure();
+        }
+        if (!first) jf << ",";
+        jf << "\n    \"" << bname << "\": " << std::scientific << total_vol;
+        first = false;
+      }
+      jf << "\n  },\n";
+
+      // Boundaries (per-surface area from CAD, not mesh)
+      jf << "  \"boundaries\": {";
+      first = true;
+      int nfd = ng_mesh->GetNFD();
+      for (int fi = 1; fi <= nfd; fi++) {
+        int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+        // Use the BCName written to .vol (matches mesh.GetBoundaries())
+        std::string bname = ng_mesh->GetBCName(fi - 1);
+        // Get CAD area from Cubit surface
+        RefFace* rf = GeometryQueryTool::instance()->get_ref_face(bc_prop);
+        double cad_area = rf ? rf->area() : 0.0;
+        if (!first) jf << ",";
+        jf << "\n    \"" << bname << "\": " << std::scientific << cad_area;
+        first = false;
+      }
+      jf << "\n  },\n";
+
+      // Edges (per-curve length, curves shared by 2+ surfaces)
+      jf << "  \"edges\": {";
+      first = true;
+      std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
+      for (int cid : curve_ids) {
+        std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(
+            "surface", "in curve " + std::to_string(cid));
+        if (parent_surfs.size() < 2) continue;
+        RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(cid);
+        double cad_len = re ? re->measure() : 0.0;
+        std::string ename = "curve_" + std::to_string(cid);
+        if (!first) jf << ",";
+        jf << "\n    \"" << ename << "\": " << std::scientific << cad_len;
+        first = false;
+      }
+      jf << "\n  },\n";
+
+      jf << "  \"n_elements\": " << ne << ",\n";
+      jf << "  \"n_points\": " << np << ",\n";
+      jf << "  \"order\": " << order << "\n";
+      jf << "}\n";
+      jf.close();
+    }
+  }
 
   return true;
 #endif

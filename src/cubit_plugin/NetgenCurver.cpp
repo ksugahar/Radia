@@ -118,71 +118,152 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     fd_idx++;
   }
 
-  PRINT_INFO("  Phase1e: Add surface elements with UV geominfo\n");
+  // --- Phase1e: Add surface elements via parse_cubit_list + get_connectivity ---
+  // get_surface_tris() returns UNSHARED node IDs (rendering mesh).
+  // Instead, use parse_cubit_list("tri"/"face", "in surface N") which returns
+  // mesh entity IDs, then get_connectivity() for shared node IDs.
+  PRINT_INFO("  Phase1e: Add surface elements (parse_cubit_list)\n");
   fflush(stdout);
-  // --- Add surface elements with UV geominfo ---
-  for (int sid : surface_ids) {
-    int ng_fd = cubit_sid_to_ng_fd_[sid];
+  {
+    // Cache RefFace pointers per surface
+    std::unordered_map<int, RefFace*> rf_cache;
+    for (int sid : surface_ids)
+      rf_cache[sid] = GeometryQueryTool::instance()->get_ref_face(sid);
 
-    // Get RefFace for UV computation
-    PRINT_INFO("  Phase1e: GeometryQueryTool::instance() for surface %d\n", sid);
-    fflush(stdout);
-    RefFace* rf = GeometryQueryTool::instance()->get_ref_face(sid);
-    PRINT_INFO("  Phase1e: RefFace=%p\n", (void*)rf);
-    fflush(stdout);
-    if (!rf) continue;
+    int nse_added = 0;
+    for (int sid : surface_ids) {
+      int ng_fd = cubit_sid_to_ng_fd_[sid];
+      RefFace* rf = rf_cache[sid];
 
-    // Get surface tri/quad elements
-    PRINT_INFO("  Phase1e: get_surface_tris(%d)...\n", sid); fflush(stdout);
-    std::vector<int> tri_list = CubitInterface::get_surface_tris(sid);
-    PRINT_INFO("  Phase1e: got %d tri nodes (%d tris)\n", (int)tri_list.size(), (int)tri_list.size()/3); fflush(stdout);
-    for (size_t t = 0; t < tri_list.size(); t += 3) {
-      if (t == 0) { PRINT_INFO("  Phase1e: first tri processing...\n"); fflush(stdout); }
-      ng::Element2d el(ng::TRIG);
-      el.SetIndex(ng_fd);
-      for (int k = 0; k < 3; k++) {
-        int cubit_nid = tri_list[t + k];
-        if (t == 0 && k == 0) { PRINT_INFO("  Phase1e: get coords nid=%d...\n", cubit_nid); fflush(stdout); }
-        el[k] = cubit_nid_to_ng_pi_[cubit_nid];
+      // Triangles on this surface
+      std::vector<int> tri_ids = CubitInterface::parse_cubit_list("tri",
+          "in surface " + std::to_string(sid));
+      for (int tid : tri_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("tri", tid);
+        if ((int)conn.size() < 3) continue;
 
-        // Compute UV via RefFace::u_v_from_position
-        auto coords = CubitInterface::get_nodal_coordinates(cubit_nid);
-        if (t == 0 && k == 0) { PRINT_INFO("  Phase1e: u_v_from_position...\n"); fflush(stdout); }
-        CubitVector loc(coords[0], coords[1], coords[2]);
-        double u, v;
-        rf->u_v_from_position(loc, u, v);
-        if (t == 0 && k == 0) { PRINT_INFO("  Phase1e: UV=(%g,%g) OK\n", u, v); fflush(stdout); }
-        ng::PointGeomInfo gi;
-        gi.trignum = ng_fd;
-        gi.u = u;
-        gi.v = v;
-        el.GeomInfo()[k] = gi;
+        ng::Element2d el(ng::TRIG);
+        el.SetIndex(ng_fd);
+        for (int k = 0; k < 3; k++) {
+          auto it = cubit_nid_to_ng_pi_.find(conn[k]);
+          if (it == cubit_nid_to_ng_pi_.end()) goto skip_tri;
+          el[k] = it->second;
+
+          auto coords = CubitInterface::get_nodal_coordinates(conn[k]);
+          CubitVector loc(coords[0], coords[1], coords[2]);
+          double u = 0, v = 0;
+          if (rf) rf->u_v_from_position(loc, u, v);
+          ng::PointGeomInfo gi;
+          gi.trignum = ng_fd;
+          gi.u = u;
+          gi.v = v;
+          el.GeomInfo()[k] = gi;
+        }
+        ng_mesh_->AddSurfaceElement(el);
+        nse_added++;
+        skip_tri:;
       }
-      ng_mesh_->AddSurfaceElement(el);
-      if (t == 0) { PRINT_INFO("  Phase1e: first tri added OK\n"); fflush(stdout); }
-      if (t + 3 >= tri_list.size()) { PRINT_INFO("  Phase1e: all %d tris added\n", (int)(tri_list.size()/3)); fflush(stdout); }
-    }
 
-    std::vector<int> quad_list = CubitInterface::get_surface_quads(sid);
-    for (size_t q = 0; q < quad_list.size(); q += 4) {
-      ng::Element2d el(ng::QUAD);
-      el.SetIndex(ng_fd);
-      for (int k = 0; k < 4; k++) {
-        int cubit_nid = quad_list[q + k];
-        el[k] = cubit_nid_to_ng_pi_[cubit_nid];
+      // Quads on this surface (hex meshes)
+      std::vector<int> face_ids = CubitInterface::parse_cubit_list("face",
+          "in surface " + std::to_string(sid));
+      for (int fid : face_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("face", fid);
+        if ((int)conn.size() < 4) continue;
 
-        auto coords = CubitInterface::get_nodal_coordinates(cubit_nid);
-        CubitVector loc(coords[0], coords[1], coords[2]);
-        double u, v;
-        rf->u_v_from_position(loc, u, v);
-        ng::PointGeomInfo gi;
-        gi.trignum = ng_fd;
-        gi.u = u;
-        gi.v = v;
-        el.GeomInfo()[k] = gi;
+        ng::Element2d el(ng::QUAD);
+        el.SetIndex(ng_fd);
+        for (int k = 0; k < 4; k++) {
+          auto it = cubit_nid_to_ng_pi_.find(conn[k]);
+          if (it == cubit_nid_to_ng_pi_.end()) goto skip_quad;
+          el[k] = it->second;
+
+          auto coords = CubitInterface::get_nodal_coordinates(conn[k]);
+          CubitVector loc(coords[0], coords[1], coords[2]);
+          double u = 0, v = 0;
+          if (rf) rf->u_v_from_position(loc, u, v);
+          ng::PointGeomInfo gi;
+          gi.trignum = ng_fd;
+          gi.u = u;
+          gi.v = v;
+          el.GeomInfo()[k] = gi;
+        }
+        ng_mesh_->AddSurfaceElement(el);
+        nse_added++;
+        skip_quad:;
       }
-      ng_mesh_->AddSurfaceElement(el);
     }
+    PRINT_INFO("  Phase1e: %d surface elements added\n", nse_added);
+  }
+
+  // --- Phase1e2: Add segment elements on curves (inter-surface edges) ---
+  PRINT_INFO("  Phase1e2: Add segments on curves\n");
+  fflush(stdout);
+  {
+    std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
+    int edgenr = 1;
+    for (int cid : curve_ids) {
+      // Get parent surfaces of this curve
+      std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(
+          "surface", "in curve " + std::to_string(cid));
+      if (parent_surfs.size() < 2) continue;
+
+      int sid1 = parent_surfs[0], sid2 = parent_surfs[1];
+      auto it1 = cubit_sid_to_ng_fd_.find(sid1);
+      auto it2 = cubit_sid_to_ng_fd_.find(sid2);
+      if (it1 == cubit_sid_to_ng_fd_.end() || it2 == cubit_sid_to_ng_fd_.end())
+        continue;
+      int fd1 = it1->second;  // 1-based
+      int fd2 = it2->second;
+
+      // Get edge (1D) elements on this curve
+      std::vector<int> edge_ids = CubitInterface::parse_cubit_list(
+          "edge", "in curve " + std::to_string(cid));
+
+      // Get curve length for dist normalization
+      RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(cid);
+      double crv_length = re ? re->measure() : 1.0;
+      double u_start = re ? re->start_param() : 0.0;
+
+      for (int eid : edge_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("edge", eid);
+        if ((int)conn.size() < 2) continue;
+        auto itn0 = cubit_nid_to_ng_pi_.find(conn[0]);
+        auto itn1 = cubit_nid_to_ng_pi_.find(conn[1]);
+        if (itn0 == cubit_nid_to_ng_pi_.end() || itn1 == cubit_nid_to_ng_pi_.end())
+          continue;
+
+        // Compute normalized arc-length parameter for each endpoint
+        double dist0 = 0, dist1 = 0;
+        if (re && crv_length > 0) {
+          auto c0 = CubitInterface::get_nodal_coordinates(conn[0]);
+          auto c1 = CubitInterface::get_nodal_coordinates(conn[1]);
+          CubitVector cv0(c0[0], c0[1], c0[2]);
+          CubitVector cv1(c1[0], c1[1], c1[2]);
+          double u0 = re->u_from_position(cv0);
+          double u1 = re->u_from_position(cv1);
+          dist0 = re->length_from_u(u_start, u0) / crv_length;
+          dist1 = re->length_from_u(u_start, u1) / crv_length;
+        }
+
+        ng::Segment nseg;
+        nseg[0] = itn0->second;
+        nseg[1] = itn1->second;
+        nseg.si = fd2;
+        nseg.edgenr = edgenr;
+        nseg.surfnr1 = fd1 - 1;  // 0-based
+        nseg.surfnr2 = fd2 - 1;
+        nseg.epgeominfo[0].edgenr = edgenr;
+        nseg.epgeominfo[0].dist = dist0;
+        nseg.epgeominfo[1].edgenr = edgenr;
+        nseg.epgeominfo[1].dist = dist1;
+        ng_mesh_->AddSegment(nseg);
+      }
+      edgenr++;
+    }
+    if (edgenr > 1)
+      ng_mesh_->SetNCD2Names(edgenr);
+    PRINT_INFO("  Phase1e2: %d edge groups added\n", edgenr - 1);
   }
 
   PRINT_INFO("  Phase1f: Add volume elements (%d)\n", (int)md.elements.size());
@@ -259,10 +340,11 @@ bool NetgenCurver::attach_callback_geometry()
     ::Surface* surf = rf->get_surface_ptr();
     CubitVector loc(x, y, z);
     CubitVector closest;
-    double u = u_hint, v = v_hint;
 
-    // Use UV-hinted projection for speed and accuracy
-    surf->closest_point_uv_guess(loc, u, v, &closest, nullptr);
+    // Use trimmed closest point (global search, matches bridge.py)
+    surf->closest_point_trimmed(loc, closest);
+    double u, v;
+    rf->u_v_from_position(closest, u, v);
     return {closest.x(), closest.y(), closest.z(), u, v};
   };
 
@@ -283,7 +365,50 @@ bool NetgenCurver::attach_callback_geometry()
     return {n.x(), n.y(), n.z()};
   };
 
-  auto geom = std::make_shared<ng::CallbackGeometry>(project, normal, num_surfaces);
+  // Edge (curve) projection callback: (surfnr1, surfnr2, x,y,z) -> (xp,yp,zp)
+  // surfnr1/surfnr2 are 1-based FD indices. Find the Cubit curve at their intersection.
+  // Build surfpair -> RefEdge map
+  std::unordered_map<int64_t, int> surfpair_to_curve;  // (fd1<<32|fd2) -> cubit_curve_id
+  {
+    std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
+    for (int cid : curve_ids) {
+      std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(
+          "surface", "in curve " + std::to_string(cid));
+      if (parent_surfs.size() < 2) continue;
+      for (size_t i = 0; i < parent_surfs.size(); i++) {
+        for (size_t j = i+1; j < parent_surfs.size(); j++) {
+          int s1 = parent_surfs[i], s2 = parent_surfs[j];
+          auto it1 = cubit_sid_to_ng_fd_.find(s1);
+          auto it2 = cubit_sid_to_ng_fd_.find(s2);
+          if (it1 == cubit_sid_to_ng_fd_.end() || it2 == cubit_sid_to_ng_fd_.end()) continue;
+          int f1 = it1->second, f2 = it2->second;
+          surfpair_to_curve[((int64_t)f1 << 32) | f2] = cid;
+          surfpair_to_curve[((int64_t)f2 << 32) | f1] = cid;
+        }
+      }
+    }
+  }
+
+  auto edge_project = [surfpair_to_curve](int surfnr1, int surfnr2,
+                                           double x, double y, double z)
+    -> std::tuple<double,double,double>
+  {
+    int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
+    auto it = surfpair_to_curve.find(key);
+    if (it != surfpair_to_curve.end()) {
+      RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(it->second);
+      if (re) {
+        CubitVector loc(x, y, z);
+        CubitVector closest;
+        re->get_curve_ptr()->closest_point_trimmed(loc, closest);
+        return {closest.x(), closest.y(), closest.z()};
+      }
+    }
+    return {x, y, z};  // no projection if curve not found
+  };
+
+  auto geom = std::make_shared<ng::CallbackGeometry>(
+      project, normal, num_surfaces, nullptr, edge_project);
   ng_mesh_->SetGeometry(geom);
 
   return true;
