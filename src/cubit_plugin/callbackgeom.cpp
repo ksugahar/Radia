@@ -98,7 +98,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
     // Direct edge/curve projection (surfi1/2 are 0-based from BuildCurvedElements)
     auto [xp, yp, zp] = edge_project_func(surfi1 + 1, surfi2 + 1, newp[0], newp[1], newp[2]);
     newp = Point<3>(xp, yp, zp);
-  } else if (project_func && surfi1 > 0) {
+  } else if (project_func && surfi1 >= 0) {
     // Fallback: project onto first surface
     auto [xp, yp, zp, u, v] = project_func(surfi1, newp[0], newp[1], newp[2],
                                              0.5*(ap1.u + ap2.u),
@@ -106,7 +106,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
     newp = Point<3>(xp, yp, zp);
   }
   // Get UV on surfi1
-  if (project_func && surfi1 > 0) {
+  if (project_func && surfi1 >= 0) {
     auto [xf, yf, zf, uf, vf] = project_func(surfi1, newp[0], newp[1], newp[2], 0, 0);
     newgi.u = uf;
     newgi.v = vf;
@@ -123,7 +123,7 @@ void CallbackGeometry::PointBetween(const Point<3> & p1, const Point<3> & p2,
 {
   // Linear interpolation, then project onto surface
   newp = p1 + secpoint * (p2 - p1);
-  if (project_func && surfi > 0) {
+  if (project_func && surfi >= 0) {
     double u_hint = gi1.u + secpoint * (gi2.u - gi1.u);
     double v_hint = gi1.v + secpoint * (gi2.v - gi1.v);
     auto [xp, yp, zp, u, v] = project_func(surfi, newp[0], newp[1], newp[2],
@@ -144,7 +144,7 @@ Vec<3> CallbackGeometry::GetTangent(const Point<3> & p, int surfi1,
     return Vec<3>(tx, ty, tz);
   }
   // Fallback: cross product of two surface normals
-  if (normal_func && surfi1 > 0 && surfi2 > 0) {
+  if (normal_func && surfi1 >= 0 && surfi2 >= 0) {
     auto [n1x, n1y, n1z] = normal_func(surfi1, p[0], p[1], p[2]);
     auto [n2x, n2y, n2z] = normal_func(surfi2, p[0], p[1], p[2]);
     Vec<3> n1(n1x, n1y, n1z), n2(n2x, n2y, n2z);
