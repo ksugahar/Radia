@@ -1107,6 +1107,70 @@ cubit.cmd('export radia_nastran "mesh.bdf" overwrite')
 cubit.cmd("block 2 add tri all")   # For tet meshes
 cubit.cmd("block 2 add quad all")  # For hex meshes
 ```
+
+## Problem: "Interrupt Detected" During NetgenCurver (AddPoint Crash)
+
+**Cause**: ABI mismatch between the ccm plugin and nglib.dll loaded at runtime.
+The ccm was compiled against one Netgen version but plugins/nglib.dll is a
+different version. This causes access violations in netgen::Mesh::AddPoint().
+
+**Fix**: Rebuild ccm with compact_netgen (static link, no external nglib.dll):
+```bash
+cmake -DNETGEN_SRC_DIR=C:/netgen_build/netgen_fork ...  # static link
+# Do NOT use -DNETGEN_DIR=C:/netgen  # dynamic link = ABI risk
+```
+
+**Verification**: ccm file size should be > 400 KB (compact_netgen ~600 KB).
+Old dynamic-linked ccm is ~238 KB. Check after radia-setup:
+```python
+import os
+ccm = r"C:\\Program Files\\Coreform Cubit 2025.3\\bin\\plugins\\radia_cubit.ccm"
+print(f"ccm: {os.path.getsize(ccm):,} bytes")  # should be > 400,000
+```
+
+## Problem: GMSH Crashes Opening Order 2 .msh (HEX20 Wrong Node Count)
+
+**Symptom**: GMSH crashes or shows garbled mesh when opening order 2 .msh
+exported from Cubit. HEX20 elements (GMSH type 17) have only 8 nodes
+instead of the required 20.
+
+**Cause** (fixed 2026-04-05): NetgenCurver generated HO nodes for volume
+element edges but did not register them in `edge_ho_nodes_` map. Only
+surface element edges were registered. When MeshData::build_ho_conn_nc()
+looked up edge HO nodes, the internal (non-surface) edges returned empty,
+causing fallback to linear connectivity.
+
+**Verification**: After fix, check .msh file:
+```
+# Each HEX20 line should have 25 fields (id + type + 3 tags + 20 nodes)
+grep "^[0-9]* 17 " mesh_o2.msh | awk '{print NF}'  # should print 25
+```
+
+## Problem: cp932 UnicodeDecodeError in Cubit Startup
+
+**Symptom**: `UnicodeDecodeError: 'cp932' codec can't decode byte 0x94`
+when Cubit loads register_toolbar.py via startup.py.
+
+**Cause**: Non-ASCII characters (em dash U+2014, smart quotes, etc.) in
+Python files loaded by Cubit. Japanese Windows defaults to cp932 encoding.
+
+**Fix**:
+1. Use ASCII-only characters in all .py files loaded by Cubit
+2. startup.py uses `exec(open(..., encoding='utf-8').read())`
+3. Lint rule `non-ascii-byte` catches this automatically
+
+## Problem: "export nastran" Uses Wrong Command
+
+**Symptom**: Exported .bdf uses Cubit's built-in format instead of Radia's
+format with order 2 / nopyramid support.
+
+**Cause**: Cubit has a built-in `export nastran` command. Radia's version
+is `export radia_nastran` to avoid the naming conflict.
+
+**Fix**: Always use `export radia_nastran`:
+```python
+cubit.cmd('export radia_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+```
 """
 
 
