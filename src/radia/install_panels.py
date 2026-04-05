@@ -171,7 +171,7 @@ def _generate_startup_script(panels_dir):
 		f'sys.path.insert(0, _sp[0]) if _sp and _sp[0] not in sys.path else None; '
 		f'__file__ = r"{register_path}"; '
 		f"exec(\"try:\\n"
-		f" exec(open(r'{register_path}').read())\\n"
+		f" exec(open(r'{register_path}', encoding='utf-8').read())\\n"
 		f"except Exception as e:\\n"
 		f" import traceback; traceback.print_exc()\")\n"
 	)

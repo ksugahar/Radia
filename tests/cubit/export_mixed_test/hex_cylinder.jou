@@ -1,0 +1,19 @@
+# Hex cylinder mesh: order 2 export test
+# Tests that HEX20 elements have correct 20-node connectivity
+reset
+
+cylinder height 1 radius 1
+
+volume 1 size 0.5
+mesh volume 1
+
+block 1 add hex all
+block 1 name "cylinder_hex"
+
+block 2 add face all
+block 2 name "boundary_face"
+
+Volume all scale 0.001
+
+export gmsh "{DIR}/hex_cyl_o2.msh" order 2 version 2 dimension 3 overwrite
+export radia_nastran "{DIR}/hex_cyl_o2.bdf" order 2 dimension 3 overwrite

@@ -1,0 +1,18 @@
+# Sphere tet mesh: p-convergence test (order 1-5)
+# Verifies NetgenCurver works for all orders
+reset
+
+create sphere radius 0.05
+volume 1 scheme tetmesh
+volume 1 size 0.02
+mesh volume 1
+block 1 add tet all
+block 1 name "sphere"
+sideset 1 add surface 1
+sideset 1 name "surface"
+
+export netgen "{DIR}/sphere_o1.vol" order 1 overwrite
+export netgen "{DIR}/sphere_o2.vol" order 2 overwrite
+export netgen "{DIR}/sphere_o3.vol" order 3 overwrite
+export netgen "{DIR}/sphere_o4.vol" order 4 overwrite
+export netgen "{DIR}/sphere_o5.vol" order 5 overwrite

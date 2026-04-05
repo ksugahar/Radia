@@ -25,7 +25,7 @@ Run `test_vol_multi_geometry.py` after any NetgenCurver or bridge.py change.
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | Yes | Yes | Yes |
 | `export gmsh "f.msh" version 2` | Gmsh v2.2 (.msh) | Yes | Yes | Yes |
 | `export gmsh "f.msh" version 4` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
-| `export nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
+| `export radia_nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
 | `export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
 | `export meg "f.meg"` | MEG/ELF (.meg) | Yes | No | No |
 | `extract_curved_mesh(cubit, order=N)` | ngsolve.Mesh (in-memory) | No (>=2) | Yes | Yes |
@@ -542,7 +542,7 @@ the interface. Two solutions:
 
 1. **Use PYRAM=False** (recommended): Writes pyramids as degenerate CHEXA
    ```python
-   cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
+   cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
    ```
 
 2. **Use pure tet mesh**: Avoids pyramids entirely

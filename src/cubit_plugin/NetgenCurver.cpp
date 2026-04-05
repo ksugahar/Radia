@@ -566,16 +566,20 @@ bool NetgenCurver::curve_and_extract(int order)
     int np = el.GetNP();
 
     if (np == 4) {  // Tet
-      // Edge points (6 edges)
+      // Edge points (6 edges) — register in edge_ho_nodes_ for connectivity
       static const int tet_edges[][2] = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
       for (auto &e : tet_edges) {
+        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
+        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;
+
+        std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          // Barycentric to reference: interpolate between vertices
           double lam[4] = {0,0,0,0};
           lam[e[0]] = 1.0 - t;
           lam[e[1]] = t;
-          // Reference coords for tet: (lam1, lam2, lam3)
           ng::Point<3> ref(lam[1], lam[2], lam[3]);
           ng::Point<3> phys;
           curved.CalcElementTransformation(ref, ei, phys);
@@ -583,7 +587,12 @@ bool NetgenCurver::curve_and_extract(int order)
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          edge_nodes.push_back(new_id);
         }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
       }
 
       // Face interior points (4 faces, for order >= 3)
@@ -646,6 +655,12 @@ bool NetgenCurver::curve_and_extract(int order)
       };
 
       for (auto &e : hex_edges) {
+        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
+        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;
+
+        std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
           double xi   = hex_ref[e[0]][0] + t * (hex_ref[e[1]][0] - hex_ref[e[0]][0]);
@@ -657,7 +672,12 @@ bool NetgenCurver::curve_and_extract(int order)
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          edge_nodes.push_back(new_id);
         }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
       }
 
       // 6 face interiors (for order >= 3)
@@ -725,6 +745,12 @@ bool NetgenCurver::curve_and_extract(int order)
       };
 
       for (auto &e : prism_edges) {
+        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
+        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;
+
+        std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
           double xi   = prism_ref[e[0]][0] + t * (prism_ref[e[1]][0] - prism_ref[e[0]][0]);
@@ -736,7 +762,12 @@ bool NetgenCurver::curve_and_extract(int order)
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          edge_nodes.push_back(new_id);
         }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
       }
 
       // Face interiors (for order >= 3)
@@ -814,6 +845,12 @@ bool NetgenCurver::curve_and_extract(int order)
       };
 
       for (auto &e : pyr_edges) {
+        int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
+        int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;
+
+        std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
           double xi   = pyr_ref[e[0]][0] + t * (pyr_ref[e[1]][0] - pyr_ref[e[0]][0]);
@@ -825,7 +862,12 @@ bool NetgenCurver::curve_and_extract(int order)
           int new_id = next_node_id_++;
           total_nodes_++;
           ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          edge_nodes.push_back(new_id);
         }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
       }
 
       // Face interiors (for order >= 3)

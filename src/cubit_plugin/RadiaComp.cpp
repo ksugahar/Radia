@@ -167,6 +167,16 @@ void RadiaComp::setup_menus()
   QObject::connect(a_vol, SIGNAL(triggered()), handler, SLOT(mesh_volume()));
   menu_list.push_back(a_vol);
 
+  // Separator before coil generation
+  QAction* sep2 = new QAction(handler);
+  sep2->setSeparator(true);
+  menu_list.push_back(sep2);
+
+  QAction* a_coil = new QAction("Generate Coil...", handler);
+  a_coil->setStatusTip("Generate coil from Python script (CoilBuilder -> STEP -> import)");
+  QObject::connect(a_coil, SIGNAL(triggered()), handler, SLOT(generate_coil()));
+  menu_list.push_back(a_coil);
+
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
   mMenuInitialized = true;
@@ -663,13 +673,43 @@ void RadiaMenuHandler::mesh_volume()
 }
 
 // ============================================================
+// Generate Coil — file dialog + APREPRO coil command
+// ============================================================
+
+void RadiaMenuHandler::generate_coil()
+{
+  // File dialog to select coil script
+  QString script = QFileDialog::getOpenFileName(
+    nullptr, "Select Coil Script",
+    QString(), "Python Scripts (*.py);;All Files (*)");
+  if (script.isEmpty())
+    return;
+
+  script.replace("\\", "/");
+
+  // Execute APREPRO coil command (handles subprocess + STEP import)
+  std::string cmd = "coil \"" + script.toStdString() + "\"";
+  PRINT_INFO("Running: %s\n", cmd.c_str());
+  CubitInterface::cmd(cmd.c_str());
+}
+
+// ============================================================
 // ExportDialog - format-specific options
 // ============================================================
 
 // --- Settings persistence ---
+static QString settingsDir()
+{
+  // Use AppData/Roaming/Radia/ (not ~/.cubit which is a file on this system)
+  QString appdata = QDir::homePath() + "/AppData/Roaming/Radia";
+  if (!QDir(appdata).exists())
+    QDir().mkpath(appdata);
+  return appdata;
+}
+
 static QString settingsPath()
 {
-  return QDir::homePath() + "/.cubit/radia_export_settings.json";
+  return settingsDir() + "/export_settings.json";
 }
 
 static QJsonObject loadSettings()
@@ -681,7 +721,6 @@ static QJsonObject loadSettings()
 
 static void saveSettings(const QJsonObject &obj)
 {
-  QDir().mkpath(QDir::homePath() + "/.cubit");
   QFile f(settingsPath());
   if (f.open(QIODevice::WriteOnly))
     f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
@@ -869,7 +908,7 @@ QString ExportDialog::cubitCommand() const
     }
     case Nastran: {
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
-      cmd = QString("export nastran \"%1\" order %2 dimension %3")
+      cmd = QString("export radia_nastran \"%1\" order %2 dimension %3")
                 .arg(file).arg(order).arg(dim);
       if (mNoPyramid && mNoPyramid->currentIndex() == 1)
         cmd += " nopyramid";

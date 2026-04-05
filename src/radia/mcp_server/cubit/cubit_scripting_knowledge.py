@@ -579,10 +579,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 add pyramid all")
-cubit.cmd('export nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
+cubit.cmd('export radia_nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
 
 # RIGHT: Use nopyramid for JMAG
-cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
 # Or use pure tet mesh to avoid pyramids entirely
 ```
 
@@ -737,7 +737,7 @@ JMAG requires degenerate hex pyramids, not standard CPYRAM elements:
 
 ```python
 # For JMAG: use nopyramid
-cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 With `nopyramid`, pyramid elements are written as degenerate CHEXA
@@ -796,7 +796,7 @@ CUBIT_2D_MESH_WORKFLOW = """
 ## Overview
 
 Several export formats support 2D mesh export:
-- `cubit.cmd('export nastran "file.bdf" dimension 2 overwrite')`
+- `cubit.cmd('export radia_nastran "file.bdf" dimension 2 overwrite')`
 - `cubit.cmd('export meg "file.meg" overwrite')` (planar, DIM='K' default)
 - `cubit.cmd('export meg "file.meg" overwrite')` (axisymmetric, DIM='R')
 - `cubit.cmd('export gmsh "file.msh" version 4 dimension 2 overwrite')`
@@ -860,7 +860,7 @@ cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 cubit.cmd('block 1 name "plate"')
-cubit.cmd('export nastran "plate.bdf" dimension 2 overwrite')
+cubit.cmd('export radia_nastran "plate.bdf" dimension 2 overwrite')
 ```
 
 ### MEG 2D Planar (DIM='K')
@@ -1067,7 +1067,7 @@ When Cubit produces mixed hex-tet meshes, pyramid transition elements are genera
 
 **Fix**: Use `nopyramid` to write pyramids as degenerate CHEXA:
 ```python
-cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 **Alternative**: Avoid pyramids entirely by using pure tet mesh:
@@ -1075,7 +1075,7 @@ cubit.cmd('export nastran "mesh.bdf" nopyramid overwrite')
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add tet all")
-cubit.cmd('export nastran "mesh.bdf" overwrite')
+cubit.cmd('export radia_nastran "mesh.bdf" overwrite')
 ```
 
 ## Problem: Hex Meshing Fails on Complex Geometry
@@ -1171,14 +1171,14 @@ When generating Cubit export scripts, **never** use:
 # WRONG: No such built-in command for these formats
 cubit.cmd('export gmsh "mesh.msh"')     # Does not exist
 cubit.cmd('export vtk "mesh.vtk"')      # Does not exist
-cubit.cmd('export nastran "mesh.bdf"')  # Does not exist
+cubit.cmd('export radia_nastran "mesh.bdf"')  # Does not exist
 ```
 
 **Always** use the module functions:
 ```python
 # RIGHT: Use export Cubit commands
 cubit.cmd('export gmsh "mesh.msh" overwrite')
-cubit.cmd('export nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('export radia_nastran "mesh.bdf" dimension 3 overwrite')
 ```
 """
 
@@ -1437,7 +1437,7 @@ for n in [2, 4, 8, 16]:  # mesh refinement levels
     cubit.cmd('block 1 add surface all')
     folder = f"n={n}"
     os.makedirs(folder, exist_ok=True)
-    cubit.cmd(f'export nastran "{folder}/sphere.nas" dimension 3 overwrite large')
+    cubit.cmd(f'export radia_nastran "{folder}/sphere.nas" dimension 3 overwrite large')
 ```
 
 ## Key Techniques
@@ -1472,7 +1472,7 @@ for mesh_size in [5.0, 2.0, 1.0, 0.5]:
     cubit.cmd('surface all scheme circle interval')
     cubit.cmd(f'surface all size {{0.2*{mesh_size}}}')
     cubit.cmd('mesh surface all')
-    cubit.cmd(f'export nastran "{folder}/mesh.bdf" dimension 2 overwrite large')
+    cubit.cmd(f'export radia_nastran "{folder}/mesh.bdf" dimension 2 overwrite large')
     cubit.cmd('exit')
 ```
 
@@ -1541,7 +1541,7 @@ cubit.cmd('mesh vol all')
 # Register blocks (required for Nastran export)
 cubit.cmd('block 1 add vol 1')
 cubit.cmd('block 2 add vol 2')
-cubit.cmd('export nastran "mesh.nas" dimension 3 overwrite everything')
+cubit.cmd('export radia_nastran "mesh.nas" dimension 3 overwrite everything')
 
 # Convert to VTU using meshio
 mesh = meshio.read("mesh.nas")

@@ -435,7 +435,7 @@ def main():
          'export gmsh "{f}" order {o} version 4 overwrite',
          parse_gmsh_volume),
         ("Nastran", ".bdf",
-         'export nastran "{f}" order {o} dimension 3 overwrite',
+         'export radia_nastran "{f}" order {o} dimension 3 overwrite',
          parse_nastran_volume),
         ("VTK", ".vtk",
          'export vtk "{f}" order {o} dimension 3 overwrite',

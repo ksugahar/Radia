@@ -1031,6 +1031,20 @@ def get_lint_rules() -> str:
 			'trigger': 'block 1 add tet all without block 1 name "..."',
 			'fix': 'cubit.cmd(\'block 1 name "domain"\')',
 		},
+		{
+			'rule': 'non-ascii-byte',
+			'severity': 'HIGH',
+			'description': 'Non-ASCII byte in Python file. Cubit cp932 (Japanese Windows) will crash.',
+			'trigger': 'Em dash, smart quotes, or any non-ASCII character in .py loaded by Cubit',
+			'fix': 'Replace with ASCII equivalents: -- instead of em dash, straight quotes, etc.',
+		},
+		{
+			'rule': 'missing-qt-import',
+			'severity': 'HIGH',
+			'description': 'Qt class used but not imported. Causes NameError at runtime in Cubit.',
+			'trigger': 'QMenu(...) without "from PySide6.QtWidgets import QMenu"',
+			'fix': 'Add the missing class to PySide6/PyQt5 import statement.',
+		},
 	]
 
 	lines = ["# Cubit Export Lint Rules (16 rules)", ""]
