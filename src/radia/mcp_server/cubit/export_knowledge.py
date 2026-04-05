@@ -586,9 +586,95 @@ geometry leads to poor quality or failed meshing.
 | curved | N/A | Unlimited | No | Yes | Yes |
 | gmsh_v2 | Medium | 2nd | No | Yes | No |
 | gmsh_v4 | Medium | 2nd | Yes | Yes | No |
-| nastran | Medium | 1st | Yes | Yes | No |
+| nastran | Medium | 2nd | Yes | Yes | No |
 | meg | Small | 1st | Yes | Yes | No |
 | exodus | Medium | All | No | Yes | No |
+
+## IMPORTANT: `export radia_nastran` (NOT `export nastran`)
+
+Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf" overwrite everything`).
+Radia's Nastran export uses a DIFFERENT command name to avoid conflict:
+
+```python
+# CORRECT: Radia's export (supports order 2, nopyramid, block labels)
+cubit.cmd('export radia_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+
+# WRONG: Cubit's built-in (different format, no order 2, no nopyramid)
+cubit.cmd('export nastran "mesh.bdf" overwrite everything')
+```
+
+## Coil APREPRO Command
+
+Generate coil STEP from a Python script and import into Cubit:
+
+```python
+# In Cubit command line or .jou file:
+cubit.cmd('coil "my_coil.py"')                          # generate + import
+cubit.cmd('coil "my_coil.py" output "C:/out/coil.step"') # custom output path
+cubit.cmd('coil "my_coil.py" noimport')                  # STEP only, no import
+
+# my_coil.py must define build_coil() -> CoilBuilder:
+# def build_coil():
+#     from radia.radia_coil_builder import CoilBuilder
+#     cb = CoilBuilder(current=1000)
+#     cb.set_start([0, 0, 0])
+#     cb.set_cross_section(width=0.02, height=0.02)
+#     cb.add_straight(length=0.1, tilt=0)
+#     cb.add_arc(radius=0.05, arc_angle=180, tilt=0)
+#     ...
+#     return cb
+```
+
+Requires external Python 3.12 with NGSolve/OCC (not Cubit's embedded 3.10).
+Set `RADIA_PYTHON` env var to override Python path.
+
+## Troubleshooting: High-Order Export
+
+### "Interrupt Detected" on AddPoint (NetgenCurver crash)
+
+**Cause**: ABI mismatch between ccm plugin and nglib.dll at runtime.
+The ccm was built against one version of Netgen, but a different nglib.dll
+is loaded from the plugins/ directory.
+
+**Fix**: Rebuild ccm with **compact_netgen** (static link, no nglib.dll dependency).
+```bash
+cmake -DNETGEN_SRC_DIR=C:/netgen_build/netgen_fork ...  # NOT -DNETGEN_DIR
+```
+
+### HEX20/TET10 has wrong node count in .msh/.bdf (order 2)
+
+**Symptom**: GMSH crashes opening .msh, or HEX20 element has 8 nodes instead of 20.
+
+**Cause** (fixed 2026-04-05): Volume element internal edges were not registered
+in `edge_ho_nodes_`. Only surface element edges were registered, so internal
+edges (not shared with any surface) had no HO nodes in the .msh/.bdf connectivity.
+The .vol export was unaffected (uses Netgen internal mesh, not edge_ho_nodes_).
+
+**Verification**: Check HEX20 node count in .msh file:
+```python
+# In exported .msh, HEX20 (type 17) must have 20 nodes per element
+# Fields: elem_id type_id n_tags tag1 tag2 node1..node20
+# If only 8 nodes -> bug (edge_ho_nodes_ not registered for volume edges)
+```
+
+## Cubit GUI Menu Structure
+
+```
+Menu bar: File Edit View Display Tools Export_Mesh Help Solve
+                                       (C++ .ccl)        (Python)
+Export Mesh:                           Solve:
+  Netgen Vol (.vol)...                   Radia-NGSolve...
+  GMSH...                               Generate Coil...
+  Nastran BDF...                         --------
+  VTK...                                 Reload Panels
+  MEG...
+  --------
+  Mesh Evaluation...
+```
+
+- **Export Mesh**: C++ .ccl component (Qt5 dialogs, APREPRO commands)
+- **Solve**: Python register_toolbar.py (subprocess to external Python 3.12)
+- Settings saved to `AppData/Roaming/Radia/export_settings.json`
 """
 
 
