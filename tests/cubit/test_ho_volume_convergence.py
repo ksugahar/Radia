@@ -643,10 +643,10 @@ def test_path_ab(case_name, cad_volume, cad_area):
     else:
         print(" [PASS]")
 
-    # Area must agree within 5% (BL wedge surface elements may differ)
+    # Area must agree within 0.1%
     a_diff = abs(area_a - area_b) / max(abs(cad_area), 1e-30) * 100.0
     print(f"  area diff: {a_diff:.4e}%", end="")
-    if a_diff > 5.0:
+    if a_diff > 0.1:
         print(" [FAIL]"); all_pass = False
     else:
         print(" [PASS]")
