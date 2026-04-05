@@ -8,7 +8,7 @@ Native APREPRO commands — no Python, no block assignment required:
 
 | Command | Format | Block Required |
 |---------|--------|---------------|
-| `radia export nastran "f.bdf" [dimension <2\|3>] [nopyramid]` | Nastran BDF | **No** |
+| `export radia_nastran "f.bdf" [dimension <2\|3>] [nopyramid]` | Nastran BDF | **No** |
 | `radia export gmsh "f.msh" [version <2\|4>] [dimension <2\|3>]` | Gmsh v2.2/v4.1 | **No** |
 | `radia export meg "f.meg"` | MEG (ELF/MAGIC) | **No** |
 
@@ -34,7 +34,7 @@ cmake --build . --config Release
 | `cubit.cmd('export mesh ...')` | Exodus II (.exo) | Yes | Yes | Yes |
 | `radia_cubit_mesh.extract_curved_mesh()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
 | `cubit.cmd('radia export gmsh ...')` | Gmsh v2.2/v4.1 | Yes | Yes | No |
-| `cubit.cmd('radia export nastran ...')` | Nastran BDF | Yes | No | No |
+| `cubit.cmd('export radia_nastran ...')` | Nastran BDF | Yes | No | No |
 | `cubit.cmd('radia export meg ...')` | MEG (ELF) | Yes | No | No |
 
 > Note: The `radia export` plugin commands require no block assignment. The `radia_cubit_mesh.extract_curved_mesh()` function requires blocks for NGSolve mesh extraction.
@@ -79,7 +79,7 @@ cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')    # v4.1
 ## Nastran BDF Export
 
 ```python
-cubit.cmd('radia export nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('export radia_nastran "mesh.bdf" dimension 3 overwrite')
 ```
 
 **DIM Options**:

@@ -6,6 +6,7 @@
 #include "ExportGmshCommand.hpp"
 #include "ExportMegCommand.hpp"
 #include "ExportVtkCommand.hpp"
+#include "CoilCommand.hpp"
 
 // ============================================================
 // Python API plugin (CUBIT_PLUGIN_DIR / cubit.init)
@@ -33,6 +34,7 @@ std::vector<std::string> RadiaPlugin::get_keys()
   keys.push_back("ExportGmshCommand");
   keys.push_back("ExportMegCommand");
   keys.push_back("ExportVtkCommand");
+  keys.push_back("CoilCommand");
   return keys;
 }
 
@@ -51,6 +53,8 @@ CubitCommand* RadiaPlugin::create_command(const std::string &key)
     return new ExportMegCommand();
   else if (key == "ExportVtkCommand")
     return new ExportVtkCommand();
+  else if (key == "CoilCommand")
+    return new CoilCommand();
   return nullptr;
 }
 

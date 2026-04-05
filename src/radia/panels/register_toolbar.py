@@ -48,12 +48,12 @@ import cubit
 
 # Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit ships PyQt5)
 try:
-    from PySide6.QtWidgets import (QApplication, QMainWindow, QMessageBox,
-                                   QToolBar)
+    from PySide6.QtWidgets import (QApplication, QMainWindow, QMenu,
+                                   QMessageBox, QToolBar)
     from PySide6.QtGui import QAction
 except ImportError:
-    from PyQt5.QtWidgets import (QApplication, QMainWindow, QMessageBox,
-                                 QToolBar, QAction)
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
+                                 QMessageBox, QToolBar, QAction)
 
 
 def _find_external_python():
@@ -100,6 +100,10 @@ def _find_main_window():
     """Find Cubit's main QMainWindow."""
     app = QApplication.instance()
     if app is None:
+        return None
+    # In batch mode (-nographics), Qt uses QCoreApplication which
+    # has no topLevelWidgets(). Skip menu registration silently.
+    if not hasattr(app, 'topLevelWidgets'):
         return None
     best = None
     best_count = 0
@@ -243,7 +247,9 @@ def register_menu():
 
     # Remove existing menus (for reload)
     is_reload = False
-    for name in ("Radia-NGSolve", "Export Mesh", "Reload Panels"):
+    # Export Mesh is owned by C++ .ccl -- do NOT remove it here
+    for name in ("Solve", "Radia-NGSolve", "Generate Coil",
+                 "Reload Panels"):
         for action in list(menu_bar.actions()):
             if action.text().replace("&", "") == name:
                 sub = action.menu()
@@ -264,14 +270,17 @@ def register_menu():
     # Export Mesh menu is provided by the C++ .ccl component (RadiaComp).
     # Do NOT register a Python Export Mesh menu here.
 
-    # --- Menu 1: Radia-NGSolve (direct action, no submenu) ---
-    action_launch = QAction("Radia-NGSolve", main_window)
+    # === Top-level "Solve" menu with sub-items ===
+    solve_menu = QMenu("Solve", main_window)
+
+    # --- Sub 1: Radia-NGSolve ---
+    action_launch = QAction("Radia-NGSolve...", main_window)
     action_launch.setStatusTip(
         "Save model as .cub5 and launch Radia standalone app (Python 3.12)")
     action_launch.triggered.connect(_launch_radia_app)
-    menu_bar.addAction(action_launch)
+    solve_menu.addAction(action_launch)
 
-    # --- Menu 2: Generate Coil (subprocess -> STEP -> import) ---
+    # --- Sub 2: Generate Coil ---
     def _generate_coil():
         try:
             ext_python = _find_external_python()
@@ -291,7 +300,7 @@ def register_menu():
                 print(f"ERROR: {gen_script} not found")
                 return
 
-            # Build command — default racetrack for now
+            # Build command - default racetrack for now
             cmd = [ext_python, gen_script, "--output", step_path]
             print(f"Generating coil: {' '.join(cmd)}")
 
@@ -318,25 +327,38 @@ def register_menu():
         except Exception as e:
             print(f"ERROR in _generate_coil: {e}")
 
-    action_coil = QAction("Generate Coil", main_window)
+    action_coil = QAction("Generate Coil...", main_window)
     action_coil.setStatusTip(
         "Generate racetrack coil STEP and import into Cubit")
     action_coil.triggered.connect(_generate_coil)
-    menu_bar.addAction(action_coil)
+    solve_menu.addAction(action_coil)
 
-    # --- Menu 3: Reload Panels (debug, direct action) ---
+    # --- Sub 3: Reload Panels (debug) ---
+    solve_menu.addSeparator()
+
     def _reload_panels():
         startup = os.path.join(_this_dir, "startup.py").replace("\\", "/")
         cubit.cmd(f'play "{startup}"')
     action_reload = QAction("Reload Panels", main_window)
     action_reload.setStatusTip("Re-read register_toolbar.py from disk (debug)")
     action_reload.triggered.connect(_reload_panels)
-    menu_bar.addAction(action_reload)
+    solve_menu.addAction(action_reload)
+
+    # Insert before Help menu (last built-in menu)
+    help_action = None
+    for action in menu_bar.actions():
+        if action.text().replace("&", "") == "Help":
+            help_action = action
+            break
+    if help_action:
+        menu_bar.insertMenu(help_action, solve_menu)
+    else:
+        menu_bar.addMenu(solve_menu)
 
     if is_reload:
-        print("Radia-NGSolve menus re-registered.")
+        print("Solve menu re-registered.")
     else:
-        print("Radia-NGSolve menus registered.")
+        print("Solve menu registered.")
 
 
 # Auto-register when this script is executed
