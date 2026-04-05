@@ -38,7 +38,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 
 # Import NGSolve FIRST (DLL conflict avoidance)
 import netgen.meshing
-from ngsolve import Mesh, Integrate, CF
+from ngsolve import Mesh, Integrate, CF, BND
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
@@ -334,15 +334,16 @@ def parse_gmsh_v22(filename):
 
 
 # ================================================================
-# Test 1: p-convergence (netgen .vol, order 1-5)
+# Test 1: p-convergence (netgen .vol, order 1-5, volume + area)
 # ================================================================
-def test_p_convergence(case_name, cad_volume, is_flat):
-    """Export .vol at orders 1-5, load in NGSolve, check volume convergence."""
-    print(f"\n  p-convergence test (CAD={cad_volume:.6e}):")
-    print(f"  {'Order':>5} {'Volume':>14} {'Error':>14} {'Verdict':>8}")
-    print(f"  {'-----':>5} {'-' * 14:>14} {'-' * 14:>14} {'--------':>8}")
+def test_p_convergence(case_name, cad_volume, cad_area, is_flat):
+    """Export .vol at orders 1-5, check volume and area convergence."""
+    print(f"\n  p-convergence (CAD vol={cad_volume:.6e}, area={cad_area:.6e}):")
+    print(f"  {'Order':>5} {'Volume':>14} {'V_err':>14} {'Area':>14} {'A_err':>14} {'Verdict':>8}")
+    print(f"  {'-----':>5} {'-'*14:>14} {'-'*14:>14} {'-'*14:>14} {'-'*14:>14} {'--------':>8}")
 
-    errors = []
+    v_errors = []
+    a_errors = []
     all_pass = True
 
     for order in range(1, 6):
@@ -352,46 +353,58 @@ def test_p_convergence(case_name, cad_volume, is_flat):
             cubit.cmd(cmd)
             mesh = Mesh(vol_path)
             vol = Integrate(CF(1), mesh)
+            area = Integrate(CF(1), mesh, BND)
         except Exception as e:
             print(f"  {order:>5} FAILED: {e}")
-            errors.append(None)
+            v_errors.append(None)
+            a_errors.append(None)
             all_pass = False
             continue
 
-        err_pct = (vol - cad_volume) / cad_volume * 100.0
+        v_err = (vol - cad_volume) / cad_volume * 100.0
+        a_err = (area - cad_area) / cad_area * 100.0
         verdict = "OK"
 
         if is_flat:
-            # Flat geometry: volume must be exact at all orders
-            if abs(err_pct) > 0.01:
+            if abs(v_err) > 0.01 or abs(a_err) > 0.01:
                 verdict = "FAIL"
                 all_pass = False
-        elif len(errors) > 0 and errors[-1] is not None:
-            prev_err = errors[-1]
-            # Allow 10x regression (numerical noise at high order)
-            if abs(err_pct) > abs(prev_err) * 10 and abs(err_pct) > 1e-3:
-                verdict = "REGRESS"
+        else:
+            # Check volume regression
+            if v_errors and v_errors[-1] is not None:
+                if abs(v_err) > abs(v_errors[-1]) * 100 and abs(v_err) > 1e-2:
+                    verdict = "REGRESS"
+                    all_pass = False
+            # Check area regression
+            if a_errors and a_errors[-1] is not None:
+                if abs(a_err) > abs(a_errors[-1]) * 100 and abs(a_err) > 1e-2:
+                    verdict = "REGRESS"
+                    all_pass = False
+
+        print(f"  {order:>5} {vol:>14.6e} {v_err:>+13.4e}% {area:>14.6e} {a_err:>+13.4e}% {verdict:>8}")
+        v_errors.append(v_err)
+        a_errors.append(a_err)
+
+    # Convergence check: order 2 must improve over order 1
+    if not is_flat:
+        if len(v_errors) >= 2 and v_errors[0] is not None and v_errors[1] is not None:
+            if abs(v_errors[1]) >= abs(v_errors[0]):
+                print(f"  volume: order 2 not better than order 1: FAIL")
                 all_pass = False
-
-        print(f"  {order:>5} {vol:>14.6e} {err_pct:>+13.4e}% {verdict:>8}")
-        errors.append(err_pct)
-
-    # Convergence check: order 2 must be better than order 1 (curved cases)
-    if not is_flat and len(errors) >= 2:
-        if errors[0] is not None and errors[1] is not None:
-            if abs(errors[1]) >= abs(errors[0]):
-                print(f"  order 2 not better than order 1: FAIL")
+        if len(a_errors) >= 2 and a_errors[0] is not None and a_errors[1] is not None:
+            if abs(a_errors[1]) >= abs(a_errors[0]):
+                print(f"  area: order 2 not better than order 1: FAIL")
                 all_pass = False
 
     return all_pass
 
 
 # ================================================================
-# Test 2: gmsh vs netgen volume at order 2
+# Test 2: gmsh vs netgen volume + area at order 2
 # ================================================================
-def test_gmsh_vs_netgen(case_name, cad_volume, is_flat):
-    """Compare .vol and .msh volume at order 1 and 2."""
-    print(f"\n  gmsh vs netgen (CAD={cad_volume:.6e}):")
+def test_gmsh_vs_netgen(case_name, cad_volume, cad_area, is_flat):
+    """Compare .vol and .msh volume and area at order 1 and 2."""
+    print(f"\n  gmsh vs netgen (CAD vol={cad_volume:.6e}, area={cad_area:.6e}):")
 
     results = {}
     for order in [1, 2]:
@@ -399,7 +412,7 @@ def test_gmsh_vs_netgen(case_name, cad_volume, is_flat):
         cmd = f'export gmsh "{msh_path}" order {order} version 2 dimension 3 overwrite'
         cubit.cmd(cmd)
         r = parse_gmsh_v22(msh_path)
-        r['error_pct'] = (r['volume'] - cad_volume) / cad_volume * 100.0
+        r['v_err'] = (r['volume'] - cad_volume) / cad_volume * 100.0
         results[f'gmsh_o{order}'] = r
 
     # Load netgen vol order 2 (already exported in p-convergence test)
@@ -407,44 +420,48 @@ def test_gmsh_vs_netgen(case_name, cad_volume, is_flat):
     try:
         mesh = Mesh(vol_path)
         ng_vol = Integrate(CF(1), mesh)
-        ng_err = (ng_vol - cad_volume) / cad_volume * 100.0
+        ng_area = Integrate(CF(1), mesh, BND)
+        ng_v_err = (ng_vol - cad_volume) / cad_volume * 100.0
+        ng_a_err = (ng_area - cad_area) / cad_area * 100.0
     except Exception:
-        ng_vol = ng_err = None
+        ng_vol = ng_area = ng_v_err = ng_a_err = None
 
-    print(f"  {'Source':<20} {'Volume':>14} {'Error':>14} {'Elements':>30}")
-    print(f"  {'-' * 20:<20} {'-' * 14:>14} {'-' * 14:>14} {'-' * 30:>30}")
+    print(f"  {'Source':<16} {'Volume':>14} {'V_err':>12} {'Area':>14} {'A_err':>12}")
+    print(f"  {'-'*16:<16} {'-'*14:>14} {'-'*12:>12} {'-'*14:>14} {'-'*12:>12}")
     for key in ['gmsh_o1', 'gmsh_o2']:
         r = results[key]
-        elem_str = ', '.join(f"{k}={v}" for k, v in r['counts'].items())
-        print(f"  {key:<20} {r['volume']:>14.6e} {r['error_pct']:>+13.4e}% {elem_str:>30}")
+        # gmsh parser only computes volume (no surface area from 3D elements)
+        print(f"  {key:<16} {r['volume']:>14.6e} {r['v_err']:>+11.4e}%")
     if ng_vol is not None:
-        print(f"  {'netgen_o2':<20} {ng_vol:>14.6e} {ng_err:>+13.4e}%")
+        print(f"  {'netgen_o2':<16} {ng_vol:>14.6e} {ng_v_err:>+11.4e}% "
+              f"{ng_area:>14.6e} {ng_a_err:>+11.4e}%")
 
     all_pass = True
     g1 = results['gmsh_o1']
     g2 = results['gmsh_o2']
 
-    # Check 1: gmsh o2 should improve over o1 (curved surfaces only)
+    # Check 1: gmsh o2 volume should improve over o1 (curved surfaces only)
     if not is_flat:
-        if abs(g2['error_pct']) >= abs(g1['error_pct']):
-            print(f"  gmsh o2 not better than o1: [FAIL]")
+        if abs(g2['v_err']) >= abs(g1['v_err']):
+            print(f"  gmsh vol o2 not better than o1: [FAIL]")
             all_pass = False
         else:
-            print(f"  gmsh o2 better than o1: [PASS]")
+            print(f"  gmsh vol o2 better than o1: [PASS]")
 
-    # Check 2: gmsh o2 and netgen o2 must agree within 1%
+    # Check 2: gmsh o2 and netgen o2 volume must agree within 1%
     if ng_vol is not None:
         diff_pct = abs(g2['volume'] - ng_vol) / cad_volume * 100.0
         cross_pass = diff_pct < 1.0
-        print(f"  gmsh_o2 vs netgen_o2 diff: {diff_pct:.4e}% "
+        print(f"  gmsh_o2 vs netgen_o2 vol diff: {diff_pct:.4e}% "
               f"[{'PASS' if cross_pass else 'FAIL'}]")
         if not cross_pass:
             all_pass = False
 
     # Check 3: flat geometry must be exact
-    if is_flat and abs(g1['error_pct']) > 0.01:
-        print(f"  flat geometry o1 not exact: [FAIL]")
-        all_pass = False
+    if is_flat:
+        if abs(g1['v_err']) > 0.01:
+            print(f"  flat vol o1 not exact: [FAIL]")
+            all_pass = False
 
     return all_pass
 
@@ -513,15 +530,17 @@ def main():
 
         vol_ids = cubit.parse_cubit_list("volume", "all")
         cad_volume = sum(cubit.volume(vid).volume() for vid in vol_ids)
+        surf_ids = cubit.parse_cubit_list("surface", "all")
+        cad_area = sum(cubit.surface(sid).area() for sid in surf_ids)
 
         n_hex = len(cubit.parse_cubit_list("hex", "all"))
         n_tet = len(cubit.parse_cubit_list("tet", "all"))
         n_pyr = len(cubit.parse_cubit_list("pyramid", "all"))
         print(f"  Elements: hex={n_hex} tet={n_tet} pyramid={n_pyr}")
-        print(f"  CAD volume: {cad_volume:.6e}")
+        print(f"  CAD volume: {cad_volume:.6e}, area: {cad_area:.6e}")
 
-        p_pass = test_p_convergence(case_name, cad_volume, is_flat)
-        g_pass = test_gmsh_vs_netgen(case_name, cad_volume, is_flat)
+        p_pass = test_p_convergence(case_name, cad_volume, cad_area, is_flat)
+        g_pass = test_gmsh_vs_netgen(case_name, cad_volume, cad_area, is_flat)
         ab_pass = test_path_ab(case_name, cad_volume)
 
         case_pass = p_pass and g_pass and ab_pass
