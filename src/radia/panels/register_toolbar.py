@@ -177,30 +177,36 @@ def _ensure_model():
 
 
 def _launch_radia_app():
-    """Save current Cubit model as .cub5 and launch Radia app.
+    """Export .vol and launch Radia app.
 
-    Two-phase:
-      1. No model -> prompt for .jou, play, save .cub5, STOP.
-         User clicks again to launch.
-      2. Model exists -> save .cub5, launch subprocess.
+    Pipeline:
+      1. No model -> prompt for .jou, play it
+      2. Export netgen .vol (C++ plugin, order 2)
+      3. Save .cub5 alongside
+      4. Launch radia_app.py with .vol path
     """
     try:
-        # Phase 1: no model -> load .jou and save .cub5 only
         if not _has_model():
             work_dir = _ensure_model()
             if work_dir is None:
                 return
-            cub5_path = os.path.join(work_dir, "radia_cubit_model.cub5")
-            cub5_path = cub5_path.replace("\\", "/")
-            cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
-            print(f"Model saved: {cub5_path}")
-            print("Click Radia-NGSolve again to launch the analysis app.")
-            return
+        else:
+            work_dir = _last_jou_dir[0] or os.getcwd()
 
-        # Phase 2: model exists -> save and launch
-        work_dir = _last_jou_dir[0] or os.getcwd()
-        cub5_path = os.path.join(work_dir, "radia_cubit_model.cub5")
-        cub5_path = cub5_path.replace("\\", "/")
+        # Set Cubit working directory
+        work_dir = work_dir.replace("\\", "/")
+        cubit.cmd(f'cd "{work_dir}"')
+
+        # Export .vol via C++ plugin (Path A, includes curvedelements)
+        vol_path = os.path.join(work_dir, "radia_model.vol").replace("\\", "/")
+        cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
+        if not os.path.isfile(vol_path):
+            print("ERROR: export netgen failed. Check blocks/sidesets.")
+            return
+        print(f"Exported: {vol_path}")
+
+        # Also save .cub5 (for reference / Path B debugging)
+        cub5_path = os.path.join(work_dir, "radia_model.cub5").replace("\\", "/")
         cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
 
         ext_python = _find_external_python()
@@ -219,7 +225,7 @@ def _launch_radia_app():
             if "QT" in key.upper() or "PYSIDE" in key.upper():
                 del env[key]
 
-        cmd = [ext_python, radia_app, cub5_path]
+        cmd = [ext_python, radia_app, vol_path]
         print(f"Launching: {' '.join(cmd)}")
         subprocess.Popen(cmd, cwd=work_dir, env=env)
 
