@@ -190,6 +190,18 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
     "$CMAKE_EXE" --build . --config Release --target radia_cubit_mesh -j
     if errorlevel 1 ( echo WARNING: radia_cubit_mesh build failed )
+
+    echo.
+    echo ========================================
+    echo   Building radia_cubit.ccm (APREPRO commands)
+    echo ========================================
+    set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
+    if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
+    cd /d "!CUBIT_CCM_BUILD!"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
+    if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
+
     cd /d "$BUILD_DIR"
 ) else (
     echo SKIP: Cubit SDK not found at %CUBIT_DIR%
@@ -243,7 +255,7 @@ try {
     $cubitFiles = @(
         @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\radia_cubit_mesh.cp312-win_amd64.pyd";
            dst = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd" },
-        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-test\radia_cubit.ccm";
+        @{ src = "$PROJECT_DIR\src\cubit_plugin\build-ccm\radia_cubit.ccm";
            dst = "$PROJECT_DIR\src\radia\radia_cubit.ccm" }
     )
     foreach ($cf in $cubitFiles) {

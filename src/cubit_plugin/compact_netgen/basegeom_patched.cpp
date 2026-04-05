@@ -361,8 +361,17 @@ namespace netgen
       find_primary(faces);
   }
 
-#if 0  // --- REMOVED: Analyse, Divide, FindEdges (mesher functions) ---
+  // Stubs for virtual functions (compact_netgen: no mesher, only curving)
   void NetgenGeometry :: Analyse(Mesh& mesh,
+                                 const MeshingParameters& mparam) const
+  { /* stub - mesher not available in compact build */ }
+
+  void NetgenGeometry :: FindEdges(Mesh& mesh,
+                                   const MeshingParameters& mparam) const
+  { /* stub - mesher not available in compact build */ }
+
+#if 0  // --- REMOVED: Analyse, Divide, FindEdges (mesher functions) ---
+  void NetgenGeometry :: Analyse_ORIGINAL(Mesh& mesh,
                                  const MeshingParameters& mparam) const
   {
     static Timer t1("SetLocalMeshsize"); RegionTimer regt(t1);
@@ -592,7 +601,7 @@ namespace netgen
     }
   }
 
-  void NetgenGeometry :: FindEdges(Mesh& mesh,
+  void NetgenGeometry :: FindEdges_ORIGINAL(Mesh& mesh,
                                    const MeshingParameters& mparam) const
   {
     static Timer t1("MeshEdges"); RegionTimer regt(t1);

@@ -147,6 +147,8 @@ set(CCM_SOURCES
     ExportMegCommand.hpp
     ExportVtkCommand.cpp
     ExportVtkCommand.hpp
+    CoilCommand.cpp
+    CoilCommand.hpp
 )
 
 # Netgen-dependent sources: callbackgeom + ExportNetgenCommand
@@ -264,11 +266,9 @@ if(HAVE_NETGEN)
       "${NETGEN_DIR}/include/include"
     )
     target_link_libraries(radia_cubit_ccl netgen::nglib netgen::ngcore)
-    # DELAYLOAD Netgen DLLs — they live in plugins/, not bin/ where .ccl is
-    if(MSVC)
-      set_property(TARGET radia_cubit_ccl APPEND_STRING PROPERTY
-        LINK_FLAGS " /DELAYLOAD:nglib.dll /DELAYLOAD:ngcore.dll")
-    endif()
+    # No DELAYLOAD for nglib/ngcore: data symbols (netgen::Mesh::default_bc)
+    # cannot be delay-loaded. ensure_netgen_dll_path() sets SetDllDirectoryA
+    # to plugins/ at startup, so the DLLs are found via normal load.
   endif()
 endif()
 

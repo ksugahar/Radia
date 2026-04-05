@@ -181,7 +181,7 @@ Output:
 |----------------|----------|----------------------------|
 | `radia export gmsh` | `get_expanded_connectivity()` | Yes - exports actual order |
 | `radia_cubit_mesh.extract_curved_mesh()` | `get_connectivity()` | No - curves via geometry |
-| `radia export nastran` | `get_connectivity()` | No - 1st order only |
+| `export radia_nastran` | `get_connectivity()` | No - 1st order only |
 
 ## See Also
 

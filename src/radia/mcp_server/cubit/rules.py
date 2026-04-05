@@ -524,6 +524,94 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
+def check_non_ascii_bytes(filepath: str, lines: List[str]) -> List[Dict]:
+	"""HIGH: Non-ASCII bytes in Python file loaded by Cubit (cp932 crash).
+
+	Cubit's embedded Python uses cp932 on Japanese Windows.
+	Any non-ASCII byte (em dash, smart quotes, etc.) causes
+	UnicodeDecodeError when startup.py reads register_toolbar.py.
+	"""
+	findings = []
+	try:
+		with open(filepath, 'rb') as f:
+			raw = f.read()
+	except (OSError, IOError):
+		return findings
+
+	for i, b in enumerate(raw):
+		if b > 127:
+			# Find line number
+			line_num = raw[:i].count(b'\n') + 1
+			context = raw[max(0, i - 10):i + 10]
+			findings.append({
+				'line': line_num,
+				'severity': 'HIGH',
+				'rule': 'non-ascii-byte',
+				'message': (
+					f'Non-ASCII byte 0x{b:02x} found. '
+					f'Cubit cp932 will crash. Use ASCII only. '
+					f'Context: {context!r}'
+				),
+			})
+			break  # One finding is enough
+	return findings
+
+
+def check_qt_imports(filepath: str, lines: List[str]) -> List[Dict]:
+	"""HIGH: Qt class used but not imported (NameError at runtime).
+
+	Checks that all Qt classes referenced in the code are present
+	in PySide6/PyQt5 import statements.
+	"""
+	findings = []
+	qt_classes_used = set()
+	qt_classes_imported = set()
+
+	# Common Qt classes used in Cubit panels
+	known_qt = {
+		'QAction', 'QApplication', 'QMainWindow', 'QMenu', 'QMenuBar',
+		'QMessageBox', 'QToolBar', 'QWidget', 'QDialog', 'QFileDialog',
+		'QLabel', 'QPushButton', 'QVBoxLayout', 'QHBoxLayout',
+		'QFormLayout', 'QLineEdit', 'QComboBox', 'QSpinBox',
+		'QTableWidget', 'QDialogButtonBox', 'QProcess', 'QTimer',
+	}
+
+	import_pattern = re.compile(r'from\s+(?:PySide6|PyQt5)\.\w+\s+import\s+(.+)')
+
+	for i, line in enumerate(lines, 1):
+		stripped = line.strip()
+		if stripped.startswith('#'):
+			continue
+
+		# Collect imports
+		m = import_pattern.match(stripped)
+		if m:
+			names = m.group(1)
+			# Handle multi-line imports (parenthesized)
+			names = names.replace('(', '').replace(')', '').replace('\\', '')
+			for name in names.split(','):
+				name = name.strip()
+				if name:
+					qt_classes_imported.add(name)
+
+		# Collect usage
+		for cls in known_qt:
+			if cls in stripped and cls not in qt_classes_imported:
+				# Check it's actually used as a class (not in a string/comment)
+				if re.search(rf'\b{cls}\s*\(', stripped):
+					qt_classes_used.add((cls, i))
+
+	for cls, line_num in sorted(qt_classes_used):
+		if cls not in qt_classes_imported:
+			findings.append({
+				'line': line_num,
+				'severity': 'HIGH',
+				'rule': 'missing-qt-import',
+				'message': f'{cls} used but not imported from PySide6/PyQt5.',
+			})
+	return findings
+
+
 # All rules in execution order
 ALL_RULES = [
 	check_missing_block_registration,
@@ -542,4 +630,6 @@ ALL_RULES = [
 	check_export_file_extension,
 	check_curve_without_setgeominfo,
 	check_missing_block_names,
+	check_non_ascii_bytes,
+	check_qt_imports,
 ]

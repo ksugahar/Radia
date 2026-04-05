@@ -464,7 +464,7 @@ def generate_test_cases():
                     name = f"nastran_{model}_order{order}_dim{dim}{nopyr_str}"
                     fname = os.path.join(OUT_DIR, f"{name}.bdf")
 
-                    cmd = (f'export nastran "{fname}" order {order} '
+                    cmd = (f'export radia_nastran "{fname}" order {order} '
                            f'dimension {dim} overwrite')
                     if nopyr:
                         cmd += ' nopyramid'
