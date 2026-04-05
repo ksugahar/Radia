@@ -210,6 +210,7 @@ Options can be set in:
 - Command line: `gmsh -setnumber Mesh.NumSubEdges 4`
 - GUI: Tools -> Options
 - Configuration: `~/.gmsh` or `%APPDATA%/gmsh.conf`
+- .msh.opt file (auto-loaded alongside .msh, see GMSH_OPT_FILE)
 
 ## General Options
 | Option | Default | Description |
@@ -217,9 +218,59 @@ Options can be set in:
 | `General.NumThreads` | 1 | Parallel threads |
 | `General.Verbosity` | 5 | Verbosity (0-99) |
 | `General.Terminal` | 0 | Terminal output |
-| `General.Orthographic` | 1 | Orthographic projection |
+| `General.Orthographic` | 1 | Orthographic projection (1=ortho, 0=perspective) |
 | `General.ConfirmQuit` | 1 | Ask before quit (set 0 to disable) |
-| `General.SmallAxes` | 1 | Show axes indicator |
+| `General.SmallAxes` | 1 | Show small axes indicator in corner |
+| `General.Axes` | 0 | Show full axes (0=none, 1=simple axes, 2=box) |
+| `General.AxesMikado` | 0 | Mikado-style axes |
+| `General.AlphaBlending` | 1 | Enable alpha (transparency) blending |
+| `General.Antialiasing` | 0 | Antialiasing |
+| `General.BackgroundGradient` | 0 | Background gradient (0=none, 1=vertical, 2=horizontal, 3=spherical) |
+| `General.ColorScheme` | 1 | Color scheme (0=dark, 1=light) |
+| `General.GraphicsFont` | "Helvetica" | Font name |
+| `General.GraphicsFontSize` | 15 | Font size for labels |
+| `General.GraphicsFontSizeTitle` | 18 | Font size for titles |
+
+## General.Light Options
+| Option | Default | Description |
+|--------|---------|-------------|
+| `General.Light0` | 1 | Enable light 0 |
+| `General.Light0X` | 0.65 | Light 0 X direction |
+| `General.Light0Y` | 0.65 | Light 0 Y direction |
+| `General.Light0Z` | 1 | Light 0 Z direction |
+| `General.Light0W` | 0 | Light 0 W (0=directional, 1=positional) |
+| `General.Light1..5` | 0 | Additional lights (disabled by default) |
+
+## General.Color Options
+| Option | Description |
+|--------|-------------|
+| `General.Color.Background` | Background color e.g. `{255,255,255}` (white) |
+| `General.Color.BackgroundGradient` | Gradient end color |
+| `General.Color.Foreground` | Foreground (axes, text borders) color |
+| `General.Color.Text` | Text color |
+
+## Camera / Trackball Options (saved in .msh.opt)
+| Option | Description |
+|--------|-------------|
+| `General.Trackball` | 1=trackball rotation mode |
+| `General.TrackballQuaternion0..3` | Rotation as unit quaternion (w,x,y,z) |
+| `General.RotationX/Y/Z` | Rotation angles in degrees |
+| `General.RotationCenterGravity` | 1=rotate around model center of gravity |
+| `General.ScaleX/Y/Z` | Zoom scale factors |
+| `General.TranslationX/Y/Z` | Pan translation |
+
+## Clipping Plane Options
+| Option | Description |
+|--------|-------------|
+| `General.Clip0A` | Clip plane 0 normal X (equation: Ax+By+Cz+D=0) |
+| `General.Clip0B` | Clip plane 0 normal Y |
+| `General.Clip0C` | Clip plane 0 normal Z |
+| `General.Clip0D` | Clip plane 0 offset D (positive = shift along normal) |
+| `General.ClipFactor` | Clip box size factor (default 5) |
+| `General.ClipWholeElements` | 1=clip whole elements (don't cut through) |
+| `General.ClipOnlyVolume` | 1=clip only volume elements (not surfaces) |
+| `General.ClipOnlyDrawIntersectingVolume` | 0=draw all, 1=only intersecting |
+| `Mesh.Clip` | 1=enable mesh clipping |
 
 ## Mesh Options (Most Important for Radia)
 | Option | Default | Description |
@@ -234,12 +285,34 @@ Options can be set in:
 | `Mesh.MeshSizeFactor` | 1.0 | Global size scaling |
 | `Mesh.MeshSizeMin` | 0 | Minimum element size |
 | `Mesh.MeshSizeMax` | 1e22 | Maximum element size |
-| `Mesh.ColorCarousel` | 1 | Coloring mode |
+| `Mesh.ColorCarousel` | 1 | Coloring mode (0=solid, 1=by element type, 2=by physical group, 3=by partition) |
+| `Mesh.Light` | 1 | Enable lighting on mesh |
+| `Mesh.LightLines` | 2 | Light on lines (0=off, 1=on, 2=two-side) |
+| `Mesh.LightTwoSide` | 1 | Two-sided lighting |
 | `Mesh.Lines` | 0 | Show 1D elements |
 | `Mesh.SurfaceEdges` | 1 | Show surface edges |
 | `Mesh.SurfaceFaces` | 0 | Show surface faces |
 | `Mesh.VolumeEdges` | 1 | Show volume edges |
 | `Mesh.VolumeFaces` | 0 | Show volume faces |
+| `Mesh.SmoothNormals` | 0 | Smooth normals for rendering |
+| `Mesh.Nodes` | 0 | Show mesh nodes |
+| `Mesh.Normals` | 0 | Show normal vectors |
+
+## Mesh.Color Options (for ColorCarousel=2, physical group coloring)
+Colors are assigned by physical group index (Zero=group 0, One=group 1, ...):
+```
+Mesh.Color.Nodes       = {0,0,255};
+Mesh.Color.Lines       = {0,0,0};
+Mesh.Color.Triangles   = {160,150,255};
+Mesh.Color.Quadrangles = {130,120,225};
+Mesh.Color.Tetrahedra  = {160,150,255};
+Mesh.Color.Hexahedra   = {130,120,225};
+Mesh.Color.Prisms      = {232,210,23};
+Mesh.Color.Pyramids    = {217,113,38};
+Mesh.Color.Zero        = {255,120,0};
+Mesh.Color.One         = {204,38,38};
+// ... up to Mesh.Color.Nineteen
+```
 
 ## View Options (View[n].*)
 | Option | Default | Description |
@@ -265,6 +338,198 @@ Options can be set in:
 | `PostProcessing.Binary` | 0 | Binary post-processing files |
 | `PostProcessing.ForceNodeData` | 0 | Force NodeData format |
 | `PostProcessing.SaveMesh` | 1 | Save mesh when exporting |
+"""
+
+
+GMSH_OPT_FILE = """
+# GMSH .msh.opt File
+
+## Overview
+
+A `.msh.opt` file is a GMSH options file placed alongside a `.msh` file
+with the same base name (e.g. `model.msh` -> `model.msh.opt`).
+GMSH automatically loads it when the .msh file is opened, restoring the
+exact camera angle, clipping, colors, and visibility from the last session.
+
+## Auto-Load Mechanism
+
+```
+model.msh        <- mesh/field data
+model.msh.opt    <- automatically loaded when model.msh is opened
+```
+
+GMSH searches for `<filename>.opt` in the same directory as `<filename>`.
+This works for any file type: `.msh.opt`, `.geo.opt`, `.step.opt`, etc.
+
+## Generating a .msh.opt File
+
+From the GMSH GUI:
+1. Open the .msh file and adjust the view interactively
+2. **File -> Save Options As Default** writes `~/.gmsh` (global)
+3. **File -> Save Session State** saves a `.opt` file next to the current file
+4. Or: **Tools -> Options -> General -> Save** exports current settings
+
+From command line / .geo script:
+```
+// Save current options to file
+Save "model.msh.opt";
+```
+
+## Structure of a .msh.opt File
+
+A `.msh.opt` file uses the same syntax as `.geo` scripts.
+It is a sequence of option assignments and GMSH commands:
+
+```
+// --- Projection ---
+General.Orthographic = 1;       // 1=orthographic, 0=perspective
+General.AlphaBlending = 1;
+General.BackgroundGradient = 0; // 0=flat background
+
+// --- Background / foreground colors ---
+General.Color.Background = {255,255,255};  // white
+General.Color.Foreground = {85,85,85};
+
+// --- Axes ---
+General.Axes = 0;        // hide full axes
+General.SmallAxes = 0;   // hide corner axes indicator
+
+// --- Light ---
+General.Light0 = 1;
+General.Light0X = 0.65;
+General.Light0Y = 0.65;
+General.Light0Z = 1;
+
+// --- Camera (trackball) ---
+General.Trackball = 1;
+General.TrackballQuaternion0 = 0.2043;  // rotation quaternion
+General.TrackballQuaternion1 = 0.0937;
+General.TrackballQuaternion2 = 0.1295;
+General.TrackballQuaternion3 = 0.9658;
+General.ScaleX = 4.0;
+General.ScaleY = 4.0;
+General.ScaleZ = 4.0;
+General.TranslationX = 0;
+General.TranslationY = 0;
+
+// --- Hide entities by physical group tag ---
+Hide { Volume{5, 6}; }  // hide air_gap (5) and air (6)
+
+// --- Clipping plane (x=-0.02565 plane, clip left side) ---
+General.Clip0A = -1;    // normal direction (-X)
+General.Clip0B = 0;
+General.Clip0C = 0;
+General.Clip0D = 0.02565;  // offset (distance from origin)
+General.ClipFactor = 5;
+General.ClipWholeElements = 1;    // don't cut through elements
+General.ClipOnlyVolume = 1;       // clip only volume elements
+General.ClipOnlyDrawIntersectingVolume = 0;
+Mesh.Clip = 1;           // activate clipping on mesh
+
+// --- Mesh display ---
+Mesh.VolumeEdges = 1;
+Mesh.VolumeFaces = 1;
+Mesh.SurfaceEdges = 0;
+Mesh.SurfaceFaces = 0;
+Mesh.SmoothNormals = 1;
+Mesh.Light = 1;
+Mesh.LightTwoSide = 1;
+Mesh.ColorCarousel = 2;  // color by physical group
+
+// --- Mesh colors (by physical group index) ---
+Mesh.Color.Tetrahedra = {160,150,255};
+Mesh.Color.Zero = {255,120,0};
+Mesh.Color.One  = {204,38,38};
+// ... up to Nineteen
+```
+
+## Hide / Show Commands
+
+```
+// Hide specific entities
+Hide { Volume{5, 6}; }       // hide volumes with tags 5, 6
+Hide { Surface{3}; }          // hide surface
+Hide "*";                     // hide all entities
+
+// Show specific entities
+Show { Volume{1, 2, 3, 4}; }
+Show "*";                     // show all entities
+```
+
+These commands are persistent in a `.opt` file — GMSH replays them on load.
+
+## Clipping Plane Formula
+
+The clip plane equation is: `A*x + B*y + C*z + D >= 0` (visible side).
+
+Examples:
+```
+// Clip at x = 0.02565 (show x > 0.02565)
+General.Clip0A = -1;  General.Clip0D = 0.02565;  // -x + 0.02565 >= 0 -> x <= 0.02565
+// Actually: visible when -x + D >= 0, i.e. x <= D
+
+// Clip at z = 0 (show z > 0, i.e. upper half)
+General.Clip0A = 0;  General.Clip0B = 0;  General.Clip0C = 1;  General.Clip0D = 0;
+```
+
+`General.ClipWholeElements = 1` is recommended for mesh display — it avoids
+partially-cut tetrahedra which look bad. Only whole elements on the visible
+side are drawn.
+
+## Radia Project Usage
+
+In the Radia project, `.msh.opt` files are used to set up a reproducible
+visualization state for mesh review:
+
+- **White background** (`General.Color.Background = {255,255,255}`)
+- **Orthographic projection** (`General.Orthographic = 1`)
+- **Air volumes hidden** (`Hide { Volume{5, 6}; }` for air_gap/air)
+- **X-plane clipping** to show internal cross-section
+- **ColorCarousel = 2** (color by physical group) for material identification
+- **No axes** for clean screenshots
+
+This state is saved per-.msh file so each mesh file remembers its own view.
+
+## Programmatic Generation (Python)
+
+```python
+def write_msh_opt(msh_path: str, hidden_volumes: list[int],
+                  clip_x: float | None = None) -> None:
+    opt_path = msh_path + ".opt"
+    lines = [
+        "General.Orthographic = 1;",
+        "General.Color.Background = {255,255,255};",
+        "General.Color.Foreground = {85,85,85};",
+        "General.Axes = 0;",
+        "General.SmallAxes = 0;",
+        "General.BackgroundGradient = 0;",
+        "Mesh.Light = 1;",
+        "Mesh.LightTwoSide = 1;",
+        "Mesh.VolumeEdges = 1;",
+        "Mesh.VolumeFaces = 1;",
+        "Mesh.SurfaceEdges = 0;",
+        "Mesh.SurfaceFaces = 0;",
+        "Mesh.SmoothNormals = 1;",
+        "Mesh.ColorCarousel = 2;",
+    ]
+    if hidden_volumes:
+        tags = ", ".join(str(v) for v in hidden_volumes)
+        lines.append(f"Hide {{ Volume{{{tags}}}; }}")
+    if clip_x is not None:
+        lines += [
+            f"General.Clip0A = -1;",
+            f"General.Clip0B = 0;",
+            f"General.Clip0C = 0;",
+            f"General.Clip0D = {clip_x};",
+            "General.ClipFactor = 5;",
+            "General.ClipWholeElements = 1;",
+            "General.ClipOnlyVolume = 1;",
+            "General.ClipOnlyDrawIntersectingVolume = 0;",
+            "Mesh.Clip = 1;",
+        ]
+    with open(opt_path, "w") as f:
+        f.write("\\n".join(lines) + "\\n")
+```
 """
 
 GMSH_MSH_FORMAT = """
@@ -746,11 +1011,201 @@ The Python gmsh package is NOT installed.
 """
 
 
+GMSH_ANIMATION = """
+# GMSH Animation: Displacement View for Moving Bodies
+
+## Overview
+
+GMSH can animate mesh displacement using $NodeData with VectorType=5
+(displacement mode). Each time step specifies a displacement vector per node.
+Combined with STEP geometry (static), this creates stator + moving body animations.
+
+## .msh File Structure (v4.1 with time-stepped displacement)
+
+```
+$MeshFormat
+4.1 0 8
+$EndMeshFormat
+$PhysicalNames
+1
+3 1 "mover"
+$EndPhysicalNames
+$Entities
+...
+$EndEntities
+$Nodes
+...  (TET10 nodes: vertices + mid-edge)
+$EndNodes
+$Elements
+...  (type 11 = TET10)
+$EndElements
+$NodeData
+1
+"Displacement"
+1
+0.000000         <- time value (step 0)
+3
+0                <- step index
+3                <- 3 components (vector)
+2430             <- number of nodes
+1 -1.0e-01 0.0 0.0   <- node 1: displacement (x, y, z)
+2 -1.0e-01 0.0 0.0
+...
+$EndNodeData
+$NodeData
+1
+"Displacement"
+1
+0.025000         <- time value (step 1)
+3
+1
+3
+2430
+1 -9.5e-02 0.0 0.0
+...
+$EndNodeData
+...  (repeat for each time step)
+```
+
+## Key View Options for Displacement Animation
+
+```
+// In .geo or via gmsh Python API:
+
+// MUST SET: displacement mode (not arrow/glyph)
+View[0].VectorType = 5;          // 5 = displacement
+
+// Displacement factor (1.0 = actual displacement)
+View[0].DisplacementFactor = 1.0;
+
+// Show element faces (filled solid, not wireframe)
+View[0].ShowElement = 1;
+View[0].DrawSkinOnly = 1;        // only draw external faces
+
+// Hide scale bar (displacement values not meaningful for display)
+View[0].ShowScale = 0;
+
+// Solid color display (avoid rainbow colormap)
+View[0].IntervalsType = 4;       // Numeric values
+View[0].RangeType = 2;           // Custom range
+View[0].CustomMin = 0;
+View[0].CustomMax = 0.001;       // tiny range -> solid color
+
+// Lighting for 3D appearance
+View[0].Light = 1;
+View[0].LightTwoSide = 1;
+
+// Curved element subdivision
+Mesh.NumSubEdges = 4;
+```
+
+## Hiding Static Mesh (Original Position)
+
+When using displacement View, GMSH also shows the mesh at its original
+position. To hide it and show only the displaced version:
+
+```
+// Hide all mesh display
+Mesh.SurfaceFaces = 0;
+Mesh.VolumeEdges = 0;
+Mesh.VolumeFaces = 0;
+Mesh.SurfaceEdges = 0;
+Mesh.Points = 0;
+```
+
+**Note**: `Mesh.*` options hide ALL meshes globally. Geometry (STEP)
+surfaces are controlled separately via `Geometry.Surfaces`.
+
+## STEP Geometry (Static Background)
+
+```
+// Show STEP as solid surface
+Geometry.Surfaces = 1;
+Geometry.SurfaceType = 2;        // filled surface (not wireframe)
+```
+
+## Transparency Limitation
+
+GMSH does NOT support proper alpha transparency for mesh faces or
+STEP surfaces. The OpenGL renderer lacks depth sorting for transparent
+objects. Use wireframe or visibility toggling instead.
+
+Alternatives for transparency:
+- ParaView (VTK-based, full alpha blending support)
+- Blender (ray-traced transparency)
+
+## .opt Companion File
+
+GMSH auto-loads `<filename>.opt` when opening `<filename>.msh`.
+Place display settings in the .opt file for reproducible visualization:
+
+```
+// file.msh.opt (auto-loaded with file.msh)
+Mesh.SurfaceFaces = 1;
+Mesh.VolumeEdges = 0;
+Mesh.SurfaceEdges = 0;
+Mesh.NumSubEdges = 4;
+```
+
+## Python API Example
+
+```python
+import gmsh
+gmsh.initialize()
+
+# Static geometry
+gmsh.merge("stator.step")
+gmsh.option.setNumber("Geometry.Surfaces", 1)
+gmsh.option.setNumber("Geometry.SurfaceType", 2)
+
+# Animated mesh with displacement NodeData
+gmsh.merge("mover.msh")
+gmsh.option.setNumber("Mesh.SurfaceFaces", 0)  # hide static mesh
+
+# Displacement view
+gmsh.option.setNumber("View[0].VectorType", 5)
+gmsh.option.setNumber("View[0].DisplacementFactor", 1.0)
+gmsh.option.setNumber("View[0].ShowElement", 1)
+gmsh.option.setNumber("View[0].DrawSkinOnly", 1)
+gmsh.option.setNumber("View[0].ShowScale", 0)
+gmsh.option.setNumber("Mesh.NumSubEdges", 4)
+
+gmsh.fltk.run()
+gmsh.finalize()
+```
+
+## vol_to_gmsh: .vol -> .msh v4.1 Conversion
+
+```python
+from radia.vol_to_gmsh import vol_to_gmsh
+
+# Convert .vol (with curvedelements) to .msh v4.1 (TET10)
+vol_to_gmsh("model.vol")                   # -> model.msh
+vol_to_gmsh("model.vol", boundary=True)    # surface elements only
+
+# CLI
+python -m radia.vol_to_gmsh model.vol -o output.msh
+```
+
+The converter uses GmshPostExport to generate TET10/HEX20 elements
+from the curved .vol mesh. Mid-edge node positions are computed via
+NGSolve GetTrafo at reference mid-edge coordinates.
+
+**NGSolve TET reference coordinate mapping** (important for correct curving):
+```
+ref(0,0,0) -> el.vertices[3]   (NOT el.vertices[0])
+ref(1,0,0) -> el.vertices[0]
+ref(0,1,0) -> el.vertices[1]
+ref(0,0,1) -> el.vertices[2]
+```
+"""
+
+
 def get_gmsh_documentation(topic: str = "all") -> str:
     """Return GMSH usage documentation by topic.
 
     Args:
-        topic: One of: all, policy, overview, cli, shortcuts, options,
+        topic: One of: all, policy, overview, cli, shortcuts, options, opt_file,
                msh_format, geo, high_order, workflow, onelab, pitfalls
 
     Returns:
@@ -762,12 +1217,14 @@ def get_gmsh_documentation(topic: str = "all") -> str:
         "cli": GMSH_COMMAND_LINE,
         "shortcuts": GMSH_KEYBOARD_SHORTCUTS,
         "options": GMSH_OPTIONS,
+        "opt_file": GMSH_OPT_FILE,
         "msh_format": GMSH_MSH_FORMAT,
         "geo": GMSH_GEO_SCRIPTING,
         "high_order": GMSH_HIGH_ORDER,
         "workflow": GMSH_RADIA_WORKFLOW,
         "onelab": GMSH_ONELAB,
         "pitfalls": GMSH_PITFALLS,
+        "animation": GMSH_ANIMATION,
     }
 
     topic = topic.lower().strip()
