@@ -1422,6 +1422,38 @@ mesh = Mesh("model.vol")   # labels + curving loaded from .vol
 - `calc_verify_vol.py --vol model.vol` — consistency check vs companion JSON
 - `calc_mesh_eval.py --cub5 model.cub5` — exception: needs Cubit for CAD values + Path B curving
 
+### IH (BEM) Inductance: Sideset Requirements
+
+**POLICY**: IH (BEM) uses boundary (surface) elements only. Volume elements are not used.
+Both volume .vol and surface-only .vol work — boundary labels must contain `source` and `sink`.
+
+**Cubit journal for IH (BEM)**:
+```python
+# Mesh the coil geometry
+volume 1 scheme tetmesh
+mesh volume 1
+block 1 add volume 1
+block 1 name "coil"
+
+# REQUIRED: define source/sink as sidesets on terminal faces
+sideset 1 add surface <source_face_id>
+sideset 1 name "source"
+sideset 2 add surface <sink_face_id>
+sideset 2 name "sink"
+
+# Export (sideset names become boundary labels in .vol)
+export netgen "coil.vol" order 2 overwrite
+```
+
+**IH (BEM) computation** (no Cubit needed):
+```bash
+python calc_inductance.py --vol coil.vol --source source --sink sink
+```
+
+The `.vol` file contains boundary labels from sidesets. `calc_inductance.py`
+reads these labels and applies unit current injection at source, extraction at sink.
+Cubit is NOT needed at compute time — only for mesh generation.
+
 **cub5_to_vol.py** (Path B reference implementation):
 - `cub5_to_vol.py --cub5 model.cub5 --order 3 --output model.vol`
 - Opens .cub5 via `import cubit`, calls `extract_curved_mesh(cubit, order=N)`, saves .vol
