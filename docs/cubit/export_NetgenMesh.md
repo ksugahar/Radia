@@ -240,14 +240,129 @@ for order in [2, 3, 4, 5]:
 
 ## Node Ordering Conversion
 
-`extract_curved_mesh()` automatically handles node ordering differences between Cubit and Netgen:
+### Vertex Ordering: GMSH/Cubit/Nastran/VTK vs Netgen
 
-| Element | Cubit Order | Netgen Order |
-|---------|-------------|--------------|
-| Tet | [0,1,2,3] | [0,1,2,3] |
-| Hex | [0,1,2,3,4,5,6,7] | [0,1,5,4,3,2,6,7] |
-| Wedge | [0,1,2,3,4,5] | [0,2,1,3,5,4] |
-| Pyramid | [0,1,2,3,4] | [3,2,1,0,4] |
+All four external formats (GMSH, Cubit, Nastran, VTK) use the same vertex ordering.
+Netgen uses a different ordering for Hex, Prism, and Pyramid. The reordering
+arrays are derived from `netgen/read_gmsh.py` and are self-inverse (the same
+permutation converts in both directions).
+
+| Element | GMSH/Cubit vertex order | Netgen vertex order | Reorder array |
+|---------|------------------------|---------------------|---------------|
+| Tet | [0,1,2,3] | [0,1,2,3] | identity |
+| Hex | [0,1,2,3,4,5,6,7] | [0,1,5,4,3,2,6,7] | `{0,1,5,4,3,2,6,7}` |
+| Prism | [0,1,2,3,4,5] | [0,2,1,3,5,4] | `{0,2,1,3,5,4}` |
+| Pyramid | [0,1,2,3,4] | [3,2,1,0,4] | `{3,2,1,0,4}` |
+| Tri | [0,1,2] | [0,1,2] | identity |
+| Quad | [0,1,2,3] | [0,1,2,3] | identity |
+
+Reference coordinates for Hex vertices:
+
+```
+GMSH/Cubit:  0=(0,0,0) 1=(1,0,0) 2=(1,1,0) 3=(0,1,0) 4=(0,0,1) 5=(1,0,1) 6=(1,1,1) 7=(0,1,1)
+Netgen:      0=(0,0,0) 1=(1,0,0) 2=(1,0,1) 3=(0,0,1) 4=(0,1,0) 5=(1,1,0) 6=(1,1,1) 7=(0,1,1)
+```
+
+### High-Order Mid-Edge Node Ordering (GMSH = Nastran = VTK)
+
+All three output formats use identical mid-edge node ordering.
+`EdgeTables` in `MeshData.hpp` encodes this shared convention.
+
+**TET10** (6 edges):
+
+| HO node | Edge (vertex pair) | EdgeTables index |
+|---------|-------------------|-----------------|
+| 4 | {0,1} | 0 |
+| 5 | {1,2} | 1 |
+| 6 | {0,2} | 2 |
+| 7 | {0,3} | 3 |
+| 8 | {1,3} | 4 |
+| 9 | {2,3} | 5 |
+
+**HEX20** (12 edges):
+
+| HO node | Edge (vertex pair) | EdgeTables index |
+|---------|-------------------|-----------------|
+| 8 | {0,1} | 0 |
+| 9 | {1,2} | 1 |
+| 10 | {2,3} | 2 |
+| 11 | {3,0} | 3 |
+| 12 | {4,5} | 4 |
+| 13 | {5,6} | 5 |
+| 14 | {6,7} | 6 |
+| 15 | {7,4} | 7 |
+| 16 | {0,4} | 8 |
+| 17 | {1,5} | 9 |
+| 18 | {2,6} | 10 |
+| 19 | {3,7} | 11 |
+
+**PRISM15/WEDGE15** (9 edges):
+
+| HO node | Edge (vertex pair) | EdgeTables index |
+|---------|-------------------|-----------------|
+| 6 | {0,1} | 0 |
+| 7 | {1,2} | 1 |
+| 8 | {2,0} | 2 |
+| 9 | {3,4} | 3 |
+| 10 | {4,5} | 4 |
+| 11 | {5,3} | 5 |
+| 12 | {0,3} | 6 |
+| 13 | {1,4} | 7 |
+| 14 | {2,5} | 8 |
+
+**PYRAMID13** (8 edges):
+
+| HO node | Edge (vertex pair) | EdgeTables index |
+|---------|-------------------|-----------------|
+| 5 | {0,1} | 0 |
+| 6 | {1,2} | 1 |
+| 7 | {2,3} | 2 |
+| 8 | {3,0} | 3 |
+| 9 | {0,4} | 4 |
+| 10 | {1,4} | 5 |
+| 11 | {2,4} | 6 |
+| 12 | {3,4} | 7 |
+
+**TRI6** (3 edges): {0,1}, {1,2}, {2,0}
+
+**QUAD8** (4 edges): {0,1}, {1,2}, {2,3}, {3,0}
+
+### Netgen Internal Edge Ordering (different from GMSH)
+
+Netgen's internal edge ordering differs from the GMSH/Nastran/VTK convention.
+This is derived from the HO node reorder arrays in `netgen/read_gmsh.py`:
+
+| Element | GMSH HO reorder (import) | Netgen edge order |
+|---------|--------------------------|-------------------|
+| TET10 | `[4,6,7,5,9,8]` | {0,1},{0,2},{0,3},{1,2},{2,3},{1,3} |
+| HEX20 | `[8,16,10,12,13,19,15,14,9,11,18,17]` | (complex, see read_gmsh.py) |
+| PRISM15 | `[7,6,9,8,11,10,13,12,14]` | (differs from GMSH) |
+| QUAD8 | `[4,6,7,5]` | {0,1},{2,3},{3,0},{1,2} |
+| TRI6 | `[4,5,3]` | {0,1},{1,2},{0,2} |
+
+The Netgen internal ordering does NOT affect our export because `edge_ho_nodes_`
+uses Cubit node IDs (physical identifiers) as keys, not local vertex indices.
+`build_ho_conn_nc` looks up edges by Cubit node ID pairs, so the lookup is
+format-independent and always finds the correct edge regardless of which
+vertex ordering was used during HO node generation.
+
+### Implementation: Vertex Reorder in NetgenCurver
+
+`build_netgen_mesh()` applies GMSH-to-Netgen vertex reordering when adding
+volume elements to the Netgen mesh (required for correct `BuildCurvedElements`
+and `.vol` export):
+
+```cpp
+static const int hex_gmsh_to_ng[8]    = {0, 1, 5, 4, 3, 2, 6, 7};
+static const int prism_gmsh_to_ng[6]  = {0, 2, 1, 3, 5, 4};
+static const int pyr_gmsh_to_ng[5]    = {3, 2, 1, 0, 4};
+
+// Hex example:
+for (int ng_k = 0; ng_k < 8; ng_k++)
+    el[ng_k] = cubit_nid_to_ng_pi[elem.conn[hex_gmsh_to_ng[ng_k]]];
+```
+
+No reordering is needed for Tet (identity), Tri (identity), or Quad (identity).
 
 ## Block to Material/Boundary Mapping
 

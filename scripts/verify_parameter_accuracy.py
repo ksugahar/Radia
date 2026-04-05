@@ -5,7 +5,7 @@ This script compares H-matrix results with different parameter settings
 to verify that ML-optimized parameters maintain acceptable accuracy.
 
 Usage:
-    python tools/verify_parameter_accuracy.py
+    python scripts/verify_parameter_accuracy.py
 """
 
 import sys

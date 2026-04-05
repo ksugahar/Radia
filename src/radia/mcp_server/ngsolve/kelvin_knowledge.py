@@ -2,7 +2,7 @@
 Kelvin transformation knowledge base for Radia MCP server.
 
 Covers the Kelvin inversion technique for open boundary FEM problems
-using NGSolve, as implemented in examples/KelvinTransformation/.
+using NGSolve, as implemented in examples/kelvin_transformation/.
 """
 
 KELVIN_OVERVIEW = """

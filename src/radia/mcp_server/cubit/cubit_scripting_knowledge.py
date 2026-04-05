@@ -1976,6 +1976,586 @@ Existing dialog instances use the OLD class definition.
 """
 
 
+CUBIT_GEOMETRY_COMMANDS = """\
+# Geometry Creation Commands Reference
+
+## Primitives
+
+```
+brick x 10 y 10 z 20
+cylinder radius 2 z 15
+create Cylinder height 85 radius 15
+create sphere radius 10
+create sphere radius 9 inner radius 8       # hollow sphere
+create torus major radius 10 minor radius 2
+create prism height 5 sides 6 radius 3
+create frustum height 10 radius 5 top 2
+create pyramid height 5 sides 4 radius 3
+```
+
+## Surface Creation
+
+```
+create surface rectangle width 10 height 20 zplane
+create surface circle radius 1 zplane
+create surface ellipse major radius 4 minor radius 2 zplane
+create surface vertex 1 2 3 4                # from 4 vertices
+create surface curve all                     # from curve loop
+```
+
+## Vertex and Curve Creation
+
+```
+create vertex 1.5 2.3 0.0
+create curve vertex 1 2                                     # line segment
+create curve arc center vertex 3 1 4                        # arc through 3 vertices
+create curve arc radius 27.5 center location 0,0,0 normal 0,0,1 start angle 45 stop angle 90
+create curve helix zaxis location 100 0 0 thread_distance 40 angle 1440 right_handed
+create curve spline location vertex 1 2 3 4 5 delete
+create curve polyline vertex 80 96 104 103
+create curve tangent vertex 3 14 start direction -1 0 0 end direction 0 5 7.5
+create curve location 0 15.5 0 location 10.905 15.5 0       # line between coords
+create curve location at vertex 13 direction 1 1 0 length 10 # from vertex in direction
+create curve offset curve 5 distance -0.75 extended          # offset curve
+```
+
+## Volume Creation
+
+```
+create volume loft surface 1 2                                # loft between surfaces
+create volume loft surface 1 2 guide curve 14 15 16 17       # guided loft
+create volume surface 1 2 3 4 5 6                            # from 6 surfaces (hex)
+create volume surface 1 2 3 4                                # from 4 surfaces (tet)
+create volume surface 7 to 12 heal                           # from surface set
+sweep surface 1 perpendicular distance 5                     # extrude
+sweep surface 1 vector 0 0 1 distance 5                      # extrude along vector
+sweep surface 1 along curve 5 include_mesh individual        # sweep along curve
+sweep surface 1 yaxis angle 180                              # revolve
+```
+
+## Boolean Operations
+
+```
+subtract vol 2 from vol 1
+subtract volume 2 from volume 1 keep_tool         # keep cutter body
+subtract volume 2 from volume 1 imprint keep
+unite volume all
+intersect volume 1 2
+chop volume 1 with volume 2                       # splits both volumes
+imprint all
+merge all
+compress                                           # renumber IDs after deletes
+split body 14                    # split multi-volume body (required before Booleans)
+unmerge all
+```
+
+**Tip**: If you get "Body N needs to be split into a single volume body",
+run `split body N` before the Boolean operation.
+
+## Webcut (Geometry Decomposition for Hex Meshing)
+
+Webcut slices geometry into hex-meshable sub-volumes:
+
+```
+webcut volume all with plane xplane offset 0
+webcut volume all with plane yplane offset 0
+webcut volume all with plane zplane offset 0 imprint merge
+webcut volume all with plane xplane offset 0 rotate 45 about z
+webcut Volume 1 tool Body 2                       # cut using another body
+webcut Volume 1 with plane surface 5
+webcut Volume 1 with plane vertex 1 2 3           # plane through 3 vertices
+webcut Volume 1 with plane normal to curve 5 fraction 0.5 from vertex 1
+webcut Volume 1 with cylinder radius 2 axis z
+webcut Volume 1 with sheet surface 5
+webcut Volume 1 with bounding box volume 2
+```
+
+**Offset webcut** (cut inward from surfaces - recommended for boundary layers):
+```
+webcut Volume 7 offset_tool Surface 107 offset 1 inward merge
+webcut Volume 20 offset_tool Surface 37 104 103 offset 1 loft inward merge
+```
+
+**Sweep-based webcut**:
+```
+webcut Volume 1 sweep surface 2 vector 0 0 1 through_all
+webcut Volume 1 sweep surface 2 perpendicular distance 5 outward
+webcut body 6 sweep surface 8 vector 0 1 0 through_all
+```
+
+## Copy and Mirror
+
+```
+Volume 2 copy rotate {360/3} about z repeat 2    # 3-fold rotational symmetry
+Surface 1 2 copy reflect x                        # mirror
+Volume all copy rotate 90 about z repeat 3        # 4-fold symmetry
+```
+
+**Prevent block/nodeset duplication on copy**:
+```
+set copy_block_on_geometry_copy OFF
+set copy_nodeset_on_geometry_copy OFF
+set copy_sideset_on_geometry_copy OFF
+```
+
+## Section and Clip
+
+```
+section volume all with zplane offset 10 normal   # cut view
+section volume all with zplane offset 50 reverse
+graphics clip on plane zplane                      # clip display
+graphics clip manipulation off
+```
+
+## Trim and Offset Curves
+
+```
+trim curve 10 AtIntersection curve 12 keepside vertex 18
+create curve offset curve 5 distance -0.75 extended
+```
+"""
+
+CUBIT_HELIX_COIL = """\
+# Helix and Coil Modeling
+
+## Basic Helix Sweep
+
+Create a helical coil by sweeping a cross-section along a helix curve:
+
+```
+create curve helix zaxis location 100 0 0 thread_distance 40 angle 1440 right_handed
+create surface circle radius 15 zplane
+move Surface 1 location vertex 1 include_merged
+sweep surface 1 along curve 1 include_mesh individual
+```
+
+**Parameters**:
+- `location X Y Z`: helix start point (distance from axis = coil radius)
+- `thread_distance`: pitch (distance per 360 degrees)
+- `angle`: total winding angle (1440 = 4 turns)
+- `right_handed` / `left_handed`: winding direction
+
+## Multi-Turn Helical Coil (APREPRO)
+
+```
+#{a = 50}           # coil radius
+#{b = 5}            # wire radius
+#{N = 10}           # number of turns
+#{h = a * 0.4}      # pitch = 0.4 * radius
+
+create curve helix zaxis location {a} 0 0 thread_distance {h} angle {N*360} right_handed
+create surface circle radius {0.8*b} zplane
+move surface 1 x {a} y {-b} z {-b-h}
+sweep surface 1 along curve 3 2 1 4 5 individual
+move volume 1 to 5 z {-(N*h)/2}       # center the coil
+```
+
+## Multi-Segment Helix (Multiple Curves)
+
+For long coils, split into multiple segments and sweep along each:
+
+```
+sweep surface 1 along curve 3 2 1 4 5 individual
+```
+
+The `individual` keyword creates a separate volume for each curve segment.
+
+## Twisted Multi-Strand Cable
+
+For multi-wire cables with different strand counts per layer:
+
+```
+# Layer 1: 3 wires, each rotated 120 degrees
+Volume 1 to 12 copy rotate {360/3} about z repeat {3-1}
+
+# Layer 2: 8 wires
+Volume 13 to 24 copy rotate {360/8} about z repeat {8-1}
+
+# Layer 3: 10 wires
+Volume 25 to 36 copy rotate {360/10} about z repeat {10-1}
+```
+
+Each wire is modeled as helix + cross-section sweep, then duplicated with
+rotational symmetry matching the strand count.
+"""
+
+CUBIT_VISUALIZATION = """\
+# Visualization and Display Commands
+
+## Display Modes
+
+```
+graphics mode smoothshade     # solid shading (default)
+graphics mode transparent     # transparent
+graphics mode wireframe       # wireframe only
+```
+
+## Element Shrink (Visual Separation)
+
+```
+graphics shrink 0.1           # shrink elements 10% from center
+graphics shrink 0.2           # more separation
+graphics shrink 0              # disable (reset)
+```
+
+## Drawing Specific Elements
+
+```
+draw vol all
+draw hex all tet all pyramid all Wedge all
+draw hex with x_min > 0  tet with x_min > 0        # half-model
+draw hex with z_min > 0.1 tet with z_min > 0.1     # above z=0.1
+draw tet with z_coord < 0.5
+draw block 3 with x_min < -1500 color red
+draw block 8 to 17 color red  block 3 to 7 18 to 21 color lightblue
+draw pyramid all                                     # show pyramids only
+draw surface all except 81 66 75                     # "except" excludes listed IDs
+```
+
+## Entity Selection by Name (Wildcard)
+
+```
+mesh volume with name "coil_1*"    # mesh only coil_1 and variants
+mesh volume with name "coil_*"     # mesh all coil_N
+body in surface with name "Tear_Fault_13@A"
+```
+
+## Colors
+
+```
+color Volume 1 green
+color Volume 2 skyblue
+color Volume 3 red
+color lines lightsteelblue
+Color Background white
+Color Background lightsteelblue
+```
+
+Useful color names: `lightgoldenrodyellow`, `coral`, `palegreen`,
+`skyblue`, `royalblue`, `lightsteelblue`
+
+## Labels and Vertex Display
+
+```
+label curve On
+label vertex On
+graphics text size 3
+graphics vertex point size 2
+vertex visibility on
+```
+
+## View Control
+
+```
+view from 229.514403 0 0
+view at 0 0 0
+view up 0 1 0
+view reset
+list view                       # show current camera parameters
+from 20 20 20                   # shorthand
+zoom reset
+```
+
+## Screenshots
+
+```
+graphics window create 2
+hardcopy "Cubit.png" png window 2
+graphics window delete 2
+```
+
+## Journal and Reset
+
+```
+journal idless on               # reproducible output without IDs
+set dev on                      # enable developer mode
+reset                           # full reset (geometry + mesh + BCs)
+reset vol all                   # reset mesh only, keep geometry
+reset Aprepro                   # clear all APREPRO variables
+```
+"""
+
+CUBIT_PYRAMID_HANDLING = """\
+# Pyramid Element Handling
+
+Pyramid elements appear at the interface between hex and tet regions.
+Many FEM solvers do not support pyramids, so they need special handling.
+
+## Detecting Pyramids
+
+```python
+volume_ids = cubit.parse_cubit_list("volume", "all")
+for vol_id in volume_ids:
+    pyramid_ids = cubit.parse_cubit_list("pyramid", f"all in volume {vol_id}")
+    if pyramid_ids:
+        print(f"Volume {vol_id}: {len(pyramid_ids)} pyramids")
+```
+
+```
+draw pyramid all               # visualize all pyramids
+graphics shrink 0.1            # shrink for visual clarity
+```
+
+## Method 1: Split Pyramids into Two Tets
+
+Each pyramid (5 nodes: 4 base + 1 apex) splits into 2 tetrahedra:
+
+```python
+#!python
+cubit.cmd("set dev on")       # required for create tet command
+volume_ids = cubit.parse_cubit_list("volume", "all")
+for vol_id in volume_ids:
+    pyramid_ids = cubit.parse_cubit_list("pyramid", f"all in volume {vol_id}")
+    for pyr_id in pyramid_ids:
+        n = cubit.get_connectivity("pyramid", pyr_id)
+        cubit.cmd(f"create tet node {n[0]} {n[1]} {n[2]} {n[4]} owner volume {vol_id}")
+        cubit.cmd(f"create tet node {n[2]} {n[3]} {n[0]} {n[4]} owner volume {vol_id}")
+        cubit.cmd(f"delete pyramid {pyr_id}")
+```
+
+**Note**: `set dev on` (developer mode) is required for the `create tet` command.
+
+## Method 2: Collapse Pyramid to Degenerate Hex
+
+Some solvers accept degenerate hexahedra (CHEXA with repeated nodes).
+The Radia plugin's `export nastran` handles this with the `nopyramid` option:
+
+```
+export radia_nastran "output.bdf" nopyramid   # writes CHEXA instead of CPYRAM
+```
+
+## Method 3: Avoid Pyramids Entirely
+
+- Use tetmesh for all volumes: `volume all scheme tetmesh`
+- Or use hex for all volumes (requires swept/mapped topology)
+- Or use `thex` to convert tet mesh to all-hex: `thex volume all`
+
+## Verification
+
+```
+quality pyramid all scaled jacobian global
+quality pyramid all allmetrics
+draw hex with z_min>0 tet with z_min>0 pyramid with z_min>0 Wedge with x_min>0
+```
+"""
+
+CUBIT_ICOSAHEDRAL_SPHERE = """\
+# High-Quality Sphere Surface Mesh (Icosahedral Method)
+
+For high-quality sphere surface meshes, the icosahedral subdivision method
+produces uniform triangles with no pole concentration.
+
+## Method
+
+1. Create sphere
+2. Create 12 icosahedron vertices using the golden ratio
+3. Connect vertices with 30 great-circle arcs
+4. Imprint arcs onto sphere (subdivides into 20 equilateral patches)
+5. Mesh each patch with `triadvance` scheme
+6. Apply Laplacian smoothing
+
+## APREPRO Implementation
+
+```
+#{p = (1+sqrt(5))/2}       # golden ratio (1.618...)
+#{q = sqrt(p+2)}           # normalization factor
+#{r0 = 100}                # sphere radius
+
+create sphere radius {r0}
+
+# Create 12 icosahedron vertices (projected onto sphere)
+# (vertices at +/-1, +/-p normalized to radius r0)
+# ... (30 arc imprint commands)
+
+imprint volume all with curve all
+merge all
+merge vertex all force
+
+# Mesh with uniform triangles
+surface all interval {n}
+surface all scheme triadvance
+mesh surface all
+surface all smooth scheme smart laplacian
+smooth surface all
+```
+
+## Results
+
+| Subdivision n | Triangles per face | Total triangles | Quality |
+|---------------|-------------------|-----------------|---------|
+| 2 | 4 | 80 | Good |
+| 4 | 16 | 320 | Very good |
+| 8 | 64 | 1280 | Excellent |
+| 16 | 256 | 5120 | Excellent |
+
+## Use Cases
+
+- BEM (Boundary Element Method) surface mesh for external field problems
+- Kelvin transform: icosahedral sphere mesh as the inversion boundary
+- Radiation boundary conditions requiring uniform angular resolution
+"""
+
+CUBIT_APREPRO_ADVANCED = """\
+# Advanced APREPRO Variables and Functions
+
+## Variable Definition and Arithmetic
+
+```
+#{a = 30}                          # variable definition
+#{z0 = -2.0}
+#{radius = sqrt(300^2 - 200^2)}   # computed value
+#{inner_r = a^2/2/abs(z0)}        # complex expression
+```
+
+## Built-in Geometry Functions
+
+APREPRO provides functions to locate entities by spatial coordinates:
+
+```
+{Id("volume")}                     # last created volume ID
+{VolumeAt(x, y, z, tol)}          # find volume at (x,y,z) within tolerance
+{SurfaceAt(x, y, z, tol)}         # find surface at point
+{VertexAt(vx, vy, vz, tol)}       # find vertex at point
+{CurveAt(x, y, z, tol)}           # find curve at point
+{GeomCentroid_X("volume", 5)}     # X centroid of volume 5
+{GeomCentroid_Y("volume", 5)}
+{GeomCentroid_Z("volume", 5)}
+```
+
+These are essential for robust journal files that don't depend on specific entity IDs.
+
+## Math Functions
+
+```
+{sin(t)}, {cos(t)}, {tan(t)}
+{atan2(z0, y0)}                   # 2-argument arctangent
+{sqrt(x)}, {abs(x)}
+{exp(x)}, {log(x)}               # natural log
+{PI}                              # built-in constant
+```
+
+## Output and Debugging
+
+```
+{Print(tostring(x))}              # print to console
+{IO(id)}                          # echo value
+```
+
+## Example: Kelvin Sphere with APREPRO
+
+```
+#{a = 30}
+#{up = 2.1 * a}
+create sphere radius {a}
+move Volume {Id("volume")} z {up} include_merged
+# Use VolumeAt to find the resulting volume after Boolean ops:
+chop volume {VolumeAt(0, 0, up, 1)} with volume 2
+```
+"""
+
+CUBIT_MESH_QUALITY_DETAILED = """\
+# Detailed Mesh Quality Metrics
+
+## Quality Commands
+
+```
+quality tet all scaled jacobian global draw histogram
+quality hex all scaled jacobian global
+quality volume all allmetrics
+quality tet all aspect ratio bet high 10 list detail
+```
+
+## Available Metrics by Element Type
+
+### Hex Metrics
+Aspect Ratio, Skew, Taper, Element Volume, Stretch, Diagonal Ratio,
+Condition Number, Jacobian, Scaled Jacobian, Shear, Shape, Relative Size,
+Timestep, Distortion, Allmetrics
+
+### Tet Metrics
+Algebraic, Aspect Ratio (Beta/Gamma), Condition Number, Distortion,
+Element Volume, Inradius, Jacobian, Equiangle Skew, Mass Increase Ratio,
+Normalized Inradius, Node Distance, Relative Size, Scaled Jacobian,
+Shape, Shape and Size, Timestep, Allmetrics, Altitude
+
+### Pyramid Metrics
+Element Volume, Jacobian, Scaled Jacobian, Shape, Equiangle Skew, Allmetrics
+
+### Wedge Metrics
+Aspect Ratio, Element Volume, Condition Number, Jacobian, Scaled Jacobian,
+Shape, Stretch, Distortion
+
+## Special Quality Checks
+
+```
+Quality Check Coincident Node in volume 1 merge delete   # fix coincident nodes
+Quality Check Valence Volume all list                     # check hex valence
+```
+
+## Smoothing Techniques
+
+```
+# Condition number smoothing (most effective for bad elements)
+volume all smooth scheme condition number beta 2.0 cpu 0.5
+smooth volume all
+
+# Smart Laplacian (for surface meshes)
+surface all smooth scheme smart laplacian
+smooth surface all
+```
+"""
+
+CUBIT_BOUNDARY_LAYER_MESH = """\
+# Boundary Layer Mesh (Skin Mesh)
+
+Create refined layers near surfaces for capturing gradients (e.g., skin effect,
+thermal boundary layers).
+
+## Basic Boundary Layer
+
+```
+create boundary_layer 1
+modify boundary_layer 1 uniform height 0.03 growth 1.0 layers 3
+modify boundary_layer 1 add surface 8 volume 2 surface 5 volume 1
+modify boundary_layer 1 continuity on
+```
+
+## Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `height` | First layer thickness |
+| `growth` | Growth ratio between layers (1.0 = uniform, 1.2 = 20% growth) |
+| `layers` | Number of layers |
+| `depth` | Total depth (alternative to height + layers) |
+
+**Note**: Only specify 3 of the 4 parameters (height, growth, layers, depth).
+
+## Multi-Surface Boundary Layer
+
+```
+create boundary_layer 1
+modify boundary_layer 1 uniform height growth 1.2 layers 4
+modify boundary_layer 1 add surface 2 volume 1 surface 12 volume 3 surface 7 volume 2
+modify boundary_layer 1 continuity off
+```
+
+**Syntax**: `add Surface <surf_id> Volume <vol_id>` — each surface must specify
+which volume it belongs to. Multiple surface-volume pairs can be added in one command.
+
+## Workflow with Webcut
+
+For more control, use offset webcut instead of boundary_layer:
+
+```
+webcut Volume 7 offset_tool Surface 107 offset 1 inward merge
+webcut Volume 20 offset_tool Surface 37 104 103 offset 1 loft inward merge
+```
+
+This creates separate thin volumes at the boundary that can be independently
+meshed with high resolution.
+"""
+
 CUBIT_RESULTS_VISUALIZATION = """\
 # Cubit Results Visualization
 
@@ -2074,6 +2654,8 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"troubleshooting": CUBIT_TROUBLESHOOTING,
 		"design_philosophy": CUBIT_DESIGN_PHILOSOPHY,
 		"aprepro_journal": CUBIT_APREPRO_JOURNAL,
+		"aprepro_advanced": CUBIT_APREPRO_ADVANCED,
+		"aprepro": CUBIT_APREPRO_ADVANCED,  # alias
 		"mesh_to_geometry": CUBIT_MESH_TO_GEOMETRY,
 		"parametric_geometry": CUBIT_PARAMETRIC_GEOMETRY,
 		"batch_processing": CUBIT_BATCH_PROCESSING,
@@ -2083,6 +2665,23 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"optuna": CUBIT_NGSOLVE_PANEL,  # Optuna integration documented in panel section
 		"results_visualization": CUBIT_RESULTS_VISUALIZATION,
 		"post_processing": CUBIT_RESULTS_VISUALIZATION,
+		"geometry_commands": CUBIT_GEOMETRY_COMMANDS,
+		"geometry": CUBIT_GEOMETRY_COMMANDS,  # alias
+		"boolean": CUBIT_GEOMETRY_COMMANDS,  # alias
+		"webcut": CUBIT_GEOMETRY_COMMANDS,  # alias
+		"helix_coil": CUBIT_HELIX_COIL,
+		"helix": CUBIT_HELIX_COIL,  # alias
+		"coil": CUBIT_HELIX_COIL,  # alias
+		"visualization": CUBIT_VISUALIZATION,
+		"display": CUBIT_VISUALIZATION,  # alias
+		"pyramid_handling": CUBIT_PYRAMID_HANDLING,
+		"pyramid": CUBIT_PYRAMID_HANDLING,  # alias
+		"icosahedral_sphere": CUBIT_ICOSAHEDRAL_SPHERE,
+		"sphere_mesh": CUBIT_ICOSAHEDRAL_SPHERE,  # alias
+		"mesh_quality_detailed": CUBIT_MESH_QUALITY_DETAILED,
+		"quality": CUBIT_MESH_QUALITY_DETAILED,  # alias
+		"boundary_layer": CUBIT_BOUNDARY_LAYER_MESH,
+		"skin_mesh": CUBIT_BOUNDARY_LAYER_MESH,  # alias
 	}
 
 	topic = topic.lower().strip()
