@@ -1454,6 +1454,23 @@ The `.vol` file contains boundary labels from sidesets. `calc_inductance.py`
 reads these labels and applies unit current injection at source, extraction at sink.
 Cubit is NOT needed at compute time — only for mesh generation.
 
+### IH (BEM): Mesh Order vs FES Order
+
+**POLICY**: For BEM (EFIE), prioritize **mesh curving order** over **FES basis order**.
+
+High mesh order (order 2-3) with low FES order (0=RWG) is often more accurate
+than high FES order with linear mesh. This is because:
+- Geometry error (flat approximation of curved surfaces) dominates
+- Area/normal accuracy improves exponentially with mesh order
+- BEM kernel singularity is sensitive to geometry, not basis polynomial degree
+
+**Recommended**: `export netgen order 3` + `--fes-order 0` (RWG on curved TRI6/TRI10).
+
+**References**:
+- Djordjevic & Notaros, "Double higher order MoM", IEEE TAP 2004 (geometry/basis independence)
+- Marussig et al., "Fast Isogeometric BEM based on Independent Field Approximation", arXiv 2014
+- Dolz et al., "Bembel: Fast Isogeometric BEM", arXiv 2019
+
 **cub5_to_vol.py** (Path B reference implementation):
 - `cub5_to_vol.py --cub5 model.cub5 --order 3 --output model.vol`
 - Opens .cub5 via `import cubit`, calls `extract_curved_mesh(cubit, order=N)`, saves .vol
