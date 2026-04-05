@@ -956,7 +956,34 @@ bool NetgenCurver::curve_and_extract(int order)
       {0,4},{1,4},{2,4},{3,4}
     };
 
+    // Helper lambda: register missing edge with linear interpolation
+    auto fill_edge = [&](int v0_cubit, int v1_cubit) -> bool {
+      HoEdgeKey key(v0_cubit, v1_cubit);
+      if (edge_ho_nodes_.count(key)) return false;
+
+      auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
+      auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
+
+      std::vector<int> edge_nodes;
+      for (int k = 1; k < order; k++) {
+        double t = (double)k / order;
+        int new_id = next_node_id_++;
+        total_nodes_++;
+        ho_node_coords_[new_id] = {c0[0] + t*(c1[0]-c0[0]),
+                                    c0[1] + t*(c1[1]-c0[1]),
+                                    c0[2] + t*(c1[2]-c0[2])};
+        edge_nodes.push_back(new_id);
+      }
+      if (v0_cubit <= v1_cubit)
+        edge_ho_nodes_[key] = edge_nodes;
+      else
+        edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
+      return true;
+    };
+
     int filled = 0;
+
+    // Pass A: volume elements
     for (int ei = 0; ei < nve; ei++) {
       const ng::Element & el = ng_mesh_->VolumeElement(ei+1);
       int np = el.GetNP();
@@ -969,34 +996,33 @@ bool NetgenCurver::curve_and_extract(int order)
       else if (np == 5) { edges = pyr_edges2;   num_edges = 8; }
       else continue;
 
-      for (int e = 0; e < num_edges; e++) {
-        int v0_cubit = ng_pi_to_cubit_nid_[el[edges[e][0]]];
-        int v1_cubit = ng_pi_to_cubit_nid_[el[edges[e][1]]];
-        HoEdgeKey key(v0_cubit, v1_cubit);
-        if (edge_ho_nodes_.count(key)) continue;  // already processed
-
-        // Linear interpolation from Cubit coordinates
-        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
-        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
-
-        std::vector<int> edge_nodes;
-        for (int k = 1; k < order; k++) {
-          double t = (double)k / order;
-          double x = c0[0] + t * (c1[0] - c0[0]);
-          double y = c0[1] + t * (c1[1] - c0[1]);
-          double z = c0[2] + t * (c1[2] - c0[2]);
-          int new_id = next_node_id_++;
-          total_nodes_++;
-          ho_node_coords_[new_id] = {x, y, z};
-          edge_nodes.push_back(new_id);
-        }
-        if (v0_cubit <= v1_cubit)
-          edge_ho_nodes_[key] = edge_nodes;
-        else
-          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
-        filled++;
-      }
+      for (int e = 0; e < num_edges; e++)
+        if (fill_edge(ng_pi_to_cubit_nid_[el[edges[e][0]]],
+                      ng_pi_to_cubit_nid_[el[edges[e][1]]]))
+          filled++;
     }
+
+    // Pass B: surface elements (uncurved faces skipped by CalcSurfaceTransformation)
+    static const int tri_edges[][2]  = {{0,1},{1,2},{2,0}};
+    static const int quad_edges[][2] = {{0,1},{1,2},{2,3},{3,0}};
+
+    int nse = ng_mesh_->GetNSE();
+    for (int sei = 0; sei < nse; sei++) {
+      const ng::Element2d & el = ng_mesh_->SurfaceElement(sei+1);
+      int np = el.GetNP();
+
+      const int (*edges)[2] = nullptr;
+      int num_edges = 0;
+      if (np == 3)      { edges = tri_edges;  num_edges = 3; }
+      else if (np == 4) { edges = quad_edges; num_edges = 4; }
+      else continue;
+
+      for (int e = 0; e < num_edges; e++)
+        if (fill_edge(ng_pi_to_cubit_nid_[el[edges[e][0]]],
+                      ng_pi_to_cubit_nid_[el[edges[e][1]]]))
+          filled++;
+    }
+
     if (filled > 0)
       PRINT_INFO("NetgenCurver: filled %d missing edges with linear interpolation.\n", filled);
   }
