@@ -1196,7 +1196,7 @@ pip install coreform-cubit-mesh-export
 
 ## Appendix: Karl Hollaus ESIM Formulation
 
-From: `W:\03_\00_\SIBC\A_Nonlinear_Effective_Surface_Impedance_in_a_Magnetic_Scalar_Potential_Formulation.pdf`
+From: `W:\03_\00_\SIBC\A_Nonlinear_effective_surface_impedance_in_a_Magnetic_Scalar_Potential_Formulation.pdf`
 
 ### Mathematical Formulation
 

@@ -854,6 +854,146 @@ Source: coreform.com/cubit_help - CubitInterface namespace
 """
 
 
+API_CREATION = """
+# Geometry Creation Functions (Python API)
+
+## Create Vertex
+
+```python
+v = cubit.create_vertex(x, y, z)
+    # Returns a Vertex object.
+    v.id()  # get numeric ID
+```
+
+## ID Tracking Pattern (Before/After Operations)
+
+Track entity IDs before and after geometry operations to identify
+newly created entities:
+
+```python
+def get_last_ids():
+    return (cubit.get_last_id("body"), cubit.get_last_id("volume"),
+            cubit.get_last_id("surface"), cubit.get_last_id("curve"),
+            cubit.get_last_id("vertex"))
+
+# Before operation
+old_ids = get_last_ids()
+
+# ... geometry operations (import, boolean, create, etc.) ...
+
+# After operation
+new_ids = get_last_ids()
+
+# Find newly created entities
+new_volumes = cubit.parse_cubit_list("volume",
+    f"{old_ids[1]+1} to {new_ids[1]}")
+```
+
+## Mesh Interval Firmness
+
+After manual interval or scheme assignments, curves become "HARD" locked.
+Check firmness to detect manual vs automatic settings:
+
+```python
+cubit.get_mesh_interval_firmness("curve", curve_id) -> str
+    # Returns "HARD", "SOFT", or "DEFAULT"
+    # HARD = manually set interval (won't change with auto sizing)
+    # SOFT = auto-assigned interval
+```
+
+## Volume Properties
+
+```python
+cubit.get_volume_area(vol_id) -> float
+    # Returns 0 if volume is a 2D surface body (sheet body).
+    # Useful to distinguish between 3D volumes and 2D surface volumes.
+
+cubit.volume(vid).volume() -> float    # CAD volume measure
+cubit.surface(sid).area() -> float     # CAD surface area
+cubit.curve(cid).length() -> float     # CAD curve length
+```
+
+## Mesh Element Queries (Extended)
+
+```python
+# Check if a surface is a cavity or hole
+cubit.is_cavity_surface(surface_id) -> bool
+cubit.is_hole_surface(surface_id, tol) -> bool
+
+# Node existence check
+cubit.get_node_exists(node_id) -> bool
+
+# Closest node to coordinates
+cubit.get_closest_node(x, y, z) -> int
+```
+
+Source: Radia project experience + Coreform Cubit Python API
+"""
+
+API_IMPORT_EXPORT = """
+# Import/Export Functions Reference
+
+## Import Formats
+
+```python
+# ACIS / SAT
+cubit.cmd('import acis "file.sat" nofreesurfaces heal attributes_on separate_bodies')
+cubit.cmd('import acis "file.sat" attributes_off')
+
+# STEP
+cubit.cmd('import step "file.stp"')
+
+# Nastran
+cubit.cmd('import nastran "file.bdf"')
+cubit.cmd('import nastran mesh geometry "file.bdf" feature_angle 135.00')
+
+# Patran
+cubit.cmd('import patran mesh geometry "file.pat" feature_angle 135.00')
+
+# STL
+cubit.cmd('import stl "file.stl"')
+
+# Exodus (mesh reimport)
+cubit.cmd('import mesh geometry "tmp.g" feature_angle 175.00 merge')
+```
+
+**feature_angle**: Controls how reimported mesh faces are grouped into
+surfaces. 135 degrees is typical for engineering geometry. Use 175 for
+nearly-flat surfaces.
+
+## Export Formats
+
+```python
+# Nastran (large format for double precision)
+cubit.cmd('export nastran "file.bdf" dimension 3 overwrite everything large')
+cubit.cmd('export nastran "file.bdf" block 1 dimension 3 large overwrite')
+
+# ACIS / SAT
+cubit.cmd('export acis "file.sat" ascii overwrite')
+cubit.cmd('set geometry version 2500')  # older version for compatibility
+
+# STEP
+cubit.cmd('export step "file.stp" overwrite')
+
+# Patran
+cubit.cmd('export patran "file.pat" block 1 dimension 3 overwrite')
+
+# Exodus
+cubit.cmd('export mesh "tmp.g" overwrite')
+```
+
+## ACIS Version Control
+
+```python
+cubit.cmd('set geometry version 2500')   # older ACIS for compatibility
+cubit.cmd('set geometry version 3000')   # newer ACIS
+cubit.get_acis_version()                 # check current version
+```
+
+Source: Radia project experience
+"""
+
+
 def get_api_reference(topic: str = "all") -> str:
 	"""Return Cubit Python API reference by topic."""
 	topics = {
@@ -865,6 +1005,11 @@ def get_api_reference(topic: str = "all") -> str:
 		"entity_classes": API_ENTITY_CLASSES,
 		"graphics_selection": API_GRAPHICS_SELECTION,
 		"advanced": API_ADVANCED,
+		"creation": API_CREATION,
+		"id_tracking": API_CREATION,  # alias
+		"import_export": API_IMPORT_EXPORT,
+		"import": API_IMPORT_EXPORT,  # alias
+		"export": API_IMPORT_EXPORT,  # alias
 	}
 
 	topic = topic.lower().strip()

@@ -563,7 +563,7 @@ message(STATUS "mmm_core module configured")
 # This is the sole Python binding (radpy_pyapi.cpp removed 2026-01)
 
 set(RADIA_PYBIND_SOURCES
-	${PYTHON_DIR}/radia_pybind.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/radia_pybind.cpp
 )
 
 pybind11_add_module(_radia_pybind

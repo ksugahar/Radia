@@ -100,11 +100,13 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   iface->get_block_list(blocks);
 
   std::set<int> seen_bids;
+  std::set<ElementHandle> seen_handles;  // deduplicate across blocks
 
   const int ebuf = 100;
   std::vector<ElementType> etypes(ebuf);
   std::vector<ElementHandle> handles(ebuf);
 
+  int dup_count = 0;
   for (size_t bi = 0; bi < blocks.size(); bi++) {
     BlockHandle block = blocks[bi];
     int bid = iface->id_from_handle(block);
@@ -114,6 +116,12 @@ void MeshData::extract_elements(MeshExportInterface *iface)
     int estart = 0, count = 0;
     while ((count = iface->get_block_elements(estart, ebuf, block, etypes, handles)) > 0) {
       for (int i = 0; i < count; i++) {
+        // Skip duplicate elements (same physical element in multiple blocks)
+        if (!seen_handles.insert(handles[i]).second) {
+          dup_count++;
+          continue;
+        }
+
         std::vector<int> conn(27);
         int nn = iface->get_connectivity(handles[i], conn);
         conn.resize(nn);
@@ -128,6 +136,8 @@ void MeshData::extract_elements(MeshExportInterface *iface)
       estart += count;
     }
   }
+  if (dup_count > 0)
+    PRINT_WARNING("Skipped %d duplicate elements across blocks.\n", dup_count);
 }
 
 // ================================================================
@@ -258,11 +268,15 @@ std::vector<int> MeshData::build_ho_conn_nc(
     edges = EdgeTables::wedge; num_edges = 9;
   } else if (nv == 5 && (type == PYRAMID5 || type == PYRAMID)) {
     edges = EdgeTables::pyramid; num_edges = 8;
-  } else if (nv == 3 && (type == TRI3 || type == CUBIT_TRI)) {
+  } else if (nv == 3 && (type == TRI3 || type == CUBIT_TRI
+                      || type == TRISHELL || type == TRISHELL3)) {
     edges = EdgeTables::tri; num_edges = 3;
-  } else if (nv == 4 && (type == QUAD4 || type == QUAD)) {
+  } else if (nv == 4 && (type == QUAD4 || type == QUAD
+                      || type == SHEL || type == SHELL4)) {
     edges = EdgeTables::quad; num_edges = 4;
   } else {
+    PRINT_WARNING("build_ho_conn_nc: unsupported type=%d nv=%d (element skipped)\n",
+                  (int)type, nv);
     return {};  // unsupported element type
   }
 
@@ -309,87 +323,3 @@ int MeshData::total_element_count() const
   return total;
 }
 
-// ================================================================
-// write_companion_json — CAD reference values for consistency check
-// ================================================================
-#if 0  // DISABLED: investigating crash
-bool MeshData::write_companion_json(const std::string &mesh_filename)
-{
-  // JSON path: mesh_filename + ".json"
-  std::string json_path = mesh_filename + ".json";
-
-  // Collect CAD reference values from Cubit ACIS kernel via get_total_volume
-  // and APREPRO variable queries for area/length.
-  auto vol_ids = CubitInterface::parse_cubit_list("volume", "all");
-  auto surf_ids = CubitInterface::parse_cubit_list("surface", "all");
-  auto curve_ids = CubitInterface::parse_cubit_list("curve", "all");
-
-  // Build JSON manually (no JSON library dependency)
-  std::ostringstream js;
-  js << std::scientific;
-  js.precision(10);
-
-  js << "{\n";
-  js << "  \"mesh_file\": \"" << mesh_filename << "\",\n";
-
-  // Materials (volumes) — use get_total_volume({vid})
-  js << "  \"materials\": {\n";
-  for (size_t i = 0; i < vol_ids.size(); i++) {
-    int vid = vol_ids[i];
-    std::string name = CubitInterface::get_entity_name("volume", vid);
-    if (name.empty() || name.substr(0, 6) == "Volume")
-      name = "volume_" + std::to_string(vid);
-    double vol = CubitInterface::get_total_volume({vid});
-    js << "    \"" << name << "\": " << vol;
-    if (i + 1 < vol_ids.size()) js << ",";
-    js << "\n";
-  }
-  js << "  },\n";
-
-  // Boundaries (surfaces) — use get_meshed_volume_or_area("surface", {sid})
-  js << "  \"boundaries\": {\n";
-  for (size_t i = 0; i < surf_ids.size(); i++) {
-    int sid = surf_ids[i];
-    std::string name = CubitInterface::get_entity_name("surface", sid);
-    if (name.empty() || name.substr(0, 7) == "Surface")
-      name = "surface_" + std::to_string(sid);
-    double area = CubitInterface::get_meshed_volume_or_area("surface", {sid});
-    js << "    \"" << name << "\": " << area;
-    if (i + 1 < surf_ids.size()) js << ",";
-    js << "\n";
-  }
-  js << "  },\n";
-
-  // Edges (boundary curves: shared by >= 2 surfaces)
-  // Use APREPRO: "#{Curve(cid).Length}" to get exact CAD length
-  js << "  \"edges\": {\n";
-  bool first_edge = true;
-  for (int cid : curve_ids) {
-    auto parent_surfs = CubitInterface::parse_cubit_list(
-      "surface", ("in curve " + std::to_string(cid)).c_str());
-    if (parent_surfs.size() < 2) continue;
-    std::string name = CubitInterface::get_entity_name("curve", cid);
-    if (name.empty() || name.substr(0, 5) == "Curve")
-      name = "curve_" + std::to_string(cid);
-    // Get length via APREPRO: set variable, then read it
-    std::string cmd = "{_radia_tmp_len = Curve(" + std::to_string(cid) + ").Length}";
-    CubitInterface::silent_cmd(cmd.c_str());
-    double length = CubitInterface::get_aprepro_numeric_value("_radia_tmp_len");
-    if (!first_edge) js << ",\n";
-    first_edge = false;
-    js << "    \"" << name << "\": " << length;
-  }
-  js << "\n  }\n";
-  js << "}\n";
-
-  std::ofstream f(json_path);
-  if (!f.is_open()) {
-    PRINT_WARNING("Could not write companion JSON: %s\n", json_path.c_str());
-    return false;
-  }
-  f << js.str();
-  f.close();
-  PRINT_INFO("Companion JSON: %s\n", json_path.c_str());
-  return true;
-}
-#endif  // DISABLED

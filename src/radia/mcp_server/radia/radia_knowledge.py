@@ -1964,9 +1964,9 @@ mesh generation (GMSH is for visualization/post-processing only).
 
 ## Examples
 
-- `examples/NGSolve_Integration/demo_ctype_simkin.py` - Linear Simkin + Kelvin
-- `examples/NGSolve_Integration/test_elf_yoke_simkin.py` - Nonlinear + 3 geometry variants
-- `examples/NGSolve_Integration/demo_hysteresis_simkin.py` - Energy hysteresis
+- `examples/ngsolve_integration/demo_ctype_simkin.py` - Linear Simkin + Kelvin
+- `examples/ngsolve_integration/test_elf_yoke_simkin.py` - Nonlinear + 3 geometry variants
+- `examples/ngsolve_integration/demo_hysteresis_simkin.py` - Energy hysteresis
 
 ## Reference
 
@@ -2140,11 +2140,11 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 
 ## Test Scripts
 
-- `examples/NGSolve_Integration/test_ctype_A_formulation.py` - Linear/nonlinear comparison
-- `examples/NGSolve_Integration/test_hysteresis_comparison.py` - Hysteresis A_r vs Simkin
-- `examples/NGSolve_Integration/test_fem_to_radia_field.py` - FEM->Radia analytical pipeline
-- `examples/NGSolve_Integration/demo_hysteresis_simkin.py` - Hysteresis AC loop demo
-- `examples/KelvinTransformation/A-formulation/` - Kelvin + A_r examples
+- `examples/ngsolve_integration/test_ctype_A_formulation.py` - Linear/nonlinear comparison
+- `examples/ngsolve_integration/test_hysteresis_comparison.py` - Hysteresis A_r vs Simkin
+- `examples/ngsolve_integration/test_fem_to_radia_field.py` - FEM->Radia analytical pipeline
+- `examples/ngsolve_integration/demo_hysteresis_simkin.py` - Hysteresis AC loop demo
+- `examples/kelvin_transformation/A-formulation/` - Kelvin + A_r examples
 """
 
 RADIA_PLAY_MODELS = """
@@ -2318,7 +2318,7 @@ rad.UtiDelAll()
 ```
 
 **DOF**: Mixed -- each hex has 6 DOF (MSC), each tet has 3 DOF (MMM).
-**Example**: `examples/NGSolve_Integration/mesh_magnetization_import/`
+**Example**: `examples/ngsolve_integration/mesh_magnetization_import/`
 
 ---
 

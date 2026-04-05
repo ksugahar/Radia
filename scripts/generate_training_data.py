@@ -5,7 +5,7 @@ This script runs multiple H-matrix constructions with different problem sizes
 and parameters to populate the cache with diverse training data.
 
 Usage:
-    python tools/generate_training_data.py
+    python scripts/generate_training_data.py
 """
 
 import sys
@@ -116,5 +116,5 @@ if results:
 
 print()
 print("Cache file updated: ./.radia_cache/hmatrix_cache.bin")
-print("Run 'python tools/analyze_cache_for_ml.py' to analyze the training data")
+print("Run 'python scripts/analyze_cache_for_ml.py' to analyze the training data")
 print("="*80)
