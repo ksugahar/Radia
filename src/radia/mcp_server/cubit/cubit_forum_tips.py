@@ -1314,6 +1314,173 @@ cubit.cmd("smooth volume all")
 Source: forum.coreform.com/t/863 (2143 views)
 """
 
+FORUM_VENDOR_TIPS = """
+# Vendor Tips (M&T / Coreform Support)
+
+Knowledge from official Coreform support interactions and vendor guidance.
+
+## Pressure Boundary Condition Bug
+
+**CRITICAL**: Pressure boundary conditions on Curves do NOT export correctly
+to Nastran format. This is a known bug (reported to Coreform developer as of 2021).
+
+```python
+# CORRECT: Pressure on Surface
+cubit.cmd('create pressure name "load" on surface 1 magnitude 998')
+# -> Exports as PLOAD4 card in Nastran
+
+# WRONG: Pressure on Curve (bug - does not export correctly)
+cubit.cmd('create pressure name "load" on curve 5 magnitude 998')
+```
+
+**Workaround**: Always apply pressure BCs to surfaces, not curves.
+
+## Node Numbering in Nastran Export
+
+Node ordering in Nastran export is NOT ascending by default:
+- Elements are written in ascending order
+- Each element's node IDs are assigned starting from the block's start_id
+- Use `renumber` to get clean sequential numbering:
+
+```
+renumber node all in Volume all start_id 1 uniqueids
+```
+
+## Offset Webcut (Advanced Decomposition)
+
+The `offset_tool` webcut variant cuts inward from surface boundaries.
+Especially useful with the `loft` option for complex surfaces:
+
+```
+webcut Volume 7 offset_tool Surface 107 offset 1 inward merge
+webcut Volume 20 offset_tool Surface 37 104 103 offset 1 loft inward merge
+```
+
+**Tip**: The `loft` keyword handles surfaces that are not simply extrudable.
+
+Source: M&T vendor support (April 2024)
+"""
+
+FORUM_RENUMBERING = """
+# Node and Element Renumbering
+
+## Basic Renumbering
+
+```
+renumber node all start_id 300 uniqueids
+renumber node all in Volume all start_id 1 uniqueids
+```
+
+## Compress (After Deletions)
+
+After deleting entities, IDs may have gaps. Use `compress` to renumber:
+
+```
+compress       # renumber all entity IDs to be sequential
+```
+
+## Notes
+
+- `uniqueids` ensures no duplicate IDs
+- Element ordering follows block assignment order, not spatial order
+- For clean exports, renumber before `export nastran`
+"""
+
+FORUM_MESH_COPY = """
+# Mesh Copy Between Surfaces
+
+Copy mesh from one surface to another (useful for conformal meshes
+across interfaces, periodic boundaries, or symmetric models).
+
+## Basic Mesh Copy
+
+```
+copy mesh surface 1 onto surface 4 source curve 2 source vertex 2 target curve 14 target vertex 14 smooth
+```
+
+**Parameters**:
+- `source curve` / `source vertex`: reference edge and vertex on source surface
+- `target curve` / `target vertex`: corresponding edge and vertex on target surface
+- `smooth`: apply smoothing after copy (recommended)
+
+## Multi-Surface Copy
+
+```
+copy mesh surface 3 onto surface 12 source curve 8 source vertex 1 target curve 10 target vertex 4
+```
+
+## Use Cases
+
+- Ensure conformal mesh at material interfaces after imprint/merge
+- Create periodic mesh pairs (same topology on both sides)
+- Copy from a well-meshed surface to a similar surface
+
+## Tips
+
+- Source and target surfaces must have the same number of sides
+- Curve/vertex pairs define the orientation mapping
+- Use `list surface N` to check surface topology before copying
+"""
+
+FORUM_ENTITY_SELECTION = """
+# Entity Selection and Filtering Tips
+
+## "except" Keyword
+
+Exclude specific entities from a selection:
+
+```
+surface all except 81 66 75          # all surfaces except 81, 66, 75
+draw surface all except 5            # draw all except surface 5
+```
+
+## Spatial Filtering
+
+```
+draw surface with radius=2           # surfaces with specific radius
+draw hex with x_min > 0              # elements in positive x half
+draw tet with z_coord < 0.5          # tets below z=0.5
+draw block 3 with x_min < -1500 color red
+```
+
+## Name-Based Selection (Wildcards)
+
+```
+mesh volume with name "coil_1*"      # match coil_1, coil_10, coil_1a, ...
+mesh volume with name "coil_*"       # match all coil_ prefixes
+body in surface with name "Tear_Fault_13@A"
+```
+
+## Python API Equivalent
+
+```python
+body_id = cubit.parse_cubit_list("body", "in surface with name 'name'")
+sids = cubit.parse_cubit_list("surface", "all with is_merged=false")
+```
+
+## Groups for Temporary Collections
+
+```python
+tmpGroup = cubit.create_new_group()
+cubit.cmd(f"group {tmpGroup} add curve all")
+curves = cubit.get_group_curves(tmpGroup)
+cubit.delete_group(tmpGroup)
+```
+
+## HARD Curve Detection
+
+After manual interval assignments, curves become "HARD" locked:
+
+```python
+hard_curves = []
+for c_id in cubit.parse_cubit_list("curve", "all"):
+    if cubit.get_mesh_interval_firmness("curve", c_id) == "HARD":
+        hard_curves.append(c_id)
+cubit.cmd("draw curve " + " ".join(map(str, hard_curves)))
+```
+"""
+
+
 def get_forum_tips(topic: str = "all") -> str:
 	"""Return forum-sourced Cubit tips by topic."""
 	topics = {
@@ -1331,6 +1498,14 @@ def get_forum_tips(topic: str = "all") -> str:
 		"quality_diagnostics": FORUM_QUALITY_DIAGNOSTICS,
 		"solver_workflows": FORUM_SOLVER_WORKFLOWS,
 		"advanced_meshing": FORUM_ADVANCED_MESHING,
+		"vendor_tips": FORUM_VENDOR_TIPS,
+		"vendor": FORUM_VENDOR_TIPS,  # alias
+		"renumbering": FORUM_RENUMBERING,
+		"renumber": FORUM_RENUMBERING,  # alias
+		"mesh_copy": FORUM_MESH_COPY,
+		"entity_selection": FORUM_ENTITY_SELECTION,
+		"selection": FORUM_ENTITY_SELECTION,  # alias
+		"filtering": FORUM_ENTITY_SELECTION,  # alias
 	}
 
 	topic = topic.lower().strip()

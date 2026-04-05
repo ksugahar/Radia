@@ -1640,7 +1640,7 @@ GMSH GUI:
 
 ## Universal Relaxation Network (URN)
 
-All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
+All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 
 **Policy**:
 - Synthetic data MUST be clearly marked as synthetic

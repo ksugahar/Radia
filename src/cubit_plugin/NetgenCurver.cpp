@@ -269,6 +269,19 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
   PRINT_INFO("  Phase1f: Add volume elements (%d)\n", (int)md.elements.size());
   fflush(stdout);
   int vol_count = 0;
+
+  // --- Vertex reordering: GMSH/Cubit -> Netgen convention ---
+  // From netgen/read_gmsh.py: ordering[ng_idx] = gmsh_idx
+  // TET: identity (same vertex numbering)
+  // HEX: Netgen swaps vertices 2<->5, 3<->4 relative to GMSH
+  //   GMSH:   0=(0,0,0) 1=(1,0,0) 2=(1,1,0) 3=(0,1,0) 4=(0,0,1) 5=(1,0,1) 6=(1,1,1) 7=(0,1,1)
+  //   Netgen: 0=(0,0,0) 1=(1,0,0) 2=(1,0,1) 3=(0,0,1) 4=(0,1,0) 5=(1,1,0) 6=(1,1,1) 7=(0,1,1)
+  static const int hex_gmsh_to_ng[8]  = {0, 1, 5, 4, 3, 2, 6, 7};
+  // PRISM: Netgen reverses triangle winding (0,2,1 instead of 0,1,2)
+  static const int prism_gmsh_to_ng[6] = {0, 2, 1, 3, 5, 4};
+  // PYRAMID: Netgen reverses base quad winding
+  static const int pyr_gmsh_to_ng[5]  = {3, 2, 1, 0, 4};
+
   // --- Add volume elements from MeshData ---
   for (auto &elem : md.elements) {
     int nn = elem.nv;
@@ -284,10 +297,15 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     }
     else if (nn == 8 && (et == ::HEX8 || et == ::HEX)) {
       ng::Element el(ng::HEX);
+      // Keep GMSH/Cubit vertex ordering — NOT reordered to Netgen convention.
+      // Vertex reordering would fix .vol export but breaks CalcElementTransformation
+      // for HO node computation (face-surface mapping inconsistency in BuildCurvedElements).
+      // Interior volume edges use Cubit coordinate linear interpolation instead.
       for (int k = 0; k < 8; k++)
         el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
       el.SetIndex(1);
       ng_mesh_->AddVolumeElement(el);
+      vol_count++;
     }
     else if (nn == 6 && (et == ::WEDGE6 || et == ::WEDGE)) {
       ng::Element el(ng::PRISM);
@@ -295,6 +313,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
       el.SetIndex(1);
       ng_mesh_->AddVolumeElement(el);
+      vol_count++;
     }
     else if (nn == 5 && (et == ::PYRAMID5 || et == ::PYRAMID)) {
       ng::Element el(ng::PYRAMID);
@@ -302,6 +321,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         el[k] = cubit_nid_to_ng_pi_[elem.conn[k]];
       el.SetIndex(1);
       ng_mesh_->AddVolumeElement(el);
+      vol_count++;
     }
   }
 
@@ -641,17 +661,16 @@ bool NetgenCurver::curve_and_extract(int order)
       }
     }
     else if (np == 8) {  // Hex
-      // Hex reference coords: (xi, eta, zeta) in [0,1]^3
-      // 12 edges
+      // Hex vertices are in GMSH/Cubit order (NOT Netgen convention).
+      // CalcElementTransformation is unreliable because BuildCurvedElements
+      // produces wrong face-surface mapping for non-Netgen vertex ordering.
+      // Surface edges are already handled by compute_surface_ho_nodes (above).
+      // Remaining edges (interior, flat faces) use Cubit coordinate interpolation.
+      // 12 edges in GMSH vertex convention (matches EdgeTables::hex)
       static const int hex_edges[][2] = {
-        {0,1},{1,2},{2,3},{3,0},  // bottom
-        {4,5},{5,6},{6,7},{7,4},  // top
-        {0,4},{1,5},{2,6},{3,7}   // vertical
-      };
-      // Hex vertex reference coords
-      static const double hex_ref[][3] = {
-        {0,0,0},{1,0,0},{1,1,0},{0,1,0},
-        {0,0,1},{1,0,1},{1,1,1},{0,1,1}
+        {0,1},{1,2},{2,3},{3,0},
+        {4,5},{5,6},{6,7},{7,4},
+        {0,4},{1,5},{2,6},{3,7}
       };
 
       for (auto &e : hex_edges) {
@@ -660,18 +679,19 @@ bool NetgenCurver::curve_and_extract(int order)
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
+        // Use Cubit coordinates directly (linear interpolation)
+        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
+        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
+
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          double xi   = hex_ref[e[0]][0] + t * (hex_ref[e[1]][0] - hex_ref[e[0]][0]);
-          double eta  = hex_ref[e[0]][1] + t * (hex_ref[e[1]][1] - hex_ref[e[0]][1]);
-          double zeta = hex_ref[e[0]][2] + t * (hex_ref[e[1]][2] - hex_ref[e[0]][2]);
-          ng::Point<3> ref(xi, eta, zeta);
-          ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          double x = c0[0] + t * (c1[0] - c0[0]);
+          double y = c0[1] + t * (c1[1] - c0[1]);
+          double z = c0[2] + t * (c1[2] - c0[2]);
           int new_id = next_node_id_++;
           total_nodes_++;
-          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          ho_node_coords_[new_id] = {x, y, z};
           edge_nodes.push_back(new_id);
         }
         if (v0_cubit <= v1_cubit)
@@ -681,8 +701,13 @@ bool NetgenCurver::curve_and_extract(int order)
       }
 
       // 6 face interiors (for order >= 3)
+      // NOTE: face/volume interior still uses CalcElementTransformation with Netgen ref.
+      // This is unreliable for hex due to vertex ordering mismatch. TODO: fix for order >= 3.
       if (order >= 3) {
-        // Face defined by 4 vertices in ref space
+        static const double hex_ref[][3] = {
+          {0,0,0},{1,0,0},{1,0,1},{0,0,1},
+          {0,1,0},{1,1,0},{1,1,1},{0,1,1}
+        };
         static const int hex_faces[][4] = {
           {0,1,2,3}, {4,5,6,7},  // bottom, top
           {0,1,5,4}, {2,3,7,6},  // front, back
@@ -731,17 +756,11 @@ bool NetgenCurver::curve_and_extract(int order)
       }
     }
     else if (np == 6) {  // Wedge (Prism)
-      // Prism reference: triangle (lam1, lam2) x [0,1] in zeta
-      // lam0 = 1 - lam1 - lam2
-      // 9 edges
-      static const double prism_ref[][3] = {
-        {0,0,0},{1,0,0},{0,1,0},  // bottom triangle
-        {0,0,1},{1,0,1},{0,1,1}   // top triangle
-      };
+      // Same approach as hex: Cubit coordinate linear interpolation for remaining edges.
       static const int prism_edges[][2] = {
-        {0,1},{1,2},{2,0},  // bottom
-        {3,4},{4,5},{5,3},  // top
-        {0,3},{1,4},{2,5}   // vertical
+        {0,1},{1,2},{2,0},
+        {3,4},{4,5},{5,3},
+        {0,3},{1,4},{2,5}
       };
 
       for (auto &e : prism_edges) {
@@ -750,18 +769,18 @@ bool NetgenCurver::curve_and_extract(int order)
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
+        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
+        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
+
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          double xi   = prism_ref[e[0]][0] + t * (prism_ref[e[1]][0] - prism_ref[e[0]][0]);
-          double eta  = prism_ref[e[0]][1] + t * (prism_ref[e[1]][1] - prism_ref[e[0]][1]);
-          double zeta = prism_ref[e[0]][2] + t * (prism_ref[e[1]][2] - prism_ref[e[0]][2]);
-          ng::Point<3> ref(xi, eta, zeta);
-          ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          double x = c0[0] + t * (c1[0] - c0[0]);
+          double y = c0[1] + t * (c1[1] - c0[1]);
+          double z = c0[2] + t * (c1[2] - c0[2]);
           int new_id = next_node_id_++;
           total_nodes_++;
-          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          ho_node_coords_[new_id] = {x, y, z};
           edge_nodes.push_back(new_id);
         }
         if (v0_cubit <= v1_cubit)
@@ -771,8 +790,12 @@ bool NetgenCurver::curve_and_extract(int order)
       }
 
       // Face interiors (for order >= 3)
+      // NOTE: still uses CalcElementTransformation. TODO: fix for order >= 3.
       if (order >= 3) {
-        // 2 triangular faces (bottom, top)
+        static const double prism_ref[][3] = {
+          {0,0,0},{1,0,0},{0,1,0},
+          {0,0,1},{1,0,1},{0,1,1}
+        };
         static const int prism_trifaces[][3] = {{0,1,2},{3,4,5}};
         for (auto &f : prism_trifaces) {
           for (int i = 1; i < order; i++) {
@@ -834,14 +857,9 @@ bool NetgenCurver::curve_and_extract(int order)
       }
     }
     else if (np == 5) {  // Pyramid
-      // Pyramid reference: quad base (xi, eta) at zeta=0, apex at zeta=1
-      static const double pyr_ref[][3] = {
-        {0,0,0},{1,0,0},{1,1,0},{0,1,0},  // base
-        {0.5,0.5,1}                         // apex
-      };
       static const int pyr_edges[][2] = {
-        {0,1},{1,2},{2,3},{3,0},  // base
-        {0,4},{1,4},{2,4},{3,4}   // lateral
+        {0,1},{1,2},{2,3},{3,0},
+        {0,4},{1,4},{2,4},{3,4}
       };
 
       for (auto &e : pyr_edges) {
@@ -850,18 +868,18 @@ bool NetgenCurver::curve_and_extract(int order)
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
+        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
+        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
+
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          double xi   = pyr_ref[e[0]][0] + t * (pyr_ref[e[1]][0] - pyr_ref[e[0]][0]);
-          double eta  = pyr_ref[e[0]][1] + t * (pyr_ref[e[1]][1] - pyr_ref[e[0]][1]);
-          double zeta = pyr_ref[e[0]][2] + t * (pyr_ref[e[1]][2] - pyr_ref[e[0]][2]);
-          ng::Point<3> ref(xi, eta, zeta);
-          ng::Point<3> phys;
-          curved.CalcElementTransformation(ref, ei, phys);
+          double x = c0[0] + t * (c1[0] - c0[0]);
+          double y = c0[1] + t * (c1[1] - c0[1]);
+          double z = c0[2] + t * (c1[2] - c0[2]);
           int new_id = next_node_id_++;
           total_nodes_++;
-          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          ho_node_coords_[new_id] = {x, y, z};
           edge_nodes.push_back(new_id);
         }
         if (v0_cubit <= v1_cubit)
@@ -871,7 +889,12 @@ bool NetgenCurver::curve_and_extract(int order)
       }
 
       // Face interiors (for order >= 3)
+      // NOTE: still uses CalcElementTransformation. TODO: fix for order >= 3.
       if (order >= 3) {
+        static const double pyr_ref[][3] = {
+          {0,0,0},{1,0,0},{1,1,0},{0,1,0},
+          {0.5,0.5,1}
+        };
         // 1 quad face (base)
         for (int i = 1; i < order; i++) {
           for (int j = 1; j < order; j++) {
@@ -907,6 +930,75 @@ bool NetgenCurver::curve_and_extract(int order)
         }
       }
     }
+  }
+
+  // ---------------------------------------------------------------
+  // Final pass: fill in missing edges with Cubit linear interpolation.
+  // Uncurved volume elements are skipped by the loop above, so their
+  // interior edges (not on any surface) have no HO nodes yet.
+  // This ensures build_ho_conn_nc() never returns empty for any element.
+  // ---------------------------------------------------------------
+  {
+    // Edge tables for each element type (matching EdgeTables:: in MeshData.hpp)
+    static const int tet_edges[][2]  = {{0,1},{1,2},{0,2},{0,3},{1,3},{2,3}};
+    static const int hex_edges2[][2] = {
+      {0,1},{1,2},{2,3},{3,0},
+      {4,5},{5,6},{6,7},{7,4},
+      {0,4},{1,5},{2,6},{3,7}
+    };
+    static const int prism_edges2[][2] = {
+      {0,1},{1,2},{2,0},
+      {3,4},{4,5},{5,3},
+      {0,3},{1,4},{2,5}
+    };
+    static const int pyr_edges2[][2] = {
+      {0,1},{1,2},{2,3},{3,0},
+      {0,4},{1,4},{2,4},{3,4}
+    };
+
+    int filled = 0;
+    for (int ei = 0; ei < nve; ei++) {
+      const ng::Element & el = ng_mesh_->VolumeElement(ei+1);
+      int np = el.GetNP();
+
+      const int (*edges)[2] = nullptr;
+      int num_edges = 0;
+      if (np == 4)      { edges = tet_edges;    num_edges = 6; }
+      else if (np == 8) { edges = hex_edges2;   num_edges = 12; }
+      else if (np == 6) { edges = prism_edges2; num_edges = 9; }
+      else if (np == 5) { edges = pyr_edges2;   num_edges = 8; }
+      else continue;
+
+      for (int e = 0; e < num_edges; e++) {
+        int v0_cubit = ng_pi_to_cubit_nid_[el[edges[e][0]]];
+        int v1_cubit = ng_pi_to_cubit_nid_[el[edges[e][1]]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;  // already processed
+
+        // Linear interpolation from Cubit coordinates
+        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
+        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
+
+        std::vector<int> edge_nodes;
+        for (int k = 1; k < order; k++) {
+          double t = (double)k / order;
+          double x = c0[0] + t * (c1[0] - c0[0]);
+          double y = c0[1] + t * (c1[1] - c0[1]);
+          double z = c0[2] + t * (c1[2] - c0[2]);
+          int new_id = next_node_id_++;
+          total_nodes_++;
+          ho_node_coords_[new_id] = {x, y, z};
+          edge_nodes.push_back(new_id);
+        }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
+        filled++;
+      }
+    }
+    if (filled > 0)
+      PRINT_INFO("NetgenCurver: filled %d missing edges with linear interpolation.\n", filled);
   }
 
   return true;

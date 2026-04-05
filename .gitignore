@@ -249,6 +249,7 @@ rad.ObjBckgCF/
 *.npy
 *.cub5
 *.msh
+*.msh.opt
 !examples/**/gmsh_models/*.msh
 
 # Python development files (experimental implementations)
@@ -280,6 +281,8 @@ examples/cube_uniform_field/nonlinear/*_summary.json
 # ============================================================================
 fix_convergence.py
 optimize_matrix.py
+examples/**/debug_*.py
+pip_freeze*.txt
 
 # ============================================================================
 # Cubit Mesh Export - Sample Output Files (pre-generated, version-controlled)
@@ -304,3 +307,11 @@ radia_cubit_model.cub5
 sphere_o3.vol
 p_convergence_sphere.png
 cubit[0-9]*.jou
+
+# Build/install logs
+aqtinstall.log
+*.egg-info/
+step_export.log
+
+# VTU output files (use NGSolve VTKOutput or GMSH post instead)
+*.vtu
