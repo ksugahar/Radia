@@ -199,6 +199,5 @@ bool ExportVtkCommand::write_vtk(const std::string &filename,
   fid.close();
   PRINT_INFO("Exported VTK (order %d): %s (%d nodes, %d cells)\n",
              order, filename.c_str(), num_nodes, num_cells);
-  // TODO: MeshData::write_companion_json(filename);
   return true;
 }
