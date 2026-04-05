@@ -184,6 +184,10 @@ void MeshData::extract_sidesets(MeshExportInterface *iface)
         for (int j = 0; j < side_nn; j++)
           face.conn[j] = parent_conn[idx[j]];
 
+        // Skip degenerate faces (nv=0 from unsupported parent types)
+        if (side_nn == 0)
+          continue;
+
         // Determine face element type
         if (side_nn == 3)
           face.type = TRI3;
