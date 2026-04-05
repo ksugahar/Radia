@@ -26,7 +26,7 @@ import sys
 
 # Version is read from pyproject.toml by setuptools
 # This fallback is only used if pyproject.toml is not available
-version = "2.5.0"
+version = "4.3.0"
 
 # Read the README file
 readme_file = Path(__file__).parent / "README.md"
@@ -140,12 +140,17 @@ setup(
 			"panels/**/*.ui",   # Cubit toolbar panel UI files
 			"panels/**/*.txt",  # Cubit toolbar panel marker files
 			"resources/*.png",  # App icons
-			"resources/*.ico",  # Windows icons
 		],
 	},
 	entry_points={
 		"console_scripts": [
 			"cubit-install-panels=radia.install_panels:main",
+			"radia-setup=radia.setup_cubit:main",
+			"radia-app=radia.radia_app:main",
+			"mcp-server-radia=radia.mcp_server.radia.server:main",
+			"mcp-server-ngsolve=radia.mcp_server.ngsolve.server:main",
+			"mcp-server-cubit=radia.mcp_server.cubit.server:main",
+			"mcp-server-gmsh=radia.mcp_server.gmsh.server:main",
 		],
 	},
 	include_package_data=True,
