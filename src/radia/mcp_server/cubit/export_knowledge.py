@@ -88,6 +88,35 @@ cubit.cmd('export netgen "sphere.vol" order 3 overwrite')
 
 **Note**: `block 2 add tri all` is NOT needed for export netgen.
 Surface elements are extracted from volume element faces automatically.
+
+## IH (BEM) Inductance: Sideset Setup
+
+IH (BEM) uses surface elements only (TRI). Source/sink terminal faces
+must be defined as **sidesets** (not blocks) so they become boundary
+labels in the .vol file.
+
+```python
+# Coil geometry
+cubit.cmd("volume 1 scheme tetmesh")
+cubit.cmd("mesh volume 1")
+cubit.cmd("block 1 add volume 1")
+cubit.cmd('block 1 name "coil"')
+
+# Terminal faces: sidesets -> boundary labels in .vol
+cubit.cmd("sideset 1 add surface 3")   # source terminal
+cubit.cmd('sideset 1 name "source"')
+cubit.cmd("sideset 2 add surface 5")   # sink terminal
+cubit.cmd('sideset 2 name "sink"')
+
+# Export (sidesets become boundary labels)
+cubit.cmd('export netgen "coil.vol" order 2 overwrite')
+
+# Compute (no Cubit needed):
+# python calc_inductance.py --vol coil.vol --source source --sink sink
+```
+
+**Important**: Both volume .vol and surface-only .vol work for IH (BEM).
+The BEM solver uses BND elements only. Volume elements are ignored.
 """
 
 EXPORT_GMSH_V2 = """
