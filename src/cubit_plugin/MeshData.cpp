@@ -100,7 +100,8 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   iface->get_block_list(blocks);
 
   std::set<int> seen_bids;
-  std::set<ElementHandle> seen_handles;  // deduplicate across blocks
+  // Deduplicate by sorted connectivity (ElementHandle may differ across blocks)
+  std::set<std::vector<int>> seen_conn;
 
   const int ebuf = 100;
   std::vector<ElementType> etypes(ebuf);
@@ -116,15 +117,17 @@ void MeshData::extract_elements(MeshExportInterface *iface)
     int estart = 0, count = 0;
     while ((count = iface->get_block_elements(estart, ebuf, block, etypes, handles)) > 0) {
       for (int i = 0; i < count; i++) {
-        // Skip duplicate elements (same physical element in multiple blocks)
-        if (!seen_handles.insert(handles[i]).second) {
-          dup_count++;
-          continue;
-        }
-
         std::vector<int> conn(27);
         int nn = iface->get_connectivity(handles[i], conn);
         conn.resize(nn);
+
+        // Skip duplicate elements (same connectivity in multiple blocks)
+        std::vector<int> key(conn.begin(), conn.begin() + nn);
+        std::sort(key.begin(), key.end());
+        if (!seen_conn.insert(key).second) {
+          dup_count++;
+          continue;
+        }
 
         MeshElement elem;
         elem.group_id = bid;
