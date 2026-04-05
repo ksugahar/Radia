@@ -44,12 +44,113 @@ def _setup_cubit():
     return cubit
 
 
+def extract_inductance_vol(vol_file, source_label="source",
+                           sink_label="sink", fes_order=0, msh_output=""):
+    """Extract self-inductance from .vol file (no Cubit needed).
+
+    Args:
+        vol_file: Path to Netgen .vol file (surface mesh with boundary labels)
+        source_label: Boundary label for source face (sideset name)
+        sink_label: Boundary label for sink face (sideset name)
+        fes_order: HDivSurface basis order (0=RWG, 1+=higher-order)
+        msh_output: Optional path for GMSH .msh output
+
+    Returns:
+        dict with inductance_H, diagnostics
+    """
+    import numpy as np
+    import time as _time
+    from ngsolve import Mesh, Integrate, CF, BND
+
+    setup_paths()
+    from bem_inductance import compute_inductance_source_sink
+
+    t_total_start = _time.perf_counter()
+
+    # Load mesh directly from .vol (no Cubit)
+    mesh = Mesh(vol_file)
+    t_export = _time.perf_counter() - t_total_start
+
+    nse = mesh.GetNE(BND)
+    nv = mesh.nv
+    ne = sum(1 for e in mesh.edges)
+    euler = nv - ne + nse
+    area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
+
+    # Verify boundary labels
+    bnd_labels = list(set(mesh.GetBoundaries()))
+    if source_label not in bnd_labels or sink_label not in bnd_labels:
+        return {"error": f"Boundary labels {bnd_labels} do not contain "
+                f"'{source_label}' and/or '{sink_label}'. "
+                f"Define source/sink as sidesets in Cubit before export."}
+
+    # Export mesh to GMSH (before solve)
+    if msh_output:
+        base_dir = os.path.dirname(os.path.abspath(msh_output))
+        gmsh_file_J = msh_output
+    else:
+        base_dir = os.path.dirname(os.path.abspath(vol_file))
+        gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
+    try:
+        from gmsh_post_export import GmshPostExport
+        post = GmshPostExport(mesh, boundary=True)
+        post.write_mesh(gmsh_file_J)
+        sys.stderr.write(f"MESH_READY:{gmsh_file_J}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
+    # Saddle point EFIE
+    sol = compute_inductance_source_sink(mesh, source_label, sink_label, fes_order)
+    if 'error' in sol:
+        return sol
+
+    L_total = sol['L']
+    t_solve = sol['t_total']
+
+    sys.stderr.write(f"SOLVE_DONE:{t_solve:.1f}s\n")
+    sys.stderr.flush()
+
+    # Save results
+    j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
+    np.save(j_npy, sol['J'])
+    mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
+    mesh.ngmesh.Save(mesh_vol)
+
+    coords = np.array([(v.point[0], v.point[1], v.point[2])
+                       for v in mesh.vertices])
+    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
+    extent = bbox_max - bbox_min
+    default_half = float(max(extent) * 0.65)
+    default_maxh = float(max(extent) * 0.1)
+
+    return {
+        "inductance_H": float(L_total),
+        "n_dofs": sol['n_J'],
+        "n_faces": sol['n_f'],
+        "euler": euler,
+        "surface_area": area,
+        "source_area": float(sol['A_source']),
+        "sink_area": float(sol['A_sink']),
+        "constraint_residual": sol['residual'],
+        "fes_order": fes_order,
+        "t_solve": round(t_solve, 2),
+        "t_export": round(t_export, 2),
+        "t_assembly": sol['t_assembly'],
+        "t_lu": sol['t_solve'],
+        "j_npy": j_npy,
+        "mesh_vol": mesh_vol,
+        "default_lxyz": round(default_half, 4),
+        "default_maxh": round(default_maxh, 4),
+    }
+
+
 def extract_inductance(cub5_file, order, source_label="source",
                        sink_label="sink", fes_order=0, msh_output="",
                        workpiece="", impedance_model="esim",
                        frequency=50000, sigma=2e6, half_thickness=0.005,
                        material="steel", esim_geometry="cylinder"):
-    """Extract self-inductance via source/sink saddle point EFIE.
+    """Extract self-inductance via source/sink saddle point EFIE (legacy cub5 path).
 
     Args:
         cub5_file: Path to Cubit .cub5 model
@@ -1209,7 +1310,8 @@ def main():
     parser.add_argument("--mode", default="solve", choices=["solve", "post"],
                         help="solve: BEM solve only; post: B-field + GMSH export")
     # Solve mode args
-    parser.add_argument("--cub5", default="", help="Cubit .cub5 model file (solve mode)")
+    parser.add_argument("--vol", default="", help="Netgen .vol file (preferred, no Cubit needed)")
+    parser.add_argument("--cub5", default="", help="Cubit .cub5 model file (legacy)")
     parser.add_argument("--order", type=int, default=2, help="Curve order (1-2)")
     parser.add_argument("--fes-order", type=int, default=0, help="HDivSurface order (0=RWG)")
     parser.add_argument("--source", default="source", help="Source block name")
@@ -1247,27 +1349,35 @@ def main():
 
     def run(args):
         if args.mode == "solve":
-            _geom_map = {"local_curvature": "cylinder", "none": "slab"}
-            esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
-            bh_file = getattr(args, 'bh_file', '')
-            if bh_file and os.path.isfile(bh_file):
-                import numpy as _np
-                bh_data = _np.loadtxt(bh_file).tolist()
-                material_override = "steel"
-            else:
-                bh_data = None
-                material_override = args.material
+            # Prefer --vol (no Cubit needed)
+            if args.vol:
+                return extract_inductance_vol(args.vol,
+                                              args.source, args.sink,
+                                              args.fes_order, args.msh_output)
+            elif args.cub5:
+                _geom_map = {"local_curvature": "cylinder", "none": "slab"}
+                esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
+                bh_file = getattr(args, 'bh_file', '')
+                if bh_file and os.path.isfile(bh_file):
+                    import numpy as _np
+                    bh_data = _np.loadtxt(bh_file).tolist()
+                    material_override = "steel"
+                else:
+                    bh_data = None
+                    material_override = args.material
 
-            return extract_inductance(args.cub5, args.order,
-                                      args.source, args.sink,
-                                      args.fes_order, args.msh_output,
-                                      workpiece=args.workpiece,
-                                      impedance_model=args.impedance_model,
-                                      frequency=args.frequency,
-                                      sigma=args.sigma,
-                                      half_thickness=args.half_thickness,
-                                      material=material_override,
-                                      esim_geometry=esim_geom)
+                return extract_inductance(args.cub5, args.order,
+                                          args.source, args.sink,
+                                          args.fes_order, args.msh_output,
+                                          workpiece=args.workpiece,
+                                          impedance_model=args.impedance_model,
+                                          frequency=args.frequency,
+                                          sigma=args.sigma,
+                                          half_thickness=args.half_thickness,
+                                          material=material_override,
+                                          esim_geometry=esim_geom)
+            else:
+                return {"error": "Either --vol or --cub5 is required"}
         else:
             return post_process(args.mesh_vol, args.fes_order,
                                 args.msh_output, args.j_npy,
