@@ -92,11 +92,6 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
     surface_data = []
     surface_objects = {}  # cache cubit.surface() objects
 
-    # Determine surface element type: Cubit uses "tri" for tet meshes,
-    # "face" for hex meshes (returns 4-node quads)
-    has_tets = len(list(tet_ids)) > 0
-    has_hexes = len(list(hex_ids)) > 0
-
     for sid in surface_ids:
         surf = cubit_mod.surface(sid)
         surface_objects[sid] = surf
@@ -104,17 +99,15 @@ def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=Fals
         tris = []
         quads = []
 
-        if has_tets:
-            # Tet mesh: surface tris via "tri" entity type
-            tri_ids_on_surf = cubit_mod.parse_cubit_list("tri", f"in surface {sid}")
-            for tid in tri_ids_on_surf:
-                tris.extend(cubit_mod.get_connectivity("tri", tid))
+        # Always check both tri and face — mixed meshes (tet+wedge, hex+tet)
+        # have both element types on surfaces.
+        tri_ids_on_surf = cubit_mod.parse_cubit_list("tri", f"in surface {sid}")
+        for tid in tri_ids_on_surf:
+            tris.extend(cubit_mod.get_connectivity("tri", tid))
 
-        if has_hexes:
-            # Hex mesh: surface quads via "face" entity type
-            face_ids_on_surf = cubit_mod.parse_cubit_list("face", f"in surface {sid}")
-            for fid in face_ids_on_surf:
-                quads.extend(cubit_mod.get_connectivity("face", fid))
+        face_ids_on_surf = cubit_mod.parse_cubit_list("face", f"in surface {sid}")
+        for fid in face_ids_on_surf:
+            quads.extend(cubit_mod.get_connectivity("face", fid))
 
         # UV coordinates for surface nodes
         surf_node_set = set(tris) | set(quads)
