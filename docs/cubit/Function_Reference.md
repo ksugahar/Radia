@@ -1,181 +1,174 @@
 # Function Reference
 
-Reference documentation for the Radia Cubit plugin mesh export commands and the `radia_cubit_mesh` module.
+Reference documentation for the Radia Cubit plugin APREPRO commands and Python API.
 
-## Cubit Plugin Commands (Recommended)
+## APREPRO Commands (Recommended)
 
-Native APREPRO commands — no Python, no block assignment required:
+Native Cubit commands registered by the Radia plugin. No Python import needed.
+All commands are available in journal files (.jou) and the Cubit command line.
 
-| Command | Format | Block Required |
-|---------|--------|---------------|
-| `export radia_nastran "f.bdf" [dimension <2\|3>] [nopyramid]` | Nastran BDF | **No** |
-| `radia export gmsh "f.msh" [version <2\|4>] [dimension <2\|3>]` | Gmsh v2.2/v4.1 | **No** |
-| `radia export meg "f.meg"` | MEG (ELF/MAGIC) | **No** |
+### Mesh Export Commands
 
-**Installation:** Copy `radia_cubit.ccm` to `<Cubit install>/bin/plugins/` or set `CUBIT_PLUGIN_DIR`.
+| Command | Format | Orders | Block Required |
+|---------|--------|--------|---------------|
+| `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | No |
+| `export gmsh "f.msh" order N version 2` | Gmsh v2.2 | 1-4 | No |
+| `export gmsh "f.msh" order N version 4` | Gmsh v4.1 | 1-4 | No |
+| `export radia_nastran "f.bdf" order N` | Nastran BDF | 1-2 | No |
+| `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | No |
+| `export meg "f.meg"` | MEG (ELF/MAGIC) | 1 only | No |
 
-**Build:**
+### Coil Generation Command
+
+| Command | Description |
+|---------|-------------|
+| `coil "script.py"` | Generate coil STEP from CoilBuilder script + import |
+| `coil "script.py" output "path.step"` | Custom output path |
+| `coil "script.py" noimport` | Generate STEP without importing |
+
+> **IMPORTANT**: Use `export radia_nastran`, NOT `export nastran`.
+> Cubit has a built-in `export nastran` with different format and no order 2 support.
+
+### Build & Installation
+
+The plugin is built with **compact_netgen** (static link, no nglib.dll dependency):
 
 ```bash
-cmake -G "Visual Studio 17 2022" -A x64 \
+# Recommended: compact_netgen (no ABI mismatch risk)
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCubit_DIR="C:/Program Files/Coreform Cubit 2025.3/cmake" \
-  ../src/cubit_plugin
-cmake --build . --config Release
+  -DNETGEN_SRC_DIR="C:/netgen_build/netgen_fork" \
+  src/cubit_plugin
+
+cmake --build . --target radia_cubit_ccm   # APREPRO commands (plugins/)
+cmake --build . --target radia_cubit_ccl   # Qt5 GUI menu (bin/)
 ```
 
----
-
-## Python API Functions (Legacy)
-
-> **Note**: The `cubit_mesh_export` Python module has been replaced by the `radia_cubit_mesh` C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`). For file exports, use the Cubit Plugin commands above (`cubit.cmd('radia export ...')`). For NGSolve mesh extraction, use `radia_cubit_mesh.extract_curved_mesh()`.
-
-| Function | Format | 1st Order | 2nd Order | 3rd+ Order |
-|----------|--------|-----------|-----------|------------|
-| `cubit.cmd('export mesh ...')` | Exodus II (.exo) | Yes | Yes | Yes |
-| `radia_cubit_mesh.extract_curved_mesh()` | Netgen mesh object | Yes | Yes (via Curve) | Yes (via Curve) |
-| `cubit.cmd('radia export gmsh ...')` | Gmsh v2.2/v4.1 | Yes | Yes | No |
-| `cubit.cmd('export radia_nastran ...')` | Nastran BDF | Yes | No | No |
-| `cubit.cmd('radia export meg ...')` | MEG (ELF) | Yes | No | No |
-
-> Note: The `radia export` plugin commands require no block assignment. The `radia_cubit_mesh.extract_curved_mesh()` function requires blocks for NGSolve mesh extraction.
+Installation: `pip install radia && radia-setup --all-users`
 
 ---
 
-## Exodus II Export
+## Command Details
+
+### export netgen
+
+```
+export netgen "filename.vol" [order <1-5>] [overwrite]
+```
+
+Exports mesh with high-order curving (CallbackGeometry + ACIS projection).
+Produces companion JSON (.vol.json) with CAD reference values for consistency checks.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| order | 1 | Curve order (1=linear, 2-5=high-order via NetgenCurver) |
+| overwrite | off | Overwrite existing file |
+
+### export gmsh
+
+```
+export gmsh "filename.msh" [order <1-4>] [version <2|4>] [dimension <2|3>] [overwrite]
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| order | 1 | Element order (1-4, order 3+ requires NetgenCurver) |
+| version | 2 | GMSH format (2=v2.2, 4=v4.1) |
+| dimension | 3 | 2D or 3D mode |
+
+### export radia_nastran
+
+```
+export radia_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| order | 1 | Element order (1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20) |
+| dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
+| nopyramid | off | Convert pyramids to degenerate hex (JMAG compatible) |
+
+### export vtk
+
+```
+export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
+```
+
+VTK Legacy format. Cell types: TET(10), HEX(12), WEDGE(13), PYRAMID(14), TRI(5), QUAD(9).
+
+### export meg
+
+```
+export meg "filename.meg" [threed|twod|axisymmetric] [overwrite]
+```
+
+MEG/ELF format. Block names become ELF element type names (MMB4T, MMB8T, etc.).
+1st order only.
+
+### coil
+
+```
+coil "script.py" [output "path.step"] [noimport]
+```
+
+Generates coil STEP via external Python 3.12 subprocess (CoilBuilder).
+The script must define `build_coil()` returning a `CoilBuilder` instance.
+
+Requires: Python 3.12 with NGSolve/OCC. Set `RADIA_PYTHON` env var to override.
+
+---
+
+## Python API
+
+### extract_curved_mesh (cubit-mesh-export package)
 
 ```python
-cubit.cmd('export mesh "output.exo" overwrite')
+from cubit_mesh_export import extract_curved_mesh
+ng_mesh = extract_curved_mesh(cubit, order=3)
 ```
 
-Exodus II is Cubit's native format. Use Cubit's built-in export command directly.
+Returns `netgen.meshing.Mesh` with high-order curving. Requires Cubit running.
 
-**Features**: All element types, 1st/2nd order, nodesets, sidesets, block definitions.
+### check_consistency (cubit-mesh-export package)
 
-[Full documentation](export_exodus.md) | [Examples](../../examples/cubit_mesh_export/exodus/)
-
----
-
-## Gmsh Export
+```bash
+check-vol model.vol                         # CLI
+check-vol model.vol --json model.vol.json   # With companion JSON
+```
 
 ```python
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')              # v2.2 (default)
-cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')    # v4.1
+from cubit_mesh_export.check import check_consistency  # API
 ```
 
-### v2.2 vs v4.1
-
-| Feature | v2.2 | v4.1 |
-|---------|------|------|
-| $Entities section | No | Yes |
-| DIM parameter | No | Yes |
-| NGSolve/Netgen | **Supported** | Not recommended |
-| Radia mesh import | **Supported** | Not supported |
-| GMSH visualization | Supported | **Recommended** |
-
-[v2.2 documentation](export_Gmsh_ver2.md) | [v4.1 documentation](export_Gmsh_ver4.md) | [Examples](../../examples/cubit_mesh_export/gmsh/)
-
 ---
 
-## Nastran BDF Export
+## GUI Menu Structure
 
-```python
-cubit.cmd('export radia_nastran "mesh.bdf" dimension 3 overwrite')
+```
+Menu bar: ... Export Mesh  Help  Solve
+
+Export Mesh (C++ .ccl):        Solve (Python):
+  Netgen Vol (.vol)...           Radia-NGSolve...
+  GMSH...                        Generate Coil...
+  Nastran BDF...                 --------
+  VTK...                         Reload Panels
+  MEG...
+  --------
+  Mesh Evaluation...
 ```
 
-**DIM Options**:
-| Value | Elements |
-|-------|----------|
-| `dimension 3` | CTETRA, CHEXA, CPENTA, CPYRAM |
-| `dimension 2` | CTRIA3, CQUAD4 (normals to +z) |
-
-**PYRAM Options**:
-| Option | Output | Use Case |
-|--------|--------|----------|
-| (default) | CPYRAM (5-node) | Standard Nastran |
-| `nopyramid` | Degenerate CHEXA | JMAG compatibility |
-
-**Limitation**: 1st order elements only.
-
-[Full documentation](export_Nastran.md) | [Examples](../../examples/cubit_mesh_export/nastran/)
+- **Export Mesh**: Qt5 dialogs with settings persistence (`AppData/Roaming/Radia/export_settings.json`)
+- **Solve**: Python subprocess to external Python 3.12 (Cubit embeds Python 3.10)
+- **Generate Coil**: Calls `coil` APREPRO command via file dialog
 
 ---
 
-## MEG Export (ELF/MAGIC)
+## Troubleshooting
 
-```python
-cubit.cmd('radia export meg "mesh.meg" overwrite')
-```
-
-**Block Names = ELF Element Names**:
-| DIM | Tri | Quad | Tet | Wedge | Hex |
-|-----|-----|------|-----|-------|-----|
-| `'T'` | - | - | MMB4T | MMB6T | MMB8T |
-| `'K'` | MMB3K | MMB4K | - | - | - |
-| `'R'` | MMB3R | MMB4R | - | - | - |
-
-**Limitation**: 1st order elements only.
-
-[Full documentation](export_meg.md) | [Examples](../../examples/cubit_mesh_export/meg/)
-
----
-
-## Netgen Export (with High-Order Curving)
-
-```python
-import radia_cubit_mesh
-ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `order` | int | 2 | Curve order for high-order elements |
-
-**Returns**: `netgen.meshing.Mesh` object with high-order curving applied.
-
-**Features**: Automatically detects curved surfaces (cylinders, spheres, tori, cones), sets UV parameters, and applies `mesh.Curve(order)`.
-
-| Geometry | Recommended Approach |
-|----------|---------------------|
-| Simple shape (cylinder, sphere, etc.) | `radia_cubit_mesh.extract_curved_mesh(order=N)` |
-| 2nd order only (no Curve(3+)) | `cubit.cmd('radia export gmsh ...')` with 2nd-order blocks + `ReadGmsh` |
-
-[Full documentation](export_NetgenMesh.md) | [Examples](../../examples/cubit_mesh_export/netgen/)
-
----
-
-## Technical Guides
-
-| Document | Description |
-|----------|-------------|
-| [Cubit_Element_Order.md](Cubit_Element_Order.md) | How to control element order (1st/2nd) in Cubit |
-
-### Key Concepts
-
-- **`get_connectivity()`** - Returns 1st order nodes only (corner nodes)
-- **`get_expanded_connectivity()`** - Returns all nodes including mid-edge nodes
-- **`block X element type tetra10`** - Cubit command to convert to 2nd order
-
-### Internal Helper Functions
-
-These functions are used internally by all export functions:
-
-| Function | Description |
-|----------|-------------|
-| `_block_contains_geometry(cubit, block_id)` | Returns True if block contains geometry (volume/surface/curve/vertex) |
-| `_get_block_elements(cubit, block_id, elem_type)` | Gets mesh elements from block, supporting both geometry and mesh element blocks |
-| `_warn_mixed_element_types_in_blocks(cubit)` | Warns if blocks contain multiple 3D or 2D element types |
-
-### Block Types
-
-Blocks can contain either mesh elements or geometry:
-
-| Block Contains | Elements Returned by `_get_block_elements()` |
-|----------------|----------------------------------------------|
-| Volume | tet, hex, wedge, pyramid (3D only) |
-| Surface | tri, quad (2D only) |
-| Curve | edge (1D only) |
-| Vertex | node (0D only) |
-| Mesh elements | Only the registered element types |
-
----
-
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| "Interrupt Detected" on AddPoint | ABI mismatch (full Netgen DLL) | Rebuild with compact_netgen |
+| HEX20 has 8 nodes in .msh | edge_ho_nodes_ bug (fixed 2026-04-05) | Update ccm |
+| `export nastran` wrong format | Using Cubit built-in | Use `export radia_nastran` |
+| cp932 UnicodeDecodeError | Non-ASCII in .py | Use ASCII only + encoding='utf-8' |
+| ccm size < 400 KB | Old full-Netgen build | Rebuild with compact_netgen (~600 KB) |

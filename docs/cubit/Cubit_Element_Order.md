@@ -177,11 +177,16 @@ Output:
 
 ## Summary Table
 
-| Export Function | API Used | Respects Block Element Type |
-|----------------|----------|----------------------------|
-| `radia export gmsh` | `get_expanded_connectivity()` | Yes - exports actual order |
-| `radia_cubit_mesh.extract_curved_mesh()` | `get_connectivity()` | No - curves via geometry |
-| `export radia_nastran` | `get_connectivity()` | No - 1st order only |
+| Export Function | High-Order Method | Max Order |
+|----------------|-------------------|-----------|
+| `export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
+| `export gmsh "f.msh" order N` | NetgenCurver | 1-4 |
+| `export radia_nastran "f.bdf" order N` | NetgenCurver | 1-2 |
+| `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
+| `export meg "f.meg"` | None | 1 only |
+| `extract_curved_mesh(cubit, order=N)` | CallbackGeometry + BuildCurvedElements | 1-5 |
+
+> **Note**: `export radia_nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
 
 ## See Also
 
