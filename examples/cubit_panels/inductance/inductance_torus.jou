@@ -1,0 +1,32 @@
+## Torus inductor: IH (BEM) inductance extraction
+## Generates surface-only .vol for calc_inductance.py
+##
+## Usage in Cubit:
+##   playback "inductance_torus.jou"
+##
+## Computation (no Cubit needed):
+##   python calc_inductance.py --vol inductance_torus.vol --source source --sink sink
+
+reset
+
+## Create torus (R_major=0.11m, R_minor=0.01m)
+create torus major radius 0.11 minor radius 0.01
+
+## Mesh
+volume 1 scheme tetmesh
+volume 1 size auto factor 5
+mesh volume 1
+
+## Material block
+block 1 add volume 1
+block 1 name "coil"
+
+## Source/sink terminal faces
+## Surface 1 and 3 are the small end faces
+sideset 1 add surface 1
+sideset 1 name "source"
+sideset 2 add surface 3
+sideset 2 name "sink"
+
+## Export netgen .vol (order 2)
+export netgen "inductance_torus.vol" order 2 overwrite
