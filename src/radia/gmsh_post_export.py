@@ -409,10 +409,10 @@ def _extract_mesh_data_grouped(mesh, is_surface):
 
     # Detect if mesh is curved (order > 1)
     curve_order = _detect_curve_order(mesh)
-    use_highorder = (curve_order >= 2) and is_surface
+    use_highorder = (curve_order >= 2)
 
-    # C++ fast path for high-order surface meshes
-    if use_highorder:
+    # C++ fast path for high-order SURFACE meshes only
+    if use_highorder and is_surface:
         try:
             from radia._radia_pybind import _compute_ho_bnd_nodes
             result = _compute_ho_bnd_nodes(mesh, curve_order)
@@ -471,21 +471,148 @@ def _extract_mesh_data_grouped(mesh, is_surface):
                 mat_names.append(mat_name)
     else:
         from ngsolve import VOL
+
+        # For high-order volume meshes, compute mid-edge nodes via GetTrafo
+        vol_ho_cache = {}  # edge_key -> [mid-node indices]
+
         for idx, el in enumerate(mesh.Elements(VOL)):
             et_name = str(el.type).split('.')[-1]
-            gmsh_type = _NGSOLVE_TO_GMSH_1ST.get(et_name)
+
+            if use_highorder and et_name in _NGSOLVE_TO_GMSH_2ND:
+                gmsh_type = _NGSOLVE_TO_GMSH_2ND[et_name]
+            else:
+                gmsh_type = _NGSOLVE_TO_GMSH_1ST.get(et_name)
             if gmsh_type is None:
                 continue
+
             verts = [v.nr for v in el.vertices]
             perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
                 et_name, list(range(len(verts))))
             reordered = [verts[i] for i in perm]
+
+            if use_highorder and et_name in _NGSOLVE_TO_GMSH_2ND:
+                reordered = _build_vol_highorder_conn(
+                    mesh, el, reordered, et_name, nodes, vol_ho_cache)
+
             mat_name = _get_element_material(mesh, el, is_surface)
             elem_data.append((mat_name, gmsh_type, reordered, idx))
             if mat_name not in mat_names:
                 mat_names.append(mat_name)
 
     return nodes, mat_names, elem_data
+
+
+# ============================================================
+# High-order volume element connectivity
+# ============================================================
+
+# Edge tables for 2nd order: vertex pairs for each mid-edge node
+# GMSH TET10 node order: 4 vertices + 6 mid-edge nodes
+# Edge order matches GMSH convention (gmsh.model.mesh.getElementProperties)
+_TET_EDGES_GMSH = [
+    (0, 1), (1, 2), (2, 0),  # bottom face edges
+    (3, 0), (3, 2), (3, 1),  # edges to apex
+]
+
+# GMSH HEX20: 8 vertices + 12 mid-edge nodes
+_HEX_EDGES_GMSH = [
+    (0, 1), (0, 3), (0, 4), (1, 2),
+    (1, 5), (2, 3), (2, 6), (3, 7),
+    (4, 5), (4, 7), (5, 6), (6, 7),
+]
+
+# GMSH PRISM18: 6 vertices + 9 mid-edge nodes
+_PRISM_EDGES_GMSH = [
+    (0, 1), (0, 2), (0, 3), (1, 2),
+    (1, 4), (2, 5), (3, 4), (3, 5), (4, 5),
+]
+
+
+def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
+    """Build 2nd order connectivity for a volume element.
+
+    Uses mesh.GetTrafo(el) to evaluate mid-edge positions in physical space.
+    Caches mid-edge nodes by vertex pair to avoid duplicates on shared edges.
+
+    Args:
+        mesh: NGSolve Mesh
+        el: Element (VOL)
+        reordered: 1st order vertex indices (GMSH node order)
+        et_name: Element type name ('TET', 'HEX', 'PRISM')
+        nodes: mutable list of (x,y,z) tuples (new nodes appended)
+        cache: dict mapping edge_key -> mid-node index
+
+    Returns:
+        Extended connectivity list (vertices + mid-edge nodes).
+    """
+    if et_name == 'TET':
+        edge_table = _TET_EDGES_GMSH
+    elif et_name == 'HEX':
+        edge_table = _HEX_EDGES_GMSH
+    elif et_name == 'PRISM':
+        edge_table = _PRISM_EDGES_GMSH
+    else:
+        return reordered  # unsupported type, return 1st order
+
+    conn = list(reordered)  # start with vertices
+
+    # Reference space mid-edge points for TET: (0,0,0)-(1,0,0)-(0,1,0)-(0,0,1)
+    # We compute each mid-edge point via GetTrafo
+    trafo = mesh.GetTrafo(el)
+
+    # NGSolve reference coordinates for standard element types.
+    # IMPORTANT: NGSolve trafo maps reference coords to physical coords,
+    # but the vertex ordering in el.vertices does NOT match the reference
+    # vertex ordering. For TET:
+    #   ref(0,0,0) -> el.vertices[3]
+    #   ref(1,0,0) -> el.vertices[0]
+    #   ref(0,1,0) -> el.vertices[1]
+    #   ref(0,0,1) -> el.vertices[2]
+    # So ref_verts[i] gives the reference coord of el.vertices[i].
+    if et_name == 'TET':
+        # el.vertices order -> reference coords
+        ref_verts = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 0)]
+    elif et_name == 'HEX':
+        ref_verts = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0),
+                     (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+    elif et_name == 'PRISM':
+        ref_verts = [(1, 0, 0), (0, 1, 0), (0, 0, 0),
+                     (1, 0, 1), (0, 1, 1), (0, 0, 1)]
+
+    # Map GMSH vertex index -> NGSolve el.vertices index -> ref coord
+    ngsolve_verts = [v.nr for v in el.vertices]
+    perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(et_name, list(range(len(ngsolve_verts))))
+    # inv_perm: gmsh_local_idx -> ngsolve_local_idx
+    inv_perm = [0] * len(perm)
+    for i, p in enumerate(perm):
+        inv_perm[p] = i
+
+    for e0_gmsh, e1_gmsh in edge_table:
+        # Global node IDs for this edge
+        gn0 = reordered[e0_gmsh]
+        gn1 = reordered[e1_gmsh]
+        edge_key = (min(gn0, gn1), max(gn0, gn1))
+
+        if edge_key in cache:
+            conn.append(cache[edge_key])
+        else:
+            # Map GMSH local index -> NGSolve local index -> ref coord
+            ng0 = inv_perm[e0_gmsh]
+            ng1 = inv_perm[e1_gmsh]
+            ref_mid = tuple(0.5 * (ref_verts[ng0][k] + ref_verts[ng1][k])
+                            for k in range(3))
+
+            # Evaluate trafo at mid-point to get physical coordinates
+            from ngsolve import IntegrationRule
+            ir = IntegrationRule([ref_mid], [1.0])
+            mip = trafo(ir[0])
+            phys = mip.point
+            mid_node_idx = len(nodes)
+            nodes.append((float(phys[0]), float(phys[1]), float(phys[2])))
+            cache[edge_key] = mid_node_idx
+            conn.append(mid_node_idx)
+
+    return conn
 
 
 def _write_companion_geo(msh_filename):
