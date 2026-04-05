@@ -38,7 +38,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 
 # Import NGSolve FIRST (DLL conflict avoidance)
 import netgen.meshing
-from ngsolve import Mesh, Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND, BBND
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
@@ -595,9 +595,9 @@ def test_gmsh_vs_netgen(case_name, cad_volume, cad_area, is_flat):
 # ================================================================
 # Test 3: Path A (export netgen C++) vs Path B (extract_curved_mesh Python)
 # ================================================================
-def test_path_ab(case_name, cad_volume):
-    """Compare .vol from Path A and Path B at order=2."""
-    print(f"\n  Path A vs B (order=2, CAD={cad_volume:.6e}):")
+def test_path_ab(case_name, cad_volume, cad_area):
+    """Compare .vol from Path A and Path B at order=2: volume, area, length."""
+    print(f"\n  Path A vs B (order=2):")
 
     ORDER = 2
 
@@ -607,6 +607,11 @@ def test_path_ab(case_name, cad_volume):
         cubit.cmd(f'export netgen "{path_a}" order {ORDER} overwrite')
     mesh_a = Mesh(path_a)
     vol_a = Integrate(CF(1), mesh_a)
+    area_a = Integrate(CF(1), mesh_a, BND)
+    try:
+        len_a = Integrate(CF(1), mesh_a, BBND)
+    except Exception:
+        len_a = 0.0
 
     # Path B: extract_curved_mesh (Python)
     path_b = os.path.join(OUT_DIR, f"{case_name}_pathB.vol")
@@ -615,22 +620,47 @@ def test_path_ab(case_name, cad_volume):
         ng_b.Save(path_b)
         mesh_b = Mesh(path_b)
         vol_b = Integrate(CF(1), mesh_b)
+        area_b = Integrate(CF(1), mesh_b, BND)
+        try:
+            len_b = Integrate(CF(1), mesh_b, BBND)
+        except Exception:
+            len_b = 0.0
     except Exception as e:
         print(f"  Path B failed: {e}")
         return False
 
-    err_a = (vol_a - cad_volume) / cad_volume * 100.0
-    err_b = (vol_b - cad_volume) / cad_volume * 100.0
-    diff_pct = abs(vol_a - vol_b) / cad_volume * 100.0
+    print(f"  {'':10} {'Volume':>14} {'Area':>14} {'Length':>14}")
+    print(f"  {'Path A':<10} {vol_a:>14.6e} {area_a:>14.6e} {len_a:>14.6e}")
+    print(f"  {'Path B':<10} {vol_b:>14.6e} {area_b:>14.6e} {len_b:>14.6e}")
 
-    print(f"  {'Path A':<10} vol={vol_a:.6e}  err={err_a:+.4e}%")
-    print(f"  {'Path B':<10} vol={vol_b:.6e}  err={err_b:+.4e}%")
-    print(f"  A vs B diff: {diff_pct:.4e}%", end="")
+    all_pass = True
 
     # Volume must agree within 0.1%
-    ok = diff_pct < 0.1
-    print(f" [{'PASS' if ok else 'FAIL'}]")
-    return ok
+    v_diff = abs(vol_a - vol_b) / max(abs(cad_volume), 1e-30) * 100.0
+    print(f"  vol  diff: {v_diff:.4e}%", end="")
+    if v_diff > 0.1:
+        print(" [FAIL]"); all_pass = False
+    else:
+        print(" [PASS]")
+
+    # Area must agree within 5% (BL wedge surface elements may differ)
+    a_diff = abs(area_a - area_b) / max(abs(cad_area), 1e-30) * 100.0
+    print(f"  area diff: {a_diff:.4e}%", end="")
+    if a_diff > 5.0:
+        print(" [FAIL]"); all_pass = False
+    else:
+        print(" [PASS]")
+
+    # Length: informational (BBND may not be available in all cases)
+    if len_a > 0 and len_b > 0:
+        l_diff = abs(len_a - len_b) / max(len_a, 1e-30) * 100.0
+        print(f"  len  diff: {l_diff:.4e}%", end="")
+        if l_diff > 1.0:
+            print(" [WARN]")
+        else:
+            print(" [PASS]")
+
+    return all_pass
 
 
 # ================================================================
@@ -667,7 +697,7 @@ def main():
 
         p_pass = test_p_convergence(case_name, cad_volume, cad_area, is_flat)
         g_pass = test_gmsh_vs_netgen(case_name, cad_volume, cad_area, is_flat)
-        ab_pass = test_path_ab(case_name, cad_volume)
+        ab_pass = test_path_ab(case_name, cad_volume, cad_area)
 
         case_pass = p_pass and g_pass and ab_pass
         print(f"\n  Result: [{'PASS' if case_pass else 'FAIL'}]")
