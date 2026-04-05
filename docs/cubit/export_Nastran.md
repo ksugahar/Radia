@@ -16,15 +16,20 @@ export radia_nastran "mesh.bdf" dimension 2 nopyramid overwrite
 ### Syntax
 
 ```
-export radia_nastran <"filename"> [dimension <2|3>] [nopyramid] [overwrite]
+export radia_nastran <"filename"> [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
+
+> **IMPORTANT**: Use `export radia_nastran`, NOT `export nastran`.
+> Cubit has a built-in `export nastran` command with different format and no order 2 support.
 
 ### Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `dimension 3` | yes | 3D solid mesh (CTETRA, CHEXA, CPENTA, CPYRAM) |
-| `dimension 2` | | 2D shell mesh (CTRIA3, CQUAD4), normals oriented to +z |
+| `order 1` | yes | 1st order elements (CTETRA, CHEXA, CPENTA, CPYRAM) |
+| `order 2` | | 2nd order elements (CTETRA10, CHEXA20, via NetgenCurver) |
+| `dimension 3` | yes | 3D solid mesh |
+| `dimension 2` | | 2D shell mesh (CTRIA3/CTRIA6, CQUAD4/CQUAD8), normals oriented to +z |
 | `nopyramid` | off | Convert pyramid elements to degenerate CHEXA (JMAG compatible) |
 | `overwrite` | off | Overwrite existing file without warning |
 

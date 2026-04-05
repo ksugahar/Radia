@@ -1,6 +1,23 @@
 # Cubit Panel Development Guide
 
-How to add a new solver panel to the Radia-NGSolve Cubit toolbar.
+How to add a new solver panel to the Radia Cubit Solve menu.
+
+## Menu Structure
+
+```
+Solve (Python, register_toolbar.py):
+  Radia-NGSolve...     -> save .cub5, launch standalone app
+  Generate Coil...     -> CoilBuilder script -> STEP -> import
+  --------
+  Reload Panels        -> re-read register_toolbar.py (debug)
+```
+
+## Important Rules
+
+- **ASCII only** in all .py files loaded by Cubit (cp932 Japanese Windows)
+- **Import QMenu** if using submenus (PySide6.QtWidgets / PyQt5.QtWidgets)
+- **No Qt in calc_*.py** -- subprocess scripts must not import PySide6/PyQt5
+- startup.py uses `encoding='utf-8'` for reading register_toolbar.py
 
 ## Architecture
 

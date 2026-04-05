@@ -370,52 +370,48 @@ print(f"DC: R={result['R'][0]*1e3:.3f} mOhm, L={result['L'][0]*1e9:.1f} nH")
 
 ## Cubit Mesh Export
 
-Radia includes a mesh export module for [Coreform Cubit](https://coreform.com/products/coreform-cubit/), supporting **Gmsh**, **Nastran BDF**, **VTK/VTU**, **Netgen/NGSolve (.vol)**, **Exodus II**, and **MEG** formats.
+Radia includes a Cubit plugin for [Coreform Cubit](https://coreform.com/products/coreform-cubit/), providing APREPRO commands for mesh export and coil generation.
 
-### Quick Usage
+### APREPRO Commands
+
+```bash
+# In Cubit command line or .jou files:
+export netgen "mesh.vol" order 3 overwrite          # Netgen .vol (order 1-5)
+export gmsh "mesh.msh" order 2 version 2 overwrite  # Gmsh v2.2 (order 1-4)
+export radia_nastran "mesh.bdf" order 2 overwrite   # Nastran BDF (order 1-2)
+export vtk "mesh.vtk" order 2 overwrite             # VTK Legacy (order 1-2)
+export meg "mesh.meg" overwrite                     # MEG/ELF (order 1)
+coil "my_coil.py"                                   # CoilBuilder STEP + import
+```
+
+> **Note**: Use `export radia_nastran`, not `export nastran` (Cubit built-in conflict).
+
+### Python API
 
 ```python
-import cubit
-import radia_cubit_mesh
-
-# Export to Gmsh v2.2 (for Radia import) or v4.1 (for visualization)
-cubit.cmd('radia export gmsh "model.msh" overwrite')
-
-# Export to NGSolve mesh with high-order curving
-ngmesh = radia_cubit_mesh.extract_curved_mesh(order=3)
-mesh = ngsolve.Mesh(ngmesh)
+from cubit_mesh_export import extract_curved_mesh
+ng_mesh = extract_curved_mesh(cubit, order=3)  # High-order curved mesh
 ```
 
 ### Installation
 
-The `radia_cubit_mesh` module and Cubit panels are included in Radia.
-`pip install radia` + `radia-setup` installs everything including the Cubit panels.
-
-To reinstall panels only (e.g., after Cubit update):
-
 ```bash
-cubit-install-panels
+pip install radia          # Includes plugin binaries
+radia-setup --all-users    # Deploy to Cubit (ccm, ccl, panels)
 ```
 
-### Setup
+### GUI Menus
 
-Cubit scripts require the `cubit` Python module. Either:
-1. Add Cubit's `bin` directory to your system PATH, or
-2. Set the `CUBIT_PATH` environment variable:
-
-```bash
-# Windows
-set CUBIT_PATH=C:\Program Files\Coreform Cubit 2025.3\bin
-
-# Linux/Mac
-export CUBIT_PATH=/opt/coreform/cubit/bin
-```
+| Menu | Items | Provided by |
+|------|-------|-------------|
+| **Export Mesh** | Netgen Vol, GMSH, Nastran, VTK, MEG, Mesh Evaluation | C++ .ccl |
+| **Solve** | Radia-NGSolve, Generate Coil, Reload Panels | Python |
 
 **Important**: When using both NGSolve and Cubit in the same script, import NGSolve **before** Cubit to avoid DLL conflicts.
 
 ### Documentation
 
-- **[Function Reference](docs/cubit/Function_Reference.md)** -- Full API documentation
+- **[Function Reference](docs/cubit/Function_Reference.md)** -- Full API and command reference
 - **[Examples](examples/cubit/)** -- Export examples for all supported formats
 
 ## License
