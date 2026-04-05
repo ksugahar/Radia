@@ -44,6 +44,49 @@ def _setup_cubit():
     return cubit
 
 
+def _write_surface_only_vol(src_ngmesh, output_path):
+    """Extract surface elements from a volume mesh and save as surface-only .vol.
+
+    BEM (HDivSurface) requires surface-only mesh. On a volume mesh,
+    HDivSurface includes all interior edges as DOFs, making the SL
+    matrix singular.
+
+    Args:
+        src_ngmesh: netgen.meshing.Mesh with volume + surface elements
+        output_path: path to write surface-only .vol
+    """
+    # Read the .vol text, remove volumeelements section, re-save
+    import io
+    buf = io.StringIO()
+    # Save to string via temp file
+    import tempfile, os
+    tmp = os.path.join(tempfile.gettempdir(), "_vol_tmp.vol")
+    src_ngmesh.Save(tmp)
+
+    with open(tmp, "r") as f:
+        lines = f.readlines()
+
+    with open(output_path, "w") as f:
+        skip = False
+        for line in lines:
+            s = line.strip()
+            if s == "volumeelements":
+                skip = True
+                # Write section with 0 elements
+                f.write("volumeelements\n0\n")
+                continue
+            if skip:
+                if s and not s[0].isdigit() and s != "edgesegmentsgi2" and not s.startswith("#"):
+                    skip = False
+                elif s == "edgesegmentsgi2" or s == "points" or s == "surfaceelements" or s == "materials" or s == "bcnames" or s == "curvedelements" or s == "endmesh" or s == "face_transparencies" or s == "facedescriptors":
+                    skip = False
+                else:
+                    continue
+            f.write(line)
+
+    os.remove(tmp)
+
+
 def extract_inductance_vol(vol_file, source_label="source",
                            sink_label="sink", fes_order=0, msh_output=""):
     """Extract self-inductance from .vol file (no Cubit needed).
@@ -67,8 +110,21 @@ def extract_inductance_vol(vol_file, source_label="source",
 
     t_total_start = _time.perf_counter()
 
-    # Load mesh directly from .vol (no Cubit)
+    # Load mesh from .vol
     mesh = Mesh(vol_file)
+
+    # BEM requires surface-only mesh (HDivSurface on volume mesh
+    # includes interior edges as DOFs -> singular SL matrix).
+    if mesh.ne > 0:
+        import tempfile
+        surf_vol = os.path.join(tempfile.gettempdir(), "bem_surface.vol")
+        # Re-export as surface-only: read .vol, remove volume elements, save
+        ng = mesh.ngmesh
+        # Delete all volume elements by creating a fresh mesh
+        # that only has surface elements, points, and face descriptors
+        _write_surface_only_vol(ng, surf_vol)
+        mesh = Mesh(surf_vol)
+
     t_export = _time.perf_counter() - t_total_start
 
     nse = mesh.GetNE(BND)
