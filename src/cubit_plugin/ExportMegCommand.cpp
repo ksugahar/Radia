@@ -209,6 +209,5 @@ bool ExportMegCommand::write_meg(const std::string &filename, char dim)
   const char *dim_name = (dim == 'T') ? "3D" : (dim == 'K') ? "2D" : "Axisymmetric";
   PRINT_INFO("Exported MEG (%s): %s (%d nodes, %d elements)\n",
              dim_name, filename.c_str(), num_nodes, eid);
-  // TODO: MeshData::write_companion_json(filename);
   return true;
 }
