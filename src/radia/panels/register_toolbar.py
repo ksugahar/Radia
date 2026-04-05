@@ -271,7 +271,60 @@ def register_menu():
     action_launch.triggered.connect(_launch_radia_app)
     menu_bar.addAction(action_launch)
 
-    # --- Menu 2: Reload Panels (debug, direct action) ---
+    # --- Menu 2: Generate Coil (subprocess -> STEP -> import) ---
+    def _generate_coil():
+        try:
+            ext_python = _find_external_python()
+            if not ext_python:
+                print("ERROR: Python 3.12 not found.")
+                return
+
+            work_dir = _last_jou_dir[0] or os.getcwd()
+            work_dir = work_dir.replace("\\", "/")
+            cubit.cmd(f'cd "{work_dir}"')
+
+            step_path = os.path.join(work_dir, "coil.step").replace("\\", "/")
+
+            # Find generate_coil.py
+            gen_script = os.path.join(_this_dir, "generate_coil.py")
+            if not os.path.isfile(gen_script):
+                print(f"ERROR: {gen_script} not found")
+                return
+
+            # Build command — default racetrack for now
+            cmd = [ext_python, gen_script, "--output", step_path]
+            print(f"Generating coil: {' '.join(cmd)}")
+
+            env = os.environ.copy()
+            for key in list(env.keys()):
+                if "QT" in key.upper() or "PYSIDE" in key.upper():
+                    del env[key]
+
+            result = subprocess.run(cmd, cwd=work_dir, env=env,
+                                     capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                print(f"ERROR: {result.stderr[:500]}")
+                return
+
+            # Parse JSON result
+            import json
+            info = json.loads(result.stdout.strip().split('\n')[-1])
+            print(f"Coil STEP: {info['output']} ({info['n_segments']} segments)")
+
+            # Import STEP into Cubit
+            cubit.cmd(f'import step "{step_path}" heal')
+            print("Coil imported into Cubit.")
+
+        except Exception as e:
+            print(f"ERROR in _generate_coil: {e}")
+
+    action_coil = QAction("Generate Coil", main_window)
+    action_coil.setStatusTip(
+        "Generate racetrack coil STEP and import into Cubit")
+    action_coil.triggered.connect(_generate_coil)
+    menu_bar.addAction(action_coil)
+
+    # --- Menu 3: Reload Panels (debug, direct action) ---
     def _reload_panels():
         startup = os.path.join(_this_dir, "startup.py").replace("\\", "/")
         cubit.cmd(f'play "{startup}"')
