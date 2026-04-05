@@ -104,7 +104,6 @@ bool ExportNastranCommand::write_nastran(const std::string &filename,
              mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
              filename.c_str(), mesh.total_node_count(),
              mesh.total_element_count());
-  // TODO: MeshData::write_companion_json(filename);
   return true;
 }
 

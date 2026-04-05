@@ -303,7 +303,7 @@ class TestMissingBlockNames:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        assert len(ALL_RULES) == 16
+        assert len(ALL_RULES) == 18
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:

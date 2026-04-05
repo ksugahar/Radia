@@ -283,7 +283,7 @@ bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
   PRINT_INFO("Exported Gmsh v2.2 (order %d%s): %s (%d nodes, %d elements)\n",
              mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
              filename.c_str(), mesh.total_node_count(), eid);
-  // TODO: MeshData::write_companion_json(filename);
+
   return true;
 }
 
@@ -582,6 +582,6 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
   PRINT_INFO("Exported Gmsh v4.1 (order %d%s): %s (%d nodes, %d elements, %d blocks)\n",
              mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
              filename.c_str(), n_total_nodes, total_elems, (int)elem_blocks.size());
-  // TODO: MeshData::write_companion_json(filename);
+
   return true;
 }
