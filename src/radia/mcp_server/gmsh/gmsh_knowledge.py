@@ -1069,34 +1069,43 @@ $EndNodeData
 
 ## Key View Options for Displacement Animation
 
-```
-// In .geo or via gmsh Python API:
+From GMSH source analysis (PViewVertexArrays.cpp):
+- VectorType=5 calls addScalarElement -> va_triangles (GL_FILL)
+- IntervalsType MUST be 2 (Continuous) or 3 (Discrete) for solid fill
+  IntervalsType=1 (Iso) draws iso-surface slices, NOT element faces
+- TET10 (10 nodes) > PVIEW_NMAX (8) -> silently SKIPPED unless
+  AdaptVisualizationGrid=1
 
-// MUST SET: displacement mode (not arrow/glyph)
-View[0].VectorType = 5;          // 5 = displacement
+```python
+# Via gmsh Python API:
 
-// Displacement factor (1.0 = actual displacement)
-View[0].DisplacementFactor = 1.0;
+# Displacement mode
+gmsh.option.setNumber("View[0].VectorType", 5)
+gmsh.option.setNumber("View[0].DisplacementFactor", 1.0)
 
-// Show element faces (filled solid, not wireframe)
-View[0].ShowElement = 1;
-View[0].DrawSkinOnly = 1;        // only draw external faces
+# CRITICAL: solid fill (NOT Iso which is the default)
+gmsh.option.setNumber("View[0].IntervalsType", 2)     # 2=Continuous
 
-// Hide scale bar (displacement values not meaningful for display)
-View[0].ShowScale = 0;
+# Exterior faces only
+gmsh.option.setNumber("View[0].DrawSkinOnly", 1)
+gmsh.option.setNumber("View[0].ShowElement", 0)        # 0=no wireframe
 
-// Solid color display (avoid rainbow colormap)
-View[0].IntervalsType = 4;       // Numeric values
-View[0].RangeType = 2;           // Custom range
-View[0].CustomMin = 0;
-View[0].CustomMax = 0.001;       // tiny range -> solid color
+# CRITICAL for TET10/HEX20: adaptive subdivision
+gmsh.option.setNumber("View[0].AdaptVisualizationGrid", 1)
+gmsh.option.setNumber("View[0].MaxRecursionLevel", 1)  # 1-2
 
-// Lighting for 3D appearance
-View[0].Light = 1;
-View[0].LightTwoSide = 1;
+# Lighting
+gmsh.option.setNumber("View[0].Light", 1)
+gmsh.option.setNumber("View[0].LightTwoSide", 1)
+gmsh.option.setNumber("View[0].SmoothNormals", 1)
 
-// Curved element subdivision
-Mesh.NumSubEdges = 4;
+# Ensure vectors/tets are drawn
+gmsh.option.setNumber("View[0].DrawVectors", 1)
+gmsh.option.setNumber("View[0].DrawTetrahedra", 1)
+
+# Auto range (not custom)
+gmsh.option.setNumber("View[0].RangeType", 1)
+gmsh.option.setNumber("View[0].ShowScale", 0)
 ```
 
 ## Hiding Static Mesh (Original Position)
