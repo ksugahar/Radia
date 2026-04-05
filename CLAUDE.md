@@ -1454,6 +1454,14 @@ The `.vol` file contains boundary labels from sidesets. `calc_inductance.py`
 reads these labels and applies unit current injection at source, extraction at sink.
 Cubit is NOT needed at compute time — only for mesh generation.
 
+**BEM vs FEM-BEM mesh requirement**:
+- **BEM only** (calc_inductance.py): requires surface-only mesh.
+  `HDivSurface` on volume mesh includes interior edges as DOFs -> singular.
+  calc_inductance.py auto-extracts surface from volume .vol.
+- **FEM-BEM coupling** (future): uses volume .vol directly.
+  `HCurl(mesh).Trace()` or `HDiv(mesh).Trace()` restricts to BND
+  without interior DOF contamination. Same .vol for both FEM and BEM.
+
 ### IH (BEM): Mesh Order vs FES Order
 
 **POLICY**: For BEM (EFIE), prioritize **mesh curving order** over **FES basis order**.
