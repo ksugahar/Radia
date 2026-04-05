@@ -66,7 +66,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/ksugahar/Radia"
-Documentation = "https://github.com/ksugahar/Radia/blob/master/README.md"
+Documentation = "https://github.com/ksugahar/Radia/blob/main/README.md"
 Repository = "https://github.com/ksugahar/Radia"
 Issues = "https://github.com/ksugahar/Radia/issues"
 "Original Radia" = "https://github.com/ochubar/Radia"
