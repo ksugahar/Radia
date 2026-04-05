@@ -71,7 +71,7 @@ def prepare_package_data():
 	cubit_files = [
 		("src/cubit_plugin/build-pyd/radia_cubit_mesh.cp312-win_amd64.pyd",
 		 "radia_cubit_mesh.pyd"),
-		("src/cubit_plugin/build-test/radia_cubit.ccm",
+		("src/cubit_plugin/build-ccm/radia_cubit.ccm",
 		 "radia_cubit.ccm"),
 	]
 	root = Path(__file__).parent
