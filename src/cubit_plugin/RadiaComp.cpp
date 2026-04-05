@@ -41,8 +41,9 @@
 #include <windows.h>
 #endif
 
-// Ensure Netgen DLLs can be found for DELAYLOAD resolution.
-// nglib.dll/ngcore.dll live in plugins/, not bin/ where .ccl lives.
+// Ensure DLLs in plugins/ can be found at runtime.
+// With compact_netgen build, nglib/ngcore are statically linked (no DLL needed).
+// This path setup is still needed for cubit_geom.dll DELAYLOAD resolution.
 static void ensure_netgen_dll_path()
 {
 #ifdef _WIN32
