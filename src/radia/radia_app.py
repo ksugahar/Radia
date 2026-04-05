@@ -208,14 +208,21 @@ class IHBEMTab(ModeTab):
         self._add_browse("bh_file", "BH file:",
                          filter_str="Text files (*.txt *.csv);;All (*)")
 
-    def build_command(self, cub5):
-        if not cub5:
-            raise ValueError("No .cub5 file specified.")
-        cmd = [_PYTHON, _calc_script("calc_inductance.py"),
-               "--cub5", cub5,
-               "--order", self._val("order"),
-               "--source", self._val("source"),
-               "--sink", self._val("sink")]
+    def build_command(self, model_path):
+        if not model_path:
+            raise ValueError("No model file specified.")
+        # Prefer --vol (no Cubit needed), fall back to --cub5
+        if model_path.endswith(".vol"):
+            cmd = [_PYTHON, _calc_script("calc_inductance.py"),
+                   "--vol", model_path,
+                   "--source", self._val("source"),
+                   "--sink", self._val("sink")]
+        else:
+            cmd = [_PYTHON, _calc_script("calc_inductance.py"),
+                   "--cub5", model_path,
+                   "--order", self._val("order"),
+                   "--source", self._val("source"),
+                   "--sink", self._val("sink")]
         fes = self._val("fes_order")
         if fes and fes != "0":
             cmd += ["--fes-order", fes]
@@ -232,7 +239,7 @@ class IHBEMTab(ModeTab):
         bh = self._val("bh_file")
         if bh:
             cmd += ["--bh-file", bh]
-        cmd += ["--msh-output", self._msh_output(cub5, "_bem")]
+        cmd += ["--msh-output", self._msh_output(model_path, "_bem")]
         return cmd
 
 
