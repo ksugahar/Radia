@@ -47,14 +47,14 @@ python arc_current_with_magnet.py
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
 | [ngsolve_integration/](ngsolve_integration/) | 14 | RadiaField CoefficientFunction, field types, mesh convergence |
-| [KelvinTransformation/](KelvinTransformation/) | 96 | Kelvin transformation for unbounded domains (H/A formulation, adaptive mesh) |
+| [kelvin_transformation/](kelvin_transformation/) | 96 | Kelvin transformation for unbounded domains (H/A formulation, adaptive mesh) |
 
 ### PEEC Conductor Modeling
 
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
 | [peec_integration/](peec_integration/) | 98 | PEEC Loop-Star solver: coils, SPICE export, ngbem coupling, WPT |
-| [Effective_Surface_Impedance/](Effective_Surface_Impedance/) | 5 | ESIM conductor model (Dowell + nonlinear homogenization) |
+| [effective_surface_impedance/](effective_surface_impedance/) | 5 | ESIM conductor model (Dowell + nonlinear homogenization) |
 | [induction_heating/](induction_heating/) | 6 | ESIM induction heating, RWG-EFIE 3D, WPT coupling |
 | [ngbem_diagnostics/](ngbem_diagnostics/) | 14 | Eddy current solver validation and diagnostics |
 
@@ -62,7 +62,7 @@ python arc_current_with_magnet.py
 
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
-| [Universal_Relaxation_Network/](Universal_Relaxation_Network/) | 24 | KAN-inspired URN for BH curves, SPICE time-domain |
+| [universal_relaxation_network/](universal_relaxation_network/) | 24 | KAN-inspired URN for BH curves, SPICE time-domain |
 
 ---
 
@@ -74,9 +74,9 @@ python arc_current_with_magnet.py
 | Permanent magnets | `simple_problems/`, `smco_magnet_array/` |
 | Electromagnets | `c_type_electromagnet/`, `complex_coil_geometry/` |
 | External/background fields | `background_fields/` |
-| FEM coupling | `ngsolve_integration/`, `KelvinTransformation/` |
+| FEM coupling | `ngsolve_integration/`, `kelvin_transformation/` |
 | PEEC conductors | `peec_integration/`, `induction_heating/` |
-| Eddy currents / shielding | `ngbem_diagnostics/`, `Effective_Surface_Impedance/` |
+| Eddy currents / shielding | `ngbem_diagnostics/`, `effective_surface_impedance/` |
 | Solver performance | `solver_benchmarks/` |
 | Visualization | `visualization/`, `vtk_export/` |
 

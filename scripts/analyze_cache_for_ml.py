@@ -6,7 +6,7 @@ problem characteristics and optimal parameters to improve future parameter
 selection.
 
 Usage:
-    python tools/analyze_cache_for_ml.py [cache_file]
+    python scripts/analyze_cache_for_ml.py [cache_file]
 """
 
 import sys

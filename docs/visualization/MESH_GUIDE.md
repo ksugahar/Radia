@@ -534,7 +534,7 @@ mesh.ngmesh.Draw()
 ### 5.1 How to check whether surface elements are present
 
 ```bash
-python utils/check_vol_surface_elements.py mesh.vol
+python scripts/check_vol_surface_elements.py mesh.vol
 ```
 
 Or programmatically:

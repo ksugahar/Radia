@@ -981,7 +981,7 @@ SIBC references (local library):
 | `Surface Impedance Boundary Conditions a Comprehensive Approach.pdf` | 0th/higher-order SIBC theory |
 | `Course G2ELab 2018 - Derivation of High Order SIBCs - lesson 2.pdf` | Curvature correction derivation |
 | `Course G2ELab 2018 - FEM Formulation - lesson 4.pdf` | FEM weak form with SIBC |
-| `A_Nonlinear_Effective_Surface_Impedance_...pdf` | Hollaus ESIM (nonlinear, Karl iteration) |
+| `A_Nonlinear_effective_surface_impedance_...pdf` | Hollaus ESIM (nonlinear, Karl iteration) |
 | `FEM and BEM implementations of a high order surface impedance...pdf` | High-order SIBC in FEM/BEM |
 
 ---

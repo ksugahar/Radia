@@ -171,7 +171,7 @@ def workflow_example():
         print(f"   mesh.ngmesh.Save('model.vol')")
 
         print(f"\n4. View in Netgen GUI:")
-        print(f"   python utils/netgen_vol_viewer.py model.vol")
+        print(f"   python scripts/netgen_vol_viewer.py model.vol")
 
         print(f"\n5. Use with Radia:")
         print(f"   from netgen_mesh_import import netgen_mesh_to_radia")

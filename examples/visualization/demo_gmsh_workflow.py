@@ -206,7 +206,7 @@ def main():
     print(f"   mesh = Mesh('{msh_file}')")
     print("   mesh.ngmesh.Save('gmsh_box.vol')")
     print("\n3. View .vol in Netgen GUI:")
-    print("   python utils/netgen_vol_viewer.py gmsh_box.vol")
+    print("   python scripts/netgen_vol_viewer.py gmsh_box.vol")
 
 
 if __name__ == '__main__':

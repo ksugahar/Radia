@@ -5,7 +5,7 @@ This script uses machine learning to predict optimal H-matrix parameters
 (eps, max_rank) based on problem size and characteristics.
 
 Usage:
-    python tools/optimize_parameters_ml.py [--train] [--predict N]
+    python scripts/optimize_parameters_ml.py [--train] [--predict N]
 """
 
 import sys
