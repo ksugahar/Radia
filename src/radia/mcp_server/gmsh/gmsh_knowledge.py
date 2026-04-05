@@ -1124,15 +1124,65 @@ Geometry.Surfaces = 1;
 Geometry.SurfaceType = 2;        // filled surface (not wireframe)
 ```
 
-## Transparency Limitation
+## High-Order Elements in Displacement View
 
-GMSH does NOT support proper alpha transparency for mesh faces or
-STEP surfaces. The OpenGL renderer lacks depth sorting for transparent
-objects. Use wireframe or visibility toggling instead.
+`Mesh.NumSubEdges` only affects MESH display, NOT View display.
+For curved elements in displacement Views, use:
 
-Alternatives for transparency:
-- ParaView (VTK-based, full alpha blending support)
-- Blender (ray-traced transparency)
+```
+View[0].AdaptVisualizationGrid = 1;  // enable adaptive subdivision
+View[0].MaxRecursionLevel = 2;       // subdivision depth (2-3 is good)
+View[0].TargetError = 0.0001;        // adaptive error threshold
+```
+
+Without these, TET10/HEX20 elements render as straight-edged in the View.
+
+## Solid (Filled) Display of Displaced Elements
+
+VectorType=5 renders displaced elements as SOLID filled surfaces
+colored by displacement magnitude. Key options:
+
+```
+View[0].VectorType = 5;              // displacement mode
+View[0].ShowElement = 0;             // 0=no wireframe overlay, 1=with edges
+View[0].DrawSkinOnly = 1;            // only external faces (faster)
+View[0].IntervalsType = 2;           // 2=continuous colormap (filled)
+View[0].Light = 1;                   // enable lighting for 3D shading
+View[0].SmoothNormals = 1;           // smooth normals across elements
+View[0].Boundary = 0;               // 0=volume, 1=surface only
+View[0].Explode = 1.0;              // 1.0=no shrinking
+```
+
+Note: IntervalsType must be 2 (continuous) or 3 (discrete) for filled
+rendering. Type 1 (iso-values) shows isolines, type 4 (numeric) shows
+values as text.
+
+## External View for Coloring Displaced Mesh
+
+```
+View[0].ExternalView = 1;  // color displaced mesh by View[1] scalar data
+```
+Enables showing stress/temperature on deformed shape. View[0] provides
+displacement, View[1] provides scalar field for coloring.
+
+## Transparency
+
+GMSH has limited transparency support:
+
+```
+View[0].ColormapAlpha = 0.3;       // global alpha (0=transparent, 1=opaque)
+View[0].ColormapAlphaPower = 0.0;  // nonlinear alpha mapping
+View[0].FakeTransparency = 0;      // 0=real (sorted), 1=additive (faster)
+```
+
+- **Real transparency**: back-to-front triangle sorting per frame. Correct
+  but slow, and only works within a single View.
+- **Fake transparency**: additive blending. Fast but incorrect for
+  overlapping geometry.
+- **No per-element/per-material alpha**. Alpha is global per View.
+- **STEP geometry surfaces have NO alpha support** at all.
+
+For proper transparency, use ParaView (VTK) or Blender.
 
 ## .opt Companion File
 
@@ -1172,6 +1222,42 @@ gmsh.option.setNumber("Mesh.NumSubEdges", 4)
 
 gmsh.fltk.run()
 gmsh.finalize()
+```
+
+## Coordinate Transformation Pipeline (applied in order)
+
+1. **Explode** (`View.Explode=1.0`) -- shrink toward barycenter
+2. **Transform** (`View.TransformXX..ZZ`) -- 3x3 matrix
+3. **Offset** (`View.OffsetX/Y/Z=0`) -- constant translation
+4. **Raise** (`View.RaiseX/Y/Z=0`) -- elevation proportional to scalar
+5. **NormalRaise** (`View.NormalRaise=0`) -- elevation along element normal
+6. **Displacement** (VectorType=5) -- `xyz += DisplacementFactor * val`
+7. **GeneralizedRaise** (`View.UseGeneralizedRaise=0`) -- formula-based
+
+## GeneralizedRaise (Custom Coordinate Formulas)
+
+```
+View[0].UseGeneralizedRaise = 1;
+View[0].GeneralizedRaiseFactor = 1.0;
+View[0].GeneralizedRaiseX = "v0";   // variables: x,y,z,v0..v8,s,t
+View[0].GeneralizedRaiseY = "v1";
+View[0].GeneralizedRaiseZ = "v2";
+```
+
+Enables arbitrary coordinate transformations using field values.
+14 input variables: xyz[0..2], val[3..11], step[12], time[13].
+
+## Rotation + Translation Animation via Displacement
+
+For combined rotation + translation, compute per-node displacement:
+```python
+# CW rotation around Z through (cx, cy) + X translation
+theta = -2 * pi * n_rotations * t
+cos_t, sin_t = cos(theta), sin(theta)
+rx, ry = x - cx, y - cy
+dx = (cos_t*rx - sin_t*ry + cx + x_disp) - x
+dy = (sin_t*rx + cos_t*ry + cy) - y
+# Write as NodeData displacement vector per time step
 ```
 
 ## vol_to_gmsh: .vol -> .msh v4.1 Conversion
