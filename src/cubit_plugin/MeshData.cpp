@@ -144,61 +144,56 @@ void MeshData::extract_elements(MeshExportInterface *iface)
 }
 
 // ================================================================
-// extract_sidesets — face elements from sideset side definitions
+// extract_sidesets — face elements from sideset surfaces
+//
+// ExodusII side table (get_sideset_sides + get_nodes_per_side) fails
+// for wedge elements (returns nv=0). Instead, get the surfaces in
+// each sideset and collect tri/face elements via parse_cubit_list,
+// which works for all element types (tet, hex, wedge, pyramid).
 // ================================================================
 void MeshData::extract_sidesets(MeshExportInterface *iface)
 {
   std::vector<SidesetHandle> ss_handles;
   iface->get_sideset_list(ss_handles);
 
-  const int sbuf = 100;
-  std::vector<ElementHandle> ehandles(sbuf);
-  std::vector<ElementType> etypes(sbuf);
-  std::vector<int> side_ids(sbuf);
-
   for (auto &ssh : ss_handles) {
     SidesetGroup sg;
     sg.id = iface->id_from_handle(ssh);
     sg.name = iface->get_sideset_name(ssh);
 
-    int sstart = 0, scount = 0;
-    while ((scount = iface->get_sideset_sides(ssh, sstart, sbuf,
-                                               ehandles, etypes, side_ids)) > 0) {
-      for (int i = 0; i < scount; i++) {
-        // Get parent element connectivity
-        std::vector<int> parent_conn(27);
-        int parent_nn = iface->get_connectivity(ehandles[i], parent_conn);
-        (void)parent_nn;
+    // Get surfaces in this sideset
+    std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
 
-        // Get face node indices from ExodusII side table
-        int side_nn = 0;
-        iface->get_nodes_per_side(etypes[i], side_ids[i], side_nn);
-        std::vector<int> idx(side_nn);
-        iface->get_node_indices_per_side(etypes[i], side_ids[i], idx);
+    for (int sid : ss_surfs) {
+      // Triangles on this surface (tet/wedge boundary faces)
+      std::vector<int> tri_ids = CubitInterface::parse_cubit_list(
+          "tri", "in surface " + std::to_string(sid));
+      for (int tid : tri_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("tri", tid);
+        if ((int)conn.size() < 3) continue;
 
-        // Build face element
         MeshElement face;
         face.group_id = sg.id;
-        face.nv = side_nn;
-        face.conn.resize(side_nn);
-        for (int j = 0; j < side_nn; j++)
-          face.conn[j] = parent_conn[idx[j]];
-
-        // Skip degenerate faces (nv=0 from unsupported parent types)
-        if (side_nn == 0)
-          continue;
-
-        // Determine face element type
-        if (side_nn == 3)
-          face.type = TRI3;
-        else if (side_nn == 4)
-          face.type = QUAD4;
-        else
-          face.type = INVALID_ELEMENT_TYPE;
-
+        face.type = TRI3;
+        face.nv = 3;
+        face.conn = {conn[0], conn[1], conn[2]};
         sg.faces.push_back(std::move(face));
       }
-      sstart += scount;
+
+      // Quads on this surface (hex/wedge boundary faces)
+      std::vector<int> face_ids = CubitInterface::parse_cubit_list(
+          "face", "in surface " + std::to_string(sid));
+      for (int fid : face_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("face", fid);
+        if ((int)conn.size() < 4) continue;
+
+        MeshElement face;
+        face.group_id = sg.id;
+        face.type = QUAD4;
+        face.nv = 4;
+        face.conn = {conn[0], conn[1], conn[2], conn[3]};
+        sg.faces.push_back(std::move(face));
+      }
     }
     sidesets.push_back(std::move(sg));
   }
