@@ -43,6 +43,7 @@ public slots:
   void export_meg();
   void export_netgen();
   void mesh_volume();
+  void generate_coil();
 };
 
 //! Export options dialog.

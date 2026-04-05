@@ -1669,7 +1669,7 @@ All URN examples, data, and scripts in `examples/Universal_Relaxation_Network/`.
 |--------|---------|-----------|-------|
 | GMSH v2.2 | `export gmsh "f.msh" version 2` | Yes | Default, NGSolve ReadGmsh() compatible |
 | GMSH v4.1 | `export gmsh "f.msh" version 4` | Yes | Structured entity blocks, PhysicalNames |
-| Nastran BDF | `export nastran "f.bdf"` | Yes | CTETRA/CTETRA(10), nopyramid option |
+| Nastran BDF | `export radia_nastran "f.bdf"` | Yes | CTETRA/CTETRA(10), nopyramid option |
 | VTK | `export vtk "f.vtk"` | Yes | Legacy format, cell types 10/24 |
 | MEG | `export meg "f.meg"` | Order 1 only | ELF format |
 

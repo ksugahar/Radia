@@ -28,7 +28,7 @@ Requires Cubit installed with the radia plugin (`radia-setup`).
 
 ```
 export gmsh "file.msh" [order {1|2}] [version {2|4}] [dimension {2|3}] [overwrite]
-export nastran "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
+export radia_nastran "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
 export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 export meg "file.meg" [threed|twod|axisymmetric] [overwrite]
 ```
