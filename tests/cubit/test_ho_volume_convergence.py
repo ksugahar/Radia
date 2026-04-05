@@ -103,6 +103,22 @@ test_cases = [
         "block 1 add hex all", 'block 1 name "map"',
         "Volume all scale 0.001",
     ], False),
+    ("case06_cyl_sphere_BL", [
+        "reset",
+        "create Cylinder height 1 radius 0.5",
+        "create sphere radius 0.5",
+        "move Volume 2 z 0.5 include_merged",
+        "unite volume all", "compress",
+        "create boundary_layer 1",
+        "modify boundary_layer 1 uniform height 0.02 growth 1.2 layers 3",
+        "modify boundary_layer 1 add surface 1 volume 1 surface 3 volume 1",
+        "modify boundary_layer 1 continuity on",
+        "volume 1 scheme tetmesh", "volume 1 size 0.2",
+        "mesh volume 1",
+        "block 1 add tet all", 'block 1 name "tet"',
+        "block 2 add wedge all", 'block 2 name "wedge"',
+        "Volume all scale 0.001",
+    ], False),
 ]
 
 
@@ -252,6 +268,110 @@ def hex8_volume(pts):
     return vol
 
 
+def wedge6_volume(pts):
+    """Volume of linear wedge using 2-point Gauss in zeta, 1-point in triangle."""
+    gp = 1.0 / math.sqrt(3.0)
+    gauss = [(1/3.0, 1/3.0, -gp), (1/3.0, 1/3.0, gp)]
+    vol = 0.0
+    for L1, L2, zeta in gauss:
+        L3 = 1 - L1 - L2
+        dNdL1 = np.array([(1-zeta)/2, 0, -(1-zeta)/2,
+                           (1+zeta)/2, 0, -(1+zeta)/2])
+        dNdL2 = np.array([0, (1-zeta)/2, -(1-zeta)/2,
+                           0, (1+zeta)/2, -(1+zeta)/2])
+        dNdzeta = np.array([-L1/2, -L2/2, -L3/2, L1/2, L2/2, L3/2])
+        J = np.zeros((3, 3))
+        for i in range(6):
+            J[0] += dNdL1[i] * pts[i]
+            J[1] += dNdL2[i] * pts[i]
+            J[2] += dNdzeta[i] * pts[i]
+        vol += 0.5 * abs(np.linalg.det(J))  # 0.5 = ref triangle area
+    return vol
+
+
+def wedge15_volume(coords):
+    """Volume of WEDGE15 using 3-point triangle x 3-point line Gauss quadrature.
+
+    GMSH WEDGE15 serendipity shape functions in (u,v,w) reference space:
+      u,v: triangle (u+v<=1), w: [-1,1]
+      L0=1-u-v, L1=u, L2=v
+
+    Corner (serendipity, NOT simple product):
+      Bottom: N_i = L_i*(1-w)*(2*L_i - 2 - w)/2
+      Top:    N_i = L_i*(1+w)*(2*L_i - 2 + w)/2
+    Mid-edge triangle: N = 4*La*Lb*(1 +/- w)/2
+    Mid-edge vertical: N = L_i*(1-w^2)
+    """
+    tri_pts = [(1 / 6.0, 1 / 6.0), (2 / 3.0, 1 / 6.0), (1 / 6.0, 2 / 3.0)]
+    tri_w = 1 / 6.0
+
+    gp = math.sqrt(3.0 / 5.0)
+    line_pts = [-gp, 0, gp]
+    line_w = [5.0 / 9.0, 8.0 / 9.0, 5.0 / 9.0]
+
+    # dL/du, dL/dv for L0=1-u-v, L1=u, L2=v
+    dLdu = [-1, 1, 0]
+    dLdv = [-1, 0, 1]
+
+    vol = 0.0
+    for u, v in tri_pts:
+        Lv = [1 - u - v, u, v]
+        for li in range(3):
+            w = line_pts[li]
+            wt = tri_w * line_w[li]
+            h0 = 1 - w * w
+
+            dNdu = np.zeros(15)
+            dNdv = np.zeros(15)
+            dNdw = np.zeros(15)
+
+            # Bottom corners: N = Li*(1-w)*(2*Li-2-w)/2
+            for i in range(3):
+                Li = Lv[i]
+                a = 1 - w
+                dNdu[i] = dLdu[i] * a * (4 * Li - 2 - w) / 2
+                dNdv[i] = dLdv[i] * a * (4 * Li - 2 - w) / 2
+                dNdw[i] = Li * (-2 * Li + 1 + 2 * w) / 2
+
+            # Top corners: N = Li*(1+w)*(2*Li-2+w)/2
+            for i in range(3):
+                Li = Lv[i]
+                a = 1 + w
+                dNdu[3 + i] = dLdu[i] * a * (4 * Li - 2 + w) / 2
+                dNdv[3 + i] = dLdv[i] * a * (4 * Li - 2 + w) / 2
+                dNdw[3 + i] = Li * (2 * Li - 1 + 2 * w) / 2
+
+            # Mid-edge bottom (6,7,8): N = 4*La*Lb*(1-w)/2
+            hm = (1 - w) / 2
+            for idx, ia, ib in [(6, 0, 1), (7, 1, 2), (8, 2, 0)]:
+                La, Lb = Lv[ia], Lv[ib]
+                dNdu[idx] = 4 * (dLdu[ia] * Lb + La * dLdu[ib]) * hm
+                dNdv[idx] = 4 * (dLdv[ia] * Lb + La * dLdv[ib]) * hm
+                dNdw[idx] = 4 * La * Lb * (-0.5)
+
+            # Mid-edge top (9,10,11): N = 4*La*Lb*(1+w)/2
+            hp = (1 + w) / 2
+            for idx, ia, ib in [(9, 0, 1), (10, 1, 2), (11, 2, 0)]:
+                La, Lb = Lv[ia], Lv[ib]
+                dNdu[idx] = 4 * (dLdu[ia] * Lb + La * dLdu[ib]) * hp
+                dNdv[idx] = 4 * (dLdv[ia] * Lb + La * dLdv[ib]) * hp
+                dNdw[idx] = 4 * La * Lb * (0.5)
+
+            # Mid-edge vertical (12,13,14): N = Li*(1-w^2)
+            for idx, i in [(12, 0), (13, 1), (14, 2)]:
+                dNdu[idx] = dLdu[i] * h0
+                dNdv[idx] = dLdv[i] * h0
+                dNdw[idx] = Lv[i] * (-2 * w)
+
+            J = np.zeros((3, 3))
+            for n in range(15):
+                J[0] += dNdu[n] * coords[n]
+                J[1] += dNdv[n] * coords[n]
+                J[2] += dNdw[n] * coords[n]
+            vol += wt * abs(np.linalg.det(J))
+    return vol
+
+
 def pyramid5_volume(pts):
     v1 = tet4_volume(np.array([pts[0], pts[1], pts[2], pts[4]]))
     v2 = tet4_volume(np.array([pts[0], pts[2], pts[3], pts[4]]))
@@ -302,8 +422,10 @@ def parse_gmsh_v22(filename):
                     elements.append((etype, conn))
 
     type_names = {
-        4: 'TET4', 11: 'TET10', 5: 'HEX8', 17: 'HEX20',
-        6: 'WEDGE6', 18: 'WEDGE15', 7: 'PYRAMID5', 19: 'PYRAMID13',
+        4: 'TET4', 11: 'TET10',
+        5: 'HEX8', 17: 'HEX20',
+        6: 'WEDGE6', 18: 'WEDGE15',
+        7: 'PYRAMID5', 19: 'PYRAMID13',
     }
     vol = 0.0
     counts = {}
@@ -317,6 +439,10 @@ def parse_gmsh_v22(filename):
                 vol += hex8_volume(np.array([nodes[c] for c in conn[:8]]))
             elif etype == 17:
                 vol += hex20_volume([nodes[c] for c in conn[:20]])
+            elif etype == 6:
+                vol += wedge6_volume(np.array([nodes[c] for c in conn[:6]]))
+            elif etype == 18:
+                vol += wedge15_volume([nodes[c] for c in conn[:15]])
             elif etype == 7:
                 vol += pyramid5_volume(np.array([nodes[c] for c in conn[:5]]))
             elif etype == 19:
