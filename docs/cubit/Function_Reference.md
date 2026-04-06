@@ -43,7 +43,7 @@ cmake --build . --target radia_cubit_ccm   # APREPRO commands (plugins/)
 cmake --build . --target radia_cubit_ccl   # Qt5 GUI menu (bin/)
 ```
 
-Installation: `pip install radia && radia-setup --all-users`
+Installation: `pip install cubit-mesh-export && cubit-plugin-install`
 
 ---
 
