@@ -380,14 +380,13 @@ All results achieve **Netgen-native accuracy** (<0.003%).
 
 - NGSolve: Build from `ksugahar/ngsolve` branch `feature/setgeominfo`
 - Coreform Cubit 2025.3+
-- `pip install coreform-cubit-mesh-export`
+- `pip install cubit-mesh-export && cubit-plugin-install`
 
 ### 3.8 Examples and Links
 
-- Full working examples: [ksugahar/Coreform_Cubit_Mesh_Export/examples/netgen/](https://github.com/ksugahar/Coreform_Cubit_Mesh_Export/tree/main/examples/netgen)
 - Netgen PR: [NGSolve/netgen#232](https://github.com/NGSolve/netgen/pull/232)
 - Forum: [Feature Request - SetGeomInfo API](https://forum.ngsolve.org/t/feature-request-python-api-for-high-order-curving-of-externally-imported-meshes/3810)
-- PyPI: [coreform-cubit-mesh-export](https://pypi.org/project/Coreform-Cubit-Mesh-Export/)
+- PyPI: [cubit-mesh-export](https://pypi.org/project/cubit-mesh-export/)
 
 ---
 
