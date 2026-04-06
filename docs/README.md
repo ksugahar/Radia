@@ -47,4 +47,3 @@
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Export Cubit mesh to Netgen with high-order curving support
 - [export_Nastran.md](cubit/export_Nastran.md) - Export to NX Nastran bulk data format
 - [export_exodus.md](cubit/export_exodus.md) - Export to Exodus II format
-- [export_meg.md](cubit/export_meg.md) - Export to ELF/MAGIC MEG format

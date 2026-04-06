@@ -971,27 +971,25 @@ for l in range(max_levels):
     mesh.Refine()
 ```
 
-## Gmsh Mesh Import (ReadGmsh)
+## Mesh Import (.vol)
 
-Load external Gmsh v2 format meshes (from Cubit, Gmsh, or other generators):
+Load Netgen .vol meshes (from Cubit export or Netgen):
 
 ```python
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
-# Load Gmsh v2 mesh (.msh)
-ngmesh = ReadGmsh("model.msh")
-mesh = Mesh(ngmesh)
+# Load .vol mesh (exported from Cubit or Netgen)
+mesh = Mesh("model.vol")
 
-# Physical groups become material names and boundary names
+# Block/sideset names become material names and boundary names
 print("Materials:", mesh.GetMaterials())
 print("Boundaries:", mesh.GetBoundaries())
 ```
 
 **Key points:**
-- Physical groups in Gmsh map to `mesh.GetMaterials()` (volumes) and
-  `mesh.GetBoundaries()` (surfaces)
-- Supports 1st and 2nd order elements (TET4/TET10, HEX8/HEX20, etc.)
+- .vol files preserve material labels and boundary labels
+- Supports high-order curved elements (order 1-5)
+- Use `dx("region_name")` and `ds("boundary_name")` in weak forms
 - Use `dx("region_name")` and `ds("boundary_name")` in weak forms
 - Material properties via `CoefficientFunction([... for mat in mesh.GetMaterials()])`
 

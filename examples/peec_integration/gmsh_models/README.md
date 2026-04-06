@@ -68,11 +68,11 @@ python demo_gmsh_to_peec.py
 ## Format: GMSH v2.2
 
 **Why v2.2**:
-- NGSolve `ReadGmsh()` supports v2.2
+- GMSH GUI visualization
 - Maximum compatibility
 - Simpler structure than v4.1
 
-**Reference**: [S:\CoreformCubit\01_GitHub\examples\gmsh\README.md](S:\CoreformCubit\01_GitHub\examples\gmsh\README.md)
+**Note**: For NGSolve FEM computation, use `export netgen "mesh.vol"` (.vol format) instead of .msh. The .msh format is used here for GMSH visualization and PEEC surface mesh input only.
 
 ## Next Steps
 

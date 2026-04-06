@@ -11,7 +11,7 @@ class QAction;
 
 //! Radia Component for Coreform Cubit GUI.
 //!
-//! Adds "Export Mesh" menu with GMSH/Nastran/VTK/MEG export.
+//! Adds "Export Mesh" menu with GMSH/Nastran/VTK export.
 //! .ccl auto-loaded from bin/ — no -commandplugindir needed.
 class RadiaComp : public Component
 {
@@ -40,7 +40,6 @@ public slots:
   void export_gmsh();
   void export_nastran();
   void export_vtk();
-  void export_meg();
   void export_netgen();
   void mesh_volume();
   void generate_coil();
@@ -55,7 +54,7 @@ class ExportDialog : public QDialog
   Q_OBJECT
 
 public:
-  enum Format { NETGEN_VOL, GMSH, Nastran, VTK, MEG };
+  enum Format { NETGEN_VOL, GMSH, Nastran, VTK };
 
   ExportDialog(Format format, const QString &jouPath = QString(),
                QWidget* parent = nullptr);
@@ -71,7 +70,6 @@ public:
   int gmshVersion() const { return 2; }  // always v2.2 (v4.1 is post-processing only)
   int dimension() const { return (mDimension->currentText() == "2D") ? 2 : 3; }
   bool noPyramid() const { return mNoPyramid && mNoPyramid->currentIndex() == 1; }
-  char megDimension() const { return mDimension ? mDimension->currentText().at(0).toLatin1() : 'T'; }
 
 private slots:
   void browseDir();

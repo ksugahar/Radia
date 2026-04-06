@@ -690,16 +690,15 @@ mat = rad.MatLin(1000)
 rad.MatApl(container, mat)
 ```
 
-## .msh File Import (Cubit export)
+## Cubit .vol Import (Recommended)
 
 ```python
-from radia.gmsh_mesh_import import gmsh_to_radia
+from ngsolve import Mesh
+from radia.netgen_mesh_import import netgen_mesh_to_radia
 
-container = gmsh_to_radia(
-    'mesh.msh',           # GMSH v2/v4 ASCII format (from Cubit export)
-    unit_scale=0.001,     # mm -> m conversion
-    magnetization=[0, 0, 0]
-)
+# Load .vol exported from Cubit (export netgen "mesh.vol" order N)
+mesh = Mesh("mesh.vol")
+container = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
 ```
 
 ## Cubit Direct Import
@@ -2293,7 +2292,7 @@ rad.UtiDelAll()
 
 ## Pattern E: Mixed Element Types (Hex + Tet)
 
-Use netgen_mesh_to_radia() or gmsh_to_radia() for complex geometries.
+Use netgen_mesh_to_radia() for complex geometries.
 
 ```python
 import radia as rad

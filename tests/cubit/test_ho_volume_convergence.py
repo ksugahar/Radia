@@ -3,8 +3,7 @@ High-order volume convergence test for mixed element types.
 
 Tests:
   1. p-convergence: export netgen .vol at order 1-5, volume must converge to CAD
-  2. gmsh cross-check: export .msh order 1 and 2, compare volume vs netgen .vol
-  3. Path A==B: export netgen (C++) vs extract_curved_mesh (Python) volume match
+  2. Path A==B: export netgen (C++) vs extract_curved_mesh (Python) volume match
 
 Cases:
   1. Flat brick (hex + tet + pyramid) -- exact volume expected
@@ -381,87 +380,6 @@ def pyramid5_volume(pts):
 
 
 # ================================================================
-# GMSH v2.2 parser
-# ================================================================
-def parse_gmsh_v22(filename):
-    """Parse GMSH v2.2 and compute total volume from all 3D elements."""
-    with open(filename, 'r') as f:
-        content = f.read()
-
-    nodes = {}
-    elements = []
-    lines = content.split('\n')
-    section = None
-    n_nodes = n_elems = 0
-
-    for line in lines:
-        line = line.strip()
-        if line.startswith('$'):
-            if line == '$Nodes':
-                section = 'nodes'
-            elif line == '$Elements':
-                section = 'elements'
-            elif line.startswith('$End'):
-                section = None
-            continue
-        if section == 'nodes':
-            if n_nodes == 0:
-                n_nodes = int(line)
-            else:
-                parts = line.split()
-                if len(parts) >= 4:
-                    nodes[int(parts[0])] = np.array(
-                        [float(parts[1]), float(parts[2]), float(parts[3])])
-        elif section == 'elements':
-            if n_elems == 0:
-                n_elems = int(line)
-            else:
-                parts = line.split()
-                if len(parts) >= 4:
-                    etype = int(parts[1])
-                    ntags = int(parts[2])
-                    conn = [int(p) for p in parts[3 + ntags:]]
-                    elements.append((etype, conn))
-
-    type_names = {
-        4: 'TET4', 11: 'TET10',
-        5: 'HEX8', 17: 'HEX20',
-        6: 'WEDGE6', 18: 'WEDGE15',
-        7: 'PYRAMID5', 19: 'PYRAMID13',
-    }
-    vol = 0.0
-    counts = {}
-    for etype, conn in elements:
-        try:
-            if etype == 4:
-                vol += tet4_volume(np.array([nodes[c] for c in conn[:4]]))
-            elif etype == 11:
-                vol += tet10_volume([nodes[c] for c in conn[:10]])
-            elif etype == 5:
-                vol += hex8_volume(np.array([nodes[c] for c in conn[:8]]))
-            elif etype == 17:
-                vol += hex20_volume([nodes[c] for c in conn[:20]])
-            elif etype == 6:
-                vol += wedge6_volume(np.array([nodes[c] for c in conn[:6]]))
-            elif etype == 18:
-                vol += wedge15_volume([nodes[c] for c in conn[:15]])
-            elif etype == 7:
-                vol += pyramid5_volume(np.array([nodes[c] for c in conn[:5]]))
-            elif etype == 19:
-                # PYRAMID13: use linear fallback (proper quadrature needs
-                # diagonal mid-node not present in GMSH PYRAMID13)
-                vol += pyramid5_volume(np.array([nodes[c] for c in conn[:5]]))
-            else:
-                continue
-        except Exception:
-            continue
-        name = type_names.get(etype, f'type{etype}')
-        counts[name] = counts.get(name, 0) + 1
-
-    return {'volume': vol, 'n_nodes': len(nodes), 'counts': counts}
-
-
-# ================================================================
 # Test 1: p-convergence (netgen .vol, order 1-5, volume + area)
 # ================================================================
 def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False):
@@ -534,74 +452,7 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
 
 # ================================================================
-# Test 2: gmsh vs netgen volume + area at order 2
-# ================================================================
-def test_gmsh_vs_netgen(case_name, cad_volume, cad_area, is_flat):
-    """Compare .vol and .msh volume and area at order 1 and 2."""
-    print(f"\n  gmsh vs netgen (CAD vol={cad_volume:.6e}, area={cad_area:.6e}):")
-
-    results = {}
-    for order in [1, 2]:
-        msh_path = os.path.join(OUT_DIR, f"{case_name}_o{order}.msh")
-        cmd = f'export gmsh "{msh_path}" order {order} version 2 dimension 3 overwrite'
-        cubit.cmd(cmd)
-        r = parse_gmsh_v22(msh_path)
-        r['v_err'] = (r['volume'] - cad_volume) / cad_volume * 100.0
-        results[f'gmsh_o{order}'] = r
-
-    # Load netgen vol order 2 (already exported in p-convergence test)
-    vol_path = os.path.join(OUT_DIR, f"{case_name}_o2.vol")
-    try:
-        mesh = Mesh(vol_path)
-        ng_vol = Integrate(CF(1), mesh)
-        ng_area = Integrate(CF(1), mesh, BND)
-        ng_v_err = (ng_vol - cad_volume) / cad_volume * 100.0
-        ng_a_err = (ng_area - cad_area) / cad_area * 100.0
-    except Exception:
-        ng_vol = ng_area = ng_v_err = ng_a_err = None
-
-    print(f"  {'Source':<16} {'Volume':>14} {'V_err':>12} {'Area':>14} {'A_err':>12}")
-    print(f"  {'-'*16:<16} {'-'*14:>14} {'-'*12:>12} {'-'*14:>14} {'-'*12:>12}")
-    for key in ['gmsh_o1', 'gmsh_o2']:
-        r = results[key]
-        # gmsh parser only computes volume (no surface area from 3D elements)
-        print(f"  {key:<16} {r['volume']:>14.6e} {r['v_err']:>+11.4e}%")
-    if ng_vol is not None:
-        print(f"  {'netgen_o2':<16} {ng_vol:>14.6e} {ng_v_err:>+11.4e}% "
-              f"{ng_area:>14.6e} {ng_a_err:>+11.4e}%")
-
-    all_pass = True
-    g1 = results['gmsh_o1']
-    g2 = results['gmsh_o2']
-
-    # Check 1: gmsh o2 volume should improve over o1 (curved surfaces only)
-    if not is_flat:
-        if abs(g2['v_err']) >= abs(g1['v_err']):
-            print(f"  gmsh vol o2 not better than o1: [FAIL]")
-            all_pass = False
-        else:
-            print(f"  gmsh vol o2 better than o1: [PASS]")
-
-    # Check 2: gmsh o2 and netgen o2 volume must agree within 1%
-    if ng_vol is not None:
-        diff_pct = abs(g2['volume'] - ng_vol) / cad_volume * 100.0
-        cross_pass = diff_pct < 1.0
-        print(f"  gmsh_o2 vs netgen_o2 vol diff: {diff_pct:.4e}% "
-              f"[{'PASS' if cross_pass else 'FAIL'}]")
-        if not cross_pass:
-            all_pass = False
-
-    # Check 3: flat geometry must be exact
-    if is_flat:
-        if abs(g1['v_err']) > 0.01:
-            print(f"  flat vol o1 not exact: [FAIL]")
-            all_pass = False
-
-    return all_pass
-
-
-# ================================================================
-# Test 3: Path A (export netgen C++) vs Path B (extract_curved_mesh Python)
+# Test 2: Path A (export netgen C++) vs Path B (extract_curved_mesh Python)
 # ================================================================
 def test_path_ab(case_name, cad_volume, cad_area):
     """Compare .vol from Path A and Path B at order=2: volume, area, length."""
@@ -678,8 +529,7 @@ def main():
     print("=" * 70)
     print("High-Order Volume Convergence Test")
     print("  1. p-convergence (netgen .vol, order 1-5)")
-    print("  2. gmsh cross-check (.msh order 1 vs 2 vs netgen)")
-    print("  3. Path A (C++) vs Path B (Python) volume match")
+    print("  2. Path A (C++) vs Path B (Python) volume match")
     print("=" * 70)
 
     overall_pass = True
@@ -704,10 +554,9 @@ def main():
         print(f"  CAD volume: {cad_volume:.6e}, area: {cad_area:.6e}")
 
         p_pass = test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn)
-        g_pass = test_gmsh_vs_netgen(case_name, cad_volume, cad_area, is_flat)
         ab_pass = test_path_ab(case_name, cad_volume, cad_area)
 
-        case_pass = p_pass and g_pass and ab_pass
+        case_pass = p_pass and ab_pass
         print(f"\n  Result: [{'PASS' if case_pass else 'FAIL'}]")
         if not case_pass:
             overall_pass = False

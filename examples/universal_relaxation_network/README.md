@@ -25,7 +25,7 @@ This directory contains the implementation and examples for the Universal Relaxa
 ## Directory Structure
 
 ```
-Universal_Relaxation_Network/
+universal_relaxation_network/
   data/
     synthetic/                    # Physics-based synthetic benchmark data
       liion_battery_eis.csv       # Synthetic Li-ion battery EIS

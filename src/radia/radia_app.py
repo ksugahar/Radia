@@ -200,18 +200,29 @@ class IHBEMTab(ModeTab):
                         ["dowell", "esim", "bem-sibc"])
         self._add_line("freq", "Frequency [Hz]:", "50000")
         self._add_line("sigma", "Sigma [S/m]:", "2e6")
+
+        # Material: mu_r / BH (no hysteresis for IH)
+        mat_combo = self._add_combo("material", "Material:",
+                                    ["mu_r (Linear)", "BH Curve"])
         self._add_line("mu_r", "mu_r:", "100")
+        self._add_browse("bh_file", "BH file:",
+                         filter_str="Text files (*.txt *.csv);;All (*)")
+        mat_combo.currentIndexChanged.connect(self._on_material_changed)
+
         self._add_line("half_thickness", "Half thickness [m]:", "0.005")
         self._add_combo("esim_geometry", "ESIM geometry:",
                         ["local_curvature", "planar"])
-        self._add_combo("material", "Material:", ["steel", "copper", "custom"])
-        self._add_browse("bh_file", "BH file:",
-                         filter_str="Text files (*.txt *.csv);;All (*)")
+        self._on_material_changed(0)
+
+    def _on_material_changed(self, idx):
+        mu_r_w = self._widgets["mu_r"]
+        bh_w = self._widgets["bh_file"]
+        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
+        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
 
     def build_command(self, model_path):
         if not model_path:
             raise ValueError("No model file specified.")
-        # Prefer --vol (no Cubit needed), fall back to --cub5
         if model_path.endswith(".vol"):
             cmd = [_PYTHON, _calc_script("calc_inductance.py"),
                    "--vol", model_path,
@@ -228,17 +239,21 @@ class IHBEMTab(ModeTab):
             cmd += ["--fes-order", fes]
         wp = self._val("workpiece")
         if wp:
+            mat_idx = self._widgets["material"].currentIndex()
+            mat_name = "custom" if mat_idx == 0 else "steel"
             cmd += ["--workpiece", wp,
                     "--impedance-model", self._val("impedance"),
                     "--frequency", self._val("freq"),
                     "--sigma", self._val("sigma"),
-                    "--mu-r", self._val("mu_r"),
+                    "--material", mat_name,
                     "--half-thickness", self._val("half_thickness"),
-                    "--esim-geometry", self._val("esim_geometry"),
-                    "--material", self._val("material")]
-        bh = self._val("bh_file")
-        if bh:
-            cmd += ["--bh-file", bh]
+                    "--esim-geometry", self._val("esim_geometry")]
+            if mat_idx == 0:
+                cmd += ["--mu-r", self._val("mu_r")]
+            else:
+                bh = self._val("bh_file")
+                if bh:
+                    cmd += ["--bh-file", bh]
         cmd += ["--msh-output", self._msh_output(model_path, "_bem")]
         return cmd
 
@@ -250,57 +265,90 @@ class IHFEMTab(ModeTab):
         self._add_line("freq", "Frequency [Hz]:", "7000")
         self._add_line("sigma", "Sigma [S/m]:", "2e6")
         self._add_combo("impedance", "Impedance:", ["sibc", "esim"])
+
+        # Material: mu_r / BH (no hysteresis for IH)
+        mat_combo = self._add_combo("material", "Material:",
+                                    ["mu_r (Linear)", "BH Curve"])
         self._add_line("mu_r", "mu_r:", "100")
-        self._add_combo("material", "Material:", ["steel", "copper", "custom"])
+        self._add_browse("bh_file", "BH file:",
+                         filter_str="Text files (*.txt *.csv);;All (*)")
+        mat_combo.currentIndexChanged.connect(self._on_material_changed)
+
         self._add_line("current", "Current [A]:", "1.0")
         self._add_line("a_coil", "Coil radius [m]:", "0.003")
         self._add_line("r_wp", "Workpiece radius [m]:", "0.010")
         self._add_combo("solver", "Solver:",
                         ["pardiso", "bddc", "iccg", "ams"])
         self._add_spin("max_iter", "Max iterations:", 15, 1, 200)
-        self._add_browse("bh_file", "BH file:",
-                         filter_str="Text files (*.txt *.csv);;All (*)")
+        self._on_material_changed(0)
+
+    def _on_material_changed(self, idx):
+        mu_r_w = self._widgets["mu_r"]
+        bh_w = self._widgets["bh_file"]
+        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
+        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
 
     def build_command(self, cub5):
         if not cub5:
             raise ValueError("No .cub5 file specified.")
+        mat_idx = self._widgets["material"].currentIndex()
+        if mat_idx == 0:
+            mat_args = ["--material", "custom", "--mu-r", self._val("mu_r")]
+        else:
+            mat_args = ["--material", "steel"]
+            bh = self._val("bh_file")
+            if bh:
+                mat_args += ["--bh-file", bh]
         cmd = [_PYTHON, _calc_script("calc_fem_kelvin.py"),
-                "--cub5", cub5,
-                "--order", self._val("order"),
-                "--fes-order", self._val("fes_order"),
-                "--frequency", self._val("freq"),
-                "--sigma", self._val("sigma"),
-                "--impedance", self._val("impedance"),
-                "--mu-r", self._val("mu_r"),
-                "--material", self._val("material"),
-                "--current", self._val("current"),
-                "--a-coil", self._val("a_coil"),
-                "--r-wp", self._val("r_wp"),
-                "--solver", self._val("solver"),
-                "--max-iter", self._val("max_iter"),
-                "--msh-output", self._msh_output(cub5, "_fem")]
-        bh = self._val("bh_file")
-        if bh:
-            cmd += ["--bh-file", bh]
+               "--cub5", cub5,
+               "--order", self._val("order"),
+               "--fes-order", self._val("fes_order"),
+               "--frequency", self._val("freq"),
+               "--sigma", self._val("sigma"),
+               "--impedance", self._val("impedance"),
+               "--current", self._val("current"),
+               "--a-coil", self._val("a_coil"),
+               "--r-wp", self._val("r_wp"),
+               "--solver", self._val("solver"),
+               "--max-iter", self._val("max_iter"),
+               "--msh-output", self._msh_output(cub5, "_fem")]
+        cmd += mat_args
         return cmd
 
 
 class EMFEMTab(ModeTab):
+    _OMEGA_SOLVERS = ["Direct (PARDISO)", "AMG (Compact)", "BDDC"]
+    _A_SOLVERS = ["Direct (PARDISO)", "AMS (Compact)", "BDDC"]
+    _SOLVER_MAP = {
+        "Direct (PARDISO)": "pardiso",
+        "AMG (Compact)": "amg",
+        "AMS (Compact)": "ams",
+        "BDDC": "bddc",
+    }
+
     def _build_ui(self):
-        self._add_combo("formulation", "Formulation:",
-                        ["omega", "a-phi"])
+        form_combo = self._add_combo("formulation", "Formulation:",
+                                     ["omega", "a-phi"])
         self._add_spin("order", "Curve order:", 2, 1, 5)
         self._add_spin("fes_order", "FES order:", 1, 1, 5)
         self._add_browse("coil_script", "Coil script:",
                          filter_str="Python (*.py);;All (*)")
-        self._add_combo("material", "Material:", ["steel", "custom"])
+
+        # Material: mu_r / BH / Hysteresis
+        mat_combo = self._add_combo("material", "Material:",
+                                    ["mu_r (Linear)", "BH Curve",
+                                     "Hysteresis (.hys)"])
         self._add_line("mu_r", "mu_r:", "1000")
         self._add_browse("bh_file", "BH file:",
                          filter_str="Text files (*.txt *.csv);;All (*)")
         self._add_browse("hys_file", "Hysteresis file:",
                          filter_str="HYS files (*.hys);;All (*)")
-        self._add_combo("solver", "Solver:",
-                        ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"])
+        mat_combo.currentIndexChanged.connect(self._on_material_changed)
+
+        # Solver: depends on formulation
+        self._add_combo("solver", "Solver:", self._OMEGA_SOLVERS)
+        form_combo.currentTextChanged.connect(self._on_formulation_changed)
+
         self._add_line("ima", "IMA symmetry:", "",
                        placeholder="e.g. +x-z")
         self._add_line("tol", "Tolerance:", "1e-3")
@@ -309,34 +357,66 @@ class EMFEMTab(ModeTab):
         self._add_line("relax", "Relaxation:", "0.0")
         self._add_combo("method", "Method:", ["Picard", "Newton"])
 
+        # Initial visibility
+        self._on_material_changed(0)
+
+    def _on_formulation_changed(self, text):
+        combo = self._widgets["solver"]
+        prev = combo.currentText()
+        combo.clear()
+        items = self._A_SOLVERS if text == "a-phi" else self._OMEGA_SOLVERS
+        combo.addItems(items)
+        # Try to keep "Direct" or "BDDC" selected if switching
+        for i, item in enumerate(items):
+            if prev.split()[0] == item.split()[0]:
+                combo.setCurrentIndex(i)
+                break
+
+    def _on_material_changed(self, idx):
+        # 0=mu_r, 1=BH, 2=Hysteresis
+        mu_r_w = self._widgets["mu_r"]
+        bh_w = self._widgets["bh_file"]
+        hys_w = self._widgets["hys_file"]
+        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
+        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
+        hys_w.parentWidget().setVisible(idx == 2) if hys_w.parentWidget() else None
+
     def build_command(self, cub5):
         coil = self._val("coil_script")
         if not coil:
             raise ValueError("No coil script specified.")
-        solver_id = self._val("solver").split()[0]
+        solver_key = self._SOLVER_MAP.get(self._val("solver"), "pardiso")
+
+        mat_idx = self._widgets["material"].currentIndex()
+        if mat_idx == 0:
+            mat_args = ["--material", "linear", "--mu-r", self._val("mu_r")]
+        elif mat_idx == 1:
+            mat_args = ["--material", "steel"]
+            bh = self._val("bh_file")
+            if bh:
+                mat_args += ["--bh-file", bh]
+        else:
+            mat_args = ["--material", "hysteresis"]
+            hys = self._val("hys_file")
+            if hys:
+                mat_args += ["--hys-file", hys]
+
         cmd = [_PYTHON, _calc_script("calc_accel_magnet.py"),
                "--formulation", self._val("formulation"),
                "--order", self._val("order"),
                "--fes-order", self._val("fes_order"),
                "--coil-script", coil,
-               "--material", self._val("material"),
-               "--mu-r", self._val("mu_r"),
-               "--solver", solver_id,
+               "--solver", solver_key,
                "--tol", self._val("tol"),
                "--max-iter", self._val("max_iter"),
                "--n-steps", self._val("n_steps"),
                "--relax", self._val("relax")]
+        cmd += mat_args
         if cub5:
             cmd += ["--cub5", cub5]
         ima = self._val("ima")
         if ima:
             cmd += ["--ima", ima]
-        bh = self._val("bh_file")
-        if bh:
-            cmd += ["--bh-file", bh]
-        hys = self._val("hys_file")
-        if hys:
-            cmd += ["--hys-file", hys]
         if self._val("method") == "Newton":
             cmd += ["--newton"]
         cmd += ["--msh-output", self._msh_output(
@@ -348,10 +428,18 @@ class EMMSCTab(ModeTab):
     def _build_ui(self):
         self._add_browse("coil_script", "Coil script:",
                          filter_str="Python (*.py);;All (*)")
-        self._add_combo("material", "Material:", ["steel", "custom"])
+
+        # Material: mu_r / BH / Hysteresis
+        mat_combo = self._add_combo("material", "Material:",
+                                    ["mu_r (Linear)", "BH Curve",
+                                     "Hysteresis (.hys)"])
         self._add_line("mu_r", "mu_r:", "1000")
         self._add_browse("bh_file", "BH file:",
                          filter_str="Text files (*.txt *.csv);;All (*)")
+        self._add_browse("hys_file", "Hysteresis file:",
+                         filter_str="HYS files (*.hys);;All (*)")
+        mat_combo.currentIndexChanged.connect(self._on_material_changed)
+
         self._add_combo("solver", "Solver:",
                         ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"])
         self._add_line("ima", "IMA symmetry:", "",
@@ -360,29 +448,50 @@ class EMMSCTab(ModeTab):
         self._add_spin("max_iter", "Max iterations:", 100, 1, 9999)
         self._add_line("relax", "Relaxation:", "0.0")
         self._add_line("unit_scale", "Unit scale:", "0.001")
+        self._on_material_changed(0)
+
+    def _on_material_changed(self, idx):
+        mu_r_w = self._widgets["mu_r"]
+        bh_w = self._widgets["bh_file"]
+        hys_w = self._widgets.get("hys_file")
+        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
+        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
+        if hys_w:
+            hys_w.parentWidget().setVisible(idx == 2) if hys_w.parentWidget() else None
 
     def build_command(self, cub5):
         coil = self._val("coil_script")
         if not coil:
             raise ValueError("No coil script specified.")
         solver_id = self._val("solver").split()[0]
+
+        mat_idx = self._widgets["material"].currentIndex()
+        if mat_idx == 0:
+            mat_args = ["--material", "custom", "--mu-r", self._val("mu_r")]
+        elif mat_idx == 1:
+            mat_args = ["--material", "steel"]
+            bh = self._val("bh_file")
+            if bh:
+                mat_args += ["--bh-file", bh]
+        else:
+            mat_args = ["--material", "hysteresis"]
+            hys = self._val("hys_file")
+            if hys:
+                mat_args += ["--hys-file", hys]
+
         cmd = [_PYTHON, _calc_script("calc_accel_msc.py"),
                "--coil-script", coil,
-               "--material", self._val("material"),
-               "--mu-r", self._val("mu_r"),
                "--solver", solver_id,
                "--tol", self._val("tol"),
                "--max-iter", self._val("max_iter"),
                "--relax", self._val("relax"),
                "--unit-scale", self._val("unit_scale")]
+        cmd += mat_args
         if cub5:
             cmd += ["--cub5", cub5]
         ima = self._val("ima")
         if ima:
             cmd += ["--ima", ima]
-        bh = self._val("bh_file")
-        if bh:
-            cmd += ["--bh-file", bh]
         cmd += ["--msh-output", self._msh_output(
             cub5 or coil, "_msc")]
         return cmd
@@ -506,6 +615,12 @@ class RadiaApp(QMainWindow):
         self._stop_btn.clicked.connect(self._on_stop)
         btn_row.addWidget(self._stop_btn)
 
+        self._save_btn = QPushButton(
+            style.standardIcon(QStyle.SP_DialogSaveButton), " Save .py")
+        self._save_btn.setFixedHeight(32)
+        self._save_btn.clicked.connect(self._on_save_script)
+        btn_row.addWidget(self._save_btn)
+
         btn_row.addStretch()
 
         self._gmsh_btn = QPushButton(
@@ -532,6 +647,38 @@ class RadiaApp(QMainWindow):
             "Cubit (*.cub5);;STEP (*.step *.stp);;All (*)")
         if path:
             self._cub5.setText(path)
+
+    def _on_save_script(self):
+        tab = self._tab_instances[self._tabs.currentIndex()]
+        cub5 = self._cub5.text().strip()
+        try:
+            cmd = tab.build_command(cub5)
+        except ValueError as e:
+            QMessageBox.warning(self, "Input Error", str(e))
+            return
+
+        default_name = os.path.splitext(os.path.basename(cub5))[0] if cub5 else "solve"
+        default_path = os.path.join(
+            os.path.dirname(cub5) if cub5 else os.getcwd(),
+            f"run_{default_name}.py")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save script", default_path,
+            "Python (*.py);;All (*)")
+        if not path:
+            return
+
+        cmd_str = ", ".join(repr(c) for c in cmd)
+        script = (
+            '#!/usr/bin/env python\n'
+            '"""Generated by Radia App"""\n'
+            'import subprocess, sys\n'
+            f'cmd = [{cmd_str}]\n'
+            'print("Running:", " ".join(cmd))\n'
+            'sys.exit(subprocess.run(cmd).returncode)\n'
+        )
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(script)
+        self._status.showMessage(f"Saved: {path}")
 
     def _on_run(self):
         if self._process is not None:

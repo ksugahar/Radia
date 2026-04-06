@@ -2,7 +2,7 @@
 Cubit Mesh Export MCP Server
 
 Provides tools for:
-- Export function documentation (Gmsh, Nastran, MEG, Netgen, Exodus)
+- Export function documentation (Gmsh, Nastran, Netgen, Exodus)
 - Netgen/NGSolve high-order curving workflows (SetGeomInfo, name-based)
 - Cubit scripting patterns and best practices
 - Cubit Python API reference (600+ functions, entity classes)
@@ -268,17 +268,15 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['gmsh_2nd_order'] = '''# Gmsh 2nd Order Alternative (Simplest Workflow)
+EXAMPLES['vol_2nd_order'] = '''# Netgen .vol 2nd Order Export (Recommended Workflow)
 import sys, os, math
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R = 1.0
 
@@ -289,17 +287,15 @@ cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("volume 1 size 0.2")
 cubit.cmd("mesh volume 1")
 
-# Register blocks with 2nd order elements
-cubit.cmd("block 1 add tet all in volume 1")
-cubit.cmd("block 1 element type tetra10")
-cubit.cmd("block 2 add tri all")
-cubit.cmd("block 2 element type tri6")
+# Register blocks
+cubit.cmd("block 1 add volume 1")
+cubit.cmd('block 1 name "sphere"')
 
-# Export to Gmsh v2.2
-cubit.cmd('export gmsh "sphere_2nd.msh" overwrite')
+# Export to Netgen .vol (order 2 with ACIS curving)
+cubit.cmd('export netgen "sphere.vol" order 2 overwrite')
 
-# Read into NGSolve (no geometry reference needed!)
-mesh = Mesh(ReadGmsh("sphere_2nd.msh"))
+# Read into NGSolve
+mesh = Mesh("sphere.vol")
 
 expected_vol = 4/3 * math.pi * R**3
 vol = Integrate(CF(1), mesh)
@@ -376,7 +372,6 @@ def cubit_docs(topic: str = "all") -> str:
 	        "export_Gmesh"         - Gmsh v4.1 format
 	        "export_NGSolveCurvedMesh"          - Curved mesh export (replaces export_netgen)
 	        "export_nastran"         - Nastran BDF format
-	        "export_meg"             - MEG ELF/MAGIC format
 	        "export_exodus"          - Exodus II format
 	        "export_comparison"      - Format comparison and decision matrix
 	        "export_decision_guide"  - Decision tree for format selection
@@ -712,17 +707,15 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
 '''
 
-SCRIPT_TEMPLATES['tet_gmsh'] = '''# Cubit -> Gmsh 2nd order (simplest workflow)
+SCRIPT_TEMPLATES['tet_vol'] = '''# Cubit -> Netgen .vol 2nd order (recommended workflow)
 import sys, os
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 MESH_SIZE = 0.15
 
@@ -735,17 +728,14 @@ cubit.cmd("volume all scheme tetmesh")
 cubit.cmd(f"volume all size {MESH_SIZE}")
 cubit.cmd("mesh volume all")
 
-# === BLOCKS (2nd order) ===
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 1 element type tetra10")
-cubit.cmd("block 2 add tri all")
-cubit.cmd("block 2 element type tri6")
+# === BLOCKS ===
+cubit.cmd("block 1 add volume all")
 
-# === EXPORT ===
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+# === EXPORT (.vol with order 2 curving) ===
+cubit.cmd('export netgen "mesh.vol" order 2 overwrite')
 
 # === IMPORT TO NGSOLVE ===
-mesh = Mesh(ReadGmsh("mesh.msh"))
+mesh = Mesh("mesh.vol")
 vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
 '''
@@ -896,7 +886,7 @@ def generate_cubit_script(workflow: str = "tet_netgen") -> str:
 	    workflow: Script template to generate. Options:
 	        "tet_netgen"       - Tet mesh -> export_NGSolveCurvedMesh with ACIS curving
 	        "tet_netgen_named" - Complex geometry with export_NGSolveCurvedMesh
-	        "tet_gmsh"         - Tet mesh -> Gmsh 2nd order (simplest)
+	        "tet_gmsh"         - Tet mesh -> Netgen .vol 2nd order (simplest)
 	        "hex_netgen"       - Hex mesh -> export_NGSolveCurvedMesh with curving
 	"""
 	workflow = workflow.lower().strip()
@@ -1015,7 +1005,7 @@ def get_lint_rules() -> str:
 			'severity': 'MODERATE',
 			'description': 'Export file extension does not match the format.',
 			'trigger': 'export_Gmesh(cubit, "mesh.vtk") should be .msh',
-			'fix': 'Use correct extension: .msh, .bdf, .meg, .exo',
+			'fix': 'Use correct extension: .msh, .bdf, .exo, .vol',
 		},
 		{
 			'rule': 'curve-without-export-curved',
@@ -1089,10 +1079,9 @@ def cubit_to_ngsolve(mesh_file: str) -> str:
 		"   1. Create geometry and mesh in Cubit\n"
 		"   2. mesh = export_NGSolveCurvedMesh(cubit, order=N)\n"
 		"   3. Done - no STEP, no OCC, no SetGeomInfo needed\n\n"
-		"B. Gmsh 2nd order (alternative for order=2 only):\n"
-		"   1. Set block element types to tetra10/tri6\n"
-		"   2. export_Gmesh(cubit, 'mesh.msh')\n"
-		"   3. Mesh(ReadGmsh('mesh.msh'))\n"
+		"B. Netgen .vol export (alternative):\n"
+		"   1. cubit.cmd('export netgen \"mesh.vol\" order 2 overwrite')\n"
+		"   2. Mesh('mesh.vol')\n"
 	)
 
 

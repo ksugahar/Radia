@@ -19,7 +19,7 @@ GMSH_RADIA_POLICY = """
 - Post-processing field data (NodeData, ElementData)
 - Merging STEP geometry + .msh field data for overlay visualization
 - .geo companion files for display settings
-- Reading .msh format via `gmsh_mesh_import.py` (pure file reader)
+- Reading .msh format for field data (GmshPostExport output)
 
 ## NOT Allowed
 - GMSH Python API (`gmsh.model.occ.*`) for geometry creation
@@ -41,7 +41,7 @@ GMSH GUI:
 ```
 
 ## Output Format
-- Default: .msh v2.2 (NGSolve ReadGmsh() compatible)
+- Default: .msh v4.1 (GMSH visualization)
 - Optional: .msh v4.1 (large-scale, structured Physical Groups)
 - `GmshPostExport.write()` defaults to v2.2
 """
@@ -917,13 +917,12 @@ Physical groups: "air", "coil_surface", "coil_wire"
 
 ## 5. GMSH .msh as Input to NGSolve
 
-Cubit exports .msh v2.2 -> NGSolve `ReadGmsh()` reads it.
-This is a pure file format path -- no GMSH dependency needed.
+Cubit exports .vol via `export netgen` -> NGSolve reads it directly.
+The .vol file is the standard interface between Cubit and NGSolve.
 
 ```python
 from ngsolve import *
-mesh = Mesh(unit_square.GenerateMesh())  # or:
-# mesh = Mesh("cubit_export.msh")  # ReadGmsh() for .msh v2.2
+mesh = Mesh("cubit_export.vol")  # .vol is the sole interface
 ```
 """
 
@@ -991,8 +990,8 @@ By default, only elements in Physical Groups are saved.
 **Fix**: Use ASCII only in GMSH scripts and output.
 
 ## 5. .msh v2.2 vs v4.1 Confusion
-**Problem**: NGSolve ReadGmsh() expects v2.2 but GMSH defaults to v4.1.
-**Fix**: Use `Mesh.MshFileVersion = 2.2` or `-format msh22`.
+**Problem**: .msh v2.2 vs v4.1 confusion when viewing in GMSH.
+**Fix**: Cubit exports v2.2 by default. Use `Mesh.MshFileVersion = 2.2` in GMSH settings if needed.
 
 ## 6. NodeData Field Not Displayed
 **Problem**: .msh file has NodeData section but no view appears.

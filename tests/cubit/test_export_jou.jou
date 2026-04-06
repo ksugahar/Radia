@@ -23,11 +23,6 @@ export radia_nastran "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_o2.
 ## VTK
 export vtk "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_o2.vtk" order 2 dimension 3 overwrite
 
-## MEG with DIM keywords
-export meg "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_3d.meg" threed overwrite
-export meg "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_2d.meg" twod overwrite
-export meg "S:/Radia/01_GitHub/tests/cubit/ho_area_test/jou_sphere_axi.meg" axisymmetric overwrite
-
 ## 2D circle test
 reset
 create surface circle radius 0.05 zplane

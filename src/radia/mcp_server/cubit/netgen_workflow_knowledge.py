@@ -50,8 +50,8 @@ curving coefficients). NGSolve reads it without any geometry file.
 
 1. **Is your geometry planar (no curved surfaces)?**
    -> Use any export format. Curving is not needed.
-   -> Simplest: `export_Gmesh(version="2.2")` + `ReadGmsh()`
-   -> Or: `export_NGSolveCurvedMesh(cubit, order=1)` for Netgen mesh
+   -> Simplest: `export netgen "mesh.vol" order 1` + `Mesh("mesh.vol")`
+   -> Or: `export_NGSolveCurvedMesh(cubit, order=1)` for in-memory Netgen mesh
 
 2. **Do you only need 2nd order (not 3rd+)?**
    -> You have two options:
@@ -59,9 +59,9 @@ curving coefficients). NGSolve reads it without any geometry file.
    ```
    Cubit -> mesh -> export_NGSolveCurvedMesh(cubit, order=2) -> done
    ```
-   b. **Gmsh 2nd order** workflow (no geometry reference needed):
+   b. **Netgen .vol** (simpler, for journal-based workflow):
    ```
-   Cubit -> block element type tetra10 -> export_Gmesh(version="2.2") -> ReadGmsh()
+   Cubit -> export netgen "mesh.vol" order 2 -> Mesh("mesh.vol")
    ```
 
 3. **Do you need 3rd order or higher?**
@@ -90,7 +90,7 @@ Key: p=5 achieves 10^-5 to 10^-6 % error for ALL shapes, matching OCC native acc
 |--------|-----------|-----------|-----------|------------|
 | extract_curved_mesh (ACIS) | ~0.003-0.03% | ~1e-6% | 5+ (tet) | Low |
 | OCC mesh.Curve() | ~0.003-0.03% | ~1e-6% | 5+ (tet) | Low |
-| Gmsh 2nd order (ReadGmsh) | ~0.001% | N/A | 2 | Low |
+| Netgen .vol order 2 (export netgen) | ~0.003% | N/A | 2 | Low |
 | 1st order (no curving) | ~1.4% | N/A | 1 | None |
 
 ## Key Principle
@@ -381,18 +381,15 @@ surface projection for any geometry directly, regardless of complexity.
 """
 
 WORKFLOW_GMSH_2ND_ORDER = """
-# Alternative: Gmsh 2nd Order Workflow (Simplest)
+# Alternative: Netgen .vol 2nd Order Workflow (Simplest)
 
 If you only need 2nd order elements and don't need 3rd order or higher,
-this is an alternative approach with excellent accuracy (~0.001%).
+the APREPRO export netgen command provides a simple workflow.
 
 ## Step-by-Step
 
 ```python
-from cubit_mesh_export import extract_curved_mesh
-from ngsolve import Mesh
-from netgen.read_gmsh import ReadGmsh
-from ngsolve import Mesh
+from ngsolve import Mesh, Integrate, CF
 
 # Step 1: Create geometry and mesh in Cubit
 cubit.cmd("create sphere radius 1")
@@ -400,38 +397,35 @@ cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("volume 1 size 0.2")
 cubit.cmd("mesh volume 1")
 
-# Step 2: Register blocks with 2nd order elements
-cubit.cmd("block 1 add tet all in volume 1")
-cubit.cmd("block 1 element type tetra10")    # Convert to 2nd order
-cubit.cmd("block 2 add tri all")
-cubit.cmd("block 2 element type tri6")       # 2nd order boundary
+# Step 2: Register blocks
+cubit.cmd("block 1 add volume 1")
+cubit.cmd('block 1 name "sphere"')
 
-# Step 3: Export to Gmsh v2.2
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+# Step 3: Export to Netgen .vol with order 2
+cubit.cmd('export netgen "mesh.vol" order 2 overwrite')
 
 # Step 4: Read into NGSolve
-mesh = Mesh(ReadGmsh("mesh.msh"))
-# Done! No geometry reference needed.
+mesh = Mesh("mesh.vol")
+# Done! No geometry reference needed at compute time.
 ```
 
 ## Advantages
-- No geometry reference needed
-- Very simple workflow
-- Good accuracy (~0.001%)
+- No geometry reference needed at compute time
+- Very simple workflow (APREPRO command)
+- Good accuracy (~0.003%)
 
 ## Limitations
-- Limited to 2nd order (no 3rd, 4th, 5th...)
-- Cubit places mid-edge nodes, not exact CAD placement
-- For 3rd+ order, use `export_NGSolveCurvedMesh()` instead
+- For 3rd+ order, also use `export netgen ... order N` (supports 1-5)
+- For in-memory workflow, use `export_NGSolveCurvedMesh()` instead
 
 ## Comparison
 
-| Feature | export_NGSolveCurvedMesh() | Gmsh 2nd Order |
-|---------|----------------|----------------|
-| Max order | Unlimited | 2 |
-| Geometry reference | ACIS (automatic) | None |
-| Complexity | Low | Low |
-| Best for | Any order, high accuracy | Quick 2nd order |
+| Feature | export netgen .vol | export_NGSolveCurvedMesh() |
+|---------|-------------------|----------------|
+| Max order | 5 | Unlimited |
+| Geometry reference | ACIS (automatic) | ACIS (automatic) |
+| Complexity | Low (APREPRO) | Low (Python) |
+| Best for | Journal-based workflow | In-memory Python workflow |
 """
 
 WORKFLOW_ACCURACY = """
@@ -442,8 +436,7 @@ WORKFLOW_ACCURACY = """
 | Method | Order 1 | Order 2 | Order 3 | Order 4 | Order 5 |
 |--------|---------|---------|---------|---------|---------|
 | No curving | ~1.4% | - | - | - | - |
-| Gmsh 2nd order | - | ~0.001% | - | - | - |
-| export_NGSolveCurvedMesh | ~1.4% | ~0.003% | ~0.0004% | ~0.00005% | ~0.000006% |
+| export netgen / export_NGSolveCurvedMesh | ~1.4% | ~0.003% | ~0.0004% | ~0.00005% | ~0.000006% |
 
 ## When Higher Order Matters
 

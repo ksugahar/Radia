@@ -7,7 +7,6 @@ Example scripts for the radia Cubit C++ plugin (`radia_cubit.ccm`), organized by
 | Folder | Format | Description |
 |--------|--------|-------------|
 | [gmsh/](gmsh/) | Gmsh (.msh) | v2.2 and v4.1, order 1-2 |
-| [meg/](meg/) | MEG (.meg) | ELF/MAGIC (threed/twod/axisymmetric) |
 | [nastran/](nastran/) | Nastran BDF (.bdf) | CTETRA/CHEXA/CTRIA, order 1-2 |
 | [other_formats/](other_formats/) | Custom formats | FreeFEM, ANSYS CDB, Lukas 2D |
 
@@ -30,7 +29,6 @@ Requires Cubit installed with the radia plugin (`radia-setup`).
 export gmsh "file.msh" [order {1|2}] [version {2|4}] [dimension {2|3}] [overwrite]
 export radia_nastran "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
 export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
-export meg "file.meg" [threed|twod|axisymmetric] [overwrite]
 ```
 
 ## See Also
