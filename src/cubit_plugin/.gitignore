@@ -1,0 +1,5 @@
+# Build directories
+build-*/
+
+# Qt5 SDK (downloaded separately, not tracked in git)
+qt5_sdk/
