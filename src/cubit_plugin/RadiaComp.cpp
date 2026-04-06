@@ -262,14 +262,7 @@ static void run_export(ExportDialog::Format fmt)
   CubitInterface::cmd(cmd.c_str());
   PRINT_INFO("Export complete: %s\n", dlg.filePath().toStdString().c_str());
 
-  // Auto-save .cub5 alongside the export (same base name)
-  QString qfile = dlg.filePath();
-  int dot = qfile.lastIndexOf('.');
-  if (dot > qfile.lastIndexOf('/')) {
-    QString cub5 = qfile.left(dot) + ".cub5";
-    std::string save_cmd = "save cub5 \"" + cub5.toStdString() + "\" overwrite";
-    CubitInterface::cmd(save_cmd.c_str());
-  }
+  // .cub5 auto-save removed — user saves explicitly if needed.
 }
 
 void RadiaMenuHandler::export_gmsh()    { run_export(ExportDialog::GMSH); }

@@ -5,6 +5,50 @@
 #include <fstream>
 #include <unordered_map>
 
+// ========================================================================
+// Reorder HO mid-edge nodes from internal order to VTK order.
+// Derived from GMSH source (GModelIO_VTK.cpp reader permutation).
+// ========================================================================
+static std::vector<int> reorder_for_vtk(const std::vector<int> &conn,
+                                         int nv, ElementType type, int order)
+{
+  if (order < 2 || (int)conn.size() <= nv)
+    return conn;
+
+  const int *reorder = nullptr;
+  int n_edge_nodes = 0;
+
+  if (nv == 4 && (type == TETRA4 || type == TETRA)) {
+    reorder = EdgeTables::tet_vtk_reorder; n_edge_nodes = 6;
+  } else if (nv == 8 && (type == HEX8 || type == HEX)) {
+    reorder = EdgeTables::hex_vtk_reorder; n_edge_nodes = 12;
+  } else if (nv == 6 && (type == WEDGE6 || type == WEDGE)) {
+    reorder = EdgeTables::wedge_vtk_reorder; n_edge_nodes = 9;
+  } else if (nv == 5 && (type == PYRAMID5 || type == PYRAMID)) {
+    reorder = EdgeTables::pyramid_vtk_reorder; n_edge_nodes = 8;
+  } else if (nv == 3 && (type == TRI3 || type == CUBIT_TRI
+                       || type == TRISHELL || type == TRISHELL3)) {
+    reorder = EdgeTables::tri_vtk_reorder; n_edge_nodes = 3;
+  } else if (nv == 4 && (type == QUAD4 || type == QUAD
+                       || type == SHEL || type == SHELL4)) {
+    reorder = EdgeTables::quad_vtk_reorder; n_edge_nodes = 4;
+  }
+
+  if (!reorder) return conn;
+
+  int n_mid = (int)conn.size() - nv;
+  if (n_mid < n_edge_nodes) return conn;
+
+  std::vector<int> out(conn.size());
+  for (int i = 0; i < nv; i++)
+    out[i] = conn[i];
+  for (int i = 0; i < n_edge_nodes; i++)
+    out[nv + reorder[i]] = conn[nv + i];
+  for (int i = nv + n_edge_nodes; i < (int)conn.size(); i++)
+    out[i] = conn[i];
+  return out;
+}
+
 ExportVtkCommand::ExportVtkCommand() {}
 ExportVtkCommand::~ExportVtkCommand() {}
 
@@ -130,7 +174,8 @@ bool ExportVtkCommand::write_vtk(const std::string &filename,
   auto add_elem = [&](const MeshElement &elem, int gid, int gtype) {
     int vt = vtk_type(elem, order);
     if (vt == 0) return;
-    const auto &c = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
+    const auto &raw = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
+    const auto c = reorder_for_vtk(raw, elem.nv, elem.type, order);
     CellData cd;
     cd.vtk_type = vt;
     cd.group_id = gid;

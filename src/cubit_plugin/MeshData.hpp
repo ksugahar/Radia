@@ -29,37 +29,72 @@ class NetgenCurver;
 #include "ElementType.h"
 
 // --- Edge tables for high-order connectivity ---
-// Vertex-index pairs for each element type, in Nastran/Gmsh/ExodusII order.
+// Internal order matches VTK convention (used by build_ho_conn_nc).
+// GMSH and Nastran use DIFFERENT orders — reorder tables below.
+//
+// Internal (= VTK) edge order:
+//   HEX:   bottom(4) + top(4) + vertical(4)
+//   WEDGE: bottom_tri(3) + top_tri(3) + vertical(3)
+// Nastran edge order:
+//   CHEXA: bottom(4) + vertical(4) + top(4)
+//   CPENTA: bottom_tri(3) + vertical(3) + top_tri(3)
+// GMSH edge order: vertex-grouped (see gmsh.info Section 10.2)
+//
+// Reorder semantics: out[nv + reorder[i]] = conn[nv + i]
 namespace EdgeTables {
-  // TET4: 6 edges
+  // --- Internal (= VTK) edge tables ---
   inline constexpr int tet[][2] = {
     {0,1},{1,2},{0,2},{0,3},{1,3},{2,3}
   };
-  // HEX8: 12 edges
   inline constexpr int hex[][2] = {
-    {0,1},{1,2},{2,3},{3,0},
-    {4,5},{5,6},{6,7},{7,4},
-    {0,4},{1,5},{2,6},{3,7}
+    {0,1},{1,2},{2,3},{3,0},     // bottom face
+    {4,5},{5,6},{6,7},{7,4},     // top face
+    {0,4},{1,5},{2,6},{3,7}      // vertical
   };
-  // WEDGE6: 9 edges
   inline constexpr int wedge[][2] = {
-    {0,1},{1,2},{2,0},
-    {3,4},{4,5},{5,3},
-    {0,3},{1,4},{2,5}
+    {0,1},{1,2},{2,0},           // bottom tri
+    {3,4},{4,5},{5,3},           // top tri
+    {0,3},{1,4},{2,5}            // vertical
   };
-  // PYRAMID5: 8 edges
   inline constexpr int pyramid[][2] = {
     {0,1},{1,2},{2,3},{3,0},
     {0,4},{1,4},{2,4},{3,4}
   };
-  // TRI3: 3 edges
   inline constexpr int tri[][2] = {
     {0,1},{1,2},{2,0}
   };
-  // QUAD4: 4 edges
   inline constexpr int quad[][2] = {
     {0,1},{1,2},{2,3},{3,0}
   };
+
+  // --- GMSH reorder: internal pos i -> GMSH file pos reorder[i] ---
+  // Verified: gmsh.info Section 10.2 + gmsh.model.mesh.getElementProperties()
+  inline constexpr int tet_gmsh_reorder[6] = {0,1,2,3,5,4};
+  inline constexpr int hex_gmsh_reorder[12] = {0,3,5,1,8,10,11,9,2,4,6,7};
+  inline constexpr int wedge_gmsh_reorder[9] = {0,3,1,6,8,7,2,4,5};
+  inline constexpr int pyramid_gmsh_reorder[8] = {0,3,5,1,2,4,6,7};
+  inline constexpr int tri_gmsh_reorder[3] = {0,1,2};
+  inline constexpr int quad_gmsh_reorder[4] = {0,1,2,3};
+
+  // --- Nastran BDF reorder: internal pos i -> Nastran file pos reorder[i] ---
+  // Derived from GMSH source (MHexahedron.h getVertexBDF, MPrism.h getVertexBDF)
+  // Nastran CHEXA: bottom(4) + vertical(4) + top(4) (swaps top/vertical vs internal)
+  // Nastran CPENTA: bottom(3) + vertical(3) + top(3) (swaps top/vertical vs internal)
+  inline constexpr int tet_bdf_reorder[6] = {0,1,2,3,4,5};  // identity
+  inline constexpr int hex_bdf_reorder[12] = {0,1,2,3,8,9,10,11,4,5,6,7};
+  inline constexpr int wedge_bdf_reorder[9] = {0,1,2,6,7,8,3,4,5};
+  inline constexpr int pyramid_bdf_reorder[8] = {0,1,2,3,4,5,6,7};  // identity
+  inline constexpr int tri_bdf_reorder[3] = {0,1,2};  // identity
+  inline constexpr int quad_bdf_reorder[4] = {0,1,2,3};  // identity
+
+  // --- VTK reorder: internal pos i -> VTK file pos reorder[i] ---
+  // Derived from GMSH source (GModelIO_VTK.cpp reader + MHexahedron.h getVertexVTK)
+  inline constexpr int tet_vtk_reorder[6] = {0,1,2,3,4,5};  // identity
+  inline constexpr int hex_vtk_reorder[12] = {0,1,10,3,2,6,7,4,5,8,11,9};
+  inline constexpr int wedge_vtk_reorder[9] = {0,6,3,2,5,4,1,8,7};
+  inline constexpr int pyramid_vtk_reorder[8] = {0,1,2,3,4,5,6,7};  // identity (GMSH VTK reader doesn't handle type 27)
+  inline constexpr int tri_vtk_reorder[3] = {0,1,2};  // identity
+  inline constexpr int quad_vtk_reorder[4] = {0,1,2,3};  // identity
 }
 
 // --- Data types ---

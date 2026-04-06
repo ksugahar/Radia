@@ -55,6 +55,46 @@ GMSH_OUTPUT_FORMATS = """
 | 49 | neu | .neu | Gambit Neutral |
 | 50 | matlab | .m | MATLAB |
 
+## GMSH API: High-Order Node Ordering Verification
+
+**POLICY**: Verify HO node ordering via `gmsh.model.mesh.getElementProperties()`.
+This returns reference node positions that definitively establish edge ordering.
+
+```python
+import gmsh
+gmsh.initialize()
+
+# Get reference node positions for TET10 (type 11)
+name, dim, order, nn, ref_pts, _ = gmsh.model.mesh.getElementProperties(11)
+# ref_pts: [x0,y0,z0, x1,y1,z1, ...] for all 10 nodes
+# Nodes 0-3: vertices, Nodes 4-9: edge midpoints
+# Midpoint of edge (a,b) at 0.5*(ref[a] + ref[b])
+```
+
+**Verified GMSH edge ordering** (differs from Nastran!):
+
+| Element | GMSH edge order (from API) |
+|---------|---------------------------|
+| TET10   | (0,1),(1,2),(0,2),(0,3),(2,3),(1,3) |
+| HEX20   | (0,1),(0,3),(0,4),(1,2),(1,5),(2,3),(2,6),(3,7),(4,5),(4,7),(5,6),(6,7) |
+| PRISM15 | (0,1),(0,2),(0,3),(1,2),(1,4),(2,5),(3,4),(3,5),(4,5) |
+| PYRAMID13 | (0,1),(0,3),(0,4),(1,2),(1,4),(2,3),(2,4),(3,4) |
+| TRI6    | (0,1),(1,2),(0,2) |
+| QUAD8   | (0,1),(1,2),(2,3),(0,3) |
+
+**Volume verification via getJacobians**:
+
+```python
+gmsh.open("exported.msh")
+etypes, etags, ntags = gmsh.model.mesh.getElements(dim=3)
+for et in etypes:
+    local_coords, weights = gmsh.model.mesh.getIntegrationPoints(int(et), "Gauss4")
+    jac, det, pts = gmsh.model.mesh.getJacobians(int(et), local_coords)
+    # Signed volume = sum(det[i*n_gp+j] * weights[j])
+    # Negative det at some Gauss points is expected for coarse curved meshes
+    # (isoparametric self-intersection, NOT a node ordering bug)
+```
+
 ## PostProcessing Formats (PostProcessing.Format)
 
 | Code | Format |

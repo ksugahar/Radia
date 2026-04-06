@@ -291,6 +291,11 @@ std::vector<int> MeshData::build_ho_conn_nc(
     ho.push_back(conn[j]);
 
   // Edge nodes
+#ifdef DEBUG_HO_NODES
+  static int dbg_elem_count_ = 0;
+  bool dbg_this = (dbg_elem_count_ < 3);
+  dbg_elem_count_++;
+#endif
   for (int e = 0; e < num_edges; e++) {
     auto en = nc.get_edge_nodes(conn[edges[e][0]], conn[edges[e][1]]);
     if (en.empty()) {
@@ -299,6 +304,12 @@ std::vector<int> MeshData::build_ho_conn_nc(
       // Fall back to linear connectivity.
       return {};
     }
+#ifdef DEBUG_HO_NODES
+    if (dbg_this && !en.empty()) {
+      PRINT_INFO("  ho_conn edge %d: verts=(%d,%d) mid_id=%d\n",
+        e, conn[edges[e][0]], conn[edges[e][1]], en[0]);
+    }
+#endif
     for (int nid : en)
       ho.push_back(nid);
     int expected = nc.get_order() - 1;

@@ -6,6 +6,51 @@
 #include <iomanip>
 #include <sstream>
 
+// ========================================================================
+// Reorder HO mid-edge nodes from internal (VTK) order to Nastran BDF order.
+// Nastran CHEXA: bottom + vertical + top (internal: bottom + top + vertical)
+// Nastran CPENTA: bottom + vertical + top (internal: bottom + top + vertical)
+// ========================================================================
+static std::vector<int> reorder_for_bdf(const std::vector<int> &conn,
+                                         int nv, ElementType type, int order)
+{
+  if (order < 2 || (int)conn.size() <= nv)
+    return conn;
+
+  const int *reorder = nullptr;
+  int n_edge_nodes = 0;
+
+  if (nv == 4 && (type == TETRA4 || type == TETRA)) {
+    reorder = EdgeTables::tet_bdf_reorder; n_edge_nodes = 6;
+  } else if (nv == 8 && (type == HEX8 || type == HEX)) {
+    reorder = EdgeTables::hex_bdf_reorder; n_edge_nodes = 12;
+  } else if (nv == 6 && (type == WEDGE6 || type == WEDGE)) {
+    reorder = EdgeTables::wedge_bdf_reorder; n_edge_nodes = 9;
+  } else if (nv == 5 && (type == PYRAMID5 || type == PYRAMID)) {
+    reorder = EdgeTables::pyramid_bdf_reorder; n_edge_nodes = 8;
+  } else if (nv == 3 && (type == TRI3 || type == CUBIT_TRI
+                       || type == TRISHELL || type == TRISHELL3)) {
+    reorder = EdgeTables::tri_bdf_reorder; n_edge_nodes = 3;
+  } else if (nv == 4 && (type == QUAD4 || type == QUAD
+                       || type == SHEL || type == SHELL4)) {
+    reorder = EdgeTables::quad_bdf_reorder; n_edge_nodes = 4;
+  }
+
+  if (!reorder) return conn;
+
+  int n_mid = (int)conn.size() - nv;
+  if (n_mid < n_edge_nodes) return conn;
+
+  std::vector<int> out(conn.size());
+  for (int i = 0; i < nv; i++)
+    out[i] = conn[i];
+  for (int i = 0; i < n_edge_nodes; i++)
+    out[nv + reorder[i]] = conn[nv + i];
+  for (int i = nv + n_edge_nodes; i < (int)conn.size(); i++)
+    out[i] = conn[i];
+  return out;
+}
+
 ExportNastranCommand::ExportNastranCommand() {}
 ExportNastranCommand::~ExportNastranCommand() {}
 
@@ -177,7 +222,8 @@ int ExportNastranCommand::write_element_card(std::ofstream &fid,
                                               bool pyram, int order)
 {
   char line[256];
-  const auto &c = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
+  const auto &raw = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
+  const auto c = reorder_for_bdf(raw, elem.nv, elem.type, order);
   int nv = elem.nv;
   int nn = (int)c.size();
 

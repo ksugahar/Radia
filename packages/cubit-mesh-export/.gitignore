@@ -1,7 +1,9 @@
-# Pre-built binaries (copied by Build.ps1 at build time)
+# Pre-built binaries (copied by Build.ps1 at build time, bundled in wheel)
 *.pyd
 *.so
 *.dll
+*.ccm
+*.ccl
 
 # Build artifacts
 dist/
