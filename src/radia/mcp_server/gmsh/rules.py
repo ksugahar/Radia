@@ -61,18 +61,19 @@ def check_gmsh_builder_import(filepath: str, lines: List[str]) -> List[Dict]:
 
 
 def check_msh_version_mismatch(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: Warn when writing v4.1 for NGSolve input (expects v2.2)."""
+    """HIGH: Warn when using ReadGmsh (deprecated, use .vol instead)."""
     findings = []
     for i, line in enumerate(lines, 1):
         stripped = line.split("#")[0]
-        if "ReadGmsh" in stripped and "4.1" in stripped:
+        if "ReadGmsh" in stripped:
             findings.append({
                 "line": i,
                 "severity": "HIGH",
-                "rule": "msh-version-mismatch",
+                "rule": "readgmsh-deprecated",
                 "message": (
-                    "NGSolve ReadGmsh() expects .msh v2.2, not v4.1. "
-                    "Use GmshPostExport.write() which defaults to v2.2."
+                    "ReadGmsh() is deprecated. Use .vol files instead: "
+                    "Mesh('model.vol'). Export from Cubit with "
+                    "'export netgen \"model.vol\" order N'."
                 ),
             })
     return findings
@@ -106,8 +107,8 @@ def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
     for i, line in enumerate(lines, 1):
         stripped = line.split("#")[0].strip()
         if stripped == "import gmsh" or stripped.startswith("from gmsh "):
-            # Allow in test files or gmsh_mesh_import.py (pure reader)
-            if "gmsh_mesh_import" in filepath or "test_" in filepath:
+            # Allow in test files or post-processing scripts
+            if "test_" in filepath or "gmsh_post" in filepath:
                 continue
             findings.append({
                 "line": i,
@@ -116,7 +117,7 @@ def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
                 "message": (
                     "GMSH Python package (pip install gmsh) should not be used. "
                     "Radia uses standalone gmsh.exe for visualization. "
-                    "For .msh reading, use gmsh_mesh_import.py (no gmsh dependency)."
+                    "For mesh input to NGSolve, use .vol files (export netgen)."
                 ),
             })
     return findings
@@ -134,8 +135,8 @@ def check_meshio_import(filepath: str, lines: List[str]) -> List[Dict]:
                 "rule": "meshio-removed",
                 "message": (
                     "meshio is removed from the project. "
-                    "Use gmsh_mesh_import.py for .msh reading, "
-                    "or GmshPostExport for .msh writing."
+                    "Use .vol files for mesh input to NGSolve, "
+                    "or GmshPostExport for .msh output (visualization)."
                 ),
             })
     return findings

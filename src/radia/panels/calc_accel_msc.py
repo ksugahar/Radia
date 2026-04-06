@@ -305,7 +305,7 @@ def _write_msc_gmsh(filename, elements, model, rad):
     """Write GMSH .msh v2.2 with element-center B field as ElementData.
 
     Builds node/element tables directly from the Radia element list
-    (no dependency on export_Gmesh or gmsh_mesh_import).
+    (no dependency on external mesh import modules).
     """
     # Collect unique nodes and build element connectivity
     node_map = {}  # (x,y,z) rounded -> node_id

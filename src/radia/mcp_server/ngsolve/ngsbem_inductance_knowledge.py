@@ -999,13 +999,12 @@ All BEM/FEM field visualization uses `GmshPostExport`, not VTK/VTS.
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
-| **Input** (-> NGSolve) | **v2.2** | Mesh import | `GmshPostExport.write_v22()` -> `ReadGmsh()` |
+| **Input** (-> NGSolve) | **.vol** | Mesh import | `Mesh("model.vol")` |
 | **Output** (NGSolve ->) | **v4.1** | Field visualization | `GmshPostExport.write()` -> GMSH GUI |
 | **Output** (NGSolve ->) | **v2.2** | High-order mesh exchange | `GmshPostExport.write_v22()` |
 
-`ReadGmsh()` supports v2.2 only. `GmshPostExport.write_v22()` outputs v2.2 with
-arbitrary-order high-order elements (Tri6, Tri10, Tri15, ...).
-Element type codes are identical in both versions.
+Use .vol files for NGSolve mesh input. `GmshPostExport.write_v22()` outputs v2.2 with
+arbitrary-order high-order elements (Tri6, Tri10, Tri15, ...) for GMSH visualization.
 
 ### Supported Orders (Lagrange Triangles)
 

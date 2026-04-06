@@ -140,7 +140,7 @@ class StraightSegment(CoilSegment):
 		"""End orientation: same as start (no rotation)."""
 		return self.orientation
 
-	def to_occ_shape(self):
+	def to_occ_shape(self, index=0):
 		"""Generate OCC Box for this straight segment."""
 		from netgen.occ import Box, Pnt, Axis, Vec, Z, X, Y
 		# Create box at origin aligned with XYZ
@@ -152,6 +152,7 @@ class StraightSegment(CoilSegment):
 		shape = shape.Rotate(Axis(Pnt(0,0,0), X), ea[1])
 		shape = shape.Rotate(Axis(Pnt(0,0,0), Z), ea[0])
 		shape = shape.Move(Vec(*self.start_pos))
+		shape.name = "coil_straight_" + str(index)
 		return shape
 
 
@@ -220,7 +221,7 @@ class ArcSegment(CoilSegment):
 		])
 		return rotation_matrix @ self.orientation
 
-	def to_occ_shape(self):
+	def to_occ_shape(self, index=0):
 		"""Generate OCC revolved shape for this arc segment."""
 		from netgen.occ import WorkPlane, Axes, Pnt, Axis, Vec, Z, X, Y
 		# Cross-section rectangle at (radius - width/2, 0) in local frame.
@@ -241,6 +242,7 @@ class ArcSegment(CoilSegment):
 		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
 		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[0])
 		shape = shape.Move(Vec(*self.arc_center))
+		shape.name = "coil_arc_" + str(index)
 		return shape
 
 
@@ -468,7 +470,7 @@ class CoilBuilder:
 			OCC shape (can be exported to STEP, displayed in GMSH, etc.)
 		"""
 		from netgen.occ import Glue
-		shapes = [seg.to_occ_shape() for seg in self.segments]
+		shapes = [seg.to_occ_shape(i) for i, seg in enumerate(self.segments)]
 		if len(shapes) == 0:
 			raise ValueError("No segments added")
 		if len(shapes) == 1:

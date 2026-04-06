@@ -17,15 +17,16 @@ Export Cubit mesh to Gmsh format (.msh).
 ### When to Use Which
 
 **Use v2.2 when:**
-- **NGSolve/Netgen integration** (ReadGmsh supports v2.2)
+- GMSH visualization of exported meshes
 - Maximum compatibility with older software
-- Simple mesh transfer without geometry information
 - Smaller file size needed
 
 **Use v4.1 when:**
 - Need geometry topology ($Entities section)
 - 2D meshes requiring normal orientation control
 - FEniCS or other modern solvers
+
+**For NGSolve computation**, use `export netgen "mesh.vol"` instead of .msh. The .vol format supports arbitrary-order curving (1-5) and preserves material/boundary labels.
 
 ## Usage
 
@@ -42,15 +43,14 @@ cubit.cmd('radia export gmsh "mesh.msh" overwrite')
 cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')
 ```
 
-## NGSolve Integration
+## NGSolve Computation
 
-**NGSolve's `ReadGmsh()` supports Gmsh v2.2 format.**
+**For NGSolve FEM computation, use `export netgen` (.vol) instead of .msh.**
 
-This is the recommended workflow for Cubit to NGSolve:
+The `.vol` format supports arbitrary-order curving (order 1-5) and preserves material/boundary labels natively. The `.msh` export is maintained for GMSH visualization only.
 
 ```python
 import cubit
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
 # 1. Create and mesh in Cubit
@@ -58,23 +58,15 @@ cubit.cmd("create cylinder height 2 radius 0.5")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
 
-# 2. Register blocks with 2nd order elements
+# 2. Register blocks
 cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
-cubit.cmd("block 1 element type tetra10")
-cubit.cmd("block 2 element type tri6")
+cubit.cmd('block 1 name "domain"')
 
-# 3. Export to Gmsh v2.2 and load into NGSolve
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
-mesh = Mesh(ReadGmsh("mesh.msh"))
+# 3. Export .vol for computation, .msh for GMSH visualization
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('export gmsh "mesh.msh" order 2 version 2 overwrite')  # visualization only
+mesh = Mesh("mesh.vol")
 ```
-
-### Accuracy with 2nd Order Elements
-
-| Element Type | 1st Order | 2nd Order |
-|--------------|-----------|-----------|
-| Tet | ~1.4% | **0.001%** |
-| Hex | ~1.6% | **0.002%** |
 
 See [examples/netgen/README.md](../netgen/README.md) for detailed NGSolve workflow.
 

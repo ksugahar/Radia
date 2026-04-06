@@ -16,7 +16,6 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | `export gmsh "f.msh" order N version 4` | Gmsh v4.1 | 1-4 | No |
 | `export radia_nastran "f.bdf" order N` | Nastran BDF | 1-2 | No |
 | `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | No |
-| `export meg "f.meg"` | MEG (ELF/MAGIC) | 1 only | No |
 
 ### Coil Generation Command
 
@@ -96,15 +95,6 @@ export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
 
 VTK Legacy format. Cell types: TET(10), HEX(12), WEDGE(13), PYRAMID(14), TRI(5), QUAD(9).
 
-### export meg
-
-```
-export meg "filename.meg" [threed|twod|axisymmetric] [overwrite]
-```
-
-MEG/ELF format. Block names become ELF element type names (MMB4T, MMB8T, etc.).
-1st order only.
-
 ### coil
 
 ```
@@ -152,7 +142,6 @@ Export Mesh (C++ .ccl):        Solve (Python):
   GMSH...                        Generate Coil...
   Nastran BDF...                 --------
   VTK...                         Reload Panels
-  MEG...
   --------
   Mesh Evaluation...
 ```

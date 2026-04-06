@@ -172,7 +172,6 @@ print(len(nodes_all))   # 10 for TET10, 4 for TET4
 | `export_exodus()` | `get_expanded_connectivity()` | Yes |
 | `export_NGSolveCurvedMesh()` | `get_connectivity()` | No (curves via ACIS) |
 | `export_nastran()` | `get_connectivity()` | No (1st order only) |
-| `export_meg()` | `get_connectivity()` | No (1st order only) |
 
 ## Design: Why export_NGSolveCurvedMesh Uses 1st Order Internally
 
@@ -614,7 +613,7 @@ cubit.cmd("block 1 element type tetra10")   # Works: converts to 2nd order
 ```
 
 To maintain consistent element order control across all export formats
-(Gmsh, VTK, Nastran, MEG, Netgen, Exodus), we standardize on blocks exclusively.
+(Gmsh, VTK, Nastran, Netgen, Exodus), we standardize on blocks exclusively.
 
 ## Boundary Conditions with Blocks
 
@@ -797,8 +796,6 @@ CUBIT_2D_MESH_WORKFLOW = """
 
 Several export formats support 2D mesh export:
 - `cubit.cmd('export radia_nastran "file.bdf" dimension 2 overwrite')`
-- `cubit.cmd('export meg "file.meg" overwrite')` (planar, DIM='K' default)
-- `cubit.cmd('export meg "file.meg" overwrite')` (axisymmetric, DIM='R')
 - `cubit.cmd('export gmsh "file.msh" version 4 dimension 2 overwrite')`
 
 ## Surface Creation
@@ -863,29 +860,6 @@ cubit.cmd('block 1 name "plate"')
 cubit.cmd('export radia_nastran "plate.bdf" dimension 2 overwrite')
 ```
 
-### MEG 2D Planar (DIM='K')
-```python
-cubit.cmd("create surface rectangle width 2 height 2 zplane")
-cubit.cmd("surface 1 scheme trimesh")
-cubit.cmd("surface 1 size 0.3")
-cubit.cmd("mesh surface 1")
-cubit.cmd("block 1 add tri all")
-cubit.cmd("block 1 name 'MMB3K'")
-cubit.cmd('export meg "plate.meg" overwrite')
-```
-
-### MEG Axisymmetric (DIM='R')
-```python
-cubit.cmd("create surface rectangle width 2 height 2 yplane")
-cubit.cmd("surface 1 move 1 0 1")   # Positive X quadrant (r > 0)
-cubit.cmd("surface 1 scheme trimesh")
-cubit.cmd("surface 1 size 0.3")
-cubit.cmd("mesh surface 1")
-cubit.cmd("block 1 add tri all")
-cubit.cmd("block 1 name 'MMB3R'")
-cubit.cmd('export meg "axisym.meg" overwrite')
-```
-
 ### Gmsh v4 2D
 ```python
 cubit.cmd("create surface rectangle width 2 height 2 zplane")
@@ -898,13 +872,9 @@ cubit.cmd('export gmsh "plate.msh" version 4 dimension 2 overwrite')
 
 ## 2D Normal Orientation
 
-For 2D exports (Nastran DIM="2D", Gmsh v4 DIM="2D", MEG DIM='K'):
+For 2D exports (Nastran DIM="2D", Gmsh v4 DIM="2D"):
 - Normals are oriented in +Z direction
 - Z coordinates may be set to 0
-
-For MEG axisymmetric (DIM='R'):
-- Coordinates are R (mapped from X), Z
-- Geometry must be in XZ plane (Y=0) with X > 0
 """
 
 CUBIT_TROUBLESHOOTING = """
@@ -1190,7 +1160,7 @@ files directly in Python.
 Cubit Python API                    Output file
   get_block_id_list()      ──┐
   get_block_tets(id)       ──┤
-  get_connectivity()       ──┼──>  Python constructs  ──>  .msh / .vtk / .bdf / .meg
+  get_connectivity()       ──┼──>  Python constructs  ──>  .msh / .vtk / .bdf
   get_expanded_connectivity()─┤
   get_nodal_coordinates()  ──┘
 ```
@@ -1204,7 +1174,7 @@ Each export function:
 ## Why Not Use Built-in Export?
 
 Cubit's built-in export covers a limited set of formats (Exodus, STEP, SAT, etc.).
-For formats like Gmsh, VTK, Nastran, MEG, and Netgen, there is no built-in export
+For formats like Gmsh, VTK, Nastran, and Netgen, there is no built-in export
 command. This module fills that gap by providing format-specific writers that read
 from Cubit's mesh data.
 

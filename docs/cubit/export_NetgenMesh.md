@@ -42,25 +42,14 @@ This approach separates mesh topology from geometry approximation:
 | Wedge elements | Supported | Supported |
 | Pyramid elements | Supported | Supported |
 
-## Recommended: Gmsh 2nd Order Workflow
+## Recommended: Netgen .vol Workflow
 
-For most use cases, **Gmsh 2nd order elements with `ReadGmsh()`** provides the best accuracy with minimal complexity.
-
-### Why Gmsh 2nd Order?
-
-| Element Type | 1st Order Error | 2nd Order Error |
-|--------------|-----------------|-----------------|
-| Tet10        | ~1.4%           | **0.001%**      |
-| Hex20        | ~1.6%           | **0.002%**      |
-| Wedge15      | ~1.6%           | ~1.1% (see note)|
-
-**Note**: Wedge15 mid-edge nodes are not projected to curved surfaces by Cubit. Use SetDeformation for Wedge elements on curved surfaces.
+For computation, use the `export netgen` command to produce `.vol` files directly. This supports arbitrary-order curving (order 1-5) and preserves material/boundary labels.
 
 ### Basic Workflow
 
 ```python
 import cubit
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
 # 1. Create and mesh geometry
@@ -70,27 +59,25 @@ cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.1")
 cubit.cmd("mesh volume all")
 
-# 2. Register blocks with 2nd order elements
+# 2. Register blocks
 cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
-cubit.cmd("block 1 element type tetra10")
-cubit.cmd("block 2 element type tri6")
+cubit.cmd('block 1 name "domain"')
+cubit.cmd("sideset 1 add surface all")
+cubit.cmd('sideset 1 name "boundary"')
 
 # 3. Export and load
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
-mesh = Mesh(ReadGmsh("mesh.msh"))
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+mesh = Mesh("mesh.vol")
 ```
 
-### Supported 2nd Order Element Types
+### Volume Accuracy by Curve Order
 
-| Cubit Type | Gmsh Type | Nodes |
-|------------|-----------|-------|
-| tetra10    | Tet10     | 10    |
-| hex20      | Hex20     | 20    |
-| wedge15    | Wedge15   | 15    |
-| pyramid13  | Pyramid13 | 13    |
-| tri6       | Tri6      | 6     |
-| quad8      | Quad8     | 8     |
+| Order | Volume Error (sphere) |
+|-------|-----------------------|
+| 1     | ~1.4%                 |
+| 2     | ~0.001%               |
+| 3     | ~1e-5%                |
+| 5     | ~1e-8%                |
 
 ## Usage
 

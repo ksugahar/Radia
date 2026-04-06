@@ -142,7 +142,7 @@ class GmshPostExport:
             timestep: Time step index
             version: GMSH format version ("4.1" or "2.2")
                      v4.1 (default): structured physical groups, NodeData, transient support
-                     v2.2: NGSolve ReadGmsh() compatible, legacy
+                     v2.2: legacy format
         """
         if version == "2.2":
             return self.write_v22(filename)
@@ -236,7 +236,7 @@ class GmshPostExport:
         Supports high-order elements (p >= 2) via the same internal
         node computation as write() (v4.1).
 
-        v2.2 is required for NGSolve ReadGmsh() import.
+        v2.2 is the legacy format (use .vol for NGSolve mesh input).
 
         Args:
             filename: Output .msh file path

@@ -443,7 +443,7 @@ def induction_heating(topic: str = "all") -> str:
         topic: Documentation topic. Options:
             "all"           - Complete documentation
             "overview"      - Physics overview, parameters, skin depth
-            "gmsh_mesh"     - ReadGmsh loading, physical groups, boundary layers
+            "gmsh_mesh"     - Mesh loading (.vol), physical groups, boundary layers
             "eddy_current"  - A-Phi formulation (production code with Gmsh mesh)
             "thermal"       - Transient heat equation (theta-scheme, material props)
             "rotating"      - Rotating workpiece (mesh.SetDeformation)

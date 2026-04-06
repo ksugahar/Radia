@@ -10,6 +10,7 @@ publish_to_pypi.cmd
 ngsolveの開発者へ/
 Build_PyPI_Package.ps1
 build_log.txt
+logs/
 src/FastMaxwellv1.0/
 examples/peec_integration/spiral_inductor/
 

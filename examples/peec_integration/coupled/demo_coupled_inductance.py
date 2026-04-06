@@ -295,71 +295,18 @@ def demo_gmsh_mesh():
                              'gmsh_models', 'ferrite_core_hex.msh')
     _generate_ferrite_core_mesh(mesh_file)
 
-    # --- Direct Python API with gmsh_mesh_import ---
-    rad.UtiDelAll()
-
-    from gmsh_mesh_import import gmsh_to_radia, get_mesh_info
-
-    # Show mesh info
-    info = get_mesh_info(mesh_file)
-    print(f"  Mesh info: {info['n_hex8']} hex8, {info['n_tet4']} tet4, "
-          f"{info['n_total_volume']} total volume elements")
-    print(f"  Bounding box: {info['bbox_min']} to {info['bbox_max']}")
+    # NOTE: gmsh_mesh_import is removed. Use .vol path instead:
+    #   from ngsolve import Mesh
+    #   mesh = Mesh("model.vol")
+    #   from netgen_mesh_import import netgen_mesh_to_radia
+    #   core = netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]})
+    print("  SKIPPED: gmsh_mesh_import removed. Use .vol + netgen_mesh_to_radia.")
     print()
+    L = 0.0
+    Delta_L = 0.0
 
-    # Build PEEC topology
-    builder = PEECBuilder()
-    n1 = builder.add_node_at(0, 0, 0)
-    n2 = builder.add_node_at(0.1, 0, 0)
-    builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
-    builder.add_port(n1, n2)
-    topo = builder.build_topology()
-
-    # Import GMSH mesh as magnetic core
-    core = gmsh_to_radia(mesh_file, mu_r=1000)
-
-    solver = CoupledPEECSolver(topo, [core])
-    solver.compute_coupling_matrix()
-
-    Z = solver.compute_port_impedance(1e6)
-    L = np.imag(Z) / (2 * np.pi * 1e6)
-    Delta_L = solver.Delta_L[0, 0]
-
-    print(f"  GMSH mesh core: L = {L*1e9:.2f} nH, Delta_L = {Delta_L*1e9:.4f} nH")
-
-    # --- Same problem via FastHenry .magnetic type=mesh ---
-    rad.UtiDelAll()
-
-    inp_mesh = f"""\
-* Inductor with ferrite core from GMSH mesh
-.Units m
-N1 x=0 y=0 z=0
-N2 x=0.1 y=0 z=0
-E1 N1 N2 w=1e-3 h=1e-3 sigma=5.8e7
-.external N1 N2
-
-.magnetic
-  type=mesh
-  file={os.path.basename(mesh_file)}
-  mu_r=1000
-.endmagnetic
-
-.freq fmin=1e6 fmax=1e6 ndec=1
-.end
-"""
-    parser = FastHenryParser()
-    # Parse from directory containing mesh file
-    inp_file = os.path.join(os.path.dirname(mesh_file),
-                            '_temp_demo_mesh.inp')
-    with open(inp_file, 'w') as f:
-        f.write(inp_mesh)
-    parser.parse_file(inp_file)
-    result = parser.solve()
-    os.remove(inp_file)
-
-    L_fh = result['L'][0] if len(result['L']) > 0 else 0.0
-    print(f"  FastHenry type=mesh: L = {L_fh*1e9:.2f} nH")
-    print()
+    # NOTE: FastHenry .magnetic type=mesh also used gmsh_mesh_import (removed).
+    # Use .vol + netgen_mesh_to_radia() for magnetic core import.
 
     return L, Delta_L
 

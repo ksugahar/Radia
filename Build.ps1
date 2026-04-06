@@ -183,6 +183,7 @@ set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
 set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
 set "CUBIT_DIR=C:\Program Files\Coreform Cubit 2025.3\cmake"
 set "NETGEN_DIR=C:\Program Files\Python312\Lib\site-packages\netgen"
+set "NETGEN_SRC_DIR=C:\netgen_build\netgen_fork"
 
 if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
@@ -198,9 +199,22 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
     if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
     cd /d "!CUBIT_CCM_BUILD!"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DNETGEN_SRC_DIR="%NETGEN_SRC_DIR%" "%CUBIT_PLUGIN_SRC%"
     "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
     if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
+
+    echo.
+    echo ========================================
+    echo   Building radia_cubit.ccl (GUI component)
+    echo ========================================
+    "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccl -j
+    if errorlevel 1 ( echo WARNING: radia_cubit_ccl build failed )
+
+    rem Copy ccl to src/radia/ so radia-setup deploys the latest version
+    if exist "!CUBIT_CCM_BUILD!\radia_cubit.ccl" (
+        copy /Y "!CUBIT_CCM_BUILD!\radia_cubit.ccl" "$PROJECT_DIR\src\radia\radia_cubit.ccl" >nul
+        echo   radia_cubit.ccl: copied to src/radia/
+    )
 
     cd /d "$BUILD_DIR"
 ) else (

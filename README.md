@@ -380,7 +380,6 @@ export netgen "mesh.vol" order 3 overwrite          # Netgen .vol (order 1-5)
 export gmsh "mesh.msh" order 2 version 2 overwrite  # Gmsh v2.2 (order 1-4)
 export radia_nastran "mesh.bdf" order 2 overwrite   # Nastran BDF (order 1-2)
 export vtk "mesh.vtk" order 2 overwrite             # VTK Legacy (order 1-2)
-export meg "mesh.meg" overwrite                     # MEG/ELF (order 1)
 coil "my_coil.py"                                   # CoilBuilder STEP + import
 ```
 
@@ -404,7 +403,7 @@ radia-setup --all-users    # Deploy to Cubit (ccm, ccl, panels)
 
 | Menu | Items | Provided by |
 |------|-------|-------------|
-| **Export Mesh** | Netgen Vol, GMSH, Nastran, VTK, MEG, Mesh Evaluation | C++ .ccl |
+| **Export Mesh** | Netgen Vol, GMSH, Nastran, VTK, Mesh Evaluation | C++ .ccl |
 | **Solve** | Radia-NGSolve, Generate Coil, Reload Panels | Python |
 
 **Important**: When using both NGSolve and Cubit in the same script, import NGSolve **before** Cubit to avoid DLL conflicts.

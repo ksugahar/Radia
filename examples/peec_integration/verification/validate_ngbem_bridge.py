@@ -63,93 +63,22 @@ def test_module_import():
     except ImportError as e:
         record("import NGBEMBridge", "FAIL", str(e))
 
-    try:
-        from gmsh_mesh_import import (read_gmsh_surface,
-                                       gmsh_surface_to_ngsolve,
-                                       extract_surface_edges)
-        record("import gmsh surface functions", "PASS")
-    except ImportError as e:
-        record("import gmsh surface functions", "FAIL", str(e))
+    # gmsh_mesh_import removed -- surface mesh functions no longer available
+    record("import gmsh surface functions", "SKIP", "gmsh_mesh_import removed")
 
 
 # =====================================================================
 # Test 2: GMSH surface mesh reading
 # =====================================================================
 def test_gmsh_surface_read():
-    """Test GMSH surface mesh reading with a minimal .msh file."""
+    """Test GMSH surface mesh reading -- SKIPPED (gmsh_mesh_import removed)."""
     print("\n" + "=" * 60)
-    print("Test 2: GMSH Surface Mesh Reading")
+    print("Test 2: GMSH Surface Mesh Reading (SKIPPED)")
     print("=" * 60)
 
-    from gmsh_mesh_import import read_gmsh_surface, extract_surface_edges
-
-    # Create a minimal GMSH 2.2 file with 2 triangles (a square face)
-    msh_content = """$MeshFormat
-2.2 0 8
-$EndMeshFormat
-$Nodes
-4
-1 0.0 0.0 0.0
-2 0.1 0.0 0.0
-3 0.1 0.1 0.0
-4 0.0 0.1 0.0
-$EndNodes
-$Elements
-2
-1 2 2 1 1 1 2 3
-2 2 2 1 1 1 3 4
-$EndElements
-"""
-
-    # Write temp file
-    tmp_file = os.path.join(os.path.dirname(__file__), '_test_surface.msh')
-    try:
-        with open(tmp_file, 'w') as f:
-            f.write(msh_content)
-
-        # Read surface mesh
-        mesh_data = read_gmsh_surface(tmp_file)
-
-        assert len(mesh_data['nodes']) == 4, \
-            f"Expected 4 nodes, got {len(mesh_data['nodes'])}"
-        record("surface node count", "PASS", "4 nodes")
-
-        assert len(mesh_data['elements']) == 2, \
-            f"Expected 2 triangles, got {len(mesh_data['elements'])}"
-        record("surface element count", "PASS", "2 Tri3 elements")
-
-        # All elements should be Tri3
-        for elem in mesh_data['elements']:
-            assert elem['type'] == 2, f"Expected type 2 (Tri3), got {elem['type']}"
-        record("surface element type", "PASS", "all Tri3")
-
-        # Extract edges
-        edge_data = extract_surface_edges(tmp_file)
-
-        # 2 triangles sharing an edge: 5 unique edges
-        assert edge_data['n_edges'] == 5, \
-            f"Expected 5 edges, got {edge_data['n_edges']}"
-        record("edge count", "PASS", "5 unique edges from 2 triangles")
-
-        assert edge_data['n_faces'] == 2, \
-            f"Expected 2 faces, got {edge_data['n_faces']}"
-        record("face count", "PASS")
-
-        # Edge lengths should all be positive
-        assert np.all(edge_data['edge_lengths'] > 0), "Some edge lengths <= 0"
-        record("edge lengths positive", "PASS",
-               f"range [{edge_data['edge_lengths'].min():.4f}, "
-               f"{edge_data['edge_lengths'].max():.4f}]")
-
-        # Direction vectors should be unit vectors
-        norms = np.linalg.norm(edge_data['edge_directions'], axis=1)
-        assert np.allclose(norms, 1.0, atol=1e-10), \
-            f"Direction vectors not unit: {norms}"
-        record("unit direction vectors", "PASS")
-
-    finally:
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+    # gmsh_mesh_import is removed. Surface mesh reading should use
+    # .vol files with NGSolve Mesh() instead.
+    record("gmsh surface read", "SKIP", "gmsh_mesh_import removed")
 
 
 # =====================================================================
@@ -394,62 +323,13 @@ E1 N1 N2 w=1 h=1
 # Test 7: gmsh_surface_to_ngsolve (requires NGSolve)
 # =====================================================================
 def test_gmsh_to_ngsolve():
-    """Test GMSH surface mesh to NGSolve mesh conversion."""
+    """Test GMSH surface mesh to NGSolve -- SKIPPED (gmsh_mesh_import removed)."""
     print("\n" + "=" * 60)
-    print("Test 7: GMSH Surface to NGSolve")
+    print("Test 7: GMSH Surface to NGSolve (SKIPPED)")
     print("=" * 60)
 
-    try:
-        from ngsolve import Mesh as NGSMesh
-    except ImportError:
-        record("GMSH to NGSolve", "SKIP", "NGSolve not installed")
-        return
-
-    from gmsh_mesh_import import gmsh_surface_to_ngsolve
-
-    # Minimal surface mesh (2 triangles)
-    msh_content = """$MeshFormat
-2.2 0 8
-$EndMeshFormat
-$Nodes
-4
-1 0.0 0.0 0.0
-2 0.1 0.0 0.0
-3 0.1 0.05 0.0
-4 0.0 0.05 0.0
-$EndNodes
-$Elements
-2
-1 2 2 1 1 1 2 3
-2 2 2 1 1 1 3 4
-$EndElements
-"""
-    tmp_file = os.path.join(os.path.dirname(__file__), '_test_ngsolve.msh')
-    try:
-        with open(tmp_file, 'w') as f:
-            f.write(msh_content)
-
-        mesh = gmsh_surface_to_ngsolve(tmp_file, label="conductor")
-
-        # Check it's a valid NGSolve mesh
-        n_edges = len(list(mesh.edges))
-        n_vertices = len(list(mesh.vertices))
-
-        print(f"  Vertices: {n_vertices}")
-        print(f"  Edges: {n_edges}")
-
-        assert n_vertices == 4, f"Expected 4 vertices, got {n_vertices}"
-        assert n_edges == 5, f"Expected 5 edges, got {n_edges}"
-
-        record("NGSolve surface mesh", "PASS",
-               f"{n_vertices} vertices, {n_edges} edges")
-
-    except Exception as e:
-        record("NGSolve surface mesh", "FAIL", str(e))
-
-    finally:
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+    # gmsh_mesh_import is removed. Use .vol files with NGSolve Mesh() instead.
+    record("NGSolve surface mesh", "SKIP", "gmsh_mesh_import removed")
 
 
 # =====================================================================

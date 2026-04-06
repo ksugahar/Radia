@@ -22,6 +22,7 @@ Regions:
 import sys
 import time
 import numpy as np
+# TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
