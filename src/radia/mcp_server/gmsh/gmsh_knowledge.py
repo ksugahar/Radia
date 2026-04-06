@@ -1268,23 +1268,6 @@ dy = (sin_t*rx + cos_t*ry + cy) - y
 # Write as NodeData displacement vector per time step
 ```
 
-## vol_to_gmsh: .vol -> .msh v4.1 Conversion
-
-```python
-from radia.vol_to_gmsh import vol_to_gmsh
-
-# Convert .vol (with curvedelements) to .msh v4.1 (TET10)
-vol_to_gmsh("model.vol")                   # -> model.msh
-vol_to_gmsh("model.vol", boundary=True)    # surface elements only
-
-# CLI
-python -m radia.vol_to_gmsh model.vol -o output.msh
-```
-
-The converter uses GmshPostExport to generate TET10/HEX20 elements
-from the curved .vol mesh. Mid-edge node positions are computed via
-NGSolve GetTrafo at reference mid-edge coordinates.
-
 **NGSolve TET reference coordinate mapping** (important for correct curving):
 ```
 ref(0,0,0) -> el.vertices[3]   (NOT el.vertices[0])

@@ -152,27 +152,37 @@ jobs:
           retention-days: 7
 
       # ----------------------------------------------------------------
-      # Build cubit-mesh-export wheel (includes radia_cubit_mesh.pyd)
+      # Build cubit-mesh-export wheel (includes .pyd, .ccm, .ccl)
       # ----------------------------------------------------------------
       - name: Build cubit-mesh-export wheel
         if: success()
         shell: pwsh
         run: |
-          # Copy .pyd to cubit-mesh-export package (Build.ps1 may have done this)
-          $pydSrc = "${{ github.workspace }}\src\radia\radia_cubit_mesh.pyd"
-          $pydDst = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export\radia_cubit_mesh.pyd"
-          if (Test-Path $pydSrc) {
-            Copy-Item $pydSrc $pydDst -Force
-            Write-Host "Copied radia_cubit_mesh.pyd to cubit-mesh-export"
-          } else {
-            Write-Host "::warning::radia_cubit_mesh.pyd not found, building pure Python wheel"
+          $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
+          # Copy binaries to cubit-mesh-export package
+          $binaries = @(
+            @{ src = "src\radia\radia_cubit_mesh.pyd"; dst = "radia_cubit_mesh.pyd" },
+            @{ src = "src\radia\radia_cubit.ccm";      dst = "radia_cubit.ccm" },
+            @{ src = "src\radia\radia_cubit.ccl";      dst = "radia_cubit.ccl" }
+          )
+          $hasBinaries = $false
+          foreach ($b in $binaries) {
+            $s = "${{ github.workspace }}\$($b.src)"
+            $d = "$pkgDir\$($b.dst)"
+            if (Test-Path $s) {
+              Copy-Item $s $d -Force
+              Write-Host "Copied $($b.dst) to cubit-mesh-export"
+              $hasBinaries = $true
+            } else {
+              Write-Host "::warning::$($b.src) not found"
+            }
           }
           pip install build wheel --quiet
           Push-Location "${{ github.workspace }}\packages\cubit-mesh-export"
           python -m build --wheel
           # Retag wheel with correct platform (pre-built .pyd is cp312/win_amd64)
           $whl = Get-ChildItem dist\*.whl | Select-Object -First 1
-          if ($whl -and (Test-Path $pydSrc)) {
+          if ($whl -and $hasBinaries) {
             python -m wheel tags --python-tag cp312 --abi-tag cp312 --platform-tag win_amd64 --remove $whl.FullName
             Write-Host "Retagged: $(Get-ChildItem dist\*.whl | Select-Object -First 1)"
           }

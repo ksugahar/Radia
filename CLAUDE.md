@@ -217,6 +217,39 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 All three checks (Volume, Area, Length) passing per label confirms the mesh is geometrically correct.
 
+### GMSH API Node Ordering Verification Policy
+
+**POLICY**: All high-order mesh exports (.msh, .bdf, .vtk) MUST be verified using the **GMSH API** (`getJacobians`). Do NOT rely on custom parsers or ReadGmsh for HO verification.
+
+**Why**: GMSH's `getJacobians()` computes Jacobian determinants using its own isoparametric basis functions. Negative determinants indicate inverted elements caused by incorrect node ordering. This is the authoritative test because it verifies that GMSH itself correctly interprets the exported file.
+
+**Test procedure** (`tests/cubit/test_ho_volume_all_formats.py`):
+
+```python
+import gmsh
+gmsh.initialize()
+gmsh.open("exported.msh")
+
+# Get integration points and Jacobians
+etypes, etags, ntags = gmsh.model.mesh.getElements(dim=3)
+for et in etypes:
+    local_coords, weights = gmsh.model.mesh.getIntegrationPoints(int(et), "Gauss4")
+    jac, det, pts = gmsh.model.mesh.getJacobians(int(et), local_coords)
+    # Volume = sum(det * weight), negative det = inverted element
+```
+
+**Pass criteria**:
+1. **No negative Jacobian determinants** (node ordering correct)
+2. **Volume error < 1%** vs analytical (mid-node positions correct)
+3. **Cross-format consistency** (all formats produce same volume within 0.01%)
+
+**Netgen reference coordinate mapping** (root cause of past bugs):
+- `ref(0,0,0)` -> `el.vertices[3]` (NOT `el.vertices[0]`)
+- `ref(1,0,0)` -> `el.vertices[0]`
+- `ref(0,1,0)` -> `el.vertices[1]`
+- `ref(0,0,1)` -> `el.vertices[2]`
+- Vertex `el[i]` -> `lam[(i+1)%4]` (barycentric index shifted by +1 mod 4)
+
 ### Cubit Block/Sideset Label Convention
 
 **POLICY**: Separate blocks for material and boundary labels. Do NOT mix volume elements and surface elements in the same block.
