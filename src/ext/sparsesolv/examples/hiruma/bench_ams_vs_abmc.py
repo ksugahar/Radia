@@ -24,6 +24,7 @@ import time
 from datetime import datetime
 
 import numpy as np
+# TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
 import sparsesolv_ngsolve as ssn

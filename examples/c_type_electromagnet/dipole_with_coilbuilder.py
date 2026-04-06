@@ -176,14 +176,11 @@ try:
 except (ImportError, AttributeError):
     # Fallback: order=1 without CallbackGeometry (pip netgen)
     print("  Note: CallbackGeometry not available, using order=1")
-    from netgen.meshing import Mesh as NetgenMesh, MeshPoint, Element3D, Element2D, FaceDescriptor
-    from netgen.csg import Pnt as NgPnt
-    # Use basic Gmsh v2 export + ReadGmsh as fallback
-    msh_tmp = os.path.join(work_dir, "_temp_dipole.msh")
-    cubit.cmd(f'radia export gmsh "{msh_tmp}" version 2 overwrite')
-    from netgen.read_gmsh import ReadGmsh
-    mesh = Mesh(ReadGmsh(msh_tmp))
-    os.remove(msh_tmp)
+    # Use Netgen .vol export as fallback
+    vol_tmp = os.path.join(work_dir, "_temp_dipole.vol")
+    cubit.cmd(f'export netgen "{vol_tmp}" order 1 overwrite')
+    mesh = Mesh(vol_tmp)
+    os.remove(vol_tmp)
 
 print(f"  NGSolve mesh: ne={mesh.ne}, nv={mesh.nv}")
 print(f"  Materials: {mesh.GetMaterials()}")

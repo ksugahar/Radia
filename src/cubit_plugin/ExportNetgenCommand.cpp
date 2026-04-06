@@ -168,69 +168,47 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
 
   // ---- Set boundary labels (sideset name -> bc number) ----
-  // FaceDescriptors already have BCProperty set to Cubit surface ID.
-  // Map sideset names to BCProperty values.
+  // FaceDescriptors have BCProperty set to Cubit surface ID, which can be
+  // larger than the number of FaceDescriptors.  NGSolve expects BCProperty
+  // to be a contiguous 1-based index into the bcnames array.  Remap here.
   int nfd = ng_mesh->GetNFD();
-  if (!md.sidesets.empty()) {
-    // Build sideset_id -> name map
-    std::map<int, std::string> ss_name;
-    for (auto &sg : md.sidesets) {
+
+  // Build surface_id -> sideset name map
+  std::map<int, std::string> surf_to_ssname;
+  for (auto &sg : md.sidesets) {
+    std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
+    for (int sid : ss_surfs) {
       if (!sg.name.empty())
-        ss_name[sg.id] = sg.name;
+        surf_to_ssname[sid] = sg.name;
     }
+  }
 
-    // Also map surface_id -> sideset name (sideset references surface)
-    std::map<int, std::string> surf_to_ssname;
-    for (auto &sg : md.sidesets) {
-      // Get surface IDs in this sideset
-      std::vector<int> ss_surfs = CubitInterface::get_sideset_surfaces(sg.id);
-      for (int sid : ss_surfs) {
-        if (!sg.name.empty())
-          surf_to_ssname[sid] = sg.name;
-      }
-    }
+  // Save original Cubit surface IDs before remapping (for companion JSON)
+  std::vector<int> orig_surf_ids(nfd);
+  for (int fi = 1; fi <= nfd; fi++)
+    orig_surf_ids[fi - 1] = ng_mesh->GetFaceDescriptor(fi).BCProperty();
 
-    // Set BCName for each FaceDescriptor
-    ng_mesh->SetNBCNames(nfd);
-    for (int fi = 1; fi <= nfd; fi++) {
-      int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
-      auto it = surf_to_ssname.find(bc_prop);
-      if (it != surf_to_ssname.end()) {
-        std::string ssname = it->second;
-        for (auto &ch : ssname) if (ch == ' ') ch = '_';
-        ng_mesh->SetBCName(fi - 1, ssname);
-        ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
-      } else {
-        // Use Cubit entity name as fallback
-        std::string sname = CubitInterface::get_entity_name("surface", bc_prop);
-        if (sname.empty())
-          sname = "surface_" + std::to_string(bc_prop);
-        for (auto &ch : sname) if (ch == ' ') ch = '_';
-        ng_mesh->SetBCName(fi - 1, sname);
-        ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
-      }
-    }
+  // Set BCName and remap BCProperty to contiguous 1-based index
+  ng_mesh->SetNBCNames(nfd);
+  for (int fi = 1; fi <= nfd; fi++) {
+    int bc_prop = orig_surf_ids[fi - 1];
 
-    // Update FaceDescriptor DomainIn/Out from volume element adjacency
-    for (int fi = 1; fi <= nfd; fi++) {
-      auto &fd = ng_mesh->GetFaceDescriptor(fi);
-      // DomainIn/Out already set by surface element adjacency in build_netgen_mesh.
-      // For now keep as-is (domain 1 for single-volume, needs improvement for multi-volume).
+    // Determine label
+    std::string label;
+    auto it = surf_to_ssname.find(bc_prop);
+    if (it != surf_to_ssname.end()) {
+      label = it->second;
+    } else {
+      label = CubitInterface::get_entity_name("surface", bc_prop);
+      if (label.empty())
+        label = "surface_" + std::to_string(bc_prop);
     }
-  } else {
-    // No sidesets: use Cubit surface entity names
-    ng_mesh->SetNBCNames(nfd);
-    for (int fi = 1; fi <= nfd; fi++) {
-      int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
-      std::string sname = CubitInterface::get_entity_name("surface", bc_prop);
-      if (sname.empty())
-        sname = "surface_" + std::to_string(bc_prop);
-      // Replace spaces with underscores — Netgen .vol bcnames parser
-      // splits on whitespace, so names with spaces get truncated.
-      for (auto &ch : sname) if (ch == ' ') ch = '_';
-      ng_mesh->SetBCName(fi - 1, sname);
-      ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
-    }
+    for (auto &ch : label) if (ch == ' ') ch = '_';
+
+    // Remap BCProperty: Cubit surface ID -> contiguous index fi
+    ng_mesh->GetFaceDescriptor(fi).SetBCProperty(fi);
+    ng_mesh->SetBCName(fi - 1, label);
+    ng_mesh->GetFaceDescriptor(fi).SetBCName(ng_mesh->GetBCNamePtr(fi - 1));
   }
 
   // For order=1: reset curving
@@ -256,7 +234,15 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // --- Write companion JSON with CAD reference values ---
   {
     std::string json_path = filename + ".json";
+#ifdef _WIN32
+    // Use wide path for Unicode support on Windows
+    int wlen = MultiByteToWideChar(CP_ACP, 0, json_path.c_str(), -1, NULL, 0);
+    std::wstring wpath(wlen, 0);
+    MultiByteToWideChar(CP_ACP, 0, json_path.c_str(), -1, &wpath[0], wlen);
+    std::ofstream jf(wpath);
+#else
     std::ofstream jf(json_path);
+#endif
     if (jf.is_open()) {
       jf << "{\n";
 
@@ -283,13 +269,14 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       // Boundaries (per-surface area from CAD, not mesh)
       jf << "  \"boundaries\": {";
       first = true;
-      int nfd = ng_mesh->GetNFD();
-      for (int fi = 1; fi <= nfd; fi++) {
-        int bc_prop = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+      int nfd_json = ng_mesh->GetNFD();
+      for (int fi = 1; fi <= nfd_json; fi++) {
+        // Use original Cubit surface ID for CAD area query
+        int cubit_surf_id = orig_surf_ids[fi - 1];
         // Use the BCName written to .vol (matches mesh.GetBoundaries())
         std::string bname = ng_mesh->GetBCName(fi - 1);
         // Get CAD area from Cubit surface
-        RefFace* rf = GeometryQueryTool::instance()->get_ref_face(bc_prop);
+        RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_surf_id);
         double cad_area = rf ? rf->area() : 0.0;
         if (!first) jf << ",";
         jf << "\n    \"" << bname << "\": " << std::scientific << cad_area;

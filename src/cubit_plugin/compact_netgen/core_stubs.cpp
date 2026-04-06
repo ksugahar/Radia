@@ -13,7 +13,7 @@ namespace ngcore
 bool TaskManager::use_paje_trace = false;
 int TaskManager::max_threads = 1;
 int TaskManager::num_threads = 1;
-int TaskManager::thread_id = 0;  // no thread_local (COMPACT_NETGEN_STATIC)
+thread_local int TaskManager::thread_id = 0;
 
 const std::function<void(TaskInfo&)> * TaskManager::func = nullptr;
 const std::function<void()> * TaskManager::startup_function = nullptr;

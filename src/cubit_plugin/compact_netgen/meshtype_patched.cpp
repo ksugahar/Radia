@@ -216,7 +216,7 @@ namespace netgen
     string * bcname_dummy = nullptr;
     ar & pnums[0] & pnums[1] & pnums[2]
       & edgenr & singedge_left & singedge_right
-      & si & cd2i & domin & domout & tlosurf
+      & si & index & domin & domout & tlosurf
       & surfnr1 & surfnr2
       & bcname_dummy // keep this for backward compatibility
       & epgeominfo[0].edgenr & epgeominfo[1].edgenr;

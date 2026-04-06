@@ -15,9 +15,9 @@ def check_missing_block_registration(filepath: str, lines: List[str]) -> List[Di
 	findings = []
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|meg|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
 		r'curved|exodus)\s*\('
-		r'|export\s+(?:netgen|gmsh|nastran|vtk|meg)\s'
+		r'|export\s+(?:netgen|gmsh|nastran|vtk)\s'
 	)
 	block_pattern = re.compile(r'cubit\.cmd\s*\(\s*["\'].*\bblock\b', re.IGNORECASE)
 
@@ -300,7 +300,7 @@ def check_missing_mesh_command(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|meg|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
 		r'curved|exodus)\s*\('
 	)
 	mesh_pattern = re.compile(
@@ -340,8 +340,7 @@ def check_export_file_extension(filepath: str, lines: List[str]) -> List[Dict]:
 	extension_map = {
 		r'export_(?:Gmsh_ver[24]|gmsh_v[24])': ['.msh'],
 		r'export_(?:Nastran|nastran)': ['.bdf', '.nas', '.dat'],
-		r'export_meg': ['.meg'],
-		r'export_exodus': ['.exo', '.e', '.ex2'],
+				r'export_exodus': ['.exo', '.e', '.ex2'],
 	}
 
 	for i, line in enumerate(lines, 1):
@@ -405,12 +404,10 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 
 	# Check for export_NGSolveCurvedMesh (which handles Curve internally)
 	has_export_NGSolveCurvedMesh = any('export_NGSolveCurvedMesh' in line for line in lines)
-	# Also check for Gmsh 2nd order workflow (ReadGmsh doesn't need curving)
-	has_readgmsh = any('ReadGmsh' in line for line in lines)
 	# Check for OCC native mesh (which has built-in geometry)
 	has_occ_mesh = any('GenerateMesh' in line for line in lines)
 
-	if not has_export_NGSolveCurvedMesh and not has_readgmsh and not has_occ_mesh:
+	if not has_export_NGSolveCurvedMesh and not has_occ_mesh:
 		findings.append({
 			'line': curve_line,
 			'severity': 'MODERATE',
@@ -433,7 +430,7 @@ def check_nodeset_sideset_usage(filepath: str, lines: List[str]) -> List[Dict]:
 	)
 	non_exodus_export = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|meg|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
 		r'NetgenMesh|netgen|netgen_with_names)\s*\('
 	)
 
@@ -478,7 +475,7 @@ def check_missing_block_names(filepath: str, lines: List[str]) -> List[Dict]:
 	# Only check files that have export calls
 	export_pattern = re.compile(
 		r'(?:cubit_mesh_export\.|cme\.)?export_'
-		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|meg|'
+		r'(?:Gmsh_ver[24]|gmsh_v[24]|Nastran|nastran|'
 		r'curved|exodus)\s*\('
 	)
 	has_export = any(

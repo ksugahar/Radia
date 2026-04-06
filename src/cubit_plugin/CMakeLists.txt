@@ -127,7 +127,7 @@ find_package(Qt5Widgets REQUIRED)
 # --------------------------------------------------------
 # Target 1: radia_cubit.ccm (command plugin, goes to plugins/)
 #
-# Registers APREPRO commands: export gmsh/nastran/vtk/meg/netgen
+# Registers APREPRO commands: export gmsh/nastran/vtk/netgen
 # Loaded by Python API (CUBIT_PLUGIN_DIR) and by cubitcomp
 # (-commandplugindir).
 # --------------------------------------------------------
@@ -143,8 +143,6 @@ set(CCM_SOURCES
     ExportNastranCommand.hpp
     ExportGmshCommand.cpp
     ExportGmshCommand.hpp
-    ExportMegCommand.cpp
-    ExportMegCommand.hpp
     ExportVtkCommand.cpp
     ExportVtkCommand.hpp
     CoilCommand.cpp
@@ -220,8 +218,6 @@ set(CCL_SOURCES
     ExportNastranCommand.hpp
     ExportVtkCommand.cpp
     ExportVtkCommand.hpp
-    ExportMegCommand.cpp
-    ExportMegCommand.hpp
 )
 
 if(HAVE_NETGEN)

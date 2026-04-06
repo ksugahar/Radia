@@ -1023,15 +1023,13 @@ class FastHenryParser:
                 objects.append(obj)
 
             elif block['type'] == 'mesh':
-                # Import from GMSH .msh file
-                from gmsh_mesh_import import gmsh_to_radia
-                obj = gmsh_to_radia(
-                    block['file'],
-                    mu_r=mu_r,
-                    physical_group=block.get('physical_group'),
-                    unit_scale=1.0,  # Already in parser units
+                # NOTE: gmsh_mesh_import is removed. Use .vol path instead:
+                #   mesh = Mesh("model.vol")
+                #   netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]})
+                raise NotImplementedError(
+                    "GMSH .msh mesh import is no longer supported. "
+                    "Use .vol files with netgen_mesh_to_radia() instead."
                 )
-                objects.append(obj)
 
         return objects
 
