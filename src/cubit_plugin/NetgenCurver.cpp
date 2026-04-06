@@ -448,136 +448,16 @@ bool NetgenCurver::curve_and_extract(int order)
     return false;
   }
 
-  // Extract curved node positions by evaluating element transformations
+  // Extract curved node positions by evaluating CalcElementTransformation
   // at reference-space coordinates of high-order nodes.
   //
-  // For now, we extract all surface element curved data.
-  // The mapping from netgen curved elements back to Cubit node IDs
-  // is done via the element connectivity.
+  // IMPORTANT: Volume elements are processed FIRST. CalcElementTransformation
+  // uses BuildCurvedElements data (same as .vol export), producing coordinates
+  // consistent with the .vol file. Surface elements are processed AFTER to
+  // add only face interior nodes (order >= 3) and edges not covered by volumes.
 
-  int nse = ng_mesh_->GetNSE();
-  for (int sei = 0; sei < nse; sei++) {
-    if (!curved.IsSurfaceElementCurved(sei)) continue;
-
-    const ng::Element2d & el = ng_mesh_->SurfaceElement(sei+1);
-    int np = el.GetNP();
-
-    // Evaluate at equidistant points for the given order
-    // For a triangle of order p, there are (p+1)(p+2)/2 nodes
-    // For a quad of order p, there are (p+1)^2 nodes
-    // Edge nodes: evaluated at equidistant points along edges
-    // Face nodes: evaluated at interior equidistant points
-
-    // For each edge of the element, add (order-1) interior points
-    // The first `np` points are the vertices (already in the mesh)
-
-    if (np == 3) {  // Triangle
-      // Edge points — register in edge_ho_nodes_ for connectivity lookup
-      for (int edge = 0; edge < 3; edge++) {
-        int v0_ng = el[edge];
-        int v1_ng = el[(edge+1) % 3];
-        int v0_cubit = ng_pi_to_cubit_nid_[v0_ng];
-        int v1_cubit = ng_pi_to_cubit_nid_[v1_ng];
-
-        HoEdgeKey key(v0_cubit, v1_cubit);
-        if (edge_ho_nodes_.count(key)) continue;  // already processed
-
-        std::vector<int> edge_nodes;
-        for (int k = 1; k < order; k++) {
-          double t = (double)k / order;
-          double xi, eta;
-          if (edge == 0) { xi = t; eta = 0; }
-          else if (edge == 1) { xi = 1-t; eta = t; }
-          else { xi = 0; eta = 1-t; }
-
-          ng::Point<2> ref(xi, eta);
-          ng::Point<3> phys;
-          curved.CalcSurfaceTransformation(ref, sei, phys);
-
-          int new_id = next_node_id_++;
-          total_nodes_++;
-          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
-          edge_nodes.push_back(new_id);
-        }
-        // Store in min→max order
-        if (v0_cubit <= v1_cubit)
-          edge_ho_nodes_[key] = edge_nodes;
-        else
-          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
-      }
-
-      // Face interior points (for order >= 3)
-      if (order >= 3) {
-        for (int i = 1; i < order; i++) {
-          for (int j = 1; j < order - i; j++) {
-            double xi = (double)i / order;
-            double eta = (double)j / order;
-            ng::Point<2> ref(xi, eta);
-            ng::Point<3> phys;
-            curved.CalcSurfaceTransformation(ref, sei, phys);
-
-            int new_id = next_node_id_++;
-            total_nodes_++;
-            ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
-          }
-        }
-      }
-    }
-    else if (np == 4) {  // Quad
-      // Edge points with edge_ho_nodes_ registration
-      for (int edge = 0; edge < 4; edge++) {
-        int v0_ng = el[edge];
-        int v1_ng = el[(edge+1) % 4];
-        int v0_cubit = ng_pi_to_cubit_nid_[v0_ng];
-        int v1_cubit = ng_pi_to_cubit_nid_[v1_ng];
-
-        HoEdgeKey key(v0_cubit, v1_cubit);
-        if (edge_ho_nodes_.count(key)) continue;
-
-        std::vector<int> edge_nodes;
-        for (int k = 1; k < order; k++) {
-          double t = (double)k / order;
-          double xi, eta;
-          if (edge == 0) { xi = t; eta = 0; }
-          else if (edge == 1) { xi = 1; eta = t; }
-          else if (edge == 2) { xi = 1-t; eta = 1; }
-          else { xi = 0; eta = 1-t; }
-
-          ng::Point<2> ref(xi, eta);
-          ng::Point<3> phys;
-          curved.CalcSurfaceTransformation(ref, sei, phys);
-
-          int new_id = next_node_id_++;
-          total_nodes_++;
-          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
-          edge_nodes.push_back(new_id);
-        }
-        if (v0_cubit <= v1_cubit)
-          edge_ho_nodes_[key] = edge_nodes;
-        else
-          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
-      }
-
-      // Face interior points
-      if (order >= 3) {
-        for (int i = 1; i < order; i++) {
-          for (int j = 1; j < order; j++) {
-            double xi = (double)i / order;
-            double eta = (double)j / order;
-            ng::Point<2> ref(xi, eta);
-            ng::Point<3> phys;
-            curved.CalcSurfaceTransformation(ref, sei, phys);
-
-            int new_id = next_node_id_++;
-            total_nodes_++;
-            ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
-          }
-        }
-      }
-    }
-  }
-
-  // Also extract curved volume element data
+  // --- Phase 1: Volume elements (CalcElementTransformation) ---
+  // This is the primary source of edge HO nodes, consistent with .vol export.
   int nve = ng_mesh_->GetNE();
   for (int ei = 0; ei < nve; ei++) {
     if (!curved.IsElementCurved(ei)) continue;
@@ -588,6 +468,16 @@ bool NetgenCurver::curve_and_extract(int order)
     if (np == 4) {  // Tet
       // Edge points (6 edges) — register in edge_ho_nodes_ for connectivity
       static const int tet_edges[][2] = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
+#ifdef DEBUG_HO_NODES
+      if (ei < 3) {
+        PRINT_INFO("  VE %d: el[0..3] ng=(%d,%d,%d,%d) cubit=(%d,%d,%d,%d)\n",
+          ei, (int)el[0], (int)el[1], (int)el[2], (int)el[3],
+          ng_pi_to_cubit_nid_[el[0]],
+          ng_pi_to_cubit_nid_[el[1]],
+          ng_pi_to_cubit_nid_[el[2]],
+          ng_pi_to_cubit_nid_[el[3]]);
+      }
+#endif
       for (auto &e : tet_edges) {
         int v0_cubit = ng_pi_to_cubit_nid_[el[e[0]]];
         int v1_cubit = ng_pi_to_cubit_nid_[el[e[1]]];
@@ -597,9 +487,11 @@ bool NetgenCurver::curve_and_extract(int order)
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
+          // Netgen ref coords: ref=(lam1,lam2,lam3), lam0=1-sum
+          // Vertex mapping: el[i] -> lam[(i+1)%4]
           double lam[4] = {0,0,0,0};
-          lam[e[0]] = 1.0 - t;
-          lam[e[1]] = t;
+          lam[(e[0]+1)%4] = 1.0 - t;
+          lam[(e[1]+1)%4] = t;
           ng::Point<3> ref(lam[1], lam[2], lam[3]);
           ng::Point<3> phys;
           curved.CalcElementTransformation(ref, ei, phys);
@@ -625,9 +517,10 @@ bool NetgenCurver::curve_and_extract(int order)
               double a = (double)i / order;
               double b = (double)j / order;
               double c = 1.0 - a - b;
-              lam[f[0]] = c;
-              lam[f[1]] = a;
-              lam[f[2]] = b;
+              // Vertex mapping: el[i] -> lam[(i+1)%4]
+              lam[(f[0]+1)%4] = c;
+              lam[(f[1]+1)%4] = a;
+              lam[(f[2]+1)%4] = b;
               ng::Point<3> ref(lam[1], lam[2], lam[3]);
               ng::Point<3> phys;
               curved.CalcElementTransformation(ref, ei, phys);
@@ -661,16 +554,45 @@ bool NetgenCurver::curve_and_extract(int order)
       }
     }
     else if (np == 8) {  // Hex
-      // Hex vertices are in GMSH/Cubit order (NOT Netgen convention).
-      // CalcElementTransformation is unreliable because BuildCurvedElements
-      // produces wrong face-surface mapping for non-Netgen vertex ordering.
-      // Surface edges are already handled by compute_surface_ho_nodes (above).
-      // Remaining edges (interior, flat faces) use Cubit coordinate interpolation.
-      // 12 edges in GMSH vertex convention (matches EdgeTables::hex)
+#ifdef DEBUG_HO_NODES
+      if (ei < 2) {
+        // Evaluate CalcElementTransformation at 8 ref vertices to find mapping
+        static const double ref_verts[][3] = {
+          {0,0,0},{1,0,0},{1,1,0},{0,1,0},
+          {0,0,1},{1,0,1},{1,1,1},{0,1,1}
+        };
+        PRINT_INFO("  HEX VE %d: Netgen ref -> physical:\n", ei);
+        for (int rv = 0; rv < 8; rv++) {
+          ng::Point<3> ref(ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2]);
+          ng::Point<3> phys;
+          curved.CalcElementTransformation(ref, ei, phys);
+          // Find closest Cubit vertex
+          int best_v = -1; double best_d = 1e30;
+          for (int k = 0; k < 8; k++) {
+            int cid = ng_pi_to_cubit_nid_[el[k]];
+            auto cc = CubitInterface::get_nodal_coordinates(cid);
+            double d = (cc[0]-phys[0])*(cc[0]-phys[0])
+                     + (cc[1]-phys[1])*(cc[1]-phys[1])
+                     + (cc[2]-phys[2])*(cc[2]-phys[2]);
+            if (d < best_d) { best_d = d; best_v = k; }
+          }
+          PRINT_INFO("    ref(%g,%g,%g) -> el[%d] (cubit %d) dist=%.2e\n",
+            ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2],
+            best_v, ng_pi_to_cubit_nid_[el[best_v]], sqrt(best_d));
+        }
+      }
+#endif
+      // HEX: ref(i,j,k) maps directly to el[i] (identity mapping verified).
+      // Use CalcElementTransformation (consistent with BuildCurvedElements/.vol).
       static const int hex_edges[][2] = {
         {0,1},{1,2},{2,3},{3,0},
         {4,5},{5,6},{6,7},{7,4},
         {0,4},{1,5},{2,6},{3,7}
+      };
+      // Netgen hex ref vertices (identity mapping to el[0..7])
+      static const double hex_ref[][3] = {
+        {0,0,0},{1,0,0},{1,1,0},{0,1,0},
+        {0,0,1},{1,0,1},{1,1,1},{0,1,1}
       };
 
       for (auto &e : hex_edges) {
@@ -679,19 +601,18 @@ bool NetgenCurver::curve_and_extract(int order)
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
-        // Use Cubit coordinates directly (linear interpolation)
-        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
-        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
-
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          double x = c0[0] + t * (c1[0] - c0[0]);
-          double y = c0[1] + t * (c1[1] - c0[1]);
-          double z = c0[2] + t * (c1[2] - c0[2]);
+          double xi   = hex_ref[e[0]][0] + t * (hex_ref[e[1]][0] - hex_ref[e[0]][0]);
+          double eta  = hex_ref[e[0]][1] + t * (hex_ref[e[1]][1] - hex_ref[e[0]][1]);
+          double zeta = hex_ref[e[0]][2] + t * (hex_ref[e[1]][2] - hex_ref[e[0]][2]);
+          ng::Point<3> ref(xi, eta, zeta);
+          ng::Point<3> phys;
+          curved.CalcElementTransformation(ref, ei, phys);
           int new_id = next_node_id_++;
           total_nodes_++;
-          ho_node_coords_[new_id] = {x, y, z};
+          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
           edge_nodes.push_back(new_id);
         }
         if (v0_cubit <= v1_cubit)
@@ -756,7 +677,43 @@ bool NetgenCurver::curve_and_extract(int order)
       }
     }
     else if (np == 6) {  // Wedge (Prism)
-      // Same approach as hex: Cubit coordinate linear interpolation for remaining edges.
+#ifdef DEBUG_HO_NODES
+      if (ei < 2) {
+        static const double ref_verts[][3] = {
+          {0,0,0},{1,0,0},{0,1,0},{0,0,1},{1,0,1},{0,1,1}
+        };
+        PRINT_INFO("  PRISM VE %d: Netgen ref -> physical:\n", ei);
+        for (int rv = 0; rv < 6; rv++) {
+          ng::Point<3> ref(ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2]);
+          ng::Point<3> phys;
+          curved.CalcElementTransformation(ref, ei, phys);
+          int best_v = -1; double best_d = 1e30;
+          for (int k = 0; k < 6; k++) {
+            int cid = ng_pi_to_cubit_nid_[el[k]];
+            auto cc = CubitInterface::get_nodal_coordinates(cid);
+            double d = (cc[0]-phys[0])*(cc[0]-phys[0])
+                     + (cc[1]-phys[1])*(cc[1]-phys[1])
+                     + (cc[2]-phys[2])*(cc[2]-phys[2]);
+            if (d < best_d) { best_d = d; best_v = k; }
+          }
+          PRINT_INFO("    ref(%g,%g,%g) -> el[%d] (cubit %d) dist=%.2e\n",
+            ref_verts[rv][0], ref_verts[rv][1], ref_verts[rv][2],
+            best_v, ng_pi_to_cubit_nid_[el[best_v]], sqrt(best_d));
+        }
+      }
+#endif
+      // PRISM: ref mapping verified by DEBUG_HO_NODES:
+      //   ref(0,0,0)->el[2], ref(1,0,0)->el[0], ref(0,1,0)->el[1]
+      //   ref(0,0,1)->el[5], ref(1,0,1)->el[3], ref(0,1,1)->el[4]
+      // prism_ref[i] = ref coords for el[i]
+      static const double prism_ref[][3] = {
+        {1,0,0},  // el[0]
+        {0,1,0},  // el[1]
+        {0,0,0},  // el[2]
+        {1,0,1},  // el[3]
+        {0,1,1},  // el[4]
+        {0,0,1},  // el[5]
+      };
       static const int prism_edges[][2] = {
         {0,1},{1,2},{2,0},
         {3,4},{4,5},{5,3},
@@ -769,18 +726,18 @@ bool NetgenCurver::curve_and_extract(int order)
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
-        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
-        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
-
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          double x = c0[0] + t * (c1[0] - c0[0]);
-          double y = c0[1] + t * (c1[1] - c0[1]);
-          double z = c0[2] + t * (c1[2] - c0[2]);
+          double xi   = prism_ref[e[0]][0] + t * (prism_ref[e[1]][0] - prism_ref[e[0]][0]);
+          double eta  = prism_ref[e[0]][1] + t * (prism_ref[e[1]][1] - prism_ref[e[0]][1]);
+          double zeta = prism_ref[e[0]][2] + t * (prism_ref[e[1]][2] - prism_ref[e[0]][2]);
+          ng::Point<3> ref(xi, eta, zeta);
+          ng::Point<3> phys;
+          curved.CalcElementTransformation(ref, ei, phys);
           int new_id = next_node_id_++;
           total_nodes_++;
-          ho_node_coords_[new_id] = {x, y, z};
+          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
           edge_nodes.push_back(new_id);
         }
         if (v0_cubit <= v1_cubit)
@@ -857,6 +814,54 @@ bool NetgenCurver::curve_and_extract(int order)
       }
     }
     else if (np == 5) {  // Pyramid
+      // Netgen pyramid ref: (0,0,0),(1,0,0),(1,1,0),(0,1,0),(0.5,0.5,1)
+      // Need to determine mapping to el[0..4] empirically.
+      // read_gmsh.py: pyramid reorder = [3,2,1,0,4] (GMSH->Netgen)
+      // So: Netgen pos 0 = GMSH v3, pos 1 = GMSH v2, pos 2 = GMSH v1, pos 3 = GMSH v0, pos 4 = GMSH v4
+      // Inverse (Netgen ref vertex -> el index):
+      //   ref(0,0,0) -> Netgen pos 0 -> el[0] which is GMSH v3
+      //   ref(1,0,0) -> Netgen pos 1 -> el[1] which is GMSH v2
+      //   ref(1,1,0) -> Netgen pos 2 -> el[2] which is GMSH v1
+      //   ref(0,1,0) -> Netgen pos 3 -> el[3] which is GMSH v0
+      //   ref(0.5,0.5,1) -> Netgen pos 4 -> el[4] which is GMSH v4
+      // BUT we don't reorder! el[0..4] = Cubit/GMSH order.
+      // So pyr_ref[i] = ref coords for el[i]:
+      //   el[0] = GMSH v0 = Netgen pos 3 -> ref(0,1,0)
+      //   el[1] = GMSH v1 = Netgen pos 2 -> ref(1,1,0)
+      //   el[2] = GMSH v2 = Netgen pos 1 -> ref(1,0,0)
+      //   el[3] = GMSH v3 = Netgen pos 0 -> ref(0,0,0)
+      //   el[4] = GMSH v4 = Netgen pos 4 -> ref(0.5,0.5,1)
+      // Netgen pyramid ref: shapes[4]=z, apex at ref(0,0,1)
+      // Base vertices identity-mapped (verified by DEBUG_HO_NODES)
+      static const double pyr_ref[][3] = {
+        {0,0,0},  // el[0]
+        {1,0,0},  // el[1]
+        {1,1,0},  // el[2]
+        {0,1,0},  // el[3]
+        {0,0,1},  // el[4] = apex
+      };
+#ifdef DEBUG_HO_NODES
+      if (ei < 2) {
+        PRINT_INFO("  PYRAMID VE %d: Netgen ref -> physical:\n", ei);
+        for (int rv = 0; rv < 5; rv++) {
+          ng::Point<3> ref(pyr_ref[rv][0], pyr_ref[rv][1], pyr_ref[rv][2]);
+          ng::Point<3> phys;
+          curved.CalcElementTransformation(ref, ei, phys);
+          int best_v = -1; double best_d = 1e30;
+          for (int k = 0; k < 5; k++) {
+            int cid = ng_pi_to_cubit_nid_[el[k]];
+            auto cc = CubitInterface::get_nodal_coordinates(cid);
+            double d = (cc[0]-phys[0])*(cc[0]-phys[0])
+                     + (cc[1]-phys[1])*(cc[1]-phys[1])
+                     + (cc[2]-phys[2])*(cc[2]-phys[2]);
+            if (d < best_d) { best_d = d; best_v = k; }
+          }
+          PRINT_INFO("    pyr_ref[%d]=(%g,%g,%g) -> el[%d] dist=%.2e\n",
+            rv, pyr_ref[rv][0], pyr_ref[rv][1], pyr_ref[rv][2],
+            best_v, sqrt(best_d));
+        }
+      }
+#endif
       static const int pyr_edges[][2] = {
         {0,1},{1,2},{2,3},{3,0},
         {0,4},{1,4},{2,4},{3,4}
@@ -868,18 +873,18 @@ bool NetgenCurver::curve_and_extract(int order)
         HoEdgeKey key(v0_cubit, v1_cubit);
         if (edge_ho_nodes_.count(key)) continue;
 
-        auto c0 = CubitInterface::get_nodal_coordinates(v0_cubit);
-        auto c1 = CubitInterface::get_nodal_coordinates(v1_cubit);
-
         std::vector<int> edge_nodes;
         for (int k = 1; k < order; k++) {
           double t = (double)k / order;
-          double x = c0[0] + t * (c1[0] - c0[0]);
-          double y = c0[1] + t * (c1[1] - c0[1]);
-          double z = c0[2] + t * (c1[2] - c0[2]);
+          double xi   = pyr_ref[e[0]][0] + t * (pyr_ref[e[1]][0] - pyr_ref[e[0]][0]);
+          double eta  = pyr_ref[e[0]][1] + t * (pyr_ref[e[1]][1] - pyr_ref[e[0]][1]);
+          double zeta = pyr_ref[e[0]][2] + t * (pyr_ref[e[1]][2] - pyr_ref[e[0]][2]);
+          ng::Point<3> ref(xi, eta, zeta);
+          ng::Point<3> phys;
+          curved.CalcElementTransformation(ref, ei, phys);
           int new_id = next_node_id_++;
           total_nodes_++;
-          ho_node_coords_[new_id] = {x, y, z};
+          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
           edge_nodes.push_back(new_id);
         }
         if (v0_cubit <= v1_cubit)
@@ -926,6 +931,102 @@ bool NetgenCurver::curve_and_extract(int order)
               total_nodes_++;
               ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
             }
+          }
+        }
+      }
+    }
+  }
+
+  // --- Phase 2: Surface elements (CalcSurfaceTransformation) ---
+  // Only for edges NOT already registered by volume elements,
+  // and for face interior nodes (order >= 3).
+  int nse = ng_mesh_->GetNSE();
+  for (int sei = 0; sei < nse; sei++) {
+    if (!curved.IsSurfaceElementCurved(sei)) continue;
+    const ng::Element2d & sel = ng_mesh_->SurfaceElement(sei+1);
+    int snp = sel.GetNP();
+
+    if (snp == 3) {  // Triangle
+      for (int edge = 0; edge < 3; edge++) {
+        int v0_cubit = ng_pi_to_cubit_nid_[sel[edge]];
+        int v1_cubit = ng_pi_to_cubit_nid_[sel[(edge+1) % 3]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;
+
+        std::vector<int> edge_nodes;
+        for (int k = 1; k < order; k++) {
+          double t = (double)k / order;
+          double xi, eta;
+          if (edge == 0) { xi = t; eta = 0; }
+          else if (edge == 1) { xi = 1-t; eta = t; }
+          else { xi = 0; eta = 1-t; }
+          ng::Point<2> ref(xi, eta);
+          ng::Point<3> phys;
+          curved.CalcSurfaceTransformation(ref, sei, phys);
+          int new_id = next_node_id_++;
+          total_nodes_++;
+          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          edge_nodes.push_back(new_id);
+        }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
+      }
+      if (order >= 3) {
+        for (int i = 1; i < order; i++) {
+          for (int j = 1; j < order - i; j++) {
+            double xi = (double)i / order;
+            double eta = (double)j / order;
+            ng::Point<2> ref(xi, eta);
+            ng::Point<3> phys;
+            curved.CalcSurfaceTransformation(ref, sei, phys);
+            int new_id = next_node_id_++;
+            total_nodes_++;
+            ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          }
+        }
+      }
+    }
+    else if (snp == 4) {  // Quad
+      for (int edge = 0; edge < 4; edge++) {
+        int v0_cubit = ng_pi_to_cubit_nid_[sel[edge]];
+        int v1_cubit = ng_pi_to_cubit_nid_[sel[(edge+1) % 4]];
+        HoEdgeKey key(v0_cubit, v1_cubit);
+        if (edge_ho_nodes_.count(key)) continue;
+
+        std::vector<int> edge_nodes;
+        for (int k = 1; k < order; k++) {
+          double t = (double)k / order;
+          double xi, eta;
+          if (edge == 0) { xi = t; eta = 0; }
+          else if (edge == 1) { xi = 1; eta = t; }
+          else if (edge == 2) { xi = 1-t; eta = 1; }
+          else { xi = 0; eta = 1-t; }
+          ng::Point<2> ref(xi, eta);
+          ng::Point<3> phys;
+          curved.CalcSurfaceTransformation(ref, sei, phys);
+          int new_id = next_node_id_++;
+          total_nodes_++;
+          ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
+          edge_nodes.push_back(new_id);
+        }
+        if (v0_cubit <= v1_cubit)
+          edge_ho_nodes_[key] = edge_nodes;
+        else
+          edge_ho_nodes_[key] = std::vector<int>(edge_nodes.rbegin(), edge_nodes.rend());
+      }
+      if (order >= 3) {
+        for (int i = 1; i < order; i++) {
+          for (int j = 1; j < order; j++) {
+            double xi = (double)i / order;
+            double eta = (double)j / order;
+            ng::Point<2> ref(xi, eta);
+            ng::Point<3> phys;
+            curved.CalcSurfaceTransformation(ref, sei, phys);
+            int new_id = next_node_id_++;
+            total_nodes_++;
+            ho_node_coords_[new_id] = {phys[0], phys[1], phys[2]};
           }
         }
       }

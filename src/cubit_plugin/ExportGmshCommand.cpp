@@ -150,6 +150,51 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
 }
 
 // ========================================================================
+// Reorder HO edge nodes from Nastran canonical to GMSH file format order.
+// GMSH .msh uses a different edge ordering than Nastran/VTK (see gmsh.info
+// Section 10.2). Vertices (first nv nodes) are unchanged.
+// ========================================================================
+static std::vector<int> reorder_for_gmsh(const std::vector<int> &conn,
+                                          int nv, ElementType type, int order)
+{
+  if (order < 2 || (int)conn.size() <= nv)
+    return conn;
+
+  const int *reorder = nullptr;
+  int n_edge_nodes = 0;
+
+  if (nv == 4 && (type == TETRA4 || type == TETRA)) {
+    reorder = EdgeTables::tet_gmsh_reorder; n_edge_nodes = 6;
+  } else if (nv == 8 && (type == HEX8 || type == HEX)) {
+    reorder = EdgeTables::hex_gmsh_reorder; n_edge_nodes = 12;
+  } else if (nv == 6 && (type == WEDGE6 || type == WEDGE)) {
+    reorder = EdgeTables::wedge_gmsh_reorder; n_edge_nodes = 9;
+  } else if (nv == 5 && (type == PYRAMID5 || type == PYRAMID)) {
+    reorder = EdgeTables::pyramid_gmsh_reorder; n_edge_nodes = 8;
+  } else if (nv == 3 && (type == TRI3 || type == CUBIT_TRI
+                       || type == TRISHELL || type == TRISHELL3)) {
+    reorder = EdgeTables::tri_gmsh_reorder; n_edge_nodes = 3;
+  } else if (nv == 4 && (type == QUAD4 || type == QUAD
+                       || type == SHEL || type == SHELL4)) {
+    reorder = EdgeTables::quad_gmsh_reorder; n_edge_nodes = 4;
+  }
+
+  if (!reorder) return conn;
+
+  int n_mid = (int)conn.size() - nv;
+  if (n_mid < n_edge_nodes) return conn;
+
+  std::vector<int> out(conn.size());
+  for (int i = 0; i < nv; i++)
+    out[i] = conn[i];
+  for (int i = 0; i < n_edge_nodes; i++)
+    out[nv + reorder[i]] = conn[nv + i];
+  for (int i = nv + n_edge_nodes; i < (int)conn.size(); i++)
+    out[i] = conn[i];
+  return out;
+}
+
+// ========================================================================
 // Gmsh v2.2 writer — unified for all orders, blocks + sidesets
 // ========================================================================
 bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
@@ -243,7 +288,8 @@ bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
     }
     eid++;
 
-    const auto &c = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
+    const auto &raw = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
+    const auto c = reorder_for_gmsh(raw, elem.nv, elem.type, order);
     fid << eid << " " << gtype << " 2 " << elem.group_id << " " << elem.group_id;
     for (int nid : c) fid << " " << nid;
     fid << "\n";
@@ -256,7 +302,8 @@ bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
       int gtype = gmsh_type(face, order);
       if (gtype == 0) continue;
 
-      const auto &c = (order >= 2 && !face.ho_conn.empty()) ? face.ho_conn : face.conn;
+      const auto &raw = (order >= 2 && !face.ho_conn.empty()) ? face.ho_conn : face.conn;
+      const auto c = reorder_for_gmsh(raw, face.nv, face.type, order);
       fid << eid << " " << gtype << " 2 " << sg.id << " " << sg.id;
       for (int nid : c) fid << " " << nid;
       fid << "\n";
@@ -519,8 +566,8 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
     blk.dim = elem_dim(el);
     blk.entity_tag = el.group_id;
     blk.gmsh_type = gtype;
-    const auto &c = (order >= 2 && !el.ho_conn.empty()) ? el.ho_conn : el.conn;
-    blk.conns.push_back(c);
+    const auto &raw = (order >= 2 && !el.ho_conn.empty()) ? el.ho_conn : el.conn;
+    blk.conns.push_back(reorder_for_gmsh(raw, el.nv, el.type, order));
     total_elems++;
   }
 
@@ -534,8 +581,8 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
       blk.dim = elem_dim(face);
       blk.entity_tag = sg.id;
       blk.gmsh_type = gtype;
-      const auto &c = (order >= 2 && !face.ho_conn.empty()) ? face.ho_conn : face.conn;
-      blk.conns.push_back(c);
+      const auto &raw = (order >= 2 && !face.ho_conn.empty()) ? face.ho_conn : face.conn;
+      blk.conns.push_back(reorder_for_gmsh(raw, face.nv, face.type, order));
       total_elems++;
     }
   }
