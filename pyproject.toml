@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.3.3"
+version = "4.4.0"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -75,6 +75,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 [project.scripts]
 radia-setup = "radia.setup_cubit:main"
 radia-app = "radia.radia_app:main"
+vol-viewer = "radia.netgen_vol_viewer:main"
 cubit-install-panels = "radia.install_panels:main"
 mcp-server-radia = "radia.mcp_server.radia.server:main"
 mcp-server-ngsolve = "radia.mcp_server.ngsolve.server:main"
