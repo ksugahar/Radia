@@ -1149,8 +1149,8 @@ pip install ngsolve>=6.2.2601
 # NGBEM add-on
 pip install ngbem
 
-# Coreform mesh export (optional)
-pip install coreform-cubit-mesh-export
+# Cubit mesh export (optional)
+pip install cubit-mesh-export
 ```
 
 ### Build Requirements
