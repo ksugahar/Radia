@@ -9,14 +9,15 @@
 #include "ExportGmshCommand.hpp"
 #include "ExportNastranCommand.hpp"
 #include "ExportVtkCommand.hpp"
-#include "ExportMegCommand.hpp"
 
 #include <direct.h>  // _getcwd
 
 #include <QAction>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -34,6 +35,7 @@
 #include <QTableWidget>
 #include <QApplication>
 #include <QClipboard>
+#include <QTextStream>
 #include <QVBoxLayout>
 #include <vector>
 
@@ -134,7 +136,7 @@ void RadiaComp::setup_menus()
 
   QAction* a_gmsh = new QAction("GMSH...", handler);
   a_gmsh->setStatusTip("Export mesh to GMSH format (.msh)");
-  // Menu order follows lab priority: .vol > .msh > .bdf > .vtk > .meg
+  // Menu order follows lab priority: .vol > .msh > .bdf > .vtk
   QAction* a_netgen = new QAction("Netgen Vol (.vol)...", handler);
   a_netgen->setStatusTip("Export curved mesh with labels (.vol, order 1-5)");
   QObject::connect(a_netgen, SIGNAL(triggered()), handler, SLOT(export_netgen()));
@@ -152,11 +154,6 @@ void RadiaComp::setup_menus()
   a_vtk->setStatusTip("Export mesh to VTK format (.vtk)");
   QObject::connect(a_vtk, SIGNAL(triggered()), handler, SLOT(export_vtk()));
   menu_list.push_back(a_vtk);
-
-  QAction* a_meg = new QAction("MEG...", handler);
-  a_meg->setStatusTip("Export mesh to MEG/ELF format (.meg)");
-  QObject::connect(a_meg, SIGNAL(triggered()), handler, SLOT(export_meg()));
-  menu_list.push_back(a_meg);
 
   // Separator before evaluation tools
   QAction* sep = new QAction(handler);
@@ -253,7 +250,7 @@ static void run_export(ExportDialog::Format fmt)
   // (prevents intermediate files landing in repo root)
   QString outDir = QFileInfo(dlg.filePath()).absolutePath();
   outDir.replace("\\", "/");
-  CubitInterface::silent_cmd(("cd \"" + outDir.toStdString() + "\"").c_str());
+  CubitInterface::silent_cmd(("cd \"" + outDir.toLocal8Bit() + "\"").constData());
 
   // Execute export via APREPRO command (same codepath as journal playback)
   std::string cmd = dlg.cubitCommand().toStdString();
@@ -278,8 +275,6 @@ static void run_export(ExportDialog::Format fmt)
 void RadiaMenuHandler::export_gmsh()    { run_export(ExportDialog::GMSH); }
 void RadiaMenuHandler::export_nastran() { run_export(ExportDialog::Nastran); }
 void RadiaMenuHandler::export_vtk()     { run_export(ExportDialog::VTK); }
-void RadiaMenuHandler::export_meg()     { run_export(ExportDialog::MEG); }
-
 // ============================================================
 // Helpers for subprocess-based operations (Netgen export, Mesh Eval)
 // ============================================================
@@ -312,11 +307,12 @@ void RadiaMenuHandler::export_netgen()
   // Set Cubit working directory to output file's directory
   QString outDir = QFileInfo(volPath).absolutePath();
   outDir.replace("\\", "/");
-  CubitInterface::silent_cmd(("cd \"" + outDir.toStdString() + "\"").c_str());
+  CubitInterface::silent_cmd(("cd \"" + outDir.toLocal8Bit() + "\"").constData());
 
   // --- Phase 1: C++ export .vol + companion JSON (no subprocess, no cub5) ---
   PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
-  std::string cmd = "export netgen \"" + volPath.toStdString()
+  std::string cmd = std::string("export netgen \"")
+    + volPath.toLocal8Bit().constData()
     + "\" order " + std::to_string(order) + " overwrite";
   CubitInterface::silent_cmd(cmd.c_str());
 
@@ -325,7 +321,7 @@ void RadiaMenuHandler::export_netgen()
     PRINT_ERROR("export netgen command failed.\n");
     return;
   }
-  PRINT_INFO("Exported: %s\n", volPath.toStdString().c_str());
+  PRINT_INFO("Exported: %s\n", volPath.toLocal8Bit().constData());
 
   // --- Phase 2: subprocess to verify .vol with NGSolve ---
   QString python = find_external_python();
@@ -354,14 +350,41 @@ void RadiaMenuHandler::export_netgen()
     PRINT_WARNING("NGSolve verification timed out.\n");
     return;
   }
+
+  // Capture output before consuming
+  QByteArray stdoutData = proc.readAllStandardOutput();
+  QByteArray stderrData = proc.readAllStandardError();
+
+  // Write log file for debugging
+  {
+    QString logDir = "S:/Radia/01_GitHub/logs";
+    if (QDir(logDir).exists()) {
+      QString ts = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+      QString logFile = QDir(logDir).filePath(
+          "export_vol_" + ts + ".log");
+      QFile lf(logFile);
+      if (lf.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream ls(&lf);
+        ls << "=== export netgen .vol log ===\n";
+        ls << "time: " << QDateTime::currentDateTime().toString(Qt::ISODate) << "\n";
+        ls << "vol: " << volPath << "\n";
+        ls << "order: " << order << "\n";
+        ls << "exit_code: " << proc.exitCode() << "\n\n";
+        ls << "--- stdout ---\n" << stdoutData << "\n";
+        ls << "--- stderr ---\n" << stderrData << "\n";
+        lf.close();
+      }
+    }
+  }
+
   if (proc.exitCode() != 0) {
     PRINT_WARNING("NGSolve verification failed:\n%s\n",
-      proc.readAllStandardError().left(2000).constData());
+      stderrData.left(2000).constData());
     return;
   }
 
   // Parse JSON result from subprocess
-  QString out = QString::fromUtf8(proc.readAllStandardOutput());
+  QString out = QString::fromUtf8(stdoutData);
   QStringList lines = out.split('\n', Qt::SkipEmptyParts);
   if (lines.isEmpty()) { PRINT_WARNING("No verification output.\n"); return; }
 
@@ -732,7 +755,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     mVersion(nullptr), mNoPyramid(nullptr)
 {
   // Window title
-  const char* titles[] = {"Export Netgen Vol", "Export GMSH", "Export Nastran BDF", "Export VTK", "Export MEG"};
+  const char* titles[] = {"Export Netgen Vol", "Export GMSH", "Export Nastran BDF", "Export VTK"};
   setWindowTitle(titles[format]);
   setMinimumWidth(500);
 
@@ -740,7 +763,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   QFormLayout* form = new QFormLayout();
 
   // Determine default directory and base name
-  const char* exts[] = {".vol", ".msh", ".bdf", ".vtk", ".meg"};
+  const char* exts[] = {".vol", ".msh", ".bdf", ".vtk"};
   QString defaultDir;
   QString baseName = "ExportedMesh";
 
@@ -791,19 +814,13 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     mOrderCombo->addItems({"1 (linear)", "2 (quadratic)"});
   }
   connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
-  if (format != MEG) {
-    form->addRow("Order:", mOrderCombo);
-  }
+  form->addRow("Order:", mOrderCombo);
 
   // Version: GMSH is always v2.2 (v4.1 is for post-processing only)
 
   // Dimension (not for NETGEN_VOL)
   mDimension = new QComboBox();
-  if (format == MEG) {
-    mDimension->addItems({"T (3D)", "K (2D)", "R (Axisymmetric)"});
-  } else {
-    mDimension->addItems({"3D", "2D"});
-  }
+  mDimension->addItems({"3D", "2D"});
   connect(mDimension, SIGNAL(currentTextChanged(QString)), this, SLOT(updatePreview()));
   if (format != NETGEN_VOL) {
     form->addRow("Dimension:", mDimension);
@@ -842,7 +859,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
   connect(buttons, &QDialogButtonBox::accepted, [this]() {
     // Save settings before accepting
-    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "meg"};
+    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk"};
     QJsonObject all = loadSettings();
     QJsonObject s;
     s["dir"] = mDir->text();
@@ -857,7 +874,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
 
   // Load saved settings (override defaults with previous values)
   {
-    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "meg"};
+    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk"};
     QJsonObject all = loadSettings();
     QJsonObject s = all[keys[format]].toObject();
     if (s.contains("dir")) mDir->setText(s["dir"].toString());
@@ -919,13 +936,6 @@ QString ExportDialog::cubitCommand() const
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
       cmd = QString("export vtk \"%1\" order %2 dimension %3")
                 .arg(file).arg(order).arg(dim);
-      break;
-    }
-    case MEG: {
-      // Map combo selection to keyword
-      QChar c = mDimension->currentText().at(0);
-      QString kw = (c == 'K') ? "twod" : (c == 'R') ? "axisymmetric" : "threed";
-      cmd = QString("export meg \"%1\" %2").arg(file).arg(kw);
       break;
     }
   }

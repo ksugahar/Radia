@@ -27,7 +27,6 @@ Run `test_vol_multi_geometry.py` after any NetgenCurver or bridge.py change.
 | `export gmsh "f.msh" version 4` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
 | `export radia_nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
 | `export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
-| `export meg "f.meg"` | MEG/ELF (.meg) | Yes | No | No |
 | `extract_curved_mesh(cubit, order=N)` | ngsolve.Mesh (in-memory) | No (>=2) | Yes | Yes |
 
 All formats use NetgenCurver (compact_netgen BuildCurvedElements) for curving.
@@ -145,17 +144,19 @@ export_Gmesh(cubit, FileName)  # version="2.2" is default
 
 ## Use Cases
 
-- **NGSolve/Netgen integration**: `ReadGmsh()` supports v2.2 format
-- **2nd order elements for NGSolve**: Best approach for simple curving
+- **NGSolve/Netgen integration**: Export .vol via `export netgen` (recommended)
+- **GMSH visualization**: View mesh in GMSH GUI
+- **2nd order elements**: Good accuracy for simple curving workflows
 
 ```python
-# NGSolve integration
-from netgen.read_gmsh import ReadGmsh
+# Recommended: export netgen .vol (any order, best accuracy)
+cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 from ngsolve import Mesh
+mesh = Mesh("mesh.vol")
 
-cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
+# Alternative: Gmsh v2.2 (2nd order only, for GMSH visualization)
+cubit.cmd("block 1 element type tetra10")
 cubit.cmd('export gmsh "mesh.msh" overwrite')
-mesh = Mesh(ReadGmsh("mesh.msh"))  # ~0.001% volume error
 ```
 """
 
@@ -184,7 +185,7 @@ export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
-| **Input** (-> NGSolve) | **v2.2** | Mesh import into NGSolve | `GmshPostExport.write_v22()` or `export_Gmesh(version="2.2")` -> `ReadGmsh()` |
+| **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
 | **Output** (NGSolve ->) | **v4.1** | Field visualization in GMSH | `GmshPostExport.write()` -> GMSH GUI |
 | **Output** (NGSolve ->) | **v2.2** | High-order mesh exchange | `GmshPostExport.write_v22()` |
 
@@ -192,7 +193,6 @@ export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
 |---------|------|------|
 | $Entities section | No | Yes |
 | DIM parameter | No | Yes |
-| NGSolve ReadGmsh() | **Supported** | Not supported |
 | Post-processing (NodeData) | Basic | **Recommended** |
 | Physical Groups | Basic | Structured |
 | High-order elements (Tri6, Tet10, Tri10, ...) | **Yes (any order)** | **Yes (any order)** |
@@ -206,15 +206,14 @@ High-order elements (Tri10=21 for order 3, Tri15=23 for order 4, etc.) work in b
 | Method | Format | High-order | Use case |
 |--------|--------|-----------|----------|
 | `write(filename)` | v4.1 | Yes (any order) | Field visualization in GMSH GUI |
-| `write_v22(filename)` | v2.2 | Yes (any order) | NGSolve ReadGmsh() import, mesh exchange |
+| `write_v22(filename)` | v2.2 | Yes (any order) | High-order mesh exchange |
 | `write_mesh(filename)` | v4.1 | Yes (any order) | Mesh only (no field data) |
 
 ## When to Use Which
 
-- **`GmshPostExport.write_v22()`**: For high-order mesh export to v2.2 (ReadGmsh() compatible, any order)
+- **`export netgen "mesh.vol"`**: For NGSolve FEM computation (recommended, any order)
 - **`GmshPostExport.write()`**: For field visualization in GMSH GUI (v4.1)
-- **`export_Gmesh(version="2.2")`**: For direct Cubit mesh output (2nd order max, no curving)
-- Do NOT use v4.1 for NGSolve import (ReadGmsh cannot parse it)
+- **`export_Gmesh(version="2.2")`**: For direct Cubit mesh output to GMSH (2nd order max)
 """
 
 EXPORT_CURVED = """
@@ -279,7 +278,7 @@ nodes are placed exactly on ACIS CAD surfaces by mesh.Curve(order).
 ## Workflows
 
 For high-order curving, see `netgen_workflow_guide()` tool.
-For simple 2nd order without geometry, consider Gmsh export with `ReadGmsh()`.
+For simple 2nd order without geometry, use `export netgen "mesh.vol" order 2`.
 
 ## Deleted Predecessors
 
@@ -320,89 +319,6 @@ export_nastran(cubit, FileName, DIM="3D", PYRAM=True)
 ## Limitation
 
 **1st order elements only.** Uses `get_connectivity()`.
-"""
-
-EXPORT_MEG = """
-# MEG Export (ELF/MAGIC)
-
-```python
-export_meg(cubit, FileName, DIM='T', MGR2=None)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .meg file path |
-| `DIM` | str | 'T' | 'T' (3D), 'K' (2D planar), 'R' (axisymmetric) |
-| `MGR2` | list | None | Spatial nodes [[x,y,z], ...] |
-
-## DIM Options
-
-| Value | Description | Coordinate System |
-|-------|-------------|-------------------|
-| `'T'` | 3D | X, Y, Z |
-| `'K'` | 2D Planar | X, Y (Z=0) |
-| `'R'` | Axisymmetric | R (X), Z |
-
-## Block Name → ELF Element Name (Critical!)
-
-In MEG format, **block names directly become ELF element type identifiers**.
-The module takes the first 4 characters of the block name and appends the DIM
-letter to form the ELF element name.
-
-### How It Works Internally
-
-```python
-name = cubit.get_exodus_entity_name("block", block_id)
-# Element line: "{name[0:4]}{DIM} {elem_id} 0 {block_id} {node1} {node2} ..."
-```
-
-For example, if block name is `"MMB8"` and DIM is `'T'`:
-→ Element name in MEG file is `MMB8T`
-
-### Standard ELF Element Names
-
-| DIM | Tri (3-node) | Quad (4-node) | Tet (4-node) | Wedge (6-node) | Hex (8-node) |
-|-----|-------------|--------------|-------------|---------------|-------------|
-| `'T'` | - | - | `MMB4T` | `MMB6T` | `MMB8T` |
-| `'K'` | `MMB3K` | `MMB4K` | - | - | - |
-| `'R'` | `MMB3R` | `MMB4R` | - | - | - |
-
-### Setting Block Names for MEG
-
-**The block name MUST start with the correct ELF prefix** (first 4 characters):
-
-```python
-# 3D tet mesh for ELF
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 1 name 'MMB4'")    # → MMB4T in MEG file
-
-# 3D hex mesh for ELF
-cubit.cmd("block 1 add hex all")
-cubit.cmd("block 1 name 'MMB8'")    # → MMB8T in MEG file
-
-# 2D planar tri mesh
-cubit.cmd("block 1 add tri all")
-cubit.cmd("block 1 name 'MMB3'")    # → MMB3K in MEG file (DIM='K')
-
-# Axisymmetric tri mesh
-cubit.cmd("block 1 add tri all")
-cubit.cmd("block 1 name 'MMB3'")    # → MMB3R in MEG file (DIM='R')
-```
-
-### Common Mistake
-
-```python
-# WRONG: Generic block name → ELF cannot identify element type
-cubit.cmd("block 1 name 'domain'")   # → "doma" + "T" = "domaT" (not valid!)
-
-# RIGHT: Use ELF naming convention
-cubit.cmd("block 1 name 'MMB4'")     # → "MMB4" + "T" = "MMB4T" (valid!)
-```
-
-## Limitation
-
-**1st order elements only.** Uses `get_connectivity()` (corner nodes only).
 """
 
 EXPORT_EXODUS = """
@@ -471,23 +387,22 @@ EXPORT_COMPARISON = """
 
 | Use Case | Recommended Format | Why |
 |----------|-------------------|-----|
-| NGSolve FEM (any order) | `export_NGSolveCurvedMesh()` | Arbitrary order via ACIS CallbackGeometry |
-| NGSolve FEM (2nd order, simple) | `export_Gmesh(version="2.2")` | ReadGmsh() supports v2.2, ~0.001% accuracy |
-| Gmsh solver | `export_Gmesh(version="4.1")` | Full v4.1 with $Entities |
+| NGSolve FEM (any order) | `export netgen "f.vol" order N` | Arbitrary order via ACIS CallbackGeometry |
+| NGSolve FEM (any order, Python) | `export_NGSolveCurvedMesh()` | In-memory, same curving as Path A |
+| GMSH visualization | `export_Gmesh(version="2.2")` | GMSH GUI viewing |
 | JMAG solver | `export_nastran()` | PYRAM=False for degenerate hex |
-| ELF/MAGIC solver | `export_meg()` | Native ELF element names |
 | Cubit-native archival | `export_exodus()` | Full fidelity, all features |
 
 ## Feature Comparison
 
-| Feature | curved | gmsh_v2 | gmsh_v4 | nastran | meg | exodus |
-|---------|--------|---------|---------|---------|-----|--------|
-| 1st order | Yes | Yes | Yes | Yes | Yes | Yes |
-| 2nd order | Yes | Yes | Yes | No | No | Yes |
-| 3rd+ order | Yes | No | No | No | No | Yes |
-| In-memory | Yes | No | No | No | No | No |
-| BlockID metadata | N/A | Yes | Yes | Yes | Yes | Yes |
-| 2D support | No | No | Yes | Yes | Yes | No |
+| Feature | curved | gmsh_v2 | gmsh_v4 | nastran | exodus |
+|---------|--------|---------|---------|---------|--------|
+| 1st order | Yes | Yes | Yes | Yes | Yes |
+| 2nd order | Yes | Yes | Yes | No | Yes |
+| 3rd+ order | Yes | No | No | No | Yes |
+| In-memory | Yes | No | No | No | No |
+| BlockID metadata | N/A | Yes | Yes | Yes | Yes |
+| 2D support | No | No | Yes | Yes | No |
 
 ## export_NGSolveCurvedMesh vs Gmsh for NGSolve
 
@@ -517,14 +432,14 @@ EXPORT_DECISION_GUIDE = """
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
-- **Alternative for 2nd order only** -> Use `export_Gmesh(version="2.2")`:
+- **Alternative for 2nd order only** -> Use `export_Gmesh(version="2.2")` for GMSH visualization:
   ```python
   cubit.cmd("block 1 add tet all")
   cubit.cmd("block 1 element type tetra10")
   cubit.cmd("block 2 add tri all")
   cubit.cmd("block 2 element type tri6")
   cubit.cmd('export gmsh "mesh.msh" overwrite')
-  mesh = Mesh(ReadGmsh("mesh.msh"))
+  # For GMSH visualization only; for NGSolve use export netgen instead
   ```
 
 ## "I need structural FEA (Nastran / JMAG)"
@@ -555,15 +470,6 @@ the interface. Two solutions:
 into sweepable sub-volumes, switch to `tetmesh`. Forcing hex on complex
 geometry leads to poor quality or failed meshing.
 
-## "I need ELF/MAGIC electromagnetic solver"
-
--> Use `export_meg()`
-- 3D: `export_meg(cubit, "mesh.meg", DIM='T')`
-- 2D planar: `export_meg(cubit, "mesh.meg", DIM='K')`
-- Axisymmetric: `export_meg(cubit, "mesh.meg", DIM='R')`
-- Block names become ELF element type names (MMB4T, MMB8T, etc.)
-- **Note**: 1st order elements only
-
 ## "I need multi-physics (MOOSE, Sierra)"
 
 -> Use `export_exodus()`
@@ -572,12 +478,11 @@ geometry leads to poor quality or failed meshing.
 - Large model support: `export_exodus(cubit, "mesh.exo", large_model=True)`
 - Cubit-native format with highest fidelity
 
-## "I want Gmsh solver integration"
+## "I want Gmsh visualization"
 
--> Use `export_Gmesh(version="4.1")` for full v4.1 format
-- Includes $Entities section
-- DIM parameter: `"2D"` or `"3D"`
-- **Note**: For NGSolve, use `export_Gmesh(version="2.2")` instead (ReadGmsh uses v2.2)
+-> Use `export_Gmesh(version="2.2")` for GMSH GUI viewing
+- Or `export_Gmesh(version="4.1")` for full v4.1 with $Entities
+- **Note**: For NGSolve FEM, use `export netgen "mesh.vol"` instead
 
 ## Performance & Feature Summary
 
@@ -587,7 +492,6 @@ geometry leads to poor quality or failed meshing.
 | gmsh_v2 | Medium | 2nd | No | Yes | No |
 | gmsh_v4 | Medium | 2nd | Yes | Yes | No |
 | nastran | Medium | 2nd | Yes | Yes | No |
-| meg | Small | 1st | Yes | Yes | No |
 | exodus | Medium | All | No | Yes | No |
 
 ## IMPORTANT: `export radia_nastran` (NOT `export nastran`)
@@ -667,7 +571,6 @@ Export Mesh:                           Solve:
   GMSH...                               Generate Coil...
   Nastran BDF...                         --------
   VTK...                                 Reload Panels
-  MEG...
   --------
   Mesh Evaluation...
 ```
@@ -687,7 +590,6 @@ def get_export_documentation(format: str = "all") -> str:
 		"curved": EXPORT_CURVED,
 		"netgen": EXPORT_CURVED,  # Alias: old name redirects to export_NGSolveCurvedMesh
 		"nastran": EXPORT_NASTRAN,
-		"meg": EXPORT_MEG,
 		"exodus": EXPORT_EXODUS,
 		"comparison": EXPORT_COMPARISON,
 		"decision_guide": EXPORT_DECISION_GUIDE,

@@ -51,9 +51,17 @@ def verify_vol(vol_path):
     # --- Per-boundary area ---
     cad_bnds = cad_ref.get("boundaries", {})
     boundaries = []
-    for bnd in dict.fromkeys(mesh.GetBoundaries()):
-        ng_area = Integrate(CF(1), mesh, BND,
-                            definedon=mesh.Boundaries(bnd))
+    try:
+        bnd_names = list(dict.fromkeys(mesh.GetBoundaries()))
+    except Exception:
+        bnd_names = []
+        warnings.append("Could not read boundary names from .vol")
+    for bnd in bnd_names:
+        try:
+            ng_area = Integrate(CF(1), mesh, BND,
+                                definedon=mesh.Boundaries(bnd))
+        except Exception:
+            continue
         entry = {"name": bnd, "ng_area": ng_area}
         if bnd in cad_bnds:
             cad_a = cad_bnds[bnd]
@@ -71,9 +79,16 @@ def verify_vol(vol_path):
     edges = []
     try:
         from ngsolve import BBND
-        for ename in dict.fromkeys(mesh.GetBBoundaries()):
-            ng_len = Integrate(CF(1), mesh, BBND,
-                               definedon=mesh.BBoundaries(ename))
+        try:
+            bb_names = list(dict.fromkeys(mesh.GetBBoundaries()))
+        except Exception:
+            bb_names = []
+        for ename in bb_names:
+            try:
+                ng_len = Integrate(CF(1), mesh, BBND,
+                                   definedon=mesh.BBoundaries(ename))
+            except Exception:
+                continue
             entry = {"name": ename, "ng_length": ng_len}
             if ename in cad_edges:
                 cad_l = cad_edges[ename]

@@ -75,18 +75,15 @@ The mesh boundary layer near the work surface must resolve the skin depth
 INDUCTION_HEATING_GMSH_MESH = """
 # Gmsh Mesh Loading for Induction Heating
 
-## ReadGmsh: Loading External .msh Files
+## Loading Meshes (.vol files)
 
-NGSolve can load Gmsh v2 format meshes via `netgen.read_gmsh.ReadGmsh`.
-This is the standard workflow when using Cubit or Gmsh for mesh generation.
+NGSolve loads meshes from .vol files (exported from Cubit or Netgen).
 
 ```python
-from netgen.read_gmsh import ReadGmsh
 from ngsolve import Mesh
 
-# Load Gmsh v2 mesh (1st or 2nd order)
-ngmesh = ReadGmsh("toymodel.msh")
-mesh = Mesh(ngmesh)
+# Load .vol mesh (exported from Cubit or Netgen)
+mesh = Mesh("toymodel.vol")
 
 # Verify material regions and boundaries
 print("Materials:", mesh.GetMaterials())
@@ -129,7 +126,7 @@ and boundary conditions (surfaces). These map to NGSolve materials/boundaries.
 # Cubit2gmsh.py: Generate Gmsh mesh from Cubit journal file
 # 1. Create geometry in Cubit (.jou file)
 # 2. Run Cubit2gmsh.py to export to Gmsh v2 format
-# 3. Load in NGSolve with ReadGmsh
+# 3. Load in NGSolve: mesh = Mesh("model.vol")
 
 # Typical Cubit export command (inside Cubit2gmsh.py):
 # cubit.cmd(f'export mesh "{output_msh}" overwrite gmsh_ver2')
@@ -171,14 +168,12 @@ heating with Gmsh meshes, based on real simulation workflows.
 
 ```python
 from ngsolve import *
-from netgen.read_gmsh import ReadGmsh
 import numpy as np
 
 # ============================================================
-# 1. Load Gmsh mesh
+# 1. Load mesh (.vol)
 # ============================================================
-ngmesh = ReadGmsh("toymodel.msh")
-mesh = Mesh(ngmesh)
+mesh = Mesh("toymodel.vol")
 
 print("Materials:", mesh.GetMaterials())
 print("Boundaries:", mesh.GetBoundaries())

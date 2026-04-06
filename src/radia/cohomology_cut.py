@@ -409,23 +409,28 @@ class CohomologyCutSolver:
         return chains
 
     def _transfer_mesh_to_ngsolve(self):
-        """Export Gmsh mesh and import into NGSolve via ReadGmsh."""
+        """Export Gmsh mesh and import into NGSolve via .vol file."""
         import gmsh
         import tempfile
         import os
 
-        tmpfile = os.path.join(tempfile.gettempdir(), '_cohom_mesh.msh')
+        tmpfile = os.path.join(tempfile.gettempdir(), '_cohom_mesh.vol')
         gmsh.option.setNumber('Mesh.MshFileVersion', 2.2)
-        gmsh.write(tmpfile)
+        # Write .msh, convert to .vol via Netgen, then load
+        msh_tmp = os.path.join(tempfile.gettempdir(), '_cohom_mesh.msh')
+        gmsh.write(msh_tmp)
 
         try:
-            from netgen.read_gmsh import ReadGmsh
+            from netgen.meshing import Mesh as NetgenMesh
             from ngsolve import Mesh
-            ngmesh = ReadGmsh(tmpfile)
-            self._mesh = Mesh(ngmesh)
+            ngmesh = NetgenMesh()
+            ngmesh.Load(msh_tmp)
+            ngmesh.Save(tmpfile)
+            self._mesh = Mesh(tmpfile)
         finally:
-            if os.path.exists(tmpfile):
-                os.remove(tmpfile)
+            for f in [msh_tmp, tmpfile]:
+                if os.path.exists(f):
+                    os.remove(f)
 
         # Build Gmsh -> NGSolve vertex mapping
         self._build_vertex_map()

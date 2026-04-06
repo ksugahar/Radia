@@ -626,7 +626,7 @@ def radia_play_model(scenario: str) -> str:
         "- ObjRecMag: optimized rectangular blocks (3 DOF, MMM)\n"
         "- ObjHexahedron: arbitrary hex (6 DOF, MSC) -- better accuracy\n"
         "- ObjTetrahedron: tet (3 DOF, MMM) -- unstructured meshes\n"
-        "- For complex geometry: use netgen_mesh_to_radia() or gmsh_to_radia()\n"
+        "- For complex geometry: use netgen_mesh_to_radia() with Mesh('model.vol')\n"
     )
 
 

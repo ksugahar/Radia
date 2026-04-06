@@ -8,12 +8,11 @@ Models:
   - 3D: sphere tet mesh (volume + boundary)
   - 2D: square tri mesh (surface only)
 
-Combinations (42 total):
+Combinations (40 total):
   GMSH:    order(1,2) x version(2,4) x dim(2D,3D) = 8 per model x 2 = 16
   Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
   VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
-  MEG:     1 per model x 2 = 2
-  Total = 42
+  Total = 40
 
 Usage:
   python tests/cubit/test_export_combinations.py
@@ -260,19 +259,6 @@ def parse_vtk(filename):
     return result
 
 
-def validate_meg(filename):
-    """Check MEG/ELF format has required sections."""
-    with open(filename, 'r') as f:
-        content = f.read()
-
-    checks = {
-        'has_node_section': 'NODE' in content.upper() or 'GRID' in content.upper(),
-        'has_element_section': 'ELEM' in content.upper(),
-        'non_empty': len(content) > 100,
-    }
-    return checks
-
-
 # ================================================================
 # Test runner
 # ================================================================
@@ -405,17 +391,6 @@ def validate_vtk_export(filename, model_info, expected):
     return errors
 
 
-def validate_meg_export(filename, model_info, expected):
-    """Validate MEG export file."""
-    errors = []
-    checks = validate_meg(filename)
-
-    if not checks['non_empty']:
-        errors.append("File is too small")
-
-    return errors
-
-
 # ================================================================
 # Test case definitions
 # ================================================================
@@ -492,20 +467,6 @@ def generate_test_cases():
                     'validator': validate_vtk_export,
                     'expected': {}
                 })
-
-    # --- MEG ---
-    for model in ['3d', '2d']:
-        name = f"meg_{model}"
-        fname = os.path.join(OUT_DIR, f"{name}.meg")
-
-        cmd = f'export meg "{fname}" overwrite'
-
-        cases.append({
-            'name': name, 'model': model,
-            'cmd': cmd,
-            'validator': validate_meg_export,
-            'expected': {}
-        })
 
     return cases
 

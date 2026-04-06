@@ -270,9 +270,9 @@ class TestCurveWithoutSetGeomInfo:
         )
         assert _run(check_curve_without_setgeominfo, code) == []
 
-    def test_allows_readgmsh(self):
+    def test_allows_occ_generate_mesh(self):
         code = (
-            'mesh = Mesh(ReadGmsh("output.msh"))\n'
+            'mesh = geo.GenerateMesh(maxh=0.1)\n'
             'mesh.Curve(3)\n'
         )
         assert _run(check_curve_without_setgeominfo, code) == []

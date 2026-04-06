@@ -181,7 +181,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 **GMSH is allowed for**:
 - Opening and visualizing `.msh` files (GMSH GUI)
 - Post-processing field data (GMSH views)
-- Reading `.msh` file format via `gmsh_mesh_import.py` (pure file reader, no GMSH dependency)
+- Reading `.msh` file format for visualization verification
 
 ### GMSH .msh Format Version Policy
 
@@ -406,7 +406,7 @@ A field is **implemented** for all element types using face integration (Wilton 
 - `rad.ObjHexahedron(vertices, magnetization)` -- Arbitrary hexahedra (8 vertices)
 - `rad.ObjTetrahedron(vertices, magnetization)` -- Tetrahedra (4 vertices)
 - `rad.ObjWedge(vertices, magnetization)` -- Wedges (6 vertices)
-- Mesh import functions (`netgen_mesh_to_radia`, `gmsh_to_radia`) for complex geometries
+- Mesh import functions (`netgen_mesh_to_radia`) for complex geometries
 
 ### EIEM2 Evaluation Point Convention
 
@@ -739,12 +739,14 @@ pt = mesh.ngmesh.Points()[v.nr]  # Off-by-one!
 
 ### Mesh Import Paths
 
-```
-Path A: Netgen (recommended for tet)
-  STEP -> NGSolve OCC -> Mesh() -> netgen_mesh_import.py -> Radia
+Both paths produce `.vol` files consumed by `Mesh("model.vol")`:
 
-Path B: Cubit (recommended for hex)
-  STEP -> Cubit -> .msh export -> gmsh_mesh_import.py -> Radia
+```
+Path A: Cubit (recommended for hex)
+  STEP -> Cubit -> export netgen "model.vol" order N -> Mesh("model.vol") -> Radia
+
+Path B: OCC (recommended for tet)
+  STEP -> NGSolve OCC -> Mesh() -> netgen_mesh_import.py -> Radia
 ```
 
 **Key import functions**:
@@ -753,7 +755,6 @@ Path B: Cubit (recommended for hex)
 |--------|----------|---------|
 | `netgen_mesh_import` | `netgen_mesh_to_radia(mesh, ...)` | NGSolve mesh -> Radia (recommended) |
 | `netgen_mesh_import` | `create_hex_mesh_grid(...)` | Structured hex grid (no external tool) |
-| `gmsh_mesh_import` | `gmsh_to_radia(file, mu_r, ...)` | .msh file -> Radia (for Cubit exports) |
 
 ### Cubit Mesh Export (cubit-mesh-export)
 
@@ -786,7 +787,7 @@ from cubit_mesh_export.check import check_consistency  # API
 - `cubit_netgen_bridge` — thin backward-compat re-export in `src/radia/` (imports from cubit_mesh_export)
 - `check_vol_consistency` — thin backward-compat re-export in `src/radia/panels/` (imports from cubit_mesh_export.check)
 
-Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/nastran/meg/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `radia-setup`).
+Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `radia-setup`).
 
 ### PEEC Conductor Mesh
 
@@ -1659,7 +1660,7 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `.ccm` (plugins/) | `radia_cubit.ccm` | APREPRO commands: `export gmsh/nastran/vtk/meg` |
+| `.ccm` (plugins/) | `radia_cubit.ccm` | APREPRO commands: `export gmsh/nastran/vtk/netgen` |
 | `.ccl` (bin/) | `radia_cubit.ccl` | Qt5 GUI: Export Mesh menu + dialog |
 | `.pyd` (plugins/) | `radia_cubit_mesh.pyd` | pybind11: Cubit-free mesh curving |
 
@@ -1667,11 +1668,11 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 
 | Format | Command | Order 1-2 | Notes |
 |--------|---------|-----------|-------|
-| GMSH v2.2 | `export gmsh "f.msh" version 2` | Yes | Default, NGSolve ReadGmsh() compatible |
+| Netgen Vol | `export netgen "f.vol" order 3` | Yes (order 1-5) | Primary format for NGSolve FEM |
+| GMSH v2.2 | `export gmsh "f.msh" version 2` | Yes | GMSH visualization |
 | GMSH v4.1 | `export gmsh "f.msh" version 4` | Yes | Structured entity blocks, PhysicalNames |
 | Nastran BDF | `export radia_nastran "f.bdf"` | Yes | CTETRA/CTETRA(10), nopyramid option |
 | VTK | `export vtk "f.vtk"` | Yes | Legacy format, cell types 10/24 |
-| MEG | `export meg "f.meg"` | Order 1 only | ELF format |
 
 **High-order mesh curving** (order >= 2):
 - `NetgenCurver` (compact_netgen, static link): `CallbackGeometry` + `BuildCurvedElements` for order 1-5
@@ -1710,7 +1711,6 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 | `src/cubit_plugin/ExportGmshCommand.cpp` | GMSH v2.2 + v4.1 writer |
 | `src/cubit_plugin/ExportNastranCommand.cpp` | Nastran BDF writer |
 | `src/cubit_plugin/ExportVtkCommand.cpp` | VTK Legacy writer |
-| `src/cubit_plugin/ExportMegCommand.cpp` | MEG/ELF writer |
 | `src/cubit_plugin/ExportNetgenCommand.cpp` | Netgen .vol writer + companion JSON |
 | `src/cubit_plugin/MeshData.cpp` | Shared mesh extraction from Cubit |
 | `src/cubit_plugin/NetgenCurver.cpp` | Order 1-5 curving via compact_netgen |

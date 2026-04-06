@@ -183,7 +183,6 @@ Output:
 | `export gmsh "f.msh" order N` | NetgenCurver | 1-4 |
 | `export radia_nastran "f.bdf" order N` | NetgenCurver | 1-2 |
 | `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
-| `export meg "f.meg"` | None | 1 only |
 | `extract_curved_mesh(cubit, order=N)` | CallbackGeometry + BuildCurvedElements | 1-5 |
 
 > **Note**: `export radia_nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
