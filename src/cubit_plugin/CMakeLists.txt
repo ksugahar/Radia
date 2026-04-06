@@ -177,8 +177,13 @@ if(MSVC)
   target_link_libraries(radia_cubit_ccm delayimp)
 endif()
 
+option(DEBUG_HO_NODES "Print debug info for high-order node registration" OFF)
+
 if(HAVE_NETGEN)
   target_compile_definitions(radia_cubit_ccm PRIVATE HAVE_NETGEN)
+  if(DEBUG_HO_NODES)
+    target_compile_definitions(radia_cubit_ccm PRIVATE DEBUG_HO_NODES)
+  endif()
   if(USE_COMPACT_NETGEN)
     target_include_directories(radia_cubit_ccm PRIVATE ${COMPACT_NETGEN_INCLUDES})
     target_compile_definitions(radia_cubit_ccm PRIVATE ${COMPACT_NETGEN_DEFS})
