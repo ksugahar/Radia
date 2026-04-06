@@ -120,9 +120,44 @@ endif()
 # --------------------------------------------------------
 # Qt5 (for GUI Component in .ccl)
 # --------------------------------------------------------
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:/Qt/5.15.2/msvc2019_64")
-find_package(Qt5Core REQUIRED)
-find_package(Qt5Widgets REQUIRED)
+# Use minimal Qt5 SDK bundled in repo (headers + .lib only).
+# Runtime DLLs come from the Cubit installation.
+# This avoids requiring a full Qt5 installation or C:\Qt.
+set(QT5_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/qt5_sdk")
+
+# Qt5::Core
+add_library(Qt5::Core SHARED IMPORTED)
+set_target_properties(Qt5::Core PROPERTIES
+    IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/Qt5Core.dll"
+    IMPORTED_IMPLIB   "${QT5_SDK_DIR}/lib/Qt5Core.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "${QT5_SDK_DIR}/include;${QT5_SDK_DIR}/include/QtCore"
+)
+# Qt5::Gui (transitive dependency of Widgets)
+add_library(Qt5::Gui SHARED IMPORTED)
+set_target_properties(Qt5::Gui PROPERTIES
+    IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/Qt5Gui.dll"
+    IMPORTED_IMPLIB   "${QT5_SDK_DIR}/lib/Qt5Gui.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "${QT5_SDK_DIR}/include;${QT5_SDK_DIR}/include/QtGui"
+)
+# Qt5::Widgets
+add_library(Qt5::Widgets SHARED IMPORTED)
+set_target_properties(Qt5::Widgets PROPERTIES
+    IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/Qt5Widgets.dll"
+    IMPORTED_IMPLIB   "${QT5_SDK_DIR}/lib/Qt5Widgets.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "${QT5_SDK_DIR}/include;${QT5_SDK_DIR}/include/QtWidgets"
+    INTERFACE_LINK_LIBRARIES "Qt5::Core;Qt5::Gui"
+)
+# moc for AUTOMOC
+set(CMAKE_AUTOMOC ON)
+set(QT_VERSION_MAJOR 5)
+set(Qt5Core_VERSION_MAJOR 5)
+set(Qt5Core_VERSION_MINOR 15)
+set(Qt5Core_VERSION "5.15.2")
+set(QT_MOC_EXECUTABLE "${QT5_SDK_DIR}/bin/moc.exe")
+if(NOT TARGET Qt5::moc)
+    add_executable(Qt5::moc IMPORTED)
+    set_target_properties(Qt5::moc PROPERTIES IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/moc.exe")
+endif()
 
 # --------------------------------------------------------
 # Target 1: radia_cubit.ccm (command plugin, goes to plugins/)
