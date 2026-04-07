@@ -192,6 +192,7 @@ def _ensure_model():
     jou_path = jou_path.replace("\\", "/")
     jou_dir = os.path.dirname(jou_path)
     _last_jou_dir[0] = jou_dir
+    _save_last_dir(jou_dir)
     cubit.cmd(f'play "{jou_path}"')
 
     if not _has_model():
