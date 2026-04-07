@@ -1,11 +1,17 @@
-## Electromagnet sample: C-type dipole yoke (quarter model)
+## Electromagnet sample: C-type dipole yoke (quarter model) with Kelvin spheres
 ## Required labels: (none)
 ## Optional labels: iron, air, kelvin_int, kelvin_ext
 ##
 ## Usage: Solve -> Radia-NGSolve -> Electromagnet
-## After play: Add Kelvin (quarter X,Z), then mesh
+##
+## This creates:
+##   1. Iron yoke (3 volumes, quarter model, XZ symmetry)
+##   2. Inner Kelvin sphere (air domain, radius 0.06 m)
+##   3. Outer Kelvin sphere (copy, offset for periodic BC)
 
 reset
+
+# === Iron Yoke (quarter model, X=0 and Z=0 symmetry) ===
 
 # Pole piece
 brick x 0.0125 y 0.040 z 0.050
@@ -26,7 +32,32 @@ merge volume all
 block 1 add volume all
 block 1 name "iron"
 
-# Mesh
+# === Kelvin Spheres (quarter, XZ symmetry) ===
+# Inner sphere: radius 0.06 m, centered at origin
+# Arc from top pole (0,0,r) to equator (r,0,0), quarter-circle
+create vertex 0 0 0.06
+create vertex 0.06 0 0
+create vertex 0 0 0
+create curve arc center vertex 7 5 6
+create curve vertex 5 7
+create curve vertex 7 6
+create surface curve 19 20 21
+# Sweep 90 degrees around z-axis (quarter model)
+sweep surface 19 axis 0 0 0 0 0 1 angle 90
+
+volume 4 rename "kelvin_int"
+
+# Outer sphere: copy + offset
+volume 4 copy move x 0 y 0 z 0 nomesh
+volume 5 rename "kelvin_ext"
+
+imprint volume all
+merge volume all
+
+# === Mesh ===
 volume all scheme tetmesh
 volume all size 0.005
 mesh volume all
+
+# Graphics: clip plane to see interior
+Graphics Clip on Plane location 0 0 0 direction 0 1 0
