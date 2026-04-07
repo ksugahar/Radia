@@ -52,7 +52,7 @@ S:\Radia\01_GitHub\
 ```bash
 pip install radia               # Python package (includes Cubit plugin binaries)
 pip install radia[cubit]        # Also installs cubit-mesh-export
-radia-setup                     # Deploy Cubit plugin + panels (skip if no Cubit)
+cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit)
 ```
 
 **Deleted repositories** (integrated into Radia):
@@ -595,8 +595,8 @@ for (int i = 0; i < n; i++) { ... }
 
 **General User Install** (after PyPI publish):
 ```bash
-pip install radia
-radia-setup            # Cubit plugin + panels
+pip install radia[cubit]
+cubit-plugin-install       # Cubit plugin + panels
 ```
 
 **CI/CD Pipeline** (`.github/workflows/`):
@@ -676,8 +676,8 @@ Deploy: replace pip's DLLs in `site-packages/netgen/` + copy libnggui.dll to `bi
 Once next PyPI release includes curvedelements, the fork becomes unnecessary.
 
 ```bash
-pip install radia      # Installs everything (NGSolve, MKL, Cubit plugin binaries)
-radia-setup            # Deploys Cubit plugin + panels
+pip install radia[cubit]       # Installs everything (NGSolve, MKL, Cubit plugin binaries)
+cubit-plugin-install           # Deploys Cubit plugin + panels
 # + deploy netgen fork DLLs (nglib, ngcore, libnggui, libngguipy)
 ```
 
@@ -820,7 +820,7 @@ from cubit_mesh_export.check import check_consistency  # API
 - `cubit_netgen_bridge` — thin backward-compat re-export in `src/radia/` (imports from cubit_mesh_export)
 - `check_vol_consistency` — thin backward-compat re-export in `src/radia/panels/` (imports from cubit_mesh_export.check)
 
-Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `radia-setup`).
+Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `cubit-plugin-install`).
 
 ### PEEC Conductor Mesh
 

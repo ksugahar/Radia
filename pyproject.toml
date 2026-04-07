@@ -73,11 +73,10 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-radia-setup = "radia.setup_cubit:main"
 radia-app = "radia.radia_app:main"
 vol-viewer = "radia.netgen_vol_viewer:main"
-cubit-install-panels = "radia.install_panels:main"
-# MCP servers moved to radia-mcp package (pip install radia-mcp)
+# Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
+# MCP servers: radia-mcp package (pip install radia-mcp)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
