@@ -1,0 +1,32 @@
+## Electromagnet sample: C-type dipole yoke (quarter model)
+## Required labels: (none)
+## Optional labels: iron, air, kelvin_int, kelvin_ext
+##
+## Usage: Solve -> Radia-NGSolve -> Electromagnet
+## After play: Add Kelvin (quarter X,Z), then mesh
+
+reset
+
+# Pole piece
+brick x 0.0125 y 0.040 z 0.050
+move volume 1 x 0.00625 y 0.020 z 0.025
+
+# Yoke back
+brick x 0.0125 y 0.080 z 0.025
+move volume 2 x 0.00625 y 0.080 z 0.0125
+
+# Main leg
+brick x 0.0125 y 0.0625 z 0.0525
+move volume 3 x 0.00625 y 0.15125 z 0.02625
+
+imprint volume all
+merge volume all
+
+# Label iron
+block 1 add volume all
+block 1 name "iron"
+
+# Mesh
+volume all scheme tetmesh
+volume all size 0.005
+mesh volume all

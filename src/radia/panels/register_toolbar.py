@@ -13,6 +13,7 @@ Architecture:
     All settings, computation, and result display
 """
 
+import json
 import sys
 import os
 import subprocess
@@ -50,30 +51,32 @@ import cubit
 try:
     from PySide6.QtWidgets import (QApplication, QMainWindow, QMenu,
                                    QMessageBox, QToolBar, QDialog,
-                                   QVBoxLayout, QHBoxLayout, QLabel,
-                                   QLineEdit, QPushButton, QFileDialog,
-                                   QDialogButtonBox, QCheckBox,
-                                   QPlainTextEdit, QComboBox, QGroupBox)
+                                   QVBoxLayout, QHBoxLayout, QFormLayout,
+                                   QLabel, QLineEdit, QPushButton,
+                                   QFileDialog, QDialogButtonBox, QCheckBox,
+                                   QPlainTextEdit, QComboBox, QGroupBox,
+                                   QWidget)
     from PySide6.QtGui import QAction
     _QT = "PySide6"
 except ImportError:
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QMenu,
                                  QMessageBox, QToolBar, QAction, QDialog,
-                                 QVBoxLayout, QHBoxLayout, QLabel,
-                                 QLineEdit, QPushButton, QFileDialog,
-                                 QDialogButtonBox, QCheckBox,
-                                 QPlainTextEdit, QComboBox, QGroupBox)
+                                 QVBoxLayout, QHBoxLayout, QFormLayout,
+                                 QLabel, QLineEdit, QPushButton,
+                                 QFileDialog, QDialogButtonBox, QCheckBox,
+                                 QPlainTextEdit, QComboBox, QGroupBox,
+                                 QWidget)
     _QT = "PyQt5"
 
 
 def _no_window_kwargs():
-    """Return subprocess kwargs to suppress console window on Windows."""
+    """Return subprocess kwargs to suppress console window on Windows.
+
+    Only CREATE_NO_WINDOW is used (hides the console).
+    Do NOT set SW_HIDE — it hides PySide6 GUI windows too.
+    """
     if sys.platform == "win32":
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0  # SW_HIDE
-        return {"startupinfo": si,
-                "creationflags": subprocess.CREATE_NO_WINDOW}
+        return {"creationflags": subprocess.CREATE_NO_WINDOW}
     return {}
 
 
@@ -139,23 +142,22 @@ def _find_main_window():
     return best
 
 
-def _find_radia_app():
-    """Find radia_app.py path without importing radia package.
+def _find_radia_script(name):
+    """Find a radia/*.py script without importing radia package.
 
     IMPORTANT: Do NOT use importlib.util.find_spec("radia") here.
     It triggers radia/__init__.py which loads _radia_pybind.pyd,
     causing DLL conflicts inside Cubit's process.
     """
-    # Same directory as this file -> ../radia_app.py
     pkg_root = os.path.dirname(_this_dir)  # src/radia/ or site-packages/radia/
-    app_path = os.path.join(pkg_root, "radia_app.py")
-    if os.path.isfile(app_path):
-        return app_path
-    # Fallback: search site-packages directly (no import)
+    path = os.path.join(pkg_root, name)
+    if os.path.isfile(path):
+        return path
     for sp in sys.path:
-        candidate = os.path.join(sp, "radia", "radia_app.py")
+        candidate = os.path.join(sp, "radia", name)
         if os.path.isfile(candidate):
             return candidate
+    return None
     return None
 
 
@@ -179,7 +181,7 @@ def _ensure_model():
     if _has_model():
         return _last_jou_dir[0] or os.getcwd()
 
-    start_dir = _last_jou_dir[0] or os.getcwd()
+    start_dir = _last_jou_dir[0] or _load_last_dir()
     jou_path, _ = QFileDialog.getOpenFileName(
         None, "Select Journal File",
         start_dir,
@@ -199,14 +201,113 @@ def _ensure_model():
     return jou_dir
 
 
-def _launch_radia_app():
-    """Export .vol and launch Radia app.
+def _discover_mode_scripts():
+    """Discover radia_*.py analysis windows and their metadata.
+
+    Convention: each radia_*.py in the radia package directory defines:
+      TITLE = "Display Name"
+      REQUIRED_LABELS = ["source", "sink"]    # must exist as block/sideset
+      OPTIONAL_LABELS = ["workpiece", "air"]  # shown but not required
+      OPTIONAL_FILES = {"Coil script": "Python (*.py)"}  # optional file inputs
+
+    Returns dict {title: {"file": filename, "required": [...],
+                          "optional": [...], "opt_files": {name: filter}}}
+    sorted by filename.
+    Does NOT import the modules (avoids DLL conflicts inside Cubit).
+    """
+    import ast
+    import glob
+    import re
+    pkg_root = os.path.dirname(_this_dir)
+    modes = {}
+    for path in sorted(glob.glob(os.path.join(pkg_root, "radia_*.py"))):
+        name = os.path.basename(path)
+        if name == "radia_gui_base.py":
+            continue
+        title = None
+        required = []
+        optional = []
+        opt_files = {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    m = re.match(r'^TITLE\s*=\s*["\'](.+?)["\']', line)
+                    if m:
+                        title = m.group(1)
+                    m = re.match(
+                        r'^REQUIRED_LABELS\s*=\s*(\[.*\])', line)
+                    if m:
+                        required = ast.literal_eval(m.group(1))
+                    m = re.match(
+                        r'^OPTIONAL_LABELS\s*=\s*(\[.*\])', line)
+                    if m:
+                        optional = ast.literal_eval(m.group(1))
+                    m = re.match(
+                        r'^OPTIONAL_FILES\s*=\s*(\{.*\})', line)
+                    if m:
+                        opt_files = ast.literal_eval(m.group(1))
+        except (OSError, ValueError, SyntaxError):
+            pass
+        if title:
+            modes[title] = {
+                "file": name,
+                "required": required,
+                "optional": optional,
+                "opt_files": opt_files,
+            }
+    return modes
+
+
+def _samples_dir():
+    """Return the package samples directory (default working folder)."""
+    return os.path.join(_this_dir, "samples")
+
+
+def _launcher_settings_path():
+    """~/.cubit/radia_launcher.json"""
+    return os.path.join(os.path.expanduser("~"), ".cubit",
+                        "radia_launcher.json")
+
+
+def _load_last_dir():
+    """Load last working directory from settings. Fallback to samples dir."""
+    default = _samples_dir()
+    p = _launcher_settings_path()
+    if not os.path.isfile(p):
+        return default
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        d = data.get("last_jou_dir", "")
+        if d and os.path.isdir(d):
+            return d
+        # Try parent
+        parent = os.path.dirname(d)
+        if parent and os.path.isdir(parent):
+            return parent
+    except (OSError, json.JSONDecodeError):
+        pass
+    return default
+
+
+def _save_last_dir(d):
+    """Save last working directory to settings."""
+    p = _launcher_settings_path()
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    try:
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump({"last_jou_dir": d}, f)
+    except OSError:
+        pass
+
+
+def _launch_radia_ngsolve():
+    """Show mode/order/folder dialog, export .vol, launch analysis window.
 
     Pipeline:
-      1. No model -> prompt for .jou, play it
-      2. Export netgen .vol (C++ plugin, order 2)
-      3. Save .cub5 alongside
-      4. Launch radia_app.py with .vol path
+      1. Dialog: mode (IH/EM/PCB) + mesh order + output folder
+      2. export netgen .vol (C++ plugin, user-chosen order)
+      3. Launch the selected analysis window with .vol path
     """
     try:
         if not _has_model():
@@ -214,28 +315,208 @@ def _launch_radia_app():
             if work_dir is None:
                 return
         else:
-            work_dir = _last_jou_dir[0] or os.getcwd()
+            work_dir = _last_jou_dir[0] or _load_last_dir()
 
-        # Set Cubit working directory
-        work_dir = work_dir.replace("\\", "/")
-        cubit.cmd(f'cd "{work_dir}"')
+        # --- Dialog ---
+        dlg = QDialog(_find_main_window())
+        dlg.setWindowTitle("Radia-NGSolve")
+        dlg.setMinimumWidth(450)
+        layout = QVBoxLayout(dlg)
 
-        # Export .vol via C++ plugin (Path A, includes curvedelements)
-        vol_path = os.path.join(work_dir, "radia_model.vol").replace("\\", "/")
-        cubit.cmd(f'export netgen "{vol_path}" order 2 overwrite')
-        if not os.path.isfile(vol_path):
-            print("ERROR: export netgen failed. Check blocks/sidesets.")
+        # Mode (dynamically discovered from radia_*.py TITLE)
+        mode_scripts = _discover_mode_scripts()
+        if not mode_scripts:
+            print("ERROR: No radia_*.py analysis windows found.")
             return
-        print(f"Exported: {vol_path}")
 
+        h_mode = QHBoxLayout()
+        h_mode.addWidget(QLabel("Analysis:"))
+        mode_combo = QComboBox()
+        mode_combo.addItems(list(mode_scripts.keys()))
+        h_mode.addWidget(mode_combo)
+        h_mode.addStretch()
+        layout.addLayout(h_mode)
+
+        # Order
+        h_order = QHBoxLayout()
+        h_order.addWidget(QLabel("Mesh order:"))
+        order_combo = QComboBox()
+        for p in range(1, 6):
+            order_combo.addItem(str(p))
+        order_combo.setCurrentIndex(1)  # default order 2
+        h_order.addWidget(order_combo)
+        h_order.addStretch()
+        layout.addLayout(h_order)
+
+        # --- Label check area ---
+        label_group = QGroupBox("Labels (blocks / sidesets)")
+        label_layout = QVBoxLayout(label_group)
+        label_layout.setContentsMargins(8, 8, 8, 8)
+        label_widget = QLabel("")
+        label_widget.setWordWrap(True)
+        label_layout.addWidget(label_widget)
+        layout.addWidget(label_group)
+
+        def _get_model_labels():
+            """Get all block and sideset names from current Cubit model."""
+            names = set()
+            try:
+                for bid in cubit.parse_cubit_list("block", "all"):
+                    n = cubit.get_entity_name("block", bid)
+                    if n:
+                        names.add(n.lower())
+                for sid in cubit.parse_cubit_list("sideset", "all"):
+                    n = cubit.get_entity_name("sideset", sid)
+                    if n:
+                        names.add(n.lower())
+            except Exception:
+                pass
+            return names
+
+        def _update_labels(_=None):
+            mode = mode_combo.currentText()
+            info = mode_scripts.get(mode, {})
+            req = info.get("required", [])
+            opt = info.get("optional", [])
+            model_labels = _get_model_labels()
+
+            lines = []
+            all_ok = True
+            for lbl in req:
+                found = lbl.lower() in model_labels
+                if found:
+                    lines.append(
+                        f'<span style="color:green">'
+                        f'[OK] {lbl} (required)</span>')
+                else:
+                    lines.append(
+                        f'<span style="color:red; font-weight:bold">'
+                        f'[MISSING] {lbl} (required)</span>')
+                    all_ok = False
+            for lbl in opt:
+                found = lbl.lower() in model_labels
+                if found:
+                    lines.append(
+                        f'<span style="color:green">'
+                        f'[OK] {lbl} (optional)</span>')
+                else:
+                    lines.append(
+                        f'<span style="color:gray">'
+                        f'[ - ] {lbl} (optional)</span>')
+
+            if not req and not opt:
+                lines.append(
+                    '<span style="color:gray">'
+                    'No label requirements</span>')
+
+            label_widget.setText("<br>".join(lines))
+            ok_btn.setEnabled(all_ok)
+
+        mode_combo.currentTextChanged.connect(_update_labels)
+
+        # --- Optional files (dynamic per mode) ---
+        files_group = QGroupBox("Optional files")
+        files_layout = QFormLayout(files_group)
+        files_layout.setContentsMargins(8, 8, 8, 8)
+        layout.addWidget(files_group)
+        _file_widgets = {}  # name -> QLineEdit
+
+        def _update_files(_=None):
+            # Clear previous rows
+            while files_layout.rowCount() > 0:
+                files_layout.removeRow(0)
+            _file_widgets.clear()
+
+            mode = mode_combo.currentText()
+            info = mode_scripts.get(mode, {})
+            opt_files = info.get("opt_files", {})
+
+            if not opt_files:
+                files_group.setVisible(False)
+                return
+            files_group.setVisible(True)
+
+            for fname, ffilter in opt_files.items():
+                row = QHBoxLayout()
+                le = QLineEdit()
+                le.setPlaceholderText(ffilter)
+                btn = QPushButton("...")
+                btn.setFixedWidth(30)
+                def _browse(le=le, ff=ffilter):
+                    p, _ = QFileDialog.getOpenFileName(
+                        dlg, f"Select {fname}", "", ff)
+                    if p:
+                        le.setText(p.replace("\\", "/"))
+                btn.clicked.connect(_browse)
+                row.addWidget(le)
+                row.addWidget(btn)
+                container = QWidget()
+                container.setLayout(row)
+                row.setContentsMargins(0, 0, 0, 0)
+                files_layout.addRow(fname + ":", container)
+                _file_widgets[fname] = le
+
+        mode_combo.currentTextChanged.connect(_update_files)
+        _update_files()
+
+        # Output folder
+        h_dir = QHBoxLayout()
+        h_dir.addWidget(QLabel("Output folder:"))
+        dir_edit = QLineEdit(work_dir.replace("\\", "/"))
+        h_dir.addWidget(dir_edit, 1)
+        btn_browse = QPushButton("Browse...")
+        def _browse_dir():
+            d = QFileDialog.getExistingDirectory(
+                dlg, "Select output folder", dir_edit.text())
+            if d:
+                dir_edit.setText(d.replace("\\", "/"))
+        btn_browse.clicked.connect(_browse_dir)
+        h_dir.addWidget(btn_browse)
+        layout.addLayout(h_dir)
+
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        ok_btn = buttons.button(QDialogButtonBox.Ok)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        # Trigger initial label check
+        _update_labels()
+
+        if dlg.exec_() != QDialog.Accepted:
+            return
+
+        mode_name = mode_combo.currentText()
+        script_name = mode_scripts[mode_name]["file"]
+        order = order_combo.currentIndex() + 1
+        out_dir = dir_edit.text().replace("\\", "/")
+
+        # --- Export .vol ---
+        cubit.cmd(f'cd "{out_dir}"')
+        vol_name = "radia_model.vol"
+        vol_path = out_dir + "/" + vol_name
+        cubit.cmd(
+            f'export netgen "{vol_path}" order {order} overwrite')
+        if not os.path.isfile(vol_path):
+            print("ERROR: export netgen failed. "
+                  "Check blocks/sidesets.")
+            return
+        print(f"Exported: {vol_path} (order {order})")
+        _save_last_dir(out_dir)
+
+        # --- Find and launch analysis window ---
         ext_python = _find_external_python()
         if not ext_python:
-            print("ERROR: Python 3.12 not found. Set RADIA_PYTHON env var.")
+            print("ERROR: Python 3.12 not found. "
+                  "Set RADIA_PYTHON env var.")
             return
 
-        radia_app = _find_radia_app()
-        if not radia_app:
-            print("ERROR: radia_app.py not found. Is radia installed? (pip install radia)")
+        script_path = _find_radia_script(script_name)
+        if not script_path:
+            print(f"ERROR: {script_name} not found. "
+                  "Is radia installed? (pip install radia)")
             return
 
         # Clean environment to avoid Qt5/Qt6 and MKL DLL conflicts
@@ -244,13 +525,21 @@ def _launch_radia_app():
             if "QT" in key.upper() or "PYSIDE" in key.upper():
                 del env[key]
 
-        cmd = [ext_python, radia_app, vol_path]
+        cmd = [ext_python, script_path, vol_path]
+        # Pass optional files as --key=value arguments
+        for fname, le in _file_widgets.items():
+            fpath = le.text().strip()
+            if fpath:
+                # Convert "Coil script" -> "--coil-script"
+                arg_key = "--" + fname.lower().replace(
+                    " ", "-").replace(".", "")
+                cmd += [arg_key, fpath]
         print(f"Launching: {' '.join(cmd)}")
-        subprocess.Popen(cmd, cwd=work_dir, env=env,
+        subprocess.Popen(cmd, cwd=out_dir, env=env,
                          **_no_window_kwargs())
 
     except Exception as e:
-        print(f"ERROR in _launch_radia_app: {e}")
+        print(f"ERROR in _launch_radia_ngsolve: {e}")
 
 
 def register_menu():
@@ -292,8 +581,8 @@ def register_menu():
     # --- Sub 1: Radia-NGSolve ---
     action_launch = QAction("Radia-NGSolve...", main_window)
     action_launch.setStatusTip(
-        "Save model as .cub5 and launch Radia standalone app (Python 3.12)")
-    action_launch.triggered.connect(_launch_radia_app)
+        "Export .vol and launch analysis window (IH / EM / PCB)")
+    action_launch.triggered.connect(_launch_radia_ngsolve)
     solve_menu.addAction(action_launch)
 
     # --- Sub 2: Generate Coil ---
@@ -635,17 +924,26 @@ def register_menu():
                               + str(2*r) + ").")
                         return
 
-                    # Sweep angle from symmetry planes
-                    # X=0 and Y=0: 90 (quarter)
-                    # X=0 or Y=0: 180 (half)
-                    # neither: 360 (full)
-                    n_xy = int(sym_x) + int(sym_y)
-                    if n_xy == 2:
+                    # Sweep angle and seed direction from
+                    # symmetry planes.
+                    # Arc seed point lies on the equator;
+                    # sweep rotates it around the z-axis.
+                    #   X=0 + Y=0: seed on x, sweep 90
+                    #   Y=0 only:  seed on x, sweep 180
+                    #   X=0 only:  seed on y, sweep 180
+                    #   neither:   seed on x, sweep 360
+                    if sym_x and sym_y:
                         sweep_angle = 90
-                    elif n_xy == 1:
+                        seed_dir = (r, 0, 0)
+                    elif sym_y:
                         sweep_angle = 180
+                        seed_dir = (r, 0, 0)
+                    elif sym_x:
+                        sweep_angle = 180
+                        seed_dir = (0, r, 0)
                     else:
                         sweep_angle = 360
+                        seed_dir = (r, 0, 0)
 
                     vols_before = set(
                         cubit.parse_cubit_list("volume", "all"))
@@ -657,7 +955,11 @@ def register_menu():
                     #    else: semicircle (180 deg)
                     cubit.cmd("create vertex 0 0 " + str(r))
                     v_top = cubit.get_last_id("vertex")
-                    cubit.cmd("create vertex " + str(r) + " 0 0")
+                    sx, sy, sz = seed_dir
+                    cubit.cmd("create vertex "
+                              + str(sx) + " "
+                              + str(sy) + " "
+                              + str(sz))
                     v_mid = cubit.get_last_id("vertex")
 
                     if sym_z:
