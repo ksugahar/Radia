@@ -191,6 +191,23 @@ void RadiaComp::cleanup_menus()
 
 //! Check if Cubit has geometry. If not, prompt for a .jou file.
 //! Returns the journal path if one was played (empty if model was already loaded).
+// Forward declarations for settings (defined later, after ExportDialog)
+static QString settingsDir();
+static QString settingsPath();
+static QJsonObject loadSettings();
+
+static QString default_start_dir()
+{
+  // Read default_dir from export_settings.json (set by Python startup)
+  QJsonObject all = loadSettings();
+  if (all.contains("default_dir")) {
+    QString dd = all["default_dir"].toString();
+    if (QDir(dd).exists())
+      return dd;
+  }
+  return QString();
+}
+
 static QString ensure_model()
 {
   if (CubitInterface::get_volume_count() > 0)
@@ -199,7 +216,7 @@ static QString ensure_model()
   // No geometry — ask user to load a journal file
   QString jou = QFileDialog::getOpenFileName(
       nullptr, "No model loaded - Select Journal File",
-      QString(), "Cubit Journal (*.jou);;All Files (*)");
+      default_start_dir(), "Cubit Journal (*.jou);;All Files (*)");
   if (jou.isEmpty())
     return QString();
 
