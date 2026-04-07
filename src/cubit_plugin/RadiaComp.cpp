@@ -10,6 +10,11 @@
 #include "ExportNastranCommand.hpp"
 #include "ExportVtkCommand.hpp"
 
+// CAD geometry queries for export verification
+#include "RefVolume.hpp"
+#include "RefFace.hpp"
+#include "GeometryQueryTool.hpp"
+
 #include <direct.h>  // _getcwd
 
 #include <QAction>
@@ -36,6 +41,8 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QTextStream>
+#include <QDesktopServices>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <vector>
 
@@ -260,9 +267,111 @@ static void run_export(ExportDialog::Format fmt)
   }
 
   CubitInterface::cmd(cmd.c_str());
-  PRINT_INFO("Export complete: %s\n", dlg.filePath().toStdString().c_str());
 
-  // .cub5 auto-save removed — user saves explicitly if needed.
+  QString outFile = dlg.filePath();
+  if (!QFile::exists(outFile)) {
+    PRINT_ERROR("Export failed: %s\n", outFile.toStdString().c_str());
+    return;
+  }
+  PRINT_INFO("Export complete: %s\n", outFile.toStdString().c_str());
+
+  // --- Show per-block/sideset CAD summary dialog ---
+  QDialog *rDlg = new QDialog();
+  rDlg->setAttribute(Qt::WA_DeleteOnClose);
+  rDlg->setWindowTitle("Export Summary");
+  rDlg->setMinimumSize(600, 300);
+  QVBoxLayout *rLayout = new QVBoxLayout(rDlg);
+
+  rLayout->addWidget(new QLabel(QString("Output: %1").arg(outFile)));
+
+  // Helper: build a table widget
+  auto makeTable = [&](const char *title, const QStringList &headers,
+                       int nRows) -> QTableWidget* {
+    rLayout->addWidget(new QLabel(title));
+    if (nRows == 0) {
+      rLayout->addWidget(new QLabel("  (none)"));
+      return nullptr;
+    }
+    QTableWidget *tbl = new QTableWidget(nRows, headers.size(), rDlg);
+    tbl->setHorizontalHeaderLabels(headers);
+    tbl->horizontalHeader()->setStretchLastSection(true);
+    tbl->verticalHeader()->setVisible(false);
+    tbl->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    rLayout->addWidget(tbl);
+    return tbl;
+  };
+
+  // Materials (per-block CAD volume)
+  std::vector<int> blocks = CubitInterface::get_block_id_list();
+  // Filter to blocks that contain volumes (material blocks)
+  struct BlockInfo { std::string name; double volume; };
+  std::vector<BlockInfo> matBlocks;
+  for (int bid : blocks) {
+    std::vector<int> vols = CubitInterface::parse_cubit_list(
+        "volume", "in block " + std::to_string(bid));
+    if (vols.empty()) continue;
+    std::string bname = CubitInterface::get_block_name(bid);
+    if (bname.empty()) bname = "block_" + std::to_string(bid);
+    double total = 0.0;
+    for (int vid : vols) {
+      RefVolume* rv = GeometryQueryTool::instance()->get_ref_volume(vid);
+      if (rv) total += rv->measure();
+    }
+    matBlocks.push_back({bname, total});
+  }
+  if (QTableWidget *t = makeTable("Materials (CAD Volume):",
+      {"Name", "Volume"}, (int)matBlocks.size())) {
+    for (int i = 0; i < (int)matBlocks.size(); i++) {
+      t->setItem(i, 0, new QTableWidgetItem(
+          QString::fromStdString(matBlocks[i].name)));
+      t->setItem(i, 1, new QTableWidgetItem(
+          QString::number(matBlocks[i].volume, 'e', 6)));
+    }
+    t->resizeColumnsToContents();
+  }
+
+  // Boundaries (per-sideset CAD area)
+  struct SidesetInfo { std::string name; double area; };
+  std::vector<SidesetInfo> ssInfos;
+  std::vector<int> sidesets = CubitInterface::get_sideset_id_list();
+  for (int sid : sidesets) {
+    std::string sname = CubitInterface::get_exodus_entity_name("sideset", sid);
+    if (sname.empty()) sname = "sideset_" + std::to_string(sid);
+    std::vector<int> surfs = CubitInterface::get_sideset_surfaces(sid);
+    double total = 0.0;
+    for (int sfid : surfs) {
+      RefFace* rf = GeometryQueryTool::instance()->get_ref_face(sfid);
+      if (rf) total += rf->area();
+    }
+    ssInfos.push_back({sname, total});
+  }
+  if (QTableWidget *t = makeTable("Boundaries (CAD Area):",
+      {"Name", "Area"}, (int)ssInfos.size())) {
+    for (int i = 0; i < (int)ssInfos.size(); i++) {
+      t->setItem(i, 0, new QTableWidgetItem(
+          QString::fromStdString(ssInfos[i].name)));
+      t->setItem(i, 1, new QTableWidgetItem(
+          QString::number(ssInfos[i].area, 'e', 6)));
+    }
+    t->resizeColumnsToContents();
+  }
+
+  // Buttons: Open File + Close
+  QHBoxLayout *btnLayout = new QHBoxLayout();
+  QPushButton *btnOpen = new QPushButton("Open File");
+  QPushButton *btnClose = new QPushButton("Close");
+  btnLayout->addStretch();
+  btnLayout->addWidget(btnOpen);
+  btnLayout->addWidget(btnClose);
+  rLayout->addLayout(btnLayout);
+
+  QString openPath = outFile;  // capture for lambda
+  QObject::connect(btnOpen, &QPushButton::clicked, [openPath, rDlg]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(openPath));
+  });
+  QObject::connect(btnClose, &QPushButton::clicked, rDlg, &QDialog::close);
+
+  rDlg->show();  // modeless
 }
 
 void RadiaMenuHandler::export_gmsh()    { run_export(ExportDialog::GMSH); }
@@ -315,6 +424,9 @@ void RadiaMenuHandler::export_netgen()
     return;
   }
   PRINT_INFO("Exported: %s\n", volPath.toLocal8Bit().constData());
+
+  // Open exported .vol with OS-associated application (vol-viewer)
+  QDesktopServices::openUrl(QUrl::fromLocalFile(volPath));
 
   // --- Phase 2: subprocess to verify .vol with NGSolve ---
   QString python = find_external_python();
@@ -665,6 +777,45 @@ void RadiaMenuHandler::mesh_volume()
   table->resizeColumnsToContents();
   layout->addWidget(table);
 
+  // --- Format round-trip table (GMSH API verification) ---
+  QJsonArray fmtArr = r["format_roundtrip"].toArray();
+  int nfmt = fmtArr.size();
+  if (nfmt > 0) {
+    layout->addWidget(new QLabel(
+        "\nFormat Round-Trip (GMSH API Jacobian verification):"));
+    QTableWidget *fmtTable = new QTableWidget(nfmt, 5, &dlg);
+    fmtTable->setHorizontalHeaderLabels(
+        {"Format", "Order", "Volume", "V err [%]", "neg_det"});
+    fmtTable->horizontalHeader()->setStretchLastSection(true);
+    fmtTable->verticalHeader()->setVisible(false);
+    fmtTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    for (int i = 0; i < nfmt; i++) {
+      QJsonObject fo = fmtArr[i].toObject();
+      fmtTable->setItem(i, 0, new QTableWidgetItem(fo["format"].toString()));
+      fmtTable->setItem(i, 1, new QTableWidgetItem(
+          QString::number(fo["order"].toInt())));
+      if (fo.contains("error")) {
+        auto *errItem = new QTableWidgetItem(fo["error"].toString());
+        errItem->setBackground(QColor(255, 200, 200));
+        fmtTable->setItem(i, 2, errItem);
+      } else {
+        fmtTable->setItem(i, 2, new QTableWidgetItem(
+            QString::number(fo["volume"].toDouble(), 'e', 6)));
+        auto *errItem = new QTableWidgetItem(
+            QString::number(fo["vol_error_pct"].toDouble(), 'e', 2));
+        if (std::abs(fo["vol_error_pct"].toDouble()) > 1.0)
+          errItem->setBackground(QColor(255, 200, 200));
+        fmtTable->setItem(i, 3, errItem);
+        int nd = fo["neg_det"].toInt();
+        auto *ndItem = new QTableWidgetItem(QString::number(nd));
+        if (nd > 0) ndItem->setBackground(QColor(255, 150, 150));
+        fmtTable->setItem(i, 4, ndItem);
+      }
+    }
+    fmtTable->resizeColumnsToContents();
+    layout->addWidget(fmtTable);
+  }
+
   // Buttons: OK + Copy
   QDialogButtonBox *buttons = new QDialogButtonBox(
     QDialogButtonBox::Ok | QDialogButtonBox::Save, &dlg);
@@ -673,15 +824,30 @@ void RadiaMenuHandler::mesh_volume()
 
   QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
   QObject::connect(buttons->button(QDialogButtonBox::Save), &QPushButton::clicked,
-    [&]() {
+    [&, table, nrows, fmtArr, nfmt]() {
       QString tsv = "p\tVolume\tV err [%]\tArea\tA err [%]\tLength\tL err [%]\n";
       for (int i = 0; i < nrows; i++) {
-        for (int j = 0; j < 7; j++) {  // skip col 7 (empty separator)
+        for (int j = 0; j < 7; j++) {
           if (j > 0) tsv += "\t";
           QTableWidgetItem *item = table->item(i, j);
           tsv += item ? item->text() : "";
         }
         tsv += "\n";
+      }
+      if (nfmt > 0) {
+        tsv += "\nFormat\tOrder\tVolume\tV err [%]\tneg_det\n";
+        for (int i = 0; i < nfmt; i++) {
+          QJsonObject fo = fmtArr[i].toObject();
+          tsv += fo["format"].toString() + "\t";
+          tsv += QString::number(fo["order"].toInt()) + "\t";
+          if (fo.contains("error")) {
+            tsv += fo["error"].toString() + "\t\t\n";
+          } else {
+            tsv += QString::number(fo["volume"].toDouble(), 'e', 6) + "\t";
+            tsv += QString::number(fo["vol_error_pct"].toDouble(), 'e', 2) + "\t";
+            tsv += QString::number(fo["neg_det"].toInt()) + "\n";
+          }
+        }
       }
       QApplication::clipboard()->setText(tsv);
     });

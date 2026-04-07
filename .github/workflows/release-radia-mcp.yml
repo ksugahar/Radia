@@ -1,0 +1,46 @@
+name: Release radia-mcp
+
+# Triggered after CI succeeds, only when the tag matches radia-mcp-v*
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    # Only publish when CI succeeded on a radia-mcp tag
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'radia-mcp-v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+
+    steps:
+      - name: Download radia-mcp wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-mcp-wheel
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify wheel
+        run: |
+          echo "=== radia-mcp wheel ==="
+          ls -la dist/
+          WHL=$(find dist -name '*.whl' | head -1)
+          if [ -z "$WHL" ]; then
+            echo "::error::No wheel found"
+            exit 1
+          fi
+          echo "Wheel: $WHL"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

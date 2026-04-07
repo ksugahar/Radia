@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "radia-mcp"
+version = "0.1.0"
+description = "MCP servers for Radia CAE ecosystem (radia, ngsolve, cubit, gmsh)"
+readme = "README.md"
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.10"
+authors = [{name = "Kengo Sugahara"}]
+dependencies = [
+    "radia",
+    "mcp>=1.0",
+]
+
+[project.urls]
+Repository = "https://github.com/ksugahar/Radia"
+
+[project.scripts]
+mcp-server-radia = "radia.mcp_server.radia.server:main"
+mcp-server-ngsolve = "radia.mcp_server.ngsolve.server:main"
+mcp-server-cubit = "radia.mcp_server.cubit.server:main"
+mcp-server-gmsh = "radia.mcp_server.gmsh.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
