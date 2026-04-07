@@ -157,8 +157,18 @@ def install_plugin():
         print("  [--] Netgen DLLs not found (high-order curving disabled)")
 
     print()
-    print("  Plugin installed. Restart Cubit to load.")
+    print("  Plugin installed.")
     print("=" * 60)
+
+    # Install Radia-NGSolve panels if radia package is available
+    try:
+        from radia.install_panels import install_panels
+        print()
+        all_users = "--all-users" in sys.argv if hasattr(sys, "argv") else False
+        install_panels(all_users=all_users)
+    except ImportError:
+        pass  # radia not installed, panels not needed
+
     return True
 
 
