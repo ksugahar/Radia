@@ -1086,7 +1086,7 @@ different version. This causes access violations in netgen::Mesh::AddPoint().
 
 **Fix**: Rebuild ccm with compact_netgen (static link, no external nglib.dll):
 ```bash
-cmake -DNETGEN_SRC_DIR=C:/netgen_build/netgen_fork ...  # static link
+cmake -DNETGEN_SRC_DIR=/path/to/netgen/source ...  # upstream or fork, static link
 # Do NOT use -DNETGEN_DIR=C:/netgen  # dynamic link = ABI risk
 ```
 

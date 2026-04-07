@@ -183,7 +183,13 @@ set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
 set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
 set "CUBIT_DIR=C:\Program Files\Coreform Cubit 2025.3\cmake"
 set "NETGEN_DIR=C:\Program Files\Python312\Lib\site-packages\netgen"
-set "NETGEN_SRC_DIR=C:\netgen_build\netgen_fork"
+rem NETGEN_SRC_DIR: netgen source for compact_netgen build.
+rem Set via environment variable. Upstream master or fork both work.
+if "%NETGEN_SRC_DIR%"=="" set "NETGEN_SRC_DIR=C:\netgen_build\netgen_fork"
+if not exist "%NETGEN_SRC_DIR%\libsrc\meshing\meshing.hpp" (
+    echo WARNING: NETGEN_SRC_DIR=%NETGEN_SRC_DIR% not found. Cubit plugin curving disabled.
+    set "NETGEN_SRC_DIR="
+)
 
 if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
