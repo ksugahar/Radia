@@ -663,6 +663,25 @@ for bnd_name, cad_area in cad["boundaries"].items():
 Do NOT compare `Integrate(CF(1), mesh, BND)` (total) against
 `sum(cad["boundaries"].values())` -- the total BND includes internal faces.
 
+## Known Limitation: VTK Quadratic Pyramid (GMSH read)
+
+GMSH API cannot read VTK cell type 27 (VTK_QUADRATIC_PYRAMID, 13 nodes).
+This causes "Unknown type of cell 27" error in Mesh Evaluation round-trip
+when the model contains pyramids and VTK order 2 is tested.
+
+This is a GMSH limitation, not a VTK export bug. The VTK file itself is
+valid and can be opened in ParaView or other VTK readers.
+
+VTK cell types used by Radia export:
+| Element | Order 1 | Order 2 |
+|---------|---------|---------|
+| Tet     | 10      | 24 (VTK_QUADRATIC_TETRA) |
+| Hex     | 12      | 25 (VTK_QUADRATIC_HEXAHEDRON) |
+| Wedge   | 13      | 26 (VTK_QUADRATIC_WEDGE) |
+| Pyramid | 14      | 27 (VTK_QUADRATIC_PYRAMID) -- GMSH cannot read |
+| Tri     | 5       | 22 (VTK_QUADRATIC_TRIANGLE) |
+| Quad    | 9       | 23 (VTK_QUADRATIC_QUAD) |
+
 ## .vol.json Companion File
 
 Every `export netgen` produces a companion .vol.json:
