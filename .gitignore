@@ -26,6 +26,7 @@ examples/KelvinTransformation/docs/digest/
 build*/
 dist/
 radia-*/
+!packages/radia-mcp/
 *.egg-info/
 .eggs/
 
