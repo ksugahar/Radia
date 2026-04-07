@@ -236,7 +236,7 @@ mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=False, split_quads=
 
 ## How It Works
 
-Uses CallbackGeometry (netgen fork) to delegate surface projection to
+Uses CallbackGeometry (upstream Netgen) to delegate surface projection to
 Cubit's ACIS kernel:
 
 1. Reads mesh topology (nodes, elements) from Cubit blocks
@@ -542,7 +542,7 @@ is loaded from the plugins/ directory.
 
 **Fix**: Rebuild ccm with **compact_netgen** (static link, no nglib.dll dependency).
 ```bash
-cmake -DNETGEN_SRC_DIR=C:/netgen_build/netgen_fork ...  # NOT -DNETGEN_DIR
+cmake -DNETGEN_SRC_DIR=/path/to/netgen/source ...  # upstream or fork
 ```
 
 ### HEX20/TET10 has wrong node count in .msh/.bdf (order 2)

@@ -87,6 +87,9 @@ radia = [
     "CONVENTIONS.md",
 ]
 
+[tool.setuptools.exclude-package-data]
+radia = ["panels/cub5_to_vol.py", "cubit_netgen_bridge.py"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
