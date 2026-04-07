@@ -434,10 +434,7 @@ void RadiaMenuHandler::export_netgen()
   };
 
   auto errItem = [](double err) {
-    auto *item = new QTableWidgetItem(QString::number(err, 'e', 2));
-    if (std::abs(err) > 1.0)
-      item->setBackground(QColor(255, 200, 200));
-    return item;
+    return new QTableWidgetItem(QString::number(err, 'e', 2));
   };
 
   // Material table (Volume)
@@ -623,7 +620,6 @@ void RadiaMenuHandler::mesh_volume()
   // --- Dialog with QTableWidget ---
   QDialog dlg;
   dlg.setWindowTitle("Mesh Evaluation - Volume / Area / Length");
-  dlg.setMinimumSize(820, 320);
   QVBoxLayout *layout = new QVBoxLayout(&dlg);
 
   // CAD reference labels
@@ -633,11 +629,24 @@ void RadiaMenuHandler::mesh_volume()
   layout->addWidget(cadLabel);
 
   // Table: empty column after L err for visual separation from future columns
-  QTableWidget *table = new QTableWidget(nrows, 8, &dlg);
+  // Helper: size table to fit all contents (no scrollbar)
+  auto fitTable = [](QTableWidget *t) {
+    t->resizeColumnsToContents();
+    t->resizeRowsToContents();
+    int w = t->verticalHeader()->isVisible() ? t->verticalHeader()->width() : 0;
+    for (int c = 0; c < t->columnCount(); c++)
+      w += t->columnWidth(c);
+    w += t->frameWidth() * 2 + 4;
+    int h = t->horizontalHeader()->height();
+    for (int r = 0; r < t->rowCount(); r++)
+      h += t->rowHeight(r);
+    h += t->frameWidth() * 2 + 2;
+    t->setFixedSize(w, h);
+  };
+
+  QTableWidget *table = new QTableWidget(nrows, 7, &dlg);
   table->setHorizontalHeaderLabels(
-    {"p", "Volume", "V err [%]", "Area", "A err [%]", "Length", "L err [%]", ""});
-  table->horizontalHeader()->setStretchLastSection(true);
-  table->setColumnWidth(7, 10);  // narrow separator column
+    {"p", "Volume", "V err [%]", "Area", "A err [%]", "Length", "L err [%]"});
   table->verticalHeader()->setVisible(false);
   table->setSelectionMode(QAbstractItemView::ContiguousSelection);
   table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -662,10 +671,9 @@ void RadiaMenuHandler::mesh_volume()
         QString::number(o["ng_length"].toDouble(), 'e', 6)));
       table->setItem(i, 6, new QTableWidgetItem(
         QString::number(o["len_error_pct"].toDouble(), 'e', 2)));
-      // col 7 = empty separator
     }
   }
-  table->resizeColumnsToContents();
+  fitTable(table);
   layout->addWidget(table);
 
   // --- Format round-trip table (GMSH API verification) ---
@@ -677,7 +685,6 @@ void RadiaMenuHandler::mesh_volume()
     QTableWidget *fmtTable = new QTableWidget(nfmt, 7, &dlg);
     fmtTable->setHorizontalHeaderLabels(
         {"Format", "Order", "Volume", "V err [%]", "Area", "A err [%]", "neg_det"});
-    fmtTable->horizontalHeader()->setStretchLastSection(true);
     fmtTable->verticalHeader()->setVisible(false);
     fmtTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     for (int i = 0; i < nfmt; i++) {
@@ -692,27 +699,22 @@ void RadiaMenuHandler::mesh_volume()
       } else {
         fmtTable->setItem(i, 2, new QTableWidgetItem(
             QString::number(fo["volume"].toDouble(), 'e', 6)));
-        auto *vErr = new QTableWidgetItem(
-            QString::number(fo["vol_error_pct"].toDouble(), 'e', 2));
-        if (std::abs(fo["vol_error_pct"].toDouble()) > 1.0)
-          vErr->setBackground(QColor(255, 200, 200));
-        fmtTable->setItem(i, 3, vErr);
+        fmtTable->setItem(i, 3, new QTableWidgetItem(
+            QString::number(fo["vol_error_pct"].toDouble(), 'e', 2)));
         fmtTable->setItem(i, 4, new QTableWidgetItem(
             QString::number(fo["area"].toDouble(), 'e', 6)));
-        auto *aErr = new QTableWidgetItem(
-            QString::number(fo["area_error_pct"].toDouble(), 'e', 2));
-        if (std::abs(fo["area_error_pct"].toDouble()) > 1.0)
-          aErr->setBackground(QColor(255, 200, 200));
-        fmtTable->setItem(i, 5, aErr);
-        int nd = fo["neg_det"].toInt();
-        auto *ndItem = new QTableWidgetItem(QString::number(nd));
-        if (nd > 0) ndItem->setBackground(QColor(255, 150, 150));
-        fmtTable->setItem(i, 6, ndItem);
+        fmtTable->setItem(i, 5, new QTableWidgetItem(
+            QString::number(fo["area_error_pct"].toDouble(), 'e', 2)));
+        fmtTable->setItem(i, 6, new QTableWidgetItem(
+            QString::number(fo["neg_det"].toInt())));
       }
     }
-    fmtTable->resizeColumnsToContents();
+    fitTable(fmtTable);
     layout->addWidget(fmtTable);
   }
+
+  dlg.setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  layout->setSizeConstraint(QLayout::SetFixedSize);
 
   // Buttons: OK + Copy
   QDialogButtonBox *buttons = new QDialogButtonBox(
