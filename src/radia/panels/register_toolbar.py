@@ -756,7 +756,151 @@ def register_menu():
     action_coil.triggered.connect(_generate_coil)
     solve_menu.addAction(action_coil)
 
-    # --- Sub 3: Kelvin Transform ---
+    # --- Sub 3: Analytic Function ---
+    def _analytic_function():
+        try:
+            if not _has_model():
+                work_dir = _ensure_model()
+                if work_dir is None:
+                    return
+            else:
+                work_dir = _last_jou_dir[0] or _load_last_dir()
+
+            dlg = QDialog(_find_main_window())
+            dlg.setWindowTitle("Analytic Function")
+            dlg.setMinimumWidth(480)
+            layout = QVBoxLayout(dlg)
+
+            # Curve order
+            h_order = QHBoxLayout()
+            h_order.addWidget(QLabel("Curve order:"))
+            order_combo = QComboBox()
+            for p in range(1, 6):
+                order_combo.addItem(str(p))
+            order_combo.setCurrentIndex(1)  # default 2
+            h_order.addWidget(order_combo)
+            h_order.addStretch()
+            layout.addLayout(h_order)
+
+            # Expression
+            layout.addWidget(QLabel("Expression (x, y, z):"))
+            expr_edit = QLineEdit("sqrt(x*x + y*y + z*z)")
+            expr_edit.setPlaceholderText(
+                "e.g. sin(x)*cos(y), x*x+y*y+z*z, exp(-x*x)")
+            layout.addWidget(expr_edit)
+
+            # Field name
+            h_name = QHBoxLayout()
+            h_name.addWidget(QLabel("Field name:"))
+            name_edit = QLineEdit("f")
+            name_edit.setFixedWidth(150)
+            h_name.addWidget(name_edit)
+            h_name.addStretch()
+            layout.addLayout(h_name)
+
+            # Output folder
+            h_dir = QHBoxLayout()
+            h_dir.addWidget(QLabel("Output folder:"))
+            dir_edit = QLineEdit(work_dir.replace("\\", "/"))
+            h_dir.addWidget(dir_edit, 1)
+            btn_browse = QPushButton("Browse...")
+            def _browse_dir():
+                d = QFileDialog.getExistingDirectory(
+                    dlg, "Select output folder", dir_edit.text())
+                if d:
+                    dir_edit.setText(d.replace("\\", "/"))
+            btn_browse.clicked.connect(_browse_dir)
+            h_dir.addWidget(btn_browse)
+            layout.addLayout(h_dir)
+
+            # Buttons
+            buttons = QDialogButtonBox(
+                QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            buttons.accepted.connect(dlg.accept)
+            buttons.rejected.connect(dlg.reject)
+            layout.addWidget(buttons)
+
+            if dlg.exec_() != QDialog.Accepted:
+                return
+
+            order = order_combo.currentIndex() + 1
+            expression = expr_edit.text().strip()
+            field_name = name_edit.text().strip() or "f"
+            out_dir = dir_edit.text().replace("\\", "/")
+
+            if not expression:
+                print("ERROR: No expression specified.")
+                return
+
+            # Export .vol
+            cubit.cmd(f'cd "{out_dir}"')
+            vol_path = out_dir + "/analytic_model.vol"
+            cubit.cmd(
+                f'export netgen "{vol_path}" order {order} overwrite')
+            if not os.path.isfile(vol_path):
+                print("ERROR: export netgen failed.")
+                return
+            print(f"Exported: {vol_path} (order {order})")
+            _save_last_dir(out_dir)
+
+            # Launch calc_analytic.py
+            ext_python = _find_external_python()
+            if not ext_python:
+                print("ERROR: Python 3.12 not found.")
+                return
+
+            script = _find_radia_script(
+                os.path.join("panels", "calc_analytic.py"))
+            if not script:
+                # Try relative to _this_dir
+                script = os.path.join(_this_dir, "calc_analytic.py")
+            if not os.path.isfile(script):
+                print("ERROR: calc_analytic.py not found.")
+                return
+
+            cmd = [ext_python, script,
+                   "--vol", vol_path,
+                   "--expr", expression,
+                   "--name", field_name]
+            print(f"Running: {' '.join(cmd)}")
+
+            import subprocess as _sp
+            result = _sp.run(cmd, capture_output=True, text=True,
+                             cwd=out_dir, timeout=120)
+            if result.stdout:
+                print(result.stdout.rstrip())
+            if result.stderr:
+                print(result.stderr.rstrip())
+
+            # Parse JSON result, open GMSH
+            for line in reversed(result.stdout.split("\n")):
+                line = line.strip()
+                if line.startswith("{"):
+                    try:
+                        data = json.loads(line)
+                        msh = data.get("msh_output", "")
+                        if msh and os.path.isfile(msh):
+                            print(f"Opening GMSH: {msh}")
+                            _sp.Popen(
+                                [ext_python, "-c",
+                                 "import gmsh; gmsh.initialize(); "
+                                 f"gmsh.merge(r'{msh}'); "
+                                 "gmsh.fltk.run(); gmsh.finalize()"],
+                                creationflags=0x08000000)
+                    except json.JSONDecodeError:
+                        pass
+                    break
+
+        except Exception as e:
+            print(f"ERROR in _analytic_function: {e}")
+
+    action_analytic = QAction("Analytic Function...", main_window)
+    action_analytic.setStatusTip(
+        "Evaluate mathematical expression on mesh and visualize in GMSH")
+    action_analytic.triggered.connect(_analytic_function)
+    solve_menu.addAction(action_analytic)
+
+    # --- Sub 4: Kelvin Transform ---
     def _kelvin_transform():
         try:
             dlg = QDialog(main_window)
