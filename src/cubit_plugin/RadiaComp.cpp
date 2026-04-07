@@ -758,27 +758,6 @@ void RadiaMenuHandler::mesh_volume()
 }
 
 // ============================================================
-// Generate Coil — file dialog + APREPRO coil command
-// ============================================================
-
-void RadiaMenuHandler::generate_coil()
-{
-  // File dialog to select coil script
-  QString script = QFileDialog::getOpenFileName(
-    nullptr, "Select Coil Script",
-    QString(), "Python Scripts (*.py);;All Files (*)");
-  if (script.isEmpty())
-    return;
-
-  script.replace("\\", "/");
-
-  // Execute APREPRO coil command (handles subprocess + STEP import)
-  std::string cmd = "coil \"" + script.toStdString() + "\"";
-  PRINT_INFO("Running: %s\n", cmd.c_str());
-  CubitInterface::cmd(cmd.c_str());
-}
-
-// ============================================================
 // ExportDialog - format-specific options
 // ============================================================
 

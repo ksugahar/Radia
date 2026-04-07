@@ -284,12 +284,18 @@ try {
         }
     }
 
-    # Copy radia_cubit_mesh.pyd to cubit-mesh-export package (for v0.2.0+ wheel)
-    $cmePydSrc = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd"
-    $cmePydDst = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export\radia_cubit_mesh.pyd"
-    if (Test-Path $cmePydSrc) {
-        Copy-Item $cmePydSrc $cmePydDst -Force
-        Write-Host "  cubit-mesh-export/radia_cubit_mesh.pyd: copied" -ForegroundColor Green
+    # Copy plugin binaries to cubit-mesh-export package (for wheel + cubit-plugin-install)
+    $cmeDir = "$PROJECT_DIR\packages\cubit-mesh-export\src\cubit_mesh_export"
+    $cmeCopies = @(
+        @{ src = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd"; name = "radia_cubit_mesh.pyd" },
+        @{ src = "$PROJECT_DIR\src\radia\radia_cubit.ccm";      name = "radia_cubit.ccm" },
+        @{ src = "$PROJECT_DIR\src\radia\radia_cubit.ccl";       name = "radia_cubit.ccl" }
+    )
+    foreach ($cc in $cmeCopies) {
+        if (Test-Path $cc.src) {
+            Copy-Item $cc.src "$cmeDir\$($cc.name)" -Force
+            Write-Host "  cubit-mesh-export/$($cc.name): copied" -ForegroundColor Green
+        }
     }
 
     foreach ($mod in $modules) {
