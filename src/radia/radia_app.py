@@ -8,8 +8,8 @@ Launched from Cubit (1-button panel) or command line:
 
 Modes:
   - Mesh Evaluation    (calc_mesh_eval.py)
-  - IH (BEM)           (calc_inductance.py)
   - IH (FEM)           (calc_fem_kelvin.py)
+  - IH (BEM)           (calc_inductance.py)
   - Electromagnet (FEM)(calc_accel_magnet.py)
   - Electromagnet (MSC)(calc_accel_msc.py)
   - PCB (PEEC)         (calc_pcb_peec.py)
@@ -87,6 +87,7 @@ class ModeTab(QWidget):
         self._form.setLabelAlignment(Qt.AlignRight)
         self.setLayout(self._form)
         self._widgets = {}  # key -> widget, for save/restore
+        self._row_indices = {}  # key -> form row index
         self._build_ui()
 
     def _build_ui(self):
@@ -99,12 +100,25 @@ class ModeTab(QWidget):
 
     # -- helpers --
 
+    def _set_row_visible(self, key, visible):
+        """Show/hide a QFormLayout row by widget key (label + field)."""
+        row_idx = self._row_indices.get(key)
+        if row_idx is None:
+            return
+        label_item = self._form.itemAt(row_idx, QFormLayout.LabelRole)
+        field_item = self._form.itemAt(row_idx, QFormLayout.FieldRole)
+        if label_item and label_item.widget():
+            label_item.widget().setVisible(visible)
+        if field_item and field_item.widget():
+            field_item.widget().setVisible(visible)
+
     def _add_line(self, key, label, default="", placeholder=""):
         w = QLineEdit(default)
         if placeholder:
             w.setPlaceholderText(placeholder)
         self._form.addRow(label, w)
         self._widgets[key] = w
+        self._row_indices[key] = self._form.rowCount() - 1
         return w
 
     def _add_combo(self, key, label, items, default=0):
@@ -113,6 +127,7 @@ class ModeTab(QWidget):
         w.setCurrentIndex(default)
         self._form.addRow(label, w)
         self._widgets[key] = w
+        self._row_indices[key] = self._form.rowCount() - 1
         return w
 
     def _add_spin(self, key, label, value=1, lo=1, hi=999):
@@ -121,6 +136,7 @@ class ModeTab(QWidget):
         w.setValue(value)
         self._form.addRow(label, w)
         self._widgets[key] = w
+        self._row_indices[key] = self._form.rowCount() - 1
         return w
 
     def _add_browse(self, key, label, default="", filter_str="All files (*.*)"):
@@ -136,6 +152,7 @@ class ModeTab(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         self._form.addRow(label, container)
         self._widgets[key] = le
+        self._row_indices[key] = self._form.rowCount() - 1
         return le
 
     def _do_browse(self, line_edit, filter_str):
@@ -215,10 +232,8 @@ class IHBEMTab(ModeTab):
         self._on_material_changed(0)
 
     def _on_material_changed(self, idx):
-        mu_r_w = self._widgets["mu_r"]
-        bh_w = self._widgets["bh_file"]
-        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
-        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
+        self._set_row_visible("mu_r", idx == 0)
+        self._set_row_visible("bh_file", idx == 1)
 
     def build_command(self, model_path):
         if not model_path:
@@ -283,10 +298,8 @@ class IHFEMTab(ModeTab):
         self._on_material_changed(0)
 
     def _on_material_changed(self, idx):
-        mu_r_w = self._widgets["mu_r"]
-        bh_w = self._widgets["bh_file"]
-        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
-        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
+        self._set_row_visible("mu_r", idx == 0)
+        self._set_row_visible("bh_file", idx == 1)
 
     def build_command(self, cub5):
         if not cub5:
@@ -374,12 +387,9 @@ class EMFEMTab(ModeTab):
 
     def _on_material_changed(self, idx):
         # 0=mu_r, 1=BH, 2=Hysteresis
-        mu_r_w = self._widgets["mu_r"]
-        bh_w = self._widgets["bh_file"]
-        hys_w = self._widgets["hys_file"]
-        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
-        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
-        hys_w.parentWidget().setVisible(idx == 2) if hys_w.parentWidget() else None
+        self._set_row_visible("mu_r", idx == 0)
+        self._set_row_visible("bh_file", idx == 1)
+        self._set_row_visible("hys_file", idx == 2)
 
     def build_command(self, cub5):
         coil = self._val("coil_script")
@@ -451,13 +461,10 @@ class EMMSCTab(ModeTab):
         self._on_material_changed(0)
 
     def _on_material_changed(self, idx):
-        mu_r_w = self._widgets["mu_r"]
-        bh_w = self._widgets["bh_file"]
-        hys_w = self._widgets.get("hys_file")
-        mu_r_w.parentWidget().setVisible(idx == 0) if mu_r_w.parentWidget() else None
-        bh_w.parentWidget().setVisible(idx == 1) if bh_w.parentWidget() else None
-        if hys_w:
-            hys_w.parentWidget().setVisible(idx == 2) if hys_w.parentWidget() else None
+        self._set_row_visible("mu_r", idx == 0)
+        self._set_row_visible("bh_file", idx == 1)
+        if "hys_file" in self._row_indices:
+            self._set_row_visible("hys_file", idx == 2)
 
     def build_command(self, cub5):
         coil = self._val("coil_script")
@@ -533,8 +540,8 @@ class PCBPEECTab(ModeTab):
 class RadiaApp(QMainWindow):
 
     TAB_CLASSES = [
-        ("IH (BEM)",   IHBEMTab),
         ("IH (FEM)",   IHFEMTab),
+        ("IH (BEM)",   IHBEMTab),
         ("EM (FEM)",   EMFEMTab),
         ("EM (MSC)",   EMMSCTab),
         ("PCB (PEEC)", PCBPEECTab),
