@@ -228,10 +228,6 @@ def _launch_radia_app():
             return
         print(f"Exported: {vol_path}")
 
-        # Also save .cub5 (for reference / Path B debugging)
-        cub5_path = os.path.join(work_dir, "radia_model.cub5").replace("\\", "/")
-        cubit.cmd(f'save cub5 "{cub5_path}" overwrite')
-
         ext_python = _find_external_python()
         if not ext_python:
             print("ERROR: Python 3.12 not found. Set RADIA_PYTHON env var.")
