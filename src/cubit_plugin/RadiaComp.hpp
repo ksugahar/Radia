@@ -42,7 +42,6 @@ public slots:
   void export_vtk();
   void export_netgen();
   void mesh_volume();
-  void generate_coil();
 };
 
 //! Export options dialog.

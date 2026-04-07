@@ -26,6 +26,7 @@ from .netgen_workflow_knowledge import get_netgen_documentation
 from .cubit_scripting_knowledge import get_cubit_documentation
 from .cubit_forum_tips import get_forum_tips
 from .cubit_api_reference import get_api_reference
+from .panel_conventions_knowledge import PANEL_CONVENTIONS, LABEL_GUIDE
 
 # Create MCP server
 mcp = FastMCP("cubit-export")
@@ -400,6 +401,9 @@ def cubit_docs(topic: str = "all") -> str:
 	        "api_entity_classes"     - Volume, Surface, Curve, Vertex
 	        "api_graphics_selection" - Graphics control, selection
 	        "api_advanced"           - Merge detection, geometry analysis
+	        --- Radia-NGSolve panels ---
+	        "panel_conventions"      - Analysis window conventions (TITLE, LABELS, etc.)
+	        "panel_labels"           - Label guide (blocks/sidesets -> .vol -> NGSolve)
 	"""
 	topic = topic.lower().strip()
 
@@ -409,7 +413,8 @@ def cubit_docs(topic: str = "all") -> str:
 			"Use topic prefixes to navigate:\n"
 			"- `export_*` - Export format documentation (gmsh_v2, netgen, nastran, etc.)\n"
 			"- `scripting_*` - Python scripting guide (blocks, mesh_schemes, etc.)\n"
-			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n\n"
+			"- `api_*` - API reference (core, geometry_queries, mesh_access, etc.)\n"
+			"- `panel_*` - Radia-NGSolve analysis window conventions\n\n"
 			+ get_export_documentation("overview")
 		)
 
@@ -424,6 +429,12 @@ def cubit_docs(topic: str = "all") -> str:
 	# API topics: strip prefix
 	if topic.startswith("api_"):
 		return get_api_reference(topic[4:])  # remove "api_"
+
+	# Panel topics
+	if topic == "panel_conventions":
+		return PANEL_CONVENTIONS
+	if topic == "panel_labels":
+		return LABEL_GUIDE
 
 	# Try without prefix (backward compat for simple names)
 	result = get_export_documentation(topic)
