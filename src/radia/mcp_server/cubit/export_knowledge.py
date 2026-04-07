@@ -581,6 +581,107 @@ Export Mesh:                           Solve:
 """
 
 
+P_CONVERGENCE_KNOWLEDGE = """
+# p-Convergence Testing and Known Issues
+
+## What is p-Convergence?
+
+When exporting a curved mesh at increasing polynomial orders (p=1..5),
+the volume and area errors vs CAD geometry should decrease monotonically.
+Each order should gain ~2-3 digits of accuracy.
+
+Example (Cylinder Tet, p=1..5):
+```
+Order  Nodes  Volume error [%]   Area error [%]
+  1       56   -2.15e+00          -3.41e+00
+  2      300   -4.82e-02          -1.03e-01
+  3      938   -2.11e-04          -7.28e-04
+  4     2051   -8.24e-07          -3.15e-06
+  5     3720   -2.67e-09          -1.42e-08
+```
+
+Only models with CURVED geometry show p-convergence. Planar models
+(brick, webcut without curves) are exact at order 1.
+
+## Verified Test Models (p-convergence passes)
+
+| Model | Elements | Geometry | Element Types |
+|-------|----------|----------|---------------|
+| Cylinder Tet | 142 | Cylindrical surface | Tet |
+| Cylinder Tet+BL | 199 | Cylindrical + BL | Tet + Wedge |
+| Acorn (cyl+sphere) | 1935 | Sphere + cylinder | Tet + Wedge |
+| Wedge Only | 144 | Cylindrical | Wedge |
+| Cylinder Hex webcut | 96 | Cylindrical with cuts | Hex |
+| Hex Only (planar) | 56 | Planar (exact at p=1) | Hex |
+| Tet+Hex+Pyramid | 12 | Planar (exact at p=1) | Mixed |
+
+## Known Issue: ACIS Loft Surface (05_loft)
+
+**Problem**: Loft surfaces (rectangle to circle) in ACIS have
+`closest_point_trimmed()` that overshoots the actual surface.
+
+**Symptom**: Area error ~0.6% that does NOT converge with p-refinement.
+Volume converges slowly but does converge.
+
+**Workaround**: None. This is an ACIS/Cubit kernel limitation.
+Volume convergence is acceptable. Use this geometry for volume-only tests.
+
+## Known Behavior: Wedge/BL Volume = 0 in .vol.json
+
+When boundary layer (BL) creates wedge elements, the .vol.json companion
+file may report `0.000000e+00` volume for the BL material. This is because
+Cubit's `RefVolume::measure()` returns the ACIS volume of the parent body,
+and BL-generated thin layers may not have an independent ACIS volume.
+
+This is NOT a bug. The mesh itself has correct wedge geometry.
+NGSolve `Integrate(CF(1), mesh)` will return the correct volume.
+
+## Known Issue: Hex BL on Cylinder (03) Export Failure
+
+Hexahedral boundary layer on a cylinder with `scheme map` may fail
+to export via `export netgen`. The combination of mapped hex meshing
+with boundary layers on curved surfaces can produce elements that
+NetgenCurver cannot process.
+
+**Workaround**: Use tet meshing with BL (creates wedge prisms instead).
+Or use `export gmsh` which does not require NetgenCurver for order 1.
+
+## BND Integrate Area Mismatch
+
+`Integrate(CF(1), mesh, BND)` integrates ALL boundary surface elements,
+including internal block-to-block interfaces. The .vol.json reports only
+EXTERNAL surface areas from Cubit's ACIS geometry.
+
+To get per-boundary area matching .vol.json, use per-label integration:
+```python
+for bnd_name, cad_area in cad["boundaries"].items():
+    ng_area = Integrate(CF(1), mesh, BND,
+                        definedon=mesh.Boundaries(bnd_name))
+    error = (ng_area - cad_area) / cad_area * 100
+```
+
+Do NOT compare `Integrate(CF(1), mesh, BND)` (total) against
+`sum(cad["boundaries"].values())` -- the total BND includes internal faces.
+
+## .vol.json Companion File
+
+Every `export netgen` produces a companion .vol.json:
+```json
+{
+  "materials": {"sphere": 5.236e-04},
+  "boundaries": {"surface_1": 3.142e-02},
+  "edges": {"curve_1": 3.142e-01},
+  "n_elements": 10359, "n_points": 2071, "order": 3
+}
+```
+
+Use for:
+- Automated p-convergence regression tests
+- Consistency checks without Cubit (`check-vol model.vol --json model.vol.json`)
+- Cross-format verification (export -> GMSH reload -> compare vs .vol.json)
+"""
+
+
 def get_export_documentation(format: str = "all") -> str:
 	"""Return export documentation by format name."""
 	topics = {
@@ -593,6 +694,7 @@ def get_export_documentation(format: str = "all") -> str:
 		"exodus": EXPORT_EXODUS,
 		"comparison": EXPORT_COMPARISON,
 		"decision_guide": EXPORT_DECISION_GUIDE,
+		"p_convergence": P_CONVERGENCE_KNOWLEDGE,
 	}
 
 	format = format.lower().strip()

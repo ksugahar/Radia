@@ -1,0 +1,25 @@
+## Induction Heating sample: torus inductor
+## Required labels: source, sink (sidesets on terminal faces)
+## Optional labels: workpiece, air
+##
+## Usage: Solve -> Radia-NGSolve -> Induction Heating
+
+reset
+
+# Create torus coil (R_major=0.11m, R_minor=0.01m)
+create torus major radius 0.11 minor radius 0.01
+
+# Mesh
+volume 1 scheme tetmesh
+volume 1 size auto factor 5
+mesh volume 1
+
+# Material block
+block 1 add volume 1
+block 1 name "coil"
+
+# Source/sink terminal faces
+sideset 1 add surface 1
+sideset 1 name "source"
+sideset 2 add surface 3
+sideset 2 name "sink"
