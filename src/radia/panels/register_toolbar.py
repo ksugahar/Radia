@@ -259,9 +259,37 @@ def _discover_mode_scripts():
     return modes
 
 
+def _unc_to_drive(path):
+    """Convert UNC path to mapped drive letter if possible.
+
+    QFileDialog on Windows may not handle UNC paths correctly,
+    defaulting to OneDrive instead. Convert to drive letter.
+    """
+    if not path or not path.startswith(("//", "\\\\")):
+        return path
+    norm = path.replace("/", "\\")
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(512)
+        # Enumerate network drives
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            drive = letter + ":"
+            size = ctypes.c_ulong(512)
+            ret = ctypes.windll.mpr.WNetGetConnectionW(
+                drive, buf, ctypes.byref(size))
+            if ret == 0:  # NO_ERROR
+                remote = buf.value
+                if norm.lower().startswith(remote.lower()):
+                    rest = norm[len(remote):]
+                    return drive + rest.replace("\\", "/")
+    except Exception:
+        pass
+    return path
+
+
 def _samples_dir():
     """Return the package samples directory (default working folder)."""
-    return os.path.join(_this_dir, "samples")
+    return _unc_to_drive(os.path.join(_this_dir, "samples"))
 
 
 def _init_export_default_dir():
