@@ -674,9 +674,9 @@ void RadiaMenuHandler::mesh_volume()
   if (nfmt > 0) {
     layout->addWidget(new QLabel(
         "\nFormat Round-Trip (GMSH API Jacobian verification):"));
-    QTableWidget *fmtTable = new QTableWidget(nfmt, 5, &dlg);
+    QTableWidget *fmtTable = new QTableWidget(nfmt, 7, &dlg);
     fmtTable->setHorizontalHeaderLabels(
-        {"Format", "Order", "Volume", "V err [%]", "neg_det"});
+        {"Format", "Order", "Volume", "V err [%]", "Area", "A err [%]", "neg_det"});
     fmtTable->horizontalHeader()->setStretchLastSection(true);
     fmtTable->verticalHeader()->setVisible(false);
     fmtTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -692,15 +692,22 @@ void RadiaMenuHandler::mesh_volume()
       } else {
         fmtTable->setItem(i, 2, new QTableWidgetItem(
             QString::number(fo["volume"].toDouble(), 'e', 6)));
-        auto *errItem = new QTableWidgetItem(
+        auto *vErr = new QTableWidgetItem(
             QString::number(fo["vol_error_pct"].toDouble(), 'e', 2));
         if (std::abs(fo["vol_error_pct"].toDouble()) > 1.0)
-          errItem->setBackground(QColor(255, 200, 200));
-        fmtTable->setItem(i, 3, errItem);
+          vErr->setBackground(QColor(255, 200, 200));
+        fmtTable->setItem(i, 3, vErr);
+        fmtTable->setItem(i, 4, new QTableWidgetItem(
+            QString::number(fo["area"].toDouble(), 'e', 6)));
+        auto *aErr = new QTableWidgetItem(
+            QString::number(fo["area_error_pct"].toDouble(), 'e', 2));
+        if (std::abs(fo["area_error_pct"].toDouble()) > 1.0)
+          aErr->setBackground(QColor(255, 200, 200));
+        fmtTable->setItem(i, 5, aErr);
         int nd = fo["neg_det"].toInt();
         auto *ndItem = new QTableWidgetItem(QString::number(nd));
         if (nd > 0) ndItem->setBackground(QColor(255, 150, 150));
-        fmtTable->setItem(i, 4, ndItem);
+        fmtTable->setItem(i, 6, ndItem);
       }
     }
     fmtTable->resizeColumnsToContents();
@@ -726,16 +733,18 @@ void RadiaMenuHandler::mesh_volume()
         tsv += "\n";
       }
       if (nfmt > 0) {
-        tsv += "\nFormat\tOrder\tVolume\tV err [%]\tneg_det\n";
+        tsv += "\nFormat\tOrder\tVolume\tV err [%]\tArea\tA err [%]\tneg_det\n";
         for (int i = 0; i < nfmt; i++) {
           QJsonObject fo = fmtArr[i].toObject();
           tsv += fo["format"].toString() + "\t";
           tsv += QString::number(fo["order"].toInt()) + "\t";
           if (fo.contains("error")) {
-            tsv += fo["error"].toString() + "\t\t\n";
+            tsv += fo["error"].toString() + "\t\t\t\t\n";
           } else {
             tsv += QString::number(fo["volume"].toDouble(), 'e', 6) + "\t";
             tsv += QString::number(fo["vol_error_pct"].toDouble(), 'e', 2) + "\t";
+            tsv += QString::number(fo["area"].toDouble(), 'e', 6) + "\t";
+            tsv += QString::number(fo["area_error_pct"].toDouble(), 'e', 2) + "\t";
             tsv += QString::number(fo["neg_det"].toInt()) + "\n";
           }
         }

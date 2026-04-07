@@ -128,17 +128,36 @@ def evaluate_mesh(cub5_file, max_order=5):
         import gmsh
         gmsh.initialize()
 
+        def _gmsh_integrate(dim, gauss_order="Gauss4"):
+            """Compute integral(1) over elements of given dimension via Jacobians."""
+            etypes, etags, ntags = gmsh.model.mesh.getElements(dim=dim)
+            total = 0.0
+            neg = 0
+            for et in etypes:
+                lc, w = gmsh.model.mesh.getIntegrationPoints(
+                    int(et), gauss_order)
+                jac, det, pts = gmsh.model.mesh.getJacobians(int(et), lc)
+                npts = len(w)
+                nel = len(det) // npts
+                for i in range(nel):
+                    for j in range(npts):
+                        d = det[i * npts + j]
+                        total += d * w[j]
+                        if d < 0:
+                            neg += 1
+            return total, neg
+
         # Export and verify each format at order 1 and 2
         formats = [
-            ("gmsh",    "msh", 'export gmsh "{path}" dimension 3 overwrite'),
-            ("nastran", "bdf", 'export radia_nastran "{path}" dimension 3 overwrite'),
-            ("vtk",     "vtk", 'export vtk "{path}" dimension 3 overwrite'),
+            ("gmsh",    "msh", 'export gmsh "{path}" overwrite'),
+            ("nastran", "bdf", 'export radia_nastran "{path}" overwrite'),
+            ("vtk",     "vtk", 'export vtk "{path}" overwrite'),
         ]
         for fmt_name, ext, cmd_template in formats:
             for order in [1, 2]:
                 fname = f"roundtrip_{fmt_name}_o{order}.{ext}"
-                fpath = os.path.join(tmpdir, fname)
-                cmd_str = cmd_template.format(path=fpath.replace("\\", "/"))
+                fpath = os.path.join(tmpdir, fname).replace("\\", "/")
+                cmd_str = cmd_template.format(path=fpath)
                 if order == 2:
                     cmd_str = cmd_str.replace("overwrite",
                                               f"order {order} overwrite")
@@ -150,31 +169,29 @@ def evaluate_mesh(cub5_file, max_order=5):
                             "error": "export failed"})
                         continue
 
-                    # Read with GMSH API and compute volume via Jacobians
+                    # Read with GMSH API
                     gmsh.clear()
                     gmsh.open(fpath)
-                    etypes, etags, ntags = gmsh.model.mesh.getElements(dim=3)
-                    total_vol = 0.0
-                    neg_det = 0
-                    for et in etypes:
-                        lc, w = gmsh.model.mesh.getIntegrationPoints(
-                            int(et), "Gauss4")
-                        jac, det, pts = gmsh.model.mesh.getJacobians(
-                            int(et), lc)
-                        for d, wt in zip(det, w):
-                            total_vol += d * wt
-                            if d < 0:
-                                neg_det += 1
 
+                    # Volume (dim=3)
+                    total_vol, neg_det = _gmsh_integrate(3)
                     vol_err = ((total_vol - cad_vol_total) / cad_vol_total
                                * 100 if cad_vol_total else 0)
+
+                    # Area (dim=2)
+                    total_area, _ = _gmsh_integrate(2)
+                    area_err = ((total_area - cad_area_total) / cad_area_total
+                                * 100 if cad_area_total else 0)
+
                     format_results.append({
                         "format": fmt_name, "order": order,
                         "volume": total_vol, "vol_error_pct": vol_err,
+                        "area": total_area, "area_error_pct": area_err,
                         "neg_det": neg_det,
                     })
-                    _log(f"{fmt_name} o{order}: V={total_vol:.6e}, "
-                         f"err={vol_err:+.4f}%, neg_det={neg_det}")
+                    _log(f"{fmt_name} o{order}: V={total_vol:.6e} "
+                         f"({vol_err:+.2e}%), A={total_area:.6e} "
+                         f"({area_err:+.2e}%), neg_det={neg_det}")
                 except Exception as e:
                     format_results.append({
                         "format": fmt_name, "order": order,
