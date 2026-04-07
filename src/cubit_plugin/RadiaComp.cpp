@@ -822,10 +822,20 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   }
 
   if (defaultDir.isEmpty()) {
-    char cwd[1024];
-    if (_getcwd(cwd, sizeof(cwd))) {
-      defaultDir = QString::fromLocal8Bit(cwd);
-      defaultDir.replace("\\", "/");
+    // Try default_dir from export_settings.json (set by Python startup)
+    QJsonObject all = loadSettings();
+    if (all.contains("default_dir")) {
+      QString dd = all["default_dir"].toString();
+      if (QDir(dd).exists())
+        defaultDir = dd;
+    }
+    // Final fallback: CWD
+    if (defaultDir.isEmpty()) {
+      char cwd[1024];
+      if (_getcwd(cwd, sizeof(cwd))) {
+        defaultDir = QString::fromLocal8Bit(cwd);
+        defaultDir.replace("\\", "/");
+      }
     }
   }
 
