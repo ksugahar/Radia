@@ -215,7 +215,7 @@ mesh = Mesh(extract_curved_mesh(cubit, order=3))
 ## Requirements
 
 - Coreform Cubit 2025.3+
-- ksugahar/netgen fork with CallbackGeometry support
+- Netgen (upstream master or PyPI, CallbackGeometry merged)
 - System Python with both NGSolve and Cubit access (CUBIT_PATH)
 """
 

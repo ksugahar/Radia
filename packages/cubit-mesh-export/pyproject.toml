@@ -21,8 +21,8 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "netgen-mesher",
-    "ngsolve",
+    "netgen-mesher>=6.2.2602",
+    "ngsolve>=6.2.2601",
     "numpy",
 ]
 
@@ -38,3 +38,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "*.ccl"]
+
+[tool.setuptools.exclude-package-data]
+cubit_mesh_export = ["bridge.py"]
