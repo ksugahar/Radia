@@ -51,12 +51,14 @@ jobs:
       # ----------------------------------------------------------------
       # Policy 4: Matrix Storage (Row-Major)
       #   No CblasColMajor in core source
-      #   Exception: rad_mmm_matrices.cpp (uses LAPACK which requires col-major)
+      #   Exceptions: rad_mmm_matrices.cpp, rad_relaxation_methods.cpp
+      #   (both use LAPACK dgetrf/dgetri which output col-major)
       # ----------------------------------------------------------------
-      - name: "Policy 4: No CblasColMajor in core (except MMM/LAPACK)"
+      - name: "Policy 4: No CblasColMajor in core (except LAPACK users)"
         run: |
           HITS=$(grep -rn 'CblasColMajor' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null \
-                 | grep -v 'rad_mmm_matrices.cpp' || true)
+                 | grep -v 'rad_mmm_matrices.cpp' \
+                 | grep -v 'rad_relaxation_methods.cpp' || true)
           [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 4 failed: use CblasRowMajor in core"; exit 1; }
           echo "PASS: No CblasColMajor in core (MMM/LAPACK excepted)"
 
