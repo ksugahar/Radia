@@ -201,11 +201,11 @@ void ExportNastranCommand::write_nodes(std::ofstream &fid, const MeshData &mesh,
   for (auto &nd : mesh.nodes) {
     char line1[128], line2[128];
     if (is_3d) {
-      std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.5f%16.5f",
+      std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.9e%16.9e",
                     nd.id, 0, nd.x, nd.y);
-      std::snprintf(line2, sizeof(line2), "*       %16.5f", nd.z);
+      std::snprintf(line2, sizeof(line2), "*       %16.9e", nd.z);
     } else {
-      std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.5f%16.5f",
+      std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.9e%16.9e",
                     nd.id, 0, nd.x, nd.y);
       std::snprintf(line2, sizeof(line2), "*       %16d", 0);
     }
