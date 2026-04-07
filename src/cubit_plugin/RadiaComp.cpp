@@ -10,10 +10,6 @@
 #include "ExportNastranCommand.hpp"
 #include "ExportVtkCommand.hpp"
 
-// CAD geometry queries for export verification
-#include "RefVolume.hpp"
-#include "RefFace.hpp"
-#include "GeometryQueryTool.hpp"
 
 #include <direct.h>  // _getcwd
 
@@ -172,16 +168,6 @@ void RadiaComp::setup_menus()
   QObject::connect(a_vol, SIGNAL(triggered()), handler, SLOT(mesh_volume()));
   menu_list.push_back(a_vol);
 
-  // Separator before coil generation
-  QAction* sep2 = new QAction(handler);
-  sep2->setSeparator(true);
-  menu_list.push_back(sep2);
-
-  QAction* a_coil = new QAction("Generate Coil...", handler);
-  a_coil->setStatusTip("Generate coil from Python script (CoilBuilder -> STEP -> import)");
-  QObject::connect(a_coil, SIGNAL(triggered()), handler, SLOT(generate_coil()));
-  menu_list.push_back(a_coil);
-
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
   mMenuInitialized = true;
@@ -275,103 +261,8 @@ static void run_export(ExportDialog::Format fmt)
   }
   PRINT_INFO("Export complete: %s\n", outFile.toStdString().c_str());
 
-  // --- Show per-block/sideset CAD summary dialog ---
-  QDialog *rDlg = new QDialog();
-  rDlg->setAttribute(Qt::WA_DeleteOnClose);
-  rDlg->setWindowTitle("Export Summary");
-  rDlg->setMinimumSize(600, 300);
-  QVBoxLayout *rLayout = new QVBoxLayout(rDlg);
-
-  rLayout->addWidget(new QLabel(QString("Output: %1").arg(outFile)));
-
-  // Helper: build a table widget
-  auto makeTable = [&](const char *title, const QStringList &headers,
-                       int nRows) -> QTableWidget* {
-    rLayout->addWidget(new QLabel(title));
-    if (nRows == 0) {
-      rLayout->addWidget(new QLabel("  (none)"));
-      return nullptr;
-    }
-    QTableWidget *tbl = new QTableWidget(nRows, headers.size(), rDlg);
-    tbl->setHorizontalHeaderLabels(headers);
-    tbl->horizontalHeader()->setStretchLastSection(true);
-    tbl->verticalHeader()->setVisible(false);
-    tbl->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    rLayout->addWidget(tbl);
-    return tbl;
-  };
-
-  // Materials (per-block CAD volume)
-  std::vector<int> blocks = CubitInterface::get_block_id_list();
-  // Filter to blocks that contain volumes (material blocks)
-  struct BlockInfo { std::string name; double volume; };
-  std::vector<BlockInfo> matBlocks;
-  for (int bid : blocks) {
-    std::vector<int> vols = CubitInterface::parse_cubit_list(
-        "volume", "in block " + std::to_string(bid));
-    if (vols.empty()) continue;
-    std::string bname = CubitInterface::get_block_name(bid);
-    if (bname.empty()) bname = "block_" + std::to_string(bid);
-    double total = 0.0;
-    for (int vid : vols) {
-      RefVolume* rv = GeometryQueryTool::instance()->get_ref_volume(vid);
-      if (rv) total += rv->measure();
-    }
-    matBlocks.push_back({bname, total});
-  }
-  if (QTableWidget *t = makeTable("Materials (CAD Volume):",
-      {"Name", "Volume"}, (int)matBlocks.size())) {
-    for (int i = 0; i < (int)matBlocks.size(); i++) {
-      t->setItem(i, 0, new QTableWidgetItem(
-          QString::fromStdString(matBlocks[i].name)));
-      t->setItem(i, 1, new QTableWidgetItem(
-          QString::number(matBlocks[i].volume, 'e', 6)));
-    }
-    t->resizeColumnsToContents();
-  }
-
-  // Boundaries (per-sideset CAD area)
-  struct SidesetInfo { std::string name; double area; };
-  std::vector<SidesetInfo> ssInfos;
-  std::vector<int> sidesets = CubitInterface::get_sideset_id_list();
-  for (int sid : sidesets) {
-    std::string sname = CubitInterface::get_exodus_entity_name("sideset", sid);
-    if (sname.empty()) sname = "sideset_" + std::to_string(sid);
-    std::vector<int> surfs = CubitInterface::get_sideset_surfaces(sid);
-    double total = 0.0;
-    for (int sfid : surfs) {
-      RefFace* rf = GeometryQueryTool::instance()->get_ref_face(sfid);
-      if (rf) total += rf->area();
-    }
-    ssInfos.push_back({sname, total});
-  }
-  if (QTableWidget *t = makeTable("Boundaries (CAD Area):",
-      {"Name", "Area"}, (int)ssInfos.size())) {
-    for (int i = 0; i < (int)ssInfos.size(); i++) {
-      t->setItem(i, 0, new QTableWidgetItem(
-          QString::fromStdString(ssInfos[i].name)));
-      t->setItem(i, 1, new QTableWidgetItem(
-          QString::number(ssInfos[i].area, 'e', 6)));
-    }
-    t->resizeColumnsToContents();
-  }
-
-  // Buttons: Open File + Close
-  QHBoxLayout *btnLayout = new QHBoxLayout();
-  QPushButton *btnOpen = new QPushButton("Open File");
-  QPushButton *btnClose = new QPushButton("Close");
-  btnLayout->addStretch();
-  btnLayout->addWidget(btnOpen);
-  btnLayout->addWidget(btnClose);
-  rLayout->addLayout(btnLayout);
-
-  QString openPath = outFile;  // capture for lambda
-  QObject::connect(btnOpen, &QPushButton::clicked, [openPath, rDlg]() {
-    QDesktopServices::openUrl(QUrl::fromLocalFile(openPath));
-  });
-  QObject::connect(btnClose, &QPushButton::clicked, rDlg, &QDialog::close);
-
-  rDlg->show();  // modeless
+  // Open exported file with OS-associated application
+  QDesktopServices::openUrl(QUrl::fromLocalFile(outFile));
 }
 
 void RadiaMenuHandler::export_gmsh()    { run_export(ExportDialog::GMSH); }
