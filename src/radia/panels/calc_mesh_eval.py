@@ -5,8 +5,8 @@ Called as subprocess from Cubit Mesh Evaluation:
     python calc_mesh_eval.py --cub5 temp.cub5 --max-order 5
 
 Phase 1: Open cub5, get CAD values, export .vol for each order
-Phase 2: Read each .vol with NGSolve, compute Volume/Area/Length
-Phase 3: Output p-convergence table as JSON
+Phase 2: Read each .vol with NGSolve, compute Volume/Area/Length (vs CAD)
+Phase 3: Round-trip: export .msh/.bdf/.vtk, read with GMSH, compare vs .vol
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 Outputs JSON to stdout (last line).
@@ -123,6 +123,13 @@ def evaluate_mesh(cub5_file, max_order=5):
         })
 
     # --- Phase 3: round-trip verification for all export formats via GMSH API ---
+    # Baseline = NGSolve .vol values (tests format conversion fidelity, not CAD)
+    ref_by_order = {}
+    for entry in orders:
+        if "error" not in entry:
+            ref_by_order[entry["order"]] = {
+                "vol": entry["ng_volume"], "area": entry["ng_area"]}
+
     format_results = []
     try:
         import gmsh
@@ -155,6 +162,13 @@ def evaluate_mesh(cub5_file, max_order=5):
         ]
         for fmt_name, ext, cmd_template in formats:
             for order in [1, 2]:
+                ref = ref_by_order.get(order)
+                if not ref:
+                    format_results.append({
+                        "format": fmt_name, "order": order,
+                        "error": f"no .vol baseline for order {order}"})
+                    continue
+
                 fname = f"roundtrip_{fmt_name}_o{order}.{ext}"
                 fpath = os.path.join(tmpdir, fname).replace("\\", "/")
                 cmd_str = cmd_template.format(path=fpath)
@@ -175,13 +189,15 @@ def evaluate_mesh(cub5_file, max_order=5):
 
                     # Volume (dim=3)
                     total_vol, neg_det = _gmsh_integrate(3)
-                    vol_err = ((total_vol - cad_vol_total) / cad_vol_total
-                               * 100 if cad_vol_total else 0)
+                    ref_vol = ref["vol"]
+                    vol_err = ((total_vol - ref_vol) / ref_vol
+                               * 100 if ref_vol else 0)
 
                     # Area (dim=2)
                     total_area, _ = _gmsh_integrate(2)
-                    area_err = ((total_area - cad_area_total) / cad_area_total
-                                * 100 if cad_area_total else 0)
+                    ref_area = ref["area"]
+                    area_err = ((total_area - ref_area) / ref_area
+                                * 100 if ref_area else 0)
 
                     format_results.append({
                         "format": fmt_name, "order": order,
@@ -190,8 +206,8 @@ def evaluate_mesh(cub5_file, max_order=5):
                         "neg_det": neg_det,
                     })
                     _log(f"{fmt_name} o{order}: V={total_vol:.6e} "
-                         f"({vol_err:+.2e}%), A={total_area:.6e} "
-                         f"({area_err:+.2e}%), neg_det={neg_det}")
+                         f"({vol_err:+.2e}% vs .vol), A={total_area:.6e} "
+                         f"({area_err:+.2e}% vs .vol), neg_det={neg_det}")
                 except Exception as e:
                     format_results.append({
                         "format": fmt_name, "order": order,
