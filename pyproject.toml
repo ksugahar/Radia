@@ -77,10 +77,7 @@ radia-setup = "radia.setup_cubit:main"
 radia-app = "radia.radia_app:main"
 vol-viewer = "radia.netgen_vol_viewer:main"
 cubit-install-panels = "radia.install_panels:main"
-mcp-server-radia = "radia.mcp_server.radia.server:main"
-mcp-server-ngsolve = "radia.mcp_server.ngsolve.server:main"
-mcp-server-cubit = "radia.mcp_server.cubit.server:main"
-mcp-server-gmsh = "radia.mcp_server.gmsh.server:main"
+# MCP servers moved to radia-mcp package (pip install radia-mcp)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

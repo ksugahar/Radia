@@ -122,6 +122,70 @@ def evaluate_mesh(cub5_file, max_order=5):
             "time": t_elapsed,
         })
 
+    # --- Phase 3: round-trip verification for all export formats via GMSH API ---
+    format_results = []
+    try:
+        import gmsh
+        gmsh.initialize()
+
+        # Export and verify each format at order 1 and 2
+        formats = [
+            ("gmsh",    "msh", 'export gmsh "{path}" dimension 3 overwrite'),
+            ("nastran", "bdf", 'export radia_nastran "{path}" dimension 3 overwrite'),
+            ("vtk",     "vtk", 'export vtk "{path}" dimension 3 overwrite'),
+        ]
+        for fmt_name, ext, cmd_template in formats:
+            for order in [1, 2]:
+                fname = f"roundtrip_{fmt_name}_o{order}.{ext}"
+                fpath = os.path.join(tmpdir, fname)
+                cmd_str = cmd_template.format(path=fpath.replace("\\", "/"))
+                if order == 2:
+                    cmd_str = cmd_str.replace("overwrite",
+                                              f"order {order} overwrite")
+                try:
+                    cubit.cmd(cmd_str)
+                    if not os.path.exists(fpath):
+                        format_results.append({
+                            "format": fmt_name, "order": order,
+                            "error": "export failed"})
+                        continue
+
+                    # Read with GMSH API and compute volume via Jacobians
+                    gmsh.clear()
+                    gmsh.open(fpath)
+                    etypes, etags, ntags = gmsh.model.mesh.getElements(dim=3)
+                    total_vol = 0.0
+                    neg_det = 0
+                    for et in etypes:
+                        lc, w = gmsh.model.mesh.getIntegrationPoints(
+                            int(et), "Gauss4")
+                        jac, det, pts = gmsh.model.mesh.getJacobians(
+                            int(et), lc)
+                        for d, wt in zip(det, w):
+                            total_vol += d * wt
+                            if d < 0:
+                                neg_det += 1
+
+                    vol_err = ((total_vol - cad_vol_total) / cad_vol_total
+                               * 100 if cad_vol_total else 0)
+                    format_results.append({
+                        "format": fmt_name, "order": order,
+                        "volume": total_vol, "vol_error_pct": vol_err,
+                        "neg_det": neg_det,
+                    })
+                    _log(f"{fmt_name} o{order}: V={total_vol:.6e}, "
+                         f"err={vol_err:+.4f}%, neg_det={neg_det}")
+                except Exception as e:
+                    format_results.append({
+                        "format": fmt_name, "order": order,
+                        "error": str(e)})
+
+        gmsh.finalize()
+    except ImportError:
+        _log("GMSH not available, skipping format round-trip verification")
+    except Exception as e:
+        _log(f"GMSH round-trip error: {e}")
+
     # Cleanup temp dir
     import shutil
     shutil.rmtree(tmpdir, ignore_errors=True)
@@ -131,6 +195,7 @@ def evaluate_mesh(cub5_file, max_order=5):
         "cad_area_total": cad_area_total,
         "cad_length_total": cad_length_total,
         "orders": orders,
+        "format_roundtrip": format_results,
         "max_order": max_order,
     }
 

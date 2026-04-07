@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*', 'cubit-mesh-export-v*']
+    tags: ['v*', 'cubit-mesh-export-v*', 'radia-mcp-v*']
   pull_request:
     branches: [main]
 
@@ -194,4 +194,24 @@ jobs:
         with:
           name: cubit-mesh-export-wheel
           path: packages/cubit-mesh-export/dist/*.whl
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Build radia-mcp wheel (pure Python, no binaries)
+      # ----------------------------------------------------------------
+      - name: Build radia-mcp wheel
+        if: success()
+        shell: pwsh
+        run: |
+          pip install build --quiet
+          Push-Location "${{ github.workspace }}\packages\radia-mcp"
+          python -m build --wheel
+          Pop-Location
+
+      - name: Upload radia-mcp wheel
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-mcp-wheel
+          path: packages/radia-mcp/dist/*.whl
           retention-days: 7
