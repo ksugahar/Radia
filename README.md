@@ -273,19 +273,20 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 ### Installation
 
 ```bash
-pip install radia
-radia-setup            # Cubit plugin + panels (skip if no Cubit)
+pip install radia[cubit]       # Core + Cubit mesh export
+cubit-plugin-install           # Deploy plugin + panels (skip if no Cubit)
 ```
 
 This installs:
-1. **radia** from PyPI (includes NGSolve, MKL, Cubit plugin binaries, MCP servers)
-2. **radia-setup** deploys Cubit plugin (.ccm, .pyd, Netgen DLLs) and registers toolbar panels
+1. **radia** from PyPI (C++ core, NGSolve integration, MKL)
+2. **cubit-mesh-export** (high-order curved mesh export from Cubit)
+3. **cubit-plugin-install** deploys Cubit plugin (.ccm, .ccl, .pyd) and registers toolbar panels
 
 **Update** — same two commands:
 
 ```bash
-pip install --upgrade radia
-radia-setup
+pip install --upgrade radia[cubit]
+cubit-plugin-install
 ```
 
 ### Example 1: Magnetostatic Source Field
@@ -395,8 +396,8 @@ ng_mesh = extract_curved_mesh(cubit, order=3)  # High-order curved mesh
 ### Installation
 
 ```bash
-pip install radia          # Includes plugin binaries
-radia-setup --all-users    # Deploy to Cubit (ccm, ccl, panels)
+pip install radia[cubit]                # Includes plugin binaries
+cubit-plugin-install --all-users       # Deploy to Cubit (ccm, ccl, panels)
 ```
 
 ### GUI Menus
