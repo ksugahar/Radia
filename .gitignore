@@ -7,7 +7,7 @@ CLAUDE.md
 ROADMAP.md
 .claude/
 publish_to_pypi.cmd
-ngsolveの開発者へ/
+ngsolve_developers/
 Build_PyPI_Package.ps1
 build_log.txt
 logs/
