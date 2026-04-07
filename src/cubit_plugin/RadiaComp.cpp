@@ -681,7 +681,7 @@ void RadiaMenuHandler::mesh_volume()
   int nfmt = fmtArr.size();
   if (nfmt > 0) {
     layout->addWidget(new QLabel(
-        "\nFormat Round-Trip (GMSH API Jacobian verification):"));
+        "\nFormat Round-Trip vs .vol (GMSH API Jacobian verification):"));
     QTableWidget *fmtTable = new QTableWidget(nfmt, 7, &dlg);
     fmtTable->setHorizontalHeaderLabels(
         {"Format", "Order", "Volume", "V err [%]", "Area", "A err [%]", "neg_det"});
