@@ -264,6 +264,30 @@ def _samples_dir():
     return os.path.join(_this_dir, "samples")
 
 
+def _init_export_default_dir():
+    """Write default_dir to C++ export_settings.json.
+
+    The C++ ExportDialog reads default_dir as fallback when no
+    journal path and no saved dir exist. Without this, it falls
+    back to _getcwd() which may be OneDrive.
+    """
+    appdata = os.path.join(os.path.expanduser("~"),
+                           "AppData", "Roaming", "Radia")
+    settings_path = os.path.join(appdata, "export_settings.json")
+    samples = _samples_dir().replace("\\", "/")
+    try:
+        os.makedirs(appdata, exist_ok=True)
+        data = {}
+        if os.path.isfile(settings_path):
+            with open(settings_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data["default_dir"] = samples
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
 def _launcher_settings_path():
     """~/.cubit/radia_launcher.json"""
     return os.path.join(os.path.expanduser("~"), ".cubit",
@@ -1352,6 +1376,10 @@ def register_menu():
         print("Solve menu re-registered.")
     else:
         print("Solve menu registered.")
+
+    # Write default_dir to C++ export_settings.json so Export Mesh
+    # dialogs default to samples/ instead of OneDrive/CWD
+    _init_export_default_dir()
 
 
 # Auto-register when this script is executed
