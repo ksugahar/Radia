@@ -402,6 +402,49 @@ def sigma_for_material(material):
     return {'steel': 2e6, 'copper': 5.8e7, 'aluminum': 3.5e7}.get(material, 2e6)
 
 
+def write_surface_only_vol(src_ngmesh, output_path):
+    """Extract surface elements from a volume mesh and save as surface-only .vol.
+
+    BEM (HDivSurface) requires surface-only mesh. On a volume mesh,
+    HDivSurface includes all interior edges as DOFs, making the SL
+    matrix singular.
+
+    Args:
+        src_ngmesh: netgen.meshing.Mesh with volume + surface elements
+        output_path: path to write surface-only .vol
+    """
+    import tempfile
+
+    tmp = os.path.join(tempfile.gettempdir(), "_vol_tmp.vol")
+    src_ngmesh.Save(tmp)
+
+    with open(tmp, "r") as f:
+        lines = f.readlines()
+
+    with open(output_path, "w") as f:
+        skip = False
+        for line in lines:
+            s = line.strip()
+            if s == "volumeelements":
+                skip = True
+                f.write("volumeelements\n0\n")
+                continue
+            if skip:
+                if (s and not s[0].isdigit() and s != "edgesegmentsgi2"
+                        and not s.startswith("#")):
+                    skip = False
+                elif s in ("edgesegmentsgi2", "points", "surfaceelements",
+                           "materials", "bcnames", "curvedelements",
+                           "endmesh", "face_transparencies",
+                           "facedescriptors"):
+                    skip = False
+                else:
+                    continue
+            f.write(line)
+
+    os.remove(tmp)
+
+
 # ============================================================
 # T0 Source/Sink Current Injection
 # ============================================================

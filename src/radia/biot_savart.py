@@ -84,6 +84,75 @@ def h_segments(segments, obs_point, current=1.0):
     return H
 
 
+def h_segments_batch(segments, obs_points, current=1.0):
+    """H-field at multiple observation points from wire segments (vectorized).
+
+    Computes H = sum_seg I/(4*pi*d) * (cos_a1 - cos_a2) * e_perp
+    for all segments and all observation points in one NumPy call.
+
+    Args:
+        segments: list of (p1, p2) endpoint tuples, N_seg segments
+        obs_points: (N_obs, 3) array of observation points [m]
+        current: current [A]
+
+    Returns:
+        H-field (N_obs, 3) in A/m
+    """
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+    n_obs = len(obs)
+
+    seg_arr = np.asarray(segments, dtype=float)  # (N_seg, 2, 3)
+    p1s = seg_arr[:, 0, :]  # (N_seg, 3)
+    p2s = seg_arr[:, 1, :]  # (N_seg, 3)
+
+    dl = p2s - p1s  # (N_seg, 3)
+    L = np.linalg.norm(dl, axis=1)  # (N_seg,)
+    valid = L > 1e-30
+    e_l = np.zeros_like(dl)
+    e_l[valid] = dl[valid] / L[valid, np.newaxis]
+
+    H_total = np.zeros((n_obs, 3))
+
+    # Process all segments: vectorize over obs_points per segment
+    for si in range(len(p1s)):
+        if not valid[si]:
+            continue
+        # r1 = obs - p1, shape (N_obs, 3)
+        r1 = obs - p1s[si]
+        r2 = obs - p2s[si]
+
+        # cross = e_l x r1, shape (N_obs, 3)
+        el = e_l[si]
+        cross = np.cross(el, r1)
+        d = np.linalg.norm(cross, axis=1)  # (N_obs,)
+
+        ok = d > 1e-30
+        if not np.any(ok):
+            continue
+
+        e_perp = np.zeros_like(cross)
+        e_perp[ok] = cross[ok] / d[ok, np.newaxis]
+
+        r1_mag = np.linalg.norm(r1, axis=1)
+        r2_mag = np.linalg.norm(r2, axis=1)
+        ok &= (r1_mag > 1e-30) & (r2_mag > 1e-30)
+        if not np.any(ok):
+            continue
+
+        cos_a1 = np.zeros(n_obs)
+        cos_a2 = np.zeros(n_obs)
+        cos_a1[ok] = np.dot(r1[ok], el) / r1_mag[ok]
+        cos_a2[ok] = np.dot(r2[ok], el) / r2_mag[ok]
+
+        scale = np.zeros(n_obs)
+        scale[ok] = current * INV_4PI / d[ok] * (cos_a1[ok] - cos_a2[ok])
+        H_total[ok] += scale[ok, np.newaxis] * e_perp[ok]
+
+    return H_total
+
+
 def a_filament(p1, p2, obs_point, current=1.0):
     """Vector potential A at obs_point from a finite current filament.
 
