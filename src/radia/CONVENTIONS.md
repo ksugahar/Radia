@@ -64,6 +64,24 @@ if __name__ == "__main__":
     main()
 ```
 
+## Mesh Evaluation Policy
+
+**Format QA (our quality guarantee)**:
+- .msh, .bdf, .vtk at order 1-2 verified via GMSH API `getJacobians()`
+- Volume and area compared against ACIS CAD values
+- Negative Jacobian determinant = inverted element (node ordering bug)
+- This is the Cubit plugin's responsibility
+
+**p-Convergence (curving accuracy)**:
+- .vol at order 1-5 read by NGSolve `Integrate(CF(1), mesh)`
+- Volume, area, length compared against CAD
+- Monotonic convergence expected (each order gains ~2-3 digits)
+- NGSolve reading .vol correctly is NGSolve's responsibility
+
+**Responsibility boundary**:
+- We guarantee: export files (.msh/.bdf/.vtk) contain correct geometry
+- NGSolve guarantees: .vol is read correctly by `Mesh("model.vol")`
+
 ## Qt Compatibility
 
 Analysis windows use PySide6 (system Python 3.12).
