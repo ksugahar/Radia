@@ -379,6 +379,59 @@ class AnalysisWindow(QMainWindow):
             if "t_lu" in result:
                 self._output.appendPlainText(
                     f"    LU solve: {result['t_lu']:.1f}s")
+            # BEM-SIBC workpiece results (calc_heating_bem)
+            if "P_total_W" in result:
+                self._output.appendPlainText(
+                    "  --- Coil ---")
+                self._output.appendPlainText(
+                    f"  Coil radius:  "
+                    f"{result.get('coil_radius_m', 0)*1e3:.1f} mm")
+                self._output.appendPlainText(
+                    f"  Coil current: "
+                    f"{result.get('coil_current_A', 0):.2f} A")
+                self._output.appendPlainText(
+                    f"  Coil sigma:   "
+                    f"{result.get('coil_sigma_Sm', 0):.4e} S/m")
+                self._output.appendPlainText(
+                    "  --- Workpiece ---")
+                self._output.appendPlainText(
+                    f"  Material:  {result.get('material', '?')}")
+                self._output.appendPlainText(
+                    f"  WP sigma:  "
+                    f"{result.get('wp_sigma_Sm', 0):.4e} S/m")
+                self._output.appendPlainText(
+                    f"  WP mu_r:   "
+                    f"{result.get('wp_mu_r', 0):.1f}")
+                self._output.appendPlainText(
+                    "  --- SIBC ---")
+                self._output.appendPlainText(
+                    f"  Frequency:  "
+                    f"{result.get('frequency_Hz', 0):.0f} Hz")
+                self._output.appendPlainText(
+                    f"  Skin depth: "
+                    f"{result.get('skin_depth_mm', 0):.3f} mm")
+                self._output.appendPlainText(
+                    f"  |Z_s| = {result.get('Z_s_abs_Ohm', 0):.4e} Ohm"
+                    f"  (phase = {result.get('Z_s_phase_deg', 0):.1f} deg)")
+                self._output.appendPlainText(
+                    f"  Re(Z_s) = {result.get('Z_s_real_Ohm', 0):.4e}, "
+                    f"Im(Z_s) = {result.get('Z_s_imag_Ohm', 0):.4e}")
+                self._output.appendPlainText(
+                    "  --- Results ---")
+                self._output.appendPlainText(
+                    f"  P_total = {result['P_total_W']:.4e} W")
+                if "Q_total_var" in result:
+                    self._output.appendPlainText(
+                        f"  Q_total = {result['Q_total_var']:.4e} var")
+                self._output.appendPlainText(
+                    f"  H_t_rms = {result.get('H_t_rms_Am', 0):.4f} A/m")
+                self._output.appendPlainText(
+                    "  --- Solver ---")
+                self._output.appendPlainText(
+                    f"  Karl iterations = {result.get('n_iter', '?')}")
+                self._output.appendPlainText(
+                    f"  BEM DOFs = {result.get('ndof', '?')}, "
+                    f"elements = {result.get('n_elements', '?')}")
             # Volume/area results (calc_volume, calc_surface)
             if "ng_volume" in result:
                 self._output.appendPlainText(

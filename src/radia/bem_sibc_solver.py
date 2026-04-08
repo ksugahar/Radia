@@ -191,7 +191,7 @@ def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
     Uses path integration: phi(P) = phi_axis(z) - int_axis^P H.dl
     H field from radia.biot_savart.h_segments (analytical formula).
     """
-    from radia.biot_savart import h_segments
+    from radia.biot_savart import h_segments_batch
 
     obs = np.asarray(obs_points, dtype=float)
     center = np.asarray(loop_center, dtype=float)
@@ -202,14 +202,15 @@ def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
 
     obs_local = obs - center[np.newaxis, :]
 
-    # Build coil wire segments
+    # Build coil wire segments as array (N_seg, 2, 3)
     arc_deg = 360 - gap_deg
     n_seg = max(200, int(arc_deg))
     theta = np.linspace(0, np.radians(arc_deg), n_seg + 1)
-    coil_segs = [(
-        (a * np.cos(theta[i]), a * np.sin(theta[i]), 0),
-        (a * np.cos(theta[i + 1]), a * np.sin(theta[i + 1]), 0),
-    ) for i in range(n_seg)]
+    coil_segs = np.zeros((n_seg, 2, 3))
+    coil_segs[:, 0, 0] = a * np.cos(theta[:-1])
+    coil_segs[:, 0, 1] = a * np.sin(theta[:-1])
+    coil_segs[:, 1, 0] = a * np.cos(theta[1:])
+    coil_segs[:, 1, 1] = a * np.sin(theta[1:])
 
     frac = arc_deg / 360.0
 
@@ -221,28 +222,45 @@ def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
     n_pts = len(obs_local)
     phi = np.zeros(n_pts)
 
-    for ip in range(n_pts):
-        x, y, z = obs_local[ip]
-        rho = math.sqrt(x * x + y * y)
+    xy = obs_local[:, :2]
+    z_arr = obs_local[:, 2]
+    rho = np.sqrt(xy[:, 0]**2 + xy[:, 1]**2)
 
-        # Analytical phi on z-axis for circular loop
-        r_za = math.sqrt(z * z + a * a)
-        phi_axis = (I / 2.0) * (1.0 - z / r_za) * frac
+    # Analytical phi on z-axis for circular loop
+    r_za = np.sqrt(z_arr**2 + a * a)
+    phi_axis = (I / 2.0) * (1.0 - z_arr / r_za) * frac
 
-        if rho < 1e-12 * a:
-            phi[ip] = phi_axis
-        else:
-            # Horizontal path integration from (0,0,z) to (x,y,z)
-            dl_vec = np.array([x, y, 0.0])
-            x_quad = np.outer(t_01, dl_vec)
-            x_quad[:, 2] = z
+    on_axis = rho < 1e-12 * a
+    phi[on_axis] = phi_axis[on_axis]
 
-            H_z_integrand = np.zeros(n_quad)
-            for iq in range(n_quad):
-                H = h_segments(coil_segs, x_quad[iq], current=I)
-                H_z_integrand[iq] = np.dot(H, dl_vec)
+    off_axis = ~on_axis
+    if np.any(off_axis):
+        idx_off = np.where(off_axis)[0]
+        n_off = len(idx_off)
 
-            phi[ip] = phi_axis - np.sum(w_01 * H_z_integrand)
+        # Build all quadrature points at once: (n_off * n_quad, 3)
+        dl_vecs = np.zeros((n_off, 3))
+        dl_vecs[:, 0] = obs_local[idx_off, 0]
+        dl_vecs[:, 1] = obs_local[idx_off, 1]
+
+        all_quad = np.zeros((n_off * n_quad, 3))
+        for iq in range(n_quad):
+            sl = slice(iq * n_off, (iq + 1) * n_off)
+            all_quad[sl, 0] = t_01[iq] * dl_vecs[:, 0]
+            all_quad[sl, 1] = t_01[iq] * dl_vecs[:, 1]
+            all_quad[sl, 2] = z_arr[idx_off]
+
+        # Vectorized H-field at all quadrature points
+        H_all = h_segments_batch(coil_segs, all_quad, current=I)
+
+        # Dot with dl_vec and integrate
+        for iq in range(n_quad):
+            sl = slice(iq * n_off, (iq + 1) * n_off)
+            H_dot_dl = (H_all[sl, 0] * dl_vecs[:, 0]
+                        + H_all[sl, 1] * dl_vecs[:, 1])
+            phi[idx_off] -= w_01[iq] * H_dot_dl
+
+        phi[idx_off] += phi_axis[idx_off]
 
     return phi
 
