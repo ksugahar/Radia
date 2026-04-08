@@ -362,7 +362,10 @@ bool NetgenCurver::attach_callback_geometry()
     CubitVector closest;
 
     // Use trimmed closest point (global search, matches bridge.py)
+    // Known issue: on sweep torus surfaces, closest_point_trimmed may
+    // cross-project between upper/lower halves. See ACIS torus curving bug.
     surf->closest_point_trimmed(loc, closest);
+
     double u, v;
     rf->u_v_from_position(closest, u, v);
     return {closest.x(), closest.y(), closest.z(), u, v};
