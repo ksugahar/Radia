@@ -1,11 +1,19 @@
 {
   "mcpServers": {
-    "mcp-server-radia": {
-      "command": "mcp-server-radia",
+    "mcp-server-radia-ngsolve": {
+      "command": "mcp-server-radia-ngsolve",
       "args": []
     },
-    "mcp-server-ngsolve": {
-      "command": "mcp-server-ngsolve",
+    "mcp-server-ih": {
+      "command": "mcp-server-ih",
+      "args": []
+    },
+    "mcp-server-electromagnet": {
+      "command": "mcp-server-electromagnet",
+      "args": []
+    },
+    "mcp-server-peec": {
+      "command": "mcp-server-peec",
       "args": []
     },
     "mcp-server-cubit": {
