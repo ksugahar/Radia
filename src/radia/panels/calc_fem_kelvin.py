@@ -57,7 +57,7 @@ def _log(msg):
     progress("FEM", msg)
 
 
-def solve_fem(cub5_file="", order=2, fes_order=1,
+def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
               frequency=7000, sigma=2e6,
               impedance_model="sibc", mu_r=100.0,
               bh_file=None, material="steel",
@@ -106,18 +106,23 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
     t_total_start = time.perf_counter()
 
     # ============================================================
-    # Step 1: Load Cubit mesh
+    # Step 1: Load mesh (.vol direct or Cubit .cub5)
     # ============================================================
     _log("MESH:loading")
     t0 = time.perf_counter()
 
-    if not cub5_file or not os.path.exists(cub5_file):
-        return {"error": f"Cubit .cub5 file required: {cub5_file}"}
-
-    cubit = setup_cubit(cub5_file)
-    if cubit is None:
-        return {"error": "Cubit not available"}
-    mesh = export_mesh(cubit, order=order)
+    if vol_file and os.path.exists(vol_file):
+        # Direct .vol path: skip Cubit entirely
+        from ngsolve import Mesh as NGMesh
+        mesh = NGMesh(vol_file)
+        _log(f"MESH:loaded .vol directly ({vol_file})")
+    elif cub5_file and os.path.exists(cub5_file):
+        cubit = setup_cubit(cub5_file)
+        if cubit is None:
+            return {"error": "Cubit not available"}
+        mesh = export_mesh(cubit, order=order)
+    else:
+        return {"error": f"Either --vol or --cub5 required"}
 
     # Kelvin: detect offset, estimate radius, add periodic identification
     a_kelvin = 0.060
@@ -312,12 +317,19 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
         t_solve_iter = time.perf_counter() - t0_iter
 
         # H_t from SIBC relation: H_t = |jw/Z_s| * |A_t|
+        #
+        # CRITICAL: Do NOT use Integrate(gfu * Conj(gfu), BND) for HCurl.
+        # HCurl BND integration returns near-zero because the natural
+        # trace is a 1-form (tangential), not a pointwise vector.
+        # Must expand components: sum(gfu[i].real^2 + gfu[i].imag^2).
+        # See fem_esim_3d.py for the validated implementation.
         if has_wp and abs(Z_s) > 0:
-            int_A2 = Integrate(
-                gfu * Conj(gfu), mesh, BND,
-                definedon=wp_region).real
-            H_t_rms = omega / abs(Z_s) * math.sqrt(
-                max(int_A2 / max(A_wp, 1e-30), 0))
+            At_sq = sum(gfu[i].real * gfu[i].real +
+                        gfu[i].imag * gfu[i].imag for i in range(3))
+            int_A2 = Integrate(At_sq, mesh, BND,
+                               definedon=wp_region).real
+            At_rms = math.sqrt(max(int_A2, 0) / max(A_wp, 1e-30))
+            H_t_rms = abs(1j * omega / Z_s) * At_rms
         else:
             H_t_rms = 5.0  # fallback
 
@@ -349,13 +361,11 @@ def solve_fem(cub5_file="", order=2, fes_order=1,
     # ============================================================
     # Step 6: Post-process
     # ============================================================
-    # Power from Poynting flux
+    # Power from SIBC: P = 0.5 * Re(Z_s) * H_t_rms^2 * A_wp
+    # H_t from last iteration is used (already computed with correct formula)
     if has_wp:
-        int_A2_final = Integrate(
-            gfu * Conj(gfu), mesh, BND,
-            definedon=wp_region).real
-        P_total = 0.5 * omega**2 * Z_s.real / abs(Z_s)**2 * int_A2_final
-        Q_total = 0.5 * omega**2 * Z_s.imag / abs(Z_s)**2 * int_A2_final
+        P_total = 0.5 * Z_s.real * H_t_rms**2 * A_wp
+        Q_total = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
     else:
         P_total = 0.0
         Q_total = 0.0
@@ -427,6 +437,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="3D FEM-SIBC with source/sink + optional Kelvin")
     parser.add_argument("--cub5", default="", help="Cubit .cub5 file")
+    parser.add_argument("--vol", default="", help="Netgen .vol file (skip Cubit)")
     parser.add_argument("--order", type=int, default=2,
                         help="Curve order (1-3)")
     parser.add_argument("--fes-order", type=int, default=1,
@@ -470,6 +481,7 @@ def main():
     def run(args):
         return solve_fem(
             cub5_file=args.cub5,
+            vol_file=args.vol,
             order=args.order,
             fes_order=args.fes_order,
             frequency=args.frequency,
