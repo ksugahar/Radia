@@ -187,7 +187,29 @@ A_inc_nodes = a_segments_batch(coil_segs, node_coords, current=1.0)
 
 Vectorized over observation points, loops over segments. 106x faster.
 For Joachim: requesting BiotSavartCF with A-field output would eliminate
-the need for pre-computed nodal values.
+the need for pre-computed nodal values. (Discussed with Joachim previously.)
+
+## CRITICAL: specialcf.normal Does NOT Work in HCurl BND LinearForm (2026-04-09)
+
+`specialcf.normal(3)` gives correct direction (verified via `n.r_hat` integral),
+but `n x H_inc * v.Trace() * ds` with HCurl test function returns **near-zero**.
+
+**MUST use explicit coordinate-based normal** (same as verify_sphere_sibc.py):
+```python
+# WRONG: specialcf.normal in HCurl BND integral
+n = specialcf.normal(3)
+nxH = CF((n[1]*H0, -n[0]*H0, 0))  # returns ~0 in LinearForm
+
+# CORRECT: explicit normal from geometry
+nxH = CF((y*H0/R, -x*H0/R, 0))  # for sphere, conductor-outward convention
+```
+
+## Biot-Savart Path Integration: Thick Coil Error
+
+phi_inc from path integration (compute_phi_inc_from_loop) assumes a filamentary
+coil. For thick coils (wire radius a_coil comparable to distance to workpiece),
+the filament approximation introduces error. Use BiotSavartCF (multipole) or
+T0 source/sink for accurate coil fields.
 
 ## H_inc Computation (for FEM RHS nxH_inc term)
 
