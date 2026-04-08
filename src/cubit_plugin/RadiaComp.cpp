@@ -693,12 +693,12 @@ void RadiaMenuHandler::mesh_volume()
   fitTable(table);
   layout->addWidget(table);
 
-  // --- Format round-trip table (GMSH API verification) ---
-  QJsonArray fmtArr = r["format_roundtrip"].toArray();
+  // --- Format QA table (GMSH API Jacobian vs CAD) ---
+  QJsonArray fmtArr = r["format_qa"].toArray();
   int nfmt = fmtArr.size();
   if (nfmt > 0) {
     layout->addWidget(new QLabel(
-        "\nFormat Round-Trip vs .vol (GMSH API Jacobian verification):"));
+        "\nFormat QA vs CAD (GMSH API Jacobian verification):"));
     QTableWidget *fmtTable = new QTableWidget(nfmt, 7, &dlg);
     fmtTable->setHorizontalHeaderLabels(
         {"Format", "Order", "Volume", "V err [%]", "Area", "A err [%]", "neg_det"});
