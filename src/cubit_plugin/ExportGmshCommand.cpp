@@ -15,7 +15,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax()
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
     "radia_export gmsh <string:label='filename',help='<filename>'> "
-    "[order <value:label='order',help='<1-4>'>] "
+    "[order <value:label='order',help='<1-5>'>] "
     "[version <value:label='version',help='<2 or 4>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[overwrite]"
@@ -27,7 +27,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export gmsh \"filename\" [order {1|2|3|4}] [version {2|4}] [dimension {2|3}] [overwrite]"
+    "radia_export gmsh \"filename\" [order {1|2|3|4|5}] [version {2|4}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }
@@ -42,7 +42,7 @@ std::vector<std::string> ExportGmshCommand::get_help()
     "Options:\n"
     "  order 1      1st-order elements (default)\n"
     "  order 2      2nd-order (edge mid-nodes)\n"
-    "  order 3-4    Higher order (requires Netgen)\n"
+    "  order 3-5    Higher order (requires Netgen, wedge limited to order 2)\n"
     "  version 2    Gmsh v2.2 format (default)\n"
     "  version 4    Gmsh v4.1 format\n"
     "  dimension 3  3D mode (default)\n"
@@ -60,9 +60,9 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
   int order = 1;
   data.get_value("order", order);
   if (order < 1) order = 1;
-  if (order > 4) {
-    PRINT_WARNING("order %d not supported. Using order 4.\n", order);
-    order = 4;
+  if (order > 5) {
+    PRINT_WARNING("order %d not supported. Using order 5.\n", order);
+    order = 5;
   }
 #ifndef HAVE_NETGEN
   if (order > 2) {
@@ -109,6 +109,9 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
   bool is_line = (elem.type == BAR || elem.type == BAR2 || elem.type == BAR3);
   bool is_pt   = (nv == 1);
 
+  // Serendipity (edge-only HO nodes) types from GMSH API.
+  // NetgenCurver produces serendipity elements.
+  // WEDGE order 3-5: not supported by GMSH (FaceClosureFull not implemented).
   if (order == 1) {
     if (is_tet)  return 4;
     if (is_hex)  return 5;
@@ -120,25 +123,44 @@ int ExportGmshCommand::gmsh_type(const MeshElement &elem, int order)
     if (is_pt)   return 15;
   }
   else if (order == 2) {
-    if (is_tet)  return 11;  // TET10
-    if (is_hex)  return 17;  // HEX20
-    if (is_wed)  return 18;  // WEDGE15
-    if (is_pyr)  return 19;  // PYRAMID13
-    if (is_tri)  return 9;   // TRI6
-    if (is_quad) return 16;  // QUAD8
-    if (is_line) return 8;   // LINE3
+    if (is_tet)  return 11;   // TET10
+    if (is_hex)  return 17;   // HEX20
+    if (is_wed)  return 18;   // WEDGE15 (Prism 15)
+    if (is_pyr)  return 19;   // PYRAMID13
+    if (is_tri)  return 9;    // TRI6
+    if (is_quad) return 16;   // QUAD8
+    if (is_line) return 8;    // LINE3
   }
   else if (order == 3) {
-    if (is_tet) return 29;   // TET20
-    if (is_tri) return 21;   // TRI10
-    // HEX, WEDGE, PYRAMID order 3 not yet mapped
+    if (is_tet)  return 29;   // TET20
+    if (is_hex)  return 99;   // HEX32 (serendipity)
+    if (is_pyr)  return 125;  // PYRAMID21 (serendipity)
+    if (is_tri)  return 21;   // TRI10
+    if (is_quad) return 39;   // QUAD12 (serendipity)
+    if (is_line) return 26;   // LINE4
   }
   else if (order == 4) {
-    if (is_tet) return 30;   // TET35
-    if (is_tri) return 23;   // TRI15
+    if (is_tet)  return 30;   // TET35
+    if (is_hex)  return 100;  // HEX44 (serendipity)
+    if (is_pyr)  return 126;  // PYRAMID29 (serendipity)
+    if (is_tri)  return 23;   // TRI15
+    if (is_quad) return 40;   // QUAD16 (serendipity)
+    if (is_line) return 27;   // LINE5
+  }
+  else if (order == 5) {
+    if (is_tet)  return 31;   // TET56
+    if (is_hex)  return 101;  // HEX56 (serendipity)
+    if (is_pyr)  return 127;  // PYRAMID37 (serendipity)
+    if (is_tri)  return 25;   // TRI21
+    if (is_quad) return 41;   // QUAD20 (serendipity)
+    if (is_line) return 28;   // LINE6
   }
 
-  // Fallback: linear type
+  // Fallback: WEDGE order 3-5 not supported by GMSH, warn and use linear
+  if (is_wed && order >= 3) {
+    PRINT_WARNING("GMSH: Wedge/Prism order %d not supported (GMSH limitation). "
+                  "Exporting as linear.\n", order);
+  }
   if (is_tet)  return 4;
   if (is_hex)  return 5;
   if (is_wed)  return 6;
