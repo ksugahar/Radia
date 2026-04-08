@@ -339,16 +339,13 @@ if cubit_path:
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch'])
-
-# cubit_mesh_export is available after loading the Cubit plugin
-from cubit_mesh_export import extract_curved_mesh
 ```
 
 ## With NGSolve (System Python + CUBIT_PATH)
 
 By using **system Python** with the `CUBIT_PATH` environment variable, scripts can
 access **both** the Cubit API and NGSolve/Netgen simultaneously. This is essential
-for the `export_NGSolveCurvedMesh()` workflow, because Cubit's bundled Python
+for the `radia_export netgen` workflow, because Cubit's bundled Python
 cannot import ngsolve.
 
 **CRITICAL: Import NGSolve BEFORE Cubit.** Cubit bundles its own VTK DLLs which
@@ -366,9 +363,7 @@ import sys, os
 
 # Step 1: Import NGSolve FIRST (before Cubit!) to avoid DLL conflicts
 import ngsolve
-from netgen.occ import OCCGeometry
 from ngsolve import Mesh
-from cubit_mesh_export import extract_curved_mesh
 
 # Step 2: Then import Cubit via CUBIT_PATH
 cubit_path = os.environ.get("CUBIT_PATH")
@@ -457,12 +452,12 @@ CUBIT_COMMON_MISTAKES = """
 ```python
 # WRONG: Export without blocks -> empty file!
 cubit.cmd("mesh volume 1")
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 
 # RIGHT: Register blocks first
 cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 ```
 
 ## 2. CRITICAL: Geometry Block with 2nd Order Conversion
@@ -507,10 +502,12 @@ geo = OCCGeometry("cyl.step")
 ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)       # DELETED
 cubit_mesh_export.set_cylinder_geominfo(ngmesh, radius=0.5, height=2.0)  # DELETED
 
-# RIGHT: Use extract_curved_mesh() — single function, no STEP, no OCC
-from cubit_mesh_export import extract_curved_mesh
+# RIGHT: Use radia_export netgen APREPRO command — no STEP, no OCC
+import tempfile
 from ngsolve import Mesh
-mesh = Mesh(extract_curved_mesh(cubit, order=3))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 ```
 
 ## 6. MODERATE: Missing Boundary Element Block
@@ -578,10 +575,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 cubit.cmd("block 1 add hex all")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 add pyramid all")
-cubit.cmd('export radia_nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
+cubit.cmd('radia_export nastran "mesh.bdf" overwrite')  # Pyramids as CPYRAM!
 
 # RIGHT: Use nopyramid for JMAG
-cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" nopyramid overwrite')
 # Or use pure tet mesh to avoid pyramids entirely
 ```
 
@@ -736,7 +733,7 @@ JMAG requires degenerate hex pyramids, not standard CPYRAM elements:
 
 ```python
 # For JMAG: use nopyramid
-cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 With `nopyramid`, pyramid elements are written as degenerate CHEXA
@@ -795,8 +792,8 @@ CUBIT_2D_MESH_WORKFLOW = """
 ## Overview
 
 Several export formats support 2D mesh export:
-- `cubit.cmd('export radia_nastran "file.bdf" dimension 2 overwrite')`
-- `cubit.cmd('export gmsh "file.msh" version 4 dimension 2 overwrite')`
+- `cubit.cmd('radia_export nastran "file.bdf" dimension 2 overwrite')`
+- `cubit.cmd('radia_export gmsh "file.msh" version 4 dimension 2 overwrite')`
 
 ## Surface Creation
 
@@ -857,7 +854,7 @@ cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
 cubit.cmd('block 1 name "plate"')
-cubit.cmd('export radia_nastran "plate.bdf" dimension 2 overwrite')
+cubit.cmd('radia_export nastran "plate.bdf" dimension 2 overwrite')
 ```
 
 ### Gmsh v4 2D
@@ -867,7 +864,7 @@ cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("surface 1 size 0.3")
 cubit.cmd("mesh surface 1")
 cubit.cmd("block 1 add tri all")
-cubit.cmd('export gmsh "plate.msh" version 4 dimension 2 overwrite')
+cubit.cmd('radia_export gmsh "plate.msh" version 4 dimension 2 overwrite')
 ```
 
 ## 2D Normal Orientation
@@ -946,10 +943,12 @@ print(f"1st order nodes: {n1}, Actual nodes: {n2}")
 # ngmesh = cubit_mesh_export.export_netgen(cubit, geometry=geo)   # DELETED
 # cubit_mesh_export.set_cylinder_geominfo(ngmesh, ...)            # DELETED
 
-# NEW: Single function call
-from cubit_mesh_export import extract_curved_mesh
+# NEW: Single APREPRO command
+import tempfile
 from ngsolve import Mesh
-mesh = Mesh(extract_curved_mesh(cubit, order=3))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 ```
 
 ## Problem: Mesh Quality Too Low
@@ -1037,7 +1036,7 @@ When Cubit produces mixed hex-tet meshes, pyramid transition elements are genera
 
 **Fix**: Use `nopyramid` to write pyramids as degenerate CHEXA:
 ```python
-cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 **Alternative**: Avoid pyramids entirely by using pure tet mesh:
@@ -1045,7 +1044,7 @@ cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add tet all")
-cubit.cmd('export radia_nastran "mesh.bdf" overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" overwrite')
 ```
 
 ## Problem: Hex Meshing Fails on Complex Geometry
@@ -1135,11 +1134,11 @@ Python files loaded by Cubit. Japanese Windows defaults to cp932 encoding.
 format with order 2 / nopyramid support.
 
 **Cause**: Cubit has a built-in `export nastran` command. Radia's version
-is `export radia_nastran` to avoid the naming conflict.
+is `radia_export nastran` to avoid the naming conflict.
 
-**Fix**: Always use `export radia_nastran`:
+**Fix**: Always use `radia_export nastran`:
 ```python
-cubit.cmd('export radia_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" order 2 dimension 3 overwrite')
 ```
 """
 
@@ -1200,19 +1199,18 @@ provides full fidelity (all element types, nodesets, sidesets, etc.).
 
 ## For AI Assistants: Script Generation Rule
 
-When generating Cubit export scripts, **never** use:
+When generating Cubit export scripts, **always** use the `radia_export` prefix:
 ```python
-# WRONG: No such built-in command for these formats
-cubit.cmd('export gmsh "mesh.msh"')     # Does not exist
-cubit.cmd('export vtk "mesh.vtk"')      # Does not exist
-cubit.cmd('export radia_nastran "mesh.bdf"')  # Does not exist
-```
+# RIGHT: Radia plugin APREPRO commands
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('radia_export vtk "mesh.vtk" overwrite')
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 
-**Always** use the module functions:
-```python
-# RIGHT: Use export Cubit commands
-cubit.cmd('export gmsh "mesh.msh" overwrite')
-cubit.cmd('export radia_nastran "mesh.bdf" dimension 3 overwrite')
+# WRONG: Old command names (removed)
+cubit.cmd('export gmsh "mesh.msh"')           # Does not exist
+cubit.cmd('export vtk "mesh.vtk"')            # Does not exist
+cubit.cmd('export radia_nastran "mesh.bdf"')  # Old name, removed
 ```
 """
 
@@ -1248,20 +1246,20 @@ cubit.cmd("block 2 add tri all")
 cubit.cmd('block 2 name "boundary"')
 
 # Export to desired format
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 ```
 
 ## Prerequisites
 
-The `cubit_mesh_export` package and `export` commands are part of the Radia Cubit plugin:
+The export commands are part of the Radia Cubit plugin:
 
 ```bash
 # Install Radia (includes Cubit plugin)
-pip install radia
+pip install radia[cubit]
+cubit-plugin-install  # Deploy Cubit plugin
 
-# The plugin is loaded via Cubit's plugin system
-# cubit_mesh_export is available after plugin load
-from cubit_mesh_export import extract_curved_mesh
+# Use radia_export netgen APREPRO command in Cubit
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 ```
 
 ## APREPRO Variables
@@ -1471,7 +1469,7 @@ for n in [2, 4, 8, 16]:  # mesh refinement levels
     cubit.cmd('block 1 add surface all')
     folder = f"n={n}"
     os.makedirs(folder, exist_ok=True)
-    cubit.cmd(f'export radia_nastran "{folder}/sphere.nas" dimension 3 overwrite large')
+    cubit.cmd(f'radia_export nastran "{folder}/sphere.nas" dimension 3 overwrite large')
 ```
 
 ## Key Techniques
@@ -1506,7 +1504,7 @@ for mesh_size in [5.0, 2.0, 1.0, 0.5]:
     cubit.cmd('surface all scheme circle interval')
     cubit.cmd(f'surface all size {{0.2*{mesh_size}}}')
     cubit.cmd('mesh surface all')
-    cubit.cmd(f'export radia_nastran "{folder}/mesh.bdf" dimension 2 overwrite large')
+    cubit.cmd(f'radia_export nastran "{folder}/mesh.bdf" dimension 2 overwrite large')
     cubit.cmd('exit')
 ```
 
@@ -1575,7 +1573,7 @@ cubit.cmd('mesh vol all')
 # Register blocks (required for Nastran export)
 cubit.cmd('block 1 add vol 1')
 cubit.cmd('block 2 add vol 2')
-cubit.cmd('export radia_nastran "mesh.nas" dimension 3 overwrite everything')
+cubit.cmd('radia_export nastran "mesh.nas" dimension 3 overwrite everything')
 
 # Convert to VTU using meshio
 mesh = meshio.read("mesh.nas")
@@ -1633,7 +1631,7 @@ cubit.cmd('create volume surface 7 to 12 heal')
 |--------|--------|--------|----------|
 | Cubit | VTU/VTK | meshio | ParaView visualization |
 | Cubit | Netgen | cubit_mesh_export | NGSolve FEM (part of Radia) |
-| Cubit | Gmsh | export gmsh | GMSH post-processing |
+| Cubit | Gmsh | radia_export gmsh | GMSH post-processing |
 | Cubit | Patran | built-in export | Coordinate transforms |
 | Gmsh GEO | Cubit | geo2jou converter | Geometry migration |
 
@@ -2288,10 +2286,10 @@ for vol_id in volume_ids:
 ## Method 2: Collapse Pyramid to Degenerate Hex
 
 Some solvers accept degenerate hexahedra (CHEXA with repeated nodes).
-The Radia plugin's `export nastran` handles this with the `nopyramid` option:
+The Radia plugin's `radia_export nastran` handles this with the `nopyramid` option:
 
 ```
-export radia_nastran "output.bdf" nopyramid   # writes CHEXA instead of CPYRAM
+radia_export nastran "output.bdf" nopyramid   # writes CHEXA instead of CPYRAM
 ```
 
 ## Method 3: Avoid Pyramids Entirely

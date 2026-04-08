@@ -2,8 +2,7 @@
 High-order volume convergence test for mixed element types.
 
 Tests:
-  1. p-convergence: export netgen .vol at order 1-5, volume must converge to CAD
-  2. Path A==B: export netgen (C++) vs extract_curved_mesh (Python) volume match
+  1. p-convergence: radia_export netgen .vol at order 1-5, volume must converge to CAD
 
 Cases:
   1. Flat brick (hex + tet + pyramid) -- exact volume expected
@@ -42,8 +41,6 @@ from ngsolve import Mesh, Integrate, CF, BND, BBND
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
             '-commandplugindir', _plugin_dir or ''])
-from cubit_mesh_export import extract_curved_mesh
-
 OUT_DIR = os.path.join(_test_dir, 'ho_convergence_test')
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -120,7 +117,32 @@ test_cases = [
         "block 2 add wedge all", 'block 2 name "wedge"',
         "Volume all scale 0.001",
     ], False, False),
+    ("case07_sweep_torus", [
+        "reset",
+        "create curve arc radius 0.5 center location 2 0 0 "
+        "normal 0 1 0 start angle 0 stop angle 360",
+        "create surface curve 1",
+        "sweep surface 1 zaxis angle 360",
+        "volume 1 scheme tetmesh", "volume 1 size auto factor 5",
+        "mesh volume 1",
+        "block 1 add volume 1", 'block 1 name "torus"',
+        "Volume all scale 0.001",
+    ], False, False),
+    ("case08_half_torus_webcut", [
+        "reset",
+        "create torus major radius 2 minor radius 0.5",
+        "webcut volume 1 with plane xplane noimprint nomerge",
+        "delete volume 2",
+        "volume 1 scheme tetmesh", "volume 1 size auto factor 5",
+        "mesh volume 1",
+        "block 1 add volume 1", 'block 1 name "coil"',
+        'sideset 1 add surface 2', 'sideset 1 name "source"',
+        'sideset 2 add surface 3', 'sideset 2 name "sink"',
+        "Volume all scale 0.001",
+    ], False, False),
 ]
+# NOTE: Racetrack (boolean) coil tested separately in test_racetrack_coil.py
+# Boolean trimming surfaces saturate at ~0.025% at high order (ACIS limitation).
 
 
 # ================================================================
@@ -394,7 +416,7 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
     for order in range(1, 6):
         vol_path = os.path.join(OUT_DIR, f"{case_name}_o{order}.vol")
-        cmd = f'export netgen "{vol_path}" order {order} overwrite'
+        cmd = f'radia_export netgen "{vol_path}" order {order} overwrite'
         try:
             cubit.cmd(cmd)
             mesh = Mesh(vol_path)
@@ -452,84 +474,12 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
 
 # ================================================================
-# Test 2: Path A (export netgen C++) vs Path B (extract_curved_mesh Python)
-# ================================================================
-def test_path_ab(case_name, cad_volume, cad_area):
-    """Compare .vol from Path A and Path B at order=2: volume, area, length."""
-    print(f"\n  Path A vs B (order=2):")
-
-    ORDER = 2
-
-    # Path A: export netgen (already tested, re-use .vol)
-    path_a = os.path.join(OUT_DIR, f"{case_name}_o{ORDER}.vol")
-    if not os.path.exists(path_a):
-        cubit.cmd(f'export netgen "{path_a}" order {ORDER} overwrite')
-    mesh_a = Mesh(path_a)
-    vol_a = Integrate(CF(1), mesh_a)
-    area_a = Integrate(CF(1), mesh_a, BND)
-    try:
-        len_a = Integrate(CF(1), mesh_a, BBND)
-    except Exception:
-        len_a = 0.0
-
-    # Path B: extract_curved_mesh (Python)
-    path_b = os.path.join(OUT_DIR, f"{case_name}_pathB.vol")
-    try:
-        ng_b = extract_curved_mesh(cubit, order=ORDER)
-        ng_b.Save(path_b)
-        mesh_b = Mesh(path_b)
-        vol_b = Integrate(CF(1), mesh_b)
-        area_b = Integrate(CF(1), mesh_b, BND)
-        try:
-            len_b = Integrate(CF(1), mesh_b, BBND)
-        except Exception:
-            len_b = 0.0
-    except Exception as e:
-        print(f"  Path B failed: {e}")
-        return False
-
-    print(f"  {'':10} {'Volume':>14} {'Area':>14} {'Length':>14}")
-    print(f"  {'Path A':<10} {vol_a:>14.6e} {area_a:>14.6e} {len_a:>14.6e}")
-    print(f"  {'Path B':<10} {vol_b:>14.6e} {area_b:>14.6e} {len_b:>14.6e}")
-
-    all_pass = True
-
-    # Volume must agree within 0.1%
-    v_diff = abs(vol_a - vol_b) / max(abs(cad_volume), 1e-30) * 100.0
-    print(f"  vol  diff: {v_diff:.4e}%", end="")
-    if v_diff > 0.1:
-        print(" [FAIL]"); all_pass = False
-    else:
-        print(" [PASS]")
-
-    # Area must agree within 0.1%
-    a_diff = abs(area_a - area_b) / max(abs(cad_area), 1e-30) * 100.0
-    print(f"  area diff: {a_diff:.4e}%", end="")
-    if a_diff > 0.1:
-        print(" [FAIL]"); all_pass = False
-    else:
-        print(" [PASS]")
-
-    # Length: informational (BBND may not be available in all cases)
-    if len_a > 0 and len_b > 0:
-        l_diff = abs(len_a - len_b) / max(len_a, 1e-30) * 100.0
-        print(f"  len  diff: {l_diff:.4e}%", end="")
-        if l_diff > 1.0:
-            print(" [WARN]")
-        else:
-            print(" [PASS]")
-
-    return all_pass
-
-
-# ================================================================
 # Main
 # ================================================================
 def main():
     print("=" * 70)
     print("High-Order Volume Convergence Test")
-    print("  1. p-convergence (netgen .vol, order 1-5)")
-    print("  2. Path A (C++) vs Path B (Python) volume match")
+    print("  p-convergence (netgen .vol, order 1-5)")
     print("=" * 70)
 
     overall_pass = True
@@ -553,10 +503,7 @@ def main():
         print(f"  Elements: hex={n_hex} tet={n_tet} pyramid={n_pyr}")
         print(f"  CAD volume: {cad_volume:.6e}, area: {cad_area:.6e}")
 
-        p_pass = test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn)
-        ab_pass = test_path_ab(case_name, cad_volume, cad_area)
-
-        case_pass = p_pass and ab_pass
+        case_pass = test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn)
         print(f"\n  Result: [{'PASS' if case_pass else 'FAIL'}]")
         if not case_pass:
             overall_pass = False

@@ -15,5 +15,5 @@ block 2 name "boundary_face"
 
 Volume all scale 0.001
 
-export gmsh "{DIR}/hex_cyl_o2.msh" order 2 version 2 dimension 3 overwrite
-export radia_nastran "{DIR}/hex_cyl_o2.bdf" order 2 dimension 3 overwrite
+radia_export gmsh "{DIR}/hex_cyl_o2.msh" order 2 version 2 dimension 3 overwrite
+radia_export nastran "{DIR}/hex_cyl_o2.bdf" order 2 dimension 3 overwrite

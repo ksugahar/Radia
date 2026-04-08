@@ -696,7 +696,7 @@ rad.MatApl(container, mat)
 from ngsolve import Mesh
 from radia.netgen_mesh_import import netgen_mesh_to_radia
 
-# Load .vol exported from Cubit (export netgen "mesh.vol" order N)
+# Load .vol exported from Cubit (radia_export netgen "mesh.vol" order N)
 mesh = Mesh("mesh.vol")
 container = netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m')
 ```

@@ -12,22 +12,19 @@ EXPORT_OVERVIEW = """
 
 | Path | Method | Speed | Use Case |
 |------|--------|-------|----------|
-| **Path A** (C++) | `cubit.cmd('export netgen/gmsh/...')` | Fast | APREPRO journal, GUI menu |
-| **Path B** (Python) | `extract_curved_mesh(cubit, order=N)` | Slower | Python scripting, reference |
+| **Path A** (C++) | `cubit.cmd('radia_export netgen/gmsh/...')` | Fast | APREPRO journal, GUI menu |
 
-Path A and Path B MUST produce bit-identical curving for tet meshes.
-Run `test_vol_multi_geometry.py` after any NetgenCurver or bridge.py change.
+Path A is the recommended export path. Use `radia_export netgen "mesh.vol" order N` for all workflows.
 
 ## Supported Formats
 
 | Command | Format | Order 1 | Order 2 | Order 3-5 |
 |---------|--------|---------|---------|-----------|
-| `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | Yes | Yes | Yes |
-| `export gmsh "f.msh" version 2` | Gmsh v2.2 (.msh) | Yes | Yes | Yes |
-| `export gmsh "f.msh" version 4` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
-| `export radia_nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
-| `export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
-| `extract_curved_mesh(cubit, order=N)` | ngsolve.Mesh (in-memory) | No (>=2) | Yes | Yes |
+| `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | Yes | Yes | Yes |
+| `radia_export gmsh "f.msh" version 2` | Gmsh v2.2 (.msh) | Yes | Yes | Yes |
+| `radia_export gmsh "f.msh" version 4` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
+| `radia_export nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
+| `radia_export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
 
 All formats use NetgenCurver (compact_netgen BuildCurvedElements) for curving.
 No fallback to HighOrderMesh (removed).
@@ -36,21 +33,19 @@ No fallback to HighOrderMesh (removed).
 
 ```python
 # Netgen .vol (recommended for NGSolve FEM computation)
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 # -> produces mesh.vol + mesh.vol.json (CAD reference values)
 
 # Gmsh v2.2 (for GMSH visualization)
-cubit.cmd('export gmsh "mesh.msh" order 2 version 2 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" order 2 version 2 overwrite')
 
-# Python path (reference, slower)
-from cubit_mesh_export import extract_curved_mesh
-ng_mesh = extract_curved_mesh(cubit, order=3)
-ng_mesh.Save("mesh.vol")
+# Any order 1-5 supported
+cubit.cmd('radia_export netgen "mesh.vol" order 5 overwrite')
 ```
 
 ## Companion JSON (.vol.json)
 
-`export netgen` writes a companion JSON with CAD reference values:
+`radia_export netgen` writes a companion JSON with CAD reference values:
 ```json
 {
   "materials": {"iron": 5.24e-04, "air": 3.38e-03},
@@ -82,10 +77,10 @@ cubit.cmd("sideset 1 add surface 1")
 cubit.cmd('sideset 1 name "outer"')
 
 # Export (surface elements extracted automatically from volume faces)
-cubit.cmd('export netgen "sphere.vol" order 3 overwrite')
+cubit.cmd('radia_export netgen "sphere.vol" order 3 overwrite')
 ```
 
-**Note**: `block 2 add tri all` is NOT needed for export netgen.
+**Note**: `block 2 add tri all` is NOT needed for radia_export netgen.
 Surface elements are extracted from volume element faces automatically.
 
 ## IH (BEM) Inductance: Sideset Setup
@@ -108,7 +103,7 @@ cubit.cmd("sideset 2 add surface 5")   # sink terminal
 cubit.cmd('sideset 2 name "sink"')
 
 # Export (sidesets become boundary labels)
-cubit.cmd('export netgen "coil.vol" order 2 overwrite')
+cubit.cmd('radia_export netgen "coil.vol" order 2 overwrite')
 
 # Compute (no Cubit needed):
 # python calc_inductance.py --vol coil.vol --source source --sink sink
@@ -144,19 +139,19 @@ export_Gmesh(cubit, FileName)  # version="2.2" is default
 
 ## Use Cases
 
-- **NGSolve/Netgen integration**: Export .vol via `export netgen` (recommended)
+- **NGSolve/Netgen integration**: Export .vol via `radia_export netgen` (recommended)
 - **GMSH visualization**: View mesh in GMSH GUI
 - **2nd order elements**: Good accuracy for simple curving workflows
 
 ```python
-# Recommended: export netgen .vol (any order, best accuracy)
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+# Recommended: radia_export netgen .vol (any order, best accuracy)
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 from ngsolve import Mesh
 mesh = Mesh("mesh.vol")
 
 # Alternative: Gmsh v2.2 (2nd order only, for GMSH visualization)
 cubit.cmd("block 1 element type tetra10")
-cubit.cmd('export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 ```
 """
 
@@ -185,7 +180,7 @@ export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
-| **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
+| **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `radia_export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
 | **Output** (NGSolve ->) | **v4.1** | Field visualization in GMSH | `GmshPostExport.write()` -> GMSH GUI |
 | **Output** (NGSolve ->) | **v2.2** | High-order mesh exchange | `GmshPostExport.write_v22()` |
 
@@ -211,48 +206,48 @@ High-order elements (Tri10=21 for order 3, Tri15=23 for order 4, etc.) work in b
 
 ## When to Use Which
 
-- **`export netgen "mesh.vol"`**: For NGSolve FEM computation (recommended, any order)
+- **`radia_export netgen "mesh.vol"`**: For NGSolve FEM computation (recommended, any order)
 - **`GmshPostExport.write()`**: For field visualization in GMSH GUI (v4.1)
 - **`export_Gmesh(version="2.2")`**: For direct Cubit mesh output to GMSH (2nd order max)
 """
 
 EXPORT_CURVED = """
-# Curved Mesh Export (export_NGSolveCurvedMesh)
+# Curved Mesh Export (radia_export netgen)
 
 ```python
-from cubit_mesh_export import extract_curved_mesh
+import tempfile
 from ngsolve import Mesh
-mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=False, split_quads=False))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `order` | int | 3 | Polynomial order for mesh curving |
-| `surface_only` | bool | False | Export surface elements only (for BEM) |
-| `split_quads` | bool | False | Split quad elements into triangles |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `order` | int (1-5) | Polynomial order for mesh curving |
+| `overwrite` | flag | Overwrite existing file |
 
-**Returns**: `netgen.meshing.Mesh` object (**already curved**). Wrap with `Mesh()` for NGSolve use.
+**Returns**: `.vol` file with embedded curvedelements section. Load with `Mesh(vol_path)`.
 
 ## How It Works
 
-Uses CallbackGeometry (upstream Netgen) to delegate surface projection to
-Cubit's ACIS kernel:
+Uses NetgenCurver (compact_netgen C++ static link) with CallbackGeometry
+to delegate surface projection to Cubit's ACIS kernel:
 
 1. Reads mesh topology (nodes, elements) from Cubit blocks
 2. Creates 1st order netgen.meshing.Mesh
-3. Registers CallbackGeometry with Cubit ACIS surface projection
-4. Calls mesh.Curve(order) using the CallbackGeometry
-5. Returns the curved ngsolve.Mesh
+3. Registers CallbackGeometry with ACIS surface projection
+4. Calls BuildCurvedElements(order) using the CallbackGeometry
+5. Writes .vol with curvedelements section + companion .vol.json
 
 No STEP files, no OCC geometry, no SetGeomInfo needed.
 
 ## Key Design Decision
 
-This function exports **1st order elements** internally, then curves
+The command exports **1st order elements** internally, then curves
 them to the requested order using ACIS surface projection. Even if
 blocks contain TET10, only corner nodes are used initially. High-order
-nodes are placed exactly on ACIS CAD surfaces by mesh.Curve(order).
+nodes are placed exactly on ACIS CAD surfaces by BuildCurvedElements(order).
 
 ## Supported Elements
 
@@ -278,7 +273,7 @@ nodes are placed exactly on ACIS CAD surfaces by mesh.Curve(order).
 ## Workflows
 
 For high-order curving, see `netgen_workflow_guide()` tool.
-For simple 2nd order without geometry, use `export netgen "mesh.vol" order 2`.
+For simple 2nd order without geometry, use `radia_export netgen "mesh.vol" order 2`.
 
 ## Deleted Predecessors
 
@@ -387,8 +382,7 @@ EXPORT_COMPARISON = """
 
 | Use Case | Recommended Format | Why |
 |----------|-------------------|-----|
-| NGSolve FEM (any order) | `export netgen "f.vol" order N` | Arbitrary order via ACIS CallbackGeometry |
-| NGSolve FEM (any order, Python) | `export_NGSolveCurvedMesh()` | In-memory, same curving as Path A |
+| NGSolve FEM (any order) | `radia_export netgen "f.vol" order N` | Arbitrary order via ACIS CallbackGeometry |
 | GMSH visualization | `export_Gmesh(version="2.2")` | GMSH GUI viewing |
 | JMAG solver | `export_nastran()` | PYRAM=False for degenerate hex |
 | Cubit-native archival | `export_exodus()` | Full fidelity, all features |
@@ -404,14 +398,14 @@ EXPORT_COMPARISON = """
 | BlockID metadata | N/A | Yes | Yes | Yes | Yes |
 | 2D support | No | No | Yes | Yes | No |
 
-## export_NGSolveCurvedMesh vs Gmsh for NGSolve
+## radia_export netgen vs Gmsh for NGSolve
 
-| Aspect | export_NGSolveCurvedMesh() | Gmsh v2.2 (export_Gmesh) |
+| Aspect | radia_export netgen | Gmsh v2.2 (export_Gmesh) |
 |--------|----------------|---------------------------|
-| Max order | Unlimited | 2nd order |
+| Max order | 5 | 2nd order |
 | Accuracy at order 2 | ~0.003% | ~0.001% |
 | Accuracy at order 3+ | ~0.0004% | N/A |
-| Complexity | Low (single function call) | Low (block element type) |
+| Complexity | Low (APREPRO command) | Low (block element type) |
 | Geometry needed | ACIS (automatic) | No |
 | Best for | Any order FEM/BEM | Standard 2nd order FEM |
 """
@@ -422,13 +416,14 @@ EXPORT_DECISION_GUIDE = """
 
 ## "I want to use NGSolve / Netgen for FEM"
 
--> Use `export_NGSolveCurvedMesh()` (recommended for any order):
+-> Use `radia_export netgen` (recommended for any order):
   ```python
-  from cubit_mesh_export import extract_curved_mesh
+  import tempfile
   from ngsolve import Mesh
-  cubit.cmd("block 1 add tet all")
-  cubit.cmd("block 2 add tri all")
-  mesh = Mesh(extract_curved_mesh(cubit, order=3))
+  cubit.cmd("block 1 add volume all")
+  vol_path = tempfile.mktemp(suffix='.vol')
+  cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+  mesh = Mesh(vol_path)
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
@@ -438,8 +433,8 @@ EXPORT_DECISION_GUIDE = """
   cubit.cmd("block 1 element type tetra10")
   cubit.cmd("block 2 add tri all")
   cubit.cmd("block 2 element type tri6")
-  cubit.cmd('export gmsh "mesh.msh" overwrite')
-  # For GMSH visualization only; for NGSolve use export netgen instead
+  cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
+  # For GMSH visualization only; for NGSolve use radia_export netgen instead
   ```
 
 ## "I need structural FEA (Nastran / JMAG)"
@@ -457,7 +452,7 @@ the interface. Two solutions:
 
 1. **Use PYRAM=False** (recommended): Writes pyramids as degenerate CHEXA
    ```python
-   cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
+   cubit.cmd('radia_export nastran "mesh.bdf" nopyramid overwrite')
    ```
 
 2. **Use pure tet mesh**: Avoids pyramids entirely
@@ -482,7 +477,7 @@ geometry leads to poor quality or failed meshing.
 
 -> Use `export_Gmesh(version="2.2")` for GMSH GUI viewing
 - Or `export_Gmesh(version="4.1")` for full v4.1 with $Entities
-- **Note**: For NGSolve FEM, use `export netgen "mesh.vol"` instead
+- **Note**: For NGSolve FEM, use `radia_export netgen "mesh.vol"` instead
 
 ## Performance & Feature Summary
 
@@ -494,14 +489,14 @@ geometry leads to poor quality or failed meshing.
 | nastran | Medium | 2nd | Yes | Yes | No |
 | exodus | Medium | All | No | Yes | No |
 
-## IMPORTANT: `export radia_nastran` (NOT `export nastran`)
+## IMPORTANT: `radia_export nastran` (NOT `export nastran`)
 
 Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf" overwrite everything`).
 Radia's Nastran export uses a DIFFERENT command name to avoid conflict:
 
 ```python
 # CORRECT: Radia's export (supports order 2, nopyramid, block labels)
-cubit.cmd('export radia_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" order 2 dimension 3 overwrite')
 
 # WRONG: Cubit's built-in (different format, no order 2, no nopyramid)
 cubit.cmd('export nastran "mesh.bdf" overwrite everything')
@@ -639,12 +634,12 @@ NGSolve `Integrate(CF(1), mesh)` will return the correct volume.
 ## Known Issue: Hex BL on Cylinder (03) Export Failure
 
 Hexahedral boundary layer on a cylinder with `scheme map` may fail
-to export via `export netgen`. The combination of mapped hex meshing
+to export via `radia_export netgen`. The combination of mapped hex meshing
 with boundary layers on curved surfaces can produce elements that
 NetgenCurver cannot process.
 
 **Workaround**: Use tet meshing with BL (creates wedge prisms instead).
-Or use `export gmsh` which does not require NetgenCurver for order 1.
+Or use `radia_export gmsh` which does not require NetgenCurver for order 1.
 
 ## BND Integrate Area Mismatch
 
@@ -684,7 +679,7 @@ VTK cell types used by Radia export:
 
 ## .vol.json Companion File
 
-Every `export netgen` produces a companion .vol.json:
+Every `radia_export netgen` produces a companion .vol.json:
 ```json
 {
   "materials": {"sphere": 5.236e-04},

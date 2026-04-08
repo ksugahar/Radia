@@ -231,11 +231,13 @@ class BEMExtractor:
             cubit: Cubit Python interface object
             curve_order: Polynomial order for curved elements (1-5)
         """
-        from cubit_mesh_export import extract_curved_mesh
+        import tempfile
         from ngsolve import Mesh as NGMesh
 
-        # Export Cubit mesh with curving via ACIS kernel (C++ accelerated)
-        self.mesh = NGMesh(extract_curved_mesh(cubit, order=curve_order))
+        # Export Cubit mesh via C++ plugin (ACIS kernel curving)
+        vol_path = tempfile.mktemp(suffix='.vol')
+        cubit.cmd(f'radia_export netgen "{vol_path}" order {curve_order} overwrite')
+        self.mesh = NGMesh(vol_path)
         self._cubit = cubit
         self._curve_order = curve_order
 

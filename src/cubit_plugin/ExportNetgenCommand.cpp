@@ -2,6 +2,8 @@
 #include "MeshData.hpp"
 #include "CubitInterface.hpp"
 #include "CubitMessage.hpp"
+#include <chrono>
+#include <iomanip>
 
 #ifdef HAVE_NETGEN
 #include "NetgenCurver.hpp"
@@ -68,7 +70,7 @@ std::vector<std::string> ExportNetgenCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "export netgen <string:label='filename',help='<filename>'> "
+    "radia_export netgen <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
     "[overwrite]"
   );
@@ -79,7 +81,7 @@ std::vector<std::string> ExportNetgenCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]"
+    "radia_export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]"
   );
   return help;
 }
@@ -99,9 +101,11 @@ std::vector<std::string> ExportNetgenCommand::get_help()
 bool ExportNetgenCommand::execute(CubitCommandData &data)
 {
 #ifndef HAVE_NETGEN
-  PRINT_ERROR("export netgen requires Netgen support (not built).\n");
+  PRINT_ERROR("radia_export netgen requires Netgen support (not built).\n");
   return false;
 #else
+  auto t_start = std::chrono::high_resolution_clock::now();
+
   std::string filename;
   data.get_string("filename", filename);
   if (filename.empty()) {
@@ -301,9 +305,13 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
       jf << "\n  },\n";
 
+      auto t_end = std::chrono::high_resolution_clock::now();
+      double t_sec = std::chrono::duration<double>(t_end - t_start).count();
+
       jf << "  \"n_elements\": " << ne << ",\n";
       jf << "  \"n_points\": " << np << ",\n";
-      jf << "  \"order\": " << order << "\n";
+      jf << "  \"order\": " << order << ",\n";
+      jf << "  \"export_time_s\": " << std::fixed << std::setprecision(3) << t_sec << "\n";
       jf << "}\n";
       jf.close();
     }

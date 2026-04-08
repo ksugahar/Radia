@@ -77,8 +77,8 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
 
 EXAMPLES = {}
 
-EXAMPLES['cylinder'] = '''# Cylinder with export_NGSolveCurvedMesh (high-order curving)
-import sys, os, math
+EXAMPLES['cylinder'] = '''# Cylinder with radia_export netgen (high-order curving)
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -86,7 +86,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R, H, ORDER = 0.5, 2.0, 3
 
@@ -98,19 +97,20 @@ cubit.cmd(f"create cylinder height {H} radius {R}")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.15")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-# Export with curving - single function call, no STEP, no OCC, no SetGeomInfo
-mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
+# Export with curving via C++ APREPRO command
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 expected_vol = math.pi * R**2 * H
 vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['sphere'] = '''# Sphere with export_NGSolveCurvedMesh
-import sys, os, math
+EXAMPLES['sphere'] = '''# Sphere with radia_export netgen
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -118,7 +118,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R, ORDER = 0.5, 3
 
@@ -129,18 +128,19 @@ cubit.cmd(f"create sphere radius {R}")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.1")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 expected_vol = 4/3 * math.pi * R**3
 vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['torus'] = '''# Torus with export_NGSolveCurvedMesh
-import sys, os, math
+EXAMPLES['torus'] = '''# Torus with radia_export netgen
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -148,7 +148,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R_MAJOR, R_MINOR, ORDER = 1.0, 0.3, 3
 
@@ -159,18 +158,19 @@ cubit.cmd(f"create torus major {R_MAJOR} minor {R_MINOR}")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.08")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 expected_vol = 2 * math.pi**2 * R_MAJOR * R_MINOR**2
 vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['cone'] = '''# Cone with export_NGSolveCurvedMesh
-import sys, os, math
+EXAMPLES['cone'] = '''# Cone with radia_export netgen
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -178,7 +178,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R_BASE, H, ORDER = 0.5, 2.0, 3
 
@@ -189,18 +188,19 @@ cubit.cmd(f"create cone height {H} radius {R_BASE} top 0")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.1")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 expected_vol = 1/3 * math.pi * R_BASE**2 * H
 vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['hex_cylinder'] = '''# Hex-meshed Cylinder with export_NGSolveCurvedMesh
-import sys, os, math
+EXAMPLES['hex_cylinder'] = '''# Hex-meshed Cylinder with radia_export netgen
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -208,7 +208,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R, H = 0.5, 2.0
 
@@ -224,18 +223,19 @@ cubit.cmd("volume all scheme auto")
 cubit.cmd("volume all size 0.15")
 cubit.cmd("mesh volume all")
 
-cubit.cmd("block 1 add hex all")
-cubit.cmd("block 2 add quad all")
+cubit.cmd("block 1 add volume all")
 
-mesh = Mesh(extract_curved_mesh(cubit, order=3))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 
 expected_vol = math.pi * R**2 * H
 vol = Integrate(CF(1), mesh)
 print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
-EXAMPLES['complex_named'] = '''# Complex Geometry with Boolean Operations (export_NGSolveCurvedMesh)
-import sys, os, math
+EXAMPLES['complex_named'] = '''# Complex Geometry with Boolean Operations (radia_export netgen)
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -243,7 +243,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 BRICK_SIZE, R_HOLE, ORDER = 2.0, 0.3, 3
 
@@ -258,11 +257,12 @@ cubit.cmd("subtract volume 2 from volume 1")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.15")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-# Export with curving - works for any geometry
-mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
+# Export with curving via C++ APREPRO command
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 expected_vol = BRICK_SIZE**3 - math.pi * R_HOLE**2 * BRICK_SIZE
 vol = Integrate(CF(1), mesh)
@@ -293,7 +293,7 @@ cubit.cmd("block 1 add volume 1")
 cubit.cmd('block 1 name "sphere"')
 
 # Export to Netgen .vol (order 2 with ACIS curving)
-cubit.cmd('export netgen "sphere.vol" order 2 overwrite')
+cubit.cmd('radia_export netgen "sphere.vol" order 2 overwrite')
 
 # Read into NGSolve
 mesh = Mesh("sphere.vol")
@@ -304,7 +304,7 @@ print(f"Volume error: {abs(vol-expected_vol)/expected_vol*100:.4f}%")
 '''
 
 EXAMPLES['poisson_sphere'] = '''# Complete FEM Example: Poisson on Sphere
-import sys, os, math
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -312,7 +312,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import *
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 R, ORDER = 1.0, 3
 
@@ -323,13 +322,13 @@ cubit.cmd(f"create sphere radius {R}")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("volume all size 0.2")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 add volume all")
 cubit.cmd('block 1 name "domain"')
-cubit.cmd("block 2 add tri all")
-cubit.cmd('block 2 name "boundary"')
 
-# --- export_NGSolveCurvedMesh handles everything ---
-mesh = Mesh(extract_curved_mesh(cubit, order=ORDER))
+# --- Export with curving via C++ APREPRO command ---
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 # --- Solve Poisson equation ---
 fes = H1(mesh, order=ORDER, dirichlet="boundary")
@@ -641,8 +640,8 @@ def lint_cubit_directory(directory: str = "examples") -> str:
 
 SCRIPT_TEMPLATES = {}
 
-SCRIPT_TEMPLATES['tet_netgen'] = '''# Cubit -> NGSolve: Tet mesh with high-order curving (export_NGSolveCurvedMesh)
-import sys, os, math
+SCRIPT_TEMPLATES['tet_netgen'] = '''# Cubit -> NGSolve: Tet mesh with high-order curving (radia_export netgen)
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -650,7 +649,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 # === PARAMETERS ===
 MESH_SIZE = 0.15
@@ -668,13 +666,13 @@ cubit.cmd(f"volume all size {MESH_SIZE}")
 cubit.cmd("mesh volume all")
 
 # === BLOCKS ===
-cubit.cmd("block 1 add tet all")
+cubit.cmd("block 1 add volume all")
 cubit.cmd('block 1 name "domain"')
-cubit.cmd("block 2 add tri all")
-cubit.cmd('block 2 name "boundary"')
 
-# === EXPORT WITH CURVING (single function call) ===
-mesh = Mesh(extract_curved_mesh(cubit, order=CURVE_ORDER))
+# === EXPORT WITH CURVING (C++ APREPRO command) ===
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 # === VERIFY ===
 vol = Integrate(CF(1), mesh)
@@ -682,8 +680,8 @@ area = Integrate(CF(1), mesh, VOL_or_BND=BND)
 print(f"Volume: {vol:.6f}, Surface area: {area:.6f}")
 '''
 
-SCRIPT_TEMPLATES['tet_netgen_named'] = '''# Cubit -> NGSolve: Complex geometry with Boolean operations (export_NGSolveCurvedMesh)
-import sys, os, math
+SCRIPT_TEMPLATES['tet_netgen_named'] = '''# Cubit -> NGSolve: Complex geometry with Boolean operations (radia_export netgen)
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -691,7 +689,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF, BND
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 MESH_SIZE = 0.15
 CURVE_ORDER = 3
@@ -708,11 +705,12 @@ cubit.cmd("reset")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd(f"volume all size {MESH_SIZE}")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-# === EXPORT WITH CURVING (works for any geometry) ===
-mesh = Mesh(extract_curved_mesh(cubit, order=CURVE_ORDER))
+# === EXPORT WITH CURVING (C++ APREPRO command) ===
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
@@ -743,7 +741,7 @@ cubit.cmd("mesh volume all")
 cubit.cmd("block 1 add volume all")
 
 # === EXPORT (.vol with order 2 curving) ===
-cubit.cmd('export netgen "mesh.vol" order 2 overwrite')
+cubit.cmd('radia_export netgen "mesh.vol" order 2 overwrite')
 
 # === IMPORT TO NGSOLVE ===
 mesh = Mesh("mesh.vol")
@@ -751,8 +749,8 @@ vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
 '''
 
-SCRIPT_TEMPLATES['hex_netgen'] = '''# Cubit -> NGSolve: Hex mesh with high-order curving (export_NGSolveCurvedMesh)
-import sys, os, math
+SCRIPT_TEMPLATES['hex_netgen'] = '''# Cubit -> NGSolve: Hex mesh with high-order curving (radia_export netgen)
+import sys, os, math, tempfile
 cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
@@ -760,7 +758,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ngsolve import Mesh, Integrate, CF
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 MESH_SIZE = 0.15
 CURVE_ORDER = 3
@@ -780,13 +777,13 @@ cubit.cmd(f"volume all size {MESH_SIZE}")
 cubit.cmd("mesh volume all")
 
 # === BLOCKS ===
-cubit.cmd("block 1 add hex all")
+cubit.cmd("block 1 add volume all")
 cubit.cmd('block 1 name "domain"')
-cubit.cmd("block 2 add quad all")
-cubit.cmd('block 2 name "boundary"')
 
-# === EXPORT WITH CURVING ===
-mesh = Mesh(extract_curved_mesh(cubit, order=CURVE_ORDER))
+# === EXPORT WITH CURVING (C++ APREPRO command) ===
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order {CURVE_ORDER} overwrite')
+mesh = Mesh(vol_path)
 
 vol = Integrate(CF(1), mesh)
 print(f"Volume: {vol:.6f}")
@@ -1023,7 +1020,7 @@ def get_lint_rules() -> str:
 			'severity': 'MODERATE',
 			'description': 'Manual mesh.Curve() without export_NGSolveCurvedMesh. Use export_NGSolveCurvedMesh for Cubit meshes.',
 			'trigger': 'mesh.Curve(3) without export_NGSolveCurvedMesh()',
-			'fix': 'Use mesh = Mesh(extract_curved_mesh(cubit, order=3))',
+			'fix': 'Use cubit.cmd(\'radia_export netgen "mesh.vol" order 3 overwrite\') then mesh = Mesh("mesh.vol")',
 		},
 		{
 			'rule': 'missing-block-names',
@@ -1091,7 +1088,7 @@ def cubit_to_ngsolve(mesh_file: str) -> str:
 		"   2. mesh = export_NGSolveCurvedMesh(cubit, order=N)\n"
 		"   3. Done - no STEP, no OCC, no SetGeomInfo needed\n\n"
 		"B. Netgen .vol export (alternative):\n"
-		"   1. cubit.cmd('export netgen \"mesh.vol\" order 2 overwrite')\n"
+		"   1. cubit.cmd('radia_export netgen \"mesh.vol\" order 2 overwrite')\n"
 		"   2. Mesh('mesh.vol')\n"
 	)
 

@@ -83,14 +83,15 @@ def calculate_surface(cub5_file, order):
         return {"volumes": results, "cad_total": cad_total,
                 "error": "Volumes are not meshed."}
 
-    # Export to NGSolve mesh with curving (ACIS kernel, no STEP needed)
-    from cubit_mesh_export import extract_curved_mesh
-
+    # Export to NGSolve mesh via C++ plugin (ACIS kernel, no STEP needed)
+    import tempfile
     try:
-        mesh = NGMesh(extract_curved_mesh(cubit, order=order))
+        vol_path = tempfile.mktemp(suffix='.vol')
+        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+        mesh = NGMesh(vol_path)
     except Exception as e:
         return {"volumes": results, "cad_total": cad_total,
-                "error": f"export_NGSolveCurvedMesh(order={order}) failed: {e}"}
+                "error": f"radia_export netgen order={order} failed: {e}"}
 
     # Integrate
     total_area = Integrate(CF(1), mesh, VOL_or_BND=BND)

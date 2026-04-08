@@ -88,7 +88,7 @@ print(f"  Block 1: 'wire_centerline' (1D edge elements)")
 output_file = "circular_wire_centerline.msh"
 print(f"\n[Step 4] Exporting to GMSH v2.2 format...")
 
-cubit.cmd(f'radia export gmsh "{output_file}" version 2 overwrite')
+cubit.cmd(f'radia_export gmsh "{output_file}" version 2 overwrite')
 
 print(f"  OK Created: {output_file}")
 

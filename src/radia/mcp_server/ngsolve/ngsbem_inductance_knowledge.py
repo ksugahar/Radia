@@ -227,14 +227,17 @@ If labels don't match, use `ds` (no label) for all boundaries.
 ## CRITICAL: CalcSurfacesOfNode() After Manual Element2D Addition
 
 When building a Netgen mesh manually, you MUST call `CalcSurfacesOfNode()`
-after adding all Element2D elements. `export_NGSolveCurvedMesh()` handles this internally.
+after adding all Element2D elements. The `radia_export netgen` command handles this internally.
 
 Without this call, internal topology tables are not built, causing HDivSurface
 edge orientation to be inconsistent.
 
 ```python
-# export_NGSolveCurvedMesh handles this automatically:
-mesh = Mesh(extract_curved_mesh(cubit, order=3, surface_only=True))
+# radia_export netgen handles this automatically:
+import tempfile
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 
 # For manual mesh construction (rare), call explicitly:
 # ngmesh.CalcSurfacesOfNode()
@@ -474,7 +477,7 @@ handles everything via Cubit's ACIS kernel + CallbackGeometry.
 ## Step-by-Step Code
 
 ```python
-import sys, os, math, numpy as np
+import sys, os, math, tempfile, numpy as np
 
 # Import NGSolve BEFORE Cubit (DLL conflict avoidance)
 from ngsolve import (Mesh, Integrate, CF, BND, HDivSurface, TaskManager,
@@ -485,7 +488,6 @@ cubit_path = os.environ.get("CUBIT_PATH")
 if cubit_path:
     sys.path.append(cubit_path)
 import cubit
-from cubit_mesh_export import extract_curved_mesh
 
 MU_0 = 4.0 * math.pi * 1e-7
 R = 0.05   # Major radius [m]
@@ -501,12 +503,11 @@ cubit.cmd("volume all scheme tetmesh")
 cubit.cmd(f"volume all size {a/2}")
 cubit.cmd("mesh volume all")
 cubit.cmd('block 1 add volume 1')
-cubit.cmd('block 2 add tri all')
-cubit.cmd('block 2 name "conductor"')
 
-# --- Step 4: Export with curving (1st order mesh, curved by Netgen) ---
-mesh = Mesh(extract_curved_mesh(cubit,
-    order=2, surface_only=True, split_quads=True))
+# --- Step 4: Export with curving ---
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+mesh = Mesh(vol_path)
 
 # --- Step 5: BEM inductance (energy method) ---
 fes = HDivSurface(mesh, order=0)
@@ -551,29 +552,19 @@ See: `examples/cubit_panels/inductance/demo_curving_effect.py`
 ## Tri and Quad Surface Meshes
 
 BEM supports both tri (from tet mesh) and quad (from hex mesh) surfaces.
-`export_NGSolveCurvedMesh(split_quads=True)` splits quads into triangles
-for ngsolve.bem compatibility (HDivSurface requires triangles).
+`radia_export netgen` exports volume mesh; BEM solver auto-extracts surface elements.
 
 ```python
-# Tet mesh -> tri surface
+# Tet mesh
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
-cubit.cmd("block 2 add tri all")
+cubit.cmd("block 1 add volume all")
 
-# Hex mesh -> quad surface (split to tri for BEM)
-cubit.cmd("volume all scheme sweep")
-cubit.cmd("mesh volume all")
-cubit.cmd("block 2 add face all")  # quad elements
-
-# Export handles both:
-mesh = Mesh(extract_curved_mesh(cubit,
-    order=2, surface_only=True, split_quads=True))
-```
-
-Register **both** tri and face blocks to support mixed meshes:
-```python
-cubit.cmd("block 2 add tri all")   # from tet volumes
-cubit.cmd("block 2 add face all")  # from hex volumes (Cubit silently skips if none)
+# Export volume mesh (BEM solver extracts BND surface automatically)
+import tempfile
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+mesh = Mesh(vol_path)
 ```
 
 ## Deleted APIs
@@ -810,15 +801,16 @@ cubit.cmd("subtract volume 2 from volume 1")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
 
-# Register blocks with source/sink
+# Register blocks and sidesets with source/sink
 cubit.cmd('block 1 add volume 1; block 1 name "conductor"')
-cubit.cmd('block 2 add tri all;  block 2 name "boundary"')
-cubit.cmd('block 3 add tri in surface {source_sid}; block 3 name "source"')
-cubit.cmd('block 4 add tri in surface {sink_sid};   block 4 name "sink"')
+cubit.cmd('sideset 1 add surface {source_sid}; sideset 1 name "source"')
+cubit.cmd('sideset 2 add surface {sink_sid};   sideset 2 name "sink"')
 
-# Export with curving (1st order mesh, curved by Netgen)
-mesh = Mesh(extract_curved_mesh(cubit,
-    order=2, surface_only=True, split_quads=True))
+# Export with curving
+import tempfile
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+mesh = Mesh(vol_path)
 
 # Energy method
 L_total = MU_0 * float(J_vec @ SL @ J_vec)
@@ -894,13 +886,16 @@ print(mesh.GetBoundaries())  # e.g., ('conductor', 'conductor', ...)
 L_op = LaplaceSL(j.Trace() * ds("conductor")) * jt.Trace() * ds("conductor")
 ```
 
-### Using Old API Instead of export_NGSolveCurvedMesh
+### Using Old API Instead of radia_export netgen
 ```python
 # OLD (DELETED): Do not use export_NetgenMesh or set_*_geominfo
-# cubit_mesh_export.set_torus_geominfo(ngmesh, ...)  # DELETED along with cubit_mesh_export.py
+# cubit_mesh_export.set_torus_geominfo(ngmesh, ...)  # DELETED
 
-# NEW: Single function call handles everything
-mesh = Mesh(extract_curved_mesh(cubit, order=3))
+# NEW: Single APREPRO command handles everything
+import tempfile
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 ```
 
 ## use_fmm: FMM vs Dense (No H-matrix in ngsolve.bem)

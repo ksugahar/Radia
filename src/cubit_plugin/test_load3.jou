@@ -1,2 +1,2 @@
 # Test: new plugin should be loaded, try the full command
-export radia_nastran "test.bdf"
+radia_export nastran "test.bdf"
