@@ -1,0 +1,30 @@
+# Export sphere mesh in .vol and .msh formats for comparison test.
+# Run via: cubit -batch -nojournal -commandplugindir <plugins> export_sphere.jou
+#
+# Output:
+#   sphere_o1.vol, sphere_o2.vol, sphere_o3.vol
+#   sphere_o1.msh, sphere_o2.msh, sphere_o3.msh  (GMSH v2.2)
+
+reset
+create sphere radius 0.05
+volume 1 scheme tetmesh
+volume 1 size 0.015
+mesh volume 1
+
+block 1 add tet all
+block 1 name "sphere"
+
+sideset 1 add tri all
+sideset 1 name "surface"
+
+# Order 1
+radia_export netgen "sphere_o1.vol" order 1 overwrite
+radia_export gmsh "sphere_o1.msh" order 1 version 2 overwrite
+
+# Order 2
+radia_export netgen "sphere_o2.vol" order 2 overwrite
+radia_export gmsh "sphere_o2.msh" order 2 version 2 overwrite
+
+# Order 3
+radia_export netgen "sphere_o3.vol" order 3 overwrite
+radia_export gmsh "sphere_o3.msh" order 3 version 2 overwrite
