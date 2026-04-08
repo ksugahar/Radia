@@ -49,15 +49,91 @@ _NGSOLVE_TO_GMSH_2ND = {
     'TRIG': 9, 'QUAD': 10, 'TET': 11, 'HEX': 17, 'PRISM': 18, 'PYRAMID': 19,
 }
 
-# High-order Lagrange triangle types (order -> GMSH type code)
-# Verified via gmsh.model.mesh.getElementType('Triangle', order)
-_TRIG_GMSH_TYPE_BY_ORDER = {1: 2, 2: 9, 3: 21, 4: 23, 5: 25}
+# High-order Lagrange element types (order -> GMSH type code)
+# Obtained via gmsh.model.mesh.getElementType(name, order)
+_GMSH_TYPE_BY_ORDER = {
+    'TRIG':    {1: 2, 2: 9, 3: 21, 4: 23, 5: 25},
+    'QUAD':    {1: 3, 2: 10, 3: 36, 4: 37, 5: 38},
+    'TET':     {1: 4, 2: 11, 3: 29, 4: 30, 5: 31},
+    'HEX':     {1: 5, 2: 12, 3: 92, 4: 93, 5: 94},
+    'PRISM':   {1: 6, 2: 13},  # order 3+ not supported in GMSH
+    'PYRAMID': {1: 7, 2: 14, 3: 118, 4: 119, 5: 120},
+}
+
+# Backward compat alias
+_TRIG_GMSH_TYPE_BY_ORDER = _GMSH_TYPE_BY_ORDER['TRIG']
 
 _GMSH_NODES_PER_TYPE = {
     2: 3, 3: 4, 4: 4, 5: 8, 6: 6, 7: 5,
-    9: 6, 10: 9, 11: 10, 17: 20, 18: 15, 19: 13,
+    9: 6, 10: 9, 11: 10, 12: 27, 17: 20, 18: 15, 19: 13,
     21: 10, 23: 15, 25: 21,  # high-order triangles
+    29: 20, 30: 35, 31: 56,  # high-order tets
+    36: 16, 37: 25, 38: 36,  # high-order quads
+    92: 64, 93: 125, 94: 216,  # high-order hexes
+    118: 30, 119: 55, 120: 91,  # high-order pyramids
 }
+
+# GMSH reference coordinates -> NGSolve reference coordinates mapping.
+# GMSH TET: same as NGSolve (0,0,0)-(1,0,0)-(0,1,0)-(0,0,1)
+#   but vertex ordering differs (handled by _NGSOLVE_TO_GMSH_NODE_ORDER)
+# GMSH HEX: (-1,-1,-1) to (1,1,1); NGSolve: (0,0,0) to (1,1,1)
+#   transform: ng = (gmsh + 1) / 2
+# GMSH PYR: (-1,-1,0) base, (0,0,1) apex; NGSolve: (0,0,0)-(1,0,0)-(1,1,0)-(0,1,0)-(0,0,1)
+#   transform: ng_x = (gmsh_x + 1)/2, ng_y = (gmsh_y + 1)/2, ng_z = gmsh_z
+
+def _gmsh_ref_to_ngsolve_ref(et_name, gmsh_x, gmsh_y, gmsh_z):
+    """Convert GMSH reference coordinates to NGSolve reference coordinates.
+
+    GMSH and NGSolve use different vertex numbering in reference space.
+    For TET: GMSH v0=(0,0,0) maps to NGSolve v[0] at ref(1,0,0).
+    The affine transform is: ng = (1-gx-gy-gz, gx, gy) for the
+    3 independent reference coordinates (4th is 1-sum).
+    """
+    gx, gy, gz = gmsh_x, gmsh_y, gmsh_z
+    if et_name == 'TET':
+        # GMSH (0,0,0)->ng(1,0,0), (1,0,0)->ng(0,1,0),
+        # (0,1,0)->ng(0,0,1), (0,0,1)->ng(0,0,0)
+        return (1 - gx - gy - gz, gx, gy)
+    elif et_name == 'TRIG':
+        return (1 - gx - gy, gx, 0)
+    elif et_name == 'HEX' or et_name == 'QUAD':
+        return ((gx + 1) / 2, (gy + 1) / 2, (gz + 1) / 2)
+    elif et_name == 'PYRAMID':
+        return ((gx + 1) / 2, (gy + 1) / 2, gz)
+    elif et_name == 'PRISM':
+        return (gx, gy, (gz + 1) / 2)
+    return (gx, gy, gz)
+
+
+def _get_gmsh_ref_points(et_name, order):
+    """Get GMSH Lagrange reference points for given element type and order.
+
+    Returns list of (x, y, z) in NGSolve reference coordinates,
+    or None if not supported.
+    """
+    type_map = _GMSH_TYPE_BY_ORDER.get(et_name, {})
+    gmsh_type = type_map.get(order)
+    if gmsh_type is None:
+        return None, None
+
+    try:
+        import gmsh
+        need_init = not gmsh.isInitialized()
+        if need_init:
+            gmsh.initialize()
+        _, _, _, nn, ref_pts, _ = gmsh.model.mesh.getElementProperties(gmsh_type)
+        if need_init:
+            gmsh.finalize()
+    except Exception:
+        return None, None
+
+    # Convert GMSH ref -> NGSolve ref
+    ng_pts = []
+    for i in range(nn):
+        gx, gy, gz = ref_pts[3*i], ref_pts[3*i+1], ref_pts[3*i+2]
+        ng_pts.append(_gmsh_ref_to_ngsolve_ref(et_name, gx, gy, gz))
+
+    return gmsh_type, ng_pts
 
 _NGSOLVE_TO_GMSH_NODE_ORDER = {
     'TET': [0, 1, 2, 3],
@@ -68,7 +144,10 @@ _NGSOLVE_TO_GMSH_NODE_ORDER = {
     'QUAD': [0, 1, 2, 3],
 }
 
-_VOL_TYPES = {4, 5, 6, 7, 11, 17, 18, 19}
+_VOL_TYPES = {4, 5, 6, 7, 11, 12, 17, 18, 19,
+              29, 30, 31,       # TET order 3-5
+              92, 93, 94,       # HEX order 3-5
+              118, 119, 120}    # PYR order 3-5
 
 
 # ============================================================
@@ -472,14 +551,24 @@ def _extract_mesh_data_grouped(mesh, is_surface):
     else:
         from ngsolve import VOL
 
-        # For high-order volume meshes, compute mid-edge nodes via GetTrafo
-        vol_ho_cache = {}  # edge_key -> [mid-node indices]
+        # For high-order volume meshes, compute Lagrange nodes via GetTrafo
+        vol_ho_cache = {}  # (et_name, order, node_key) -> node index
+
+        # Pre-fetch GMSH reference points per (element_type, order)
+        _vol_gmsh_ref = {}  # (et_name,) -> (gmsh_type, ng_ref_pts)
 
         for idx, el in enumerate(mesh.Elements(VOL)):
             et_name = str(el.type).split('.')[-1]
 
-            if use_highorder and et_name in _NGSOLVE_TO_GMSH_2ND:
-                gmsh_type = _NGSOLVE_TO_GMSH_2ND[et_name]
+            if use_highorder:
+                # Try high-order type
+                type_map = _GMSH_TYPE_BY_ORDER.get(et_name, {})
+                gmsh_type = type_map.get(curve_order)
+                if gmsh_type is None:
+                    # Fall back to order 2 or 1
+                    gmsh_type = type_map.get(min(curve_order, 2))
+                if gmsh_type is None:
+                    gmsh_type = _NGSOLVE_TO_GMSH_1ST.get(et_name)
             else:
                 gmsh_type = _NGSOLVE_TO_GMSH_1ST.get(et_name)
             if gmsh_type is None:
@@ -490,9 +579,14 @@ def _extract_mesh_data_grouped(mesh, is_surface):
                 et_name, list(range(len(verts))))
             reordered = [verts[i] for i in perm]
 
-            if use_highorder and et_name in _NGSOLVE_TO_GMSH_2ND:
-                reordered = _build_vol_highorder_conn(
-                    mesh, el, reordered, et_name, nodes, vol_ho_cache)
+            if use_highorder and et_name in _GMSH_TYPE_BY_ORDER:
+                effective_order = curve_order
+                if effective_order not in _GMSH_TYPE_BY_ORDER.get(et_name, {}):
+                    effective_order = min(curve_order, 2)
+                if effective_order >= 2:
+                    reordered = _build_vol_ho_generic(
+                        mesh, el, reordered, et_name, effective_order,
+                        nodes, vol_ho_cache, _vol_gmsh_ref)
 
             mat_name = _get_element_material(mesh, el, is_surface)
             elem_data.append((mat_name, gmsh_type, reordered, idx))
@@ -611,6 +705,79 @@ def _build_vol_highorder_conn(mesh, el, reordered, et_name, nodes, cache):
             nodes.append((float(phys[0]), float(phys[1]), float(phys[2])))
             cache[edge_key] = mid_node_idx
             conn.append(mid_node_idx)
+
+    return conn
+
+
+def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
+                          nodes, cache, ref_cache):
+    """Build arbitrary-order connectivity for a volume element.
+
+    Uses GMSH API to get Lagrange reference points, converts to NGSolve
+    reference coordinates, evaluates GetTrafo for physical positions.
+
+    Vertex nodes (first N) reuse existing indices from reordered.
+    Higher-order nodes are cached by rounded physical position to share
+    nodes across adjacent elements.
+
+    Args:
+        mesh: NGSolve Mesh
+        el: Element (VOL)
+        reordered: 1st order vertex indices (GMSH node order)
+        et_name: Element type name ('TET', 'HEX', 'PRISM', 'PYRAMID')
+        order: polynomial order (2-5)
+        nodes: mutable list of (x,y,z) tuples (new nodes appended)
+        cache: dict for node deduplication
+        ref_cache: dict (et_name,) -> (gmsh_type, ng_ref_pts)
+    """
+    # Get or compute reference points
+    if et_name not in ref_cache:
+        ref_cache[et_name] = _get_gmsh_ref_points(et_name, order)
+    gmsh_type, ng_ref_pts = ref_cache[et_name]
+
+    if ng_ref_pts is None:
+        # Fallback to order-2 path
+        return _build_vol_highorder_conn(
+            mesh, el, reordered, et_name, nodes,
+            cache.setdefault("_order2", {}))
+
+    n_verts = len(reordered)
+    n_total = len(ng_ref_pts)
+
+    # NGSolve reference coords for vertices
+    # Map: GMSH local vertex i -> NGSolve el.vertices index
+    perm = _NGSOLVE_TO_GMSH_NODE_ORDER.get(
+        et_name, list(range(n_verts)))
+    inv_perm = [0] * len(perm)
+    for i, p in enumerate(perm):
+        inv_perm[p] = i
+
+    # Evaluate trafo at all high-order reference points
+    trafo = mesh.GetTrafo(el)
+    from ngsolve import IntegrationRule
+
+    conn = list(reordered)  # vertices first
+
+    for ho_idx in range(n_verts, n_total):
+        ref_pt = ng_ref_pts[ho_idx]
+
+        # Evaluate physical coordinates
+        ir = IntegrationRule([ref_pt], [1.0])
+        mip = trafo(ir[0])
+        phys = (float(mip.point[0]), float(mip.point[1]),
+                float(mip.point[2]))
+
+        # Round for deduplication (shared edges/faces between elements)
+        key = (round(phys[0], 12), round(phys[1], 12),
+               round(phys[2], 12))
+
+        if key in cache:
+            conn.append(cache[key])
+        else:
+            node_idx = len(nodes)
+            nodes.append(phys)
+            cache[key] = node_idx
+            conn.append(node_idx)
 
     return conn
 
