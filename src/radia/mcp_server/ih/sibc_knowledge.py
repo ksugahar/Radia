@@ -5,18 +5,20 @@ Covers: Surface Impedance Boundary Condition approaches for eddy current,
 BEM (Scalar BIE) and FEM (scattered-field) formulations, Karl iteration,
 ESIM nonlinear impedance, and validation results.
 
-Updated: 2026-04-09 with FEM-SIBC BND trace investigation results.
+Updated: 2026-04-09 with specialcf.normal sign fix, scattered-field cancellation,
+total-field hole+BND approach.
 """
 
 IH_SIBC_OVERVIEW = """
 # SIBC for Induction Heating: Method Selection
 
-## Two Validated Approaches
+## Three Validated Approaches
 
 | Method | Formulation | Validated | Error | DOFs |
 |--------|-------------|-----------|-------|------|
 | **Scalar BIE + SIBC (BEM)** | H1 surface phi | pytest 4/4 | **<0.1% sphere** | 162-320 |
 | **FEM scattered-field + hole** | HCurl A_scat | verify_sphere | **-2.7% sphere** | ~150k |
+| **FEM total-field + hole + BND** | HCurl A_total | coil+cylinder | **+8.2% vs BEM** | ~150k |
 
 ## Scalar BIE + SIBC (Recommended for P_total)
 
@@ -50,7 +52,33 @@ H_t = result['H_t_rms']
 - --impedance-model esim (nonlinear BH) or linear (fixed mu_r)
 - Karl iteration for ESIM convergence
 
-## FEM Scattered-Field + Hole + Kelvin (For L, B, P)
+## FEM Total-Field + Hole + BND Integral (Recommended for Coil+Workpiece)
+
+**File**: `examples/cubit_panels/inductance/fem_total_field.py`
+
+Total-field formulation (no A_inc decomposition):
+- Coil as volume source J in coil cross-section
+- Hole approach: workpiece removed, SIBC on hole boundary
+- No subtraction cancellation (A_total solved directly)
+
+**H_t extraction**: BND integral with tangential projection (specialcf.normal):
+```python
+n = specialcf.normal(3)
+A_sq = sum(gfu[i].real**2 + gfu[i].imag**2 for i in range(3))
+A_dot_n_re = sum(gfu[i].real * n[i] for i in range(3))
+A_dot_n_im = sum(gfu[i].imag * n[i] for i in range(3))
+At_sq = A_sq - A_dot_n_re**2 - A_dot_n_im**2
+H_t_rms = abs(1j*omega/Z_s) * sqrt(Integrate(At_sq, mesh, BND, definedon=sibc) / A_wp)
+```
+
+**CRITICAL: Pointwise evaluation FAILS** near SIBC boundary. Robin penalty
+|jw/Z_s| ~ 1e9 creates huge normal A component (~1e6 T*m). Tangential
+projection at interior points requires 10^14 cancellation. Only BND integral
+works (NGSolve evaluates trace functions directly).
+
+**Validated**: copper cylinder (R=10mm, 7kHz) vs BEM: +8.2%.
+
+## FEM Scattered-Field + Hole (For Sphere / Analytical A_inc)
 
 **File**: `examples/cubit_panels/inductance/verify_sphere_sibc.py`
 
@@ -58,19 +86,26 @@ Decomposition: A = A_inc + A_scat
 - A_inc: known analytically (uniform field, or Biot-Savart filament)
 - Solve for A_scat only (HCurl, smaller perturbation)
 - Hole approach: workpiece volume NOT meshed, wp_surface is air-side boundary
-- **Kelvin transform REQUIRED** for correct screening (truncation gives 435% error)
-- H_t from A_total = A_inc + A_scat on BND (A_inc dominates, correctly evaluated)
 
-**Validated**: sphere R=10mm, steel 7kHz (ratio=3.0):
-- FEM + Kelvin: H_t = 2.53 A/m (-1.7% vs analytical 2.58)
-- FEM + Dirichlet (R_air=80mm): H_t = 13.8 A/m (+435%) ← WRONG
-
-**RHS must include BOTH terms**:
+**RHS (correct signs)**:
 ```python
-f(v) = -(jw/Z_s) * <A_inc, v>_sibc   # SIBC term
-     + (-1)      * <n x H_inc, v>_sibc # incident field boundary term
+n_cond = -specialcf.normal(3)  # outward from conductor
+nxH = Cross(H_inc_cf, specialcf.normal(3))  # = n_cond x H_inc
+f(v) = -(jw/Z_s) * <A_inc, v>_sibc - <n_cond x H_inc, v>_sibc
 ```
-Missing the second term causes factor-of-3 error.
+
+**Sign convention (CRITICAL)**:
+- `specialcf.normal(3)` points outward from the mesh domain (air)
+- For a hole: this points INTO the conductor = WRONG for SIBC
+- **n_cond = -specialcf.normal(3)** = outward from conductor (SIBC convention)
+- Alternatively: `Cross(H_inc, specialcf.normal(3))` gives n_cond x H_inc directly
+
+**Subtraction cancellation limitation**: For coil+workpiece, A_scat approx -A_inc
+on SIBC surface (85% cancellation for copper). H1 interpolation error (~1%) in
+A_inc amplifies to ~12% in the residual A_total = A_inc + A_scat. Use total-field
+approach instead for coil+workpiece cases.
+
+**Validated**: sphere (analytical A_inc, H_inc): -2.7% vs analytical.
 
 ## CRITICAL: What Does NOT Work (2026-04-09)
 
@@ -103,22 +138,42 @@ EFIE-SIBC (BEM). But EFIE-SIBC has -65% error on sphere (SL eigenvalue mismatch)
 RT0 (order=0) has zero surface curl. SIBC requires curl_s(J) which vanishes
 for RT0 basis. Results are wrong by 65% on sphere at Z_s/(jw*mu0*R) = 10.
 
-### Hole + Total-Field: PEC
+### Hole + Total-Field WITHOUT Robin: PEC
 
-Without scattered-field decomposition, hole boundary has natural Neumann BC
-(n x H = 0 = PEC). Robin penalty only strengthens PEC tendency.
+Without SIBC Robin penalty, hole boundary has natural Neumann BC (n x H = 0 = PEC).
+**With Robin penalty**: total-field + hole works correctly (see above).
+
+### Scattered-Field + H1 Interpolation of A_inc: Cancellation Error
+
+H1 interpolation of Biot-Savart A_inc at mesh vertices introduces ~1% error.
+With 85% cancellation (A_scat approx -A_inc), the residual error is amplified
+to ~12% in H_t. Fine mesh refinement barely helps (+26% -> +23%).
+
+### Volume Form for RHS: Curl-Free Violation
+
+`-int H_inc_interp . curl(v) dx` fails (-99%) because H1 interpolant of H_inc
+is NOT curl-free. Integration by parts identity only holds for the exact field.
+The H1 interpolant has inter-element discontinuities -> spurious curl contributions.
+
+### Pointwise Evaluation on SIBC Boundary: Normal Component Explosion
+
+Robin penalty |jw/Z_s| ~ 1e9 creates |A_n| ~ 1e6 on SIBC boundary while
+|A_t| ~ 1e-8. Tangential projection at points near (not on) boundary requires
+cancellation of 10^14 -> fails completely. Only BND integral works.
 
 ## Summary: When to Use What
 
 | Need | Method | Script |
 |------|--------|--------|
-| **P_total, H_t** | Scalar BIE (BEM) | calc_heating_bem.py |
-| **L (inductance)** | FEM (Kelvin) | calc_fem_kelvin.py |
+| **P_total, H_t (fast)** | Scalar BIE (BEM) | calc_heating_bem.py |
+| **P_total, H_t (FEM)** | Total-field + hole + BND | fem_total_field.py |
+| **L (inductance)** | FEM total-field | fem_total_field.py |
 | **B distribution** | FEM (volume integral) | calc_fem_kelvin.py |
 | **Coil optimization** | BEM for P, FEM for L | both |
+| **Validation (sphere)** | Scattered-field | verify_sphere_sibc.py |
 
-BEM is fast for P_total (162 DOFs vs 110k). FEM is needed for field distribution
-and inductance. Both are needed for coil optimization.
+BEM is fast for P_total (162 DOFs vs 150k). FEM is needed for field distribution
+and inductance. Total-field FEM with hole+BND gives +8% vs BEM for P_total.
 """
 
 IH_ESIM = """
@@ -189,20 +244,31 @@ Vectorized over observation points, loops over segments. 106x faster.
 For Joachim: requesting BiotSavartCF with A-field output would eliminate
 the need for pre-computed nodal values. (Discussed with Joachim previously.)
 
-## CRITICAL: specialcf.normal Does NOT Work in HCurl BND LinearForm (2026-04-09)
+## specialcf.normal WORKS — Sign Convention is Critical (2026-04-09 CORRECTED)
 
-`specialcf.normal(3)` gives correct direction (verified via `n.r_hat` integral),
-but `n x H_inc * v.Trace() * ds` with HCurl test function returns **near-zero**.
+`specialcf.normal(3)` DOES work in HCurl BND LinearForm. The previous claim
+that it "returns near-zero" was due to a **sign error**.
 
-**MUST use explicit coordinate-based normal** (same as verify_sphere_sibc.py):
+`specialcf.normal(3)` points outward from the mesh domain (air). For a hole
+(conductor removed), this is INWARD into the conductor — opposite to SIBC
+convention (outward from conductor).
+
 ```python
-# WRONG: specialcf.normal in HCurl BND integral
-n = specialcf.normal(3)
-nxH = CF((n[1]*H0, -n[0]*H0, 0))  # returns ~0 in LinearForm
+# CORRECT: negate specialcf.normal for SIBC conductor-outward convention
+n_mesh = specialcf.normal(3)         # outward from air = into conductor
+n_cond = -n_mesh                      # outward from conductor (SIBC)
 
-# CORRECT: explicit normal from geometry
-nxH = CF((y*H0/R, -x*H0/R, 0))  # for sphere, conductor-outward convention
+# n_cond x H: use Cross(H, n_mesh) which equals -(n_mesh x H) = n_cond x H
+nxH = Cross(H_inc_cf, n_mesh)        # works for ANY geometry
+
+# OR explicit cross product:
+nxH = CF((n_cond[1]*H[2] - n_cond[2]*H[1],
+          n_cond[2]*H[0] - n_cond[0]*H[2],
+          n_cond[0]*H[1] - n_cond[1]*H[0]))
 ```
+
+Verified on sphere: ||f_specialcf - f_explicit|| / ||f_explicit|| = 1.3e-4 (roundoff).
+Both give H_t_rms = 88.34 A/m (-2.7% vs analytical 90.83 A/m).
 
 ## Biot-Savart Path Integration: Thick Coil Error
 
@@ -237,19 +303,18 @@ One-way models use H_t = H_inc (PEC approximation).
 For steel at 7kHz: H_t = 0.77 A/m, not 18 A/m. One-way overestimates P by 300x.
 Two-way (Karl iteration with ESIM) is essential for magnetic materials.
 
-## FEM Scattered-Field: Kelvin is REQUIRED for Screening
+## FEM Open Boundary: Kelvin vs Dirichlet
 
-**CRITICAL (2026-04-09)**: FEM scattered-field with Dirichlet truncation
-(R_air = 8*R_wp) gives H_t ≈ H_inc (no screening). Kelvin transform is
-REQUIRED for correct screening at Z_s/(jw*mu0*a) >= 1.
+Kelvin transform provides exact open boundary. Dirichlet truncation at finite
+distance introduces small error but is much simpler.
 
-Verified:
-- **With Kelvin**: verify_sphere_sibc.py, ratio=10, -2.7% error ← CORRECT
-- **Without Kelvin**: IH hole mesh, ratio=3.0, H_t=13.8 vs BEM 6.3 ← WRONG (2.2x)
+For scattered-field copper cylinder (7 kHz):
+- **Kelvin** (R_air=60mm, R_kelvin=120mm): P = 6.62e-6 W
+- **Dirichlet** (R_air=100mm): P = 6.59e-6 W (negligible difference)
 
-The Dirichlet truncation reflects the scattered field back, contaminating
-the screening effect. The scattered field from SIBC is small but its
-incorrect reflection dominates at high screening ratios.
+Kelvin IS important for the verify_sphere_sibc.py uniform-field case
+(ratio=10, steel), where Dirichlet gives +435% error. But for typical
+coil+workpiece (localized source, ratio < 1): Dirichlet at R_air ~ 3*R_coil is adequate.
 
 For BEM (Scalar BIE): no truncation issue. BEM naturally handles open boundary.
 

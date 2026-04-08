@@ -23,6 +23,10 @@
     "mcp-server-gmsh": {
       "command": "mcp-server-gmsh",
       "args": []
+    },
+    "mcp-server-elf": {
+      "command": "mcp-server-elf",
+      "args": []
     }
   }
 }

@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QTableWidget>
 
 class QAction;
 
@@ -41,6 +42,8 @@ public slots:
   void export_nastran();
   void export_vtk();
   void export_netgen();
+  void export_femeem();
+  void export_meg();
   void mesh_volume();
 };
 
@@ -53,7 +56,7 @@ class ExportDialog : public QDialog
   Q_OBJECT
 
 public:
-  enum Format { NETGEN_VOL, GMSH, Nastran, VTK };
+  enum Format { NETGEN_VOL, GMSH, Nastran, VTK, FEMEEM, MEG };
 
   ExportDialog(Format format, const QString &jouPath = QString(),
                QWidget* parent = nullptr);
@@ -69,6 +72,7 @@ public:
   int gmshVersion() const { return 2; }  // always v2.2 (v4.1 is post-processing only)
   int dimension() const { return (mDimension->currentText() == "2D") ? 2 : 3; }
   bool noPyramid() const { return mNoPyramid && mNoPyramid->currentIndex() == 1; }
+  double scale() const;
 
 private slots:
   void browseDir();
@@ -82,7 +86,12 @@ private:
   QComboBox* mVersion;    // GMSH only
   QComboBox* mDimension;
   QComboBox* mNoPyramid;  // Nastran only
+  QLineEdit* mScale;      // FEMEEM only
+  QTableWidget* mBlockTable;  // MEG only: per-block ELF label
   QLineEdit* mPreview;
+
+  void populateBlockTable();
+  void updateBlockLabels();  // called when DIM changes
 };
 
 #endif // RADIACOMP_HPP
