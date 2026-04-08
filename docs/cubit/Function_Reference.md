@@ -11,11 +11,11 @@ All commands are available in journal files (.jou) and the Cubit command line.
 
 | Command | Format | Orders | Block Required |
 |---------|--------|--------|---------------|
-| `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | No |
-| `export gmsh "f.msh" order N version 2` | Gmsh v2.2 | 1-4 | No |
-| `export gmsh "f.msh" order N version 4` | Gmsh v4.1 | 1-4 | No |
-| `export radia_nastran "f.bdf" order N` | Nastran BDF | 1-2 | No |
-| `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | No |
+| `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | No |
+| `radia_export gmsh "f.msh" order N version 2` | Gmsh v2.2 | 1-4 | No |
+| `radia_export gmsh "f.msh" order N version 4` | Gmsh v4.1 | 1-4 | No |
+| `radia_export nastran "f.bdf" order N` | Nastran BDF | 1-2 | No |
+| `radia_export vtk "f.vtk" order N` | VTK Legacy | 1-2 | No |
 
 ### Coil Generation Command
 
@@ -25,7 +25,7 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | `coil "script.py" output "path.step"` | Custom output path |
 | `coil "script.py" noimport` | Generate STEP without importing |
 
-> **IMPORTANT**: Use `export radia_nastran`, NOT `export nastran`.
+> **IMPORTANT**: Use `radia_export nastran`, NOT `export nastran`.
 > Cubit has a built-in `export nastran` with different format and no order 2 support.
 
 ### Build & Installation
@@ -49,10 +49,10 @@ Installation: `pip install cubit-mesh-export && cubit-plugin-install`
 
 ## Command Details
 
-### export netgen
+### radia_export netgen
 
 ```
-export netgen "filename.vol" [order <1-5>] [overwrite]
+radia_export netgen "filename.vol" [order <1-5>] [overwrite]
 ```
 
 Exports mesh with high-order curving (CallbackGeometry + ACIS projection).
@@ -63,10 +63,10 @@ Produces companion JSON (.vol.json) with CAD reference values for consistency ch
 | order | 1 | Curve order (1=linear, 2-5=high-order via NetgenCurver) |
 | overwrite | off | Overwrite existing file |
 
-### export gmsh
+### radia_export gmsh
 
 ```
-export gmsh "filename.msh" [order <1-4>] [version <2|4>] [dimension <2|3>] [overwrite]
+radia_export gmsh "filename.msh" [order <1-4>] [version <2|4>] [dimension <2|3>] [overwrite]
 ```
 
 | Parameter | Default | Description |
@@ -75,10 +75,10 @@ export gmsh "filename.msh" [order <1-4>] [version <2|4>] [dimension <2|3>] [over
 | version | 2 | GMSH format (2=v2.2, 4=v4.1) |
 | dimension | 3 | 2D or 3D mode |
 
-### export radia_nastran
+### radia_export nastran
 
 ```
-export radia_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+radia_export nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
 
 | Parameter | Default | Description |
@@ -87,10 +87,10 @@ export radia_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] 
 | dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
 | nopyramid | off | Convert pyramids to degenerate hex (JMAG compatible) |
 
-### export vtk
+### radia_export vtk
 
 ```
-export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
+radia_export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
 ```
 
 VTK Legacy format. Cell types: TET(10), HEX(12), WEDGE(13), PYRAMID(14), TRI(5), QUAD(9).
@@ -158,6 +158,6 @@ Export Mesh (C++ .ccl):        Solve (Python):
 |---------|-------|-----|
 | "Interrupt Detected" on AddPoint | ABI mismatch (full Netgen DLL) | Rebuild with compact_netgen |
 | HEX20 has 8 nodes in .msh | edge_ho_nodes_ bug (fixed 2026-04-05) | Update ccm |
-| `export nastran` wrong format | Using Cubit built-in | Use `export radia_nastran` |
+| `export nastran` wrong format | Using Cubit built-in | Use `radia_export nastran` |
 | cp932 UnicodeDecodeError | Non-ASCII in .py | Use ASCII only + encoding='utf-8' |
 | ccm size < 400 KB | Old full-Netgen build | Rebuild with compact_netgen (~600 KB) |

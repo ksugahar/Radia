@@ -2,7 +2,7 @@
 Convert Cubit .cub5 to Netgen .vol with high-order curving (Path B).
 
 This is the Python reference implementation of mesh curving.
-Path A (C++ `export netgen` APREPRO command) must produce identical
+Path A (C++ `radia_export netgen` APREPRO command) must produce identical
 results for tet meshes. This script is maintained for:
   (a) debugging and Path A/B comparison tests
   (b) sharing with Joachim (NGSolve team) as a demo
@@ -39,21 +39,17 @@ def cub5_to_vol(cub5_file, order=2, output=None):
     if cubit is None:
         return {"error": "Cubit not available"}
 
-    # Extract curved mesh (Path B)
-    from cubit_mesh_export import extract_curved_mesh
-
+    # Export via C++ plugin (Path A)
     t0 = time.perf_counter()
-    ng_mesh = extract_curved_mesh(cubit, order=order)
-    t_curve = time.perf_counter() - t0
 
     # Determine output path
     if output is None:
         base = os.path.splitext(cub5_file)[0]
         output = f"{base}_o{order}.vol"
 
-    # Save .vol
-    ng_mesh.Save(output)
-    t_save = time.perf_counter() - t0
+    cubit.cmd(f'radia_export netgen "{output}" order {order} overwrite')
+    t_curve = time.perf_counter() - t0
+    t_save = t_curve
 
     # Verify
     mesh = Mesh(output)

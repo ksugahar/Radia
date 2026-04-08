@@ -111,7 +111,7 @@ def test_gmsh_v2_with_volume_block():
 	with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 		msh_file = f.name
 
-	cubit.cmd(f'radia export gmsh "{msh_file}" overwrite')
+	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
 
 	# Verify file exists and has content
 	with open(msh_file, 'r') as f:
@@ -152,7 +152,7 @@ def test_gmsh_with_volume_block():
 	with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 		msh_file = f.name
 
-	cubit.cmd(f'radia export gmsh "{msh_file}" version 2 overwrite')
+	cubit.cmd(f'radia_export gmsh "{msh_file}" version 2 overwrite')
 
 	# Verify file
 	with open(msh_file, 'r') as f:

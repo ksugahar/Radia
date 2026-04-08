@@ -96,20 +96,17 @@ def calculate_volume(cub5_file, order):
             "error": "Volumes are not meshed.",
         }
 
-    from cubit_mesh_export import extract_curved_mesh
-
+    import tempfile
     try:
-        build_order = max(order, 2)
-        ng_mesh = extract_curved_mesh(cubit, order=build_order)
+        vol_path = tempfile.mktemp(suffix='.vol')
+        cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
     except Exception as e:
         return {
             "volumes": results, "cad_total": cad_total,
-            "error": f"extract_curved_mesh(order={order}) failed: {e}",
+            "error": f"radia_export netgen order={order} failed: {e}",
         }
 
-    mesh = NGMesh(ng_mesh)
-    if order == 1:
-        mesh.Curve(1)
+    mesh = NGMesh(vol_path)
 
     total_vol = Integrate(CF(1), mesh)
     total_area = Integrate(CF(1), mesh, BND)

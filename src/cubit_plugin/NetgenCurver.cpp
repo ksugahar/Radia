@@ -361,13 +361,26 @@ bool NetgenCurver::attach_callback_geometry()
     CubitVector loc(x, y, z);
     CubitVector closest;
 
-    // Use trimmed closest point (global search, matches bridge.py)
-    // Known issue: on sweep torus surfaces, closest_point_trimmed may
-    // cross-project between upper/lower halves. See ACIS torus curving bug.
-    surf->closest_point_trimmed(loc, closest);
-
+    // Use UV-guided Newton iteration when UV hint is available (like OCC).
+    // closest_point_trimmed is a global search that can cross-project
+    // between adjacent surface patches (e.g., sweep torus upper/lower halves).
+    // closest_point_uv_guess starts from the UV hint and iterates locally,
+    // so it stays on the correct side of surface boundaries.
     double u, v;
-    rf->u_v_from_position(closest, u, v);
+    if (u_hint != 0.0 || v_hint != 0.0) {
+      u = u_hint;
+      v = v_hint;
+      CubitStatus stat = surf->closest_point_uv_guess(loc, u, v, &closest, nullptr);
+      if (stat != CUBIT_SUCCESS) {
+        // Fallback to global search if Newton fails
+        surf->closest_point_trimmed(loc, closest);
+        rf->u_v_from_position(closest, u, v);
+      }
+    } else {
+      // First call: no UV hint available, use global search
+      surf->closest_point_trimmed(loc, closest);
+      rf->u_v_from_position(closest, u, v);
+    }
     return {closest.x(), closest.y(), closest.z(), u, v};
   };
 

@@ -416,7 +416,7 @@ def generate_test_cases():
                     elif model == '2d':
                         expected_types.append(GMSH_TRI_TYPES[order])
 
-                    cmd = (f'export gmsh "{fname}" order {order} '
+                    cmd = (f'radia_export gmsh "{fname}" order {order} '
                            f'version {version} dimension {dim} overwrite')
 
                     cases.append({
@@ -439,7 +439,7 @@ def generate_test_cases():
                     name = f"nastran_{model}_order{order}_dim{dim}{nopyr_str}"
                     fname = os.path.join(OUT_DIR, f"{name}.bdf")
 
-                    cmd = (f'export radia_nastran "{fname}" order {order} '
+                    cmd = (f'radia_export nastran "{fname}" order {order} '
                            f'dimension {dim} overwrite')
                     if nopyr:
                         cmd += ' nopyramid'
@@ -458,7 +458,7 @@ def generate_test_cases():
                 name = f"vtk_{model}_order{order}_dim{dim}"
                 fname = os.path.join(OUT_DIR, f"{name}.vtk")
 
-                cmd = (f'export vtk "{fname}" order {order} '
+                cmd = (f'radia_export vtk "{fname}" order {order} '
                        f'dimension {dim} overwrite')
 
                 cases.append({

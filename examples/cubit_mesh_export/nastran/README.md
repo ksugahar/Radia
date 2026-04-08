@@ -13,10 +13,10 @@ Controls the mesh dimension and element types:
 
 ```python
 # 3D solid mesh
-cubit.cmd('export radia_nastran "solid.bdf" dimension 3 overwrite')
+cubit.cmd('radia_export nastran "solid.bdf" dimension 3 overwrite')
 
 # 2D shell mesh (normals reoriented to +z, z-coordinates set to 0)
-cubit.cmd('export radia_nastran "plate.bdf" dimension 2 overwrite')
+cubit.cmd('radia_export nastran "plate.bdf" dimension 2 overwrite')
 ```
 
 ## PYRAM Parameter
@@ -32,10 +32,10 @@ Controls pyramid element handling in hybrid hex/tet meshes:
 
 ```python
 # Standard export with CPYRAM elements
-cubit.cmd('export radia_nastran "mesh.bdf" overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" overwrite')
 
 # For JMAG: convert pyramids to degenerate hex
-cubit.cmd('export radia_nastran "mesh_jmag.bdf" nopyramid overwrite')
+cubit.cmd('radia_export nastran "mesh_jmag.bdf" nopyramid overwrite')
 ```
 
 ## Element Mapping

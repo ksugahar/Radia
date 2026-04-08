@@ -102,7 +102,7 @@ ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
 # ngmesh contains 4-node tets, mesh.Curve() adds high-order nodes
 ```
 
-### radia export gmsh
+### radia_export gmsh
 
 Uses `get_expanded_connectivity()` to export 2nd order elements:
 
@@ -153,7 +153,7 @@ print(f"1st order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"1st order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 1st order Gmsh
-cubit.cmd('radia export gmsh "sphere_1st.msh" overwrite')
+cubit.cmd('radia_export gmsh "sphere_1st.msh" overwrite')
 
 # Convert to 2nd order
 cubit.cmd("block 1 element type tetra10")
@@ -164,7 +164,7 @@ print(f"2nd order - get_connectivity: {len(cubit.get_connectivity('tet', tet_id)
 print(f"2nd order - get_expanded_connectivity: {len(cubit.get_expanded_connectivity('tet', tet_id))}")
 
 # Export 2nd order Gmsh
-cubit.cmd('radia export gmsh "sphere_2nd.msh" overwrite')
+cubit.cmd('radia_export gmsh "sphere_2nd.msh" overwrite')
 ```
 
 Output:
@@ -179,13 +179,13 @@ Output:
 
 | Export Function | High-Order Method | Max Order |
 |----------------|-------------------|-----------|
-| `export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
-| `export gmsh "f.msh" order N` | NetgenCurver | 1-4 |
-| `export radia_nastran "f.bdf" order N` | NetgenCurver | 1-2 |
-| `export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
+| `radia_export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
+| `radia_export gmsh "f.msh" order N` | NetgenCurver | 1-4 |
+| `radia_export nastran "f.bdf" order N` | NetgenCurver | 1-2 |
+| `radia_export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
 | `extract_curved_mesh(cubit, order=N)` | CallbackGeometry + BuildCurvedElements | 1-5 |
 
-> **Note**: `export radia_nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
+> **Note**: `radia_export nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
 
 ## See Also
 

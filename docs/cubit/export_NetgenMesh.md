@@ -33,7 +33,7 @@ This approach separates mesh topology from geometry approximation:
 
 ### Comparison with Gmsh Export
 
-| Feature | extract_curved_mesh() | radia export gmsh |
+| Feature | extract_curved_mesh() | radia_export gmsh |
 |---------|-----------------|-------------------|
 | Max order | Unlimited (via Curve) | 2nd order |
 | Intermediate file | None | .msh file |
@@ -44,7 +44,7 @@ This approach separates mesh topology from geometry approximation:
 
 ## Recommended: Netgen .vol Workflow
 
-For computation, use the `export netgen` command to produce `.vol` files directly. This supports arbitrary-order curving (order 1-5) and preserves material/boundary labels.
+For computation, use the `radia_export netgen` command to produce `.vol` files directly. This supports arbitrary-order curving (order 1-5) and preserves material/boundary labels.
 
 ### Basic Workflow
 
@@ -66,7 +66,7 @@ cubit.cmd("sideset 1 add surface all")
 cubit.cmd('sideset 1 name "boundary"')
 
 # 3. Export and load
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 mesh = Mesh("mesh.vol")
 ```
 

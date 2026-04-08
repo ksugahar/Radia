@@ -34,8 +34,8 @@ def _log(msg):
 
 def evaluate_mesh(cub5_file, max_order=5):
     # Import NGSolve FIRST (before GMSH) to avoid MKL DLL conflicts
+    import tempfile
     from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND
-    from cubit_mesh_export import extract_curved_mesh
 
     setup_paths()
     cubit = setup_cubit(cub5_file)
@@ -106,9 +106,9 @@ def evaluate_mesh(cub5_file, max_order=5):
             return total, neg
 
         formats = [
-            ("gmsh",    "msh", 'export gmsh "{path}" overwrite'),
-            ("nastran", "bdf", 'export radia_nastran "{path}" overwrite'),
-            ("vtk",     "vtk", 'export vtk "{path}" overwrite'),
+            ("gmsh",    "msh", 'radia_export gmsh "{path}" overwrite'),
+            ("nastran", "bdf", 'radia_export nastran "{path}" overwrite'),
+            ("vtk",     "vtk", 'radia_export vtk "{path}" overwrite'),
         ]
         for fmt_name, ext, cmd_template in formats:
             for order in [1, 2]:
@@ -168,13 +168,9 @@ def evaluate_mesh(cub5_file, max_order=5):
         t0 = time.perf_counter()
 
         try:
-            if p == 1:
-                ng_mesh = extract_curved_mesh(cubit, order=2)
-                mesh = NGMesh(ng_mesh)
-                mesh.Curve(1)
-            else:
-                ng_mesh = extract_curved_mesh(cubit, order=p)
-                mesh = NGMesh(ng_mesh)
+            vol_path = tempfile.mktemp(suffix='.vol')
+            cubit.cmd(f'radia_export netgen "{vol_path}" order {p} overwrite')
+            mesh = NGMesh(vol_path)
         except Exception as e:
             orders.append({"order": p, "error": str(e)})
             continue

@@ -362,6 +362,35 @@ class AnalysisWindow(QMainWindow):
                 self._last_msh = msh
                 self._gmsh_btn.setEnabled(True)
 
+        # Display result summary in output window
+        if result and "error" not in result:
+            self._output.appendPlainText("\n--- Result ---")
+            if "inductance_H" in result:
+                L_nH = result["inductance_H"] * 1e9
+                self._output.appendPlainText(f"  L = {L_nH:.2f} nH")
+            if "n_dofs" in result:
+                self._output.appendPlainText(f"  DOFs = {result['n_dofs']}")
+            if "t_solve" in result:
+                self._output.appendPlainText(
+                    f"  Time: {result['t_solve']:.1f}s total")
+            if "t_assembly" in result:
+                self._output.appendPlainText(
+                    f"    Assembly: {result['t_assembly']:.1f}s")
+            if "t_lu" in result:
+                self._output.appendPlainText(
+                    f"    LU solve: {result['t_lu']:.1f}s")
+            # Volume/area results (calc_volume, calc_surface)
+            if "ng_volume" in result:
+                self._output.appendPlainText(
+                    f"  Volume = {result['ng_volume']:.6e}")
+            if "vol_error_pct" in result:
+                self._output.appendPlainText(
+                    f"  Volume error = {result['vol_error_pct']:+.4e}%")
+            if "ng_area" in result:
+                self._output.appendPlainText(
+                    f"  Area = {result['ng_area']:.6e}")
+            self._output.appendPlainText("")
+
         self._status.showMessage("Done." if exit_code == 0 else "Failed.")
 
     def _open_gmsh(self):

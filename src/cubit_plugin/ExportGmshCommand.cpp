@@ -14,7 +14,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "export gmsh <string:label='filename',help='<filename>'> "
+    "radia_export gmsh <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-4>'>] "
     "[version <value:label='version',help='<2 or 4>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
@@ -27,7 +27,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export gmsh \"filename\" [order {1|2|3|4}] [version {2|4}] [dimension {2|3}] [overwrite]"
+    "radia_export gmsh \"filename\" [order {1|2|3|4}] [version {2|4}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }

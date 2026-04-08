@@ -54,5 +54,5 @@ for i in range(1, num_volumes + 1):
 output_dir = os.path.dirname(os.path.abspath(__file__))
 filename = os.path.join(output_dir, 'sphere')
 
-cubit.cmd(f'export radia_nastran "{filename}.bdf" dimension 3 nopyramid overwrite')
+cubit.cmd(f'radia_export nastran "{filename}.bdf" dimension 3 nopyramid overwrite')
 print(f"Exported: {filename}.bdf")
