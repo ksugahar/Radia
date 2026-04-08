@@ -1,12 +1,14 @@
 """
-Mesh evaluation: export .vol for p=1..N and verify against CAD.
+Mesh evaluation: export format quality assurance + p-convergence.
 
 Called as subprocess from Cubit Mesh Evaluation:
     python calc_mesh_eval.py --cub5 temp.cub5 --max-order 5
 
-Phase 1: Open cub5, get CAD values, export .vol for each order
-Phase 2: Read each .vol with NGSolve, compute Volume/Area/Length (vs CAD)
-Phase 3: Round-trip: export .msh/.bdf/.vtk, read with GMSH, compare vs .vol
+Phase 1: Open cub5, get CAD values (volume, area, length)
+Phase 2: Format QA (order 1-2): export .msh/.bdf/.vtk, verify via GMSH API
+         getJacobians vs CAD. This is OUR quality guarantee.
+Phase 3: p-convergence (order 1-5): export .vol, read with NGSolve Integrate
+         vs CAD. Confirms curving accuracy across orders.
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 Outputs JSON to stdout (last line).
@@ -31,8 +33,6 @@ def _log(msg):
 
 
 def evaluate_mesh(cub5_file, max_order=5):
-    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND, VOL
-
     setup_paths()
     cubit = setup_cubit(cub5_file)
     if cubit is None:
@@ -42,14 +42,13 @@ def evaluate_mesh(cub5_file, max_order=5):
     if not vol_ids:
         return {"error": "No volumes found in model"}
 
-    # CAD values
+    # === Phase 1: CAD reference values ===
     cad_mats = {}
     for vid in vol_ids:
         name = cubit.get_entity_name("volume", vid) or f"Volume {vid}"
         cad_mats[name] = cubit.volume(vid).volume()
     cad_bnds = {}
     for sid in cubit.parse_cubit_list("surface", "all"):
-        surfaces = cubit.get_relatives("volume", vol_ids[0], "surface") if len(vol_ids) == 1 else [sid]
         cad_bnds[f"surface_{sid}"] = cubit.surface(sid).area()
     cad_edges = {}
     for cid in cubit.parse_cubit_list("curve", "all"):
@@ -61,7 +60,8 @@ def evaluate_mesh(cub5_file, max_order=5):
     cad_area_total = sum(cad_bnds.values())
     cad_length_total = sum(cad_edges.values())
 
-    _log(f"CAD: V={cad_vol_total:.6e}, A={cad_area_total:.6e}, L={cad_length_total:.6e}")
+    _log(f"CAD: V={cad_vol_total:.6e}, A={cad_area_total:.6e}, "
+         f"L={cad_length_total:.6e}")
 
     # Check meshed
     total_elems = sum(
@@ -73,16 +73,97 @@ def evaluate_mesh(cub5_file, max_order=5):
                 "cad_area_total": cad_area_total,
                 "cad_length_total": cad_length_total}
 
-    # Export .vol for each order + verify
+    tmpdir = tempfile.mkdtemp(prefix="radia_eval_")
+
+    # === Phase 2: Format QA via GMSH API (order 1-2, vs CAD) ===
+    # This is our quality guarantee: .msh/.bdf/.vtk export correctness
+    format_results = []
+    try:
+        import gmsh
+        gmsh.initialize()
+
+        def _gmsh_integrate(dim, gauss_order="Gauss5"):
+            """Compute integral(1) over elements via GMSH getJacobians."""
+            etypes, etags, ntags = gmsh.model.mesh.getElements(dim=dim)
+            total = 0.0
+            neg = 0
+            for et in etypes:
+                lc, w = gmsh.model.mesh.getIntegrationPoints(
+                    int(et), gauss_order)
+                jac, det, pts = gmsh.model.mesh.getJacobians(int(et), lc)
+                npts = len(w)
+                nel = len(det) // npts
+                for i in range(nel):
+                    for j in range(npts):
+                        d = det[i * npts + j]
+                        total += d * w[j]
+                        if d < 0:
+                            neg += 1
+            return total, neg
+
+        formats = [
+            ("gmsh",    "msh", 'export gmsh "{path}" overwrite'),
+            ("nastran", "bdf", 'export radia_nastran "{path}" overwrite'),
+            ("vtk",     "vtk", 'export vtk "{path}" overwrite'),
+        ]
+        for fmt_name, ext, cmd_template in formats:
+            for order in [1, 2]:
+                fname = f"qa_{fmt_name}_o{order}.{ext}"
+                fpath = os.path.join(tmpdir, fname).replace("\\", "/")
+                cmd_str = cmd_template.format(path=fpath)
+                if order == 2:
+                    cmd_str = cmd_str.replace("overwrite",
+                                              f"order {order} overwrite")
+                try:
+                    cubit.cmd(cmd_str)
+                    if not os.path.exists(fpath):
+                        format_results.append({
+                            "format": fmt_name, "order": order,
+                            "error": "export failed"})
+                        continue
+
+                    gmsh.clear()
+                    gmsh.open(fpath)
+
+                    # Volume (dim=3) vs CAD
+                    total_vol, neg_det = _gmsh_integrate(3)
+                    vol_err = ((total_vol - cad_vol_total) / cad_vol_total
+                               * 100 if cad_vol_total else 0)
+
+                    # Area (dim=2) vs CAD
+                    total_area, _ = _gmsh_integrate(2)
+                    area_err = ((total_area - cad_area_total) / cad_area_total
+                                * 100 if cad_area_total else 0)
+
+                    format_results.append({
+                        "format": fmt_name, "order": order,
+                        "volume": total_vol, "vol_error_pct": vol_err,
+                        "area": total_area, "area_error_pct": area_err,
+                        "neg_det": neg_det,
+                    })
+                    _log(f"{fmt_name} o{order}: V={total_vol:.6e} "
+                         f"({vol_err:+.2e}% vs CAD), "
+                         f"A={total_area:.6e} ({area_err:+.2e}% vs CAD), "
+                         f"neg_det={neg_det}")
+                except Exception as e:
+                    format_results.append({
+                        "format": fmt_name, "order": order,
+                        "error": str(e)})
+
+        gmsh.finalize()
+    except ImportError:
+        _log("GMSH not available, skipping format QA")
+    except Exception as e:
+        _log(f"GMSH format QA error: {e}")
+
+    # === Phase 3: p-convergence via NGSolve (order 1-5, vs CAD) ===
+    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND
     from cubit_mesh_export import extract_curved_mesh
 
-    tmpdir = tempfile.mkdtemp(prefix="radia_eval_")
     orders = []
-
     for p in range(1, max_order + 1):
-        _log(f"p={p}: exporting...")
+        _log(f"p={p}: exporting .vol...")
         t0 = time.perf_counter()
-        vol_path = os.path.join(tmpdir, f"eval_p{p}.vol")
 
         try:
             if p == 1:
@@ -105,11 +186,15 @@ def evaluate_mesh(cub5_file, max_order=5):
 
         t_elapsed = time.perf_counter() - t0
 
-        vol_err = (ng_vol - cad_vol_total) / cad_vol_total * 100 if cad_vol_total else 0
-        area_err = (ng_area - cad_area_total) / cad_area_total * 100 if cad_area_total else 0
-        len_err = (ng_length - cad_length_total) / cad_length_total * 100 if cad_length_total else 0
+        vol_err = ((ng_vol - cad_vol_total) / cad_vol_total * 100
+                   if cad_vol_total else 0)
+        area_err = ((ng_area - cad_area_total) / cad_area_total * 100
+                    if cad_area_total else 0)
+        len_err = ((ng_length - cad_length_total) / cad_length_total * 100
+                   if cad_length_total else 0)
 
-        _log(f"p={p}: V_err={vol_err:+.4f}%, A_err={area_err:+.4f}%, L_err={len_err:+.4f}%, t={t_elapsed:.2f}s")
+        _log(f"p={p}: V_err={vol_err:+.4f}%, A_err={area_err:+.4f}%, "
+             f"L_err={len_err:+.4f}%, t={t_elapsed:.2f}s")
 
         orders.append({
             "order": p,
@@ -122,104 +207,7 @@ def evaluate_mesh(cub5_file, max_order=5):
             "time": t_elapsed,
         })
 
-    # --- Phase 3: round-trip verification for all export formats via GMSH API ---
-    # Baseline = NGSolve .vol values (tests format conversion fidelity, not CAD)
-    ref_by_order = {}
-    for entry in orders:
-        if "error" not in entry:
-            ref_by_order[entry["order"]] = {
-                "vol": entry["ng_volume"], "area": entry["ng_area"]}
-
-    format_results = []
-    try:
-        import gmsh
-        gmsh.initialize()
-
-        def _gmsh_integrate(dim, gauss_order="Gauss4"):
-            """Compute integral(1) over elements of given dimension via Jacobians."""
-            etypes, etags, ntags = gmsh.model.mesh.getElements(dim=dim)
-            total = 0.0
-            neg = 0
-            for et in etypes:
-                lc, w = gmsh.model.mesh.getIntegrationPoints(
-                    int(et), gauss_order)
-                jac, det, pts = gmsh.model.mesh.getJacobians(int(et), lc)
-                npts = len(w)
-                nel = len(det) // npts
-                for i in range(nel):
-                    for j in range(npts):
-                        d = det[i * npts + j]
-                        total += d * w[j]
-                        if d < 0:
-                            neg += 1
-            return total, neg
-
-        # Export and verify each format at order 1 and 2
-        formats = [
-            ("gmsh",    "msh", 'export gmsh "{path}" overwrite'),
-            ("nastran", "bdf", 'export radia_nastran "{path}" overwrite'),
-            ("vtk",     "vtk", 'export vtk "{path}" overwrite'),
-        ]
-        for fmt_name, ext, cmd_template in formats:
-            for order in [1, 2]:
-                ref = ref_by_order.get(order)
-                if not ref:
-                    format_results.append({
-                        "format": fmt_name, "order": order,
-                        "error": f"no .vol baseline for order {order}"})
-                    continue
-
-                fname = f"roundtrip_{fmt_name}_o{order}.{ext}"
-                fpath = os.path.join(tmpdir, fname).replace("\\", "/")
-                cmd_str = cmd_template.format(path=fpath)
-                if order == 2:
-                    cmd_str = cmd_str.replace("overwrite",
-                                              f"order {order} overwrite")
-                try:
-                    cubit.cmd(cmd_str)
-                    if not os.path.exists(fpath):
-                        format_results.append({
-                            "format": fmt_name, "order": order,
-                            "error": "export failed"})
-                        continue
-
-                    # Read with GMSH API
-                    gmsh.clear()
-                    gmsh.open(fpath)
-
-                    # Volume (dim=3)
-                    total_vol, neg_det = _gmsh_integrate(3)
-                    ref_vol = ref["vol"]
-                    vol_err = ((total_vol - ref_vol) / ref_vol
-                               * 100 if ref_vol else 0)
-
-                    # Area (dim=2)
-                    total_area, _ = _gmsh_integrate(2)
-                    ref_area = ref["area"]
-                    area_err = ((total_area - ref_area) / ref_area
-                                * 100 if ref_area else 0)
-
-                    format_results.append({
-                        "format": fmt_name, "order": order,
-                        "volume": total_vol, "vol_error_pct": vol_err,
-                        "area": total_area, "area_error_pct": area_err,
-                        "neg_det": neg_det,
-                    })
-                    _log(f"{fmt_name} o{order}: V={total_vol:.6e} "
-                         f"({vol_err:+.2e}% vs .vol), A={total_area:.6e} "
-                         f"({area_err:+.2e}% vs .vol), neg_det={neg_det}")
-                except Exception as e:
-                    format_results.append({
-                        "format": fmt_name, "order": order,
-                        "error": str(e)})
-
-        gmsh.finalize()
-    except ImportError:
-        _log("GMSH not available, skipping format round-trip verification")
-    except Exception as e:
-        _log(f"GMSH round-trip error: {e}")
-
-    # Cleanup temp dir
+    # Cleanup
     import shutil
     shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -227,16 +215,17 @@ def evaluate_mesh(cub5_file, max_order=5):
         "cad_vol_total": cad_vol_total,
         "cad_area_total": cad_area_total,
         "cad_length_total": cad_length_total,
+        "format_qa": format_results,
         "orders": orders,
-        "format_roundtrip": format_results,
         "max_order": max_order,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Mesh evaluation: export + verify p=1..N")
-    parser.add_argument("--cub5", required=True, help="Cubit .cub5 model file")
+        description="Mesh evaluation: format QA + p-convergence")
+    parser.add_argument("--cub5", required=True,
+                        help="Cubit .cub5 model file")
     parser.add_argument("--max-order", type=int, default=5)
 
     def run(args):
