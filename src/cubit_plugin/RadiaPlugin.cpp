@@ -5,6 +5,8 @@
 #include "ExportNastranCommand.hpp"
 #include "ExportGmshCommand.hpp"
 #include "ExportVtkCommand.hpp"
+#include "ExportFemeemCommand.hpp"
+#include "ExportMegCommand.hpp"
 #include "CoilCommand.hpp"
 
 // ============================================================
@@ -32,6 +34,8 @@ std::vector<std::string> RadiaPlugin::get_keys()
   keys.push_back("ExportNastranCommand");
   keys.push_back("ExportGmshCommand");
   keys.push_back("ExportVtkCommand");
+  keys.push_back("ExportFemeemCommand");
+  keys.push_back("ExportMegCommand");
   keys.push_back("CoilCommand");
   return keys;
 }
@@ -49,6 +53,10 @@ CubitCommand* RadiaPlugin::create_command(const std::string &key)
     return new ExportGmshCommand();
   else if (key == "ExportVtkCommand")
     return new ExportVtkCommand();
+  else if (key == "ExportFemeemCommand")
+    return new ExportFemeemCommand();
+  else if (key == "ExportMegCommand")
+    return new ExportMegCommand();
   else if (key == "CoilCommand")
     return new CoilCommand();
   return nullptr;

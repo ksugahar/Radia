@@ -180,6 +180,10 @@ set(CCM_SOURCES
     ExportGmshCommand.hpp
     ExportVtkCommand.cpp
     ExportVtkCommand.hpp
+    ExportFemeemCommand.cpp
+    ExportFemeemCommand.hpp
+    ExportMegCommand.cpp
+    ExportMegCommand.hpp
     CoilCommand.cpp
     CoilCommand.hpp
 )
@@ -258,6 +262,10 @@ set(CCL_SOURCES
     ExportNastranCommand.hpp
     ExportVtkCommand.cpp
     ExportVtkCommand.hpp
+    ExportFemeemCommand.cpp
+    ExportFemeemCommand.hpp
+    ExportMegCommand.cpp
+    ExportMegCommand.hpp
 )
 
 if(HAVE_NETGEN)
