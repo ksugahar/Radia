@@ -872,20 +872,17 @@ def register_menu():
             if result.stderr:
                 print(result.stderr.rstrip())
 
-            # Parse JSON result, open GMSH
+            # Parse JSON result, open Netgen GUI
             for line in reversed(result.stdout.split("\n")):
                 line = line.strip()
                 if line.startswith("{"):
                     try:
                         data = json.loads(line)
-                        msh = data.get("msh_output", "")
-                        if msh and os.path.isfile(msh):
-                            print(f"Opening GMSH: {msh}")
+                        vp = data.get("vol_path", "")
+                        if vp and os.path.isfile(vp):
+                            print(f"Opening Netgen: {vp}")
                             _sp.Popen(
-                                [ext_python, "-c",
-                                 "import gmsh; gmsh.initialize(); "
-                                 f"gmsh.merge(r'{msh}'); "
-                                 "gmsh.fltk.run(); gmsh.finalize()"],
+                                [ext_python, "-m", "netgen", vp],
                                 creationflags=0x08000000)
                     except json.JSONDecodeError:
                         pass

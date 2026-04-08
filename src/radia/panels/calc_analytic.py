@@ -57,25 +57,28 @@ def evaluate_analytic(vol_path, expression, field_name="f",
 
     _log(f"Expression: {expression}")
 
-    # Determine output path
-    base = os.path.splitext(vol_path)[0]
-    msh_path = base + "_analytic.msh"
+    # Evaluate on GridFunction for visualization
+    from ngsolve import H1, GridFunction
 
-    # Use GmshPostExport for .msh v4.1
-    sys.path.insert(0, os.path.dirname(_this_dir))
-    from gmsh_post_export import GmshPostExport
-
-    post = GmshPostExport(mesh)
     if vector:
-        post.add_vector_field(field_name, cf)
+        fes = H1(mesh, order=fes_order, dim=3)
     else:
-        post.add_scalar_field(field_name, cf)
-    post.write(msh_path)
+        fes = H1(mesh, order=fes_order)
+    gf = GridFunction(fes, name=field_name)
+    gf.Set(cf)
 
-    _log(f"Written: {msh_path}")
+    # Save .vol with solution (Netgen GUI can display GridFunction)
+    base = os.path.splitext(vol_path)[0]
+    sol_path = base + "_analytic.sol"
+    gf.Save(sol_path)
+
+    _log(f"Written: {sol_path}")
+    _log(f"View with: python -m netgen {vol_path}")
+    _log(f"  then load solution: {sol_path}")
 
     return {
-        "msh_output": msh_path,
+        "vol_path": vol_path,
+        "sol_path": sol_path,
         "field_name": field_name,
         "expression": expression,
         "n_elements": mesh.ne,
