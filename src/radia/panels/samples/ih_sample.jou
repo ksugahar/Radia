@@ -1,33 +1,39 @@
-## Induction Heating sample: torus inductor with source/sink terminals
+## Induction Heating sample: torus inductor
 ## Required labels: source, sink (sidesets on terminal faces)
 ## Optional labels: workpiece, air
+##
+## Creates a torus by sweeping a circle along an arc (not 'create torus',
+## which produces a closed surface with no terminal faces).
+## The sweep angle < 360 leaves two open faces for source/sink.
 ##
 ## Usage: Solve -> Radia-NGSolve -> Induction Heating
 
 reset
 
-# Create torus coil (R_major=0.11m, R_minor=0.01m)
-create torus major radius 0.11 minor radius 0.01
+# Cross-section circle (R_minor = 0.01 m, centered at R_major = 0.11 m)
+create vertex 0.10 0 0
+create vertex 0.12 0 0
+create vertex 0.11 0 0.01
+create curve arc three vertex 1 3 2
+create vertex 0.11 0 -0.01
+create curve arc three vertex 2 4 1
+create surface curve 1 2
 
-# Cut to create terminal faces (source and sink)
-webcut volume 1 with plane yplane offset 0 noimprint nomerge
+# Sweep 350 degrees around Z axis (leaves 10-degree gap for terminals)
+sweep surface 1 axis 0 0 0 0 0 1 angle 350
 
 # Mesh
-volume all scheme tetmesh
-volume all size auto factor 5
-mesh volume all
+volume 1 scheme tetmesh
+volume 1 size auto factor 5
+mesh volume 1
 
-# Imprint and merge after meshing
-imprint volume all
-merge volume all
-
-# Material blocks
-block 1 add volume all
+# Material block
+block 1 add volume 1
 block 1 name "coil"
 
-# Source/sink terminal faces (created by webcut)
-# The cut creates 2 new planar surfaces
-sideset 1 add surface 2
+# Terminal faces: the two planar ends created by the incomplete sweep
+# Surface 1 = start face (source), Surface 3 = end face (sink)
+sideset 1 add surface 1
 sideset 1 name "source"
-sideset 2 add surface 5
+sideset 2 add surface 3
 sideset 2 name "sink"
