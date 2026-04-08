@@ -158,6 +158,16 @@ void RadiaComp::setup_menus()
   QObject::connect(a_vtk, SIGNAL(triggered()), handler, SLOT(export_vtk()));
   menu_list.push_back(a_vtk);
 
+  QAction* a_femeem = new QAction("FEMEEM...", handler);
+  a_femeem->setStatusTip("Export mesh to FEMEEM format (1st-order tet, directory output)");
+  QObject::connect(a_femeem, SIGNAL(triggered()), handler, SLOT(export_femeem()));
+  menu_list.push_back(a_femeem);
+
+  QAction* a_meg = new QAction("MEG (ELF/MAGIC)...", handler);
+  a_meg->setStatusTip("Export mesh to ELF/MAGIC MEG format (1st-order)");
+  QObject::connect(a_meg, SIGNAL(triggered()), handler, SLOT(export_meg()));
+  menu_list.push_back(a_meg);
+
   // Separator before evaluation tools
   QAction* sep = new QAction(handler);
   sep->setSeparator(true);
@@ -272,19 +282,24 @@ static void run_export(ExportDialog::Format fmt)
   CubitInterface::cmd(cmd.c_str());
 
   QString outFile = dlg.filePath();
-  if (!QFile::exists(outFile)) {
+  bool exists = (fmt == ExportDialog::FEMEEM)
+                  ? QDir(outFile).exists()
+                  : QFile::exists(outFile);
+  if (!exists) {
     PRINT_ERROR("Export failed: %s\n", outFile.toStdString().c_str());
     return;
   }
   PRINT_INFO("Export complete: %s\n", outFile.toStdString().c_str());
 
-  // Open exported file with OS-associated application
+  // Open exported file/directory with OS-associated application
   QDesktopServices::openUrl(QUrl::fromLocalFile(outFile));
 }
 
 void RadiaMenuHandler::export_gmsh()    { run_export(ExportDialog::GMSH); }
 void RadiaMenuHandler::export_nastran() { run_export(ExportDialog::Nastran); }
 void RadiaMenuHandler::export_vtk()     { run_export(ExportDialog::VTK); }
+void RadiaMenuHandler::export_femeem()  { run_export(ExportDialog::FEMEEM); }
+void RadiaMenuHandler::export_meg()     { run_export(ExportDialog::MEG); }
 // ============================================================
 // Helpers for subprocess-based operations (Netgen export, Mesh Eval)
 // ============================================================
@@ -809,10 +824,10 @@ static void saveSettings(const QJsonObject &obj)
 
 ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* parent)
   : QDialog(parent), mFormat(format),
-    mVersion(nullptr), mNoPyramid(nullptr)
+    mVersion(nullptr), mNoPyramid(nullptr), mScale(nullptr)
 {
   // Window title
-  const char* titles[] = {"Export Netgen Vol", "Export GMSH", "Export Nastran BDF", "Export VTK"};
+  const char* titles[] = {"Export Netgen Vol", "Export GMSH", "Export Nastran BDF", "Export VTK", "Export FEMEEM", "Export MEG (ELF/MAGIC)"};
   setWindowTitle(titles[format]);
   setMinimumWidth(500);
 
@@ -820,9 +835,10 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   QFormLayout* form = new QFormLayout();
 
   // Determine default directory and base name
-  const char* exts[] = {".vol", ".msh", ".bdf", ".vtk"};
+  // FEMEEM: no extension (directory name), others: file extension
+  const char* exts[] = {".vol", ".msh", ".bdf", ".vtk", "", ".meg"};
   QString defaultDir;
-  QString baseName = "ExportedMesh";
+  QString baseName = (format == FEMEEM) ? "femeem_output" : "ExportedMesh";
 
   if (!jouPath.isEmpty()) {
     // Use journal file's directory and basename
@@ -868,28 +884,46 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   form->addRow("Directory:", dirRow);
 
   // Filename row: text input (no browse, user types)
+  // FEMEEM: directory name (no extension), others: file with extension
+  QString fileLabel = (format == FEMEEM) ? "Output name:" : "Filename:";
   mFileName = new QLineEdit(baseName + exts[format]);
   connect(mFileName, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
-  form->addRow("Filename:", mFileName);
+  form->addRow(fileLabel, mFileName);
 
-  // Order
+  // Order (not for FEMEEM/MEG — always 1st order)
   mOrderCombo = new QComboBox();
-  if (format == NETGEN_VOL) {
+  if (format == FEMEEM || format == MEG) {
+    mOrderCombo->addItems({"1 (linear)"});
+    // No form row — hidden, always order 1
+  } else if (format == NETGEN_VOL) {
     mOrderCombo->addItems({"1", "2", "3", "4", "5"});
     mOrderCombo->setCurrentIndex(2);  // default order 3
+    connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
+    form->addRow("Order:", mOrderCombo);
   } else {
     mOrderCombo->addItems({"1 (linear)", "2 (quadratic)"});
+    connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
+    form->addRow("Order:", mOrderCombo);
   }
-  connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
-  form->addRow("Order:", mOrderCombo);
 
   // Version: GMSH is always v2.2 (v4.1 is for post-processing only)
 
-  // Dimension (not for NETGEN_VOL)
+  // Scale (FEMEEM only)
+  if (format == FEMEEM) {
+    mScale = new QLineEdit("1.0");
+    connect(mScale, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
+    form->addRow("Scale:", mScale);
+  }
+
+  // Dimension
   mDimension = new QComboBox();
-  mDimension->addItems({"3D", "2D"});
+  if (format == MEG) {
+    mDimension->addItems({"3D (threed)", "2D (twod)", "Axisymmetric"});
+  } else {
+    mDimension->addItems({"3D", "2D"});
+  }
   connect(mDimension, SIGNAL(currentTextChanged(QString)), this, SLOT(updatePreview()));
-  if (format != NETGEN_VOL) {
+  if (format != NETGEN_VOL && format != FEMEEM) {
     form->addRow("Dimension:", mDimension);
   }
 
@@ -901,7 +935,26 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     form->addRow("Pyramids:", mNoPyramid);
   }
 
-  layout->addLayout(form);
+  // Block label table (MEG only)
+  mBlockTable = nullptr;
+  if (format == MEG) {
+    layout->addLayout(form);
+    QLabel *lbl = new QLabel("Block -> ELF Label:");
+    layout->addWidget(lbl);
+    mBlockTable = new QTableWidget(0, 3);
+    mBlockTable->setHorizontalHeaderLabels({"Block", "Name", "ELF Type"});
+    mBlockTable->horizontalHeader()->setStretchLastSection(true);
+    mBlockTable->setColumnWidth(0, 50);
+    mBlockTable->setColumnWidth(1, 140);
+    mBlockTable->setMinimumHeight(120);
+    mBlockTable->setMaximumHeight(250);
+    layout->addWidget(mBlockTable);
+    populateBlockTable();
+    // Update labels when DIM changes
+    connect(mDimension, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
+  } else {
+    layout->addLayout(form);
+  }
 
   // Command preview: left-aligned, click to select all for easy copy
   QFormLayout* previewForm = new QFormLayout();
@@ -926,13 +979,14 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
   connect(buttons, &QDialogButtonBox::accepted, [this]() {
     // Save settings before accepting
-    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk"};
+    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "femeem", "meg"};
     QJsonObject all = loadSettings();
     QJsonObject s;
     s["dir"] = mDir->text();
     s["order"] = mOrderCombo->currentIndex();
     if (mDimension) s["dimension"] = mDimension->currentIndex();
     if (mNoPyramid) s["nopyramid"] = mNoPyramid->currentIndex();
+    if (mScale) s["scale"] = mScale->text();
     all[keys[mFormat]] = s;
     saveSettings(all);
     accept();
@@ -941,7 +995,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
 
   // Load saved settings (override defaults with previous values)
   {
-    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk"};
+    const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "femeem", "meg"};
     QJsonObject all = loadSettings();
     QJsonObject s = all[keys[format]].toObject();
     if (s.contains("dir")) mDir->setText(s["dir"].toString());
@@ -950,6 +1004,8 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
       mDimension->setCurrentIndex(s["dimension"].toInt());
     if (s.contains("nopyramid") && mNoPyramid)
       mNoPyramid->setCurrentIndex(s["nopyramid"].toInt());
+    if (s.contains("scale") && mScale)
+      mScale->setText(s["scale"].toString());
   }
 
   updatePreview();
@@ -972,6 +1028,46 @@ QString ExportDialog::filePath() const
   if (!dir.endsWith('/')) dir += '/';
   return dir + mFileName->text();
 }
+
+// --- ELF label helpers (must precede cubitCommand) ---
+
+// ELF label options per DIM
+static QStringList elfLabelsForDim(int dimIdx)
+{
+  // dimIdx: 0=3D(T), 1=2D(K), 2=Axisym(R)
+  if (dimIdx == 0) {
+    return {"MMB - Magnetic body",
+            "MMS - Magnetic shell",
+            "MMT - Magnetic thin",
+            "MMP - Permanent magnet",
+            "MWL - Winding/coil",
+            "MWV - Vector winding",
+            "MCL - Coil line",
+            "MCO - Current conductor",
+            "MAB - Armature block",
+            "MAT - Armature thin",
+            "MBB - Boundary"};
+  } else {
+    return {"MMB - Magnetic body",
+            "MMT - Magnetic thin",
+            "MMP - Permanent magnet",
+            "MWL - Winding/coil",
+            "MWV - Vector winding",
+            "MCL - Coil line",
+            "MCO - Current conductor",
+            "MAB - Armature block",
+            "MAT - Armature thin",
+            "MBB - Boundary"};
+  }
+}
+
+// Extract 3-char prefix from combo text "MMB - Magnetic body" -> "MMB"
+static QString elfPrefixFromCombo(const QString &text)
+{
+  return text.left(3);
+}
+
+// --- end ELF label helpers ---
 
 QString ExportDialog::cubitCommand() const
 {
@@ -1005,13 +1101,126 @@ QString ExportDialog::cubitCommand() const
                 .arg(file).arg(order).arg(dim);
       break;
     }
+    case FEMEEM: {
+      QString sc = mScale ? mScale->text() : "1.0";
+      cmd = QString("radia_export femeem \"%1\" scale %2").arg(file).arg(sc);
+      break;
+    }
+    case MEG: {
+      // MEG dimension: 3D -> threed, 2D -> twod, Axisymmetric -> axisymmetric
+      QString dimOpt = "threed";
+      if (mDimension) {
+        int idx = mDimension->currentIndex();
+        if (idx == 1) dimOpt = "twod";
+        else if (idx == 2) dimOpt = "axisymmetric";
+      }
+      cmd = QString("export meg \"%1\" %2").arg(file).arg(dimOpt);
+      // Encode per-block labels: "1:MMB,2:MWL,3:MCO"
+      if (mBlockTable && mBlockTable->rowCount() > 0) {
+        QStringList pairs;
+        for (int r = 0; r < mBlockTable->rowCount(); r++) {
+          auto *idItem = mBlockTable->item(r, 0);
+          auto *combo = qobject_cast<QComboBox*>(mBlockTable->cellWidget(r, 2));
+          if (idItem && combo) {
+            QString bid = idItem->text();
+            QString prefix = elfPrefixFromCombo(combo->currentText());
+            pairs << bid + ":" + prefix;
+          }
+        }
+        if (!pairs.isEmpty())
+          cmd += QString(" labels \"%1\"").arg(pairs.join(","));
+      }
+      break;
+    }
   }
   cmd += " overwrite";
   return cmd;
 }
 
+double ExportDialog::scale() const
+{
+  if (!mScale) return 1.0;
+  bool ok;
+  double v = mScale->text().toDouble(&ok);
+  return (ok && v > 0.0) ? v : 1.0;
+}
+
+void ExportDialog::populateBlockTable()
+{
+  if (!mBlockTable) return;
+
+  std::vector<int> block_ids = CubitInterface::parse_cubit_list("block", "all");
+  int nrows = (int)block_ids.size();
+  mBlockTable->setRowCount(nrows);
+
+  int dimIdx = mDimension ? mDimension->currentIndex() : 0;
+  QStringList labels = elfLabelsForDim(dimIdx);
+
+  for (int r = 0; r < nrows; r++) {
+    int bid = block_ids[r];
+    std::string name = CubitInterface::get_entity_name("block", bid);
+    if (name.empty()) name = "(unnamed)";
+
+    // Block ID (read-only)
+    auto *idItem = new QTableWidgetItem(QString::number(bid));
+    idItem->setFlags(idItem->flags() & ~Qt::ItemIsEditable);
+    mBlockTable->setItem(r, 0, idItem);
+
+    // Block name (read-only)
+    auto *nameItem = new QTableWidgetItem(QString::fromStdString(name));
+    nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+    mBlockTable->setItem(r, 1, nameItem);
+
+    // ELF type dropdown
+    auto *combo = new QComboBox();
+    combo->addItems(labels);
+
+    // Try to auto-detect from block name
+    QString qname = QString::fromStdString(name).toUpper();
+    int defaultIdx = 0;  // MMB
+    for (int i = 0; i < labels.size(); i++) {
+      if (qname.startsWith(elfPrefixFromCombo(labels[i]))) {
+        defaultIdx = i;
+        break;
+      }
+    }
+    combo->setCurrentIndex(defaultIdx);
+    connect(combo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
+    mBlockTable->setCellWidget(r, 2, combo);
+  }
+}
+
+void ExportDialog::updateBlockLabels()
+{
+  if (!mBlockTable || !mDimension) return;
+
+  int dimIdx = mDimension->currentIndex();
+  QStringList labels = elfLabelsForDim(dimIdx);
+
+  for (int r = 0; r < mBlockTable->rowCount(); r++) {
+    auto *combo = qobject_cast<QComboBox*>(mBlockTable->cellWidget(r, 2));
+    if (!combo) continue;
+    QString current = elfPrefixFromCombo(combo->currentText());
+    combo->blockSignals(true);
+    combo->clear();
+    combo->addItems(labels);
+    // Restore previous selection if still valid
+    for (int i = 0; i < labels.size(); i++) {
+      if (elfPrefixFromCombo(labels[i]) == current) {
+        combo->setCurrentIndex(i);
+        break;
+      }
+    }
+    combo->blockSignals(false);
+  }
+}
+
 void ExportDialog::updatePreview()
 {
+  // Update block labels when DIM changes (MEG only)
+  if (mFormat == MEG && mBlockTable)
+    updateBlockLabels();
+
   mPreview->setText(cubitCommand());
   mPreview->setCursorPosition(0);  // show beginning of command
 }
