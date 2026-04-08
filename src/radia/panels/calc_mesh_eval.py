@@ -33,6 +33,10 @@ def _log(msg):
 
 
 def evaluate_mesh(cub5_file, max_order=5):
+    # Import NGSolve FIRST (before GMSH) to avoid MKL DLL conflicts
+    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND
+    from cubit_mesh_export import extract_curved_mesh
+
     setup_paths()
     cubit = setup_cubit(cub5_file)
     if cubit is None:
@@ -157,8 +161,6 @@ def evaluate_mesh(cub5_file, max_order=5):
         _log(f"GMSH format QA error: {e}")
 
     # === Phase 3: p-convergence via NGSolve (order 1-5, vs CAD) ===
-    from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND
-    from cubit_mesh_export import extract_curved_mesh
 
     orders = []
     for p in range(1, max_order + 1):
