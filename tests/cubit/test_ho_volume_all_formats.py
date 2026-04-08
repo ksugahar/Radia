@@ -144,10 +144,10 @@ def gmsh_api_volume(filename):
 # Export formats
 # ================================================================
 FORMATS = [
-    ("GMSH_v2.2", ".msh", 'export gmsh "{f}" order {o} version 2 overwrite'),
-    ("GMSH_v4.1", ".msh", 'export gmsh "{f}" order {o} version 4 overwrite'),
-    ("Nastran",   ".bdf", 'export radia_nastran "{f}" order {o} dimension 3 overwrite'),
-    ("VTK",       ".vtk", 'export vtk "{f}" order {o} dimension 3 overwrite'),
+    ("GMSH_v2.2", ".msh", 'radia_export gmsh "{f}" order {o} version 2 overwrite'),
+    ("GMSH_v4.1", ".msh", 'radia_export gmsh "{f}" order {o} version 4 overwrite'),
+    ("Nastran",   ".bdf", 'radia_export nastran "{f}" order {o} dimension 3 overwrite'),
+    ("VTK",       ".vtk", 'radia_export vtk "{f}" order {o} dimension 3 overwrite'),
 ]
 
 

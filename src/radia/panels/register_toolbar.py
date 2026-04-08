@@ -317,9 +317,9 @@ def _init_export_default_dir():
 
 
 def _launcher_settings_path():
-    """~/.cubit/radia_launcher.json"""
-    return os.path.join(os.path.expanduser("~"), ".cubit",
-                        "radia_launcher.json")
+    """~/.radia/radia_launcher.json"""
+    return os.path.join(os.path.expanduser("~"),
+                        ".radia", "radia_launcher.json")
 
 
 def _load_last_dir():
@@ -359,7 +359,7 @@ def _launch_radia_ngsolve():
 
     Pipeline:
       1. Dialog: mode (IH/EM/PCB) + mesh order + output folder
-      2. export netgen .vol (C++ plugin, user-chosen order)
+      2. radia_export netgen .vol (C++ plugin, user-chosen order)
       3. Launch the selected analysis window with .vol path
     """
     try:
@@ -551,9 +551,9 @@ def _launch_radia_ngsolve():
         vol_name = "radia_model.vol"
         vol_path = out_dir + "/" + vol_name
         cubit.cmd(
-            f'export netgen "{vol_path}" order {order} overwrite')
+            f'radia_export netgen "{vol_path}" order {order} overwrite')
         if not os.path.isfile(vol_path):
-            print("ERROR: export netgen failed. "
+            print("ERROR: radia_export netgen failed. "
                   "Check blocks/sidesets.")
             return
         print(f"Exported: {vol_path} (order {order})")
@@ -836,9 +836,9 @@ def register_menu():
             cubit.cmd(f'cd "{out_dir}"')
             vol_path = out_dir + "/analytic_model.vol"
             cubit.cmd(
-                f'export netgen "{vol_path}" order {order} overwrite')
+                f'radia_export netgen "{vol_path}" order {order} overwrite')
             if not os.path.isfile(vol_path):
-                print("ERROR: export netgen failed.")
+                print("ERROR: radia_export netgen failed.")
                 return
             print(f"Exported: {vol_path} (order {order})")
             _save_last_dir(out_dir)

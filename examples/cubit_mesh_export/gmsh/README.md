@@ -4,7 +4,7 @@ Export Cubit mesh to Gmsh format (.msh).
 
 ## v2.2 vs v4.1 Format
 
-| Feature | v2.2 (`radia export gmsh`) | v4.1 (`radia export gmsh version 4`) |
+| Feature | v2.2 (`radia_export gmsh`) | v4.1 (`radia_export gmsh version 4`) |
 |---------|-------------------------|-------------------------|
 | Format version | 2.2 | 4.1 |
 | Structure | Flat lists | Entity blocks |
@@ -26,7 +26,7 @@ Export Cubit mesh to Gmsh format (.msh).
 - 2D meshes requiring normal orientation control
 - FEniCS or other modern solvers
 
-**For NGSolve computation**, use `export netgen "mesh.vol"` instead of .msh. The .vol format supports arbitrary-order curving (1-5) and preserves material/boundary labels.
+**For NGSolve computation**, use `radia_export netgen "mesh.vol"` instead of .msh. The .vol format supports arbitrary-order curving (1-5) and preserves material/boundary labels.
 
 ## Usage
 
@@ -37,15 +37,15 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Gmsh v2.2 (recommended for NGSolve)
-cubit.cmd('radia export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 
 # Gmsh v4.1 (with $Entities section)
-cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" version 4 overwrite')
 ```
 
 ## NGSolve Computation
 
-**For NGSolve FEM computation, use `export netgen` (.vol) instead of .msh.**
+**For NGSolve FEM computation, use `radia_export netgen` (.vol) instead of .msh.**
 
 The `.vol` format supports arbitrary-order curving (order 1-5) and preserves material/boundary labels natively. The `.msh` export is maintained for GMSH visualization only.
 
@@ -63,8 +63,8 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd('block 1 name "domain"')
 
 # 3. Export .vol for computation, .msh for GMSH visualization
-cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
-cubit.cmd('export gmsh "mesh.msh" order 2 version 2 overwrite')  # visualization only
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" order 2 version 2 overwrite')  # visualization only
 mesh = Mesh("mesh.vol")
 ```
 
@@ -76,13 +76,13 @@ The v4.1 format supports dimension control:
 
 ```python
 # Auto-detect dimension (default)
-cubit.cmd('radia export gmsh "mesh.msh" version 4 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" version 4 overwrite')
 
 # Force 2D mode (normals to +z, z=0)
-cubit.cmd('radia export gmsh "plate.msh" version 4 dimension 2 overwrite')
+cubit.cmd('radia_export gmsh "plate.msh" version 4 dimension 2 overwrite')
 
 # Force 3D mode
-cubit.cmd('radia export gmsh "solid.msh" version 4 dimension 3 overwrite')
+cubit.cmd('radia_export gmsh "solid.msh" version 4 dimension 3 overwrite')
 ```
 
 ## Sample Files

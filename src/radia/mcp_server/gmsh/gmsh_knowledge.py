@@ -917,7 +917,7 @@ Physical groups: "air", "coil_surface", "coil_wire"
 
 ## 5. GMSH .msh as Input to NGSolve
 
-Cubit exports .vol via `export netgen` -> NGSolve reads it directly.
+Cubit exports .vol via `radia_export netgen` -> NGSolve reads it directly.
 The .vol file is the standard interface between Cubit and NGSolve.
 
 ```python

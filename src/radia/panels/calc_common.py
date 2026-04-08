@@ -78,7 +78,7 @@ def setup_cubit(cub5_path=None, load_plugins=False):
     Args:
         cub5_path: Optional .cub5 file to open after init.
         load_plugins: If True, set CUBIT_PLUGIN_DIR so radia .ccm
-            plugin commands (export gmsh/nastran/meg/vtk) are available.
+            plugin commands (radia_export gmsh/nastran/vtk) are available.
 
     Returns:
         cubit module (or None if Cubit unavailable)
@@ -129,26 +129,23 @@ def _clean_cubit_paths():
 
 
 def export_mesh(cubit_mod, order=2, surface_only=False, split_quads=None):
-    """Export Cubit mesh to NGSolve via export_NGSolveCurvedMesh.
+    """Export Cubit mesh to NGSolve via C++ radia_export netgen command.
 
     Args:
         cubit_mod: Cubit module (already initialized with model open)
-        order: Curve order (1-3)
-        surface_only: True for BEM surface mesh
-        split_quads: Split quads into tris (default: True for surface_only)
+        order: Curve order (1-5)
+        surface_only: True for BEM surface mesh (auto-extracts from volume)
+        split_quads: Unused (kept for API compatibility)
 
     Returns:
         ngsolve.Mesh
     """
+    import tempfile
     setup_paths()
     from ngsolve import Mesh as NGMesh
-    from cubit_mesh_export import extract_curved_mesh
-    if split_quads is None:
-        split_quads = surface_only
-    ng_mesh = extract_curved_mesh(
-        cubit_mod, order=order, surface_only=surface_only,
-        split_quads=split_quads)
-    return NGMesh(ng_mesh)
+    vol_path = tempfile.mktemp(suffix='.vol')
+    cubit_mod.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
+    return NGMesh(vol_path)
 
 
 # ============================================================

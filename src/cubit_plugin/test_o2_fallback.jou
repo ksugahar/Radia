@@ -3,6 +3,6 @@ brick x 10 y 10 z 10
 volume all scheme tetmesh
 volume all size 5
 mesh volume all
-export radia_nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o1.bdf" order 1 overwrite
-export radia_nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o2.bdf" order 2 overwrite
-export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o1.msh" order 1 overwrite
+radia_export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o1.bdf" order 1 overwrite
+radia_export nastran "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o2.bdf" order 2 overwrite
+radia_export gmsh "S:/Radia/01_GitHub/src/cubit_plugin/test_out_o1.msh" order 1 overwrite

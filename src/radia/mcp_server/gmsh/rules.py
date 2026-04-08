@@ -73,7 +73,7 @@ def check_msh_version_mismatch(filepath: str, lines: List[str]) -> List[Dict]:
                 "message": (
                     "ReadGmsh() is deprecated. Use .vol files instead: "
                     "Mesh('model.vol'). Export from Cubit with "
-                    "'export netgen \"model.vol\" order N'."
+                    "'radia_export netgen \"model.vol\" order N'."
                 ),
             })
     return findings
@@ -117,7 +117,7 @@ def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
                 "message": (
                     "GMSH Python package (pip install gmsh) should not be used. "
                     "Radia uses standalone gmsh.exe for visualization. "
-                    "For mesh input to NGSolve, use .vol files (export netgen)."
+                    "For mesh input to NGSolve, use .vol files (radia_export netgen)."
                 ),
             })
     return findings

@@ -680,8 +680,8 @@ def test_11_cubit_multi_material_tet():
 		cubit.cmd("block 3 name 'boundary'")
 
 		# Export both versions
-		cubit.cmd(f'radia export gmsh "{tmp_v2}" version 2 overwrite')
-		cubit.cmd(f'radia export gmsh "{tmp_v4}" version 4 overwrite')
+		cubit.cmd(f'radia_export gmsh "{tmp_v2}" version 2 overwrite')
+		cubit.cmd(f'radia_export gmsh "{tmp_v4}" version 4 overwrite')
 
 		# Read both through GMSH API and compare
 		data_v2 = _safe_read_mesh_data(tmp_v2)
@@ -740,8 +740,8 @@ def test_12_cubit_mixed_dim_0d_1d_2d_3d():
 		cubit.cmd("block 4 name 'vertex_set'")
 
 		# Export both versions
-		cubit.cmd(f'radia export gmsh "{tmp_v2}" version 2 overwrite')
-		cubit.cmd(f'radia export gmsh "{tmp_v4}" version 4 overwrite')
+		cubit.cmd(f'radia_export gmsh "{tmp_v2}" version 2 overwrite')
+		cubit.cmd(f'radia_export gmsh "{tmp_v4}" version 4 overwrite')
 
 		data_v2 = _safe_read_mesh_data(tmp_v2)
 		data_v4 = _safe_read_mesh_data(tmp_v4)
