@@ -153,6 +153,55 @@ def h_segments_batch(segments, obs_points, current=1.0):
     return H_total
 
 
+def a_segments_batch(segments, obs_points, current=1.0):
+    """Vector potential A at multiple observation points from wire segments.
+
+    Vectorized over observation points, loops over segments.
+    A = mu0/(4*pi) * I * e_l * [arsinh((L-t)/d) + arsinh(t/d)]
+
+    Args:
+        segments: (N_seg, 2, 3) array or list of (p1, p2) tuples
+        obs_points: (N_obs, 3) array
+        current: current [A]
+
+    Returns:
+        A-field (N_obs, 3) in T*m
+    """
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+    n_obs = len(obs)
+
+    seg_arr = np.asarray(segments, dtype=float)  # (N_seg, 2, 3)
+    p1s = seg_arr[:, 0, :]
+    p2s = seg_arr[:, 1, :]
+
+    dl = p2s - p1s
+    L = np.linalg.norm(dl, axis=1)
+    valid = L > 1e-30
+    e_l = np.zeros_like(dl)
+    e_l[valid] = dl[valid] / L[valid, np.newaxis]
+
+    A_total = np.zeros((n_obs, 3))
+
+    for si in range(len(p1s)):
+        if not valid[si]:
+            continue
+        r1 = obs - p1s[si]  # (N_obs, 3)
+        el = e_l[si]
+        Ls = L[si]
+
+        t = r1 @ el  # (N_obs,)
+        perp = r1 - np.outer(t, el)  # (N_obs, 3)
+        d = np.linalg.norm(perp, axis=1)  # (N_obs,)
+        d = np.maximum(d, 1e-15)
+
+        integral = np.arcsinh((Ls - t) / d) + np.arcsinh(t / d)  # (N_obs,)
+        A_total += (current * MU0 * INV_4PI) * np.outer(integral, el)
+
+    return A_total
+
+
 def a_filament(p1, p2, obs_point, current=1.0):
     """Vector potential A at obs_point from a finite current filament.
 
