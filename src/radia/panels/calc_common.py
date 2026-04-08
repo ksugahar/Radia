@@ -269,6 +269,85 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
     return mesh, info
 
 
+def build_occ_ih_mesh_simple(R_coil=0.030, a_coil=0.003, gap_deg=5,
+                             R_wp=0.010, H_wp=0.020,
+                             R_air=0.080,
+                             maxh_coil=0.005, maxh_air=0.015,
+                             order=2):
+    """Build 3D IH mesh via OCC WITHOUT Kelvin (truncated air sphere).
+
+    For quick FEM testing / BEM-vs-FEM comparison. Dirichlet on outer sphere.
+    Same coil+workpiece geometry as build_occ_ih_mesh_3d.
+
+    Args:
+        R_coil, a_coil: Coil major/minor radius [m]
+        gap_deg: Gap angle [degrees]
+        R_wp, H_wp: Workpiece radius/height [m]
+        R_air: Outer air sphere radius [m] (Dirichlet truncation)
+        maxh_coil, maxh_air: Mesh sizes [m]
+        order: Mesh curve order
+
+    Returns:
+        (ngsolve.Mesh, dict)
+    """
+    from ngsolve import Mesh, TaskManager
+    from netgen.occ import (WorkPlane, Axes, Axis, Pnt, Dir, Sphere,
+                             Cylinder, OCCGeometry, Glue)
+
+    # Gapped torus coil
+    wp_plane = WorkPlane(Axes(p=Pnt(R_coil, 0, 0),
+                              n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
+    circle = wp_plane.Circle(a_coil).Face()
+    torus = circle.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360 - gap_deg)
+    torus.name = "coil"
+    torus.maxh = maxh_coil
+
+    # Label gap faces as source/sink
+    expected_gap_area = math.pi * a_coil**2
+    for f in torus.faces:
+        area = f.mass
+        if abs(area - expected_gap_area) / expected_gap_area < 0.3:
+            angle = math.atan2(f.center.y, f.center.x)
+            if abs(angle) < math.radians(gap_deg):
+                f.name = "source"
+            else:
+                f.name = "sink"
+
+    # Workpiece cylinder
+    wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
+    wp_cyl.name = "workpiece"
+    for f in wp_cyl.faces:
+        f.name = "wp_surface"
+        f.maxh = min(R_wp / 3, maxh_coil)
+
+    # Air sphere (truncated boundary)
+    air_sphere = Sphere(Pnt(0, 0, 0), R_air)
+
+    # Boolean: air = sphere - coil - workpiece
+    air = air_sphere - torus - wp_cyl
+    air.name = "air"
+    # Label outer sphere as Dirichlet
+    expected_sphere_area = 4 * math.pi * R_air**2
+    for f in air.faces:
+        if abs(f.mass - expected_sphere_area) / expected_sphere_area < 0.1:
+            f.name = "outer"
+            break
+
+    shape = Glue([air, wp_cyl, torus])
+    geo = OCCGeometry(shape)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
+    mesh = Mesh(ngmesh)
+    mesh.Curve(order)
+
+    info = {
+        'R_air': R_air,
+        'R_coil': R_coil, 'a_coil': a_coil,
+        'R_wp': R_wp, 'H_wp': H_wp,
+    }
+    return mesh, info
+
+
 def add_periodic_kelvin(mesh, kelvin_offset):
     """Add periodic identification to Cubit-exported mesh for Kelvin transform.
 

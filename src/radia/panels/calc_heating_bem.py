@@ -94,7 +94,8 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
                         gap_deg=5, frequency=7000, sigma=2e6,
                         material="steel", h1_order=1, wp_label="wp_surface",
                         half_thickness=0.010, esim_geometry="cylinder",
-                        bh_file=None, max_iter=15, tol=1e-3,
+                        bh_file=None, impedance_model="esim", mu_r=None,
+                        max_iter=15, tol=1e-3,
                         msh_output=""):
     """BEM-SIBC workpiece eddy current from .vol file.
 
@@ -169,53 +170,85 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
     progress("PHI_INC", f"range=[{phi_inc_nodes.min():.4f}, "
              f"{phi_inc_nodes.max():.4f}] ({t_phi:.1f}s)")
 
-    # === 4. ESIM surface impedance + Karl iteration ===
-    progress("KARL", "Starting Karl iteration...")
-
-    esim_solver = create_esim_solver(
-        material=material, frequency=frequency, sigma=sigma,
-        half_thickness=half_thickness, geometry=esim_geometry,
-        bh_file=bh_file)
-
-    # Skin depth estimate for reporting
-    bh_curve, mu_r = None, 1.0
-    if material == "steel":
-        mu_r = 100.0
-    mu_eff = MU_0 * mu_r
+    # === 4. Surface impedance + Karl iteration ===
+    # Determine mu_r for skin depth reporting
+    if mu_r is None:
+        mu_r_report = 100.0 if material == "steel" else 1.0
+    else:
+        mu_r_report = mu_r
+    mu_eff = MU_0 * mu_r_report
     delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega * sigma > 0 else float('inf')
 
-    # Initial Z_s
-    H_t_init = 5.0
-    Z_s = esim_solver.solve(H_t_init)['Z']
-    relax = 0.5
+    if impedance_model == "linear":
+        # Linear SIBC: Z_s = (1+j) * rho / delta, fixed (no iteration)
+        rho = 1.0 / sigma
+        mu_lin = MU_0 * (mu_r if mu_r is not None else mu_r_report)
+        delta_lin = math.sqrt(2 * rho / (omega * mu_lin)) if omega > 0 else float('inf')
+        Z_s = complex(1, 1) * rho / delta_lin
+        delta = delta_lin
 
-    n_converged = 0
-    for iteration in range(max_iter):
+        progress("SIBC", f"Linear Z_s={Z_s:.4e}, mu_r={mu_r_report}, "
+                 f"delta={delta*1e3:.4f}mm")
+
+        result = solver.solve(phi_inc_nodes, Z_s=Z_s, omega=omega)
+        H_t_rms = result['H_t_rms']
+        P_density = result['P_density']
+        P_total = P_density * result['area']
+        n_converged = 1
+        mu_r_eff = mu_r_report
+
+        progress("SOLVE_DONE", f"P={P_total:.4e}W, H_t_rms={H_t_rms:.2f}A/m")
+
+    else:
+        # ESIM: nonlinear Z_s(H_t), Karl iteration
+        progress("KARL", "Starting Karl iteration...")
+
+        esim_solver = create_esim_solver(
+            material=material, frequency=frequency, sigma=sigma,
+            half_thickness=half_thickness, geometry=esim_geometry,
+            bh_file=bh_file)
+
+        H_t_init = 5.0
+        Z_s = esim_solver.solve(H_t_init)['Z']
+        relax = 0.5
+
+        n_converged = 0
+        for iteration in range(max_iter):
+            result = solver.solve(phi_inc_nodes, Z_s=Z_s, omega=omega)
+            H_t_rms = result['H_t_rms']
+            P_density = result['P_density']
+            P_total = P_density * result['area']
+
+            Z_s_old = Z_s
+            sol = esim_solver.solve(max(H_t_rms, 1e-3))
+            Z_s_new = sol['Z']
+            Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+
+            dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            progress("KARL", f"iter {iteration}: |Z_s|={abs(Z_s):.4e}, "
+                     f"H_t_rms={H_t_rms:.2f}, P={P_total:.4e}W, dZ/Z={dZ:.4e}")
+
+            if dZ < tol and iteration > 0:
+                n_converged = iteration
+                break
+        else:
+            n_converged = max_iter
+
+        # Final result with converged Z_s
         result = solver.solve(phi_inc_nodes, Z_s=Z_s, omega=omega)
         H_t_rms = result['H_t_rms']
         P_density = result['P_density']
         P_total = P_density * result['area']
 
-        Z_s_old = Z_s
-        sol = esim_solver.solve(max(H_t_rms, 1e-3))
-        Z_s_new = sol['Z']
-        Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+        # Effective mu_r from ESIM (for reporting)
+        esim_info = esim_solver.solve(max(H_t_rms, 1e-3))
+        mu_final = esim_info.get('mu_final', MU_0 * mu_r_report)
+        mu_r_eff = float(abs(mu_final) / MU_0) if mu_final else mu_r_report
 
-        dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
-        progress("KARL", f"iter {iteration}: |Z_s|={abs(Z_s):.4e}, "
-                 f"H_t_rms={H_t_rms:.2f}, P={P_total:.4e}W, dZ/Z={dZ:.4e}")
+        t_total_check = _time.perf_counter() - t_total_start
+        progress("SOLVE_DONE", f"P={P_total:.4e}W, H_t_rms={H_t_rms:.2f}A/m "
+                 f"({t_total_check:.1f}s)")
 
-        if dZ < tol and iteration > 0:
-            n_converged = iteration
-            break
-    else:
-        n_converged = max_iter
-
-    # Final result with converged Z_s
-    result = solver.solve(phi_inc_nodes, Z_s=Z_s, omega=omega)
-    H_t_rms = result['H_t_rms']
-    P_density = result['P_density']
-    P_total = P_density * result['area']
     Q_density = 0.5 * Z_s.imag * H_t_rms**2 if Z_s != 0 else 0
     Q_total = Q_density * result['area']
 
@@ -223,11 +256,6 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
 
     progress("SOLVE_DONE", f"P={P_total:.4e}W, H_t_rms={H_t_rms:.2f}A/m "
              f"({t_total:.1f}s)")
-
-    # Effective mu_r from ESIM (for reporting)
-    esim_info = esim_solver.solve(max(H_t_rms, 1e-3))
-    mu_final = esim_info.get('mu_final', MU_0 * mu_r)
-    mu_r_eff = float(abs(mu_final) / MU_0) if mu_final else mu_r
 
     # === 5. GMSH output (optional) ===
     gmsh_file = ""
@@ -346,6 +374,11 @@ def main():
                         help="Workpiece radius for ESIM [m]")
     parser.add_argument("--esim-geometry", default="cylinder",
                         choices=["cylinder", "planar"])
+    parser.add_argument("--impedance-model", default="esim",
+                        choices=["esim", "linear"],
+                        help="esim (nonlinear BH) or linear (fixed mu_r)")
+    parser.add_argument("--mu-r", type=float, default=None,
+                        help="Relative permeability (linear mode)")
     parser.add_argument("--bh-file", default="",
                         help="Custom BH curve file")
     parser.add_argument("--max-iter", type=int, default=15,
@@ -365,6 +398,8 @@ def main():
             gap_deg=args.gap_deg,
             frequency=args.frequency,
             sigma=args.sigma,
+            impedance_model=args.impedance_model,
+            mu_r=args.mu_r,
             material=args.material,
             h1_order=args.h1_order,
             wp_label=args.wp_label,
