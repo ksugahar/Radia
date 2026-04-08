@@ -605,7 +605,7 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
     # --- Workpiece surface mesh ---
     # Try Cubit export first (ACIS curved, order=2), fallback to OCC
     t0 = _time.perf_counter()
-    from cubit_mesh_export import extract_curved_mesh
+    import tempfile as _tmpfile
     try:
         # Mesh workpiece volumes in Cubit if not already meshed
         for vid in wp_vol_ids:
@@ -618,15 +618,10 @@ def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
                 sys.stderr.write(f"BEM-SIBC: auto-meshed wp volume {vid}\n")
                 sys.stderr.flush()
 
-        # Temporarily hide non-workpiece volumes, export surface
-        all_vids = list(cubit_mod.get_entities("volume"))
-        hidden = [v for v in all_vids if v not in wp_vol_ids]
-        for v in hidden:
-            cubit_mod.cmd(f'volume {v} visibility off')
-        wp_mesh = Mesh(extract_curved_mesh(
-            cubit_mod, order=2, surface_only=True, split_quads=True))
-        for v in hidden:
-            cubit_mod.cmd(f'volume {v} visibility on')
+        # Export via C++ plugin
+        vol_path = _tmpfile.mktemp(suffix='.vol')
+        cubit_mod.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
+        wp_mesh = Mesh(vol_path)
         sys.stderr.write(f"BEM-SIBC: Cubit export OK (ACIS order=2)\n")
         sys.stderr.flush()
     except Exception as e:

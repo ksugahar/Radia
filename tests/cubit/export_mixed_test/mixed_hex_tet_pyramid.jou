@@ -4,9 +4,9 @@
 #   Volume 1: hex (map scheme)
 #   Volume 2: tet (tetmesh scheme) -- produces pyramids at hex-tet interface
 #
-# Tests: export gmsh order 1, export gmsh order 2 (NetgenCurver)
-#        export radia_nastran order 1, export radia_nastran order 2
-#        export netgen order 1, export netgen order 2
+# Tests: radia_export gmsh order 1, radia_export gmsh order 2 (NetgenCurver)
+#        radia_export nastran order 1, radia_export nastran order 2
+#        radia_export netgen order 1, radia_export netgen order 2
 
 reset
 
@@ -40,11 +40,11 @@ block 5 name "boundary_face"
 Volume all scale 0.001
 
 # Order 1 exports
-export gmsh "{DIR}/mixed_o1.msh" order 1 version 2 dimension 3 overwrite
-export radia_nastran "{DIR}/mixed_o1.bdf" order 1 dimension 3 overwrite
-export netgen "{DIR}/mixed_o1.vol" order 1 overwrite
+radia_export gmsh "{DIR}/mixed_o1.msh" order 1 version 2 dimension 3 overwrite
+radia_export nastran "{DIR}/mixed_o1.bdf" order 1 dimension 3 overwrite
+radia_export netgen "{DIR}/mixed_o1.vol" order 1 overwrite
 
 # Order 2 exports (NetgenCurver)
-export gmsh "{DIR}/mixed_o2.msh" order 2 version 2 dimension 3 overwrite
-export radia_nastran "{DIR}/mixed_o2.bdf" order 2 dimension 3 overwrite
-export netgen "{DIR}/mixed_o2.vol" order 2 overwrite
+radia_export gmsh "{DIR}/mixed_o2.msh" order 2 version 2 dimension 3 overwrite
+radia_export nastran "{DIR}/mixed_o2.bdf" order 2 dimension 3 overwrite
+radia_export netgen "{DIR}/mixed_o2.vol" order 2 overwrite

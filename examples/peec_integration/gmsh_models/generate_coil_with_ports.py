@@ -130,7 +130,7 @@ else:
 # Export to GMSH v2.2 format
 output_file = "circular_coil_with_ports.msh"
 print(f"\n[6] Exporting to GMSH v2.2 format...")
-cubit.cmd(f'radia export gmsh "{output_file}" version 2 overwrite')
+cubit.cmd(f'radia_export gmsh "{output_file}" version 2 overwrite')
 print(f"    OK Created: {output_file}")
 print(f"    Format: GMSH v2.2 (with port physical groups)")
 

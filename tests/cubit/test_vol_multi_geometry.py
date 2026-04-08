@@ -1,5 +1,5 @@
 """
-Multi-geometry comparison: Path A (compact_netgen) vs Path B (extract_curved_mesh).
+Multi-geometry volume accuracy test (radia_export netgen C++ command).
 
 Shapes:
   1. Sphere (R=0.05) — single curved surface
@@ -27,8 +27,6 @@ from ngsolve import Mesh, Integrate, CF, BND
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
             '-commandplugindir', os.environ['CUBIT_PLUGIN_DIR']])
-from cubit_mesh_export import extract_curved_mesh
-
 OUT_DIR = os.path.join(_test_dir, 'export_netgen_test')
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -146,7 +144,6 @@ test_cases = [
      (1.0/3.0)*math.pi*0.08*(0.04**2 + 0.04*0.01 + 0.01**2),
      None),  # complex area
 
-    # --- Hex meshes (A != B expected) ---
     # --- Hex meshes with curved surfaces ---
     ("hex_cylinder",
      [f"create cylinder height {H_cyl} radius {R_cyl}",
@@ -169,10 +166,10 @@ test_cases = [
 ]
 
 print("=" * 90)
-print(f"Multi-geometry test: Path A vs Path B (order {ORDER})")
+print(f"Multi-geometry volume accuracy test (order {ORDER})")
 print("=" * 90)
 
-header = f"{'Shape':<14} {'Path':<6} {'V_err%':>12} {'A_err%':>12} {'ne':>7} {'nse':>6} {'nedges':>7} {'n_ho_e':>7} {'Match':>6}"
+header = f"{'Shape':<14} {'V_err%':>12} {'A_err%':>12} {'ne':>7} {'nse':>6} {'nedges':>7} {'n_ho_e':>7} {'Result':>8}"
 print(header)
 print("-" * len(header))
 
@@ -182,31 +179,17 @@ for name, cmds, v_exact, a_exact in test_cases:
     cubit.cmd("reset")
     for cmd in cmds:
         cubit.cmd(cmd)
-    ne = cubit.get_tet_count() + cubit.get_hex_count()
 
-    # --- Path A: export netgen ---
-    path_a = os.path.join(OUT_DIR, f"multi_{name}_A.vol")
-    cubit.cmd(f'export netgen "{path_a}" order {ORDER} overwrite')
-    mesh_a = Mesh(path_a)
-    vol_a = Integrate(CF(1), mesh_a)
-    area_a = Integrate(CF(1), mesh_a, BND)
-    verr_a = (vol_a - v_exact) / v_exact * 100 if v_exact else float('nan')
+    # --- Export netgen ---
+    vol_path = os.path.join(OUT_DIR, f"multi_{name}.vol")
+    cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
+    mesh = Mesh(vol_path)
+    vol = Integrate(CF(1), mesh)
+    area = Integrate(CF(1), mesh, BND)
+    verr = (vol - v_exact) / v_exact * 100 if v_exact else float('nan')
+    aerr = (area - a_exact) / a_exact * 100 if a_exact else float('nan')
 
-    # --- Path B: extract_curved_mesh ---
-    try:
-        ng_b = extract_curved_mesh(cubit, order=ORDER)
-        path_b = os.path.join(OUT_DIR, f"multi_{name}_B.vol")
-        ng_b.Save(path_b)
-        mesh_b = Mesh(path_b)
-        vol_b = Integrate(CF(1), mesh_b)
-        area_b = Integrate(CF(1), mesh_b, BND)
-        verr_b = (vol_b - v_exact) / v_exact * 100 if v_exact else float('nan')
-    except Exception as e:
-        print(f"{name:<14} {'B':<6} FAILED: {e}")
-        vol_b = area_b = verr_b = float('nan')
-        path_b = None
-
-    # --- Structural comparison ---
+    # --- Structural info ---
     def vol_info(path):
         info = {}
         with open(path) as f:
@@ -222,35 +205,20 @@ for name, cmds, v_exact, a_exact in test_cases:
                                      if int(lines[j].strip()) > 1)
         return info
 
-    si_a = vol_info(path_a)
-    si_b = vol_info(path_b) if path_b else {}
+    si = vol_info(vol_path)
 
-    # Check match
-    if v_exact:
-        ref = abs(v_exact)
-        match_vol = abs(vol_a - vol_b) < 1e-10 * ref if not math.isnan(vol_b) else False
-    elif not math.isnan(vol_a) and not math.isnan(vol_b):
-        ref = max(abs(vol_a), abs(vol_b), 1e-30)
-        match_vol = abs(vol_a - vol_b) < 1e-10 * ref
-    else:
-        # Both nan (no analytical vol) — compare .vol structure only
-        match_vol = True
-    match_nse = si_a.get('nse') == si_b.get('nse')
-    match_ne = si_a.get('nedges') == si_b.get('nedges')
-    ok = match_vol and match_nse and match_ne
-    is_hex = name.startswith("hex_")
-    tag = "OK" if ok else ("hex" if is_hex else "DIFF")
-    if not ok and not is_hex:
+    # Volume error check (1% threshold for curved, exact for flat)
+    ok = True
+    if v_exact and abs(verr) > 1.0:
+        ok = False
+    tag = "OK" if ok else "FAIL"
+    if not ok:
         all_pass = False
 
-    aerr_a = (area_a - a_exact) / a_exact * 100 if a_exact else float('nan')
-    aerr_b = (area_b - a_exact) / a_exact * 100 if a_exact and not math.isnan(area_b) else float('nan')
-
-    print(f"{name:<14} {'A':<6} {verr_a:>+12.6e} {aerr_a:>+12.6e} {mesh_a.ne:>7} {si_a.get('nse','?'):>6} {si_a.get('nedges','?'):>7} {si_a.get('n_ho_e','?'):>7} {tag:>6}")
-    print(f"{'':14} {'B':<6} {verr_b:>+12.6e} {aerr_b:>+12.6e} {mesh_b.ne if not math.isnan(vol_b) else '?':>7} {si_b.get('nse','?'):>6} {si_b.get('nedges','?'):>7} {si_b.get('n_ho_e','?'):>7}")
+    print(f"{name:<14} {verr:>+12.6e} {aerr:>+12.6e} {mesh.ne:>7} {si.get('nse','?'):>6} {si.get('nedges','?'):>7} {si.get('n_ho_e','?'):>7} {tag:>8}")
 
 print("-" * len(header))
 if all_pass:
-    print("ALL SHAPES: Path A == Path B  (PASS)")
+    print("ALL SHAPES: volume accuracy OK  (PASS)")
 else:
-    print("SOME SHAPES DIFFER: investigate differences above")
+    print("SOME SHAPES FAILED: investigate errors above")

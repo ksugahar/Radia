@@ -4217,9 +4217,11 @@ radia_objects = coil.to_radia() # Biot-Savart source (NO mesh)
 
 ### 2. Cubit Hex Mesh + Curving
 ```python
-from cubit_mesh_export import extract_curved_mesh
+import tempfile
 from ngsolve import Mesh
-mesh = Mesh(extract_curved_mesh(cubit, order=3))
+vol_path = tempfile.mktemp(suffix='.vol')
+cubit.cmd(f'radia_export netgen "{vol_path}" order 3 overwrite')
+mesh = Mesh(vol_path)
 # ACIS CallbackGeometry: no STEP, no OCC, no seam problems
 ```
 

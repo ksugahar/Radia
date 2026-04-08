@@ -1,25 +1,18 @@
 """
-cubit-mesh-export: High-order curved mesh export from Coreform Cubit.
+cubit-mesh-export: Cubit plugin binaries and mesh consistency checking.
 
-Exports Cubit meshes to Netgen .vol format with:
-  - Arbitrary-order curving (order 1-5) via ACIS geometry projection
-  - Material labels (block/entity name)
-  - Boundary labels (sideset/block/entity name)
-  - Edge labels (BBND, sideset on curves)
-  - Companion JSON with CAD reference values for consistency checking
+The Cubit plugin (radia_cubit.ccm) provides mesh export commands:
+  radia_export netgen "model.vol" order N    -- High-order curved .vol
+  radia_export gmsh "model.msh" version 2   -- GMSH v2.2
+  radia_export gmsh "model.msh" version 4   -- GMSH v4.1
 
-Usage:
-    # Export (requires Cubit)
-    from cubit_mesh_export import extract_curved_mesh
-    ng_mesh = extract_curved_mesh(cubit, order=3)
+Consistency checking (does NOT require Cubit):
+  check-vol model.vol              # CLI
+  from cubit_mesh_export.check import check_consistency  # API
 
-    # Check (does NOT require Cubit)
-    check-vol model.vol              # CLI
-    from cubit_mesh_export.check import check_consistency  # API
+cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
-from .bridge import extract_curved_mesh
-
-__all__ = ["extract_curved_mesh", "__version__"]
+__all__ = ["__version__"]

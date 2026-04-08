@@ -7,19 +7,19 @@ Export mesh to NX Nastran bulk data format.
 The Radia Cubit plugin provides a native APREPRO command — no Python or block assignment required:
 
 ```
-export radia_nastran "mesh.bdf"
-export radia_nastran "mesh.bdf" dimension 2
-export radia_nastran "mesh.bdf" nopyramid
-export radia_nastran "mesh.bdf" dimension 2 nopyramid overwrite
+radia_export nastran "mesh.bdf"
+radia_export nastran "mesh.bdf" dimension 2
+radia_export nastran "mesh.bdf" nopyramid
+radia_export nastran "mesh.bdf" dimension 2 nopyramid overwrite
 ```
 
 ### Syntax
 
 ```
-export radia_nastran <"filename"> [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+radia_export nastran <"filename"> [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
 
-> **IMPORTANT**: Use `export radia_nastran`, NOT `export nastran`.
+> **IMPORTANT**: Use `radia_export nastran`, NOT `export nastran`.
 > Cubit has a built-in `export nastran` command with different format and no order 2 support.
 
 ### Options
@@ -47,10 +47,10 @@ export radia_nastran <"filename"> [order <1|2>] [dimension <2|3>] [nopyramid] [o
 ## Plugin Command
 
 ```python
-cubit.cmd('export radia_nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" dimension 3 overwrite')
 ```
 
-> **Note**: The old `cubit_mesh_export.export_Nastran()` Python function has been replaced by the `export radia_nastran` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
+> **Note**: The old `cubit_mesh_export.export_Nastran()` Python function has been replaced by the `radia_export nastran` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
 
 ### Options
 
@@ -135,7 +135,7 @@ cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 
-cubit.cmd('export radia_nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" dimension 3 overwrite')
 ```
 
 ### 2D Plate Export
@@ -146,17 +146,17 @@ cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("mesh surface 1")
 
 # Export as 2D - normals oriented to +z
-cubit.cmd('export radia_nastran "plate.bdf" dimension 2 overwrite')
+cubit.cmd('radia_export nastran "plate.bdf" dimension 2 overwrite')
 ```
 
 ### Handling Pyramids
 
 ```python
 # Export pyramids as CPYRAM (default)
-cubit.cmd('export radia_nastran "mesh.bdf" overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" overwrite')
 
 # Convert pyramids to degenerate hex (for solver compatibility)
-cubit.cmd('export radia_nastran "mesh.bdf" nopyramid overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" nopyramid overwrite')
 ```
 
 ## 2D Mode Normal Orientation

@@ -321,14 +321,14 @@ void RadiaMenuHandler::export_netgen()
 
   // --- Phase 1: C++ export .vol + companion JSON (no subprocess, no cub5) ---
   PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
-  std::string cmd = std::string("export netgen \"")
+  std::string cmd = std::string("radia_export netgen \"")
     + volPath.toLocal8Bit().constData()
     + "\" order " + std::to_string(order) + " overwrite";
   CubitInterface::silent_cmd(cmd.c_str());
 
   // Check .vol was created
   if (!QFile::exists(volPath)) {
-    PRINT_ERROR("export netgen command failed.\n");
+    PRINT_ERROR("radia_export netgen command failed.\n");
     return;
   }
   PRINT_INFO("Exported: %s\n", volPath.toLocal8Bit().constData());
@@ -982,18 +982,18 @@ QString ExportDialog::cubitCommand() const
   switch (mFormat) {
     case NETGEN_VOL: {
       // Not a Cubit APREPRO command — shown as preview only
-      cmd = QString("export netgen \"%1\" order %2").arg(file).arg(order);
+      cmd = QString("radia_export netgen \"%1\" order %2").arg(file).arg(order);
       break;
     }
     case GMSH: {
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
-      cmd = QString("export gmsh \"%1\" order %2 version 2 dimension %3")
+      cmd = QString("radia_export gmsh \"%1\" order %2 version 2 dimension %3")
                 .arg(file).arg(order).arg(dim);
       break;
     }
     case Nastran: {
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
-      cmd = QString("export radia_nastran \"%1\" order %2 dimension %3")
+      cmd = QString("radia_export nastran \"%1\" order %2 dimension %3")
                 .arg(file).arg(order).arg(dim);
       if (mNoPyramid && mNoPyramid->currentIndex() == 1)
         cmd += " nopyramid";
@@ -1001,7 +1001,7 @@ QString ExportDialog::cubitCommand() const
     }
     case VTK: {
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
-      cmd = QString("export vtk \"%1\" order %2 dimension %3")
+      cmd = QString("radia_export vtk \"%1\" order %2 dimension %3")
                 .arg(file).arg(order).arg(dim);
       break;
     }
