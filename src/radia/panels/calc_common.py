@@ -348,6 +348,74 @@ def build_occ_ih_mesh_simple(R_coil=0.030, a_coil=0.003, gap_deg=5,
     return mesh, info
 
 
+def build_occ_ih_mesh_hole(R_coil=0.030, a_coil=0.003, gap_deg=5,
+                           R_wp=0.010, H_wp=0.020,
+                           R_air=0.080,
+                           maxh_coil=0.005, maxh_air=0.015,
+                           order=2):
+    """Build 3D IH mesh with workpiece as HOLE (scattered-field FEM-SIBC).
+
+    Workpiece volume is NOT meshed. wp_surface is an external boundary
+    of the air domain. This is required for scattered-field formulation
+    where H_t is extracted from A_total = A_inc + A_scat on BND.
+
+    Faces are named BEFORE boolean to ensure OCC propagates labels.
+
+    Returns:
+        (ngsolve.Mesh, dict)
+    """
+    from ngsolve import Mesh, TaskManager
+    from netgen.occ import (WorkPlane, Axes, Axis, Pnt, Dir, Sphere,
+                             Cylinder, OCCGeometry, Glue)
+
+    # Gapped torus coil
+    wp_plane = WorkPlane(Axes(p=Pnt(R_coil, 0, 0),
+                              n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
+    circle = wp_plane.Circle(a_coil).Face()
+    torus = circle.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360 - gap_deg)
+    torus.name = "coil"
+    torus.maxh = maxh_coil
+
+    expected_gap_area = math.pi * a_coil**2
+    for f in torus.faces:
+        if abs(f.mass - expected_gap_area) / expected_gap_area < 0.3:
+            angle = math.atan2(f.center.y, f.center.x)
+            if abs(angle) < math.radians(gap_deg):
+                f.name = "source"
+            else:
+                f.name = "sink"
+
+    # Workpiece cylinder: name faces BEFORE boolean (OCC propagates names)
+    wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
+    for f in wp_cyl.faces:
+        f.name = "wp_surface"
+        f.maxh = min(R_wp / 3, maxh_coil)
+
+    # Air sphere with hole (no workpiece volume)
+    air = Sphere(Pnt(0, 0, 0), R_air) - torus - wp_cyl
+    air.name = "air"
+
+    expected_sphere_area = 4 * math.pi * R_air**2
+    for f in air.faces:
+        if f.name is None and abs(f.mass - expected_sphere_area) / expected_sphere_area < 0.1:
+            f.name = "outer"
+
+    shape = Glue([air, torus])  # NO wp_cyl (hole)
+    geo = OCCGeometry(shape)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
+    mesh = Mesh(ngmesh)
+    mesh.Curve(order)
+
+    info = {
+        'R_air': R_air,
+        'R_coil': R_coil, 'a_coil': a_coil,
+        'R_wp': R_wp, 'H_wp': H_wp,
+        'approach': 'hole',
+    }
+    return mesh, info
+
+
 def add_periodic_kelvin(mesh, kelvin_offset):
     """Add periodic identification to Cubit-exported mesh for Kelvin transform.
 
