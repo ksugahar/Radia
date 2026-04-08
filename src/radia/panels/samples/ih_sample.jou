@@ -1,16 +1,24 @@
-## Induction Heating sample: straight cylindrical conductor
-## Required labels: source, sink (sidesets on end faces)
+## Induction Heating sample: half-torus coil (native torus + webcut)
+## Required labels: source, sink (sidesets on cut faces)
 ## Optional labels: workpiece, air
 ##
-## Simple cylinder with source/sink on the two end faces.
-## Passes p-convergence test (single curved surface, no torus issues).
+## Creates a half-torus coil by webcut of native ACIS torus.
+## Native 'create torus' produces a single toroidal surface that
+## passes p-convergence cleanly (unlike sweep, which splits into
+## upper/lower halves causing ACIS projection issues).
 ##
 ## Usage: Solve -> Radia-NGSolve -> Induction Heating
 
 reset
 
-# Cylindrical conductor (radius 0.01 m, length 0.1 m)
-create cylinder height 0.1 radius 0.01
+# Create torus coil (R_major=0.11 m, R_minor=0.01 m)
+create torus major radius 0.11 minor radius 0.01
+
+# Cut with YZ plane to create terminal faces
+webcut volume 1 with plane xplane noimprint nomerge
+
+# Delete one half to get a C-shape (half-torus)
+delete volume 2
 
 # Mesh
 volume 1 scheme tetmesh
@@ -21,7 +29,7 @@ mesh volume 1
 block 1 add volume 1
 block 1 name "coil"
 
-# Terminal faces (top and bottom of cylinder)
+# Terminal faces (created by webcut)
 sideset 1 add surface 2
 sideset 1 name "source"
 sideset 2 add surface 3
