@@ -1,4 +1,4 @@
-## Induction Heating sample: torus inductor
+## Induction Heating sample: torus inductor with source/sink terminals
 ## Required labels: source, sink (sidesets on terminal faces)
 ## Optional labels: workpiece, air
 ##
@@ -9,17 +9,25 @@ reset
 # Create torus coil (R_major=0.11m, R_minor=0.01m)
 create torus major radius 0.11 minor radius 0.01
 
-# Mesh
-volume 1 scheme tetmesh
-volume 1 size auto factor 5
-mesh volume 1
+# Cut to create terminal faces (source and sink)
+webcut volume 1 with plane yplane offset 0 noimprint nomerge
 
-# Material block
-block 1 add volume 1
+# Mesh
+volume all scheme tetmesh
+volume all size auto factor 5
+mesh volume all
+
+# Imprint and merge after meshing
+imprint volume all
+merge volume all
+
+# Material blocks
+block 1 add volume all
 block 1 name "coil"
 
-# Source/sink terminal faces
-sideset 1 add surface 1
+# Source/sink terminal faces (created by webcut)
+# The cut creates 2 new planar surfaces
+sideset 1 add surface 2
 sideset 1 name "source"
-sideset 2 add surface 3
+sideset 2 add surface 5
 sideset 2 name "sink"
