@@ -33,7 +33,7 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (setup_cubit as _setup_cubit_common, setup_paths, MU_0,
-                          progress, calc_main)
+                          progress, calc_main, write_surface_only_vol)
 
 
 def _setup_cubit():
@@ -45,46 +45,8 @@ def _setup_cubit():
 
 
 def _write_surface_only_vol(src_ngmesh, output_path):
-    """Extract surface elements from a volume mesh and save as surface-only .vol.
-
-    BEM (HDivSurface) requires surface-only mesh. On a volume mesh,
-    HDivSurface includes all interior edges as DOFs, making the SL
-    matrix singular.
-
-    Args:
-        src_ngmesh: netgen.meshing.Mesh with volume + surface elements
-        output_path: path to write surface-only .vol
-    """
-    # Read the .vol text, remove volumeelements section, re-save
-    import io
-    buf = io.StringIO()
-    # Save to string via temp file
-    import tempfile, os
-    tmp = os.path.join(tempfile.gettempdir(), "_vol_tmp.vol")
-    src_ngmesh.Save(tmp)
-
-    with open(tmp, "r") as f:
-        lines = f.readlines()
-
-    with open(output_path, "w") as f:
-        skip = False
-        for line in lines:
-            s = line.strip()
-            if s == "volumeelements":
-                skip = True
-                # Write section with 0 elements
-                f.write("volumeelements\n0\n")
-                continue
-            if skip:
-                if s and not s[0].isdigit() and s != "edgesegmentsgi2" and not s.startswith("#"):
-                    skip = False
-                elif s == "edgesegmentsgi2" or s == "points" or s == "surfaceelements" or s == "materials" or s == "bcnames" or s == "curvedelements" or s == "endmesh" or s == "face_transparencies" or s == "facedescriptors":
-                    skip = False
-                else:
-                    continue
-            f.write(line)
-
-    os.remove(tmp)
+    """Legacy wrapper -- delegates to calc_common.write_surface_only_vol."""
+    write_surface_only_vol(src_ngmesh, output_path)
 
 
 def extract_inductance_vol(vol_file, source_label="source",

@@ -1,7 +1,11 @@
 """
 Radia IH (Induction Heating) analysis window.
 
-Modes: FEM (Kelvin + SIBC/ESIM) / BEM (EFIE + SIBC)
+Modes:
+  BEM          -- EFIE source/sink coil + optional workpiece SIBC
+  BEM-SIBC (WP) -- Analytical coil + workpiece surface BEM-SIBC
+  FEM          -- Kelvin + SIBC/ESIM
+
 Switch via combo box -- single window.
 
 Usage:
@@ -13,8 +17,8 @@ import sys
 import os
 
 TITLE = "Induction Heating"
-REQUIRED_LABELS = ["source", "sink"]
-OPTIONAL_LABELS = ["workpiece", "air"]
+REQUIRED_LABELS = []
+OPTIONAL_LABELS = ["source", "sink", "workpiece", "air", "wp_surface"]
 OPTIONAL_FILES = {}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,12 +37,12 @@ class IHPanel(ModePanel):
     def _build_ui(self):
         # Method selector
         self._method_combo = self.add_combo(
-            "method", "Method:", ["BEM", "FEM"])
+            "method", "Method:", ["BEM", "BEM-SIBC (WP)", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
 
-        # Source / Sink (required for BEM, red if empty)
+        # Source / Sink (required for BEM coil, not for BEM-SIBC WP)
         src_w = self.add_line("source", "Source block:", "",
                               placeholder="e.g. source")
         sink_w = self.add_line("sink", "Sink block:", "",
@@ -50,7 +54,16 @@ class IHPanel(ModePanel):
         self.add_line("freq", "Frequency [Hz]:", "50000")
         self.add_line("coil_sigma", "Coil sigma [S/m]:", "5.8e7")
 
-        # Workpiece (optional for BEM, always for FEM)
+        # BEM-SIBC (WP) specific: analytical coil geometry
+        self.add_line("wp_coil_radius", "Coil radius [m]:", "0.030")
+        self.add_line("wp_coil_current", "Coil current [A]:", "1.0")
+        self.add_line("wp_gap_deg", "Coil gap [deg]:", "5")
+        wp_label_w = self.add_line("wp_bnd_label", "WP boundary label:",
+                                   "wp_surface",
+                                   placeholder="e.g. wp_surface")
+        wp_label_w.textChanged.connect(self._on_validation_changed)
+
+        # Workpiece (optional for BEM coil, always for FEM)
         wp_w = self.add_line("workpiece", "Workpiece block:", "",
                              placeholder="(empty = inductance only)")
         wp_w.textChanged.connect(self._on_workpiece_changed)
@@ -67,6 +80,8 @@ class IHPanel(ModePanel):
                         filter_str="Text files (*.txt *.csv);;All (*)")
         self.add_combo("esim_geometry", "ESIM geometry:",
                        ["local_curvature", "planar"])
+        self.add_combo("wp_material", "WP material:",
+                       ["steel", "copper", "aluminum"])
 
         # FEM-specific
         self.add_line("current", "Current [A]:", "1.0")
@@ -92,32 +107,56 @@ class IHPanel(ModePanel):
         self._on_validation_changed()
 
     def _on_method_changed(self, method):
-        is_bem = (method == "BEM")
-        is_fem = not is_bem
+        is_bem_coil = (method == "BEM")
+        is_bem_wp = (method == "BEM-SIBC (WP)")
+        is_fem = (method == "FEM")
 
-        # BEM fields
+        # BEM coil fields (source/sink/air)
         for key in ("source", "sink", "air"):
-            self._set_row_visible(key, is_bem)
+            self._set_row_visible(key, is_bem_coil)
+
+        # BEM coil-specific
+        self._set_row_visible("coil_sigma", is_bem_coil)
+
+        # BEM-SIBC (WP) fields (analytical coil, no source/sink)
+        for key in ("wp_coil_radius", "wp_coil_current", "wp_gap_deg",
+                     "wp_bnd_label"):
+            self._set_row_visible(key, is_bem_wp)
 
         # FEM fields
         for key in ("current", "a_coil", "r_wp", "solver",
                      "max_iter", "fem_material", "fem_bh_file"):
             self._set_row_visible(key, is_fem)
 
-        # Impedance options differ
+        # Workpiece block line: BEM coil only (WP mode always has workpiece)
+        self._set_row_visible("workpiece", is_bem_coil)
+
+        # Impedance options differ by method
         combo = self._widgets["impedance"]
         prev = combo.currentText()
         combo.clear()
-        if is_bem:
+        if is_bem_coil:
             combo.addItems(["dowell", "esim", "bem-sibc"])
+        elif is_bem_wp:
+            combo.addItems(["esim", "dowell"])
         else:
             combo.addItems(["sibc", "esim"])
-        # Try to keep selection
         idx = combo.findText(prev)
         if idx >= 0:
             combo.setCurrentIndex(idx)
 
-        self._on_workpiece_changed()
+        # BEM-SIBC (WP) always shows workpiece params
+        if is_bem_wp:
+            for key in ("impedance", "wp_sigma", "half_thickness",
+                         "esim_geometry", "wp_material"):
+                self._set_row_visible(key, True)
+            self._set_row_visible("fes_order", True)
+            self._on_impedance_changed(
+                self._widgets["impedance"].currentText())
+        else:
+            self._set_row_visible("wp_material", False)
+            self._on_workpiece_changed()
+
         self._on_validation_changed()
 
     def _on_workpiece_changed(self, _text=None):
@@ -137,11 +176,13 @@ class IHPanel(ModePanel):
                 self._widgets["impedance"].currentText())
 
     def _on_impedance_changed(self, imp):
-        has_wp = bool(self._widgets["workpiece"].text().strip())
+        method = self.val("method")
+        is_wp_mode = (method == "BEM-SIBC (WP)")
+        has_wp = is_wp_mode or bool(self._widgets["workpiece"].text().strip())
         if not has_wp:
             return
         is_esim = (imp == "esim")
-        self._set_row_visible("mu_r", not is_esim)
+        self._set_row_visible("mu_r", not is_esim and not is_wp_mode)
         self._set_row_visible("bh_file", is_esim)
         self._set_row_visible("esim_geometry", is_esim)
 
@@ -158,15 +199,17 @@ class IHPanel(ModePanel):
                 w = self._widgets[key]
                 w.setStyleSheet(self._RED if not w.text().strip()
                                 else self._NORMAL)
-        if callable(self.validationChanged):
-            self.validationChanged()
+        cb = getattr(self, 'validationChanged', None)
+        if callable(cb):
+            cb()
 
     def is_runnable(self):
         method = self.val("method")
         if method == "BEM":
             return (bool(self._widgets["source"].text().strip())
                     and bool(self._widgets["sink"].text().strip()))
-        return True  # FEM has no hard requirements beyond .vol
+        # BEM-SIBC (WP) and FEM: no hard label requirements beyond .vol
+        return True
 
     def build_command(self, vol_path):
         if not vol_path:
@@ -175,6 +218,8 @@ class IHPanel(ModePanel):
 
         if method == "BEM":
             return self._build_bem_command(vol_path)
+        elif method == "BEM-SIBC (WP)":
+            return self._build_bem_wp_command(vol_path)
         else:
             return self._build_fem_command(vol_path)
 
@@ -209,6 +254,29 @@ class IHPanel(ModePanel):
         if air:
             cmd += ["--air", air,
                     "--msh-output", msh_output(vol_path, "_bem")]
+        return cmd
+
+    def _build_bem_wp_command(self, vol_path):
+        cmd = [_PYTHON, calc_script("calc_heating_bem.py"),
+               "--vol", vol_path,
+               "--coil-radius", self.val("wp_coil_radius"),
+               "--coil-current", self.val("wp_coil_current"),
+               "--gap-deg", self.val("wp_gap_deg"),
+               "--frequency", self.val("freq"),
+               "--sigma", self.val("wp_sigma"),
+               "--material", self.val("wp_material"),
+               "--half-thickness", self.val("half_thickness"),
+               "--wp-label", self.val("wp_bnd_label"),
+               "--msh-output", msh_output(vol_path, "_bem_wp")]
+        fes = self.val("fes_order")
+        if fes and fes != "0":
+            cmd += ["--h1-order", fes]
+        imp = self.val("impedance")
+        if imp == "esim":
+            cmd += ["--esim-geometry", self.val("esim_geometry")]
+            bh = self.val("bh_file")
+            if bh:
+                cmd += ["--bh-file", bh]
         return cmd
 
     def _build_fem_command(self, vol_path):
