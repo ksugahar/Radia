@@ -50,7 +50,7 @@ H_t = result['H_t_rms']
 - --impedance-model esim (nonlinear BH) or linear (fixed mu_r)
 - Karl iteration for ESIM convergence
 
-## FEM Scattered-Field + Hole (For L, B distribution)
+## FEM Scattered-Field + Hole + Kelvin (For L, B, P)
 
 **File**: `examples/cubit_panels/inductance/verify_sphere_sibc.py`
 
@@ -58,7 +58,12 @@ Decomposition: A = A_inc + A_scat
 - A_inc: known analytically (uniform field, or Biot-Savart filament)
 - Solve for A_scat only (HCurl, smaller perturbation)
 - Hole approach: workpiece volume NOT meshed, wp_surface is air-side boundary
+- **Kelvin transform REQUIRED** for correct screening (truncation gives 435% error)
 - H_t from A_total = A_inc + A_scat on BND (A_inc dominates, correctly evaluated)
+
+**Validated**: sphere R=10mm, steel 7kHz (ratio=3.0):
+- FEM + Kelvin: H_t = 2.53 A/m (-1.7% vs analytical 2.58)
+- FEM + Dirichlet (R_air=80mm): H_t = 13.8 A/m (+435%) ← WRONG
 
 **RHS must include BOTH terms**:
 ```python
@@ -195,18 +200,47 @@ H_inc_nodes = h_segments_batch(coil_segs, node_coords, current=1.0)
 IH_SCREENING = """
 # Screening Physics
 
+## Dimensionless Parameter
+
 The key dimensionless parameter is `Z_s / (jw * mu0 * a)` where `a` is the
 workpiece characteristic size (radius for cylinder).
 
-| Z_s / (jw*mu0*a) | Behavior | One-way accuracy |
-|-------------------|----------|-----------------|
-| < 0.3 | Weak screening | One-way OK (-11%) |
-| 0.3 - 3 | Transition | One-way unreliable |
-| > 3 | Strong screening | **One-way fails (100x+ error)** |
+| Z_s / (jw*mu0*a) | Behavior | One-way accuracy | Example |
+|-------------------|----------|-----------------|---------|
+| < 0.3 | Weak screening | One-way OK (-11%) | Copper 1kHz |
+| 0.3 - 3 | Transition | One-way unreliable | Steel 7kHz (ratio=3.0) |
+| > 3 | Strong screening | **One-way fails (100x+ error)** | Steel at high freq |
 
 One-way models use H_t = H_inc (PEC approximation).
 For steel at 7kHz: H_t = 0.77 A/m, not 18 A/m. One-way overestimates P by 300x.
 Two-way (Karl iteration with ESIM) is essential for magnetic materials.
+
+## FEM Scattered-Field: Kelvin is REQUIRED for Screening
+
+**CRITICAL (2026-04-09)**: FEM scattered-field with Dirichlet truncation
+(R_air = 8*R_wp) gives H_t ≈ H_inc (no screening). Kelvin transform is
+REQUIRED for correct screening at Z_s/(jw*mu0*a) >= 1.
+
+Verified:
+- **With Kelvin**: verify_sphere_sibc.py, ratio=10, -2.7% error ← CORRECT
+- **Without Kelvin**: IH hole mesh, ratio=3.0, H_t=13.8 vs BEM 6.3 ← WRONG (2.2x)
+
+The Dirichlet truncation reflects the scattered field back, contaminating
+the screening effect. The scattered field from SIBC is small but its
+incorrect reflection dominates at high screening ratios.
+
+For BEM (Scalar BIE): no truncation issue. BEM naturally handles open boundary.
+
+## Typical IH Parameters
+
+| Material | sigma [S/m] | mu_r | f [Hz] | delta [mm] | ratio |
+|----------|-------------|------|--------|------------|-------|
+| Steel | 2e6 | 100 | 7000 | 0.43 | 3.0 |
+| Copper | 5.8e7 | 1 | 1000 | 6.6 | 0.01 |
+| Copper | 5.8e7 | 1 | 100000 | 0.66 | 0.14 |
+| Aluminum | 3.5e7 | 1 | 7000 | 1.01 | 0.04 |
+
+Steel always needs two-way. Copper/aluminum OK with one-way at low frequencies.
 """
 
 
