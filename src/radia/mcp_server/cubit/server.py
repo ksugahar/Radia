@@ -1143,16 +1143,44 @@ def cubit_element_types_reference() -> str:
 # ============================================================
 
 def _selftest():
-	"""Run lint on the project's examples/ directory."""
+	"""Run lint on fixtures and optionally examples/."""
 	print("=" * 70)
 	print("Cubit Export Lint Self-Test")
 	print("=" * 70)
 	print()
 
+	# --- Fixtures validation ---
+	fixtures_dir = (
+		Path(__file__).parent.parent.parent.parent.parent / "tests"
+		/ "mcp_server" / "fixtures"
+	)
+	if not fixtures_dir.exists():
+		fixtures_dir = Path(__file__).parent / "fixtures"
+
+	if fixtures_dir.exists():
+		bad_file = fixtures_dir / "bad_cubit_script.py"
+		clean_file = fixtures_dir / "clean_cubit_script.py"
+		if bad_file.exists():
+			findings = _lint_file(str(bad_file))
+			print(f"  bad_cubit_script.py: {len(findings)} finding(s)")
+			if not findings:
+				print("  WARNING: bad_cubit_script.py has no findings")
+		if clean_file.exists():
+			findings = _lint_file(str(clean_file))
+			print(f"  clean_cubit_script.py: {len(findings)} finding(s)")
+			if findings:
+				for f in findings:
+					print(f"    L{f['line']} [{f['severity']}] {f['rule']}: {f['message']}")
+				print("  FAIL: clean script should have zero findings")
+				sys.exit(1)
+		print("  fixture validation: PASSED")
+		print()
+
+	# --- Examples scan ---
 	examples_dir = PROJECT_ROOT / "examples"
 	if not examples_dir.exists():
-		print(f"SKIP: examples/ not found at {examples_dir}")
-		print("Run from the project root or a directory containing examples/.")
+		if not fixtures_dir.exists():
+			print(f"SKIP: No fixtures or examples/ found")
 		return
 
 	result = lint_cubit_directory("examples")

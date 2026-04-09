@@ -41,8 +41,8 @@ def test_ngsolve_selftest_uses_fixtures(monkeypatch):
     assert 'fixture' in output.lower() or 'PASSED' in output or 'SKIP' in output
 
 
-def test_cubit_selftest_skips_without_examples(tmp_path, monkeypatch):
-    """Cubit selftest should print SKIP when examples/ not found."""
+def test_cubit_selftest_runs_without_examples(tmp_path, monkeypatch):
+    """Cubit selftest should use fixtures when examples/ not found."""
     monkeypatch.setattr(
         'radia.mcp_server.cubit.server.PROJECT_ROOT', tmp_path
     )
@@ -52,7 +52,7 @@ def test_cubit_selftest_skips_without_examples(tmp_path, monkeypatch):
     monkeypatch.setattr('sys.stdout', captured)
     _selftest()
     output = captured.getvalue()
-    assert 'SKIP' in output
+    assert 'PASSED' in output or 'SKIP' in output
 
 
 # ============================================================
@@ -126,6 +126,60 @@ def test_clean_ngsolve_has_no_findings():
     assert findings == [], (
         f"Clean script has {len(findings)} finding(s): "
         + ", ".join(f['rule'] for f in findings)
+    )
+
+
+# ============================================================
+# Fixture file validation (Cubit)
+# ============================================================
+
+from radia.mcp_server.cubit.server import _lint_file as _lint_file_cubit
+
+
+def test_bad_cubit_has_findings():
+    """bad_cubit_script.py must trigger Cubit-specific findings."""
+    findings = _lint_file_cubit(str(FIXTURES_DIR / "bad_cubit_script.py"))
+    rules_found = {f['rule'] for f in findings}
+    assert 'deleted-api-usage' in rules_found
+    assert 'hardcoded-absolute-path' in rules_found
+    assert len(findings) >= 4
+
+
+def test_clean_cubit_has_no_findings():
+    """clean_cubit_script.py must produce zero findings."""
+    findings = _lint_file_cubit(str(FIXTURES_DIR / "clean_cubit_script.py"))
+    assert findings == [], (
+        f"Clean script has {len(findings)} finding(s): "
+        + ", ".join(f['rule'] for f in findings)
+    )
+
+
+# ============================================================
+# Fixture file validation (GMSH)
+# ============================================================
+
+from radia.mcp_server.gmsh.server import _lint_file as _lint_file_gmsh
+
+
+def test_bad_gmsh_has_findings():
+    """bad_gmsh_script.py must trigger GMSH-specific findings."""
+    findings = _lint_file_gmsh(str(FIXTURES_DIR / "bad_gmsh_script.py"))
+    rules_found = {f['rule'] for f in findings}
+    assert 'gmsh-mesh-generation' in rules_found or 'pip-gmsh-import' in rules_found
+    assert len(findings) >= 2
+
+
+def test_clean_gmsh_has_no_findings():
+    """clean_gmsh_script.py must produce zero findings."""
+    findings = _lint_file_gmsh(str(FIXTURES_DIR / "clean_gmsh_script.py"))
+    # Filter to gmsh-specific rules only (same as selftest)
+    gmsh_findings = [f for f in findings
+                     if f['rule'].startswith(('gmsh-', 'pip-gmsh',
+                                              'meshio-', 'msh-',
+                                              'numsubedges', 'readgmsh'))]
+    assert gmsh_findings == [], (
+        f"Clean script has {len(gmsh_findings)} GMSH finding(s): "
+        + ", ".join(f['rule'] for f in gmsh_findings)
     )
 
 
