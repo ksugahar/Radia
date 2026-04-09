@@ -202,14 +202,53 @@ def get_gmsh_lint_rules() -> str:
 # ============================================================
 
 def _selftest():
-    """Run lint on examples/ to verify rules work."""
+    """Run lint on fixtures and optionally examples/."""
     print("=" * 70)
     print("GMSH Lint Self-Test")
     print("=" * 70)
 
+    # --- Fixtures validation ---
+    fixtures_dir = (
+        Path(__file__).parent.parent.parent.parent.parent / "tests"
+        / "mcp_server" / "fixtures"
+    )
+    if not fixtures_dir.exists():
+        fixtures_dir = Path(__file__).parent / "fixtures"
+
+    if fixtures_dir.exists():
+        bad_file = fixtures_dir / "bad_gmsh_script.py"
+        clean_file = fixtures_dir / "clean_gmsh_script.py"
+        if bad_file.exists():
+            findings = _lint_file(str(bad_file))
+            gmsh_findings = [f for f in findings
+                             if f['rule'].startswith(('gmsh-', 'pip-gmsh',
+                                                      'meshio-', 'msh-',
+                                                      'numsubedges',
+                                                      'readgmsh'))]
+            print(f"  bad_gmsh_script.py: {len(gmsh_findings)} finding(s)")
+            if not gmsh_findings:
+                print("  WARNING: bad_gmsh_script.py has no GMSH findings")
+        if clean_file.exists():
+            findings = _lint_file(str(clean_file))
+            gmsh_findings = [f for f in findings
+                             if f['rule'].startswith(('gmsh-', 'pip-gmsh',
+                                                      'meshio-', 'msh-',
+                                                      'numsubedges',
+                                                      'readgmsh'))]
+            print(f"  clean_gmsh_script.py: {len(gmsh_findings)} finding(s)")
+            if gmsh_findings:
+                for f in gmsh_findings:
+                    print(f"    L{f['line']} [{f['severity']}] {f['rule']}: {f['message']}")
+                print("  FAIL: clean script should have zero GMSH findings")
+                sys.exit(1)
+        print("  fixture validation: PASSED")
+        print()
+
+    # --- Examples scan ---
     examples_dir = PROJECT_ROOT / "examples"
     if not examples_dir.exists():
-        print(f"Examples directory not found: {examples_dir}")
+        if not fixtures_dir.exists():
+            print(f"Examples directory not found: {examples_dir}")
         return
 
     py_files = sorted(examples_dir.rglob("*.py"))
