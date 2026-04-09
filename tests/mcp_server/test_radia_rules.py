@@ -5,7 +5,7 @@ then provides correct code and verifies no findings.
 """
 
 import pytest
-from radia.mcp_server.radia.rules import (
+from radia.mcp_server.radia_ngsolve.rules import (
     ALL_RULES,
     check_objbckg_no_lambda,
     check_missing_utidelall,
@@ -338,7 +338,7 @@ class TestPeecPOverJw:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        assert len(ALL_RULES) == 17
+        assert len(ALL_RULES) == 33
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
