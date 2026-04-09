@@ -20,4 +20,12 @@ n_seg = 16
 # Rule: peec-p-over-jw (HIGH)
 # Loop-Star PEEC formulation
 omega = 2 * np.pi * 1e6
-# self.P / (1j * omega)  -- triggers in Loop-Star context
+Z_SS = self.P / (1j * omega)
+
+# Rule: efie-v-minus-sign (HIGH)
+# ShieldBEMSIBC solver
+Z_LL = Zs * M_LL - 1j * omega * mu_0 * V_LL
+
+# Rule: classical-efie-breakdown (MODERATE)
+from ngbem import HelmholtzSL
+P = 1 / kappa ** 2 * V_SL
