@@ -42,29 +42,39 @@ def elf_usage(topic: str = "all") -> str:
     Get ELF600 electromagnetic field analysis documentation.
 
     ELF600 is a BEM-based electromagnetic analysis suite with three solvers:
-    MAGIC (magnetostatic), ELFIN (eddy current), BEAM (particle tracking).
+    MAGIC (magnetostatic), ELFIN (electrostatic), BEAM (particle tracking).
     Input consists of .mai (analysis control), .mei (mesh script), and
     .meg (compiled mesh) files.
 
     Args:
         topic: Documentation topic. Options:
-            "all"              - Complete documentation
-            "overview"         - ELF600 suite overview, solver modules
-            "mai_format"       - .mai file format (analysis input)
-            "mei_format"       - .mei file format (mesh scripting)
-            "meg_format"       - .meg file format (compiled mesh data)
+            "all"              - Complete documentation (~60k chars)
+            "overview"         - ELF600 suite overview, solver modules, tools
+            "mai_format"       - .mai file format (PRE keywords, all solvers)
+            "mei_format"       - .mei file format (mesh scripting structure)
+            "meg_format"       - .meg file format (symmetry, nodes, elements)
             "magic"            - MAGIC magnetostatic solver details
-            "elfin"            - ELFIN eddy current solver details
-            "beam"             - BEAM particle tracking solver details
-            "element_types"    - Element naming convention and types
-            "bh_curves"        - B-H curve specification (HBUN/HBCU/HBRM)
-            "sol_commands"     - SOL block types and sub-keywords
-            "mei_commands"     - Mesh scripting commands (AA/AN/AE/ME/...)
-            "ipm_motor"        - IPM motor analysis workflow
-            "inductance"       - Inductance computation (LscLl)
-            "magnetization"    - Magnetization / demagnetization analysis
+            "elfin"            - ELFIN electrostatic solver (D-E curves)
+            "beam"             - BEAM particle tracking (RELA, BINT, GRAV)
+            "element_types"    - All element types (MAGIC/ELFIN/BEAM, DOF)
+            "bh_curves"        - B-H curves, recoil, extrapolation
+            "sol_commands"     - SOL blocks, NONL strategy, PASS optimization
+            "mei_commands"     - IEmesh commands (AA/AN/AE/ME/BE/TE/NB/...)
+            "ipm_motor"        - IPM motor Ld/Lq calculation workflow
+            "inductance"       - Lsc (JIS) and Ll (IEEJ) with 6 samples
+            "magnetization"    - Magnetization (MAGNE2) and demagnetization
             "examples"         - Example file catalog
             "meg_export"       - MEG export from Cubit (labels, DIM)
+            "treasure_box"     - Quick-reference tables (element-PRE map, etc.)
+            "sinusoidal"       - SOL MOMC, complex permeability, AC force
+            "anisotropy"       - HBA1/HBA2, VEC1/VEC3, lamination
+            "sted"             - Steady-state eddy current motion
+            "meshing"          - Element quality, gaps, connectivity rules
+            "convergence"      - Nonlinear convergence troubleshooting
+            "force_methods"    - FORC vs FORT vs FIXB comparison
+            "errors"           - Error messages (ELF-Q/E/W, 160+ codes)
+            "iemesh"           - IEmesh tool overview and command families
+            "tools"            - Wmap3, MagFilter2, MaiEditor3, ELF/Bench
     """
     return get_elf_documentation(topic)
 
@@ -123,6 +133,9 @@ def main():
             "magic", "elfin", "beam", "element_types", "bh_curves",
             "sol_commands", "mei_commands", "ipm_motor", "inductance",
             "magnetization", "examples", "meg_export",
+            "treasure_box", "sinusoidal", "anisotropy", "sted",
+            "meshing", "convergence", "force_methods", "errors",
+            "iemesh", "tools",
         ]
         for t in topics:
             result = elf_usage(t)
