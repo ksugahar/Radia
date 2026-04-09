@@ -606,7 +606,7 @@ def _selftest():
     print("=" * 70)
     print()
 
-    fixtures_dir = Path(__file__).parent.parent.parent.parent / "tests" / "fixtures"
+    fixtures_dir = Path(__file__).parent.parent.parent.parent.parent / "tests" / "mcp_server" / "fixtures"
     if not fixtures_dir.exists():
         fixtures_dir = Path(__file__).parent / "fixtures"
 
