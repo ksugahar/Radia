@@ -1,6 +1,10 @@
 """
 3D FEM-SIBC solver for Cubit panel (IHFEMDialog).
 
+Two approaches for workpiece:
+  Hole (preferred): workpiece subtracted from mesh, SIBC on hole boundary "sibc".
+  Interface (legacy): workpiece meshed as volume, SIBC on internal "wp_surface".
+
 User workflow:
   1. Write .jou to create geometry + mesh + named blocks
   2. Run journal in Cubit panel
@@ -8,18 +12,12 @@ User workflow:
 
 Cubit blocks (user sets in .jou):
   coil        - volume block, J source
-  workpiece   - volume block (SIBC on interface)
-  air         - volume block
+  air         - volume block (includes where workpiece was, for hole approach)
+  sibc        - sideset on hole boundary (hole approach, preferred)
+  wp_surface  - surface on air/workpiece interface (legacy interface approach)
   kelvin      - volume block (optional, Periodic Kelvin)
   source      - surface block, T0=1 (gap face, optional)
   sink        - surface block, T0=0 (gap face, optional)
-
-Auto-created by panel dialog:
-  wp_surface  - surface, Robin BC (shared face coil/air)
-  kelvin_int  - surface, periodic BC (interior hemisphere)
-  kelvin_ext  - surface, periodic BC (exterior hemisphere)
-
-Kelvin requires: webcut sphere + volume copy nomesh + copy mesh surface.
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
 """
@@ -125,23 +123,29 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
         return {"error": f"Either --vol or --cub5 required"}
 
     # Kelvin: detect offset, estimate radius, add periodic identification
+    # Only attempt if "kelvin" material exists in mesh
     a_kelvin = 0.060
-    kelvin_center = detect_kelvin_offset(mesh)
-    try:
-        air_verts = set()
-        mats = mesh.GetMaterials()
-        for el in mesh.Elements(VOL):
-            if "air" in str(mats[el.nr]):
-                for v in el.vertices:
-                    air_verts.add(v.nr)
-        if air_verts:
-            coords = np.array([mesh.vertices[v].point for v in air_verts])
-            a_kelvin = float(np.max(np.linalg.norm(coords, axis=1)))
-    except Exception:
-        pass
-    if add_periodic_kelvin(mesh, kelvin_center):
-        mesh = ngsolve.Mesh(mesh.ngmesh)
-        _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
+    kelvin_center = (0, 0, 0)
+    mats_pre = mesh.GetMaterials()
+    if "kelvin" in mats_pre:
+        kelvin_center = detect_kelvin_offset(mesh)
+        try:
+            # Estimate a_kelvin from max radius of kelvin_int boundary vertices
+            kelvin_verts = set()
+            for el in mesh.Elements(VOL):
+                if "kelvin" in str(mats_pre[el.nr]).lower():
+                    for v in el.vertices:
+                        kelvin_verts.add(v.nr)
+            if kelvin_verts:
+                kc = np.array(kelvin_center)
+                coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
+                dists = np.linalg.norm(coords - kc[np.newaxis, :], axis=1)
+                a_kelvin = float(np.min(dists))  # inner radius of kelvin shell
+        except Exception:
+            pass
+        if add_periodic_kelvin(mesh, kelvin_center):
+            mesh = ngsolve.Mesh(mesh.ngmesh)
+            _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
 
     t_mesh = time.perf_counter() - t0
 
@@ -155,8 +159,23 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     # ============================================================
     has_source = "source" in boundaries
     has_sink = "sink" in boundaries
-    has_wp = "wp_surface" in boundaries
     has_kelvin = "kelvin" in materials
+
+    # SIBC boundary: "sibc" (hole approach, preferred) or "wp_surface" (legacy)
+    if "sibc" in boundaries:
+        sibc_bnd = "sibc"
+        has_wp = True
+    elif "wp_surface" in boundaries:
+        sibc_bnd = "wp_surface"
+        has_wp = True
+    else:
+        sibc_bnd = ""
+        has_wp = False
+
+    # Hole approach: workpiece NOT in materials (subtracted from mesh)
+    is_hole = has_wp and "workpiece" not in materials
+    if has_wp:
+        _log(f"SIBC:boundary={sibc_bnd}, approach={'hole' if is_hole else 'interface'}")
 
     if has_source and has_sink:
         _log("SOURCE:T0 source/sink technique")
@@ -185,7 +204,8 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
         else:
             nu_dict[m] = NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
-    _log(f"KELVIN:a={a_kelvin}, center=({kx},{ky},{kz})")
+    if has_kelvin:
+        _log(f"KELVIN:a={a_kelvin}, center=({kx},{ky},{kz})")
 
     # ============================================================
     # Step 4: ESIM / SIBC solver
@@ -242,9 +262,9 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     f_lf += J_source * v * dx("coil")
     f_lf.Assemble()
 
-    # wp_surface area for H_t estimation
+    # SIBC surface area for H_t estimation
     if has_wp:
-        wp_region = mesh.Boundaries("wp_surface")
+        wp_region = mesh.Boundaries(sibc_bnd)
         A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
     else:
         A_wp = 2 * math.pi * R_wp * 0.020  # rough estimate
@@ -256,7 +276,11 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     for iteration in range(max_iter):
         t0_iter = time.perf_counter()
 
-        robin = -1j * omega / Z_s if has_wp else 0
+        # Robin coefficient:
+        #   Hole approach: +jw/Z_s (SIBC on external boundary of air domain)
+        #   Interface: sign depends on which side NGSolve evaluates from
+        #              +jw/Z_s works for both (tested with tangential projection)
+        robin = 1j * omega / Z_s if has_wp else 0
 
         # System bilinear form
         a_bf = BilinearForm(fes)
@@ -265,7 +289,7 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
             a_bf += reg * NU_0 * u * v * dx  # gauge regularization
 
         if has_wp and abs(robin) > 0:
-            a_bf += robin * u.Trace() * v.Trace() * ds("wp_surface")
+            a_bf += robin * u.Trace() * v.Trace() * ds(sibc_bnd)
 
         # Solver-specific setup
         if solver == "ams":
@@ -276,7 +300,7 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
             if reg > 0:
                 a_shifted += reg * NU_0 * u * v * dx
             if has_wp and abs(robin) > 0:
-                a_shifted += robin * u.Trace() * v.Trace() * ds("wp_surface")
+                a_shifted += robin * u.Trace() * v.Trace() * ds(sibc_bnd)
 
             from ngsolve.la import CompactAMSPreconditioner, COCRSolver
             pre_ams = CompactAMSPreconditioner(a_shifted, fes)
@@ -318,18 +342,35 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
 
         # H_t from SIBC relation: H_t = |jw/Z_s| * |A_t|
         #
-        # CRITICAL: Do NOT use Integrate(gfu * Conj(gfu), BND) for HCurl.
-        # HCurl BND integration returns near-zero because the natural
-        # trace is a 1-form (tangential), not a pointwise vector.
-        # Must expand components: sum(gfu[i].real^2 + gfu[i].imag^2).
-        # See fem_esim_3d.py for the validated implementation.
+        # Tangential projection: |A_t|^2 = |A|^2 - (A . n)^2
+        # n = specialcf.normal(3) = outward from mesh domain (air)
+        #
+        # Energy-balance P: P_sibc = P_input - P_curlcurl
+        #   P_input = Re(int J . A* dV)  (volume integral, no BND issues)
+        #   P_curlcurl = int nu |curl(A)|^2 dV + reg*nu0*|A|^2 dV
         if has_wp and abs(Z_s) > 0:
-            At_sq = sum(gfu[i].real * gfu[i].real +
-                        gfu[i].imag * gfu[i].imag for i in range(3))
-            int_A2 = Integrate(At_sq, mesh, BND,
-                               definedon=wp_region).real
-            At_rms = math.sqrt(max(int_A2, 0) / max(A_wp, 1e-30))
-            H_t_rms = abs(1j * omega / Z_s) * At_rms
+            from ngsolve import specialcf
+            n_bnd = specialcf.normal(3)
+
+            # |A|^2
+            A_sq = sum(gfu[i].real * gfu[i].real +
+                       gfu[i].imag * gfu[i].imag for i in range(3))
+            # (A . n)^2 = (Re(A).n)^2 + (Im(A).n)^2
+            Adn_re = sum(gfu[i].real * n_bnd[i] for i in range(3))
+            Adn_im = sum(gfu[i].imag * n_bnd[i] for i in range(3))
+            An_sq = Adn_re * Adn_re + Adn_im * Adn_im
+            At_sq = A_sq - An_sq  # |A_t|^2
+
+            int_At2 = Integrate(At_sq, mesh, BND,
+                                definedon=wp_region).real
+            At_rms = math.sqrt(max(int_At2, 0) / max(A_wp, 1e-30))
+            H_t_bnd = abs(1j * omega / Z_s) * At_rms
+
+            # BND integral with tangential projection works for both approaches:
+            #   Hole: single-side trace (air external boundary), fully correct
+            #   Interface: tangential projection removes normal artifacts
+            # Energy-balance is unreliable for interface (Robin leaks into workpiece)
+            H_t_rms = H_t_bnd
         else:
             H_t_rms = 5.0  # fallback
 
@@ -361,8 +402,7 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     # ============================================================
     # Step 6: Post-process
     # ============================================================
-    # Power from SIBC: P = 0.5 * Re(Z_s) * H_t_rms^2 * A_wp
-    # H_t from last iteration is used (already computed with correct formula)
+    # Time-averaged power: P = 0.5 * Re(Z_s) * H_t_rms^2 * A_wp
     if has_wp:
         P_total = 0.5 * Z_s.real * H_t_rms**2 * A_wp
         Q_total = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
@@ -397,7 +437,7 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
             fes_h1 = ngsolve.H1(mesh, order=1)
             gf_B = GridFunction(fes_h1)
             gf_B.Set(B_mag)
-            node_B = np.array([gf_B(mesh.vertices[v.nr].point)
+            node_B = np.array([gf_B(mesh(*mesh.vertices[v.nr].point))
                                for v in mesh.vertices])
             post.add_field("|B|", node_B, ncomp=1)
             post.write(msh_output)
