@@ -8,7 +8,7 @@ Based on: JP-MARs/SparseSolv
 
 Import: from ngsolve.la import CompactAMSPreconditioner, COCRSolver, etc.
 Install: Bundled with radia (pip install radia). Source: src/ext/sparsesolv/
-Requires: ngsolve >= 6.2.2601
+Requires: ngsolve >= 6.2.2603
 """
 
 SPARSESOLV_OVERVIEW = """
@@ -529,7 +529,7 @@ SPARSESOLV_BUILD = """
 ## PyPI (Recommended)
 
 ```bash
-pip install ngsolve>=6.2.2601     # Required dependency
+pip install ngsolve>=6.2.2603     # Required dependency
 pip install radia    # Includes sparsesolv
 ```
 
