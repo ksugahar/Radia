@@ -357,6 +357,193 @@ std::vector<int> MeshData::build_ho_conn_nc(
 
   return ho;
 }
+// ================================================================
+// build_ho_conn_gmsh — GMSH-ordered connectivity in one pass
+// ================================================================
+std::vector<int> MeshData::build_ho_conn_gmsh(
+    const std::vector<int> &conn, int nv, ElementType type,
+    const NetgenCurver &nc, const MeshData &mesh)
+{
+  int order = nc.get_order();
+  if (order < 2) return conn;
+
+  bool is_tet = (nv == 4 && (type == TETRA4 || type == TETRA));
+  bool is_tri = (nv == 3 && (type == TRI3 || type == CUBIT_TRI
+                           || type == TRISHELL || type == TRISHELL3));
+
+  if (is_tet) {
+    // --- TET: build entirely in GMSH order ---
+    // GMSH TET edges (gmsh.info Section 10.2, verified):
+    //   pos 0: (0,1), pos 1: (1,2), pos 2: (2,0),
+    //   pos 3: (3,0), pos 4: (3,2), pos 5: (3,1)
+    static const int gmsh_edges[][2] = {
+      {0,1},{1,2},{2,0},{3,0},{3,2},{3,1}
+    };
+    // GMSH TET faces (MTetrahedron.h, verified via Jacobian test):
+    //   face 0: (0,2,1), face 1: (0,1,3), face 2: (0,3,2), face 3: (3,1,2)
+    // get_face_nodes with GMSH winding returns face nodes directly in GMSH (i,j) order.
+    static const int gmsh_faces[][3] = {
+      {0,2,1},{0,1,3},{0,3,2},{3,1,2}
+    };
+
+    int npe = order - 1;  // nodes per edge
+    int npf = (order - 1) * (order - 2) / 2;  // face interior per face
+    int npv = (order - 1) * (order - 2) * (order - 3) / 6;  // volume interior
+    int total = 4 + 6 * npe + 4 * npf + npv;
+
+    std::vector<int> ho;
+    ho.reserve(total);
+
+    // Vertices (same order as GMSH)
+    for (int j = 0; j < 4; j++) ho.push_back(conn[j]);
+
+    // Edge nodes in GMSH order and direction
+    for (int e = 0; e < 6; e++) {
+      auto en = nc.get_edge_nodes(conn[gmsh_edges[e][0]],
+                                   conn[gmsh_edges[e][1]]);
+      if (en.empty()) return {};  // not in curved mesh
+      for (int nid : en) ho.push_back(nid);
+      for (int k = (int)en.size(); k < npe; k++)
+        ho.push_back(en.back());  // safe fallback
+    }
+
+    // Face interior nodes in GMSH winding (order >= 3)
+    if (order >= 3) {
+      for (int f = 0; f < 4; f++) {
+        auto fn = nc.get_face_nodes(conn[gmsh_faces[f][0]],
+                                     conn[gmsh_faces[f][1]],
+                                     conn[gmsh_faces[f][2]]);
+        for (int nid : fn) ho.push_back(nid);
+      }
+    }
+
+    // Volume interior nodes (order >= 4) — coordinate-based GMSH sorting
+    if (order >= 4 && npv > 0) {
+      auto vn = nc.get_vol_nodes(conn[0], conn[1], conn[2], conn[3]);
+      if ((int)vn.size() >= npv) {
+        // GMSH enumerates vol nodes as (i,j,k) for i=1..p-1, j=1..p-1-i, k=1..p-1-i-j
+        // where i = lam1 * p (weight on v1), j = lam2 * p, k = lam3 * p.
+        std::vector<std::array<int,3>> gmsh_ijk;
+        for (int i = 1; i < order; i++)
+          for (int j = 1; j < order - i; j++)
+            for (int k = 1; k < order - i - j; k++)
+              gmsh_ijk.push_back({i, j, k});
+
+        // Compute barycentric (i,j,k) for each vol node via Cramer's rule
+        auto v0c = mesh.get_node_coords(conn[0]);
+        auto v1c = mesh.get_node_coords(conn[1]);
+        auto v2c = mesh.get_node_coords(conn[2]);
+        auto v3c = mesh.get_node_coords(conn[3]);
+
+        double e1[3], e2[3], e3[3];
+        for (int d = 0; d < 3; d++) {
+          e1[d] = v1c[d] - v0c[d];
+          e2[d] = v2c[d] - v0c[d];
+          e3[d] = v3c[d] - v0c[d];
+        }
+        double det_A = e1[0]*(e2[1]*e3[2]-e2[2]*e3[1])
+                     - e1[1]*(e2[0]*e3[2]-e2[2]*e3[0])
+                     + e1[2]*(e2[0]*e3[1]-e2[1]*e3[0]);
+
+        struct VolNode { int node_id; int i, j, k; };
+        std::vector<VolNode> vol_nodes(npv);
+        for (int n = 0; n < npv; n++) {
+          auto nc_coord = mesh.get_node_coords(vn[n]);
+          double rhs[3] = {nc_coord[0]-v0c[0], nc_coord[1]-v0c[1], nc_coord[2]-v0c[2]};
+          double u = (rhs[0]*(e2[1]*e3[2]-e2[2]*e3[1])
+                    - rhs[1]*(e2[0]*e3[2]-e2[2]*e3[0])
+                    + rhs[2]*(e2[0]*e3[1]-e2[1]*e3[0])) / det_A;
+          double v = (e1[0]*(rhs[1]*e3[2]-rhs[2]*e3[1])
+                    - e1[1]*(rhs[0]*e3[2]-rhs[2]*e3[0])
+                    + e1[2]*(rhs[0]*e3[1]-rhs[1]*e3[0])) / det_A;
+          double w = (e1[0]*(e2[1]*rhs[2]-e2[2]*rhs[1])
+                    - e1[1]*(e2[0]*rhs[2]-e2[2]*rhs[0])
+                    + e1[2]*(e2[0]*rhs[1]-e2[1]*rhs[0])) / det_A;
+          vol_nodes[n] = {vn[n], (int)std::round(u * order),
+                                 (int)std::round(v * order),
+                                 (int)std::round(w * order)};
+        }
+
+        // Place each vol node at the GMSH target position
+        for (int g = 0; g < npv; g++) {
+          auto &target = gmsh_ijk[g];
+          bool found = false;
+          for (int n = 0; n < npv; n++) {
+            if (vol_nodes[n].i == target[0] &&
+                vol_nodes[n].j == target[1] &&
+                vol_nodes[n].k == target[2]) {
+              ho.push_back(vol_nodes[n].node_id);
+              found = true;
+              break;
+            }
+          }
+          if (!found) ho.push_back(vn[g]);  // fallback
+        }
+      } else {
+        for (int nid : vn) ho.push_back(nid);
+      }
+    }
+
+    return ho;
+  }
+
+  // --- Non-TET: build with internal order, then reorder edges ---
+  // Non-TET elements use serendipity (edge-only HO), so no face/vol reordering.
+  // TRI/QUAD: GMSH edge order matches internal (identity reorder).
+  auto ho = build_ho_conn_nc(conn, nv, type, nc);
+  if (ho.empty()) return {};
+
+  // Select reorder and flip tables
+  const int *reorder = nullptr;
+  const bool *flip = nullptr;
+  int n_edges = 0;
+
+  if (nv == 8 && (type == HEX8 || type == HEX)) {
+    reorder = EdgeTables::hex_gmsh_reorder; flip = EdgeTables::hex_gmsh_flip; n_edges = 12;
+  } else if (nv == 6 && (type == WEDGE6 || type == WEDGE)) {
+    reorder = EdgeTables::wedge_gmsh_reorder; flip = EdgeTables::wedge_gmsh_flip; n_edges = 9;
+  } else if (nv == 5 && (type == PYRAMID5 || type == PYRAMID)) {
+    reorder = EdgeTables::pyramid_gmsh_reorder; flip = EdgeTables::pyramid_gmsh_flip; n_edges = 8;
+  } else if (is_tri) {
+    // TRI: identity reorder, no flip — return as-is
+    return ho;
+  } else if (nv == 4 && (type == QUAD4 || type == QUAD
+                       || type == SHEL || type == SHELL4)) {
+    // QUAD: identity reorder — return as-is
+    return ho;
+  }
+
+  if (!reorder) return ho;
+
+  int npe = order - 1;
+  int n_total_edge_nodes = n_edges * npe;
+  int n_mid = (int)ho.size() - nv;
+  if (n_mid < n_total_edge_nodes) return ho;
+
+  std::vector<int> out(ho.size());
+  // Vertices unchanged
+  for (int i = 0; i < nv; i++) out[i] = ho[i];
+
+  // Reorder edge nodes
+  for (int e = 0; e < n_edges; e++) {
+    int src_start = nv + e * npe;
+    int dst_start = nv + reorder[e] * npe;
+    if (flip && flip[e]) {
+      for (int k = 0; k < npe; k++)
+        out[dst_start + k] = ho[src_start + (npe - 1 - k)];
+    } else {
+      for (int k = 0; k < npe; k++)
+        out[dst_start + k] = ho[src_start + k];
+    }
+  }
+
+  // Copy remaining nodes (face interior for TRI — but TRI already returned above)
+  int edge_end = nv + n_total_edge_nodes;
+  for (int i = edge_end; i < (int)ho.size(); i++)
+    out[i] = ho[i];
+
+  return out;
+}
 #endif // HAVE_NETGEN
 
 // ================================================================
