@@ -180,22 +180,19 @@ CallbackGeometry. This enables arbitrary orders (2, 3, 4, 5, ...) with
 exact placement on ACIS CAD surfaces. Cubit's role is topology (1st order
 mesh) AND surface projection; Netgen's role is p-refinement via Curve().
 
-## Curving Test Results (netgen 6.2.2602.post26, 2026-04-03)
+## Curving Test Results (netgen 6.2.2603, 2026-04-10)
 
 | Shape | Elems | p=2 V_err | p=5 V_err | Status |
 |-------|-------|-----------|-----------|--------|
-| Sphere tet | 482t | -0.08% | -0.00% | OK |
-| Cylinder tet | 2198t | -0.003% | -0.00% | OK |
-| Torus tet | 19348t | -0.003% | -0.00% | OK |
-| Gap torus tet | 12525t | -0.028% | -0.00% | OK |
-| Cone tet | 1145t | -0.010% | -0.00% | OK |
-| Cylinder hex | 308h | -0.007% | +0.00% | OK |
-| Sphere hex | 32h | -1.86% | -1.39% | Volume stops (face bubble blocked) |
+| Sphere tet | 482t | -8.24e-02% | -9.32e-06% | OK |
+| Cylinder hex | 308h | -1.57e-03% | +8.21e-06% | OK |
+| Cylinder wedge | 957w | -5.25e-03% | -4.37e-06% | OK |
+| Torus tet | 5191t | -2.68e-02% | -2.08e-05% | OK |
+| Mixed (tet+hex+wedge) | 1719 | -2.32e-02% | -8.92e-07% | OK |
 
-**Tet**: all shapes p-converge perfectly at p=5.
-**Hex cylinder**: edge blending exact for ruled surfaces.
-**Hex sphere**: volume stops (CalcElementTransformation returns false for hex order>=2).
-  Area converges (surface quad face bubbles work).
+**All element types** (tet, hex, wedge) p-converge to machine precision at p=5.
+Hex face bubbles and prism curving both work in 6.2.2603.
+curvedelements Save/Load roundtrip works out of the box (no fork needed).
 
 ## Multi-Surface Topology Warning
 
@@ -1085,7 +1082,7 @@ different version. This causes access violations in netgen::Mesh::AddPoint().
 
 **Fix**: Rebuild ccm with compact_netgen (static link, no external nglib.dll):
 ```bash
-cmake -DNETGEN_SRC_DIR=/path/to/netgen/source ...  # upstream or fork, static link
+cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
 # Do NOT use -DNETGEN_DIR=C:/netgen  # dynamic link = ABI risk
 ```
 

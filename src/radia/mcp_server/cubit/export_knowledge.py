@@ -538,7 +538,7 @@ is loaded from the plugins/ directory.
 
 **Fix**: Rebuild ccm with **compact_netgen** (static link, no nglib.dll dependency).
 ```bash
-cmake -DNETGEN_SRC_DIR=/path/to/netgen/source ...  # upstream or fork
+cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external path needed
 ```
 
 ### HEX20/TET10 has wrong node count in .msh/.bdf (order 2)
