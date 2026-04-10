@@ -407,80 +407,14 @@ std::vector<int> MeshData::build_ho_conn_gmsh(
         ho.push_back(en.back());  // safe fallback
     }
 
-    // Face interior nodes in GMSH winding (order >= 3)
-    if (order >= 3) {
+    // Face interior nodes in GMSH winding (order 3 only — 1 node per face)
+    // Order 4-5 not supported in GMSH export (clamped to 3 in ExportGmshCommand).
+    if (order == 3) {
       for (int f = 0; f < 4; f++) {
         auto fn = nc.get_face_nodes(conn[gmsh_faces[f][0]],
                                      conn[gmsh_faces[f][1]],
                                      conn[gmsh_faces[f][2]]);
         for (int nid : fn) ho.push_back(nid);
-      }
-    }
-
-    // Volume interior nodes (order >= 4) — coordinate-based GMSH sorting
-    if (order >= 4 && npv > 0) {
-      auto vn = nc.get_vol_nodes(conn[0], conn[1], conn[2], conn[3]);
-      if ((int)vn.size() >= npv) {
-        // GMSH enumerates vol nodes as (i,j,k) for i=1..p-1, j=1..p-1-i, k=1..p-1-i-j
-        // where i = lam1 * p (weight on v1), j = lam2 * p, k = lam3 * p.
-        std::vector<std::array<int,3>> gmsh_ijk;
-        for (int i = 1; i < order; i++)
-          for (int j = 1; j < order - i; j++)
-            for (int k = 1; k < order - i - j; k++)
-              gmsh_ijk.push_back({i, j, k});
-
-        // Compute barycentric (i,j,k) for each vol node via Cramer's rule
-        auto v0c = mesh.get_node_coords(conn[0]);
-        auto v1c = mesh.get_node_coords(conn[1]);
-        auto v2c = mesh.get_node_coords(conn[2]);
-        auto v3c = mesh.get_node_coords(conn[3]);
-
-        double e1[3], e2[3], e3[3];
-        for (int d = 0; d < 3; d++) {
-          e1[d] = v1c[d] - v0c[d];
-          e2[d] = v2c[d] - v0c[d];
-          e3[d] = v3c[d] - v0c[d];
-        }
-        double det_A = e1[0]*(e2[1]*e3[2]-e2[2]*e3[1])
-                     - e1[1]*(e2[0]*e3[2]-e2[2]*e3[0])
-                     + e1[2]*(e2[0]*e3[1]-e2[1]*e3[0]);
-
-        struct VolNode { int node_id; int i, j, k; };
-        std::vector<VolNode> vol_nodes(npv);
-        for (int n = 0; n < npv; n++) {
-          auto nc_coord = mesh.get_node_coords(vn[n]);
-          double rhs[3] = {nc_coord[0]-v0c[0], nc_coord[1]-v0c[1], nc_coord[2]-v0c[2]};
-          double u = (rhs[0]*(e2[1]*e3[2]-e2[2]*e3[1])
-                    - rhs[1]*(e2[0]*e3[2]-e2[2]*e3[0])
-                    + rhs[2]*(e2[0]*e3[1]-e2[1]*e3[0])) / det_A;
-          double v = (e1[0]*(rhs[1]*e3[2]-rhs[2]*e3[1])
-                    - e1[1]*(rhs[0]*e3[2]-rhs[2]*e3[0])
-                    + e1[2]*(rhs[0]*e3[1]-rhs[1]*e3[0])) / det_A;
-          double w = (e1[0]*(e2[1]*rhs[2]-e2[2]*rhs[1])
-                    - e1[1]*(e2[0]*rhs[2]-e2[2]*rhs[0])
-                    + e1[2]*(e2[0]*rhs[1]-e2[1]*rhs[0])) / det_A;
-          vol_nodes[n] = {vn[n], (int)std::round(u * order),
-                                 (int)std::round(v * order),
-                                 (int)std::round(w * order)};
-        }
-
-        // Place each vol node at the GMSH target position
-        for (int g = 0; g < npv; g++) {
-          auto &target = gmsh_ijk[g];
-          bool found = false;
-          for (int n = 0; n < npv; n++) {
-            if (vol_nodes[n].i == target[0] &&
-                vol_nodes[n].j == target[1] &&
-                vol_nodes[n].k == target[2]) {
-              ho.push_back(vol_nodes[n].node_id);
-              found = true;
-              break;
-            }
-          }
-          if (!found) ho.push_back(vn[g]);  // fallback
-        }
-      } else {
-        for (int nid : vn) ho.push_back(nid);
       }
     }
 
