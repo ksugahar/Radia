@@ -36,8 +36,8 @@ No fallback to HighOrderMesh (removed).
 cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 # -> produces mesh.vol + mesh.vol.json (CAD reference values)
 
-# Gmsh v2.2 (for GMSH visualization)
-cubit.cmd('radia_export gmsh "mesh.msh" order 2 version 2 overwrite')
+# Gmsh v2.2 (for GMSH visualization, order 1-5 supported)
+cubit.cmd('radia_export gmsh "mesh.msh" order 5 version 2 overwrite')
 
 # Any order 1-5 supported
 cubit.cmd('radia_export netgen "mesh.vol" order 5 overwrite')
@@ -393,21 +393,24 @@ EXPORT_COMPARISON = """
 |---------|--------|---------|---------|---------|--------|
 | 1st order | Yes | Yes | Yes | Yes | Yes |
 | 2nd order | Yes | Yes | Yes | No | Yes |
-| 3rd+ order | Yes | No | No | No | Yes |
+| 3rd-5th order | Yes | Yes | Yes | No | Yes |
 | In-memory | Yes | No | No | No | No |
 | BlockID metadata | N/A | Yes | Yes | Yes | Yes |
 | 2D support | No | No | Yes | Yes | No |
 
+Note: Gmsh v2.2/v4.1 order 3-5 supports TET, HEX, PYRAMID, TRI, QUAD.
+Wedge/Prism is limited to order 2 (GMSH format limitation).
+
 ## radia_export netgen vs Gmsh for NGSolve
 
-| Aspect | radia_export netgen | Gmsh v2.2 (export_Gmesh) |
+| Aspect | radia_export netgen | radia_export gmsh |
 |--------|----------------|---------------------------|
-| Max order | 5 | 2nd order |
+| Max order | 5 | 5 (wedge: 2) |
 | Accuracy at order 2 | ~0.003% | ~0.001% |
-| Accuracy at order 3+ | ~0.0004% | N/A |
-| Complexity | Low (APREPRO command) | Low (block element type) |
-| Geometry needed | ACIS (automatic) | No |
-| Best for | Any order FEM/BEM | Standard 2nd order FEM |
+| Accuracy at order 3+ | ~0.0004% | ~0.0004% |
+| Complexity | Low (APREPRO command) | Low (APREPRO command) |
+| Geometry needed | ACIS (automatic) | ACIS (automatic, order 3+) |
+| Best for | NGSolve FEM/BEM | GMSH visualization, ReadGmsh |
 """
 
 
@@ -427,14 +430,11 @@ EXPORT_DECISION_GUIDE = """
   ```
   Works for ANY geometry shape. No STEP files, no OCC, no SetGeomInfo.
 
-- **Alternative for 2nd order only** -> Use `export_Gmesh(version="2.2")` for GMSH visualization:
+- **Alternative (order 1-5)** -> Use `radia_export gmsh` for GMSH visualization:
   ```python
-  cubit.cmd("block 1 add tet all")
-  cubit.cmd("block 1 element type tetra10")
-  cubit.cmd("block 2 add tri all")
-  cubit.cmd("block 2 element type tri6")
-  cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
-  # For GMSH visualization only; for NGSolve use radia_export netgen instead
+  cubit.cmd('radia_export gmsh "mesh.msh" order 5 version 2 overwrite')
+  # Supports order 1-5 (wedge limited to order 2)
+  # For NGSolve use radia_export netgen instead
   ```
 
 ## "I need structural FEA (Nastran / JMAG)"

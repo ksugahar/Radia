@@ -109,8 +109,9 @@ class EMPanel(ModePanel):
         if idx >= 0:
             combo.setCurrentIndex(idx)
 
-        if callable(self.validationChanged):
-            self.validationChanged()
+        cb = getattr(self, 'validationChanged', None)
+        if callable(cb):
+            cb()
 
     def _on_material_changed(self, idx):
         self._set_row_visible("mu_r", idx == 0)

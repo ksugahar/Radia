@@ -25,8 +25,11 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | `coil "script.py" output "path.step"` | Custom output path |
 | `coil "script.py" noimport` | Generate STEP without importing |
 
-> **IMPORTANT**: Use `radia_export nastran`, NOT `export nastran`.
-> Cubit has a built-in `export nastran` with different format and no order 2 support.
+> **IMPORTANT**: Use `radia_export`, NOT `export`.
+> Cubit has built-in `export nastran` and `export abaqus` commands with different
+> formats and no high-order support. `export gmsh` does NOT exist in Cubit — only
+> `radia_export gmsh` is available. Using `export gmsh` will fail with
+> "is not a valid type of file to be exported".
 
 ### Build & Installation
 

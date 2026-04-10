@@ -322,36 +322,48 @@ def _launcher_settings_path():
                         ".radia", "radia_launcher.json")
 
 
+def _load_launcher_settings():
+    """Load launcher settings from ~/.radia/radia_launcher.json."""
+    p = _launcher_settings_path()
+    if not os.path.isfile(p):
+        return {}
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_launcher_settings(data):
+    """Save launcher settings to ~/.radia/radia_launcher.json."""
+    p = _launcher_settings_path()
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    try:
+        # Merge with existing settings
+        existing = _load_launcher_settings()
+        existing.update(data)
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=2)
+    except OSError:
+        pass
+
+
 def _load_last_dir():
     """Load last working directory from settings. Fallback to samples dir."""
     default = _samples_dir()
-    p = _launcher_settings_path()
-    if not os.path.isfile(p):
-        return default
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        d = data.get("last_jou_dir", "")
-        if d and os.path.isdir(d):
-            return d
-        # Try parent
-        parent = os.path.dirname(d)
-        if parent and os.path.isdir(parent):
-            return parent
-    except (OSError, json.JSONDecodeError):
-        pass
+    data = _load_launcher_settings()
+    d = data.get("last_jou_dir", "")
+    if d and os.path.isdir(d):
+        return d
+    parent = os.path.dirname(d)
+    if parent and os.path.isdir(parent):
+        return parent
     return default
 
 
 def _save_last_dir(d):
     """Save last working directory to settings."""
-    p = _launcher_settings_path()
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    try:
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump({"last_jou_dir": d}, f)
-    except OSError:
-        pass
+    _save_launcher_settings({"last_jou_dir": d})
 
 
 def _launch_radia_ngsolve():
@@ -382,10 +394,18 @@ def _launch_radia_ngsolve():
             print("ERROR: No radia_*.py analysis windows found.")
             return
 
+        # Restore previous selections
+        prev = _load_launcher_settings()
+        last_mode = prev.get("last_mode", "")
+        last_order = prev.get("last_order", 2)
+
         h_mode = QHBoxLayout()
         h_mode.addWidget(QLabel("Analysis:"))
         mode_combo = QComboBox()
-        mode_combo.addItems(list(mode_scripts.keys()))
+        mode_names = list(mode_scripts.keys())
+        mode_combo.addItems(mode_names)
+        if last_mode in mode_names:
+            mode_combo.setCurrentText(last_mode)
         h_mode.addWidget(mode_combo)
         h_mode.addStretch()
         layout.addLayout(h_mode)
@@ -396,7 +416,7 @@ def _launch_radia_ngsolve():
         order_combo = QComboBox()
         for p in range(1, 6):
             order_combo.addItem(str(p))
-        order_combo.setCurrentIndex(1)  # default order 2
+        order_combo.setCurrentIndex(max(0, min(4, last_order - 1)))
         h_order.addWidget(order_combo)
         h_order.addStretch()
         layout.addLayout(h_order)
@@ -546,6 +566,13 @@ def _launch_radia_ngsolve():
         order = order_combo.currentIndex() + 1
         out_dir = dir_edit.text().replace("\\", "/")
 
+        # Save selections for next launch
+        _save_launcher_settings({
+            "last_mode": mode_name,
+            "last_order": order,
+            "last_jou_dir": out_dir,
+        })
+
         # --- Export .vol ---
         cubit.cmd(f'cd "{out_dir}"')
         vol_name = "radia_model.vol"
@@ -557,7 +584,6 @@ def _launch_radia_ngsolve():
                   "Check blocks/sidesets.")
             return
         print(f"Exported: {vol_path} (order {order})")
-        _save_last_dir(out_dir)
 
         # --- Find and launch analysis window ---
         ext_python = _find_external_python()

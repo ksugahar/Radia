@@ -79,8 +79,8 @@ def evaluate_mesh(cub5_file, max_order=5):
 
     tmpdir = tempfile.mkdtemp(prefix="radia_eval_")
 
-    # === Phase 2: Format QA via GMSH API (order 1-2, vs CAD) ===
-    # This is our quality guarantee: .msh/.bdf/.vtk export correctness
+    # === Phase 2: Format QA via GMSH API (vs CAD) ===
+    # GMSH: order 1-5, Nastran/VTK: order 1-2
     format_results = []
     try:
         import gmsh
@@ -106,16 +106,17 @@ def evaluate_mesh(cub5_file, max_order=5):
             return total, neg
 
         formats = [
-            ("gmsh",    "msh", 'radia_export gmsh "{path}" overwrite'),
-            ("nastran", "bdf", 'radia_export nastran "{path}" overwrite'),
-            ("vtk",     "vtk", 'radia_export vtk "{path}" overwrite'),
+            # (name, ext, cmd_template, max_order)
+            ("gmsh",    "msh", 'radia_export gmsh "{path}" overwrite', max_order),
+            ("nastran", "bdf", 'radia_export nastran "{path}" overwrite', 2),
+            ("vtk",     "vtk", 'radia_export vtk "{path}" overwrite', 2),
         ]
-        for fmt_name, ext, cmd_template in formats:
-            for order in [1, 2]:
+        for fmt_name, ext, cmd_template, fmt_max_order in formats:
+            for order in range(1, fmt_max_order + 1):
                 fname = f"qa_{fmt_name}_o{order}.{ext}"
                 fpath = os.path.join(tmpdir, fname).replace("\\", "/")
                 cmd_str = cmd_template.format(path=fpath)
-                if order == 2:
+                if order >= 2:
                     cmd_str = cmd_str.replace("overwrite",
                                               f"order {order} overwrite")
                 try:
