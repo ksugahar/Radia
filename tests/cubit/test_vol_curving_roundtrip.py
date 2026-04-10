@@ -93,11 +93,14 @@ for order in [2, 3]:
     mesh_reload = Mesh(vol_path)
     vol_reload = Integrate(CF(1), mesh_reload)
     err_reload = (vol_reload - V_EXACT) / V_EXACT * 100
+    curve_order = mesh_reload.GetCurveOrder()
     print(f"  Loaded:     V={vol_reload:.10e}  err={err_reload:+.6e}%")
+    print(f"  CurveOrder: {curve_order} (expected {order})")
 
     results[order] = {
         'vol_reload': vol_reload, 'err_reload': err_reload,
         'has_curved': has_curved,
+        'curve_order': curve_order,
     }
 
 # ============================================================
@@ -124,3 +127,13 @@ if all_curved:
     print("curvedelements section present in all .vol files: PASS")
 else:
     print("curvedelements section MISSING in some .vol files: FAIL")
+
+# Verify CurveOrder is actually loaded (requires Netgen fork with curvedelements parser)
+curve_ok = all(r['curve_order'] == order for order, r in results.items())
+if curve_ok:
+    print("CurveOrder matches export order for all .vol files: PASS")
+else:
+    for order, r in results.items():
+        if r['curve_order'] != order:
+            print(f"WARNING: Order {order} .vol loaded as CurveOrder={r['curve_order']} "
+                  f"(expected {order}). Netgen fork with curvedelements Load parser required.")
