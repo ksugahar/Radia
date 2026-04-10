@@ -86,10 +86,34 @@ bool ExportGmshCommand::write_gmsh(const std::string &filename,
   if (!mesh.extract(order))
     return false;
 
-  if (version == "4.1")
-    return write_gmsh_v41(filename, mesh);
+  bool ok = (version == "4.1")
+    ? write_gmsh_v41(filename, mesh)
+    : write_gmsh_v22(filename, mesh);
 
-  return write_gmsh_v22(filename, mesh);
+  // Write companion .geo file for proper curved element display in GMSH GUI.
+  // Mesh.NumSubEdges=4 is required to render high-order curved surfaces
+  // (GMSH default=1 draws straight edges).
+  if (ok && order >= 2) {
+    std::string geo = filename.substr(0, filename.rfind('.')) + ".geo";
+    std::string msh_base = filename;
+    auto sep = msh_base.rfind('/');
+    auto sep2 = msh_base.rfind('\\');
+    if (sep2 != std::string::npos && (sep == std::string::npos || sep2 > sep))
+      sep = sep2;
+    if (sep != std::string::npos)
+      msh_base = msh_base.substr(sep + 1);
+
+    std::ofstream gf(geo);
+    if (gf.is_open()) {
+      gf << "// Auto-generated companion for " << msh_base << "\n";
+      gf << "Merge \"" << msh_base << "\";\n";
+      gf << "Mesh.NumSubEdges = 4;\n";
+      gf.close();
+      PRINT_INFO("Companion: %s\n", geo.c_str());
+    }
+  }
+
+  return ok;
 }
 
 // ========================================================================
@@ -401,6 +425,25 @@ static std::vector<int> reorder_for_gmsh(const std::vector<int> &conn,
 }
 
 // ========================================================================
+// gmsh_conn — get GMSH-ordered connectivity for a single element
+// ========================================================================
+static std::vector<int> gmsh_conn(const MeshElement &el, const MeshData &mesh)
+{
+  int order = mesh.order;
+#ifdef HAVE_NETGEN
+  auto nc = mesh.get_netgen_curver();
+  if (order >= 2 && nc) {
+    auto c = MeshData::build_ho_conn_gmsh(el.conn, el.nv, el.type, *nc, mesh);
+    if (!c.empty()) return c;
+  }
+#endif
+  // Fallback: use pre-built ho_conn (if any) with legacy reorder
+  const auto &raw = (order >= 2 && !el.ho_conn.empty()) ? el.ho_conn : el.conn;
+  return (order >= 2) ? reorder_for_gmsh(raw, el.nv, el.type, order, &mesh)
+                      : std::vector<int>(raw.begin(), raw.end());
+}
+
+// ========================================================================
 // Gmsh v2.2 writer — unified for all orders, blocks + sidesets
 // ========================================================================
 bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
@@ -494,8 +537,7 @@ bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
     }
     eid++;
 
-    const auto &raw = (order >= 2 && !elem.ho_conn.empty()) ? elem.ho_conn : elem.conn;
-    const auto c = reorder_for_gmsh(raw, elem.nv, elem.type, order, &mesh);
+    const auto c = gmsh_conn(elem, mesh);
     fid << eid << " " << gtype << " 2 " << elem.group_id << " " << elem.group_id;
     for (int nid : c) fid << " " << nid;
     fid << "\n";
@@ -508,8 +550,7 @@ bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
       int gtype = gmsh_type(face, order);
       if (gtype == 0) continue;
 
-      const auto &raw = (order >= 2 && !face.ho_conn.empty()) ? face.ho_conn : face.conn;
-      const auto c = reorder_for_gmsh(raw, face.nv, face.type, order, &mesh);
+      const auto c = gmsh_conn(face, mesh);
       fid << eid << " " << gtype << " 2 " << sg.id << " " << sg.id;
       for (int nid : c) fid << " " << nid;
       fid << "\n";
@@ -772,8 +813,7 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
     blk.dim = elem_dim(el);
     blk.entity_tag = el.group_id;
     blk.gmsh_type = gtype;
-    const auto &raw = (order >= 2 && !el.ho_conn.empty()) ? el.ho_conn : el.conn;
-    blk.conns.push_back(reorder_for_gmsh(raw, el.nv, el.type, order, &mesh));
+    blk.conns.push_back(gmsh_conn(el, mesh));
     total_elems++;
   }
 
@@ -787,8 +827,7 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
       blk.dim = elem_dim(face);
       blk.entity_tag = sg.id;
       blk.gmsh_type = gtype;
-      const auto &raw = (order >= 2 && !face.ho_conn.empty()) ? face.ho_conn : face.conn;
-      blk.conns.push_back(reorder_for_gmsh(raw, face.nv, face.type, order, &mesh));
+      blk.conns.push_back(gmsh_conn(face, mesh));
       total_elems++;
     }
   }
