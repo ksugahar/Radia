@@ -191,13 +191,8 @@ set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
 set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
 set "CUBIT_DIR=C:\Program Files\Coreform Cubit 2025.3\cmake"
 set "NETGEN_DIR=C:\Program Files\Python312\Lib\site-packages\netgen"
-rem NETGEN_SRC_DIR: netgen source for compact_netgen build.
-rem Set via environment variable. Upstream master or fork both work.
-if "%NETGEN_SRC_DIR%"=="" set "NETGEN_SRC_DIR=C:\netgen_build\netgen_official"
-if not exist "%NETGEN_SRC_DIR%\libsrc\meshing\meshing.hpp" (
-    echo WARNING: NETGEN_SRC_DIR=%NETGEN_SRC_DIR% not found. Cubit plugin curving disabled.
-    set "NETGEN_SRC_DIR="
-)
+rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
+rem No external NETGEN_SRC_DIR needed.
 
 if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
@@ -213,7 +208,7 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
     if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
     cd /d "!CUBIT_CCM_BUILD!"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DNETGEN_SRC_DIR="%NETGEN_SRC_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
     "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
     if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
 
