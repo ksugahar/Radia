@@ -123,6 +123,14 @@ if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxi
     call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
 )
 
+REM Ninja header dependency tracking:
+REM MSVC /showIncludes outputs in Japanese (cp932) on Japanese Windows.
+REM If rules.ninja gets a garbled msvc_deps_prefix (encoding mismatch),
+REM Ninja records #deps 0 for all .obj files and misses header changes.
+REM Fix: delete build-*/CMakeFiles/rules.ninja and reconfigure (Build.ps1 -Rebuild).
+REM VSLANG=1033 does NOT change cl.exe language, but ensures consistent env.
+set VSLANG=1033
+
 set LIB=$INTEL_MKL\lib;%LIB%
 set INCLUDE=$INTEL_MKL\include;%INCLUDE%
 set MKLROOT=$INTEL_MKL
