@@ -356,9 +356,10 @@ class AnalysisWindow(QMainWindow):
                 except json.JSONDecodeError:
                     pass
                 break
-        if result and "msh_output" in result:
-            msh = result["msh_output"]
-            if os.path.isfile(msh):
+        msh_key = "msh_output" if "msh_output" in (result or {}) else "msh_file"
+        if result and msh_key in result:
+            msh = result[msh_key]
+            if msh and os.path.isfile(msh):
                 self._last_msh = msh
                 self._gmsh_btn.setEnabled(True)
 
@@ -432,6 +433,37 @@ class AnalysisWindow(QMainWindow):
                 self._output.appendPlainText(
                     f"  BEM DOFs = {result.get('ndof', '?')}, "
                     f"elements = {result.get('n_elements', '?')}")
+            # FEM-SIBC results (calc_fem_kelvin)
+            if "P_total" in result and "P_total_W" not in result:
+                self._output.appendPlainText(
+                    "  --- FEM-SIBC ---")
+                self._output.appendPlainText(
+                    f"  P_total = {result['P_total']:.4e} W")
+                if "Q_total" in result:
+                    self._output.appendPlainText(
+                        f"  Q_total = {result['Q_total']:.4e} var")
+                if "H_t_rms" in result:
+                    self._output.appendPlainText(
+                        f"  H_t_rms = {result['H_t_rms']:.4f} A/m")
+                if "L" in result:
+                    self._output.appendPlainText(
+                        f"  L = {result['L']*1e9:.2f} nH")
+                if "Z_s" in result:
+                    self._output.appendPlainText(
+                        f"  Z_s = {result['Z_s']}")
+                if "delta" in result:
+                    self._output.appendPlainText(
+                        f"  Skin depth = {result['delta']*1e3:.3f} mm")
+                if "ndof" in result:
+                    self._output.appendPlainText(
+                        f"  DOFs = {result['ndof']}, "
+                        f"Elements = {result.get('ne', '?')}")
+                if "iterations" in result:
+                    self._output.appendPlainText(
+                        f"  Karl iterations = {result['iterations']}")
+                if "t_total" in result:
+                    self._output.appendPlainText(
+                        f"  Time = {result['t_total']:.1f}s")
             # Volume/area results (calc_volume, calc_surface)
             if "ng_volume" in result:
                 self._output.appendPlainText(

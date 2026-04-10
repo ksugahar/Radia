@@ -872,32 +872,46 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     }
   }
 
-  // Directory row: text + browse button
-  QHBoxLayout* dirRow = new QHBoxLayout();
-  mDir = new QLineEdit(defaultDir);
-  QPushButton* browseBtn = new QPushButton("...");
-  browseBtn->setFixedWidth(30);
-  connect(browseBtn, SIGNAL(clicked()), this, SLOT(browseDir()));
-  connect(mDir, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
-  dirRow->addWidget(mDir);
-  dirRow->addWidget(browseBtn);
-  form->addRow("Directory:", dirRow);
+  if (format == FEMEEM) {
+    // FEMEEM: single directory path (files in.dat etc. are fixed names)
+    QHBoxLayout* dirRow = new QHBoxLayout();
+    mDir = new QLineEdit(defaultDir + "/" + baseName);
+    QPushButton* browseBtn = new QPushButton("...");
+    browseBtn->setFixedWidth(30);
+    connect(browseBtn, SIGNAL(clicked()), this, SLOT(browseDir()));
+    connect(mDir, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
+    dirRow->addWidget(mDir);
+    dirRow->addWidget(browseBtn);
+    form->addRow("Directory:", dirRow);
 
-  // Filename row: text input (no browse, user types)
-  // FEMEEM: directory name (no extension), others: file with extension
-  QString fileLabel = (format == FEMEEM) ? "Output name:" : "Filename:";
-  mFileName = new QLineEdit(baseName + exts[format]);
-  connect(mFileName, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
-  form->addRow(fileLabel, mFileName);
+    // Hidden mFileName (filePath() uses dir + filename, keep empty)
+    mFileName = new QLineEdit("");
+    mFileName->setVisible(false);
+  } else {
+    // Other formats: directory + filename
+    QHBoxLayout* dirRow = new QHBoxLayout();
+    mDir = new QLineEdit(defaultDir);
+    QPushButton* browseBtn = new QPushButton("...");
+    browseBtn->setFixedWidth(30);
+    connect(browseBtn, SIGNAL(clicked()), this, SLOT(browseDir()));
+    connect(mDir, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
+    dirRow->addWidget(mDir);
+    dirRow->addWidget(browseBtn);
+    form->addRow("Directory:", dirRow);
+
+    mFileName = new QLineEdit(baseName + exts[format]);
+    connect(mFileName, SIGNAL(textChanged(QString)), this, SLOT(updatePreview()));
+    form->addRow("Filename:", mFileName);
+  }
 
   // Order (not for FEMEEM/MEG — always 1st order)
   mOrderCombo = new QComboBox();
   if (format == FEMEEM || format == MEG) {
     mOrderCombo->addItems({"1 (linear)"});
     // No form row — hidden, always order 1
-  } else if (format == NETGEN_VOL) {
+  } else if (format == NETGEN_VOL || format == GMSH) {
     mOrderCombo->addItems({"1", "2", "3", "4", "5"});
-    mOrderCombo->setCurrentIndex(2);  // default order 3
+    mOrderCombo->setCurrentIndex(format == NETGEN_VOL ? 2 : 0);  // vol: default 3, gmsh: default 1
     connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
     form->addRow("Order:", mOrderCombo);
   } else {
@@ -1025,6 +1039,11 @@ QString ExportDialog::filePath() const
 {
   QString dir = mDir->text();
   dir.replace("\\", "/");
+  if (mFormat == FEMEEM) {
+    // FEMEEM: mDir IS the full output directory path
+    while (dir.endsWith('/')) dir.chop(1);
+    return dir;
+  }
   if (!dir.endsWith('/')) dir += '/';
   return dir + mFileName->text();
 }

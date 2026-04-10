@@ -251,9 +251,16 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       jf << "{\n";
 
       // Materials (per-block volume)
+      // MeshExportInterface may return a default block (all elements) whose ID
+      // does not exist as a user-defined Cubit block. Skip such blocks to avoid
+      // "No block with ID N was found" errors from parse_cubit_list.
       jf << "  \"materials\": {";
       bool first = true;
+      std::vector<int> cubit_block_ids = CubitInterface::parse_cubit_list("block", "all");
+      std::set<int> cubit_block_set(cubit_block_ids.begin(), cubit_block_ids.end());
       for (int bid : md.block_ids) {
+        if (cubit_block_set.find(bid) == cubit_block_set.end())
+          continue;  // skip MeshExportInterface default block
         std::string bname = CubitInterface::get_block_name(bid);
         if (bname.empty()) bname = "volume_" + std::to_string(bid);
         // Get volumes in this block

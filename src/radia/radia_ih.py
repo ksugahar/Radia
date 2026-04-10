@@ -18,7 +18,7 @@ import os
 
 TITLE = "Induction Heating"
 REQUIRED_LABELS = []
-OPTIONAL_LABELS = ["source", "sink", "workpiece", "air", "wp_surface"]
+OPTIONAL_LABELS = ["source", "sink", "workpiece", "air", "wp_surface", "sibc"]
 OPTIONAL_FILES = {}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

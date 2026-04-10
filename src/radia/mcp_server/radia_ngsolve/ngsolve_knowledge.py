@@ -1578,6 +1578,26 @@ gfuir.Interpolate(gfu)  # Now contains actual point values
 point_values = np.array(gfuir.vec.data[:])
 ```
 
+## 18b. GridFunction Point Evaluation: Unpack Tuple (Radia)
+
+`mesh.vertices[v].point` returns a tuple `(x, y, z)`. GridFunction `__call__`
+does NOT accept a single tuple — it expects separate `x, y, z` arguments
+or a `MeshPoint`.
+
+```python
+# WRONG - tuple passed as single argument
+val = gf(mesh.vertices[v.nr].point)       # TypeError!
+
+# CORRECT - unpack tuple with *
+val = gf(*mesh.vertices[v.nr].point)      # gf(x, y, z)
+
+# ALSO CORRECT - via MeshPoint
+val = gf(mesh(*mesh.vertices[v.nr].point))
+```
+
+This bug broke GMSH |B| export in both `calc_fem_kelvin.py` and
+`calc_accel_magnet.py` (fixed 2026-04-09).
+
 ## 19. Python Krylov Solvers for Nested BlockMatrix (Forum: Thread 3399)
 
 ```python

@@ -803,7 +803,7 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
             fes_h1 = H1(mesh, order=1)
             gf_B = GridFunction(fes_h1)
             gf_B.Set(B_mag_cf)
-            node_B = np.array([gf_B(mesh.vertices[v.nr].point)
+            node_B = np.array([gf_B(mesh(*mesh.vertices[v.nr].point))
                                for v in mesh.vertices])
             post.add_field("|B|", node_B, ncomp=1)
             post.write(msh_output)

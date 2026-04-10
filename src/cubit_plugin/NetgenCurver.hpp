@@ -15,6 +15,7 @@
 
 #include <vector>
 #include <array>
+#include <algorithm>
 #include <unordered_map>
 #include <iosfwd>
 #include <memory>
@@ -38,6 +39,50 @@ struct HoEdgeKey {
 struct HoEdgeKeyHash {
   size_t operator()(const HoEdgeKey &k) const {
     return std::hash<int64_t>()(((int64_t)k.n0 << 32) | (int64_t)(unsigned)k.n1);
+  }
+};
+
+// Face key for deduplication (triangular face — 3 sorted vertex IDs)
+struct HoFaceKey3 {
+  int n0, n1, n2;  // sorted ascending
+  HoFaceKey3(int a, int b, int c) {
+    if (a > b) std::swap(a, b);
+    if (b > c) std::swap(b, c);
+    if (a > b) std::swap(a, b);
+    n0 = a; n1 = b; n2 = c;
+  }
+  bool operator==(const HoFaceKey3 &o) const {
+    return n0 == o.n0 && n1 == o.n1 && n2 == o.n2;
+  }
+};
+struct HoFaceKey3Hash {
+  size_t operator()(const HoFaceKey3 &k) const {
+    size_t h = std::hash<int>()(k.n0);
+    h ^= std::hash<int>()(k.n1) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<int>()(k.n2) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
+// Volume key for deduplication (tet — 4 sorted vertex IDs)
+struct HoElemKey4 {
+  int n0, n1, n2, n3;  // sorted ascending
+  HoElemKey4(int a, int b, int c, int d) {
+    int v[4] = {a, b, c, d};
+    std::sort(v, v + 4);
+    n0 = v[0]; n1 = v[1]; n2 = v[2]; n3 = v[3];
+  }
+  bool operator==(const HoElemKey4 &o) const {
+    return n0 == o.n0 && n1 == o.n1 && n2 == o.n2 && n3 == o.n3;
+  }
+};
+struct HoElemKey4Hash {
+  size_t operator()(const HoElemKey4 &k) const {
+    size_t h = std::hash<int>()(k.n0);
+    h ^= std::hash<int>()(k.n1) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<int>()(k.n2) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    h ^= std::hash<int>()(k.n3) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
   }
 };
 
@@ -66,6 +111,15 @@ public:
   // Get edge high-order nodes between two vertex node IDs.
   // Returns (order-1) node IDs along the edge from n0 to n1.
   std::vector<int> get_edge_nodes(int n0, int n1) const;
+
+  // Get face interior nodes for a triangular face (order >= 3).
+  // Vertices n0,n1,n2 in element-local order. Returns nodes in
+  // GMSH convention relative to the given vertex ordering.
+  std::vector<int> get_face_nodes(int n0, int n1, int n2) const;
+
+  // Get volume interior nodes for a tet (order >= 4).
+  // Vertices n0..n3 in element-local order.
+  std::vector<int> get_vol_nodes(int n0, int n1, int n2, int n3) const;
 
   // Write all high-order nodes (beyond vertex nodes) to Gmsh format
   void write_ho_nodes_gmsh(std::ofstream &fid) const;
@@ -103,6 +157,24 @@ private:
   // Edge -> ordered list of high-order node IDs (order-1 nodes per edge)
   // Key is ordered (min,max) pair; value is nodes from min→max direction
   std::unordered_map<HoEdgeKey, std::vector<int>, HoEdgeKeyHash> edge_ho_nodes_;
+
+  // Face -> ordered list of face interior node IDs (order >= 3)
+  // Key: sorted 3-vertex triple. Value: nodes generated with the
+  // canonical vertex ordering (v_sorted[0] -> v_sorted[1] -> v_sorted[2]).
+  // Stored vertices for orientation recovery:
+  struct FaceData {
+    std::vector<int> node_ids;   // interior node IDs in generation order
+    int gen_v0, gen_v1, gen_v2;  // vertex IDs in the order used during generation
+  };
+  std::unordered_map<HoFaceKey3, FaceData, HoFaceKey3Hash> face_ho_nodes_;
+
+  // Volume interior nodes (order >= 4, TET only)
+  // Key: sorted 4-vertex tuple. Value: node IDs + generation vertex order.
+  struct VolData {
+    std::vector<int> node_ids;
+    int gen_v0, gen_v1, gen_v2, gen_v3;
+  };
+  std::unordered_map<HoElemKey4, VolData, HoElemKey4Hash> vol_ho_nodes_;
 
   int total_nodes_ = 0;
   int next_node_id_ = 0;
