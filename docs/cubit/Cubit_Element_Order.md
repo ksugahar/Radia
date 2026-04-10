@@ -180,7 +180,7 @@ Output:
 | Export Function | High-Order Method | Max Order |
 |----------------|-------------------|-----------|
 | `radia_export netgen "f.vol" order N` | NetgenCurver (compact_netgen) | 1-5 |
-| `radia_export gmsh "f.msh" order N` | NetgenCurver | 1-4 |
+| `radia_export gmsh "f.msh" order N` | NetgenCurver | 1-3 |
 | `radia_export nastran "f.bdf" order N` | NetgenCurver | 1-2 |
 | `radia_export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
 | `extract_curved_mesh(cubit, order=N)` | CallbackGeometry + BuildCurvedElements | 1-5 |
