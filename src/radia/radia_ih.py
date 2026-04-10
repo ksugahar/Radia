@@ -235,7 +235,7 @@ class IHPanel(ModePanel):
                "--vol", vol_path,
                "--source", src, "--sink", sink,
                "--frequency", self.val("freq"),
-               "--coil-sigma", self.val("coil_sigma")]
+               "--msh-output", msh_output(vol_path, "_bem")]
         if coil:
             cmd += ["--coil", coil]
         fes = self.val("fes_order")
@@ -246,7 +246,7 @@ class IHPanel(ModePanel):
             imp = self.val("impedance")
             cmd += ["--workpiece", wp,
                     "--impedance-model", imp,
-                    "--wp-sigma", self.val("wp_sigma"),
+                    "--sigma", self.val("wp_sigma"),
                     "--half-thickness", self.val("half_thickness")]
             if imp == "esim":
                 cmd += ["--esim-geometry", self.val("esim_geometry")]
@@ -255,10 +255,6 @@ class IHPanel(ModePanel):
                     cmd += ["--bh-file", bh]
             else:
                 cmd += ["--mu-r", self.val("mu_r")]
-        air = self.val("air")
-        if air:
-            cmd += ["--air", air,
-                    "--msh-output", msh_output(vol_path, "_bem")]
         return cmd
 
     def _build_bem_wp_command(self, vol_path):
