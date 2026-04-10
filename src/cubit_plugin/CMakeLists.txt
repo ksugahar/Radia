@@ -10,71 +10,65 @@ find_package(Cubit REQUIRED CONFIG)
 # Netgen (optional, for high-order curving order >= 2)
 # --------------------------------------------------------
 set(NETGEN_DIR "" CACHE PATH "Netgen installation directory (full Netgen, optional)")
-set(NETGEN_SRC_DIR "" CACHE PATH "Netgen source directory (for compact build)")
 set(COMPACT_NETGEN_OVERRIDES "" CACHE PATH "Compact Netgen overrides directory")
 
 # Option 1: Compact Netgen (source compiled directly into plugin)
-# No separate build, no DLL, no .lib — just source files.
-if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
-  if(NOT COMPACT_NETGEN_OVERRIDES)
-    set(COMPACT_NETGEN_OVERRIDES "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")
-  endif()
-  if(EXISTS "${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp")
-    message(STATUS "Compact Netgen: sources from ${NETGEN_SRC_DIR}")
+# Netgen sources are snapshotted in compact_netgen/netgen_src/ (no external dependency).
+# To update: copy libsrc/ files from upstream netgen, apply COMPACT_NETGEN_STATIC patch
+# to ngcore_api.hpp and mydefs.hpp.
+if(NOT COMPACT_NETGEN_OVERRIDES)
+  set(COMPACT_NETGEN_OVERRIDES "${CMAKE_CURRENT_SOURCE_DIR}/compact_netgen")
+endif()
+set(NETGEN_SNAP "${COMPACT_NETGEN_OVERRIDES}/netgen_src")
+if(EXISTS "${NETGEN_SNAP}/meshing/meshing.hpp" AND EXISTS "${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp")
+    message(STATUS "Compact Netgen: sources from ${NETGEN_SNAP}")
     set(HAVE_NETGEN ON)
     set(USE_COMPACT_NETGEN ON)
 
-    # Minimal Netgen sources (mesh + curving + save only)
-    # NOTE: To bisect static init failures, comment out groups below
-    # Bisect static init: add sources incrementally.
-    # Group A: core only (stubs + safe sources)
     set(COMPACT_NETGEN_SOURCES
       ${COMPACT_NETGEN_OVERRIDES}/core_stubs.cpp
     )
-    # Group B: core originals
     list(APPEND COMPACT_NETGEN_SOURCES
-      ${NETGEN_SRC_DIR}/libsrc/core/archive.cpp
-      ${NETGEN_SRC_DIR}/libsrc/core/bitarray.cpp
-      ${NETGEN_SRC_DIR}/libsrc/core/exception.cpp
+      ${NETGEN_SNAP}/core/archive.cpp
+      ${NETGEN_SNAP}/core/bitarray.cpp
+      ${NETGEN_SNAP}/core/exception.cpp
       ${COMPACT_NETGEN_OVERRIDES}/flags_patched.cpp
-      ${NETGEN_SRC_DIR}/libsrc/core/localheap.cpp
-      ${NETGEN_SRC_DIR}/libsrc/core/table.cpp
+      ${NETGEN_SNAP}/core/localheap.cpp
+      ${NETGEN_SNAP}/core/table.cpp
       ${COMPACT_NETGEN_OVERRIDES}/utils_patched.cpp
       ${COMPACT_NETGEN_OVERRIDES}/version_patched.cpp
       ${COMPACT_NETGEN_OVERRIDES}/statushandler_patched.cpp
     )
-    # Group C: general + gprim
     list(APPEND COMPACT_NETGEN_SOURCES
-      ${NETGEN_SRC_DIR}/libsrc/general/hashtabl.cpp
-      ${NETGEN_SRC_DIR}/libsrc/general/mystring.cpp
-      ${NETGEN_SRC_DIR}/libsrc/general/table.cpp
-      ${NETGEN_SRC_DIR}/libsrc/general/optmem.cpp
-      ${NETGEN_SRC_DIR}/libsrc/gprim/geom3d.cpp
-      ${NETGEN_SRC_DIR}/libsrc/gprim/transform3d.cpp
-      ${NETGEN_SRC_DIR}/libsrc/linalg/densemat.cpp
+      ${NETGEN_SNAP}/general/hashtabl.cpp
+      ${NETGEN_SNAP}/general/mystring.cpp
+      ${NETGEN_SNAP}/general/table.cpp
+      ${NETGEN_SNAP}/general/optmem.cpp
+      ${NETGEN_SNAP}/gprim/geom3d.cpp
+      ${NETGEN_SNAP}/gprim/transform3d.cpp
+      ${NETGEN_SNAP}/linalg/densemat.cpp
     )
-    # Group D: meshing
     list(APPEND COMPACT_NETGEN_SOURCES
       ${COMPACT_NETGEN_OVERRIDES}/meshtype_patched.cpp
       ${COMPACT_NETGEN_OVERRIDES}/meshclass_patched.cpp
-      ${NETGEN_SRC_DIR}/libsrc/meshing/curvedelems.cpp
-      ${NETGEN_SRC_DIR}/libsrc/meshing/topology.cpp
-      ${NETGEN_SRC_DIR}/libsrc/meshing/localh.cpp
+      ${NETGEN_SNAP}/meshing/curvedelems.cpp
+      ${NETGEN_SNAP}/meshing/topology.cpp
+      ${NETGEN_SNAP}/meshing/localh.cpp
       ${COMPACT_NETGEN_OVERRIDES}/basegeom_patched.cpp
-      ${NETGEN_SRC_DIR}/libsrc/meshing/msghandler.cpp
+      ${NETGEN_SNAP}/meshing/msghandler.cpp
       ${COMPACT_NETGEN_OVERRIDES}/compact_stubs.cpp
     )
 
     set(COMPACT_NETGEN_INCLUDES
       ${COMPACT_NETGEN_OVERRIDES}/..    # netgen_config.hpp, netgen_version.hpp
       ${COMPACT_NETGEN_OVERRIDES}       # gzstream.h stub, patched headers
-      ${NETGEN_SRC_DIR}/libsrc
-      ${NETGEN_SRC_DIR}/libsrc/core
-      ${NETGEN_SRC_DIR}/libsrc/include
-      ${NETGEN_SRC_DIR}/libsrc/general
-      ${NETGEN_SRC_DIR}/libsrc/gprim
-      ${NETGEN_SRC_DIR}/libsrc/linalg
-      ${NETGEN_SRC_DIR}/libsrc/meshing
+      ${NETGEN_SNAP}
+      ${NETGEN_SNAP}/core
+      ${NETGEN_SNAP}/include
+      ${NETGEN_SNAP}/general
+      ${NETGEN_SNAP}/gprim
+      ${NETGEN_SNAP}/linalg
+      ${NETGEN_SNAP}/meshing
     )
 
     set(COMPACT_NETGEN_DEFS
@@ -88,12 +82,6 @@ if(NETGEN_SRC_DIR AND EXISTS "${NETGEN_SRC_DIR}/libsrc/meshing/meshing.hpp")
     if(OpenMP_CXX_FOUND)
       message(STATUS "Compact Netgen: OpenMP enabled for BuildCurvedElements")
     endif()
-  else()
-    message(WARNING "NETGEN_SRC_DIR set but overrides not found at ${COMPACT_NETGEN_OVERRIDES}")
-    set(HAVE_NETGEN OFF)
-    set(USE_COMPACT_NETGEN OFF)
-  endif()
-
 # Option 2: Full Netgen (shared libs, has Python dependency)
 elseif(NETGEN_DIR AND EXISTS "${NETGEN_DIR}/lib/nglib.lib")
   message(STATUS "Netgen found: ${NETGEN_DIR}")
