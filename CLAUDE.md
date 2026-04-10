@@ -1677,15 +1677,19 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 | `.ccl` (bin/) | `radia_cubit.ccl` | Qt5 GUI: Export Mesh menu + dialog |
 | `.pyd` (plugins/) | `radia_cubit_mesh.pyd` | pybind11: Cubit-free mesh curving |
 
-**Export formats** (all in C++, all support order 1-2 with ACIS geometry projection):
+**Export formats** (all in C++, ACIS geometry projection for curving):
 
-| Format | Command | Order 1-2 | Notes |
+| Format | Command | Max Order | Notes |
 |--------|---------|-----------|-------|
-| Netgen Vol | `radia_export netgen "f.vol" order 3` | Yes (order 1-5) | Primary format for NGSolve FEM |
-| GMSH v2.2 | `radia_export gmsh "f.msh" version 2` | Yes | GMSH visualization |
-| GMSH v4.1 | `radia_export gmsh "f.msh" version 4` | Yes | Structured entity blocks, PhysicalNames |
-| Nastran BDF | `radia_export nastran "f.bdf"` | Yes | CTETRA/CTETRA(10), nopyramid option |
-| VTK | `radia_export vtk "f.vtk"` | Yes | Legacy format, cell types 10/24 |
+| Netgen Vol | `radia_export netgen "f.vol" order 3` | 1-5 | Primary format for NGSolve FEM |
+| GMSH v2.2 | `radia_export gmsh "f.msh" version 2` | 1-3 | GMSH visualization |
+| GMSH v4.1 | `radia_export gmsh "f.msh" version 4` | 1-3 | Structured entity blocks, PhysicalNames |
+| Nastran BDF | `radia_export nastran "f.bdf"` | 1-2 | CTETRA/CTETRA(10), nopyramid option |
+| VTK | `radia_export vtk "f.vtk"` | 1-2 | Legacy format, cell types 10/24 |
+
+**GMSH order limit**: Order 4-5 is an error (not fallback). NetgenCurver face/volume
+interior node extraction is unreliable at p>=4 (linear interpolation fallback causes
+negative Jacobians in GMSH). Use `radia_export netgen` for order 4-5.
 
 **High-order mesh curving** (order >= 2):
 - `NetgenCurver` (compact_netgen, static link): `CallbackGeometry` + `BuildCurvedElements` for order 1-5
