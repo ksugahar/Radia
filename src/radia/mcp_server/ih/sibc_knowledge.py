@@ -52,14 +52,14 @@ H_t = result['H_t_rms']
 - --impedance-model esim (nonlinear BH) or linear (fixed mu_r)
 - Karl iteration for ESIM convergence
 
-## FEM Total-Field + Hole + BND Integral (Recommended for Coil+Workpiece)
+## FEM Total-Field + BND Integral (Recommended for Coil+Workpiece)
 
-**File**: `examples/cubit_panels/inductance/fem_total_field.py`
+**File**: `src/radia/panels/calc_fem_kelvin.py`
 
 Total-field formulation (no A_inc decomposition):
 - Coil as volume source J in coil cross-section
-- Hole approach: workpiece removed, SIBC on hole boundary
-- No subtraction cancellation (A_total solved directly)
+- Two mesh approaches: interface (workpiece as volume) or hole (workpiece removed)
+- **Interface is more accurate** (-2.9% vs BEM) than hole (+5.9%)
 
 **H_t extraction**: BND integral with tangential projection (specialcf.normal):
 ```python
@@ -76,7 +76,24 @@ H_t_rms = abs(1j*omega/Z_s) * sqrt(Integrate(At_sq, mesh, BND, definedon=sibc) /
 projection at interior points requires 10^14 cancellation. Only BND integral
 works (NGSolve evaluates trace functions directly).
 
-**Validated**: copper cylinder (R=10mm, 7kHz) vs BEM: +8.2%.
+**Interface is the correct formulation. Hole (PEC) is wrong.**
+
+SIBC models a thin conducting shell: the interior is transparent (air), and
+surface current J_s = (jw/Z_s)*A_t flows on the interface. This maps directly
+to Robin BC on an **internal interface** (workpiece volume meshed as air).
+
+Hole approach = PEC baseline (natural BC: n x H = 0). Adding Robin penalty to
+a PEC boundary is not SIBC — it perturbs the wrong physics. The hole error
+(+5.9%) is a formulation error, not a mesh resolution issue.
+
+| Approach | Physics | H_t vs BEM | P vs BEM |
+|----------|---------|-----------|---------|
+| **Interface (correct)** | Transparent + Robin | **-2.9%** | **-2.3%** |
+| Hole (wrong) | PEC + Robin perturbation | +5.9% | +16.2% |
+
+Interface approach: workpiece volume meshed (as air, nu=nu0), SIBC on internal
+boundary "wp_surface". The Robin BC `+jw/Z_s * u.Trace() * v.Trace() * ds`
+acts as a thin conducting shell on the shared face.
 
 ## FEM Scattered-Field + Hole (For Sphere / Analytical A_inc)
 
@@ -138,10 +155,13 @@ EFIE-SIBC (BEM). But EFIE-SIBC has -65% error on sphere (SL eigenvalue mismatch)
 RT0 (order=0) has zero surface curl. SIBC requires curl_s(J) which vanishes
 for RT0 basis. Results are wrong by 65% on sphere at Z_s/(jw*mu0*R) = 10.
 
-### Hole + Total-Field WITHOUT Robin: PEC
+### Hole Approach: Wrong Physics for SIBC
 
-Without SIBC Robin penalty, hole boundary has natural Neumann BC (n x H = 0 = PEC).
-**With Robin penalty**: total-field + hole works correctly (see above).
+Hole = workpiece removed from mesh. Natural BC is Neumann (n x H = 0 = PEC).
+Adding Robin penalty perturbs PEC toward finite impedance, but the baseline
+is wrong: PEC = total screening, while SIBC = partial screening (transparent
+interior with surface current). The hole approach has a systematic +6% error
+that does not decrease with mesh refinement.
 
 ### Scattered-Field + H1 Interpolation of A_inc: Cancellation Error
 
@@ -161,19 +181,59 @@ Robin penalty |jw/Z_s| ~ 1e9 creates |A_n| ~ 1e6 on SIBC boundary while
 |A_t| ~ 1e-8. Tangential projection at points near (not on) boundary requires
 cancellation of 10^14 -> fails completely. Only BND integral works.
 
+## calc_fem_kelvin.py Panel: Fixed (2026-04-09)
+
+**Production panel** for Cubit workflow. Now supports hole approach with correct SIBC.
+
+**Fixes applied**:
+1. Robin sign: `-jw/Z_s` -> `+jw/Z_s` (hole = SIBC on external boundary of air)
+2. Boundary name: `sibc` (hole) + `wp_surface` (legacy internal interface)
+3. Tangential projection: `|A_t|^2 = |A|^2 - (A.n)^2` via `specialcf.normal(3)`
+4. Energy-balance P extraction for internal interface fallback
+5. Auto-detect: `is_hole = "workpiece" not in materials`
+
+**Validated (copper, 7 kHz)**:
+- **Interface (recommended)**: H_t = 15.81 (-2.9% vs BEM), P = 5.11e-6 (-2.3%)
+- Hole: H_t = 17.25 (+5.9% vs BEM), P = 6.08e-6 (+16.2%)
+**Before fix**: H_t ~ 0, P ~ 0 (BND integral lacked tangential projection)
+
+**Cubit .jou for interface approach (recommended)**:
+```python
+# Keep workpiece as separate volume, label the shared face "wp_surface"
+block 1 add volume <air_id>
+block 1 name "air"
+block 2 add volume <coil_id>
+block 2 name "coil"
+block 3 add volume <wp_id>
+block 3 name "workpiece"
+sideset 1 add surface <shared_face_ids>
+sideset 1 name "wp_surface"
+radia_export netgen "model.vol" order 2 overwrite
+```
+
+**Cubit .jou for hole approach** (if interface not possible):
+```python
+subtract volume <wp_id> from volume <air_id>
+sideset 1 add surface <hole_face_ids>
+sideset 1 name "sibc"
+block 1 add volume <air_id>
+block 1 name "air"
+block 2 add volume <coil_id>
+block 2 name "coil"
+radia_export netgen "model.vol" order 2 overwrite
+```
+
 ## Summary: When to Use What
 
 | Need | Method | Script |
 |------|--------|--------|
 | **P_total, H_t (fast)** | Scalar BIE (BEM) | calc_heating_bem.py |
-| **P_total, H_t (FEM)** | Total-field + hole + BND | fem_total_field.py |
-| **L (inductance)** | FEM total-field | fem_total_field.py |
-| **B distribution** | FEM (volume integral) | calc_fem_kelvin.py |
+| **P_total, H_t, L, B (FEM)** | Total-field + interface + BND | **calc_fem_kelvin.py** |
 | **Coil optimization** | BEM for P, FEM for L | both |
 | **Validation (sphere)** | Scattered-field | verify_sphere_sibc.py |
 
 BEM is fast for P_total (162 DOFs vs 150k). FEM is needed for field distribution
-and inductance. Total-field FEM with hole+BND gives +8% vs BEM for P_total.
+and inductance. Panel FEM interface approach gives -2.9% H_t vs BEM.
 """
 
 IH_ESIM = """

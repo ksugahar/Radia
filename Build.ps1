@@ -272,6 +272,10 @@ try {
     )
 
     # Cubit plugin files (built in separate build dirs)
+    # Freshness check: compare build output against destination.
+    #   - If src is newer than dst (or dst missing): copy (UPDATED)
+    #   - If src == dst (same size + same or older time): skip (up-to-date)
+    #   - If src is missing: skip with warning
     $cubitFiles = @(
         @{ src = "$PROJECT_DIR\src\cubit_plugin\build-pyd\radia_cubit_mesh.cp312-win_amd64.pyd";
            dst = "$PROJECT_DIR\src\radia\radia_cubit_mesh.pyd" },
@@ -279,13 +283,22 @@ try {
            dst = "$PROJECT_DIR\src\radia\radia_cubit.ccm" }
     )
     foreach ($cf in $cubitFiles) {
+        $name = Split-Path $cf.dst -Leaf
         if (Test-Path $cf.src) {
-            Copy-Item $cf.src $cf.dst -Force
-            $info = Get-Item $cf.dst
-            $name = Split-Path $cf.dst -Leaf
-            Write-Host "  ${name}: $([math]::Round($info.Length / 1KB, 1)) KB" -ForegroundColor Green
+            $srcInfo = Get-Item $cf.src
+            $needCopy = $true
+            if (Test-Path $cf.dst) {
+                $dstInfo = Get-Item $cf.dst
+                if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
+                    Write-Host "  ${name}: up-to-date ($([math]::Round($srcInfo.Length / 1KB, 1)) KB)" -ForegroundColor Cyan
+                    $needCopy = $false
+                }
+            }
+            if ($needCopy) {
+                Copy-Item $cf.src $cf.dst -Force
+                Write-Host "  ${name}: $([math]::Round($srcInfo.Length / 1KB, 1)) KB (UPDATED)" -ForegroundColor Green
+            }
         } else {
-            $name = Split-Path $cf.dst -Leaf
             Write-Host "  ${name}: skipped (not built)" -ForegroundColor Yellow
         }
     }
@@ -299,8 +312,19 @@ try {
     )
     foreach ($cc in $cmeCopies) {
         if (Test-Path $cc.src) {
-            Copy-Item $cc.src "$cmeDir\$($cc.name)" -Force
-            Write-Host "  cubit-mesh-export/$($cc.name): copied" -ForegroundColor Green
+            $srcInfo = Get-Item $cc.src
+            $cmeDst = "$cmeDir\$($cc.name)"
+            $needCopy = $true
+            if (Test-Path $cmeDst) {
+                $dstInfo = Get-Item $cmeDst
+                if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
+                    $needCopy = $false
+                }
+            }
+            if ($needCopy) {
+                Copy-Item $cc.src $cmeDst -Force
+                Write-Host "  cubit-mesh-export/$($cc.name): copied" -ForegroundColor Green
+            }
         }
     }
 
@@ -308,9 +332,19 @@ try {
         $srcPath = "$BUILD_DIR\$($mod.src)"
         $dstPath = "$PROJECT_DIR\src\radia\$($mod.dst)"
         if (Test-Path $srcPath) {
-            Copy-Item $srcPath $dstPath -Force
-            $info = Get-Item $dstPath
-            Write-Host "  $($mod.dst): $([math]::Round($info.Length / 1MB, 2)) MB" -ForegroundColor Green
+            $srcInfo = Get-Item $srcPath
+            $needCopy = $true
+            if (Test-Path $dstPath) {
+                $dstInfo = Get-Item $dstPath
+                if ($srcInfo.Length -eq $dstInfo.Length -and $srcInfo.LastWriteTime -le $dstInfo.LastWriteTime) {
+                    Write-Host "  $($mod.dst): up-to-date ($([math]::Round($srcInfo.Length / 1MB, 2)) MB)" -ForegroundColor Cyan
+                    $needCopy = $false
+                }
+            }
+            if ($needCopy) {
+                Copy-Item $srcPath $dstPath -Force
+                Write-Host "  $($mod.dst): $([math]::Round($srcInfo.Length / 1MB, 2)) MB (UPDATED)" -ForegroundColor Green
+            }
         } elseif ($mod.required) {
             Write-Host "ERROR: $($mod.src) not found" -ForegroundColor Red
             exit 1
