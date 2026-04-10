@@ -76,6 +76,30 @@ namespace EdgeTables {
   inline constexpr int tri_gmsh_reorder[3] = {0,1,2};
   inline constexpr int quad_gmsh_reorder[4] = {0,1,2,3};
 
+  // --- GMSH edge direction flip: true = reverse HO nodes within this edge ---
+  // GMSH defines edge direction by (p0,p1) from MTetrahedron.h edges_tetra():
+  //   Edge 0: (0,1), Edge 1: (1,2), Edge 2: (2,0)
+  //   Edge 3: (3,0), Edge 4: (3,1), Edge 5: (3,2)
+  // Internal (Netgen/VTK) edge order:
+  //   Edge 0: (0,1), Edge 1: (1,2), Edge 2: (0,2)
+  //   Edge 3: (0,3), Edge 4: (1,3), Edge 5: (2,3)
+  // Flip needed for: edge 2 (0,2 vs 2,0), edge 3 (0,3 vs 3,0),
+  //                  edge 4 (1,3 vs 3,1), edge 5 (2,3 vs 3,2)
+  inline constexpr bool tet_gmsh_flip[6] = {false,false,true,true,true,true};
+  // HEX (MHexahedron.h): all edges match internal direction
+  inline constexpr bool hex_gmsh_flip[12] = {false,false,false,false,
+                                              false,false,false,false,
+                                              false,false,false,false};
+  // WEDGE (MPrism.h): edges match
+  inline constexpr bool wedge_gmsh_flip[9] = {false,false,false,
+                                               false,false,false,
+                                               false,false,false};
+  // PYRAMID (MPyramid.h): edges to apex (4) go from base vertex to apex
+  inline constexpr bool pyramid_gmsh_flip[8] = {false,false,false,false,
+                                                 false,false,false,false};
+  inline constexpr bool tri_gmsh_flip[3] = {false,false,false};
+  inline constexpr bool quad_gmsh_flip[4] = {false,false,false,false};
+
   // --- Nastran BDF reorder: internal pos i -> Nastran file pos reorder[i] ---
   // Derived from GMSH source (MHexahedron.h getVertexBDF, MPrism.h getVertexBDF)
   // Nastran CHEXA: bottom(4) + vertical(4) + top(4) (swaps top/vertical vs internal)
@@ -154,6 +178,16 @@ public:
 
   // Lookup: Cubit node ID -> 0-based index into nodes[]
   std::unordered_map<int, int> node_id_to_index;
+
+  // Get node coordinates by Cubit node ID
+  std::array<double,3> get_node_coords(int node_id) const {
+    auto it = node_id_to_index.find(node_id);
+    if (it != node_id_to_index.end()) {
+      auto &n = nodes[it->second];
+      return {n.x, n.y, n.z};
+    }
+    return {0, 0, 0};
+  }
 
   // ---- Main entry point ----
   // Acquires MeshExportInterface, extracts everything, releases it.

@@ -19,7 +19,7 @@ std::vector<std::string> ExportFemeemCommand::get_syntax()
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
     "radia_export femeem <string:label='filename',help='<directory>'> "
-    "[scale <string:label='scale',help='<coordinate scale>'>] "
+    "[scale <value:label='scale',help='<coordinate scale>'>] "
     "[overwrite]"
   );
   return syntax_list;
@@ -62,13 +62,7 @@ bool ExportFemeemCommand::execute(CubitCommandData &data)
   data.get_string("filename", dirname);
 
   double scale = 1.0;
-  {
-    std::string scale_str;
-    if (data.get_string("scale", scale_str) && !scale_str.empty()) {
-      try { scale = std::stod(scale_str); }
-      catch (...) { scale = 1.0; }
-    }
-  }
+  data.get_value("scale", scale);
   if (scale <= 0.0) {
     PRINT_WARNING("Scale must be positive. Using 1.0.\n");
     scale = 1.0;

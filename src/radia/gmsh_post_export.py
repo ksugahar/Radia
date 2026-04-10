@@ -27,6 +27,10 @@ Usage:
 Supports:
     1st order: Tri3 (2), Quad4 (3), Tet4 (4), Hex8 (5), Wedge6 (6), Pyr5 (7)
     2nd order: Tri6 (9), Quad9 (10), Tet10 (11), Hex20 (17), Wedge15 (18), Pyr13 (19)
+    3rd order: Tri10 (21), Quad16 (36), Tet20 (29), Hex64 (92), Pyr30 (118)
+    4th order: Tri15 (23), Quad25 (37), Tet35 (30), Hex125 (93), Pyr55 (119)
+    5th order: Tri21 (25), Quad36 (38), Tet56 (31), Hex216 (94), Pyr91 (120)
+    Note: Wedge/Prism only supports up to 2nd order (GMSH format limitation)
 
 Part of Radia project
 """

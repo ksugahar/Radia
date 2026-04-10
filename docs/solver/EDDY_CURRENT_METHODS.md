@@ -387,15 +387,14 @@ Z = R + s * L
                 |             |
        FEM-SIBC + ESIM       |
        (Karl iteration,      |
-        fem_esim_3d.py)      |
+        calc_fem_kelvin.py)   |
                               |
                     Need air mesh free? (BEM vs FEM)
                          /         \
                        Yes          No
                         |            |
-                   BEM methods   FEM + Kelvin
-                        |        (A-Phi: simple)
-                        |        (T-Omega: multi-loop)
+                   BEM methods   FEM-SIBC (interface)
+                        |        (calc_fem_kelvin.py)
                         |
               +-------------------+
               |                   |
@@ -403,7 +402,7 @@ Z = R + s * L
               |                   |
      Scalar BIE + SIBC    EFIE saddle point
      (all Z_s, <0.1%)     (LaplaceSL, PEC)
-     scalar_bie_sibc.py    bem_inductance.py
+     bem_sibc_solver.py    bem_inductance.py
 ```
 
 ### Method Selection Table
@@ -412,10 +411,58 @@ Z = R + s * L
 |----------|-------------------|-----|
 | Coil self-inductance (L_air) | EFIE saddle point | PEC assumption OK for copper coils |
 | Workpiece eddy current (linear) | **Scalar BIE + SIBC** | All Z_s, surface-only, fast freq sweep |
-| Workpiece eddy current (nonlinear mu) | FEM-SIBC + ESIM | Need H-dependent Z_s via Karl iteration |
+| Workpiece P + L + B distribution | **FEM-SIBC (interface)** | P (-2.3%), L, B in one solve |
+| Workpiece eddy current (nonlinear mu) | FEM-SIBC + ESIM (interface) | H-dependent Z_s via Karl iteration |
 | Coil + magnetic core | FEM + Kelvin | Nonlinear iron needs volume mesh |
 | High-frequency (>1 MHz) | ngsolve.bem Helmholtz | Wave effects matter |
 | Circuit extraction (L, R, C, M) | Radia PEEC pipeline | Direct SPICE netlist output |
+
+### FEM-SIBC: Interface vs Hole Approach
+
+**Interface approach (correct)**: workpiece volume meshed as air (nu = nu0),
+Robin BC on internal interface. SIBC models a thin conducting shell: interior
+is transparent, surface current `J_s = (jw/Z_s) * A_t` flows on the interface.
+
+**Hole approach (wrong)**: workpiece subtracted from mesh, Robin BC on hole
+boundary. Natural BC is Neumann `n x H = 0` (PEC). Robin penalty perturbs PEC
+toward finite impedance, but the physical baseline is wrong: PEC = total
+screening, while SIBC = partial screening with transparent interior.
+
+| Approach | Physics | H_t vs BEM | P vs BEM |
+|----------|---------|-----------|---------|
+| **Interface** | Transparent + Robin | **-2.9%** | **-2.3%** |
+| Hole | PEC + Robin perturbation | +5.9% | +16.2% |
+
+**H_t extraction**: BND integral with tangential projection using `specialcf.normal(3)`:
+
+```python
+n = specialcf.normal(3)
+A_sq = sum(gfu[i].real**2 + gfu[i].imag**2 for i in range(3))
+Adn_re = sum(gfu[i].real * n[i] for i in range(3))
+Adn_im = sum(gfu[i].imag * n[i] for i in range(3))
+At_sq = A_sq - Adn_re**2 - Adn_im**2     # |A_t|^2
+H_t_rms = abs(1j*omega/Z_s) * sqrt(Integrate(At_sq, mesh, BND, ...) / A_wp)
+P = 0.5 * Re(Z_s) * H_t_rms**2 * A_wp    # time-averaged
+```
+
+**Without tangential projection**, `|A|^2` includes the normal component,
+which is inflated by the Robin penalty. The previous implementation
+(before 2026-04-09) lacked this projection and returned H_t ~ 0.
+
+**Robin sign**: `+jw/Z_s` (positive). With negative sign or without Robin,
+the solution diverges or gives PEC.
+
+**GMSH |B| export**: Per-vertex `|B|` field written to `.msh v4.1` via `GmshPostExport`.
+
+```python
+# CRITICAL: unpack tuple for GridFunction evaluation
+node_B = np.array([gf_B(mesh(*mesh.vertices[v.nr].point))
+                   for v in mesh.vertices])
+# gf(mesh.vertices[v].point) FAILS - tuple is not a MeshPoint
+# gf(*mesh.vertices[v].point) also works (unpacks to x, y, z)
+```
+
+**Panel script**: `src/radia/panels/calc_fem_kelvin.py`
 
 ### Why Scalar BIE + SIBC (Not EFIE or MFIE)
 
