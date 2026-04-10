@@ -24,9 +24,9 @@ Key features relevant to electromagnetic simulation:
 ## Installation
 
 ```bash
-pip install ngsolve   # Use official PyPI ngsolve >= 6.2.2601
-# Version 6.2.2601 includes: MKL + PARDISO + Periodic BC fix
-# Periodic BC regression (6.2.2406~6.2.2501) is FIXED in 6.2.2601+
+pip install ngsolve   # Use official PyPI ngsolve >= 6.2.2603
+# Version 6.2.2603 includes: MKL, PARDISO, Periodic BC fix, curvedelements Load, hex/prism curving
+# Periodic BC regression (6.2.2406~6.2.2501) is FIXED in 6.2.2603+
 # See: https://forum.ngsolve.org/t/3805
 # Optional: pip install ngsolve-sparsesolv  # Compact AMS/COCR solvers
 ```
