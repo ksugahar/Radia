@@ -44,13 +44,14 @@ def _setup_cubit():
     return cubit
 
 
-def _write_surface_only_vol(src_ngmesh, output_path):
+def _write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
     """Legacy wrapper -- delegates to calc_common.write_surface_only_vol."""
-    write_surface_only_vol(src_ngmesh, output_path)
+    write_surface_only_vol(src_ngmesh, output_path, keep_material=keep_material)
 
 
 def extract_inductance_vol(vol_file, source_label="source",
-                           sink_label="sink", fes_order=0, msh_output=""):
+                           sink_label="sink", fes_order=0, msh_output="",
+                           coil_label=""):
     """Extract self-inductance from .vol file (no Cubit needed).
 
     Args:
@@ -59,6 +60,9 @@ def extract_inductance_vol(vol_file, source_label="source",
         sink_label: Boundary label for sink face (sideset name)
         fes_order: HDivSurface basis order (0=RWG, 1+=higher-order)
         msh_output: Optional path for GMSH .msh output
+        coil_label: Material name of the coil block.  When set, only surface
+            elements adjacent to this material are kept (filters out
+            workpiece/air surfaces so BEM solves on coil only).
 
     Returns:
         dict with inductance_H, diagnostics
@@ -80,11 +84,10 @@ def extract_inductance_vol(vol_file, source_label="source",
     if mesh.ne > 0:
         import tempfile
         surf_vol = os.path.join(tempfile.gettempdir(), "bem_surface.vol")
-        # Re-export as surface-only: read .vol, remove volume elements, save
+        # Re-export as surface-only: read .vol, remove volume elements, save.
+        # When coil_label is set, also filter out non-coil surfaces.
         ng = mesh.ngmesh
-        # Delete all volume elements by creating a fresh mesh
-        # that only has surface elements, points, and face descriptors
-        _write_surface_only_vol(ng, surf_vol)
+        _write_surface_only_vol(ng, surf_vol, keep_material=coil_label)
         mesh = Mesh(surf_vol)
 
     t_export = _time.perf_counter() - t_total_start
@@ -1332,6 +1335,7 @@ def main():
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
     # Workpiece ESIM/Dowell args
+    parser.add_argument("--coil", default="", help="Coil material name (filters BEM to coil surfaces only)")
     parser.add_argument("--workpiece", default="", help="Workpiece block name")
     parser.add_argument("--impedance-model", default="esim",
                         choices=["esim", "dowell", "bem-sibc",
@@ -1366,7 +1370,8 @@ def main():
             if args.vol:
                 return extract_inductance_vol(args.vol,
                                               args.source, args.sink,
-                                              args.fes_order, args.msh_output)
+                                              args.fes_order, args.msh_output,
+                                              coil_label=args.coil)
             elif args.cub5:
                 _geom_map = {"local_curvature": "cylinder", "none": "slab"}
                 esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
