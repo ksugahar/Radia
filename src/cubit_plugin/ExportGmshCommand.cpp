@@ -64,10 +64,9 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
   // are not reliably extracted by NetgenCurver (missing faces filled with
   // linear interpolation -> negative Jacobians in GMSH). Use .vol for p>=4.
   if (order > 3) {
-    PRINT_WARNING("GMSH export: order %d not supported (face/volume node extraction "
-                  "unreliable). Use 'radia_export netgen' for order 4-5. "
-                  "Falling back to order 3.\n", order);
-    order = 3;
+    PRINT_ERROR("GMSH export: order %d not supported. "
+                "Use 'radia_export netgen' for order 4-5.\n", order);
+    return false;
   }
 #ifndef HAVE_NETGEN
   if (order > 1) {
