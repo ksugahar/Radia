@@ -203,7 +203,7 @@ mesh = Mesh(vol_path)
 ## Requirements
 
 - Coreform Cubit 2025.3+ with Radia plugin installed (`cubit-plugin-install`)
-- NGSolve 6.2.2601+ (for reading .vol with curvedelements)
+- NGSolve 6.2.2603+ (curvedelements Load, hex/prism curving)
 """
 
 WORKFLOW_CYLINDER = """
