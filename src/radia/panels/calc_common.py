@@ -549,7 +549,7 @@ def sigma_for_material(material):
     return {'steel': 2e6, 'copper': 5.8e7, 'aluminum': 3.5e7}.get(material, 2e6)
 
 
-def write_surface_only_vol(src_ngmesh, output_path):
+def write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
     """Extract surface elements from a volume mesh and save as surface-only .vol.
 
     BEM (HDivSurface) requires surface-only mesh. On a volume mesh,
@@ -559,6 +559,9 @@ def write_surface_only_vol(src_ngmesh, output_path):
     Args:
         src_ngmesh: netgen.meshing.Mesh with volume + surface elements
         output_path: path to write surface-only .vol
+        keep_material: if set, only keep surface elements adjacent to this
+            material (by domin/domout in facedescriptors).  Empty string
+            keeps all surfaces (original behaviour).
     """
     import tempfile
 
@@ -568,28 +571,122 @@ def write_surface_only_vol(src_ngmesh, output_path):
     with open(tmp, "r") as f:
         lines = f.readlines()
 
-    with open(output_path, "w") as f:
-        skip = False
-        for line in lines:
-            s = line.strip()
-            if s == "volumeelements":
-                skip = True
-                f.write("volumeelements\n0\n")
+    # --- When keep_material is specified, find the material index and
+    #     identify which face descriptors border that material. ----------
+    mat_idx = 0  # 0 = no filter
+    keep_fds = None  # set of 1-based face descriptor indices to keep
+    if keep_material:
+        mat_idx = _find_material_index(lines, keep_material)
+        if mat_idx > 0:
+            keep_fds = _find_adjacent_fds(lines, mat_idx)
+
+    # Build output lines in memory (avoids Windows text-mode seek issues)
+    out = []
+    section = ""
+    se_insert_idx = -1  # where to insert filtered count
+    kept_elems = []
+
+    for line in lines:
+        s = line.strip()
+
+        # --- skip volumeelements entirely ---
+        if s == "volumeelements":
+            section = "volumeelements"
+            out.append("volumeelements\n")
+            out.append("0\n")
+            continue
+        if section == "volumeelements":
+            if _is_section_header(s):
+                section = ""
+            else:
                 continue
-            if skip:
-                if (s and not s[0].isdigit() and s != "edgesegmentsgi2"
-                        and not s.startswith("#")):
-                    skip = False
-                elif s in ("edgesegmentsgi2", "points", "surfaceelements",
-                           "materials", "bcnames", "curvedelements",
-                           "endmesh", "face_transparencies",
-                           "facedescriptors"):
-                    skip = False
-                else:
-                    continue
-            f.write(line)
+
+        # --- filter surfaceelements by keep_fds ---
+        if s == "surfaceelements":
+            section = "surfaceelements"
+            out.append(line)
+            if keep_fds is not None:
+                se_insert_idx = len(out)  # count placeholder
+                out.append("")  # will be replaced
+            continue
+
+        if section == "surfaceelements":
+            if _is_section_header(s):
+                section = ""
+            elif keep_fds is not None:
+                parts = s.split()
+                if len(parts) >= 5:
+                    fd_idx = int(parts[0])
+                    if fd_idx in keep_fds:
+                        kept_elems.append(line)
+                continue
+            # keep_fds is None: pass through (count + elements)
+
+        out.append(line)
+
+    # Insert filtered surface elements
+    if keep_fds is not None and se_insert_idx >= 0:
+        out[se_insert_idx] = f"{len(kept_elems)}\n"
+        for i, el in enumerate(kept_elems):
+            out.insert(se_insert_idx + 1 + i, el)
+
+    with open(output_path, "w") as f:
+        f.writelines(out)
 
     os.remove(tmp)
+
+
+def _find_material_index(vol_lines, name):
+    """Return 1-based material index for *name* in a .vol file, or 0."""
+    in_mat = False
+    for line in vol_lines:
+        s = line.strip()
+        if s == "materials":
+            in_mat = True
+            continue
+        if in_mat:
+            if _is_section_header(s):
+                break
+            parts = s.split(None, 1)
+            if len(parts) == 2 and parts[1] == name:
+                return int(parts[0])
+    return 0
+
+
+def _find_adjacent_fds(vol_lines, mat_idx):
+    """Return set of 1-based face descriptor indices adjacent to *mat_idx*."""
+    in_fd = False
+    fd_set = set()
+    idx = 0
+    for line in vol_lines:
+        s = line.strip()
+        if s == "facedescriptors":
+            in_fd = True
+            continue
+        if in_fd:
+            if _is_section_header(s):
+                break
+            parts = s.split()
+            if len(parts) >= 4 and parts[0][0].isdigit():
+                idx += 1
+                # facedescriptors: surfnr domin domout tlosurf bcprop
+                domin = int(parts[1])
+                domout = int(parts[2])
+                if domin == mat_idx or domout == mat_idx:
+                    fd_set.add(idx)
+    return fd_set
+
+
+def _is_section_header(s):
+    """True if *s* looks like a .vol section keyword (not a data line)."""
+    if not s or s.startswith("#"):
+        return False
+    return (s.isalpha() or s in (
+        "edgesegmentsgi2", "facedescriptors", "face_transparencies",
+        "surfaceelements", "surfaceelementsuv",
+        "volumeelements", "curvedelements",
+        "points", "materials", "bcnames", "endmesh",
+    ))
 
 
 # ============================================================

@@ -42,11 +42,13 @@ class IHPanel(ModePanel):
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
 
-        # Source / Sink (required for BEM coil, not for BEM-SIBC WP)
+        # Source / Sink / Coil (required for BEM coil, not for BEM-SIBC WP)
         src_w = self.add_line("source", "Source block:", "",
                               placeholder="e.g. source")
         sink_w = self.add_line("sink", "Sink block:", "",
                                placeholder="e.g. sink")
+        self.add_line("coil", "Coil block:", "coil",
+                      placeholder="e.g. coil (filters BEM to coil surface)")
         src_w.textChanged.connect(self._on_validation_changed)
         sink_w.textChanged.connect(self._on_validation_changed)
 
@@ -111,8 +113,8 @@ class IHPanel(ModePanel):
         is_bem_wp = (method == "BEM-SIBC (WP)")
         is_fem = (method == "FEM")
 
-        # BEM coil fields (source/sink/air)
-        for key in ("source", "sink", "air"):
+        # BEM coil fields (source/sink/coil/air)
+        for key in ("source", "sink", "coil", "air"):
             self._set_row_visible(key, is_bem_coil)
 
         # BEM coil-specific
@@ -228,11 +230,14 @@ class IHPanel(ModePanel):
         sink = self.val("sink")
         if not src or not sink:
             raise ValueError("Source and Sink blocks are required.")
+        coil = self.val("coil")
         cmd = [_PYTHON, calc_script("calc_inductance.py"),
                "--vol", vol_path,
                "--source", src, "--sink", sink,
                "--frequency", self.val("freq"),
                "--coil-sigma", self.val("coil_sigma")]
+        if coil:
+            cmd += ["--coil", coil]
         fes = self.val("fes_order")
         if fes and fes != "0":
             cmd += ["--fes-order", fes]
