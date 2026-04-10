@@ -198,6 +198,15 @@ public:
   int total_node_count() const { return (int)nodes.size(); }
   int total_element_count() const;  // block elements + all sideset faces
 
+#ifdef HAVE_NETGEN
+  // Build ho_conn directly in GMSH file order (edges, faces, volume).
+  // Uses GMSH face winding for face nodes (avoids per-order permutation tables).
+  // Coordinate-based sorting for volume interior nodes.
+  static std::vector<int> build_ho_conn_gmsh(
+      const std::vector<int> &conn, int nv, ElementType type,
+      const NetgenCurver &nc, const MeshData &mesh);
+#endif
+
 private:
   void extract_nodes(MeshExportInterface *iface);
   void extract_elements(MeshExportInterface *iface);
