@@ -1,9 +1,17 @@
 ## Inductance sample: half-torus coil + workpiece + air domain
 ## Required labels: source, sink (sidesets on terminal faces)
-## Optional labels: coil, workpiece, air
+## Optional labels: coil, workpiece, air, wp_surface
 ##
 ## Half-torus coil with cylindrical workpiece inside, surrounded by
 ## cubic air domain. For BEM EFIE + SIBC induction heating analysis.
+##
+## Labels:
+##   coil       - block on coil volume (J source)
+##   workpiece  - block on workpiece volume (meshed as air for SIBC)
+##   air        - block on air volume
+##   source     - sideset on coil terminal face (T0=1)
+##   sink       - sideset on coil terminal face (T0=0)
+##   wp_surface - sideset on workpiece outer surface (SIBC Robin BC)
 ##
 ## Geometry:
 ##   Coil: half-torus (R_major=0.11 m, R_minor=0.01 m)
@@ -64,3 +72,7 @@ sideset 1 add surface 2
 sideset 1 name "source"
 sideset 2 add surface 3
 sideset 2 name "sink"
+
+# Workpiece outer surface (SIBC Robin BC for FEM-SIBC)
+sideset 3 add surface in volume 3
+sideset 3 name "wp_surface"

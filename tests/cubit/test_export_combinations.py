@@ -8,11 +8,11 @@ Models:
   - 3D: sphere tet mesh (volume + boundary)
   - 2D: square tri mesh (surface only)
 
-Combinations (40 total):
-  GMSH:    order(1,2) x version(2,4) x dim(2D,3D) = 8 per model x 2 = 16
+Combinations (64 total):
+  GMSH:    order(1-5) x version(2,4) x dim(2D,3D) = 20 per model x 2 = 40
   Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
   VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
-  Total = 40
+  Total = 64
 
 Usage:
   python tests/cubit/test_export_combinations.py
@@ -262,8 +262,8 @@ def parse_vtk(filename):
 # ================================================================
 # Test runner
 # ================================================================
-GMSH_TRI_TYPES = {1: 2, 2: 9}   # order -> gmsh type for tri
-GMSH_TET_TYPES = {1: 4, 2: 11}  # order -> gmsh type for tet
+GMSH_TRI_TYPES = {1: 2, 2: 9, 3: 21, 4: 23, 5: 25}   # order -> gmsh type for tri
+GMSH_TET_TYPES = {1: 4, 2: 11, 3: 29, 4: 30, 5: 31}  # order -> gmsh type for tet
 
 results = []
 
@@ -352,10 +352,10 @@ def validate_gmsh_export(filename, model_info, expected):
             # tri blocks should be dim 2, tet blocks dim 3
             pass  # checked by element_types presence
 
-    # Order 2: nodes should be more than linear
-    if expected.get('order', 1) == 2 and 'n_nodes' in model_info:
+    # Order 2+: nodes should be more than linear
+    if expected.get('order', 1) >= 2 and 'n_nodes' in model_info:
         if r['nodes'] <= model_info['n_nodes']:
-            errors.append(f"Order 2 but node count not increased: "
+            errors.append(f"Order {expected['order']} but node count not increased: "
                           f"{r['nodes']} <= {model_info['n_nodes']}")
 
     return errors
@@ -398,9 +398,9 @@ def generate_test_cases():
     """Generate all format x option combinations."""
     cases = []
 
-    # --- GMSH: order(1,2) x version(2,4) x dim(2D,3D) ---
+    # --- GMSH: order(1-5) x version(2,4) x dim(2D,3D) ---
     for model in ['3d', '2d']:
-        for order in [1, 2]:
+        for order in [1, 2, 3, 4, 5]:
             for version in [2, 4]:
                 for dim in [3, 2]:
                     vstr = '2.2' if version == 2 else '4.1'

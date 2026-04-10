@@ -317,9 +317,43 @@ std::vector<int> MeshData::build_ho_conn_nc(
       ho.push_back(en.back());  // repeat last node (safe fallback)
   }
 
-  // TODO: face interior nodes and volume interior nodes for order >= 3
-  // These are needed for Gmsh TET20, TET35, etc.
-  // Currently NetgenCurver generates them but doesn't expose per-element.
+  // Face interior nodes (order >= 3, TET and TRI only — HEX/QUAD/PYR use serendipity)
+  if (nc.get_order() >= 3) {
+    bool is_tet = (nv == 4 && (type == TETRA4 || type == TETRA));
+    bool is_tri = (nv == 3 && (type == TRI3 || type == CUBIT_TRI
+                             || type == TRISHELL || type == TRISHELL3));
+    if (is_tet) {
+      // GMSH TET face order: same vertex sets as ours, but winding may differ.
+      // For order 3 (1 face node/face): position is unique, winding irrelevant.
+      // For order 4+ (3+ face nodes/face): winding affects node ordering.
+      // Our face order: (0,1,2), (0,1,3), (0,2,3), (1,2,3)
+      // GMSH face order: (0,2,1), (0,1,3), (0,3,2), (3,1,2) [MTetrahedron.h]
+      // get_face_nodes + permute_face_nodes handles vertex remapping,
+      // but the output order depends on the generation winding.
+      // We pass OUR face vertices — permute_face_nodes will reorder internally.
+      static const int tet_faces[][3] = {{0,1,2},{0,1,3},{0,2,3},{1,2,3}};
+      for (auto &f : tet_faces) {
+        auto fn = nc.get_face_nodes(conn[f[0]], conn[f[1]], conn[f[2]]);
+        for (int nid : fn)
+          ho.push_back(nid);
+      }
+    }
+    if (is_tri) {
+      auto fn = nc.get_face_nodes(conn[0], conn[1], conn[2]);
+      for (int nid : fn)
+        ho.push_back(nid);
+    }
+  }
+
+  // Volume interior nodes (order >= 4, TET only)
+  if (nc.get_order() >= 4) {
+    bool is_tet = (nv == 4 && (type == TETRA4 || type == TETRA));
+    if (is_tet) {
+      auto vn = nc.get_vol_nodes(conn[0], conn[1], conn[2], conn[3]);
+      for (int nid : vn)
+        ho.push_back(nid);
+    }
+  }
 
   return ho;
 }
