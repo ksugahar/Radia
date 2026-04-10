@@ -76,7 +76,6 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 radia-ih = "radia.radia_ih:main"
 radia-em = "radia.radia_em:main"
 radia-pcb = "radia.radia_pcb:main"
-vol-viewer = "radia.netgen_vol_viewer:main"
 # Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
 # MCP servers: radia-mcp package (pip install radia-mcp)
 
