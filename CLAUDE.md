@@ -11,7 +11,7 @@ Radia is a **monorepo** containing all components. Only 2 repositories exist:
 | Repository | Purpose |
 |-----------|---------|
 | **ksugahar/Radia** | Everything (C++, Python, MCP servers, sparsesolv, Cubit plugin) |
-| **ksugahar/netgen** | Netgen fork (historical, no longer required for installation) |
+| **ksugahar/netgen** | Netgen fork (historical, archived — all features merged into official 6.2.2603) |
 
 ```
 S:\Radia\01_GitHub\
@@ -521,7 +521,7 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 |-----------|---------|-------|
 | **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit panels call via subprocess. |
 | **Coreform Cubit** | 2025.3 | Embedded Python 3.10 + PySide6. Cannot import NGSolve/Radia directly. |
-| **NGSolve** | 6.2.2601+ | Periodic BC fix required |
+| **NGSolve** | 6.2.2603+ | curvedelements Load, hex/prism curving, Periodic BC fix |
 
 **Cubit panel subprocess constraint**: Cubit embeds Python 3.10; Radia/NGSolve require 3.12. Same-process import is impossible. All computation runs via `subprocess.run([python3.12, calc_*.py])` with JSON output.
 
@@ -660,23 +660,19 @@ src/radia/
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2601** or later. Version 6.2.2406~6.2.2501 had a regression in Periodic Boundary Conditions (`Identify()` lost during `Glue()`), fixed in 6.2.2601+.
+**CRITICAL**: Use NGSolve **6.2.2603** or later. Required for curvedelements .vol Load, hex/prism curving, and Periodic BC fix.
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
-Official PyPI ngsolve 6.2.2601+ includes: **MKL**, **PARDISO**, Periodic BC fix.
+Official PyPI ngsolve **6.2.2603**+ includes: **MKL**, **PARDISO**, Periodic BC fix,
+**curvedelements Save/Load**, **p-version hex/prism curving**.
 
-**Netgen fork** (`C:\netgen_build\netgen_fork`): Required for curvedelements .vol Load + netgen.gui.
-Upstream Netgen master has curvedelements support, but the current PyPI release (6.2.2602.post1) does not.
-Fork build: `USE_GUI=ON` superbuild → nglib.dll + ngcore.dll + libnggui.dll + libngguipy.pyd.
-Deploy: replace pip's DLLs in `site-packages/netgen/` + copy libnggui.dll to `bin/`.
-
-Once next PyPI release includes curvedelements, the fork becomes unnecessary.
+**Netgen fork is no longer required.** The ksugahar/netgen repository is historical only.
+All curvedelements, CallbackGeometry, and curving features are now in the official release.
 
 ```bash
 pip install radia[cubit]       # Installs everything (NGSolve, MKL, Cubit plugin binaries)
 cubit-plugin-install           # Deploys Cubit plugin + panels
-# + deploy netgen fork DLLs (nglib, ngcore, libnggui, libngguipy)
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
