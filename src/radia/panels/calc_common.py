@@ -451,30 +451,23 @@ def detect_kelvin_offset(mesh):
     """Detect Kelvin sphere center offset from mesh vertex positions.
 
     Finds the centroid of 'kelvin' material region as the offset.
+    For spheres centered at origin, returns approximately (0, 0, 0).
 
     Returns:
-        (x, y, z) offset or (0.3, 0, 0) default
+        (x, y, z) offset or (0, 0, 0) default
     """
     from ngsolve import VOL
     try:
         materials = mesh.GetMaterials()
         if "kelvin" not in materials:
-            return (0.3, 0, 0)
+            return (0, 0, 0)
 
         # Average vertex positions in kelvin region
         kelvin_verts = set()
         for el in mesh.Elements(VOL):
-            if materials[el.mat] == "kelvin" if hasattr(el, 'mat') else False:
+            if el.mat == "kelvin":
                 for v in el.vertices:
                     kelvin_verts.add(v.nr)
-
-        if not kelvin_verts:
-            # Fallback: scan all elements
-            for i, el in enumerate(mesh.Elements(VOL)):
-                mat_idx = el.index if hasattr(el, 'index') else i
-                if mat_idx < len(materials) and "kelvin" in materials[mat_idx].lower():
-                    for v in el.vertices:
-                        kelvin_verts.add(v.nr)
 
         if kelvin_verts:
             import numpy as np
@@ -484,7 +477,7 @@ def detect_kelvin_offset(mesh):
     except Exception:
         pass
 
-    return (0.3, 0, 0)
+    return (0, 0, 0)
 
 
 # ============================================================
@@ -571,14 +564,10 @@ def write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
     with open(tmp, "r") as f:
         lines = f.readlines()
 
-    # --- When keep_material is specified, find the material index and
-    #     identify which face descriptors border that material. ----------
+    # --- When keep_material is specified, find the material index ---
     mat_idx = 0  # 0 = no filter
-    keep_fds = None  # set of 1-based face descriptor indices to keep
     if keep_material:
         mat_idx = _find_material_index(lines, keep_material)
-        if mat_idx > 0:
-            keep_fds = _find_adjacent_fds(lines, mat_idx)
 
     # Build output lines in memory (avoids Windows text-mode seek issues)
     out = []
@@ -601,11 +590,11 @@ def write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
             else:
                 continue
 
-        # --- filter surfaceelements by keep_fds ---
-        if s == "surfaceelements":
+        # --- filter surfaceelements / surfaceelementsuv by domin/domout ---
+        if s in ("surfaceelements", "surfaceelementsuv"):
             section = "surfaceelements"
             out.append(line)
-            if keep_fds is not None:
+            if mat_idx > 0:
                 se_insert_idx = len(out)  # count placeholder
                 out.append("")  # will be replaced
             continue
@@ -613,19 +602,26 @@ def write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
         if section == "surfaceelements":
             if _is_section_header(s):
                 section = ""
-            elif keep_fds is not None:
-                parts = s.split()
-                if len(parts) >= 5:
-                    fd_idx = int(parts[0])
-                    if fd_idx in keep_fds:
-                        kept_elems.append(line)
+            elif s.startswith("#") or not s:
                 continue
-            # keep_fds is None: pass through (count + elements)
+            elif mat_idx > 0:
+                parts = s.split()
+                # Format: surfid bcprop domin domout np p1 p2 p3 ...
+                if len(parts) >= 5:
+                    try:
+                        domin = int(parts[2])
+                        domout = int(parts[3])
+                        if domin == mat_idx or domout == mat_idx:
+                            kept_elems.append(line)
+                    except (ValueError, IndexError):
+                        pass
+                continue
+            # mat_idx == 0: pass through (count + elements)
 
         out.append(line)
 
     # Insert filtered surface elements
-    if keep_fds is not None and se_insert_idx >= 0:
+    if mat_idx > 0 and se_insert_idx >= 0:
         out[se_insert_idx] = f"{len(kept_elems)}\n"
         for i, el in enumerate(kept_elems):
             out.insert(se_insert_idx + 1 + i, el)
@@ -633,7 +629,229 @@ def write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
     with open(output_path, "w") as f:
         f.writelines(out)
 
+    # When filtering by material, also drop FaceDescriptors and bcnames that
+    # have no surface elements left. Otherwise NGSolve registers spurious
+    # boundary regions and the BEM saddle-point matrix becomes singular.
+    if mat_idx > 0:
+        _strip_unused_face_descriptors(output_path)
+
     os.remove(tmp)
+
+
+def _strip_unused_face_descriptors(vol_path):
+    """Remove FaceDescriptors and bcnames that have zero surface elements.
+
+    Required after `write_surface_only_vol` filters by material: the
+    surface element list is reduced but the FD/bcname tables are not.
+    NGSolve treats orphan FDs as separate boundary regions and the BEM
+    saddle-point matrix becomes rank-deficient.
+
+    Strategy: parse the .vol into sections, find which 1-based FD indices
+    still appear in surface elements, build an old->new index map, then
+    rewrite facedescriptors / surfaceelements / bcnames consistently.
+    """
+    with open(vol_path, "r") as f:
+        raw = f.read()
+
+    # Split into "section blocks": each block starts at a section header
+    # line (a single keyword) and runs until the next section header.
+    section_keywords = {
+        "mesh3d", "dimension", "geomtype", "facedescriptors",
+        "surfaceelements", "surfaceelementsuv", "surfaceelementsgi",
+        "volumeelements", "edgesegmentsgi2", "points", "pointelements",
+        "identifications", "identificationtypes", "identificationnames",
+        "materials", "bcnames", "cd2names", "cd3names",
+        "singular_points", "singular_lines", "singular_faces",
+        "curvedelements", "endmesh",
+    }
+
+    lines = raw.splitlines(keepends=True)
+    # Identify section boundaries.
+    section_starts = []  # list of (line_index, keyword)
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s in section_keywords:
+            section_starts.append((i, s))
+    section_starts.append((len(lines), "EOF"))
+
+    # Build a dict: keyword -> list of lines AFTER the keyword and count
+    # line, until the next section.
+    blocks = {}
+    for j in range(len(section_starts) - 1):
+        i0, kw = section_starts[j]
+        i1, _ = section_starts[j + 1]
+        # Skip the keyword line itself
+        body = lines[i0 + 1 : i1]
+        blocks[kw] = (i0, body)
+
+    # --- Pass 1: find used FD indices in surfaceelements ---
+    # Surface element format: surfid bcprop domin domout np p1 p2 p3 ...
+    # surfid is the original Cubit surface ID; bcprop is the contiguous
+    # 1-based FD index that NGSolve uses to look up the FaceDescriptor.
+    # We must collect bcprop values (parts[1]), NOT surfid (parts[0]).
+    used_fds = set()
+    for kw in ("surfaceelements", "surfaceelementsuv", "surfaceelementsgi"):
+        if kw not in blocks:
+            continue
+        body = blocks[kw][1]
+        count_skipped = False
+        for ln in body:
+            s = ln.strip()
+            if not s or s.startswith("#"):
+                continue
+            if not count_skipped:
+                count_skipped = True
+                continue
+            parts = s.split()
+            if len(parts) >= 5:
+                try:
+                    used_fds.add(int(parts[1]))  # bcprop = 1-based FD index
+                except ValueError:
+                    pass
+
+    if not used_fds:
+        return
+
+    # --- Pass 2: parse facedescriptors to get total nfd ---
+    if "facedescriptors" not in blocks:
+        return
+    fd_body = blocks["facedescriptors"][1]
+    fd_data = []
+    count_line = None
+    for ln in fd_body:
+        s = ln.strip()
+        if not s or s.startswith("#"):
+            continue
+        if count_line is None:
+            count_line = ln
+            continue
+        fd_data.append(ln)
+
+    nfd = int(count_line.strip())
+    if len(fd_data) != nfd:
+        # Defensive: if parsing failed, leave file untouched.
+        return
+
+    # Build old (1-based) -> new (1-based) FD map.
+    old_to_new = {}
+    new_idx = 1
+    for k in range(1, nfd + 1):
+        if k in used_fds:
+            old_to_new[k] = new_idx
+            new_idx += 1
+    if len(old_to_new) == nfd:
+        return  # nothing to strip
+
+    # --- Pass 3: rewrite the file ---
+    out = []
+    skip_until_next_section = False
+    j = 0
+    while j < len(lines):
+        line = lines[j]
+        s = line.strip()
+        if s == "facedescriptors":
+            out.append(line)
+            new_fds = []
+            for k, fl in enumerate(fd_data, 1):
+                if k not in old_to_new:
+                    continue
+                parts = fl.split()
+                if len(parts) >= 5:
+                    # facedescriptors: surfnr domin domout tlosurf bcprop
+                    #   surfnr / tlosurf = original geometric surface id
+                    #     (Cubit surface ID) — KEEP as-is
+                    #   bcprop = the 1-based FD index used by surface elements
+                    #     to look up this FD; renumber consecutively.
+                    parts[4] = str(old_to_new[k])
+                new_fds.append(" " + " ".join(parts) + "\n")
+            out.append(f"{len(new_fds)}\n")
+            out.extend(new_fds)
+            # Skip the original FD body in the input lines
+            j += 1
+            # Skip count line + nfd data lines (preserving comments)
+            consumed = 0
+            target = 1 + nfd  # count + entries
+            while j < len(lines) and consumed < target:
+                t = lines[j].strip()
+                if t and not t.startswith("#"):
+                    consumed += 1
+                j += 1
+            continue
+
+        if s in ("surfaceelements", "surfaceelementsuv", "surfaceelementsgi"):
+            out.append(line)
+            j += 1
+            # Read count + nse element lines from input
+            se_body_lines = []
+            count_consumed = False
+            nse = 0
+            while j < len(lines):
+                t = lines[j].strip()
+                if t in section_keywords:
+                    break
+                if not t or t.startswith("#"):
+                    se_body_lines.append(lines[j])
+                    j += 1
+                    continue
+                if not count_consumed:
+                    nse = int(t)
+                    se_body_lines.append(lines[j])
+                    count_consumed = True
+                    j += 1
+                    continue
+                parts = lines[j].split()
+                if len(parts) >= 5:
+                    try:
+                        # Update bcprop (parts[1]) only; surfid (parts[0])
+                        # is the original Cubit surface ID and should be
+                        # preserved.
+                        old_bc = int(parts[1])
+                        if old_bc in old_to_new:
+                            parts[1] = str(old_to_new[old_bc])
+                    except ValueError:
+                        pass
+                se_body_lines.append(" " + " ".join(parts) + "\n")
+                j += 1
+            out.extend(se_body_lines)
+            continue
+
+        if s == "bcnames":
+            out.append(line)
+            j += 1
+            # Read count + nbc lines
+            count_consumed = False
+            nbc = 0
+            bc_data = []
+            while j < len(lines):
+                t = lines[j].strip()
+                if t in section_keywords:
+                    break
+                if not t:
+                    j += 1
+                    continue
+                if not count_consumed:
+                    nbc = int(t)
+                    count_consumed = True
+                    j += 1
+                    continue
+                bc_data.append(lines[j])
+                j += 1
+            new_bcs = []
+            for k, bl in enumerate(bc_data, 1):
+                if k not in old_to_new:
+                    continue
+                parts = bl.split(None, 1)
+                rest = parts[1].rstrip("\r\n") if len(parts) > 1 else "default"
+                new_bcs.append(f"{old_to_new[k]}\t{rest}\n")
+            out.append(f"{len(new_bcs)}\n")
+            out.extend(new_bcs)
+            continue
+
+        out.append(line)
+        j += 1
+
+    with open(vol_path, "w") as f:
+        f.writelines(out)
 
 
 def _find_material_index(vol_lines, name):
@@ -805,6 +1023,24 @@ def calc_main(solve_func, parser):
 
     args = parser.parse_args()
 
+    # Tag this subprocess in the shared panel debug log so its lines
+    # are interleaved with Cubit / IH window lines under one Cubit
+    # session.
+    try:
+        from panel_log import init_panel_log, panel_log
+        # Use the entry-point script name (e.g. calc_inductance.py)
+        # as the component tag, truncated to 12 chars.
+        _entry = os.path.basename(sys.argv[0])
+        _tag = os.path.splitext(_entry)[0].replace("calc_", "")
+        init_panel_log(_tag, truncate=False, banner=False)
+        panel_log(f"calc_main: {_entry} args={vars(args)}")
+    except Exception:
+        def panel_log(_msg):
+            pass
+
+    import time as _time
+    _t0 = _time.perf_counter()
+
     real_stdout = sys.stdout
     sys.stdout = io.StringIO()
     try:
@@ -813,7 +1049,23 @@ def calc_main(solve_func, parser):
         result = {"error": str(e)}
         sys.stderr.write(traceback.format_exc())
         sys.stderr.flush()
+        try:
+            panel_log(f"calc_main: EXCEPTION {e}")
+            for line in traceback.format_exc().rstrip().splitlines():
+                panel_log(f"  {line}")
+        except Exception:
+            pass
     sys.stdout = real_stdout
+
+    _elapsed = _time.perf_counter() - _t0
+    try:
+        if isinstance(result, dict):
+            keys = sorted(result.keys())[:15]
+            panel_log(f"calc_main: done {_elapsed:.2f}s keys={keys}")
+            if "error" in result:
+                panel_log(f"  ERROR: {result['error']}")
+    except Exception:
+        pass
 
     output_path = getattr(args, "output", "")
     if output_path:
