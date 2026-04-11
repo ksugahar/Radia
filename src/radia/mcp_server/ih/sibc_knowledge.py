@@ -223,17 +223,221 @@ block 2 name "coil"
 radia_export netgen "model.vol" order 2 overwrite
 ```
 
+## Coupled BEM Coil Terminal Inductance Change (2026-04-12)
+
+`bem_coupled_solver.CoupledBEMSolver` computes the **physically correct
+coil terminal inductance change** caused by an SIBC workpiece, by
+iterating coil EFIE + workpiece scalar BIE+SIBC with a per-DOF
+back-reaction RHS.
+
+### What it returns
+
+```python
+from radia.bem_coupled_solver import CoupledBEMSolver
+solver = CoupledBEMSolver(mesh_coil, mesh_wp)
+result = solver.solve(Z_s, omega, max_iter=10, tol=1e-3, relax=0.5)
+
+L_air   = result['L_air']      # uncoupled coil-only inductance
+L_total = result['L_total']    # coupled coil terminal inductance
+Delta_L = result['Delta_L']    # = L_total - L_air, sign-correct
+P_total = result['P_total']    # workpiece dissipation [W]
+```
+
+### Sign behavior (validated 2026-04-12)
+
+| Workpiece | mu_r | Delta_L sign | Physics |
+|---|---|---|---|
+| Non-magnetic conductor (Cu, Al) | 1 | **negative** | Lenz screening |
+| Weakly ferromagnetic | 2-10 | negative (smaller) | Lenz still dominates |
+| Ferromagnetic (steel) | 100-1000 | **positive** | Skin-layer flux concentration |
+| Asymptotic high freq | any | saturates | Cu @ 1 MHz: -1.02 nH (PEC limit) |
+
+Frequency sweep (copper, mu_r=1, R_coil=30mm, R_wp=10mm, H_wp=20mm):
+
+| freq    | delta    | L_air     | L_total   | Delta_L      |
+|---------|----------|-----------|-----------|--------------|
+| 100 Hz  | 6.61 mm  | 86.671 nH | 86.356 nH | -0.316 nH    |
+| 1 kHz   | 2.09 mm  | 86.671 nH | 85.899 nH | -0.772 nH    |
+| 10 kHz  | 0.66 mm  | 86.671 nH | 85.729 nH | -0.942 nH    |
+| 100 kHz | 0.21 mm  | 86.671 nH | 85.673 nH | -0.998 nH    |
+| 1 MHz   | 0.066 mm | 86.671 nH | 85.655 nH | -1.016 nH    |
+
+mu_r sweep (steel sigma=2e6, half=5mm, f=50kHz) shows the sign change:
+
+| mu_r | Delta_L      |
+|------|--------------|
+| 1    | -0.831 nH    |
+| 10   | -0.462 nH    |
+| 100  | **+0.342 nH** |
+| 1000 | +1.304 nH    |
+
+### Implementation key (do NOT use scalar rescale)
+
+The back-reaction RHS is a **per-HDivSurface-DOF vector**:
+
+    f_back[i] = int v_i.Trace() . A_wp dS_coil   (i = 0..n_J-1)
+
+Built via a NGSolve LinearForm with A_wp as a CoefficientFunction sum
+of M analytic 1/r kernels in (x, y, z). The previous (v1) implementation
+used a scalar rescale `alpha * SL @ J_coil` and produced wrong-signed
+Delta_L. Saved as `bem_coupled_solver_v1_buggy.py.bak` for reference.
+
+### Limitations
+
+- Linear SIBC (Dowell formula) only — nonlinear ESIM not yet supported
+  in the coupled solver
+- Scalar BIE limit captures only exterior scattered field; full mu_r
+  flux concentration in the workpiece volume requires MFIE/PMCHWT
+  (not yet implemented)
+- Quantitative validation against FEM-Kelvin / analytical sphere is
+  still pending; sign and trends are verified
+
+### Wired into
+
+- `calc_inductance.py::_run_coupled_bem`: called when `--workpiece` is
+  set with `--impedance-model dowell`
+- IH panel display shows `L (air)`, `delta L`, `L (eff)`, `R (added)`,
+  iterations, skin depth
+
+## Per-panel local curvature SIBC (2026-04-12)
+
+NGSolve mesh-driven per-panel local radius for the SIBC cell problem.
+Eliminates the need for the user to manually set ``half_thickness`` to
+match the workpiece geometry.
+
+### What it does
+
+For each workpiece panel, compute a local radius from the **discrete
+normal-angle** between adjacent panels:
+
+```
+edge-adjacent panel pair (i, j):
+    angle_ij = arccos(n_i . n_j)
+    dist_ij  = |c_j - c_i|
+    R_ij     = dist_ij / angle_ij      (= 1 / local curvature)
+R_local[i] = percentile_10({R_ij over all edge neighbors of i})
+```
+
+The percentile-10 aggregation picks up the maximum local curvature
+direction (= principal direction with the smallest R) and is robust
+against:
+
+- cylinder axial neighbors (parallel normals -> R -> infinity, filtered)
+- sliver triangles producing spurious tiny R (clipped)
+- mesh discretization noise (median-like robustness)
+
+### CLI / GUI
+
+```bash
+calc_inductance.py --workpiece sibc --impedance-model esim \
+    --use-local-curvature
+```
+
+GUI (IH panel) -> "Per-panel curvature: on / off" combo, visible
+whenever Workpiece SIBC mode is on. Off by default for backward
+compatibility.
+
+### Validation (2026-04-12)
+
+| Geometry        | mesh maxh | R_local mean | expected | error |
+|-----------------|-----------|--------------|----------|-------|
+| Sphere R=25 mm  | R/4       | 22.79 mm     | 25 mm    | -8.8% |
+| Sphere R=25 mm  | R/8       | 23.32 mm     | 25 mm    | -6.7% |
+| Cylinder R=10 mm side | R/3 | 10.72 mm     | 10 mm    | +7.2% |
+| Cylinder caps         | R/3 | 654.9 mm     | flat     | OK    |
+| Flat plate            | -   | 507 mm       | flat     | OK    |
+
+The chord-vs-arc discretization error decreases with mesh refinement.
+
+### End-to-end demo (sphere workpiece, R=15 mm, steel mu_r=100, 50 kHz)
+
+| Case                                | half_thickness | P_total [W] | error |
+|-------------------------------------|---------------|-------------|-------|
+| A. Wrong global R (user typo: 5 mm) | 5 mm          | 0.180       | **+189%** |
+| B. Correct global R = 15 mm         | 15 mm         | 0.062       | reference |
+| C. **Per-panel auto (--use-local-curvature)** | (any)  | **0.067**   | **+8%** |
+
+The headline is **case A vs C**: the user no longer needs to know or
+type the workpiece radius — the mesh tells the solver. A typo in
+``half_thickness`` becomes harmless, and a non-trivial geometry
+(ellipsoid, free-form workpiece) gets per-panel-correct Z_s without
+any user input.
+
+### Files
+
+- `src/radia/panels/calc_inductance.py::_compute_panel_local_radii` —
+  the discrete-normal-angle radius extractor
+- `src/radia/panels/calc_inductance.py::_compute_wp_impedance_from_panels` —
+  ``mesh_wp`` and ``use_local_curvature`` parameters; both ESIM and
+  Dowell loops use per-panel R
+- `src/radia/esim_cell_problem.py::ESIMFiniteSlabSolver` —
+  ``set_radius(R)`` and ``solve(H0, R_local=...)`` for fast per-panel R
+- `src/radia/radia_ih.py` — GUI combo "Per-panel curvature: on/off"
+
+### Result keys (added)
+
+- `wp_use_local_curvature`: bool
+- `wp_R_local_min`: smallest per-panel R found [m]
+- `wp_R_local_max`: largest per-panel R found [m]
+
+### Limitations
+
+1. The cell problem is still 1D radial — captures the maximum
+   principal curvature only. For ellipsoid or doubly-curved
+   surfaces (kappa_1 != kappa_2) it approximates as a cylinder of
+   ``R = 1/kappa_max``. For a sphere this is exact.
+2. The **coupled BEM solver** (`bem_coupled_solver.py`) still uses
+   a scalar Z_s. Per-panel Z_s in the coupled solve is Phase 5.
+3. The clamp ``R >= 0.5*half_thickness`` protects against sliver
+   triangles producing spurious tiny R. Lower the bound for
+   sub-millimeter workpieces.
+
+### What used to be the case (do not re-search)
+
+Before 2026-04-12, ``--esim-geometry local_curvature`` only meant
+"use 1D radial Bessel with R = global half_thickness". The name was
+misleading. Now ``--use-local-curvature`` is the per-panel mesh-driven
+flag, distinct from the geometry mode.
+
+See ``memory/sibc_per_panel_curvature.md`` for full implementation
+notes; the older ``sibc_curvature_status.md`` is **superseded**.
+
+### Cross-check vs FEM-Kelvin SIBC (validated 2026-04-12)
+
+The coupled BEM was independently validated against the FEM-Kelvin
+SIBC pipeline (`calc_fem_kelvin.py --impedance sibc`) on the same
+`radia_model.vol` from `ih_sample.jou`:
+
+| Material | mu_r | f      | L_BEM     | L_FEM     | diff      |
+|----------|------|--------|-----------|-----------|-----------|
+| copper   | 1    | 50 kHz | 84.31 nH  | 84.56 nH  | **+0.29%** |
+| steel    | 100  | 50 kHz | 87.92 nH  | 89.43 nH  | +1.72%    |
+
+L_air (coil only) = 87.81 nH. The 0.3% agreement on copper is the
+strongest validation we have for the coupled BEM solver. Both methods
+report the correct sign in both regimes (Lenz screening for copper,
+flux concentration for ferromagnetic steel).
+
+**Canonical regression script**:
+`examples/cubit_panels/inductance/compare_bem_coupled_vs_fem_kelvin.py`
+
+Run after any change to `bem_coupled_solver.py` to confirm the cross-
+check is still tight.
+
 ## Summary: When to Use What
 
 | Need | Method | Script |
 |------|--------|--------|
 | **P_total, H_t (fast)** | Scalar BIE (BEM) | calc_heating_bem.py |
+| **L change vs workpiece** | **Coupled BEM (2026-04-12)** | **calc_inductance.py --workpiece** |
 | **P_total, H_t, L, B (FEM)** | Total-field + interface + BND | **calc_fem_kelvin.py** |
-| **Coil optimization** | BEM for P, FEM for L | both |
+| **Coil optimization** | BEM for L+P, FEM for field distribution | both |
 | **Validation (sphere)** | Scattered-field | verify_sphere_sibc.py |
 
-BEM is fast for P_total (162 DOFs vs 150k). FEM is needed for field distribution
-and inductance. Panel FEM interface approach gives -2.9% H_t vs BEM.
+BEM is fast for P_total (162 DOFs vs 150k). The coupled BEM is the
+right tool for "how does the coil terminal L change when I add a
+workpiece" — it gets the sign right across all mu_r/frequency regimes.
+FEM is needed for field distribution and full mu_r flux concentration.
 """
 
 IH_ESIM = """
