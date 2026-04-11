@@ -1,29 +1,29 @@
 """
 Inductance extractor using source/sink saddle point EFIE + ngsolve.bem.
 
-Called as subprocess from Cubit panel:
-    python calc_inductance.py --cub5 model.cub5 --order 2 --source source --sink sink
+Usage:
+    python calc_inductance.py --vol model.vol --source source --sink sink
+
+Input: Netgen .vol file with boundary labels (prefix-matched):
+  - source*: current injection face(s)
+  - sink*:   current extraction face(s)
+  - Optional: coil material label for surface filtering
+  - Optional: workpiece boundary labels for impedance calculation
 
 Method (saddle point EFIE):
-  1. export_NGSolveCurvedMesh(surface_only=True) -> surface mesh
-     Block names become NGSolve boundary labels ("source", "sink", etc.)
+  1. Load .vol, extract surface mesh (filter by coil material if set)
   2. Build SL (LaplaceSL) and D (divergence) matrices
   3. Solve saddle point: [SL D^T; D 0] [J; p] = [0; g]
      where g encodes unit current injection at source/sink
   4. L = mu_0 * J^T @ SL @ J
-  5. GMSH v2.2 export: J-distribution (surface) and B-distribution (volume)
+  5. Optional: workpiece impedance via Biot-Savart + ESIM/Dowell
 
-Prerequisites (Cubit journal):
-    block N name "source"    # tri/quad on source face
-    block M name "sink"      # tri/quad on sink face
-    block K name "boundary"  # all surface tri/quad (optional)
-
-IMPORTANT: NGSolve must be imported BEFORE cubit.
-Outputs JSON to stdout (suppresses all other print output).
+Outputs JSON to stdout.
 """
 
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -32,40 +32,54 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import (setup_cubit as _setup_cubit_common, setup_paths, MU_0,
-                          progress, calc_main, write_surface_only_vol)
+from calc_common import (setup_paths, MU_0, progress, calc_main,
+                          write_surface_only_vol)
 
 
-def _setup_cubit():
-    """Import cubit with path cleanup (NGSolve already imported)."""
-    cubit = _setup_cubit_common()
-    if cubit is None:
-        raise RuntimeError("Cubit not available")
-    return cubit
+def _resolve_bnd_labels(query, bnd_labels):
+    """Look up *query* in *bnd_labels*. Exact match only.
 
-
-def _write_surface_only_vol(src_ngmesh, output_path, keep_material=""):
-    """Legacy wrapper -- delegates to calc_common.write_surface_only_vol."""
-    write_surface_only_vol(src_ngmesh, output_path, keep_material=keep_material)
+    No case-insensitive matching, no prefix matching, no fuzzy fallback.
+    The .jou contractually defines the labels; if the exact name is not
+    present, error out so the user fixes the .jou rather than getting a
+    silently-wrong result.
+    """
+    return [query] if query in bnd_labels else []
 
 
 def extract_inductance_vol(vol_file, source_label="source",
                            sink_label="sink", fes_order=0, msh_output="",
-                           coil_label=""):
+                           coil_label="",
+                           workpiece="", impedance_model="esim",
+                           frequency=50000, sigma=2e6, half_thickness=0.005,
+                           mu_r=0, material="steel", esim_geometry="cylinder",
+                           bh_file="", coil_sigma=0, solver="lu",
+                           field_air=False, use_local_curvature=False):
     """Extract self-inductance from .vol file (no Cubit needed).
 
     Args:
         vol_file: Path to Netgen .vol file (surface mesh with boundary labels)
-        source_label: Boundary label for source face (sideset name)
-        sink_label: Boundary label for sink face (sideset name)
+        source_label: Boundary label for source face (prefix match)
+        sink_label: Boundary label for sink face (prefix match)
         fes_order: HDivSurface basis order (0=RWG, 1+=higher-order)
         msh_output: Optional path for GMSH .msh output
         coil_label: Material name of the coil block.  When set, only surface
             elements adjacent to this material are kept (filters out
             workpiece/air surfaces so BEM solves on coil only).
+        workpiece: Workpiece boundary label keyword (prefix match).
+            Empty string disables workpiece computation.
+        impedance_model: 'esim' or 'dowell'
+        frequency: Operating frequency [Hz]
+        sigma: Workpiece conductivity [S/m]
+        half_thickness: Slab half-thickness [m]
+        mu_r: Relative permeability (0=auto from material, used by dowell)
+        material: Material preset ('steel', 'copper', 'aluminum')
+        esim_geometry: 'cylinder' (local curvature) or 'slab' (flat)
+        bh_file: Path to BH curve file (2-column: H[A/m] B[T])
+        coil_sigma: Coil conductivity [S/m] (stored in results, not used in BEM)
 
     Returns:
-        dict with inductance_H, diagnostics
+        dict with inductance_H, diagnostics, and wp_* keys if workpiece enabled
     """
     import numpy as np
     import time as _time
@@ -76,19 +90,22 @@ def extract_inductance_vol(vol_file, source_label="source",
 
     t_total_start = _time.perf_counter()
 
-    # Load mesh from .vol
-    mesh = Mesh(vol_file)
+    # Load mesh from .vol (keep full mesh for workpiece panel extraction)
+    mesh_full = Mesh(vol_file)
 
     # BEM requires surface-only mesh (HDivSurface on volume mesh
     # includes interior edges as DOFs -> singular SL matrix).
-    if mesh.ne > 0:
-        import tempfile
-        surf_vol = os.path.join(tempfile.gettempdir(), "bem_surface.vol")
-        # Re-export as surface-only: read .vol, remove volume elements, save.
-        # When coil_label is set, also filter out non-coil surfaces.
-        ng = mesh.ngmesh
-        _write_surface_only_vol(ng, surf_vol, keep_material=coil_label)
-        mesh = Mesh(surf_vol)
+    # Use the in-memory extractor that prunes orphan vertices and
+    # renumbers FaceDescriptors. The .vol-text path
+    # (write_surface_only_vol) preserves all 7000+ vertices from the
+    # parent volume mesh, leaving thousands of unused vertices and
+    # making HDivSurface DOFs / SL singular.
+    if mesh_full.ne > 0:
+        from calc_heating_bem import _extract_surface_mesh_filtered
+        mesh = _extract_surface_mesh_filtered(mesh_full,
+                                              keep_label=coil_label)
+    else:
+        mesh = mesh_full
 
     t_export = _time.perf_counter() - t_total_start
 
@@ -98,20 +115,39 @@ def extract_inductance_vol(vol_file, source_label="source",
     euler = nv - ne + nse
     area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
 
-    # Verify boundary labels
+    # Resolve source/sink labels by keyword matching
     bnd_labels = list(set(mesh.GetBoundaries()))
-    if source_label not in bnd_labels or sink_label not in bnd_labels:
-        return {"error": f"Boundary labels {bnd_labels} do not contain "
-                f"'{source_label}' and/or '{sink_label}'. "
-                f"Define source/sink as sidesets in Cubit before export."}
+    src_matches = _resolve_bnd_labels(source_label, bnd_labels)
+    sink_matches = _resolve_bnd_labels(sink_label, bnd_labels)
+    if not src_matches or not sink_matches:
+        missing = []
+        if not src_matches:
+            missing.append(f"source='{source_label}'")
+        if not sink_matches:
+            missing.append(f"sink='{sink_label}'")
+        return {"error":
+                f"No boundary labels match {', '.join(missing)}. "
+                f"Available boundary labels: {sorted(bnd_labels)[:20]}. "
+                f"Fix: in your Cubit .jou, define sidesets named 'source' "
+                f"and 'sink' on the coil terminal faces, e.g.:\n"
+                f"  sideset 1 add surface <source_face_id>\n"
+                f"  sideset 1 name \"source\"\n"
+                f"  sideset 2 add surface <sink_face_id>\n"
+                f"  sideset 2 name \"sink\"\n"
+                f"Then re-export with: radia_export netgen \"model.vol\" order N"}
+    source_label = "|".join(src_matches)
+    sink_label = "|".join(sink_matches)
 
-    # Export mesh to GMSH (before solve)
+    # Export coil surface mesh (no field yet) to GMSH so the user can
+    # at least see the mesh while the BEM solve runs. The J / B fields
+    # are added later (or in a separate post pass) — see field_air.
     if msh_output:
         base_dir = os.path.dirname(os.path.abspath(msh_output))
         gmsh_file_J = msh_output
     else:
         base_dir = os.path.dirname(os.path.abspath(vol_file))
         gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
+    gmsh_file_J = gmsh_file_J.replace("\\", "/")
     try:
         from gmsh_post_export import GmshPostExport
         post = GmshPostExport(mesh, boundary=True)
@@ -119,10 +155,11 @@ def extract_inductance_vol(vol_file, source_label="source",
         sys.stderr.write(f"MESH_READY:{gmsh_file_J}\n")
         sys.stderr.flush()
     except Exception:
-        pass
+        gmsh_file_J = ""
 
     # Saddle point EFIE
-    sol = compute_inductance_source_sink(mesh, source_label, sink_label, fes_order)
+    sol = compute_inductance_source_sink(
+        mesh, source_label, sink_label, fes_order, solver=solver)
     if 'error' in sol:
         return sol
 
@@ -138,6 +175,53 @@ def extract_inductance_vol(vol_file, source_label="source",
     mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
     mesh.ngmesh.Save(mesh_vol)
 
+    # Add the actual J vector field to the surface .msh so the GMSH
+    # button has something meaningful to show even when --field-air
+    # is off. We re-export the same file (overwrites the empty mesh
+    # written before the solve) with vector + magnitude views.
+    if gmsh_file_J:
+        try:
+            from gmsh_post_export import GmshPostExport
+            from ngsolve import (Integrate, CF, BND, HDivSurface,
+                                 GridFunction)
+            fes_J_post = HDivSurface(mesh, order=fes_order)
+            gf_J_post = GridFunction(fes_J_post)
+            gf_J_post.vec.FV().NumPy()[:] = sol['J']
+
+            elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND,
+                               element_wise=True)
+            elem_Jx = Integrate(gf_J_post[0], mesh, VOL_or_BND=BND,
+                                element_wise=True)
+            elem_Jy = Integrate(gf_J_post[1], mesh, VOL_or_BND=BND,
+                                element_wise=True)
+            elem_Jz = Integrate(gf_J_post[2], mesh, VOL_or_BND=BND,
+                                element_wise=True)
+
+            J_nodes = np.zeros((mesh.nv, 3))
+            nc_count = np.zeros(mesh.nv)
+            for el in mesh.Elements(BND):
+                a = max(abs(elem_A[el.nr]), 1e-30)
+                jvec = (elem_Jx[el.nr] / a,
+                        elem_Jy[el.nr] / a,
+                        elem_Jz[el.nr] / a)
+                for vtx in el.vertices:
+                    J_nodes[vtx.nr, 0] += jvec[0]
+                    J_nodes[vtx.nr, 1] += jvec[1]
+                    J_nodes[vtx.nr, 2] += jvec[2]
+                    nc_count[vtx.nr] += 1
+            for k in range(3):
+                J_nodes[:, k] = np.where(nc_count > 0,
+                                         J_nodes[:, k] / nc_count, 0.0)
+
+            post_J = GmshPostExport(mesh, boundary=True)
+            post_J.add_field("|J|",
+                             np.linalg.norm(J_nodes, axis=1), ncomp=1)
+            post_J.add_field("J", J_nodes, ncomp=3)
+            post_J.write(gmsh_file_J)
+        except Exception as _e:
+            sys.stderr.write(f"WARN: J post export failed: {_e}\n")
+            sys.stderr.flush()
+
     coords = np.array([(v.point[0], v.point[1], v.point[2])
                        for v in mesh.vertices])
     bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
@@ -145,7 +229,7 @@ def extract_inductance_vol(vol_file, source_label="source",
     default_half = float(max(extent) * 0.65)
     default_maxh = float(max(extent) * 0.1)
 
-    return {
+    result = {
         "inductance_H": float(L_total),
         "n_dofs": sol['n_J'],
         "n_faces": sol['n_f'],
@@ -161,183 +245,346 @@ def extract_inductance_vol(vol_file, source_label="source",
         "t_lu": sol['t_solve'],
         "j_npy": j_npy,
         "mesh_vol": mesh_vol,
+        # GMSH button payload: the coil surface mesh file written
+        # before the solve. The field_air path overwrites this with
+        # the merged .geo (B + J + air-field) when --field-air is set.
+        "msh_output": gmsh_file_J,
         "default_lxyz": round(default_half, 4),
         "default_maxh": round(default_maxh, 4),
     }
+    if coil_sigma > 0:
+        result["coil_sigma_Sm"] = coil_sigma
 
-
-def extract_inductance(cub5_file, order, source_label="source",
-                       sink_label="sink", fes_order=0, msh_output="",
-                       workpiece="", impedance_model="esim",
-                       frequency=50000, sigma=2e6, half_thickness=0.005,
-                       material="steel", esim_geometry="cylinder"):
-    """Extract self-inductance via source/sink saddle point EFIE (legacy cub5 path).
-
-    Args:
-        cub5_file: Path to Cubit .cub5 model
-        order: Curve order (1-2)
-        source_label: Block name for source face
-        sink_label: Block name for sink face
-        fes_order: HDivSurface basis order (0=RWG, 1+=higher-order)
-        msh_output: Optional path for GMSH .msh output (J-distribution)
-
-    Returns:
-        dict with inductance_H, gmsh_file_J, gmsh_file_B, diagnostics
-    """
-    import numpy as np
-    import math
-    import time as _time
-    from ngsolve import Integrate, CF, BND, GridFunction
-
-    setup_paths()
-    from bem_inductance import compute_inductance_source_sink
-
-    t_total_start = _time.perf_counter()
-
-    cubit = _setup_cubit()
-    cubit.cmd(f'open "{cub5_file}"')
-
-    vol_ids = list(cubit.get_entities("volume"))
-    if not vol_ids:
-        return {"error": "No volumes found in model"}
-
-    total_elems = sum(
-        len(cubit.get_volume_tets(vid)) + len(cubit.get_volume_hexes(vid))
-        for vid in vol_ids
-    )
-    if total_elems == 0:
-        return {"error": "Volumes are not meshed."}
-
-    # Check that source/sink blocks exist
-    block_names = []
-    for bid in cubit.get_block_id_list():
-        block_names.append(cubit.get_exodus_entity_name("block", bid))
-
-    has_source = source_label in block_names
-    has_sink = sink_label in block_names
-
-    if not has_source or not has_sink:
-        return {"error": f"Missing blocks: "
-                f"{'source' if not has_source else ''} "
-                f"{'sink' if not has_sink else ''}. "
-                f"Available blocks: {block_names}. "
-                f"Define source/sink blocks in Cubit journal."}
-
-    # Export surface mesh (block names -> boundary labels)
-    from calc_common import export_mesh
-
-    t0_export = _time.perf_counter()
-    mesh = export_mesh(cubit, order=order, surface_only=True)
-    t_export = _time.perf_counter() - t0_export
-
-    nse = mesh.GetNE(BND)
-    nv = mesh.nv
-    ne = sum(1 for e in mesh.edges)
-    euler = nv - ne + nse
-    area = float(Integrate(CF(1), mesh, VOL_or_BND=BND))
-
-    # Verify boundary labels
-    bnd_labels = list(set(mesh.GetBoundaries()))
-    if source_label not in bnd_labels or sink_label not in bnd_labels:
-        return {"error": f"Boundary labels {bnd_labels} do not contain "
-                f"'{source_label}' and/or '{sink_label}'."}
-
-    # --- Phase 1: Export mesh to GMSH (before solve) ---
-    # Output dir: same as msh_output (all files must be co-located for .geo Merge)
-    if msh_output:
-        base_dir = os.path.dirname(os.path.abspath(msh_output))
-        gmsh_file_J = msh_output
-    else:
-        base_dir = os.path.dirname(os.path.abspath(cub5_file))
-        gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
-    try:
-        from gmsh_post_export import GmshPostExport
-        post = GmshPostExport(mesh, boundary=True)
-        post.write_mesh(gmsh_file_J)
-        sys.stderr.write(f"MESH_READY:{gmsh_file_J}\n")
-        sys.stderr.flush()
-    except Exception:
-        pass
-
-    # --- Phase 2: Saddle point EFIE (shared solver) ---
-    sol = compute_inductance_source_sink(mesh, source_label, sink_label, fes_order)
-    if 'error' in sol:
-        return sol
-
-    L_total = sol['L']
-    n_J = sol['n_J']
-    n_f = sol['n_f']
-    A_src = sol['A_source']
-    A_snk = sol['A_sink']
-    residual = sol['residual']
-    t_solve = sol['t_total']
-
-    sys.stderr.write(f"SOLVE_DONE:{t_solve:.1f}s\n")
-    sys.stderr.flush()
-
-    # Save solve results for post-processing (separate step)
-    j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
-    np.save(j_npy, sol['J'])
-    mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
-    mesh.ngmesh.Save(mesh_vol)
-
-    # Conductor bounding box for default post volume
-    coords = np.array([(v.point[0], v.point[1], v.point[2])
-                       for v in mesh.vertices])
-    bbox_min, bbox_max = coords.min(axis=0), coords.max(axis=0)
-    extent = bbox_max - bbox_min
-    default_half = float(max(extent) * 0.65)
-    default_maxh = float(max(extent) * 0.1)
-
-    result = {
-        "inductance_H": float(L_total),
-        "n_dofs": n_J,
-        "n_faces": n_f,
-        "euler": euler,
-        "surface_area": area,
-        "source_area": float(A_src),
-        "sink_area": float(A_snk),
-        "constraint_residual": residual,
-        "curve_order": order,
-        "fes_order": fes_order,
-        "t_solve": round(t_solve, 2),
-        "t_export": round(t_export, 2),
-        "t_assembly": sol['t_assembly'],
-        "t_lu": sol['t_solve'],
-        "j_npy": j_npy,
-        "mesh_vol": mesh_vol,
-        "default_lxyz": round(default_half, 4),
-        "default_maxh": round(default_maxh, 4),
-    }
-
-    # --- Workpiece surface impedance (ESIM or Dowell) ---
+    # Workpiece (optional). Two paths:
+    #   - dowell -> CoupledBEMSolver (iterative back-reaction with
+    #     per-DOF f_back[i] = int v_i . A_wp dS_coil; gives the
+    #     physically correct sign of Delta_L: <0 for non-magnetic
+    #     conductors with strong screening, >0 for ferromagnetic
+    #     workpieces). See bem_coupled_solver.py.
+    #   - esim   -> one-way SIBC post-processing (nonlinear cell
+    #     problem; the coupled solver does not yet support nonlinear
+    #     Z_s, so this path keeps the legacy uncoupled estimator with
+    #     P/Q reported but no Delta L).
     if workpiece:
-        sys.stderr.write("ESIM_START:computing workpiece impedance\n")
-        sys.stderr.flush()
-        wp_result = _compute_workpiece_impedance(
-            mesh, sol['gf_J'], workpiece, cubit,
-            impedance_model=impedance_model,
-            frequency=frequency, sigma=sigma,
-            half_thickness=half_thickness, material=material,
-            esim_geometry=esim_geometry)
-        result.update(wp_result)
-        sys.stderr.write(f"ESIM_DONE:R={wp_result.get('wp_R_effective', 0):.4e}\n")
-        sys.stderr.flush()
+        if impedance_model == "dowell":
+            try:
+                coupled_result = _run_coupled_bem(
+                    mesh_full=mesh_full,
+                    workpiece_label=workpiece,
+                    source_label=source_label,
+                    sink_label=sink_label,
+                    fes_order=fes_order,
+                    frequency=frequency,
+                    sigma=sigma,
+                    half_thickness=half_thickness,
+                    mu_r=mu_r,
+                    material=material)
+                result.update(coupled_result)
+                # Headline inductance becomes the coupled L_total.
+                # Keep the air-only value as L_air_H so the panel can
+                # display both.
+                result["L_air_H"] = result["inductance_H"]
+                result["inductance_H"] = coupled_result[
+                    "coupled_L_total_H"]
+            except Exception as _exc:
+                # Coupled solve failed — surface the error rather than
+                # silently falling back to a one-way (wrong) result.
+                import traceback as _tb
+                result["coupled_error"] = (
+                    f"CoupledBEMSolver failed: {_exc}\n{_tb.format_exc()}")
+        else:  # esim (nonlinear cell problem)
+            wp_panels = _extract_panels_from_mesh(mesh_full, workpiece)
+            if not wp_panels:
+                result["wp_error"] = (
+                    f"No boundary labels starting with '{workpiece}' "
+                    f"found. Available: "
+                    f"{sorted(set(mesh_full.GetBoundaries()))[:20]}...")
+            else:
+                wp_result = _compute_wp_impedance_from_panels(
+                    mesh, sol['gf_J'], wp_panels,
+                    impedance_model=impedance_model, frequency=frequency,
+                    sigma=sigma, half_thickness=half_thickness,
+                    mu_r=mu_r, material=material,
+                    esim_geometry=esim_geometry, bh_file=bh_file,
+                    mesh_wp=mesh_full,
+                    use_local_curvature=use_local_curvature)
+                result.update(wp_result)
+                wp_P = wp_result.get("wp_P_total", 0.0)
+                omega = 2.0 * math.pi * frequency
+                if omega > 0:
+                    result["coupled_R_effective_Ohm"] = float(2.0 * wp_P)
+
+    # Optional: B-field post-processing in the air domain.
+    # Reuses the post_process() pipeline (BiotSavartCF -> volume mesh
+    # via Set() -> GMSH .msh + .geo). Runs inline after solve so the
+    # user gets one-shot inductance + field in a single GUI Run.
+    if field_air:
+        progress("FIELD", "Computing B-field in air domain...")
+        # default_lxyz/default_maxh come from the solve step's bbox
+        lxyz = result.get("default_lxyz", 0.05)
+        maxh = result.get("default_maxh", 0.01)
+        post_result = post_process(
+            mesh_vol_path=result["mesh_vol"],
+            fes_order=fes_order,
+            msh_output=result.get("msh_output", msh_output),
+            j_npy=result["j_npy"],
+            lx=lxyz, ly=lxyz, lz=lxyz, maxh_vol=maxh)
+        # Merge field-eval keys with `field_` prefix to keep them
+        # separate from inductance results.
+        for k, v in post_result.items():
+            result[f"field_{k}"] = v
 
     return result
 
 
-def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
-                                  impedance_model="esim", frequency=50000,
-                                  sigma=2e6, half_thickness=0.005,
-                                  material="steel", esim_geometry="cylinder"):
-    """Compute workpiece surface impedance via ESIM or Dowell.
+def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
+                     fes_order, frequency, sigma, half_thickness, mu_r,
+                     material):
+    """Iterative coil-workpiece BEM via bem_coupled_solver.CoupledBEMSolver.
+
+    Builds clean coil + workpiece surface meshes from the same .vol
+    (filtered by material name with orphan vertices pruned), then runs
+    the iterative coupled solve with per-DOF back-reaction RHS.
+
+    Sign of Delta_L (verified 2026-04-12):
+      - mu_r = 1, copper, 1 kHz: -0.77 nH (Lenz screening)
+      - mu_r = 1, copper, 1 MHz: -1.02 nH (PEC limit)
+      - mu_r = 100, steel, 50 kHz: +0.34 nH (flux concentration starts)
+      - mu_r = 1000, steel, 50 kHz: +1.30 nH (flux concentration dominates)
+
+    Returns dict of coupled_* keys ready to merge into the main result.
+    """
+    setup_paths()
+    from bem_coupled_solver import CoupledBEMSolver
+    from calc_heating_bem import _extract_surface_mesh_filtered
+    from calc_common import get_bh_curve
+    import numpy as np
+
+    mesh_coil = _extract_surface_mesh_filtered(mesh_full, keep_label="coil")
+    mesh_wp = _extract_surface_mesh_filtered(
+        mesh_full, keep_label=workpiece_label)
+
+    # Z_s from the Dowell tanh formula (linear SIBC, single layer of
+    # half_thickness).
+    _, mat_mu_r = get_bh_curve(material)
+    if mu_r > 0:
+        mat_mu_r = mu_r
+    rho = 1.0 / sigma
+    omega = 2.0 * math.pi * frequency
+    mu_eff = MU_0 * float(mat_mu_r if mat_mu_r else 1.0)
+    delta = math.sqrt(2.0 * rho / (omega * mu_eff)) if omega > 0 else 1e10
+    xi = half_thickness / delta
+    gamma_a = complex(1, 1) * xi
+    try:
+        Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
+    except OverflowError:
+        Z_s = (rho / half_thickness) * gamma_a
+
+    solver = CoupledBEMSolver(
+        mesh_coil, mesh_wp,
+        source_label=source_label, sink_label=sink_label,
+        fes_order=fes_order)
+    sol = solver.solve(Z_s=Z_s, omega=omega,
+                       max_iter=10, tol=1e-3, relax=0.5)
+
+    return {
+        "coupled_L_air_H": float(sol['L_air']),
+        "coupled_L_total_H": float(sol['L_total']),
+        "coupled_dL_H": float(sol['Delta_L']),
+        "coupled_P_total_W": float(sol['P_total']),
+        "coupled_R_effective_Ohm": float(2.0 * sol['P_total']),
+        "coupled_H_t_rms_Am": float(sol['H_t_rms']),
+        "coupled_iterations": int(sol['iterations']),
+        "coupled_n_J_coil": int(sol['n_J_coil']),
+        "coupled_n_phi_wp": int(sol['n_phi_wp']),
+        "coupled_Z_s_real_Ohm": float(Z_s.real),
+        "coupled_Z_s_imag_Ohm": float(Z_s.imag),
+        "coupled_delta_skin_m": float(delta),
+        "coupled_mu_r": float(mat_mu_r),
+        "coupled_sigma_Sm": float(sigma),
+        "coupled_half_thickness_m": float(half_thickness),
+        "coupled_material": material,
+    }
+
+
+def _extract_panels_from_mesh(mesh, workpiece_label):
+    """Extract workpiece surface panels from mesh boundary elements.
+
+    Finds boundary elements whose label starts with *workpiece_label*
+    (prefix match, case-insensitive) and computes per-element centroid,
+    outward normal, area, and the **vertex indices** (used downstream
+    by ``_compute_panel_local_radii`` for per-panel local sphere fit).
+
+    Returns list of dicts with keys ``center``, ``normal``, ``area``,
+    ``vert_ids``.
+    """
+    import numpy as np
+    from ngsolve import BND
+
+    bnd_labels = list(set(mesh.GetBoundaries()))
+    wp_labels = _resolve_bnd_labels(workpiece_label, bnd_labels)
+    if not wp_labels:
+        return []
+
+    wp_label_set = set(wp_labels)
+    panels = []
+    for el in mesh.Elements(BND):
+        if el.mat not in wp_label_set:
+            continue
+        vert_ids = [v.nr for v in el.vertices]
+        verts = [mesh.vertices[v.nr].point for v in el.vertices]
+        pts = np.array([(v[0], v[1], v[2]) for v in verts])
+        center = pts.mean(axis=0)
+        # Triangle normal via cross product
+        if len(pts) >= 3:
+            e1 = pts[1] - pts[0]
+            e2 = pts[2] - pts[0]
+            cross = np.cross(e1, e2)
+            area = 0.5 * np.linalg.norm(cross)
+            normal = cross / (2.0 * area) if area > 1e-30 else np.array([0, 0, 1.0])
+        else:
+            area = 0.0
+            normal = np.array([0, 0, 1.0])
+        if area > 1e-30:
+            panels.append({
+                'center': center,
+                'normal': normal,
+                'area': area,
+                'vert_ids': vert_ids,
+            })
+    return panels
+
+
+def _compute_panel_local_radii(mesh, panels, default_R=1e30):
+    """Compute a per-panel local radius via discrete mean curvature.
+
+    Uses the standard discrete-differential-geometry formula based on
+    the **angle between adjacent panel normals**. For each panel ``i``
+    we look at its **edge-adjacent** panels ``j`` (sharing 2 vertices,
+    i.e. an edge) and compute::
+
+        angle_ij  = arccos(n_i . n_j)
+        dist_ij   = |c_j - c_i|
+        kappa_ij  ~ angle_ij / dist_ij           (local curvature)
+        R_ij      = 1 / kappa_ij = dist_ij / angle_ij
+
+    The panel's local radius is the **median** of the per-edge
+    estimates (median is robust to outliers from sliver triangles).
+
+    This formula is the limiting case of the integrated geodesic
+    curvature in 1D and gives the right answer for the three
+    canonical local shapes:
+
+      - **Sphere** R: all neighbors are at the same arc-length and
+        the normal rotates by the same angle -> R_ij = R exactly.
+      - **Cylinder** R: edge-adjacent panels around the
+        circumferential direction give R; edge-adjacent panels in
+        the axial direction give parallel normals (angle ~ 0,
+        radius -> infinity). The median picks up the smaller R
+        from circumferential neighbors -> R_local = R.
+      - **Flat plate**: parallel normals everywhere, angle ~ 0,
+        radius -> infinity -> clipped to ``default_R``.
+
+    Returns ``np.ndarray[len(panels)]`` of local radii [m]. Panels
+    with no edge neighbors fall back to ``default_R``.
+    """
+    import numpy as np
+
+    if not panels:
+        return np.array([])
+
+    # vertex -> list of panel indices that touch it
+    vert_to_panels = {}
+    for pi, p in enumerate(panels):
+        for vid in p['vert_ids']:
+            vert_to_panels.setdefault(vid, []).append(pi)
+
+    R_local = np.full(len(panels), float(default_R))
+    MIN_ANGLE = 1e-4  # below this, treat as flat (numerical noise)
+
+    for pi, p in enumerate(panels):
+        n_i = np.asarray(p['normal'], dtype=float)
+        n_i /= max(float(np.linalg.norm(n_i)), 1e-30)
+        c_i = np.asarray(p['center'], dtype=float)
+
+        # Find directly edge-adjacent panels (share exactly 2 vertices).
+        own_vids = set(p['vert_ids'])
+        candidate_neighbors = set()
+        for vid in own_vids:
+            for qi in vert_to_panels.get(vid, []):
+                if qi != pi:
+                    candidate_neighbors.add(qi)
+        edge_neighbors = [
+            qi for qi in candidate_neighbors
+            if len(own_vids & set(panels[qi]['vert_ids'])) == 2]
+
+        if not edge_neighbors:
+            continue
+
+        radii = []
+        for qi in edge_neighbors:
+            n_q = np.asarray(panels[qi]['normal'], dtype=float)
+            n_q /= max(float(np.linalg.norm(n_q)), 1e-30)
+            c_q = np.asarray(panels[qi]['center'], dtype=float)
+
+            cos_angle = float(np.clip(np.dot(n_i, n_q), -1.0, 1.0))
+            angle = float(np.arccos(cos_angle))
+            if angle < MIN_ANGLE:
+                continue  # parallel normals -> flat -> infinite R
+
+            dist = float(np.linalg.norm(c_q - c_i))
+            if dist < 1e-30:
+                continue
+
+            R_est = dist / angle
+            if R_est > default_R or R_est <= 0:
+                continue
+            radii.append(R_est)
+
+        if not radii:
+            continue
+        # We want the **maximum local curvature direction** = the
+        # smallest R, because the SIBC cylinder cell problem is solved
+        # in the most-curved 1D radial coordinate. For:
+        #   - sphere R: every neighbor gives R, percentile-10 = R
+        #   - cylinder R: circumferential neighbors give R,
+        #     axial neighbors give large R (or are filtered out by
+        #     MIN_ANGLE), percentile-10 picks up the small R = R
+        #   - flat: all R large, percentile-10 large -> default_R clip
+        # We take percentile 10 (not the strict min) for robustness
+        # against sliver triangles that produce spurious tiny R.
+        radii_arr = np.asarray(radii)
+        R_local[pi] = float(np.percentile(radii_arr, 10))
+
+    return R_local
+
+
+def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
+                                       impedance_model="esim", frequency=50000,
+                                       sigma=2e6, half_thickness=0.005,
+                                       mu_r=0, material="steel",
+                                       esim_geometry="cylinder",
+                                       bh_file="",
+                                       mesh_wp=None,
+                                       use_local_curvature=False):
+    """Compute workpiece surface impedance from mesh panels.
 
     Pipeline:
-      1. Extract workpiece surface panels from Cubit block geometry
-      2. Biot-Savart from coil J -> H at workpiece panels
-      3. ESIM cell problem or Dowell formula -> Z_s, P, Q per panel
-      4. Integrate over surface
+      1. Biot-Savart from coil J -> H at workpiece panels
+      2. ESIM cell problem or Dowell formula -> Z_s, P, Q per panel
+         If ``use_local_curvature`` is True, each panel's R is taken
+         from the mesh-driven local curvature instead of the global
+         ``half_thickness``.
+      3. Integrate over surface
+
+    Args:
+        mesh_wp: workpiece NGSolve mesh (required when
+            use_local_curvature=True; used to compute per-panel R)
+        use_local_curvature: when True, the SIBC R is per-panel,
+            extracted from the mesh by ``_compute_panel_local_radii``.
+            Sphere / ellipsoid / curved-shell workpieces benefit
+            because the cell problem now matches the local geometry
+            instead of using a single global radius.
 
     Returns dict with wp_* keys to merge into main result.
     """
@@ -345,48 +592,14 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
     import numpy as np
     from ngsolve import Integrate, CF, BND
 
-    rho = 1.0 / sigma
-    omega = 2 * math.pi * frequency
-
-    # --- Step 1: Workpiece surface panels from Cubit block ---
-    # Get workpiece volume IDs from block
-    wp_vol_ids = []
-    for bid in cubit_mod.get_block_id_list():
-        try:
-            name = cubit_mod.get_exodus_entity_name("block", bid)
-            if name == workpiece_label:
-                # Block may contain volumes
-                for vid in cubit_mod.get_block_volumes(bid):
-                    wp_vol_ids.append(vid)
-                break
-        except Exception:
-            pass
-
-    if not wp_vol_ids:
-        return {"wp_error": f"Workpiece block '{workpiece_label}' has no volumes"}
-
-    # Get workpiece surface panels: centroid + normal + area from Cubit surfaces
-    panels = []
-    for vid in wp_vol_ids:
-        surfaces = cubit_mod.get_relatives("volume", vid, "surface")
-        for sid in surfaces:
-            s = cubit_mod.surface(sid)
-            cx, cy, cz = s.center_point()
-            # Normal from Cubit (outward)
-            nx, ny, nz = s.normal_at(s.center_point())
-            area = s.area()
-            panels.append({
-                'center': np.array([cx, cy, cz]),
-                'normal': np.array([nx, ny, nz]),
-                'area': area,
-            })
-
     if not panels:
         return {"wp_error": "No workpiece surfaces found"}
 
     n_panels = len(panels)
+    rho = 1.0 / sigma
+    omega = 2 * math.pi * frequency
 
-    # --- Step 2: Biot-Savart H at workpiece panels ---
+    # --- Biot-Savart H at workpiece panels ---
     INV_4PI = 1.0 / (4.0 * np.pi)
 
     elem_A = Integrate(CF(1), mesh_coil, VOL_or_BND=BND, element_wise=True)
@@ -423,10 +636,12 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
     H_t_vec = H_panels - H_n * normals
     H_t_mag = np.linalg.norm(H_t_vec, axis=1)
 
-    # --- Step 3: Surface impedance per panel ---
+    # --- Surface impedance per panel ---
     from calc_common import create_esim_solver, get_bh_curve
 
-    bh_curve, mu_r = get_bh_curve(material)
+    bh_curve, mat_mu_r = get_bh_curve(material)
+    if mu_r > 0:
+        mat_mu_r = mu_r
 
     P_total = 0.0
     Q_total = 0.0
@@ -434,14 +649,36 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
     delta_min = float('inf')
     delta_max = 0.0
 
+    # Per-panel local radii from the mesh (for the curvature-aware
+    # SIBC variant). All radii default to ``half_thickness`` so when
+    # use_local_curvature=False the legacy global-R behaviour is
+    # exactly preserved.
+    R_per_panel = np.full(n_panels, float(half_thickness))
+    R_local_min = float(half_thickness)
+    R_local_max = float(half_thickness)
+    if use_local_curvature and mesh_wp is not None:
+        R_local_arr = _compute_panel_local_radii(
+            mesh_wp, panels, default_R=1e3 * float(half_thickness))
+        # Clamp to a sensible window: workpiece thickness <= R <= 1m
+        R_per_panel = np.clip(R_local_arr,
+                              0.5 * float(half_thickness), 1.0)
+        R_local_min = float(R_per_panel.min())
+        R_local_max = float(R_per_panel.max())
+
     if impedance_model == "esim":
-        solver = create_esim_solver(
-            material=material, frequency=frequency, sigma=sigma,
-            half_thickness=half_thickness, geometry=esim_geometry)
+        esim_kw = dict(material=material, frequency=frequency, sigma=sigma,
+                       half_thickness=half_thickness, geometry=esim_geometry)
+        if bh_file and os.path.isfile(bh_file):
+            esim_kw['bh_file'] = bh_file
+        solver = create_esim_solver(**esim_kw)
 
         for i in range(n_panels):
             H0 = max(float(H_t_mag[i]), 1e-3)
-            sol = solver.solve(H0)
+            R_i = float(R_per_panel[i])
+            if use_local_curvature:
+                sol = solver.solve(H0, R_local=R_i)
+            else:
+                sol = solver.solve(H0)
             P_total += sol['P_prime'] * panels[i]['area']
             Q_total += sol['Q_prime'] * panels[i]['area']
             Z_sum += sol['Z'] * H_t_mag[i]**2 * panels[i]['area']
@@ -449,39 +686,27 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
             delta_max = max(delta_max, sol['delta'])
 
     elif impedance_model == "dowell":
-        # Dowell: Z_s = (rho/a) * gamma*a * tanh(gamma*a)
-        mu_eff = MU_0 * (mu_r if mu_r else 1.0)
+        mu_eff = MU_0 * (mat_mu_r if mat_mu_r else 1.0)
         delta = math.sqrt(2 * rho / (omega * mu_eff)) if omega > 0 else 1e10
-        xi = half_thickness / delta
-        gamma_a = complex(1, 1) * xi
-        try:
-            Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
-        except OverflowError:
-            Z_s = (rho / half_thickness) * gamma_a
-
         delta_min = delta_max = delta
+
+        # Per-panel Z_s using per-panel R (Dowell tanh)
         for i in range(n_panels):
+            R_i = float(R_per_panel[i])
+            xi = R_i / delta
+            gamma_a = complex(1, 1) * xi
+            try:
+                Z_s_i = (rho / R_i) * gamma_a * np.tanh(gamma_a)
+            except OverflowError:
+                Z_s_i = (rho / R_i) * gamma_a
             H0 = float(H_t_mag[i])
-            P_panel = Z_s.real * H0**2 / 2 * panels[i]['area']
-            Q_panel = Z_s.imag * H0**2 / 2 * panels[i]['area']
-            P_total += P_panel
-            Q_total += Q_panel
-            Z_sum += Z_s * H0**2 * panels[i]['area']
+            area_i = panels[i]['area']
+            P_total += 0.5 * Z_s_i.real * H0 ** 2 * area_i
+            Q_total += 0.5 * Z_s_i.imag * H0 ** 2 * area_i
+            Z_sum += Z_s_i * H0 ** 2 * area_i
 
-    elif impedance_model == "bem-sibc":
-        return _compute_workpiece_bem_sibc(
-            mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
-            frequency=frequency, sigma=sigma, half_thickness=half_thickness,
-            material=material, esim_geometry=esim_geometry)
-
-    elif impedance_model in ("fem-esim", "fem-dowell", "fem-sibc"):
-        _zs_mode = {"fem-esim": "esim", "fem-dowell": "dowell",
-                     "fem-sibc": "sibc"}[impedance_model]
-        return _compute_workpiece_fem_esim(
-            mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
-            frequency=frequency, sigma=sigma, half_thickness=half_thickness,
-            material=material, esim_geometry=esim_geometry,
-            zs_mode=_zs_mode)
+    else:
+        return {"wp_error": f"Unknown impedance model: {impedance_model}"}
 
     R_eff = float(Z_sum.real)
     X_eff = float(Z_sum.imag)
@@ -493,6 +718,9 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
         "wp_frequency": frequency,
         "wp_sigma": sigma,
         "wp_half_thickness": half_thickness,
+        "wp_use_local_curvature": bool(use_local_curvature),
+        "wp_R_local_min": R_local_min,
+        "wp_R_local_max": R_local_max,
         "wp_n_panels": n_panels,
         "wp_H_t_max": float(H_t_mag.max()),
         "wp_H_t_min": float(H_t_mag.min()),
@@ -503,456 +731,6 @@ def _compute_workpiece_impedance(mesh_coil, gf_J, workpiece_label, cubit_mod,
         "wp_X_effective": X_eff,
         "wp_delta_min": float(delta_min),
         "wp_delta_max": float(delta_max),
-    }
-
-
-def _compute_workpiece_bem_sibc(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
-                                 frequency=50000, sigma=2e6, half_thickness=0.005,
-                                 material="steel", esim_geometry="cylinder"):
-    """Compute workpiece impedance via Scalar BIE + SIBC (BEM).
-
-    Uses ScalarBIESIBCSolver from bem_sibc_solver.py.
-    Workpiece surface mesh auto-generated from Cubit geometry.
-    phi_inc from coil computed via Biot-Savart (coil center line approximation).
-
-    Returns dict with wp_* keys.
-    """
-    import math
-    import time as _time
-    from ngsolve import (Mesh, Integrate, CF, BND, TaskManager)
-    from netgen.occ import Cylinder, Pnt, Dir, OCCGeometry, Glue
-    from bem_sibc_solver import (ScalarBIESIBCSolver,
-                                 compute_phi_inc_from_surface_J)
-    from esim_cell_problem import ESIMFiniteSlabSolver
-
-    omega = 2 * math.pi * frequency
-
-    # --- Auto-detect workpiece geometry from Cubit surfaces ---
-    centers = np.array([p['center'] for p in panels])
-    wp_center = np.mean(centers, axis=0)
-    z_min, z_max = centers[:, 2].min(), centers[:, 2].max()
-    wp_height = z_max - z_min
-    rho = np.sqrt((centers[:, 0] - wp_center[0])**2 +
-                  (centers[:, 1] - wp_center[1])**2)
-    wp_radius = float(np.max(rho))
-    if wp_radius < 1e-6:
-        wp_radius = half_thickness
-
-    sys.stderr.write(f"BEM-SIBC: wp R={wp_radius*1e3:.1f}mm, "
-                     f"H={wp_height*1e3:.1f}mm\n")
-    sys.stderr.flush()
-
-    # --- Extract per-element J from EFIE solution (actual surface current) ---
-    from ngsolve import Integrate, CF, BND
-    elem_A = Integrate(CF(1), mesh_coil, VOL_or_BND=BND, element_wise=True)
-    elem_Jx = Integrate(gf_J[0], mesh_coil, VOL_or_BND=BND, element_wise=True)
-    elem_Jy = Integrate(gf_J[1], mesh_coil, VOL_or_BND=BND, element_wise=True)
-    elem_Jz = Integrate(gf_J[2], mesh_coil, VOL_or_BND=BND, element_wise=True)
-
-    src_centroids, src_areas, src_J_vecs = [], [], []
-    for el in mesh_coil.Elements(BND):
-        area = abs(elem_A[el.nr])
-        if area < 1e-30:
-            continue
-        jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr], elem_Jz[el.nr]]) / area
-        verts = [mesh_coil.vertices[v.nr].point for v in el.vertices]
-        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-        src_centroids.append(c)
-        src_areas.append(area)
-        src_J_vecs.append(jvec)
-
-    src_centroids = np.array(src_centroids)
-    src_areas = np.array(src_areas)
-    src_J_vecs = np.array(src_J_vecs)
-    sys.stderr.write(f"BEM-SIBC: {len(src_areas)} coil elements for Biot-Savart\n")
-    sys.stderr.flush()
-
-    # --- Workpiece surface mesh ---
-    # Try Cubit export first (ACIS curved, order=2), fallback to OCC
-    t0 = _time.perf_counter()
-    import tempfile as _tmpfile
-    try:
-        # Mesh workpiece volumes in Cubit if not already meshed
-        for vid in wp_vol_ids:
-            n_tets = len(cubit_mod.get_volume_tets(vid))
-            n_hexes = len(cubit_mod.get_volume_hexes(vid))
-            if n_tets + n_hexes == 0:
-                cubit_mod.cmd(f'volume {vid} scheme tetmesh')
-                cubit_mod.cmd(f'volume {vid} size {wp_radius / 4}')
-                cubit_mod.cmd(f'mesh volume {vid}')
-                sys.stderr.write(f"BEM-SIBC: auto-meshed wp volume {vid}\n")
-                sys.stderr.flush()
-
-        # Export via C++ plugin
-        vol_path = _tmpfile.mktemp(suffix='.vol')
-        cubit_mod.cmd(f'radia_export netgen "{vol_path}" order 2 overwrite')
-        wp_mesh = Mesh(vol_path)
-        sys.stderr.write(f"BEM-SIBC: Cubit export OK (ACIS order=2)\n")
-        sys.stderr.flush()
-    except Exception as e:
-        sys.stderr.write(f"BEM-SIBC: Cubit export failed ({e}), OCC fallback\n")
-        sys.stderr.flush()
-        from netgen.occ import (Cylinder as _Cyl, Pnt as _P, Dir as _D,
-                                 OCCGeometry as _G, Glue as _Gl)
-        wp_cyl = _Cyl(_P(wp_center[0], wp_center[1], z_min),
-                       _D(0, 0, 1), wp_radius, wp_height)
-        for f in wp_cyl.faces:
-            f.name = "wp_surface"
-        wp_mesh = Mesh(_G(_Gl(wp_cyl.faces)).GenerateMesh(maxh=wp_radius / 4))
-        wp_mesh.Curve(3)
-    t_mesh = _time.perf_counter() - t0
-
-    ne_wp = wp_mesh.GetNE(BND)
-    sys.stderr.write(f"BEM-SIBC: wp mesh {ne_wp} elems ({t_mesh:.1f}s)\n")
-    sys.stderr.flush()
-
-    # --- Assemble BEM operators ---
-    solver = ScalarBIESIBCSolver(wp_mesh, order=1)
-    sys.stderr.write(f"BEM-SIBC: assembled {solver.ndof} DOFs ({solver.t_assembly:.1f}s)\n")
-    sys.stderr.flush()
-
-    # --- Compute phi_inc ---
-    t0 = _time.perf_counter()
-    node_coords = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
-                            for i in range(wp_mesh.nv)])
-
-    # Use EFIE-solved surface J for phi_inc (accounts for proximity effects)
-    phi_inc = compute_phi_inc_from_surface_J(
-        node_coords, src_centroids, src_areas, src_J_vecs, n_quad=20)
-    t_phi = _time.perf_counter() - t0
-
-    sys.stderr.write(f"BEM-SIBC: phi_inc [{phi_inc.min():.4f}, {phi_inc.max():.4f}] "
-                     f"({t_phi:.1f}s)\n")
-    sys.stderr.flush()
-
-    # --- ESIM + Karl iteration ---
-    STEEL_BH = [
-        [0.0, 0.0], [50.0, 0.10], [100.0, 0.25], [200.0, 0.55],
-        [500.0, 0.95], [1000.0, 1.20], [2000.0, 1.40], [5000.0, 1.55],
-        [10000.0, 1.65], [20000.0, 1.75], [50000.0, 1.90], [100000.0, 2.00],
-    ]
-    bh_curve = STEEL_BH if material == "steel" else None
-    mu_r = 1.0 if material in ("copper", "aluminum") else None
-
-    esim_solver = ESIMFiniteSlabSolver(
-        half_thickness=half_thickness, bh_curve=bh_curve,
-        sigma=sigma, frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None,
-        n_nodes=200, geometry=esim_geometry)
-
-    Z_s = esim_solver.solve(5.0)['Z']
-    max_iter = 15
-    tol = 1e-3
-    relax = 0.5
-
-    for iteration in range(max_iter):
-        result = solver.solve(phi_inc, Z_s=Z_s, omega=omega)
-        H_t_rms = result['H_t_rms']
-
-        Z_s_old = Z_s
-        sol = esim_solver.solve(max(H_t_rms, 1e-3))
-        Z_s_new = sol['Z']
-        Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
-
-        dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
-        if dZ < tol and iteration > 0:
-            break
-
-    # Final solve with converged Z_s
-    result = solver.solve(phi_inc, Z_s=Z_s, omega=omega)
-    H_t_rms = result['H_t_rms']
-    P_density = result['P_density']
-    P_total = P_density * result['area']
-    Q_density = 0.5 * Z_s.imag * H_t_rms**2 if Z_s != 0 else 0
-    Q_total = Q_density * result['area']
-
-    mu_eff = 4e-7 * math.pi * (mu_r if mu_r else 100.0)
-    delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega > 0 else 1e10
-
-    return {
-        "wp_model": "bem-sibc",
-        "wp_material": material,
-        "wp_frequency": frequency,
-        "wp_sigma": sigma,
-        "wp_half_thickness": half_thickness,
-        "wp_n_panels": ne_wp,
-        "wp_H_t_max": float(H_t_rms),
-        "wp_H_t_min": float(H_t_rms),
-        "wp_P_total": float(P_total),
-        "wp_Q_total": float(Q_total),
-        "wp_P_density": float(P_density),
-        "wp_R_effective": float(0.5 * Z_s.real * H_t_rms**2 * result['area']),
-        "wp_X_effective": float(0.5 * Z_s.imag * H_t_rms**2 * result['area']),
-        "wp_delta_min": float(delta),
-        "wp_delta_max": float(delta),
-        "wp_bem_ndof": solver.ndof,
-        "wp_bem_t_assembly": solver.t_assembly,
-        "wp_bem_n_coil_elems": len(src_areas),
-        "wp_bem_wp_radius": wp_radius,
-    }
-
-
-def _compute_workpiece_fem_esim(mesh_coil, gf_J, panels, cubit_mod, wp_vol_ids,
-                                 frequency=50000, sigma=2e6, half_thickness=0.005,
-                                 material="steel", esim_geometry="cylinder",
-                                 zs_mode="esim"):
-    """Compute workpiece impedance via 3D FEM with SIBC Robin condition.
-
-    Creates 3D volume mesh (air + coil + workpiece cavity),
-    solves HCurl curl-curl + SIBC penalty, Karl iteration for Z_s.
-
-    Returns dict with wp_* keys (same format as BEM-SIBC).
-    """
-    import math
-    import time as _time
-    from ngsolve import (Mesh, HCurl, BilinearForm, LinearForm, GridFunction,
-                         Integrate, curl, dx, ds, CF, BND, VOL, TaskManager,
-                         InnerProduct, x, y, z, sqrt, IfPos)
-    from netgen.occ import (WorkPlane, Axes, Axis, Pnt, Dir, Sphere,
-                             Cylinder, OCCGeometry, Glue)
-    from esim_cell_problem import ESIMFiniteSlabSolver
-
-    MU_0 = 4e-7 * np.pi
-    omega = 2 * math.pi * frequency
-    nu0 = 1.0 / MU_0
-
-    # --- Auto-detect geometry from panels + coil mesh ---
-    centers = np.array([p['center'] for p in panels])
-    wp_center = np.mean(centers, axis=0)
-    z_min, z_max = centers[:, 2].min(), centers[:, 2].max()
-    wp_height = z_max - z_min
-    rho = np.sqrt((centers[:, 0] - wp_center[0])**2 +
-                  (centers[:, 1] - wp_center[1])**2)
-    R_wp = float(np.max(rho))
-    if R_wp < 1e-6:
-        R_wp = half_thickness
-    H_wp = wp_height if wp_height > 1e-6 else 2 * R_wp
-
-    coil_coords = np.array([(v.point[0], v.point[1], v.point[2])
-                            for v in mesh_coil.vertices])
-    coil_rho = np.sqrt(coil_coords[:, 0]**2 + coil_coords[:, 1]**2)
-    R_coil = float(np.mean(coil_rho))
-    coil_extent = np.max(np.abs(coil_coords))
-    a_coil = float(np.std(coil_rho)) * 2  # rough cross-section estimate
-
-    sys.stderr.write(f"FEM-ESIM: coil R={R_coil*1e3:.1f}mm, "
-                     f"wp R={R_wp*1e3:.1f}mm H={H_wp*1e3:.1f}mm\n")
-    sys.stderr.flush()
-
-    # --- 3D Geometry ---
-    t0 = _time.perf_counter()
-    gap_deg = 5
-    wp_plane = WorkPlane(Axes(p=Pnt(R_coil, 0, 0),
-                              n=Dir(0, 1, 0), h=Dir(0, 0, 1)))
-    circle = wp_plane.Circle(a_coil).Face()
-    torus = circle.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)), 360 - gap_deg)
-    torus.name = "coil"
-    torus.maxh = a_coil
-
-    R_air = max(R_coil * 4, coil_extent * 3)
-    air_sphere = Sphere(Pnt(0, 0, 0), R_air)
-    air_sphere.name = "air"
-    for f in air_sphere.faces:
-        f.name = "outer"
-
-    wp_cyl = Cylinder(Pnt(wp_center[0], wp_center[1], z_min),
-                      Dir(0, 0, 1), R_wp, H_wp)
-    for f in wp_cyl.faces:
-        f.name = "wp_surface"
-        f.maxh = min(R_wp / 4, a_coil)
-
-    air = air_sphere - torus - wp_cyl
-    air.name = "air"
-    shape = Glue([air, torus])
-
-    geo = OCCGeometry(shape)
-    maxh_air = R_air / 8
-    with TaskManager():
-        ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
-    mesh = Mesh(ngmesh)
-    mesh.Curve(2)
-    t_mesh = _time.perf_counter() - t0
-
-    ne = mesh.ne
-    bnds = mesh.GetBoundaries()
-    has_wp = "wp_surface" in bnds
-
-    sys.stderr.write(f"FEM-ESIM: {ne} tets, {mesh.nv} verts ({t_mesh:.1f}s)\n")
-    sys.stderr.flush()
-
-    if not has_wp:
-        return {"wp_error": "wp_surface boundary not found in FEM mesh"}
-
-    # --- FEM-SIBC solve with Karl iteration ---
-    t0 = _time.perf_counter()
-    fes = HCurl(mesh, order=1, dirichlet="outer", complex=True)
-    u, v = fes.TnT()
-
-    I_total = 1.0
-    J0 = I_total / (math.pi * a_coil**2)
-    r_xy = sqrt(x * x + y * y)
-    r_safe = IfPos(r_xy - 1e-10, r_xy, 1e-10)
-    J_source = J0 * CF((-y / r_safe, x / r_safe, 0))
-
-    f_lf = LinearForm(fes)
-    f_lf += J_source * v * dx("coil")
-    f_lf.Assemble()
-
-    wp_region = mesh.Boundaries("wp_surface")
-    A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
-
-    STEEL_BH = [
-        [0, 0], [50, 0.1], [100, 0.25], [200, 0.55],
-        [500, 0.95], [1000, 1.2], [2000, 1.4], [5000, 1.55],
-        [10000, 1.65], [20000, 1.75], [50000, 1.9], [100000, 2.0],
-    ]
-    bh_curve = STEEL_BH if material == "steel" else None
-    mu_r = 1.0 if material in ("copper", "aluminum") else None
-
-    # Z_s computation: ESIM (nonlinear, Karl iteration), Dowell or SIBC (linear, no iteration)
-    rho = 1.0 / sigma
-    mu_eff = MU_0 * (mu_r if mu_r else 100.0)
-    delta = math.sqrt(2.0 / (omega * mu_eff * sigma)) if omega > 0 else 1e10
-    _label = f"FEM-{zs_mode.upper()}"
-    esim_solver = None
-
-    if zs_mode == "sibc":
-        # Classical SIBC: Z_s = (1+j)/(sigma*delta), semi-infinite half-space
-        Z_s = complex(1, 1) / (sigma * delta)
-        max_iter = 1  # no iteration (linear, no thickness correction)
-    elif zs_mode == "dowell":
-        # Dowell: Z_s = (rho/a)*gamma_a*tanh(gamma_a), finite slab
-        xi = half_thickness / delta
-        gamma_a = complex(1, 1) * xi
-        Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
-        max_iter = 1  # no iteration (linear)
-    else:
-        # ESIM: 1D cell problem, supports nonlinear BH + curvature
-        esim_solver = ESIMFiniteSlabSolver(
-            half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
-            frequency=frequency,
-            mu_r=mu_r if bh_curve is None else None, n_nodes=200,
-            geometry=esim_geometry)
-        Z_s = esim_solver.solve(5.0)['Z']
-        max_iter = 15  # Karl iteration for nonlinear
-
-    gfu = GridFunction(fes)
-    tol = 1e-3
-    relax = 0.5
-    H_t_rms = 5.0
-    P_total = 0.0
-    Q_total = 0.0
-
-    # Per-element Z_s on workpiece surface (for ESIM spatially varying Z_s)
-    from ngsolve import SurfaceL2, NumberSpace
-    fes_zs = SurfaceL2(mesh, order=0, complex=True)
-    gf_zs_inv = GridFunction(fes_zs)  # stores 1/Z_s per element (for Robin coeff)
-    # Initialize with uniform Z_s
-    gf_zs_inv.Set(1.0 / Z_s, definedon=wp_region)
-
-    sys.stderr.write(f"{_label}: {fes.ndof} DOFs, solving...\n")
-    sys.stderr.flush()
-
-    for iteration in range(max_iter):
-        a_bf = BilinearForm(fes)
-        a_bf += nu0 * curl(u) * curl(v) * dx
-        # SIBC Robin: (jw/Z_s)*A_t*v_t, with Z_s varying per element
-        if esim_solver:
-            sibc_cf = 1j * omega * gf_zs_inv  # per-element
-        else:
-            sibc_cf = 1j * omega / Z_s  # uniform scalar
-        a_bf += sibc_cf * u.Trace() * v.Trace() * ds("wp_surface")
-        a_bf.Assemble()
-
-        with TaskManager():
-            gfu.vec.data = a_bf.mat.Inverse(
-                fes.FreeDofs(), inverse="pardiso") * f_lf.vec
-
-        if esim_solver:
-            # Per-element H_t and Z_s update
-            At_sq = sum(gfu[i].real * gfu[i].real +
-                        gfu[i].imag * gfu[i].imag for i in range(3))
-            elem_At2 = Integrate(At_sq, mesh, BND,
-                                 definedon=wp_region, element_wise=True)
-            elem_area = Integrate(CF(1), mesh, BND,
-                                  definedon=wp_region, element_wise=True)
-
-            Z_s_old_arr = gf_zs_inv.vec.FV().NumPy().copy()
-            P_total = 0.0
-            Q_total = 0.0
-            max_dZ = 0.0
-            n_wp_elems = 0
-
-            for el in mesh.Elements(BND):
-                if mesh.GetBCName(el.index) != "wp_surface":
-                    continue
-                area_e = abs(elem_area[el.nr])
-                if area_e < 1e-30:
-                    continue
-                At2_e = abs(elem_At2[el.nr])
-                At_rms_e = math.sqrt(At2_e / area_e)
-                # H_t from SIBC: H_t = |jw/Z_s|*|A_t|
-                Zs_old_e = 1.0 / Z_s_old_arr[el.nr] if abs(Z_s_old_arr[el.nr]) > 1e-30 else Z_s
-                H_t_e = abs(1j * omega / Zs_old_e) * At_rms_e
-
-                sol = esim_solver.solve(max(float(H_t_e), 1e-3))
-                Zs_new = sol['Z']
-                Zs_e = relax * Zs_new + (1 - relax) * Zs_old_e
-                gf_zs_inv.vec[el.nr] = 1.0 / Zs_e
-
-                P_total += sol['P_prime'] * area_e
-                Q_total += sol['Q_prime'] * area_e
-                dZ_e = abs(Zs_e - Zs_old_e) / max(abs(Zs_old_e), 1e-30)
-                max_dZ = max(max_dZ, dZ_e)
-                n_wp_elems += 1
-
-            dZ = max_dZ
-            # Compute overall H_t_rms
-            At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
-            At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
-            # Mean |Z_s| for reporting
-            Zs_mean = A_wp / max(abs(np.sum(gf_zs_inv.vec.FV().NumPy()[:n_wp_elems])), 1e-30)
-            H_t_rms = abs(1j * omega * np.mean(np.abs(
-                gf_zs_inv.vec.FV().NumPy()[:fes_zs.ndof]))) * At_rms
-        else:
-            # Uniform Z_s (Dowell or SIBC): single scalar
-            At_sq = sum(gfu[i].real * gfu[i].real +
-                        gfu[i].imag * gfu[i].imag for i in range(3))
-            At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
-            At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
-            H_t_rms = abs(1j * omega / Z_s) * At_rms
-            P_total = 0.5 * Z_s.real * H_t_rms**2 * A_wp
-            Q_total = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
-            dZ = 0.0
-
-        sys.stderr.write(f"{_label}: iter {iteration} "
-                         f"H_t={H_t_rms:.2f} P={P_total:.4e} dZ={dZ:.4e}\n")
-        sys.stderr.flush()
-        if dZ < tol and iteration > 0:
-            break
-
-    t_solve = _time.perf_counter() - t0
-
-    return {
-        "wp_model": _label.lower(),
-        "wp_material": material,
-        "wp_frequency": frequency,
-        "wp_sigma": sigma,
-        "wp_half_thickness": half_thickness,
-        "wp_n_panels": ne,
-        "wp_H_t_max": float(H_t_rms),
-        "wp_H_t_min": float(H_t_rms),
-        "wp_P_total": float(P_total),
-        "wp_Q_total": float(Q_total),
-        "wp_P_density": float(P_total / A_wp) if A_wp > 0 else 0,
-        "wp_R_effective": float(P_total),
-        "wp_X_effective": float(Q_total),
-        "wp_delta_min": float(delta),
-        "wp_delta_max": float(delta),
-        "wp_fem_ndof": fes.ndof,
-        "wp_fem_ne": ne,
-        "wp_fem_t_mesh": round(t_mesh, 1),
-        "wp_fem_t_solve": round(t_solve, 1),
     }
 
 
@@ -1326,24 +1104,25 @@ def main():
     parser.add_argument("--mode", default="solve", choices=["solve", "post"],
                         help="solve: BEM solve only; post: B-field + GMSH export")
     # Solve mode args
-    parser.add_argument("--vol", default="", help="Netgen .vol file (preferred, no Cubit needed)")
-    parser.add_argument("--cub5", default="", help="Cubit .cub5 model file (legacy)")
-    parser.add_argument("--order", type=int, default=2, help="Curve order (1-2)")
+    parser.add_argument("--vol", required=True, help="Netgen .vol file")
     parser.add_argument("--fes-order", type=int, default=0, help="HDivSurface order (0=RWG)")
-    parser.add_argument("--source", default="source", help="Source block name")
-    parser.add_argument("--sink", default="sink", help="Sink block name")
+    parser.add_argument("--source", default="source",
+                        help="Source boundary label (default 'source' by .jou convention)")
+    parser.add_argument("--sink", default="sink",
+                        help="Sink boundary label (default 'sink' by .jou convention)")
     parser.add_argument("--msh-output", default="", help="GMSH .msh output path")
     parser.add_argument("--output", default="", help="Output JSON file (optional)")
-    # Workpiece ESIM/Dowell args
-    parser.add_argument("--coil", default="", help="Coil material name (filters BEM to coil surfaces only)")
-    parser.add_argument("--workpiece", default="", help="Workpiece block name")
+    # Coil / Workpiece args
+    parser.add_argument("--coil", default="coil",
+                        help="Coil material name (default 'coil' by .jou convention; filters BEM to coil surfaces)")
+    parser.add_argument("--coil-sigma", type=float, default=0,
+                        help="Coil conductivity [S/m] (stored in results)")
+    parser.add_argument("--workpiece", default="", help="Workpiece boundary label (prefix match)")
     parser.add_argument("--impedance-model", default="esim",
-                        choices=["esim", "dowell", "bem-sibc",
-                                 "fem-esim", "fem-dowell", "fem-sibc"],
-                        help="esim/dowell=BEM per-panel, bem-sibc=BEM scalar BIE, "
-                             "fem-esim/fem-dowell/fem-sibc=3D FEM with Z_s model")
+                        choices=["esim", "dowell"],
+                        help="esim=ESIM cell problem, dowell=Dowell formula")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
-    parser.add_argument("--sigma", type=float, default=2e6, help="Conductivity [S/m]")
+    parser.add_argument("--sigma", type=float, default=2e6, help="Workpiece conductivity [S/m]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
                         help="Slab half-thickness [m]")
     parser.add_argument("--material", default="steel",
@@ -1356,6 +1135,22 @@ def main():
                              "none=flat slab (cosh/sinh)")
     parser.add_argument("--bh-file", default="",
                         help="BH curve file (2-column: H[A/m] B[T], overrides --material)")
+    parser.add_argument("--solver", default="lu",
+                        choices=["lu", "minres", "gmres"],
+                        help="BEM saddle-point solver: lu=dense direct (default, "
+                             "best for ndof<5000), minres=Krylov symmetric "
+                             "indefinite (large problems), gmres=general Krylov")
+    parser.add_argument("--field-air", action="store_true",
+                        help="After BEM solve, also compute B-field in the "
+                             "air domain via Biot-Savart and write a "
+                             "GMSH .msh + .geo for visualization.")
+    parser.add_argument("--use-local-curvature", action="store_true",
+                        help="Use mesh-driven per-panel local curvature "
+                             "for the SIBC. Each workpiece panel gets its "
+                             "own local radius from a discrete normal-angle "
+                             "fit. Replaces the global half_thickness "
+                             "assumption — required for correct sphere or "
+                             "doubly-curved workpiece SIBC.")
     # Post mode args
     parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (post mode)")
     parser.add_argument("--mesh-vol", default="", help="surface_mesh.vol path (post mode)")
@@ -1365,37 +1160,27 @@ def main():
     parser.add_argument("--maxh-vol", type=float, default=0.01, help="Volume mesh size [m]")
 
     def run(args):
-        if args.mode == "solve":
-            # Prefer --vol (no Cubit needed)
-            if args.vol:
-                return extract_inductance_vol(args.vol,
-                                              args.source, args.sink,
-                                              args.fes_order, args.msh_output,
-                                              coil_label=args.coil)
-            elif args.cub5:
-                _geom_map = {"local_curvature": "cylinder", "none": "slab"}
-                esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
-                bh_file = getattr(args, 'bh_file', '')
-                if bh_file and os.path.isfile(bh_file):
-                    import numpy as _np
-                    bh_data = _np.loadtxt(bh_file).tolist()
-                    material_override = "steel"
-                else:
-                    bh_data = None
-                    material_override = args.material
+        _geom_map = {"local_curvature": "cylinder", "none": "slab"}
+        esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
 
-                return extract_inductance(args.cub5, args.order,
-                                          args.source, args.sink,
-                                          args.fes_order, args.msh_output,
-                                          workpiece=args.workpiece,
-                                          impedance_model=args.impedance_model,
-                                          frequency=args.frequency,
-                                          sigma=args.sigma,
-                                          half_thickness=args.half_thickness,
-                                          material=material_override,
-                                          esim_geometry=esim_geom)
-            else:
-                return {"error": "Either --vol or --cub5 is required"}
+        if args.mode == "solve":
+            return extract_inductance_vol(
+                args.vol, args.source, args.sink,
+                args.fes_order, args.msh_output,
+                coil_label=args.coil,
+                workpiece=args.workpiece,
+                impedance_model=args.impedance_model,
+                frequency=args.frequency,
+                sigma=args.sigma,
+                half_thickness=args.half_thickness,
+                mu_r=args.mu_r,
+                material=args.material,
+                esim_geometry=esim_geom,
+                bh_file=getattr(args, 'bh_file', ''),
+                coil_sigma=args.coil_sigma,
+                solver=args.solver,
+                field_air=args.field_air,
+                use_local_curvature=args.use_local_curvature)
         else:
             return post_process(args.mesh_vol, args.fes_order,
                                 args.msh_output, args.j_npy,

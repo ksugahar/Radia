@@ -437,7 +437,25 @@ class ESIMFiniteSlabSolver:
         else:
             return self.bh_interp.mu(H_abs)
 
-    def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5):
+    def set_radius(self, R):
+        """Reset the solver to use a new local radius / half-thickness.
+
+        Used by ``solve(H0, R_local=...)`` so a single solver instance
+        can be reused per panel without reallocating bh_interp /
+        complex_mu interpolators (which are the expensive part).
+
+        Args:
+            R: new ``half_thickness`` (slab) or radius (cylinder) [m].
+        """
+        self.half_thickness = R
+        if self.delta < float('inf') and self.delta > 0:
+            self.xi = R / self.delta
+        else:
+            self.xi = 0.0
+        self.mesh_points = np.linspace(0, R, self.n_nodes)
+
+    def solve(self, H0, tol=1e-6, max_iter=50, relaxation=0.5,
+              R_local=None):
         """
         Solve the finite slab Cell Problem for given surface field H0.
 
@@ -446,10 +464,19 @@ class ESIMFiniteSlabSolver:
             tol: Convergence tolerance
             max_iter: Maximum Picard iterations
             relaxation: Under-relaxation parameter
+            R_local: optional per-call override of the half-thickness /
+                cylinder radius. When supplied (per-panel curvature SIBC),
+                the solver temporarily resets ``half_thickness`` to this
+                value, runs the cell problem, and the result reflects
+                the local geometry. The instance state is left at this
+                R after the call so subsequent solves use the same
+                value unless overridden again.
 
         Returns:
             result: dict with solution data
         """
+        if R_local is not None:
+            self.set_radius(float(R_local))
         n = self.n_nodes
         z = self.mesh_points
         a = self.half_thickness
