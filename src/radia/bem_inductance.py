@@ -23,8 +23,55 @@ import time
 import numpy as np
 from scipy.linalg import solve as scipy_solve
 from scipy.sparse import coo_matrix
+from scipy.sparse.linalg import minres as scipy_minres
+from scipy.sparse.linalg import gmres as scipy_gmres
 
 MU_0 = 4e-7 * np.pi
+
+
+def _solve_saddle(K, rhs, method, tol=1e-8, maxiter=2000):
+    """Solve the saddle-point system K x = rhs.
+
+    method:
+      "lu"     dense LAPACK direct solve (scipy.linalg.solve, partial-
+               pivot LU). Best for ndof <~ 5000. Memory O(N^2),
+               work O(N^3).
+      "minres" Krylov solver for symmetric indefinite systems
+               (scipy.sparse.linalg.minres). Best when ndof is large
+               and the matrix is symmetric (the saddle point IS
+               symmetric: K^T = [[SL, D'],[D, 0]] = K).
+      "gmres"  General iterative Krylov (scipy.sparse.linalg.gmres).
+               Use only if MINRES stalls.
+    Returns ``(x, info)`` where info is a dict with keys
+    ``method, iterations, residual``.
+    """
+    if method == "lu":
+        x = scipy_solve(K, rhs)
+        info = {"method": "lu", "iterations": 1,
+                "residual": float(np.linalg.norm(K @ x - rhs))}
+        return x, info
+    if method == "minres":
+        x, code = scipy_minres(K, rhs, rtol=tol, maxiter=maxiter)
+        if code != 0:
+            raise RuntimeError(
+                f"MINRES did not converge (info={code}, "
+                f"maxiter={maxiter}, tol={tol})")
+        info = {"method": "minres", "iterations": maxiter,
+                "residual": float(np.linalg.norm(K @ x - rhs))}
+        return x, info
+    if method == "gmres":
+        x, code = scipy_gmres(K, rhs, rtol=tol, maxiter=maxiter,
+                              restart=50)
+        if code != 0:
+            raise RuntimeError(
+                f"GMRES did not converge (info={code}, "
+                f"maxiter={maxiter}, tol={tol})")
+        info = {"method": "gmres", "iterations": maxiter,
+                "residual": float(np.linalg.norm(K @ x - rhs))}
+        return x, info
+    raise ValueError(
+        f"Unknown saddle-point solver: {method!r}. "
+        f"Choices: lu, minres, gmres.")
 
 
 def _to_dense(mat):
@@ -44,7 +91,7 @@ def _to_dense(mat):
 
 
 def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink",
-                                    fes_order=0):
+                                    fes_order=0, solver="lu"):
     """Compute self-inductance via saddle point EFIE with source/sink ports.
 
     Args:
@@ -52,6 +99,8 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
         source_label: Boundary label for current injection face
         sink_label: Boundary label for current extraction face
         fes_order: HDivSurface polynomial order (0=RWG, 1=higher-order)
+        solver: saddle-point solver — "lu" (dense direct, default),
+            "minres" (Krylov, symmetric indefinite), or "gmres".
 
     Returns:
         dict with keys:
@@ -78,7 +127,12 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
     nv = mesh.nv
 
     fes_J = HDivSurface(mesh, order=fes_order)
-    fes_L2 = SurfaceL2(mesh, order=0)
+    # Lagrange multiplier space must be one polynomial order LOWER than the
+    # current space so that div(HDivSurface) maps onto it (de Rham complex):
+    #     div: HDivSurface(order=p) -> SurfaceL2(order=p-1)
+    # For order=0 (RWG) the divergence is piecewise constant, so order=0
+    # works. For order>=1 we need order=p-1 to capture the full image.
+    fes_L2 = SurfaceL2(mesh, order=max(0, fes_order - 1))
     n_J = fes_J.ndof
     n_f = fes_L2.ndof
 
@@ -131,7 +185,7 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
     rhs = np.zeros(n_J + n_constraint)
     rhs[n_J:] = g_red
 
-    x = scipy_solve(K, rhs)
+    x, solve_info = _solve_saddle(K, rhs, method=solver)
     J = x[:n_J]
     t_lu = time.perf_counter() - t0
 
@@ -155,6 +209,7 @@ def compute_inductance_source_sink(mesh, source_label="source", sink_label="sink
         't_solve': round(t_lu, 2),
         't_total': round(t_total, 2),
         'residual': float(residual),
+        'solver': solve_info,
         'J': J,
         'SL': SL,
         'gf_J': gf_J,
