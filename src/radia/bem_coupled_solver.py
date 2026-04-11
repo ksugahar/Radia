@@ -253,6 +253,23 @@ class CoupledBEMSolver:
               verbose=False):
         """Run the iterative coupled solve.
 
+        Args:
+            Z_s: workpiece surface impedance.
+                - **complex scalar**: legacy uniform-Z_s SIBC.
+                - **ndarray of length self.wp_solver.ndof (complex)**:
+                  per-node Z_s for the per-panel curvature SIBC.
+                  The caller (``calc_inductance.py::_run_coupled_bem``)
+                  builds this array by computing per-panel local
+                  curvature from the workpiece mesh and projecting the
+                  resulting per-panel Z_s onto H1 nodes via vertex
+                  averaging. The ScalarBIESIBCSolver assembles the
+                  Robin term with diag(gamma) so each node sees its
+                  own SIBC coefficient.
+            omega: angular frequency [rad/s]
+            max_iter: Picard iteration cap
+            tol: relative L_total convergence
+            relax: under-relaxation (0..1)
+
         Returns dict with ``L_air``, ``L_total``, ``Delta_L``, ``P_total``,
         ``H_t_rms``, ``iterations``, ``J_coil_re``, ``J_coil_im``.
         """
@@ -362,6 +379,13 @@ class CoupledBEMSolver:
         P_total = P_density * wp_result['area']
         H_t_rms = wp_result['H_t_rms']
 
+        # Z_s passthrough: complex scalar in the legacy path, but a
+        # ndarray in the per-node path. The caller treats it as opaque.
+        if isinstance(Z_s, np.ndarray):
+            Z_s_out = complex(np.mean(Z_s))
+        else:
+            Z_s_out = complex(Z_s)
+
         return {
             'L_air': float(L_air),
             'L_self': float(L_self_now),
@@ -374,7 +398,7 @@ class CoupledBEMSolver:
             'n_phi_wp': self.wp_solver.ndof,
             'J_coil_re': J_re,
             'J_coil_im': J_im,
-            'Z_s': complex(Z_s),
+            'Z_s': Z_s_out,
         }
 
     def _extract_wp_J(self, phi_vec_complex, phi_inc_complex):
