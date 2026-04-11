@@ -17,6 +17,41 @@ import json
 import sys
 import os
 import subprocess
+import time
+import traceback
+
+
+# ============================================================
+# Panel debug log: shared writer in radia.panels.panel_log.
+# Cubit-side processes truncate the log on session start so one
+# Cubit session = one continuous log file across all subprocesses.
+# ============================================================
+# panel_log.py is sibling to this file inside src/radia/panels/.
+# Make sure that directory is on sys.path so we can import it
+# even when Cubit's `play` runs us without a parent package context.
+_my_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() \
+    else os.getcwd()
+if _my_dir not in sys.path:
+    sys.path.insert(0, _my_dir)
+from panel_log import (init_panel_log, panel_log as _panel_log,
+                       panel_log_exception as _panel_log_exception,
+                       PANEL_LOG_PATH as _PANEL_LOG_PATH)
+
+# Truncate (Cubit session start) and tag this process as 'cubit'.
+init_panel_log("cubit", truncate=True, banner=True)
+
+# Log the *file mtime* of this script. The user can compare against
+# the on-disk mtime via `verify-deploy` skill / `Solve > Verify Deploy`
+# menu to confirm Cubit is using the freshly-edited code (vs. a stale
+# Python cache or shadow install).
+try:
+    _self_mtime = os.path.getmtime(__file__) if "__file__" in dir() else 0
+    _self_path = __file__ if "__file__" in dir() else "(no __file__)"
+    _panel_log(f"  this file: {_self_path}")
+    _panel_log(f"  this mtime: {int(_self_mtime)}")
+except Exception:
+    pass
+print(f"[Radia] Panel debug log: {_PANEL_LOG_PATH}")
 
 # Determine script location (__file__ is not defined when run via Cubit 'play')
 try:
@@ -374,6 +409,7 @@ def _launch_radia_ngsolve():
       2. radia_export netgen .vol (C++ plugin, user-chosen order)
       3. Launch the selected analysis window with .vol path
     """
+    _panel_log("_launch_radia_ngsolve: ENTER")
     try:
         if not _has_model():
             work_dir = _ensure_model()
@@ -431,27 +467,79 @@ def _launch_radia_ngsolve():
         layout.addWidget(label_group)
 
         def _get_model_labels():
-            """Get all block and sideset names from current Cubit model."""
+            """Get all block and sideset names from current Cubit model.
+
+            ID enumeration: `get_block_id_list()` / `get_sideset_id_list()`.
+            Name lookup:    `get_exodus_entity_name(kind, id)` for both.
+
+            We use the single canonical name API
+            (`get_exodus_entity_name`) instead of `get_block_name` /
+            `get_sideset_name` because the latter pair is inconsistent
+            in Cubit 2025.3 — `get_sideset_name` does not exist on this
+            build, only `get_block_name` does.
+
+            Heavily traced — every Cubit API call is logged so we can
+            diagnose dialog launch failures and label detection issues.
+            """
+            _panel_log("_get_model_labels: ENTER")
             names = set()
             try:
-                for bid in cubit.parse_cubit_list("block", "all"):
-                    n = cubit.get_entity_name("block", bid)
-                    if n:
-                        names.add(n.lower())
-                for sid in cubit.parse_cubit_list("sideset", "all"):
-                    n = cubit.get_entity_name("sideset", sid)
-                    if n:
-                        names.add(n.lower())
+                bids = cubit.get_block_id_list()
+                _panel_log(
+                    f"  get_block_id_list -> {type(bids).__name__} {list(bids)}")
             except Exception:
-                pass
+                _panel_log_exception("  get_block_id_list FAILED")
+                raise
+            for bid in bids:
+                try:
+                    n = cubit.get_exodus_entity_name("block", bid)
+                    _panel_log(
+                        f"  get_exodus_entity_name('block',{bid}) -> {n!r}")
+                except Exception:
+                    _panel_log_exception(
+                        f"  get_exodus_entity_name('block',{bid}) FAILED")
+                    raise
+                if n:
+                    names.add(n.lower())
+            try:
+                sids = cubit.get_sideset_id_list()
+                _panel_log(
+                    f"  get_sideset_id_list -> {type(sids).__name__} {list(sids)}")
+            except Exception:
+                _panel_log_exception("  get_sideset_id_list FAILED")
+                raise
+            for sid in sids:
+                try:
+                    n = cubit.get_exodus_entity_name("sideset", sid)
+                    _panel_log(
+                        f"  get_exodus_entity_name('sideset',{sid}) -> {n!r}")
+                except Exception:
+                    _panel_log_exception(
+                        f"  get_exodus_entity_name('sideset',{sid}) FAILED")
+                    raise
+                if n:
+                    names.add(n.lower())
+            _panel_log(f"_get_model_labels: EXIT names={sorted(names)}")
             return names
 
         def _update_labels(_=None):
+            _panel_log("_update_labels: ENTER")
             mode = mode_combo.currentText()
             info = mode_scripts.get(mode, {})
             req = info.get("required", [])
             opt = info.get("optional", [])
-            model_labels = _get_model_labels()
+            _panel_log(f"  mode={mode!r} req={req} opt={opt}")
+            try:
+                model_labels = _get_model_labels()
+            except Exception:
+                _panel_log_exception("_update_labels: _get_model_labels failed")
+                # Show the error in the dialog rather than crashing it
+                label_widget.setText(
+                    '<span style="color:red">'
+                    f'ERROR reading model labels — see {_PANEL_LOG_PATH}'
+                    '</span>')
+                ok_btn.setEnabled(False)
+                return
 
             lines = []
             all_ok = True
@@ -618,13 +706,17 @@ def _launch_radia_ngsolve():
                          **_no_window_kwargs())
 
     except Exception as e:
-        print(f"ERROR in _launch_radia_ngsolve: {e}")
+        _panel_log_exception("_launch_radia_ngsolve")
+        print(f"ERROR in _launch_radia_ngsolve: {e} "
+              f"(full traceback in {_PANEL_LOG_PATH})")
 
 
 def register_menu():
     """Register menus in Cubit's menu bar."""
+    _panel_log("register_menu: ENTER")
     main_window = _find_main_window()
     if main_window is None:
+        _panel_log("register_menu: main_window is None — abort")
         return
 
     menu_bar = main_window.menuBar()
@@ -1379,13 +1471,19 @@ def register_menu():
                     cubit.cmd("mesh volume "
                               + " ".join(str(h) for h in outer_halves))
 
-                    # Create blocks (skip if already exist)
+                    # Create blocks (skip if already exist).
+                    # Use get_block_name (NOT get_exodus_entity_name /
+                    # get_entity_name) — the latter raises
+                    # "Invalid list type for the get_mref_entity function"
+                    # on some Cubit versions.
                     existing_block_names = set()
                     for bid in cubit.parse_cubit_list(
                             "block", "all"):
-                        existing_block_names.add(
-                            cubit.get_exodus_entity_name(
-                                "block", bid).lower())
+                        try:
+                            n = cubit.get_block_name(bid) or ""
+                        except Exception:
+                            n = ""
+                        existing_block_names.add(n.lower())
 
                     existing_blocks = set(
                         cubit.parse_cubit_list("block", "all"))
@@ -1411,13 +1509,16 @@ def register_menu():
                             'block ' + str(nb)
                             + ' name "kelvin"')
 
-                    # Create sidesets for periodic BC
+                    # Create sidesets for periodic BC.
+                    # Use get_sideset_name for the same reason as above.
                     existing_ss_names = set()
                     for sid in cubit.parse_cubit_list(
                             "sideset", "all"):
-                        existing_ss_names.add(
-                            cubit.get_exodus_entity_name(
-                                "sideset", sid).lower())
+                        try:
+                            n = cubit.get_sideset_name(sid) or ""
+                        except Exception:
+                            n = ""
+                        existing_ss_names.add(n.lower())
 
                     existing_ss = set(
                         cubit.parse_cubit_list("sideset", "all"))
@@ -1556,6 +1657,70 @@ def register_menu():
     action_reload.triggered.connect(_reload_panels)
     solve_menu.addAction(action_reload)
 
+    # --- Sub 5: Verify Deploy (debug) ---
+    def _verify_deploy():
+        """Print mtime and short hash of key Radia modules to the Cubit
+        console + panel debug log.
+
+        After editing src/radia/**, click this to confirm Cubit (and
+        any external Python it spawns) is reading the freshly-edited
+        files. The output goes to both the Cubit console and
+        C:/radia_panel_log.txt for permanent record.
+        """
+        import hashlib
+        _panel_log("=" * 70)
+        _panel_log("Verify Deploy: checking Radia module mtimes")
+
+        # Files inside the radia package that the panel cares about
+        # (from the editable install or wheel install).
+        radia_root = os.path.dirname(os.path.dirname(_this_dir))
+        radia_pkg = os.path.join(radia_root, "radia")
+        if not os.path.isdir(radia_pkg):
+            radia_pkg = _this_dir.rsplit(os.sep + "panels", 1)[0]
+
+        candidates = [
+            os.path.join(radia_pkg, "radia_ih.py"),
+            os.path.join(radia_pkg, "radia_em.py"),
+            os.path.join(radia_pkg, "radia_pcb.py"),
+            os.path.join(radia_pkg, "radia_gui_base.py"),
+            os.path.join(radia_pkg, "bem_coupled_solver.py"),
+            os.path.join(radia_pkg, "bem_inductance.py"),
+            os.path.join(_this_dir, "register_toolbar.py"),
+            os.path.join(_this_dir, "calc_inductance.py"),
+            os.path.join(_this_dir, "calc_fem_kelvin.py"),
+            os.path.join(_this_dir, "calc_heating_bem.py"),
+        ]
+
+        import datetime as _dt
+        for path in candidates:
+            if not os.path.isfile(path):
+                _panel_log(f"  [MISSING] {path}")
+                continue
+            mtime = os.path.getmtime(path)
+            ts = _dt.datetime.fromtimestamp(mtime).strftime(
+                "%Y-%m-%d %H:%M:%S")
+            with open(path, "rb") as fh:
+                h = hashlib.sha1(fh.read()).hexdigest()[:8]
+            short = os.path.basename(path)
+            _panel_log(f"  {short:<26} mtime={ts}  sha1={h}")
+
+        # Also dump the editable install pointer if any
+        try:
+            import radia
+            _panel_log(f"  radia.__file__ = {radia.__file__}")
+            _panel_log(f"  radia.__version__ = {radia.__version__}")
+        except Exception as _e:
+            _panel_log(f"  radia import FAILED: {_e}")
+
+        _panel_log("Verify Deploy: done. See C:/radia_panel_log.txt for full log")
+
+    action_verify = QAction("Verify Deploy", main_window)
+    action_verify.setStatusTip(
+        "Print mtime + sha1 of key Radia modules — confirms Cubit is "
+        "reading the latest edited files")
+    action_verify.triggered.connect(_verify_deploy)
+    solve_menu.addAction(action_verify)
+
     # Insert before Help menu (last built-in menu)
     help_action = None
     for action in menu_bar.actions():
@@ -1569,13 +1734,20 @@ def register_menu():
 
     if is_reload:
         print("Solve menu re-registered.")
+        _panel_log("register_menu: re-registered Solve menu")
     else:
         print("Solve menu registered.")
+        _panel_log("register_menu: registered Solve menu")
 
     # Write default_dir to C++ export_settings.json so Export Mesh
     # dialogs default to samples/ instead of OneDrive/CWD
     _init_export_default_dir()
+    _panel_log("register_menu: EXIT (success)")
 
 
 # Auto-register when this script is executed
-register_menu()
+try:
+    register_menu()
+except Exception:
+    _panel_log_exception("register_menu top-level FAILED")
+    raise
