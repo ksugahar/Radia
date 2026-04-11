@@ -1,63 +1,78 @@
-## Electromagnet sample: C-type dipole yoke (quarter model) with Kelvin spheres
-## Required labels: (none)
-## Optional labels: iron, air, kelvin_int, kelvin_ext
+## Electromagnet sample: simple C-yoke (quarter model) with Kelvin spheres
 ##
-## Usage: Solve -> Radia-NGSolve -> Electromagnet
+## Required labels:
+##   block 1 = "iron"        (the C-shaped yoke, three brick volumes)
+##   block 2 = "air"         (the inner air sphere around the yoke)
+##   block 3 = "kelvin"      (the exterior Kelvin image sphere)
+##   sideset 1 = "kelvin_int" (inner sphere outer surface)
+##   sideset 2 = "kelvin_ext" (exterior sphere outer surface)
 ##
-## This creates:
-##   1. Iron yoke (3 volumes, quarter model, XZ symmetry)
-##   2. Inner Kelvin sphere (air domain, radius 0.06 m)
-##   3. Outer Kelvin sphere (copy, offset for periodic BC)
+## Geometry (XZ symmetry quarter model — symmetry planes applied by panel):
+##   Iron yoke: 3 bricks in z>0 region
+##   Inner air sphere: R = 0.060 m at origin
+##   Exterior Kelvin sphere: R = 0.060 m, offset 0.200 m in +x
+##
+## Build policy:
+##   1. SUBTRACT iron from inner air half BEFORE imprint+merge
+##      (nested merge alone does NOT share surfaces)
+##   2. Webcut both spheres with zplane to create anchor curves so the
+##      `radia_export netgen` C++ plugin can pair the kelvin_int / kelvin_ext
+##      surface mesh nodes 1:1 (Periodic Kelvin)
 
 reset
 
-# === Iron Yoke (quarter model, X=0 and Z=0 symmetry) ===
-
-# Pole piece
+# === 1. Iron yoke (3 bricks in z > 0) ===
 brick x 0.0125 y 0.040 z 0.050
 move volume 1 x 0.00625 y 0.020 z 0.025
 
-# Yoke back
 brick x 0.0125 y 0.080 z 0.025
 move volume 2 x 0.00625 y 0.080 z 0.0125
 
-# Main leg
 brick x 0.0125 y 0.0625 z 0.0525
 move volume 3 x 0.00625 y 0.15125 z 0.02625
 
-imprint volume all
-merge volume all
+# === 2. Spheres: inner (vol 4) at origin, kelvin (vol 5) at offset ===
+create sphere radius 0.060
+create sphere radius 0.060
+move volume 5 x 0.200
 
-# Label iron
-block 1 add volume all
+# === 3. Webcut both spheres with zplane (creates anchor curves on equator) ===
+# After webcut: vol 4 = inner top (z>0), vol 6 = inner bot (z<0),
+#               vol 5 = kelvin top, vol 7 = kelvin bot
+webcut volume 4 5 with plane zplane
+
+# === 4. Subtract iron from inner top (iron only sits in z>0) ===
+# inner bot has no iron to subtract.
+subtract volume 1 2 3 from volume 4 keep_tool
+
+# === 5. Imprint + merge for shared interfaces and equator nodes ===
+imprint volume 4 6
+merge volume 4 6
+imprint volume 5 7
+merge volume 5 7
+imprint volume 1 2 3 4
+merge volume 1 2 3 4
+
+# === 6. Mesh ===
+volume 1 2 3 scheme tetmesh
+volume 1 2 3 size 0.005
+mesh volume 1 2 3
+
+volume 4 6 scheme tetmesh
+volume 4 6 size 0.012
+mesh volume 4 6
+
+volume 5 7 scheme tetmesh
+volume 5 7 size 0.012
+mesh volume 5 7
+
+# === 7. Blocks ===
+block 1 add volume 1 2 3
 block 1 name "iron"
+block 2 add volume 4 6
+block 2 name "air"
+block 3 add volume 5 7
+block 3 name "kelvin"
 
-# === Kelvin Spheres (quarter, XZ symmetry) ===
-# Inner sphere: radius 0.06 m, centered at origin
-# Arc from top pole (0,0,r) to equator (r,0,0), quarter-circle
-create vertex 0 0 0.06
-create vertex 0.06 0 0
-create vertex 0 0 0
-create curve arc center vertex 7 5 6
-create curve vertex 5 7
-create curve vertex 7 6
-create surface curve 19 20 21
-# Sweep 90 degrees around z-axis (quarter model)
-sweep surface 19 axis 0 0 0 0 0 1 angle 90
-
-volume 4 rename "kelvin_int"
-
-# Outer sphere: copy + offset
-volume 4 copy move x 0 y 0 z 0 nomesh
-volume 5 rename "kelvin_ext"
-
-imprint volume all
-merge volume all
-
-# === Mesh ===
-volume all scheme tetmesh
-volume all size 0.005
-mesh volume all
-
-# Graphics: clip plane to see interior
-Graphics Clip on Plane location 0 0 0 direction 0 1 0
+# Hide air + kelvin for visibility
+volume 4 5 6 7 visibility off
