@@ -1396,25 +1396,129 @@ LaplaceDL gives dG/dn' (normal component only), which is insufficient for
 cross-mesh Biot-Savart (n_src != n_obs). Feature request submitted to Joachim.
 Direct numerical Biot-Savart (vectorized NumPy) is used as workaround.
 
-### Coupled two-body BEM (coil + workpiece)
+### Coupled two-body BEM (coil + workpiece) — sign-correct (2026-04-12)
+
+`bem_coupled_solver.CoupledBEMSolver` implements iterative coil EFIE
++ workpiece scalar BIE+SIBC with **per-DOF back-reaction RHS**.
+
 ```python
 from radia.bem_coupled_solver import CoupledBEMSolver
 
 solver = CoupledBEMSolver(mesh_coil, mesh_wp)
-result = solver.solve(Z_s=Z_s, omega=omega)
-L_total = result['L_total']    # includes mutual coupling Delta_L
-P_total = result['P_total']
+result = solver.solve(Z_s=Z_s, omega=omega, max_iter=10, tol=1e-3,
+                      relax=0.5)
+# result keys:
+#   L_air      coil-only inductance (no workpiece)
+#   L_total    coupled coil terminal inductance (= L_air + Delta_L)
+#   Delta_L    coil terminal inductance change due to workpiece
+#   P_total    workpiece eddy power loss [W]
+#   H_t_rms    surface tangential H rms [A/m]
+#   iterations number of Picard iterations to convergence
+#   J_coil_re  back-reacted coil current (real part)
+#   J_coil_im  back-reacted coil current (imaginary part)
 ```
 
+#### Picard iteration
+
+```
+1. J_coil(0) = LU^{-1}(g_red)              # uncoupled (air-only) solve
+2. for k = 0..max_iter:
+     phi_inc = Biot-Savart(J_coil) at workpiece nodes
+     phi_wp  = ScalarBIESIBCSolver.solve(phi_inc, Z_s, omega)
+     J_wp    = n x H_scat = n x (-grad_s(phi_wp - phi_inc))
+     f_back[i] = int v_i.Trace() . A_wp dS_coil          # PER-DOF
+     J_coil(k+1) = LU^{-1}(g_red - f_back)               # re-solve
+     under-relax with relax=0.5
+   until |L_total - L_prev| / |L_prev| < tol
+```
+
+#### Back-reaction RHS (the 2026-04-12 fix)
+
+Built as a NGSolve LinearForm that integrates the workpiece-induced
+vector potential against the HDivSurface test space on the coil:
+
+```python
+A_components = [CoefficientFunction(0.0) for _ in range(3)]
+for j in range(M):                          # M ~= 280 wp panels
+    cx, cy, cz = wp_c[j]
+    r_inv = 1.0 / sqrt((x-cx)**2 + (y-cy)**2 + (z-cz)**2)
+    weight = (mu0/4pi) * wp_a[j] * r_inv
+    for k in range(3):
+        A_components[k] += weight * wp_J[j, k]
+A_cf = CoefficientFunction(tuple(A_components))
+
+f_form = LinearForm(fes_J)
+f_form += InnerProduct(u_J.Trace(), A_cf) * ds
+f_form.Assemble()
+f_back = f_form.vec.FV().NumPy().copy()
+```
+
+This is a per-HDivSurface-DOF vector. **Do NOT use a scalar rescale
+of `SL @ J_coil`** — the previous (v1) implementation did exactly that
+and produced wrong-signed Delta_L (saved as
+`bem_coupled_solver_v1_buggy.py.bak` for reference).
+
+#### L_total formula
+
+```python
+L_self = mu0 * (J_re^T SL J_re + J_im^T SL J_im)
+mutual = f_back_re . J_re + f_back_im . J_im
+L_total = L_self + mutual
+Delta_L = L_total - L_air
+```
+
+The sum of L_self drop + negative mutual gives the Lenz reduction for
+non-magnetic conductors, while a positive mutual (from large Im(Z_s)
+when mu_r >> 1) gives the flux concentration limit for ferromagnetic
+workpieces.
+
+#### Verified sign behavior (2026-04-12)
+
+Frequency sweep (copper, mu_r=1, R_coil=30mm, R_wp=10mm, H_wp=20mm):
+
+| freq    | delta    | L_air     | L_total   | Delta_L      |
+|---------|----------|-----------|-----------|--------------|
+| 100 Hz  | 6.61 mm  | 86.671 nH | 86.356 nH | -0.316 nH    |
+| 1 kHz   | 2.09 mm  | 86.671 nH | 85.899 nH | -0.772 nH    |
+| 10 kHz  | 0.66 mm  | 86.671 nH | 85.729 nH | -0.942 nH    |
+| 100 kHz | 0.21 mm  | 86.671 nH | 85.673 nH | -0.998 nH    |
+| 1 MHz   | 0.066 mm | 86.671 nH | 85.655 nH | -1.016 nH    |
+
+Negative for all frequencies (Lenz screening), monotonically growing
+with frequency, asymptoting to the PEC limit at high frequency.
+
+mu_r sweep (steel, sigma=2e6, half=5mm, f=50 kHz):
+
+| mu_r | |Z_s|       | L_air     | L_total   | Delta_L      |
+|------|-------------|-----------|-----------|--------------|
+| 1    | 4.43e-04 Ω  | 86.671 nH | 85.841 nH | -0.831 nH    |
+| 10   | 1.41e-03 Ω  | 86.671 nH | 86.209 nH | -0.462 nH    |
+| 100  | 4.44e-03 Ω  | 86.671 nH | 87.013 nH | **+0.342 nH** |
+| 1000 | 1.41e-02 Ω  | 86.671 nH | 87.976 nH | +1.304 nH    |
+
+Sign change between mu_r=10 and mu_r=100, marking the cross-over from
+Lenz-dominated screening to flux-concentration-dominated storage in the
+ferromagnetic skin layer.
+
 ### Panel integration
-Cubit panel offers: Solver (BEM/FEM) x Impedance (ESIM/Dowell/SIBC).
-All 6 combinations produce compatible results: P_total, P_density, H_t_rms.
+
+`calc_inductance.py` calls `_run_coupled_bem` when the user picks
+`Method=BEM, Workpiece=SIBC` in the IH panel. The headline
+`inductance_H` becomes `L_total`, and `L_air_H` keeps the coil-only
+value so the panel can display both. `radia_gui_base.py::_on_finished`
+shows L (air), delta L, L (eff), R (added), iters, skin depth.
+
+For ESIM (nonlinear cell problem) the coupled solver is NOT used —
+falls back to one-way uncoupled estimator with R reported only.
 
 ### Files
 - `src/radia/bem_sibc_solver.py`: ScalarBIESIBCSolver + phi_inc computation
-- `src/radia/bem_coupled_solver.py`: CoupledBEMSolver (two-body iteration)
+- `src/radia/bem_coupled_solver.py`: CoupledBEMSolver (per-DOF f_back, sign correct)
+- `src/radia/bem_coupled_solver_v1_buggy.py.bak`: archived buggy v1 (scalar rescale)
+- `src/radia/panels/calc_inductance.py::_run_coupled_bem`: wrapper for IH panel
 - `examples/cubit_panels/inductance/scalar_bie_sibc.py`: sphere validation
 - `examples/cubit_panels/inductance/bem_sibc_workpiece.py`: coil + workpiece demo
+- `examples/cubit_panels/inductance/experiment_coupled_bem.py`: FEM-ESIM cross-check (still uses old API)
 
 ## Screening Physics
 

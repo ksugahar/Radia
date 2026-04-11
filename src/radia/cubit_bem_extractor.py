@@ -292,17 +292,11 @@ class BEMExtractor:
             raise ValueError(f"Block '{block_name}' not found. "
                              f"Available: {block_names_available}")
 
-        # Get surface elements from block
-        tri_ids = []
-        quad_ids = []
-        try:
-            tri_ids = list(cubit.get_block_tris(target_block))
-        except Exception:
-            pass
-        try:
-            quad_ids = list(cubit.get_block_quads(target_block))
-        except Exception:
-            pass
+        # Get surface elements from block. get_block_tris/get_block_quads
+        # return an empty list when the block has no elements of that type;
+        # a thrown exception means a real Cubit/API error and must surface.
+        tri_ids = list(cubit.get_block_tris(target_block))
+        quad_ids = list(cubit.get_block_quads(target_block))
 
         if len(tri_ids) == 0 and len(quad_ids) == 0:
             raise ValueError(f"Block '{block_name}' contains no surface elements")
@@ -748,39 +742,18 @@ class BEMExtractor:
                   f"Available: {block_names_available}")
             return None
 
-        # Collect all nodes from block elements
+        # Collect all nodes from block elements. get_block_{tris,quads,
+        # tets,hexes} return [] for blocks with no elements of that type;
+        # an exception means a real API error and must surface.
         cubit_nodes = set()
-
-        # Try different element types that blocks can contain
-        # Surface elements (for source/sink faces)
-        try:
-            tri_ids = cubit.get_block_tris(target_block)
-            for tri_id in tri_ids:
-                cubit_nodes.update(cubit.get_connectivity("tri", tri_id))
-        except Exception:
-            pass
-
-        try:
-            quad_ids = cubit.get_block_quads(target_block)
-            for quad_id in quad_ids:
-                cubit_nodes.update(cubit.get_connectivity("quad", quad_id))
-        except Exception:
-            pass
-
-        # Volume elements (if block contains volumes)
-        try:
-            tet_ids = cubit.get_block_tets(target_block)
-            for tet_id in tet_ids:
-                cubit_nodes.update(cubit.get_connectivity("tet", tet_id))
-        except Exception:
-            pass
-
-        try:
-            hex_ids = cubit.get_block_hexes(target_block)
-            for hex_id in hex_ids:
-                cubit_nodes.update(cubit.get_connectivity("hex", hex_id))
-        except Exception:
-            pass
+        for tri_id in cubit.get_block_tris(target_block):
+            cubit_nodes.update(cubit.get_connectivity("tri", tri_id))
+        for quad_id in cubit.get_block_quads(target_block):
+            cubit_nodes.update(cubit.get_connectivity("quad", quad_id))
+        for tet_id in cubit.get_block_tets(target_block):
+            cubit_nodes.update(cubit.get_connectivity("tet", tet_id))
+        for hex_id in cubit.get_block_hexes(target_block):
+            cubit_nodes.update(cubit.get_connectivity("hex", hex_id))
 
         if not cubit_nodes:
             print(f"  WARNING: Block '{block_name}' has no nodes")
