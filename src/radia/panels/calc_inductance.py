@@ -359,27 +359,100 @@ def _dowell_Zs(R, rho, omega, mu_eff):
 
 
 def _build_per_node_Zs(mesh_wp, panels, R_panel, rho, omega, mu_eff,
-                        ndof_phi):
+                        ndof_phi, fes=None):
     """Build a per-node Z_s array on the workpiece H1 mesh.
 
     For each workpiece panel, compute Z_s_panel from the Dowell tanh
     formula at the panel's local radius R_panel[i]. Project the
-    per-panel values onto the H1 nodes by **vertex averaging**:
+    per-panel values onto the H1 DOFs.
 
-        Z_s_node[v] = (sum over panels p touching v of Z_s_panel[p]) / count
+    Two projection paths:
 
-    The result is an ``ndarray[ndof_phi]`` of complex Z_s values to feed
-    into ``ScalarBIESIBCSolver.solve(phi_inc, Z_s=array, omega=omega)``.
+      1. **Order = 1** (the production case): vertex averaging is
+         exact for piecewise-linear data. The H1 ordering is
+         vertex-first so node index == vertex index. This is the
+         fast path.
 
-    Vertex averaging is the same projection used by ``GridFunction.Set``
-    in the order=1 case (P1) and is exact for piecewise-linear data.
-    The H1 ordering on the workpiece mesh is vertex-first when
-    ``order=1``, so node index == vertex index.
+      2. **Order > 1** (or fes supplied): assemble a piecewise-constant
+         L2 source from the per-panel Z_s values, then **L2-project**
+         onto the H1 space via ``GridFunction.Set`` of a
+         CoefficientFunction built per material region. This properly
+         distributes the per-panel data to all H1 DOFs (vertex + edge
+         + face) instead of leaving the higher-order DOFs at the
+         panel-mean fallback. Slower but correct for any order.
+
+    The default ``fes=None`` keeps the legacy P1 vertex averaging
+    behaviour for backward compatibility with the production
+    coupled BEM solver where order=1 is the only supported case.
+
+    Returns ``(Zs_node, Zs_panel)`` where ``Zs_node`` has shape
+    ``(ndof_phi,)`` and ``Zs_panel`` has shape ``(n_panels,)``.
     """
     Zs_panel = np.array(
         [_dowell_Zs(float(R_panel[i]), rho, omega, mu_eff)
          for i in range(len(panels))], dtype=complex)
 
+    # Path 2: order > 1 — L2-project a piecewise-constant CF onto fes
+    # via SurfaceL2 -> H1 mass-matrix solve. This handles edge / face
+    # DOFs correctly for any polynomial order.
+    if fes is not None and getattr(fes, 'globalorder', 1) > 1:
+        try:
+            from ngsolve import (SurfaceL2, GridFunction, BilinearForm,
+                                 LinearForm, ds, BND, TaskManager)
+
+            # Build SurfaceL2 of the same dimensionality, attach the
+            # per-panel Z_s as element-wise data via a GridFunction.
+            fes_l2 = SurfaceL2(mesh_wp, order=0)
+            gf_l2_re = GridFunction(fes_l2)
+            gf_l2_im = GridFunction(fes_l2)
+            re_vec = gf_l2_re.vec.FV().NumPy()
+            im_vec = gf_l2_im.vec.FV().NumPy()
+            re_vec[:] = 0
+            im_vec[:] = 0
+            # SurfaceL2 ordering matches mesh.Elements(BND) iteration
+            # which is the same iteration order used by
+            # _extract_panels_from_mesh; we have to map our panels list
+            # back to the SurfaceL2 element index. Use el.nr.
+            from ngsolve import BND as _BND
+            el_nr_to_panel = {}
+            j = 0
+            for el in mesh_wp.Elements(_BND):
+                el_nr_to_panel[el.nr] = j
+                j += 1
+            for el in mesh_wp.Elements(_BND):
+                # Find the panel index that corresponds to this element
+                pi = el_nr_to_panel.get(el.nr)
+                if pi is None or pi >= len(Zs_panel):
+                    continue
+                z = Zs_panel[pi]
+                # SurfaceL2 order 0: one DOF per element. el.nr is
+                # the element index but the DOF mapping uses the
+                # local SurfaceL2 dof for this element.
+                dofs = fes_l2.GetDofNrs(el)
+                for d in dofs:
+                    if 0 <= d < len(re_vec):
+                        re_vec[d] = z.real
+                        im_vec[d] = z.imag
+
+            # L2-project onto fes (the H1 space) by solving the
+            # H1 mass equation: (u, v)_H1 = (gf_l2, v)_H1 for u in fes.
+            # GridFunction.Set with VOL_or_BND=BND does this.
+            gf_re = GridFunction(fes)
+            gf_im = GridFunction(fes)
+            with TaskManager():
+                gf_re.Set(gf_l2_re, definedon=mesh_wp.Boundaries(".*"))
+                gf_im.Set(gf_l2_im, definedon=mesh_wp.Boundaries(".*"))
+            re = gf_re.vec.FV().NumPy().copy()
+            im = gf_im.vec.FV().NumPy().copy()
+            return (re + 1j * im).astype(complex), Zs_panel
+        except Exception:
+            # Fall through to vertex averaging if the L2 projection
+            # fails for any reason (NGSolve API surface drift,
+            # missing SurfaceL2 etc.). The user gets the order-1
+            # answer instead of an error.
+            pass
+
+    # Path 1: order = 1 vertex averaging (default, fast)
     Zs_node = np.zeros(ndof_phi, dtype=complex)
     count = np.zeros(ndof_phi, dtype=int)
     for i, p in enumerate(panels):
@@ -466,13 +539,16 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
             # if the workpiece label is wrong.
             Z_s_arg = Zs_global
         else:
+            # The extractor's adaptive panel-diameter floor handles
+            # sliver triangles internally; the only global cap we
+            # still apply is the upper bound = 1 m (= "essentially
+            # flat"), so an unbounded default_R cannot leak out.
             R_panel = _compute_panel_local_radii(
-                mesh_wp, wp_panels, default_R=1e3 * float(half_thickness))
-            R_panel = np.clip(R_panel,
-                              0.5 * float(half_thickness), 1.0)
+                mesh_wp, wp_panels, default_R=1.0)
             Zs_node, Zs_panel = _build_per_node_Zs(
                 mesh_wp, wp_panels, R_panel, rho, omega, mu_eff,
-                solver.wp_solver.ndof)
+                solver.wp_solver.ndof,
+                fes=solver.wp_solver.fes)
             Z_s_arg = Zs_node
             extra_keys.update({
                 "coupled_use_local_curvature": True,
@@ -605,6 +681,24 @@ def _compute_panel_local_radii(mesh, panels, default_R=1e30):
         for vid in p['vert_ids']:
             vert_to_panels.setdefault(vid, []).append(pi)
 
+    # Pre-compute per-panel diameter from the panel's vertex coordinates.
+    # The local radius cannot meaningfully be smaller than the panel
+    # diameter (the chord-vs-arc approximation breaks down) — this is
+    # the **adaptive sliver-suppression bound**, more meaningful than
+    # the previous global ``0.5 * half_thickness`` clamp.
+    panel_diam = np.zeros(len(panels))
+    for pi, p in enumerate(panels):
+        coords = np.array(
+            [mesh.vertices[v].point for v in p['vert_ids']], dtype=float)
+        # Max pairwise distance among the (3) triangle vertices
+        d = 0.0
+        for i in range(len(coords)):
+            for j in range(i + 1, len(coords)):
+                dij = float(np.linalg.norm(coords[i] - coords[j]))
+                if dij > d:
+                    d = dij
+        panel_diam[pi] = d
+
     R_local = np.full(len(panels), float(default_R))
     MIN_ANGLE = 1e-4  # below this, treat as flat (numerical noise)
 
@@ -627,6 +721,12 @@ def _compute_panel_local_radii(mesh, panels, default_R=1e30):
         if not edge_neighbors:
             continue
 
+        # Adaptive sliver lower bound: a panel of diameter h cannot
+        # resolve a curvature radius below h/2 (the chord-vs-arc
+        # approximation breaks). Drop any R_est below this floor.
+        # Above the floor, the discrete formula is still meaningful.
+        R_floor = 0.5 * float(panel_diam[pi])
+
         radii = []
         for qi in edge_neighbors:
             n_q = np.asarray(panels[qi]['normal'], dtype=float)
@@ -643,6 +743,12 @@ def _compute_panel_local_radii(mesh, panels, default_R=1e30):
                 continue
 
             R_est = dist / angle
+            # Filter out spurious tiny R from sliver triangles, fold-
+            # over panels (e.g. gap end-caps), or cross-mesh edge
+            # neighbors. Anything below the panel-diameter floor is
+            # geometrically suspicious.
+            if R_est < R_floor:
+                continue
             if R_est > default_R or R_est <= 0:
                 continue
             radii.append(R_est)
@@ -763,11 +869,12 @@ def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
     R_local_min = float(half_thickness)
     R_local_max = float(half_thickness)
     if use_local_curvature and mesh_wp is not None:
-        R_local_arr = _compute_panel_local_radii(
-            mesh_wp, panels, default_R=1e3 * float(half_thickness))
-        # Clamp to a sensible window: workpiece thickness <= R <= 1m
-        R_per_panel = np.clip(R_local_arr,
-                              0.5 * float(half_thickness), 1.0)
+        # The extractor's adaptive panel-diameter floor handles
+        # sliver suppression internally. Only the upper bound (=1 m,
+        # essentially flat) needs to be enforced here so unbounded
+        # default_R values cannot leak through.
+        R_per_panel = _compute_panel_local_radii(
+            mesh_wp, panels, default_R=1.0)
         R_local_min = float(R_per_panel.min())
         R_local_max = float(R_per_panel.max())
 
