@@ -1,31 +1,94 @@
 """
-Two-body BEM coupled solver: coil (EFIE) + workpiece (Scalar BIE + SIBC).
+Two-body BEM coupled solver: coil EFIE + workpiece scalar BIE + SIBC.
 
-Iterative coupling between coil surface current and workpiece eddy current:
-  1. EFIE on coil → J_coil (with back-reaction RHS from J_wp)
-  2. Biot-Savart J_coil → phi_inc at workpiece
-  3. Scalar BIE + SIBC → phi_wp → J_wp
-  4. Biot-Savart J_wp → A_back at coil → modify EFIE RHS
-  5. Converge → L_total, P, Delta_L
+Iterative coupling with proper per-DOF back-reaction RHS.
 
-Usage:
-    from radia.bem_coupled_solver import CoupledBEMSolver
-    solver = CoupledBEMSolver(mesh_coil, mesh_wp, ...)
-    result = solver.solve(Z_s, omega)
+Mathematical setup
+==================
+
+Coil EFIE saddle point (real, time-harmonic with workpiece reflection):
+
+    [SL_coil  D^T] [J]   [-f_back]
+    [D         0 ] [p] = [ g_red ]
+
+solved twice per Picard iteration — once for the real (J_re, f_back_re,
+g_red) RHS and once for the imaginary (J_im, f_back_im, 0) RHS — so the
+SAME LU factorization can be reused for both.
+
+Workpiece scalar BIE + SIBC (handles complex Z_s, complex phi_inc):
+
+    A_sys phi = M phi_inc                with A_sys = 1/2 M - DL + gamma SL M^-1 K
+    -> phi_vec_complex
+    -> J_wp = n x H_scat                  where H_scat = -grad_s(phi_total - phi_inc)
+
+Back-reaction
+=============
+
+    A_wp(r) = (mu0/4pi) sum_j J_wp[j] * area[j] / |r - centroid[j]|
+    f_back[i] = int v_i.Trace() . A_wp dS_coil       (LinearForm assembly)
+
+Real and imaginary parts of A_wp are handled separately. The CoefficientFunction
+is built as a sum of M analytic 1/r kernels in (x, y, z), which NGSolve
+compiles to a flat expression tree and integrates against the HDivSurface
+test functions on the coil surface.
+
+This is the FIX for the v1 bug where f_back was a scalar rescale of
+SL @ J_coil. The scalar rescale loses all spatial information about A_wp
+at the coil surface and gives the wrong sign of Delta_L.
+
+Inductance from energy
+======================
+
+Self magnetic energy (with back-reacted complex coil current):
+
+    W_self = (1/2) mu0 (J_re^T SL_coil J_re + J_im^T SL_coil J_im)
+
+Mutual magnetic energy (coil-workpiece coupling):
+
+    W_mut  = (1/2) (f_back_re^T J_re + f_back_im^T J_im)
+
+Coil terminal effective inductance for unit current amplitude:
+
+    L_total = 2 W_total = mu0 (J_re^T SL J_re + J_im^T SL J_im)
+                          + (f_back_re . J_re + f_back_im . J_im)
+
+Reference values:
+
+    L_air     = mu0 J_re_uncoupled^T SL J_re_uncoupled    (no workpiece)
+    Delta_L   = L_total - L_air                            (sign-correct)
+
+For non-magnetic conductors with strong screening, J_re drops (current is
+pushed out of the original air pattern by the workpiece reflection) AND
+the mutual term is negative (Lenz). Result: Delta_L < 0.
+
+For ferromagnetic workpiece, the imaginary part of Z_s gives a strong
+in-phase storage in the skin layer, and the mutual term goes positive.
+Result: Delta_L > 0.
+
+History
+=======
+
+v1 (2026-04 initial): had a SCALAR back-reaction
+    f_back_v1 = alpha * SL_coil @ J_coil
+which lost all spatial information about A_wp at the coil and produced
+wrong-signed Delta_L (verified 2026-04-12: copper at 1 kHz gave +0.72 nH
+instead of an expected small negative). See
+memory/bem_coupled_solver_existing.md.
 """
 
 import math
 import time
 import numpy as np
-from scipy.linalg import solve as scipy_solve, lu_factor, lu_solve
+from scipy.linalg import lu_factor, lu_solve
 
 MU_0 = 4e-7 * np.pi
 
 
 def extract_element_J(mesh, gf_J):
-    """Extract per-element current density from HDivSurface GridFunction.
+    """Per-element current vectors from an HDivSurface GridFunction.
 
-    Returns (centroids, areas, J_vecs) arrays.
+    Returns ``(centroids, areas, J_vecs)`` arrays. Empty / degenerate
+    elements (area < 1e-30) are skipped.
     """
     from ngsolve import Integrate, CF, BND
 
@@ -50,71 +113,89 @@ def extract_element_J(mesh, gf_J):
     return np.array(centroids), np.array(areas), np.array(J_vecs)
 
 
-def vector_potential_from_J(obs_points, src_centroids, src_areas, src_J_vecs):
-    """Compute vector potential A = (mu0/4pi) * int J/|r-r'| dS' at observation points.
+def assemble_back_reaction_RHS(fes_J, wp_c, wp_a, wp_J):
+    """Assemble ``f_back[i] = int v_i.Trace() . A_wp dS_coil``.
+
+    A_wp is the vector potential at the coil surface from the workpiece
+    induced surface current::
+
+        A_wp(r) = (mu0/4pi) sum_j wp_J[j] * wp_a[j] / |r - wp_c[j]|
+
+    The CoefficientFunction is built as a sum of M analytic 1/r kernels
+    in (x, y, z), then integrated against the HDivSurface test space on
+    the coil via a LinearForm assembly.
 
     Args:
-        obs_points: (N, 3) observation points
-        src_centroids: (M, 3) source element centroids
-        src_areas: (M,) source element areas
-        src_J_vecs: (M, 3) source current density
+        fes_J: NGSolve HDivSurface space on the coil
+        wp_c:  (M, 3) workpiece panel centroids
+        wp_a:  (M,)   workpiece panel areas
+        wp_J:  (M, 3) workpiece panel REAL surface current density
 
     Returns:
-        A: (N, 3) vector potential [T*m]
+        np.ndarray of length ``fes_J.ndof``.
     """
-    obs = np.asarray(obs_points)
-    src_c = np.asarray(src_centroids)
-    src_a = np.asarray(src_areas)
-    src_J = np.asarray(src_J_vecs)
+    from ngsolve import (CoefficientFunction, LinearForm, InnerProduct,
+                         ds, sqrt, x, y, z)
 
-    dx = obs[:, None, :] - src_c[None, :, :]       # (N, M, 3)
-    r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-60))  # (N, M)
-    # A = (mu0/4pi) * sum_j J_j * area_j / r_j
-    weight = (MU_0 / (4 * np.pi)) * src_a[None, :] / r  # (N, M)
-    A = np.einsum('nm,mj->nj', weight, src_J)  # (N, 3)
-    return A
+    wp_c = np.asarray(wp_c, dtype=float)
+    wp_a = np.asarray(wp_a, dtype=float)
+    wp_J = np.asarray(wp_J, dtype=float)
+    M = len(wp_c)
+    if M == 0:
+        return np.zeros(fes_J.ndof)
+
+    A_components = [CoefficientFunction(0.0) for _ in range(3)]
+    inv_4pi_mu0 = MU_0 / (4.0 * np.pi)
+
+    for j in range(M):
+        cx = float(wp_c[j, 0])
+        cy = float(wp_c[j, 1])
+        cz = float(wp_c[j, 2])
+        r_inv = 1.0 / sqrt((x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2)
+        weight = inv_4pi_mu0 * float(wp_a[j]) * r_inv
+        for k in range(3):
+            jval = float(wp_J[j, k])
+            if jval == 0.0:
+                continue
+            A_components[k] = A_components[k] + weight * jval
+
+    A_cf = CoefficientFunction(tuple(A_components))
+
+    u_J = fes_J.TestFunction()
+    f_form = LinearForm(fes_J)
+    f_form += InnerProduct(u_J.Trace(), A_cf) * ds
+    f_form.Assemble()
+    return f_form.vec.FV().NumPy().copy()
 
 
 class CoupledBEMSolver:
-    """Two-body BEM: coil (EFIE) + workpiece (Scalar BIE + SIBC).
-
-    Assembles both BEM systems once, then iterates the coupling.
-    """
+    """Iterative coil EFIE + workpiece scalar BIE + SIBC."""
 
     def __init__(self, mesh_coil, mesh_wp, source_label="source",
                  sink_label="sink", fes_order=0, wp_order=1):
-        """Initialize coupled solver.
-
-        Args:
-            mesh_coil: NGSolve Mesh for coil (surface mesh with source/sink)
-            mesh_wp: NGSolve Mesh for workpiece (surface mesh)
-            source_label, sink_label: boundary labels for current injection
-            fes_order: HDivSurface order for coil EFIE
-            wp_order: H1 order for workpiece BIE
-        """
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
-                             GridFunction, TaskManager, ds, BND, div)
+                             TaskManager, ds, BND, div)
         from ngsolve.bem import LaplaceSL
         from bem_sibc_solver import ScalarBIESIBCSolver
+        from scipy.sparse import coo_matrix
 
         self.mesh_coil = mesh_coil
         self.mesh_wp = mesh_wp
 
-        # === Coil EFIE setup ===
+        # === Coil EFIE setup (real saddle point factorization) ===
         t0 = time.perf_counter()
         fes_J = HDivSurface(mesh_coil, order=fes_order)
-        fes_L2 = SurfaceL2(mesh_coil, order=0)
+        fes_L2 = SurfaceL2(mesh_coil, order=max(0, fes_order - 1))
         self.fes_J = fes_J
         self.n_J = fes_J.ndof
         self.n_f = fes_L2.ndof
 
-        # Divergence matrix D
+        # Divergence matrix D: n_f x n_J
         u_J = fes_J.TrialFunction()
         q = fes_L2.TestFunction()
         bf_D = BilinearForm(trialspace=fes_J, testspace=fes_L2)
         bf_D += div(u_J.Trace()) * q * ds
         bf_D.Assemble()
-        from scipy.sparse import coo_matrix
         rows, cols, vals = bf_D.mat.COO()
         self.D = coo_matrix((vals, (rows, cols)),
                             shape=(bf_D.mat.height, bf_D.mat.width)).toarray()
@@ -140,9 +221,15 @@ class CoupledBEMSolver:
         g_snk = f_snk.vec.FV().NumPy().copy()
         A_snk = np.sum(g_snk)
 
+        if abs(A_src) < 1e-30 or abs(A_snk) < 1e-30:
+            raise ValueError(
+                f"Source/sink faces empty: A_src={A_src}, A_snk={A_snk}. "
+                f"Check that the coil mesh has boundary labels "
+                f"'{source_label}' / '{sink_label}'.")
+
         self.g = g_src / A_src - g_snk / A_snk
 
-        # LU factorize the saddle point matrix (reused each iteration)
+        # LU factorize the saddle-point matrix (reused each iteration)
         D_red = self.D[:-1, :]
         g_red = self.g[:-1]
         n_J = self.n_J
@@ -154,193 +241,187 @@ class CoupledBEMSolver:
         self.K_lu = lu_factor(self.K_saddle)
         self.g_red = g_red
         self.n_constraint = n_c
-
         self.t_coil_assembly = time.perf_counter() - t0
 
         # === Workpiece BIE setup ===
         self.wp_solver = ScalarBIESIBCSolver(mesh_wp, order=wp_order)
-
-        # Workpiece node coordinates
         self.wp_nodes = np.array(
             [[mesh_wp.vertices[i].point[j] for j in range(3)]
              for i in range(mesh_wp.nv)])
 
-        # Coil element data (for Biot-Savart, initially empty)
-        self._coil_elems = None
+    def solve(self, Z_s, omega, max_iter=10, tol=1e-3, relax=0.5,
+              verbose=False):
+        """Run the iterative coupled solve.
 
-    def solve(self, Z_s, omega, max_iter=10, tol=1e-3, relax=0.5):
-        """Solve coupled system iteratively.
-
-        Args:
-            Z_s: Surface impedance [Ohm] (complex)
-            omega: Angular frequency [rad/s]
-            max_iter: Maximum coupling iterations
-            tol: Convergence tolerance (relative change in L)
-            relax: Under-relaxation for back-reaction
-
-        Returns:
-            dict with L_total, L_self, Delta_L, P_total, H_t_rms, iterations
+        Returns dict with ``L_air``, ``L_total``, ``Delta_L``, ``P_total``,
+        ``H_t_rms``, ``iterations``, ``J_coil_re``, ``J_coil_im``.
         """
-        from ngsolve import GridFunction, Integrate, CF, BND, InnerProduct, grad
-        from bem_sibc_solver import (compute_phi_inc_from_surface_J,
-                                     biot_savart_surface_current)
+        from ngsolve import GridFunction
+        from bem_sibc_solver import compute_phi_inc_from_surface_J
 
         n_J = self.n_J
         n_c = self.n_constraint
 
-        # --- Initial EFIE (no back-reaction) ---
+        # === Step 0: uncoupled coil solution (air-only L) ===
         rhs0 = np.zeros(n_J + n_c)
         rhs0[n_J:] = self.g_red
+        x0 = lu_solve(self.K_lu, rhs0)
+        J_re_air = x0[:n_J].copy()
+        L_air = MU_0 * (J_re_air @ self.SL_coil @ J_re_air)
 
-        x = lu_solve(self.K_lu, rhs0)
-        J_coil = x[:n_J]
-        L_self = MU_0 * J_coil @ self.SL_coil @ J_coil
+        J_re = J_re_air.copy()
+        J_im = np.zeros(n_J)
+        f_back_re = np.zeros(n_J)
+        f_back_im = np.zeros(n_J)
 
-        # Set coil GridFunction
-        gf_J = GridFunction(self.fes_J)
-        gf_J.vec.FV().NumPy()[:] = J_coil
+        gf_J_re = GridFunction(self.fes_J)
+        gf_J_im = GridFunction(self.fes_J)
+        gf_J_re.vec.FV().NumPy()[:] = J_re
+        gf_J_im.vec.FV().NumPy()[:] = J_im
 
-        # Extract coil elements for Biot-Savart
-        coil_c, coil_a, coil_J = extract_element_J(self.mesh_coil, gf_J)
-
-        # --- Iteration loop ---
-        f_back = np.zeros(n_J)  # back-reaction RHS
-        L_prev = L_self
+        L_prev = L_air
+        Delta_L = 0.0
+        wp_result = None
+        iteration = 0
 
         for iteration in range(max_iter):
-            # Forward: coil → workpiece
-            phi_inc = compute_phi_inc_from_surface_J(
-                self.wp_nodes, coil_c, coil_a, coil_J, n_quad=20)
+            # --- Forward: J_coil (complex) -> phi_inc (complex) at workpiece ---
+            coil_c, coil_a, coil_J_re_arr = extract_element_J(
+                self.mesh_coil, gf_J_re)
+            _, _, coil_J_im_arr = extract_element_J(
+                self.mesh_coil, gf_J_im)
 
-            # Workpiece BIE-SIBC
-            wp_result = self.wp_solver.solve(phi_inc, Z_s=Z_s, omega=omega)
-            H_t_rms = wp_result['H_t_rms']
+            phi_inc_re = compute_phi_inc_from_surface_J(
+                self.wp_nodes, coil_c, coil_a, coil_J_re_arr, n_quad=20)
+            phi_inc_im = compute_phi_inc_from_surface_J(
+                self.wp_nodes, coil_c, coil_a, coil_J_im_arr, n_quad=20)
+            phi_inc_cplx = phi_inc_re + 1j * phi_inc_im
+
+            # --- Workpiece scalar BIE + SIBC (returns complex phi_vec) ---
+            wp_result = self.wp_solver.solve(
+                phi_inc_cplx, Z_s=Z_s, omega=omega)
             phi_vec = wp_result['phi_vec']
 
-            # Extract SCATTERED surface current from phi:
-            # phi_scat = phi_total - phi_inc  (scattered potential)
-            # H_scat = -grad_s(phi_scat) = -grad_s(phi_total) + grad_s(phi_inc)
-            # J_s = n x H_scat (surface current producing the scattered field)
-            #
-            # NOTE: phi_total is small (~0.03 A) because SIBC is near-PEC,
-            # but phi_scat is large (~0.5 A) because it represents the
-            # workpiece reflection of the incident field.
-            gf_scat_re = GridFunction(self.wp_solver.fes)
-            gf_scat_im = GridFunction(self.wp_solver.fes)
-            gf_scat_re.vec.FV().NumPy()[:] = phi_vec.real - phi_inc
-            gf_scat_im.vec.FV().NumPy()[:] = phi_vec.imag
+            # --- Extract scattered surface current J_wp ---
+            (wp_c, wp_a, wp_J_re_arr,
+             wp_J_im_arr) = self._extract_wp_J(phi_vec, phi_inc_cplx)
 
-            elem_A_wp = Integrate(CF(1), self.mesh_wp, BND, element_wise=True)
+            # --- Per-DOF back-reaction RHS via LinearForm assembly ---
+            f_back_re_new = assemble_back_reaction_RHS(
+                self.fes_J, wp_c, wp_a, wp_J_re_arr)
+            f_back_im_new = assemble_back_reaction_RHS(
+                self.fes_J, wp_c, wp_a, wp_J_im_arr)
 
-            # Compute per-element H_scat = -grad_s(phi_scat)
-            grad_re = [Integrate(grad(gf_scat_re)[i], self.mesh_wp, BND,
-                                 element_wise=True) for i in range(3)]
-            grad_im = [Integrate(grad(gf_scat_im)[i], self.mesh_wp, BND,
-                                 element_wise=True) for i in range(3)]
+            if iteration == 0:
+                f_back_re = f_back_re_new
+                f_back_im = f_back_im_new
+            else:
+                f_back_re = (relax * f_back_re_new
+                             + (1 - relax) * f_back_re)
+                f_back_im = (relax * f_back_im_new
+                             + (1 - relax) * f_back_im)
 
-            wp_c, wp_a, wp_J_re, wp_J_im = [], [], [], []
-            for el in self.mesh_wp.Elements(BND):
-                area = abs(elem_A_wp[el.nr])
-                if area < 1e-30:
-                    continue
-                # H_t = -grad_s(phi) per element
-                ht_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
-                ht_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
-                # Outward normal from vertex cross product
-                verts = [np.array(self.mesh_wp.vertices[v.nr].point)
-                         for v in el.vertices]
-                e1 = verts[1] - verts[0]
-                e2 = verts[2] - verts[0]
-                n_vec = np.cross(e1, e2)
-                n_mag = np.linalg.norm(n_vec)
-                if n_mag > 1e-30:
-                    n_vec /= n_mag
-                # Ensure outward: normal points away from centroid of shape
-                centroid = np.mean(verts, axis=0)
-                if np.dot(n_vec, centroid) < 0:
-                    n_vec = -n_vec
-                # J_s = n x H_t (surface current)
-                j_re = np.cross(n_vec, ht_re)
-                j_im = np.cross(n_vec, ht_im)
-                verts = [self.mesh_wp.vertices[v.nr].point for v in el.vertices]
-                c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-                wp_c.append(c)
-                wp_a.append(area)
-                wp_J_re.append(j_re)
-                wp_J_im.append(j_im)
+            # --- Re-solve coil EFIE saddle point (real and imag parts) ---
+            # SL J_re + D^T p_re = -f_back_re;  D J_re = g_red
+            rhs_re = np.zeros(n_J + n_c)
+            rhs_re[:n_J] = -f_back_re
+            rhs_re[n_J:] = self.g_red
+            sol_re = lu_solve(self.K_lu, rhs_re)
+            J_re = sol_re[:n_J]
 
-            wp_c = np.array(wp_c)
-            wp_a = np.array(wp_a)
-            wp_J_re = np.array(wp_J_re)
-            wp_J_im = np.array(wp_J_im)
+            # SL J_im + D^T p_im = -f_back_im;  D J_im = 0
+            rhs_im = np.zeros(n_J + n_c)
+            rhs_im[:n_J] = -f_back_im
+            sol_im = lu_solve(self.K_lu, rhs_im)
+            J_im = sol_im[:n_J]
 
-            # Back-reaction: A_wp at coil from COMPLEX J_s
-            # Delta_Z = -jw * mu0 * J_coil . A(J_wp)
-            # Re(Delta_Z) = w * mu0 * J_coil . A(J_wp_im)  (resistance increase)
-            # Im(Delta_Z) = -w * mu0 * J_coil . A(J_wp_re)  (= w*Delta_L)
-            # So Delta_L = -mu0 * J_coil . A(J_wp_re)
-            A_back_re = vector_potential_from_J(coil_c, wp_c, wp_a, wp_J_re)
-            A_back_im = vector_potential_from_J(coil_c, wp_c, wp_a, wp_J_im)
+            gf_J_re.vec.FV().NumPy()[:] = J_re
+            gf_J_im.vec.FV().NumPy()[:] = J_im
 
-            # Compute Delta_L and Delta_R from complex A_back:
-            # Delta_L = -mu0 * sum(J_coil . A_back_re * area_coil)
-            # Delta_R = omega * mu0 * sum(J_coil . A_back_im * area_coil)
-            coupling_re = MU_0 * np.sum(
-                np.sum(coil_J * A_back_re, axis=1) * coil_a)
-            coupling_im = MU_0 * np.sum(
-                np.sum(coil_J * A_back_im, axis=1) * coil_a)
-            Delta_L_elem = -coupling_re  # inductance change (reactive)
+            # --- Inductance from total magnetic energy ---
+            # Self contribution from BOTH real and imag back-reacted current.
+            # Mutual contribution from per-DOF back-reaction inner product.
+            L_self_now = MU_0 * (J_re @ self.SL_coil @ J_re
+                                 + J_im @ self.SL_coil @ J_im)
+            mutual = float(f_back_re @ J_re + f_back_im @ J_im)
+            L_total = L_self_now + mutual
+            Delta_L = L_total - L_air
 
-            # f_back for EFIE re-solve: distribute via SL structure
-            alpha = Delta_L_elem / max(abs(L_self), 1e-30)
-            f_back_new = alpha * (self.SL_coil @ J_coil)
-
-            # Under-relax
-            f_back = relax * f_back_new + (1 - relax) * f_back
-
-            # Re-solve EFIE with back-reaction
-            rhs = np.zeros(n_J + n_c)
-            rhs[:n_J] = -f_back  # negative: SL@J + D^T@p = -f_back
-            rhs[n_J:] = self.g_red
-            x = lu_solve(self.K_lu, rhs)
-            J_coil = x[:n_J]
-
-            # Update coil GridFunction and elements
-            gf_J.vec.FV().NumPy()[:] = J_coil
-            coil_c, coil_a, coil_J = extract_element_J(self.mesh_coil, gf_J)
-
-            # Compute L
-            L_self_new = MU_0 * J_coil @ self.SL_coil @ J_coil
-            # Mutual: Delta_L = mu0 * J_coil . A_wp (dot product over coil surface)
-            # ΔL = f_back . J_coil (since f_back ≈ ∫ A_wp . v dS)
-            Delta_L = float(np.dot(f_back, J_coil))
-            L_total = L_self_new + Delta_L
-
-            dL = abs(L_total - L_prev) / max(abs(L_prev), 1e-30)
-
-            P_density = wp_result['P_density']
-            P_total = P_density * wp_result['area']
-
-            print(f"  iter {iteration}: L_self={L_self_new*1e9:.2f}nH "
-                  f"DeltaL={Delta_L*1e9:.2f}nH L_total={L_total*1e9:.2f}nH "
-                  f"H_t={H_t_rms:.2f} P={P_total:.4e} dL={dL:.4e}")
+            dL_rel = abs(L_total - L_prev) / max(abs(L_prev), 1e-30)
+            if verbose:
+                print(f"  iter {iteration}: L_self={L_self_now*1e9:.3f}nH "
+                      f"mutual={mutual*1e9:+.3f}nH "
+                      f"L_total={L_total*1e9:.3f}nH "
+                      f"DeltaL={Delta_L*1e9:+.3f}nH dL={dL_rel:.3e}")
 
             L_prev = L_total
-
-            if dL < tol and iteration > 0:
-                print(f"  Converged at iteration {iteration}")
+            if dL_rel < tol and iteration > 0:
                 break
 
+        P_density = wp_result['P_density']
+        P_total = P_density * wp_result['area']
+        H_t_rms = wp_result['H_t_rms']
+
         return {
+            'L_air': float(L_air),
+            'L_self': float(L_self_now),
             'L_total': float(L_total),
-            'L_self': float(L_self_new),
             'Delta_L': float(Delta_L),
             'P_total': float(P_total),
-            'P_density': float(P_density),
             'H_t_rms': float(H_t_rms),
-            'area_wp': float(wp_result['area']),
-            'Z_s': complex(Z_s),
             'iterations': iteration + 1,
             'n_J_coil': self.n_J,
             'n_phi_wp': self.wp_solver.ndof,
+            'J_coil_re': J_re,
+            'J_coil_im': J_im,
+            'Z_s': complex(Z_s),
         }
+
+    def _extract_wp_J(self, phi_vec_complex, phi_inc_complex):
+        """Extract scattered surface current ``J_wp = n x H_scat`` from the
+        SIBC scalar BIE solution.
+
+        ``H_scat = -grad_s(phi_total - phi_inc)``, computed per element via
+        NGSolve element-wise integration of grad components.
+        """
+        from ngsolve import GridFunction, Integrate, CF, BND, grad
+
+        gf_re = GridFunction(self.wp_solver.fes)
+        gf_im = GridFunction(self.wp_solver.fes)
+        gf_re.vec.FV().NumPy()[:] = phi_vec_complex.real - phi_inc_complex.real
+        gf_im.vec.FV().NumPy()[:] = phi_vec_complex.imag - phi_inc_complex.imag
+
+        elem_A = Integrate(CF(1), self.mesh_wp, BND, element_wise=True)
+        grad_re = [Integrate(grad(gf_re)[i], self.mesh_wp, BND,
+                             element_wise=True) for i in range(3)]
+        grad_im = [Integrate(grad(gf_im)[i], self.mesh_wp, BND,
+                             element_wise=True) for i in range(3)]
+
+        c_list, a_list, jr_list, ji_list = [], [], [], []
+        for el in self.mesh_wp.Elements(BND):
+            area = abs(elem_A[el.nr])
+            if area < 1e-30:
+                continue
+            ht_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
+            ht_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
+            verts = [np.array(self.mesh_wp.vertices[v.nr].point)
+                     for v in el.vertices]
+            e1 = verts[1] - verts[0]
+            e2 = verts[2] - verts[0]
+            n_vec = np.cross(e1, e2)
+            n_mag = np.linalg.norm(n_vec)
+            if n_mag > 1e-30:
+                n_vec /= n_mag
+            centroid = np.mean(verts, axis=0)
+            if np.dot(n_vec, centroid) < 0:
+                n_vec = -n_vec
+            j_re = np.cross(n_vec, ht_re)
+            j_im = np.cross(n_vec, ht_im)
+            c_list.append(np.mean([(v[0], v[1], v[2]) for v in verts],
+                                  axis=0))
+            a_list.append(area)
+            jr_list.append(j_re)
+            ji_list.append(j_im)
+
+        return (np.array(c_list), np.array(a_list),
+                np.array(jr_list), np.array(ji_list))
