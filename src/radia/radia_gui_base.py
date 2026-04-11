@@ -26,6 +26,25 @@ _RESOURCES_DIR = os.path.join(_THIS_DIR, "resources")
 _PYTHON = sys.executable
 _SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".radia")
 
+# Shared panel debug log (C:/radia_panel_log.txt on Windows). Append-only
+# from this process; the Cubit-side register_toolbar.py truncates it on
+# session start so the file holds one continuous Cubit session log.
+if _PANELS_DIR not in sys.path:
+    sys.path.insert(0, _PANELS_DIR)
+try:
+    from panel_log import (init_panel_log, panel_log,
+                           panel_log_exception, PANEL_LOG_PATH)
+    init_panel_log("ih-window", truncate=False, banner=True)
+    panel_log(f"radia_gui_base.py file={__file__}")
+except Exception:
+    # Panel log is best-effort. Define no-op shims so the analysis
+    # windows still run if panel_log.py is missing for any reason.
+    PANEL_LOG_PATH = ""
+    def panel_log(_msg):
+        pass
+    def panel_log_exception(_prefix=""):
+        pass
+
 
 def _icon_path():
     for ext in (".ico", ".png"):
@@ -288,8 +307,12 @@ class AnalysisWindow(QMainWindow):
         try:
             cmd = self._panel.build_command(vol)
         except ValueError as e:
+            panel_log(f"_on_run: build_command FAILED: {e}")
             QMessageBox.warning(self, "Input Error", str(e))
             return
+
+        panel_log(f"_on_run: vol={vol}")
+        panel_log(f"  cmd: {' '.join(cmd)}")
 
         self._save_settings()
         self._output.clear()
@@ -300,6 +323,28 @@ class AnalysisWindow(QMainWindow):
         work_dir = os.path.dirname(vol) if vol else os.getcwd()
         if not os.path.isdir(work_dir):
             work_dir = os.getcwd()
+
+        # Cleanup stale GMSH artifacts left by previous Runs from the
+        # working directory. Without this the user can accidentally
+        # open an old `inductance.geo` (full B-field box from a
+        # previous Air=on run) when the current Run is Air=off.
+        # We delete files the panel itself produces; the user's own
+        # .msh / .geo files (anything not in the known list) are left
+        # alone.
+        for stale in ("inductance.geo", "inductance_B.msh",
+                      "inductance_J.msh", "J_coeffs.npy",
+                      "surface_mesh.vol",
+                      os.path.basename(msh_output(vol, "_bem"))
+                      if vol else ""):
+            if not stale:
+                continue
+            p = os.path.join(work_dir, stale)
+            if os.path.isfile(p):
+                try:
+                    os.remove(p)
+                    panel_log(f"  cleaned stale: {stale}")
+                except OSError:
+                    pass
 
         self._process = QProcess(self)
         self._process.setWorkingDirectory(work_dir)
@@ -340,10 +385,16 @@ class AnalysisWindow(QMainWindow):
         self._stop_btn.setEnabled(False)
         self._update_run_state()
 
+        panel_log(f"_on_finished: exit_code={exit_code}")
+
         if exit_code != 0:
             self._status.showMessage(f"Error (exit code {exit_code})")
             self._output.appendPlainText(
                 f"\n*** Process exited with code {exit_code}")
+            # Log the last ~20 lines so the failure is visible in the
+            # panel debug log without the user needing to copy/paste.
+            tail = "\n".join(stdout_text.splitlines()[-20:])
+            panel_log(f"_on_finished: subprocess FAILED, tail:\n{tail}")
             return
 
         # Find .msh in output for GMSH button
@@ -356,12 +407,48 @@ class AnalysisWindow(QMainWindow):
                 except json.JSONDecodeError:
                     pass
                 break
-        msh_key = "msh_output" if "msh_output" in (result or {}) else "msh_file"
-        if result and msh_key in result:
-            msh = result[msh_key]
+        # Prefer the merged .geo (B + J + companion) when air field
+        # post-processing ran; otherwise fall back to the BEM .msh.
+        gmsh_target = None
+        gmsh_reason = ""
+        if result and result.get("field_gmsh_file") and os.path.isfile(
+                result["field_gmsh_file"]):
+            gmsh_target = result["field_gmsh_file"]
+            gmsh_reason = "field_gmsh_file (.geo with B + J + air-field)"
+        elif result:
+            msh_key = "msh_output" if "msh_output" in result else "msh_file"
+            msh = result.get(msh_key)
             if msh and os.path.isfile(msh):
-                self._last_msh = msh
-                self._gmsh_btn.setEnabled(True)
+                gmsh_target = msh
+                gmsh_reason = f"{msh_key}"
+            else:
+                gmsh_reason = (
+                    f"no {msh_key} (value={msh!r}) — Open GMSH disabled")
+        if gmsh_target:
+            self._last_msh = gmsh_target
+            self._gmsh_btn.setEnabled(True)
+        panel_log(f"_on_finished: gmsh button = "
+                  f"{'ENABLED' if gmsh_target else 'disabled'} "
+                  f"({gmsh_reason})")
+        if gmsh_target:
+            panel_log(f"  -> {gmsh_target}")
+
+        # Log result keys + headline numbers to panel debug log
+        if result is not None:
+            panel_log(f"_on_finished: result keys = "
+                      f"{sorted(result.keys())[:20]}")
+            if "error" in result:
+                panel_log(f"  ERROR: {result['error']}")
+            if "inductance_H" in result:
+                panel_log(
+                    f"  L = {result['inductance_H']*1e9:.3f} nH")
+            if "coupled_dL_H" in result:
+                panel_log(
+                    f"  delta_L = {result['coupled_dL_H']*1e9:+.3f} nH")
+            if "P_total_W" in result:
+                panel_log(f"  P_total = {result['P_total_W']:.4e} W")
+            if "wp_P_total" in result:
+                panel_log(f"  wp_P_total = {result['wp_P_total']:.4e} W")
 
         # Display result summary in output window
         if result and "error" not in result:
@@ -464,6 +551,109 @@ class AnalysisWindow(QMainWindow):
                 if "t_total" in result:
                     self._output.appendPlainText(
                         f"  Time = {result['t_total']:.1f}s")
+            # BEM coil + workpiece SIBC/ESIM (calc_inductance.py with
+            # --workpiece). Distinct from BEM-SIBC (WP) which uses
+            # P_total_W; this path uses wp_P_total + wp_R_effective.
+            if "wp_P_total" in result:
+                self._output.appendPlainText(
+                    "  --- Workpiece SIBC ---")
+                self._output.appendPlainText(
+                    f"  Model:    {result.get('wp_model', '?')}")
+                self._output.appendPlainText(
+                    f"  Material: {result.get('wp_material', '?')}")
+                self._output.appendPlainText(
+                    f"  Frequency: {result.get('wp_frequency', 0):.0f} Hz")
+                self._output.appendPlainText(
+                    f"  WP sigma:  {result.get('wp_sigma', 0):.4e} S/m")
+                if "wp_delta_min" in result:
+                    self._output.appendPlainText(
+                        f"  Skin depth: "
+                        f"{result['wp_delta_min']*1e3:.4f} mm")
+                self._output.appendPlainText(
+                    f"  Panels: {result.get('wp_n_panels', '?')}")
+                if "wp_H_t_max" in result:
+                    self._output.appendPlainText(
+                        f"  H_t range: {result['wp_H_t_min']:.2f} - "
+                        f"{result['wp_H_t_max']:.2f} A/m")
+                self._output.appendPlainText(
+                    f"  P_total = {result['wp_P_total']:.4e} W")
+                if "wp_Q_total" in result:
+                    self._output.appendPlainText(
+                        f"  Q_total = {result['wp_Q_total']:.4e} var")
+                if "wp_R_effective" in result:
+                    self._output.appendPlainText(
+                        f"  R_eff   = "
+                        f"{result['wp_R_effective']:.4e} Ohm")
+                if "wp_X_effective" in result:
+                    self._output.appendPlainText(
+                        f"  X_eff   = "
+                        f"{result['wp_X_effective']:.4e} Ohm")
+                # Coupled coil-terminal results.
+                # Two cases:
+                #   1. Linear SIBC (Dowell): full coupled BEM solve via
+                #      bem_coupled_solver.CoupledBEMSolver. Reports
+                #      L_air, L_total, Delta_L (sign is physically
+                #      correct: <0 for non-magnetic Lenz screening,
+                #      >0 for ferromagnetic flux concentration).
+                #   2. Nonlinear SIBC (ESIM): uncoupled estimator,
+                #      reports R only (no Delta L).
+                if "coupled_L_total_H" in result:
+                    L_air_nH = result.get(
+                        "L_air_H", result.get("coupled_L_air_H", 0)) * 1e9
+                    L_total_nH = result["coupled_L_total_H"] * 1e9
+                    dL_nH = result["coupled_dL_H"] * 1e9
+                    self._output.appendPlainText(
+                        "  --- Coil terminal (with workpiece) ---")
+                    self._output.appendPlainText(
+                        f"  L (air)   = {L_air_nH:.3f} nH")
+                    self._output.appendPlainText(
+                        f"  delta L  = {dL_nH:+.3f} nH")
+                    self._output.appendPlainText(
+                        f"  L (eff)   = {L_total_nH:.3f} nH")
+                    if "coupled_R_effective_Ohm" in result:
+                        self._output.appendPlainText(
+                            f"  R (added) = "
+                            f"{result['coupled_R_effective_Ohm']*1e3:.4f}"
+                            f" mOhm")
+                    if "coupled_iterations" in result:
+                        self._output.appendPlainText(
+                            f"  iters     = "
+                            f"{result['coupled_iterations']} "
+                            f"(Picard, relax=0.5)")
+                    if "coupled_delta_skin_m" in result:
+                        self._output.appendPlainText(
+                            f"  skin depth = "
+                            f"{result['coupled_delta_skin_m']*1e3:.4f} mm")
+                    self._output.appendPlainText(
+                        "  (Coupled BEM: per-DOF f_back, validated"
+                        " 2026-04-12 vs FEM-Kelvin SIBC at 0.3% on"
+                        " copper / 1.7% on steel mu_r=100. See"
+                        " examples/cubit_panels/inductance/"
+                        "compare_bem_coupled_vs_fem_kelvin.py)")
+                elif "coupled_R_effective_Ohm" in result:
+                    self._output.appendPlainText(
+                        "  --- Coil terminal (with workpiece, ESIM) ---")
+                    self._output.appendPlainText(
+                        f"  L (air-only) = "
+                        f"{result.get('inductance_H', 0)*1e9:.3f} nH")
+                    self._output.appendPlainText(
+                        f"  R (added)   = "
+                        f"{result['coupled_R_effective_Ohm']*1e3:.4f}"
+                        f" mOhm")
+                    self._output.appendPlainText(
+                        "  (delta L not reported: ESIM is one-way only;"
+                        " coupled BEM only supports linear Dowell SIBC.)")
+                if "coupled_error" in result:
+                    self._output.appendPlainText(
+                        "  --- Coupled BEM ERROR ---")
+                    self._output.appendPlainText(
+                        f"  {result['coupled_error']}")
+            elif "wp_error" in result:
+                self._output.appendPlainText(
+                    "  --- Workpiece SIBC ---")
+                self._output.appendPlainText(
+                    f"  ERROR: {result['wp_error']}")
+
             # Volume/area results (calc_volume, calc_surface)
             if "ng_volume" in result:
                 self._output.appendPlainText(
@@ -482,11 +672,34 @@ class AnalysisWindow(QMainWindow):
         if not self._last_msh:
             return
         import subprocess
+        # Build a small Python launcher that:
+        #   - merges the .msh / .geo we just produced
+        #   - sets sensible defaults so the curved surfaces render
+        #     correctly and air-mesh edges do not cover the screen
+        #   - shows the first vector view (J) as arrows by default
+        launcher = (
+            "import gmsh; gmsh.initialize();"
+            f" gmsh.merge(r'{self._last_msh}');"
+            # 1. Curved-element subdivision (Tri6/10/15 etc.)
+            " gmsh.option.setNumber('Mesh.NumSubEdges', 4);"
+            # 2. Hide volume mesh edges (kills the black-line storm)
+            " gmsh.option.setNumber('Mesh.VolumeEdges', 0);"
+            " gmsh.option.setNumber('Mesh.VolumeFaces', 0);"
+            # 3. Surface edges off, surface faces on so the coil
+            #    looks like a smooth shaded body, not a wireframe
+            " gmsh.option.setNumber('Mesh.SurfaceEdges', 0);"
+            " gmsh.option.setNumber('Mesh.SurfaceFaces', 1);"
+            # 4. If a vector view is present, draw it as small arrows
+            #    on the surface (the J view from calc_inductance.py)
+            " tags = gmsh.view.getTags();"
+            " [gmsh.option.setNumber(f'View[{i}].VectorType', 4)"
+            "  for i, _ in enumerate(tags)];"
+            " [gmsh.option.setNumber(f'View[{i}].ArrowSizeMax', 60)"
+            "  for i, _ in enumerate(tags)];"
+            " gmsh.fltk.run(); gmsh.finalize()"
+        )
         subprocess.Popen(
-            [_PYTHON, "-c",
-             "import gmsh; gmsh.initialize(); "
-             f"gmsh.merge(r'{self._last_msh}'); "
-             "gmsh.fltk.run(); gmsh.finalize()"],
+            [_PYTHON, "-c", launcher],
             creationflags=(0x08000000 if sys.platform == "win32" else 0))
 
     # Settings
