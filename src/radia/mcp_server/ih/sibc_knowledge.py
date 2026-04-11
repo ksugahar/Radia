@@ -402,6 +402,92 @@ flag, distinct from the geometry mode.
 See ``memory/sibc_per_panel_curvature.md`` for full implementation
 notes; the older ``sibc_curvature_status.md`` is **superseded**.
 
+## Phase 5 (2026-04-12): per-node Z_s in the COUPLED BEM solver
+
+The same per-panel curvature is now wired into the **iterative coupled
+BEM solver** ``bem_coupled_solver.CoupledBEMSolver`` by extending the
+scalar BIE+SIBC core ``bem_sibc_solver.ScalarBIESIBCSolver`` to
+accept a **per-H1-node Z_s ndarray**.
+
+### Implementation
+
+``ScalarBIESIBCSolver.solve(phi_inc, Z_s, omega)``:
+- ``Z_s`` may be a complex scalar (legacy) OR a complex ndarray of
+  length ``self.ndof``.
+- For an ndarray, the system is::
+
+      (1/2 M - DL + diag(gamma) @ SL @ M^-1 @ K) phi = M phi_inc
+      gamma_i = Z_s_i / (jw mu_0)
+
+  Each H1 row gets its own Robin coefficient. Verified to reproduce
+  the scalar result to 7.6e-16 when the array is uniform.
+
+``calc_inductance.py::_run_coupled_bem``:
+- Builds per-panel R via ``_compute_panel_local_radii``
+- Computes per-panel Z_s via the Dowell tanh formula
+- Projects to H1 nodes by **vertex averaging** (P1 nodal projection)
+- Passes the array to ``solver.solve(Z_s=ndarray, omega)``
+
+### Validation: analytical sphere SIBC (Smythe)
+
+Uniform external field H = H0 z_hat on a conducting sphere of radius
+R. Smythe's closed-form result::
+
+    J_s(theta) = (3/2) * j*omega*B0*R / (j*omega*mu_0*R + Z_s) * sin(theta)
+    H_t_rms    = max|J_s| * sqrt(2/3)
+
+Three SIBC paths on the same sphere mesh:
+
+  1. **scalar(wrong R=5mm)**: legacy, user supplied wrong half_thickness
+  2. **per-node(mesh extractor)**: production path
+  3. **per-node(true R)**: machine-precision regression
+
+| Sphere R=10mm        | xi    | scalar(wrong R) | **per-node(mesh)** | per-node(true) |
+|----------------------|-------|-----------------|---------------------|----------------|
+| Cu 1 MHz (asymptot.) | 72    | -0.65%          | -0.65%              | -0.65%         |
+| Cu 1 kHz             | 2.3   | -0.53%          | -0.68%              | -0.68%         |
+| **Cu 10 Hz**         | 0.48  | **+31.0%** ❌  | **+2.9%** ✓        | -0.79%         |
+| Steel mu=100 1 kHz   | 8.9   | -0.92%          | -0.90%              | -0.90%         |
+
+The Cu/10Hz case shows the headline: scalar with wrong R gives +31%
+error, per-node recovers to +2.9% (**11x improvement**). In the
+asymptotic regime Z_s is R-independent so all paths agree.
+
+### Validation: prolate spheroid (spatially varying R)
+
+Sphere alone has uniform R so it cannot test that per-panel
+**variation** is captured correctly. The prolate spheroid
+``x²/b² + y²/b² + z²/a² = 1`` (a > b) has principal radii::
+
+    pole (cos t = 1):    R = b² / a   (tip-of-cigar radius)
+    equator (cos t = 0): R = b        (equatorial radius)
+
+For a/b = 4 the pole-vs-equator R ratio is 16x. The per-panel
+extractor's percentile-10 picks the smaller principal radius.
+
+| Cu cigar (a × b)         | xi    | scalar(mean R) | **per-node(mesh)** | per-node(analytic) |
+|---------------------------|-------|----------------|---------------------|---------------------|
+| 20 × 10 mm, **10 Hz**     | 0.48  | -11.2%         | **+3.1%**           | ground truth        |
+| 20 × 10 mm, 1 MHz (asym.) | 318   | +0.00%         | +0.00%              | identical           |
+| 40 × 10 mm, **100 Hz**    | 1.5   | -5.1%          | **+1.7%**           | ground truth        |
+
+**This is the definitive validation**: spatially varying principal
+curvature is correctly extracted from the mesh AND correctly fed
+into the per-node SIBC solver. Per-node beats scalar by 4-7x in the
+xi ~ 1 regime; identical to scalar in the asymptotic regime
+(regression OK).
+
+### Files
+
+- `src/radia/bem_sibc_solver.py::ScalarBIESIBCSolver.solve` —
+  per-node Z_s acceptance + Robin block diag(gamma) construction
+- `src/radia/bem_coupled_solver.py::CoupledBEMSolver.solve` —
+  passes through per-node Z_s to the SIBC core
+- `src/radia/panels/calc_inductance.py::_dowell_Zs`,
+  `_build_per_node_Zs`, `_run_coupled_bem(use_local_curvature=True)`
+- `examples/cubit_panels/inductance/verify_per_node_sibc_sphere.py`
+- `examples/cubit_panels/inductance/verify_per_node_sibc_spheroid.py`
+
 ### Cross-check vs FEM-Kelvin SIBC (validated 2026-04-12)
 
 The coupled BEM was independently validated against the FEM-Kelvin

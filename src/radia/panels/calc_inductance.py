@@ -27,6 +27,8 @@ import math
 import os
 import sys
 
+import numpy as np
+
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
@@ -278,7 +280,8 @@ def extract_inductance_vol(vol_file, source_label="source",
                     sigma=sigma,
                     half_thickness=half_thickness,
                     mu_r=mu_r,
-                    material=material)
+                    material=material,
+                    use_local_curvature=use_local_curvature)
                 result.update(coupled_result)
                 # Headline inductance becomes the coupled L_total.
                 # Keep the air-only value as L_air_H so the panel can
@@ -337,14 +340,81 @@ def extract_inductance_vol(vol_file, source_label="source",
     return result
 
 
+def _dowell_Zs(R, rho, omega, mu_eff):
+    """Linear SIBC Z_s from the Dowell tanh formula.
+
+    Z_s = (rho / R) * gamma * tanh(gamma)
+    gamma = (1 + j) * R / delta
+    delta = sqrt(2 * rho / (omega * mu_eff))
+    """
+    if omega <= 0:
+        return complex(0.0)
+    delta = math.sqrt(2.0 * rho / (omega * mu_eff))
+    xi = R / delta
+    gamma_a = complex(1, 1) * xi
+    try:
+        return (rho / R) * gamma_a * np.tanh(gamma_a)
+    except OverflowError:
+        return (rho / R) * gamma_a
+
+
+def _build_per_node_Zs(mesh_wp, panels, R_panel, rho, omega, mu_eff,
+                        ndof_phi):
+    """Build a per-node Z_s array on the workpiece H1 mesh.
+
+    For each workpiece panel, compute Z_s_panel from the Dowell tanh
+    formula at the panel's local radius R_panel[i]. Project the
+    per-panel values onto the H1 nodes by **vertex averaging**:
+
+        Z_s_node[v] = (sum over panels p touching v of Z_s_panel[p]) / count
+
+    The result is an ``ndarray[ndof_phi]`` of complex Z_s values to feed
+    into ``ScalarBIESIBCSolver.solve(phi_inc, Z_s=array, omega=omega)``.
+
+    Vertex averaging is the same projection used by ``GridFunction.Set``
+    in the order=1 case (P1) and is exact for piecewise-linear data.
+    The H1 ordering on the workpiece mesh is vertex-first when
+    ``order=1``, so node index == vertex index.
+    """
+    Zs_panel = np.array(
+        [_dowell_Zs(float(R_panel[i]), rho, omega, mu_eff)
+         for i in range(len(panels))], dtype=complex)
+
+    Zs_node = np.zeros(ndof_phi, dtype=complex)
+    count = np.zeros(ndof_phi, dtype=int)
+    for i, p in enumerate(panels):
+        for vid in p['vert_ids']:
+            if vid < ndof_phi:
+                Zs_node[vid] += Zs_panel[i]
+                count[vid] += 1
+
+    # Nodes that no panel touched (e.g. orphan H1 dof) get the
+    # mean Z_s as a safe default; in practice this should be empty
+    # because every BND vertex belongs to >=1 panel.
+    Zs_mean = complex(np.mean(Zs_panel)) if len(Zs_panel) > 0 else 0+0j
+    for j in range(ndof_phi):
+        if count[j] > 0:
+            Zs_node[j] /= count[j]
+        else:
+            Zs_node[j] = Zs_mean
+    return Zs_node, Zs_panel
+
+
 def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
                      fes_order, frequency, sigma, half_thickness, mu_r,
-                     material):
+                     material, use_local_curvature=False):
     """Iterative coil-workpiece BEM via bem_coupled_solver.CoupledBEMSolver.
 
     Builds clean coil + workpiece surface meshes from the same .vol
     (filtered by material name with orphan vertices pruned), then runs
     the iterative coupled solve with per-DOF back-reaction RHS.
+
+    When ``use_local_curvature`` is True (Phase 5, 2026-04-12), the
+    workpiece SIBC uses **per-node Z_s** built from per-panel local
+    curvature instead of a single global Z_s value. This is the most
+    accurate variant of the coupled BEM solver: each workpiece node
+    gets a Z_s computed from its local sphere/cylinder radius
+    extracted from the mesh.
 
     Sign of Delta_L (verified 2026-04-12):
       - mu_r = 1, copper, 1 kHz: -0.77 nH (Lenz screening)
@@ -361,11 +431,14 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     import numpy as np
 
     mesh_coil = _extract_surface_mesh_filtered(mesh_full, keep_label="coil")
+    # The user-facing --workpiece argument is actually a BOUNDARY name
+    # (the sideset, e.g. "sibc"), but _extract_surface_mesh_filtered
+    # filters by VOLUME material. The .jou convention is to name the
+    # workpiece block "workpiece" and the surface sideset "sibc", so
+    # always use "workpiece" here.
     mesh_wp = _extract_surface_mesh_filtered(
-        mesh_full, keep_label=workpiece_label)
+        mesh_full, keep_label="workpiece")
 
-    # Z_s from the Dowell tanh formula (linear SIBC, single layer of
-    # half_thickness).
     _, mat_mu_r = get_bh_curve(material)
     if mu_r > 0:
         mat_mu_r = mu_r
@@ -373,21 +446,52 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     omega = 2.0 * math.pi * frequency
     mu_eff = MU_0 * float(mat_mu_r if mat_mu_r else 1.0)
     delta = math.sqrt(2.0 * rho / (omega * mu_eff)) if omega > 0 else 1e10
-    xi = half_thickness / delta
-    gamma_a = complex(1, 1) * xi
-    try:
-        Z_s = (rho / half_thickness) * gamma_a * np.tanh(gamma_a)
-    except OverflowError:
-        Z_s = (rho / half_thickness) * gamma_a
+
+    # Global Z_s (always computed for the legacy reporting fields)
+    Zs_global = _dowell_Zs(half_thickness, rho, omega, mu_eff)
 
     solver = CoupledBEMSolver(
         mesh_coil, mesh_wp,
         source_label=source_label, sink_label=sink_label,
         fes_order=fes_order)
-    sol = solver.solve(Z_s=Z_s, omega=omega,
+
+    extra_keys = {}
+    if use_local_curvature:
+        # Per-panel R from the workpiece mesh, then per-node Z_s by
+        # vertex averaging onto the SIBC solver's H1 nodes.
+        wp_panels = _extract_panels_from_mesh(mesh_wp, workpiece_label)
+        if not wp_panels:
+            # Fall through to global Z_s; the user will see the same
+            # answer as the non-local-curvature path. Errors out only
+            # if the workpiece label is wrong.
+            Z_s_arg = Zs_global
+        else:
+            R_panel = _compute_panel_local_radii(
+                mesh_wp, wp_panels, default_R=1e3 * float(half_thickness))
+            R_panel = np.clip(R_panel,
+                              0.5 * float(half_thickness), 1.0)
+            Zs_node, Zs_panel = _build_per_node_Zs(
+                mesh_wp, wp_panels, R_panel, rho, omega, mu_eff,
+                solver.wp_solver.ndof)
+            Z_s_arg = Zs_node
+            extra_keys.update({
+                "coupled_use_local_curvature": True,
+                "coupled_R_local_min_m": float(R_panel.min()),
+                "coupled_R_local_max_m": float(R_panel.max()),
+                "coupled_Zs_local_re_min": float(Zs_panel.real.min()),
+                "coupled_Zs_local_re_max": float(Zs_panel.real.max()),
+                "coupled_Zs_local_im_min": float(Zs_panel.imag.min()),
+                "coupled_Zs_local_im_max": float(Zs_panel.imag.max()),
+                "coupled_n_wp_panels": int(len(wp_panels)),
+            })
+    else:
+        Z_s_arg = Zs_global
+        extra_keys["coupled_use_local_curvature"] = False
+
+    sol = solver.solve(Z_s=Z_s_arg, omega=omega,
                        max_iter=10, tol=1e-3, relax=0.5)
 
-    return {
+    result = {
         "coupled_L_air_H": float(sol['L_air']),
         "coupled_L_total_H": float(sol['L_total']),
         "coupled_dL_H": float(sol['Delta_L']),
@@ -397,14 +501,16 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
         "coupled_iterations": int(sol['iterations']),
         "coupled_n_J_coil": int(sol['n_J_coil']),
         "coupled_n_phi_wp": int(sol['n_phi_wp']),
-        "coupled_Z_s_real_Ohm": float(Z_s.real),
-        "coupled_Z_s_imag_Ohm": float(Z_s.imag),
+        "coupled_Z_s_real_Ohm": float(Zs_global.real),
+        "coupled_Z_s_imag_Ohm": float(Zs_global.imag),
         "coupled_delta_skin_m": float(delta),
         "coupled_mu_r": float(mat_mu_r),
         "coupled_sigma_Sm": float(sigma),
         "coupled_half_thickness_m": float(half_thickness),
         "coupled_material": material,
     }
+    result.update(extra_keys)
+    return result
 
 
 def _extract_panels_from_mesh(mesh, workpiece_label):
