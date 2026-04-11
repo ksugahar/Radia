@@ -1,16 +1,24 @@
-## Induction Heating sample: gapped torus coil + cylindrical workpiece + air
+## Induction Heating sample: gapped torus coil + spherical workpiece + air
 ##
 ## Required labels:
 ##   block 1 = "coil"      (the swept gapped torus)
-##   block 2 = "workpiece" (the cylindrical work)
+##   block 2 = "workpiece" (the spherical work)
 ##   block 3 = "air"       (the surrounding air sphere)
 ##   sideset 1 = "source"  (one gap face on the coil)
 ##   sideset 2 = "sink"    (other gap face on the coil)
+##   sideset 3 = "sibc"    (the workpiece surface, for SIBC Robin BC)
 ##
 ## Geometry (matched to the BEM reference test, L_analytical = 88.55 nH):
 ##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
 ##              L = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
-##   Workpiece: cylinder, R = 0.015 m, H = 0.020 m, axis = z (centered in coil)
+##   Workpiece: SPHERE, R = 0.010 m (centered in coil)
+##              -- a sphere lets the per-panel curvature SIBC ("Per-panel
+##              curvature: on" combo in the IH panel) recover the local
+##              radius from the mesh and feed the right Z_s into the
+##              cell problem. With a cylinder workpiece the per-panel
+##              path was indistinguishable from the global path because
+##              the cylinder is locally cylindrical everywhere. The
+##              sphere makes the difference visible.
 ##   Air:       sphere, R = 0.080 m  (~2.7x coil radius for open-BC headroom)
 ##
 ## Usage: Solve -> Radia-NGSolve -> Induction Heating
@@ -37,9 +45,12 @@ create surface curve 1
 sweep surface 1 axis 0 0 0 0 0 1 angle 355
 # Volume 1 = coil
 
-# === 2. Workpiece cylinder (volume 2) ===
-# R = 0.015 m, H = 0.020 m -- fits inside the coil bore (inner R = 0.027 m).
-create cylinder height 0.020000 radius 0.015000
+# === 2. Workpiece sphere (volume 2) ===
+# R = 0.010 m -- fits well inside the coil bore (inner R = 0.027 m).
+# A sphere has uniform principal curvature so the per-panel SIBC R
+# extractor recovers the sphere radius at every panel; this is the
+# clean reference geometry for the "Per-panel curvature: on" toggle.
+create sphere radius 0.010000
 
 # === 3. Air sphere (volume 3) ===
 # R = 0.080 m -- ~2.7x coil radius gives ~80% headroom for the open BC.
@@ -71,7 +82,7 @@ volume 1 size 0.003
 mesh volume 1
 
 volume 2 scheme tetmesh
-volume 2 size 0.005
+volume 2 size 0.003
 mesh volume 2
 
 volume 4 scheme tetmesh
@@ -97,14 +108,23 @@ sideset 1 name "source"
 sideset 2 add surface 3
 sideset 2 name "sink"
 
-# Workpiece outer surfaces (for BEM+SIBC and FEM+SIBC impedance models).
-# After subtract, the workpiece-air interface is shared between volumes 2
-# and 4. Cubit assigns these to surfaces 4 5 6 (3 faces of the cylinder:
-# side, top, bottom). The sideset name MUST be "sibc" — calc_fem_kelvin.py
-# (FEM impedance model) and the FEM-Kelvin pipeline both look for the
-# boundary named "sibc" to apply the SIBC Robin BC. The BEM-coupled path
-# uses the "workpiece" material/block name and does not need this sideset.
-sideset 3 add surface 4 5 6
+# Workpiece outer surface (for BEM+SIBC and FEM+SIBC impedance models).
+# After subtract, the workpiece sphere has a single face shared with the
+# carved air volume. We identify it by its area: 4*pi*R_wp^2 with
+# R_wp = 0.010 m, i.e. ~ 1.257e-3 m^2. The sideset name MUST be "sibc".
+# calc_fem_kelvin.py (FEM impedance model) and the FEM-Kelvin pipeline
+# both look for the boundary named "sibc" to apply the SIBC Robin BC.
+# The BEM-coupled path uses the "workpiece" material/block name and
+# does not need this sideset.
+#
+# We pick the surface by hand here (Cubit assigns id 4 to the sphere
+# face after the subtract+imprint+merge sequence in this script). For
+# robustness against re-orderings, identify by area in your own .jou:
+#   sphere_area = pi * 4 * 0.010 * 0.010
+#   for sid in surfaces in volume 2:
+#       if abs(area(sid) - sphere_area) / sphere_area < 0.05:
+#           sideset 3 add surface sid
+sideset 3 add surface 4
 sideset 3 name "sibc"
 
 # Hide air for visibility
