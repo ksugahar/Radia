@@ -105,7 +105,13 @@ class ScalarBIESIBCSolver:
         Args:
             phi_inc_cf: NGSolve CoefficientFunction for incident scalar potential
                         on the surface, OR ndarray of length ndof (nodal values).
-            Z_s: Surface impedance [Ohm] (complex scalar).
+            Z_s: Surface impedance.
+                 - **complex scalar**: legacy global SIBC (uniform Z_s
+                   over the workpiece)
+                 - **ndarray of length ndof (complex)**: per-node Z_s
+                   (per-panel curvature SIBC; build the array from
+                   panel-level Z_s values via vertex averaging or any
+                   other H1 projection).
             omega: Angular frequency [rad/s].
 
         Returns:
@@ -114,7 +120,7 @@ class ScalarBIESIBCSolver:
                 phi_vec: ndarray (complex) - coefficient vector
                 H_t_rms: float - RMS tangential H [A/m] (= surface current density)
                 P_density: float - time-averaged power loss density [W/m^2]
-                gamma: complex - Z_s / (jw * mu_0)
+                gamma: complex - Z_s / (jw * mu_0) (or its mean if per-node)
                 t_solve: float - solve time [s]
         """
         from ngsolve import (LinearForm, GridFunction, Integrate, CF, ds,
@@ -133,10 +139,34 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        # System matrix
-        gamma = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0
-        A_sys = (0.5 * self.M - self.DL
-                 + gamma * self.SL @ self.M_inv @ self.K).astype(complex)
+        # System matrix.
+        # Original global-Z_s formulation:
+        #   gamma = Z_s / (jw * mu_0)         (scalar)
+        #   A = 1/2 M - DL + gamma * (SL M^{-1} K)
+        # Per-node Z_s formulation:
+        #   Gamma_ii = Z_s_i / (jw * mu_0)    (diagonal)
+        #   The Robin term gamma * Delta_s phi has the per-node coefficient
+        #   on the test side: <gamma_i grad_s phi, grad_s v> -> the SL M^-1 K
+        #   block is left-multiplied by diag(gamma) (per-row scaling).
+        # That is, the discrete form (1/2 M - DL) phi + diag(gamma) (SL M^-1 K)
+        # phi = M phi_inc.
+        if isinstance(Z_s, np.ndarray):
+            if Z_s.shape != (ndof,):
+                raise ValueError(
+                    f"Per-node Z_s must have shape ({ndof},), got {Z_s.shape}")
+            if omega <= 0:
+                gamma_vec = np.zeros(ndof, dtype=complex)
+            else:
+                gamma_vec = Z_s.astype(complex) / (1j * omega * MU_0)
+            gamma_for_log = complex(np.mean(gamma_vec))
+            # diag(gamma_vec) @ M = gamma_vec[:, None] * M (row-scaling)
+            robin_block = gamma_vec[:, None] * (self.SL @ self.M_inv @ self.K)
+            A_sys = (0.5 * self.M - self.DL + robin_block).astype(complex)
+        else:
+            gamma = Z_s / (1j * omega * MU_0) if omega > 0 and Z_s != 0 else 0
+            gamma_for_log = complex(gamma)
+            A_sys = (0.5 * self.M - self.DL
+                     + gamma * self.SL @ self.M_inv @ self.K).astype(complex)
 
         # Solve with gauge (Lagrange multiplier for int phi dS = 0)
         phi_vec = self._solve_with_gauge(A_sys, rhs_vec.astype(complex))
@@ -154,8 +184,14 @@ class ScalarBIESIBCSolver:
         H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
 
         # Power density: P' = (1/2) Re(Z_s) |J_s|^2 = (1/2) Re(Z_s) H_t_rms^2
-        # (time-averaged)
-        P_density = 0.5 * Z_s.real * H_t_rms**2 if Z_s != 0 else 0
+        # (time-averaged). For per-node Z_s, the area-averaged Re(Z_s) is
+        # the right scalar to report; the caller already integrates the
+        # local power per panel via the panel-level R if needed.
+        if isinstance(Z_s, np.ndarray):
+            Z_s_avg_re = float(np.mean(Z_s.real))
+            P_density = 0.5 * Z_s_avg_re * H_t_rms ** 2
+        else:
+            P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0
 
         # GridFunction output
         gf_phi = GridFunction(self.fes)
@@ -167,7 +203,7 @@ class ScalarBIESIBCSolver:
             'H_t_rms': float(H_t_rms),
             'P_density': float(P_density),
             'area': float(abs(area)),
-            'gamma': complex(gamma),
+            'gamma': gamma_for_log,
             't_solve': round(t_solve, 3),
         }
 
