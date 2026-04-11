@@ -17,8 +17,12 @@ import sys
 import os
 
 TITLE = "Induction Heating"
-REQUIRED_LABELS = []
-OPTIONAL_LABELS = ["source", "sink", "workpiece", "air", "wp_surface", "sibc"]
+# coil:   block name (volume label) — used by calc_inductance.py to filter
+#         the BEM surface mesh to coil-adjacent faces only.
+# source: sideset name on one coil terminal face (current injection).
+# sink:   sideset name on the other coil terminal face (current extraction).
+REQUIRED_LABELS = ["coil", "source", "sink"]
+OPTIONAL_LABELS = ["workpiece", "air"]
 OPTIONAL_FILES = {}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -42,15 +46,15 @@ class IHPanel(ModePanel):
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
 
-        # Source / Sink / Coil (required for BEM coil, not for BEM-SIBC WP)
-        src_w = self.add_line("source", "Source block:", "",
-                              placeholder="e.g. source")
-        sink_w = self.add_line("sink", "Sink block:", "",
-                               placeholder="e.g. sink")
-        self.add_line("coil", "Coil block:", "coil",
-                      placeholder="e.g. coil (filters BEM to coil surface)")
-        src_w.textChanged.connect(self._on_validation_changed)
-        sink_w.textChanged.connect(self._on_validation_changed)
+        # Source / Sink / Coil are NOT GUI inputs. The .jou file is
+        # contractually required to use sideset/block names "source",
+        # "sink", "coil". calc_inductance.py picks them up by default.
+        # Students verify the .jou — after .vol export, no label input
+        # is needed at the GUI or calc-script level.
+
+        # BEM saddle-point solver (BEM mode only). Default LU.
+        self.add_combo("bem_solver", "BEM solver:",
+                       ["LU (direct)", "MINRES", "GMRES"])
 
         # Coil parameters (always visible)
         self.add_line("freq", "Frequency [Hz]:", "50000")
@@ -65,10 +69,14 @@ class IHPanel(ModePanel):
                                    placeholder="e.g. wp_surface")
         wp_label_w.textChanged.connect(self._on_validation_changed)
 
-        # Workpiece (optional for BEM coil, always for FEM)
-        wp_w = self.add_line("workpiece", "Workpiece block:", "",
-                             placeholder="(empty = inductance only)")
-        wp_w.textChanged.connect(self._on_workpiece_changed)
+        # Workpiece coupling mode (BEM mode only):
+        #   off  = workpiece NOT in DOF (coil-only inductance)
+        #   SIBC = include workpiece via linear surface impedance
+        #          (Dowell formula in calc_inductance.py)
+        #   ESIM = include workpiece via nonlinear cell problem
+        wp_combo = self.add_combo("workpiece_mode", "Workpiece:",
+                                  ["off", "SIBC", "ESIM"])
+        wp_combo.currentTextChanged.connect(self._on_workpiece_changed)
 
         # Workpiece impedance model
         imp_combo = self.add_combo("impedance", "Impedance model:",
@@ -80,8 +88,20 @@ class IHPanel(ModePanel):
         self.add_line("mu_r", "mu_r:", "100")
         self.add_browse("bh_file", "BH file:",
                         filter_str="Text files (*.txt *.csv);;All (*)")
+        # ESIM 1D cell-problem coordinate system:
+        #   "local_curvature": cylindrical Bessel (radial coordinate)
+        #   "none": flat slab cosh/sinh (no curvature)
         self.add_combo("esim_geometry", "ESIM geometry:",
-                       ["local_curvature", "planar"])
+                       ["local_curvature", "none"])
+        # When ON, the SIBC R is taken **per panel** from the mesh-driven
+        # local curvature (discrete normal-angle fit, percentile-10).
+        # This makes the cell problem use the actual local geometry of
+        # each workpiece panel (sphere -> R, ellipsoid -> per-panel R)
+        # instead of the single global ``half_thickness`` value.
+        # OFF for backward compatibility / when half_thickness already
+        # matches the workpiece radius (e.g. uniform cylinder).
+        self.add_combo("use_local_curvature", "Per-panel curvature:",
+                       ["off", "on"])
         self.add_combo("wp_material", "WP material:",
                        ["steel", "copper", "aluminum"])
 
@@ -93,9 +113,10 @@ class IHPanel(ModePanel):
                        ["pardiso", "bddc", "iccg", "ams"])
         self.add_spin("max_iter", "Max iterations:", 15, 1, 200)
 
-        # BEM-specific: air domain
-        self.add_line("air", "Air block:", "",
-                      placeholder="(empty = no field calculation)")
+        # BEM-specific: air domain field post-processing on/off.
+        # When "on", calc_inductance.py runs B-field post-processing
+        # in the air block after the BEM solve.
+        self.add_combo("air_mode", "Air field calc:", ["off", "on"])
 
         # Material for FEM
         mat_combo = self.add_combo("fem_material", "Material:",
@@ -113,9 +134,9 @@ class IHPanel(ModePanel):
         is_bem_wp = (method == "BEM-SIBC (WP)")
         is_fem = (method == "FEM")
 
-        # BEM coil fields (source/sink/coil/air)
-        for key in ("source", "sink", "coil", "air"):
-            self._set_row_visible(key, is_bem_coil)
+        # BEM coil row: air on/off + bem solver + workpiece mode
+        self._set_row_visible("air_mode", is_bem_coil)
+        self._set_row_visible("bem_solver", is_bem_coil)
 
         # BEM coil-specific
         self._set_row_visible("coil_sigma", is_bem_coil)
@@ -130,8 +151,8 @@ class IHPanel(ModePanel):
                      "max_iter", "fem_material", "fem_bh_file"):
             self._set_row_visible(key, is_fem)
 
-        # Workpiece block line: BEM coil only (WP mode always has workpiece)
-        self._set_row_visible("workpiece", is_bem_coil)
+        # Workpiece combo line: BEM coil only (WP mode always has workpiece)
+        self._set_row_visible("workpiece_mode", is_bem_coil)
 
         # Impedance options differ by method
         combo = self._widgets["impedance"]
@@ -162,25 +183,32 @@ class IHPanel(ModePanel):
         self._on_validation_changed()
 
     def _on_workpiece_changed(self, _text=None):
-        has_wp = bool(self._widgets["workpiece"].text().strip())
+        wp_mode = self.val("workpiece_mode")
+        has_wp = (wp_mode != "off")
         method = self.val("method")
 
         # Hide all wp params first
-        for key in ("impedance", "wp_sigma", "half_thickness",
+        for key in ("wp_sigma", "half_thickness", "use_local_curvature",
                      "mu_r", "bh_file", "esim_geometry"):
             self._set_row_visible(key, False)
 
         if has_wp:
-            self._set_row_visible("impedance", True)
             self._set_row_visible("wp_sigma", True)
             self._set_row_visible("half_thickness", True)
-            self._on_impedance_changed(
-                self._widgets["impedance"].currentText())
+            self._set_row_visible("use_local_curvature", True)
+            # Map combo to impedance model:
+            #   SIBC -> dowell (linear surface impedance)
+            #   ESIM -> esim   (nonlinear cell problem)
+            is_esim = (wp_mode == "ESIM")
+            self._set_row_visible("mu_r", not is_esim)
+            self._set_row_visible("bh_file", is_esim)
+            self._set_row_visible("esim_geometry", is_esim)
 
     def _on_impedance_changed(self, imp):
         method = self.val("method")
         is_wp_mode = (method == "BEM-SIBC (WP)")
-        has_wp = is_wp_mode or bool(self._widgets["workpiece"].text().strip())
+        wp_mode = self.val("workpiece_mode") if "workpiece_mode" in self._widgets else "off"
+        has_wp = is_wp_mode or (wp_mode != "off")
         if not has_wp:
             return
         is_esim = (imp == "esim")
@@ -195,22 +223,12 @@ class IHPanel(ModePanel):
         self._set_row_visible("fem_bh_file", idx == 1)
 
     def _on_validation_changed(self, _text=None):
-        method = self.val("method")
-        if method == "BEM":
-            for key in ("source", "sink"):
-                w = self._widgets[key]
-                w.setStyleSheet(self._RED if not w.text().strip()
-                                else self._NORMAL)
         cb = getattr(self, 'validationChanged', None)
         if callable(cb):
             cb()
 
     def is_runnable(self):
-        method = self.val("method")
-        if method == "BEM":
-            return (bool(self._widgets["source"].text().strip())
-                    and bool(self._widgets["sink"].text().strip()))
-        # BEM-SIBC (WP) and FEM: no hard label requirements beyond .vol
+        # All methods rely on .jou naming convention; no GUI label inputs.
         return True
 
     def build_command(self, vol_path):
@@ -226,35 +244,53 @@ class IHPanel(ModePanel):
             return self._build_fem_command(vol_path)
 
     def _build_bem_command(self, vol_path):
-        src = self.val("source")
-        sink = self.val("sink")
-        if not src or not sink:
-            raise ValueError("Source and Sink blocks are required.")
-        coil = self.val("coil")
+        # Source/sink/coil labels follow the .jou naming convention
+        # ("source"/"sink"/"coil") and are picked up by calc_inductance.py
+        # defaults. No label arguments are passed from the GUI.
         cmd = [_PYTHON, calc_script("calc_inductance.py"),
                "--vol", vol_path,
-               "--source", src, "--sink", sink,
                "--frequency", self.val("freq"),
                "--msh-output", msh_output(vol_path, "_bem")]
-        if coil:
-            cmd += ["--coil", coil]
+        coil_sigma = self.val("coil_sigma")
+        if coil_sigma:
+            cmd += ["--coil-sigma", coil_sigma]
         fes = self.val("fes_order")
         if fes and fes != "0":
             cmd += ["--fes-order", fes]
-        wp = self.val("workpiece")
-        if wp:
-            imp = self.val("impedance")
-            cmd += ["--workpiece", wp,
+
+        # BEM saddle-point solver: combo display name -> --solver value
+        bem_solver_map = {
+            "LU (direct)": "lu",
+            "MINRES": "minres",
+            "GMRES": "gmres",
+        }
+        cmd += ["--solver", bem_solver_map.get(self.val("bem_solver"), "lu")]
+
+        # Workpiece coupling: combo -> --workpiece + impedance
+        # The workpiece sideset is named "sibc" by .jou convention
+        # (see ih_sample.jou). The label is passed as the boundary
+        # name prefix to _extract_panels_from_mesh.
+        wp_mode = self.val("workpiece_mode")
+        if wp_mode != "off":
+            imp = "esim" if wp_mode == "ESIM" else "dowell"
+            cmd += ["--workpiece", "sibc",
                     "--impedance-model", imp,
                     "--sigma", self.val("wp_sigma"),
-                    "--half-thickness", self.val("half_thickness")]
+                    "--half-thickness", self.val("half_thickness"),
+                    "--mu-r", self.val("mu_r")]
             if imp == "esim":
                 cmd += ["--esim-geometry", self.val("esim_geometry")]
                 bh = self.val("bh_file")
                 if bh:
                     cmd += ["--bh-file", bh]
-            else:
-                cmd += ["--mu-r", self.val("mu_r")]
+            # Per-panel local curvature (mesh-driven SIBC R)
+            if self.val("use_local_curvature") == "on":
+                cmd += ["--use-local-curvature"]
+
+        # Air field post-processing on/off
+        if self.val("air_mode") == "on":
+            cmd += ["--field-air"]
+
         return cmd
 
     def _build_bem_wp_command(self, vol_path):
@@ -313,7 +349,46 @@ class IHWindow(AnalysisWindow):
         panel = IHPanel()
         self._set_panel(panel)
         self._restore_settings()
+        # Auto-populate workpiece/air fields from the .vol's materials
+        # so the user does not have to retype labels that the .jou
+        # already declared.
+        self._populate_optional_labels(vol_path)
         self._update_run_state()
+
+    def _populate_optional_labels(self, vol_path):
+        """Read materials from the .vol and pre-set workpiece/air combos
+        when the corresponding labels exist. The user can still flip the
+        combo back to "off" to disable that feature.
+        """
+        if not vol_path or not os.path.isfile(vol_path):
+            return
+        from netgen.meshing import Mesh as NgMesh
+        ng = NgMesh()
+        ng.Load(vol_path)
+        mats = set()
+        for i in range(1, 64):
+            try:
+                n = ng.GetMaterial(i)
+            except Exception:
+                break
+            if n:
+                mats.add(n)
+        widgets = self._panel._widgets
+        # workpiece combo: default to SIBC when a "workpiece" material
+        # is present in the .vol (the user can flip to ESIM or off).
+        if "workpiece" in mats and "workpiece_mode" in widgets:
+            wp = widgets["workpiece_mode"]
+            if wp.currentText() == "off":
+                idx = wp.findText("SIBC")
+                if idx >= 0:
+                    wp.setCurrentIndex(idx)
+        # air combo: default to "on" when an "air" material exists.
+        if "air" in mats and "air_mode" in widgets:
+            ac = widgets["air_mode"]
+            if ac.currentText() == "off":
+                idx = ac.findText("on")
+                if idx >= 0:
+                    ac.setCurrentIndex(idx)
 
 
 def main():
