@@ -120,17 +120,100 @@ and boundary conditions (surfaces). These map to NGSolve materials/boundaries.
 | coil_surface | coil_surface | Coil surface |
 | outer | outer | Far-field (A=0) |
 
-### Gmsh Mesh from Cubit (Cubit2gmsh Workflow)
+### Mesh from Cubit (radia_export netgen)
+
+The recommended path is `radia_export netgen` (Cubit plugin command),
+which writes the .vol directly with proper FaceDescriptors, materials,
+and (optionally) Kelvin Periodic identifications. The legacy
+`Cubit2gmsh.py` workflow is obsolete.
 
 ```python
-# Cubit2gmsh.py: Generate Gmsh mesh from Cubit journal file
-# 1. Create geometry in Cubit (.jou file)
-# 2. Run Cubit2gmsh.py to export to Gmsh v2 format
-# 3. Load in NGSolve: mesh = Mesh("model.vol")
+# Cubit-side: build geometry, mesh, export
+import cubit, math, os
+cubit.init(["cubit", "-nographics", "-nojournal"])
 
-# Typical Cubit export command (inside Cubit2gmsh.py):
-# cubit.cmd(f'export mesh "{output_msh}" overwrite gmsh_ver2')
+# Coil: sweep (NOT webcut — see policy below)
+cubit.cmd('create vertex 0.030 0 0')
+cubit.cmd('create vertex 0.033 0 0')
+cubit.cmd('create vertex 0.030 0 0.003')
+cubit.cmd('create curve arc center vertex 1 vertex 2 vertex 3 normal 0 1 0 full')
+cubit.cmd('create surface curve 1')
+cubit.cmd('sweep surface 1 axis 0 0 0 0 0 1 angle 355')
+coil_vid = cubit.get_last_id("volume")
+
+# Air sphere
+cubit.cmd('create sphere radius 0.120')
+air0 = cubit.get_last_id("volume")
+
+# CRITICAL: subtract before imprint+merge for nested volumes
+# (imprint+merge alone does NOT share surfaces between fully nested
+#  volumes; the resulting .vol has wrong FaceDescriptors)
+cubit.cmd(f'subtract volume {coil_vid} from volume {air0} keep_tool')
+all_vols = list(cubit.parse_cubit_list("volume", "all"))
+air_vid = [v for v in all_vols if v != coil_vid][0]
+cubit.cmd(f'imprint volume {coil_vid} {air_vid}')
+cubit.cmd(f'merge volume {coil_vid} {air_vid}')
+# Verify: "Consolidated N pairs of surfaces" with N > 0
+
+# Mesh
+cubit.cmd(f'volume {coil_vid} scheme tetmesh')
+cubit.cmd(f'volume {coil_vid} size 0.0024')
+cubit.cmd(f'mesh volume {coil_vid}')
+cubit.cmd(f'volume {air_vid} scheme tetmesh')
+cubit.cmd(f'volume {air_vid} size 0.030')
+cubit.cmd(f'mesh volume {air_vid}')
+
+# Blocks (named, NOT by hardcoded ID)
+cubit.cmd(f'block 1 add volume {coil_vid}')
+cubit.cmd('block 1 name "coil"')
+cubit.cmd(f'block 2 add volume {air_vid}')
+cubit.cmd('block 2 name "air"')
+
+# Source/sink: identify by area (not by hardcoded surface ID).
+# A_circle = pi * a_coil^2 ≈ 2.83e-5 for a=3mm.
+A_gap = math.pi * 0.003**2
+gap_faces = []
+for sid in cubit.parse_cubit_list("surface", f"in volume {coil_vid}"):
+    a = cubit.surface(sid).area()
+    if a < 1.1 * A_gap:
+        gap_faces.append((sid, cubit.get_center_point("surface", sid)[1]))
+gap_faces.sort(key=lambda t: t[1])
+cubit.cmd(f'sideset 1 add surface {gap_faces[0][0]}')
+cubit.cmd('sideset 1 name "source"')
+cubit.cmd(f'sideset 2 add surface {gap_faces[-1][0]}')
+cubit.cmd('sideset 2 name "sink"')
+
+# Export
+out = os.path.abspath("model.vol")
+cubit.cmd(f'radia_export netgen "{out}" order 2 overwrite')
 ```
+
+Then on the NGSolve side: `mesh = Mesh("model.vol")`.
+
+**Cubit policy reminders** (full details in cubit_scripting_knowledge):
+- Use **sweep** to build coils, NOT `create torus + webcut + delete`
+  (webcut+delete can silently produce a half coil)
+- Use **subtract first, then imprint+merge** for nested volumes
+- **Identify entities by geometric properties** (area, centroid),
+  NOT by hardcoded IDs — IDs change after imprint/merge/version
+
+## Naming convention contract (.jou ↔ calc scripts)
+
+**POLICY**: Once the .vol is exported, NO label is passed at the GUI or
+calc-script level. The .jou file is the single point where labels are
+defined and verified by the user.
+
+| Entity | Required name | Purpose |
+|--------|---------------|---------|
+| sideset on coil terminal (current injection)  | `source` | calc_inductance.py default `--source source` |
+| sideset on coil terminal (current extraction) | `sink`   | calc_inductance.py default `--sink sink` |
+| block of coil volume                          | `coil`   | calc_inductance.py default `--coil coil` (filters BEM to coil surfaces) |
+| block of workpiece volume (optional)          | `workpiece` | calc_inductance.py `--workpiece workpiece` |
+| block of air volume (optional)                | `air`    | (computation skips it) |
+
+If the .jou follows this convention, the student opens the GUI, picks
+the .vol file, hits Run — no label input needed. Errors at this stage
+mean the .jou does not follow convention; fix the .jou, not the GUI.
 
 ## Boundary Layer Meshing for Skin Depth
 
@@ -1022,13 +1105,48 @@ Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
 
 1. **Keep** workpiece as separate material with air/vacuum properties (NOT a hole!)
    ```python
-   # CORRECT: workpiece meshed as air, internal interface for SIBC
+   # OCC: CORRECT pattern (use boolean subtract)
+   # workpiece meshed as air, internal interface for SIBC
    air = air_sphere - torus - wp_cyl
    air.name = "air"
    wp_cyl.name = "workpiece"   # same nu0 as air, separate material
    shape = Glue([air, wp_cyl, torus])  # THREE volumes
    # WRONG: air = sphere - torus - wp_cyl  (hole = PEC for all Z_s!)
    ```
+
+   **Cubit equivalent** (same pattern, different syntax):
+   ```python
+   # Coil: sweep (NOT webcut, see cubit_scripting_knowledge sweep policy)
+   cubit.cmd('sweep surface 1 axis 0 0 0 0 0 1 angle 355')
+   coil_vid = cubit.get_last_id("volume")
+   # Workpiece cylinder
+   cubit.cmd('create cylinder height ... radius ...')
+   wp_vid = cubit.get_last_id("volume")
+   # Air sphere
+   cubit.cmd('create sphere radius 0.120')
+   air_vid_orig = cubit.get_last_id("volume")
+   # CRITICAL: subtract BOTH coil and workpiece from air sphere.
+   # imprint+merge alone does NOT share surfaces between fully nested
+   # volumes — Cubit reports "Consolidated 0 pair of surfaces" and the
+   # FEM treats coil/wp walls as PEC (wrong).
+   cubit.cmd(f'subtract volume {coil_vid} {wp_vid} from volume {air_vid_orig} keep_tool')
+   all_vols = list(cubit.parse_cubit_list("volume", "all"))
+   air_vid = [v for v in all_vols if v not in (coil_vid, wp_vid)][0]
+   cubit.cmd(f'imprint volume {coil_vid} {wp_vid} {air_vid}')
+   cubit.cmd(f'merge volume {coil_vid} {wp_vid} {air_vid}')
+   # Verify: "Consolidated N pairs of surfaces" with N > 0
+   # blocks
+   cubit.cmd(f'block 1 add volume {coil_vid}'); cubit.cmd('block 1 name "coil"')
+   cubit.cmd(f'block 2 add volume {air_vid}');  cubit.cmd('block 2 name "air"')
+   cubit.cmd(f'block 3 add volume {wp_vid}');   cubit.cmd('block 3 name "workpiece"')
+   ```
+
+   **Why this matters**: Without `subtract` first, Cubit's
+   `imprint+merge` does nothing for fully nested volumes. The exported
+   .vol then has FaceDescriptor `domin=coil, domout=0` (PEC) instead of
+   `domin=coil, domout=air` (interface). FEM L is wrong by ~+150% for
+   coil-only models, and the SIBC Robin BC has nothing to attach to for
+   workpiece-bearing models.
 2. **Add** SIBC Robin BC on internal workpiece surface:
    ```python
    # Robin BC: (jw/Z_s) * A_t * v_t on internal wp_surface

@@ -1,31 +1,47 @@
-## PCB sample: simple rectangular conductor
-## Required labels: (none)
-## Optional labels: (none)
-## Note: PCB analysis uses FastHenry .inp, not .vol mesh.
-##       This .jou creates a minimal geometry for field evaluation.
+## PCB sample: simple rectangular conductor in an air box
 ##
-## Usage: Solve -> Radia-NGSolve -> PCB
+## Required labels:
+##   block 1 = "conductor"  (the copper trace, 10mm x 1mm x 0.035mm)
+##   block 2 = "air"        (the surrounding air box)
+##
+## Note: PCB analysis primarily uses FastHenry .inp; this .jou creates a
+##       minimal mesh for field evaluation in NGSolve.
+##
+## Build policy:
+##   - SUBTRACT conductor from air with `keep_tool` (otherwise conductor
+##     volume disappears and `block 1 add volume 1` errors out)
+##   - imprint+merge on the resulting volumes shares the conductor-air
+##     interface (Consolidated N pair of surfaces, N > 0)
 
 reset
 
-# Simple rectangular conductor (10mm x 1mm x 0.035mm copper trace)
+# === 1. Conductor (vol 1): 10 mm x 1 mm x 0.035 mm copper trace ===
 brick x 0.010 y 0.001 z 0.000035
 move volume 1 x 0.005 y 0.0005 z 0.0000175
 
-# Air domain for field evaluation
+# === 2. Air box (vol 2) enclosing the conductor ===
 brick x 0.020 y 0.010 z 0.005
 move volume 2 x 0.010 y 0.005 z 0.0025
 
-subtract volume 1 from volume 2
+# === 3. Carve a conductor cavity in the air, KEEPING the conductor ===
+# `keep_tool` is required so that block 1 still has volume 1 to add.
+subtract volume 1 from volume 2 keep_tool
 
-imprint volume all
-merge volume all
+# === 4. Imprint + merge: shares the conductor-air interface ===
+imprint volume 1 2
+merge volume 1 2
 
+# === 5. Mesh ===
+volume 1 scheme tetmesh
+volume 1 size 0.0005
+mesh volume 1
+
+volume 2 scheme tetmesh
+volume 2 size 0.002
+mesh volume 2
+
+# === 6. Blocks ===
 block 1 add volume 1
 block 1 name "conductor"
 block 2 add volume 2
 block 2 name "air"
-
-volume all scheme tetmesh
-volume all size auto factor 7
-mesh volume all
