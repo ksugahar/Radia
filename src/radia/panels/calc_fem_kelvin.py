@@ -1,25 +1,23 @@
 """
-3D FEM-SIBC solver for Cubit panel (IHFEMDialog).
+3D FEM-SIBC solver for Radia-NGSolve panel.
+
+Usage:
+    python calc_fem_kelvin.py --vol model.vol --frequency 7000 --sigma 2e6
+
+Input: Netgen .vol file with material/boundary labels:
+  coil        - volume material, J source
+  air         - volume material (includes where workpiece was, for hole approach)
+  sibc        - boundary on hole surface (hole approach, preferred)
+  wp_surface  - boundary on air/workpiece interface (legacy interface approach)
+  kelvin      - volume material (optional, Periodic Kelvin)
+  source      - boundary, T0=1 (gap face, optional)
+  sink        - boundary, T0=0 (gap face, optional)
 
 Two approaches for workpiece:
   Hole (preferred): workpiece subtracted from mesh, SIBC on hole boundary "sibc".
   Interface (legacy): workpiece meshed as volume, SIBC on internal "wp_surface".
 
-User workflow:
-  1. Write .jou to create geometry + mesh + named blocks
-  2. Run journal in Cubit panel
-  3. Click Solve -> panel saves temp .cub5 -> this script runs as subprocess
-
-Cubit blocks (user sets in .jou):
-  coil        - volume block, J source
-  air         - volume block (includes where workpiece was, for hole approach)
-  sibc        - sideset on hole boundary (hole approach, preferred)
-  wp_surface  - surface on air/workpiece interface (legacy interface approach)
-  kelvin      - volume block (optional, Periodic Kelvin)
-  source      - surface block, T0=1 (gap face, optional)
-  sink        - surface block, T0=0 (gap face, optional)
-
-IMPORTANT: NGSolve must be imported BEFORE cubit.
+Outputs JSON to stdout.
 """
 
 import argparse
@@ -29,13 +27,6 @@ import os
 import sys
 import time
 
-# Pre-import scipy BEFORE Cubit (Cubit bundles broken scipy)
-try:
-    import scipy  # noqa: F401
-    import scipy.interpolate  # noqa: F401
-except ImportError:
-    pass
-
 import numpy as np
 
 # Shared utilities
@@ -43,7 +34,7 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import (MU_0, NU_0, setup_paths, setup_cubit, export_mesh,
+from calc_common import (MU_0, NU_0, setup_paths,
                           add_periodic_kelvin, detect_kelvin_offset,
                           create_esim_solver, get_bh_curve,
                           compute_T0_source, compute_J_theta,
@@ -55,7 +46,7 @@ def _log(msg):
     progress("FEM", msg)
 
 
-def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
+def solve_fem(vol_file="", fes_order=1,
               frequency=7000, sigma=2e6,
               impedance_model="sibc", mu_r=100.0,
               bh_file=None, material="steel",
@@ -64,11 +55,10 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
               solver="pardiso", reg=1e-6, shift_eps=1e-6,
               nthreads=0,
               msh_output=""):
-    """3D FEM-SIBC solver for Cubit mesh.
+    """3D FEM-SIBC solver for .vol mesh.
 
     Args:
-        cub5_file: Cubit .cub5 file (temp file from panel dialog)
-        order: Mesh curve order (1-3)
+        vol_file: Netgen .vol file (with material/boundary labels)
         fes_order: HCurl polynomial order (1-3)
         frequency: Operating frequency [Hz]
         sigma: Workpiece conductivity [S/m]
@@ -104,48 +94,83 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     t_total_start = time.perf_counter()
 
     # ============================================================
-    # Step 1: Load mesh (.vol direct or Cubit .cub5)
+    # Step 1: Load mesh (.vol)
     # ============================================================
     _log("MESH:loading")
     t0 = time.perf_counter()
 
-    if vol_file and os.path.exists(vol_file):
-        # Direct .vol path: skip Cubit entirely
-        from ngsolve import Mesh as NGMesh
-        mesh = NGMesh(vol_file)
-        _log(f"MESH:loaded .vol directly ({vol_file})")
-    elif cub5_file and os.path.exists(cub5_file):
-        cubit = setup_cubit(cub5_file)
-        if cubit is None:
-            return {"error": "Cubit not available"}
-        mesh = export_mesh(cubit, order=order)
-    else:
-        return {"error": f"Either --vol or --cub5 required"}
+    if not vol_file or not os.path.exists(vol_file):
+        return {"error": f"--vol is required (got: {vol_file!r})"}
 
-    # Kelvin: detect offset, estimate radius, add periodic identification
-    # Only attempt if "kelvin" material exists in mesh
-    a_kelvin = 0.060
+    from ngsolve import Mesh as NGMesh
+    mesh = NGMesh(vol_file)
+    _log(f"MESH:loaded {vol_file}")
+
+    # POLICY: FES order must not exceed mesh curve order.
+    # curve_order=1 + fes_order>=2 produces large geometry/basis mismatch error
+    # because high-order HCurl basis functions assume curved edges that
+    # don't exist on a piecewise-linear mesh. Inductance diverges with order.
+    try:
+        curve_order = mesh.ngmesh.GetCurveOrder()
+    except Exception:
+        curve_order = 1
+    if fes_order > curve_order:
+        return {
+            "error": f"fes_order ({fes_order}) > mesh curve_order ({curve_order}). "
+                     f"Re-export .vol with 'radia_export netgen ... order {fes_order}' "
+                     f"or use --fes-order {curve_order}."
+        }
+    _log(f"MESH:curve_order={curve_order}, fes_order={fes_order}")
+
+    # Kelvin: detect offset, measure radius, require periodic identification
+    # to be already embedded in the .vol by the C++ export. No fallback —
+    # if Kelvin is present in the mesh but periodic ID is missing, abort.
+    # (A Kelvin-transformed mesh without periodic identification gives a
+    # silently wrong answer that looks like a Dirichlet truncation result.)
     kelvin_center = (0, 0, 0)
+    a_kelvin = 0.0
     mats_pre = mesh.GetMaterials()
+    has_kelvin_periodic = False
     if "kelvin" in mats_pre:
         kelvin_center = detect_kelvin_offset(mesh)
-        try:
-            # Estimate a_kelvin from max radius of kelvin_int boundary vertices
-            kelvin_verts = set()
-            for el in mesh.Elements(VOL):
-                if "kelvin" in str(mats_pre[el.nr]).lower():
-                    for v in el.vertices:
-                        kelvin_verts.add(v.nr)
-            if kelvin_verts:
-                kc = np.array(kelvin_center)
-                coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
-                dists = np.linalg.norm(coords - kc[np.newaxis, :], axis=1)
-                a_kelvin = float(np.min(dists))  # inner radius of kelvin shell
-        except Exception:
-            pass
-        if add_periodic_kelvin(mesh, kelvin_center):
-            mesh = ngsolve.Mesh(mesh.ngmesh)
-            _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
+
+        # Estimate a_kelvin = sphere radius from MAX vertex distance from
+        # the kelvin centroid. The 2-sphere model uses a solid sphere
+        # (not a shell), so np.min would return ~0 (interior vertex), which
+        # is wrong. The correct value is np.max = sphere radius R.
+        kelvin_verts = set()
+        for el in mesh.Elements(VOL):
+            if el.mat == "kelvin":
+                for v in el.vertices:
+                    kelvin_verts.add(v.nr)
+        if not kelvin_verts:
+            return {"error":
+                    "Mesh has 'kelvin' material in the materials list but "
+                    "no volume elements are tagged 'kelvin'. The .vol export "
+                    "is inconsistent — re-run the Cubit .jou and re-export."}
+        kc = np.array(kelvin_center)
+        coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
+        dists = np.linalg.norm(coords - kc[np.newaxis, :], axis=1)
+        a_kelvin = float(np.max(dists))  # sphere radius R
+
+        # Periodic identification MUST come from the C++ export. The
+        # Python add_periodic_kelvin path was a debug crutch that produced
+        # subtly different identification tolerances and is now removed.
+        n_ident = mesh.ngmesh.GetNrIdentifications()
+        if n_ident == 0:
+            return {"error":
+                    "Mesh has 'kelvin' material but no periodic "
+                    "identification in the .vol file. The C++ export "
+                    "(radia_export netgen ... order N) is responsible for "
+                    "writing the inner-sphere/outer-sphere triangle pairs "
+                    "into the .vol. Without it the FEM solve falls back to "
+                    "Dirichlet truncation and silently produces a wrong "
+                    "answer for the open-boundary problem. "
+                    "Re-export the .vol with the latest plugin and ensure "
+                    "the .jou uses the 'subtract -> imprint -> merge' "
+                    "pattern for the kelvin sphere."}
+        has_kelvin_periodic = True
+        _log(f"PERIODIC:from_vol ({n_ident} ident(s), a={a_kelvin:.4f})")
 
     t_mesh = time.perf_counter() - t0
 
@@ -161,12 +186,11 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     has_sink = "sink" in boundaries
     has_kelvin = "kelvin" in materials
 
-    # SIBC boundary: "sibc" (hole approach, preferred) or "wp_surface" (legacy)
+    # SIBC boundary: must be named "sibc" by .jou convention.
+    # The legacy "wp_surface" name is no longer accepted (single supported
+    # convention, no fallback).
     if "sibc" in boundaries:
         sibc_bnd = "sibc"
-        has_wp = True
-    elif "wp_surface" in boundaries:
-        sibc_bnd = "wp_surface"
         has_wp = True
     else:
         sibc_bnd = ""
@@ -177,19 +201,28 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     if has_wp:
         _log(f"SIBC:boundary={sibc_bnd}, approach={'hole' if is_hole else 'interface'}")
 
-    if has_source and has_sink:
-        _log("SOURCE:T0 source/sink technique")
-        J_source, gf_T0 = compute_T0_source(mesh, fes_order, I_total)
-    else:
-        _log("SOURCE:J0*e_theta (torus fallback)")
-        J_source = compute_J_theta(I_total, a_coil)
-        gf_T0 = None
+    if not (has_source and has_sink):
+        return {"error":
+                "Mesh has no 'source' and/or 'sink' boundary labels. "
+                "These are required for the T0 source/sink technique. "
+                f"Available boundaries: {sorted(set(boundaries))}. "
+                "Fix the .jou: define sidesets named 'source' and 'sink' "
+                "on the coil terminal faces and re-export."}
+    _log("SOURCE:T0 source/sink technique")
+    J_source, gf_T0 = compute_T0_source(mesh, fes_order, I_total)
 
     # ============================================================
     # Step 3: Material properties
     # ============================================================
-    # Kelvin weight: nu = nu0 * (a/r')^2 in kelvin domain
+    # Kelvin weight for HCurl A-formulation:  nu_eff = (r'/R)^2 * nu0
+    #
+    # Physical rule (Kelvin transform under inversion r -> R^2/r'):
+    #   - mu, eps, sigma -> infinity at r'=0 (image of physical infinity)
+    #   - nu = 1/mu, rho_e = 1/sigma -> 0 at r'=0
+    # The PDE is unchanged; only the constitutive coefficient is distorted.
+    #
     # r' = distance from exterior sphere center (kelvin_center)
+    # R = a_kelvin (sphere radius, same for both spheres)
     # All other domains: nu = nu0 (workpiece treated as air for SIBC)
     kx, ky, kz = kelvin_center
     nu_dict = {}
@@ -199,7 +232,7 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
             dy_k = y - ky
             dz_k = z - kz
             rp_sq = dx_k * dx_k + dy_k * dy_k + dz_k * dz_k + 1e-20
-            kelvin_fac = a_kelvin**2 / rp_sq  # (a/r')^2
+            kelvin_fac = rp_sq / a_kelvin**2  # (r'/R)^2
             nu_dict[m] = NU_0 * kelvin_fac
         else:
             nu_dict[m] = NU_0
@@ -212,7 +245,12 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     # ============================================================
     omega = 2 * math.pi * frequency
 
-    if impedance_model == "esim":
+    if sigma <= 0 or omega <= 0:
+        # DC or no conductor: pure inductance, no SIBC
+        Z_s = complex(0, 0)
+        esim = None
+        has_wp = False
+    elif impedance_model == "esim":
         esim = create_esim_solver(
             material=material, frequency=frequency, sigma=sigma,
             half_thickness=R_wp, geometry='cylinder', bh_file=bh_file)
@@ -235,13 +273,26 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     dirichlet_bnd = ""
     if "GND" in boundaries:
         dirichlet_bnd = "GND"
-    elif "outer" in boundaries:
+    elif not has_kelvin and "outer" in boundaries:
         dirichlet_bnd = "outer"
+    # 2-sphere Kelvin: Periodic BC handles far field, no Dirichlet on kelvin_ext.
+    # GND (vertex at kelvin sphere center) provides uniqueness if present.
 
-    base_fes = HCurl(mesh, order=fes_order, complex=True,
+    is_dc = (omega <= 0 or sigma <= 0)
+    # POLICY: nograds=True is REQUIRED for HCurl curl-curl at any order.
+    # Reference: NGSolve Maxwell tutorial unit-2.4
+    #   HCurl(mesh, order=p, dirichlet="outer", nograds=True)
+    # The HCurl high-order basis includes gradients of H1 basis functions
+    # which form the curl-curl gauge kernel. nograds=True removes them
+    # so the system is well-conditioned for any p (including p>=2).
+    # complex flag follows AC vs DC (eddy term needs complex arithmetic).
+    use_complex = not is_dc
+    base_fes = HCurl(mesh, order=fes_order,
+                     complex=use_complex,
+                     nograds=True,
                      dirichlet=dirichlet_bnd)
-    # Wrap with Periodic if Kelvin identification exists
-    if has_kelvin:
+    # 2-sphere Kelvin: Periodic BC couples interior and exterior sphere DOFs
+    if has_kelvin and has_kelvin_periodic:
         fes = Periodic(base_fes)
         _log("FES:Periodic HCurl (Kelvin)")
     else:
@@ -285,32 +336,99 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
         # System bilinear form
         a_bf = BilinearForm(fes)
         a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+        # Gauge regularization. nograds=True removes the H1 gradient
+        # subspace but residual harmonic forms (cohomology of nontrivial
+        # topology) still leave the curl-curl operator singular. Add a
+        # tiny mass term to fix the kernel.  This is needed in BOTH DC
+        # and AC mode unless an SIBC Robin term covers the air domain.
+        #
+        # IMPORTANT: in the Kelvin domain nu_cf = (r'/R)^2 * nu_0 vanishes
+        # near r'=0, so a constant NU_0 mass term would dominate the curl
+        # term there and corrupt the magnetic energy integral. Restrict the
+        # regularization to non-kelvin materials when Periodic Kelvin is on;
+        # otherwise apply it everywhere.
         if reg > 0:
-            a_bf += reg * NU_0 * u * v * dx  # gauge regularization
+            if has_kelvin and has_kelvin_periodic:
+                non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+                if non_kelvin_mats:
+                    a_bf += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
+            else:
+                a_bf += reg * NU_0 * u * v * dx
 
         if has_wp and abs(robin) > 0:
             a_bf += robin * u.Trace() * v.Trace() * ds(sibc_bnd)
 
         # Solver-specific setup
         if solver == "ams":
-            # Shifted preconditioner (AMS+COCR)
-            a_shifted = BilinearForm(fes)
-            a_shifted += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
-            a_shifted += shift_eps * NU_0 * u * v * dx  # shift for prec only
-            if reg > 0:
-                a_shifted += reg * NU_0 * u * v * dx
-            if has_wp and abs(robin) > 0:
-                a_shifted += robin * u.Trace() * v.Trace() * ds(sibc_bnd)
+            # Compact AMS preconditioner + COCR solver (AC eddy-current only).
+            # Reference: src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py
+            #
+            # Constraints:
+            #   - fes_order = 1 (CompactAMS auxiliary space is order-1 HCurl)
+            #   - nograds = True (H1 auxiliary space matches vertex count)
+            #   - AC mode (sigma > 0): AMS is designed for K + jw*sigma*M
+            #   - No Periodic BC (DOF dimensions don't match)
+            if fes_order > 1:
+                return {"error": f"solver=ams requires fes_order=1 (got {fes_order})"}
+            if is_dc:
+                return {"error": "solver=ams requires AC (frequency>0, sigma>0). "
+                                 "For DC use solver=bddc or pardiso."}
+            if has_kelvin and has_kelvin_periodic:
+                return {"error": "solver=ams is not supported with Periodic Kelvin BC."}
 
-            from ngsolve.la import CompactAMSPreconditioner, COCRSolver
-            pre_ams = CompactAMSPreconditioner(a_shifted, fes)
-            a_shifted.Assemble()
+            # Rebuild the system fes/bilinear form with nograds=True
+            # (overrides the use_complex code path which uses nograds=False)
+            import sparsesolv_ngsolve as ssn
+
+            fes_ams = HCurl(mesh, order=1, complex=True, nograds=True,
+                            dirichlet=dirichlet_bnd)
+            u_a, v_a = fes_ams.TnT()
+            a_bf = BilinearForm(fes_ams)
+            a_bf += nu_cf * curl(u_a) * curl(v_a) * dx(bonus_intorder=4)
+            a_bf += reg * NU_0 * u_a * v_a * dx
+            a_bf += 1j * omega * sigma * u_a * v_a * dx  # AC eddy term
+            if has_wp and abs(robin) > 0:
+                a_bf += robin * u_a.Trace() * v_a.Trace() * ds(sibc_bnd)
             a_bf.Assemble()
 
+            f_ams = LinearForm(fes_ams)
+            f_ams += J_source * v_a * dx("coil")
+            f_ams.Assemble()
+            f_lf = f_ams  # used by H_t evaluation later
+
+            # Real auxiliary fes for the AMS preconditioner
+            fes_real = HCurl(mesh, order=1, complex=False, nograds=True,
+                             dirichlet=dirichlet_bnd)
+            ur, vr = fes_real.TnT()
+            a_real = BilinearForm(fes_real)
+            a_real += nu_cf * curl(ur) * curl(vr) * dx(bonus_intorder=4)
+            a_real += shift_eps * NU_0 * ur * vr * dx
+            a_real += abs(omega) * sigma * ur * vr * dx
+            if has_wp and abs(robin) > 0:
+                a_real += abs(robin) * ur.Trace() * vr.Trace() * ds(sibc_bnd)
+            a_real.Assemble()
+
+            grad_mat, fes_h1 = fes_real.CreateGradient()
+            nv = mesh.nv
+            coord_x = [0.0] * nv; coord_y = [0.0] * nv; coord_z = [0.0] * nv
+            for i in range(nv):
+                pt = mesh.vertices[i].point
+                coord_x[i] = pt[0]; coord_y[i] = pt[1]; coord_z[i] = pt[2]
+
+            pre_ams = ssn.ComplexCompactAMSPreconditioner(
+                a_real_mat=a_real.mat, grad_mat=grad_mat,
+                freedofs=fes_real.FreeDofs(),
+                coord_x=coord_x, coord_y=coord_y, coord_z=coord_z,
+                ndof_complex=fes_ams.ndof, cycle_type=1, print_level=0)
+
+            gfu = GridFunction(fes_ams)
             with TaskManager():
-                cocr = COCRSolver(a_bf.mat, pre_ams, maxiter=500, tol=1e-8,
-                                  freedofs=fes.FreeDofs())
-                gfu.vec.data = cocr * f_lf.vec
+                cocr = ssn.COCRSolver(a_bf.mat, pre_ams,
+                                      freedofs=fes_ams.FreeDofs(),
+                                      maxiter=500, tol=1e-8, printrates=False)
+                gfu.vec.data = cocr * f_ams.vec
+            fes = fes_ams  # downstream code uses `fes`
+            _log(f"AMS:iters={cocr.iterations}")
         elif solver == "iccg":
             # Shifted ICCG (IC preconditioned CG, single-thread efficient)
             a_bf.Assemble()
@@ -345,10 +463,17 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
         # Tangential projection: |A_t|^2 = |A|^2 - (A . n)^2
         # n = specialcf.normal(3) = outward from mesh domain (air)
         #
-        # Energy-balance P: P_sibc = P_input - P_curlcurl
-        #   P_input = Re(int J . A* dV)  (volume integral, no BND issues)
-        #   P_curlcurl = int nu |curl(A)|^2 dV + reg*nu0*|A|^2 dV
-        if has_wp and abs(Z_s) > 0:
+        # Only meaningful when there is a workpiece. For the inductance-
+        # only path (no workpiece) the Karl loop already breaks at the
+        # esim-is-None check below; H_t_rms is not used downstream.
+        H_t_rms = None
+        if has_wp:
+            if not (abs(Z_s) > 0):
+                raise RuntimeError(
+                    "Z_s == 0 inside Karl iteration with workpiece present. "
+                    "This is an uninitialized state — check the SIBC setup "
+                    "(material, sigma, frequency, half-thickness, esim) "
+                    "before the iteration starts.")
             from ngsolve import specialcf
             n_bnd = specialcf.normal(3)
 
@@ -364,15 +489,11 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
             int_At2 = Integrate(At_sq, mesh, BND,
                                 definedon=wp_region).real
             At_rms = math.sqrt(max(int_At2, 0) / max(A_wp, 1e-30))
-            H_t_bnd = abs(1j * omega / Z_s) * At_rms
-
             # BND integral with tangential projection works for both approaches:
             #   Hole: single-side trace (air external boundary), fully correct
             #   Interface: tangential projection removes normal artifacts
             # Energy-balance is unreliable for interface (Robin leaks into workpiece)
-            H_t_rms = H_t_bnd
-        else:
-            H_t_rms = 5.0  # fallback
+            H_t_rms = abs(1j * omega / Z_s) * At_rms
 
         # Update Z_s
         Z_s_old = Z_s
@@ -385,11 +506,12 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
         history.append({
             'iteration': iteration,
             'Z_s_abs': abs(Z_s),
-            'H_t_rms': float(H_t_rms),
+            'H_t_rms': float(H_t_rms) if H_t_rms is not None else None,
             'dZ': float(dZ),
             't_solve': t_solve_iter,
         })
-        _log(f"ITER:{iteration} |Z_s|={abs(Z_s):.4e} H_t={H_t_rms:.2f} "
+        h_t_str = f"{H_t_rms:.2f}" if H_t_rms is not None else "n/a"
+        _log(f"ITER:{iteration} |Z_s|={abs(Z_s):.4e} H_t={h_t_str} "
              f"dZ={dZ:.4e} t={t_solve_iter:.1f}s")
 
         if dZ < tol and iteration > 0:
@@ -428,9 +550,13 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
 
             # Volume field: |B|
             curl_A = curl(gfu)
-            B_mag = sqrt(sum(curl_A[i].real * curl_A[i].real +
-                             curl_A[i].imag * curl_A[i].imag
-                             for i in range(3)))
+            if is_dc:
+                B_mag = sqrt(sum(curl_A[i] * curl_A[i]
+                                 for i in range(3)))
+            else:
+                B_mag = sqrt(sum(curl_A[i].real * curl_A[i].real +
+                                 curl_A[i].imag * curl_A[i].imag
+                                 for i in range(3)))
 
             post = GmshPostExport(mesh, boundary=False)
             # Compute per-vertex |B| values
@@ -449,14 +575,16 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
     # ============================================================
     # Step 8: Result JSON
     # ============================================================
-    delta_skin = math.sqrt(2.0 / (omega * MU_0 * (mu_r if esim is None else 100) * sigma)) if omega > 0 else 0
+    delta_skin = math.sqrt(2.0 / (omega * MU_0 * (mu_r if esim is None else 100) * sigma)) if (omega > 0 and sigma > 0) else 0
 
     result = {
         "P_total": float(P_total),
         "Q_total": float(Q_total),
         "L": float(L),
         "Z_s": str(Z_s),
-        "H_t_rms": float(H_t_rms),
+        # H_t_rms is None when there is no workpiece (coil-only run);
+        # serialize as null in JSON instead of crashing.
+        "H_t_rms": float(H_t_rms) if H_t_rms is not None else None,
         "delta": float(delta_skin),
         "ndof": ndof,
         "ne": ne,
@@ -476,10 +604,7 @@ def solve_fem(cub5_file="", vol_file="", order=2, fes_order=1,
 def main():
     parser = argparse.ArgumentParser(
         description="3D FEM-SIBC with source/sink + optional Kelvin")
-    parser.add_argument("--cub5", default="", help="Cubit .cub5 file")
-    parser.add_argument("--vol", default="", help="Netgen .vol file (skip Cubit)")
-    parser.add_argument("--order", type=int, default=2,
-                        help="Curve order (1-3)")
+    parser.add_argument("--vol", required=True, help="Netgen .vol file")
     parser.add_argument("--fes-order", type=int, default=1,
                         help="HCurl polynomial order (1-3)")
     parser.add_argument("--frequency", type=float, default=7000,
@@ -520,9 +645,7 @@ def main():
 
     def run(args):
         return solve_fem(
-            cub5_file=args.cub5,
             vol_file=args.vol,
-            order=args.order,
             fes_order=args.fes_order,
             frequency=args.frequency,
             sigma=args.sigma,
