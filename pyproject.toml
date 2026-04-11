@@ -83,6 +83,7 @@ radia-pcb = "radia.radia_pcb:main"
 radia = [
     "*.pyd", "*.ccm", "*.ccl", "*.png", "*.ico",
     "panels/samples/*.jou",
+    "panels/panel_registry.json",
     "CONVENTIONS.md",
 ]
 

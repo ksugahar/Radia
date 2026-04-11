@@ -351,24 +351,22 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
     dirichlet_bnd = "|".join(dir_parts) if dir_parts else ""
     _log(f"BC:dirichlet={dirichlet_bnd or '(none)'}")
 
-    # GND fallback: if Kelvin is present but no "GND" boundary,
-    # find the nearest mesh vertex to the Kelvin center and pin it.
-    # Omega-reduced (H1): Omega=0 at infinity (required for uniqueness)
-    # A-formulation (HCurl): not needed (gauge regularization handles it)
-    gnd_dof = None
-    if has_kelvin and "GND" not in boundaries and formulation == "omega":
-        kc = np.array(kelvin_center, dtype=float)
-        best_dist = 1e30
-        best_vnr = 0
-        for v in mesh.vertices:
-            pt = np.array(v.point)
-            d = np.linalg.norm(pt - kc)
-            if d < best_dist:
-                best_dist = d
-                best_vnr = v.nr
-        _log(f"GND:fallback vertex {best_vnr} at dist={best_dist:.6f}m "
-             f"from Kelvin center {kelvin_center}")
-        gnd_dof = best_vnr  # H1 vertex DOF index
+    # Omega-reduced (H1) on Kelvin requires a Dirichlet pin at the Kelvin
+    # center (= physical infinity in the transformed coordinates) for
+    # uniqueness. The .jou is contractually required to define this as a
+    # nodeset named "GND" on a vertex (or sideset on a tiny boundary).
+    # We do NOT auto-pick the nearest vertex — that result depends on the
+    # mesh and changes silently between regenerations.
+    if (has_kelvin and "GND" not in boundaries
+            and formulation == "omega"):
+        return {"error":
+                "Omega-reduced formulation with Kelvin transformation "
+                "requires a Dirichlet 'GND' label at the Kelvin center "
+                "(physical infinity). The .jou must define a nodeset "
+                "or sideset named 'GND' at the kelvin_center vertex. "
+                "Auto-picking the nearest vertex is disabled because "
+                "the choice depends on mesh discretization and would "
+                "give silently different results across re-meshes."}
 
     if formulation == "omega":
         base_fes = H1(mesh, order=fes_order, dirichlet=dirichlet_bnd)
@@ -390,23 +388,6 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
     u, v = fes.TnT()
     ndof = fes.ndof
     _log(f"FES:ndof={ndof}")
-
-    # Pin GND DOF if no boundary-based GND was available
-    if gnd_dof is not None and formulation == "omega":
-        from ngsolve import NodeId, VERTEX
-        try:
-            dofs = base_fes.GetDofNrs(NodeId(VERTEX, gnd_dof))
-            for d in dofs:
-                if d >= 0 and d < ndof:
-                    fd = fes.FreeDofs()
-                    fd.Clear(d)
-                    _log(f"GND:DOF {d} pinned (vertex {gnd_dof}, Omega=0)")
-        except Exception as e:
-            # Fallback: vertex nr == DOF nr (H1 order=1 only)
-            if gnd_dof < ndof:
-                fd = fes.FreeDofs()
-                fd.Clear(gnd_dof)
-                _log(f"GND:DOF {gnd_dof} pinned (fallback, {e})")
 
     use_direct = ndof < 200000
 

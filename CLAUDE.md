@@ -141,6 +141,47 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 **POLICY**: No `printf`/`cout`/`cerr` in C++ code for logging. All user-facing output through Python. Allowed: error messages via `Send.ErrorMessage(...)` and `#ifdef DEBUG_...` guards.
 
+### No Fallbacks — Fail Fast, Fail Loud
+
+**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.3, NGSolve 6.2.2603+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
+
+**Design philosophy**: this is the **fail-fast** principle (Jim Shore, 2004) combined with **"errors should never pass silently"** (PEP 20, Zen of Python) and **"explicit is better than implicit"**. The deeper rationale is *user agency*: a fallback path performs a computation the user did not ask for and cannot inspect. Silent fallback violates the **Principle of Least Astonishment** — the user gets a number, has no way to know which code path produced it, and trusts it. That trust is unrecoverable when the result turns out to be from the wrong path.
+
+**Erroring out is FAR better than silently producing a sloppy / wrong result.** Compare:
+
+| Behavior | What user sees | What user can do |
+|---|---|---|
+| Raise with available labels | "label 'src' not found; available: [source, sink, ...]" | Fix the .jou (the actual root cause) in 30 seconds |
+| Silent fuzzy match → wrong label | A plausible-looking number | Notice the bug 6 months later, after publishing |
+| Silent default constant (e.g. `H_t_rms = 5.0`) | A plausible-looking number | Never notice |
+
+The raise is a **feature**, not a defect.
+
+**Why fallbacks are harmful**:
+- They hide bugs. When the primary call silently fails, the fallback masks it; the next person sees "it works" and never learns the primary is broken.
+- They obscure intent. Readers cannot tell which path is the supported one.
+- They defeat root-cause debugging. The exception that would have pointed at the real problem gets swallowed.
+- They violate user agency. The user neither requested nor can audit the fallback path.
+- Wrong numbers from a fallback are worse than no numbers — they get put in papers and presentations.
+
+Note: the **Robustness Principle** ("be liberal in what you accept") is now widely regarded as harmful for both protocols and scientific code. Prefer **strict in what you accept**.
+
+**How to apply**:
+- Cubit Python: use `get_block_id_list()` / `get_sideset_id_list()` directly. Do NOT add `parse_cubit_list("sideset", "all")` as a fallback.
+- File loading: pick one format (e.g. `.vol`), not "try .vol, fall back to .cub5".
+- Solver: pick one preconditioner (e.g. CompactAMS), not "try AMS, fall back to BoomerAMG".
+- Surface mesh extraction: use the in-memory NGSolve extractor (`_extract_surface_mesh_filtered`), not "try in-memory, fall back to .vol-text rewrite".
+- Material/boundary lookup: if the expected label is missing, raise with the available label list — do not guess by case-insensitive prefix matching, kind-of-name fallback, or numeric→string fallback.
+- Numerical defaults: NEVER substitute a "reasonable-looking" constant (e.g. `H_t_rms = 5.0` if Karl iteration didn't converge). Raise.
+- GND/source identification: if the labelled GND vertex doesn't exist, raise. Do NOT pick "the closest vertex to the origin" as a substitute — it changes silently when the mesh is regenerated.
+- Periodic boundary identification: if the C++ identification path fails, raise with a clear message. Do NOT silently re-do the work in Python with different tolerances.
+
+**Allowed (these are not fallbacks)**:
+- A single `try/except` that converts a system error into a clean user message — but it must `raise` or `return {"error": ...}`, never silently try another path and continue.
+- Two-path code where the user **explicitly chose** the path (e.g. `--mode bem` vs `--mode fem`). The user is in control.
+- Optional features genuinely not needed for the result (e.g. "if matplotlib is installed, also save a PNG").
+- Default *parameter values* declared at the function signature — these are the user's contract, not a runtime fallback.
+
 ### Field Comparison: Vector Difference
 
 **POLICY**: Compare magnetic fields using **vector difference** `norm(B1 - B2)`, not scalar magnitude difference `abs(|B1| - |B2|)`. Magnetic field is a vector quantity.
@@ -273,6 +314,49 @@ block 1 name "mixed"           # boundary label LOST
 - Material: block (volume membership) > entity name > `volume_N`
 - Boundary: sideset > block (tri/face overlap) > entity name > `surface_N`
 - Edge (BBND): sideset on curve > entity name (TODO: SetCD2Name crashes, needs investigation)
+
+### Journal File Portability Policy
+
+**POLICY**: `.jou` and Cubit `.py` files MUST NOT hardcode entity IDs.
+Humans pick IDs by visual inspection in the GUI; LLMs and automation MUST
+identify entities from **geometric properties** (area, volume, centroid,
+distance) and material/sideset names.
+
+**Why**: IDs change between Cubit versions, after imprint/merge, after
+edit-rebuild cycles, and depending on operation order. Hardcoded IDs make
+scripts silently produce the wrong geometry (e.g., a 50% half-coil instead
+of a 355° gapped torus).
+
+**Guidelines**:
+- **No hardcoded volume/surface/curve/vertex IDs.** Use `cubit.get_last_id()`
+  immediately after the `create` call, then thread the variable through.
+- **Identify entities by geometric predicates**:
+  - "the surface whose area ≈ π·a²" -> coil gap face
+  - "the volume whose centroid x ≈ offset_x" -> Kelvin sphere
+  - "the surface adjacent to material 'kelvin'" -> Kelvin boundary
+- **Prefer named blocks/sidesets** over IDs in downstream commands
+  (`block 3 name "kelvin"` -> let the C++ exporter look up by name).
+- **C++ export plugin auto-detection**: Prefer boundary detection from
+  material topology (e.g., Kelvin inner/outer detected from block names
+  "air"/"kelvin") over manual sideset assignment.
+
+```python
+# CORRECT: capture IDs immediately, identify by geometry
+cubit.cmd('create surface curve 1')
+cubit.cmd('sweep surface 1 axis 0 0 0 0 0 1 angle 355')
+coil_vid = cubit.get_last_id("volume")
+cubit.cmd('block 1 add volume %d' % coil_vid)
+cubit.cmd('block 1 name "coil"')
+
+# CORRECT: detect gap faces by area
+A_gap = math.pi * a_coil**2
+gap_faces = [s for s in cubit.parse_cubit_list("surface", "in volume %d" % coil_vid)
+             if abs(cubit.surface(s).area() - A_gap) / A_gap < 0.05]
+
+# WRONG: hardcoded IDs
+block 1 add volume 1                # may be a half-coil after webcut!
+sideset 1 add surface 2             # surface 2 may not be the gap face
+```
 
 ---
 

@@ -1547,6 +1547,47 @@ project/
 3. **Use `cubit.init([''])` per case** if running standalone (not in GUI)
 4. **Format filenames with parameters** - enables post-processing automation
 5. **Graphics off for batch**: `cubit.cmd('set echo off')` and `-nographics -batch` flags
+
+## ID Identification Policy (IMPORTANT for LLM-generated scripts)
+
+**Humans pick entity IDs by visual inspection in the Cubit GUI. LLMs and
+automation MUST identify entities from geometric properties** (area, volume,
+centroid, distance from a known point) and from named blocks/sidesets.
+
+Hardcoded IDs are FRAGILE -- they break when:
+- Cubit version changes
+- Geometry creation order changes
+- imprint/merge reorders sub-entities
+- A `webcut` or `unite` step is added/removed
+
+```python
+# WRONG: hardcoded volume id
+cubit.cmd('block 1 add volume 1')   # vol 1 may be a half-coil after webcut
+
+# CORRECT: capture id immediately after create, then thread it through
+cubit.cmd('sweep surface 1 axis 0 0 0 0 0 1 angle 355')
+coil_vid = cubit.get_last_id("volume")
+cubit.cmd('block 1 add volume %d' % coil_vid)
+cubit.cmd('block 1 name "coil"')
+
+# CORRECT: identify gap faces by area
+A_gap = math.pi * a_coil**2
+gap_faces = [s for s in cubit.parse_cubit_list("surface", "in volume %d" % coil_vid)
+             if abs(cubit.surface(s).area() - A_gap) / A_gap < 0.05]
+
+# CORRECT: identify spheres by centroid
+for v in new_volumes:
+    cx = cubit.get_center_point("volume", v)[0]
+    if abs(cx - kelvin_offset) < R_kelvin:
+        kelvin_vol = v
+    else:
+        air_vol = v
+```
+
+Helper functions: `cubit.get_last_id("volume"|"surface"|"curve"|"vertex")`,
+`cubit.surface(sid).area()`, `cubit.volume(vid).volume()`,
+`cubit.get_center_point("surface"|"volume", id)`,
+`cubit.parse_cubit_list("surface", "in volume %d" % vid)`.
 """
 
 CUBIT_FORMAT_CONVERSION = """\
@@ -1707,40 +1748,168 @@ cubit.cmd('merge vol all')
 - **`create surface net from mapped surface`**: Reconstructs smooth geometry from mesh
 - **heal**: Repairs small gaps in reconstructed geometry
 - Use with NGSolve Kelvin CoefficientFunction for material property mapping
+
+## Modern 2-Sphere Workflow (Recommended)
+
+Instead of the Patran transform above, the preferred approach creates two
+identical spheres with `copy mesh surface` for 1:1 node correspondence.
+See `kelvin_transformation` MCP tool for the full NGSolve-side theory.
+
+### Step-by-step (Cubit journal)
+
+```python
+import cubit
+
+R = 0.060          # sphere radius [m]
+offset_x = 3 * R   # separation between sphere centers
+
+# 1. Create coil geometry (torus example)
+cubit.cmd('torus major {R_major} minor {R_minor}')
+# ... webcut to create gap for source/sink ...
+
+# 2. Create interior sphere at origin
+cubit.cmd(f'create sphere radius {R}')
+inner_vid = cubit.get_last_id("volume")
+
+# 3. Create exterior sphere (same R) at offset
+cubit.cmd(f'create sphere radius {R}')
+outer_vid = cubit.get_last_id("volume")
+cubit.cmd(f'move volume {outer_vid} x {offset_x} include_merged')
+
+# 4. Webcut BOTH spheres with same plane (create curves for copy mesh)
+cubit.cmd(f'webcut volume {inner_vid} with plane zplane')
+cubit.cmd(f'webcut volume {outer_vid} with plane zplane')
+
+# 5. Imprint + merge each pair of hemispheres (equator node sharing)
+# (inner pair)
+cubit.cmd(f'imprint volume {inner_top} {inner_bot}')
+cubit.cmd(f'merge volume {inner_top} {inner_bot}')
+# (outer pair)
+cubit.cmd(f'imprint volume {outer_top} {outer_bot}')
+cubit.cmd(f'merge volume {outer_top} {outer_bot}')
+
+# 6. Imprint coil with AIR sphere only (NOT Kelvin sphere)
+cubit.cmd(f'imprint volume {coil_vid} {inner_top} {inner_bot}')
+cubit.cmd(f'merge volume {coil_vid} {inner_top} {inner_bot}')
+
+# 7. Mesh hemisphere SURFACES first (required before copy mesh)
+for sid in inner_hemi_surfaces:
+    cubit.cmd(f'surface {sid} scheme trimesh')
+    cubit.cmd(f'surface {sid} size {mesh_size}')
+    cubit.cmd(f'mesh surface {sid}')
+
+# 8. Copy mesh surface: inner -> outer (1:1 node correspondence)
+for in_sid, out_sid, src_curve, src_vtx, tgt_curve, tgt_vtx in pairs:
+    cubit.cmd(f'copy mesh surface {in_sid} onto surface {out_sid} '
+              f'source curve {src_curve} source vertex {src_vtx} '
+              f'target curve {tgt_curve} target vertex {tgt_vtx}')
+
+# 9. Mesh all volumes
+cubit.cmd('volume all scheme tetmesh')
+cubit.cmd('mesh volume all')
+
+# 10. GND vertex at exterior sphere center (maps to physical infinity)
+#     Essential for H1 (scalar potential), optional for HCurl (vector potential)
+cubit.cmd(f'create vertex x {offset_x} y 0 z 0')
+gnd_vid = cubit.get_last_id("vertex")
+cubit.cmd(f'nodeset 100 add vertex {gnd_vid}')
+cubit.cmd(f'nodeset 100 name "GND"')
+
+# 11. Set blocks and sidesets
+cubit.cmd(f'block 1 add volume {coil_vid}')
+cubit.cmd(f'block 1 name "coil"')
+cubit.cmd(f'block 2 add volume {inner_top} {inner_bot}')
+cubit.cmd(f'block 2 name "air"')
+cubit.cmd(f'block 3 add volume {outer_top} {outer_bot}')
+cubit.cmd(f'block 3 name "kelvin"')
+# source/sink sidesets on coil gap faces
+cubit.cmd(f'sideset 1 add surface {source_sid}')
+cubit.cmd(f'sideset 1 name "source"')
+cubit.cmd(f'sideset 2 add surface {sink_sid}')
+cubit.cmd(f'sideset 2 name "sink"')
+
+# 12. Export (C++ writes periodic identification as translation)
+cubit.cmd(f'radia_export netgen "model.vol" order 2 overwrite')
+```
+
+### GND Vertex Details
+
+| Formulation | GND Required? | Why |
+|-------------|---------------|-----|
+| H1 (phi, Omega) | **Yes** | Uniqueness: scalar potential needs Dirichlet at infinity |
+| HCurl (A) | Optional | Gauge regularization `reg*nu0*u*v*dx` provides uniqueness |
+
+The GND vertex must be placed at the **center of the exterior (Kelvin) sphere**.
+In the transformed domain, r'=0 corresponds to physical infinity (r -> inf).
+Setting the field to zero there is physically correct.
+
+For HCurl, GND improves iterative solver convergence even though it is not
+strictly required for uniqueness. Recommended for production use.
+
+## Naming Convention Contract for IH/BEM (.jou ↔ calc scripts)
+
+**POLICY**: Labels live ONLY in the .jou. After .vol export, no label is
+passed at the GUI or calc-script level. The student verifies the .jou
+once; everything downstream uses defaults.
+
+| Entity | Required name | Used by |
+|--------|---------------|---------|
+| Coil terminal sideset (current in)  | `source` | calc_inductance.py default |
+| Coil terminal sideset (current out) | `sink`   | calc_inductance.py default |
+| Coil block                           | `coil`   | calc_inductance.py default (BEM filter) |
+| Workpiece block (optional)           | `workpiece` | calc_inductance.py / calc_heating_bem.py |
+| Air block (optional)                 | `air`    | (not used by BEM) |
+| Kelvin block (optional, FEM Kelvin)  | `kelvin` | calc_fem_kelvin.py |
+| GND nodeset (optional, H1 Kelvin)    | `GND`    | calc_fem_kelvin.py |
+
+```python
+# .jou template — names are FIXED, IDs are LOCAL
+cubit.cmd(f'block 1 add volume {coil_vid}')
+cubit.cmd('block 1 name "coil"')
+cubit.cmd(f'sideset 1 add surface {source_sid}')
+cubit.cmd('sideset 1 name "source"')   # MUST be "source"
+cubit.cmd(f'sideset 2 add surface {sink_sid}')
+cubit.cmd('sideset 2 name "sink"')     # MUST be "sink"
+```
+
+If calc_inductance.py reports "No boundary labels match source='source'",
+the .jou does not follow convention. Fix the .jou (not the GUI, not the
+calc script).
 """
 
 
 CUBIT_NGSOLVE_PANEL = """\
 # Cubit Panel Development: External Python + NGSolve
 
-## Architecture: Two-Process Model
+## Architecture: Two-Process Model (.vol Interface)
 
 Cubit panels that use NGSolve must run computation in an **external Python
-subprocess** because Cubit's bundled Python (3.10) does not have NGSolve.
+subprocess**. The `.vol` file is the **sole interface** between Cubit and
+NGSolve. `calc_*.py` scripts do NOT import cubit.
 
 ```
 Cubit GUI (bundled Python 3.10, has PyQt5)
   register_toolbar.py
     1. Qt dialog (modeless, non-blocking)
-    2. cubit.cmd('save cub5 "temp.cub5" overwrite')
-    3. QProcess.start(external_python, [calc_*.py, ...])
+    2. cubit.cmd('radia_export netgen "model.vol" order 2 overwrite')
+    3. QProcess.start(external_python, [calc_*.py, --vol model.vol, ...])
     4. QProcess.finished -> read JSON result file (--output)
     5. Update Qt dialog with results
 
 External Python (system Python 3.12, has NGSolve)
-  calc_volume.py / calc_surface.py / calc_inductance.py
-    1. Import NGSolve FIRST (before cubit)
-    2. Import cubit (suppress banner, -noinit)
-    3. cubit.cmd('open "temp.cub5"')
-    4. Compute (export_NGSolveCurvedMesh, BEM, etc.)
-    5. Write result to --output JSON file
+  calc_inductance.py / calc_fem_kelvin.py / calc_volume.py
+    1. from ngsolve import Mesh
+    2. mesh = Mesh("model.vol")  # labels + curving embedded in .vol
+    3. Compute (BEM, FEM, etc.)
+    4. Write result to --output JSON file
+    NOTE: NO cubit import. NO .cub5 handling.
 ```
 
 ## Critical Rules
 
-1. **NGSolve before cubit**: `from ngsolve import ...` MUST come before
-   `import cubit`. Cubit adds its site-packages (Python 3.10 numpy) to
-   sys.path, which conflicts with system Python 3.12 numpy.
+1. **calc_*.py must NOT import cubit**: The `.vol` file contains all mesh
+   data (material labels, boundary labels, high-order curving). Cubit is
+   only needed for mesh generation (in the GUI process), not for computation.
 
 2. **QProcess, not subprocess.run()**: subprocess.run() blocks the GUI thread,
    causing Cubit to freeze/crash. QProcess is non-blocking.
@@ -1757,14 +1926,8 @@ External Python (system Python 3.12, has NGSolve)
    action.triggered.connect(_show_dialog)
    ```
 
-4. **-noinit flag**: `cubit.init([..., "-noinit"])` prevents .cubit startup
-   file from being replayed when opening cub5 in external Python.
-
-5. **Suppress cubit banner**: `cubit.init()` outputs a large banner to
-   C-level stderr. Use `contextlib.redirect_stderr(io.StringIO())`.
-
-6. **JSON result via --output file**: Do NOT rely on stdout parsing.
-   cubit.cmd() pollutes C-level stdout. Use `--output result.json`:
+4. **JSON result via --output file**: Do NOT rely on stdout parsing.
+   Use `--output result.json`:
    ```python
    # calc_inductance.py
    parser.add_argument("--output", default="")
@@ -1779,10 +1942,7 @@ External Python (system Python 3.12, has NGSolve)
        data = json.load(f)
    ```
 
-7. **Cubit site-packages cleanup**: After `import cubit`, remove Cubit's
-   bundled site-packages from sys.path to avoid numpy/scipy conflicts.
-
-8. **startup.py encoding**: Use `exec(open(..., encoding="utf-8").read())`
+5. **startup.py encoding**: Use `exec(open(..., encoding="utf-8").read())`
    because Windows Japanese locale defaults to cp932. Never use non-ASCII
    characters (em dash, smart quotes, etc.) in register_toolbar.py.
 
@@ -2016,6 +2176,46 @@ unmerge all
 
 **Tip**: If you get "Body N needs to be split into a single volume body",
 run `split body N` before the Boolean operation.
+
+### CRITICAL: Imprint+Merge does NOT share surfaces between nested volumes
+
+If volume A is **fully nested inside** volume B (e.g. coil inside an air
+sphere), `imprint volume A B; merge volume A B` does **NOT** create a
+shared interface — Cubit reports `Consolidated 0 pair of surfaces`.
+
+The result is that the .vol file's FaceDescriptor for A's outer wall has
+`domin=A, domout=0` (treated as exterior boundary) instead of
+`domin=A, domout=B` (interface). FEM solvers then treat that wall as a
+PEC boundary rather than an internal interface and produce wrong results
+(observed: gapped torus FEM L = 94 nH instead of 88 nH).
+
+**Correct pattern**: use boolean SUBTRACT first to carve a cavity in the
+outer volume, then imprint+merge the resulting boundary:
+
+```python
+# WRONG: nested coil + air, just imprint+merge -> no shared surface
+cubit.cmd('create torus ...')           # vol 1 = coil
+cubit.cmd('create sphere radius 0.12')  # vol 2 = air
+cubit.cmd('imprint volume 1 2')         # nothing happens
+cubit.cmd('merge volume 1 2')           # Consolidated 0 pairs
+
+# RIGHT: subtract first
+cubit.cmd('create torus ...')           # vol 1 = coil
+cubit.cmd('create sphere radius 0.12')  # vol 2 = air
+cubit.cmd('subtract volume 1 from volume 2 keep_tool')
+# Now vol 2 has a coil-shaped hole; the new id may differ from 2
+all_vols = list(cubit.parse_cubit_list("volume", "all"))
+air_vid = [v for v in all_vols if v != 1][0]
+cubit.cmd(f'imprint volume 1 {air_vid}')
+cubit.cmd(f'merge volume 1 {air_vid}')   # Consolidated 3 pairs (correct!)
+```
+
+Verify with `Consolidated N pair of surfaces` (N > 0) in the merge log,
+or by checking that `cubit.get_relatives("surface", sid, "volume")`
+returns BOTH parent volumes for the shared surfaces.
+
+After Cubit -> .vol export, NGSolve should report `domin != 0` AND
+`domout != 0` for interface FDs.
 
 ## Webcut (Geometry Decomposition for Hex Meshing)
 
