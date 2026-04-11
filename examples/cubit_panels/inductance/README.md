@@ -70,6 +70,36 @@ Verified against NGSolve H1 FEM (p=4) as independent method (`verify_esim.py`):
 | Nonlinear Z_s (steel BH) | NGSolve H1 FEM + Picard | 0.78% | PASS |
 | H(z) profile | Analytical / FEM | < 0.2% | PASS |
 
+### Coupled BEM coil terminal Delta_L (2026-04-12)
+
+`src/radia/bem_coupled_solver.py::CoupledBEMSolver` computes the coil
+terminal inductance change due to a workpiece, with **per-DOF
+back-reaction RHS** (`f_back[i] = int v_i.Trace() . A_wp dS_coil`
+assembled via NGSolve LinearForm). The previous v1 implementation
+used a scalar rescale and produced wrong-signed Delta_L; the new
+version is sign-correct in both the Lenz screening and flux
+concentration regimes.
+
+**Validation**: independent FEM-Kelvin SIBC solve via
+`calc_fem_kelvin.py` on the same `radia_model.vol`.
+
+| Material | mu_r | f | L_BEM | L_FEM | diff |
+|---|---|---|---|---|---|
+| copper, sigma=5.8e7 | 1   | 50 kHz | **84.31 nH** | **84.56 nH** | **+0.29%** |
+| steel,  sigma=2e6   | 100 | 50 kHz | 87.92 nH | 89.43 nH | +1.72% |
+
+L_air (coil only) = 87.81 nH. Both methods report dL < 0 for copper
+(Lenz screening) and dL > 0 for steel (flux concentration in the
+ferromagnetic skin layer). The 0.3% agreement on copper is the
+strongest validation we have for the coupled BEM solver.
+
+Run the cross-check:
+```bash
+python compare_bem_coupled_vs_fem_kelvin.py
+```
+
+Background notes: `memory/bem_coupled_solver_existing.md`
+
 ## GMSH Visualization
 
 Results output as combined `inductance.geo` merging:
@@ -90,6 +120,7 @@ All views independently toggleable in GMSH Post-processing tree.
 | `inductance_torus.cub5` | Pre-built Cubit model |
 | `impedance_esim.py` | BEM coil + ESIM workpiece coupled analysis |
 | `verify_esim.py` | ESIM verification against analytical + NGSolve FEM |
+| **`compare_bem_coupled_vs_fem_kelvin.py`** | **Coupled BEM vs FEM-Kelvin SIBC cross-check (canonical regression record, 2026-04-12)** |
 
 ## Cubit Panel
 

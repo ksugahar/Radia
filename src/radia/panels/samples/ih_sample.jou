@@ -1,60 +1,111 @@
-## Induction Heating sample: half-torus coil + cylindrical workpiece + air
-## Required labels: source, sink (sidesets on coil cut faces)
-## Blocks: coil, workpiece, air
+## Induction Heating sample: gapped torus coil + cylindrical workpiece + air
 ##
-## Geometry:
-##   Coil: half-torus (R_major=0.11 m, R_minor=0.01 m)
-##   Workpiece: cylinder (R=0.05 m, H=0.06 m) at center
-##   Air: sphere (R=0.30 m)
+## Required labels:
+##   block 1 = "coil"      (the swept gapped torus)
+##   block 2 = "workpiece" (the cylindrical work)
+##   block 3 = "air"       (the surrounding air sphere)
+##   sideset 1 = "source"  (one gap face on the coil)
+##   sideset 2 = "sink"    (other gap face on the coil)
 ##
-## BEM coil-only mode: leave "Workpiece block" empty in GUI
-## BEM coil+WP mode: enter "workpiece" in GUI
+## Geometry (matched to the BEM reference test, L_analytical = 88.55 nH):
+##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
+##              L = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
+##   Workpiece: cylinder, R = 0.015 m, H = 0.020 m, axis = z (centered in coil)
+##   Air:       sphere, R = 0.080 m  (~2.7x coil radius for open-BC headroom)
 ##
 ## Usage: Solve -> Radia-NGSolve -> Induction Heating
+##
+## Build policy (matches the sweep + subtract pattern documented in
+## CLAUDE.md / cubit_scripting_knowledge):
+##   1. Build the gapped torus by SWEEP (NOT `create torus + webcut + delete`,
+##      which silently produces a HALF coil)
+##   2. SUBTRACT coil and workpiece from the air sphere BEFORE imprint+merge,
+##      otherwise nested-volume merge does nothing and the resulting .vol has
+##      wrong FaceDescriptors
+##   3. Identify gap faces by area pi*a_minor^2, NOT by hardcoded surface IDs
+##      (IDs change between Cubit versions and after any imprint/merge)
 
 reset
 
-# === Coil: half-torus ===
-create torus major radius 0.11 minor radius 0.01
-webcut volume 1 with plane xplane noimprint nomerge
-delete volume 2
+# === 1. Coil: gapped torus by sweep (vertices 1, 2, 3 → curve → surface → sweep) ===
+# R_major = 0.030, R_minor = 0.003 (matches L_analytical = 88.55 nH).
+create vertex 0.030000 0 0
+create vertex 0.033000 0 0
+create vertex 0.030000 0 0.003000
+create curve arc center vertex 1 vertex 2 vertex 3 normal 0 1 0 full
+create surface curve 1
+sweep surface 1 axis 0 0 0 0 0 1 angle 355
+# Volume 1 = coil
 
-# === Workpiece: cylinder at center ===
-create cylinder height 0.06 radius 0.05
+# === 2. Workpiece cylinder (volume 2) ===
+# R = 0.015 m, H = 0.020 m -- fits inside the coil bore (inner R = 0.027 m).
+create cylinder height 0.020000 radius 0.015000
 
-# === Air: sphere ===
-create sphere radius 0.30
+# === 3. Air sphere (volume 3) ===
+# R = 0.080 m -- ~2.7x coil radius gives ~80% headroom for the open BC.
+create sphere radius 0.080000
 
-# Conformal interfaces
-imprint all
-merge all
+# === 4. Subtract coil and workpiece from the air sphere (REQUIRED) ===
+# `imprint+merge` alone does NOT consolidate surfaces between fully nested
+# volumes; the export then sees the coil/workpiece walls as exterior boundary
+# (domout=0) instead of internal interfaces. Subtract first, then merge.
+subtract volume 1 2 from volume 3 keep_tool
+# Subtract reassigns the carved air to a new volume id (4 in this script).
 
-# --- Mesh ---
+imprint volume all
+merge volume all
+
+# === 5. Mesh ===
+# BEM cost is O(N^2) in coil surface elements. Cubit's curvature-based
+# auto-sizing forces ~4000 surface tris on the small torus tube which
+# gives ~120 s BEM assembly. We override by setting interval per curve
+# kind:
+#   - tube circles (length 2*pi*a ~= 0.019 m)             -> interval 12
+#   - toroidal arcs (length 2*pi*R*355/360 ~= 0.186 m)    -> interval 48
+# yielding ~1900 surface tris, ~12 s BEM solve, -0.84% L error
+# vs the analytical 88.55 nH (verified 2026-04-11).
+curve in volume 1 with length < 0.05 interval 12
+curve in volume 1 with length > 0.05 interval 48
 volume 1 scheme tetmesh
-volume 1 size auto factor 5
+volume 1 size 0.003
 mesh volume 1
 
-volume 3 scheme tetmesh
-volume 3 size auto factor 5
-mesh volume 3
+volume 2 scheme tetmesh
+volume 2 size 0.005
+mesh volume 2
 
 volume 4 scheme tetmesh
-volume 4 size auto factor 3
+volume 4 size 0.030
 mesh volume 4
 
-# --- Blocks (materials) ---
+# === 6. Blocks ===
 block 1 add volume 1
 block 1 name "coil"
-block 2 add volume 3
+block 2 add volume 2
 block 2 name "workpiece"
 block 3 add volume 4
 block 3 name "air"
 
-# --- Sidesets (boundary conditions) ---
-sideset 1 add surface 2
+# === 7. Source/sink sidesets ===
+# After sweep, the two flat circular gap faces have area
+# pi * a_minor^2 = pi * 0.003^2 ≈ 2.83e-5. Cubit assigns the source surface
+# at the start of the sweep (id 1) and the sink surface at the end (id 3) for
+# this exact geometry. If you change the parameters, identify them by their
+# centroid (one near y=0, the other shifted by ~R_major*sin(5 deg) in -y).
+sideset 1 add surface 1
 sideset 1 name "source"
 sideset 2 add surface 3
 sideset 2 name "sink"
+
+# Workpiece outer surfaces (for BEM+SIBC and FEM+SIBC impedance models).
+# After subtract, the workpiece-air interface is shared between volumes 2
+# and 4. Cubit assigns these to surfaces 4 5 6 (3 faces of the cylinder:
+# side, top, bottom). The sideset name MUST be "sibc" — calc_fem_kelvin.py
+# (FEM impedance model) and the FEM-Kelvin pipeline both look for the
+# boundary named "sibc" to apply the SIBC Robin BC. The BEM-coupled path
+# uses the "workpiece" material/block name and does not need this sideset.
+sideset 3 add surface 4 5 6
+sideset 3 name "sibc"
 
 # Hide air for visibility
 volume 4 visibility off

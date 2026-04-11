@@ -33,6 +33,95 @@ from calc_common import (setup_paths, MU_0, progress, calc_main,
                           create_esim_solver)
 
 
+def _extract_surface_mesh_filtered(vol_mesh, keep_label=""):
+    """Extract a clean 2D surface mesh containing only boundary elements
+    that touch the specified material.
+
+    Args:
+        vol_mesh: NGSolve Mesh (3D volume mesh)
+        keep_label: material name to keep (e.g. "coil"). If empty, keeps all.
+
+    Returns:
+        NGSolve Mesh (surface only, no orphan vertices, all boundary labels
+        renumbered consecutively).
+    """
+    from ngsolve import Mesh, BND, VOL
+    import netgen.meshing as ngm
+
+    # Determine which volume index corresponds to keep_label.
+    # An empty keep_label means "no filter" — extract all boundaries.
+    # A non-empty keep_label that does not match any material is an
+    # error: the caller asked us to filter by a label that does not
+    # exist, and silently switching to all-boundaries would produce a
+    # mesh containing the air sphere outer surface and other unrelated
+    # boundaries that ruin the BEM solve.
+    keep_dom = 0  # 0 = no filter
+    materials = vol_mesh.GetMaterials()
+    if keep_label:
+        for i, m in enumerate(materials, 1):
+            if m == keep_label:
+                keep_dom = i
+                break
+        if keep_dom == 0:
+            raise ValueError(
+                f"Surface mesh extractor: requested keep_label "
+                f"{keep_label!r} is not in the .vol's materials list "
+                f"({sorted(set(materials))}). Fix the .jou (block name) "
+                f"or pass an existing material name.")
+
+    ngmesh_new = ngm.Mesh(dim=3)
+    bnd_labels = list(vol_mesh.GetBoundaries())
+
+    # Pre-scan: which boundary labels actually have elements adjacent to keep_dom?
+    used_labels = []
+    label_to_fd = {}
+    for el in vol_mesh.Elements(BND):
+        if keep_dom > 0:
+            # Check FaceDescriptor's domin/domout for keep_dom adjacency
+            fd = vol_mesh.ngmesh.FaceDescriptor(el.index + 1)
+            if fd.domin != keep_dom and fd.domout != keep_dom:
+                continue
+        lbl = bnd_labels[el.index]
+        if lbl not in label_to_fd:
+            new_idx = len(used_labels) + 1
+            fd_new = ngm.FaceDescriptor(bc=new_idx)
+            fd_idx = ngmesh_new.Add(fd_new)
+            ngmesh_new.SetBCName(new_idx - 1, lbl)
+            label_to_fd[lbl] = fd_idx
+            used_labels.append(lbl)
+
+    if not used_labels:
+        # Material exists but has no adjacent boundary elements. The
+        # .vol is malformed (volume tagged but no surface elements).
+        raise ValueError(
+            f"Surface mesh extractor: material {keep_label!r} has no "
+            f"adjacent boundary elements. The .vol export is "
+            f"inconsistent — re-run the Cubit .jou and re-export.")
+
+    # Add boundary elements (and their vertices) for the filtered set.
+    old_to_new = {}
+    for el in vol_mesh.Elements(BND):
+        if keep_dom > 0:
+            fd = vol_mesh.ngmesh.FaceDescriptor(el.index + 1)
+            if fd.domin != keep_dom and fd.domout != keep_dom:
+                continue
+        lbl = bnd_labels[el.index]
+        fd_idx = label_to_fd.get(lbl)
+        if fd_idx is None:
+            continue
+        new_verts = []
+        for v in el.vertices:
+            if v.nr not in old_to_new:
+                pt = vol_mesh.vertices[v.nr].point
+                old_to_new[v.nr] = ngmesh_new.Add(
+                    ngm.MeshPoint(ngm.Pnt(pt[0], pt[1], pt[2])))
+            new_verts.append(old_to_new[v.nr])
+        se = ngm.Element2D(fd_idx, new_verts)
+        ngmesh_new.Add(se)
+
+    return Mesh(ngmesh_new)
+
+
 def _extract_surface_mesh(vol_mesh, order=2):
     """Extract a clean 2D surface mesh from a 3D volume mesh.
 
@@ -96,7 +185,9 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
                         half_thickness=0.010, esim_geometry="cylinder",
                         bh_file=None, impedance_model="esim", mu_r=None,
                         max_iter=15, tol=1e-3,
-                        msh_output=""):
+                        msh_output="",
+                        coil_vol="", coil_source="source", coil_sink="sink",
+                        coil_label="coil"):
     """BEM-SIBC workpiece eddy current from .vol file.
 
     Args:
@@ -128,12 +219,20 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
     omega = 2 * np.pi * frequency
     t_total_start = _time.perf_counter()
 
-    # === 1. Load mesh and extract surface ===
+    # === 1. Load mesh and extract workpiece surface ===
     progress("MESH", "Loading .vol file...")
-    mesh = Mesh(vol_file)
+    mesh_full = Mesh(vol_file)
 
-    if mesh.ne > 0:
-        mesh = _extract_surface_mesh(mesh, order=2)
+    if mesh_full.ne > 0:
+        # Try to extract the workpiece volume only — keeps the BEM problem
+        # to the conducting body, not the entire mesh boundary.
+        if wp_label and wp_label in mesh_full.GetMaterials():
+            mesh = _extract_surface_mesh_filtered(mesh_full,
+                                                  keep_label=wp_label)
+        else:
+            mesh = _extract_surface_mesh(mesh_full, order=2)
+    else:
+        mesh = mesh_full
 
     nse = mesh.GetNE(BND)
     nv = mesh.nv
@@ -162,9 +261,69 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
     node_coords = np.array([[mesh.vertices[i].point[j] for j in range(3)]
                             for i in range(mesh.nv)])
 
-    phi_inc_nodes = compute_phi_inc_from_loop(
-        node_coords, loop_center=[0, 0, 0], loop_radius=coil_radius,
-        current=coil_current, n_quad=30, gap_deg=gap_deg)
+    if coil_vol:
+        # --- Mesh coil path: BEM EFIE for J, then phi_inc from surface J ---
+        from bem_sibc_solver import compute_phi_inc_from_surface_J
+        from bem_inductance import compute_inductance_source_sink
+        from ngsolve import Mesh as NGSolveMesh
+        from ngsolve import Integrate, CF, BND
+
+        progress("COIL_BEM", f"Loading coil mesh: {coil_vol}")
+        coil_mesh_full = NGSolveMesh(coil_vol)
+        # Extract clean surface mesh (no orphan vertices) — coil only.
+        if coil_mesh_full.ne > 0:
+            coil_mesh = _extract_surface_mesh_filtered(
+                coil_mesh_full, keep_label=coil_label)
+        else:
+            coil_mesh = coil_mesh_full
+
+        progress("COIL_BEM",
+                 f"coil surface: nse={coil_mesh.GetNE(BND)}, nv={coil_mesh.nv}")
+
+        # Solve EFIE saddle point system for J on coil surface
+        sol_coil = compute_inductance_source_sink(
+            coil_mesh, coil_source, coil_sink, fes_order=0)
+        if 'error' in sol_coil:
+            return {"error": f"Coil BEM failed: {sol_coil['error']}"}
+
+        gf_J = sol_coil['gf_J']
+        L_coil = sol_coil['L']
+        progress("COIL_BEM",
+                 f"L_coil={L_coil*1e9:.2f} nH, n_J={sol_coil['n_J']}")
+
+        # Extract per-element J vector and area for compute_phi_inc_from_surface_J
+        elem_A = Integrate(CF(1), coil_mesh, VOL_or_BND=BND, element_wise=True)
+        elem_Jx = Integrate(gf_J[0], coil_mesh, VOL_or_BND=BND, element_wise=True)
+        elem_Jy = Integrate(gf_J[1], coil_mesh, VOL_or_BND=BND, element_wise=True)
+        elem_Jz = Integrate(gf_J[2], coil_mesh, VOL_or_BND=BND, element_wise=True)
+
+        centroids, areas, Jvecs = [], [], []
+        for el in coil_mesh.Elements(BND):
+            a = abs(elem_A[el.nr])
+            if a < 1e-30:
+                continue
+            jvec = np.array([elem_Jx[el.nr], elem_Jy[el.nr],
+                             elem_Jz[el.nr]]) / a
+            verts = [coil_mesh.vertices[v.nr].point for v in el.vertices]
+            c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+            centroids.append(c)
+            areas.append(a)
+            Jvecs.append(jvec)
+
+        centroids = np.array(centroids)
+        areas = np.array(areas)
+        Jvecs = np.array(Jvecs)
+        # Scale to physical current
+        Jvecs *= coil_current
+
+        progress("PHI_INC", f"computing from {len(centroids)} surface panels")
+        phi_inc_nodes = compute_phi_inc_from_surface_J(
+            node_coords, centroids, areas, Jvecs, n_quad=20)
+    else:
+        # --- Analytical loop path (original) ---
+        phi_inc_nodes = compute_phi_inc_from_loop(
+            node_coords, loop_center=[0, 0, 0], loop_radius=coil_radius,
+            current=coil_current, n_quad=30, gap_deg=gap_deg)
 
     t_phi = _time.perf_counter() - t0
     progress("PHI_INC", f"range=[{phi_inc_nodes.min():.4f}, "
@@ -389,6 +548,21 @@ def main():
                         help="GMSH output path")
     parser.add_argument("--output", default="",
                         help="JSON output file")
+    parser.add_argument("--coil-vol", default="",
+                        help="Optional coil mesh .vol file. When set, the "
+                             "coil current is solved from a BEM EFIE "
+                             "(source/sink saddle point) on the coil mesh "
+                             "and used as the source for phi_inc instead "
+                             "of the analytical loop. Coil shape can be "
+                             "arbitrary.")
+    parser.add_argument("--coil-source", default="source",
+                        help="Source boundary label on coil mesh "
+                             "(only used with --coil-vol)")
+    parser.add_argument("--coil-sink", default="sink",
+                        help="Sink boundary label on coil mesh")
+    parser.add_argument("--coil-label", default="coil",
+                        help="Material name of the coil volume "
+                             "(used to extract coil-only surface mesh)")
 
     def run(args):
         return compute_heating_bem(
@@ -409,6 +583,10 @@ def main():
             max_iter=args.max_iter,
             tol=args.tol,
             msh_output=args.msh_output,
+            coil_vol=args.coil_vol,
+            coil_source=args.coil_source,
+            coil_sink=args.coil_sink,
+            coil_label=args.coil_label,
         )
 
     calc_main(run, parser)
