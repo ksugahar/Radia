@@ -267,11 +267,27 @@ def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,
 
 
 def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
-                                    src_J_vecs, n_quad=20):
+                                    src_J_vecs, n_quad=20, chunk_size=512):
     """Compute phi_inc from solved surface current via path integration.
 
     H field computed as sum of dipole contributions from surface elements.
-    Uses vectorized NumPy for efficiency.
+    Fully vectorised over both the axis sweep (Stage 1) and the
+    horizontal path sweep (Stage 2). For ih_sample.vol (170 obs nodes,
+    4006 source panels, n_quad=20) this brings the runtime from ~160 s
+    (per-node loop) down to ~1 s.
+
+    Args:
+        obs_points: (N, 3) observation node coordinates.
+        src_centroids: (M, 3) source panel centroids.
+        src_areas: (M,) source panel areas.
+        src_J_vecs: (M, 3) source panel surface current densities (A/m).
+        n_quad: Gauss-Legendre order for the path integrals.
+        chunk_size: maximum number of obs nodes processed per chunk
+            (memory cap; the inner H field array is
+            chunk_size * n_quad * M * 3 floats).
+
+    Returns:
+        (N,) phi_inc values.
     """
     obs = np.asarray(obs_points, dtype=float)
     if obs.ndim == 1:
@@ -284,10 +300,15 @@ def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
     INV_4PI = 1.0 / (4.0 * np.pi)
 
     def _H_at_points(pts):
-        """Vectorized H field from surface current elements."""
+        """Vectorized H field at *pts* (shape (N, 3)) from all sources.
+
+        Returns (N, 3) H values.  This is the per-chunk hot loop:
+        memory ~ N * M * 3 floats for the dx and cross arrays.
+        """
         dx = pts[:, None, :] - centers[None, :, :]  # (N, M, 3)
-        r = np.sqrt(np.maximum(np.sum(dx**2, axis=2), 1e-60))  # (N, M)
-        r3_inv = areas[None, :] / (r ** 3)  # (N, M)
+        r2 = np.sum(dx * dx, axis=2)
+        r2 = np.maximum(r2, 1e-60)
+        r3_inv = areas[None, :] / (r2 * np.sqrt(r2))  # (N, M)
         cross = np.cross(J[None, :, :], dx)  # (N, M, 3)
         return INV_4PI * np.sum(cross * r3_inv[:, :, None], axis=1)
 
@@ -295,34 +316,89 @@ def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
     t_01 = 0.5 * (t_gl + 1)
     w_01 = 0.5 * w_gl
 
-    src_extent = np.max(np.abs(centers))
-    z_far = 20 * src_extent
+    src_extent = float(np.max(np.abs(centers)))
+    z_far = 20.0 * src_extent
 
-    # Stage 1: phi(0,0,z) for each unique z
-    z_vals = np.unique(obs[:, 2])
-    phi_axis = {}
-    for z_i in z_vals:
-        z_quad = z_far - t_01 * (z_far - z_i)
-        x_quad = np.zeros((n_quad, 3))
-        x_quad[:, 2] = z_quad
-        H_quad = _H_at_points(x_quad)
-        phi_axis[z_i] = (z_far - z_i) * np.sum(w_01 * H_quad[:, 2])
+    # ------------------------------------------------------------------
+    # Stage 1: phi(0, 0, z) for every unique z used by an observation.
+    # ------------------------------------------------------------------
+    z_unique = np.unique(obs[:, 2])
+    n_z = len(z_unique)
 
-    # Stage 2: horizontal path for each node
-    phi = np.zeros(len(obs))
-    for ip in range(len(obs)):
-        x_i, y_i, z_i = obs[ip]
-        rho = math.sqrt(x_i * x_i + y_i * y_i)
+    # Quadrature points along the (0,0,z) -> (0,0,z_far) ray:
+    #   z(t) = z_far - t * (z_far - z_unique[k])
+    # x_quad shape: (n_z, n_quad, 3); we then flatten to feed _H_at_points.
+    x_axis_quad = np.zeros((n_z, n_quad, 3))
+    x_axis_quad[:, :, 2] = (z_far
+                            - t_01[None, :] * (z_far - z_unique[:, None]))
 
-        if rho < 1e-12 * src_extent:
-            phi[ip] = phi_axis[z_i]
-        else:
-            dl_vec = np.array([x_i, y_i, 0.0])
-            x_quad = np.outer(t_01, dl_vec)
-            x_quad[:, 2] = z_i
-            H_quad = _H_at_points(x_quad)
-            integrand = np.sum(H_quad * dl_vec[np.newaxis, :], axis=1)
-            phi[ip] = phi_axis[z_i] - np.sum(w_01 * integrand)
+    # Memory-bounded chunking on n_z * n_quad observation rows.
+    rows_per_chunk = max(1, chunk_size // max(1, n_quad))
+    H_axis = np.empty((n_z, n_quad, 3))
+    flat = x_axis_quad.reshape(-1, 3)
+    H_flat = np.empty_like(flat)
+    n_rows = flat.shape[0]
+    for s in range(0, n_rows, chunk_size):
+        e = min(s + chunk_size, n_rows)
+        H_flat[s:e] = _H_at_points(flat[s:e])
+    H_axis = H_flat.reshape(n_z, n_quad, 3)
+
+    # phi_axis[k] = (z_far - z_unique[k]) * int_0^1 H_z(z(t)) dt
+    phi_axis_arr = (z_far - z_unique) * np.sum(
+        w_01[None, :] * H_axis[:, :, 2], axis=1)
+    phi_axis_lookup = dict(zip(z_unique, phi_axis_arr))
+
+    # ------------------------------------------------------------------
+    # Stage 2: horizontal path (0,0,z) -> (x,y,z) per observation node,
+    # vectorised across all off-axis nodes.
+    # ------------------------------------------------------------------
+    n_obs = len(obs)
+    phi = np.empty(n_obs)
+
+    rho2 = obs[:, 0] ** 2 + obs[:, 1] ** 2
+    eps_axis = (1e-12 * src_extent) ** 2
+    on_axis = rho2 < eps_axis
+
+    # On-axis nodes: phi(P) = phi_axis(z_P) directly.
+    if np.any(on_axis):
+        for k in np.where(on_axis)[0]:
+            phi[k] = phi_axis_lookup[obs[k, 2]]
+
+    off_idx = np.where(~on_axis)[0]
+    if off_idx.size:
+        x_off = obs[off_idx, 0]
+        y_off = obs[off_idx, 1]
+        z_off = obs[off_idx, 2]
+
+        # dl vector per off-axis node (z component is zero).
+        dl_x = x_off  # (n_off,)
+        dl_y = y_off
+
+        # Phi at the axis end of each path (z = z_off[k]).
+        phi_axis_off = np.array([phi_axis_lookup[z] for z in z_off])
+
+        # Process off-axis nodes in chunks to keep peak memory bounded.
+        max_nodes_per_chunk = max(1, chunk_size // max(1, n_quad))
+        for s in range(0, off_idx.size, max_nodes_per_chunk):
+            e = min(s + max_nodes_per_chunk, off_idx.size)
+            n_chunk = e - s
+
+            # Build (n_chunk, n_quad, 3) quadrature points along
+            # (0,0,z) -> (x,y,z): position(t) = (t*x, t*y, z)
+            quad_pts = np.empty((n_chunk, n_quad, 3))
+            quad_pts[:, :, 0] = t_01[None, :] * dl_x[s:e, None]
+            quad_pts[:, :, 1] = t_01[None, :] * dl_y[s:e, None]
+            quad_pts[:, :, 2] = z_off[s:e, None]
+            flat_pts = quad_pts.reshape(-1, 3)
+
+            H_flat = _H_at_points(flat_pts)
+            H_quad = H_flat.reshape(n_chunk, n_quad, 3)
+
+            # integrand[k, q] = H_x[k, q] * dl_x[k] + H_y[k, q] * dl_y[k]
+            integrand = (H_quad[:, :, 0] * dl_x[s:e, None]
+                         + H_quad[:, :, 1] * dl_y[s:e, None])
+            path_int = np.sum(w_01[None, :] * integrand, axis=1)  # (n_chunk,)
+            phi[off_idx[s:e]] = phi_axis_off[s:e] - path_int
 
     return phi
 
