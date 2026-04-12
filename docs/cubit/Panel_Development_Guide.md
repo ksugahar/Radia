@@ -6,7 +6,7 @@ How to add a new solver panel to the Radia Cubit Solve menu.
 
 ```
 Solve (Python, register_toolbar.py):
-  Radia-NGSolve...     -> save .cub5, launch standalone app
+  Radia-NGSolve...     -> export .vol, launch standalone app
   Generate Coil...     -> CoilBuilder script -> STEP -> import
   --------
   Reload Panels        -> re-read register_toolbar.py (debug)
@@ -17,6 +17,7 @@ Solve (Python, register_toolbar.py):
 - **ASCII only** in all .py files loaded by Cubit (cp932 Japanese Windows)
 - **Import QMenu** if using submenus (PySide6.QtWidgets / PyQt5.QtWidgets)
 - **No Qt in calc_*.py** -- subprocess scripts must not import PySide6/PyQt5
+- **No cubit import in calc_*.py** -- .vol file is the sole interface
 - startup.py uses `encoding='utf-8'` for reading register_toolbar.py
 
 ## Architecture
@@ -26,19 +27,22 @@ register_toolbar.py (Cubit GUI Python, Qt)
   |
   |-- YourDialog(QDialog)
   |     1. Display UI (Qt widgets)
-  |     2. cubit.cmd('save cub5 "temp.cub5"')
-  |     3. QProcess -> [external_python, calc_your.py, --cub5, ...]
+  |     2. cubit.cmd('radia_export netgen "model.vol" order 2 overwrite')
+  |     3. QProcess -> [external_python, calc_your.py, --vol model.vol, ...]
   |     4. Parse JSON result
   |     5. Display result in dialog
   |
   v
-calc_your.py (External Python, NO Qt)
-  |-- from calc_common import setup_cubit, export_mesh, calc_main, progress
-  |-- def solve_your(args): ... return dict
+calc_your.py (External Python, NO Qt, NO cubit)
+  |-- from calc_common import setup_paths, calc_main, progress, MU_0
+  |-- def solve_your(vol_file, ...): ... return dict
   |-- calc_main(solve_your, parser)
 ```
 
-**Key rule**: `calc_*.py` runs in external Python (with NGSolve). It must NOT import Qt.
+**Key rules**:
+- `calc_*.py` runs in external Python (with NGSolve). It must NOT import Qt.
+- `calc_*.py` must NOT import cubit. The `.vol` file is the sole interface.
+- Mesh curving is done at export time (`radia_export netgen ... order N`).
 
 ## Step-by-Step: Adding a New Panel
 
@@ -48,10 +52,10 @@ calc_your.py (External Python, NO Qt)
 """
 Your solver description.
 
-Called as subprocess:
-    python calc_your.py --cub5 model.cub5 --order 2 --param1 value
+Usage:
+    python calc_your.py --vol model.vol --param1 value
 
-IMPORTANT: NGSolve must be imported BEFORE cubit.
+Outputs JSON to stdout.
 """
 
 import argparse
@@ -63,29 +67,31 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import (setup_cubit, export_mesh, progress, calc_main,
-                          MU_0, NU_0)
+from calc_common import (setup_paths, progress, calc_main, MU_0, NU_0)
 
 
-def solve_your(cub5_file, order=2, param1=1.0):
+def solve_your(vol_file, param1=1.0):
     """Your solver.
+
+    Args:
+        vol_file: Netgen .vol file with material/boundary labels.
 
     Returns:
         dict with result keys
     """
-    # 1. Import NGSolve FIRST
-    from ngsolve import Integrate, CF, BND
+    from ngsolve import Mesh, Integrate, CF, BND
 
-    # 2. Load Cubit model
-    cubit = setup_cubit(cub5_file)
-    mesh = export_mesh(cubit, order=order)
+    setup_paths()
+
+    # 1. Load mesh from .vol (labels embedded by radia_export netgen)
+    mesh = Mesh(vol_file)
     progress("MESH", f"{mesh.GetNE()} elements")
 
-    # 3. Solve
+    # 2. Solve
     progress("SOLVE", "starting...")
     result_value = 42.0  # your computation
 
-    # 4. Return JSON-serializable dict
+    # 3. Return JSON-serializable dict
     return {
         "result": result_value,
         "n_elements": mesh.GetNE(),
@@ -94,13 +100,12 @@ def solve_your(cub5_file, order=2, param1=1.0):
 
 def main():
     parser = argparse.ArgumentParser(description="Your solver")
-    parser.add_argument("--cub5", required=True, help="Cubit .cub5 file")
-    parser.add_argument("--order", type=int, default=2, help="Curve order")
+    parser.add_argument("--vol", required=True, help="Netgen .vol file")
     parser.add_argument("--param1", type=float, default=1.0, help="Parameter")
     parser.add_argument("--output", default="", help="JSON output file")
 
     def run(args):
-        return solve_your(args.cub5, args.order, args.param1)
+        return solve_your(args.vol, args.param1)
 
     calc_main(run, parser)
 
@@ -139,10 +144,10 @@ class YourDialog(QDialog):
         self.solve_btn.setEnabled(False)
         self.solve_btn.setText("Solving...")
 
-        # Save Cubit model to temp file
+        # Export mesh to .vol (curving done here, at export time)
         tmpdir = tempfile.mkdtemp(prefix="radia_your_")
-        cub5_file = os.path.join(tmpdir, "model.cub5").replace("\\", "/")
-        cubit.cmd(f'save cub5 "{cub5_file}" overwrite')
+        vol_file = os.path.join(tmpdir, "model.vol").replace("\\", "/")
+        cubit.cmd(f'radia_export netgen "{vol_file}" order 2 overwrite')
 
         # JSON output file
         self._result_json = os.path.join(tmpdir, "result.json").replace("\\", "/")
@@ -150,8 +155,7 @@ class YourDialog(QDialog):
         calc_script = os.path.join(_this_dir, "calc_your.py")
         args = [
             calc_script,
-            "--cub5", cub5_file,
-            "--order", str(self.order_spin.value()),
+            "--vol", vol_file,
             "--output", self._result_json,
         ]
 
@@ -252,6 +256,7 @@ Cubit blocks map to NGSolve boundary/material labels. Use these standard names:
 | `kelvin_int` | Interior Kelvin sphere surface | Auto-created |
 | `kelvin_ext` | Exterior Kelvin sphere surface | Auto-created |
 | `outer` | Outer boundary (far field) | Auto-created |
+| `GND` | Dirichlet at infinity (vertex at Kelvin center) | Optional (HCurl), Essential (H1) |
 
 *source/sink: Required for T0 technique. Without them, J_theta fallback is used (axisymmetric torus only).
 
@@ -262,6 +267,8 @@ The panel dialog auto-creates these blocks when "Run Journal" or "Add Kelvin" is
 - **wp_surface**: Shared faces between workpiece and air volumes
 - **kelvin_int/kelvin_ext**: Interior/exterior Kelvin sphere surfaces
 - **outer**: Free surfaces on air or kelvin volumes
+- **GND**: Vertex at exterior Kelvin sphere center (maps to physical infinity).
+  Essential for H1 (scalar potential), optional for HCurl (gauge reg suffices).
 
 ### Naming Rules
 

@@ -45,6 +45,7 @@ public slots:
   void export_femeem();
   void export_meg();
   void mesh_volume();
+  void launch_radia_ngsolve();
 };
 
 //! Export options dialog.

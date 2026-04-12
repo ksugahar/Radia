@@ -565,13 +565,11 @@ def solve_fem(vol_file="", fes_order=1,
     _log(f"DONE:P={P_total:.4e} L={L*1e9:.2f}nH t={t_total:.1f}s")
 
     # ============================================================
-    # Step 7: GMSH export — B vector + J vector + companion .geo
+    # Step 7: GMSH export — B vector + J vector + companion .msh.opt
     # ============================================================
     # Match the BEM viz convention: VECTORS only (GMSH shows the
-    # magnitude under the vector view automatically), and a
-    # companion .geo that hides the volume mesh elements so the
-    # arrows are visible against an empty background instead of
-    # the all-black sphere of internal triangles.
+    # magnitude under the vector view automatically). The companion
+    # .msh.opt hides volume mesh elements so arrows are visible.
     gmsh_file = ""
     if msh_output:
         _log("GMSH:start")
@@ -630,38 +628,12 @@ def solve_fem(vol_file="", fes_order=1,
             post.write(msh_output)
             _log(f"GMSH:wrote {os.path.basename(msh_output)}")
 
-            # Companion .geo: hide the volume mesh elements and
-            # render both views as 3D arrows. The user opens this
-            # .geo from the panel's "Open GMSH" button, which Merges
-            # the .msh and applies the display options below.
-            # Companion .geo restored from v3.6.1 "beautiful" version
-            # (commit 5e0b69c, 2026-03-23). The KEY display option is
-            # ``ArrowSizeMin = ArrowSizeMax = 20`` — without a fixed
-            # arrow size GMSH's auto-scale picks ~3 pixel arrows that
-            # disappear against any mesh background. Hard-coding 20
-            # pixels is what made the past visualization look "kirei".
-            geo_file = os.path.splitext(msh_output)[0] + ".geo"
-            with open(geo_file, "w", encoding="utf-8") as f:
-                f.write(f'Merge "{os.path.basename(msh_output)}";\n')
-                f.write('Mesh.NumSubEdges = 4;\n')
-                # NOTE: Mesh.Volumes does NOT exist in GMSH 4.x.
-                # Use VolumeEdges + VolumeFaces instead.
-                f.write('Mesh.VolumeEdges = 0;\n')
-                f.write('Mesh.VolumeFaces = 0;\n')
-                f.write('Mesh.SurfaceEdges = 0;\n')
-                f.write('Mesh.SurfaceFaces = 0;\n')
-                # B view (View[0]): 3D arrows, fixed visible size
-                f.write('View[0].VectorType = 4;\n')
-                f.write('View[0].IntervalsType = 3;\n')
-                f.write('View[0].ArrowSizeMin = 20;\n')
-                f.write('View[0].ArrowSizeMax = 20;\n')
-                # J view (View[1]): 3D arrows, fixed visible size
-                f.write('View[1].VectorType = 4;\n')
-                f.write('View[1].IntervalsType = 3;\n')
-                f.write('View[1].ArrowSizeMin = 20;\n')
-                f.write('View[1].ArrowSizeMax = 20;\n')
-            _log(f"GMSH:wrote {os.path.basename(geo_file)}")
-            gmsh_file = geo_file
+            # Companion .msh.opt: GMSH auto-loads this when opening
+            # the .msh. Replaces the old .geo companion approach.
+            from gmsh_post_export import write_companion_opt
+            opt_file = write_companion_opt(msh_output, n_vector_views=2)
+            _log(f"GMSH:wrote {os.path.basename(opt_file)}")
+            gmsh_file = msh_output
         except Exception as e:
             import traceback
             tb_text = traceback.format_exc()
