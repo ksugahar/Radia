@@ -70,12 +70,16 @@ Optional: (none) -- uses FastHenry .inp, not .vol labels
 Each radia_*.py MUST have a corresponding sample in `panels/samples/`:
 
 ```
-radia_ih.py  -> panels/samples/ih_sample.jou
+radia_ih.py  -> panels/samples/ih_bem_sample.jou         (BEM: surface mesh, small air)
+                panels/samples/ih_fem_sample.jou         (FEM: volume mesh, large air Dirichlet)
+                panels/samples/ih_fem_kelvin_sample.jou  (FEM + Kelvin shell, exact open BC)
 radia_em.py  -> panels/samples/em_sample.jou
 radia_pcb.py -> panels/samples/pcb_sample.jou
 ```
 
-Naming: {stem}_sample.jou where stem is the part after radia_ in the filename.
+Naming: {stem}_sample.jou where stem is the part after radia_ in the filename. A
+single radia_*.py panel may ship multiple samples when distinct solver methods
+need different mesh strategies — radia_ih ships three (BEM, FEM Dirichlet, FEM Kelvin).
 
 Samples are packaged with pip install radia and serve as:
 - Default working folder for the launcher

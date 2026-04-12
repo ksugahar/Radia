@@ -501,7 +501,7 @@ of the analytical reference because vertex averaging in
 a known limitation; the right fix is a 1-ring vertex expansion or
 analytic Frenet-Serret / shape-operator approach.
 
-**ih_sample.jou** workpiece changed from cylinder to sphere
+**ih_bem_sample.jou** workpiece changed from cylinder to sphere
 (R=10mm). The cylinder is locally cylindrical everywhere so per-
 panel had no visible effect. With a sphere, the per-node coupled
 BEM gives a coil-terminal dL that is **10x smaller** than the
@@ -549,7 +549,7 @@ averaging on the production code path.
 
 The coupled BEM was independently validated against the FEM-Kelvin
 SIBC pipeline (`calc_fem_kelvin.py --impedance sibc`) on the same
-`radia_model.vol` from `ih_sample.jou`:
+`radia_model.vol` from `ih_bem_sample.jou`:
 
 | Material | mu_r | f      | L_BEM     | L_FEM     | diff      |
 |----------|------|--------|-----------|-----------|-----------|

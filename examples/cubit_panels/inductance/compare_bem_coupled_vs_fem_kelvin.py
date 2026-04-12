@@ -16,7 +16,7 @@ Two material cases are exercised:
      -> Both methods should produce a positive dL
 
 The .vol file is the standard IH sample
-(``src/radia/panels/samples/ih_sample.jou`` -> ``radia_model.vol``)
+(``src/radia/panels/samples/ih_bem_sample.jou`` -> ``radia_model.vol``)
 which has block ``coil`` (the swept gapped torus), block ``workpiece``
 (the cylinder), block ``air`` (the sphere shell), and the boundary
 ``sibc`` on the coil-side workpiece interface (required by FEM-Kelvin).
@@ -162,7 +162,7 @@ def main():
             f"radia_model.vol not found at {VOL_PATH}.\n"
             f"Run the IH sample .jou first:\n"
             f'  coreform_cubit -batch -nographics -nojournal '
-            f'src/radia/panels/samples/ih_sample.jou')
+            f'src/radia/panels/samples/ih_bem_sample.jou')
 
     print("=" * 65)
     print("BEM coupled vs FEM-Kelvin SIBC cross-check")
