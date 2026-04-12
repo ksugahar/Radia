@@ -1649,9 +1649,14 @@ def register_menu():
     solve_menu.addSeparator()
 
     def _reload_panels():
-        cubit.cmd("reset")
+        # Re-execute startup.py after a QTimer delay so the current
+        # Qt event handler returns cleanly before the script re-runs.
+        # Do NOT call cubit.cmd("reset") — it destroys the loaded
+        # model and can crash Cubit's Python state.
+        from PySide6.QtCore import QTimer
         startup = os.path.join(_this_dir, "startup.py").replace("\\", "/")
-        cubit.cmd('play "' + startup + '"')
+        _panel_log("Reload Panels: scheduling re-play via QTimer")
+        QTimer.singleShot(200, lambda: cubit.cmd('play "' + startup + '"'))
     action_reload = QAction("Reload Panels", main_window)
     action_reload.setStatusTip("Re-read register_toolbar.py from disk (debug)")
     action_reload.triggered.connect(_reload_panels)
