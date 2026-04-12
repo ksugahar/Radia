@@ -704,10 +704,12 @@ void RadiaMenuHandler::mesh_volume()
   // GMSH order 4-5 is an error (NetgenCurver face/volume interior node
   // extraction is unreliable at p>=4).  Use radia_export netgen for p>=4.
   struct FmtSpec { const char *name; const char *ext; const char *cmd; int maxOrd; };
+  int gmshMaxOrd = maxOrder < 3 ? maxOrder : 3;
+  int bdfMaxOrd  = maxOrder < 2 ? maxOrder : 2;
   FmtSpec fmts[] = {
-    {"gmsh",    "msh", "radia_export gmsh",    std::min(maxOrder, 3)},
-    {"nastran", "bdf", "radia_export nastran",  std::min(maxOrder, 2)},
-    {"vtk",     "vtk", "radia_export vtk",      std::min(maxOrder, 2)},
+    {"gmsh",    "msh", "radia_export gmsh",    gmshMaxOrd},
+    {"nastran", "bdf", "radia_export nastran",  bdfMaxOrd},
+    {"vtk",     "vtk", "radia_export vtk",      bdfMaxOrd},
   };
   for (auto &fmt : fmts) {
     for (int p = 1; p <= fmt.maxOrd; p++) {
