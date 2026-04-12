@@ -1659,15 +1659,17 @@ def register_menu():
 
     # --- Sub 5: Verify Deploy (debug) ---
     def _verify_deploy():
-        """Print mtime and short hash of key Radia modules to the Cubit
-        console + panel debug log.
+        """Show mtime and short hash of key Radia modules so the user
+        can confirm Cubit is reading the freshly-edited source files.
 
-        After editing src/radia/**, click this to confirm Cubit (and
-        any external Python it spawns) is reading the freshly-edited
-        files. The output goes to both the Cubit console and
-        C:/radia_panel_log.txt for permanent record.
+        Output goes to THREE places:
+          1. A QMessageBox dialog (so the user actually sees it)
+          2. C:/radia_panel_log.txt (permanent record)
+          3. Cubit's Python console via print() (sometimes silent)
         """
         import hashlib
+        import datetime as _dt
+
         _panel_log("=" * 70)
         _panel_log("Verify Deploy: checking Radia module mtimes")
 
@@ -1691,10 +1693,12 @@ def register_menu():
             os.path.join(_this_dir, "calc_heating_bem.py"),
         ]
 
-        import datetime as _dt
+        report_lines = ["Radia source-file deployment report", ""]
         for path in candidates:
             if not os.path.isfile(path):
-                _panel_log(f"  [MISSING] {path}")
+                line = f"  [MISSING] {os.path.basename(path)}"
+                report_lines.append(line)
+                _panel_log(line)
                 continue
             mtime = os.path.getmtime(path)
             ts = _dt.datetime.fromtimestamp(mtime).strftime(
@@ -1702,17 +1706,59 @@ def register_menu():
             with open(path, "rb") as fh:
                 h = hashlib.sha1(fh.read()).hexdigest()[:8]
             short = os.path.basename(path)
-            _panel_log(f"  {short:<26} mtime={ts}  sha1={h}")
+            line = f"  {short:<26} {ts}  {h}"
+            report_lines.append(line)
+            _panel_log(line)
 
         # Also dump the editable install pointer if any
+        report_lines.append("")
         try:
             import radia
-            _panel_log(f"  radia.__file__ = {radia.__file__}")
-            _panel_log(f"  radia.__version__ = {radia.__version__}")
+            ver_line = f"  radia.__version__ = {radia.__version__}"
+            file_line = f"  radia.__file__    = {radia.__file__}"
+            report_lines.append(ver_line)
+            report_lines.append(file_line)
+            _panel_log(ver_line)
+            _panel_log(file_line)
         except Exception as _e:
-            _panel_log(f"  radia import FAILED: {_e}")
+            err_line = f"  radia import FAILED: {_e}"
+            report_lines.append(err_line)
+            _panel_log(err_line)
 
-        _panel_log("Verify Deploy: done. See C:/radia_panel_log.txt for full log")
+        report_lines.append("")
+        report_lines.append(
+            "Full log: C:/radia_panel_log.txt")
+
+        _panel_log(
+            "Verify Deploy: done. See C:/radia_panel_log.txt for full log")
+
+        # The actual user-visible output: a QMessageBox. Without this
+        # the menu action looks like a no-op (the report only goes to
+        # the log file, which the user has no reason to be tailing).
+        try:
+            from PySide6.QtWidgets import QMessageBox
+        except ImportError:
+            try:
+                from PyQt5.QtWidgets import QMessageBox
+            except ImportError:
+                QMessageBox = None
+        if QMessageBox is not None:
+            box = QMessageBox(main_window)
+            box.setWindowTitle("Radia: Verify Deploy")
+            box.setIcon(QMessageBox.Information)
+            box.setText("Source-file deployment report")
+            box.setInformativeText(
+                "Compare the timestamps below against your most "
+                "recent edits to confirm Cubit is reading the latest "
+                "files. If a row shows an old time, restart Cubit "
+                "(or rerun the deploy skill).")
+            box.setDetailedText("\n".join(report_lines))
+            # Make the box wide enough that the monospace report
+            # does not get truncated.
+            box.setStyleSheet("QLabel{min-width: 600px;}")
+            box.exec()
+        else:
+            print("\n".join(report_lines))
 
     action_verify = QAction("Verify Deploy", main_window)
     action_verify.setStatusTip(

@@ -235,6 +235,7 @@ class IHPanel(ModePanel):
                "--current", self.val("current"),
                "--sigma", self.val("wp_sigma"),
                "--mu-r", self.val("mu_r"),
+               "--half-thickness", self.val("half_thickness"),
                "--material", "custom",
                "--impedance", impedance,
                "--solver", self.val("solver"),
