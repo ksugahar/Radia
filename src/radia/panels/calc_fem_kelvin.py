@@ -619,7 +619,10 @@ def main():
     parser.add_argument("--bh-file", default="",
                         help="BH curve file (ESIM mode)")
     parser.add_argument("--material", default="steel",
-                        choices=["steel", "copper", "aluminum"])
+                        choices=["steel", "copper", "aluminum", "custom"],
+                        help="Workpiece material; 'custom' takes mu_r "
+                             "and sigma from the explicit --mu-r / --sigma "
+                             "arguments instead of the built-in BH table.")
     parser.add_argument("--current", type=float, default=1.0,
                         help="Coil current [A]")
     parser.add_argument("--a-coil", type=float, default=0.003,
