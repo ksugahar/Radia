@@ -21,6 +21,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QJsonArray>
@@ -29,7 +30,9 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QPushButton>
+#include <QSet>
 #include <QSpinBox>
 #include <QHeaderView>
 #include <QLabel>
@@ -45,6 +48,28 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+// ============================================================
+// CCL debug log — writes to C:\radia_ccl_log.txt
+// Append-mode, timestamped. Safe to leave on permanently.
+// ============================================================
+static void ccl_log(const char *fmt, ...)
+{
+  FILE *f = fopen("C:\\radia_ccl_log.txt", "a");
+  if (!f) return;
+  // Timestamp + username
+  QDateTime now = QDateTime::currentDateTime();
+  QString user = qEnvironmentVariable("USERNAME", "?");
+  fprintf(f, "[%s %s] ",
+          now.toString("yyyy-MM-dd HH:mm:ss").toLocal8Bit().constData(),
+          user.toLocal8Bit().constData());
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(f, fmt, ap);
+  va_end(ap);
+  fprintf(f, "\n");
+  fclose(f);
+}
 
 // Ensure DLLs in plugins/ can be found at runtime.
 // With compact_netgen build, nglib/ngcore are statically linked (no DLL needed).
@@ -115,6 +140,8 @@ RadiaComp::~RadiaComp() {}
 
 void RadiaComp::start_up(int withGUI)
 {
+  ccl_log("=== Radia Cubit Plugin start_up (GUI=%d) ===", withGUI);
+  ccl_log("  version: 1.0 (built " __DATE__ " " __TIME__ ")");
   if (withGUI)
     setup_menus();
 }
@@ -180,6 +207,9 @@ void RadiaComp::setup_menus()
 
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
+  // "Solve" menu is managed by Python (register_toolbar.py).
+  // launch_radia_ngsolve() is called from Python, not from C++ menu.
+
   mMenuInitialized = true;
 }
 
@@ -223,24 +253,81 @@ static QString ensure_model()
   if (CubitInterface::get_volume_count() > 0)
     return QString();
 
+  ccl_log("ensure_model: no volumes, prompting for .jou");
   // No geometry — ask user to load a journal file
   QString jou = QFileDialog::getOpenFileName(
       nullptr, "No model loaded - Select Journal File",
       default_start_dir(), "Cubit Journal (*.jou);;All Files (*)");
-  if (jou.isEmpty())
+  if (jou.isEmpty()) {
+    ccl_log("ensure_model: cancelled");
     return QString();
+  }
 
   jou.replace("\\", "/");
+  ccl_log("ensure_model: playing %s", jou.toLocal8Bit().constData());
   std::string cmd = "play \"" + jou.toStdString() + "\"";
   CubitInterface::cmd(cmd.c_str());
 
-  if (CubitInterface::get_volume_count() > 0)
+  if (CubitInterface::get_volume_count() > 0) {
+    ccl_log("ensure_model: OK (%d volumes)", CubitInterface::get_volume_count());
     return jou;
+  }
+  ccl_log("ensure_model: FAIL (0 volumes after play)");
   return QString();
 }
 
 // Persistent journal path across exports in one session
 static QString s_lastJouPath;
+
+//! Ensure a .jou path is known.  If no journal is associated with
+//! the current model, prompt the user to save one.  Returns the
+//! .jou path (empty if cancelled).
+static QString ensure_jou_path()
+{
+  // 1. Cubit's own journal path
+  std::string jf = CubitInterface::get_current_journal_file();
+  if (!jf.empty()) {
+    ccl_log("ensure_jou_path: from Cubit journal: %s", jf.c_str());
+    return QString::fromStdString(jf).replace("\\", "/");
+  }
+
+  // 2. Previously loaded/saved path in this session
+  if (!s_lastJouPath.isEmpty()) {
+    ccl_log("ensure_jou_path: from session: %s",
+            s_lastJouPath.toLocal8Bit().constData());
+    return s_lastJouPath;
+  }
+
+  // 3. No journal — prompt user to save one
+  ccl_log("ensure_jou_path: no journal known, prompting save");
+  QString defaultDir = default_start_dir();
+  if (defaultDir.isEmpty()) {
+    char cwd[1024];
+    if (_getcwd(cwd, sizeof(cwd)))
+      defaultDir = QString::fromLocal8Bit(cwd).replace("\\", "/");
+  }
+  QString jou = QFileDialog::getSaveFileName(
+      nullptr, "Save Journal (determines output filenames)",
+      defaultDir + "/model.jou",
+      "Cubit Journal (*.jou);;All Files (*)");
+  if (jou.isEmpty()) {
+    ccl_log("ensure_jou_path: cancelled");
+    return QString();
+  }
+
+  jou.replace("\\", "/");
+
+  // Ensure parent directory exists
+  QDir().mkpath(QFileInfo(jou).absolutePath());
+
+  // Save journal only (.cub5 is NOT saved — user manages session manually)
+  std::string cmd = "save journal \"" + jou.toStdString() + "\" overwrite";
+  CubitInterface::silent_cmd(cmd.c_str());
+  s_lastJouPath = jou;
+  ccl_log("ensure_jou_path: saved %s", jou.toLocal8Bit().constData());
+  PRINT_INFO("Saved journal: %s\n", jou.toLocal8Bit().constData());
+  return jou;
+}
 
 static void run_export(ExportDialog::Format fmt)
 {
@@ -252,13 +339,10 @@ static void run_export(ExportDialog::Format fmt)
       s_lastJouPath = jou;
   }
 
-  // Try get_current_journal_file() first, fall back to saved path
-  QString jouPath;
-  std::string jf = CubitInterface::get_current_journal_file();
-  if (!jf.empty())
-    jouPath = QString::fromStdString(jf);
-  else
-    jouPath = s_lastJouPath;
+  // Ensure .jou is saved — determines output basename
+  QString jouPath = ensure_jou_path();
+  if (jouPath.isEmpty())
+    return;
 
   // Modal dialog — Cubit command execution requires the GUI thread,
   // so the dialog must block until the user clicks OK/Cancel.
@@ -279,6 +363,7 @@ static void run_export(ExportDialog::Format fmt)
     return;
   }
 
+  ccl_log("run_export: cmd=[%s]", cmd.c_str());
   CubitInterface::cmd(cmd.c_str());
 
   QString outFile = dlg.filePath();
@@ -286,9 +371,11 @@ static void run_export(ExportDialog::Format fmt)
                   ? QDir(outFile).exists()
                   : QFile::exists(outFile);
   if (!exists) {
+    ccl_log("run_export: FAIL %s", outFile.toStdString().c_str());
     PRINT_ERROR("Export failed: %s\n", outFile.toStdString().c_str());
     return;
   }
+  ccl_log("run_export: OK %s", outFile.toStdString().c_str());
   PRINT_INFO("Export complete: %s\n", outFile.toStdString().c_str());
 
   // Open exported file/directory with OS-associated application
@@ -309,15 +396,15 @@ static QString find_calc_script(const QString &python, const QString &name);
 void RadiaMenuHandler::export_netgen()
 {
   if (CubitInterface::get_volume_count() == 0) {
-    ensure_model();
+    QString jou = ensure_model();
     if (CubitInterface::get_volume_count() == 0) return;
+    if (!jou.isEmpty())
+      s_lastJouPath = jou;
   }
 
-  // Modal dialog — Cubit commands require GUI thread
-  QString jouPath;
-  std::string jf = CubitInterface::get_current_journal_file();
-  if (!jf.empty()) jouPath = QString::fromStdString(jf);
-  if (jouPath.isEmpty()) jouPath = s_lastJouPath;
+  // Ensure .jou is saved — determines output basename
+  QString jouPath = ensure_jou_path();
+  if (jouPath.isEmpty()) return;
 
   ExportDialog dlgOpt(ExportDialog::NETGEN_VOL, jouPath);
   if (dlgOpt.exec() != QDialog::Accepted) return;
@@ -335,6 +422,8 @@ void RadiaMenuHandler::export_netgen()
   CubitInterface::silent_cmd(("cd \"" + outDir.toLocal8Bit() + "\"").constData());
 
   // --- Phase 1: C++ export .vol + companion JSON (no subprocess, no cub5) ---
+  ccl_log("export_netgen: jou=%s order=%d",
+          jouPath.toLocal8Bit().constData(), order);
   PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
   std::string cmd = std::string("radia_export netgen \"")
     + volPath.toLocal8Bit().constData()
@@ -343,9 +432,11 @@ void RadiaMenuHandler::export_netgen()
 
   // Check .vol was created
   if (!QFile::exists(volPath)) {
+    ccl_log("export_netgen: FAIL %s", volPath.toLocal8Bit().constData());
     PRINT_ERROR("radia_export netgen command failed.\n");
     return;
   }
+  ccl_log("export_netgen: OK %s", volPath.toLocal8Bit().constData());
   PRINT_INFO("Exported: %s\n", volPath.toLocal8Bit().constData());
 
   // Open exported .vol with OS-associated application (vol-viewer)
@@ -569,42 +660,82 @@ static QString find_calc_script(const QString &python, const QString &name)
 void RadiaMenuHandler::mesh_volume()
 {
   if (CubitInterface::get_volume_count() == 0) {
-    ensure_model();
+    QString jou = ensure_model();
     if (CubitInterface::get_volume_count() == 0) return;
+    if (!jou.isEmpty())
+      s_lastJouPath = jou;
   }
 
-  // Ensure Netgen DLLs are on search path before export netgen commands
+  // Ensure .jou is saved — determines output basename
+  QString jouPath = ensure_jou_path();
+  if (jouPath.isEmpty()) return;
+
   ensure_netgen_dll_path();
 
-  // --- Phase 1: Save temp .cub5 for subprocess ---
-  QString tmpDir = QDir::tempPath();
-  tmpDir.replace("\\", "/");
-  if (!tmpDir.endsWith('/')) tmpDir += '/';
-  QString cub5Path = tmpDir + "radia_eval_temp.cub5";
-  {
-    std::string cmd = "save cub5 \"" + cub5Path.toStdString() + "\" overwrite";
+  // Derive basename: /path/to/model.jou -> /path/to/model
+  QString base = jouPath;
+  if (base.endsWith(".jou", Qt::CaseInsensitive))
+    base.chop(4);
+  QString outDir = QFileInfo(base).absolutePath();
+  QDir().mkpath(outDir);
+  CubitInterface::silent_cmd(
+      ("cd \"" + outDir.toLocal8Bit() + "\"").constData());
+
+  // --- Phase 1: C++ exports (all Cubit operations here) ---
+  // p-convergence: .vol at order 1-5 (each produces companion .vol.json)
+  int maxOrder = 5;
+  ccl_log("mesh_eval: jou=%s base=%s maxOrder=%d",
+          jouPath.toLocal8Bit().constData(),
+          base.toLocal8Bit().constData(), maxOrder);
+  PRINT_INFO("Exporting .vol order 1-%d...\n", maxOrder);
+  for (int p = 1; p <= maxOrder; p++) {
+    QString volPath = QString("%1_p%2.vol").arg(base).arg(p);
+    std::string cmd = "radia_export netgen \"" +
+        volPath.toLocal8Bit().toStdString() +
+        "\" order " + std::to_string(p) + " overwrite";
     CubitInterface::silent_cmd(cmd.c_str());
-    if (!QFile::exists(cub5Path)) {
-      PRINT_ERROR("Failed to save temp .cub5\n");
-      return;
+    if (!QFile::exists(volPath))
+      PRINT_WARNING("order %d export failed\n", p);
+    else
+      PRINT_INFO("  p=%d: %s\n", p, volPath.toLocal8Bit().constData());
+  }
+
+  // Format QA: .msh (order 1-5), .bdf/.vtk (order 1-2)
+  struct FmtSpec { const char *name; const char *ext; const char *cmd; int maxOrd; };
+  FmtSpec fmts[] = {
+    {"gmsh",    "msh", "radia_export gmsh",    maxOrder},
+    {"nastran", "bdf", "radia_export nastran",  2},
+    {"vtk",     "vtk", "radia_export vtk",      2},
+  };
+  for (auto &fmt : fmts) {
+    for (int p = 1; p <= fmt.maxOrd; p++) {
+      QString fpath = QString("%1_qa_%2_o%3.%4")
+          .arg(base).arg(fmt.name).arg(p).arg(fmt.ext);
+      std::string cmd = std::string(fmt.cmd) + " \"" +
+          fpath.toLocal8Bit().constData() + "\"";
+      if (p >= 2)
+        cmd += " order " + std::to_string(p);
+      cmd += " overwrite";
+      CubitInterface::silent_cmd(cmd.c_str());
     }
   }
 
-  // --- Phase 2: subprocess — calc_mesh_eval.py does extract_curved_mesh p=1..5 ---
+  // --- Phase 2: subprocess — calc_mesh_eval.py reads .vol + .vol.json ---
+  // NO import cubit in Python — all Cubit operations done above
   QString python = find_external_python();
   QString script = find_calc_script(python, "calc_mesh_eval");
   if (script.isEmpty()) {
     PRINT_ERROR("Cannot find calc_mesh_eval.py. Is radia installed?\n");
-    QFile::remove(cub5Path);
     return;
   }
 
-  PRINT_INFO("Evaluating mesh p=1..5 with NGSolve...\n");
+  PRINT_INFO("Evaluating mesh with NGSolve + GMSH...\n");
 
   QProcess proc;
   QStringList args;
   if (python == "py") args << "-3";
-  args << script << "--cub5" << cub5Path;
+  args << script << "--vol-base" << base
+       << "--max-order" << QString::number(maxOrder);
 
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   for (const QString &key : env.keys()) {
@@ -623,9 +754,6 @@ void RadiaMenuHandler::mesh_volume()
       proc.readAllStandardError().left(2000).constData());
     return;
   }
-
-  // Cleanup temp .cub5
-  QFile::remove(cub5Path);
 
   // Parse JSON from last line
   QString out = QString::fromUtf8(proc.readAllStandardOutput());
@@ -790,6 +918,358 @@ void RadiaMenuHandler::mesh_volume()
 }
 
 // ============================================================
+// Radia-NGSolve launcher — replaces Python register_toolbar.py
+// ============================================================
+
+// Metadata parsed from radia_*.py scripts
+struct ModeScript {
+  QString title;       // TITLE = "Induction Heating"
+  QString fileName;    // radia_ih.py
+  QStringList required; // REQUIRED_LABELS
+  QStringList optional; // OPTIONAL_LABELS
+};
+
+// Find radia package directory via external Python
+static QString find_radia_package_dir(const QString &python)
+{
+  QProcess p;
+  QStringList args;
+  if (python == "py") args << "-3";
+  args << "-c"
+       << "import importlib.util, os; "
+          "spec = importlib.util.find_spec('radia'); "
+          "print(os.path.dirname(spec.origin) if spec else '')";
+  p.start(python, args);
+  if (p.waitForFinished(10000) && p.exitCode() == 0) {
+    QString dir = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+    if (!dir.isEmpty() && QDir(dir).exists())
+      return dir;
+  }
+  return QString();
+}
+
+// Discover radia_*.py analysis windows and their metadata
+static QList<ModeScript> discover_mode_scripts(const QString &pkgDir)
+{
+  QList<ModeScript> modes;
+  if (pkgDir.isEmpty()) return modes;
+
+  QDir dir(pkgDir);
+  QStringList files = dir.entryList({"radia_*.py"}, QDir::Files, QDir::Name);
+
+  // Match Python string assignment: TITLE = "..." or TITLE = '...'
+  // Use backreference to ensure matching quote type (handles apostrophes).
+  QRegularExpression reTitle(R"(^TITLE\s*=\s*(["'])(.+?)\1)");
+  QRegularExpression reReq(R"(^REQUIRED_LABELS\s*=\s*\[([^\]]*)\])");
+  QRegularExpression reOpt(R"(^OPTIONAL_LABELS\s*=\s*\[([^\]]*)\])");
+
+  auto parseList = [](const QString &raw) -> QStringList {
+    QStringList result;
+    // Parse Python list literal: ["a", "b", 'c']
+    // Backreference \1 ensures matching quote type.
+    QRegularExpression reItem(R"((["'])([^"']+?)\1)");
+    auto it = reItem.globalMatch(raw);
+    while (it.hasNext())
+      result << it.next().captured(2);
+    return result;
+  };
+
+  for (const QString &fname : files) {
+    if (fname == "radia_gui_base.py") continue;
+
+    QFile f(dir.filePath(fname));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
+
+    ModeScript ms;
+    ms.fileName = fname;
+
+    while (!f.atEnd()) {
+      QString line = QString::fromUtf8(f.readLine());
+      auto m = reTitle.match(line);
+      if (m.hasMatch()) ms.title = m.captured(2);
+      m = reReq.match(line);
+      if (m.hasMatch()) ms.required = parseList(m.captured(1));
+      m = reOpt.match(line);
+      if (m.hasMatch()) ms.optional = parseList(m.captured(1));
+    }
+    if (!ms.title.isEmpty())
+      modes.append(ms);
+  }
+  return modes;
+}
+
+// Get block and sideset label names from current Cubit model.
+// Blocks: get_block_name() (reliable C++ API for groups).
+// Sidesets: get_entity_name("sideset", id) (works for mref entities).
+// Note: get_entity_name("block", id) does NOT work — blocks are groups,
+// not mref entities.  The Python side uses get_exodus_entity_name()
+// which handles both, but that API is not exposed in the C++ SDK.
+static QStringList get_model_labels()
+{
+  QSet<QString> names;
+
+  // Block names via C++ API (get_block_name works reliably)
+  std::vector<int> bids = CubitInterface::parse_cubit_list("block", "all");
+  for (int bid : bids) {
+    std::string n = CubitInterface::get_block_name(bid);
+    if (!n.empty())
+      names.insert(QString::fromStdString(n).toLower());
+  }
+
+  // Sideset names via get_entity_name (works for sidesets unlike blocks)
+  std::vector<int> sids = CubitInterface::parse_cubit_list("sideset", "all");
+  for (int sid : sids) {
+    std::string n = CubitInterface::get_entity_name("sideset", sid);
+    if (!n.empty())
+      names.insert(QString::fromStdString(n).toLower());
+  }
+
+  return names.values();
+}
+
+// Launcher settings persistence (separate from export settings)
+static QString launcherSettingsPath()
+{
+  QString home = QDir::homePath() + "/.radia";
+  QDir().mkpath(home);
+  return home + "/radia_launcher.json";
+}
+
+static QJsonObject loadLauncherSettings()
+{
+  QFile f(launcherSettingsPath());
+  if (!f.open(QIODevice::ReadOnly)) return {};
+  return QJsonDocument::fromJson(f.readAll()).object();
+}
+
+static void saveLauncherSettings(const QJsonObject &obj)
+{
+  QJsonObject existing = loadLauncherSettings();
+  for (auto it = obj.begin(); it != obj.end(); ++it)
+    existing[it.key()] = it.value();
+  QFile f(launcherSettingsPath());
+  if (f.open(QIODevice::WriteOnly))
+    f.write(QJsonDocument(existing).toJson(QJsonDocument::Indented));
+}
+
+void RadiaMenuHandler::launch_radia_ngsolve()
+{
+  // --- Ensure model loaded ---
+  if (CubitInterface::get_volume_count() == 0) {
+    QString jou = ensure_model();
+    if (CubitInterface::get_volume_count() == 0) return;
+    if (!jou.isEmpty())
+      s_lastJouPath = jou;
+  }
+
+  ensure_netgen_dll_path();
+
+  // --- Find external Python and radia package ---
+  QString python = find_external_python();
+  QString pkgDir = find_radia_package_dir(python);
+  if (pkgDir.isEmpty()) {
+    PRINT_ERROR("Cannot find radia package. Is radia installed? "
+                "(pip install radia)\n");
+    return;
+  }
+
+  // --- Discover analysis windows ---
+  QList<ModeScript> modes = discover_mode_scripts(pkgDir);
+  if (modes.isEmpty()) {
+    PRINT_ERROR("No radia_*.py analysis windows found in %s\n",
+                pkgDir.toStdString().c_str());
+    return;
+  }
+
+  // Ensure .jou is saved — determines output basename
+  QString jouPath = ensure_jou_path();
+  if (jouPath.isEmpty()) return;
+
+  // --- Load saved settings ---
+  QJsonObject prev = loadLauncherSettings();
+  QString lastMode = prev["last_mode"].toString();
+  int lastOrder = prev["last_order"].toInt(2);
+
+  // --- Build dialog ---
+  QDialog dlg;
+  dlg.setWindowTitle("Radia-NGSolve");
+  dlg.setMinimumWidth(500);
+  QVBoxLayout *layout = new QVBoxLayout(&dlg);
+
+  // Mode combo
+  QHBoxLayout *hMode = new QHBoxLayout();
+  hMode->addWidget(new QLabel("Analysis:"));
+  QComboBox *modeCombo = new QComboBox();
+  for (const auto &ms : modes)
+    modeCombo->addItem(ms.title);
+  if (!lastMode.isEmpty()) {
+    int idx = modeCombo->findText(lastMode);
+    if (idx >= 0) modeCombo->setCurrentIndex(idx);
+  }
+  hMode->addWidget(modeCombo);
+  hMode->addStretch();
+  layout->addLayout(hMode);
+
+  // Order combo
+  QHBoxLayout *hOrder = new QHBoxLayout();
+  hOrder->addWidget(new QLabel("Mesh order:"));
+  QComboBox *orderCombo = new QComboBox();
+  for (int p = 1; p <= 5; p++)
+    orderCombo->addItem(QString::number(p));
+  orderCombo->setCurrentIndex(qBound(0, lastOrder - 1, 4));
+  hOrder->addWidget(orderCombo);
+  hOrder->addStretch();
+  layout->addLayout(hOrder);
+
+  // Label validation area
+  QLabel *labelWidget = new QLabel();
+  labelWidget->setWordWrap(true);
+  labelWidget->setTextFormat(Qt::RichText);
+  QGroupBox *labelGroup = new QGroupBox("Labels (blocks / sidesets)");
+  QVBoxLayout *labelLayout = new QVBoxLayout(labelGroup);
+  labelLayout->addWidget(labelWidget);
+  layout->addWidget(labelGroup);
+
+  // .jou path display (read-only — already saved by ensure_jou_path)
+  QString volBase = jouPath;
+  if (volBase.endsWith(".jou", Qt::CaseInsensitive))
+    volBase.chop(4);
+  QHBoxLayout *hVol = new QHBoxLayout();
+  hVol->addWidget(new QLabel("Output .vol:"));
+  QLineEdit *volPreview = new QLineEdit(volBase + ".vol");
+  volPreview->setReadOnly(true);
+  volPreview->setStyleSheet("color: gray;");
+  hVol->addWidget(volPreview, 1);
+  layout->addLayout(hVol);
+
+  // OK / Cancel
+  QDialogButtonBox *buttons = new QDialogButtonBox(
+      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+  QPushButton *okBtn = buttons->button(QDialogButtonBox::Ok);
+  QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+  layout->addWidget(buttons);
+
+  // Label update lambda
+  auto updateLabels = [&]() {
+    int idx = modeCombo->currentIndex();
+    if (idx < 0 || idx >= modes.size()) return;
+    const ModeScript &ms = modes[idx];
+
+    QStringList modelLabels = get_model_labels();
+    QSet<QString> labelSet;
+    for (const QString &l : modelLabels)
+      labelSet.insert(l.toLower());
+
+    QStringList lines;
+    bool allOk = true;
+    for (const QString &lbl : ms.required) {
+      if (labelSet.contains(lbl.toLower())) {
+        lines << QString("<span style=\"color:green\">"
+                         "[OK] %1 (required)</span>").arg(lbl);
+      } else {
+        lines << QString("<span style=\"color:red; font-weight:bold\">"
+                         "[MISSING] %1 (required)</span>").arg(lbl);
+        allOk = false;
+      }
+    }
+    for (const QString &lbl : ms.optional) {
+      if (labelSet.contains(lbl.toLower())) {
+        lines << QString("<span style=\"color:green\">"
+                         "[OK] %1 (optional)</span>").arg(lbl);
+      } else {
+        lines << QString("<span style=\"color:gray\">"
+                         "[ - ] %1 (optional)</span>").arg(lbl);
+      }
+    }
+    if (ms.required.isEmpty() && ms.optional.isEmpty())
+      lines << "<span style=\"color:gray\">No label requirements</span>";
+
+    labelWidget->setText(lines.join("<br>"));
+    okBtn->setEnabled(allOk);
+  };
+
+  QObject::connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                   [&](int) { updateLabels(); });
+  updateLabels();
+
+  // --- Execute dialog ---
+  if (dlg.exec() != QDialog::Accepted)
+    return;
+
+  int modeIdx = modeCombo->currentIndex();
+  const ModeScript &ms = modes[modeIdx];
+  int order = orderCombo->currentIndex() + 1;
+
+  // Derive output directory and baseName from .jou path
+  // (jouPath was set by ensure_jou_path() before dialog)
+  QString outDir;
+  QString baseName;
+  {
+    int slash = jouPath.lastIndexOf('/');
+    outDir = (slash >= 0) ? jouPath.left(slash) : ".";
+    QString fname = (slash >= 0) ? jouPath.mid(slash + 1) : jouPath;
+    int dot = fname.lastIndexOf('.');
+    baseName = (dot > 0) ? fname.left(dot) : fname;
+  }
+
+  // Save settings
+  saveLauncherSettings({
+      {"last_mode", ms.title},
+      {"last_order", order},
+      {"last_jou_dir", outDir},
+  });
+
+  // --- Export .vol ---
+  QDir().mkpath(outDir);
+  CubitInterface::silent_cmd(("cd \"" + outDir.toLocal8Bit() + "\"").constData());
+
+  QString volPath = outDir + "/" + baseName + ".vol";
+  PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
+
+  std::string exportCmd = "radia_export netgen \"" +
+      volPath.toLocal8Bit().toStdString() +
+      "\" order " + std::to_string(order) + " overwrite";
+  CubitInterface::cmd(exportCmd.c_str());
+
+  if (!QFile::exists(volPath)) {
+    PRINT_ERROR("radia_export netgen failed. Check blocks/sidesets.\n");
+    return;
+  }
+  PRINT_INFO("Exported: %s (order %d)\n",
+             volPath.toLocal8Bit().constData(), order);
+
+  // --- Launch analysis window subprocess ---
+  QString scriptPath = pkgDir + "/" + ms.fileName;
+  if (!QFile::exists(scriptPath)) {
+    PRINT_ERROR("Analysis script not found: %s\n",
+                scriptPath.toStdString().c_str());
+    return;
+  }
+
+  QStringList args;
+  if (python == "py") args << "-3";
+  args << scriptPath << volPath;
+
+  PRINT_INFO("Launching: %s %s\n",
+             python.toStdString().c_str(),
+             args.join(" ").toStdString().c_str());
+
+  // Static startDetached: no heap QProcess needed, no memory leak.
+  // Environment cleaning (Qt/PySide) is handled by the PySide6 app
+  // itself (it imports its own Qt, ignoring Cubit's env vars).
+  qint64 pid = 0;
+  QProcess::startDetached(python, args, outDir, &pid);
+  if (pid > 0)
+    PRINT_INFO("PID: %lld\n", pid);
+  else
+    PRINT_WARNING("Failed to launch analysis window.\n");
+
+  // Open .vol with OS viewer as well
+  QDesktopServices::openUrl(QUrl::fromLocalFile(volPath));
+}
+
+// ============================================================
 // ExportDialog - format-specific options
 // ============================================================
 
@@ -909,12 +1389,21 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   if (format == FEMEEM || format == MEG) {
     mOrderCombo->addItems({"1 (linear)"});
     // No form row — hidden, always order 1
-  } else if (format == NETGEN_VOL || format == GMSH) {
+  } else if (format == NETGEN_VOL) {
     mOrderCombo->addItems({"1", "2", "3", "4", "5"});
-    mOrderCombo->setCurrentIndex(format == NETGEN_VOL ? 2 : 0);  // vol: default 3, gmsh: default 1
+    mOrderCombo->setCurrentIndex(2);  // default 3
+    connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
+    form->addRow("Order:", mOrderCombo);
+  } else if (format == GMSH) {
+    // GMSH: tet/hex up to order 3, wedge up to order 2.
+    // Order 4-5 unsupported (NetgenCurver interior node extraction
+    // unreliable at p>=4). Use Netgen Vol for order 4-5.
+    mOrderCombo->addItems({"1", "2", "3 (tet/hex only, wedge stays 2)"});
+    mOrderCombo->setCurrentIndex(0);  // default 1
     connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
     form->addRow("Order:", mOrderCombo);
   } else {
+    // Nastran, VTK: order 1-2 (format specification limit)
     mOrderCombo->addItems({"1 (linear)", "2 (quadratic)"});
     connect(mOrderCombo, SIGNAL(currentIndexChanged(int)), this, SLOT(updatePreview()));
     form->addRow("Order:", mOrderCombo);
@@ -1054,8 +1543,10 @@ QString ExportDialog::filePath() const
 static QStringList elfLabelsForDim(int dimIdx)
 {
   // dimIdx: 0=3D(T), 1=2D(K), 2=Axisym(R)
+  // "(none)" = skip this block in MEG export (e.g. air regions)
   if (dimIdx == 0) {
-    return {"MMB - Magnetic body",
+    return {"(none) - Skip export",
+            "MMB - Magnetic body",
             "MMS - Magnetic shell",
             "MMT - Magnetic thin",
             "MMP - Permanent magnet",
@@ -1067,7 +1558,8 @@ static QStringList elfLabelsForDim(int dimIdx)
             "MAT - Armature thin",
             "MBB - Boundary"};
   } else {
-    return {"MMB - Magnetic body",
+    return {"(none) - Skip export",
+            "MMB - Magnetic body",
             "MMT - Magnetic thin",
             "MMP - Permanent magnet",
             "MWL - Winding/coil",
@@ -1135,14 +1627,17 @@ QString ExportDialog::cubitCommand() const
       }
       cmd = QString("export meg \"%1\" %2").arg(file).arg(dimOpt);
       // Encode per-block labels: "1:MMB,2:MWL,3:MCO"
+      // Blocks with "(none)" are skipped (not exported)
       if (mBlockTable && mBlockTable->rowCount() > 0) {
         QStringList pairs;
         for (int r = 0; r < mBlockTable->rowCount(); r++) {
           auto *idItem = mBlockTable->item(r, 0);
           auto *combo = qobject_cast<QComboBox*>(mBlockTable->cellWidget(r, 2));
           if (idItem && combo) {
-            QString bid = idItem->text();
             QString prefix = elfPrefixFromCombo(combo->currentText());
+            if (prefix == "(no")  // "(none) - Skip export"
+              continue;
+            QString bid = idItem->text();
             pairs << bid + ":" + prefix;
           }
         }
@@ -1177,7 +1672,11 @@ void ExportDialog::populateBlockTable()
 
   for (int r = 0; r < nrows; r++) {
     int bid = block_ids[r];
-    std::string name = CubitInterface::get_entity_name("block", bid);
+    // Use get_block_name (NOT get_entity_name("block", ...)) — the
+    // generic accessor calls get_mref_entity which raises
+    // "Invalid list type for the get_mref_entity function: block"
+    // because blocks are groups, not mref entities.
+    std::string name = CubitInterface::get_block_name(bid);
     if (name.empty()) name = "(unnamed)";
 
     // Block ID (read-only)
@@ -1194,13 +1693,22 @@ void ExportDialog::populateBlockTable()
     auto *combo = new QComboBox();
     combo->addItems(labels);
 
-    // Try to auto-detect from block name
+    // Auto-detect ELF label from block name.
+    // "air", "kelvin" etc. -> (none) (skip export).
+    // "MMB_iron", "MWL_coil" etc. -> match by 3-char prefix.
+    // Unmatched -> MMB (first real label after "(none)").
     QString qname = QString::fromStdString(name).toUpper();
-    int defaultIdx = 0;  // MMB
-    for (int i = 0; i < labels.size(); i++) {
-      if (qname.startsWith(elfPrefixFromCombo(labels[i]))) {
-        defaultIdx = i;
-        break;
+    int defaultIdx = 1;  // MMB (index 1, after "(none)" at index 0)
+    // Check for names that should be skipped
+    if (qname == "AIR" || qname == "KELVIN" || qname.startsWith("AIR_")
+        || qname.startsWith("KELVIN_")) {
+      defaultIdx = 0;  // (none)
+    } else {
+      for (int i = 1; i < labels.size(); i++) {
+        if (qname.startsWith(elfPrefixFromCombo(labels[i]))) {
+          defaultIdx = i;
+          break;
+        }
       }
     }
     combo->setCurrentIndex(defaultIdx);
