@@ -50,7 +50,7 @@ def solve_fem(vol_file="", fes_order=1,
               frequency=7000, sigma=2e6,
               impedance_model="sibc", mu_r=100.0,
               bh_file=None, material="steel",
-              I_total=1.0, a_coil=0.003, R_wp=0.010,
+              I_total=1.0, half_thickness=0.005,
               max_iter=15, tol=1e-3, relax=0.5,
               solver="pardiso", reg=1e-6, shift_eps=1e-6,
               nthreads=0,
@@ -67,8 +67,10 @@ def solve_fem(vol_file="", fes_order=1,
         bh_file: BH curve file path (ESIM mode)
         material: "steel", "copper", "aluminum"
         I_total: Coil current [A]
-        a_coil: Coil wire radius [m] (for J0*e_theta fallback)
-        R_wp: Workpiece radius [m] (for ESIM half-thickness)
+        half_thickness: Workpiece characteristic radius / half
+            thickness [m]. R in the Dowell tanh formula for the
+            linear SIBC path AND cell-problem domain length for
+            the ESIM nonlinear path.
         max_iter: Max Karl iterations
         tol: Z_s convergence tolerance
         relax: Under-relaxation (0-1)
@@ -253,14 +255,33 @@ def solve_fem(vol_file="", fes_order=1,
     elif impedance_model == "esim":
         esim = create_esim_solver(
             material=material, frequency=frequency, sigma=sigma,
-            half_thickness=R_wp, geometry='cylinder', bh_file=bh_file)
+            half_thickness=half_thickness, geometry='cylinder',
+            bh_file=bh_file)
         Z_s = esim.solve(5.0)['Z']
     else:
-        # Linear SIBC: Z_s = (1+j) * rho / delta
+        # Linear SIBC: Dowell tanh formula with R = half_thickness.
+        #   Z_s = (rho / R) * (1+j)*xi * tanh((1+j)*xi)
+        #   xi  = R / delta,  delta = sqrt(2 rho / (omega mu_eff))
+        # Reduces to the thick-limit Z_s = (1+j) rho / delta when
+        # xi >> 1 (typical Cu workpiece at 50 kHz: xi ~ 30) but gives
+        # the correct lower magnitude when the workpiece is on the
+        # order of one skin depth (e.g. magnetic materials at high
+        # frequency, where mu_r raises delta).
         rho = 1.0 / sigma
         mu_eff = MU_0 * mu_r
-        delta = math.sqrt(2 * rho / (omega * mu_eff)) if omega > 0 else 1e10
-        Z_s = complex(1, 1) * rho / delta
+        if omega <= 0 or half_thickness <= 0:
+            delta = 1e10
+            Z_s = complex(0, 0)
+        else:
+            delta = math.sqrt(2 * rho / (omega * mu_eff))
+            xi = half_thickness / delta
+            gamma_a = complex(1, 1) * xi
+            try:
+                Z_s = ((rho / half_thickness)
+                       * gamma_a * np.tanh(gamma_a))
+            except OverflowError:
+                # tanh saturates to 1 for large xi -> thick-limit
+                Z_s = complex(1, 1) * rho / delta
         esim = None
 
     _log(f"SIBC:Z_s={Z_s:.4e}, model={impedance_model}")
@@ -318,7 +339,10 @@ def solve_fem(vol_file="", fes_order=1,
         wp_region = mesh.Boundaries(sibc_bnd)
         A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
     else:
-        A_wp = 2 * math.pi * R_wp * 0.020  # rough estimate
+        # Workpiece is not in the .vol — use a rough placeholder
+        # (the H_t estimate is only used for the iteration printout
+        # in the no-workpiece case, not for the inductance result).
+        A_wp = 4 * math.pi * half_thickness ** 2
 
     # Karl iteration
     gfu = GridFunction(fes)
@@ -550,55 +574,63 @@ def solve_fem(vol_file="", fes_order=1,
     # the all-black sphere of internal triangles.
     gmsh_file = ""
     if msh_output:
+        _log("GMSH:start")
         try:
             from gmsh_post_export import GmshPostExport
 
             curl_A = curl(gfu)
+
+            def _eval_vec_at_vertices(cf):
+                """Evaluate a vector CF at every mesh vertex.
+
+                Returns an (nv, 3) numpy array. Uses NGSolve's
+                MeshPoint evaluation directly because building a
+                vector H1 GridFunction + Set() can fail on the FEM
+                volume mesh when the source is a curl of a complex
+                AC GridFunction (NGSolve internals try to allocate a
+                complex vector space). Per-vertex point evaluation
+                of the CF avoids that path entirely.
+                """
+                arr = np.zeros((mesh.nv, 3))
+                for vi, v in enumerate(mesh.vertices):
+                    pt = mesh(*v.point)
+                    val = cf(pt)
+                    # cf(pt) returns a tuple/list/scalar; coerce
+                    # to a length-3 vector.
+                    if hasattr(val, "__len__"):
+                        arr[vi, :len(val)] = [
+                            float(getattr(x, "real", x))
+                            for x in val[:3]]
+                    else:
+                        arr[vi, 0] = float(getattr(val, "real", val))
+                return arr
+
             # Real-valued vector for the GMSH view: take the real
-            # part of the complex curl_A in the AC case, full vector
-            # in the DC case. The imaginary part is dropped here
-            # because GMSH view files do not carry phase — write a
-            # second .msh in the future if both phases are needed.
+            # part of curl_A in the AC case (GMSH view files do not
+            # carry phase — write a second .msh later for the
+            # imaginary part if needed).
             if is_dc:
                 B_cf = curl_A
             else:
                 B_cf = ngsolve.CoefficientFunction(
                     tuple(curl_A[i].real for i in range(3)))
 
-            # Per-vertex B (3 components) via H1 projection.
-            fes_h1v = ngsolve.H1(mesh, order=1, dim=3)
-            gf_Bv = GridFunction(fes_h1v)
-            gf_Bv.Set(B_cf)
-            node_B = np.array([
-                [gf_Bv.components[k](mesh(*mesh.vertices[v.nr].point))
-                 if hasattr(gf_Bv, 'components')
-                 else gf_Bv(mesh(*mesh.vertices[v.nr].point))[k]
-                 for k in range(3)]
-                for v in mesh.vertices])
+            node_B = _eval_vec_at_vertices(B_cf)
+            _log(f"GMSH:B node values done ({mesh.nv} verts)")
 
-            # Per-vertex J on the coil (J_source is non-zero only
-            # in the coil material). Same projection trick.
-            fes_h1v_J = ngsolve.H1(mesh, order=1, dim=3)
-            gf_Jv = GridFunction(fes_h1v_J)
-            try:
-                gf_Jv.Set(J_source, definedon=mesh.Materials("coil"))
-            except Exception:
-                gf_Jv.Set(J_source)
-            node_J = np.array([
-                [gf_Jv.components[k](mesh(*mesh.vertices[v.nr].point))
-                 if hasattr(gf_Jv, 'components')
-                 else gf_Jv(mesh(*mesh.vertices[v.nr].point))[k]
-                 for k in range(3)]
-                for v in mesh.vertices])
+            # J on the coil — restrict via IfPos on the material
+            # indicator function (J_source is already zero outside
+            # the coil region, so simple per-vertex evaluation works).
+            node_J = _eval_vec_at_vertices(J_source)
+            _log(f"GMSH:J node values done")
 
             post = GmshPostExport(mesh, boundary=False)
             post.add_field("B", node_B, ncomp=3)
-            post.add_field("J", node_J, ncomp=3, material="coil")
+            post.add_field("J", node_J, ncomp=3)
             post.write(msh_output)
-            gmsh_file = msh_output
-            _log(f"GMSH:{msh_output}")
+            _log(f"GMSH:wrote {os.path.basename(msh_output)}")
 
-            # Companion .geo: hide the air-domain volume mesh and
+            # Companion .geo: hide the volume mesh elements and
             # render both views as 3D arrows. The user opens this
             # .geo from the panel's "Open GMSH" button, which Merges
             # the .msh and applies the display options below.
@@ -617,12 +649,27 @@ def solve_fem(vol_file="", fes_order=1,
                 f.write('// J view: 3D arrow style\n')
                 f.write('View[1].VectorType = 4;\n')
                 f.write('View[1].IntervalsType = 3;\n')
-            _log(f"GMSH:{geo_file}")
+            _log(f"GMSH:wrote {os.path.basename(geo_file)}")
             gmsh_file = geo_file
         except Exception as e:
-            _log(f"GMSH_ERROR:{e}")
             import traceback
-            _log(traceback.format_exc().splitlines()[-1])
+            tb_text = traceback.format_exc()
+            _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
+            # Surface the last 3 lines of the traceback so the panel
+            # output window shows where the failure happened (the
+            # one-line catch we had before was useless).
+            for line in tb_text.splitlines()[-4:]:
+                _log(f"GMSH_ERROR:  {line}")
+            # Even on failure, try to write a minimal mesh-only .msh
+            # so the user can at least open the geometry in GMSH.
+            try:
+                from gmsh_post_export import GmshPostExport
+                post_min = GmshPostExport(mesh, boundary=False)
+                post_min.write_mesh(msh_output)
+                gmsh_file = msh_output
+                _log(f"GMSH:fallback mesh-only -> {msh_output}")
+            except Exception as e2:
+                _log(f"GMSH_ERROR:fallback also failed: {e2}")
 
     # ============================================================
     # Step 8: Result JSON
@@ -677,10 +724,12 @@ def main():
                              "arguments instead of the built-in BH table.")
     parser.add_argument("--current", type=float, default=1.0,
                         help="Coil current [A]")
-    parser.add_argument("--a-coil", type=float, default=0.003,
-                        help="Coil wire radius [m] (for J_theta fallback)")
-    parser.add_argument("--r-wp", type=float, default=0.010,
-                        help="Workpiece radius [m]")
+    parser.add_argument("--half-thickness", type=float, default=0.005,
+                        help="Workpiece half-thickness / characteristic "
+                             "radius [m]. Used as R in the Dowell tanh "
+                             "formula for the linear SIBC path AND as "
+                             "the cell-problem domain length for the "
+                             "ESIM nonlinear path.")
     parser.add_argument("--max-iter", type=int, default=15,
                         help="Max Karl iterations")
     parser.add_argument("--solver", default="pardiso",
@@ -709,8 +758,7 @@ def main():
             bh_file=args.bh_file if args.bh_file else None,
             material=args.material,
             I_total=args.current,
-            a_coil=args.a_coil,
-            R_wp=args.r_wp,
+            half_thickness=args.half_thickness,
             max_iter=args.max_iter,
             solver=args.solver,
             reg=args.reg,
