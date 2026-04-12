@@ -1,24 +1,28 @@
-"""FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air + Kelvin shell.
+"""FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air + Kelvin sphere.
 
 Cubit Python script (playback from Cubit GUI or batch mode).
-Uses 'copy mesh surface' to ensure 1:1 triangle correspondence between
-kelvin_int and kelvin_ext for NGSolve periodic BC.
+
+Kelvin = TWO IDENTICAL SPHERES (same radius R), OFFSET in space.
+  - Interior sphere: coil + workpiece + air (physical domain)
+  - Exterior sphere: Kelvin domain (air only, material modulated)
+  - Periodic BC via TRANSLATION (offset vector)
+  - copy mesh surface from interior to exterior (MANDATORY for 1:1 DOFs)
 
 Required labels (consumed by calc_fem_kelvin.py):
   block 1 = "coil"      (gapped torus, source J)
   block 2 = "workpiece" (cylinder)
-  block 3 = "air"       (carved inner air half-spheres)
-  block 4 = "kelvin"    (outer hemispherical shells, mesh-copied)
+  block 3 = "air"       (interior sphere with coil+workpiece holes)
+  block 4 = "kelvin"    (exterior sphere, offset)
   sideset 1 = "source"  (one gap face on the coil)
   sideset 2 = "sink"    (other gap face on the coil)
   sideset 3 = "sibc"    (workpiece outer surface)
-  nodeset 100 = "GND"   (origin vertex)
+  nodeset 100 = "GND"   (Kelvin sphere center = physical infinity)
 
 Geometry:
   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
   Workpiece: cylinder R = 0.025 m, H = 0.025 m
-  Air:       sphere R = 0.060 m
-  Kelvin:    shell R = 0.060 m to R = 0.120 m
+  Sphere R:  0.060 m (both interior and exterior, SAME radius)
+  Offset:    0.200 m in x direction (> 3R, no overlap)
 
 Run: Solve -> Radia-NGSolve -> Induction Heating -> Method: FEM
 """
@@ -26,6 +30,9 @@ import math
 import cubit
 
 cubit.cmd("reset")
+
+R = 0.060       # Kelvin sphere radius (both interior and exterior)
+offset_x = 0.200  # Exterior sphere offset in x
 
 # === 1. Coil: gapped torus by sweep =========================================
 cubit.cmd("create vertex 0.030000 0 0")
@@ -40,36 +47,44 @@ coil_vid = cubit.get_last_id("volume")
 cubit.cmd("create cylinder radius 0.025000 height 0.025000")
 wp_vid = cubit.get_last_id("volume")
 
-# === 3. Air sphere (inner) ===================================================
-R_inner = 0.060
-cubit.cmd(f"create sphere radius {R_inner}")
+# === 3. Interior air sphere ==================================================
+cubit.cmd(f"create sphere radius {R}")
 air_vid = cubit.get_last_id("volume")
 
-# === 4. Kelvin outer sphere ==================================================
-R_outer = 0.120
-cubit.cmd(f"create sphere radius {R_outer}")
+# === 4. Exterior (Kelvin) sphere — SAME radius, offset in x =================
+cubit.cmd(f"create sphere radius {R}")
 kelvin_vid = cubit.get_last_id("volume")
+cubit.cmd(f"move volume {kelvin_vid} x {offset_x}")
 
-# === 5. Webcut air + kelvin with zplane ======================================
+# === 5. Webcut BOTH spheres with zplane ======================================
+# ACIS spheres have 0 curves — webcut creates equator curves needed for copy mesh.
 id_before = cubit.get_last_id("volume")
-cubit.cmd(f"webcut volume {air_vid} {kelvin_vid} with plane zplane")
+cubit.cmd(f"webcut volume {air_vid} with plane zplane")
 air_top = air_vid
 air_bot = id_before + 1
+
+id_before2 = cubit.get_last_id("volume")
+cubit.cmd(f"webcut volume {kelvin_vid} with plane zplane")
+# zplane at z=0 passes through the kelvin sphere center (0.200, 0, 0)
+# -> same hemisphere topology as the interior sphere cut.
 kelvin_top = kelvin_vid
-kelvin_bot = id_before + 2
+kelvin_bot = cubit.get_last_id("volume")
 
-# === 6. Subtract air from kelvin -> shells ===================================
-cubit.cmd(f"subtract volume {air_top} from volume {kelvin_top} keep_tool")
-cubit.cmd(f"subtract volume {air_bot} from volume {kelvin_bot} keep_tool")
-
-# === 7. Subtract coil + workpiece from air ===================================
+# === 6. Subtract coil + workpiece from air ===================================
 cubit.cmd(f"subtract volume {coil_vid} {wp_vid} from volume {air_top} {air_bot} keep_tool")
 
-# === 8. Imprint + merge =====================================================
-cubit.cmd("imprint all")
-cubit.cmd("merge all")
+# === 7. Imprint + merge =====================================================
+# Imprint air halves with each other (equator), kelvin halves with each other.
+# Do NOT imprint interior with exterior (they don't touch).
+cubit.cmd(f"imprint volume {air_top} {air_bot}")
+cubit.cmd(f"merge volume {air_top} {air_bot}")
+cubit.cmd(f"imprint volume {kelvin_top} {kelvin_bot}")
+cubit.cmd(f"merge volume {kelvin_top} {kelvin_bot}")
+# Also imprint coil/wp with air
+cubit.cmd(f"imprint volume {coil_vid} {wp_vid} {air_top} {air_bot}")
+cubit.cmd(f"merge volume {coil_vid} {wp_vid} {air_top} {air_bot}")
 
-# === 9. Mesh coil + workpiece + air (NOT kelvin yet) ========================
+# === 8. Mesh coil + workpiece + air (NOT kelvin yet) ========================
 cubit.cmd(f"curve in volume {coil_vid} with length < 0.05 interval 12")
 cubit.cmd(f"curve in volume {coil_vid} with length > 0.05 interval 48")
 cubit.cmd(f"volume {coil_vid} scheme tetmesh")
@@ -84,69 +99,48 @@ cubit.cmd(f"volume {air_top} {air_bot} scheme tetmesh")
 cubit.cmd(f"volume {air_top} {air_bot} size 0.020")
 cubit.cmd(f"mesh volume {air_top} {air_bot}")
 
-# === 10. Copy mesh: kelvin inner -> kelvin outer =============================
-# After meshing air, the shared air|kelvin interface is triangulated.
-# Copy that triangulation onto the kelvin outer surface so periodic BC
-# has exact 1:1 node correspondence.
-#
-# For each hemisphere pair (top, bottom):
-#   - src_surf = kelvin inner hemi (shared with air, area ~ 2*pi*R_inner^2)
-#   - dst_surf = kelvin outer hemi (area ~ 2*pi*R_outer^2)
-# Identify by area: inner hemi is smaller, outer hemi is larger.
-# Equator flat face has area ~ pi*(R_outer^2 - R_inner^2).
+# === 9. Copy mesh: interior sphere -> exterior sphere ========================
+# The interior sphere's outer surface is now meshed (from air meshing).
+# Copy that mesh onto the exterior sphere's surface for 1:1 DOF matching.
+A_hemi = 2.0 * math.pi * R**2  # hemisphere area for identification
 
-A_inner_hemi = 2.0 * math.pi * R_inner**2  # ~ 0.0226
-A_outer_hemi = 2.0 * math.pi * R_outer**2  # ~ 0.0905
-A_equator = math.pi * (R_outer**2 - R_inner**2)  # ~ 0.0339
+for inner_vid, outer_vid in [(air_top, kelvin_top), (air_bot, kelvin_bot)]:
+    # Find hemisphere surface (largest area) in each volume
+    inner_surfs = cubit.get_relatives("volume", inner_vid, "surface")
+    outer_surfs = cubit.get_relatives("volume", outer_vid, "surface")
 
-for k_vid in [kelvin_top, kelvin_bot]:
-    surfs = cubit.get_relatives("volume", k_vid, "surface")
-    # Classify surfaces by area
-    surf_areas = [(s, cubit.surface(s).area()) for s in surfs]
-    surf_areas.sort(key=lambda x: x[1])
+    # Interior: the hemisphere (outer boundary of air) is the largest surface
+    # that is NOT shared with coil/workpiece
+    src = max(inner_surfs, key=lambda s: cubit.surface(s).area())
+    dst = max(outer_surfs, key=lambda s: cubit.surface(s).area())
 
-    # Find inner (closest to A_inner_hemi) and outer (closest to A_outer_hemi)
-    src_surf = min(surf_areas, key=lambda x: abs(x[1] - A_inner_hemi))[0]
-    dst_surf = min(surf_areas, key=lambda x: abs(x[1] - A_outer_hemi))[0]
-
-    # Mesh the source surface first (it should already be meshed from air)
-    # Copy mesh requires source curve + vertex for orientation mapping
-    src_curves = cubit.get_relatives("surface", src_surf, "curve")
-    dst_curves = cubit.get_relatives("surface", dst_surf, "curve")
+    # Pick longest curve (equator) for orientation reference
+    src_curves = cubit.get_relatives("surface", src, "curve")
+    dst_curves = cubit.get_relatives("surface", dst, "curve")
 
     if not src_curves or not dst_curves:
-        print(f"WARNING: no curves on kelvin surfaces {src_surf}/{dst_surf}")
+        print(f"WARNING: no curves on surfaces {src}/{dst}, skipping copy mesh")
         continue
 
-    # Pick the longest curve (equator circle) for orientation reference
     src_c = max(src_curves, key=lambda c: cubit.curve(c).length())
     dst_c = max(dst_curves, key=lambda c: cubit.curve(c).length())
+    src_v = cubit.get_relatives("curve", src_c, "vertex")[0]
+    dst_v = cubit.get_relatives("curve", dst_c, "vertex")[0]
 
-    src_verts = cubit.get_relatives("curve", src_c, "vertex")
-    dst_verts = cubit.get_relatives("curve", dst_c, "vertex")
-
-    if not src_verts or not dst_verts:
-        print(f"WARNING: no vertices on curves {src_c}/{dst_c}")
-        continue
-
-    src_v = src_verts[0]
-    dst_v = dst_verts[0]
-
-    print(f"  copy mesh: surface {src_surf} (A={cubit.surface(src_surf).area():.6f}) "
-          f"-> surface {dst_surf} (A={cubit.surface(dst_surf).area():.6f})")
-    print(f"    src curve {src_c} vertex {src_v} -> dst curve {dst_c} vertex {dst_v}")
+    print(f"  copy mesh: surface {src} (A={cubit.surface(src).area():.6f}) "
+          f"-> surface {dst} (A={cubit.surface(dst).area():.6f})")
 
     cubit.cmd(
-        f"copy mesh surface {src_surf} onto surface {dst_surf} "
+        f"copy mesh surface {src} onto surface {dst} "
         f"source curve {src_c} source vertex {src_v} "
         f"target curve {dst_c} target vertex {dst_v}")
 
-# === 11. Mesh kelvin volumes (boundary already constrained) ==================
+# === 10. Mesh kelvin volumes (boundary already constrained from copy) ========
 # Do NOT set volume size — it would override the copied surface mesh.
 cubit.cmd(f"volume {kelvin_top} {kelvin_bot} scheme tetmesh")
 cubit.cmd(f"mesh volume {kelvin_top} {kelvin_bot}")
 
-# === 12. Blocks ==============================================================
+# === 11. Blocks ==============================================================
 cubit.cmd(f"block 1 add volume {coil_vid}")
 cubit.cmd('block 1 name "coil"')
 cubit.cmd(f"block 2 add volume {wp_vid}")
@@ -156,7 +150,7 @@ cubit.cmd('block 3 name "air"')
 cubit.cmd(f"block 4 add volume {kelvin_top} {kelvin_bot}")
 cubit.cmd('block 4 name "kelvin"')
 
-# === 13. Sidesets ============================================================
+# === 12. Sidesets ============================================================
 cubit.cmd(f'group "coil_gaps" add surface in volume {coil_vid} with area < 0.0001')
 cubit.cmd('sideset 1 add surface in coil_gaps with y_coord > -0.001')
 cubit.cmd('sideset 1 name "source"')
@@ -166,8 +160,26 @@ cubit.cmd('sideset 2 name "sink"')
 cubit.cmd(f"sideset 3 add surface in volume {wp_vid}")
 cubit.cmd('sideset 3 name "sibc"')
 
-# === 14. GND nodeset =========================================================
-cubit.cmd("create vertex 0 0 0")
+# Kelvin periodic boundaries: interior sphere outer surface + exterior sphere surface.
+# After subtract, the interior sphere outer surface = largest surface in each air half.
+# The exterior sphere surface = all surfaces in each kelvin half.
+for a_vid in [air_top, air_bot]:
+    surfs = cubit.get_relatives("volume", a_vid, "surface")
+    # The outer hemisphere surface has area ~ 2*pi*R^2
+    outer_s = max(surfs, key=lambda s: cubit.surface(s).area())
+    cubit.cmd(f"sideset 4 add surface {outer_s}")
+cubit.cmd('sideset 4 name "kelvin_int"')
+
+for k_vid in [kelvin_top, kelvin_bot]:
+    surfs = cubit.get_relatives("volume", k_vid, "surface")
+    # All surfaces of the kelvin sphere
+    for s in surfs:
+        cubit.cmd(f"sideset 5 add surface {s}")
+cubit.cmd('sideset 5 name "kelvin_ext"')
+
+# === 13. GND nodeset =========================================================
+# GND = Kelvin sphere center = physical infinity
+cubit.cmd(f"create vertex {offset_x} 0 0")
 gnd_vid = cubit.get_last_id("vertex")
 cubit.cmd(f"nodeset 100 add vertex {gnd_vid}")
 cubit.cmd('nodeset 100 name "GND"')
@@ -176,4 +188,4 @@ cubit.cmd('nodeset 100 name "GND"')
 cubit.cmd(f"volume {air_top} {air_bot} visibility off")
 cubit.cmd(f"volume {kelvin_top} {kelvin_bot} visibility off")
 
-print("ih_fem_kelvin_sample.py: done")
+print("ih_fem_kelvin_sample.py: done (offset Kelvin)")
