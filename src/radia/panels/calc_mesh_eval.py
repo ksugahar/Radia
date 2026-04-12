@@ -95,9 +95,10 @@ def evaluate_mesh(vol_base, max_order=5):
 
         formats = [
             # (name, ext, max_order_for_format)
-            ("gmsh",    "msh", max_order),
-            ("nastran", "bdf", 2),
-            ("vtk",     "vtk", 2),
+            # GMSH order 4-5 is an error (unreliable HO interior nodes)
+            ("gmsh",    "msh", min(max_order, 3)),
+            ("nastran", "bdf", min(max_order, 2)),
+            ("vtk",     "vtk", min(max_order, 2)),
         ]
         for fmt_name, ext, fmt_max_order in formats:
             for order in range(1, fmt_max_order + 1):
