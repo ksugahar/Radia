@@ -155,24 +155,23 @@ def solve_fem(vol_file="", fes_order=1,
         dists = np.linalg.norm(coords - kc[np.newaxis, :], axis=1)
         a_kelvin = float(np.max(dists))  # sphere radius R
 
-        # Periodic identification MUST come from the C++ export. The
-        # Python add_periodic_kelvin path was a debug crutch that produced
-        # subtly different identification tolerances and is now removed.
+        # Periodic identification via Python radial-scaling.
+        # The C++ exporter labels kelvin_int/kelvin_ext but does NOT
+        # write identification pairs (NGSolve .vol loader crashes on
+        # some hash entries). We add pairs here via AddPointIdentification.
         n_ident = mesh.ngmesh.GetNrIdentifications()
         if n_ident == 0:
-            return {"error":
-                    "Mesh has 'kelvin' material but no periodic "
-                    "identification in the .vol file. The C++ export "
-                    "(radia_export netgen ... order N) is responsible for "
-                    "writing the inner-sphere/outer-sphere triangle pairs "
-                    "into the .vol. Without it the FEM solve falls back to "
-                    "Dirichlet truncation and silently produces a wrong "
-                    "answer for the open-boundary problem. "
-                    "Re-export the .vol with the latest plugin and ensure "
-                    "the .jou uses the 'subtract -> imprint -> merge' "
-                    "pattern for the kelvin sphere."}
+            _log("KELVIN:adding periodic identification (Python-side)")
+            n_pairs = add_periodic_kelvin(mesh, kelvin_center, a_kelvin)
+            if n_pairs <= 0:
+                return {"error":
+                        f"Kelvin periodic identification failed: "
+                        f"{n_pairs} pairs. Check kelvin_int/kelvin_ext "
+                        f"bc labels in the .vol file."}
+            _log(f"KELVIN:added {n_pairs} periodic pairs")
         has_kelvin_periodic = True
-        _log(f"PERIODIC:from_vol ({n_ident} ident(s), a={a_kelvin:.4f})")
+        n_ident = mesh.ngmesh.GetNrIdentifications()
+        _log(f"PERIODIC:active ({n_ident} ident(s), a={a_kelvin:.4f})")
 
     t_mesh = time.perf_counter() - t0
 
