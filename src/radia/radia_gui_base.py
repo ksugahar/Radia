@@ -732,8 +732,16 @@ class AnalysisWindow(QMainWindow):
             "  for i, _ in enumerate(tags)];"
             " gmsh.fltk.run(); gmsh.finalize()"
         )
+        # Run in the .geo's directory so relative Merge directives
+        # (e.g. ``Merge "inductance_B.msh";``) resolve correctly.
+        # Without this the subprocess inherits Cubit's CWD (usually
+        # the repo root) and GMSH silently fails to find the .msh.
+        geo_dir = os.path.dirname(os.path.abspath(self._last_msh))
+        panel_log(f"_open_gmsh: launching GMSH, cwd={geo_dir}")
+        panel_log(f"  file: {self._last_msh}")
         subprocess.Popen(
             [_PYTHON, "-c", launcher],
+            cwd=geo_dir,
             creationflags=(0x08000000 if sys.platform == "win32" else 0))
 
     # Settings
