@@ -33,17 +33,23 @@ from calc_common import (setup_paths, MU_0, progress, calc_main,
                           create_esim_solver)
 
 
-def _extract_surface_mesh_filtered(vol_mesh, keep_label=""):
+def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
+                                    return_vertex_map=False):
     """Extract a clean 2D surface mesh containing only boundary elements
     that touch the specified material.
 
     Args:
         vol_mesh: NGSolve Mesh (3D volume mesh)
         keep_label: material name to keep (e.g. "coil"). If empty, keeps all.
+        return_vertex_map: if True, also return the
+            ``new_to_old`` mapping (extracted-mesh vertex nr -> volume-mesh
+            vertex nr) so the caller can re-evaluate per-vertex fields on
+            the parent (curved) volume mesh.
 
     Returns:
         NGSolve Mesh (surface only, no orphan vertices, all boundary labels
-        renumbered consecutively).
+        renumbered consecutively). If ``return_vertex_map`` is True a
+        ``(mesh, new_to_old)`` tuple is returned instead.
     """
     from ngsolve import Mesh, BND, VOL
     import netgen.meshing as ngm
@@ -119,7 +125,15 @@ def _extract_surface_mesh_filtered(vol_mesh, keep_label=""):
         se = ngm.Element2D(fd_idx, new_verts)
         ngmesh_new.Add(se)
 
-    return Mesh(ngmesh_new)
+    surf_mesh = Mesh(ngmesh_new)
+    if return_vertex_map:
+        # ngmesh.Add returns a 1-indexed PointId; the NGSolve Mesh
+        # exposes vertices via 0-indexed v.nr. Convert here so the
+        # caller can use new_to_old[surf.vertices[i].nr].
+        new_to_old = {int(new_id) - 1: int(old_nr)
+                       for old_nr, new_id in old_to_new.items()}
+        return surf_mesh, new_to_old
+    return surf_mesh
 
 
 def _extract_surface_mesh(vol_mesh, order=2):
