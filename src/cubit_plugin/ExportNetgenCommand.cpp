@@ -305,11 +305,16 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
   }
 
-  // ---- Kelvin periodic identification (optional) ----
-  // Concentric-sphere Kelvin transform: inner surface at R_inner,
-  // outer surface at R_outer, both centered at the same point.
-  // The mapping is RADIAL SCALING: p_outer = center + (p_inner - center) * scale
-  // where scale = R_outer / R_inner.
+  // ---- Kelvin periodic identification ----
+  // Labels kelvin_int / kelvin_ext are set by auto-detect above.
+  // The actual vertex-pair identification is done in Python
+  // (calc_fem_kelvin.py) after loading the .vol, because:
+  //   1. NGSolve 6.2.2603's .vol loader crashes on some identification
+  //      hash table entries ("Ask for unused hash-value")
+  //   2. Python's AddPointIdentification is reliable and allows
+  //      radial-scaling logic without C++ rebuild
+  // The C++ code below only LOGS the expected pairing for verification.
+  // It does NOT call ident.Add() — no identification is written to .vol.
   //
   // Algorithm:
   //   1. Collect inner/outer triangles (vertex-3 only)
@@ -381,6 +386,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
             outer_pts.begin(), outer_pts.end());
 
         std::map<int, int> vertex_pair;   // inner_vid -> outer_vid
+        std::set<int> used_outer;          // prevent duplicate targets
         double max_dist = 0;
         int n_good = 0, n_bad = 0;
 
@@ -393,10 +399,11 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           double py = cy + dy * scale;
           double pz = cz + dz * scale;
 
-          // Find nearest outer vertex (brute force, O(N*M))
+          // Find nearest UNUSED outer vertex (brute force, O(N*M))
           int best_ov = -1;
           double best_d2 = 1e30;
           for (auto &op : outer_vec) {
+            if (used_outer.count(op.first)) continue;  // skip already paired
             double ddx = op.second(0) - px;
             double ddy = op.second(1) - py;
             double ddz = op.second(2) - pz;
@@ -409,6 +416,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           double tol = 0.3 * R_outer * 0.5;  // conservative
           if (dist < tol && best_ov > 0) {
             vertex_pair[ip.first] = best_ov;
+            used_outer.insert(best_ov);
             if (dist > max_dist) max_dist = dist;
             n_good++;
           } else {
@@ -416,16 +424,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           }
         }
 
-        // Write identifications
-        auto &ident = ng_mesh->GetIdentifications();
-        int n_paired = 0;
-        for (auto &p : vertex_pair) {
-          ident.Add(netgen::PointIndex(p.first),
-                    netgen::PointIndex(p.second),
-                    "kelvin",
-                    netgen::Identifications::PERIODIC);
-          n_paired++;
-        }
+        // Log pairing (do NOT write to .vol — Python handles identification)
+        int n_paired = (int)vertex_pair.size();
 
         PRINT_INFO("Kelvin periodic: %d/%zu pairs written "
                    "(max_dist=%.2e, %d unmatched)\n",
