@@ -121,12 +121,16 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
    - WITHOUT copy mesh, tet meshing produces different triangulations -> crash
 8. Mesh all volumes (tet mesh, using existing surface mesh as boundary constraint)
    - Do NOT set volume size for Kelvin volumes after copy (overrides copied mesh)
-9. Set blocks (coil, air, kelvin) and sidesets (source, sink)
-   - Block names "air" and "kelvin" trigger auto-detection in C++ exporter
-   - C++ labels shared face as "kelvin_int", kelvin outer face as "kelvin_ext"
+9. Set blocks (coil, air, kelvin) and sidesets (source, sink, kelvin_int, kelvin_ext)
+   - sideset "kelvin_int": interior sphere outer surface (air boundary)
+   - sideset "kelvin_ext": exterior sphere surface (kelvin boundary)
+   - These MUST be set explicitly in the .py — offset spheres do not share
+     a face, so DomainIn/DomainOut auto-detection does NOT work
 10. radia_export netgen: writes periodic identification as TRANSLATION
-    - C++ estimates translation vector from boundary node centroids
+    - C++ reads bc names "kelvin_int" / "kelvin_ext" from sidesets
+    - Computes offset = mean(kelvin_ext vertices) - mean(kelvin_int vertices)
     - Bijective nearest-neighbor matching (no duplicate targets)
+    - Writes ident.Add() pairs to .vol (NGSolve Periodic() reads them)
 ```
 
 ### Copy mesh: dynamic surface identification (Cubit Python)
@@ -168,10 +172,20 @@ for inner_vid, outer_vid in [(air_top, kelvin_top), (air_bot, kelvin_bot)]:
 | Coil imprinted with kelvin | Extra nodes on kelvin boundary | Only imprint coil with air, NOT kelvin |
 | `mesh volume` without surface | copy mesh produces 0 tris | Mesh air volumes first |
 
+### Verified result (2026-04-13)
+
+```
+copy mesh: surface 10 -> 14, surface 12 -> 16 (1:1 hemisphere copy)
+Kelvin periodic: 270 inner, 270 outer verts (mesh copy guarantees match)
+offset=(0.1990, 0.0000, -0.0001), max_dist=9.65e-04, 0 unmatched
+Periodic HCurl: ndof=38333, FreeDofs: 38333 -> 37529 (804 coupled)
+FEM-Kelvin L=80.46 nH (7000 Hz, copper cylinder workpiece)
+```
+
 **Do NOT use**:
 - Concentric shells (R_inner to R_outer) — this is NOT Kelvin transformation
 - Radial scaling for node pairing — use translation (offset)
-- C++ ident.Add() in .vol — NGSolve loader may crash (`Ask for unused hash-value`)
+- Independent tet mesh on both spheres without copy mesh — different triangulations
 
 ## Material Modulation -- The Only Thing You Change
 
