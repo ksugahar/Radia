@@ -432,6 +432,52 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
     progress("SOLVE_DONE", f"P={P_total:.4e}W, H_t_rms={H_t_rms:.2f}A/m "
              f"({t_total:.1f}s)")
 
+    # === 4b. Save .vol + .sol (workpiece mesh + heating density) ===
+    base_dir = os.path.dirname(os.path.abspath(vol_file))
+    if msh_output:
+        base_dir = os.path.dirname(os.path.abspath(msh_output))
+    try:
+        from ngsolve import GridFunction, grad, Norm, H1
+
+        # q = sigma * |H_t|^2 / 2 per vertex.
+        # Compute per-element |grad phi|^2 via Integrate, then vertex-average.
+        phi_vec = result['phi_vec']
+        gf_phi_re = GridFunction(solver.fes)
+        gf_phi_im = GridFunction(solver.fes)
+        gf_phi_re.vec.FV().NumPy()[:] = phi_vec.real
+        gf_phi_im.vec.FV().NumPy()[:] = phi_vec.imag
+
+        H_t_sq_cf = Norm(grad(gf_phi_re))**2 + Norm(grad(gf_phi_im))**2
+        elem_area = Integrate(CF(1), solver.mesh, BND, element_wise=True)
+        elem_Ht2 = Integrate(H_t_sq_cf, solver.mesh, BND, element_wise=True)
+
+        # Per-vertex q via element averaging
+        q_arr = np.zeros(solver.mesh.nv)
+        nc = np.zeros(solver.mesh.nv)
+        for el in solver.mesh.Elements(BND):
+            a = max(abs(float(elem_area[el.nr])), 1e-30)
+            ht2 = float(elem_Ht2[el.nr]) / a
+            qe = 0.5 * sigma * ht2
+            for v in el.vertices:
+                q_arr[v.nr] += qe
+                nc[v.nr] += 1
+        q_arr = np.where(nc > 0, q_arr / nc, 0.0)
+
+        gf_q = GridFunction(solver.fes)
+        gf_q.vec.FV().NumPy()[:solver.mesh.nv] = q_arr
+
+        wp_vol_path = os.path.join(base_dir, "workpiece.vol").replace("\\", "/")
+        q_sol_path = os.path.join(base_dir, "q_heating.sol").replace("\\", "/")
+        # Save the BEM surface mesh (solver.mesh), NOT the full volume mesh
+        solver.mesh.ngmesh.Save(wp_vol_path)
+        gf_q.Save(q_sol_path)
+        progress("SAVE", f"workpiece.vol + q_heating.sol")
+    except Exception as e:
+        wp_vol_path = ""
+        q_sol_path = ""
+        sys.stderr.write(f"SOL save failed: {e}\n")
+        sys.stderr.flush()
+
     # === 5. GMSH output (optional) ===
     gmsh_file = ""
     if msh_output:
@@ -465,31 +511,10 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
 
             post.write(msh_output)
 
-            # Overwrite .geo companion with SIBC parameters
-            geo_path = os.path.splitext(msh_output)[0] + ".geo"
-            with open(geo_path, "w") as gf:
-                gf.write("// BEM-SIBC workpiece result\n")
-                gf.write(f"// Material: {material}\n")
-                gf.write(f"// WP sigma = {sigma:.4e} S/m\n")
-                gf.write(f"// WP mu_r = {mu_r_eff:.1f}\n")
-                gf.write(f"// Coil sigma = 5.8e+07 S/m (copper)\n")
-                gf.write(f"// frequency = {frequency:.0f} Hz\n")
-                gf.write(f"// |Z_s| = {abs(Z_s):.4e} Ohm "
-                         f"(phase = {np.degrees(np.angle(Z_s)):.1f} deg)\n")
-                gf.write(f"// Re(Z_s) = {Re_Zs:.4e}, "
-                         f"Im(Z_s) = {Im_Zs:.4e}\n")
-                gf.write(f"// skin_depth = {delta*1e3:.3f} mm\n")
-                gf.write(f"// half_thickness = {half_thickness*1e3:.1f} mm\n")
-                gf.write(f"// coil_radius = {coil_radius*1e3:.1f} mm\n")
-                gf.write(f"// coil_current = {coil_current:.2f} A\n")
-                gf.write(f"// P_total = {P_total:.4e} W\n")
-                gf.write(f"// Q_total = {Q_total:.4e} var\n")
-                gf.write(f"// H_t_rms = {H_t_rms:.4f} A/m\n")
-                gf.write(f"// Karl iterations = {n_converged}\n")
-                gf.write(f'Merge "{os.path.basename(msh_output)}";\n')
-                gf.write("Mesh.NumSubEdges = 4;\n")
-                gf.write("Mesh.VolumeEdges = 0;\n")
-                gf.write("Mesh.SurfaceEdges = 0;\n")
+            # Write companion .msh.opt (replaces .geo)
+            from gmsh_post_export import write_companion_opt
+            write_companion_opt(msh_output, n_vector_views=0,
+                                n_scalar_views=3)
             gmsh_file = msh_output
             progress("MSH", gmsh_file)
         except Exception as e:

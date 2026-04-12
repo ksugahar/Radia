@@ -26,16 +26,46 @@ magnetostatic/electromagnetic problems without artificial truncation.
 
 ## Key Principles
 
-1. **Domain Duplication**: Create two copies of the boundary domain:
-   - Interior: physical domain (materials + surrounding air)
-   - Exterior (Kelvin): inverted image of the outer space
+1. **Two Identical Spheres** (NOT a shell):
+   - Interior sphere: physical domain (coil + iron + surrounding air), radius R
+   - Exterior sphere (Kelvin): same radius R, offset in space (e.g., offset_x = 3R)
+   - Both spheres have **identical radius and identical surface mesh**
+   - This is because Periodic BC couples DOFs 1:1 between the two boundaries
+   - **WRONG**: concentric shell (R_inner to R_outer) — this is NOT Kelvin
+   - **CORRECT**: two separate spheres of the SAME radius R, placed apart
 
-2. **Permeability Modulation** (exterior domain):
-   - mu' = (R / rho')^2 * mu_0  (both 2D and 3D)
-   - This is the metric-based Kelvin factor for electromagnetic problems
-   - Same factor regardless of formulation (H, A, or Omega)
+2. **Identical DOF Structure**:
+   - Periodic BC requires the two identified boundaries to have matching DOFs
+   - Both sphere surfaces must have the same mesh topology (same nodes, same elements)
+   - OCC workflow: `Identify()` + `GenerateMesh()` handles this automatically
+   - Cubit workflow: `copy mesh surface` from interior sphere to exterior sphere
+   - The relationship between identified nodes is a pure TRANSLATION (offset)
 
-3. **Background Field Modulation** (exterior domain):
+3. **Material Modulation** (exterior domain):
+
+   **Physical principle**: Kelvin transformation is a numerical technique
+   close to the physics of EM. It only **distorts material properties** -- the
+   PDE itself is unchanged. The "image of infinity" is at rho'=0 (Kelvin
+   sphere center), where:
+
+   - **Direct material quantities** (mu, eps, sigma) -> **infinity** at rho'=0
+   - **Reciprocal quantities** (nu = 1/mu, rho = 1/sigma) -> **0** at rho'=0
+
+   For the 3D Kelvin inversion rho -> R^2/rho', the modulation is:
+
+   | Quantity   | Formula                  | rho'=0 (infinity) | rho'=R (boundary) |
+   |------------|--------------------------|-------------------|-------------------|
+   | mu'        | (R / rho')^2 * mu_0      | infinity          | mu_0 (continuous) |
+   | epsilon'   | (R / rho')^2 * eps_0     | infinity          | eps_0             |
+   | sigma'     | (R / rho')^2 * sigma     | infinity          | sigma             |
+   | nu' = 1/mu'| (rho' / R)^2 * nu_0      | **0**             | nu_0              |
+   | rho_e'    | (rho' / R)^2 * rho_e     | **0**             | rho_e             |
+
+   - rho' = distance from the CENTER of the exterior sphere
+   - The factor is the same regardless of formulation (H, A, or Omega)
+   - Use mu' for H1/Omega scalar potential, nu' for HCurl A-formulation
+
+4. **Background Field Modulation** (exterior domain):
    - Physical Kelvin-transformed field: H'_i = -(R/r')^2 * H_i(R^2/r')
    - The sign flip comes from the negative Jacobian (orientation reversal)
    - For uniform dipole H_s=(0,0,1): exterior H'_s = (0, 0, -(R/r')^2)
@@ -43,36 +73,113 @@ magnetostatic/electromagnetic problems without artificial truncation.
      (positive because the double negation: field already negative + Kelvin sign flip)
    - At the Kelvin boundary r'=R, the rule simplifies to H'(R) = -H(R)
 
-4. **Periodic Boundary Conditions**:
+5. **Periodic Boundary Conditions**:
    - Identify interior outer boundary with exterior outer boundary
    - Ensures field continuity at the inversion sphere/circle
    - Uses NGSolve `Periodic()` FE space wrapper
    - Boundary terms in the weak form AUTO-CANCEL with periodic BC
 
-5. **GND Point (Dirichlet at Infinity)**:
+6. **GND Point (Dirichlet at Infinity)**:
    - Place vertex at exterior domain center (r'=0)
    - Corresponds to physical infinity
-   - Essential for unique solution: `dirichlet_bbnd="GND"`
+   - **H1 (scalar potential)**: Essential for uniqueness: `dirichlet_bbnd="GND"`
+   - **HCurl (vector potential)**: Optional but recommended. Gauge
+     regularization (`reg * nu0 * u * v * dx`) provides uniqueness without GND.
+     GND improves convergence for iterative solvers.
+   - Cubit: create vertex at Kelvin sphere center, assign as nodeset "GND"
 
-## Weak Form Factors (from coordinate substitution)
+## Cubit Workflow (3D with .vol export)
 
-The Kelvin transformation introduces different weight factors for
-the bilinear and linear forms in the exterior domain:
+For Cubit-based meshes exported via `radia_export netgen`.
+Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
 
-| | 2D | 3D |
-|---|---|---|
-| Volume element | dA = (R/r')^4 dA' | dV = (R/r')^6 dV' |
-| Gradient scaling | nabla = (r'/R)^2 nabla' | nabla = (r'/R)^2 nabla' |
-| Bilinear factor | 1 (cancels) | (R/r')^2 |
-| Linear factor (uniform Hs) | (R/r')^2 | (R/r')^4 |
+### Step-by-step procedure
 
-**2D**: Only the linear form needs a Kelvin weight factor.
-**3D**: Both bilinear AND linear forms need Kelvin weight factors.
+```
+1. Create interior sphere (radius R) centered at origin
+   - Contains coil + iron + air
+2. Create exterior sphere (SAME radius R) at offset position (e.g., x = 3R)
+   - Contains only air (Kelvin domain)
+3. Webcut BOTH spheres with the SAME plane (e.g., zplane)
+   - ACIS sphere has 0 curves by default — webcut creates 1 curve per hemisphere
+   - This matching topology is required for copy mesh surface
+4. Merge BOTH pairs of half-spheres:
+   - imprint volume <inner_top> <inner_bottom>; merge volume <inner_top> <inner_bottom>
+   - imprint volume <outer_top> <outer_bottom>; merge volume <outer_top> <outer_bottom>
+   - This ensures equator nodes are shared → inner node count = outer node count
+5. Imprint/merge coil with air (interior sphere only, NOT with exterior)
+6. Mesh hemisphere SURFACES first with trimesh:
+   - surface <inner_hemi> scheme trimesh; surface <inner_hemi> size <h>; mesh surface <inner_hemi>
+   - CRITICAL: mesh volume does NOT create standalone surface tri entities.
+     copy mesh surface requires explicit surface meshing BEFORE volume meshing.
+7. copy mesh surface: inner hemisphere -> outer hemisphere
+   - copy mesh surface <in_sid> onto surface <out_sid> source curve <ic> source vertex <iv> target curve <ec> target vertex <ev>
+   - Guarantees 1:1 node correspondence for Periodic BC
+8. Mesh all volumes (tet mesh, using existing surface mesh as boundary constraint)
+9. Set blocks (coil, air, kelvin) and sidesets (source, sink, kelvin_int, kelvin_ext)
+10. radia_export netgen: writes periodic identification as TRANSLATION
+    - C++ estimates translation vector from boundary node centroids
+    - Bijective nearest-neighbor matching (no duplicate targets)
+```
 
-In the current implementation, the bilinear factor is absorbed into
-mu_outer = (R/r')^2 * mu0, and the background field Hs is set such
-that mu_outer * Hs gives the correct boundary value at r'=R.
-The periodic BC constrains the interior solution to high accuracy.
+### Critical gotchas
+
+| Issue | Symptom | Fix |
+|-------|---------|-----|
+| Surface not meshed before copy | copy mesh produces 0 tris | `surface <N> scheme trimesh; mesh surface <N>` BEFORE `mesh volume` |
+| Equator not merged | inner node count ≠ outer node count | `imprint + merge` both half-sphere pairs |
+| ACIS sphere has 0 curves | copy mesh surface fails (no curve correspondence) | `webcut with plane zplane` both spheres |
+| Coil imprinted with kelvin sphere | Extra nodes on kelvin boundary | Only imprint coil with air sphere, NOT with kelvin |
+| Volume size overrides surface mesh | Additional nodes on copied surface | Do NOT set volume size for kelvin volumes after copy |
+
+### Verified result
+
+```
+Kelvin periodic: 526 node pairs (526 inner, 526 outer,
+                  offset=(0.200, 0.000, 0.000), max_dist=2.43e-03)
+Mesh load: OK
+Periodic HCurl: FreeDofs 68562 -> 65418 (coupled: 3144)
+```
+
+**Do NOT use**:
+- Concentric shells (R_inner to R_outer) — this is NOT Kelvin transformation
+- Sweep mesh between concentric surfaces — wrong element structure
+- Radial scaling for node pairing — use translation (offset)
+- `mesh volume` without prior `mesh surface` for copy mesh sources
+
+## Material Modulation -- The Only Thing You Change
+
+Kelvin transformation does not change the PDE -- you write the standard
+weak form on the bounded computational domain (interior + Kelvin sphere)
+and **only modify the material coefficients in the Kelvin region**.
+
+| Formulation | Bilinear form           | Kelvin region material        |
+|-------------|------------------------|-------------------------------|
+| H1 / Omega  | int mu * grad u . grad v dx | mu = (R/r')^2 * mu_0     |
+| HCurl A     | int nu * curl u . curl v dx | nu = (r'/R)^2 * nu_0     |
+| H1 (eddy)   | + sigma * u * v dx          | sigma = (R/r')^2 * sigma_0|
+| HCurl (eddy)| + (1/sigma) curl u * curl v | rho = (r'/R)^2 * rho_0   |
+
+**The rule is the physical rule** (no coordinate substitution needed):
+
+- mu, eps, sigma diverge to infinity at r'=0 (image of physical infinity)
+- nu, rho_e (reciprocals) vanish to 0 at r'=0
+- All factors are continuous (= material_0) at r'=R (kelvin boundary)
+
+NGSolve example:
+```python
+nu_dict = {}
+for m in mesh.GetMaterials():
+    if "kelvin" in m.lower():
+        rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2 + 1e-20
+        nu_dict[m] = NU_0 * rp_sq / R**2   # (r'/R)^2 * nu_0  -- vanishes at r'=0
+    else:
+        nu_dict[m] = NU_0
+nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
+```
+
+The periodic BC at r'=R ensures continuity of the field across the
+inversion boundary, completing the open-boundary closure.
 
 ## Supported Formulations
 
@@ -372,17 +479,157 @@ Hz_analytical = 3.0 / (mu_r + 2)  # Interior field
 | Aspect | 2D | 3D |
 |--------|----|----|
 | Inversion | Circle: r' = R^2/r | Sphere: rho' = R^2/rho |
-| Volume element | dA = (R/r')^4 dA' | dV = (R/r')^6 dV' |
-| mu modulation (metric) | (R/r')^2 * mu0 | (R/r')^2 * mu0 |
-| Bilinear form Kelvin factor | 1 (cancels) | (R/r')^2 |
+| mu modulation (H1)   | mu = (R/r')^2 * mu_0 | mu = (R/r')^2 * mu_0 |
+| nu modulation (HCurl)| nu = (r'/R)^2 * nu_0 | nu = (r'/R)^2 * nu_0 |
 | Linear form Kelvin factor | (R/r')^2 | (R/r')^4 |
 | Physical H' (uniform) | H' = -H (no spatial variation) | H'_z = -(R/r')^2 |
 | Analytical (dipole) | 2/(mu_r+1) | 3/(mu_r+2) |
+
+**Physical rule**: mu, eps, sigma -> infinity at r'=0; nu, rho_e -> 0 at r'=0.
 
 **Note on 2D anisotropy**: In 2D, the metric-based permeability is
 anisotropic: constant in the r-direction, (R/r')^2 in the theta-direction.
 However, in Cartesian coordinates with isotropic materials, these factors
 cancel in the bilinear form, so the effective isotropic mu' = mu0 suffices.
+"""
+
+KELVIN_HCURL_3D = """
+# 3D HCurl A-Formulation with Kelvin (calc_fem_kelvin.py)
+
+The HCurl formulation solves for vector potential A directly in 3D,
+used for coil problems with SIBC workpieces (induction heating).
+This is what `calc_fem_kelvin.py` implements.
+
+## Key Difference from H1 Formulations
+
+| Aspect | H1 (phi/Omega) | HCurl (A) |
+|--------|----------------|-----------|
+| Primary variable | Scalar potential phi | Vector potential A |
+| Bilinear form | mu * grad(u) * grad(v) | **nu** * curl(u) * curl(v) |
+| Kelvin factor in bilinear | mu' = (R/r')^2 * mu0 | **nu' = (r'/R)^2 * nu0** |
+| GND requirement | Essential (uniqueness) | Optional (gauge reg suffices) |
+| Source term | mu * grad(v) . Hs dx | J * v * dx("coil") |
+| Source modulation | Hs modulated in exterior | **No modulation** (J=0 in Kelvin) |
+
+## Why nu = (r'/R)^2 * nu0
+
+This follows directly from the Kelvin physical rule: under the inversion
+r -> R^2/r', the image of physical infinity is at r'=0. Material quantities
+behave at r'=0 according to whether they are direct or reciprocal:
+
+| Quantity | At r'=0 (image of infinity) | Modulation                |
+|----------|------------------------------|---------------------------|
+| mu       | infinity                     | mu = (R/r')^2 * mu_0      |
+| eps      | infinity                     | eps = (R/r')^2 * eps_0    |
+| sigma    | infinity                     | sigma = (R/r')^2 * sigma_0|
+| **nu = 1/mu**  | **0**                  | **nu = (r'/R)^2 * nu_0**  |
+| rho_e = 1/sigma| 0                      | rho_e = (r'/R)^2 * rho_e_0|
+
+The HCurl A-formulation uses nu in the bilinear form, hence:
+```
+nu_kelvin = (r'/R)^2 * nu_0     -- vanishes at the kelvin center (r'=0)
+nu_kelvin = nu_0 at r'=R         -- continuous with the air domain
+```
+
+This is purely a **material distortion** -- the PDE is unchanged.
+Kelvin transformation is among the most physical of numerical techniques
+for open boundary problems precisely because it does not modify the weak
+form, only the constitutive coefficient in the Kelvin domain.
+
+## Implementation (from calc_fem_kelvin.py)
+
+```python
+from ngsolve import *
+
+MU_0 = 4e-7 * pi
+NU_0 = 1.0 / MU_0
+
+mesh = Mesh("model.vol")  # Contains "coil", "air", "kelvin" materials
+
+# Detect Kelvin sphere
+kelvin_center = detect_kelvin_offset(mesh)  # centroid of "kelvin" elements
+a_kelvin = estimate_kelvin_radius(mesh)     # min vertex distance from center
+
+# Reluctivity with Kelvin modulation
+kx, ky, kz = kelvin_center
+nu_dict = {}
+for m in mesh.GetMaterials():
+    if "kelvin" in m.lower():
+        dx_k = x - kx
+        dy_k = y - ky
+        dz_k = z - kz
+        rp_sq = dx_k*dx_k + dy_k*dy_k + dz_k*dz_k + 1e-20
+        kelvin_fac = rp_sq / a_kelvin**2  # (r'/R)^2
+        nu_dict[m] = NU_0 * kelvin_fac
+    else:
+        nu_dict[m] = NU_0
+nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
+
+# FE space: HCurl + Periodic (no GND needed for HCurl)
+dirichlet_bnd = "GND" if "GND" in mesh.GetBoundaries() else ""
+base_fes = HCurl(mesh, order=1, complex=True, nograds=True, dirichlet=dirichlet_bnd)
+fes = Periodic(base_fes)  # Couples Kelvin sphere DOFs
+u, v = fes.TnT()
+
+# Bilinear form: curl-curl with Kelvin-modulated nu
+a = BilinearForm(fes)
+a += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+a += reg * NU_0 * u * v * dx  # gauge regularization (HCurl uniqueness)
+
+# Robin BC for SIBC workpiece (on hole boundary)
+if has_sibc:
+    robin = 1j * omega / Z_s
+    a += robin * u.Trace() * v.Trace() * ds("sibc")
+
+# Source: J in coil only (NO source modulation in Kelvin domain)
+f = LinearForm(fes)
+f += J_source * v * dx("coil")
+
+a.Assemble()
+f.Assemble()
+
+gfu = GridFunction(fes)
+gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+
+# Inductance from magnetic energy (nu_cf includes Kelvin modulation)
+W_mag = Integrate(0.5 * nu_cf * curl(gfu) * Conj(curl(gfu)),
+                  mesh, order=10).real
+L = 2 * W_mag / I_total**2
+```
+
+## Why No Source Modulation is Needed
+
+Unlike H-formulation where Hs must be modulated in the exterior domain,
+the HCurl A-formulation has J_source = 0 in the Kelvin domain (no coil there).
+The linear form `J * v * dx("coil")` only integrates over the coil region
+in the interior sphere. The Kelvin domain contribution comes entirely from
+the bilinear form (curl-curl stiffness with nu' modulation).
+
+## GND Vertex in Cubit Workflow
+
+For HCurl, GND is optional but improves iterative solver convergence:
+
+```
+# In Cubit journal (after creating exterior sphere):
+create vertex X {kelvin_offset_x} Y 0 Z 0
+nodeset 100 add vertex {last_vertex_id}
+nodeset 100 name "GND"
+```
+
+The vertex at the Kelvin sphere center maps to physical infinity (r -> inf).
+Setting A = 0 there is physically correct (no field at infinity).
+
+## bonus_intorder for Kelvin Domain
+
+The varying nu_cf = (r'/R)^2 * nu0 is a rational function of coordinates.
+Standard quadrature rules are insufficient. Use `bonus_intorder=4`:
+
+```python
+a += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+```
+
+Without bonus_intorder, integration error in the Kelvin domain can reach
+several percent, leading to incorrect inductance values.
 """
 
 KELVIN_ADAPTIVE = """
@@ -834,9 +1081,14 @@ KELVIN_TIPS = """
 
 ## Common Mistakes
 
-1. **Forgetting permeability modulation in exterior domain**
-   - mu' = (R/rho')^2 * mu0, NOT just mu0
-   - This is the universal Kelvin factor for EM problems (2D and 3D)
+1. **Forgetting material modulation in exterior domain**
+   - **Direct quantities** (mu, eps, sigma): diverge at r'=0
+       mu = (R/rho')^2 * mu_0
+   - **Reciprocal quantities** (nu, rho_e): vanish at r'=0
+       nu = (rho'/R)^2 * nu_0
+   - Use mu modulation for H1/Omega (scalar potential)
+   - Use nu modulation for HCurl A-formulation
+   - The PDE itself is unchanged -- only the material is distorted
 
 2. **Wrong sign on background field modulation**
    - The Kelvin BC at r'=R requires: H'(R) = -H(R) (sign flip)
@@ -846,8 +1098,11 @@ KELVIN_TIPS = """
    - Rule: the physical transformed field is H'_i = -(R/r')^2 * H_i(R^2/r')
 
 3. **Missing GND point**
-   - Without Dirichlet at infinity (GND), solution is non-unique
-   - Place vertex at center of exterior domain
+   - **H1 (phi, Omega)**: Without GND, solution is non-unique. Essential.
+   - **HCurl (A)**: Gauge regularization provides uniqueness. GND is optional
+     but improves iterative solver convergence.
+   - Place vertex at center of exterior sphere (maps to physical infinity).
+   - Cubit: `create vertex X {offset} Y 0 Z 0; nodeset N name "GND"`
 
 4. **Boundary terms in linear form**
    - With Kelvin + Periodic BC, boundary terms CANCEL
@@ -861,6 +1116,28 @@ KELVIN_TIPS = """
 6. **Face identification order**
    - Identify interior outer face WITH exterior outer face
    - Order matters for orientation of periodic coupling
+
+7. **HCurl without nograds=True**
+   - HCurl basis functions include gradients of H1 basis which form the
+     curl-curl kernel (curl(grad phi) = 0 = gauge freedom)
+   - Use `HCurl(mesh, order=p, complex=..., nograds=True, dirichlet=...)`
+     at ANY polynomial order p (including p=1).
+   - Reference: NGSolve Maxwell tutorial unit-2.4
+     `HCurl(mesh, order=3, dirichlet="outer", nograds=True)`
+   - Without nograds, the curl-curl system is rank deficient by the
+     gradient subspace dimension. PARDISO pseudo-inverses and returns a
+     solution polluted by an arbitrary gradient field; inductance or
+     magnetic energy values are then order-dependent and unreliable.
+
+8. **Cubit coil: sweep, NOT webcut**
+   - `create torus + webcut + delete` can silently produce a half-coil
+     (BEM = 46 nH instead of 87 nH for R=30mm/a=3mm/gap=5 deg)
+   - `webcut` also breaks p-convergence of curved surface elements
+   - Correct: build a disk cross section and sweep about the axis:
+     `create curve arc ... normal 0 1 0 full;
+      create surface curve 1;
+      sweep surface 1 axis 0 0 0 0 0 1 angle 355`
+   - Verified p-convergence O1 → O5: -3.35% → -1.8e-05%
 
 ## Performance Tips
 
@@ -888,6 +1165,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "h_formulation": KELVIN_H_FORMULATION,
         "a_formulation": KELVIN_A_FORMULATION,
         "3d": KELVIN_3D,
+        "hcurl_3d": KELVIN_HCURL_3D,
         "adaptive": KELVIN_ADAPTIVE,
         "identify": KELVIN_IDENTIFY,
         "tips": KELVIN_TIPS,

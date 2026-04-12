@@ -187,11 +187,20 @@ def extract_inductance_vol(vol_file, source_label="source",
     sys.stderr.write(f"SOLVE_DONE:{t_solve:.1f}s\n")
     sys.stderr.flush()
 
-    # Save results
-    j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
-    np.save(j_npy, sol['J'])
+    # Save results (.vol + .sol — NGSolve standard pair)
     mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
     mesh.ngmesh.Save(mesh_vol)
+
+    from ngsolve import HDivSurface, GridFunction
+    fes_save = HDivSurface(mesh, order=fes_order)
+    gf_save = GridFunction(fes_save)
+    gf_save.vec.FV().NumPy()[:] = sol['J']
+    j_sol = os.path.join(base_dir, "J_coeffs.sol").replace("\\", "/")
+    gf_save.Save(j_sol)
+
+    # Legacy .npy (backward compat with existing post_process callers)
+    j_npy = os.path.join(base_dir, "J_coeffs.npy").replace("\\", "/")
+    np.save(j_npy, sol['J'])
 
     # Add the actual J vector field to the surface .msh so the GMSH
     # button has something meaningful to show even when --field-air
@@ -1158,75 +1167,160 @@ def _compute_B_field_cf(mesh_surf, gf_J, elem_A, lx=0, ly=0, lz=0, maxh_vol=0):
     return B_cf, mesh_vol
 
 
-def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
-                            vol_nodes, vol_elems, B_nodes):
-    """Write a single .msh v4.1 with volume B + surface J + wireframe.
+def _extract_tri6_surface(mesh_surf):
+    """Extract Tri6 (curved) surface mesh from an NGSolve mesh.
 
-    Three physical groups in one file, with node/element IDs offset
-    so there are no collisions:
-
-      Physical "air"           (3D, tag 1): volume tets + B NodeData
-      Physical "coil_surface"  (2D, tag 2): surface tris + J NodeData
-      Physical "coil_wire"     (1D, tag 3): wireframe edges (no data)
-
-    v4.1 entity-block format with one entity per physical group.
+    Returns:
+        nodes: list of (x, y, z) — vertices first, then mid-edge nodes
+        elems: list of [v0, v1, v2, m01, m12, m20] (0-indexed into nodes)
+        edges: sorted list of (a, b) vertex-only edges for wireframe
     """
-    from ngsolve import BND
+    from ngsolve import BND, IntegrationRule
 
-    nv_vol = len(vol_nodes)
-    nv_surf = mesh_surf.nv
-    surf_offset = nv_vol  # surface node IDs = nv_vol+1 ..
+    nodes = [(v.point[0], v.point[1], v.point[2])
+             for v in mesh_surf.vertices]
+    edge_cache = {}  # (min_v, max_v) -> mid_node_index
 
-    surf_nodes = [(v.point[0], v.point[1], v.point[2])
-                  for v in mesh_surf.vertices]
-    surf_elems = [[v.nr for v in el.vertices]
-                  for el in mesh_surf.Elements(BND)]
-
-    # Wireframe edges
-    edges = set()
+    elems = []
+    wire_edges = set()
     for el in mesh_surf.Elements(BND):
         verts = [v.nr for v in el.vertices]
-        for i in range(len(verts)):
-            a, b = verts[i], verts[(i + 1) % len(verts)]
-            edges.add((min(a, b), max(a, b)))
-    edges = sorted(edges)
+        if len(verts) != 3:
+            continue
 
-    n_nodes = nv_vol + nv_surf
+        trafo = mesh_surf.GetTrafo(el)
+
+        # Map reference corners to physical vertices
+        ref_corners = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+        corner_pts = []
+        for u, v in ref_corners:
+            ir = IntegrationRule([(u, v)], [1.0])
+            for ip in ir:
+                mip = trafo(ip)
+                corner_pts.append(
+                    np.array([mip.point[0], mip.point[1], mip.point[2]]))
+
+        ref_to_vert = []
+        for ci in range(3):
+            dists = [np.linalg.norm(corner_pts[ci] -
+                     np.array(mesh_surf.vertices[verts[vi]].point))
+                     for vi in range(3)]
+            ref_to_vert.append(verts[np.argmin(dists)])
+
+        # Mid-edge nodes via GetTrafo on curved geometry
+        ref_mids = [(0.5, 0.0), (0.5, 0.5), (0.0, 0.5)]
+        edge_pairs = [(0, 1), (1, 2), (2, 0)]
+        mid_indices = []
+        for ei, (rc0, rc1) in enumerate(edge_pairs):
+            va = ref_to_vert[rc0]
+            vb = ref_to_vert[rc1]
+            edge_key = (min(va, vb), max(va, vb))
+            wire_edges.add(edge_key)
+
+            if edge_key in edge_cache:
+                mid_indices.append(edge_cache[edge_key])
+            else:
+                u, v = ref_mids[ei]
+                ir = IntegrationRule([(u, v)], [1.0])
+                for ip in ir:
+                    mip = trafo(ip)
+                    pt = (mip.point[0], mip.point[1], mip.point[2])
+                    nidx = len(nodes)
+                    nodes.append(pt)
+                    edge_cache[edge_key] = nidx
+                    mid_indices.append(nidx)
+
+        # GMSH Tri6 ordering: v0 v1 v2 m01 m12 m20
+        elems.append([ref_to_vert[0], ref_to_vert[1], ref_to_vert[2],
+                      mid_indices[0], mid_indices[1], mid_indices[2]])
+
+    return nodes, elems, sorted(wire_edges)
+
+
+def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
+                            vol_nodes, vol_elems, B_nodes,
+                            wp_nodes=None, wp_elems=None, q_nodes=None):
+    """Write a single .msh v4.1 with volume B + surface J + wireframe.
+
+    Physical groups in one file, with node/element IDs offset
+    so there are no collisions:
+
+      Physical "air"                (3D, tag 1): volume tets   + B NodeData
+      Physical "coil_surface"       (2D, tag 2): Tri6 surface  + J NodeData
+      Physical "coil_wire"          (1D, tag 3): wireframe edges (no data)
+      Physical "workpiece_surface"  (2D, tag 4): workpiece tris + q NodeData
+                                                  (optional, only if wp_nodes)
+
+    Coil surface uses Tri6 (GMSH type 9) for curved rendering.
+    Writes companion .msh.opt with display options (replaces .geo).
+
+    Args:
+        filename: Output .msh path
+        mesh_surf: NGSolve mesh (must have Curve(2) applied)
+        J_nodes: (nv_surf, 3) array of J per vertex node
+        vol_nodes: list of (x,y,z) for volume mesh vertices
+        vol_elems: list of [v0,v1,v2,v3] for volume tets (0-indexed)
+        B_nodes: (nv_vol, 3) array of B per volume vertex
+        wp_nodes: optional list of (x,y,z) for workpiece surface
+        wp_elems: optional list of [v0,v1,v2] for workpiece tris (0-indexed)
+        q_nodes: optional (nv_wp,) array of heating density per wp vertex
+    """
+    from gmsh_post_export import write_companion_opt
+
+    # Extract curved Tri6 coil surface
+    surf_nodes, surf_elems, wire_edges = _extract_tri6_surface(mesh_surf)
+    nv_surf = len(surf_nodes)  # vertices + mid-edge nodes
+
+    nv_vol = len(vol_nodes)
+    surf_offset = nv_vol
     ne_vol = len(vol_elems)
     ne_surf = len(surf_elems)
-    ne_wire = len(edges)
+    ne_wire = len(wire_edges)
+
+    # Workpiece (optional)
+    has_wp = (wp_nodes is not None and wp_elems is not None
+              and q_nodes is not None)
+    nv_wp = len(wp_nodes) if has_wp else 0
+    ne_wp = len(wp_elems) if has_wp else 0
+    wp_offset = nv_vol + nv_surf
+
+    n_nodes = nv_vol + nv_surf + nv_wp
+    n_phys = 4 if has_wp else 3
+    n_entities_curve = 1
+    n_entities_surf = 2 if has_wp else 1
+    n_entities_vol = 1
 
     with open(filename, 'w', encoding='utf-8') as f:
         # ---- Header ----
         f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
 
         # ---- Physical names ----
-        f.write('$PhysicalNames\n3\n')
+        f.write(f'$PhysicalNames\n{n_phys}\n')
         f.write('3 1 "air"\n')
         f.write('2 2 "coil_surface"\n')
         f.write('1 3 "coil_wire"\n')
+        if has_wp:
+            f.write('2 4 "workpiece_surface"\n')
         f.write('$EndPhysicalNames\n')
 
-        # ---- Entities (one per physical group) ----
-        # Format: numPoints numCurves numSurfaces numVolumes
-        # Point: not needed
-        # Curve (1D): tag bbox numPhysicals [physTag] numBounding []
-        # Surface (2D): same
-        # Volume (3D): same
+        # ---- Entities ----
         f.write('$Entities\n')
-        f.write('0 1 1 1\n')
+        f.write(f'0 {n_entities_curve} {n_entities_surf} {n_entities_vol}\n')
         # Curve entity (tag=3, physical=3)
         f.write('3 0 0 0 0 0 0 1 3 0\n')
         # Surface entity (tag=2, physical=2)
         f.write('2 0 0 0 0 0 0 1 2 0\n')
+        if has_wp:
+            # Surface entity (tag=4, physical=4)
+            f.write('4 0 0 0 0 0 0 1 4 0\n')
         # Volume entity (tag=1, physical=1)
         f.write('1 0 0 0 0 0 0 1 1 0\n')
         f.write('$EndEntities\n')
 
-        # ---- Nodes (two entity blocks) ----
-        # numEntityBlocks numNodes minTag maxTag
+        # ---- Nodes ----
+        n_blocks = 2 + (1 if has_wp else 0)
         f.write('$Nodes\n')
-        f.write(f'2 {n_nodes} 1 {n_nodes}\n')
+        f.write(f'{n_blocks} {n_nodes} 1 {n_nodes}\n')
         # Block 1: volume nodes (entity dim=3, tag=1)
         f.write(f'3 1 0 {nv_vol}\n')
         for i in range(nv_vol):
@@ -1239,31 +1333,46 @@ def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
             f.write(f'{surf_offset + i + 1}\n')
         for x, y, z in surf_nodes:
             f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        # Block 3: workpiece nodes (entity dim=2, tag=4)
+        if has_wp:
+            f.write(f'2 4 0 {nv_wp}\n')
+            for i in range(nv_wp):
+                f.write(f'{wp_offset + i + 1}\n')
+            for x, y, z in wp_nodes:
+                f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
         f.write('$EndNodes\n')
 
-        # ---- Elements (three entity blocks) ----
-        n_elems = ne_vol + ne_surf + ne_wire
+        # ---- Elements ----
+        n_elems = ne_vol + ne_surf + ne_wire + ne_wp
+        n_elem_blocks = 3 + (1 if has_wp else 0)
         f.write('$Elements\n')
-        f.write(f'3 {n_elems} 1 {n_elems}\n')
+        f.write(f'{n_elem_blocks} {n_elems} 1 {n_elems}\n')
+        eid = 1
         # Block 1: volume tets (dim=3, entity=1, type=4=tet)
         f.write(f'3 1 4 {ne_vol}\n')
-        eid = 1
         for verts in vol_elems:
             ns = ' '.join(str(v + 1) for v in verts)
             f.write(f'{eid} {ns}\n')
             eid += 1
-        # Block 2: surface tris (dim=2, entity=2, type=2=tri)
-        f.write(f'2 2 2 {ne_surf}\n')
-        for verts in surf_elems:
-            ns = ' '.join(str(v + surf_offset + 1) for v in verts)
+        # Block 2: surface Tri6 (dim=2, entity=2, type=9=tri6)
+        f.write(f'2 2 9 {ne_surf}\n')
+        for conn in surf_elems:
+            ns = ' '.join(str(v + surf_offset + 1) for v in conn)
             f.write(f'{eid} {ns}\n')
             eid += 1
         # Block 3: wireframe lines (dim=1, entity=3, type=1=line)
         f.write(f'1 3 1 {ne_wire}\n')
-        for a, b in edges:
+        for a, b in wire_edges:
             f.write(f'{eid} {a + surf_offset + 1} '
                     f'{b + surf_offset + 1}\n')
             eid += 1
+        # Block 4: workpiece tris (dim=2, entity=4, type=2=tri3)
+        if has_wp:
+            f.write(f'2 4 2 {ne_wp}\n')
+            for verts in wp_elems:
+                ns = ' '.join(str(v + wp_offset + 1) for v in verts)
+                f.write(f'{eid} {ns}\n')
+                eid += 1
         f.write('$EndElements\n')
 
         # ---- NodeData: B on volume nodes ----
@@ -1275,28 +1384,45 @@ def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
             f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
         f.write('$EndNodeData\n')
 
-        # ---- NodeData: J on surface nodes ----
+        # ---- NodeData: J on coil vertex nodes only ----
+        # J_nodes has data for mesh_surf.nv vertices.
+        # Tri6 mid-edge nodes have no direct J data — GMSH interpolates.
+        nv_vert = mesh_surf.nv
         f.write('$NodeData\n')
         f.write('1\n"J"\n1\n0.0\n3\n0\n3\n')
-        f.write(f'{nv_surf}\n')
-        for i in range(nv_surf):
+        f.write(f'{nv_vert}\n')
+        for i in range(nv_vert):
             jx, jy, jz = J_nodes[i]
             f.write(f'{surf_offset + i + 1} '
                     f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
         f.write('$EndNodeData\n')
+
+        # ---- NodeData: q on workpiece nodes ----
+        if has_wp:
+            f.write('$NodeData\n')
+            f.write('1\n"q"\n1\n0.0\n3\n0\n1\n')
+            f.write(f'{nv_wp}\n')
+            for i in range(nv_wp):
+                f.write(f'{wp_offset + i + 1} {q_nodes[i]:.15e}\n')
+            f.write('$EndNodeData\n')
+
+    # Write companion .msh.opt (replaces .geo)
+    # B and J are vector (ncomp=3), q is scalar (ncomp=1)
+    write_companion_opt(filename, n_vector_views=2,
+                        n_scalar_views=1 if has_wp else 0)
 
 
 def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
                  lx=0, ly=0, lz=0, maxh_vol=0):
     """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
 
-    Loads Solve results (mesh .vol + J_coeffs.npy). No Cubit needed.
+    Loads Solve results (.vol + .sol or .npy). No Cubit needed.
 
     Args:
         mesh_vol_path: Path to surface_mesh.vol from solve step
         fes_order: HDivSurface basis order
         msh_output: Optional .msh output path
-        j_npy: Path to J_coeffs.npy from solve step
+        j_npy: Path to J_coeffs.sol or J_coeffs.npy from solve step
         lx, ly, lz: Box half-sizes [m].
         maxh_vol: Volume mesh element size [m].
 
@@ -1322,11 +1448,14 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     if msh_output:
         base_dir = os.path.dirname(os.path.abspath(msh_output))
 
-    # Load J coefficients
-    J = np.load(j_npy)
+    # Load J coefficients (.sol or .npy)
     fes_J = HDivSurface(mesh, order=fes_order)
     gf_J = GridFunction(fes_J)
-    gf_J.vec.FV().NumPy()[:] = J
+    if j_npy.endswith('.sol'):
+        gf_J.Load(j_npy)
+    else:
+        J = np.load(j_npy)
+        gf_J.vec.FV().NumPy()[:] = J
 
     # Per-node J vector via vertex averaging
     elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
@@ -1355,14 +1484,12 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
 
     # Write a SINGLE v4.1 .msh with:
     #   - volume tets (air box) carrying B NodeData
-    #   - surface tris (coil) carrying J NodeData
+    #   - Tri6 curved surface (coil) carrying J NodeData
     #   - coil wireframe (1D edges) for visual reference
     #
-    # v3.6.1 did this with v2.2 (_write_combined_msh). The v4.1
-    # version uses the same node-ID-offset trick but wraps it in
-    # the entity-block format that GMSH 4.x expects. This gives
-    # the same "kirei" result (coil wireframe + J arrows + B arrows
-    # in the air around it) while following the v4.1-only policy.
+    # Coil surface uses Tri6 (curved) elements from mesh.Curve(2)
+    # for the smooth "kirei" rendering. .msh.opt auto-loaded by GMSH
+    # sets arrow sizes and hides air mesh edges.
     gmsh_file = os.path.join(
         base_dir, "inductance.msh").replace("\\", "/")
 
@@ -1370,6 +1497,14 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     fes_B = HDiv(mesh_vol, order=1)
     gf_B = GridFunction(fes_B)
     gf_B.Set(B_cf)
+
+    # Save B (.vol + .sol pair for the air volume mesh)
+    air_vol = os.path.join(base_dir, "air_mesh.vol").replace("\\", "/")
+    b_sol = os.path.join(base_dir, "B_field.sol").replace("\\", "/")
+    mesh_vol.ngmesh.Save(air_vol)
+    gf_B.Save(b_sol)
+    progress("SAVE", f"air_mesh.vol + B_field.sol")
+
     vol_nodes_xyz = [(v.point[0], v.point[1], v.point[2])
                      for v in mesh_vol.vertices]
     B_nodes = np.zeros((len(vol_nodes_xyz), 3))
@@ -1385,20 +1520,7 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
         gmsh_file, mesh, J_nodes, vol_nodes_xyz, vol_elems, B_nodes)
     progress("GMSH", f"B + J + wireframe (v4.1): {gmsh_file}")
 
-    # Companion .geo — v3.6.1 "kirei" display options
-    geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
-    with open(geo_file, 'w', encoding='utf-8') as f:
-        f.write(f'Merge "{os.path.basename(gmsh_file)}";\n')
-        f.write('Mesh.NumSubEdges = 4;\n')
-        f.write('Mesh.VolumeEdges = 0;\n')
-        # B (View[0]): 3D arrows
-        f.write('View[0].VectorType = 4;\n')
-        f.write('View[0].ArrowSizeMin = 20;\n')
-        f.write('View[0].ArrowSizeMax = 20;\n')
-        # J (View[1]): 3D arrows
-        f.write('View[1].VectorType = 4;\n')
-        f.write('View[1].ArrowSizeMin = 20;\n')
-        f.write('View[1].ArrowSizeMax = 20;\n')
+    # .msh.opt is written by _write_combined_msh_v41 (replaces .geo)
 
     # COMSOL-compatible text interpolation files
     vol_nodes_list = [(v.point[0], v.point[1], v.point[2])
@@ -1414,7 +1536,7 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     t_post = _time.perf_counter() - t0
 
     return {
-        "gmsh_file": geo_file,
+        "gmsh_file": gmsh_file,
         "t_post": round(t_post, 2),
     }
 
@@ -1570,6 +1692,137 @@ def _write_comsol_txt(filename, nodes, field_data, field_name, comp_names):
             f.write(f'{x:.15e} {y:.15e} {z:.15e} {vals}\n')
 
 
+
+
+def run_bem_pipeline(vol_file, source_label="source", sink_label="sink",
+                     coil_label="coil", wp_label="workpiece",
+                     fes_order=0, frequency=10000, sigma=5.8e7,
+                     mu_r=1.0, material="copper", impedance_model="linear",
+                     half_thickness=0.010, coil_radius=0.030,
+                     coil_current=100.0, field_air=True,
+                     lx=0.06, ly=0.06, lz=0.03, maxh_vol=0.015):
+    """Full BEM pipeline: .vol -> .sol files + .msh visualization.
+
+    Input:
+        {name}.vol       Cubit-exported mesh (radia_export netgen order 2)
+
+    Output (all in same directory as .vol):
+        {name}_coil.vol  Coil surface mesh
+        {name}_J.sol     Coil current density J (HDivSurface)
+        {name}_air.vol   Air volume mesh (Biot-Savart box)
+        {name}_B.sol     Magnetic flux density B (HDiv)
+        {name}_wp.vol    Workpiece surface mesh
+        {name}_q.sol     Heating density q = sigma*|H_t|^2/2
+        {name}.msh       GMSH visualization (B + J + q + wireframe)
+        {name}.msh.opt   GMSH display options
+
+    Args:
+        vol_file: Path to .vol file from Cubit export.
+        source_label: Boundary label for current source face.
+        sink_label: Boundary label for current sink face.
+        coil_label: Material name of the coil block.
+        wp_label: Material name of the workpiece block.
+        fes_order: HDivSurface basis order (0=RWG).
+        frequency: Operating frequency [Hz].
+        sigma: Workpiece conductivity [S/m].
+        mu_r: Workpiece relative permeability.
+        material: Workpiece material name for ESIM.
+        impedance_model: "linear" or "esim".
+        half_thickness: Workpiece thickness for ESIM [m].
+        coil_radius: Coil loop radius [m] (for workpiece phi_inc).
+        coil_current: Coil current [A].
+        field_air: Compute B field in air box.
+        lx, ly, lz: Air box half-sizes [m].
+        maxh_vol: Air box element size [m].
+
+    Returns:
+        dict with file paths and solver results.
+    """
+    base = os.path.splitext(vol_file)[0]
+    base_dir = os.path.dirname(os.path.abspath(vol_file))
+
+    # === 1. Coil BEM: J ===
+    progress("PIPELINE", "Step 1: Coil BEM solve")
+    result = extract_inductance_vol(
+        vol_file=vol_file,
+        source_label=source_label, sink_label=sink_label,
+        fes_order=fes_order, coil_label=coil_label,
+        field_air=field_air,
+        msh_output=base + '.msh',
+    )
+    if 'error' in result:
+        return result
+
+    # Rename to {name}_xxx convention
+    _rename_if_exists(base_dir, 'surface_mesh.vol', base + '_coil.vol')
+    _rename_if_exists(base_dir, 'J_coeffs.sol', base + '_J.sol')
+    _rename_if_exists(base_dir, 'J_coeffs.npy', base + '_J.npy')
+    _rename_if_exists(base_dir, 'air_mesh.vol', base + '_air.vol')
+    _rename_if_exists(base_dir, 'B_field.sol', base + '_B.sol')
+    progress("PIPELINE", f"Coil: {base}_coil.vol + _J.sol")
+
+    # === 2. Workpiece BEM: q ===
+    wp_result = {}
+    wp_vol = base + '_wp.vol'
+    q_sol = base + '_q.sol'
+    try:
+        sys.path.insert(0, os.path.dirname(__file__))
+        from calc_heating_bem import compute_heating_bem
+        progress("PIPELINE", "Step 2: Workpiece BEM heating")
+        wp_result = compute_heating_bem(
+            vol_file=vol_file,
+            coil_radius=coil_radius, coil_current=coil_current,
+            frequency=frequency, sigma=sigma,
+            material=material, impedance_model=impedance_model,
+            mu_r=mu_r, half_thickness=half_thickness,
+            wp_label=wp_label,
+        )
+        _rename_if_exists(base_dir, 'workpiece.vol', wp_vol)
+        _rename_if_exists(base_dir, 'q_heating.sol', q_sol)
+        progress("PIPELINE", f"WP: P={wp_result.get('P_total_W', 0):.4e} W")
+    except Exception as e:
+        progress("PIPELINE", f"Workpiece skipped: {e}")
+        wp_vol = None
+        q_sol = None
+
+    # === 3. Convert .sol -> .msh ===
+    progress("PIPELINE", "Step 3: convert_sol_to_msh")
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    from gmsh_post_export import convert_sol_to_msh
+    coil_vol = base + '_coil.vol'
+    j_sol = base + '_J.sol'
+    air_vol = base + '_air.vol' if field_air else None
+    b_sol = base + '_B.sol' if field_air else None
+
+    convert_sol_to_msh(
+        output_msh=base + '.msh',
+        surface_vol=coil_vol, j_sol=j_sol,
+        air_vol=air_vol, b_sol=b_sol,
+        wp_vol=wp_vol if wp_vol and os.path.exists(wp_vol) else None,
+        q_sol=q_sol if q_sol and os.path.exists(q_sol) else None,
+        fes_order=fes_order,
+    )
+    progress("PIPELINE", f"Done: {base}.msh")
+
+    return {
+        "vol": vol_file,
+        "coil_vol": coil_vol, "j_sol": j_sol,
+        "air_vol": air_vol, "b_sol": b_sol,
+        "wp_vol": wp_vol, "q_sol": q_sol,
+        "msh": base + '.msh',
+        "L_nH": result.get('L_nH'),
+        "P_W": wp_result.get('P_total_W'),
+        "H_t_rms": wp_result.get('H_t_rms_Am'),
+    }
+
+
+def _rename_if_exists(base_dir, old_name, new_path):
+    """Rename a file from base_dir/old_name to new_path."""
+    old = os.path.join(base_dir, old_name)
+    if os.path.exists(old):
+        if os.path.exists(new_path):
+            os.remove(new_path)
+        os.rename(old, new_path)
 
 
 def main():
