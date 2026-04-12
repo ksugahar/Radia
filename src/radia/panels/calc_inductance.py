@@ -1252,13 +1252,17 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     post_J.write(gmsh_file_J)
     progress("GMSH", f"J written: {gmsh_file_J}")
 
-    # Companion .geo (Merge both files).
-    # Mesh.Volumes/VolumeFaces/VolumeEdges = 0  -> hide the air
-    # tetrahedra so the B arrows are clearly visible. Curved coil
-    # surface elements use NumSubEdges = 4 sub-segments per side.
-    # View[0].VectorType = 4 picks the 3D arrow style; the arrow
-    # size is left at GMSH's auto-scale (the user can rescale via
-    # Tools -> Options -> View -> General).
+    # Companion .geo (Merge both files). Restored from the v3.6.1
+    # "beautiful" version (commits 5e0b69c / 1c957f3, 2026-03-23)
+    # which had:
+    #   - Mesh.Volumes / VolumeFaces / VolumeEdges = 0  hides air
+    #     tetrahedra so the B arrows are visible
+    #   - View[*].VectorType = 4                        3D arrows
+    #   - View[*].ArrowSizeMin = ArrowSizeMax = 20      THE KEY:
+    #     without a fixed arrow size, GMSH's auto-scale picks ~3
+    #     pixel arrows that disappear against any mesh background.
+    #     Hard-coding 20 pixels is what made the past visualization
+    #     look "kirei" (everyone said so).
     geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
     with open(geo_file, 'w', encoding='utf-8') as f:
         f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
@@ -1267,12 +1271,16 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
         f.write('Mesh.Volumes = 0;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
         f.write('Mesh.VolumeFaces = 0;\n')
-        f.write('// B view: 3D arrow style\n')
+        # B view (View[0]): 3D arrows, fixed visible size
         f.write('View[0].VectorType = 4;\n')
         f.write('View[0].IntervalsType = 3;\n')
-        f.write('// J view: 3D arrow style\n')
+        f.write('View[0].ArrowSizeMin = 20;\n')
+        f.write('View[0].ArrowSizeMax = 20;\n')
+        # J view (View[1]): 3D arrows, fixed visible size
         f.write('View[1].VectorType = 4;\n')
         f.write('View[1].IntervalsType = 3;\n')
+        f.write('View[1].ArrowSizeMin = 20;\n')
+        f.write('View[1].ArrowSizeMax = 20;\n')
 
     # COMSOL-compatible text interpolation files
     vol_nodes_list = [(v.point[0], v.point[1], v.point[2])

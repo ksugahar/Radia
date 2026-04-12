@@ -792,18 +792,22 @@ def panel_gui_pitfalls(topic: str = "") -> str:
     that prevents it from coming back.
 
     Topics:
-      combo_state         -- save/restore by text, not index
-      mode_switch         -- hidden widgets must not feed build_command
-      layout_unification  -- shared widget set across solver methods
-      gmsh_viz            -- companion .geo, hide volume mesh, vector only
-      subprocess_args     -- calc_*.py choices must match GUI combos
-      cubit_jou           -- subtract id semantics, surface id renumbering
-      sample_jou          -- one .jou per (panel, method) pair
-      silent_action       -- menu actions must produce visible feedback
-      silent_except       -- never bare-except; always log type+traceback
-                             tail; always provide a fallback path
-      result_keys         -- subprocess result dict is an API contract
-      learn_edition_cap   -- ignore the 50k warning, radia_export bypasses it
+      combo_state             -- save/restore by text, not index
+      mode_switch             -- hidden widgets must not feed build_command
+      layout_unification      -- shared widget set across solver methods
+      gmsh_viz                -- companion .geo, hide volume mesh, vector only
+      gmsh_arrow_size         -- ArrowSizeMin/Max=20 — without this the
+                                 field arrows are functionally invisible
+      subprocess_args         -- calc_*.py choices must match GUI combos
+      cubit_jou               -- subtract id semantics, surface id renumbering
+      sample_jou              -- one .jou per (panel, method) pair
+      silent_action           -- menu actions must produce visible feedback
+      silent_except           -- never bare-except; always log type+traceback
+                                 tail; always provide a fallback path
+      result_keys             -- subprocess result dict is an API contract
+      regression_blast_radius -- run BOTH panels after touching shared
+                                 helpers; opaque casts (PointId) bite
+      learn_edition_cap       -- ignore the 50k warning, radia_export bypasses it
 
     Args:
         topic: Empty for the full document, or one of the topic
