@@ -94,6 +94,16 @@ def extract_inductance_vol(vol_file, source_label="source",
 
     # Load mesh from .vol (keep full mesh for workpiece panel extraction)
     mesh_full = Mesh(vol_file)
+    # Activate high-order curving from the .vol's curvedelements
+    # section. The Cubit exporter writes order=1..5; calling Curve(2)
+    # is enough to make GmshPostExport detect the mesh as curved and
+    # emit Tri6 elements with correct mid-edge nodes for the coil
+    # visualization. NGSolve clips to the actual stored order, so
+    # this is safe even when the .vol is order=1.
+    try:
+        mesh_full.Curve(2)
+    except Exception:
+        pass
 
     # BEM requires surface-only mesh (HDivSurface on volume mesh
     # includes interior edges as DOFs -> singular SL matrix).
@@ -104,10 +114,11 @@ def extract_inductance_vol(vol_file, source_label="source",
     # making HDivSurface DOFs / SL singular.
     if mesh_full.ne > 0:
         from calc_heating_bem import _extract_surface_mesh_filtered
-        mesh = _extract_surface_mesh_filtered(mesh_full,
-                                              keep_label=coil_label)
+        mesh, surf_new_to_old = _extract_surface_mesh_filtered(
+            mesh_full, keep_label=coil_label, return_vertex_map=True)
     else:
         mesh = mesh_full
+        surf_new_to_old = {i: i for i in range(mesh.nv)}
 
     t_export = _time.perf_counter() - t_total_start
 
@@ -143,6 +154,11 @@ def extract_inductance_vol(vol_file, source_label="source",
     # Export coil surface mesh (no field yet) to GMSH so the user can
     # at least see the mesh while the BEM solve runs. The J / B fields
     # are added later (or in a separate post pass) — see field_air.
+    # We use ``mesh_full`` (with Curve(2) activated above) so the
+    # exporter can emit Tri6 elements with the correct mid-edge nodes
+    # — the linear extracted mesh ``mesh`` would only render flat
+    # triangles. The exporter writes BND elements grouped by
+    # material, so the user can hide non-coil entities in GMSH.
     if msh_output:
         base_dir = os.path.dirname(os.path.abspath(msh_output))
         gmsh_file_J = msh_output
@@ -152,7 +168,7 @@ def extract_inductance_vol(vol_file, source_label="source",
     gmsh_file_J = gmsh_file_J.replace("\\", "/")
     try:
         from gmsh_post_export import GmshPostExport
-        post = GmshPostExport(mesh, boundary=True)
+        post = GmshPostExport(mesh_full, boundary=True)
         post.write_mesh(gmsh_file_J)
         sys.stderr.write(f"MESH_READY:{gmsh_file_J}\n")
         sys.stderr.flush()
@@ -179,8 +195,18 @@ def extract_inductance_vol(vol_file, source_label="source",
 
     # Add the actual J vector field to the surface .msh so the GMSH
     # button has something meaningful to show even when --field-air
-    # is off. We re-export the same file (overwrites the empty mesh
-    # written before the solve) with vector + magnitude views.
+    # is off. We re-export the same file (overwrites the mesh-only
+    # version written before the solve) with the J VECTOR view —
+    # |J| is intentionally not exported because GMSH already shows
+    # the magnitude when the user picks the vector view.
+    #
+    # The J coefficients live on the linear extracted mesh, so we
+    # vertex-average the per-element J there and then map the result
+    # back onto mesh_full's parent vertices via surf_new_to_old. The
+    # write step uses mesh_full so the curved Tri6 elements survive.
+    # J_nodes_full is also reused later by the workpiece coupled
+    # path to re-write the same .msh with material-restricted views.
+    J_nodes_full = None
     if gmsh_file_J:
         try:
             from gmsh_post_export import GmshPostExport
@@ -199,7 +225,7 @@ def extract_inductance_vol(vol_file, source_label="source",
             elem_Jz = Integrate(gf_J_post[2], mesh, VOL_or_BND=BND,
                                 element_wise=True)
 
-            J_nodes = np.zeros((mesh.nv, 3))
+            J_nodes_extracted = np.zeros((mesh.nv, 3))
             nc_count = np.zeros(mesh.nv)
             for el in mesh.Elements(BND):
                 a = max(abs(elem_A[el.nr]), 1e-30)
@@ -207,18 +233,24 @@ def extract_inductance_vol(vol_file, source_label="source",
                         elem_Jy[el.nr] / a,
                         elem_Jz[el.nr] / a)
                 for vtx in el.vertices:
-                    J_nodes[vtx.nr, 0] += jvec[0]
-                    J_nodes[vtx.nr, 1] += jvec[1]
-                    J_nodes[vtx.nr, 2] += jvec[2]
+                    J_nodes_extracted[vtx.nr, 0] += jvec[0]
+                    J_nodes_extracted[vtx.nr, 1] += jvec[1]
+                    J_nodes_extracted[vtx.nr, 2] += jvec[2]
                     nc_count[vtx.nr] += 1
             for k in range(3):
-                J_nodes[:, k] = np.where(nc_count > 0,
-                                         J_nodes[:, k] / nc_count, 0.0)
+                J_nodes_extracted[:, k] = np.where(
+                    nc_count > 0,
+                    J_nodes_extracted[:, k] / nc_count, 0.0)
 
-            post_J = GmshPostExport(mesh, boundary=True)
-            post_J.add_field("|J|",
-                             np.linalg.norm(J_nodes, axis=1), ncomp=1)
-            post_J.add_field("J", J_nodes, ncomp=3)
+            # Lift J onto mesh_full's vertices via the new->old map.
+            # Vertices not adjacent to a coil boundary stay zero.
+            J_nodes_full = np.zeros((mesh_full.nv, 3))
+            for new_nr, old_nr in surf_new_to_old.items():
+                if 0 <= new_nr < mesh.nv and 0 <= old_nr < mesh_full.nv:
+                    J_nodes_full[old_nr] = J_nodes_extracted[new_nr]
+
+            post_J = GmshPostExport(mesh_full, boundary=True)
+            post_J.add_field("J", J_nodes_full, ncomp=3)
             post_J.write(gmsh_file_J)
         except Exception as _e:
             sys.stderr.write(f"WARN: J post export failed: {_e}\n")
@@ -282,6 +314,11 @@ def extract_inductance_vol(vol_file, source_label="source",
                     mu_r=mu_r,
                     material=material,
                     use_local_curvature=use_local_curvature)
+                # Pull out private wp_J/wp_q arrays before merging the
+                # rest of the dict (they are NumPy arrays and would
+                # break json.dumps later).
+                wp_J_full_arr = coupled_result.pop("_wp_J_full", None)
+                wp_q_full_arr = coupled_result.pop("_wp_q_full", None)
                 result.update(coupled_result)
                 # Headline inductance becomes the coupled L_total.
                 # Keep the air-only value as L_air_H so the panel can
@@ -289,6 +326,29 @@ def extract_inductance_vol(vol_file, source_label="source",
                 result["L_air_H"] = result["inductance_H"]
                 result["inductance_H"] = coupled_result[
                     "coupled_L_total_H"]
+                # Re-write the J .msh with workpiece views appended
+                # (J vector + heating density), restricted to the
+                # "workpiece" material so they only render on the
+                # workpiece surface.
+                if (gmsh_file_J and wp_J_full_arr is not None
+                        and J_nodes_full is not None):
+                    try:
+                        from gmsh_post_export import GmshPostExport
+                        post_J2 = GmshPostExport(mesh_full, boundary=True)
+                        post_J2.add_field(
+                            "J_coil", J_nodes_full, ncomp=3,
+                            material="coil")
+                        post_J2.add_field(
+                            "J_workpiece", wp_J_full_arr, ncomp=3,
+                            material="workpiece")
+                        post_J2.add_field(
+                            "q_workpiece [W/m^2]", wp_q_full_arr, ncomp=1,
+                            material="workpiece")
+                        post_J2.write(gmsh_file_J)
+                    except Exception as _e:
+                        sys.stderr.write(
+                            f"WARN: wp J/q export failed: {_e}\n")
+                        sys.stderr.flush()
             except Exception as _exc:
                 # Coupled solve failed — surface the error rather than
                 # silently falling back to a one-way (wrong) result.
@@ -508,9 +568,12 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     # (the sideset, e.g. "sibc"), but _extract_surface_mesh_filtered
     # filters by VOLUME material. The .jou convention is to name the
     # workpiece block "workpiece" and the surface sideset "sibc", so
-    # always use "workpiece" here.
-    mesh_wp = _extract_surface_mesh_filtered(
-        mesh_full, keep_label="workpiece")
+    # always use "workpiece" here. The new_to_old vertex map lets us
+    # lift per-element/per-vertex workpiece quantities back onto
+    # mesh_full so the GMSH visualization keeps the curved Tri6
+    # rendering of the parent mesh.
+    mesh_wp, wp_new_to_old = _extract_surface_mesh_filtered(
+        mesh_full, keep_label="workpiece", return_vertex_map=True)
 
     _, mat_mu_r = get_bh_curve(material)
     if mu_r > 0:
@@ -567,6 +630,54 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     sol = solver.solve(Z_s=Z_s_arg, omega=omega,
                        max_iter=10, tol=1e-3, relax=0.5)
 
+    # ---- Lift wp_J onto mesh_full vertices for GMSH visualization ----
+    # The CoupledBEMSolver returns wp_J as per-element complex vectors
+    # on the *extracted* mesh_wp. To get a per-vertex |J|^2 on the
+    # parent mesh_full we (1) average per-element |J| onto mesh_wp
+    # vertices, (2) map mesh_wp vertices back to mesh_full vertices,
+    # and (3) compute the heating density sigma * |J_complex|^2 / 2.
+    # The result arrays span all of mesh_full.nv with zeros outside
+    # the workpiece surface; the GMSH writer restricts the view to
+    # the "workpiece" material so the zeros never show up.
+    wp_c = sol.get('wp_c')
+    wp_a = sol.get('wp_a')
+    wp_J_re_arr = sol.get('wp_J_re')
+    wp_J_im_arr = sol.get('wp_J_im')
+    wp_J_full = None
+    wp_q_full = None
+    if (wp_c is not None and wp_a is not None
+            and wp_J_re_arr is not None and len(wp_c) > 0):
+        from ngsolve import BND
+        wp_J_re_arr = np.asarray(wp_J_re_arr)
+        wp_J_im_arr = np.asarray(wp_J_im_arr)
+        # Per-vertex accumulators on the extracted workpiece mesh.
+        Jre_v = np.zeros((mesh_wp.nv, 3))
+        Jim_v = np.zeros((mesh_wp.nv, 3))
+        cnt_v = np.zeros(mesh_wp.nv)
+        for el_idx, el in enumerate(mesh_wp.Elements(BND)):
+            if el_idx >= len(wp_J_re_arr):
+                break
+            for v in el.vertices:
+                Jre_v[v.nr] += wp_J_re_arr[el_idx]
+                Jim_v[v.nr] += wp_J_im_arr[el_idx]
+                cnt_v[v.nr] += 1
+        for k in range(3):
+            Jre_v[:, k] = np.where(cnt_v > 0, Jre_v[:, k] / cnt_v, 0.0)
+            Jim_v[:, k] = np.where(cnt_v > 0, Jim_v[:, k] / cnt_v, 0.0)
+        # Lift to mesh_full vertices.
+        wp_J_full = np.zeros((mesh_full.nv, 3))
+        wp_q_full = np.zeros(mesh_full.nv)
+        Jmag2_v = np.sum(Jre_v ** 2 + Jim_v ** 2, axis=1)
+        # Heating density: P = sigma * |J|^2 / 2 (RMS of phasor =
+        # sqrt(2)*peak; convention here uses peak J so /2 gives
+        # the time-averaged W/m^2). Surface current J [A/m] gives
+        # power per unit area in W/m^2.
+        q_v = sigma * Jmag2_v / 2.0
+        for new_nr, old_nr in wp_new_to_old.items():
+            if 0 <= new_nr < mesh_wp.nv and 0 <= old_nr < mesh_full.nv:
+                wp_J_full[old_nr] = Jre_v[new_nr]
+                wp_q_full[old_nr] = q_v[new_nr]
+
     result = {
         "coupled_L_air_H": float(sol['L_air']),
         "coupled_L_total_H": float(sol['L_total']),
@@ -586,6 +697,12 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
         "coupled_material": material,
     }
     result.update(extra_keys)
+    # Pass per-vertex workpiece quantities back to the caller as
+    # private keys (underscore prefix); the caller pops them before
+    # returning the JSON-serializable result dict to the panel.
+    if wp_J_full is not None:
+        result["_wp_J_full"] = wp_J_full
+        result["_wp_q_full"] = wp_q_full
     return result
 
 
@@ -1114,30 +1231,48 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
 
     from gmsh_post_export import GmshPostExport
 
-    # Volume B-field via BiotSavartCF -> GridFunction.Set()
+    # Volume B-field via BiotSavartCF -> GridFunction.Set().
+    # Only the vector view is exported — the scalar magnitude |B|
+    # is redundant because GMSH shows |B| automatically when the
+    # vector view is selected. The companion .geo below also hides
+    # the air-domain volume mesh so the user only sees the B
+    # arrows.
     fes_B = HDiv(mesh_vol, order=1)
     gf_B = GridFunction(fes_B)
     gf_B.Set(B_cf)
     post_B = GmshPostExport(mesh_vol)
     post_B.add_vector_field("B", gf_B)
-    post_B.add_scalar_field("|B|", Norm(gf_B))
     post_B.write(gmsh_file_B)
     progress("GMSH", f"B written: {gmsh_file_B}")
 
-    # Surface J-field (high-order curved elements)
+    # Surface J-field (high-order curved elements). Vector only —
+    # |J| is dropped for the same reason.
     post_J = GmshPostExport(mesh, boundary=True)
-    post_J.add_field("|J|", np.linalg.norm(J_nodes, axis=1), ncomp=1)
     post_J.add_field("J", J_nodes, ncomp=3)
     post_J.write(gmsh_file_J)
     progress("GMSH", f"J written: {gmsh_file_J}")
 
-    # Companion .geo (Merge both files)
+    # Companion .geo (Merge both files).
+    # Mesh.Volumes/VolumeFaces/VolumeEdges = 0  -> hide the air
+    # tetrahedra so the B arrows are clearly visible. Curved coil
+    # surface elements use NumSubEdges = 4 sub-segments per side.
+    # View[0].VectorType = 4 picks the 3D arrow style; the arrow
+    # size is left at GMSH's auto-scale (the user can rescale via
+    # Tools -> Options -> View -> General).
     geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
     with open(geo_file, 'w', encoding='utf-8') as f:
         f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
         f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
+        f.write('Mesh.Volumes = 0;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
+        f.write('Mesh.VolumeFaces = 0;\n')
+        f.write('// B view: 3D arrow style\n')
+        f.write('View[0].VectorType = 4;\n')
+        f.write('View[0].IntervalsType = 3;\n')
+        f.write('// J view: 3D arrow style\n')
+        f.write('View[1].VectorType = 4;\n')
+        f.write('View[1].IntervalsType = 3;\n')
 
     # COMSOL-compatible text interpolation files
     vol_nodes_list = [(v.point[0], v.point[1], v.point[2])
@@ -1332,8 +1467,10 @@ def main():
                         help="Coil conductivity [S/m] (stored in results)")
     parser.add_argument("--workpiece", default="", help="Workpiece boundary label (prefix match)")
     parser.add_argument("--impedance-model", default="esim",
-                        choices=["esim", "dowell"],
-                        help="esim=ESIM cell problem, dowell=Dowell formula")
+                        choices=["esim", "sibc", "dowell"],
+                        help="esim=ESIM cell problem, sibc=linear surface "
+                             "impedance (per-panel curvature). 'dowell' is "
+                             "kept as a deprecated alias for sibc.")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
     parser.add_argument("--sigma", type=float, default=2e6, help="Workpiece conductivity [S/m]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
@@ -1377,12 +1514,18 @@ def main():
         esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
 
         if args.mode == "solve":
+            # SIBC and the legacy 'dowell' label both map to the
+            # linear surface impedance path; the rest of this module
+            # still uses "dowell" as the internal key.
+            imp_model = args.impedance_model
+            if imp_model == "sibc":
+                imp_model = "dowell"
             return extract_inductance_vol(
                 args.vol, args.source, args.sink,
                 args.fes_order, args.msh_output,
                 coil_label=args.coil,
                 workpiece=args.workpiece,
-                impedance_model=args.impedance_model,
+                impedance_model=imp_model,
                 frequency=args.frequency,
                 sigma=args.sigma,
                 half_thickness=args.half_thickness,
