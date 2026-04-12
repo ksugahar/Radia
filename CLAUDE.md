@@ -289,6 +289,26 @@ for et in etypes:
 - `ref(0,0,1)` -> `el.vertices[2]`
 - Vertex `el[i]` -> `lam[(i+1)%4]` (barycentric index shifted by +1 mod 4)
 
+### Cubit Learn Edition 50k Element Cap: Ignore
+
+**POLICY**: Cubit Learn Edition prints `ERROR: Coreform Cubit - Learn
+Edition restricts export to models with less than 50k elements.` for its
+own .exo / .gmsh / .vtk exporters. The Radia in-tree `radia_export
+netgen` plugin **bypasses this cap** and writes the .vol regardless of
+the warning. The .vol file IS produced (verified 2026-04-12 with a
+147k-element coil model).
+
+Do NOT artificially coarsen sample meshes to fit under 50k elements.
+Tune mesh density to the physical accuracy you need (usually
+BEM-validated reference density), and ignore the Cubit warning. The
+deployed LAB / 100号機 / mdx machines all run Cubit Pro and never see
+the warning anyway.
+
+If a developer running Cubit Learn Edition wants to use Cubit's
+built-in `export gmsh` / `export vtk` paths, that path WILL be capped at
+50k. The official Radia workflow uses `radia_export netgen` only, so
+this is irrelevant to production users.
+
 ### Cubit Block/Sideset Label Convention
 
 **POLICY**: Separate blocks for material and boundary labels. Do NOT mix volume elements and surface elements in the same block.
