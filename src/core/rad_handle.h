@@ -69,16 +69,11 @@ public:
 		bind(r); return *this;
 	}
 
-	int operator<(const radTHandle& r)
-	{
-		if(rep<r.rep) return 1;
-		else return 0;
-	}
-	int operator==(const radTHandle& r)
-	{
-		if(rep==r.rep) return 1;
-		else return 0;
-	}
+	// NOTE: operator< and operator== are provided as free function
+	// templates below (lines ~91 / ~98). Member versions used to be
+	// defined here as well, but C++20 rewriting candidates (P1185)
+	// make MSVC report C2666 ambiguity between the member and the
+	// free template when both exist. Removed 2026-04-12.
 
 	~radTHandle()
 	{
