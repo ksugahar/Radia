@@ -624,6 +624,21 @@ class AnalysisWindow(QMainWindow):
                         self._output.appendPlainText(
                             f"  skin depth = "
                             f"{result['coupled_delta_skin_m']*1e3:.4f} mm")
+                    # Per-panel curvature SIBC (Phase 5, 2026-04-12):
+                    # Surface the local-R range and panel count so the
+                    # user can sanity-check that the mesh-driven extractor
+                    # picked up the workpiece geometry correctly.
+                    if result.get("coupled_use_local_curvature"):
+                        rmin = result.get("coupled_R_local_min_m", 0) * 1e3
+                        rmax = result.get("coupled_R_local_max_m", 0) * 1e3
+                        npan = result.get("coupled_n_wp_panels", 0)
+                        self._output.appendPlainText(
+                            f"  R_local   = [{rmin:.3f}, {rmax:.3f}] mm "
+                            f"(per-panel, {npan} panels)")
+                    elif "coupled_use_local_curvature" in result:
+                        self._output.appendPlainText(
+                            "  R_local   = global half-thickness "
+                            "(per-panel curvature: off)")
                     self._output.appendPlainText(
                         "  (Coupled BEM: per-DOF f_back, validated"
                         " 2026-04-12 vs FEM-Kelvin SIBC at 0.3% on"
