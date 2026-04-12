@@ -34,6 +34,12 @@ from .sparsesolv_knowledge import get_sparsesolv_documentation
 from .kelvin_knowledge import get_kelvin_documentation
 from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
 from .panel_gui_pitfalls_knowledge import get_panel_gui_pitfalls
+from .panel_describer import (
+    find_panel_file as _find_panel_file,
+    parse_panel_file as _parse_panel_file,
+    describe_panel_jp as _describe_panel_jp,
+    widget_locations as _widget_locations,
+)
 
 # NOTE: induction_heating_knowledge is in mcp-server-ih (not here)
 
@@ -779,6 +785,81 @@ def panel_add_param(panel_name: str, param_name: str, param_type: str = "float",
     ])
 
     return "\n".join(lines)
+
+
+@mcp.tool()
+def panel_describe_jp(panel_name: str) -> str:
+    """
+    現在のパネルソースを AST 解析して日本語で詳細に説明する。
+
+    Reads the actual ``radia_<panel_name>.py`` source file (NOT the
+    cached panel_registry.json which can be stale) and returns a
+    Japanese hierarchical description of:
+
+      - all widgets (key, label, type, default, combo items)
+      - mode-switch visibility logic per handler
+      - subprocess command builders with their CLI flag mapping
+
+    Use this to:
+      1. Confirm what the panel actually looks like before editing
+      2. Generate a "spec" for the user to confirm in plain Japanese
+      3. Diff against panel_registry.json to find drift
+
+    Args:
+        panel_name: Panel id (e.g. "ih", "em", "pcb"). Resolved to
+                    ``src/radia/radia_<panel_name>.py``.
+
+    Returns markdown text. Combine with panel_gui_pitfalls() output
+    when planning a panel modification — first describe the current
+    state, then check the relevant pitfalls.
+    """
+    path = _find_panel_file(panel_name)
+    if path is None:
+        return (f"Panel file not found for {panel_name!r}. "
+                f"Expected at src/radia/radia_{panel_name}.py.")
+    try:
+        info = _parse_panel_file(path)
+    except SyntaxError as e:
+        return f"SyntaxError in {path}:{e.lineno}: {e.msg}"
+    return _describe_panel_jp(info)
+
+
+@mcp.tool()
+def panel_widget_locations(panel_name: str, widget_key: str) -> str:
+    """
+    Return file:line locations for everything that touches a widget.
+
+    For a given widget key (e.g. ``"half_thickness"``), returns:
+
+      - **Definition** location: which add_line/add_combo/add_spin
+        call created the widget, with the line number, default
+        value, and combo items.
+      - **Visibility rules**: every ``self._set_row_visible(key, ...)``
+        call across all _on_*_changed handlers, with the conditional
+        branch and the visibility expression.
+      - **Command builder uses**: every ``cmd += ["--flag",
+        self.val("key")]`` line in _build_*_command methods.
+
+    Use this BEFORE editing a widget so you can update every
+    location that references it in one consistent commit. The MCP
+    output is JSON-pretty so the LLM can structure follow-up
+    edits programmatically.
+
+    Args:
+        panel_name:  Panel id (e.g. "ih")
+        widget_key:  Internal widget key (e.g. "half_thickness",
+                     "wp_sigma", "method")
+    """
+    import json
+    path = _find_panel_file(panel_name)
+    if path is None:
+        return f"Panel file not found for {panel_name!r}."
+    try:
+        info = _parse_panel_file(path)
+    except SyntaxError as e:
+        return f"SyntaxError in {path}:{e.lineno}: {e.msg}"
+    locs = _widget_locations(info, widget_key)
+    return json.dumps(locs, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
