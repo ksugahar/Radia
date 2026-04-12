@@ -34,6 +34,7 @@ from .sparsesolv_knowledge import get_sparsesolv_documentation
 from .kelvin_knowledge import get_kelvin_documentation
 from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
 from .panel_gui_pitfalls_knowledge import get_panel_gui_pitfalls
+from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
     parse_panel_file as _parse_panel_file,
@@ -860,6 +861,22 @@ def panel_widget_locations(panel_name: str, widget_key: str) -> str:
         return f"SyntaxError in {path}:{e.lineno}: {e.msg}"
     locs = _widget_locations(info, widget_key)
     return json.dumps(locs, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def gmsh_post_spec() -> str:
+    """
+    GMSH post-processing specification for Radia panels.
+
+    Returns the SINGLE SOURCE OF TRUTH for what the GMSH output must
+    look like: file format, physical groups, mesh curving, display
+    options (.msh.opt), NodeData requirements, and the "kirei"
+    reference from v3.6.1.
+
+    Read this BEFORE writing any GMSH export code in calc_*.py.
+    Every item is mandatory — no exceptions.
+    """
+    return get_gmsh_post_spec()
 
 
 @mcp.tool()
