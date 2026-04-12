@@ -541,36 +541,88 @@ def solve_fem(vol_file="", fes_order=1,
     _log(f"DONE:P={P_total:.4e} L={L*1e9:.2f}nH t={t_total:.1f}s")
 
     # ============================================================
-    # Step 7: GMSH export
+    # Step 7: GMSH export — B vector + J vector + companion .geo
     # ============================================================
+    # Match the BEM viz convention: VECTORS only (GMSH shows the
+    # magnitude under the vector view automatically), and a
+    # companion .geo that hides the volume mesh elements so the
+    # arrows are visible against an empty background instead of
+    # the all-black sphere of internal triangles.
     gmsh_file = ""
     if msh_output:
         try:
             from gmsh_post_export import GmshPostExport
 
-            # Volume field: |B|
             curl_A = curl(gfu)
+            # Real-valued vector for the GMSH view: take the real
+            # part of the complex curl_A in the AC case, full vector
+            # in the DC case. The imaginary part is dropped here
+            # because GMSH view files do not carry phase — write a
+            # second .msh in the future if both phases are needed.
             if is_dc:
-                B_mag = sqrt(sum(curl_A[i] * curl_A[i]
-                                 for i in range(3)))
+                B_cf = curl_A
             else:
-                B_mag = sqrt(sum(curl_A[i].real * curl_A[i].real +
-                                 curl_A[i].imag * curl_A[i].imag
-                                 for i in range(3)))
+                B_cf = ngsolve.CoefficientFunction(
+                    tuple(curl_A[i].real for i in range(3)))
+
+            # Per-vertex B (3 components) via H1 projection.
+            fes_h1v = ngsolve.H1(mesh, order=1, dim=3)
+            gf_Bv = GridFunction(fes_h1v)
+            gf_Bv.Set(B_cf)
+            node_B = np.array([
+                [gf_Bv.components[k](mesh(*mesh.vertices[v.nr].point))
+                 if hasattr(gf_Bv, 'components')
+                 else gf_Bv(mesh(*mesh.vertices[v.nr].point))[k]
+                 for k in range(3)]
+                for v in mesh.vertices])
+
+            # Per-vertex J on the coil (J_source is non-zero only
+            # in the coil material). Same projection trick.
+            fes_h1v_J = ngsolve.H1(mesh, order=1, dim=3)
+            gf_Jv = GridFunction(fes_h1v_J)
+            try:
+                gf_Jv.Set(J_source, definedon=mesh.Materials("coil"))
+            except Exception:
+                gf_Jv.Set(J_source)
+            node_J = np.array([
+                [gf_Jv.components[k](mesh(*mesh.vertices[v.nr].point))
+                 if hasattr(gf_Jv, 'components')
+                 else gf_Jv(mesh(*mesh.vertices[v.nr].point))[k]
+                 for k in range(3)]
+                for v in mesh.vertices])
 
             post = GmshPostExport(mesh, boundary=False)
-            # Compute per-vertex |B| values
-            fes_h1 = ngsolve.H1(mesh, order=1)
-            gf_B = GridFunction(fes_h1)
-            gf_B.Set(B_mag)
-            node_B = np.array([gf_B(mesh(*mesh.vertices[v.nr].point))
-                               for v in mesh.vertices])
-            post.add_field("|B|", node_B, ncomp=1)
+            post.add_field("B", node_B, ncomp=3)
+            post.add_field("J", node_J, ncomp=3, material="coil")
             post.write(msh_output)
             gmsh_file = msh_output
             _log(f"GMSH:{msh_output}")
+
+            # Companion .geo: hide the air-domain volume mesh and
+            # render both views as 3D arrows. The user opens this
+            # .geo from the panel's "Open GMSH" button, which Merges
+            # the .msh and applies the display options below.
+            geo_file = os.path.splitext(msh_output)[0] + ".geo"
+            with open(geo_file, "w", encoding="utf-8") as f:
+                f.write(f'Merge "{os.path.basename(msh_output)}";\n')
+                f.write('Mesh.NumSubEdges = 4;\n')
+                f.write('Mesh.Volumes = 0;\n')
+                f.write('Mesh.VolumeEdges = 0;\n')
+                f.write('Mesh.VolumeFaces = 0;\n')
+                f.write('Mesh.SurfaceEdges = 0;\n')
+                f.write('Mesh.SurfaceFaces = 0;\n')
+                f.write('// B view: 3D arrow style\n')
+                f.write('View[0].VectorType = 4;\n')
+                f.write('View[0].IntervalsType = 3;\n')
+                f.write('// J view: 3D arrow style\n')
+                f.write('View[1].VectorType = 4;\n')
+                f.write('View[1].IntervalsType = 3;\n')
+            _log(f"GMSH:{geo_file}")
+            gmsh_file = geo_file
         except Exception as e:
             _log(f"GMSH_ERROR:{e}")
+            import traceback
+            _log(traceback.format_exc().splitlines()[-1])
 
     # ============================================================
     # Step 8: Result JSON
