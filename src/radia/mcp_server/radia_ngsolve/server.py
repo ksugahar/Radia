@@ -799,6 +799,10 @@ def panel_gui_pitfalls(topic: str = "") -> str:
       subprocess_args     -- calc_*.py choices must match GUI combos
       cubit_jou           -- subtract id semantics, surface id renumbering
       sample_jou          -- one .jou per (panel, method) pair
+      silent_action       -- menu actions must produce visible feedback
+      silent_except       -- never bare-except; always log type+traceback
+                             tail; always provide a fallback path
+      result_keys         -- subprocess result dict is an API contract
       learn_edition_cap   -- ignore the 50k warning, radia_export bypasses it
 
     Args:
