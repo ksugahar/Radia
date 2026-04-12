@@ -1,4 +1,4 @@
-## IH FEM sample (NO Kelvin transform): gapped torus coil + sphere workpiece
+## IH FEM sample (NO Kelvin transform): gapped torus coil + cylindrical workpiece
 ## + LARGE air sphere with a Dirichlet outer-boundary truncation.
 ##
 ## This is the simplest FEM variant — no Kelvin shell, no periodic
@@ -14,7 +14,7 @@
 ##
 ## Required labels (consumed by calc_fem_kelvin.py):
 ##   block 1   = "coil"      (gapped torus, source J)
-##   block 2   = "workpiece" (sphere, INTERFACE approach — kept as a
+##   block 2   = "workpiece" (cylinder, INTERFACE approach — kept as a
 ##                            separate volume; SIBC Robin BC applied
 ##                            on the air|workpiece interface)
 ##   block 3   = "air"       (carved air sphere with coil + workpiece holes)
@@ -26,7 +26,7 @@
 ## Geometry:
 ##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
 ##              L_air = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
-##   Workpiece: sphere R = 0.010 m
+##   Workpiece: cylinder R = 0.025 m, H = 0.025 m
 ##   Air:       sphere R = 0.240 m  (= 8 x R_coil, Dirichlet BC truncation)
 ##
 ## Build policy (CLAUDE.md): coil by SWEEP, subtract before merge,
@@ -45,8 +45,9 @@ create surface curve 1
 sweep surface 1 axis 0 0 0 0 0 1 angle 355
 ${coil_vid = Id("volume")}
 
-# === 2. Workpiece sphere ====================================================
-create sphere radius 0.010000
+# === 2. Workpiece cylinder ==================================================
+# R = 0.025 m, H = 0.025 m, centered at origin (z = -0.0125 to +0.0125).
+create cylinder radius 0.025000 height 0.025000
 ${wp_vid = Id("volume")}
 
 # === 3. Air sphere ==========================================================
@@ -84,9 +85,9 @@ volume {coil_vid} scheme tetmesh
 volume {coil_vid} size 0.003
 mesh volume {coil_vid}
 
-# Workpiece sphere.
+# Workpiece cylinder.
 volume {wp_vid} scheme tetmesh
-volume {wp_vid} size 0.003
+volume {wp_vid} size 0.005
 mesh volume {wp_vid}
 
 # Air: graded tet mesh — the Dirichlet outer boundary at R=0.240
