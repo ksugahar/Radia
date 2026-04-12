@@ -191,12 +191,17 @@ class IHPanel(ModePanel):
         is_bem_coil = (method == "BEM")
         has_wp = is_bem_coil and (wp_mode != "off")
 
-        # Hide all wp params first
-        for key in ("wp_sigma", "half_thickness", "use_local_curvature",
-                     "mu_r", "bh_file", "esim_geometry"):
+        # Hide all wp params first. The impedance combo is also tied
+        # to the workpiece — when wp is off (or in FEM mode where
+        # workpiece_mode is hidden) it should disappear so the user
+        # can't pick a model that does nothing.
+        for key in ("impedance", "wp_sigma", "half_thickness",
+                     "use_local_curvature", "mu_r", "bh_file",
+                     "esim_geometry"):
             self._set_row_visible(key, False)
 
         if has_wp:
+            self._set_row_visible("impedance", True)
             self._set_row_visible("wp_sigma", True)
             self._set_row_visible("half_thickness", True)
             self._set_row_visible("use_local_curvature", True)
