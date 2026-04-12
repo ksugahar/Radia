@@ -1158,6 +1158,103 @@ def _compute_B_field_cf(mesh_surf, gf_J, elem_A, lx=0, ly=0, lz=0, maxh_vol=0):
     return B_cf, mesh_vol
 
 
+def _write_combined_msh(filename, mesh_surf, J_nodes,
+                        vol_nodes, vol_elems, B_nodes):
+    """Write SINGLE .msh v2.2 with volume B + surface J + coil wireframe.
+
+    Restored from v3.6.1 (commit 0563155, 2026-03-23). The key trick
+    is offsetting surface mesh node and element IDs past the volume
+    mesh's range so there are NO duplicate IDs when GMSH loads the
+    file. The two-file Merge approach fails because GMSH silently
+    skips duplicate element IDs.
+
+    Node numbering:
+      1..nv_vol                  : volume mesh vertices (B field)
+      nv_vol+1..nv_vol+nv_surf   : surface mesh vertices (J field)
+    Elements:
+      1..ne_vol                  : volume tets (physical group "air")
+      ne_vol+1..ne_vol+ne_surf   : surface tris (physical group "coil_surface")
+      after that                 : coil wireframe lines (physical group "coil_wire")
+    """
+    from ngsolve import BND
+
+    nv_vol = len(vol_nodes)
+    nv_surf = mesh_surf.nv
+    surf_offset = nv_vol
+
+    surf_nodes = [(v.point[0], v.point[1], v.point[2])
+                  for v in mesh_surf.vertices]
+
+    surf_elems = []
+    for el in mesh_surf.Elements(BND):
+        surf_elems.append([v.nr for v in el.vertices])
+
+    # Coil wireframe edges
+    edges = set()
+    for el in mesh_surf.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        nv = len(verts)
+        for i in range(nv):
+            a, b = verts[i], verts[(i + 1) % nv]
+            edges.add((min(a, b), max(a, b)))
+    edges = sorted(edges)
+
+    n_nodes = nv_vol + nv_surf
+    ne_vol = len(vol_elems)
+    ne_surf = len(surf_elems)
+    ne_wire = len(edges)
+    n_elems = ne_vol + ne_surf + ne_wire
+
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
+
+        f.write('$PhysicalNames\n3\n')
+        f.write('3 1 "air"\n')
+        f.write('2 2 "coil_surface"\n')
+        f.write('1 3 "coil_wire"\n')
+        f.write('$EndPhysicalNames\n')
+
+        f.write(f'$Nodes\n{n_nodes}\n')
+        for i, (x, y, z) in enumerate(vol_nodes):
+            f.write(f'{i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
+        for i, (x, y, z) in enumerate(surf_nodes):
+            f.write(f'{surf_offset + i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
+        f.write('$EndNodes\n')
+
+        f.write(f'$Elements\n{n_elems}\n')
+        eid = 1
+        for verts in vol_elems:
+            ns = ' '.join(str(v + 1) for v in verts)
+            f.write(f'{eid} 4 2 1 1 {ns}\n')
+            eid += 1
+        for verts in surf_elems:
+            ns = ' '.join(str(v + surf_offset + 1) for v in verts)
+            f.write(f'{eid} 2 2 2 2 {ns}\n')
+            eid += 1
+        for a, b in edges:
+            f.write(f'{eid} 1 2 3 3 '
+                    f'{a + surf_offset + 1} {b + surf_offset + 1}\n')
+            eid += 1
+        f.write('$EndElements\n')
+
+        # NodeData: B on volume nodes
+        f.write('$NodeData\n1\n"B"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_vol}\n')
+        for i in range(nv_vol):
+            bx, by, bz = B_nodes[i]
+            f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
+        f.write('$EndNodeData\n')
+
+        # NodeData: J on surface nodes (offset IDs)
+        f.write('$NodeData\n1\n"J"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_surf}\n')
+        for i in range(nv_surf):
+            jx, jy, jz = J_nodes[i]
+            f.write(f'{surf_offset + i + 1} '
+                    f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
+        f.write('$EndNodeData\n')
+
+
 def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
                  lx=0, ly=0, lz=0, maxh_vol=0):
     """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
@@ -1225,60 +1322,55 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
 
     progress("B_FIELD_READY", "B computed")
 
-    # Write output via GmshPostExport
-    gmsh_file_B = os.path.join(base_dir, "inductance_B.msh").replace("\\", "/")
-    gmsh_file_J = os.path.join(base_dir, "inductance_J.msh").replace("\\", "/")
+    # Write a SINGLE combined .msh v2.2 with B + J + coil wireframe.
+    # Restored from v3.6.1 (commit 0563155, 2026-03-23) — the version
+    # "みんなキレイだって言っていた".
+    #
+    # The two-file approach (inductance_B.msh + inductance_J.msh + a
+    # .geo that Merges both) DOES NOT WORK because both files start
+    # element numbering from 1, and GMSH's merge silently skips every
+    # duplicate element ID. Result: the J view is empty and
+    # gmsh.fltk.run() crashes. The single-file approach avoids this
+    # by offsetting the surface mesh node/element IDs past the volume
+    # mesh's range.
+    gmsh_combined = os.path.join(
+        base_dir, "inductance.msh").replace("\\", "/")
 
-    from gmsh_post_export import GmshPostExport
-
-    # Volume B-field via BiotSavartCF -> GridFunction.Set().
-    # Only the vector view is exported — the scalar magnitude |B|
-    # is redundant because GMSH shows |B| automatically when the
-    # vector view is selected. The companion .geo below also hides
-    # the air-domain volume mesh so the user only sees the B
-    # arrows.
+    # Evaluate B at volume vertices
     fes_B = HDiv(mesh_vol, order=1)
     gf_B = GridFunction(fes_B)
     gf_B.Set(B_cf)
-    post_B = GmshPostExport(mesh_vol)
-    post_B.add_vector_field("B", gf_B)
-    post_B.write(gmsh_file_B)
-    progress("GMSH", f"B written: {gmsh_file_B}")
+    vol_nodes = [(v.point[0], v.point[1], v.point[2])
+                  for v in mesh_vol.vertices]
+    B_nodes = np.zeros((len(vol_nodes), 3))
+    for vi, v in enumerate(mesh_vol.vertices):
+        bval = gf_B(mesh_vol(*v.point))
+        B_nodes[vi] = [float(bval[k]) for k in range(3)]
 
-    # Surface J-field (high-order curved elements). Vector only —
-    # |J| is dropped for the same reason.
-    post_J = GmshPostExport(mesh, boundary=True)
-    post_J.add_field("J", J_nodes, ncomp=3)
-    post_J.write(gmsh_file_J)
-    progress("GMSH", f"J written: {gmsh_file_J}")
+    # Volume elements (tets)
+    vol_elems = []
+    for el in mesh_vol.Elements():
+        vol_elems.append([v.nr for v in el.vertices])
 
-    # Companion .geo (Merge both files). Restored from the v3.6.1
-    # "beautiful" version (commits 5e0b69c / 1c957f3, 2026-03-23)
-    # which had:
-    #   - Mesh.Volumes / VolumeFaces / VolumeEdges = 0  hides air
-    #     tetrahedra so the B arrows are visible
-    #   - View[*].VectorType = 4                        3D arrows
-    #   - View[*].ArrowSizeMin = ArrowSizeMax = 20      THE KEY:
-    #     without a fixed arrow size, GMSH's auto-scale picks ~3
-    #     pixel arrows that disappear against any mesh background.
-    #     Hard-coding 20 pixels is what made the past visualization
-    #     look "kirei" (everyone said so).
+    _write_combined_msh(gmsh_combined, mesh, J_nodes,
+                        vol_nodes, vol_elems, B_nodes)
+    progress("GMSH", f"combined: {gmsh_combined}")
+
+    # Companion .geo — v3.6.1 "kirei" display options.
+    # ArrowSizeMin = ArrowSizeMax = 20 is THE KEY knob that makes
+    # the arrows actually visible (GMSH default auto-scale gives
+    # ~3 px arrows that disappear against any mesh background).
     geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
     with open(geo_file, 'w', encoding='utf-8') as f:
-        f.write(f'Merge "{os.path.basename(gmsh_file_B)}";\n')
-        f.write(f'Merge "{os.path.basename(gmsh_file_J)}";\n')
+        f.write(f'Merge "{os.path.basename(gmsh_combined)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
-        f.write('Mesh.Volumes = 0;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
-        f.write('Mesh.VolumeFaces = 0;\n')
         # B view (View[0]): 3D arrows, fixed visible size
         f.write('View[0].VectorType = 4;\n')
-        f.write('View[0].IntervalsType = 3;\n')
         f.write('View[0].ArrowSizeMin = 20;\n')
         f.write('View[0].ArrowSizeMax = 20;\n')
         # J view (View[1]): 3D arrows, fixed visible size
         f.write('View[1].VectorType = 4;\n')
-        f.write('View[1].IntervalsType = 3;\n')
         f.write('View[1].ArrowSizeMin = 20;\n')
         f.write('View[1].ArrowSizeMax = 20;\n')
 
