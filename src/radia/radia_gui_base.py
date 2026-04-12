@@ -156,7 +156,12 @@ class ModePanel(QWidget):
             if isinstance(w, QLineEdit):
                 state[key] = w.text()
             elif isinstance(w, QComboBox):
-                state[key] = w.currentIndex()
+                # Save the SELECTED TEXT, not the index. Combo items can
+                # be added / removed / reordered between releases (e.g.
+                # the IH panel dropping "BEM-SIBC (WP)" 2026-04-12), and
+                # a stale index would silently jump to the wrong item or
+                # land out-of-range and leave the combo blank.
+                state[key] = w.currentText()
             elif isinstance(w, QSpinBox):
                 state[key] = w.value()
         return state
@@ -172,7 +177,21 @@ class ModePanel(QWidget):
                 if isinstance(w, QLineEdit):
                     w.setText(str(val))
                 elif isinstance(w, QComboBox):
-                    w.setCurrentIndex(int(val))
+                    # Two state encodings need to be supported:
+                    #  - text   (new format, robust to combo edits)
+                    #  - index  (legacy format from before 2026-04-12)
+                    # If neither matches a current item we leave the
+                    # combo at its panel-default selection rather than
+                    # forcing an out-of-range index that blanks the
+                    # widget.
+                    if isinstance(val, str):
+                        idx = w.findText(val)
+                        if idx >= 0:
+                            w.setCurrentIndex(idx)
+                    else:
+                        ival = int(val)
+                        if 0 <= ival < w.count():
+                            w.setCurrentIndex(ival)
                 elif isinstance(w, QSpinBox):
                     w.setValue(int(val))
             except (ValueError, TypeError):
