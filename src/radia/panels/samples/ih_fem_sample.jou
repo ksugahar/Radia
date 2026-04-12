@@ -74,29 +74,27 @@ imprint all
 merge all
 
 # === 5. Mesh ================================================================
-# Element count is tuned to stay under the Cubit Learn Edition's 50k
-# element export cap (the script has to work for free users too).
-# The coil mesh is somewhat coarsened from the BEM reference
-# density and the air mesh is graded heavily so the bulk of the
-# tets sit in the inner region near the coil.
-#
-# Coil: tet mesh, ~1000 surface tris (BEM reference uses ~1900).
-curve in volume {coil_vid} with length < 0.05 interval 8
-curve in volume {coil_vid} with length > 0.05 interval 32
+# Coil: tet mesh, BEM-validated density. The interval overrides on
+# the tube vs toroidal arcs match ih_bem_sample.jou (~1900 surface
+# tris) so the coil terminal inductance is comparable across the
+# three IH samples.
+curve in volume {coil_vid} with length < 0.05 interval 12
+curve in volume {coil_vid} with length > 0.05 interval 48
 volume {coil_vid} scheme tetmesh
-volume {coil_vid} size 0.004
+volume {coil_vid} size 0.003
 mesh volume {coil_vid}
 
 # Workpiece sphere.
 volume {wp_vid} scheme tetmesh
-volume {wp_vid} size 0.004
+volume {wp_vid} size 0.003
 mesh volume {wp_vid}
 
-# Air: coarse tet mesh, size = R_coil*2 so the outer Dirichlet
-# region is meshed with ~few hundred tets only. Inner region gets
-# auto-refinement near the coil + workpiece interfaces.
+# Air: graded tet mesh — the Dirichlet outer boundary at R=0.240
+# only needs ~few hundred tets, inner region gets auto-refinement
+# from the coil + workpiece interfaces. size = R_coil for a
+# reasonable trade-off.
 volume {air_vid} scheme tetmesh
-volume {air_vid} size 0.060
+volume {air_vid} size 0.030
 mesh volume {air_vid}
 
 # === 6. Blocks ==============================================================
