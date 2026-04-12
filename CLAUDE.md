@@ -1532,6 +1532,25 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 ## .vol Pipeline: 2-Path Generation, 1-Path Computation
 
+### File Management: .jou and .vol Only
+
+**POLICY**: `ensure_jou_path()` (C++ .ccl) saves `.jou` before any export or evaluation. `.jou` basename determines all output filenames. `.cub5` is NOT saved by the pipeline.
+
+| File | Role |
+|------|------|
+| `.jou` | **Single source of truth**. Text, diff-able, version-controllable, reproducible across machines and Cubit versions |
+| `.vol` | **Computation interface**. Sole interface between Cubit and NGSolve. No ABI dependency |
+
+**Design — .jou loaded or saved before proceeding**:
+- Every Export Mesh / Mesh Evaluation operation calls `ensure_jou_path()` first
+- `ensure_jou_path()` resolves in 3 steps:
+  1. `.jou` already loaded (via `play` or `get_current_journal_file`) → use it
+  2. `.jou` saved earlier in this session (`s_lastJouPath`) → use it
+  3. Neither → prompt user to save `.jou` now (QFileDialog) → `save journal`
+- **No operation proceeds without a known `.jou` path**
+- All output filenames derive from `.jou` basename: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, etc.
+- `.cub5` is NOT saved by the pipeline. `.vol` is the sole computation interface
+
 ### Cubit/NGSolve Complete Separation Policy
 
 **POLICY**: Radia-NGSolve computation scripts (`calc_*.py`, panels) must **NEVER `import cubit`**. The `.vol` file is the **sole interface** between Cubit and NGSolve.
@@ -1540,7 +1559,6 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 **Mesh export is C++ only** (`radia_export netgen` APREPRO command):
 - Cubit -> `radia_export netgen "model.vol" order N` -> `.vol` with labels + curving
-- Pure Python reference (`cub5_to_vol.py`) is maintained in the netgen fork, not in Radia
 
 **1-Path Computation** (`.vol` only, no Cubit dependency):
 ```python
@@ -1551,11 +1569,11 @@ mesh = Mesh("model.vol")   # labels + curving loaded from .vol
 # ... FEM solve, post-processing ...
 ```
 
-**calc_*.py accepts `--vol` only** (not `--cub5`):
+**calc_*.py accepts `--vol` only** (no `.cub5`):
 - `calc_volume.py --vol model.vol` — volume/area integration
 - `calc_inductance.py --vol model.vol` — BEM inductance extraction
 - `calc_verify_vol.py --vol model.vol` — consistency check vs companion JSON
-- `calc_mesh_eval.py --cub5 model.cub5` — exception: needs Cubit for CAD values
+- `calc_mesh_eval.py --vol-base model` — p-convergence (`_p1.vol` ... `_p5.vol`, C++ exports)
 
 ### IH (BEM) Inductance: Sideset Requirements
 
@@ -1626,65 +1644,79 @@ than high FES order with linear mesh. This is because:
 
 ## Cubit Panel Architecture
 
-### External Python Subprocess Policy
+### 4-Layer Architecture
 
-**POLICY**: Cubit panels use **external Python subprocess** for NGSolve/Radia computation. The external Python must NOT depend on Qt (PySide6/PyQt5).
+**POLICY**: Cubit, Radia-NGSolve, and computation are **3 separate processes**. No layer imports another layer's libraries.
 
-**Architecture**:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Cubit GUI (PySide6/PyQt5)                                      │
+│  Layer 1: C++ Qt5 (.ccl)                                        │
 │  ─────────────────────────────────────────────────────────────  │
-│  Panel dialog (register_toolbar.py)                             │
-│    1. Display UI (Qt widgets)                                   │
-│    2. Save model: cubit.cmd('save cub5 "temp.cub5"')           │
-│    3. subprocess.run([external_python, calc_*.py, --cub5, ...]) │
-│    4. Parse JSON from stdout (last line)                        │
-│    5. Display result in dialog                                  │
+│  Export Mesh menu (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)      │
+│  Mesh Evaluation (_p1.vol ... _p5.vol + format QA exports)      │
+│  ensure_jou_path(): .jou save -> basename for all output files  │
+│  radia_export netgen/gmsh/nastran/vtk (APREPRO commands)        │
 └─────────────────────────────────────────────────────────────────┘
-                              │ subprocess
 ┌─────────────────────────────────────────────────────────────────┐
-│  External Python (system Python with NGSolve)                   │
+│  Layer 2: Cubit GUI Python (Python 3.10 + PySide6/Qt5)          │
 │  ─────────────────────────────────────────────────────────────  │
-│  calc_volume.py / calc_inductance.py                            │
-│    1. Import NGSolve FIRST (before cubit, numpy DLL conflict)   │
-│    2. Import cubit (suppress banner on stderr)                  │
-│    3. Open cub5, compute                                        │
-│    4. print(json.dumps(result)) to stdout                       │
+│  register_toolbar.py -> Solve menu management                   │
+│    Radia-NGSolve / Generate Coil / Kelvin / Reload / Verify     │
+│  import cubit OK (same process). import radia/ngsolve FORBIDDEN │
+│  Launches Layer 3 via subprocess.Popen (detached)               │
+└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Layer 3: Radia-NGSolve PySide6 (Python 3.12 + PySide6)        │
 │  ─────────────────────────────────────────────────────────────  │
-│  NO Qt imports. NO GUI code. JSON stdout only.                  │
+│  radia_ih.py (IHWindow) — standalone PySide6 application        │
+│  Separate process from Cubit. import cubit FORBIDDEN.           │
+│  Receives .vol path as CLI argument.                            │
+│  Launches Layer 4 via subprocess for computation.               │
+└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Layer 4: Computation (Python 3.12, no GUI)                     │
+│  ─────────────────────────────────────────────────────────────  │
+│  calc_inductance.py / calc_fem_kelvin.py / calc_mesh_eval.py    │
+│  import cubit FORBIDDEN. import PySide6 FORBIDDEN.              │
+│  NGSolve + GMSH only. .vol input, JSON stdout output.           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Rules**:
-- `calc_*.py` scripts must NOT import PySide6, PyQt5, or any GUI library
-- All results returned as JSON on stdout (last line)
-- **CRITICAL**: NGSolve must be imported BEFORE cubit (numpy DLL conflict avoidance). Cubit bundles Python 3.10 site-packages with its own numpy/scipy DLLs which conflict with Python 3.12's MKL-linked numpy. Order: `import netgen` → `import ngsolve` → `setup_cubit()` → `import cubit`
-- `cubit.init()` banner suppressed via `contextlib.redirect_stderr`
-- `_auto_register_panels()` in the panels module checks Qt availability before running
-- External Python detected via: `RADIA_PYTHON` env var > `py -3` > `python`
-- Cubit path detected via: `CUBIT_PATH` env var > platform-specific glob search
+**Interface between layers**: `.vol` file (text format, no ABI dependency)
 
-**Panel files**:
+**Filename convention**: `ensure_jou_path()` (Layer 1, C++) saves `.jou` first. All output files derive basename from `.jou`: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, `{base}_q.sol`, etc.
 
-| File | Runs in | Purpose |
-|------|---------|---------|
-| `panels/register_toolbar.py` | Cubit GUI Python | Radia-NGSolve launcher + Reload Panels |
-| `panels/startup.py` | Cubit GUI Python | Generated by install_panels, loads register_toolbar.py |
-| `panels/calc_volume.py` | External Python | Volume integration (NGSolve) |
-| `panels/calc_inductance.py` | External Python | Inductance extraction (ngsolve.bem) |
-| `install_panels.py` | System Python | Generates startup.py, registers in ~/.cubit |
+### Layer Isolation Rules
 
-**Export Mesh is C++ only** (see Cubit Mesh Export Module section below). Do NOT add Python export dialogs or panels.
+| Rule | Rationale |
+|------|-----------|
+| Layer 4 must NOT `import cubit` | Cubit is expensive commercial software. Computation must work without it. |
+| Layer 4 must NOT import PySide6/PyQt5 | Headless computation. JSON stdout only. |
+| Layer 3 must NOT `import cubit` | Separate process. Cubit embeds Python 3.10; Layer 3 is Python 3.12. |
+| Layer 2 must NOT `import radia` or `import ngsolve` | DLL conflicts (Cubit bundles its own numpy/scipy). |
+| Layer 1 (C++) has no Python dependency | `.ccm`/`.ccl` link Cubit C++ API directly. |
+
+### Panel Files
+
+| File | Layer | Purpose |
+|------|-------|---------|
+| `RadiaComp.cpp` (.ccl) | 1 (C++ Qt5) | Export Mesh menu + Mesh Evaluation |
+| `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
+| `radia_ih.py` | 3 (PySide6) | IH analysis window (BEM/FEM) |
+| `panels/calc_inductance.py` | 4 (no GUI) | BEM inductance + workpiece coupling |
+| `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Kelvin + SIBC |
+| `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
+| `panels/calc_heating_bem.py` | 4 (no GUI) | Workpiece heating (BEM-SIBC) |
 
 ### Cubit Plugin: C++ First, No Python ABI Dependency
 
 **POLICY**: Cubit plugin functionality MUST be implemented in C++ to avoid Python ABI mismatch. Cubit embeds Python 3.10; NGSolve/Radia use Python 3.12. Sharing Python objects between them causes segfaults and DLL conflicts.
 
-- `.ccm`/`.ccl`: Link Cubit C++ API (cubiti, cubit_util) directly — no Python dependency
-- `radia_cubit_mesh.pyd`: pybind11 for Python 3.12 — does NOT link Cubit C++ libraries
-- Netgen `SetNCD2Names()` is not exposed to Python — call from C++ side in `NetgenCurverPure`
+- `.ccm`/`.ccl`: Link Cubit C++ API (cubiti, cubit_util) directly -- no Python dependency
+- `radia_cubit_mesh.pyd`: pybind11 for Python 3.12 -- does NOT link Cubit C++ libraries
+- Netgen `SetNCD2Names()` is not exposed to Python -- call from C++ side in `NetgenCurverPure`
 - Interface between Cubit and NGSolve: **.vol file** (text format, no ABI dependency)
+- Export Mesh is C++ only (see Cubit Mesh Export Module section below). Do NOT add Python export dialogs or panels.
 
 ---
 

@@ -302,9 +302,15 @@ class GmshPostExport:
                         _write_node_data(
                             f, name, ncomp, data, n_nodes, time, timestep)
 
-        # Write companion .geo file for correct high-order display
+        # Write companion .msh.opt for correct high-order display.
+        # View index matches NodeData order in .msh file:
+        #   vector views (ncomp >= 2) get arrow settings,
+        #   scalar views (ncomp == 1) get filled colormap.
         if is_surface and _detect_curve_order(self.mesh) >= 2:
-            _write_companion_geo(filename)
+            n_vec = sum(1 for _, nc, _, _, _ in self._fields if nc >= 2)
+            n_scl = sum(1 for _, nc, _, _, _ in self._fields if nc == 1)
+            write_companion_opt(filename, n_vector_views=n_vec,
+                                n_scalar_views=n_scl)
 
         n_fields = len(self._fields)
         mat_str = ', '.join(f'{m}({len(mat_elem_map.get(m, []))})' for m in mat_names)
@@ -407,9 +413,12 @@ class GmshPostExport:
                         f.write(f'{ni + 1} {vals}\n')
                 f.write('$EndNodeData\n')
 
-        # Write companion .geo file for correct high-order display
+        # Write companion .msh.opt for correct high-order display
         if is_surface and _detect_curve_order(mesh) >= 2:
-            _write_companion_geo(filename)
+            n_vec = sum(1 for _, nc, _, _, _ in self._fields if nc >= 2)
+            n_scl = sum(1 for _, nc, _, _, _ in self._fields if nc == 1)
+            write_companion_opt(filename, n_vector_views=n_vec,
+                                n_scalar_views=n_scl)
 
         print(f"GMSH v2.2 export: {filename}")
         print(f"  {n_elems} elements, {n_nodes} nodes, "
@@ -786,20 +795,69 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
     return conn
 
 
-def _write_companion_geo(msh_filename):
-    """Write a companion .geo file that merges .msh with correct display settings.
+def write_companion_opt(msh_filename, n_vector_views=0,
+                        n_scalar_views=0):
+    """Write a .msh.opt file with display settings for GMSH.
 
-    GMSH default Mesh.NumSubEdges=1 draws curved (Tri6) elements as flat.
-    The .geo file sets NumSubEdges=4 for proper curved surface rendering.
+    GMSH auto-loads ``<file>.msh.opt`` when opening ``<file>.msh``.
+    This replaces the old companion .geo approach (no Merge needed,
+    no element-ID collision risk from multi-file Merge).
+
+    Settings follow the gmsh_post_spec (mandatory):
+      - Mesh.NumSubEdges = 4      (render curved Tri6+ smoothly)
+      - Mesh.VolumeEdges = 0      (hide air tet edges)
+      - Mesh.VolumeFaces = 0      (hide air tet faces)
+      - Mesh.SurfaceFaces = 1     (show coil as smooth body)
+      - View[i].VectorType = 4    (3D arrows for vectors)
+      - View[i].ArrowSizeMin = 20 (fixed 20 px -- THE kirei knob)
+      - View[i].IntervalsType = 2 (filled iso for scalars)
+
+    View ordering: vector views first [0..n_vector-1],
+    then scalar views [n_vector..n_vector+n_scalar-1].
+
+    Args:
+        msh_filename: Path to the .msh file (the .opt is written next to it).
+        n_vector_views: Number of vector views (View[0]..View[n-1]).
+        n_scalar_views: Number of scalar views (View[n]..View[n+m-1]).
+
+    Returns:
+        Path to the .msh.opt file.
     """
     import os
-    geo_filename = os.path.splitext(msh_filename)[0] + '.geo'
-    msh_basename = os.path.basename(msh_filename)
-    with open(geo_filename, 'w', encoding='utf-8') as f:
-        f.write(f'// Auto-generated companion for {msh_basename}\n')
-        f.write(f'Merge "{msh_basename}";\n')
+    opt_filename = msh_filename + '.opt'
+    with open(opt_filename, 'w', encoding='utf-8') as f:
+        f.write('// Auto-generated display options (gmsh_post_spec)\n')
+        # Curved element rendering
         f.write('Mesh.NumSubEdges = 4;\n')
-    return geo_filename
+        # Hide air volume mesh
+        f.write('Mesh.VolumeEdges = 0;\n')
+        f.write('Mesh.VolumeFaces = 0;\n')
+        # Coil surface: smooth body, no edge lines
+        f.write('Mesh.SurfaceEdges = 0;\n')
+        f.write('Mesh.SurfaceFaces = 1;\n')
+        # Hide node markers and wireframe lines
+        f.write('Mesh.Points = 0;\n')
+        f.write('Mesh.Lines = 0;\n')
+        f.write('Mesh.LineWidth = 1;\n')
+        # Vector views: 3D arrows, fixed 20px (the kirei knob)
+        for i in range(n_vector_views):
+            f.write(f'View[{i}].Visible = 1;\n')
+            f.write(f'View[{i}].VectorType = 4;\n')
+            f.write(f'View[{i}].ArrowSizeMin = 20;\n')
+            f.write(f'View[{i}].ArrowSizeMax = 20;\n')
+        # Scalar views: filled iso colormap with legend bar
+        for j in range(n_scalar_views):
+            idx = n_vector_views + j
+            f.write(f'View[{idx}].Visible = 1;\n')
+            f.write(f'View[{idx}].IntervalsType = 2;\n')  # Filled
+            f.write(f'View[{idx}].ShowScale = 1;\n')
+            f.write(f'View[{idx}].NbIso = 20;\n')
+    return opt_filename
+
+
+def _write_companion_geo(msh_filename):
+    """Deprecated: use write_companion_opt() instead."""
+    return write_companion_opt(msh_filename)
 
 
 def _detect_curve_order(mesh):
@@ -1258,3 +1316,379 @@ def _evaluate_cf(mesh, cf, ncomp, cell_data):
             except Exception:
                 pass
         return result
+
+
+# ============================================================
+# .vol + .sol -> .msh v4.1 converter
+# ============================================================
+
+def _extract_curved_surface(mesh, curve_order):
+    """Extract curved surface elements from an NGSolve mesh.
+
+    Uses GetTrafo to compute high-order node positions matching
+    the mesh's curve order (Curve(2)->Tri6, Curve(3)->Tri10, etc.).
+
+    Args:
+        mesh: NGSolve mesh with Curve(p) applied.
+        curve_order: Polynomial order (1-5).
+
+    Returns:
+        nodes: list of (x, y, z) -- vertices, then edge/interior nodes.
+        elems: list of connectivity arrays (0-indexed into nodes).
+        gmsh_type: GMSH element type code (2=Tri3, 9=Tri6, 21=Tri10, ...).
+    """
+    from ngsolve import BND, IntegrationRule
+
+    p = curve_order
+    gmsh_type = _GMSH_TYPE_BY_ORDER['TRIG'].get(p, 2)
+    gmsh_ref = _get_gmsh_trig_ref_points(p)
+    ho_refs = gmsh_ref[3:]  # skip 3 corners
+    n_edge_nodes = p - 1
+
+    nodes = [(v.point[0], v.point[1], v.point[2])
+             for v in mesh.vertices]
+    edge_cache = {}  # (min_v, max_v) -> [node_indices]
+
+    elems = []
+    for el in mesh.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        if len(verts) != 3:
+            continue
+
+        trafo = mesh.GetTrafo(el)
+
+        # Map reference corners to physical vertices
+        ref_corners = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+        corner_pts = []
+        for u, v in ref_corners:
+            ir = IntegrationRule([(u, v)], [1.0])
+            for ip in ir:
+                mip = trafo(ip)
+                corner_pts.append(
+                    np.array([mip.point[0], mip.point[1], mip.point[2]]))
+
+        ref_to_vert = []
+        for ci in range(3):
+            dists = [np.linalg.norm(corner_pts[ci] -
+                     np.array(mesh.vertices[verts[vi]].point))
+                     for vi in range(3)]
+            ref_to_vert.append(verts[np.argmin(dists)])
+
+        conn = list(ref_to_vert)
+
+        # Edge nodes (3 edges x (p-1) nodes each)
+        edge_pairs = [(0, 1), (1, 2), (2, 0)]
+        for ei in range(3):
+            va = ref_to_vert[edge_pairs[ei][0]]
+            vb = ref_to_vert[edge_pairs[ei][1]]
+            edge_key = (min(va, vb), max(va, vb))
+            reverse = va > vb
+
+            if edge_key in edge_cache:
+                indices = edge_cache[edge_key]
+                conn.extend(reversed(indices) if reverse else indices)
+            else:
+                start = ei * n_edge_nodes
+                indices = []
+                for k in range(n_edge_nodes):
+                    u, v = ho_refs[start + k]
+                    ir = IntegrationRule([(u, v)], [1.0])
+                    for ip in ir:
+                        mip = trafo(ip)
+                        pt = (mip.point[0], mip.point[1], mip.point[2])
+                        indices.append(len(nodes))
+                        nodes.append(pt)
+                edge_cache[edge_key] = indices
+                conn.extend(indices)
+
+        # Interior nodes (order >= 3)
+        interior_start = 3 * n_edge_nodes
+        for k in range(interior_start, len(ho_refs)):
+            u, v = ho_refs[k]
+            ir = IntegrationRule([(u, v)], [1.0])
+            for ip in ir:
+                mip = trafo(ip)
+                pt = (mip.point[0], mip.point[1], mip.point[2])
+                conn.append(len(nodes))
+                nodes.append(pt)
+
+        elems.append(conn)
+
+    return nodes, elems, gmsh_type
+
+
+def _extract_wireframe(mesh):
+    """Extract wireframe edges from mesh boundary elements."""
+    from ngsolve import BND
+    edges = set()
+    for el in mesh.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        for i in range(len(verts)):
+            a, b = verts[i], verts[(i + 1) % len(verts)]
+            edges.add((min(a, b), max(a, b)))
+    return sorted(edges)
+
+
+def convert_sol_to_msh(output_msh,
+                       surface_vol, j_sol,
+                       air_vol=None, b_sol=None,
+                       wp_vol=None, q_sol=None, wp_sigma=None,
+                       fes_order=0):
+    """Convert .vol + .sol pairs to a single GMSH .msh v4.1 file.
+
+    Data flow::
+
+        Solve -> .vol + .sol (NGSolve native)
+          -> convert_sol_to_msh()
+          -> .msh + .msh.opt (GMSH visualization)
+
+    Coil surface element order matches the mesh's curve order
+    (Curve(2)->Tri6, Curve(3)->Tri10, Curve(4)->Tri15, Curve(5)->Tri21).
+
+    Args:
+        output_msh: Output .msh file path.
+        surface_vol: Coil surface mesh (.vol).
+        j_sol: J GridFunction (.sol), HDivSurface.
+        air_vol: Air volume mesh (.vol). Optional.
+        b_sol: B GridFunction (.sol), HDiv. Optional.
+        wp_vol: Workpiece surface mesh (.vol). Optional.
+        q_sol: Workpiece heating GridFunction (.sol), H1. Optional.
+            If None but wp_vol given, q is computed from J_t and wp_sigma.
+        wp_sigma: Workpiece conductivity [S/m]. Used when q_sol is None.
+        fes_order: FES order used for J (default 0 = RWG).
+
+    Returns:
+        Path to the .msh file.
+    """
+    from ngsolve import (Mesh, BND, HDivSurface, HDiv, GridFunction,
+                         Integrate, CF)
+    from netgen.meshing import Mesh as NetgenMesh
+
+    # --- Load coil surface ---
+    ngm = NetgenMesh()
+    ngm.Load(surface_vol)
+    mesh_surf = Mesh(ngm)
+    curve_order = _detect_curve_order(mesh_surf)
+    if curve_order < 2:
+        mesh_surf.Curve(2)
+        curve_order = 2
+    nv_surf = mesh_surf.nv
+
+    fes_J = HDivSurface(mesh_surf, order=fes_order)
+    gf_J = GridFunction(fes_J)
+    gf_J.Load(j_sol)
+
+    # Extract curved surface + wireframe
+    surf_nodes, surf_elems, surf_gmsh_type = _extract_curved_surface(
+        mesh_surf, curve_order)
+    wire_edges = _extract_wireframe(mesh_surf)
+
+    # Evaluate J at ALL surface nodes (vertices + HO mid-edge/interior)
+    # so GMSH can render NodeData on Tri6/Tri10 elements correctly.
+    J_all = np.zeros((len(surf_nodes), 3))
+    for ni, (x, y, z) in enumerate(surf_nodes):
+        try:
+            pt = mesh_surf(x, y, z)
+            val = gf_J(pt)
+            J_all[ni] = [float(val[k]) for k in range(3)]
+        except Exception:
+            pass
+
+    # --- Load air volume (optional) ---
+    vol_nodes = []
+    vol_elems = []
+    B_nodes = None
+    if air_vol and b_sol:
+        ngm_air = NetgenMesh()
+        ngm_air.Load(air_vol)
+        mesh_air = Mesh(ngm_air)
+
+        fes_B = HDiv(mesh_air, order=1)
+        gf_B = GridFunction(fes_B)
+        gf_B.Load(b_sol)
+
+        vol_nodes = [(v.point[0], v.point[1], v.point[2])
+                     for v in mesh_air.vertices]
+        vol_elems = [[v.nr for v in el.vertices]
+                     for el in mesh_air.Elements()]
+        B_nodes = np.zeros((len(vol_nodes), 3))
+        for vi, v in enumerate(mesh_air.vertices):
+            bval = gf_B(mesh_air(*v.point))
+            B_nodes[vi] = [float(bval[k]) for k in range(3)]
+
+    has_air = len(vol_nodes) > 0
+
+    # --- Load workpiece (optional) ---
+    wp_nodes_list = []
+    wp_elems_list = []
+    q_all = None
+    has_wp = False
+    if wp_vol:
+        from ngsolve import H1
+        ngm_wp = NetgenMesh()
+        ngm_wp.Load(wp_vol)
+        mesh_wp = Mesh(ngm_wp)
+        wp_curve = _detect_curve_order(mesh_wp)
+        if wp_curve < 2:
+            mesh_wp.Curve(2)
+
+        wp_nodes_list = [(v.point[0], v.point[1], v.point[2])
+                         for v in mesh_wp.vertices]
+        wp_elems_list = [[v.nr for v in el.vertices]
+                         for el in mesh_wp.Elements(BND)]
+
+        if q_sol:
+            # Load pre-computed heating density
+            fes_q = H1(mesh_wp, order=1)
+            gf_q = GridFunction(fes_q)
+            gf_q.Load(q_sol)
+            q_all = np.zeros(len(wp_nodes_list))
+            for vi, v in enumerate(mesh_wp.vertices):
+                try:
+                    q_all[vi] = float(gf_q(mesh_wp(*v.point)))
+                except Exception:
+                    pass
+        elif wp_sigma is not None and wp_sigma > 0:
+            # Compute q = sigma * |J_t|^2 / 2 from Biot-Savart J on wp
+            # For now, store zeros — full coupling requires BEM solve
+            q_all = np.zeros(len(wp_nodes_list))
+
+        has_wp = len(wp_nodes_list) > 0
+
+    # --- Write .msh v4.1 ---
+    nv_vol = len(vol_nodes)
+    nv_s = len(surf_nodes)
+    nv_wp = len(wp_nodes_list)
+    surf_offset = nv_vol
+    wp_offset = nv_vol + nv_s
+
+    n_phys = 2  # coil_surface + coil_wire
+    if has_air:
+        n_phys += 1
+    if has_wp:
+        n_phys += 1
+
+    with open(output_msh, 'w', encoding='utf-8') as f:
+        f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+
+        # Physical names
+        f.write(f'$PhysicalNames\n{n_phys}\n')
+        if has_air:
+            f.write('3 1 "air"\n')
+        f.write('2 2 "coil_surface"\n')
+        f.write('1 3 "coil_wire"\n')
+        if has_wp:
+            f.write('2 4 "workpiece_surface"\n')
+        f.write('$EndPhysicalNames\n')
+
+        # Entities
+        n_surf_ent = 1 + (1 if has_wp else 0)
+        n_vol_ent = 1 if has_air else 0
+        f.write('$Entities\n')
+        f.write(f'0 1 {n_surf_ent} {n_vol_ent}\n')
+        f.write('3 0 0 0 0 0 0 1 3 0\n')  # curve
+        f.write('2 0 0 0 0 0 0 1 2 0\n')  # coil surface
+        if has_wp:
+            f.write('4 0 0 0 0 0 0 1 4 0\n')  # workpiece surface
+        if has_air:
+            f.write('1 0 0 0 0 0 0 1 1 0\n')  # volume
+        f.write('$EndEntities\n')
+
+        # Nodes
+        n_nodes = nv_vol + nv_s + nv_wp
+        n_blocks = (1 if has_air else 0) + 1 + (1 if has_wp else 0)
+        f.write('$Nodes\n')
+        f.write(f'{n_blocks} {n_nodes} 1 {n_nodes}\n')
+        if has_air:
+            f.write(f'3 1 0 {nv_vol}\n')
+            for i in range(nv_vol):
+                f.write(f'{i + 1}\n')
+            for x, y, z in vol_nodes:
+                f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        f.write(f'2 2 0 {nv_s}\n')
+        for i in range(nv_s):
+            f.write(f'{surf_offset + i + 1}\n')
+        for x, y, z in surf_nodes:
+            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        if has_wp:
+            f.write(f'2 4 0 {nv_wp}\n')
+            for i in range(nv_wp):
+                f.write(f'{wp_offset + i + 1}\n')
+            for x, y, z in wp_nodes_list:
+                f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        f.write('$EndNodes\n')
+
+        # Elements
+        ne_vol = len(vol_elems)
+        ne_surf = len(surf_elems)
+        ne_wire = len(wire_edges)
+        ne_wp = len(wp_elems_list)
+        n_elems = ne_vol + ne_surf + ne_wire + ne_wp
+        n_elem_blocks = (1 if has_air else 0) + 2 + (1 if has_wp else 0)
+        f.write('$Elements\n')
+        f.write(f'{n_elem_blocks} {n_elems} 1 {n_elems}\n')
+        eid = 1
+        if has_air:
+            f.write(f'3 1 4 {ne_vol}\n')
+            for verts in vol_elems:
+                f.write(f'{eid} {" ".join(str(v+1) for v in verts)}\n')
+                eid += 1
+        f.write(f'2 2 {surf_gmsh_type} {ne_surf}\n')
+        for conn in surf_elems:
+            f.write(f'{eid} {" ".join(str(v+surf_offset+1) for v in conn)}\n')
+            eid += 1
+        f.write(f'1 3 1 {ne_wire}\n')
+        for a, b in wire_edges:
+            f.write(f'{eid} {a+surf_offset+1} {b+surf_offset+1}\n')
+            eid += 1
+        if has_wp:
+            f.write(f'2 4 2 {ne_wp}\n')
+            for verts in wp_elems_list:
+                f.write(f'{eid} {" ".join(str(v+wp_offset+1) for v in verts)}\n')
+                eid += 1
+        f.write('$EndElements\n')
+
+        # NodeData: B
+        n_views = 0
+        if has_air and B_nodes is not None:
+            f.write('$NodeData\n1\n"B"\n1\n0.0\n3\n0\n3\n')
+            f.write(f'{nv_vol}\n')
+            for i in range(nv_vol):
+                bx, by, bz = B_nodes[i]
+                f.write(f'{i+1} {bx:.15e} {by:.15e} {bz:.15e}\n')
+            f.write('$EndNodeData\n')
+            n_views += 1
+
+        # NodeData: J on ALL surface nodes (vertex + HO)
+        f.write('$NodeData\n1\n"J"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_s}\n')
+        for i in range(nv_s):
+            jx, jy, jz = J_all[i]
+            f.write(f'{surf_offset+i+1} {jx:.15e} {jy:.15e} {jz:.15e}\n')
+        f.write('$EndNodeData\n')
+        n_views += 1
+
+        # NodeData: q (heating density) on workpiece
+        if has_wp and q_all is not None:
+            f.write('$NodeData\n1\n"q"\n1\n0.0\n3\n0\n1\n')
+            f.write(f'{nv_wp}\n')
+            for i in range(nv_wp):
+                f.write(f'{wp_offset+i+1} {q_all[i]:.15e}\n')
+            f.write('$EndNodeData\n')
+            n_views += 1
+
+    # B and J are vector views; q is scalar
+    n_vec = min(n_views, 2)  # at most B + J
+    n_scl = n_views - n_vec  # remaining views are scalar (q)
+    write_companion_opt(output_msh, n_vector_views=n_vec,
+                        n_scalar_views=n_scl)
+
+    print(f"convert_sol_to_msh: {output_msh}")
+    print(f"  coil: {ne_surf} Tri (order {curve_order}), "
+          f"{nv_s} nodes ({nv_surf} vert + {nv_s - nv_surf} HO)")
+    if has_air:
+        print(f"  air: {ne_vol} tets, {nv_vol} nodes")
+    if has_wp:
+        print(f"  workpiece: {ne_wp} tris, {nv_wp} nodes")
+    print(f"  wireframe: {ne_wire} edges, views: {n_views}")
+    return output_msh

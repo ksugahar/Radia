@@ -180,13 +180,16 @@ bool ExportMegCommand::write_meg(const std::string &filename, char dim,
   // --- Elements ---
   // Build block_id -> ELF prefix map
   // Priority: label_map (from GUI) > block name (from Cubit) > default "MMB"
+  // Use get_block_name (NOT get_entity_name("block", ...)) — the
+  // generic accessor calls get_mref_entity which raises
+  // "Invalid list type for the get_mref_entity function: block".
   std::unordered_map<int, std::string> block_prefix;
   for (int bid : mesh.block_ids) {
     auto it = label_map.find(bid);
     if (it != label_map.end()) {
       block_prefix[bid] = it->second;
     } else {
-      std::string name = CubitInterface::get_entity_name("block", bid);
+      std::string name = CubitInterface::get_block_name(bid);
       block_prefix[bid] = extract_elf_prefix(name.empty() ? "MMB" : name);
     }
   }
@@ -194,7 +197,7 @@ bool ExportMegCommand::write_meg(const std::string &filename, char dim,
   // Print block->label mapping for user verification
   PRINT_INFO("MEG block -> ELF label mapping:\n");
   for (int bid : mesh.block_ids) {
-    std::string name = CubitInterface::get_entity_name("block", bid);
+    std::string name = CubitInterface::get_block_name(bid);
     PRINT_INFO("  Block %d \"%s\" -> %s*%c\n",
                bid, name.c_str(), block_prefix[bid].c_str(), dim);
   }
