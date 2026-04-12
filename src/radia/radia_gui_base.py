@@ -426,23 +426,20 @@ class AnalysisWindow(QMainWindow):
                 except json.JSONDecodeError:
                     pass
                 break
-        # Prefer the merged .geo (B + J + companion) when air field
-        # post-processing ran; otherwise fall back to the BEM .msh.
+        # Find the GMSH output file from the result JSON.
+        # Check keys in priority order: gmsh_file > msh_output > msh_file
         gmsh_target = None
         gmsh_reason = ""
-        if result and result.get("field_gmsh_file") and os.path.isfile(
-                result["field_gmsh_file"]):
-            gmsh_target = result["field_gmsh_file"]
-            gmsh_reason = "field_gmsh_file (.geo with B + J + air-field)"
-        elif result:
-            msh_key = "msh_output" if "msh_output" in result else "msh_file"
-            msh = result.get(msh_key)
-            if msh and os.path.isfile(msh):
-                gmsh_target = msh
-                gmsh_reason = f"{msh_key}"
-            else:
-                gmsh_reason = (
-                    f"no {msh_key} (value={msh!r}) — Open GMSH disabled")
+        if result:
+            for key in ("gmsh_file", "field_gmsh_file",
+                        "msh_output", "msh_file"):
+                msh = result.get(key)
+                if msh and os.path.isfile(msh):
+                    gmsh_target = msh
+                    gmsh_reason = key
+                    break
+            if not gmsh_target:
+                gmsh_reason = "no GMSH output file in result"
         if gmsh_target:
             self._last_msh = gmsh_target
             self._gmsh_btn.setEnabled(True)
@@ -706,42 +703,28 @@ class AnalysisWindow(QMainWindow):
         if not self._last_msh:
             return
         import subprocess
-        # Build a small Python launcher that:
-        #   - merges the .msh / .geo we just produced
-        #   - sets sensible defaults so the curved surfaces render
-        #     correctly and air-mesh edges do not cover the screen
-        #   - shows the first vector view (J) as arrows by default
+        msh_path = self._last_msh
+        # Ensure we open the .msh, not a .geo (legacy compat)
+        if msh_path.endswith('.geo'):
+            msh_candidate = msh_path.rsplit('.', 1)[0] + '.msh'
+            if os.path.exists(msh_candidate):
+                msh_path = msh_candidate
+        # gmsh.initialize(['-noconfig']) skips the session options
+        # file (%APPDATA%/gmsh-options) so only the .msh.opt companion
+        # controls display. This prevents user's GUI history from
+        # overriding our settings (VolumeFaces=1, VectorType=5, etc.).
+        # The .msh.opt also works for double-click (same result).
         launcher = (
-            "import gmsh; gmsh.initialize();"
-            f" gmsh.merge(r'{self._last_msh}');"
-            # 1. Curved-element subdivision (Tri6/10/15 etc.)
-            " gmsh.option.setNumber('Mesh.NumSubEdges', 4);"
-            # 2. Hide volume mesh edges (kills the black-line storm)
-            " gmsh.option.setNumber('Mesh.VolumeEdges', 0);"
-            " gmsh.option.setNumber('Mesh.VolumeFaces', 0);"
-            # 3. Surface edges off, surface faces on so the coil
-            #    looks like a smooth shaded body, not a wireframe
-            " gmsh.option.setNumber('Mesh.SurfaceEdges', 0);"
-            " gmsh.option.setNumber('Mesh.SurfaceFaces', 1);"
-            # 4. If a vector view is present, draw it as small arrows
-            #    on the surface (the J view from calc_inductance.py)
-            " tags = gmsh.view.getTags();"
-            " [gmsh.option.setNumber(f'View[{i}].VectorType', 4)"
-            "  for i, _ in enumerate(tags)];"
-            " [gmsh.option.setNumber(f'View[{i}].ArrowSizeMax', 60)"
-            "  for i, _ in enumerate(tags)];"
+            "import gmsh; gmsh.initialize(['-noconfig']);"
+            f" gmsh.open(r'{msh_path}');"
             " gmsh.fltk.run(); gmsh.finalize()"
         )
-        # Run in the .geo's directory so relative Merge directives
-        # (e.g. ``Merge "inductance_B.msh";``) resolve correctly.
-        # Without this the subprocess inherits Cubit's CWD (usually
-        # the repo root) and GMSH silently fails to find the .msh.
-        geo_dir = os.path.dirname(os.path.abspath(self._last_msh))
-        panel_log(f"_open_gmsh: launching GMSH, cwd={geo_dir}")
-        panel_log(f"  file: {self._last_msh}")
+        msh_dir = os.path.dirname(os.path.abspath(msh_path))
+        panel_log(f"_open_gmsh: launching GMSH, cwd={msh_dir}")
+        panel_log(f"  file: {msh_path}")
         subprocess.Popen(
             [_PYTHON, "-c", launcher],
-            cwd=geo_dir,
+            cwd=msh_dir,
             creationflags=(0x08000000 if sys.platform == "win32" else 0))
 
     # Settings

@@ -754,7 +754,7 @@ namespace netgen
               }
             break;
           default:
-            ; 
+            ;
           }
         outfile << "\n";
       }
