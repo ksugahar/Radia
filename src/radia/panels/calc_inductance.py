@@ -1472,6 +1472,11 @@ def main():
                              "impedance (per-panel curvature). 'dowell' is "
                              "kept as a deprecated alias for sibc.")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
+    parser.add_argument("--current", type=float, default=1.0,
+                        help="Coil terminal current [A] (1 A reference; "
+                             "BEM solves a unit-current problem and the "
+                             "user can rescale post hoc — accepted here "
+                             "for symmetry with the FEM driver)")
     parser.add_argument("--sigma", type=float, default=2e6, help="Workpiece conductivity [S/m]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
                         help="Slab half-thickness [m]")
