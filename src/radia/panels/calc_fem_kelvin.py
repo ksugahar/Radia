@@ -35,7 +35,7 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (MU_0, NU_0, setup_paths,
-                          add_periodic_kelvin, detect_kelvin_offset,
+                          detect_kelvin_offset,
                           create_esim_solver, get_bh_curve,
                           compute_T0_source, compute_J_theta,
                           progress, calc_main)
