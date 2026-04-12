@@ -807,6 +807,9 @@ def panel_gui_pitfalls(topic: str = "") -> str:
       result_keys             -- subprocess result dict is an API contract
       regression_blast_radius -- run BOTH panels after touching shared
                                  helpers; opaque casts (PointId) bite
+      panel_qt_testing        -- use tests/panels/test_*_qt.py headless
+                                 PySide6 tests as regression guards;
+                                 string-grep tests do not catch behaviour
       learn_edition_cap       -- ignore the 50k warning, radia_export bypasses it
 
     Args:
