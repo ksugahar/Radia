@@ -1,0 +1,204 @@
+## FEM-Kelvin sample: gapped torus coil + sphere workpiece + air + Kelvin shell
+##
+## Required labels (consumed by calc_fem_kelvin.py):
+##   block 1 = "coil"      (gapped torus, source J)
+##   block 2 = "workpiece" (sphere, INTERFACE approach — kept as a separate
+##                          volume; calc_fem_kelvin.py applies the SIBC
+##                          Robin BC on the air|workpiece interface
+##                          named "sibc" via sideset 3)
+##   block 3 = "air"       (carved inner air half-spheres with coil + workpiece
+##                          holes)
+##   block 4 = "kelvin"    (outer hemispherical shells, sweep-meshed for 1:1
+##                          node correspondence with the air outer surface;
+##                          paired with the air outer surface via the C++
+##                          exporter's automatic block-based Kelvin
+##                          identification)
+##   sideset 1 = "source"  (one gap face on the coil)
+##   sideset 2 = "sink"    (other gap face on the coil)
+##   sideset 3 = "sibc"    (workpiece outer surface, area = 4*pi*R_wp^2)
+##   nodeset 100 = "GND"   (origin vertex; maps to r=infinity in the
+##                          Kelvin transform — essential for H1, optional
+##                          for HCurl)
+##
+## Geometry:
+##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
+##              L_air = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
+##   Workpiece: sphere R = 0.010 m (centered in the coil bore)
+##   Air:       inner sphere R = 0.060 m  (~2x coil major radius)
+##   Kelvin:    outer shell from R = 0.060 m to R = 0.120 m
+##
+## Build policy (CLAUDE.md):
+##   1. Coil by SWEEP, not `create torus + webcut + delete`.
+##   2. SUBTRACT before imprint+merge for any nested topology.
+##   3. NO hardcoded volume / surface IDs — use APREPRO Id("volume")
+##      and identify surfaces by area at sideset assignment time.
+##   4. Block names drive the C++ exporter's Kelvin auto-detection.
+##
+## Subtract ordering (matters):
+##   step 1: webcut both air and kelvin spheres with zplane
+##           -> 4 hemispheres, kelvin still encloses air
+##   step 2: subtract air halves from kelvin halves keep_tool
+##           -> kelvin halves become hemispherical SHELLS,
+##              air halves untouched
+##   step 3: subtract coil and workpiece from air halves keep_tool
+##           -> air halves get coil + workpiece holes,
+##              coil and workpiece volumes preserved
+##   step 4: imprint + merge for conformal interfaces
+##
+## If you reverse steps 2 and 3, the air halves already have coil/wp
+## holes when you subtract them from kelvin, so the holes propagate
+## INTO kelvin and the shell is no longer a clean R=0.060->0.120 annulus.
+##
+## Run via: Solve -> Radia-NGSolve -> Induction Heating -> Method: FEM
+
+reset
+
+# === 1. Coil: gapped torus by sweep =========================================
+# R_major = 0.030, R_minor = 0.003 -> L_air ~ 88.55 nH (BEM-validated).
+create vertex 0.030000 0 0
+create vertex 0.033000 0 0
+create vertex 0.030000 0 0.003000
+create curve arc center vertex 1 vertex 2 vertex 3 normal 0 1 0 full
+create surface curve 1
+sweep surface 1 axis 0 0 0 0 0 1 angle 355
+${coil_vid = Id("volume")}
+
+# === 2. Workpiece sphere (interface approach) ===============================
+# R = 0.010 m, centered at the origin (inside the coil bore).
+create sphere radius 0.010000
+${wp_vid = Id("volume")}
+
+# === 3. Air sphere (inner) ==================================================
+# R = 0.060 m, ~2x coil major radius.
+create sphere radius 0.060000
+${air_vid = Id("volume")}
+
+# === 4. Kelvin outer sphere =================================================
+# R = 0.120 m. The shell volume between R_air and R_kelvin is the
+# Kelvin domain, paired with the inner air outer surface via the
+# C++ exporter's automatic block-based Kelvin identification.
+create sphere radius 0.120000
+${kelvin_vid = Id("volume")}
+
+# === 5. Webcut air + kelvin spheres with zplane =============================
+# Webcut creates new volumes in input order: the new "negative side"
+# halves get IDs (max_before + 1) and (max_before + 2). Capture them
+# with APREPRO so the rest of the script does not depend on the
+# exact numbering Cubit picks.
+${id_before_webcut = Id("volume")}
+webcut volume {air_vid} {kelvin_vid} with plane zplane
+${air_top = air_vid}
+${air_bot = id_before_webcut + 1}
+${kelvin_top = kelvin_vid}
+${kelvin_bot = id_before_webcut + 2}
+
+# === 6. Subtract air halves from kelvin halves -> kelvin SHELLS =============
+# Cubit's ``subtract ... keep_tool`` MODIFIES the body in place
+# when its volume id is below the current max (verified empirically
+# on Cubit 2025.3, 2026-04-12). The body keeps its original id;
+# only the topology / FaceDescriptor list changes. So we do NOT
+# need to re-capture the kelvin / air ids after the subtract — the
+# values from step 5 (after webcut) remain valid through the rest
+# of the script.
+#
+# (If you reorder the script so a body has the highest id at the
+#  time of subtract, that body WILL get a new id; in that case
+#  re-capture with ``${name = Id("volume")}`` after the call. See
+#  ih_fem_sample.jou for an example.)
+subtract volume {air_top} from volume {kelvin_top} keep_tool
+subtract volume {air_bot} from volume {kelvin_bot} keep_tool
+
+# === 7. Subtract coil + workpiece from air halves ===========================
+# Multi-body subtract is supported — Cubit processes each body
+# independently, modifying each in place.
+subtract volume {coil_vid} {wp_vid} from volume {air_top} {air_bot} keep_tool
+
+# === 8. Imprint + merge for conformal interfaces ============================
+imprint all
+merge all
+
+# === 9. Mesh ================================================================
+# Element count is tuned to fit under the Cubit Learn Edition's 50k
+# element export cap, so all three sample .jou files run for free
+# users. Increase the densities below if you have a Pro license and
+# want a finer reference solve.
+#
+# Coil: tet mesh, ~1000 surface tris.
+curve in volume {coil_vid} with length < 0.05 interval 8
+curve in volume {coil_vid} with length > 0.05 interval 32
+volume {coil_vid} scheme tetmesh
+volume {coil_vid} size 0.004
+mesh volume {coil_vid}
+
+# Workpiece sphere.
+volume {wp_vid} scheme tetmesh
+volume {wp_vid} size 0.004
+mesh volume {wp_vid}
+
+# Air half-spheres: coarse tet mesh.
+volume {air_top} {air_bot} scheme tetmesh
+volume {air_top} {air_bot} size 0.025
+mesh volume {air_top} {air_bot}
+
+# Kelvin shells: tet mesh. Sweep mesh would give 1:1 inner<->outer
+# node correspondence (preferred for the periodic Kelvin BC), but
+# Cubit's auto-detect fails on hemispherical shells without an
+# explicit source/target pair. Tet mesh + position-based pairing in
+# the C++ exporter works for matched mesh densities — use the same
+# size as the air halves so the inner air outer surface and the
+# kelvin shell inner surface have similar tri counts.
+volume {kelvin_top} {kelvin_bot} scheme tetmesh
+volume {kelvin_top} {kelvin_bot} size 0.025
+mesh volume {kelvin_top} {kelvin_bot}
+
+# === 10. Blocks =============================================================
+block 1 add volume {coil_vid}
+block 1 name "coil"
+block 2 add volume {wp_vid}
+block 2 name "workpiece"
+block 3 add volume {air_top} {air_bot}
+block 3 name "air"
+block 4 add volume {kelvin_top} {kelvin_bot}
+block 4 name "kelvin"
+
+# === 11. Sidesets ===========================================================
+# Source/sink: identify the two coil gap faces by AREA + CENTROID.
+# After sweep + multiple imprint/merge cycles (because of the air
+# and kelvin webcuts), the surface IDs Cubit assigned at sweep time
+# (1 and 3) get renumbered, so hardcoding `surface 1` / `surface 3`
+# the way ih_bem_sample.jou does no longer works for this script.
+#
+#   1. Group all small-area surfaces in the coil volume — these are
+#      exactly the two gap faces (area = pi * a_minor^2 ~ 2.83e-5 m^2,
+#      compared to the lateral coil surface ~ 0.012 m^2).
+#   2. Split by y-coordinate of the centroid: the start of the
+#      sweep sits on y = 0 (positive y boundary) while the end of
+#      the sweep at angle 355 sits at y = R_major * sin(-5 deg)
+#      ~ -0.0026 m. The threshold y_coord = -0.001 cleanly
+#      separates the two.
+group "coil_gaps" add surface in volume {coil_vid} with area < 0.0001
+sideset 1 add surface in coil_gaps with y_coord > -0.001
+sideset 1 name "source"
+sideset 2 add surface in coil_gaps with y_coord < -0.001
+sideset 2 name "sink"
+
+# Workpiece outer surface: pick all surfaces in the workpiece
+# volume. After imprint+merge with the zplane-cut air halves the
+# workpiece sphere is split into a top + bottom hemisphere; both
+# hemispheres are part of the SIBC interface.
+sideset 3 add surface in volume {wp_vid}
+sideset 3 name "sibc"
+
+# === 12. GND nodeset ========================================================
+# The Kelvin transform maps r' = a^2 / r, so the origin (r' = 0) is
+# the image of physical infinity. Pin the H1 scalar potential to
+# zero at the origin vertex; for the H1 formulation this is essential
+# (the linear system is rank-deficient by 1 without it).
+create vertex 0 0 0
+nodeset 100 add vertex {Id("vertex")}
+nodeset 100 name "GND"
+
+# Hide air + kelvin so the user sees only the coil + workpiece in
+# the Cubit GUI before launching the FEM solve.
+volume {air_top} {air_bot} visibility off
+volume {kelvin_top} {kelvin_bot} visibility off

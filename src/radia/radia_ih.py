@@ -273,8 +273,8 @@ class IHPanel(ModePanel):
 
         # Workpiece coupling: combo -> --workpiece + impedance
         # The workpiece sideset is named "sibc" by .jou convention
-        # (see ih_sample.jou). The label is passed as the boundary
-        # name prefix to _extract_panels_from_mesh.
+        # (see ih_bem_sample.jou). The label is passed as the
+        # boundary name prefix to _extract_panels_from_mesh.
         wp_mode = self.val("workpiece_mode")
         if wp_mode != "off":
             imp = "esim" if wp_mode == "ESIM" else "sibc"
