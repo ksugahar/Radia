@@ -118,37 +118,42 @@ imprint all
 merge all
 
 # === 9. Mesh ================================================================
-# Element count is tuned to fit under the Cubit Learn Edition's 50k
-# element export cap, so all three sample .jou files run for free
-# users. Increase the densities below if you have a Pro license and
-# want a finer reference solve.
+# Coil: tet mesh, BEM-validated density (~1900 surface tris).
+# Matches ih_bem_sample.jou and ih_fem_sample.jou so the coil
+# terminal inductance is comparable across the three samples.
 #
-# Coil: tet mesh, ~1000 surface tris.
-curve in volume {coil_vid} with length < 0.05 interval 8
-curve in volume {coil_vid} with length > 0.05 interval 32
+# Note: Cubit Learn Edition's 50k-element cap applies to its own
+# .exo / .gmsh / .vtk exporters; the in-tree ``radia_export
+# netgen`` plugin bypasses the cap and writes the .vol regardless
+# of the warning Cubit prints. So we tune to the physically right
+# mesh density and ignore the Learn-Edition warning.
+curve in volume {coil_vid} with length < 0.05 interval 12
+curve in volume {coil_vid} with length > 0.05 interval 48
 volume {coil_vid} scheme tetmesh
-volume {coil_vid} size 0.004
+volume {coil_vid} size 0.003
 mesh volume {coil_vid}
 
-# Workpiece sphere.
+# Workpiece sphere: tet mesh.
 volume {wp_vid} scheme tetmesh
-volume {wp_vid} size 0.004
+volume {wp_vid} size 0.003
 mesh volume {wp_vid}
 
-# Air half-spheres: coarse tet mesh.
+# Air halves: tet mesh. Coarser than the coil but fine enough that
+# the air outer surface (which the Kelvin BC pairs with) has a
+# tri density comparable to the Kelvin shell inner surface.
 volume {air_top} {air_bot} scheme tetmesh
-volume {air_top} {air_bot} size 0.025
+volume {air_top} {air_bot} size 0.020
 mesh volume {air_top} {air_bot}
 
-# Kelvin shells: tet mesh. Sweep mesh would give 1:1 inner<->outer
-# node correspondence (preferred for the periodic Kelvin BC), but
-# Cubit's auto-detect fails on hemispherical shells without an
-# explicit source/target pair. Tet mesh + position-based pairing in
-# the C++ exporter works for matched mesh densities — use the same
-# size as the air halves so the inner air outer surface and the
-# kelvin shell inner surface have similar tri counts.
+# Kelvin shells: tet mesh, same size as the air halves so the
+# air outer surface and the kelvin shell inner surface have
+# similar tri counts (the C++ exporter's position-based Kelvin
+# identifier needs roughly matched mesh densities to find a
+# 1:1 pairing). Sweep mesh would give exact 1:1 correspondence
+# but Cubit's auto-detect cannot pick the source/target pair on
+# a hemispherical shell without explicit hints.
 volume {kelvin_top} {kelvin_bot} scheme tetmesh
-volume {kelvin_top} {kelvin_bot} size 0.025
+volume {kelvin_top} {kelvin_bot} size 0.020
 mesh volume {kelvin_top} {kelvin_bot}
 
 # === 10. Blocks =============================================================
