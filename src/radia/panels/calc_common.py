@@ -416,35 +416,87 @@ def build_occ_ih_mesh_hole(R_coil=0.030, a_coil=0.003, gap_deg=5,
     return mesh, info
 
 
-def add_periodic_kelvin(mesh, kelvin_offset):
-    """Add periodic identification to Cubit-exported mesh for Kelvin transform.
+def add_periodic_kelvin(mesh, kelvin_center, a_kelvin):
+    """Add periodic identification for concentric-sphere Kelvin transform.
 
     Matches vertices on 'kelvin_int' boundary to corresponding points
-    on 'kelvin_ext' (at position + kelvin_offset) using translation mapping.
-    Modifies the ngmesh in place.
+    on 'kelvin_ext' using RADIAL SCALING from kelvin_center:
+      p_outer = center + (p_inner - center) * (R_outer / R_inner)
 
-    For Cubit meshes, the sphere must be webcut first to create curves,
-    then `copy mesh surface` ensures matching node topology.
+    NGSolve's IdentifyPeriodicBoundaries only supports translation/rotation
+    (not radial scaling), so we use AddPointIdentification directly.
 
     Args:
-        mesh: ngsolve.Mesh (from export_NGSolveCurvedMesh)
-        kelvin_offset: (x, y, z) offset of exterior sphere center
+        mesh: ngsolve.Mesh
+        kelvin_center: (x, y, z) center of Kelvin spheres
+        a_kelvin: outer sphere radius (R_outer)
 
     Returns:
-        True if identification was added, False otherwise
+        int: number of vertex pairs added (0 on failure)
     """
-    boundaries = mesh.GetBoundaries()
-    if "kelvin_int" not in boundaries and "kelvin_ext" not in boundaries:
-        return False
+    from ngsolve import BND
+    from netgen.meshing import PointId, IdentificationType
+    import numpy as np
 
-    from netgen.meshing import Trafo, Vec3d
-    trafo = Trafo(Vec3d(*kelvin_offset))
+    boundaries = mesh.GetBoundaries()
+    if "kelvin_int" not in boundaries or "kelvin_ext" not in boundaries:
+        return 0
+
+    # Collect vertices on kelvin_int and kelvin_ext
+    center = np.array(kelvin_center)
+    inner_verts = {}  # vid -> np.array([x,y,z])
+    outer_verts = {}
+
+    for el in mesh.Elements(BND):
+        bc = boundaries[el.index]
+        if bc == "kelvin_int":
+            for v in el.vertices:
+                if v.nr not in inner_verts:
+                    inner_verts[v.nr] = np.array(mesh.vertices[v.nr].point)
+        elif bc == "kelvin_ext":
+            for v in el.vertices:
+                if v.nr not in outer_verts:
+                    outer_verts[v.nr] = np.array(mesh.vertices[v.nr].point)
+
+    if not inner_verts or not outer_verts:
+        return 0
+
+    # Compute R_inner from inner vertices
+    inner_dists = [np.linalg.norm(p - center) for p in inner_verts.values()]
+    R_inner = np.mean(inner_dists)
+    R_outer = a_kelvin
+    scale = R_outer / R_inner
+
+    # For each inner vertex, find nearest unused outer vertex after scaling
+    outer_list = list(outer_verts.items())  # [(vid, coords), ...]
+    outer_coords = np.array([p for _, p in outer_list])
+    outer_ids = [vid for vid, _ in outer_list]
+    used = set()
 
     ngmesh = mesh.ngmesh
-    identnr = ngmesh.IdentifyPeriodicBoundaries(
-        "kelvin", "kelvin_int", trafo, point_tolerance=1e-3)
+    n_paired = 0
 
-    return identnr > 0
+    for iv, ip in inner_verts.items():
+        # Predict outer position by radial scaling
+        predicted = center + (ip - center) * scale
+
+        # Find nearest unused outer vertex
+        dists = np.linalg.norm(outer_coords - predicted[np.newaxis, :], axis=1)
+        order = np.argsort(dists)
+        for idx in order:
+            ov = outer_ids[idx]
+            if ov not in used:
+                d = dists[idx]
+                tol = 0.3 * R_outer * 0.5
+                if d < tol:
+                    ngmesh.AddPointIdentification(
+                        PointId(iv + 1), PointId(ov + 1),
+                        identnr=1, type=IdentificationType.PERIODIC)
+                    used.add(ov)
+                    n_paired += 1
+                break
+
+    return n_paired
 
 
 def detect_kelvin_offset(mesh):
