@@ -127,10 +127,12 @@ def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
 
     surf_mesh = Mesh(ngmesh_new)
     if return_vertex_map:
-        # ngmesh.Add returns a 1-indexed PointId; the NGSolve Mesh
-        # exposes vertices via 0-indexed v.nr. Convert here so the
-        # caller can use new_to_old[surf.vertices[i].nr].
-        new_to_old = {int(new_id) - 1: int(old_nr)
+        # ngmesh.Add returns a netgen ``PointId`` (1-indexed). The
+        # NGSolve Mesh exposes vertices via 0-indexed ``v.nr``.
+        # PointId is NOT directly castable to int — use its ``.nr``
+        # attribute. (Discovered the hard way 2026-04-12 when the
+        # original ``int(new_id)`` cast crashed BEM with TypeError.)
+        new_to_old = {new_id.nr - 1: int(old_nr)
                        for old_nr, new_id in old_to_new.items()}
         return surf_mesh, new_to_old
     return surf_mesh

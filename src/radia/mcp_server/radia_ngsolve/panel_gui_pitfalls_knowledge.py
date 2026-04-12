@@ -174,6 +174,160 @@ applies to ``|J|``: vector only, never the scalar magnitude.
 B/J).
 
 ============================================================
+## gmsh_viz — Visualization quality checklist (regression guard)
+============================================================
+
+**Symptom**: New GMSH outputs look noticeably worse than older
+outputs from the same panel. Common regression patterns:
+
+  - sphere appears black (volume mesh edges fill the screen)
+  - field views are present but show flat color (no arrows)
+  - high-order curving is lost; coil renders as faceted polygon
+  - only B is exported; J is missing
+  - the Open GMSH button enables but the .msh has no field data
+
+**Root cause**: Each new export refactor drops one or two of the
+quality knobs the previous version had. Without a checklist the
+quality drifts down monotonically with every refactor.
+
+**Rule — checklist for any new GMSH export from a panel**:
+
+DO:
+
+  - Write a **vector** view per physical quantity (B, J, A, ...).
+    Use ``add_field("B", node_data, ncomp=3)``.
+  - Per-vertex evaluate the CoefficientFunction directly:
+
+    ```python
+    arr = np.zeros((mesh.nv, 3))
+    for vi, v in enumerate(mesh.vertices):
+        val = cf(mesh(*v.point))
+        arr[vi] = [float(getattr(x, "real", x)) for x in val[:3]]
+    ```
+
+    NodeData on the original vertices renders cleanly even on
+    high-order curved meshes — no projection-induced artifacts.
+
+  - Export BOTH the field-source view (J on the coil) AND the
+    field-effect view (B everywhere). One view alone is half the
+    story; the user always wants to correlate the two.
+
+  - Restrict source-side views to the relevant material:
+    ``add_field("J", node_J, ncomp=3, material="coil")`` so the
+    arrows do not pollute the air domain.
+
+  - Write a **companion ``.geo`` file** next to the .msh and have
+    the panel's "Open GMSH" button open the .geo, NOT the .msh.
+    The .geo applies the display options below automatically.
+
+  - Apply these display options in the .geo:
+
+    ```
+    Mesh.NumSubEdges = 4;       // smooth high-order curving
+    Mesh.Volumes = 0;           // hide air tetrahedra
+    Mesh.VolumeFaces = 0;
+    Mesh.VolumeEdges = 0;
+    Mesh.SurfaceEdges = 0;      // hide internal triangle edges
+    Mesh.SurfaceFaces = 0;
+    View[0].VectorType = 4;     // 3D arrow style for B
+    View[0].IntervalsType = 3;  // continuous color map
+    View[1].VectorType = 4;     // 3D arrow style for J
+    View[1].IntervalsType = 3;
+    ```
+
+  - Activate ``mesh.Curve(N)`` (N >= 2) on the source mesh BEFORE
+    writing so the GMSH exporter can emit Tri6/Tri10 elements with
+    correct mid-edge nodes. Linear-only export of a high-order .vol
+    silently degrades the geometry visualization.
+
+  - Always provide a **fallback** path that writes a mesh-only
+    .msh when the field-write fails (see ``silent_except`` topic),
+    so the Open GMSH button always enables.
+
+DON'T:
+
+  - **Do not** add a separate ``|B|`` / ``|J|`` scalar view. The
+    vector view already encodes magnitude in its arrow color. The
+    scalar duplicates information and clutters the View list.
+
+  - **Do not** leave ``Mesh.Volumes = 1`` (the GMSH default). On a
+    100k-element sphere mesh that draws as a black blob and hides
+    every field arrow.
+
+  - **Do not** write per-element ElementData when per-vertex
+    NodeData is what GMSH wants for arrow rendering. Per-element
+    arrows are constant within each cell and look chunky;
+    per-vertex arrows interpolate smoothly.
+
+  - **Do not** project a vector quantity to a scalar GridFunction
+    just to use ``Set()``. ``H1(mesh, dim=3)`` is not a real API;
+    ``VectorH1`` and ``H1(...)**3`` work but add nothing over
+    direct CF evaluation, and ``Set(complex_cf)`` on a real space
+    raises silently. Skip the projection entirely.
+
+  - **Do not** ship just B without J (or vice versa). The user
+    always wants both.
+
+  - **Do not** open the raw .msh from the panel button. Open the
+    companion .geo instead so the display options are applied.
+
+**Reference**: commits ``d364796`` (FEM B/J vector + companion .geo
++ mesh-only fallback), ``1aa66ee`` (initial unified BEM/FEM viz),
+``8dbee35`` (BEM dropping ``|B|``/``|J|`` scalars). Past quality
+regressions traced from comparing ``calc_fem_kelvin.py`` Step 7
+across these commits.
+
+============================================================
+## gmsh_arrow_size — Without ArrowSizeMin/Max the field is invisible
+============================================================
+
+**Symptom**: GMSH .geo opens, B view is selected, the user sees a
+clean wireframe coil but **no arrows at all**. Or: arrows are
+visible but tiny dots, indistinguishable from the background mesh.
+The user reports "出力されるgmshの質が過去のものより劣化していた".
+
+**Root cause**: GMSH's vector view defaults to ``ArrowSize* = 60``
+**relative to the bounding box**, which for a 0.24 m air sphere
+gives arrows that are physically a few mm long — invisible at the
+default zoom. ``View.VectorType = 4`` alone is not enough; without
+fixed pixel sizes the arrows do not render at a useful scale.
+
+The v3.6.1 (commit ``5e0b69c``, 2026-03-23) version of
+``calc_inductance.py post_process`` set:
+
+```
+View[0].ArrowSizeMin = 20;
+View[0].ArrowSizeMax = 20;
+View[1].ArrowSizeMin = 20;
+View[1].ArrowSizeMax = 20;
+```
+
+That gave the consistently beautiful field arrows everyone praised.
+A 2026-04-12 refactor of the same companion .geo writer dropped
+these lines (left it at GMSH defaults), and the field views became
+invisible without the user noticing — the comment in the new code
+even said "the arrow size is left at GMSH's auto-scale" as if that
+were a feature.
+
+**Rule**: Every ``.geo`` companion file the panel writes MUST set:
+
+```
+View[N].VectorType = 4;          // 3D arrow style
+View[N].IntervalsType = 3;       // continuous color map
+View[N].ArrowSizeMin = 20;       // FIXED 20 px — do NOT auto-scale
+View[N].ArrowSizeMax = 20;
+```
+
+for **every** vector view in the .msh. Without ArrowSizeMin/Max
+the field is functionally invisible. There is no scenario where
+GMSH's auto-scale produces a useful default for Radia output, so
+the "leave it default" path is wrong by definition.
+
+**Reference**: commit ``5e0b69c`` (original beautiful version),
+commit ``d949d50`` (regression: dropped the arrow sizes), this
+commit (restored).
+
+============================================================
 ## subprocess_args — calc_*.py choices must match GUI combos
 ============================================================
 
@@ -439,6 +593,72 @@ shipping.
 which has the canonical "what the GUI looks for" logic.
 
 ============================================================
+## regression_blast_radius — One edit breaks an unrelated place
+============================================================
+
+**Symptom**: Fixing the FEM panel's Open GMSH button suddenly
+breaks the BEM panel. Adding a return_vertex_map kwarg to
+``_extract_surface_mesh_filtered`` makes BEM die with
+``TypeError: int() argument must be a string ... not PointId``
+on a code path the FEM fix did not touch. The user reports
+"どっかをいじるとどっか別のところが壊れる".
+
+**Root cause**: The Radia panels share a lot of utility code via
+``calc_common.py`` / ``calc_heating_bem.py`` / the BEM solver. A
+"local" change to one panel that touches a shared helper has a
+**blast radius** that the immediate test doesn't catch:
+
+  - Adding a kwarg with a new return type breaks every existing
+    caller that did not opt in.
+  - Renaming a result-dict key breaks the GUI's ``_on_finished``
+    consumer regardless of which panel script wrote it.
+  - Changing a calc_*.py argparse default breaks any sample run
+    that relied on the old default being passed implicitly.
+  - Tightening a CoefficientFunction signature breaks every
+    GridFunction.Set() call in the same module.
+
+The PointId crash above came from a one-line construction:
+
+```python
+new_to_old = {int(new_id) - 1: int(old_nr)
+               for old_nr, new_id in old_to_new.items()}
+```
+
+``int(PointId)`` raises TypeError on netgen's PointId class.
+Discovered only when the user ran BEM (not FEM, the panel I was
+editing).
+
+**Rules**:
+
+  1. **Run BOTH panels** after touching any shared helper, even
+     when "the change is only for FEM". If the helper lives in
+     ``calc_heating_bem.py`` or ``calc_common.py``, the smoke
+     test must cover at least one BEM run AND one FEM run.
+
+  2. **Optional kwargs** that change return type are dangerous —
+     prefer adding a separate function or making the new return
+     a tuple ``(old_result, extra)`` with a clear opt-in flag,
+     and write a regression test that exercises the OLD signature.
+
+  3. **Cast carefully** — ``int(x)`` works for built-in numerics
+     but not for opaque library wrappers like netgen's PointId.
+     When in doubt use the explicit attribute (``x.nr`` for
+     PointId) and document why in a comment.
+
+  4. **Result dict keys** are an API contract (see ``result_keys``
+     topic). Renaming requires grep across every consumer.
+
+  5. After any non-trivial edit, **list every file that imports
+     the changed function** and run the smoke test for each
+     consumer panel. ``grep -rln "_extract_surface_mesh_filtered"
+     src/radia/`` is faster than discovering the regression in
+     production.
+
+**Reference**: commits ``1aa66ee`` (introduced
+``return_vertex_map``), ``d364796`` (broke BEM via PointId int
+cast), this commit (restored ``.nr`` access + added rule).
+
+============================================================
 ## learn_edition_cap — Cubit Learn Edition 50k limit is harmless
 ============================================================
 
@@ -469,12 +689,14 @@ _TOPICS = (
     "mode_switch",
     "layout_unification",
     "gmsh_viz",
+    "gmsh_arrow_size",
     "subprocess_args",
     "cubit_jou",
     "sample_jou",
     "silent_action",
     "silent_except",
     "result_keys",
+    "regression_blast_radius",
     "learn_edition_cap",
 )
 
