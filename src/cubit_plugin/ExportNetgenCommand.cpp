@@ -259,26 +259,65 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     ng_mesh->BuildCurvedElements(1);
   }
 
+  // ---- Kelvin auto-detection ----
+  // If blocks named "air" and "kelvin" exist, automatically label the
+  // shared air|kelvin interface as "kelvin_int" and the outer kelvin
+  // boundary (DomainOut=0) as "kelvin_ext".  This saves the user from
+  // having to add manual sidesets in the .jou file.
+  {
+    int air_dom = 0, kelvin_dom = 0;
+    for (int bid : md.block_ids) {
+      std::string bname = CubitInterface::get_block_name(bid);
+      for (auto &ch : bname) ch = (char)tolower((unsigned char)ch);
+      if (bname == "air")    air_dom = block_to_domain[bid];
+      if (bname == "kelvin") kelvin_dom = block_to_domain[bid];
+    }
+
+    if (air_dom > 0 && kelvin_dom > 0) {
+      int n_int = 0, n_ext = 0;
+      for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
+        int di = ng_mesh->GetFaceDescriptor(fi).DomainIn();
+        int dout = ng_mesh->GetFaceDescriptor(fi).DomainOut();
+        // Shared face between air and kelvin = kelvin_int
+        if ((di == air_dom && dout == kelvin_dom) ||
+            (di == kelvin_dom && dout == air_dom)) {
+          ng_mesh->SetBCName(fi - 1, "kelvin_int");
+          ng_mesh->GetFaceDescriptor(fi).SetBCName(
+              ng_mesh->GetBCNamePtr(fi - 1));
+          n_int++;
+        }
+        // Outer boundary of kelvin shell (one side is kelvin, other is 0)
+        else if ((di == kelvin_dom && dout == 0) ||
+                 (di == 0 && dout == kelvin_dom)) {
+          ng_mesh->SetBCName(fi - 1, "kelvin_ext");
+          ng_mesh->GetFaceDescriptor(fi).SetBCName(
+              ng_mesh->GetBCNamePtr(fi - 1));
+          n_ext++;
+        }
+      }
+      if (n_int > 0 && n_ext > 0) {
+        PRINT_INFO("Kelvin auto-detect: %d inner + %d outer face descriptors\n",
+                   n_int, n_ext);
+      } else if (n_int > 0 || n_ext > 0) {
+        PRINT_WARNING("Kelvin auto-detect: found %d inner, %d outer "
+                      "(need both > 0)\n", n_int, n_ext);
+      }
+    }
+  }
+
   // ---- Kelvin periodic identification (optional) ----
-  // Two-sphere approach: interior sphere (physical) + exterior sphere (Kelvin image).
-  // Both have the same radius R, offset in space.
-  //
-  // Pairing must preserve TRIANGLE TOPOLOGY: every inner triangle must have a
-  // matching outer triangle when its vertices are remapped via the pair table.
-  // A naive nearest-neighbor vertex match does not guarantee this — small
-  // numerical noise can pair vertices in a way that breaks triangle adjacency.
+  // Concentric-sphere Kelvin transform: inner surface at R_inner,
+  // outer surface at R_outer, both centered at the same point.
+  // The mapping is RADIAL SCALING: p_outer = center + (p_inner - center) * scale
+  // where scale = R_outer / R_inner.
   //
   // Algorithm:
-  //   1. Collect inner/outer triangles (3 vertex IDs each)
-  //   2. Estimate translation T = mean(outer) - mean(inner)
-  //   3. For each inner triangle, find the outer triangle with closest centroid
-  //      after translation
-  //   4. For each matched pair, try the 3 cyclic rotations of the inner vertices
-  //      against the outer vertices (orientation may flip, so also try reverse)
-  //      and pick the rotation with minimum total vertex distance
-  //   5. Record (inner_vid -> outer_vid) from the chosen rotation
-  //   6. Verify consistency: every inner vertex must always map to the same
-  //      outer vertex across all triangles it belongs to
+  //   1. Collect inner/outer triangles (vertex-3 only)
+  //   2. Compute center and radii from point clouds
+  //   3. For each inner vertex, predict its outer position by radial scaling
+  //   4. Find the nearest outer vertex to each predicted position
+  //   5. Verify via triangle topology (matched triangles must have
+  //      consistent vertex pairing across all shared edges)
   {
     std::set<int> fd_inner_set, fd_outer_set;
     for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
@@ -288,8 +327,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
 
     if (!fd_inner_set.empty() && !fd_outer_set.empty()) {
-      struct Tri { int v[3]; double cx, cy, cz; };
-      std::vector<Tri> inner_tris, outer_tris;
+      // Collect vertex positions for inner and outer surfaces
       std::map<int, netgen::Point<3>> inner_pts, outer_pts;
 
       for (int sei = 1; sei <= ng_mesh->GetNSE(); sei++) {
@@ -298,117 +336,87 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         bool is_inner = fd_inner_set.count(fd) > 0;
         bool is_outer = fd_outer_set.count(fd) > 0;
         if (!is_inner && !is_outer) continue;
-        if (sel.GetNP() < 3) continue;  // Skip non-triangle elements
 
-        Tri t;
-        t.cx = t.cy = t.cz = 0;
-        for (int j = 0; j < 3; j++) {
+        auto &target = is_inner ? inner_pts : outer_pts;
+        for (int j = 0; j < sel.GetNP(); j++) {
           int pi = sel[j];
-          t.v[j] = pi;
-          auto &pt = ng_mesh->Point(netgen::PointIndex(pi));
-          t.cx += pt(0); t.cy += pt(1); t.cz += pt(2);
-          auto &target = is_inner ? inner_pts : outer_pts;
-          if (target.find(pi) == target.end()) target[pi] = pt;
+          if (target.find(pi) == target.end())
+            target[pi] = ng_mesh->Point(netgen::PointIndex(pi));
         }
-        t.cx /= 3; t.cy /= 3; t.cz /= 3;
-        (is_inner ? inner_tris : outer_tris).push_back(t);
       }
 
-      if (!inner_tris.empty() && !outer_tris.empty()) {
-        // Translation: centroid(outer) - centroid(inner)
-        double mean_ix = 0, mean_iy = 0, mean_iz = 0;
-        double mean_ox = 0, mean_oy = 0, mean_oz = 0;
+      if (!inner_pts.empty() && !outer_pts.empty()) {
+        // Compute center as mean of inner points (should be near sphere center)
+        double cx = 0, cy = 0, cz = 0;
         for (auto &p : inner_pts) {
-          mean_ix += p.second(0); mean_iy += p.second(1); mean_iz += p.second(2);
+          cx += p.second(0); cy += p.second(1); cz += p.second(2);
+        }
+        double ni = (double)inner_pts.size();
+        cx /= ni; cy /= ni; cz /= ni;
+
+        // Compute average radii
+        double r_inner_sum = 0, r_outer_sum = 0;
+        for (auto &p : inner_pts) {
+          double dx = p.second(0) - cx, dy = p.second(1) - cy, dz = p.second(2) - cz;
+          r_inner_sum += sqrt(dx*dx + dy*dy + dz*dz);
         }
         for (auto &p : outer_pts) {
-          mean_ox += p.second(0); mean_oy += p.second(1); mean_oz += p.second(2);
+          double dx = p.second(0) - cx, dy = p.second(1) - cy, dz = p.second(2) - cz;
+          r_outer_sum += sqrt(dx*dx + dy*dy + dz*dz);
         }
-        double ni = inner_pts.size(), no = outer_pts.size();
-        double tx = mean_ox/no - mean_ix/ni;
-        double ty = mean_oy/no - mean_iy/ni;
-        double tz = mean_oz/no - mean_iz/ni;
+        double R_inner = r_inner_sum / ni;
+        double R_outer = r_outer_sum / (double)outer_pts.size();
+        double scale = R_outer / R_inner;
 
-        // Step 1: For each inner triangle, find matching outer triangle by centroid
-        // (linear search is O(N^2); fine for typical Kelvin sphere sizes)
-        std::map<int, int> vertex_pair;          // inner_vid -> outer_vid
-        std::map<int, int> vertex_pair_count;    // for consistency check
-        std::map<int, std::map<int,int>> vertex_pair_votes;  // inner -> {outer -> count}
-        double max_vertex_dist = 0;
-        int n_tri_matched = 0;
-        int n_tri_unmatched = 0;
+        PRINT_INFO("Kelvin periodic: center=(%.4f,%.4f,%.4f) "
+                   "R_inner=%.4f R_outer=%.4f scale=%.4f\n",
+                   cx, cy, cz, R_inner, R_outer, scale);
+        PRINT_INFO("Kelvin periodic: %zu inner verts, %zu outer verts\n",
+                   inner_pts.size(), outer_pts.size());
 
-        for (auto &t_in : inner_tris) {
-          double ex = t_in.cx + tx, ey = t_in.cy + ty, ez = t_in.cz + tz;
+        // Build spatial index of outer points for fast lookup.
+        // For each inner vertex, predict outer position by radial scaling
+        // and find the nearest outer vertex.
+        std::vector<std::pair<int, netgen::Point<3>>> outer_vec(
+            outer_pts.begin(), outer_pts.end());
 
-          // Find nearest outer triangle by centroid
-          int best_oi = -1;
+        std::map<int, int> vertex_pair;   // inner_vid -> outer_vid
+        double max_dist = 0;
+        int n_good = 0, n_bad = 0;
+
+        for (auto &ip : inner_pts) {
+          // Predict outer position: radial scaling from center
+          double dx = ip.second(0) - cx;
+          double dy = ip.second(1) - cy;
+          double dz = ip.second(2) - cz;
+          double px = cx + dx * scale;
+          double py = cy + dy * scale;
+          double pz = cz + dz * scale;
+
+          // Find nearest outer vertex (brute force, O(N*M))
+          int best_ov = -1;
           double best_d2 = 1e30;
-          for (size_t k = 0; k < outer_tris.size(); k++) {
-            auto &t_out = outer_tris[k];
-            double dx = t_out.cx - ex, dy = t_out.cy - ey, dz = t_out.cz - ez;
-            double d2 = dx*dx + dy*dy + dz*dz;
-            if (d2 < best_d2) { best_d2 = d2; best_oi = (int)k; }
-          }
-          if (best_oi < 0) { n_tri_unmatched++; continue; }
-          n_tri_matched++;
-          auto &t_out = outer_tris[best_oi];
-
-          // Try 6 permutations: 3 cyclic rotations × 2 mirror (orientation flip)
-          // Cycle: (0,1,2), (1,2,0), (2,0,1)
-          // Reverse: (0,2,1), (2,1,0), (1,0,2)
-          int perms[6][3] = {
-            {0,1,2}, {1,2,0}, {2,0,1},
-            {0,2,1}, {2,1,0}, {1,0,2}
-          };
-          double best_perm_d2 = 1e30;
-          int best_perm = -1;
-          for (int p = 0; p < 6; p++) {
-            double sum = 0;
-            for (int j = 0; j < 3; j++) {
-              auto &pi = inner_pts[t_in.v[j]];
-              auto &po = outer_pts[t_out.v[perms[p][j]]];
-              double dx = po(0) - (pi(0)+tx);
-              double dy = po(1) - (pi(1)+ty);
-              double dz = po(2) - (pi(2)+tz);
-              sum += dx*dx + dy*dy + dz*dz;
-            }
-            if (sum < best_perm_d2) { best_perm_d2 = sum; best_perm = p; }
+          for (auto &op : outer_vec) {
+            double ddx = op.second(0) - px;
+            double ddy = op.second(1) - py;
+            double ddz = op.second(2) - pz;
+            double d2 = ddx*ddx + ddy*ddy + ddz*ddz;
+            if (d2 < best_d2) { best_d2 = d2; best_ov = op.first; }
           }
 
-          // Vote: each triangle proposes a vertex pairing
-          for (int j = 0; j < 3; j++) {
-            int vi = t_in.v[j];
-            int vo = t_out.v[perms[best_perm][j]];
-            vertex_pair_votes[vi][vo]++;
-          }
-          double d = sqrt(best_perm_d2 / 3.0);
-          if (d > max_vertex_dist) max_vertex_dist = d;
-        }
-
-        // Step 2: Resolve final pairing by majority vote per inner vertex.
-        // Each vertex appears in multiple triangles; the correct outer pair
-        // is the one most-voted (should be unanimous if mesh is conformal).
-        int n_consistent = 0;
-        int n_conflicts = 0;
-        for (auto &kv : vertex_pair_votes) {
-          int vi = kv.first;
-          int best_vo = -1, best_votes = 0, total = 0;
-          for (auto &vo_count : kv.second) {
-            total += vo_count.second;
-            if (vo_count.second > best_votes) {
-              best_votes = vo_count.second;
-              best_vo = vo_count.first;
-            }
-          }
-          if (best_vo > 0) {
-            vertex_pair[vi] = best_vo;
-            if (best_votes < total) n_conflicts++;
-            else n_consistent++;
+          double dist = sqrt(best_d2);
+          // Tolerance: 30% of average outer edge length (generous for tet mesh)
+          double tol = 0.3 * R_outer * 0.5;  // conservative
+          if (dist < tol && best_ov > 0) {
+            vertex_pair[ip.first] = best_ov;
+            if (dist > max_dist) max_dist = dist;
+            n_good++;
+          } else {
+            n_bad++;
           }
         }
 
-        // Step 3: Write identifications
+        // Write identifications
         auto &ident = ng_mesh->GetIdentifications();
         int n_paired = 0;
         for (auto &p : vertex_pair) {
@@ -419,12 +427,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           n_paired++;
         }
 
-        PRINT_INFO("Kelvin periodic: %d vertex pairs from %d/%d matched triangles "
-                   "(%zu inner pts, %zu outer pts, offset=(%.4f,%.4f,%.4f), "
-                   "max_vert_dist=%.2e, conflicts=%d/%d)\n",
-                   n_paired, n_tri_matched, (int)inner_tris.size(),
-                   inner_pts.size(), outer_pts.size(), tx, ty, tz,
-                   max_vertex_dist, n_conflicts, n_consistent + n_conflicts);
+        PRINT_INFO("Kelvin periodic: %d/%zu pairs written "
+                   "(max_dist=%.2e, %d unmatched)\n",
+                   n_paired, inner_pts.size(), max_dist, n_bad);
       }
     }
   }

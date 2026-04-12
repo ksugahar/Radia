@@ -1,8 +1,8 @@
-## FEM-Kelvin sample: gapped torus coil + sphere workpiece + air + Kelvin shell
+## FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air + Kelvin shell
 ##
 ## Required labels (consumed by calc_fem_kelvin.py):
 ##   block 1 = "coil"      (gapped torus, source J)
-##   block 2 = "workpiece" (sphere, INTERFACE approach — kept as a separate
+##   block 2 = "workpiece" (cylinder, INTERFACE approach — kept as a separate
 ##                          volume; calc_fem_kelvin.py applies the SIBC
 ##                          Robin BC on the air|workpiece interface
 ##                          named "sibc" via sideset 3)
@@ -15,7 +15,7 @@
 ##                          identification)
 ##   sideset 1 = "source"  (one gap face on the coil)
 ##   sideset 2 = "sink"    (other gap face on the coil)
-##   sideset 3 = "sibc"    (workpiece outer surface, area = 4*pi*R_wp^2)
+##   sideset 3 = "sibc"    (workpiece outer surface)
 ##   nodeset 100 = "GND"   (origin vertex; maps to r=infinity in the
 ##                          Kelvin transform — essential for H1, optional
 ##                          for HCurl)
@@ -23,7 +23,7 @@
 ## Geometry:
 ##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
 ##              L_air = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
-##   Workpiece: sphere R = 0.010 m (centered in the coil bore)
+##   Workpiece: cylinder R = 0.025 m, H = 0.025 m (centered in the coil bore)
 ##   Air:       inner sphere R = 0.060 m  (~2x coil major radius)
 ##   Kelvin:    outer shell from R = 0.060 m to R = 0.120 m
 ##
@@ -63,9 +63,9 @@ create surface curve 1
 sweep surface 1 axis 0 0 0 0 0 1 angle 355
 ${coil_vid = Id("volume")}
 
-# === 2. Workpiece sphere (interface approach) ===============================
-# R = 0.010 m, centered at the origin (inside the coil bore).
-create sphere radius 0.010000
+# === 2. Workpiece cylinder (interface approach) =============================
+# R = 0.025 m, H = 0.025 m, centered at the origin (inside the coil bore).
+create cylinder radius 0.025000 height 0.025000
 ${wp_vid = Id("volume")}
 
 # === 3. Air sphere (inner) ==================================================
@@ -133,9 +133,9 @@ volume {coil_vid} scheme tetmesh
 volume {coil_vid} size 0.003
 mesh volume {coil_vid}
 
-# Workpiece sphere: tet mesh.
+# Workpiece cylinder: tet mesh.
 volume {wp_vid} scheme tetmesh
-volume {wp_vid} size 0.003
+volume {wp_vid} size 0.005
 mesh volume {wp_vid}
 
 # Air halves: tet mesh. Coarser than the coil but fine enough that
@@ -189,8 +189,8 @@ sideset 2 name "sink"
 
 # Workpiece outer surface: pick all surfaces in the workpiece
 # volume. After imprint+merge with the zplane-cut air halves the
-# workpiece sphere is split into a top + bottom hemisphere; both
-# hemispheres are part of the SIBC interface.
+# workpiece cylinder may be split by the zplane; all resulting
+# surfaces are part of the SIBC interface.
 sideset 3 add surface in volume {wp_vid}
 sideset 3 name "sibc"
 
