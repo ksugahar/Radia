@@ -33,6 +33,7 @@ from .ngsolve_knowledge import get_ngsolve_documentation
 from .sparsesolv_knowledge import get_sparsesolv_documentation
 from .kelvin_knowledge import get_kelvin_documentation
 from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
+from .panel_gui_pitfalls_knowledge import get_panel_gui_pitfalls
 
 # NOTE: induction_heating_knowledge is in mcp-server-ih (not here)
 
@@ -435,7 +436,8 @@ def kelvin_transformation(topic: str = "all") -> str:
             "overview"       - Mathematical foundation and key principles
             "h_formulation"  - H-field perturbation potential formulation
             "a_formulation"  - Vector potential formulation (coils)
-            "3d"             - 3D sphere/solid examples
+            "3d"             - 3D sphere/solid examples (H1)
+            "hcurl_3d"       - 3D HCurl A-formulation (calc_fem_kelvin.py)
             "adaptive"       - Adaptive mesh refinement with Kelvin
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips
@@ -597,6 +599,213 @@ def ngsolve_solvers_reference() -> str:
         "- local (Jacobi/GS): simple, good for smoothing\n"
         "- multigrid: geometric or algebraic, best for H1\n"
     )
+
+
+# ============================================================
+# Panel Registry Tools
+# ============================================================
+
+def _load_panel_registry():
+    """Load panel_registry.json from panels directory."""
+    import json
+    registry_path = (Path(__file__).parent.parent.parent / "panels"
+                     / "panel_registry.json")
+    if not registry_path.exists():
+        return None
+    with open(registry_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@mcp.tool()
+def panel_schema(panel_name: str = "") -> str:
+    """
+    Show Radia-NGSolve panel definitions with Japanese labels and physics.
+
+    When called without arguments, lists all available panels.
+    When called with a panel name, shows detailed parameter definitions
+    including Japanese names, physical meaning, CLI flags, and defaults.
+
+    This enables natural language <-> CLI parameter mapping:
+      "周波数を50kHzに" -> --frequency 50000
+      "銅のワークピース" -> --material copper --sigma 5.8e7
+
+    Args:
+        panel_name: Panel ID (e.g. "inductance", "fem_kelvin").
+                    Empty string returns overview of all panels.
+    """
+    reg = _load_panel_registry()
+    if reg is None:
+        return ("Error: panel_registry.json not found. "
+                "Run: python src/radia/panels/sync_registry.py")
+
+    panels = reg.get("panels", {})
+
+    if not panel_name:
+        lines = ["# Radia-NGSolve Panels\n"]
+        for pid, p in panels.items():
+            n = len(p.get("params", []))
+            lines.append(f"## {pid}: {p['ja_name']}")
+            lines.append(f"  {p['ja_description']}")
+            lines.append(f"  Script: {p['script']} | Method: {p['method']}")
+            lines.append(f"  Parameters: {n}")
+            lines.append("")
+        lines.append("Use panel_schema(panel_name) for parameter details.")
+        return "\n".join(lines)
+
+    if panel_name not in panels:
+        return (f"Unknown panel: {panel_name}. "
+                f"Available: {', '.join(panels.keys())}")
+
+    p = panels[panel_name]
+    lines = [
+        f"# {p['ja_name']} ({panel_name})",
+        f"Script: `{p['script']}` | Function: `{p['function']}`",
+        f"Method: {p['method']}",
+        f"Description: {p['ja_description']}",
+        "",
+        "## Parameters",
+        "",
+        "| CLI | 日本語 | Type | Default | Physics |",
+        "|-----|--------|------|---------|---------|",
+    ]
+    for param in p.get("params", []):
+        cli = param.get("cli", "")
+        ja = param.get("ja", "")
+        typ = param.get("type", "str")
+        default = param.get("default", "")
+        if param.get("required"):
+            default = "**required**"
+        physics = param.get("physics", "")
+        choices = param.get("choices", [])
+        if choices:
+            physics = f"{physics} [{'/'.join(str(c) for c in choices)}]"
+        lines.append(f"| `{cli}` | {ja} | {typ} | {default} | {physics} |")
+
+    if p.get("command_builder"):
+        lines.append(f"\nCommand builder: `{p['command_builder']}`")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def panel_add_param(panel_name: str, param_name: str, param_type: str = "float",
+                    cli_flag: str = "", default: str = "",
+                    ja: str = "", physics: str = "",
+                    help_text: str = "") -> str:
+    """
+    Plan where to add a new parameter to a Radia-NGSolve panel.
+
+    Does NOT modify code. Returns a checklist of files and locations
+    that need to be updated, so the LLM can make precise edits.
+
+    Args:
+        panel_name: Panel ID (e.g. "fem_kelvin", "inductance")
+        param_name: Python parameter name (e.g. "coil_sigma")
+        param_type: "float", "int", "str", "bool"
+        cli_flag: CLI flag (e.g. "--coil-sigma"). Auto-generated if empty.
+        default: Default value as string
+        ja: Japanese label (e.g. "コイル導電率")
+        physics: Physics description (e.g. "R = L/(sigma*A)")
+        help_text: English help text for argparse
+    """
+    reg = _load_panel_registry()
+    if reg is None:
+        return "Error: panel_registry.json not found."
+
+    panels = reg.get("panels", {})
+    if panel_name not in panels:
+        return f"Unknown panel: {panel_name}. Available: {', '.join(panels.keys())}"
+
+    p = panels[panel_name]
+    if not cli_flag:
+        cli_flag = "--" + param_name.replace("_", "-")
+
+    # Check if param already exists
+    existing = [x["cli"] for x in p.get("params", [])]
+    if cli_flag in existing:
+        return f"Parameter {cli_flag} already exists in {panel_name}."
+
+    script = p["script"]
+    function = p["function"]
+    builder = p.get("command_builder", "")
+
+    lines = [
+        f"# Add `{param_name}` to {panel_name} ({p['ja_name']})",
+        f"  日本語: {ja}",
+        f"  Physics: {physics}",
+        "",
+        "## Checklist (4 locations):",
+        "",
+        f"### 1. `panels/{script}` — argparse",
+        f"  Add: `parser.add_argument(\"{cli_flag}\", type={param_type}, "
+        f"default={default}, help=\"{help_text}\")`",
+        "",
+        f"### 2. `panels/{script}` — function `{function}()`",
+        f"  Add parameter: `{param_name}: {param_type} = {default}`",
+        f"  Wire: `args.{param_name.replace('-', '_')}` -> function call",
+        "",
+    ]
+
+    if builder:
+        mod, method = builder.split(":")
+        lines.extend([
+            f"### 3. `{mod}` — `{method}()`",
+            f"  Add: `cmd += [\"{cli_flag}\", self.val(\"{param_name}\")]`",
+            "",
+            f"### 4. `{mod}` — widget definition",
+            f"  Add QLineEdit/QSpinBox for `{param_name}`",
+            f"  Label: \"{ja}\" (displayed in Qt panel)",
+            "",
+        ])
+    else:
+        lines.extend([
+            "### 3-4. No command builder (standalone script)",
+            "",
+        ])
+
+    lines.extend([
+        "### 5. Update registry",
+        f"  Run: `python panels/sync_registry.py`",
+        "",
+        "### 6. Update MCP knowledge (if physics-relevant)",
+        f"  File: mcp_server knowledge related to {panel_name}",
+        "",
+        "### 7. Avoid the GUI pitfalls",
+        "  Before committing, call `panel_gui_pitfalls()` and check",
+        "  that the new param does not regress any of the listed",
+        "  bugs (combo state save/restore, hidden-widget read in",
+        "  build_command, mode-switch widget visibility, GMSH viz,",
+        "  subprocess argparse choices, Cubit .jou id capture, ...).",
+    ])
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def panel_gui_pitfalls(topic: str = "") -> str:
+    """
+    Pitfalls and lessons learned from Radia GUI / Cubit panel development.
+
+    Read this BEFORE adding a new parameter, mode, or method to a
+    `radia_*.py` panel, BEFORE renaming a combo item, and BEFORE
+    writing a new sample .jou. Each pitfall is paired with a "rule"
+    that prevents it from coming back.
+
+    Topics:
+      combo_state         -- save/restore by text, not index
+      mode_switch         -- hidden widgets must not feed build_command
+      layout_unification  -- shared widget set across solver methods
+      gmsh_viz            -- companion .geo, hide volume mesh, vector only
+      subprocess_args     -- calc_*.py choices must match GUI combos
+      cubit_jou           -- subtract id semantics, surface id renumbering
+      sample_jou          -- one .jou per (panel, method) pair
+      learn_edition_cap   -- ignore the 50k warning, radia_export bypasses it
+
+    Args:
+        topic: Empty for the full document, or one of the topic
+               keywords above for a single section.
+    """
+    return get_panel_gui_pitfalls(topic)
 
 
 def _selftest():
