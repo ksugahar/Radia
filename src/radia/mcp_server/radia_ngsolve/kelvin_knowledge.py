@@ -26,11 +26,11 @@ magnetostatic/electromagnetic problems without artificial truncation.
 
 ## Key Principles
 
-1. **Two Identical Spheres** (NOT a shell):
+1. **Two Identical Spheres, Offset in Space**:
    - Interior sphere: physical domain (coil + iron + surrounding air), radius R
    - Exterior sphere (Kelvin): same radius R, offset in space (e.g., offset_x = 3R)
    - Both spheres have **identical radius and identical surface mesh**
-   - This is because Periodic BC couples DOFs 1:1 between the two boundaries
+   - Periodic BC couples DOFs 1:1 between the two boundaries via TRANSLATION
    - **WRONG**: concentric shell (R_inner to R_outer) — this is NOT Kelvin
    - **CORRECT**: two separate spheres of the SAME radius R, placed apart
 
@@ -39,6 +39,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
    - Both sphere surfaces must have the same mesh topology (same nodes, same elements)
    - OCC workflow: `Identify()` + `GenerateMesh()` handles this automatically
    - Cubit workflow: `copy mesh surface` from interior sphere to exterior sphere
+     (MANDATORY — without it, tet mesh gives different triangulations)
    - The relationship between identified nodes is a pure TRANSLATION (offset)
 
 3. **Material Modulation** (exterior domain):
@@ -88,7 +89,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
      GND improves convergence for iterative solvers.
    - Cubit: create vertex at Kelvin sphere center, assign as nodeset "GND"
 
-## Cubit Workflow (3D with .vol export)
+## Cubit Workflow: Offset Spheres (3D with .vol export)
 
 For Cubit-based meshes exported via `radia_export netgen`.
 Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
@@ -106,46 +107,71 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
 4. Merge BOTH pairs of half-spheres:
    - imprint volume <inner_top> <inner_bottom>; merge volume <inner_top> <inner_bottom>
    - imprint volume <outer_top> <outer_bottom>; merge volume <outer_top> <outer_bottom>
-   - This ensures equator nodes are shared → inner node count = outer node count
+   - This ensures equator nodes are shared -> inner node count = outer node count
 5. Imprint/merge coil with air (interior sphere only, NOT with exterior)
-6. Mesh hemisphere SURFACES first with trimesh:
-   - surface <inner_hemi> scheme trimesh; surface <inner_hemi> size <h>; mesh surface <inner_hemi>
-   - CRITICAL: mesh volume does NOT create standalone surface tri entities.
-     copy mesh surface requires explicit surface meshing BEFORE volume meshing.
-7. copy mesh surface: inner hemisphere -> outer hemisphere
-   - copy mesh surface <in_sid> onto surface <out_sid> source curve <ic> source vertex <iv> target curve <ec> target vertex <ev>
+6. Mesh interior hemisphere SURFACES first:
+   - The air outer surface must be triangulated before copy mesh
+   - `mesh volume {air_top} {air_bot}` creates the surface mesh as a side effect
+   - Alternatively: `surface <N> scheme trimesh; mesh surface <N>` explicitly
+7. copy mesh surface: interior sphere -> exterior sphere (MANDATORY)
+   - copy mesh surface <in_sid> onto surface <out_sid> source curve <ic>
+     source vertex <iv> target curve <ec> target vertex <ev>
+   - Identify surfaces by area: hemisphere = largest area surface per volume
    - Guarantees 1:1 node correspondence for Periodic BC
+   - WITHOUT copy mesh, tet meshing produces different triangulations -> crash
 8. Mesh all volumes (tet mesh, using existing surface mesh as boundary constraint)
-9. Set blocks (coil, air, kelvin) and sidesets (source, sink, kelvin_int, kelvin_ext)
+   - Do NOT set volume size for Kelvin volumes after copy (overrides copied mesh)
+9. Set blocks (coil, air, kelvin) and sidesets (source, sink)
+   - Block names "air" and "kelvin" trigger auto-detection in C++ exporter
+   - C++ labels shared face as "kelvin_int", kelvin outer face as "kelvin_ext"
 10. radia_export netgen: writes periodic identification as TRANSLATION
     - C++ estimates translation vector from boundary node centroids
     - Bijective nearest-neighbor matching (no duplicate targets)
+```
+
+### Copy mesh: dynamic surface identification (Cubit Python)
+
+APREPRO cannot iterate over surfaces or compare areas. Use Cubit Python
+for the mesh copy step:
+
+```python
+import math
+A_hemi = 2.0 * math.pi * R**2  # hemisphere area
+
+for inner_vid, outer_vid in [(air_top, kelvin_top), (air_bot, kelvin_bot)]:
+    # Find hemisphere surface (largest area) in each volume
+    inner_surfs = cubit.get_relatives("volume", inner_vid, "surface")
+    outer_surfs = cubit.get_relatives("volume", outer_vid, "surface")
+    src = max(inner_surfs, key=lambda s: cubit.surface(s).area())
+    dst = max(outer_surfs, key=lambda s: cubit.surface(s).area())
+
+    # Pick longest curve (equator) for orientation reference
+    src_c = max(cubit.get_relatives("surface", src, "curve"),
+                key=lambda c: cubit.curve(c).length())
+    dst_c = max(cubit.get_relatives("surface", dst, "curve"),
+                key=lambda c: cubit.curve(c).length())
+    src_v = cubit.get_relatives("curve", src_c, "vertex")[0]
+    dst_v = cubit.get_relatives("curve", dst_c, "vertex")[0]
+
+    cubit.cmd(f"copy mesh surface {src} onto surface {dst} "
+              f"source curve {src_c} source vertex {src_v} "
+              f"target curve {dst_c} target vertex {dst_v}")
 ```
 
 ### Critical gotchas
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
-| Surface not meshed before copy | copy mesh produces 0 tris | `surface <N> scheme trimesh; mesh surface <N>` BEFORE `mesh volume` |
-| Equator not merged | inner node count ≠ outer node count | `imprint + merge` both half-sphere pairs |
-| ACIS sphere has 0 curves | copy mesh surface fails (no curve correspondence) | `webcut with plane zplane` both spheres |
-| Coil imprinted with kelvin sphere | Extra nodes on kelvin boundary | Only imprint coil with air sphere, NOT with kelvin |
-| Volume size overrides surface mesh | Additional nodes on copied surface | Do NOT set volume size for kelvin volumes after copy |
-
-### Verified result
-
-```
-Kelvin periodic: 526 node pairs (526 inner, 526 outer,
-                  offset=(0.200, 0.000, 0.000), max_dist=2.43e-03)
-Mesh load: OK
-Periodic HCurl: FreeDofs 68562 -> 65418 (coupled: 3144)
-```
+| No mesh copy | different inner/outer vertex counts, crash | `copy mesh surface` is MANDATORY |
+| Volume size after copy | Extra nodes on copied surface | Do NOT set kelvin volume size |
+| ACIS sphere has 0 curves | copy mesh fails (no curve) | `webcut with plane zplane` |
+| Coil imprinted with kelvin | Extra nodes on kelvin boundary | Only imprint coil with air, NOT kelvin |
+| `mesh volume` without surface | copy mesh produces 0 tris | Mesh air volumes first |
 
 **Do NOT use**:
 - Concentric shells (R_inner to R_outer) — this is NOT Kelvin transformation
-- Sweep mesh between concentric surfaces — wrong element structure
 - Radial scaling for node pairing — use translation (offset)
-- `mesh volume` without prior `mesh surface` for copy mesh sources
+- C++ ident.Add() in .vol — NGSolve loader may crash (`Ask for unused hash-value`)
 
 ## Material Modulation -- The Only Thing You Change
 

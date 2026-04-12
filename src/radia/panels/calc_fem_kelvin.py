@@ -155,23 +155,20 @@ def solve_fem(vol_file="", fes_order=1,
         dists = np.linalg.norm(coords - kc[np.newaxis, :], axis=1)
         a_kelvin = float(np.max(dists))  # sphere radius R
 
-        # Periodic identification via Python radial-scaling.
-        # The C++ exporter labels kelvin_int/kelvin_ext but does NOT
-        # write identification pairs (NGSolve .vol loader crashes on
-        # some hash entries). We add pairs here via AddPointIdentification.
+        # Periodic identification comes from C++ export (translation-based).
+        # The .vol must contain identification pairs from ident.Add().
         n_ident = mesh.ngmesh.GetNrIdentifications()
         if n_ident == 0:
-            _log("KELVIN:adding periodic identification (Python-side)")
-            n_pairs = add_periodic_kelvin(mesh, kelvin_center, a_kelvin)
-            if n_pairs <= 0:
-                return {"error":
-                        f"Kelvin periodic identification failed: "
-                        f"{n_pairs} pairs. Check kelvin_int/kelvin_ext "
-                        f"bc labels in the .vol file."}
-            _log(f"KELVIN:added {n_pairs} periodic pairs")
+            return {"error":
+                    "Mesh has 'kelvin' material but no periodic "
+                    "identification in the .vol file. Ensure the .jou/.py "
+                    "sets sideset 'kelvin_int' (interior sphere outer "
+                    "boundary) and 'kelvin_ext' (exterior sphere boundary), "
+                    "and uses 'copy mesh surface' for 1:1 correspondence. "
+                    "The C++ exporter writes identification via translation "
+                    "offset matching."}
         has_kelvin_periodic = True
-        n_ident = mesh.ngmesh.GetNrIdentifications()
-        _log(f"PERIODIC:active ({n_ident} ident(s), a={a_kelvin:.4f})")
+        _log(f"PERIODIC:from_vol ({n_ident} ident(s), a={a_kelvin:.4f})")
 
     t_mesh = time.perf_counter() - t0
 

@@ -306,23 +306,18 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   }
 
   // ---- Kelvin periodic identification ----
-  // Labels kelvin_int / kelvin_ext are set by auto-detect above.
-  // The actual vertex-pair identification is done in Python
-  // (calc_fem_kelvin.py) after loading the .vol, because:
-  //   1. NGSolve 6.2.2603's .vol loader crashes on some identification
-  //      hash table entries ("Ask for unused hash-value")
-  //   2. Python's AddPointIdentification is reliable and allows
-  //      radial-scaling logic without C++ rebuild
-  // The C++ code below only LOGS the expected pairing for verification.
-  // It does NOT call ident.Add() — no identification is written to .vol.
+  // Kelvin = two identical spheres, offset in space.
+  // kelvin_int / kelvin_ext labels come from sidesets (set in .py) or
+  // auto-detect (concentric shell only).
+  // Identification = TRANSLATION: offset = mean(outer) - mean(inner).
+  // With copy mesh, inner and outer have 1:1 vertex correspondence.
   //
   // Algorithm:
-  //   1. Collect inner/outer triangles (vertex-3 only)
-  //   2. Compute center and radii from point clouds
-  //   3. For each inner vertex, predict its outer position by radial scaling
-  //   4. Find the nearest outer vertex to each predicted position
-  //   5. Verify via triangle topology (matched triangles must have
-  //      consistent vertex pairing across all shared edges)
+  // Algorithm: translation-based nearest-neighbor vertex matching.
+  //   1. Collect inner/outer vertex positions from bc names
+  //   2. Offset = mean(outer) - mean(inner)
+  //   3. For each inner vertex, find nearest unused outer vertex at (inner + offset)
+  //   4. Write identification pairs via ident.Add()
   {
     std::set<int> fd_inner_set, fd_outer_set;
     for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
@@ -332,7 +327,6 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
 
     if (!fd_inner_set.empty() && !fd_outer_set.empty()) {
-      // Collect vertex positions for inner and outer surfaces
       std::map<int, netgen::Point<3>> inner_pts, outer_pts;
 
       for (int sei = 1; sei <= ng_mesh->GetNSE(); sei++) {
@@ -351,85 +345,72 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
 
       if (!inner_pts.empty() && !outer_pts.empty()) {
-        // Compute center as mean of inner points (should be near sphere center)
-        double cx = 0, cy = 0, cz = 0;
+        // Translation offset = mean(outer) - mean(inner)
+        double mix = 0, miy = 0, miz = 0;
         for (auto &p : inner_pts) {
-          cx += p.second(0); cy += p.second(1); cz += p.second(2);
+          mix += p.second(0); miy += p.second(1); miz += p.second(2);
         }
         double ni = (double)inner_pts.size();
-        cx /= ni; cy /= ni; cz /= ni;
+        mix /= ni; miy /= ni; miz /= ni;
 
-        // Compute average radii
-        double r_inner_sum = 0, r_outer_sum = 0;
-        for (auto &p : inner_pts) {
-          double dx = p.second(0) - cx, dy = p.second(1) - cy, dz = p.second(2) - cz;
-          r_inner_sum += sqrt(dx*dx + dy*dy + dz*dz);
-        }
+        double mox = 0, moy = 0, moz = 0;
         for (auto &p : outer_pts) {
-          double dx = p.second(0) - cx, dy = p.second(1) - cy, dz = p.second(2) - cz;
-          r_outer_sum += sqrt(dx*dx + dy*dy + dz*dz);
+          mox += p.second(0); moy += p.second(1); moz += p.second(2);
         }
-        double R_inner = r_inner_sum / ni;
-        double R_outer = r_outer_sum / (double)outer_pts.size();
-        double scale = R_outer / R_inner;
+        double no = (double)outer_pts.size();
+        mox /= no; moy /= no; moz /= no;
 
-        PRINT_INFO("Kelvin periodic: center=(%.4f,%.4f,%.4f) "
-                   "R_inner=%.4f R_outer=%.4f scale=%.4f\n",
-                   cx, cy, cz, R_inner, R_outer, scale);
-        PRINT_INFO("Kelvin periodic: %zu inner verts, %zu outer verts\n",
-                   inner_pts.size(), outer_pts.size());
+        double tx = mox - mix, ty = moy - miy, tz = moz - miz;
 
-        // Build spatial index of outer points for fast lookup.
-        // For each inner vertex, predict outer position by radial scaling
-        // and find the nearest outer vertex.
+        PRINT_INFO("Kelvin periodic: %zu inner, %zu outer verts, "
+                   "offset=(%.4f,%.4f,%.4f)\n",
+                   inner_pts.size(), outer_pts.size(), tx, ty, tz);
+
+        // Match: for each inner vertex, find nearest unused outer at (inner + offset)
         std::vector<std::pair<int, netgen::Point<3>>> outer_vec(
             outer_pts.begin(), outer_pts.end());
-
-        std::map<int, int> vertex_pair;   // inner_vid -> outer_vid
-        std::set<int> used_outer;          // prevent duplicate targets
+        std::map<int, int> vertex_pair;
+        std::set<int> used_outer;
         double max_dist = 0;
-        int n_good = 0, n_bad = 0;
+        int n_bad = 0;
 
         for (auto &ip : inner_pts) {
-          // Predict outer position: radial scaling from center
-          double dx = ip.second(0) - cx;
-          double dy = ip.second(1) - cy;
-          double dz = ip.second(2) - cz;
-          double px = cx + dx * scale;
-          double py = cy + dy * scale;
-          double pz = cz + dz * scale;
+          double px = ip.second(0) + tx;
+          double py = ip.second(1) + ty;
+          double pz = ip.second(2) + tz;
 
-          // Find nearest UNUSED outer vertex (brute force, O(N*M))
           int best_ov = -1;
           double best_d2 = 1e30;
           for (auto &op : outer_vec) {
-            if (used_outer.count(op.first)) continue;  // skip already paired
-            double ddx = op.second(0) - px;
-            double ddy = op.second(1) - py;
-            double ddz = op.second(2) - pz;
-            double d2 = ddx*ddx + ddy*ddy + ddz*ddz;
+            if (used_outer.count(op.first)) continue;
+            double dx = op.second(0) - px;
+            double dy = op.second(1) - py;
+            double dz = op.second(2) - pz;
+            double d2 = dx*dx + dy*dy + dz*dz;
             if (d2 < best_d2) { best_d2 = d2; best_ov = op.first; }
           }
 
           double dist = sqrt(best_d2);
-          // Tolerance: 30% of average outer edge length (generous for tet mesh)
-          double tol = 0.3 * R_outer * 0.5;  // conservative
-          if (dist < tol && best_ov > 0) {
+          if (dist < 1e-2 && best_ov > 0) {
             vertex_pair[ip.first] = best_ov;
             used_outer.insert(best_ov);
             if (dist > max_dist) max_dist = dist;
-            n_good++;
           } else {
             n_bad++;
           }
         }
 
-        // Log pairing (do NOT write to .vol — Python handles identification)
-        int n_paired = (int)vertex_pair.size();
+        // Write identification pairs
+        auto &ident = ng_mesh->GetIdentifications();
+        for (auto &p : vertex_pair) {
+          ident.Add(netgen::PointIndex(p.first),
+                    netgen::PointIndex(p.second),
+                    "kelvin",
+                    netgen::Identifications::PERIODIC);
+        }
 
-        PRINT_INFO("Kelvin periodic: %d/%zu pairs written "
-                   "(max_dist=%.2e, %d unmatched)\n",
-                   n_paired, inner_pts.size(), max_dist, n_bad);
+        PRINT_INFO("Kelvin periodic: %d/%zu pairs (max_dist=%.2e, %d unmatched)\n",
+                   (int)vertex_pair.size(), inner_pts.size(), max_dist, n_bad);
       }
     }
   }
