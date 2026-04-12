@@ -2,9 +2,9 @@
 Radia IH (Induction Heating) analysis window.
 
 Modes:
-  BEM          -- EFIE source/sink coil + optional workpiece SIBC
-  BEM-SIBC (WP) -- Analytical coil + workpiece surface BEM-SIBC
-  FEM          -- Kelvin + SIBC/ESIM
+  BEM  -- EFIE source/sink coil + optional workpiece SIBC / ESIM
+          (per-panel curvature, coupled back-reaction)
+  FEM  -- Kelvin + SIBC / ESIM
 
 Switch via combo box -- single window.
 
@@ -41,7 +41,7 @@ class IHPanel(ModePanel):
     def _build_ui(self):
         # Method selector
         self._method_combo = self.add_combo(
-            "method", "Method:", ["BEM", "BEM-SIBC (WP)", "FEM"])
+            "method", "Method:", ["BEM", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
@@ -60,15 +60,6 @@ class IHPanel(ModePanel):
         self.add_line("freq", "Frequency [Hz]:", "50000")
         self.add_line("coil_sigma", "Coil sigma [S/m]:", "5.8e7")
 
-        # BEM-SIBC (WP) specific: analytical coil geometry
-        self.add_line("wp_coil_radius", "Coil radius [m]:", "0.030")
-        self.add_line("wp_coil_current", "Coil current [A]:", "1.0")
-        self.add_line("wp_gap_deg", "Coil gap [deg]:", "5")
-        wp_label_w = self.add_line("wp_bnd_label", "WP boundary label:",
-                                   "wp_surface",
-                                   placeholder="e.g. wp_surface")
-        wp_label_w.textChanged.connect(self._on_validation_changed)
-
         # Workpiece coupling mode (BEM mode only):
         #   off  = workpiece NOT in DOF (coil-only inductance)
         #   SIBC = include workpiece via linear surface impedance
@@ -79,11 +70,11 @@ class IHPanel(ModePanel):
                                   ["off", "SIBC", "ESIM"])
         wp_combo.currentTextChanged.connect(self._on_workpiece_changed)
 
-        # Impedance model combo: kept for FEM and BEM-SIBC (WP) modes
-        # which still need an explicit choice. In BEM coil mode the
+        # Impedance model combo: kept for the FEM mode which still
+        # needs an explicit sibc/esim choice. In BEM coil mode the
         # workpiece_mode combo above already determines this, so the
-        # impedance row is hidden. Per-panel curvature is now the
-        # default (was selectable, simplified 2026-04-12) so the
+        # impedance row is hidden there. Per-panel curvature is now
+        # the default (was selectable, simplified 2026-04-12) so the
         # user-facing choice is reduced to "sibc" / "esim".
         imp_combo = self.add_combo("impedance", "Impedance model:",
                                    ["sibc", "esim"])
@@ -128,7 +119,6 @@ class IHPanel(ModePanel):
 
     def _on_method_changed(self, method):
         is_bem_coil = (method == "BEM")
-        is_bem_wp = (method == "BEM-SIBC (WP)")
         is_fem = (method == "FEM")
 
         # BEM coil row: air on/off + bem solver + workpiece mode
@@ -138,23 +128,17 @@ class IHPanel(ModePanel):
         # BEM coil-specific
         self._set_row_visible("coil_sigma", is_bem_coil)
 
-        # BEM-SIBC (WP) fields (analytical coil, no source/sink)
-        for key in ("wp_coil_radius", "wp_coil_current", "wp_gap_deg",
-                     "wp_bnd_label"):
-            self._set_row_visible(key, is_bem_wp)
-
         # FEM fields
         for key in ("current", "a_coil", "r_wp", "solver",
-                     "max_iter", "fem_material", "fem_bh_file"):
+                     "max_iter", "fem_material", "fem_bh_file",
+                     "impedance"):
             self._set_row_visible(key, is_fem)
 
-        # Workpiece combo line: BEM coil only (WP mode always has workpiece)
+        # Workpiece combo line: BEM coil only.
         self._set_row_visible("workpiece_mode", is_bem_coil)
 
-        # Impedance options: only "sibc" and "esim", with per-panel
-        # curvature implied. The combo is rebuilt unconditionally so
-        # that the previous selection is preserved across method
-        # switches when both items are present.
+        # Impedance combo items (sibc/esim) — rebuilt so the previous
+        # selection is preserved across BEM <-> FEM switches.
         combo = self._widgets["impedance"]
         prev = combo.currentText()
         combo.clear()
@@ -163,16 +147,19 @@ class IHPanel(ModePanel):
         if idx >= 0:
             combo.setCurrentIndex(idx)
 
-        # BEM-SIBC (WP) always shows workpiece params
-        if is_bem_wp:
-            for key in ("impedance", "wp_sigma", "half_thickness",
-                         "esim_geometry", "wp_material"):
-                self._set_row_visible(key, True)
-            self._set_row_visible("fes_order", True)
-            self._on_impedance_changed(
-                self._widgets["impedance"].currentText())
+        self._set_row_visible("wp_material", False)
+
+        if is_fem:
+            # FEM needs the workpiece electrical params explicitly:
+            # wp_sigma always, mu_r when fem_material = mu_r (Linear).
+            self._set_row_visible("wp_sigma", True)
+            self._set_row_visible("half_thickness", False)
+            self._set_row_visible("esim_geometry", False)
+            self._set_row_visible("bh_file", False)
+            mat_idx = self._widgets["fem_material"].currentIndex()
+            self._set_row_visible("mu_r", mat_idx == 0)
+            self._set_row_visible("fem_bh_file", mat_idx == 1)
         else:
-            self._set_row_visible("wp_material", False)
             self._on_workpiece_changed()
 
         self._on_validation_changed()
@@ -180,9 +167,9 @@ class IHPanel(ModePanel):
     def _on_workpiece_changed(self, _text=None):
         wp_mode = self.val("workpiece_mode")
         method = self.val("method")
-        # workpiece_mode combo is only shown in BEM coil mode; in FEM /
-        # BEM-SIBC (WP) modes the workpiece params must stay hidden
-        # regardless of what value the combo holds from a previous mode.
+        # workpiece_mode combo is only shown in BEM coil mode; in FEM
+        # the workpiece params must stay hidden regardless of what
+        # value the combo holds from a previous mode.
         is_bem_coil = (method == "BEM")
         has_wp = is_bem_coil and (wp_mode != "off")
 
@@ -210,14 +197,12 @@ class IHPanel(ModePanel):
             self._set_row_visible("esim_geometry", is_esim)
 
     def _on_impedance_changed(self, imp):
-        method = self.val("method")
-        is_wp_mode = (method == "BEM-SIBC (WP)")
-        wp_mode = self.val("workpiece_mode") if "workpiece_mode" in self._widgets else "off"
-        has_wp = is_wp_mode or (wp_mode != "off")
-        if not has_wp:
+        wp_mode = (self.val("workpiece_mode")
+                   if "workpiece_mode" in self._widgets else "off")
+        if wp_mode == "off":
             return
         is_esim = (imp == "esim")
-        self._set_row_visible("mu_r", not is_esim and not is_wp_mode)
+        self._set_row_visible("mu_r", not is_esim)
         self._set_row_visible("bh_file", is_esim)
         self._set_row_visible("esim_geometry", is_esim)
 
@@ -225,6 +210,9 @@ class IHPanel(ModePanel):
         method = self.val("method")
         if method != "FEM":
             return
+        # idx == 0: "mu_r (Linear)" -> show explicit mu_r value
+        # idx == 1: "BH Curve"      -> show BH file picker
+        self._set_row_visible("mu_r", idx == 0)
         self._set_row_visible("fem_bh_file", idx == 1)
 
     def _on_validation_changed(self, _text=None):
@@ -243,8 +231,6 @@ class IHPanel(ModePanel):
 
         if method == "BEM":
             return self._build_bem_command(vol_path)
-        elif method == "BEM-SIBC (WP)":
-            return self._build_bem_wp_command(vol_path)
         else:
             return self._build_fem_command(vol_path)
 
@@ -299,29 +285,6 @@ class IHPanel(ModePanel):
         if self.val("air_mode") == "on":
             cmd += ["--field-air"]
 
-        return cmd
-
-    def _build_bem_wp_command(self, vol_path):
-        cmd = [_PYTHON, calc_script("calc_heating_bem.py"),
-               "--vol", vol_path,
-               "--coil-radius", self.val("wp_coil_radius"),
-               "--coil-current", self.val("wp_coil_current"),
-               "--gap-deg", self.val("wp_gap_deg"),
-               "--frequency", self.val("freq"),
-               "--sigma", self.val("wp_sigma"),
-               "--material", self.val("wp_material"),
-               "--half-thickness", self.val("half_thickness"),
-               "--wp-label", self.val("wp_bnd_label"),
-               "--msh-output", msh_output(vol_path, "_bem_wp")]
-        fes = self.val("fes_order")
-        if fes and fes != "0":
-            cmd += ["--h1-order", fes]
-        imp = self.val("impedance")
-        if imp == "esim":
-            cmd += ["--esim-geometry", self.val("esim_geometry")]
-            bh = self.val("bh_file")
-            if bh:
-                cmd += ["--bh-file", bh]
         return cmd
 
     def _build_fem_command(self, vol_path):
