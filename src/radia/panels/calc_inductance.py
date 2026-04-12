@@ -1158,6 +1158,134 @@ def _compute_B_field_cf(mesh_surf, gf_J, elem_A, lx=0, ly=0, lz=0, maxh_vol=0):
     return B_cf, mesh_vol
 
 
+def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
+                            vol_nodes, vol_elems, B_nodes):
+    """Write a single .msh v4.1 with volume B + surface J + wireframe.
+
+    Three physical groups in one file, with node/element IDs offset
+    so there are no collisions:
+
+      Physical "air"           (3D, tag 1): volume tets + B NodeData
+      Physical "coil_surface"  (2D, tag 2): surface tris + J NodeData
+      Physical "coil_wire"     (1D, tag 3): wireframe edges (no data)
+
+    v4.1 entity-block format with one entity per physical group.
+    """
+    from ngsolve import BND
+
+    nv_vol = len(vol_nodes)
+    nv_surf = mesh_surf.nv
+    surf_offset = nv_vol  # surface node IDs = nv_vol+1 ..
+
+    surf_nodes = [(v.point[0], v.point[1], v.point[2])
+                  for v in mesh_surf.vertices]
+    surf_elems = [[v.nr for v in el.vertices]
+                  for el in mesh_surf.Elements(BND)]
+
+    # Wireframe edges
+    edges = set()
+    for el in mesh_surf.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        for i in range(len(verts)):
+            a, b = verts[i], verts[(i + 1) % len(verts)]
+            edges.add((min(a, b), max(a, b)))
+    edges = sorted(edges)
+
+    n_nodes = nv_vol + nv_surf
+    ne_vol = len(vol_elems)
+    ne_surf = len(surf_elems)
+    ne_wire = len(edges)
+
+    with open(filename, 'w', encoding='utf-8') as f:
+        # ---- Header ----
+        f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+
+        # ---- Physical names ----
+        f.write('$PhysicalNames\n3\n')
+        f.write('3 1 "air"\n')
+        f.write('2 2 "coil_surface"\n')
+        f.write('1 3 "coil_wire"\n')
+        f.write('$EndPhysicalNames\n')
+
+        # ---- Entities (one per physical group) ----
+        # Format: numPoints numCurves numSurfaces numVolumes
+        # Point: not needed
+        # Curve (1D): tag bbox numPhysicals [physTag] numBounding []
+        # Surface (2D): same
+        # Volume (3D): same
+        f.write('$Entities\n')
+        f.write('0 1 1 1\n')
+        # Curve entity (tag=3, physical=3)
+        f.write('3 0 0 0 0 0 0 1 3 0\n')
+        # Surface entity (tag=2, physical=2)
+        f.write('2 0 0 0 0 0 0 1 2 0\n')
+        # Volume entity (tag=1, physical=1)
+        f.write('1 0 0 0 0 0 0 1 1 0\n')
+        f.write('$EndEntities\n')
+
+        # ---- Nodes (two entity blocks) ----
+        # numEntityBlocks numNodes minTag maxTag
+        f.write('$Nodes\n')
+        f.write(f'2 {n_nodes} 1 {n_nodes}\n')
+        # Block 1: volume nodes (entity dim=3, tag=1)
+        f.write(f'3 1 0 {nv_vol}\n')
+        for i in range(nv_vol):
+            f.write(f'{i + 1}\n')
+        for x, y, z in vol_nodes:
+            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        # Block 2: surface nodes (entity dim=2, tag=2)
+        f.write(f'2 2 0 {nv_surf}\n')
+        for i in range(nv_surf):
+            f.write(f'{surf_offset + i + 1}\n')
+        for x, y, z in surf_nodes:
+            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        f.write('$EndNodes\n')
+
+        # ---- Elements (three entity blocks) ----
+        n_elems = ne_vol + ne_surf + ne_wire
+        f.write('$Elements\n')
+        f.write(f'3 {n_elems} 1 {n_elems}\n')
+        # Block 1: volume tets (dim=3, entity=1, type=4=tet)
+        f.write(f'3 1 4 {ne_vol}\n')
+        eid = 1
+        for verts in vol_elems:
+            ns = ' '.join(str(v + 1) for v in verts)
+            f.write(f'{eid} {ns}\n')
+            eid += 1
+        # Block 2: surface tris (dim=2, entity=2, type=2=tri)
+        f.write(f'2 2 2 {ne_surf}\n')
+        for verts in surf_elems:
+            ns = ' '.join(str(v + surf_offset + 1) for v in verts)
+            f.write(f'{eid} {ns}\n')
+            eid += 1
+        # Block 3: wireframe lines (dim=1, entity=3, type=1=line)
+        f.write(f'1 3 1 {ne_wire}\n')
+        for a, b in edges:
+            f.write(f'{eid} {a + surf_offset + 1} '
+                    f'{b + surf_offset + 1}\n')
+            eid += 1
+        f.write('$EndElements\n')
+
+        # ---- NodeData: B on volume nodes ----
+        f.write('$NodeData\n')
+        f.write('1\n"B"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_vol}\n')
+        for i in range(nv_vol):
+            bx, by, bz = B_nodes[i]
+            f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
+        f.write('$EndNodeData\n')
+
+        # ---- NodeData: J on surface nodes ----
+        f.write('$NodeData\n')
+        f.write('1\n"J"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_surf}\n')
+        for i in range(nv_surf):
+            jx, jy, jz = J_nodes[i]
+            f.write(f'{surf_offset + i + 1} '
+                    f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
+        f.write('$EndNodeData\n')
+
+
 def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
                  lx=0, ly=0, lz=0, maxh_vol=0):
     """Post-process: B-field Biot-Savart, GMSH/Nastran/COMSOL export.
@@ -1225,75 +1353,49 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
 
     progress("B_FIELD_READY", "B computed")
 
-    # Evaluate B on the SAME volume mesh (mesh_vol) and write a
-    # SINGLE v4.1 .msh via GmshPostExport with B as volume NodeData
-    # and J as material-restricted NodeData on the coil surface.
+    # Write a SINGLE v4.1 .msh with:
+    #   - volume tets (air box) carrying B NodeData
+    #   - surface tris (coil) carrying J NodeData
+    #   - coil wireframe (1D edges) for visual reference
     #
-    # Policy: "Radia-NGSolve パネルは v4.1 のみ" (CLAUDE.md).
-    # The previous approach (two separate .msh files merged via .geo)
-    # failed because GMSH rejects duplicate element IDs during merge.
-    # The v3.6.1 workaround (v2.2 with manual ID offset) violated
-    # the v4.1 policy. The solution: put B + J on the same mesh in
-    # one GmshPostExport call → one v4.1 file, no merge needed.
+    # v3.6.1 did this with v2.2 (_write_combined_msh). The v4.1
+    # version uses the same node-ID-offset trick but wraps it in
+    # the entity-block format that GMSH 4.x expects. This gives
+    # the same "kirei" result (coil wireframe + J arrows + B arrows
+    # in the air around it) while following the v4.1-only policy.
     gmsh_file = os.path.join(
         base_dir, "inductance.msh").replace("\\", "/")
 
-    from gmsh_post_export import GmshPostExport
-
-    # B per vertex on the volume mesh (from BiotSavartCF).
+    # B per vertex on the volume mesh
     fes_B = HDiv(mesh_vol, order=1)
     gf_B = GridFunction(fes_B)
     gf_B.Set(B_cf)
-    B_nodes = np.zeros((mesh_vol.nv, 3))
+    vol_nodes_xyz = [(v.point[0], v.point[1], v.point[2])
+                     for v in mesh_vol.vertices]
+    B_nodes = np.zeros((len(vol_nodes_xyz), 3))
     for vi, v in enumerate(mesh_vol.vertices):
         bval = gf_B(mesh_vol(*v.point))
         B_nodes[vi] = [float(bval[k]) for k in range(3)]
 
-    # J per vertex on the SAME volume mesh. The J vector is
-    # physically meaningful only on the coil surface, so we map
-    # the per-element-averaged J_nodes from the BEM surface mesh
-    # onto mesh_vol's coil-interior vertices via spatial nearest-
-    # neighbour. For nodes NOT on the coil surface, J stays zero
-    # — GmshPostExport writes them but they produce zero-length
-    # arrows, invisible in GMSH.
-    J_vol = np.zeros((mesh_vol.nv, 3))
-    # Build kd-tree from surface mesh vertices → J_nodes
-    from scipy.spatial import cKDTree
-    surf_pts = np.array([(v.point[0], v.point[1], v.point[2])
-                         for v in mesh.vertices])
-    tree = cKDTree(surf_pts)
-    vol_pts = np.array([(v.point[0], v.point[1], v.point[2])
-                        for v in mesh_vol.vertices])
-    dists, idxs = tree.query(vol_pts)
-    # Only transfer J to volume nodes that are close to the
-    # surface mesh (within 1 element size ≈ max dist between
-    # adjacent surface vertices ≈ coil wire diameter).
-    tol = float(np.median(np.linalg.norm(
-        np.diff(surf_pts[:min(50, len(surf_pts))], axis=0), axis=1))) * 3
-    for vi in range(mesh_vol.nv):
-        if dists[vi] < tol:
-            J_vol[vi] = J_nodes[idxs[vi]]
+    # Volume elements (tets)
+    vol_elems = [[v.nr for v in el.vertices]
+                 for el in mesh_vol.Elements()]
 
-    post = GmshPostExport(mesh_vol)
-    post.add_field("B", B_nodes, ncomp=3)
-    post.add_field("J", J_vol, ncomp=3)
-    post.write(gmsh_file)
-    progress("GMSH", f"B + J (v4.1): {gmsh_file}")
+    _write_combined_msh_v41(
+        gmsh_file, mesh, J_nodes, vol_nodes_xyz, vol_elems, B_nodes)
+    progress("GMSH", f"B + J + wireframe (v4.1): {gmsh_file}")
 
-    # Companion .geo — ArrowSizeMin/Max = 20 is THE KEY knob that
-    # makes the arrows actually visible (the "kirei" setting from
-    # v3.6.1 commit 5e0b69c).
+    # Companion .geo — v3.6.1 "kirei" display options
     geo_file = os.path.join(base_dir, "inductance.geo").replace("\\", "/")
     with open(geo_file, 'w', encoding='utf-8') as f:
         f.write(f'Merge "{os.path.basename(gmsh_file)}";\n')
         f.write('Mesh.NumSubEdges = 4;\n')
         f.write('Mesh.VolumeEdges = 0;\n')
-        f.write('Mesh.VolumeFaces = 0;\n')
-        # B view (View[0]): 3D arrows, fixed visible size
+        # B (View[0]): 3D arrows
         f.write('View[0].VectorType = 4;\n')
         f.write('View[0].ArrowSizeMin = 20;\n')
         f.write('View[0].ArrowSizeMax = 20;\n')
-        # J view (View[1]): 3D arrows, fixed visible size
+        # J (View[1]): 3D arrows
         f.write('View[1].VectorType = 4;\n')
         f.write('View[1].ArrowSizeMin = 20;\n')
         f.write('View[1].ArrowSizeMax = 20;\n')
