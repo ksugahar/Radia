@@ -487,6 +487,63 @@ xi ~ 1 regime; identical to scalar in the asymptotic regime
   `_build_per_node_Zs`, `_run_coupled_bem(use_local_curvature=True)`
 - `examples/cubit_panels/inductance/verify_per_node_sibc_sphere.py`
 - `examples/cubit_panels/inductance/verify_per_node_sibc_spheroid.py`
+- `examples/cubit_panels/inductance/verify_per_node_sibc_torus.py`
+
+### Residual cleanup (commit ca5cb46, 2026-04-12)
+
+After Phase 5 four small follow-ups landed:
+
+**Torus validation script** added (the adversarial case for the
+percentile-10 extractor). On a thin torus (R/a = 6) the mean per-
+panel R error is +245%, but the integrated H_t_rms stays within 5%
+of the analytical reference because vertex averaging in
+``_build_per_node_Zs`` smooths the per-panel noise. Documented as
+a known limitation; the right fix is a 1-ring vertex expansion or
+analytic Frenet-Serret / shape-operator approach.
+
+**ih_sample.jou** workpiece changed from cylinder to sphere
+(R=10mm). The cylinder is locally cylindrical everywhere so per-
+panel had no visible effect. With a sphere, the per-node coupled
+BEM gives a coil-terminal dL that is **10x smaller** than the
+wrong-global-R scalar path — the correction is now visible in the
+IH panel output.
+
+**Adaptive sliver clamp**: replaced the global
+``R >= 0.5 * half_thickness`` clamp with a per-panel adaptive lower
+bound ``R_floor[i] = 0.5 * panel_diameter[i]`` inside
+``_compute_panel_local_radii``. Below this floor the chord-vs-arc
+approximation breaks down so the discrete-normal-angle estimate is
+geometrically meaningless. Removed the duplicate global clamps in
+``_run_coupled_bem`` and ``_compute_wp_impedance_from_panels``;
+the floor lives in the extractor only.
+
+  Validation:
+    Sphere / spheroid — unchanged (regression OK)
+    Torus thin (R/a=6)  — H_t err 4.80% → 3.32%
+    Torus fat (R/a=1.5) — H_t err 3.34% → 0.48%
+
+**``_build_per_node_Zs`` order > 1 projection**: added an optional
+``fes`` parameter. When supplied AND ``fes.globalorder > 1``, the
+per-panel Z_s is wrapped in a SurfaceL2(order=0) GridFunction and
+L2-projected onto fes via ``GridFunction.Set``. Edge / face DOFs
+get the right H1 mass-matrix solve instead of the panel-mean
+fallback. Default ``fes=None`` keeps the legacy P1 vertex
+averaging on the production code path.
+
+### Known limitations as of 2026-04-12
+
+1. **Torus extractor**: percentile-10 of 3 edge-neighbors fails on
+   panels at z = ±a (top/bottom of poloidal circle). Fix is
+   1-ring expansion or shape-operator; deferred to next session.
+
+2. **MFIE / PMCHWT not implemented**: the SIBC scalar BIE captures
+   the surface skin layer correctly but cannot reach the high-mu_r
+   ferromagnetic flux concentration limit. For that an MFIE term
+   with the gradient of the Green's function is needed.
+
+3. **Order > 1 L2 projection** has not been exercised in production.
+   The legacy vertex-averaging path is the only one tested for the
+   coupled BEM end-to-end.
 
 ### Cross-check vs FEM-Kelvin SIBC (validated 2026-04-12)
 
