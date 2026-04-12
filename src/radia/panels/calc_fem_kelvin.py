@@ -634,6 +634,12 @@ def solve_fem(vol_file="", fes_order=1,
             # render both views as 3D arrows. The user opens this
             # .geo from the panel's "Open GMSH" button, which Merges
             # the .msh and applies the display options below.
+            # Companion .geo restored from v3.6.1 "beautiful" version
+            # (commit 5e0b69c, 2026-03-23). The KEY display option is
+            # ``ArrowSizeMin = ArrowSizeMax = 20`` — without a fixed
+            # arrow size GMSH's auto-scale picks ~3 pixel arrows that
+            # disappear against any mesh background. Hard-coding 20
+            # pixels is what made the past visualization look "kirei".
             geo_file = os.path.splitext(msh_output)[0] + ".geo"
             with open(geo_file, "w", encoding="utf-8") as f:
                 f.write(f'Merge "{os.path.basename(msh_output)}";\n')
@@ -643,12 +649,16 @@ def solve_fem(vol_file="", fes_order=1,
                 f.write('Mesh.VolumeFaces = 0;\n')
                 f.write('Mesh.SurfaceEdges = 0;\n')
                 f.write('Mesh.SurfaceFaces = 0;\n')
-                f.write('// B view: 3D arrow style\n')
+                # B view (View[0]): 3D arrows, fixed visible size
                 f.write('View[0].VectorType = 4;\n')
                 f.write('View[0].IntervalsType = 3;\n')
-                f.write('// J view: 3D arrow style\n')
+                f.write('View[0].ArrowSizeMin = 20;\n')
+                f.write('View[0].ArrowSizeMax = 20;\n')
+                # J view (View[1]): 3D arrows, fixed visible size
                 f.write('View[1].VectorType = 4;\n')
                 f.write('View[1].IntervalsType = 3;\n')
+                f.write('View[1].ArrowSizeMin = 20;\n')
+                f.write('View[1].ArrowSizeMax = 20;\n')
             _log(f"GMSH:wrote {os.path.basename(geo_file)}")
             gmsh_file = geo_file
         except Exception as e:
