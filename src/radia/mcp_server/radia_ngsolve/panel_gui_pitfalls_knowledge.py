@@ -316,6 +316,129 @@ the registry knows about all three.
 (restored BEM-validated mesh density).
 
 ============================================================
+## silent_action — Menu actions must produce visible feedback
+============================================================
+
+**Symptom**: User clicks "Verify Deploy" in the Solve menu. Nothing
+happens — no dialog, no console output, no busy cursor. The user
+reports "押しても何もおきない".
+
+**Root cause**: The handler wrote its mtime/sha1 report to
+``C:/radia_panel_log.txt`` via ``_panel_log()`` and **only** there.
+The user has no reason to be tailing that file, so the action is
+indistinguishable from a no-op.
+
+**Rule**: Any user-triggered menu action MUST produce a visible
+result. Acceptable channels:
+
+  1. **QMessageBox** for ad-hoc reports / confirmations
+  2. The panel **output text widget** (``self._output.appendPlainText``)
+     for streaming subprocess output
+  3. A new **window** for non-trivial reports
+
+Writing to a debug log file is fine as a SECONDARY record but never
+the only output. Test by clicking the button: if the screen does not
+change, the handler is broken regardless of whether the file got
+written.
+
+**Reference**: commit ``d364796``, ``register_toolbar.py::
+_verify_deploy``.
+
+============================================================
+## silent_except — Bare except hides field-export bugs
+============================================================
+
+**Symptom**: GMSH "Open" button stays disabled after a successful
+FEM run. Result panel shows L, P, Q, time — everything looks normal.
+Panel debug log says ``msh_file (value='') — Open GMSH disabled``.
+
+**Root cause**: The GMSH export step inside ``calc_fem_kelvin.py``
+was wrapped in ``try / except Exception as e: _log(f"GMSH_ERROR:{e}")``.
+The actual exception was ``H1() got an unexpected keyword argument
+'dim'`` (the ``H1(mesh, order=1, dim=3)`` API does not exist — vector
+H1 is built via ``H1(...)**3`` or ``VectorH1``). The bare except
+swallowed the AttributeError, ``_log`` printed only the short
+``str(e)`` to stderr (which was already past the visible output
+window), and ``gmsh_file`` stayed at its initial empty string.
+
+The result dict shipped ``msh_file=""``, the panel saw an empty
+path, and disabled the Open GMSH button — looking exactly like a
+"no field exported, success ignored" silent failure.
+
+**Rules**:
+
+  1. Never log just ``str(e)`` from a bare except. Log
+     ``type(e).__name__`` AND the **last few lines of the
+     traceback** so the actual offending API call is visible:
+
+     ```python
+     except Exception as e:
+         import traceback
+         tb = traceback.format_exc()
+         _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
+         for line in tb.splitlines()[-4:]:
+             _log(f"GMSH_ERROR:  {line}")
+     ```
+
+  2. **Always provide a fallback** that still produces SOMETHING
+     openable. Even if the field-write fails, write a mesh-only
+     ``.msh`` so the Open GMSH button enables and the user gets
+     the geometry:
+
+     ```python
+     except Exception:
+         post_min = GmshPostExport(mesh, boundary=False)
+         post_min.write_mesh(msh_output)
+         gmsh_file = msh_output
+     ```
+
+  3. Don't use ``H1(mesh, dim=N)`` — that signature does not exist
+     in NGSolve. For per-vertex vector evaluation in a GMSH export,
+     skip the GridFunction projection entirely and evaluate the
+     CoefficientFunction directly at each ``mesh.vertices[i].point``.
+     The (n_v, 3) numpy array goes straight into the GMSH NodeData
+     section.
+
+**Reference**: commit ``d364796``, ``calc_fem_kelvin.py`` Step 7.
+
+============================================================
+## result_keys — Subprocess result dict keys are an API contract
+============================================================
+
+**Symptom**: One panel script returns ``"msh_file"`` in its result
+dict, another returns ``"msh_output"``, a third returns
+``"gmsh_file"``. The GUI's ``_on_finished`` has to test for all of
+them, and any new script that picks a different name silently
+breaks the Open GMSH button.
+
+**Root cause**: Each calc_*.py was developed independently and
+each author picked a slightly different key name for the same
+concept ("path of the GMSH file the user should open").
+
+**Rule**: Subprocess result dicts have a **stable, documented set
+of keys** that the GUI relies on. The current contract for the IH
+panel:
+
+  ``msh_output`` or ``msh_file``  -- raw .msh path the user can open
+                                     (Open GMSH button uses either)
+  ``field_gmsh_file``              -- preferred .geo path that Merges
+                                     mesh + field views with display
+                                     options applied (overrides
+                                     msh_output when present)
+  ``inductance_H``                 -- headline result for L
+  ``coupled_*``                    -- coupled BEM headline results
+  ``error``                        -- single string, presence
+                                     suppresses success display
+
+When you add a new key, update the gui_base.py ``_on_finished``
+handler in the same commit. When you rename a key, grep for it
+across ``radia_gui_base.py`` AND every ``radia_*.py`` panel before
+shipping.
+
+**Reference**: ``radia_gui_base.py::_on_finished`` lines 425-470,
+which has the canonical "what the GUI looks for" logic.
+
+============================================================
 ## learn_edition_cap — Cubit Learn Edition 50k limit is harmless
 ============================================================
 
@@ -349,6 +472,9 @@ _TOPICS = (
     "subprocess_args",
     "cubit_jou",
     "sample_jou",
+    "silent_action",
+    "silent_except",
+    "result_keys",
     "learn_edition_cap",
 )
 
