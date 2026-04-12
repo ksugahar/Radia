@@ -80,10 +80,16 @@ def _extract_elements_from_cubit(cubit, block_name="yoke", unit_scale=0.001):
     Returns:
         list of dicts: [{'type': 'hex'|'tet'|'wedge', 'vertices': [[x,y,z],...]}]
     """
-    # Find block ID by name
+    # Find block ID by name. Use get_block_name (NOT get_exodus_entity_name)
+    # to avoid the "Invalid list type for the get_mref_entity function: block"
+    # error on some Cubit versions where blocks are not registered as
+    # mref_entities.
     yoke_bid = None
     for bid in cubit.get_block_id_list():
-        name = cubit.get_exodus_entity_name("block", bid).lower()
+        try:
+            name = (cubit.get_block_name(bid) or "").lower()
+        except Exception:
+            name = ""
         if name == block_name.lower():
             yoke_bid = bid
             break
