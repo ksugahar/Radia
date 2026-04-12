@@ -398,6 +398,16 @@ class CoupledBEMSolver:
             'n_phi_wp': self.wp_solver.ndof,
             'J_coil_re': J_re,
             'J_coil_im': J_im,
+            # Workpiece-side per-panel data needed for GMSH
+            # visualization (J vector + sigma|J|^2/2 heating density).
+            # ``wp_J_re/im_arr`` are arrays of shape (M, 3) of the
+            # scattered surface current per BND element on the
+            # workpiece mesh, ``wp_c`` are panel centroids and
+            # ``wp_a`` are panel areas.
+            'wp_c': wp_c,
+            'wp_a': wp_a,
+            'wp_J_re': wp_J_re_arr,
+            'wp_J_im': wp_J_im_arr,
             'Z_s': Z_s_out,
         }
 

@@ -72,15 +72,21 @@ class IHPanel(ModePanel):
         # Workpiece coupling mode (BEM mode only):
         #   off  = workpiece NOT in DOF (coil-only inductance)
         #   SIBC = include workpiece via linear surface impedance
-        #          (Dowell formula in calc_inductance.py)
-        #   ESIM = include workpiece via nonlinear cell problem
+        #          with per-panel curvature (mesh-driven local R)
+        #   ESIM = include workpiece via nonlinear 1D cell problem
+        #          with per-panel curvature
         wp_combo = self.add_combo("workpiece_mode", "Workpiece:",
                                   ["off", "SIBC", "ESIM"])
         wp_combo.currentTextChanged.connect(self._on_workpiece_changed)
 
-        # Workpiece impedance model
+        # Impedance model combo: kept for FEM and BEM-SIBC (WP) modes
+        # which still need an explicit choice. In BEM coil mode the
+        # workpiece_mode combo above already determines this, so the
+        # impedance row is hidden. Per-panel curvature is now the
+        # default (was selectable, simplified 2026-04-12) so the
+        # user-facing choice is reduced to "sibc" / "esim".
         imp_combo = self.add_combo("impedance", "Impedance model:",
-                                   ["dowell", "esim", "bem-sibc", "sibc"])
+                                   ["sibc", "esim"])
         imp_combo.currentTextChanged.connect(self._on_impedance_changed)
 
         self.add_line("wp_sigma", "WP sigma [S/m]:", "2e6")
@@ -93,15 +99,6 @@ class IHPanel(ModePanel):
         #   "none": flat slab cosh/sinh (no curvature)
         self.add_combo("esim_geometry", "ESIM geometry:",
                        ["local_curvature", "none"])
-        # When ON, the SIBC R is taken **per panel** from the mesh-driven
-        # local curvature (discrete normal-angle fit, percentile-10).
-        # This makes the cell problem use the actual local geometry of
-        # each workpiece panel (sphere -> R, ellipsoid -> per-panel R)
-        # instead of the single global ``half_thickness`` value.
-        # OFF for backward compatibility / when half_thickness already
-        # matches the workpiece radius (e.g. uniform cylinder).
-        self.add_combo("use_local_curvature", "Per-panel curvature:",
-                       ["off", "on"])
         self.add_combo("wp_material", "WP material:",
                        ["steel", "copper", "aluminum"])
 
@@ -154,16 +151,14 @@ class IHPanel(ModePanel):
         # Workpiece combo line: BEM coil only (WP mode always has workpiece)
         self._set_row_visible("workpiece_mode", is_bem_coil)
 
-        # Impedance options differ by method
+        # Impedance options: only "sibc" and "esim", with per-panel
+        # curvature implied. The combo is rebuilt unconditionally so
+        # that the previous selection is preserved across method
+        # switches when both items are present.
         combo = self._widgets["impedance"]
         prev = combo.currentText()
         combo.clear()
-        if is_bem_coil:
-            combo.addItems(["dowell", "esim", "bem-sibc"])
-        elif is_bem_wp:
-            combo.addItems(["esim", "dowell"])
-        else:
-            combo.addItems(["sibc", "esim"])
+        combo.addItems(["sibc", "esim"])
         idx = combo.findText(prev)
         if idx >= 0:
             combo.setCurrentIndex(idx)
@@ -194,20 +189,21 @@ class IHPanel(ModePanel):
         # Hide all wp params first. The impedance combo is also tied
         # to the workpiece — when wp is off (or in FEM mode where
         # workpiece_mode is hidden) it should disappear so the user
-        # can't pick a model that does nothing.
+        # can't pick a model that does nothing. In BEM coil mode the
+        # impedance row is suppressed entirely because workpiece_mode
+        # already determines the impedance choice (SIBC or ESIM).
         for key in ("impedance", "wp_sigma", "half_thickness",
-                     "use_local_curvature", "mu_r", "bh_file",
-                     "esim_geometry"):
+                     "mu_r", "bh_file", "esim_geometry"):
             self._set_row_visible(key, False)
 
         if has_wp:
-            self._set_row_visible("impedance", True)
             self._set_row_visible("wp_sigma", True)
             self._set_row_visible("half_thickness", True)
-            self._set_row_visible("use_local_curvature", True)
+            # In BEM coil mode the workpiece_mode combo IS the
+            # impedance choice, so the impedance row stays hidden.
             # Map combo to impedance model:
-            #   SIBC -> dowell (linear surface impedance)
-            #   ESIM -> esim   (nonlinear cell problem)
+            #   SIBC -> sibc (linear surface impedance, per-panel R)
+            #   ESIM -> esim (nonlinear 1D cell problem, per-panel R)
             is_esim = (wp_mode == "ESIM")
             self._set_row_visible("mu_r", not is_esim)
             self._set_row_visible("bh_file", is_esim)
@@ -281,7 +277,7 @@ class IHPanel(ModePanel):
         # name prefix to _extract_panels_from_mesh.
         wp_mode = self.val("workpiece_mode")
         if wp_mode != "off":
-            imp = "esim" if wp_mode == "ESIM" else "dowell"
+            imp = "esim" if wp_mode == "ESIM" else "sibc"
             cmd += ["--workpiece", "sibc",
                     "--impedance-model", imp,
                     "--sigma", self.val("wp_sigma"),
@@ -292,9 +288,12 @@ class IHPanel(ModePanel):
                 bh = self.val("bh_file")
                 if bh:
                     cmd += ["--bh-file", bh]
-            # Per-panel local curvature (mesh-driven SIBC R)
-            if self.val("use_local_curvature") == "on":
-                cmd += ["--use-local-curvature"]
+            # Per-panel local curvature is now the default for both
+            # SIBC and ESIM (was a user-selectable combo, simplified
+            # 2026-04-12 — the global half_thickness is only used as
+            # a fallback when the extractor cannot recover the local
+            # radius, e.g. on degenerate sliver triangles).
+            cmd += ["--use-local-curvature"]
 
         # Air field post-processing on/off
         if self.val("air_mode") == "on":
