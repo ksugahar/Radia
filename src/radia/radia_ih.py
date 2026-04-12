@@ -184,8 +184,12 @@ class IHPanel(ModePanel):
 
     def _on_workpiece_changed(self, _text=None):
         wp_mode = self.val("workpiece_mode")
-        has_wp = (wp_mode != "off")
         method = self.val("method")
+        # workpiece_mode combo is only shown in BEM coil mode; in FEM /
+        # BEM-SIBC (WP) modes the workpiece params must stay hidden
+        # regardless of what value the combo holds from a previous mode.
+        is_bem_coil = (method == "BEM")
+        has_wp = is_bem_coil and (wp_mode != "off")
 
         # Hide all wp params first
         for key in ("wp_sigma", "half_thickness", "use_local_curvature",
