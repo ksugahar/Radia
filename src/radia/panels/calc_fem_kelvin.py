@@ -644,7 +644,8 @@ def solve_fem(vol_file="", fes_order=1,
             with open(geo_file, "w", encoding="utf-8") as f:
                 f.write(f'Merge "{os.path.basename(msh_output)}";\n')
                 f.write('Mesh.NumSubEdges = 4;\n')
-                f.write('Mesh.Volumes = 0;\n')
+                # NOTE: Mesh.Volumes does NOT exist in GMSH 4.x.
+                # Use VolumeEdges + VolumeFaces instead.
                 f.write('Mesh.VolumeEdges = 0;\n')
                 f.write('Mesh.VolumeFaces = 0;\n')
                 f.write('Mesh.SurfaceEdges = 0;\n')
