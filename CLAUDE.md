@@ -289,25 +289,40 @@ for et in etypes:
 - `ref(0,0,1)` -> `el.vertices[2]`
 - Vertex `el[i]` -> `lam[(i+1)%4]` (barycentric index shifted by +1 mod 4)
 
-### Cubit Learn Edition 50k Element Cap: Ignore
+### Cubit Learn Edition 50k Element Cap: IGNORE — exceeding 50k is OK
 
-**POLICY**: Cubit Learn Edition prints `ERROR: Coreform Cubit - Learn
-Edition restricts export to models with less than 50k elements.` for its
-own .exo / .gmsh / .vtk exporters. The Radia in-tree `radia_export
-netgen` plugin **bypasses this cap** and writes the .vol regardless of
-the warning. The .vol file IS produced (verified 2026-04-12 with a
-147k-element coil model).
+**POLICY**: **Exceeding 50,000 elements is OK and expected.** Tune the
+mesh to whatever density the physics needs (typically the BEM-validated
+reference density) and let the element count fall where it may.
 
-Do NOT artificially coarsen sample meshes to fit under 50k elements.
-Tune mesh density to the physical accuracy you need (usually
-BEM-validated reference density), and ignore the Cubit warning. The
-deployed LAB / 100号機 / mdx machines all run Cubit Pro and never see
-the warning anyway.
+Cubit Learn Edition prints
+`ERROR: Coreform Cubit - Learn Edition restricts export to models with
+less than 50k elements.` whenever it sees a model larger than 50k. This
+ERROR is **harmless for the Radia workflow**:
 
-If a developer running Cubit Learn Edition wants to use Cubit's
-built-in `export gmsh` / `export vtk` paths, that path WILL be capped at
-50k. The official Radia workflow uses `radia_export netgen` only, so
-this is irrelevant to production users.
+- The Radia in-tree `radia_export netgen` plugin **bypasses the cap**
+  and writes the .vol successfully regardless of the warning. Verified
+  2026-04-12 with a 147,234-element coil model:
+
+      *****ERROR: Coreform Cubit - Learn Edition restricts export to
+      models with less than 50k elements.
+      Phase1f: 147234 volume elements added
+      Exported Netgen Vol (order 1): ih_fem_sample.vol
+                                    (25301 nodes, 147234 elements)
+
+  The "ERROR" line and the "Exported" line BOTH appear in the same run.
+  The export succeeded.
+
+- The cap only applies to Cubit's own built-in exporters
+  (`export gmsh` / `export vtk` / `export exo`), which the Radia
+  workflow does not use.
+
+- The deployed LAB / 100号機 / mdx machines all run Cubit Pro and never
+  see the warning anyway.
+
+**Do NOT** coarsen sample .jou meshes to "fit under" the 50k cap, and
+**do NOT** treat the Learn Edition ERROR line as a failure when the
+"Exported" line is present in the same Cubit run.
 
 ### Cubit Block/Sideset Label Convention
 
