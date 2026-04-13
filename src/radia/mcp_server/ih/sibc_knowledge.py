@@ -5,22 +5,24 @@ Covers: Surface Impedance Boundary Condition approaches for eddy current,
 BEM (Scalar BIE) and FEM (scattered-field) formulations, Karl iteration,
 ESIM nonlinear impedance, and validation results.
 
-Updated: 2026-04-09 with specialcf.normal sign fix, scattered-field cancellation,
-total-field hole+BND approach.
+Updated: 2026-04-13 with Smythe sphere analytical validation (14 data points),
+FEM-scattered confirmed as reference solver (+/-3%), FEM-total -34% systematic.
+EMMaterial class now provides unified material properties.
 """
 
 IH_SIBC_OVERVIEW = """
 # SIBC for Induction Heating: Method Selection
 
-## Three Validated Approaches
+## Solver Accuracy (Smythe sphere analytical validation, 2026-04-13)
 
-| Method | Formulation | Validated | Error | DOFs |
-|--------|-------------|-----------|-------|------|
-| **Scalar BIE + SIBC (BEM)** | H1 surface phi | pytest 4/4 | **<0.1% sphere** | 162-320 |
-| **FEM scattered-field + hole** | HCurl A_scat | verify_sphere | **-2.7% sphere** | ~150k |
-| **FEM total-field + hole + BND** | HCurl A_total | coil+cylinder | **+8.2% vs BEM** | ~150k |
+| Method | H_t error vs analytical | Conditions | Status |
+|--------|------------------------|------------|--------|
+| **FEM scattered-field** | **+/-3%** | All f, Cu+Steel | **Reference (A_inc=exact CF)** |
+| **BEM Scalar BIE SIBC** | **-1.6%** | R/d>1.5, Cu+Steel | **Production solver** |
+| FEM total-field | **-34% systematic** | All f, Cu+Steel | H_t/P broken, L OK |
+| BEM EFIE (HDivSurface) | -7% to -66% | Broken | Factor-3 eigenvalue error |
 
-## Scalar BIE + SIBC (Recommended for P_total)
+## Scalar BIE + SIBC (Production solver for H_t and P)
 
 **File**: `src/radia/bem_sibc_solver.py` (ScalarBIESIBCSolver)
 
@@ -33,10 +35,15 @@ System: `(1/2*M - DL + gamma * SL * M^{-1} * K) phi = phi_inc`
 - H_t = |grad_s phi| = tangential H = surface current
 - P = 0.5 * Re(Z_s) * H_t^2 * area
 - **No C++ needed**: all existing ngsolve.bem operators
+- **mu_r is handled correctly through Z_s** (no PMCHWT needed)
+- Uses BOTH DL and SL -- captures full A+H physics (unlike EFIE)
 
-**Validated**:
-- Sphere: <0.1% for ALL Z_s (PEC to transparent), pytest 4/4
-- Cylinder workpiece + coil: ~7% mesh-dependent
+**Validated (2026-04-13) vs exact Bessel solution** (no SIBC approx):
+- Copper (R/d 1.5-33.8): **-1.0% to -1.6%**
+- Steel mu_r=100 (R/d 2.8-62.8): **-1.5% to -1.7%**
+- SIBC approximation itself fails at R/delta < 1 (low frequency limit)
+- **EFIE (HDivSurface+LaplaceSL) is broken** (-7% to -66%): factor-3
+  eigenvalue error from using A only (SL), dropping H contribution (curl SL)
 
 **Usage**:
 ```python
@@ -52,99 +59,70 @@ H_t = result['H_t_rms']
 - --impedance-model esim (nonlinear BH) or linear (fixed mu_r)
 - Karl iteration for ESIM convergence
 
-## FEM Total-Field + BND Integral (Recommended for Coil+Workpiece)
+## FEM Total-Field (L only; H_t/P has -34% systematic error)
 
-**File**: `src/radia/panels/calc_fem_kelvin.py`
+**File**: `src/radia/panels/calc_fem_kelvin.py --formulation total`
 
-Total-field formulation (no A_inc decomposition):
-- Coil as volume source J in coil cross-section
-- Two mesh approaches: interface (workpiece as volume) or hole (workpiece removed)
-- **Interface is more accurate** (-2.9% vs BEM) than hole (+5.9%)
+Total-field formulation: solve for full A with Robin BC.
+- **L (inductance) is correct** (volume integral, not affected by surface issues)
+- **H_t and P have -34% systematic error** vs Smythe analytical (2026-04-13)
+- The -34% is frequency-independent and material-independent
+- Root cause: BND trace evaluation of HCurl GF on SIBC returns wrong-side values
 
-**H_t extraction**: BND integral with tangential projection (specialcf.normal):
-```python
-n = specialcf.normal(3)
-A_sq = sum(gfu[i].real**2 + gfu[i].imag**2 for i in range(3))
-A_dot_n_re = sum(gfu[i].real * n[i] for i in range(3))
-A_dot_n_im = sum(gfu[i].imag * n[i] for i in range(3))
-At_sq = A_sq - A_dot_n_re**2 - A_dot_n_im**2
-H_t_rms = abs(1j*omega/Z_s) * sqrt(Integrate(At_sq, mesh, BND, definedon=sibc) / A_wp)
-```
+**Do NOT use FEM total-field for H_t or P extraction.**
+Use `--formulation scattered` instead (see below).
 
-**CRITICAL: Pointwise evaluation FAILS** near SIBC boundary. Robin penalty
-|jw/Z_s| ~ 1e9 creates huge normal A component (~1e6 T*m). Tangential
-projection at interior points requires 10^14 cancellation. Only BND integral
-works (NGSolve evaluates trace functions directly).
+## FEM Scattered-Field (Reference solver for H_t and P)
 
-**Interface is the correct formulation. Hole (PEC) is wrong.**
+**Files**:
+- `src/radia/panels/calc_fem_kelvin.py --formulation scattered`
+- `examples/eddy_current_analytical_validation/sphere_uniform_field.py`
 
-SIBC models a thin conducting shell: the interior is transparent (air), and
-surface current J_s = (jw/Z_s)*A_t flows on the interface. This maps directly
-to Robin BC on an **internal interface** (workpiece volume meshed as air).
+Decomposition: A = A_inc + A_scat.  A_inc is known (analytical CF or
+free-space FEM solve). Solve for A_scat with Robin BC.
 
-Hole approach = PEC baseline (natural BC: n x H = 0). Adding Robin penalty to
-a PEC boundary is not SIBC — it perturbs the wrong physics. The hole error
-(+5.9%) is a formulation error, not a mesh resolution issue.
+**Two modes**:
 
-| Approach | Physics | H_t vs BEM | P vs BEM |
-|----------|---------|-----------|---------|
-| **Interface (correct)** | Transparent + Robin | **-2.9%** | **-2.3%** |
-| Hole (wrong) | PEC + Robin perturbation | +5.9% | +16.2% |
+1. **Sphere / uniform field**: A_inc = CF((-B0/2*y, B0/2*x, 0)) -- exact,
+   no discretization error. RHS includes both surface terms:
+   ```python
+   f(v) = -(jw/Z_s) * <A_inc, v>_sibc - <n_cond x H_inc, v>_sibc
+   ```
 
-Interface approach: workpiece volume meshed (as air, nu=nu0), SIBC on internal
-boundary "wp_surface". The Robin BC `+jw/Z_s * u.Trace() * v.Trace() * ds`
-acts as a thin conducting shell on the shared face.
+2. **Coil problem (two-step)**: Step 1 solves free-space (no Robin) -> A_inc
+   as GridFunction. Step 2 solves with Robin, RHS = -robin * A_inc on SIBC.
+   Volume terms cancel because A_inc satisfies the source PDE.
 
-## FEM Scattered-Field + Hole (For Sphere / Analytical A_inc)
+**H_t extraction**: A_total = A_inc (CF) + A_scat (GF).  Since A_inc dominates
+the tangential component, numerical errors in A_scat do not corrupt H_t.
 
-**File**: `examples/cubit_panels/inductance/verify_sphere_sibc.py`
+**Validated against Smythe sphere (2026-04-13, 14 data points)**:
+- Copper (R/delta 1.5 to 33.8): +0.1% to +2.0%
+- Steel (R/delta 2.8 to 62.8): -2.9% to -1.0%
+- **All conditions: error < 3%**
 
-Decomposition: A = A_inc + A_scat
-- A_inc: known analytically (uniform field, or Biot-Savart filament)
-- Solve for A_scat only (HCurl, smaller perturbation)
-- Hole approach: workpiece volume NOT meshed, wp_surface is air-side boundary
+See `docs/FEM_SCATTERED_FIELD.md` for full derivation and validation table.
 
-**RHS (correct signs)**:
-```python
-n_cond = -specialcf.normal(3)  # outward from conductor
-nxH = Cross(H_inc_cf, specialcf.normal(3))  # = n_cond x H_inc
-f(v) = -(jw/Z_s) * <A_inc, v>_sibc - <n_cond x H_inc, v>_sibc
-```
+**Limitation for coil problem**: When A_inc comes from a FEM solve (GridFunction,
+not exact CF), subtraction cancellation (A_scat ~ -A_inc on SIBC, 85% for Cu)
+may degrade H_t accuracy. Future: use Biot-Savart vector potential via
+RadiaField('a') as exact CF for A_inc.
 
-**Sign convention (CRITICAL)**:
-- `specialcf.normal(3)` points outward from the mesh domain (air)
-- For a hole: this points INTO the conductor = WRONG for SIBC
-- **n_cond = -specialcf.normal(3)** = outward from conductor (SIBC convention)
-- Alternatively: `Cross(H_inc, specialcf.normal(3))` gives n_cond x H_inc directly
+## CRITICAL: What Does NOT Work
 
-**Subtraction cancellation limitation**: For coil+workpiece, A_scat approx -A_inc
-on SIBC surface (85% cancellation for copper). H1 interpolation error (~1%) in
-A_inc amplifies to ~12% in the residual A_total = A_inc + A_scat. Use total-field
-approach instead for coil+workpiece cases.
+### FEM Total-Field H_t: -34% Systematic Error (confirmed 2026-04-13)
 
-**Validated**: sphere (analytical A_inc, H_inc): -2.7% vs analytical.
+`calc_fem_kelvin.py --formulation total` gives **-34% error on H_t** (and
+therefore -56% on P) compared to Smythe analytical sphere solution. This
+error is **constant across all frequencies and materials** (tested R/delta
+1.5 to 62.8, copper and steel).
 
-## CRITICAL: What Does NOT Work (2026-04-09)
+Root cause: BND trace evaluation of conforming HCurl GridFunction on the
+SIBC boundary returns values biased toward the workpiece interior (where
+A ~ 0 due to gauge regularization or simply because the conducting body
+has no internal source). The bias is independent of Robin magnitude.
 
-### FEM Total-Field + Internal Interface: BND Integral Returns ~0
-
-`calc_fem_kelvin.py` and `fem_esim_3d.py` used total-field formulation with
-workpiece as a separate volume (internal interface). This approach has a
-**fundamental problem**:
-
-```python
-# This returns ~0 on internal interface (workpiece side trace):
-At_sq = sum(gfu[i].real**2 + gfu[i].imag**2 for i in range(3))
-int_At2 = Integrate(At_sq, mesh, BND, definedon=wp_region)  # ~1e-17
-```
-
-**Root cause** (verified 2026-04-09):
-1. NGSolve evaluates BND integrals from the **workpiece side** of the interface
-2. Workpiece volume has no source; gauge regularization suppresses A to ~0
-3. Air-side |A_t| ~ 3.0, workpiece-side |A_t| ~ 2e-6 (ratio 1.5 million)
-4. `gfu.Other()` is DG-only, not available for conforming HCurl
-5. Robin BC IS assembled correctly (B field changes 2.5% with/without Robin)
-6. But P_total extraction from `int|A_t|^2` is impossible
+**L (inductance) is NOT affected** -- it uses a volume integral.
 
 **Previous "validation"** (commit 3ef7555, 2026-03-28) compared FEM-SIBC vs
 EFIE-SIBC (BEM). But EFIE-SIBC has -65% error on sphere (SL eigenvalue mismatch).
@@ -155,13 +133,23 @@ EFIE-SIBC (BEM). But EFIE-SIBC has -65% error on sphere (SL eigenvalue mismatch)
 RT0 (order=0) has zero surface curl. SIBC requires curl_s(J) which vanishes
 for RT0 basis. Results are wrong by 65% on sphere at Z_s/(jw*mu0*R) = 10.
 
-### Hole Approach: Wrong Physics for SIBC
+### SIBC Implementation: Hole Approach is Correct (2026-04-14)
 
-Hole = workpiece removed from mesh. Natural BC is Neumann (n x H = 0 = PEC).
-Adding Robin penalty perturbs PEC toward finite impedance, but the baseline
-is wrong: PEC = total screening, while SIBC = partial screening (transparent
-interior with surface current). The hole approach has a systematic +6% error
-that does not decrease with mesh refinement.
+SIBC = Robin BC on the conductor surface.  The conductor interior is
+NOT solved.  Use hole approach: subtract workpiece from mesh, apply
+Robin BC on the hole boundary.  Validated in 2D axisymmetric Kelvin FEM:
+
+- Full-resolution (eddy currents resolved at delta/5) vs SIBC (hole + Robin)
+- L: < 1% for Cu, Steel (mu_r=100), Al at R/delta = 3 to 160
+- P: < 2% for all cases
+- Z_s: cylindrical Bessel `rho*gamma*I1(ga)/I0(ga)` (exact for solid cylinder)
+- Interface approach (wp meshed as air + Robin) is WRONG: flux bypasses
+  Robin through transparent interior (steel: 58% of correct L)
+
+For H1/phi formulation: Robin term = `(jw/Z_s)/r * u * v * ds("wp_bnd")`
+For 3D HCurl formulation: Robin term = `(jw/Z_s) * A_t . v_t * ds("sibc")`
+
+Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
 
 ### Scattered-Field + H1 Interpolation of A_inc: Cancellation Error
 
@@ -181,21 +169,20 @@ Robin penalty |jw/Z_s| ~ 1e9 creates |A_n| ~ 1e6 on SIBC boundary while
 |A_t| ~ 1e-8. Tangential projection at points near (not on) boundary requires
 cancellation of 10^14 -> fails completely. Only BND integral works.
 
-## calc_fem_kelvin.py Panel: Fixed (2026-04-09)
+## calc_fem_kelvin.py Panel (2026-04-13)
 
-**Production panel** for Cubit workflow. Now supports hole approach with correct SIBC.
+**Production panel** for Cubit workflow. Two formulations:
 
-**Fixes applied**:
-1. Robin sign: `-jw/Z_s` -> `+jw/Z_s` (hole = SIBC on external boundary of air)
-2. Boundary name: `sibc` (hole) + `wp_surface` (legacy internal interface)
-3. Tangential projection: `|A_t|^2 = |A|^2 - (A.n)^2` via `specialcf.normal(3)`
-4. Energy-balance P extraction for internal interface fallback
-5. Auto-detect: `is_hole = "workpiece" not in materials`
+- `--formulation total` (default): L is accurate, H_t/P has -34% systematic error
+- `--formulation scattered`: L AND H_t/P are accurate (for A_inc = exact CF)
 
-**Validated (copper, 7 kHz)**:
-- **Interface (recommended)**: H_t = 15.81 (-2.9% vs BEM), P = 5.11e-6 (-2.3%)
-- Hole: H_t = 17.25 (+5.9% vs BEM), P = 6.08e-6 (+16.2%)
-**Before fix**: H_t ~ 0, P ~ 0 (BND integral lacked tangential projection)
+**EMMaterial integration (2026-04-13)**: `--material copper` now auto-sets
+sigma=5.8e7 and mu_r=1 (via `EMMaterial.from_args()`). No need to pass
+`--sigma` separately.
+
+**For H_t/P accuracy in coil problems**: the two-step scattered solve uses
+A_inc from free-space FEM (GridFunction). Accuracy depends on A_inc quality.
+Future: Biot-Savart A via RadiaField('a') as exact CF.
 
 **Cubit .jou for interface approach (recommended)**:
 ```python
@@ -284,7 +271,7 @@ Delta_L. Saved as `bem_coupled_solver_v1_buggy.py.bak` for reference.
 
 ### Limitations
 
-- Linear SIBC (Dowell formula) only — nonlinear ESIM not yet supported
+- Linear SIBC (Dowell formula) only -- nonlinear ESIM not yet supported
   in the coupled solver
 - Scalar BIE limit captures only exterior scattered field; full mu_r
   flux concentration in the workpiece volume requires MFIE/PMCHWT
@@ -358,21 +345,21 @@ The chord-vs-arc discretization error decreases with mesh refinement.
 | C. **Per-panel auto (--use-local-curvature)** | (any)  | **0.067**   | **+8%** |
 
 The headline is **case A vs C**: the user no longer needs to know or
-type the workpiece radius — the mesh tells the solver. A typo in
+type the workpiece radius -- the mesh tells the solver. A typo in
 ``half_thickness`` becomes harmless, and a non-trivial geometry
 (ellipsoid, free-form workpiece) gets per-panel-correct Z_s without
 any user input.
 
 ### Files
 
-- `src/radia/panels/calc_inductance.py::_compute_panel_local_radii` —
+- `src/radia/panels/calc_inductance.py::_compute_panel_local_radii` --
   the discrete-normal-angle radius extractor
-- `src/radia/panels/calc_inductance.py::_compute_wp_impedance_from_panels` —
+- `src/radia/panels/calc_inductance.py::_compute_wp_impedance_from_panels` --
   ``mesh_wp`` and ``use_local_curvature`` parameters; both ESIM and
   Dowell loops use per-panel R
-- `src/radia/esim_cell_problem.py::ESIMFiniteSlabSolver` —
+- `src/radia/esim_cell_problem.py::ESIMFiniteSlabSolver` --
   ``set_radius(R)`` and ``solve(H0, R_local=...)`` for fast per-panel R
-- `src/radia/radia_ih.py` — GUI combo "Per-panel curvature: on/off"
+- `src/radia/radia_ih.py` -- GUI combo "Per-panel curvature: on/off"
 
 ### Result keys (added)
 
@@ -382,7 +369,7 @@ any user input.
 
 ### Limitations
 
-1. The cell problem is still 1D radial — captures the maximum
+1. The cell problem is still 1D radial -- captures the maximum
    principal curvature only. For ellipsoid or doubly-curved
    surfaces (kappa_1 != kappa_2) it approximates as a cylinder of
    ``R = 1/kappa_max``. For a sphere this is exact.
@@ -479,9 +466,9 @@ xi ~ 1 regime; identical to scalar in the asymptotic regime
 
 ### Files
 
-- `src/radia/bem_sibc_solver.py::ScalarBIESIBCSolver.solve` —
+- `src/radia/bem_sibc_solver.py::ScalarBIESIBCSolver.solve` --
   per-node Z_s acceptance + Robin block diag(gamma) construction
-- `src/radia/bem_coupled_solver.py::CoupledBEMSolver.solve` —
+- `src/radia/bem_coupled_solver.py::CoupledBEMSolver.solve` --
   passes through per-node Z_s to the SIBC core
 - `src/radia/panels/calc_inductance.py::_dowell_Zs`,
   `_build_per_node_Zs`, `_run_coupled_bem(use_local_curvature=True)`
@@ -505,7 +492,7 @@ analytic Frenet-Serret / shape-operator approach.
 (R=10mm). The cylinder is locally cylindrical everywhere so per-
 panel had no visible effect. With a sphere, the per-node coupled
 BEM gives a coil-terminal dL that is **10x smaller** than the
-wrong-global-R scalar path — the correction is now visible in the
+wrong-global-R scalar path -- the correction is now visible in the
 IH panel output.
 
 **Adaptive sliver clamp**: replaced the global
@@ -518,9 +505,9 @@ geometrically meaningless. Removed the duplicate global clamps in
 the floor lives in the extractor only.
 
   Validation:
-    Sphere / spheroid — unchanged (regression OK)
-    Torus thin (R/a=6)  — H_t err 4.80% → 3.32%
-    Torus fat (R/a=1.5) — H_t err 3.34% → 0.48%
+    Sphere / spheroid -- unchanged (regression OK)
+    Torus thin (R/a=6)  -- H_t err 4.80% → 3.32%
+    Torus fat (R/a=1.5) -- H_t err 3.34% → 0.48%
 
 **``_build_per_node_Zs`` order > 1 projection**: added an optional
 ``fes`` parameter. When supplied AND ``fes.globalorder > 1``, the
@@ -579,7 +566,7 @@ check is still tight.
 
 BEM is fast for P_total (162 DOFs vs 150k). The coupled BEM is the
 right tool for "how does the coil terminal L change when I add a
-workpiece" — it gets the sign right across all mu_r/frequency regimes.
+workpiece" -- it gets the sign right across all mu_r/frequency regimes.
 FEM is needed for field distribution and full mu_r flux concentration.
 """
 
@@ -651,13 +638,13 @@ Vectorized over observation points, loops over segments. 106x faster.
 For Joachim: requesting BiotSavartCF with A-field output would eliminate
 the need for pre-computed nodal values. (Discussed with Joachim previously.)
 
-## specialcf.normal WORKS — Sign Convention is Critical (2026-04-09 CORRECTED)
+## specialcf.normal WORKS -- Sign Convention is Critical (2026-04-09 CORRECTED)
 
 `specialcf.normal(3)` DOES work in HCurl BND LinearForm. The previous claim
 that it "returns near-zero" was due to a **sign error**.
 
 `specialcf.normal(3)` points outward from the mesh domain (air). For a hole
-(conductor removed), this is INWARD into the conductor — opposite to SIBC
+(conductor removed), this is INWARD into the conductor -- opposite to SIBC
 convention (outward from conductor).
 
 ```python

@@ -616,7 +616,9 @@ a = BilinearForm(fes)
 a += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
 a += reg * NU_0 * u * v * dx  # gauge regularization (HCurl uniqueness)
 
-# Robin BC for SIBC workpiece (on hole boundary)
+# SIBC = Robin BC on hole boundary (conductor NOT meshed, NOT solved)
+# Validated 2026-04-14: 2D axisym Kelvin full-res vs SIBC match L<1%, P<2%
+# Z_s for solid cylinder: rho*gamma*I1(ga)/I0(ga), gamma=sqrt(jw*mu*sigma)
 if has_sibc:
     robin = 1j * omega / Z_s
     a += robin * u.Trace() * v.Trace() * ds("sibc")
