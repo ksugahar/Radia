@@ -22,7 +22,7 @@ TITLE = "Induction Heating"
 # source: sideset name on one coil terminal face (current injection).
 # sink:   sideset name on the other coil terminal face (current extraction).
 REQUIRED_LABELS = ["coil", "source", "sink"]
-OPTIONAL_LABELS = ["workpiece", "air"]
+OPTIONAL_LABELS = ["workpiece", "air", "kelvin", "kelvin_int", "kelvin_ext"]
 OPTIONAL_FILES = {}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
