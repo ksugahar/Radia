@@ -26,6 +26,7 @@ mcp-server-peec = "radia.mcp_server.peec.server:main"
 mcp-server-cubit = "radia.mcp_server.cubit.server:main"
 mcp-server-gmsh = "radia.mcp_server.gmsh.server:main"
 mcp-server-elf = "radia.mcp_server.elf.server:main"
+mcp-server-build123d = "radia.mcp_server.build123d.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

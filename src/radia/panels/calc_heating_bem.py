@@ -30,7 +30,8 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (setup_paths, MU_0, progress, calc_main,
-                          create_esim_solver)
+                          create_esim_solver,
+                          EMMaterial, add_material_args)
 
 
 def _extract_surface_mesh_filtered(vol_mesh, keep_label="",
@@ -196,10 +197,10 @@ def _extract_surface_mesh(vol_mesh, order=2):
 
 
 def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
-                        gap_deg=5, frequency=7000, sigma=2e6,
-                        material="steel", h1_order=1, wp_label="wp_surface",
+                        gap_deg=5, frequency=7000, mat=None,
+                        h1_order=1, wp_label="wp_surface",
                         half_thickness=0.010, esim_geometry="cylinder",
-                        bh_file=None, impedance_model="esim", mu_r=None,
+                        impedance_model="esim",
                         max_iter=15, tol=1e-3,
                         msh_output="",
                         coil_vol="", coil_source="source", coil_sink="sink",
@@ -212,13 +213,11 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
         coil_current: Total coil current [A]
         gap_deg: Coil gap angle [degrees] (0 = closed loop)
         frequency: Operating frequency [Hz]
-        sigma: Workpiece conductivity [S/m]
-        material: "steel", "copper", or "aluminum"
+        mat: EMMaterial instance (workpiece properties)
         h1_order: H1 polynomial order on surface
         wp_label: Boundary label for workpiece surface
         half_thickness: Workpiece radius for ESIM [m]
         esim_geometry: "cylinder" or "planar"
-        bh_file: Optional custom BH curve file
         max_iter: Karl iteration maximum
         tol: Karl convergence tolerance
         msh_output: Optional GMSH output path
@@ -226,6 +225,12 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
     Returns:
         dict with P_total, H_t_rms, Z_s, etc.
     """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    sigma = mat.sigma
+    mu_r = mat.mu_r
+    material = mat.name
+
     import time as _time
     from ngsolve import Mesh, Integrate, CF, BND
 
@@ -378,10 +383,8 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
         # ESIM: nonlinear Z_s(H_t), Karl iteration
         progress("KARL", "Starting Karl iteration...")
 
-        esim_solver = create_esim_solver(
-            material=material, frequency=frequency, sigma=sigma,
-            half_thickness=half_thickness, geometry=esim_geometry,
-            bh_file=bh_file)
+        esim_solver = mat.create_esim_solver(
+            frequency, half_thickness, geometry=esim_geometry)
 
         H_t_init = 5.0
         Z_s = esim_solver.solve(H_t_init)['Z']
@@ -562,10 +565,7 @@ def main():
                         help="Coil gap angle [degrees]")
     parser.add_argument("--frequency", type=float, default=7000,
                         help="Frequency [Hz]")
-    parser.add_argument("--sigma", type=float, default=2e6,
-                        help="Workpiece conductivity [S/m]")
-    parser.add_argument("--material", default="steel",
-                        choices=["steel", "copper", "aluminum"])
+    add_material_args(parser, include_custom=False)
     parser.add_argument("--h1-order", type=int, default=1,
                         help="H1 polynomial order")
     parser.add_argument("--wp-label", default="wp_surface",
@@ -577,10 +577,6 @@ def main():
     parser.add_argument("--impedance-model", default="esim",
                         choices=["esim", "linear"],
                         help="esim (nonlinear BH) or linear (fixed mu_r)")
-    parser.add_argument("--mu-r", type=float, default=None,
-                        help="Relative permeability (linear mode)")
-    parser.add_argument("--bh-file", default="",
-                        help="Custom BH curve file")
     parser.add_argument("--max-iter", type=int, default=15,
                         help="Karl iteration max")
     parser.add_argument("--tol", type=float, default=1e-3,
@@ -612,15 +608,12 @@ def main():
             coil_current=args.coil_current,
             gap_deg=args.gap_deg,
             frequency=args.frequency,
-            sigma=args.sigma,
+            mat=EMMaterial.from_args(args),
             impedance_model=args.impedance_model,
-            mu_r=args.mu_r,
-            material=args.material,
             h1_order=args.h1_order,
             wp_label=args.wp_label,
             half_thickness=args.half_thickness,
             esim_geometry=args.esim_geometry,
-            bh_file=args.bh_file or None,
             max_iter=args.max_iter,
             tol=args.tol,
             msh_output=args.msh_output,

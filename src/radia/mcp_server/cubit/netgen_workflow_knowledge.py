@@ -688,6 +688,90 @@ mesh = Mesh(vol_path)
 
 def get_netgen_documentation(workflow: str = "overview") -> str:
 	"""Return Netgen workflow documentation by topic."""
+
+	KELVIN_AUTO = """
+# Kelvin Auto-Add in Cubit Workflow (2026-04-14)
+
+## Overview
+
+Kelvin open-boundary transformation is automatically added when the user
+clicks "Radia-NGSolve" -> OK in the Cubit GUI. No manual "Kelvin Transform"
+step is needed.
+
+## How It Works (register_toolbar.py)
+
+1. User creates physical geometry (coil + air + optional workpiece hole)
+2. User clicks "Radia-NGSolve" -> selects analysis mode -> OK
+3. register_toolbar.py checks: is "kelvin" block already present?
+   - YES -> skip, proceed to export
+   - NO  -> auto-detect R, symmetry, and call add_kelvin_cubit()
+4. radia_export netgen -> .vol (with Kelvin + periodic identification)
+5. Launch analysis window (calc_fem.py reads .vol with Kelvin)
+
+## Auto-Detection Logic
+
+### Sphere Radius (R)
+- Find the "air" block volumes
+- Find the largest-area surface on those volumes -> outer boundary
+- R = max vertex distance from origin on that surface
+- Works for full sphere, hemisphere (1/2), quarter sphere (1/4), octant (1/8)
+
+### Symmetry Planes
+- Check all vertices of air volumes
+- If ALL vertices have x >= 0 AND some are at x = 0 -> "x" symmetry
+- Same for y, z
+- Result: [] (full), ["z"] (1/2), ["x","z"] (1/4), ["x","y","z"] (1/8)
+
+### Offset Direction
+- auto_offset_direction(symmetry) picks a free axis
+- ["z"] -> offset in x; ["x","z"] -> offset in y
+
+## What add_kelvin_cubit() Does
+
+1. Creates exterior sphere (same R, at offset position)
+2. Webcuts for symmetry planes
+3. Copies mesh from interior sphere surface -> exterior sphere (1:1 nodes)
+4. Tet-meshes the exterior sphere volumes
+5. Assigns blocks ("kelvin"), sidesets ("kelvin_int", "kelvin_ext")
+6. Creates GND vertex + nodeset at Kelvin center
+
+## CRITICAL: Kelvin Domain Must Be Tet
+
+Spherical geometry is best approximated by triangular high-order elements.
+Hex elements on sphere surfaces introduce systematic geometry error.
+Always use `scheme tetmesh` for Kelvin volumes.
+
+## User Requirements
+
+The user only needs to provide:
+- Coil geometry (block "coil" with source/sink sidesets)
+- Air sphere (block "air") containing the coil
+- Optional: workpiece hole (sideset "sibc") -- subtracted from air, NOT meshed
+
+The user does NOT need to:
+- Create Kelvin geometry manually
+- Know the Kelvin sphere radius or offset
+- Specify symmetry planes
+- Click "Kelvin Transform -> Apply"
+
+## .jou Example (Minimal)
+
+```python
+# User only creates physical geometry:
+reset
+create sphere radius 0.06     # air sphere
+sweep surface 1 axis ...      # coil (inside air sphere)
+subtract volume <coil> from volume <air> keep_tool
+imprint all; merge all
+mesh volume all
+block 1 add volume <coil>; block 1 name "coil"
+block 2 add volume <air>;  block 2 name "air"
+sideset 1 add surface <gap1>; sideset 1 name "source"
+sideset 2 add surface <gap2>; sideset 2 name "sink"
+# That's it. Kelvin is added automatically on "Solve".
+```
+"""
+
 	topics = {
 		"overview": WORKFLOW_OVERVIEW,
 		"export_NGSolveCurvedMesh": WORKFLOW_EXPORT_CURVED,
@@ -697,6 +781,7 @@ def get_netgen_documentation(workflow: str = "overview") -> str:
 		"complex": WORKFLOW_COMPLEX,
 		"complex_named": WORKFLOW_COMPLEX,  # Alias for backward compat
 		"accuracy": WORKFLOW_ACCURACY,
+		"kelvin_auto": KELVIN_AUTO,
 		"gmsh_2nd_order": WORKFLOW_GMSH_2ND_ORDER,
 		"troubleshooting": TROUBLESHOOTING,
 		"deleted_apis": DELETED_APIS,
