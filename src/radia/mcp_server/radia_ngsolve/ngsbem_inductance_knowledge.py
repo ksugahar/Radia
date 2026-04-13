@@ -1623,27 +1623,20 @@ scattered-field decomposition.
 
 **Fix applied in**: `verify_sphere_sibc.py` line 162-163.
 
-### Critical Design: Internal Interface, NOT Hole
+### SIBC = Robin BC on Conductor Surface (2026-04-14 Update)
 
-**WRONG** (gives PEC for all Z_s):
+**SIBC is a Robin BC.  Conductor interior is NOT solved.**
+
+Use hole approach: subtract workpiece from mesh, Robin BC on hole boundary.
+Validated 2026-04-14 (2D axisym Kelvin): L < 1%, P < 2% for Cu/Steel/Al.
+
 ```python
-# Hole approach: workpiece removed from mesh
+# Hole approach (correct): workpiece removed from mesh
 air = air_sphere - torus - wp_cyl    # wp_cyl subtracted = hole
 shape = Glue([air, torus])
-# Natural Neumann on hole boundary = n x H = 0 = PEC
-# Robin penalty (jw/Z_s)*A_t only strengthens PEC tendency
-# Z_s -> infinity (transparent) STILL gives PEC. Fundamentally wrong.
-```
-
-**CORRECT** (transparent for Z_s->inf, PEC for Z_s->0):
-```python
-# Internal interface: workpiece kept as separate material (air properties)
-air = air_sphere - torus - wp_cyl
-air.name = "air"
-wp_cyl.name = "workpiece"    # meshed with same nu0 as air
-shape = Glue([air, wp_cyl, torus])   # THREE volumes
-# Without SIBC penalty: field passes through = transparent. CORRECT.
-# With SIBC penalty: Robin correction on internal interface.
+# Robin BC on hole boundary:
+a += (1j * omega / Z_s) * u.Trace() * v.Trace() * ds("sibc")
+# Z_s for solid cylinder: rho*gamma*I1(ga)/I0(ga)
 ```
 
 ### Critical: H_t from SIBC Relation, NOT curl(A)
