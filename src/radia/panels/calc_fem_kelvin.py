@@ -36,9 +36,9 @@ if _this_dir not in sys.path:
 
 from calc_common import (MU_0, NU_0, setup_paths,
                           detect_kelvin_offset,
-                          create_esim_solver, get_bh_curve,
                           compute_T0_source, compute_J_theta,
-                          progress, calc_main)
+                          progress, calc_main,
+                          EMMaterial, add_material_args)
 
 
 def _log(msg):
@@ -47,9 +47,9 @@ def _log(msg):
 
 
 def solve_fem(vol_file="", fes_order=1,
-              frequency=7000, sigma=2e6,
-              impedance_model="sibc", mu_r=100.0,
-              bh_file=None, material="steel",
+              frequency=7000, mat=None,
+              impedance_model="sibc",
+              formulation="total",
               I_total=1.0, half_thickness=0.005,
               max_iter=15, tol=1e-3, relax=0.5,
               solver="pardiso", reg=1e-6, shift_eps=1e-6,
@@ -61,11 +61,10 @@ def solve_fem(vol_file="", fes_order=1,
         vol_file: Netgen .vol file (with material/boundary labels)
         fes_order: HCurl polynomial order (1-3)
         frequency: Operating frequency [Hz]
-        sigma: Workpiece conductivity [S/m]
+        mat: EMMaterial instance (workpiece properties: sigma, mu_r, BH)
         impedance_model: "sibc" (linear) or "esim" (nonlinear)
-        mu_r: Relative permeability (SIBC mode)
-        bh_file: BH curve file path (ESIM mode)
-        material: "steel", "copper", "aluminum"
+        formulation: "total" (standard) or "scattered" (two-step:
+            solve free-space A_inc first, then A_scat with Robin RHS)
         I_total: Coil current [A]
         half_thickness: Workpiece characteristic radius / half
             thickness [m]. R in the Dowell tanh formula for the
@@ -84,6 +83,10 @@ def solve_fem(vol_file="", fes_order=1,
     Returns:
         dict with P_total, L, Z_s, H_t_rms, etc.
     """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    sigma = mat.sigma
+    mu_r = mat.mu_r
     # NGSolve must be imported BEFORE Cubit
     import ngsolve  # noqa: F401
     from ngsolve import (H1, HCurl, Periodic, BilinearForm, LinearForm,
@@ -249,35 +252,12 @@ def solve_fem(vol_file="", fes_order=1,
         esim = None
         has_wp = False
     elif impedance_model == "esim":
-        esim = create_esim_solver(
-            material=material, frequency=frequency, sigma=sigma,
-            half_thickness=half_thickness, geometry='cylinder',
-            bh_file=bh_file)
+        esim = mat.create_esim_solver(frequency, half_thickness,
+                                      geometry='cylinder')
         Z_s = esim.solve(5.0)['Z']
     else:
-        # Linear SIBC: Dowell tanh formula with R = half_thickness.
-        #   Z_s = (rho / R) * (1+j)*xi * tanh((1+j)*xi)
-        #   xi  = R / delta,  delta = sqrt(2 rho / (omega mu_eff))
-        # Reduces to the thick-limit Z_s = (1+j) rho / delta when
-        # xi >> 1 (typical Cu workpiece at 50 kHz: xi ~ 30) but gives
-        # the correct lower magnitude when the workpiece is on the
-        # order of one skin depth (e.g. magnetic materials at high
-        # frequency, where mu_r raises delta).
-        rho = 1.0 / sigma
-        mu_eff = MU_0 * mu_r
-        if omega <= 0 or half_thickness <= 0:
-            delta = 1e10
-            Z_s = complex(0, 0)
-        else:
-            delta = math.sqrt(2 * rho / (omega * mu_eff))
-            xi = half_thickness / delta
-            gamma_a = complex(1, 1) * xi
-            try:
-                Z_s = ((rho / half_thickness)
-                       * gamma_a * np.tanh(gamma_a))
-            except OverflowError:
-                # tanh saturates to 1 for large xi -> thick-limit
-                Z_s = complex(1, 1) * rho / delta
+        # Linear SIBC via Dowell tanh formula
+        Z_s = mat.dowell_Zs(frequency, half_thickness)
         esim = None
 
     _log(f"SIBC:Z_s={Z_s:.4e}, model={impedance_model}")
@@ -471,10 +451,53 @@ def solve_fem(vol_file="", fes_order=1,
                             pre=pre, maxsteps=500, tol=1e-8)
         else:
             # pardiso (direct)
-            a_bf.Assemble()
-            with TaskManager():
-                gfu.vec.data = a_bf.mat.Inverse(
-                    fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+            if formulation == "scattered" and has_wp and abs(robin) > 0:
+                # Scattered-field two-step solve:
+                #   Step 1: A_inc = free-space solution (no Robin)
+                #   Step 2: A_scat with Robin, RHS = -robin * A_inc on SIBC
+                #   Total: A = A_inc + A_scat
+                #
+                # Volume RHS terms cancel exactly: A_inc satisfies
+                #   int nu curl(A_inc) . curl(v) dx = int J . v dx
+                # so the scattered-field RHS is surface-only.
+
+                # Step 1: free-space (no Robin)
+                a_free = BilinearForm(fes)
+                a_free += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
+                if reg > 0:
+                    if has_kelvin and has_kelvin_periodic:
+                        if non_kelvin_mats:
+                            a_free += reg * NU_0 * u * v * dx(
+                                "|".join(non_kelvin_mats))
+                    else:
+                        a_free += reg * NU_0 * u * v * dx
+                a_free.Assemble()
+                gfu_inc = GridFunction(fes)
+                with TaskManager():
+                    gfu_inc.vec.data = a_free.mat.Inverse(
+                        fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+                _log(f"SCATTERED:A_inc solved")
+
+                # Step 2: A_scat with Robin
+                # a_bf already has curl-curl + Robin + reg
+                a_bf.Assemble()
+                f_scat = LinearForm(fes)
+                f_scat += -robin * gfu_inc * v.Trace() * ds(sibc_bnd)
+                f_scat.Assemble()
+                gfu_scat = GridFunction(fes)
+                with TaskManager():
+                    gfu_scat.vec.data = a_bf.mat.Inverse(
+                        fes.FreeDofs(), inverse="pardiso") * f_scat.vec
+                _log(f"SCATTERED:A_scat solved")
+
+                # Total field
+                gfu.vec.data = gfu_inc.vec + gfu_scat.vec
+            else:
+                # Standard total-field solve
+                a_bf.Assemble()
+                with TaskManager():
+                    gfu.vec.data = a_bf.mat.Inverse(
+                        fes.FreeDofs(), inverse="pardiso") * f_lf.vec
 
         t_solve_iter = time.perf_counter() - t0_iter
 
@@ -653,7 +676,7 @@ def solve_fem(vol_file="", fes_order=1,
     # ============================================================
     # Step 8: Result JSON
     # ============================================================
-    delta_skin = math.sqrt(2.0 / (omega * MU_0 * (mu_r if esim is None else 100) * sigma)) if (omega > 0 and sigma > 0) else 0
+    delta_skin = mat.skin_depth(frequency)
 
     result = {
         "P_total": float(P_total),
@@ -672,6 +695,7 @@ def solve_fem(vol_file="", fes_order=1,
         "frequency": frequency,
         "sigma": sigma,
         "impedance_model": impedance_model,
+        "formulation": formulation,
         "source_type": "T0" if gf_T0 is not None else "J_theta",
         "has_kelvin": has_kelvin,
         "msh_file": gmsh_file,
@@ -687,20 +711,15 @@ def main():
                         help="HCurl polynomial order (1-3)")
     parser.add_argument("--frequency", type=float, default=7000,
                         help="Frequency [Hz]")
-    parser.add_argument("--sigma", type=float, default=2e6,
-                        help="Conductivity [S/m]")
+    add_material_args(parser, include_custom=True)
     parser.add_argument("--impedance", default="sibc",
                         choices=["sibc", "esim"],
                         help="Impedance model")
-    parser.add_argument("--mu-r", type=float, default=100,
-                        help="mu_r (SIBC mode)")
-    parser.add_argument("--bh-file", default="",
-                        help="BH curve file (ESIM mode)")
-    parser.add_argument("--material", default="steel",
-                        choices=["steel", "copper", "aluminum", "custom"],
-                        help="Workpiece material; 'custom' takes mu_r "
-                             "and sigma from the explicit --mu-r / --sigma "
-                             "arguments instead of the built-in BH table.")
+    parser.add_argument("--formulation", default="total",
+                        choices=["total", "scattered"],
+                        help="total: standard single solve; "
+                             "scattered: two-step (A_inc free-space "
+                             "+ A_scat with Robin RHS)")
     parser.add_argument("--current", type=float, default=1.0,
                         help="Coil current [A]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
@@ -731,11 +750,9 @@ def main():
             vol_file=args.vol,
             fes_order=args.fes_order,
             frequency=args.frequency,
-            sigma=args.sigma,
+            mat=EMMaterial.from_args(args),
             impedance_model=args.impedance,
-            mu_r=args.mu_r,
-            bh_file=args.bh_file if args.bh_file else None,
-            material=args.material,
+            formulation=args.formulation,
             I_total=args.current,
             half_thickness=args.half_thickness,
             max_iter=args.max_iter,

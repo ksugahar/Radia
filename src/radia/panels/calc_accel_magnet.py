@@ -54,7 +54,8 @@ if _this_dir not in sys.path:
 
 from calc_common import (MU_0, NU_0, setup_paths, setup_cubit, export_mesh,
                           add_periodic_kelvin, detect_kelvin_offset,
-                          get_bh_curve, progress, calc_main)
+                          get_bh_curve, progress, calc_main,
+                          EMMaterial, add_material_args)
 
 
 def _log(msg):
@@ -159,8 +160,7 @@ def _create_bh_interpolators(bh_data):
 
 def solve_accel(coil_script="", cub5_file="", formulation="omega",
                 order=2, fes_order=1,
-                bh_file=None, material="steel", mu_r=1000.0,
-                hys_file="", n_steps=1,
+                mat=None, n_steps=1,
                 max_iter=30, tol=1e-3, relax=0.3,
                 newton=False, solver="auto", msh_output=""):
     """Accelerator magnet solver (Omega-reduced or A-formulation).
@@ -171,10 +171,7 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
         formulation: "omega" (scalar H1) or "a" (vector HCurl)
         order: Mesh curve order (1-3)
         fes_order: FE polynomial order
-        bh_file: BH curve file (2 columns: H B)
-        material: "steel" (BH curve), "linear" (mu_r), or "hysteresis" (.hys)
-        mu_r: Relative permeability (linear mode only)
-        hys_file: .hys file path (hysteresis mode)
+        mat: EMMaterial instance (iron yoke properties)
         n_steps: Number of quasi-static steps (hysteresis: 0->I->0)
         max_iter: Max Picard/Hantila iterations
         tol: Convergence tolerance
@@ -184,6 +181,13 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
     Returns:
         dict with B_center, L, W_mag, ndof, iterations, etc.
     """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    material = mat.name
+    mu_r = mat.mu_r
+    bh_file = ""  # BH data now lives in mat.bh_curve
+    hys_file = mat.hys_file
+
     # NGSolve must be imported BEFORE Cubit
     import ngsolve  # noqa: F401
     from ngsolve import (H1, HCurl, L2, Periodic, BilinearForm, LinearForm,
@@ -298,7 +302,7 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
         is_nonlinear = True
 
     elif has_yoke and material not in ("linear", "hysteresis"):
-        bh_data, _ = get_bh_curve(material, bh_file)
+        bh_data, _ = mat.get_bh_curve()
         if bh_data:
             bh_interp = _create_bh_interpolators(bh_data)
             mu_r_init = bh_interp['mu_r_init']
@@ -833,15 +837,8 @@ def main():
                         help="Curve order (1-3)")
     parser.add_argument("--fes-order", type=int, default=1,
                         help="FE polynomial order")
-    parser.add_argument("--bh-file", default="",
-                        help="BH curve file (2 columns: H B)")
-    parser.add_argument("--material", default="steel",
-                        choices=["steel", "elf_steel", "linear", "hysteresis"],
-                        help="steel/elf_steel (BH curve), linear (mu_r), hysteresis (.hys)")
-    parser.add_argument("--mu-r", type=float, default=1000,
-                        help="mu_r (linear mode only)")
-    parser.add_argument("--hys-file", default="",
-                        help=".hys file (hysteresis mode)")
+    add_material_args(parser, default_material="steel",
+                      include_custom=False, include_hys=True)
     parser.add_argument("--n-steps", type=int, default=1,
                         help="Quasi-static steps (hysteresis: 0->I->0)")
     parser.add_argument("--max-iter", type=int, default=30,
@@ -868,10 +865,7 @@ def main():
             formulation=args.formulation,
             order=args.order,
             fes_order=args.fes_order,
-            bh_file=args.bh_file if args.bh_file else None,
-            material=args.material,
-            mu_r=args.mu_r,
-            hys_file=args.hys_file if args.hys_file else "",
+            mat=EMMaterial.from_args(args),
             n_steps=args.n_steps,
             max_iter=args.max_iter,
             tol=args.tol,

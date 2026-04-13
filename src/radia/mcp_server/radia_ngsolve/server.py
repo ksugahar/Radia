@@ -448,6 +448,10 @@ def kelvin_transformation(topic: str = "all") -> str:
             "adaptive"       - Adaptive mesh refinement with Kelvin
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips
+            "robustness"     - Robustness checklist (mesh copy, material scaling,
+                               FreeDofs verification, symmetry models, GND)
+            "verification"   - Numerical verification (single-domain approach)
+            "periodic_wedge" - 1/n sector (symmetry model) with Periodic BC
     """
     return get_kelvin_documentation(topic)
 
