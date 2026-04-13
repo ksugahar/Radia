@@ -695,8 +695,8 @@ def get_netgen_documentation(workflow: str = "overview") -> str:
 ## Overview
 
 Kelvin open-boundary transformation is automatically added when the user
-clicks "Radia-NGSolve" -> OK in the Cubit GUI. No manual "Kelvin Transform"
-step is needed.
+clicks "Radia-NGSolve" -> OK in the Cubit GUI. Kelvin is added automatically
+-- there is no separate "Kelvin Transform" menu item.
 
 ## How It Works (register_toolbar.py)
 
@@ -752,7 +752,7 @@ The user does NOT need to:
 - Create Kelvin geometry manually
 - Know the Kelvin sphere radius or offset
 - Specify symmetry planes
-- Click "Kelvin Transform -> Apply"
+- Add Kelvin manually (it is auto-added on Solve)
 
 ## .jou Example (Minimal)
 

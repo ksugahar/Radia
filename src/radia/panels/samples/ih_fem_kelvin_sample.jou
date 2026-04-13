@@ -1,10 +1,10 @@
 ## FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air sphere
 ##
 ## This .jou creates the PHYSICAL domain only (coil + workpiece + air).
-## Kelvin open-boundary sphere is added SEPARATELY via:
-##   - GUI: Solve -> Kelvin Transform -> Apply
-##   - Script: from add_kelvin import add_kelvin_cubit
-##             add_kelvin_cubit(R=0.060, symmetry=["z"])
+## Kelvin open-boundary sphere is added AUTOMATICALLY when launching
+## Radia-NGSolve (Solve -> Radia-NGSolve -> OK).
+## Manual alternative: from add_kelvin import add_kelvin_cubit
+##                     add_kelvin_cubit(R=0.060, symmetry=["z"])
 ##
 ## Required labels (consumed by calc_fem_kelvin.py):
 ##   block 1 = "coil"      (gapped torus, source J)
@@ -97,7 +97,7 @@ sideset 3 name "sibc"
 # Hide air
 volume {air_top} {air_bot} visibility off
 
-# === Next step: add Kelvin open boundary ====================================
-# GUI:    Solve -> Kelvin Transform -> Apply
-# Script: add_kelvin_cubit(R=0.060, symmetry=["z"])
-# Then:   radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+# === Next step: Kelvin is added automatically ================================
+# Solve -> Radia-NGSolve -> OK  (auto-Kelvin + export + launch)
+# Manual: add_kelvin_cubit(R=0.060, symmetry=["z"])
+#         radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
