@@ -930,12 +930,18 @@
       "Bash(export PATH=\"/c/Program Files/Python312/Library/bin:$PATH\")",
       "Bash(PATH=\"/c/Program Files/Python312/Library/bin:$PATH\")",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "Edit(/.claude/skills/build/**)",
+      "Edit(/.claude/skills/verify-deploy/**)",
+      "Edit(/.claude/skills/panel-qt-test/**)",
+      "Edit(/.claude/skills/gmsh-verify/**)",
+      "mcp__mcp-server-radia-ngsolve__gmsh_post_spec"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
-      "s:\\Radia\\01_GitHub\\Solve\\,"
+      "s:\\Radia\\01_GitHub\\Solve\\,",
+      "S:\\Radia\\01_GitHub\\.claude\\skills"
     ]
   }
 }

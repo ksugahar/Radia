@@ -1,34 +1,30 @@
-## FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air + Kelvin shell
+## FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air sphere
+##
+## This .jou creates the PHYSICAL domain only (coil + workpiece + air).
+## Kelvin open-boundary sphere is added SEPARATELY via:
+##   - GUI: Solve -> Kelvin Transform -> Apply
+##   - Script: from add_kelvin import add_kelvin_cubit
+##             add_kelvin_cubit(R=0.060, symmetry=["z"])
 ##
 ## Required labels (consumed by calc_fem_kelvin.py):
 ##   block 1 = "coil"      (gapped torus, source J)
-##   block 2 = "workpiece" (cylinder, INTERFACE approach — kept as a separate
-##                          volume; calc_fem_kelvin.py applies the SIBC
-##                          Robin BC on the air|workpiece interface
-##                          named "sibc" via sideset 3)
-##   block 3 = "air"       (carved inner air half-spheres with coil + workpiece
-##                          holes)
-##   block 4 = "kelvin"    (outer hemispherical shells, mesh-copied from air
-##                          outer surface for 1:1 periodic node correspondence)
+##   block 2 = "air"       (inner sphere with coil + workpiece holes)
 ##   sideset 1 = "source"  (one gap face on the coil)
 ##   sideset 2 = "sink"    (other gap face on the coil)
-##   sideset 3 = "sibc"    (workpiece outer surface)
-##   nodeset 100 = "GND"   (origin vertex; maps to r=infinity in the
-##                          Kelvin transform)
+##   sideset 3 = "sibc"    (hole boundary where workpiece was subtracted)
+##
+## HOLE APPROACH: workpiece is subtracted from air and NOT meshed.
+## The SIBC Robin BC is applied on the air-side hole boundary.
+## Do NOT add the workpiece to any block.
 ##
 ## Geometry:
 ##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
 ##              L_air = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
 ##   Workpiece: cylinder R = 0.025 m, H = 0.025 m (centered in the coil bore)
-##   Air:       inner sphere R = 0.060 m  (~2x coil major radius)
-##   Kelvin:    outer shell from R = 0.060 m to R = 0.120 m
+##   Air:       sphere R = 0.060 m  (~2x coil major radius)
 ##
-## Mesh copy strategy for Kelvin periodic BC:
-##   1. Mesh coil + workpiece + air (air outer surface gets triangulated)
-##   2. The air outer surface = kelvin inner surface (shared after merge)
-##   3. copy mesh surface (kelvin inner -> kelvin outer) per hemisphere
-##   4. Mesh kelvin volumes (boundary already fixed from copy)
-##   This guarantees 1:1 triangle correspondence for NGSolve periodic BC.
+## After playback + add_kelvin, export via:
+##   radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
 ##
 ## Run via: Solve -> Radia-NGSolve -> Induction Heating -> Method: FEM
 
@@ -47,103 +43,61 @@ ${coil_vid = Id("volume")}
 create cylinder radius 0.025000 height 0.025000
 ${wp_vid = Id("volume")}
 
-# === 3. Air sphere (inner) ==================================================
+# === 3. Air sphere ==========================================================
 create sphere radius 0.060000
 ${air_vid = Id("volume")}
 
-# === 4. Kelvin outer sphere =================================================
-create sphere radius 0.120000
-${kelvin_vid = Id("volume")}
-
-# === 5. Webcut air + kelvin spheres with zplane =============================
+# === 4. Webcut air sphere for mesh seam curves ==============================
+# ACIS sphere has 0 curves.  Webcut with zplane creates equator curves
+# needed later by copy mesh (when Kelvin is added).
 ${id_before_webcut = Id("volume")}
-webcut volume {air_vid} {kelvin_vid} with plane zplane
+webcut volume {air_vid} with plane zplane
 ${air_top = air_vid}
 ${air_bot = id_before_webcut + 1}
-${kelvin_top = kelvin_vid}
-${kelvin_bot = id_before_webcut + 2}
 
-# === 6. Subtract air halves from kelvin halves -> kelvin SHELLS =============
-subtract volume {air_top} from volume {kelvin_top} keep_tool
-subtract volume {air_bot} from volume {kelvin_bot} keep_tool
-
-# === 7. Subtract coil + workpiece from air halves ===========================
+# === 5. Subtract coil + workpiece from air ==================================
 subtract volume {coil_vid} {wp_vid} from volume {air_top} {air_bot} keep_tool
 
-# === 8. Imprint + merge for conformal interfaces ============================
-imprint all
-merge all
+# === 6. Imprint + merge ====================================================
+imprint volume {coil_vid} {wp_vid} {air_top} {air_bot}
+merge volume {coil_vid} {wp_vid} {air_top} {air_bot}
 
-# === 9. Mesh coil + workpiece + air (NOT kelvin yet) =======================
+# === 7. Mesh (workpiece NOT meshed — hole approach) =========================
 curve in volume {coil_vid} with length < 0.05 interval 12
 curve in volume {coil_vid} with length > 0.05 interval 48
 volume {coil_vid} scheme tetmesh
 volume {coil_vid} size 0.003
 mesh volume {coil_vid}
 
-volume {wp_vid} scheme tetmesh
-volume {wp_vid} size 0.005
-mesh volume {wp_vid}
+# Workpiece is NOT meshed: SIBC treats it as a hole in the air domain.
 
 volume {air_top} {air_bot} scheme tetmesh
 volume {air_top} {air_bot} size 0.020
 mesh volume {air_top} {air_bot}
 
-# === 10. Copy mesh: kelvin inner -> kelvin outer ============================
-# After meshing air, the shared air|kelvin surface has a triangulation.
-# Copy that triangulation onto the kelvin outer surface so the periodic
-# BC has exact 1:1 node correspondence.
-#
-# For each hemisphere pair (top, bottom):
-#   - kelvin inner surface = shared with air (largest-area surface in
-#     both air_half and kelvin_half after subtract)
-#   - kelvin outer surface = exterior boundary of kelvin shell
-#     (the surface NOT shared with air)
-#
-# The copy mesh command requires source/target curve + vertex for
-# orientation mapping. After webcut, each hemisphere surface has
-# exactly one equator curve with vertices.
-#
-# This is done via an inline Python block because APREPRO cannot
-# iterate over surface lists or compare areas.
-#{
-# Python block for copy mesh (Cubit Python 3.10)
-# Use cubit.cmd() and cubit.get_relatives() to identify surfaces
-#}
-
-# For now, mesh kelvin volumes with matching size (the C++ exporter's
-# radial-scaling Kelvin identification handles non-matching meshes).
-# TODO: Replace with copy mesh when Python block is validated.
-volume {kelvin_top} {kelvin_bot} scheme tetmesh
-volume {kelvin_top} {kelvin_bot} size 0.020
-mesh volume {kelvin_top} {kelvin_bot}
-
-# === 11. Blocks =============================================================
+# === 8. Blocks (NO workpiece block) ========================================
 block 1 add volume {coil_vid}
 block 1 name "coil"
-block 2 add volume {wp_vid}
-block 2 name "workpiece"
-block 3 add volume {air_top} {air_bot}
-block 3 name "air"
-block 4 add volume {kelvin_top} {kelvin_bot}
-block 4 name "kelvin"
+block 2 add volume {air_top} {air_bot}
+block 2 name "air"
 
-# === 12. Sidesets ===========================================================
+# === 9. Sidesets ============================================================
 group "coil_gaps" add surface in volume {coil_vid} with area < 0.0001
 sideset 1 add surface in coil_gaps with y_coord > -0.001
 sideset 1 name "source"
 sideset 2 add surface in coil_gaps with y_coord < -0.001
 sideset 2 name "sink"
 
-# Workpiece outer surface (SIBC interface).
+# Workpiece hole boundary (SIBC Robin BC on air-side surface).
+# After subtract + imprint/merge, surfaces of wp_vid are shared with air.
+# Since wp is not meshed/blocked, these become air external boundaries.
 sideset 3 add surface in volume {wp_vid}
 sideset 3 name "sibc"
 
-# === 13. GND nodeset ========================================================
-create vertex 0 0 0
-nodeset 100 add vertex {Id("vertex")}
-nodeset 100 name "GND"
-
-# Hide air + kelvin
+# Hide air
 volume {air_top} {air_bot} visibility off
-volume {kelvin_top} {kelvin_bot} visibility off
+
+# === Next step: add Kelvin open boundary ====================================
+# GUI:    Solve -> Kelvin Transform -> Apply
+# Script: add_kelvin_cubit(R=0.060, symmetry=["z"])
+# Then:   radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite

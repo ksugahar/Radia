@@ -27,6 +27,10 @@
     "mcp-server-elf": {
       "command": "mcp-server-elf",
       "args": []
+    },
+    "mcp-server-build123d": {
+      "command": "mcp-server-build123d",
+      "args": []
     }
   }
 }
