@@ -1110,8 +1110,8 @@ Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
    air = air_sphere - torus - wp_cyl
    air.name = "air"
    wp_cyl.name = "workpiece"   # same nu0 as air, separate material
-   shape = Glue([air, wp_cyl, torus])  # THREE volumes
-   # WRONG: air = sphere - torus - wp_cyl  (hole = PEC for all Z_s!)
+   shape = Glue([air, wp_cyl, torus])  # THREE volumes (interface approach)
+   # NOTE: for SIBC, hole approach (wp NOT in Glue) is also valid
    ```
 
    **Cubit equivalent** (same pattern, different syntax):
@@ -1150,9 +1150,9 @@ Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
 2. **Add** SIBC Robin BC on internal workpiece surface:
    ```python
    # Robin BC: (jw/Z_s) * A_t * v_t on internal wp_surface
-   a += (1j * omega / Z_s) * u.Trace() * v.Trace() * ds("wp_surface")
-   # Without penalty: transparent (field passes through). Correct.
-   # With large penalty (Z_s->0): PEC. Correct.
+   a += (1j * omega / Z_s) * u.Trace() * v.Trace() * ds("sibc")
+   # SIBC = Robin BC. Conductor interior not solved (hole approach).
+   # Validated 2026-04-14: L<1%, P<2% for Cu/Steel/Al (2D axisym Kelvin).
    ```
 3. **Add** Kelvin exterior sphere (replaces `air` Dirichlet BC):
    ```python
@@ -1170,21 +1170,29 @@ Q = 0.5 * sigma * InnerProduct(E, E).real  # from EM solve
    Q_surface = sol['P_prime']  # W/m^2 (surface density, not volume)
    ```
 
-### Why Hole Approach Fails
+### SIBC = Robin BC; Conductor Interior Not Solved (2026-04-14)
 
-For a hole in the mesh, the natural Neumann BC is `n x H = 0` (PEC). Adding
-Robin penalty `(jw/Z_s)*A_t` only strengthens PEC. Both Z_s->0 and Z_s->inf
-give PEC, which is physically wrong (Z_s->inf should be transparent).
+**SIBC is a Robin BC on the conductor surface.  Do NOT solve inside.**
 
-With internal interface (workpiece meshed as air): no penalty = transparent,
-penalty = finite-impedance screening. Both limits are correct.
+The correct approach is the **hole approach**: subtract the workpiece
+from the mesh and apply the Robin BC on the hole boundary.
 
-### Validated (fem_esim_3d.py vs efie_sibc.py)
+For 3D HCurl: `a += (jw/Z_s) * u.Trace() * v.Trace() * ds("sibc")`
+For 2D H1/phi: `a += (jw/Z_s) / r * u * v * ds("wp_bnd")`
 
-| Material | Freq | FEM-SIBC | BEM | Diff |
-|----------|------|----------|-----|------|
-| Steel | 7 kHz | 1.76e-6 W | 1.96e-6 W | -9.9% |
-| Copper | 1 kHz | 1.26e-6 W | 1.35e-6 W | -6.8% |
+**Validated (2026-04-14, 2D axisymmetric Kelvin)**:
+Full-resolution (eddy currents resolved at delta/5) vs SIBC (hole + Robin):
+
+| Material | R/delta | L error | P error |
+|----------|---------|---------|---------|
+| Copper   | 3.8-84.6 | < 0.3% | < 1% |
+| Steel    | 7.0-157 | < 0.4% | < 2% |
+| Aluminum | 2.9-65.7 | < 0.8% | < 2% |
+
+Z_s for solid cylinder: `rho * gamma * I1(ga)/I0(ga)`,
+`gamma = sqrt(jw * mu_r * mu_0 * sigma)` (cylindrical Bessel, not Dowell).
+
+Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
 
 ### Karl Iteration (for nonlinear BH)
 

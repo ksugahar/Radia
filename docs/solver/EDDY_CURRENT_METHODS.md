@@ -417,21 +417,26 @@ Z = R + s * L
 | High-frequency (>1 MHz) | ngsolve.bem Helmholtz | Wave effects matter |
 | Circuit extraction (L, R, C, M) | Radia PEEC pipeline | Direct SPICE netlist output |
 
-### FEM-SIBC: Interface vs Hole Approach
+### FEM-SIBC: Hole Approach (Correct)
 
-**Interface approach (correct)**: workpiece volume meshed as air (nu = nu0),
-Robin BC on internal interface. SIBC models a thin conducting shell: interior
-is transparent, surface current `J_s = (jw/Z_s) * A_t` flows on the interface.
+**SIBC = Robin BC** on the conductor surface.  The conductor interior is
+NOT solved -- it is replaced by the impedance condition.  Subtract the
+workpiece from the mesh (hole) and apply Robin BC on the boundary:
 
-**Hole approach (wrong)**: workpiece subtracted from mesh, Robin BC on hole
-boundary. Natural BC is Neumann `n x H = 0` (PEC). Robin penalty perturbs PEC
-toward finite impedance, but the physical baseline is wrong: PEC = total
-screening, while SIBC = partial screening with transparent interior.
+```
+dphi/dn + (jw*mu_0/Z_s) * phi = 0      (H1/phi formulation)
+n x E   + Z_s * (n x H x n)  = 0       (HCurl formulation)
+```
 
-| Approach | Physics | H_t vs BEM | P vs BEM |
-|----------|---------|-----------|---------|
-| **Interface** | Transparent + Robin | **-2.9%** | **-2.3%** |
-| Hole | PEC + Robin perturbation | +5.9% | +16.2% |
+**Interface approach (wrong for H1)**: workpiece meshed as air + Robin
+on internal interface.  Flux bypasses the Robin BC through the
+transparent interior.  Verified in 2D axisym: interface gives 58-94% of
+the correct L (steel worst), while hole gives > 99.6%.
+
+**Note on 3D HCurl**: the earlier interface result (-2.9% H_t) was for a
+specific 3D HCurl test case where the curl-curl operator constrains
+the interior differently.  The general principle remains: SIBC replaces
+the interior, so don't solve inside it.
 
 **H_t extraction**: BND integral with tangential projection using `specialcf.normal(3)`:
 
@@ -463,6 +468,53 @@ node_B = np.array([gf_B(mesh(*mesh.vertices[v.nr].point))
 ```
 
 **Panel script**: `src/radia/panels/calc_fem_kelvin.py`
+
+### 2D Axisymmetric SIBC Validation (2026-04-14)
+
+Independent validation using 2D axisymmetric FEM with z-offset Kelvin
+open boundary.  Full-resolution (eddy currents resolved at delta/5)
+compared with SIBC (hole + Robin BC).
+
+Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
+
+**Formulation**: phi = r * A_phi (H1 space).
+SIBC = Robin BC on hole boundary: `(jw/Z_s) / r * u * v * ds("wp_bnd")`.
+Conductor interior NOT meshed, NOT solved.
+
+**Surface impedance**:
+- **Cylindrical Bessel** (exact for solid cylinder):
+  `Z_s = rho * gamma * I1(gamma*a) / I0(gamma*a)`,
+  `gamma = sqrt(jw * mu_r * mu_0 * sigma)`.
+- Dowell flat-slab: acceptable for L, but P off 16-23% at low R/delta.
+
+**Results (Kelvin + cylindrical Bessel Z_s)**:
+
+| Material | R/delta | L error | P error |
+|----------|---------|---------|---------|
+| Copper | 3.8 - 84.6 | < 0.3% | < 1% |
+| Steel (mu_r=100) | 7.0 - 157 | < 0.4% | < 2% |
+| Aluminum | 2.9 - 65.7 | < 0.8% | < 2% |
+
+Air-only L = 99.47 nH (Neumann = 99.23, 0.2% match).
+
+**Conclusion**: SIBC Robin BC on hole is validated.  The same approach
+(hole + Robin + cylindrical Bessel Z_s) applies to 3D.
+
+| Material | R/delta | L error (cyl) | P error (cyl) |
+|----------|---------|-------------|-------------|
+| Copper | 3.8 - 84.6 | < 0.1% | < 1.0% |
+| Steel (mu_r=100) | 7.0 - 157 | < 0.4% | < 3.3% |
+| Aluminum | 2.9 - 65.7 | < 0.6% | < 2.8% |
+
+**SIBC = Robin BC on the conductor surface; do NOT solve inside.**
+The conductor interior is replaced by the surface impedance condition.
+Use the **hole approach** (conductor subtracted from the mesh) and apply
+the Robin BC `dphi/dn + (jw*mu_0/Z_s)*phi = 0` on the hole boundary.
+
+The interface approach (conductor meshed as air + Robin on internal
+interface) is **wrong** because flux bypasses the Robin BC through the
+transparent interior. Verified in 2D axisymmetric H1/phi: interface
+gives 58-94% of the correct L (steel worst), while hole gives > 99.6%.
 
 ### Why Scalar BIE + SIBC (Not EFIE or MFIE)
 

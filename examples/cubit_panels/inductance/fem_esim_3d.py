@@ -1,9 +1,9 @@
 """
 3D FEM-SIBC: gapped torus coil + cylindrical workpiece with ESIM surface impedance.
 
-Key insight: workpiece interior MUST be meshed (as air/vacuum), NOT cut as a hole.
-  - Hole approach: natural Neumann BC = PEC, SIBC penalty only strengthens PEC.
-  - Full mesh approach: no SIBC = transparent, SIBC penalty provides correct screening.
+SIBC = Robin BC on conductor surface.  Conductor interior NOT solved.
+Validated 2026-04-14 (2D axisym Kelvin): hole + Robin gives L<1%, P<2%.
+For 3D HCurl, Robin = (jw/Z_s) * A_t . v_t on hole boundary (ds("sibc")).
 
 Formulation (thin conducting shell on internal interface):
   int nu0 * curl(A) . curl(v) dx + (jw/Z_s) * int A_t . v_t ds(wp) = int J . v dx
