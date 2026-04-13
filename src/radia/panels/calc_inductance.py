@@ -35,7 +35,8 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (setup_paths, MU_0, progress, calc_main,
-                          write_surface_only_vol)
+                          write_surface_only_vol,
+                          EMMaterial, add_material_args)
 
 
 def _resolve_bnd_labels(query, bnd_labels):
@@ -53,9 +54,10 @@ def extract_inductance_vol(vol_file, source_label="source",
                            sink_label="sink", fes_order=0, msh_output="",
                            coil_label="",
                            workpiece="", impedance_model="esim",
-                           frequency=50000, sigma=2e6, half_thickness=0.005,
-                           mu_r=0, material="steel", esim_geometry="cylinder",
-                           bh_file="", coil_sigma=0, solver="lu",
+                           frequency=50000, mat=None,
+                           half_thickness=0.005,
+                           esim_geometry="cylinder",
+                           coil_sigma=0, solver="lu",
                            field_air=False, use_local_curvature=False):
     """Extract self-inductance from .vol file (no Cubit needed).
 
@@ -72,17 +74,19 @@ def extract_inductance_vol(vol_file, source_label="source",
             Empty string disables workpiece computation.
         impedance_model: 'esim' or 'dowell'
         frequency: Operating frequency [Hz]
-        sigma: Workpiece conductivity [S/m]
+        mat: EMMaterial instance (workpiece properties: sigma, mu_r, BH)
         half_thickness: Slab half-thickness [m]
-        mu_r: Relative permeability (0=auto from material, used by dowell)
-        material: Material preset ('steel', 'copper', 'aluminum')
         esim_geometry: 'cylinder' (local curvature) or 'slab' (flat)
-        bh_file: Path to BH curve file (2-column: H[A/m] B[T])
         coil_sigma: Coil conductivity [S/m] (stored in results, not used in BEM)
 
     Returns:
         dict with inductance_H, diagnostics, and wp_* keys if workpiece enabled
     """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    sigma = mat.sigma
+    mu_r = mat.mu_r
+
     import numpy as np
     import time as _time
     from ngsolve import Mesh, Integrate, CF, BND
@@ -318,10 +322,8 @@ def extract_inductance_vol(vol_file, source_label="source",
                     sink_label=sink_label,
                     fes_order=fes_order,
                     frequency=frequency,
-                    sigma=sigma,
+                    mat=mat,
                     half_thickness=half_thickness,
-                    mu_r=mu_r,
-                    material=material,
                     use_local_curvature=use_local_curvature)
                 # Pull out private wp_J/wp_q arrays before merging the
                 # rest of the dict (they are NumPy arrays and would
@@ -375,9 +377,8 @@ def extract_inductance_vol(vol_file, source_label="source",
                 wp_result = _compute_wp_impedance_from_panels(
                     mesh, sol['gf_J'], wp_panels,
                     impedance_model=impedance_model, frequency=frequency,
-                    sigma=sigma, half_thickness=half_thickness,
-                    mu_r=mu_r, material=material,
-                    esim_geometry=esim_geometry, bh_file=bh_file,
+                    mat=mat, half_thickness=half_thickness,
+                    esim_geometry=esim_geometry,
                     mesh_wp=mesh_full,
                     use_local_curvature=use_local_curvature)
                 result.update(wp_result)
@@ -543,8 +544,8 @@ def _build_per_node_Zs(mesh_wp, panels, R_panel, rho, omega, mu_eff,
 
 
 def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
-                     fes_order, frequency, sigma, half_thickness, mu_r,
-                     material, use_local_curvature=False):
+                     fes_order, frequency, mat, half_thickness,
+                     use_local_curvature=False):
     """Iterative coil-workpiece BEM via bem_coupled_solver.CoupledBEMSolver.
 
     Builds clean coil + workpiece surface meshes from the same .vol
@@ -569,8 +570,11 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     setup_paths()
     from bem_coupled_solver import CoupledBEMSolver
     from calc_heating_bem import _extract_surface_mesh_filtered
-    from calc_common import get_bh_curve
     import numpy as np
+
+    sigma = mat.sigma
+    mu_r = mat.mu_r
+    material = mat.name
 
     mesh_coil = _extract_surface_mesh_filtered(mesh_full, keep_label="coil")
     # The user-facing --workpiece argument is actually a BOUNDARY name
@@ -584,13 +588,10 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     mesh_wp, wp_new_to_old = _extract_surface_mesh_filtered(
         mesh_full, keep_label="workpiece", return_vertex_map=True)
 
-    _, mat_mu_r = get_bh_curve(material)
-    if mu_r > 0:
-        mat_mu_r = mu_r
-    rho = 1.0 / sigma
+    rho = mat.rho
     omega = 2.0 * math.pi * frequency
-    mu_eff = MU_0 * float(mat_mu_r if mat_mu_r else 1.0)
-    delta = math.sqrt(2.0 * rho / (omega * mu_eff)) if omega > 0 else 1e10
+    mu_eff = MU_0 * mu_r
+    delta = mat.skin_depth(frequency)
 
     # Global Z_s (always computed for the legacy reporting fields)
     Zs_global = _dowell_Zs(half_thickness, rho, omega, mu_eff)
@@ -700,7 +701,7 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
         "coupled_Z_s_real_Ohm": float(Zs_global.real),
         "coupled_Z_s_imag_Ohm": float(Zs_global.imag),
         "coupled_delta_skin_m": float(delta),
-        "coupled_mu_r": float(mat_mu_r),
+        "coupled_mu_r": float(mu_r),
         "coupled_sigma_Sm": float(sigma),
         "coupled_half_thickness_m": float(half_thickness),
         "coupled_material": material,
@@ -899,10 +900,8 @@ def _compute_panel_local_radii(mesh, panels, default_R=1e30):
 
 def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
                                        impedance_model="esim", frequency=50000,
-                                       sigma=2e6, half_thickness=0.005,
-                                       mu_r=0, material="steel",
+                                       mat=None, half_thickness=0.005,
                                        esim_geometry="cylinder",
-                                       bh_file="",
                                        mesh_wp=None,
                                        use_local_curvature=False):
     """Compute workpiece surface impedance from mesh panels.
@@ -930,11 +929,17 @@ def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
     import numpy as np
     from ngsolve import Integrate, CF, BND
 
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    sigma = mat.sigma
+    mu_r = mat.mu_r
+    material = mat.name
+
     if not panels:
         return {"wp_error": "No workpiece surfaces found"}
 
     n_panels = len(panels)
-    rho = 1.0 / sigma
+    rho = mat.rho
     omega = 2 * math.pi * frequency
 
     # --- Biot-Savart H at workpiece panels ---
@@ -975,12 +980,6 @@ def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
     H_t_mag = np.linalg.norm(H_t_vec, axis=1)
 
     # --- Surface impedance per panel ---
-    from calc_common import create_esim_solver, get_bh_curve
-
-    bh_curve, mat_mu_r = get_bh_curve(material)
-    if mu_r > 0:
-        mat_mu_r = mu_r
-
     P_total = 0.0
     Q_total = 0.0
     Z_sum = 0.0 + 0.0j
@@ -1005,11 +1004,8 @@ def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
         R_local_max = float(R_per_panel.max())
 
     if impedance_model == "esim":
-        esim_kw = dict(material=material, frequency=frequency, sigma=sigma,
-                       half_thickness=half_thickness, geometry=esim_geometry)
-        if bh_file and os.path.isfile(bh_file):
-            esim_kw['bh_file'] = bh_file
-        solver = create_esim_solver(**esim_kw)
+        solver = mat.create_esim_solver(frequency, half_thickness,
+                                        geometry=esim_geometry)
 
         for i in range(n_panels):
             H0 = max(float(H_t_mag[i]), 1e-3)
@@ -1025,7 +1021,7 @@ def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
             delta_max = max(delta_max, sol['delta'])
 
     elif impedance_model == "dowell":
-        mu_eff = MU_0 * (mat_mu_r if mat_mu_r else 1.0)
+        mu_eff = MU_0 * mu_r
         delta = math.sqrt(2 * rho / (omega * mu_eff)) if omega > 0 else 1e10
         delta_min = delta_max = delta
 
@@ -1696,8 +1692,8 @@ def _write_comsol_txt(filename, nodes, field_data, field_name, comp_names):
 
 def run_bem_pipeline(vol_file, source_label="source", sink_label="sink",
                      coil_label="coil", wp_label="workpiece",
-                     fes_order=0, frequency=10000, sigma=5.8e7,
-                     mu_r=1.0, material="copper", impedance_model="linear",
+                     fes_order=0, frequency=10000, mat=None,
+                     impedance_model="linear",
                      half_thickness=0.010, coil_radius=0.030,
                      coil_current=100.0, field_air=True,
                      lx=0.06, ly=0.06, lz=0.03, maxh_vol=0.015):
@@ -1724,9 +1720,7 @@ def run_bem_pipeline(vol_file, source_label="source", sink_label="sink",
         wp_label: Material name of the workpiece block.
         fes_order: HDivSurface basis order (0=RWG).
         frequency: Operating frequency [Hz].
-        sigma: Workpiece conductivity [S/m].
-        mu_r: Workpiece relative permeability.
-        material: Workpiece material name for ESIM.
+        mat: EMMaterial instance (workpiece properties).
         impedance_model: "linear" or "esim".
         half_thickness: Workpiece thickness for ESIM [m].
         coil_radius: Coil loop radius [m] (for workpiece phi_inc).
@@ -1772,9 +1766,9 @@ def run_bem_pipeline(vol_file, source_label="source", sink_label="sink",
         wp_result = compute_heating_bem(
             vol_file=vol_file,
             coil_radius=coil_radius, coil_current=coil_current,
-            frequency=frequency, sigma=sigma,
-            material=material, impedance_model=impedance_model,
-            mu_r=mu_r, half_thickness=half_thickness,
+            frequency=frequency, mat=mat,
+            impedance_model=impedance_model,
+            half_thickness=half_thickness,
             wp_label=wp_label,
         )
         _rename_if_exists(base_dir, 'workpiece.vol', wp_vol)
@@ -1856,19 +1850,13 @@ def main():
                              "BEM solves a unit-current problem and the "
                              "user can rescale post hoc — accepted here "
                              "for symmetry with the FEM driver)")
-    parser.add_argument("--sigma", type=float, default=2e6, help="Workpiece conductivity [S/m]")
     parser.add_argument("--half-thickness", type=float, default=0.005,
                         help="Slab half-thickness [m]")
-    parser.add_argument("--material", default="steel",
-                        choices=["steel", "copper", "aluminum"])
-    parser.add_argument("--mu-r", type=float, default=0,
-                        help="Relative permeability for SIBC/Dowell (0=auto from material)")
+    add_material_args(parser, include_custom=False)
     parser.add_argument("--esim-geometry", default="local_curvature",
                         choices=["local_curvature", "none"],
                         help="ESIM curvature: local_curvature=Bessel (R=half_thickness), "
                              "none=flat slab (cosh/sinh)")
-    parser.add_argument("--bh-file", default="",
-                        help="BH curve file (2-column: H[A/m] B[T], overrides --material)")
     parser.add_argument("--solver", default="lu",
                         choices=["lu", "minres", "gmres"],
                         help="BEM saddle-point solver: lu=dense direct (default, "
@@ -1911,12 +1899,9 @@ def main():
                 workpiece=args.workpiece,
                 impedance_model=imp_model,
                 frequency=args.frequency,
-                sigma=args.sigma,
+                mat=EMMaterial.from_args(args),
                 half_thickness=args.half_thickness,
-                mu_r=args.mu_r,
-                material=args.material,
                 esim_geometry=esim_geom,
-                bh_file=getattr(args, 'bh_file', ''),
                 coil_sigma=args.coil_sigma,
                 solver=args.solver,
                 field_air=args.field_air,

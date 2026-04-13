@@ -661,6 +661,80 @@ def _launch_radia_ngsolve():
             "last_jou_dir": out_dir,
         })
 
+        # --- Auto-Kelvin: add if not already present ---
+        model_labels = _get_model_labels()
+        if "kelvin" not in model_labels:
+            try:
+                _panel_log("AUTO-KELVIN: 'kelvin' block not found, "
+                           "auto-adding Kelvin open boundary")
+                panels_dir = os.path.dirname(
+                    os.path.abspath(__file__))
+                if panels_dir not in sys.path:
+                    sys.path.insert(0, panels_dir)
+                from add_kelvin import add_kelvin_cubit
+
+                # Detect air sphere radius from Cubit geometry.
+                # Find the air block, get its volumes, find the
+                # largest unmerged surface -> that's the outer sphere.
+                air_bid = None
+                for bid in cubit.get_block_id_list():
+                    n = cubit.get_exodus_entity_name("block", bid)
+                    if n and n.lower() == "air":
+                        air_bid = bid
+                        break
+                if air_bid is None:
+                    print("WARNING: No 'air' block found. "
+                          "Cannot auto-add Kelvin.")
+                else:
+                    air_vols = list(cubit.parse_cubit_list(
+                        "volume", "in block %d" % air_bid))
+                    # Find largest surface area -> outer boundary
+                    best_sid, best_area = 0, 0
+                    for vid in air_vols:
+                        for sid in cubit.get_relatives(
+                                "volume", vid, "surface"):
+                            a = cubit.surface(sid).area()
+                            if a > best_area:
+                                best_area = a
+                                best_sid = sid
+                    if best_sid > 0:
+                        import math as _m
+                        # R = max vertex distance from origin
+                        vids = cubit.get_relatives(
+                            "surface", best_sid, "vertex")
+                        R = max(
+                            _m.sqrt(sum(
+                                c**2 for c in cubit.vertex(v).coordinates()))
+                            for v in vids)
+                        # Detect symmetry from vertex positions
+                        # (same logic as calc_common.detect_symmetry)
+                        all_verts = set()
+                        for vid in air_vols:
+                            for v in cubit.get_relatives(
+                                    "volume", vid, "vertex"):
+                                all_verts.add(v)
+                        sym = []
+                        for axis, name in enumerate(["x", "y", "z"]):
+                            coords = [cubit.vertex(v).coordinates()[axis]
+                                       for v in all_verts]
+                            if (min(coords) >= -1e-6
+                                    and any(abs(c) < 1e-6
+                                            for c in coords)):
+                                sym.append(name)
+                        _panel_log(
+                            f"AUTO-KELVIN: R={R:.4f}, symmetry={sym}")
+                        info = add_kelvin_cubit(
+                            R=R, symmetry=sym)
+                        ox, oy, oz = info["center"]
+                        print(f"Auto-Kelvin: R={R:.4f}, "
+                              f"offset=({ox:.3f}, {oy:.3f}, {oz:.3f}), "
+                              f"symmetry={sym}")
+            except Exception as e:
+                _panel_log_exception("AUTO-KELVIN failed")
+                print(f"WARNING: Auto-Kelvin failed: {e}")
+                print("Proceeding without Kelvin "
+                      "(Dirichlet truncation).")
+
         # --- Export .vol ---
         cubit.cmd(f'cd "{out_dir}"')
         vol_name = "radia_model.vol"
@@ -1020,7 +1094,7 @@ def register_menu():
         try:
             dlg = QDialog(main_window)
             dlg.setWindowTitle("Kelvin Transform")
-            dlg.setMinimumWidth(520)
+            dlg.setMinimumWidth(420)
             layout = QVBoxLayout(dlg)
 
             # Radius
@@ -1032,20 +1106,22 @@ def register_menu():
             h_r.addStretch()
             layout.addLayout(h_r)
 
-            # Offset direction + distance
+            # Offset
             grp_off = QGroupBox("Exterior sphere offset")
             off_lay = QVBoxLayout(grp_off)
-            h_dir = QHBoxLayout()
-            h_dir.addWidget(QLabel("Direction:"))
+            h_off = QHBoxLayout()
+            h_off.addWidget(QLabel("Direction:"))
             dir_combo = QComboBox()
-            dir_combo.addItems(["+X", "-X", "+Y", "-Y", "+Z", "-Z"])
-            h_dir.addWidget(dir_combo)
-            h_dir.addWidget(QLabel("  Distance [m]:"))
-            dist_edit = QLineEdit("0.15")
+            dir_combo.addItems(["auto", "+X", "+Y", "+Z",
+                                "-X", "-Y", "-Z"])
+            h_off.addWidget(dir_combo)
+            h_off.addWidget(QLabel("  Distance [m]:"))
+            dist_edit = QLineEdit("")
+            dist_edit.setPlaceholderText("3*R")
             dist_edit.setFixedWidth(80)
-            h_dir.addWidget(dist_edit)
-            h_dir.addStretch()
-            off_lay.addLayout(h_dir)
+            h_off.addWidget(dist_edit)
+            h_off.addStretch()
+            off_lay.addLayout(h_off)
             layout.addWidget(grp_off)
 
             # Symmetry planes
@@ -1060,569 +1136,122 @@ def register_menu():
             h_sym.addStretch()
             layout.addLayout(h_sym)
 
-            # Command preview (multi-line) + Copy
-            layout.addWidget(QLabel("Commands:"))
-            cmd_edit = QPlainTextEdit()
-            cmd_edit.setMaximumHeight(160)
-            layout.addWidget(cmd_edit)
-            h_copy = QHBoxLayout()
-            h_copy.addStretch()
-            btn_copy = QPushButton("Copy")
-            btn_copy.setFixedWidth(60)
-            def _do_copy():
-                QApplication.clipboard().setText(cmd_edit.toPlainText())
-            btn_copy.clicked.connect(_do_copy)
-            h_copy.addWidget(btn_copy)
-            layout.addLayout(h_copy)
+            # Status label
+            status_label = QLabel("")
+            layout.addWidget(status_label)
 
-            def _offset_xyz():
-                d = dir_combo.currentText()
-                v = dist_edit.text().strip()
-                sign = 1 if d[0] == "+" else -1
-                axis = d[1]
-                if axis == "X":
-                    return (str(sign) + "*" + v, "0", "0")
-                elif axis == "Y":
-                    return ("0", str(sign) + "*" + v, "0")
-                else:
-                    return ("0", "0", str(sign) + "*" + v)
+            # Undo state
+            _kelvin_result = {"info": None}
 
-            def _offset_floats():
-                d = dir_combo.currentText()
-                try:
-                    v = float(dist_edit.text().strip())
-                except ValueError:
-                    v = 0.3
-                sign = 1.0 if d[0] == "+" else -1.0
-                axis = d[1]
-                if axis == "X":
-                    return (sign * v, 0.0, 0.0)
-                elif axis == "Y":
-                    return (0.0, sign * v, 0.0)
-                else:
-                    return (0.0, 0.0, sign * v)
-
-            def _build_cmds():
-                r = radius_edit.text().strip()
-                ox, oy, oz = _offset_floats()
-                sx, sy, sz = str(ox), str(oy), str(oz)
-                sym_x = chk_x.isChecked()
-                sym_y = chk_y.isChecked()
-                sym_z = chk_z.isChecked()
-                lines = []
-                lines.append("# kelvin_int (semicircle sweep)")
-                lines.append("create vertex 0 0 " + r)
-                lines.append("create vertex " + r + " 0 0")
-                lines.append("create vertex 0 0 -" + r)
-                lines.append("create curve arc three vertex"
-                             " {v_top} {v_mid} {v_bot}")
-                lines.append("create curve vertex"
-                             " {v_top} {v_bot}")
-                lines.append("create surface curve"
-                             " {arc} {line}")
-                lines.append("sweep surface {s}"
-                             " axis 0 0 0 0 0 1 angle 360")
-                lines.append('volume {id} rename "kelvin_int"')
-                lines.append("imprint volume all")
-                lines.append("merge volume all")
-                lines.append("")
-                lines.append("# kelvin_ext (at "
-                             + sx + ", " + sy + ", " + sz + ")")
-                lines.append("volume {inner} copy move"
-                             " x " + sx
-                             + " y " + sy
-                             + " z " + sz + " nomesh")
-                lines.append('volume {id} rename "kelvin_ext"')
-                cuts = []
-                if sym_x:
-                    cuts.append("xplane")
-                if sym_y:
-                    cuts.append("yplane")
-                if sym_z:
-                    cuts.append("zplane")
-                for pl in cuts:
-                    lines.append(
-                        "webcut volume {outer} with plane " + pl
-                        + " center location "
-                        + sx + " " + sy + " " + sz)
-                if cuts:
-                    lines.append(
-                        "# Delete negative-side pieces")
-                lines.append("")
-                lines.append("# Mesh + block/sideset")
-                lines.append(
-                    "volume {inner} scheme tetmesh")
-                lines.append("mesh volume {inner}")
-                lines.append(
-                    "copy mesh from volume {inner}"
-                    " to volume {outer}")
-                lines.append("mesh volume {outer}")
-                lines.append(
-                    'block {N} add volume {outer}')
-                lines.append(
-                    'block {N} name "kelvin"')
-                lines.append(
-                    "# Sidesets: kelvin_int + kelvin_ext")
-                return "\n".join(lines)
-
-            def _update_cmd():
-                cmd_edit.setPlainText(_build_cmds())
-
-            for w in [radius_edit, dist_edit]:
-                w.textChanged.connect(_update_cmd)
-            dir_combo.currentIndexChanged.connect(lambda: _update_cmd())
-            chk_x.toggled.connect(lambda: _update_cmd())
-            chk_y.toggled.connect(lambda: _update_cmd())
-            chk_z.toggled.connect(lambda: _update_cmd())
-            _update_cmd()
-
-            # State: track generated volume IDs
-            _kelvin_state = {"inner": None, "outer": None}
-            # Undo stack: list of actions to reverse
-            _undo_stack = []
-
-            # --- Buttons: Generate + Mesh + Close ---
+            # --- Buttons ---
             h_btns = QHBoxLayout()
-            btn_gen = QPushButton("Generate")
-            btn_gen.setFixedHeight(28)
-            btn_mesh = QPushButton("Mesh")
-            btn_mesh.setFixedHeight(28)
-            btn_mesh.setEnabled(False)
+            btn_apply = QPushButton("Apply")
+            btn_apply.setFixedHeight(28)
             btn_undo = QPushButton("Undo")
             btn_undo.setFixedHeight(28)
+            btn_undo.setEnabled(False)
             btn_close = QPushButton("Close")
             btn_close.setFixedHeight(28)
-            h_btns.addWidget(btn_gen)
-            h_btns.addWidget(btn_mesh)
+            h_btns.addWidget(btn_apply)
             h_btns.addStretch()
             h_btns.addWidget(btn_undo)
             h_btns.addWidget(btn_close)
             layout.addLayout(h_btns)
             btn_close.clicked.connect(dlg.close)
 
-            # Detect existing kelvin_int / kelvin_ext volumes
-            def _detect_kelvin_volumes():
-                inner = []
-                outer = []
-                for vid in cubit.parse_cubit_list("volume", "all"):
-                    vname = cubit.get_entity_name("volume", vid)
-                    if vname == "kelvin_int":
-                        inner.append(vid)
-                    elif vname == "kelvin_ext":
-                        outer.append(vid)
-                return inner, outer
-
-            _det_inner, _det_outer = _detect_kelvin_volumes()
-            if _det_inner and _det_outer:
-                _kelvin_state["inner"] = _det_inner
-                _kelvin_state["outer"] = _det_outer
-                btn_mesh.setEnabled(True)
-                print("Kelvin detected: inner="
-                      + str(_det_inner) + " outer="
-                      + str(_det_outer))
-
-            def _on_generate():
+            def _on_apply():
                 try:
                     r = float(radius_edit.text().strip())
-                    ox, oy, oz = _offset_floats()
-                    dist = (ox**2 + oy**2 + oz**2)**0.5
-                    sym_x = chk_x.isChecked()
-                    sym_y = chk_y.isChecked()
-                    sym_z = chk_z.isChecked()
+                    sym = []
+                    if chk_x.isChecked():
+                        sym.append("x")
+                    if chk_y.isChecked():
+                        sym.append("y")
+                    if chk_z.isChecked():
+                        sym.append("z")
 
-                    if dist < 2 * r:
-                        print("ERROR: Offset distance ("
-                              + str(dist) + ") must be >= 2*radius ("
-                              + str(2*r) + ").")
-                        return
-
-                    # Sweep angle and seed direction from
-                    # symmetry planes.
-                    # Arc seed point lies on the equator;
-                    # sweep rotates it around the z-axis.
-                    #   X=0 + Y=0: seed on x, sweep 90
-                    #   Y=0 only:  seed on x, sweep 180
-                    #   X=0 only:  seed on y, sweep 180
-                    #   neither:   seed on x, sweep 360
-                    if sym_x and sym_y:
-                        sweep_angle = 90
-                        seed_dir = (r, 0, 0)
-                    elif sym_y:
-                        sweep_angle = 180
-                        seed_dir = (r, 0, 0)
-                    elif sym_x:
-                        sweep_angle = 180
-                        seed_dir = (0, r, 0)
+                    d = dir_combo.currentText()
+                    if d == "auto":
+                        o_dir = None
                     else:
-                        sweep_angle = 360
-                        seed_dir = (r, 0, 0)
+                        o_dir = d[1].lower()
+                        if d[0] == "-":
+                            print("WARNING: negative offset "
+                                  "direction not supported, "
+                                  "using +%s" % o_dir)
 
-                    vols_before = set(
-                        cubit.parse_cubit_list("volume", "all"))
+                    dist_text = dist_edit.text().strip()
+                    o_dist = float(dist_text) if dist_text else None
 
-                    # 1. Create sphere via arc sweep
-                    #    (sweep creates seam curves for
-                    #     copy mesh mapping)
-                    #    Z=0 sym: quarter-arc (90 deg)
-                    #    else: semicircle (180 deg)
-                    cubit.cmd("create vertex 0 0 " + str(r))
-                    v_top = cubit.get_last_id("vertex")
-                    sx, sy, sz = seed_dir
-                    cubit.cmd("create vertex "
-                              + str(sx) + " "
-                              + str(sy) + " "
-                              + str(sz))
-                    v_mid = cubit.get_last_id("vertex")
+                    # Use the shared add_kelvin module
+                    panels_dir = os.path.dirname(
+                        os.path.abspath(__file__))
+                    if panels_dir not in sys.path:
+                        sys.path.insert(0, panels_dir)
+                    from add_kelvin import add_kelvin_cubit
 
-                    if sym_z:
-                        # Quarter-arc: top pole to equator
-                        cubit.cmd("create vertex 0 0 0")
-                        v_org = cubit.get_last_id("vertex")
-                        cubit.cmd(
-                            "create curve arc center vertex "
-                            + str(v_org) + " "
-                            + str(v_top) + " " + str(v_mid))
-                        arc_id = cubit.get_last_id("curve")
-                        # Close with two lines (z-axis + x-axis)
-                        cubit.cmd(
-                            "create curve vertex "
-                            + str(v_top) + " " + str(v_org))
-                        l1 = cubit.get_last_id("curve")
-                        cubit.cmd(
-                            "create curve vertex "
-                            + str(v_org) + " " + str(v_mid))
-                        l2 = cubit.get_last_id("curve")
-                        cubit.cmd(
-                            "create surface curve "
-                            + str(arc_id) + " "
-                            + str(l1) + " " + str(l2))
-                    else:
-                        # Semicircle: top pole to bottom pole
-                        cubit.cmd(
-                            "create vertex 0 0 " + str(-r))
-                        v_bot = cubit.get_last_id("vertex")
-                        cubit.cmd(
-                            "create curve arc three vertex "
-                            + str(v_top) + " " + str(v_mid)
-                            + " " + str(v_bot))
-                        arc_id = cubit.get_last_id("curve")
-                        cubit.cmd(
-                            "create curve vertex "
-                            + str(v_top) + " " + str(v_bot))
-                        line_id = cubit.get_last_id("curve")
-                        cubit.cmd(
-                            "create surface curve "
-                            + str(arc_id) + " "
-                            + str(line_id))
+                    info = add_kelvin_cubit(
+                        R=r, symmetry=sym,
+                        offset_dir=o_dir, offset_dist=o_dist)
+                    _kelvin_result["info"] = info
 
-                    surf_id = cubit.get_last_id("surface")
-
-                    # Sweep around z-axis
-                    cubit.cmd(
-                        "sweep surface " + str(surf_id)
-                        + " axis 0 0 0 0 0 1"
-                        + " angle " + str(sweep_angle))
-
-                    vols_after = set(
-                        cubit.parse_cubit_list("volume", "all"))
-                    inner = sorted(vols_after - vols_before)
-
-                    if not inner:
-                        print("ERROR: sphere creation failed")
-                        return
-
-                    for vid in inner:
-                        cubit.cmd('volume ' + str(vid)
-                                  + ' rename "kelvin_int"')
-
-                    cubit.cmd("imprint volume all")
-                    cubit.cmd("merge volume all")
-
-                    # 2. Copy to create exterior sphere
-                    inner_str = " ".join(
-                        str(v) for v in inner)
-                    cubit.cmd(
-                        "volume " + inner_str
-                        + " copy move"
-                        + " x " + str(ox)
-                        + " y " + str(oy)
-                        + " z " + str(oz)
-                        + " nomesh")
-                    vols_after_copy = set(
-                        cubit.parse_cubit_list("volume", "all"))
-                    outer = sorted(
-                        vols_after_copy - vols_after
-                        - vols_before)
-                    # vols_after may be stale after zcut/delete
-                    # recalculate: outer = new vols not in inner
-                    all_now = set(
-                        cubit.parse_cubit_list("volume", "all"))
-                    outer = sorted(
-                        all_now - set(inner) - vols_before)
-
-                    for vid in outer:
-                        cubit.cmd('volume ' + str(vid)
-                                  + ' rename "kelvin_ext"')
-
-                    # Clipping plane to see interior
-                    cubit.cmd(
-                        "Graphics Clip on Plane"
-                        " location 0 0 0"
-                        " direction 0 1 0")
-                    cubit.cmd("from 0 " + str(-r) + " 0")
-                    cubit.cmd("zoom reset")
-                    _kelvin_state["inner"] = inner
-                    _kelvin_state["outer"] = outer
-                    _kelvin_state["r"] = r
-                    _kelvin_state["offset"] = (ox, oy, oz)
-                    btn_mesh.setEnabled(True)
-
-                    n_sym = sum([sym_x, sym_y, sym_z])
-                    frac = ("1/" + str(2**n_sym)
-                            if n_sym > 0 else "full")
-                    print("")
-                    print("=== Kelvin Generate ===")
-                    print("  sweep: " + str(sweep_angle) + " deg")
-                    print("  kelvin_int: volumes "
-                          + str(inner))
-                    print("  kelvin_ext: volumes "
-                          + str(outer)
-                          + " (" + frac + ")")
-
-                    # Push to undo stack
-                    _undo_stack.append({
-                        "action": "generate",
-                        "volumes": inner + outer,
-                    })
+                    ox, oy, oz = info["center"]
+                    status_label.setText(
+                        "Kelvin added: %s, offset=(%.3f, %.3f, %.3f)"
+                        % (sym or "full", ox, oy, oz))
+                    btn_undo.setEnabled(True)
+                    btn_apply.setEnabled(False)
 
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
                     print("ERROR: " + str(e))
-
-            def _on_mesh():
-                try:
-                    inner_halves = _kelvin_state.get("inner")
-                    outer_halves = _kelvin_state.get("outer")
-                    r = _kelvin_state.get("r", 0.06)
-                    if not inner_halves or not outer_halves:
-                        print("ERROR: Generate first")
-                        return
-
-                    blocks_before = set(
-                        cubit.parse_cubit_list("block", "all"))
-                    ss_before = set(
-                        cubit.parse_cubit_list("sideset", "all"))
-
-                    mesh_size = r / 3.0
-
-                    # Mesh interior halves
-                    for hid in inner_halves:
-                        cubit.cmd("volume " + str(hid)
-                                  + " scheme tetmesh")
-                        cubit.cmd("volume " + str(hid)
-                                  + " size " + str(mesh_size))
-                    cubit.cmd("mesh volume "
-                              + " ".join(str(h) for h in inner_halves))
-
-                    # Copy surface mesh from interior to exterior
-                    inner_hemi_surfs = []
-                    outer_hemi_surfs = []
-                    for src_id, dst_id in zip(inner_halves,
-                                              outer_halves):
-                        # Find hemisphere surface (largest area)
-                        src_surfs = list(
-                            cubit.get_relatives("volume", src_id,
-                                                "surface"))
-                        dst_surfs = list(
-                            cubit.get_relatives("volume", dst_id,
-                                                "surface"))
-                        src_hemi = max(src_surfs,
-                            key=lambda s: cubit.get_surface_area(s))
-                        dst_hemi = max(dst_surfs,
-                            key=lambda s: cubit.get_surface_area(s))
-                        inner_hemi_surfs.append(src_hemi)
-                        outer_hemi_surfs.append(dst_hemi)
-
-                        # Get curve + vertex for mapping
-                        src_c = cubit.get_relatives(
-                            "surface", src_hemi, "curve")[0]
-                        dst_c = cubit.get_relatives(
-                            "surface", dst_hemi, "curve")[0]
-                        src_v = cubit.get_relatives(
-                            "curve", src_c, "vertex")[0]
-                        dst_v = cubit.get_relatives(
-                            "curve", dst_c, "vertex")[0]
-
-                        cubit.cmd(
-                            "copy mesh surface " + str(src_hemi)
-                            + " onto surface " + str(dst_hemi)
-                            + " source curve " + str(src_c)
-                            + " source vertex " + str(src_v)
-                            + " target curve " + str(dst_c)
-                            + " target vertex " + str(dst_v))
-
-                    # Mesh exterior volumes (surface already copied)
-                    for hid in outer_halves:
-                        cubit.cmd("volume " + str(hid)
-                                  + " scheme tetmesh")
-                        cubit.cmd("volume " + str(hid)
-                                  + " size " + str(mesh_size))
-                    cubit.cmd("mesh volume "
-                              + " ".join(str(h) for h in outer_halves))
-
-                    # Create blocks (skip if already exist).
-                    # Use get_block_name (NOT get_exodus_entity_name /
-                    # get_entity_name) — the latter raises
-                    # "Invalid list type for the get_mref_entity function"
-                    # on some Cubit versions.
-                    existing_block_names = set()
-                    for bid in cubit.parse_cubit_list(
-                            "block", "all"):
-                        try:
-                            n = cubit.get_block_name(bid) or ""
-                        except Exception:
-                            n = ""
-                        existing_block_names.add(n.lower())
-
-                    existing_blocks = set(
-                        cubit.parse_cubit_list("block", "all"))
-                    nb = (max(existing_blocks) + 1
-                          if existing_blocks else 1)
-
-                    if "kelvin_int" not in existing_block_names:
-                        cubit.cmd(
-                            "block " + str(nb) + " add volume "
-                            + " ".join(
-                                str(h) for h in inner_halves))
-                        cubit.cmd(
-                            'block ' + str(nb)
-                            + ' name "kelvin_int"')
-                        nb += 1
-
-                    if "kelvin" not in existing_block_names:
-                        cubit.cmd(
-                            "block " + str(nb) + " add volume "
-                            + " ".join(
-                                str(h) for h in outer_halves))
-                        cubit.cmd(
-                            'block ' + str(nb)
-                            + ' name "kelvin"')
-
-                    # Create sidesets for periodic BC.
-                    # Use get_sideset_name for the same reason as above.
-                    existing_ss_names = set()
-                    for sid in cubit.parse_cubit_list(
-                            "sideset", "all"):
-                        try:
-                            n = cubit.get_sideset_name(sid) or ""
-                        except Exception:
-                            n = ""
-                        existing_ss_names.add(n.lower())
-
-                    existing_ss = set(
-                        cubit.parse_cubit_list("sideset", "all"))
-                    ns = (max(existing_ss) + 1
-                          if existing_ss else 1)
-
-                    if "kelvin_int" not in existing_ss_names:
-                        cubit.cmd(
-                            "sideset " + str(ns)
-                            + " add surface "
-                            + " ".join(
-                                str(s) for s in inner_hemi_surfs))
-                        cubit.cmd(
-                            'sideset ' + str(ns)
-                            + ' name "kelvin_int"')
-                        ns += 1
-
-                    if "kelvin_ext" not in existing_ss_names:
-                        cubit.cmd(
-                            "sideset " + str(ns)
-                            + " add surface "
-                            + " ".join(
-                                str(s) for s in outer_hemi_surfs))
-                        cubit.cmd(
-                            'sideset ' + str(ns)
-                            + ' name "kelvin_ext"')
-
-                    print("")
-                    print("=== Kelvin Mesh ===")
-                    print("  kelvin_int " + str(inner_halves)
-                          + ": meshed (tet)")
-                    print("  kelvin_ext " + str(outer_halves)
-                          + ": meshed (copy + tet)")
-                    print("  blocks: kelvin_int, kelvin")
-                    print("  sidesets: kelvin_int, kelvin_ext")
-
-                    # Track created blocks/sidesets
-                    new_blocks = sorted(
-                        set(cubit.parse_cubit_list(
-                            "block", "all")) - blocks_before)
-                    new_ss = sorted(
-                        set(cubit.parse_cubit_list(
-                            "sideset", "all")) - ss_before)
-
-                    _undo_stack.append({
-                        "action": "mesh",
-                        "volumes": inner_halves + outer_halves,
-                        "blocks": new_blocks,
-                        "sidesets": new_ss,
-                    })
-
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                    print("ERROR: " + str(e))
+                    status_label.setText("ERROR: " + str(e))
 
             def _on_undo():
                 try:
-                    if not _undo_stack:
-                        print("Nothing to undo")
+                    info = _kelvin_result.get("info")
+                    if not info:
                         return
-                    entry = _undo_stack.pop()
-                    action = entry["action"]
+                    all_vols = (info.get("inner_vols", [])
+                                + info.get("outer_vols", []))
 
-                    if action == "mesh":
-                        # Delete sidesets, blocks, then mesh
-                        for sid in reversed(entry.get(
-                                "sidesets", [])):
-                            cubit.cmd("delete sideset "
-                                      + str(sid))
-                        for bid in reversed(entry.get(
-                                "blocks", [])):
-                            cubit.cmd("delete block "
-                                      + str(bid))
-                        vol_str = " ".join(
-                            str(v) for v in entry["volumes"])
-                        cubit.cmd("delete mesh volume "
-                                  + vol_str + " propagate")
-                        print("Undo: mesh deleted")
+                    # Delete sidesets/blocks by name
+                    for sid in cubit.parse_cubit_list(
+                            "sideset", "all"):
+                        try:
+                            n = (cubit.get_sideset_name(sid)
+                                 or "")
+                        except Exception:
+                            n = ""
+                        if n.lower() in ("kelvin_int",
+                                         "kelvin_ext"):
+                            cubit.cmd("delete sideset %d" % sid)
 
-                    elif action == "generate":
-                        vol_str = " ".join(
-                            str(v) for v in entry["volumes"])
-                        cubit.cmd("delete volume " + vol_str)
-                        _kelvin_state["inner"] = None
-                        _kelvin_state["outer"] = None
-                        btn_mesh.setEnabled(False)
-                        print("Undo: volumes deleted")
+                    for bid in cubit.parse_cubit_list(
+                            "block", "all"):
+                        try:
+                            n = (cubit.get_block_name(bid) or "")
+                        except Exception:
+                            n = ""
+                        if n.lower() in ("kelvin", "kelvin_int"):
+                            cubit.cmd("delete block %d" % bid)
 
-                    # Re-detect
-                    inner, outer = _detect_kelvin_volumes()
-                    if inner and outer:
-                        _kelvin_state["inner"] = inner
-                        _kelvin_state["outer"] = outer
-                        btn_mesh.setEnabled(True)
+                    vol_str = " ".join(str(v) for v in all_vols)
+                    cubit.cmd("delete volume " + vol_str)
+                    _kelvin_result["info"] = None
+                    btn_undo.setEnabled(False)
+                    btn_apply.setEnabled(True)
+                    status_label.setText("Undo: Kelvin removed")
+                    print("Undo: Kelvin volumes deleted")
 
                 except Exception as e:
                     print("ERROR: undo failed: " + str(e))
 
-            btn_gen.clicked.connect(_on_generate)
-            btn_mesh.clicked.connect(_on_mesh)
+            btn_apply.clicked.connect(_on_apply)
             btn_undo.clicked.connect(_on_undo)
 
-            # Ctrl+Z shortcut within dialog
+            # Ctrl+Z shortcut
             try:
                 from PySide6.QtGui import QKeySequence, QShortcut
             except ImportError:

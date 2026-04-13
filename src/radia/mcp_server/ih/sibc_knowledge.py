@@ -19,7 +19,8 @@ IH_SIBC_OVERVIEW = """
 |--------|------------------------|------------|--------|
 | **FEM scattered-field** | **+/-3%** | All f, Cu+Steel | **Reference (A_inc=exact CF)** |
 | **BEM Scalar BIE SIBC** | **-1.6%** | R/d>1.5, Cu+Steel | **Production solver** |
-| FEM total-field | **-34% systematic** | All f, Cu+Steel | H_t/P broken, L OK |
+| **FEM total-field (hole)** | **L: +2.5%** | Kelvin, Cu 50kHz | **L production, H_t TBD** |
+| FEM total-field (interface) | **-34% systematic** | All f, Cu+Steel | **WRONG: do not use** |
 | BEM EFIE (HDivSurface) | -7% to -66% | Broken | Factor-3 eigenvalue error |
 
 ## Scalar BIE + SIBC (Production solver for H_t and P)
@@ -59,18 +60,22 @@ H_t = result['H_t_rms']
 - --impedance-model esim (nonlinear BH) or linear (fixed mu_r)
 - Karl iteration for ESIM convergence
 
-## FEM Total-Field (L only; H_t/P has -34% systematic error)
+## FEM Total-Field + Hole Approach (Production for L; H_t under validation)
 
 **File**: `src/radia/panels/calc_fem_kelvin.py --formulation total`
 
-Total-field formulation: solve for full A with Robin BC.
-- **L (inductance) is correct** (volume integral, not affected by surface issues)
-- **H_t and P have -34% systematic error** vs Smythe analytical (2026-04-13)
-- The -34% is frequency-independent and material-independent
-- Root cause: BND trace evaluation of HCurl GF on SIBC returns wrong-side values
+Total-field formulation: solve for full A with Robin BC on the hole boundary.
+- **Hole approach is REQUIRED**: workpiece subtracted from mesh, NOT meshed.
+- **L (inductance) is correct**: +2.5% vs analytical torus (3D Kelvin, Cu 50kHz)
+- **H_t extraction**: `H_t = |jw/Z_s| * |A_t|` from single-side BND trace.
+  Hole approach has unambiguous trace (air side only). Under validation.
+- 2D axisym validation: L < 1%, P < 2% vs full-resolution (Cu/Steel/Al, R/d=3-160)
 
-**Do NOT use FEM total-field for H_t or P extraction.**
-Use `--formulation scattered` instead (see below).
+**Interface approach (-34% error) is WRONG**: Robin BC on internal interface returns
+values from the workpiece interior (A ~ 0). Do NOT use `--formulation total` with
+workpiece as a meshed volume.
+
+**For H_t/P with analytical A_inc (validation only)**: use `--formulation scattered`.
 
 ## FEM Scattered-Field (Reference solver for H_t and P)
 
@@ -184,31 +189,32 @@ sigma=5.8e7 and mu_r=1 (via `EMMaterial.from_args()`). No need to pass
 A_inc from free-space FEM (GridFunction). Accuracy depends on A_inc quality.
 Future: Biot-Savart A via RadiaField('a') as exact CF.
 
-**Cubit .jou for interface approach (recommended)**:
+**Cubit .jou for hole approach (REQUIRED)**:
 ```python
-# Keep workpiece as separate volume, label the shared face "wp_surface"
-block 1 add volume <air_id>
-block 1 name "air"
-block 2 add volume <coil_id>
-block 2 name "coil"
-block 3 add volume <wp_id>
-block 3 name "workpiece"
-sideset 1 add surface <shared_face_ids>
-sideset 1 name "wp_surface"
-radia_export netgen "model.vol" order 2 overwrite
-```
-
-**Cubit .jou for hole approach** (if interface not possible):
-```python
-subtract volume <wp_id> from volume <air_id>
-sideset 1 add surface <hole_face_ids>
+# Workpiece is subtracted from air (NOT meshed), SIBC on hole boundary.
+# Validated in 2D axisym: L < 1%, P < 2% vs full-resolution eddy current.
+# Interface approach (wp meshed as volume) is WRONG: flux bypasses Robin
+# through transparent interior (steel: 58% of correct L).
+subtract volume <wp_id> from volume <air_id> keep_tool
+imprint volume <air_id> <coil_id>
+merge volume <air_id> <coil_id>
+# Do NOT mesh the workpiece. Do NOT add it to a block.
+sideset 1 add surface in volume <wp_id>   # shared surfaces become air boundary
 sideset 1 name "sibc"
 block 1 add volume <air_id>
 block 1 name "air"
 block 2 add volume <coil_id>
 block 2 name "coil"
-radia_export netgen "model.vol" order 2 overwrite
+radia_export netgen "model.vol" order 1 overwrite
 ```
+
+**Do NOT use interface approach** (workpiece meshed as separate volume).
+The Robin BC on an internal interface has wrong-side trace evaluation:
+NGSolve returns values from the workpiece interior (A ~ 0), not from
+the air side. This causes -34% systematic H_t error (total-field) and
+58% L error (steel). The hole approach eliminates the ambiguity because
+the SIBC boundary is an external boundary of the air domain with a
+single-side trace.
 
 ## Coupled BEM Coil Terminal Inductance Change (2026-04-12)
 
@@ -560,7 +566,8 @@ check is still tight.
 |------|--------|--------|
 | **P_total, H_t (fast)** | Scalar BIE (BEM) | calc_heating_bem.py |
 | **L change vs workpiece** | **Coupled BEM (2026-04-12)** | **calc_inductance.py --workpiece** |
-| **P_total, H_t, L, B (FEM)** | Total-field + interface + BND | **calc_fem_kelvin.py** |
+| **L, B distribution (FEM)** | **Total-field + hole + Kelvin** | **calc_fem_kelvin.py** |
+| **P_total, H_t (FEM)** | Total-field + hole (under validation) | calc_fem_kelvin.py |
 | **Coil optimization** | BEM for L+P, FEM for field distribution | both |
 | **Validation (sphere)** | Scattered-field | verify_sphere_sibc.py |
 
@@ -697,18 +704,19 @@ One-way models use H_t = H_inc (PEC approximation).
 For steel at 7kHz: H_t = 0.77 A/m, not 18 A/m. One-way overestimates P by 300x.
 Two-way (Karl iteration with ESIM) is essential for magnetic materials.
 
-## FEM Open Boundary: Kelvin vs Dirichlet
+## FEM Open Boundary: Kelvin Only (Policy 2026-04-14)
 
-Kelvin transform provides exact open boundary. Dirichlet truncation at finite
-distance introduces small error but is much simpler.
+**POLICY**: Use Kelvin transformation for all FEM open boundary problems.
+Do NOT use large Dirichlet truncation spheres.
 
-For scattered-field copper cylinder (7 kHz):
-- **Kelvin** (R_air=60mm, R_kelvin=120mm): P = 6.62e-6 W
-- **Dirichlet** (R_air=100mm): P = 6.59e-6 W (negligible difference)
+Kelvin transform provides exact open boundary with no truncation error:
+- 2-sphere Periodic Kelvin (Cubit or OCC): physical + mapped domain
+- Periodic BC couples interior and exterior sphere DOFs
+- GND vertex at exterior sphere center = Dirichlet 0 = physical infinity
+- nu_kelvin = nu0 * (r'/R)^2, r' from exterior center
 
-Kelvin IS important for the verify_sphere_sibc.py uniform-field case
-(ratio=10, steel), where Dirichlet gives +435% error. But for typical
-coil+workpiece (localized source, ratio < 1): Dirichlet at R_air ~ 3*R_coil is adequate.
+Validated: 3D FEM-Kelvin L = 90.71 nH vs analytical 88.5 nH (+2.5%, coarse mesh).
+2D axisym Kelvin: L < 0.6% for Cu/Steel/Al at R/delta = 3-160.
 
 For BEM (Scalar BIE): no truncation issue. BEM naturally handles open boundary.
 
