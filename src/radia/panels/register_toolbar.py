@@ -735,7 +735,18 @@ def _launch_radia_ngsolve():
                 print("Proceeding without Kelvin "
                       "(Dirichlet truncation).")
 
-        # --- Export .vol ---
+        # --- Export .vol (detect Kelvin status before export) ---
+        model_labels = _get_model_labels()
+        has_kelvin = "kelvin" in model_labels
+        _panel_log(f"VOL EXPORT: order={order}, "
+                   f"has_kelvin={has_kelvin}, "
+                   f"labels={sorted(model_labels)}")
+        if has_kelvin:
+            print(f"Kelvin open boundary detected (order {order})")
+        else:
+            print(f"No Kelvin domain -- Dirichlet truncation "
+                  f"(order {order})")
+
         cubit.cmd(f'cd "{out_dir}"')
         vol_name = "radia_model.vol"
         vol_path = out_dir + "/" + vol_name
@@ -1088,191 +1099,6 @@ def register_menu():
         "Evaluate mathematical expression on mesh and visualize in GMSH")
     action_analytic.triggered.connect(_analytic_function)
     solve_menu.addAction(action_analytic)
-
-    # --- Sub 4: Kelvin Transform ---
-    def _kelvin_transform():
-        try:
-            dlg = QDialog(main_window)
-            dlg.setWindowTitle("Kelvin Transform")
-            dlg.setMinimumWidth(420)
-            layout = QVBoxLayout(dlg)
-
-            # Radius
-            h_r = QHBoxLayout()
-            h_r.addWidget(QLabel("Radius [m]:"))
-            radius_edit = QLineEdit("0.06")
-            radius_edit.setFixedWidth(100)
-            h_r.addWidget(radius_edit)
-            h_r.addStretch()
-            layout.addLayout(h_r)
-
-            # Offset
-            grp_off = QGroupBox("Exterior sphere offset")
-            off_lay = QVBoxLayout(grp_off)
-            h_off = QHBoxLayout()
-            h_off.addWidget(QLabel("Direction:"))
-            dir_combo = QComboBox()
-            dir_combo.addItems(["auto", "+X", "+Y", "+Z",
-                                "-X", "-Y", "-Z"])
-            h_off.addWidget(dir_combo)
-            h_off.addWidget(QLabel("  Distance [m]:"))
-            dist_edit = QLineEdit("")
-            dist_edit.setPlaceholderText("3*R")
-            dist_edit.setFixedWidth(80)
-            h_off.addWidget(dist_edit)
-            h_off.addStretch()
-            off_lay.addLayout(h_off)
-            layout.addWidget(grp_off)
-
-            # Symmetry planes
-            layout.addWidget(QLabel("Symmetry planes (cut sphere):"))
-            h_sym = QHBoxLayout()
-            chk_x = QCheckBox("X = 0")
-            chk_y = QCheckBox("Y = 0")
-            chk_z = QCheckBox("Z = 0")
-            h_sym.addWidget(chk_x)
-            h_sym.addWidget(chk_y)
-            h_sym.addWidget(chk_z)
-            h_sym.addStretch()
-            layout.addLayout(h_sym)
-
-            # Status label
-            status_label = QLabel("")
-            layout.addWidget(status_label)
-
-            # Undo state
-            _kelvin_result = {"info": None}
-
-            # --- Buttons ---
-            h_btns = QHBoxLayout()
-            btn_apply = QPushButton("Apply")
-            btn_apply.setFixedHeight(28)
-            btn_undo = QPushButton("Undo")
-            btn_undo.setFixedHeight(28)
-            btn_undo.setEnabled(False)
-            btn_close = QPushButton("Close")
-            btn_close.setFixedHeight(28)
-            h_btns.addWidget(btn_apply)
-            h_btns.addStretch()
-            h_btns.addWidget(btn_undo)
-            h_btns.addWidget(btn_close)
-            layout.addLayout(h_btns)
-            btn_close.clicked.connect(dlg.close)
-
-            def _on_apply():
-                try:
-                    r = float(radius_edit.text().strip())
-                    sym = []
-                    if chk_x.isChecked():
-                        sym.append("x")
-                    if chk_y.isChecked():
-                        sym.append("y")
-                    if chk_z.isChecked():
-                        sym.append("z")
-
-                    d = dir_combo.currentText()
-                    if d == "auto":
-                        o_dir = None
-                    else:
-                        o_dir = d[1].lower()
-                        if d[0] == "-":
-                            print("WARNING: negative offset "
-                                  "direction not supported, "
-                                  "using +%s" % o_dir)
-
-                    dist_text = dist_edit.text().strip()
-                    o_dist = float(dist_text) if dist_text else None
-
-                    # Use the shared add_kelvin module
-                    panels_dir = os.path.dirname(
-                        os.path.abspath(__file__))
-                    if panels_dir not in sys.path:
-                        sys.path.insert(0, panels_dir)
-                    from add_kelvin import add_kelvin_cubit
-
-                    info = add_kelvin_cubit(
-                        R=r, symmetry=sym,
-                        offset_dir=o_dir, offset_dist=o_dist)
-                    _kelvin_result["info"] = info
-
-                    ox, oy, oz = info["center"]
-                    status_label.setText(
-                        "Kelvin added: %s, offset=(%.3f, %.3f, %.3f)"
-                        % (sym or "full", ox, oy, oz))
-                    btn_undo.setEnabled(True)
-                    btn_apply.setEnabled(False)
-
-                except Exception as e:
-                    import traceback
-                    traceback.print_exc()
-                    print("ERROR: " + str(e))
-                    status_label.setText("ERROR: " + str(e))
-
-            def _on_undo():
-                try:
-                    info = _kelvin_result.get("info")
-                    if not info:
-                        return
-                    all_vols = (info.get("inner_vols", [])
-                                + info.get("outer_vols", []))
-
-                    # Delete sidesets/blocks by name
-                    for sid in cubit.parse_cubit_list(
-                            "sideset", "all"):
-                        try:
-                            n = (cubit.get_sideset_name(sid)
-                                 or "")
-                        except Exception:
-                            n = ""
-                        if n.lower() in ("kelvin_int",
-                                         "kelvin_ext"):
-                            cubit.cmd("delete sideset %d" % sid)
-
-                    for bid in cubit.parse_cubit_list(
-                            "block", "all"):
-                        try:
-                            n = (cubit.get_block_name(bid) or "")
-                        except Exception:
-                            n = ""
-                        if n.lower() in ("kelvin", "kelvin_int"):
-                            cubit.cmd("delete block %d" % bid)
-
-                    vol_str = " ".join(str(v) for v in all_vols)
-                    cubit.cmd("delete volume " + vol_str)
-                    _kelvin_result["info"] = None
-                    btn_undo.setEnabled(False)
-                    btn_apply.setEnabled(True)
-                    status_label.setText("Undo: Kelvin removed")
-                    print("Undo: Kelvin volumes deleted")
-
-                except Exception as e:
-                    print("ERROR: undo failed: " + str(e))
-
-            btn_apply.clicked.connect(_on_apply)
-            btn_undo.clicked.connect(_on_undo)
-
-            # Ctrl+Z shortcut
-            try:
-                from PySide6.QtGui import QKeySequence, QShortcut
-            except ImportError:
-                from PyQt5.QtGui import QKeySequence
-                from PyQt5.QtWidgets import QShortcut
-            shortcut_undo = QShortcut(
-                QKeySequence("Ctrl+Z"), dlg)
-            shortcut_undo.activated.connect(_on_undo)
-
-            dlg.show()
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print("ERROR: Kelvin dialog failed: " + str(e))
-
-    action_kelvin = QAction("Kelvin Transform...", main_window)
-    action_kelvin.setStatusTip(
-        "Add Periodic Kelvin sphere (open boundary) to the model")
-    action_kelvin.triggered.connect(_kelvin_transform)
-    solve_menu.addAction(action_kelvin)
 
     # --- Sub 4: Reload Panels (debug) ---
     solve_menu.addSeparator()

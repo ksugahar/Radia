@@ -6,6 +6,7 @@
 CLAUDE.md
 ROADMAP.md
 .claude/
+docs/research/
 publish_to_pypi.cmd
 ngsolve_developers/
 Build_PyPI_Package.ps1
@@ -24,6 +25,7 @@ examples/KelvinTransformation/docs/digest/
 # Build Directories
 # ============================================================================
 build*/
+!src/radia/mcp_server/build123d/
 dist/
 radia-*/
 !packages/radia-mcp/
