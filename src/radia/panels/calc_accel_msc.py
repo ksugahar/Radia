@@ -40,7 +40,8 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (MU_0, setup_paths, setup_cubit,
-                          get_bh_curve, progress, calc_main)
+                          get_bh_curve, progress, calc_main,
+                          EMMaterial, add_material_args)
 
 
 def _log(msg):
@@ -128,8 +129,7 @@ def _extract_elements_from_cubit(cubit, block_name="yoke", unit_scale=0.001):
 
 
 def solve_msc(coil_script="", cub5_file="",
-              material="steel", mu_r=1000.0, bh_file=None,
-              ima="", solver=0,
+              mat=None, ima="", solver=0,
               max_iter=100, tol=1e-3, relax=0.0,
               unit_scale=0.001,
               msh_output=""):
@@ -138,9 +138,7 @@ def solve_msc(coil_script="", cub5_file="",
     Args:
         coil_script: Path to Python script with build_coil()
         cub5_file: Cubit .cub5 file with hex mesh
-        material: "steel" (BH curve) or "linear" (mu_r)
-        mu_r: Relative permeability (linear mode only)
-        bh_file: Custom BH curve file (H [A/m], B [T])
+        mat: EMMaterial instance (iron yoke properties)
         ima: IMA string e.g. '+x-z' for quarter model ('' = no IMA)
         solver: 0=LU, 1=BiCGSTAB, 2=HACApK
         max_iter: Max nonlinear iterations
@@ -152,6 +150,12 @@ def solve_msc(coil_script="", cub5_file="",
     Returns:
         dict with B_center, n_elem, ndof, iterations, converged, etc.
     """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    material = mat.name
+    mu_r = mat.mu_r
+    bh_file = ""  # BH data now lives in mat.bh_curve
+
     setup_paths()
     import radia as rad
 
@@ -205,7 +209,7 @@ def solve_msc(coil_script="", cub5_file="",
         mat = rad.MatLin(mu_r)
         _log(f"MAT:linear mu_r={mu_r}")
     else:
-        bh_data, _ = get_bh_curve(material, bh_file)
+        bh_data, _ = mat.get_bh_curve()
         if bh_data is None:
             return {"error": f"No BH curve for material: {material}"}
         mat = rad.MatSatIsoTab(bh_data)
@@ -390,13 +394,8 @@ def main():
     parser.add_argument("--coil-script", required=True,
                         help="Python script with build_coil() -> CoilBuilder")
     parser.add_argument("--cub5", default="", help="Cubit .cub5 file")
-    parser.add_argument("--material", default="steel",
-                        choices=["steel", "elf_steel", "linear"],
-                        help="steel (BH curve) or linear (mu_r)")
-    parser.add_argument("--mu-r", type=float, default=1000,
-                        help="mu_r (linear mode only)")
-    parser.add_argument("--bh-file", default="",
-                        help="Custom BH curve file (H B)")
+    add_material_args(parser, default_material="steel",
+                      include_custom=False, include_hys=True)
     parser.add_argument("--ima", default="",
                         help="IMA string: '+x-z' (quarter), '+x' (half-x), "
                              "'-z' (half-z), '' (full)")
@@ -420,9 +419,7 @@ def main():
         return solve_msc(
             coil_script=args.coil_script,
             cub5_file=args.cub5,
-            material=args.material,
-            mu_r=args.mu_r,
-            bh_file=args.bh_file if args.bh_file else None,
+            mat=EMMaterial.from_args(args),
             ima=args.ima,
             solver=args.solver,
             max_iter=args.max_iter,

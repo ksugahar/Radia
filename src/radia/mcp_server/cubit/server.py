@@ -470,6 +470,7 @@ def netgen_workflow_guide(workflow: str = "overview") -> str:
 	        "simple_torus"      - Torus example
 	        "complex"           - Complex geometry (Boolean operations, any shape)
 	        "accuracy"          - Accuracy guide: order selection and verification
+	        "kelvin_auto"       - Kelvin auto-add (auto R, symmetry, mesh copy)
 	        "gmsh_2nd_order"    - Alternative: Gmsh 2nd order (simplest)
 	        "troubleshooting"   - Common errors and fixes
 	        "deleted_apis"      - Migration guide from old APIs

@@ -21,45 +21,12 @@ import numpy as np
 MU_0 = 4e-7 * np.pi
 NU_0 = 1.0 / MU_0
 
-# BH curve (100 points, from ELF_MAGIC CEFC 2020 nonlinear model)
-# Source: examples/c_type_electromagnet/nonlinear/BH.txt
-# Units: H [A/m], B [T]
-STEEL_BH = [
-    [0.0, 0.0],
-    [13.898, 0.22296], [15.397, 0.25304], [17.058, 0.28380],
-    [18.898, 0.31552], [20.936, 0.34852], [23.194, 0.38323],
-    [25.696, 0.42011], [28.467, 0.45974], [31.538, 0.50272],
-    [34.939, 0.54965], [38.708, 0.60110], [42.883, 0.65744],
-    [47.508, 0.71868], [52.632, 0.78437], [58.309, 0.85340],
-    [64.598, 0.92403], [71.565, 0.99400], [79.284, 1.06090],
-    [87.836, 1.12254], [97.310, 1.17738], [107.806, 1.22465],
-    [119.433, 1.26440], [132.315, 1.29727], [146.587, 1.32427],
-    [162.397, 1.34654], [179.913, 1.36518], [199.319, 1.38116],
-    [220.817, 1.39530], [244.634, 1.40821], [271.020, 1.42039],
-    [300.252, 1.43217], [332.636, 1.44381], [368.514, 1.45547],
-    [408.262, 1.46728], [452.296, 1.47930], [501.081, 1.49157],
-    [555.127, 1.50410], [615.002, 1.51691], [681.335, 1.52999],
-    [754.823, 1.54332], [836.238, 1.55689], [926.433, 1.57068],
-    [1026.357, 1.58467], [1137.059, 1.59883], [1259.701, 1.61315],
-    [1395.571, 1.62761], [1546.096, 1.64220], [1712.856, 1.65688],
-    [1897.603, 1.67166], [2102.276, 1.68651], [2329.025, 1.70142],
-    [2580.231, 1.71638], [2858.532, 1.73137], [3166.850, 1.74640],
-    [3508.423, 1.76144], [3886.837, 1.77649], [4306.067, 1.79154],
-    [4770.514, 1.80658], [5285.057, 1.82162], [5855.097, 1.83664],
-    [6486.621, 1.85165], [7186.261, 1.86663], [7961.362, 1.88158],
-    [8820.066, 1.89651], [9771.388, 1.91142], [10825.319, 1.92629],
-    [11992.926, 1.94114], [13286.469, 1.95596], [14719.532, 1.97077],
-    [16307.164, 1.98555], [18066.037, 2.00033], [20014.619, 2.01510],
-    [22173.373, 2.02987], [24564.968, 2.04466], [27214.517, 2.05948],
-    [30149.844, 2.07434], [33401.772, 2.08927], [37004.449, 2.10428],
-    [40995.707, 2.11941], [45417.458, 2.13468], [50316.133, 2.15014],
-    [55743.174, 2.16583], [61755.569, 2.18181], [68416.455, 2.19815],
-    [75795.776, 2.21493], [83971.022, 2.23225], [93028.041, 2.25023],
-    [103061.940, 2.26901], [114178.084, 2.28877], [126493.203, 2.30972],
-    [140136.616, 2.33211], [155251.592, 2.35623], [171996.852, 2.38247],
-    [190548.237, 2.41122], [211100.554, 2.44300], [233869.620, 2.47834],
-    [259094.531, 2.51786], [287040.173, 2.56214], [318000.0, 2.61173],
-]
+# BH curve data and material presets are canonical in em_material.py.
+# Re-export here for backward compatibility.
+_radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+if os.path.abspath(_radia_src) not in sys.path:
+    sys.path.insert(0, os.path.abspath(_radia_src))
+from em_material import STEEL_BH, EMMaterial, add_material_args  # noqa: E402
 
 
 def setup_paths():
@@ -209,19 +176,26 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
             else:
                 f.name = "sink"
 
-    # Workpiece cylinder (meshed as air, SIBC on interface)
+    # Workpiece cylinder (hole: subtracted from air, NOT meshed)
     wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
-    wp_cyl.name = "workpiece"
-    for f in wp_cyl.faces:
-        f.name = "wp_surface"
-        f.maxh = min(R_wp / 3, maxh_coil)
 
     # Interior sphere (physical domain)
     inner_sphere = Sphere(Pnt(0, 0, 0), a_kelvin)
 
-    # Boolean: air = inner_sphere - coil - wp
+    # Boolean: air = inner_sphere - coil - wp (wp is a hole)
     air = inner_sphere - torus - wp_cyl
     air.name = "air"
+
+    # Label cavity faces (from wp subtraction) as "sibc"
+    # These are the faces whose area matches the workpiece surface
+    wp_lateral_area = 2 * math.pi * R_wp * H_wp
+    wp_cap_area = math.pi * R_wp**2
+    for f in air.faces:
+        area = f.mass
+        if (abs(area - wp_lateral_area) / wp_lateral_area < 0.3 or
+                abs(area - wp_cap_area) / wp_cap_area < 0.3):
+            f.name = "sibc"
+            f.maxh = min(R_wp / 3, maxh_coil)
 
     # Exterior sphere (Kelvin-mapped domain, same radius, offset center)
     ext_sphere = Sphere(Pnt(kelvin_offset, 0, 0), a_kelvin)
@@ -253,7 +227,8 @@ def build_occ_ih_mesh_3d(R_coil=0.030, a_coil=0.003, gap_deg=5,
     if int_face is not None and ext_face is not None:
         int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
 
-    shape = Glue([air, wp_cyl, torus, ext_sphere, gnd])
+    # Hole approach: wp_cyl is NOT included (it's just a hole in air)
+    shape = Glue([air, torus, ext_sphere, gnd])
     geo = OCCGeometry(shape)
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
@@ -313,27 +288,30 @@ def build_occ_ih_mesh_simple(R_coil=0.030, a_coil=0.003, gap_deg=5,
             else:
                 f.name = "sink"
 
-    # Workpiece cylinder
+    # Workpiece cylinder (hole: subtracted from air, NOT meshed)
     wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
-    wp_cyl.name = "workpiece"
-    for f in wp_cyl.faces:
-        f.name = "wp_surface"
-        f.maxh = min(R_wp / 3, maxh_coil)
 
     # Air sphere (truncated boundary)
     air_sphere = Sphere(Pnt(0, 0, 0), R_air)
 
-    # Boolean: air = sphere - coil - workpiece
+    # Boolean: air = sphere - coil - workpiece (wp is a hole)
     air = air_sphere - torus - wp_cyl
     air.name = "air"
     # Label outer sphere as Dirichlet
     expected_sphere_area = 4 * math.pi * R_air**2
+    wp_lateral_area = 2 * math.pi * R_wp * H_wp
+    wp_cap_area = math.pi * R_wp**2
     for f in air.faces:
-        if abs(f.mass - expected_sphere_area) / expected_sphere_area < 0.1:
+        area = f.mass
+        if abs(area - expected_sphere_area) / expected_sphere_area < 0.1:
             f.name = "outer"
-            break
+        elif (abs(area - wp_lateral_area) / wp_lateral_area < 0.3 or
+              abs(area - wp_cap_area) / wp_cap_area < 0.3):
+            f.name = "sibc"
+            f.maxh = min(R_wp / 3, maxh_coil)
 
-    shape = Glue([air, wp_cyl, torus])
+    # Hole approach: wp_cyl is NOT included
+    shape = Glue([air, torus])
     geo = OCCGeometry(shape)
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
@@ -445,6 +423,105 @@ def add_periodic_kelvin(mesh, kelvin_offset):
     return identnr > 0
 
 
+def detect_outer_boundary(mesh):
+    """Detect the outer boundary of the air domain (largest BND area).
+
+    Works for full, 1/2, 1/4, 1/8 symmetry models: the outer spherical
+    surface is ALWAYS the largest BND face because symmetry planes have
+    holes (coil, workpiece subtracted).
+
+    Returns:
+        (name, area, R) where:
+            name: boundary label string
+            area: total area of the boundary [m^2]
+            R: estimated sphere radius from max vertex distance [m]
+        or (None, 0, 0) if no boundary found.
+    """
+    from ngsolve import Integrate, CF, BND
+    bnd_names = sorted(set(mesh.GetBoundaries()))
+
+    best_name, best_area = None, 0.0
+    for name in bnd_names:
+        if not name or name == "default":
+            continue
+        try:
+            area = float(Integrate(CF(1), mesh, BND,
+                                   definedon=mesh.Boundaries(name)).real)
+        except Exception:
+            continue
+        if area > best_area:
+            best_area = area
+            best_name = name
+
+    if best_name is None:
+        return (None, 0.0, 0.0)
+
+    # Estimate R from vertex positions on the outer boundary
+    outer_verts = set()
+    boundaries = mesh.GetBoundaries()
+    for el in mesh.Elements(BND):
+        if boundaries[el.index] == best_name:
+            for v in el.vertices:
+                outer_verts.add(v.nr)
+
+    if outer_verts:
+        coords = np.array([mesh.vertices[v].point for v in outer_verts])
+        R = float(np.max(np.linalg.norm(coords, axis=1)))
+    else:
+        R = 0.0
+
+    return (best_name, best_area, R)
+
+
+def detect_symmetry(mesh, tol=1e-6):
+    """Detect symmetry planes from mesh vertex positions.
+
+    If ALL vertices have x >= -tol AND some vertices have x < tol
+    (i.e., vertices lie ON the x=0 plane), then x=0 is a symmetry plane.
+
+    Works for 1/2 (1 plane), 1/4 (2 planes), 1/8 (3 planes) models.
+
+    Returns:
+        list of plane names, e.g. ["z"], ["x", "z"], ["x", "y", "z"]
+    """
+    pts = np.array([v.point for v in mesh.vertices])
+    sym = []
+    for axis, name in enumerate(["x", "y", "z"]):
+        all_positive = pts[:, axis].min() >= -tol
+        has_on_plane = (pts[:, axis] < tol).any()
+        if all_positive and has_on_plane:
+            sym.append(name)
+    return sym
+
+
+def estimate_kelvin_maxh(mesh, outer_bnd_name):
+    """Estimate mesh size for Kelvin domain from outer boundary edges.
+
+    Returns the median edge length on the outer boundary, multiplied
+    by 1.5 (Kelvin domain can be coarser than the physical domain).
+    """
+    from ngsolve import BND
+    boundaries = mesh.GetBoundaries()
+    outer_edges = set()
+    for el in mesh.Elements(BND):
+        if boundaries[el.index] == outer_bnd_name:
+            for e in el.edges:
+                outer_edges.add(e.nr)
+
+    if not outer_edges:
+        return 0.02  # fallback
+
+    lengths = []
+    for e_nr in outer_edges:
+        edge = mesh.edges[e_nr]
+        v0, v1 = edge.vertices
+        p0 = np.array(mesh.vertices[v0.nr].point)
+        p1 = np.array(mesh.vertices[v1.nr].point)
+        lengths.append(float(np.linalg.norm(p1 - p0)))
+
+    return float(np.median(lengths)) * 1.5
+
+
 def detect_kelvin_offset(mesh):
     """Detect Kelvin sphere center offset from mesh vertex positions.
 
@@ -485,23 +562,10 @@ def detect_kelvin_offset(mesh):
 def get_bh_curve(material="steel", bh_file=None):
     """Get BH curve data for material.
 
-    Args:
-        material: "steel", "copper", or "aluminum"
-        bh_file: Optional path to custom BH file (2 columns: H B)
-
-    Returns:
-        (bh_curve, mu_r): bh_curve is list or None, mu_r is float or None
+    Delegates to :class:`EMMaterial`.  Kept for backward compatibility.
     """
-    if bh_file and bh_file != "(built-in Steel)" and os.path.exists(bh_file):
-        data = np.loadtxt(bh_file)
-        if data.ndim == 2 and data.shape[1] >= 2:
-            return data[:, :2].tolist(), None
-        raise ValueError(f"Invalid BH file format: {bh_file}")
-
-    if material in ("steel", "elf_steel"):
-        return STEEL_BH, None
-    else:
-        return None, 1.0  # non-magnetic
+    mat = EMMaterial.from_name(material, bh_file=bh_file or "")
+    return mat.get_bh_curve()
 
 
 def create_esim_solver(material="steel", frequency=7000, sigma=2e6,
@@ -509,35 +573,25 @@ def create_esim_solver(material="steel", frequency=7000, sigma=2e6,
                        bh_file=None):
     """Create ESIMFiniteSlabSolver with appropriate material settings.
 
-    Args:
-        material: "steel", "copper", or "aluminum"
-        frequency: Operating frequency [Hz]
-        sigma: Conductivity [S/m]
-        half_thickness: Workpiece half-thickness or radius [m]
-        geometry: 'cylinder' (Bessel) or 'slab' (cosh/sinh)
-        bh_file: Optional path to custom BH file
-
-    Returns:
-        ESIMFiniteSlabSolver instance
+    Delegates to :class:`EMMaterial`.  Kept for backward compatibility.
     """
-    setup_paths()
-    from esim_cell_problem import ESIMFiniteSlabSolver
-
-    bh_curve, mu_r = get_bh_curve(material, bh_file)
-
-    return ESIMFiniteSlabSolver(
-        half_thickness=half_thickness,
-        bh_curve=bh_curve,
-        sigma=sigma,
-        frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None,
-        n_nodes=200,
-        geometry=geometry)
+    mat = EMMaterial.from_name(material, bh_file=bh_file or "")
+    # Override sigma if the caller passed an explicit value (legacy API).
+    if sigma != 2e6 or material not in ("steel", "elf_steel"):
+        mat = EMMaterial(name=mat.name, sigma=sigma, mu_r=mat.mu_r,
+                         bh_curve=mat.bh_curve, hys_file=mat.hys_file)
+    return mat.create_esim_solver(frequency, half_thickness, geometry)
 
 
 def sigma_for_material(material):
-    """Default conductivity [S/m] for common materials."""
-    return {'steel': 2e6, 'copper': 5.8e7, 'aluminum': 3.5e7}.get(material, 2e6)
+    """Default conductivity [S/m] for common materials.
+
+    Delegates to :class:`EMMaterial`.  Kept for backward compatibility.
+    """
+    try:
+        return EMMaterial.from_name(material).sigma
+    except ValueError:
+        return 2e6
 
 
 def write_surface_only_vol(src_ngmesh, output_path, keep_material=""):

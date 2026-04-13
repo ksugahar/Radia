@@ -31,7 +31,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
    - Exterior sphere (Kelvin): same radius R, offset in space (e.g., offset_x = 3R)
    - Both spheres have **identical radius and identical surface mesh**
    - Periodic BC couples DOFs 1:1 between the two boundaries via TRANSLATION
-   - **WRONG**: concentric shell (R_inner to R_outer) — this is NOT Kelvin
+   - **WRONG**: concentric shell (R_inner to R_outer) -- this is NOT Kelvin
    - **CORRECT**: two separate spheres of the SAME radius R, placed apart
 
 2. **Identical DOF Structure**:
@@ -39,7 +39,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
    - Both sphere surfaces must have the same mesh topology (same nodes, same elements)
    - OCC workflow: `Identify()` + `GenerateMesh()` handles this automatically
    - Cubit workflow: `copy mesh surface` from interior sphere to exterior sphere
-     (MANDATORY — without it, tet mesh gives different triangulations)
+     (MANDATORY -- without it, tet mesh gives different triangulations)
    - The relationship between identified nodes is a pure TRANSLATION (offset)
 
 3. **Material Modulation** (exterior domain):
@@ -102,7 +102,7 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
 2. Create exterior sphere (SAME radius R) at offset position (e.g., x = 3R)
    - Contains only air (Kelvin domain)
 3. Webcut BOTH spheres with the SAME plane (e.g., zplane)
-   - ACIS sphere has 0 curves by default — webcut creates 1 curve per hemisphere
+   - ACIS sphere has 0 curves by default -- webcut creates 1 curve per hemisphere
    - This matching topology is required for copy mesh surface
 4. Merge BOTH pairs of half-spheres:
    - imprint volume <inner_top> <inner_bottom>; merge volume <inner_top> <inner_bottom>
@@ -124,7 +124,7 @@ Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
 9. Set blocks (coil, air, kelvin) and sidesets (source, sink, kelvin_int, kelvin_ext)
    - sideset "kelvin_int": interior sphere outer surface (air boundary)
    - sideset "kelvin_ext": exterior sphere surface (kelvin boundary)
-   - These MUST be set explicitly in the .py — offset spheres do not share
+   - These MUST be set explicitly in the .py -- offset spheres do not share
      a face, so DomainIn/DomainOut auto-detection does NOT work
 10. radia_export netgen: writes periodic identification as TRANSLATION
     - C++ reads bc names "kelvin_int" / "kelvin_ext" from sidesets
@@ -183,9 +183,9 @@ FEM-Kelvin L=80.46 nH (7000 Hz, copper cylinder workpiece)
 ```
 
 **Do NOT use**:
-- Concentric shells (R_inner to R_outer) — this is NOT Kelvin transformation
-- Radial scaling for node pairing — use translation (offset)
-- Independent tet mesh on both spheres without copy mesh — different triangulations
+- Concentric shells (R_inner to R_outer) -- this is NOT Kelvin transformation
+- Radial scaling for node pairing -- use translation (offset)
+- Independent tet mesh on both spheres without copy mesh -- different triangulations
 
 ## Material Modulation -- The Only Thing You Change
 
@@ -1200,6 +1200,252 @@ KELVIN_TIPS = """
 """
 
 
+KELVIN_ROBUSTNESS = """
+# Kelvin Robustness Checklist (2026-04-14)
+
+## POLICY: Kelvin Only -- No Dirichlet Truncation
+
+Use Kelvin transformation for ALL FEM open boundary problems.
+Do NOT use large Dirichlet truncation spheres. Kelvin provides exact
+open boundary with zero truncation error. Dirichlet truncation introduces
+uncontrolled error that depends on sphere size and cannot be bounded.
+
+## Checklist: Steps That MUST Succeed
+
+### 1. Mesh Copy (Interior -> Exterior Sphere)
+
+Both sphere surfaces must have **identical mesh topology** (1:1 node
+correspondence). Without this, Periodic BC cannot pair DOFs.
+
+**OCC workflow**: `Identify()` before `GenerateMesh()` handles this
+automatically. Netgen matches identified surfaces during mesh generation.
+
+**Cubit workflow**: `copy mesh surface` is MANDATORY:
+```python
+# After meshing interior air volumes (which creates their surface mesh):
+copy mesh surface <interior_hemi> onto surface <exterior_hemi> \\
+    source curve <ic> source vertex <iv> \\
+    target curve <ec> target vertex <ev>
+```
+Do NOT set volume size on the exterior Kelvin volumes after copy
+(this adds extra nodes and breaks the 1:1 correspondence).
+
+**Verification**:
+```python
+# After export, check vertex counts
+kelvin_int_verts = set()
+kelvin_ext_verts = set()
+for el in mesh.Elements(BND):
+    bnd = mesh.GetBoundaries()[el.index]
+    for v in el.vertices:
+        if "kelvin_int" in bnd: kelvin_int_verts.add(v.nr)
+        elif "kelvin_ext" in bnd: kelvin_ext_verts.add(v.nr)
+assert len(kelvin_int_verts) == len(kelvin_ext_verts), \\
+    f"Mesh copy failed: {len(kelvin_int_verts)} int vs {len(kelvin_ext_verts)} ext"
+```
+
+### 2. Exterior Sphere Must Be Meshed
+
+The exterior (Kelvin) sphere is a real computational domain -- it must
+contain volume elements with material "kelvin". It is NOT just a boundary.
+
+**Common mistake**: creating the exterior sphere but forgetting to mesh it
+or forgetting to assign it to a block.
+
+```python
+# Cubit: exterior sphere MUST be meshed
+volume {kelvin_top} {kelvin_bot} scheme tetmesh
+mesh volume {kelvin_top} {kelvin_bot}
+
+block N add volume {kelvin_top} {kelvin_bot}
+block N name "kelvin"
+```
+
+### 3. Material Scaling in Kelvin Domain
+
+Kelvin transformation **only distorts material properties** -- the PDE is
+unchanged. The image of physical infinity is at r'=0 (Kelvin sphere center).
+
+| Quantity | Physical (r→inf) | Kelvin (r'→0) | Modulation |
+|----------|-----------------|---------------|------------|
+| mu       | mu_0            | **infinity**  | mu = (R/r')^2 * mu_0 |
+| eps      | eps_0           | **infinity**  | eps = (R/r')^2 * eps_0 |
+| sigma    | 0 (air)         | 0             | sigma = (R/r')^2 * sigma (0 for air) |
+| **nu = 1/mu** | nu_0      | **0**         | **nu = (r'/R)^2 * nu_0** |
+| rho_e = 1/sigma | inf     | inf           | rho_e = (r'/R)^2 * rho_e |
+
+**Implementation**:
+```python
+# HCurl A-formulation: uses nu (not mu)
+for m in mesh.GetMaterials():
+    if "kelvin" in m.lower():
+        rp_sq = (x-kx)**2 + (y-ky)**2 + (z-kz)**2 + 1e-20
+        nu_dict[m] = NU_0 * rp_sq / R**2   # -> 0 at r'=0
+    else:
+        nu_dict[m] = NU_0
+```
+
+**The 1e-20 epsilon prevents division by zero but is NOT a hack**:
+at r'=0 exactly, nu=0 (correct), and the 1e-20 ensures no NaN.
+The gauge regularization `reg * NU_0 * u * v * dx` in the bilinear form
+provides the missing mass term where nu vanishes.
+
+**IMPORTANT for gauge regularization with Kelvin**:
+Do NOT apply `reg * NU_0 * u * v * dx` in the Kelvin domain -- the
+nu_cf = (r'/R)^2 * nu0 vanishes near r'=0, so a constant NU_0 mass
+term would dominate and corrupt the magnetic energy integral there.
+Restrict regularization to non-kelvin materials:
+```python
+non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+if non_kelvin_mats:
+    a += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
+```
+
+### 4. kelvin_int / kelvin_ext Identification
+
+The periodic identification pairs must be embedded in the .vol file.
+Without it, the Kelvin sphere is just a disconnected air domain with
+Neumann BC (silently wrong, looks like a small Dirichlet truncation).
+
+**OCC**: Call `Identify()` before `GenerateMesh()`:
+```python
+int_face.Identify(ext_face, "kelvin", IdentificationType.PERIODIC)
+```
+
+**Cubit**: The C++ exporter (`radia_export netgen`) reads sideset names
+"kelvin_int" and "kelvin_ext", computes the translation offset, and writes
+`ident.Add()` pairs to the .vol automatically.
+
+**Detection in calc_fem_kelvin.py**:
+```python
+n_ident = mesh.ngmesh.GetNrIdentifications()
+if n_ident == 0:
+    raise RuntimeError("Kelvin without periodic identification!")
+```
+
+### 5. FreeDofs Decrease After Periodic()
+
+This is the **definitive verification** that periodic identification is
+working. If FreeDofs does not decrease, the identification failed silently.
+
+```python
+base_fes = HCurl(mesh, order=1, complex=True, nograds=True, dirichlet="GND")
+n_before = sum(1 for d in base_fes.FreeDofs() if d)
+
+fes = Periodic(base_fes)
+n_after = sum(1 for d in fes.FreeDofs() if d)
+
+n_coupled = n_before - n_after
+print(f"FreeDofs: {n_before} -> {n_after} (coupled: {n_coupled})")
+if n_coupled == 0:
+    raise RuntimeError(
+        "Periodic BC NOT working! FreeDofs unchanged. "
+        "Check: (1) Identify() before GenerateMesh/Glue, "
+        "(2) sideset names kelvin_int/kelvin_ext in .jou, "
+        "(3) radia_export netgen wrote identification pairs.")
+```
+
+Typical: ~2-5% of DOFs are coupled (boundary DOFs on the Kelvin spheres).
+Example: ndof=49244, FreeDofs: 49244 -> 48440 (804 coupled).
+
+### 6. Symmetry Models: 1/2, 1/4, 1/8
+
+Kelvin + symmetry = periodic wedge + Kelvin open boundary.
+
+**1/2 model** (one symmetry plane, e.g., z=0):
+- Webcut interior AND exterior spheres with the symmetry plane
+- Symmetry BC (Neumann for A_n=0, Dirichlet for A_t=0)
+- Kelvin identification only between matching hemispheres
+
+**1/4 model** (two symmetry planes):
+- Webcut with both planes
+- HalfSpace intersection for clean wedge geometry
+- Identify BEFORE Glue (critical for OCC)
+
+**1/8 model** (three symmetry planes):
+- Use HalfSpace intersection to create octant
+- Same Kelvin principles apply
+
+**Critical**: the symmetry planes must cut BOTH interior and exterior
+spheres identically. The mesh copy must respect the symmetry boundary.
+
+**Example (1/2 model with z-symmetry)**:
+```python
+# In Cubit .jou:
+webcut volume {air_vid} with plane zplane
+webcut volume {kelvin_vid} with plane zplane
+# Keep only z>0 halves for mesh copy + identification
+# Apply symmetry BC (Neumann or Dirichlet) on z=0 faces
+```
+
+### 7. GND at Infinity
+
+The vertex at the exterior sphere center maps to physical infinity.
+
+| Formulation | GND requirement |
+|-------------|----------------|
+| **H1 (phi, Omega)** | **Essential** -- uniqueness of scalar potential |
+| **HCurl (A)** | Optional -- gauge `reg * nu * u * v * dx` suffices |
+| **HCurl + iterative solver** | Recommended -- improves convergence |
+| **HCurl + PARDISO** | Optional -- PARDISO handles near-singular |
+
+**Implementation**:
+```python
+# In Cubit .jou:
+create vertex X {kelvin_offset_x} Y 0 Z 0
+nodeset 100 add vertex {last_vertex_id}
+nodeset 100 name "GND"
+
+# In calc_fem_kelvin.py:
+if "GND" in boundaries:
+    dirichlet_bnd = "GND"  # A(infinity) = 0
+```
+
+**For OCC workflow**:
+```python
+gnd = Vertex(Pnt(kelvin_offset, 0, 0))
+gnd.name = "GND"
+# Include in Glue
+shape = Glue([air, torus, ext_sphere, gnd])
+```
+
+### 8. Kelvin Domain: Tet Only (No Hex)
+
+**POLICY**: Kelvin domain must use **tetrahedral** mesh, not hexahedral.
+
+Spherical geometry is best approximated by triangular high-order elements.
+Hex elements on a sphere surface introduce systematic geometry error that
+worsens with mesh refinement (opposite of convergence).
+
+- OCC workflow: always produces tets (correct by default)
+- Cubit workflow: use `scheme tetmesh` for Kelvin volumes
+- Do NOT use hex sweep or mapped mesh on the Kelvin sphere
+
+This is why the Kelvin sphere is always a Netgen/OCC tet mesh, even when
+the physical domain (coil, iron yoke) uses Cubit hex mesh.
+
+## Diagnostic Summary
+
+| Check | Expected | If Wrong |
+|-------|----------|----------|
+| Interior/exterior vertex count | Equal | Mesh copy failed |
+| kelvin material in mesh | Present | Exterior sphere not meshed/blocked |
+| nu at r'=0 | 0 | Wrong material scaling (mu not nu) |
+| NrIdentifications > 0 | True | No periodic ID in .vol |
+| FreeDofs decrease | Yes (2-5%) | Identification failed silently |
+| L vs analytical | < 5% | Check all above + mesh size |
+| Iterative solver converges | Yes | Check GND, reg, nograds |
+
+## Validated Results (2026-04-14)
+
+| Test case | L [nH] | Analytical | Error | Configuration |
+|-----------|--------|------------|-------|---------------|
+| Torus R=30mm a=3mm 5deg gap (3D) | 90.71 | 88.5 | +2.5% | Kelvin, Cu 50kHz, hole SIBC |
+| Torus (2D axisym) | ~89 | 88.5 | <1% | Kelvin, static |
+| C-magnet york.jou (3D) | 80.46 | -- | -- | Kelvin, 7kHz, mesh copy |
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -1213,6 +1459,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "tips": KELVIN_TIPS,
         "verification": KELVIN_VERIFICATION,
         "periodic_wedge": KELVIN_PERIODIC_WEDGE,
+        "robustness": KELVIN_ROBUSTNESS,
     }
 
     topic = topic.lower().strip()

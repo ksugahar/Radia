@@ -1,0 +1,8 @@
+## Cone (frustum) tet mesh (R_bottom=0.04m, R_top=0.01m, H=0.08m)
+reset
+create frustum height 0.08 radius 0.04 top 0.01
+volume 1 scheme tetmesh
+volume 1 size auto factor 5
+mesh volume 1
+block 1 add volume 1
+block 1 name "cone"

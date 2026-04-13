@@ -32,11 +32,11 @@ import numpy as np
 MU_0 = 4e-7 * np.pi
 NU_0 = 1.0 / MU_0
 
-STEEL_BH = [
-    [0, 0], [50, 0.1], [100, 0.25], [200, 0.55],
-    [500, 0.95], [1000, 1.2], [2000, 1.4], [5000, 1.55],
-    [10000, 1.65], [20000, 1.75], [50000, 1.9], [100000, 2.0],
-]
+# Import canonical material definitions
+_radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+if os.path.abspath(_radia_src) not in sys.path:
+    sys.path.insert(0, os.path.abspath(_radia_src))
+from em_material import STEEL_BH, EMMaterial, add_material_args
 
 
 def build_axi_mesh(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset, maxh):
@@ -126,13 +126,17 @@ def build_axi_mesh(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset, maxh):
 
 
 def compute_heating(R_coil, a_coil, R_wp, H_wp,
-                    sigma, frequency, material="steel",
+                    mat=None, frequency=50000,
                     I_total=1.0, maxh=0.003, order=3,
                     esim_geometry='cylinder'):
     """Compute workpiece heating via FEM-ESIM.
 
     Returns dict with P_total, P_distribution, L_coil, diagnostics.
     """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    sigma = mat.sigma
+
     from ngsolve import (H1, Periodic, BilinearForm, LinearForm, GridFunction,
                          Integrate, Conj, IfPos, sqrt, grad, dx, ds, x, y)
 
@@ -143,11 +147,11 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
 
     omega = 2 * np.pi * frequency
     J0 = I_total / (2 * a_coil)**2
-    rho = 1.0 / sigma
-    delta = math.sqrt(2 * rho / (omega * MU_0))
+    rho = mat.rho
+    delta = mat.skin_depth(frequency)
 
-    bh_curve = STEEL_BH if material == "steel" else None
-    mu_r = 1.0 if material in ("copper", "aluminum") else None
+    bh_curve = mat.bh_curve
+    mu_r = mat.mu_r if bh_curve is None else None
 
     # Kelvin parameters (auto-sized)
     a_kelvin = max(R_coil * 3, R_wp * 5, 0.15)
@@ -269,7 +273,7 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
         "t_esim": round(t_esim, 2),
         "frequency": frequency,
         "sigma": sigma,
-        "material": material,
+        "material": mat.name,
         "panels": panels,
     }
 
@@ -287,9 +291,7 @@ def main():
     parser.add_argument("--r-wp", type=float, required=True, help="Workpiece radius [m]")
     parser.add_argument("--h-wp", type=float, required=True, help="Workpiece height [m]")
     parser.add_argument("--frequency", type=float, default=50000, help="Frequency [Hz]")
-    parser.add_argument("--sigma", type=float, default=2e6, help="Conductivity [S/m]")
-    parser.add_argument("--material", default="steel",
-                        choices=["steel", "copper", "aluminum"])
+    add_material_args(parser, include_custom=False)
     parser.add_argument("--maxh", type=float, default=0.003, help="Mesh size [m]")
     parser.add_argument("--esim-geometry", default="local_curvature",
                         choices=["local_curvature", "none"],
@@ -301,8 +303,8 @@ def main():
         esim_geom = _geom_map.get(args.esim_geometry, "cylinder")
         return compute_heating(
             args.r_coil, args.a_coil, args.r_wp, args.h_wp,
-            args.sigma, args.frequency, args.material, maxh=args.maxh,
-            esim_geometry=esim_geom)
+            mat=EMMaterial.from_args(args), frequency=args.frequency,
+            maxh=args.maxh, esim_geometry=esim_geom)
 
     calc_main(run, parser)
 
