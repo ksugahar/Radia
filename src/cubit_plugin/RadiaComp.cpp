@@ -4,6 +4,7 @@
 #include "Claro.hpp"
 #include "CubitInterface.hpp"
 #include "CubitMessage.hpp"
+#include "LauncherLogic.hpp"
 
 // Export logic (integrated, no .ccm needed)
 #include "ExportGmshCommand.hpp"
@@ -1012,38 +1013,16 @@ static QList<ModeScript> discover_mode_scripts(const QString &pkgDir)
   return modes;
 }
 
-// Get block and sideset label names from current Cubit model.
-//
-// 2026-04-14 fix: sidesets must be queried via get_exodus_entity_name,
-// NOT get_entity_name. The latter is for mref entities (vertices /
-// curves / surfaces / volumes), and silently returns "" for sidesets.
-// CubitInterface.hpp line 4872 (Cubit 2025.3 SDK) confirms
-// get_exodus_entity_name supports "block", "sideset", "nodeset".
-//
-// The previous implementation made the launcher dialog falsely flag
-// "source" / "sink" as MISSING (Kubota / 100号機, 2026-04-14) even
-// though the sidesets were correctly registered in the Model Tree.
+// Thin Qt wrapper around RadiaLauncherLogic::get_model_labels.
+// All actual API calls live in LauncherLogic.hpp so that the headless
+// `radia_export verify_launcher` command tests the SAME code that the
+// dialog runs (2026-04-14 hardening — see feedback_gui_test_with_deploy).
 static QStringList get_model_labels()
 {
-  QSet<QString> names;
-
-  // Block names via the dedicated API.
-  std::vector<int> bids = CubitInterface::parse_cubit_list("block", "all");
-  for (int bid : bids) {
-    std::string n = CubitInterface::get_block_name(bid);
-    if (!n.empty())
-      names.insert(QString::fromStdString(n).toLower());
-  }
-
-  // Sideset names via get_exodus_entity_name (NOT get_entity_name).
-  std::vector<int> sids = CubitInterface::parse_cubit_list("sideset", "all");
-  for (int sid : sids) {
-    std::string n = CubitInterface::get_exodus_entity_name("sideset", sid);
-    if (!n.empty())
-      names.insert(QString::fromStdString(n).toLower());
-  }
-
-  return names.values();
+  QStringList out;
+  for (auto &n : RadiaLauncherLogic::get_model_labels())
+    out.append(QString::fromStdString(n));
+  return out;
 }
 
 // Launcher settings persistence (separate from export settings)
