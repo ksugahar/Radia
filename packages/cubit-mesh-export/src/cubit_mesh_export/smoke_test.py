@@ -171,8 +171,13 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     driver = work / "driver.jou"
 
     # Cubit-side driver: play the sample, then call the custom command.
+    # Ask verify_launcher to assert that every label expected by the GUI
+    # launcher dialog is reachable through the same code path the dialog
+    # uses (RadiaLauncherLogic::get_model_labels). 2026-04-14 hardening.
+    require_csv = ",".join(expect_materials + expect)
     driver.write_text(textwrap.dedent(f"""\
         play "{sample.as_posix()}"
+        radia_export verify_launcher require "{require_csv}"
         radia_export netgen "{vol_path.as_posix()}" order {order} overwrite
     """), encoding="utf-8")
     print(f"  Work:   {work}")
@@ -195,6 +200,36 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
         "\n=== STDERR ===\n" + (proc.stderr or ""),
         encoding="utf-8", errors="replace")
     print(f"  Log:    {log_path}")
+
+    # Parse VERIFY_LAUNCHER: lines from Cubit stdout — these are the
+    # headless self-test of the launcher dialog logic.
+    launcher_kv = {}
+    for line in (proc.stdout or "").splitlines():
+        line = line.strip()
+        if line.startswith("VERIFY_LAUNCHER:"):
+            try:
+                _, body = line.split(":", 1)
+                k, v = body.strip().split("=", 1)
+                launcher_kv[k.strip()] = v.strip()
+            except ValueError:
+                pass
+    if launcher_kv:
+        print(f"  verify_launcher: {launcher_kv}")
+        if launcher_kv.get("status") != "OK":
+            print(f"[FAIL] verify_launcher status = "
+                  f"{launcher_kv.get('status', 'MISSING')}; "
+                  f"missing labels = {launcher_kv.get('missing', '?')}")
+            return 1
+        # default_vol_status FALLBACK_NEEDED is acceptable in -batch
+        # (no journal saved); INVALID is a real bug.
+        if launcher_kv.get("default_vol_status") == "INVALID":
+            print(f"[FAIL] verify_launcher default_vol_status = INVALID; "
+                  f"value = {launcher_kv.get('default_vol', '?')}")
+            return 1
+    else:
+        print("[FAIL] verify_launcher produced no output — the .ccm "
+              "lacks VerifyLauncherCommand. Rebuild the cubit plugin.")
+        return 1
 
     # Cubit's headless mode is flaky: it often segfaults in the mesh-cleanup
     # stage AFTER radia_export has written the .vol. We therefore trust the
