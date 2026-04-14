@@ -9,11 +9,16 @@ ROADMAP.md
 docs/research/
 publish_to_pypi.cmd
 ngsolve_developers/
+to_developers/
 Build_PyPI_Package.ps1
 build_log.txt
 logs/
 src/FastMaxwellv1.0/
 examples/peec_integration/spiral_inductor/
+
+# Demo output artifacts (regenerable from the .py script next to them)
+examples/**/out_*.png
+examples/**/out_*.txt
 
 # Kelvin transformation reference documents (large PDFs, docx)
 examples/KelvinTransformation/docs/Supplement/Computational Electromagnetism/
