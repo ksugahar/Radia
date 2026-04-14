@@ -18,8 +18,12 @@ $env:NETGEN_DIR = 'C:\Program Files\Python312\Lib\site-packages\netgen'
 $cmake = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 
 # Resolve the cubit plugin source dir relative to this script.
+# Use ProviderPath to strip the "Microsoft.PowerShell.Core\FileSystem::"
+# wrapper that Resolve-Path inserts on UNC paths.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$src = (Resolve-Path (Join-Path $scriptDir "../src/cubit_plugin")).Path
+$src = (Resolve-Path (Join-Path $scriptDir "../src/cubit_plugin")).ProviderPath
+# CMake on Windows expects native backslashes for UNC paths.
+$src = $src -replace '/', '\'
 
 # Pull MSVC vars into pwsh.
 & cmd /c "`"$vcvarsBat`" && set" | ForEach-Object {
