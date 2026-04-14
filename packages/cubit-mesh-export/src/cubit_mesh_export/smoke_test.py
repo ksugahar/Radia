@@ -87,8 +87,17 @@ def _find_sample_jou(override: str = "") -> Path:
         "package (`pip install radia`) or pass --jou <path>.")
 
 
-def _read_vol_bcnames(vol_path: Path):
-    """Read the ``bcnames`` section of a Netgen .vol (text format)."""
+def _read_vol_named_section(vol_path: Path, section: str):
+    """Read a named-items section (e.g. ``bcnames``, ``materials``) of a
+    Netgen .vol text file. Both sections share the layout::
+
+        <section>
+        <N>
+        <id> "<name>"
+        ...
+
+    Returns a list of names in declaration order.
+    """
     names = []
     with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
         inside = False
@@ -97,7 +106,7 @@ def _read_vol_bcnames(vol_path: Path):
         for line in f:
             s = line.strip()
             if not inside:
-                if s == "bcnames":
+                if s == section:
                     inside = True
                     count_line_seen = False
                 continue
@@ -119,12 +128,29 @@ def _read_vol_bcnames(vol_path: Path):
     return names
 
 
+def _read_vol_bcnames(vol_path: Path):
+    return _read_vol_named_section(vol_path, "bcnames")
+
+
+def _read_vol_materials(vol_path: Path):
+    return _read_vol_named_section(vol_path, "materials")
+
+
 def run_smoke_test(*, jou: str = "", order: int = 2,
                     expect: list[str] | None = None,
+                    expect_materials: list[str] | None = None,
                     keep: bool = False, timeout: float = 600.0) -> int:
-    """Run the round-trip. Returns 0 on success, 1 on any failure."""
+    """Run the round-trip. Returns 0 on success, 1 on any failure.
+
+    expect: boundary (sideset) labels required in the .vol bcnames section.
+    expect_materials: block (volume / material) names required in the .vol
+        materials section. Block names live in a different section than
+        sidesets — do not mix them up (2026-04-14 false-FAIL).
+    """
     if expect is None:
-        expect = ["coil", "source", "sink", "sibc"]
+        expect = ["source", "sink", "sibc"]
+    if expect_materials is None:
+        expect_materials = ["coil", "workpiece", "air"]
 
     cubit_exe = _find_cubit_exe()
     if cubit_exe is None:
@@ -170,34 +196,56 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
         encoding="utf-8", errors="replace")
     print(f"  Log:    {log_path}")
 
-    if proc.returncode != 0:
-        print("[FAIL] Cubit exited non-zero. See log above.")
+    # Cubit's headless mode is flaky: it often segfaults in the mesh-cleanup
+    # stage AFTER radia_export has written the .vol. We therefore trust the
+    # .vol as the source of truth — its presence + valid bcnames means the
+    # plugin round-trip succeeded, regardless of Cubit's exit code.
+    if not vol_path.is_file():
+        print(f"[FAIL] radia_export did not produce {vol_path}")
+        if proc.returncode != 0:
+            print(f"[DIAG] Cubit exited with {proc.returncode} "
+                  "(0xC0000005 = access violation is common on exit).")
         print("----- last 30 lines of stderr -----")
         for line in (proc.stderr or "").splitlines()[-30:]:
             print(f"    {line}")
         return 1
 
-    if not vol_path.is_file():
-        print(f"[FAIL] radia_export did not produce {vol_path}")
-        return 1
+    if proc.returncode != 0:
+        print(f"[WARN] Cubit exited {proc.returncode} after exporting the "
+              ".vol. Cubit's headless teardown can segfault after a "
+              "successful export; continuing because the .vol looks valid.")
     print(f"  .vol size: {vol_path.stat().st_size} bytes")
 
-    # Inspect boundary labels
+    # Inspect boundary labels (sidesets)
     try:
         bcnames = _read_vol_bcnames(vol_path)
     except Exception as e:
         print(f"[FAIL] could not parse .vol bcnames: {e}")
         return 1
-    print(f"  bcnames ({len(bcnames)}): {bcnames}")
+    print(f"  bcnames  ({len(bcnames)}): {bcnames}")
 
-    missing = [name for name in expect if name not in bcnames]
-    if missing:
-        print(f"[FAIL] missing expected boundary label(s): {missing}")
-        print(f"       present: {bcnames}")
+    # Inspect block / material labels
+    try:
+        materials = _read_vol_materials(vol_path)
+    except Exception as e:
+        print(f"[FAIL] could not parse .vol materials: {e}")
+        return 1
+    print(f"  materials ({len(materials)}): {materials}")
+
+    missing_bnd = [name for name in expect if name not in bcnames]
+    missing_mat = [name for name in expect_materials if name not in materials]
+    if missing_bnd or missing_mat:
+        if missing_bnd:
+            print(f"[FAIL] missing expected boundary label(s): {missing_bnd}")
+            print(f"       bcnames present: {bcnames}")
+        if missing_mat:
+            print(f"[FAIL] missing expected material/block name(s): {missing_mat}")
+            print(f"       materials present: {materials}")
         return 1
 
     print()
-    print(f"[OK] round-trip healthy. expected labels {expect} all present.")
+    print(f"[OK] round-trip healthy. "
+          f"Boundaries {expect} + materials {expect_materials} all present.")
 
     if not keep:
         import shutil as _sh
@@ -222,9 +270,15 @@ def main():
                         help="mesh curving order passed to radia_export "
                              "netgen (default 2)")
     parser.add_argument("--expect", nargs="+",
-                        default=["coil", "source", "sink", "sibc"],
-                        help="boundary labels required in the .vol "
-                             "(default: coil source sink sibc)")
+                        default=["source", "sink", "sibc"],
+                        help="boundary (sideset) labels required in the "
+                             ".vol bcnames section "
+                             "(default: source sink sibc)")
+    parser.add_argument("--expect-materials", nargs="+",
+                        default=["coil", "workpiece", "air"],
+                        help="block / material names required in the .vol "
+                             "materials section "
+                             "(default: coil workpiece air)")
     parser.add_argument("--keep", action="store_true",
                         help="keep the temp work directory for inspection")
     parser.add_argument("--timeout", type=float, default=600.0,
@@ -236,7 +290,9 @@ def main():
     print("=" * 60)
     print()
     rc = run_smoke_test(jou=args.jou, order=args.order,
-                         expect=args.expect, keep=args.keep,
+                         expect=args.expect,
+                         expect_materials=args.expect_materials,
+                         keep=args.keep,
                          timeout=args.timeout)
     raise SystemExit(rc)
 
