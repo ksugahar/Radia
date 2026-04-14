@@ -123,7 +123,8 @@ def print_result(tag, r):
 
 
 def compare_one(material, freq, R_coil, a_coil, R_wp, H_wp,
-                gap_deg, maxh_air_3d, order_3d, skip_full=False):
+                gap_deg, maxh_air_3d, order_3d, skip_full=False,
+                skip_3d=False):
     sigma = SIGMA_MAP[material]
     mu_r = MU_R_MAP[material]
     if mu_r is None:

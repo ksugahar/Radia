@@ -34,7 +34,10 @@ from em_material import EMMaterial, MU_0
 
 def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
                     mat=None, frequency=7000, I_total=1.0, maxh_air=0.010,
-                    kelvin=False, order=2):
+                    kelvin=False, order=2,
+                    skin_mode="uniform", maxh_wp=None,
+                    maxh_wp_interior=None, skin_ratio=5.0,
+                    grading=0.5):
     """2D axisymmetric FEM with full eddy current resolution.
 
     Args:
@@ -64,7 +67,10 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
     nu_wp = 1.0 / (mu_r_val * MU_0)
     delta = mat.skin_depth(frequency)
 
-    maxh_wp = max(delta / 5, 0.0002)
+    if maxh_wp is None:
+        maxh_wp = delta / skin_ratio
+    if maxh_wp_interior is None:
+        maxh_wp_interior = max(delta * 3, maxh_wp)
     maxh_coil = a_coil / 2
 
     t0 = time.perf_counter()
@@ -99,7 +105,13 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
             r_wp, h_wp / 2).LineTo(0, h_wp / 2).LineTo(0, -h_wp / 2)
         cond_full = wp_cond.Face()
         cond_full.name = "workpiece"
-        cond_full.maxh = maxh_wp
+        if skin_mode == "skin":
+            cond_full.maxh = maxh_wp_interior
+            for e in cond_full.edges:
+                if e.center.x > 1e-6:
+                    e.maxh = maxh_wp
+        else:
+            cond_full.maxh = maxh_wp
 
         # Exterior half-circle centered at (0, z_offset)
         wp2 = WorkPlane(Axes((0, z_offset, 0), n=Z, h=X))
@@ -181,7 +193,7 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
         shape = Glue([inner_air, coil_half, cond_half, outer_half, gnd_point])
         geo = OCCGeometry(shape, dim=2)
         with TaskManager():
-            ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.5)
+            ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=grading)
         mesh = Mesh(ngmesh)
         mesh.Curve(order)
 
@@ -230,7 +242,13 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
             r_wp, h_wp / 2).LineTo(0, h_wp / 2).LineTo(0, -h_wp / 2)
         cond_face = wp_cond.Face()
         cond_face.name = "workpiece"
-        cond_face.maxh = maxh_wp
+        if skin_mode == "skin":
+            cond_face.maxh = maxh_wp_interior
+            for e in cond_face.edges:
+                if e.center.x > 1e-6:
+                    e.maxh = maxh_wp
+        else:
+            cond_face.maxh = maxh_wp
         for e in cond_face.edges:
             if abs(e.center.x) < 1e-6:
                 e.name = "axis"
@@ -248,7 +266,7 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
         shape = Glue([air_cut, cond_face, coil_face])
         geo = OCCGeometry(shape, dim=2)
         with TaskManager():
-            ngmesh = geo.GenerateMesh(maxh=maxh_air)
+            ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=grading)
         mesh = Mesh(ngmesh)
         mesh.Curve(order)
 
