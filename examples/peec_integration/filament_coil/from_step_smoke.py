@@ -124,6 +124,107 @@ def test_square_torus():
               f"(expected {w * 1e3:.2f} x {h * 1e3:.2f} mm)")
 
 
+def _build_racetrack_step(path, length=0.040, radius=0.020, w=0.006, h=0.006):
+    """Build a planar racetrack (2 straights + 2 semicircles) via CoilBuilder."""
+    sys.path.insert(0, SRC_RADIA)
+    from radia_coil_builder import CoilBuilder
+    cb = (CoilBuilder(current=1.0)
+          .set_start([0, -radius, 0],
+                     orientation=np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+          .set_cross_section(width=w, height=h)
+          .add_straight(length)
+          .add_arc(radius=radius, arc_angle=180, tilt=0)
+          .add_straight(length)
+          .add_arc(radius=radius, arc_angle=180, tilt=0))
+    cb.write_step(path)
+
+
+def test_racetrack():
+    print()
+    print("=" * 70)
+    print("  Test 3: racetrack (2 straights + 2 semicircles)")
+    print("=" * 70)
+    from coil_from_step import (extract_centerline, polyline_to_segments)
+    length, radius = 0.040, 0.020
+    w, h = 0.006, 0.006
+    step = os.path.join(HERE, "out_smoke_racetrack.step")
+    try:
+        _build_racetrack_step(step, length, radius, w, h)
+    except Exception as e:
+        print(f"  Build failed: {e}")
+        return
+    res = extract_centerline(
+        step,
+        start_hint=(np.array([0, -radius, 0]), np.array([0, 1, 0])),
+        step_size=0.003,
+    )
+    L_expected = 2 * length + 2 * math.pi * radius
+    L = res.arclen[-1] + (
+        np.linalg.norm(res.polyline[-1] - res.polyline[0])
+        if res.closed else 0.0)
+    print(f"  stations  : {len(res.polyline)} (closed={res.closed})")
+    print(f"  arclength : {L:.4f} m  (expected {L_expected:.4f} m, "
+          f"err {(L - L_expected) / L_expected * 100:+.2f}%)")
+
+    segs = polyline_to_segments(res)
+    print(f"  Reconstructed {len(segs)} segments (expected 4):")
+    for i, s in enumerate(segs):
+        if s.kind == 'arc':
+            print(f"    [{i}] arc   length={s.length * 1e3:.2f}mm "
+                  f"radius={s.radius * 1e3:.2f}mm "
+                  f"angle={s.angle_deg:.2f}deg")
+        else:
+            print(f"    [{i}] straight length={s.length * 1e3:.2f}mm")
+
+    print()
+    print("  Building CoilBuilder...")
+    from coil_from_step import to_coil_builder
+    try:
+        builder, _ = to_coil_builder(res, current=1.0)
+        print(f"  CoilBuilder OK with {len(builder.segments)} segments")
+    except Exception as e:
+        print(f"  ERROR: {e}")
+
+
+def test_sprint2_segments():
+    print()
+    print("=" * 70)
+    print("  Sprint 2: polyline -> CoilBuilder reconstruction")
+    print("=" * 70)
+    from coil_from_step import (extract_centerline, polyline_to_segments,
+                                 to_coil_builder)
+    R, a = 0.030, 0.003
+    step = os.path.join(HERE, "out_smoke_torus_circular.step")
+    res = extract_centerline(
+        step,
+        start_hint=(np.array([R, 0, 0]), np.array([0, 1, 0])),
+        step_size=0.003,
+    )
+    segs = polyline_to_segments(res)
+    print(f"  Reconstructed {len(segs)} segments:")
+    for i, s in enumerate(segs):
+        if s.kind == 'arc':
+            print(f"    [{i}] arc   length={s.length * 1e3:.2f}mm "
+                  f"radius={s.radius * 1e3:.2f}mm "
+                  f"angle={s.angle_deg:.2f} deg "
+                  f"profile={type(s.profile).__name__}")
+        else:
+            print(f"    [{i}] straight length={s.length * 1e3:.2f}mm "
+                  f"profile={type(s.profile).__name__}")
+    print(f"  Total length: {sum(s.length for s in segs) * 1e3:.2f}mm "
+          f"(expected {2 * math.pi * R * 1e3:.2f}mm)")
+
+    print()
+    print("  Building CoilBuilder...")
+    try:
+        builder, _ = to_coil_builder(res, current=1.0)
+        print(f"  CoilBuilder OK with {len(builder.segments)} segments")
+    except Exception as e:
+        print(f"  ERROR: {e}")
+
+
 if __name__ == "__main__":
     test_circular_torus()
     test_square_torus()
+    test_sprint2_segments()
+    test_racetrack()
