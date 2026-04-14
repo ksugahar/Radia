@@ -954,6 +954,47 @@ public:
         return result;
     }
 
+    /**
+     * Solve for per-filament complex branch currents at a given frequency,
+     * given user-specified port current injection.
+     *
+     * I_branch[f] = current flowing from node_from[f] to node_to[f] (complex).
+     * Useful for the "N parallel filaments between two ports, I_total injected"
+     * workflow: pass port_currents=[I_total] and read off the AC current
+     * distribution including skin + proximity coupling.
+     */
+    py::array_t<std::complex<double>> solve_branch_currents(
+        double freq,
+        py::array_t<std::complex<double>> port_currents,
+        py::object Zs_obj = py::none()) {
+
+        auto pc_buf = port_currents.unchecked<1>();
+        int n_pc = static_cast<int>(pc_buf.size());
+
+        const std::complex<double>* Zs_ptr = nullptr;
+        int n_Zs = 0;
+        py::array_t<std::complex<double>> Zs_arr;
+        if (!Zs_obj.is_none()) {
+            Zs_arr = Zs_obj.cast<py::array_t<std::complex<double>>>();
+            auto Zs_buf = Zs_arr.unchecked<1>();
+            Zs_ptr = Zs_buf.data(0);
+            n_Zs = static_cast<int>(Zs_buf.size());
+        }
+
+        int n_loop = matrices_.n_loop;
+        py::array_t<std::complex<double>> I_out(n_loop);
+        auto I_buf = I_out.mutable_unchecked<1>();
+
+        std::vector<std::complex<double>> I_branch(n_loop);
+        solver_->ComputeBranchCurrents(freq,
+                                        pc_buf.data(0), n_pc,
+                                        Zs_ptr, n_Zs,
+                                        I_branch.data(), n_loop);
+
+        for (int i = 0; i < n_loop; ++i) I_buf(i) = I_branch[i];
+        return I_out;
+    }
+
     int num_ports() const { return n_ports_; }
 
     void set_solver_method(int method) { solver_->SetSolverMethod(method); }
@@ -1440,6 +1481,26 @@ Example:
 
              Returns:
                  dict with 'freqs' and 'Z_matrix' (n_freq, n_ports, n_ports)
+             )doc")
+
+        .def("solve_branch_currents", &PyMNASolver::solve_branch_currents,
+             py::arg("freq"),
+             py::arg("port_currents"),
+             py::arg("Zs") = py::none(),
+             R"doc(
+             Solve for per-filament complex branch currents under user-specified
+             port current injection.
+
+             Args:
+                 freq: Frequency in Hz
+                 port_currents: Complex currents injected at each port (n_ports,)
+                 Zs: Optional per-filament surface impedance (n_loop,) complex
+
+             Returns:
+                 I_branch: (n_loop,) complex numpy array. I_branch[f] > 0 means
+                     current flows from node_from[f] to node_to[f]. For a bundle
+                     of parallel filaments between port+ and port-, sum(I_branch)
+                     equals port_currents[0].
              )doc")
 
         .def_property_readonly("num_ports", &PyMNASolver::num_ports,
