@@ -43,14 +43,13 @@ radia-*/
 *.o
 *.obj
 
-# But DO track the Cubit plugin binaries — they ship in the
-# cubit-mesh-export wheel and CI does not rebuild them. .ccl already
-# tracked as src/radia/radia_cubit.ccl. Mirror for .ccm and .pyd.
+# But DO track the Cubit plugin .ccm/.ccl — they ship in the
+# cubit-mesh-export wheel and CI does not rebuild them. .pyd is
+# intentionally NOT tracked (Policy 2 bans .pyd in git, and it is an
+# optional Cubit-less HO meshing module). Wheel ships .ccm + .ccl only.
 !src/radia/radia_cubit.ccm
-!src/radia/radia_cubit_mesh.pyd
 !packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit.ccm
 !packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit.ccl
-!packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit_mesh.pyd
 *.exe
 *.out
 *.app
