@@ -697,11 +697,23 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
         wp_J_full = np.zeros((mesh_full.nv, 3))
         wp_q_full = np.zeros(mesh_full.nv)
         Jmag2_v = np.sum(Jre_v ** 2 + Jim_v ** 2, axis=1)
-        # Heating density: P = sigma * |J|^2 / 2 (RMS of phasor =
-        # sqrt(2)*peak; convention here uses peak J so /2 gives
-        # the time-averaged W/m^2). Surface current J [A/m] gives
-        # power per unit area in W/m^2.
-        q_v = sigma * Jmag2_v / 2.0
+        # Heating density [W/m^2] for a SIBC conductor carrying surface
+        # current J_s [A/m]:
+        #
+        #   Z_s  = (1 + j) / (sigma * delta)   [Ω/sq]  (SIBC)
+        #   q''  = 0.5 * Re(Z_s) * |J_s|^2
+        #        = 0.5 * |J_s|^2 / (sigma * delta)     [W/m^2]
+        #
+        # Previous formula `sigma * |J_s|^2 / 2` was dimensionally wrong
+        # (A^2 * S / m^3, not W/m^2) and off by a factor of ~delta*sigma
+        # ~ 1e-1, giving q ~10^8 W/m^2 where the physics expects ~1 W/m^2
+        # for the IH BEM sample. Fixed 2026-04-15 after sugahara GUI
+        # feedback ("発熱密度が一様で気持ち悪い" - values saturated the
+        # log-scale legend because they were 8 orders of magnitude too
+        # large). Jre/Jim here are the real / imaginary parts of the
+        # surface current phasor (peak amplitudes), so the 0.5 factor
+        # converts peak^2 to time-averaged power.
+        q_v = 0.5 * Jmag2_v / (sigma * delta)
         for new_nr, old_nr in wp_new_to_old.items():
             if 0 <= new_nr < mesh_wp.nv and 0 <= old_nr < mesh_full.nv:
                 wp_J_full[old_nr] = Jre_v[new_nr]
