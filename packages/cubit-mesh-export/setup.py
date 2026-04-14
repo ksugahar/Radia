@@ -54,16 +54,33 @@ def _check_binary_freshness():
         pkg_dir / "radia_cubit.ccm",
         pkg_dir / "radia_cubit.ccl",
     ]
+    present = [p for p in bundled if p.is_file()]
     missing = [p for p in bundled if not p.is_file()]
+    if not present:
+        # No binaries shipped at all — assume sdist / source-only build.
+        # The wheel will still be installable (Python-only fallback paths)
+        # but cubit-plugin-install will fail loud at deploy time.
+        sys.stderr.write(
+            "cubit-mesh-export: WARN — no bundled plugin binaries found "
+            "in package source dir.\n")
+        sys.stderr.write(
+            "  Building sdist or a Python-only wheel. Wheel will lack "
+            "radia_cubit.ccm / .ccl and cubit-plugin-install will refuse "
+            "to deploy from it.\n")
+        return
     if missing:
         sys.stderr.write(
-            "\ncubit-mesh-export: FATAL — expected bundled binary missing:\n")
+            "\ncubit-mesh-export: FATAL — partial set of bundled binaries:\n")
+        for p in present:
+            sys.stderr.write(f"  [present] {p.name}\n")
         for p in missing:
-            sys.stderr.write(f"  - {p}\n")
+            sys.stderr.write(f"  [MISSING] {p}\n")
         sys.stderr.write(
-            "\n  Rebuild the Cubit plugin and propagate the artifacts:\n"
-            "    powershell Build.ps1 -Rebuild   # from repo root\n\n")
+            "\n  All-or-nothing: either ship every binary or none. Rebuild "
+            "and re-propagate (radia_cubit.ccm + radia_cubit.ccl are built\n"
+            "  together by Build.ps1 -Rebuild) before retrying.\n\n")
         sys.exit(1)
+    bundled = present  # only freshness-check the binaries we will ship
 
     # Find the latest mtime among .cpp/.hpp/.h/.cmake under src/cubit_plugin/.
     latest_src_mtime = 0.0

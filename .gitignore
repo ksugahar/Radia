@@ -42,6 +42,15 @@ radia-*/
 *.dylib
 *.o
 *.obj
+
+# But DO track the Cubit plugin binaries — they ship in the
+# cubit-mesh-export wheel and CI does not rebuild them. .ccl already
+# tracked as src/radia/radia_cubit.ccl. Mirror for .ccm and .pyd.
+!src/radia/radia_cubit.ccm
+!src/radia/radia_cubit_mesh.pyd
+!packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit.ccm
+!packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit.ccl
+!packages/cubit-mesh-export/src/cubit_mesh_export/radia_cubit_mesh.pyd
 *.exe
 *.out
 *.app
