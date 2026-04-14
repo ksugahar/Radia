@@ -205,10 +205,20 @@ void RadiaComp::setup_menus()
   QObject::connect(a_vol, SIGNAL(triggered()), handler, SLOT(mesh_volume()));
   menu_list.push_back(a_vol);
 
+  // Separator before analysis launcher
+  QAction* sep2 = new QAction(handler);
+  sep2->setSeparator(true);
+  menu_list.push_back(sep2);
+
+  // Radia-NGSolve analysis launcher (was in Python Solve menu, now C++)
+  QAction* a_ngs = new QAction("Radia-NGSolve...", handler);
+  a_ngs->setStatusTip("Export .vol and launch analysis window (IH / EM / PCB)");
+  QObject::connect(a_ngs, SIGNAL(triggered()), handler, SLOT(launch_radia_ngsolve()));
+  menu_list.push_back(a_ngs);
+
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
-  // "Solve" menu is managed by Python (register_toolbar.py).
-  // launch_radia_ngsolve() is called from Python, not from C++ menu.
+  // Python Solve menu is removed (2026-04-14). Radia-NGSolve is here in C++.
 
   mMenuInitialized = true;
 }
