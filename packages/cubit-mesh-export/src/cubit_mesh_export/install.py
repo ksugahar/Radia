@@ -252,6 +252,97 @@ def _critical_plugin_files(cubit_dir: Path):
     ]
 
 
+def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
+    """Return list[(pkg_src, deployed_dst)] for each binary cubit-plugin-install
+    is responsible for."""
+    plugins_dir = cubit_dir / "bin" / "plugins"
+    bin_dir = cubit_dir / "bin"
+    pairs = []
+    if (pkg_dir / "radia_cubit.ccm").is_file():
+        pairs.append((pkg_dir / "radia_cubit.ccm",
+                       plugins_dir / "radia_cubit.ccm"))
+    if (pkg_dir / "radia_cubit.ccl").is_file():
+        pairs.append((pkg_dir / "radia_cubit.ccl",
+                       bin_dir / "radia_cubit.ccl"))
+    if (pkg_dir / "radia_cubit_mesh.pyd").is_file():
+        pairs.append((pkg_dir / "radia_cubit_mesh.pyd",
+                       plugins_dir / "radia_cubit_mesh.cp312-win_amd64.pyd"))
+    nglib, ngcore = _find_netgen_dlls()
+    if nglib:
+        pairs.append((nglib, plugins_dir / nglib.name))
+        pairs.append((ngcore, plugins_dir / ngcore.name))
+    return pairs
+
+
+def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
+    """Confirm that every expected file is deployed and matches the package.
+
+    Returns:
+        (ok: bool, issues: list[str])
+
+    Checks:
+      - every expected destination file exists
+      - destination file size + sha256 match the package source
+      - no stale ``radia_cubit.ccl`` lingering in bin/plugins/ (the
+        2026-04-14 shadow bug)
+
+    Independent from ``preflight()`` (which is read-only safety-before-write).
+    Use this after ``cubit-plugin-install`` finishes, OR at any later
+    time to re-confirm the install state.
+    """
+    issues = []
+
+    pairs = _expected_deployments(pkg_dir, cubit_dir)
+    if verbose:
+        print("  Verification:")
+
+    for src, dst in pairs:
+        if not dst.is_file():
+            msg = f"missing deployed file: {dst}"
+            issues.append(msg)
+            if verbose: print(f"    [MISS] {msg}")
+            continue
+        src_size = src.stat().st_size
+        dst_size = dst.stat().st_size
+        if src_size != dst_size:
+            msg = (f"size mismatch: {dst} = {dst_size} bytes, "
+                   f"package {src} = {src_size} bytes")
+            issues.append(msg)
+            if verbose: print(f"    [SIZE] {msg}")
+            continue
+        if _sha256(src) != _sha256(dst):
+            msg = f"sha256 mismatch: {dst} != {src}"
+            issues.append(msg)
+            if verbose: print(f"    [HASH] {msg}")
+            continue
+        if verbose:
+            print(f"    [OK] {dst.name}  ({dst_size} bytes, sha256 match)")
+
+    # Stale .ccl in plugins/ shadow guard.
+    stale_ccl = cubit_dir / "bin" / "plugins" / "radia_cubit.ccl"
+    if stale_ccl.is_file():
+        msg = (f"stale shadow file: {stale_ccl} — the .ccl belongs in "
+               f"{cubit_dir / 'bin'}, not bin/plugins/. Re-run "
+               "cubit-plugin-install to clean.")
+        issues.append(msg)
+        if verbose: print(f"    [STALE] {msg}")
+
+    # Compat report (read-only).
+    compat_ok, compat_msg = _check_radia_compat()
+    if verbose:
+        print(f"    compat: {compat_msg}")
+    if not compat_ok:
+        issues.append(f"Version incompatibility: {compat_msg}")
+
+    if verbose:
+        if issues:
+            print(f"  [FAIL] {len(issues)} issue(s) found.")
+        else:
+            print("  [OK] every expected binary present and matches package source.")
+
+    return (not issues), issues
+
+
 def preflight(cubit_dir: Path, *, verbose: bool = True):
     """Run the read-only safety checks.
 
@@ -396,7 +487,8 @@ def _copy_verified(src: Path, dst: Path, start_time: float):
 # Main install flow
 # ============================================================
 
-def install_plugin(*, all_users: bool = False, check_only: bool = False):
+def install_plugin(*, all_users: bool = False, check_only: bool = False,
+                    verify_only: bool = False):
     """Deploy Cubit plugin binaries to Cubit installation.
 
     Args:
@@ -424,6 +516,8 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False):
     print("  cubit-mesh-export: Plugin Install")
     if check_only:
         print("  (--check-only: no writes will be performed)")
+    elif verify_only:
+        print("  (--verify-only: confirming current deployment, no writes)")
     print("=" * 60)
     print()
 
@@ -435,6 +529,12 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False):
     print(f"  Cubit:   {cubit_dir}")
     print(f"  Package: {pkg_dir}")
     print()
+
+    if verify_only:
+        ok, issues = verify_deployment(pkg_dir, cubit_dir, verbose=True)
+        if not ok:
+            raise SystemExit(4)
+        return True
 
     ok, problems = preflight(cubit_dir, verbose=True)
     print()
@@ -511,20 +611,11 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False):
             print(f"    - {e}")
         raise SystemExit(3)
 
-    # Final post-install sanity: every expected artifact exists in the
-    # right place and hashes back to the source.
-    verify_errors = []
-    for src, dst in copy_jobs:
-        if not dst.is_file():
-            verify_errors.append(f"Missing after install: {dst}")
-            continue
-        if _sha256(src) != _sha256(dst):
-            verify_errors.append(f"Hash mismatch after install: {dst}")
-    if verify_errors:
-        print()
-        print("  [FAIL] post-install verification hit errors:")
-        for e in verify_errors:
-            print(f"    - {e}")
+    # Final post-install sanity — delegated to verify_deployment for a
+    # single source of truth (also exposed via --verify-only).
+    print()
+    ok_v, _ = verify_deployment(pkg_dir, cubit_dir, verbose=True)
+    if not ok_v:
         raise SystemExit(4)
 
     print()
@@ -553,11 +644,18 @@ def main():
                              "user's ~/.cubit (requires admin)")
     parser.add_argument("--check-only", action="store_true",
                         help="run preflight only; do not modify anything")
+    parser.add_argument("--verify-only", action="store_true",
+                        help="check that the currently-deployed binaries "
+                             "match this package's source-of-truth (size + "
+                             "sha256). No writes.")
     args = parser.parse_args()
+    if args.check_only and args.verify_only:
+        parser.error("--check-only and --verify-only are mutually exclusive")
 
     try:
         ok = install_plugin(all_users=args.all_users,
-                            check_only=args.check_only)
+                            check_only=args.check_only,
+                            verify_only=args.verify_only)
     except SystemExit:
         raise
     except Exception as e:
