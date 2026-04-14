@@ -315,9 +315,10 @@ def extract_inductance_vol(vol_file, source_label="source",
     #     Z_s, so this path keeps the legacy uncoupled estimator with
     #     P/Q reported but no Delta L).
     if workpiece:
-        # "sibc" is the user-facing name for the linear analytical SIBC
-        # path implemented in _run_coupled_bem; "dowell" is the legacy
-        # internal name. Normalise to the same code branch.
+        # "sibc" is the GUI name for analytical surface-impedance with
+        # back-reaction. Internally it routes through _run_coupled_bem
+        # (which uses the analytical Dowell Z_s and writes wp_J / wp_q
+        # to the .msh for visualization). "dowell" is the legacy alias.
         if impedance_model == "sibc":
             impedance_model = "dowell"
         progress("WORKPIECE", f"impedance_model={impedance_model}, "
