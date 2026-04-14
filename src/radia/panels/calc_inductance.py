@@ -192,6 +192,7 @@ def extract_inductance_vol(vol_file, source_label="source",
     sys.stderr.flush()
 
     # Save results (.vol + .sol — NGSolve standard pair)
+    progress("POST_SOLVE", "saving surface_mesh.vol + J_coeffs.sol")
     mesh_vol = os.path.join(base_dir, "surface_mesh.vol").replace("\\", "/")
     mesh.ngmesh.Save(mesh_vol)
 
@@ -221,6 +222,7 @@ def extract_inductance_vol(vol_file, source_label="source",
     # path to re-write the same .msh with material-restricted views.
     J_nodes_full = None
     if gmsh_file_J:
+        progress("POST_SOLVE", "writing coil J vector field to .msh")
         try:
             from gmsh_post_export import GmshPostExport
             from ngsolve import (Integrate, CF, BND, HDivSurface,
@@ -313,6 +315,8 @@ def extract_inductance_vol(vol_file, source_label="source",
     #     Z_s, so this path keeps the legacy uncoupled estimator with
     #     P/Q reported but no Delta L).
     if workpiece:
+        progress("WORKPIECE", f"impedance_model={impedance_model}, "
+                              f"workpiece={workpiece}")
         if impedance_model == "dowell":
             try:
                 coupled_result = _run_coupled_bem(
