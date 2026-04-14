@@ -454,13 +454,23 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
         elem_area = Integrate(CF(1), solver.mesh, BND, element_wise=True)
         elem_Ht2 = Integrate(H_t_sq_cf, solver.mesh, BND, element_wise=True)
 
-        # Per-vertex q via element averaging
+        # Per-vertex q [W/m^2] via element averaging.
+        #
+        # SIBC heating density: q'' = 0.5 * Re(Z_s) * |H_t|^2
+        # (= 0.5 * |J_s|^2 / (sigma * delta) since J_s = n × H_t).
+        # Re(Z_s) comes directly from the solver's nonlinear ESIM
+        # (varies with |H_t|) or from the linear sibc fallback, matching
+        # the GMSH P_loss viz formula below at line ~505. The previous
+        # `0.5 * sigma * |H_t|^2` was dimensionally W/m^3 (volumetric)
+        # not W/m^2 — saved values were ~10^8 too large (sugahara 2026-
+        # 04-15 GUI feedback, same root cause as calc_inductance v4.5.9).
+        Re_Zs = float(Z_s.real)
         q_arr = np.zeros(solver.mesh.nv)
         nc = np.zeros(solver.mesh.nv)
         for el in solver.mesh.Elements(BND):
             a = max(abs(float(elem_area[el.nr])), 1e-30)
             ht2 = float(elem_Ht2[el.nr]) / a
-            qe = 0.5 * sigma * ht2
+            qe = 0.5 * Re_Zs * ht2
             for v in el.vertices:
                 q_arr[v.nr] += qe
                 nc[v.nr] += 1
