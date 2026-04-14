@@ -157,6 +157,15 @@ jobs:
       - name: Build cubit-mesh-export wheel
         if: success()
         shell: pwsh
+        env:
+          # Skip the dev-side mtime freshness gate in CI: self-hosted
+          # runners have persistent workspaces and git checkout does not
+          # reliably normalise mtimes, producing false positives that
+          # block unrelated commits (2026-04-14 incident: 2D axisym
+          # validation commit blocked by stale-binary false alarm). CI
+          # has its own wheel-content guard in release-cubit-mesh-export
+          # .yml that verifies .ccm/.ccl are present at publish time.
+          CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK: "1"
         run: |
           $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
           # Copy binaries to cubit-mesh-export package
