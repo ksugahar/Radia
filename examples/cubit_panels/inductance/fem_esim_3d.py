@@ -42,6 +42,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         R_wp=0.010, H_wp=0.020,
         sigma=2e6, frequency=7000, material="steel",
         R_air=0.06, maxh_air=0.012, maxh_coil=0.005,
+        maxh_wp_bnd=None,
         R_kelvin=0.12,
         order=1, esim_geometry='cylinder',
         approach='hole'):
@@ -57,6 +58,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         R_air: Air sphere / Kelvin boundary radius [m]
         maxh_air: Air mesh size [m]
         maxh_coil: Coil mesh size [m]
+        maxh_wp_bnd: WP surface mesh size [m]. If None, uses min(R_wp/4, maxh_coil).
         R_kelvin: Kelvin shell outer radius [m] (0 = no Kelvin, Dirichlet on R_air)
         order: HCurl polynomial order
         esim_geometry: 'cylinder' (Bessel I0/I1) or 'slab' (cosh/sinh)
@@ -127,9 +129,10 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
 
     # Workpiece cylinder
     wp_cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
+    wp_bnd_h = maxh_wp_bnd if maxh_wp_bnd is not None else min(R_wp / 4, maxh_coil)
     for f in wp_cyl.faces:
         f.name = "wp_surface"
-        f.maxh = min(R_wp / 4, maxh_coil)
+        f.maxh = wp_bnd_h
 
     if approach == 'hole':
         air = air_sphere - torus - wp_cyl
@@ -312,8 +315,19 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         # H_t gives the physical surface current (~0.7 A/m), which is the
         # correct input for the ESIM cell problem.
         if sibc_bnd:
-            At_sq = sum(gfu[i].real * gfu[i].real +
-                        gfu[i].imag * gfu[i].imag for i in range(3))
+            # |A_t|^2 = |A|^2 - |A.n|^2 (project out normal component).
+            # HCurl basis has NON-zero normal trace on a surface; summing
+            # gfu[i]^2 over i=0..2 gives |A|^2 (full vector), not the
+            # tangential magnitude. The physical SIBC relation
+            # J_s = -(jw/Z_s) A_t needs the TANGENTIAL A only.
+            from ngsolve import specialcf
+            nrm = specialcf.normal(3)
+            A_dot_n_re = sum(gfu[i].real * nrm[i] for i in range(3))
+            A_dot_n_im = sum(gfu[i].imag * nrm[i] for i in range(3))
+            A_n_sq = A_dot_n_re * A_dot_n_re + A_dot_n_im * A_dot_n_im
+            A_full_sq = sum(gfu[i].real * gfu[i].real +
+                            gfu[i].imag * gfu[i].imag for i in range(3))
+            At_sq = A_full_sq - A_n_sq
             At_int = Integrate(At_sq, mesh, BND,
                                definedon=wp_region).real
             At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
