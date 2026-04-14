@@ -845,11 +845,16 @@ def write_companion_opt(msh_filename, n_vector_views=0,
             f.write(f'View[{i}].VectorType = 4;\n')
             f.write(f'View[{i}].ArrowSizeMin = 20;\n')
             f.write(f'View[{i}].ArrowSizeMax = 20;\n')
-        # Scalar views: filled iso colormap with legend bar
+        # Scalar views: filled iso colormap with legend bar.
+        # Log scale (ScaleType = 2) so q heating density (usual range
+        # spans 2-5 decades from skin-depth local peak to far-side
+        # minimum) shows visible contrast instead of a uniform near-
+        # max band (2026-04-15: sugahara GUI feedback).
         for j in range(n_scalar_views):
             idx = n_vector_views + j
             f.write(f'View[{idx}].Visible = 1;\n')
             f.write(f'View[{idx}].IntervalsType = 2;\n')  # Filled
+            f.write(f'View[{idx}].ScaleType = 2;\n')  # 1=Linear 2=Log 3=Double-log
             f.write(f'View[{idx}].ShowScale = 1;\n')
             f.write(f'View[{idx}].NbIso = 20;\n')
     return opt_filename
