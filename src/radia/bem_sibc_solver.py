@@ -439,17 +439,22 @@ def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
     return phi
 
 
-def _h_segments_complex(segments, obs_points, currents):
+def _h_segments_complex(segments, obs_points, currents,
+                         seg_chunk=4096):
     """Finite-segment Biot-Savart H at obs_points with complex per-segment currents.
 
     segments:  (N_seg, 2, 3) real endpoints
     obs_points: (N_obs, 3) real
     currents:  (N_seg,) complex
+    seg_chunk: max segments processed at once (memory cap
+        ~ n_obs * seg_chunk * 3 complex floats)
     returns:   (N_obs, 3) complex
 
     Uses the exact analytical line-segment formula:
         H = I/(4 pi d) * (cos(alpha1) - cos(alpha2)) * e_perp
-    mirroring biot_savart.h_segments_batch but with per-segment current.
+    mirroring biot_savart.h_segments_batch but with per-segment
+    complex current. Fully vectorized across segments (previous
+    Python loop over N_seg was the phi_inc bottleneck).
     """
     INV_4PI = 1.0 / (4.0 * np.pi)
     obs = np.asarray(obs_points, dtype=float)
@@ -458,43 +463,57 @@ def _h_segments_complex(segments, obs_points, currents):
     n_obs = len(obs)
 
     seg = np.asarray(segments, dtype=float)
-    p1s = seg[:, 0, :]
-    p2s = seg[:, 1, :]
-    I = np.asarray(currents, dtype=complex)
-
-    dl = p2s - p1s
-    L = np.linalg.norm(dl, axis=1)
-    valid = L > 1e-30
-    e_l = np.zeros_like(dl)
-    e_l[valid] = dl[valid] / L[valid, np.newaxis]
+    p1s_all = seg[:, 0, :]
+    p2s_all = seg[:, 1, :]
+    I_all = np.asarray(currents, dtype=complex)
 
     H_total = np.zeros((n_obs, 3), dtype=complex)
 
-    for si in range(len(p1s)):
-        if not valid[si]:
+    # Chunk on segments to cap peak memory at
+    # n_obs * seg_chunk * 3 (* 16 B complex).
+    for s0 in range(0, len(p1s_all), seg_chunk):
+        s1 = min(s0 + seg_chunk, len(p1s_all))
+        p1s = p1s_all[s0:s1]  # (M, 3)
+        p2s = p2s_all[s0:s1]
+        I = I_all[s0:s1]      # (M,)
+        M = s1 - s0
+
+        dl = p2s - p1s                             # (M, 3)
+        L = np.linalg.norm(dl, axis=1)             # (M,)
+        valid_seg = L > 1e-30
+        if not np.any(valid_seg):
             continue
-        r1 = obs - p1s[si]
-        r2 = obs - p2s[si]
-        el = e_l[si]
-        cross = np.cross(el, r1)
-        d = np.linalg.norm(cross, axis=1)
-        ok = d > 1e-30
-        if not np.any(ok):
-            continue
-        e_perp = np.zeros_like(cross)
-        e_perp[ok] = cross[ok] / d[ok, np.newaxis]
-        r1_mag = np.linalg.norm(r1, axis=1)
-        r2_mag = np.linalg.norm(r2, axis=1)
-        ok &= (r1_mag > 1e-30) & (r2_mag > 1e-30)
-        if not np.any(ok):
-            continue
-        cos_a1 = np.zeros(n_obs)
-        cos_a2 = np.zeros(n_obs)
-        cos_a1[ok] = np.sum(r1[ok] * el, axis=1) / r1_mag[ok]
-        cos_a2[ok] = np.sum(r2[ok] * el, axis=1) / r2_mag[ok]
-        geom = np.zeros(n_obs)
-        geom[ok] = INV_4PI / d[ok] * (cos_a1[ok] - cos_a2[ok])
-        H_total[ok] += (I[si] * geom[ok])[:, np.newaxis] * e_perp[ok]
+        e_l = np.zeros_like(dl)
+        e_l[valid_seg] = dl[valid_seg] / L[valid_seg, np.newaxis]
+
+        # r1, r2 shape: (n_obs, M, 3)
+        r1 = obs[:, None, :] - p1s[None, :, :]
+        r2 = obs[:, None, :] - p2s[None, :, :]
+
+        # cross(e_l, r1) per (obs, seg) -> (n_obs, M, 3)
+        cross = np.cross(e_l[None, :, :], r1)
+        d = np.linalg.norm(cross, axis=2)          # (n_obs, M)
+        r1_mag = np.linalg.norm(r1, axis=2)
+        r2_mag = np.linalg.norm(r2, axis=2)
+
+        ok = (d > 1e-30) & (r1_mag > 1e-30) & (r2_mag > 1e-30)
+        ok &= valid_seg[None, :]
+
+        # Safe denominators to avoid /0 warnings outside 'ok'
+        d_safe = np.where(ok, d, 1.0)
+        r1_safe = np.where(ok, r1_mag, 1.0)
+        r2_safe = np.where(ok, r2_mag, 1.0)
+
+        cos_a1 = np.sum(r1 * e_l[None, :, :], axis=2) / r1_safe
+        cos_a2 = np.sum(r2 * e_l[None, :, :], axis=2) / r2_safe
+        geom = np.where(ok, INV_4PI / d_safe * (cos_a1 - cos_a2), 0.0)
+
+        # e_perp = cross / d (zero where not ok)
+        e_perp = cross / d_safe[..., None]
+
+        # H contribution per (obs, seg): I[seg] * geom[obs, seg] * e_perp[obs, seg, :]
+        weight = I[None, :] * geom                  # (n_obs, M) complex
+        H_total += np.sum(weight[..., None] * e_perp, axis=1)
 
     return H_total
 
