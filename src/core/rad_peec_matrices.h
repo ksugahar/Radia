@@ -519,6 +519,32 @@ public:
                         const std::complex<double>* Zs_all,
                         std::complex<double>* Z_out, int n_ports_out);
 
+    /**
+     * @brief Compute per-filament complex branch currents under user-specified
+     *        port current injection.
+     *
+     * Solves MNA with current-source port excitation (not voltage-source)
+     * and returns I_branch = Y_branch * A^T * V_node (n_loop complex entries,
+     * signed so that positive = current flowing from node_from to node_to).
+     *
+     * Use case: "All filaments in parallel between port+ and port-" -> set
+     * port_currents[0] = I_total, then the returned vector is the per-
+     * filament AC current distribution including skin/proximity coupling.
+     *
+     * @param freq Frequency in Hz
+     * @param port_currents Complex current injected at each port (size n_ports)
+     * @param Zs Optional per-filament surface impedance (n_loop), or nullptr
+     * @param n_Zs Number of Zs elements
+     * @param I_branch_out Output branch currents (n_loop complex, row-major)
+     * @param n_loop_out Size of I_branch_out (for validation)
+     */
+    void ComputeBranchCurrents(double freq,
+                                const std::complex<double>* port_currents,
+                                int n_ports_in,
+                                const std::complex<double>* Zs, int n_Zs,
+                                std::complex<double>* I_branch_out,
+                                int n_loop_out);
+
     // ========== Legacy API (upgraded to LAPACK zgesv_) ==========
 
     /**
