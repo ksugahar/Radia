@@ -43,7 +43,8 @@ class CoilSegment(ABC):
 	to enable automatic state tracking in the builder pattern.
 	"""
 
-	def __init__(self, current, start_pos, orientation, width, height, tilt=0):
+	def __init__(self, current, start_pos, orientation, width, height,
+	             tilt=0, profile=None):
 		"""
 		Initialize coil segment.
 
@@ -54,12 +55,24 @@ class CoilSegment(ABC):
 			width (float): Cross-section width (in active Radia units)
 			height (float): Cross-section height (in active Radia units)
 			tilt (float): Tilt angle in degrees (not applied here, applied in subclass)
+			profile (Profile, optional): Explicit cross-section Profile. If
+				given, replaces the implicit RectProfile(width, height) used
+				for filament sampling. width/height are still stored for
+				legacy consumers (to_radia, to_occ) and reporting.
 		"""
 		self.current = current
 		self.start_pos = np.array(start_pos)
 		self.orientation = np.array(orientation)
 		self.width = width
 		self.height = height
+
+		# Cross-section profile: explicit if given, else RectProfile fallback
+		# so StraightSegment/ArcSegment with the legacy (w, h) API continues
+		# to work.
+		if profile is None:
+			from radia.coil_profile import RectProfile
+			profile = RectProfile(width, height)
+		self.profile = profile
 
 		# Extract Euler angles for Radia transformations
 		rot = Rotation.from_matrix(self.orientation)
@@ -101,7 +114,8 @@ class StraightSegment(CoilSegment):
 	extending in the local Y direction.
 	"""
 
-	def __init__(self, current, start_pos, orientation, width, height, length, tilt=0):
+	def __init__(self, current, start_pos, orientation, width, height,
+	             length, tilt=0, profile=None):
 		"""
 		Initialize straight segment.
 
@@ -113,6 +127,7 @@ class StraightSegment(CoilSegment):
 			height (float): Cross-section height (in active Radia units)
 			length (float): Segment length (in active Radia units)
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
+			profile (Profile, optional): explicit cross-section profile.
 		"""
 		# Apply tilt transformation to orientation
 		tilt_rad = np.deg2rad(tilt)
@@ -127,7 +142,8 @@ class StraightSegment(CoilSegment):
 		tilted_width = abs(np.cos(tilt_rad) * width + np.sin(tilt_rad) * height)
 		tilted_height = abs(-np.sin(tilt_rad) * width + np.cos(tilt_rad) * height)
 
-		super().__init__(current, start_pos, tilted_orientation, tilted_width, tilted_height, tilt)
+		super().__init__(current, start_pos, tilted_orientation,
+		                 tilted_width, tilted_height, tilt, profile=profile)
 		self.length = length
 
 	@property
@@ -156,6 +172,182 @@ class StraightSegment(CoilSegment):
 		return shape
 
 
+class LoftStraightSegment(CoilSegment):
+	"""
+	Straight segment with a cross-section that lofts (linear interpolation)
+	from profile_start at the segment start to profile_end at the end.
+
+	Only Stage 3a feature: profiles must be of compatible type
+	(e.g. both RectProfile). Cross-type lofts (Stage 3b) are not yet
+	supported.
+
+	Filament paths through a loft segment are NOT straight lines in 3D --
+	each filament's (u, v) offset from the centerline varies with path
+	parameter s in [0, 1] as the profile morphs, so the filament itself
+	converges/diverges with the cross-section.
+	"""
+
+	def __init__(self, current, start_pos, orientation,
+	             profile_start, profile_end, length, n_sub=20, tilt=0):
+		"""
+		Args:
+			profile_start: Profile instance at segment start (s = 0).
+			profile_end: Profile instance at segment end (s = 1).
+			length: straight-path length in Radia units.
+			n_sub: number of sub-segments along the path for
+			       filament discretization. Larger -> better
+			       resolution of cross-section variation.
+			tilt: Y-axis rotation (same convention as StraightSegment).
+		"""
+		tilt_rad = np.deg2rad(tilt)
+		tilt_matrix = np.array([
+			[np.cos(tilt_rad), 0, -np.sin(tilt_rad)],
+			[0, 1, 0],
+			[np.sin(tilt_rad), 0, np.cos(tilt_rad)],
+		])
+		tilted_orientation = tilt_matrix @ orientation
+
+		# For the base class's width/height, use the END profile's bounding
+		# box so CoilBuilder._width/_height follow the cross-section at the
+		# next segment's start.
+		w_end, h_end = profile_end.bounding_wh()
+		super().__init__(current, start_pos, tilted_orientation,
+		                 w_end, h_end, tilt)
+		self.profile_start = profile_start
+		self.profile_end = profile_end
+		self.length = length
+		self.n_sub = int(n_sub)
+
+	@property
+	def end_pos(self):
+		return self.start_pos + self.length * self.orientation[1, :]
+
+	@property
+	def end_orientation(self):
+		return self.orientation
+
+	def profile_at(self, s):
+		"""Interpolated profile at normalized path parameter s in [0, 1]."""
+		return self.profile_start.interpolate(self.profile_end, s)
+
+	def to_occ_shape(self, index=0):
+		"""Loft OCC shape from profile_start at s=0 to profile_end at s=1.
+
+		Stage 3a implementation supports only RectProfile -> RectProfile
+		and emits a ThruSections loft between the two rectangle wires.
+		The resulting Solid is usable for STEP export and visual
+		inspection.
+		"""
+		from netgen.occ import (WorkPlane, Axes, Pnt, Axis, X, Y, Z, Vec,
+		                         ThruSections)
+		from radia.coil_profile import RectProfile
+		if not (isinstance(self.profile_start, RectProfile)
+		        and isinstance(self.profile_end, RectProfile)):
+			raise NotImplementedError(
+				"LoftStraightSegment.to_occ_shape is only implemented for "
+				"RectProfile -> RectProfile (Stage 3a).")
+		w0, h0 = self.profile_start.w, self.profile_start.h
+		w1, h1 = self.profile_end.w, self.profile_end.h
+		# ThruSections requires Wires (boundary curves), not Faces.
+		wire0 = WorkPlane(Axes(Pnt(0, 0, 0), n=Y, h=X)) \
+		        .Rectangle(w0, h0).Wire()
+		wire1 = WorkPlane(Axes(Pnt(0, self.length, 0), n=Y, h=X)) \
+		        .Rectangle(w1, h1).Wire()
+		shape = ThruSections([wire0, wire1], solid=True)
+		ea = self.euler_angles
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[2])
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), X), ea[1])
+		shape = shape.Rotate(Axis(Pnt(0, 0, 0), Z), ea[0])
+		shape = shape.Move(Vec(*self.start_pos))
+		shape.name = "coil_loft_" + str(index)
+		return shape
+
+
+class LoftArcSegment(CoilSegment):
+	"""
+	Arc segment with a cross-section that lofts (linear interpolation
+	in canonical (alpha, beta) parametrization) from profile_start at
+	the arc entry to profile_end at the arc exit.
+
+	Combines the geometric path of ArcSegment (rotation around arc_center
+	in the local XY plane) with the cross-section variation of
+	LoftStraightSegment. Each filament k at (alpha_k, beta_k) has radial
+	offset u_k(s) and axial offset v_k(s) that interpolate smoothly
+	between profile_start and profile_end as the arc parameter s goes
+	from 0 to 1.
+
+	Useful for IH turn geometries where the conductor cross-section
+	morphs through a bend (e.g. round wire transitioning to a flat strap
+	on a pancake coil turn).
+	"""
+
+	def __init__(self, current, start_pos, orientation, profile_start,
+	             profile_end, radius, arc_angle, n_sub=20, tilt=0):
+		"""
+		Args:
+			profile_start: Profile at arc entry (s = 0).
+			profile_end: Profile at arc exit (s = 1).
+			radius: arc center-line radius.
+			arc_angle: arc angle [deg] (signed).
+			n_sub: sub-segment count along the arc for filament
+			       discretization (larger -> smoother cross-section
+			       morph).
+			tilt: Y-axis tilt [deg] (same convention as ArcSegment).
+		"""
+		tilt_rad = np.deg2rad(tilt)
+		tilt_matrix = np.array([
+			[np.cos(tilt_rad), 0, -np.sin(tilt_rad)],
+			[0, 1, 0],
+			[np.sin(tilt_rad), 0, np.cos(tilt_rad)],
+		])
+		tilted_orientation = tilt_matrix @ orientation
+
+		# End-profile bounding (w, h) so CoilBuilder state follows.
+		w_end, h_end = profile_end.bounding_wh()
+		super().__init__(current, start_pos, tilted_orientation,
+		                 w_end, h_end, tilt, profile=None)
+		self.profile_start = profile_start
+		self.profile_end = profile_end
+		self.radius = radius
+		self.arc_angle = arc_angle
+		self.n_sub = int(n_sub)
+
+		# Arc center: same construction as ArcSegment.
+		self.arc_center = self.start_pos - self.radius * self.orientation[0, :]
+
+	@property
+	def end_pos(self):
+		phi_rad = np.deg2rad(self.arc_angle)
+		rotation_matrix = np.array([
+			[np.cos(phi_rad), np.sin(phi_rad), 0],
+			[-np.sin(phi_rad), np.cos(phi_rad), 0],
+			[0, 0, 1],
+		])
+		end_orientation = rotation_matrix @ self.orientation
+		return self.arc_center + self.radius * end_orientation[0, :]
+
+	@property
+	def end_orientation(self):
+		phi_rad = np.deg2rad(self.arc_angle)
+		rotation_matrix = np.array([
+			[np.cos(phi_rad), np.sin(phi_rad), 0],
+			[-np.sin(phi_rad), np.cos(phi_rad), 0],
+			[0, 0, 1],
+		])
+		return rotation_matrix @ self.orientation
+
+	def profile_at(self, s):
+		return self.profile_start.interpolate(self.profile_end, s)
+
+	def to_occ_shape(self, index=0):
+		"""OCC shape for LoftArcSegment is not yet implemented. For
+		visualization / STEP export, use multiple LoftStraightSegment
+		pieces along the arc, or use build123d's sweep/loft directly."""
+		raise NotImplementedError(
+			"LoftArcSegment.to_occ_shape: not implemented yet. "
+			"Use LoftStraightSegment chains for CAD export.")
+
+
 class ArcSegment(CoilSegment):
 	"""
 	Arc coil segment with optional tilt.
@@ -164,7 +356,8 @@ class ArcSegment(CoilSegment):
 	Tilt is applied first, then the arc rotation.
 	"""
 
-	def __init__(self, current, start_pos, orientation, width, height, radius, arc_angle, tilt=0):
+	def __init__(self, current, start_pos, orientation, width, height,
+	             radius, arc_angle, tilt=0, profile=None):
 		"""
 		Initialize arc segment.
 
@@ -177,6 +370,7 @@ class ArcSegment(CoilSegment):
 			radius (float): Arc radius (in active Radia units)
 			arc_angle (float): Arc angle in degrees
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
+			profile (Profile, optional): explicit cross-section profile.
 		"""
 		# Apply tilt transformation to orientation
 		tilt_rad = np.deg2rad(tilt)
@@ -191,7 +385,8 @@ class ArcSegment(CoilSegment):
 		tilted_width = abs(np.cos(tilt_rad) * width + np.sin(tilt_rad) * height)
 		tilted_height = abs(-np.sin(tilt_rad) * width + np.cos(tilt_rad) * height)
 
-		super().__init__(current, start_pos, tilted_orientation, tilted_width, tilted_height, tilt)
+		super().__init__(current, start_pos, tilted_orientation,
+		                 tilted_width, tilted_height, tilt, profile=profile)
 		self.radius = radius
 		self.arc_angle = arc_angle
 
@@ -284,6 +479,9 @@ class CoilBuilder:
 		self._orientation = np.eye(3)
 		self._width = None
 		self._height = None
+		# Optional explicit profile, takes precedence over (_width, _height)
+		# when a segment is added. Set via set_profile().
+		self._profile = None
 
 	def set_start(self, position, orientation=None):
 		"""
@@ -304,7 +502,9 @@ class CoilBuilder:
 
 	def set_cross_section(self, width, height):
 		"""
-		Set cross-section dimensions for subsequent segments.
+		Set rectangular cross-section dimensions for subsequent segments.
+
+		Clears any explicit profile previously set via set_profile().
 
 		Args:
 			width (float): Width (in active Radia units)
@@ -315,6 +515,27 @@ class CoilBuilder:
 		"""
 		self._width = width
 		self._height = height
+		self._profile = None
+		return self
+
+	def set_profile(self, profile):
+		"""Set an explicit cross-section Profile for subsequent segments.
+
+		Overrides set_cross_section(). Profile bounding (w, h) still
+		populates _width / _height for legacy consumers, but filament
+		sampling in to_filaments uses profile.sample_at() directly.
+
+		Args:
+			profile: Profile instance (RectProfile, CircleProfile,
+				AnnularProfile, etc.)
+
+		Returns:
+			self (for method chaining)
+		"""
+		self._profile = profile
+		w, h = profile.bounding_wh()
+		self._width = w
+		self._height = h
 		return self
 
 	def _check_cross_section(self):
@@ -325,13 +546,16 @@ class CoilBuilder:
 				"before adding segments."
 			)
 
-	def add_straight(self, length, tilt=0):
+	def add_straight(self, length, tilt=0, profile=None):
 		"""
 		Add a straight segment.
 
 		Args:
 			length (float): Length (in active Radia units)
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
+			profile (Profile, optional): explicit cross-section profile.
+				If None, uses self._profile (from set_profile) or
+				RectProfile(self._width, self._height).
 
 		Returns:
 			self (for method chaining)
@@ -340,6 +564,9 @@ class CoilBuilder:
 			ValueError: If set_cross_section() has not been called.
 		"""
 		self._check_cross_section()
+		if profile is None:
+			profile = self._profile  # may still be None -> CoilSegment
+			                          # builds RectProfile(w, h)
 		segment = StraightSegment(
 			self.current,
 			self._position,
@@ -347,7 +574,8 @@ class CoilBuilder:
 			self._width,
 			self._height,
 			length,
-			tilt
+			tilt,
+			profile=profile,
 		)
 		self.segments.append(segment)
 
@@ -356,10 +584,103 @@ class CoilBuilder:
 		self._orientation = segment.end_orientation
 		self._width = segment.width
 		self._height = segment.height
+		# Carry forward the explicit profile (if any) so subsequent
+		# add_straight / add_arc without explicit profile= inherit it.
+		if profile is not None:
+			self._profile = profile
 
 		return self
 
-	def add_arc(self, radius, arc_angle, tilt=0):
+	def add_loft_straight(self, profile_end, length, n_sub=20, tilt=0,
+	                     profile_start=None):
+		"""Add a straight segment with a lofting cross-section.
+
+		The cross-section interpolates linearly from profile_start at
+		s=0 to profile_end at s=1. profile_start defaults to the
+		current builder cross-section (a RectProfile constructed from
+		the builder's _width, _height).
+
+		Args:
+			profile_end: Profile at the segment end. Same type as
+				profile_start (Stage 3a: RectProfile only).
+			length: straight-path length [active Radia units].
+			n_sub: number of sub-segments along the path for filament
+				discretization. Default 20.
+			tilt: Y-axis tilt [deg].
+			profile_start: explicit Profile at segment start. If None,
+				uses RectProfile(self._width, self._height) matching
+				the builder's current cross-section.
+		Returns:
+			self (for chaining).
+		"""
+		from radia.coil_profile import RectProfile
+		if profile_start is None:
+			self._check_cross_section()
+			profile_start = RectProfile(self._width, self._height)
+
+		segment = LoftStraightSegment(
+			self.current, self._position, self._orientation,
+			profile_start, profile_end, length, n_sub=n_sub, tilt=tilt,
+		)
+		self.segments.append(segment)
+
+		self._position = segment.end_pos
+		self._orientation = segment.end_orientation
+		# Update builder cross-section to end profile (so the next
+		# add_straight / add_arc inherits the new size).
+		w_end, h_end = profile_end.bounding_wh()
+		self._width = w_end
+		self._height = h_end
+
+		return self
+
+	def add_loft_arc(self, profile_end, radius, arc_angle, n_sub=20, tilt=0,
+	                  profile_start=None):
+		"""Add an arc segment with a lofting cross-section.
+
+		The cross-section interpolates linearly in canonical (alpha,
+		beta) space from profile_start at s=0 (arc entry) to
+		profile_end at s=1 (arc exit).
+
+		Args:
+			profile_end: Profile at arc exit. Interpolable with
+				profile_start (same-type for Stage 3a rect-rect
+				loft; cross-type via InterpolatedProfile otherwise).
+			radius: arc center-line radius.
+			arc_angle: arc angle [deg].
+			n_sub: sub-segment count along the arc. Default 20.
+			tilt: Y-axis tilt [deg].
+			profile_start: Profile at arc entry. Defaults to current
+				builder profile / rect fallback.
+
+		Returns:
+			self (for chaining).
+		"""
+		if profile_start is None:
+			self._check_cross_section()
+			if self._profile is not None:
+				profile_start = self._profile
+			else:
+				from radia.coil_profile import RectProfile
+				profile_start = RectProfile(self._width, self._height)
+
+		segment = LoftArcSegment(
+			self.current, self._position, self._orientation,
+			profile_start, profile_end, radius, arc_angle,
+			n_sub=n_sub, tilt=tilt,
+		)
+		self.segments.append(segment)
+
+		self._position = segment.end_pos
+		self._orientation = segment.end_orientation
+		w_end, h_end = profile_end.bounding_wh()
+		self._width = w_end
+		self._height = h_end
+		self._profile = profile_end
+
+		return self
+
+	def add_arc(self, radius, arc_angle, tilt=0, profile=None):
 		"""
 		Add an arc segment.
 
@@ -367,6 +688,8 @@ class CoilBuilder:
 			radius (float): Arc radius (in active Radia units)
 			arc_angle (float): Arc angle in degrees
 			tilt (float): Tilt angle in degrees (rotation around Y-axis)
+			profile (Profile, optional): explicit cross-section profile.
+				If None, uses self._profile or the rectangular fallback.
 
 		Returns:
 			self (for method chaining)
@@ -375,6 +698,8 @@ class CoilBuilder:
 			ValueError: If set_cross_section() has not been called.
 		"""
 		self._check_cross_section()
+		if profile is None:
+			profile = self._profile
 		segment = ArcSegment(
 			self.current,
 			self._position,
@@ -383,7 +708,8 @@ class CoilBuilder:
 			self._height,
 			radius,
 			arc_angle,
-			tilt
+			tilt,
+			profile=profile,
 		)
 		self.segments.append(segment)
 
@@ -392,6 +718,8 @@ class CoilBuilder:
 		self._orientation = segment.end_orientation
 		self._width = segment.width
 		self._height = segment.height
+		if profile is not None:
+			self._profile = profile
 
 		return self
 
@@ -594,49 +922,92 @@ class CoilBuilder:
 
 		MU_0 = 4.0 * np.pi * 1e-7
 
-		# Cross-section reference (assumed uniform across segments)
-		w0 = self.segments[0].width
-		h0 = self.segments[0].height
-		du = w0 / nw
-		dv = h0 / nh
+		# Reference (w0, h0) from the FIRST segment's profile bounding box.
+		# Used for legacy _last_filament_info reporting and the Tier A skin
+		# factor fallback (approximate for non-rect profiles; PEEC is the
+		# AC-truth path anyway).
+		w0, h0 = self.segments[0].profile.bounding_wh()
 
-		# Filament (u, v) offsets from centerline (cell centers)
+		# Canonical (alpha, beta) in [0, 1]^2, invariant across all segments
+		# and across profile types / lofts.
 		i_idx, j_idx = np.meshgrid(np.arange(nw), np.arange(nh),
 		                           indexing='ij')
-		us = ((i_idx + 0.5) * du - w0 / 2).ravel()
-		vs = ((j_idx + 0.5) * dv - h0 / 2).ravel()
-		N = us.size
+		alphas = ((i_idx + 0.5) / nw).ravel()
+		betas = ((j_idx + 0.5) / nh).ravel()
+		N = alphas.size
 
-		# Build paths and accumulate lengths
+		# Reference (u0, v0) sampled on the FIRST segment's profile, for
+		# Tier A skin factor (bounding-box distance approximation) and
+		# legacy reporting.
+		us0, vs0 = self.segments[0].profile.sample_at(alphas, betas)
+
 		filament_paths = [[] for _ in range(N)]
+		cell_wh = [[] for _ in range(N)]
 		lengths = np.zeros(N)
+		R_k = np.zeros(N)
+
+		def _check_arc_inner_radius(R_arc, us):
+			r_min = R_arc + float(np.min(us))
+			if r_min <= 0:
+				raise ValueError(
+					f"Minimum filament arc radius {r_min} <= 0: "
+					f"R_arc={R_arc}, min(u)={np.min(us):g}. Reduce "
+					"profile size or increase arc radius.")
 
 		for seg in self.segments:
-			x_hat = seg.orientation[0, :]  # local width dir
-			y_hat = seg.orientation[1, :]  # local flow dir
-			z_hat = seg.orientation[2, :]  # local height dir
+			x_hat = seg.orientation[0, :]
+			y_hat = seg.orientation[1, :]
+			z_hat = seg.orientation[2, :]
 
-			if isinstance(seg, StraightSegment):
+			if isinstance(seg, LoftStraightSegment):
+				n_sub = seg.n_sub
+				s_waypoints = np.linspace(0.0, 1.0, n_sub + 1)
+				profile_at_s = [seg.profile_start.interpolate(seg.profile_end, s)
+				                for s in s_waypoints]
+				uv_wp = [pr.sample_at(alphas, betas) for pr in profile_at_s]
+				for p_idx in range(n_sub):
+					s1 = s_waypoints[p_idx]
+					s2 = s_waypoints[p_idx + 1]
+					u1, v1 = uv_wp[p_idx]
+					u2, v2 = uv_wp[p_idx + 1]
+					pr_mid = seg.profile_start.interpolate(
+						seg.profile_end, 0.5 * (s1 + s2))
+					dw_mid, dh_mid = pr_mid.cell_wh(nw, nh)
+					A_mid = pr_mid.total_area() / (nw * nh)
+					for k in range(N):
+						p1 = (seg.start_pos + s1 * seg.length * y_hat
+						      + u1[k] * x_hat + v1[k] * z_hat)
+						p2 = (seg.start_pos + s2 * seg.length * y_hat
+						      + u2[k] * x_hat + v2[k] * z_hat)
+						filament_paths[k].append((tuple(p1), tuple(p2)))
+						cell_wh[k].append((dw_mid, dh_mid))
+						dl = float(np.linalg.norm(p2 - p1))
+						lengths[k] += dl
+						R_k[k] += dl / (sigma * A_mid)
+
+			elif isinstance(seg, StraightSegment):
+				us_s, vs_s = seg.profile.sample_at(alphas, betas)
+				du_s, dv_s = seg.profile.cell_wh(nw, nh)
+				A_cell_s = seg.profile.total_area() / (nw * nh)
 				for k in range(N):
-					offset = us[k] * x_hat + vs[k] * z_hat
+					offset = us_s[k] * x_hat + vs_s[k] * z_hat
 					p1 = seg.start_pos + offset
 					p2 = seg.end_pos + offset
 					filament_paths[k].append((tuple(p1), tuple(p2)))
+					cell_wh[k].append((du_s, dv_s))
 					lengths[k] += seg.length
+					R_k[k] += seg.length / (sigma * A_cell_s)
 
 			elif isinstance(seg, ArcSegment):
 				theta_total = np.deg2rad(seg.arc_angle)
-				R = seg.radius
-				# Check all filament radii are positive
-				r_inner = R - w0 / 2 + du / 2  # innermost filament radius
-				if r_inner <= 0:
-					raise ValueError(
-						f"Inner filament radius {r_inner} <= 0: arc "
-						f"radius={R}, width={w0}. Reduce width or nw, or "
-						f"increase arc radius.")
+				R_arc = seg.radius
+				us_s, vs_s = seg.profile.sample_at(alphas, betas)
+				du_s, dv_s = seg.profile.cell_wh(nw, nh)
+				A_cell_s = seg.profile.total_area() / (nw * nh)
+				_check_arc_inner_radius(R_arc, us_s)
 				for k in range(N):
-					u, v = us[k], vs[k]
-					r_k = R + u
+					u, v = us_s[k], vs_s[k]
+					r_k = R_arc + u
 					z_off = v * z_hat
 					for p_idx in range(n_arc):
 						t1 = theta_total * p_idx / n_arc
@@ -646,17 +1017,64 @@ class CoilBuilder:
 						p2 = (seg.arc_center + r_k * (np.cos(t2) * x_hat
 						      + np.sin(t2) * y_hat) + z_off)
 						filament_paths[k].append((tuple(p1), tuple(p2)))
-					lengths[k] += abs(r_k * theta_total)
+						cell_wh[k].append((du_s, dv_s))
+					arc_len_k = abs(r_k * theta_total)
+					lengths[k] += arc_len_k
+					R_k[k] += arc_len_k / (sigma * A_cell_s)
 
-		# DC resistance per filament
-		A_cell = du * dv
-		R_k = lengths / (sigma * A_cell)
+			elif isinstance(seg, LoftArcSegment):
+				theta_total = np.deg2rad(seg.arc_angle)
+				R_arc = seg.radius
+				n_sub = seg.n_sub
+				s_waypoints = np.linspace(0.0, 1.0, n_sub + 1)
+				profile_at_s = [seg.profile_start.interpolate(seg.profile_end, s)
+				                for s in s_waypoints]
+				uv_wp = [pr.sample_at(alphas, betas) for pr in profile_at_s]
+				# Check inner radius across all s, all k.
+				for pr_idx, (u_s, _) in enumerate(uv_wp):
+					_check_arc_inner_radius(R_arc, u_s)
+				for p_idx in range(n_sub):
+					s1 = s_waypoints[p_idx]
+					s2 = s_waypoints[p_idx + 1]
+					theta1 = theta_total * s1
+					theta2 = theta_total * s2
+					u1, v1 = uv_wp[p_idx]
+					u2, v2 = uv_wp[p_idx + 1]
+					pr_mid = seg.profile_start.interpolate(
+						seg.profile_end, 0.5 * (s1 + s2))
+					dw_mid, dh_mid = pr_mid.cell_wh(nw, nh)
+					A_mid = pr_mid.total_area() / (nw * nh)
+					for k in range(N):
+						r_k_1 = R_arc + u1[k]
+						r_k_2 = R_arc + u2[k]
+						p1 = (seg.arc_center
+						      + r_k_1 * (np.cos(theta1) * x_hat
+						                 + np.sin(theta1) * y_hat)
+						      + v1[k] * z_hat)
+						p2 = (seg.arc_center
+						      + r_k_2 * (np.cos(theta2) * x_hat
+						                 + np.sin(theta2) * y_hat)
+						      + v2[k] * z_hat)
+						filament_paths[k].append((tuple(p1), tuple(p2)))
+						cell_wh[k].append((dw_mid, dh_mid))
+						dl = float(np.linalg.norm(p2 - p1))
+						lengths[k] += dl
+						R_k[k] += dl / (sigma * A_mid)
+			else:
+				raise NotImplementedError(
+					f"Unsupported segment type {type(seg).__name__}")
 
-		# Weights
+		# Tier A current weights. R_k is exact (accumulated from per-piece
+		# A_cell(s) integrals) for any profile / loft. Skin factor uses a
+		# bounding-box distance approximation on the FIRST segment's
+		# profile -- coarse for circles (overestimates d near the corners
+		# of the bounding box, so skin factor is slightly too large), but
+		# Tier A is only a seed; PEEC is the AC-truth path.
 		if frequency > 0:
 			omega = 2.0 * np.pi * frequency
 			delta = np.sqrt(2.0 / (omega * MU_0 * mu_r * sigma))
-			d_k = np.minimum(w0 / 2 - np.abs(us), h0 / 2 - np.abs(vs))
+			d_k = np.minimum(w0 / 2 - np.abs(us0), h0 / 2 - np.abs(vs0))
+			d_k = np.maximum(d_k, 0.0)
 			skin_factor = np.exp(-(1 + 1j) * d_k / delta)
 			weights = (1.0 / R_k) * skin_factor
 		else:
@@ -664,17 +1082,21 @@ class CoilBuilder:
 
 		currents = self.current * weights / np.sum(weights)
 
-		# Expose u/v and sizing info for visualization
 		self._last_filament_info = {
-			'us': us, 'vs': vs,
+			'us': us0, 'vs': vs0,
+			'alphas': alphas, 'betas': betas,
 			'nw': nw, 'nh': nh,
 			'w': w0, 'h': h0,
 			'lengths': lengths,
 			'R_k': R_k,
+			'cell_wh': cell_wh,
 			'currents': currents,
 			'frequency': frequency,
 			'sigma': sigma,
 			'mu_r': mu_r,
+			'has_loft': any(isinstance(s, (LoftStraightSegment,
+			                                 LoftArcSegment))
+			                for s in self.segments),
 		}
 		return filament_paths, currents
 
