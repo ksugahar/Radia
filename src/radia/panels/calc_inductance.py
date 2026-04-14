@@ -315,6 +315,11 @@ def extract_inductance_vol(vol_file, source_label="source",
     #     Z_s, so this path keeps the legacy uncoupled estimator with
     #     P/Q reported but no Delta L).
     if workpiece:
+        # "sibc" is the user-facing name for the linear analytical SIBC
+        # path implemented in _run_coupled_bem; "dowell" is the legacy
+        # internal name. Normalise to the same code branch.
+        if impedance_model == "sibc":
+            impedance_model = "dowell"
         progress("WORKPIECE", f"impedance_model={impedance_model}, "
                               f"workpiece={workpiece}")
         if impedance_model == "dowell":
@@ -1007,6 +1012,9 @@ def _compute_wp_impedance_from_panels(mesh_coil, gf_J, panels,
         R_local_min = float(R_per_panel.min())
         R_local_max = float(R_per_panel.max())
 
+    # "sibc" is the user-facing name for the linear analytical Dowell SIBC.
+    if impedance_model == "sibc":
+        impedance_model = "dowell"
     if impedance_model == "esim":
         solver = mat.create_esim_solver(frequency, half_thickness,
                                         geometry=esim_geometry)
