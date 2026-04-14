@@ -638,6 +638,124 @@ def compute_phi_inc_from_filaments(obs_points, filament_paths, currents,
     return phi
 
 
+def extract_surface_J_from_phi(mesh, phi_vec_complex, order=1):
+    """Extract per-element complex surface current density J_s.
+
+    SIBC scalar BIE: phi on surface is magnetic scalar potential. The
+    tangential magnetic field is H_t = -grad_s(phi), and the surface
+    current density is J_s = n x H_t = -n x grad_s(phi).
+
+    Args:
+        mesh: NGSolve surface mesh (2D or 3D with BND).
+        phi_vec_complex: (ndof,) complex coefficient vector for phi.
+        order: H1 polynomial order matching the BIE solve (default 1).
+
+    Returns:
+        centroids: (M, 3) float, element area-centroids.
+        areas: (M,) float, element areas.
+        J_s: (M, 3) complex, element-averaged surface current density.
+    """
+    from ngsolve import (H1, GridFunction, Integrate, CF, BND,
+                         grad, specialcf, Cross)
+
+    fes = H1(mesh, order=order)
+    gf_re = GridFunction(fes)
+    gf_im = GridFunction(fes)
+    gf_re.vec.FV().NumPy()[:] = phi_vec_complex.real
+    gf_im.vec.FV().NumPy()[:] = phi_vec_complex.imag
+
+    n_cf = specialcf.normal(3)
+    Jre_cf = -Cross(n_cf, grad(gf_re).Trace())
+    Jim_cf = -Cross(n_cf, grad(gf_im).Trace())
+
+    elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
+    Jre = [Integrate(Jre_cf[i], mesh, VOL_or_BND=BND, element_wise=True)
+           for i in range(3)]
+    Jim = [Integrate(Jim_cf[i], mesh, VOL_or_BND=BND, element_wise=True)
+           for i in range(3)]
+
+    centroids, areas, J_s = [], [], []
+    for el in mesh.Elements(BND):
+        a = abs(elem_A[el.nr])
+        if a < 1e-30:
+            continue
+        verts = [mesh.vertices[v.nr].point for v in el.vertices]
+        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+        Jvec = np.array([(Jre[i][el.nr] + 1j * Jim[i][el.nr]) / a
+                         for i in range(3)], dtype=complex)
+        centroids.append(c)
+        areas.append(a)
+        J_s.append(Jvec)
+    return np.array(centroids), np.array(areas), np.array(J_s)
+
+
+def A_from_surface_J(obs_points, src_centroids, src_areas, src_J,
+                     chunk_size=4096):
+    """Magnetic vector potential at obs points from surface current density.
+
+        A(r) = (mu_0 / 4 pi) * sum_j  J_s[j] * area[j] / |r - c_j|
+
+    Args:
+        obs_points: (N, 3) float observation coordinates.
+        src_centroids: (M, 3) panel centroids.
+        src_areas: (M,) panel areas.
+        src_J: (M, 3) complex (or real) surface current density.
+        chunk_size: rows of the pair-wise distance matrix per chunk
+            (memory cap; each chunk is N_chunk x M).
+
+    Returns:
+        (N, 3) complex array (real if src_J is real).
+    """
+    r = np.asarray(obs_points, dtype=float)
+    c = np.asarray(src_centroids, dtype=float)
+    a = np.asarray(src_areas, dtype=float)
+    J = np.asarray(src_J)
+    if r.ndim == 1:
+        r = r.reshape(1, 3)
+    N = r.shape[0]
+    dtype = complex if np.iscomplexobj(J) else float
+    MU_0 = 4e-7 * np.pi
+    pref = MU_0 / (4.0 * np.pi)
+    A = np.zeros((N, 3), dtype=dtype)
+    for s in range(0, N, chunk_size):
+        e = min(s + chunk_size, N)
+        dx = r[s:e, None, 0] - c[None, :, 0]
+        dy = r[s:e, None, 1] - c[None, :, 1]
+        dz = r[s:e, None, 2] - c[None, :, 2]
+        dist = np.sqrt(dx * dx + dy * dy + dz * dz)
+        dist[dist < 1e-12] = 1e-12
+        weight = pref * (a / dist)                    # (n, M)
+        A[s:e] = np.einsum('nm,mc->nc', weight, J)
+    return A
+
+
+def flux_linkage_in_filaments(filament_paths, src_centroids, src_areas, src_J):
+    """Phi_k = integral of A_src . dl along each filament polyline.
+
+    Uses midpoint rule on each polyline segment (A evaluated at midpoint,
+    dotted with the segment's dl vector).
+
+    Args:
+        filament_paths: list of K filament polylines, each a list of
+            ``(p1, p2)`` endpoint tuples (3-vectors in meters).
+        src_centroids, src_areas, src_J: panel data for A_from_surface_J.
+
+    Returns:
+        (K,) complex (or real) array of flux linkages.
+    """
+    K = len(filament_paths)
+    dtype = complex if np.iscomplexobj(src_J) else float
+    Phi = np.zeros(K, dtype=dtype)
+    for k, path in enumerate(filament_paths):
+        mids = np.array([0.5 * (np.asarray(p1, float) + np.asarray(p2, float))
+                         for p1, p2 in path])
+        dls = np.array([np.asarray(p2, float) - np.asarray(p1, float)
+                        for p1, p2 in path])
+        A_mid = A_from_surface_J(mids, src_centroids, src_areas, src_J)
+        Phi[k] = np.sum(A_mid * dls)
+    return Phi
+
+
 # Legacy alias
 def compute_phi_inc_from_coil(obs_points, coil_path, current, n_quad=50):
     """Compute phi_inc using filament approximation (legacy interface)."""
