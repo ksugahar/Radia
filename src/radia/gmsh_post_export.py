@@ -860,6 +860,109 @@ def write_companion_opt(msh_filename, n_vector_views=0,
     return opt_filename
 
 
+# ============================================================
+# Public API: vol2msh single-mesh converter (Phase B, 2026-04-15)
+# ============================================================
+
+def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
+             boundary=False, companion_opt=True):
+    """Load a .vol + zero-or-more .sol files and write a GMSH .msh.
+
+    Single source of truth for panels that have ONE base mesh with
+    multiple fields attached. For multi-mesh cases (e.g. IH BEM with
+    coil_surface + workpiece_surface + air_volume living on three
+    different meshes) see the combined writer in calc_inductance.py.
+
+    Args:
+        output_msh: Path to the .msh to write.
+        vol_path: Path to the NGSolve .vol file (the mesh to load).
+        fields: list of field specs. Each spec is a dict with EITHER:
+            - ``array`` key  -> a numpy array of per-vertex values
+              (fastest path, bypasses GridFunction reconstruction)
+            - ``sol`` key    -> path to a .sol file plus ``fes``,
+              ``fes_order``, ``fes_dim`` (for HDiv*/H1 dim>1).
+            Common keys (both paths):
+                ``name``    : view name in GMSH
+                ``ncomp``   : 1 (scalar) or 3 (vector)
+                ``material``: optional, restrict view to a physical group
+        mesh_curve_order: if >=2, call mesh.Curve(N) so Tri6/Tet10/...
+            render smoothly in GMSH.
+        boundary: if True, export BND elements only (surface export
+            from a volume mesh); matches GmshPostExport(boundary=...).
+        companion_opt: if True, also write ``<output_msh>.opt`` so
+            GMSH auto-loads sensible display defaults.
+
+    Returns the path to the .msh written.
+    """
+    from ngsolve import Mesh
+    from netgen.meshing import Mesh as NgMesh
+
+    ng = NgMesh()
+    ng.Load(vol_path)
+    mesh = Mesh(ng)
+    if mesh_curve_order >= 2:
+        try:
+            mesh.Curve(mesh_curve_order)
+        except Exception:
+            pass
+
+    post = GmshPostExport(mesh, boundary=boundary)
+
+    n_vec = 0
+    n_sca = 0
+    for f in fields:
+        name = f["name"]
+        ncomp = f.get("ncomp")
+        material = f.get("material")
+        if "array" in f:
+            post.add_field(name, f["array"], ncomp=ncomp, material=material)
+        elif "sol" in f:
+            from ngsolve import GridFunction
+            fes_kind = f["fes"]
+            fes_order = f.get("fes_order", 1)
+            fes_dim = f.get("fes_dim", 1)
+            if fes_kind == "H1":
+                from ngsolve import H1
+                fes = H1(mesh, order=fes_order, dim=fes_dim)
+            elif fes_kind == "HDiv":
+                from ngsolve import HDiv
+                fes = HDiv(mesh, order=fes_order)
+            elif fes_kind == "HDivSurface":
+                from ngsolve import HDivSurface
+                fes = HDivSurface(mesh, order=fes_order)
+            elif fes_kind == "L2":
+                from ngsolve import L2
+                fes = L2(mesh, order=fes_order)
+            else:
+                raise ValueError(f"vol2msh: unsupported fes kind {fes_kind!r}")
+            gf = GridFunction(fes)
+            gf.Load(f["sol"])
+            post.add_field(name, gf, ncomp=ncomp, material=material)
+        else:
+            raise ValueError(
+                f"vol2msh: field {name!r} has neither 'array' nor 'sol'")
+        if (ncomp or 0) >= 2:
+            n_vec += 1
+        else:
+            n_sca += 1
+
+    post.write(output_msh)
+    if companion_opt:
+        write_companion_opt(output_msh,
+                             n_vector_views=n_vec, n_scalar_views=n_sca)
+    return output_msh
+
+
+def save_vol_sol_pair(vol_path, sol_path, mesh_ngmesh, gf):
+    """Save a NGSolve mesh + GridFunction as the canonical .vol+.sol pair.
+
+    Thin wrapper so every calc_*.py uses identical call sites.
+    """
+    mesh_ngmesh.Save(vol_path)
+    gf.Save(sol_path)
+    return vol_path, sol_path
+
+
 def _write_companion_geo(msh_filename):
     """Deprecated: use write_companion_opt() instead."""
     return write_companion_opt(msh_filename)
