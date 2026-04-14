@@ -28,7 +28,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify wheel
+      - name: Verify wheel (mandatory plugin binaries + version consistency)
         run: |
           echo "=== cubit-mesh-export wheel ==="
           ls -la dist/
@@ -38,15 +38,47 @@ jobs:
             exit 1
           fi
           echo "Wheel: $WHL"
-          # Verify .pyd is included
-          python3 -c "
-          import zipfile, sys
-          whl = zipfile.ZipFile('$WHL')
-          pyds = [f.filename for f in whl.infolist() if f.filename.endswith('.pyd')]
-          print('Bundled .pyd files:', pyds)
-          if not pyds:
-              print('WARNING: No .pyd in wheel (pure Python fallback)')
-          "
+          python3 - "$WHL" <<'PY'
+          import sys, zipfile, re
+          whl = sys.argv[1]
+          zf = zipfile.ZipFile(whl)
+          names = [f.filename for f in zf.infolist()]
+
+          # Plugin binaries that MUST ship in every wheel. The Cubit plugin is
+          # useless without .ccm (APREPRO commands) or .ccl (Qt GUI slot); we
+          # refuse to publish a broken wheel (2026-04-14 hardening).
+          required = ["radia_cubit.ccm", "radia_cubit.ccl"]
+          missing = [r for r in required if not any(n.endswith(r) for n in names)]
+          if missing:
+              print(f"::error::Wheel missing mandatory plugin binaries: {missing}")
+              print(f"  Wheel contents: {names}")
+              sys.exit(1)
+          print(f"OK mandatory: {required}")
+
+          # .pyd is optional — only present when the build machine had a full
+          # (non-compact) Netgen + pybind11 at CMake time. Log but don't fail.
+          pyds = [n for n in names if n.endswith(".pyd")]
+          if pyds:
+              print(f"Bundled .pyd files: {pyds}")
+          else:
+              print("No .pyd in wheel (compact-netgen build path, expected in CI)")
+
+          # Version consistency: the __version__ declared in __init__.py
+          # must match the version in the wheel filename.
+          whl_ver = re.match(r"[^-]+-([^-]+)-", whl.rsplit("/", 1)[-1]).group(1)
+          init = zf.read(next(n for n in names if n.endswith("__init__.py"))).decode()
+          m = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M)
+          if not m:
+              print("::error::__version__ not found in wheel __init__.py")
+              sys.exit(1)
+          pkg_ver = m.group(1)
+          if whl_ver != pkg_ver:
+              print(f"::error::Version mismatch — wheel={whl_ver} "
+                    f"vs __init__.__version__={pkg_ver}. "
+                    f"Someone forgot to bump one of them.")
+              sys.exit(1)
+          print(f"OK version consistency: {pkg_ver}")
+          PY
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

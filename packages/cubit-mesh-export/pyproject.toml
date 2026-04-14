@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "0.5.1"
+version = "0.5.2"
 description = "High-order curved mesh export from Coreform Cubit to NGSolve/Netgen"
 readme = "README.md"
 license = {text = "MIT"}
@@ -31,6 +31,7 @@ Homepage = "https://github.com/ksugahar/Radia"
 
 [project.scripts]
 cubit-plugin-install = "cubit_mesh_export.install:main"
+cubit-smoke-test = "cubit_mesh_export.smoke_test:main"
 check-vol = "cubit_mesh_export.check:main"
 
 [tool.setuptools.packages.find]
