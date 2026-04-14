@@ -1013,16 +1013,21 @@ static QList<ModeScript> discover_mode_scripts(const QString &pkgDir)
 }
 
 // Get block and sideset label names from current Cubit model.
-// Blocks: get_block_name() (reliable C++ API for groups).
-// Sidesets: get_entity_name("sideset", id) (works for mref entities).
-// Note: get_entity_name("block", id) does NOT work — blocks are groups,
-// not mref entities.  The Python side uses get_exodus_entity_name()
-// which handles both, but that API is not exposed in the C++ SDK.
+//
+// 2026-04-14 fix: sidesets must be queried via get_exodus_entity_name,
+// NOT get_entity_name. The latter is for mref entities (vertices /
+// curves / surfaces / volumes), and silently returns "" for sidesets.
+// CubitInterface.hpp line 4872 (Cubit 2025.3 SDK) confirms
+// get_exodus_entity_name supports "block", "sideset", "nodeset".
+//
+// The previous implementation made the launcher dialog falsely flag
+// "source" / "sink" as MISSING (Kubota / 100号機, 2026-04-14) even
+// though the sidesets were correctly registered in the Model Tree.
 static QStringList get_model_labels()
 {
   QSet<QString> names;
 
-  // Block names via C++ API (get_block_name works reliably)
+  // Block names via the dedicated API.
   std::vector<int> bids = CubitInterface::parse_cubit_list("block", "all");
   for (int bid : bids) {
     std::string n = CubitInterface::get_block_name(bid);
@@ -1030,10 +1035,10 @@ static QStringList get_model_labels()
       names.insert(QString::fromStdString(n).toLower());
   }
 
-  // Sideset names via get_entity_name (works for sidesets unlike blocks)
+  // Sideset names via get_exodus_entity_name (NOT get_entity_name).
   std::vector<int> sids = CubitInterface::parse_cubit_list("sideset", "all");
   for (int sid : sids) {
-    std::string n = CubitInterface::get_entity_name("sideset", sid);
+    std::string n = CubitInterface::get_exodus_entity_name("sideset", sid);
     if (!n.empty())
       names.insert(QString::fromStdString(n).toLower());
   }
