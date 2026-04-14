@@ -149,10 +149,36 @@ def init_panel_log(component, *, truncate=False, banner=True):
     _USERHOST_TAG = _format_userhost()
 
     if truncate:
+        # Rotate the previous session out so we never lose Kubota's last
+        # error to the next Cubit start (2026-04-14: this swallowed the
+        # actual IH BEM stack trace four times before someone noticed).
+        # Keep last 5 sessions: .1 (newest previous) -> .5 (oldest).
         try:
-            open(PANEL_LOG_PATH, "w", encoding="utf-8").close()
+            for i in range(4, 0, -1):
+                src = f"{PANEL_LOG_PATH}.{i}"
+                dst = f"{PANEL_LOG_PATH}.{i + 1}"
+                if os.path.isfile(src):
+                    try:
+                        if os.path.isfile(dst):
+                            os.remove(dst)
+                        os.rename(src, dst)
+                    except OSError:
+                        pass
+            if os.path.isfile(PANEL_LOG_PATH):
+                dst = f"{PANEL_LOG_PATH}.1"
+                try:
+                    if os.path.isfile(dst):
+                        os.remove(dst)
+                    os.rename(PANEL_LOG_PATH, dst)
+                except OSError:
+                    # Could not rotate (file lock?); fall back to truncate
+                    # so the new session still gets a clean log.
+                    open(PANEL_LOG_PATH, "w", encoding="utf-8").close()
         except Exception:
-            pass
+            try:
+                open(PANEL_LOG_PATH, "w", encoding="utf-8").close()
+            except Exception:
+                pass
 
     if banner:
         panel_log("=" * 70)
