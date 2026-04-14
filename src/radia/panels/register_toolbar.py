@@ -79,10 +79,16 @@ except ImportError:
 
 
 def _find_main_window():
-    """Find Cubit's top-level QMainWindow for menu cleanup."""
+    """Find Cubit's top-level QMainWindow for menu cleanup.
+
+    Cubit sometimes runs this startup script before it has upgraded its
+    Qt application from QCoreApplication (non-GUI) to QApplication
+    (GUI). QCoreApplication has no ``topLevelWidgets`` method, so we
+    have to bail out gracefully instead of crashing the whole startup.
+    """
     app = QApplication.instance()
-    if app is None:
-        return None
+    if app is None or not hasattr(app, "topLevelWidgets"):
+        return None  # no GUI app yet, nothing to clean up
     if _QT == "PySide6":
         from PySide6.QtWidgets import QMainWindow
     else:
@@ -251,9 +257,14 @@ def register_menu():
     kept for compatibility with startup.py which calls register_menu().
     """
     _panel_log("register_menu: ENTER (C++-only mode)")
-    _cleanup_legacy_menus()
-    _init_export_default_dir()
-    _check_plugin_freshness()
+    # Each step is independent — a failure in legacy-menu cleanup must
+    # not block export-dir seeding or the plugin-freshness check.
+    for step in (_cleanup_legacy_menus, _init_export_default_dir,
+                 _check_plugin_freshness):
+        try:
+            step()
+        except Exception:
+            _panel_log_exception(f"register_menu: {step.__name__} FAILED")
     _panel_log("register_menu: EXIT (export defaults seeded)")
 
 
