@@ -425,6 +425,27 @@ def cmd_all(args):
     return cmd_phase9(args)
 
 
+def cmd_done(args):
+    """Definition-of-done check: preflight (repo) + phase9 (3 machines).
+
+    Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
+    mdx and the repo is in a clean release-ready state. Exit non-zero
+    means do NOT tell the user "release done" yet.
+    """
+    step("Definition-of-done check (preflight + phase9)")
+    rc = cmd_preflight(args)
+    if rc != 0:
+        fail("preflight failed — repo state not release-ready.")
+        return rc
+    rc = cmd_phase9(args)
+    if rc != 0:
+        fail("phase9 drift detected — at least one machine is out of sync.")
+        return rc
+    print("")
+    ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / mdx.")
+    return 0
+
+
 # ============================================================
 # CLI
 # ============================================================
@@ -448,6 +469,8 @@ def main():
                     help="cross-machine consistency probe")
     sub.add_parser("all",
                     help="phase8 -> phase8e -> phase9 in one shot")
+    sub.add_parser("done",
+                    help="definition-of-done: preflight + phase9 (read-only)")
 
     args = p.parse_args()
     handler = {
@@ -457,6 +480,7 @@ def main():
         "phase8e":   cmd_phase8e,
         "phase9":    cmd_phase9,
         "all":       cmd_all,
+        "done":      cmd_done,
     }[args.cmd]
     raise SystemExit(handler(args))
 
