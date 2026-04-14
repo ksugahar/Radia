@@ -334,7 +334,8 @@ def extract_inductance_vol(vol_file, source_label="source",
                     frequency=frequency,
                     mat=mat,
                     half_thickness=half_thickness,
-                    use_local_curvature=use_local_curvature)
+                    use_local_curvature=use_local_curvature,
+                    output_dir=base_dir)
                 # Pull out private wp_J/wp_q arrays before merging the
                 # rest of the dict (they are NumPy arrays and would
                 # break json.dumps later).
@@ -555,7 +556,7 @@ def _build_per_node_Zs(mesh_wp, panels, R_panel, rho, omega, mu_eff,
 
 def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
                      fes_order, frequency, mat, half_thickness,
-                     use_local_curvature=False):
+                     use_local_curvature=False, output_dir=None):
     """Iterative coil-workpiece BEM via bem_coupled_solver.CoupledBEMSolver.
 
     Builds clean coil + workpiece surface meshes from the same .vol
@@ -723,6 +724,46 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     if wp_J_full is not None:
         result["_wp_J_full"] = wp_J_full
         result["_wp_q_full"] = wp_q_full
+        # Save workpiece mesh + per-vertex J / q as .vol + .sol pair
+        # (NGSolve native format). The unified vol2msh converter at the
+        # end of extract_inductance_vol reads these and produces the
+        # combined GMSH .msh — no inline GMSH writes here.
+        try:
+            from ngsolve import H1, GridFunction
+            wp_dir = output_dir if output_dir else "."
+            wp_vol_path = os.path.join(wp_dir, "workpiece.vol").replace("\\", "/")
+            wp_J_sol = os.path.join(wp_dir, "wp_J.sol").replace("\\", "/")
+            wp_q_sol = os.path.join(wp_dir, "wp_q.sol").replace("\\", "/")
+
+            # Save extracted workpiece mesh.
+            mesh_wp.ngmesh.Save(wp_vol_path)
+
+            # wp_J as H1 vector-3 GridFunction on extracted wp mesh.
+            fes_J = H1(mesh_wp, order=1, dim=3)
+            gf_J_wp = GridFunction(fes_J)
+            # H1 dim=3 layout: interleaved (x0,y0,z0, x1,y1,z1, ...) with
+            # vertex-first DOF ordering for order=1.
+            for v_idx in range(mesh_wp.nv):
+                for k in range(3):
+                    gf_J_wp.vec.FV()[v_idx * 3 + k] = float(Jre_v[v_idx, k])
+            gf_J_wp.Save(wp_J_sol)
+
+            # wp_q as H1 scalar GridFunction on extracted wp mesh.
+            fes_q = H1(mesh_wp, order=1)
+            gf_q_wp = GridFunction(fes_q)
+            for v_idx in range(mesh_wp.nv):
+                gf_q_wp.vec.FV()[v_idx] = float(q_v[v_idx])
+            gf_q_wp.Save(wp_q_sol)
+
+            result["_wp_vol_path"] = wp_vol_path
+            result["_wp_J_sol_path"] = wp_J_sol
+            result["_wp_q_sol_path"] = wp_q_sol
+            from calc_common import progress as _progress
+            _progress("SAVE",
+                      f"workpiece.vol + wp_J.sol + wp_q.sol -> {wp_dir}")
+        except Exception as _e:
+            sys.stderr.write(f"WARN: workpiece .vol/.sol save failed: {_e}\n")
+            sys.stderr.flush()
     return result
 
 
@@ -1499,8 +1540,15 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     # Coil surface uses Tri6 (curved) elements from mesh.Curve(2)
     # for the smooth "kirei" rendering. .msh.opt auto-loaded by GMSH
     # sets arrow sizes and hides air mesh edges.
-    gmsh_file = os.path.join(
-        base_dir, "inductance.msh").replace("\\", "/")
+    # 2026-04-14 Phase A.3: write to user's msh_output (single file with
+    # B + coil J + workpiece overlay) instead of a hardcoded
+    # "inductance.msh" that left the panel-output and post-output files
+    # diverged.
+    if msh_output:
+        gmsh_file = msh_output.replace("\\", "/")
+    else:
+        gmsh_file = os.path.join(
+            base_dir, "inductance.msh").replace("\\", "/")
 
     # B per vertex on the volume mesh
     fes_B = HDiv(mesh_vol, order=1)
@@ -1525,9 +1573,40 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     vol_elems = [[v.nr for v in el.vertices]
                  for el in mesh_vol.Elements()]
 
+    # Phase A.2: load workpiece .vol + wp_q.sol if present and pass to
+    # the combined .msh writer. This is how the GMSH viewer shows
+    # workpiece + heating density alongside coil J + air B in ONE file
+    # (single source of truth = the .vol+.sol pairs the solver wrote).
+    wp_nodes = wp_elems = q_nodes = None
+    wp_vol_path = os.path.join(base_dir, "workpiece.vol").replace("\\", "/")
+    wp_q_sol_path = os.path.join(base_dir, "wp_q.sol").replace("\\", "/")
+    if os.path.isfile(wp_vol_path) and os.path.isfile(wp_q_sol_path):
+        try:
+            from netgen.meshing import Mesh as NgMesh
+            from ngsolve import H1, GridFunction, Mesh as NgsMesh
+            wp_ngmesh = NgMesh()
+            wp_ngmesh.Load(wp_vol_path)
+            wp_mesh_obj = NgsMesh(wp_ngmesh)
+            wp_nodes = [(v.point[0], v.point[1], v.point[2])
+                         for v in wp_mesh_obj.vertices]
+            wp_elems = [[v.nr for v in el.vertices]
+                         for el in wp_mesh_obj.Elements(BND)]
+            fes_q = H1(wp_mesh_obj, order=1)
+            gf_q_load = GridFunction(fes_q)
+            gf_q_load.Load(wp_q_sol_path)
+            q_nodes = np.array(
+                [float(gf_q_load.vec.FV()[i]) for i in range(wp_mesh_obj.nv)])
+            progress("GMSH", f"loaded workpiece overlay: "
+                              f"{len(wp_nodes)} nodes, {len(wp_elems)} tris")
+        except Exception as _e:
+            sys.stderr.write(f"WARN: could not load workpiece overlay: {_e}\n")
+            sys.stderr.flush()
+            wp_nodes = wp_elems = q_nodes = None
+
     _write_combined_msh_v41(
-        gmsh_file, mesh, J_nodes, vol_nodes_xyz, vol_elems, B_nodes)
-    progress("GMSH", f"B + J + wireframe (v4.1): {gmsh_file}")
+        gmsh_file, mesh, J_nodes, vol_nodes_xyz, vol_elems, B_nodes,
+        wp_nodes=wp_nodes, wp_elems=wp_elems, q_nodes=q_nodes)
+    progress("GMSH", f"B + J + wireframe + workpiece (v4.1): {gmsh_file}")
 
     # .msh.opt is written by _write_combined_msh_v41 (replaces .geo)
 
