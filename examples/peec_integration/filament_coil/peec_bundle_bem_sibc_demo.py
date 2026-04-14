@@ -83,94 +83,6 @@ def solve_peec_bundle(filament_paths, dw, dh, sigma, current, frequency):
     return I_fil, solver
 
 
-def extract_wp_surface_J(mesh, phi_vec_complex, omega, Z_s):
-    """Extract per-element complex surface current density J_s.
-
-    SIBC scalar BIE: phi on surface is magnetic scalar potential. H_t =
-    -grad_s(phi); J_s = n x H_t = -n x grad_s(phi) (tangential vector).
-
-    Returns (centroids, areas, J_s) as (M,3), (M,), (M,3) arrays; J_s
-    is complex because phi_vec is complex.
-    """
-    from ngsolve import (H1, GridFunction, Integrate, CF, BND,
-                          InnerProduct, grad, specialcf, Cross)
-    fes = H1(mesh, order=1)
-    gf_re = GridFunction(fes)
-    gf_im = GridFunction(fes)
-    gf_re.vec.FV().NumPy()[:] = phi_vec_complex.real
-    gf_im.vec.FV().NumPy()[:] = phi_vec_complex.imag
-
-    n_cf = specialcf.normal(3)
-    # J_s_complex = -n x grad_s(phi) = -n x (grad phi_re + j grad phi_im)
-    Jre_cf = -Cross(n_cf, grad(gf_re).Trace())
-    Jim_cf = -Cross(n_cf, grad(gf_im).Trace())
-
-    # Per-element averages via element_wise integrate / area
-    elem_A = Integrate(CF(1), mesh, VOL_or_BND=BND, element_wise=True)
-    Jre = [Integrate(Jre_cf[i], mesh, VOL_or_BND=BND, element_wise=True)
-           for i in range(3)]
-    Jim = [Integrate(Jim_cf[i], mesh, VOL_or_BND=BND, element_wise=True)
-           for i in range(3)]
-
-    centroids, areas, J_s = [], [], []
-    for el in mesh.Elements(BND):
-        area = abs(elem_A[el.nr])
-        if area < 1e-30:
-            continue
-        verts = [mesh.vertices[v.nr].point for v in el.vertices]
-        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-        Jvec = np.array([(Jre[i][el.nr] + 1j * Jim[i][el.nr]) / area
-                         for i in range(3)], dtype=complex)
-        centroids.append(c)
-        areas.append(area)
-        J_s.append(Jvec)
-    return np.array(centroids), np.array(areas), np.array(J_s)
-
-
-def A_back_at_points(obs_points, wp_c, wp_a, wp_J):
-    """Vector potential from wp surface currents at obs points.
-
-    A(r) = (mu_0/4pi) sum_j wp_J[j] * wp_a[j] / |r - wp_c[j]|
-
-    Args:
-        obs_points: (N,3) float
-        wp_c: (M,3) panel centroids
-        wp_a: (M,) panel areas
-        wp_J: (M,3) complex panel surface current density
-
-    Returns:
-        (N,3) complex A_back.
-    """
-    r = np.asarray(obs_points, float)
-    c = np.asarray(wp_c, float)
-    a = np.asarray(wp_a, float)
-    J = np.asarray(wp_J, complex)
-
-    # Pair-wise distances (N, M)
-    dx = r[:, None, 0] - c[None, :, 0]
-    dy = r[:, None, 1] - c[None, :, 1]
-    dz = r[:, None, 2] - c[None, :, 2]
-    dist = np.sqrt(dx * dx + dy * dy + dz * dz)
-    dist[dist < 1e-12] = 1e-12
-    MU_0 = 4e-7 * math.pi
-    weight = (MU_0 / (4 * math.pi)) * (a / dist)   # (N, M)
-    A = np.einsum('nm,mc->nc', weight, J)          # (N, 3) complex
-    return A
-
-
-def compute_flux_linkage(filament_paths, wp_c, wp_a, wp_J):
-    """Flux Phi_k = integral of A_back.dl along each filament."""
-    N = len(filament_paths)
-    Phi = np.zeros(N, dtype=complex)
-    for k, path in enumerate(filament_paths):
-        midpoints = np.array([0.5 * (np.array(p1) + np.array(p2))
-                              for p1, p2 in path])
-        dls = np.array([np.array(p2) - np.array(p1) for p1, p2 in path])
-        A_mid = A_back_at_points(midpoints, wp_c, wp_a, wp_J)
-        Phi[k] = np.sum(A_mid * dls)
-    return Phi
-
-
 def build_wp_mesh(R_wp, H_wp, maxh):
     """Build a SURFACE mesh of a copper cylinder workpiece (for BEM)."""
     from netgen.occ import Cylinder, OCCGeometry, Pnt, Dir
@@ -264,54 +176,11 @@ def main():
     P_total = res.get('P_density', float('nan')) * A_wp
     print(f"  A_wp        = {A_wp:.4e} m^2 (analytical)")
     print(f"  P_total     = {P_total:.4e} W")
-
-    print()
-    print("[5/5] Back-reaction: extract J_s, compute flux linkage, DeltaL...")
-    t0 = time.perf_counter()
-    wp_c, wp_a, wp_J = extract_wp_surface_J(
-        wp_mesh, res['phi_vec'], omega, Z_s)
-    print(f"  Extracted J_s on {len(wp_c)} wp elements "
-          f"({time.perf_counter() - t0:.1f}s)")
-
-    # Flux linkage per filament: Phi_k = integral A_back . dl
-    t0 = time.perf_counter()
-    Phi = compute_flux_linkage(paths, wp_c, wp_a, wp_J)
-    print(f"  Flux linkage per filament "
-          f"({time.perf_counter() - t0:.1f}s):")
-    print(f"    |Phi| min/max/mean = {np.min(np.abs(Phi)):.3e} / "
-          f"{np.max(np.abs(Phi)):.3e} / {np.mean(np.abs(Phi)):.3e}")
-
-    # Port impedance change from wp mutual coupling:
-    #   Delta_Z_port = +jw * sum_k (I_k * Phi_wp_k) / I_port^2
-    # The +jw sign follows from mutual flux linkage V = jw Phi adding
-    # to the port voltage (NOT the -jw EMF notation). Validated by the
-    # sign of Delta_L < 0 for Cu (Lenz) and Delta_R > 0 for eddy loss.
-    I_port = 1.0
-    Sum_IPhi = np.sum(I_fil * Phi)
-    Delta_Z = 1j * omega * Sum_IPhi / I_port ** 2
-    Delta_L = Delta_Z.imag / omega
-    Delta_R = Delta_Z.real
-    print(f"  Delta_Z = {Delta_Z:.4e}")
-    print(f"  Delta_L = {Delta_L * 1e9:+.3f} nH  (wp-induced inductance change)")
-    print(f"  Delta_R = {Delta_R * 1e3:+.4f} mOhm  (wp-induced resistance)")
-
-    # Air-only L from PEEC (port impedance at this frequency)
-    Z_port = peec_solver.compute_port_impedance(freq)
-    L_air = Z_port.imag / omega
-    R_coil = Z_port.real
-    L_total = L_air + Delta_L
-    print(f"  L_air (PEEC)     = {L_air * 1e9:.3f} nH")
-    print(f"  L_total (+ wp)   = {L_total * 1e9:.3f} nH")
-
     print()
     print("Reference values (matched-mesh test, Cu @ 7 kHz, R/delta=31.7):")
-    print(f"  {'solver':<12s} {'L [nH]':>10s} {'P [W]':>12s}")
-    print(f"  {'2D SIBC':<12s} {57.61:>10.2f} {6.63e-5:>12.2e}")
-    print(f"  {'3D FEM':<12s} {56.94:>10.2f} {5.78e-5:>12.2e}")
-    print(f"  {'PEEC+BEM':<12s} {L_total * 1e9:>10.2f} "
-          f"{P_total:>12.2e}")
-    print(f"  dL vs 2D = {(L_total * 1e9 - 57.61) / 57.61 * 100:+.2f}%")
-    print(f"  dP vs 2D = {(P_total - 6.63e-5) / 6.63e-5 * 100:+.2f}%")
+    print("  2D SIBC:  L=57.61 nH, P=6.63e-05 W")
+    print("  3D FEM:   L=56.94 nH, P=5.78e-05 W  (-12.81% P)")
+    print(f"  PEEC+BEM: P={P_total:.3e} W  (vs 2D dP={(P_total - 6.63e-5)/6.63e-5*100:+.2f}%)")
 
 
 if __name__ == "__main__":
