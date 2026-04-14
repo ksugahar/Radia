@@ -1289,7 +1289,8 @@ def _extract_tri6_surface(mesh_surf):
 
 def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
                             vol_nodes, vol_elems, B_nodes,
-                            wp_nodes=None, wp_elems=None, q_nodes=None):
+                            wp_nodes=None, wp_elems=None, q_nodes=None,
+                            wp_J_nodes=None):
     """Write a single .msh v4.1 with volume B + surface J + wireframe.
 
     Physical groups in one file, with node/element IDs offset
@@ -1447,7 +1448,22 @@ def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
                     f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
         f.write('$EndNodeData\n')
 
-        # ---- NodeData: q on workpiece nodes ----
+        # Keep NodeData ordering: ALL vector views first, then scalars
+        # (the .msh.opt writer assigns ArrowSize to View[0..n_vec-1]
+        # and IntervalsType to View[n_vec..], matching this order).
+
+        # ---- NodeData: J_workpiece (surface eddy current, vector) ----
+        if has_wp and wp_J_nodes is not None:
+            f.write('$NodeData\n')
+            f.write('1\n"J_workpiece"\n1\n0.0\n3\n0\n3\n')
+            f.write(f'{nv_wp}\n')
+            for i in range(nv_wp):
+                jx, jy, jz = wp_J_nodes[i]
+                f.write(f'{wp_offset + i + 1} '
+                        f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
+            f.write('$EndNodeData\n')
+
+        # ---- NodeData: q on workpiece nodes (scalar, always last) ----
         if has_wp:
             f.write('$NodeData\n')
             f.write('1\n"q"\n1\n0.0\n3\n0\n1\n')
@@ -1457,9 +1473,13 @@ def _write_combined_msh_v41(filename, mesh_surf, J_nodes,
             f.write('$EndNodeData\n')
 
     # Write companion .msh.opt (replaces .geo)
-    # B and J are vector (ncomp=3), q is scalar (ncomp=1)
-    write_companion_opt(filename, n_vector_views=2,
-                        n_scalar_views=1 if has_wp else 0)
+    # Vector views: B, J, and (optionally) J_workpiece
+    # Scalar view:  q (when workpiece present) — written LAST so
+    # View index in .msh.opt lines up with the order above.
+    n_vec = 2 + (1 if (has_wp and wp_J_nodes is not None) else 0)
+    n_sca = 1 if has_wp else 0
+    write_companion_opt(filename, n_vector_views=n_vec,
+                        n_scalar_views=n_sca)
 
 
 def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
@@ -1577,9 +1597,10 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
     # the combined .msh writer. This is how the GMSH viewer shows
     # workpiece + heating density alongside coil J + air B in ONE file
     # (single source of truth = the .vol+.sol pairs the solver wrote).
-    wp_nodes = wp_elems = q_nodes = None
+    wp_nodes = wp_elems = q_nodes = wp_J_nodes = None
     wp_vol_path = os.path.join(base_dir, "workpiece.vol").replace("\\", "/")
     wp_q_sol_path = os.path.join(base_dir, "wp_q.sol").replace("\\", "/")
+    wp_J_sol_path = os.path.join(base_dir, "wp_J.sol").replace("\\", "/")
     if os.path.isfile(wp_vol_path) and os.path.isfile(wp_q_sol_path):
         try:
             from netgen.meshing import Mesh as NgMesh
@@ -1596,16 +1617,30 @@ def post_process(mesh_vol_path, fes_order=0, msh_output="", j_npy="",
             gf_q_load.Load(wp_q_sol_path)
             q_nodes = np.array(
                 [float(gf_q_load.vec.FV()[i]) for i in range(wp_mesh_obj.nv)])
+
+            # Eddy-current vector on wp surface (optional companion)
+            if os.path.isfile(wp_J_sol_path):
+                fes_J_wp = H1(wp_mesh_obj, order=1, dim=3)
+                gf_J_wp = GridFunction(fes_J_wp)
+                gf_J_wp.Load(wp_J_sol_path)
+                wp_J_nodes = np.zeros((wp_mesh_obj.nv, 3))
+                for v_idx in range(wp_mesh_obj.nv):
+                    for k in range(3):
+                        wp_J_nodes[v_idx, k] = float(
+                            gf_J_wp.vec.FV()[v_idx * 3 + k])
+
             progress("GMSH", f"loaded workpiece overlay: "
-                              f"{len(wp_nodes)} nodes, {len(wp_elems)} tris")
+                              f"{len(wp_nodes)} nodes, {len(wp_elems)} tris"
+                              + (", J_workpiece" if wp_J_nodes is not None else ""))
         except Exception as _e:
             sys.stderr.write(f"WARN: could not load workpiece overlay: {_e}\n")
             sys.stderr.flush()
-            wp_nodes = wp_elems = q_nodes = None
+            wp_nodes = wp_elems = q_nodes = wp_J_nodes = None
 
     _write_combined_msh_v41(
         gmsh_file, mesh, J_nodes, vol_nodes_xyz, vol_elems, B_nodes,
-        wp_nodes=wp_nodes, wp_elems=wp_elems, q_nodes=q_nodes)
+        wp_nodes=wp_nodes, wp_elems=wp_elems, q_nodes=q_nodes,
+        wp_J_nodes=wp_J_nodes)
     progress("GMSH", f"B + J + wireframe + workpiece (v4.1): {gmsh_file}")
 
     # .msh.opt is written by _write_combined_msh_v41 (replaces .geo)
