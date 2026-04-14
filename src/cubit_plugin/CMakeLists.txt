@@ -174,6 +174,9 @@ set(CCM_SOURCES
     ExportMegCommand.hpp
     CoilCommand.cpp
     CoilCommand.hpp
+    VerifyLauncherCommand.cpp
+    VerifyLauncherCommand.hpp
+    LauncherLogic.hpp
 )
 
 # Netgen-dependent sources: callbackgeom + ExportNetgenCommand
