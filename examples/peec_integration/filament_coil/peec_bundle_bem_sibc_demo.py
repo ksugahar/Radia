@@ -89,13 +89,24 @@ def build_wp_surface_mesh(R_wp, H_wp, maxh):
 
 
 def solve_peec_bundle(paths, dw, dh, sigma, I_port, frequency):
-    """Build PEEC bundle and return per-filament complex currents."""
-    from peec_bundle import build_bundle_solver
+    """Build PEEC bundle + Loop-form reduction, return per-fil currents.
+
+    For a parallel-filament series-chain bundle the nodal MNA collapses
+    exactly to a K x K Loop-form (K = #filaments) via
+    build_loop_bundle_impedance. This scales O(N_seg^3) -> O(K^3) with
+    zero approximation error (verified in loop_bundle_verify.py).
+
+    Returns (R_f, L_f, I_fil, V_port). V_port is the port voltage when
+    driven by the specified I_port current source, so the air-only port
+    impedance is V_port / I_port.
+    """
+    from peec_bundle import (build_bundle_solver,
+                              build_loop_bundle_impedance,
+                              solve_loop_bundle)
     solver, seg_of_fil, _, _ = build_bundle_solver(paths, dw, dh, sigma)
-    I_branch = solver.compute_branch_currents(frequency, [I_port])
-    I_fil = np.array([np.mean(I_branch[segs]) for segs in seg_of_fil],
-                     dtype=complex)
-    return solver, I_fil
+    R_f, L_f = build_loop_bundle_impedance(solver, seg_of_fil)
+    I_fil, V_port = solve_loop_bundle(R_f, L_f, frequency, I_port=I_port)
+    return R_f, L_f, I_fil, V_port
 
 
 def main():
@@ -135,14 +146,16 @@ def main():
     print(f"  {len(paths)} filaments, sub-cell {dw*1e3:.3f} x {dh*1e3:.3f} mm "
           f"({time.perf_counter() - t0:.1f}s)")
 
-    print("\n[2/5] PEEC bundle solve -> per-filament currents")
+    print("\n[2/5] PEEC bundle + Loop-form reduction -> per-filament currents")
     t0 = time.perf_counter()
-    peec_solver, I_fil = solve_peec_bundle(
+    R_f, L_f, I_fil, V_port = solve_peec_bundle(
         paths, dw, dh, sigma_cu, I_port=1.0, frequency=args.freq)
-    Z_port = peec_solver.compute_port_impedance(args.freq)
+    # With I_port = 1 A, V_port IS the port impedance.
+    Z_port = V_port
     L_air = Z_port.imag / omega
     R_coil = Z_port.real
-    print(f"  done ({time.perf_counter() - t0:.1f}s)")
+    print(f"  done ({time.perf_counter() - t0:.1f}s, K x K = "
+          f"{R_f.shape[0]} x {R_f.shape[0]})")
     print(f"  sum(I_fil) = {np.sum(I_fil):.4f}  "
           f"|I_fil| mean = {np.mean(np.abs(I_fil)):.3e}")
     print(f"  L_air (PEEC, vacuum) = {L_air * 1e9:.3f} nH")
