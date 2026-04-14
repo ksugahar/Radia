@@ -13,6 +13,14 @@ Consistency checking (does NOT require Cubit):
 cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.2"
 
-__all__ = ["__version__"]
+# Compatibility window with the main radia package. The Cubit plugin
+# binaries bundled here (.ccm/.ccl/.pyd) are rebuilt alongside radia's
+# register_toolbar.py and calc_*.py at each release; the Python side
+# expects a matching minor series on the plugin. A mismatch triggers a
+# loud warning from radia's _check_plugin_freshness at Cubit startup.
+COMPAT_RADIA_MIN = "4.5.0"
+COMPAT_RADIA_MAX = "4.999.999"  # bumped when we cut the next radia minor
+
+__all__ = ["__version__", "COMPAT_RADIA_MIN", "COMPAT_RADIA_MAX"]

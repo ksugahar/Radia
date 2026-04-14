@@ -9,7 +9,14 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "4.5.1"
+__version__ = "4.5.2"
+
+# Compatibility window with the cubit-mesh-export package. The .ccm/.ccl
+# plugin binaries built there must match this radia minor series; the
+# 2026-04-14 incident (stale .ccl on 100号機) is the canonical reason
+# this matters. cubit-plugin-install enforces this at deploy time.
+COMPAT_CUBIT_MESH_EXPORT_MIN = "0.5.0"
+COMPAT_CUBIT_MESH_EXPORT_MAX = "0.999.999"  # bumped on next radia minor
 
 # DLL loader for Windows
 # MKL DLLs are installed via pip dependency (mkl>=2024.2.0)
