@@ -2138,6 +2138,195 @@ void PEECSolver::ComputeCouplingCoefficient(double freq,
     }
 }
 
+void PEECSolver::ComputeBranchCurrents(double freq,
+                                        const std::complex<double>* port_currents,
+                                        int n_ports_in,
+                                        const std::complex<double>* Zs, int n_Zs,
+                                        std::complex<double>* I_branch_out,
+                                        int n_loop_out) {
+    if (!hasTopology_) return;
+
+    int n_loop = matrices_.n_loop;
+    int n_ports = static_cast<int>(ports_.size());
+
+    // Zero output
+    for (int i = 0; i < n_loop_out; ++i) I_branch_out[i] = std::complex<double>(0, 0);
+
+    if (n_loop_out < n_loop) return;
+    if (n_ports == 0 || n_ports_in < n_ports) return;
+
+    double omega = 2.0 * RadConst::PI * freq;
+
+    // Build Z_eff (Schur-reduced if panels, else Z_branch)
+    std::vector<std::complex<double>> Z_eff;
+    if (hasGatheredCapacitance_) {
+        BuildZBranch(freq, Zs, n_Zs, Z_eff);
+    } else {
+        BuildZEff(freq, Zs, n_Zs, Z_eff);
+    }
+
+#ifdef HAVE_LAPACK
+    int info = 0;
+
+    // Invert Z_eff -> Y_branch (row-major, n_loop x n_loop)
+    std::vector<std::complex<double>> Y_branch(n_loop * n_loop, std::complex<double>(0, 0));
+    if (solverMethod_ == 1) {
+        bicgstab::DenseInvert<std::complex<double>>(
+            n_loop, Z_eff.data(), Y_branch.data(),
+            bicgstab_tol_, bicgstab_max_iter_);
+    } else {
+        std::vector<std::complex<double>> Z_copy(Z_eff);
+        for (int i = 0; i < n_loop; ++i) Y_branch[i * n_loop + i] = std::complex<double>(1, 0);
+
+        for (int i = 0; i < n_loop; ++i) {
+            for (int j = i + 1; j < n_loop; ++j) {
+                std::swap(Z_copy[i * n_loop + j], Z_copy[j * n_loop + i]);
+                std::swap(Y_branch[i * n_loop + j], Y_branch[j * n_loop + i]);
+            }
+        }
+
+        int ln = n_loop, nrhs = n_loop;
+        std::vector<int> ipiv(n_loop);
+        zgesv_(&ln, &nrhs, reinterpret_cast<MKL_Complex16*>(Z_copy.data()), &ln,
+               ipiv.data(), reinterpret_cast<MKL_Complex16*>(Y_branch.data()), &ln, &info);
+        if (info != 0) return;
+
+        for (int i = 0; i < n_loop; ++i) {
+            for (int j = i + 1; j < n_loop; ++j) {
+                std::swap(Y_branch[i * n_loop + j], Y_branch[j * n_loop + i]);
+            }
+        }
+    }
+
+    // Build A_full (n_nodes x n_loop) and Y_node = A * Y_branch * A^T
+    std::vector<double> A_full;
+    BuildFullIncidenceMatrix(A_full);
+
+    std::vector<std::complex<double>> A_cmplx(n_nodes_ * n_loop);
+    for (int i = 0; i < n_nodes_ * n_loop; ++i) {
+        A_cmplx[i] = std::complex<double>(A_full[i], 0);
+    }
+
+    std::complex<double> alpha(1, 0), beta_zero(0, 0);
+    std::vector<std::complex<double>> temp(n_loop * n_nodes_);
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                n_loop, n_nodes_, n_loop,
+                &alpha, Y_branch.data(), n_loop,
+                A_cmplx.data(), n_loop,
+                &beta_zero, temp.data(), n_nodes_);
+
+    std::vector<std::complex<double>> Y_node(n_nodes_ * n_nodes_);
+    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+                n_nodes_, n_nodes_, n_loop,
+                &alpha, A_cmplx.data(), n_loop,
+                temp.data(), n_nodes_,
+                &beta_zero, Y_node.data(), n_nodes_);
+
+    if (hasGatheredCapacitance_ && std::abs(omega) > 1e-10 &&
+        static_cast<int>(C_gathered_.size()) >= n_nodes_ * n_nodes_) {
+        std::complex<double> jw(0, omega);
+        for (int i = 0; i < n_nodes_; ++i) {
+            for (int j = 0; j < n_nodes_; ++j) {
+                Y_node[i * n_nodes_ + j] += jw *
+                    std::complex<double>(C_gathered_[i * n_nodes_ + j], 0);
+            }
+        }
+    }
+
+    // Ground selection
+    std::vector<std::vector<int>> components;
+    FindConnectedComponents(components);
+
+    std::vector<int> ground_nodes;
+    SelectGroundNodes(components, ground_nodes);
+
+    std::set<int> ground_set(ground_nodes.begin(), ground_nodes.end());
+    int n_ground = static_cast<int>(ground_set.size());
+    int n_reduced = n_nodes_ - n_ground;
+    if (n_reduced <= 0) return;
+
+    std::vector<int> non_ground;
+    non_ground.reserve(n_reduced);
+    for (int i = 0; i < n_nodes_; ++i) {
+        if (!ground_set.count(i)) non_ground.push_back(i);
+    }
+    std::vector<int> node_order = non_ground;
+    for (int g : ground_nodes) node_order.push_back(g);
+    std::vector<int> inv_order(n_nodes_, -1);
+    for (int i = 0; i < static_cast<int>(node_order.size()); ++i) {
+        inv_order[node_order[i]] = i;
+    }
+
+    // Y_reduced (column-major for LAPACK)
+    std::vector<std::complex<double>> Y_reduced(n_reduced * n_reduced);
+    for (int i = 0; i < n_reduced; ++i) {
+        for (int j = 0; j < n_reduced; ++j) {
+            int orig_i = node_order[i];
+            int orig_j = node_order[j];
+            Y_reduced[j * n_reduced + i] = Y_node[orig_i * n_nodes_ + orig_j];
+        }
+    }
+
+    int ln_red = n_reduced;
+    std::vector<int> ipiv_red(n_reduced);
+    zgetrf_(&ln_red, &ln_red, reinterpret_cast<MKL_Complex16*>(Y_reduced.data()),
+            &ln_red, ipiv_red.data(), &info);
+    if (info != 0) return;
+
+    // Build I_ext from user-specified port currents:
+    //   +I_k at node_positive, -I_k at node_negative of each port k
+    std::vector<std::complex<double>> rhs(n_reduced, std::complex<double>(0, 0));
+    for (int k = 0; k < n_ports; ++k) {
+        std::complex<double> I_k = port_currents[k];
+        int np = ports_[k].node_positive;
+        int nn = ports_[k].node_negative;
+        if (!ground_set.count(np)) {
+            int idx = inv_order[np];
+            if (idx >= 0 && idx < n_reduced) rhs[idx] += I_k;
+        }
+        if (!ground_set.count(nn)) {
+            int idx = inv_order[nn];
+            if (idx >= 0 && idx < n_reduced) rhs[idx] -= I_k;
+        }
+    }
+
+    char trans = 'N';
+    int nrhs_one = 1;
+    zgetrs_(&trans, &ln_red, &nrhs_one,
+            reinterpret_cast<MKL_Complex16*>(Y_reduced.data()), &ln_red,
+            ipiv_red.data(), reinterpret_cast<MKL_Complex16*>(rhs.data()),
+            &ln_red, &info);
+    if (info != 0) return;
+
+    // V_full (ground = 0)
+    std::vector<std::complex<double>> V_full(n_nodes_, std::complex<double>(0, 0));
+    for (int idx = 0; idx < n_reduced; ++idx) {
+        V_full[node_order[idx]] = rhs[idx];
+    }
+
+    // V_branch[f] = A^T[f,:] · V_full = V_full[node_from] - V_full[node_to]
+    // (A_full[nf,f] = +1, A_full[nt,f] = -1)
+    std::vector<std::complex<double>> V_branch(n_loop, std::complex<double>(0, 0));
+    for (int f = 0; f < n_loop; ++f) {
+        std::complex<double> s(0, 0);
+        for (int n = 0; n < n_nodes_; ++n) {
+            double a = A_full[n * n_loop + f];
+            if (a != 0.0) s += std::complex<double>(a, 0) * V_full[n];
+        }
+        V_branch[f] = s;
+    }
+
+    // I_branch = Y_branch · V_branch (positive = flow node_from -> node_to)
+    for (int i = 0; i < n_loop; ++i) {
+        std::complex<double> s(0, 0);
+        for (int j = 0; j < n_loop; ++j) {
+            s += Y_branch[i * n_loop + j] * V_branch[j];
+        }
+        I_branch_out[i] = s;
+    }
+#endif
+}
+
 void PEECSolver::FrequencySweep(const double* freqs, int n_freq,
                                  const std::complex<double>* Zs_all,
                                  std::complex<double>* Z_out, int n_ports_out) {
