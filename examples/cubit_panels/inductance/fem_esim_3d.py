@@ -150,7 +150,16 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh_air, grading=0.3)
     mesh = Mesh(ngmesh)
-    mesh.Curve(order + 1)  # High-order curving for sphere/cylinder/torus geometry
+    # Curve the mesh geometry. Practical default Curve(>=3) for 3D IH:
+    # the torus+sphere+cylinder combination needs order 3 to match
+    # 2D axisym reference to within 1% P (measured 2026-04-14, Cu 7kHz).
+    # Curve(2) under-predicts L by ~10%; Curve(3) brings it to ~-5%.
+    # Raising FES order to 2 instead (at Curve(2)) is far more expensive
+    # (60x solve time) and does NOT improve P. Prefer Curve(3) over
+    # HCurl order=2 for this geometry class. See
+    # `src/radia/mcp_server/ih/ih_knowledge.py` -> "Curve Order vs FES Order"
+    # for the measured tradeoff table.
+    mesh.Curve(max(order + 1, 3))
     t_mesh = time.perf_counter() - t0
 
     ne = mesh.ne

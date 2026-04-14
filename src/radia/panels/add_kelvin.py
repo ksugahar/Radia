@@ -1,26 +1,55 @@
 """Add Kelvin open-boundary sphere to an existing model.
 
-Provides two entry points -- one for Cubit, one for OCC -- with
-identical semantics:
+Provides three entry points -- Cubit 3D, OCC 3D, OCC 2D axisym -- with
+consistent semantics:
 
-    1.  Create an exterior sphere (same radius R, offset in space)
-    2.  Handle symmetry cuts (1/2, 1/4)
-    3.  Establish 1:1 surface mesh correspondence
-    4.  Mesh the Kelvin volume
-    5.  Assign labels (block/sideset or OCC face names)
+    1.  Create an exterior sphere/half-circle (same radius R, offset in space)
+    2.  Handle symmetry cuts (1/2, 1/4)  [3D only]
+    3.  Establish 1:1 surface/edge mesh correspondence (Periodic BC)
+    4.  Mesh the Kelvin volume/face
+    5.  Assign labels (block/sideset or OCC face/edge names)
     6.  Create GND vertex at Kelvin center (= physical infinity)
 
-The caller supplies only the physical-domain mesh (already meshed for
-Cubit; as an OCC shape for OCC) and the sphere radius.  Everything
-else is automatic.
+The caller supplies only the physical-domain geometry and the Kelvin
+radius.  Everything else is automatic.
 
 Usage (Cubit Python -- Layer 2, inside Cubit):
     >>> from add_kelvin import add_kelvin_cubit
     >>> info = add_kelvin_cubit(R=0.06, symmetry=["z"])
 
-Usage (OCC/Netgen -- Layer 4, system Python 3.12):
+Usage (OCC 3D -- Layer 4, system Python 3.12):
     >>> from add_kelvin import add_kelvin_occ
     >>> shape, info = add_kelvin_occ(air_shape, R=0.06, symmetry=["z"])
+
+Usage (OCC 2D axisymmetric -- Layer 4, system Python 3.12):
+    >>> from add_kelvin import add_kelvin_2d_axisym
+    >>> shape, info = add_kelvin_2d_axisym(interior_face, R=0.10, z_offset=0.25)
+
+## 2D Axisymmetric Kelvin (z-offset strategy)
+
+In 2D axisymmetric FEM (r, z plane representation of an axisymmetric
+3D problem), the physical domain lives on x >= 0 with r = x, z = y.
+The Kelvin transformation maps the infinite exterior (r^2 + z^2 > R^2)
+into a bounded fictitious half-circle centered at (0, z_offset):
+
+    interior:  half-circle centered (0, 0),        radius R, x >= 0
+    exterior:  half-circle centered (0, z_offset), radius R, x >= 0
+    link:      Periodic BC along the curved arcs (kelvin_int, kelvin_ext)
+    GND:       vertex at (0, z_offset) (= image of infinity, Dirichlet)
+
+Reluctivity modulation (A-formulation, u = r*A_phi):
+    nu_exterior(x, y) = nu_0 * (rho' / R)^2
+    where rho' = sqrt(x^2 + (y - z_offset)^2)
+
+This factor is 0 at rho'=0 (infinity) and continuous nu_0 at rho'=R
+(Kelvin boundary), providing the "image of infinity" degeneracy that
+requires GND Dirichlet for uniqueness.
+
+IMPORTANT: The 2D axisym Kelvin radius must enclose ALL physical
+objects (coil + workpiece + sources). In practice R >= 3*R_coil is
+recommended. A recent convergence test (2026-04-14) verified that L
+is stable within 0.07% across R in [0.08, 0.25]m for a R_coil=30mm
+coil + R_wp=25mm workpiece.
 """
 
 from __future__ import annotations
@@ -464,5 +493,146 @@ def add_kelvin_occ(air_shape, R, symmetry=None,
           "  symmetry = [] (full)")
     print("  Identify: kelvin_int <-> kelvin_ext")
     print("  GND vertex at (%g, %g, %g)" % (ox, oy, oz))
+
+    return shape, info
+
+
+# ====================================================================
+# OCC 2D axisymmetric path (Layer 4 -- system Python 3.12 + NGSolve)
+# ====================================================================
+
+def add_kelvin_2d_axisym(interior_shape, R, z_offset=None, maxh_kelvin=None):
+    """Add z-offset Kelvin half-circle for 2D axisymmetric FEM.
+
+    Call **before** meshing.  The caller must provide `interior_shape`:
+    a 2D OCC face representing the physical domain on x >= 0 (the (r, z)
+    projection of the axisymmetric 3D geometry), with its outer curved
+    edge (radius R arc centered at origin) ready to be identified.
+
+    Edges of `interior_shape` should already be named:
+      - "axis"       on the x = 0 boundary (r = 0)
+      - "kelvin_int" on the outer arc (to be identified with exterior)
+      - anything else for physical boundaries (coil, wp, etc.)
+
+    Args:
+        interior_shape: OCC 2D face for the interior half-circle with
+            any physical inclusions subtracted. Must live on x >= 0.
+        R: Kelvin arc radius [m]. Must enclose all physical objects.
+        z_offset: Vertical offset of exterior half-circle center [m].
+            Default: 2.5*R (ensures interior and exterior are disjoint).
+        maxh_kelvin: Max mesh size for Kelvin face [m] or None.
+
+    Returns:
+        (compound_shape, info_dict)
+        The compound_shape is ready for OCCGeometry(shape, dim=2).GenerateMesh().
+        info_dict has keys: 'R', 'z_offset', 'kelvin_factor' (string expr),
+        'axis_labels' (Dirichlet edges to pass to FES).
+
+    Weak form hint (A-formulation, u = r*A_phi, mesh coordinates x=r, y=z):
+        fes = Periodic(H1(mesh, order=p, complex=True,
+                          dirichlet="axis|axis_ext",
+                          dirichlet_bbnd="GND"))
+        from ngsolve import x, y, sqrt, IfPos
+        r_safe = IfPos(x - 1e-10, x, 1e-10)
+        rho_prime = sqrt(x**2 + (y - z_offset)**2)
+        rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+        kelvin_fac = (rho_safe / R)**2
+        nu_dict = {m: nu_0 * kelvin_fac if "kelvin" in m else nu_0
+                   for m in mesh.GetMaterials()}
+        nu_cf = mesh.MaterialCF(nu_dict, default=nu_0)
+        a_bf += nu_cf / r_safe * grad(u) * grad(v) * dx
+    """
+    from netgen.occ import (WorkPlane, MoveTo, Axes, Pnt, X, Z,
+                             Glue, Vertex, IdentificationType)
+
+    if z_offset is None:
+        z_offset = 2.5 * R
+    if z_offset < 2.0 * R:
+        raise ValueError(
+            "z_offset %.4f must be >= 2*R = %.4f to avoid overlap."
+            % (z_offset, 2.0 * R))
+
+    # ---- 1. Build exterior half-circle centered at (0, z_offset) ----
+    wp_ext = WorkPlane(Axes((0, z_offset, 0), n=Z, h=X))
+    outer_full = wp_ext.Circle(R).Face()
+    cutter_ext = MoveTo(-R - 0.1, z_offset - R - 0.1).Rectangle(
+        R + 0.1, 2 * R + 0.2).Face()
+    exterior = outer_full - cutter_ext
+    exterior.name = "kelvin"
+    if maxh_kelvin is not None:
+        exterior.maxh = maxh_kelvin
+
+    # ---- 2. Name exterior edges ----
+    kelvin_ext_edges = []
+    for edge in exterior.edges:
+        cx = edge.center.x
+        try:
+            v0, v1 = edge.vertices
+            d0 = math.sqrt(v0.p.x ** 2 + (v0.p.y - z_offset) ** 2)
+            d1 = math.sqrt(v1.p.x ** 2 + (v1.p.y - z_offset) ** 2)
+            is_arc = (abs(d0 - R) < 0.01 * R and abs(d1 - R) < 0.01 * R
+                      and cx > 0.01 * R)
+        except Exception:
+            is_arc = False
+        if cx < 1e-4:
+            edge.name = "axis_ext"
+        elif is_arc:
+            edge.name = "kelvin_ext"
+            kelvin_ext_edges.append(edge)
+        else:
+            edge.name = "default"
+
+    # ---- 3. Find kelvin_int edges in interior (expected named already) ----
+    kelvin_int_edges = [e for e in interior_shape.edges
+                        if getattr(e, 'name', '') == "kelvin_int"]
+    if not kelvin_int_edges:
+        raise RuntimeError(
+            "No edges named 'kelvin_int' found in interior_shape. "
+            "The caller must name the outer arc(s) of the interior "
+            "half-circle 'kelvin_int' before calling add_kelvin_2d_axisym.")
+    if not kelvin_ext_edges:
+        raise RuntimeError(
+            "Failed to identify exterior Kelvin arc edges. "
+            "Check z_offset and R values.")
+
+    # ---- 4. Periodic identification (match by y-sign) ----
+    matched = 0
+    for int_e in kelvin_int_edges:
+        iy = int_e.center.y
+        for ext_e in kelvin_ext_edges:
+            ey = ext_e.center.y - z_offset
+            # Match same-sign halves (Netgen splits full arc into top/bottom)
+            if (iy > 0 and ey > 0) or (iy < 0 and ey < 0) or \
+               (abs(iy) < 1e-8 and abs(ey) < 1e-8):
+                int_e.Identify(ext_e, "kelvin", IdentificationType.PERIODIC)
+                matched += 1
+                break
+    if matched == 0:
+        raise RuntimeError(
+            "Failed to match any kelvin_int edge with a kelvin_ext edge. "
+            "Verify that the interior arc radius matches R = %g." % R)
+
+    # ---- 5. GND vertex at exterior center (= image of infinity) ----
+    gnd = Vertex(Pnt(0, z_offset, 0))
+    gnd.name = "GND"
+
+    # ---- 6. Glue ----
+    shape = Glue([interior_shape, exterior, gnd])
+
+    info = {
+        "R": R,
+        "z_offset": z_offset,
+        "n_periodic_pairs": matched,
+        "axis_labels": "axis|axis_ext",
+        "kelvin_factor": "(rho'/R)**2 with rho' = sqrt(x**2 + (y-z_offset)**2)",
+    }
+
+    print("")
+    print("=== add_kelvin_2d_axisym ===")
+    print("  R        = %g m" % R)
+    print("  z_offset = %g m" % z_offset)
+    print("  Periodic pairs matched: %d (kelvin_int <-> kelvin_ext)" % matched)
+    print("  GND vertex at (0, %g)" % z_offset)
+    print("  Reluctivity factor (exterior): nu_0 * (rho'/R)^2")
 
     return shape, info
