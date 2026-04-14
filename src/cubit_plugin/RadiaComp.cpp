@@ -1149,16 +1149,38 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   labelLayout->addWidget(labelWidget);
   layout->addWidget(labelGroup);
 
-  // .jou path display (read-only — already saved by ensure_jou_path)
+  // Output .vol path: editable + Browse button. 2026-04-14 fix: when
+  // ensure_jou_path returns "/" (e.g. session has no saved journal yet,
+  // or s_lastJouPath cached a stale value), the previous read-only field
+  // was unfix-able by the user and OK silently exported to "/.vol" which
+  // failed write permission. Editable field lets the user pick any
+  // writable location.
   QString volBase = jouPath;
   if (volBase.endsWith(".jou", Qt::CaseInsensitive))
     volBase.chop(4);
+  QString defaultVol = volBase + ".vol";
+  // Reject obviously broken auto-derived paths (empty, "/", "/.vol")
+  // and fall back to a sane default in the user's home directory.
+  if (defaultVol.isEmpty() || defaultVol == "/.vol" || defaultVol == ".vol"
+      || defaultVol.startsWith("//.vol")) {
+    QString home = QDir::homePath();
+    defaultVol = home + "/radia_model.vol";
+  }
   QHBoxLayout *hVol = new QHBoxLayout();
   hVol->addWidget(new QLabel("Output .vol:"));
-  QLineEdit *volPreview = new QLineEdit(volBase + ".vol");
-  volPreview->setReadOnly(true);
-  volPreview->setStyleSheet("color: gray;");
-  hVol->addWidget(volPreview, 1);
+  QLineEdit *volEdit = new QLineEdit(defaultVol);
+  hVol->addWidget(volEdit, 1);
+  QPushButton *volBrowseBtn = new QPushButton("Browse...");
+  hVol->addWidget(volBrowseBtn);
+  QObject::connect(volBrowseBtn, &QPushButton::clicked, [&dlg, volEdit]() {
+    QString picked = QFileDialog::getSaveFileName(
+        &dlg, "Output .vol path", volEdit->text(),
+        "Netgen Vol (*.vol);;All Files (*)");
+    if (!picked.isEmpty()) {
+      picked.replace("\\", "/");
+      volEdit->setText(picked);
+    }
+  });
   layout->addLayout(hVol);
 
   // OK / Cancel
@@ -1220,17 +1242,16 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   const ModeScript &ms = modes[modeIdx];
   int order = orderCombo->currentIndex() + 1;
 
-  // Derive output directory and baseName from .jou path
-  // (jouPath was set by ensure_jou_path() before dialog)
-  QString outDir;
-  QString baseName;
-  {
-    int slash = jouPath.lastIndexOf('/');
-    outDir = (slash >= 0) ? jouPath.left(slash) : ".";
-    QString fname = (slash >= 0) ? jouPath.mid(slash + 1) : jouPath;
-    int dot = fname.lastIndexOf('.');
-    baseName = (dot > 0) ? fname.left(dot) : fname;
+  // Use the (possibly user-edited) Output .vol path.
+  QString volPath = volEdit->text().trimmed().replace("\\", "/");
+  if (volPath.isEmpty() || volPath == "/" || volPath == "/.vol") {
+    PRINT_ERROR("Output .vol path is empty or invalid: %s\n",
+                volPath.toLocal8Bit().constData());
+    return;
   }
+  QString outDir = QFileInfo(volPath).absolutePath();
+  if (outDir.isEmpty()) outDir = ".";
+  QString baseName = QFileInfo(volPath).completeBaseName();
 
   // Save settings
   saveLauncherSettings({
@@ -1240,11 +1261,15 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   });
 
   // --- Export .vol ---
-  QDir().mkpath(outDir);
+  if (!QDir().mkpath(outDir)) {
+    PRINT_ERROR("Cannot create output directory: %s\n",
+                outDir.toLocal8Bit().constData());
+    return;
+  }
   CubitInterface::silent_cmd(("cd \"" + outDir.toLocal8Bit() + "\"").constData());
 
-  QString volPath = outDir + "/" + baseName + ".vol";
-  PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
+  PRINT_INFO("Exporting Netgen .vol (order %d) to %s...\n",
+             order, volPath.toLocal8Bit().constData());
 
   std::string exportCmd = "radia_export netgen \"" +
       volPath.toLocal8Bit().toStdString() +
