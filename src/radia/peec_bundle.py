@@ -128,6 +128,68 @@ def build_bundle_solver(filament_paths, dw, dh, sigma, cell_wh=None):
     return solver, seg_indices, 0, 1
 
 
+def build_loop_bundle_impedance(solver, seg_of_filament):
+    """Reduce a parallel-filament PEEC bundle to filament-level (R_f, L_f).
+
+    For a bundle of K filaments where each filament is a SERIES CHAIN
+    of segments with shared port start/end nodes (the topology produced
+    by build_bundle_solver), every segment in filament k carries the same
+    current I_f[k]. Under this constraint the nodal MNA system collapses
+    exactly to a K x K Loop-form problem:
+
+        R_f[k, k]  = sum_{i in seg_of_filament[k]} R_dc[i, i]
+        L_f[k, l]  = sum_{i in seg_of_filament[k]}
+                     sum_{j in seg_of_filament[l]} L[i, j]
+
+    This is a lossless reduction (not approximate) for the series-chain
+    bundle topology and scales the system from O(N_seg^3) to O(K^3).
+
+    Returns (R_f, L_f) as K x K real arrays.
+    """
+    K = len(seg_of_filament)
+    R_full = solver.R_dc
+    L_full = solver.L
+    N_seg = R_full.shape[0]
+    A = np.zeros((K, N_seg), dtype=np.float64)
+    for k, segs in enumerate(seg_of_filament):
+        for i in segs:
+            A[k, int(i)] = 1.0
+    # R_full may be a 1D vector (per-segment R) or 2D diagonal matrix.
+    R_diag_vec = R_full if R_full.ndim == 1 else np.diag(R_full)
+    R_f = np.diag(A @ R_diag_vec)            # K x K diagonal
+    L_f = A @ L_full @ A.T                    # K x K dense symmetric
+    return R_f, L_f
+
+
+def solve_loop_bundle(R_f, L_f, frequency, I_port=1.0, Zs_fil=None):
+    """Solve the K x K Loop-form bundle system at one frequency.
+
+    Extended system (K+1 x K+1) with port voltage V_port as an unknown:
+
+        [ Z_fil  -1 ] [I_f   ]   [0     ]
+        [ 1^T     0 ] [V_port] = [I_port]
+
+    Z_fil = R_f + jw * L_f + diag(Zs_fil) (optional per-filament SIBC
+    surface impedance, e.g. Dowell).
+
+    Returns (I_f, V_port) where I_f is (K,) complex.
+    """
+    import math
+    omega = 2.0 * math.pi * frequency
+    K = R_f.shape[0]
+    Z_fil = R_f.astype(complex) + 1j * omega * L_f.astype(complex)
+    if Zs_fil is not None:
+        Z_fil = Z_fil + np.diag(np.asarray(Zs_fil, dtype=complex))
+    M = np.zeros((K + 1, K + 1), dtype=complex)
+    M[:K, :K] = Z_fil
+    M[:K, K] = -1.0
+    M[K, :K] = 1.0
+    b = np.zeros(K + 1, dtype=complex)
+    b[K] = I_port
+    x = np.linalg.solve(M, b)
+    return x[:K], complex(x[K])
+
+
 def filament_currents(I_branch, seg_of_filament):
     """Aggregate per-filament current from per-segment branch current array.
 
