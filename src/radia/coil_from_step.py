@@ -84,21 +84,25 @@ class CenterlineResult:
 
 
 def load_step_solid(step_path):
-    """Load a STEP file and return its single Solid.
+    """Load a STEP file and return a single Solid.
 
-    Raises ValueError if the STEP contains 0 or >1 solids.
+    Multiple solids in the file (e.g. CoilBuilder.write_step output, one
+    solid per segment) are boolean-fused into one before returning.
     """
-    from netgen.occ import OCCGeometry
+    from netgen.occ import OCCGeometry, Glue
     if not os.path.isfile(step_path):
         raise FileNotFoundError(step_path)
     geo = OCCGeometry(step_path)
     shape = geo.shape
     solids = list(shape.solids)
-    if len(solids) != 1:
-        raise ValueError(
-            f"STEP must contain exactly 1 solid, got {len(solids)} "
-            f"in {step_path}")
-    return solids[0]
+    if not solids:
+        raise ValueError(f"STEP contains no solids: {step_path}")
+    if len(solids) == 1:
+        return solids[0]
+    fused = solids[0]
+    for s in solids[1:]:
+        fused = fused + s   # boolean union (OCC '+')
+    return fused
 
 
 # ---------- Cross-section helpers -------------------------------------------
@@ -393,3 +397,195 @@ def extract_centerline(step_path_or_solid, *,
         arclen=arclen,
         closed=locals().get('closed', False),
     )
+
+
+# ---------- Sprint 2: polyline -> CoilBuilder segments ----------------------
+
+
+@dataclass
+class SegmentSpec:
+    """Geometric specification of one reconstructed segment."""
+    kind: str               # 'straight' or 'arc'
+    length: float           # arc length [m]
+    radius: float = 0.0     # arc radius [m] (0 for straight)
+    angle_deg: float = 0.0  # arc angle [deg] (0 for straight)
+    profile: Profile = None # cross-section profile
+    start_pos: np.ndarray = None      # (3,) world starting point
+    start_tangent: np.ndarray = None  # (3,) unit tangent
+    start_normal: np.ndarray = None   # (3,) unit cross-section normal
+
+
+def _smooth_curvature(polyline, closed):
+    """Compute discrete curvature kappa_i [1/m] at each polyline station.
+
+    Uses three consecutive points (p_{i-1}, p_i, p_{i+1}) and the
+    Menger curvature formula:  kappa = 4 * area / (|a| * |b| * |c|).
+
+    For closed loops the indices wrap; for open chains the endpoints
+    use a one-sided estimate (set to neighbor's kappa).
+    """
+    n = len(polyline)
+    if n < 3:
+        return np.zeros(n)
+    kappa = np.zeros(n)
+    for i in range(n):
+        if not closed and (i == 0 or i == n - 1):
+            continue
+        i0 = (i - 1) % n
+        i1 = i
+        i2 = (i + 1) % n
+        a = polyline[i1] - polyline[i0]
+        b = polyline[i2] - polyline[i1]
+        c = polyline[i2] - polyline[i0]
+        an, bn, cn = (np.linalg.norm(a), np.linalg.norm(b),
+                      np.linalg.norm(c))
+        if an < 1e-12 or bn < 1e-12 or cn < 1e-12:
+            continue
+        # Triangle area via cross product
+        area = 0.5 * np.linalg.norm(np.cross(a, b))
+        kappa[i] = 4.0 * area / (an * bn * cn)
+    if not closed:
+        kappa[0] = kappa[1]
+        kappa[-1] = kappa[-2]
+    return kappa
+
+
+def _estimate_plane_normal(polyline):
+    """Best-fit plane normal (SVD) for a roughly planar polyline.
+
+    Used to disambiguate the cross-section's normal direction for
+    arc segments. For non-planar coils the result is the principal
+    out-of-plane direction.
+    """
+    centroid = polyline.mean(axis=0)
+    pts = polyline - centroid
+    # SVD: smallest singular value's right-singular vector = plane normal
+    _, _, Vt = np.linalg.svd(pts, full_matrices=False)
+    return Vt[-1] / np.linalg.norm(Vt[-1])
+
+
+def polyline_to_segments(result, *,
+                         straight_kappa_threshold=2.0,
+                         curvature_var_tol=0.20):
+    """Group polyline stations into straight + arc segments.
+
+    Args:
+        result: CenterlineResult from extract_centerline().
+        straight_kappa_threshold: kappa < threshold/avg_radius -> straight
+            (default: stations with kappa less than 1/(50 * avg_radius)).
+        curvature_var_tol: relative variation of kappa within an arc
+            group must be < this fraction.
+
+    Returns:
+        list of SegmentSpec.
+    """
+    pts = result.polyline
+    tans = result.tangents
+    profiles = result.profiles
+    arclen = result.arclen
+    closed = result.closed
+    n = len(pts)
+    if n < 3:
+        return []
+
+    kappa = _smooth_curvature(pts, closed)
+    avg_R = np.mean(arclen[1:] - arclen[:-1]) * n / (2 * np.pi) \
+        if closed else float(np.linalg.norm(pts[-1] - pts[0]))
+    avg_R = max(avg_R, 1e-6)
+    kappa_straight = straight_kappa_threshold / (50.0 * avg_R)
+
+    # Classify each station
+    kinds = ['straight' if k < kappa_straight else 'arc' for k in kappa]
+
+    # Group consecutive same-kind stations (with similar kappa for arcs)
+    groups = []  # list of (kind, [indices])
+    cur_kind = kinds[0]
+    cur_idx = [0]
+    cur_kappa_mean = kappa[0]
+    for i in range(1, n):
+        if kinds[i] == cur_kind:
+            if cur_kind == 'arc':
+                # Check kappa stability within group
+                grp_mean = np.mean([kappa[j] for j in cur_idx])
+                if grp_mean > 0 and abs(kappa[i] - grp_mean) / grp_mean \
+                        < curvature_var_tol:
+                    cur_idx.append(i)
+                    continue
+                # Curvature changed too much -> close group and restart
+                groups.append((cur_kind, cur_idx))
+                cur_kind = 'arc'
+                cur_idx = [i]
+                cur_kappa_mean = kappa[i]
+                continue
+            cur_idx.append(i)
+        else:
+            groups.append((cur_kind, cur_idx))
+            cur_kind = kinds[i]
+            cur_idx = [i]
+            cur_kappa_mean = kappa[i]
+    groups.append((cur_kind, cur_idx))
+
+    # Convert groups to SegmentSpec
+    segs = []
+    for kind, idx in groups:
+        if len(idx) < 2:
+            continue
+        i0, i1 = idx[0], idx[-1]
+        if closed and i1 == n - 1:
+            length = arclen[i1] - arclen[i0] + np.linalg.norm(pts[0] - pts[-1])
+        else:
+            length = arclen[i1] - arclen[i0]
+        prof = profiles[i0]
+        start_pos = pts[i0].copy()
+        start_tan = tans[i0].copy()
+        if kind == 'straight':
+            segs.append(SegmentSpec(
+                kind='straight', length=length, profile=prof,
+                start_pos=start_pos, start_tangent=start_tan))
+        else:
+            kappa_mean = float(np.mean([kappa[j] for j in idx]))
+            radius = 1.0 / kappa_mean if kappa_mean > 0 else 0.0
+            angle_rad = length * kappa_mean
+            segs.append(SegmentSpec(
+                kind='arc', length=length, radius=radius,
+                angle_deg=math.degrees(angle_rad), profile=prof,
+                start_pos=start_pos, start_tangent=start_tan))
+    return segs
+
+
+def to_coil_builder(result, current=1.0):
+    """Build a CoilBuilder from an extracted centerline result.
+
+    Currently supports planar coils with straight + circular-arc
+    segments (Sprint 2 scope). Lofts (varying cross-section) and
+    helical / non-planar arcs are NOT yet handled.
+    """
+    from radia_coil_builder import CoilBuilder
+    segs = polyline_to_segments(result)
+    if not segs:
+        raise RuntimeError("no segments reconstructed")
+
+    builder = CoilBuilder(current=current)
+    first = segs[0]
+    # Initial orientation: x = tangent (segment-along), z = plane normal,
+    # y = z x x. This matches CoilBuilder's StraightSegment convention
+    # where x is the path direction.
+    plane_n = _estimate_plane_normal(result.polyline)
+    x_axis = first.start_tangent / np.linalg.norm(first.start_tangent)
+    z_axis = plane_n / np.linalg.norm(plane_n)
+    # Re-orthogonalize z to remove any component along x
+    z_axis = z_axis - np.dot(z_axis, x_axis) * x_axis
+    z_axis = z_axis / np.linalg.norm(z_axis)
+    y_axis = np.cross(z_axis, x_axis)
+    orient = np.array([x_axis, y_axis, z_axis])  # row vectors
+    builder.set_start(first.start_pos.tolist(), orientation=orient)
+    builder.set_profile(first.profile)
+    for s in segs:
+        if s.profile is not None:
+            # Refresh profile in case it changed across segment boundary
+            builder.set_profile(s.profile)
+        if s.kind == 'straight':
+            builder.add_straight(length=s.length)
+        else:
+            builder.add_arc(radius=s.radius, arc_angle=s.angle_deg)
+    return builder, segs
