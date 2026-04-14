@@ -69,16 +69,22 @@ def _clean_old_plugins(cubit_dir):
     bin_dir = cubit_dir / "bin"
     removed = 0
 
-    for pattern in ["radia_cubit.ccm", "radia_cubit_mesh*.pyd",
+    # Clean from BOTH plugins/ and bin/ — .ccl has historically been
+    # placed in either location, and a stale copy in the wrong place
+    # silently shadows the freshly installed one (2026-04-14: this caused
+    # IH BEM sideset source/sink to fail on 100号機).
+    for pattern in ["radia_cubit.ccm", "radia_cubit.ccl",
+                    "radia_cubit_mesh*.pyd",
                     "nglib.dll", "ngcore.dll"]:
-        for f in plugins_dir.glob(pattern):
-            try:
-                f.unlink()
-                removed += 1
-            except OSError:
-                pass
+        for dir_ in (plugins_dir, bin_dir):
+            for f in dir_.glob(pattern):
+                try:
+                    f.unlink()
+                    removed += 1
+                except OSError:
+                    pass
 
-    for name in ["radia_cubit.ccl", "cubit_radia.bat"]:
+    for name in ["cubit_radia.bat"]:
         f = bin_dir / name
         if f.is_file():
             try:

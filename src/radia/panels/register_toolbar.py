@@ -141,6 +141,77 @@ def _init_export_default_dir():
         pass
 
 
+def _check_plugin_freshness():
+    """Warn if Cubit C++ plugin (.ccl/.ccm) is older than this Python file.
+
+    Silent mismatch between site-packages/radia and the Cubit plugin dir
+    has caused hard-to-diagnose bugs (e.g., 2026-04-14: IH BEM failed to
+    read source/sink sidesets because an outdated .ccl shipped without
+    the FaceDescriptor DomainIn/Out fix). Fail loudly.
+    """
+    try:
+        from install_panels import find_cubit_bin
+    except ImportError:
+        try:
+            from radia.install_panels import find_cubit_bin
+        except Exception:
+            return
+    try:
+        cubit_bin = find_cubit_bin()
+    except Exception:
+        cubit_bin = None
+    if not cubit_bin:
+        return
+    plugin_dir = os.path.join(cubit_bin, "plugins")
+    try:
+        self_mtime = os.path.getmtime(__file__)
+    except Exception:
+        return
+    tol_sec = 3600  # 1 h tolerance (one pip install batches within a minute)
+    stale = []
+    for name in ("radia_cubit.ccl", "radia_cubit.ccm"):
+        p = os.path.join(plugin_dir, name)
+        if not os.path.isfile(p):
+            continue
+        m = os.path.getmtime(p)
+        if m + tol_sec < self_mtime:
+            lag_hr = (self_mtime - m) / 3600.0
+            stale.append((name, p, m, lag_hr))
+    if not stale:
+        return
+    import time as _t
+    lines = [
+        "=" * 70,
+        "[Radia] WARNING: Cubit C++ plugin is out of date.",
+        "-" * 70,
+    ]
+    for name, p, m, lag_hr in stale:
+        lines.append(f"  {name}: {lag_hr:.1f} h older than Python package")
+        lines.append(f"    {p}")
+        lines.append(f"    plugin mtime: {_t.ctime(m)}")
+    lines.append(f"  Python package ({os.path.basename(__file__)}):")
+    lines.append(f"    mtime: {_t.ctime(self_mtime)}")
+    lines.append("")
+    lines.append("  RISK: silent wrong results (e.g., IH BEM source/sink")
+    lines.append("        sidesets not read if FaceDescriptor DomainIn/Out")
+    lines.append("        is stale).")
+    lines.append("  FIX:  rebuild + redeploy the plugin:")
+    lines.append("          cd src/cubit_plugin && cmake --build . --config Release")
+    lines.append("          cubit-plugin-install   # from cubit-mesh-export pkg")
+    lines.append("=" * 70)
+    msg = "\n".join(lines)
+    # Print to Cubit console (visible in the GUI log tab)
+    try:
+        print(msg)
+    except Exception:
+        pass
+    # Panel log (timestamped, persistent across subprocess calls)
+    for name, p, m, lag_hr in stale:
+        _panel_log(
+            f"PLUGIN_STALE: {name} is {lag_hr:.1f} h older than Python "
+            f"package — rebuild and redeploy required")
+
+
 def _cleanup_legacy_menus():
     """Remove legacy Python-side menus left behind by older installs.
 
@@ -182,6 +253,7 @@ def register_menu():
     _panel_log("register_menu: ENTER (C++-only mode)")
     _cleanup_legacy_menus()
     _init_export_default_dir()
+    _check_plugin_freshness()
     _panel_log("register_menu: EXIT (export defaults seeded)")
 
 
