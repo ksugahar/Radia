@@ -210,6 +210,28 @@ class PEECCircuitSolver:
 
         return Z_port
 
+    def compute_branch_currents(self, freq, port_currents, Zs=None):
+        """Solve for per-filament complex branch currents under user-specified
+        port current injection.
+
+        Use case: all N filaments wired in parallel between a single port's
+        positive and negative nodes. Pass port_currents=[I_total] to get the
+        AC current distribution across the N filaments (skin + proximity).
+
+        Args:
+            freq: Frequency in Hz
+            port_currents: array-like of complex port currents, length n_ports
+            Zs: Optional surface impedance array (n_loop,) complex
+
+        Returns:
+            I_branch: (n_loop,) complex array. I_branch[f] > 0 means current
+                flows from segment_nodes[f, 0] to segment_nodes[f, 1].
+                For a parallel filament bundle, sum(I_branch) == port_currents[0].
+        """
+        pc = np.asarray(port_currents, dtype=complex).reshape(-1)
+        Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
+        return np.array(self._solver.solve_branch_currents(freq, pc, Zs_arg))
+
     def compute_Z_matrix(self, freq, Zs=None):
         """Compute full n_port x n_port Z-parameter matrix.
 
