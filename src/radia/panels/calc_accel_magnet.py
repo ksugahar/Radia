@@ -777,23 +777,29 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
     # ============================================================
     # Step 8: GMSH export
     # ============================================================
+    # Phase B: save .vol + |B|.sol (NGSolve native), then vol2msh.
     gmsh_file = ""
     if msh_output:
         try:
-            from gmsh_post_export import GmshPostExport
+            from gmsh_post_export import save_vol_sol_pair, vol2msh
+            base_dir = os.path.dirname(os.path.abspath(msh_output))
+            name_stem = os.path.splitext(os.path.basename(msh_output))[0]
 
             B_mag_cf = sqrt(InnerProduct(B_field, B_field))
-
-            post = GmshPostExport(mesh, boundary=False)
             fes_h1 = H1(mesh, order=1)
             gf_B = GridFunction(fes_h1)
             gf_B.Set(B_mag_cf)
-            node_B = np.array([gf_B(mesh(*mesh.vertices[v.nr].point))
-                               for v in mesh.vertices])
-            post.add_field("|B|", node_B, ncomp=1)
-            post.write(msh_output)
+
+            vol_path = os.path.join(base_dir, f"{name_stem}_mesh.vol").replace("\\", "/")
+            sol_path = os.path.join(base_dir, f"{name_stem}_Bmag.sol").replace("\\", "/")
+            save_vol_sol_pair(vol_path, sol_path, mesh.ngmesh, gf_B)
+
+            vol2msh(msh_output, vol_path, [
+                {"sol": sol_path, "fes": "H1", "fes_order": 1, "fes_dim": 1,
+                 "name": "|B|", "ncomp": 1},
+            ])
             gmsh_file = msh_output
-            _log(f"GMSH:{msh_output}")
+            _log(f"GMSH:{msh_output} (via vol2msh)")
         except Exception as e:
             _log(f"GMSH_ERROR:{e}")
 
