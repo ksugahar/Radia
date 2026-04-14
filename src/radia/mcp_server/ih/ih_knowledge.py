@@ -215,6 +215,59 @@ If the .jou follows this convention, the student opens the GUI, picks
 the .vol file, hits Run — no label input needed. Errors at this stage
 mean the .jou does not follow convention; fix the .jou, not the GUI.
 
+## Curve Order vs FES Order (CRITICAL for IH accuracy)
+
+**CRITICAL**: Both `fem_esim_kelvin.py` (2D axi) and `fem_esim_3d.py` (3D)
+MUST call `mesh.Curve(>=2)` after `Mesh()` if FES order >= 1 and the
+geometry contains curved entities (circles, torus, sphere, cylinder).
+Missing `mesh.Curve()` causes a **systematic L under-prediction of
+~10 %**, because circular coil cross-sections and Kelvin arcs collapse
+to polygons.
+
+### Practical recommendation (Sugahara, 2026-04-14)
+
+General rule of thumb: **`curve_order=2` with `FES order=1 or 2`
+is sufficient** for most IH problems. Going higher rarely pays off.
+
+**Exception for strongly-curved 3D geometries** (torus coil + sphere
+Kelvin + cylinder workpiece, such as `ih_fem_kelvin_sample.jou`):
+the default `curve_order=2` with HCurl order=1 gives L error ~10 %
+vs 2D axisym full-res reference, because the sphere and torus need
+finer geometry than Curve(2) can capture on a maxh=15 mm mesh.
+
+**Tested at Cu 7 kHz** (coil R=30 mm, a=3 mm, WP cylinder R=25 mm):
+
+| 3D setting                  | L vs full-res | P vs full-res | t_solve |
+|-----------------------------|---------------|---------------|---------|
+| HCurl order=1 + Curve(2)    | -9.91 %       | -4.0 %        | 23 s    |
+| HCurl order=1 + Curve(3)    | **-5.37 %**   | **-0.46 %**   | 26 s    |
+| HCurl order=2 + Curve(2)    | +3.2 % (but spurious P -26 %) | | 1371 s  |
+
+**Bottom line for current 3D IH panel code** (`fem_esim_3d.py`,
+`calc_fem_kelvin.py`):
+
+- Start with `HCurl order=1 + mesh.Curve(max(order+1, 2))`
+- If L seems too low (-5 % or worse) and P looks OK, **raise Curve
+  to 3** instead of raising FES order. Curve is cheap; FES doubles
+  ndof and can introduce spurious modes.
+- HCurl order=2 costs ~60x more on this test case (ndof 83k -> 333k,
+  23s -> 23min) and can OVERSHOOT L and WORSEN P at the same Curve
+  level. Don't raise FES order without raising Curve too.
+
+### Why 2D is less sensitive than 3D
+
+2D axisym has only planar curves (coil circle + Kelvin arc). H1 scalar
+elements with `Curve(order=2 or 3)` match the geometry accurately
+even at moderate mesh resolution. 3D adds sphere + torus in space --
+strong Gaussian curvature that needs better surface approximation.
+
+### Companion fix (2026-04-14)
+
+`fem_esim_kelvin.build_geometry` previously NEVER called `mesh.Curve()`
+despite using `H1 order=3` by default. Adding `mesh.Curve(order)`
+improved L by +7 nH (-11.7 % -> -4.6 %) on the Cu 7 kHz test case.
+Users running old checkouts must pull this fix to get trustworthy L.
+
 ## Boundary Layer Meshing for Skin Depth
 
 The skin depth at the work surface must be resolved by the mesh.
