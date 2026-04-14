@@ -89,7 +89,7 @@ def solve_fem(vol_file="", fes_order=1,
     mu_r = mat.mu_r
     # NGSolve must be imported BEFORE Cubit
     import ngsolve  # noqa: F401
-    from ngsolve import (H1, HCurl, Periodic, BilinearForm, LinearForm,
+    from ngsolve import (H1, HCurl, HDiv, Periodic, BilinearForm, LinearForm,
                          GridFunction, Integrate, Conj, curl, dx, ds, CF,
                          BND, VOL, TaskManager, Preconditioner)
     from ngsolve import x, y, z, sqrt, IfPos
@@ -589,89 +589,84 @@ def solve_fem(vol_file="", fes_order=1,
     # Match the BEM viz convention: VECTORS only (GMSH shows the
     # magnitude under the vector view automatically). The companion
     # .msh.opt hides volume mesh elements so arrows are visible.
+    # Phase B: save .vol + .sol (NGSolve native) first, then convert to
+    # GMSH via the shared vol2msh helper. Gives a single source of truth
+    # (the .vol+.sol pair) so the .msh can be regenerated / swapped
+    # later without re-solving.
     gmsh_file = ""
+    vol_path = ""
+    sol_paths = {}
     if msh_output:
-        _log("GMSH:start")
+        _log("SAVE:start .vol + .sol")
         try:
-            from gmsh_post_export import GmshPostExport
+            from gmsh_post_export import save_vol_sol_pair, vol2msh
+            base_dir = os.path.dirname(os.path.abspath(msh_output))
+            name_stem = os.path.splitext(os.path.basename(msh_output))[0]
 
+            # 1. Mesh + B field as a real-valued HDiv GridFunction.
+            #    For the AC case we save the real component (phase is
+            #    not carried in .sol; callers needing complex B should
+            #    reconstruct from gfu.Load + curl on the loaded mesh).
             curl_A = curl(gfu)
-
-            def _eval_vec_at_vertices(cf):
-                """Evaluate a vector CF at every mesh vertex.
-
-                Returns an (nv, 3) numpy array. Uses NGSolve's
-                MeshPoint evaluation directly because building a
-                vector H1 GridFunction + Set() can fail on the FEM
-                volume mesh when the source is a curl of a complex
-                AC GridFunction (NGSolve internals try to allocate a
-                complex vector space). Per-vertex point evaluation
-                of the CF avoids that path entirely.
-                """
-                arr = np.zeros((mesh.nv, 3))
-                for vi, v in enumerate(mesh.vertices):
-                    pt = mesh(*v.point)
-                    val = cf(pt)
-                    # cf(pt) returns a tuple/list/scalar; coerce
-                    # to a length-3 vector.
-                    if hasattr(val, "__len__"):
-                        arr[vi, :len(val)] = [
-                            float(getattr(x, "real", x))
-                            for x in val[:3]]
-                    else:
-                        arr[vi, 0] = float(getattr(val, "real", val))
-                return arr
-
-            # Real-valued vector for the GMSH view: take the real
-            # part of curl_A in the AC case (GMSH view files do not
-            # carry phase — write a second .msh later for the
-            # imaginary part if needed).
             if is_dc:
                 B_cf = curl_A
             else:
                 B_cf = ngsolve.CoefficientFunction(
                     tuple(curl_A[i].real for i in range(3)))
+            fes_B = HDiv(mesh, order=1)
+            gf_B = GridFunction(fes_B)
+            try:
+                gf_B.Set(B_cf)
+            except Exception:
+                # Some AC problems resist Set on HDiv — fall back to
+                # vertex-eval + H1 dim=3 GridFunction.
+                fes_B = H1(mesh, order=1, dim=3)
+                gf_B = GridFunction(fes_B)
+                for vi, v in enumerate(mesh.vertices):
+                    pt = mesh(*v.point)
+                    val = B_cf(pt)
+                    if hasattr(val, "__len__"):
+                        for k in range(3):
+                            gf_B.vec.FV()[vi * 3 + k] = float(
+                                getattr(val[k], "real", val[k]))
+            vol_B = os.path.join(base_dir, f"{name_stem}_fem.vol").replace("\\", "/")
+            sol_B = os.path.join(base_dir, f"{name_stem}_B.sol").replace("\\", "/")
+            save_vol_sol_pair(vol_B, sol_B, mesh.ngmesh, gf_B)
+            vol_path = vol_B
+            sol_paths["B"] = sol_B
 
-            node_B = _eval_vec_at_vertices(B_cf)
-            _log(f"GMSH:B node values done ({mesh.nv} verts)")
+            # 2. J source as a separate scalar-in-vector GridFunction.
+            fes_J = H1(mesh, order=1, dim=3)
+            gf_J = GridFunction(fes_J)
+            for vi, v in enumerate(mesh.vertices):
+                pt = mesh(*v.point)
+                val = J_source(pt)
+                if hasattr(val, "__len__"):
+                    for k in range(3):
+                        gf_J.vec.FV()[vi * 3 + k] = float(
+                            getattr(val[k], "real", val[k]))
+            sol_J = os.path.join(base_dir, f"{name_stem}_J.sol").replace("\\", "/")
+            gf_J.Save(sol_J)
+            sol_paths["J"] = sol_J
+            _log(f"SAVE:{os.path.basename(vol_B)} + {len(sol_paths)} .sol")
 
-            # J on the coil — restrict via IfPos on the material
-            # indicator function (J_source is already zero outside
-            # the coil region, so simple per-vertex evaluation works).
-            node_J = _eval_vec_at_vertices(J_source)
-            _log(f"GMSH:J node values done")
-
-            post = GmshPostExport(mesh, boundary=False)
-            post.add_field("B", node_B, ncomp=3)
-            post.add_field("J", node_J, ncomp=3)
-            post.write(msh_output)
-            _log(f"GMSH:wrote {os.path.basename(msh_output)}")
-
-            # Companion .msh.opt: GMSH auto-loads this when opening
-            # the .msh. Replaces the old .geo companion approach.
-            from gmsh_post_export import write_companion_opt
-            opt_file = write_companion_opt(msh_output, n_vector_views=2)
-            _log(f"GMSH:wrote {os.path.basename(opt_file)}")
+            # 3. Convert .vol + .sol to .msh via the shared helper.
+            vol2msh(msh_output, vol_B, [
+                {"sol": sol_B, "fes": type(fes_B).__name__,
+                 "fes_order": 1,
+                 "fes_dim": getattr(fes_B, "dim", 1),
+                 "name": "B", "ncomp": 3},
+                {"sol": sol_J, "fes": "H1", "fes_order": 1, "fes_dim": 3,
+                 "name": "J", "ncomp": 3},
+            ])
             gmsh_file = msh_output
+            _log(f"GMSH:wrote {os.path.basename(msh_output)}")
         except Exception as e:
             import traceback
             tb_text = traceback.format_exc()
             _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
-            # Surface the last 3 lines of the traceback so the panel
-            # output window shows where the failure happened (the
-            # one-line catch we had before was useless).
             for line in tb_text.splitlines()[-4:]:
                 _log(f"GMSH_ERROR:  {line}")
-            # Even on failure, try to write a minimal mesh-only .msh
-            # so the user can at least open the geometry in GMSH.
-            try:
-                from gmsh_post_export import GmshPostExport
-                post_min = GmshPostExport(mesh, boundary=False)
-                post_min.write_mesh(msh_output)
-                gmsh_file = msh_output
-                _log(f"GMSH:fallback mesh-only -> {msh_output}")
-            except Exception as e2:
-                _log(f"GMSH_ERROR:fallback also failed: {e2}")
 
     # ============================================================
     # Step 8: Result JSON
