@@ -293,17 +293,34 @@ static QString s_lastJouPath;
 //! Ensure a .jou path is known.  If no journal is associated with
 //! the current model, prompt the user to save one.  Returns the
 //! .jou path (empty if cancelled).
+static bool _is_valid_jou_path(const QString& p)
+{
+  // Reject empty, just-a-separator, or paths missing a basename.
+  if (p.isEmpty()) return false;
+  if (p == "/" || p == "\\" || p == "." || p == "..") return false;
+  // Must have a non-empty basename after the last slash and (optional)
+  // .jou suffix, otherwise volPath derivation gives "/.vol".
+  QFileInfo fi(p);
+  if (fi.completeBaseName().isEmpty()) return false;
+  return true;
+}
+
 static QString ensure_jou_path()
 {
   // 1. Cubit's own journal path
   std::string jf = CubitInterface::get_current_journal_file();
   if (!jf.empty()) {
-    ccl_log("ensure_jou_path: from Cubit journal: %s", jf.c_str());
-    return QString::fromStdString(jf).replace("\\", "/");
+    QString p = QString::fromStdString(jf).replace("\\", "/");
+    if (_is_valid_jou_path(p)) {
+      ccl_log("ensure_jou_path: from Cubit journal: %s", jf.c_str());
+      return p;
+    }
+    ccl_log("ensure_jou_path: Cubit returned invalid journal '%s' "
+            "— forcing save prompt.", jf.c_str());
   }
 
   // 2. Previously loaded/saved path in this session
-  if (!s_lastJouPath.isEmpty()) {
+  if (!s_lastJouPath.isEmpty() && _is_valid_jou_path(s_lastJouPath)) {
     ccl_log("ensure_jou_path: from session: %s",
             s_lastJouPath.toLocal8Bit().constData());
     return s_lastJouPath;
@@ -1128,23 +1145,14 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   labelLayout->addWidget(labelWidget);
   layout->addWidget(labelGroup);
 
-  // Output .vol path: editable + Browse button. 2026-04-14 fix: when
-  // ensure_jou_path returns "/" (e.g. session has no saved journal yet,
-  // or s_lastJouPath cached a stale value), the previous read-only field
-  // was unfix-able by the user and OK silently exported to "/.vol" which
-  // failed write permission. Editable field lets the user pick any
-  // writable location.
+  // Output .vol path: derived from the journal path (.jou -> .vol in the
+  // same directory). Editable + Browse so the user can override.
+  // 2026-04-14: ensure_jou_path now refuses to return "/" or other
+  // unusable paths, so this derivation cannot produce "/.vol" anymore.
   QString volBase = jouPath;
   if (volBase.endsWith(".jou", Qt::CaseInsensitive))
     volBase.chop(4);
   QString defaultVol = volBase + ".vol";
-  // Reject obviously broken auto-derived paths (empty, "/", "/.vol")
-  // and fall back to a sane default in the user's home directory.
-  if (defaultVol.isEmpty() || defaultVol == "/.vol" || defaultVol == ".vol"
-      || defaultVol.startsWith("//.vol")) {
-    QString home = QDir::homePath();
-    defaultVol = home + "/radia_model.vol";
-  }
   QHBoxLayout *hVol = new QHBoxLayout();
   hVol->addWidget(new QLabel("Output .vol:"));
   QLineEdit *volEdit = new QLineEdit(defaultVol);
