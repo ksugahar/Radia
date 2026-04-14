@@ -131,7 +131,7 @@ def install_plugin():
     ccm_src = pkg_dir / "radia_cubit.ccm"
     if ccm_src.is_file():
         dst = plugins_dir / "radia_cubit.ccm"
-        shutil.copy2(ccm_src, dst)
+        shutil.copy(ccm_src, dst)
         print(f"  [OK] radia_cubit.ccm -> {dst}")
     else:
         print(f"  [--] radia_cubit.ccm not found in {pkg_dir}")
@@ -140,14 +140,14 @@ def install_plugin():
     ccl_src = pkg_dir / "radia_cubit.ccl"
     if ccl_src.is_file():
         dst = cubit_dir / "bin" / "radia_cubit.ccl"
-        shutil.copy2(ccl_src, dst)
+        shutil.copy(ccl_src, dst)
         print(f"  [OK] radia_cubit.ccl -> {dst}")
 
     # Copy .pyd (high-order mesh curving)
     pyd_src = pkg_dir / "radia_cubit_mesh.pyd"
     if pyd_src.is_file():
         dst = plugins_dir / "radia_cubit_mesh.cp312-win_amd64.pyd"
-        shutil.copy2(pyd_src, dst)
+        shutil.copy(pyd_src, dst)
         print(f"  [OK] radia_cubit_mesh.pyd -> {dst}")
     else:
         print(f"  [--] radia_cubit_mesh.pyd not found in {pkg_dir}")
@@ -157,7 +157,7 @@ def install_plugin():
     if nglib:
         for dll in (nglib, ngcore):
             dst = plugins_dir / dll.name
-            shutil.copy2(dll, dst)
+            shutil.copy(dll, dst)
             print(f"  [OK] {dll.name} -> {dst}")
     else:
         print("  [--] Netgen DLLs not found (high-order curving disabled)")
