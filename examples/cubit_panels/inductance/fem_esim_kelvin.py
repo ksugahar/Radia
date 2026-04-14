@@ -39,18 +39,22 @@ NU_0 = 1.0 / MU_0
 # Geometry: air + coil + workpiece + Kelvin exterior
 # ============================================================
 def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
-                   include_workpiece_volume=True, maxh=0.003):
+                   include_workpiece_volume=True, maxh=0.003,
+                   coil_shape='square', curve_order=2):
     """Build 2D axisymmetric geometry.
 
     Args:
         R_coil: Coil center radius [m]
-        a_coil: Coil wire radius [m] (modeled as square cross-section)
+        a_coil: Coil wire radius [m]
         R_wp: Workpiece cylinder radius [m]
         H_wp: Workpiece cylinder height [m]
         a_kelvin: Kelvin boundary radius [m]
         z_offset: Z-offset for exterior domain [m]
         include_workpiece_volume: If True, mesh workpiece interior (FEM-full)
         maxh: Mesh size [m]
+        coil_shape: 'square' (2a x 2a, cross-section area = 4*a^2) or
+            'circular' (radius a, cross-section area = pi*a^2). Use
+            'circular' to match a 3D circular-torus coil exactly.
 
     Returns:
         NGSolve Mesh
@@ -65,8 +69,17 @@ def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
     inner_half = inner_full - cutter
 
     # Coil cross-section
-    w = a_coil * 2
-    coil = MoveTo(R_coil - w / 2, -w / 2).Rectangle(w, w).Face()
+    if coil_shape == 'circular':
+        # Circle of radius a_coil centered at (R_coil, 0)
+        wp_coil = WorkPlane()
+        wp_coil.MoveTo(R_coil + a_coil, 0)
+        wp_coil.Direction(0, 1)  # heading UP so arc center = (R_coil, 0)
+        wp_coil.Arc(a_coil, 180).Arc(a_coil, 180)
+        coil = wp_coil.Face()
+    else:
+        # Square 2a x 2a centered at (R_coil, 0)
+        w = a_coil * 2
+        coil = MoveTo(R_coil - w / 2, -w / 2).Rectangle(w, w).Face()
     coil.name = "coil"
     coil.maxh = maxh / 2
 
@@ -186,6 +199,11 @@ def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
     shape = Glue(shapes + [outer_half, gnd])
     geo = OCCGeometry(shape, dim=2)
     mesh = Mesh(geo.GenerateMesh(maxh=maxh, grading=0.4))
+    # Curve the mesh so circular coil / Kelvin arcs are represented
+    # correctly at high FES order. Without this, circles are polygonal
+    # and L is systematically under-predicted by several percent.
+    if curve_order >= 2:
+        mesh.Curve(curve_order)
     return mesh
 
 
@@ -194,18 +212,26 @@ def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
 # ============================================================
 def solve_fem_full(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
                    I_total=1.0, a_kelvin=0.15, z_offset=0.4,
-                   maxh=0.002, order=3):
+                   maxh=0.002, order=3, coil_shape='square'):
     """Solve frequency-domain eddy current with meshed workpiece.
+
+    Args:
+        coil_shape: 'square' (2a x 2a) or 'circular' (radius a).
+            Use 'circular' to match 3D circular-torus coil.
 
     Returns dict with P_total, Q_total, L, mesh info.
     """
     omega = 2 * np.pi * frequency
-    J0 = I_total / (2 * a_coil)**2  # Current density
+    if coil_shape == 'circular':
+        J0 = I_total / (np.pi * a_coil ** 2)
+    else:
+        J0 = I_total / (2 * a_coil) ** 2
 
-    print("  Building geometry (workpiece meshed)...")
+    print(f"  Building geometry (workpiece meshed, coil={coil_shape})...")
     t0 = time.perf_counter()
     mesh = build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
-                          include_workpiece_volume=True, maxh=maxh)
+                          include_workpiece_volume=True, maxh=maxh,
+                          coil_shape=coil_shape, curve_order=order)
     t_mesh = time.perf_counter() - t0
 
     materials = mesh.GetMaterials()
@@ -504,7 +530,8 @@ def solve_fem_esim_oneway(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
                    bh_curve=None, mu_r=1.0,
                    I_total=1.0, a_kelvin=0.15, z_offset=0.4,
-                   maxh=0.003, order=3, max_iter=15, tol=1e-4):
+                   maxh=0.003, order=3, max_iter=15, tol=1e-4,
+                   coil_shape='square'):
     """Solve with SIBC Robin BC + Karl Hollaus iteration.
 
     Karl iteration (Hollaus, IEEE Trans. Mag., 2025):
@@ -519,17 +546,25 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
     Power (Poynting flux, correct factor = pi not 2*pi):
       P = pi * w^2 * Re(Zs)/|Zs|^2 * int |u|^2/r ds
 
+    Args:
+        coil_shape: 'square' (2a x 2a) or 'circular' (radius a).
+            Use 'circular' to match 3D circular-torus coil.
+
     Returns dict with P_total, L, iteration info.
     """
     from esim_cell_problem import ESIMFiniteSlabSolver
 
     omega = 2 * np.pi * frequency
-    J0 = I_total / (2 * a_coil)**2
+    if coil_shape == 'circular':
+        J0 = I_total / (np.pi * a_coil ** 2)
+    else:
+        J0 = I_total / (2 * a_coil) ** 2
 
-    print("  Building geometry (workpiece = hole)...")
+    print(f"  Building geometry (workpiece = hole, coil={coil_shape})...")
     t0 = time.perf_counter()
     mesh = build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
-                          include_workpiece_volume=False, maxh=maxh)
+                          include_workpiece_volume=False, maxh=maxh,
+                          coil_shape=coil_shape, curve_order=order)
     t_mesh = time.perf_counter() - t0
 
     materials = mesh.GetMaterials()

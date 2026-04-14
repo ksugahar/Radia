@@ -392,7 +392,32 @@ Vector potential formulation, particularly useful for coil problems.
 
 In axisymmetric problems, the z-offset strategy keeps the r-coordinate
 unchanged between interior and exterior domains, simplifying the
-transformation.
+transformation. The physical domain lives on x >= 0 (r = x, z = y)
+and uses H1 scalar FES with u = r * A_phi substitution.
+
+**Verified 2026-04-14**: L is independent of Kelvin radius R within
+0.07% for R in [0.08, 0.25] m on a R_coil=30mm + R_wp=25mm test case,
+confirming the reluctivity modulation formula nu_0 * (rho'/R)^2 is
+correct.
+
+**Helper function** (`src/radia/panels/add_kelvin.py`):
+
+```python
+from add_kelvin import add_kelvin_2d_axisym
+# interior_shape: your 2D OCC face on x>=0 with outer arc named "kelvin_int"
+shape, info = add_kelvin_2d_axisym(interior_shape, R=0.10, z_offset=0.25)
+# info['axis_labels']  -> "axis|axis_ext" (pass to H1 dirichlet=...)
+# info['z_offset']     -> z_offset used
+# Periodic pairs are established; GND vertex at (0, z_offset) is added.
+```
+
+The caller is responsible for:
+  1. Building the interior half-circle on x >= 0 with physical inclusions
+     subtracted (coil, workpiece, etc.)
+  2. Naming the outer arc edge(s) "kelvin_int" BEFORE passing to this function
+  3. Naming "axis" on x = 0 edges (interior)
+  4. Passing `dirichlet="axis|axis_ext"` and `dirichlet_bbnd="GND"` to
+     the H1 FES, wrapping with `Periodic()`
 
 ```python
 from ngsolve import *
@@ -617,7 +642,12 @@ a += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
 a += reg * NU_0 * u * v * dx  # gauge regularization (HCurl uniqueness)
 
 # SIBC = Robin BC on hole boundary (conductor NOT meshed, NOT solved)
-# Validated 2026-04-14: 2D axisym Kelvin full-res vs SIBC match L<1%, P<2%
+# Validated 2026-04-14: 2D axisym Kelvin + SIBC (3D HCurl, hole approach)
+#   matches within 2% in L, 4% in P vs 2D full-res with delta/5 mesh.
+#   WARNING: an earlier claim of "L<1%, P<2%" compared 2D SIBC against a
+#   COARSE 2D full-res (mesh/3, not delta/5); both were under-converged.
+#   True full-res reference is reference_2d_axisym.solve_2d_axisym(kelvin=True)
+#   which auto-refines WP to max(delta/5, 0.2mm).
 # Z_s for solid cylinder: rho*gamma*I1(ga)/I0(ga), gamma=sqrt(jw*mu*sigma)
 if has_sibc:
     robin = 1j * omega / Z_s
