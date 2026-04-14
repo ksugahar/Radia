@@ -433,10 +433,12 @@ def _dowell_Zs(R, rho, omega, mu_eff):
     delta = math.sqrt(2.0 * rho / (omega * mu_eff))
     xi = R / delta
     gamma_a = complex(1, 1) * xi
-    try:
-        return (rho / R) * gamma_a * np.tanh(gamma_a)
-    except OverflowError:
+    # tanh saturates to 1 at |arg| > ~20 (double precision); avoid the
+    # NumPy RuntimeWarning "overflow encountered in tanh" that otherwise
+    # floods the panel Output window. PEC-limit Z_s = (rho/R) * gamma_a.
+    if xi > 20.0:
         return (rho / R) * gamma_a
+    return (rho / R) * gamma_a * np.tanh(gamma_a)
 
 
 def _build_per_node_Zs(mesh_wp, panels, R_panel, rho, omega, mu_eff,
@@ -587,6 +589,7 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     mu_r = mat.mu_r
     material = mat.name
 
+    progress("COUPLED", "extracting coil + workpiece surfaces")
     mesh_coil = _extract_surface_mesh_filtered(mesh_full, keep_label="coil")
     # The user-facing --workpiece argument is actually a BOUNDARY name
     # (the sideset, e.g. "sibc"), but _extract_surface_mesh_filtered
@@ -607,6 +610,8 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     # Global Z_s (always computed for the legacy reporting fields)
     Zs_global = _dowell_Zs(half_thickness, rho, omega, mu_eff)
 
+    progress("COUPLED", f"building coupled solver: coil {mesh_coil.nv}v "
+                        f"/ wp {mesh_wp.nv}v, f={frequency} Hz")
     solver = CoupledBEMSolver(
         mesh_coil, mesh_wp,
         source_label=source_label, sink_label=sink_label,
@@ -648,8 +653,11 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
         Z_s_arg = Zs_global
         extra_keys["coupled_use_local_curvature"] = False
 
+    progress("COUPLED", "iterating coil-workpiece back-reaction...")
     sol = solver.solve(Z_s=Z_s_arg, omega=omega,
                        max_iter=10, tol=1e-3, relax=0.5)
+    progress("COUPLED", f"converged in {int(sol['iterations'])} iter, "
+                        f"L_total={sol['L_total']*1e9:.2f} nH")
 
     # ---- Lift wp_J onto mesh_full vertices for GMSH visualization ----
     # The CoupledBEMSolver returns wp_J as per-element complex vectors
