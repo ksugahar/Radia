@@ -354,12 +354,25 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
 
     t_solve = time.perf_counter() - t0
 
-    # Inductance from magnetic energy
+    # Inductance: volume magnetic energy + skin-layer reactive energy.
+    # SIBC excludes the conductor interior from the mesh, so the skin
+    # layer's stored magnetic energy is missing from the volume integral.
+    # Add surface term from Im(Z_s) (same formula as 2D axisym, see
+    # fem_esim_kelvin.solve_fem_sibc). Without this, L is under-predicted
+    # by ~5% at R/delta ~ 30.
     curl_A = curl(gfu)
     B_sq = sum(curl_A[i].real * curl_A[i].real +
                curl_A[i].imag * curl_A[i].imag for i in range(3))
     W = 0.5 * Integrate(nu0 * B_sq, mesh).real
-    L = 2 * W / I_total**2
+    L_vol = 2 * W / I_total**2
+    if sibc_bnd:
+        # L_skin = omega * Im(Z_s) / |Z_s|^2 * int |A_t|^2 dA  (3D surface)
+        # At_int was computed above for H_t_rms (phasor |A_t|^2 integral).
+        L_skin = (omega * Z_s.imag / abs(Z_s)**2 * At_int
+                  / I_total**2)
+    else:
+        L_skin = 0.0
+    L = L_vol + L_skin
 
     # === Results ===
     print()
@@ -369,7 +382,8 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     print(f"  Q                  = {Q_total:.6e} var")
     print(f"  H_t_rms            = {H_t_rms:.2f} A/m")
     print(f"  |Z_s|              = {abs(Z_s):.4e} Ohm")
-    print(f"  L (FEM 3D)         = {L*1e9:.2f} nH")
+    print(f"  L (volume only)    = {L_vol*1e9:.3f} nH")
+    print(f"  L (+skin surface)  = {L*1e9:.3f} nH  (skin adds {L_skin*1e9:+.3f} nH)")
     print(f"  DOFs: {fes.ndof}, Elements: {ne}")
     print(f"  Time: mesh={t_mesh:.1f}s, solve={t_solve:.1f}s")
     print("-" * 65)
