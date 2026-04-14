@@ -439,6 +439,186 @@ def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
     return phi
 
 
+def _h_segments_complex(segments, obs_points, currents):
+    """Finite-segment Biot-Savart H at obs_points with complex per-segment currents.
+
+    segments:  (N_seg, 2, 3) real endpoints
+    obs_points: (N_obs, 3) real
+    currents:  (N_seg,) complex
+    returns:   (N_obs, 3) complex
+
+    Uses the exact analytical line-segment formula:
+        H = I/(4 pi d) * (cos(alpha1) - cos(alpha2)) * e_perp
+    mirroring biot_savart.h_segments_batch but with per-segment current.
+    """
+    INV_4PI = 1.0 / (4.0 * np.pi)
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+    n_obs = len(obs)
+
+    seg = np.asarray(segments, dtype=float)
+    p1s = seg[:, 0, :]
+    p2s = seg[:, 1, :]
+    I = np.asarray(currents, dtype=complex)
+
+    dl = p2s - p1s
+    L = np.linalg.norm(dl, axis=1)
+    valid = L > 1e-30
+    e_l = np.zeros_like(dl)
+    e_l[valid] = dl[valid] / L[valid, np.newaxis]
+
+    H_total = np.zeros((n_obs, 3), dtype=complex)
+
+    for si in range(len(p1s)):
+        if not valid[si]:
+            continue
+        r1 = obs - p1s[si]
+        r2 = obs - p2s[si]
+        el = e_l[si]
+        cross = np.cross(el, r1)
+        d = np.linalg.norm(cross, axis=1)
+        ok = d > 1e-30
+        if not np.any(ok):
+            continue
+        e_perp = np.zeros_like(cross)
+        e_perp[ok] = cross[ok] / d[ok, np.newaxis]
+        r1_mag = np.linalg.norm(r1, axis=1)
+        r2_mag = np.linalg.norm(r2, axis=1)
+        ok &= (r1_mag > 1e-30) & (r2_mag > 1e-30)
+        if not np.any(ok):
+            continue
+        cos_a1 = np.zeros(n_obs)
+        cos_a2 = np.zeros(n_obs)
+        cos_a1[ok] = np.sum(r1[ok] * el, axis=1) / r1_mag[ok]
+        cos_a2[ok] = np.sum(r2[ok] * el, axis=1) / r2_mag[ok]
+        geom = np.zeros(n_obs)
+        geom[ok] = INV_4PI / d[ok] * (cos_a1[ok] - cos_a2[ok])
+        H_total[ok] += (I[si] * geom[ok])[:, np.newaxis] * e_perp[ok]
+
+    return H_total
+
+
+def compute_phi_inc_from_filaments(obs_points, filament_paths, currents,
+                                    n_quad=20, chunk_size=512, z_far=None):
+    """Complex phi_inc from a bundle of filaments with per-filament currents.
+
+    Path-integration follows the same two-stage pattern as
+    ``compute_phi_inc_from_surface_J`` (axis ray from z_far + horizontal
+    sweep) but evaluates H via the exact finite-segment Biot-Savart
+    formula and supports COMPLEX per-filament currents, so the output
+    is a complex phi_inc suitable for ScalarBIESIBCSolver driven by a
+    coil with non-trivial AC current distribution (e.g. Tier A skin
+    effect).
+
+    The method assumes the z-axis ray (0, 0, z_far) -> (0, 0, z_obs)
+    and the horizontal ray (0, 0, z_obs) -> (x_obs, y_obs, z_obs) do
+    not pierce any filament wire — true for a ring coil centered on
+    the z-axis with the workpiece inside the coil bore.
+
+    Args:
+        obs_points: (N, 3) observation points [m].
+        filament_paths: list of K filaments; each filament is a list of
+            ``(p1, p2)`` endpoint tuples, as returned by
+            ``CoilBuilder.to_filaments``.
+        currents: length-K array of per-filament currents, real or
+            complex [A].
+        n_quad: Gauss-Legendre order for the 1-D path integrals.
+        chunk_size: memory cap on ``n_obs * n_quad`` rows per H batch.
+        z_far: reference height where phi ~ 0. Default: 20x max extent.
+
+    Returns:
+        (N,) complex phi values.
+    """
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+    n_obs = len(obs)
+
+    flat_segs = []
+    flat_I = []
+    for fil_segs, Ik in zip(filament_paths, currents):
+        Ik_c = complex(Ik)
+        for (p1, p2) in fil_segs:
+            flat_segs.append((p1, p2))
+            flat_I.append(Ik_c)
+
+    if not flat_segs:
+        return np.zeros(n_obs, dtype=complex)
+
+    segs = np.asarray(flat_segs, dtype=float)
+    Iseg = np.asarray(flat_I, dtype=complex)
+
+    extent = float(np.max(np.abs(segs)))
+    if z_far is None:
+        z_far = 20.0 * max(extent, 1e-3)
+
+    # --- Dipole tail correction: phi(0,0,z_far) ~ m_z / (4 pi z_far^2) ---
+    # For the gauge phi(infinity) = 0 to be numerically honored, we seed the
+    # axis integration with the dipole value at z_far instead of zero. This
+    # cancels the O(1/z_far^2) offset from truncating the axis integral at
+    # a finite z_far; residual is quadrupole-order (1/z_far^4).
+    r_mid = 0.5 * (segs[:, 0, :] + segs[:, 1, :])
+    dl_vec = segs[:, 1, :] - segs[:, 0, :]
+    m_z = 0.5 * np.sum(
+        Iseg * (r_mid[:, 0] * dl_vec[:, 1] - r_mid[:, 1] * dl_vec[:, 0]))
+    phi_tail = m_z / (4.0 * np.pi * z_far ** 2)
+
+    t_gl, w_gl = np.polynomial.legendre.leggauss(n_quad)
+    t_01 = 0.5 * (t_gl + 1)
+    w_01 = 0.5 * w_gl
+
+    # ---- Stage 1: axis phi at unique z ----
+    z_unique = np.unique(obs[:, 2])
+    n_z = len(z_unique)
+    axis_quad = np.zeros((n_z, n_quad, 3))
+    axis_quad[:, :, 2] = z_far - t_01[None, :] * (z_far - z_unique[:, None])
+    flat = axis_quad.reshape(-1, 3)
+
+    max_rows = max(1, chunk_size)
+    H_axis_flat = np.empty((flat.shape[0], 3), dtype=complex)
+    for s in range(0, flat.shape[0], max_rows):
+        e = min(s + max_rows, flat.shape[0])
+        H_axis_flat[s:e] = _h_segments_complex(segs, flat[s:e], Iseg)
+    H_axis = H_axis_flat.reshape(n_z, n_quad, 3)
+    phi_axis_arr = phi_tail + (z_far - z_unique) * np.sum(
+        w_01[None, :] * H_axis[:, :, 2], axis=1)
+    phi_axis_lookup = dict(zip(z_unique, phi_axis_arr))
+
+    # ---- Stage 2: horizontal path (0,0,z) -> (x,y,z) ----
+    phi = np.empty(n_obs, dtype=complex)
+    rho2 = obs[:, 0] ** 2 + obs[:, 1] ** 2
+    eps_axis = (1e-12 * max(extent, 1e-3)) ** 2
+    on_axis = rho2 < eps_axis
+    if np.any(on_axis):
+        for k in np.where(on_axis)[0]:
+            phi[k] = phi_axis_lookup[obs[k, 2]]
+    off_idx = np.where(~on_axis)[0]
+    if off_idx.size:
+        x_off = obs[off_idx, 0]
+        y_off = obs[off_idx, 1]
+        z_off = obs[off_idx, 2]
+        phi_axis_off = np.array([phi_axis_lookup[z] for z in z_off],
+                                dtype=complex)
+        max_nodes_per_chunk = max(1, chunk_size // max(1, n_quad))
+        for s in range(0, off_idx.size, max_nodes_per_chunk):
+            e = min(s + max_nodes_per_chunk, off_idx.size)
+            n_chunk = e - s
+            quad_pts = np.empty((n_chunk, n_quad, 3))
+            quad_pts[:, :, 0] = t_01[None, :] * x_off[s:e, None]
+            quad_pts[:, :, 1] = t_01[None, :] * y_off[s:e, None]
+            quad_pts[:, :, 2] = z_off[s:e, None]
+            flat_pts = quad_pts.reshape(-1, 3)
+            H_flat = _h_segments_complex(segs, flat_pts, Iseg)
+            H_quad = H_flat.reshape(n_chunk, n_quad, 3)
+            integrand = (H_quad[:, :, 0] * x_off[s:e, None]
+                         + H_quad[:, :, 1] * y_off[s:e, None])
+            path_int = np.sum(w_01[None, :] * integrand, axis=1)
+            phi[off_idx[s:e]] = phi_axis_off[s:e] - path_int
+
+    return phi
+
+
 # Legacy alias
 def compute_phi_inc_from_coil(obs_points, coil_path, current, n_quad=50):
     """Compute phi_inc using filament approximation (legacy interface)."""

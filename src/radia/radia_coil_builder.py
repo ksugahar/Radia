@@ -527,6 +527,214 @@ class CoilBuilder:
 		return wire_segments, self.current
 
 	# ============================================================
+	# Filament approximation for AC analysis (Tier A: analytical)
+	# ============================================================
+
+	def to_filaments(self, nw, nh, frequency=0.0, sigma=5.8e7,
+	                 mu_r=1.0, n_arc=20):
+		"""Generate filament paths with complex currents for AC analysis.
+
+		Divides the rectangular cross-section into nw x nh filaments.
+		Each filament follows the coil centerline offset by (u, v) in the
+		local cross-section frame. The filament current is computed from
+		an analytical "Tier A" model:
+
+		    I_k = I_total * w_k / sum(w_j)
+		    w_k = (1 / R_k) * exp(-(1+j) d_k / delta)
+
+		where
+		    R_k    = rho * L_k / A_cell     (DC resistance of filament k)
+		    L_k    = total path length of filament k (inner arcs shorter)
+		    A_cell = (width/nw) * (height/nh)  (cross-section cell area)
+		    d_k    = L-inf distance from filament (u_k, v_k) to conductor
+		             surface
+		    delta  = sqrt(2 / (omega * mu * sigma))   (skin depth)
+
+		Captures:
+		  - "Circulating current" = path-length bias on arcs (1/R_k)
+		  - A-priori skin effect via exp(-(1+j) d/delta)
+
+		Does NOT capture:
+		  - Proximity effect (coupling between filaments or to external
+		    conductors/workpieces). For workpiece-less coil design this
+		    approximation typically agrees well with BEM; add a workpiece
+		    and the proximity effect grows, which is where this model breaks
+		    down and a full PEEC / BEM solve is needed.
+
+		Args:
+		    nw (int): Number of filaments across width (>= 1)
+		    nh (int): Number of filaments across height (>= 1)
+		    frequency (float): Frequency [Hz]. Zero -> DC (real currents,
+		                       no skin factor; only path-length bias on
+		                       arc segments).
+		    sigma (float): Conductivity [S/m]. Default 5.8e7 (Cu).
+		    mu_r (float): Relative permeability. Default 1.0.
+		    n_arc (int): Polyline sub-segments per arc (default 20).
+
+		Returns:
+		    (filament_paths, currents)
+		      filament_paths : list of length N = nw*nh. Each element is a
+		                       list of ((x1,y1,z1), (x2,y2,z2)) polyline
+		                       segment endpoint pairs [same length unit as
+		                       the builder].
+		      currents       : ndarray (N,), complex128 if frequency>0 else
+		                       float64. Sum over k equals self.current.
+
+		Notes:
+		    Assumes the cross-section is uniform across segments (takes
+		    width/height from segments[0]). For tilted segments the local
+		    orientation rotates with the segment; the filament indexing
+		    (u, v) is consistent across segments because orientation is
+		    continuous in CoilBuilder.
+		"""
+		if not self.segments:
+			raise ValueError("No segments to filament-ize.")
+		if nw < 1 or nh < 1:
+			raise ValueError(f"nw={nw}, nh={nh}; both must be >= 1.")
+
+		MU_0 = 4.0 * np.pi * 1e-7
+
+		# Cross-section reference (assumed uniform across segments)
+		w0 = self.segments[0].width
+		h0 = self.segments[0].height
+		du = w0 / nw
+		dv = h0 / nh
+
+		# Filament (u, v) offsets from centerline (cell centers)
+		i_idx, j_idx = np.meshgrid(np.arange(nw), np.arange(nh),
+		                           indexing='ij')
+		us = ((i_idx + 0.5) * du - w0 / 2).ravel()
+		vs = ((j_idx + 0.5) * dv - h0 / 2).ravel()
+		N = us.size
+
+		# Build paths and accumulate lengths
+		filament_paths = [[] for _ in range(N)]
+		lengths = np.zeros(N)
+
+		for seg in self.segments:
+			x_hat = seg.orientation[0, :]  # local width dir
+			y_hat = seg.orientation[1, :]  # local flow dir
+			z_hat = seg.orientation[2, :]  # local height dir
+
+			if isinstance(seg, StraightSegment):
+				for k in range(N):
+					offset = us[k] * x_hat + vs[k] * z_hat
+					p1 = seg.start_pos + offset
+					p2 = seg.end_pos + offset
+					filament_paths[k].append((tuple(p1), tuple(p2)))
+					lengths[k] += seg.length
+
+			elif isinstance(seg, ArcSegment):
+				theta_total = np.deg2rad(seg.arc_angle)
+				R = seg.radius
+				# Check all filament radii are positive
+				r_inner = R - w0 / 2 + du / 2  # innermost filament radius
+				if r_inner <= 0:
+					raise ValueError(
+						f"Inner filament radius {r_inner} <= 0: arc "
+						f"radius={R}, width={w0}. Reduce width or nw, or "
+						f"increase arc radius.")
+				for k in range(N):
+					u, v = us[k], vs[k]
+					r_k = R + u
+					z_off = v * z_hat
+					for p_idx in range(n_arc):
+						t1 = theta_total * p_idx / n_arc
+						t2 = theta_total * (p_idx + 1) / n_arc
+						p1 = (seg.arc_center + r_k * (np.cos(t1) * x_hat
+						      + np.sin(t1) * y_hat) + z_off)
+						p2 = (seg.arc_center + r_k * (np.cos(t2) * x_hat
+						      + np.sin(t2) * y_hat) + z_off)
+						filament_paths[k].append((tuple(p1), tuple(p2)))
+					lengths[k] += abs(r_k * theta_total)
+
+		# DC resistance per filament
+		A_cell = du * dv
+		R_k = lengths / (sigma * A_cell)
+
+		# Weights
+		if frequency > 0:
+			omega = 2.0 * np.pi * frequency
+			delta = np.sqrt(2.0 / (omega * MU_0 * mu_r * sigma))
+			d_k = np.minimum(w0 / 2 - np.abs(us), h0 / 2 - np.abs(vs))
+			skin_factor = np.exp(-(1 + 1j) * d_k / delta)
+			weights = (1.0 / R_k) * skin_factor
+		else:
+			weights = 1.0 / R_k
+
+		currents = self.current * weights / np.sum(weights)
+
+		# Expose u/v and sizing info for visualization
+		self._last_filament_info = {
+			'us': us, 'vs': vs,
+			'nw': nw, 'nh': nh,
+			'w': w0, 'h': h0,
+			'lengths': lengths,
+			'R_k': R_k,
+			'currents': currents,
+			'frequency': frequency,
+			'sigma': sigma,
+			'mu_r': mu_r,
+		}
+		return filament_paths, currents
+
+	def plot_cross_section_current(self, nw, nh, frequency=0.0,
+	                               sigma=5.8e7, mu_r=1.0, fig=None):
+		"""Visualize the analytical filament current distribution.
+
+		Shows |J| (magnitude) and phase(J) on a nw x nh grid matching the
+		conductor cross-section. Requires matplotlib.
+
+		Returns:
+		    matplotlib Figure (newly created if fig is None).
+		"""
+		import matplotlib.pyplot as plt
+
+		# Compute filament currents (also populates _last_filament_info)
+		_, currents = self.to_filaments(nw, nh, frequency=frequency,
+		                                sigma=sigma, mu_r=mu_r, n_arc=1)
+		info = self._last_filament_info
+		w, h = info['w'], info['h']
+
+		# Current density per cell [A / cross-section-unit^2]
+		A_cell = (w / nw) * (h / nh)
+		J = currents.reshape(nw, nh) / A_cell
+
+		if fig is None:
+			if frequency > 0:
+				fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+			else:
+				fig, ax0 = plt.subplots(figsize=(5, 4))
+				axes = [ax0]
+
+		extent = [-w / 2, w / 2, -h / 2, h / 2]
+
+		# |J|
+		ax = axes[0]
+		im = ax.imshow(np.abs(J).T, origin='lower', extent=extent,
+		               aspect='equal', cmap='viridis')
+		ax.set_xlabel('u (width)')
+		ax.set_ylabel('v (height)')
+		ax.set_title(f'|J|  f={frequency:g} Hz,  I_total={self.current:g} A')
+		fig.colorbar(im, ax=ax)
+
+		# Phase (AC only)
+		if frequency > 0 and len(axes) > 1:
+			ax = axes[1]
+			im = ax.imshow(np.angle(J, deg=True).T, origin='lower',
+			               extent=extent, aspect='equal',
+			               cmap='twilight', vmin=-180, vmax=180)
+			ax.set_xlabel('u (width)')
+			ax.set_ylabel('v (height)')
+			omega = 2.0 * np.pi * frequency
+			delta = np.sqrt(2.0 / (omega * (4e-7 * np.pi) * mu_r * sigma))
+			ax.set_title(f'phase(J) [deg],  skin depth = {delta*1e3:.3g} mm')
+			fig.colorbar(im, ax=ax)
+
+		fig.tight_layout()
+		return fig
+
+	# ============================================================
 	# Loop closure and symmetry
 	# ============================================================
 
