@@ -79,7 +79,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify wheel exists
+      - name: Verify wheel (exists + version consistency)
         run: |
           echo "=== Wheel files ==="
           ls -la dist/
@@ -89,6 +89,28 @@ jobs:
             exit 1
           fi
           echo "Wheel: $WHL"
+          python3 - "$WHL" <<'PY'
+          import sys, zipfile, re
+          whl = sys.argv[1]
+          zf = zipfile.ZipFile(whl)
+          names = [f.filename for f in zf.infolist()]
+          # pyproject.toml version vs __init__.py __version__ must match
+          # the wheel filename. 2026-04-14 hardening after a missed
+          # __init__.py bump would have silently shipped the wrong
+          # __version__ attribute.
+          whl_ver = re.match(r"[^-]+-([^-]+)-", whl.rsplit("/", 1)[-1]).group(1)
+          init = zf.read(next(n for n in names if n.endswith("radia/__init__.py"))).decode()
+          m = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M)
+          if not m:
+              print("::error::__version__ not found in wheel radia/__init__.py")
+              sys.exit(1)
+          pkg_ver = m.group(1)
+          if whl_ver != pkg_ver:
+              print(f"::error::Version mismatch — wheel={whl_ver} "
+                    f"vs radia.__version__={pkg_ver}.")
+              sys.exit(1)
+          print(f"OK version consistency: {pkg_ver}")
+          PY
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
