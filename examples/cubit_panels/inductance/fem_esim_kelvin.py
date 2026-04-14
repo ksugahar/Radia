@@ -648,13 +648,26 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 
     t_solve = time.perf_counter() - t0_solve
 
-    # Inductance (complex field: use real part only for physical L)
-    W = 2 * np.pi * Integrate(
+    # Inductance: volume magnetic energy + skin-layer reactive energy.
+    # SIBC excludes the conductor interior from the mesh, so the skin
+    # layer's stored magnetic energy is missing from the volume integral.
+    # Add it back via the reactive part of Z_s (Im(Z_s) = Y > 0 for metals):
+    #   <W_m_skin> = Im(Z_s)*|H_t|^2/(4*omega)  per 3D surface area
+    # With |H_t|^2 = omega^2*|u|^2/(r^2*|Z_s|^2) and dA_3D = 2*pi*r*ds:
+    #   <W_m_skin> = pi*omega*Y/(2|Z_s|^2) * int |u|^2/r ds
+    # L = 4*<W_m_total>/|I|^2 = 2*W_volume_peak/|I|^2 + 2*pi*omega*Y/|Z_s|^2 * B
+    # Verified: matches 2D full-res within ~1% across R/delta = 12..85
+    # (without this term, L is systematically low by 5-10%).
+    W_vol = 2 * np.pi * Integrate(
         0.5 * nu_cf / r_cf * grad(gfu) * Conj(grad(gfu)), mesh).real
-    L = 2 * W / I_total**2
+    L_vol = 2 * W_vol / I_total**2
+    L_skin = (2 * np.pi * omega * Z_s.imag / abs(Z_s)**2 * int_u2r
+              / I_total**2)
+    L = L_vol + L_skin
 
     print(f"  P (Poynting Robin)  = {P:.6e} W")
-    print(f"  L (energy, complex) = {L*1e9:.2f} nH")
+    print(f"  L (volume only)     = {L_vol*1e9:.3f} nH")
+    print(f"  L (+skin surface)   = {L*1e9:.3f} nH  (skin adds {L_skin*1e9:+.3f} nH)")
 
     return {
         'mode': 'FEM-SIBC (Karl)',
