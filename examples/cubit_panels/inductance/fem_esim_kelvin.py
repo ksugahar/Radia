@@ -40,7 +40,8 @@ NU_0 = 1.0 / MU_0
 # ============================================================
 def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
                    include_workpiece_volume=True, maxh=0.003,
-                   coil_shape='square', curve_order=2):
+                   coil_shape='square', curve_order=2,
+                   maxh_wp_bnd=None, maxh_coil=None):
     """Build 2D axisymmetric geometry.
 
     Args:
@@ -81,7 +82,7 @@ def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
         w = a_coil * 2
         coil = MoveTo(R_coil - w / 2, -w / 2).Rectangle(w, w).Face()
     coil.name = "coil"
-    coil.maxh = maxh / 2
+    coil.maxh = maxh_coil if maxh_coil is not None else maxh / 2
 
     # Workpiece cross-section (rectangle in r-z plane)
     wp_rect = MoveTo(0, -H_wp / 2).Rectangle(R_wp, H_wp).Face()
@@ -92,6 +93,8 @@ def build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
             edge.name = "axis"  # left edge on axis
         else:
             edge.name = "workpiece_bnd"
+            if maxh_wp_bnd is not None:
+                edge.maxh = maxh_wp_bnd
 
     if include_workpiece_volume:
         # FEM-full: workpiece is a meshed region
@@ -531,7 +534,7 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
                    bh_curve=None, mu_r=1.0,
                    I_total=1.0, a_kelvin=0.15, z_offset=0.4,
                    maxh=0.003, order=3, max_iter=15, tol=1e-4,
-                   coil_shape='square'):
+                   coil_shape='square', maxh_wp_bnd=None, maxh_coil=None):
     """Solve with SIBC Robin BC + Karl Hollaus iteration.
 
     Karl iteration (Hollaus, IEEE Trans. Mag., 2025):
@@ -564,7 +567,8 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
     t0 = time.perf_counter()
     mesh = build_geometry(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset,
                           include_workpiece_volume=False, maxh=maxh,
-                          coil_shape=coil_shape, curve_order=order)
+                          coil_shape=coil_shape, curve_order=order,
+                          maxh_wp_bnd=maxh_wp_bnd, maxh_coil=maxh_coil)
     t_mesh = time.perf_counter() - t0
 
     materials = mesh.GetMaterials()
@@ -629,11 +633,13 @@ def solve_fem_sibc(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 
         # H_t from SIBC relation on the boundary (NOT offset sampling)
         # SIBC: H_t = (-jw/Z_s) * A_t, so |H_t| = w*|A_t|/|Z_s| = w*|u|/(r*|Z_s|)
-        # H_t_rms^2 = w^2/|Z_s|^2 * (1/A_wp) * int |u|^2/r ds  (2D axi)
-        # where A_wp = 2*pi * int r ds = workpiece surface area
+        # 3D surface element dA = 2*pi*r*ds, so
+        #   int |A_phi|^2 dA = 2*pi * int |u|^2/r ds = 2*pi * int_u2r
+        #   <|A_phi|^2>_area = 2*pi * int_u2r / A_wp
+        #   H_t_rms^2 = w^2/|Z_s|^2 * 2*pi * int_u2r / A_wp
         wp_area = 2 * np.pi * (R_wp * H_wp + 2 * 0.5 * R_wp**2)  # lateral + caps
         H_t_avg = omega / abs(Z_s) * np.sqrt(
-            max(int_u2r / wp_area, 0)) if int_u2r > 0 else 1e-3
+            max(2 * np.pi * int_u2r / wp_area, 0)) if int_u2r > 0 else 1e-3
 
         # Update Z_s (under-relaxation)
         Z_s_old = Z_s
