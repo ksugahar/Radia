@@ -5,9 +5,26 @@ for the Kelvin-modulated material parameter (nu) and for an external
 A_s source field with the Kelvin pullback automatically applied in the
 Kelvin exterior domain.
 
-Convention: ``nu_kelvin = (R/rho')^2 * nu_0`` (Sugahara two-sphere,
-empirically validated 2026-04-15 against analytical L of a gapped
-torus to within 1 %).
+Canonical convention (Nagamine, Yamaguchi, Sugahara,
+"A Pullback-Based Formulation of Kelvin Transformation in
+Electromagnetic Field Analysis," CEFC 2026 id 350; see also
+Sugahara 2022 IEEE TransMag 58(9) [ref [3] in Nagamine]):
+
+    3D spherical (conformal): nu' = (rho'/R)^2 * nu_0
+                              mu' = (R/rho')^2 * mu_0   (reciprocal)
+
+Derivation via pullback of orthonormal 1-form basis + bilinear energy
+functional (Nagamine eq. 9). Numerical validation on toroidal current
+loop: analytical dipole exterior energy 3.333e-8 J vs FEM on Omega'
+= 3.344e-8 J (+0.33%).
+
+Solution pullback (A 1-form, DIFFERENT from material factor):
+    A_comp(r') = (R/rho')^2 * H * A_phys(r_phys)
+    B_comp(r') = -(R/rho')^4 * H * B_phys(r_phys)    (2-form pseudovector)
+
+See examples/kelvin_transformation/CONVENTION.md for the declaration
+and examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8
+for the derivation.
 """
 
 from __future__ import annotations
@@ -25,7 +42,11 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
     """NGSolve CoefficientFunction for nu(r) with Kelvin modulation.
 
     nu(r) = nu_0 in non-Kelvin materials,
-    nu(r) = nu_0 * (R_K / |r' - offset|)^2 in Kelvin materials.
+    nu(r) = nu_0 * (|r' - offset| / R_K)^2 in Kelvin materials.
+
+    Canonical Nagamine CEFC 2026 / Sugahara 2022 convention for 3D
+    spherical (conformal) Kelvin: nu' = (rho'/R)^2 * nu_0. Vanishes at
+    rho' = 0 (image of infinity), equals nu_0 at rho' = R (continuous).
 
     Args:
         mesh: NGSolve Mesh.
@@ -43,7 +64,7 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
 
     ox, oy, oz = offset
     rho_prime_sq = (x - ox) ** 2 + (y - oy) ** 2 + (z - oz) ** 2 + 1e-24
-    kelvin_fac = R_K * R_K / rho_prime_sq    # (R/rho')^2
+    kelvin_fac = rho_prime_sq / (R_K * R_K)    # (rho'/R)^2
 
     nu_dict = {}
     for m in mesh.GetMaterials():

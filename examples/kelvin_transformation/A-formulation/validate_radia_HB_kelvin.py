@@ -102,8 +102,9 @@ def build_kelvin_mesh():
 
 
 def kelvin_factor_cf():
+    # nu_kelvin = (rho'/R)^2 * nu_0 (Nagamine CEFC 2026 / Sugahara 2022)
     r_prime_sq = (x - offset) ** 2 + y ** 2 + z ** 2 + 1e-24
-    return R_K * R_K / r_prime_sq
+    return r_prime_sq / (R_K * R_K)
 
 
 def nu_cf_kelvin(mesh):
@@ -199,12 +200,15 @@ def case_B_radia_external(mesh, phase=2):
             rho_sq = rho * rho
             r_phys = np.array([offset, 0.0, 0.0]) + (R_K * R_K / rho_sq) * d
             A_phys = np.array(rad.Fld(coil, 'a', list(r_phys)))
-            # 1-form pullback under Kelvin r -> r' = R^2 r / |r|^2:
-            #   A_comp = (rho'/R)^2 * (I - 2 n n^T) * A_phys
-            # Note: (rho'/R)^2 (NOT (R/rho')^2; the latter is for scalar
-            # potential phi or for B field, not for A 1-form).
+            # 1-form pullback of A under Kelvin r -> r' = R^2 r / |r|^2:
+            #   A_comp(r') = (R/rho')^2 * (I - 2 n n^T) * A_phys(r_phys)
+            # Solution pullback factor is (R/rho')^2 (inverse Jacobian of
+            # the map; see kelvin_source.kelvin_pullback_vector and
+            # pullback_derivation_3D.md sec 4). Do NOT confuse with the
+            # material factor nu' = (rho'/R)^2 * nu_0 used in the bilinear
+            # form (Nagamine CEFC 2026 eq. 9).
             rho_sq = rho * rho   # = |r' - c|^2
-            factor = rho_sq / (R_K * R_K)
+            factor = (R_K * R_K) / rho_sq    # (R/rho')^2
             if phase == 1:
                 A_comp = factor * A_phys
             elif phase == 2:

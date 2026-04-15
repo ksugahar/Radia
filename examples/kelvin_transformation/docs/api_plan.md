@@ -76,22 +76,13 @@ Encapsulates the boilerplate currently in
               `src/radia/kelvin_source.py` extended)
 
 ```python
-def make_kelvin_nu_cf(
-        mesh, R_K, offset, nu_0,
-        kelvin_mats=("kelvin",),
-        convention="sugahara",        # or "energy_invariant" (rho'/R)^2
-        ):
+def make_kelvin_nu_cf(mesh, R_K, offset, nu_0, kelvin_mats=("kelvin",)):
     """Return an NGSolve CF nu(r) modulated in Kelvin material.
 
-    convention == 'sugahara':         nu = (R/rho')^2 * nu_0
-                  (matches Coil_3D_A_HCurl_with_Kelvin.py code,
-                   gives correct L for full-A volume-J FEM)
-    convention == 'energy_invariant': nu = (rho'/R)^2 * nu_0
-                  (matches the energy-invariance derivation, which
-                   uses the validated A/B pullback formulas; this
-                   yields different numerical L until the open
-                   question in pullback_derivation_3D.md sec 8 is
-                   resolved.)
+    Canonical Nagamine CEFC 2026 / Sugahara 2022 convention:
+        nu_kelvin = (rho'/R)^2 * nu_0   (3D spherical conformal)
+    Derived from pullback of 1-form basis + bilinear energy functional.
+    See examples/kelvin_transformation/CONVENTION.md.
     """
 
 def make_kelvin_aware_A_s_cf(
@@ -230,24 +221,26 @@ into <50 lines each, using the layered API.
 
 ## 5. Open questions to resolve before finalizing
 
-1. **nu_kelvin convention**: pure-math derivation says
-   `(rho'/R)^2 * nu_0`; production code uses `(R/rho')^2 * nu_0`;
-   both give correct L for full-A volume-J FEM. Until reconciled,
-   the API exposes both as `convention=...`.
-2. **2D axisymmetric variant**: the H-formulation
-   `Coil_A_formulation_with_Kelvin.py` uses Z-offset Kelvin
-   (different topology). Should the helpers handle 2D too? Probably
-   yes, with a `dim=2` switch or a separate `kelvin_geometry_2d.py`.
+1. **[RESOLVED 2026-04-16]** nu_kelvin convention: Nagamine CEFC 2026
+   (with Sugahara as co-author) gives the rigorous pullback + bilinear
+   energy functional derivation `nu' = (rho'/R)^2 * nu_0` and validates
+   it numerically (+0.33% on a toroidal loop). See CONVENTION.md and
+   pullback_derivation_3D.md §8. The API exposes only this canonical
+   convention. Earlier empirical A/B result favoring `(R/rho')^2`
+   (test_nu_convention.py) was due to FEM setup (GND / gauge) issues
+   that merit separate debugging, not a different convention.
+2. **2D axisymmetric variant**: Z-offset Kelvin (different topology)
+   is a 3D spherical Kelvin viewed in the meridional plane, so the
+   3D factor `(rho'/R)^2` applies. 2D cylindrical Kelvin (Nagamine
+   §II.B) is non-conformal: `nu' = diag(1,1,(rho'/R)^4) nu`.
 3. **Multiple Kelvin centers**: for very large coils where one
    Kelvin sphere is too small, would multiple stitched Kelvin
    spheres be useful? Out of scope for M1-M4.
 
 ## 6. Order of operations (suggested)
 
-1. Resolve open question #1 above by re-deriving with paper [6] in
-   hand, OR running a controlled numerical experiment that pins down
-   which `nu_kelvin` is actually consistent with the validated
-   pullback formulas.
+1. Convention question resolved (see #5.1 above). No further derivation
+   required; use Nagamine CEFC 2026 canonical.
 2. Implement M1 (geometry + material).
 3. Implement M2 (FEM drivers), refactor the existing two scripts as
    the canonical regression tests.
