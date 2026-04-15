@@ -1,12 +1,12 @@
 """Build FEM mesh from STEP file with air domain and Kelvin transformation.
 
 Workflow:
-    STEP (yoke) -> OCC import -> air sphere + Kelvin shell
+    STEP (yoke) -> OCC import -> air sphere + Kelvin exterior domain
     -> auto-label faces -> Netgen all-tet mesh -> mesh.Curve(order)
 
 Designed for accelerator electromagnet analysis where:
     - Yoke geometry comes from any CAD tool as STEP
-    - Air domain and Kelvin shell are added automatically
+    - Air domain and Kelvin exterior domain are added automatically
     - Symmetry planes are auto-detected or specified
     - All-tet mesh avoids pyramid element issues with high-order
 
@@ -48,7 +48,7 @@ def build_mesh_from_step(step_file, symmetry="quarter_xz",
     mesh_size_air : float or None
         Mesh size for air. Overrides global.
     mesh_size_kelvin : float or None
-        Mesh size for Kelvin shell. Overrides global.
+        Mesh size for Kelvin exterior domain. Overrides global.
     curve_order : int
         Geometry curving order (default 2).
     fes_order : int or None
