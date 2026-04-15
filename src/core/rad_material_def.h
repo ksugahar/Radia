@@ -65,11 +65,7 @@ public:
 		radThg hgLoc(MatPtr); hg = hgLoc; return 1;
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0) // Porting
-	{
-		radTg::Dump(o);
-		o << "Magnetic material: ";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin_Material(CAuxBinStrVect& oStr)
 	{
@@ -196,7 +192,7 @@ public:
 		return FinishDuplication(new radTLinearAnisotropMaterial(*this), hg);
 	}
 
-	inline void Dump(std::ostream& o, int ShortSign =0); // Porting
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg)
@@ -246,23 +242,7 @@ inline void radTLinearAnisotropMaterial::SetupKsiTensor()
 
 //-------------------------------------------------------------------------
 
-inline void radTLinearAnisotropMaterial::Dump(std::ostream& o, int ShortSign) //Porting
-{
-	radTMaterial::Dump(o);
-	o << "Linear anisotropic";
-
-	if(ShortSign==1) return;
-	o << endl;
-	o << "   {ksipar,ksiper}= {" << KsiPar << ',' << KsiPerp << "}" << endl;
-
-	if(EasyAxisDefined)
-		o << "   {mrx,mry,mrz}= {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "}";
-	else
-		o << "   mr= " << RemMagn.x;
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
+// radTLinearAnisotropMaterial::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -308,19 +288,7 @@ public:
 		return FinishDuplication(new radTLinearIsotropMaterial(*this), hg);
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0) // Porting
-	//inline void radTLinearIsotropMaterial::Dump(std::ostream& o, int ShortSign) // Porting
-	{
-		radTMaterial::Dump(o);
-		o << "Linear isotropic";
-
-		if(ShortSign==1) return;
-		o << endl;
-		o << "   ksi= " << Ksi;
-
-		o << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{
@@ -448,7 +416,7 @@ public:
 	//void FindNewH(TVector3d&, const TMatrix3d&, const TVector3d&, double, radTg3dRelax*, void*); //OC140103
 	void FindNewH(TVector3d&, const TMatrix3d&, const TVector3d&, double); //OC140103
 
-	inline void Dump(std::ostream& o, int ShortSign =0);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	inline void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
 	// Compute dB/dH derivatives for B-H curve (renamed from Compute_dMdH)
@@ -690,27 +658,7 @@ inline void radTNonlinearIsotropMaterial::MultMatrByInstKsiAndMr(const TVector3d
 
 //-------------------------------------------------------------------------
 
-inline void radTNonlinearIsotropMaterial::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTMaterial::Dump(o);
-	o << "Nonlinear isotropic";
-
-	if(ShortSign==1) return;
-
-	o << endl;
-	if((gArrayHB == 0) || (gLenArrayHB == 0))
-	{
-		o << "   {ms1,ms2,ms3}= {" << Ms[0] << ',' << Ms[1] << ',' << Ms[2] << "}" << endl;
-		o << "   {ks1,ks2,ks3}= {" << ks[0] << ',' << ks[1] << ',' << ks[2] << "}";
-	}
-	else
-	{
-		o << "   M(H) defined by table of values";
-	}
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
+// radTNonlinearIsotropMaterial::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
@@ -881,18 +829,7 @@ public:
 		return FinishDuplication(new radTPermanentMagnet(*this), hg);
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0)
-	{
-		radTMaterial::Dump(o);
-		o << "Permanent magnet (Br/Hc)";
-
-		if(ShortSign==1) return;
-		o << endl;
-		o << "   Br= " << Br << " T, Hc= " << Hc << " A/m, mu_rec= " << mu_rec << endl;
-		o << "   Easy axis: {" << MagAxis.x << ',' << MagAxis.y << ',' << MagAxis.z << "}" << endl;
-		o << "   Remanent magnetization: {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "} A/m" << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{
@@ -1022,16 +959,7 @@ public:
 		return FinishDuplication(new radTMagFixed(*this), hg);
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0)
-	{
-		radTMaterial::Dump(o);
-		o << "Fixed magnetization (no relaxation)";
-
-		if(ShortSign==1) return;
-		o << endl;
-		o << "   {Mx,My,Mz}= {" << FixedMagn.x << ',' << FixedMagn.y << ',' << FixedMagn.z << "} A/m" << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{
@@ -1167,19 +1095,7 @@ public:
 		return FinishDuplication(new radTMagLinear(*this), hg);
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0)
-	{
-		radTMaterial::Dump(o);
-		o << "Linear demagnetization PM (Br/Hc)";
-
-		if(ShortSign==1) return;
-		o << endl;
-		o << "   Br= " << Br << " T, Hc= " << Hc << " A/m, mu_rec= " << mu_rec << endl;
-		o << "   Easy axis: {" << MagAxis.x << ',' << MagAxis.y << ',' << MagAxis.z << "}" << endl;
-		o << "   Remanent magnetization: {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "} A/m" << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-		o << endl << "   [Note: Demagnetization not yet implemented - behaves as fixed magnetization]";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{
@@ -1333,19 +1249,7 @@ public:
 		return FinishDuplication(new radTMagCurve(*this), hg);
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0)
-	{
-		radTMaterial::Dump(o);
-		o << "User-defined demagnetization curve PM";
-
-		if(ShortSign==1) return;
-		o << endl;
-		o << "   Demagnetization curve: " << LenDemagCurve << " points" << endl;
-		o << "   Easy axis: {" << MagAxis.x << ',' << MagAxis.y << ',' << MagAxis.z << "}" << endl;
-		o << "   Remanent magnetization: {" << RemMagn.x << ',' << RemMagn.y << ',' << RemMagn.z << "} A/m" << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-		o << endl << "   [Note: Demagnetization not yet implemented - behaves as fixed magnetization]";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{

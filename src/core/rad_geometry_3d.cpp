@@ -364,33 +364,7 @@ void radTg3d::NormStressTensor(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::DumpTransApplied(std::ostream& o) // Porting
-{
-	o << endl;
-	o << "   Transformations applied: ";
-
-	if(g3dListOfTransform.empty()) { o << "None";}
-	else
-	{
-		for(radTlphg::reverse_iterator iter = g3dListOfTransform.rbegin();
-			iter != g3dListOfTransform.rend(); ++iter)
-		{
-			o << endl;
-
-			long TrElemKey = rad.RetrieveElemKey((*iter).Handler_g.rep);
-			if(TrElemKey > 0)
-			{
-				o << "      Index " << TrElemKey << ": ";
-			}
-			else
-			{
-				o << "      Index " << "n/a" << ": ";
-			}
-			((*iter).Handler_g.rep)->Dump(o, 1);
-			o << ";  Multiplicity: " << (*iter).m;
-		}
-	}
-}
+// radTg3d::DumpTransApplied REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
@@ -1109,18 +1083,7 @@ void radTg3d::DumpBinParse_g3d(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-void radTg3dRelax::DumpMaterApplied(std::ostream& o) // Porting
-{
-	o << endl;
-	o << "   Material applied: ";
-	if(MaterHandle.rep != 0)
-	{
-		o << endl;
-		o << "      Index " << rad.RetrieveElemKey(MaterHandle.rep) << ": ";
-		(static_cast<radTMaterial*>(MaterHandle.rep))->Dump(o, 1);
-	}
-	else { o << "None";}
-}
+// radTg3dRelax::DumpMaterApplied REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

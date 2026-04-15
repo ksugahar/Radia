@@ -1134,54 +1134,7 @@ int radTRecMag::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplicat
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTg3dRelax::Dump(o);
-	DumpPureObjInfo(o, ShortSign);
-	if(ShortSign==1) return;
-
-	if(!J_IsNotZero) DumpMaterApplied(o);
-	DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
-
-//-------------------------------------------------------------------------
-
-void radTRecMag::DumpPureObjInfo(std::ostream& o, int ShortSign)
-{
-	if(J_IsNotZero) 
-	{ 
-		o << "Current carrying: ";
-		o << "RecCur";
-	}
-	else 
-	{ 
-		o << "Relaxable: ";
-		o << "RecMag";
-	}
-	if(ShortSign==1) return;
-	o << endl;
-	o << "   {x,y,z}= {" << CentrPoint.x << ','
-						 << CentrPoint.y << ','
-						 << CentrPoint.z << "}" << endl
-	  << "   {wx,wy,wz}= {" << Dimensions.x << ','
-							<< Dimensions.y << ','
-							<< Dimensions.z << "}" << endl;
-	if(J_IsNotZero) 
-	{ 
-	  o << "   {jx,jy,jz}= {" << J.x << ','
-						      << J.y << ','
-							  << J.z << "}";
-	}
-	else
-	{
-	  o << "   {mx,my,mz}= {" << Magn.x << ','
-							  << Magn.y << ','
-							  << Magn.z << "}";
-	}
-}
+// radTRecMag::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

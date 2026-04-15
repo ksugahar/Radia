@@ -71,7 +71,7 @@ public:
 		FieldPtr->Energy += (ConstForJ*I)*((EndPoint - StartPoint)*LocField.A);
 	}
 
-	void Dump(std::ostream&, int ShortSign =0); // Porting
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
 	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);

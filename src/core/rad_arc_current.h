@@ -167,8 +167,7 @@ public:
 
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans* pBaseTrans, radTg3d*, radTApplication*);
 
-	void Dump(std::ostream&, int ShortSign =0);
-	void DumpPureObjInfo(std::ostream&, int);
+	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
 
@@ -314,16 +313,7 @@ public:
 		// Infinite integral is set to zero (though, formally, its contribution is infinite)
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0) // Porting
-	{
-		radTg3d::Dump(o);
-		o << "Uniform background field source";
-		if(ShortSign==1) return;
-		o << endl;
-		o << "   {bx,by,bz}= {" << BackgrB.x << ',' << BackgrB.y << ',' << BackgrB.z << "}";
-		o << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{
