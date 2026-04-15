@@ -1528,6 +1528,98 @@ the physical domain (coil, iron yoke) uses Cubit hex mesh.
 """
 
 
+KELVIN_HELPERS_RECIPE = """
+# Student-friendly Kelvin helpers (radia.kelvin_source)
+
+The canonical way to apply Kelvin material modulation in new code is
+to import factor CFs from `radia.kelvin_source`. This avoids re-deriving
+the factor inline and guarantees Nagamine CEFC 2026 consistency.
+
+## Available factor helpers (3D spherical + axisym = same 3D idea)
+
+| Formulation | Helper                             | Factor     | Direction |
+|-------------|------------------------------------|------------|-----------|
+| 3D A-form   | kelvin_nu_factor_3d_cf(c, R)       | (rho'/R)^2 | vanishes at rho'=0 |
+| 3D Omega/H  | kelvin_mu_factor_3d_cf(c, R)       | (R/rho')^2 | diverges at rho'=0 |
+| Axisym A    | kelvin_nu_factor_axisym_cf(z_off, R)| (rho'/R)^2| axisym (r,z) meridional |
+| Axisym Ω/H  | kelvin_mu_factor_axisym_cf(z_off, R)| (R/rho')^2|  |
+| 2D A-form A_z| kelvin_nu_factor_2d_Az_cf(o, R)   | (rho'/R)^4 | cylindrical anisotropic |
+| 2D Ω/H in-plane | kelvin_mu_factor_2d_Hx_Hy_cf() | 1 (identity) | cylindrical in-plane |
+
+Note: 2D cylindrical Kelvin is non-conformal (Nagamine eq. 12):
+nu' = diag(1, 1, (rho'/R)^4) * nu.  The 2D A-form A_z case reduces to
+a scalar (rho'/R)^4; 2D H1/Omega in-plane is identity (factor = 1).
+
+Axisymmetric (r, z) is treated as 3D spherical Kelvin viewed in the
+meridional plane; same basic `(rho'/R)^2` or `(R/rho')^2` formulas.
+
+## Material builder
+
+`build_material_cf(mesh, base_value, kelvin_factor_cf, overrides=..., outer_keyword=...)`
+
+Builds a `CoefficientFunction` indexed by `mesh.GetMaterials()`:
+- Material name containing `outer_keyword` (case-insensitive) gets
+  `base_value * kelvin_factor_cf`
+- `overrides={material: value}` explicitly overrides specific materials
+- Other materials get `base_value`
+
+## Recipe: migrate inline Kelvin to the centralized helpers
+
+### Before (inline, Ω-form 3D sphere with z-offset):
+
+```python
+r_prime_sq = x**2 + y**2 + (z - offset_z)**2
+r_prime = sqrt(r_prime_sq + 1e-20)
+mu_kelvin = (kelvin_radius / r_prime)**2 * mu0
+
+mu_dict = {
+    "air_inner": mu0,
+    "air_outer": mu_kelvin,
+    "magnetic": mu_r * mu0,
+}
+Mu = CoefficientFunction([mu_dict[m] for m in mesh.GetMaterials()])
+```
+
+### After (centralized helpers):
+
+```python
+from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
+
+mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=(0.0, 0.0, offset_z),
+                                            R=kelvin_radius)
+Mu = build_material_cf(
+    mesh, mu0, mu_kelvin_factor,
+    outer_keyword="air_outer",
+    overrides={"magnetic": mu_r * mu0},
+)
+# For post-processing (energy integration etc.):
+mu_kelvin = mu0 * mu_kelvin_factor
+```
+
+### A-formulation axisym (Z-offset Kelvin):
+
+```python
+from radia.kelvin_source import kelvin_nu_factor_axisym_cf, build_material_cf
+
+nu_kelvin_factor = kelvin_nu_factor_axisym_cf(z_offset=z_offset, R=a)
+nu_cf = build_material_cf(
+    mesh, nu0, nu_kelvin_factor,
+    overrides={m: nu0 / mu_r for m in mesh.GetMaterials() if "magnetic" in m.lower()},
+)
+```
+
+### Rule
+
+NEVER hand-write `(rho'/R)^2` or `(R/rho')^2` in new code. Always
+import from `radia.kelvin_source`. This is mandatory for the
+LLM-driven coil design workflow to avoid Kelvin-origin bugs.
+
+If a Kelvin setup shows wrong inductance / field / energy, DO NOT
+change the factor. Debug the FEM setup instead: GND, gauge
+regularization, mesh near rho'=0, integration order, periodic ID.
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -1542,6 +1634,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "verification": KELVIN_VERIFICATION,
         "periodic_wedge": KELVIN_PERIODIC_WEDGE,
         "robustness": KELVIN_ROBUSTNESS,
+        "helpers_recipe": KELVIN_HELPERS_RECIPE,
     }
 
     topic = topic.lower().strip()
