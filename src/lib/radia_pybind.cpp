@@ -44,6 +44,7 @@
 #include "radentry.h"
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
+#include "rad_hacapk_peec.h"  // HACApK PEEC adapter sanity check
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -3844,4 +3845,27 @@ PYBIND11_MODULE(_radia_pybind, m) {
             elem_materials (list of str), elem_gmsh_types (list of int),
             elem_orig_idx (list of int), n_vertices (int)
     )pbdoc");
+
+    // ========================================================================
+    // HACApK PEEC adapter sanity check (Step 3 of HACApK-PEEC integration)
+    // ========================================================================
+    m.def("_TestPEECHACApKSanity", &RadHACApKPEECSanityCheck, py::arg("n_filaments"),
+          R"pbdoc(
+              Internal sanity check for RadHACApKPEECManager.
+
+              Builds N parallel filaments along +z spaced 1 cm apart, forms
+              the dense Ruehli L matrix and the HACApK L matrix, runs MatVec
+              with a deterministic test vector in both, and returns the max
+              relative error (HACApK vs dense). Used during development of
+              the HACApK-PEEC adapter; should return a value below aca_eps
+              (internally set to 1e-8).
+
+              Args:
+                  n_filaments: number of filaments (>= 2)
+
+              Returns:
+                  float: max relative error of HACApK MatVec vs dense L @ x.
+                  Negative values indicate failure (-1 bad arg, -2 build
+                  failed, -3 ndof mismatch).
+          )pbdoc");
 }

@@ -119,14 +119,14 @@ void IncrementGeneration() {
 }
 
 double ComputeEntry(int i, int j) {
-    // i, j are 1-based ORIGINAL indices from HACApK
+    // i, j are 1-based ORIGINAL indices from HACApK.
     // The lod conversion is already done by cHACApK_fill_leafmtx_hyp:
     //   val = cHACApK_entry_ij(lodl[permuted_pos], lodt[permuted_pos], i_bemv)
-    // So we receive original indices, NOT permuted indices!
+    // so we receive original indices, NOT permuted indices.
     //
-    // Matrix element: A(i,j) = N(i,j) - delta_ij/chi_i (ELF-compatible)
-    // where N already contains -K/(4*pi) from GetInteractionMatrixElement()
-    // So the equation is: (-K/(4pi) - 1/chi * I) * sigma = H_ext_n (ELF-compatible)
+    // The kernel-specific system-matrix convention is delegated to
+    // RadHACApKBase::ComputeSystemEntry so that each subclass (MSC,
+    // PEEC, future BEM) can store exactly what HACApK needs.
 
     if (g_currentManager == nullptr) {
         std::cerr << "[HACApK] Error: g_currentManager is null in ComputeEntry" << std::endl;
@@ -139,26 +139,13 @@ double ComputeEntry(int i, int j) {
     int i0 = i - 1;
     int j0 = j - 1;
 
-    // Bounds check on original indices
     if (i0 < 0 || i0 >= ndof || j0 < 0 || j0 >= ndof) {
         std::cerr << "[HACApK] Error: Invalid DOF indices: i0=" << i0
                   << " j0=" << j0 << " ndof=" << ndof << std::endl;
         return 0.0;
     }
 
-    // Get N matrix element through manager (friend class access)
-    // GetInteractionMatrixElement() returns K_ij/(4*pi) for MSC hexahedra
-    double N_val = g_currentManager->GetInteractionMatrixElement(i0, j0);
-
-    // A = -K/(4pi) + diag(1/chi) (Physically correct sign)
-    // Physical equation: (-K/(4pi) + 1/chi) * sigma = H_ext_n
-    // N_val contains K/(4pi), so we negate it
-    double A_val = -N_val;
-    if (i0 == j0 && i0 < (int)g_invChi.size()) {
-        A_val += g_invChi[i0];  // Physically correct: +1/chi
-    }
-
-    return A_val;
+    return g_currentManager->ComputeSystemEntry(i0, j0);
 }
 
 }  // namespace RadHACApKCallback
@@ -213,6 +200,21 @@ RadHACApKMSCManager::RadHACApKMSCManager(radTInteraction* interaction)
 }
 
 RadHACApKMSCManager::~RadHACApKMSCManager() = default;
+
+//=========================================================================
+// MSC system-matrix convention: A(i, j) = -N(i, j) + delta_ij / chi_i
+// where N is the physical demagnetization tensor entry returned by
+// GetInteractionMatrixElement (MSC/MMM convention: +N).
+//=========================================================================
+
+double RadHACApKMSCManager::ComputeSystemEntry(int dof_i, int dof_j) const {
+    double N_val = GetInteractionMatrixElement(dof_i, dof_j);
+    double A_val = -N_val;
+    if (dof_i == dof_j && dof_i < (int)m_inv_chi.size()) {
+        A_val += m_inv_chi[dof_i];
+    }
+    return A_val;
+}
 
 void RadHACApKBase::FreeResources() {
     // Clear global callback state first (prevents stale state in next solve)

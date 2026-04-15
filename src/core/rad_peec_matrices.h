@@ -387,6 +387,16 @@ public:
     const std::vector<PEECNode>& GetNodes() const { return nodes_; }
     const std::vector<PEECPanel>& GetPanels() const { return panels_; }
 
+    /**
+     * @brief Return L(i, j) entry of the inductance matrix.
+     *
+     * Dispatches to SelfInductance(i) when i == j and MutualInductance(i, j)
+     * otherwise. Exposed publicly for on-demand consumption by the HACApK
+     * PEEC adapter (see RadHACApKPEECManager::GetInteractionMatrixElement)
+     * without forcing O(N^2) assembly of the full L matrix.
+     */
+    double InductanceEntry(int i, int j) const;
+
 private:
     std::vector<PEECSegment> segments_;
     std::vector<PEECNode> nodes_;
