@@ -87,7 +87,7 @@ def main():
     ap.add_argument("--R-air", type=float, default=0.060,
                     help="3D air sphere radius [m]")
     ap.add_argument("--R-kelvin", type=float, default=0.120,
-                    help="3D Kelvin shell outer radius [m]")
+                    help="3D Kelvin exterior domain outer radius [m]")
     ap.add_argument("--skip-2d", action="store_true")
     ap.add_argument("--skip-3d", action="store_true")
     args = ap.parse_args()

@@ -219,7 +219,7 @@ KELVIN_WORKFLOW = """
 ## Overview
 
 For accelerator magnets, the workflow uses:
-1. Cubit for structured hex mesh (yoke + air + Kelvin shell)
+1. Cubit for structured hex mesh (yoke + air + Kelvin exterior domain)
 2. NGSolve for FEM solve with Kelvin transformation (open boundary)
 3. Radia CoilBuilder for analytical coil source field
 
@@ -246,7 +246,7 @@ brick x {W} y {D} z {H}
 sphere radius {a}
 subtract volume {yoke_id} from volume {air_id}
 
-# 3. Create Kelvin shell
+# 3. Create Kelvin exterior domain
 sphere radius {R}     # R > a
 subtract volume {air_id} from volume {kelvin_id}
 

@@ -57,11 +57,11 @@ class ScalarPotentialSolver:
     order : int
         FEM polynomial order (default: 2).
     kelvin_region : str, optional
-        Material name of Kelvin shell region.
+        Material name of Kelvin exterior domain region.
     kelvin_radius : float, optional
-        Inner radius R of Kelvin shell [m].
+        Inner radius R of Kelvin exterior domain [m].
     kelvin_center : list/tuple, optional
-        Center of Kelvin shell [x, y, z] in meters.
+        Center of Kelvin exterior domain [x, y, z] in meters.
     """
 
     def __init__(self, mesh, iron_domains='iron', mu_r=1000.0, order=2,
@@ -124,7 +124,7 @@ class ScalarPotentialSolver:
         if bbox is not None:
             pass  # use provided bbox
         elif self._kelvin_region:
-            # Exclude Kelvin shell: use only iron + air bounding box
+            # Exclude Kelvin exterior domain: use only iron + air bounding box
             bbox = self._compute_physical_bbox()
         else:
             pmin, pmax = self.mesh.ngmesh.bounding_box
@@ -249,7 +249,7 @@ class ScalarPotentialSolver:
         for mat in phys_mats:
             a += mu_cf * grad(phi) * grad(v) * dx(mat)
 
-        # Kelvin shell term
+        # Kelvin exterior domain term
         kelvin_weight = None
         if self._kelvin_region:
             kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
@@ -335,7 +335,7 @@ class ScalarPotentialSolver:
         penalty = 1e3 * self.mu_r * MU_0
         a += penalty * (phi_r - psi) * (v_f - v_i) * dx(iron_re)
 
-        # Kelvin shell
+        # Kelvin exterior domain
         kelvin_weight = None
         if self._kelvin_region:
             kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
@@ -538,7 +538,7 @@ class ScalarPotentialSolver:
             a += SymbolicEnergy(w_H(sqrt(H2 + 1e-12)),
                                 definedon=self.mesh.Materials(mat))
 
-        # Kelvin shell: linear with weight
+        # Kelvin exterior domain: linear with weight
         if self._kelvin_region:
             kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
             a += SymbolicEnergy(
@@ -1150,7 +1150,7 @@ class ScalarPotentialSolver:
         return [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
 
     def _build_kelvin_weight(self, x, y, z, sqrt_cf):
-        """Build Kelvin shell weight CF: (R/r)^2."""
+        """Build Kelvin exterior domain weight CF: (R/r)^2."""
         cx, cy, cz = self._kelvin_center
         r_sq = (x - cx)**2 + (y - cy)**2 + (z - cz)**2 + 1e-30
         R = self._kelvin_radius

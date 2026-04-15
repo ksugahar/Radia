@@ -59,7 +59,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         maxh_air: Air mesh size [m]
         maxh_coil: Coil mesh size [m]
         maxh_wp_bnd: WP surface mesh size [m]. If None, uses min(R_wp/4, maxh_coil).
-        R_kelvin: Kelvin shell outer radius [m] (0 = no Kelvin, Dirichlet on R_air)
+        R_kelvin: Kelvin exterior domain outer radius [m] (0 = no Kelvin, Dirichlet on R_air)
         order: HCurl polynomial order
         esim_geometry: 'cylinder' (Bessel I0/I1) or 'slab' (cosh/sinh)
     """
@@ -114,13 +114,13 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     air_sphere = Sphere(Pnt(0, 0, 0), R_air)
     air_sphere.name = "air"
 
-    # Kelvin shell (exterior mapped domain)
+    # Kelvin exterior domain (exterior mapped domain)
     use_kelvin = R_kelvin > R_air
     if use_kelvin:
         kelvin_outer = Sphere(Pnt(0, 0, 0), R_kelvin)
-        kelvin_shell = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
-        kelvin_shell.name = "kelvin"
-        kelvin_shell.maxh = maxh_air * 2
+        kelvin_ext = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
+        kelvin_ext.name = "kelvin"
+        kelvin_ext.maxh = maxh_air * 2
         for f in kelvin_outer.faces:
             f.name = "outer"
     else:
@@ -145,7 +145,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
         parts = [air, wp_cyl, torus]
 
     if use_kelvin:
-        parts.append(kelvin_shell)
+        parts.append(kelvin_ext)
 
     shape = Glue(parts)
 
@@ -242,7 +242,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     # Determine SIBC boundary name
     sibc_bnd = "wp_surface" if has_wp else None
 
-    # Reluctivity: nu0 everywhere, nu0*(r/R_air)^4 in Kelvin shell
+    # Reluctivity: nu0 everywhere, nu0*(r/R_air)^4 in Kelvin exterior domain
     has_kelvin = "kelvin" in mats
     if has_kelvin:
         r_sq = x * x + y * y + z * z

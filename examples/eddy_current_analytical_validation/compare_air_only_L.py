@@ -169,7 +169,7 @@ def solve_2d_axisym_air(R_coil, a_coil, a_kelvin, z_offset,
 
 def solve_3d_air(R_coil, a_coil, R_air, R_kelvin, gap_deg,
                  maxh_air, maxh_coil, order, I_total=1.0):
-    """3D, no workpiece, full (or gapped) torus, spherical Kelvin shell.
+    """3D, no workpiece, full (or gapped) torus, spherical Kelvin exterior domain.
     Returns L_air [H] from volume energy integral.
     """
     from netgen.occ import Sphere, Cylinder
@@ -185,15 +185,15 @@ def solve_3d_air(R_coil, a_coil, R_air, R_kelvin, gap_deg,
     air_sphere.name = "air"
 
     kelvin_outer = Sphere(Pnt(0, 0, 0), R_kelvin)
-    kelvin_shell = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
-    kelvin_shell.name = "kelvin"
-    kelvin_shell.maxh = maxh_air * 2
+    kelvin_ext = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
+    kelvin_ext.name = "kelvin"
+    kelvin_ext.maxh = maxh_air * 2
     for f in kelvin_outer.faces:
         f.name = "outer"
 
     air = air_sphere - torus
     air.name = "air"
-    shape = Glue([air, torus, kelvin_shell])
+    shape = Glue([air, torus, kelvin_ext])
 
     geo = OCCGeometry(shape)
     with TaskManager():
