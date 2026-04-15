@@ -22,37 +22,7 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-void radTGroup::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTg3d::Dump(o);
-	DumpPureObjInfo(o, ShortSign);
-	if(ShortSign==1) return;
-
-	DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied (incl. the content): " << SizeOfThis() << " bytes";
-}
-
-//-------------------------------------------------------------------------
-
-void radTGroup::DumpPureObjInfo(std::ostream& o, int ShortSign)
-{
-	o << "Container";
-
-	if(ShortSign==1) return;
-
-	o << endl;
-	o << "   Content:";
-
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-	{
-		o << endl;
-		o << "      Index " << (*iter).first << ": ";
-		(((*iter).second).rep)->Dump(o, 1);
-	}
-}
+// radTGroup::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

@@ -35,12 +35,7 @@ public:
 	virtual ~radTg() {}
 
 	virtual int Type_g() { return 0;}
-	virtual void Dump(std::ostream& o, int ShortSign =0)
-	{
-		//o << "     Address: " << this << endl;
-	}
-	//virtual void DumpBin(CAuxBinStrVect& oStr, map<int, radTHandle<radTg>, less<int> >& mEl, radTHandle<radTg>& hg) {}
-	//virtual void DumpBin(CAuxBinStrVect& oStr, map<int, radTHandle<radTg>, less<int> >& mEl, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey) {}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	virtual void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey) {}
 
 	virtual int DuplicateItself(radTHandle<radTg>&, radTApplication*, char PutNewStuffIntoGenCont =1) { return 1;} // PutNewStuffIntoGenCont only for groups

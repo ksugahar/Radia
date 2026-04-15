@@ -571,7 +571,7 @@ public:
 	void AddRelaxSubInterval(int StartNo, int FinNo, TRelaxSubIntervalID SubIntervalID); //New
 
 	int NotEmpty() { return (AmOfMainElem==0)? 0 : 1;}
-	inline void Dump(std::ostream&, int =0); // Porting
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 	void DumpBinVectOfPtrToListsOfTransPtr(CAuxBinStrVect& oStr, radVectPtr_lphgPtr& VectOfPtrToListsOfTransPtr, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers);
 	int DumpBinParseSourceHandle(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers, bool do_g3dCast, bool do_g3dRelaxCast, radThg& out_hg);
@@ -866,21 +866,7 @@ inline void radTInteraction::ShowInteractMatrix()
 
 //-------------------------------------------------------------------------
 
-inline void radTInteraction::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTg::Dump(o);
-	o << "Interaction: ";
-
-	if(ShortSign) return;
-
-	o << endl;
-	o << "   Number of \"atomic\" relaxable objects: " << AmOfMainElem << endl;
-	o << "   Total number of degrees of freedom to relax on: " << AmOfMainElem*3 << endl;
-	o << "   Number of external field sources in the general container: " << AmOfExtElem;
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
+// radTInteraction::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

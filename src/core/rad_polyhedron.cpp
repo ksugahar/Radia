@@ -3487,65 +3487,7 @@ void radTPolyhedron::B_intComp_frJ(radTField* pField)
 
 //-------------------------------------------------------------------------
 
-void radTPolyhedron::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTg3dRelax::Dump(o);
-	DumpPureObjInfo(o, ShortSign);
-	if(ShortSign==1) return;
-
-	DumpMaterApplied(o);
-	DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
-
-//-------------------------------------------------------------------------
-
-void radTPolyhedron::DumpPureObjInfo(std::ostream& o, int ShortSign)
-{
-	o << "Relaxable: ";
-	o << "Polyhedron";
-
-	if(ShortSign==1) return;
-
-	o << endl;
-	o << "   Number of faces: " << AmOfFaces << endl;
-	o << "   {x,y,z}= {" << CentrPoint.x << ',' << CentrPoint.y << ',' << CentrPoint.z << '}' << endl;
-	o << "   {mx,my,mz}= {" << Magn.x << ',' << Magn.y << ',' << Magn.z << '}';
-	
-	o << endl;
-	o << "   Face Vertices:" << endl;
-
-	int AmOfFaces_mi_1 = AmOfFaces;
-	for(int i=0; i<AmOfFaces; i++)
-	{
-		o << "   {";
-
-		radTHandlePgnAndTrans &FacePgnAndTrans = VectHandlePgnAndTrans[i];
-		radTPolygon *FacePgnPtr = FacePgnAndTrans.PgnHndl.rep;
-		double zcFace = FacePgnPtr->CoordZ;
-		int numVertInCurFace = FacePgnPtr->AmOfEdgePoints;
-		radTVect2dVect &vVertexPoints = FacePgnPtr->EdgePointsVector;
-		radTrans *FaceTransPtr = FacePgnAndTrans.TransHndl.rep;
-
-		TVector3d vP(0,0,zcFace);
-
-		int numVertInCurFace_mi_1 = numVertInCurFace - 1;
-		for(int j=0; j<numVertInCurFace; j++)
-		{
-			TVector2d &vP2d = vVertexPoints[j];
-			vP.x = vP2d.x; vP.y = vP2d.y;
-			TVector3d vPlab = FaceTransPtr->TrPoint(vP);
-			o << '{' << vPlab.x << ',' << vPlab.y << ',' << vPlab.z << '}';
-			if(j < numVertInCurFace_mi_1) o << ',';
-		}
-
-		o << '}';
-		if(i < AmOfFaces_mi_1) o << "," << endl;
-	}
-	//o << '}';
-}
+// radTPolyhedron::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
