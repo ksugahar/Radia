@@ -446,41 +446,22 @@ public:
 		}
 	}
 
-	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
-	int FindIntersectionWithFace(int, TVector3d*, radTVectOfPtrToVect3d&, radTVectHandlePgnAndTrans&, radTVectHandlePgnAndTrans&, char&, double*);
-	int SetUpUpperAndLowerPolygon(TVector2d*, int*, radTHandlePgnAndTrans&, radTVectHandlePgnAndTrans&, radTVectHandlePgnAndTrans&, double*);
-	int DetermineNewFaceAndTrans(radTVectOfPtrToVect3d&, TVector3d&, radTHandlePgnAndTrans&, radTHandlePgnAndTrans&, double*);
-	int FillInNewHandlePgnAndTransFrom3d(TVector3d**, int, TVector3d&, radTHandlePgnAndTrans&, double*);
-	int CheckIfTwoPointAlreadyMapped(TVector3d&, TVector3d&, radTVectOfPtrToVect3d&, double*);
+	// CutItself / FindIntersectionWithFace / SetUpUpperAndLowerPolygon / DetermineNewFaceAndTrans
+	// FillInNewHandlePgnAndTransFrom3d / CheckIfTwoPointAlreadyMapped / SubdivideItself* /
+	// KsFromSizeToNumb / DeterminePointsOnCuttingPlanes / FindLowestAndUppestVertices /
+	// IntrsctOfTwoLines / EstimateSize / FindEdgePoints* / FindLocalEllipticCoord /
+	// SubdivideByEllipses / SubdivideItselfOverAzimuth / SubdivideItselfByEllipticCylinder
+	// REMOVED (Phase C, 2026-04-16)
 	void DefineRelAndAbsTol(double*);
 
-	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*);
-	int KsFromSizeToNumb(double*, int, radTSubdivOptions*);
-
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*);
-	int DeterminePointsOnCuttingPlanes(TVector3d&, double*, short, TVector3d*);
-	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&);
-
 	int CheckForSpecialShapes(radTVectHandlePgnAndTrans&, radThg&, double*);
-	void IntrsctOfTwoLines(const TVector2d&, const TVector2d&, const TVector2d&, const TVector2d&, TVector2d&, TLinesIntrsctCase&, double*);
 
 	double Volume();
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);
 
-	void EstimateSize(TVector3d*, double*, int);
 	void FindTypicalSize(TVector3d*, int, double&);
 
 	// Dump / DumpPureObjInfo / DumpBin / DumpBin_Polyhedron / DumpBinParse_Polyhedron REMOVED (Phase B2b/B2c, 2026-04-15)
-
-	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	void FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec*, TVector3d*, double*);
-	int FindEdgePointsOverEllipseSet0(double*, radTCylindricSubdivSpec*, radThg, TVector3d*, double*, radTSubdivOptions*);
-	int FindEdgePointsOverEllipseSet(double*, radTCylindricSubdivSpec*, radThg, TVector3d*, double*, radTSubdivOptions*);
-	void FindLocalEllipticCoord(double, double, double, double&, double&);
-
-	int SubdivideItselfOverAzimuth(double*, double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideByEllipses(double*, double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
 
 	void Push_backCenterPointAndField(radTFieldKey* pFieldKey, radTVectPairOfVect3d* pVectPairOfVect3d, radTrans* pBaseTrans, radTg3d* g3dSrcPtr, radTApplication* pAppl);
 	

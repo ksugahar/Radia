@@ -26,9 +26,7 @@
 #include "rad_filament.h"
 #include "rad_transform_def.h"
 #include "rad_material_def.h"
-#include "rad_subdivided_rectangle.h"
-#include "rad_subdivided_extruded_polygon.h"
-#include "rad_subdivided_polyhedron.h"
+// rad_subdivided_*.h REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -44,13 +42,9 @@ public:
 	inline static radTGroup* GroupCast(radTg3d* g3dPtr);
 	inline static radTg3dRelax* g3dRelaxCast(radTg3d* g3dPtr);
 	inline static radTRecMag* RecMagCast(radTg3dRelax* g3dRelaxPtr);
-	inline static radTSubdividedRecMag* SubdividedRecMagCast(radTGroup* GroupPtr);
-	inline static radTSubdividedRecMag* SubdividedRecMagCastFromRelax(radTg3dRelax* g3dRelaxPtr);
+	// Subdivided*Cast* REMOVED (Phase C, 2026-04-16)
 	inline static radTExtrPolygon* ExtrPolygonCast(radTg3dRelax* g3dRelaxPtr);
-	inline static radTSubdividedExtrPolygon* SubdExtrPolygonCastFromGroup(radTGroup* GroupPtr);
-	inline static radTSubdividedExtrPolygon* SubdExtrPolygonCastFromRelax(radTg3dRelax* g3dRelaxPtr);
 	inline static radTPolyhedron* PolyhedronCast(radTg3dRelax* g3dRelaxPtr);
-	inline static radTSubdividedPolyhedron* SubdPolyhedronCastFromGroup(radTGroup* GroupPtr);
 
 	inline static radTRectangle* RectangleCast(radTg3d* g3dPtr);
 	inline static radTFlmLinCur* FlmLinCurCast(radTg3d* g3dPtr);
@@ -101,21 +95,7 @@ inline radTRecMag* radTCast::RecMagCast(radTg3dRelax* g3dRelaxPtr)
 
 //-------------------------------------------------------------------------
 
-inline radTSubdividedRecMag* radTCast::SubdividedRecMagCast(radTGroup* GroupPtr)
-{
-	radTSubdividedRecMag SubdividedRecMag;
-	if(GroupPtr->Type_Group()==SubdividedRecMag.Type_Group()) return (radTSubdividedRecMag*)GroupPtr;
-	else return 0;
-}
-
-//-------------------------------------------------------------------------
-
-inline radTSubdividedRecMag* radTCast::SubdividedRecMagCastFromRelax(radTg3dRelax* g3dRelaxPtr)
-{
-	radTSubdividedRecMag SubdividedRecMag;
-	if(g3dRelaxPtr->Type_g3dRelax()==SubdividedRecMag.Type_g3dRelax()) return (radTSubdividedRecMag*)g3dRelaxPtr;
-	else return 0;
-}
+// SubdividedRecMagCast / SubdividedRecMagCastFromRelax REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
@@ -128,21 +108,7 @@ inline radTExtrPolygon* radTCast::ExtrPolygonCast(radTg3dRelax* g3dRelaxPtr)
 
 //-------------------------------------------------------------------------
 
-inline radTSubdividedExtrPolygon* radTCast::SubdExtrPolygonCastFromGroup(radTGroup* GroupPtr)
-{
-	radTSubdividedExtrPolygon SubdividedExtrPolygon;
-	if(GroupPtr->Type_Group()==SubdividedExtrPolygon.Type_Group()) return (radTSubdividedExtrPolygon*)GroupPtr;
-	else return 0;
-}
-
-//-------------------------------------------------------------------------
-
-inline radTSubdividedExtrPolygon* radTCast::SubdExtrPolygonCastFromRelax(radTg3dRelax* g3dRelaxPtr)
-{
-	radTSubdividedExtrPolygon SubdividedExtrPolygon;
-	if(g3dRelaxPtr->Type_g3dRelax()==SubdividedExtrPolygon.Type_g3dRelax()) return (radTSubdividedExtrPolygon*)g3dRelaxPtr;
-	else return 0;
-}
+// SubdExtrPolygonCastFromGroup / SubdExtrPolygonCastFromRelax REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
@@ -155,12 +121,7 @@ inline radTPolyhedron* radTCast::PolyhedronCast(radTg3dRelax* g3dRelaxPtr)
 
 //-------------------------------------------------------------------------
 
-inline radTSubdividedPolyhedron* radTCast::SubdPolyhedronCastFromGroup(radTGroup* GroupPtr)
-{
-	radTSubdividedPolyhedron SubdividedPolyhedron;
-	if(GroupPtr->Type_Group()==SubdividedPolyhedron.Type_Group()) return (radTSubdividedPolyhedron*)GroupPtr;
-	else return 0;
-}
+// SubdPolyhedronCastFromGroup REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 

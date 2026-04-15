@@ -170,10 +170,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_poly_analytical.cpp       # Analytical polygon field formulas
 	${CORE_DIR}/rad_rectangular_block.cpp     # Rectangular parallelepiped
 	${CORE_DIR}/rad_relaxation_methods.cpp    # Relaxation methods
-	${CORE_DIR}/rad_subdivided_arc_current.cpp        # Subdivided arc with current
-	${CORE_DIR}/rad_subdivided_extruded_polygon.cpp   # Subdivided extruded polygon
-	${CORE_DIR}/rad_subdivided_rectangle.cpp          # Subdivided rectangle
-	${CORE_DIR}/rad_subdivided_polyhedron.cpp         # Subdivided polyhedron
+	# rad_subdivided_*.cpp REMOVED (Phase C, 2026-04-16) - Subdivide API gone, use Cubit/Netgen meshing
 	${CORE_DIR}/rad_serialization.cpp         # Interface functions
 	${CORE_DIR}/rad_polyhedron.cpp            # Polyhedron with magnetization
 	${CORE_DIR}/rad_hacapk.cpp                # HACApK H-matrix manager (Method 2)

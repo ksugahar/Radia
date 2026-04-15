@@ -70,16 +70,8 @@ void OutGroupSubObjectKeys( int );
 void DuplicateElementG3D();
 void DuplicateElementG3DOpt( int, const char* );
 void CreateFromG3DObjectWithSymmetries( int );
-void SubdivideElementG3D();
-void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
-void CutElementG3D();
-void CutElementG3DOpt1( int, double,double,double, double,double,double, const char* );
-void CutElementG3DOpt0( int, double,double,double, double,double,double );
-void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
-void SubdivideElementG3DByParPlanes();
+// SubdivideElementG3D* / CutElementG3D* / FldCmpMetForSubdRecMag / SetLocMgnInSbdRecMag REMOVED (Phase C, 2026-04-16)
 void GeometricalVolume( int );
-void FldCmpMetForSubdRecMag( int, int, int );
-void SetLocMgnInSbdRecMag();
 void RecMagsAsExtrPolygons( char* );
 void RecMagsAsPolyhedrons( char* );
 void RecognizeRecMags( char* );
@@ -136,9 +128,7 @@ void FieldArbitraryPointsStruct( int, char* ); //OCTEST18042016
 void FieldArbitraryPointsArray( long, const char*, double**, long );
 void FieldInt( int, char*, char*, double,double,double, double,double,double );
 void FieldForce( int, int );
-void FieldEnergy( int, int, int,int,int );
-void FieldForceThroughEnergy( int, int, char*, int,int,int );
-void FieldTorqueThroughEnergy( int, int, char*, double,double,double, int,int,int );
+// FieldEnergy / FieldForceThroughEnergy / FieldTorqueThroughEnergy REMOVED (Phase C, 2026-04-16)
 void CompCriterium( double, double, double, double, double,double );
 void CompPrecision();
 void CompPrecisionOpt( const char*, const char*, const char*, const char*, const char*, const char*, const char*, const char* );
@@ -1017,155 +1007,13 @@ void SetObjMagn(int ElemKey, double Mx, double My, double Mz)
 
 //-------------------------------------------------------------------------
 
-void SubdivideElementG3D()
-{
-
-}
-
-//-------------------------------------------------------------------------
-
-void SubdivideElementG3DOpt(int ElemKey, double* SubdivArray, char TypeExtraSpec, double* ExtraSpec, int LenExtraSpec, const char* Opt1, const char* Opt2, const char* Opt3)
-{
-	const char* OptionNames[] = {0,0,0};
-	const char* OptionValues[] = {0,0,0};
-	int OptionCount = 0;
-
-	std::array<char, 200> CharBuf1, CharBuf2, CharBuf3;
-	if(Opt1 != 0)
-	{
-		if(*Opt1 != '\0')
-		{
-			strncpy(CharBuf1.data(), Opt1, 199);
-			CharBuf1[199] = '\0';
-			char *pEndOptName = strrchr(CharBuf1.data(), '-');
-			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
-			*pEndOptName = '\0';
-			OptionNames[0] = CharBuf1.data();
-			OptionValues[0] = strrchr(Opt1, '>') + 1;
-			OptionCount++;
-		}
-	}
-	if(Opt2 != 0)
-	{
-		if(*Opt2 != '\0')
-		{
-			strncpy(CharBuf2.data(), Opt2, 199);
-			CharBuf2[199] = '\0';
-			char *pEndOptName = strrchr(CharBuf2.data(), '-');
-			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
-			*pEndOptName = '\0';
-			OptionNames[OptionCount] = CharBuf2.data();
-			OptionValues[OptionCount] = strrchr(Opt2, '>') + 1;
-			OptionCount++;
-		}
-	}
-	if(Opt3 != 0)
-	{
-		if(*Opt3 != '\0')
-		{
-			strncpy(CharBuf3.data(), Opt3, 199);
-			CharBuf3[199] = '\0';
-			char *pEndOptName = strrchr(CharBuf3.data(), '-');
-			if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
-			*pEndOptName = '\0';
-			OptionNames[OptionCount] = CharBuf3.data();
-			OptionValues[OptionCount] = strrchr(Opt3, '>') + 1;
-			OptionCount++;
-		}
-	}
-
-	rad.SubdivideElement_g3d(ElemKey, SubdivArray, 6, TypeExtraSpec, ExtraSpec, LenExtraSpec, OptionNames, OptionValues, OptionCount);
-}
-
-//-------------------------------------------------------------------------
-
-void CutElementG3D()
-{
-
-}
-
-//-------------------------------------------------------------------------
-
-void CutElementG3DOpt1(int ElemKey, double x, double y, double z, double nx, double ny, double nz, const char* Opt)
-{
-	double PointOnPlane[] = {x,y,z};
-	double PlaneNormal[] = {nx,ny,nz};
-
-	char CharBuf[200];
-	strncpy(CharBuf, Opt, 199);
-	CharBuf[199] = '\0';
-	char *pEndOptName = strrchr(CharBuf, '-');
-	if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
-	*pEndOptName = '\0';
-
-	const char* OptionNames[] = {CharBuf};
-	const char* OptionValues[] = {0};
-	OptionValues[0] = strrchr(Opt, '>') + 1;
-
-	rad.CutElement_g3d(ElemKey, PointOnPlane, 3, PlaneNormal, 3, OptionNames, OptionValues, 1);
-}
-
-void CutElementG3DOpt0(int ElemKey, double x, double y, double z, double nx, double ny, double nz)
-{
-	double PointOnPlane[] = {x,y,z};
-	double PlaneNormal[] = {nx,ny,nz};
-
-	const char* OptionNames[] = {0};
-	const char* OptionValues[] = {0};
-
-	rad.CutElement_g3d(ElemKey, PointOnPlane, 3, PlaneNormal, 3, OptionNames, OptionValues, 0);
-}
-
-void CutElementG3DOpt(int ElemKey, double x, double y, double z, double nx, double ny, double nz, const char* Opt1)
-{
-	double PointOnPlane[] = {x,y,z};
-	double PlaneNormal[] = {nx,ny,nz};
-
-	const char* OptionNames[] = {0};
-	const char* OptionValues[] = {0};
-	int OptionCount = 0;
-
-	std::array<char, 200> CharBuf1;
-	if(*Opt1 != '\0')
-	{
-		strncpy(CharBuf1.data(), Opt1, 199);
-		CharBuf1[199] = '\0';
-		char *pEndOptName = strrchr(CharBuf1.data(), '-');
-		if(pEndOptName == nullptr) { rad.Send.ErrorMessage("Radia::Error062"); return;}
-		*pEndOptName = '\0';
-		OptionNames[0] = CharBuf1.data();
-		OptionValues[0] = strrchr(Opt1, '>') + 1;
-		OptionCount++;
-	}
-	rad.CutElement_g3d(ElemKey, PointOnPlane, 3, PlaneNormal, 3, OptionNames, OptionValues, OptionCount);
-}
-
-//-------------------------------------------------------------------------
-
-void SubdivideElementG3DByParPlanes()
-{
-
-}
+// SubdivideElementG3D* / CutElementG3D* / FldCmpMetForSubdRecMag / SetLocMgnInSbdRecMag REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
 void GeometricalVolume(int ElemKey)
 {
 	rad.ComputeGeometricalVolume(ElemKey);
-}
-
-//-------------------------------------------------------------------------
-
-void FldCmpMetForSubdRecMag(int ElemKey, int Switch, int SubLevel)
-{
-	rad.FieldCompMethForSubdividedRecMag(ElemKey, Switch, SubLevel);
-}
-
-//-------------------------------------------------------------------------
-
-void SetLocMgnInSbdRecMag() // May be removed
-{
-
 }
 
 //-------------------------------------------------------------------------
@@ -2021,29 +1869,7 @@ void FieldForce(int ElemKey, int ShapeElemKey)
 
 //-------------------------------------------------------------------------
 
-void FieldEnergy(int DestElemKey, int SourceElemKey, int kx, int ky, int kz)
-{
-	int SubdArray[] = {kx, ky, kz};
-	rad.ComputeFieldEnergy(DestElemKey, SourceElemKey, SubdArray, 3);
-}
-
-//-------------------------------------------------------------------------
-
-void FieldForceThroughEnergy(int DestElemKey, int SourceElemKey, char* ForceComponID, int kx, int ky, int kz)
-{
-	int SubdArray[] = {kx, ky, kz};
-	rad.ComputeFieldForceThroughEnergy(DestElemKey, SourceElemKey, ForceComponID, SubdArray, 3);
-}
-
-//-------------------------------------------------------------------------
-
-void FieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueComponID, double x0, double y0, double z0, int kx, int ky, int kz)
-{
-	int SubdArray[] = {kx, ky, kz};
-	double TorqueCenPo[] = {x0, y0, z0};
-	rad.ComputeFieldTorqueThroughEnergy(DestElemKey, SourceElemKey, TorqueComponID, SubdArray, 3, TorqueCenPo, 3);
-}
-
+// FieldEnergy / FieldForceThroughEnergy / FieldTorqueThroughEnergy REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
