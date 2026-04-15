@@ -988,39 +988,8 @@ EXP int CALL RadUtiDel(int* n, int obj);
 */
 EXP int CALL RadUtiDelAll(int* n);
 
-/** Outputs information about object obj.
-@param OutStr [out] string containing information about obj
-@param arObj [in] array of object reference numbers to show information for
-@param nObj [in] length of array of object reference numbers
-@param AscOrBin [in] string specifying format of the output information string, can be \"asc\" (for ASCII) or \"bin\" (for Binary)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-//EXP int CALL RadUtiDmp(char* OutStr, int obj);
-//EXP int CALL RadUtiDmp(char* OutStr, int* arObj, int nObj, char* AscOrBin);
-EXP int CALL RadUtiDmp(char* OutStr, int* pSize, int* arObj, int nObj, char* AscOrBin); //OC01102018
-
-/** Outputs information about object obj after reading it from internal buffer.
-@param OutStr [out] string containing information about obj
-@param AscOrBin [in] string specifying format of the output information string, can be \"asc\" (for ASCII) or \"bin\" (for Binary)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-//EXP int CALL RadUtiDmpRead(char* OutStr, char* AscOrBin);
-
-/** Gives necessary length of the string to include dump information about object obj.
-@param size [out] size of string containing information about obj
-@param arObj [in] array of object reference numbers to show information for
-@param nObj [in] length of array of object reference numbers
-@param AscOrBin [in] string specifying format of the output information string, can be \"asc\" (for ASCII) or \"bin\" (for Binary)
-@param doEraseBuf [in] switch specifying whether the output buffer has to be erased or not (leaving the buffer unerased allows not to repeat the dump operation at a subsequent call of RadUtiDmp)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-//EXP int CALL RadUtiDmpSize(int* size, int* arElem, int nElem, char* AscOrBin, bool doEraseBuf);
-////EXP int CALL RadUtiDmpSize(int* size, int Elem);
-
-EXP int CALL RadUtiDmpPrs(int* arElem, int* nElem, unsigned char* sBytes, int nBytes); //OC01102018
+// RadUtiDmp / RadUtiDmpPrs REMOVED (Phase B1, 2026-04-15) -
+// .rad save/load is no longer supported.
 
 /** Sets interruption time quanta in seconds for platforms with no preemptive multitasking.
 @param t [in] interruption time quanta [s]
@@ -1029,7 +998,7 @@ EXP int CALL RadUtiDmpPrs(int* arElem, int* nElem, unsigned char* sBytes, int nB
 */
 EXP int CALL RadUtiIntrptTim(double* d, double t);
 
-/** Returns data resulting from previous calculations in cases when the data size was not known 'a priori', e.g. after executing functions RadObjM, RadObjCenFld, RadUtiDmp,...
+/** Returns data resulting from previous calculations in cases when the data size was not known 'a priori', e.g. after executing functions RadObjM, RadObjCenFld, ...
 @param size [out] pointer to the resulting data (to be allocated in calling function)
 @param typeData [in] string identifying type of the data: \"mad\" for multi-dim. array of double, \"mai\" for multi-dim. array of integer, \"bin\" for byte array, \"asc\" for ASCII string, \"d\" for double, \"i\" for integer
 @param key [in] additional identifier of the data to be extracted, e.g. to ensure thread safety (not implemented yet)
