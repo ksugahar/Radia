@@ -153,6 +153,87 @@ def test_A_s_kelvin_pathway():
     assert rel_sh < 1e-6
 
 
+def test_pullback_equals_scalar_for_uniform_A():
+    """For A with no radial component, pullback == scalar * A (uniform case)."""
+    from kelvin_source import kelvin_pullback_vector, kelvin_factor_scalar
+
+    center = np.array([0.15, 0.0, 0.0])
+    R = 0.060
+    # Shell points
+    rng = np.random.default_rng(0)
+    r_prime = center + 0.5 * R * rng.standard_normal((20, 3))
+    # A with no radial component: A perpendicular to (r' - c).
+    # For a uniform B = B_z z_hat background, A = (B_z/2) (-y, x, 0) in 3D
+    # is azimuthal and is always perpendicular to the radial direction
+    # from z-axis but NOT to the radial from a generic center c.
+    # Construct A purely tangential to (r' - c):
+    d = r_prime - center
+    rho = np.linalg.norm(d, axis=1, keepdims=True)
+    n = d / rho
+    v = rng.standard_normal((20, 3))
+    A_tan = v - (np.sum(v * n, axis=1, keepdims=True)) * n   # remove radial
+    # Pullback vs scalar * A_tan
+    A_pull = kelvin_pullback_vector(A_tan, r_prime, center, R)
+    f = kelvin_factor_scalar(r_prime, center, R)
+    A_scalar = f[:, None] * A_tan
+    err = np.max(np.abs(A_pull - A_scalar)) / np.max(np.abs(A_scalar))
+    print(f"  tangential-A: pullback == scalar factor, rel err = {err:.2e}")
+    assert err < 1e-12
+
+
+def test_pullback_flips_radial_sign():
+    """Pure radial A: pullback flips sign and applies (R/rho')^2."""
+    from kelvin_source import kelvin_pullback_vector, kelvin_factor_scalar
+
+    center = np.array([0.15, 0.0, 0.0])
+    R = 0.060
+    rng = np.random.default_rng(1)
+    r_prime = center + 0.5 * R * rng.standard_normal((15, 3))
+    d = r_prime - center
+    rho = np.linalg.norm(d, axis=1, keepdims=True)
+    n = d / rho
+    # Purely radial A
+    mag = rng.standard_normal((15, 1))
+    A_rad = mag * n
+    A_pull = kelvin_pullback_vector(A_rad, r_prime, center, R)
+    f = kelvin_factor_scalar(r_prime, center, R)
+    # Expected: -f * A_rad (Householder flips sign of radial component)
+    expected = -f[:, None] * A_rad
+    err = np.max(np.abs(A_pull - expected)) / np.max(np.abs(expected))
+    print(f"  radial-A: pullback == -scalar, rel err = {err:.2e}")
+    assert err < 1e-12
+
+
+def test_pullback_involution():
+    """Pulling back twice (with same center, R) returns to original vector.
+
+    Since the Kelvin map is involutive, A''(r) = A(r). Verify numerically.
+    """
+    from kelvin_source import kelvin_pullback_vector, kelvin_map_3d
+
+    center = np.array([0.0, 0.0, 0.0])
+    R = 1.0
+    rng = np.random.default_rng(2)
+    # Physical points outside the sphere (|r| > R)
+    r_phys = rng.standard_normal((10, 3))
+    r_phys *= 2 + np.linalg.norm(r_phys, axis=1, keepdims=True)
+    A_phys = rng.standard_normal((10, 3))
+    # First pullback: A_phys at r_phys -> A' at r' = Kelvin_inv(r_phys)
+    r_prime = kelvin_map_3d(r_phys, center, R)
+    A_shell = kelvin_pullback_vector(A_phys, r_prime, center, R)
+    # Second pullback: A_shell at r_prime (treated as 'physical') -> back at r
+    # For involution to hold, we need to interpret the second pullback as
+    # going from the shell back to physical. The Jacobian is the same
+    # form because phi is self-inverse:
+    r_back = kelvin_map_3d(r_prime, center, R)
+    err_rback = np.max(np.abs(r_back - r_phys))
+    assert err_rback < 1e-10
+    A_back = kelvin_pullback_vector(A_shell, r_back, center, R)
+    err = np.max(np.abs(A_back - A_phys)) / np.max(np.abs(A_phys))
+    print(f"  double pullback involution, rel err = {err:.2e}")
+    assert err < 1e-12
+
+
 if __name__ == "__main__":
     print("test_on_axis_B_circular_loop"); test_on_axis_B_circular_loop()
     print("test_kelvin_map_involution"); test_kelvin_map_involution()
@@ -160,4 +241,10 @@ if __name__ == "__main__":
     print("test_scalar_factor_at_sphere_boundary");
     test_scalar_factor_at_sphere_boundary()
     print("test_A_s_kelvin_pathway"); test_A_s_kelvin_pathway()
+    print("test_pullback_equals_scalar_for_uniform_A")
+    test_pullback_equals_scalar_for_uniform_A()
+    print("test_pullback_flips_radial_sign")
+    test_pullback_flips_radial_sign()
+    print("test_pullback_involution")
+    test_pullback_involution()
     print("\nall tests passed.")
