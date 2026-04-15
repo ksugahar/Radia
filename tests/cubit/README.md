@@ -37,9 +37,8 @@ python tests/cubit/test_vtk_auto_order.py
 | File | Description |
 |------|-------------|
 | `test_basic.py` | Module import and function signature tests |
-| `test_gmsh_export.py` | Gmsh v2/v4 export tests |
+| `test_gmsh_export.py` | Gmsh v4.1 export tests |
 | `test_gmsh_v4_export.py` | Gmsh v4.1 export tests |
-| `test_gmsh_v2_v4_consistency.py` | Gmsh v2.2 vs v4.1 consistency tests |
 | `test_nastran_export.py` | Nastran BDF export tests |
 | `test_meg_export.py` | MEG format export tests |
 | `test_vtk_auto_order.py` | VTK auto element order detection tests |

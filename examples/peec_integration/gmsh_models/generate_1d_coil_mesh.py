@@ -82,12 +82,12 @@ print("    Block 1: 'conductor' (1D edge elements)")
 print("    NOTE: Ports will be defined by coordinate-based search in Python")
 print("          (nodeset/sideset not supported by radia_export gmsh)")
 
-# Export to GMSH v2.2 format
+# Export to GMSH v4.1 format
 output_file = "circular_coil_1d.msh"
-print(f"\n[6] Exporting to GMSH v2.2 format...")
-cubit.cmd(f'radia_export gmsh "{output_file}" version 2 overwrite')
+print(f"\n[6] Exporting to GMSH v4.1 format...")
+cubit.cmd(f'radia_export gmsh "{output_file}" overwrite')
 print(f"    OK Created: {output_file}")
-print(f"    Format: GMSH v2.2 (1D edge elements with port nodes)")
+print(f"    Format: GMSH v4.1 (1D edge elements with port nodes)")
 
 # Verify: should have NO surface or volume elements
 if cubit.get_tri_count() > 0 or cubit.get_quad_count() > 0:

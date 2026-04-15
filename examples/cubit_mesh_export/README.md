@@ -6,7 +6,7 @@ Example scripts for the radia Cubit C++ plugin (`radia_cubit.ccm`), organized by
 
 | Folder | Format | Description |
 |--------|--------|-------------|
-| [gmsh/](gmsh/) | Gmsh (.msh) | v2.2 and v4.1, order 1-2 |
+| [gmsh/](gmsh/) | Gmsh (.msh) | v4.1, order 1-3 |
 | [nastran/](nastran/) | Nastran BDF (.bdf) | CTETRA/CHEXA/CTRIA, order 1-2 |
 | [other_formats/](other_formats/) | Custom formats | FreeFEM, ANSYS CDB, Lukas 2D |
 
@@ -26,7 +26,7 @@ Requires Cubit installed with the radia plugin (`radia-setup`).
 ## Export Commands (C++ .ccm plugin)
 
 ```
-radia_export gmsh "file.msh" [order {1|2}] [version {2|4}] [dimension {2|3}] [overwrite]
+radia_export gmsh "file.msh" [order {1|2}] [dimension {2|3}] [overwrite]
 radia_export nastran "file.bdf" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]
 radia_export vtk "file.vtk" [order {1|2}] [dimension {2|3}] [overwrite]
 ```

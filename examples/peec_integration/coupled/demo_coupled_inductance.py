@@ -368,7 +368,7 @@ def _generate_ferrite_core_mesh(filename):
 
 
 def _write_simple_hex_mesh(filename):
-    """Write a minimal GMSH 2.2 hex mesh (2x1x1 = 2 hex elements) as fallback."""
+    """Write a minimal GMSH v4.1 hex mesh (2x1x1 = 2 hex elements) as fallback."""
     os.makedirs(os.path.dirname(filename), exist_ok=True)
 
     # 2 hex elements along x-axis
@@ -403,15 +403,23 @@ def _write_simple_hex_mesh(filename):
         eid += 1
 
     with open(filename, 'w') as f:
-        f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
-        f.write(f'$Nodes\n{len(nodes)}\n')
-        for nid, x, y, z in nodes:
-            f.write(f'{nid} {x:.10g} {y:.10g} {z:.10g}\n')
+        f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+        # Single entity: 3D volume, tag=1, no physical group
+        f.write('$Entities\n0 0 0 1\n1 0 0 0 0 0 0 0 0\n$EndEntities\n')
+        # $Nodes: one block (dim=3, entityTag=1, parametric=0, numNodes)
+        f.write(f'$Nodes\n1 {len(nodes)} 1 {len(nodes)}\n')
+        f.write(f'3 1 0 {len(nodes)}\n')
+        for nid, _x, _y, _z in nodes:
+            f.write(f'{nid}\n')
+        for _nid, x, y, z in nodes:
+            f.write(f'{x:.10g} {y:.10g} {z:.10g}\n')
         f.write('$EndNodes\n')
-        f.write(f'$Elements\n{len(elements)}\n')
+        # $Elements: one block (dim=3, entityTag=1, type=5 Hex8, count)
+        f.write(f'$Elements\n1 {len(elements)} 1 {len(elements)}\n')
+        f.write(f'3 1 5 {len(elements)}\n')
         for eid, enodes in elements:
             node_str = ' '.join(str(n) for n in enodes)
-            f.write(f'{eid} 5 2 0 0 {node_str}\n')  # type=5 (Hex8), 2 tags
+            f.write(f'{eid} {node_str}\n')
         f.write('$EndElements\n')
 
 

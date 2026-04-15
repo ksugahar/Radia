@@ -121,7 +121,7 @@ for method_name, commands in torus_methods:
         msh_path = os.path.join(OUT_DIR, f"{method_name}_A_order{order}.msh")
 
         cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
-        cubit.cmd(f'radia_export gmsh "{msh_path}" version 2 order {order} overwrite')
+        cubit.cmd(f'radia_export gmsh "{msh_path}" order {order} overwrite')
 
         V_ng = volume_from_vol(vol_path, order)
         err_pct = (V_ng - V_exact) / V_exact * 100.0
