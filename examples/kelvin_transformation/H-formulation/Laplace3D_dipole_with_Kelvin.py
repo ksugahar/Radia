@@ -119,17 +119,15 @@ mu0 = 4*pi*1e-7
 u = fes.TrialFunction()
 v = fes.TestFunction()
 
-# Material properties with Kelvin transformation
-# Interior: mu = mu_0
-# Exterior: mu' = (R^2/r'^2)·mu_0
-x_local = x - offset_x
-y_local = y
-z_local = z
-r_prime_sq = x_local**2 + y_local**2 + z_local**2
-mu_outer = kelvin_radius**2 / (r_prime_sq + 1e-20) * mu0
+# Kelvin-modulated permeability (Nagamine CEFC 2026 canonical):
+#   mu_ext = mu_0 * (R/r')^2  for 3D spherical (conformal) Kelvin
+# See examples/kelvin_transformation/CONVENTION.md.
+from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
 
-mu_d = {"air_inner": 1*mu0, "air_outer": mu_outer}
-mu = CoefficientFunction([mu_d[mat] for mat in mesh.GetMaterials()])
+mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=(offset_x, 0.0, 0.0),
+                                           R=kelvin_radius)
+mu = build_material_cf(mesh, mu0, mu_kelvin_factor,
+                        outer_keyword="air_outer")
 
 print(f"  Permeability:")
 print(f"	Interior: mu = mu0")

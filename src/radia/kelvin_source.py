@@ -46,12 +46,23 @@ This module exposes helpers for two DIFFERENT concepts:
 
 2. **Material modulation** (FEM bilinear form coefficient): the nu or
    mu that, applied in the transformed domain Omega', makes the FEM
-   bilinear form equal the physical-domain energy. For 3D spherical
-   (conformal) Kelvin (Nagamine CEFC 2026 eq. 9):
+   bilinear form equal the physical-domain energy.
+
+   3D spherical (conformal) Kelvin (Nagamine CEFC 2026 eq. 9). The
+   axisymmetric (r, z) case is the SAME basic formula applied in the
+   meridional plane (the 3D Kelvin sphere viewed axisymmetrically):
      nu_ext = (rho'/R)^2 * nu_0          [HCurl A-formulation]
      mu_ext = (R/rho')^2 * mu_0          [H1 Omega/H-formulation; reciprocal]
-   Functions: kelvin_nu_factor_{3d,axisym,2d}_cf,
-     kelvin_mu_factor_{3d,axisym,2d}_cf, build_material_cf.
+   Helpers: kelvin_nu_factor_{3d,axisym}_cf,
+     kelvin_mu_factor_{3d,axisym}_cf, build_material_cf.
+
+   2D cylindrical (non-conformal; Nagamine eq. 12):
+     nu' = diag(1, 1, (rho'/R)^4) * nu   (only axial z-component)
+   - 2D H1/Omega-form (scalar potential in (x,y)): Kelvin factor IS 1
+     (in-plane components unchanged); use
+     kelvin_mu_factor_2d_Hx_Hy_cf for the uniform helper pattern.
+   - 2D A-form (A_z scalar): scalar factor (rho'/R)^4;
+     use kelvin_nu_factor_2d_Az_cf.
 
 Reference: H. Nagamine, T. Yamaguchi, K. Sugahara, "A Pullback-Based
 Formulation of Kelvin Transformation in Electromagnetic Field Analysis,"
@@ -491,15 +502,27 @@ def kelvin_mu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
     return (R / rho_safe) ** 2
 
 
-def kelvin_nu_factor_2d_cf(offset, R, x_coord=None, y_coord=None):
-    """2D Cartesian Kelvin nu factor (rho'/R)^2 with (x, y) offset.
+def kelvin_nu_factor_2d_Az_cf(offset, R, x_coord=None, y_coord=None):
+    """2D A-formulation (A_z scalar) Kelvin factor (rho'/R)^4.
+
+    2D problem treated as a 3D cylindrical cross-section (Nagamine
+    CEFC 2026 §II.B, eq. 12): cylindrical inversion
+    k(rho, phi, z) = (R^2/rho, phi, z) is NON-conformal, yielding the
+    anisotropic reluctivity tensor
+
+        nu' = diag(1, 1, (rho'/R)^4) * nu    (only axial z-component)
+
+    When A = A_z(x, y) e_z, only nu_z enters the bilinear form and it
+    reduces to the scalar (rho'/R)^4.
 
     rho' = sqrt((x - x_off)^2 + (y - y_off)^2)
 
-    For 2D CARTESIAN conformal Kelvin. For 2D CYLINDRICAL (z-axis)
-    Kelvin, the modulation is anisotropic (Nagamine eq. 12):
-    nu' = diag(1, 1, (rho'/R)^4) nu -- use a tensor CF rather than
-    this scalar helper.
+    Args:
+        offset: (x_off, y_off) -- Kelvin circle center in world coords.
+        R: Kelvin radius.
+
+    Returns:
+        NGSolve CoefficientFunction (rho'/R)^4.
     """
     from ngsolve import x, y, sqrt, IfPos
     if x_coord is None:
@@ -509,20 +532,33 @@ def kelvin_nu_factor_2d_cf(offset, R, x_coord=None, y_coord=None):
     xo, yo = offset
     rho_prime = sqrt((x_coord - xo) ** 2 + (y_coord - yo) ** 2)
     rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
-    return (rho_safe / R) ** 2
+    return (rho_safe / R) ** 4
 
 
-def kelvin_mu_factor_2d_cf(offset, R, x_coord=None, y_coord=None):
-    """2D Cartesian Kelvin mu factor (R/rho')^2. Reciprocal of nu factor."""
-    from ngsolve import x, y, sqrt, IfPos
-    if x_coord is None:
-        x_coord = x
-    if y_coord is None:
-        y_coord = y
-    xo, yo = offset
-    rho_prime = sqrt((x_coord - xo) ** 2 + (y_coord - yo) ** 2)
-    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
-    return (R / rho_safe) ** 2
+def kelvin_mu_factor_2d_Hx_Hy_cf():
+    """2D H1/Omega-form in-plane Kelvin factor = 1 (identity).
+
+    Under 2D cylindrical Kelvin (Nagamine CEFC 2026 §II.B, eq. 12), the
+    in-plane components of mu are UNCHANGED:
+
+        mu' = diag(mu, mu, (R/rho')^4 mu)
+
+    For the H1/Omega-formulation (scalar potential phi in (x, y)), the
+    bilinear form `mu * grad(phi) * grad(v)` uses only in-plane mu
+    components, so the effective Kelvin factor is literally **1**.
+
+    This helper returns a CF = 1 so that 2D examples can still use the
+    uniform pattern `build_material_cf(mesh, mu0, factor, ...)` without
+    special-casing -- the Kelvin factor IS 1 here, not absent.
+    """
+    from ngsolve import CoefficientFunction
+    return CoefficientFunction(1.0)
+
+
+def kelvin_nu_factor_2d_Hx_Hy_cf():
+    """2D H-form in-plane Kelvin factor = 1 (reciprocal of mu, also 1)."""
+    from ngsolve import CoefficientFunction
+    return CoefficientFunction(1.0)
 
 
 def build_material_cf(mesh, base_value, kelvin_factor_cf, *,
