@@ -56,13 +56,19 @@ This module exposes helpers for two DIFFERENT concepts:
    Helpers: kelvin_nu_factor_{3d,axisym}_cf,
      kelvin_mu_factor_{3d,axisym}_cf, build_material_cf.
 
-   2D cylindrical (non-conformal; Nagamine eq. 12):
-     nu' = diag(1, 1, (rho'/R)^4) * nu   (only axial z-component)
-   - 2D H1/Omega-form (scalar potential in (x,y)): Kelvin factor IS 1
-     (in-plane components unchanged); use
-     kelvin_mu_factor_2d_Hx_Hy_cf for the uniform helper pattern.
-   - 2D A-form (A_z scalar): scalar factor (rho'/R)^4;
-     use kelvin_nu_factor_2d_Az_cf.
+   2D cylindrical (non-conformal; Nagamine eq. 12) -- ANISOTROPIC:
+     nu' = diag(1, 1, (rho'/R)^4) * nu       (only nu_zz modulated)
+     mu' = diag(1, 1, (R/rho')^4) * mu       (only mu_zz modulated)
+   Which slot enters the bilinear form depends on which B / H
+   components the problem actually uses -- not on whether it's
+   "A-form" vs "Omega-form":
+   - In-plane (Hx, Hy) or in-plane B (e.g. 2D A-form with
+     A = A_z z_hat, so curl(A) is in-plane): the z-slot is NEVER
+     contracted; the effective Kelvin factor is **1 (identity)**.
+     This is the COMMON case. Helper: kelvin_factor_2d_inplane_cf().
+   - Axial B_z (e.g. 2D A-form with A in-plane, so curl(A) = B_z z_hat)
+     or axial H_z: nu_zz / mu_zz enter; factor is (rho'/R)^4 or
+     (R/rho')^4 respectively. Helper: kelvin_{nu,mu}_factor_2d_axial_cf.
 
 Reference: H. Nagamine, T. Yamaguchi, K. Sugahara, "A Pullback-Based
 Formulation of Kelvin Transformation in Electromagnetic Field Analysis,"
@@ -352,8 +358,9 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
             (Biot-Savart everywhere). If both given, Kelvin exterior domain quad
             points are remapped.
         factor_mode: 'scalar' (Phase 1 approximation, (R/rho')**2 on
-            the vector magnitude) or 'pullback' (Phase 2, exact
-            1-form Jacobian -- to be implemented).
+            the vector magnitude -- exact only for tangential A) or
+            'pullback' (Phase 2, full 1-form Jacobian with Householder
+            reflection via kelvin_pullback_vector).
         n_quad: quadrature per segment.
 
     Returns:
@@ -477,6 +484,17 @@ def kelvin_nu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
     z_coord when your mesh uses a different embedding.
 
     Multiply by nu_0 for A-formulation nu_ext.
+
+    IMPORTANT -- NGSolve has no built-in axisymmetric mode. The r-weight
+    from the axisymmetric volume element (2 pi r dr dz) must be written
+    explicitly by the caller:
+
+        a += nu_cf * grad(u) * grad(v) * r_coord * dx
+
+    The Kelvin factor returned here ONLY handles the sphere-inversion
+    pullback; it does NOT absorb the r-weight. A common bug is to drop
+    the ``* r_coord`` factor and get results that are off by O(r) near
+    the axis.
     """
     from ngsolve import x, y, sqrt, IfPos
     if r_coord is None:
@@ -490,7 +508,12 @@ def kelvin_nu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
 
 
 def kelvin_mu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
-    """Axisym (r,z) Kelvin mu factor (R/rho')^2. Reciprocal of nu factor."""
+    """Axisym (r,z) Kelvin mu factor (R/rho')^2. Reciprocal of nu factor.
+
+    Same r-weight caveat as kelvin_nu_factor_axisym_cf: the caller must
+    write ``* r_coord * dx`` explicitly (NGSolve has no built-in axisym
+    mode). This helper only returns the sphere-inversion pullback.
+    """
     from ngsolve import x, y, sqrt, IfPos
     if r_coord is None:
         r_coord = x
@@ -502,18 +525,49 @@ def kelvin_mu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
     return (R / rho_safe) ** 2
 
 
-def kelvin_nu_factor_2d_Az_cf(offset, R, x_coord=None, y_coord=None):
-    """2D A-formulation (A_z scalar) Kelvin factor (rho'/R)^4.
+def kelvin_factor_2d_inplane_cf():
+    """2D Kelvin factor for IN-PLANE (Bx, By) / (Hx, Hy) problems: 1.
 
-    2D problem treated as a 3D cylindrical cross-section (Nagamine
-    CEFC 2026 §II.B, eq. 12): cylindrical inversion
-    k(rho, phi, z) = (R^2/rho, phi, z) is NON-conformal, yielding the
-    anisotropic reluctivity tensor
+    Under 2D cylindrical Kelvin inversion k(rho,phi,z) = (R^2/rho, phi, z)
+    the bilinear form ``integral(coeff * grad(u) . grad(v)) dA`` is
+    INVARIANT when grad(u) is in-plane: the gradient factor (rho'/R)^2
+    and the volume factor (R/rho')^4 cancel with the in-plane metric,
+    leaving the coefficient unmodulated.
 
-        nu' = diag(1, 1, (rho'/R)^4) * nu    (only axial z-component)
+    Nagamine CEFC 2026 eq. 12 gives the full anisotropic tensor
+    ``nu' = diag(1, 1, (rho'/R)^4) nu`` (and reciprocal for mu'). The
+    z-slot -- (rho'/R)^4 for nu, (R/rho')^4 for mu -- only enters the
+    bilinear form when the problem involves the Z-component of B or H.
+    For the **common** 2D magnetostatic setups below, the z-slot is
+    never contracted and this helper returns literally **1**:
 
-    When A = A_z(x, y) e_z, only nu_z enters the bilinear form and it
-    reduces to the scalar (rho'/R)^4.
+    - Omega-form with scalar potential phi(x, y): grad(phi) = H in-plane
+    - A-form with A = A_z(x, y) z_hat: curl(A) = B in-plane
+
+    This helper is the uniform-API counterpart of the 3D/axisym factor
+    helpers, so ``build_material_cf(mesh, mu0, kelvin_factor_2d_inplane_cf())``
+    composes without special-casing. Kelvin factor IS 1 here, not absent.
+
+    The deprecated names kelvin_{mu,nu}_factor_2d_Hx_Hy_cf and
+    kelvin_nu_factor_2d_Az_cf are aliases of this helper (the A_z name
+    was misleading: A_z scalar formulations ALSO land in the in-plane
+    case above, so the factor is 1, not (rho'/R)^4).
+    """
+    from ngsolve import CoefficientFunction
+    return CoefficientFunction(1.0)
+
+
+def kelvin_nu_factor_2d_axial_cf(offset, R, x_coord=None, y_coord=None):
+    """2D Kelvin nu factor for AXIAL (B_z) problems: (rho'/R)^4.
+
+    Nagamine CEFC 2026 eq. 12, z-slot of ``nu' = diag(1, 1, (rho'/R)^4) nu``.
+    Applies when B has a z-component -- e.g. 2D A-formulation with an
+    in-plane vector potential A = (A_x(x,y), A_y(x,y), 0), for which
+    curl(A) = B_z z_hat and nu_zz contracts into the bilinear form.
+
+    For the common A = A_z z_hat case (B in-plane, B_z=0), use
+    kelvin_factor_2d_inplane_cf() instead -- the axial slot does NOT
+    enter the bilinear form there.
 
     rho' = sqrt((x - x_off)^2 + (y - y_off)^2)
 
@@ -535,30 +589,48 @@ def kelvin_nu_factor_2d_Az_cf(offset, R, x_coord=None, y_coord=None):
     return (rho_safe / R) ** 4
 
 
-def kelvin_mu_factor_2d_Hx_Hy_cf():
-    """2D H1/Omega-form in-plane Kelvin factor = 1 (identity).
+def kelvin_mu_factor_2d_axial_cf(offset, R, x_coord=None, y_coord=None):
+    """2D Kelvin mu factor for AXIAL (H_z) problems: (R/rho')^4.
 
-    Under 2D cylindrical Kelvin (Nagamine CEFC 2026 §II.B, eq. 12), the
-    in-plane components of mu are UNCHANGED:
-
-        mu' = diag(mu, mu, (R/rho')^4 mu)
-
-    For the H1/Omega-formulation (scalar potential phi in (x, y)), the
-    bilinear form `mu * grad(phi) * grad(v)` uses only in-plane mu
-    components, so the effective Kelvin factor is literally **1**.
-
-    This helper returns a CF = 1 so that 2D examples can still use the
-    uniform pattern `build_material_cf(mesh, mu0, factor, ...)` without
-    special-casing -- the Kelvin factor IS 1 here, not absent.
+    Reciprocal of kelvin_nu_factor_2d_axial_cf. Applies when H has a
+    z-component -- unusual in standard 2D magnetostatics (where the
+    common in-plane-H case uses factor = 1).
     """
-    from ngsolve import CoefficientFunction
-    return CoefficientFunction(1.0)
+    from ngsolve import x, y, sqrt, IfPos
+    if x_coord is None:
+        x_coord = x
+    if y_coord is None:
+        y_coord = y
+    xo, yo = offset
+    rho_prime = sqrt((x_coord - xo) ** 2 + (y_coord - yo) ** 2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (R / rho_safe) ** 4
+
+
+# Deprecated aliases -- keep callers working while the ecosystem migrates.
+# Previous misleading signatures (especially kelvin_nu_factor_2d_Az_cf taking
+# (offset, R) and returning (rho'/R)^4) are corrected to the in-plane factor
+# of 1, matching the actual physics of the A_z scalar formulation.
+def kelvin_mu_factor_2d_Hx_Hy_cf():
+    """DEPRECATED alias. Use kelvin_factor_2d_inplane_cf()."""
+    return kelvin_factor_2d_inplane_cf()
 
 
 def kelvin_nu_factor_2d_Hx_Hy_cf():
-    """2D H-form in-plane Kelvin factor = 1 (reciprocal of mu, also 1)."""
-    from ngsolve import CoefficientFunction
-    return CoefficientFunction(1.0)
+    """DEPRECATED alias. Use kelvin_factor_2d_inplane_cf()."""
+    return kelvin_factor_2d_inplane_cf()
+
+
+def kelvin_nu_factor_2d_Az_cf(offset=None, R=None, x_coord=None, y_coord=None):
+    """DEPRECATED. A_z scalar formulation has in-plane B, so factor = 1.
+
+    The original implementation returned (rho'/R)^4, but that is the
+    nu_zz slot (for axial B_z, e.g. in-plane A) and does NOT enter the
+    bilinear form when A = A_z z_hat. Use kelvin_factor_2d_inplane_cf()
+    (returns 1) for the standard A_z scalar case, or
+    kelvin_nu_factor_2d_axial_cf(offset, R) if you actually have B_z.
+    """
+    return kelvin_factor_2d_inplane_cf()
 
 
 def build_material_cf(mesh, base_value, kelvin_factor_cf, *,

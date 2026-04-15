@@ -176,6 +176,7 @@ def solve_A_formulation(mesh, order):
     u = fes.TrialFunction()
     v = fes.TestFunction()
 
+    # 2D in-plane: Kelvin factor = 1 (kelvin_factor_2d_inplane_cf)
     nu_cf = nu0
 
     a_form = BilinearForm(fes)

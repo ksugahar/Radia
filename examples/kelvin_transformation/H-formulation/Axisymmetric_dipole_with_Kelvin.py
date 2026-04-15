@@ -197,16 +197,24 @@ z_coord = y  # Axial coordinate
 # ============================================================
 # Material properties (following 3D_dipole_with_Kelvin.py physics)
 # ============================================================
-# 3D Kelvin: mu'(rho') = (R/rho')^2 * mu0
+# 3D Kelvin (Nagamine CEFC 2026 canonical):
+#   mu_ext = mu_0 * (R/rho')^2   (Omega / H-formulation)
+# Exterior domain center is at (r, z) = (offset_x, 0), so pass
+# shifted r_coord to the axisym helper (z_offset=0).
+from radia.kelvin_source import kelvin_mu_factor_axisym_cf, build_material_cf
 
 # Distance squared from exterior domain center
 rho_prime_sq = (r_coord - offset_x)**2 + z_coord**2
 
-# Transformed permeability for exterior domain
-mu_outer = kelvin_radius**2 / (rho_prime_sq + 1e-20) * mu0
-
-mu_d = {"air_inner": 1*mu0, "air_outer": mu_outer, "magnetic": mu_r*mu0}
-mu = CoefficientFunction([mu_d[mat] for mat in mesh.GetMaterials()])
+mu_kelvin_factor = kelvin_mu_factor_axisym_cf(
+    z_offset=0.0, R=kelvin_radius,
+    r_coord=r_coord - offset_x, z_coord=z_coord,
+)
+mu = build_material_cf(
+    mesh, mu0, mu_kelvin_factor,
+    outer_keyword="air_outer",
+    overrides={"magnetic": mu_r * mu0},
+)
 
 # ============================================================
 # Background field (following 3D_dipole_with_Kelvin.py physics)

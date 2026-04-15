@@ -47,6 +47,7 @@ print(f"Deleted {deleted_count} files.")
 from numpy import pi, sqrt, linspace, zeros, nan, isnan, meshgrid, array, log, log10, sin, cos
 from ngsolve import *
 from netgen.occ import *
+from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
 import scipy.io as sio
 import tempfile
 
@@ -253,15 +254,15 @@ def solve_omega_formulation(mesh, fe_order):
 	r_prime_sq = (x - center_x_ext)**2 + y**2 + z**2
 	r_prime = sqrt(r_prime_sq + 1e-20)
 
-	mu_kelvin = (kelvin_radius / r_prime)**2 * mu0
-
-	mu_dict = {
-		"magnetic": mu_r * mu0,
-		"air_total": mu0,
-		"air_inner": mu0,
-		"air_outer": mu_kelvin
-	}
-	Mu = CoefficientFunction([mu_dict[mat] for mat in mesh.GetMaterials()])
+	# Kelvin material modulation via centralized helper (Nagamine CEFC 2026).
+	mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=(center_x_ext, 0.0, 0.0),
+	                                           R=kelvin_radius)
+	mu_kelvin = mu0 * mu_kelvin_factor  # alias for downstream energy integration
+	Mu = build_material_cf(
+		mesh, mu0, mu_kelvin_factor,
+		outer_keyword="air_outer",
+		overrides={"magnetic": mu_r * mu0},
+	)
 
 	Omega_s = H0 * z
 	Hs = CoefficientFunction((0.0, 0.0, H0))
