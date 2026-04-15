@@ -62,45 +62,7 @@ public:
 	double Volume() { return Thickness*(((radTPolygon*)(BasePolygonHandle.rep))->Area());}
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d& InPlanesNormal, TVector3d* InPointsOnCuttingPlanes, int AmOfPieces_mi_1, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions, radTvhg* pVectOfHgChanged)
-	{
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) return 0;
-		OldHandle = NewHandle;
-		if(!((radTg3d*)(OldHandle.rep))->SubdivideItselfByOneSetOfParPlanes(InPlanesNormal, InPointsOnCuttingPlanes, AmOfPieces_mi_1, NewHandle, radPtr, pSubdivOptions, pVectOfHgChanged)) return 0;
-		return 1;
-	}
-	int SubdivideItselfByParPlanes(double* SubdivArray, int AmOfDir, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-	{
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) return 0;
-		OldHandle = NewHandle;
-		if(!((radTg3d*)(OldHandle.rep))->SubdivideItselfByParPlanes(SubdivArray, AmOfDir, NewHandle, radPtr, pSubdivOptions)) return 0;
-		return 1;
-	}
-	int CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair_int_hg& LowerNewPair_int_hg, radTPair_int_hg& UpperNewPair_int_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-	{
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) return 0;
-		OldHandle = NewHandle;
-		if(!((radTg3d*)(OldHandle.rep))->CutItself(InCuttingPlane, NewHandle, LowerNewPair_int_hg, UpperNewPair_int_hg, radPtr, pSubdivOptions)) return 0;
-		return 1;
-	}
-	int SubdivideItselfByEllipticCylinder(double* SubdivArray, radTCylindricSubdivSpec* pSubdivSpec, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-	{ 
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) return 0;
-		OldHandle = NewHandle;
-		if(!((radTg3d*)(OldHandle.rep))->SubdivideItselfByEllipticCylinder(SubdivArray, pSubdivSpec, NewHandle, radPtr, pSubdivOptions)) return 0;
-		return 1;
-	}
-
-	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&);
+	// SubdivideItself* / CutItself / FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
 	int ConvertToPolyhedron(radThg&, radTApplication*, char);
 
 	int DuplicateItself(radThg& hg, radTApplication*, char) 

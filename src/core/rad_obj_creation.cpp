@@ -166,24 +166,7 @@ int radTApplication::ValidateFieldIntChar(char* FieldIntChar, char* FinOrInfChar
 
 //-------------------------------------------------------------------------
 
-int radTApplication::ValidateFieldEnergyForceChar(char* ComponIDChar, radTFieldKey* FieldKeyPtr)
-{
-	char* BufChar = ComponIDChar;
-	if(*ComponIDChar == '\0') {	FieldKeyPtr->Energy_=1; FieldKeyPtr->ForceEnr_=1; FieldKeyPtr->Torque_=1;}
-	else
-		while (*BufChar != '\0') 
-		{
-			if((*BufChar == 'E') || (*BufChar == 'e')) FieldKeyPtr->Energy_ = 1;
-			if((*BufChar == 'F') || (*BufChar == 'f')) FieldKeyPtr->ForceEnr_ = 1;
-			if((*BufChar == 'T') || (*BufChar == 't')) FieldKeyPtr->Torque_ = 1;
-			BufChar++;
-		}
-	if((!FieldKeyPtr->Energy_) && (!FieldKeyPtr->ForceEnr_) && (!FieldKeyPtr->Torque_))
-	{
-		Send.ErrorMessage("Radia::Error056"); return 0;
-	}
-	return 1;
-}
+// ValidateFieldEnergyForceChar REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
 //-------------------------------------------------------------------------
 
@@ -211,44 +194,7 @@ int radTApplication::ValidateMagnChar(char* MagnChar)
 
 //-------------------------------------------------------------------------
 
-int radTApplication::ValidateForceChar(char* ForceChar)
-{
-	char* BufChar = ForceChar;
-	if(*BufChar == '\0') { return 1;}
-	
-	short CharIsValid = 0;
-	while (*BufChar != '\0') 
-	{
-		//if((*BufChar == 'M') || (*BufChar == 'm') ||
-		if((*BufChar == 'F') || (*BufChar == 'f') || //OC061008
-		   (*BufChar == 'X') || (*BufChar == 'x') ||
-		   (*BufChar == 'Y') || (*BufChar == 'y') ||
-		   (*BufChar == 'Z') || (*BufChar == 'z')) CharIsValid = 1;
-		BufChar++;
-	}
-	if(!CharIsValid) { Send.ErrorMessage("Radia::Error058"); return 0;}
-	else return 1;
-}
-
-//-------------------------------------------------------------------------
-
-int radTApplication::ValidateTorqueChar(char* TorqueChar)
-{
-	char* BufChar = TorqueChar;
-	if(*BufChar == '\0') { return 1;}
-	
-	short CharIsValid = 0;
-	while (*BufChar != '\0') 
-	{
-		if((*BufChar == 'T') || (*BufChar == 't') ||
-		   (*BufChar == 'X') || (*BufChar == 'x') ||
-		   (*BufChar == 'Y') || (*BufChar == 'y') ||
-		   (*BufChar == 'Z') || (*BufChar == 'z')) CharIsValid = 1;
-		BufChar++;
-	}
-	if(!CharIsValid) { Send.ErrorMessage("Radia::Error059"); return 0;}
-	else return 1;
-}
+// ValidateForceChar / ValidateTorqueChar REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------

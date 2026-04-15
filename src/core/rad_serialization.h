@@ -62,7 +62,7 @@ public:
 	void MultiDimArrayOfDouble(double*, int*, int);
 
 	void ArrayOfPairOfVect3d(radTVectPairOfVect3d* pVectPairOfVect3d);
-	void OutFieldForceOrTorqueThroughEnergyCompRes(char* ForceComponID, TVector3d& Vect, char ID);
+	// OutFieldForceOrTorqueThroughEnergyCompRes REMOVED (Phase C, 2026-04-16)
 	void OutFieldIntCompRes(char* FieldIntChar, radTField* FieldPtr, double* ArgArray = 0, int Np = 1);
 	void OutFieldCompRes(char* FieldChar, radTField* FieldArray, double* ArgArray, int Np);
 	void OutRelaxResultsInfo(double* RelaxStatusParamArray, int lenRelaxStatusParamArray, int ActualIterNum);

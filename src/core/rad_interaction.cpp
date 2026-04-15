@@ -15,7 +15,7 @@
 -------------------------------------------------------------------------*/
 
 #include "rad_interaction.h"
-#include "rad_subdivided_rectangle.h"
+// #include "rad_subdivided_rectangle.h" REMOVED (Phase C, 2026-04-16)
 #include "rad_polyhedron.h"  // For IsTetrahedron() check in N_self fix
 #include "rad_constants.h"   // For RadConst::INV_FOUR_PI
 #include <array>
@@ -278,71 +278,23 @@ void radTInteraction::CountMainRelaxElems(radTg3d* g3dPtr, radTlphgPtr* CurrList
 	}
 	else
 	{
-		//--New
-		radTSubdividedRecMag* SubdividedRecMagPtr = Cast.SubdividedRecMagCast(GroupPtr);
-		if(SubdividedRecMagPtr != 0)
+		// radTSubdividedRecMag handling REMOVED (Phase C, 2026-04-16). Generic Group traversal only.
+		radTlphgPtr* LocListOfTransPtrPtr = CurrListOfTransPtrPtr;
+
+		short GroupListOfTransIsNotEmpty = 1;
+		if(GroupPtr->g3dListOfTransform.empty()) GroupListOfTransIsNotEmpty = 0;
+
+		if(GroupListOfTransIsNotEmpty)
 		{
-			radTg3dRelax* g3dRelaxFromSbdRecMagPtr = (radTg3dRelax*)SubdividedRecMagPtr;
-
-			radTRecMag* SubElRecMagPtr = Cast.RecMagCast((radTg3dRelax*)((*(SubdividedRecMagPtr->GroupMapOfHandlers.begin())).second.rep));
-
-			if((g3dRelaxFromSbdRecMagPtr->MaterHandle.rep != 0) && (SubElRecMagPtr != 0))
-			{
-				int SubIntervStart = AmOfMainElem;
-				if(SubdividedRecMagPtr->FldCmpMeth==1)
-				{
-					for(int ix=0; ix<int(SubdividedRecMagPtr->kx); ix++)
-						for(int iy=0; iy<int(SubdividedRecMagPtr->ky); iy++)
-							for(int iz=0; iz<int(SubdividedRecMagPtr->kz); iz++)
-							{
-								g3dRelaxPtrVect.push_back(g3dRelaxFromSbdRecMagPtr);
-								AmOfMainElem++;
-
-								radTlphgPtr* TotalListOfElemTransPtrPtr = new radTlphgPtr(*CurrListOfTransPtrPtr);
-								PushFrontNativeElemTransList(g3dRelaxFromSbdRecMagPtr, TotalListOfElemTransPtrPtr);
-								IntVectOfPtrToListsOfTransPtr.push_back(TotalListOfElemTransPtrPtr);
-							}
-				}
-				int SubIntervFin = SubIntervStart + (int)(SubdividedRecMagPtr->GroupMapOfHandlers.size()) - 1;
-
-				if(RelaxSubIntervConstrVect.empty())
-				{
-					radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, TRelaxSubIntervalID::RelaxTogether);
-					RelaxSubIntervConstrVect.push_back(RlxSbIntrv);
-				}
-				else
-				{
-					radTRelaxSubInterval& LastEnteredSubIntrv = RelaxSubIntervConstrVect.back();
-					if((SubIntervStart != LastEnteredSubIntrv.StartNo) && (SubIntervFin != LastEnteredSubIntrv.FinNo))
-					{
-						radTRelaxSubInterval RlxSbIntrv(SubIntervStart, SubIntervFin, TRelaxSubIntervalID::RelaxTogether);
-						RelaxSubIntervConstrVect.push_back(RlxSbIntrv);
-					}
-				}
-			}
+			LocListOfTransPtrPtr = new radTlphgPtr(*CurrListOfTransPtrPtr);
+			PushFrontNativeElemTransList(GroupPtr, LocListOfTransPtrPtr);
 		}
-		if((SubdividedRecMagPtr == 0) || ((SubdividedRecMagPtr != 0) && (SubdividedRecMagPtr->FldCmpMeth != 1)))
-		{
-		//--EndNew
-			radTlphgPtr* LocListOfTransPtrPtr = CurrListOfTransPtrPtr;
-			
-			short GroupListOfTransIsNotEmpty = 1;
-			if(GroupPtr->g3dListOfTransform.empty()) GroupListOfTransIsNotEmpty = 0;
 
-			if(GroupListOfTransIsNotEmpty) 
-			{
-				LocListOfTransPtrPtr = new radTlphgPtr(*CurrListOfTransPtrPtr);
-				PushFrontNativeElemTransList(GroupPtr, LocListOfTransPtrPtr);
-			}
+		for(radTmhg::iterator iter = GroupPtr->GroupMapOfHandlers.begin();
+			iter != GroupPtr->GroupMapOfHandlers.end(); ++iter)
+			CountMainRelaxElems(static_cast<radTg3d*>(iter->second.rep), LocListOfTransPtrPtr);
 
-			for(radTmhg::iterator iter = GroupPtr->GroupMapOfHandlers.begin();
-				iter != GroupPtr->GroupMapOfHandlers.end(); ++iter) 
-				CountMainRelaxElems(static_cast<radTg3d*>(iter->second.rep), LocListOfTransPtrPtr);
-
-			if(GroupListOfTransIsNotEmpty) delete LocListOfTransPtrPtr;
-		//--New
-		}
-		//--EndNew
+		if(GroupListOfTransIsNotEmpty) delete LocListOfTransPtrPtr;
 	}
 }
 

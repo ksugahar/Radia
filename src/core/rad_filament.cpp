@@ -242,60 +242,6 @@ FinalDefinitionOfFieldIntegrals:
 
 //-------------------------------------------------------------------------
 
-int radTFlmLinCur::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-{
-	char SubdivideCoils = pSubdivOptions->SubdivideCoils;
-	char PutNewStuffIntoGenCont = pSubdivOptions->PutNewStuffIntoGenCont;
-
-	if(!SubdivideCoils) return 1;
-	radTSend Send;
-	if((pSubdivOptions->SubdivisionFrame != 0) && (!g3dListOfTransform.empty())) 
-	{
-		Send.ErrorMessage("Radia::Error108"); return 0;
-	}
-
-	double k = SubdivArray[0], q = SubdivArray[1];
-
-	if(pSubdivOptions->SubdivisionParamCode == 1)
-	{
-		k = (k < Length)? Round(Length/k) : 1.;
-	}
-
-	const double ZeroTol = 1.E-10;
-	if(fabs(k-1.)<ZeroTol) return 1;
-
-	radTGroup* GroupInPlaceOfThisPtr = new radTGroup();
-	IsGroupMember = GroupInPlaceOfThisPtr->IsGroupMember;
-	g3dListOfTransform = GroupInPlaceOfThisPtr->g3dListOfTransform;
-
-	radThg NewHandle(GroupInPlaceOfThisPtr);
-
-	const double AbsZeroTol = 5.E-12;
-	double q0 = (fabs(k-1.)>AbsZeroTol)? pow(q, 1./(k-1.)) : q;
-	double Buf = q*q0 - 1.;
-	double a1 = (fabs(Buf) > AbsZeroTol)? Length*(q0 - 1.)/Buf : Length/k;
-
-	int kInt = int(k), k_mi_1 = kInt-1;
-
-	TVector3d UnitVect = (1./Length)*(EndPoint - StartPoint);
-	TVector3d NewStartPoint = StartPoint, NewEndPoint = StartPoint + a1*UnitVect;
-	double NewLength = a1;
-
-	int NewStuffCounter = 0;
-	for(int i=0; i<kInt; i++)
-	{
-		radTFlmLinCur* FlmLinCurPtr = new radTFlmLinCur(NewStartPoint, NewEndPoint, I);
-		if(FlmLinCurPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-		radThg hg(FlmLinCurPtr);
-		if(PutNewStuffIntoGenCont) GroupInPlaceOfThisPtr->AddElement(radPtr->AddElementToContainer(hg), hg);
-		else GroupInPlaceOfThisPtr->AddElement(++NewStuffCounter, hg);
-
-		NewLength *= q0;
-		NewStartPoint = NewEndPoint;
-		NewEndPoint = NewStartPoint + NewLength*UnitVect;
-	}
-	In_hg = NewHandle;
-	return 1;
-}
+// radTFlmLinCur::SubdivideItself REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------

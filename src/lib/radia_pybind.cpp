@@ -1883,13 +1883,7 @@ py::dict GetSolverConfig() {
 
 namespace radia_field_ext {
 
-double FldEnr(int obj_dst, int obj_src) {
-    double energy = 0;
-    int SbdPar[3] = {0, 0, 0};
-    int err = RadFldEnr(&energy, obj_dst, obj_src, SbdPar);
-    check_error(err);
-    return energy;
-}
+// FldEnr (energy-based) REMOVED (Phase C, 2026-04-16)
 
 py::array_t<double> FldFrc(int obj, int shape) {
     double f[6] = {0};
@@ -3202,9 +3196,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Extended Field Functions
     // ========================================================================
 
-    m.def("FldEnr", &radia_field_ext::FldEnr,
-          py::arg("obj_dst"), py::arg("obj_src"),
-          "Compute interaction energy between objects [J].");
+    // FldEnr binding REMOVED (Phase C, 2026-04-16)
 
     m.def("FldFrc", &radia_field_ext::FldFrc,
           py::arg("obj"), py::arg("shape"),
@@ -3404,106 +3396,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     // Use CERN Xsuite/Xtrack for GPU-accelerated beam tracking.
 
-    // FldEnrFrc - Energy-based force
-    m.def("FldEnrFrc", [](int obj_dst, int obj_src,
-                          const std::string& component = "",
-                          const py::object& subdiv = py::none()) -> py::object {
-        double f[3] = {0, 0, 0};
-        int nf = 0;
-        int sbdPar[3] = {0, 0, 0};
-        int* pSbdPar = nullptr;
-
-        if (!subdiv.is_none()) {
-            auto sd = to_vector(subdiv);
-            if (sd.size() >= 3) {
-                sbdPar[0] = static_cast<int>(sd[0]);
-                sbdPar[1] = static_cast<int>(sd[1]);
-                sbdPar[2] = static_cast<int>(sd[2]);
-                pSbdPar = sbdPar;
-            }
-        }
-
-        char id_cstr[16];
-        strncpy(id_cstr, component.c_str(), 15);
-        id_cstr[15] = '\0';
-
-        int err = RadFldEnrFrc(f, &nf, obj_dst, obj_src, id_cstr, pSbdPar);
-        check_error(err);
-
-        if (nf == 1) {
-            return py::cast(f[0]);
-        } else {
-            return py::make_tuple(f[0], f[1], f[2]);
-        }
-    },
-    py::arg("obj_dst"), py::arg("obj_src"),
-    py::arg("component") = "", py::arg("subdiv") = py::none(),
-    R"pbdoc(
-        Compute force on object from field of another object.
-
-        Args:
-            obj_dst: Destination object handle
-            obj_src: Source object handle
-            component: "fx", "fy", "fz", or "" for all
-            subdiv: Optional subdivision [kx, ky, kz]
-
-        Returns:
-            Force in Newton (single value or tuple)
-    )pbdoc");
-
-    // FldEnrTrq - Energy-based torque
-    m.def("FldEnrTrq", [](int obj_dst, int obj_src,
-                          const std::string& component,
-                          const py::list& point,
-                          const py::object& subdiv = py::none()) -> py::object {
-        auto p = to_vector(point.cast<py::object>());
-        if (p.size() != 3) {
-            throw std::runtime_error("Point must have 3 coordinates");
-        }
-
-        double f[3] = {0, 0, 0};
-        int nf = 0;
-        int sbdPar[3] = {0, 0, 0};
-        int* pSbdPar = nullptr;
-
-        if (!subdiv.is_none()) {
-            auto sd = to_vector(subdiv);
-            if (sd.size() >= 3) {
-                sbdPar[0] = static_cast<int>(sd[0]);
-                sbdPar[1] = static_cast<int>(sd[1]);
-                sbdPar[2] = static_cast<int>(sd[2]);
-                pSbdPar = sbdPar;
-            }
-        }
-
-        char id_cstr[16];
-        strncpy(id_cstr, component.c_str(), 15);
-        id_cstr[15] = '\0';
-
-        int err = RadFldEnrTrq(f, &nf, obj_dst, obj_src, id_cstr, p.data(), pSbdPar);
-        check_error(err);
-
-        if (nf == 1) {
-            return py::cast(f[0]);
-        } else {
-            return py::make_tuple(f[0], f[1], f[2]);
-        }
-    },
-    py::arg("obj_dst"), py::arg("obj_src"), py::arg("component"),
-    py::arg("point"), py::arg("subdiv") = py::none(),
-    R"pbdoc(
-        Compute torque on object from field of another object.
-
-        Args:
-            obj_dst: Destination object handle
-            obj_src: Source object handle
-            component: "tx", "ty", "tz", or "" for all
-            point: Torque reference point [x, y, z]
-            subdiv: Optional subdivision [kx, ky, kz]
-
-        Returns:
-            Torque in Newton*mm (single value or tuple)
-    )pbdoc");
+    // FldEnrFrc / FldEnrTrq (energy-based force/torque) REMOVED (Phase C, 2026-04-16)
 
     // FldCmpPrc - Set computation precision (string options version)
     m.def("FldCmpPrc", [](const std::string& opt) {

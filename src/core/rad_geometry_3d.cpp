@@ -110,58 +110,7 @@ void radTg3d::NestedFor_B(radTField* FieldPtr, const radTlphg::iterator& Iter)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::NestedFor_Energy(radTField* FieldPtr, const radTlphg::iterator& Iter)
-{
-	radTrans* TransPtr = (radTrans*)(((*Iter).Handler_g).rep);
-	radTlphg::iterator LocalNextIter = Iter;
-	LocalNextIter++;
-
-	radTg3d* SourcePtr = static_cast<radTg3d*>(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep);
-	radTrans* InvTransPtr = new radTrans(*TransPtr); // This is to let handler work correctly
-	InvTransPtr->Invert();
-	radThg hInvTrans(InvTransPtr);
-
-	double& LocEnergy = FieldPtr->Energy;
-	TVector3d ZeroVect(0.,0.,0.);
-
-	radTFieldKey& FieldPtrFieldKey = FieldPtr->FieldKey;
-
-	if((*Iter).m == 1)
-	{
-		SourcePtr->AddTransform(1, hInvTrans);
-		Energy_Or_NestedFor(FieldPtr, LocalNextIter);
-		SourcePtr->EraseOuterTransform();
-	}
-	else
-	{
-		TVector3d LocForceMult1(0.,0.,0.), LocTorqueMult1(0.,0.,0.);
-		double LocEnergyMult1 =0.;
-
-		radTField BufField(FieldPtrFieldKey, FieldPtr->CompCriterium, FieldPtr->HandleEnergyForceTorqueCompData);
-		BufField.Energy = FieldPtr->Energy;
-
-		Energy_Or_NestedFor(&BufField, LocalNextIter);
-		LocEnergyMult1 = BufField.Energy;
-
-		BufField = radTField(FieldPtrFieldKey, FieldPtr->CompCriterium, FieldPtr->HandleEnergyForceTorqueCompData);
-		BufField.Energy = FieldPtr->Energy;
-
-		double &BufFieldEnergy = BufField.Energy;
-		SourcePtr->AddTransform(1, hInvTrans);
-
-		int Mult = (*Iter).m;
-		for(int km = 1; km < Mult-1; km++)
-		{
-			Energy_Or_NestedFor(&BufField, LocalNextIter);
-			SourcePtr->AddTransform(1, hInvTrans);
-		}
-		Energy_Or_NestedFor(&BufField, LocalNextIter);
-
-		for(int km1 = 1; km1 < Mult; km1++) SourcePtr->EraseOuterTransform();
-
-		LocEnergy += LocEnergyMult1 + BufFieldEnergy;
-	}
-}
+// radTg3d::NestedFor_Energy REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
@@ -368,474 +317,47 @@ void radTg3d::NormStressTensor(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::ActualEnergyForceTorqueComp(radTField* FieldPtr)
-{
-	TVector3d ZeroVect(0.,0.,0.);
-	const double DeltaL = 1.E-01; // mm
-	//const double DeltaL = 1.; // mm
-	const double DeltaTeta = 1.E-03; // rad
-
-	radTField LocField(FieldPtr->FieldKey, FieldPtr->CompCriterium, FieldPtr->HandleEnergyForceTorqueCompData);
-	double& Enr = LocField.Energy;
-	double Ex1, Ex2, Ey1, Ey2, Ez1, Ez2;
-
-	if(FieldPtr->FieldKey.Energy_)
-	{
-		Enr = 0.;
-		(g3dListOfTransform.empty())? SimpleEnergyComp(&LocField) : NestedFor_Energy(&LocField, g3dListOfTransform.begin());
-		FieldPtr->Energy += LocField.Energy;
-	}
-	if(FieldPtr->FieldKey.ForceEnr_)
-	{
-		LocField.CompCriterium.BasedOnWorstRelPrec = 1;
-
-		TVector3d DeltaX(-DeltaL/2., 0., 0.), DeltaY(0., -DeltaL/2., 0.),  DeltaZ(0., 0., -DeltaL/2.);
-		radTrans *SmallTranslXPtr = new radTrans(), *SmallTranslYPtr = new radTrans(), *SmallTranslZPtr = new radTrans();
-		radThg hTranslX(SmallTranslXPtr), hTranslY(SmallTranslYPtr), hTranslZ(SmallTranslZPtr);
-		SmallTranslXPtr->SetupTranslation(DeltaX); SmallTranslYPtr->SetupTranslation(DeltaY); SmallTranslZPtr->SetupTranslation(DeltaZ);
-
-		AddTransform(1, hTranslX); 
-		//AddTransform_OtherSide(1, hTranslX);
-		Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ex1 = Enr;
-		SmallTranslXPtr->Invert(); Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ex2 = Enr;
-		EraseOuterTransform(); 
-		//EraseInnerTransform(); 
-
-		AddTransform(1, hTranslY);
-		//AddTransform_OtherSide(1, hTranslY);
-		Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ey1 = Enr;
-		SmallTranslYPtr->Invert(); Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ey2 = Enr;
-		EraseOuterTransform(); 
-		//EraseInnerTransform(); 
-
-		AddTransform(1, hTranslZ); 
-		//AddTransform_OtherSide(1, hTranslZ);
-		Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ez1 = Enr;
-		SmallTranslZPtr->Invert(); Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ez2 = Enr;
-		EraseOuterTransform();
-		//EraseInnerTransform(); 
-
-		double Const = 1000./DeltaL;
-		TVector3d LocForce(Const*(Ex1 - Ex2), Const*(Ey1 - Ey2), Const*(Ez1 - Ez2));
-		if(FieldPtr->FieldKey.ForceEnr_) FieldPtr->Force += LocForce;
-	}
-	if(FieldPtr->FieldKey.Torque_)
-	{
-		LocField.CompCriterium.BasedOnWorstRelPrec = 1;
-
-		radTrans *SmallRotXaxPtr = new radTrans(), *SmallRotYaxPtr = new radTrans(), *SmallRotZaxPtr = new radTrans();
-		radThg hRotX(SmallRotXaxPtr), hRotY(SmallRotYaxPtr), hRotZ(SmallRotZaxPtr);
-
-		TVector3d OrtX(1.,0.,0.), OrtY(0.,1.,0.), OrtZ(0.,0.,1.);
-		SmallRotXaxPtr->SetupRotation(FieldPtr->P, OrtX, -DeltaTeta/2.);
-		SmallRotYaxPtr->SetupRotation(FieldPtr->P, OrtY, -DeltaTeta/2.);
-		SmallRotZaxPtr->SetupRotation(FieldPtr->P, OrtZ, -DeltaTeta/2.);
-
-		AddTransform(1, hRotX); 
-		//AddTransform_OtherSide(1, hRotX);
-		Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ex1 = Enr;
-		SmallRotXaxPtr->Invert(); Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ex2 = Enr;
-		EraseOuterTransform(); 
-		//EraseInnerTransform(); 
-
-		AddTransform(1, hRotY); 
-		//AddTransform_OtherSide(1, hRotY);
-		Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ey1 = Enr;
-		SmallRotYaxPtr->Invert(); Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ey2 = Enr;
-		EraseOuterTransform(); 
-		//EraseInnerTransform(); 
-
-		AddTransform(1, hRotZ); 
-		//AddTransform_OtherSide(1, hRotZ);
-		Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ez1 = Enr;
-		SmallRotZaxPtr->Invert(); Enr = 0.; NestedFor_Energy(&LocField, g3dListOfTransform.begin()); Ez2 = Enr;
-		EraseOuterTransform();
-		//EraseInnerTransform(); 
-
-		double Const = 1000./DeltaTeta;
-		TVector3d LocTorque(Const*(Ex1 - Ex2), Const*(Ey1 - Ey2), Const*(Ez1 - Ez2));
-		if(FieldPtr->FieldKey.Torque_) FieldPtr->Torque += LocTorque;
-	}
-}
+// radTg3d::ActualEnergyForceTorqueComp REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::EnergyForceTorqueComp(radTField* FieldPtr)
-{
-	const double RelTol = 1.E-09;
-	radTStructForEnergyForceTorqueComp* EnFrcTrqCompDataPtr = FieldPtr->HandleEnergyForceTorqueCompData.rep;
-
-	if(EnFrcTrqCompDataPtr->AutoDestSubdivision)
-	{
-		EnergyForceTorqueCompAutoDestSubd(FieldPtr);
-	}
-	else
-	{
-		if(!DuplicateItself(EnFrcTrqCompDataPtr->hDest, EnFrcTrqCompDataPtr->radPtr, 0))
-		{ 
-			EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
-		}
-		radTg3d* DuplDestPtr = static_cast<radTg3d*>(EnFrcTrqCompDataPtr->hDest.rep);
-
-		if((fabs(EnFrcTrqCompDataPtr->DestSubdivArray[0]-1.)<RelTol) && (fabs(EnFrcTrqCompDataPtr->DestSubdivArray[2]-1.)<RelTol) && (fabs(EnFrcTrqCompDataPtr->DestSubdivArray[4]-1.)<RelTol))
-		{
-			DuplDestPtr->ActualEnergyForceTorqueComp(FieldPtr); return;
-		}
-		else
-		{
-			radTSubdivOptions SubdivOptions;
-			SubdivOptions.SubdivisionFrame = 0;
-			SubdivOptions.SubdivisionParamCode = 0;
-			SubdivOptions.SubdivideCoils = 1;
-			SubdivOptions.PutNewStuffIntoGenCont = 0;
-
-			if(!DuplDestPtr->SubdivideItself(EnFrcTrqCompDataPtr->DestSubdivArray, EnFrcTrqCompDataPtr->hDest, EnFrcTrqCompDataPtr->radPtr, &SubdivOptions))
-			{ 
-				EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
-			}
-			(static_cast<radTg3d*>(EnFrcTrqCompDataPtr->hDest.rep))->ActualEnergyForceTorqueComp(FieldPtr); 
-		}
-	}
-}
+// radTg3d::EnergyForceTorqueComp REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-char radTg3d::CheckIfMoreEnrFrcTrqCompNeededAndUpdate(radTField* WorkFieldPtr, radTField* TotFieldPtr)
-{
-	radTFieldKey &FieldKey = WorkFieldPtr->FieldKey;
-	char EnergyCompNotNeeded = 1, ForceCompNotNeeded = 1, TorqueCompNotNeeded = 1;
-	
-	radTg3d* LocDestPtr = static_cast<radTg3d*>(WorkFieldPtr->HandleEnergyForceTorqueCompData.rep->hDest.rep);
-	radTAuxCompDataG3D* AuxCompDataPtr = LocDestPtr->HandleAuxCompData.rep;
-
-	if(FieldKey.Energy_)
-	{
-		double &Old = AuxCompDataPtr->Energy, &New = WorkFieldPtr->Energy;
-		double Diff = New - Old;
-		EnergyCompNotNeeded = (Abs(Diff) <= WorkFieldPtr->CompCriterium.AbsPrecEnergy)? 1 : 0;
-		if(!EnergyCompNotNeeded)
-		{
-			Old = New; // Is it actually necessary?
-		}
-		TotFieldPtr->Energy += Diff;
-	}
-	if(FieldKey.ForceEnr_)
-	{
-		TVector3d &Old = AuxCompDataPtr->Force, &New = WorkFieldPtr->Force;
-		TVector3d Diff = New - Old;
-		ForceCompNotNeeded = (NormAbs(Diff) <= WorkFieldPtr->CompCriterium.AbsPrecForce)? 1 : 0;
-		if(!ForceCompNotNeeded)
-		{
-			Old = New; // Is it actually necessary?
-		}
-		TotFieldPtr->Force += Diff;
-	}
-	if(FieldKey.Torque_)
-	{
-		TVector3d &Old = AuxCompDataPtr->Torque, &New = WorkFieldPtr->Torque;
-		TVector3d Diff = New - Old;
-		TorqueCompNotNeeded = (NormAbs(Diff) <= WorkFieldPtr->CompCriterium.AbsPrecTorque)? 1 : 0;
-		if(!TorqueCompNotNeeded)
-		{
-			Old = New; // Is it actually necessary?
-		}
-		TotFieldPtr->Torque += Diff;
-	}
-	return !(EnergyCompNotNeeded && ForceCompNotNeeded && TorqueCompNotNeeded);
-}
+// radTg3d::CheckIfMoreEnrFrcTrqCompNeededAndUpdate REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::ActualEnergyForceTorqueCompWithAdd(radTField* FieldPtr)
-{// This is for everything except for Groups and their childs.
-	TVector3d ZeroVect(0.,0.,0.);
-	radTField LocField = *FieldPtr;
-	LocField.Force = LocField.Torque = ZeroVect; LocField.Energy = 0.;
-	
-	ActualEnergyForceTorqueComp(&LocField);
-
-	if(HandleAuxCompData.rep == 0) CreateAuxCompData();
-	HandleAuxCompData.rep->StoreDataFromField(&LocField);
-
-	radTFieldKey &FieldKey = FieldPtr->FieldKey;
-	if(FieldKey.Energy_) FieldPtr->Energy += LocField.Energy;
-	if(FieldKey.ForceEnr_) FieldPtr->Force += LocField.Force;
-	if(FieldKey.Torque_) FieldPtr->Torque += LocField.Torque;
-}
+// radTg3d::ActualEnergyForceTorqueCompWithAdd REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-int radTg3d::ProceedNextStepEnergyForceTorqueComp(double* SubdArr, radThg& HandleOfThis, radTField* LocFieldPtr, radTField* FieldPtr, char& SubdNeed, char XorYorZ)
-{
-	radThg hOld = HandleOfThis;
-
-	radTSubdivOptions SubdivOptions;
-	SubdivOptions.SubdivisionFrame = 0;
-	SubdivOptions.SubdivisionParamCode = 0;
-	SubdivOptions.SubdivideCoils = 1;
-	SubdivOptions.PutNewStuffIntoGenCont = 0;
-
-	if(!(static_cast<radTg3d*>(hOld.rep))->SubdivideItself(SubdArr, HandleOfThis, FieldPtr->HandleEnergyForceTorqueCompData.rep->radPtr, &SubdivOptions))
-	{
-		FieldPtr->HandleEnergyForceTorqueCompData.rep->SomethingIsWrong = 1; return 0;
-	}
-	TVector3d &LocForce = LocFieldPtr->Force, &LocTorque = LocFieldPtr->Torque;
-	LocFieldPtr->Energy = LocForce.x = LocForce.y = LocForce.z = LocTorque.x = LocTorque.y = LocTorque.z = 0.;
-
-	LocFieldPtr->HandleEnergyForceTorqueCompData.rep->hDest = HandleOfThis;
-
-	radTg3d* NewGroupPtr = static_cast<radTg3d*>(HandleOfThis.rep);
-	NewGroupPtr->ActualEnergyForceTorqueCompWithAdd(LocFieldPtr);
-	NewGroupPtr->HandleAuxCompData = (static_cast<radTg3d*>(hOld.rep))->HandleAuxCompData; // Move to constructors of subdivided items
-
-	NewGroupPtr->SetupFurtherSubdInd(NewGroupPtr->HandleAuxCompData.rep->SubdNeedInd);
-
-	SubdNeed = CheckIfMoreEnrFrcTrqCompNeededAndUpdate(LocFieldPtr, FieldPtr);
-	if(!SubdNeed) HandleOfThis = hOld;
-
-	radTg3d* GroupInPlaceOfThis_Or_This = static_cast<radTg3d*>(HandleOfThis.rep);
-	GroupInPlaceOfThis_Or_This->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
-	return 1;
-}
+// radTg3d::ProceedNextStepEnergyForceTorqueComp REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-int radTg3d::NextStepEnergyForceTorqueComp(double* TotSubdArr, radThg& HandleOfThis, radTField* FieldPtr, char& MoreSubdNeeded)
-{
-	char SubdNeedX, SubdNeedY, SubdNeedZ;
-	HandleAuxCompData.rep->ShowSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
-	if(!(SubdNeedX || SubdNeedY || SubdNeedZ)) return 1;
-
-	double SubdArrX[] = {TotSubdArr[0], TotSubdArr[1], 1.,1.,1.,1.};
-	double SubdArrY[] = {1.,1., TotSubdArr[2], TotSubdArr[3], 1.,1.};
-	double SubdArrZ[] = {1.,1.,1.,1., TotSubdArr[4], TotSubdArr[5]};
-
-	radTStructForEnergyForceTorqueComp* EnFrcTrqCompDataPtr = FieldPtr->HandleEnergyForceTorqueCompData.rep;
-	char SubdivideCoils =1, PutNewStuffIntoGenCont =0;
-
-	radTField LocField = *FieldPtr;
-	LocField.HandleEnergyForceTorqueCompData = radTHandleStructForEnergyForceTorqueComp(new radTStructForEnergyForceTorqueComp(*(FieldPtr->HandleEnergyForceTorqueCompData.rep)));
-
-	if(SubdNeedX)
-		if(!ProceedNextStepEnergyForceTorqueComp(SubdArrX, HandleOfThis, &LocField, FieldPtr, SubdNeedX, 'x')) return 0;
-	if(SubdNeedY)
-	{
-		radThg hgOld = HandleOfThis;
-		radTg3d* DestPtr = static_cast<radTg3d*>(hgOld.rep);
-		if(!DestPtr->ProceedNextStepEnergyForceTorqueComp(SubdArrY, HandleOfThis, &LocField, FieldPtr, SubdNeedY, 'y')) return 0;
-	}
-	if(SubdNeedZ)
-	{
-		radThg hgOld = HandleOfThis;
-		radTg3d* DestPtr = static_cast<radTg3d*>(hgOld.rep);
-		if(!DestPtr->ProceedNextStepEnergyForceTorqueComp(SubdArrZ, HandleOfThis, &LocField, FieldPtr, SubdNeedZ, 'z')) return 0;
-	}
-	MoreSubdNeeded = SubdNeedX || SubdNeedY || SubdNeedZ;
-	return 1;
-}
+// radTg3d::NextStepEnergyForceTorqueComp REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::EnergyForceTorqueCompAutoDestSubd(radTField* FieldPtr)
-{
-	radTStructForEnergyForceTorqueComp* EnFrcTrqCompDataPtr = FieldPtr->HandleEnergyForceTorqueCompData.rep;
-
-	if(!DuplicateItself(EnFrcTrqCompDataPtr->hDest, EnFrcTrqCompDataPtr->radPtr, 0))
-	{ 
-		EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
-	}
-
-	TVector3d ZeroVect(0.,0.,0.);
-	double TotSubdArray[] = {2.,1.,2.,1.,2.,1}; 
-
-	radTField LocField = *FieldPtr;
-	LocField.Force = LocField.Torque = ZeroVect; LocField.Energy = 0.;
-
-	radTg3d* DestPtr = static_cast<radTg3d*>(EnFrcTrqCompDataPtr->hDest.rep);
-	DestPtr->ActualEnergyForceTorqueCompWithAdd(&LocField);
-	DestPtr->MarkFurtherSubdNeed(1, 1, 1);
-
-	char MoreSubdNeeded = 1;
-	while(MoreSubdNeeded)
-	{
-		radThg hDestOld = LocField.HandleEnergyForceTorqueCompData.rep->hDest; // To prevent from automatic deletion through handle
-		if(!(static_cast<radTg3d*>(hDestOld.rep))->NextStepEnergyForceTorqueComp(TotSubdArray, EnFrcTrqCompDataPtr->hDest, &LocField, MoreSubdNeeded))
-		{
-			EnFrcTrqCompDataPtr->SomethingIsWrong = 1; return;
-		}
-	}
-	radTFieldKey &FieldKey = FieldPtr->FieldKey;
-	if(FieldKey.Energy_) FieldPtr->Energy += LocField.Energy;
-	if(FieldKey.ForceEnr_) FieldPtr->Force += LocField.Force;
-	if(FieldKey.Torque_) FieldPtr->Torque += LocField.Torque;
-}
+// radTg3d::EnergyForceTorqueCompAutoDestSubd REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::CheckAxesExchangeForSubdInLabFrame(double* SubdivArray, char& ConversionToPolyhedronsIsNeeded)
-{
-	ConversionToPolyhedronsIsNeeded = 0;
-
-	radTrans ResTransf;
-	short SomethingFound = 0;
-	FindResTransfWithMultOne(ResTransf, SomethingFound);
-	if(SomethingFound) 
-	{
-		const double ZeroTol = 1.E-13;
-		TVector3d ex(1.,0.,0.), ey(0.,1.,0.), ez(0.,0.,1.);
-		TVector3d ex1 = ResTransf.TrBiPoint_inv(ex);
-		TVector3d ey1 = ResTransf.TrBiPoint_inv(ey);
-		TVector3d ez1 = ResTransf.TrBiPoint_inv(ez);
-
-		if(PracticallyEqualOrAnti(ex, ex1, ZeroTol))
-		{
-			if(!(PracticallyEqualOrAnti(ey, ey1, ZeroTol) || PracticallyEqualOrAnti(ey, ez1, ZeroTol)))
-				ConversionToPolyhedronsIsNeeded = 1;
-		}
-		else if(PracticallyEqualOrAnti(ex, ey1, ZeroTol))
-		{
-			if(!(PracticallyEqualOrAnti(ey, ex1, ZeroTol) || PracticallyEqualOrAnti(ey, ez1, ZeroTol)))
-				ConversionToPolyhedronsIsNeeded = 1;
-		}
-		else if(PracticallyEqualOrAnti(ex, ez1, ZeroTol))
-		{
-			if(!(PracticallyEqualOrAnti(ey, ex1, ZeroTol) || PracticallyEqualOrAnti(ey, ey1, ZeroTol)))
-				ConversionToPolyhedronsIsNeeded = 1;
-		}
-		else ConversionToPolyhedronsIsNeeded = 1;
-
-		if(!ConversionToPolyhedronsIsNeeded)
-		{
-			double &kx = SubdivArray[0], &ky = SubdivArray[2],  &kz = SubdivArray[4];
-			double &qx = SubdivArray[1], &qy = SubdivArray[3],  &qz = SubdivArray[5];
-
-			TVector3d kx_ex1 = kx*ex1, ky_ey1 = ky*ey1, kz_ez1 = kz*ez1;
-			TVector3d k1Tot = kx_ex1 + ky_ey1 + kz_ez1;
-			TVector3d qx_ex1 = qx*ex1, qy_ey1 = qy*ey1, qz_ez1 = qz*ez1;
-			TVector3d q1Tot = qx_ex1 + qy_ey1 + qz_ez1;
-
-			kx = ex*k1Tot; qx = ex*q1Tot;
-			if(kx < 0.) { kx = -kx; qx = -1./qx;}
-			ky = ey*k1Tot; qy = ey*q1Tot;
-			if(ky < 0.) { ky = -ky; qy = -1./qy;}
-			kz = ez*k1Tot; qz = ez*q1Tot;
-			if(kz < 0.) { kz = -kz; qz = -1./qz;}
-		}
-	}
-}
+// radTg3d::CheckAxesExchangeForSubdInLabFrame REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-int radTg3d::TransferSubdivisionStructToLocalFrame(TVector3d& InNormal, TVector3d* InPoints, int AmOfPoints, radTSubdivOptions* pSubdivOptions, TVector3d& OutNormal, TVector3d*& OutPoints)
-{// AmOfPoints = AmOfPieces_mi_1
-	OutNormal = InNormal;
-	OutPoints = InPoints; // This is important
-		
-	radTrans ResTransf;
-	short SomethingFound = 0;
-
-	if((pSubdivOptions->SubdivisionFrame != 0) && (!g3dListOfTransform.empty()))
-	{
-		FindResTransfWithMultOne(ResTransf, SomethingFound);
-	}
-	else if(ConsiderOnlyWithTrans && (!g3dListOfTransform.empty()))
-	{
-		FindInnerTransfWithMultOne(ResTransf, SomethingFound);
-	}
-
-	radTSend Send;
-	if(SomethingFound) 
-	{
-		OutNormal = ResTransf.TrBiPoint_inv(InNormal);
-
-		OutPoints = new TVector3d[AmOfPoints];
-		if(OutPoints == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-
-		TVector3d *tOut = OutPoints, *tIn = InPoints;
-		for(int k=0; k<AmOfPoints; k++) *(tOut++) = ResTransf.TrPoint_inv(*(tIn++));
-	}
-	return 1;
-}
+// radTg3d::TransferSubdivisionStructToLocalFrame REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-void radTg3d::FindEllipticCoordOfPoint(radTCylindricSubdivSpec* pCylSpec, TVector3d& Point, double& a, double& Phi)
-{
-	TVector3d& CylAxVect = pCylSpec->CylAxVect;
-	TVector3d& PointOnCylAx = pCylSpec->PointOnCylAx;
-	TVector3d& PointOnEllAx = pCylSpec->PointOnEllAx;
-	double Ratio = 1./pCylSpec->EllAxRatio;
-
-	TVector3d PointOnEllAx_mi_PointOnCylAx = PointOnEllAx - PointOnCylAx;
-	TVector3d Ex = PointOnEllAx_mi_PointOnCylAx - (PointOnEllAx_mi_PointOnCylAx*CylAxVect)*CylAxVect;
-	double InvLenEx = 1./sqrt(Ex.x*Ex.x + Ex.y*Ex.y + Ex.z*Ex.z);
-	Ex = InvLenEx*Ex;
-	TVector3d Ey = CylAxVect^Ex;
-
-	TVector3d Point_mi_PointOnCylAx = Point - PointOnCylAx;
-	TVector3d PointOrtComp = Point_mi_PointOnCylAx - (Point_mi_PointOnCylAx*CylAxVect)*CylAxVect;
-
-	double xLoc = PointOrtComp*Ex, yLoc = PointOrtComp*Ey;
-
-	const double HalfPI = 1.5707963267949;
-	const double TolForZero = 1.E-12;
-	if(fabs(xLoc) < TolForZero)
-	{
-		if(yLoc > TolForZero) { Phi = HalfPI; a = Ratio*yLoc; return;}
-		else if(yLoc < -TolForZero) { Phi = 3.*HalfPI; a = -Ratio*yLoc; return;}
-		else { a = 0.; Phi = 0.; return;}
-	}
-	else if(xLoc > TolForZero)
-	{
-		if(yLoc > TolForZero) Phi = atan(Ratio*yLoc/xLoc);
-		else if(yLoc < -TolForZero) Phi = 4.*HalfPI + atan(Ratio*yLoc/xLoc);
-		else { a = xLoc; Phi = 0.; return;}
-	}
-	else if(xLoc < -TolForZero)
-	{
-		Phi = 2.*HalfPI + atan(Ratio*yLoc/xLoc);
-	}
-
-	a = xLoc/cos(Phi);
-}
+// radTg3d::FindEllipticCoordOfPoint REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-double radTg3d::EstimateLengthAlongEllipse(double a, double Ratio, double PhMin, double PhMax)
-{
-	const double PointsPerRad = 4./1.5708;
-	double DelPhi = PhMax - PhMin;
-	int Np = int(DelPhi*PointsPerRad) + 1;
-
-	double Buf = Np*0.5;
-	if((Buf - int(Buf)) < 0.4) Np++;
-	if(Np < 3) Np = 3;
-
-	double Inv_k = Ratio;
-	double Inv_ke2 = Inv_k*Inv_k;
-
-	double SinPh = sin(PhMin), CosPh = cos(PhMin);
-	double f0 = sqrt(SinPh*SinPh + Inv_ke2*CosPh*CosPh);
-	SinPh = sin(PhMax), CosPh = cos(PhMax);
-	double fn = sqrt(SinPh*SinPh + Inv_ke2*CosPh*CosPh);
-
-	double StPhi = DelPhi/(Np - 1);
-	double Phi = PhMin + StPhi;
-	double Sum1=0., Sum2=0.;
-	int nPass = (Np - 3) >> 1;
-	for(int k=0; k<nPass; k++)
-	{
-		SinPh = sin(Phi), CosPh = cos(Phi);
-		Sum1 += sqrt(SinPh*SinPh + Inv_ke2*CosPh*CosPh);
-		Phi += StPhi;
-		SinPh = sin(Phi), CosPh = cos(Phi);
-		Sum2 += sqrt(SinPh*SinPh + Inv_ke2*CosPh*CosPh);
-		Phi += StPhi;
-	}
-	SinPh = sin(Phi), CosPh = cos(Phi);
-	Sum1 += sqrt(SinPh*SinPh + Inv_ke2*CosPh*CosPh);
-	return 0.33333*StPhi*a*(f0 + fn + 4.*Sum1 + 2.*Sum2);
-}
+// radTg3d::EstimateLengthAlongEllipse REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
@@ -865,7 +387,7 @@ int radTg3d::CreateFromSym(radThg& In_hg, radTApplication* radPtr, char PutNewSt
 		{
 			pGroup->IsGroupMember = IsGroupMember;
 			pGroup->ConsiderOnlyWithTrans = ConsiderOnlyWithTrans;
-			pGroup->MessageChar = MessageChar;
+			// pGroup->MessageChar = MessageChar; REMOVED (Phase C, 2026-04-16)
 			In_hg = hgGroup;
 		}
 	}
