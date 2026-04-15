@@ -45,6 +45,7 @@ from ngsolve import *
 from netgen.occ import *
 from netgen.meshing import MeshingParameters
 import scipy.io as sio
+from radia.kelvin_source import kelvin_mu_factor_axisym_cf, build_material_cf
 
 # Import matplotlib for plotting
 import matplotlib
@@ -248,15 +249,17 @@ def solve_omega_formulation(mesh, fe_order):
     # Distance squared from exterior domain center (z-offset)
     rho_prime_sq = r_coord**2 + (z_coord - offset_z)**2
 
-    # Transformed permeability for exterior domain (Kelvin)
-    mu_kelvin = kelvin_radius**2 / (rho_prime_sq + 1e-20) * mu0
-
-    Mu_dict = {
-        "air_inner": mu0,
-        "air_outer": mu_kelvin,
-        "magnetic": mu_r * mu0
-    }
-    Mu = CoefficientFunction([Mu_dict[mat] for mat in mesh.GetMaterials()])
+    # Transformed permeability for exterior domain (Kelvin) via centralized helper
+    mu_kelvin_factor = kelvin_mu_factor_axisym_cf(
+        z_offset=offset_z, R=kelvin_radius,
+        r_coord=r_coord, z_coord=z_coord,
+    )
+    Mu = build_material_cf(
+        mesh, mu0, mu_kelvin_factor,
+        outer_keyword="air_outer",
+        overrides={"magnetic": mu_r * mu0},
+    )
+    mu_kelvin = mu0 * mu_kelvin_factor  # alias for post-processing
 
     # r-weight for axisymmetric formulation (same r for all domains with z-offset)
     r_weight = r_coord
@@ -967,9 +970,10 @@ while True:
 
     # --- Kelvin region (air_outer) ---
     # H_pert = grad(Orr)
-    # Using mu_kelvin for Kelvin-transformed region
-    rho_prime_sq_energy = x**2 + (y - offset_z)**2
-    mu_kelvin_energy = kelvin_radius**2 / (rho_prime_sq_energy + 1e-20) * mu0
+    # Using mu_kelvin for Kelvin-transformed region (centralized helper)
+    mu_kelvin_energy = mu0 * kelvin_mu_factor_axisym_cf(
+        z_offset=offset_z, R=kelvin_radius,
+    )
     H_pert_kelvin = grad(Orr_energy)
     W_kelvin = 2 * pi * 0.5 * Integrate(mu_kelvin_energy * InnerProduct(H_pert_kelvin, H_pert_kelvin) * r_weight,
                                          mesh, definedon=mesh.Materials("air_outer"))
