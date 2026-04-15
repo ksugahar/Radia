@@ -389,67 +389,7 @@ void radTSend::ArrayOfPairOfVect3d(radTVectPairOfVect3d* pVectPairOfVect3d)
 
 //-------------------------------------------------------------------------
 
-void radTSend::OutFieldForceOrTorqueThroughEnergyCompRes(char* ForceComponID, TVector3d& Vect, char ID)
-{// This is only for Force and Torque!
-	char* BufChar = ForceComponID;
-	//char* EqEmptyStr = (ID=='f')? "FxFyFz" : "TxTyTz";
-	//char EqEmptyStr[6];
-	char EqEmptyStr[10]; //OC150505
-	strncpy(EqEmptyStr, "TxTyTz", 9); EqEmptyStr[9] = '\0';
-	if(ID=='f') { strncpy(EqEmptyStr, "FxFyFz", 9); EqEmptyStr[9] = '\0'; }
-
-	char SmallID = ID;
-	char CapitalID = (SmallID=='f')? 'F' : 'T';
-
-	int ItemCount = 0;
-	if(*BufChar != '\0')
-	{
-		while (*BufChar != '\0')
-		{
-			char* BufChar_pl_1 = BufChar+1;
-			if((((*BufChar==CapitalID) || (*BufChar==SmallID)) &&
-			   (*(BufChar_pl_1)!='x') && (*(BufChar_pl_1)!='X') &&
-			   (*(BufChar_pl_1)!='y') && (*(BufChar_pl_1)!='Y') &&
-			   (*(BufChar_pl_1)!='z') && (*(BufChar_pl_1)!='Z')) ||
-			   (*BufChar == 'X') || (*BufChar == 'x') ||
-			   (*BufChar == 'Y') || (*BufChar == 'y') ||
-			   (*BufChar == 'Z') || (*BufChar == 'z')) ItemCount++;
-			BufChar++;
-		}
-		BufChar = ForceComponID;
-	}
-	else
-	{
-		BufChar = EqEmptyStr;
-		ItemCount = 3;
-	}
-
-//#ifdef __JAVA__
-#if defined __JAVA__ || defined ALPHA__DLL__ || defined ALPHA__LIB__
-
-	double TotOutArray[10];
-	double *t = TotOutArray;
-	int nv = 0;
-
-	while(*BufChar != '\0')
-	{
-		if((*(BufChar)==CapitalID) || (*(BufChar)==SmallID))
-		{
-			char* BufChar_pl_1 = BufChar+1;
-			if((*(BufChar_pl_1)!='x') && (*(BufChar_pl_1)!='X') &&
-			   (*(BufChar_pl_1)!='y') && (*(BufChar_pl_1)!='Y') &&
-			   (*(BufChar_pl_1)!='z') && (*(BufChar_pl_1)!='Z'))
-			{ *(t++) = Vect.x; *(t++) =Vect.y; *(t++) = Vect.z; nv += 3;}
-		}
-		else if((*(BufChar)=='X') || (*(BufChar)=='x')) { *(t++) = Vect.x; nv++;}
-		else if((*(BufChar)=='Y') || (*(BufChar)=='y')) { *(t++) = Vect.y; nv++;}
-		else if((*(BufChar)=='Z') || (*(BufChar)=='z')) { *(t++) = Vect.z; nv++;}
-		BufChar++;
-	}
-	int Dims[] = { nv};
-	MultiDimArrayOfDouble(TotOutArray, Dims, 1);
-#endif
-}
+// OutFieldForceOrTorqueThroughEnergyCompRes REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
 //-------------------------------------------------------------------------
 

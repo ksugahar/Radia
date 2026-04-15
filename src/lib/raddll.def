@@ -62,9 +62,7 @@ RadFldCmpPrc
 RadFldFrcShpRtg
 RadFldLenRndSw
 RadFldLenTol
-RadFldEnr
-RadFldEnrFrc
-RadFldEnrTrq
+; RadFldEnr / RadFldEnrFrc / RadFldEnrTrq REMOVED (Phase C, 2026-04-16)
 RadFldFrc
 RadFldInt
 RadFldPtcTrj

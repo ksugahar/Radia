@@ -17,7 +17,7 @@
 #include "rad_application.h"
 #include "rad_constants.h"  // Unified mathematical/physical constants
 #include "rad_extruded_polygon.h"
-#include "rad_subdivided_extruded_polygon.h"
+// #include "rad_subdivided_extruded_polygon.h" REMOVED (Phase C, 2026-04-16)
 #include "rad_geometry_3d_aux.h"
 
 //-------------------------------------------------------------------------
@@ -1002,119 +1002,7 @@ void radTExtrPolygon::B_intCompSpecCases(radTField* FieldPtr, const TSpecCaseID&
 
 //-------------------------------------------------------------------------
 
-int radTExtrPolygon::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-{
-	char SubdivideCoils = pSubdivOptions->SubdivideCoils;
-	char PutNewStuffIntoGenCont = pSubdivOptions->PutNewStuffIntoGenCont;
-
-	double LocSubdivArray[15];
-	for(int jj=0; jj<15; jj++) LocSubdivArray[jj] = SubdivArray[jj];
-
-	const double ZeroTol = 1.E-10;
-	if((pSubdivOptions->SubdivisionParamCode == 0) && (fabs(LocSubdivArray[0]-1.)<ZeroTol) && (fabs(LocSubdivArray[2]-1.)<ZeroTol) && (fabs(LocSubdivArray[4]-1.)<ZeroTol)) return 1;
-
-	radTSend Send;
-	if((pSubdivOptions->SubdivisionFrame != 0) && (!g3dListOfTransform.empty())) 
-	{
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) // PutNewStuffIntoGenCont is only necessary for "to replace in all groups"
-		{
-			Send.ErrorMessage("Radia::Error108"); return 0;
-		}
-		radThg OldNewHandle = NewHandle;
-		int SubdOK = ((radTPolyhedron*)(OldNewHandle.rep))->SubdivideItself(LocSubdivArray, NewHandle, radPtr, pSubdivOptions);
-		if(!SubdOK) return 0;
-		return 1;
-	}
-
-	double &kx = LocSubdivArray[0];
-	double &qx = LocSubdivArray[1];
-	if(pSubdivOptions->SubdivisionParamCode == 1)
-	{
-		kx = (kx < Thickness)? Round(Thickness/kx) : 1.;
-	}
-
-	radTGroup* GroupInPlaceOfThisPtr = new radTSubdividedExtrPolygon(this, LocSubdivArray);
-	radThg NewHandle(GroupInPlaceOfThisPtr);
-
-	TVector2d OldBaseFirstEdgePoi = ((radTPolygon*)(BasePolygonHandle.rep))->EdgePointsVector[0];
-
-	const double AbsZeroTol = 5.E-12;
-	double q0x = (fabs(kx-1.)>AbsZeroTol)? pow(qx, 1./(kx-1.)) : qx;
-	double BufX = qx*q0x - 1.;
-	double a1x = (fabs(BufX) > AbsZeroTol)? Thickness*(q0x - 1.)/BufX : Thickness/kx;
-
-	double SubdArrayForBase[] = { LocSubdivArray[2], LocSubdivArray[3], LocSubdivArray[4], LocSubdivArray[5]};
-
-	radThg GrInPlaceOfBasePgnHandle = BasePolygonHandle;
-// Maybe duplicate the base first ?
-	int SubdOK = ((radTPolygon*)(BasePolygonHandle.rep))->SubdivideItself(SubdArrayForBase, GrInPlaceOfBasePgnHandle, radPtr, pSubdivOptions);
-	if(!SubdOK) return 0;
-
-	short BaseReallySubdivided = (GrInPlaceOfBasePgnHandle.rep != BasePolygonHandle.rep)? 1 : 0;
-
-	int NewStuffCounter = 0;
-	if(BaseReallySubdivided)
-	{
-		radTGroup* GrInPlaceOfBasePgnPtr = (radTGroup*)(GrInPlaceOfBasePgnHandle.rep);
-		for(radTmhg::const_iterator iter = GrInPlaceOfBasePgnPtr->GroupMapOfHandlers.begin();
-			iter != GrInPlaceOfBasePgnPtr->GroupMapOfHandlers.end(); ++iter)
-		{
-			radThg NewBasePgnHandle = (*iter).second;
-			radTPolygon* NewBasePgnPtr = (radTPolygon*)(NewBasePgnHandle.rep);
-
-			TVector2d AddForFirstPoi = NewBasePgnPtr->EdgePointsVector[0] - OldBaseFirstEdgePoi;
-			TVector3d NewFirstPoint(FirstPoint.x, FirstPoint.y + AddForFirstPoi.x, FirstPoint.z + AddForFirstPoi.y);
-
-			double NewThickness = a1x;
-
-			for(int ix=0; ix<int(kx); ix++)
-			{
-				if(!NewBasePgnPtr->DuplicateItself(NewBasePgnHandle, radPtr, PutNewStuffIntoGenCont)) return 0;
-
-				radThg hg(new radTExtrPolygon(NewFirstPoint, ParallelToX, NewThickness, NewBasePgnHandle, Magn, MaterHandle));
-				if(PutNewStuffIntoGenCont) GroupInPlaceOfThisPtr->AddElement(radPtr->AddElementToContainer(hg), hg);
-				else GroupInPlaceOfThisPtr->AddElement(++NewStuffCounter, hg);
-
-				NewFirstPoint.x += NewThickness;
-				NewThickness *= q0x;
-			}
-			if(PutNewStuffIntoGenCont)
-			{
-				short OldSendingIsRequired = radPtr->SendingIsRequired;
-				radPtr->SendingIsRequired = 0;
-				radPtr->DeleteElement(radPtr->RetrieveElemKey(NewBasePgnPtr));
-				radPtr->SendingIsRequired = OldSendingIsRequired;
-			}
-		}
-	}
-	else
-	{
-		radThg NewBasePgnHandle = BasePolygonHandle;
-		radTPolygon* NewBasePgnPtr = (radTPolygon*)(NewBasePgnHandle.rep);
-		TVector2d AddForFirstPoi = NewBasePgnPtr->EdgePointsVector[0] - OldBaseFirstEdgePoi;
-
-		TVector3d NewFirstPoint(FirstPoint.x, FirstPoint.y + AddForFirstPoi.x, FirstPoint.z + AddForFirstPoi.y);
-		double NewThickness = a1x;
-
-		for(int ix=0; ix<int(kx); ix++)
-		{
-			if(!NewBasePgnPtr->DuplicateItself(NewBasePgnHandle, radPtr, PutNewStuffIntoGenCont)) return 0;
-
-			radThg hg(new radTExtrPolygon(NewFirstPoint, ParallelToX, NewThickness, NewBasePgnHandle, Magn, MaterHandle));
-			if(PutNewStuffIntoGenCont) GroupInPlaceOfThisPtr->AddElement(radPtr->AddElementToContainer(hg), hg);
-			else GroupInPlaceOfThisPtr->AddElement(++NewStuffCounter, hg);
-
-			NewFirstPoint.x += NewThickness;
-			NewThickness *= q0x;
-		}
-	}
-	((radTSubdividedExtrPolygon*)GroupInPlaceOfThisPtr)->AmOfSubElem = (int)(GroupInPlaceOfThisPtr->GroupMapOfHandlers.size());
-
-	In_hg = NewHandle;
-	return 1;
-}
+// radTExtrPolygon::SubdivideItself REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
@@ -1215,8 +1103,7 @@ int radTExtrPolygon::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr,
 
 	PolyhedronPtr->CentrPoint = CentrPoint; // For full compatibility
 
-	PolyhedronPtr->HandleAuxCompData = HandleAuxCompData;
-	PolyhedronPtr->MessageChar = MessageChar;
+	// HandleAuxCompData / MessageChar copy REMOVED (Phase C, 2026-04-16)
 
 	radThg NewHandle(PolyhedronPtr);
 	In_hg = NewHandle;
@@ -1227,67 +1114,7 @@ int radTExtrPolygon::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr,
 
 //-------------------------------------------------------------------------
 
-int radTExtrPolygon::FindLowestAndUppestVertices(TVector3d& PlanesNormal, radTSubdivOptions* pSubdivOptions, 
-	TVector3d& LowestVertexPoint, TVector3d& UppestVertexPoint, radTrans& Trans, char& TransWasSet, char& Ignore)
-{
-	short SubdInLocFrame = (pSubdivOptions->SubdivisionFrame == 0)? 1 : 0;
-
-	Ignore = 0;
-	TransWasSet = 0;
-	TVector3d& ActualPlanesNormal = PlanesNormal;
-	if(!SubdInLocFrame)
-	{
-		radTrans ResTransf;
-		short SomethingFound = 0;
-		FindResTransfWithMultOne(ResTransf, SomethingFound);
-		if(SomethingFound) 
-		{
-			ActualPlanesNormal = ResTransf.TrBiPoint_inv(ActualPlanesNormal);
-			Trans = ResTransf;
-			TransWasSet = 1;
-		}
-	}
-	else if(ConsiderOnlyWithTrans)
-	{
-		radTrans ResTransf;
-		short SomethingFound = 0;
-		FindInnerTransfWithMultOne(ResTransf, SomethingFound);
-		if(SomethingFound) 
-		{
-			ActualPlanesNormal = ResTransf.TrBiPoint_inv(ActualPlanesNormal);
-			Trans = ResTransf;
-			TransWasSet = 1;
-		}
-	}
-
-	TVector3d LowestPo = (1.E+23)*PlanesNormal, UppestPo = (-1.E+23)*PlanesNormal;
-
-	radTPolygon* BasePgnPtr = (radTPolygon*)(BasePolygonHandle.rep);
-	int AmOfEdgePoInBase = BasePgnPtr->AmOfEdgePoints;
-	radTVect2dVect& BasePgnEdgePointsVector = BasePgnPtr->EdgePointsVector;
-
-	TVector3d TestLoV, TestUpV;
-	int AmOfEdgePoInBase_mi_1 = AmOfEdgePoInBase - 1;
-	for(int k=0; k<AmOfEdgePoInBase; k++)
-	{
-		TVector2d& CurBasePo = BasePgnEdgePointsVector[k];
-		TVector3d TestPo1(FirstPoint.x, CurBasePo.x, CurBasePo.y);
-		TVector3d TestPo2(FirstPoint.x + Thickness, CurBasePo.x, CurBasePo.y);
-
-		TestLoV = TestPo1 - LowestPo;
-		TestUpV = TestPo1 - UppestPo;
-		if(TestLoV*ActualPlanesNormal < 0.) LowestPo = TestPo1;
-		if(TestUpV*ActualPlanesNormal > 0.) UppestPo = TestPo1;
-
-		TestLoV = TestPo2 - LowestPo;
-		TestUpV = TestPo2 - UppestPo;
-		if(TestLoV*ActualPlanesNormal < 0.) LowestPo = TestPo2;
-		if(TestUpV*ActualPlanesNormal > 0.) UppestPo = TestPo2;
-	}
-	LowestVertexPoint = LowestPo;
-	UppestVertexPoint = UppestPo;
-	return 1;
-}
+// radTExtrPolygon::FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 

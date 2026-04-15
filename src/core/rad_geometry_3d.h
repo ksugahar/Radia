@@ -42,111 +42,10 @@ class radTField;
 
 //-------------------------------------------------------------------------
 
-struct radTAuxCompDataG3D {
-	TVector3d Force, Torque;
-	double Energy;
-	char SubdNeedInd;
-
-	radTAuxCompDataG3D() { SubdNeedInd = 0;}
-	~radTAuxCompDataG3D() {}
-
-	void MarkSubdNeed(char SubdNeedX, char SubdNeedY, char SubdNeedZ)
-	{// This accepts only 0 or 1
-		char SubdNeedX_Code = SubdNeedX << 2;
-		char SubdNeedY_Code = SubdNeedY << 1;
-		SubdNeedInd = SubdNeedX_Code | SubdNeedY_Code | SubdNeedZ;
-	}
-	void MarkSubdNeed1D(char SubdNeed, char XorYorZ)
-	{// This accepts only 0 or 1
-		char SubdNeedCode, OtherSubdNeed;
-		if(XorYorZ == 'x')
-		{
-			SubdNeedCode = SubdNeed << 2;
-			OtherSubdNeed = SubdNeedInd & 3;
-		}
-		else if(XorYorZ == 'y')
-		{
-			SubdNeedCode = SubdNeed << 1;
-			OtherSubdNeed = SubdNeedInd & 5;
-		}
-		else if(XorYorZ == 'z')
-		{
-			SubdNeedCode = SubdNeed;
-			OtherSubdNeed = SubdNeedInd & 6;
-		}
-		SubdNeedInd = SubdNeedCode | OtherSubdNeed;
-	}
-	void ShowSubdNeed(char& SubdNeedX, char& SubdNeedY, char& SubdNeedZ)
-	{// This gives 0 or 1
-		SubdNeedZ = SubdNeedInd & 1;
-		SubdNeedY = (SubdNeedInd >> 1) & 1;
-		SubdNeedX = SubdNeedInd >> 2;
-	}
-	void ShowSubdNeed1D(char& SubdNeed, char XorYorZ)
-	{
-		if(XorYorZ == 'x') SubdNeed = SubdNeedInd >> 2;
-		else if(XorYorZ == 'y') SubdNeed = (SubdNeedInd >> 1) & 1;
-		else if(XorYorZ == 'z') SubdNeed = SubdNeedInd & 1;
-	}
-	inline void StoreDataFromField(radTField*);
-	inline void PutStoredDataToField(radTField*);
-};
+// radTAuxCompDataG3D / radTSubdivOptions / radTCylindricSubdivSpec REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-struct radTSubdivOptions {
-	char SubdivisionFrame; // 0- Local; 1- Laboratory, Group as whole; 2- Laboratory, Group Members individually;
-	char SubdivisionParamCode; // 0- kx,ky,kz are subdiv. numbers; 1- kx,ky,kz are average sizes of pieces;
-	char SubdivideCoils; // 0- do not subdivide coils; 1- subdivide coils;
-	char PutNewStuffIntoGenCont; // 0- do not put; 1- put;
-	char ReplaceOldStuff;
-	char SeparatePiecesAtCutting; // 0- do not separate; 1- separate;
-	char MapInternalFacesAfterCut;
-	char MethForRadialSegmAtEllCylSubd; // 0- Radial segmentation based on position of point defining the Ellipse axis; 1- Radial segmentation based on dimensions of the object with respect to the Elliptic cylinder of subdivision;
-
-	radTSubdivOptions() { SeparatePiecesAtCutting = 0; MapInternalFacesAfterCut = 1;}
-};
-
-//-------------------------------------------------------------------------
-
-struct radTCylindricSubdivSpec {
-	TVector3d PointOnCylAx, CylAxVect;
-	TVector3d PointOnEllAx;
-	double EllAxRatio;
-	char EllAxNotDefined;
-
-	radTCylindricSubdivSpec(double* SubdivSpecData, int LenSubdivSpecData) 
-	{
-		if(LenSubdivSpecData == 0) return;
-		PointOnCylAx.x = *(SubdivSpecData++);
-		PointOnCylAx.y = *(SubdivSpecData++);
-		PointOnCylAx.z = *(SubdivSpecData++);
-		CylAxVect.x = *(SubdivSpecData++);
-		CylAxVect.y = *(SubdivSpecData++);
-		CylAxVect.z = *(SubdivSpecData++);
-		if(LenSubdivSpecData > 6)
-		{
-			PointOnEllAx.x = *(SubdivSpecData++);
-			PointOnEllAx.y = *(SubdivSpecData++);
-			PointOnEllAx.z = *(SubdivSpecData++);
-			EllAxRatio = *SubdivSpecData;
-			EllAxNotDefined = 0;
-		}
-		else
-		{
-			PointOnEllAx = PointOnCylAx;
-			EllAxRatio = 1.;
-			EllAxNotDefined = 1;
-		}
-		double InvLen = 1./sqrt(CylAxVect.x*CylAxVect.x + CylAxVect.y*CylAxVect.y + CylAxVect.z*CylAxVect.z);
-		CylAxVect = InvLen*CylAxVect;
-	}
-	radTCylindricSubdivSpec() {}
-};
-
-//-------------------------------------------------------------------------
-
-using radTHandleAuxCompDataG3D = radTHandle<radTAuxCompDataG3D>;
 class radTApplication;
 class radTField;
 struct radTFieldKey;
@@ -162,8 +61,7 @@ public:
 	char ConsiderOnlyWithTrans;
 	TVector3d CentrPoint; //moved from derived classes OC061008
 
-	radTHandleAuxCompDataG3D HandleAuxCompData;
-	char MessageChar; 
+	// HandleAuxCompData / MessageChar REMOVED (Phase C, 2026-04-16, energy/subdivide gone)
 	//double gCurrentScaleCoef; //required for current-carrying objects?
 
 	radTg3d() 
@@ -195,33 +93,9 @@ public:
 	virtual void B_intComp(radTField*) {}
 	void B_intCompFinNum(radTField*);
 
-	void EnergyForceTorqueComp(radTField*);
-	void ActualEnergyForceTorqueComp(radTField*);
-	void NestedFor_Energy(radTField*, const radTlphg::iterator&);
-	void Energy_Or_NestedFor(radTField* FieldPtr, const radTlphg::iterator& Iter)
-	{
-		if(Iter == g3dListOfTransform.end()) SimpleEnergyComp(FieldPtr);
-		else NestedFor_Energy(FieldPtr, Iter);
-	}
-	void CreateAuxCompData() { HandleAuxCompData = radTHandleAuxCompDataG3D(new radTAuxCompDataG3D());}
-	void EnergyForceTorqueCompAutoDestSubd(radTField*);
-	char CheckIfMoreEnrFrcTrqCompNeededAndUpdate(radTField*, radTField*);
-	virtual void SimpleEnergyComp(radTField*) {}
-	virtual int NextStepEnergyForceTorqueComp(double*, radThg&, radTField*, char&);
-	virtual void ActualEnergyForceTorqueCompWithAdd(radTField*);
-	virtual int ProceedNextStepEnergyForceTorqueComp(double*, radThg&, radTField*, radTField*, char&, char);
-	virtual void MarkFurtherSubdNeed(char SubdNeedX, char SubdNeedY, char SubdNeedZ)
-	{// This is for everything except for Groups and their childs.
-		if(HandleAuxCompData.rep != 0) HandleAuxCompData.rep->MarkSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
-	}
-	virtual void MarkFurtherSubdNeed1D(char SubdNeed, char XorYorZ)
-	{// This is for everything except for Groups and their childs.
-		if(HandleAuxCompData.rep != 0) HandleAuxCompData.rep->MarkSubdNeed1D(SubdNeed, XorYorZ);
-	}
-	virtual void SetupFurtherSubdInd(char InSubdInd)
-	{
-		if(HandleAuxCompData.rep != 0) HandleAuxCompData.rep->SubdNeedInd = InSubdInd;
-	}
+	// EnergyForceTorqueComp / NestedFor_Energy / SimpleEnergyComp / MarkFurtherSubdNeed* / SetupFurtherSubdInd
+	// CreateAuxCompData / CheckIfMoreEnrFrcTrqCompNeededAndUpdate / Next+ProceedNextStepEnergyForceTorqueComp
+	// REMOVED (Phase C, 2026-04-16)
 
 	void NormStressTensor(radTField*);
 
@@ -233,16 +107,9 @@ public:
 	void NestedFor_IntOverShape(radTField*, const radTlphg::iterator&);
 	virtual void IntOverShape(radTField*) {}
 
-	virtual int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*) { return 1;}
-	virtual int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*) { return 1;}
-	virtual int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*) { return 1;}
-	virtual int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*) { return 1;}
-	void CheckAxesExchangeForSubdInLabFrame(double*, char&);
-	int TransferSubdivisionStructToLocalFrame(TVector3d&, TVector3d*, int, radTSubdivOptions*, TVector3d&, TVector3d*&);
+	// SubdivideItself* / CutItself / CheckAxesExchangeForSubdInLabFrame / TransferSubdivisionStructToLocalFrame
+	// FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
 	virtual int ConvertToPolyhedron(radThg&, radTApplication*, char) { return 0;} // 0 is essential
-	virtual int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&) { return 1;}
-
-	virtual int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*) { return 1;}
 
 	int FinishDuplication(radTg3d* g3dPtr, radThg& hg)
 	{
@@ -279,8 +146,7 @@ public:
 	constexpr double Sign(double x) { return (x<0.)? -1. : 1.;}
 	constexpr double Step(double x) { return (x>0.)? 1. : 0.;}
 
-	void FindEllipticCoordOfPoint(radTCylindricSubdivSpec*, TVector3d&, double&, double&);
-	double EstimateLengthAlongEllipse(double, double, double, double);
+	// FindEllipticCoordOfPoint / EstimateLengthAlongEllipse REMOVED (Phase C, 2026-04-16)
 	inline char AngleIsBetween(double, double, double);
 	inline double AngularDifference(double, double);
 
@@ -311,7 +177,7 @@ public:
 		else return false;
 	}
 
-	virtual void SetMessageChar(char InMessageChar) { MessageChar = InMessageChar;}
+	// SetMessageChar REMOVED (Phase C, 2026-04-16, MessageChar gone)
 };
 
 //-------------------------------------------------------------------------
@@ -404,19 +270,7 @@ struct radTStructForShapeInt {
 
 //-------------------------------------------------------------------------
 
-struct radTStructForEnergyForceTorqueComp {
-	radThg hSource, hDest;
-	double* DestSubdivArray;
-	radTApplication* radPtr;
-	char AutoDestSubdivision;
-	char SomethingIsWrong;
-
-	radTStructForEnergyForceTorqueComp() { SomethingIsWrong = 0;}
-};
-
-//-------------------------------------------------------------------------
-
-using radTHandleStructForEnergyForceTorqueComp = radTHandle<radTStructForEnergyForceTorqueComp>;
+// radTStructForEnergyForceTorqueComp / radTHandleStructForEnergyForceTorqueComp REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
@@ -430,7 +284,7 @@ public:
 	radTFieldKey FieldKey;
 	radTCompCriterium CompCriterium;
 
-	radTHandleStructForEnergyForceTorqueComp HandleEnergyForceTorqueCompData;
+	// HandleEnergyForceTorqueCompData REMOVED (Phase C, 2026-04-16)
 	radTStructForShapeInt* ShapeIntDataPtr;
 
 	radTField(const radTFieldKey& InFieldKey, const radTCompCriterium& InCompCriterium, 
@@ -459,17 +313,8 @@ public:
 		Phi = Energy = 0.;
 		PointIsInsideFrame = 0;
 	}
-	radTField(const radTFieldKey& InFieldKey, const radTCompCriterium& InCompCriterium, 
-			  radTHandleStructForEnergyForceTorqueComp& InHandleEnergyForceTorqueCompData)
-	{// This is used in NestedFor_IntOverShape
-		FieldKey = InFieldKey; CompCriterium = InCompCriterium; 
-		HandleEnergyForceTorqueCompData = InHandleEnergyForceTorqueCompData;
-		TVector3d ZeroVect(0.,0.,0.);
-		B = H = A = M = J = Ib = Ih = Force = Torque = ZeroVect; // Add here more members should they appear
-		Phi = Energy = 0.;
-		PointIsInsideFrame = 0;
-	}
-	radTField(const radTFieldKey& InFieldKey, const TVector3d& InP, const TVector3d& InB, 
+	// radTField(const radTFieldKey&, const radTCompCriterium&, radTHandleStructForEnergyForceTorqueComp&) REMOVED (Phase C, 2026-04-16)
+	radTField(const radTFieldKey& InFieldKey, const TVector3d& InP, const TVector3d& InB,
 			  const TVector3d& InH, const TVector3d& InA, const TVector3d& InM, const TVector3d& InJ, double InPhi =0.)
 	{ 
 		FieldKey = InFieldKey;
@@ -666,18 +511,9 @@ public:
 	int Type_g3d() { return 1;}
 	virtual int Type_g3dRelax() { return 0;}
 
-	void SimpleEnergyComp(radTField* FieldPtr)
-	{
-		const double PI = 3.14159265358979;
-		const double ConstForM = -1./(4.*PI*100.);
-		radTFieldKey LocFieldKey; LocFieldKey.B_ = 1;
-		radTField LocField(LocFieldKey, FieldPtr->CompCriterium);
-		LocField.P = CentrPoint;
-		((radTg3d*)(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep))->B_genComp(&LocField);
-		FieldPtr->Energy += (ConstForM*Volume())*(Magn*LocField.B);
-	}
+	// SimpleEnergyComp REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
-	int SetMaterial(radThg& InMatHandle, radTApplication*) 
+	int SetMaterial(radThg& InMatHandle, radTApplication*)
 	{
 		MaterHandle = InMatHandle;
 		radTMaterial* MaterPtr = (radTMaterial*)(MaterHandle.rep);
@@ -860,23 +696,7 @@ inline void radTg3d::GetTrfAndCenPointInLabFrame(radTrans* pInBaseTrans, radTran
 
 //-------------------------------------------------------------------------
 
-inline void radTAuxCompDataG3D::StoreDataFromField(radTField* FieldPtr)
-{
-	radTFieldKey &FieldKey = FieldPtr->FieldKey;
-	if(FieldKey.Energy_) Energy = FieldPtr->Energy;
-	if(FieldKey.ForceEnr_) Force = FieldPtr->Force;
-	if(FieldKey.Torque_) Torque = FieldPtr->Torque;
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTAuxCompDataG3D::PutStoredDataToField(radTField* FieldPtr)
-{
-	radTFieldKey &FieldKey = FieldPtr->FieldKey;
-	if(FieldKey.Energy_) FieldPtr->Energy = Energy;
-	if(FieldKey.ForceEnr_) FieldPtr->Force = Force;
-	if(FieldKey.Torque_) FieldPtr->Torque = Torque;
-}
+// radTAuxCompDataG3D::StoreDataFromField / PutStoredDataToField REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 

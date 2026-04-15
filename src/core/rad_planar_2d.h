@@ -248,10 +248,7 @@ public:
 		return FinishDuplication(new radTPolygon(*this), hg);
 	}
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideBySetOfParallelLines(const TVector2d&, TVector2d*, int, radTvhg&);
-	void FindStPointsForIntrsctLines(const TVector2d&, const TVector2d&, double, double, double, double, TVector2d*, TVector2d*);
-	void FillInIntrsctInfoStruct(const TVector2d&, const TVector2d*, int, radTPolyg2dIntrsctInfoVect*, radTPolyg2dIntrsctInfoVect*, double&);
+	// SubdivideItself / SubdivideBySetOfParallelLines / FindStPointsForIntrsctLines / FillInIntrsctInfoStruct REMOVED (Phase C, 2026-04-16)
 	void IntrsctOfTwoLines(const TVector2d&, const TVector2d&, const TVector2d&, const TVector2d&, TVector2d&, TLinesIntrsctCase&);
 	void IntrsctOfTwoLines2(const TVector2d&, const TVector2d&, const TVector2d&, const TVector2d&, TVector2d&, TLinesIntrsctCase&);
 	void ComputeCentrPoint(short&);

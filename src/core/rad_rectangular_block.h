@@ -102,29 +102,7 @@ public:
 	double Volume() { return Dimensions.x*Dimensions.y*Dimensions.z;}
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);
 
-	void SimpleEnergyComp(radTField* FieldPtr)
-	{
-		// Energy computation in SI units (Radia now uses meters internally, matching ELF)
-		// E_M = -integral(M . B) dV = -M . B * Volume (for uniform M, B)
-		// E_J = -integral(J . A) dV = -J . A * Volume (for uniform J, A)
-		// M in A/m, B in T -> M.B in T*A/m = J/m^3
-		// J in A/m^2, A in T*m -> J.A in T*A/m = J/m^3
-		// Volume in m^3 -> Energy in Joules
-		const double PI = 3.14159265358979;
-		const double ConstForM = -1.0;  // SI units: -M . B * Volume
-		const double ConstForJ = -1.0;  // SI units: -J . A * Volume
-		const double MagnCurDensTol = 1.E-09;
-		char LocJ_IsNotZero = Abs(J.x)>MagnCurDensTol || Abs(J.y)>MagnCurDensTol || Abs(J.z)>MagnCurDensTol || J_IsNotZero;
-		char LocM_IsNotZero = Abs(Magn.x)>MagnCurDensTol || Abs(Magn.y)>MagnCurDensTol || Abs(Magn.z)>MagnCurDensTol;
-		radTFieldKey LocFieldKey;
-		if(LocM_IsNotZero) LocFieldKey.B_ = 1;
-		if(LocJ_IsNotZero) LocFieldKey.A_ = 1;
-		radTField LocField(LocFieldKey, FieldPtr->CompCriterium);
-		LocField.P = CentrPoint;
-		((radTg3d*)(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep))->B_genComp(&LocField);
-		if(LocM_IsNotZero) FieldPtr->Energy += (ConstForM*Volume())*(Magn*LocField.B);
-		if(LocJ_IsNotZero) FieldPtr->Energy += (ConstForJ*Volume())*(J*LocField.A);
-	}
+	// SimpleEnergyComp REMOVED (Phase C, 2026-04-16, energy-based API gone)
 	void UniformlyDistrPoints(double* q, TVector3d& P)
 	{// This is not used
 		P.x = CentrPoint.x + Dimensions.x*((*(q++))-0.5); 
@@ -142,44 +120,7 @@ public:
 		return FinishDuplication(new radTRecMag(*this), hg);
 	}
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*);
-	int SubdivideItselfByPlanesParToFace(short, TVector3d*, int, radThg&, radTApplication*, char, char);
-	int SubdivideItselfByParPlanes(double* SubdivArray, int AmOfDir, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-	{
-		char ThereIsCurrent = (J.x!=0. || J.y!=0. || J.z!=0. || J_IsNotZero);
-		if(ThereIsCurrent)
-		{
-			radTSend Send;
-			if(pSubdivOptions->SubdivideCoils) { Send.ErrorMessage("Radia::Error109"); return 0;}
-			else return 1;
-		}
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) return 0;
-		OldHandle = NewHandle;
-		if(!((radTg3d*)(OldHandle.rep))->SubdivideItselfByParPlanes(SubdivArray, AmOfDir, NewHandle, radPtr, pSubdivOptions)) return 0;
-		return 1;
-	}
-	int SubdivideItselfByEllipticCylinder(double* SubdivArray, radTCylindricSubdivSpec* pSubdivSpec, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-	{ 
-		char ThereIsCurrent = (J.x!=0. || J.y!=0. || J.z!=0. || J_IsNotZero);
-		if(ThereIsCurrent)
-		{
-			radTSend Send;
-			if(pSubdivOptions->SubdivideCoils) { Send.ErrorMessage("Radia::Error109"); return 0;}
-			else return 1;
-		}
-		radThg& NewHandle = In_hg;
-		radThg OldHandle = In_hg;
-		if(!((radTg3d*)(OldHandle.rep))->ConvertToPolyhedron(NewHandle, radPtr, pSubdivOptions->PutNewStuffIntoGenCont)) return 0;
-		OldHandle = NewHandle;
-		if(!((radTg3d*)(OldHandle.rep))->SubdivideItselfByEllipticCylinder(SubdivArray, pSubdivSpec, NewHandle, radPtr, pSubdivOptions)) return 0;
-		return 1;
-	}
-
-	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
-	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&);
+	// SubdivideItself* / CutItself / FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
 
 	int SetMaterial(radThg& InMatHandle, radTApplication* ApPtr) 
 	{ 
@@ -200,7 +141,7 @@ public:
 	int SizeOfThis() { return sizeof(radTRecMag);}
 
 	int ConvertToPolyhedron(radThg&, radTApplication*, char);
-	void CheckVertexPtsPositionsWithRespectToPlane(TVector3d*, char&);
+	// CheckVertexPtsPositionsWithRespectToPlane REMOVED (Phase C, 2026-04-16)
 
 	void DefineRelAndAbsTol(double* RelAbsTol)
 	{
