@@ -99,7 +99,7 @@ def test_kelvin_map_on_sphere():
 
 
 def test_scalar_factor_at_sphere_boundary():
-    """Kelvin factor (R/rho')^2 = 1 at rho' = R."""
+    """Kelvin factor (rho'/R)^2 = 1 at rho' = R."""
     from kelvin_source import kelvin_factor_scalar
 
     center = np.array([0.0, 0.0, 0.0])
@@ -140,11 +140,11 @@ def test_A_s_kelvin_pathway():
     print(f"  inner A match: err = {err_in:.2e}")
     assert err_in < 1e-12
 
-    # Kelvin exterior domain: expected = A(physical_equivalent) * (R/rho')^2
+    # Kelvin exterior domain: expected = A(physical_equivalent) * (rho'/R)^2
     A_at_phys = biot_savart_A_at_points(p_out_phys.reshape(1, 3),
                                          paths, currents, n_quad=8)[0]
     rho_prime = np.linalg.norm(p_out_kelvin_ext - offset)
-    factor = (R_kelvin / rho_prime) ** 2
+    factor = (rho_prime / R_kelvin) ** 2
     expected = A_at_phys * factor
     err_sh = np.max(np.abs(A_full[1] - expected))
     rel_sh = err_sh / np.max(np.abs(expected))
@@ -182,7 +182,7 @@ def test_pullback_equals_scalar_for_uniform_A():
 
 
 def test_pullback_flips_radial_sign():
-    """Pure radial A: pullback flips sign and applies (R/rho')^2."""
+    """Pure radial A: pullback flips sign and applies (rho'/R)^2."""
     from kelvin_source import kelvin_pullback_vector, kelvin_factor_scalar
 
     center = np.array([0.15, 0.0, 0.0])
