@@ -476,58 +476,76 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
                 nc[v.nr] += 1
         q_arr = np.where(nc > 0, q_arr / nc, 0.0)
 
-        gf_q = GridFunction(solver.fes)
-        gf_q.vec.FV().NumPy()[:solver.mesh.nv] = q_arr
+        # Phase B: compute + save the four scalar fields displayed in GMSH
+        # as individual .vol + .sol pairs, then vol2msh() to combine.
+        # Values all use the same formula and Re_Zs so the saved file
+        # exactly matches what GMSH renders.
+        Im_Zs = float(Z_s.imag)
+
+        def _elemwise_cf_to_vertex_array(cf):
+            """Integrate `cf` per element, divide by area, vertex-average."""
+            arr = np.zeros(solver.mesh.nv)
+            nc_local = np.zeros(solver.mesh.nv)
+            elem_val = Integrate(cf, solver.mesh, BND, element_wise=True)
+            for el in solver.mesh.Elements(BND):
+                a = max(abs(float(elem_area[el.nr])), 1e-30)
+                v_elem = float(elem_val[el.nr]) / a
+                for vtx in el.vertices:
+                    arr[vtx.nr] += v_elem
+                    nc_local[vtx.nr] += 1
+            return np.where(nc_local > 0, arr / nc_local, 0.0)
+
+        from ngsolve import sqrt
+        H_t_cf = sqrt(H_t_sq_cf)
+        P_cf = 0.5 * Re_Zs * H_t_sq_cf
+        Q_cf = 0.5 * Im_Zs * H_t_sq_cf
+
+        Ht_arr = _elemwise_cf_to_vertex_array(H_t_cf)
+        P_arr = _elemwise_cf_to_vertex_array(P_cf)
+        Q_arr = _elemwise_cf_to_vertex_array(Q_cf)
+
+        # All four fields live on solver.mesh (the BEM surface). Save as
+        # H1 order=1 scalar GridFunctions so vol2msh can reload them.
+        from gmsh_post_export import save_vol_sol_pair, vol2msh
+
+        def _save_scalar(arr, sol_path):
+            gf = GridFunction(H1(solver.mesh, order=1))
+            gf.vec.FV().NumPy()[:len(arr)] = arr
+            gf.Save(sol_path)
 
         wp_vol_path = os.path.join(base_dir, "workpiece.vol").replace("\\", "/")
         q_sol_path = os.path.join(base_dir, "q_heating.sol").replace("\\", "/")
-        # Save the BEM surface mesh (solver.mesh), NOT the full volume mesh
-        solver.mesh.ngmesh.Save(wp_vol_path)
-        gf_q.Save(q_sol_path)
-        progress("SAVE", f"workpiece.vol + q_heating.sol")
+        ht_sol_path = os.path.join(base_dir, "H_t.sol").replace("\\", "/")
+        p_sol_path = os.path.join(base_dir, "P_loss.sol").replace("\\", "/")
+        q_react_sol_path = os.path.join(base_dir, "Q_reactive.sol").replace("\\", "/")
+
+        gf_q = GridFunction(H1(solver.mesh, order=1))
+        gf_q.vec.FV().NumPy()[:len(q_arr)] = q_arr
+        save_vol_sol_pair(wp_vol_path, q_sol_path,
+                           solver.mesh.ngmesh, gf_q)
+        _save_scalar(Ht_arr, ht_sol_path)
+        _save_scalar(P_arr, p_sol_path)
+        _save_scalar(Q_arr, q_react_sol_path)
+        progress("SAVE", "workpiece.vol + q_heating.sol + H_t.sol + "
+                          "P_loss.sol + Q_reactive.sol")
     except Exception as e:
         wp_vol_path = ""
         q_sol_path = ""
         sys.stderr.write(f"SOL save failed: {e}\n")
         sys.stderr.flush()
 
-    # === 5. GMSH output (optional) ===
+    # === 5. GMSH output via the shared vol2msh converter ===
     gmsh_file = ""
-    if msh_output:
+    if msh_output and wp_vol_path:
         try:
-            from gmsh_post_export import GmshPostExport
-            post = GmshPostExport(mesh, boundary=(mesh.ne > 0))
-
-            phi_vec = result['phi_vec']
-            from ngsolve import GridFunction, grad, Norm, sqrt
-
-            gf_phi_re = GridFunction(solver.fes)
-            gf_phi_re.vec.FV().NumPy()[:] = phi_vec.real
-            gf_phi_im = GridFunction(solver.fes)
-            gf_phi_im.vec.FV().NumPy()[:] = phi_vec.imag
-
-            # |H_t|^2 = |grad phi_re|^2 + |grad phi_im|^2
-            H_t_sq = Norm(grad(gf_phi_re))**2 + Norm(grad(gf_phi_im))**2
-            H_t_cf = sqrt(H_t_sq)
-
-            # P_loss [W/m^2] = 0.5 * Re(Z_s) * |H_t|^2
-            Re_Zs = Z_s.real
-            P_cf = 0.5 * Re_Zs * H_t_sq
-
-            # Q_reactive [var/m^2] = 0.5 * Im(Z_s) * |H_t|^2
-            Im_Zs = Z_s.imag
-            Q_cf = 0.5 * Im_Zs * H_t_sq
-
-            post.add_field("|H_t| [A/m]", H_t_cf, ncomp=1)
-            post.add_field("P_loss [W/m^2]", P_cf, ncomp=1)
-            post.add_field("Q_reactive [var/m^2]", Q_cf, ncomp=1)
-
-            post.write(msh_output)
-
-            # Write companion .msh.opt (replaces .geo)
-            from gmsh_post_export import write_companion_opt
-            write_companion_opt(msh_output, n_vector_views=0,
-                                n_scalar_views=3)
+            vol2msh(msh_output, wp_vol_path, [
+                {"sol": ht_sol_path, "fes": "H1", "fes_order": 1,
+                 "name": "|H_t| [A/m]", "ncomp": 1},
+                {"sol": p_sol_path, "fes": "H1", "fes_order": 1,
+                 "name": "P_loss [W/m^2]", "ncomp": 1},
+                {"sol": q_react_sol_path, "fes": "H1", "fes_order": 1,
+                 "name": "Q_reactive [var/m^2]", "ncomp": 1},
+            ])
             gmsh_file = msh_output
             progress("MSH", gmsh_file)
         except Exception as e:
