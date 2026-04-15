@@ -63,37 +63,17 @@ public:
 
 	int CreateFromSym(radThg&, radTApplication*, char);
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*) override;
-	int SubdivideItselfAsWholeInLabFrame(double*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SetUpCuttingPlanes(TVector3d&, double*, radTSubdivOptions*, TVector3d*);
-	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions*, TVector3d&, TVector3d&, radTrans&, char&, char&);
+	// All Subdivide* / CutItself / FindLowestAndUppestVertices / SetUpCuttingPlanes / FlattenNestedStructure*
+	// CollectNonGroupElements / JustTraverse / SimpleEnergyComp / ActualEnergyForceTorqueCompWithAdd
+	// MarkFurtherSubdNeed* / SetupFurtherSubdInd / SetMessageChar / NextStepEnergyForceTorqueComp
+	// ProceedNextStepEnergyForceTorqueComp / EstimateCenterPointOverRelaxables / FindEdgePointsOver*
+	// SubdivideByEllipses / SubdivideByPlanesPerpToCylAx REMOVED (Phase C, 2026-04-16)
 
-	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*) override;
-	int SubdivideItselfByEllipticCylinderAsWholeInLabFrame(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	int FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec*, TVector3d*, double*);
 	int ConvertToPolyhedron(radThg&, radTApplication*, char);
-	int EstimateCenterPointOverRelaxables(TVector3d&);
-	int SubdivideItselfOverAzimuth(double*, double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	int FindEdgePointsOverEllipseSet0(double*, radTCylindricSubdivSpec*, radThg, TVector3d*, double*, radTSubdivOptions*);
-	int FindEdgePointsOverEllipseSet(double*, radTCylindricSubdivSpec*, radThg, TVector3d*, double*, radTSubdivOptions*);
-	int SubdivideByEllipses(double*, double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideByPlanesPerpToCylAx(double*, double*, TVector3d*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
-	void FlattenNestedStructureIfMessageCharIsSet(radTApplication*, char, radTSubdivOptions*);
-	void JustTraverse();
-
-	int CutItself(TVector3d*, radThg&, radTPair_int_hg&, radTPair_int_hg&, radTApplication*, radTSubdivOptions*);
-
-	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions*) override;
-	int SubdivideItselfByParPlanesAsWholeInLabFrame(double*, int, radThg&, radTApplication*, radTSubdivOptions*);
-
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions*, radTvhg*) override;
 
 	int SetMaterial(radThg&, radTApplication*) override;
 	void SetM(TVector3d& M) override; //virtual
 	inline int ScaleCurrent(double) override; //virtual in radTg3d
-
-	void FlattenNestedStructure(radTApplication*, char);
-	void CollectNonGroupElements(radTmhg*, int&, radTApplication*, char);
 
 	inline int ItemIsNotFullyInternalAfterCut();
 
@@ -104,16 +84,6 @@ public:
 
 	inline double Volume();
 	inline void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);
-
-	inline void SimpleEnergyComp(radTField*);
-	void ActualEnergyForceTorqueCompWithAdd(radTField*);
-	inline void MarkFurtherSubdNeed(char, char, char);
-	inline void MarkFurtherSubdNeed1D(char, char);
-	int NextStepEnergyForceTorqueComp(double*, radThg&, radTField*, char&);
-	int ProceedNextStepEnergyForceTorqueComp(double*, radThg&, radTField*, radTField*, char&, char);
-	inline void SetupFurtherSubdInd(char);
-
-	inline void SetMessageChar(char);
 
 	radTGroup* CreateGroupIncludingAllMembersExceptIt(const radTmhg::const_iterator&);
 };
@@ -188,62 +158,8 @@ inline void radTGroup::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool En
 
 //-------------------------------------------------------------------------
 
-inline void radTGroup::SimpleEnergyComp(radTField* FieldPtr)
-{
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-	{
-		auto* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
-		if(g3dPtr->g3dListOfTransform.empty()) g3dPtr->SimpleEnergyComp(FieldPtr);
-		else
-		{
-			g3dPtr->NestedFor_Energy(FieldPtr, g3dPtr->g3dListOfTransform.begin());
-		}
-	}
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTGroup::MarkFurtherSubdNeed(char SubdNeedX, char SubdNeedY, char SubdNeedZ)
-{
-	radTg3d::MarkFurtherSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
-
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		static_cast<radTg3d*>(iter->second.rep)->MarkFurtherSubdNeed(SubdNeedX, SubdNeedY, SubdNeedZ);
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTGroup::MarkFurtherSubdNeed1D(char SubdNeed, char XorYorZ)
-{
-	radTg3d::MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
-
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		static_cast<radTg3d*>(iter->second.rep)->MarkFurtherSubdNeed1D(SubdNeed, XorYorZ);
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTGroup::SetupFurtherSubdInd(char InSubdInd)
-{
-	radTg3d::SetupFurtherSubdInd(InSubdInd);
-
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		static_cast<radTg3d*>(iter->second.rep)->SetupFurtherSubdInd(InSubdInd);
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTGroup::SetMessageChar(char InMessageChar)
-{
-	MessageChar = InMessageChar;
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-		static_cast<radTg3d*>(iter->second.rep)->SetMessageChar(InMessageChar);
-}
+// radTGroup::SimpleEnergyComp REMOVED (Phase C, 2026-04-16, energy-based API gone)
+// MarkFurtherSubdNeed / MarkFurtherSubdNeed1D / SetupFurtherSubdInd / SetMessageChar REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 

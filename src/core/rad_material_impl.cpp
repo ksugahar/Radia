@@ -719,32 +719,7 @@ void radTApplication::ComputeMvsH(int g3dRelaxOrMaterElemKey, char* MagnChar, do
 				MaterPtr = static_cast<radTMaterial*>(g3dRelaxPtr->MaterHandle.rep);
 				if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error027"); return;}
 			}
-			else
-			{
-				radTGroup* GroupPtr = Cast.GroupCast(g3dPtr);
-				if(GroupPtr!=nullptr)
-				{
-					radTg3dRelax* g3dSubdRelaxPtr = nullptr;
-
-					radTSubdividedRecMag* SubdividedRecMagPtr = Cast.SubdividedRecMagCast(GroupPtr);
-					if(SubdividedRecMagPtr!=nullptr) g3dSubdRelaxPtr = static_cast<radTg3dRelax*>(SubdividedRecMagPtr);
-					else
-					{
-						radTSubdividedExtrPolygon* SubdividedExtrPolygonPtr = Cast.SubdExtrPolygonCastFromGroup(GroupPtr);
-						if(SubdividedExtrPolygonPtr!=nullptr) g3dSubdRelaxPtr = static_cast<radTg3dRelax*>(SubdividedExtrPolygonPtr);
-						else
-						{
-							radTSubdividedPolyhedron* SubdividedPolyhedronPtr = Cast.SubdPolyhedronCastFromGroup(GroupPtr);
-							if(SubdividedPolyhedronPtr!=nullptr) g3dSubdRelaxPtr = static_cast<radTg3dRelax*>(SubdividedPolyhedronPtr);
-						}
-					}
-					if(g3dSubdRelaxPtr!=nullptr)
-					{
-						MaterPtr = static_cast<radTMaterial*>(g3dSubdRelaxPtr->MaterHandle.rep);
-						if(MaterPtr==nullptr) { Send.ErrorMessage("Radia::Error027"); return;}
-					}
-				}
-			}
+			// radTSubdivided* branches REMOVED (Phase C, 2026-04-16). Subdivided classes no longer exist.
 		}
 		if(MaterPtr==nullptr)
 		{
@@ -2023,54 +1998,7 @@ void radTApplication::OutFieldIntCompRes(char* FieldIntChar, radTField* FieldPtr
 **/
 //-------------------------------------------------------------------------
 
-void radTApplication::OutFieldEnergyForceCompRes(char* FieldChar, radTField* FieldPtr)
-{
-	char* BufChar = FieldChar;
-	//char* EqEmptyStr = "EFT";
-	char EqEmptyStr[] = "EFT"; //OC01052013
-
-	int ItemCount = 0;
-	if(*BufChar != '\0')
-	{
-		while (*BufChar != '\0') 
-		{
-			if((*BufChar == 'E') || (*BufChar == 'e') || 
-			   (*BufChar == 'F') || (*BufChar == 'f') ||
-			   (*BufChar == 'T') || (*BufChar == 't')) ItemCount++;
-			BufChar++;
-		}
-		BufChar = FieldChar;
-	}
-	else
-	{
-		BufChar = EqEmptyStr;
-		ItemCount = 3;
-	}
-	char* ActualInitCharPtr = BufChar;
-
-	if(ItemCount > 1) Send.InitOutList(ItemCount);
-	while (*BufChar != '\0') 
-	{
-		char* BufChar_p_1 = BufChar+1;
-
-		if(*(BufChar)=='E' || *(BufChar)=='e') Send.Double(FieldPtr->Energy);
-		else if(*(BufChar)=='F' || *(BufChar)=='f')
-		{
-			if(*BufChar_p_1=='x' || *BufChar_p_1=='X') Send.Double(FieldPtr->Force.x);
-			else if(*BufChar_p_1=='y' || *BufChar_p_1=='Y') Send.Double(FieldPtr->Force.y);
-			else if(*BufChar_p_1=='z' || *BufChar_p_1=='Z') Send.Double(FieldPtr->Force.z);
-			else Send.Vector3d(&(FieldPtr->Force));
-		}
-		else if(*(BufChar)=='T' || *(BufChar)=='t')
-		{
-			if(*BufChar_p_1=='x' || *BufChar_p_1=='X') Send.Double(FieldPtr->Torque.x);
-			else if(*BufChar_p_1=='y' || *BufChar_p_1=='Y') Send.Double(FieldPtr->Torque.y);
-			else if(*BufChar_p_1=='z' || *BufChar_p_1=='Z') Send.Double(FieldPtr->Torque.z);
-			else Send.Vector3d(&(FieldPtr->Torque));
-		}
-		BufChar++;
-	}
-}
+// OutFieldEnergyForceCompRes REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
 //-------------------------------------------------------------------------
 

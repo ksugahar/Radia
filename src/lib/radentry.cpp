@@ -45,7 +45,6 @@ void OutGroupSize( int );
 void OutGroupSubObjectKeys( int );
 void DuplicateElementG3DOpt( int, const char* );
 // CutElementG3DOpt REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
-void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
 void GeometricalVolume( int );
 void NumberOfDegOfFreedom( int );
 
@@ -129,10 +128,8 @@ void ComputeVectorPotentialBatch( double*, int, double*, int );
 
 void FieldArbitraryPointsArray( long, const char*, double**, long );
 void Field( int, char*, double,double,double, double,double,double, int, char*, double );
-void FieldEnergy( int, int, int,int,int );
 void FieldForce( int, int );
-void FieldForceThroughEnergy( int, int, char*, int,int,int );
-void FieldTorqueThroughEnergy( int, int, char*, double,double,double, int,int,int );
+// FieldEnergy / FieldForceThroughEnergy / FieldTorqueThroughEnergy REMOVED (Phase C, 2026-04-16)
 //void FocusingKickPer( int, double,double,double, double,double,double, double,int, double,double,double, double,int,double,int, const char*, int,int,double,double );
 void FocusingKickPer( int, double,double,double, double,double,double, double,double, double,double,double, double,int,double,int, const char*, int,int,double,double, const char*, double, const char* ); //OC03112019
 void FocusingKickPerFormStrRep( double*,double*,double*,double*,double*, int,int, double, int, const char* );
@@ -1042,54 +1039,7 @@ int CALL RadFld(double* pB, int* pNb, int Obj, char* ID, double* pCoord, int Np)
 
 //-------------------------------------------------------------------------
 
-int CALL RadFldEnr(double* d, int objdst, int objsrc, int* SbdPar)
-{
-	int LocSbdArr[] = {0,0,0};
-	if(SbdPar != 0) { LocSbdArr[0] = SbdPar[0]; LocSbdArr[1] = SbdPar[1]; LocSbdArr[2] = SbdPar[2];}
-
-	FieldEnergy(objdst, objsrc, LocSbdArr[0], LocSbdArr[1], LocSbdArr[2]);
-
-	*d = ioBuffer.OutDouble();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadFldEnrFrc(double* pF, int* pNf, int objdst, int objsrc, char* id, int* SbdPar)
-{
-	int LocSbdArr[] = {0,0,0};
-	if(SbdPar != 0) { LocSbdArr[0] = SbdPar[0]; LocSbdArr[1] = SbdPar[1]; LocSbdArr[2] = SbdPar[2];}
-
-	FieldForceThroughEnergy(objdst, objsrc, id, LocSbdArr[0], LocSbdArr[1], LocSbdArr[2]);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	int Dims[20];
-	int NumDims;
-	ioBuffer.OutMultiDimArrayOfDouble(pF, Dims, NumDims);
-	*pNf = Dims[0];
-	return ErrStat;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadFldEnrTrq(double* pF, int* pNf, int objdst, int objsrc, char* id, double* pP, int* SbdPar)
-{
-	int LocSbdArr[] = {0,0,0};
-	if(SbdPar != 0) { LocSbdArr[0] = SbdPar[0]; LocSbdArr[1] = SbdPar[1]; LocSbdArr[2] = SbdPar[2];}
-
-	FieldTorqueThroughEnergy(objdst, objsrc, id, pP[0], pP[1], pP[2], LocSbdArr[0], LocSbdArr[1], LocSbdArr[2]);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	int Dims[20];
-	int NumDims;
-	ioBuffer.OutMultiDimArrayOfDouble(pF, Dims, NumDims);
-	*pNf = Dims[0];
-	return ErrStat;
-}
+// RadFldEnr / RadFldEnrFrc / RadFldEnrTrq (energy-based API) REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
