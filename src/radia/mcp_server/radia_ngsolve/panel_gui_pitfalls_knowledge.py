@@ -448,7 +448,7 @@ section 11 ``Sidesets``.
 **Symptom**: A single ``ih_sample.jou`` was used for both BEM and FEM
 modes of the IH panel, but BEM needs only a small air sphere
 (surface integral equation, open BC) and FEM needs either a large
-air sphere (Dirichlet truncation) or a Kelvin shell (exact open BC).
+air sphere (Dirichlet truncation) or a Kelvin exterior domain (exact open BC).
 Forcing one geometry to serve both made BEM slow and FEM inaccurate.
 
 **Rule**: Ship one sample .jou per (panel, solver method) pair when
@@ -461,7 +461,7 @@ Examples:
 
   ``ih_bem_sample.jou``         BEM, small air, surface mesh
   ``ih_fem_sample.jou``         FEM, large air sphere, Dirichlet
-  ``ih_fem_kelvin_sample.jou``  FEM + Kelvin shell, exact open BC
+  ``ih_fem_kelvin_sample.jou``  FEM + Kelvin exterior domain, exact open BC
 
 Update ``CONVENTIONS.md`` and ``panel_conventions_knowledge.py`` so
 the registry knows about all three.
