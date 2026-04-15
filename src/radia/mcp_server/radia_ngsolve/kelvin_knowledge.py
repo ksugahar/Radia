@@ -1667,6 +1667,95 @@ regularization, mesh near rho'=0, integration order, periodic ID.
 """
 
 
+KELVIN_DIFFERENTIAL_FORMS = """
+# Differential-form pullback under Kelvin inversion (0-, 1-, 2-form)
+
+The Kelvin transformation is not just a change of variables; it is a
+*coordinate transformation* that pulls back differential forms between
+the physical exterior domain and the bounded computational outer
+sphere. This makes the three field quantities — scalar potential Omega
+(0-form), vector potential A (1-form), and magnetic induction B
+(2-form pseudovector) — a very clean pedagogical example of how the
+pullback factor depends only on the form degree.
+
+## The three pullback rules
+
+Let `r_phys` be a point in the physical exterior, `c` the Kelvin outer
+sphere center, `R` the sphere radius, and `r' = c + R^2 (r_phys-c)/|r_phys-c|^2`
+the Kelvin image in the computational domain. Define
+`rho' = |r' - c|` and `n = (r' - c)/rho'`. Then:
+
+| Form | Field | Pullback: F_comp(r') = ...                           |
+|------|-------|-----------------------------------------------------|
+| 0    | Ω     | Ω_phys(r_phys)                                      |
+| 1    | A     | (R/rho')^2 * H(n) * A_phys(r_phys)                  |
+| 2    | B     | -(R/rho')^4 * H(n) * B_phys(r_phys)                 |
+
+Here `H(n) = I - 2 n n^T` is the Householder reflection. The magnitude
+factor (R/rho')^{2k} for a k-form comes from k copies of the inverse
+Kelvin Jacobian. The Householder comes from the non-identity part of
+the Jacobian (for 1- and 2-forms only — 0-forms just transport). The
+minus sign on B is from `det(H) = -1` via the Hodge identity for a
+pseudovector.
+
+The factors (R/rho')^{2k} DIVERGE as rho' -> 0 (Kelvin sphere center,
+which is the image of physical infinity). That is consistent — the
+computational frame compresses infinity to a point, so a finite
+physical field must blow up in magnitude there (the integration
+measure compensates).
+
+## Practical eval helpers (radia.kelvin_source)
+
+`eval_Omega_physical_from_gf(gf_Omega_comp, mesh, r_phys, c, R)`
+    0-form. Evaluates the FEM scalar potential at a physical point
+    r_phys outside the inner domain. Internally looks up the mesh at
+    r' and returns the scalar value unchanged.
+
+`eval_A_physical_from_gf(gf_A_comp, mesh, r_phys, c, R)`
+    1-form. Does the (R/rho')^2 H pullback from computational A_comp
+    back to physical A_phys. For use when the Kelvin exterior FEM
+    result must be compared against a Biot-Savart / Radia reference
+    at physical observation points.
+
+`eval_B_physical_from_gf(gf_B_comp, mesh, r_phys, c, R)`
+    2-form. -(R/rho')^4 H pullback. Same use case as above, at the
+    B-field level; also useful for sanity-checking flux and energy.
+
+Because the Kelvin map is involutive (phi(phi(r)) = r), the same
+`kelvin_pullback_vector` / `kelvin_pullback_B_pseudovector` function
+works for both directions: passing r_phys as the "r_prime" argument
+yields the inverse pullback, which is exactly what these helpers do.
+
+## Differential-geometry practice example
+
+Given the above, the following are good self-checks for any reader
+working through pullback derivations:
+
+1. Verify on paper that `curl_r'(A_comp) = -(R/rho')^4 H curl_r(A_phys)`
+   when A is defined as a 1-form and B = curl(A) as a 2-form. The
+   factor (R/rho')^4 and the Householder with det -1 must match.
+
+2. Check the 0-form case: `grad_r'(Omega_comp) = (R/rho')^2 H grad_r(Omega_phys)`
+   — the gradient of a 0-form IS a 1-form, so the H + (R/rho')^2 factor
+   appears here even though Omega itself has no pullback factor.
+
+3. Verify the energy equivalence
+     integral_{physical exterior} nu_0 |B|^2 dV
+     = integral_{Kelvin sphere} (rho'/R)^2 nu_0 |B_comp|^2 dV'
+   by combining the 2-form pullback (factor (R/rho')^4) with the
+   volume element dV = (R/rho')^6 dV' and the nu material factor
+   (rho'/R)^2 from Nagamine eq. 9. The (R/rho')^{4+6} / (R/rho')^2
+   = (R/rho')^{12} on the LHS becomes (rho'/R)^{12} * (rho'/R)^2 on
+   the RHS, which with |B_comp|^2 = (R/rho')^8 |B_phys|^2 gives back
+   the physical LHS — confirming pullback + material + measure all
+   agree.
+
+These are the kind of exercises the Nagamine CEFC 2026 paper goes
+through in its appendix and the Sugahara 2022 IEEE TransMag paper
+uses to validate the two-sphere Kelvin implementation.
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -1682,6 +1771,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "periodic_wedge": KELVIN_PERIODIC_WEDGE,
         "robustness": KELVIN_ROBUSTNESS,
         "helpers_recipe": KELVIN_HELPERS_RECIPE,
+        "differential_forms": KELVIN_DIFFERENTIAL_FORMS,
     }
 
     topic = topic.lower().strip()
