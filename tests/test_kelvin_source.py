@@ -337,6 +337,134 @@ def test_curl_A_comp_matches_B_pullback():
     assert rel < 1e-5
 
 
+def _build_sphere_mesh_centered(center, R, maxh=0.25):
+    """Tiny Netgen sphere mesh used only to exercise eval_*_physical_from_gf."""
+    from netgen.occ import Sphere, Pnt, OCCGeometry
+    from ngsolve import Mesh
+    ball = Sphere(Pnt(*center), R)
+    ball.mat("outer")
+    geo = OCCGeometry(ball)
+    ngmesh = geo.GenerateMesh(maxh=maxh)
+    return Mesh(ngmesh)
+
+
+def test_eval_Omega_physical_from_gf():
+    """0-form helper: the eval just composes with kelvin_map_3d and reads
+    the GridFunction. To exercise only that pipeline (and not FEM
+    interpolation error), store a LINEAR CF in computational coords r';
+    the helper must return that linear CF evaluated at r' = Kelvin(r_phys).
+    """
+    try:
+        from ngsolve import H1, GridFunction, x, y, z
+    except Exception as e:
+        print(f"  skipping (no NGSolve): {e}")
+        return
+    from kelvin_source import (eval_Omega_physical_from_gf, kelvin_map_3d)
+
+    center = np.array([0.3, -0.2, 0.1])
+    R = 1.0
+    mesh = _build_sphere_mesh_centered(center, R, maxh=0.25)
+
+    # Omega_comp(r') = r'_x + 2 r'_y + 3 r'_z  (linear in r')
+    fes = H1(mesh, order=2)
+    gf = GridFunction(fes)
+    gf.Set(x + 2.0 * y + 3.0 * z)
+
+    rel_errs = []
+    for r_phys_off in [(1.5, 0, 0), (0, 2.0, 0.5), (-1.0, 1.2, -0.8)]:
+        r_phys = np.array(r_phys_off) + center
+        assert np.linalg.norm(r_phys - center) > R
+        r_prime = kelvin_map_3d(r_phys, center, R)
+        expected = r_prime[0] + 2.0 * r_prime[1] + 3.0 * r_prime[2]
+        got = eval_Omega_physical_from_gf(gf, mesh, r_phys, center, R)
+        rel = abs(got - expected) / max(1.0, abs(expected))
+        rel_errs.append(rel)
+        print(f"  r_phys={r_phys}, r_prime={r_prime}, got={got:.6f}, "
+              f"expected={expected:.6f}, rel={rel:.2e}")
+    assert max(rel_errs) < 1e-3, f"0-form eval rel err {max(rel_errs):.2e}"
+
+
+def test_eval_A_physical_from_gf():
+    """1-form helper: store a LINEAR vector A_comp(r') in computational
+    coords, then eval_A_physical must return the Kelvin pullback of that
+    value at r' = Kelvin(r_phys).
+    """
+    try:
+        from ngsolve import HCurl, VectorH1, GridFunction, CoefficientFunction, x, y, z
+    except Exception as e:
+        print(f"  skipping (no NGSolve): {e}")
+        return
+    from kelvin_source import (eval_A_physical_from_gf, kelvin_map_3d,
+                                kelvin_pullback_vector)
+
+    center = np.array([0.2, 0.0, -0.1])
+    R = 1.0
+    mesh = _build_sphere_mesh_centered(center, R, maxh=0.25)
+
+    # A_comp(r') = linear vector field in r'
+    A_cf = CoefficientFunction((y - center[1], -(x - center[0]), z - center[2]))
+    fes = VectorH1(mesh, order=2)
+    gf = GridFunction(fes)
+    gf.Set(A_cf)
+
+    rel_errs = []
+    for r_phys_off in [(1.8, 0.0, 0.0), (0.0, -2.1, 0.4), (-1.2, 0.7, -1.0)]:
+        r_phys = np.array(r_phys_off) + center
+        assert np.linalg.norm(r_phys - center) > R
+        r_prime = kelvin_map_3d(r_phys, center, R)
+        A_comp_at_rprime = np.array([r_prime[1] - center[1],
+                                      -(r_prime[0] - center[0]),
+                                      r_prime[2] - center[2]])
+        # helper should return the 1-form pullback of A_comp_at_rprime at r_phys
+        expected = kelvin_pullback_vector(A_comp_at_rprime, r_phys, center, R)
+        got = eval_A_physical_from_gf(gf, mesh, r_phys, center, R)
+        rel = np.linalg.norm(got - expected) / max(1.0, np.linalg.norm(expected))
+        rel_errs.append(rel)
+        print(f"  r_phys={r_phys}, got={got}, expected={expected}, rel={rel:.2e}")
+    assert max(rel_errs) < 5e-3, f"1-form eval rel err {max(rel_errs):.2e}"
+
+
+def test_eval_B_physical_from_gf():
+    """2-form helper: store a LINEAR B_comp(r') in computational coords,
+    then eval_B_physical must return the 2-form pullback of that value
+    at r' = Kelvin(r_phys).
+    """
+    try:
+        from ngsolve import VectorH1, GridFunction, CoefficientFunction, x, y, z
+    except Exception as e:
+        print(f"  skipping (no NGSolve): {e}")
+        return
+    from kelvin_source import (eval_B_physical_from_gf, kelvin_map_3d,
+                                kelvin_pullback_B_pseudovector)
+
+    center = np.array([0.0, 0.0, 0.5])
+    R = 1.0
+    mesh = _build_sphere_mesh_centered(center, R, maxh=0.25)
+
+    B_cf = CoefficientFunction((2.0 * (x - center[0]),
+                                  y - center[1] + 0.3,
+                                  0.7))
+    fes = VectorH1(mesh, order=2)
+    gfB = GridFunction(fes)
+    gfB.Set(B_cf)
+
+    rel_errs = []
+    for r_phys_off in [(1.5, 0.0, 0.0), (0.0, 2.2, 0.3), (-0.8, 0.9, -1.4)]:
+        r_phys = np.array(r_phys_off) + center
+        assert np.linalg.norm(r_phys - center) > R
+        r_prime = kelvin_map_3d(r_phys, center, R)
+        B_comp_at_rprime = np.array([2.0 * (r_prime[0] - center[0]),
+                                      r_prime[1] - center[1] + 0.3,
+                                      0.7])
+        expected = kelvin_pullback_B_pseudovector(B_comp_at_rprime, r_phys,
+                                                    center, R)
+        got = eval_B_physical_from_gf(gfB, mesh, r_phys, center, R)
+        rel = np.linalg.norm(got - expected) / max(1.0, np.linalg.norm(expected))
+        rel_errs.append(rel)
+        print(f"  r_phys={r_phys}, got={got}, expected={expected}, rel={rel:.2e}")
+    assert max(rel_errs) < 5e-3, f"2-form eval rel err {max(rel_errs):.2e}"
+
+
 if __name__ == "__main__":
     print("test_on_axis_B_circular_loop"); test_on_axis_B_circular_loop()
     print("test_kelvin_map_involution"); test_kelvin_map_involution()
@@ -354,4 +482,10 @@ if __name__ == "__main__":
     print("test_B_pullback_radial_flip"); test_B_pullback_radial_flip()
     print("test_curl_A_comp_matches_B_pullback")
     test_curl_A_comp_matches_B_pullback()
+    print("test_eval_Omega_physical_from_gf")
+    test_eval_Omega_physical_from_gf()
+    print("test_eval_A_physical_from_gf")
+    test_eval_A_physical_from_gf()
+    print("test_eval_B_physical_from_gf")
+    test_eval_B_physical_from_gf()
     print("\nall tests passed.")
