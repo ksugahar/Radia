@@ -78,35 +78,6 @@ def create_beam_steering_coil():
 	return coils_container, parameters
 
 
-def get_coil_info(coil_obj):
-	"""
-	Get information about the coil geometry.
-
-	Args:
-		coil_obj: Radia object ID
-
-	Returns:
-		dict: Coil information including bounding box
-	"""
-	# Get bounding box
-	bbox = rad.ObjGeoLim(coil_obj)
-
-	info = {
-		'bbox': {
-			'x_min': bbox[0], 'x_max': bbox[1],
-			'y_min': bbox[2], 'y_max': bbox[3],
-			'z_min': bbox[4], 'z_max': bbox[5]
-		},
-		'span': {
-			'x': bbox[1] - bbox[0],
-			'y': bbox[3] - bbox[2],
-			'z': bbox[5] - bbox[4]
-		}
-	}
-
-	return info
-
-
 if __name__ == '__main__':
 	"""
 	Test: Create coil and display basic information
@@ -123,19 +94,6 @@ if __name__ == '__main__':
 	print(f"  Current: {params['current']} A")
 	print(f"  Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
 	print(f"  Segments: {params['num_segments']}")
-
-	# Get geometry info
-	info = get_coil_info(coil)
-
-	print("\nCoil Geometry:")
-	print(f"  Bounding box:")
-	print(f"    X: [{info['bbox']['x_min']/mm:.2f}, {info['bbox']['x_max']/mm:.2f}] mm")
-	print(f"    Y: [{info['bbox']['y_min']/mm:.2f}, {info['bbox']['y_max']/mm:.2f}] mm")
-	print(f"    Z: [{info['bbox']['z_min']/mm:.2f}, {info['bbox']['z_max']/mm:.2f}] mm")
-	print(f"  Span:")
-	print(f"    X: {info['span']['x']/mm:.2f} mm")
-	print(f"    Y: {info['span']['y']/mm:.2f} mm")
-	print(f"    Z: {info['span']['z']/mm:.2f} mm")
 
 	# Cleanup
 	rad.UtiDelAll()

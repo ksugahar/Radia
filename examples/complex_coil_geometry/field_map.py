@@ -20,7 +20,7 @@ import numpy as np
 import radia as rad
 
 # Import coil model (defines mm = 1e-3)
-from coil_model import create_beam_steering_coil, get_coil_info, mm
+from coil_model import create_beam_steering_coil, mm
 
 print("=" * 70)
 print("MAGNETIC FIELD MAP CALCULATION")
@@ -180,27 +180,11 @@ def main():
 	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
 	print(f"     Segments: {params['num_segments']}")
 
-	# Get coil bounding box
-	info = get_coil_info(coil)
-	bounds = info['bbox']
-
-	print(f"\n" + "-" * 70)
-	print("Coil bounding box:")
-	print("-" * 70)
-	print(f"  X: [{bounds['x_min']/mm:.2f}, {bounds['x_max']/mm:.2f}] mm (span: {info['span']['x']/mm:.2f} mm)")
-	print(f"  Y: [{bounds['y_min']/mm:.2f}, {bounds['y_max']/mm:.2f}] mm (span: {info['span']['y']/mm:.2f} mm)")
-	print(f"  Z: [{bounds['z_min']/mm:.2f}, {bounds['z_max']/mm:.2f}] mm (span: {info['span']['z']/mm:.2f} mm)")
-
-	# Define grid parameters with 100 mm margin around coil
-	margin = 100 * mm
-
-	# Calculate grid range with margin
-	x_min = bounds['x_min'] - margin
-	x_max = bounds['x_max'] + margin
-	y_min = bounds['y_min'] - margin
-	y_max = bounds['y_max'] + margin
-	z_min = bounds['z_min'] - margin
-	z_max = bounds['z_max'] + margin
+	# Fixed evaluation grid sized for the 8-segment beam steering coil.
+	# Covers the full coil extent (~1.1 m x 1.5 m x 0.5 m) with ~100 mm margin.
+	x_min, x_max = -400 * mm,  800 * mm
+	y_min, y_max = -800 * mm,  800 * mm
+	z_min, z_max = -300 * mm,  300 * mm
 
 	# Number of points in each direction
 	# Adjust resolution based on span to maintain reasonable aspect ratio

@@ -20,7 +20,7 @@ import numpy as np
 import radia as rad
 
 # Import coil model (defines mm = 1e-3)
-from coil_model import create_beam_steering_coil, get_coil_info, mm
+from coil_model import create_beam_steering_coil, mm
 
 
 
@@ -93,13 +93,6 @@ def main():
 	print(f"     Current: {params['current']} A")
 	print(f"     Cross-section: {params['cross_section']['width']/mm:.0f}x{params['cross_section']['height']/mm:.0f} mm")
 	print(f"     Segments: {params['num_segments']}")
-
-	# Get geometry info
-	info = get_coil_info(coil)
-	print(f"\n     Bounding box:")
-	print(f"       X: [{info['bbox']['x_min']/mm:.2f}, {info['bbox']['x_max']/mm:.2f}] mm")
-	print(f"       Y: [{info['bbox']['y_min']/mm:.2f}, {info['bbox']['y_max']/mm:.2f}] mm")
-	print(f"       Z: [{info['bbox']['z_min']/mm:.2f}, {info['bbox']['z_max']/mm:.2f}] mm")
 
 	# Calculate magnetic field at test points
 	calculate_field_at_test_points(coil)

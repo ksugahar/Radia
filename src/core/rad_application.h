@@ -42,7 +42,6 @@ class radTApplication {
 
 	radTmhg GlobalMapOfHandlers;
 	int GlobalUniqueMapKey;
-	radTMapOfDrawAttr MapOfDrawAttr;
 	radTCast Cast;
 	radTCompCriterium CompCriterium;
 
@@ -287,7 +286,6 @@ public:
 
 	int ComputeNumberOfDegOfFreedom(int ElemKey);
 	int ComputeGeometricalVolume(int ElemKey);
-	int ComputeGeometricalLimits(int ElemKey);
 	void ComputeMagnOrJ_InCenter(int ElemKey, char MorJ);
 	int ScaleCurrent(int ElemKey, double scaleCoef);
 	int SetObjMagn(int ElemKey, double Mx, double My, double Mz);
@@ -427,7 +425,6 @@ public:
 
 	void ReplaceInAllGroups(radThg& OldHandle, radThg& NewHandle);
 	void ReplaceInGlobalMap(radThg& OldHandle, radThg& NewHandle);
-	inline void CopyDrawAttr(int OldElemKey, int NewElemKey);
 
 	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0);
 
@@ -475,9 +472,6 @@ inline int radTApplication::DeleteElement(int ElemKey)
 	}
 	GlobalMapOfHandlers.erase(iter);
 
-	radTMapOfDrawAttr::iterator iterDrawAttr = MapOfDrawAttr.find(ElemKey);
-	if(iterDrawAttr != MapOfDrawAttr.end()) MapOfDrawAttr.erase(iterDrawAttr);
-
 	// Invalidate solve cache if the deleted element is the cached geometry or interaction
 	if(ElemKey == m_cached_obj_key || ElemKey == m_cached_interact_key)
 	{
@@ -487,14 +481,6 @@ inline int radTApplication::DeleteElement(int ElemKey)
 
 	if(SendingIsRequired) Send.Int(0);
 	return 1;
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTApplication::CopyDrawAttr(int OldElemKey, int NewElemKey)
-{
-	radTMapOfDrawAttr::const_iterator iter = MapOfDrawAttr.find(OldElemKey);
-	if(iter != MapOfDrawAttr.end()) MapOfDrawAttr[NewElemKey] = (*iter).second;
 }
 
 //-------------------------------------------------------------------------

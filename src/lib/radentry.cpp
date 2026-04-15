@@ -47,7 +47,6 @@ void DuplicateElementG3DOpt( int, const char* );
 // CutElementG3DOpt REMOVED (2026-01-14) - Use Cubit/Netgen for mesh operations
 void SubdivideElementG3DOpt( int, double*, char, double*, int, const char*, const char*, const char* );
 void GeometricalVolume( int );
-void GeometricalLimits( int );
 void NumberOfDegOfFreedom( int );
 
 void MagnOfObj( int );
@@ -574,21 +573,6 @@ int CALL RadObjGeoVol(double* Vol, int Obj)
 
 	*Vol = ioBuffer.OutDouble();
 	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadObjGeoLim(double* Lim, int Obj)
-{
-	GeometricalLimits(Obj);
-
-	int ErrStat = ioBuffer.OutErrorStatus();
-	if(ErrStat > 0) return ErrStat;
-
-	int Dims[20];
-	int NumDims;
-	ioBuffer.OutMultiDimArrayOfDouble(Lim, Dims, NumDims);
-	return ErrStat;
 }
 
 //-------------------------------------------------------------------------
@@ -1267,9 +1251,6 @@ int CALL RadFldLenTol(int* n, double AbsVal, double RelVal, double ZeroVal)
 	return ioBuffer.OutErrorStatus();
 }
 
-//-------------------------------------------------------------------------
-// RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
-// Use VTK export with ParaView for visualization
 //-------------------------------------------------------------------------
 
 int CALL RadUtiDel(int* n, int Elem)
