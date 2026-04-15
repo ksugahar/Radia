@@ -216,20 +216,12 @@ class GmshPostExport:
         arr = self._resolve_data(data, ncomp=3, cell_data=cell_data)
         self._fields.append((name, 3, arr, cell_data, material))
 
-    def write(self, filename, time=0.0, timestep=0, version="4.1"):
-        """Write mesh + field data to GMSH .msh format.
+    def write(self, filename, time=0.0, timestep=0):
+        """Write mesh + field data to GMSH .msh v4.1 format.
 
-        Args:
-            filename: Output .msh file path
-            time: Time value for time series
-            timestep: Time step index
-            version: GMSH format version ("4.1" or "2.2")
-                     v4.1 (default): structured physical groups, NodeData, transient support
-                     v2.2: legacy format
+        v4.1 is the only supported format (lab-wide standard, 2026-04).
+        netgen I/O is always via .vol; .msh v2.2 is no longer emitted.
         """
-        if version == "2.2":
-            return self.write_v22(filename)
-
         if not filename.endswith('.msh'):
             filename += '.msh'
 
@@ -317,112 +309,6 @@ class GmshPostExport:
         print(f"GMSH export: {filename}")
         print(f"  {n_elems} elements, {n_nodes} nodes, {n_fields} fields")
         print(f"  Materials: {mat_str}")
-        return filename
-
-    def write_v22(self, filename):
-        """Write mesh + field data to GMSH .msh v2.2 format.
-
-        Supports high-order elements (p >= 2) via the same internal
-        node computation as write() (v4.1).
-
-        v2.2 is the legacy format (use .vol for NGSolve mesh input).
-
-        Args:
-            filename: Output .msh file path
-        """
-        if not filename.endswith('.msh'):
-            filename += '.msh'
-
-        mesh = self.mesh
-        is_surface = _is_surface_mesh(mesh) or self._boundary
-
-        nodes, mat_names, elem_data = _extract_mesh_data_grouped(
-            mesh, is_surface)
-        n_nodes = len(nodes)
-        n_elems = len(elem_data)
-
-        # Build material -> physical tag mapping (1-indexed)
-        mat_to_tag = {name: i + 1 for i, name in enumerate(mat_names)}
-
-        # Determine dimension
-        dim = 2 if is_surface else 3
-
-        with open(filename, 'w', encoding='utf-8') as f:
-            # Header
-            f.write('$MeshFormat\n2.2 0 8\n$EndMeshFormat\n')
-
-            # Physical names
-            f.write('$PhysicalNames\n')
-            f.write(f'{len(mat_names)}\n')
-            for name in mat_names:
-                tag = mat_to_tag[name]
-                f.write(f'{dim} {tag} "{name}"\n')
-            f.write('$EndPhysicalNames\n')
-
-            # Nodes
-            f.write('$Nodes\n')
-            f.write(f'{n_nodes}\n')
-            for i, (x, y, z) in enumerate(nodes):
-                f.write(f'{i + 1} {x:.15e} {y:.15e} {z:.15e}\n')
-            f.write('$EndNodes\n')
-
-            # Elements
-            f.write('$Elements\n')
-            f.write(f'{n_elems}\n')
-            for elem_idx, (mat_name, gmsh_type, conn, _) in enumerate(elem_data):
-                elem_id = elem_idx + 1
-                phys_tag = mat_to_tag[mat_name]
-                # v2.2 format: id type n_tags tag1 tag2 node1 node2 ...
-                # tag1 = physical group, tag2 = elementary entity (= same)
-                node_str = ' '.join(str(c + 1) for c in conn)
-                f.write(f'{elem_id} {gmsh_type} 2 {phys_tag} {phys_tag} '
-                        f'{node_str}\n')
-            f.write('$EndElements\n')
-
-            # NodeData (field data)
-            for name, ncomp, data, is_cell, material in self._fields:
-                if is_cell:
-                    continue  # v2.2 NodeData only for simplicity
-                arr = self._resolve_data(data, ncomp, False)
-                if ncomp is None:
-                    ncomp = 1 if arr.ndim == 1 else arr.shape[1]
-
-                # Limit to nodes that have data (vertex nodes only for
-                # high-order meshes where arr has nv entries, not n_nodes)
-                n_data = arr.shape[0]
-                if material is not None:
-                    node_set = set()
-                    for mn, _, conn, _ in elem_data:
-                        if mn == material:
-                            node_set.update(c for c in conn if c < n_data)
-                    out_nodes = sorted(node_set)
-                else:
-                    out_nodes = list(range(min(n_nodes, n_data)))
-
-                f.write('$NodeData\n')
-                f.write(f'1\n"{name}"\n')
-                f.write(f'1\n0.0\n')
-                f.write(f'3\n0\n{ncomp}\n{len(out_nodes)}\n')
-                for ni in out_nodes:
-                    if ncomp == 1:
-                        val = float(arr[ni]) if arr.ndim == 1 else float(arr[ni, 0])
-                        f.write(f'{ni + 1} {val:.15e}\n')
-                    else:
-                        vals = ' '.join(f'{float(arr[ni, c]):.15e}'
-                                        for c in range(ncomp))
-                        f.write(f'{ni + 1} {vals}\n')
-                f.write('$EndNodeData\n')
-
-        # Write companion .msh.opt for correct high-order display
-        if is_surface and _detect_curve_order(mesh) >= 2:
-            n_vec = sum(1 for _, nc, _, _, _ in self._fields if nc >= 2)
-            n_scl = sum(1 for _, nc, _, _, _ in self._fields if nc == 1)
-            write_companion_opt(filename, n_vector_views=n_vec,
-                                n_scalar_views=n_scl)
-
-        print(f"GMSH v2.2 export: {filename}")
-        print(f"  {n_elems} elements, {n_nodes} nodes, "
-              f"{len(self._fields)} fields")
         return filename
 
     def write_mesh(self, filename):
@@ -914,8 +800,10 @@ def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
         name = f["name"]
         ncomp = f.get("ncomp")
         material = f.get("material")
+        cell_data = f.get("cell_data", False)
         if "array" in f:
-            post.add_field(name, f["array"], ncomp=ncomp, material=material)
+            post.add_field(name, f["array"], ncomp=ncomp,
+                           material=material, cell_data=cell_data)
         elif "sol" in f:
             from ngsolve import GridFunction
             fes_kind = f["fes"]
@@ -932,12 +820,13 @@ def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
                 fes = HDivSurface(mesh, order=fes_order)
             elif fes_kind == "L2":
                 from ngsolve import L2
-                fes = L2(mesh, order=fes_order)
+                fes = L2(mesh, order=fes_order, dim=fes_dim)
             else:
                 raise ValueError(f"vol2msh: unsupported fes kind {fes_kind!r}")
             gf = GridFunction(fes)
             gf.Load(f["sol"])
-            post.add_field(name, gf, ncomp=ncomp, material=material)
+            post.add_field(name, gf, ncomp=ncomp,
+                           material=material, cell_data=cell_data)
         else:
             raise ValueError(
                 f"vol2msh: field {name!r} has neither 'array' nor 'sol'")
@@ -961,6 +850,240 @@ def save_vol_sol_pair(vol_path, sol_path, mesh_ngmesh, gf):
     mesh_ngmesh.Save(vol_path)
     gf.Save(sol_path)
     return vol_path, sol_path
+
+
+# ============================================================
+# Multi-mesh combined .msh writer (Phase C, 2026-04-14)
+# ============================================================
+# Used by calc_inductance to emit one .msh v4.1 file that holds
+# three logically-separate meshes (air volume, coil surface, workpiece
+# surface) as distinct physical groups with curved Tri6 coil rendering.
+# Lives here so any panel that later needs the same pattern can reuse
+# it without duplicating ~200 lines of .msh-formatting code.
+
+
+def extract_tri6_surface(mesh_surf):
+    """Extract Tri6 (curved) surface mesh from an NGSolve mesh.
+
+    Returns:
+        nodes: list of (x, y, z) — vertices first, then mid-edge nodes
+        elems: list of [v0, v1, v2, m01, m12, m20] (0-indexed into nodes)
+        edges: sorted list of (a, b) vertex-only edges for wireframe
+    """
+    from ngsolve import BND, IntegrationRule
+
+    nodes = [(v.point[0], v.point[1], v.point[2])
+             for v in mesh_surf.vertices]
+    edge_cache = {}  # (min_v, max_v) -> mid_node_index
+
+    elems = []
+    wire_edges = set()
+    for el in mesh_surf.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        if len(verts) != 3:
+            continue
+
+        trafo = mesh_surf.GetTrafo(el)
+
+        ref_corners = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
+        corner_pts = []
+        for u, v in ref_corners:
+            ir = IntegrationRule([(u, v)], [1.0])
+            for ip in ir:
+                mip = trafo(ip)
+                corner_pts.append(
+                    np.array([mip.point[0], mip.point[1], mip.point[2]]))
+
+        ref_to_vert = []
+        for ci in range(3):
+            dists = [np.linalg.norm(corner_pts[ci] -
+                     np.array(mesh_surf.vertices[verts[vi]].point))
+                     for vi in range(3)]
+            ref_to_vert.append(verts[np.argmin(dists)])
+
+        ref_mids = [(0.5, 0.0), (0.5, 0.5), (0.0, 0.5)]
+        edge_pairs = [(0, 1), (1, 2), (2, 0)]
+        mid_indices = []
+        for ei, (rc0, rc1) in enumerate(edge_pairs):
+            va = ref_to_vert[rc0]
+            vb = ref_to_vert[rc1]
+            edge_key = (min(va, vb), max(va, vb))
+            wire_edges.add(edge_key)
+
+            if edge_key in edge_cache:
+                mid_indices.append(edge_cache[edge_key])
+            else:
+                u, v = ref_mids[ei]
+                ir = IntegrationRule([(u, v)], [1.0])
+                for ip in ir:
+                    mip = trafo(ip)
+                    pt = (mip.point[0], mip.point[1], mip.point[2])
+                    nidx = len(nodes)
+                    nodes.append(pt)
+                    edge_cache[edge_key] = nidx
+                    mid_indices.append(nidx)
+
+        # GMSH Tri6 ordering: v0 v1 v2 m01 m12 m20
+        elems.append([ref_to_vert[0], ref_to_vert[1], ref_to_vert[2],
+                      mid_indices[0], mid_indices[1], mid_indices[2]])
+
+    return nodes, elems, sorted(wire_edges)
+
+
+def write_combined_msh_v41(filename, mesh_surf, J_nodes,
+                           vol_nodes, vol_elems, B_nodes,
+                           wp_nodes=None, wp_elems=None, q_nodes=None,
+                           wp_J_nodes=None):
+    """Write a single .msh v4.1 with volume B + surface J + wireframe.
+
+    Physical groups in one file, with node/element IDs offset so
+    there are no collisions:
+
+      Physical "air"                (3D, tag 1): volume tets   + B NodeData
+      Physical "coil_surface"       (2D, tag 2): Tri6 surface  + J NodeData
+      Physical "coil_wire"          (1D, tag 3): wireframe edges (no data)
+      Physical "workpiece_surface"  (2D, tag 4): workpiece tris + q NodeData
+                                                  (optional)
+
+    Coil surface uses Tri6 (GMSH type 9) for curved rendering.
+    Writes companion .msh.opt with display options (replaces .geo).
+    """
+    surf_nodes, surf_elems, wire_edges = extract_tri6_surface(mesh_surf)
+    nv_surf = len(surf_nodes)
+
+    nv_vol = len(vol_nodes)
+    surf_offset = nv_vol
+    ne_vol = len(vol_elems)
+    ne_surf = len(surf_elems)
+    ne_wire = len(wire_edges)
+
+    has_wp = (wp_nodes is not None and wp_elems is not None
+              and q_nodes is not None)
+    nv_wp = len(wp_nodes) if has_wp else 0
+    ne_wp = len(wp_elems) if has_wp else 0
+    wp_offset = nv_vol + nv_surf
+
+    n_nodes = nv_vol + nv_surf + nv_wp
+    n_phys = 4 if has_wp else 3
+    n_entities_curve = 1
+    n_entities_surf = 2 if has_wp else 1
+    n_entities_vol = 1
+
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+
+        f.write(f'$PhysicalNames\n{n_phys}\n')
+        f.write('3 1 "air"\n')
+        f.write('2 2 "coil_surface"\n')
+        f.write('1 3 "coil_wire"\n')
+        if has_wp:
+            f.write('2 4 "workpiece_surface"\n')
+        f.write('$EndPhysicalNames\n')
+
+        f.write('$Entities\n')
+        f.write(f'0 {n_entities_curve} {n_entities_surf} {n_entities_vol}\n')
+        f.write('3 0 0 0 0 0 0 1 3 0\n')
+        f.write('2 0 0 0 0 0 0 1 2 0\n')
+        if has_wp:
+            f.write('4 0 0 0 0 0 0 1 4 0\n')
+        f.write('1 0 0 0 0 0 0 1 1 0\n')
+        f.write('$EndEntities\n')
+
+        n_blocks = 2 + (1 if has_wp else 0)
+        f.write('$Nodes\n')
+        f.write(f'{n_blocks} {n_nodes} 1 {n_nodes}\n')
+        f.write(f'3 1 0 {nv_vol}\n')
+        for i in range(nv_vol):
+            f.write(f'{i + 1}\n')
+        for x, y, z in vol_nodes:
+            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        f.write(f'2 2 0 {nv_surf}\n')
+        for i in range(nv_surf):
+            f.write(f'{surf_offset + i + 1}\n')
+        for x, y, z in surf_nodes:
+            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        if has_wp:
+            f.write(f'2 4 0 {nv_wp}\n')
+            for i in range(nv_wp):
+                f.write(f'{wp_offset + i + 1}\n')
+            for x, y, z in wp_nodes:
+                f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        f.write('$EndNodes\n')
+
+        n_elems = ne_vol + ne_surf + ne_wire + ne_wp
+        n_elem_blocks = 3 + (1 if has_wp else 0)
+        f.write('$Elements\n')
+        f.write(f'{n_elem_blocks} {n_elems} 1 {n_elems}\n')
+        eid = 1
+        f.write(f'3 1 4 {ne_vol}\n')
+        for verts in vol_elems:
+            ns = ' '.join(str(v + 1) for v in verts)
+            f.write(f'{eid} {ns}\n')
+            eid += 1
+        f.write(f'2 2 9 {ne_surf}\n')
+        for conn in surf_elems:
+            ns = ' '.join(str(v + surf_offset + 1) for v in conn)
+            f.write(f'{eid} {ns}\n')
+            eid += 1
+        f.write(f'1 3 1 {ne_wire}\n')
+        for a, b in wire_edges:
+            f.write(f'{eid} {a + surf_offset + 1} '
+                    f'{b + surf_offset + 1}\n')
+            eid += 1
+        if has_wp:
+            f.write(f'2 4 2 {ne_wp}\n')
+            for verts in wp_elems:
+                ns = ' '.join(str(v + wp_offset + 1) for v in verts)
+                f.write(f'{eid} {ns}\n')
+                eid += 1
+        f.write('$EndElements\n')
+
+        f.write('$NodeData\n')
+        f.write('1\n"B"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_vol}\n')
+        for i in range(nv_vol):
+            bx, by, bz = B_nodes[i]
+            f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
+        f.write('$EndNodeData\n')
+
+        # J on coil vertex nodes only; Tri6 mid-edge nodes have no direct
+        # J data — GMSH interpolates.
+        nv_vert = mesh_surf.nv
+        f.write('$NodeData\n')
+        f.write('1\n"J"\n1\n0.0\n3\n0\n3\n')
+        f.write(f'{nv_vert}\n')
+        for i in range(nv_vert):
+            jx, jy, jz = J_nodes[i]
+            f.write(f'{surf_offset + i + 1} '
+                    f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
+        f.write('$EndNodeData\n')
+
+        # Keep NodeData ordering: ALL vector views first, then scalars
+        # (.msh.opt writer assigns ArrowSize to View[0..n_vec-1] and
+        # IntervalsType to View[n_vec..], matching this order).
+        if has_wp and wp_J_nodes is not None:
+            f.write('$NodeData\n')
+            f.write('1\n"J_workpiece"\n1\n0.0\n3\n0\n3\n')
+            f.write(f'{nv_wp}\n')
+            for i in range(nv_wp):
+                jx, jy, jz = wp_J_nodes[i]
+                f.write(f'{wp_offset + i + 1} '
+                        f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
+            f.write('$EndNodeData\n')
+
+        if has_wp:
+            f.write('$NodeData\n')
+            f.write('1\n"q"\n1\n0.0\n3\n0\n1\n')
+            f.write(f'{nv_wp}\n')
+            for i in range(nv_wp):
+                f.write(f'{wp_offset + i + 1} {q_nodes[i]:.15e}\n')
+            f.write('$EndNodeData\n')
+
+    n_vec = 2 + (1 if (has_wp and wp_J_nodes is not None) else 0)
+    n_sca = 1 if has_wp else 0
+    write_companion_opt(filename, n_vector_views=n_vec,
+                        n_scalar_views=n_sca)
+    return filename
 
 
 def _write_companion_geo(msh_filename):
