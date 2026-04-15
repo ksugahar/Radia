@@ -211,22 +211,24 @@ z_coord = y  # Axial coordinate
 # ============================================================
 print("\nSetting up material properties...")
 
-# Distance squared from exterior domain center (offset in z-direction)
-rho_prime_sq = r_coord**2 + (z_coord - offset_z)**2
+# Kelvin-transformed permeability (Nagamine CEFC 2026 canonical):
+#   mu_ext = mu_0 * (R/rho')^2  for 3D spherical (conformal) Kelvin
+# rho' = sqrt(r^2 + (z - offset_z)^2) in axisym (r,z) meridional plane.
+# See examples/kelvin_transformation/CONVENTION.md.
+from radia.kelvin_source import kelvin_mu_factor_axisym_cf, build_material_cf
 
-# Transformed permeability for exterior domain
-# mu'(rho') = (R/rho')^2 * mu0
-mu_kelvin = kelvin_radius**2 / (rho_prime_sq + 1e-20) * mu0
-
-mu_dict = {
-    "air_inner": mu0,
-    "air_outer": mu_kelvin,
-    "magnetic": mu_r * mu0
-}
-Mu = CoefficientFunction([mu_dict[mat] for mat in mesh.GetMaterials()])
+mu_kelvin_factor = kelvin_mu_factor_axisym_cf(
+    z_offset=offset_z, R=kelvin_radius,
+    r_coord=r_coord, z_coord=z_coord,
+)
+Mu = build_material_cf(
+    mesh, mu0, mu_kelvin_factor,
+    outer_keyword="air_outer",
+    overrides={"magnetic": mu_r * mu0},
+)
 
 print(f"  air_inner: mu = mu0")
-print(f"  air_outer: mu = (R/rho')^2 * mu0 (Kelvin)")
+print(f"  air_outer: mu = (R/rho')^2 * mu0 [Nagamine CEFC 2026]")
 print(f"  magnetic: mu = {mu_r} * mu0")
 
 # ============================================================

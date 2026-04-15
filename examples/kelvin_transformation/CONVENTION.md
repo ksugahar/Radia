@@ -77,6 +77,14 @@ nu' = nu * (r'/R)^2
 Reciprocal for mu: `mu' = mu / (r'/R)² = (R/r')² mu` (same as the
 existing Ω-formulation convention).
 
+### Axisymmetric (r, z) — same as 3D spherical
+
+The axisymmetric case is the **same basic 3D spherical Kelvin** viewed
+in the meridional (r, z) plane. `ρ' = sqrt(r² + (z - z_offset)²)` is
+the 3D spherical distance from the Kelvin sphere center (on the axis
+at `z = z_offset`). Use `kelvin_{nu,mu}_factor_axisym_cf` — the
+formulas `(ρ'/R)²` and `(R/ρ')²` are identical to the 3D case.
+
 ### Cylindrical (2D) Kelvin — non-conformal
 
 For cylindrical inversion `k(ρ,φ,z) = (R²/ρ, φ, z)` (Nagamine §II.B),
@@ -84,13 +92,17 @@ the transformation is **non-conformal** and yields an **anisotropic**
 reluctivity tensor (eq. 12):
 
 ```
-ν' = diag(1, 1, (ρ'/R)^4) · ν
+ν' = diag(1, 1, (ρ'/R)⁴) · ν
 ```
 
-The axial (`z`) component picks up `(ρ'/R)^4`; radial and azimuthal
-components are unchanged. Examples using cylindrical Kelvin
-(2D dipole, 2D quadrupole, axisymmetric cylinder) should use this
-diagonal tensor rather than a scalar factor.
+Only the axial (`z`) component picks up `(ρ'/R)⁴`; radial and
+azimuthal components are **unchanged (factor = 1, identity)**.
+
+- **2D H1/Ω-form** (scalar potential `φ(x,y)` with `grad(φ)` in (x,y)):
+  bilinear form uses in-plane μ only → **Kelvin factor IS 1**
+  (identity, not "no factor"). Use `kelvin_mu_factor_2d_Hx_Hy_cf()`.
+- **2D A-form** (`A = A_z(x,y) ẑ`): bilinear form uses ν_z only →
+  scalar factor `(ρ'/R)⁴`. Use `kelvin_nu_factor_2d_Az_cf(offset, R)`.
 
 ## Use in code
 
