@@ -1,12 +1,12 @@
 """
 Gmsh Export Example
 
-Demonstrates exporting Cubit mesh to Gmsh format (v2.2 and v4.1)
+Demonstrates exporting Cubit mesh to Gmsh v4.1 format
 using the radia_export gmsh command.
 
 Output files:
-    - cube_v2.msh : Gmsh v2.2 format (simple flat structure)
-    - cube_v4.msh : Gmsh v4.1 format (with $Entities section)
+    - cube.msh            : Gmsh v4.1 format (1st order)
+    - cube_2nd_order.msh  : Gmsh v4.1 format (2nd order)
 """
 
 import sys
@@ -36,21 +36,16 @@ cubit.cmd("block 1 name 'solid'")
 cubit.cmd("block 2 add tri all")
 cubit.cmd("block 2 name 'boundary'")
 
-# Export to Gmsh v2.2 (default)
-print("\nExporting to Gmsh v2.2...")
-cubit.cmd('radia_export gmsh "cube_v2.msh" version 2 overwrite')
-print("  Created: cube_v2.msh")
-
-# Export to Gmsh v4.1
+# Export to Gmsh v4.1 (default)
 print("\nExporting to Gmsh v4.1...")
-cubit.cmd('radia_export gmsh "cube_v4.msh" version 4 overwrite')
-print("  Created: cube_v4.msh")
+cubit.cmd('radia_export gmsh "cube.msh" overwrite')
+print("  Created: cube.msh")
 
 # 2nd order example
 print("\nCreating 2nd order mesh...")
 cubit.cmd("block 1 element type tetra10")
 cubit.cmd("block 2 element type tri6")
-cubit.cmd('radia_export gmsh "cube_2nd_order.msh" version 2 overwrite')
+cubit.cmd('radia_export gmsh "cube_2nd_order.msh" overwrite')
 print("  Created: cube_2nd_order.msh")
 
 print("\nDone!")

@@ -87,10 +87,10 @@ def test_helper_function():
 
 
 def test_gmsh_v2_with_volume_block():
-	"""Test Gmsh v2 export with block containing volume (geometry)."""
+	"""Test Gmsh export with block containing volume (geometry)."""
 	global all_passed
 	print("\n" + "=" * 60)
-	print("Test 2: Gmsh v2 export with volume-based block")
+	print("Test 2: Gmsh export with volume-based block")
 	print("=" * 60)
 
 	cubit.cmd("reset")
@@ -152,7 +152,7 @@ def test_gmsh_with_volume_block():
 	with tempfile.NamedTemporaryFile(suffix='.msh', delete=False) as f:
 		msh_file = f.name
 
-	cubit.cmd(f'radia_export gmsh "{msh_file}" version 2 overwrite')
+	cubit.cmd(f'radia_export gmsh "{msh_file}" overwrite')
 
 	# Verify file
 	with open(msh_file, 'r') as f:

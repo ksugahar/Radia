@@ -2,16 +2,16 @@
 Generate Circular Coil Mesh using Coreform Cubit
 
 Creates a toroidal coil (circular coil with rectangular cross-section)
-and exports as GMSH v2.2 format for PEEC analysis.
+and exports as GMSH v4.1 format for PEEC analysis.
 
 Workflow:
     1. Create toroidal coil geometry in Cubit
     2. Generate SURFACE mesh only (PEEC requirement)
-    3. Export to GMSH v2.2 format (.msh)
+    3. Export to GMSH v4.1 format (.msh)
     4. View in GMSH GUI: gmsh circular_coil.msh
 
 Output:
-    circular_coil.msh - Surface mesh in GMSH v2.2 format
+    circular_coil.msh - Surface mesh in GMSH v4.1 format
 
 Requirements:
     - Coreform Cubit 2025.3+
@@ -88,12 +88,12 @@ cubit.cmd("block 1 name 'conductor'")
 cubit.cmd("block 1 element type tri3")
 print("    Block 1: 'conductor' (surface triangles)")
 
-# Export to GMSH v2.2 format
+# Export to GMSH v4.1 format
 output_file = "circular_coil.msh"
-print(f"\n[5] Exporting to GMSH v2.2 format...")
-cubit.cmd(f'radia_export gmsh "{output_file}" version 2 overwrite')
+print(f"\n[5] Exporting to GMSH v4.1 format...")
+cubit.cmd(f'radia_export gmsh "{output_file}" overwrite')
 print(f"    [OK] Created: {output_file}")
-print(f"    Format: GMSH v2.2 (use GMSH Python API to load)")
+print(f"    Format: GMSH v4.1 (use GMSH Python API to load)")
 
 # Verify: should have NO volume elements
 if cubit.get_tet_count() > 0 or cubit.get_hex_count() > 0:

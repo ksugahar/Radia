@@ -8,11 +8,10 @@ Models:
   - 3D: sphere tet mesh (volume + boundary)
   - 2D: square tri mesh (surface only)
 
-Combinations (64 total):
-  GMSH:    order(1-5) x version(2,4) x dim(2D,3D) = 20 per model x 2 = 40
+Combinations:
+  GMSH:    order(1-5) x dim(2D,3D) = 10 per model x 2 = 20 (v4.1 only)
   Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) = 8 per model x 2 = 16
   VTK:     order(1,2) x dim(2D,3D) = 4 per model x 2 = 8
-  Total = 64
 
 Usage:
   python tests/cubit/test_export_combinations.py
@@ -84,7 +83,7 @@ def build_2d_model():
 # File parsers (Layer 2 validation)
 # ================================================================
 def parse_gmsh(filename):
-    """Parse GMSH v2.2 or v4.1 and return {nodes, elements, element_types, physical_names}."""
+    """Parse GMSH v4.1 and return {nodes, elements, element_types, physical_names}."""
     with open(filename, 'r') as f:
         lines = f.readlines()
 
@@ -97,56 +96,8 @@ def parse_gmsh(filename):
         if line.strip().startswith('4.1') or line.strip().startswith('4.0'):
             result['version'] = line.strip().split()[0]
             break
-        elif line.strip().startswith('2.2') or line.strip().startswith('2.'):
-            result['version'] = line.strip().split()[0]
-            break
 
-    is_v4 = result['version'] is not None and result['version'].startswith('4')
-
-    if is_v4:
-        return _parse_gmsh_v41(lines, result)
-    else:
-        return _parse_gmsh_v22(lines, result)
-
-
-def _parse_gmsh_v22(lines, result):
-    """Parse GMSH v2.2 format."""
-    section = None
-    for line in lines:
-        line = line.strip()
-        if line.startswith('$'):
-            if line == '$MeshFormat':
-                section = 'format'
-            elif line == '$Nodes':
-                section = 'nodes'
-            elif line == '$Elements':
-                section = 'elements'
-            elif line == '$PhysicalNames':
-                section = 'physical'
-            elif line.startswith('$End'):
-                section = None
-            continue
-
-        if section == 'format':
-            result['version'] = line.split()[0]
-        elif section == 'nodes' and result['nodes'] == 0:
-            result['nodes'] = int(line)
-        elif section == 'physical':
-            parts = line.split()
-            if len(parts) >= 3 and parts[0].isdigit():
-                result['physical_names'].append(
-                    (int(parts[0]), int(parts[1]), parts[2].strip('"')))
-        elif section == 'elements':
-            if result['declared_elements'] == 0:
-                result['declared_elements'] = int(line)
-            else:
-                parts = line.split()
-                if len(parts) >= 2:
-                    etype = int(parts[1])
-                    result['element_types'][etype] = \
-                        result['element_types'].get(etype, 0) + 1
-                    result['elements'] += 1
-    return result
+    return _parse_gmsh_v41(lines, result)
 
 
 def _parse_gmsh_v41(lines, result):
@@ -398,37 +349,36 @@ def generate_test_cases():
     """Generate all format x option combinations."""
     cases = []
 
-    # --- GMSH: order(1-5) x version(2,4) x dim(2D,3D) ---
+    # --- GMSH: order(1-5) x dim(2D,3D) (v4.1 only) ---
     for model in ['3d', '2d']:
         for order in [1, 2, 3, 4, 5]:
-            for version in [2, 4]:
-                for dim in [3, 2]:
-                    vstr = '2.2' if version == 2 else '4.1'
-                    name = f"gmsh_{model}_order{order}_v{vstr}_dim{dim}"
-                    fname = os.path.join(OUT_DIR, f"{name}.msh")
+            for dim in [3, 2]:
+                vstr = '4.1'
+                name = f"gmsh_{model}_order{order}_v{vstr}_dim{dim}"
+                fname = os.path.join(OUT_DIR, f"{name}.msh")
 
-                    expected_types = []
-                    if model == '3d' and dim == 3:
-                        expected_types.append(GMSH_TET_TYPES[order])
-                        expected_types.append(GMSH_TRI_TYPES[order])
-                    elif model == '3d' and dim == 2:
-                        expected_types.append(GMSH_TRI_TYPES[order])
-                    elif model == '2d':
-                        expected_types.append(GMSH_TRI_TYPES[order])
+                expected_types = []
+                if model == '3d' and dim == 3:
+                    expected_types.append(GMSH_TET_TYPES[order])
+                    expected_types.append(GMSH_TRI_TYPES[order])
+                elif model == '3d' and dim == 2:
+                    expected_types.append(GMSH_TRI_TYPES[order])
+                elif model == '2d':
+                    expected_types.append(GMSH_TRI_TYPES[order])
 
-                    cmd = (f'radia_export gmsh "{fname}" order {order} '
-                           f'version {version} dimension {dim} overwrite')
+                cmd = (f'radia_export gmsh "{fname}" order {order} '
+                       f'dimension {dim} overwrite')
 
-                    cases.append({
-                        'name': name, 'model': model,
-                        'cmd': cmd,
-                        'validator': validate_gmsh_export,
-                        'expected': {
-                            'version': vstr[:3],
-                            'order': order,
-                            'element_types': expected_types,
-                        }
-                    })
+                cases.append({
+                    'name': name, 'model': model,
+                    'cmd': cmd,
+                    'validator': validate_gmsh_export,
+                    'expected': {
+                        'version': vstr[:3],
+                        'order': order,
+                        'element_types': expected_types,
+                    }
+                })
 
     # --- Nastran: order(1,2) x dim(2D,3D) x nopyramid(0,1) ---
     for model in ['3d', '2d']:

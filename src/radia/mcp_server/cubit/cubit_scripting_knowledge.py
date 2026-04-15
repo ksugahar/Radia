@@ -2056,13 +2056,13 @@ CRITICAL: Do NOT use gmsh.bat or `python -m gmsh` from Cubit's Python.
 - `python -m gmsh` does NOT launch the GUI
 - Only `gmsh.initialize(sys.argv, run=True)` launches the GMSH GUI window
 
-Result .msh v2.2 contains two NodeData fields:
+Result .msh v4.1 contains two NodeData fields:
 - |J| (ncomp=1): scalar current density magnitude, colormap display
 - J (ncomp=3): vector current density, arrow display on curved surface
 
 IMPORTANT: Vector data must be passed as 2D numpy array shape (nv, 3),
 NOT flatten(). flatten() creates 1D array causing arr[ni,c] IndexError
-in GmshPostExport.write_v22().
+in GmshPostExport.write().
 
 ```python
 # CORRECT

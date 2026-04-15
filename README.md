@@ -377,10 +377,10 @@ Radia includes a Cubit plugin for [Coreform Cubit](https://coreform.com/products
 
 ```bash
 # In Cubit command line or .jou files:
-radia_export netgen "mesh.vol" order 3 overwrite          # Netgen .vol (order 1-5)
-radia_export gmsh "mesh.msh" order 2 version 2 overwrite  # Gmsh v2.2 (order 1-4)
-radia_export nastran "mesh.bdf" order 2 overwrite   # Nastran BDF (order 1-2)
-radia_export vtk "mesh.vtk" order 2 overwrite             # VTK Legacy (order 1-2)
+radia_export netgen "mesh.vol" order 3 overwrite      # Netgen .vol (order 1-5)
+radia_export gmsh "mesh.msh" order 2 overwrite        # GMSH v4.1 (order 1-3)
+radia_export nastran "mesh.bdf" order 2 overwrite     # Nastran BDF (order 1-2)
+radia_export vtk "mesh.vtk" order 2 overwrite         # VTK Legacy (order 1-2)
 coil "my_coil.py"                                   # CoilBuilder STEP + import
 ```
 

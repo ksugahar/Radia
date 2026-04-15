@@ -87,13 +87,13 @@ cubit.cmd("block 1 element type BEAM2")
 print(f"  Block 1: 'coil_centerline' (1D edge elements)")
 
 # ============================================================================
-# Export to GMSH v2.2
+# Export to GMSH v4.1
 # ============================================================================
 
 output_file = "circular_coil_centerline.msh"
-print(f"\n[Step 4] Exporting to GMSH v2.2 format...")
+print(f"\n[Step 4] Exporting to GMSH v4.1 format...")
 
-cubit.cmd(f'radia_export gmsh "{output_file}" version 2 overwrite')
+cubit.cmd(f'radia_export gmsh "{output_file}" overwrite')
 
 print(f"  OK Created: {output_file}")
 

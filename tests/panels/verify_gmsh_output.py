@@ -106,124 +106,42 @@ def verify_geo(geo_path: str | Path, verbose: bool = True) -> bool:
 # ============================================================
 
 def verify_msh(msh_path: str | Path, verbose: bool = True) -> bool:
-    """Verify a .msh file (v2.2 or v4.1).
+    """Verify a GMSH v4.1 .msh file.
 
-    Checks (v2.2 only — v4.1 uses entity-block structure where
-    element IDs restart per block, so duplicate-ID and node-count
-    checks are structurally different and skipped for now):
-      1. No duplicate element IDs.
-      2. NodeData declared node count matches actual lines.
-      3. $Nodes section node count matches declared count.
+    v4.1 uses an entity-block structure where element IDs restart per
+    block by design, so the v2.2-style duplicate-ID / node-count
+    checks do not apply. Only NodeData consistency is verified here.
 
-    For v4.1, only NodeData consistency is checked.
-
-    Returns True if all checks pass.
+    Returns True if all checks pass. Fails loudly if the file is not
+    GMSH v4.1.
     """
     msh_path = Path(msh_path)
     text = msh_path.read_text(encoding="utf-8")
-    ok = True
 
-    # Detect version from $MeshFormat
-    version = "2.2"
+    # Detect version from $MeshFormat — v4.1 is the only supported format.
     m_ver = re.search(r'\$MeshFormat\s+(\d+\.\d+)', text)
-    if m_ver:
-        version = m_ver.group(1)
-    is_v22 = version.startswith("2")
-
-    if not is_v22:
-        # v4.1: entity-block structure — element IDs restart per
-        # block by design, so "duplicate" detection from v2.2
-        # parsing would give false positives. Skip structural
-        # checks; only verify NodeData.
-        _report(verbose, "INFO", msh_path.name, 0,
-                f'GMSH v{version} (entity-block format, '
-                f'structural checks skipped)')
-        # Still check NodeData sections
-        ok = _check_nodedata_v22(text, msh_path.name, verbose)
-        if ok and verbose:
-            print(f"  PASS: {msh_path.name} (v{version})")
-        return ok
-
-    # ---- v2.2: full structural checks ----
-    elem_ids = set()
-    dup_count = 0
-    in_elements = False
-    in_nodes = False
-    declared_nodes = 0
-    actual_nodes = 0
-    first_node_line = True
-
-    for line in text.splitlines():
-        stripped = line.strip()
-
-        if stripped == "$Nodes":
-            in_nodes = True
-            first_node_line = True
-            continue
-        if stripped == "$EndNodes":
-            in_nodes = False
-            if declared_nodes != actual_nodes:
-                _report(verbose, "FAIL", msh_path.name, 0,
-                        f'$Nodes declared {declared_nodes} but '
-                        f'found {actual_nodes} node lines')
-                ok = False
-            else:
-                _report(verbose, "OK", msh_path.name, 0,
-                        f'$Nodes: {actual_nodes} nodes')
-            continue
-        if in_nodes:
-            if first_node_line:
-                first_node_line = False
-                try:
-                    declared_nodes = int(stripped.split()[0])
-                except (ValueError, IndexError):
-                    pass
-            else:
-                actual_nodes += 1
-            continue
-
-        if stripped == "$Elements":
-            in_elements = True
-            first_node_line = True  # reuse for first-line skip
-            continue
-        if stripped == "$EndElements":
-            in_elements = False
-            continue
-        if in_elements:
-            if first_node_line:
-                first_node_line = False
-                continue  # skip the count line
-            parts = stripped.split()
-            if len(parts) >= 2:
-                try:
-                    eid = int(parts[0])
-                    if eid in elem_ids:
-                        dup_count += 1
-                    elem_ids.add(eid)
-                except ValueError:
-                    pass
-            continue
-
-    if dup_count > 0:
+    if not m_ver:
         _report(verbose, "FAIL", msh_path.name, 0,
-                f'{dup_count} duplicate element IDs '
-                f'(total unique: {len(elem_ids)})')
-        ok = False
-    else:
-        _report(verbose, "OK", msh_path.name, 0,
-                f'{len(elem_ids)} elements, no duplicates')
+                '$MeshFormat header not found; cannot verify')
+        return False
+    version = m_ver.group(1)
+    if not version.startswith("4"):
+        _report(verbose, "FAIL", msh_path.name, 0,
+                f'GMSH v{version} is not supported; '
+                f'v4.1 is the only accepted format')
+        return False
 
-    # NodeData
-    nd_ok = _check_nodedata_v22(text, msh_path.name, verbose)
-    ok = ok and nd_ok
-
+    _report(verbose, "INFO", msh_path.name, 0,
+            f'GMSH v{version} (entity-block format, '
+            f'structural checks skipped)')
+    ok = _check_nodedata(text, msh_path.name, verbose)
     if ok and verbose:
         print(f"  PASS: {msh_path.name} (v{version})")
     return ok
 
 
-def _check_nodedata_v22(text, filename, verbose):
-    """Check NodeData sections (same format in v2.2 and v4.1)."""
+def _check_nodedata(text, filename, verbose):
+    """Check NodeData sections (same layout in v4.1 as in legacy v2.2)."""
     ok = True
     in_nodedata = False
     nd_name = ""

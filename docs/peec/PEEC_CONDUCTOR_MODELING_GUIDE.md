@@ -179,7 +179,7 @@ cubit.cmd(f"mesh curve {curve_id}")
 cubit.cmd(f"block 1 add curve {curve_id}")
 cubit.cmd("block 1 name 'conductor'")
 
-# Export to GMSH v2.2
+# Export to GMSH v4.1
 cubit.cmd('radia_export gmsh "coil_mesh.msh" overwrite')
 ```
 

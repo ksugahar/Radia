@@ -25,10 +25,8 @@ public:
 
 private:
 
-  // Gmsh v2.2 writer (all orders, blocks + sidesets + nodesets)
-  bool write_gmsh_v22(const std::string &filename, const MeshData &mesh);
-
-  // Gmsh v4.1 writer (all orders, blocks + sidesets + nodesets)
+  // Gmsh v4.1 writer (all orders, blocks + sidesets + nodesets).
+  // v4.1 is the only supported format (lab-wide standard, 2026-04).
   bool write_gmsh_v41(const std::string &filename, const MeshData &mesh);
 
   // Gmsh element type code
