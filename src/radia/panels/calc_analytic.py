@@ -67,18 +67,30 @@ def evaluate_analytic(vol_path, expression, field_name="f",
     gf = GridFunction(fes, name=field_name)
     gf.Set(cf)
 
-    # Save .vol with solution (Netgen GUI can display GridFunction)
     base = os.path.splitext(vol_path)[0]
     sol_path = base + "_analytic.sol"
     gf.Save(sol_path)
-
     _log(f"Written: {sol_path}")
-    _log(f"View with: python -m netgen {vol_path}")
-    _log(f"  then load solution: {sol_path}")
+
+    from gmsh_post_export import vol2msh
+    msh_path = base + "_analytic.msh"
+    vol2msh(
+        msh_path, vol_path,
+        [{
+            "name": field_name,
+            "sol": sol_path,
+            "fes": "H1",
+            "fes_order": fes_order,
+            "fes_dim": 3 if vector else 1,
+            "ncomp": 3 if vector else 1,
+        }],
+    )
+    _log(f"Written: {msh_path}")
 
     return {
         "vol_path": vol_path,
         "sol_path": sol_path,
+        "msh_path": msh_path,
         "field_name": field_name,
         "expression": expression,
         "n_elements": mesh.ne,
