@@ -61,12 +61,19 @@ print(f"  Source field: H_s = (0, 0, {H0}) A/m")
 # ============================================================
 print("\nCreating 1/8 geometry using OCC...")
 
-# Create cutting boxes for 1/8 symmetry
-# Keep x >= 0, y >= 0, z >= 0
+# Create cutting boxes for 1/8 symmetry.
+# Keep x >= 0, y >= 0, z >= 0.
+# IMPORTANT: cut_x / cut_y must span z up past the OUTER sphere top
+# (z = offset_z + kelvin_radius). Without this, the outer sphere's
+# upper half is NOT cut and remains a hemisphere -- breaking the
+# periodic BC because interior (1/8 sphere) and exterior (hemisphere)
+# have incompatible face topology. Symptom: FreeDofs diff = 0 after
+# Periodic(fes). Fixed 2026-04-16 for the 1/8 Kelvin-cylinder model.
+z_hi = offset_z + kelvin_radius * 2
 cut_x = Box(Pnt(-kelvin_radius*2, -kelvin_radius*2, -kelvin_radius*2),
-            Pnt(0, kelvin_radius*2, kelvin_radius*2))
+            Pnt(0, kelvin_radius*2, z_hi))
 cut_y = Box(Pnt(-kelvin_radius*2, -kelvin_radius*2, -kelvin_radius*2),
-            Pnt(kelvin_radius*2, 0, kelvin_radius*2))
+            Pnt(kelvin_radius*2, 0, z_hi))
 cut_z = Box(Pnt(-kelvin_radius*2, -kelvin_radius*2, -kelvin_radius*2),
             Pnt(kelvin_radius*2, kelvin_radius*2, 0))
 
