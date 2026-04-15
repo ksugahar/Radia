@@ -1,20 +1,31 @@
 """test_nu_convention.py
 
-Empirical test to resolve the open question in
-pullback_derivation_3D.md sec 8: which nu_kelvin convention gives the
-correct L in a full-A volume-J FEM with Sugahara two-sphere Kelvin
-geometry?
+A/B regression test of nu_kelvin conventions in the 3D full-A HCurl
+FEM with Sugahara two-sphere Kelvin geometry (gapped torus, circular
+cross-section, analytical L = 88.55 nH).
 
-  (a) "sugahara"          : nu_kelvin = (R/rho')^2 * nu_0
-                            (used by Coil_3D_A_HCurl_with_Kelvin.py)
-  (b) "energy_invariant"  : nu_kelvin = (rho'/R)^2 * nu_0
-                            (derived in pullback_derivation_3D.md from
-                            the validated A 1-form pullback formula)
+Canonical convention per Nagamine CEFC 2026 / Sugahara 2022 IEEE
+TransMag (labeled "canonical" below):
 
-Both are run on the IDENTICAL geometry, same Kelvin convention except
-for the nu_kelvin formula. The one that reproduces L_analytical = 88.55
-nH (gapped torus, circular cross-section a=3mm) is the empirically
-correct one.
+    nu_kelvin = (rho'/R)^2 * nu_0
+
+An "inverted_variant" with (R/rho')^2 is kept for A/B purposes: an
+earlier (2026-04-15) session reported the inverted form winning with
++0.90% error on this benchmark and mislabeled it "sugahara", which
+was incorrect. Nagamine CEFC 2026 derives (rho'/R)^2 rigorously
+(pullback + bilinear energy functional) and validates numerically
+on a toroidal loop to +0.33%. See
+  examples/kelvin_transformation/CONVENTION.md
+  examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8
+
+Run this to verify the canonical convention reproduces L_analytical
+on this benchmark. Any discrepancy from the old empirical result
+(where the canonical gave +4.80% error) points to FEM setup issues
+(GND / gauge regularization / mesh) and is an open investigation.
+
+Labels:
+  (a) "canonical"       : nu_kelvin = (rho'/R)^2 * nu_0   [Nagamine/Sugahara]
+  (b) "inverted_variant": nu_kelvin = (R/rho')^2 * nu_0   [historical mislabel]
 """
 
 import math
@@ -98,10 +109,12 @@ def solve_with_convention(mesh, R_K, offset, R_coil, a_coil, gap_deg,
     J0 = I_total / (math.pi * a_coil ** 2)
 
     r_prime_sq = (x - offset) ** 2 + y ** 2 + z ** 2 + 1e-24
-    if convention == "sugahara":
+    if convention == "canonical":
+        # Nagamine CEFC 2026 / Sugahara 2022 IEEE TransMag: nu' = (rho'/R)^2 * nu_0
+        kelvin_fac = r_prime_sq / (R_K * R_K)
+    elif convention == "inverted_variant":
+        # Historical mislabel ("sugahara" in 2026-04-15 session); kept for A/B only
         kelvin_fac = R_K * R_K / r_prime_sq        # (R/rho')^2
-    elif convention == "energy_invariant":
-        kelvin_fac = r_prime_sq / (R_K * R_K)      # (rho'/R)^2
     else:
         raise ValueError(convention)
 
@@ -157,9 +170,9 @@ def main():
     print(f"  {mesh.ne} tets, {mesh.nv} verts, "
           f"mats={mesh.GetMaterials()} ({time.perf_counter()-t0:.1f}s)")
 
-    for conv in ["sugahara", "energy_invariant"]:
+    for conv in ["canonical", "inverted_variant"]:
         print(f"\n[{conv}] nu_kelvin = "
-              f"{'(R/rho)^2' if conv=='sugahara' else '(rho/R)^2'} * nu_0")
+              f"{'(rho/R)^2' if conv=='canonical' else '(R/rho)^2'} * nu_0")
         t0 = time.perf_counter()
         L, W_in, W_k = solve_with_convention(
             mesh, R_K, offset, R_coil, a_coil, gap_deg, conv)

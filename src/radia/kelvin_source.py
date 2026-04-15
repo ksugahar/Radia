@@ -31,6 +31,33 @@ For a filament bundle with currents I_k carried by polyline path_k:
     A_s(r) = (mu_0 / 4 pi) * sum_k I_k * integral_{path_k} dl' / |r - r'|
 
 Evaluated via Gauss-Legendre quadrature on each polyline segment.
+
+Two kinds of Kelvin factor (don't confuse them!)
+------------------------------------------------
+This module exposes helpers for two DIFFERENT concepts:
+
+1. **Solution pullback** (PEEC source evaluation): transform a vector
+   potential A_phys defined on the physical exterior into the
+   computational frame:
+     A_comp(r') = (R/rho')^2 H A_phys(r_phys)        (1-form pullback)
+     B_comp(r') = -(R/rho')^4 H B_phys(r_phys)       (2-form pullback)
+   Functions: kelvin_pullback_vector, kelvin_pullback_B_pseudovector,
+   kelvin_factor_scalar, A_s_at_obs_with_kelvin.
+
+2. **Material modulation** (FEM bilinear form coefficient): the nu or
+   mu that, applied in the transformed domain Omega', makes the FEM
+   bilinear form equal the physical-domain energy. For 3D spherical
+   (conformal) Kelvin (Nagamine CEFC 2026 eq. 9):
+     nu_ext = (rho'/R)^2 * nu_0          [HCurl A-formulation]
+     mu_ext = (R/rho')^2 * mu_0          [H1 Omega/H-formulation; reciprocal]
+   Functions: kelvin_nu_factor_{3d,axisym,2d}_cf,
+     kelvin_mu_factor_{3d,axisym,2d}_cf, build_material_cf.
+
+Reference: H. Nagamine, T. Yamaguchi, K. Sugahara, "A Pullback-Based
+Formulation of Kelvin Transformation in Electromagnetic Field Analysis,"
+CEFC 2026 (Thessaloniki) id 350 (with Sugahara as co-author); see also
+Sugahara 2022 IEEE TransMag 58(9) [ref [3] in Nagamine]. Canonical
+declaration: examples/kelvin_transformation/CONVENTION.md.
 """
 
 from __future__ import annotations
@@ -357,3 +384,194 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
     if not np.iscomplexobj(np.asarray(list(currents))):
         A = A.real
     return A
+
+
+# ---------- FEM (NGSolve) material CoefficientFunction factory --------
+#
+# Helpers for the canonical Kelvin material modulation per
+#   H. Nagamine, T. Yamaguchi, K. Sugahara,
+#   "A Pullback-Based Formulation of Kelvin Transformation in
+#    Electromagnetic Field Analysis," CEFC 2026 id 350
+# (with Sugahara as co-author); see also Sugahara 2022 IEEE TransMag
+# 58(9) [ref [3] in Nagamine]. Full declaration in
+#   examples/kelvin_transformation/CONVENTION.md
+# and derivation in
+#   examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8.
+#
+# 3D spherical (conformal) Kelvin:
+#     nu' = (rho'/R)^2 * nu_0          [HCurl A-formulation]
+#     mu' = (R/rho')^2 * mu_0          [H1 Omega / H-formulation]
+# (pointwise reciprocals; mu * nu = 1)
+#
+# These factors are the MATERIAL modulation entering the FEM bilinear
+# form. They are DIFFERENT from the solution pullback factors (R/rho')^2
+# on A and -(R/rho')^4 on B used by kelvin_pullback_vector and
+# kelvin_pullback_B_pseudovector above.
+
+
+def kelvin_nu_factor_3d_cf(center, R, coords=None):
+    """3D spherical Kelvin nu factor (rho'/R)^2 as NGSolve CF.
+
+    Multiply by nu_0 to produce the Kelvin exterior-domain reluctivity:
+        nu_ext = nu_0 * kelvin_nu_factor_3d_cf(...)
+
+    Vanishes at rho'=0 (image of physical infinity), equals nu_0 at
+    rho'=R (continuous with air domain). Reference: Nagamine CEFC 2026
+    eq. (9).
+
+    Args:
+        center: (cx, cy, cz) -- Kelvin sphere center in world coords.
+        R: Kelvin sphere radius.
+        coords: optional 3-tuple of NGSolve CFs (default: (x, y, z)).
+
+    Returns:
+        NGSolve CoefficientFunction.
+    """
+    from ngsolve import x, y, z, sqrt, IfPos
+    if coords is None:
+        coords = (x, y, z)
+    cx, cy, cz = center
+    rho2 = (coords[0] - cx) ** 2 + (coords[1] - cy) ** 2 + (coords[2] - cz) ** 2
+    rho_prime = sqrt(rho2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (rho_safe / R) ** 2
+
+
+def kelvin_mu_factor_3d_cf(center, R, coords=None):
+    """3D spherical Kelvin mu factor (R/rho')^2 as NGSolve CF.
+
+    Multiply by mu_0 to produce the Kelvin exterior-domain permeability:
+        mu_ext = mu_0 * kelvin_mu_factor_3d_cf(...)
+
+    Diverges at rho'=0 (mu_r -> infinity at image of infinity), equals
+    mu_0 at rho'=R. Reciprocal of kelvin_nu_factor_3d_cf.
+    """
+    from ngsolve import x, y, z, sqrt, IfPos
+    if coords is None:
+        coords = (x, y, z)
+    cx, cy, cz = center
+    rho2 = (coords[0] - cx) ** 2 + (coords[1] - cy) ** 2 + (coords[2] - cz) ** 2
+    rho_prime = sqrt(rho2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (R / rho_safe) ** 2
+
+
+def kelvin_nu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
+    """Axisym (r,z) Kelvin nu factor (rho'/R)^2 with Z-offset.
+
+    rho' = sqrt(r^2 + (z - z_offset)^2)  (3D spherical distance in the
+    meridional plane; this is 3D sphere Kelvin viewed axisymmetrically).
+
+    NGSolve axisym convention: r = x, z = y. Pass explicit r_coord /
+    z_coord when your mesh uses a different embedding.
+
+    Multiply by nu_0 for A-formulation nu_ext.
+    """
+    from ngsolve import x, y, sqrt, IfPos
+    if r_coord is None:
+        r_coord = x
+    if z_coord is None:
+        z_coord = y
+    z_local = z_coord - z_offset
+    rho_prime = sqrt(r_coord ** 2 + z_local ** 2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (rho_safe / R) ** 2
+
+
+def kelvin_mu_factor_axisym_cf(z_offset, R, r_coord=None, z_coord=None):
+    """Axisym (r,z) Kelvin mu factor (R/rho')^2. Reciprocal of nu factor."""
+    from ngsolve import x, y, sqrt, IfPos
+    if r_coord is None:
+        r_coord = x
+    if z_coord is None:
+        z_coord = y
+    z_local = z_coord - z_offset
+    rho_prime = sqrt(r_coord ** 2 + z_local ** 2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (R / rho_safe) ** 2
+
+
+def kelvin_nu_factor_2d_cf(offset, R, x_coord=None, y_coord=None):
+    """2D Cartesian Kelvin nu factor (rho'/R)^2 with (x, y) offset.
+
+    rho' = sqrt((x - x_off)^2 + (y - y_off)^2)
+
+    For 2D CARTESIAN conformal Kelvin. For 2D CYLINDRICAL (z-axis)
+    Kelvin, the modulation is anisotropic (Nagamine eq. 12):
+    nu' = diag(1, 1, (rho'/R)^4) nu -- use a tensor CF rather than
+    this scalar helper.
+    """
+    from ngsolve import x, y, sqrt, IfPos
+    if x_coord is None:
+        x_coord = x
+    if y_coord is None:
+        y_coord = y
+    xo, yo = offset
+    rho_prime = sqrt((x_coord - xo) ** 2 + (y_coord - yo) ** 2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (rho_safe / R) ** 2
+
+
+def kelvin_mu_factor_2d_cf(offset, R, x_coord=None, y_coord=None):
+    """2D Cartesian Kelvin mu factor (R/rho')^2. Reciprocal of nu factor."""
+    from ngsolve import x, y, sqrt, IfPos
+    if x_coord is None:
+        x_coord = x
+    if y_coord is None:
+        y_coord = y
+    xo, yo = offset
+    rho_prime = sqrt((x_coord - xo) ** 2 + (y_coord - yo) ** 2)
+    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    return (R / rho_safe) ** 2
+
+
+def build_material_cf(mesh, base_value, kelvin_factor_cf, *,
+                      overrides=None,
+                      outer_keyword="outer"):
+    """Build a mesh-material-indexed CoefficientFunction.
+
+    For each material in ``mesh.GetMaterials()``:
+      - if present in ``overrides`` dict, use overrides[material]
+      - elif name contains ``outer_keyword`` (case-insensitive),
+        use ``base_value * kelvin_factor_cf``
+      - otherwise use ``base_value``
+
+    Typical usage:
+
+        # A-formulation axisym with Z-offset:
+        nu_cf = build_material_cf(
+            mesh, nu0,
+            kelvin_nu_factor_axisym_cf(z_offset, a),
+            overrides={"magnetic": nu0 / mu_r},
+        )
+
+        # Omega-formulation 3D sphere:
+        mu_cf = build_material_cf(
+            mesh, mu0,
+            kelvin_mu_factor_3d_cf(center, R),
+            overrides={"magnetic": mu_r * mu0},
+        )
+
+    Args:
+        mesh: NGSolve Mesh.
+        base_value: float -- baseline material (nu_0 or mu_0).
+        kelvin_factor_cf: CF -- pick the matching helper:
+            nu-direction: kelvin_nu_factor_{3d,axisym,2d}_cf
+            mu-direction: kelvin_mu_factor_{3d,axisym,2d}_cf
+        overrides: {material_name: value_or_cf} explicit overrides.
+        outer_keyword: substring to match Kelvin outer-domain name.
+
+    Returns:
+        NGSolve CoefficientFunction indexed by mesh.GetMaterials().
+    """
+    from ngsolve import CoefficientFunction
+    overrides = overrides or {}
+    values = []
+    for mat in mesh.GetMaterials():
+        if mat in overrides:
+            values.append(overrides[mat])
+        elif outer_keyword in mat.lower():
+            values.append(base_value * kelvin_factor_cf)
+        else:
+            values.append(base_value)
+    return CoefficientFunction(values)
