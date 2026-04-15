@@ -239,22 +239,23 @@ psi = fes.TestFunction()
 # ============================================================
 print("\nSetting up material properties...")
 
-# Distance from exterior domain center
-r_prime_sq = x**2 + y**2 + (z - offset_z)**2
-r_prime = sqrt(r_prime_sq + 1e-20)
+# Kelvin-transformed permeability (Nagamine CEFC 2026 canonical):
+#   mu_ext = mu_0 * (R/r')^2  for 3D spherical (conformal) Kelvin
+# See examples/kelvin_transformation/CONVENTION.md.
+from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
 
-# Kelvin-transformed permeability
-mu_kelvin = (kelvin_radius / r_prime)**2 * mu0
-
-mu_dict = {
-    "air_inner": mu0,
-    "air_outer": mu_kelvin,
-    "magnetic": mu_r * mu0
-}
-Mu = CoefficientFunction([mu_dict[mat] for mat in mesh.GetMaterials()])
+mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=(0.0, 0.0, offset_z),
+                                           R=kelvin_radius)
+Mu = build_material_cf(
+    mesh, mu0, mu_kelvin_factor,
+    outer_keyword="air_outer",
+    overrides={"magnetic": mu_r * mu0},
+)
+# Keep mu_kelvin alias for post-processing
+mu_kelvin = mu0 * mu_kelvin_factor
 
 print(f"  air_inner: mu = mu0")
-print(f"  air_outer: mu = (R/r')^2 * mu0 (Kelvin)")
+print(f"  air_outer: mu = (R/r')^2 * mu0 [Nagamine CEFC 2026]")
 print(f"  magnetic: mu = {mu_r} * mu0")
 
 # ============================================================
