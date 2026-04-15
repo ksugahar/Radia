@@ -274,13 +274,14 @@ def solve_msc(coil_script="", cub5_file="",
 
     # ============================================================
     # Step 6: Optional GMSH output (element-center B field)
+    # Write .vol + .sol first, then vol2msh for GMSH visualization
     # ============================================================
     gmsh_file = ""
     if msh_output:
         try:
-            _write_msc_gmsh(msh_output, elements, model, rad)
-            gmsh_file = msh_output
-            _log(f"GMSH:{msh_output}")
+            gmsh_file = _write_msc_vol_sol_msh(
+                msh_output, elements, model, rad)
+            _log(f"GMSH:{gmsh_file}")
         except Exception as e:
             _log(f"GMSH:export failed: {e}")
 
@@ -311,81 +312,92 @@ def solve_msc(coil_script="", cub5_file="",
     return result_dict
 
 
-def _write_msc_gmsh(filename, elements, model, rad):
-    """Write GMSH .msh v2.2 with element-center B field as ElementData.
+def _build_ngmesh_from_elements(elements):
+    """Build a netgen Mesh from the Radia hex/tet/wedge element list.
 
-    Builds node/element tables directly from the Radia element list
-    (no dependency on external mesh import modules).
+    Shares vertices by coordinate rounding so adjacent elements
+    reference the same PointIndex.
     """
-    # Collect unique nodes and build element connectivity
-    node_map = {}  # (x,y,z) rounded -> node_id
-    node_coords = {}  # node_id -> (x, y, z)
-    elem_connectivity = []  # [(gmsh_type, [node_ids])]
-    next_nid = 1
+    from netgen.meshing import (Mesh as NGMesh, MeshPoint, Element3D,
+                                 Pnt, FaceDescriptor)
+    m = NGMesh(dim=3)
+    m.Add(FaceDescriptor(surfnr=1, domin=1, bc=1))
+    m.SetMaterial(1, 'yoke')
 
-    gmsh_types = {'hex': 5, 'tet': 4, 'wedge': 6}
-
+    vmap = {}  # (rx,ry,rz) -> PointIndex
     for elem in elements:
-        nids = []
+        pids = []
         for v in elem['vertices']:
             key = (round(v[0], 10), round(v[1], 10), round(v[2], 10))
-            if key not in node_map:
-                node_map[key] = next_nid
-                node_coords[next_nid] = (v[0], v[1], v[2])
-                next_nid += 1
-            nids.append(node_map[key])
-        elem_connectivity.append((gmsh_types[elem['type']], nids))
+            pid = vmap.get(key)
+            if pid is None:
+                pid = m.Add(MeshPoint(Pnt(v[0], v[1], v[2])))
+                vmap[key] = pid
+            pids.append(pid)
+        m.Add(Element3D(1, pids))
+    return m
 
-    # Compute B at element centroids
-    B_data = []
-    for elem in elements:
-        verts = elem['vertices']
-        n = len(verts)
-        cx = sum(v[0] for v in verts) / n
-        cy = sum(v[1] for v in verts) / n
-        cz = sum(v[2] for v in verts) / n
+
+def _write_msc_vol_sol_msh(msh_path, elements, model, rad):
+    """.vol + .sol first, then vol2msh to GMSH v4.1 with ElementData.
+
+    Outputs:
+      <base>.vol      netgen mesh (hex/tet/wedge)
+      <base>_B.sol    L2 order=0 dim=3 element-centered B [T]
+      <base>_Bmag.sol L2 order=0 scalar element-centered |B| [T]
+      <base>.msh      GMSH v4.1 with $ElementData views (via vol2msh)
+    """
+    from ngsolve import Mesh as NMesh, L2, GridFunction
+
+    base, _ = os.path.splitext(msh_path)
+    vol_path = base + ".vol"
+    b_sol = base + "_B.sol"
+    bmag_sol = base + "_Bmag.sol"
+
+    ngm = _build_ngmesh_from_elements(elements)
+    ngm.Save(vol_path)
+
+    # Reload so FES/GridFunction build on the saved-and-loaded mesh
+    # (keeps element ordering deterministic between save and later vol2msh).
+    from netgen.meshing import Mesh as _NGMesh
+    ng2 = _NGMesh()
+    ng2.Load(vol_path)
+    nsm = NMesh(ng2)
+
+    fes_v = L2(nsm, order=0, dim=3)
+    gf_b = GridFunction(fes_v)
+    fes_s = L2(nsm, order=0)
+    gf_bm = GridFunction(fes_s)
+
+    # Compute B at NGSolve element centroids directly — same centroids
+    # the source element list used, since we built the mesh from them.
+    for ngs_idx, el in enumerate(nsm.Elements()):
+        pts = [nsm[v].point for v in el.vertices]
+        n = len(pts)
+        cx = sum(p[0] for p in pts) / n
+        cy = sum(p[1] for p in pts) / n
+        cz = sum(p[2] for p in pts) / n
         B = rad.Fld(model, 'b', [cx, cy, cz])
-        B_data.append(B)
+        gf_b.vec.FV()[ngs_idx * 3 + 0] = float(B[0])
+        gf_b.vec.FV()[ngs_idx * 3 + 1] = float(B[1])
+        gf_b.vec.FV()[ngs_idx * 3 + 2] = float(B[2])
+        gf_bm.vec.FV()[ngs_idx] = math.sqrt(
+            float(B[0]) ** 2 + float(B[1]) ** 2 + float(B[2]) ** 2)
 
-    # Write GMSH v2.2
-    with open(filename, 'w') as f:
-        f.write("$MeshFormat\n2.2 0 8\n$EndMeshFormat\n")
+    gf_b.Save(b_sol)
+    gf_bm.Save(bmag_sol)
 
-        # Nodes
-        f.write(f"$Nodes\n{len(node_coords)}\n")
-        for nid in sorted(node_coords.keys()):
-            x, y, z = node_coords[nid]
-            f.write(f"{nid} {x} {y} {z}\n")
-        f.write("$EndNodes\n")
-
-        # Elements
-        f.write(f"$Elements\n{len(elem_connectivity)}\n")
-        for i, (etype, nids) in enumerate(elem_connectivity):
-            eid = i + 1
-            nids_str = " ".join(str(n) for n in nids)
-            f.write(f"{eid} {etype} 2 1 1 {nids_str}\n")
-        f.write("$EndElements\n")
-
-        # ElementData: B vector
-        f.write("$ElementData\n")
-        f.write("1\n\"B [T]\"\n")
-        f.write("1\n0.0\n")
-        f.write("3\n0\n3\n")
-        f.write(f"{len(elements)}\n")
-        for i, B in enumerate(B_data):
-            f.write(f"{i+1} {B[0]} {B[1]} {B[2]}\n")
-        f.write("$EndElementData\n")
-
-        # ElementData: |B| scalar
-        f.write("$ElementData\n")
-        f.write("1\n\"|B| [T]\"\n")
-        f.write("1\n0.0\n")
-        f.write("3\n0\n1\n")
-        f.write(f"{len(elements)}\n")
-        for i, B in enumerate(B_data):
-            Bmag = math.sqrt(B[0]**2 + B[1]**2 + B[2]**2)
-            f.write(f"{i+1} {Bmag}\n")
-        f.write("$EndElementData\n")
+    from gmsh_post_export import vol2msh
+    vol2msh(
+        msh_path, vol_path,
+        [
+            {"name": "B [T]", "sol": b_sol, "fes": "L2",
+             "fes_order": 0, "fes_dim": 3, "ncomp": 3, "cell_data": True},
+            {"name": "|B| [T]", "sol": bmag_sol, "fes": "L2",
+             "fes_order": 0, "ncomp": 1, "cell_data": True},
+        ],
+    )
+    return msh_path
 
 
 def main():
