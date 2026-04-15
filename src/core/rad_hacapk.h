@@ -7,6 +7,13 @@
 * Description:    HACApK (H-matrix with ACA+) interface for BiCGSTAB solver
 *                 Provides O(N log N) matrix-vector products for large problems
 *
+*                 Refactored 2026-04-16:
+*                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
+*                 - RadHACApKMSCManager : public RadHACApKBase implements the
+*                   MMM/MSC kernel (tetra/wedge/hex magnetization moments and
+*                   surface charges). A future RadHACApKPEECManager will
+*                   implement Ruehli finite-filament mutual inductance.
+*
 * First release:  2025
 *
 * Reference:      ppOpen-HPC project (MIT License)
@@ -69,236 +76,208 @@ struct RadHACApKStats {
 };
 
 //-------------------------------------------------------------------------
-// HACApK Manager for Radia
+// RadHACApKBase: kernel-agnostic H-matrix manager
 //-------------------------------------------------------------------------
 
 /**
- * RadHACApKManager handles the lifecycle of H-matrix for BiCGSTAB solver
+ * RadHACApKBase holds the HACApK build / matvec / diagonal-update lifecycle
+ * that is independent of the physical kernel. Subclasses supply the
+ * integration kernel via four virtual hooks:
  *
- * Usage:
- *   1. Create manager with RadHACApKManager(interaction_ptr)
- *   2. Call BuildHMatrix() to construct the H-matrix
- *   3. Call MatVec(x, y) for matrix-vector products
- *   4. Call UpdateDiagonal() when chi(H) changes (nonlinear iteration)
+ *   - ExtractCoordinates(): populate m_coordinates, m_n_elem, m_ndof,
+ *     m_dof_offset (and any kernel-specific lookup tables)
+ *   - OnBeforeBuild():      run kernel-specific precomputation before
+ *     HACApK calls back into ComputeEntry
+ *   - InitializeInvChi():   populate m_inv_chi (size == m_ndof) from the
+ *     current material / constitutive state
+ *   - GetInteractionMatrixElement(i, j): return the +N(i, j) physical
+ *     matrix element (system matrix A = -N + diag(1/chi); the sign flip
+ *     is applied once inside RadHACApKCallback::ComputeEntry)
  *
- * The H-matrix approximates A = -N - diag(1/chi) using ACA+ compression (ELF-compatible).
- * For problems where elements are spatially well-separated, this provides
- * O(N log N) complexity instead of O(N^2) for dense matrix-vector products.
- *
- * Note: For single compact objects (typical Radia use case), the admissibility
- * criterion may not be satisfied and most blocks remain dense. In such cases,
- * the dense BiCGSTAB solver (Method 1) is more efficient.
+ * Typical usage:
+ *   RadHACApKMSCManager mgr(interaction);
+ *   mgr.BuildHMatrix();
+ *   mgr.MatVec(x, y);                    // y = A * x
+ *   mgr.UpdateDiagonal(new_inv_chi);     // nonlinear iteration update
  */
-class RadHACApKManager {
+class RadHACApKBase {
 public:
-    /**
-     * Constructor
-     * @param interaction Pointer to Radia interaction object (must remain valid)
-     */
-    RadHACApKManager(radTInteraction* interaction);
+    virtual ~RadHACApKBase();
 
     /**
-     * Destructor - frees HACApK resources
-     */
-    ~RadHACApKManager();
-
-    /**
-     * Build H-matrix from current interaction matrix
-     * @param params Configuration parameters
-     * @return true on success, false on failure
+     * Build H-matrix. Calls ExtractCoordinates, OnBeforeBuild,
+     * InitializeInvChi, then hands off to HACApK.
      */
     bool BuildHMatrix(const RadHACApKParams& params = RadHACApKParams());
 
     /**
-     * Matrix-vector product: y = A * x
-     * Uses H-matrix approximation for O(N log N) complexity
-     * @param x Input vector (size = n_dof)
-     * @param y Output vector (size = n_dof)
+     * Matrix-vector product: y = A * x (O(N log N))
      */
     void MatVec(const std::vector<double>& x, std::vector<double>& y);
 
     /**
-     * Update diagonal blocks when chi(H) changes
-     * Called during nonlinear iteration when material susceptibility updates
-     * @param inv_chi New inverse susceptibility values (1/chi for each DOF)
+     * Update diagonal blocks when 1/chi changes (nonlinear iteration)
      */
     void UpdateDiagonal(const std::vector<double>& inv_chi);
 
     /**
-     * Check if H-matrix is valid and ready for use
+     * Return the kernel's +N(i, j) interaction matrix element.
+     * The system matrix A = -N + diag(1/chi) is assembled by
+     * RadHACApKCallback::ComputeEntry; do NOT apply the sign here.
      */
+    virtual double GetInteractionMatrixElement(int dof_i, int dof_j) const = 0;
+
+    // Accessors
     bool IsValid() const { return m_valid; }
-
-    /**
-     * Get the interaction object this H-matrix was built for
-     */
-    radTInteraction* GetInteraction() const { return m_interaction; }
-
-    /**
-     * Get H-matrix statistics
-     */
-    const RadHACApKStats& GetStats() const { return m_stats; }
-
-    /**
-     * Get number of degrees of freedom
-     */
     int GetNDOF() const { return m_ndof; }
-
-    /**
-     * Get permutation array (for coordinate reordering)
-     */
     const std::vector<int>& GetPermutation() const { return m_permutation; }
-
-    /**
-     * Get interaction matrix element N(dof_i, dof_j)
-     * Uses friend access to radTInteraction::InteractMatrix
-     * @param dof_i Row DOF index (0-based)
-     * @param dof_j Column DOF index (0-based)
-     * @return The N matrix element value
-     */
-    double GetInteractionMatrixElement(int dof_i, int dof_j) const;
-
-    /**
-     * Get cached diagonal elements of interaction matrix N_ii
-     * These are computed once during BuildHMatrix for efficiency
-     * @return Reference to cached diagonal vector (size = n_dof)
-     */
+    const RadHACApKStats& GetStats() const { return m_stats; }
     const std::vector<double>& GetDiagonalN() const { return m_diag_N; }
-
-    /**
-     * Check if diagonal elements are cached
-     */
     bool IsDiagonalCached() const { return m_diag_cached; }
 
-    /**
-     * Check if flat N storage is ready (for 3DOF tetrahedra)
-     */
-    bool IsFlatNReady() const { return m_flat_N_ready; }
+protected:
+    RadHACApKBase();
+
+    // Kernel hooks
+    virtual void ExtractCoordinates() = 0;
+    virtual void OnBeforeBuild() = 0;
+    virtual void InitializeInvChi() = 0;
 
     /**
-     * Flatten InteractMatrix for 3DOF tetrahedra (O(1) access)
-     * Must be called AFTER InteractMatrix is computed
-     * Safe to call multiple times (no-op if already ready)
+     * Return true to use variable-DOF HACApK build (per-element DOF via
+     * m_dof_offset). Return false for uniform DOF (m_nffc per element).
+     */
+    virtual bool IsVariableDOF() const = 0;
+
+    /**
+     * Uniform DOF count per element (used when IsVariableDOF() is false).
+     * Typical: 3 (MMM tetra), 6 (MSC hex), 1 (PEEC filament).
+     */
+    virtual int GetUniformNFFC() const = 0;
+
+    void FreeResources();
+
+    // HACApK opaque structures (owned)
+    void* m_leafmtxp;    // st_cHACApK_leafmtxp*
+    void* m_control;     // st_cHACApK_lcontrol*
+
+    // Global state
+    bool m_valid;
+    int m_ndof;
+    int m_n_elem;
+
+    // DOF permutation returned by HACApK clustering
+    std::vector<int> m_permutation;
+
+    // Per-element DOF offset (size = n_elem + 1); required for variable-DOF build
+    std::vector<int> m_dof_offset;
+
+    // Element center coordinates for clustering, size = n_elem * 3
+    std::vector<double> m_coordinates;
+
+    // Current inverse susceptibility (1/chi per DOF), size = n_dof
+    std::vector<double> m_inv_chi;
+
+    // Cached diagonal of N (physical, NOT system matrix), size = n_dof
+    std::vector<double> m_diag_N;
+    bool m_diag_cached;
+
+    RadHACApKStats m_stats;
+
+private:
+    RadHACApKBase(const RadHACApKBase&) = delete;
+    RadHACApKBase& operator=(const RadHACApKBase&) = delete;
+};
+
+//-------------------------------------------------------------------------
+// RadHACApKMSCManager: MMM/MSC kernel (tetra 3DOF, wedge 5DOF, hex 6DOF)
+//-------------------------------------------------------------------------
+
+/**
+ * RadHACApKMSCManager implements the HACApK kernel for Radia's Magnetic
+ * Moment Method (MMM, tetrahedra, 3 DOF) and Magnetic Surface Charge
+ * method (MSC, wedges 5 DOF / hexahedra 6 DOF) element types, including
+ * mixed meshes.
+ *
+ * All kernel-specific precomputation (PrecomputeHexaGeometry, etc.),
+ * flat matrix caching, and on-demand block computation routines live
+ * here. The DOF-to-element lookup table m_dof_to_elem / m_dof_to_local
+ * is built after ExtractCoordinates completes.
+ *
+ * For typical Radia compact geometries most H-matrix blocks are dense
+ * (admissibility not satisfied). HACApK still provides a clean solver
+ * pipeline, but the dense BiCGSTAB solver (Method 1) is often faster
+ * on small/medium problems. Use HACApK when N > ~1000.
+ */
+class RadHACApKMSCManager : public RadHACApKBase {
+public:
+    explicit RadHACApKMSCManager(radTInteraction* interaction);
+    ~RadHACApKMSCManager() override;
+
+    radTInteraction* GetInteraction() const { return m_interaction; }
+
+    double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+
+    /**
+     * Flatten InteractMatrix for 3DOF tetrahedra (O(1) element access).
+     * Safe to call multiple times (no-op if already ready).
      */
     void PrecomputeFlatInteractMatrix();
+    bool IsFlatNReady() const { return m_flat_N_ready; }
+
+    // Delegates to radTInteraction::Compute6x6BlockFast (shared with LU/BiCGSTAB)
+    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;
+
+protected:
+    void ExtractCoordinates() override;
+    void OnBeforeBuild() override;
+    void InitializeInvChi() override;
+    bool IsVariableDOF() const override { return m_is_mixed_dof || m_is_5dof; }
+    int GetUniformNFFC() const override { return m_nffc; }
 
 private:
     // Pointer to Radia interaction (not owned)
     radTInteraction* m_interaction;
 
-    // HACApK internal structures (owned, opaque pointers)
-    void* m_leafmtxp;   // st_cHACApK_leafmtxp*
-    void* m_control;    // st_cHACApK_lcontrol*
+    // DOF per element classification
+    int m_nffc;            // 3 (tetra), 5 (wedge), 6 (hex), 0 (mixed/variable)
+    bool m_is_6dof;
+    bool m_is_5dof;
+    bool m_is_mixed_dof;
 
-    // State
-    bool m_valid;
-    int m_ndof;
-    int m_n_elem;
-    int m_nffc;  // DOF per element (3 for tetra, 5 for wedge, 6 for hexa, 0 for mixed)
-    bool m_is_6dof;  // true if using 6DOF MSC hexahedra
-    bool m_is_5dof;  // true if using 5DOF MSC wedges
-    bool m_is_mixed_dof;  // true if mesh contains mixed DOF elements
+    // O(1) DOF-to-element lookup (ELF-style)
+    std::vector<int> m_dof_to_elem;   // [dof] -> element index
+    std::vector<int> m_dof_to_local;  // [dof] -> local DOF within element
 
-    // DOF permutation for cluster ordering
-    std::vector<int> m_permutation;
-
-    // DOF offset per element (for variable DOF support)
-    std::vector<int> m_dof_offset;
-
-    // O(1) DOF-to-element lookup table (ELF-style)
-    // m_dof_to_elem[dof] = element index
-    // m_dof_to_local[dof] = local DOF index within element (0-5 for hexa)
-    std::vector<int> m_dof_to_elem;
-    std::vector<int> m_dof_to_local;
-
-    // Statistics
-    RadHACApKStats m_stats;
-
-    // Current inverse susceptibility values
-    std::vector<double> m_inv_chi;
-
-    // Element coordinates for clustering
-    std::vector<double> m_coordinates;  // [n_elem * 3]
-
-    // ========================================================================
-    // 6DOF hexahedra: Use radTInteraction's unified precomputation
-    // ========================================================================
-    // radTInteraction::PrecomputeHexaGeometry() provides all geometry data
-    // radTInteraction::Compute6x6BlockFast() provides fast block computation
-    // No local geometry storage needed - delegated to radTInteraction
-
-    // ========================================================================
-    // Pre-computed geometry for 3DOF tetrahedra (ELF-style optimization)
-    // ========================================================================
-    // Pre-computed tetrahedron face vertices for direct field computation
-    // Avoids calling B_comp() which has significant overhead
-
-    // Pre-computed tetrahedron centers [n_elem * 3]
-    std::vector<double> m_tetra_centers;
-
-    // Pre-computed tetrahedron face vertices [n_elem * 4 * 3 * 3]
-    // (4 faces, 3 vertices per face, 3 coords)
-    std::vector<double> m_tetra_face_vertices;
-
-    // Pre-computed tetrahedron face normals [n_elem * 4 * 3] (outward normals)
-    std::vector<double> m_tetra_face_normals;
-
-    // Pre-computed tetrahedron face areas [n_elem * 4]
-    std::vector<double> m_tetra_face_areas;
-
-    // Flag: tetrahedron geometry has been pre-computed
+    // Pre-computed geometry for 3DOF tetrahedra (avoids B_comp overhead)
+    std::vector<double> m_tetra_centers;         // [n_elem * 3]
+    std::vector<double> m_tetra_face_vertices;   // [n_elem * 4 * 3 * 3]
+    std::vector<double> m_tetra_face_normals;    // [n_elem * 4 * 3]
+    std::vector<double> m_tetra_face_areas;      // [n_elem * 4]
     bool m_geometry_3dof_ready;
 
-    // Cached diagonal elements of interaction matrix N_ii (for Jacobi preconditioner)
-    // Computed once during BuildHMatrix, reused in every BiCGSTAB iteration
-    std::vector<double> m_diag_N;
-    bool m_diag_cached;
-
-    // ========================================================================
-    // Flat interaction matrix storage (for 3DOF tetrahedra)
-    // ========================================================================
-    // Pre-computed flat array for O(1) access to N_ij elements
-    // Layout: m_flat_N[elem_i * n_elem + elem_j] = 3x3 block starting index
-    // Actual data: m_flat_N_data[(elem_i * n_elem + elem_j) * 9 + row * 3 + col]
-    std::vector<double> m_flat_N_data;  // size = n_elem * n_elem * 9
+    // Flat interaction matrix storage (for 3DOF tetrahedra, O(1) access)
+    std::vector<double> m_flat_N_data;           // [n_elem * n_elem * 9]
     bool m_flat_N_ready;
 
-    // Private methods
-    void FreeResources();
-    void ExtractElementCoordinates();
+    // Private helpers
     void BuildDOFLookupTable();
-    void PrecomputeGeometry3DOF();  // ELF-style pre-computation for 3DOF tetrahedra
+    void PrecomputeGeometry3DOF();
 
-    // 6DOF hexahedron methods (public: used by Block Jacobi preconditioner)
-    // Note: Uses radTInteraction::Compute6x6BlockFast() for unified implementation
+    // 6DOF hexahedron block computation
     double GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const;
     void Compute6x6Block(int elem_i, int elem_j, double* K_mat) const;
 
-public:
-    void Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const;  // Delegates to radTInteraction
-private:
-
-    // 3DOF tetrahedron methods
+    // 3DOF tetrahedron block computation
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
-    void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;  // On-demand without pre-computed matrix
-    void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;  // Uses pre-computed geometry
+    void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;
+    void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;
 
-    // Field computation from pre-computed tetrahedron faces
-    void FieldFromTetraFace(int elem, int face, const double* obs, const double* M_unit, double& H_n) const;
-
-    // 5DOF wedge methods (delegates to radTInteraction::Compute5x5BlockFast)
+    // 5DOF wedge / mixed / generic
     double GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const;
-
-    // Unified mixed-DOF cache (all cross-DOF pairs via ComputeMixedBlockFast)
     double GetCachedMixedElement(int elem_i, int elem_j, int dof_i, int dof_j, int local_i, int local_j) const;
-
-    // Generic variable DOF element access (flat matrix fallback)
     double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
-
-    // Disable copy
-    RadHACApKManager(const RadHACApKManager&) = delete;
-    RadHACApKManager& operator=(const RadHACApKManager&) = delete;
 };
 
 //-------------------------------------------------------------------------
@@ -307,11 +286,11 @@ private:
 //-------------------------------------------------------------------------
 
 namespace RadHACApKCallback {
-    // Set the current manager for callbacks
-    void SetCurrentManager(RadHACApKManager* manager);
+    // Set the current manager for callbacks (base pointer; kernel resolved via virtual dispatch)
+    void SetCurrentManager(RadHACApKBase* manager);
 
     // Get the current manager
-    RadHACApKManager* GetCurrentManager();
+    RadHACApKBase* GetCurrentManager();
 
     // Set inverse susceptibility for matrix element computation
     void SetInvChi(const std::vector<double>& inv_chi);
@@ -327,11 +306,17 @@ namespace RadHACApKCallback {
     // Clear all global callback state (called on manager destruction)
     void ClearGlobalState();
 
-    // Set interaction for callback
+    // Set interaction for callback (MSC kernel informational; PEEC adapters
+    // may leave interaction null)
     void SetInteraction(radTInteraction* interaction, int n_elem, int nffc);
 
-    // Compute matrix element A(i,j) = -N(i,j) - delta_ij/chi_i (ELF-compatible)
-    // Called from cHACApK_entry_ij
+    // Cache generation counter (incremented on every H-matrix build so that
+    // thread-local block caches in subclasses can detect stale entries).
+    uint64_t GetGeneration();
+    void IncrementGeneration();
+
+    // Compute matrix element A(i,j) = -N(i,j) + delta_ij/chi_i
+    // Called from cHACApK_entry_ij (1-based indexing in HACApK's convention).
     double ComputeEntry(int i, int j);
 }
 
