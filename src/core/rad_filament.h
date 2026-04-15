@@ -33,22 +33,6 @@ public:
 
 	radTFlmLinCur(const TVector3d&, const TVector3d&, double);
 
-	radTFlmLinCur(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-		NativeRotation.DumpBinParse_Trans(inStr);
-
-		//double Length;
-		inStr >> Length;
-
-		//double I;
-		inStr >> I;
-
-		//TVector3d StartPoint, EndPoint;
-		inStr >> StartPoint;
-		inStr >> EndPoint;
-	}
-
 	radTFlmLinCur() {}
 
 	int Type_g3d() { return 4;}
@@ -71,8 +55,7 @@ public:
 		FieldPtr->Energy += (ConstForJ*I)*((EndPoint - StartPoint)*LocField.A);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
 	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions* pSubdivOptions, radTvhg*) 

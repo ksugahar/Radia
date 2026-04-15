@@ -10,7 +10,7 @@
 * Author(s):      Oleg Chubar
 *
 * First release:  1997
-* 
+*
 * Copyright (C):  1997 by European Synchrotron Radiation Facility, France
 *
 -------------------------------------------------------------------------*/
@@ -23,48 +23,6 @@
 
 //-------------------------------------------------------------------------
 
-// radTSubdividedPolyhedron::Dump REMOVED (Phase B2b, 2026-04-15)
-
-//-------------------------------------------------------------------------
-
-void radTSubdividedPolyhedron::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-{
-	//Dumping objects that may be used by this object
-	vector<pair<int, int> > vTrfKeys;
-	//DumpBin_g3d_TreatTrfs(oStr, mEl, vTrfKeys);
-	radTGroup::DumpBin_g3d_TreatTrfs(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, vTrfKeys); //all G3D members should be accessed via radTGroup
-	
-	vector<int> vGroupMemKeys;
-	DumpBin_Group_TreatMembers(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, vGroupMemKeys);
-
-	int matKey=0;
-	DumpBin_g3dRelax_TreatMat(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, matKey);
-
-	vElemKeysOut.push_back(elemKey);
-	oStr << elemKey;
-
-	//Next 5 bytes define/encode element type:
-	oStr << (char)radTGroup::Type_g();
-	oStr << (char)radTGroup::Type_g3d();
-	oStr << (char)Type_Group();
-	oStr << (char)0;
-	oStr << (char)0;
-
-	//Members of radTg3d
-	radTGroup::DumpBin_g3d(oStr, vTrfKeys);
-
-	//Members of radTGroup
-	DumpBin_Group_OutMemKeys(oStr, vGroupMemKeys);
-
-	//Members of radTg3dRelax
-	DumpBin_g3dRelax(oStr, matKey);
-
-	//Members of radTPolyhedron
-	DumpBin_Polyhedron(oStr);
-
-	//Members of radTSubdividedPolyhedron
-	//int AmOfSubElem;
-	oStr << AmOfSubElem;
-}
+// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------

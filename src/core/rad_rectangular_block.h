@@ -75,12 +75,7 @@ public:
 		J=InJ_vect; J_IsNotZero = InJ_IsNotZero;
 		InternalFacesAfterCut = 0;
 	}
-	radTRecMag(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-		DumpBinParse_g3dRelax(inStr, mKeysOldNew, gMapOfHandlers);
-		DumpBinParse_RecMag(inStr);
-	}
+	// radTRecMag(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
 	radTRecMag() : radTg3dRelax()
 	{ 
 		InternalFacesAfterCut = 0;
@@ -139,12 +134,7 @@ public:
 
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans*, radTg3d*, radTApplication*);
 	
-	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
-	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg); 
-	//void DumpBin(CAuxBinStrVect& oStr, map<int, radTHandle<radTg>, less<int> >& mEl, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
-	void DumpBin_RecMag(CAuxBinStrVect& oStr);
-	void DumpBinParse_RecMag(CAuxBinStrVect& inStr);
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpPureObjInfo / DumpBin / DumpBin_RecMag / DumpBinParse_RecMag REMOVED (Phase B2b/B2c, 2026-04-15)
 
 
 	int DuplicateItself(radThg& hg, radTApplication*, char) 

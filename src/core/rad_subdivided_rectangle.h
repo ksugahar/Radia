@@ -59,7 +59,7 @@ public:
 	radTSubdividedRecMag(const TVector3d&, const TVector3d&, const double*);
 	radTSubdividedRecMag(const radTRecMag*, const double*);
 	radTSubdividedRecMag(const radTRecMag*);
-	radTSubdividedRecMag(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
+	// radTSubdividedRecMag(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
 	radTSubdividedRecMag();
 
 	int Type_Group() { return 1;}
@@ -169,8 +169,7 @@ public:
 	void SetupFurtherSubdInd(char InSubdInd) { radTGroup::SetupFurtherSubdInd(InSubdInd);}
 	void SetMessageChar(char InMessageChar) { radTGroup::SetMessageChar(InMessageChar);}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 };
 
 //-------------------------------------------------------------------------
