@@ -14,18 +14,14 @@ This directory contains examples of building complex coil paths with straight an
 
 Defines the 8-segment beam steering coil geometry as a reusable module:
 - `create_beam_steering_coil()` - Creates the coil and returns (coil_object, parameters)
-- `get_coil_info(coil_obj)` - Returns bounding box and geometry information
 - Can be imported by other scripts (visualize_coils.py, field_map.py)
 
 **Usage:**
 ```python
-from coil_model import create_beam_steering_coil, get_coil_info
+from coil_model import create_beam_steering_coil
 
 # Create coil
 coil, params = create_beam_steering_coil()
-
-# Get geometry info
-info = get_coil_info(coil)
 ```
 
 **Test:**
@@ -80,7 +76,7 @@ python visualize_coils.py
 
 Loads the coil model and calculates magnetic field distribution on a 3D grid:
 - Imports coil from coil_model.py (same model as visualize_coils.py)
-- Automatic grid generation with 100mm margin around coil
+- Fixed evaluation grid sized to the 8-segment coil extent
 - Structured grid field calculation
 - Vector field export (Bx, By, Bz) in VTK format
 - Purpose: **Calculate field distribution for analysis**
@@ -94,9 +90,7 @@ python field_map.py
 **Output:**
 - File: `field_map.vtk` - Structured grid with field data
 - Grid size: Configurable (default: 31×51×31 = 49,011 points)
-- Coverage: **Automatic** - Coil bounding box + 100mm margin in all directions
-  - Example: X: [-379, 379] mm, Y: [-735, 735] mm, Z: [-242, 1242] mm
-  - Coil bounds automatically detected using `rad.ObjGeoLim()`
+- Coverage: fixed grid in field_map.py covering the full coil extent
 - Field data:
   - **Vector field**: B (Bx, By, Bz) in mT
 

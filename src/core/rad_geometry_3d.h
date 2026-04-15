@@ -266,10 +266,7 @@ public:
 	virtual double Volume() { return 0.;}
 	double VolumeWithSym();
 
-	void Limits(radTrans*, double*);
-	void DeterminePointsLimits(TVector3d* Points, int AmOfPoints, double*);
 	virtual void VerticesInLocFrame(radTVectorOfVector3d&, bool) {}
-	virtual void LimitsAtTransform(radTrans*, double*);
 
 	virtual void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans*, radTg3d*, radTApplication*) {}
 	inline void GetTrfAndCenPointInLabFrame(radTrans* pBaseTrans, radTrans& bufTrans, radTrans*& pResTrans, TVector3d& cenPointInLabFr);

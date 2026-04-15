@@ -3823,12 +3823,7 @@ int radTPolyhedron::CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair
 			UpperNewPair_int_hg.m = UpperNewElKey;
 			UpperNewPair_int_hg.Handler_g = hg2;
 
-			if(AddNewElemsToGenCont)
-			{
-				int NewGroupElemKey = radPtr->RetrieveElemKey(GroupInPlaceOfThisPtr);
-				radPtr->CopyDrawAttr(NewGroupElemKey, LowerNewElKey);
-				radPtr->CopyDrawAttr(NewGroupElemKey, UpperNewElKey);
-			}
+			(void)AddNewElemsToGenCont;
 		}
 	}
 	else

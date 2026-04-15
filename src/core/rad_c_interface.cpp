@@ -78,7 +78,6 @@ void CutElementG3DOpt0( int, double,double,double, double,double,double );
 void CutElementG3DOpt( int, double,double,double, double,double,double, const char* );
 void SubdivideElementG3DByParPlanes();
 void GeometricalVolume( int );
-void GeometricalLimits( int );
 void FldCmpMetForSubdRecMag( int, int, int );
 void SetLocMgnInSbdRecMag();
 void RecMagsAsExtrPolygons( char* );
@@ -1158,13 +1157,6 @@ void SubdivideElementG3DByParPlanes()
 void GeometricalVolume(int ElemKey)
 {
 	rad.ComputeGeometricalVolume(ElemKey);
-}
-
-//-------------------------------------------------------------------------
-
-void GeometricalLimits(int ElemKey)
-{
-	rad.ComputeGeometricalLimits(ElemKey);
 }
 
 //-------------------------------------------------------------------------
