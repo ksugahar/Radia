@@ -252,6 +252,115 @@ def kelvin_factor_scalar(r_prime, center, R):
     return (R / rho_prime) ** 2
 
 
+# ---------- GridFunction evaluation in physical coordinates ---------------
+
+
+def eval_Omega_physical_from_gf(gf_Omega_comp, mesh, r_phys, center, R):
+    """Physical Omega(r_phys) from a GridFunction storing Omega_comp on
+    the Kelvin outer-sphere FEM mesh.
+
+    Omega is a SCALAR potential (0-form). Under the Kelvin inversion the
+    0-form pullback is trivial function composition — no Jacobian factor
+    and no Householder reflection:
+
+        Omega_phys(r_phys) = Omega_comp(r'),   r' = kelvin_map_3d(r_phys, c, R)
+
+    Provided as the 0-form member of the eval_{Omega, A, B}_physical_from_gf
+    family so that the differential-form hierarchy is complete:
+
+        0-form (Omega)  : factor 1                          (scalar)
+        1-form (A)      : (R/rho')^2 H                      (covector)
+        2-form (B)      : -(R/rho')^4 H  (pseudovector)     (2-form)
+
+    Args:
+        gf_Omega_comp: scalar NGSolve GridFunction or CoefficientFunction,
+            callable as ``gf_Omega_comp(mip)``.
+        mesh: NGSolve Mesh.
+        r_phys: (3,) physical-frame coordinate.
+        center, R: Kelvin sphere center and radius in computational coords.
+
+    Returns:
+        float Omega_phys(r_phys).
+    """
+    r_phys = np.asarray(r_phys, dtype=float).reshape(3)
+    r_prime = kelvin_map_3d(r_phys, center, R)
+    mip = mesh(float(r_prime[0]), float(r_prime[1]), float(r_prime[2]))
+    return float(gf_Omega_comp(mip))
+
+
+def eval_A_physical_from_gf(gf_A_comp, mesh, r_phys, center, R):
+    """Physical A(r_phys) from a GridFunction storing A_comp on the Kelvin
+    outer-sphere FEM mesh.
+
+    For evaluation of FEM results at physical points outside the inner
+    domain: the Kelvin exterior stores A_comp in the COMPUTATIONAL frame,
+    which is not directly the physical A at r_phys. Because the Kelvin
+    map is involutive (``phi(phi(r)) = r``) and the 1-form pullback
+    factor ``(R/rho)^2 H`` is self-inverse up to (R/rho')^2 -> (rho'/R)^-2,
+    the inverse pullback is obtained by calling the same formula with
+    the query point as the "r_prime" argument:
+
+        A_phys(r_phys) = (R / |r_phys - c|)**2 * H(n) * A_comp(r')
+                       = kelvin_pullback_vector(A_comp, r_phys, c, R)
+
+    where r' = kelvin_map_3d(r_phys, c, R) is the computational coordinate
+    and n = (r_phys - c) / |r_phys - c| = (r' - c) / |r' - c|.
+
+    Args:
+        gf_A_comp: NGSolve 3-component GridFunction (HCurl or VectorH1)
+            containing the computed A in the computational frame. Must
+            be callable as ``gf_A_comp[i](mip)`` at a mesh point.
+        mesh: NGSolve Mesh (the one gf_A_comp lives on).
+        r_phys: (3,) physical-frame coordinate where A is wanted.
+        center: (3,) Kelvin outer-sphere center in computational coords.
+        R: Kelvin radius.
+
+    Returns:
+        (3,) numpy array A_phys(r_phys).
+    """
+    r_phys = np.asarray(r_phys, dtype=float).reshape(3)
+    r_prime = kelvin_map_3d(r_phys, center, R)
+    mip = mesh(float(r_prime[0]), float(r_prime[1]), float(r_prime[2]))
+    A_comp = np.array([gf_A_comp[0](mip), gf_A_comp[1](mip),
+                        gf_A_comp[2](mip)], dtype=float)
+    return kelvin_pullback_vector(A_comp, r_phys, center, R)
+
+
+def eval_B_physical_from_gf(gf_B_comp, mesh, r_phys, center, R):
+    """Physical B(r_phys) from a GridFunction storing B_comp on the Kelvin
+    outer-sphere FEM mesh.
+
+    Counterpart of eval_A_physical_from_gf for B (2-form pseudovector).
+    By the same involutivity argument:
+
+        B_phys(r_phys) = -(R / |r_phys - c|)**4 * H(n) * B_comp(r')
+                       = kelvin_pullback_B_pseudovector(B_comp, r_phys, c, R)
+
+    Args:
+        gf_B_comp: NGSolve 3-component GridFunction (or CoefficientFunction)
+            containing the computed B in the computational frame.
+            Callable as ``gf_B_comp[i](mip)`` at a mesh point, or
+            ``gf_B_comp(mip)`` returning a 3-tuple.
+        mesh: NGSolve Mesh.
+        r_phys: (3,) physical-frame coordinate.
+        center, R: Kelvin sphere center and radius in computational coords.
+
+    Returns:
+        (3,) numpy array B_phys(r_phys).
+    """
+    r_phys = np.asarray(r_phys, dtype=float).reshape(3)
+    r_prime = kelvin_map_3d(r_phys, center, R)
+    mip = mesh(float(r_prime[0]), float(r_prime[1]), float(r_prime[2]))
+    try:
+        B_comp = np.array([gf_B_comp[0](mip), gf_B_comp[1](mip),
+                            gf_B_comp[2](mip)], dtype=float)
+    except TypeError:
+        # CoefficientFunction returning a 3-tuple
+        val = gf_B_comp(mip)
+        B_comp = np.array([val[0], val[1], val[2]], dtype=float)
+    return kelvin_pullback_B_pseudovector(B_comp, r_phys, center, R)
+
+
 # ---------- Biot-Savart vector potential from filaments -------------------
 
 
