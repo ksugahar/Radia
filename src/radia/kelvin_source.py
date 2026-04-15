@@ -81,30 +81,39 @@ def is_in_kelvin_exterior_domain(points, center, R):
 
 
 def kelvin_pullback_vector(A_phys, r_prime, center, R):
-    """Phase 2: exact 1-form pullback of a vector A under 3D sphere Kelvin.
+    """Exact 1-form pullback of A under 3D sphere Kelvin inversion.
 
-    Kelvin map in d-coords (d = r - center):
-        phi: d -> d' = (R^2 / rho^2) * d,    rho = |d|, rho' = R^2/rho
+    See examples/kelvin_transformation/docs/pullback_derivation_3D.md
+    for the full derivation. Summary:
 
-    For a 1-form A, the pullback transforms as
-        A'_i(r') = (d r^j / d r'^i) A_j(r_phys)
-    where (d r / d r') is the Jacobian of the INVERSE Kelvin map, which
-    equals (rho'^2 / R^2) (I - 2 n n^T) (Householder, n = (r' - c)/rho').
-    Hence:
+    Kelvin map (origin at `center`, radius `R`):
+        phi:  d -> d' = (R^2 / |d|^2) d,   d = r - c,  d' = r' - c.
 
-        A'(r') = (rho' / R)^2 * (I - 2 n n^T) * A_phys(r_phys)
+    Forward Jacobian:
+        J^j_i = dd'^j / dd^i  =  (rho'/R)^2 * H^j_i,    H = I - 2 n n^T,
+                                                       n = d' / rho'
+    Inverse Jacobian (involutive):
+        (J^-1)^j_i = dd^j / dd'^i  =  (R/rho')^2 * H^j_i.
 
-    NOTE the factor is (rho'/R)^2, NOT (R/rho')^2. The (R/rho')^2 factor
-    applies to scalar quantities (potential phi) and to vector B; for the
-    1-form A the inverse-Jacobian gives the (rho'/R)^2 factor instead.
-    Empirically validated on a Radia ObjArcCur source 2026-04-15:
-    using (R/rho')^2 produced |A_comp| ~ 200x too large in the Kelvin
-    exterior domain; the (rho'/R)^2 factor brings the energy integral
-    into agreement with the FEM-volume-J reference within ~5%.
+    For a 1-form omega, the pullback (line-integral preserving) is
 
-    For A fields with no radial component (azimuthal A from a uniform
-    B_0 z_hat background) Householder is the identity and only the
-    scalar (rho'/R)^2 factor remains.
+        omega_comp_i (r') = (dd^j / dd'^i) * omega_phys_j (r_phys)
+                         = (R/rho')^2 * H^j_i * omega_phys_j
+
+    In matrix form (H symmetric):
+
+        A_comp(r') = (R / rho')^2 * H * A_phys(r_phys)
+                  = (R / rho')^2 * [A_phys - 2 (A_phys . n) n]
+
+    The factor is (R/rho')^2 (NOT (rho'/R)^2): the inverse Jacobian has
+    determinant (R/rho')^6, and a 1-form picks up one factor of the
+    inverse Jacobian per index. The Householder reflection flips the
+    radial component of A while preserving tangential components.
+
+    Internal consistency: applying curl in the computational frame to
+    this A_comp recovers the 2-form pullback of B (see
+    kelvin_pullback_B_pseudovector). Verified numerically in
+    test_kelvin_source.py and in pullback_derivation_3D.md sec 6.
 
     Args:
         A_phys: (N, 3) physical-frame A evaluated at r_phys = Kelvin_inv(r').
@@ -128,31 +137,75 @@ def kelvin_pullback_vector(A_phys, r_prime, center, R):
     n = d_prime / rho_prime[:, None]
     A_dot_n = np.sum(A_phys * n, axis=1)
     A_refl = A_phys - 2.0 * A_dot_n[:, None] * n
-    factor = (rho_prime / R) ** 2   # 1-form A pullback factor
+    factor = (R / rho_prime) ** 2   # 1-form A pullback factor
     out = factor[:, None] * A_refl
     return out[0] if single else out
 
 
+def kelvin_pullback_B_pseudovector(B_phys, r_prime, center, R):
+    """3D Kelvin pullback of B as a 2-form pseudovector.
+
+        B_comp(r') = -(R/rho')^4 * H * B_phys(r_phys)
+
+    Derived in pullback_derivation_3D.md section 5: the 2-form
+    transforms with two inverse-Jacobian indices, picking up
+    (R/rho')^4 in magnitude. Hodge-dual to a vector adds a sign of
+    det(H) = -1 from the Levi-Civita identity. So B is a pseudovector
+    that flips its sign through the Householder reflection AND picks
+    up an overall minus from the Hodge identity.
+
+    Args:
+        B_phys: (N, 3) physical-frame B at r_phys = Kelvin_inv(r').
+        r_prime: (N, 3) computational coordinates.
+        center, R: Kelvin sphere center, radius.
+
+    Returns:
+        (N, 3) pulled-back B'.
+    """
+    r_prime = np.asarray(r_prime, dtype=float)
+    B_phys = np.asarray(B_phys)
+    c = np.asarray(center, dtype=float)
+    single = r_prime.ndim == 1
+    if single:
+        r_prime = r_prime.reshape(1, 3)
+        B_phys = B_phys.reshape(1, 3)
+    d_prime = r_prime - c
+    rho_prime = np.sqrt(np.sum(d_prime * d_prime, axis=1))
+    rho_prime = np.where(rho_prime < 1e-30, 1e-30, rho_prime)
+    n = d_prime / rho_prime[:, None]
+    B_dot_n = np.sum(B_phys * n, axis=1)
+    B_refl = B_phys - 2.0 * B_dot_n[:, None] * n
+    factor = -(R / rho_prime) ** 4   # 2-form pseudovector factor
+    out = factor[:, None] * B_refl
+    return out[0] if single else out
+
+
 def kelvin_factor_scalar(r_prime, center, R):
-    """Phase 1: scalar A-pullback factor (rho'/R)^2 (no Householder).
+    """Scalar magnitude factor for 1-form A pullback: (R/rho')^2.
 
-    For 1-form A under Kelvin r -> r' = R^2 r / |r|^2, the proper
-    pullback factor is (rho'/R)^2 (see kelvin_pullback_vector). Phase 1
-    drops the Householder reflection, so this is exact only when A_phys
-    is purely tangential at the evaluation point (e.g. azimuthal A from
-    a uniform z-axial B background).
+    Drops the Householder reflection from the full 1-form pullback
+    (kelvin_pullback_vector). Exact when A_phys is purely tangential
+    at the evaluation point (n . A_phys = 0); in particular for the
+    azimuthal A_phys of a uniform B_0 z_hat background, Householder
+    is the identity and only this factor remains.
 
-    NOTE: the H-formulation uniform-H_s rule uses (R/rho')^2 with sign
-    flip. That is the SCALAR-POTENTIAL pullback, NOT the A pullback.
-    Initially this module had (R/rho')^2 here too; that gave |A_comp|
-    ~200x too large in the Kelvin exterior domain. Corrected
-    2026-04-15 against a Radia ObjArcCur reference.
+    See pullback_derivation_3D.md section 4 for the derivation: the
+    inverse Kelvin Jacobian (dr/dr') has determinant (R/rho')^6 in 3D
+    and a 1-form picks up (R/rho')^2 per index.
+
+    NOTE on history: an earlier (2026-04-15) "fix" replaced this with
+    (rho'/R)^2 based on an empirical observation that the (R/rho')^2
+    formula appeared to over-count energy in the Kelvin exterior. That
+    over-count was real but came from the missing Householder, NOT
+    from a wrong scalar factor. The proper resolution is to use the
+    full 1-form pullback (kelvin_pullback_vector); the scalar form is
+    only correct as the tangential limit.
     """
     p = np.asarray(r_prime, dtype=float)
     c = np.asarray(center, dtype=float)
     rho_prime = np.sqrt(np.sum((p - c) ** 2, axis=-1))
     rho_prime = np.where(rho_prime < 1e-30, 1e-30, rho_prime)
-    return (rho_prime / R) ** 2
+    return (R / rho_prime) ** 2
 
 
 # ---------- Biot-Savart vector potential from filaments -------------------
