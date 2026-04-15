@@ -99,7 +99,7 @@ def test_kelvin_map_on_sphere():
 
 
 def test_scalar_factor_at_sphere_boundary():
-    """Kelvin factor (rho'/R)^2 = 1 at rho' = R."""
+    """Kelvin factor (R/rho')^2 = 1 at rho' = R."""
     from kelvin_source import kelvin_factor_scalar
 
     center = np.array([0.0, 0.0, 0.0])
@@ -140,11 +140,11 @@ def test_A_s_kelvin_pathway():
     print(f"  inner A match: err = {err_in:.2e}")
     assert err_in < 1e-12
 
-    # Kelvin exterior domain: expected = A(physical_equivalent) * (rho'/R)^2
+    # Kelvin exterior domain: expected = A(physical_equivalent) * (R/rho')^2
     A_at_phys = biot_savart_A_at_points(p_out_phys.reshape(1, 3),
                                          paths, currents, n_quad=8)[0]
     rho_prime = np.linalg.norm(p_out_kelvin_ext - offset)
-    factor = (rho_prime / R_kelvin) ** 2
+    factor = (R_kelvin / rho_prime) ** 2
     expected = A_at_phys * factor
     err_sh = np.max(np.abs(A_full[1] - expected))
     rel_sh = err_sh / np.max(np.abs(expected))
@@ -182,7 +182,7 @@ def test_pullback_equals_scalar_for_uniform_A():
 
 
 def test_pullback_flips_radial_sign():
-    """Pure radial A: pullback flips sign and applies (rho'/R)^2."""
+    """Pure radial A: pullback flips sign and applies (R/rho')^2."""
     from kelvin_source import kelvin_pullback_vector, kelvin_factor_scalar
 
     center = np.array([0.15, 0.0, 0.0])
@@ -234,6 +234,109 @@ def test_pullback_involution():
     assert err < 1e-12
 
 
+def test_B_pullback_uniform_field():
+    """For uniform B_phys = B_0 z_hat, the pseudovector pullback at any
+    r' should give B_comp = -(R/rho')^4 * H * B_phys.
+
+    At points on a coordinate axis, H acts simply (radial flip only),
+    so we can check both magnitude and direction in closed form.
+    """
+    from kelvin_source import kelvin_pullback_B_pseudovector
+
+    center = np.array([0.0, 0.0, 0.0])
+    R = 1.0
+    B0 = 2.5
+    B_phys = np.array([0.0, 0.0, B0])  # uniform B_z
+
+    # Probe along x-axis at various rho': n = (1,0,0), so H flips x;
+    # B_phys is in z so H leaves it unchanged.
+    for rho in [0.1, 0.3, 0.5, 0.9]:
+        rp = np.array([rho, 0.0, 0.0])
+        B_comp = kelvin_pullback_B_pseudovector(B_phys, rp, center, R)
+        expected = -((R / rho) ** 4) * B_phys
+        err = np.max(np.abs(B_comp - expected))
+        print(f"  rho={rho}: B_comp={B_comp}, expected={expected}, "
+              f"err={err:.2e}")
+        assert err < 1e-12
+
+
+def test_B_pullback_radial_flip():
+    """For B_phys purely radial along z-axis (B_phys = B_0 z_hat at r'
+    on z-axis), Householder reflects: B_phys.n = B_0, refl = -B_phys.
+
+    So B_comp at z-axis with same B_phys = (-1) * (-B_0 z_hat) * (R/rho)^4
+                                       = +B_0 (R/rho)^4 z_hat
+    (the -1 sign from -det(H) and the radial flip cancel).
+    """
+    from kelvin_source import kelvin_pullback_B_pseudovector
+
+    center = np.array([0.0, 0.0, 0.0])
+    R = 1.0
+    B0 = 1.7
+    B_phys = np.array([0.0, 0.0, B0])
+
+    for rho in [0.2, 0.4, 0.6, 0.8]:
+        rp = np.array([0.0, 0.0, rho])  # on z-axis
+        B_comp = kelvin_pullback_B_pseudovector(B_phys, rp, center, R)
+        # n = (0,0,1), B_phys.n = B0, refl = B_phys - 2*B0*z_hat = -B_phys
+        # B_comp = -(R/rho)^4 * (-B_phys) = +(R/rho)^4 * B_phys
+        expected = ((R / rho) ** 4) * B_phys
+        err = np.max(np.abs(B_comp - expected))
+        print(f"  rho={rho}: B_comp={B_comp}, expected={expected}, "
+              f"err={err:.2e}")
+        assert err < 1e-12
+
+
+def test_curl_A_comp_matches_B_pullback():
+    """Internal consistency: curl(A_comp) computed numerically in the
+    computational frame should equal the 2-form pullback formula for B.
+
+    Use uniform B_phys = B_0 z_hat (so A_phys = (B_0/2)(-y, x, 0)
+    azimuthal, tangential everywhere). Compute A_comp(r') analytically
+    via the closed form, then take a 4th-order central finite difference
+    for curl_z at a probe point. Compare with the 2-form formula
+    B_comp = -(R/rho')^4 * H * B_phys (Householder identity here).
+    """
+    from kelvin_source import (kelvin_pullback_vector,
+                                kelvin_pullback_B_pseudovector)
+
+    center = np.array([0.0, 0.0, 0.0])
+    R = 1.0
+    B0 = 1.0
+
+    def A_phys(r):
+        # uniform B_z -> azimuthal A
+        return np.array([-0.5 * B0 * r[1], 0.5 * B0 * r[0], 0.0])
+
+    def kelvin_inv(rp, c=center, R=R):
+        d = rp - c
+        rho_sq = float(np.dot(d, d))
+        return c + (R * R / rho_sq) * d
+
+    def A_comp(rp):
+        rphys = kelvin_inv(rp)
+        a = A_phys(rphys)
+        return kelvin_pullback_vector(a, rp, center, R)
+
+    # Probe on x-axis at rho' = 0.5
+    rp = np.array([0.5, 0.0, 0.0])
+    h = 1e-5
+    # curl_z = dA_y/dx - dA_x/dy
+    dAy_dx = (A_comp(rp + np.array([h, 0, 0]))[1]
+              - A_comp(rp - np.array([h, 0, 0]))[1]) / (2 * h)
+    dAx_dy = (A_comp(rp + np.array([0, h, 0]))[0]
+              - A_comp(rp - np.array([0, h, 0]))[0]) / (2 * h)
+    curl_z_numeric = dAy_dx - dAx_dy
+
+    B_comp = kelvin_pullback_B_pseudovector(
+        np.array([0.0, 0.0, B0]), rp, center, R)
+    print(f"  numerical curl_z(A_comp) = {curl_z_numeric:.6e}")
+    print(f"  formula  B_comp_z         = {B_comp[2]:.6e}")
+    rel = abs(curl_z_numeric - B_comp[2]) / abs(B_comp[2])
+    print(f"  rel err = {rel:.2e}")
+    assert rel < 1e-5
+
+
 if __name__ == "__main__":
     print("test_on_axis_B_circular_loop"); test_on_axis_B_circular_loop()
     print("test_kelvin_map_involution"); test_kelvin_map_involution()
@@ -247,4 +350,8 @@ if __name__ == "__main__":
     test_pullback_flips_radial_sign()
     print("test_pullback_involution")
     test_pullback_involution()
+    print("test_B_pullback_uniform_field"); test_B_pullback_uniform_field()
+    print("test_B_pullback_radial_flip"); test_B_pullback_radial_flip()
+    print("test_curl_A_comp_matches_B_pullback")
+    test_curl_A_comp_matches_B_pullback()
     print("\nall tests passed.")
