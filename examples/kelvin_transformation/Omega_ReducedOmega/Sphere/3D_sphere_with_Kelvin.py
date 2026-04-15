@@ -194,6 +194,7 @@ Mu = build_material_cf(
     outer_keyword="air_outer",
     overrides={"magnetic": mu_r * mu0},
 )
+mu_kelvin = mu0 * mu_kelvin_factor   # CF alias for downstream energy integration
 
 print(f"  air_inner: mu = mu0")
 print(f"  air_outer: mu = (R/r')^2 * mu0 [Nagamine CEFC 2026]")
