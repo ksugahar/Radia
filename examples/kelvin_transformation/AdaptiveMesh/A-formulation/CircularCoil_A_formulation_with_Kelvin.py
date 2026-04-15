@@ -214,19 +214,15 @@ def solve_A_formulation(mesh, fe_order):
     A = fes.TrialFunction()
     v = fes.TestFunction()
 
-    # Kelvin coefficient for exterior domain
-    r_prime_sq = (x - offset_x)**2 + y**2 + z**2
-    r_prime = sqrt(r_prime_sq + 1e-20)
+    # Kelvin-modulated reluctivity (Nagamine CEFC 2026 canonical):
+    #   nu_ext = nu_0 * (r'/R)^2  for 3D spherical (conformal) Kelvin
+    # See examples/kelvin_transformation/CONVENTION.md.
+    from radia.kelvin_source import kelvin_nu_factor_3d_cf, build_material_cf
 
-    # nu_kelvin = (r'/R)^2 * nu0
-    nu_kelvin = (r_prime / kelvin_radius)**2 * nu0
-
-    # Material coefficients
-    nu_dict = {
-        "air_inner": nu0,
-        "air_outer": nu_kelvin
-    }
-    Nu = CoefficientFunction([nu_dict[mat] for mat in mesh.GetMaterials()])
+    nu_kelvin_factor = kelvin_nu_factor_3d_cf(center=(offset_x, 0.0, 0.0),
+                                               R=kelvin_radius)
+    Nu = build_material_cf(mesh, nu0, nu_kelvin_factor,
+                            outer_keyword="air_outer")
 
     # Bilinear form: (nu * curl(A), curl(v)) + regularization
     a = BilinearForm(fes)
