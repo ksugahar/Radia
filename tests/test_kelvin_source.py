@@ -111,7 +111,7 @@ def test_scalar_factor_at_sphere_boundary():
 
 
 def test_A_s_kelvin_pathway():
-    """A_s_at_obs_with_kelvin: inner points unchanged, shell points mapped."""
+    """A_s_at_obs_with_kelvin: inner points unchanged, kelvin_ext points mapped."""
     from kelvin_source import A_s_at_obs_with_kelvin, biot_savart_A_at_points
 
     R_loop = 0.030
@@ -121,13 +121,13 @@ def test_A_s_kelvin_pathway():
     paths, currents = build_loop(R_loop, 0.0, 200, I)
     # Inner point (physical inner domain, far from Kelvin sphere)
     p_in = np.array([0.010, 0.0, 0.005])
-    # Kelvin shell point (computational frame): offset +/- dx within radius
-    p_out_shell = offset + np.array([0.020, 0.005, 0.010])
+    # Kelvin exterior domain point (computational frame): offset +/- dx within radius
+    p_out_kelvin_ext = offset + np.array([0.020, 0.005, 0.010])
     # Its Kelvin-inverse physical position:
     from kelvin_source import kelvin_map_3d
-    p_out_phys = kelvin_map_3d(p_out_shell, offset, R_kelvin)
+    p_out_phys = kelvin_map_3d(p_out_kelvin_ext, offset, R_kelvin)
 
-    obs = np.vstack([p_in, p_out_shell])
+    obs = np.vstack([p_in, p_out_kelvin_ext])
     A_full = A_s_at_obs_with_kelvin(
         obs, paths, currents,
         kelvin_center=offset.tolist(), R_kelvin=R_kelvin,
@@ -140,15 +140,15 @@ def test_A_s_kelvin_pathway():
     print(f"  inner A match: err = {err_in:.2e}")
     assert err_in < 1e-12
 
-    # Shell: expected = A(physical_equivalent) * (R/rho')^2
+    # Kelvin exterior domain: expected = A(physical_equivalent) * (R/rho')^2
     A_at_phys = biot_savart_A_at_points(p_out_phys.reshape(1, 3),
                                          paths, currents, n_quad=8)[0]
-    rho_prime = np.linalg.norm(p_out_shell - offset)
+    rho_prime = np.linalg.norm(p_out_kelvin_ext - offset)
     factor = (R_kelvin / rho_prime) ** 2
     expected = A_at_phys * factor
     err_sh = np.max(np.abs(A_full[1] - expected))
     rel_sh = err_sh / np.max(np.abs(expected))
-    print(f"  shell factor match: err = {err_sh:.2e}  rel = {rel_sh:.2e}")
+    print(f"  kelvin_ext factor match: err = {err_sh:.2e}  rel = {rel_sh:.2e}")
     # Quadrature-level tolerance (loop discretization + n_quad=8).
     assert rel_sh < 1e-6
 
@@ -159,7 +159,7 @@ def test_pullback_equals_scalar_for_uniform_A():
 
     center = np.array([0.15, 0.0, 0.0])
     R = 0.060
-    # Shell points
+    # Kelvin exterior domain points
     rng = np.random.default_rng(0)
     r_prime = center + 0.5 * R * rng.standard_normal((20, 3))
     # A with no radial component: A perpendicular to (r' - c).
@@ -220,15 +220,15 @@ def test_pullback_involution():
     A_phys = rng.standard_normal((10, 3))
     # First pullback: A_phys at r_phys -> A' at r' = Kelvin_inv(r_phys)
     r_prime = kelvin_map_3d(r_phys, center, R)
-    A_shell = kelvin_pullback_vector(A_phys, r_prime, center, R)
-    # Second pullback: A_shell at r_prime (treated as 'physical') -> back at r
+    A_kelvin_ext = kelvin_pullback_vector(A_phys, r_prime, center, R)
+    # Second pullback: A_kelvin_ext at r_prime (treated as 'physical') -> back at r
     # For involution to hold, we need to interpret the second pullback as
-    # going from the shell back to physical. The Jacobian is the same
+    # going from the kelvin_ext back to physical. The Jacobian is the same
     # form because phi is self-inverse:
     r_back = kelvin_map_3d(r_prime, center, R)
     err_rback = np.max(np.abs(r_back - r_phys))
     assert err_rback < 1e-10
-    A_back = kelvin_pullback_vector(A_shell, r_back, center, R)
+    A_back = kelvin_pullback_vector(A_kelvin_ext, r_back, center, R)
     err = np.max(np.abs(A_back - A_phys)) / np.max(np.abs(A_phys))
     print(f"  double pullback involution, rel err = {err:.2e}")
     assert err < 1e-12

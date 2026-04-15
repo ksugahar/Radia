@@ -72,7 +72,7 @@ Each radia_*.py MUST have a corresponding sample in `panels/samples/`:
 ```
 radia_ih.py  -> panels/samples/ih_bem_sample.jou         (BEM: surface mesh, small air)
                 panels/samples/ih_fem_sample.jou         (FEM: volume mesh, large air Dirichlet)
-                panels/samples/ih_fem_kelvin_sample.jou  (FEM + Kelvin shell, exact open BC)
+                panels/samples/ih_fem_kelvin_sample.jou  (FEM + Kelvin exterior domain, exact open BC)
 radia_em.py  -> panels/samples/em_sample.jou
 radia_pcb.py -> panels/samples/pcb_sample.jou
 ```

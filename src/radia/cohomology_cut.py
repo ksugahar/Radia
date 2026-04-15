@@ -173,7 +173,7 @@ class CohomologyCutSolver:
             phys_mats = [m for m in all_mats if m != kelvin_region]
             for mat in phys_mats:
                 a += self._mu_cf * grad(phi) * grad(v) * dx(mat)
-            # Kelvin shell: weight = (R/r)^2 (3D Kelvin transform)
+            # Kelvin exterior domain: weight = (R/r)^2 (3D Kelvin transform)
             cx, cy, cz = kelvin_center if kelvin_center else (0, 0, 0)
             r_cf = sqrt((x - cx)**2 + (y - cy)**2 + (z - cz)**2)
             R = kelvin_radius
@@ -190,7 +190,7 @@ class CohomologyCutSolver:
         a.Assemble()
 
         # Source: f(v) = sum_k NI_k * integral(mu * h_k . grad(v))
-        # Source only in physical region (not in Kelvin shell)
+        # Source only in physical region (not in Kelvin exterior domain)
         f = LinearForm(fes)
         if kelvin_region:
             for k, NI_k in enumerate(NI_list):

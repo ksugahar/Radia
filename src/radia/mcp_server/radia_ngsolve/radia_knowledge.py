@@ -3766,7 +3766,7 @@ a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
 | Method | L error | Extra DOFs | Truncation |
 |--------|---------|------------|------------|
 | Dirichlet at R=120mm | **+7%** | 0 | PEC wall error |
-| Kelvin shell (DEPRECATED) | +1.2% | +20-30% | Small (R_outer) |
+| Kelvin exterior domain (DEPRECATED) | +1.2% | +20-30% | Small (R_outer) |
 | **Periodic Kelvin** | **+1.5%** | **0** | **None (exact)** |
 
 Periodic Kelvin is the recommended method. Shell approach is deprecated.
