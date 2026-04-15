@@ -70,7 +70,7 @@ public:
 
   //! Accessors
   int order() const { return mOrderCombo->currentIndex() + 1; }
-  int gmshVersion() const { return 2; }  // always v2.2 (v4.1 is post-processing only)
+  int gmshVersion() const { return 4; }  // always v4.1 (lab-wide standard, 2026-04)
   int dimension() const { return (mDimension->currentText() == "2D") ? 2 : 3; }
   bool noPyramid() const { return mNoPyramid && mNoPyramid->currentIndex() == 1; }
   double scale() const;

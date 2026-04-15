@@ -9,7 +9,7 @@ radia_export gmsh "mesh.msh" version 4.1
 radia_export gmsh "mesh.msh" version 4.1 dim 2d
 ```
 
-No block assignment or `#!python` required. See [export_Gmsh_ver2.md](export_Gmsh_ver2.md) for full plugin documentation.
+No block assignment or `#!python` required.
 
 ---
 
@@ -107,17 +107,6 @@ cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
 cubit.cmd('radia_export gmsh "mesh_2nd_order.msh" version 4 overwrite')
 ```
 
-## Differences from v2
-
-| Feature | v2 (`export_Gmsh_ver2`) | v4 (`export_Gmsh_ver4`) |
-|---------|------------------------|------------------------|
-| Format version | 2.2 | 4.1 |
-| $Entities section | No | Yes |
-| Node grouping | Flat list | Entity blocks |
-| Element grouping | Flat list | Entity blocks |
-| DIM parameter | No | Yes |
-| 2D normal control | No | Yes |
-
 ## $Entities Section
 
 The v4 format includes geometry topology information:
@@ -139,5 +128,4 @@ The output file is compatible with:
 
 ## See Also
 
-- [export_Gmsh_ver2](export_Gmsh_ver2.md) - Gmsh v2.2 format export
 - [Cubit_Element_Order.md](Cubit_Element_Order.md) - How to control element order

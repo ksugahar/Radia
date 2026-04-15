@@ -990,16 +990,17 @@ All BEM/FEM field visualization uses `GmshPostExport`, not VTK/VTS.
 **Why GMSH, not VTK**: GMSH natively supports arbitrary-order curved elements
 (Tri6, Tri10, Tri15, ...). VTK approximates high-order elements as linear facets.
 
-### Format Version Policy
+### Format Version Policy (2026-04: v4.1 only)
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import | `Mesh("model.vol")` |
-| **Output** (NGSolve ->) | **v4.1** | Field visualization | `GmshPostExport.write()` -> GMSH GUI |
-| **Output** (NGSolve ->) | **v2.2** | High-order mesh exchange | `GmshPostExport.write_v22()` |
+| **Output** (NGSolve ->) | **.msh v4.1** | Field visualization | `GmshPostExport.write()` / `vol2msh()` -> GMSH GUI |
 
-Use .vol files for NGSolve mesh input. `GmshPostExport.write_v22()` outputs v2.2 with
-arbitrary-order high-order elements (Tri6, Tri10, Tri15, ...) for GMSH visualization.
+Lab-wide standard (2026-04): GMSH .msh v4.1 is the ONLY supported format.
+`GmshPostExport.write_v22()` has been removed.  netgen I/O is always via
+.vol (never via .msh).  v4.1 supports the same arbitrary-order elements
+(Tri6, Tri10, Tri15, ...) for GMSH visualization.
 
 ### Supported Orders (Lagrange Triangles)
 

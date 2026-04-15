@@ -12,8 +12,7 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | Command | Format | Orders | Block Required |
 |---------|--------|--------|---------------|
 | `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | No |
-| `radia_export gmsh "f.msh" order N version 2` | Gmsh v2.2 | 1-4 | No |
-| `radia_export gmsh "f.msh" order N version 4` | Gmsh v4.1 | 1-4 | No |
+| `radia_export gmsh "f.msh" order N` | Gmsh v4.1 | 1-4 | No |
 | `radia_export nastran "f.bdf" order N` | Nastran BDF | 1-2 | No |
 | `radia_export vtk "f.vtk" order N` | VTK Legacy | 1-2 | No |
 
@@ -75,7 +74,7 @@ radia_export gmsh "filename.msh" [order <1-4>] [version <2|4>] [dimension <2|3>]
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | order | 1 | Element order (1-4, order 3+ requires NetgenCurver) |
-| version | 2 | GMSH format (2=v2.2, 4=v4.1) |
+| version | (ignored) | v4.1 is the only supported format; the `version` keyword is accepted for backward compatibility but ignored |
 | dimension | 3 | 2D or 3D mode |
 
 ### radia_export nastran

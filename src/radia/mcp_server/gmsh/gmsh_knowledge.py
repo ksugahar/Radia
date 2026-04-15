@@ -535,47 +535,11 @@ def write_msh_opt(msh_path: str, hidden_volumes: list[int],
 GMSH_MSH_FORMAT = """
 # GMSH .msh File Format
 
-## Version 2.2 (Standard for Radia/NGSolve)
+## Version 4.1 (Lab-wide standard, 2026-04)
 
-```
-$MeshFormat
-2.2 0 8
-$EndMeshFormat
-
-$PhysicalNames
-numNames
-dimension physicalTag "name"
-...
-$EndPhysicalNames
-
-$Nodes
-numNodes
-nodeNumber x y z
-...
-$EndNodes
-
-$Elements
-numElements
-elmNumber elmType numTags tag1 tag2 ... nodeList
-...
-$EndElements
-
-$NodeData
-numStringTags
-"viewName"
-numRealTags
-timeValue
-numIntegerTags
-timeStepIndex
-numComponents        (1=scalar, 3=vector, 9=tensor)
-numNodes
-partitionIndex       (0=none)
-nodeNumber value...
-...
-$EndNodeData
-```
-
-## Version 4.1 (Optional Large-Scale Output)
+v4.1 is the only supported format across the Radia repository
+(Cubit plugin output, NGSolve post-processing, all panels).
+netgen I/O is always via `.vol` (never `.msh`).
 
 ```
 $MeshFormat

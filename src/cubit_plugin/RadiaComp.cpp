@@ -1440,7 +1440,7 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     form->addRow("Order:", mOrderCombo);
   }
 
-  // Version: GMSH is always v2.2 (v4.1 is for post-processing only)
+  // GMSH output: always v4.1 (lab-wide standard, 2026-04).
 
   // Scale (FEMEEM only)
   if (format == FEMEEM) {
@@ -1625,7 +1625,7 @@ QString ExportDialog::cubitCommand() const
     }
     case GMSH: {
       QString dim = (mDimension->currentText() == "2D") ? "2" : "3";
-      cmd = QString("radia_export gmsh \"%1\" order %2 version 2 dimension %3")
+      cmd = QString("radia_export gmsh \"%1\" order %2 dimension %3")
                 .arg(file).arg(order).arg(dim);
       break;
     }
