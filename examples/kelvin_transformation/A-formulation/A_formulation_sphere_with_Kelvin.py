@@ -306,7 +306,7 @@ gfu = GridFunction(fes)
 # Build source term for reduced potential
 # Source coefficient: (nu_0 - nu) in magnetic region only
 nu_diff_list = []
-for mat in materials:
+for mat in mesh.GetMaterials():
     if "magnetic" in mat.lower():
         nu_diff_list.append(nu0 - nu0/mu_r)  # nu_0 - nu_mag > 0
     else:
