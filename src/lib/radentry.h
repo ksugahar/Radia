@@ -440,14 +440,6 @@ EXP int CALL RadObjSetM(int obj, double* M);
 */ 
 EXP int CALL RadObjGeoVol(double* v, int obj);
 
-/** Computes coordinates of object extrimities in laboratory frame.
-@param L [out] array of 6 numbers representing cartesian coordinates of object extrimities (xmin, xmax, ymin, ymax, zmin, zmax)
-@param obj [in] reference number of a 3D object
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/ 
-EXP int CALL RadObjGeoLim(double* L, int obj);
-
 /** Gives number of degrees of freedom for the relaxation of an object.
 @param num [out] number of degrees of freedom
 @param obj [in] reference number of a 3D object
@@ -456,13 +448,7 @@ EXP int CALL RadObjGeoLim(double* L, int obj);
 */
 EXP int CALL RadObjDegFre(int* num, int obj);
 
-// RadObjDrwQD3D REMOVED (2026-01-14) - QuickDraw 3D is obsolete
-// Visualization: use NGSolve + GmshPostExport
-
-// RadObjDrwAtr REMOVED (2026-01-14) - Drawing attributes no longer used
-// Use VTK export with ParaView for visualization
-
-/** Creates a parallelepiped block with center point {P[0],P[1],P[2]}, dimensions {L[0],L[1],L[2]} and color {RGB[0],RGB[1],RGB[2]}. 
+/** Creates a parallelepiped block with center point {P[0],P[1],P[2]}, dimensions {L[0],L[1],L[2]} and color {RGB[0],RGB[1],RGB[2]}.
 The block is magnetized according to {M[0],M[1],M[2]} then subdivided according to {K[0],K[1],K[2]} and added into the container grp. grp should be defined in advance by calling RadObjCnt().
 @param n [out] reference number of the object created
 @param P [in] three cartesian coordinates of the block center point

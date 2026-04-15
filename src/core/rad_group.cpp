@@ -187,7 +187,6 @@ int radTGroup::DuplicateGroupStuff(radTGroup* NewGroupPtr, radThg& hg, radTAppli
 		if(PutNewStuffIntoGenCont)
 		{
 			NewElemKey = radPtr->AddElementToContainer(hgSubLoc);
-			radPtr->CopyDrawAttr((*iter).first, NewElemKey);
 			NewGroupPtr->AddElement(NewElemKey, hgSubLoc);
 		}
 		else NewGroupPtr->AddElement(++NewStuffCounter, hgSubLoc);
@@ -661,8 +660,7 @@ int radTGroup::CutItself(TVector3d* CuttingPlane, radThg& In_hg, radTPair_int_hg
 		if(AddNewElemsToGenCont)
 		{
 			int GroupElemKey = radPtr->RetrieveElemKey(this);
-			if(pNewLowerGroup != 0) radPtr->CopyDrawAttr(GroupElemKey, LowerNewPair_int_hg.m);
-			if(pNewUpperGroup != 0) radPtr->CopyDrawAttr(GroupElemKey, UpperNewPair_int_hg.m);
+			(void)GroupElemKey;
 		}
 	}
 	return 1;
@@ -1709,7 +1707,6 @@ int radTGroup::CreateFromSym(radThg& In_hg, radTApplication* radPtr, char PutNew
 		if(PutNewStuffIntoGenCont)
 		{
 			int NewElemKey = radPtr->AddElementToContainer(hgNew);
-			radPtr->CopyDrawAttr((*iter).first, NewElemKey);
 			pGroupDpl->AddElement(NewElemKey, hgNew);
 		}
 		else pGroupDpl->AddElement(++NewStuffCounter, hgNew);

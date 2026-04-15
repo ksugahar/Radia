@@ -906,24 +906,6 @@ double ObjGeoVol(int obj) {
 }
 
 /**
- * @brief Get object geometry limits
- * @param obj Object handle
- * @return [xmin, xmax, ymin, ymax, zmin, zmax]
- */
-py::array_t<double> ObjGeoLim(int obj) {
-    double L[6] = {0};
-    int err = RadObjGeoLim(L, obj);
-    check_error(err);
-
-    py::array_t<double> result(6);
-    auto r = result.mutable_unchecked<1>();
-    for (int i = 0; i < 6; i++) {
-        r(i) = L[i];
-    }
-    return result;
-}
-
-/**
  * @brief Get number of degrees of freedom
  * @param obj Object handle
  * @return Number of DOF
@@ -2728,10 +2710,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("ObjGeoVol", &radia_utility::ObjGeoVol,
           py::arg("obj"),
           "Get object geometry volume.");
-
-    m.def("ObjGeoLim", &radia_utility::ObjGeoLim,
-          py::arg("obj"),
-          "Get object geometry limits [xmin, xmax, ymin, ymax, zmin, zmax].");
 
     m.def("ObjDegFre", &radia_utility::ObjDegFre,
           py::arg("obj"),

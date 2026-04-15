@@ -110,7 +110,6 @@ public:
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans*, radTg3d*, radTApplication*);
 
 	inline double Volume();
-	inline void LimitsAtTransform(radTrans* pExtTr, double* LimArr);
 	inline void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);
 
 	inline void SimpleEnergyComp(radTField*);
@@ -183,30 +182,6 @@ inline double radTGroup::Volume()
 		SumVol += static_cast<radTg3d*>(iter->second.rep)->VolumeWithSym();
 
 	return SumVol;
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTGroup::LimitsAtTransform(radTrans* pExtTr, double* LimArr)
-{
-	double &xMin = LimArr[0], &xMax = LimArr[1];
-	double &yMin = LimArr[2], &yMax = LimArr[3];
-	double &zMin = LimArr[4], &zMax = LimArr[5];
-	xMin = 1e+23; xMax = -1e+23;
-	yMin = 1e+23; yMax = -1e+23;
-	zMin = 1e+23; zMax = -1e+23;
-
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin(); iter != GroupMapOfHandlers.end(); ++iter)
-	{
-		double LocLimArr[6];
-		static_cast<radTg3d*>(iter->second.rep)->Limits(pExtTr, LocLimArr);
-		if(xMin > LocLimArr[0]) xMin = LocLimArr[0];
-		if(xMax < LocLimArr[1]) xMax = LocLimArr[1];
-		if(yMin > LocLimArr[2]) yMin = LocLimArr[2];
-		if(yMax < LocLimArr[3]) yMax = LocLimArr[3];
-		if(zMin > LocLimArr[4]) zMin = LocLimArr[4];
-		if(zMax < LocLimArr[5]) zMax = LocLimArr[5];
-	}
 }
 
 //-------------------------------------------------------------------------

@@ -34,14 +34,6 @@ struct radRGB {
 	}
 };
 
-struct radTDrawAttr {
-	radRGB RGB_col;
-	double LineThickness;
-};
-
-using radTMapOfDrawAttr = std::map<int, radTDrawAttr, std::less<int>>;
-using radTVectOfDrawAttr = std::vector<radTDrawAttr>;
-
 class radTrans;
 class radTField;
 
