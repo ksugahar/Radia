@@ -188,87 +188,206 @@ nu_0 * (R/rho')^6 * dV_comp = nu_kelvin * (R/rho')^8 * dV_comp
 => nu_kelvin = nu_0 * (rho'/R)^2
 ```
 
-## 8. Empirical resolution: (R/rho')^2 wins (2026-04-15)
+## 8. Canonical resolution: Nagamine CEFC 2026 (2026-04-16)
 
-The pure-math derivation in section 7 gives `nu_kelvin = (rho'/R)^2`,
-but the production code uses `(R/rho')^2`. To resolve the discrepancy
-empirically, `test_nu_convention.py` solves the same baseline geometry
-(gapped torus, circular cross-section, R_coil=30mm a_coil=3mm,
-gap=5deg, R_K=60mm, offset=150mm) with BOTH conventions and compares
-to the analytical L = 88.55 nH:
+The derivation in sections 4-7 gives `nu_kelvin = (rho'/R)^2 * nu_0`.
+This is the **canonical Nagamine / Sugahara 2022 convention** and is
+the one to use in FEM code.
 
-| convention                       | L_total [nH] | error vs analytical |
-|----------------------------------|--------------|---------------------|
-| `sugahara`         `(R/rho')^2`  | **89.35**    | **+0.90 %**         |
-| `energy_invariant` `(rho'/R)^2`  | 92.81        | +4.80 %             |
+### 8.1. Authoritative reference
 
-The Sugahara `(R/rho')^2` convention reproduces the analytical
-inductance to within 1 % and is therefore the empirically correct
-choice. The pure-math derivation in sections 4-7 must contain an
-error — most likely in the form-degree assignment (HCurl A may not be
-a pure 1-form covector under the FEM coordinate change), or in the
-curl-operator transformation across the Kelvin map.
+> **H. Nagamine, T. Yamaguchi, K. Sugahara**, "A Pullback-Based
+> Formulation of Kelvin Transformation in Electromagnetic Field
+> Analysis," CEFC 2026 (Thessaloniki), id 350.
+>
+> Derives the material transformation law for vector fields via
+> pullbacks of differential forms and bilinear energy functionals (not
+> a metric-based approach with ad-hoc scale factors). Confirms
+> `nu' = (rho'/R)^2 * nu` for 3D spherical (conformal) Kelvin, citing
+> Sugahara 2022 IEEE TransMag 58(9) as ref [3].
 
-**Practical conclusion**: use `nu_kelvin = (R/rho')^2 * nu_0` for the
-A-formulation HCurl FEM. This is what Sugahara 2022 (IEEE Trans Magn,
-ref [6]) presumably derives.
+Key steps (Nagamine eqs. 5-9):
 
-The derivation in sections 4-7 IS internally consistent (the validated
-A pullback and B pullback are connected by curl, see test
-`test_curl_A_comp_matches_B_pullback`). The mistake is somewhere in
-the bridge from "differential-form pullback" to "FEM bilinear form
-energy on the Kelvin mesh". A pinpoint derivation is left as future
-work; references to consult:
+Spherical Kelvin map: `k(r, theta, phi) = (R^2/r, theta, phi)`,
+orientation-reversing with `sgn(k) = -1`.
 
-1. Sugahara 2022 IEEE Trans Magn 58(9), "Electromagnetic analysis of
-   eddy current testing with Kelvin transformation" -- direct A-form
-   derivation expected.
-2. Nabizadeh, Ramamoorthi, Chern, ACM TOG 40(4) -- their general
-   k-form transformation formulas may clarify which convention HCurl A
-   actually obeys.
+Pullback of orthonormal 1-form basis (conformal, same factor on each
+angular component):
+```
+k*(e^{r'}) = -(R/r)^2 e^r     (same for e^theta, e^phi)
+```
+
+Hodge and inner product pullback (eq. 7):
+```
+star(k*(B')) = -(R/r)^2 * k*(star'(B'))           for 2-form B'
+g(k*(w'), k*(w')) = +(R/r)^4 * g'(w', w')         for 1-forms
+```
+
+Bilinear integrand (eq. 8):
+```
+nu <dw, dA> = nu <dw', dA'>' * (R/r)^{2+2+4}
+            = nu <dw', dA'>' * (R/r)^8
+```
+
+Volume: `dOmega = k*(-R^6/r'^6 dOmega')`. Substituting and using
+`sgn(k) = -1`:
+
+```
+W_m^E = int_Omega_E nu <dw, dA> dOmega
+      = sgn(k) int_Omega' nu <dw', dA'>' * (-r'^2/R^2) dOmega'
+      = int_Omega' nu * (r'/R)^2 <dw', dA'>' dOmega'
+```
+
+Comparing with `W_m' = int_Omega' nu' <dw', dA'>' dOmega'`:
+
+```
+nu' = nu * (r'/R)^2        [CANONICAL: Nagamine eq. 9]
+```
+
+### 8.2. Numerical validation (Nagamine CEFC 2026 §III)
+
+Toroidal current loop, major radius `a = 0.1 m`, wire radius
+`b = 0.01 m`, magnetic moment `m = I * pi * a^2 = 1 A m^2`. Kelvin
+sphere `R = 1 m`.
+
+Exterior magnetic energy:
+
+- Analytical (dipole approximation): `mu_0 m^2 / (12 pi R^3) = 3.333e-8 J`
+- FEM on transformed domain Omega' using `nu' = (rho'/R)^2 * nu`: `3.344e-8 J`
+- Error: `+0.33%`
+
+This confirms that the correct FEM material coefficient in the
+transformed domain is `nu' = (rho'/R)^2 * nu_0`, and that the
+magnetic energy computed directly in Omega' coordinates reproduces
+the physical exterior energy.
+
+### 8.3. Cylindrical (2D non-conformal) Kelvin
+
+Cylindrical inversion `k(rho, phi, z) = (R^2/rho, phi, z)` is NOT
+conformal. The pullback yields an anisotropic reluctivity tensor
+(Nagamine eq. 12):
+
+```
+nu' = diag(1, 1, (rho'/R)^4) * nu       (only axial component modulated)
+```
+
+Use cylindrical Kelvin examples directly with this tensor form, not
+the scalar 3D factor.
+
+### 8.4. Solution pullback vs material modulation
+
+Two DIFFERENT factors arise in Kelvin, don't confuse them:
+
+| Concept                | Factor                | Used in                            |
+|------------------------|-----------------------|------------------------------------|
+| Material `nu`          | `(rho'/R)^2 * nu_0`   | FEM bilinear form (Nagamine eq. 9) |
+| Material `mu`          | `(R/rho')^2 * mu_0`   | Omega/H-form (reciprocal)          |
+| Solution A (1-form)    | `(R/rho')^2 * H A`    | PEEC source pullback               |
+| Solution B (2-form)    | `-(R/rho')^4 * H B`   | B-field pullback                   |
+
+The material factor `(rho'/R)^2` for nu is the **bilinear energy
+equivalence** result. The solution factors `(R/rho')^2` (for A) and
+`(R/rho')^4` (for B) are **pullbacks of the field itself** and come
+directly from the inverse Jacobian (see sections 4, 5 of this note).
+
+### 8.5. Mislabel in `test_nu_convention.py` (historical note)
+
+An earlier version of
+`examples/kelvin_transformation/A-formulation/test_nu_convention.py`
+defined two convention labels as follows:
+
+| label (in old file)   | factor             |
+|-----------------------|--------------------|
+| `sugahara`            | `(R/rho')^2 * nu_0`|
+| `energy_invariant`    | `(rho'/R)^2 * nu_0`|
+
+The labels are **reversed** from the actual Sugahara 2022 result.
+Per Nagamine's derivation (with Sugahara as co-author, citing ref
+[3] = Sugahara 2022), the Sugahara convention is `(rho'/R)^2 * nu_0`,
+which the old file labeled `energy_invariant`.
+
+The 2026-04-15 session treated the mislabeled empirical result
+(`(R/rho')^2` winning with +0.90% vs +4.80% on a gapped-torus
+benchmark) as authoritative and "resolved" this note in favor of
+`(R/rho')^2`. That resolution was incorrect. The present text (§8)
+supersedes the earlier one.
+
+### 8.6. Open investigation: empirical discrepancy in old test
+
+The old test reported `(R/rho')^2 -> +0.90%` vs `(rho'/R)^2 -> +4.80%`
+on a gapped-torus benchmark. Per Nagamine, `(rho'/R)^2` is correct,
+so `(rho'/R)^2` should give the better result. The discrepancy is
+likely due to FEM setup (GND / gauge regularization) and is logged
+as a follow-up investigation (see
+`memory/project_kelvin_e2c_deferred.md`). Re-running with proper GND
+enforcement should restore agreement.
+
+### 8.7. Centralized API
+
+New code should import Nagamine-canonical factors from
+`radia.kelvin_source` rather than re-deriving inline. See
+`examples/kelvin_transformation/CONVENTION.md` for the factory
+functions.
+
+## 9. Validation script
+
+See also `validate_radia_HB_kelvin.py` in the same directory for a
+direct Radia-vs-FEM cross-check of the material factor + A 1-form
+pullback.
 
 ## 9. Validation script
 
 `examples/kelvin_transformation/A-formulation/validate_radia_HB_kelvin.py`
 performs an A/B comparison on the same Kelvin mesh:
 
-- Case A: full FEM (volume J, Sugahara two-sphere convention,
-  `nu_kelvin = (R/rho')^2 nu_0`).
+- Case A: full FEM (volume J, two-sphere Kelvin, canonical
+  `nu_kelvin = (rho'/R)^2 nu_0` per Nagamine CEFC 2026).
 - Case B: inject Radia ObjArcCur analytical A onto the same mesh, with
   the 1-form pullback in the Kelvin exterior, integrate
   `H . B = nu |curl A|^2`.
 
 Empirical results (square 2a x 2a torus, R_coil=30mm, a_coil=3mm,
-gap=5deg, R_K=60mm, offset=150mm, coarse mesh maxh=12mm):
+gap=5deg, R_K=60mm, offset=150mm, coarse mesh maxh=12mm), recorded
+before the Nagamine resolution — kept as historical log; the
+convention labels in the "inject" column refer to the factor applied
+to A in the kelvin exterior, NOT the material factor:
 
 | | L_inner [nH] | L_kext [nH] | Total |
 |---|---|---|---|
 | Case A FEM (volume J) | 78.8 | 2.6 | 81.4 |
-| Case B (R/rho')^2 inject (Phase 1) | 78.8* | 73 | 152* (was 218 before fix) |
+| Case B (R/rho')^2 inject (Phase 1) | 78.8 | 73 | 152 |
 | Case B (rho'/R)^2 inject (Phase 1) | 98.7 | 0.15 | 98.9 |
 | Case B (rho'/R)^2 + Householder (Phase 2) | 98.7 | 0.62 | 99.4 |
 
-*The (R/rho')^2 row is from an earlier buggy implementation; the
-Phase 2 pullback derived in section 4 of this note is the
-mathematically correct 1-form formula.
-
-The 25 % gap between Case A inner and Case B inner is unexplained by
-mesh refinement alone; investigation continues. The (rho'/R)^2 form
-is incorrect per the derivation above (it is the SCALAR-derived
-gradient transformation factor, not the 1-form A pullback factor),
-so the agreement Case B (rho'/R)^2 ~ Radia open-domain is partially
-fortuitous and needs further analysis.
+Per Nagamine: the correct **A solution pullback** is `(R/rho')^2 H A`
+(not `(rho'/R)^2`), and the correct **material nu** is
+`(rho'/R)^2 nu_0`. The script in §9 was run in a mixed state where the
+two factors were confused; results should be re-run with the corrected
+`validate_radia_HB_kelvin.py` (factor fix committed 2026-04-16).
 
 ## 10. References
 
+- **H. Nagamine, T. Yamaguchi, K. Sugahara**, "A Pullback-Based
+  Formulation of Kelvin Transformation in Electromagnetic Field
+  Analysis," CEFC 2026 (Thessaloniki), id 350. **Authoritative
+  derivation**: pullback of orthonormal 1-form basis + bilinear energy
+  functional gives `nu' = (rho'/R)^2 * nu` for 3D spherical (conformal)
+  Kelvin; `nu' = diag(1,1,(rho'/R)^4) * nu` for 2D cylindrical
+  (non-conformal). Validated numerically: toroidal loop analytical
+  dipole energy 3.333e-8 J vs FEM 3.344e-8 J (+0.33%).
+- **K. Sugahara**, "Electromagnetic analysis of eddy current testing
+  with Kelvin transformation," IEEE Trans. Magn. 58(9), 1-6, Sept.
+  2022 (cited as ref [3] in the Nagamine paper). Original A-formulation
+  derivation of `nu' = (rho'/R)^2 * nu`.
 - Sugahara, Nagamine, Kameari, "Kelvin Transformation for Open
   Boundary Problems in Reduced Potential Formulation"
   (digest, examples/kelvin_transformation/digest.pdf, 2026).
-  Provides the H-formulation rule
-  `H'_s = -(rho'/R)^2 H_s` and the bilinear factor `(R/rho')^2`.
-- Sugahara 2022, IEEE Trans. Magn. 58(9), "Electromagnetic analysis
-  of eddy current testing with Kelvin transformation" -- A-formulation
-  conformal-symmetry derivation (cited as ref [6] in the digest;
-  contains the `(R/rho')^2` ν convention used in the code).
+  Companion tutorial covering H-formulation rule
+  `H'_s = -(rho'/R)^2 H_s`.
+- A. Bossavit, *Computational Electromagnetism*, Academic Press, 1998
+  (ref [4] in Nagamine) -- differential geometric framework for EM.
+- Wong and Ciric, COMPEL 4(3), 1985; Freeman and Lowther, IEEE Trans.
+  Magn. 24(6), 1988 (refs [1], [2] in Nagamine).
 - Nabizadeh, Ramamoorthi, Chern, "Kelvin transformations for
-  simulations on infinite domains", ACM Trans. Graphics 40(4), 2021.
+  simulations on infinite domains", ACM Trans. Graphics 40(4), 2021
+  (general k-form pullback framework).

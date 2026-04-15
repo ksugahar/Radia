@@ -2,6 +2,40 @@
 
 Finite element examples for unbounded magnetostatic problems using the **Kelvin transformation**. The Kelvin transformation maps an infinite exterior domain (r > R) to a finite computational domain by the inversion r' = R^2/r, enabling standard FEM discretisation on a bounded mesh while exactly representing the far-field decay. All examples are implemented with [NGSolve](https://ngsolve.org/) / Netgen.
 
+## Canonical convention
+
+All examples and the centralised `radia.kelvin_source` API use the single canonical convention derived in:
+
+> **H. Nagamine, T. Yamaguchi, K. Sugahara**, "A Pullback-Based Formulation of Kelvin Transformation in Electromagnetic Field Analysis," CEFC 2026 (Thessaloniki), id 350.
+
+For 3D spherical (conformal) Kelvin:
+
+```
+nu_ext = (rho'/R)^2 * nu_0          [HCurl A-formulation]
+mu_ext = (R/rho')^2 * mu_0          [H1 Omega / H-formulation]
+```
+
+These are pointwise reciprocals (mu * nu = 1), consistent with Kelvin as a *physical* coordinate transformation. See [CONVENTION.md](CONVENTION.md) for the full declaration and derivation, and [docs/pullback_derivation_3D.md](docs/pullback_derivation_3D.md) §8 for the pullback + bilinear energy functional derivation (validated numerically against analytical dipole energy to +0.33%).
+
+**Quickstart (student-friendly API)**: Import factors from `radia.kelvin_source` rather than re-deriving inline:
+
+```python
+from radia.kelvin_source import (
+    kelvin_nu_factor_axisym_cf,   # (rho'/R)^2 for A-form, axisym with Z-offset
+    kelvin_mu_factor_3d_cf,       # (R/rho')^2 for Omega-form, 3D sphere
+    build_material_cf,            # {material: value} CF builder
+)
+
+# A-formulation, axisym with Z-offset:
+nu_cf = build_material_cf(
+    mesh, nu0,
+    kelvin_nu_factor_axisym_cf(z_offset, R_kelvin),
+    overrides={"magnetic": nu0 / mu_r},
+)
+```
+
+If a particular Kelvin setup shows unexpected inductance / field / energy errors, **do not change the convention**. Debug the FEM setup separately: GND placement (Dirichlet at rho'=0), gauge regularisation, mesh refinement near rho'=0 (material vanishes or diverges), integration order (bonus_intorder for rational coefficients), and periodic identification.
+
 ## Subdirectories
 
 ### H-formulation
