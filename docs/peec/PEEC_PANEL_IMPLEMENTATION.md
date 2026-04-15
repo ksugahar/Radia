@@ -432,7 +432,7 @@ Z_LL[i][i] = R[i] + jw*L[i][i] + Z_s[i]
 **Dual mesh workflow** (updated `demo_peec_from_dual_mesh.py`):
 
 1. Generate dual mesh in Cubit: `generate_dual_mesh_filament_panel.py`
-2. Export to GMSH v2.2 format (1D filaments + 2D panels)
+2. Export to GMSH v4.1 format (1D filaments + 2D panels)
 3. Load in Python: `demo_peec_from_dual_mesh.py`
 4. Build PEEC matrices with true 2D integration
 

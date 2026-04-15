@@ -222,27 +222,32 @@ Note: the **Robustness Principle** ("be liberal in what you accept") is now wide
 - Post-processing field data (GMSH views)
 - Reading `.msh` file format for visualization verification
 
-### GMSH .msh Format Version Policy
+### GMSH .msh Format Version Policy (2026-04-15 update)
 
-**POLICY**: Cubit plugin は **v2.2 のみ**、Radia-NGSolve パネルは **v4.1 のみ**。各コンポーネントは片方だけ考えればよい。
+**POLICY**: **全リポジトリで GMSH .msh v4.1 のみ**。v2.2 は全廃。
+netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロセスとする。
 
-| Component | Version | Purpose | Test scope |
-|-----------|---------|---------|------------|
-| **Cubit plugin** (C++) | **v2.2 only** | Mesh export → GMSH viewer / NGSolve | v2.2 export のみ |
-| **Radia-NGSolve panel** (Python) | **v4.1 only** | Field post-processing (transient, NodeData) | v4.1 post のみ |
+| Component | Output | Purpose |
+|-----------|--------|---------|
+| **Cubit plugin** (`radia_export gmsh`) | `.msh v4.1` | Mesh export → GMSH viewer |
+| **Cubit plugin** (`radia_export netgen`) | `.vol` | NGSolve mesh interchange |
+| **Radia post** (`GmshPostExport` / `vol2msh`) | `.msh v4.1` | Field post-processing |
 
-**Separation of concerns**:
-- Cubit plugin 開発者は v2.2 のテストのみ必要
-- Radia-NGSolve パネル開発者は v4.1 のテストのみ必要
-- 結合テストは **.vol 渡し** の round-trip のみ（.msh は各コンポーネント内で完結）
-- Radia-NGSolve は v2.2/v4.1 両方のコードをメンテするが、各コンポーネントの開発・テストは独立
+**Shared routine layout** (both mesh_export and post_export emit the same v4.1 structure):
+1. `$MeshFormat 4.1 0 8`
+2. `$PhysicalNames` (blocks → material names, sidesets → boundary names)
+3. `$Entities` (one per physical group, linked via `physicalTag`)
+4. `$Nodes` (block-structured, one block per entity)
+5. `$Elements` (block-structured, one block per entity × element type)
+6. `$NodeData` / `$ElementData` (post-processing only)
 
-**Post-processing**: GMSH .msh v4.1 only (`GmshPostExport`). VTK output is NOT maintained by Radia — use NGSolve's built-in VTK export (`VTKOutput`) if needed.
-
-**Interface between components**: `.vol` (Cubit export → Radia-NGSolve calculation)
-
-- Element type codes (Tri6=9, Tri10=21, Tri15=23, Tri21=25) are identical in both versions
-- High-order elements (arbitrary order) are supported in both v2.2 and v4.1
+**Netgen interchange**:
+- Cubit → NGSolve: `.vol` only (never `.msh`).  No `ReadGmsh` path.
+- NGSolve → GMSH view: `.vol` + `.sol` → `vol2msh()` → `.msh v4.1`.
+- `.msh v2.2` support has been removed from `GmshPostExport` and
+  `ExportGmshCommand`.  The `version` keyword on `radia_export gmsh` is
+  accepted for back-compat with old `.jou` files but is ignored
+  (always emits v4.1 with a warning if `version 2` is passed).
 
 ### Mesh Export Consistency Check Policy
 
@@ -1748,7 +1753,7 @@ GMSH を可視化ツールとして使用する理由:
 - **高次要素ネイティブ対応** (Tri6, Tri10, Tri15, ..., arbitrary p)
 - **STEP ファイルを直接読み込み** → 幾何形状と磁場を重ねて表示
 - Per-material Physical Groups で材料別表示
-- .msh v2.2 (NGSolve 入力) と v4.1 (出力) の両方をサポート
+- **.msh v4.1 only** (lab-wide standard; netgen I/O は常に .vol 経由)
 
 ### GmshPostExport: High-Order Field Visualization
 
@@ -1829,8 +1834,7 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 | Format | Command | Max Order | Notes |
 |--------|---------|-----------|-------|
 | Netgen Vol | `radia_export netgen "f.vol" order 3` | 1-5 | Primary format for NGSolve FEM |
-| GMSH v2.2 | `radia_export gmsh "f.msh" version 2` | 1-3 | GMSH visualization |
-| GMSH v4.1 | `radia_export gmsh "f.msh" version 4` | 1-3 | Structured entity blocks, PhysicalNames |
+| GMSH v4.1 | `radia_export gmsh "f.msh"`           | 1-3 | Lab-wide standard; structured entity blocks |
 | Nastran BDF | `radia_export nastran "f.bdf"` | 1-2 | CTETRA/CTETRA(10), nopyramid option |
 | VTK | `radia_export vtk "f.vtk"` | 1-2 | Legacy format, cell types 10/24 |
 
@@ -1872,7 +1876,7 @@ negative Jacobians in GMSH). Use `radia_export netgen` for order 4-5.
 
 | File | Purpose |
 |------|---------|
-| `src/cubit_plugin/ExportGmshCommand.cpp` | GMSH v2.2 + v4.1 writer |
+| `src/cubit_plugin/ExportGmshCommand.cpp` | GMSH v4.1 writer |
 | `src/cubit_plugin/ExportNastranCommand.cpp` | Nastran BDF writer |
 | `src/cubit_plugin/ExportVtkCommand.cpp` | VTK Legacy writer |
 | `src/cubit_plugin/ExportNetgenCommand.cpp` | Netgen .vol writer + companion JSON |
