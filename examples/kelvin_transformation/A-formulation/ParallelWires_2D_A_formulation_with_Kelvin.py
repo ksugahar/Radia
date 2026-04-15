@@ -247,6 +247,7 @@ rho_prime_cf = sqrt(x**2 + y_local_cf**2)
 rho_prime_safe_cf = IfPos(rho_prime_cf - 1e-10, rho_prime_cf, 1e-10)
 
 # For 2D Laplace equation: invariant under Kelvin (no factor needed)
+# 2D in-plane: Kelvin factor = 1 (kelvin_factor_2d_inplane_cf)
 nu_cf = nu0
 
 print(f"  Using uniform nu (2D Laplace invariant under Kelvin)")
