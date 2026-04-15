@@ -35,10 +35,162 @@ Supports:
 Part of Radia project
 """
 
+from dataclasses import dataclass, field
+from typing import List, Tuple
+
 import numpy as np
 
 # Physical constants
 MU_0 = 4.0 * np.pi * 1e-7
+
+
+# ============================================================
+# Unified GMSH v4.1 payload model (Phase E.1, 2026-04-15)
+# ============================================================
+# Both the single-mesh writer (GmshPostExport.write) and the multi-mesh
+# writer (write_combined_msh_v41) build PayloadV41 instances and emit
+# through _emit_v41_msh. Every on-disk field of the .msh format lives
+# here once, so format changes only need touching one place.
+
+
+@dataclass
+class PhysicalGroup:
+    dim: int      # 0/1/2/3
+    tag: int      # global physical tag
+    name: str
+
+
+@dataclass
+class Entity:
+    dim: int
+    tag: int
+    bbox: Tuple[float, float, float, float, float, float]
+    physical_tags: List[int] = field(default_factory=list)
+    bounding_tags: List[int] = field(default_factory=list)
+
+
+@dataclass
+class NodeBlock:
+    entity_dim: int
+    entity_tag: int
+    start_id: int   # 1-indexed first node ID in this block
+    coords: List[Tuple[float, float, float]]
+
+
+@dataclass
+class ElementBlock:
+    entity_dim: int
+    entity_tag: int
+    gmsh_type: int
+    # connectivity entries are lists of GLOBAL 1-indexed node IDs
+    connectivity: List[List[int]]
+
+
+@dataclass
+class DataField:
+    kind: str        # "$NodeData" or "$ElementData"
+    name: str
+    ncomp: int       # 1 (scalar) or 3 (vector)
+    # items[i] = (gmsh_id, value_or_tuple). For scalar ncomp=1 value is
+    # float; for ncomp>=2 value is iterable of floats.
+    items: List[Tuple[int, object]]
+    time: float = 0.0
+    timestep: int = 0
+
+
+@dataclass
+class PayloadV41:
+    groups: List[PhysicalGroup] = field(default_factory=list)
+    entities: List[Entity] = field(default_factory=list)
+    node_blocks: List[NodeBlock] = field(default_factory=list)
+    element_blocks: List[ElementBlock] = field(default_factory=list)
+    data_fields: List[DataField] = field(default_factory=list)
+
+
+def _emit_v41_msh(f, payload: PayloadV41) -> None:
+    """Single v4.1 emitter. Writes a full .msh from a PayloadV41."""
+    f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+
+    # $PhysicalNames
+    if payload.groups:
+        f.write(f'$PhysicalNames\n{len(payload.groups)}\n')
+        for g in payload.groups:
+            f.write(f'{g.dim} {g.tag} "{g.name}"\n')
+        f.write('$EndPhysicalNames\n')
+
+    # $Entities — format per dim: point=3 coords, curve/surf/vol=6 bbox
+    n_pt = sum(1 for e in payload.entities if e.dim == 0)
+    n_cu = sum(1 for e in payload.entities if e.dim == 1)
+    n_su = sum(1 for e in payload.entities if e.dim == 2)
+    n_vl = sum(1 for e in payload.entities if e.dim == 3)
+    f.write(f'$Entities\n{n_pt} {n_cu} {n_su} {n_vl}\n')
+    for e in payload.entities:
+        xmin, ymin, zmin, xmax, ymax, zmax = e.bbox
+        parts = [str(e.tag)]
+        if e.dim == 0:
+            parts += [f'{xmin:.15e}', f'{ymin:.15e}', f'{zmin:.15e}']
+        else:
+            parts += [f'{xmin:.15e}', f'{ymin:.15e}', f'{zmin:.15e}',
+                      f'{xmax:.15e}', f'{ymax:.15e}', f'{zmax:.15e}']
+        parts.append(str(len(e.physical_tags)))
+        parts += [str(t) for t in e.physical_tags]
+        parts.append(str(len(e.bounding_tags)))
+        parts += [str(t) for t in e.bounding_tags]
+        f.write(' '.join(parts) + '\n')
+    f.write('$EndEntities\n')
+
+    # $Nodes
+    total_nodes = sum(len(b.coords) for b in payload.node_blocks)
+    if total_nodes == 0:
+        f.write('$Nodes\n0 0 0 0\n$EndNodes\n')
+    else:
+        f.write(f'$Nodes\n{len(payload.node_blocks)} {total_nodes} '
+                f'1 {total_nodes}\n')
+        for b in payload.node_blocks:
+            f.write(f'{b.entity_dim} {b.entity_tag} 0 {len(b.coords)}\n')
+            for i in range(len(b.coords)):
+                f.write(f'{b.start_id + i}\n')
+            for x, y, z in b.coords:
+                f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
+        f.write('$EndNodes\n')
+
+    # $Elements — IDs auto-assigned sequentially from 1
+    total_elems = sum(len(b.connectivity) for b in payload.element_blocks)
+    if total_elems == 0:
+        f.write('$Elements\n0 0 0 0\n$EndElements\n')
+    else:
+        f.write(f'$Elements\n{len(payload.element_blocks)} {total_elems} '
+                f'1 {total_elems}\n')
+        eid = 1
+        for b in payload.element_blocks:
+            f.write(f'{b.entity_dim} {b.entity_tag} {b.gmsh_type} '
+                    f'{len(b.connectivity)}\n')
+            for conn in b.connectivity:
+                f.write(f'{eid} ' + ' '.join(str(n) for n in conn) + '\n')
+                eid += 1
+        f.write('$EndElements\n')
+
+    # $NodeData / $ElementData
+    for df in payload.data_fields:
+        _emit_data_section(f, df)
+
+
+def _emit_data_section(f, df: DataField) -> None:
+    """Emit a $NodeData or $ElementData block from a DataField."""
+    end_kind = df.kind.replace('$', '$End')
+    f.write(f'{df.kind}\n')
+    f.write(f'1\n"{df.name}"\n')
+    f.write(f'1\n{df.time:.15e}\n')
+    f.write(f'3\n{df.timestep}\n{df.ncomp}\n')
+    f.write(f'{len(df.items)}\n')
+    if df.ncomp == 1:
+        for tag, val in df.items:
+            f.write(f'{tag} {float(val):.15e}\n')
+    else:
+        for tag, vec in df.items:
+            vals = ' '.join(f'{float(c):.15e}' for c in vec)
+            f.write(f'{tag} {vals}\n')
+    f.write(f'{end_kind}\n')
 
 
 # ============================================================
@@ -221,6 +373,9 @@ class GmshPostExport:
 
         v4.1 is the only supported format (lab-wide standard, 2026-04).
         netgen I/O is always via .vol; .msh v2.2 is no longer emitted.
+
+        Phase E.1 (2026-04-15): now goes through the unified
+        _emit_v41_msh emitter via a PayloadV41 built here.
         """
         if not filename.endswith('.msh'):
             filename += '.msh'
@@ -228,76 +383,22 @@ class GmshPostExport:
         mesh = self.mesh
         is_surface = _is_surface_mesh(mesh) or self._boundary
 
-        # Extract mesh topology grouped by material
         nodes, mat_names, elem_data = _extract_mesh_data_grouped(
             mesh, is_surface)
         n_nodes = len(nodes)
-
-        # Build per-material element index mapping
-        # mat_elem_map: {mat_name: [(orig_idx, gmsh_elem_id)]}
-        mat_elem_map, elem_id_map, n_elems = _assign_element_ids(
+        mat_elem_map, _elem_id_map, n_elems = _assign_element_ids(
             mat_names, elem_data)
-
-        # Determine dimension (2 for surface, 3 for volume)
         dim = 2 if is_surface else 3
-
-        # Compute per-material bounding boxes
         mat_bboxes = _compute_material_bboxes(nodes, mat_names, elem_data)
 
+        payload = self._build_single_mesh_payload(
+            nodes, mat_names, elem_data, mat_elem_map, n_elems,
+            dim, mat_bboxes, time, timestep)
+
         with open(filename, 'w', encoding='utf-8') as f:
-            # Header
-            f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
+            _emit_v41_msh(f, payload)
 
-            # Physical names (one per material)
-            _write_physical_names(f, mat_names, dim)
-
-            # Entities (one per material)
-            _write_entities(f, mat_names, mat_bboxes, dim)
-
-            # Nodes (all in one entity block)
-            _write_nodes(f, nodes, dim)
-
-            # Elements (grouped by material x element type)
-            _write_elements_grouped(f, mat_names, elem_data, n_elems, dim)
-
-            # Field data
-            for name, ncomp, data, is_cell, material in self._fields:
-                if is_cell:
-                    if material is not None:
-                        # Material-specific: only include that material's elements
-                        elem_ids = mat_elem_map.get(material, [])
-                        if not elem_ids:
-                            print(f"  WARNING: material '{material}' not found, "
-                                  f"skipping field '{name}'")
-                            continue
-                        _write_element_data_filtered(
-                            f, name, ncomp, data, elem_ids, time, timestep)
-                    else:
-                        # Global: all elements
-                        all_ids = []
-                        for mn in mat_names:
-                            all_ids.extend(mat_elem_map.get(mn, []))
-                        _write_element_data_filtered(
-                            f, name, ncomp, data, all_ids, time, timestep)
-                else:
-                    if material is not None:
-                        # Material-specific node data: restrict to nodes
-                        # connected to this material's elements
-                        node_set = set()
-                        for mat_name, gmsh_type, conn, orig_idx in elem_data:
-                            if mat_name == material:
-                                node_set.update(conn)
-                        _write_node_data_filtered(
-                            f, name, ncomp, data, sorted(node_set),
-                            time, timestep)
-                    else:
-                        _write_node_data(
-                            f, name, ncomp, data, n_nodes, time, timestep)
-
-        # Write companion .msh.opt for correct high-order display.
-        # View index matches NodeData order in .msh file:
-        #   vector views (ncomp >= 2) get arrow settings,
-        #   scalar views (ncomp == 1) get filled colormap.
+        # Companion .msh.opt for high-order surface display
         if is_surface and _detect_curve_order(self.mesh) >= 2:
             n_vec = sum(1 for _, nc, _, _, _ in self._fields if nc >= 2)
             n_scl = sum(1 for _, nc, _, _, _ in self._fields if nc == 1)
@@ -310,6 +411,107 @@ class GmshPostExport:
         print(f"  {n_elems} elements, {n_nodes} nodes, {n_fields} fields")
         print(f"  Materials: {mat_str}")
         return filename
+
+    def _build_single_mesh_payload(self, nodes, mat_names, elem_data,
+                                     mat_elem_map, n_elems, dim, mat_bboxes,
+                                     time, timestep) -> PayloadV41:
+        """Translate single-mesh state into a PayloadV41.
+
+        One PhysicalGroup + one Entity per material. Nodes share a
+        single block (entity tag = 1, covering the whole mesh). Elements
+        are grouped by (material, gmsh_type) — each group becomes one
+        ElementBlock under the corresponding material's entity tag.
+        """
+        # Physical groups + entities, one per material
+        groups = []
+        entities = []
+        for i, name in enumerate(mat_names):
+            tag = i + 1
+            groups.append(PhysicalGroup(dim=dim, tag=tag, name=name))
+            bbox = mat_bboxes.get(name, (0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+            entities.append(Entity(
+                dim=dim, tag=tag, bbox=bbox,
+                physical_tags=[tag], bounding_tags=[]))
+
+        # Nodes: one block covering all vertices (entity_tag=1)
+        node_blocks = [NodeBlock(
+            entity_dim=dim, entity_tag=1, start_id=1, coords=list(nodes))]
+
+        # Elements: one block per (material, gmsh_type), entity_tag =
+        # that material's index+1. Connectivity uses global 1-indexed
+        # node IDs (equal to local index + 1 since nodes are flat).
+        element_blocks = []
+        for i, mat_name in enumerate(mat_names):
+            entity_tag = i + 1
+            type_groups = {}
+            for mn, gt, conn, oi in elem_data:
+                if mn != mat_name:
+                    continue
+                type_groups.setdefault(gt, []).append(conn)
+            for gmsh_type in sorted(type_groups.keys()):
+                conns_1indexed = [[n + 1 for n in conn]
+                                   for conn in type_groups[gmsh_type]]
+                element_blocks.append(ElementBlock(
+                    entity_dim=dim, entity_tag=entity_tag,
+                    gmsh_type=gmsh_type, connectivity=conns_1indexed))
+
+        # Data fields (preserving the material-filter semantics of the
+        # original GmshPostExport.write path)
+        data_fields = []
+        n_nodes = len(nodes)
+        for name, ncomp, data, is_cell, material in self._fields:
+            if is_cell:
+                if material is not None:
+                    elem_ids = mat_elem_map.get(material, [])
+                    if not elem_ids:
+                        print(f"  WARNING: material '{material}' not found, "
+                              f"skipping field '{name}'")
+                        continue
+                else:
+                    elem_ids = []
+                    for mn in mat_names:
+                        elem_ids.extend(mat_elem_map.get(mn, []))
+                items = []
+                for orig_idx, gmsh_id in elem_ids:
+                    if ncomp == 1:
+                        v = (float(data[orig_idx]) if orig_idx < len(data)
+                             else 0.0)
+                    else:
+                        v = (data[orig_idx] if orig_idx < len(data)
+                             else np.zeros(ncomp))
+                    items.append((gmsh_id, v))
+                data_fields.append(DataField(
+                    kind='$ElementData', name=name, ncomp=ncomp,
+                    items=items, time=time, timestep=timestep))
+            else:
+                if material is not None:
+                    node_set = set()
+                    for mat_name, _gt, conn, _oi in elem_data:
+                        if mat_name == material:
+                            node_set.update(conn)
+                    indices = sorted(node_set)
+                else:
+                    # vertex-only data: only emit nodes that have entries
+                    n_data = (len(data) if hasattr(data, '__len__')
+                              else n_nodes)
+                    indices = list(range(min(n_nodes, n_data)))
+                items = []
+                for node_idx in indices:
+                    if ncomp == 1:
+                        v = (float(data[node_idx]) if node_idx < len(data)
+                             else 0.0)
+                    else:
+                        v = (data[node_idx] if node_idx < len(data)
+                             else np.zeros(ncomp))
+                    items.append((node_idx + 1, v))
+                data_fields.append(DataField(
+                    kind='$NodeData', name=name, ncomp=ncomp,
+                    items=items, time=time, timestep=timestep))
+
+        return PayloadV41(
+            groups=groups, entities=entities,
+            node_blocks=node_blocks, element_blocks=element_blocks,
+            data_fields=data_fields)
 
     def write_mesh(self, filename):
         """Write mesh only (no field data)."""
@@ -936,8 +1138,7 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
                            wp_J_nodes=None):
     """Write a single .msh v4.1 with volume B + surface J + wireframe.
 
-    Physical groups in one file, with node/element IDs offset so
-    there are no collisions:
+    Physical groups (contiguous node ID space across three meshes):
 
       Physical "air"                (3D, tag 1): volume tets   + B NodeData
       Physical "coil_surface"       (2D, tag 2): Tri6 surface  + J NodeData
@@ -947,137 +1148,99 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
 
     Coil surface uses Tri6 (GMSH type 9) for curved rendering.
     Writes companion .msh.opt with display options (replaces .geo).
+
+    Phase E.1 (2026-04-15): builds a PayloadV41 and emits via
+    _emit_v41_msh (shared with GmshPostExport.write).
     """
     surf_nodes, surf_elems, wire_edges = extract_tri6_surface(mesh_surf)
     nv_surf = len(surf_nodes)
-
     nv_vol = len(vol_nodes)
     surf_offset = nv_vol
-    ne_vol = len(vol_elems)
-    ne_surf = len(surf_elems)
-    ne_wire = len(wire_edges)
-
     has_wp = (wp_nodes is not None and wp_elems is not None
               and q_nodes is not None)
     nv_wp = len(wp_nodes) if has_wp else 0
-    ne_wp = len(wp_elems) if has_wp else 0
     wp_offset = nv_vol + nv_surf
 
-    n_nodes = nv_vol + nv_surf + nv_wp
-    n_phys = 4 if has_wp else 3
-    n_entities_curve = 1
-    n_entities_surf = 2 if has_wp else 1
-    n_entities_vol = 1
+    groups = [
+        PhysicalGroup(dim=3, tag=1, name='air'),
+        PhysicalGroup(dim=2, tag=2, name='coil_surface'),
+        PhysicalGroup(dim=1, tag=3, name='coil_wire'),
+    ]
+    if has_wp:
+        groups.append(PhysicalGroup(dim=2, tag=4, name='workpiece_surface'))
+
+    # Preserve historical entity-ordering (curve before surfaces before
+    # volume) by building the list in that order.
+    entities = [
+        Entity(dim=1, tag=3, bbox=(0, 0, 0, 0, 0, 0),
+               physical_tags=[3], bounding_tags=[]),
+        Entity(dim=2, tag=2, bbox=(0, 0, 0, 0, 0, 0),
+               physical_tags=[2], bounding_tags=[]),
+    ]
+    if has_wp:
+        entities.append(Entity(dim=2, tag=4, bbox=(0, 0, 0, 0, 0, 0),
+                                physical_tags=[4], bounding_tags=[]))
+    entities.append(Entity(dim=3, tag=1, bbox=(0, 0, 0, 0, 0, 0),
+                            physical_tags=[1], bounding_tags=[]))
+
+    node_blocks = [
+        NodeBlock(entity_dim=3, entity_tag=1, start_id=1,
+                  coords=list(vol_nodes)),
+        NodeBlock(entity_dim=2, entity_tag=2, start_id=surf_offset + 1,
+                  coords=list(surf_nodes)),
+    ]
+    if has_wp:
+        node_blocks.append(NodeBlock(
+            entity_dim=2, entity_tag=4, start_id=wp_offset + 1,
+            coords=list(wp_nodes)))
+
+    # Elements (all connectivity in GLOBAL 1-indexed node IDs)
+    vol_conn = [[v + 1 for v in verts] for verts in vol_elems]
+    surf_conn = [[v + surf_offset + 1 for v in conn] for conn in surf_elems]
+    wire_conn = [[a + surf_offset + 1, b + surf_offset + 1]
+                  for a, b in wire_edges]
+    element_blocks = [
+        ElementBlock(entity_dim=3, entity_tag=1, gmsh_type=4,
+                     connectivity=vol_conn),
+        ElementBlock(entity_dim=2, entity_tag=2, gmsh_type=9,
+                     connectivity=surf_conn),
+        ElementBlock(entity_dim=1, entity_tag=3, gmsh_type=1,
+                     connectivity=wire_conn),
+    ]
+    if has_wp:
+        wp_conn = [[v + wp_offset + 1 for v in verts] for verts in wp_elems]
+        element_blocks.append(ElementBlock(
+            entity_dim=2, entity_tag=4, gmsh_type=2, connectivity=wp_conn))
+
+    # Data fields. B on all volume nodes, J only on coil vertex IDs
+    # (Tri6 mid-edge nodes are interpolated by GMSH). Scalar q last so
+    # companion .msh.opt assigns IntervalsType correctly.
+    data_fields = [
+        DataField(
+            kind='$NodeData', name='B', ncomp=3,
+            items=[(i + 1, B_nodes[i]) for i in range(nv_vol)]),
+        DataField(
+            kind='$NodeData', name='J', ncomp=3,
+            items=[(surf_offset + i + 1, J_nodes[i])
+                    for i in range(mesh_surf.nv)]),
+    ]
+    if has_wp and wp_J_nodes is not None:
+        data_fields.append(DataField(
+            kind='$NodeData', name='J_workpiece', ncomp=3,
+            items=[(wp_offset + i + 1, wp_J_nodes[i])
+                    for i in range(nv_wp)]))
+    if has_wp:
+        data_fields.append(DataField(
+            kind='$NodeData', name='q', ncomp=1,
+            items=[(wp_offset + i + 1, q_nodes[i]) for i in range(nv_wp)]))
+
+    payload = PayloadV41(
+        groups=groups, entities=entities,
+        node_blocks=node_blocks, element_blocks=element_blocks,
+        data_fields=data_fields)
 
     with open(filename, 'w', encoding='utf-8') as f:
-        f.write('$MeshFormat\n4.1 0 8\n$EndMeshFormat\n')
-
-        f.write(f'$PhysicalNames\n{n_phys}\n')
-        f.write('3 1 "air"\n')
-        f.write('2 2 "coil_surface"\n')
-        f.write('1 3 "coil_wire"\n')
-        if has_wp:
-            f.write('2 4 "workpiece_surface"\n')
-        f.write('$EndPhysicalNames\n')
-
-        f.write('$Entities\n')
-        f.write(f'0 {n_entities_curve} {n_entities_surf} {n_entities_vol}\n')
-        f.write('3 0 0 0 0 0 0 1 3 0\n')
-        f.write('2 0 0 0 0 0 0 1 2 0\n')
-        if has_wp:
-            f.write('4 0 0 0 0 0 0 1 4 0\n')
-        f.write('1 0 0 0 0 0 0 1 1 0\n')
-        f.write('$EndEntities\n')
-
-        n_blocks = 2 + (1 if has_wp else 0)
-        f.write('$Nodes\n')
-        f.write(f'{n_blocks} {n_nodes} 1 {n_nodes}\n')
-        f.write(f'3 1 0 {nv_vol}\n')
-        for i in range(nv_vol):
-            f.write(f'{i + 1}\n')
-        for x, y, z in vol_nodes:
-            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
-        f.write(f'2 2 0 {nv_surf}\n')
-        for i in range(nv_surf):
-            f.write(f'{surf_offset + i + 1}\n')
-        for x, y, z in surf_nodes:
-            f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
-        if has_wp:
-            f.write(f'2 4 0 {nv_wp}\n')
-            for i in range(nv_wp):
-                f.write(f'{wp_offset + i + 1}\n')
-            for x, y, z in wp_nodes:
-                f.write(f'{x:.15e} {y:.15e} {z:.15e}\n')
-        f.write('$EndNodes\n')
-
-        n_elems = ne_vol + ne_surf + ne_wire + ne_wp
-        n_elem_blocks = 3 + (1 if has_wp else 0)
-        f.write('$Elements\n')
-        f.write(f'{n_elem_blocks} {n_elems} 1 {n_elems}\n')
-        eid = 1
-        f.write(f'3 1 4 {ne_vol}\n')
-        for verts in vol_elems:
-            ns = ' '.join(str(v + 1) for v in verts)
-            f.write(f'{eid} {ns}\n')
-            eid += 1
-        f.write(f'2 2 9 {ne_surf}\n')
-        for conn in surf_elems:
-            ns = ' '.join(str(v + surf_offset + 1) for v in conn)
-            f.write(f'{eid} {ns}\n')
-            eid += 1
-        f.write(f'1 3 1 {ne_wire}\n')
-        for a, b in wire_edges:
-            f.write(f'{eid} {a + surf_offset + 1} '
-                    f'{b + surf_offset + 1}\n')
-            eid += 1
-        if has_wp:
-            f.write(f'2 4 2 {ne_wp}\n')
-            for verts in wp_elems:
-                ns = ' '.join(str(v + wp_offset + 1) for v in verts)
-                f.write(f'{eid} {ns}\n')
-                eid += 1
-        f.write('$EndElements\n')
-
-        f.write('$NodeData\n')
-        f.write('1\n"B"\n1\n0.0\n3\n0\n3\n')
-        f.write(f'{nv_vol}\n')
-        for i in range(nv_vol):
-            bx, by, bz = B_nodes[i]
-            f.write(f'{i + 1} {bx:.15e} {by:.15e} {bz:.15e}\n')
-        f.write('$EndNodeData\n')
-
-        # J on coil vertex nodes only; Tri6 mid-edge nodes have no direct
-        # J data — GMSH interpolates.
-        nv_vert = mesh_surf.nv
-        f.write('$NodeData\n')
-        f.write('1\n"J"\n1\n0.0\n3\n0\n3\n')
-        f.write(f'{nv_vert}\n')
-        for i in range(nv_vert):
-            jx, jy, jz = J_nodes[i]
-            f.write(f'{surf_offset + i + 1} '
-                    f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
-        f.write('$EndNodeData\n')
-
-        # Keep NodeData ordering: ALL vector views first, then scalars
-        # (.msh.opt writer assigns ArrowSize to View[0..n_vec-1] and
-        # IntervalsType to View[n_vec..], matching this order).
-        if has_wp and wp_J_nodes is not None:
-            f.write('$NodeData\n')
-            f.write('1\n"J_workpiece"\n1\n0.0\n3\n0\n3\n')
-            f.write(f'{nv_wp}\n')
-            for i in range(nv_wp):
-                jx, jy, jz = wp_J_nodes[i]
-                f.write(f'{wp_offset + i + 1} '
-                        f'{jx:.15e} {jy:.15e} {jz:.15e}\n')
-            f.write('$EndNodeData\n')
-
-        if has_wp:
-            f.write('$NodeData\n')
-            f.write('1\n"q"\n1\n0.0\n3\n0\n1\n')
-            f.write(f'{nv_wp}\n')
-            for i in range(nv_wp):
-                f.write(f'{wp_offset + i + 1} {q_nodes[i]:.15e}\n')
-            f.write('$EndNodeData\n')
+        _emit_v41_msh(f, payload)
 
     n_vec = 2 + (1 if (has_wp and wp_J_nodes is not None) else 0)
     n_sca = 1 if has_wp else 0
@@ -1340,163 +1503,13 @@ def _compute_material_bboxes(nodes, mat_names, elem_data):
 # ============================================================
 # Internal: GMSH section writers
 # ============================================================
-
-def _write_physical_names(f, mat_names, dim):
-    """Write $PhysicalNames section."""
-    if not mat_names:
-        return
-    f.write('$PhysicalNames\n')
-    f.write(f'{len(mat_names)}\n')
-    for i, name in enumerate(mat_names):
-        f.write(f'{dim} {i + 1} "{name}"\n')
-    f.write('$EndPhysicalNames\n')
-
-
-def _write_entities(f, mat_names, mat_bboxes, dim):
-    """Write $Entities section (one entity per material)."""
-    if not mat_names:
-        return
-
-    n_surf = len(mat_names) if dim == 2 else 0
-    n_vol = len(mat_names) if dim == 3 else 0
-
-    f.write('$Entities\n')
-    f.write(f'0 0 {n_surf} {n_vol}\n')
-
-    for i, name in enumerate(mat_names):
-        tag = i + 1
-        bbox = mat_bboxes.get(name, (0, 0, 0, 0, 0, 0))
-        xmin, ymin, zmin, xmax, ymax, zmax = bbox
-        # entityTag xMin yMin zMin xMax yMax zMax numPhysicalTags physTag ... numBounding boundTag ...
-        f.write(f'{tag} {xmin:.15e} {ymin:.15e} {zmin:.15e} '
-                f'{xmax:.15e} {ymax:.15e} {zmax:.15e} '
-                f'1 {tag} 0\n')
-
-    f.write('$EndEntities\n')
-
-
-def _write_nodes(f, nodes, dim):
-    """Write $Nodes section (all nodes in one entity block)."""
-    n = len(nodes)
-    if n == 0:
-        f.write('$Nodes\n0 0 0 0\n$EndNodes\n')
-        return
-
-    f.write('$Nodes\n')
-    f.write(f'1 {n} 1 {n}\n')
-    # One entity block: dim, tag=1, parametric=0, numNodes
-    f.write(f'{dim} 1 0 {n}\n')
-    for i in range(n):
-        f.write(f'{i + 1}\n')
-    for i in range(n):
-        f.write(f'{nodes[i][0]:.15e} {nodes[i][1]:.15e} {nodes[i][2]:.15e}\n')
-    f.write('$EndNodes\n')
-
-
-def _write_elements_grouped(f, mat_names, elem_data, n_elems, dim):
-    """Write $Elements section grouped by material and element type."""
-    if n_elems == 0:
-        f.write('$Elements\n0 0 0 0\n$EndElements\n')
-        return
-
-    # Build entity blocks: (dim, entity_tag, gmsh_type, [(conn, orig_idx)])
-    entity_blocks = []
-    for i, mat_name in enumerate(mat_names):
-        entity_tag = i + 1
-        # Group this material's elements by type
-        type_groups = {}
-        for mn, gt, conn, oi in elem_data:
-            if mn != mat_name:
-                continue
-            if gt not in type_groups:
-                type_groups[gt] = []
-            type_groups[gt].append((conn, oi))
-
-        for gmsh_type in sorted(type_groups.keys()):
-            entity_blocks.append(
-                (dim, entity_tag, gmsh_type, type_groups[gmsh_type]))
-
-    f.write('$Elements\n')
-    f.write(f'{len(entity_blocks)} {n_elems} 1 {n_elems}\n')
-
-    gmsh_id = 1
-    for edim, etag, etype, elems in entity_blocks:
-        f.write(f'{edim} {etag} {etype} {len(elems)}\n')
-        for conn, _ in elems:
-            node_str = ' '.join(str(n + 1) for n in conn)
-            f.write(f'{gmsh_id} {node_str}\n')
-            gmsh_id += 1
-
-    f.write('$EndElements\n')
-
-
-def _write_node_data(f, name, ncomp, data, n_nodes, time, timestep):
-    """Write $NodeData section (vertex nodes with data only)."""
-    # For high-order meshes, n_nodes > len(data) because data is per-vertex.
-    # Write only nodes that have data.
-    n_data = len(data) if hasattr(data, '__len__') else n_nodes
-    n_out = min(n_nodes, n_data)
-
-    f.write('$NodeData\n')
-    f.write(f'1\n"{name}"\n')
-    f.write(f'1\n{time:.15e}\n')
-    f.write(f'3\n{timestep}\n{ncomp}\n{n_out}\n')
-
-    for i in range(n_out):
-        if ncomp == 1:
-            val = float(data[i])
-            f.write(f'{i + 1} {val:.15e}\n')
-        else:
-            vals = data[i]
-            val_str = ' '.join(f'{float(v):.15e}' for v in vals)
-            f.write(f'{i + 1} {val_str}\n')
-
-    f.write('$EndNodeData\n')
-
-
-def _write_node_data_filtered(f, name, ncomp, data, node_indices, time, timestep):
-    """Write $NodeData for a subset of nodes (material-filtered)."""
-    n = len(node_indices)
-    f.write('$NodeData\n')
-    f.write(f'1\n"{name}"\n')
-    f.write(f'1\n{time:.15e}\n')
-    f.write(f'3\n{timestep}\n{ncomp}\n{n}\n')
-
-    for node_idx in node_indices:
-        gmsh_nid = node_idx + 1
-        if ncomp == 1:
-            val = float(data[node_idx]) if node_idx < len(data) else 0.0
-            f.write(f'{gmsh_nid} {val:.15e}\n')
-        else:
-            vals = data[node_idx] if node_idx < len(data) else np.zeros(ncomp)
-            val_str = ' '.join(f'{float(v):.15e}' for v in vals)
-            f.write(f'{gmsh_nid} {val_str}\n')
-
-    f.write('$EndNodeData\n')
-
-
-def _write_element_data_filtered(f, name, ncomp, data, elem_ids, time, timestep):
-    """Write $ElementData for specified elements only.
-
-    Args:
-        elem_ids: list of (orig_idx, gmsh_elem_id) tuples
-    """
-    n = len(elem_ids)
-    f.write('$ElementData\n')
-    f.write(f'1\n"{name}"\n')
-    f.write(f'1\n{time:.15e}\n')
-    f.write(f'3\n{timestep}\n{ncomp}\n{n}\n')
-
-    for orig_idx, gmsh_id in elem_ids:
-        if ncomp == 1:
-            val = float(data[orig_idx]) if orig_idx < len(data) else 0.0
-            f.write(f'{gmsh_id} {val:.15e}\n')
-        else:
-            vals = data[orig_idx] if orig_idx < len(data) else np.zeros(ncomp)
-            val_str = ' '.join(f'{float(v):.15e}' for v in vals)
-            f.write(f'{gmsh_id} {val_str}\n')
-
-    f.write('$EndElementData\n')
+# Phase E.1 (2026-04-15): the per-section writers (_write_physical_names,
+# _write_entities, _write_nodes, _write_elements_grouped,
+# _write_node_data, _write_node_data_filtered,
+# _write_element_data_filtered) were collapsed into _emit_v41_msh /
+# _emit_data_section at the top of this file. Both GmshPostExport.write
+# and write_combined_msh_v41 now build a PayloadV41 and call the unified
+# emitter, so changing the .msh on-disk layout is a one-touch edit.
 
 
 # ============================================================
