@@ -643,6 +643,69 @@ gmsh.fltk.run()
 ```
 """
 
+RADIA_REMOVED_APIS = """
+# Removed APIs (breaking change reference)
+
+Radia is a research codebase with a no-backward-compat policy. When an API is
+removed, it is removed outright -- no alias, no deprecation wrapper. If a user
+or AI-generated script calls one of these, it will raise `AttributeError` or
+similar. Use the listed replacement instead.
+
+## Force / energy / torque (Phase C, 2026-04-16)
+
+| Removed                 | Replacement / Status                                   |
+|-------------------------|--------------------------------------------------------|
+| `rad.FldEnr(dst, src, SbdPar)`     | Use `rad.FldFrc(obj, rect_shape)` (Maxwell stress tensor on rectangular surface). A new analytical pair-interaction API (`rad.AnalEn/AnalFrc/AnalTrq`) is planned as research -- see `docs/research/FORCE_COMPUTATION_DESIGN.md`. |
+| `rad.FldEnrFrc(...)`    | Same -- use `rad.FldFrc` until the new API ships.     |
+| `rad.FldEnrTrq(...)`    | Same -- no direct torque API currently; derive from force * arm or wait for `rad.AnalTrq`. |
+
+Why removed: the old implementation relied on `SubdivideItself`-based midpoint
+quadrature (physical mesh splitting with user-specified `SbdPar=[kx,ky,kz,kxs,kys,kzs]`).
+This is superseded by the plan to use the MSC/MMM interaction kernel in closed form,
+combined with NGSolve's high-order `Integrate(..., order=N)` quadrature.
+
+Still live: `rad.FldFrc(obj, shape)` and `rad.FldFrcShpRtg(center, size)` --
+the Maxwell stress tensor path is independent and unaffected.
+
+## Mesh operations (removed 2026-01-14)
+
+| Removed                 | Replacement                                            |
+|-------------------------|--------------------------------------------------------|
+| `rad.ObjDivMag(obj, k)` | Use external meshers: Cubit (`radia_export netgen`) or Netgen OCC -> `.vol` -> `netgen_mesh_to_radia`. |
+| `rad.ObjDivMagPln(obj, planes)` | Same. Plane-based splits are mesh generation, not Radia's job. |
+| `rad.ObjCutMag(obj, plane)` | Same. |
+
+Why removed: Radia is no longer a mesh generator. All meshing goes through
+Cubit or Netgen; Radia consumes the resulting `.vol` via `netgen_mesh_to_radia`.
+
+## Serialization (Phase A/B, 2026-04-15 -- 04-16)
+
+| Removed                 | Replacement                                            |
+|-------------------------|--------------------------------------------------------|
+| `rad.UtiDmp(obj)` / `rad.UtiDmpPrs(s)` | No replacement. Save your Python script; rebuild the Radia object tree on next run. `.rad` save/load is not supported. |
+| `rad.ObjGeoLim(obj)` | No replacement. Compute bounding boxes from the input parameters you used to construct the object (vertices, center+size, etc.). |
+| `rad.ObjDrwAttr(...)` / `rad.ObjDrwVTK(...)` | Visualization goes through NGSolve + GMSH. Use `rad.RadiaField` CoefficientFunction + `GmshPostExport`. |
+
+## Unit system (removed long ago)
+
+| Removed                 | Replacement                                            |
+|-------------------------|--------------------------------------------------------|
+| `rad.FldUnits("mm")` / any `FldUnits` call | Radia always uses meters. There is no unit switch. |
+
+## Visualization (removed)
+
+| Removed                 | Replacement                                            |
+|-------------------------|--------------------------------------------------------|
+| `rad.FldVTS(...)` | Use `rad.Fld(obj, field_type, points)` for point evaluation, then export to `.msh v4.1` via `GmshPostExport` for visualization. |
+
+## Policy
+
+When adding a new API or breaking an existing one, the committer MUST update
+this section. No code-level compat shim will be added. Users and AI coders
+discover the change by querying this MCP tool.
+"""
+
+
 RADIA_MESH_IMPORT = """
 # NGSolve Mesh Import
 
@@ -3992,6 +4055,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "solving": RADIA_SOLVING,
         "parallelization": RADIA_PARALLELIZATION,
         "fields": RADIA_FIELDS,
+        "removed_apis": RADIA_REMOVED_APIS,
         "mesh_import": RADIA_MESH_IMPORT,
         "best_practices": RADIA_BEST_PRACTICES,
         "peec": RADIA_PEEC,
