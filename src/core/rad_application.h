@@ -223,10 +223,9 @@ public:
 	int ValidateElemKey(long ElemKey, radThg& hg);
 	int ValidateFieldChar(char* FieldChar, radTFieldKey* FieldKeyPtr, bool LocSendRequired = true);
 	int ValidateFieldIntChar(char* FieldIntChar, char* FinOrInfChar, radTFieldKey* FieldKeyPtr, bool LocSendRequired = true);
-	int ValidateFieldEnergyForceChar(char* ComponIDChar, radTFieldKey* FieldKeyPtr);
+	// ValidateFieldEnergyForceChar REMOVED (Phase C, 2026-04-16, energy-based API gone)
 	int ValidateMagnChar(char* MagnChar);
-	int ValidateForceChar(char* ForceChar);
-	int ValidateTorqueChar(char* TorqueChar);
+	// ValidateForceChar / ValidateTorqueChar REMOVED (Phase C, 2026-04-16, energy-based API gone)
 	int ValidateIsotropMaterDescrByPoints(TVector2d* ArrayHB, int LenArrayArrayHB);
 
 	inline int AddElementToContainer(radThg& hg);
@@ -291,8 +290,7 @@ public:
 	int SetObjMagn(int ElemKey, double Mx, double My, double Mz);
 	void OutCenFieldCompRes(radTVectPairOfVect3d*);
 
-	int FieldCompMethForSubdividedRecMag(int ElemKey, int Switch, int SubLevel);
-	int SetLocMgnInSbdRecMag(int ElemKey, TVector3d* ArrayOfVectIndx, TVector3d* ArrayOfMagn, int Len);
+	// FieldCompMethForSubdividedRecMag / SetLocMgnInSbdRecMag REMOVED (Phase C, 2026-04-16, radTSubdividedRecMag gone)
 
 	int SetTranslation(double* Transl, long lenTransl);
 	int SetRotation(double* PoiOnAx, long lenPoiOnAx, double* AxVect, long lenAxVect, double Angle);
@@ -378,10 +376,8 @@ public:
 
 	void ComputeFieldInt(int ElemKey, char* IntID, char* FieldIntChar, double* StPoi, long lenStPoi, double* FiPoi, long lenFiPoi);
 	void ComputeFieldForce(int ElemKey, int ShapeElemKey);
-	void ComputeFieldEnergy(int DestElemKey, int SourceElemKey, int* SubdArray, long lenSubdivArray);
-	void ComputeFieldForceThroughEnergy(int DestElemKey, int SourceElemKey, char* ForceComponID, int* SubdArray, long lenSubdivArray);
-	void ComputeFieldTorqueThroughEnergy(int DestElemKey, int SourceElemKey, char* TorqueComponID, int* SubdArray, long lenSubdivArray, double* TorqueCenPo, long lenTorqueCenPo);
-	inline char CheckForAutoDestSubdivision(double* SubdivArray);
+	// ComputeFieldEnergy / ComputeFieldForceThroughEnergy / ComputeFieldTorqueThroughEnergy REMOVED (Phase C, 2026-04-16)
+	// CheckForAutoDestSubdivision REMOVED (Phase C, 2026-04-16, ComputeField*ThroughEnergy gone)
 
 	void ComputeFocusPotent(int ElemKey, double* StPoi, long lenStPoi, double* FiPoi, long lenFiPoi, int Np);
 	void ComputeFocusKickPer(int ElemKey, double* P1, double* Nlong, double per, double nper, double* N1, double r1, int np1, double r2, int np2, const char* Comment, int nharm, int ns, double d1, double d2, const char* strKickUnit, double inEnergyGeV=0, const char* strOutFormat=0);
@@ -393,7 +389,7 @@ public:
 	void OutFieldCompRes(char* FieldChar, radTField* FieldArray, long Np);
 	void ParseAndSendOneFieldValue(radTField* tField, char* BufChar, int AmOfItem);
 
-	void OutFieldEnergyForceCompRes(char* ComponIDChar, radTField* FieldPtr);
+	// OutFieldEnergyForceCompRes REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
 	int SetCompPrecisions(const char** ValNames, double* Values, int ValCount);
 	int SetCompCriterium(double InAbsPrecB, double InAbsPrecA, double InAbsPrecB_int, double InAbsPrecFrc, double InAbsPrecTrjCoord, double InAbsPrecTrjAngle);
@@ -413,9 +409,7 @@ public:
 	// GraphicsForElem_g3d, GraphicsForElem_g3d_VTK, DecodeViewingOptions,
 	// DeallocateAuxPgnViewData, GraphicsForAll_g3d)
 
-	int SubdivideElement_g3d(int ElemKey, double* SubdivArray, long lenSubdivArray, char TypeExtraSpec, double* ExtraSpec, long lenExtraSpec, const char** OptionNames, const char** OptionValues, int OptionCount);
-	int CutElement_g3d(int ElemKey, double* PointOnPlane, long lenPointOnPlane, double* PlaneNormal, long lenPlaneNormal, const char** OptionNames, const char** OptionValues, int OptionCount);
-	int SubdivideElement_g3dByParPlanes(int ElemKey, double* SubdivArray, int AmOfSubdivDirections, const char* LabOrLocFrame);
+	// SubdivideElement_g3d / CutElement_g3d / SubdivideElement_g3dByParPlanes REMOVED (Phase C, 2026-04-16)
 	int DuplicateElement_g3d(int ElemKey, const char** OptionNames, const char** OptionValues, int OptionCount);
 
 	int CreateFromObj_g3dWithSym(int ElemKey);
@@ -482,12 +476,7 @@ inline int radTApplication::DeleteElement(int ElemKey)
 
 //-------------------------------------------------------------------------
 
-inline char radTApplication::CheckForAutoDestSubdivision(double* SubdivArray)
-{
-	const double RelTol = 1.E-09;
-	if((fabs(SubdivArray[0])<RelTol) && (fabs(SubdivArray[2])<RelTol) && (fabs(SubdivArray[4])<RelTol)) return 1;
-	else return 0;
-}
+// CheckForAutoDestSubdivision impl REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
