@@ -239,7 +239,6 @@ public:
 	radTPolygon(const radTVect2dVect&);
 	radTPolygon(double, TVector2d*, int, const TVector3d&);
 	radTPolygon(radTVect2dVect&, double, const TVector3d&);
-	radTPolygon(CAuxBinStrVect& inStr);
 	radTPolygon() { CoordZ =0.; SomethingIsWrong = 0;}
 
 	virtual int Type_g3d() { return 6;}
@@ -270,34 +269,7 @@ public:
 
 	//void B_comp_frJ(radTField*);
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin_Polygon(CAuxBinStrVect& oStr)
-	{
-		//int AmOfEdgePoints;
-		oStr << AmOfEdgePoints;
-
-		//radTVect2dVect EdgePointsVector;
-		for(int i=0; i<AmOfEdgePoints; i++)
-		{
-			oStr << EdgePointsVector[i];
-		}
-
-		//TVector2d CentrPoint;
-		oStr << radTPolygon::CentrPoint;
-
-		//double CoordZ;
-		oStr << CoordZ;
-
-		//TVector3d Magn;
-		oStr << Magn;
-
-		//short SomethingIsWrong;
-		oStr << SomethingIsWrong;
-
-		//char IsConvex;
-		oStr << IsConvex;
-	}
+	// Dump / DumpBin_Polygon REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int NumberOfDegOfFreedom() { return 0;}
 	int SizeOfThis() 

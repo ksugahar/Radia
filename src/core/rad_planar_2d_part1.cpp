@@ -218,34 +218,7 @@ radTPolygon::radTPolygon(radTVect2dVect& InEdgePointsVector, double InZ, const T
 
 //-------------------------------------------------------------------------
 
-radTPolygon::radTPolygon(CAuxBinStrVect& inStr)
-{
-	//int AmOfEdgePoints;
-	inStr >> AmOfEdgePoints;
-
-	//radTVect2dVect EdgePointsVector;
-	TVector2d p2d;
-	for(int i=0; i<AmOfEdgePoints; i++)
-	{
-		inStr >> p2d;
-		EdgePointsVector.push_back(p2d);
-	}
-
-	//TVector2d CentrPoint;
-	inStr >> radTPolygon::CentrPoint;
-
-	//double CoordZ;
-	inStr >> CoordZ;
-
-	//TVector3d Magn;
-	inStr >> Magn;
-
-	//short SomethingIsWrong;
-	inStr >> SomethingIsWrong;
-
-	//char IsConvex;
-	inStr >> IsConvex;
-}
+// radTPolygon(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
