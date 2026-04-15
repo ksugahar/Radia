@@ -41,7 +41,7 @@
 
 #include "rad_application.h"
 #include "rad_arc_current.h"
-#include "rad_subdivided_arc_current.h"
+// #include "rad_subdivided_arc_current.h" REMOVED (Phase C, 2026-04-16)
 #include "rad_elliptic_integral.h"
 
 #include <math.h>
@@ -435,131 +435,9 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 // radTArcCur::Dump / DumpPureObjInfo / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
-//-------------------------------------------------------------------------
 
-int radTArcCur::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-{
-	char SubdivideCoils = pSubdivOptions->SubdivideCoils;
-	char PutNewStuffIntoGenCont = pSubdivOptions->PutNewStuffIntoGenCont;
+// radTArcCur::SubdivideItself REMOVED (Phase C, 2026-04-16)
 
-	if(!SubdivideCoils) return 1;
-	radTSend Send;
-	if((pSubdivOptions->SubdivisionFrame != 0) && (!g3dListOfTransform.empty())) 
-	{
-		Send.ErrorMessage("Radia::Error108"); return 0;
-	}
-
-	const double ZeroTol = 1.E-10;
-
-	double kr = SubdivArray[0], kPhi = SubdivArray[2], kz = SubdivArray[4];
-	double qr = SubdivArray[1], qPhi = SubdivArray[3], qz = SubdivArray[5];
-
-	double DelPhi = Phi_max - Phi_min;
-	double Del_r = R_max - R_min;
-
-	if(pSubdivOptions->SubdivisionParamCode == 1)
-	{
-		double DelPhiL = DelPhi*0.666666666667*(R_max*R_max + R_max*R_min + R_min*R_min)/(R_max + R_min);
-		kPhi = (kPhi < DelPhiL)? Round(DelPhiL/kPhi) : 1.;
-
-		kr = (kr < Del_r)? Round(Del_r/kr) : 1.;
-		kz = (kz < Height)? Round(Height/kz) : 1.;
-	}
-
-	if((fabs(kPhi-1.)<ZeroTol) && (fabs(kr-1.)<ZeroTol) && (fabs(kz-1.)<ZeroTol)) return 1;
-
-	radTGroup* GroupInPlaceOfThisPtr = new radTSubdividedArcCur(this);
-	radThg NewHandle(GroupInPlaceOfThisPtr);
-
-	const double AbsZeroTol = 5.E-12;
-	double q0Phi = (fabs(kPhi-1.)>AbsZeroTol)? pow(qPhi, 1./(kPhi-1.)) : qPhi;
-	double q0r = (fabs(kr-1.)>AbsZeroTol)? pow(qr, 1./(kr-1.)) : qr;
-	double q0z = (fabs(kz-1.)>AbsZeroTol)? pow(qz, 1./(kz-1.)) : qz;
-	double BufPhi = qPhi*q0Phi - 1., BufR = qr*q0r - 1., BufZ = qz*q0z - 1.;
-
-	double a1Phi = (fabs(BufPhi) > AbsZeroTol)? DelPhi*(q0Phi - 1.)/BufPhi : DelPhi/kPhi;
-	double a1r = (fabs(BufR) > AbsZeroTol)? Del_r*(q0r - 1.)/BufR : Del_r/kr;
-	double a1z = (fabs(BufZ) > AbsZeroTol)? Height*(q0z - 1.)/BufZ : Height/kz;
-
-	TVector3d InitNewDims(a1Phi, a1r, a1z);
-	TVector3d NewDims = InitNewDims;
-
-	short NewFacesState[6], ParentFacesState[6];
-	ListFacesInternalAfterCut(ParentFacesState);
-
-	int kPhiInt = int(kPhi), krInt = int(kr), kzInt = int(kz);
-	int kPhi_mi_1 = kPhiInt-1, kr_mi_1 = krInt-1, kz_mi_1 = kzInt-1;
-
-	TVector3d InitNewCircleCenPoi = TVector3d(CircleCentrPoint.x, CircleCentrPoint.y, CircleCentrPoint.z - 0.5*(Height - a1z));
-	TVector3d NewCircleCenPoi = InitNewCircleCenPoi;
-
-	double NewAngles[2], NewRadii[2], NewHeight = a1z;
-
-	double &NewStartAngle = *NewAngles, &NewFinAngle = *(NewAngles+1), &NewStartRad = *NewRadii, &NewFinRad = *(NewRadii+1);
-	NewStartAngle = Phi_min;
-	NewFinAngle = Phi_min + a1Phi;
-	double SmallDelPhi = a1Phi;
-
-	NewStartRad = R_min;
-	NewFinRad = R_min + a1r;
-	double SmallDel_r = a1r;
-
-	int NewStuffCounter = 0;
-	for(int iPhi=0; iPhi<kPhiInt; iPhi++)
-	{
-		NewFacesState[0] = NewFacesState[1] = 1;
-		if(iPhi==0) NewFacesState[0] = ParentFacesState[0];
-		if(iPhi==kPhi_mi_1) NewFacesState[1] = ParentFacesState[1];
-
-		float FloatNumOfSect = (float)((SmallDelPhi/DelPhi)*NumberOfSectors);
-		int IntNumOfSect = int(FloatNumOfSect);
-		int NewNumberOfSectors = ((FloatNumOfSect - IntNumOfSect) < 0.5)? IntNumOfSect : IntNumOfSect + 1;
-
-		if(NewNumberOfSectors < 1) NewNumberOfSectors = 1;
-
-		for(int ir=0; ir<krInt; ir++)
-		{
-			NewFacesState[2] = NewFacesState[3] = 1;
-			if(ir==0) NewFacesState[2] = ParentFacesState[2];
-			if(ir==kr_mi_1) NewFacesState[3] = ParentFacesState[3];
-
-			for(int iz=0; iz<kzInt; iz++)
-			{
-				NewFacesState[4] = NewFacesState[5] = 1;
-				if(iz==0) NewFacesState[4] = ParentFacesState[4];
-				if(iz==kz_mi_1) NewFacesState[5] = ParentFacesState[5];
-
-				radTArcCur* ArcCurPtr = new radTArcCur(NewCircleCenPoi, NewRadii, NewAngles, NewHeight, J_azim, NewNumberOfSectors, BasedOnPrecLevel);
-				if(ArcCurPtr==0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-
-				radThg hg(ArcCurPtr);
-				if(PutNewStuffIntoGenCont) GroupInPlaceOfThisPtr->AddElement(radPtr->AddElementToContainer(hg), hg);
-				else GroupInPlaceOfThisPtr->AddElement(++NewStuffCounter, hg);
-
-				ArcCurPtr->SetFacesInternalAfterCut(NewFacesState);
-
-				NewCircleCenPoi.z += 0.5*NewHeight;
-				NewHeight *= q0z;
-				NewCircleCenPoi.z += 0.5*NewHeight;
-			}
-			NewStartRad = NewFinRad;
-			SmallDel_r *= q0r;
-			NewFinRad += SmallDel_r;
-
-			NewCircleCenPoi.z = InitNewCircleCenPoi.z;
-			NewHeight = a1z;
-		}
-		NewStartAngle = NewFinAngle;
-		SmallDelPhi *= q0Phi;
-		NewFinAngle += SmallDelPhi;
-
-		NewStartRad = R_min;
-		NewFinRad = R_min + a1r;
-		SmallDel_r = a1r;
-	}
-	In_hg = NewHandle;
-	return 1;
-}
 
 //-------------------------------------------------------------------------
 

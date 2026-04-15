@@ -42,59 +42,13 @@ public:
 	void B_comp(radTField*);
 	void B_intComp(radTField*);
 
-	void SimpleEnergyComp(radTField* FieldPtr)
-	{
-		// Energy: E = -integral(I dl . A) = -I * (EndPoint - StartPoint) . A
-		// Radia now uses SI units (meters) internally, matching ELF.
-		// I in Amperes, dl in meters, A in T*m -> Energy in Joules
-		const double ConstForJ = -1.0;
-		radTFieldKey LocFieldKey; LocFieldKey.A_ = 1;
-		radTField LocField(LocFieldKey, FieldPtr->CompCriterium);
-		LocField.P = 0.5*(StartPoint + EndPoint);
-		((radTg3d*)(FieldPtr->HandleEnergyForceTorqueCompData.rep->hSource.rep))->B_genComp(&LocField);
-		FieldPtr->Energy += (ConstForJ*I)*((EndPoint - StartPoint)*LocField.A);
-	}
+	// SimpleEnergyComp REMOVED (Phase C, 2026-04-16, energy-based API gone)
 
 	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
-	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
-	int SubdivideItselfByOneSetOfParPlanes(TVector3d&, TVector3d*, int, radThg&, radTApplication*, radTSubdivOptions* pSubdivOptions, radTvhg*) 
-	{
-		radTSend Send;
-		if(!pSubdivOptions->SubdivideCoils) return 1;
-		else { Send.ErrorMessage("Radia::Error109"); return 0;}
-	}
-	int SubdivideItselfByParPlanes(double*, int, radThg&, radTApplication*, radTSubdivOptions* pSubdivOptions) 
-	{
-		radTSend Send;
-		if(!pSubdivOptions->SubdivideCoils) return 1;
-		else { Send.ErrorMessage("Radia::Error109"); return 0;}
-	}
-	int CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair_int_hg&, radTPair_int_hg&, radTApplication* radPtr, radTSubdivOptions* pSubdivOptions)
-	{
-		radTSend Send;
-		if(!pSubdivOptions->SubdivideCoils) return 1;
-		else { Send.ErrorMessage("Radia::Error109"); return 0;}
-	}
-	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions* pSubdivOptions)
-	{ 
-		radTSend Send;
-		if(!pSubdivOptions->SubdivideCoils) return 1;
-		else { Send.ErrorMessage("Radia::Error109"); return 0;}
-	}
+	// SubdivideItself* / CutItself / FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
 
-	int FindLowestAndUppestVertices(TVector3d&, radTSubdivOptions* pSubdivOptions, TVector3d&, TVector3d&, radTrans&, char&, char& Ignore)
-	{
-		Ignore = 1;
-		if(!pSubdivOptions->SubdivideCoils) return 1;
-		else 
-		{ 
-			radTSend Send;
-			Send.ErrorMessage("Radia::Error109"); return 0;
-		}
-	}
-
-	int DuplicateItself(radThg& hg, radTApplication*, char) 
+	int DuplicateItself(radThg& hg, radTApplication*, char)
 	{ 
 		return FinishDuplication(new radTFlmLinCur(*this), hg);
 	}

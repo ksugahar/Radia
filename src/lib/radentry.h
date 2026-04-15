@@ -864,42 +864,9 @@ EXP int CALL RadFldLenRndSw(int* n, char* OnOrOff);
 */
 EXP int CALL RadFldLenTol(int* n, double AbsVal, double RelVal, double ZeroVal);
 
-/** Computes potential energy (in Joule) of the object objdst in the field created by the object objsrc. If SbdPar = 0, the function performes the computation based on absolute accuracy value for the energy (by default 10 Joule; can be modified by the function radFldCmpPrc). Otherwise, the computation is performed based on the destination object subdivision numbers (kx=SbdPar[0],ky=SbdPar[1],kz=SbdPar[2]).
-@param d [out] computed energy value
-@param objdst [in] reference number of the object, the energy of which should be computed
-@param objsrc [in] reference number of the source object creating the magnetic field
-@param SbdPar [in] array of 3 integer numbers specifying subdivision parameters for the energy computation (kx=SbdPar[0],ky=SbdPar[1],kz=SbdPar[2]). If SbdPar = 0, the function performes the computation based on absolute accuracy value for the energy (by default 10 Joule, can be modified by the function radFldCmpPrc). 
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldEnr(double* d, int objdst, int objsrc, int* SbdPar);
+/* RadFldEnr / RadFldEnrFrc / RadFldEnrTrq (energy-based force/torque/energy API) REMOVED (Phase C, 2026-04-16) */
 
-/** Computes force (in Newton) acting on the object objdst in the field produced by the object objsrc. If SbdPar = 0, the function performes the computation based on absolute accuracy value for the force (by default 10 Newton; can be modified by the function radFldCmpPrc). Otherwise, the computation is performed based on the destination object subdivision numbers {kx=SbdPar[0],ky=SbdPar[1],kz=SbdPar[2]}.
-@param f [out] computed force component(s)
-@param nf [out] number of force components computed
-@param objdst [in] reference number of the object, on which the force is acting
-@param objsrc [in] reference number of the source object creating the magnetic field
-@param id [in] string identifying the force components to be computed (fx|fy|fz)
-@param SbdPar [in] array of 3 integer numbers specifying subdivision parameters for the energy/force computation (kx=SbdPar[0],ky=SbdPar[1],kz=SbdPar[2]). If SbdPar = 0, the function performes the computation based on absolute accuracy value for the force (by default 10 Newton, can be modified by the function radFldCmpPrc). 
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldEnrFrc(double* f, int* nf, int objdst, int objsrc, char* id, int* SbdPar);
-
-/** Computes torque (in Newton*mm) with respect to point P, acting on the object objdst in the field produced by the object objsrc. If SbdPar = 0, the function performes the computation based on absolute accuracy value for the torque (by default 10 Newton*mm; can be modified by the function radFldCmpPrc). Otherwise, the computation is performed based on the destination object subdivision numbers {kx=SbdPar[0],ky=SbdPar[1],kz=SbdPar[2]}.
-@param f [out] computed torque component(s)
-@param nf [out] number of torque components computed
-@param objdst [in] reference number of the object on which the force is acting
-@param objsrc [in] reference number of the source object creating the magnetic field
-@param id [in] string identifying the force components to be computed (tx|ty|tz)
-@param P [in] array of 3 real numbers specifying cartesian coordinates of the point with respect to which the torque should be computed  
-@param SbdPar [in] array of 3 integer numbers specifying subdivision parameters for the energy/force computation (kx=SbdPar[0],ky=SbdPar[1],kz=SbdPar[2]). If SbdPar = 0, the function performes the computation based on absolute accuracy value for the torque (by default 10 Newton*mm, can be modified by the function radFldCmpPrc). 
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author O.C.
-*/
-EXP int CALL RadFldEnrTrq(double* f, int* nf, int objdst, int objsrc, char* id, double* P, int* SbdPar);
-
-/** Computes force of the field produced by the object obj into a shape defined by shape. shape can be the result of RadObjRecMag (parallelepiped) or RadFldFrcShpRtg (rectangular surface). This function uses the algorithm based on Maxwell tensor, which may not always provide high efficiency. We suggest to use the function RadFldEnrFrc instead of this function.
+/** Computes force of the field produced by the object obj into a shape defined by shape. shape can be the result of RadObjRecMag (parallelepiped) or RadFldFrcShpRtg (rectangular surface). This function uses the algorithm based on Maxwell tensor, which may not always provide high efficiency.
 @param f [out] computed force component(s)
 @param nf [out] number of force components computed
 @param obj [in] reference number of the magnetic field source object
