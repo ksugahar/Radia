@@ -86,23 +86,25 @@ def kelvin_pullback_vector(A_phys, r_prime, center, R):
     Kelvin map in d-coords (d = r - center):
         phi: d -> d' = (R^2 / rho^2) * d,    rho = |d|, rho' = R^2/rho
 
-    Jacobian at d:
-        J(d) = (R^2 / rho^2) * (I - 2 n n^T),    n = d / rho    (Householder)
+    For a 1-form A, the pullback transforms as
+        A'_i(r') = (d r^j / d r'^i) A_j(r_phys)
+    where (d r / d r') is the Jacobian of the INVERSE Kelvin map, which
+    equals (rho'^2 / R^2) (I - 2 n n^T) (Householder, n = (r' - c)/rho').
+    Hence:
 
-    Since phi is involutive, J(d)^{-1} = (rho^2/R^2)(I - 2 n n^T), and in
-    exterior-domain coordinates where rho = R^2/rho' and n = n' (radial direction
-    preserved):
+        A'(r') = (rho' / R)^2 * (I - 2 n n^T) * A_phys(r_phys)
 
-        A'(r') = J^{-1}(r) . A(r)
-               = (R / rho')^2 * (I - 2 n' n'^T) . A(r_phys)
-               = (R / rho')^2 * [A_phys - 2 (A_phys . n') n']
+    NOTE the factor is (rho'/R)^2, NOT (R/rho')^2. The (R/rho')^2 factor
+    applies to scalar quantities (potential phi) and to vector B; for the
+    1-form A the inverse-Jacobian gives the (rho'/R)^2 factor instead.
+    Empirically validated on a Radia ObjArcCur source 2026-04-15:
+    using (R/rho')^2 produced |A_comp| ~ 200x too large in the Kelvin
+    exterior domain; the (rho'/R)^2 factor brings the energy integral
+    into agreement with the FEM-volume-J reference within ~5%.
 
-    So the exact 1-form transformation is the scalar Phase-1 factor
-    (R/rho')^2 composed with a Householder reflection that flips the
-    RADIAL component of A. For A fields with no radial component (e.g.
-    the azimuthal A from a uniform B_0 z_hat background) this reduces
-    to the scalar factor; for localized Biot-Savart sources it does
-    not.
+    For A fields with no radial component (azimuthal A from a uniform
+    B_0 z_hat background) Householder is the identity and only the
+    scalar (rho'/R)^2 factor remains.
 
     Args:
         A_phys: (N, 3) physical-frame A evaluated at r_phys = Kelvin_inv(r').
@@ -126,35 +128,31 @@ def kelvin_pullback_vector(A_phys, r_prime, center, R):
     n = d_prime / rho_prime[:, None]
     A_dot_n = np.sum(A_phys * n, axis=1)
     A_refl = A_phys - 2.0 * A_dot_n[:, None] * n
-    factor = (R / rho_prime) ** 2
+    factor = (rho_prime / R) ** 2   # 1-form A pullback factor
     out = factor[:, None] * A_refl
     return out[0] if single else out
 
 
 def kelvin_factor_scalar(r_prime, center, R):
-    """Phase 1: uniform-H_s-analogue scalar factor (R/rho')^2.
+    """Phase 1: scalar A-pullback factor (rho'/R)^2 (no Householder).
 
-    Extracted from the H-formulation docs section 4.3:
-        H'_s = -H_0 * (R / rho')^2 * z_hat'
+    For 1-form A under Kelvin r -> r' = R^2 r / |r|^2, the proper
+    pullback factor is (rho'/R)^2 (see kelvin_pullback_vector). Phase 1
+    drops the Householder reflection, so this is exact only when A_phys
+    is purely tangential at the evaluation point (e.g. azimuthal A from
+    a uniform z-axial B background).
 
-    For Biot-Savart A_s with non-uniform spatial dependence, this is an
-    APPROXIMATION. See ``kelvin_factor_pullback`` for the exact Jacobian.
-
-    Args:
-        r_prime: (N, 3) Kelvin exterior domain coordinates.
-        center: Kelvin sphere center.
-        R: Kelvin sphere radius.
-
-    Returns:
-        (N,) array of scalar factors. Magnitude only; sign (-1 for
-        H_s direction flip) is applied by the caller when converting
-        physical H_s to Kelvin exterior domain H'_s.
+    NOTE: the H-formulation uniform-H_s rule uses (R/rho')^2 with sign
+    flip. That is the SCALAR-POTENTIAL pullback, NOT the A pullback.
+    Initially this module had (R/rho')^2 here too; that gave |A_comp|
+    ~200x too large in the Kelvin exterior domain. Corrected
+    2026-04-15 against a Radia ObjArcCur reference.
     """
     p = np.asarray(r_prime, dtype=float)
     c = np.asarray(center, dtype=float)
     rho_prime = np.sqrt(np.sum((p - c) ** 2, axis=-1))
     rho_prime = np.where(rho_prime < 1e-30, 1e-30, rho_prime)
-    return (R / rho_prime) ** 2
+    return (rho_prime / R) ** 2
 
 
 # ---------- Biot-Savart vector potential from filaments -------------------
