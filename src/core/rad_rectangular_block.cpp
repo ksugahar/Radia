@@ -1138,78 +1138,7 @@ int radTRecMag::SubdivideItself(double* SubdivArray, radThg& In_hg, radTApplicat
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::DumpBin_RecMag(CAuxBinStrVect& oStr)
-{
-	//radTParallelepSurfIntData* SurfIntDataPtr; /is not dumped
-	//TVector3d Dimensions;
-	oStr << Dimensions;
-	
-	//TVector3d J;
-	oStr << J;
-
-	//short J_IsNotZero;
-	oStr << J_IsNotZero;
-
-	//short InternalFacesAfterCut;
-	oStr << InternalFacesAfterCut;
-}
-
-//-------------------------------------------------------------------------
-
-void radTRecMag::DumpBinParse_RecMag(CAuxBinStrVect& inStr)
-{
-	//radTParallelepSurfIntData* SurfIntDataPtr; /is not dumped
-	//TVector3d Dimensions;
-	inStr >> Dimensions;
-
-	//TVector3d J;
-	inStr >> J;
-
-	//short J_IsNotZero;
-	inStr >> J_IsNotZero;
-
-	//short InternalFacesAfterCut;
-	inStr >> InternalFacesAfterCut;
-}
-
-//-------------------------------------------------------------------------
-
-//void radTRecMag::DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg)
-void radTRecMag::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-{
-	//Dumping objects that may be used by this object
-	vector<pair<int, int> > vTrfKeys;
-	//DumpBin_g3d_TreatTrfs(oStr, mEl, vTrfKeys);
-	DumpBin_g3d_TreatTrfs(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, vTrfKeys);
-	int matKey=0;
-	DumpBin_g3dRelax_TreatMat(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, matKey);
-
-	//int newKey = (int)mEl.size() + 1;
-	//mEl[newKey] = hg;
-	 
-	//Start dumping this object
-	//oStr << newKey;
-
-	//elemCount++;
-	vElemKeysOut.push_back(elemKey);
-	oStr << elemKey;
-
-	//Next 5 bytes define/encode element type:
-	oStr << (char)Type_g();
-	oStr << (char)Type_g3d();
-	oStr << (char)Type_g3dRelax();
-	oStr << (char)Type_RecMag();
-	oStr << (char)0;
-
-	//Members of radTg3d
-	DumpBin_g3d(oStr, vTrfKeys);
-
-	//Members of radTg3dRelax
-	DumpBin_g3dRelax(oStr, matKey);
-
-	//Members of radTRecMag
-	DumpBin_RecMag(oStr);
-}
+// DumpBin / DumpBin_RecMag / DumpBinParse_RecMag REMOVED (Phase B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

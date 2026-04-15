@@ -433,60 +433,7 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-// radTArcCur::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
-
-//-------------------------------------------------------------------------
-
-void radTArcCur::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-{
-	//Dumping objects that may be used by this object
-	vector<pair<int, int> > vTrfKeys;
-	DumpBin_g3d_TreatTrfs(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, vTrfKeys);
-
-	vElemKeysOut.push_back(elemKey);
-	oStr << elemKey;
-
-	//Next 5 bytes define/encode element type:
-	oStr << (char)Type_g();
-	oStr << (char)Type_g3d();
-	oStr << (char)0;
-	oStr << (char)0;
-	oStr << (char)0;
-
-	//Members of radTg3d
-	DumpBin_g3d(oStr, vTrfKeys);
-
-	//Members of radTArcCur
-	//TVector3d CircleCentrPoint;
-	oStr << CircleCentrPoint;
-
-	//double R_min, R_max;
-	oStr << R_min << R_max;
-
-	//double Phi_min, Phi_max;
-	oStr << Phi_min << Phi_max;
-
-	//double Height;
-	oStr << Height;
-
-	//double J_azim;
-	oStr << J_azim;
-
-	//int NumberOfSectors;
-	oStr << NumberOfSectors;
-
-	//short BasedOnPrecLevel;
-	oStr << BasedOnPrecLevel;
-
-	//short InternalFacesAfterCut;
-	oStr << InternalFacesAfterCut;
-
-	//char J_IsNotZero;
-	oStr << J_IsNotZero;
-}
-
-//-------------------------------------------------------------------------
-
+// radTArcCur::Dump / DumpPureObjInfo / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

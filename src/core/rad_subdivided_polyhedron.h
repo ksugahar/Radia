@@ -55,24 +55,7 @@ public:
 
 		radTGroup::MessageChar = PolyhedronPtr->MessageChar;
 	}
-	radTSubdividedPolyhedron(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{
-		//Members of radTg3d 
-		radTGroup::DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers); //all G3D members should be accessed via radTGroup
-
-		//Members of radTGroup 
-		DumpBinParse_Group(inStr, mKeysOldNew, gMapOfHandlers);
-
-		//Members of radTg3dRelax 
-		DumpBinParse_g3dRelax(inStr, mKeysOldNew, gMapOfHandlers);
-
-		//Members of radTPolyhedron 
-		DumpBinParse_Polyhedron(inStr);
-
-		//Members of radTSubdividedPolyhedron
-		//int AmOfSubElem;
-		inStr >> AmOfSubElem;
-	}
+	// radTSubdividedPolyhedron(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
 
 	radTSubdividedPolyhedron() {};
 
@@ -157,8 +140,7 @@ public:
 		radTGroup::SetM(M);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	double Volume() { return radTPolyhedron::Volume();}
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique) { radTPolyhedron::VerticesInLocFrame(OutVect, EnsureUnique);}

@@ -65,14 +65,9 @@ public:
 		}
 	}
 
-	radTNonlinearAnisotropMaterial(CAuxBinStrVect& inStr)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_Material(inStr);
-		//Members of radTNonlinearAnisotropMaterial
-		DumpBinParse_NonlinearAnisotropMaterial(inStr);
-	}
+	// radTNonlinearAnisotropMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
-	radTNonlinearAnisotropMaterial() 
+	radTNonlinearAnisotropMaterial()
 	{
 		gLenArrayHB_Par = gLenArrayHB_Perp = 0;
 		gArrayHB_Par = gArrayHB_Perp = 0;
@@ -112,10 +107,7 @@ public:
 		return FinishDuplication(new radTNonlinearAnisotropMaterial(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	inline void DumpBin_NonlinearAnisotropMaterial(CAuxBinStrVect& oStr);
-	inline void DumpBinParse_NonlinearAnisotropMaterial(CAuxBinStrVect& inStr);
-	inline void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin / DumpBin_NonlinearAnisotropMaterial / DumpBinParse_NonlinearAnisotropMaterial REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTNonlinearAnisotropMaterial);}
 
@@ -385,163 +377,7 @@ inline void radTNonlinearAnisotropMaterial::FindNewH(TVector3d& H, const TMatrix
 
 //-------------------------------------------------------------------------
 
-inline void radTNonlinearAnisotropMaterial::DumpBin_NonlinearAnisotropMaterial(CAuxBinStrVect& oStr)
-{
-	//double Ksi[2][4];
-	int i, j;
-	for(i=0; i<2; i++)
-		for(j=0; j<3; j++)
-			oStr << Ksi[i][j];
-
-	//double Ms[2][3];
-	for(i=0; i<2; i++)
-		for(j=0; j<3; j++)
-			oStr << Ms[i][j];
-
-	//double Hci[4];
-	for(i=0; i<4; i++) oStr << Hci[i];
-
-	//char DependenceIsNonlinear[2];
-	oStr << DependenceIsNonlinear[0] << DependenceIsNonlinear[1];
-
-	//int gLenArrayHB_Par
-	oStr << gLenArrayHB_Par;
-	//TVector2d *gArrayHB_Par
-	if((gLenArrayHB_Par) && (gArrayHB_Par != 0))
-	{
-		oStr << (char)1;
-		TVector2d *t_gArrayHB_Par = gArrayHB_Par;
-		for(int i=0; i<gLenArrayHB_Par; i++) oStr << (*(t_gArrayHB_Par++));
-	}
-	else oStr << (char)0;
-	//double *gdBdH_Par
-	if((gLenArrayHB_Par) && (gdBdH_Par != 0))
-	{
-		oStr << (char)1;
-		double *t_gdBdH_Par = gdBdH_Par;
-		for(int i=0; i<gLenArrayHB_Par; i++) oStr << (*(t_gdBdH_Par++));
-	}
-	else oStr << (char)0;
-
-	//int gLenArrayHB_Perp;
-	oStr << gLenArrayHB_Par;
-	//TVector2d *gArrayHB_Perp;
-	if((gLenArrayHB_Perp) && (gArrayHB_Perp != 0))
-	{
-		oStr << (char)1;
-		TVector2d *t_gArrayHB_Perp = gArrayHB_Perp;
-		for(int i=0; i<gLenArrayHB_Perp; i++) oStr << (*(t_gArrayHB_Perp++));
-	}
-	else oStr << (char)0;
-	//double *gdBdH_Perp;
-	if((gLenArrayHB_Perp) && (gdBdH_Perp != 0))
-	{
-		oStr << (char)1;
-		double *t_gdBdH_Perp = gdBdH_Perp;
-		for(int i=0; i<gLenArrayHB_Perp; i++) oStr << (*(t_gdBdH_Perp++));
-	}
-	else oStr << (char)0;
-
-	//double gMaxKsi_Par, gMaxKsi_Perp;
-	oStr << gMaxKsi_Par << gMaxKsi_Perp;
-
-	//TVector3d UnitEasyAxisVect;
-	oStr << UnitEasyAxisVect;
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTNonlinearAnisotropMaterial::DumpBinParse_NonlinearAnisotropMaterial(CAuxBinStrVect& inStr)
-{
-	//double Ksi[2][4];
-	int i, j;
-	for(i=0; i<2; i++)
-		for(j=0; j<3; j++)
-			inStr >> Ksi[i][j];
-
-	//double Ms[2][3];
-	for(i=0; i<2; i++)
-		for(j=0; j<3; j++)
-			inStr >> Ms[i][j];
-
-	//double Hci[4];
-	for(i=0; i<4; i++) inStr >> Hci[i];
-
-	//char DependenceIsNonlinear[2];
-	inStr >> DependenceIsNonlinear[0];
-	inStr >> DependenceIsNonlinear[1];
-
-	//int gLenArrayHB_Par
-	inStr >> gLenArrayHB_Par;
-	char cTest = 0;
-	inStr >> cTest;
-	//TVector2d *gArrayHB_Par
-	if(cTest > 0)
-	{
-		vgArrayHB_Par.resize(gLenArrayHB_Par);
-		gArrayHB_Par = vgArrayHB_Par.data();
-		TVector2d *t_gArrayHB_Par = gArrayHB_Par;
-		for(int i=0; i<gLenArrayHB_Par; i++) inStr >> (*(t_gArrayHB_Par++));
-	}
-	//double *gdBdH_Par
-	inStr >> cTest;
-	if(cTest > 0)
-	{
-		vgdBdH_Par.resize(gLenArrayHB_Par);
-		gdBdH_Par = vgdBdH_Par.data();
-		double *t_gdBdH_Par = gdBdH_Par;
-		for(int i=0; i<gLenArrayHB_Par; i++) inStr >> (*(t_gdBdH_Par++));
-	}
-
-	//int gLenArrayHB_Perp;
-	inStr >> gLenArrayHB_Perp;
-	//TVector2d *gArrayHB_Perp;
-	inStr >> cTest;
-	if(cTest > 0)
-	{
-		vgArrayHB_Perp.resize(gLenArrayHB_Perp);
-		gArrayHB_Perp = vgArrayHB_Perp.data();
-		TVector2d *t_gArrayHB_Perp = gArrayHB_Perp;
-		for(int i=0; i<gLenArrayHB_Perp; i++) inStr >> (*(t_gArrayHB_Perp++));
-	}
-	//double *gdBdH_Perp;
-	inStr >> cTest;
-	if(cTest > 0)
-	{
-		vgdBdH_Perp.resize(gLenArrayHB_Perp);
-		gdBdH_Perp = vgdBdH_Perp.data();
-		double *t_gdBdH_Perp = gdBdH_Perp;
-		for(int i=0; i<gLenArrayHB_Perp; i++) inStr >> (*(t_gdBdH_Perp++));
-	}
-
-	//double gMaxKsi_Par, gMaxKsi_Perp;
-	inStr >> gMaxKsi_Par;
-	inStr >> gMaxKsi_Perp;
-
-	//TVector3d UnitEasyAxisVect;
-	inStr >> UnitEasyAxisVect;
-}
-
-//-------------------------------------------------------------------------
-
-inline void radTNonlinearAnisotropMaterial::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-{
-	vElemKeysOut.push_back(elemKey);
-	oStr << elemKey;
-
-	//Next 5 bytes define/encode element type:
-	oStr << (char)Type_g();
-	oStr << (char)Type_Material();
-	oStr << (char)0;
-	oStr << (char)0;
-	oStr << (char)0;
-
-	//Members of radTMaterial
-	DumpBin_Material(oStr);
-
-	//Members of radTNonlinearAnisotropMaterial
-	DumpBin_NonlinearAnisotropMaterial(oStr);
-}
+// DumpBin_NonlinearAnisotropMaterial / DumpBinParse_NonlinearAnisotropMaterial / DumpBin REMOVED (Phase B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -602,15 +438,7 @@ public:
 		SetupEasyAxisIfPossible(pN);
 	}
 
-	radTNonlinearLaminatedMaterial(CAuxBinStrVect& inStr)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_Material(inStr);
-		//Members of radTNonlinearAnisotropMaterial
-		DumpBinParse_NonlinearAnisotropMaterial(inStr);
-
-		//double gPackFactor;
-		inStr >> gPackFactor;
-	}
+	// radTNonlinearLaminatedMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTNonlinearLaminatedMaterial() : radTNonlinearAnisotropMaterial() {}
 
@@ -688,29 +516,7 @@ public:
 	}
 	int SizeOfThis() { return sizeof(radTNonlinearLaminatedMaterial);}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		//Next 5 bytes define/encode element type:
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)Type_NonlinearAnisotropMaterial();
-		oStr << (char)0;
-		oStr << (char)0;
-
-		//Members of radTMaterial
-		DumpBin_Material(oStr);
-	
-		//Members of radTNonlinearAnisotropMaterial
-		DumpBin_NonlinearAnisotropMaterial(oStr);
-
-		//double gPackFactor;
-		oStr << gPackFactor;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 };
 
 //-------------------------------------------------------------------------
