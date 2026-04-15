@@ -539,67 +539,9 @@ public:
 };
 
 //-------------------------------------------------------------------------
-//Auxiliary class for binary data collection / storage / manipulations (added for programming persistence in Radia)
-class CAuxBinStr : public string {
-
-private:
-	string::iterator itOut;
-
-public:
-
-	CAuxBinStr(const unsigned char *bStr, int len_bStr)
-	{
-		if((bStr != 0) && (len_bStr > 0))
-		{
-			for(int i=0; i<len_bStr; i++) push_back(*(bStr++));
-			setItOut();
-		}
-	}
-	CAuxBinStr() {}
-
-	void setItOut(long ofst=0)
-	{//To call before using ">>" first time!
-		itOut = begin() + ofst;
-	}
-
-	long getCurOfst()
-	{//Get current offset of input
-		return (long)(end() - begin());
-	}
-
-	template<class T> void setFromPos(long ofst, T a)
-	{//Assumes that memory has been allocated previously
-	 //ofst is offset in bytes!
-		int sz = (int)sizeof(T);
-		//char *p = reinterpret_cast<char*>(&a);
-		unsigned char *p = reinterpret_cast<unsigned char*>(&a);
-		string::iterator it = begin() + ofst;
-		for(int i=0; i<sz; i++) *(it++) = *(p++); 
-	}
-
-	template<class T> inline friend CAuxBinStr& operator<<(CAuxBinStr& str, T a);
-	template<class T> inline friend CAuxBinStr& operator>>(CAuxBinStr& str, T& a);
-};
-
-template<class T> inline CAuxBinStr& operator<<(CAuxBinStr& str, T a)
-{
-	int sz = (int)sizeof(T);
-	//char *p = reinterpret_cast<char*>(&a);
-	unsigned char *p = reinterpret_cast<unsigned char*>(&a);
-	for(int i=0; i<sz; i++) str.push_back(*(p++)); //str += *(p++);
-	return str;
-};
-
-template<class T> inline CAuxBinStr& operator>>(CAuxBinStr& str, T& a)
-{//Extracts starting from position specified by itOut (assuming it exists)
-	int sz = (int)sizeof(T);
-	//char *p = reinterpret_cast<char*>(&a);
-	unsigned char *p = reinterpret_cast<unsigned char*>(&a);
-	string::iterator &it = str.itOut;
-	for(int i=0; i<sz; i++) *(p++) = *(it++); 
-	return str;
-};
-
+// CAuxBinStr base class + operator<<,>> templates REMOVED (Phase B3, 2026-04-16)
+// Previously used by CAuxBinStrVect (gmvbstr.h, also removed) for the
+// per-class DumpBin / DumpBinParse binary serialization layer.
 //-------------------------------------------------------------------------
 
 #endif

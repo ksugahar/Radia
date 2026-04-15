@@ -25,14 +25,8 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-// Drawing attribute types (kept for binary serialization compatibility)
-struct radRGB {
-	double Red, Green, Blue;
-	radRGB(double InRed =0, double InGreen =0, double InBlue =0)
-	{
-		Red = InRed; Green = InGreen; Blue = InBlue;
-	}
-};
+// radRGB struct REMOVED (Phase B3, 2026-04-16) — drawing/color attribute,
+// previously kept for binary serialization compat that is now gone.
 
 class radTrans;
 class radTField;
