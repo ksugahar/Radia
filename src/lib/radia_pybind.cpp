@@ -3834,82 +3834,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
     m.def("UtiVer", &radia_utility_ext::UtiVer,
           "Get Radia library version number.");
 
-    // UtiDmp - Dump object(s) to string
-    m.def("UtiDmp", [](const py::object& elem,
-                       const std::string& format = "asc") -> py::bytes {
-        std::vector<int> objs;
-
-        if (py::isinstance<py::int_>(elem)) {
-            objs.push_back(elem.cast<int>());
-        } else if (py::isinstance<py::list>(elem)) {
-            for (const auto& e : elem.cast<py::list>()) {
-                objs.push_back(e.cast<int>());
-            }
-        } else {
-            throw std::runtime_error("elem must be int or list of ints");
-        }
-
-        char fmt[4];
-        strncpy(fmt, format.c_str(), 3);
-        fmt[3] = '\0';
-
-        // First call to get size
-        int size = 0;
-        int err = RadUtiDmp(nullptr, &size, objs.data(),
-                            static_cast<int>(objs.size()), fmt);
-        check_error(err);
-
-        // Allocate and get data
-        std::vector<char> buffer(size + 1);
-        err = RadUtiDmp(buffer.data(), &size, objs.data(),
-                        static_cast<int>(objs.size()), fmt);
-        check_error(err);
-
-        return py::bytes(buffer.data(), size);
-    },
-    py::arg("elem"), py::arg("format") = "asc",
-    R"pbdoc(
-        Dump object(s) to byte string.
-
-        Args:
-            elem: Object handle or list of handles
-            format: "asc" (ASCII) or "bin" (binary)
-
-        Returns:
-            Byte string with object data
-    )pbdoc");
-
-    // UtiDmpPrs - Parse dumped data
-    m.def("UtiDmpPrs", [](const py::bytes& data) -> py::object {
-        std::string s = data;
-        std::vector<int> elems(1000);  // Max elements
-        int nElem = 0;
-
-        int err = RadUtiDmpPrs(elems.data(), &nElem,
-                               reinterpret_cast<unsigned char*>(const_cast<char*>(s.data())),
-                               static_cast<int>(s.size()));
-        check_error(err);
-
-        if (nElem == 1) {
-            return py::cast(elems[0]);
-        } else {
-            py::list out;
-            for (int i = 0; i < nElem; ++i) {
-                out.append(elems[i]);
-            }
-            return out;
-        }
-    },
-    py::arg("data"),
-    R"pbdoc(
-        Parse dumped byte string and recreate object(s).
-
-        Args:
-            data: Byte string from UtiDmp
-
-        Returns:
-            Object handle or list of handles
-    )pbdoc");
+    // UtiDmp / UtiDmpPrs REMOVED (Phase B1, 2026-04-15) -
+    // .rad save/load is no longer supported. Reconstruct objects from
+    // user scripts instead.
 
     // ========================================================================
     // NGSolve CoefficientFunction: RadiaField
