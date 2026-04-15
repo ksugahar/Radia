@@ -23,6 +23,7 @@ from numpy import pi, sqrt, cos, sin, linspace, zeros, nan, isnan, meshgrid, arr
 from scipy.special import ellipk, ellipe
 from ngsolve import *
 from netgen.occ import *
+from radia.kelvin_source import kelvin_nu_factor_axisym_cf, build_material_cf
 
 print("=" * 60)
 print("Axisymmetric A-formulation with Z-OFFSET Kelvin")
@@ -182,21 +183,11 @@ def solve_A_formulation(mesh, order):
     # r-weight
     r_weight = IfPos(x - 1e-10, x, 1e-10)
 
-    # Kelvin transformation factor
-    y_local = y - z_offset
-    rho_prime = sqrt(x**2 + y_local**2)
-    rho_prime_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
-    kelvin_factor = (rho_prime_safe / a)**2
-
-    # Build reluctivity by region
-    materials = mesh.GetMaterials()
-    nu_list = []
-    for mat in materials:
-        if "outer" in mat.lower():
-            nu_list.append(nu0 * kelvin_factor)
-        else:
-            nu_list.append(nu0)
-    nu_cf = CoefficientFunction(nu_list)
+    # Kelvin modulation via centralized helper (Nagamine CEFC 2026 canonical):
+    #   nu_ext = nu_0 * (rho'/a)^2,  rho' = sqrt(x^2 + (y - z_offset)^2)
+    # See examples/kelvin_transformation/CONVENTION.md.
+    nu_kelvin_factor = kelvin_nu_factor_axisym_cf(z_offset=z_offset, R=a)
+    nu_cf = build_material_cf(mesh, nu0, nu_kelvin_factor)
 
     # Bilinear form
     a_form = BilinearForm(fes)

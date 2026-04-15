@@ -14,8 +14,12 @@ Nagamine):
       mu' = (R/rho')^2 * mu_0     [Omega / H-formulation, H1]
       (pointwise reciprocals: mu * nu = 1)
 
-    2D cylindrical (non-conformal) Kelvin:
-      nu' = diag(1, 1, (rho'/R)^4) * nu_0   (anisotropic tensor)
+    2D cylindrical (non-conformal) Kelvin -- ANISOTROPIC tensor:
+      nu' = diag(1, 1, (rho'/R)^4) * nu_0
+      mu' = diag(1, 1, (R/rho')^4) * mu_0
+      In-plane slots (xx, yy) are identity -- common case factor = 1.
+      Axial slot (zz) carries (rho'/R)^4 or (R/rho')^4 -- rare cases
+      where B or H has a z-component (e.g. 2D A-form with in-plane A).
 
 Derivation: pullback of orthonormal 1-form basis + bilinear energy
 functional. Validated numerically on a toroidal current loop
@@ -90,10 +94,19 @@ magnetostatic/electromagnetic problems without artificial truncation.
    - Derivation: Nagamine CEFC 2026 eq. 9 (pullback of 1-form basis +
      bilinear energy equivalence)
 
-   For 2D cylindrical (non-conformal) Kelvin, the reluctivity is
-   anisotropic (Nagamine eq. 12):
+   For 2D cylindrical (non-conformal) Kelvin, the reluctivity is an
+   ANISOTROPIC tensor (Nagamine eq. 12) -- the Kelvin factor is NOT
+   scalar:
 
        nu' = diag(1, 1, (rho'/R)^4) * nu     (only axial component scaled)
+       mu' = diag(1, 1, (R/rho')^4) * mu
+
+   Which slot contracts into the bilinear form depends on which B/H
+   component the problem uses. The common case (in-plane B and H, as in
+   2D Omega-form with scalar phi, or 2D A-form with A = A_z z_hat) uses
+   only the in-plane identity slots, so the effective Kelvin factor is
+   **1**. The (rho'/R)^4 / (R/rho')^4 axial slot matters only when B_z
+   or H_z is present (rare in standard 2D magnetostatics).
 
    **Accuracy note**: if a Kelvin setup gives wrong inductance /
    field / energy, DO NOT change the convention. The convention is
@@ -1535,23 +1548,57 @@ The canonical way to apply Kelvin material modulation in new code is
 to import factor CFs from `radia.kelvin_source`. This avoids re-deriving
 the factor inline and guarantees Nagamine CEFC 2026 consistency.
 
-## Available factor helpers (3D spherical + axisym = same 3D idea)
+## Available factor helpers
 
-| Formulation | Helper                             | Factor     | Direction |
-|-------------|------------------------------------|------------|-----------|
-| 3D A-form   | kelvin_nu_factor_3d_cf(c, R)       | (rho'/R)^2 | vanishes at rho'=0 |
-| 3D Omega/H  | kelvin_mu_factor_3d_cf(c, R)       | (R/rho')^2 | diverges at rho'=0 |
-| Axisym A    | kelvin_nu_factor_axisym_cf(z_off, R)| (rho'/R)^2| axisym (r,z) meridional |
-| Axisym Ω/H  | kelvin_mu_factor_axisym_cf(z_off, R)| (R/rho')^2|  |
-| 2D A-form A_z| kelvin_nu_factor_2d_Az_cf(o, R)   | (rho'/R)^4 | cylindrical anisotropic |
-| 2D Ω/H in-plane | kelvin_mu_factor_2d_Hx_Hy_cf() | 1 (identity) | cylindrical in-plane |
+Most Radia-NGSolve problems are **3D**, so the 3D helpers below are the
+primary case. Axisymmetric is a dimensional reduction; 2D is special.
 
-Note: 2D cylindrical Kelvin is non-conformal (Nagamine eq. 12):
-nu' = diag(1, 1, (rho'/R)^4) * nu.  The 2D A-form A_z case reduces to
-a scalar (rho'/R)^4; 2D H1/Omega in-plane is identity (factor = 1).
+### 3D spherical Kelvin (primary case, isotropic)
 
-Axisymmetric (r, z) is treated as 3D spherical Kelvin viewed in the
-meridional plane; same basic `(rho'/R)^2` or `(R/rho')^2` formulas.
+| Formulation | Helper                       | Factor     | At rho'=0 |
+|-------------|------------------------------|------------|-----------|
+| 3D A-form   | kelvin_nu_factor_3d_cf(c, R) | (rho'/R)^2 | vanishes  |
+| 3D Omega/H  | kelvin_mu_factor_3d_cf(c, R) | (R/rho')^2 | diverges  |
+
+### Axisymmetric (r, z) -- 3D sphere viewed in meridional plane
+
+| Formulation | Helper                                | Factor     |
+|-------------|---------------------------------------|------------|
+| Axisym A    | kelvin_nu_factor_axisym_cf(z_off, R)  | (rho'/R)^2 |
+| Axisym Ω/H  | kelvin_mu_factor_axisym_cf(z_off, R)  | (R/rho')^2 |
+
+**!! CRITICAL AXISYM CAVEAT:** NGSolve has NO built-in axisymmetric
+mode. The caller MUST write the r-weight explicitly:
+
+    a += nu_cf * grad(u) * grad(v) * r_coord * dx   # correct
+    a += nu_cf * grad(u) * grad(v)           * dx   # WRONG, off by O(r)
+
+The helper returns the sphere-inversion pullback only; it does NOT
+absorb the `* r_coord` from the axisymmetric volume element. Dropping
+this factor is one of the most common axisymmetric Kelvin bugs.
+
+### 2D cylindrical Kelvin -- ANISOTROPIC tensor
+
+Nagamine CEFC 2026 eq. 12: `nu' = diag(1, 1, (rho'/R)^4) nu`. The
+Kelvin factor is NOT scalar -- it is a tensor, and which slot enters
+the bilinear form depends on which **B / H component** the problem
+actually uses (not on "A-form vs Omega-form").
+
+| Case          | Helper                           | Factor     |
+|---------------|----------------------------------|------------|
+| In-plane B/H  | kelvin_factor_2d_inplane_cf()    | 1 (identity) |
+| Axial B_z (nu)| kelvin_nu_factor_2d_axial_cf(o,R)| (rho'/R)^4 |
+| Axial H_z (mu)| kelvin_mu_factor_2d_axial_cf(o,R)| (R/rho')^4 |
+
+**In-plane is the common case** (most 2D magnetostatic setups): both
+2D Omega-form with scalar phi (H in-plane) and 2D A-form with
+A = A_z(x, y) z_hat (B in-plane, B_z = 0) land here -- Kelvin factor
+is literally 1. Deprecated aliases `kelvin_mu_factor_2d_Hx_Hy_cf()`,
+`kelvin_nu_factor_2d_Hx_Hy_cf()`, and `kelvin_nu_factor_2d_Az_cf(...)`
+all resolve to `kelvin_factor_2d_inplane_cf()`.
+
+The axial helpers are for the rare case where B or H genuinely has a
+z-component (e.g. 2D A-form with in-plane A gives B_z z_hat).
 
 ## Material builder
 
