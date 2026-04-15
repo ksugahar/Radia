@@ -289,12 +289,8 @@ public:
 		double x = 0.5*(double(ii) + 1.E-08); return ((ii > 0) && ((x - int(x)) < 0.1));
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0) // Porting
-	{
-		radTg::Dump(o);
-		o << "Magnetic field source object: ";
-	}
-	
+	// Dump REMOVED (Phase B2b, 2026-04-15)
+
 	//void DumpBin_g3d_TreatTrfs(CAuxBinStrVect& oStr, radTmhg& mEl, vector<pair<int, int> >& vTrfKeys) 
 	//void DumpBin_g3d_TreatTrfs(CAuxBinStrVect& oStr, radTmhg& mEl, radTmhg& gMapOfHandlers, int& gUniqueMapKey, vector<pair<int, int> >& vTrfKeys) 
 	void DumpBin_g3d_TreatTrfs(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, vector<pair<int, int> >& vTrfKeys) 
@@ -384,7 +380,7 @@ public:
 	}
 
 	void DumpBinParse_g3d(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
-	void DumpTransApplied(std::ostream& o); // Porting
+	// DumpTransApplied REMOVED (Phase B2b, 2026-04-15)
 
 	static int Round(double dVal) 
 	{
@@ -798,12 +794,8 @@ public:
 		else CenPtPositionChar = 'L';
 	}
 
-	void Dump(std::ostream& o, int ShortSign =0)
-	{
-		radTg3d::Dump(o);
-		//o << "Relaxable: ";
-	}
-	
+	// Dump REMOVED (Phase B2b, 2026-04-15)
+
 	void DumpBin_g3dRelax_TreatMat(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int& matKey)
 	{
 		matKey = 0;
@@ -856,7 +848,7 @@ public:
 	}
 
 	void DumpBinParse_g3dRelax(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
-	void DumpMaterApplied(std::ostream&);
+	// DumpMaterApplied REMOVED (Phase B2b, 2026-04-15)
 };
 
 //-------------------------------------------------------------------------

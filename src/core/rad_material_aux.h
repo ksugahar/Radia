@@ -112,7 +112,7 @@ public:
 		return FinishDuplication(new radTNonlinearAnisotropMaterial(*this), hg);
 	}
 
-	inline void Dump(std::ostream& o, int ShortSign =0);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	inline void DumpBin_NonlinearAnisotropMaterial(CAuxBinStrVect& oStr);
 	inline void DumpBinParse_NonlinearAnisotropMaterial(CAuxBinStrVect& inStr);
 	inline void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
@@ -381,46 +381,7 @@ inline void radTNonlinearAnisotropMaterial::FindNewH(TVector3d& H, const TMatrix
 
 //-------------------------------------------------------------------------
 
-inline void radTNonlinearAnisotropMaterial::Dump(std::ostream& o, int ShortSign)
-{
-	radTMaterial::Dump(o);
-	o << "Nonlinear Anisotropic";
-	if(ShortSign==1) return;
-
-	o << endl;
-	o << "   Parallel to the easy magnetization axis:" << endl;
-	if(DependenceIsNonlinear[0])
-	{
-		o << "      {ksi1,ms1,hc1}= {" << Ksi[0][0] << ',' << Ms[0][0] << ',' << Hci[0] << "}" << endl;
-		o << "      {ksi2,ms2,hc2}= {" << Ksi[0][1] << ',' << Ms[0][1] << ',' << Hci[1] << "}" << endl;
-		o << "      {ksi3,ms3,hc3}= {" << Ksi[0][2] << ',' << Ms[0][2] << ',' << Hci[2] << "}" << endl;
-		o << "      {ksi0,hc0}= {" << Ksi[0][3] << ',' << Hci[3] << "}" << endl;
-	}
-	else
-	{
-		o << "      ksi= " << Ksi[0][0] << endl;
-	}
-
-	o << "   Perpendicular to the easy magnetization axis:" << endl;
-	if(DependenceIsNonlinear[1])
-	{
-		o << "      {ksi1,ms1}= {" << Ksi[1][0] << ',' << Ms[1][0] << "}" << endl;
-		o << "      {ksi2,ms2}= {" << Ksi[1][1] << ',' << Ms[1][1] << "}" << endl;
-		o << "      {ksi3,ms3}= {" << Ksi[1][2] << ',' << Ms[1][2] << "}" << endl;
-		o << "      ksi0= " << Ksi[1][3] << endl;
-		//o << "      hc= " << Hc[1] << endl;
-	}
-	else
-	{
-		o << "      ksi= " << Ksi[1][0] << endl;
-	}
-
-	o << "   Easy magnetization axis: ";
-	if(EasyAxisDefined) o << "{" << UnitEasyAxisVect.x << "," << UnitEasyAxisVect.y << "," << UnitEasyAxisVect.z << "}" << endl;
-	else o << "not defined" << endl;
-
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
+// radTNonlinearAnisotropMaterial::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
@@ -727,31 +688,7 @@ public:
 	}
 	int SizeOfThis() { return sizeof(radTNonlinearLaminatedMaterial);}
 
-	void Dump(std::ostream& o, int ShortSign)
-	{
-		radTMaterial::Dump(o);
-		o << "Nonlinear Laminated";
-		if(ShortSign==1) return;
-
-		o << endl;
-		o << "   Packing factor: " << gPackFactor << endl;
-
-		o << "   Isotropic parameters:" << endl;
-
-		if((gArrayHB_Par == 0) || (gLenArrayHB_Par == 0))
-		{
-			o << "      {ksi1,ms1}= {" << Ksi[0][0] << ',' << Ms[0][0] << "}" << endl;
-			o << "      {ksi2,ms2}= {" << Ksi[0][1] << ',' << Ms[0][1] << "}" << endl;
-			o << "      {ksi3,ms3}= {" << Ksi[0][2] << ',' << Ms[0][2] << "}" << endl;
-		}
-		else o << "      M(H) defined by table of values" << endl;
-
-		o << "   Vector normal to the lamination planes: ";
-		if(EasyAxisDefined) o << "{" << UnitEasyAxisVect.x << "," << UnitEasyAxisVect.y << "," << UnitEasyAxisVect.z << "}" << endl;
-		else o << "not defined" << endl;
-		
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
 	{

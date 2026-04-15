@@ -113,7 +113,7 @@ public:
 		return GenSize + radTGroup::SizeOfThis();
 	}
 
-	void Dump(std::ostream&, int ShortSign =0);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	double Volume() { return radTArcCur::Volume();}
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique) { radTArcCur::VerticesInLocFrame(OutVect, EnsureUnique);}

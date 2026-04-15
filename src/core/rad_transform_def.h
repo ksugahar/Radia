@@ -48,21 +48,7 @@ public:
 	int Type_g() { return 2;}
 	virtual int Type_Trans() { return 0;}
 
-	void Dump(std::ostream& o, int ShortSign) // Porting
-	{
-		radTg::Dump(o);
-		o << "Transformation: ";
-		if(ID_No == 1) o << "Translation";
-		else if(ID_No == 2) o << "Rotation";
-		else if(ID_No == 3) o << "Plane symmetry";
-		else if(ID_No == 4) o << "Field inversion";
-		else if(ID_No == 10) o << "Composite";
-
-		if(ShortSign) return;
-
-		o << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin_Trans(CAuxBinStrVect& oStr)
 	{

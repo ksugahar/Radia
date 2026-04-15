@@ -66,22 +66,7 @@ public:
 
 	int NumberOfDegOfFreedom() { return 0;}
 
-	void Dump(std::ostream& o, int ShortSign) // Porting
-	{
-		radTg3d::Dump(o, ShortSign);
-		o << "Rectangle";
-
-		if(ShortSign) return;
-
-		o << endl;
-		o << "   {x,y,z}= {" << CentrPoint.x << ',' << CentrPoint.y << ',' << CentrPoint.z << "}" << endl;
-		o << "   {wx,wy}= {" << Dimensions.x << ',' << Dimensions.y << "}";
-
-		DumpTransApplied(o);
-
-		o << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTRectangle);}
 };
@@ -285,14 +270,7 @@ public:
 
 	//void B_comp_frJ(radTField*);
 
-	void Dump(std::ostream& o, int ShortSign) // Porting
-	{
-		radTg3d::Dump(o, ShortSign);
-		o << "Polygon";
-
-		o << endl;
-		o << "   Memory occupied: " << SizeOfThis() << " bytes";
-	}
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin_Polygon(CAuxBinStrVect& oStr)
 	{
