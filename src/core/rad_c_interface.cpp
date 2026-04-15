@@ -198,12 +198,7 @@ void DeleteElement( int );
 void DeleteAllElements1();
 void InterruptTime( double );
 void RadiaVersion();
-//void DumpElem( int );
-void DumpElem();
-void DumpElemOpt( int*, int, const char* );
-void DumpElemParse();
-void DumpElemParseOpt( const unsigned char*, int );
-void GenDump();
+// DumpElem / DumpElemParse / GenDump REMOVED (Phase B2a, 2026-04-15)
 void DeleteAllElements2();
 
 void StartProf(int, int, int);
@@ -2092,43 +2087,8 @@ void PhysicalUnitsSet(const char* unitStr)
 
 //-------------------------------------------------------------------------
 
-//void DumpElem(int ElemKey, char* strFormat)
-//{
-//	rad.DumpElem(ElemKey, strFormat);
-//}
-
-void DumpElem()
-{
-
-}
-
-//-------------------------------------------------------------------------
-
-void DumpElemOpt(int* arKeys, int nKeys, const char* AscOrBin)
-{
-	rad.DumpElem(arKeys, nKeys, AscOrBin, true); //?
-}
-
-//-------------------------------------------------------------------------
-
-void DumpElemParse()
-{
-
-}
-
-//-------------------------------------------------------------------------
-
-void DumpElemParseOpt(const unsigned char* sBytes, int nBytes)
-{
-	rad.DumpElemParse(sBytes, nBytes); //?
-}
-
-//-------------------------------------------------------------------------
-
-void GenDump()
-{
-	rad.GenDump();
-}
+// DumpElem / DumpElemOpt / DumpElemParse / DumpElemParseOpt / GenDump
+// REMOVED (Phase B2a, 2026-04-15) - .rad save/load is no longer supported.
 
 //-------------------------------------------------------------------------
 

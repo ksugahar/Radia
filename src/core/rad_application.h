@@ -401,9 +401,8 @@ public:
 	int SetTolForConvergence(double AbsRandMagnitude, double RelRandMagnitude, double ZeroRandMagnitude);
 	int RandomizationOnOrOff(char* OnOrOff);
 
-	void DumpElem(int* arKeys, int nElem, const char* strFormat, bool arKeysAllocInMathLink=false);
-	int DumpElemParse(const unsigned char *bstr, int bstrLen);
-	void GenDump();
+	// DumpElem / DumpElemParse / GenDump REMOVED (Phase B2a, 2026-04-15) -
+	// .rad save/load is no longer supported.
 	int RetrieveElemKey(const radTg* gPtr);
 
 	inline double ReturnVersionID();
@@ -428,9 +427,7 @@ public:
 
 	int ProcMPI(const char* OnOrOff, double* arData=0, long* pnData=0, long* pRankFrom=0, long* pRankTo=0);
 
-	// Get element handle by key
-	// Returns true if element found, false otherwise
-	bool UnsafeGetElemByKey(int ElemKey, radThg& outHandle);
+	// UnsafeGetElemByKey REMOVED (Phase B2a, 2026-04-15) - no callers
 
 	// Get interaction pointer by key (for CplMag solver)
 	// Returns nullptr if not found or not an interaction
