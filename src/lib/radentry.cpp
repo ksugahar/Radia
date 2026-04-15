@@ -152,10 +152,7 @@ void DeleteElement( int );
 void DeleteAllElements1();
 void InterruptTime( double );
 void RadiaVersion();
-//void DumpElem( int );
-void DumpElemOpt( int*, int, const char* );
-void DumpElemParseOpt( const unsigned char*, int );
-void GenDump();
+// DumpElem / DumpElemParseOpt / GenDump REMOVED (Phase B2a, 2026-04-15)
 
 void ProcMPI( const char*, double*, long*, long*, long*);
 //void ProcMPI( const char* );
