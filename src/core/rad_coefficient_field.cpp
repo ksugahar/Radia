@@ -30,16 +30,6 @@ radTCoefficientFunctionFieldSource::radTCoefficientFunctionFieldSource(PyObject*
 //-------------------------------------------------------------------------
 
 radTCoefficientFunctionFieldSource::radTCoefficientFunctionFieldSource(
-	CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-{
-	// Binary deserialization not supported for Python callbacks
-	DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-	cf_callback = 0;
-}
-
-//-------------------------------------------------------------------------
-
-radTCoefficientFunctionFieldSource::radTCoefficientFunctionFieldSource(
 	const radTCoefficientFunctionFieldSource& src)
 	: radTg3d(src), cf_callback(src.cf_callback)
 {
@@ -256,18 +246,7 @@ void radTCoefficientFunctionFieldSource::B_intComp(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-// radTCoefficientFunctionFieldSource::Dump REMOVED (Phase B2b, 2026-04-15)
-
-//-------------------------------------------------------------------------
-
-void radTCoefficientFunctionFieldSource::DumpBin(
-	CAuxBinStrVect& oStr, vector<int>& vElemKeysOut,
-	map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers,
-	int& gUniqueMapKey, int elemKey)
-{
-	// Binary serialization not supported for Python callbacks
-	// Silently do nothing - user won't be able to save/load CF field sources
-}
+// radTCoefficientFunctionFieldSource::Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

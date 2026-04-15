@@ -19,7 +19,6 @@
 
 #include "rad_handle.h"
 #include "rad_auxiliary_structures.h"
-#include "gmvbstr.h"
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -35,8 +34,7 @@ public:
 	virtual ~radTg() {}
 
 	virtual int Type_g() { return 0;}
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	virtual void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey) {}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	virtual int DuplicateItself(radTHandle<radTg>&, radTApplication*, char PutNewStuffIntoGenCont =1) { return 1;} // PutNewStuffIntoGenCont only for groups
 	virtual int SizeOfThis() { return sizeof(*this);}

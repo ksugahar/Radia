@@ -31,7 +31,6 @@ class radTGroup : public radTg3d {
 public:
 	radTmhg GroupMapOfHandlers;
 
-	radTGroup(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
 	radTGroup() {}
 	~radTGroup() {}
 
@@ -44,12 +43,7 @@ public:
 	void B_genComp(radTField* FieldPtr) override;  // Override for transformation propagation
 	void B_intComp(radTField* FieldPtr) { B_comp(FieldPtr);} // This is not an Error!!!
 
-	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin_Group_TreatMembers(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, vector<int>& vGroupMemKeys);
-	void DumpBin_Group_OutMemKeys(CAuxBinStrVect& oStr, vector<int>& vGroupMemKeys);
-	void DumpBinParse_Group(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
-	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg);
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpPureObjInfo / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 
 	int DuplicateItself(radThg& hg, radTApplication* radPtr, char PutNewStuffIntoGenCont) override

@@ -316,25 +316,7 @@ public:
 		*this = aPlhdr;
 		if(aPlhdr.pJ_LinCoef != 0) pJ_LinCoef = new TMatrix3d(*(aPlhdr.pJ_LinCoef));
 	}
-	radTPolyhedron(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{
-		// Initialize 6 DOF MSC data before parsing
-		Use6DOF_MSC = false;
-		for(int i = 0; i < 6; i++) {
-			Sigma[i] = 0.0;
-			FaceArea[i] = 0.0;
-			FaceNormal[i].x = FaceNormal[i].y = FaceNormal[i].z = 0.0;
-			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
-		}
-
-		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-		DumpBinParse_g3dRelax(inStr, mKeysOldNew, gMapOfHandlers);
-		DumpBinParse_Polyhedron(inStr);
-
-		// Setup 6 DOF after parsing for hexahedra
-		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
-		if(Use6DOF_MSC) SetupFaceGeometry();
-	}
+	// radTPolyhedron(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
 	radTPolyhedron() : radTg3dRelax()
 	{
 		pJ_LinCoef = 0; mLinTreat = 0;
@@ -488,10 +470,7 @@ public:
 	void EstimateSize(TVector3d*, double*, int);
 	void FindTypicalSize(TVector3d*, int, double&);
 
-	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
-	void DumpBin_Polyhedron(CAuxBinStrVect& oStr);
-	void DumpBinParse_Polyhedron(CAuxBinStrVect& inStr);
+	// Dump / DumpPureObjInfo / DumpBin / DumpBin_Polyhedron / DumpBinParse_Polyhedron REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SubdivideItselfByEllipticCylinder(double*, radTCylindricSubdivSpec*, radThg&, radTApplication*, radTSubdivOptions*);
 	void FindEdgePointsOverPhiAndAxForCylSubd(radTCylindricSubdivSpec*, TVector3d*, double*);

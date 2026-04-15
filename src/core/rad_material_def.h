@@ -65,26 +65,7 @@ public:
 		radThg hgLoc(MatPtr); hg = hgLoc; return 1;
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin_Material(CAuxBinStrVect& oStr)
-	{
-		//static radTHMatDBVect MaterDB; //no need to dump static members
-		//TVector3d RemMagn; // Don't make it private nor protected
-		oStr << RemMagn;
-		
-		//char EasyAxisDefined;
-		oStr << EasyAxisDefined;
-	}
-
-	void DumpBinParse_Material(CAuxBinStrVect& inStr)
-	{
-		//TVector3d RemMagn; // Don't make it private nor protected
-		inStr >> RemMagn;
-
-		//char EasyAxisDefined;
-		inStr >> EasyAxisDefined;
-	}
+	// Dump / DumpBin_Material / DumpBinParse_Material REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	//static void SteerNewH(TVector3d& PrevH, TVector3d& InstantH, void* pvAuxRelax); //OC140103
 };
@@ -126,17 +107,7 @@ public:
 	}
 */
 
-	radTLinearAnisotropMaterial(CAuxBinStrVect& inStr) //, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_Material(inStr);
-
-		//double KsiPar, KsiPerp;
-		inStr >> KsiPar;
-		inStr >> KsiPerp;
-
-		//TMatrix3d KsiTensor;
-		inStr >> KsiTensor;
-	}
+	// radTLinearAnisotropMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTLinearAnisotropMaterial() {}
 
@@ -192,35 +163,7 @@ public:
 		return FinishDuplication(new radTLinearAnisotropMaterial(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg)
-	{
-		//int newKey = (int)mEl.size() + 1;
-		//mEl[newKey] = hg;
-		//Start dumping this object
-		//oStr << newKey;
-
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		//Next 5 bytes define/encode element type:
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		//Members of radTMaterial
-		DumpBin_Material(oStr);
-
-		//double KsiPar, KsiPerp;
-		oStr << KsiPar << KsiPerp;
-
-		//TMatrix3d KsiTensor;
-		oStr << KsiTensor;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTLinearAnisotropMaterial);}
 };
@@ -255,12 +198,7 @@ public:
 	radTLinearIsotropMaterial(const double* InKsiArray, const TVector3d& InRemMagn, char InEasyAxisDefined) 
 		: radTMaterial(InRemMagn, InEasyAxisDefined) { Ksi = InKsiArray[0];}
 	
-	radTLinearIsotropMaterial(CAuxBinStrVect& inStr) //, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_Material(inStr);
-		//double Ksi;
-		inStr << Ksi;
-	}
+	// radTLinearIsotropMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTLinearIsotropMaterial() {}
 
@@ -288,26 +226,7 @@ public:
 		return FinishDuplication(new radTLinearIsotropMaterial(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		//Next 5 bytes define/encode element type:
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		//Members of radTMaterial
-		DumpBin_Material(oStr);
-
-		//double Ksi;
-		oStr << Ksi;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTLinearIsotropMaterial);}
 };
@@ -363,47 +282,7 @@ public:
 		// Compute dB/dH derivatives for B-H curve
 		Compute_dBdH(gArrayHB, gdBdH, gLenArrayHB, gMaxKsi);
 	}
-	radTNonlinearIsotropMaterial(CAuxBinStrVect& inStr) //, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_Material(inStr);
-
-		//double Ms[3];
-		inStr >> Ms[0]; inStr >> Ms[1]; inStr >> Ms[2];
-
-		//double ks[3];
-		inStr >> ks[0]; inStr >> ks[1]; inStr >> ks[2];
-
-		//int lenMs_ks;
-		inStr >> lenMs_ks;
-
-		//int gLenArrayHB;
-		inStr >> gLenArrayHB;
-
-		//TVector2d* gArrayHB;
-		gArrayHB = 0;
-		char cTest=0;
-		inStr >> cTest;
-		if(cTest > 0)
-		{
-			vgArrayHB.resize(gLenArrayHB);
-			gArrayHB = vgArrayHB.data();
-			TVector2d *t_gArrayHB = gArrayHB;
-			for(int i=0; i<gLenArrayHB; i++) inStr >> (*(t_gArrayHB++));
-		}
-		//double* gdBdH;
-		gdBdH = 0;
-		inStr >> cTest;
-		if(cTest > 0)
-		{
-			vgdBdH.resize(gLenArrayHB);
-			gdBdH = vgdBdH.data();
-			double *t_gdBdH = gdBdH;
-			for(int i=0; i<gLenArrayHB; i++) inStr >> (*(t_gdBdH++));
-		}
-
-		//double gMaxKsi;
-		inStr >> gMaxKsi;
-	}
+	// radTNonlinearIsotropMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTNonlinearIsotropMaterial() { gArrayHB = 0; gLenArrayHB = 0; gdBdH = 0; gMaxKsi = 0;}
 	~radTNonlinearIsotropMaterial() { DeallocateArrays();}
@@ -416,8 +295,7 @@ public:
 	//void FindNewH(TVector3d&, const TMatrix3d&, const TVector3d&, double, radTg3dRelax*, void*); //OC140103
 	void FindNewH(TVector3d&, const TMatrix3d&, const TVector3d&, double); //OC140103
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	inline void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	// Compute dB/dH derivatives for B-H curve (renamed from Compute_dMdH)
 	static void Compute_dBdH(TVector2d* ArrayHB, double* dBdH, int LenArrayHB, double& MaxKsi);
@@ -658,58 +536,7 @@ inline void radTNonlinearIsotropMaterial::MultMatrByInstKsiAndMr(const TVector3d
 
 //-------------------------------------------------------------------------
 
-// radTNonlinearIsotropMaterial::Dump REMOVED (Phase B2b, 2026-04-15)
-
-//-------------------------------------------------------------------------
-
-inline void radTNonlinearIsotropMaterial::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-{
-	vElemKeysOut.push_back(elemKey);
-	oStr << elemKey;
-
-	//Next 5 bytes define/encode element type:
-	oStr << (char)Type_g();
-	oStr << (char)Type_Material();
-	oStr << (char)0;
-	oStr << (char)0;
-	oStr << (char)0;
-
-	//Members of radTMaterial
-	DumpBin_Material(oStr);
-
-	//double Ms[3];
-	oStr << Ms[0] << Ms[1] << Ms[2];
-
-	//double ks[3];
-	oStr << ks[0] << ks[1] << ks[2];
-
-	//int lenMs_ks;
-	oStr << lenMs_ks;
-
-	//int gLenArrayHB;
-	oStr << gLenArrayHB;
-
-	//TVector2d* gArrayHB;
-	if((gLenArrayHB > 0) && (gArrayHB != 0))
-	{
-		oStr << (char)1;
-		TVector2d *t_gArrayHB = gArrayHB;
-		for(int i=0; i<gLenArrayHB; i++) oStr << (*(t_gArrayHB++));
-	}
-	else oStr << (char)0;
-
-	//double* gdBdH;
-	if((gLenArrayHB > 0) && (gdBdH != 0))
-	{
-		oStr << (char)1;
-		double *t_gdBdH = gdBdH;
-		for(int i=0; i<gLenArrayHB; i++) oStr << (*(t_gdBdH++));
-	}
-	else oStr << (char)0;
-
-	//double gMaxKsi;
-	oStr << gMaxKsi;
-}
+// radTNonlinearIsotropMaterial::Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
@@ -754,16 +581,7 @@ public:
 		RemMagn = (Br / mu_0) * MagAxis;
 	}
 
-	radTPermanentMagnet(CAuxBinStrVect& inStr)
-	{
-		// Instantiates from string according to DumpBin
-		DumpBinParse_Material(inStr);
-
-		inStr >> Br;
-		inStr >> Hc;
-		inStr >> mu_rec;
-		inStr >> MagAxis;
-	}
+	// radTPermanentMagnet(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTPermanentMagnet() {}
 
@@ -829,29 +647,7 @@ public:
 		return FinishDuplication(new radTPermanentMagnet(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		// Next 5 bytes define/encode element type
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		// Members of radTMaterial
-		DumpBin_Material(oStr);
-
-		// Members of radTPermanentMagnet
-		oStr << Br;
-		oStr << Hc;
-		oStr << mu_rec;
-		oStr << MagAxis;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTPermanentMagnet);}
 };
@@ -912,11 +708,7 @@ public:
 		RemMagn = InMagn;  // RemMagn is the remanent magnetization
 	}
 
-	radTMagFixed(CAuxBinStrVect& inStr)
-	{
-		DumpBinParse_Material(inStr);
-		inStr >> FixedMagn;
-	}
+	// radTMagFixed(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTMagFixed() {}
 
@@ -959,26 +751,7 @@ public:
 		return FinishDuplication(new radTMagFixed(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		// Next 5 bytes define/encode element type
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		// Members of radTMaterial
-		DumpBin_Material(oStr);
-
-		// Members of radTMagFixed
-		oStr << FixedMagn;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTMagFixed);}
 
@@ -1042,14 +815,7 @@ public:
 		RemMagn = (Br / mu_0) * MagAxis;
 	}
 
-	radTMagLinear(CAuxBinStrVect& inStr)
-	{
-		DumpBinParse_Material(inStr);
-		inStr >> Br;
-		inStr >> Hc;
-		inStr >> mu_rec;
-		inStr >> MagAxis;
-	}
+	// radTMagLinear(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTMagLinear() {}
 
@@ -1095,26 +861,7 @@ public:
 		return FinishDuplication(new radTMagLinear(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		DumpBin_Material(oStr);
-
-		oStr << Br;
-		oStr << Hc;
-		oStr << mu_rec;
-		oStr << MagAxis;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTMagLinear);}
 
@@ -1192,18 +939,7 @@ public:
 		RemMagn = (Br / mu_0) * MagAxis;
 	}
 
-	radTMagCurve(CAuxBinStrVect& inStr)
-	{
-		DumpBinParse_Material(inStr);
-		inStr >> LenDemagCurve;
-		vDemagCurve.resize(LenDemagCurve);
-		DemagCurve = vDemagCurve.data();
-		for(int i = 0; i < LenDemagCurve; i++)
-		{
-			inStr >> DemagCurve[i];
-		}
-		inStr >> MagAxis;
-	}
+	// radTMagCurve(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	radTMagCurve() { DemagCurve = nullptr; LenDemagCurve = 0; }
 
@@ -1249,28 +985,7 @@ public:
 		return FinishDuplication(new radTMagCurve(*this), hg);
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		oStr << (char)Type_g();
-		oStr << (char)Type_Material();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		DumpBin_Material(oStr);
-
-		oStr << LenDemagCurve;
-		for(int i = 0; i < LenDemagCurve; i++)
-		{
-			oStr << DemagCurve[i];
-		}
-		oStr << MagAxis;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SizeOfThis() { return sizeof(radTMagCurve);}
 
@@ -1362,8 +1077,7 @@ public:
 	                             const std::vector<std::vector<double>>& f_tables,
 	                             double eps);
 
-	// Serialization constructor
-	radTEnergyHysteresisMaterial(CAuxBinStrVect& inStr);
+	// Serialization constructor radTEnergyHysteresisMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	// Default constructor
 	radTEnergyHysteresisMaterial()
@@ -1472,9 +1186,7 @@ public:
 		}
 	}
 
-	// Serialization
-	inline void DumpBin(CAuxBinStrVect& oStr, std::vector<int>& vElemKeysOut,
-	                     radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// DumpBin REMOVED (Phase B2c, 2026-04-15)
 
 	int DuplicateItself(radThg& hg, radTApplication*, char)
 	{
@@ -1591,8 +1303,7 @@ public:
 	                            const std::vector<std::vector<double>>& r_tables,
 	                            const std::vector<std::vector<double>>& f_tables);
 
-	// Serialization constructor
-	radTPlayHysteresisMaterial(CAuxBinStrVect& inStr);
+	// Serialization constructor radTPlayHysteresisMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
 
 	// Default constructor
 	radTPlayHysteresisMaterial()
@@ -1711,9 +1422,7 @@ public:
 		m_has_result = false;
 	}
 
-	// Serialization
-	inline void DumpBin(CAuxBinStrVect& oStr, std::vector<int>& vElemKeysOut,
-	                     radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// DumpBin REMOVED (Phase B2c, 2026-04-15)
 
 	int DuplicateItself(radThg& hg, radTApplication*, char)
 	{

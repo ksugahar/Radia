@@ -39,70 +39,13 @@ public:
 	{
 		//M = InM; V = InV; s = In_s; detM = In_detM; M_inv = Matrix3d_inv(InM); ID_No = InID_No;
 	}
-	radTrans(CAuxBinStrVect& inStr)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_Trans(inStr);
-	}
 	radTrans() : gmTrans() {}
 
 	int Type_g() { return 2;}
 	virtual int Type_Trans() { return 0;}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
+	// Dump / DumpBin / DumpBin_Trans / DumpBinParse_Trans REMOVED (Phase B2b/B2c, 2026-04-15)
 
-	void DumpBin_Trans(CAuxBinStrVect& oStr)
-	{
-		//TMatrix3d M, M_inv;
-		oStr << M << M_inv;
-
-		//TVector3d V;
-		oStr << V;
-
-		//double detM, s;
-		oStr << detM << s;
-
-		//int ID_No;
-		oStr << ID_No;
-	}
-
-	void DumpBinParse_Trans(CAuxBinStrVect& inStr)
-	{
-		//TMatrix3d M, M_inv;
-		inStr >> M;
-		inStr >> M_inv;
-
-		//TVector3d V;
-		inStr >> V;
-
-		//double detM, s;
-		inStr >> detM;
-		inStr >> s;
-
-		//int ID_No;
-		inStr >> ID_No;
-	}
-
-	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		//int newKey = (int)mEl.size() + 1;
-		//mEl[newKey] = hg;
-
-		//Start dumping this object
-		//oStr << newKey;
-		//elemCount++;
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		//Next 5 bytes define/encode element type:
-		oStr << (char)Type_g();
-		oStr << (char)Type_Trans();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		DumpBin_Trans(oStr);
-	}
 
 	//virtual TVector3d TrPoint(const TVector3d& P) { return M*P+V;}
 	//virtual TVector3d TrBiPoint(const TVector3d& P) { return M*P;}
