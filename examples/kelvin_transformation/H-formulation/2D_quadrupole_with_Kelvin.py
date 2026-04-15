@@ -314,15 +314,22 @@ for i, xval in enumerate(x_profile):
 	else:
 		Hx_pert_numerical_x[i] = nan
 
-	# Analytical solution for H_s = (x, -y) at (x, 0): theta=0 or pi
+	# Analytical solution for H_s = (x, -y) at (x, 0): theta=0 or pi.
+	# Must project H_r, H_theta back to Cartesian (same form as Y-axis
+	# profile below). The earlier shortcut "H_x = H_r" was wrong for
+	# xval < 0 because at theta=pi the radial direction is -x_hat,
+	# which flipped the sign and drove the X-axis RMS error to ~82%.
 	r = abs(xval)
-	theta = arctan2(0, xval)  # theta=0 or pi
+	theta = arctan2(0, xval)  # theta=0 for xval>0, theta=pi for xval<0
 	if r < circle_radius:
-		# Interior: H_r = -2Ar cos2theta, at y=0: H_x = H_r
-		Hx_pert_analytical_x[i] = -2.0 * A_coeff * r * cos(2*theta)
+		# Interior: H_r = -2Ar cos2theta, H_theta = 2Ar sin2theta
+		Hr = -2.0 * A_coeff * r * cos(2*theta)
+		Htheta = 2.0 * A_coeff * r * sin(2*theta)
 	else:
-		# Exterior: H_r = 2B(a⁴/r^3)cos2theta, at y=0: H_x = H_r
-		Hx_pert_analytical_x[i] = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
+		# Exterior: H_r = 2B(a^4/r^3) cos2theta, H_theta = -2B(a^4/r^3) sin2theta
+		Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
+		Htheta = -2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
+	Hx_pert_analytical_x[i] = Hr * cos(theta) - Htheta * sin(theta)
 
 # Y-axis profile: Hy vs y at x=0 (quadrupole field)
 y_profile = profile_range
