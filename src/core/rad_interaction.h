@@ -360,7 +360,6 @@ public:
 
 	radTInteraction(const radThg&, const radThg&, const radTCompCriterium&, short =0, char =0, char =0, int =-1, int =0, char =0); //OC08012020 + skipDenseMatrix
 	//radTInteraction(const radThg&, const radThg&, const radTCompCriterium&, short =0, char =0, char =0);
-	radTInteraction(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
 	radTInteraction();
 	~radTInteraction();
 
@@ -571,11 +570,7 @@ public:
 	void AddRelaxSubInterval(int StartNo, int FinNo, TRelaxSubIntervalID SubIntervalID); //New
 
 	int NotEmpty() { return (AmOfMainElem==0)? 0 : 1;}
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
-	void DumpBinVectOfPtrToListsOfTransPtr(CAuxBinStrVect& oStr, radVectPtr_lphgPtr& VectOfPtrToListsOfTransPtr, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers);
-	int DumpBinParseSourceHandle(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers, bool do_g3dCast, bool do_g3dRelaxCast, radThg& out_hg);
-	void DumpBinParseVectOfPtrToListsOfTransPtr(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers, radVectPtr_lphgPtr& VectOfPtrToListsOfTransPtr);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int Type_g() { return 4;}
 

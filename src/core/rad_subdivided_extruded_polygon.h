@@ -78,7 +78,7 @@ public:
 
 		AlgsBasedOnKsQsMayNotWork = true;
 	}
-	radTSubdividedExtrPolygon(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
+	// radTSubdividedExtrPolygon(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
 	radTSubdividedExtrPolygon() { AlgsBasedOnKsQsMayNotWork = true;};
 
 	int Type_Group() { return 2;}
@@ -142,8 +142,7 @@ public:
 	int NumberOfDegOfFreedom() { return radTGroup::NumberOfDegOfFreedom();}
 	int SizeOfThis() { return (radTGroup::SizeOfThis() + radTExtrPolygon::SizeOfThis());}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int SetMaterial(radThg& InMatHandle, radTApplication* ApPtr) 
 	{ 

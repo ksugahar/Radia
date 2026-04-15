@@ -48,12 +48,6 @@ public:
 		BasePolygonHandle = hg;
 		DefineCentrPoint();
 	}
-	radTExtrPolygon(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{
-		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-		DumpBinParse_g3dRelax(inStr, mKeysOldNew, gMapOfHandlers);
-		DumpBinParse_ExtrPolygon(inStr);
-	}
 	radTExtrPolygon() : radTg3dRelax() {}
 
 	int Type_g3dRelax() { return 2;}
@@ -62,10 +56,7 @@ public:
 	void B_intComp(radTField*);
 	void B_intCompSpecCases(radTField*, const TSpecCaseID&);
 
-	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
-	void DumpBin_ExtrPolygon(CAuxBinStrVect& oStr);
-	void DumpBinParse_ExtrPolygon(CAuxBinStrVect& inStr);
+	// Dump / DumpPureObjInfo / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 
 	double Volume() { return Thickness*(((radTPolygon*)(BasePolygonHandle.rep))->Area());}

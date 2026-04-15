@@ -23,7 +23,6 @@
 #include "rad_operation_names.h"
 #include "rad_material_aux.h"
 #include "rad_point_classify.h"
-#include "gmvbstr.h"
 
 #include <math.h>
 #include <string.h>
@@ -2636,67 +2635,8 @@ radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(
 }
 
 //-------------------------------------------------------------------------
-// Serialization constructor
+// Serialization ctor / DumpBin REMOVED (Phase B2c, 2026-04-15)
 //-------------------------------------------------------------------------
-
-radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(CAuxBinStrVect& inStr)
-	: m_last_chi(0), m_last_chi_d(0), m_has_result(false)
-{
-	DumpBinParse_Material(inStr);
-	inStr >> m_K;
-	inStr >> m_eps;
-
-	m_chi.resize(m_K);
-	m_tables.resize(m_K);
-	for(int k = 0; k < m_K; k++)
-	{
-		inStr >> m_chi[k];
-		auto& tab = m_tables[k];
-		inStr >> tab.n;
-		tab.r.resize(tab.n);
-		tab.f.resize(tab.n);
-		for(int i = 0; i < tab.n; i++) inStr >> tab.r[i];
-		for(int i = 0; i < tab.n; i++) inStr >> tab.f[i];
-		tab.r_max = (tab.n > 0) ? tab.r[tab.n-1] : 0.0;
-		PrecomputeOperatorTable(tab);  // Recompute U and df
-	}
-
-	TVector3d zero(0, 0, 0);
-	m_Jk_prev.resize(m_K, zero);
-	m_Jk_pinning.resize(m_K, zero);
-	m_Jk_current.resize(m_K, zero);
-
-	// Deserialize state
-	for(int k = 0; k < m_K; k++) inStr >> m_Jk_prev[k];
-	m_Jk_pinning = m_Jk_prev;
-	m_last_H = zero;
-	m_last_B = zero;
-}
-
-//-------------------------------------------------------------------------
-// Serialization
-//-------------------------------------------------------------------------
-
-void radTEnergyHysteresisMaterial::DumpBin(CAuxBinStrVect& oStr,
-	std::vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers,
-	int& gUniqueMapKey, int elemKey)
-{
-	vElemKeysOut.push_back(elemKey);
-	int MatType = Type_Material();
-	oStr << MatType;
-	DumpBin_Material(oStr);
-
-	oStr << m_K;
-	oStr << m_eps;
-	for(int k = 0; k < m_K; k++)
-	{
-		oStr << m_chi[k];
-		oStr << m_tables[k].n;
-		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].r[i];
-		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].f[i];
-	}
-	for(int k = 0; k < m_K; k++) oStr << m_Jk_prev[k];
-}
 
 //-------------------------------------------------------------------------
 // Internal energy U_k(|J|) and derivatives (table interpolation)
@@ -3650,65 +3590,8 @@ double radTPlayHysteresisMaterial::ComputeDifferentialChi(double H_mag)
 }
 
 //-------------------------------------------------------------------------
-// Serialization
+// Serialization ctor / DumpBin REMOVED (Phase B2c, 2026-04-15)
 //-------------------------------------------------------------------------
-void radTPlayHysteresisMaterial::DumpBin(CAuxBinStrVect& oStr,
-	std::vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers,
-	int& gUniqueMapKey, int elemKey)
-{
-	vElemKeysOut.push_back(elemKey);
-	int matType = Type_Material();
-	oStr << matType;
-	oStr << m_K;
-	for(int k = 0; k < m_K; k++) oStr << m_eta[k];
-	for(int k = 0; k < m_K; k++)
-	{
-		oStr << m_tables[k].n;
-		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].r[i];
-		for(int i = 0; i < m_tables[k].n; i++) oStr << m_tables[k].f[i];
-	}
-	// Save state
-	for(int k = 0; k < m_K; k++)
-	{
-		oStr << m_pk_prev[k].x << m_pk_prev[k].y << m_pk_prev[k].z;
-	}
-}
-
-radTPlayHysteresisMaterial::radTPlayHysteresisMaterial(CAuxBinStrVect& inStr)
-	: m_B_mono_max(1.0), m_H_mono_max(0),
-	  m_last_chi(0), m_last_chi_d(0), m_has_result(false)
-{
-	inStr >> m_K;
-	m_eta.resize(m_K);
-	for(int k = 0; k < m_K; k++) inStr >> m_eta[k];
-	m_tables.resize(m_K);
-	for(int k = 0; k < m_K; k++)
-	{
-		int n;
-		inStr >> n;
-		m_tables[k].n = n;
-		m_tables[k].r.resize(n);
-		m_tables[k].f.resize(n);
-		for(int i = 0; i < n; i++) inStr >> m_tables[k].r[i];
-		for(int i = 0; i < n; i++) inStr >> m_tables[k].f[i];
-		m_tables[k].r_max = (n > 0) ? m_tables[k].r[n-1] : 0.0;
-		PrecomputePlayTable(m_tables[k]);
-	}
-	TVector3d zero(0, 0, 0);
-	m_pk_prev.resize(m_K, zero);
-	m_pk_pinning.resize(m_K, zero);
-	m_pk_current.resize(m_K, zero);
-	for(int k = 0; k < m_K; k++)
-	{
-		inStr >> m_pk_prev[k].x >> m_pk_prev[k].y >> m_pk_prev[k].z;
-		m_pk_pinning[k] = m_pk_prev[k];
-	}
-	m_last_H = zero;
-	m_last_B = zero;
-	m_last_dHdB = Eye();
-
-	ComputeMonotoneLimits();
-}
 
 //-------------------------------------------------------------------------
 // Application method: create and register play hysteresis material
