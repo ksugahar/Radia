@@ -137,10 +137,17 @@ def case_A_fem(mesh):
         gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(),
                                          inverse="pardiso") * f_lf.vec
     # H . B = ν * |B|^2  with B = curl(A)
-    W = Integrate(0.5 * nu_cf
-                   * InnerProduct(curl(gfu), Conj(curl(gfu))),
-                   mesh, order=10).real
-    return 2.0 * W / I_total ** 2
+    W_inner = Integrate(
+        0.5 * nu_cf * InnerProduct(curl(gfu), Conj(curl(gfu))),
+        mesh, definedon=mesh.Materials("air|coil"), order=10).real
+    W_kext = Integrate(
+        0.5 * nu_cf * InnerProduct(curl(gfu), Conj(curl(gfu))),
+        mesh, definedon=mesh.Materials("kelvin"), order=10).real
+    L_inner = 2.0 * W_inner / I_total ** 2
+    L_kext = 2.0 * W_kext / I_total ** 2
+    print(f"  L_inner = {L_inner*1e9:.3f} nH, "
+          f"L_kext = {L_kext*1e9:.3f} nH")
+    return L_inner + L_kext
 
 
 def build_radia_coil():
@@ -227,8 +234,17 @@ def case_B_radia_external(mesh, phase=2):
     B = CF((G[2, 1] - G[1, 2],
             G[0, 2] - G[2, 0],
             G[1, 0] - G[0, 1]))
-    W = Integrate(0.5 * nu_cf * InnerProduct(B, B), mesh, order=10).real
-    return 2.0 * W / I_total ** 2
+    W_inner = Integrate(0.5 * nu_cf * InnerProduct(B, B),
+                         mesh, definedon=mesh.Materials("air|coil"),
+                         order=10).real
+    W_kext = Integrate(0.5 * nu_cf * InnerProduct(B, B),
+                        mesh, definedon=mesh.Materials("kelvin"),
+                        order=10).real
+    L_inner = 2.0 * W_inner / I_total ** 2
+    L_kext = 2.0 * W_kext / I_total ** 2
+    print(f"  L_inner = {L_inner*1e9:.3f} nH, "
+          f"L_kext = {L_kext*1e9:.3f} nH")
+    return L_inner + L_kext
 
 
 def main():
