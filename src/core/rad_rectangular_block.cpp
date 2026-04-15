@@ -1757,12 +1757,7 @@ int radTRecMag::CutItself(TVector3d* InCuttingPlane, radThg& In_hg, radTPair_int
 		UpperNewPair_int_hg.m = UpperElemKey;
 		UpperNewPair_int_hg.Handler_g = hgUpperNew;
 	
-		if(AddNewElemsToGenCont)
-		{
-			int NewGroupElemKey = radPtr->RetrieveElemKey(GroupInPlaceOfThisPtr);
-			radPtr->CopyDrawAttr(NewGroupElemKey, LowerElemKey);
-			radPtr->CopyDrawAttr(NewGroupElemKey, UpperElemKey);
-		}
+		(void)AddNewElemsToGenCont;
 	}
 	return 1;
 }

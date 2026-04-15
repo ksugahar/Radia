@@ -935,27 +935,9 @@ void radTApplication::DumpElem(int* arKeys, int nElem, const char* strFormat, bo
 			//oStr.setFromPos((long)((nElem + 1)*(sizeof(int))), elemCount);
 			oStr.setFromPos((long)((nElem + 1)*(sizeof(int)) + 1), elemCount); //OC060713
 
-			//Saving "Drawing Attributes" of objects
-			long drwAttrOfst = oStr.getCurOfst();
+			//Saving "Drawing Attributes" of objects (always 0 — DrwAttr removed)
 			int nDrwAttrFound = 0;
 			oStr << nDrwAttrFound;
-			for(int j=0; j<elemCount; j++)
-			{
-				int elemKey = vElemKeysOut[j];
-				radTMapOfDrawAttr::const_iterator itDrw = MapOfDrawAttr.find(elemKey);
-				if(itDrw != MapOfDrawAttr.end())
-				{
-					const radTDrawAttr &drwAttr = itDrw->second;
-					oStr << elemKey;
-					//Members of radTDrawAttr
-					//double Red, Green, Blue; 
-					oStr << drwAttr.RGB_col.Red << drwAttr.RGB_col.Green << drwAttr.RGB_col.Blue; 
-					//double LineThickness;
-					oStr << drwAttr.LineThickness;
-					nDrwAttrFound++;
-				}
-			}
-			if(nDrwAttrFound > 0) oStr.setFromPos(drwAttrOfst, nDrwAttrFound);
 
 			Send.ByteString(reinterpret_cast<const unsigned char*>(oStr.data()), (long)oStr.size());
 		}
@@ -1124,27 +1106,15 @@ int radTApplication::DumpElemParse(const unsigned char *bstr, int bstrLen)
 			mKeysOldNew[oldKey] = elemKey;
 		}
 
-		//Drawing Attributes
+		//Drawing Attributes (DrwAttr removed — read and discard for back-compat with old .rad dumps)
 		int nDrwAttrFound = 0;
 		inStr >> nDrwAttrFound;
-		//double red, green, blue, lineThick;
 		for(int id=0; id<nDrwAttrFound; id++)
 		{
-			int oldElemKey=0;
+			int oldElemKey=0; double dTmp=0;
 			inStr >> oldElemKey;
-
-			radTDrawAttr DrawAttr;
-			inStr >> DrawAttr.RGB_col.Red;
-			inStr >> DrawAttr.RGB_col.Green;
-			inStr >> DrawAttr.RGB_col.Blue;
-			inStr >> DrawAttr.LineThickness;
-
-			int newElemKey=0;
-			map<int, int>::const_iterator itOldNewKey = mKeysOldNew.find(oldElemKey);
-			if(itOldNewKey != mKeysOldNew.end())
-			{
-				MapOfDrawAttr[itOldNewKey->second] = DrawAttr;
-			}
+			inStr >> dTmp; inStr >> dTmp; inStr >> dTmp; // RGB
+			inStr >> dTmp;                               // LineThickness
 		}
 
 		int res = 0;

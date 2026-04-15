@@ -1108,7 +1108,6 @@ int radTApplication::DuplicateElement_g3d(int ElemKey, const char** OptionNames,
 		}
 
 		int NewElemKey = AddElementToContainer(hg);
-		CopyDrawAttr(ElemKey, NewElemKey);
 
 		if(SendingIsRequired) Send.Int(NewElemKey);
 		return NewElemKey;
@@ -1136,7 +1135,6 @@ int radTApplication::CreateFromObj_g3dWithSym(int ElemKey)
 		if(hg.rep != g3dPtr)
 		{
 			int NewElemKey = AddElementToContainer(hg);
-			CopyDrawAttr(ElemKey, NewElemKey);
 
 			if(SendingIsRequired) Send.Int(NewElemKey);
 			return NewElemKey;
@@ -1168,8 +1166,6 @@ int radTApplication::DeleteAllElements(int DeletionMethNo)
 			GlobalMapOfHandlers.erase(GlobalMapOfHandlers.begin());
 		}
 		GlobalUniqueMapKey = 1;
-
-		MapOfDrawAttr.erase(MapOfDrawAttr.begin(), MapOfDrawAttr.end());
 
 		// Reset solve cache - interaction object keys are now invalid
 		m_cached_interact_key = 0;
@@ -1207,30 +1203,6 @@ int radTApplication::ComputeGeometricalVolume(int ElemKey)
 	}
 }
 
-//-------------------------------------------------------------------------
-
-int radTApplication::ComputeGeometricalLimits(int ElemKey)
-{
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(ElemKey, hg)) return 0;
-		radTg3d* g3dPtr = Cast.g3dCast(hg.rep); 
-		if(g3dPtr==0) { Send.ErrorMessage("Radia::Error003"); return 0;}
-
-		double LimArr[6];
-		g3dPtr->Limits(0, LimArr);
-
-		if(SendingIsRequired) Send.DoubleList(LimArr, 6);
-		return 1;
-	}
-	catch(...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 void radTApplication::ReturnInput(double Input, int NumTimes)
