@@ -12,6 +12,7 @@ import ngsolve
 
 # Import OCC geometry
 from netgen.occ import *
+from radia.kelvin_source import kelvin_factor_2d_inplane_cf, build_material_cf
 
 print("="*60)
 print("H-formulation 2D QUADRUPOLE with Kelvin Transformation (Periodic BC)")
@@ -147,8 +148,12 @@ v = fes.TestFunction()
 
 # Material properties
 mu_r = 100  # Relative permeability
-mu_d = {"air_inner": 1*mu0, "air_outer": 1*mu0, "magnetic": mu_r*mu0}
-mu = CoefficientFunction([mu_d[mat] for mat in mesh.GetMaterials()])
+# 2D in-plane H-formulation: Kelvin factor = 1 (kelvin_factor_2d_inplane_cf)
+mu = build_material_cf(
+    mesh, mu0, kelvin_factor_2d_inplane_cf(),
+    outer_keyword="air_outer",
+    overrides={"magnetic": mu_r * mu0},
+)
 
 # Background field: H_s = (x, -y) A/m (QUADRUPOLE field)
 # This satisfies div(H_s) = 0, making it physically valid

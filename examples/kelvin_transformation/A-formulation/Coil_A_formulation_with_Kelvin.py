@@ -206,26 +206,15 @@ v = fes.TestFunction()
 # KEY: r = x is the SAME in both interior and exterior domains!
 r_weight = IfPos(x - 1e-10, x, 1e-10)
 
-# For exterior domain: rho' = sqrt(x^2 + (y - z_offset)^2)
-y_local = y - z_offset
-rho_prime = sqrt(x**2 + y_local**2)
-rho_prime_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+# Kelvin modulation via centralized helper (Nagamine CEFC 2026 canonical):
+#   nu_ext = nu_0 * (rho'/a)^2,  rho' = sqrt(x^2 + (y - z_offset)^2)
+# See examples/kelvin_transformation/CONVENTION.md.
+from radia.kelvin_source import kelvin_nu_factor_axisym_cf, build_material_cf
 
-# Kelvin transformation factor for reluctivity: nu' = nu0 * (rho'/a)^2
-kelvin_factor = (rho_prime_safe / a)**2
+nu_kelvin_factor = kelvin_nu_factor_axisym_cf(z_offset=z_offset, R=a)
+nu_cf = build_material_cf(mesh, nu0, nu_kelvin_factor)
 
-# Build reluctivity by region
-materials = mesh.GetMaterials()
-print(f"\n  Materials: {materials}")
-
-nu_list = []
-for mat in materials:
-    if "outer" in mat.lower():
-        nu_list.append(nu0 * kelvin_factor)
-    else:
-        nu_list.append(nu0)
-
-nu_cf = CoefficientFunction(nu_list)
+print(f"\n  Materials: {mesh.GetMaterials()}")
 
 print(f"  Key: r = x in both domains (no anisotropy!)")
 print(f"  Kelvin factor: (rho'/a)^2")
