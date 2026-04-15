@@ -24,7 +24,8 @@ Weak form
     f(v)    = - int (nu(r) - nu_0) curl(A_s(r)) . curl(v) dV
 
 The RHS f(v) is non-zero only where nu(r) != nu_0, i.e., the Kelvin
-kext (Sugahara 2022: nu_kelvin = nu_0 (R_K / rho')^2). In the inner
+kext (Nagamine CEFC 2026 / Sugahara 2022: nu_kelvin = nu_0 (rho'/R_K)^2).
+In the inner
 "air" region, nu = nu_0, so the RHS vanishes and A_r = 0 there (exactly,
 in the continuum limit). The air-only FEM contribution comes purely
 from A_s, which is the analytical Biot-Savart.
@@ -179,14 +180,15 @@ def kelvin_pullback_cf(A_inner_cf, A_kelvin_cf, mesh,
     kelvin_mats : list of material-name substrings to treat as Kelvin.
     offset_xyz  : (3,) Kelvin sphere center.
     R           : Kelvin sphere radius.
-    phase       : 1 = scalar pullback A' = (R/rho')^2 * A_phys  (Sugahara
-                  convention: FEM A in kext represents pulled-back A_phys
-                  with scalar factor; matches baseline's material scaling
-                  nu_K = nu_0 (R/rho')^2 without Householder reflection).
-                  2 = exact 1-form pullback with Householder reflection
-                  (geometrically correct covariant pullback, but not
-                  consistent with baseline's periodic-BC gluing which
-                  assumes A(inner interface) = A(kext interface)).
+    phase       : 1 = scalar pullback A' = (R/rho')^2 * A_phys
+                  (scalar magnitude factor from 1-form pullback; exact
+                  when A_phys is tangential, approximation otherwise).
+                  2 = exact 1-form pullback A' = (R/rho')^2 * H * A_phys
+                  with Householder reflection H = I - 2 n n^T (Nagamine
+                  CEFC 2026 eq. 5; geometrically correct covariant pullback).
+                  NOTE: the material factor is nu_K = (rho'/R)^2 * nu_0
+                  (Nagamine eq. 9), which is DIFFERENT from the solution
+                  pullback factor (R/rho')^2 used here. Do not confuse.
 
     Material switching is done per-component via mesh.MaterialCF(dict):
     CoefficientFunction(list) would build a vector of length len(list),
@@ -367,7 +369,9 @@ def main():
           f"{time.perf_counter() - t0:.1f}s)")
 
     # === Reluctivity with Kelvin modulation ===
-    kelvin_fac = R_K ** 2 / rho_p_sq
+    # Nagamine CEFC 2026 / Sugahara 2022: nu' = (rho'/R)^2 * nu_0
+    # (3D spherical conformal Kelvin; see examples/.../CONVENTION.md)
+    kelvin_fac = rho_p_sq / (R_K ** 2)
     nu_dict = {}
     for m in mats:
         if "kelvin" in m.lower() and not args.no_kelvin_nu:

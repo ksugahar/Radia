@@ -4,12 +4,27 @@ Kelvin transformation knowledge base for Radia MCP server.
 Covers the Kelvin inversion technique for open boundary FEM problems
 using NGSolve, as implemented in examples/kelvin_transformation/.
 
-See also (2026-04-15):
-  examples/kelvin_transformation/docs/pullback_derivation_3D.md --
-    differential-form derivation of A (1-form) and B (2-form) pullbacks
-    under 3D sphere Kelvin, energy invariance check, and the open
-    question on the (R/rho')^2 vs (rho'/R)^2 nu_kelvin convention used
-    by Coil_3D_A_HCurl_with_Kelvin.py vs the energy-invariance argument.
+Canonical convention (Nagamine, Yamaguchi, Sugahara, CEFC 2026, id 350,
+"A Pullback-Based Formulation of Kelvin Transformation in EM Field
+Analysis"; see also Sugahara 2022 IEEE TransMag 58(9) = ref [3] in
+Nagamine):
+
+    3D spherical (conformal) Kelvin:
+      nu' = (rho'/R)^2 * nu_0     [A-formulation, HCurl]
+      mu' = (R/rho')^2 * mu_0     [Omega / H-formulation, H1]
+      (pointwise reciprocals: mu * nu = 1)
+
+    2D cylindrical (non-conformal) Kelvin:
+      nu' = diag(1, 1, (rho'/R)^4) * nu_0   (anisotropic tensor)
+
+Derivation: pullback of orthonormal 1-form basis + bilinear energy
+functional. Validated numerically on a toroidal current loop
+(analytical dipole exterior energy 3.333e-8 J vs FEM on Omega'
+= 3.344e-8 J, +0.33%).
+
+Reference docs:
+  examples/kelvin_transformation/CONVENTION.md (canonical declaration)
+  examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8
 """
 
 KELVIN_OVERVIEW = """
@@ -49,17 +64,18 @@ magnetostatic/electromagnetic problems without artificial truncation.
      (MANDATORY -- without it, tet mesh gives different triangulations)
    - The relationship between identified nodes is a pure TRANSLATION (offset)
 
-3. **Material Modulation** (exterior domain):
+3. **Material Modulation** (exterior domain) -- Nagamine CEFC 2026:
 
-   **Physical principle**: Kelvin transformation is a numerical technique
-   close to the physics of EM. It only **distorts material properties** -- the
-   PDE itself is unchanged. The "image of infinity" is at rho'=0 (Kelvin
-   sphere center), where:
+   Kelvin transformation is a *physical* coordinate transformation of
+   the same material (not an ad-hoc numerical trick). Material
+   modulations obey the reciprocal relation `mu * nu = 1` pointwise.
+   The "image of infinity" is at rho'=0 (Kelvin sphere center), where
+   mu diverges and nu = 1/mu vanishes:
 
    - **Direct material quantities** (mu, eps, sigma) -> **infinity** at rho'=0
    - **Reciprocal quantities** (nu = 1/mu, rho = 1/sigma) -> **0** at rho'=0
 
-   For the 3D Kelvin inversion rho -> R^2/rho', the modulation is:
+   For the 3D spherical (conformal) Kelvin inversion rho -> R^2/rho':
 
    | Quantity   | Formula                  | rho'=0 (infinity) | rho'=R (boundary) |
    |------------|--------------------------|-------------------|-------------------|
@@ -70,8 +86,22 @@ magnetostatic/electromagnetic problems without artificial truncation.
    | rho_e'    | (rho' / R)^2 * rho_e     | **0**             | rho_e             |
 
    - rho' = distance from the CENTER of the exterior sphere
-   - The factor is the same regardless of formulation (H, A, or Omega)
    - Use mu' for H1/Omega scalar potential, nu' for HCurl A-formulation
+   - Derivation: Nagamine CEFC 2026 eq. 9 (pullback of 1-form basis +
+     bilinear energy equivalence)
+
+   For 2D cylindrical (non-conformal) Kelvin, the reluctivity is
+   anisotropic (Nagamine eq. 12):
+
+       nu' = diag(1, 1, (rho'/R)^4) * nu     (only axial component scaled)
+
+   **Accuracy note**: if a Kelvin setup gives wrong inductance /
+   field / energy, DO NOT change the convention. The convention is
+   mathematically / physically fixed by Nagamine's derivation. Instead
+   debug the FEM setup separately: GND placement (Dirichlet at
+   rho'=0), gauge regularization magnitude, mesh refinement near
+   rho'=0 (where nu vanishes / mu diverges), integration order
+   (bonus_intorder for rational nu), and periodic identification.
 
 4. **Background Field Modulation** (exterior domain):
    - Physical Kelvin-transformed field: H'_i = -(R/r')^2 * H_i(R^2/r')
@@ -200,7 +230,7 @@ Kelvin transformation does not change the PDE -- you write the standard
 weak form on the bounded computational domain (interior + Kelvin sphere)
 and **only modify the material coefficients in the Kelvin region**.
 
-| Formulation | Bilinear form           | Kelvin region material        |
+| Formulation | Bilinear form           | Kelvin region material (3D sphere, Nagamine) |
 |-------------|------------------------|-------------------------------|
 | H1 / Omega  | int mu * grad u . grad v dx | mu = (R/r')^2 * mu_0     |
 | HCurl A     | int nu * curl u . curl v dx | nu = (r'/R)^2 * nu_0     |
@@ -213,7 +243,7 @@ and **only modify the material coefficients in the Kelvin region**.
 - nu, rho_e (reciprocals) vanish to 0 at r'=0
 - All factors are continuous (= material_0) at r'=R (kelvin boundary)
 
-NGSolve example:
+NGSolve example (Nagamine CEFC 2026 canonical):
 ```python
 nu_dict = {}
 for m in mesh.GetMaterials():
@@ -223,6 +253,13 @@ for m in mesh.GetMaterials():
     else:
         nu_dict[m] = NU_0
 nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
+```
+
+Alternatively use the centralized helper (radia 4.5.16+):
+```python
+from radia.kelvin_source import kelvin_nu_factor_3d_cf, build_material_cf
+nu_factor = kelvin_nu_factor_3d_cf(center=(kx, ky, kz), R=R)
+nu_cf = build_material_cf(mesh, NU_0, nu_factor, outer_keyword="kelvin")
 ```
 
 The periodic BC at r'=R ensures continuity of the field across the
@@ -583,11 +620,19 @@ This is what `calc_fem_kelvin.py` implements.
 | Source term | mu * grad(v) . Hs dx | J * v * dx("coil") |
 | Source modulation | Hs modulated in exterior | **No modulation** (J=0 in Kelvin) |
 
-## Why nu = (r'/R)^2 * nu0
+## Why nu = (r'/R)^2 * nu0 (Nagamine CEFC 2026 canonical)
 
-This follows directly from the Kelvin physical rule: under the inversion
-r -> R^2/r', the image of physical infinity is at r'=0. Material quantities
-behave at r'=0 according to whether they are direct or reciprocal:
+Derivation per Nagamine, Yamaguchi, Sugahara, CEFC 2026 (id 350):
+pullback of orthonormal 1-form basis + bilinear energy functional
+gives, for 3D spherical (conformal) Kelvin inversion:
+
+    nu' = (rho'/R)^2 * nu          (eq. 9)
+
+Physically: Kelvin is a coordinate transformation of the same
+material, so mu' * nu' = 1 pointwise. Under the inversion
+r -> R^2/r', the image of physical infinity is at r'=0. Material
+quantities behave at r'=0 according to whether they are direct or
+reciprocal:
 
 | Quantity | At r'=0 (image of infinity) | Modulation                |
 |----------|------------------------------|---------------------------|
