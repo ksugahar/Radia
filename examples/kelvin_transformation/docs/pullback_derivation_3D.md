@@ -188,34 +188,44 @@ nu_0 * (R/rho')^6 * dV_comp = nu_kelvin * (R/rho')^8 * dV_comp
 => nu_kelvin = nu_0 * (rho'/R)^2
 ```
 
-## 8. Open question: the code uses (R/rho')^2
+## 8. Empirical resolution: (R/rho')^2 wins (2026-04-15)
 
-The 3D HCurl A-formulation code in this repository
-(`Coil_3D_A_HCurl_with_Kelvin.py`) uses
+The pure-math derivation in section 7 gives `nu_kelvin = (rho'/R)^2`,
+but the production code uses `(R/rho')^2`. To resolve the discrepancy
+empirically, `test_nu_convention.py` solves the same baseline geometry
+(gapped torus, circular cross-section, R_coil=30mm a_coil=3mm,
+gap=5deg, R_K=60mm, offset=150mm) with BOTH conventions and compares
+to the analytical L = 88.55 nH:
 
-```python
-kelvin_fac = R_K**2 / r_prime_sq          # = (R / rho')^2
-nu_dict[m] = NU_0 * kelvin_fac            # nu_kelvin = (R/rho')^2 * nu_0
-```
+| convention                       | L_total [nH] | error vs analytical |
+|----------------------------------|--------------|---------------------|
+| `sugahara`         `(R/rho')^2`  | **89.35**    | **+0.90 %**         |
+| `energy_invariant` `(rho'/R)^2`  | 92.81        | +4.80 %             |
 
-which is the **inverse** of the formula derived above. The empirical
-result is nevertheless correct (gapped torus L = 89.44 nH vs analytical
-torus 88.55 nH, +1.0% on a coarse mesh).
+The Sugahara `(R/rho')^2` convention reproduces the analytical
+inductance to within 1 % and is therefore the empirically correct
+choice. The pure-math derivation in sections 4-7 must contain an
+error — most likely in the form-degree assignment (HCurl A may not be
+a pure 1-form covector under the FEM coordinate change), or in the
+curl-operator transformation across the Kelvin map.
 
-Possible reconciliations (any of which can be the right one):
+**Practical conclusion**: use `nu_kelvin = (R/rho')^2 * nu_0` for the
+A-formulation HCurl FEM. This is what Sugahara 2022 (IEEE Trans Magn,
+ref [6]) presumably derives.
 
-1. The code's `nu_kelvin = (R/rho')^2 nu_0` is paired with a different A
-   pullback than the pure 1-form formula above. If the FEM-solved
-   `A_FEM_comp(r')` does NOT equal the 1-form pullback `(R/rho')^2 H
-   A_phys`, but is instead something else (e.g. the literal
-   `A_phys(r_phys)` value at the point — with ν compensating for the
-   missing Jacobians), the bilinear form can still produce the right
-   physical inductance.
-2. The 2-form pullback derivation uses `det H = -1` for the Hodge
-   identity. If the FEM convention treats B as a pure 2-form (no
-   pseudovector dualisation), the sign and possibly an exponent change.
-3. There is an additional source-side factor in the FEM that absorbs
-   the `(rho'/R)^4` excess.
+The derivation in sections 4-7 IS internally consistent (the validated
+A pullback and B pullback are connected by curl, see test
+`test_curl_A_comp_matches_B_pullback`). The mistake is somewhere in
+the bridge from "differential-form pullback" to "FEM bilinear form
+energy on the Kelvin mesh". A pinpoint derivation is left as future
+work; references to consult:
+
+1. Sugahara 2022 IEEE Trans Magn 58(9), "Electromagnetic analysis of
+   eddy current testing with Kelvin transformation" -- direct A-form
+   derivation expected.
+2. Nabizadeh, Ramamoorthi, Chern, ACM TOG 40(4) -- their general
+   k-form transformation formulas may clarify which convention HCurl A
+   actually obeys.
 
 ## 9. Validation script
 
