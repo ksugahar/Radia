@@ -3,6 +3,13 @@ Kelvin transformation knowledge base for Radia MCP server.
 
 Covers the Kelvin inversion technique for open boundary FEM problems
 using NGSolve, as implemented in examples/kelvin_transformation/.
+
+See also (2026-04-15):
+  examples/kelvin_transformation/docs/pullback_derivation_3D.md --
+    differential-form derivation of A (1-form) and B (2-form) pullbacks
+    under 3D sphere Kelvin, energy invariance check, and the open
+    question on the (R/rho')^2 vs (rho'/R)^2 nu_kelvin convention used
+    by Coil_3D_A_HCurl_with_Kelvin.py vs the energy-invariance argument.
 """
 
 KELVIN_OVERVIEW = """
