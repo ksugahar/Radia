@@ -523,6 +523,17 @@ void PEECMatrixBuilder::ComputeL(PEECMatrices& matrices) {
     });
 }
 
+double PEECMatrixBuilder::InductanceEntry(int i, int j) const {
+    // Public on-demand accessor for the HACApK PEEC adapter. Dispatches
+    // to SelfInductance (Grover/short-segment formula) for the diagonal
+    // and MutualInductance (parallel analytical / Gauss quadrature /
+    // fourfil) for off-diagonal entries.
+    int n = static_cast<int>(segments_.size());
+    if (i < 0 || i >= n || j < 0 || j >= n) return 0.0;
+    if (i == j) return SelfInductance(segments_[i]);
+    return MutualInductance(segments_[i], segments_[j]);
+}
+
 void PEECMatrixBuilder::ComputeP(PEECMatrices& matrices) {
     // Use panels if available, otherwise use nodes (point approximation)
     if (!panels_.empty()) {

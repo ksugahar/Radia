@@ -121,11 +121,30 @@ public:
     void UpdateDiagonal(const std::vector<double>& inv_chi);
 
     /**
-     * Return the kernel's +N(i, j) interaction matrix element.
-     * The system matrix A = -N + diag(1/chi) is assembled by
-     * RadHACApKCallback::ComputeEntry; do NOT apply the sign here.
+     * Return the kernel's physical +N(i, j) interaction matrix element.
+     * For MSC this is the demagnetization tensor contribution (system
+     * matrix is -N + diag(1/chi)); for PEEC this is the +L mutual
+     * inductance (system matrix is L itself, frequency-dependent
+     * factors applied outside HACApK).
+     *
+     * The physical vs system-matrix convention is bridged by
+     * ComputeSystemEntry below.
      */
     virtual double GetInteractionMatrixElement(int dof_i, int dof_j) const = 0;
+
+    /**
+     * Return the system-matrix entry A(i, j) as stored by HACApK.
+     * Default implementation returns GetInteractionMatrixElement
+     * unchanged (PEEC / BEM convention where the physical N is itself
+     * the system matrix). MSC overrides this to apply the sign flip
+     * and the diag(1/chi) shift: A = -N + delta_ij / chi_i.
+     *
+     * This is the hook called by RadHACApKCallback::ComputeEntry, so
+     * each kernel decides exactly what HACApK stores.
+     */
+    virtual double ComputeSystemEntry(int dof_i, int dof_j) const {
+        return GetInteractionMatrixElement(dof_i, dof_j);
+    }
 
     // Accessors
     bool IsValid() const { return m_valid; }
@@ -217,6 +236,11 @@ public:
     radTInteraction* GetInteraction() const { return m_interaction; }
 
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+
+    /**
+     * MSC system-matrix convention: A = -N + delta_ij / chi_i.
+     */
+    double ComputeSystemEntry(int dof_i, int dof_j) const override;
 
     /**
      * Flatten InteractMatrix for 3DOF tetrahedra (O(1) element access).
