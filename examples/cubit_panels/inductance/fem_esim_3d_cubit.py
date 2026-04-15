@@ -6,7 +6,7 @@ Cubit -> export_NGSolveCurvedMesh -> HCurl FEM + SIBC Robin BC.
 Pipeline:
   1. Load Cubit model (.cub5) or auto-create Go-Tech toymodel
   2. export_NGSolveCurvedMesh(order=2): high-order curved tet mesh
-  3. HCurl FEM: curl(nu*curl(A)) = J0 in coil, nu_K in Kelvin shell
+  3. HCurl FEM: curl(nu*curl(A)) = J0 in coil, nu_K in Kelvin exterior domain
   4. SIBC Robin BC: -(jw/Z_s) * A_t . v_t  on wp_surface
   5. Karl iteration: solve -> sample H_t -> update Z_s -> repeat
   6. Power: P = sum(P'(H_t_i) * dA_i) via ESIM per panel

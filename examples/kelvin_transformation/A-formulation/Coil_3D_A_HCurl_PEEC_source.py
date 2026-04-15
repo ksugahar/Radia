@@ -11,7 +11,7 @@ Target physics
 In the reduced A-formulation, A_total = A_s + A_r where
   A_s  : Biot-Savart field from the filament bundle (analytical).
   A_r  : the FEM unknown, corrects for the material modulation
-         (nu != nu_0 in the Kelvin shell).
+         (nu != nu_0 in the Kelvin exterior domain).
 
 Weak form
 ---------
@@ -24,15 +24,15 @@ Weak form
     f(v)    = - int (nu(r) - nu_0) curl(A_s(r)) . curl(v) dV
 
 The RHS f(v) is non-zero only where nu(r) != nu_0, i.e., the Kelvin
-shell (Sugahara 2022: nu_kelvin = nu_0 (R_K / rho')^2). In the inner
+kext (Sugahara 2022: nu_kelvin = nu_0 (R_K / rho')^2). In the inner
 "air" region, nu = nu_0, so the RHS vanishes and A_r = 0 there (exactly,
 in the continuum limit). The air-only FEM contribution comes purely
 from A_s, which is the analytical Biot-Savart.
 
-Kelvin shell evaluation of A_s uses the Phase 2 1-form pullback
+Kelvin exterior domain evaluation of A_s uses the Phase 2 1-form pullback
 (kelvin_source.kelvin_pullback_vector):
 
-    A_s_shell(r') = (R/rho')^2 [A_s(r_phys) - 2 (A_s.n') n']
+    A_s_kext(r') = (R/rho')^2 [A_s(r_phys) - 2 (A_s.n') n']
 
 with r_phys = Kelvin_inverse(r') = c + R^2 (r' - c) / |r' - c|^2.
 
@@ -86,6 +86,7 @@ from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction,
                       Periodic, TaskManager, Mesh)
 from netgen.occ import (WorkPlane, Axes, Pnt, Dir, Sphere, Axis, Vertex,
                          Glue, OCCGeometry, IdentificationType)
+from ngsolve import BND
 
 
 # =======================================================================
@@ -99,6 +100,9 @@ arc_deg = 360.0 - gap_deg
 R_K = 0.06
 offset = 0.15
 maxh = 0.012
+maxh_coil = 0.012   # uniform mesh — refinement near 1D filaments
+                    # is counterproductive (amplifies filament self-field
+                    # log-singularity in |curl A_s|^2 integral).
 order = 1
 
 MU_0 = 4e-7 * math.pi
@@ -164,45 +168,65 @@ def _biot_savart_A_cf(filament_paths, currents, x_cf, y_cf, z_cf):
     return CoefficientFunction((Ax, Ay, Az))
 
 
-def kelvin_pullback_cf(A_inner_cf, A_kelvin_cf, mesh_materials,
-                       kelvin_mats, offset_xyz, R):
+def kelvin_pullback_cf(A_inner_cf, A_kelvin_cf, mesh,
+                       kelvin_mats, offset_xyz, R,
+                       phase=1):
     """Material-switched A_s CF: A_inner in non-Kelvin, pullback in Kelvin.
 
-    A_inner_cf  : CF for A_s evaluated at physical coords (x, y, z).
-    A_kelvin_cf : CF for A_s evaluated at Kelvin-mapped physical coords
+    A_inner_cf  : vector CF for A_s evaluated at physical coords (x, y, z).
+    A_kelvin_cf : vector CF for A_s evaluated at Kelvin-mapped physical coords
                   (kelvin_x, kelvin_y, kelvin_z).
     kelvin_mats : list of material-name substrings to treat as Kelvin.
     offset_xyz  : (3,) Kelvin sphere center.
     R           : Kelvin sphere radius.
+    phase       : 1 = scalar pullback A' = (R/rho')^2 * A_phys  (Sugahara
+                  convention: FEM A in kext represents pulled-back A_phys
+                  with scalar factor; matches baseline's material scaling
+                  nu_K = nu_0 (R/rho')^2 without Householder reflection).
+                  2 = exact 1-form pullback with Householder reflection
+                  (geometrically correct covariant pullback, but not
+                  consistent with baseline's periodic-BC gluing which
+                  assumes A(inner interface) = A(kext interface)).
 
-    Returns CF equal to:
-        in Kelvin mat: (R/rho')^2 * (A_kelvin - 2 (A_kelvin . n') n')
-        else         : A_inner
+    Material switching is done per-component via mesh.MaterialCF(dict):
+    CoefficientFunction(list) would build a vector of length len(list),
+    NOT a material-switched scalar/vector.
     """
     ox, oy, oz = offset_xyz
     dxp = x - ox
     dyp = y - oy
     dzp = z - oz
     rho_p_sq = dxp * dxp + dyp * dyp + dzp * dzp + 1e-24
-    rho_p = sqrt(rho_p_sq)
-    n_cf = CoefficientFunction((dxp / rho_p, dyp / rho_p, dzp / rho_p))
-    A_dot_n = (A_kelvin_cf[0] * n_cf[0]
-               + A_kelvin_cf[1] * n_cf[1]
-               + A_kelvin_cf[2] * n_cf[2])
-    refl_x = A_kelvin_cf[0] - 2.0 * A_dot_n * n_cf[0]
-    refl_y = A_kelvin_cf[1] - 2.0 * A_dot_n * n_cf[1]
-    refl_z = A_kelvin_cf[2] - 2.0 * A_dot_n * n_cf[2]
     factor = (R * R) / rho_p_sq
-    A_shell = CoefficientFunction(
-        (factor * refl_x, factor * refl_y, factor * refl_z))
+    if phase == 2:
+        rho_p = sqrt(rho_p_sq)
+        nx = dxp / rho_p
+        ny = dyp / rho_p
+        nz = dzp / rho_p
+        A_dot_n = (A_kelvin_cf[0] * nx
+                   + A_kelvin_cf[1] * ny
+                   + A_kelvin_cf[2] * nz)
+        kext_x = factor * (A_kelvin_cf[0] - 2.0 * A_dot_n * nx)
+        kext_y = factor * (A_kelvin_cf[1] - 2.0 * A_dot_n * ny)
+        kext_z = factor * (A_kelvin_cf[2] - 2.0 * A_dot_n * nz)
+    else:
+        kext_x = factor * A_kelvin_cf[0]
+        kext_y = factor * A_kelvin_cf[1]
+        kext_z = factor * A_kelvin_cf[2]
 
-    choice = []
-    for m in mesh_materials:
-        in_kelvin = any(kw in m.lower() for kw in kelvin_mats)
-        choice.append(A_shell if in_kelvin else A_inner_cf)
-    # NGSolve MaterialCF expects a CF per material; combine via list
-    # order matching mesh.GetMaterials().
-    return CoefficientFunction(choice)
+    def _switch(kext_comp, inner_comp):
+        d = {}
+        for m in mesh.GetMaterials():
+            if any(kw in m.lower() for kw in kelvin_mats):
+                d[m] = kext_comp
+            else:
+                d[m] = inner_comp
+        return mesh.MaterialCF(d, default=inner_comp)
+
+    Ax = _switch(kext_x, A_inner_cf[0])
+    Ay = _switch(kext_y, A_inner_cf[1])
+    Az = _switch(kext_z, A_inner_cf[2])
+    return CoefficientFunction((Ax, Ay, Az))
 
 
 def main():
@@ -210,6 +234,10 @@ def main():
     ap.add_argument("--nw", type=int, default=3)
     ap.add_argument("--nh", type=int, default=3)
     ap.add_argument("--n-arc", type=int, default=30)
+    ap.add_argument("--phase", type=int, default=1,
+                    help="0=no pullback (debug), 1=scalar, 2=Householder")
+    ap.add_argument("--no-kelvin-nu", action="store_true",
+                    help="Debug: set nu=NU_0 in kext too (no Kelvin weight)")
     args = ap.parse_args()
 
     print("=" * 60)
@@ -240,14 +268,28 @@ def main():
     currents = [I_total / (args.nw * args.nh)] * len(paths)
     print(f"  {len(paths)} filaments ({time.perf_counter() - t0:.1f}s)")
 
-    # === Geometry: inner air sphere + Kelvin shell (no coil volume) ===
-    print("[2/5] Building geometry (NO coil volume)...")
+    # === Geometry: inner air sphere (with coil-shaped refinement region)
+    #   + Kelvin exterior domain (no coil-as-source volume) ===
+    print("[2/5] Building geometry (NO coil source volume)...")
     t0 = time.perf_counter()
+
+    # Coil-shaped refinement volume: same torus as baseline, but left as
+    # "air" so the filament analytical A_s remains the only source.
+    wp = WorkPlane(Axes(p=Pnt(R_coil, 0, 0), n=Dir(0, 1, 0),
+                         h=Dir(0, 0, 1)))
+    torus_face = wp.Circle(a_coil).Face()
+    coil_torus = torus_face.Revolve(Axis(Pnt(0, 0, 0), Dir(0, 0, 1)),
+                                     arc_deg)
+    coil_torus.maxh = maxh_coil
+
     inner_sphere = Sphere(Pnt(0, 0, 0), R_K)
     inner_sphere.maxh = maxh
     for f in inner_sphere.faces:
         f.name = "kelvin_int"
-    inner_sphere.name = "air"
+
+    inner_air = inner_sphere - coil_torus
+    inner_air.name = "air"
+    coil_torus.name = "air"  # Same material — only for mesh refinement
 
     outer_sphere = Sphere(Pnt(offset, 0, 0), R_K)
     outer_sphere.maxh = maxh * 2
@@ -260,7 +302,7 @@ def main():
 
     # Periodic identification
     k_int_face = None; k_ext_face = None
-    for f in inner_sphere.faces:
+    for f in inner_air.faces:
         if f.name == "kelvin_int":
             k_int_face = f; break
     for f in outer_sphere.faces:
@@ -270,7 +312,7 @@ def main():
         k_int_face.Identify(k_ext_face, "periodic",
                              IdentificationType.PERIODIC)
 
-    shape = Glue([inner_sphere, outer_sphere, gnd])
+    shape = Glue([inner_air, coil_torus, outer_sphere, gnd])
     geo = OCCGeometry(shape)
     with TaskManager():
         ngmesh = geo.GenerateMesh(maxh=maxh, grading=0.5)
@@ -287,26 +329,48 @@ def main():
     # Inner (physical) evaluation at (x, y, z):
     A_inner = _biot_savart_A_cf(paths, currents, x, y, z)
     # Kelvin-mapped physical coords:
+    # Inversion about kext center c=(offset,0,0) with radius R_K maps
+    # kext point p' to physical image p_phys = (R_K^2/rho'^2) (p' - c).
+    # At rho'=R_K (interface): |p_phys| = R_K (inner sphere surface).
+    # At rho'->0 (GND center): |p_phys| -> infinity.
     dxp = x - offset
     dyp = y
     dzp = z
     rho_p_sq = dxp * dxp + dyp * dyp + dzp * dzp + 1e-24
-    kel_x = offset + (R_K * R_K / rho_p_sq) * dxp
+    kel_x = (R_K * R_K / rho_p_sq) * dxp
     kel_y = (R_K * R_K / rho_p_sq) * dyp
     kel_z = (R_K * R_K / rho_p_sq) * dzp
     # Evaluate A_s at the Kelvin-mapped coord (physical exterior):
     A_kel_phys = _biot_savart_A_cf(paths, currents, kel_x, kel_y, kel_z)
-    # Apply Phase 2 pullback to Kelvin shell, leave inner alone:
-    A_s_cf = kelvin_pullback_cf(A_inner, A_kel_phys, mats,
-                                 kelvin_mats=["kelvin"],
-                                 offset_xyz=(offset, 0.0, 0.0), R=R_K)
+    # Apply pullback to Kelvin exterior domain, leave inner alone:
+    if args.phase == 0:
+        # Debug: no pullback at all — use A_inner (physical Biot-Savart
+        # at kext coords, which are ~150mm from coil) in the kext.
+        A_s_cf = A_inner
+    else:
+        A_s_cf = kelvin_pullback_cf(A_inner, A_kel_phys, mesh,
+                                     kelvin_mats=["kelvin"],
+                                     offset_xyz=(offset, 0.0, 0.0),
+                                     R=R_K, phase=args.phase)
     print(f"  A_s CF built ({time.perf_counter() - t0:.1f}s)")
+
+    # Project A_s_cf to HCurl GridFunction so curl() works. Symbolic CFs
+    # don't implement curl() directly; HCurl projection + curl(gfu_As)
+    # gives a valid curl CF for the RHS and energy integral.
+    t0 = time.perf_counter()
+    fes_As = HCurl(mesh, order=order + 1)
+    gfu_As = GridFunction(fes_As)
+    with TaskManager():
+        gfu_As.Set(A_s_cf, bonus_intorder=4)
+    curl_As = curl(gfu_As)
+    print(f"  A_s projected to HCurl (ndof={fes_As.ndof}, "
+          f"{time.perf_counter() - t0:.1f}s)")
 
     # === Reluctivity with Kelvin modulation ===
     kelvin_fac = R_K ** 2 / rho_p_sq
     nu_dict = {}
     for m in mats:
-        if "kelvin" in m.lower():
+        if "kelvin" in m.lower() and not args.no_kelvin_nu:
             nu_dict[m] = NU_0 * kelvin_fac
         else:
             nu_dict[m] = NU_0
@@ -325,8 +389,9 @@ def main():
 
     f_lf = LinearForm(fes)
     # Reduced-A RHS: - (nu - nu_0) * curl(A_s) . curl(v) over whole mesh
-    # (non-zero only where nu != nu_0).
-    f_lf += -(nu_cf - NU_0) * InnerProduct(curl(A_s_cf), curl(v)) \
+    # (non-zero only where nu != nu_0). curl_As comes from HCurl
+    # projection — curl() on symbolic A_s_cf is not supported.
+    f_lf += -(nu_cf - NU_0) * InnerProduct(curl_As, curl(v)) \
         * dx(bonus_intorder=4)
 
     with TaskManager():
@@ -345,11 +410,22 @@ def main():
     print(f"  solve: {t_solve:.1f}s")
 
     # === Inductance from total A = A_s + A_r ===
-    A_total = A_s_cf + gfu
-    W = Integrate(0.5 * nu_cf * InnerProduct(curl(A_total),
-                                              Conj(curl(A_total))),
-                  mesh, order=10).real
+    # curl(A_total) = curl_As + curl(gfu); can't call curl() on A_s_cf.
+    curl_total = curl_As + curl(gfu)
+    W_inner = Integrate(0.5 * nu_cf
+                         * InnerProduct(curl_total, Conj(curl_total)),
+                         mesh, definedon=mesh.Materials("air"),
+                         order=10).real
+    W_kext = Integrate(0.5 * nu_cf
+                         * InnerProduct(curl_total, Conj(curl_total)),
+                         mesh, definedon=mesh.Materials("kelvin"),
+                         order=10).real
+    W = W_inner + W_kext
     L = 2.0 * W / I_total ** 2
+    print(f"  W_inner = {W_inner:.4e} J  -> L_inner = "
+          f"{2*W_inner/I_total**2 * 1e9:.2f} nH")
+    print(f"  W_kext = {W_kext:.4e} J  -> L_kext = "
+          f"{2*W_kext/I_total**2 * 1e9:.2f} nH")
 
     print()
     print("=" * 60)

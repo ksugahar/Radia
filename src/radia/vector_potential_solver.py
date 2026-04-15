@@ -51,11 +51,11 @@ class VectorPotentialSolver:
     order : int
         FEM polynomial order (default: 2).
     kelvin_region : str, optional
-        Material name of Kelvin shell region (reserved for future use).
+        Material name of Kelvin exterior domain region (reserved for future use).
     kelvin_radius : float, optional
-        Inner radius R of Kelvin shell [m].
+        Inner radius R of Kelvin exterior domain [m].
     kelvin_center : list/tuple, optional
-        Center of Kelvin shell [x, y, z] in meters.
+        Center of Kelvin exterior domain [x, y, z] in meters.
     ams_options : dict, optional
         AMS preconditioner options. Keys:
         - 'chebyshev_degree' (int, default 3): Chebyshev smoother degree.
