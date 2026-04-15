@@ -127,12 +127,12 @@ if port2_tris:
 else:
     print("    WARNING: No triangles found for port_negative!")
 
-# Export to GMSH v2.2 format
+# Export to GMSH v4.1 format
 output_file = "circular_coil_with_ports.msh"
-print(f"\n[6] Exporting to GMSH v2.2 format...")
-cubit.cmd(f'radia_export gmsh "{output_file}" version 2 overwrite')
+print(f"\n[6] Exporting to GMSH v4.1 format...")
+cubit.cmd(f'radia_export gmsh "{output_file}" overwrite')
 print(f"    OK Created: {output_file}")
-print(f"    Format: GMSH v2.2 (with port physical groups)")
+print(f"    Format: GMSH v4.1 (with port physical groups)")
 
 # Verify: should have NO volume elements
 if cubit.get_tet_count() > 0 or cubit.get_hex_count() > 0:

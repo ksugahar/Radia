@@ -27,7 +27,7 @@ std::vector<std::string> ExportGmshCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export gmsh \"filename\" [order {1|2|3|4|5}] [version {2|4}] [dimension {2|3}] [overwrite]"
+    "radia_export gmsh \"filename\" [order {1|2|3|4|5}] [dimension {2|3}] [overwrite]"
   );
   return help;
 }
@@ -36,15 +36,13 @@ std::vector<std::string> ExportGmshCommand::get_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "Export mesh to Gmsh MSH format.\n"
+    "Export mesh to Gmsh MSH v4.1 format (lab-wide standard).\n"
     "Block assignment is NOT required.\n"
     "Sidesets exported as surface elements. Nodesets as comments.\n\n"
     "Options:\n"
     "  order 1      1st-order elements (default)\n"
     "  order 2      2nd-order (edge mid-nodes)\n"
     "  order 3-5    Higher order (requires Netgen, wedge limited to order 2)\n"
-    "  version 2    Gmsh v2.2 format (default)\n"
-    "  version 4    Gmsh v4.1 format\n"
     "  dimension 3  3D mode (default)\n"
     "  dimension 2  2D mode\n"
     "  overwrite    Overwrite existing file\n"
@@ -75,24 +73,29 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
   }
 #endif
 
-  int ver = 2;
+  // v4.1 is the only supported output format (lab-wide standard, 2026-04).
+  // The `version` keyword is accepted but ignored for back-compat with
+  // old .jou files; output is always v4.1.
+  int ver = 4;
   data.get_value("version", ver);
-  std::string version = (ver >= 4) ? "4.1" : "2.2";
+  if (ver != 4) {
+    PRINT_WARNING("version %d requested, but mesh_export emits v4.1 only. "
+                  "Writing v4.1.\n", ver);
+  }
 
-  return write_gmsh(filename, version, order);
+  return write_gmsh(filename, "4.1", order);
 }
 
 bool ExportGmshCommand::write_gmsh(const std::string &filename,
                                     const std::string &version,
                                     int order)
 {
+  (void)version;  // always v4.1
   MeshData mesh;
   if (!mesh.extract(order))
     return false;
 
-  bool ok = (version == "4.1")
-    ? write_gmsh_v41(filename, mesh)
-    : write_gmsh_v22(filename, mesh);
+  bool ok = write_gmsh_v41(filename, mesh);
 
   // Write companion .geo file for proper curved element display in GMSH GUI.
   // Mesh.NumSubEdges=4 is required to render high-order curved surfaces
@@ -267,144 +270,6 @@ static std::vector<int> gmsh_conn(const MeshElement &el, const MeshData &mesh)
   const auto &raw = (order >= 2 && !el.ho_conn.empty()) ? el.ho_conn : el.conn;
   return (order >= 2) ? reorder_for_gmsh(raw, el.nv, el.type, order, &mesh)
                       : std::vector<int>(raw.begin(), raw.end());
-}
-
-// ========================================================================
-// Gmsh v2.2 writer — unified for all orders, blocks + sidesets
-// ========================================================================
-bool ExportGmshCommand::write_gmsh_v22(const std::string &filename,
-                                        const MeshData &mesh)
-{
-  std::ofstream fid(filename);
-  if (!fid.is_open()) {
-    PRINT_ERROR("Cannot open file: %s\n", filename.c_str());
-    return false;
-  }
-
-  fid << "$MeshFormat\n2.2 0 8\n$EndMeshFormat\n";
-
-  // --- PhysicalNames: blocks (auto dim) + sidesets (BND) + nodesets (BBBND) ---
-  //
-  // Detect dimension per block from actual element types:
-  //   tet/hex/wedge/pyramid -> 3, tri/quad -> 2, line -> 1, point -> 0
-  std::unordered_map<int, int> block_dim;
-  for (auto &elem : mesh.elements) {
-    int dim = 3;  // default
-    int nv = elem.nv;
-    if (nv == 3 && (elem.type == TRI3 || elem.type == CUBIT_TRI
-                 || elem.type == TRISHELL || elem.type == TRISHELL3))
-      dim = 2;
-    else if (nv == 4 && (elem.type == QUAD4 || elem.type == QUAD
-                      || elem.type == SHEL || elem.type == SHELL4))
-      dim = 2;
-    else if (elem.type == BAR || elem.type == BAR2 || elem.type == BAR3)
-      dim = 1;
-    else if (nv == 1)
-      dim = 0;
-
-    auto it = block_dim.find(elem.group_id);
-    if (it == block_dim.end() || dim > it->second)
-      block_dim[elem.group_id] = dim;
-  }
-
-  {
-    int nphys = (int)mesh.block_ids.size() + (int)mesh.sidesets.size()
-                + (int)mesh.nodesets.size();
-    if (nphys > 0) {
-      fid << "$PhysicalNames\n" << nphys << "\n";
-      // Blocks: auto-detected dimension
-      for (int bid : mesh.block_ids) {
-        int dim = 3;
-        auto it = block_dim.find(bid);
-        if (it != block_dim.end()) dim = it->second;
-        fid << dim << " " << bid << " \"block_" << bid << "\"\n";
-      }
-      // Sidesets: dimension 2 (BND)
-      for (auto &sg : mesh.sidesets) {
-        fid << "2 " << sg.id << " \"";
-        fid << (sg.name.empty() ? "sideset_" + std::to_string(sg.id) : sg.name);
-        fid << "\"\n";
-      }
-      // Nodesets: dimension 0 (BBBND)
-      for (auto &ng : mesh.nodesets) {
-        fid << "0 " << ng.id << " \"";
-        fid << (ng.name.empty() ? "nodeset_" + std::to_string(ng.id) : ng.name);
-        fid << "\"\n";
-      }
-      fid << "$EndPhysicalNames\n";
-    }
-  }
-
-  // --- Nodes ---
-  fid << "$Nodes\n" << mesh.total_node_count() << "\n";
-  for (auto &nd : mesh.nodes)
-    fid << nd.id << " " << nd.x << " " << nd.y << " " << nd.z << "\n";
-  fid << "$EndNodes\n";
-
-  // --- Elements: block elements + sideset faces + nodeset points ---
-  // Count: block elems + sideset faces + nodeset nodes (as POINT elements)
-  int nodeset_point_count = 0;
-  for (auto &ng : mesh.nodesets) nodeset_point_count += (int)ng.node_ids.size();
-  int total = mesh.total_element_count() + nodeset_point_count;
-  fid << "$Elements\n" << total << "\n";
-
-  int eid = 0;
-  int order = mesh.order;
-
-  // Block elements
-  int skipped = 0;
-  for (auto &elem : mesh.elements) {
-    int gtype = gmsh_type(elem, order);
-    if (gtype == 0) {
-      skipped++;
-      PRINT_WARNING("Skipped element: type=%d nv=%d block=%d\n",
-                    (int)elem.type, elem.nv, elem.group_id);
-      continue;
-    }
-    eid++;
-
-    const auto c = gmsh_conn(elem, mesh);
-    fid << eid << " " << gtype << " 2 " << elem.group_id << " " << elem.group_id;
-    for (int nid : c) fid << " " << nid;
-    fid << "\n";
-  }
-
-  // Sideset face elements
-  for (auto &sg : mesh.sidesets) {
-    for (auto &face : sg.faces) {
-      eid++;
-      int gtype = gmsh_type(face, order);
-      if (gtype == 0) continue;
-
-      const auto c = gmsh_conn(face, mesh);
-      fid << eid << " " << gtype << " 2 " << sg.id << " " << sg.id;
-      for (int nid : c) fid << " " << nid;
-      fid << "\n";
-    }
-  }
-
-  // Nodeset nodes as POINT elements (BBBND for NGSolve)
-  for (auto &ng : mesh.nodesets) {
-    for (int nid : ng.node_ids) {
-      eid++;
-      fid << eid << " 15 2 " << ng.id << " " << ng.id << " " << nid << "\n";
-    }
-  }
-
-  fid << "$EndElements\n";
-
-  if (skipped > 0)
-    PRINT_WARNING("Skipped %d elements with unknown type.\n", skipped);
-
-  // Rewrite element count at the correct position
-  // (we used 'total' but some may have been skipped)
-  fid.close();
-
-  PRINT_INFO("Exported Gmsh v2.2 (order %d%s): %s (%d nodes, %d elements)\n",
-             mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
-             filename.c_str(), mesh.total_node_count(), eid);
-
-  return true;
 }
 
 // ========================================================================

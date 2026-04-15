@@ -36,10 +36,9 @@ After installation, these commands are available in Cubit:
 
 ```
 radia_export netgen "model.vol" order 3 overwrite     # NGSolve FEM (.vol)
-radia_export gmsh "model.msh" order 2 version 2 overwrite  # GMSH v2.2
-radia_export gmsh "model.msh" order 2 version 4 overwrite  # GMSH v4.1
+radia_export gmsh "model.msh" order 2 overwrite       # GMSH v4.1 (lab standard)
 radia_export nastran "model.bdf" order 2 overwrite    # Nastran BDF
-radia_export vtk "model.vtk" order 2 overwrite              # VTK Legacy
+radia_export vtk "model.vtk" order 2 overwrite        # VTK Legacy
 ```
 
 Or use the **Export Mesh** menu in the Cubit GUI.
