@@ -157,7 +157,7 @@ public:
 		radTGroup::SetM(M);
 	}
 
-	void Dump(std::ostream&, int ShortSign =0);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
 	double Volume() { return radTPolyhedron::Volume();}

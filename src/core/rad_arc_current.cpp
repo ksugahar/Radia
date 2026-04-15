@@ -433,38 +433,7 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-void radTArcCur::Dump(std::ostream& o, int ShortSign)
-{
-	radTg3d::Dump(o);
-	DumpPureObjInfo(o, ShortSign);
-	if(ShortSign==1) return;
-
-	DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
-
-//-------------------------------------------------------------------------
-
-void radTArcCur::DumpPureObjInfo(std::ostream& o, int ShortSign)
-{
-	o << "Current carrying: ";
-	o << "ArcCur";
-
-	if(ShortSign==1) return;
-
-	o << endl;
-	o << "   {x,y,z}= {" << CircleCentrPoint.x << ','
-						 << CircleCentrPoint.y << ','
-						 << CircleCentrPoint.z << "}" << endl
-	  << "   {rmin,rmax}= {" << R_min << ',' << R_max << "}" << endl
-	  << "   {phimin,phimax}= {" << Phi_min << ',' << Phi_max << "}" << endl
-	  << "   h= " << Height << endl
-	  << "   nseg= " << NumberOfSectors << endl
-	  << "   j= " << J_azim << endl
-	  << "   Field computation mode: " << (BasedOnPrecLevel? "\"auto\"" : "\"man\"");
-}
+// radTArcCur::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
