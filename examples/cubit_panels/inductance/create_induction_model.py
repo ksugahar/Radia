@@ -1,5 +1,5 @@
 """
-Create induction heating model in Cubit: coil + air + Kelvin shell.
+Create induction heating model in Cubit: coil + air + Kelvin exterior domain.
 
 Geometry (Go-Tech toymodel inspired):
   - Coil: single-turn torus (J imposed, not eddy-current solved)
@@ -32,7 +32,7 @@ A_COIL = 0.005       # Coil wire (minor) radius [m]
 R_WP = 0.015         # Workpiece cylinder radius [m]
 H_WP = 0.040         # Workpiece cylinder height [m]
 R_AIR = 0.100        # Air sphere / Kelvin boundary radius [m]
-R_KELVIN = 0.200     # Kelvin shell outer radius [m] (Dirichlet at physical infinity)
+R_KELVIN = 0.200     # Kelvin exterior domain outer radius [m] (Dirichlet at physical infinity)
 MESH_SIZE = 0.008    # Global mesh size [m]
 MESH_SIZE_COIL = 0.004  # Coil mesh size [m]
 
@@ -66,7 +66,7 @@ def _classify_volumes(cubit, R_coil, a_coil, R_wp, H_wp, R_air, R_kelvin):
         if (abs(vol - coil_vol_expected) / max(coil_vol_expected, 1e-30) < 0.5
                 and abs(r_cen - R_coil) < R_coil * 0.5):
             classified[vid] = 'coil'
-        # Kelvin shell: very large volume, centroid near origin
+        # Kelvin exterior domain: very large volume, centroid near origin
         elif vol > kelvin_vol_expected * 0.3 and d_cen < R_kelvin * 0.3:
             classified[vid] = 'kelvin'
         # Workpiece: small, centroid near origin, matches cylinder
@@ -106,7 +106,7 @@ def create_induction_model(cubit,
     print(f"  Kelvin:    R={R_kelvin*1e3:.0f}mm")
 
     # ============================================================
-    # Step 1: Kelvin shell (optional: outer sphere - inner sphere)
+    # Step 1: Kelvin exterior domain (optional: outer sphere - inner sphere)
     # ============================================================
     use_kelvin = R_kelvin > R_air
     if use_kelvin:

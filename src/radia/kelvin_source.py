@@ -6,13 +6,13 @@ with PEEC filament coils.
 Scope (2026-04-15)
 ------------------
 * Source (PEEC filament coil) is assumed to live in the INNER PHYSICAL
-  domain (not geometrically inside the Kelvin shell). This covers the
+  domain (not geometrically inside the Kelvin exterior domain). This covers the
   standard IH setup where R_coil + a_coil <= R_air.
 * Phase 1: scalar Kelvin factor (uniform-H_s analogue).
 * Phase 2: correct 1-form pullback Jacobian for the Kelvin coordinate
   map. Phase 1 is a ``factor_mode='scalar'`` approximation; Phase 2 is
   ``factor_mode='pullback'`` (exact).
-* Phase 3: source filaments that extend into the Kelvin shell -- NOT
+* Phase 3: source filaments that extend into the Kelvin exterior domain -- NOT
   supported here; document_user_discussed_skip_2026-04-15.
 
 Geometry conventions
@@ -22,7 +22,7 @@ Kelvin map (3D sphere) centered at ``c`` with radius ``R``:
     phi: r -> r' = c + (R**2 / |r - c|**2) * (r - c)
 
 The map is involutive: phi(phi(r)) = r. Points with |r-c| > R are the
-physical exterior and are mapped to the Kelvin shell (|r'-c| < R).
+physical exterior and are mapped to the Kelvin exterior domain (|r'-c| < R).
 
 A-formulation source (Biot-Savart vector potential)
 ---------------------------------------------------
@@ -70,8 +70,8 @@ def kelvin_map_3d(points, center, R):
     return out[0] if single else out
 
 
-def is_in_kelvin_shell(points, center, R):
-    """True where |p - center| < R (within the Kelvin shell)."""
+def is_in_kelvin_exterior_domain(points, center, R):
+    """True where |p - center| < R (within the Kelvin exterior domain)."""
     p = np.asarray(points, dtype=float)
     c = np.asarray(center, dtype=float)
     return np.sum((p - c) ** 2, axis=-1) < R * R
@@ -90,7 +90,7 @@ def kelvin_pullback_vector(A_phys, r_prime, center, R):
         J(d) = (R^2 / rho^2) * (I - 2 n n^T),    n = d / rho    (Householder)
 
     Since phi is involutive, J(d)^{-1} = (rho^2/R^2)(I - 2 n n^T), and in
-    shell coordinates where rho = R^2/rho' and n = n' (radial direction
+    exterior-domain coordinates where rho = R^2/rho' and n = n' (radial direction
     preserved):
 
         A'(r') = J^{-1}(r) . A(r)
@@ -106,7 +106,7 @@ def kelvin_pullback_vector(A_phys, r_prime, center, R):
 
     Args:
         A_phys: (N, 3) physical-frame A evaluated at r_phys = Kelvin_inv(r').
-        r_prime: (N, 3) shell-frame coordinates.
+        r_prime: (N, 3) exterior-frame coordinates.
         center:  (3,) Kelvin sphere center.
         R: Kelvin sphere radius.
 
@@ -141,14 +141,14 @@ def kelvin_factor_scalar(r_prime, center, R):
     APPROXIMATION. See ``kelvin_factor_pullback`` for the exact Jacobian.
 
     Args:
-        r_prime: (N, 3) Kelvin-shell coordinates.
+        r_prime: (N, 3) Kelvin exterior domain coordinates.
         center: Kelvin sphere center.
         R: Kelvin sphere radius.
 
     Returns:
         (N,) array of scalar factors. Magnitude only; sign (-1 for
         H_s direction flip) is applied by the caller when converting
-        physical H_s to Kelvin-shell H'_s.
+        physical H_s to Kelvin exterior domain H'_s.
     """
     p = np.asarray(r_prime, dtype=float)
     c = np.asarray(center, dtype=float)
@@ -249,10 +249,10 @@ def biot_savart_A_at_points(obs_points, filament_paths, currents,
 def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
                             kelvin_center=None, R_kelvin=None,
                             factor_mode='scalar', n_quad=8):
-    """Evaluate A_s at observation points, handling Kelvin shell.
+    """Evaluate A_s at observation points, handling Kelvin exterior domain.
 
     For obs points in the INNER physical domain: Biot-Savart directly.
-    For obs points in the Kelvin shell (|r'-c| < R): map r' -> physical
+    For obs points in the Kelvin exterior domain (|r'-c| < R): map r' -> physical
     r = c + R^2 (r'-c)/|r'-c|^2, evaluate Biot-Savart at r, then apply
     Kelvin factor.
 
@@ -260,7 +260,7 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
         obs_points: (N, 3)
         filament_paths, currents: as in biot_savart_A_at_points.
         kelvin_center, R_kelvin: if None, Kelvin handling is disabled
-            (Biot-Savart everywhere). If both given, Kelvin shell quad
+            (Biot-Savart everywhere). If both given, Kelvin exterior domain quad
             points are remapped.
         factor_mode: 'scalar' (Phase 1 approximation, (R/rho')**2 on
             the vector magnitude) or 'pullback' (Phase 2, exact
@@ -279,26 +279,26 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
                                        n_quad=n_quad)
 
     c = np.asarray(kelvin_center, dtype=float)
-    in_shell = is_in_kelvin_shell(obs, c, R_kelvin)
+    in_kelvin_ext = is_in_kelvin_exterior_domain(obs, c, R_kelvin)
 
     A = np.zeros((obs.shape[0], 3), dtype=complex)
     # Inner points: direct evaluation.
-    if np.any(~in_shell):
+    if np.any(~in_kelvin_ext):
         A_inner = biot_savart_A_at_points(
-            obs[~in_shell], filament_paths, currents, n_quad=n_quad)
-        A[~in_shell] = A_inner
+            obs[~in_kelvin_ext], filament_paths, currents, n_quad=n_quad)
+        A[~in_kelvin_ext] = A_inner
 
-    # Kelvin shell points: map + evaluate + factor.
-    if np.any(in_shell):
-        r_prime = obs[in_shell]
+    # Kelvin exterior domain points: map + evaluate + factor.
+    if np.any(in_kelvin_ext):
+        r_prime = obs[in_kelvin_ext]
         r_phys = kelvin_map_3d(r_prime, c, R_kelvin)
         A_phys = biot_savart_A_at_points(
             r_phys, filament_paths, currents, n_quad=n_quad)
         if factor_mode == 'scalar':
-            f = kelvin_factor_scalar(r_prime, c, R_kelvin)   # (N_shell,)
-            A[in_shell] = A_phys * f[:, None]
+            f = kelvin_factor_scalar(r_prime, c, R_kelvin)   # (N_ext,)
+            A[in_kelvin_ext] = A_phys * f[:, None]
         elif factor_mode == 'pullback':
-            A[in_shell] = kelvin_pullback_vector(
+            A[in_kelvin_ext] = kelvin_pullback_vector(
                 A_phys, r_prime, c, R_kelvin)
         else:
             raise ValueError(f"Unknown factor_mode: {factor_mode!r}")

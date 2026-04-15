@@ -166,9 +166,9 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
 
     if use_kelvin:
         kelvin_outer = Sphere(Pnt(0, 0, 0), R_kelvin)
-        kelvin_shell = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
-        kelvin_shell.name = "kelvin"
-        kelvin_shell.maxh = maxh_air * 2
+        kelvin_ext = kelvin_outer - Sphere(Pnt(0, 0, 0), R_air)
+        kelvin_ext.name = "kelvin"
+        kelvin_ext.maxh = maxh_air * 2
 
         for f_air in air.faces:
             if f_air.name != "sibc":
@@ -177,7 +177,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
             f_kel.name = "outer"
 
         for f_int in [f for f in air.faces if f.name == "kelvin_int"]:
-            for f_ext in kelvin_shell.faces:
+            for f_ext in kelvin_ext.faces:
                 if f_ext.name != "outer":
                     try:
                         f_int.Identify(f_ext, "kelvin",
@@ -188,7 +188,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
 
         gnd = Vertex(Pnt(0, 0, 0))
         gnd.name = "GND"
-        parts.extend([kelvin_shell, gnd])
+        parts.extend([kelvin_ext, gnd])
         dirichlet_bc = "GND"
     else:
         for f in air_sphere.faces:
