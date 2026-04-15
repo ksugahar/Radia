@@ -80,6 +80,57 @@ def is_in_kelvin_shell(points, center, R):
 # ---------- Kelvin factor (Phase 1 scalar, Phase 2 pullback) --------------
 
 
+def kelvin_pullback_vector(A_phys, r_prime, center, R):
+    """Phase 2: exact 1-form pullback of a vector A under 3D sphere Kelvin.
+
+    Kelvin map in d-coords (d = r - center):
+        phi: d -> d' = (R^2 / rho^2) * d,    rho = |d|, rho' = R^2/rho
+
+    Jacobian at d:
+        J(d) = (R^2 / rho^2) * (I - 2 n n^T),    n = d / rho    (Householder)
+
+    Since phi is involutive, J(d)^{-1} = (rho^2/R^2)(I - 2 n n^T), and in
+    shell coordinates where rho = R^2/rho' and n = n' (radial direction
+    preserved):
+
+        A'(r') = J^{-1}(r) . A(r)
+               = (R / rho')^2 * (I - 2 n' n'^T) . A(r_phys)
+               = (R / rho')^2 * [A_phys - 2 (A_phys . n') n']
+
+    So the exact 1-form transformation is the scalar Phase-1 factor
+    (R/rho')^2 composed with a Householder reflection that flips the
+    RADIAL component of A. For A fields with no radial component (e.g.
+    the azimuthal A from a uniform B_0 z_hat background) this reduces
+    to the scalar factor; for localized Biot-Savart sources it does
+    not.
+
+    Args:
+        A_phys: (N, 3) physical-frame A evaluated at r_phys = Kelvin_inv(r').
+        r_prime: (N, 3) shell-frame coordinates.
+        center:  (3,) Kelvin sphere center.
+        R: Kelvin sphere radius.
+
+    Returns:
+        (N, 3) pulled-back A', same dtype as A_phys.
+    """
+    r_prime = np.asarray(r_prime, dtype=float)
+    A_phys = np.asarray(A_phys)
+    c = np.asarray(center, dtype=float)
+    single = r_prime.ndim == 1
+    if single:
+        r_prime = r_prime.reshape(1, 3)
+        A_phys = A_phys.reshape(1, 3)
+    d_prime = r_prime - c
+    rho_prime = np.sqrt(np.sum(d_prime * d_prime, axis=1))
+    rho_prime = np.where(rho_prime < 1e-30, 1e-30, rho_prime)
+    n = d_prime / rho_prime[:, None]
+    A_dot_n = np.sum(A_phys * n, axis=1)
+    A_refl = A_phys - 2.0 * A_dot_n[:, None] * n
+    factor = (R / rho_prime) ** 2
+    out = factor[:, None] * A_refl
+    return out[0] if single else out
+
+
 def kelvin_factor_scalar(r_prime, center, R):
     """Phase 1: uniform-H_s-analogue scalar factor (R/rho')^2.
 
@@ -247,9 +298,8 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
             f = kelvin_factor_scalar(r_prime, c, R_kelvin)   # (N_shell,)
             A[in_shell] = A_phys * f[:, None]
         elif factor_mode == 'pullback':
-            raise NotImplementedError(
-                "Phase 2 1-form pullback not implemented yet. Use "
-                "factor_mode='scalar' for Phase 1 approximation.")
+            A[in_shell] = kelvin_pullback_vector(
+                A_phys, r_prime, c, R_kelvin)
         else:
             raise ValueError(f"Unknown factor_mode: {factor_mode!r}")
 
