@@ -62,8 +62,7 @@ public:
 	void B_intComp(radTField*);
 	void B_intCompSpecCases(radTField*, const TSpecCaseID&);
 
-	void Dump(std::ostream&, int ShortSign =0);
-	void DumpPureObjInfo(std::ostream&, int);
+	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 	void DumpBin_ExtrPolygon(CAuxBinStrVect& oStr);
 	void DumpBinParse_ExtrPolygon(CAuxBinStrVect& inStr);

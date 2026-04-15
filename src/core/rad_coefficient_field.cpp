@@ -256,16 +256,7 @@ void radTCoefficientFunctionFieldSource::B_intComp(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-void radTCoefficientFunctionFieldSource::Dump(std::ostream& o, int ShortSign)
-{
-	radTg3d::Dump(o);
-	o << "CoefficientFunction-based background field source";
-	if(ShortSign==1) return;
-	o << endl;
-	o << "   Python callback: " << (cf_callback ? "registered" : "none");
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
+// radTCoefficientFunctionFieldSource::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

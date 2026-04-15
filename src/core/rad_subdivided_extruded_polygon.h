@@ -142,7 +142,7 @@ public:
 	int NumberOfDegOfFreedom() { return radTGroup::NumberOfDegOfFreedom();}
 	int SizeOfThis() { return (radTGroup::SizeOfThis() + radTExtrPolygon::SizeOfThis());}
 
-	void Dump(std::ostream&, int ShortSign =0);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 
 	int SetMaterial(radThg& InMatHandle, radTApplication* ApPtr) 
