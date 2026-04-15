@@ -1053,27 +1053,7 @@ radTg3dRelax* radTSubdividedRecMag::FormalIntrctMemberPtr()
 
 //-------------------------------------------------------------------------
 
-void radTSubdividedRecMag::Dump(std::ostream& o, int ShortSign)
-{
-	((radTg3d*)((radTGroup*)this))->radTg3d::Dump(o, ShortSign);
-
-	o << "Subdivided RecMag";
-
-	if(ShortSign==1) return;
-
-	o << endl;
-	radTRecMag::DumpPureObjInfo(o, ShortSign);
-	DumpMaterApplied(o);
-
-	o << endl;
-	radTGroup::DumpPureObjInfo(o, ShortSign);
-
-	o << endl;
-	((radTg3d*)((radTGroup*)this))->radTg3d::DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied (incl. the content): " << SizeOfThis() << " bytes";
-}
+// radTSubdividedRecMag::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

@@ -44,8 +44,7 @@ public:
 	void B_genComp(radTField* FieldPtr) override;  // Override for transformation propagation
 	void B_intComp(radTField* FieldPtr) { B_comp(FieldPtr);} // This is not an Error!!!
 
-	void Dump(std::ostream&, int =0);
-	void DumpPureObjInfo(std::ostream&, int);
+	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin_Group_TreatMembers(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, vector<int>& vGroupMemKeys);
 	void DumpBin_Group_OutMemKeys(CAuxBinStrVect& oStr, vector<int>& vGroupMemKeys);
 	void DumpBinParse_Group(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);

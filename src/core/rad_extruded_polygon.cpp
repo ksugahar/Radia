@@ -31,44 +31,7 @@ static const double PI = RadConst::PI;
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-void radTExtrPolygon::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTg3dRelax::Dump(o);
-	DumpPureObjInfo(o, ShortSign);
-	if(ShortSign==1) return;
-
-	DumpMaterApplied(o);
-	DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
-
-//-------------------------------------------------------------------------
-
-void radTExtrPolygon::DumpPureObjInfo(std::ostream& o, int ShortSign)
-{
-	o << "Relaxable: ";
-	o << "ThckPgn";
-
-	if(ShortSign==1) return;
-
-	o << endl;
-	o << "   {x,y,z}= {" << CentrPoint.x << ',' << CentrPoint.y << ',' << CentrPoint.z << "}" << endl;
-	o << "   lx= " << Thickness << endl;
-
-	o << "   Pgn= {";
-	radTPolygon* BasePgnPtr = (radTPolygon*)(BasePolygonHandle.rep);
-	int AmOfEdgePoints_m_1 = BasePgnPtr->AmOfEdgePoints - 1;
-	for(int i=0; i<=AmOfEdgePoints_m_1; i++)
-	{
-		o << "{" << BasePgnPtr->EdgePointsVector[i].x << ',' << BasePgnPtr->EdgePointsVector[i].y << "}";
-		if(i!=AmOfEdgePoints_m_1) { o << ",";}
-	}
-	o << "}" << endl;
-
-	o << "   {mx,my,mz}= {" << Magn.x << ',' << Magn.y << ',' << Magn.z << "}";
-}
+// radTExtrPolygon::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

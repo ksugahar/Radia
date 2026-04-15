@@ -40,7 +40,7 @@ public:
 	void B_intComp(radTField* FieldPtr);
 
 
-	void Dump(std::ostream& o, int ShortSign = 0);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut,
 	             map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers,

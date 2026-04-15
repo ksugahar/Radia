@@ -169,7 +169,7 @@ public:
 	void SetupFurtherSubdInd(char InSubdInd) { radTGroup::SetupFurtherSubdInd(InSubdInd);}
 	void SetMessageChar(char InMessageChar) { radTGroup::SetMessageChar(InMessageChar);}
 
-	void Dump(std::ostream& Out, int Form);
+	// Dump REMOVED (Phase B2b, 2026-04-15)
 	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 };
 

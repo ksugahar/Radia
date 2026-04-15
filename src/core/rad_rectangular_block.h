@@ -139,8 +139,7 @@ public:
 
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans*, radTg3d*, radTApplication*);
 	
-	void Dump(std::ostream&, int ShortSign =0);
-	void DumpPureObjInfo(std::ostream&, int);
+	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 	//void DumpBin(CAuxBinStrVect& oStr, radTmhg& mEl, radThg& hg); 
 	//void DumpBin(CAuxBinStrVect& oStr, map<int, radTHandle<radTg>, less<int> >& mEl, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
 	void DumpBin_RecMag(CAuxBinStrVect& oStr);

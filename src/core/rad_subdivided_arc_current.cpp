@@ -23,25 +23,6 @@
 
 //-------------------------------------------------------------------------
 
-void radTSubdividedArcCur::Dump(std::ostream& o, int ShortSign)
-{
-	((radTg3d*)((radTGroup*)this))->radTg3d::Dump(o, ShortSign);
-
-	o << "Subdivided ArcCur";
-	
-	if(ShortSign==1) return;
-
-	o << endl;
-	radTArcCur::DumpPureObjInfo(o, ShortSign);
-
-	o << endl;
-	radTGroup::DumpPureObjInfo(o, ShortSign);
-
-	o << endl;
-	((radTg3d*)((radTGroup*)this))->radTg3d::DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied (incl. the content): " << SizeOfThis() << " bytes";
-}
+// radTSubdividedArcCur::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------

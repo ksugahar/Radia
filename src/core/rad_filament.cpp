@@ -238,26 +238,7 @@ FinalDefinitionOfFieldIntegrals:
 
 //-------------------------------------------------------------------------
 
-void radTFlmLinCur::Dump(std::ostream& o, int ShortSign) // Porting
-{
-	radTg3d::Dump(o);
-	o << "FlmLinCur";
-	if(ShortSign==1) return;
-	o << endl;
-
-	o << "   {x1,y1,z1}= {" << StartPoint.x << ','
-							<< StartPoint.y << ','
-							<< StartPoint.z << "}" << endl
-	  << "   {x2,y2,z2}= {" << EndPoint.x << ','
-							<< EndPoint.y << ','
-							<< EndPoint.z << "}" << endl
-	  << "   i= " << I;
-
-	DumpTransApplied(o);
-
-	o << endl;
-	o << "   Memory occupied: " << SizeOfThis() << " bytes";
-}
+// radTFlmLinCur::Dump REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
