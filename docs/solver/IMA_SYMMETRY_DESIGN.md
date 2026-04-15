@@ -258,7 +258,7 @@ Compare with ELF_MAGIC x-mirror results:
    - Validate against ELF_MAGIC
 
 2. **Phase 2**: HACApK IMA (ComputeMatrixElement_IMA)
-   - Modify RadHACApKManager for IMA mode
+   - Modify RadHACApKMSCManager for IMA mode
    - Validate performance and accuracy
 
 3. **Phase 3**: Multi-axis symmetry
