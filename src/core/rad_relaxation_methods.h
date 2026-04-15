@@ -464,7 +464,7 @@ public:
 
 private:
 	// HACApK manager (owns the H-matrix)
-	RadHACApKManager* m_hacapk;
+	RadHACApKMSCManager* m_hacapk;
 	RadHACApKParams m_hacapk_params;
 
 	// NOTE: Jacobi preconditioner is now recomputed every iteration (FIX 2025-12-27)
