@@ -5,7 +5,7 @@
 * Project:        RADIA
 *
 * Description:    HACApK (H-matrix with ACA+) interface for BiCGSTAB solver
-*                 Implementation of RadHACApKManager and callback functions
+*                 Implementation of RadHACApKBase / RadHACApKMSCManager and callback functions
 *
 * First release:  2025
 *
@@ -46,7 +46,7 @@ namespace {
     // which must see the same manager/invChi/interaction set by the main thread.
     // Thread safety for concurrent BuildHMatrix calls (multiple Python threads)
     // is ensured by Python's GIL; standalone C++ use would require a mutex.
-    RadHACApKManager* g_currentManager = nullptr;
+    RadHACApKBase* g_currentManager = nullptr;
     std::vector<double> g_invChi;
     radTInteraction* g_interaction = nullptr;
     int g_nElem = 0;
@@ -64,11 +64,11 @@ namespace {
 
 namespace RadHACApKCallback {
 
-void SetCurrentManager(RadHACApKManager* manager) {
+void SetCurrentManager(RadHACApKBase* manager) {
     g_currentManager = manager;
 }
 
-RadHACApKManager* GetCurrentManager() {
+RadHACApKBase* GetCurrentManager() {
     return g_currentManager;
 }
 
@@ -178,32 +178,43 @@ double cHACApK_entry_ij(int i, int j, int i_bemv) {
 }  // extern "C"
 
 //=========================================================================
-// RadHACApKManager Implementation
+// RadHACApKBase Implementation (kernel-agnostic H-matrix lifecycle)
 //=========================================================================
 
-RadHACApKManager::RadHACApKManager(radTInteraction* interaction)
-    : m_interaction(interaction)
-    , m_leafmtxp(nullptr)
+RadHACApKBase::RadHACApKBase()
+    : m_leafmtxp(nullptr)
     , m_control(nullptr)
     , m_valid(false)
     , m_ndof(0)
     , m_n_elem(0)
+    , m_diag_cached(false)
+{
+}
+
+RadHACApKBase::~RadHACApKBase() {
+    FreeResources();
+}
+
+//=========================================================================
+// RadHACApKMSCManager Implementation (MMM / MSC kernel)
+//=========================================================================
+
+RadHACApKMSCManager::RadHACApKMSCManager(radTInteraction* interaction)
+    : RadHACApKBase()
+    , m_interaction(interaction)
     , m_nffc(3)
     , m_is_6dof(false)
     , m_is_5dof(false)
     , m_is_mixed_dof(false)
     , m_geometry_3dof_ready(false)
-    , m_diag_cached(false)
     , m_flat_N_ready(false)
 {
     // Hash-based cache is initialized automatically
 }
 
-RadHACApKManager::~RadHACApKManager() {
-    FreeResources();
-}
+RadHACApKMSCManager::~RadHACApKMSCManager() = default;
 
-void RadHACApKManager::FreeResources() {
+void RadHACApKBase::FreeResources() {
     // Clear global callback state first (prevents stale state in next solve)
     RadHACApKCallback::ClearGlobalState();
 
@@ -225,7 +236,7 @@ void RadHACApKManager::FreeResources() {
     m_valid = false;
 }
 
-void RadHACApKManager::ExtractElementCoordinates() {
+void RadHACApKMSCManager::ExtractCoordinates() {
     // Extract element center coordinates for clustering
     // Supports both 3DOF tetrahedra and 6DOF MSC hexahedra
     if (!m_interaction) return;
@@ -324,7 +335,7 @@ void RadHACApKManager::ExtractElementCoordinates() {
 // BuildDOFLookupTable: Create O(1) DOF-to-element lookup (ELF-style)
 //=========================================================================
 
-void RadHACApKManager::BuildDOFLookupTable() {
+void RadHACApKMSCManager::BuildDOFLookupTable() {
     if (m_ndof == 0) return;
 
     m_dof_to_elem.resize(m_ndof);
@@ -346,7 +357,7 @@ void RadHACApKManager::BuildDOFLookupTable() {
 // This avoids calling B_comp() which has significant overhead during H-matrix build
 //=========================================================================
 
-void RadHACApKManager::PrecomputeGeometry3DOF() {
+void RadHACApKMSCManager::PrecomputeGeometry3DOF() {
     if (m_geometry_3dof_ready || m_n_elem == 0 || !m_interaction) return;
 
     // Allocate arrays for tetrahedra (4 triangular faces, 3 vertices each)
@@ -431,7 +442,7 @@ void RadHACApKManager::PrecomputeGeometry3DOF() {
 // This eliminates pointer chasing during matrix element access
 //=========================================================================
 
-void RadHACApKManager::PrecomputeFlatInteractMatrix() {
+void RadHACApKMSCManager::PrecomputeFlatInteractMatrix() {
     if (m_flat_N_ready || m_n_elem == 0 || !m_interaction) return;
     if (!m_interaction->InteractMatrix) {
         return;  // InteractMatrix not computed
@@ -474,7 +485,7 @@ void RadHACApKManager::PrecomputeFlatInteractMatrix() {
 // 6DOF hexahedra use radTInteraction::Compute6x6BlockFast (shared with LU/BiCGSTAB)
 //=========================================================================
 
-void RadHACApKManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const {
+void RadHACApKMSCManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat) const {
     // Use radTInteraction's unified implementation (shared with LU/BiCGSTAB)
     if (m_interaction && m_interaction->IsHexaTriDataReady()) {
         m_interaction->Compute6x6BlockFast(elem_i, elem_j, K_mat);
@@ -485,101 +496,35 @@ void RadHACApKManager::Compute6x6BlockFast(int elem_i, int elem_j, double* K_mat
     std::memset(K_mat, 0, 36 * sizeof(double));
 }
 
-bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
+bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     FreeResources();
-
-    if (!m_interaction) {
-        std::cerr << "[HACApK] Error: No interaction object" << std::endl;
-        return false;
-    }
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    ExtractElementCoordinates();
+    ExtractCoordinates();
 
     if (m_n_elem == 0) {
         std::cerr << "[HACApK] Error: No elements" << std::endl;
         return false;
     }
-
-    // Set global callback state
-    RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
-    RadHACApKCallback::SetCurrentManager(this);
-
-    // FIX (2025-02-04): Increment generation counter to invalidate thread-local caches
-    // This ensures that matrix element caches from previous solves are not reused
-    RadHACApKCallback::IncrementGeneration();
-
-    // Verify DOF was configured correctly (3DOF, 5DOF, 6DOF, or mixed=0)
-    if (m_ndof == 0 || (m_nffc != 0 && m_nffc != 3 && m_nffc != 5 && m_nffc != 6)) {
-        std::cerr << "[HACApK] Error: Invalid DOF configuration (nffc=" << m_nffc << ")" << std::endl;
+    if (m_ndof == 0) {
+        std::cerr << "[HACApK] Error: Invalid DOF configuration (ndof=0)" << std::endl;
         return false;
     }
 
-    // ELF-style pre-computation for 6DOF hexahedra
-    // Use radTInteraction's unified precomputation (shared with LU/BiCGSTAB)
-    if (m_is_6dof) {
-        // Ensure radTInteraction has precomputed geometry
-        // HACApK delegates all 6DOF computation to radTInteraction::Compute6x6BlockFast
-        m_interaction->PrecomputeHexaGeometry();
-    }
-    // ELF-style pre-computation for 3DOF tetrahedra (2025-12-26)
-    // PrecomputeGeometry3DOF extracts face vertices/normals for direct field computation
-    // This allows on-demand matrix element computation without O(N^2) SetupInteractMatrix()
-    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof) {
-        PrecomputeGeometry3DOF();
-    }
-    // For pure wedge: precompute wedge geometry via radTInteraction
-    if (m_is_5dof && m_interaction) {
-        m_interaction->PrecomputeWedgeGeometry();
-    }
-    // FIX (2025-12-26): For 3DOF tetrahedra, use PrecomputeFlatInteractMatrix()
-    // if InteractMatrix was already computed (fallback path)
-    // This provides O(1) matrix element access during H-matrix construction
-    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
-        PrecomputeFlatInteractMatrix();
-    }
-    // For mixed DOF mode: precompute ALL element type geometries
-    // ComputeMixedBlockFast needs geometry for each element type present
-    if (m_is_mixed_dof && m_interaction) {
-        m_interaction->PrecomputeTetraGeometry();
-        m_interaction->PrecomputeWedgeGeometry();
-        m_interaction->PrecomputeHexaGeometry();
-    }
+    // Set global callback state (MUST happen before OnBeforeBuild / InitializeInvChi
+    // so kernel-side hooks may register additional callback state if needed)
+    RadHACApKCallback::SetCurrentManager(this);
 
-    // Initialize inverse susceptibility with ELF-style initial chi from BH curve point 2
-    // This matches ELF's initialize_chi_from_bh() which uses:
-    //   chi = B2/(mu0*H2) - 1 (from 2nd point of BH curve)
-    m_inv_chi.resize(m_ndof);
+    // FIX (2025-02-04): Increment generation counter to invalidate thread-local caches
+    // so that matrix-element caches from previous solves are not reused.
+    RadHACApKCallback::IncrementGeneration();
 
-    for (int i = 0; i < m_n_elem; i++) {
-        radTg3dRelax* g3dRelaxPtr = m_interaction->g3dRelaxPtrVect[i];
-        radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+    // Kernel-specific precomputation (e.g. PrecomputeHexaGeometry for MSC hex)
+    OnBeforeBuild();
 
-        // Use ELF-style initial chi from BH curve point 2 (matches initialize_chi_from_bh)
-        double chi = 1.0;
-        radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
-        if (NonlinMater != nullptr) {
-            chi = NonlinMater->GetInitialChi_ELF_Style();
-            if (chi <= 0) chi = 1.0;
-        } else {
-            // Fallback for linear materials: use DefineInstantKsiTensor with H=0
-            TMatrix3d KsiTensor;
-            TVector3d MrVect;
-            TVector3d H_zero(0., 0., 0.);
-            MaterPtr->DefineInstantKsiTensor(H_zero, KsiTensor, MrVect);
-            chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
-        }
-        if (chi < 1.0e-6) chi = 1.0e-6;
-        double inv_chi_val = 1.0 / chi;
-
-        // All DOF per element use the same 1/chi
-        int offset = m_dof_offset[i];
-        int elem_dof = m_dof_offset[i + 1] - offset;
-        for (int k = 0; k < elem_dof; k++) {
-            m_inv_chi[offset + k] = inv_chi_val;
-        }
-    }
+    // Kernel-specific initial chi (for MSC: initial susceptibility from material state)
+    InitializeInvChi();
 
     RadHACApKCallback::SetInvChi(m_inv_chi);
 
@@ -592,15 +537,14 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
         return false;
     }
 
-    // Build H-matrix using the C wrapper
-    // m_nffc: 3 for tetrahedra, 6 for hexahedra, 0 for mixed
-    int ndim = 3;  // Spatial dimension
+    // Build H-matrix via HACApK wrapper. Variable-DOF mode routes through the
+    // dof_offset array; uniform-DOF mode uses GetUniformNFFC().
+    int ndim = 3;
 
     auto t_hmatrix_start = std::chrono::high_resolution_clock::now();
     int result;
 
-    if (m_is_mixed_dof || m_is_5dof) {
-        // Variable DOF mode: use varDOF wrapper (mixed meshes and pure wedge)
+    if (IsVariableDOF()) {
         result = HACApK_build_hmatrix_varDOF_wrapper(
             m_leafmtxp,
             m_control,
@@ -615,13 +559,12 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
             params.print_level
         );
     } else {
-        // Uniform DOF mode (original)
         result = HACApK_build_hmatrix_wrapper(
             m_leafmtxp,
             m_control,
             m_coordinates.data(),
             m_n_elem,
-            m_nffc,  // 3 for tetra, 6 for hexa
+            GetUniformNFFC(),
             ndim,
             params.aca_eps,
             params.leaf_size,
@@ -657,18 +600,12 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     m_stats.n_dense = m_stats.n_leaves - m_stats.n_lowrank;
     m_stats.max_rank = HACApK_leafmtxp_get_ktmax(m_leafmtxp);
 
-    // Calculate memory usage and compression ratio (ELF-compatible)
-    // Use accurate per-leaf calculation instead of rough estimation
     int64_t hmat_bytes = 0;
     int64_t dense_bytes = 0;
     HACApK_get_memory_stats(m_leafmtxp, &hmat_bytes, &dense_bytes);
 
     m_stats.memory_mb = (double)hmat_bytes / (1024.0 * 1024.0);
     m_stats.dense_memory_mb = (double)dense_bytes / (1024.0 * 1024.0);
-
-    // Compression ratio = H-matrix memory / Dense matrix memory
-    // Note: dense_bytes is the sum of block sizes, not full N^2 matrix
-    // This matches ELF's definition where compression < 1 means memory saved
     m_stats.compression = (dense_bytes > 0) ?
         (double)hmat_bytes / (double)dense_bytes : 1.0;
 
@@ -686,8 +623,8 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
                   << std::endl;
     }
 
-    // Cache diagonal elements N_ii for Jacobi preconditioner
-    // This is computed once and reused in every BiCGSTAB iteration
+    // Cache diagonal elements N_ii for Jacobi preconditioner (reused every
+    // BiCGSTAB iteration). Uses virtual GetInteractionMatrixElement.
     m_diag_N.resize(m_ndof);
     ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t i) {
         m_diag_N[(int)i] = GetInteractionMatrixElement((int)i, (int)i);
@@ -698,7 +635,92 @@ bool RadHACApKManager::BuildHMatrix(const RadHACApKParams& params) {
     return true;
 }
 
-void RadHACApKManager::MatVec(const std::vector<double>& x, std::vector<double>& y) {
+//=========================================================================
+// RadHACApKMSCManager::OnBeforeBuild
+// MSC-specific precomputation switch (runs AFTER ExtractCoordinates has
+// populated m_nffc, m_is_6dof/5dof/mixed_dof, and BEFORE HACApK callbacks).
+//=========================================================================
+
+void RadHACApKMSCManager::OnBeforeBuild() {
+    if (!m_interaction) return;
+
+    // Validate MSC DOF configuration
+    if (m_nffc != 0 && m_nffc != 3 && m_nffc != 5 && m_nffc != 6) {
+        std::cerr << "[HACApK] Warning: unexpected MSC nffc=" << m_nffc << std::endl;
+    }
+
+    // Register with callback (informational; ComputeEntry uses the manager directly)
+    RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, m_nffc);
+
+    // ELF-style pre-computation for 6DOF hexahedra — shared with LU/BiCGSTAB.
+    if (m_is_6dof) {
+        m_interaction->PrecomputeHexaGeometry();
+    }
+    // ELF-style pre-computation for 3DOF tetrahedra (2025-12-26) — extracts
+    // face vertices/normals for direct field computation without O(N^2)
+    // SetupInteractMatrix().
+    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof) {
+        PrecomputeGeometry3DOF();
+    }
+    // Pure wedge: precompute via radTInteraction
+    if (m_is_5dof) {
+        m_interaction->PrecomputeWedgeGeometry();
+    }
+    // FIX (2025-12-26): 3DOF tetrahedra fallback — if InteractMatrix was
+    // already computed, use flat storage for O(1) element access.
+    if (!m_is_6dof && !m_is_5dof && !m_is_mixed_dof && !m_geometry_3dof_ready && m_interaction->InteractMatrix != nullptr) {
+        PrecomputeFlatInteractMatrix();
+    }
+    // Mixed DOF: precompute ALL element geometries (ComputeMixedBlockFast
+    // needs each type present in the mesh).
+    if (m_is_mixed_dof) {
+        m_interaction->PrecomputeTetraGeometry();
+        m_interaction->PrecomputeWedgeGeometry();
+        m_interaction->PrecomputeHexaGeometry();
+    }
+}
+
+//=========================================================================
+// RadHACApKMSCManager::InitializeInvChi
+// Populate m_inv_chi from material state. Matches ELF's
+// initialize_chi_from_bh() for nonlinear isotropic materials (chi from the
+// 2nd BH curve point) and falls back to DefineInstantKsiTensor(H=0) for
+// linear materials.
+//=========================================================================
+
+void RadHACApKMSCManager::InitializeInvChi() {
+    if (!m_interaction) return;
+    m_inv_chi.resize(m_ndof);
+
+    for (int i = 0; i < m_n_elem; i++) {
+        radTg3dRelax* g3dRelaxPtr = m_interaction->g3dRelaxPtrVect[i];
+        radTMaterial* MaterPtr = (radTMaterial*)(g3dRelaxPtr->MaterHandle.rep);
+
+        double chi = 1.0;
+        radTNonlinearIsotropMaterial* NonlinMater = dynamic_cast<radTNonlinearIsotropMaterial*>(MaterPtr);
+        if (NonlinMater != nullptr) {
+            chi = NonlinMater->GetInitialChi_ELF_Style();
+            if (chi <= 0) chi = 1.0;
+        } else {
+            TMatrix3d KsiTensor;
+            TVector3d MrVect;
+            TVector3d H_zero(0., 0., 0.);
+            MaterPtr->DefineInstantKsiTensor(H_zero, KsiTensor, MrVect);
+            chi = (KsiTensor.Str0.x + KsiTensor.Str1.y + KsiTensor.Str2.z) / 3.0;
+        }
+        if (chi < 1.0e-6) chi = 1.0e-6;
+        double inv_chi_val = 1.0 / chi;
+
+        // All DOF on this element share the same 1/chi.
+        int offset = m_dof_offset[i];
+        int elem_dof = m_dof_offset[i + 1] - offset;
+        for (int k = 0; k < elem_dof; k++) {
+            m_inv_chi[offset + k] = inv_chi_val;
+        }
+    }
+}
+
+void RadHACApKBase::MatVec(const std::vector<double>& x, std::vector<double>& y) {
     if (!m_valid || !m_leafmtxp || !m_control) {
         std::fill(y.begin(), y.end(), 0.0);
         return;
@@ -708,7 +730,7 @@ void RadHACApKManager::MatVec(const std::vector<double>& x, std::vector<double>&
     HACApK_matvec_wrapper(m_leafmtxp, m_control, x.data(), y.data(), nd);
 }
 
-void RadHACApKManager::UpdateDiagonal(const std::vector<double>& inv_chi) {
+void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
     if (!m_valid || !m_leafmtxp || !m_control) return;
 
     // Update stored inverse susceptibility
@@ -746,7 +768,7 @@ void RadHACApKManager::UpdateDiagonal(const std::vector<double>& inv_chi) {
 // K(face_i, face_j) = normal_i dot H_field(eval_pt_i, src_face_j)
 //=========================================================================
 
-void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) const {
+void RadHACApKMSCManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) const {
     // Bounds check for element indices
     if (elem_i < 0 || elem_i >= m_n_elem || elem_j < 0 || elem_j >= m_n_elem) {
         std::cerr << "[HACApK] Error: Invalid element indices in Compute6x6Block: "
@@ -828,7 +850,7 @@ void RadHACApKManager::Compute6x6Block(int elem_i, int elem_j, double* K_mat) co
 static constexpr int TL_HASH_SIZE = 1024;
 static constexpr int TL_HASH_MASK = TL_HASH_SIZE - 1;
 
-double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
+double RadHACApKMSCManager::GetCached6x6Element(int elem_i, int elem_j, int face_i, int face_j) const {
     // FIX (2025-02-04): Use generation counter for cache invalidation.
     // The generation counter is incremented each time a new HACApK manager builds its H-matrix.
     // This properly handles memory reuse where a new interaction object might have the
@@ -909,7 +931,7 @@ double RadHACApKManager::GetCached6x6Element(int elem_i, int elem_j, int face_i,
 // Supports 3DOF tetrahedra, 6DOF hexahedra, and mixed meshes
 //=========================================================================
 
-double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
+double RadHACApKMSCManager::GetInteractionMatrixElement(int dof_i, int dof_j) const {
     if (!m_interaction || dof_i < 0 || dof_i >= m_ndof || dof_j < 0 || dof_j >= m_ndof) {
         return 0.0;
     }
@@ -966,7 +988,7 @@ double RadHACApKManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
 static constexpr int TL_HASH_SIZE_3DOF = 1024;
 static constexpr int TL_HASH_MASK_3DOF = TL_HASH_SIZE_3DOF - 1;
 
-double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
+double RadHACApKMSCManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const {
     // If flat storage is ready (pre-computed), use O(1) direct access
     if (m_flat_N_ready) {
         int64_t base_idx = ((int64_t)elem_i * m_n_elem + elem_j) * 9;
@@ -1065,7 +1087,7 @@ double RadHACApKManager::GetCached3x3Element(int elem_i, int elem_j, int comp_i,
 static constexpr int TL_HASH_SIZE_5DOF = 512;
 static constexpr int TL_HASH_MASK_5DOF = TL_HASH_SIZE_5DOF - 1;
 
-double RadHACApKManager::GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const {
+double RadHACApKMSCManager::GetCached5x5Element(int elem_i, int elem_j, int face_i, int face_j) const {
     static thread_local uint64_t tl_cached_generation = 0;
     static thread_local int tl_single_elem_i = -1;
     static thread_local int tl_single_elem_j = -1;
@@ -1135,7 +1157,7 @@ static constexpr int TL_HASH_SIZE_MIXED = 256;
 static constexpr int TL_HASH_MASK_MIXED = TL_HASH_SIZE_MIXED - 1;
 static constexpr int MAX_BLOCK_SIZE = 36;  // max DOF product: 6x6
 
-double RadHACApKManager::GetCachedMixedElement(int elem_i, int elem_j,
+double RadHACApKMSCManager::GetCachedMixedElement(int elem_i, int elem_j,
 	int dof_i, int dof_j, int local_i, int local_j) const
 {
 	static thread_local uint64_t tl_cached_generation = 0;
@@ -1203,7 +1225,7 @@ double RadHACApKManager::GetCachedMixedElement(int elem_i, int elem_j,
 // Uses existing radTInteraction::InteractMatrix
 //=========================================================================
 
-void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) const {
+void RadHACApKMSCManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) const {
     // InteractMatrix[elem_i][elem_j] returns TMatrix3df (3x3 float matrix)
     //
     // MATRIX LAYOUT FIX (2025-12-24):
@@ -1250,7 +1272,7 @@ void RadHACApKManager::Compute3x3Block(int elem_i, int elem_j, double* N_mat) co
 // This is used by HACApK to avoid O(N^2) matrix pre-computation
 //=========================================================================
 
-void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const {
+void RadHACApKMSCManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const {
     // Compute interaction from element j to observation at element i center
     // using B_comp() directly (same approach as SetupInteractMatrix)
     //
@@ -1326,7 +1348,7 @@ void RadHACApKManager::Compute3x3Block_OnDemand(int elem_i, int elem_j, double* 
 // For PreRelax mode, we compute dH/dM for each unit M direction.
 //=========================================================================
 
-void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const {
+void RadHACApKMSCManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const {
     std::memset(N_mat, 0, 9 * sizeof(double));
 
     if (!m_geometry_3dof_ready || elem_i < 0 || elem_i >= m_n_elem ||
@@ -1399,7 +1421,7 @@ void RadHACApKManager::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat
     }
 }
 
-double RadHACApKManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
+double RadHACApKMSCManager::GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const {
     // Generic path: access pre-computed flat interaction matrix (+N convention)
     if (!m_interaction || m_interaction->m_flatInteractMatrix.empty()) return 0.0;
 
