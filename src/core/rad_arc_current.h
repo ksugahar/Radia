@@ -56,41 +56,7 @@ public:
 		InternalFacesAfterCut = 0;
 		ConsiderOnlyWithTrans = 0;
 	}
-	radTArcCur(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-
-		//TVector3d CircleCentrPoint;
-		inStr >> CircleCentrPoint;
-
-		//double R_min, R_max;
-		inStr >> R_min;
-		inStr >> R_max;
-
-		//double Phi_min, Phi_max;
-		inStr >> Phi_min;
-		inStr >> Phi_max;
-
-		//double Height;
-		inStr >> Height;
-
-		//double J_azim;
-		inStr >> J_azim;
-
-		//int NumberOfSectors;
-		inStr >> NumberOfSectors;
-
-		//short BasedOnPrecLevel;
-		inStr >> BasedOnPrecLevel;
-
-		//short InternalFacesAfterCut;
-		inStr >> InternalFacesAfterCut;
-
-		//char J_IsNotZero;
-		inStr >> J_IsNotZero;
-	}
-
-	radTArcCur() 
+	radTArcCur()
 	{ 
 		J_IsNotZero = 0; InternalFacesAfterCut = 0; ConsiderOnlyWithTrans = 0;
 	}
@@ -167,8 +133,7 @@ public:
 
 	void Push_backCenterPointAndField(radTFieldKey*, radTVectPairOfVect3d*, radTrans* pBaseTrans, radTg3d*, radTApplication*);
 
-	// Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, radTmhg& gMapOfHandlers, int& gUniqueMapKey, int elemKey);
+	// Dump / DumpPureObjInfo / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 
 	int SubdivideItself(double*, radThg&, radTApplication*, radTSubdivOptions*);
@@ -272,14 +237,6 @@ public:
 		BackgrB = InBackgrB;  // Input in Tesla
 	}
 
-	radTBackgroundFieldSource(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers)
-	{//Instantiates from string according to DumpBin
-		DumpBinParse_g3d(inStr, mKeysOldNew, gMapOfHandlers);
-
-		//TVector3d BackgrB;
-		inStr >> BackgrB;
-	}
-
 	radTBackgroundFieldSource()
 	{
 		BackgrB.Zero();
@@ -313,30 +270,7 @@ public:
 		// Infinite integral is set to zero (though, formally, its contribution is infinite)
 	}
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-	{
-		//Dumping objects that may be used by this object
-		vector<pair<int, int> > vTrfKeys;
-		DumpBin_g3d_TreatTrfs(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, vTrfKeys);
-
-		vElemKeysOut.push_back(elemKey);
-		oStr << elemKey;
-
-		//Next 5 bytes define/encode element type:
-		oStr << (char)Type_g();
-		oStr << (char)Type_g3d();
-		oStr << (char)0;
-		oStr << (char)0;
-		oStr << (char)0;
-
-		//Members of radTg3d
-		DumpBin_g3d(oStr, vTrfKeys);
-
-		//TVector3d BackgrB;
-		oStr << BackgrB;
-	}
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int DuplicateItself(radThg& hg, radTApplication*, char)
 	{

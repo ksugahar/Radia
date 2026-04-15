@@ -238,41 +238,7 @@ FinalDefinitionOfFieldIntegrals:
 
 //-------------------------------------------------------------------------
 
-// radTFlmLinCur::Dump REMOVED (Phase B2b, 2026-04-15)
-
-//-------------------------------------------------------------------------
-
-void radTFlmLinCur::DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut, map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers, int& gUniqueMapKey, int elemKey)
-{
-	//Dumping objects that may be used by this object
-	vector<pair<int, int> > vTrfKeys;
-	DumpBin_g3d_TreatTrfs(oStr, vElemKeysOut, gMapOfHandlers, gUniqueMapKey, vTrfKeys);
-
-	vElemKeysOut.push_back(elemKey);
-	oStr << elemKey;
-
-	//Next 5 bytes define/encode element type:
-	oStr << (char)Type_g();
-	oStr << (char)Type_g3d();
-	oStr << (char)0;
-	oStr << (char)0;
-	oStr << (char)0;
-
-	//Members of radTg3d
-	DumpBin_g3d(oStr, vTrfKeys);
-
-	//radTrans NativeRotation;
-	NativeRotation.DumpBin_Trans(oStr);
-
-	//double Length;
-	oStr << Length;
-
-	//double I;
-	oStr << I;
-
-	//TVector3d StartPoint, EndPoint;
-	oStr << StartPoint << EndPoint;
-}
+// radTFlmLinCur::Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 //-------------------------------------------------------------------------
 

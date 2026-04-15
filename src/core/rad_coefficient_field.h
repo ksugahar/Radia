@@ -29,8 +29,6 @@ public:
 
 	radTCoefficientFunctionFieldSource(PyObject* callback);
 
-	radTCoefficientFunctionFieldSource(CAuxBinStrVect& inStr, map<int, int>& mKeysOldNew, radTmhg& gMapOfHandlers);
-
 	radTCoefficientFunctionFieldSource(const radTCoefficientFunctionFieldSource& src);
 
 	virtual ~radTCoefficientFunctionFieldSource();
@@ -40,11 +38,7 @@ public:
 	void B_intComp(radTField* FieldPtr);
 
 
-	// Dump REMOVED (Phase B2b, 2026-04-15)
-
-	void DumpBin(CAuxBinStrVect& oStr, vector<int>& vElemKeysOut,
-	             map<int, radTHandle<radTg>, less<int> >& gMapOfHandlers,
-	             int& gUniqueMapKey, int elemKey);
+	// Dump / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)
 
 	int DuplicateItself(radThg& hg, radTApplication*, char);
 
