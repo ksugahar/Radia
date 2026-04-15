@@ -473,6 +473,7 @@ def radia_usage(topic: str = "all") -> str:
             "materials"      - MatLin, MatSatIsoTab, hysteresis, permanent magnets
             "solver"         - rad.Solve, SolverConfig, LU/BiCGSTAB/HACApK
             "field"          - rad.Fld, batch evaluation, A field
+            "removed_apis"   - Removed APIs reference (FldEnr/ObjDivMag/UtiDmp/...)
             "ngsolve"        - RadiaField CF, netgen_mesh_to_radia
             "background"     - ObjBckg, Biot-Savart source
             "ima"            - Image Method of Analysis
