@@ -45,7 +45,7 @@ def fake_msh(tmp_path):
     """Create a placeholder .msh file on disk so os.path.isfile
     returns True."""
     p = tmp_path / "model.msh"
-    p.write_text("$MeshFormat\n2.2 0 8\n$EndMeshFormat\n")
+    p.write_text("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
     return str(p)
 
 

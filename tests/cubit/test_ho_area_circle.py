@@ -312,9 +312,6 @@ def main():
     n_tri, n_nodes = build_circle_mesh(mesh_size)
 
     test_cases = [
-        ("GMSH v2.2", ".msh",
-         'radia_export gmsh "{f}" order {o} version 2 dimension 2 overwrite',
-         parse_gmsh_area),
         ("GMSH v4.1", ".msh",
          'radia_export gmsh "{f}" order {o} version 4 dimension 2 overwrite',
          parse_gmsh_area),

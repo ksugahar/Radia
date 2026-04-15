@@ -59,54 +59,78 @@ def build_sphere_mesh(mesh_size=0.02):
     return n_tet, n_nodes
 
 
-def parse_gmsh_v22(filename):
-    """Parse GMSH v2.2 file and return nodes dict and element connectivity."""
-    nodes = {}  # id -> (x, y, z)
-    elements = []  # list of (type, [node_ids])
+def parse_gmsh_v41(filename):
+    """Parse GMSH v4.1 file and return nodes dict and element connectivity.
+
+    v4.1 format (block-structured):
+      $Nodes
+      <numEntityBlocks numNodes minTag maxTag>
+      for each block:
+        <entityDim entityTag parametric numNodesInBlock>
+        nodeTag1
+        nodeTag2
+        ...
+        x1 y1 z1
+        x2 y2 z2
+        ...
+      $EndNodes
+
+      $Elements (analogous, one block per entity/type)
+    """
+    nodes = {}
+    elements = []
 
     with open(filename, 'r') as f:
-        lines = f.readlines()
+        lines = [ln.strip() for ln in f.readlines()]
 
-    section = None
-    n_nodes = 0
-    n_elems = 0
-    node_count_read = 0
-    elem_count_read = 0
+    i = 0
+    n = len(lines)
+    while i < n:
+        ln = lines[i]
+        if ln == '$Nodes':
+            i += 1
+            hdr = lines[i].split()
+            n_blocks = int(hdr[0])
+            i += 1
+            for _ in range(n_blocks):
+                bh = lines[i].split()
+                n_in_block = int(bh[3])
+                i += 1
+                tag_ids = [int(lines[i + k]) for k in range(n_in_block)]
+                i += n_in_block
+                for k in range(n_in_block):
+                    parts = lines[i + k].split()
+                    nodes[tag_ids[k]] = (
+                        float(parts[0]), float(parts[1]), float(parts[2]))
+                i += n_in_block
+            while i < n and lines[i] != '$EndNodes':
+                i += 1
+        elif ln == '$Elements':
+            i += 1
+            hdr = lines[i].split()
+            n_blocks = int(hdr[0])
+            i += 1
+            for _ in range(n_blocks):
+                bh = lines[i].split()
+                etype = int(bh[2])
+                n_in_block = int(bh[3])
+                i += 1
+                for k in range(n_in_block):
+                    parts = lines[i + k].split()
+                    conn = [int(p) for p in parts[1:]]
+                    elements.append((etype, conn))
+                i += n_in_block
+            while i < n and lines[i] != '$EndElements':
+                i += 1
+        i += 1
 
-    for line in lines:
-        line = line.strip()
-        if line.startswith('$'):
-            if line == '$Nodes':
-                section = 'nodes'
-            elif line == '$Elements':
-                section = 'elements'
-            elif line.startswith('$End'):
-                section = None
-            continue
-
-        if section == 'nodes':
-            if n_nodes == 0:
-                n_nodes = int(line)
-            else:
-                parts = line.split()
-                nid = int(parts[0])
-                x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-                nodes[nid] = (x, y, z)
-                node_count_read += 1
-        elif section == 'elements':
-            if n_elems == 0:
-                n_elems = int(line)
-            else:
-                parts = line.split()
-                etype = int(parts[1])
-                ntags = int(parts[2])
-                conn_start = 3 + ntags
-                conn = [int(p) for p in parts[conn_start:]]
-                elements.append((etype, conn))
-                elem_count_read += 1
-
-    print(f"  Parsed {filename}: {node_count_read} nodes, {elem_count_read} elements")
+    print(f"  Parsed {filename}: {len(nodes)} nodes, {len(elements)} elements")
     return nodes, elements
+
+
+# Back-compat alias: older callers (and any user scripts that imported
+# the v2.2 parser) keep working against v4.1-only output.
+parse_gmsh_v22 = parse_gmsh_v41
 
 
 def tet4_volume(p0, p1, p2, p3):
@@ -268,21 +292,21 @@ def main():
 
         # Export order=1
         f1 = os.path.join(OUT_DIR, f"sphere_order1_sz{mesh_size}.msh")
-        cubit.cmd(f'radia_export gmsh "{f1}" order 1 version 2 overwrite')
+        cubit.cmd(f'radia_export gmsh "{f1}" order 1 overwrite')
 
         # Export order=2
         f2 = os.path.join(OUT_DIR, f"sphere_order2_sz{mesh_size}.msh")
-        cubit.cmd(f'radia_export gmsh "{f2}" order 2 version 2 overwrite')
+        cubit.cmd(f'radia_export gmsh "{f2}" order 2 overwrite')
 
         # Parse and compute volumes
         print("\nOrder 1 (TET4):")
-        nodes1, elems1 = parse_gmsh_v22(f1)
+        nodes1, elems1 = parse_gmsh_v41(f1)
         vol1 = compute_volume(nodes1, elems1)
         err1 = (vol1 - V_EXACT) / V_EXACT * 100.0
         print(f"  V = {vol1:.6e} m^3, error = {err1:+.2f}%")
 
         print("\nOrder 2 (TET10):")
-        nodes2, elems2 = parse_gmsh_v22(f2)
+        nodes2, elems2 = parse_gmsh_v41(f2)
         vol2 = compute_volume(nodes2, elems2)
         err2 = (vol2 - V_EXACT) / V_EXACT * 100.0
         print(f"  V = {vol2:.6e} m^3, error = {err2:+.2f}%")

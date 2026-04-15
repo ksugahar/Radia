@@ -21,8 +21,7 @@ Path A is the recommended export path. Use `radia_export netgen "mesh.vol" order
 | Command | Format | Order 1 | Order 2 | Order 3-5 |
 |---------|--------|---------|---------|-----------|
 | `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | Yes | Yes | Yes |
-| `radia_export gmsh "f.msh" version 2` | Gmsh v2.2 (.msh) | Yes | Yes | Yes |
-| `radia_export gmsh "f.msh" version 4` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
+| `radia_export gmsh "f.msh"` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
 | `radia_export nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
 | `radia_export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
 
@@ -36,8 +35,8 @@ No fallback to HighOrderMesh (removed).
 cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 # -> produces mesh.vol + mesh.vol.json (CAD reference values)
 
-# Gmsh v2.2 (for GMSH visualization, order 1-3 supported)
-cubit.cmd('radia_export gmsh "mesh.msh" order 3 version 2 overwrite')
+# Gmsh v4.1 (for GMSH visualization, order 1-3 supported)
+cubit.cmd('radia_export gmsh "mesh.msh" order 3 overwrite')
 
 # Netgen .vol supports order 1-5
 cubit.cmd('radia_export netgen "mesh.vol" order 5 overwrite')
@@ -114,10 +113,10 @@ The BEM solver uses BND elements only. Volume elements are ignored.
 """
 
 EXPORT_GMSH_V2 = """
-# Gmsh v2.2 Export
+# Gmsh v4.1 Export (default and only supported format)
 
 ```python
-export_Gmesh(cubit, FileName)  # version="2.2" is default
+export_Gmesh(cubit, FileName)  # v4.1 is default (v2.2 no longer supported)
 ```
 
 | Parameter | Type | Default | Description |
@@ -149,7 +148,7 @@ cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 from ngsolve import Mesh
 mesh = Mesh("mesh.vol")
 
-# Alternative: Gmsh v2.2 (2nd order only, for GMSH visualization)
+# Alternative: Gmsh v4.1 (2nd order only, for GMSH visualization)
 cubit.cmd("block 1 element type tetra10")
 cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 ```
@@ -176,39 +175,28 @@ export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
 | `"2D"` | Orient normals to +z, z-coordinates set to 0 |
 | `"3D"` | No normal orientation |
 
-## v2.2 vs v4.1: Format Version Policy
+## Format Version Policy
+
+v4.1 is the only supported GMSH format (v2.2 removed, lab-wide standard).
+For NGSolve, the input path is .vol via `radia_export netgen`.
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `radia_export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
 | **Output** (NGSolve ->) | **v4.1** | Field visualization in GMSH | `GmshPostExport.write()` -> GMSH GUI |
-| **Output** (NGSolve ->) | **v2.2** | High-order mesh exchange | `GmshPostExport.write_v22()` |
-
-| Feature | v2.2 | v4.1 |
-|---------|------|------|
-| $Entities section | No | Yes |
-| DIM parameter | No | Yes |
-| Post-processing (NodeData) | Basic | **Recommended** |
-| Physical Groups | Basic | Structured |
-| High-order elements (Tri6, Tet10, Tri10, ...) | **Yes (any order)** | **Yes (any order)** |
-| Element type codes | Same as v4.1 | Same as v2.2 |
-
-**Key rule**: Element type codes are identical in both versions.
-High-order elements (Tri10=21 for order 3, Tri15=23 for order 4, etc.) work in both.
 
 ### GmshPostExport Methods
 
 | Method | Format | High-order | Use case |
 |--------|--------|-----------|----------|
 | `write(filename)` | v4.1 | Yes (any order) | Field visualization in GMSH GUI |
-| `write_v22(filename)` | v2.2 | Yes (any order) | High-order mesh exchange |
 | `write_mesh(filename)` | v4.1 | Yes (any order) | Mesh only (no field data) |
 
 ## When to Use Which
 
 - **`radia_export netgen "mesh.vol"`**: For NGSolve FEM computation (recommended, any order)
 - **`GmshPostExport.write()`**: For field visualization in GMSH GUI (v4.1)
-- **`export_Gmesh(version="2.2")`**: For direct Cubit mesh output to GMSH (2nd order max)
+- **`export_Gmesh()`**: For direct Cubit mesh output to GMSH v4.1 (2nd order max)
 """
 
 EXPORT_CURVED = """
@@ -383,7 +371,7 @@ EXPORT_COMPARISON = """
 | Use Case | Recommended Format | Why |
 |----------|-------------------|-----|
 | NGSolve FEM (any order) | `radia_export netgen "f.vol" order N` | Arbitrary order via ACIS CallbackGeometry |
-| GMSH visualization | `export_Gmesh(version="2.2")` | GMSH GUI viewing |
+| GMSH visualization | `export_Gmesh()` | GMSH GUI viewing (v4.1) |
 | JMAG solver | `export_nastran()` | PYRAM=False for degenerate hex |
 | Cubit-native archival | `export_exodus()` | Full fidelity, all features |
 
@@ -399,7 +387,7 @@ EXPORT_COMPARISON = """
 | BlockID metadata | N/A | Yes | Yes | Yes | Yes |
 | 2D support | No | No | Yes | Yes | No |
 
-Note: Gmsh v2.2/v4.1 supports order 1-3 (TET, HEX, PYRAMID, TRI, QUAD).
+Note: Gmsh v4.1 supports order 1-3 (TET, HEX, PYRAMID, TRI, QUAD).
 Wedge/Prism limited to order 2. Order 4-5: error (use radia_export netgen).
 
 ## radia_export netgen vs Gmsh for NGSolve
@@ -433,7 +421,7 @@ EXPORT_DECISION_GUIDE = """
 
 - **Alternative (order 1-3)** -> Use `radia_export gmsh` for GMSH visualization:
   ```python
-  cubit.cmd('radia_export gmsh "mesh.msh" order 3 version 2 overwrite')
+  cubit.cmd('radia_export gmsh "mesh.msh" order 3 overwrite')
   # Supports order 1-3 (wedge limited to order 2). Order 4-5: error.
   # For NGSolve use radia_export netgen instead
   ```
@@ -476,8 +464,7 @@ geometry leads to poor quality or failed meshing.
 
 ## "I want Gmsh visualization"
 
--> Use `export_Gmesh(version="2.2")` for GMSH GUI viewing
-- Or `export_Gmesh(version="4.1")` for full v4.1 with $Entities
+-> Use `export_Gmesh()` for GMSH GUI viewing (v4.1 with $Entities)
 - **Note**: For NGSolve FEM, use `radia_export netgen "mesh.vol"` instead
 
 ## Performance & Feature Summary
