@@ -325,6 +325,8 @@ src/radia/panels/samples/_*.jou
 src/radia/panels/samples/compare_*.py
 src/radia/panels/samples/test_*.py
 src/radia/panels/samples/test_*.jou
+src/radia/panels/samples/wp_*.sol
+src/radia/panels/samples/3turnCoil.*
 
 # Panel inductance dev test scripts (one-shot probes, not regression suite)
 examples/cubit_panels/inductance/test_*.py
