@@ -1,4 +1,4 @@
-# Stage 5 finding: HACApK-MNA (nested BiCGSTAB) does not cross over
+# Stage 5+6 findings: HACApK-MNA scaling
 
 Helical solenoid, 10 turns x 20 seg/turn (200 connected segments),
 nwinc^2 parallel sub-filaments.  Freq 10 kHz.  Dense path is the
@@ -7,64 +7,97 @@ stock C++ `MNASolver` (LU).  HACApK path is
 rtol 1e-8, maxiter 5000 (the tightest tolerances that actually
 converge on this geometry).
 
-## Measurements (LAB, 2026-04-16)
+## Stage-5 baseline (BiCGSTAB outer)
 
-| Mode   | N_fil | t_solve | peak mem | |Z11|    | rel-err vs dense |
-|--------|------:|--------:|---------:|---------:|------------------:|
-| dense  |   200 |  0.01 s |   116 MB | 0.5739   | --                |
-| dense  |   800 |  0.12 s |   165 MB | 0.5682   | --                |
-| dense  |  1800 |  1.07 s |   367 MB | 0.5660   | --                |
-| dense  |  3200 |  5.59 s |   907 MB | 0.5652   | --                |
-| dense  |  5000 | 20.36 s |  2034 MB | 0.5648   | --                |
-| hacapk |   200 |  1.36 s |   109 MB | 0.5737   | 4.94e-04          |
+| Mode           | N_fil | t_solve |
+|----------------|------:|--------:|
+| dense LU       |   200 |   0.01 s |
+| hacapk bicgstab|   200 |  ~1.4 s  |
+| hacapk bicgstab|   500 |  ~30 s (diverges past rtol 1e-4) |
 
-At N=200 the HACApK driver is already **170x slower** than dense LU.
-Beyond N=200 the outer BiCGSTAB stalls well above the loose 1e-4
-target and/or wall time explodes (wall time ~300x dense at N=500,
-previously measured at ~30 s).
+BiCGSTAB outer stalls above N ~ 200 on a strongly coupled helical
+coil because the inner HACApK BiCGSTAB breaks down at residual
+~1e-7 and BiCGSTAB's three-term recurrence cannot tolerate that
+varying-operator noise.  Stage 5 concluded with this negative
+result and scheduled three remediation options.
 
-## Why
+## Stage-6a: lgmres outer (commit `<stage-6a>`)
 
-The pure L matvec **does** scale (stage 3 bench shows 255x speedup
-and 100x memory reduction at N=12500).  What does NOT scale is the
-nodal BiCGSTAB on top:
+Option 1 of the stage-5 plan.  scipy.sparse.linalg.lgmres replaces
+the outer BiCGSTAB and an exact diagonal Jacobi preconditioner is
+added on Y = A Z^{-1} A^T.  Both are wired through the
+`outer_method` keyword on `PEECCircuitSolver`; gcrotmk is also
+exposed but NaN-divides at N=72 + 10 kHz so lgmres is default.
 
-1. Each outer matvec `Y @ v = A Z^{-1} A^T v` requires a full inner
-   BiCGSTAB on the N-by-N branch system `Z I = A^T v`.
-2. scipy BiCGSTAB on the inner problem breaks down around residual
-   1e-7 on a strongly coupled helical coil (rho ~ 0).  This caps
-   the usable outer tolerance at ~1e-4 for the bench to converge
-   at all.
-3. Even at outer=1e-4, the outer loop needs 700+ matvecs, each
-   triggering a full inner solve with 20+ HACApK matvecs.  Product:
-   ~60,000 real H-matrix matvecs per port impedance evaluation.
+| Mode         | N_fil | t_solve | peak mem | |Z11|  | rel vs dense |
+|--------------|------:|--------:|---------:|--------|--------------|
+| dense LU     |   200 |  0.01 s |   115 MB | 0.5739 | --           |
+| dense LU     |   800 |  0.12 s |   165 MB | 0.5682 | --           |
+| dense LU     |  1800 |  1.07 s |   367 MB | 0.5660 | --           |
+| dense LU     |  3200 |  5.59 s |   907 MB | 0.5652 | --           |
+| dense LU     |  5000 | 20.44 s |  2034 MB | 0.5648 | --           |
+| hacapk lgmres|   200 |  3.56 s |   111 MB | 0.5742 | 4.07e-04     |
+| hacapk lgmres|   800 | 35.01 s |   121 MB | 0.5681 | 7.04e-05     |
+| hacapk lgmres|  1800 | 402.19 s|   157 MB | 0.5821 | 2.85e-02     |
 
-The pathology is visible even when the inner solve is replaced
-with a dense LU factorization of Z: nested Krylov on Y takes 2700
-outer matvecs at outer=1e-6, whereas direct BiCGSTAB on the
-assembled Y matrix converges in ~100 iterations.  Inner noise,
-however small, destroys outer Krylov convergence efficiency.
+(At N=1800 lgmres converges only to residual ~1e-3 under the 10x
+slack on outer_tol=1e-4, explaining the 3% Z_11 error.  Tightening
+outer_tol costs 4-10x more iterations and was not measured.)
 
-## Implication for the paper plan (memory/hacapk_peec_prima_plan.md)
+### Stage-6a finding: robust, not faster
 
-The "HACApK-MNA crossover N" measurement we expected to land
-somewhere above 2000 does not exist with the current architecture.
-Reporting this as a negative result is valuable: it motivates the
-stage-6+ redesign rather than hiding the limitation.
+lgmres converges everywhere BiCGSTAB did not, which is a prerequisite
+for the paper story.  But **it still does not beat dense LU in wall
+time**:
 
-## Suggested next steps (stage 6+)
+  N=200  :  350x slower
+  N=800  :  290x slower
+  N=1800 :  375x slower
 
-1. **FGMRES outer with BiCGSTAB inner.**  scipy.sparse.linalg.lgmres
-   is flexible with respect to preconditioner changes and should
-   tolerate the inner residual jitter that kills BiCGSTAB-on-BiCGSTAB.
-2. **Saddle-point formulation.**  Solve the coupled 2-by-2 block
-   system `[Z_branch, A^T; A, 0] [I; V] = [0; i_ext]` directly with
-   a single Krylov method + block preconditioner (e.g. Schur
-   complement approximation using `diag(A Z_diag^{-1} A^T)`).
-3. **Assemble Y as its own H-matrix.**  Since A is sparse and Z has
-   an H-matrix, `Y = A Z^{-1} A^T` can be built in H-matrix form
-   (inverse H-matrix of Z composed with sparse A).  Solve Y V = b
-   with direct H-matrix back-substitution, no nested Krylov.
+**The memory story is better.**  At N=1800 HACApK-MNA uses 157 MB
+(43% of dense's 367 MB); at N=5000 (where HACApK was not measured
+but L matvec alone stays ~150 MB per stage-3 bench) the ratio drops
+below 10%.  The memory crossover is real, the compute crossover is
+not.
 
-The current commit keeps the nested driver in the library as-is,
-so the stage-6 successor can diff the finding numerically.
+### Why compute still loses
+
+Per outer matvec the code does a full inner HACApK BiCGSTAB on
+Z_branch I = A^T v.  That inner solve costs ~30-50 real HACApK
+matvecs, each O(N log N), so the total work per port impedance is
+
+    O( outer_iters × inner_iters × N log N )
+      ~ 1800 × 50 × N log N           at N=1800
+
+versus dense LU's O(N^3).  The constants plus the inner Krylov
+overhead keep the nested approach from amortizing even at N ~ 5000.
+
+## Path forward (stage 7+)
+
+Since option 1 gives robustness but not compute speedup, we need one
+of the heavier options:
+
+1. **Saddle-point direct formulation.**  Solve the 2x2 block system
+       [Z_branch   A^T] [I]   [0    ]
+       [A          0 ] [V] = [i_ext]
+   with a single Krylov + block preconditioner (Schur complement
+   approximation using diag(Z_branch)).  Collapses the nested
+   structure into a single Krylov iteration.
+
+2. **Y as H-matrix.**  Build the inverse H-matrix of Z_branch (HACApK
+   QR or H-LU on the real-part L-only side), compose with sparse A
+   to form Y as an H-matrix, and solve Y V = b by direct back-sub.
+   Zero nested Krylov.  Highest ROI if we eventually add H-matrix
+   QR anyway for frequency sweep speed.
+
+Stage 7 should start with (1) because it reuses existing HACApK
+matvec + scipy Krylov plumbing; (2) becomes attractive if and when
+Ida-san's H-QR work lands (see memory/hacapk_peec_prima_plan.md).
+
+## How to reproduce
+
+    python examples/solver_benchmarks/bench_peec_mna_crossover.py
+
+Default uses OUTER_METHOD="lgmres"; change the module-level constant
+at the top of the script to "bicgstab" or "gcrotmk" to sweep.  Wall
+time ~7 minutes for the current SUBDIVISIONS settings on LAB.
