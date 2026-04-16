@@ -6,30 +6,33 @@ on the full nodal impedance solve.
 
 FINDINGS (LAB, 2026-04-16)
 --------------------------
-Contrary to the stage-3 result for the L matvec only, the nested
-Krylov driver in PEECCircuitSolver does NOT cross over with dense LU
-at any practical N.  On a helical coil with N_fil >= ~500:
+Stage 5 showed that naive nested BiCGSTAB (scipy bicgstab outer +
+HACApK BiCGSTAB inner) stalls above N ~ 200 on a strongly coupled
+helical coil.  Stage 6 (this revision) replaces the outer BiCGSTAB
+with scipy.sparse.linalg.lgmres, which tolerates the varying-operator
+preconditioner introduced by the inner Krylov -- so convergence is
+now robust across DC..10 MHz and N up to ~2000.
 
-  * Dense LU C++:          0.07 s at N=500       (1.475 reference |Z|)
-  * HACApK-MNA (nested):   ~30 s at N=500        (0.1% Z_11 accuracy)
-  * Pure HACApK L matvec:  0.003 s at N=500      (stage 3 bench)
+However, *robust* does not yet mean *fast*:
 
-The L matvec itself scales fine up to N=24500 (stage 3).  What does
-not scale is the outer nodal BiCGSTAB sitting on top: the inner
-HACApK BiCGSTAB breaks down around residual 1e-7 for a strongly
-coupled helical coil, which bounds the usable outer tolerance from
-below.  Even with loose outer_tol=1e-4, solving A Z^{-1} A^T V = i_ext
-needs 5000+ outer matvecs and accumulates inner noise so badly that
-the combined accuracy tops out around 1e-3.
+  * Dense LU C++ @ N=1800:      1.07 s    (reference)
+  * HACApK-MNA lgmres @ N=1800:   see results_bench_peec_mna_crossover.json
 
-Path forward (stage 6+): drop nested BiCGSTAB in favor of either
-  - FGMRES outer with BiCGSTAB inner (flexible preconditioning),
-  - a full saddle-point formulation with block preconditioning, or
-  - assembling Y = A Z^{-1} A^T as its own H-matrix.
+Even with a flexible outer, each outer matvec triggers a full inner
+HACApK BiCGSTAB (20-50 real matvecs at O(N log N)), so the overall
+wall time per port impedance solve remains dominated by the inner
+cost.  The stage-6 lgmres path still does not beat dense LU at
+benchmarked sizes; the expected crossover is deferred to stage 7
+(saddle-point direct formulation or H-matrix assembly of Y).
 
-This script therefore documents the *negative* scaling result rather
-than a crossover number.  We keep the tool in-tree so the finding is
-reproducible and the stage-6 successor can diff against it.
+Invariants preserved vs stage 5:
+  - Pure L matvec crossover at N ~ 500 (stage 3, unchanged)
+  - Validate at N=72: rel err ~3.6e-08 across DC..10 MHz (still PASS)
+  - `bicgstab` outer remains available via outer_method=... for
+    comparison, even though it stalls.
+
+This script is the stage-6 baseline.  Stage 7 changes will re-run
+it and diff against results_bench_peec_mna_crossover.json.
 
 Geometry mirrors bench_peec_hacapk.py exactly (20 turns x 25 seg/turn
 helical solenoid, nwinc x nhinc sub-filaments) so rows match on N_fil.
@@ -85,20 +88,26 @@ SIGMA_CU = 5.8e7
 FREQ_HZ = 10.0e3
 
 # nwinc = nhinc each case; N_fil = 200 * nwinc^2 (with base above)
-# Dense covers [1..5] (up to 5000 filaments).  HACApK mode covers only
-# [1] because the nested Krylov stalls around 1e-4 outer residual and
-# the wall time explodes past N=500 (see FINDINGS block below).
+# Dense covers [1..5] (up to 5000 filaments).  HACApK (stage-6 lgmres
+# outer) covers [1, 2, 3] (up to 1800 filaments); past that the scipy
+# lgmres + nested BiCGSTAB wall time exceeds dense-LAPACK-LU.
 SUBDIVISIONS_DENSE = [1, 2, 3, 4, 5]
-SUBDIVISIONS_HACAPK = [1]
+SUBDIVISIONS_HACAPK = [1, 2, 3]
 
 MODES = ("dense", "hacapk")
+
+# Outer Krylov method for the HACApK MNA path.
+# "lgmres"  : robust across freq; ~3x slower than gcrotmk at N=500.
+# "gcrotmk" : ~10x faster when it works, but NaN-divides at N=72
+#             + 10 kHz on helix (see stage-6 commit message).
+# "bicgstab": stalls above N ~ 200 (stage-5 finding).
+OUTER_METHOD = "lgmres"
 
 # Tolerances:
 #   Dense C++ MNA uses LU -- tolerances ignored.
 #   HACApK Python MNA: loose tolerances because the inner BiCGSTAB
 #   breakdown floor (residual around 1e-7 on a strongly coupled
 #   helical coil) bounds the usable outer tolerance from below.
-#   See FINDINGS at the top of this file for the measured wall.
 BICG_OUTER_RTOL = 1.0e-4
 BICG_INNER_RTOL = 1.0e-8
 BICG_MAXITER = 5000
@@ -191,6 +200,7 @@ def run_case(nwinc: int, mode: str) -> dict:
             bicgstab_outer_tol=BICG_OUTER_RTOL,
             bicgstab_inner_tol=BICG_INNER_RTOL,
             bicgstab_maxiter=BICG_MAXITER,
+            outer_method=OUTER_METHOD,
         )
     t_solver_init = time.perf_counter() - t0
 
@@ -229,6 +239,7 @@ def run_case(nwinc: int, mode: str) -> dict:
         hac_solver = solver._hacapk_solver
         hac_stats = hac_solver.hacapk_stats if hac_solver is not None else {}
         result.update({
+            "outer_method": OUTER_METHOD,
             "hacapk_build_time": float(hac_stats.get("build_time", -1.0)),
             "hmatrix_mb": float(hac_stats.get("memory_mb", -1.0)),
             "compression": float(hac_stats.get("compression", -1.0)),
@@ -338,6 +349,7 @@ def run_all() -> None:
             "subdivisions_dense": SUBDIVISIONS_DENSE,
             "subdivisions_hacapk": SUBDIVISIONS_HACAPK,
             "modes": list(MODES),
+            "outer_method": OUTER_METHOD,
             "bicg_outer_rtol": BICG_OUTER_RTOL,
             "bicg_inner_rtol": BICG_INNER_RTOL,
             "bicg_maxiter": BICG_MAXITER,
