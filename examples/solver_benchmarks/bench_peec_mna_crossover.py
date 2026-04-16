@@ -200,7 +200,7 @@ def run_case(nwinc: int, mode: str) -> dict:
             topo,
             use_hacapk=True,
             hacapk_params={
-                "aca_eps": 1.0e-4,
+                "aca_eps": 1.0e-8,
                 "leaf_size": 128,
                 "eta": 3.0,
                 "max_rank": 400,
