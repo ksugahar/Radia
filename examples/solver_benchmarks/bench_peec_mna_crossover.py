@@ -88,20 +88,29 @@ SIGMA_CU = 5.8e7
 FREQ_HZ = 10.0e3
 
 # nwinc = nhinc each case; N_fil = 200 * nwinc^2 (with base above)
-# Dense covers [1..5] (up to 5000 filaments).  HACApK (stage-6 lgmres
-# outer) covers [1, 2, 3] (up to 1800 filaments); past that the scipy
-# lgmres + nested BiCGSTAB wall time exceeds dense-LAPACK-LU.
+# Dense covers [1..5] (up to 5000 filaments).  Stage-6b saddle point
+# is much faster than the stage-6a nested lgmres so extending HACApK
+# coverage to [1..5] to match dense and expose the crossover.
 SUBDIVISIONS_DENSE = [1, 2, 3, 4, 5]
-SUBDIVISIONS_HACAPK = [1, 2, 3]
+SUBDIVISIONS_HACAPK = [1, 2, 3, 4, 5]
 
 MODES = ("dense", "hacapk")
 
 # Outer Krylov method for the HACApK MNA path.
-# "lgmres"  : robust across freq; ~3x slower than gcrotmk at N=500.
-# "gcrotmk" : ~10x faster when it works, but NaN-divides at N=72
-#             + 10 kHz on helix (see stage-6 commit message).
+# "saddle"  : stage-6b block saddle-point (default). Single lgmres on
+#             the combined [I;V] system with block-diag preconditioner
+#             (diag(Z)^-1 on upper, sparse LU of Schur on lower).
+#             No nested Krylov.  ~50 matvecs per port solve at N=72.
+# "lgmres"  : stage-6a nested (lgmres outer, BiCGSTAB inner).  Robust
+#             but slow; retained for comparison.
+# "gcrotmk" : 10x faster than lgmres when it works, but NaN-divides
+#             at N=72 + 10 kHz on helix.
 # "bicgstab": stalls above N ~ 200 (stage-5 finding).
-OUTER_METHOD = "lgmres"
+OUTER_METHOD = "saddle"
+
+# Which outer-method schedule to run.  Set to a list to sweep methods
+# in a single bench pass (useful for paper plots).
+OUTER_METHOD_SWEEP = None   # e.g. ["lgmres", "saddle"] to compare
 
 # Tolerances:
 #   Dense C++ MNA uses LU -- tolerances ignored.
