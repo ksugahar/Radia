@@ -1756,6 +1756,163 @@ uses to validate the two-sphere Kelvin implementation.
 """
 
 
+KELVIN_SOURCE_IN_OMEGA_FORM = """
+# External source (coil / magnet) with Omega-reduced-Omega + Kelvin
+
+A FREQUENTLY-CONFUSING POINT: when the Omega-reduced-Omega
+scheme is combined with the Kelvin outer sphere, the coil source
+enters the FEM system ONLY through two boundary terms on the
+total-reduced interface. The Kelvin (outer sphere) region itself
+carries NO source term. The periodic BC between the inner and outer
+sphere boundaries automatically propagates the solution into the
+exterior.
+
+Contrast with the A-formulation: there, the Biot-Savart source A_s
+typically has to be injected (with a 1-form pullback) into the Kelvin
+exterior as well, because A is a 1-form that does not vanish at
+infinity in the same way as Omega. Omega (being a 0-form magnetic
+scalar potential) is chosen so that it is zero at infinity, so the
+Kelvin-image-of-infinity (rho' = 0) naturally gives the GND Dirichlet.
+
+This pattern was explicitly demonstrated in the EMPY_Analysis package
+(S:/NGSolve/EMPY/EMPY_Analysis, file
+Static/Omega_ReducedOmega.py) and is the canonical way to model a
+coil source with a scalar-potential formulation + Kelvin.
+
+## Recipe (Radia + NGSolve)
+
+Given: coil object `coil` = rad.ObjArcCur / polylines / etc., and a
+Kelvin mesh with three materials ("magnetic" or "iron", "air",
+"kelvin") plus a `total_boundary` = material interface where the
+magnetic material meets air, and the Kelvin outer sphere offset
+("kelvin_ext") identified periodically with the inner air-side
+"kelvin_int" boundary.
+
+```python
+from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
+
+# (1) Source evaluation on a mesh point (MIP).  These are callbacks
+#     that call into Radia each evaluation; wrap as NGSolve
+#     CoefficientFunctions via a custom Python CF if you need fast
+#     evaluation, or just call mesh() + rad.Fld at a set of sample
+#     points for the BC Set().
+
+def Omega_s(pt):
+    return float(rad.Fld(coil, 'phi', list(pt)))
+
+def B_s(pt):
+    return np.array(rad.Fld(coil, 'b', list(pt)), dtype=float)
+
+# (2) Kelvin material (Nagamine canonical):
+mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=c_out, R=R_K)
+Mu = build_material_cf(mesh, MU_0, mu_kelvin_factor,
+                        outer_keyword="kelvin",
+                        overrides={"magnetic": mu_r * MU_0})
+
+# (3) Bilinear form — NO source in Kelvin, periodic BC handles it:
+fes_raw = H1(mesh, order=fe_order, dirichlet="GND")
+fes = Periodic(fes_raw)
+omega, psi = fes.TnT()
+a = BilinearForm(fes)
+a += Mu * grad(omega) * grad(psi) * dx(total_region)
+a += Mu * grad(omega) * grad(psi) * dx(reduced_region)
+a += Mu * grad(omega) * grad(psi) * dx("kelvin")   # Mu already has (R/rho')^2
+
+# (4) Dirichlet BC on total_boundary = coil scalar potential:
+gfOmega = GridFunction(fes)
+gfOmega.Set(Omega_s_cf, BND, mesh.Boundaries(total_boundary))
+
+# (5) RHS: reduced-region Dirichlet lift + Neumann B_s . n on boundary.
+f = LinearForm(fes)
+f += Mu * grad(gfOmega) * grad(psi) * dx(reduced_region)
+normal = -specialcf.normal(mesh.dim)
+f += (normal * B_s_cf) * psi * ds(total_boundary)
+
+# (6) Assemble, solve with Dirichlet cut-off, post-process
+#     B = B_t + B_r + B_s   (B_s = 0 in Kelvin region)
+```
+
+## The three source-handling rules for Kelvin
+
+| Formulation            | Inner reduced | Inner total   | Kelvin       |
+|------------------------|---------------|---------------|--------------|
+| Omega-reduced-Omega    | Ω_s (dir/grad)| B_s.n (Neum.) | 0 (periodic) |
+| A-reduced-A            | A_s (curl)    | A_s.n (Neum.) | pullback(A_s)|
+| H-form with source     | H_s = B_s/mu0 | --            | pullback(H_s)|
+
+"Inner total" here means the magnetic-material boundary. The Omega
+scheme gets away WITHOUT a Kelvin-region source because it reduces to
+solving a pure Laplace problem in the air+Kelvin union, with the source
+factored out into BCs. The A scheme cannot — because the physical A
+does not vanish at infinity quickly enough and the magnetic flux
+through any sphere is nonzero; the source HAS to be carried into the
+Kelvin region explicitly via the 1-form pullback.
+
+## Radia API cheat-sheet for source evaluation
+
+```python
+rad.Fld(obj, 'phi', pt)   # scalar magnetic potential — **MAGNETIZED BODIES ONLY**
+rad.Fld(obj, 'b',   pt)   # magnetic flux density (any source)
+rad.Fld(obj, 'h',   pt)   # H field               (any source)
+rad.Fld(obj, 'a',   pt)   # vector potential      (any source)
+```
+
+**!! CRITICAL GOTCHA: rad.Fld(..., 'phi', pt) only returns the magnetic
+scalar potential for MAGNETIZED bodies (ObjRecMag, ObjCylMag with M),
+NOT for current-driven coils (ObjArcCur).** For magnetized bodies,
+`H = -grad(phi)` holds (verified: ratio 1.000 at sample points). For
+ObjArcCur, the returned 'phi' is an internal quantity (related to J
+-> M conversion) and `H = -grad(phi)` does **not** hold (ratio ~64
+empirically).
+
+Workarounds for a current-driven coil source:
+
+1. **Equivalent-magnetization coil** (simplest, recommended): model a
+   solenoid with N turns and current I as hollow ObjRecMag blocks
+   with M_z = N*I/h. External field is identical to a real winding.
+   Then rad.Fld(..., 'phi', pt) works correctly. See
+   `examples/ngsolve_integration/demo_coil_scalar_potential.py`.
+
+2. **Path-integration helper**:
+   `radia.bem_sibc_solver.compute_phi_inc_from_filaments(obs_points,
+   filament_paths, currents)` computes Omega_s for arbitrary filament
+   bundles via two-stage path integration (axis + horizontal sweep)
+   using the exact finite-segment Biot-Savart formula. Supports
+   complex per-filament currents. This is the general solution for
+   ObjArcCur or any topology-aware coil.
+
+3. **High-level FEM solver**: `radia.scalar_potential_solver.ScalarPotentialSolver`
+   takes a Radia object and builds the phi-reduced FEM with
+   **H_s evaluated on a voxel grid** (via rad.Fld 'h', which works
+   universally). Supports Kelvin via `kelvin_region`/`kelvin_radius`/
+   `kelvin_center` keyword args and handles both the phi-reduced
+   (single-potential) and Simkin-Trowbridge (two-potential) methods.
+   This is the preferred high-level entry point.
+
+The 'phi' output, WHEN VALID (magnetized bodies), is the magnetic
+scalar potential consistent with H_s = -grad(Omega_s) in any
+simply-connected current-free region. It is discontinuous across any
+gap surface spanning a coil loop (phi changes by I each time you cross
+such a surface); for a GAPPED coil the gap breaks the topological
+obstruction and Omega_s is single-valued outside the coil.
+
+## Gotchas
+
+- **Source must live in the INNER physical region** (not the Kelvin
+  exterior). Sources that straddle the Kelvin boundary require the
+  Phase-3 pullback of the source into the exterior, which is beyond
+  the scope of this recipe.
+- **Ω_s is multi-valued through a coil-spanning surface.** Use a
+  gapped coil (gap_deg > 0) or, for closed loops, arrange the FEM
+  domain so no total_boundary crosses the cut surface.
+- **Kelvin region gets ZERO source** but the periodic BC must
+  actually reduce DOFs (check `FreeDofs` before / after applying
+  `Periodic(fes)` — a difference of zero means periodic is broken).
+- **GND Dirichlet** at the Kelvin outer sphere center is the image of
+  physical infinity and enforces Omega(infinity) = 0.
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -1772,6 +1929,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "robustness": KELVIN_ROBUSTNESS,
         "helpers_recipe": KELVIN_HELPERS_RECIPE,
         "differential_forms": KELVIN_DIFFERENTIAL_FORMS,
+        "source_in_omega_form": KELVIN_SOURCE_IN_OMEGA_FORM,
     }
 
     topic = topic.lower().strip()
