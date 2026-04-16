@@ -84,7 +84,7 @@ class PEECCircuitSolver:
                  bicgstab_outer_tol=1e-8,
                  bicgstab_inner_tol=1e-10,
                  bicgstab_maxiter=1000,
-                 outer_method="lgmres",
+                 outer_method="saddle",
                  outer_m=50):
         """
         Initialize from build_topology() result dict.
@@ -110,19 +110,23 @@ class PEECCircuitSolver:
                 Should be tighter than bicgstab_outer_tol.
             bicgstab_maxiter: Max iterations for both outer and inner
                 Krylov calls.
-            outer_method: Which scipy Krylov to use for the nodal solve.
-                ``"lgmres"`` (default) and ``"gcrotmk"`` tolerate the
-                varying-operator preconditioner introduced by the inner
-                HACApK BiCGSTAB; ``"bicgstab"`` breaks down for N>~200
-                on strongly coupled helical coils (see stage-5
-                findings_peec_mna_crossover.md).  lgmres is the default
-                because gcrotmk produces NaN divisions at high omega on
-                small (N~72) test cases, while lgmres is robust across
-                DC..10 MHz; gcrotmk is ~10x faster at N>=500 and is
-                exposed for benchmark runs that tolerate the fragility.
-                The stage-4 default was "bicgstab"; stage-6 switches to
-                "lgmres" to fix the nested-Krylov stall.
+            outer_method: Nodal solver for the HACApK-MNA path.
+                ``"saddle"`` (default, stage-6b/7) solves the combined
+                2x2 block system
+                ``[Z_branch A^T; A 0] [I; V] = [0; -i_ext]`` with a
+                single lgmres call and a block-diagonal preconditioner
+                (``diag(Z)^{-1}`` + sparse LU of the Schur complement
+                ``A diag(Z)^{-1} A^T``).  No nested Krylov; machine-
+                precision accuracy and crossover with dense LU at
+                N ~ 3000 (see
+                examples/solver_benchmarks/findings_peec_mna_crossover.md).
+                ``"lgmres"`` and ``"gcrotmk"`` use the older nested
+                (outer Krylov + inner HACApK BiCGSTAB) path; ``"lgmres"``
+                is robust but 100x slower at small N, ``"gcrotmk"``
+                NaN-divides at high omega.  ``"bicgstab"`` is the
+                stage-4 legacy and stalls above N ~ 200.
             outer_m: Krylov subspace dimension for lgmres / gcrotmk.
+                Also used as the ``inner_m`` of the saddle-point lgmres.
         """
         self.n_loop = topology_dict['n_loop']
         self.n_nodes = topology_dict['n_nodes']
@@ -140,10 +144,10 @@ class PEECCircuitSolver:
         self._bicgstab_inner_tol = float(bicgstab_inner_tol)
         self._bicgstab_maxiter = int(bicgstab_maxiter)
         method = str(outer_method).lower()
-        if method not in ("bicgstab", "gcrotmk", "lgmres"):
+        if method not in ("bicgstab", "gcrotmk", "lgmres", "saddle"):
             raise ValueError(
                 "outer_method must be one of 'bicgstab', 'gcrotmk', "
-                "'lgmres', got %r" % outer_method
+                "'lgmres', 'saddle', got %r" % outer_method
             )
         self._outer_method = method
         self._outer_m = int(outer_m)
@@ -711,6 +715,135 @@ class PEECCircuitSolver:
         self._last_nodal_stats = counters
         return V_red
 
+    def _solve_saddle_point(self, freq, Zs, A_hat, i_ext_red):
+        """Solve the 2x2 block saddle-point system directly::
+
+            [Z_branch   A_hat^T] [I]   [0        ]
+            [A_hat       0     ] [V] = [i_ext_red]
+
+        No nested Krylov: ONE outer lgmres iteration on the combined
+        (N + n_red)-dimensional complex system, block-diagonal
+        preconditioned with ``diag(Z_branch)^{-1}`` on the upper block
+        and a sparse LU of the Schur complement
+        ``S = A_hat diag(Z)^{-1} A_hat^T`` on the lower block.
+
+        ``Z_branch = diag(R + Zs) + j*omega*L``; the L matvec uses the
+        HACApK H-matrix, so each block matvec costs two real H-matrix
+        calls plus O(|A_hat|) sparse-vector ops.
+
+        Returns V_red (length n_red).
+        """
+        from scipy.sparse.linalg import LinearOperator, lgmres
+        from scipy.sparse.linalg import splu
+        import scipy.sparse as sp
+
+        omega = 2.0 * np.pi * float(freq)
+        solver = self._get_hacapk_solver()
+        N = self.n_loop
+        n_red = A_hat.shape[0]
+        dim_total = N + n_red
+
+        R_diag = np.asarray(solver._R_dc_default, dtype=np.float64)
+        Zs_diag = (np.zeros(N, dtype=np.complex128)
+                   if Zs is None else np.asarray(Zs, dtype=np.complex128))
+        diag_L = solver.get_L_diag()
+        Z_diag = (R_diag + Zs_diag.real) + 1j * (omega * diag_L + Zs_diag.imag)
+        diag_scal = R_diag.astype(np.complex128) + Zs_diag
+
+        A_hat_T = A_hat.T
+        counters = {"matvec": 0}
+
+        def block_matvec(xy):
+            counters["matvec"] += 1
+            I = xy[:N]
+            V = xy[N:]
+            I_re = np.ascontiguousarray(I.real)
+            I_im = np.ascontiguousarray(I.imag)
+            LI_re = solver.apply_L(I_re)
+            LI_im = solver.apply_L(I_im)
+            # Z_branch I = (R + Re Zs) I + j (Im Zs) I + j*omega*L I
+            # j*omega*(LI_re + j*LI_im) = -omega*LI_im + j*omega*LI_re
+            ZI = diag_scal * I + (-omega * LI_im + 1j * omega * LI_re)
+            top = ZI + A_hat_T @ V
+            bot = A_hat @ I
+            out = np.empty(dim_total, dtype=np.complex128)
+            out[:N] = top
+            out[N:] = bot
+            return out
+
+        A_block = LinearOperator(shape=(dim_total, dim_total),
+                                 matvec=block_matvec,
+                                 dtype=np.complex128)
+
+        # Block-diagonal preconditioner (Murphy-Golub-Wathen, 2000).
+        inv_Z = 1.0 / Z_diag
+        Diag_invZ = sp.diags(inv_Z, format='csc')
+        # Schur complement S = A_hat diag(Z)^{-1} A_hat^T has the same
+        # sparsity as A_hat A_hat^T (graph Laplacian for a connected
+        # topology); for a chain of n_red=N nodes this is tridiagonal,
+        # so splu is O(N).
+        S_mat = (A_hat @ Diag_invZ @ A_hat_T).tocsc()
+        S_lu = splu(S_mat)
+
+        def precond(r):
+            r_top = r[:N]
+            r_bot = r[N:]
+            out = np.empty(dim_total, dtype=np.complex128)
+            out[:N] = inv_Z * r_top
+            out[N:] = S_lu.solve(r_bot)
+            return out
+
+        M_block = LinearOperator(shape=(dim_total, dim_total),
+                                 matvec=precond,
+                                 dtype=np.complex128)
+
+        # Sign convention matches _solve_nodal_system: the incidence
+        # matrix is built so that ``Z_branch I = -A_hat^T V`` (see
+        # _build_reduced_incidence docstring), hence
+        # ``I = -Z^{-1} A_hat^T V`` and ``A_hat I = -A_hat Z^{-1} A_hat^T V
+        # = -Y V``.  Requiring ``Y V = i_ext_red`` (the stage-4
+        # convention) therefore gives ``A_hat I = -i_ext_red``; in block
+        # form the RHS is ``[0; -i_ext_red]``.
+        rhs = np.zeros(dim_total, dtype=np.complex128)
+        rhs[N:] = -i_ext_red
+
+        m = min(self._outer_m, max(2, dim_total - 1))
+        xy, info = lgmres(
+            A_block, rhs,
+            rtol=self._bicgstab_outer_tol,
+            maxiter=self._bicgstab_maxiter,
+            inner_m=m,
+            M=M_block,
+        )
+
+        b_norm = np.linalg.norm(rhs)
+        final_res = (np.linalg.norm(rhs - A_block @ xy) / b_norm
+                     if b_norm > 0 else 0.0)
+        # A_block @ xy above adds one matvec for the residual check.
+        n_solve_matvec = max(0, counters["matvec"] - 1)
+        if final_res > self._bicgstab_outer_tol * 10.0:
+            raise RuntimeError(
+                "Saddle-point lgmres did not converge at f=%g Hz "
+                "(info=%d, block matvecs=%d, final_res=%.2e > %.2e)"
+                % (freq, info, n_solve_matvec,
+                   final_res, self._bicgstab_outer_tol)
+            )
+
+        V_red = xy[N:]
+        self._last_nodal_stats = {
+            "outer": n_solve_matvec,
+            "inner_iters": 0,
+            "inner_matvec_real": 2 * n_solve_matvec,
+            "final_outer_res": float(final_res),
+        }
+        return V_red
+
+    def _dispatch_nodal_solve(self, freq, Zs, A_hat, i_ext_red):
+        """Route to the configured nodal solver."""
+        if self._outer_method == "saddle":
+            return self._solve_saddle_point(freq, Zs, A_hat, i_ext_red)
+        return self._solve_nodal_system(freq, Zs, A_hat, i_ext_red)
+
     def _compute_Z_matrix_hacapk(self, freq, Zs=None):
         """Nodal-MNA Z-parameter matrix via HACApK + nested BiCGSTAB."""
         n_ports = len(self.ports)
@@ -737,7 +870,7 @@ class PEECCircuitSolver:
             i_ext[neg] -= 1.0
             i_ext_red = i_ext[keep]
 
-            V_red = self._solve_nodal_system(freq, Zs_arr, A_hat, i_ext_red)
+            V_red = self._dispatch_nodal_solve(freq, Zs_arr, A_hat, i_ext_red)
 
             V_full = np.zeros(self.n_nodes, dtype=np.complex128)
             V_full[keep] = V_red  # V[gnd] = 0
