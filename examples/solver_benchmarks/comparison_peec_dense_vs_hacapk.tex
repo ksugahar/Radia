@@ -1,0 +1,20 @@
+\begin{table}[t]
+\centering
+\caption{PEEC filament-level scaling: dense LU vs HACApK BiCGSTAB. Helical solenoid, 20 turns, 25 seg/turn, $n_{\text{winc}}^2$ parallel sub-filaments. 10~kHz. BiCGSTAB rtol $10^{-6}$.}
+\label{tab:peec_hacapk_scaling}
+\begin{tabular}{rrrrrrrrrrr}
+\toprule
+ & \multicolumn{4}{c}{Dense} & \multicolumn{6}{c}{HACApK} \\
+\cmidrule(lr){2-5} \cmidrule(lr){6-11}
+$N$ & $L$ & build & solve & peak & H-mat & ratio & build & solve & iter & $\|r\|$ \\
+\midrule
+500 & 2 MB & 20.2 ms & 67.5 ms & 144 MB & 2 MB & 100.0% & 39.9 ms & 3.1 ms & 13 & 9.2e-07 \\
+2000 & 31 MB & 315.5 ms & 1.65 s & 395 MB & 27 MB & 90.0% & 575.8 ms & 235.4 ms & 36 & 9.9e-07 \\
+4500 & 154 MB & 1.60 s & 16.13 s & 1.49 GB & 77 MB & 50.0% & 1.61 s & 842.8 ms & 43 & 5.7e-07 \\
+8000 & 488 MB & 5.12 s & 1.40 min & 4.42 GB & 64 MB & 13.1% & 1.27 s & 1.09 s & 67 & 8.6e-07 \\
+12500 & 1.16 GB & 14.89 s & 5.81 min & 10.60 GB & 80 MB & 6.7% & 1.46 s & 1.37 s & 61 & 8.8e-07 \\
+18000 & -- & -- & -- & -- & 90 MB & 3.6% & 1.61 s & 1.77 s & 71 & 9.9e-07 \\
+24500 & -- & -- & -- & -- & 157 MB & 3.4% & 2.68 s & 3.05 s & 70 & 9.3e-07 \\
+\bottomrule
+\end{tabular}
+\end{table}
