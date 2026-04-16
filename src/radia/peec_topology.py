@@ -78,7 +78,12 @@ class PEECCircuitSolver:
     Mode is auto-detected from topology_dict contents.
     """
 
-    def __init__(self, topology_dict):
+    def __init__(self, topology_dict, *,
+                 use_hacapk=False,
+                 hacapk_params=None,
+                 bicgstab_outer_tol=1e-8,
+                 bicgstab_inner_tol=1e-10,
+                 bicgstab_maxiter=1000):
         """
         Initialize from build_topology() result dict.
 
@@ -87,9 +92,23 @@ class PEECCircuitSolver:
                 L, R, segment_nodes, n_nodes, ports, n_loop
                 Optional: P, M_LS, n_star (for full RLCM mode)
                 Optional: C_gathered (for proper MNA with resonance)
+                Optional (required when use_hacapk=True):
+                    segment_centers, segment_directions, segment_lengths,
+                    segment_widths, segment_heights, segment_sigmas
+            use_hacapk: If True, replace the C++ dense MNA solver with a
+                Python MNA driver that uses a HACApK H-matrix for L and
+                a nested BiCGSTAB for the branch Z_branch^{-1} matvec.
+                Only compute_Z_matrix / compute_port_impedance /
+                frequency_sweep / compute_coupling_coefficient are
+                supported in this mode (others raise NotImplementedError).
+            hacapk_params: Optional dict forwarded to PEECHACApKSolver
+                (keys: aca_eps, leaf_size, eta, max_rank, print_level).
+            bicgstab_outer_tol: Relative tol for the nodal BiCGSTAB solve.
+            bicgstab_inner_tol: Relative tol for the branch (HACApK) solve.
+                Should be tighter than bicgstab_outer_tol.
+            bicgstab_maxiter: Max iterations for both outer and inner
+                BiCGSTAB calls.
         """
-        self.L = np.array(topology_dict['L'])
-        self.R_dc = np.array(topology_dict['R'])
         self.n_loop = topology_dict['n_loop']
         self.n_nodes = topology_dict['n_nodes']
 
@@ -98,6 +117,45 @@ class PEECCircuitSolver:
 
         # Port definitions: list of (node_positive, node_negative, port_id)
         self.ports = topology_dict['ports']
+
+        # HACApK switch + parameters
+        self._use_hacapk = bool(use_hacapk)
+        self._hacapk_params = dict(hacapk_params) if hacapk_params else {}
+        self._bicgstab_outer_tol = float(bicgstab_outer_tol)
+        self._bicgstab_inner_tol = float(bicgstab_inner_tol)
+        self._bicgstab_maxiter = int(bicgstab_maxiter)
+        self._hacapk_solver = None   # lazy-built on first call
+
+        if self._use_hacapk:
+            required = ('segment_centers', 'segment_directions',
+                        'segment_lengths', 'segment_widths',
+                        'segment_heights', 'segment_sigmas')
+            missing = [k for k in required if topology_dict.get(k) is None]
+            if missing:
+                raise KeyError(
+                    "use_hacapk=True requires per-filament geometry in "
+                    "topology_dict (missing: %s). Rebuild via "
+                    "PyPEECBuilder.build_topology() from a recent Radia."
+                    % missing
+                )
+            self._seg_centers = np.ascontiguousarray(
+                topology_dict['segment_centers'], dtype=np.float64)
+            self._seg_directions = np.ascontiguousarray(
+                topology_dict['segment_directions'], dtype=np.float64)
+            self._seg_lengths = np.ascontiguousarray(
+                topology_dict['segment_lengths'], dtype=np.float64)
+            self._seg_widths = np.ascontiguousarray(
+                topology_dict['segment_widths'], dtype=np.float64)
+            self._seg_heights = np.ascontiguousarray(
+                topology_dict['segment_heights'], dtype=np.float64)
+            self._seg_sigmas = np.ascontiguousarray(
+                topology_dict['segment_sigmas'], dtype=np.float64)
+            # No dense L needed; R is recomputed inside PEECHACApKSolver.
+            self.L = None
+            self.R_dc = None
+        else:
+            self.L = np.array(topology_dict['L'])
+            self.R_dc = np.array(topology_dict['R'])
 
         # Panel/Star data (optional - enables full RLCM mode)
         P_raw = topology_dict.get('P', None)
@@ -123,25 +181,35 @@ class PEECCircuitSolver:
         else:
             self.C_gathered = None
 
-        # Create C++ MNA solver from raw arrays
-        seg_nodes_int = np.ascontiguousarray(self.segment_nodes, dtype=np.int32)
-        port_tuples = [(int(p[0]), int(p[1]), int(p[2])) for p in self.ports]
+        # Create C++ MNA solver from raw arrays (dense path only; HACApK
+        # path goes through _compute_Z_matrix_hacapk and skips this).
+        if self._use_hacapk:
+            if self.has_panels:
+                raise NotImplementedError(
+                    "use_hacapk=True does not yet support P/M_LS (panel "
+                    "capacitance / full RLCM). Drop include_star=True when "
+                    "calling build_topology()."
+                )
+            self._solver = None
+        else:
+            seg_nodes_int = np.ascontiguousarray(self.segment_nodes, dtype=np.int32)
+            port_tuples = [(int(p[0]), int(p[1]), int(p[2])) for p in self.ports]
 
-        P_arg = self.P if self.has_panels else None
-        M_LS_arg = self.M_LS if (self.has_panels and self.M_LS is not None) else None
-        C_gath_arg = (np.ascontiguousarray(self.C_gathered, dtype=np.float64)
-                      if self.C_gathered is not None else None)
+            P_arg = self.P if self.has_panels else None
+            M_LS_arg = self.M_LS if (self.has_panels and self.M_LS is not None) else None
+            C_gath_arg = (np.ascontiguousarray(self.C_gathered, dtype=np.float64)
+                          if self.C_gathered is not None else None)
 
-        self._solver = MNASolver(
-            np.ascontiguousarray(self.L, dtype=np.float64),
-            np.ascontiguousarray(self.R_dc, dtype=np.float64),
-            seg_nodes_int,
-            self.n_nodes,
-            port_tuples,
-            P_arg,
-            M_LS_arg,
-            C_gath_arg,
-        )
+            self._solver = MNASolver(
+                np.ascontiguousarray(self.L, dtype=np.float64),
+                np.ascontiguousarray(self.R_dc, dtype=np.float64),
+                seg_nodes_int,
+                self.n_nodes,
+                port_tuples,
+                P_arg,
+                M_LS_arg,
+                C_gath_arg,
+            )
 
     def set_solver_method(self, method):
         """Set solver method for Z_branch inversion.
@@ -149,6 +217,10 @@ class PEECCircuitSolver:
         Args:
             method: 0 = LU (default, LAPACK zgesv_), 1 = BiCGSTAB
         """
+        if self._use_hacapk:
+            raise NotImplementedError(
+                "set_solver_method is not applicable when use_hacapk=True"
+            )
         self._solver.set_solver_method(method)
 
     def set_bicgstab_params(self, tol=1e-10, max_iter=1000):
@@ -158,6 +230,10 @@ class PEECCircuitSolver:
             tol: Convergence tolerance (default 1e-10)
             max_iter: Maximum iterations (default 1000)
         """
+        if self._use_hacapk:
+            self._bicgstab_inner_tol = float(tol)
+            self._bicgstab_maxiter = int(max_iter)
+            return
         self._solver.set_bicgstab_params(tol, max_iter)
 
     def compute_port_impedance(self, freq, Zs=None):
@@ -173,6 +249,10 @@ class PEECCircuitSolver:
         """
         if len(self.ports) == 0:
             return 0.0 + 0.0j
+
+        if self._use_hacapk:
+            Z_mat = self._compute_Z_matrix_hacapk(freq, Zs)
+            return Z_mat[0, 0]
 
         Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
         Z_mat = np.array(self._solver.solve_z_matrix(freq, Zs_arg))
@@ -192,6 +272,16 @@ class PEECCircuitSolver:
             Z_port: Complex array of port impedances, shape (len(freqs),)
         """
         freqs = np.asarray(freqs, dtype=np.float64)
+
+        if self._use_hacapk:
+            # Python loop; HACApK H-matrix is reused across freqs.
+            n_freq = len(freqs)
+            Z_port = np.zeros(n_freq, dtype=complex)
+            for i, f in enumerate(freqs):
+                Zs = Zs_func(f) if Zs_func is not None else None
+                Z_mat = self._compute_Z_matrix_hacapk(float(f), Zs)
+                Z_port[i] = Z_mat[0, 0]
+            return Z_port
 
         if Zs_func is None:
             # Batch sweep in C++ (no per-frequency callback)
@@ -228,6 +318,9 @@ class PEECCircuitSolver:
                 flows from segment_nodes[f, 0] to segment_nodes[f, 1].
                 For a parallel filament bundle, sum(I_branch) == port_currents[0].
         """
+        if self._use_hacapk:
+            pc = np.asarray(port_currents, dtype=complex).reshape(-1)
+            return self._compute_branch_currents_hacapk(freq, pc, Zs)
         pc = np.asarray(port_currents, dtype=complex).reshape(-1)
         Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
         return np.array(self._solver.solve_branch_currents(freq, pc, Zs_arg))
@@ -248,6 +341,8 @@ class PEECCircuitSolver:
         Returns:
             Z_mat: (n_ports x n_ports) complex Z-parameter matrix
         """
+        if self._use_hacapk:
+            return self._compute_Z_matrix_hacapk(freq, Zs)
         Zs_arg = np.asarray(Zs, dtype=complex) if Zs is not None else None
         return np.array(self._solver.solve_z_matrix(freq, Zs_arg))
 
@@ -405,3 +500,211 @@ class PEECCircuitSolver:
                 resonances.append(float(f_res))
 
         return resonances
+
+    # ------------------------------------------------------------------
+    # HACApK MNA path (use_hacapk=True)
+    # ------------------------------------------------------------------
+
+    def _get_hacapk_solver(self):
+        """Lazily instantiate the PEECHACApKSolver (H-matrix of L)."""
+        if self._hacapk_solver is None:
+            from radia.peec_hacapk_solver import PEECHACApKSolver
+            hp = self._hacapk_params
+            self._hacapk_solver = PEECHACApKSolver(
+                self._seg_centers,
+                self._seg_directions,
+                self._seg_lengths,
+                self._seg_widths,
+                self._seg_heights,
+                self._seg_sigmas,
+                aca_eps=hp.get('aca_eps', -1.0),
+                leaf_size=hp.get('leaf_size', -1),
+                eta=hp.get('eta', -1.0),
+                max_rank=hp.get('max_rank', -1),
+                print_level=hp.get('print_level', 0),
+            )
+        return self._hacapk_solver
+
+    def _build_reduced_incidence(self):
+        """Return (A_hat, keep, gnd) for the nodal MNA system.
+
+        A_hat is a scipy.sparse CSR matrix of shape (n_nodes-1, n_loop)
+        representing the reduced incidence after grounding one node.
+        ``keep`` is the list of original node indices retained (row order).
+        ``gnd`` is the index of the grounded node.
+
+        Convention: A[i, j] = -1 if node i is branch j's source
+        (``segment_nodes[j, 0]``), +1 if node i is the sink
+        (``segment_nodes[j, 1]``). Branch KVL is ``Z_branch I = -A^T V``
+        so that the nodal admittance ``Y = A Z^{-1} A^T`` satisfies
+        ``Y V = i_ext`` with ``i_ext[pos] = +I, i_ext[neg] = -I``.
+        """
+        import scipy.sparse as sp
+
+        N = self.n_loop
+        n_nodes = self.n_nodes
+        src = self.segment_nodes[:, 0].astype(np.int64)
+        dst = self.segment_nodes[:, 1].astype(np.int64)
+
+        rows = np.concatenate([src, dst])
+        cols = np.concatenate([np.arange(N, dtype=np.int64),
+                               np.arange(N, dtype=np.int64)])
+        data = np.concatenate([-np.ones(N, dtype=np.float64),
+                               np.ones(N, dtype=np.float64)])
+        A_inc = sp.csr_matrix((data, (rows, cols)),
+                              shape=(n_nodes, N))
+
+        # Ground port 0's negative terminal (must exist since len(ports)>0
+        # is checked by the caller).
+        gnd = int(self.ports[0][1])
+        keep = np.array([i for i in range(n_nodes) if i != gnd],
+                        dtype=np.int64)
+        A_hat = A_inc[keep, :]
+        return A_hat, keep, gnd
+
+    def _solve_nodal_system(self, freq, Zs, A_hat, i_ext_red):
+        """Solve ``A_hat Z_branch^{-1} A_hat^T V = i_ext_red`` via nested
+        BiCGSTAB.  Inner Z_branch solve uses HACApK matvec.
+
+        Raises RuntimeError on non-convergence (fail-loud policy).
+        """
+        from scipy.sparse.linalg import LinearOperator, bicgstab
+
+        solver = self._get_hacapk_solver()
+        n_red = A_hat.shape[0]
+
+        counters = {"outer": 0, "inner_iters": 0, "inner_matvec_real": 0}
+        M_jac = solver.build_jacobi_preconditioner(float(freq), Zs=Zs)
+
+        def matvec_Y(v):
+            counters["outer"] += 1
+            b = A_hat.T @ np.asarray(v, dtype=np.complex128)
+            b = np.ascontiguousarray(b.reshape(-1))
+            res = solver.solve(
+                float(freq), b, Zs=Zs,
+                rtol=self._bicgstab_inner_tol,
+                maxiter=self._bicgstab_maxiter,
+                M=M_jac,
+                track_residual=False,
+            )
+            if not res.converged:
+                raise RuntimeError(
+                    "HACApK inner BiCGSTAB did not converge at f=%g Hz "
+                    "(info=%d, final_residual=%.2e)"
+                    % (freq, res.info, res.final_residual)
+                )
+            counters["inner_iters"] += res.iterations
+            counters["inner_matvec_real"] += res.n_matvec_real
+            return A_hat @ res.x
+
+        Y_op = LinearOperator(shape=(n_red, n_red),
+                              matvec=matvec_Y,
+                              dtype=np.complex128)
+
+        V_red, info = bicgstab(
+            Y_op, i_ext_red,
+            rtol=self._bicgstab_outer_tol,
+            maxiter=self._bicgstab_maxiter,
+        )
+        if info != 0:
+            raise RuntimeError(
+                "Nodal BiCGSTAB did not converge at f=%g Hz "
+                "(scipy info=%d, outer matvecs=%d)"
+                % (freq, info, counters["outer"])
+            )
+
+        self._last_nodal_stats = counters
+        return V_red
+
+    def _compute_Z_matrix_hacapk(self, freq, Zs=None):
+        """Nodal-MNA Z-parameter matrix via HACApK + nested BiCGSTAB."""
+        n_ports = len(self.ports)
+        if n_ports == 0:
+            return np.zeros((0, 0), dtype=np.complex128)
+
+        A_hat, keep, gnd = self._build_reduced_incidence()
+        keep_map = {int(k): int(i) for i, k in enumerate(keep)}
+
+        Zs_arr = None
+        if Zs is not None:
+            Zs_arr = np.asarray(Zs, dtype=np.complex128).reshape(-1)
+            if Zs_arr.shape != (self.n_loop,):
+                raise ValueError(
+                    "Zs must have shape (%d,), got %s"
+                    % (self.n_loop, Zs_arr.shape)
+                )
+
+        Z_mat = np.zeros((n_ports, n_ports), dtype=np.complex128)
+        for p_idx, port in enumerate(self.ports):
+            pos, neg, _ = int(port[0]), int(port[1]), int(port[2])
+            i_ext = np.zeros(self.n_nodes, dtype=np.complex128)
+            i_ext[pos] += 1.0
+            i_ext[neg] -= 1.0
+            i_ext_red = i_ext[keep]
+
+            V_red = self._solve_nodal_system(freq, Zs_arr, A_hat, i_ext_red)
+
+            V_full = np.zeros(self.n_nodes, dtype=np.complex128)
+            V_full[keep] = V_red  # V[gnd] = 0
+
+            for q_idx, q_port in enumerate(self.ports):
+                qpos = int(q_port[0])
+                qneg = int(q_port[1])
+                Z_mat[q_idx, p_idx] = V_full[qpos] - V_full[qneg]
+
+        return Z_mat
+
+    def _compute_branch_currents_hacapk(self, freq, port_currents, Zs=None):
+        """Per-filament currents under port_current injection (HACApK MNA)."""
+        n_ports = len(self.ports)
+        if n_ports == 0:
+            return np.zeros(self.n_loop, dtype=np.complex128)
+        if port_currents.shape != (n_ports,):
+            raise ValueError(
+                "port_currents must have shape (%d,), got %s"
+                % (n_ports, port_currents.shape)
+            )
+
+        A_hat, keep, gnd = self._build_reduced_incidence()
+
+        Zs_arr = None
+        if Zs is not None:
+            Zs_arr = np.asarray(Zs, dtype=np.complex128).reshape(-1)
+            if Zs_arr.shape != (self.n_loop,):
+                raise ValueError(
+                    "Zs must have shape (%d,), got %s"
+                    % (self.n_loop, Zs_arr.shape)
+                )
+
+        # Build external current injection from the user's port_currents
+        i_ext = np.zeros(self.n_nodes, dtype=np.complex128)
+        for (pos, neg, _), I_p in zip(self.ports, port_currents):
+            i_ext[int(pos)] += I_p
+            i_ext[int(neg)] -= I_p
+        i_ext_red = i_ext[keep]
+
+        V_red = self._solve_nodal_system(freq, Zs_arr, A_hat, i_ext_red)
+        V_full = np.zeros(self.n_nodes, dtype=np.complex128)
+        V_full[keep] = V_red
+
+        # I = -Z_branch^{-1} A^T V  (branch KVL: Z I = -A^T V)
+        # Reuse the inner HACApK solve for the final branch-current back-sub.
+        solver = self._get_hacapk_solver()
+        # A_full^T V computed directly from segment endpoints (A_hat drops gnd
+        # row, but V[gnd]=0 so the missing row contributes nothing).
+        A_full_T_V = A_hat.T @ V_red
+        res = solver.solve(
+            float(freq), np.ascontiguousarray(A_full_T_V),
+            Zs=Zs_arr,
+            rtol=self._bicgstab_inner_tol,
+            maxiter=self._bicgstab_maxiter,
+            M=solver.build_jacobi_preconditioner(float(freq), Zs=Zs_arr),
+            track_residual=False,
+        )
+        if not res.converged:
+            raise RuntimeError(
+                "HACApK back-sub BiCGSTAB did not converge at f=%g Hz "
+                "(info=%d, final_residual=%.2e)"
+                % (freq, res.info, res.final_residual)
+            )
+        return -res.x
