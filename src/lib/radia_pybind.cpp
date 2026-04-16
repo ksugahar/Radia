@@ -44,7 +44,8 @@
 #include "radentry.h"
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
-#include "rad_hacapk_peec.h"  // HACApK PEEC adapter sanity check
+#include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
+#include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -3868,4 +3869,148 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Negative values indicate failure (-1 bad arg, -2 build
                   failed, -3 ndof mismatch).
           )pbdoc");
+
+    // ========================================================================
+    // HACApK PEEC manager (Step 4 stage 1: pybind class exposure)
+    // ========================================================================
+    //
+    // Self-contained wrapper that owns its own PEECMatrixBuilder and
+    // RadHACApKPEECManager. Inputs are numpy arrays of filament geometry
+    // (no dependency on PyPEECBuilder which lives in a separate pybind
+    // module). The Python-side complex BiCGSTAB combines two real MatVec
+    // calls per complex iteration to handle (R + jωL + Zs) systems —
+    // see hacapk_peec_prima_plan.md "Option A".
+    //
+    py::class_<radia::PEECMatrixBuilder>(m, "_PEECBuilderInternal");
+    py::class_<RadHACApKPEECManager>(m, "_HACApKPEECManagerInternal");
+
+    class PyHACApKPEECManager {
+    public:
+        PyHACApKPEECManager(py::array_t<double, py::array::c_style | py::array::forcecast> centers,
+                            py::array_t<double, py::array::c_style | py::array::forcecast> directions,
+                            py::array_t<double, py::array::c_style | py::array::forcecast> lengths,
+                            py::array_t<double, py::array::c_style | py::array::forcecast> widths,
+                            py::array_t<double, py::array::c_style | py::array::forcecast> heights,
+                            py::array_t<double, py::array::c_style | py::array::forcecast> sigmas)
+        {
+            auto c = centers.unchecked<2>();
+            auto d = directions.unchecked<2>();
+            auto l = lengths.unchecked<1>();
+            auto w = widths.unchecked<1>();
+            auto h = heights.unchecked<1>();
+            auto s = sigmas.unchecked<1>();
+            const int64_t n = static_cast<int64_t>(c.shape(0));
+            if (c.shape(1) != 3) throw std::invalid_argument("centers must have shape (N, 3)");
+            if (d.shape(0) != n || d.shape(1) != 3) throw std::invalid_argument("directions must have shape (N, 3)");
+            if (l.shape(0) != n) throw std::invalid_argument("lengths must have shape (N,)");
+            if (w.shape(0) != n) throw std::invalid_argument("widths must have shape (N,)");
+            if (h.shape(0) != n) throw std::invalid_argument("heights must have shape (N,)");
+            if (s.shape(0) != n) throw std::invalid_argument("sigmas must have shape (N,)");
+
+            for (int64_t i = 0; i < n; ++i) {
+                radia::PEECSegment seg;
+                seg.center = TVector3d(c(i, 0), c(i, 1), c(i, 2));
+                seg.direction = TVector3d(d(i, 0), d(i, 1), d(i, 2));
+                seg.length = l(i);
+                seg.width = w(i);
+                seg.height = h(i);
+                seg.sigma = s(i);
+                builder_.AddSegment(seg);
+            }
+            manager_ = std::make_unique<RadHACApKPEECManager>(builder_);
+        }
+
+        bool BuildHMatrix(double aca_eps, int leaf_size, double eta, int max_rank, int print_level) {
+            RadHACApKParams p = RadHACApKPEECDefaultParams();
+            if (aca_eps > 0)   p.aca_eps   = aca_eps;
+            if (leaf_size > 0) p.leaf_size = leaf_size;
+            if (eta > 0)       p.eta       = eta;
+            if (max_rank > 0)  p.max_rank  = max_rank;
+            p.print_level = print_level;
+            return manager_->BuildHMatrix(p);
+        }
+
+        py::array_t<double> MatVec(py::array_t<double, py::array::c_style | py::array::forcecast> x) {
+            const int n = manager_->GetNDOF();
+            auto xb = x.unchecked<1>();
+            if ((int)xb.shape(0) != n) {
+                throw std::invalid_argument("x size must equal NDOF (= number of filaments)");
+            }
+            std::vector<double> xv(n), yv(n);
+            for (int i = 0; i < n; ++i) xv[i] = xb(i);
+            manager_->MatVec(xv, yv);
+            py::array_t<double> y(n);
+            auto yb = y.mutable_unchecked<1>();
+            for (int i = 0; i < n; ++i) yb(i) = yv[i];
+            return y;
+        }
+
+        int GetNDOF() const { return manager_->GetNDOF(); }
+        bool IsValid() const { return manager_->IsValid(); }
+
+        py::dict GetStats() const {
+            const auto& s = manager_->GetStats();
+            py::dict d;
+            d["n_dof"] = s.n_dof;
+            d["n_leaves"] = s.n_leaves;
+            d["n_lowrank"] = s.n_lowrank;
+            d["n_dense"] = s.n_dense;
+            d["max_rank"] = s.max_rank;
+            d["compression"] = s.compression;
+            d["build_time"] = s.build_time;
+            d["memory_mb"] = s.memory_mb;
+            d["dense_memory_mb"] = s.dense_memory_mb;
+            return d;
+        }
+
+    private:
+        radia::PEECMatrixBuilder builder_;
+        std::unique_ptr<RadHACApKPEECManager> manager_;
+    };
+
+    py::class_<PyHACApKPEECManager>(m, "HACApKPEECManager",
+        R"pbdoc(
+            HACApK adapter for PEEC filament inductance.
+
+            Builds the H-matrix for the real symmetric L (Ruehli mutual
+            inductance) of a set of straight filaments. The frequency-
+            dependent system (R + jωL + Zs) is assembled in Python by
+            combining real MatVec(L) calls with diagonal R/Zs terms
+            (Option A pattern; see docs).
+
+            Args:
+                centers: (N, 3) filament center coordinates [m]
+                directions: (N, 3) filament unit direction vectors
+                lengths: (N,) filament lengths [m]
+                widths: (N,) filament widths [m]
+                heights: (N,) filament heights [m]
+                sigmas: (N,) filament conductivities [S/m]
+        )pbdoc")
+        .def(py::init<py::array_t<double, py::array::c_style | py::array::forcecast>,
+                       py::array_t<double, py::array::c_style | py::array::forcecast>,
+                       py::array_t<double, py::array::c_style | py::array::forcecast>,
+                       py::array_t<double, py::array::c_style | py::array::forcecast>,
+                       py::array_t<double, py::array::c_style | py::array::forcecast>,
+                       py::array_t<double, py::array::c_style | py::array::forcecast>>(),
+             py::arg("centers"), py::arg("directions"), py::arg("lengths"),
+             py::arg("widths"), py::arg("heights"), py::arg("sigmas"))
+        .def("BuildHMatrix", &PyHACApKPEECManager::BuildHMatrix,
+             py::arg("aca_eps") = -1.0, py::arg("leaf_size") = -1,
+             py::arg("eta") = -1.0, py::arg("max_rank") = -1,
+             py::arg("print_level") = 0,
+             R"pbdoc(
+                 Build the H-matrix for L. Negative arguments use the
+                 PEEC-tuned defaults (aca_eps=1e-4, leaf_size=128, eta=3.0,
+                 max_rank=400). Returns True on success.
+             )pbdoc")
+        .def("MatVec", &PyHACApKPEECManager::MatVec, py::arg("x"),
+             R"pbdoc(
+                 Real matvec y = L * x. Both x and y are length-NDOF
+                 (= n_filaments) double arrays.
+             )pbdoc")
+        .def("GetNDOF", &PyHACApKPEECManager::GetNDOF)
+        .def("IsValid", &PyHACApKPEECManager::IsValid)
+        .def("GetStats", &PyHACApKPEECManager::GetStats,
+             "Return dict with n_dof, n_leaves, n_lowrank, n_dense, "
+             "max_rank, compression, build_time [s], memory_mb, dense_memory_mb.");
 }
