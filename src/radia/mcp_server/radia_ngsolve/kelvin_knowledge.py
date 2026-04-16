@@ -1759,94 +1759,104 @@ uses to validate the two-sphere Kelvin implementation.
 KELVIN_SOURCE_IN_OMEGA_FORM = """
 # External source (coil / magnet) with Omega-reduced-Omega + Kelvin
 
-A FREQUENTLY-CONFUSING POINT: when the Omega-reduced-Omega
-scheme is combined with the Kelvin outer sphere, the coil source
-enters the FEM system ONLY through two boundary terms on the
-total-reduced interface. The Kelvin (outer sphere) region itself
-carries NO source term. The periodic BC between the inner and outer
-sphere boundaries automatically propagates the solution into the
-exterior.
+When the Omega-reduced-Omega scheme is combined with the Kelvin outer
+sphere, the coil source enters the FEM system ONLY through two boundary
+terms on the total-reduced interface. The Kelvin (outer sphere) region
+itself carries NO source term. The periodic BC between the inner and
+outer sphere boundaries automatically propagates the solution.
 
 Contrast with the A-formulation: there, the Biot-Savart source A_s
 typically has to be injected (with a 1-form pullback) into the Kelvin
-exterior as well, because A is a 1-form that does not vanish at
-infinity in the same way as Omega. Omega (being a 0-form magnetic
-scalar potential) is chosen so that it is zero at infinity, so the
-Kelvin-image-of-infinity (rho' = 0) naturally gives the GND Dirichlet.
+exterior. Omega (being a 0-form) vanishes at infinity, so the
+Kelvin-image-of-infinity (rho' = 0) naturally gives GND Dirichlet.
 
-This pattern was explicitly demonstrated in the EMPY_Analysis package
-(S:/NGSolve/EMPY/EMPY_Analysis, file
-Static/Omega_ReducedOmega.py) and is the canonical way to model a
-coil source with a scalar-potential formulation + Kelvin.
+**!! WARNING: the fully-reduced single-potential method
+(`ScalarPotentialSolver.solve_single_potential`) does NOT work for
+coil sources with Kelvin.** It requires H_s defined in the Kelvin
+region via 1-form pullback, which `set_source_from_radia` does not
+provide (VoxelCoefficient clamps to bbox boundary, leaking non-zero
+H_s into Kelvin). Setting H_s=0 in Kelvin makes it worse (tested:
+99% error vs 43% baseline). The CORRECT pattern is the EMPY-style
+**total+reduced split** described below.
+
+This pattern was validated against the EMPY_Analysis package
+(S:/NGSolve/EMPY/EMPY_Analysis/Static/Omega_ReducedOmega.py).
+Working reference: `examples/kelvin_transformation/Omega_ReducedOmega/
+Cylinder/3D_cylinder_with_Kelvin.py` (0.52% RMS for uniform field).
+Coil source validation: `validate_omega_coil_source_v2.py`
+(z-axis <3%, outside <0.3%, x-axis ~12% voxel-limited).
 
 ## Recipe (Radia + NGSolve)
 
-Given: coil object `coil` = rad.ObjArcCur / polylines / etc., and a
-Kelvin mesh with three materials ("magnetic" or "iron", "air",
-"kelvin") plus a `total_boundary` = material interface where the
-magnetic material meets air, and the Kelvin outer sphere offset
-("kelvin_ext") identified periodically with the inner air-side
-"kelvin_int" boundary.
+Given: coil object `coil` = rad.ObjArcCur, and a Kelvin mesh with
+three materials ("iron", "air_inner", "air_outer") plus
+`iron_surf` = iron-air interface, Kelvin outer sphere offset
+("kelvin_ext") identified periodically with "kelvin_int".
 
 ```python
-from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
+from radia.kelvin_source import kelvin_mu_factor_3d_cf
 
-# (1) Source evaluation on a mesh point (MIP).  These are callbacks
-#     that call into Radia each evaluation; wrap as NGSolve
-#     CoefficientFunctions via a custom Python CF if you need fast
-#     evaluation, or just call mesh() + rad.Fld at a set of sample
-#     points for the BC Set().
+# (1) Omega_s: scalar potential of coil's H field.
+#     CANNOT use rad.Fld(coil, 'phi') — broken for ObjArcCur.
+#     Use line-integral of rad.Fld(coil, 'h') from a reference
+#     point below iron (path must not cross coil cut surface).
+#     Build as VoxelCoefficient covering the iron surface bbox.
+Omega_s_cf = build_Omega_s_voxel(coil, bbox, resolution, n_line_samples)
 
-def Omega_s(pt):
-    return float(rad.Fld(coil, 'phi', list(pt)))
-
-def B_s(pt):
-    return np.array(rad.Fld(coil, 'b', list(pt)), dtype=float)
+# (1b) B_s: coil free-space B field as VoxelCoefficient.
+#      Bbox must cover ALL of air_inner (not just iron surface),
+#      otherwise VoxelCoefficient clamps to boundary values.
+Bs_cf = build_Bs_voxel(coil, bbox_full_air, resolution)
 
 # (2) Kelvin material (Nagamine canonical):
 mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=c_out, R=R_K)
-Mu = build_material_cf(mesh, MU_0, mu_kelvin_factor,
-                        outer_keyword="kelvin",
-                        overrides={"magnetic": mu_r * MU_0})
+Mu = CF([mat_dict[m] for m in mesh.GetMaterials()])
+# mat_dict = {"iron": mu_r*MU_0, "air_inner": MU_0,
+#             "air_outer": MU_0 * mu_kelvin_factor}
 
-# (3) Bilinear form — NO source in Kelvin, periodic BC handles it:
+# (3) Bilinear form — Mu * grad . grad over ALL volume:
+#     CRITICAL: dirichlet="GND" ONLY.  Do NOT add "iron_surf"
+#     as Dirichlet — that pins omega to Omega_s and kills
+#     demagnetization (gives Bt = mu_iron * Hs, the long-cylinder
+#     limit). The iron_surf BC must enter WEAKLY via the RHS lift.
 fes_raw = H1(mesh, order=fe_order, dirichlet="GND")
 fes = Periodic(fes_raw)
 omega, psi = fes.TnT()
 a = BilinearForm(fes)
-a += Mu * grad(omega) * grad(psi) * dx(total_region)
-a += Mu * grad(omega) * grad(psi) * dx(reduced_region)
-a += Mu * grad(omega) * grad(psi) * dx("kelvin")   # Mu already has (R/rho')^2
+a += Mu * grad(omega) * grad(psi) * dx
+a.Assemble()
 
-# (4) Dirichlet BC on total_boundary = coil scalar potential:
+# (4) Dirichlet lift: Set Omega_s on iron_surf BND (NOT Dirichlet).
+#     This creates a GridFunction with Omega_s at iron-air boundary
+#     nodes and 0 elsewhere, used as RHS source contribution.
 gfOmega = GridFunction(fes)
-gfOmega.Set(Omega_s_cf, BND, mesh.Boundaries(total_boundary))
+gfOmega.Set(Omega_s_cf, BND, mesh.Boundaries("iron_surf"))
 
-# (5) RHS: reduced-region Dirichlet lift + Neumann B_s . n on boundary.
+# (5) RHS: reduced-region lift + Neumann B_s.n on iron surface.
 f = LinearForm(fes)
-f += Mu * grad(gfOmega) * grad(psi) * dx(reduced_region)
-normal = -specialcf.normal(mesh.dim)
-f += (normal * B_s_cf) * psi * ds(total_boundary)
+f += Mu * grad(gfOmega) * grad(psi) * dx("air_inner")
+normal = -specialcf.normal(mesh.dim)   # outward from iron
+f += (normal * Bs_cf) * psi * ds("iron_surf")
+f.Assemble()
 
-# (6) Assemble, solve with Dirichlet cut-off, post-process
-#     B = B_t + B_r + B_s   (B_s = 0 in Kelvin region)
+# (6) Solve directly (NO inhomogeneous Dirichlet correction):
+sol = GridFunction(fes)
+sol.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+# (7) Post-process: B = Mu * grad(sol) in iron, Mu*(grad(sol)-grad(lift))+Bs in air
 ```
 
 ## The three source-handling rules for Kelvin
 
 | Formulation            | Inner reduced | Inner total   | Kelvin       |
 |------------------------|---------------|---------------|--------------|
-| Omega-reduced-Omega    | Ω_s (dir/grad)| B_s.n (Neum.) | 0 (periodic) |
+| Omega-reduced-Omega    | Omega_s lift  | B_s.n (Neum.) | 0 (periodic) |
 | A-reduced-A            | A_s (curl)    | A_s.n (Neum.) | pullback(A_s)|
 | H-form with source     | H_s = B_s/mu0 | --            | pullback(H_s)|
 
-"Inner total" here means the magnetic-material boundary. The Omega
-scheme gets away WITHOUT a Kelvin-region source because it reduces to
-solving a pure Laplace problem in the air+Kelvin union, with the source
-factored out into BCs. The A scheme cannot — because the physical A
-does not vanish at infinity quickly enough and the magnetic flux
-through any sphere is nonzero; the source HAS to be carried into the
-Kelvin region explicitly via the 1-form pullback.
+The Omega scheme gets away WITHOUT a Kelvin-region source because it
+reduces to solving a pure Laplace problem in air+Kelvin with the source
+factored into BCs.
 
 ## Radia API cheat-sheet for source evaluation
 
@@ -1857,59 +1867,62 @@ rad.Fld(obj, 'h',   pt)   # H field               (any source)
 rad.Fld(obj, 'a',   pt)   # vector potential      (any source)
 ```
 
-**!! CRITICAL GOTCHA: rad.Fld(..., 'phi', pt) only returns the magnetic
-scalar potential for MAGNETIZED bodies (ObjRecMag, ObjCylMag with M),
-NOT for current-driven coils (ObjArcCur).** For magnetized bodies,
-`H = -grad(phi)` holds (verified: ratio 1.000 at sample points). For
-ObjArcCur, the returned 'phi' is an internal quantity (related to J
--> M conversion) and `H = -grad(phi)` does **not** hold (ratio ~64
-empirically).
+**!! CRITICAL GOTCHA: rad.Fld(..., 'phi', pt) does NOT return the
+magnetic scalar potential for current-driven coils (ObjArcCur).** The
+C++ `rad_arc_current.cpp` uses an incorrect solid-angle integrand for
+arc coils (not full-loop); the returned phi has `grad(phi) != H`
+(ratio 19-32x empirically at multiple probe points). For magnetized
+bodies (ObjRecMag, ObjCylMag with M), `H = -grad(phi)` holds.
 
 Workarounds for a current-driven coil source:
 
-1. **Equivalent-magnetization coil** (simplest, recommended): model a
-   solenoid with N turns and current I as hollow ObjRecMag blocks
-   with M_z = N*I/h. External field is identical to a real winding.
-   Then rad.Fld(..., 'phi', pt) works correctly. See
-   `examples/ngsolve_integration/demo_coil_scalar_potential.py`.
+1. **Line-integration of rad.Fld('h')**: compute Omega_s(p) =
+   integral_ref^p H_s . dl on a voxel grid. Choose reference point
+   below iron; straight path must not cross coil cut surface. Build
+   VoxelCoefficient. See `validate_omega_coil_source_v2.py` for the
+   working implementation.
 
 2. **Path-integration helper**:
    `radia.bem_sibc_solver.compute_phi_inc_from_filaments(obs_points,
    filament_paths, currents)` computes Omega_s for arbitrary filament
-   bundles via two-stage path integration (axis + horizontal sweep)
-   using the exact finite-segment Biot-Savart formula. Supports
-   complex per-filament currents. This is the general solution for
-   ObjArcCur or any topology-aware coil.
+   bundles. Supports complex per-filament currents.
 
-3. **High-level FEM solver**: `radia.scalar_potential_solver.ScalarPotentialSolver`
-   takes a Radia object and builds the phi-reduced FEM with
-   **H_s evaluated on a voxel grid** (via rad.Fld 'h', which works
-   universally). Supports Kelvin via `kelvin_region`/`kelvin_radius`/
-   `kelvin_center` keyword args and handles both the phi-reduced
-   (single-potential) and Simkin-Trowbridge (two-potential) methods.
-   This is the preferred high-level entry point.
+3. **Equivalent-magnetization coil**: model a solenoid as hollow
+   ObjRecMag blocks with M_z = N*I/h. Then rad.Fld('phi') works.
 
-The 'phi' output, WHEN VALID (magnetized bodies), is the magnetic
-scalar potential consistent with H_s = -grad(Omega_s) in any
-simply-connected current-free region. It is discontinuous across any
-gap surface spanning a coil loop (phi changes by I each time you cross
-such a surface); for a GAPPED coil the gap breaks the topological
-obstruction and Omega_s is single-valued outside the coil.
+## Critical geometry constraints (5 hard-won bugs)
+
+1. **Kelvin sphere offset > 2*R required.** Inner sphere @origin R
+   and outer sphere @offset R: if offset < 2R, the spheres overlap
+   geometrically and OCC Glue assigns iron tets to the air_outer
+   material. This silently gives wrong Mu inside iron.
+
+2. **Bs voxel bbox must cover entire air_inner region.** A bbox
+   covering only the iron surface causes VoxelCoefficient boundary
+   clamping: constant |B|_FEM beyond the bbox edge.
+
+3. **dirichlet="GND" only, NOT "GND|iron_surf".** Strict Dirichlet
+   on iron_surf pins omega to harmonic-extension(Omega_s) in iron,
+   giving grad(omega) = Hs and Bt = mu_iron * Hs (long-cylinder
+   limit with no demagnetization). Weak BC via RHS lift allows
+   demagnetization.
+
+4. **Ot.Set(sol, VOL, definedon="iron") may return near-zero** when
+   projecting from full-mesh to iron-restricted H1. Use per-material
+   CF dispatch `CF([Mu*grad(sol) if mat=="iron" else ...])` instead.
+
+5. **Source must live in the INNER physical region** (not the Kelvin
+   exterior).
 
 ## Gotchas
 
-- **Source must live in the INNER physical region** (not the Kelvin
-  exterior). Sources that straddle the Kelvin boundary require the
-  Phase-3 pullback of the source into the exterior, which is beyond
-  the scope of this recipe.
-- **Ω_s is multi-valued through a coil-spanning surface.** Use a
+- **Omega_s is multi-valued through a coil-spanning surface.** Use a
   gapped coil (gap_deg > 0) or, for closed loops, arrange the FEM
   domain so no total_boundary crosses the cut surface.
 - **Kelvin region gets ZERO source** but the periodic BC must
-  actually reduce DOFs (check `FreeDofs` before / after applying
-  `Periodic(fes)` — a difference of zero means periodic is broken).
-- **GND Dirichlet** at the Kelvin outer sphere center is the image of
-  physical infinity and enforces Omega(infinity) = 0.
+  actually reduce DOFs (check FreeDofs before/after Periodic).
+- **GND Dirichlet** at the Kelvin outer sphere center is the image
+  of physical infinity and enforces Omega(infinity) = 0.
 """
 
 
