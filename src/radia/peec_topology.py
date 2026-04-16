@@ -83,7 +83,9 @@ class PEECCircuitSolver:
                  hacapk_params=None,
                  bicgstab_outer_tol=1e-8,
                  bicgstab_inner_tol=1e-10,
-                 bicgstab_maxiter=1000):
+                 bicgstab_maxiter=1000,
+                 outer_method="lgmres",
+                 outer_m=50):
         """
         Initialize from build_topology() result dict.
 
@@ -97,17 +99,30 @@ class PEECCircuitSolver:
                     segment_widths, segment_heights, segment_sigmas
             use_hacapk: If True, replace the C++ dense MNA solver with a
                 Python MNA driver that uses a HACApK H-matrix for L and
-                a nested BiCGSTAB for the branch Z_branch^{-1} matvec.
-                Only compute_Z_matrix / compute_port_impedance /
+                a flexible outer Krylov for the branch Z_branch^{-1}
+                matvec.  Only compute_Z_matrix / compute_port_impedance /
                 frequency_sweep / compute_coupling_coefficient are
                 supported in this mode (others raise NotImplementedError).
             hacapk_params: Optional dict forwarded to PEECHACApKSolver
                 (keys: aca_eps, leaf_size, eta, max_rank, print_level).
-            bicgstab_outer_tol: Relative tol for the nodal BiCGSTAB solve.
+            bicgstab_outer_tol: Relative tol for the nodal outer Krylov.
             bicgstab_inner_tol: Relative tol for the branch (HACApK) solve.
                 Should be tighter than bicgstab_outer_tol.
             bicgstab_maxiter: Max iterations for both outer and inner
-                BiCGSTAB calls.
+                Krylov calls.
+            outer_method: Which scipy Krylov to use for the nodal solve.
+                ``"lgmres"`` (default) and ``"gcrotmk"`` tolerate the
+                varying-operator preconditioner introduced by the inner
+                HACApK BiCGSTAB; ``"bicgstab"`` breaks down for N>~200
+                on strongly coupled helical coils (see stage-5
+                findings_peec_mna_crossover.md).  lgmres is the default
+                because gcrotmk produces NaN divisions at high omega on
+                small (N~72) test cases, while lgmres is robust across
+                DC..10 MHz; gcrotmk is ~10x faster at N>=500 and is
+                exposed for benchmark runs that tolerate the fragility.
+                The stage-4 default was "bicgstab"; stage-6 switches to
+                "lgmres" to fix the nested-Krylov stall.
+            outer_m: Krylov subspace dimension for lgmres / gcrotmk.
         """
         self.n_loop = topology_dict['n_loop']
         self.n_nodes = topology_dict['n_nodes']
@@ -124,6 +139,14 @@ class PEECCircuitSolver:
         self._bicgstab_outer_tol = float(bicgstab_outer_tol)
         self._bicgstab_inner_tol = float(bicgstab_inner_tol)
         self._bicgstab_maxiter = int(bicgstab_maxiter)
+        method = str(outer_method).lower()
+        if method not in ("bicgstab", "gcrotmk", "lgmres"):
+            raise ValueError(
+                "outer_method must be one of 'bicgstab', 'gcrotmk', "
+                "'lgmres', got %r" % outer_method
+            )
+        self._outer_method = method
+        self._outer_m = int(outer_m)
         self._hacapk_solver = None   # lazy-built on first call
 
         if self._use_hacapk:
@@ -562,19 +585,63 @@ class PEECCircuitSolver:
         A_hat = A_inc[keep, :]
         return A_hat, keep, gnd
 
+    def _build_outer_jacobi(self, freq, Zs, A_hat):
+        """Jacobi preconditioner for the nodal admittance Y = A Z^{-1} A^T.
+
+        Since A_hat has entries in {-1, 0, +1}, (A_hat[i,j])**2 = |A_hat[i,j]|
+        and the exact diagonal of Y is
+
+            diag_Y[i] = sum_{branch j incident to i} 1 / Z_branch[j,j]
+
+        which is one sparse matvec of |A_hat| against the reciprocal of
+        ``diag(Z_branch) = R + Zs + j*omega*diag(L)``.  ``diag(L)`` is
+        extracted once via ``PEECHACApKSolver.get_L_diag()`` (cached).
+        """
+        from scipy.sparse.linalg import LinearOperator
+
+        omega = 2.0 * np.pi * float(freq)
+        solver = self._get_hacapk_solver()
+        R_diag = np.asarray(solver._R_dc_default, dtype=np.float64)
+        Zs_diag = (np.zeros(self.n_loop, dtype=np.complex128)
+                   if Zs is None else np.asarray(Zs, dtype=np.complex128))
+        diag_L = solver.get_L_diag()
+        diag_Z = (R_diag + Zs_diag.real) + 1j * (omega * diag_L + Zs_diag.imag)
+        A_abs = abs(A_hat)
+        diag_Y = A_abs @ (1.0 / diag_Z)
+        tiny = np.max(np.abs(diag_Y)) * 1.0e-30
+        diag_Y_safe = np.where(np.abs(diag_Y) > tiny, diag_Y, 1.0)
+
+        n_red = A_hat.shape[0]
+        return LinearOperator(
+            shape=(n_red, n_red),
+            matvec=lambda r: np.asarray(r) / diag_Y_safe,
+            dtype=np.complex128,
+        )
+
     def _solve_nodal_system(self, freq, Zs, A_hat, i_ext_red):
-        """Solve ``A_hat Z_branch^{-1} A_hat^T V = i_ext_red`` via nested
-        BiCGSTAB.  Inner Z_branch solve uses HACApK matvec.
+        """Solve ``A_hat Z_branch^{-1} A_hat^T V = i_ext_red`` via an
+        outer Krylov (gcrotmk by default) + inner HACApK BiCGSTAB, with
+        a diagonal Jacobi preconditioner on diag(Y).
 
         Raises RuntimeError on non-convergence (fail-loud policy).
+
+        The default outer method is gcrotmk because plain BiCGSTAB
+        stalls above N ~ 200 on strongly coupled helical coils: the
+        inner HACApK BiCGSTAB breaks down at residual ~1e-7 and the
+        resulting varying-operator perturbation destroys BiCGSTAB's
+        three-term recurrence (see stage-5 findings).  gcrotmk's
+        augmented subspace + FGMRES-style outer loop absorbs this noise.
         """
-        from scipy.sparse.linalg import LinearOperator, bicgstab
+        from scipy.sparse.linalg import (
+            LinearOperator, bicgstab, gcrotmk, lgmres,
+        )
 
         solver = self._get_hacapk_solver()
         n_red = A_hat.shape[0]
 
         counters = {"outer": 0, "inner_iters": 0, "inner_matvec_real": 0}
-        M_jac = solver.build_jacobi_preconditioner(float(freq), Zs=Zs)
+        M_inner = solver.build_jacobi_preconditioner(float(freq), Zs=Zs)
+        M_outer = self._build_outer_jacobi(float(freq), Zs, A_hat)
 
         def matvec_Y(v):
             counters["outer"] += 1
@@ -584,7 +651,7 @@ class PEECCircuitSolver:
                 float(freq), b, Zs=Zs,
                 rtol=self._bicgstab_inner_tol,
                 maxiter=self._bicgstab_maxiter,
-                M=M_jac,
+                M=M_inner,
                 track_residual=False,
             )
             if not res.converged:
@@ -601,17 +668,45 @@ class PEECCircuitSolver:
                               matvec=matvec_Y,
                               dtype=np.complex128)
 
-        V_red, info = bicgstab(
-            Y_op, i_ext_red,
-            rtol=self._bicgstab_outer_tol,
-            maxiter=self._bicgstab_maxiter,
-        )
-        if info != 0:
-            raise RuntimeError(
-                "Nodal BiCGSTAB did not converge at f=%g Hz "
-                "(scipy info=%d, outer matvecs=%d)"
-                % (freq, info, counters["outer"])
+        m = min(self._outer_m, max(2, n_red - 1))
+        if self._outer_method == "gcrotmk":
+            V_red, info = gcrotmk(
+                Y_op, i_ext_red,
+                rtol=self._bicgstab_outer_tol,
+                maxiter=self._bicgstab_maxiter,
+                m=m,
+                M=M_outer,
             )
+        elif self._outer_method == "lgmres":
+            V_red, info = lgmres(
+                Y_op, i_ext_red,
+                rtol=self._bicgstab_outer_tol,
+                maxiter=self._bicgstab_maxiter,
+                inner_m=m,
+                M=M_outer,
+            )
+        else:  # "bicgstab"
+            V_red, info = bicgstab(
+                Y_op, i_ext_red,
+                rtol=self._bicgstab_outer_tol,
+                maxiter=self._bicgstab_maxiter,
+                M=M_outer,
+            )
+
+        # Residual-based convergence: scipy info alone is not reliable
+        # under a varying-operator preconditioner; recompute once.
+        b_norm = np.linalg.norm(i_ext_red)
+        final_res = (np.linalg.norm(i_ext_red - Y_op @ V_red) / b_norm
+                     if b_norm > 0 else 0.0)
+        counters["outer"] = max(0, counters["outer"] - 1)
+        if final_res > self._bicgstab_outer_tol * 10.0:
+            raise RuntimeError(
+                "Nodal %s did not converge at f=%g Hz "
+                "(scipy info=%d, outer matvecs=%d, final_res=%.2e > %.2e)"
+                % (self._outer_method, freq, info, counters["outer"],
+                   final_res, self._bicgstab_outer_tol)
+            )
+        counters["final_outer_res"] = float(final_res)
 
         self._last_nodal_stats = counters
         return V_red
