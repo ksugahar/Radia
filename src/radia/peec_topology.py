@@ -139,7 +139,15 @@ class PEECCircuitSolver:
 
         # HACApK switch + parameters
         self._use_hacapk = bool(use_hacapk)
-        self._hacapk_params = dict(hacapk_params) if hacapk_params else {}
+        hp = dict(hacapk_params) if hacapk_params else {}
+        # Override the C++ PEEC default aca_eps=1e-4 with 1e-8 unless
+        # the caller explicitly set it.  1e-8 is the sweet spot for the
+        # Ruehli mutual-inductance kernel: ACA rank jumps from 1 (16%
+        # L matvec error) to ~100 (< 0.4% error) between 1e-7 and 1e-8,
+        # while memory stays within 2x of the 1e-4 setting.  See
+        # findings_peec_mna_crossover.md "Stage-8" section.
+        hp.setdefault("aca_eps", 1.0e-8)
+        self._hacapk_params = hp
         self._bicgstab_outer_tol = float(bicgstab_outer_tol)
         self._bicgstab_inner_tol = float(bicgstab_inner_tol)
         self._bicgstab_maxiter = int(bicgstab_maxiter)
