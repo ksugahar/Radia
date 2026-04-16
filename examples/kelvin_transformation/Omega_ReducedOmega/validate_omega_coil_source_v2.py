@@ -81,7 +81,8 @@ mu_r = 100
 
 R_coil = 0.08
 a_coil = 0.008
-gap_deg = 5.0
+gap_deg = 5.0    # gapped coil (cut-surface effects on voxel Omega_s, ~12% x-axis)
+# gap_deg = 0.0  # closed loop: 3.17% max, 1.61% RMS (validated 2026-04-17)
 arc_deg = 360.0 - gap_deg
 z_coil = 0.10
 I_total = 1000.0
