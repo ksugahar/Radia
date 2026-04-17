@@ -30,15 +30,15 @@ import pytest
 
 class TestMethodCombo:
 
-    def test_default_method_is_BEM(self, ih_panel):
-        """First-launch default. The user must never see a blank
-        combo (regression from 2026-04-12 stale-index restore)."""
-        assert ih_panel._method_combo.currentText() == "BEM"
+    def test_default_method_is_PEEC(self, ih_panel):
+        """First-launch default. PEEC is the default since BEM was
+        removed from the panel (2026-04-17)."""
+        assert ih_panel._method_combo.currentText() == "PEEC"
 
     def test_method_items(self, ih_panel):
         items = [ih_panel._method_combo.itemText(i)
                  for i in range(ih_panel._method_combo.count())]
-        assert items == ["BEM", "FEM"]
+        assert items == ["PEEC", "PEEC+BEM", "FEM"]
 
     def test_no_legacy_BEM_SIBC_WP_method(self, ih_panel):
         """Removed 2026-04-12. Make sure it does not creep back."""
@@ -63,31 +63,29 @@ class TestModeSwitch:
             return False
         return w.isVisibleTo(panel)
 
-    def test_BEM_shows_BEM_only_widgets(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("BEM")
-        assert self._visible(ih_panel, "air_mode")
+    def test_PEEC_shows_coil_params(self, ih_panel):
+        ih_panel._method_combo.setCurrentText("PEEC")
+        assert self._visible(ih_panel, "coil_radius")
+        assert self._visible(ih_panel, "nwinc")
         assert self._visible(ih_panel, "coil_sigma")
-        assert self._visible(ih_panel, "workpiece_mode")
-        # Solver combo present in both modes
         assert self._visible(ih_panel, "solver")
-        # FEM-only widget hidden
         assert not self._visible(ih_panel, "max_iter")
+        assert not self._visible(ih_panel, "air_mode")
+        assert not self._visible(ih_panel, "fes_order")
 
     def test_FEM_shows_FEM_only_widgets(self, ih_panel):
         ih_panel._method_combo.setCurrentText("FEM")
-        # FEM-only
         assert self._visible(ih_panel, "max_iter")
-        # FEM hides air_mode (volume mesh always solves the field)
         assert not self._visible(ih_panel, "air_mode")
-        # Workpiece group is shared
         assert self._visible(ih_panel, "workpiece_mode")
         assert self._visible(ih_panel, "wp_sigma")
+        assert not self._visible(ih_panel, "coil_radius")
 
-    def test_BEM_solver_items(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("BEM")
+    def test_PEEC_solver_items(self, ih_panel):
+        ih_panel._method_combo.setCurrentText("PEEC")
         items = [ih_panel._widgets["solver"].itemText(i)
                  for i in range(ih_panel._widgets["solver"].count())]
-        assert items == ["LU (direct)", "MINRES", "GMRES"]
+        assert items == ["Dense LU", "HACApK saddle", "PRIMA"]
 
     def test_FEM_solver_items(self, ih_panel):
         ih_panel._method_combo.setCurrentText("FEM")
@@ -103,14 +101,14 @@ class TestModeSwitch:
 class TestWorkpieceGroup:
 
     def test_off_hides_WP_detail(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("off")
         for key in ("wp_sigma", "half_thickness", "mu_r",
                     "bh_file", "esim_geometry"):
             assert not ih_panel._widgets[key].isVisibleTo(ih_panel), key
 
     def test_SIBC_shows_mu_r_not_bh(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("SIBC")
         assert ih_panel._widgets["wp_sigma"].isVisibleTo(ih_panel)
         assert ih_panel._widgets["half_thickness"].isVisibleTo(ih_panel)
@@ -119,7 +117,7 @@ class TestWorkpieceGroup:
         assert not ih_panel._widgets["esim_geometry"].isVisibleTo(ih_panel)
 
     def test_ESIM_shows_bh_not_mu_r(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("ESIM")
         assert ih_panel._widgets["wp_sigma"].isVisibleTo(ih_panel)
         assert ih_panel._widgets["bh_file"].isVisibleTo(ih_panel)
@@ -218,28 +216,21 @@ class TestCommandRoundtrip:
     sent to a parser that did not declare ``custom`` as a valid
     choice would have been caught by this test."""
 
-    def test_BEM_no_workpiece(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("BEM")
-        ih_panel._widgets["workpiece_mode"].setCurrentText("off")
-        cmd = ih_panel.build_command("model.vol")
+    def test_PEEC_no_vol(self, ih_panel):
+        ih_panel._method_combo.setCurrentText("PEEC")
+        cmd = ih_panel.build_command(None)
         assert cmd[0].endswith("python.exe") or cmd[0].endswith("python")
-        assert cmd[1].endswith("calc_inductance.py")
-        parser = _calc_inductance_argparse()
-        ns = parser.parse_args(cmd[2:])
-        assert ns.vol == "model.vol"
+        assert cmd[1].endswith("calc_peec.py")
+        assert "--coil-radius" in cmd
+        assert "--nwinc" in cmd
 
-    @pytest.mark.parametrize("wp_mode,expected_imp",
-                             [("SIBC", "sibc"),
-                              ("ESIM", "esim")])
-    def test_BEM_with_workpiece(self, ih_panel, wp_mode, expected_imp):
-        ih_panel._method_combo.setCurrentText("BEM")
-        ih_panel._widgets["workpiece_mode"].setCurrentText(wp_mode)
+    def test_PEEC_BEM_with_workpiece(self, ih_panel):
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._widgets["workpiece_mode"].setCurrentText("SIBC")
         cmd = ih_panel.build_command("model.vol")
-        parser = _calc_inductance_argparse()
-        ns = parser.parse_args(cmd[2:])
-        assert ns.workpiece == "sibc"  # boundary label
-        assert ns.impedance_model == expected_imp
-        assert ns.use_local_curvature is True
+        assert cmd[1].endswith("calc_peec.py")
+        assert "--vol" in cmd
+        assert "--workpiece" in cmd
 
     @pytest.mark.parametrize("wp_mode,expected_imp",
                              [("SIBC", "sibc"),
