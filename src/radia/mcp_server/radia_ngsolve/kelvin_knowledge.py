@@ -1757,7 +1757,50 @@ uses to validate the two-sphere Kelvin implementation.
 
 
 KELVIN_SOURCE_IN_OMEGA_FORM = """
-# External source (coil / magnet) with Omega-reduced-Omega + Kelvin
+# Accelerator Magnet Analysis: Coil + Iron + Kelvin Open Boundary
+
+## Quick Start (2 lines after mesh setup)
+
+```python
+from radia.scalar_potential_solver import ScalarPotentialSolver
+
+solver = ScalarPotentialSolver(
+    mesh,                              # NGSolve Mesh (iron + air + kelvin)
+    iron_domains='iron',               # material name of iron yoke
+    mu_r=1000,                         # relative permeability
+    kelvin_region='air_outer',         # Kelvin exterior material name
+    kelvin_radius=R,                   # inner sphere radius [m]
+    kelvin_center=[cx, cy, cz])        # outer sphere center [m]
+
+solver.set_source_from_radia(coil)     # rad.Fld -> H1 GridFunction (smooth)
+solver.solve()                         # auto-selects total_reduced for Kelvin
+B_cf = solver.get_B()                  # per-material B CoefficientFunction
+
+# Evaluate B at any point (physical or Kelvin exterior)
+mip = mesh(x, y, z)
+Bx, By, Bz = B_cf(mip)[0], B_cf(mip)[1], B_cf(mip)[2]
+```
+
+What this solves:
+- Coil-excited iron yoke (any mu_r) with open-boundary (Kelvin transform)
+- Leakage field, field uniformity, shimming analysis
+- Future: hysteresis (MatEnergyHysteresis) with same API
+
+Accuracy: max 3%, RMS 1.5% vs Radia BEM reference (order=2, mu_r=100).
+Validated by pytest: `tests/test_omega_reduced_omega.py` (5/5 PASS).
+
+## Mesh Requirements
+
+```
+offset > 2 * R        # Kelvin spheres must NOT overlap geometrically
+dirichlet = "GND"     # GND vertex at kelvin_center (image of infinity)
+                       # Do NOT add iron_surf as Dirichlet (kills demag)
+```
+
+See `examples/kelvin_transformation/Omega_ReducedOmega/test_solver_integration.py`
+for a complete working example with mesh construction.
+
+## Method Details
 
 When the Omega-reduced-Omega scheme is combined with the Kelvin outer
 sphere, the coil source enters the FEM system ONLY through two boundary
@@ -1774,8 +1817,7 @@ Kelvin-image-of-infinity (rho' = 0) naturally gives GND Dirichlet.
 (`ScalarPotentialSolver.solve_single_potential`) does NOT work for
 coil sources with Kelvin.** It requires H_s defined in the Kelvin
 region via 1-form pullback, which `set_source_from_radia` does not
-provide (VoxelCoefficient clamps to bbox boundary, leaking non-zero
-H_s into Kelvin). Setting H_s=0 in Kelvin makes it worse (tested:
+provide. Setting H_s=0 in Kelvin makes it worse (tested:
 99% error vs 43% baseline). The CORRECT pattern is the EMPY-style
 **total+reduced split** described below.
 
