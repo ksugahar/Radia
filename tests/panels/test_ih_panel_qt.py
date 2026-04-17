@@ -33,12 +33,12 @@ class TestMethodCombo:
     def test_default_method_is_PEEC(self, ih_panel):
         """First-launch default. PEEC is the default since BEM was
         removed from the panel (2026-04-17)."""
-        assert ih_panel._method_combo.currentText() == "PEEC"
+        assert ih_panel._method_combo.currentText() == "PEEC+BEM"
 
     def test_method_items(self, ih_panel):
         items = [ih_panel._method_combo.itemText(i)
                  for i in range(ih_panel._method_combo.count())]
-        assert items == ["PEEC", "PEEC+BEM", "FEM"]
+        assert items == ["PEEC+BEM", "FEM"]
 
     def test_no_legacy_BEM_SIBC_WP_method(self, ih_panel):
         """Removed 2026-04-12. Make sure it does not creep back."""
@@ -64,7 +64,7 @@ class TestModeSwitch:
         return w.isVisibleTo(panel)
 
     def test_PEEC_shows_coil_params(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC")
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
         assert self._visible(ih_panel, "coil_radius")
         assert self._visible(ih_panel, "nwinc")
         assert self._visible(ih_panel, "coil_sigma")
@@ -82,7 +82,7 @@ class TestModeSwitch:
         assert not self._visible(ih_panel, "coil_radius")
 
     def test_PEEC_solver_items(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC")
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
         items = [ih_panel._widgets["solver"].itemText(i)
                  for i in range(ih_panel._widgets["solver"].count())]
         assert items == ["Dense LU", "HACApK saddle", "PRIMA"]
@@ -216,15 +216,16 @@ class TestCommandRoundtrip:
     sent to a parser that did not declare ``custom`` as a valid
     choice would have been caught by this test."""
 
-    def test_PEEC_no_vol(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC")
+    def test_PEEC_no_workpiece(self, ih_panel):
+        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._widgets["workpiece_mode"].setCurrentText("off")
         cmd = ih_panel.build_command(None)
         assert cmd[0].endswith("python.exe") or cmd[0].endswith("python")
         assert cmd[1].endswith("calc_peec.py")
         assert "--coil-radius" in cmd
-        assert "--nwinc" in cmd
+        assert "--vol" not in cmd
 
-    def test_PEEC_BEM_with_workpiece(self, ih_panel):
+    def test_PEEC_with_workpiece(self, ih_panel):
         ih_panel._method_combo.setCurrentText("PEEC+BEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("SIBC")
         cmd = ih_panel.build_command("model.vol")
