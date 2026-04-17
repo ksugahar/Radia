@@ -58,22 +58,21 @@ def induction_heating(topic: str = "all") -> str:
 @mcp.tool()
 def ih_sibc(topic: str = "all") -> str:
     """
-    Get SIBC / ESIM method documentation for induction heating.
+    Get IH solver architecture and SIBC documentation.
+
+    Two solver paths (v4.6.0):
+    - PEEC+FEM (default): coil PEEC filaments + FEM-SIBC+Kelvin workpiece
+    - ALL FEM (reference): full volume FEM with Kelvin
 
     Surface Impedance Boundary Condition approaches:
-    - BEM (Scalar BIE): <0.1% sphere, recommended for P_total
-    - FEM (scattered-field): -2.7% sphere, for L and B distribution
-    - ESIM: nonlinear Z_s(H) for steel/ferrite
-    - Karl iteration: convergence of ESIM + BEM/FEM
-
-    CRITICAL: FEM total-field + internal interface does NOT work for
-    P_total extraction (BND integral returns ~0). Use BEM or
-    scattered-field FEM.
+    - SIBC: linear surface impedance (Cu, Al)
+    - ESIM: nonlinear Z_s(H) for steel/ferrite (BH curve)
 
     Args:
         topic: Options:
-            "all"         - Complete SIBC documentation
-            "overview"    - Method selection table, what works / what doesn't
+            "all"         - Complete documentation
+            "peec_fem"    - PEEC+FEM vs ALL FEM architecture (START HERE)
+            "overview"    - SIBC method selection table
             "esim"        - ESIM cell problem, Karl iteration
             "biot_savart" - Coil field computation (phi_inc, A_inc, H_inc)
             "screening"   - Screening physics, dimensionless parameter
