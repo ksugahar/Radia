@@ -746,6 +746,27 @@ robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
+### Cubit Batch Self-Testing Policy
+
+**POLICY**: Claude は Cubit を **完全ヘッドレス** (`-batch -nographics -nojournal`) で起動し、自力で機能試験を走らせること。GUI や人間の操作は不要。
+
+**起動方法** (既存テストのパターン):
+```python
+import cubit
+cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
+            '-commandplugindir', <plugin_dir>])
+cubit.cmd("create sphere radius 0.05")
+cubit.cmd("mesh volume 1")
+cubit.cmd('radia_export femeem "C:\\tmp\\cub" overwrite')
+```
+
+**対象**: `radia_export {gmsh,netgen,nastran,vtk,femeem}`、panels の非 GUI ロジック、BEM extractor、`export_curved`。
+GUI が絶対必要なもの (panel dialog のレンダリング) のみ例外。
+
+**前提**: `cubit` は Python API import (`S:/Radia/01_GitHub/src/radia/install_panels.py` の `find_cubit_bin()` で自動検出可)。バッチ起動でライセンス消費あり。
+
+**特記**: FEMEEM エクスポートの出力パスは **40 文字以下** にすること。`inpin.f90::chkinib(filename*40)` が長い Python `tempfile.TemporaryDirectory()` パスを切り詰めて `forrtl severe (29)` を起こす。`C:\tmp\<short>\` 等を使う。
+
 **Wheel Verification** (automated by Build_Wheel.ps1, also manual):
 ```python
 import zipfile
@@ -1576,61 +1597,26 @@ mesh = Mesh("model.vol")   # labels + curving loaded from .vol
 
 **calc_*.py accepts `--vol` only** (no `.cub5`):
 - `calc_volume.py --vol model.vol` — volume/area integration
-- `calc_inductance.py --vol model.vol` — BEM inductance extraction
+- `calc_peec.py --step coil.step` — PEEC filament inductance (no mesh needed for coil)
+- `calc_fem_kelvin.py --vol model.vol` — FEM Omega-reduced + Kelvin + SIBC
 - `calc_verify_vol.py --vol model.vol` — consistency check vs companion JSON
 - `calc_mesh_eval.py --vol-base model` — p-convergence (`_p1.vol` ... `_p5.vol`, C++ exports)
 
-### IH (BEM) Inductance: Sideset Requirements
+### IH: No Source/Sink Sidesets Required (PEEC+FEM)
 
-**POLICY**: IH (BEM) uses boundary (surface) elements only. Volume elements are not used.
-Both volume .vol and surface-only .vol work — boundary labels must contain `source` and `sink`.
+**POLICY**: The IH production path (PEEC+FEM) does NOT require source/sink sidesets.
+Coil current is defined by filament topology (STEP -> centerline -> PEECBuilder ports).
+FEM workpiece uses Omega-reduced formulation with H_s from Biot-Savart (no current injection).
 
-**Cubit journal for IH (BEM)**:
-```python
-# Mesh the coil geometry
-volume 1 scheme tetmesh
-mesh volume 1
-block 1 add volume 1
-block 1 name "coil"
+**Workpiece .vol needs only material blocks**:
+- `workpiece` (sigma, mu_r)
+- `air`
+- `kelvin`
 
-# REQUIRED: define source/sink as sidesets on terminal faces
-sideset 1 add surface <source_face_id>
-sideset 1 name "source"
-sideset 2 add surface <sink_face_id>
-sideset 2 name "sink"
+No sidesets needed. No source/sink labels.
 
-# Export (sideset names become boundary labels in .vol)
-radia_export netgen "coil.vol" order 2 overwrite
-```
-
-**IH (BEM) computation** (no Cubit needed):
-```bash
-python calc_inductance.py --vol coil.vol --source source --sink sink
-```
-
-The `.vol` file contains boundary labels from sidesets. `calc_inductance.py`
-reads these labels and applies unit current injection at source, extraction at sink.
-Cubit is NOT needed at compute time — only for mesh generation.
-
-**BEM vs FEM-BEM mesh requirement**:
-- **BEM only** (calc_inductance.py): requires surface-only mesh.
-  `HDivSurface` on volume mesh includes interior edges as DOFs -> singular.
-  calc_inductance.py auto-extracts surface from volume .vol.
-- **FEM-BEM coupling** (future): uses volume .vol directly.
-  `HCurl(mesh).Trace()` or `HDiv(mesh).Trace()` restricts to BND
-  without interior DOF contamination. Same .vol for both FEM and BEM.
-
-### IH (BEM): Mesh Order vs FES Order
-
-**POLICY**: For BEM (EFIE), prioritize **mesh curving order** over **FES basis order**.
-
-High mesh order (order 2-3) with low FES order (0=RWG) is often more accurate
-than high FES order with linear mesh. This is because:
-- Geometry error (flat approximation of curved surfaces) dominates
-- Area/normal accuracy improves exponentially with mesh order
-- BEM kernel singularity is sensitive to geometry, not basis polynomial degree
-
-**Recommended**: `radia_export netgen order 3` + `--fes-order 0` (RWG on curved TRI6/TRI10).
+**BEM (legacy)**: BEM solver modules are in `examples/induction_heating/bem_reference/`
+for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_inductance topic).
 
 **References**:
 - Djordjevic & Notaros, "Double higher order MoM", IEEE TAP 2004 (geometry/basis independence)
@@ -1681,7 +1667,7 @@ than high FES order with linear mesh. This is because:
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
 │  ─────────────────────────────────────────────────────────────  │
-│  calc_inductance.py / calc_fem_kelvin.py / calc_mesh_eval.py    │
+│  calc_peec.py / calc_fem_kelvin.py / calc_mesh_eval.py          │
 │  import cubit FORBIDDEN. import PySide6 FORBIDDEN.              │
 │  NGSolve + GMSH only. .vol input, JSON stdout output.           │
 └─────────────────────────────────────────────────────────────────┘
@@ -1707,11 +1693,10 @@ than high FES order with linear mesh. This is because:
 |------|-------|---------|
 | `RadiaComp.cpp` (.ccl) | 1 (C++ Qt5) | Export Mesh menu + Mesh Evaluation |
 | `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
-| `radia_ih.py` | 3 (PySide6) | IH analysis window (BEM/FEM) |
-| `panels/calc_inductance.py` | 4 (no GUI) | BEM inductance + workpiece coupling |
-| `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Kelvin + SIBC |
+| `radia_ih.py` | 3 (PySide6) | IH analysis window (PEEC+FEM / FEM) |
+| `panels/calc_peec.py` | 4 (no GUI) | PEEC filament coil inductance |
+| `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Omega-reduced + Kelvin + SIBC |
 | `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
-| `panels/calc_heating_bem.py` | 4 (no GUI) | Workpiece heating (BEM-SIBC) |
 
 ### Cubit Plugin: C++ First, No Python ABI Dependency
 
