@@ -1779,12 +1779,28 @@ H_s into Kelvin). Setting H_s=0 in Kelvin makes it worse (tested:
 99% error vs 43% baseline). The CORRECT pattern is the EMPY-style
 **total+reduced split** described below.
 
-This pattern was validated against the EMPY_Analysis package
-(S:/NGSolve/EMPY/EMPY_Analysis/Static/Omega_ReducedOmega.py).
-Working reference: `examples/kelvin_transformation/Omega_ReducedOmega/
-Cylinder/3D_cylinder_with_Kelvin.py` (0.52% RMS for uniform field).
-Coil source validation: `validate_omega_coil_source_v2.py`
-(z-axis <3%, outside <0.3%, x-axis ~12% voxel-limited).
+This pattern was validated via stone-bridge analysis (2026-04-17):
+
+  1. mu_r=1 (air-only) 3D Kelvin vs Radia Biot-Savart: 0.39% max
+  2. mu_r=100 3D Kelvin vs **2D axisymmetric FEM reference**: 1.15% max
+     (proper h/p convergence, refined maxh=4mm order 3)
+  3. 2D axisym reference vs Radia Biot-Savart (air): 0.02% agreement
+
+**DO NOT** use Radia MMM/MSC as a convergence reference -- MMM showed
+4-8% variation between mesh densities at iron endcap/surface probes,
+masquerading as FEM error. The 2D axisym FEM reference
+(`reference_2d_axisym.py`, u=r*A_phi formulation, order 4) is
+sub-0.02% accuracy and is the authoritative reference.
+
+**gap > 0 (gapped coil) is OUT OF SCOPE** for Omega-reduced-Omega.
+ObjArcCur with arc < 360 deg has no return path, so div(J) != 0 at
+the terminals and Omega_s is uncontrolled near the cut surface.  The
+12% x-axis error at gap=5 deg is a formulation limitation, not
+a discretization issue.
+
+Scripts:
+  `validate_omega_coil_source_v2.py` (3D Omega + Kelvin)
+  `reference_2d_axisym.py` (2D axisym A_phi reference)
 
 ## Recipe (Radia + NGSolve)
 
@@ -1916,9 +1932,13 @@ Workarounds for a current-driven coil source:
 
 ## Gotchas
 
-- **Omega_s is multi-valued through a coil-spanning surface.** Use a
-  gapped coil (gap_deg > 0) or, for closed loops, arrange the FEM
-  domain so no total_boundary crosses the cut surface.
+- **Omega_s is multi-valued through a coil-spanning surface.** For
+  closed-loop coils (gap_deg = 0, the ONLY valid case for
+  Omega-reduced-Omega), arrange the FEM domain so no mesh boundary
+  crosses the branch-cut surface of Omega_s.
+- **Gapped coils (gap_deg > 0) are NOT supported** by the Omega
+  formulation (div(J) != 0 at terminals makes Omega_s
+  path-dependent). Use the A-formulation (HCurl) for gapped coils.
 - **Kelvin region gets ZERO source** but the periodic BC must
   actually reduce DOFs (check FreeDofs before/after Periodic).
 - **GND Dirichlet** at the Kelvin outer sphere center is the image
