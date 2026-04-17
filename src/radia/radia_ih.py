@@ -2,13 +2,10 @@
 Radia IH (Induction Heating) analysis window.
 
 Modes:
-  PEEC     -- Filament coil (no mesh needed for coil), PRIMA broadband.
-              Fastest for coil self-impedance / freq sweep.
-  PEEC+FEM -- PEEC coil + BEM-SIBC workpiece coupling (Picard, 1 step).
-              .vol needed only for workpiece surface mesh.
-  BEM      -- EFIE source/sink coil + optional workpiece SIBC / ESIM.
-              Legacy; slower than PEEC for coil inductance.
-  FEM      -- Kelvin + SIBC / ESIM (full volume mesh).
+  PEEC+FEM -- PEEC filament coil (no mesh needed) + FEM-SIBC workpiece
+              with Kelvin open boundary.  Production path.
+  FEM      -- Full volume mesh + Omega-reduced / A + Kelvin + SIBC/ESIM.
+              Reference solver for validation.
 
 Switch via combo box -- single window.
 
@@ -21,13 +18,10 @@ import sys
 import os
 
 TITLE = "Induction Heating"
-# coil:   block name (volume label) — used by calc_inductance.py to filter
-#         the BEM surface mesh to coil-adjacent faces only.
-# source: sideset name on one coil terminal face (current injection).
-# sink:   sideset name on the other coil terminal face (current extraction).
-# BEM requires source/sink sidesets; PEEC does not (coil defined parametrically).
-# The label check is mode-dependent; see is_runnable().
-REQUIRED_LABELS = []   # relaxed — PEEC needs no mesh labels at all
+# PEEC+FEM needs no source/sink sidesets — coil is defined by filament
+# topology (STEP -> centerline -> filaments -> PEECBuilder ports).
+# Workpiece .vol needs only material blocks (workpiece, air, kelvin).
+REQUIRED_LABELS = []
 OPTIONAL_LABELS = ["workpiece", "air", "kelvin", "kelvin_int", "kelvin_ext"]
 OPTIONAL_FILES = {}
 
@@ -45,8 +39,8 @@ class IHPanel(ModePanel):
         self._build_ui()
 
     def _build_ui(self):
-        # Method selector — defaults to BEM. user_settings restored
-        # later (in IHWindow.__init__) overrides this when present.
+        # Method selector. user_settings restored later (in
+        # IHWindow.__init__) overrides this when present.
         self._method_combo = self.add_combo(
             "method", "Method:", ["PEEC+FEM", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
@@ -58,11 +52,11 @@ class IHPanel(ModePanel):
         # shift when switching modes.
         solver_combo = self.add_combo("solver", "Solver:", ["LU (direct)"])
 
-        # FEM-only iteration cap. Hidden in BEM mode (BEM is direct).
+        # FEM-only iteration cap.
         self.add_spin("max_iter", "Max iterations:", 15, 1, 200)
 
         # ============ Coil parameters ============
-        # Frequency, current, sigma — applicable to both BEM and FEM.
+        # Frequency, current, sigma.
         self.add_line("freq", "Frequency [Hz]:", "50000")
         self.add_line("current", "Coil current [A]:", "1.0")
         self.add_line("coil_sigma", "Coil sigma [S/m]:", "5.8e7")
@@ -78,8 +72,7 @@ class IHPanel(ModePanel):
         self.add_spin("prima_q", "PRIMA order:", 30, 5, 100)
 
         # ============ Workpiece parameters ============
-        # The same combo drives both BEM and FEM:
-        #   off  -> workpiece NOT in DOF (coil-only inductance, BEM only)
+        #   off  -> coil-only (no workpiece coupling)
         #   SIBC -> linear surface impedance + per-panel curvature
         #   ESIM -> nonlinear 1D cell problem + per-panel curvature
         wp_combo = self.add_combo("workpiece_mode", "Workpiece:",
@@ -94,11 +87,6 @@ class IHPanel(ModePanel):
         # ESIM 1D cell-problem coordinate system.
         self.add_combo("esim_geometry", "ESIM geometry:",
                        ["local_curvature", "none"])
-
-        # Air field calc — BEM only (FEM volume mesh always solves
-        # for the field everywhere, so the toggle is meaningless in
-        # FEM and would mislead the user). Hidden in FEM mode.
-        self.add_combo("air_mode", "Air field calc:", ["off", "on"])
 
         # Initial state — default Method = PEEC.
         self._method_combo.setCurrentText("PEEC+FEM")
@@ -131,8 +119,6 @@ class IHPanel(ModePanel):
         # FEM-only widgets.
         self._set_row_visible("max_iter", is_fem)
         self._set_row_visible("fes_order", is_fem)
-        self._set_row_visible("air_mode", False)  # BEM removed
-
         # Workpiece: always visible. "off" = coil only; SIBC/ESIM = coupling.
         # FEM requires workpiece (forces non-off).
         self._set_row_visible("workpiece_mode", True)
@@ -202,7 +188,7 @@ class IHPanel(ModePanel):
                "--solver",
                self._PEEC_SOLVER_MAP.get(self.val("solver"), "dense"),
                "--prima-q", str(self.val("prima_q"))]
-        # Workpiece coupling: "off" = coil only, SIBC/ESIM = BEM coupling
+        # Workpiece coupling: "off" = coil only, SIBC/ESIM = FEM coupling
         wp_mode = self.val("workpiece_mode")
         if wp_mode != "off" and vol_path:
             imp = "esim" if wp_mode == "ESIM" else "sibc"
@@ -213,59 +199,6 @@ class IHPanel(ModePanel):
                     "--half-thickness", self.val("half_thickness"),
                     "--mu-r", self.val("mu_r"),
                     "--use-local-curvature"]
-        return cmd
-
-    # Solver combo display name -> calc-script --solver value
-    _BEM_SOLVER_MAP = {
-        "LU (direct)": "lu",
-        "MINRES": "minres",
-        "GMRES": "gmres",
-    }
-
-    def _build_bem_command(self, vol_path):
-        # Source/sink/coil labels follow the .jou naming convention
-        # ("source"/"sink"/"coil") and are picked up by
-        # calc_inductance.py defaults. No label arguments from the GUI.
-        cmd = [_PYTHON, calc_script("calc_inductance.py"),
-               "--vol", vol_path,
-               "--frequency", self.val("freq"),
-               "--current", self.val("current"),
-               "--msh-output", msh_output(vol_path, "_bem")]
-        coil_sigma = self.val("coil_sigma")
-        if coil_sigma:
-            cmd += ["--coil-sigma", coil_sigma]
-        fes = self.val("fes_order")
-        if fes and fes != "0":
-            cmd += ["--fes-order", fes]
-
-        cmd += ["--solver",
-                self._BEM_SOLVER_MAP.get(self.val("solver"), "lu")]
-
-        # Workpiece coupling: combo -> --workpiece + impedance.
-        # The workpiece sideset is named "sibc" by .jou convention
-        # (see ih_bem_sample.jou).
-        wp_mode = self.val("workpiece_mode")
-        if wp_mode != "off":
-            imp = "esim" if wp_mode == "ESIM" else "sibc"
-            cmd += ["--workpiece", "sibc",
-                    "--impedance-model", imp,
-                    "--sigma", self.val("wp_sigma"),
-                    "--half-thickness", self.val("half_thickness"),
-                    "--mu-r", self.val("mu_r")]
-            if imp == "esim":
-                cmd += ["--esim-geometry", self.val("esim_geometry")]
-                bh = self.val("bh_file")
-                if bh:
-                    cmd += ["--bh-file", bh]
-            # Per-panel local curvature is now always on (the global
-            # half_thickness is only used as a fallback when the
-            # extractor cannot recover the local radius).
-            cmd += ["--use-local-curvature"]
-
-        # Air field post-processing on/off (BEM only)
-        if self.val("air_mode") == "on":
-            cmd += ["--field-air"]
-
         return cmd
 
     def _build_fem_command(self, vol_path):
@@ -334,13 +267,6 @@ class IHWindow(AnalysisWindow):
                 idx = wp.findText("SIBC")
                 if idx >= 0:
                     wp.setCurrentIndex(idx)
-        # air combo: default to "on" when an "air" material exists.
-        if "air" in mats and "air_mode" in widgets:
-            ac = widgets["air_mode"]
-            if ac.currentText() == "off":
-                idx = ac.findText("on")
-                if idx >= 0:
-                    ac.setCurrentIndex(idx)
 
 
 def main():
