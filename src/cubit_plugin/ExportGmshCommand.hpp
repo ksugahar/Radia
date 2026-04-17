@@ -20,8 +20,7 @@ public:
   std::vector<std::string> get_help();
   bool execute(CubitCommandData &data);
 
-  bool write_gmsh(const std::string &filename, const std::string &version,
-                  int order);
+  bool write_gmsh(const std::string &filename, int order);
 
 private:
 
