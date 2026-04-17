@@ -40,7 +40,8 @@
  */
 inline RadHACApKParams RadHACApKPEECDefaultParams() {
     RadHACApKParams p;
-    p.aca_eps = 1.0e-4;
+    p.aca_eps = 1.0e-8;  // PEEC sweet spot: ACA rank jumps 14->96, error 4.8%->0.38%
+                         // between 1e-7 and 1e-8 for Ruehli 1/r kernel (bench 2026-04-16)
     p.leaf_size = 128;   // 1 DOF/fil -> ~MSC-equivalent DOF/leaf
     p.eta = 3.0;         // keep near-field blocks dense (helix adjacent turns)
     p.max_rank = 400;    // 1/r kernel needs higher rank than MSC
@@ -114,7 +115,7 @@ private:
  * BuildHMatrix, MatVec permutation, GetInteractionMatrixElement).
  *
  * Returns max|y_hmat - y_dense| / max|y_dense|. Should be below
- * ~aca_eps (typ. 1e-4) for well-separated filaments.
+ * ~aca_eps (typ. 1e-8) for well-separated filaments.
  */
 double RadHACApKPEECSanityCheck(int n_filaments);
 
