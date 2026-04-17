@@ -269,13 +269,22 @@ def filaments_from_step(step_path: str,
                         nwinc: int = 1,
                         nhinc: int = 1,
                         cad_units_per_meter: float = 1000.0,
-                        n_slices: int = 200):
+                        n_slices: int = 200,
+                        use_coil_builder: bool = True):
     """End-to-end: STEP solid -> PEEC topology.
 
-    If path_points_m is None, auto-extracts the centerline from the
-    STEP file by z-slicing + nearest-neighbor chaining (no explicit
-    path needed).  Cross-section (w, h) is always extracted from the
-    solid by perpendicular sectioning.
+    Two paths are available:
+
+    **CoilBuilder path** (use_coil_builder=True, default):
+        STEP -> extract_centerline -> to_coil_builder -> to_filaments
+        -> peec_bundle.  Uses Profile.sample_at() to place filaments
+        according to the actual cross-section shape (circular, rect,
+        loft).  Correct for any cross-section geometry.
+
+    **Legacy path** (use_coil_builder=False):
+        STEP -> extract_centerline -> build_peec_from_path
+        -> C++ ExpandFilaments (rectangular grid only).
+        Does not respect circular cross-section boundaries.
 
     Args:
         step_path: STEP file path.
@@ -286,10 +295,20 @@ def filaments_from_step(step_path: str,
         cad_units_per_meter: Scale factor (default 1000 = mm).
         n_slices: Z-slice count for auto-extraction (ignored if
             path_points_m is given).
+        use_coil_builder: If True (default), use CoilBuilder path for
+            profile-aware filament placement.  Falls back to legacy
+            path if CoilBuilder reconstruction fails.
 
     Returns:
         topology_dict from PEECBuilder.build_topology().
     """
+    if use_coil_builder:
+        return _filaments_via_coil_builder(
+            step_path, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
+            n_slices=n_slices,
+            start_hint=None)  # auto-detect from bounding box
+
+    # Legacy path: rectangular grid via C++ ExpandFilaments
     if path_points_m is None:
         path_m, widths_m, heights_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
@@ -316,7 +335,68 @@ def filaments_from_step(step_path: str,
                 )
         path_m = path_points_m
 
-    return build_peec_from_path(
+    topo = build_peec_from_path(
         path_m, widths_m, heights_m,
         sigma=sigma, nwinc=nwinc, nhinc=nhinc,
     )
+    topo["filament_path"] = path_m
+    topo["filament_widths"] = widths_m
+    topo["filament_heights"] = heights_m
+    return topo
+
+
+def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
+                                start_hint=None):
+    """CoilBuilder path: STEP -> centerline -> CoilBuilder -> to_filaments.
+
+    Uses Profile.sample_at() for cross-section-aware filament placement.
+    Supports circular, rectangular, and lofted cross-sections.
+    """
+    from coil_from_step import extract_centerline, to_coil_builder
+    from peec_bundle import build_bundle_solver
+    import numpy as np
+
+    # Step 1: Extract centerline with profile classification
+    # For closed loops (torus), auto-detect a start hint from the
+    # solid's bounding box if not provided.
+    if start_hint is None:
+        from coil_from_step import load_step_solid
+        solid = load_step_solid(step_path)
+        bb = solid.bounding_box
+        # Start at +x extremity with tangent +y (works for z-axis torus)
+        cx = 0.5 * (bb[0][0] + bb[1][0])
+        cy = 0.5 * (bb[0][1] + bb[1][1])
+        rx = 0.5 * (bb[1][0] - bb[0][0])
+        start_hint = (np.array([cx + rx * 0.5, cy, 0.5 * (bb[0][2] + bb[1][2])]),
+                      np.array([0, 1, 0]))
+
+    res = extract_centerline(step_path, start_hint=start_hint, verbose=False)
+
+    # Step 2: Reconstruct CoilBuilder from centerline + profiles
+    coil, _segs = to_coil_builder(res, current=1.0)
+
+    # Step 3: Generate profile-aware filaments
+    paths, _currents = coil.to_filaments(
+        nw=nwinc, nh=nhinc, frequency=0.0, sigma=sigma)
+    cell_wh = coil._last_filament_info.get('cell_wh')
+
+    # Step 4: Build PEEC topology via bundle solver
+    # build_bundle_solver internally calls PEECBuilder.build_topology()
+    # and remaps nodes for the parallel-bundle topology.  It returns
+    # a PEECCircuitSolver (not a raw topo dict).  We return the solver
+    # plus metadata for the caller.
+    solver, seg_of_fil, port_p, port_m = build_bundle_solver(
+        paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
+
+    # Return a dict compatible with the legacy path
+    result = {
+        "solver": solver,
+        "seg_of_filament": seg_of_fil,
+        "filament_paths": paths,
+        "cell_wh": cell_wh,
+        "coil_builder": coil,
+        "n_loop": len(paths),
+        "port_plus": port_p,
+        "port_minus": port_m,
+    }
+    return result
