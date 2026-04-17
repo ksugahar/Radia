@@ -703,7 +703,7 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
 # kelvin_pullback_B_pseudovector above.
 
 
-def kelvin_nu_factor_3d_cf(center, R, coords=None):
+def kelvin_nu_factor_3d_cf(center, R, coords=None, rho_min=None):
     """3D spherical Kelvin nu factor (rho'/R)^2 as NGSolve CF.
 
     Multiply by nu_0 to produce the Kelvin exterior-domain reluctivity:
@@ -717,6 +717,10 @@ def kelvin_nu_factor_3d_cf(center, R, coords=None):
         center: (cx, cy, cz) -- Kelvin sphere center in world coords.
         R: Kelvin sphere radius.
         coords: optional 3-tuple of NGSolve CFs (default: (x, y, z)).
+        rho_min: minimum rho' for regularization.  If None, uses 1e-10
+            (legacy behaviour). Set to the Kelvin-region mesh element
+            size (e.g. maxh_kelvin) to cap the metric and stabilize
+            higher-order (order >= 3) FEM.
 
     Returns:
         NGSolve CoefficientFunction.
@@ -724,14 +728,16 @@ def kelvin_nu_factor_3d_cf(center, R, coords=None):
     from ngsolve import x, y, z, sqrt, IfPos
     if coords is None:
         coords = (x, y, z)
+    if rho_min is None:
+        rho_min = 1e-10
     cx, cy, cz = center
     rho2 = (coords[0] - cx) ** 2 + (coords[1] - cy) ** 2 + (coords[2] - cz) ** 2
     rho_prime = sqrt(rho2)
-    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    rho_safe = IfPos(rho_prime - rho_min, rho_prime, rho_min)
     return (rho_safe / R) ** 2
 
 
-def kelvin_mu_factor_3d_cf(center, R, coords=None):
+def kelvin_mu_factor_3d_cf(center, R, coords=None, rho_min=None):
     """3D spherical Kelvin mu factor (R/rho')^2 as NGSolve CF.
 
     Multiply by mu_0 to produce the Kelvin exterior-domain permeability:
@@ -739,14 +745,23 @@ def kelvin_mu_factor_3d_cf(center, R, coords=None):
 
     Diverges at rho'=0 (mu_r -> infinity at image of infinity), equals
     mu_0 at rho'=R. Reciprocal of kelvin_nu_factor_3d_cf.
+
+    Args:
+        center, R, coords: see kelvin_nu_factor_3d_cf.
+        rho_min: minimum rho' for regularization.  Caps the mu factor
+            at (R/rho_min)^2.  Set to the Kelvin-region mesh element
+            size to stabilize higher-order FEM (order >= 3).
+            Default None -> 1e-10 (legacy).
     """
     from ngsolve import x, y, z, sqrt, IfPos
     if coords is None:
         coords = (x, y, z)
+    if rho_min is None:
+        rho_min = 1e-10
     cx, cy, cz = center
     rho2 = (coords[0] - cx) ** 2 + (coords[1] - cy) ** 2 + (coords[2] - cz) ** 2
     rho_prime = sqrt(rho2)
-    rho_safe = IfPos(rho_prime - 1e-10, rho_prime, 1e-10)
+    rho_safe = IfPos(rho_prime - rho_min, rho_prime, rho_min)
     return (R / rho_safe) ** 2
 
 
