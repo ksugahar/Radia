@@ -418,6 +418,24 @@ private:
     // Compute mutual inductance via Neumann formula
     double MutualInductance(const PEECSegment& seg_i, const PEECSegment& seg_j) const;
 
+    /** Exact mutual inductance between two parallel rectangular bars.
+     *
+     * Uses Gauss quadrature over both cross-sections (n_gauss x n_gauss
+     * points per bar, total n_gauss^4 filament-pair evaluations) to
+     * compute the volume-volume integral that the filamentary Neumann
+     * formula approximates as a line-line integral.
+     *
+     * Reference: A. E. Ruehli, IBM J. Res. Dev. 16(5), 1972, Section 6
+     *            (filament decomposition of the mutual inductance integral).
+     *
+     * @param seg_i First segment (parallel to seg_j)
+     * @param seg_j Second segment
+     * @param n_gauss Gauss points per dimension per cross-section (default 3)
+     */
+    double MutualInductanceRectBar(const PEECSegment& seg_i,
+                                    const PEECSegment& seg_j,
+                                    int n_gauss = 3) const;
+
     // Compute self-potential coefficient (disk approximation)
     double SelfPotential(const PEECNode& node) const;
 

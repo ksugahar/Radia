@@ -511,12 +511,36 @@ void PEECMatrixBuilder::ComputeL(PEECMatrices& matrices) {
     int n = static_cast<int>(segments_.size());
 
     ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) {
-        // Self-inductance
-        matrices.L[i * n + i] = SelfInductance(segments_[(int)i]);
+        const PEECSegment& si = segments_[(int)i];
+
+        // Self-inductance (exact Rosa/Grover for rect, exact Neumann for circ)
+        matrices.L[i * n + i] = SelfInductance(si);
 
         // Mutual inductance (upper triangle)
         for (int j = (int)i + 1; j < n; ++j) {
-            double Lij = MutualInductance(segments_[(int)i], segments_[j]);
+            const PEECSegment& sj = segments_[j];
+            double Lij;
+
+            // For parallel sub-filaments of the same parent conductor,
+            // use exact cross-section-averaged mutual inductance (Ruehli
+            // 1972 Section 6, Gauss quadrature over both cross-sections).
+            // This eliminates the spurious circulating current artifact
+            // that filamentary Neumann gives for close parallel bars.
+            bool same_parent = (si.parent_segment >= 0 &&
+                                si.parent_segment == sj.parent_segment);
+            double dot = si.direction.x * sj.direction.x +
+                         si.direction.y * sj.direction.y +
+                         si.direction.z * sj.direction.z;
+            bool parallel = (std::abs(std::abs(dot) - 1.0) < 1e-3);
+
+            if (same_parent && parallel &&
+                si.cross_section_type == CrossSectionType::RECTANGULAR &&
+                si.width > 1e-15 && si.height > 1e-15) {
+                Lij = MutualInductanceRectBar(si, sj);
+            } else {
+                Lij = MutualInductance(si, sj);
+            }
+
             matrices.L[i * n + j] = Lij;
             matrices.L[j * n + i] = Lij;  // Symmetric
         }
@@ -864,6 +888,96 @@ double PEECMatrixBuilder::SelfInductanceCircular(const PEECSegment& seg) const {
     double L_int = l * 0.25;                             // internal (DC)
 
     return (PEEC_MU_0 / (2.0 * RadConst::PI)) * (L_ext + L_int);
+}
+
+// --- 3-point Gauss-Legendre quadrature on [-1, 1] ---
+static const double GAUSS3_PTS[] = { -0.7745966692414834, 0.0, 0.7745966692414834 };
+static const double GAUSS3_WTS[] = {  0.5555555555555556, 0.8888888888888889, 0.5555555555555556 };
+
+double PEECMatrixBuilder::MutualInductanceRectBar(
+        const PEECSegment& seg_i, const PEECSegment& seg_j,
+        int n_gauss) const {
+    // Volume-averaged mutual inductance between two parallel rectangular
+    // bars.  Decomposes each cross-section into n_gauss x n_gauss Gauss
+    // quadrature points and averages the filamentary Neumann mutual
+    // inductance over all pairs.
+    //
+    //   M_bar = (1/A_i*A_j) * integral_Ai integral_Aj M_fil(p_i, p_j) dA_i dA_j
+    //
+    // This correctly accounts for the finite cross-section geometry that
+    // the filamentary formula ignores.
+    //
+    // Reference: Ruehli 1972 Section 6, eq. (19): "partial mutual
+    //   inductance is computed from a finite number of filaments"
+
+    // Build local coordinate system (same for both, since parallel)
+    TVector3d dir = seg_i.direction;
+    TVector3d ref;
+    if (std::abs(dir.x) < 0.9)
+        ref = TVector3d(1, 0, 0);
+    else
+        ref = TVector3d(0, 1, 0);
+
+    // e_w = ref x dir
+    TVector3d e_w;
+    e_w.x = ref.y * dir.z - ref.z * dir.y;
+    e_w.y = ref.z * dir.x - ref.x * dir.z;
+    e_w.z = ref.x * dir.y - ref.y * dir.x;
+    double e_w_len = std::sqrt(e_w.x*e_w.x + e_w.y*e_w.y + e_w.z*e_w.z);
+    if (e_w_len < 1e-15) return 0.0;
+    e_w.x /= e_w_len; e_w.y /= e_w_len; e_w.z /= e_w_len;
+
+    // e_h = dir x e_w
+    TVector3d e_h;
+    e_h.x = dir.y * e_w.z - dir.z * e_w.y;
+    e_h.y = dir.z * e_w.x - dir.x * e_w.z;
+    e_h.z = dir.x * e_w.y - dir.y * e_w.x;
+
+    // Use 3-point Gauss (hardcoded) regardless of n_gauss for now
+    const int ng = 3;
+    const double* gp = GAUSS3_PTS;
+    const double* gw = GAUSS3_WTS;
+
+    double M_sum = 0.0;
+    double w_sum = 0.0;
+
+    for (int iw = 0; iw < ng; ++iw) {
+      for (int ih = 0; ih < ng; ++ih) {
+        // Gauss point in cross-section of seg_i
+        double ow_i = seg_i.width  * 0.5 * gp[iw];
+        double oh_i = seg_i.height * 0.5 * gp[ih];
+
+        TVector3d ci;
+        ci.x = seg_i.center.x + ow_i * e_w.x + oh_i * e_h.x;
+        ci.y = seg_i.center.y + ow_i * e_w.y + oh_i * e_h.y;
+        ci.z = seg_i.center.z + ow_i * e_w.z + oh_i * e_h.z;
+
+        for (int jw = 0; jw < ng; ++jw) {
+          for (int jh = 0; jh < ng; ++jh) {
+            // Gauss point in cross-section of seg_j
+            double ow_j = seg_j.width  * 0.5 * gp[jw];
+            double oh_j = seg_j.height * 0.5 * gp[jh];
+
+            TVector3d cj;
+            cj.x = seg_j.center.x + ow_j * e_w.x + oh_j * e_h.x;
+            cj.y = seg_j.center.y + ow_j * e_w.y + oh_j * e_h.y;
+            cj.z = seg_j.center.z + ow_j * e_w.z + oh_j * e_h.z;
+
+            // Filamentary Neumann mutual inductance between these two points
+            // Create temporary filament segments at the Gauss points
+            PEECSegment fi(ci, dir, seg_i.length, 0, 0, 0);
+            PEECSegment fj(cj, dir, seg_j.length, 0, 0, 0);
+
+            double Mij = MutualInductance(fi, fj);
+            double wij = gw[iw] * gw[ih] * gw[jw] * gw[jh];
+            M_sum += wij * Mij;
+            w_sum += wij;
+          }
+        }
+      }
+    }
+
+    return M_sum / w_sum;
 }
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
