@@ -301,6 +301,26 @@ def inspect_geometry(file_path: str) -> str:
     if not shape.is_valid:
         warnings.append("Shape is not valid")
 
+    # Per-face info (labels, area, center, normal)
+    if faces:
+        face_info = []
+        for idx, face in enumerate(faces):
+            fi = {"index": idx, "area": round(face.area, 6)}
+            if face.label:
+                fi["label"] = face.label
+            try:
+                c = face.center()
+                fi["center"] = [round(c.X, 6), round(c.Y, 6), round(c.Z, 6)]
+            except Exception:
+                pass
+            try:
+                n = face.normal_at(face.center())
+                fi["normal"] = [round(n.X, 6), round(n.Y, 6), round(n.Z, 6)]
+            except Exception:
+                pass
+            face_info.append(fi)
+        info["faces"] = face_info
+
     # Check for children/assembly structure
     try:
         children = shape.children
@@ -325,6 +345,253 @@ def inspect_geometry(file_path: str) -> str:
 
     if warnings:
         info["cae_warnings"] = warnings
+
+    return json.dumps(info, indent=2)
+
+
+@mcp.tool()
+def section_along_path(
+    file_path: str,
+    path_json: str,
+    n_sections: int = 0,
+) -> str:
+    """
+    Section a STEP/BREP coil solid along a discrete path and extract
+    per-segment cross-section dimensions.
+
+    Given a solid and a centerline path (list of [x, y, z] points in
+    the same units as the CAD file, typically mm), the tool:
+    1. Computes segment midpoints and tangent vectors
+    2. Sections the solid perpendicular to the tangent at each midpoint
+    3. Picks the face closest to the path center (multi-turn safe)
+    4. Returns area, estimated width/height per segment
+
+    This is the CAD-side half of the PEEC filament extraction pipeline.
+    Feed the output into PEECBuilder.add_connected_segment() with
+    the per-segment (w, h) values (convert to meters if CAD is in mm).
+
+    Args:
+        file_path: Path to .step or .brep file.
+        path_json: JSON string encoding a list of [x, y, z] path points
+            (N+1 points for N segments), in CAD units (typically mm).
+            Example: "[[50,0,0],[0,50,4],[-50,0,8],[0,-50,12],[50,0,16]]"
+        n_sections: If > 0, resample path to this many equidistant
+            segments before sectioning.  0 = use path points as-is.
+
+    Returns:
+        JSON with per-segment: index, midpoint, area, w_est, h_est,
+        plus a summary of the taper range.
+    """
+    import math
+    import numpy as np
+
+    p = Path(file_path)
+    if not p.exists():
+        return json.dumps({"status": "error", "error": f"File not found: {file_path}"})
+
+    try:
+        pts = json.loads(path_json)
+    except Exception:
+        return json.dumps({"status": "error", "error": "path_json is not valid JSON"})
+
+    pts = np.array(pts, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[1] != 3 or pts.shape[0] < 2:
+        return json.dumps({
+            "status": "error",
+            "error": f"path must be (N, 3) with N >= 2, got shape {pts.shape}",
+        })
+
+    # Optional resample
+    if n_sections > 0 and n_sections != pts.shape[0] - 1:
+        from scipy.interpolate import interp1d
+        cum = np.zeros(len(pts))
+        for i in range(1, len(pts)):
+            cum[i] = cum[i - 1] + np.linalg.norm(pts[i] - pts[i - 1])
+        t_orig = cum / cum[-1]
+        t_new = np.linspace(0, 1, n_sections + 1)
+        pts = np.column_stack([
+            interp1d(t_orig, pts[:, k], kind="cubic")(t_new)
+            for k in range(3)
+        ])
+
+    n_seg = pts.shape[0] - 1
+    midpoints = 0.5 * (pts[:-1] + pts[1:])
+    diffs = np.diff(pts, axis=0)
+    norms = np.linalg.norm(diffs, axis=1, keepdims=True)
+    norms = np.maximum(norms, 1e-30)
+    tangents = diffs / norms
+
+    # Load solid
+    suffix = p.suffix.lower()
+    try:
+        if suffix in (".step", ".stp"):
+            from build123d import import_step
+            solid = import_step(str(p))
+        else:
+            from build123d import import_brep
+            solid = import_brep(str(p))
+    except Exception:
+        return json.dumps({"status": "error", "error": traceback.format_exc()})
+
+    from build123d import section, Plane, Vector
+
+    segments = []
+    for i in range(n_seg):
+        c = midpoints[i]
+        t = tangents[i]
+        origin = Vector(float(c[0]), float(c[1]), float(c[2]))
+        z_dir = Vector(float(t[0]), float(t[1]), float(t[2]))
+        sec_plane = Plane(origin=origin, z_dir=z_dir)
+        try:
+            cross = section(solid, section_by=sec_plane)
+        except Exception:
+            segments.append({"index": i, "error": "section failed"})
+            continue
+
+        if not cross or len(cross.faces()) == 0:
+            segments.append({"index": i, "error": "no faces"})
+            continue
+
+        best_face = min(cross.faces(),
+                        key=lambda f: (f.center() - origin).length)
+        area = best_face.area
+        side = math.sqrt(area)
+        seg_len = float(norms[i, 0])
+
+        segments.append({
+            "index": i,
+            "midpoint": [round(c[0], 6), round(c[1], 6), round(c[2], 6)],
+            "length": round(seg_len, 6),
+            "area": round(area, 6),
+            "w_est": round(side, 6),
+            "h_est": round(side, 6),
+        })
+
+    areas = [s["area"] for s in segments if "area" in s]
+    ws = [s["w_est"] for s in segments if "w_est" in s]
+    summary = {
+        "n_segments": n_seg,
+        "n_ok": len(areas),
+        "area_range": [round(min(areas), 4), round(max(areas), 4)] if areas else None,
+        "w_range": [round(min(ws), 4), round(max(ws), 4)] if ws else None,
+    }
+
+    return json.dumps({"status": "ok", "summary": summary, "segments": segments}, indent=2)
+
+
+@mcp.tool()
+def generate_helix_coil(
+    radius: float = 50.0,
+    pitch: float = 10.0,
+    n_turns: float = 5.0,
+    w_start: float = 4.0,
+    h_start: float = 4.0,
+    w_end: float = 4.0,
+    h_end: float = 4.0,
+    sections_per_turn: int = 12,
+    export_dir: str = "",
+    label: str = "helix_coil",
+) -> str:
+    """
+    Generate a helical coil with optional cross-section taper.
+
+    Creates a solid coil by lofting rectangular cross-sections along a
+    helix path.  Cross-section dimensions interpolate linearly from
+    (w_start, h_start) at the bottom to (w_end, h_end) at the top.
+
+    All dimensions are in the CAD working units (typically mm).
+
+    For PEEC filament extraction, use section_along_path() on the
+    exported file with the helix centerline path.
+
+    Args:
+        radius: Helix radius (center of wire to axis).
+        pitch: Axial advance per turn.
+        n_turns: Number of turns (can be fractional).
+        w_start: Cross-section width at bottom.
+        h_start: Cross-section height at bottom.
+        w_end: Cross-section width at top.
+        h_end: Cross-section height at top.
+        sections_per_turn: Loft sections per turn (12 = 30 deg each).
+        export_dir: Directory for STEP export (empty = no export).
+        label: Name for the solid and export filename.
+
+    Returns:
+        JSON with geometry info (volume, area, bbox) and the helix
+        path as a list of [x, y, z] points (for section_along_path).
+    """
+    import math
+    from build123d import (BuildSketch, Rectangle, Plane, Vector, loft,
+                           export_step)
+
+    n_sec = int(n_turns * sections_per_turn) + 1
+    height = pitch * n_turns
+    sketches = []
+    path_pts = []
+
+    for i in range(n_sec):
+        t = i / (n_sec - 1) if n_sec > 1 else 0
+        angle = 2 * math.pi * n_turns * t
+        z = height * t
+        cx = radius * math.cos(angle)
+        cy = radius * math.sin(angle)
+        w = w_start + (w_end - w_start) * t
+        h = h_start + (h_end - h_start) * t
+
+        dx = -radius * math.sin(angle) * 2 * math.pi * n_turns
+        dy = radius * math.cos(angle) * 2 * math.pi * n_turns
+        dz = height
+        norm = math.sqrt(dx**2 + dy**2 + dz**2)
+        tangent = (dx / norm, dy / norm, dz / norm)
+
+        # Cross-section perpendicular to helix tangent
+        x_dir_raw = (tangent[1], -tangent[0], 0)
+        x_norm = math.sqrt(x_dir_raw[0]**2 + x_dir_raw[1]**2)
+        if x_norm < 1e-10:
+            x_dir_raw = (1, 0, 0)
+            x_norm = 1.0
+        x_dir = (x_dir_raw[0] / x_norm, x_dir_raw[1] / x_norm, 0)
+
+        plane = Plane(origin=(cx, cy, z), x_dir=x_dir, z_dir=tangent)
+        with BuildSketch(plane) as sk:
+            Rectangle(w, h)
+        sketches.append(sk.sketch)
+        path_pts.append([round(cx, 6), round(cy, 6), round(z, 6)])
+
+    coil = loft(sketches)
+    coil.label = label
+
+    info = {
+        "status": "ok",
+        "label": label,
+        "n_turns": n_turns,
+        "radius": radius,
+        "pitch": pitch,
+        "cross_section_start": [w_start, h_start],
+        "cross_section_end": [w_end, h_end],
+        "is_valid": coil.is_valid,
+        "volume": round(coil.volume, 4),
+        "face_count": len(coil.faces()),
+        "edge_count": len(coil.edges()),
+    }
+
+    try:
+        bb = coil.bounding_box()
+        info["bounding_box"] = {
+            "min": [round(bb.min.X, 4), round(bb.min.Y, 4), round(bb.min.Z, 4)],
+            "max": [round(bb.max.X, 4), round(bb.max.Y, 4), round(bb.max.Z, 4)],
+        }
+    except Exception:
+        pass
+
+    info["path_points"] = path_pts
+
+    if export_dir:
+        export_path = Path(export_dir)
+        export_path.mkdir(parents=True, exist_ok=True)
+        fpath = export_path / f"{label}.step"
+        export_step(coil, str(fpath))
+        info["exported"] = str(fpath)
 
     return json.dumps(info, indent=2)
 
@@ -395,7 +662,8 @@ def main():
         # Test knowledge base topics
         topics = [
             "overview", "primitives_3d", "primitives_2d", "operations",
-            "curves", "export_import", "topology", "cae_guidelines", "examples",
+            "curves", "export_import", "topology", "cae_guidelines",
+            "examples", "coil_modeling",
         ]
         for t in topics:
             result = build123d_usage(t)
@@ -410,6 +678,18 @@ def main():
         assert data["status"] == "ok", f"Execute failed: {data}"
         assert data["is_valid"], "Box should be valid"
         assert abs(data["volume"] - 6000.0) < 1, f"Volume wrong: {data['volume']}"
+
+        # Test generate_helix_coil
+        result = generate_helix_coil(radius=30, pitch=8, n_turns=2,
+                                     w_start=3, h_start=3, w_end=2, h_end=2,
+                                     sections_per_turn=8)
+        data = _json.loads(result)
+        print(f"  generate_helix_coil: volume={data.get('volume')}, "
+              f"path_pts={len(data.get('path_points', []))}")
+        assert data["status"] == "ok", f"generate_helix_coil failed: {data}"
+        assert data["is_valid"], "Helix coil should be valid"
+        assert data["volume"] > 0, "Volume should be positive"
+        assert len(data["path_points"]) > 10, "Path should have points"
 
         # Test prompt
         prompt = new_cae_geometry("ih_coil")
