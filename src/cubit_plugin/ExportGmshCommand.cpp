@@ -16,7 +16,6 @@ std::vector<std::string> ExportGmshCommand::get_syntax()
   syntax_list.push_back(
     "radia_export gmsh <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
-    "[version <value:label='version',help='<2 or 4>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[overwrite]"
   );
@@ -73,24 +72,12 @@ bool ExportGmshCommand::execute(CubitCommandData &data)
   }
 #endif
 
-  // v4.1 is the only supported output format (lab-wide standard, 2026-04).
-  // The `version` keyword is accepted but ignored for back-compat with
-  // old .jou files; output is always v4.1.
-  int ver = 4;
-  data.get_value("version", ver);
-  if (ver != 4) {
-    PRINT_WARNING("version %d requested, but mesh_export emits v4.1 only. "
-                  "Writing v4.1.\n", ver);
-  }
-
-  return write_gmsh(filename, "4.1", order);
+  return write_gmsh(filename, order);
 }
 
 bool ExportGmshCommand::write_gmsh(const std::string &filename,
-                                    const std::string &version,
                                     int order)
 {
-  (void)version;  // always v4.1
   MeshData mesh;
   if (!mesh.extract(order))
     return false;
