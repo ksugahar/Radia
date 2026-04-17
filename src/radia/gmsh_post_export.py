@@ -2047,18 +2047,17 @@ def export_filaments_msh(filament_paths, output_msh, *,
                 f.write(f"{tag} {n1} {n2}\n")
         f.write("$EndElements\n")
 
-        # NodeData: |I| per node (if currents provided)
+        # ElementData: |I| per line element (no node-sharing ambiguity)
         if currents is not None:
             I_abs = np.abs(np.asarray(currents))
-            f.write("$NodeData\n")
+            f.write("$ElementData\n")
             f.write('1\n"|I| [A]"\n')  # 1 string tag
             f.write("1\n0.0\n")         # 1 real tag (time=0)
-            f.write(f"3\n0\n1\n{n_nodes}\n")  # step=0, 1 component, n nodes
-            for i in range(n_nodes):
-                nid = i + 1
-                k = fil_of_node.get(nid, 0)
-                f.write(f"{nid} {float(I_abs[k]):.6e}\n")
-            f.write("$EndNodeData\n")
+            f.write(f"3\n0\n1\n{n_elems}\n")  # step=0, 1 comp, n elems
+            for (tag, phys, n1, n2) in elements:
+                k = phys - 1  # filament index (0-based)
+                f.write(f"{tag} {float(I_abs[k]):.6e}\n")
+            f.write("$EndElementData\n")
 
     print(f"export_filaments_msh: {output_msh}")
     print(f"  {n_fil} filaments, {n_elems} line elements, {n_nodes} nodes")
