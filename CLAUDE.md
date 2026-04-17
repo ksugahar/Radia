@@ -1598,7 +1598,7 @@ mesh = Mesh("model.vol")   # labels + curving loaded from .vol
 **calc_*.py accepts `--vol` only** (no `.cub5`):
 - `calc_volume.py --vol model.vol` — volume/area integration
 - `calc_peec.py --step coil.step` — PEEC filament inductance (no mesh needed for coil)
-- `calc_fem_kelvin.py --vol model.vol` — FEM Omega-reduced + Kelvin + SIBC
+- `calc_fem_kelvin.py --vol model.vol` — FEM Kelvin + SIBC (IH workpiece)
 - `calc_verify_vol.py --vol model.vol` — consistency check vs companion JSON
 - `calc_mesh_eval.py --vol-base model` — p-convergence (`_p1.vol` ... `_p5.vol`, C++ exports)
 
@@ -1606,7 +1606,15 @@ mesh = Mesh("model.vol")   # labels + curving loaded from .vol
 
 **POLICY**: The IH production path (PEEC+FEM) does NOT require source/sink sidesets.
 Coil current is defined by filament topology (STEP -> centerline -> PEECBuilder ports).
-FEM workpiece uses Omega-reduced formulation with H_s from Biot-Savart (no current injection).
+FEM workpiece uses Biot-Savart H_s from PEEC filaments as the incident field +
+SIBC Robin BC on the workpiece surface (no current injection faces needed).
+
+**IH has 2 paths** (both source/sink-free):
+1. **PEEC+FEM** (production): STEP -> filaments -> PEEC coil L,R + workpiece FEM-SIBC+Kelvin
+2. **FEM** (reference): full volume mesh with coil included + Kelvin + SIBC/ESIM
+
+Note: Omega-reduced H_s formulation is for the **accelerator magnet panel**, not IH.
+IH uses Biot-Savart from filaments (PEEC path) or volume mesh coil (FEM path).
 
 **Workpiece .vol needs only material blocks**:
 - `workpiece` (sigma, mu_r)
@@ -1667,7 +1675,7 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
 │  ─────────────────────────────────────────────────────────────  │
-│  calc_peec.py / calc_fem_kelvin.py / calc_mesh_eval.py          │
+│  calc_peec.py (PEEC coil) / calc_fem_kelvin.py (FEM workpiece)  │
 │  import cubit FORBIDDEN. import PySide6 FORBIDDEN.              │
 │  NGSolve + GMSH only. .vol input, JSON stdout output.           │
 └─────────────────────────────────────────────────────────────────┘
@@ -1695,7 +1703,7 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 | `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
 | `radia_ih.py` | 3 (PySide6) | IH analysis window (PEEC+FEM / FEM) |
 | `panels/calc_peec.py` | 4 (no GUI) | PEEC filament coil inductance |
-| `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Omega-reduced + Kelvin + SIBC |
+| `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Kelvin + SIBC (IH workpiece) |
 | `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
 
 ### Cubit Plugin: C++ First, No Python ABI Dependency
