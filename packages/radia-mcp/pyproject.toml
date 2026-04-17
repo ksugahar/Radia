@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "MCP servers for Radia CAE ecosystem (radia-ngsolve, ih, electromagnet, peec, cubit, gmsh)"
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
