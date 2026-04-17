@@ -32,15 +32,15 @@ phys_R = 0.18
 kelvin_center = (0.50, 0.0, 0.0)
 
 LEVELS = [
-    {"label": "L1 (coarse)",
+    {"label": "L1 (coarse, p=2)",
      "maxh_iron": 0.008, "maxh_air": 0.025, "maxh_kelvin": 0.03,
-     "fe_order": 2, "os_res": 41, "os_line": 100},
-    {"label": "L2 (medium)",
+     "fe_order": 2},
+    {"label": "L2 (medium, p=2)",
      "maxh_iron": 0.005, "maxh_air": 0.015, "maxh_kelvin": 0.025,
-     "fe_order": 2, "os_res": 51, "os_line": 120},
-    {"label": "L3 (fine)",
+     "fe_order": 2},
+    {"label": "L3 (fine, p=3)",
      "maxh_iron": 0.003, "maxh_air": 0.010, "maxh_kelvin": 0.020,
-     "fe_order": 3, "os_res": 51, "os_line": 150},
+     "fe_order": 3},
 ]
 
 
@@ -129,10 +129,7 @@ def run_level(level, grp_ref, sample_points):
         mesh, iron_domains='iron', mu_r=mu_r, order=level['fe_order'],
         kelvin_region='air_outer', kelvin_radius=phys_R,
         kelvin_center=list(kelvin_center))
-    solver.set_source_from_radia(
-        coil, resolution=level['os_res'],
-        omega_s_resolution=level['os_res'],
-        omega_s_line_samples=level['os_line'])
+    solver.set_source_from_radia(coil)
 
     t0 = time.perf_counter()
     solver.solve_total_reduced_potential()
