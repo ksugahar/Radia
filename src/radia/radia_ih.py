@@ -2,9 +2,13 @@
 Radia IH (Induction Heating) analysis window.
 
 Modes:
-  BEM  -- EFIE source/sink coil + optional workpiece SIBC / ESIM
-          (per-panel curvature, coupled back-reaction)
-  FEM  -- Kelvin + SIBC / ESIM
+  PEEC     -- Filament coil (no mesh needed for coil), PRIMA broadband.
+              Fastest for coil self-impedance / freq sweep.
+  PEEC+BEM -- PEEC coil + BEM-SIBC workpiece coupling (Picard, 1 step).
+              .vol needed only for workpiece surface mesh.
+  BEM      -- EFIE source/sink coil + optional workpiece SIBC / ESIM.
+              Legacy; slower than PEEC for coil inductance.
+  FEM      -- Kelvin + SIBC / ESIM (full volume mesh).
 
 Switch via combo box -- single window.
 
@@ -21,7 +25,9 @@ TITLE = "Induction Heating"
 #         the BEM surface mesh to coil-adjacent faces only.
 # source: sideset name on one coil terminal face (current injection).
 # sink:   sideset name on the other coil terminal face (current extraction).
-REQUIRED_LABELS = ["coil", "source", "sink"]
+# BEM requires source/sink sidesets; PEEC does not (coil defined parametrically).
+# The label check is mode-dependent; see is_runnable().
+REQUIRED_LABELS = []   # relaxed — PEEC needs no mesh labels at all
 OPTIONAL_LABELS = ["workpiece", "air", "kelvin", "kelvin_int", "kelvin_ext"]
 OPTIONAL_FILES = {}
 
@@ -42,7 +48,7 @@ class IHPanel(ModePanel):
         # Method selector — defaults to BEM. user_settings restored
         # later (in IHWindow.__init__) overrides this when present.
         self._method_combo = self.add_combo(
-            "method", "Method:", ["BEM", "FEM"])
+            "method", "Method:", ["PEEC", "PEEC+BEM", "BEM", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
@@ -60,6 +66,16 @@ class IHPanel(ModePanel):
         self.add_line("freq", "Frequency [Hz]:", "50000")
         self.add_line("current", "Coil current [A]:", "1.0")
         self.add_line("coil_sigma", "Coil sigma [S/m]:", "5.8e7")
+
+        # ============ PEEC coil parameters (no mesh needed) ============
+        self.add_line("coil_radius", "Coil radius [m]:", "0.05")
+        self.add_line("coil_pitch", "Coil pitch [m]:", "0.008")
+        self.add_line("coil_turns", "Turns:", "5")
+        self.add_line("wire_w", "Wire width [m]:", "0.006")
+        self.add_line("wire_h", "Wire height [m]:", "0.006")
+        self.add_spin("nwinc", "nwinc (skin subdiv):", 3, 1, 10)
+        self.add_spin("seg_per_turn", "Segments/turn:", 20, 8, 50)
+        self.add_spin("prima_q", "PRIMA order:", 30, 5, 100)
 
         # ============ Workpiece parameters ============
         # The same combo drives both BEM and FEM:
@@ -88,21 +104,22 @@ class IHPanel(ModePanel):
         # user settings happens later in IHWindow.__init__ via
         # _restore_settings; if the saved value is "BEM" it stays
         # BEM here, otherwise the restore swaps it.
-        self._method_combo.setCurrentText("BEM")
-        self._on_method_changed("BEM")
+        self._method_combo.setCurrentText("PEEC")
+        self._on_method_changed("PEEC")
         self._on_validation_changed()
 
     def _on_method_changed(self, method):
+        is_peec = method in ("PEEC", "PEEC+BEM")
         is_bem = (method == "BEM")
         is_fem = (method == "FEM")
 
         # Solver combo: same widget, different items per method.
-        # Preserve the previous selection if it still exists in the
-        # new item set; otherwise default to the first item.
         solver = self._widgets["solver"]
         prev = solver.currentText()
         solver.clear()
-        if is_bem:
+        if is_peec:
+            solver.addItems(["PRIMA", "HACApK saddle", "Dense LU"])
+        elif is_bem:
             solver.addItems(["LU (direct)", "MINRES", "GMRES"])
         else:
             solver.addItems(["pardiso", "bddc", "iccg", "ams"])
@@ -110,20 +127,40 @@ class IHPanel(ModePanel):
         if idx >= 0:
             solver.setCurrentIndex(idx)
 
+        # PEEC coil parameters — visible only in PEEC modes (no mesh
+        # needed for coil; helix defined by these parameters).
+        for key in ("coil_radius", "coil_pitch", "coil_turns",
+                     "wire_w", "wire_h", "nwinc", "seg_per_turn",
+                     "prima_q"):
+            self._set_row_visible(key, is_peec)
+
         # FEM-only widgets (max iter cap on the Karl iteration).
         self._set_row_visible("max_iter", is_fem)
 
-        # Air field calc: BEM only. In FEM the volume mesh always
-        # solves for the field everywhere, so the toggle is
-        # meaningless and would mislead the user.
+        # FES order: BEM and FEM only (PEEC has no FES).
+        self._set_row_visible("fes_order", is_bem or is_fem)
+
+        # Air field calc: BEM only.
         self._set_row_visible("air_mode", is_bem)
 
-        # Workpiece combo: visible in both modes. In BEM "off" gives
-        # the coil-only inductance; in FEM the workpiece is part of
-        # the mesh and the user must pick SIBC or ESIM (the panel
-        # forces the combo to a non-off value when entering FEM).
-        self._set_row_visible("workpiece_mode", True)
-        if is_fem and self.val("workpiece_mode") == "off":
+        # Workpiece: PEEC = off or PEEC+BEM; BEM = off/SIBC/ESIM;
+        # FEM = SIBC/ESIM (forced).
+        self._set_row_visible("workpiece_mode", not (method == "PEEC"))
+        if method == "PEEC":
+            # PEEC-only has no workpiece; force "off".
+            wp = self._widgets["workpiece_mode"]
+            off_idx = wp.findText("off")
+            if off_idx >= 0:
+                wp.setCurrentIndex(off_idx)
+        elif method == "PEEC+BEM":
+            # PEEC+BEM requires workpiece; force non-off.
+            self._set_row_visible("workpiece_mode", True)
+            wp = self._widgets["workpiece_mode"]
+            if self.val("workpiece_mode") == "off":
+                sibc_idx = wp.findText("SIBC")
+                if sibc_idx >= 0:
+                    wp.setCurrentIndex(sibc_idx)
+        elif is_fem and self.val("workpiece_mode") == "off":
             wp = self._widgets["workpiece_mode"]
             sibc_idx = wp.findText("SIBC")
             if sibc_idx >= 0:
@@ -160,14 +197,47 @@ class IHPanel(ModePanel):
         return True
 
     def build_command(self, vol_path):
+        method = self.val("method")
+        if method in ("PEEC", "PEEC+BEM"):
+            return self._build_peec_command(vol_path, method)
         if not vol_path:
             raise ValueError("No .vol file specified.")
-        method = self.val("method")
-
         if method == "BEM":
             return self._build_bem_command(vol_path)
-        else:
-            return self._build_fem_command(vol_path)
+        return self._build_fem_command(vol_path)
+
+    # PEEC solver combo -> calc-script --solver value
+    _PEEC_SOLVER_MAP = {
+        "PRIMA": "prima",
+        "HACApK saddle": "hacapk",
+        "Dense LU": "dense",
+    }
+
+    def _build_peec_command(self, vol_path, method):
+        cmd = [_PYTHON, calc_script("calc_peec.py"),
+               "--coil-radius", self.val("coil_radius"),
+               "--coil-pitch", self.val("coil_pitch"),
+               "--coil-turns", self.val("coil_turns"),
+               "--wire-w", self.val("wire_w"),
+               "--wire-h", self.val("wire_h"),
+               "--nwinc", str(self.val("nwinc")),
+               "--seg-per-turn", str(self.val("seg_per_turn")),
+               "--frequency", self.val("freq"),
+               "--current", self.val("current"),
+               "--coil-sigma", self.val("coil_sigma"),
+               "--solver",
+               self._PEEC_SOLVER_MAP.get(self.val("solver"), "prima"),
+               "--prima-q", str(self.val("prima_q"))]
+        if method == "PEEC+BEM" and vol_path:
+            cmd += ["--vol", vol_path,
+                    "--workpiece", "sibc",
+                    "--impedance-model",
+                    "esim" if self.val("workpiece_mode") == "ESIM" else "sibc",
+                    "--sigma", self.val("wp_sigma"),
+                    "--half-thickness", self.val("half_thickness"),
+                    "--mu-r", self.val("mu_r"),
+                    "--use-local-curvature"]
+        return cmd
 
     # Solver combo display name -> calc-script --solver value
     _BEM_SOLVER_MAP = {
