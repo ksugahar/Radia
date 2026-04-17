@@ -118,7 +118,7 @@ class IHPanel(ModePanel):
         prev = solver.currentText()
         solver.clear()
         if is_peec:
-            solver.addItems(["PRIMA", "HACApK saddle", "Dense LU"])
+            solver.addItems(["Dense LU", "HACApK saddle", "PRIMA"])
         elif is_bem:
             solver.addItems(["LU (direct)", "MINRES", "GMRES"])
         else:
@@ -130,9 +130,10 @@ class IHPanel(ModePanel):
         # PEEC coil parameters — visible only in PEEC modes (no mesh
         # needed for coil; helix defined by these parameters).
         for key in ("coil_radius", "coil_pitch", "coil_turns",
-                     "wire_w", "wire_h", "nwinc", "seg_per_turn",
-                     "prima_q"):
+                     "wire_w", "wire_h", "nwinc", "seg_per_turn"):
             self._set_row_visible(key, is_peec)
+        # PRIMA order: only visible when solver is "PRIMA"
+        self._set_row_visible("prima_q", is_peec and self.val("solver") == "PRIMA")
 
         # FEM-only widgets (max iter cap on the Karl iteration).
         self._set_row_visible("max_iter", is_fem)
