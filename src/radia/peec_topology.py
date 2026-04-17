@@ -51,7 +51,10 @@ Part of Radia project
 """
 
 import numpy as np
-from peec_matrices import MNASolver
+try:
+    from peec_matrices import MNASolver
+except ImportError:
+    from radia.peec_matrices import MNASolver
 
 
 class PEECCircuitSolver:
