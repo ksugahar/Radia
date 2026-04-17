@@ -48,7 +48,7 @@ class IHPanel(ModePanel):
         # Method selector — defaults to BEM. user_settings restored
         # later (in IHWindow.__init__) overrides this when present.
         self._method_combo = self.add_combo(
-            "method", "Method:", ["PEEC", "PEEC+BEM", "BEM", "FEM"])
+            "method", "Method:", ["PEEC", "PEEC+BEM", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
@@ -100,17 +100,13 @@ class IHPanel(ModePanel):
         # FEM and would mislead the user). Hidden in FEM mode.
         self.add_combo("air_mode", "Air field calc:", ["off", "on"])
 
-        # Initial state — default Method = BEM. Restoring saved
-        # user settings happens later in IHWindow.__init__ via
-        # _restore_settings; if the saved value is "BEM" it stays
-        # BEM here, otherwise the restore swaps it.
+        # Initial state — default Method = PEEC.
         self._method_combo.setCurrentText("PEEC")
         self._on_method_changed("PEEC")
         self._on_validation_changed()
 
     def _on_method_changed(self, method):
         is_peec = method in ("PEEC", "PEEC+BEM")
-        is_bem = (method == "BEM")
         is_fem = (method == "FEM")
 
         # Solver combo: same widget, different items per method.
@@ -119,42 +115,32 @@ class IHPanel(ModePanel):
         solver.clear()
         if is_peec:
             solver.addItems(["Dense LU", "HACApK saddle", "PRIMA"])
-        elif is_bem:
-            solver.addItems(["LU (direct)", "MINRES", "GMRES"])
         else:
             solver.addItems(["pardiso", "bddc", "iccg", "ams"])
         idx = solver.findText(prev)
         if idx >= 0:
             solver.setCurrentIndex(idx)
 
-        # PEEC coil parameters — visible only in PEEC modes (no mesh
-        # needed for coil; helix defined by these parameters).
+        # PEEC coil parameters — visible only in PEEC modes.
         for key in ("coil_radius", "coil_pitch", "coil_turns",
                      "wire_w", "wire_h", "nwinc", "seg_per_turn"):
             self._set_row_visible(key, is_peec)
-        # PRIMA order: only visible when solver is "PRIMA"
-        self._set_row_visible("prima_q", is_peec and self.val("solver") == "PRIMA")
+        self._set_row_visible("prima_q",
+                              is_peec and self.val("solver") == "PRIMA")
 
-        # FEM-only widgets (max iter cap on the Karl iteration).
+        # FEM-only widgets.
         self._set_row_visible("max_iter", is_fem)
+        self._set_row_visible("fes_order", is_fem)
+        self._set_row_visible("air_mode", False)  # BEM removed
 
-        # FES order: BEM and FEM only (PEEC has no FES).
-        self._set_row_visible("fes_order", is_bem or is_fem)
-
-        # Air field calc: BEM only.
-        self._set_row_visible("air_mode", is_bem)
-
-        # Workpiece: PEEC = off or PEEC+BEM; BEM = off/SIBC/ESIM;
-        # FEM = SIBC/ESIM (forced).
+        # Workpiece: PEEC = off; PEEC+BEM = forced on; FEM = forced on.
         self._set_row_visible("workpiece_mode", not (method == "PEEC"))
         if method == "PEEC":
-            # PEEC-only has no workpiece; force "off".
             wp = self._widgets["workpiece_mode"]
             off_idx = wp.findText("off")
             if off_idx >= 0:
                 wp.setCurrentIndex(off_idx)
         elif method == "PEEC+BEM":
-            # PEEC+BEM requires workpiece; force non-off.
             self._set_row_visible("workpiece_mode", True)
             wp = self._widgets["workpiece_mode"]
             if self.val("workpiece_mode") == "off":
@@ -203,8 +189,6 @@ class IHPanel(ModePanel):
             return self._build_peec_command(vol_path, method)
         if not vol_path:
             raise ValueError("No .vol file specified.")
-        if method == "BEM":
-            return self._build_bem_command(vol_path)
         return self._build_fem_command(vol_path)
 
     # PEEC solver combo -> calc-script --solver value
