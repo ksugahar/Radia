@@ -314,7 +314,7 @@ def _descriptor_prima(solver, R_dc, A_hat, e_port, q, inv_R=None):
             return out
 
         M_op = LinearOperator((dim, dim), matvec=precond, dtype=np.float64)
-        w, info = lgmres(A_op, rhs_full, rtol=1e-12, maxiter=2000,
+        w, info = lgmres(A_op, rhs_full, rtol=1e-10, maxiter=2000,
                          inner_m=50, M=M_op)
         return w
 
