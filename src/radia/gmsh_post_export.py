@@ -1936,3 +1936,132 @@ def convert_sol_to_msh(output_msh,
         print(f"  workpiece: {ne_wp} tris, {nv_wp} nodes")
     print(f"  wireframe: {ne_wire} edges, views: {n_views}")
     return output_msh
+
+
+# =====================================================================
+# Filament visualization (PEEC sub-filament paths as GMSH line elements)
+# =====================================================================
+
+def export_filaments_msh(filament_paths, output_msh, *,
+                         currents=None, label="filament"):
+    """Export PEEC filament paths as GMSH .msh v4.1 line elements.
+
+    Each filament is a polyline of ((x1,y1,z1),(x2,y2,z2)) segments.
+    Writes 2-node line elements (GMSH type 1) grouped per filament
+    as separate physical groups.  Optionally writes |I| as NodeData
+    for current magnitude visualization.
+
+    Usage:
+        from radia.gmsh_post_export import export_filaments_msh
+
+        result = filaments_from_step("coil.step", nwinc=3, nhinc=3)
+        export_filaments_msh(result["filament_paths"], "filaments.msh")
+
+        # In GMSH GUI:
+        #   Merge "coil.step"       <- solid coil overlay
+        #   Merge "filaments.msh"   <- filament lines + current
+
+    Args:
+        filament_paths: list of N filaments.  Each filament is a list
+            of ((x1,y1,z1), (x2,y2,z2)) segment endpoint pairs.
+        output_msh: Output .msh file path.
+        currents: optional complex ndarray (N,) of per-filament currents.
+            Written as |I| NodeData.
+        label: Physical group base name (default "filament").
+    """
+    import numpy as np
+
+    # Collect unique nodes and build element connectivity
+    node_map = {}   # (x,y,z) rounded -> node_id (1-based)
+    nodes = []      # [(x, y, z), ...]
+    elements = []   # [(tag, phys_group, n1, n2), ...]
+
+    def _get_node(pt):
+        key = (round(pt[0], 12), round(pt[1], 12), round(pt[2], 12))
+        if key not in node_map:
+            nid = len(nodes) + 1  # 1-based
+            node_map[key] = nid
+            nodes.append(key)
+        return node_map[key]
+
+    # Per-filament physical groups
+    n_fil = len(filament_paths)
+    elem_tag = 0
+    fil_of_node = {}  # node_id -> filament index (for current assignment)
+
+    for k, path in enumerate(filament_paths):
+        phys = k + 1  # 1-based physical group
+        for (p1, p2) in path:
+            n1 = _get_node(p1)
+            n2 = _get_node(p2)
+            elem_tag += 1
+            elements.append((elem_tag, phys, n1, n2))
+            fil_of_node.setdefault(n1, k)
+            fil_of_node.setdefault(n2, k)
+
+    n_nodes = len(nodes)
+    n_elems = len(elements)
+
+    with open(output_msh, "w") as f:
+        # Header
+        f.write("$MeshFormat\n4.1 0 8\n$EndMeshFormat\n")
+
+        # Physical names
+        f.write("$PhysicalNames\n")
+        f.write(f"{n_fil}\n")
+        for k in range(n_fil):
+            f.write(f'1 {k+1} "{label}_{k}"\n')
+        f.write("$EndPhysicalNames\n")
+
+        # Entities: one curve entity per filament
+        f.write("$Entities\n")
+        f.write(f"0 {n_fil} 0 0\n")  # 0 points, n_fil curves, 0 surfs, 0 vols
+        for k in range(n_fil):
+            # curve tag, minX,minY,minZ, maxX,maxY,maxZ, numPhysTags, physTag
+            f.write(f"{k+1} 0 0 0 0 0 0 1 {k+1} 0\n")
+        f.write("$EndEntities\n")
+
+        # Nodes (one block, all nodes)
+        f.write("$Nodes\n")
+        f.write(f"1 {n_nodes} 1 {n_nodes}\n")  # 1 entity block
+        f.write(f"1 1 0 {n_nodes}\n")  # dim=1, tag=1, parametric=0, numNodes
+        for i in range(n_nodes):
+            f.write(f"{i+1}\n")
+        for (x, y, z) in nodes:
+            f.write(f"{x:.15e} {y:.15e} {z:.15e}\n")
+        f.write("$EndNodes\n")
+
+        # Elements (one block per filament)
+        f.write("$Elements\n")
+        # Count elements per filament for block structure
+        elems_by_fil = [[] for _ in range(n_fil)]
+        for (tag, phys, n1, n2) in elements:
+            elems_by_fil[phys - 1].append((tag, n1, n2))
+
+        f.write(f"{n_fil} {n_elems} 1 {elem_tag}\n")
+        for k in range(n_fil):
+            es = elems_by_fil[k]
+            # dim=1, entityTag=k+1, elemType=1 (2-node line), numElems
+            f.write(f"1 {k+1} 1 {len(es)}\n")
+            for (tag, n1, n2) in es:
+                f.write(f"{tag} {n1} {n2}\n")
+        f.write("$EndElements\n")
+
+        # NodeData: |I| per node (if currents provided)
+        if currents is not None:
+            I_abs = np.abs(np.asarray(currents))
+            f.write("$NodeData\n")
+            f.write('1\n"|I| [A]"\n')  # 1 string tag
+            f.write("1\n0.0\n")         # 1 real tag (time=0)
+            f.write(f"3\n0\n1\n{n_nodes}\n")  # step=0, 1 component, n nodes
+            for i in range(n_nodes):
+                nid = i + 1
+                k = fil_of_node.get(nid, 0)
+                f.write(f"{nid} {float(I_abs[k]):.6e}\n")
+            f.write("$EndNodeData\n")
+
+    print(f"export_filaments_msh: {output_msh}")
+    print(f"  {n_fil} filaments, {n_elems} line elements, {n_nodes} nodes")
+    if currents is not None:
+        print(f"  |I| range: [{float(np.min(np.abs(currents))):.3e}, "
+              f"{float(np.max(np.abs(currents))):.3e}] A")
