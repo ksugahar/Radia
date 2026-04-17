@@ -29,15 +29,6 @@
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows for GMSH, Netgen, and Cubit
 
-## Research
-
-- [APPLICATION_ROADMAP.md](research/APPLICATION_ROADMAP.md) - Research laboratory applications and collaboration roadmap
-- [B_INPUT_PLAY_MODEL.md](research/B_INPUT_PLAY_MODEL.md) - B-input Play hysteresis model definition and formulation
-- [CYLINDRICAL_MAGNET.md](research/CYLINDRICAL_MAGNET.md) - Analytical field computation for uniformly magnetized cylindrical magnets
-- [ENERGY_BASED_B_INPUT_PLAY.md](research/ENERGY_BASED_B_INPUT_PLAY.md) - Energy-based B-input Play model with reversible/irreversible separation
-- [KAN_INSPIRED_URN.md](research/KAN_INSPIRED_URN.md) - KAN-inspired Universal Relaxation Network for circuit synthesis from frequency data
-- [MAGNETIC_AFTEREFFECT_RESEARCH.md](research/MAGNETIC_AFTEREFFECT_RESEARCH.md) - Magnetic aftereffect research plan (Sugahara Lab / Hane Lab collaboration)
-
 ## Cubit Mesh Export
 
 - [Function_Reference.md](cubit/Function_Reference.md) - Function reference index for the radia Cubit plugin and `radia_cubit_mesh` module
