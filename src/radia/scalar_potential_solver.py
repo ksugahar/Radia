@@ -379,6 +379,277 @@ class ScalarPotentialSolver:
         return gf
 
     # ------------------------------------------------------------------
+    # Total+reduced split (EMPY pattern) — required for Kelvin + coil
+    # ------------------------------------------------------------------
+
+    def solve_total_reduced_potential(self, dirichlet='GND',
+                                      iron_boundary='default',
+                                      omega_s_resolution=41,
+                                      omega_s_line_samples=100,
+                                      omega_s_bbox=None,
+                                      omega_s_ref=None,
+                                      bs_bbox=None,
+                                      bs_resolution=51):
+        """Solve using EMPY-style total+reduced split with Kelvin.
+
+        This is the ONLY correct method for Kelvin + external coil source.
+        ``solve_single_potential`` does NOT work with Kelvin + coil source
+        because the fully-reduced formulation requires H_s defined in the
+        Kelvin region via 1-form pullback, which ``set_source_from_radia``
+        cannot provide.
+
+        The unknown ``omega`` represents:
+        - Omega_t (total potential) in iron regions
+        - Omega_r + Omega_s (total potential) in air regions
+
+        Source enters via:
+        - Dirichlet lift: Omega_s on iron-air boundary (weak, NOT strict)
+        - Neumann jump: (n . B_s) on iron-air boundary
+
+        Kelvin region receives NO source term.
+
+        Parameters
+        ----------
+        dirichlet : str
+            Boundary label for Dirichlet BC (default: 'GND').
+            MUST NOT include the iron-air boundary (strict Dirichlet
+            there kills demagnetization).
+        iron_boundary : str
+            Boundary name of the iron-air interface (default: auto-detect
+            from mesh boundaries containing 'iron' or 'cylinder').
+        omega_s_resolution : int
+            Voxel grid resolution for Omega_s computation.
+        omega_s_line_samples : int
+            Number of samples per line integral for Omega_s.
+        omega_s_bbox : list, optional
+            Bounding box for Omega_s voxel. Default: iron bbox + margin.
+        omega_s_ref : array-like, optional
+            Reference point for Omega_s line integral. Default: (0,0,-1).
+        bs_bbox : list, optional
+            Bounding box for B_s voxel. Default: physical bbox.
+        bs_resolution : int
+            Voxel grid resolution for B_s.
+
+        Returns
+        -------
+        GridFunction
+            The solved scalar potential.
+        """
+        from ngsolve import (H1, Periodic, GridFunction, BilinearForm,
+                             LinearForm, grad, dx, ds, CF,
+                             x, y, z, sqrt, specialcf, Preconditioner,
+                             VoxelCoefficient, BND)
+        import radia as rad
+
+        if self._radia_obj is None:
+            raise RuntimeError(
+                "Set source first via set_source_from_radia()")
+        if not self._kelvin_region:
+            raise RuntimeError(
+                "solve_total_reduced_potential requires Kelvin "
+                "configuration (kelvin_region, kelvin_radius, "
+                "kelvin_center)")
+
+        radia_obj = self._radia_obj
+
+        # --- Auto-detect iron boundary name ---
+        if iron_boundary == 'default':
+            bnds = self.mesh.GetBoundaries()
+            for candidate in ['iron_surf', 'cylinder', 'iron']:
+                if candidate in bnds:
+                    iron_boundary = candidate
+                    break
+            else:
+                iron_re = '|'.join(self.iron_domains)
+                iron_boundary = iron_re
+
+        # --- Build Omega_s voxel (line integral of H_s) ---
+        if omega_s_bbox is None:
+            omega_s_bbox = self._compute_iron_bbox()
+        if omega_s_ref is None:
+            omega_s_ref = np.array([0.0, 0.0, -1.0])
+        else:
+            omega_s_ref = np.asarray(omega_s_ref, dtype=float)
+
+        Omega_s_cf = self._build_omega_s_voxel(
+            radia_obj, omega_s_bbox, omega_s_resolution,
+            omega_s_line_samples, omega_s_ref)
+
+        # --- Build B_s voxel (full physical bbox) ---
+        if bs_bbox is None:
+            bs_bbox = self._compute_physical_bbox()
+        Bs_cf = self._build_bs_voxel(radia_obj, bs_bbox, bs_resolution)
+
+        # --- Material CF with Kelvin metric ---
+        mu_cf = self._build_mu_cf_with_kelvin()
+
+        # --- FE space: Periodic + GND Dirichlet only ---
+        fes_pre = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+        fes = Periodic(fes_pre)
+
+        omega_t = fes.TrialFunction()
+        psi = fes.TestFunction()
+
+        # --- Bilinear form: Mu * grad . grad over all volume ---
+        a = BilinearForm(fes)
+        a += mu_cf * grad(omega_t) * grad(psi) * dx
+
+        pre = None
+        use_iterative = fes.ndof > 200_000
+        if use_iterative:
+            pre = Preconditioner(a, 'bddc')
+        a.Assemble()
+
+        # --- Dirichlet lift: Omega_s on iron boundary (weak) ---
+        gfOmega = GridFunction(fes)
+        gfOmega.Set(Omega_s_cf, BND,
+                     self.mesh.Boundaries(iron_boundary))
+
+        # --- RHS: lift contribution in air + Neumann jump ---
+        f = LinearForm(fes)
+        air_mats = [m for m in set(self.mesh.GetMaterials())
+                    if m not in self.iron_domains
+                    and m != self._kelvin_region]
+        for mat in air_mats:
+            f += mu_cf * grad(gfOmega) * grad(psi) * dx(mat)
+        normal = -specialcf.normal(self.mesh.dim)
+        f += (normal * Bs_cf) * psi * ds(iron_boundary)
+        f.Assemble()
+
+        # --- Solve ---
+        self._phi_gf = GridFunction(fes, name='omega_total_reduced')
+        self._solve_system(a, f, fes, self._phi_gf, pre, use_iterative)
+
+        # --- Build per-material B field ---
+        zero_vec = CF((0.0, 0.0, 0.0))
+        fes_air = H1(self.mesh, order=self.order,
+                      definedon='|'.join(air_mats +
+                                         [self._kelvin_region]))
+        Oxr = GridFunction(fes_air)
+        Oxr.Set(Omega_s_cf, BND,
+                self.mesh.Boundaries(iron_boundary))
+
+        B_per_mat = []
+        for m in self.mesh.GetMaterials():
+            if m in self.iron_domains:
+                B_per_mat.append(mu_cf * grad(self._phi_gf))
+            elif m == self._kelvin_region:
+                B_per_mat.append(
+                    mu_cf * (grad(self._phi_gf) - grad(Oxr)))
+            else:
+                B_per_mat.append(
+                    mu_cf * (grad(self._phi_gf) - grad(Oxr))
+                    + Bs_cf)
+        self._B_cf = CF(B_per_mat, dims=(3,))
+        self._H_cf = self._B_cf / mu_cf
+
+        self._Omega_s_cf = Omega_s_cf
+        self._Bs_cf = Bs_cf
+
+        return self._phi_gf
+
+    def _compute_iron_bbox(self):
+        """Compute bounding box of iron domains + margin."""
+        from ngsolve import VOL
+        pmin = [1e30, 1e30, 1e30]
+        pmax = [-1e30, -1e30, -1e30]
+        for el in self.mesh.Elements(VOL):
+            mat = el.mat if hasattr(el, 'mat') else str(
+                self.mesh.GetMaterials()[el.nr])
+            if mat not in self.iron_domains:
+                continue
+            for v in el.vertices:
+                pt = self.mesh.vertices[v.nr].point
+                for i in range(3):
+                    pmin[i] = min(pmin[i], pt[i])
+                    pmax[i] = max(pmax[i], pt[i])
+        margin = 0.5 * max(pmax[i] - pmin[i] for i in range(3))
+        return [[pmin[i] - margin, pmax[i] + margin] for i in range(3)]
+
+    def _build_omega_s_voxel(self, radia_obj, bbox, resolution,
+                              n_line_samples, ref_point):
+        """Build Omega_s VoxelCoefficient via line integral of H_s.
+
+        Omega_s(p) = integral_{ref}^{p} H_s . dl
+        Convention: H_s = grad(Omega_s).
+        """
+        import radia as rad
+        from ngsolve import VoxelCoefficient
+
+        nx = ny = nz = resolution
+        xs = np.linspace(bbox[0][0], bbox[0][1], nx)
+        ys = np.linspace(bbox[1][0], bbox[1][1], ny)
+        zs = np.linspace(bbox[2][0], bbox[2][1], nz)
+        xx, yy, zz = np.meshgrid(xs, ys, zs, indexing='ij')
+        grid_pts = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+
+        ts = np.linspace(0.0, 1.0, n_line_samples)
+        dt = ts[1] - ts[0]
+        w = np.full(n_line_samples, dt)
+        w[0] *= 0.5
+        w[-1] *= 0.5
+
+        delta = grid_pts - ref_point[None, :]
+        sample_pts = (ref_point[None, None, :] +
+                       ts[None, :, None] * delta[:, None, :])
+        sample_flat = sample_pts.reshape(-1, 3)
+
+        H_flat = np.asarray(rad.Fld(radia_obj, 'h', sample_flat))
+        H = H_flat.reshape(len(grid_pts), n_line_samples, 3)
+
+        integrand = np.einsum('pmi,pi->pm', H, delta)
+        Omega_s_arr = np.einsum('pm,m->p', integrand, w)
+
+        data = Omega_s_arr.reshape(nx, ny, nz)
+        data = np.ascontiguousarray(data.transpose(2, 1, 0))
+        start = (bbox[0][0], bbox[1][0], bbox[2][0])
+        end = (bbox[0][1], bbox[1][1], bbox[2][1])
+        return VoxelCoefficient(start, end, data, linear=True)
+
+    def _build_bs_voxel(self, radia_obj, bbox, resolution):
+        """Build B_s VoxelCoefficient from rad.Fld('b')."""
+        import radia as rad
+        from ngsolve import VoxelCoefficient, CF
+
+        nx = ny = nz = resolution
+        xs = np.linspace(bbox[0][0], bbox[0][1], nx)
+        ys = np.linspace(bbox[1][0], bbox[1][1], ny)
+        zs = np.linspace(bbox[2][0], bbox[2][1], nz)
+        xx, yy, zz = np.meshgrid(xs, ys, zs, indexing='ij')
+        pts = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+
+        B_flat = np.asarray(rad.Fld(radia_obj, 'b', pts))
+        start = (bbox[0][0], bbox[1][0], bbox[2][0])
+        end = (bbox[0][1], bbox[1][1], bbox[2][1])
+        cfs = []
+        for c in range(3):
+            d = B_flat[:, c].reshape(nx, ny, nz)
+            d = np.ascontiguousarray(d.transpose(2, 1, 0))
+            cfs.append(VoxelCoefficient(start, end, d, linear=True))
+        return CF(tuple(cfs))
+
+    def _build_mu_cf_with_kelvin(self):
+        """Build per-material mu CF including Kelvin metric."""
+        from ngsolve import CF, x, y, z, sqrt, IfPos
+
+        cx, cy, cz = self._kelvin_center
+        R = self._kelvin_radius
+        rho2 = (x - cx)**2 + (y - cy)**2 + (z - cz)**2
+        rho = sqrt(rho2)
+        rho_safe = IfPos(rho - 1e-10, rho, 1e-10)
+        kelvin_factor = (R / rho_safe)**2
+
+        mat_dict = {}
+        for m in set(self.mesh.GetMaterials()):
+            if m in self._mu_r_dict:
+                mat_dict[m] = MU_0 * self._mu_r_dict[m]
+            elif m == self._kelvin_region:
+                mat_dict[m] = MU_0 * kelvin_factor
+            else:
+                mat_dict[m] = MU_0
+        return CF([mat_dict[m] for m in self.mesh.GetMaterials()])
+
+    # ------------------------------------------------------------------
     # Convenience: auto-select method
     # ------------------------------------------------------------------
 
@@ -389,17 +660,32 @@ class ScalarPotentialSolver:
         ----------
         method : str
             'single' for single-potential, 'two' for two-potential,
-            'auto' to select based on mu_r (two-potential if mu_r > 5000).
+            'total_reduced' for EMPY-style total+reduced (Kelvin + coil),
+            'auto' to select automatically.
+
+        Auto-selection logic:
+            - Kelvin + radia source -> 'total_reduced'
+            - mu_r > 5000 -> 'two'
+            - otherwise -> 'single'
         """
         if method == 'auto':
-            method = 'two' if self.mu_r > 5000 else 'single'
+            if self._kelvin_region and self._radia_obj is not None:
+                method = 'total_reduced'
+            elif self.mu_r > 5000:
+                method = 'two'
+            else:
+                method = 'single'
 
         if method == 'single':
             return self.solve_single_potential(**kwargs)
         elif method == 'two':
             return self.solve_two_potential(**kwargs)
+        elif method == 'total_reduced':
+            return self.solve_total_reduced_potential(**kwargs)
         else:
-            raise ValueError("method must be 'single', 'two', or 'auto'")
+            raise ValueError(
+                "method must be 'single', 'two', "
+                "'total_reduced', or 'auto'")
 
     # ------------------------------------------------------------------
     # Nonlinear solver (B-H curve, Picard iteration)
