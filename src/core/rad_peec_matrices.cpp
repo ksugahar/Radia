@@ -322,8 +322,10 @@ void PEECMatrixBuilder::ExpandFilaments() {
                 sub_center.y = seg.center.y + offset_w * e_w.y + offset_h * e_h.y;
                 sub_center.z = seg.center.z + offset_w * e_w.z + offset_h * e_h.z;
 
+                // Sub-filaments are always rectangular cells in the nwinc grid,
+                // regardless of the parent's cross-section type.
                 PEECSegment sub(sub_center, seg.direction, seg.length,
-                                sub_w, sub_h, seg.sigma, seg.cross_section_type);
+                                sub_w, sub_h, seg.sigma, CrossSectionType::RECTANGULAR);
                 sub.node_from = seg.node_from;
                 sub.node_to = seg.node_to;
                 sub.nwinc = 1;
