@@ -1812,17 +1812,21 @@ three materials ("iron", "air_inner", "air_outer") plus
 ```python
 from radia.kelvin_source import kelvin_mu_factor_3d_cf
 
-# (1) Omega_s: scalar potential of coil's H field.
-#     CANNOT use rad.Fld(coil, 'phi') — broken for ObjArcCur.
-#     Use line-integral of rad.Fld(coil, 'h') from a reference
-#     point below iron (path must not cross coil cut surface).
-#     Build as VoxelCoefficient covering the iron surface bbox.
-Omega_s_cf = build_Omega_s_voxel(coil, bbox, resolution, n_line_samples)
-
-# (1b) B_s: coil free-space B field as VoxelCoefficient.
-#      Bbox must cover ALL of air_inner (not just iron surface),
-#      otherwise VoxelCoefficient clamps to boundary values.
-Bs_cf = build_Bs_voxel(coil, bbox_full_air, resolution)
+# (1) Source fields from Radia → H1 GridFunction (smooth, C0).
+#     rad.Fld('phi') returns Phi where H = -grad(Phi).
+#     Omega_s = -Phi (EMPY convention: H = +grad(Omega_s)).
+#     rad.Fld('h') gives H_s, B_s = mu0 * H_s.
+#
+#     HIGH-LEVEL API (recommended):
+solver = ScalarPotentialSolver(mesh, iron_domains='iron', mu_r=100,
+    kelvin_region='air_outer', kelvin_radius=R, kelvin_center=c)
+solver.set_source_from_radia(coil)   # builds Omega_s + H_s as GridFunctions
+solver.solve()                        # auto-selects total_reduced
+B = solver.get_B()
+#
+#     MANUAL (for custom setups):
+Omega_s_cf = ...  # H1 GridFunction from -rad.Fld('phi')
+Bs_cf = ...       # mu0 * H1 GridFunction from rad.Fld('h')
 
 # (2) Kelvin material (Nagamine canonical):
 mu_kelvin_factor = kelvin_mu_factor_3d_cf(center=c_out, R=R_K)
