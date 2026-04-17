@@ -33,8 +33,7 @@
 
 - [Function_Reference.md](cubit/Function_Reference.md) - Function reference index for the radia Cubit plugin and `radia_cubit_mesh` module
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
-- [export_Gmsh_ver2.md](cubit/export_Gmsh_ver2.md) - Export to Gmsh format version 2.2
-- [export_Gmsh_ver4.md](cubit/export_Gmsh_ver4.md) - Export to Gmsh format version 4.1
+- [export_Gmsh.md](cubit/export_Gmsh.md) - Export to Gmsh format
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Export Cubit mesh to Netgen with high-order curving support
 - [export_Nastran.md](cubit/export_Nastran.md) - Export to NX Nastran bulk data format
 - [export_exodus.md](cubit/export_exodus.md) - Export to Exodus II format
