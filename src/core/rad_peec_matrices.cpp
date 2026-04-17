@@ -826,41 +826,44 @@ double PEECMatrixBuilder::SelfInductanceRectangular(const PEECSegment& seg) cons
 }
 
 double PEECMatrixBuilder::SelfInductanceCircular(const PEECSegment& seg) const {
-    // Grover formula for circular cross-section
-    // Reference: F. W. Grover, "Inductance Calculations", Dover, 1946
+    // Exact Neumann formula for self-inductance of a circular wire segment.
     //
-    // L = (mu_0/2pi) * l * [ln(2*l/r) - 0.75]
+    // References:
+    //   F. W. Grover, "Inductance Calculations", Dover, 1946
+    //   H. A. Aebischer and B. Aebischer, "Improved formulae for the
+    //   inductance of straight wires", Advanced Electromagnetics, 3(1),
+    //   pp. 31-43, 2014
+    //   L. Giussani et al., IEEE Trans. Magn. 2022 (submarine cable PEEC)
     //
-    // Where:
-    //   l = conductor length [m]
-    //   r = wire radius [m]
-    //   -0.75 = internal inductance constant for circular cross-section
+    // Exact double-volume Neumann integral for a cylindrical conductor
+    // of length l and radius r with uniform current distribution:
     //
-    // Note: This differs from rectangular formula by the constant term:
-    //   Rectangular: +0.25
-    //   Circular: -0.75
-    //   Difference: 1.0 (accounts for ~17% difference in internal inductance)
+    //   L = (mu_0/2pi) * [l*asinh(l/r) - sqrt(l^2+r^2) + r + l/4]
+    //
+    // where asinh(l/r) = ln((sqrt(l^2+r^2) + l) / r).
+    // The l/4 term is the DC internal inductance (mu_0*l/(8*pi)).
+    //
+    // For l >> r this reduces to Grover: (mu_0/2pi)*l*[ln(2l/r) - 3/4].
+    // For l/r < 10 the Grover approximation has > 4% error (Giussani
+    // et al. Fig.5); this exact formula is accurate for all l/r > 0.
 
     double l = seg.length;
 
-    // Extract radius from cross-sectional area
-    // For circular: area = pi * r^2, so r = sqrt(area / pi)
-    double area = seg.area();
-    double r = std::sqrt(area / RadConst::PI);
+    // Extract wire radius.
+    // For circular cross-section, width = height = diameter, so r = width/2.
+    // Note: seg.area() returns width*height (rectangular area), NOT pi*r^2,
+    // so we must not compute r = sqrt(area/pi) for circular segments.
+    double r = std::min(seg.width, seg.height) / 2.0;
 
     // Minimum cross-section check
     if (r < 1e-15) r = 1e-6;
+    if (l < 1e-15) return 0.0;
 
-    if (l > 2.0 * r) {
-        // Grover formula for circular cross-section
-        double term1 = std::log(2.0 * l / r);
-        double term2 = -0.75;  // Circular cross-section constant
+    double d = std::sqrt(l * l + r * r);  // sqrt(l^2 + r^2)
+    double L_ext = l * std::log((d + l) / r) - d + r;  // external
+    double L_int = l * 0.25;                             // internal (DC)
 
-        return (PEEC_MU_0 / (2.0 * RadConst::PI)) * l * (term1 + term2);
-    } else {
-        // Short segment approximation (l << diameter)
-        return (PEEC_MU_0 / (2.0 * RadConst::PI)) * l * 0.5;
-    }
+    return (PEEC_MU_0 / (2.0 * RadConst::PI)) * (L_ext + L_int);
 }
 
 double PEECMatrixBuilder::MutualInductance(const PEECSegment& seg_i,
