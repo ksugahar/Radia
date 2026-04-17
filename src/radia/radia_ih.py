@@ -4,7 +4,7 @@ Radia IH (Induction Heating) analysis window.
 Modes:
   PEEC     -- Filament coil (no mesh needed for coil), PRIMA broadband.
               Fastest for coil self-impedance / freq sweep.
-  PEEC+BEM -- PEEC coil + BEM-SIBC workpiece coupling (Picard, 1 step).
+  PEEC+FEM -- PEEC coil + BEM-SIBC workpiece coupling (Picard, 1 step).
               .vol needed only for workpiece surface mesh.
   BEM      -- EFIE source/sink coil + optional workpiece SIBC / ESIM.
               Legacy; slower than PEEC for coil inductance.
@@ -48,7 +48,7 @@ class IHPanel(ModePanel):
         # Method selector — defaults to BEM. user_settings restored
         # later (in IHWindow.__init__) overrides this when present.
         self._method_combo = self.add_combo(
-            "method", "Method:", ["PEEC+BEM", "FEM"])
+            "method", "Method:", ["PEEC+FEM", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
@@ -101,12 +101,12 @@ class IHPanel(ModePanel):
         self.add_combo("air_mode", "Air field calc:", ["off", "on"])
 
         # Initial state — default Method = PEEC.
-        self._method_combo.setCurrentText("PEEC+BEM")
-        self._on_method_changed("PEEC+BEM")
+        self._method_combo.setCurrentText("PEEC+FEM")
+        self._on_method_changed("PEEC+FEM")
         self._on_validation_changed()
 
     def _on_method_changed(self, method):
-        is_peec = (method == "PEEC+BEM")
+        is_peec = (method == "PEEC+FEM")
         is_fem = (method == "FEM")
 
         # Solver combo: same widget, different items per method.
@@ -174,7 +174,7 @@ class IHPanel(ModePanel):
 
     def build_command(self, vol_path):
         method = self.val("method")
-        if method == "PEEC+BEM":
+        if method == "PEEC+FEM":
             return self._build_peec_command(vol_path)
         if not vol_path:
             raise ValueError("No .vol file specified.")
