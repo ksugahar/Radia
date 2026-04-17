@@ -48,7 +48,7 @@ class IHPanel(ModePanel):
         # Method selector — defaults to BEM. user_settings restored
         # later (in IHWindow.__init__) overrides this when present.
         self._method_combo = self.add_combo(
-            "method", "Method:", ["PEEC", "PEEC+BEM", "FEM"])
+            "method", "Method:", ["PEEC+BEM", "FEM"])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
 
         self.add_spin("fes_order", "FES order:", 0, 0, 5)
@@ -101,12 +101,12 @@ class IHPanel(ModePanel):
         self.add_combo("air_mode", "Air field calc:", ["off", "on"])
 
         # Initial state — default Method = PEEC.
-        self._method_combo.setCurrentText("PEEC")
-        self._on_method_changed("PEEC")
+        self._method_combo.setCurrentText("PEEC+BEM")
+        self._on_method_changed("PEEC+BEM")
         self._on_validation_changed()
 
     def _on_method_changed(self, method):
-        is_peec = method in ("PEEC", "PEEC+BEM")
+        is_peec = (method == "PEEC+BEM")
         is_fem = (method == "FEM")
 
         # Solver combo: same widget, different items per method.
@@ -133,21 +133,10 @@ class IHPanel(ModePanel):
         self._set_row_visible("fes_order", is_fem)
         self._set_row_visible("air_mode", False)  # BEM removed
 
-        # Workpiece: PEEC = off; PEEC+BEM = forced on; FEM = forced on.
-        self._set_row_visible("workpiece_mode", not (method == "PEEC"))
-        if method == "PEEC":
-            wp = self._widgets["workpiece_mode"]
-            off_idx = wp.findText("off")
-            if off_idx >= 0:
-                wp.setCurrentIndex(off_idx)
-        elif method == "PEEC+BEM":
-            self._set_row_visible("workpiece_mode", True)
-            wp = self._widgets["workpiece_mode"]
-            if self.val("workpiece_mode") == "off":
-                sibc_idx = wp.findText("SIBC")
-                if sibc_idx >= 0:
-                    wp.setCurrentIndex(sibc_idx)
-        elif is_fem and self.val("workpiece_mode") == "off":
+        # Workpiece: always visible. "off" = coil only; SIBC/ESIM = coupling.
+        # FEM requires workpiece (forces non-off).
+        self._set_row_visible("workpiece_mode", True)
+        if is_fem and self.val("workpiece_mode") == "off":
             wp = self._widgets["workpiece_mode"]
             sibc_idx = wp.findText("SIBC")
             if sibc_idx >= 0:
@@ -185,8 +174,8 @@ class IHPanel(ModePanel):
 
     def build_command(self, vol_path):
         method = self.val("method")
-        if method in ("PEEC", "PEEC+BEM"):
-            return self._build_peec_command(vol_path, method)
+        if method == "PEEC+BEM":
+            return self._build_peec_command(vol_path)
         if not vol_path:
             raise ValueError("No .vol file specified.")
         return self._build_fem_command(vol_path)
@@ -198,7 +187,7 @@ class IHPanel(ModePanel):
         "Dense LU": "dense",
     }
 
-    def _build_peec_command(self, vol_path, method):
+    def _build_peec_command(self, vol_path):
         cmd = [_PYTHON, calc_script("calc_peec.py"),
                "--coil-radius", self.val("coil_radius"),
                "--coil-pitch", self.val("coil_pitch"),
@@ -211,13 +200,15 @@ class IHPanel(ModePanel):
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
                "--solver",
-               self._PEEC_SOLVER_MAP.get(self.val("solver"), "prima"),
+               self._PEEC_SOLVER_MAP.get(self.val("solver"), "dense"),
                "--prima-q", str(self.val("prima_q"))]
-        if method == "PEEC+BEM" and vol_path:
+        # Workpiece coupling: "off" = coil only, SIBC/ESIM = BEM coupling
+        wp_mode = self.val("workpiece_mode")
+        if wp_mode != "off" and vol_path:
+            imp = "esim" if wp_mode == "ESIM" else "sibc"
             cmd += ["--vol", vol_path,
                     "--workpiece", "sibc",
-                    "--impedance-model",
-                    "esim" if self.val("workpiece_mode") == "ESIM" else "sibc",
+                    "--impedance-model", imp,
                     "--sigma", self.val("wp_sigma"),
                     "--half-thickness", self.val("half_thickness"),
                     "--mu-r", self.val("mu_r"),
