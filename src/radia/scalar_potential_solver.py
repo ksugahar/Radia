@@ -620,15 +620,20 @@ class ScalarPotentialSolver:
         return VoxelCoefficient(start, end, data, linear=True)
 
     def _build_mu_cf_with_kelvin(self):
-        """Build per-material mu CF including Kelvin metric."""
-        from ngsolve import CF, x, y, z, sqrt, IfPos
+        """Build per-material mu CF including Kelvin metric.
 
-        cx, cy, cz = self._kelvin_center
-        R = self._kelvin_radius
-        rho2 = (x - cx)**2 + (y - cy)**2 + (z - cz)**2
-        rho = sqrt(rho2)
-        rho_safe = IfPos(rho - 1e-10, rho, 1e-10)
-        kelvin_factor = (R / rho_safe)**2
+        The Kelvin factor (R/rho')^2 is regularized with rho_min set to
+        the estimated mesh element size in the Kelvin region.  This caps
+        the metric at (R/maxh)^2, preventing numerical explosion for
+        higher-order FEM (order >= 3) near the GND vertex at rho'=0.
+        """
+        from ngsolve import CF
+        from radia.kelvin_source import kelvin_mu_factor_3d_cf
+
+        rho_min = self._estimate_kelvin_maxh()
+        kelvin_factor = kelvin_mu_factor_3d_cf(
+            center=self._kelvin_center, R=self._kelvin_radius,
+            rho_min=rho_min)
 
         mat_dict = {}
         for m in set(self.mesh.GetMaterials()):
@@ -639,6 +644,23 @@ class ScalarPotentialSolver:
             else:
                 mat_dict[m] = MU_0
         return CF([mat_dict[m] for m in self.mesh.GetMaterials()])
+
+    def _estimate_kelvin_maxh(self):
+        """Estimate max element size in the Kelvin region."""
+        from ngsolve import VOL
+        maxh = 0.0
+        for el in self.mesh.Elements(VOL):
+            mat = el.mat if hasattr(el, 'mat') else str(
+                self.mesh.GetMaterials()[el.nr])
+            if mat != self._kelvin_region:
+                continue
+            verts = [self.mesh.vertices[v.nr].point for v in el.vertices]
+            for i in range(len(verts)):
+                for j in range(i + 1, len(verts)):
+                    d = sum((verts[i][k] - verts[j][k])**2
+                            for k in range(3)) ** 0.5
+                    maxh = max(maxh, d)
+        return maxh if maxh > 0 else 1e-10
 
     # ------------------------------------------------------------------
     # Convenience: auto-select method
