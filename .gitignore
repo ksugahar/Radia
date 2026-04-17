@@ -362,3 +362,4 @@ step_export.log
 
 # VTU output files (use NGSolve VTKOutput or GMSH post instead)
 *.vtu
+docs/research/
