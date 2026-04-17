@@ -27,12 +27,12 @@ class TestComboSaveByText:
         ih_panel._method_combo.setCurrentText("FEM")
         state = ih_panel.save_state()
         assert state["method"] == "FEM"  # text, not 1
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         state = ih_panel.save_state()
-        assert state["method"] == "PEEC+BEM"
+        assert state["method"] == "PEEC+FEM"
 
     def test_restore_text_lookup(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel.restore_state({"method": "FEM"})
         assert ih_panel._method_combo.currentText() == "FEM"
 
@@ -52,7 +52,7 @@ class TestLegacyIndexRestore:
     for backward compatibility, but only when they are in range."""
 
     def test_legacy_index_in_range(self, ih_panel):
-        # New combo: PEEC+BEM=0, FEM=1
+        # New combo: PEEC+FEM=0, FEM=1
         ih_panel.restore_state({"method": 1})
         assert ih_panel._method_combo.currentText() == "FEM"
 
@@ -60,14 +60,14 @@ class TestLegacyIndexRestore:
         """Index 2 from the old 3-item combo on the new 2-item combo
         must NOT call setCurrentIndex(2). The widget must stay
         non-blank at its panel default."""
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel.restore_state({"method": 2})
         text = ih_panel._method_combo.currentText()
-        assert text in ("PEEC+BEM", "FEM")
+        assert text in ("PEEC+FEM", "FEM")
         assert text != ""
 
     def test_legacy_negative_index_keeps_default(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel.restore_state({"method": -1})
         assert ih_panel._method_combo.currentText() != ""
 
@@ -96,7 +96,7 @@ class TestRoundTrip:
         """A saved key that no longer exists in the panel must
         not raise — restore should silently skip unknown widgets."""
         ih_panel.restore_state({
-            "method": "PEEC+BEM",
+            "method": "PEEC+FEM",
             "removed_widget_xyz": "garbage",
         })
-        assert ih_panel._method_combo.currentText() == "PEEC+BEM"
+        assert ih_panel._method_combo.currentText() == "PEEC+FEM"
