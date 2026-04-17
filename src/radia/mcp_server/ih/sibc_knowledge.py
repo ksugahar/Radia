@@ -10,6 +10,85 @@ FEM-scattered confirmed as reference solver (+/-3%), FEM-total -34% systematic.
 EMMaterial class now provides unified material properties.
 """
 
+IH_PEEC_FEM = """
+# IH Architecture: PEEC+FEM (v4.6.0)
+
+## Two Solver Paths
+
+| Path | Coil | Workpiece | Panel Method |
+|------|------|-----------|-------------|
+| **PEEC+FEM** (default) | PEEC filaments (no mesh) | FEM-SIBC + Kelvin | "PEEC+FEM" |
+| **ALL FEM** (reference) | FEM volume mesh | FEM-SIBC + Kelvin | "FEM" |
+
+### Path 1: PEEC+FEM (Production, default)
+
+```
+STEP coil file -> auto centerline -> PEEC filaments (ms, no mesh)
+    -> Biot-Savart source field
+    -> FEM-SIBC + Kelvin on workpiece (sparse, seconds)
+    -> Picard back-reaction (1 step)
+```
+
+Advantages:
+- **No coil mesh** (STEP -> filaments, auto cross-section extraction)
+- **Coil rotation/translation** = coordinate transform only (no remesh)
+- Shifted Compact AMS preconditioner (HCurl p=1, TaskManager parallel)
+- HACApK saddle-point for large coils (N > 3000)
+- PRIMA MOR for broadband sweep (if needed)
+
+Solver options in panel:
+- Dense LU: fastest for N < 3000 (default)
+- HACApK saddle-point: for N >= 3000
+- PRIMA: for frequency sweep (rarely needed in IH)
+
+Files:
+- `calc_peec.py` (Layer 4 computation)
+- `coil_from_cad.py` (STEP -> filaments)
+- `peec_topology.py` (PEECCircuitSolver)
+- `prima_hacapk.py` (PRIMA MOR)
+
+### Path 2: ALL FEM (Reference, validation)
+
+```
+Cubit .vol (coil + workpiece + air + Kelvin) -> full volume FEM
+    -> Omega or A-formulation + SIBC + Kelvin
+    -> Direct solve (pardiso/bddc)
+```
+
+Advantages:
+- Full physics (volume currents, nonlinear materials)
+- Well-validated (2D axisym reference: 1.15%)
+- No approximations beyond mesh discretization
+
+Limitations:
+- Requires full volume mesh (coil + air + Kelvin)
+- Coil remesh required for geometry changes
+- Slower for parametric studies
+
+Files:
+- `calc_fem_kelvin.py` (Layer 4 computation)
+- `scalar_potential_solver.py` (Omega formulation)
+- `kelvin_solver.py` (Kelvin helpers)
+
+### When to Use Which
+
+| Scenario | Recommended |
+|----------|------------|
+| IH coil design (fast iteration) | **PEEC+FEM** |
+| Coil placement optimization | **PEEC+FEM** (rotation = coordinate transform) |
+| Nonlinear workpiece (BH curve) | **PEEC+FEM** (ESIM in FEM workpiece) |
+| Validation / reference | **ALL FEM** (full physics) |
+| Complex coil geometry (not helix) | **ALL FEM** (until STEP extraction matures) |
+
+### Workpiece Sub-options (both paths)
+
+| Workpiece | Description |
+|-----------|-------------|
+| off | Coil self-impedance only |
+| SIBC | Linear surface impedance (Cu, Al, fixed mu_r) |
+| ESIM | Nonlinear 1D cell problem (steel, BH curve, freq-dependent mu) |
+"""
+
 IH_SIBC_OVERVIEW = """
 # SIBC for Induction Heating: Method Selection
 
@@ -736,6 +815,7 @@ Steel always needs two-way. Copper/aluminum OK with one-way at low frequencies.
 def get_ih_sibc_documentation(topic="all"):
     """Return IH SIBC documentation by topic."""
     topics = {
+        "peec_fem": IH_PEEC_FEM,
         "overview": IH_SIBC_OVERVIEW,
         "esim": IH_ESIM,
         "biot_savart": IH_BIOT_SAVART,
