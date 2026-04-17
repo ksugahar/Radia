@@ -370,34 +370,63 @@ void radTArcCur::B_compElliptic(radTField* FieldPtr)
 					IntForAy += factor_A * cos_phi_coil;
 				}
 
-				// Scalar potential (numerical integration)
+				// Scalar potential: Phi = sum_filaments dI * Omega_sector / (4*pi)
+				// where Omega_sector is the solid angle of the planar sector
+				// surface enclosed by the filament arc segment.
+				//
+				// For each cross-section quadrature point (r_coil, z_coil) and
+				// each phi-segment of angular width dphi at phi_coil:
+				//   dOmega = dphi * integral_0^{r_coil} h*r'/ D^3 dr'
+				// where h = z_obs - z_coil,
+				//   D = sqrt((x-r'cos(phi))^2 + (y-r'sin(phi))^2 + h^2)
+				// The r' integral is computed via 8-point Gauss-Legendre.
 				if (FieldPtr->FieldKey.Phi_) {
-					static const double gp[] = {-0.5773502691896257, 0.5773502691896257};
-					static const double gw[] = {1.0, 1.0};
+					// Cross-section quadrature (2x2 Gauss-Legendre)
+					static const double gp2[] = {-0.5773502691896257, 0.5773502691896257};
+					static const double gw2[] = {1.0, 1.0};
+					// Radial surface integral (8-point Gauss-Legendre on [0, r_coil])
+					static const int N_RAD_QUAD = 8;
+					static const double gp8[] = {
+						-0.9602898564975363, -0.7966664774136267,
+						-0.5255324099163290, -0.1834346424956498,
+						 0.1834346424956498,  0.5255324099163290,
+						 0.7966664774136267,  0.9602898564975363
+					};
+					static const double gw8[] = {
+						0.1012285362903763, 0.2223810344533745,
+						0.3137066458778873, 0.3626837833783620,
+						0.3626837833783620, 0.3137066458778873,
+						0.2223810344533745, 0.1012285362903763
+					};
 
 					for (int ir = 0; ir < 2; ++ir) {
-						double r_coil = r_mid + r_half * gp[ir];
-						double w_r = gw[ir] * r_half;
+						double r_coil = r_mid + r_half * gp2[ir];
+						double w_r = gw2[ir] * r_half;
 
 						for (int iz = 0; iz < 2; ++iz) {
-							double z_coil = z_half * gp[iz];
-							double w_z = gw[iz] * z_half;
+							double z_coil = z_half * gp2[iz];
+							double w_z = gw2[iz] * z_half;
 
 							double dI = J_azim * w_r * w_z;
-							double dl = r_coil * w_phi;
+							double h = z - z_coil;  // signed height
 
-							double rx = P_mi_CenPo.x - r_coil * cos_phi_coil;
-							double ry = P_mi_CenPo.y - r_coil * sin_phi_coil;
-							double rz = z - z_coil;
-							double dist2 = rx*rx + ry*ry + rz*rz;
-							double dist = sqrt(dist2 + SmallPositive);
+							// Integrate solid angle of sector strip:
+							// integral_0^{r_coil} h * r' / D^3 dr'
+							// using 8-point Gauss-Legendre on [0, r_coil]
+							double r_integral = 0.0;
+							for (int iq = 0; iq < N_RAD_QUAD; ++iq) {
+								double r_prime = 0.5 * r_coil * (1.0 + gp8[iq]);
+								double w_rp = 0.5 * r_coil * gw8[iq];
 
-							double jx = -sin_phi_coil;
-							double jy = cos_phi_coil;
-							double cross_z = jx * ry - jy * rx;
+								double dx = P_mi_CenPo.x - r_prime * cos_phi_coil;
+								double dy = P_mi_CenPo.y - r_prime * sin_phi_coil;
+								double D2 = dx*dx + dy*dy + h*h + SmallPositive;
+								double D = sqrt(D2);
 
-							double r_perp = sqrt(rx*rx + ry*ry + SmallPositive);
-							double dOmega = cross_z * dl / (dist * dist * r_perp);
+								r_integral += w_rp * h * r_prime / (D * D2);
+							}
+							// dOmega_sector = dphi * r_integral
+							double dOmega = w_phi * r_integral;
 							IntForPhi += dI * dOmega / (4.0 * Pi);
 						}
 					}
