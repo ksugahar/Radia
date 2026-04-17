@@ -746,6 +746,81 @@ export_step(yoke, "dipole_quarter_yoke.step")
 # Topic lookup
 # ============================================================
 
+COIL_MODELING = """
+# Coil Modeling for PEEC Filament Extraction
+
+## Variable Cross-Section Coils (Tapered, Shaped)
+
+Use `loft()` between rectangular cross-sections placed along a helix
+path. Each section can have different (w, h), creating a smooth taper.
+
+```python
+from build123d import *
+import math
+
+R, pitch, n_turns = 50, 10, 5   # mm
+w_bot, h_bot = 4, 4              # bottom cross-section
+w_top, h_top = 2, 2              # top cross-section
+n_sec = n_turns * 12 + 1         # 12 sections per turn
+
+sections = []
+for i in range(n_sec):
+    t = i / (n_sec - 1)
+    angle = 2 * math.pi * n_turns * t
+    z = pitch * n_turns * t
+    cx, cy = R * math.cos(angle), R * math.sin(angle)
+    w = w_bot + (w_top - w_bot) * t
+    h = h_bot + (h_top - h_bot) * t
+    # tangent direction
+    dx = -R * math.sin(angle) * 2 * math.pi * n_turns
+    dy = R * math.cos(angle) * 2 * math.pi * n_turns
+    dz = pitch * n_turns
+    norm = math.sqrt(dx**2 + dy**2 + dz**2)
+    tangent = (dx/norm, dy/norm, dz/norm)
+    plane = Plane(origin=(cx, cy, z),
+                  x_dir=(tangent[1], -tangent[0], 0),
+                  z_dir=tangent)
+    with BuildSketch(plane) as sk:
+        Rectangle(w, h)
+    sections.append(sk.sketch)
+
+coil = loft(sections)
+```
+
+## MCP Tool Shortcut
+
+Instead of writing the loft code manually, use:
+
+    generate_helix_coil(radius=50, pitch=10, n_turns=5,
+                        w_start=4, h_start=4, w_end=2, h_end=2)
+
+This returns the solid + the helix path points for section_along_path.
+
+## PEEC Filament Extraction Pipeline
+
+1. **Generate solid**: `generate_helix_coil(...)` or custom `execute_build123d(...)`
+2. **Export STEP**: set `export_dir` to save the solid
+3. **Section along path**: `section_along_path(step_file, path_json)` returns
+   per-segment (area, w_est, h_est) in CAD units
+4. **Build filaments**: feed (w, h) into `PEECBuilder.add_connected_segment()`
+   with per-segment local dimensions (convert CAD units to meters)
+5. **Solve**: `PEECCircuitSolver(topo, use_hacapk=True, outer_method="saddle")`
+
+Python-side helper: `from radia.coil_from_cad import filaments_from_step`
+wraps steps 3-5 in one call.
+
+## Best Practices
+
+- **sections_per_turn >= 8** for smooth loft (12 recommended)
+- **Label the solid** (`coil.label = "coil"`) for STEP export filename
+- **Square cross-section**: w_est = h_est = sqrt(area)
+- **Rectangular**: pass aspect_ratio to section_along_path (TODO)
+- **Multi-turn proximity**: section_along_path uses centroid-proximity
+  filtering so one cut plane hitting multiple turns picks the right face
+- **nwinc/nhinc >= 3** for skin/proximity at f > 10 kHz in PEEC
+- **Units**: build123d works in mm, PEEC in meters. scale = 1000.
+"""
+
 _TOPICS = {
     "overview": OVERVIEW,
     "primitives_3d": PRIMITIVES_3D,
@@ -756,6 +831,7 @@ _TOPICS = {
     "topology": TOPOLOGY,
     "cae_guidelines": CAE_GUIDELINES,
     "examples": EXAMPLES,
+    "coil_modeling": COIL_MODELING,
 }
 
 
