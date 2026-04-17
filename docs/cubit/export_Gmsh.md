@@ -1,12 +1,12 @@
-# export_Gmsh_ver4
+# export_Gmsh
 
-Export mesh to Gmsh format version 4.1.
+Export mesh to Gmsh format.
 
 ## Cubit Plugin (Recommended)
 
 ```
-radia_export gmsh "mesh.msh" version 4.1
-radia_export gmsh "mesh.msh" version 4.1 dim 2d
+radia_export gmsh "mesh.msh"
+radia_export gmsh "mesh.msh" dim 2d
 ```
 
 No block assignment or `#!python` required.
@@ -16,8 +16,8 @@ No block assignment or `#!python` required.
 ## Plugin Command
 
 ```python
-cubit.cmd('radia_export gmsh "mesh.msh" version 4 overwrite')
-cubit.cmd('radia_export gmsh "mesh.msh" version 4 dimension 2 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" dimension 2 overwrite')
 ```
 
 > **Note**: The old `cubit_mesh_export.export_Gmesh()` Python function has been replaced by the `radia_export gmsh` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
@@ -61,7 +61,7 @@ cubit.cmd('radia_export gmsh "mesh.msh" version 4 dimension 2 overwrite')
 
 ## File Format
 
-The Gmsh v4.1 format includes:
+The output uses Gmsh v4.1 format:
 
 1. **$MeshFormat** - Version identifier (4.1 0 8)
 2. **$PhysicalNames** - Block names with dimensions
@@ -81,7 +81,7 @@ cubit.cmd("create brick x 1 y 1 z 1")
 cubit.cmd("volume 1 scheme tetmesh")
 cubit.cmd("mesh volume 1")
 
-cubit.cmd('radia_export gmsh "mesh.msh" version 4 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
 ```
 
 ### 2D Export with Normal Orientation
@@ -91,8 +91,7 @@ cubit.cmd("create surface rectangle width 1 height 1 zplane")
 cubit.cmd("surface 1 scheme trimesh")
 cubit.cmd("mesh surface 1")
 
-# Force 2D mode to ensure normals point in +z direction
-cubit.cmd('radia_export gmsh "plate.msh" version 4 dimension 2 overwrite')
+cubit.cmd('radia_export gmsh "plate.msh" dimension 2 overwrite')
 ```
 
 ### 2nd Order Elements
@@ -104,12 +103,12 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all")
 cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
 
-cubit.cmd('radia_export gmsh "mesh_2nd_order.msh" version 4 overwrite')
+cubit.cmd('radia_export gmsh "mesh_2nd_order.msh" overwrite')
 ```
 
 ## $Entities Section
 
-The v4 format includes geometry topology information:
+Geometry topology information:
 
 - **Points**: Vertex coordinates
 - **Curves**: Bounding box and vertex references
