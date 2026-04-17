@@ -1945,6 +1945,57 @@ Workarounds for a current-driven coil source:
   of physical infinity and enforces Omega(infinity) = 0.
 """
 
+KELVIN_RADIA_SOURCE_HELPERS = """
+# Radia source field evaluation with Kelvin pullback
+
+Student-friendly helpers in ``radia.kelvin_source`` for evaluating
+Radia source fields (coils, magnets) at arbitrary points, including
+points inside the Kelvin exterior mesh region.
+
+## Quick reference
+
+```python
+from radia.kelvin_source import (
+    eval_H_from_radia_at_physical,     # H at physical point (no Kelvin)
+    eval_B_from_radia_at_physical,     # B at physical point (no Kelvin)
+    eval_H_from_radia_in_kelvin,       # H at Kelvin mesh point (with pullback)
+    eval_B_from_radia_in_kelvin,       # B at Kelvin mesh point (with pullback)
+    eval_field_from_radia_with_kelvin, # auto-dispatch (physical or Kelvin)
+)
+
+# Auto-dispatch: "just give me the field" (B or H)
+B = eval_field_from_radia_with_kelvin(coil, points, center, R, field_type='b')
+
+# Explicit Kelvin-region evaluation (e.g. for source injection)
+H_kelvin = eval_H_from_radia_in_kelvin(coil, [0.4, 0, 0],
+                                        center=[0.5, 0, 0], R=0.18)
+```
+
+## Differential-form pullback rules (applied automatically)
+
+| Field | Form degree | Pullback factor |
+|-------|-------------|-----------------|
+| Omega | 0-form      | 1 (trivial)     |
+| H, A  | 1-form      | (R/rho')^2 H    |
+| B     | 2-form      | -(R/rho')^4 H   |
+
+where H is the Householder reflection about the radial direction.
+
+## FEM GridFunction evaluation at physical exterior points
+
+```python
+from radia.kelvin_source import (
+    eval_Omega_physical_from_gf,  # 0-form: no Jacobian
+    eval_A_physical_from_gf,      # 1-form: (R/rho')^2 H pullback
+    eval_B_physical_from_gf,      # 2-form: -(R/rho')^4 H pullback
+)
+
+# After FEM solve, evaluate B at a physical point outside the inner sphere
+B_phys = eval_B_physical_from_gf(gf_B, mesh, r_phys=[0, 0, 1.0],
+                                  center=[0, 0, 4], R=1.5)
+```
+"""
+
 
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
@@ -1962,6 +2013,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "robustness": KELVIN_ROBUSTNESS,
         "helpers_recipe": KELVIN_HELPERS_RECIPE,
         "differential_forms": KELVIN_DIFFERENTIAL_FORMS,
+        "radia_source_helpers": KELVIN_RADIA_SOURCE_HELPERS,
         "source_in_omega_form": KELVIN_SOURCE_IN_OMEGA_FORM,
     }
 

@@ -90,6 +90,10 @@ class ScalarPotentialSolver:
         # Source field (set by set_source_*)
         self._H_source_cf = None
         self._radia_obj = None
+        # Precomputed source CFs for total+reduced solver (built eagerly
+        # in set_source_from_radia while the Radia handle is alive)
+        self._Omega_s_cf = None   # scalar VoxelCoefficient
+        self._Bs_cf = None        # vector CF = MU_0 * H_source_cf
 
         # Solution storage
         self._phi_gf = None
@@ -100,21 +104,37 @@ class ScalarPotentialSolver:
     # Source field setup
     # ------------------------------------------------------------------
 
-    def set_source_from_radia(self, radia_obj, resolution=41, bbox=None):
+    def set_source_from_radia(self, radia_obj, resolution=41, bbox=None,
+                              omega_s_resolution=None,
+                              omega_s_line_samples=100,
+                              omega_s_bbox=None, omega_s_ref=None):
         """Set source field H_s from a Radia object.
 
         Computes H_s on a voxel grid via ``rad.Fld()`` and creates
-        a VoxelCoefficient for efficient FEM integration.
+        a VoxelCoefficient for FEM integration.  When a Kelvin region
+        is configured, also eagerly builds the Omega_s and B_s CFs
+        needed by ``solve_total_reduced_potential``.
+
+        After this call returns, the Radia object handle is no longer
+        needed — all subsequent solve methods work from stored CFs.
 
         Parameters
         ----------
         radia_obj : int
             Radia object handle (coil, after Solve() if soft iron present).
         resolution : int
-            Voxel grid resolution per dimension.
+            Voxel grid resolution per dimension for H_s.
         bbox : list of [min, max] pairs, optional
             Custom bounding box [[xmin,xmax],[ymin,ymax],[zmin,zmax]].
             If None, auto-computed from physical (non-Kelvin) domains.
+        omega_s_resolution : int, optional
+            Voxel resolution for Omega_s (default: same as resolution).
+        omega_s_line_samples : int
+            Samples per line integral for Omega_s computation.
+        omega_s_bbox : list, optional
+            Bounding box for Omega_s voxel (default: iron bbox + margin).
+        omega_s_ref : array-like, optional
+            Reference point for Omega_s line integral (default: (0,0,-1)).
         """
         import radia as rad
         from ngsolve import VoxelCoefficient, CF
@@ -124,7 +144,6 @@ class ScalarPotentialSolver:
         if bbox is not None:
             pass  # use provided bbox
         elif self._kelvin_region:
-            # Exclude Kelvin exterior domain: use only iron + air bounding box
             bbox = self._compute_physical_bbox()
         else:
             pmin, pmax = self.mesh.ngmesh.bounding_box
@@ -153,6 +172,22 @@ class ScalarPotentialSolver:
             cfs.append(VoxelCoefficient(start, end, data, linear=True))
 
         self._H_source_cf = CF(tuple(cfs))
+
+        # B_s = mu0 * H_s (free-space source field)
+        self._Bs_cf = MU_0 * self._H_source_cf
+
+        # Eagerly build Omega_s when Kelvin is configured
+        if self._kelvin_region:
+            os_res = omega_s_resolution or resolution
+            if omega_s_bbox is None:
+                omega_s_bbox = self._compute_iron_bbox()
+            if omega_s_ref is None:
+                omega_s_ref = np.array([0.0, 0.0, -1.0])
+            else:
+                omega_s_ref = np.asarray(omega_s_ref, dtype=float)
+            self._Omega_s_cf = self._build_omega_s_voxel(
+                radia_obj, omega_s_bbox, os_res,
+                omega_s_line_samples, omega_s_ref)
 
     def set_source_from_callback(self, h_func, resolution=41):
         """Set source field H_s from a Python callback.
@@ -383,13 +418,7 @@ class ScalarPotentialSolver:
     # ------------------------------------------------------------------
 
     def solve_total_reduced_potential(self, dirichlet='GND',
-                                      iron_boundary='default',
-                                      omega_s_resolution=41,
-                                      omega_s_line_samples=100,
-                                      omega_s_bbox=None,
-                                      omega_s_ref=None,
-                                      bs_bbox=None,
-                                      bs_resolution=51):
+                                      iron_boundary='default'):
         """Solve using EMPY-style total+reduced split with Kelvin.
 
         This is the ONLY correct method for Kelvin + external coil source.
@@ -408,6 +437,10 @@ class ScalarPotentialSolver:
 
         Kelvin region receives NO source term.
 
+        All source CFs (Omega_s, B_s) are pre-built by
+        ``set_source_from_radia`` — this method uses only NGSolve CFs,
+        no Radia calls.
+
         Parameters
         ----------
         dirichlet : str
@@ -417,18 +450,6 @@ class ScalarPotentialSolver:
         iron_boundary : str
             Boundary name of the iron-air interface (default: auto-detect
             from mesh boundaries containing 'iron' or 'cylinder').
-        omega_s_resolution : int
-            Voxel grid resolution for Omega_s computation.
-        omega_s_line_samples : int
-            Number of samples per line integral for Omega_s.
-        omega_s_bbox : list, optional
-            Bounding box for Omega_s voxel. Default: iron bbox + margin.
-        omega_s_ref : array-like, optional
-            Reference point for Omega_s line integral. Default: (0,0,-1).
-        bs_bbox : list, optional
-            Bounding box for B_s voxel. Default: physical bbox.
-        bs_resolution : int
-            Voxel grid resolution for B_s.
 
         Returns
         -------
@@ -438,10 +459,9 @@ class ScalarPotentialSolver:
         from ngsolve import (H1, Periodic, GridFunction, BilinearForm,
                              LinearForm, grad, dx, ds, CF,
                              x, y, z, sqrt, specialcf, Preconditioner,
-                             VoxelCoefficient, BND)
-        import radia as rad
+                             BND)
 
-        if self._radia_obj is None:
+        if self._H_source_cf is None:
             raise RuntimeError(
                 "Set source first via set_source_from_radia()")
         if not self._kelvin_region:
@@ -449,8 +469,14 @@ class ScalarPotentialSolver:
                 "solve_total_reduced_potential requires Kelvin "
                 "configuration (kelvin_region, kelvin_radius, "
                 "kelvin_center)")
+        if self._Omega_s_cf is None:
+            raise RuntimeError(
+                "Omega_s not built — set_source_from_radia must be "
+                "called with Kelvin configured")
 
-        radia_obj = self._radia_obj
+        # Use pre-built CFs from set_source_from_radia
+        Omega_s_cf = self._Omega_s_cf
+        Bs_cf = self._Bs_cf
 
         # --- Auto-detect iron boundary name ---
         if iron_boundary == 'default':
@@ -462,23 +488,6 @@ class ScalarPotentialSolver:
             else:
                 iron_re = '|'.join(self.iron_domains)
                 iron_boundary = iron_re
-
-        # --- Build Omega_s voxel (line integral of H_s) ---
-        if omega_s_bbox is None:
-            omega_s_bbox = self._compute_iron_bbox()
-        if omega_s_ref is None:
-            omega_s_ref = np.array([0.0, 0.0, -1.0])
-        else:
-            omega_s_ref = np.asarray(omega_s_ref, dtype=float)
-
-        Omega_s_cf = self._build_omega_s_voxel(
-            radia_obj, omega_s_bbox, omega_s_resolution,
-            omega_s_line_samples, omega_s_ref)
-
-        # --- Build B_s voxel (full physical bbox) ---
-        if bs_bbox is None:
-            bs_bbox = self._compute_physical_bbox()
-        Bs_cf = self._build_bs_voxel(radia_obj, bs_bbox, bs_resolution)
 
         # --- Material CF with Kelvin metric ---
         mu_cf = self._build_mu_cf_with_kelvin()
@@ -570,6 +579,9 @@ class ScalarPotentialSolver:
                               n_line_samples, ref_point):
         """Build Omega_s VoxelCoefficient via line integral of H_s.
 
+        Called from ``set_source_from_radia`` while the Radia handle
+        is alive. Uses ``rad.Fld('h')`` directly for exact evaluation.
+
         Omega_s(p) = integral_{ref}^{p} H_s . dl
         Convention: H_s = grad(Omega_s).
         """
@@ -583,6 +595,7 @@ class ScalarPotentialSolver:
         xx, yy, zz = np.meshgrid(xs, ys, zs, indexing='ij')
         grid_pts = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
 
+        # Trapezoid rule along straight line ref -> p
         ts = np.linspace(0.0, 1.0, n_line_samples)
         dt = ts[1] - ts[0]
         w = np.full(n_line_samples, dt)
@@ -605,28 +618,6 @@ class ScalarPotentialSolver:
         start = (bbox[0][0], bbox[1][0], bbox[2][0])
         end = (bbox[0][1], bbox[1][1], bbox[2][1])
         return VoxelCoefficient(start, end, data, linear=True)
-
-    def _build_bs_voxel(self, radia_obj, bbox, resolution):
-        """Build B_s VoxelCoefficient from rad.Fld('b')."""
-        import radia as rad
-        from ngsolve import VoxelCoefficient, CF
-
-        nx = ny = nz = resolution
-        xs = np.linspace(bbox[0][0], bbox[0][1], nx)
-        ys = np.linspace(bbox[1][0], bbox[1][1], ny)
-        zs = np.linspace(bbox[2][0], bbox[2][1], nz)
-        xx, yy, zz = np.meshgrid(xs, ys, zs, indexing='ij')
-        pts = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
-
-        B_flat = np.asarray(rad.Fld(radia_obj, 'b', pts))
-        start = (bbox[0][0], bbox[1][0], bbox[2][0])
-        end = (bbox[0][1], bbox[1][1], bbox[2][1])
-        cfs = []
-        for c in range(3):
-            d = B_flat[:, c].reshape(nx, ny, nz)
-            d = np.ascontiguousarray(d.transpose(2, 1, 0))
-            cfs.append(VoxelCoefficient(start, end, d, linear=True))
-        return CF(tuple(cfs))
 
     def _build_mu_cf_with_kelvin(self):
         """Build per-material mu CF including Kelvin metric."""
