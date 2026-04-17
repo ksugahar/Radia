@@ -1,13 +1,11 @@
 """
 SIBC / ESIM knowledge for induction heating MCP server.
 
-Covers: Surface Impedance Boundary Condition approaches for eddy current,
-BEM (Scalar BIE) and FEM (scattered-field) formulations, Karl iteration,
-ESIM nonlinear impedance, and validation results.
+Production path: PEEC+FEM (filament coil + Omega-reduced Kelvin FEM).
+BEM knowledge has moved to mcp-server-radia-ngsolve (ngsbem_inductance topic).
+BEM solver modules have moved to examples/induction_heating/bem_reference/.
 
-Updated: 2026-04-13 with Smythe sphere analytical validation (14 data points),
-FEM-scattered confirmed as reference solver (+/-3%), FEM-total -34% systematic.
-EMMaterial class now provides unified material properties.
+Updated: 2026-04-17 — BEM removed from IH production path.
 """
 
 IH_PEEC_FEM = """
@@ -812,23 +810,41 @@ Steel always needs two-way. Copper/aluminum OK with one-way at low frequencies.
 """
 
 
+_BEM_DEPRECATED_MSG = """
+# BEM knowledge has moved
+
+BEM (Scalar BIE, EFIE, coupled BEM-SIBC) is no longer part of the IH
+production path.  Use `mcp-server-radia-ngsolve` with topic `ngsbem_inductance`
+for BEM documentation.
+
+BEM solver modules are in `examples/induction_heating/bem_reference/`.
+"""
+
+
 def get_ih_sibc_documentation(topic="all"):
-    """Return IH SIBC documentation by topic."""
-    topics = {
+    """Return IH SIBC documentation by topic.
+
+    Production topics: peec_fem, esim, screening.
+    Deprecated (BEM): overview, biot_savart -> redirects to radia-ngsolve.
+    """
+    production_topics = {
         "peec_fem": IH_PEEC_FEM,
-        "overview": IH_SIBC_OVERVIEW,
         "esim": IH_ESIM,
-        "biot_savart": IH_BIOT_SAVART,
         "screening": IH_SCREENING,
     }
+    # Legacy topics kept for backward compat but redirect to ngsolve MCP
+    deprecated_topics = {"overview", "biot_savart"}
 
     topic = topic.lower().strip()
     if topic == "all":
-        return "\n\n".join(topics.values())
-    elif topic in topics:
-        return topics[topic]
+        return "\n\n".join(production_topics.values())
+    elif topic in production_topics:
+        return production_topics[topic]
+    elif topic in deprecated_topics:
+        return _BEM_DEPRECATED_MSG
     else:
         return (
             f"Unknown topic: '{topic}'. "
-            f"Available: all, {', '.join(topics.keys())}"
+            f"Available: all, {', '.join(production_topics.keys())}. "
+            f"BEM topics moved to mcp-server-radia-ngsolve (ngsbem_inductance)."
         )
