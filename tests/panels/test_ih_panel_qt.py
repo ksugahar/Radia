@@ -33,12 +33,12 @@ class TestMethodCombo:
     def test_default_method_is_PEEC(self, ih_panel):
         """First-launch default. PEEC is the default since BEM was
         removed from the panel (2026-04-17)."""
-        assert ih_panel._method_combo.currentText() == "PEEC+BEM"
+        assert ih_panel._method_combo.currentText() == "PEEC+FEM"
 
     def test_method_items(self, ih_panel):
         items = [ih_panel._method_combo.itemText(i)
                  for i in range(ih_panel._method_combo.count())]
-        assert items == ["PEEC+BEM", "FEM"]
+        assert items == ["PEEC+FEM", "FEM"]
 
     def test_no_legacy_BEM_SIBC_WP_method(self, ih_panel):
         """Removed 2026-04-12. Make sure it does not creep back."""
@@ -64,7 +64,7 @@ class TestModeSwitch:
         return w.isVisibleTo(panel)
 
     def test_PEEC_shows_coil_params(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         assert self._visible(ih_panel, "coil_radius")
         assert self._visible(ih_panel, "nwinc")
         assert self._visible(ih_panel, "coil_sigma")
@@ -82,7 +82,7 @@ class TestModeSwitch:
         assert not self._visible(ih_panel, "coil_radius")
 
     def test_PEEC_solver_items(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         items = [ih_panel._widgets["solver"].itemText(i)
                  for i in range(ih_panel._widgets["solver"].count())]
         assert items == ["Dense LU", "HACApK saddle", "PRIMA"]
@@ -101,14 +101,14 @@ class TestModeSwitch:
 class TestWorkpieceGroup:
 
     def test_off_hides_WP_detail(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("off")
         for key in ("wp_sigma", "half_thickness", "mu_r",
                     "bh_file", "esim_geometry"):
             assert not ih_panel._widgets[key].isVisibleTo(ih_panel), key
 
     def test_SIBC_shows_mu_r_not_bh(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("SIBC")
         assert ih_panel._widgets["wp_sigma"].isVisibleTo(ih_panel)
         assert ih_panel._widgets["half_thickness"].isVisibleTo(ih_panel)
@@ -117,7 +117,7 @@ class TestWorkpieceGroup:
         assert not ih_panel._widgets["esim_geometry"].isVisibleTo(ih_panel)
 
     def test_ESIM_shows_bh_not_mu_r(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("ESIM")
         assert ih_panel._widgets["wp_sigma"].isVisibleTo(ih_panel)
         assert ih_panel._widgets["bh_file"].isVisibleTo(ih_panel)
@@ -217,7 +217,7 @@ class TestCommandRoundtrip:
     choice would have been caught by this test."""
 
     def test_PEEC_no_workpiece(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("off")
         cmd = ih_panel.build_command(None)
         assert cmd[0].endswith("python.exe") or cmd[0].endswith("python")
@@ -226,7 +226,7 @@ class TestCommandRoundtrip:
         assert "--vol" not in cmd
 
     def test_PEEC_with_workpiece(self, ih_panel):
-        ih_panel._method_combo.setCurrentText("PEEC+BEM")
+        ih_panel._method_combo.setCurrentText("PEEC+FEM")
         ih_panel._widgets["workpiece_mode"].setCurrentText("SIBC")
         cmd = ih_panel.build_command("model.vol")
         assert cmd[1].endswith("calc_peec.py")
