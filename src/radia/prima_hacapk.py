@@ -173,37 +173,34 @@ class PRIMAHACApKModel:
                 "hacapk_stats": solver.hacapk_stats,
             }
         else:
-            # General topology: Lanczos on R^{-1} L with starting vector b
+            # General topology: descriptor PRIMA on the augmented
+            # saddle-point system (handles current redistribution
+            # in parallel filament bundles).
+            i_ext_red = i_ext_red.astype(np.float64)
             t0 = time.perf_counter()
-            V_basis, T_alpha, T_beta = _lanczos_rinvl(
-                solver, inv_R, b, q,
+            V_basis, E_q, A_q, B_q, actual_q = _descriptor_prima(
+                solver, R_dc, A_hat, i_ext_red, q, inv_R=inv_R,
             )
-            t_lanczos = time.perf_counter() - t0
+            t_build = time.perf_counter() - t0
 
-            # Project L and R onto the basis
-            t0 = time.perf_counter()
-            LV = np.zeros((N, V_basis.shape[1]), dtype=np.float64)
-            for j in range(V_basis.shape[1]):
-                LV[:, j] = solver.apply_L(
-                    np.ascontiguousarray(V_basis[:, j])
-                )
-            L_q = V_basis.T @ LV
-            L_q = 0.5 * (L_q + L_q.T)  # symmetrize
-            R_q = V_basis.T @ (R_dc[:, None] * V_basis)
-            t_project = time.perf_counter() - t0
+            # For descriptor PRIMA:
+            #   (A_q + s E_q) x_q = B_q
+            #   y_q = B_q^T x_q = port voltage
+            # Z_port(s) = y_q / I_port = B_q^T (A_q + s E_q)^{-1} B_q
+            L_q = E_q    # E = [[L,0],[0,0]] projected
+            R_q = A_q    # A_sys = [[R,A^T],[A,0]] projected
+            port_vec_q = B_q
 
-            port_vec_q = V_basis.T @ b
-
-            actual_q = V_basis.shape[1]
             stats = {
                 "q_requested": q,
                 "q_actual": actual_q,
                 "n_full": N,
                 "is_series": False,
-                "t_lanczos": t_lanczos,
-                "t_project": t_project,
-                "t_total": t_lanczos + t_project,
-                "n_hmat_matvec": actual_q + actual_q,
+                "is_descriptor": True,
+                "t_lanczos": t_build,
+                "t_project": 0.0,
+                "t_total": t_build,
+                "n_hmat_matvec": actual_q * 2,
                 "hacapk_stats": solver.hacapk_stats,
             }
 
@@ -218,20 +215,16 @@ class PRIMAHACApKModel:
         """Evaluate Z_port at a single frequency from the reduced model.
 
         For series chain (q=1): Z = R_total + s * L_total (exact).
-        For general topology: Z = b_q^T Z_q^{-1} b_q (reduced MNA).
+        For descriptor PRIMA: Z = B_q^T (A_q + s*E_q)^{-1} B_q.
         """
         s = 1j * 2.0 * math.pi * freq_hz
         if self.q == 1 and self.build_stats.get("is_series"):
-            # Series chain: polynomial in s, exact with 1 Krylov vector
             return complex(self.R_q[0, 0] + s * self.L_q[0, 0])
-        Z_q = self.R_q + s * self.L_q   # (q, q) complex
-        # For general topology: Y_port = b^T Z_branch^{-1} b
-        # Z_port = 1 / Y_port ... but this is admittance.
-        # Actually for the Galerkin projection of the BRANCH system:
-        # Z_port = b_q^T Z_q b_q (quadratic form, for series-like)
-        # For truly parallel DOFs with current redistribution, need
-        # the nodal PRIMA (descriptor form). For now use quadratic form.
-        return complex(self.port_vec_q @ (Z_q @ self.port_vec_q))
+        # Descriptor PRIMA: (A_q + s*E_q) x = B_q, output = C_q^T x
+        # B = [0; -e_port], C = [0; +e_port] → C = -B → Z = -B^T Z^{-1} B
+        Z_q = self.R_q + s * self.L_q
+        x = np.linalg.solve(Z_q, self.port_vec_q.astype(np.complex128))
+        return -complex(self.port_vec_q @ x)
 
     def impedance_sweep(self, freqs) -> np.ndarray:
         """Evaluate Z_port at multiple frequencies.
@@ -263,6 +256,142 @@ class PRIMAHACApKModel:
         Lx = self.L_q @ x0
         L_port = float(np.real(self.port_vec_q @ np.linalg.solve(self.R_q, Lx)))
         return L_port, R_port
+
+
+def _descriptor_prima(solver, R_dc, A_hat, e_port, q, inv_R=None):
+    """Descriptor PRIMA on the saddle-point PEEC system.
+
+    System: [R+sL  A^T] [I]   [0    ]
+            [A     0  ] [V] = [i_ext]
+
+    Descriptor form: E x_dot = A_sys x + B u, where
+        E = [[L, 0], [0, 0]]   (singular)
+        A_sys = -[[R, A^T], [A, 0]]
+        B = [[0], [e_port]]
+        x = [I; V]
+
+    PRIMA Krylov from M = A_sys^{-1} E starting at x0 = A_sys^{-1} B:
+    Each step requires one saddle-point solve + one HACApK L matvec.
+
+    Returns (V_basis, L_q, R_q, port_vec_q) where V_basis spans the
+    Krylov subspace in the augmented [I; V] space.
+    """
+    import scipy.sparse as sp
+    from scipy.sparse.linalg import LinearOperator, lgmres, splu
+
+    N = solver.N
+    n_red = A_hat.shape[0]
+    dim = N + n_red
+
+    if inv_R is None:
+        inv_R = 1.0 / R_dc
+
+    # Block-diagonal preconditioner (same as stage-7 saddle-point)
+    A_hat_T = A_hat.T
+    Diag_invR = sp.diags(inv_R, format="csc")
+    S_mat = (A_hat @ Diag_invR @ A_hat_T).tocsc()
+    S_lu = splu(S_mat)
+
+    def solve_saddle(rhs_full):
+        """Solve [[R, A^T], [A, 0]] w = rhs via preconditioned lgmres."""
+        rhs_top = rhs_full[:N]
+        rhs_bot = rhs_full[N:]
+
+        def block_mv(xy):
+            I_ = xy[:N]; V_ = xy[N:]
+            top = R_dc * I_ + A_hat_T @ V_
+            bot = A_hat @ I_
+            out = np.empty(dim, dtype=np.float64)
+            out[:N] = top; out[N:] = bot
+            return out
+
+        A_op = LinearOperator((dim, dim), matvec=block_mv, dtype=np.float64)
+
+        def precond(r):
+            out = np.empty(dim, dtype=np.float64)
+            out[:N] = inv_R * r[:N]
+            out[N:] = S_lu.solve(np.asarray(r[N:], dtype=np.float64))
+            return out
+
+        M_op = LinearOperator((dim, dim), matvec=precond, dtype=np.float64)
+        w, info = lgmres(A_op, rhs_full, rtol=1e-12, maxiter=2000,
+                         inner_m=50, M=M_op)
+        return w
+
+    def apply_E(x_full):
+        """E x = [L * I; 0]."""
+        I_ = x_full[:N]
+        LI = solver.apply_L(np.ascontiguousarray(I_))
+        out = np.zeros(dim, dtype=np.float64)
+        out[:N] = LI
+        return out
+
+    # Initial vector: x0 = A_sys^{-1} B = solve [[R,A^T],[A,0]] w = [0; -e_port]
+    # The negation matches the MNA sign convention (stage 7): A I = -i_ext
+    # so that the extracted Z_port has the correct sign.
+    rhs0 = np.zeros(dim, dtype=np.float64)
+    rhs0[N:] = -e_port
+    x0 = solve_saddle(rhs0)
+
+    # Arnoldi (modified Gram-Schmidt) on M = A_sys^{-1} E
+    V = np.zeros((dim, q + 1), dtype=np.float64)
+    H = np.zeros((q + 1, q), dtype=np.float64)
+
+    norm0 = np.linalg.norm(x0)
+    if norm0 < 1e-30:
+        raise RuntimeError("Zero initial vector in descriptor PRIMA")
+    V[:, 0] = x0 / norm0
+
+    actual_q = q
+    for j in range(q):
+        # w = M v_j = A_sys^{-1} E v_j
+        Ev = apply_E(V[:, j])     # one HACApK matvec
+        w = solve_saddle(Ev)       # one saddle-point solve
+
+        # Modified Gram-Schmidt
+        for i in range(j + 1):
+            H[i, j] = float(w @ V[:, i])
+            w -= H[i, j] * V[:, i]
+
+        # Full reorthogonalization
+        for i in range(j + 1):
+            s = float(w @ V[:, i])
+            H[i, j] += s
+            w -= s * V[:, i]
+
+        H[j + 1, j] = np.linalg.norm(w)
+        if H[j + 1, j] < 1e-14 * norm0:
+            actual_q = j + 1
+            break
+        V[:, j + 1] = w / H[j + 1, j]
+
+    V_basis = V[:, :actual_q]   # (dim, q)
+
+    # Project system matrices onto V_basis:
+    # R_block = [[R, A^T], [A, 0]]  projected as V^T R_block V
+    # E_block = [[L, 0], [0, 0]]    projected as V^T E_block V
+
+    # E_q = V^T E V (requires q HACApK matvecs for L @ V[:N, :])
+    EV = np.zeros((dim, actual_q), dtype=np.float64)
+    for j in range(actual_q):
+        EV[:, j] = apply_E(V_basis[:, j])
+    E_q = V_basis.T @ EV   # (q, q)
+    E_q = 0.5 * (E_q + E_q.T)  # symmetrize
+
+    # A_q = V^T A_block V (A_block is sparse, cheap)
+    AV = np.zeros((dim, actual_q), dtype=np.float64)
+    for j in range(actual_q):
+        I_ = V_basis[:N, j]; V_ = V_basis[N:, j]
+        AV[:N, j] = R_dc * I_ + A_hat_T @ V_
+        AV[N:, j] = A_hat @ I_
+    A_q = V_basis.T @ AV
+
+    # Port vector in reduced space: B_q = V^T B = V^T [0; -e_port]
+    B_full = np.zeros(dim, dtype=np.float64)
+    B_full[N:] = -e_port
+    B_q = V_basis.T @ B_full
+
+    return V_basis, E_q, A_q, B_q, actual_q
 
 
 def _lanczos_rinvl(solver, inv_R, b, q):
