@@ -361,6 +361,173 @@ def eval_B_physical_from_gf(gf_B_comp, mesh, r_phys, center, R):
     return kelvin_pullback_B_pseudovector(B_comp, r_phys, center, R)
 
 
+# ---------- Radia source evaluation with Kelvin pullback -----------------
+
+
+def eval_H_from_radia_at_physical(radia_obj, r_phys):
+    """Evaluate H_s from a Radia object at a physical-frame point.
+
+    Simply calls ``rad.Fld(radia_obj, 'h', r_phys)``.  Provided for
+    symmetry with the Kelvin-aware variants below.
+
+    Args:
+        radia_obj: Radia object handle (coil, magnet, etc.).
+        r_phys: (3,) or (N, 3) physical-frame coordinates.
+
+    Returns:
+        (3,) or (N, 3) H field in A/m.
+    """
+    import radia as rad
+    return np.asarray(rad.Fld(radia_obj, 'h', np.asarray(r_phys).tolist()),
+                      dtype=float)
+
+
+def eval_B_from_radia_at_physical(radia_obj, r_phys):
+    """Evaluate B_s from a Radia object at a physical-frame point.
+
+    Simply calls ``rad.Fld(radia_obj, 'b', r_phys)``.
+
+    Args:
+        radia_obj: Radia object handle.
+        r_phys: (3,) or (N, 3) physical-frame coordinates.
+
+    Returns:
+        (3,) or (N, 3) B field in Tesla.
+    """
+    import radia as rad
+    return np.asarray(rad.Fld(radia_obj, 'b', np.asarray(r_phys).tolist()),
+                      dtype=float)
+
+
+def eval_H_from_radia_in_kelvin(radia_obj, r_kelvin, center, R):
+    """Evaluate physical H_s at a Kelvin-mesh coordinate point.
+
+    Given a point ``r_kelvin`` in the Kelvin exterior mesh region,
+    compute the PHYSICAL H field of the Radia source at the
+    corresponding physical exterior point, with proper 1-form pullback.
+
+    Steps:
+        1. r_phys = kelvin_map_3d(r_kelvin, center, R)  # inverse map
+        2. H_phys = rad.Fld(radia_obj, 'h', r_phys)
+        3. H_comp = kelvin_pullback_vector(H_phys, r_kelvin, center, R)
+
+    The returned H_comp is what the Kelvin mesh "sees" — use this when
+    injecting an H-source into the Kelvin exterior FE space.
+
+    Args:
+        radia_obj: Radia object handle (coil, magnet, etc.).
+        r_kelvin: (3,) or (N, 3) coordinate in the Kelvin mesh region.
+        center: (3,) Kelvin sphere center.
+        R: Kelvin sphere radius.
+
+    Returns:
+        (3,) or (N, 3) H field in Kelvin computational frame.
+
+    Example::
+
+        # Evaluate coil H field "seen" inside the Kelvin mesh at (0.4, 0, 0)
+        H_kelvin = eval_H_from_radia_in_kelvin(coil, [0.4, 0, 0],
+                                                center=[0.5, 0, 0], R=0.18)
+    """
+    import radia as rad
+    r_kelvin = np.asarray(r_kelvin, dtype=float)
+    r_phys = kelvin_map_3d(r_kelvin, center, R)
+    H_phys = np.asarray(rad.Fld(radia_obj, 'h',
+                                 r_phys.tolist()), dtype=float)
+    return kelvin_pullback_vector(H_phys, r_kelvin, center, R)
+
+
+def eval_B_from_radia_in_kelvin(radia_obj, r_kelvin, center, R):
+    """Evaluate physical B_s at a Kelvin-mesh coordinate point.
+
+    Counterpart of ``eval_H_from_radia_in_kelvin`` for B (2-form
+    pseudovector). Uses ``kelvin_pullback_B_pseudovector``.
+
+    Steps:
+        1. r_phys = kelvin_map_3d(r_kelvin, center, R)
+        2. B_phys = rad.Fld(radia_obj, 'b', r_phys)
+        3. B_comp = kelvin_pullback_B_pseudovector(B_phys, r_kelvin, center, R)
+
+    Args:
+        radia_obj: Radia object handle.
+        r_kelvin: (3,) or (N, 3) coordinate in Kelvin mesh region.
+        center: (3,) Kelvin sphere center.
+        R: Kelvin sphere radius.
+
+    Returns:
+        (3,) or (N, 3) B field in Kelvin computational frame (Tesla).
+    """
+    import radia as rad
+    r_kelvin = np.asarray(r_kelvin, dtype=float)
+    r_phys = kelvin_map_3d(r_kelvin, center, R)
+    B_phys = np.asarray(rad.Fld(radia_obj, 'b',
+                                 r_phys.tolist()), dtype=float)
+    return kelvin_pullback_B_pseudovector(B_phys, r_kelvin, center, R)
+
+
+def eval_field_from_radia_with_kelvin(radia_obj, points, center, R,
+                                       field_type='b'):
+    """Evaluate Radia source field at arbitrary points, with automatic
+    Kelvin handling for points inside the exterior domain.
+
+    For each point:
+    - If ``|p - center| < R`` (inside Kelvin mesh region): evaluate
+      at the physical exterior point (Kelvin inverse map) and apply
+      the appropriate pullback.
+    - Otherwise (physical region): evaluate directly via rad.Fld.
+
+    This is the student-friendly "just give me the field" function.
+
+    Args:
+        radia_obj: Radia object handle.
+        points: (3,) or (N, 3) observation points.
+        center: (3,) Kelvin sphere center.
+        R: Kelvin sphere radius.
+        field_type: 'h' for H [A/m] or 'b' for B [T].
+
+    Returns:
+        (3,) or (N, 3) field values.
+
+    Example::
+
+        # Evaluate coil B everywhere (auto Kelvin for exterior points)
+        pts = np.array([[0, 0, 0], [0.4, 0, 0], [0, 0, 0.5]])
+        B = eval_field_from_radia_with_kelvin(coil, pts, [0.5,0,0], 0.18)
+    """
+    import radia as rad
+    points = np.asarray(points, dtype=float)
+    single = points.ndim == 1
+    if single:
+        points = points.reshape(1, 3)
+
+    in_kelvin = is_in_kelvin_exterior_domain(points, center, R)
+    result = np.zeros_like(points)
+
+    # Physical-region points: direct evaluation
+    phys_mask = ~in_kelvin
+    if np.any(phys_mask):
+        pts_phys = points[phys_mask]
+        result[phys_mask] = np.asarray(
+            rad.Fld(radia_obj, field_type, pts_phys.tolist()),
+            dtype=float).reshape(-1, 3)
+
+    # Kelvin-region points: inverse map + evaluate + pullback
+    if np.any(in_kelvin):
+        pts_kelvin = points[in_kelvin]
+        pts_phys_mapped = kelvin_map_3d(pts_kelvin, center, R)
+        field_phys = np.asarray(
+            rad.Fld(radia_obj, field_type, pts_phys_mapped.tolist()),
+            dtype=float).reshape(-1, 3)
+        if field_type == 'h':
+            result[in_kelvin] = kelvin_pullback_vector(
+                field_phys, pts_kelvin, center, R)
+        elif field_type == 'b':
+            result[in_kelvin] = kelvin_pullback_B_pseudovector(
+                field_phys, pts_kelvin, center, R)
+
+    return result[0] if single else result
+
+
 # ---------- Biot-Savart vector potential from filaments -------------------
 
 
