@@ -139,7 +139,7 @@ Z = solver.compute_port_impedance(freq=1e6)
 
 **Key advantage**: **Only Radia can handle nonlinear materials** in the integral equation framework.
 This includes **vector hysteresis** with Play operators -- a novel capability
-for BEM (see `docs/research/B_INPUT_PLAY_MODEL.md`).
+for BEM.
 FEM-BEM (ngbem) is limited to linear materials because BEM requires a known Green's function.
 
 ### 3. ngbem (NGSolve BEM): Linear Materials Only
@@ -436,8 +436,7 @@ rad.Solve(container, 1e-4, 5000, 0)
 ```
 
 **Novel contribution**: B-input formulation directly uses the Play model's natural
-B-space domain, with analytical Jacobian from `ComputeJacobian(dBdH)`. See
-`docs/research/B_INPUT_PLAY_MODEL.md` Section 12 for full details.
+B-space domain, with analytical Jacobian from `ComputeJacobian(dBdH)`.
 
 | Solver | Materials | Cost/iter | Convergence |
 |--------|-----------|-----------|-------------|
