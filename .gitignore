@@ -6,7 +6,6 @@
 CLAUDE.md
 ROADMAP.md
 .claude/
-docs/research/
 publish_to_pypi.cmd
 ngsolve_developers/
 to_developers/
