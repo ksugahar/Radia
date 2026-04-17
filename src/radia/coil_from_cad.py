@@ -165,49 +165,158 @@ def build_peec_from_path(path_points: np.ndarray,
     return builder.build_topology()
 
 
+def extract_centerline_from_step(step_path: str,
+                                 n_segments: int = 100,
+                                 cad_units_per_meter: float = 1000.0):
+    """Auto-extract coil centerline + cross-sections from a STEP file.
+
+    Algorithm:
+    1. Find the longest edge of the solid (= sweep/loft spine, one of
+       the rectangular cross-section corner paths).
+    2. Sample the spine at n_segments+1 points → approximate path.
+    3. At each segment midpoint, section perpendicular to the tangent.
+    4. Cross-section centroid = true centerline point (corrects for
+       the corner-to-center offset of the spine edge).
+    5. Cross-section area → estimated (w, h).
+
+    Works for any swept or lofted solid where the longest edge traces
+    the coil path (helix, spiral, arbitrary 3D curve).
+
+    Args:
+        step_path: Path to .step file (CAD units, typically mm).
+        n_segments: Number of filament segments to extract.
+        cad_units_per_meter: Scale factor (default 1000 = mm).
+
+    Returns:
+        path_m: (N+1, 3) centerline points in meters.
+        widths_m: (N,) per-segment width in meters.
+        heights_m: (N,) per-segment height in meters.
+    """
+    from build123d import import_step, section, Plane, Vector
+
+    solid = import_step(step_path)
+
+    # Step 1: find spine (longest edge)
+    edges = solid.edges()
+    if not edges:
+        raise RuntimeError("STEP solid has no edges")
+    spine = max(edges, key=lambda e: e.length)
+
+    # Step 2: sample spine at n+1 points
+    spine_pts = np.zeros((n_segments + 1, 3), dtype=np.float64)
+    for i in range(n_segments + 1):
+        t = i / n_segments
+        p = spine @ t
+        spine_pts[i] = [p.X, p.Y, p.Z]
+
+    # Step 3-5: section at midpoints → centroids + areas
+    tangents = path_tangents(spine_pts)
+    midpoints = 0.5 * (spine_pts[:-1] + spine_pts[1:])
+
+    centerline = np.zeros((n_segments + 1, 3), dtype=np.float64)
+    widths_cad = np.zeros(n_segments, dtype=np.float64)
+    heights_cad = np.zeros(n_segments, dtype=np.float64)
+
+    # First/last centerline points from spine endpoints
+    centerline[0] = spine_pts[0]
+    centerline[-1] = spine_pts[-1]
+
+    for i in range(n_segments):
+        c = midpoints[i]
+        t = tangents[i]
+        origin = Vector(float(c[0]), float(c[1]), float(c[2]))
+        z_dir = Vector(float(t[0]), float(t[1]), float(t[2]))
+        sec_plane = Plane(origin=origin, z_dir=z_dir)
+        try:
+            cross = section(solid, section_by=sec_plane)
+        except Exception:
+            cross = None
+
+        if cross and len(cross.faces()) > 0:
+            best = min(cross.faces(),
+                       key=lambda f: (f.center() - origin).length)
+            bc = best.center()
+            # Update centerline: midpoint between corrected centers
+            if i < n_segments:
+                centerline[i] = [bc.X, bc.Y, bc.Z]
+                if i == n_segments - 1:
+                    # Last segment: also update final point
+                    centerline[i + 1] = spine_pts[i + 1]
+            side = math.sqrt(best.area)
+            widths_cad[i] = side
+            heights_cad[i] = side
+        else:
+            widths_cad[i] = widths_cad[max(0, i - 1)]
+            heights_cad[i] = heights_cad[max(0, i - 1)]
+            centerline[i] = c
+
+    # Rebuild path from centroids: use midpoints as node positions
+    # (shift from midpoint-of-spine to centroid-of-section)
+    # Simple: nodes = [centroid_0, centroid_1, ..., centroid_{N-1}, spine_end]
+    path_cad = np.zeros((n_segments + 1, 3), dtype=np.float64)
+    path_cad[0] = centerline[0]
+    for i in range(n_segments - 1):
+        path_cad[i + 1] = 0.5 * (centerline[i] + centerline[i + 1])
+    path_cad[-1] = centerline[-1]
+
+    scale = 1.0 / cad_units_per_meter
+    return path_cad * scale, widths_cad * scale, heights_cad * scale
+
+
 def filaments_from_step(step_path: str,
-                        path_points_m: np.ndarray,
+                        path_points_m: Optional[np.ndarray] = None,
                         sigma: float = 5.8e7,
                         nwinc: int = 1,
                         nhinc: int = 1,
-                        cad_units_per_meter: float = 1000.0):
-    """End-to-end: STEP solid + path -> PEEC topology.
+                        cad_units_per_meter: float = 1000.0,
+                        n_slices: int = 200):
+    """End-to-end: STEP solid -> PEEC topology.
+
+    If path_points_m is None, auto-extracts the centerline from the
+    STEP file by z-slicing + nearest-neighbor chaining (no explicit
+    path needed).  Cross-section (w, h) is always extracted from the
+    solid by perpendicular sectioning.
 
     Args:
         step_path: STEP file path.
-        path_points_m: (N+1, 3) path vertices in meters.
+        path_points_m: (N+1, 3) path vertices in meters, or None for
+            auto-extraction.
         sigma: Conductivity [S/m].
         nwinc, nhinc: Sub-filament subdivision.
         cad_units_per_meter: Scale factor (default 1000 = mm).
+        n_slices: Z-slice count for auto-extraction (ignored if
+            path_points_m is given).
 
     Returns:
         topology_dict from PEECBuilder.build_topology().
     """
-    n_seg = path_points_m.shape[0] - 1
-    tangents = path_tangents(path_points_m)
-
-    # Section midpoints
-    midpoints = 0.5 * (path_points_m[:-1] + path_points_m[1:])
-
-    sections = section_solid_along_path(
-        step_path, midpoints, tangents, units_scale=cad_units_per_meter
-    )
-
-    # Convert section dimensions from CAD units to meters
-    scale_inv = 1.0 / cad_units_per_meter
-    widths = np.zeros(n_seg, dtype=np.float64)
-    heights = np.zeros(n_seg, dtype=np.float64)
-    for i, sec in enumerate(sections):
-        if sec["w_est"] is not None:
-            widths[i] = sec["w_est"] * scale_inv
-            heights[i] = sec["h_est"] * scale_inv
-        else:
-            raise RuntimeError(
-                f"Section {i} at midpoint {midpoints[i]} failed. "
-                "Check that the STEP solid intersects the path."
-            )
+    if path_points_m is None:
+        path_m, widths_m, heights_m = extract_centerline_from_step(
+            step_path, n_segments=n_slices,
+            cad_units_per_meter=cad_units_per_meter,
+        )
+    else:
+        n_seg = path_points_m.shape[0] - 1
+        tangents = path_tangents(path_points_m)
+        midpoints = 0.5 * (path_points_m[:-1] + path_points_m[1:])
+        sections = section_solid_along_path(
+            step_path, midpoints, tangents,
+            units_scale=cad_units_per_meter,
+        )
+        scale_inv = 1.0 / cad_units_per_meter
+        widths_m = np.zeros(n_seg, dtype=np.float64)
+        heights_m = np.zeros(n_seg, dtype=np.float64)
+        for i, sec in enumerate(sections):
+            if sec["w_est"] is not None:
+                widths_m[i] = sec["w_est"] * scale_inv
+                heights_m[i] = sec["h_est"] * scale_inv
+            else:
+                raise RuntimeError(
+                    f"Section {i} at midpoint {midpoints[i]} failed."
+                )
+        path_m = path_points_m
 
     return build_peec_from_path(
-        path_points_m, widths, heights,
+        path_m, widths_m, heights_m,
         sigma=sigma, nwinc=nwinc, nhinc=nhinc,
     )
