@@ -85,7 +85,7 @@ mesh = Mesh("mesh.vol")
 
 ```python
 import cubit
-import radia_cubit_mesh
+from cubit_mesh_export import extract_curved_mesh
 import ngsolve
 
 # Create mesh in Cubit
@@ -101,7 +101,7 @@ cubit.cmd("block 2 name 'boundary'")
 cubit.cmd('export step "geometry.step" overwrite')
 
 # Convert to Netgen mesh
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, geometry_file="geometry.step")
+ngmesh = extract_curved_mesh(cubit, geometry_file="geometry.step")
 
 # Wrap with NGSolve for FEM analysis
 mesh = ngsolve.Mesh(ngmesh)
@@ -117,7 +117,7 @@ print(mesh.GetBoundaries())  # ('boundary',)
 ### Without Geometry (No Curve Support)
 
 ```python
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit)
+ngmesh = extract_curved_mesh(cubit)
 mesh = ngsolve.Mesh(ngmesh)
 # mesh.Curve() will not work without geometry
 ```
@@ -146,20 +146,20 @@ cubit.cmd("block 4 add wedge all")
 cubit.cmd("block 4 name 'wedge_region'")
 
 # Export all
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, "geometry.step")
+ngmesh = extract_curved_mesh(cubit, "geometry.step")
 ```
 
 ## Function Signature
 
 ```python
-def extract_curved_mesh(order: int = 2, geometry_file: str = None) -> netgen.meshing.Mesh:
+def extract_curved_mesh(cubit_mod, order=2, surface_only=False, split_quads=False):
     """Export Cubit mesh to Netgen mesh format.
 
     Args:
-        cubit: Cubit Python interface object
-        geometry_file: Path to geometry file (.step, .stp, .brep, .iges) for
-                       mesh.Curve() support. If None, mesh is created without
-                       geometry reference.
+        cubit_mod: Cubit Python interface object
+        order: Element order (1-5, default 2)
+        surface_only: If True, export surface mesh only
+        split_quads: If True, split quad elements into triangles
 
     Returns:
         netgen.meshing.Mesh: Netgen mesh object ready for use with NGSolve
@@ -216,7 +216,7 @@ The key advantage of `extract_curved_mesh()` is the ability to use Netgen's `mes
 
 ```python
 # Create mesh and attach geometry
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, "geometry.step")
+ngmesh = extract_curved_mesh(cubit, "geometry.step")
 mesh = ngsolve.Mesh(ngmesh)
 
 # Apply different curve orders
@@ -401,7 +401,7 @@ if cubit_path:
     sys.path.append(cubit_path)
 
 import cubit
-import radia_cubit_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import *
 
 # Initialize Cubit
@@ -424,7 +424,7 @@ cubit.cmd("block 2 name 'dirichlet'")
 cubit.cmd('export step "sphere.step" overwrite')
 
 # Convert to Netgen mesh, then wrap with NGSolve
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, "sphere.step")
+ngmesh = extract_curved_mesh(cubit, "sphere.step")
 mesh = Mesh(ngmesh)
 mesh.Curve(3)
 
@@ -477,7 +477,7 @@ if cubit_path:
 from netgen import occ
 from netgen.occ import OCCGeometry
 import cubit
-import radia_cubit_mesh
+from cubit_mesh_export import extract_curved_mesh
 from ngsolve import Mesh
 
 # Step 1: Create geometry in OCC
@@ -503,7 +503,7 @@ cubit.cmd("block 1 add tet all")
 cubit.cmd("block 2 add tri all")
 
 # Step 4: Export with OCC geometry reference
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, geometry=geo)
+ngmesh = extract_curved_mesh(cubit)
 
 # Now Curve() works!
 mesh = Mesh(ngmesh)
@@ -595,7 +595,7 @@ See `examples/radia_cubit_mesh/netgen/setdeformation_curving.py` for complete ex
 **Solution**: Ensure the STEP file is exported from the same geometry:
 ```python
 cubit.cmd('export step "geometry.step" overwrite')
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, "geometry.step")
+ngmesh = extract_curved_mesh(cubit, "geometry.step")
 ```
 
 **Cause 2**: Seam line problem on curved surfaces (cylinder, cone, etc.).
@@ -646,7 +646,7 @@ pip install ngsolve
 import os
 step_file = os.path.abspath("geometry.step")
 cubit.cmd(f'export step "{step_file}" overwrite')
-ngmesh = radia_cubit_mesh.extract_curved_mesh(cubit, step_file)
+ngmesh = extract_curved_mesh(cubit, step_file)
 ```
 
 ## Netgen vs NGSolve Mesh
