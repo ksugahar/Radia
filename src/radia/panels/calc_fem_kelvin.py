@@ -921,25 +921,60 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
     Delta_R = omega * back['Delta_R_over_omega']
     P_wp = 0.5 * Delta_R * abs(I_total) ** 2
 
-    # SIBC area for H_t estimate
-    A_wp = Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries('sibc')).real
+    # --- 6b. Power + H_t_rms from SIBC surface integral ---
+    # (fem_esim_3d convention -- validated against 2D axisym to <1%)
+    # A_total on the wp surface = gf_As + gfu (scattered).
+    # Tangential A: A_t = A - (A.n) n. H_t_rms uses |A_t|^2 integrated
+    # over the sibc surface divided by wp area.
+    from ngsolve import specialcf
+    n_bnd = specialcf.normal(3)
+    A_total = CF(tuple(gf_As[i] + gfu[i] for i in range(3)))
+    A_sq = sum(A_total[i].real * A_total[i].real
+               + A_total[i].imag * A_total[i].imag for i in range(3))
+    Adn_re = sum(A_total[i].real * n_bnd[i] for i in range(3))
+    Adn_im = sum(A_total[i].imag * n_bnd[i] for i in range(3))
+    An_sq = Adn_re * Adn_re + Adn_im * Adn_im
+    At_sq = A_sq - An_sq  # |A_t|^2
+
+    wp_region = mesh.Boundaries('sibc')
+    A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
+    At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
+    At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
+    H_t_rms = abs(1j * omega / Z_s) * At_rms
+    P_surf = 0.5 * Z_s.real * H_t_rms**2 * A_wp
+    Q_surf = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
+
+    # --- 6c. Skin-layer stored energy term (per sibc_skin_energy_fix) ---
+    # L_skin = omega * Im(Z_s)/|Z_s|^2 * int |A_t|^2 dS / |I|^2
+    # Captures the magnetic energy inside the workpiece skin layer that
+    # SIBC hides from the FEM mesh. For Cu (mu_r=1) this is small; for
+    # steel (mu_r=100) it dominates.
+    L_skin = omega * Z_s.imag / (abs(Z_s) ** 2) * At_int / abs(I_total) ** 2
 
     L_total = L_peec + Delta_L
-    _log(f"DONE:L={L_total*1e9:.2f}nH (L_peec={L_peec*1e9:.2f} "
-         f"+ DeltaL={Delta_L*1e9:+.2f}) P={P_wp:.4e} "
+    # Total L = PEEC circuit L + flux-linkage back-reaction + skin-layer stored energy.
+    L_total_with_skin = L_total + L_skin
+
+    _log(f"DONE:L={L_total_with_skin*1e9:.2f}nH "
+         f"(L_peec={L_peec*1e9:.2f} + DL={Delta_L*1e9:+.2f} "
+         f"+ L_skin={L_skin*1e9:+.2f}) "
+         f"P_line={P_wp:.4e} P_surf={P_surf:.4e} H_t={H_t_rms:.2f} "
          f"t={time.perf_counter()-t_total_start:.1f}s")
 
     return {
-        "P_total": P_wp,
-        "Q_total": 0.0,
-        "L": L_total,
+        "P_total": P_surf,
+        "P_line": P_wp,
+        "Q_total": Q_surf,
+        "L": L_total_with_skin,
+        "L_no_skin": L_total,
         "L_peec": L_peec,
         "R_peec": R_peec,
         "Delta_L": Delta_L,
         "Delta_R": Delta_R,
+        "L_skin": L_skin,
         "Z_s_real": Z_s.real,
         "Z_s_imag": Z_s.imag,
-        "H_t_rms": 0.0,
+        "H_t_rms": H_t_rms,
         "A_wp": A_wp,
         "iterations": 0,
         "converged": True,
