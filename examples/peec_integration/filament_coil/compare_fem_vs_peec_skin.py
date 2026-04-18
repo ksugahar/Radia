@@ -45,8 +45,13 @@ def fmt_pct(val, ref):
 
 def solve_peec_back_reaction(vol_file, step, frequency, mat,
                              half_thickness, nwinc, nhinc,
-                             peec_sigma=5.8e7, I_total=1.0):
+                             peec_sigma=5.8e7, I_total=1.0,
+                             coil_sigma=0.0):
     """PEEC L_peec + FEM-SIBC scattered A_r for back-reaction Delta_L.
+
+    If ``coil_sigma > 0``: adds ``jw*sigma*(A_r+A_s)*v`` over the coil volume,
+    turning the FEM solve into an A-scattered A-V with Biot-Savart excitation
+    (no T0, no source/sink). This is the (h) sanity test against T0-based A-V.
 
     Returns dict with L_peec, Delta_L, L_total, Delta_R, P_wp.
     """
@@ -153,8 +158,14 @@ def solve_peec_back_reaction(vol_file, step, frequency, mat,
 
     a += robin * u.Trace() * v_.Trace() * ds('sibc')
 
+    if coil_sigma > 0 and 'coil' in materials:
+        a += 1j * omega * coil_sigma * u * v_ * dx('coil')
+
     f = LinearForm(fes)
     f += -robin * gf_As * v_.Trace() * ds('sibc')
+
+    if coil_sigma > 0 and 'coil' in materials:
+        f += -1j * omega * coil_sigma * gf_As * v_ * dx('coil')
 
     t0 = time.perf_counter()
     a.Assemble()
@@ -225,33 +236,55 @@ def main():
         nwinc=args.peec_nwinc, nhinc=args.peec_nhinc)
     runs["t_peec"] = time.perf_counter() - t0
 
+    # --- Run 3: PEEC+BR with nwinc=1 centerline (no skin in PEEC) ---
+    # Single-centerline filament: L_peec is the DC Neumann self-L
+    # (~97 nH), FEM captures workpiece back-reaction only (no coil
+    # eddy). Contrast with Run 2 (nwinc=3, PEEC captures skin) to
+    # isolate the nwinc-driven skin correction. Both rows are T0-free.
+    print("=" * 60)
+    print(f"Run 3: PEEC nwinc=1 centerline + back-reaction (no skin in PEEC)")
+    print("=" * 60)
+    t0 = time.perf_counter()
+    runs["avbs"] = solve_peec_back_reaction(
+        vol_file=args.vol, step=args.step, frequency=f, mat=mat,
+        half_thickness=args.half_thickness,
+        nwinc=1, nhinc=1)
+    runs["t_avbs"] = time.perf_counter() - t0
+
     # --- Results ---
     av = runs["av"]
     pe = runs["peec"]
+    bs = runs["avbs"]
 
     L_av = av.get("L", 0) or 0
     L_pe = pe["L_total"]
+    L_bs = bs["L_total"]
     P_av = av.get("P_total", 0) or 0
     P_pe = pe["P_wp"]
+    P_bs = bs["P_wp"]
 
     print()
     print("=" * 60)
     print("COMPARISON")
     print("=" * 60)
-    print(f"{'':18} {'A-V':>14} {'PEEC+BR':>14} {'PE/AV':>9}")
-    print("-" * 60)
-    print(f"{'L [nH]':18} {L_av*1e9:14.3f} {L_pe*1e9:14.3f} "
-          f"{fmt_pct(L_pe, L_av):>9}")
-    print(f"{'P [W]':18} {P_av:14.4e} {P_pe:14.4e} "
-          f"{fmt_pct(P_pe, P_av):>9}")
+    print(f"{'':18} {'A-V T0':>14} {'PEEC+BR nw3':>14} {'PEEC+BR nw1':>14}")
+    print("-" * 74)
+    print(f"{'L [nH]':18} {L_av*1e9:14.3f} {L_pe*1e9:14.3f} {L_bs*1e9:14.3f}")
+    print(f"{'P [W]':18} {P_av:14.4e} {P_pe:14.4e} {P_bs:14.4e}")
     print()
-    print(f"  PEEC decomposition:")
-    print(f"    L_peec (circuit): {pe['L_peec']*1e9:.3f} nH")
+    print(f"  Row 2 (nwinc=3, PEEC captures skin) decomposition:")
+    print(f"    L_peec (circuit): {pe['L_peec']*1e9:.3f} nH  (HF skin-corrected)")
     print(f"    Delta_L (FEM BR): {pe['Delta_L']*1e9:+.3f} nH  "
           f"{'(Lenz, PASS)' if pe['Delta_L'] < 0 else '(positive - flux conc.?)'}")
     print(f"    L_total         : {pe['L_total']*1e9:.3f} nH")
     print()
-    print(f"  Times: A-V {runs['t_av']:.1f}s, PEEC+BR {runs['t_peec']:.1f}s")
+    print(f"  Row 3 (nwinc=1 centerline) decomposition:")
+    print(f"    L_peec (DC self): {bs['L_peec']*1e9:.3f} nH  (no skin correction)")
+    print(f"    Delta_L (FEM BR): {bs['Delta_L']*1e9:+.3f} nH")
+    print(f"    L_total         : {bs['L_total']*1e9:.3f} nH")
+    print()
+    print(f"  Times: A-V(T0) {runs['t_av']:.1f}s, PEEC+BR nw3 {runs['t_peec']:.1f}s, "
+          f"PEEC+BR nw1 {runs['t_avbs']:.1f}s")
 
     if "error" in av:
         print(f"  A-V ERROR: {av['error']}")
