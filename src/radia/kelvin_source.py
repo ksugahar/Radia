@@ -680,6 +680,70 @@ def A_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
     return A
 
 
+def B_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
+                            kelvin_center=None, R_kelvin=None):
+    """Evaluate B_s = mu_0 * H_s at observation points with Kelvin handling.
+
+    For the reduced-A RHS, we need curl(A_s) = B_s. Instead of projecting
+    A_s into HCurl and taking curl (which gives piecewise-constant B and
+    large errors in the Kelvin domain), this function evaluates B_s
+    DIRECTLY at each point for subsequent H1 projection.
+
+    Inner domain: B = mu_0 * Biot-Savart H.
+    Kelvin exterior: map to physical, compute B_phys, apply 2-form pullback.
+
+    Args:
+        obs_points: (N, 3) coordinates.
+        filament_paths: list of K filaments, each [(p1,p2), ...].
+        currents: length-K currents.
+        kelvin_center, R_kelvin: Kelvin sphere (None = no Kelvin).
+
+    Returns:
+        (N, 3) real array of B values [T].
+    """
+    from biot_savart import h_segments_batch
+
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+    N = obs.shape[0]
+
+    # Flatten all filament segments with per-segment current
+    all_segs = []
+    for path, Ik in zip(filament_paths, currents):
+        for p1, p2 in path:
+            all_segs.append((p1, p2, float(np.real(Ik))))
+
+    def _eval_B(pts):
+        """B = mu_0 * sum_seg H_seg at points."""
+        B = np.zeros((len(pts), 3), dtype=float)
+        for p1, p2, I_seg in all_segs:
+            H = h_segments_batch([(p1, p2)], pts, current=I_seg)
+            B += MU_0 * H
+        return B
+
+    if kelvin_center is None or R_kelvin is None:
+        return _eval_B(obs)
+
+    c = np.asarray(kelvin_center, dtype=float)
+    in_kelvin = is_in_kelvin_exterior_domain(obs, c, R_kelvin)
+
+    B = np.zeros((N, 3), dtype=float)
+
+    phys_idx = np.where(~in_kelvin)[0]
+    if len(phys_idx) > 0:
+        B[phys_idx] = _eval_B(obs[phys_idx])
+
+    kelv_idx = np.where(in_kelvin)[0]
+    if len(kelv_idx) > 0:
+        r_phys = kelvin_map_3d(obs[kelv_idx], c, R_kelvin)
+        B_phys = _eval_B(r_phys)
+        B[kelv_idx] = kelvin_pullback_B_pseudovector(
+            B_phys, obs[kelv_idx], c, R_kelvin)
+
+    return B
+
+
 # ---------- FEM (NGSolve) material CoefficientFunction factory --------
 #
 # Helpers for the canonical Kelvin material modulation per
@@ -974,3 +1038,182 @@ def build_material_cf(mesh, base_value, kelvin_factor_cf, *,
         else:
             values.append(base_value)
     return CoefficientFunction(values)
+
+
+# ---------- HCurl projection of the Biot-Savart source ---------------------
+
+
+def project_A_s_to_hcurl(mesh, filament_paths, fil_currents,
+                         kelvin_center=None, R_kelvin=None,
+                         factor_mode='pullback', is_complex=None,
+                         order=1, n_quad=8):
+    """Project the Biot-Savart A_s (filament bundle) onto an HCurl GridFunction.
+
+    Handles both real and complex per-filament currents, with optional
+    Kelvin-exterior pullback for meshes that include a Kelvin-transformed
+    outer domain.
+
+    Workaround: ``HCurl(complex=True).Set(H1(complex=True))`` currently
+    projects to zero in NGSolve 6.2.2603.  This helper projects the real
+    and imaginary parts separately through a real HCurl space, then
+    combines the dof vectors into the complex target GridFunction.
+
+    Args:
+        mesh: NGSolve Mesh.
+        filament_paths: list of K filaments, each a list of ``(p1, p2)``
+            segment endpoint tuples.
+        fil_currents: length-K currents.  If any is complex, the output
+            is complex; ``is_complex=`` can override.
+        kelvin_center, R_kelvin: exterior-Kelvin sphere parameters.
+            Pass both to enable pullback; ``None`` disables.
+        factor_mode: ``'pullback'`` (full 1-form pullback, default) or
+            ``'scalar'`` (Phase 1 approximation).
+        is_complex: override for complex HCurl target.  Default: auto-
+            detect from ``fil_currents``.
+        order: HCurl (and intermediate H1) polynomial order.
+        n_quad: quadrature per segment inside ``A_s_at_obs_with_kelvin``.
+
+    Returns:
+        ``GridFunction`` on ``HCurl(mesh, order=order, complex=...)``
+        holding the projected A_s.
+    """
+    from ngsolve import H1, HCurl, GridFunction
+
+    Ik_arr = np.asarray(list(fil_currents))
+    if is_complex is None:
+        is_complex = bool(np.iscomplexobj(Ik_arr)
+                          and np.any(Ik_arr.imag != 0))
+
+    nv = mesh.nv
+    obs = np.array([mesh.vertices[v].point for v in range(nv)])
+
+    if kelvin_center is not None and R_kelvin is not None:
+        A_vals = A_s_at_obs_with_kelvin(
+            obs, filament_paths, fil_currents,
+            kelvin_center=kelvin_center, R_kelvin=R_kelvin,
+            factor_mode=factor_mode, n_quad=n_quad)
+    else:
+        A_vals = biot_savart_A_at_points(
+            obs, filament_paths, fil_currents, n_quad=n_quad)
+
+    def _project_real(A_real):
+        fes_h1 = H1(mesh, order=order, dim=3, complex=False)
+        gf_h1 = GridFunction(fes_h1)
+        fv = gf_h1.vec.FV()
+        for vi in range(nv):
+            for k in range(3):
+                fv[vi * 3 + k] = float(A_real[vi, k])
+        fes_c = HCurl(mesh, order=order, complex=False)
+        gf_c = GridFunction(fes_c)
+        gf_c.Set(gf_h1)
+        return gf_c
+
+    if not is_complex:
+        A_real = A_vals.real if np.iscomplexobj(A_vals) else np.asarray(A_vals, float)
+        return _project_real(A_real)
+
+    # Complex path: project Re/Im through the real HCurl space separately
+    # (HCurl.Set on a complex H1 currently returns the zero vector).
+    gf_As_re = _project_real(A_vals.real)
+    gf_As_im = _project_real(A_vals.imag)
+
+    fes_c = HCurl(mesh, order=order, complex=True)
+    gf_c = GridFunction(fes_c)
+    v_re = np.asarray(gf_As_re.vec.FV())
+    v_im = np.asarray(gf_As_im.vec.FV())
+    fv_c = gf_c.vec.FV()
+    for i in range(len(v_re)):
+        fv_c[i] = complex(float(v_re[i]), float(v_im[i]))
+    return gf_c
+
+
+# ---------- Back-reaction: line integral of A along filaments ---------------
+
+
+def line_integral_A_filaments(gfu, mesh, filament_paths, n_quad=4):
+    """Line integral of vector potential A along each filament path.
+
+    Computes  Delta_Phi_k = integral_{path_k} A . dl  for each filament,
+    using Gauss-Legendre quadrature with *n_quad* points per segment.
+
+    This is the core primitive for PEEC+FEM back-reaction: the scattered
+    field A_r (from FEM-SIBC solve) links through each PEEC filament,
+    producing a flux-linkage change that modifies the effective inductance.
+
+    Args:
+        gfu: NGSolve GridFunction (HCurl, possibly complex).  This is
+            typically A_r (the scattered/reduced field from the FEM solve).
+        mesh: NGSolve Mesh on which *gfu* is defined.
+        filament_paths: list of K filaments, each a list of ``(p1, p2)``
+            segment endpoint tuples (coordinates in meters).
+        n_quad: Gauss-Legendre quadrature points per segment (default 4).
+
+    Returns:
+        (K,) complex ndarray of flux linkages Delta_Phi_k [Wb].
+    """
+    t_gl, w_gl = np.polynomial.legendre.leggauss(n_quad)
+    t01 = 0.5 * (t_gl + 1.0)   # map [-1,1] -> [0,1]
+    w01 = 0.5 * w_gl
+
+    n_fil = len(filament_paths)
+    delta_phi = np.zeros(n_fil, dtype=complex)
+
+    for k, path in enumerate(filament_paths):
+        for p1, p2 in path:
+            p1a = np.asarray(p1, float)
+            p2a = np.asarray(p2, float)
+            dl = p2a - p1a
+            if np.linalg.norm(dl) < 1e-15:
+                continue
+            for q in range(n_quad):
+                pt = p1a + t01[q] * dl
+                try:
+                    A_val = gfu(mesh(*pt))
+                except Exception:
+                    continue  # skip quadrature points outside mesh
+                dot_A_dl = sum(complex(A_val[i]) * dl[i] for i in range(3))
+                delta_phi[k] += w01[q] * dot_A_dl
+
+    return delta_phi
+
+
+def compute_back_reaction(fil_currents, delta_phi, I_total):
+    """Compute Delta_L and Delta_R from PEEC filament flux linkages.
+
+    Physics:  The scattered field A_r (from FEM-SIBC on the workpiece)
+    threads through each PEEC filament.  The resulting impedance change
+    at the coil port is
+
+        Delta_Z = j * omega * sum_k conj(I_k) * Delta_Phi_k / |I_total|^2
+
+    Decomposed into inductance and resistance changes:
+
+        Delta_L =  Re(sum_k conj(I_k) * Delta_Phi_k) / |I_total|^2
+        Delta_R = -omega * Im(sum_k conj(I_k) * Delta_Phi_k) / |I_total|^2
+
+    Sign conventions (validated by physical expectation):
+        Cu  workpiece  (Lenz law):           Delta_L < 0
+        Steel workpiece (flux concentration): Delta_L > 0
+
+    Args:
+        fil_currents: length-K complex array of per-filament currents [A].
+        delta_phi: length-K complex array from line_integral_A_filaments [Wb].
+        I_total: scalar total port current [A].
+
+    Returns:
+        dict with keys:
+            Delta_L           -- inductance change [H] (real)
+            Delta_R_over_omega -- resistance change / omega [Ohm*s/rad]
+            flux_linkage_sum  -- raw complex sum (diagnostic)
+    """
+    I_k = np.asarray(fil_currents, dtype=complex)
+    dphi = np.asarray(delta_phi, dtype=complex)
+
+    flux_sum = np.sum(np.conj(I_k) * dphi)
+    I2 = abs(float(I_total)) ** 2
+
+    return {
+        'Delta_L': float(flux_sum.real / I2),
+        'Delta_R_over_omega': float(-flux_sum.imag / I2),
+        'flux_linkage_sum': complex(flux_sum),
+    }

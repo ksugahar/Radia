@@ -50,12 +50,12 @@ def solve_peec_back_reaction(vol_file, step, frequency, mat,
 
     Returns dict with L_peec, Delta_L, L_total, Delta_R, P_wp.
     """
-    from ngsolve import (Mesh, HCurl, H1, BilinearForm, LinearForm,
+    from ngsolve import (Mesh, HCurl, BilinearForm, LinearForm,
                          GridFunction, Periodic, curl, dx, ds,
                          VOL, x, y, z, TaskManager)
     from coil_from_cad import filaments_from_step
     from calc_fem_kelvin import detect_kelvin_offset
-    from kelvin_source import (A_s_at_obs_with_kelvin,
+    from kelvin_source import (project_A_s_to_hcurl,
                                line_integral_A_filaments,
                                compute_back_reaction)
 
@@ -125,43 +125,11 @@ def solve_peec_back_reaction(vol_file, step, frequency, mat,
 
     # --- 4. Project A_s (filament Biot-Savart, Kelvin pullback) to HCurl ---
     t0 = time.perf_counter()
-    nv = mesh.nv
-    all_pts = np.array([mesh.vertices[v].point for v in range(nv)])
-    A_vals = A_s_at_obs_with_kelvin(
-        all_pts, fil_paths, fil_currents,
+    gf_As = project_A_s_to_hcurl(
+        mesh, fil_paths, fil_currents,
         kelvin_center=kelvin_center if has_kelvin else None,
         R_kelvin=a_kelvin if has_kelvin else None,
-        factor_mode='pullback')
-
-    # Complex HCurl.Set(complex H1) returns zero in current NGSolve —
-    # project real and imaginary parts separately via real H1 + real
-    # HCurl, then combine into a complex HCurl GridFunction.
-    fes_h1_re = H1(mesh, order=1, dim=3, complex=False)
-    gf_h1_re = GridFunction(fes_h1_re)
-    gf_h1_im = GridFunction(fes_h1_re)
-    fv_re = gf_h1_re.vec.FV()
-    fv_im = gf_h1_im.vec.FV()
-    for vi in range(nv):
-        for k in range(3):
-            fv_re[vi * 3 + k] = float(A_vals[vi, k].real)
-            fv_im[vi * 3 + k] = float(A_vals[vi, k].imag)
-
-    fes_As_re = HCurl(mesh, order=1, complex=False)
-    gf_As_re = GridFunction(fes_As_re)
-    gf_As_im = GridFunction(fes_As_re)
-    gf_As_re.Set(gf_h1_re)
-    gf_As_im.Set(gf_h1_im)
-
-    fes_As = HCurl(mesh, order=1, complex=True)
-    gf_As = GridFunction(fes_As)
-    # Combine Re + 1j * Im into complex HCurl dof vector
-    v_re = np.asarray(gf_As_re.vec.FV())
-    v_im = np.asarray(gf_As_im.vec.FV())
-    fv_c = gf_As.vec.FV()
-    for i in range(len(v_re)):
-        fv_c[i] = complex(v_re[i], v_im[i])
-    print(f"  gf_As: |Re|={np.linalg.norm(v_re):.3e}, "
-          f"|Im|={np.linalg.norm(v_im):.3e}")
+        factor_mode='pullback', is_complex=True)
     print(f"  A_s projection: t={time.perf_counter()-t0:.1f}s")
 
     # --- 5. FES + SIBC Robin system for scattered A_r ---
