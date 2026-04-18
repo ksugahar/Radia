@@ -795,7 +795,7 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
                          BND, VOL, TaskManager)
     from ngsolve import x, y, z
     from coil_from_cad import filaments_from_step
-    from kelvin_source import (project_A_s_to_hcurl,
+    from kelvin_source import (biot_savart_A_cf,
                                 line_integral_A_filaments,
                                 compute_back_reaction)
 
@@ -867,14 +867,18 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
             nu_dict[m] = NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
 
-    # --- 4. Biot-Savart A_s (Kelvin pullback in exterior) ---
+    # --- 4. Biot-Savart A_s as direct CoefficientFunction (no projection) ---
+    # Closed-form A for each straight segment; summed symbolically. This
+    # avoids the ~O(h^2) magnitude loss of an HCurl order=1 L2 projection
+    # (diagnosed 2026-04-18 -- gave factor-4 P under-prediction on the
+    # workpiece surface for the Cu 7 kHz closed-torus sample).
+    # Valid only for evaluating A_s in the INNER (physical) domain --
+    # fine here because the Robin RHS and At_int are both on the wp
+    # sibc boundary (inner) and the line integral is along filaments (inner).
     t0 = time.perf_counter()
-    gf_As = project_A_s_to_hcurl(
-        mesh, fil_paths, fil_currents,
-        kelvin_center=kelvin_center if has_kelvin else None,
-        R_kelvin=a_kelvin if has_kelvin else None,
-        factor_mode='pullback', is_complex=True, order=fes_order)
-    _log(f"A_s:proj t={time.perf_counter()-t0:.1f}s")
+    A_s_cf = biot_savart_A_cf(fil_paths, fil_currents)
+    _log(f"A_s:CF built in {time.perf_counter()-t0:.1f}s "
+         f"({sum(len(p) for p in fil_paths)} segments)")
 
     # --- 5. FES + SIBC Robin system for scattered A_r ---
     Z_s = mat.dowell_Zs(frequency, half_thickness)
@@ -888,17 +892,15 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
     fes = Periodic(base_fes) if has_kelvin_periodic else base_fes
 
     u, v_ = fes.TnT()
+    non_kelvin_mats = [m for m in materials if 'kelvin' not in m.lower()]
     a = BilinearForm(fes)
     a += nu_cf * curl(u) * curl(v_) * dx(bonus_intorder=4)
-
-    non_kelvin_mats = [m for m in materials if 'kelvin' not in m.lower()]
     if non_kelvin_mats:
         a += 1e-6 * NU_0 * u * v_ * dx('|'.join(non_kelvin_mats))
-
     a += robin * u.Trace() * v_.Trace() * ds('sibc')
 
     f_lf = LinearForm(fes)
-    f_lf += -robin * gf_As * v_.Trace() * ds('sibc')
+    f_lf += -robin * A_s_cf * v_.Trace() * ds('sibc', bonus_intorder=4)
 
     t0 = time.perf_counter()
     a.Assemble()
@@ -922,13 +924,10 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
     P_wp = 0.5 * Delta_R * abs(I_total) ** 2
 
     # --- 6b. Power + H_t_rms from SIBC surface integral ---
-    # (fem_esim_3d convention -- validated against 2D axisym to <1%)
-    # A_total on the wp surface = gf_As + gfu (scattered).
-    # Tangential A: A_t = A - (A.n) n. H_t_rms uses |A_t|^2 integrated
-    # over the sibc surface divided by wp area.
+    # A_total on the wp surface = A_s_cf + gfu (scattered).
     from ngsolve import specialcf
     n_bnd = specialcf.normal(3)
-    A_total = CF(tuple(gf_As[i] + gfu[i] for i in range(3)))
+    A_total = CF(tuple(A_s_cf[i] + gfu[i] for i in range(3)))
     A_sq = sum(A_total[i].real * A_total[i].real
                + A_total[i].imag * A_total[i].imag for i in range(3))
     Adn_re = sum(A_total[i].real * n_bnd[i] for i in range(3))
@@ -938,7 +937,8 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
 
     wp_region = mesh.Boundaries('sibc')
     A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
-    At_int = Integrate(At_sq, mesh, BND, definedon=wp_region).real
+    At_int = Integrate(At_sq, mesh, BND, definedon=wp_region,
+                       order=8).real
     At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
     H_t_rms = abs(1j * omega / Z_s) * At_rms
     P_surf = 0.5 * Z_s.real * H_t_rms**2 * A_wp

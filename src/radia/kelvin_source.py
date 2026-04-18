@@ -1043,6 +1043,92 @@ def build_material_cf(mesh, base_value, kelvin_factor_cf, *,
 # ---------- HCurl projection of the Biot-Savart source ---------------------
 
 
+def curl_of_vector_cf(A_cf):
+    """Build curl(A) as a symbolic CF via component Diff.
+
+    NGSolve does not overload ``curl()`` for an arbitrary
+    ``VectorialCoefficientFunction``, so we assemble it manually:
+
+        curl(A) = (dA_z/dy - dA_y/dz, dA_x/dz - dA_z/dx, dA_y/dx - dA_x/dy)
+
+    This is the natural formula when A is a smooth vector field built
+    from symbolic expressions in (x, y, z). NGSolve's symbolic
+    differentiation handles sqrt / log terms via the chain rule.
+    """
+    from ngsolve import x, y, z, CF
+    cx = A_cf[2].Diff(y) - A_cf[1].Diff(z)
+    cy = A_cf[0].Diff(z) - A_cf[2].Diff(x)
+    cz = A_cf[1].Diff(x) - A_cf[0].Diff(y)
+    return CF((cx, cy, cz))
+
+
+def biot_savart_A_cf(filament_paths, fil_currents):
+    """Symbolic NGSolve CoefficientFunction for Biot-Savart A from a filament bundle.
+
+    Uses the closed-form A for a straight current segment (avoids any
+    L2 projection / quadrature-truncation error):
+
+        A_seg(r) = (mu_0 I / 4 pi) * dl_hat * ln((|r-p2| + sB)/(|r-p1| + sA))
+          where sA = -dl_hat . (r - p1), sB = -dl_hat . (r - p2)
+                dl_hat = (p2 - p1) / |p2 - p1|
+
+    Sums over all segments of all filaments. No Kelvin pullback here —
+    valid only for evaluating A_s at points in the INNER (physical)
+    domain. Do NOT use this CF to evaluate in a Kelvin-transformed
+    region; the PEEC+FEM scattered workflow only needs A_s on the
+    workpiece sibc boundary (inner) and on the filament line (inner),
+    so the restriction is not a practical limit there.
+
+    Args:
+        filament_paths: list of K filaments, each a list of
+            ``(p1, p2)`` segment endpoint tuples.
+        fil_currents: length-K currents (real or complex).
+
+    Returns:
+        NGSolve 3-component CoefficientFunction (complex if any
+        current is complex).
+    """
+    from ngsolve import x, y, z, sqrt, log, CF
+
+    # Detect complex currents
+    is_complex = any(np.iscomplexobj(I) or (isinstance(I, complex) and I.imag != 0)
+                     for I in fil_currents)
+
+    A_x = CF(0.0j if is_complex else 0.0)
+    A_y = CF(0.0j if is_complex else 0.0)
+    A_z = CF(0.0j if is_complex else 0.0)
+
+    four_pi = 4 * math.pi
+    for path, I_k in zip(filament_paths, fil_currents):
+        I_val = complex(I_k) if is_complex else float(I_k)
+        pref = MU_0 * I_val / four_pi
+        for (p1, p2) in path:
+            p1 = np.asarray(p1, dtype=float)
+            p2 = np.asarray(p2, dtype=float)
+            dl = p2 - p1
+            L = np.linalg.norm(dl)
+            if L < 1e-15:
+                continue
+            dlh = dl / L
+            R1x = x - p1[0]; R1y = y - p1[1]; R1z = z - p1[2]
+            R2x = x - p2[0]; R2y = y - p2[1]; R2z = z - p2[2]
+            # Small epsilon guards for points ON or very close to the filament
+            eps = 1e-18
+            L1 = sqrt(R1x * R1x + R1y * R1y + R1z * R1z + eps)
+            L2 = sqrt(R2x * R2x + R2y * R2y + R2z * R2z + eps)
+            sA = -(dlh[0] * R1x + dlh[1] * R1y + dlh[2] * R1z)
+            sB = -(dlh[0] * R2x + dlh[1] * R2y + dlh[2] * R2z)
+            # log argument; both numerator and denominator are positive
+            # for observation off the segment
+            logterm = log((L2 + sB + eps) / (L1 + sA + eps))
+            contrib = pref * logterm
+            A_x = A_x + contrib * dlh[0]
+            A_y = A_y + contrib * dlh[1]
+            A_z = A_z + contrib * dlh[2]
+
+    return CF((A_x, A_y, A_z))
+
+
 def project_A_s_to_hcurl(mesh, filament_paths, fil_currents,
                          kelvin_center=None, R_kelvin=None,
                          factor_mode='pullback', is_complex=None,
