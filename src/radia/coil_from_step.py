@@ -413,6 +413,38 @@ class SegmentSpec:
     start_pos: np.ndarray = None      # (3,) world starting point
     start_tangent: np.ndarray = None  # (3,) unit tangent
     start_normal: np.ndarray = None   # (3,) unit cross-section normal
+    arc_center: np.ndarray = None     # (3,) arc center (arcs only)
+    arc_normal: np.ndarray = None     # (3,) arc plane normal (arcs only)
+
+
+def _three_point_circle(p0, p1, p2, plane_normal):
+    """Return (center, radius) of the circle through three 3D points.
+
+    Uses perpendicular bisectors in the plane defined by ``plane_normal``.
+    Returns (None, None) if the three points are collinear or the
+    intersection is ill-conditioned.
+    """
+    n = plane_normal / np.linalg.norm(plane_normal)
+    a = p1 - p0
+    b = p2 - p1
+    # Perpendicular bisectors (in-plane directions)
+    da = np.cross(n, a)
+    db = np.cross(n, b)
+    ma = 0.5 * (p0 + p1)
+    mb = 0.5 * (p1 + p2)
+    # Solve ma + t*da = mb + s*db for t  -> 2x2 system in the plane.
+    # Set up: t*da - s*db = mb - ma
+    A = np.column_stack([da, -db])  # (3, 2)
+    rhs = mb - ma
+    # Least-squares solution (plane-restricted, so rank 2)
+    try:
+        ts, *_ = np.linalg.lstsq(A, rhs, rcond=None)
+    except np.linalg.LinAlgError:
+        return None, None
+    t = ts[0]
+    center = ma + t * da
+    radius = float(np.linalg.norm(p0 - center))
+    return center, radius
 
 
 def _smooth_curvature(polyline, closed):
@@ -488,6 +520,7 @@ def polyline_to_segments(result, *,
     if n < 3:
         return []
 
+    plane_normal = _estimate_plane_normal(pts)
     kappa = _smooth_curvature(pts, closed)
     avg_R = np.mean(arclen[1:] - arclen[:-1]) * n / (2 * np.pi) \
         if closed else float(np.linalg.norm(pts[-1] - pts[0]))
@@ -525,13 +558,39 @@ def polyline_to_segments(result, *,
             cur_kappa_mean = kappa[i]
     groups.append((cur_kind, cur_idx))
 
+    # Merge small noise groups into a single dominant arc when the
+    # polyline is "mostly arc" (e.g., a torus centerline where the
+    # first and last few stations have inflated curvature due to the
+    # wrap-around gap).  The `_smooth_curvature` endpoint artifacts
+    # otherwise split what is geometrically a single circular arc
+    # into multiple groups, truncating the reconstructed arc angle.
+    n_arc_pts = sum(len(idx) for k, idx in groups if k == 'arc')
+    if (n_arc_pts >= 0.7 * n
+            and all(k == 'arc' for k, _ in groups)):
+        # Find the dominant group (largest) and adopt its kappa as
+        # the canonical radius.  Replace everything with one group
+        # spanning [0..n-1].
+        dom_kind, dom_idx = max(groups, key=lambda g: len(g[1]))
+        dom_kappa = float(np.mean([kappa[j] for j in dom_idx]))
+        groups = [('arc', list(range(n)))]
+        # Override kappa[i] for outliers so the downstream radius
+        # reconstruction isn't biased by endpoint noise.
+        for i in range(n):
+            if dom_kappa > 0 and abs(kappa[i] - dom_kappa) / dom_kappa > curvature_var_tol:
+                kappa[i] = dom_kappa
+
     # Convert groups to SegmentSpec
     segs = []
     for kind, idx in groups:
         if len(idx) < 2:
             continue
         i0, i1 = idx[0], idx[-1]
-        if closed and i1 == n - 1:
+        # Use full polyline arclength for a closed loop spanning all
+        # stations (arclen[-1] is distance of pts[n-1] from pts[0], so
+        # we must add the wrap-around chord to close the loop).
+        if closed and i0 == 0 and i1 == n - 1:
+            length = arclen[i1] + np.linalg.norm(pts[0] - pts[-1])
+        elif closed and i1 == n - 1:
             length = arclen[i1] - arclen[i0] + np.linalg.norm(pts[0] - pts[-1])
         else:
             length = arclen[i1] - arclen[i0]
@@ -546,10 +605,36 @@ def polyline_to_segments(result, *,
             kappa_mean = float(np.mean([kappa[j] for j in idx]))
             radius = 1.0 / kappa_mean if kappa_mean > 0 else 0.0
             angle_rad = length * kappa_mean
+            # 3-point circle fit over well-spaced polyline samples
+            # inside this arc group to recover the arc center.
+            # For a closed loop the first and last indices are
+            # adjacent in world space, so picking j0=idx[0] and
+            # j2=idx[-1] gives a nearly degenerate triangle and an
+            # ill-conditioned center.  Use the 1/4, 1/2, 3/4
+            # positions instead (well separated around the arc).
+            arc_center = None
+            if len(idx) >= 4:
+                m = len(idx)
+                j0 = idx[m // 4]
+                j1 = idx[m // 2]
+                j2 = idx[(3 * m) // 4]
+                c_fit, r_fit = _three_point_circle(
+                    pts[j0], pts[j1], pts[j2], plane_normal)
+                if c_fit is not None:
+                    arc_center = c_fit
+                    # Prefer the geometric radius over the
+                    # kappa-averaged one — the 3-point fit is exact
+                    # for circular arcs, kappa averaging isn't.
+                    radius = r_fit
+                    # Re-derive angle from the exact radius so the
+                    # reconstructed arc spans the correct sweep.
+                    angle_rad = length / radius
             segs.append(SegmentSpec(
                 kind='arc', length=length, radius=radius,
                 angle_deg=math.degrees(angle_rad), profile=prof,
-                start_pos=start_pos, start_tangent=start_tan))
+                start_pos=start_pos, start_tangent=start_tan,
+                arc_center=arc_center,
+                arc_normal=plane_normal.copy()))
     return segs
 
 
@@ -567,16 +652,32 @@ def to_coil_builder(result, current=1.0):
 
     builder = CoilBuilder(current=current)
     first = segs[0]
-    # Initial orientation: x = tangent (segment-along), z = plane normal,
-    # y = z x x. This matches CoilBuilder's StraightSegment convention
-    # where x is the path direction.
+    # CoilBuilder orientation convention (rows = local X, Y, Z axes):
+    #   row 1 (Y) = path tangent (StraightSegment extends in +Y,
+    #               ArcSegment tangent at start is +Y)
+    #   row 0 (X) = radial outward from arc_center toward start_pos
+    #               (ArcSegment: arc_center = start_pos - radius * row0)
+    #               For a straight lead-in the X axis is the cross-section
+    #               width direction; any choice orthogonal to tangent works.
+    #   row 2 (Z) = arc plane normal (cross-section height direction)
     plane_n = _estimate_plane_normal(result.polyline)
-    x_axis = first.start_tangent / np.linalg.norm(first.start_tangent)
-    z_axis = plane_n / np.linalg.norm(plane_n)
-    # Re-orthogonalize z to remove any component along x
-    z_axis = z_axis - np.dot(z_axis, x_axis) * x_axis
-    z_axis = z_axis / np.linalg.norm(z_axis)
-    y_axis = np.cross(z_axis, x_axis)
+    y_axis = first.start_tangent / np.linalg.norm(first.start_tangent)
+    if first.kind == 'arc' and first.arc_center is not None:
+        # Radial from arc center to start position — this is the
+        # authoritative X-axis for the ArcSegment convention.
+        x_axis = first.start_pos - first.arc_center
+        x_axis = x_axis / np.linalg.norm(x_axis)
+        z_axis = np.cross(x_axis, y_axis)
+        z_axis = z_axis / np.linalg.norm(z_axis)
+        # Re-orthogonalize Y against (X, Z) to absorb tangent estimation
+        # noise while keeping X radial-exact (needed for arc_center
+        # round-trip correctness).
+        y_axis = np.cross(z_axis, x_axis)
+    else:
+        z_axis = plane_n / np.linalg.norm(plane_n)
+        z_axis = z_axis - np.dot(z_axis, y_axis) * y_axis
+        z_axis = z_axis / np.linalg.norm(z_axis)
+        x_axis = np.cross(y_axis, z_axis)
     orient = np.array([x_axis, y_axis, z_axis])  # row vectors
     builder.set_start(first.start_pos.tolist(), orientation=orient)
     builder.set_profile(first.profile)
