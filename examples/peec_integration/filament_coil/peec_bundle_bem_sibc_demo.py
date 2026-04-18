@@ -44,7 +44,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
 SRC_RADIA = os.path.join(SRC, 'radia')
 PANELS = os.path.join(SRC_RADIA, 'panels')
-for p in (SRC, SRC_RADIA, PANELS):
+BEM_REF = os.path.abspath(os.path.join(
+    HERE, '..', '..', 'induction_heating', 'bem_reference'))
+for p in (SRC, SRC_RADIA, PANELS, BEM_REF):
     if p not in sys.path:
         sys.path.insert(0, p)
 
