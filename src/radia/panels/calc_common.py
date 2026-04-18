@@ -960,66 +960,6 @@ def _is_section_header(s):
 
 
 # ============================================================
-# T0 Source/Sink Current Injection
-# ============================================================
-
-def compute_T0_source(mesh, order, I_total=1.0):
-    """Compute current density J via T0 technique (source/sink faces).
-
-    Solves Laplace equation in coil volume:
-        -div(grad(T0)) = 0 in "coil"
-        T0 = 1 on "source", T0 = 0 on "sink"
-        dT0/dn = 0 on lateral surface (natural BC)
-
-    Returns:
-        CoefficientFunction J = I_total / Phi * grad(T0)
-        where Phi = total flux through source face
-    """
-    from ngsolve import (H1, BilinearForm, LinearForm, GridFunction,
-                         Integrate, grad, dx, ds, CF, BND)
-
-    fes_T0 = H1(mesh, order=order, dirichlet="source|sink")
-    u, v = fes_T0.TnT()
-
-    a = BilinearForm(fes_T0, check_unused=False)
-    a += grad(u) * grad(v) * dx("coil")
-    a.Assemble()
-
-    gf_T0 = GridFunction(fes_T0)
-    gf_T0.Set(CF(1), definedon=mesh.Boundaries("source"))
-
-    # Solve with Dirichlet lift
-    r = gf_T0.vec.CreateVector()
-    r.data = -a.mat * gf_T0.vec
-    gf_T0.vec.data += a.mat.Inverse(fes_T0.FreeDofs(), inverse="pardiso") * r
-
-    # Normalize: Phi = integral of grad(T0) . n over source face
-    # By Gauss's theorem, Phi = integral of |grad(T0)|^2 in coil
-    # (since div(grad T0)=0 and T0 drops from 1 to 0)
-    Phi = Integrate(grad(gf_T0) * grad(gf_T0), mesh,
-                    definedon=mesh.Materials("coil"))
-    if abs(Phi) < 1e-30:
-        raise RuntimeError("T0 flux is zero - check source/sink blocks")
-
-    J_source = (I_total / Phi) * grad(gf_T0)
-    return J_source, gf_T0
-
-
-def compute_J_theta(I_total, a_coil):
-    """Compute J = J0 * e_theta for axisymmetric torus coil (fallback).
-
-    Returns:
-        CoefficientFunction J = J0 * (-y/r, x/r, 0)
-    """
-    from ngsolve import CF, x, y, sqrt, IfPos
-
-    J0 = I_total / (math.pi * a_coil**2)
-    r_xy = sqrt(x * x + y * y)
-    r_safe = IfPos(r_xy - 1e-10, r_xy, 1e-10)
-    return J0 * CF((-y / r_safe, x / r_safe, 0))
-
-
-# ============================================================
 # Subprocess Output Protocol
 # ============================================================
 

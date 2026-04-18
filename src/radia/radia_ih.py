@@ -61,6 +61,16 @@ class IHPanel(ModePanel):
         self.add_line("current", "Coil current [A]:", "1.0")
         self.add_line("coil_sigma", "Coil sigma [S/m]:", "5.8e7")
 
+        # ============ FEM coil source: PEEC filament only ============
+        # T0 (source/sink Dirichlet Laplace) was retired 2026-04-18 after
+        # being shown unreliable on gapped geometries (1/r cusps at gap
+        # corners). All FEM source injection now goes through the PEEC
+        # filament Biot-Savart path.
+        self.add_browse("peec_step", "PEEC STEP file:",
+                        filter_str="STEP files (*.step *.stp);;All (*)")
+        self.add_spin("peec_nwinc", "PEEC nwinc:", 3, 1, 10)
+        self.add_spin("peec_nhinc", "PEEC nhinc:", 3, 1, 10)
+
         # ============ PEEC coil parameters (no mesh needed) ============
         self.add_line("coil_radius", "Coil radius [m]:", "0.05")
         self.add_line("coil_pitch", "Coil pitch [m]:", "0.008")
@@ -109,7 +119,7 @@ class IHPanel(ModePanel):
         if idx >= 0:
             solver.setCurrentIndex(idx)
 
-        # PEEC coil parameters — visible only in PEEC modes.
+        # PEEC coil parameters — visible only in PEEC+FEM mode.
         for key in ("coil_radius", "coil_pitch", "coil_turns",
                      "wire_w", "wire_h", "nwinc", "seg_per_turn"):
             self._set_row_visible(key, is_peec)
@@ -119,6 +129,11 @@ class IHPanel(ModePanel):
         # FEM-only widgets.
         self._set_row_visible("max_iter", is_fem)
         self._set_row_visible("fes_order", is_fem)
+
+        # PEEC filament fields are required whenever FEM is selected
+        # (T0 was retired; all FEM runs use the PEEC Biot-Savart source).
+        for key in ("peec_step", "peec_nwinc", "peec_nhinc"):
+            self._set_row_visible(key, is_fem)
         # Workpiece: always visible. "off" = coil only; SIBC/ESIM = coupling.
         # FEM requires workpiece (forces non-off).
         self._set_row_visible("workpiece_mode", True)
@@ -207,6 +222,11 @@ class IHPanel(ModePanel):
         # needs the legacy linear / BH-curve material combo.
         wp_mode = self.val("workpiece_mode")
         impedance = "esim" if wp_mode == "ESIM" else "sibc"
+        # FEM coil source is always PEEC filament (T0 retired 2026-04-18).
+        # For ESIM (nonlinear workpiece) we still need the Karl iteration
+        # path, so we use --source-mode total (PEEC line-integral RHS +
+        # .msh viz). For linear SIBC the default 'scattered' is faster.
+        source_mode = "total" if impedance == "esim" else "scattered"
         cmd = [_PYTHON, calc_script("calc_fem_kelvin.py"),
                "--vol", vol_path,
                "--fes-order", self.val("fes_order"),
@@ -219,7 +239,12 @@ class IHPanel(ModePanel):
                "--impedance", impedance,
                "--solver", self.val("solver"),
                "--max-iter", self.val("max_iter"),
-               "--msh-output", msh_output(vol_path, "_fem")]
+               "--msh-output", msh_output(vol_path, "_fem"),
+               "--source-mode", source_mode,
+               "--peec-step", self.val("peec_step"),
+               "--peec-sigma", self.val("coil_sigma"),
+               "--peec-nwinc", str(self.val("peec_nwinc")),
+               "--peec-nhinc", str(self.val("peec_nhinc"))]
         if impedance == "esim":
             bh = self.val("bh_file")
             if bh:
