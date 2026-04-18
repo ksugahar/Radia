@@ -423,27 +423,16 @@ rad.Solve(container, 1e-4, 100, 0)
 ### B-input Newton / Hantila (Hysteresis)
 
 For `MatPlayHysteresis` or `MatEnergyHysteresis` materials, specialized B-input solvers are available.
-These use the Inverse(B) operator with analytical Jacobian.
 
 ```python
-# B-input Newton (2-4 iterations, O(N^3) per iter)
+# B-input Newton (quadratic convergence, O(N^3) per iteration)
 rad.SolverConfig(b_input_newton=True)
 
-# B-input Hantila hybrid (RECOMMENDED for hysteresis)
-# Newton(3) warmup + Hantila O(N^2) refinement
+# B-input Hantila hybrid (recommended for hysteresis)
+# Newton warmup + Hantila refinement
 rad.SolverConfig(b_input_hantila=True, hantila_alpha=0)  # auto-alpha
 rad.Solve(container, 1e-4, 5000, 0)
 ```
-
-**Novel contribution**: B-input formulation directly uses the Play model's natural
-B-space domain, with analytical Jacobian from `ComputeJacobian(dBdH)`.
-
-| Solver | Materials | Cost/iter | Convergence |
-|--------|-----------|-----------|-------------|
-| Picard | MatLin, MatSatIsoTab | O(N^3) | 10-100 iter |
-| Newton | MatLin, MatSatIsoTab | O(N^3) | 3-10 iter |
-| B-input Newton | MatPlayHysteresis / MatEnergyHysteresis | O(N^3) | **2-4 iter** |
-| B-input Hantila | MatPlayHysteresis / MatEnergyHysteresis | O(N^2) after LU | **3-47 iter** |
 
 ---
 
