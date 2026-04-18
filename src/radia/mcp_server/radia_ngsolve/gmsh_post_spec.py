@@ -112,7 +112,7 @@ The target visualization has these visual properties:
 Same requirements except:
 - Volume mesh is mesh_full (not a separate air box)
 - B is curl(A) evaluated per-vertex via CoefficientFunction
-- J is the source current (J_source from compute_T0_source)
+- J is no longer exported (PEEC filament source, not a volume J)
 - No separate coil wireframe (mesh_full already has the coil)
 - Companion .geo hides Mesh.VolumeEdges + Mesh.VolumeFaces +
   Mesh.SurfaceEdges (keep SurfaceFaces for the material boundary)
