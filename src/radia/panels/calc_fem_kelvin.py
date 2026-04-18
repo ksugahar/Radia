@@ -10,8 +10,7 @@ Input: Netgen .vol file with material/boundary labels:
   sibc        - boundary on hole surface (hole approach, preferred)
   wp_surface  - boundary on air/workpiece interface (legacy interface approach)
   kelvin      - volume material (optional, Periodic Kelvin)
-  source      - boundary, T0=1 (gap face, optional)
-  sink        - boundary, T0=0 (gap face, optional)
+  (T0 source/sink labels retired 2026-04-18; PEEC filament source only)
 
 Two approaches for workpiece:
   Hole (preferred): workpiece subtracted from mesh, SIBC on hole boundary "sibc".
@@ -36,7 +35,6 @@ if _this_dir not in sys.path:
 
 from calc_common import (MU_0, NU_0, setup_paths,
                           detect_kelvin_offset,
-                          compute_T0_source, compute_J_theta,
                           progress, calc_main,
                           EMMaterial, add_material_args)
 
@@ -58,8 +56,7 @@ def solve_fem(vol_file="", fes_order=1,
               peec_step="",
               peec_sigma=5.8e7,
               peec_nwinc=1,
-              peec_nhinc=1,
-              coil_sigma=0.0):
+              peec_nhinc=1):
     """3D FEM-SIBC solver for .vol mesh.
 
     Args:
@@ -186,15 +183,15 @@ def solve_fem(vol_file="", fes_order=1,
     _log(f"MESH:done ({ne} elems, {t_mesh:.1f}s)")
 
     # ============================================================
-    # Step 2: Source current (T0 or J0*e_theta)
+    # Step 2: Source current -- PEEC filament only
     # ============================================================
-    has_source = "source" in boundaries
-    has_sink = "sink" in boundaries
+    # T0 (Dirichlet-at-source/sink Laplace) was retired 2026-04-18 after
+    # being shown unreliable on gapped geometries (1/r cusps at gap
+    # corners). The remaining FEM source is the PEEC line-integral
+    # total-field excitation; for a scattered A_r variant use
+    # solve_fem_biot_savart().
     has_kelvin = "kelvin" in materials
 
-    # SIBC boundary: must be named "sibc" by .jou convention.
-    # The legacy "wp_surface" name is no longer accepted (single supported
-    # convention, no fallback).
     if "sibc" in boundaries:
         sibc_bnd = "sibc"
         has_wp = True
@@ -202,7 +199,6 @@ def solve_fem(vol_file="", fes_order=1,
         sibc_bnd = ""
         has_wp = False
 
-    # Hole approach: workpiece NOT in materials (subtracted from mesh)
     is_hole = has_wp and "workpiece" not in materials
     if has_wp:
         _log(f"SIBC:boundary={sibc_bnd}, approach={'hole' if is_hole else 'interface'}")
@@ -211,17 +207,12 @@ def solve_fem(vol_file="", fes_order=1,
 
     if use_peec:
         _log(f"SOURCE:PEEC filament from {peec_step}")
-        J_source = None
-        gf_T0 = None
-    elif has_source and has_sink:
-        _log("SOURCE:T0 source/sink technique")
-        J_source, gf_T0 = compute_T0_source(mesh, fes_order, I_total)
     else:
         return {"error":
-                "Mesh has no 'source'/'sink' boundary labels and no peec_step. "
-                "Either define sidesets named 'source' and 'sink' "
-                "on the coil terminal faces, or provide --peec-step. "
-                f"Available boundaries: {sorted(set(boundaries))}"}
+                "--peec-step is required. The T0 source/sink technique "
+                "was retired 2026-04-18 (unreliable on gapped geometries). "
+                "Use --peec-step to pass a coil STEP file for the PEEC "
+                "filament source."}
 
     # ============================================================
     # Step 3: Material properties
@@ -287,33 +278,21 @@ def solve_fem(vol_file="", fes_order=1,
     # GND (vertex at kelvin sphere center) provides uniqueness if present.
 
     is_dc = (omega <= 0 or sigma <= 0)
-    use_complex = not is_dc or (coil_sigma > 0 and omega > 0)
-    use_av = (coil_sigma > 0 and omega > 0 and "coil" in materials)
+    use_complex = not is_dc
 
-    # HCurl space for A (nograds=True always)
+    # HCurl space for A (nograds=True always). T0-era A-V compound was
+    # retired with T0; the PEEC filament source does not need an in-coil
+    # scalar potential gauge.
     base_fes = HCurl(mesh, order=fes_order,
                      complex=use_complex,
                      nograds=True,
                      dirichlet=dirichlet_bnd)
     if has_kelvin and has_kelvin_periodic:
-        fes_A = Periodic(base_fes)
+        fes = Periodic(base_fes)
         _log("FES:Periodic HCurl (Kelvin)")
     else:
-        fes_A = base_fes
-
-    if use_av:
-        # A-V compound: HCurl(A) x H1(phi, coil only)
-        # phi = scalar potential in conductor, provides gauge for
-        # the eddy current term s*sigma*(A+grad(phi))*(N+grad(psi)).
-        fes_phi = H1(mesh, order=fes_order, complex=use_complex,
-                     definedon="coil", dirichlet="source|sink")
-        fes = fes_A * fes_phi
-        (u, phi_u), (v, psi_v) = fes.TnT()
-        _log(f"FES:A-V compound (A:{fes_A.ndof} phi:{fes_phi.ndof})")
-    else:
-        fes = fes_A
-        u, v = fes.TnT()
-        phi_u = psi_v = None
+        fes = base_fes
+    u, v = fes.TnT()
 
     ndof = fes.ndof
     _log(f"FES:ndof={ndof}")
@@ -427,13 +406,6 @@ def solve_fem(vol_file="", fes_order=1,
         # Assemble empty LinearForm first, then overwrite with f_vec.
         f_lf.Assemble()
         f_lf.vec.data = f_vec
-    elif use_av:
-        # A-V: RHS is zero; source comes from phi Dirichlet lift
-        # (phi=1 on source, phi=0 on sink)
-        f_lf.Assemble()
-    else:
-        f_lf += J_source * v * dx("coil")
-        f_lf.Assemble()
 
     # SIBC surface area for H_t estimation
     if has_wp:
@@ -447,10 +419,6 @@ def solve_fem(vol_file="", fes_order=1,
 
     # Karl iteration
     gfu = GridFunction(fes)
-    if use_av:
-        # Set phi Dirichlet: phi=1 on source, phi=0 on sink
-        gf_A_comp, gf_phi_comp = gfu.components
-        gf_phi_comp.Set(CF(1), definedon=mesh.Boundaries("source"))
     history = []
 
     for iteration in range(max_iter):
@@ -487,97 +455,18 @@ def solve_fem(vol_file="", fes_order=1,
         if has_wp and abs(robin) > 0:
             a_bf += robin * u.Trace() * v.Trace() * ds(sibc_bnd)
 
-        # Coil eddy currents via A-V formulation:
-        #   s*sigma*(A+grad(phi))*(N+grad(psi)) in coil
-        # Requires coil volume mesh with sufficient resolution to resolve
-        # the skin depth delta = sqrt(2/(omega*mu*sigma)).
-        if use_av:
-            s_eddy = 1j * omega
-            a_bf += s_eddy * coil_sigma * (u + grad(phi_u)) \
-                * (v + grad(psi_v)) * dx("coil")
-            if iteration == 0:
-                delta_coil = math.sqrt(2.0 / (omega * MU_0 * coil_sigma))
-                _log(f"COIL_AV:sigma={coil_sigma:.2e}, "
-                     f"delta={delta_coil*1e3:.3f}mm")
-
         # PEEC total-field: Robin BC is on the LHS (a_bf already has it).
         # No surface RHS from A_s needed.
         rhs_vec = f_lf.vec
 
         # Solver-specific setup
         if solver == "ams":
-            # Compact AMS preconditioner + COCR solver (AC eddy-current only).
-            # Reference: src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py
-            #
-            # Constraints:
-            #   - fes_order = 1 (CompactAMS auxiliary space is order-1 HCurl)
-            #   - nograds = True (H1 auxiliary space matches vertex count)
-            #   - AC mode (sigma > 0): AMS is designed for K + jw*sigma*M
-            #   - No Periodic BC (DOF dimensions don't match)
-            if fes_order > 1:
-                return {"error": f"solver=ams requires fes_order=1 (got {fes_order})"}
-            if is_dc:
-                return {"error": "solver=ams requires AC (frequency>0, sigma>0). "
-                                 "For DC use solver=bddc or pardiso."}
-            if has_kelvin and has_kelvin_periodic:
-                return {"error": "solver=ams is not supported with Periodic Kelvin BC."}
-            if use_peec:
-                return {"error": "solver=ams is not supported with PEEC source. "
-                                 "Use pardiso or bddc."}
-
-            # Rebuild the system fes/bilinear form with nograds=True
-            # (overrides the use_complex code path which uses nograds=False)
-            import sparsesolv_ngsolve as ssn
-
-            fes_ams = HCurl(mesh, order=1, complex=True, nograds=True,
-                            dirichlet=dirichlet_bnd)
-            u_a, v_a = fes_ams.TnT()
-            a_bf = BilinearForm(fes_ams)
-            a_bf += nu_cf * curl(u_a) * curl(v_a) * dx(bonus_intorder=4)
-            a_bf += reg * NU_0 * u_a * v_a * dx
-            a_bf += 1j * omega * sigma * u_a * v_a * dx  # AC eddy term
-            if has_wp and abs(robin) > 0:
-                a_bf += robin * u_a.Trace() * v_a.Trace() * ds(sibc_bnd)
-            a_bf.Assemble()
-
-            f_ams = LinearForm(fes_ams)
-            f_ams += J_source * v_a * dx("coil")
-            f_ams.Assemble()
-            f_lf = f_ams  # used by H_t evaluation later
-
-            # Real auxiliary fes for the AMS preconditioner
-            fes_real = HCurl(mesh, order=1, complex=False, nograds=True,
-                             dirichlet=dirichlet_bnd)
-            ur, vr = fes_real.TnT()
-            a_real = BilinearForm(fes_real)
-            a_real += nu_cf * curl(ur) * curl(vr) * dx(bonus_intorder=4)
-            a_real += shift_eps * NU_0 * ur * vr * dx
-            a_real += abs(omega) * sigma * ur * vr * dx
-            if has_wp and abs(robin) > 0:
-                a_real += abs(robin) * ur.Trace() * vr.Trace() * ds(sibc_bnd)
-            a_real.Assemble()
-
-            grad_mat, fes_h1 = fes_real.CreateGradient()
-            nv = mesh.nv
-            coord_x = [0.0] * nv; coord_y = [0.0] * nv; coord_z = [0.0] * nv
-            for i in range(nv):
-                pt = mesh.vertices[i].point
-                coord_x[i] = pt[0]; coord_y[i] = pt[1]; coord_z[i] = pt[2]
-
-            pre_ams = ssn.ComplexCompactAMSPreconditioner(
-                a_real_mat=a_real.mat, grad_mat=grad_mat,
-                freedofs=fes_real.FreeDofs(),
-                coord_x=coord_x, coord_y=coord_y, coord_z=coord_z,
-                ndof_complex=fes_ams.ndof, cycle_type=1, print_level=0)
-
-            gfu = GridFunction(fes_ams)
-            with TaskManager():
-                cocr = ssn.COCRSolver(a_bf.mat, pre_ams,
-                                      freedofs=fes_ams.FreeDofs(),
-                                      maxiter=500, tol=1e-8, printrates=False)
-                gfu.vec.data = cocr * f_ams.vec
-            fes = fes_ams  # downstream code uses `fes`
-            _log(f"AMS:iters={cocr.iterations}")
+            # AMS was built around the T0 / J_source volume source; with
+            # PEEC line-integral RHS (the only remaining path) it has
+            # never been wired up. Fail loud rather than run the wrong
+            # configuration silently.
+            return {"error": "solver=ams is not supported with the PEEC "
+                             "filament source. Use pardiso or bddc."}
         elif solver == "iccg":
             # Shifted ICCG (IC preconditioned CG, single-thread efficient)
             a_bf.Assemble()
@@ -602,30 +491,6 @@ def solve_fem(vol_file="", fes_order=1,
                 from ngsolve import solvers
                 solvers.BVP(bf=a_bf, lf=f_lf, gf=gfu,
                             pre=pre, maxsteps=500, tol=1e-8)
-        elif use_av:
-            # A-V pardiso: Dirichlet lift solve
-            # phi has Dirichlet (source=1, sink=0); RHS = -a * gfu_lift
-            a_bf.Assemble()
-            r_av = gfu.vec.CreateVector()
-            r_av.data = rhs_vec - a_bf.mat * gfu.vec
-            with TaskManager():
-                gfu.vec.data += a_bf.mat.Inverse(
-                    fes.FreeDofs(), inverse="pardiso") * r_av
-            # Post-normalization: scale to I_total
-            s_eddy = 1j * omega
-            J_coil = -s_eddy * coil_sigma * (gf_A_comp + grad(gf_phi_comp))
-            fes_psi_n = H1(mesh, order=fes_order, complex=use_complex,
-                           dirichlet="sink", definedon="coil")
-            gf_psi_n = GridFunction(fes_psi_n)
-            gf_psi_n.Set(CF(1), definedon=mesh.Boundaries("source"))
-            I_out = Integrate(J_coil * grad(gf_psi_n) * dx("coil"), mesh)
-            if abs(I_out) < 1e-30:
-                return {"error": "A-V solve: I_out is zero (no current). "
-                                 "Check source/sink sidesets."}
-            av_scale = I_total / I_out
-            gfu.vec.data = complex(av_scale) * gfu.vec
-            _log(f"COIL_AV:I_out={abs(I_out):.6f}A, "
-                 f"scale={abs(av_scale):.4f}")
         else:
             # pardiso (direct)
             if formulation == "scattered" and has_wp and abs(robin) > 0:
@@ -701,9 +566,7 @@ def solve_fem(vol_file="", fes_order=1,
             n_bnd = specialcf.normal(3)
 
             # A_eval: the field whose tangential trace drives H_t.
-            if use_av:
-                A_eval = gfu.components[0]
-            elif use_peec and peec_A_s_cf is not None:
+            if peec_A_s_cf is not None:
                 A_eval = CF(tuple(gfu[i] + peec_A_s_cf[i]
                                   for i in range(3)))
             else:
@@ -761,12 +624,7 @@ def solve_fem(vol_file="", fes_order=1,
         Q_total = 0.0
 
     # Inductance from magnetic energy
-    if use_av:
-        gf_A_for_L = gfu.components[0]
-        W_mag = Integrate(
-            0.5 * nu_cf * curl(gf_A_for_L) * Conj(curl(gf_A_for_L)),
-            mesh, order=10).real
-    elif use_peec and peec_A_s_cf is not None:
+    if peec_A_s_cf is not None:
         B_total = curl(gfu) + curl(peec_A_s_cf)
         nu_for_L = peec_nu_cf_for_L if peec_nu_cf_for_L is not None else nu_cf
         W_mag = Integrate(
@@ -840,25 +698,7 @@ def solve_fem(vol_file="", fes_order=1,
                  "fes_dim": getattr(fes_B, "dim", 1),
                  "name": "B", "ncomp": 3},
             ]
-            if J_source is not None:
-                # T0/J_theta source: export J as H1(dim=3)
-                fes_J = H1(mesh, order=1, dim=3)
-                gf_J = GridFunction(fes_J)
-                for vi, v in enumerate(mesh.vertices):
-                    pt = mesh(*v.point)
-                    val = J_source(pt)
-                    if hasattr(val, "__len__"):
-                        for k in range(3):
-                            gf_J.vec.FV()[vi * 3 + k] = float(
-                                getattr(val[k], "real", val[k]))
-                sol_J = os.path.join(base_dir,
-                                     f"{name_stem}_J.sol").replace("\\", "/")
-                gf_J.Save(sol_J)
-                sol_paths["J"] = sol_J
-                sol_entries.append(
-                    {"sol": sol_J, "fes": "H1", "fes_order": 1,
-                     "fes_dim": 3, "name": "J", "ncomp": 3})
-            elif peec_A_s_cf is not None:
+            if peec_A_s_cf is not None:
                 # PEEC source: export A_s as H1(dim=3) for visualization
                 sol_As = os.path.join(base_dir,
                                       f"{name_stem}_As.sol").replace("\\", "/")
@@ -913,8 +753,7 @@ def solve_fem(vol_file="", fes_order=1,
         "sigma": sigma,
         "impedance_model": impedance_model,
         "formulation": formulation,
-        "source_type": ("PEEC" if use_peec else
-                        "T0" if gf_T0 is not None else "J_theta"),
+        "source_type": "PEEC",
         "has_kelvin": has_kelvin,
         "msh_file": gmsh_file,
     }
@@ -1118,7 +957,7 @@ def solve_fem_biot_savart(vol_file="", fes_order=1,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="3D FEM-SIBC with source/sink + optional Kelvin")
+        description="3D FEM-SIBC with PEEC filament source + optional Kelvin")
     parser.add_argument("--vol", required=True, help="Netgen .vol file")
     parser.add_argument("--fes-order", type=int, default=1,
                         help="HCurl polynomial order (1-3)")
@@ -1165,24 +1004,20 @@ def main():
                         help="PEEC width subdivision (default 1)")
     parser.add_argument("--peec-nhinc", type=int, default=1,
                         help="PEEC height subdivision (default 1)")
-    parser.add_argument("--coil-sigma", type=float, default=0.0,
-                        help="Coil conductivity [S/m] for eddy current "
-                             "in coil volume (0=no eddy current, "
-                             "5.8e7=copper). Requires fine coil mesh "
-                             "to resolve skin depth.")
-    parser.add_argument("--source-mode", default="auto",
-                        choices=["auto", "t0", "biot-savart"],
-                        help="auto (default): biot-savart if --peec-step "
-                             "is given, else t0. biot-savart: scattered "
-                             "A_r with Biot-Savart A_s excitation (no T0, "
-                             "no source/sink needed). t0: legacy Laplace "
-                             "T0 source (requires source/sink sidesets).")
+    parser.add_argument("--source-mode", default="scattered",
+                        choices=["scattered", "total"],
+                        help="scattered (default): Biot-Savart A_s excitation "
+                             "with FEM scattered A_r (fast, PEEC captures "
+                             "coil skin via nwinc). "
+                             "total: FEM line-integral PEEC RHS (total-field, "
+                             "supports ESIM Karl iteration and GMSH viz).")
 
     def run(args):
-        mode = args.source_mode
-        if mode == "auto":
-            mode = "biot-savart" if args.peec_step else "t0"
-        if mode == "biot-savart":
+        if not args.peec_step:
+            return {"error": "--peec-step is required. T0/AV paths were "
+                             "retired 2026-04-18; all FEM source injection "
+                             "goes through PEEC filaments."}
+        if args.source_mode == "scattered":
             return solve_fem_biot_savart(
                 vol_file=args.vol,
                 fes_order=args.fes_order,
@@ -1216,7 +1051,6 @@ def main():
             peec_sigma=args.peec_sigma,
             peec_nwinc=args.peec_nwinc,
             peec_nhinc=args.peec_nhinc,
-            coil_sigma=args.coil_sigma,
         )
 
     calc_main(run, parser)
