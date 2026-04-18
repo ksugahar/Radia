@@ -45,154 +45,25 @@ def fmt_pct(val, ref):
 
 def solve_peec_back_reaction(vol_file, step, frequency, mat,
                              half_thickness, nwinc, nhinc,
-                             peec_sigma=5.8e7, I_total=1.0,
-                             coil_sigma=0.0):
-    """PEEC L_peec + FEM-SIBC scattered A_r for back-reaction Delta_L.
+                             peec_sigma=5.8e7, I_total=1.0):
+    """Thin wrapper around calc_fem_kelvin.solve_fem_biot_savart.
 
-    If ``coil_sigma > 0``: adds ``jw*sigma*(A_r+A_s)*v`` over the coil volume,
-    turning the FEM solve into an A-scattered A-V with Biot-Savart excitation
-    (no T0, no source/sink). This is the (h) sanity test against T0-based A-V.
-
-    Returns dict with L_peec, Delta_L, L_total, Delta_R, P_wp.
+    Kept for the 3-way compare below and for backward API compat with any
+    downstream callers.
     """
-    from ngsolve import (Mesh, HCurl, BilinearForm, LinearForm,
-                         GridFunction, Periodic, curl, dx, ds,
-                         VOL, x, y, z, TaskManager)
-    from coil_from_cad import filaments_from_step
-    from calc_fem_kelvin import detect_kelvin_offset
-    from kelvin_source import (project_A_s_to_hcurl,
-                               line_integral_A_filaments,
-                               compute_back_reaction)
-
-    # --- 1. PEEC topology + port impedance + per-filament currents ---
-    t0 = time.perf_counter()
-    topo = filaments_from_step(step, sigma=peec_sigma,
-                               nwinc=nwinc, nhinc=nhinc)
-    solver = topo['solver']
-    Z_port = solver.compute_port_impedance(frequency)
-    L_peec = float(Z_port.imag) / (2 * math.pi * frequency)
-    R_peec = float(Z_port.real)
-
-    fil_paths = topo['filament_paths']
-    seg_of_fil = topo['seg_of_filament']
-    I_branch = solver.compute_branch_currents(frequency, [I_total])
-    fil_currents = np.array([
-        complex(np.mean([I_branch[s] for s in segs]))
-        for segs in seg_of_fil
-    ])
-    print(f"  PEEC: n_fil={len(fil_paths)}, L_peec={L_peec*1e9:.3f} nH, "
-          f"sum|I|={abs(fil_currents.sum()):.4f} A, "
-          f"t={time.perf_counter()-t0:.1f}s")
-
-    # --- 2. Mesh + Kelvin detection + SIBC boundary ---
-    t0 = time.perf_counter()
-    mesh = Mesh(vol_file)
-    materials = mesh.GetMaterials()
-    boundaries = set(mesh.GetBoundaries())
-
-    has_kelvin = 'kelvin' in materials
-    has_sibc = 'sibc' in boundaries
-    if not has_sibc:
-        raise RuntimeError("Mesh has no 'sibc' boundary — need SIBC workpiece")
-
-    if has_kelvin:
-        kelvin_center = np.array(detect_kelvin_offset(mesh))
-        kelvin_verts = set()
-        for el in mesh.Elements(VOL):
-            if el.mat == 'kelvin':
-                for v in el.vertices:
-                    kelvin_verts.add(v.nr)
-        coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
-        dists = np.linalg.norm(coords - kelvin_center[None, :], axis=1)
-        a_kelvin = float(np.max(dists))
-        n_ident = mesh.ngmesh.GetNrIdentifications()
-        has_kelvin_periodic = n_ident > 0
-    else:
-        kelvin_center = np.array([0.0, 0.0, 0.0])
-        a_kelvin = 0.0
-        has_kelvin_periodic = False
-    print(f"  MESH: ne={mesh.GetNE(VOL)}, has_kelvin={has_kelvin}, "
-          f"periodic={has_kelvin_periodic}, t={time.perf_counter()-t0:.1f}s")
-
-    # --- 3. nu_cf: coil treated as air (PEEC owns the coil self-L) ---
-    kx, ky, kz = kelvin_center
-    nu_dict = {}
-    for m in materials:
-        if 'kelvin' in m.lower():
-            dx_k = x - kx
-            dy_k = y - ky
-            dz_k = z - kz
-            rp_sq = dx_k * dx_k + dy_k * dy_k + dz_k * dz_k + 1e-20
-            nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
-        else:
-            nu_dict[m] = NU_0
-    nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
-
-    # --- 4. Project A_s (filament Biot-Savart, Kelvin pullback) to HCurl ---
-    t0 = time.perf_counter()
-    gf_As = project_A_s_to_hcurl(
-        mesh, fil_paths, fil_currents,
-        kelvin_center=kelvin_center if has_kelvin else None,
-        R_kelvin=a_kelvin if has_kelvin else None,
-        factor_mode='pullback', is_complex=True)
-    print(f"  A_s projection: t={time.perf_counter()-t0:.1f}s")
-
-    # --- 5. FES + SIBC Robin system for scattered A_r ---
-    Z_s = mat.dowell_Zs(frequency, half_thickness)
-    omega = 2 * math.pi * frequency
-    robin = 1j * omega / Z_s
-    print(f"  Z_s={Z_s:.4e}, Robin={robin:.4e}")
-
-    dirichlet_bnd = 'GND' if 'GND' in boundaries else ''
-    base_fes = HCurl(mesh, order=1, nograds=True, complex=True,
-                     dirichlet=dirichlet_bnd)
-    fes = Periodic(base_fes) if has_kelvin_periodic else base_fes
-
-    u, v_ = fes.TnT()
-    a = BilinearForm(fes)
-    a += nu_cf * curl(u) * curl(v_) * dx(bonus_intorder=4)
-
-    non_kelvin_mats = [m for m in materials if 'kelvin' not in m.lower()]
-    if non_kelvin_mats:
-        a += 1e-6 * NU_0 * u * v_ * dx('|'.join(non_kelvin_mats))
-
-    a += robin * u.Trace() * v_.Trace() * ds('sibc')
-
-    if coil_sigma > 0 and 'coil' in materials:
-        a += 1j * omega * coil_sigma * u * v_ * dx('coil')
-
-    f = LinearForm(fes)
-    f += -robin * gf_As * v_.Trace() * ds('sibc')
-
-    if coil_sigma > 0 and 'coil' in materials:
-        f += -1j * omega * coil_sigma * gf_As * v_ * dx('coil')
-
-    t0 = time.perf_counter()
-    a.Assemble()
-    f.Assemble()
-    t_asm = time.perf_counter() - t0
-
-    gfu = GridFunction(fes)
-    t0 = time.perf_counter()
-    with TaskManager():
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse='pardiso') * f.vec
-    t_solve = time.perf_counter() - t0
-    print(f"  FEM: ndof={fes.ndof}, t_asm={t_asm:.1f}s, t_solve={t_solve:.1f}s")
-
-    # --- 6. Back-reaction ΔL, ΔR via line integral of A_r along filaments ---
-    delta_phi = line_integral_A_filaments(gfu, mesh, fil_paths, n_quad=4)
-    back = compute_back_reaction(fil_currents, delta_phi, I_total)
-    Delta_L = back['Delta_L']
-    Delta_R = omega * back['Delta_R_over_omega']
-    P_wp = 0.5 * Delta_R * abs(I_total) ** 2
-
+    from calc_fem_kelvin import solve_fem_biot_savart
+    r = solve_fem_biot_savart(
+        vol_file=vol_file, frequency=frequency, mat=mat,
+        I_total=I_total, half_thickness=half_thickness,
+        peec_step=step, peec_sigma=peec_sigma,
+        peec_nwinc=nwinc, peec_nhinc=nhinc)
     return {
-        'L_peec': L_peec,
-        'R_peec': R_peec,
-        'Delta_L': Delta_L,
-        'L_total': L_peec + Delta_L,
-        'Delta_R': Delta_R,
-        'P_wp': P_wp,
+        'L_peec': r['L_peec'],
+        'R_peec': r['R_peec'],
+        'Delta_L': r['Delta_L'],
+        'L_total': r['L'],
+        'Delta_R': r['Delta_R'],
+        'P_wp': r['P_total'],
     }
 
 
