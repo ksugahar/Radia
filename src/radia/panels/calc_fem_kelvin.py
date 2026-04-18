@@ -95,8 +95,8 @@ def solve_fem(vol_file="", fes_order=1,
     # NGSolve must be imported BEFORE Cubit
     import ngsolve  # noqa: F401
     from ngsolve import (H1, HCurl, HDiv, Periodic, BilinearForm, LinearForm,
-                         GridFunction, Integrate, Conj, curl, dx, ds, CF,
-                         BND, VOL, TaskManager, Preconditioner)
+                         GridFunction, Integrate, Conj, curl, grad, dx, ds, CF,
+                         BND, VOL, TaskManager, Preconditioner, InnerProduct)
     from ngsolve import x, y, z, sqrt, IfPos
 
     setup_paths()
@@ -287,25 +287,34 @@ def solve_fem(vol_file="", fes_order=1,
     # GND (vertex at kelvin sphere center) provides uniqueness if present.
 
     is_dc = (omega <= 0 or sigma <= 0)
-    # POLICY: nograds=True is REQUIRED for HCurl curl-curl at any order.
-    # Reference: NGSolve Maxwell tutorial unit-2.4
-    #   HCurl(mesh, order=p, dirichlet="outer", nograds=True)
-    # The HCurl high-order basis includes gradients of H1 basis functions
-    # which form the curl-curl gauge kernel. nograds=True removes them
-    # so the system is well-conditioned for any p (including p>=2).
-    # complex flag follows AC vs DC (eddy term needs complex arithmetic).
     use_complex = not is_dc or (coil_sigma > 0 and omega > 0)
+    use_av = (coil_sigma > 0 and omega > 0 and "coil" in materials)
+
+    # HCurl space for A (nograds=True always)
     base_fes = HCurl(mesh, order=fes_order,
                      complex=use_complex,
                      nograds=True,
                      dirichlet=dirichlet_bnd)
-    # 2-sphere Kelvin: Periodic BC couples interior and exterior sphere DOFs
     if has_kelvin and has_kelvin_periodic:
-        fes = Periodic(base_fes)
+        fes_A = Periodic(base_fes)
         _log("FES:Periodic HCurl (Kelvin)")
     else:
-        fes = base_fes
-    u, v = fes.TnT()
+        fes_A = base_fes
+
+    if use_av:
+        # A-V compound: HCurl(A) x H1(phi, coil only)
+        # phi = scalar potential in conductor, provides gauge for
+        # the eddy current term s*sigma*(A+grad(phi))*(N+grad(psi)).
+        fes_phi = H1(mesh, order=fes_order, complex=use_complex,
+                     definedon="coil", dirichlet="source|sink")
+        fes = fes_A * fes_phi
+        (u, phi_u), (v, psi_v) = fes.TnT()
+        _log(f"FES:A-V compound (A:{fes_A.ndof} phi:{fes_phi.ndof})")
+    else:
+        fes = fes_A
+        u, v = fes.TnT()
+        phi_u = psi_v = None
+
     ndof = fes.ndof
     _log(f"FES:ndof={ndof}")
 
@@ -321,33 +330,27 @@ def solve_fem(vol_file="", fes_order=1,
     peec_nu_cf_for_L = None
     f_lf = LinearForm(fes)
     if use_peec:
-        # ---- PEEC filament source: reduced-A formulation ----
-        # Strategy: evaluate Biot-Savart A_s at all mesh vertices,
-        # apply Kelvin 1-form pullback in the exterior domain, and
-        # project into an H1(dim=3) GridFunction. This avoids the
-        # symbolic CF factory approach (which cannot call into numpy).
+        # ---- PEEC filament source: total-field via line integrals ----
+        # Strategy: assemble RHS f[j] = sum_k I_k * integral_{path_k} phi_j . dl
+        # directly from filament paths and HCurl basis functions.
+        # This is the total-field formulation: FEM solves for A_total,
+        # not the scattered field A_r. Robin BC is on the LHS (A_total).
+        #
+        # No Biot-Savart vertex sampling, no HCurl projection, no
+        # reduced-A cancellation error.
         from coil_from_cad import filaments_from_step
-        from kelvin_source import (biot_savart_A_at_points,
-                                    kelvin_map_3d,
-                                    kelvin_pullback_vector,
-                                    is_in_kelvin_exterior_domain)
+        from ngsolve import ElementId
 
         _log("PEEC:building topology")
         topo = filaments_from_step(peec_step, sigma=peec_sigma,
                                     nwinc=peec_nwinc, nhinc=peec_nhinc)
 
-        # Two return formats:
-        # CoilBuilder path: topo["filament_paths"] = list of K filament
-        #   segment lists, each [(p0,p1), (p1,p2), ...].
-        #   topo["solver"] = PEECCircuitSolver for AC currents.
-        # Legacy path: topo["filament_path"] = (N+1, 3) centerline.
         if "filament_paths" in topo:
             fil_paths = topo["filament_paths"]
             n_fil = topo.get("n_loop", len(fil_paths))
             if n_fil == 1:
                 fil_currents = [I_total]
             else:
-                # Multi-filament: solve PEEC for per-filament AC currents
                 peec_solver = topo["solver"]
                 I_branch = peec_solver.compute_branch_currents(
                     frequency, [I_total])
@@ -359,7 +362,6 @@ def solve_fem(vol_file="", fes_order=1,
             _log(f"PEEC:{n_fil} filaments, "
                  f"{sum(len(p) for p in fil_paths)} total segments")
         elif "filament_path" in topo:
-            # Legacy: single centerline path
             fp = topo["filament_path"]
             fil_paths = [[(fp[i], fp[i + 1])
                           for i in range(len(fp) - 1)]]
@@ -369,64 +371,69 @@ def solve_fem(vol_file="", fes_order=1,
             return {"error": "filaments_from_step returned unknown format: "
                              + str(list(topo.keys()))}
 
-        # Evaluate A_s at all mesh vertices
-        nv = mesh.nv
-        all_pts = np.array([mesh.vertices[v].point for v in range(nv)])
-        _log(f"PEEC:evaluating Biot-Savart at {nv} vertices")
+        # Assemble line-integral RHS:
+        #   f[j] = sum_k I_k * sum_seg integral phi_j(x) . dl dx
+        # using Gauss-Legendre quadrature per segment.
+        n_quad_line = 4
+        t_gl, w_gl = np.polynomial.legendre.leggauss(n_quad_line)
+        t01 = 0.5 * (t_gl + 1.0)
+        w01 = 0.5 * w_gl
 
-        if has_kelvin and a_kelvin > 0:
-            kc = np.array(kelvin_center)
-            in_kelv = is_in_kelvin_exterior_domain(all_pts, kc, a_kelvin)
-            A_all = np.zeros((nv, 3), dtype=float)
+        _log("PEEC:assembling line-integral RHS")
+        t0_li = time.perf_counter()
+        f_vec = f_lf.vec.CreateVector()
+        f_vec[:] = 0
 
-            # Physical-domain vertices: direct Biot-Savart
-            phys_idx = np.where(~in_kelv)[0]
-            if len(phys_idx) > 0:
-                A_all[phys_idx] = biot_savart_A_at_points(
-                    all_pts[phys_idx], fil_paths, fil_currents).real
+        # Scratch GF for per-DOF basis function evaluation
+        gf_scratch = GridFunction(fes)
+        n_skip = 0
 
-            # Kelvin exterior vertices: inverse map + Biot-Savart + pullback
-            kelv_idx = np.where(in_kelv)[0]
-            if len(kelv_idx) > 0:
-                r_phys = kelvin_map_3d(all_pts[kelv_idx], kc, a_kelvin)
-                A_phys = biot_savart_A_at_points(
-                    r_phys, fil_paths, fil_currents)
-                A_all[kelv_idx] = kelvin_pullback_vector(
-                    A_phys, all_pts[kelv_idx], kc, a_kelvin).real
-            _log(f"PEEC:Biot-Savart done ({len(phys_idx)} phys, "
-                 f"{len(kelv_idx)} kelvin vertices)")
-        else:
-            A_all = biot_savart_A_at_points(
-                all_pts, fil_paths, fil_currents).real
-            _log(f"PEEC:Biot-Savart done ({nv} vertices, no Kelvin)")
+        for k, path in enumerate(fil_paths):
+            Ik = complex(fil_currents[k])
+            for (p1, p2) in path:
+                p1a = np.asarray(p1, dtype=float)
+                p2a = np.asarray(p2, dtype=float)
+                dl = p2a - p1a
+                seg_len = np.linalg.norm(dl)
+                if seg_len < 1e-15:
+                    continue
+                for q in range(n_quad_line):
+                    pt = p1a + t01[q] * dl
+                    try:
+                        mp = mesh(*pt)
+                        elnr = mp.nr
+                        if elnr < 0:
+                            raise ValueError("outside mesh")
+                        el = mesh[ElementId(VOL, elnr)]
+                    except Exception:
+                        n_skip += 1
+                        continue
+                    dofs = fes.GetDofNrs(el)
+                    for d in dofs:
+                        if d < 0:
+                            continue  # constrained DOF
+                        gf_scratch.vec[:] = 0
+                        gf_scratch.vec[d] = 1.0
+                        val = gf_scratch(mp)
+                        dot = sum(complex(val[i]) * dl[i]
+                                  for i in range(3))
+                        f_vec[d] += Ik * w01[q] * dot
 
-        # Project A_s into an HCurl GridFunction (not H1(dim=3))
-        # because curl(H1_GF) triggers an unsupported SIMD path in
-        # NGSolve's LinearForm assembler. HCurl curl is native.
-        # Step 1: load vertex values into temporary H1(dim=3)
-        fes_As_h1 = H1(mesh, order=1, dim=3)
-        gf_As_h1 = GridFunction(fes_As_h1)
-        fv = gf_As_h1.vec.FV()
-        for vi in range(nv):
-            for k in range(3):
-                fv[vi * 3 + k] = float(A_all[vi, k].real)
-        # Step 2: project H1(dim=3) -> HCurl via Set()
-        fes_As = HCurl(mesh, order=fes_order, complex=False)
-        gf_As = GridFunction(fes_As)
-        gf_As.Set(gf_As_h1)
-        peec_A_s_cf = gf_As
-        peec_nu_cf_for_L = nu_cf  # same nu_cf (already has Kelvin)
-        _log(f"PEEC:A_s projected into HCurl (ndof={fes_As.ndof})")
-
-        # Volume RHS: -(nu - nu_0) curl(A_s) . curl(v) dV
-        # Only non-zero in Kelvin domain (where nu != nu_0)
-        f_lf += -(nu_cf - NU_0) * curl(peec_A_s_cf) * curl(v) \
-            * dx(bonus_intorder=4)
-        # NOTE: Robin surface RHS (-robin * A_s · v ds) is added inside
-        # the Karl loop because robin = jw/Z_s depends on iteration.
+        t_li = time.perf_counter() - t0_li
+        _log(f"PEEC:line-integral RHS assembled ({t_li:.1f}s, "
+             f"{n_skip} skipped)")
+        # Mark as total-field (no A_s to add later)
+        peec_A_s_cf = None
+        # Assemble empty LinearForm first, then overwrite with f_vec.
+        f_lf.Assemble()
+        f_lf.vec.data = f_vec
+    elif use_av:
+        # A-V: RHS is zero; source comes from phi Dirichlet lift
+        # (phi=1 on source, phi=0 on sink)
+        f_lf.Assemble()
     else:
         f_lf += J_source * v * dx("coil")
-    f_lf.Assemble()
+        f_lf.Assemble()
 
     # SIBC surface area for H_t estimation
     if has_wp:
@@ -440,6 +447,10 @@ def solve_fem(vol_file="", fes_order=1,
 
     # Karl iteration
     gfu = GridFunction(fes)
+    if use_av:
+        # Set phi Dirichlet: phi=1 on source, phi=0 on sink
+        gf_A_comp, gf_phi_comp = gfu.components
+        gf_phi_comp.Set(CF(1), definedon=mesh.Boundaries("source"))
     history = []
 
     for iteration in range(max_iter):
@@ -476,32 +487,22 @@ def solve_fem(vol_file="", fes_order=1,
         if has_wp and abs(robin) > 0:
             a_bf += robin * u.Trace() * v.Trace() * ds(sibc_bnd)
 
-        # Coil eddy currents: jωσ_coil ∫u·v dV("coil")
-        # Adds skin/proximity effect in the coil volume (T0 source path).
+        # Coil eddy currents via A-V formulation:
+        #   s*sigma*(A+grad(phi))*(N+grad(psi)) in coil
         # Requires coil volume mesh with sufficient resolution to resolve
-        # the skin depth δ = sqrt(2/(ωμσ)).  E.g. copper at 7 kHz:
-        # δ ≈ 0.86 mm → need mesh size < 0.3 mm in coil.
-        if coil_sigma > 0 and omega > 0 and "coil" in materials:
-            a_bf += 1j * omega * coil_sigma * u * v * dx("coil")
+        # the skin depth delta = sqrt(2/(omega*mu*sigma)).
+        if use_av:
+            s_eddy = 1j * omega
+            a_bf += s_eddy * coil_sigma * (u + grad(phi_u)) \
+                * (v + grad(psi_v)) * dx("coil")
             if iteration == 0:
                 delta_coil = math.sqrt(2.0 / (omega * MU_0 * coil_sigma))
-                _log(f"COIL_EDDY:sigma={coil_sigma:.2e}, "
+                _log(f"COIL_AV:sigma={coil_sigma:.2e}, "
                      f"delta={delta_coil*1e3:.3f}mm")
 
-        # PEEC reduced-A: Robin surface RHS from A_s
-        # The weak form for A_total = A_r + A_s with Robin BC is:
-        #   a(A_r, v) = l_vol(v) - robin * int A_s . v ds(sibc)
-        # where l_vol = -(nu - nu_0) curl(A_s) . curl(v) dV (in f_lf).
-        # The surface term depends on robin (= jw/Z_s) which changes
-        # during ESIM iterations, so build the combined RHS here.
-        if use_peec and has_wp and abs(robin) > 0:
-            f_robin_As = LinearForm(fes)
-            f_robin_As += -robin * peec_A_s_cf * v.Trace() * ds(sibc_bnd)
-            f_robin_As.Assemble()
-            rhs_vec = gfu.vec.CreateVector()
-            rhs_vec.data = f_lf.vec + f_robin_As.vec
-        else:
-            rhs_vec = f_lf.vec
+        # PEEC total-field: Robin BC is on the LHS (a_bf already has it).
+        # No surface RHS from A_s needed.
+        rhs_vec = f_lf.vec
 
         # Solver-specific setup
         if solver == "ams":
@@ -601,6 +602,30 @@ def solve_fem(vol_file="", fes_order=1,
                 from ngsolve import solvers
                 solvers.BVP(bf=a_bf, lf=f_lf, gf=gfu,
                             pre=pre, maxsteps=500, tol=1e-8)
+        elif use_av:
+            # A-V pardiso: Dirichlet lift solve
+            # phi has Dirichlet (source=1, sink=0); RHS = -a * gfu_lift
+            a_bf.Assemble()
+            r_av = gfu.vec.CreateVector()
+            r_av.data = rhs_vec - a_bf.mat * gfu.vec
+            with TaskManager():
+                gfu.vec.data += a_bf.mat.Inverse(
+                    fes.FreeDofs(), inverse="pardiso") * r_av
+            # Post-normalization: scale to I_total
+            s_eddy = 1j * omega
+            J_coil = -s_eddy * coil_sigma * (gf_A_comp + grad(gf_phi_comp))
+            fes_psi_n = H1(mesh, order=fes_order, complex=use_complex,
+                           dirichlet="sink", definedon="coil")
+            gf_psi_n = GridFunction(fes_psi_n)
+            gf_psi_n.Set(CF(1), definedon=mesh.Boundaries("source"))
+            I_out = Integrate(J_coil * grad(gf_psi_n) * dx("coil"), mesh)
+            if abs(I_out) < 1e-30:
+                return {"error": "A-V solve: I_out is zero (no current). "
+                                 "Check source/sink sidesets."}
+            av_scale = I_total / I_out
+            gfu.vec.data = complex(av_scale) * gfu.vec
+            _log(f"COIL_AV:I_out={abs(I_out):.6f}A, "
+                 f"scale={abs(av_scale):.4f}")
         else:
             # pardiso (direct)
             if formulation == "scattered" and has_wp and abs(robin) > 0:
@@ -676,9 +701,9 @@ def solve_fem(vol_file="", fes_order=1,
             n_bnd = specialcf.normal(3)
 
             # A_eval: the field whose tangential trace drives H_t.
-            # T0 path: gfu IS A_total.
-            # PEEC path: A_total = A_r (gfu) + A_s (peec_A_s_cf).
-            if use_peec and peec_A_s_cf is not None:
+            if use_av:
+                A_eval = gfu.components[0]
+            elif use_peec and peec_A_s_cf is not None:
                 A_eval = CF(tuple(gfu[i] + peec_A_s_cf[i]
                                   for i in range(3)))
             else:
@@ -736,8 +761,12 @@ def solve_fem(vol_file="", fes_order=1,
         Q_total = 0.0
 
     # Inductance from magnetic energy
-    if use_peec and peec_A_s_cf is not None:
-        # Reduced-A: total B = curl(A_r + A_s)
+    if use_av:
+        gf_A_for_L = gfu.components[0]
+        W_mag = Integrate(
+            0.5 * nu_cf * curl(gf_A_for_L) * Conj(curl(gf_A_for_L)),
+            mesh, order=10).real
+    elif use_peec and peec_A_s_cf is not None:
         B_total = curl(gfu) + curl(peec_A_s_cf)
         nu_for_L = peec_nu_cf_for_L if peec_nu_cf_for_L is not None else nu_cf
         W_mag = Integrate(
@@ -856,10 +885,20 @@ def solve_fem(vol_file="", fes_order=1,
     # ============================================================
     delta_skin = mat.skin_depth(frequency)
 
+    # PEEC: L from port impedance (mesh-independent, validated)
+    L_peec = None
+    if use_peec and 'topo' in dir():
+        peec_solver_obj = topo.get("solver")
+        if peec_solver_obj is not None:
+            Z_port = peec_solver_obj.compute_port_impedance(frequency)
+            L_peec = float(Z_port.imag) / (2 * math.pi * frequency)
+            _log(f"PEEC:L_peec={L_peec*1e9:.3f}nH (Z_port)")
+
     result = {
         "P_total": float(P_total),
         "Q_total": float(Q_total),
         "L": float(L),
+        "L_peec": L_peec,
         "Z_s": str(Z_s),
         # H_t_rms is None when there is no workpiece (coil-only run);
         # serialize as null in JSON instead of crashing.
@@ -880,6 +919,201 @@ def solve_fem(vol_file="", fes_order=1,
         "msh_file": gmsh_file,
     }
     return result
+
+
+def solve_fem_biot_savart(vol_file="", fes_order=1,
+                           frequency=7000, mat=None,
+                           I_total=1.0, half_thickness=0.005,
+                           peec_step="",
+                           peec_sigma=5.8e7,
+                           peec_nwinc=3, peec_nhinc=3,
+                           solver="pardiso", nthreads=0):
+    """Scattered A_r formulation with Biot-Savart A_s excitation (no T0).
+
+    Solves for the scattered vector potential A_r on the given .vol mesh,
+    using the PEEC filament Biot-Savart A_s as the excitation (entering
+    through the SIBC Robin boundary term). The coil volume is treated
+    as air from the FEM side; PEEC captures the coil skin / proximity
+    effect through the nwinc/nhinc filament subdivision.
+
+    L is returned as ``L_peec + Delta_L`` where L_peec comes from the
+    PEEC circuit port impedance and Delta_L is the line integral of
+    A_r along the filament paths. This decomposition is numerically
+    well-behaved because neither term relies on a source/sink T0
+    Dirichlet lift, so there are no gap-corner 1/r cusps.
+
+    Returns a dict with keys matching solve_fem: P_total, L, Z_s, ...
+    """
+    if mat is None:
+        mat = EMMaterial.from_name("steel")
+    if not peec_step or not os.path.exists(peec_step):
+        return {"error": f"--peec-step is required for Biot-Savart mode "
+                         f"(got: {peec_step!r})"}
+
+    import ngsolve  # noqa: F401
+    from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
+                         GridFunction, Integrate, curl, dx, ds, CF,
+                         BND, VOL, TaskManager)
+    from ngsolve import x, y, z
+    from coil_from_cad import filaments_from_step
+    from kelvin_source import (project_A_s_to_hcurl,
+                                line_integral_A_filaments,
+                                compute_back_reaction)
+
+    setup_paths()
+    t_total_start = time.perf_counter()
+
+    # --- 1. PEEC topology + port impedance + per-filament currents ---
+    _log("MESH:loading")
+    t0 = time.perf_counter()
+    mesh = Mesh(vol_file)
+    t_mesh = time.perf_counter() - t0
+
+    materials = mesh.GetMaterials()
+    boundaries = set(mesh.GetBoundaries())
+
+    has_kelvin = 'kelvin' in materials
+    if 'sibc' not in boundaries:
+        return {"error": "Mesh has no 'sibc' boundary — SIBC workpiece required"}
+
+    if has_kelvin:
+        kelvin_center = np.array(detect_kelvin_offset(mesh))
+        kelvin_verts = set()
+        for el in mesh.Elements(VOL):
+            if el.mat == 'kelvin':
+                for v in el.vertices:
+                    kelvin_verts.add(v.nr)
+        coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
+        dists = np.linalg.norm(coords - kelvin_center[None, :], axis=1)
+        a_kelvin = float(np.max(dists))
+        n_ident = mesh.ngmesh.GetNrIdentifications()
+        has_kelvin_periodic = n_ident > 0
+    else:
+        kelvin_center = np.array([0.0, 0.0, 0.0])
+        a_kelvin = 0.0
+        has_kelvin_periodic = False
+    _log(f"MESH:ne={mesh.GetNE(VOL)} kelvin={has_kelvin} "
+         f"periodic={has_kelvin_periodic} t={t_mesh:.1f}s")
+
+    # --- 2. PEEC filaments + currents ---
+    t0 = time.perf_counter()
+    topo = filaments_from_step(peec_step, sigma=peec_sigma,
+                                nwinc=peec_nwinc, nhinc=peec_nhinc)
+    peec_solver = topo['solver']
+    Z_port = peec_solver.compute_port_impedance(frequency)
+    L_peec = float(Z_port.imag) / (2 * math.pi * frequency)
+    R_peec = float(Z_port.real)
+
+    fil_paths = topo['filament_paths']
+    seg_of_fil = topo['seg_of_filament']
+    I_branch = peec_solver.compute_branch_currents(frequency, [I_total])
+    fil_currents = np.array([
+        complex(np.mean([I_branch[s] for s in segs]))
+        for segs in seg_of_fil
+    ])
+    _log(f"PEEC:n_fil={len(fil_paths)} L_peec={L_peec*1e9:.3f}nH "
+         f"t={time.perf_counter()-t0:.1f}s")
+
+    # --- 3. nu_cf: Kelvin weight, coil treated as air ---
+    kx, ky, kz = kelvin_center
+    nu_dict = {}
+    for m in materials:
+        if 'kelvin' in m.lower():
+            dx_k = x - kx
+            dy_k = y - ky
+            dz_k = z - kz
+            rp_sq = dx_k * dx_k + dy_k * dy_k + dz_k * dz_k + 1e-20
+            nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
+        else:
+            nu_dict[m] = NU_0
+    nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
+
+    # --- 4. Biot-Savart A_s (Kelvin pullback in exterior) ---
+    t0 = time.perf_counter()
+    gf_As = project_A_s_to_hcurl(
+        mesh, fil_paths, fil_currents,
+        kelvin_center=kelvin_center if has_kelvin else None,
+        R_kelvin=a_kelvin if has_kelvin else None,
+        factor_mode='pullback', is_complex=True, order=fes_order)
+    _log(f"A_s:proj t={time.perf_counter()-t0:.1f}s")
+
+    # --- 5. FES + SIBC Robin system for scattered A_r ---
+    Z_s = mat.dowell_Zs(frequency, half_thickness)
+    omega = 2 * math.pi * frequency
+    robin = 1j * omega / Z_s
+    _log(f"SIBC:Z_s={Z_s:.4e}, Robin={robin:.4e}")
+
+    dirichlet_bnd = 'GND' if 'GND' in boundaries else ''
+    base_fes = HCurl(mesh, order=fes_order, nograds=True, complex=True,
+                     dirichlet=dirichlet_bnd)
+    fes = Periodic(base_fes) if has_kelvin_periodic else base_fes
+
+    u, v_ = fes.TnT()
+    a = BilinearForm(fes)
+    a += nu_cf * curl(u) * curl(v_) * dx(bonus_intorder=4)
+
+    non_kelvin_mats = [m for m in materials if 'kelvin' not in m.lower()]
+    if non_kelvin_mats:
+        a += 1e-6 * NU_0 * u * v_ * dx('|'.join(non_kelvin_mats))
+
+    a += robin * u.Trace() * v_.Trace() * ds('sibc')
+
+    f_lf = LinearForm(fes)
+    f_lf += -robin * gf_As * v_.Trace() * ds('sibc')
+
+    t0 = time.perf_counter()
+    a.Assemble()
+    f_lf.Assemble()
+    t_asm = time.perf_counter() - t0
+
+    gfu = GridFunction(fes)
+    t0 = time.perf_counter()
+    if nthreads > 0:
+        ngsolve.SetNumThreads(nthreads)
+    with TaskManager():
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse=solver) * f_lf.vec
+    t_solve = time.perf_counter() - t0
+    _log(f"FEM:ndof={fes.ndof} asm={t_asm:.1f}s solve={t_solve:.1f}s")
+
+    # --- 6. Back-reaction Delta_L, Delta_R from line integral ---
+    delta_phi = line_integral_A_filaments(gfu, mesh, fil_paths, n_quad=4)
+    back = compute_back_reaction(fil_currents, delta_phi, I_total)
+    Delta_L = back['Delta_L']
+    Delta_R = omega * back['Delta_R_over_omega']
+    P_wp = 0.5 * Delta_R * abs(I_total) ** 2
+
+    # SIBC area for H_t estimate
+    A_wp = Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries('sibc')).real
+
+    L_total = L_peec + Delta_L
+    _log(f"DONE:L={L_total*1e9:.2f}nH (L_peec={L_peec*1e9:.2f} "
+         f"+ DeltaL={Delta_L*1e9:+.2f}) P={P_wp:.4e} "
+         f"t={time.perf_counter()-t_total_start:.1f}s")
+
+    return {
+        "P_total": P_wp,
+        "Q_total": 0.0,
+        "L": L_total,
+        "L_peec": L_peec,
+        "R_peec": R_peec,
+        "Delta_L": Delta_L,
+        "Delta_R": Delta_R,
+        "Z_s_real": Z_s.real,
+        "Z_s_imag": Z_s.imag,
+        "H_t_rms": 0.0,
+        "A_wp": A_wp,
+        "iterations": 0,
+        "converged": True,
+        "t_mesh": round(t_mesh, 2),
+        "t_total": round(time.perf_counter() - t_total_start, 2),
+        "frequency": frequency,
+        "sigma": mat.sigma,
+        "impedance_model": "sibc",
+        "formulation": "scattered-biot-savart",
+        "source_type": "biot-savart",
+        "has_kelvin": has_kelvin,
+        "msh_file": "",
+    }
 
 
 def main():
@@ -936,8 +1170,33 @@ def main():
                              "in coil volume (0=no eddy current, "
                              "5.8e7=copper). Requires fine coil mesh "
                              "to resolve skin depth.")
+    parser.add_argument("--source-mode", default="auto",
+                        choices=["auto", "t0", "biot-savart"],
+                        help="auto (default): biot-savart if --peec-step "
+                             "is given, else t0. biot-savart: scattered "
+                             "A_r with Biot-Savart A_s excitation (no T0, "
+                             "no source/sink needed). t0: legacy Laplace "
+                             "T0 source (requires source/sink sidesets).")
 
     def run(args):
+        mode = args.source_mode
+        if mode == "auto":
+            mode = "biot-savart" if args.peec_step else "t0"
+        if mode == "biot-savart":
+            return solve_fem_biot_savart(
+                vol_file=args.vol,
+                fes_order=args.fes_order,
+                frequency=args.frequency,
+                mat=EMMaterial.from_args(args),
+                I_total=args.current,
+                half_thickness=args.half_thickness,
+                peec_step=args.peec_step,
+                peec_sigma=args.peec_sigma,
+                peec_nwinc=args.peec_nwinc,
+                peec_nhinc=args.peec_nhinc,
+                solver=args.solver,
+                nthreads=args.nthreads,
+            )
         return solve_fem(
             vol_file=args.vol,
             fes_order=args.fes_order,
