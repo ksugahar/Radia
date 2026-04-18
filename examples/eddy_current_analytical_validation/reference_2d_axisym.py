@@ -37,7 +37,8 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
                     kelvin=False, order=2,
                     skin_mode="uniform", maxh_wp=None,
                     maxh_wp_interior=None, skin_ratio=5.0,
-                    grading=0.5):
+                    grading=0.5,
+                    sigma_coil=0.0, mu_r_coil=1.0, maxh_coil_override=None):
     """2D axisymmetric FEM with full eddy current resolution.
 
     Args:
@@ -45,6 +46,16 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
             boundary.  Eliminates the conducting-shell artifact from
             Dirichlet BC on a finite air domain.
         order: FE polynomial order (default 2).
+        sigma_coil: coil conductivity [S/m]. 0 (default) = uniform-J
+            DC mode (existing behavior, matches 2D SIBC). Set to
+            5.8e7 (Cu) to capture coil skin/proximity self-consistently
+            -- this matches the physics of a PEEC nwinc>=3 filament
+            bundle and is the apples-to-apples reference for PEEC+FEM
+            and PEEC+BEM solvers at AC frequencies.
+        mu_r_coil: coil relative permeability (for magnetic coils).
+        maxh_coil_override: mesh size in coil. When sigma_coil > 0 the
+            coil needs h <= delta_coil/3 to resolve the skin layer;
+            default a_coil/2 may be too coarse.
 
     Returns dict with L, P, H_t_rms, diagnostics.
     """
@@ -71,7 +82,15 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
         maxh_wp = delta / skin_ratio
     if maxh_wp_interior is None:
         maxh_wp_interior = max(delta * 3, maxh_wp)
-    maxh_coil = a_coil / 2
+    if maxh_coil_override is not None:
+        maxh_coil = maxh_coil_override
+    elif sigma_coil > 0:
+        # Resolve skin depth inside conducting coil
+        delta_coil = math.sqrt(2.0 / (omega * mu_r_coil * MU_0 * sigma_coil))
+        maxh_coil = min(a_coil / 2, delta_coil / 3)
+    else:
+        maxh_coil = a_coil / 2
+    nu_coil = 1.0 / (mu_r_coil * MU_0)
 
     t0 = time.perf_counter()
 
@@ -218,7 +237,10 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
             elif m == "workpiece":
                 nu_vals.append(nu_wp)
                 sigma_vals.append(sigma)
-            else:  # air, coil
+            elif m == "coil":
+                nu_vals.append(nu_coil)
+                sigma_vals.append(sigma_coil)
+            else:  # air
                 nu_vals.append(nu0)
                 sigma_vals.append(0)
         nu_cf = CoefficientFunction(nu_vals)
@@ -272,9 +294,10 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
 
         fes = H1(mesh, order=order, complex=True,
                  dirichlet="outer|axis")
-        nu_cf = mesh.MaterialCF({"air": nu0, "coil": nu0,
+        nu_cf = mesh.MaterialCF({"air": nu0, "coil": nu_coil,
                                   "workpiece": nu_wp}, default=nu0)
-        sigma_cf = mesh.MaterialCF({"workpiece": sigma}, default=0)
+        sigma_cf = mesh.MaterialCF({"workpiece": sigma, "coil": sigma_coil},
+                                     default=0)
 
     # ---- Common solve path ----
     t_mesh = time.perf_counter() - t0
@@ -306,7 +329,27 @@ def solve_2d_axisym(r_coil=0.030, a_coil=0.003, r_wp=0.025, h_wp=0.025,
                                          inverse="pardiso") * f_lf.vec
     t_solve = time.perf_counter() - t0
 
+    # Current normalization for sigma_coil > 0 (conductive coil):
+    # The imposed J0 alone gives total I = J0 * pi a^2 = I_target, but
+    # with sigma > 0 the coil eddy -jw sigma A_phi subtracts from J0,
+    # so the actual net current through the coil cross-section differs
+    # from I_target. Compute I_actual and rescale gfu linearly so the
+    # re-scaled solution corresponds to net I = I_target.
+    #   J_phi_actual = J0 - jw sigma A_phi = J0 - jw sigma * phi / r
+    #   I_actual = integral over coil meridional = int(J_phi_actual dr dz)
+    #     (no 2pi, no r-weight -- this is the net azimuthal current).
+    if sigma_coil > 0:
+        J_phi_cf = J0 - 1j * omega * sigma_coil * gfu / r_safe
+        I_actual = complex(Integrate(
+            J_phi_cf, mesh, definedon=mesh.Materials("coil")))
+        scale = complex(I_total) / I_actual
+        gfu.vec.data = complex(scale) * gfu.vec
+    else:
+        scale = 1.0 + 0j
+
     # L and P from impedance (no 1/r singularity at axis)
+    # NOTE: ftu uses raw gfu; if we scaled gfu, also scale f_lf-weighted
+    # inner product by the same factor (it's in gfu now already).
     ftu = sum(f_lf.vec[i] * gfu.vec[i].conjugate()
               for i in range(fes.ndof)).real
     L = 2 * math.pi * ftu / I_total ** 2
@@ -359,6 +402,10 @@ if __name__ == "__main__":
     parser.add_argument("--sweep", action="store_true")
     parser.add_argument("--kelvin", action="store_true",
                         help="Use z-offset Kelvin for open boundary")
+    parser.add_argument("--sigma-coil", type=float, default=0.0,
+                        help="Coil conductivity [S/m]. 0 (default) = "
+                             "uniform-J DC coil. 5.8e7 = Cu full-eddy "
+                             "coil (apples-to-apples with PEEC nwinc>=3).")
     args = parser.parse_args()
 
     bc_label = "Kelvin" if args.kelvin else "Dirichlet"
@@ -397,7 +444,8 @@ if __name__ == "__main__":
         print()
 
         r = solve_2d_axisym(mat=mat, frequency=args.freq,
-                            kelvin=args.kelvin)
+                            kelvin=args.kelvin,
+                            sigma_coil=args.sigma_coil)
         print(f"L       = {r['L']*1e9:.4f} nH")
         print(f"P_total = {r['P_total']:.6e} W")
         print(f"H_t_rms = {r['H_t_rms']:.4f} A/m (cylindrical surface)")
