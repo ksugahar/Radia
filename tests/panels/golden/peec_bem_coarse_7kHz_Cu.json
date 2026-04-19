@@ -1,0 +1,40 @@
+{
+  "description": "Golden reference for PEEC+BEM 1-way on the coarse BEM sample.",
+  "rationale": "Knowledge accumulation mechanism: locks in the known-good P output of calc_peec_bem.py against the 2D axisym full-eddy reference, so regressions in _extract_bnd_only (normal winding, FD filtering) fail loudly on CI and not during user validation.",
+  "sample": {
+    "vol": "src/radia/panels/samples/ih_peec_bem_coarse.vol",
+    "step": "src/radia/panels/samples/ih_peec_bem_coarse_coil.step",
+    "generator_jou": "src/radia/panels/samples/ih_peec_bem_coarse.jou"
+  },
+  "physics": {
+    "coil": "gapped torus R=30mm a=3mm gap=5deg, Cu sigma=5.8e7",
+    "workpiece": "cylinder R=25mm H=25mm, Cu sigma=5.8e7, mu_r=1",
+    "frequency_Hz": 7000,
+    "current_A": 1.0,
+    "half_thickness_m": 0.0125,
+    "peec_nwinc": 3,
+    "peec_nhinc": 3,
+    "h1_order": 1
+  },
+  "reference_2d_axisym_full_eddy": {
+    "L_nH": 50.54,
+    "P_total_W": 1.507e-4,
+    "note": "Geometry has no gap; the 3D gap=5deg gives ~1.4% asymmetry. The 2D reference P INCLUDES coil ohmic + wp skin.  The BEM 1-way value below is wp skin only and matches the 2D SIBC (sigma_coil=0) case which is also ~6.6e-5."
+  },
+  "reference_2d_axisym_sibc": {
+    "P_W": 6.63e-5,
+    "note": "wp SIBC only (sigma_coil=0); comparable to BEM P_wp 1-way output."
+  },
+  "expected": {
+    "L_coil_peec_nH": 88.57,
+    "R_coil_peec_mOhm": 0.1594,
+    "P_wp_W": 6.48e-5,
+    "H_t_rms_Am": 27.55,
+    "tolerance_P_pct": 15.0,
+    "tolerance_L_coil_pct": 1.0,
+    "flipped_triangle_fraction_expected_min": 0.5
+  },
+  "captured_at": "2026-04-19",
+  "captured_commit": "pre-regression-harness",
+  "source_of_truth": "peec_bundle_bem_sibc_demo.py --wp-maxh 0.006 (5.87e-5 W, -11% vs 2D SIBC)"
+}
