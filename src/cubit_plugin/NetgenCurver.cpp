@@ -559,6 +559,40 @@ bool NetgenCurver::attach_callback_geometry()
   }
   project_reject_log_entries_.clear();
 
+  // Build per-surface bounding boxes from the Phase1e vertex-UV table.
+  // `surf_bbox_pad_` is set to 1.5 x the largest mesh-edge length we
+  // observe — large enough to accommodate a legitimate curvature offset
+  // on a curved surface while still catching "interior midpoint assigned
+  // to a distant terminal face" spikes (tens of mm).
+  surf_bbox_.clear();
+  double global_diam = 0.0;
+  for (const auto &kv : surf_vertex_uvs_) {
+    if (kv.second.empty()) continue;
+    BBox bb{kv.second[0][0], kv.second[0][1], kv.second[0][2],
+            kv.second[0][0], kv.second[0][1], kv.second[0][2]};
+    for (const auto &row : kv.second) {
+      if (row[0] < bb.xmin) bb.xmin = row[0];
+      if (row[0] > bb.xmax) bb.xmax = row[0];
+      if (row[1] < bb.ymin) bb.ymin = row[1];
+      if (row[1] > bb.ymax) bb.ymax = row[1];
+      if (row[2] < bb.zmin) bb.zmin = row[2];
+      if (row[2] > bb.zmax) bb.zmax = row[2];
+    }
+    double dx = bb.xmax - bb.xmin;
+    double dy = bb.ymax - bb.ymin;
+    double dz = bb.zmax - bb.zmin;
+    double diam = std::sqrt(dx*dx + dy*dy + dz*dz);
+    if (diam > global_diam) global_diam = diam;
+    surf_bbox_[kv.first] = bb;
+  }
+  // Pad = 5% of the global diameter (a fraction of the whole body's size).
+  // This keeps legitimate HO curving offsets (normally small relative to
+  // the body) admissible while catching projections of points that sit a
+  // substantial fraction of the body away from a candidate surface.
+  surf_bbox_pad_ = 0.05 * global_diam;
+  PRINT_INFO("NetgenCurver: built bbox for %d surfaces (pad=%g mm, global_diam=%g mm)\n",
+             (int)surf_bbox_.size(), surf_bbox_pad_, global_diam);
+
   // Project callback: (surfnr, x,y,z, u_hint, v_hint, has_hint) -> (xp,yp,zp, u,v)
   auto project = [this](int surfnr, double x, double y, double z,
                          double u_hint, double v_hint, bool has_hint)
@@ -573,6 +607,23 @@ bool NetgenCurver::attach_callback_geometry()
     int cubit_sid = it->second;
     RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_sid);
     if (!rf) return {x, y, z, u_hint, v_hint};
+
+    // Early reject: if the query point lies noticeably outside this
+    // surface's own bounding box, return identity. This catches the
+    // dominant failure mode on `unite volume all` coil bodies, where the
+    // curving pipeline asks us to project a coil-interior midpoint onto
+    // a distant terminal face and the ACIS projection clamps to that
+    // face's boundary at tens of mm displacement.
+    auto bb_it = surf_bbox_.find(cubit_sid);
+    if (bb_it != surf_bbox_.end()) {
+      const BBox &bb = bb_it->second;
+      double pad = surf_bbox_pad_;
+      if (x < bb.xmin - pad || x > bb.xmax + pad ||
+          y < bb.ymin - pad || y > bb.ymax + pad ||
+          z < bb.zmin - pad || z > bb.zmax + pad) {
+        return {x, y, z, u_hint, v_hint};
+      }
+    }
 
     ::Surface* surf = rf->get_surface_ptr();
     CubitVector loc(x, y, z);
@@ -698,8 +749,14 @@ bool NetgenCurver::attach_callback_geometry()
                  u_hint, v_hint, u, v, disp);
         project_reject_log_entries_.emplace_back(buf);
       }
-      // Return identity so the HO node stays on the straight edge midpoint
-      return {x, y, z, u_hint, v_hint};
+      // Return identity for the 3D point (HO node stays on the linear
+      // midpoint) but return a UV derived from the *input* point rather
+      // than the boundary-clamped projection result.  This stops bogus
+      // boundary UVs from propagating to downstream PointBetween calls
+      // as their UV hint, which would otherwise compound the error.
+      double u_clean = 0, v_clean = 0;
+      rf->u_v_from_position(loc, u_clean, v_clean);
+      return {x, y, z, u_clean, v_clean};
     }
 
     return {closest.x(), closest.y(), closest.z(), u, v};
