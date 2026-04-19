@@ -1378,6 +1378,217 @@ def open_in_cubit(path: str = "",
 
 
 # ============================================================
+# Cubit Viewer Session tools (OCP-inspired persistent daemon)
+# ============================================================
+#
+# Design note (2026-04-19): these tools drive a long-lived Cubit GUI
+# via a JSON-RPC daemon running under Cubit's bundled Python 3.10.
+# Launch cost is paid once (~0.7s init); subsequent commands are
+# <1 ms. The daemon is auto-discovered via `find_cubit_install()`
+# (env > registry > glob), so there is no hardcoded version path.
+#
+# The design follows OCP CAD Viewer's architecture (stateless client
+# calls + persistent viewer) transposed to Cubit: Cubit itself plays
+# the role of OCP's WebView, and this mcp-server plays the role of
+# OCP's Python client.
+
+from . import cubit_session as _cs
+
+
+def _cubit_session_or_error():
+    """Lazy-init the singleton; return (session, None) or (None, err_json)."""
+    try:
+        sess = _cs.CubitSession.get()
+        sess.ensure_started()
+        return sess, None
+    except _cs.CubitSessionError as e:
+        err = {
+            "status": "error",
+            "stage": "session_init",
+            "error": str(e),
+            "hint": ("Ensure Coreform Cubit is installed. "
+                     "Override path with `set_cubit_bin_dir(path)` or "
+                     "`CUBIT_BIN_DIR` environment variable."),
+        }
+        return None, json.dumps(err, indent=2)
+
+
+def _cubit_path_dispatch(path: Path) -> str:
+    """Map a file extension to the matching Cubit import command."""
+    suffix = path.suffix.lower()
+    abs_path = str(path.resolve()).replace("\\", "/")
+    if suffix == ".jou":
+        return f'playback "{abs_path}"'
+    if suffix in (".step", ".stp"):
+        return f'import step "{abs_path}"'
+    if suffix in (".brep", ".brp"):
+        return f'import acis "{abs_path}"'
+    if suffix in (".msh", ".vol", ".g", ".e", ".exo"):
+        return f'import mesh "{abs_path}"'
+    raise ValueError(f"Unsupported extension for Cubit viewer: {suffix}")
+
+
+@mcp.tool()
+def cubit_show(path: str = "", extra_commands: list = None) -> str:
+	"""
+	Load a file into the **persistent Cubit viewer** and optionally run
+	follow-up commands. First call launches the daemon + Cubit GUI;
+	subsequent calls reuse the session (sub-second command cycles).
+
+	Supported inputs: .jou (playback), .step/.stp (import step), .brep
+	(import acis), .msh/.vol/.g/.e/.exo (import mesh).
+
+	Args:
+	    path: file to load. Leave empty to run only `extra_commands`.
+	    extra_commands: extra Cubit commands to run after loading.
+
+	Returns JSON with the per-command results (line + ok + rc).
+	"""
+	from pathlib import Path as _P
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+
+	cmds = []
+	if path:
+		p = _P(path)
+		if not p.is_absolute():
+			p = PROJECT_ROOT / p
+		if not p.exists():
+			return json.dumps({"status": "error", "stage": "input",
+			                   "error": f"File not found: {p}"})
+		try:
+			cmds.append(_cubit_path_dispatch(p))
+		except ValueError as e:
+			return json.dumps({"status": "error", "stage": "input",
+			                   "error": str(e)})
+	if extra_commands:
+		cmds.extend(str(c).rstrip() for c in extra_commands)
+	if not cmds:
+		return json.dumps({"status": "error", "stage": "input",
+		                   "error": "Either `path` or `extra_commands` is required."})
+
+	try:
+		r = sess.call("cmd", cmds)
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc",
+		                   "error": str(e)})
+	return json.dumps(r, indent=2)
+
+
+@mcp.tool()
+def cubit_exec(commands: list) -> str:
+	"""
+	Send arbitrary Cubit commands to the persistent viewer session.
+
+	Use this for incremental modelling / meshing driven by the LLM:
+	each call appends commands to the running Cubit session, which
+	the student can watch live in Cubit's GUI window.
+
+	Args:
+	    commands: list of Cubit command strings (one per list item, no
+	        trailing newline). Runs in order; stops at first failure.
+
+	Returns JSON with per-command success flags. On a Cubit error,
+	`ok=false` on the offending line and subsequent commands are
+	NOT executed so the viewer's state stays inspectable.
+	"""
+	if not commands:
+		return json.dumps({"status": "error",
+		                   "error": "commands list cannot be empty"})
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	try:
+		r = sess.call("cmd", [str(c).rstrip() for c in commands])
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc",
+		                   "error": str(e)})
+	return json.dumps(r, indent=2)
+
+
+@mcp.tool()
+def cubit_probe(query: str = "summary") -> str:
+	"""
+	Query the Cubit session for geometry/mesh statistics.
+
+	Valid queries:
+	  "summary"  — {volumes, surfaces, curves, vertices, nodes, hexes, tets}
+	  "volume_count", "surface_count", "curve_count", "vertex_count"
+	  "node_count", "hex_count", "tet_count"
+
+	Args:
+	    query: probe name, see list above.
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	try:
+		r = sess.call("probe", [query])
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc",
+		                   "error": str(e)})
+	return json.dumps(r, indent=2)
+
+
+@mcp.tool()
+def cubit_snapshot(out_path: str,
+                   width: int = 800,
+                   height: int = 600) -> str:
+	"""
+	Hardcopy the current Cubit view to a PNG file.
+
+	Use for paper/slide figures from an LLM-driven session, or for
+	a cheap "visual diff" after a command sequence.  GUI mode is
+	strongly recommended; batch-mode screenshots may be empty.
+
+	Args:
+	    out_path: PNG output path (absolute or relative to project root).
+	    width, height: pixel dimensions (defaults 800x600).
+	"""
+	from pathlib import Path as _P
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	p = _P(out_path)
+	if not p.is_absolute():
+		p = PROJECT_ROOT / p
+	abs_path = str(p.resolve()).replace("\\", "/")
+	try:
+		r = sess.call("snapshot", [abs_path, int(width), int(height)])
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc",
+		                   "error": str(e)})
+	return json.dumps(r, indent=2)
+
+
+@mcp.tool()
+def cubit_session_status() -> str:
+	"""Return diagnostic info about the Cubit session (pid, alive, bin_dir)."""
+	status = {
+		"bin_dir": str(_cs.get_cubit_bin_dir() or "<not found>"),
+		"alive": False,
+		"pid": None,
+		"ready_info": None,
+	}
+	if _cs._SINGLETON is not None:
+		status["alive"] = _cs._SINGLETON.is_alive()
+		if _cs._SINGLETON._proc is not None:
+			status["pid"] = _cs._SINGLETON._proc.pid
+		status["ready_info"] = _cs._SINGLETON._ready_info
+	return json.dumps(status, indent=2)
+
+
+@mcp.tool()
+def cubit_session_shutdown() -> str:
+	"""Stop the persistent Cubit daemon. Next `cubit_show` relaunches."""
+	if _cs._SINGLETON is None or not _cs._SINGLETON.is_alive():
+		return json.dumps({"status": "ok", "note": "no session running"})
+	_cs.CubitSession.reset()
+	return json.dumps({"status": "ok", "note": "session stopped"})
+
+
+# ============================================================
 # MCP Prompts
 # ============================================================
 
