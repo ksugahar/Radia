@@ -60,9 +60,9 @@ def ih_sibc(topic: str = "all") -> str:
     """
     Get IH solver architecture and SIBC documentation.
 
-    Two solver paths (v4.6.0):
-    - PEEC+FEM (default): coil PEEC filaments + FEM-SIBC+Kelvin workpiece
-    - ALL FEM (reference): full volume FEM with Kelvin
+    Panel pipeline (2026-04-19):
+    - PEEC+BEM (1-way)        -> calc_peec_bem.py       (P_wp focus, fast)
+    - FEM A-V + wp SIBC + Kelvin -> calc_fem_coilmesh.py (L+P_wp+P_coil, exact)
 
     Surface Impedance Boundary Condition approaches:
     - SIBC: linear surface impedance (Cu, Al)
@@ -71,7 +71,7 @@ def ih_sibc(topic: str = "all") -> str:
     Args:
         topic: Options:
             "all"         - Complete documentation
-            "peec_fem"    - PEEC+FEM vs ALL FEM architecture (START HERE)
+            "peec_fem"    - (historical, see ih_knowledge AV_COIL_SIGMA)
             "overview"    - SIBC method selection table
             "esim"        - ESIM cell problem, Karl iteration
             "biot_savart" - Coil field computation (phi_inc, A_inc, H_inc)
@@ -90,13 +90,13 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
     return (
         f"Set up an induction heating simulation for: {geometry}\n"
         f"Material: {material}\n\n"
-        "Use the ih_sibc tool for SIBC method selection.\n"
-        "Key points:\n"
-        "1. For P_total: use BEM (ScalarBIESIBCSolver) - calc_heating_bem.py\n"
-        "2. For L/B: use FEM (HCurl + Kelvin) - calc_fem_kelvin.py\n"
-        "3. For nonlinear steel: use ESIM + Karl iteration\n"
-        "4. Coil = Biot-Savart filament (no coil mesh needed for BEM)\n"
-        "5. Workpiece surface mesh from OCC or Cubit .vol export\n"
+        "Use the ih_sibc and ih_knowledge tools.\n"
+        "Key points (panel pipeline 2026-04-19):\n"
+        "1. P_wp fast + rotating WP: PEEC+BEM (1-way) / calc_peec_bem.py\n"
+        "2. L + P_wp + P_coil exact: FEM A-V / calc_fem_coilmesh.py\n"
+        "3. Both need GAPPED torus (real port terminations)\n"
+        "4. For nonlinear steel: ESIM + Karl iteration (FEM path)\n"
+        "5. Sample .jou: ih_peec_bem_coarse.jou / ih_fem_kelvin_skin_fine.jou\n"
     )
 
 

@@ -1,11 +1,27 @@
 """
 SIBC / ESIM knowledge for induction heating MCP server.
 
-Production path: PEEC+FEM (filament coil + Omega-reduced Kelvin FEM).
-BEM knowledge has moved to mcp-server-radia-ngsolve (ngsbem_inductance topic).
-BEM solver modules have moved to examples/induction_heating/bem_reference/.
+=============================================================================
+2026-04-19 PANEL MIGRATION NOTICE
+=============================================================================
+The IH panel was rebuilt on 2026-04-19.  Two methods only:
 
-Updated: 2026-04-17 — BEM removed from IH production path.
+  (a) PEEC+BEM (1-way)   -> calc_peec_bem.py       (P_wp focus)
+  (b) FEM A-V (coil mesh) -> calc_fem_coilmesh.py   (L + P_wp + P_coil)
+
+References below to `calc_inductance.py`, `calc_heating_bem.py`, and
+`calc_fem_kelvin.py` describe RETIRED (or moved to examples/) panel
+scripts.  The PHYSICS knowledge is still correct and useful; the
+panel-script file names are NOT.  For current panel pipeline, see
+`ih_knowledge.py::INDUCTION_HEATING_PEEC_BEM_SIBC` and
+`::INDUCTION_HEATING_AV_COIL_SIGMA`.
+
+Historical context:
+  2026-04-17: BEM modules moved examples/induction_heating/bem_reference/
+  2026-04-18: T0 + A-V compound retired from panel (gap-corner 1/r cusps)
+  2026-04-19: calc_peec_bem + calc_fem_coilmesh become the panel
+              (A-V is BACK, this time gapped-torus-only + proper source/sink)
+=============================================================================
 """
 
 IH_PEEC_FEM = """
