@@ -331,6 +331,165 @@ def preview_shape(script: str, name: str = "preview") -> str:
 
 
 @mcp.tool()
+def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
+    """
+    Run a build123d script and show the resulting Shape in the
+    **persistent Cubit Viewer** (GUI window), replacing OCP CAD Viewer.
+
+    This is the successor to `preview_shape` (which used OCP directly).
+    Lab direction (2026-04-19): Cubit Viewer becomes the single CAD
+    preview target — industrial-grade visualization / measurement
+    without the OCP/Cubit split.
+
+    Pipeline:
+      1. exec the build123d script (like execute_build123d).
+      2. Extract the last Shape found in the namespace.
+      3. Export to a temp STEP file.
+      4. Hand to the persistent Cubit session (`cubit_show`-equivalent);
+         the daemon imports STEP into its live Cubit GUI window.
+      5. Temp STEP is deleted by default (Cubit now owns the geometry).
+
+    Performance:
+      - First call: ~0.7-1.0 s (Cubit daemon cold-start) + STEP roundtrip
+      - Subsequent calls: <1 s (daemon warm + STEP import ~0.5 s)
+
+    Args:
+        script: self-contained build123d Python code.
+        label: label attached to the shape (used for STEP filename).
+
+    Returns:
+        JSON with shape stats (volume / bbox / faces / edges) plus the
+        Cubit session response (per-command ok flags).
+    """
+    import sys as _sys
+    import tempfile as _tf
+    import traceback as _tb
+    from io import StringIO
+    from pathlib import Path as _P
+
+    namespace = {}
+    _buf = StringIO()
+    _orig_stdout = sys.stdout
+    sys.stdout = _buf
+    try:
+        exec(  # noqa: S102
+            "from build123d import *\n" + script,
+            namespace,
+        )
+    except Exception:
+        sys.stdout = _orig_stdout
+        return json.dumps({
+            "status": "error",
+            "stage": "script_exec",
+            "error": _tb.format_exc(),
+            "stdout": _buf.getvalue(),
+        }, indent=2)
+    finally:
+        sys.stdout = _orig_stdout
+    stdout_text = _buf.getvalue()
+
+    from build123d import Shape, export_step
+
+    target = None
+    target_name = None
+    for n, obj in namespace.items():
+        if n.startswith("_"):
+            continue
+        if isinstance(obj, Shape):
+            target, target_name = obj, n
+    if target is None:
+        return json.dumps({
+            "status": "error",
+            "stage": "extract",
+            "error": "Script executed but no build123d Shape was found.",
+            "stdout": stdout_text,
+        }, indent=2)
+
+    # Write to a temp STEP; Cubit daemon imports, then we clean up.
+    tmp = _P(_tf.mkdtemp(prefix="b123d_to_cubit_"))
+    step_path = tmp / f"{label}.step"
+    try:
+        export_step(target, str(step_path))
+    except Exception:
+        return json.dumps({
+            "status": "error",
+            "stage": "step_export",
+            "error": _tb.format_exc(),
+        }, indent=2)
+
+    # Hand to Cubit viewer (lazy-start daemon).
+    try:
+        from radia.mcp_server.cubit import cubit_session as _cs
+    except ImportError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "cubit_import",
+            "error": f"mcp-server-cubit package not available: {e}",
+        }, indent=2)
+
+    try:
+        sess = _cs.CubitSession.get()
+        sess.ensure_started()
+    except _cs.CubitSessionError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "cubit_session",
+            "error": str(e),
+            "hint": ("Is Coreform Cubit installed? Override path via "
+                     "`CUBIT_BIN_DIR` env var or `set_cubit_bin_dir()`."),
+        }, indent=2)
+
+    step_fwd = str(step_path).replace("\\", "/")
+    try:
+        r = sess.call("cmd", [f'import step "{step_fwd}"'])
+    except _cs.CubitSessionError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "cubit_rpc",
+            "error": str(e),
+        }, indent=2)
+
+    info = {
+        "status": "ok",
+        "stage": "shown_in_cubit",
+        "viewer": "cubit_persistent_session",
+        "label": label,
+        "variable": target_name,
+        "type": type(target).__name__,
+        "is_valid": target.is_valid,
+        "cubit_result": r,
+    }
+    try:
+        info["volume"] = round(target.volume, 6)
+    except Exception:
+        info["volume"] = None
+    try:
+        info["face_count"] = len(target.faces())
+        info["edge_count"] = len(target.edges())
+    except Exception:
+        pass
+    try:
+        bb = target.bounding_box()
+        info["bounding_box"] = {
+            "min": [round(bb.min.X, 4), round(bb.min.Y, 4), round(bb.min.Z, 4)],
+            "max": [round(bb.max.X, 4), round(bb.max.Y, 4), round(bb.max.Z, 4)],
+        }
+    except Exception:
+        pass
+    if stdout_text:
+        info["stdout"] = stdout_text
+
+    # Temp STEP can be cleaned now — Cubit has imported it.
+    try:
+        step_path.unlink(missing_ok=True)
+        tmp.rmdir()
+    except OSError:
+        pass
+
+    return json.dumps(info, indent=2)
+
+
+@mcp.tool()
 def inspect_geometry(file_path: str) -> str:
     """
     Inspect a STEP or BREP file for CAE quality.
