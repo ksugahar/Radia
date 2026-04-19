@@ -5,124 +5,82 @@
     "ja_description": "Radia-NGSolve パネル定義。自然言語 <-> CLI パラメータの双方向変換に使用。"
   },
   "panels": {
-    "inductance": {
-      "script": "calc_inductance.py",
-      "function": "extract_inductance_vol",
-      "ja_name": "BEM インダクタンス抽出",
-      "ja_description": "source/sink 鞍点 EFIE によるコイル自己インダクタンス抽出 (BEM, 無限領域)",
-      "method": "BEM (LaplaceSL saddle point EFIE)",
-      "command_builder": "radia_ih.py:IHPanel._build_bem_command",
+    "peec_bem": {
+      "script": "calc_peec_bem.py",
+      "function": "solve_peec_bem_forward",
+      "ja_name": "PEEC+BEM 1-way (IH)",
+      "ja_description": "STEP コイル → PEEC filament → 表面 BEM-SIBC で wp 発熱 P_wp を算出。1-way forward (back-reaction なし)。",
+      "method": "PEEC filament bundle + Scalar BIE + SIBC Robin on wp",
+      "command_builder": "radia_ih.py:IHPanel._build_peec_bem_command",
       "params": [
         {
-          "cli": "--mode",
-          "name": "mode",
-          "default": "solve",
-          "choices": [
-            "solve",
-            "post"
-          ],
-          "help": "solve: BEM solve only; post: B-field + GMSH export"
-        },
-        {
-          "cli": "--vol",
-          "name": "vol",
+          "cli": "--peec-step",
+          "name": "peec_step",
           "required": true,
-          "help": "Netgen .vol file",
-          "ja": ".vol メッシュファイル",
-          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+          "help": "STEP file for PEEC coil"
         },
         {
-          "cli": "--fes-order",
-          "name": "fes_order",
+          "cli": "--peec-nwinc",
+          "name": "peec_nwinc",
           "type": "int",
-          "default": 0,
-          "help": "HDivSurface order (0=RWG)",
-          "ja": "基底関数次数",
-          "physics": "0=RWG, 1+=高次"
+          "default": 3,
+          "help": "Filament sub-cells width direction"
         },
         {
-          "cli": "--source",
-          "name": "source",
-          "default": "source",
-          "help": "Source boundary label (prefix match)",
-          "ja": "電流注入面",
-          "physics": "BEM で単位電流を注入する境界面"
-        },
-        {
-          "cli": "--sink",
-          "name": "sink",
-          "default": "sink",
-          "help": "Sink boundary label (prefix match)",
-          "ja": "電流引出面",
-          "physics": "BEM で電流を引き出す境界面"
-        },
-        {
-          "cli": "--msh-output",
-          "name": "msh_output",
-          "default": "",
-          "help": "GMSH .msh output path",
-          "ja": "GMSH 出力パス",
-          "physics": "場の可視化用 .msh v4.1"
-        },
-        {
-          "cli": "--output",
-          "name": "output",
-          "default": "",
-          "help": "Output JSON file (optional)",
-          "ja": "出力 JSON ファイル",
-          "physics": ""
-        },
-        {
-          "cli": "--coil",
-          "name": "coil",
-          "default": "",
-          "help": "Coil material name (filters BEM to coil surfaces)",
-          "ja": "コイル材料名",
-          "physics": "BEM をコイル表面のみに限定するフィルタ"
-        },
-        {
-          "cli": "--coil-sigma",
-          "name": "coil_sigma",
-          "type": "float",
-          "default": 0,
-          "help": "Coil conductivity [S/m] (stored in results)",
-          "ja": "コイル導電率",
-          "physics": "コイル抵抗計算用 [S/m]"
-        },
-        {
-          "cli": "--workpiece",
-          "name": "workpiece",
-          "default": "",
-          "help": "Workpiece boundary label (prefix match)",
-          "ja": "ワークピース境界",
-          "physics": "加熱対象の表面ラベル (prefix match)"
-        },
-        {
-          "cli": "--impedance-model",
-          "name": "impedance_model",
-          "default": "esim",
-          "choices": [
-            "esim",
-            "dowell"
-          ],
-          "help": "esim=ESIM cell problem, dowell=Dowell formula",
-          "ja": "インピーダンスモデル",
-          "physics": "esim/dowell/sibc"
+          "cli": "--peec-nhinc",
+          "name": "peec_nhinc",
+          "type": "int",
+          "default": 3,
+          "help": "Filament sub-cells height direction"
         },
         {
           "cli": "--frequency",
           "name": "frequency",
           "type": "float",
-          "default": 50000,
+          "required": true,
           "help": "Frequency [Hz]",
           "ja": "周波数",
           "physics": "渦電流の浸透深さ delta = sqrt(2*rho/(omega*mu)) を決める"
         },
         {
+          "cli": "--current",
+          "name": "current",
+          "type": "float",
+          "default": 1.0,
+          "help": "Port current [A]",
+          "ja": "コイル電流",
+          "physics": "ソース電流 [A]。J = I / A_cross で電流密度に変換"
+        },
+        {
+          "cli": "--coil-sigma",
+          "name": "coil_sigma",
+          "type": "float",
+          "default": 58000000.0,
+          "help": "Coil conductivity [S/m]",
+          "ja": "コイル導電率",
+          "physics": "コイル抵抗計算用 [S/m]"
+        },
+        {
+          "cli": "--vol",
+          "name": "vol",
+          "required": true,
+          "help": ".vol file containing workpiece mesh",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+        },
+        {
+          "cli": "--wp-label",
+          "name": "wp_label",
+          "default": "sibc",
+          "help": "Workpiece label: volume material name OR boundary sideset label (wp-as-hole + sibc)",
+          "ja": "WP 境界ラベル",
+          "physics": ""
+        },
+        {
           "cli": "--sigma",
           "name": "sigma",
           "type": "float",
-          "default": 2000000.0,
+          "required": true,
           "help": "Workpiece conductivity [S/m]",
           "ja": "導電率",
           "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
@@ -131,213 +89,122 @@
           "cli": "--half-thickness",
           "name": "half_thickness",
           "type": "float",
-          "default": 0.005,
-          "help": "Slab half-thickness [m]",
+          "default": 0.01,
+          "help": "Half-thickness for ESIM (unused in linear)",
           "ja": "半厚さ",
           "physics": "ESIM 厚さ [m]"
-        },
-        {
-          "cli": "--material",
-          "name": "material",
-          "default": "steel",
-          "choices": [
-            "steel",
-            "copper",
-            "aluminum"
-          ],
-          "ja": "材料プリセット",
-          "physics": "steel/copper/aluminum の物性値を自動設定"
         },
         {
           "cli": "--mu-r",
           "name": "mu_r",
           "type": "float",
-          "default": 0,
-          "help": "Relative permeability for SIBC/Dowell (0=auto from material)",
+          "default": 1.0,
+          "help": "Workpiece relative permeability",
           "ja": "比透磁率",
           "physics": "mu = mu_0 * mu_r"
         },
         {
-          "cli": "--esim-geometry",
-          "name": "esim_geometry",
-          "default": "local_curvature",
+          "cli": "--impedance-model",
+          "name": "impedance_model",
+          "default": "sibc",
           "choices": [
-            "local_curvature",
-            "none"
+            "sibc"
           ],
-          "help": "ESIM curvature: local_curvature=Bessel (R=half_thickness), none=flat slab (cosh/sinh)",
-          "ja": "ESIM 形状",
-          "physics": "cylinder/slab"
+          "help": "linear SIBC only (ESIM not supported in 1-way)",
+          "ja": "インピーダンスモデル",
+          "physics": "esim/dowell/sibc"
         },
         {
-          "cli": "--bh-file",
-          "name": "bh_file",
-          "default": "",
-          "help": "BH curve file (2-column: H[A/m] B[T], overrides --material)",
-          "ja": "BH カーブファイル",
-          "physics": "2列: H[A/m] B[T]"
-        },
-        {
-          "cli": "--j-npy",
-          "name": "j_npy",
-          "default": "",
-          "help": "J_coeffs.npy path (post mode)"
-        },
-        {
-          "cli": "--mesh-vol",
-          "name": "mesh_vol",
-          "default": "",
-          "help": "surface_mesh.vol path (post mode)"
-        },
-        {
-          "cli": "--lx",
-          "name": "lx",
-          "type": "float",
-          "default": 0.07,
-          "help": "Box half-size X [m]"
-        },
-        {
-          "cli": "--ly",
-          "name": "ly",
-          "type": "float",
-          "default": 0.07,
-          "help": "Box half-size Y [m]"
-        },
-        {
-          "cli": "--lz",
-          "name": "lz",
-          "type": "float",
-          "default": 0.07,
-          "help": "Box half-size Z [m]"
-        },
-        {
-          "cli": "--maxh-vol",
-          "name": "maxh_vol",
-          "type": "float",
-          "default": 0.01,
-          "help": "Volume mesh size [m]"
+          "cli": "--h1-order",
+          "name": "h1_order",
+          "type": "int",
+          "default": 1,
+          "help": "H1 polynomial order for BEM",
+          "ja": "H1 次数",
+          "physics": ""
         }
       ]
     },
-    "fem_kelvin": {
-      "script": "calc_fem_kelvin.py",
-      "function": "solve_fem",
-      "ja_name": "FEM-SIBC 誘導加熱",
-      "ja_description": "3D FEM (HCurl) + SIBC/ESIM + Kelvin 変換。場分布と損失を計算",
-      "method": "FEM (HCurl curl-curl + Robin SIBC)",
-      "command_builder": "radia_ih.py:IHPanel._build_fem_command",
+    "fem_coilmesh": {
+      "script": "calc_fem_coilmesh.py",
+      "function": "solve_fem_coilmesh",
+      "ja_name": "FEM A-V (IH、コイル体積メッシュ)",
+      "ja_description": "A-V 定式化 (HCurl + H1 phi on coil) + source/sink Dirichlet lift + 体積積分電流抽出 + wp SIBC Robin + Kelvin。gapped torus 専用。L, P_wp, P_coil を出力。",
+      "method": "FEM A-V (HCurl A + H1 phi on coil, phi Dirichlet source/sink)",
+      "command_builder": "radia_ih.py:IHPanel._build_fem_coilmesh_command",
       "params": [
         {
           "cli": "--vol",
           "name": "vol",
           "required": true,
-          "help": "Netgen .vol file",
+          "help": ".vol file",
           "ja": ".vol メッシュファイル",
           "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
-        },
-        {
-          "cli": "--fes-order",
-          "name": "fes_order",
-          "type": "int",
-          "default": 1,
-          "help": "HCurl polynomial order (1-3)",
-          "ja": "基底関数次数",
-          "physics": "0=RWG, 1+=高次"
         },
         {
           "cli": "--frequency",
           "name": "frequency",
           "type": "float",
-          "default": 7000,
-          "help": "Frequency [Hz]",
+          "required": true,
           "ja": "周波数",
           "physics": "渦電流の浸透深さ delta = sqrt(2*rho/(omega*mu)) を決める"
-        },
-        {
-          "cli": "--sigma",
-          "name": "sigma",
-          "type": "float",
-          "default": 2000000.0,
-          "help": "Conductivity [S/m]",
-          "ja": "導電率",
-          "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
-        },
-        {
-          "cli": "--impedance",
-          "name": "impedance",
-          "default": "sibc",
-          "choices": [
-            "sibc",
-            "esim"
-          ],
-          "help": "Impedance model",
-          "ja": "インピーダンスモデル",
-          "physics": "sibc=線形SIBC, esim=非線形ESIM"
-        },
-        {
-          "cli": "--mu-r",
-          "name": "mu_r",
-          "type": "float",
-          "default": 100,
-          "help": "mu_r (SIBC mode)",
-          "ja": "比透磁率",
-          "physics": "mu = mu_0 * mu_r"
-        },
-        {
-          "cli": "--bh-file",
-          "name": "bh_file",
-          "default": "",
-          "help": "BH curve file (ESIM mode)",
-          "ja": "BH カーブファイル",
-          "physics": "2列: H[A/m] B[T]"
-        },
-        {
-          "cli": "--material",
-          "name": "material",
-          "default": "steel",
-          "choices": [
-            "steel",
-            "copper",
-            "aluminum"
-          ],
-          "ja": "材料プリセット",
-          "physics": "steel/copper/aluminum の物性値を自動設定"
         },
         {
           "cli": "--current",
           "name": "current",
           "type": "float",
           "default": 1.0,
-          "help": "Coil current [A]",
+          "help": "Port current I_target [A]",
           "ja": "コイル電流",
           "physics": "ソース電流 [A]。J = I / A_cross で電流密度に変換"
         },
         {
-          "cli": "--a-coil",
-          "name": "a_coil",
+          "cli": "--coil-sigma",
+          "name": "coil_sigma",
           "type": "float",
-          "default": 0.003,
-          "help": "Coil wire radius [m] (for J_theta fallback)",
-          "ja": "コイル線半径",
-          "physics": "[m]"
+          "default": 58000000.0,
+          "ja": "コイル導電率",
+          "physics": "コイル抵抗計算用 [S/m]"
         },
         {
-          "cli": "--r-wp",
-          "name": "r_wp",
+          "cli": "--coil-mu-r",
+          "name": "coil_mu_r",
+          "type": "float",
+          "default": 1.0
+        },
+        {
+          "cli": "--sigma",
+          "name": "sigma",
+          "type": "float",
+          "required": true,
+          "help": "Workpiece conductivity [S/m]",
+          "ja": "導電率",
+          "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
+        },
+        {
+          "cli": "--mu-r",
+          "name": "mu_r",
+          "type": "float",
+          "default": 1.0,
+          "help": "Workpiece relative permeability",
+          "ja": "比透磁率",
+          "physics": "mu = mu_0 * mu_r"
+        },
+        {
+          "cli": "--half-thickness",
+          "name": "half_thickness",
           "type": "float",
           "default": 0.01,
-          "help": "Workpiece radius [m]",
-          "ja": "ワークピース半径",
-          "physics": "[m]"
+          "ja": "半厚さ",
+          "physics": "ESIM 厚さ [m]"
         },
         {
-          "cli": "--max-iter",
-          "name": "max_iter",
+          "cli": "--fes-order",
+          "name": "fes_order",
           "type": "int",
-          "default": 15,
-          "help": "Max Karl iterations",
-          "ja": "最大反復回数",
-          "physics": ""
+          "default": 1,
+          "ja": "基底関数次数",
+          "physics": "0=RWG, 1+=高次"
         },
         {
           "cli": "--solver",
@@ -349,227 +216,28 @@
             "iccg",
             "ams"
           ],
-          "help": "pardiso (direct), bddc (iterative), iccg (shifted IC+CG), ams (Compact AMS+COCR)",
           "ja": "線形ソルバー",
           "physics": "pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR"
         },
         {
-          "cli": "--reg",
-          "name": "reg",
-          "type": "float",
-          "default": 1e-06,
-          "help": "Gauge regularization (add reg*nu0*u*v*dx)",
-          "ja": "ゲージ正則化",
-          "physics": "curl-curl 系のカーネル除去。reg*nu0*u*v*dx を追加"
+          "cli": "--sibc-bnd",
+          "name": "sibc_bnd",
+          "default": "sibc"
         },
         {
-          "cli": "--shift-eps",
-          "name": "shift_eps",
-          "type": "float",
-          "default": 1e-06,
-          "help": "Shifted preconditioner eps (AMS/ICCG)",
-          "ja": "シフト前処理",
-          "physics": "AMS/ICCG 用"
+          "cli": "--source-bnd",
+          "name": "source_bnd",
+          "default": "source"
         },
         {
-          "cli": "--nthreads",
-          "name": "nthreads",
-          "type": "int",
-          "default": 0,
-          "help": "TaskManager threads (0=auto, 1=single)",
-          "ja": "スレッド数",
-          "physics": "TaskManager 並列数。0=自動, 1=シングル"
+          "cli": "--sink-bnd",
+          "name": "sink_bnd",
+          "default": "sink"
         },
         {
-          "cli": "--msh-output",
-          "name": "msh_output",
-          "default": "",
-          "help": "GMSH .msh output path",
-          "ja": "GMSH 出力パス",
-          "physics": "場の可視化用 .msh v4.1"
-        },
-        {
-          "cli": "--output",
-          "name": "output",
-          "default": "",
-          "help": "JSON output file",
-          "ja": "出力 JSON ファイル",
-          "physics": ""
-        }
-      ]
-    },
-    "heating_bem": {
-      "script": "calc_heating_bem.py",
-      "function": "compute_heating_bem",
-      "ja_name": "BEM-SIBC 加熱解析",
-      "ja_description": "スカラー BIE + SIBC。Biot-Savart コイル + ワークピース表面損失",
-      "method": "Scalar BIE (LaplaceSL + LaplaceDL + SIBC Robin)",
-      "command_builder": "radia_ih.py:IHPanel._build_bem_wp_command",
-      "params": [
-        {
-          "cli": "--vol",
-          "name": "vol",
-          "required": true,
-          "help": "Path to .vol file",
-          "ja": ".vol メッシュファイル",
-          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
-        },
-        {
-          "cli": "--coil-radius",
-          "name": "coil_radius",
-          "type": "float",
-          "default": 0.03,
-          "help": "Coil loop radius [m]",
-          "ja": "コイル半径",
-          "physics": "[m]"
-        },
-        {
-          "cli": "--coil-current",
-          "name": "coil_current",
-          "type": "float",
-          "default": 1.0,
-          "help": "Coil current [A]",
-          "ja": "コイル電流",
-          "physics": "[A]"
-        },
-        {
-          "cli": "--gap-deg",
-          "name": "gap_deg",
-          "type": "float",
-          "default": 5,
-          "help": "Coil gap angle [degrees]",
-          "ja": "ギャップ角度",
-          "physics": "[deg]"
-        },
-        {
-          "cli": "--frequency",
-          "name": "frequency",
-          "type": "float",
-          "default": 7000,
-          "help": "Frequency [Hz]",
-          "ja": "周波数",
-          "physics": "渦電流の浸透深さ delta = sqrt(2*rho/(omega*mu)) を決める"
-        },
-        {
-          "cli": "--sigma",
-          "name": "sigma",
-          "type": "float",
-          "default": 2000000.0,
-          "help": "Workpiece conductivity [S/m]",
-          "ja": "導電率",
-          "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
-        },
-        {
-          "cli": "--material",
-          "name": "material",
-          "default": "steel",
-          "choices": [
-            "steel",
-            "copper",
-            "aluminum"
-          ],
-          "ja": "材料プリセット",
-          "physics": "steel/copper/aluminum の物性値を自動設定"
-        },
-        {
-          "cli": "--h1-order",
-          "name": "h1_order",
-          "type": "int",
-          "default": 1,
-          "help": "H1 polynomial order",
-          "ja": "H1 次数",
-          "physics": ""
-        },
-        {
-          "cli": "--wp-label",
-          "name": "wp_label",
-          "default": "wp_surface",
-          "help": "Boundary label for workpiece surface",
-          "ja": "WP 境界ラベル",
-          "physics": ""
-        },
-        {
-          "cli": "--half-thickness",
-          "name": "half_thickness",
-          "type": "float",
-          "default": 0.01,
-          "help": "Workpiece radius for ESIM [m]",
-          "ja": "半厚さ",
-          "physics": "ESIM 厚さ [m]"
-        },
-        {
-          "cli": "--esim-geometry",
-          "name": "esim_geometry",
-          "default": "cylinder",
-          "choices": [
-            "cylinder",
-            "planar"
-          ],
-          "ja": "ESIM 形状",
-          "physics": "cylinder/slab"
-        },
-        {
-          "cli": "--impedance-model",
-          "name": "impedance_model",
-          "default": "esim",
-          "choices": [
-            "esim",
-            "linear"
-          ],
-          "help": "esim (nonlinear BH) or linear (fixed mu_r)",
-          "ja": "インピーダンスモデル",
-          "physics": "esim/dowell/sibc"
-        },
-        {
-          "cli": "--mu-r",
-          "name": "mu_r",
-          "type": "float",
-          "default": null,
-          "help": "Relative permeability (linear mode)",
-          "ja": "比透磁率",
-          "physics": "mu = mu_0 * mu_r"
-        },
-        {
-          "cli": "--bh-file",
-          "name": "bh_file",
-          "default": "",
-          "help": "Custom BH curve file",
-          "ja": "BH カーブファイル",
-          "physics": "2列: H[A/m] B[T]"
-        },
-        {
-          "cli": "--max-iter",
-          "name": "max_iter",
-          "type": "int",
-          "default": 15,
-          "help": "Karl iteration max",
-          "ja": "最大反復回数",
-          "physics": ""
-        },
-        {
-          "cli": "--tol",
-          "name": "tol",
-          "type": "float",
-          "default": 0.001,
-          "help": "Karl convergence tolerance",
-          "ja": "収束判定",
-          "physics": "Karl 反復の Z_s 変化率閾値"
-        },
-        {
-          "cli": "--msh-output",
-          "name": "msh_output",
-          "default": "",
-          "help": "GMSH output path",
-          "ja": "GMSH 出力パス",
-          "physics": "場の可視化用 .msh v4.1"
-        },
-        {
-          "cli": "--output",
-          "name": "output",
-          "default": "",
-          "help": "JSON output file",
-          "ja": "出力 JSON ファイル",
-          "physics": ""
+          "cli": "--coil-mat",
+          "name": "coil_mat",
+          "default": "coil"
         }
       ]
     },
@@ -677,45 +345,6 @@
           "physics": "0=RWG, 1+=高次"
         },
         {
-          "cli": "--bh-file",
-          "name": "bh_file",
-          "default": "",
-          "help": "BH curve file (2 columns: H B)",
-          "ja": "BH カーブファイル",
-          "physics": "2列: H[A/m] B[T]"
-        },
-        {
-          "cli": "--material",
-          "name": "material",
-          "default": "steel",
-          "choices": [
-            "steel",
-            "elf_steel",
-            "linear",
-            "hysteresis"
-          ],
-          "help": "steel/elf_steel (BH curve), linear (mu_r), hysteresis (.hys)",
-          "ja": "材料プリセット",
-          "physics": "steel/copper/aluminum の物性値を自動設定"
-        },
-        {
-          "cli": "--mu-r",
-          "name": "mu_r",
-          "type": "float",
-          "default": 1000,
-          "help": "mu_r (linear mode only)",
-          "ja": "比透磁率",
-          "physics": "mu = mu_0 * mu_r"
-        },
-        {
-          "cli": "--hys-file",
-          "name": "hys_file",
-          "default": "",
-          "help": ".hys file (hysteresis mode)",
-          "ja": "ヒステリシスファイル",
-          "physics": ""
-        },
-        {
           "cli": "--n-steps",
           "name": "n_steps",
           "type": "int",
@@ -814,36 +443,6 @@
           "help": "Cubit .cub5 file",
           "ja": "Cubit モデル",
           "physics": ".cub5 ファイル (メッシュ生成に Cubit 必要)"
-        },
-        {
-          "cli": "--material",
-          "name": "material",
-          "default": "steel",
-          "choices": [
-            "steel",
-            "elf_steel",
-            "linear"
-          ],
-          "help": "steel (BH curve) or linear (mu_r)",
-          "ja": "材料プリセット",
-          "physics": "steel/copper/aluminum の物性値を自動設定"
-        },
-        {
-          "cli": "--mu-r",
-          "name": "mu_r",
-          "type": "float",
-          "default": 1000,
-          "help": "mu_r (linear mode only)",
-          "ja": "比透磁率",
-          "physics": "mu = mu_0 * mu_r"
-        },
-        {
-          "cli": "--bh-file",
-          "name": "bh_file",
-          "default": "",
-          "help": "Custom BH curve file (H B)",
-          "ja": "BH カーブファイル",
-          "physics": "2列: H[A/m] B[T]"
         },
         {
           "cli": "--ima",

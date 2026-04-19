@@ -6,7 +6,7 @@ Called as subprocess from Cubit panel:
 
 Workflow:
   1. Open cub5, get CAD areas
-  2. export_NGSolveCurvedMesh(cubit, order=N) -> NGSolve Mesh (curved via ACIS kernel)
+  2. radia_export netgen "mesh.vol" order N -> NGSolve Mesh (curved via ACIS kernel)
   3. Integrate(CF(1), mesh, BND) for surface area
 
 IMPORTANT: NGSolve must be imported BEFORE cubit.
@@ -48,9 +48,9 @@ def _setup_cubit():
 
 
 def calculate_surface(cub5_file, order):
-    """Calculate surface area using Cubit mesh + export_NGSolveCurvedMesh().
+    """Calculate surface area using Cubit mesh + radia_export netgen.
 
-    Uses export_NGSolveCurvedMesh() which works directly with Cubit's ACIS kernel
+    Uses radia_export netgen which works directly with Cubit's ACIS kernel
     for high-order curving. No STEP files or OCC geometry needed.
     """
     from ngsolve import Mesh as NGMesh, Integrate, CF, BND

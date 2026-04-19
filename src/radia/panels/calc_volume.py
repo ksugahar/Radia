@@ -8,7 +8,7 @@ Called as subprocess from Radia app or Cubit panel:
 
 Three mesh paths:
   .vol:  Pre-exported Netgen mesh (preferred, no Cubit needed)
-  .cub5: Cubit ACIS kernel -> extract_curved_mesh(order=N) -> NGSolve
+  .cub5: Cubit -> radia_export netgen "mesh.vol" order N -> NGSolve
   .step: OCC geometry -> Netgen mesh -> mesh.Curve(order) -> NGSolve
 
 IMPORTANT: NGSolve must be imported BEFORE cubit to avoid numpy DLL conflict.
@@ -56,7 +56,7 @@ def calculate_volume_vol(vol_file):
 
 
 def calculate_volume(cub5_file, order):
-    """Calculate volume using Cubit ACIS kernel + extract_curved_mesh.
+    """Calculate volume using Cubit ACIS kernel + radia_export netgen.
 
     Legacy path — prefer .vol export + calculate_volume_vol().
     """

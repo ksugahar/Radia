@@ -52,24 +52,27 @@ step_path = os.path.join(SAMPLES_DIR, "ih_closed_torus_coil.step")
 cubit.cmd('export step "%s" volume %d overwrite' % (step_path, coil_vid))
 print("STEP exported: %s" % step_path)
 
+# Coil volume is NOT meshed: calc_fem_coilmesh treats it as a hole in
+# the air domain, with SIBC Robin BC on the coil_surface sideset.
+# Only air + (later) kelvin are meshed with HCurl DOFs.
 cubit.cmd("curve in volume %d with length < 0.05 interval 60" % coil_vid)
 cubit.cmd("curve in volume %d with length > 0.05 interval 180" % coil_vid)
-cubit.cmd("volume %d scheme tetmesh" % coil_vid)
-cubit.cmd("volume %d size 0.001" % coil_vid)
-cubit.cmd("mesh volume %d" % coil_vid)
 
 cubit.cmd("surface in volume %d size 0.002" % wp_vid)
 cubit.cmd("volume %d %d scheme tetmesh" % (air_top, air_bot))
 cubit.cmd("volume %d %d size 0.020" % (air_top, air_bot))
 cubit.cmd("mesh volume %d %d" % (air_top, air_bot))
 
-cubit.cmd("block 1 add volume %d" % coil_vid)
-cubit.cmd('block 1 name "coil"')
 cubit.cmd("block 2 add volume %d %d" % (air_top, air_bot))
 cubit.cmd('block 2 name "air"')
 
 cubit.cmd("sideset 1 add surface in volume %d" % wp_vid)
 cubit.cmd('sideset 1 name "sibc"')
+
+# Coil outer surface for calc_fem_coilmesh (coil SIBC + K_phi source).
+# Closed torus has no gap faces, so all coil surfaces carry K.
+cubit.cmd("sideset 2 add surface in volume %d" % coil_vid)
+cubit.cmd('sideset 2 name "coil_surface"')
 
 info = add_kelvin_cubit(R=R, symmetry=["z"])
 
