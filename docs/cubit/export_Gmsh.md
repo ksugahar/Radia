@@ -1,37 +1,36 @@
 # export_Gmsh
 
-Export mesh to Gmsh format.
+Export mesh to Gmsh v4.1 format with high-order element support (order 1-3).
 
-## Cubit Plugin (Recommended)
+## Syntax
 
 ```
-radia_export gmsh "mesh.msh"
-radia_export gmsh "mesh.msh" dim 2d
+radia_export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
-No block assignment or `#!python` required.
+No block assignment required — all meshed elements are exported automatically.
+Sidesets are exported as surface elements. Nodesets as point elements.
 
----
+> **IMPORTANT**: Use `radia_export gmsh`, NOT `export gmsh`.
+> Cubit has no built-in `export gmsh` command — only `radia_export gmsh` is available.
 
-## Plugin Command
+### Options
 
-```python
-cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
-cubit.cmd('radia_export gmsh "mesh.msh" dimension 2 overwrite')
-```
+| Option | Default | Description |
+|--------|---------|-------------|
+| `order 1` | yes | 1st order elements |
+| `order 2` | | 2nd order (edge mid-nodes via NetgenCurver + ACIS geometry projection) |
+| `order 3` | | 3rd order (edge + face nodes via NetgenCurver; wedge not supported) |
+| `dimension 3` | yes | 3D mode |
+| `dimension 2` | | 2D mode — orient surface normals to +z, z-coordinates set to 0 |
+| `overwrite` | off | Overwrite existing file |
 
-> **Note**: The old `cubit_mesh_export.export_Gmesh()` Python function has been replaced by the `radia_export gmsh` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
-
-### DIM Parameter Options
-
-| Option | Description |
-|--------|-------------|
-| `dimension 3` (default) | 3D mode - no normal orientation applied |
-| `dimension 2` | 2D mode - orient surface element normals to +z direction, z-coordinates set to 0 |
+> **Order 4-5**: Not supported in Gmsh export (face/volume interior node extraction
+> is unreliable, leading to negative Jacobians). Use `radia_export netgen` for order 4-5.
 
 ## Supported Elements
 
-### 1st Order Elements
+### 1st Order (order 1)
 
 | Element Type | Gmsh Code | Nodes |
 |--------------|-----------|-------|
@@ -44,20 +43,32 @@ cubit.cmd('radia_export gmsh "mesh.msh" dimension 2 overwrite')
 | Wedge/Prism | 6 | 6 |
 | Pyramid | 7 | 5 |
 
-### 2nd Order Elements
+### 2nd Order (order 2) — Serendipity
 
 | Element Type | Gmsh Code | Nodes |
 |--------------|-----------|-------|
 | Line3 | 8 | 3 |
 | Triangle6 | 9 | 6 |
-| Triangle7 | 42 | 7 |
 | Quad8 | 16 | 8 |
-| Quad9 | 10 | 9 |
 | Tetrahedron10 | 11 | 10 |
-| Tetrahedron11 | 35 | 11 |
 | Hexahedron20 | 17 | 20 |
 | Wedge15 | 18 | 15 |
 | Pyramid13 | 19 | 13 |
+
+### 3rd Order (order 3) — Serendipity
+
+| Element Type | Gmsh Code | Nodes |
+|--------------|-----------|-------|
+| Line4 | 26 | 4 |
+| Triangle10 | 21 | 10 |
+| Quad12 | 39 | 12 |
+| Tetrahedron20 | 29 | 20 |
+| Hexahedron32 | 99 | 32 |
+| Pyramid21 | 125 | 21 |
+
+> **Note**: Wedge/Prism is **not supported** at order 3 (Gmsh limitation:
+> `FaceClosureFull` not implemented for prisms). Wedge elements fall back
+> to linear when order 3 is requested.
 
 ## File Format
 
@@ -94,17 +105,26 @@ cubit.cmd("mesh surface 1")
 cubit.cmd('radia_export gmsh "plate.msh" dimension 2 overwrite')
 ```
 
-### 2nd Order Elements
+### High-Order Export (order 2)
 
 ```python
-cubit.cmd("create brick x 1 y 1 z 1")
+cubit.cmd("create sphere radius 1")
 cubit.cmd("volume 1 scheme tetmesh")
+cubit.cmd("volume 1 size 0.3")
 cubit.cmd("mesh volume 1")
-cubit.cmd("block 1 add tet all")
-cubit.cmd("block 1 element type tetra10")  # Convert to 2nd order
 
-cubit.cmd('radia_export gmsh "mesh_2nd_order.msh" overwrite')
+# No block assignment or element type change needed
+cubit.cmd('radia_export gmsh "mesh_o2.msh" order 2 overwrite')
 ```
+
+### 3rd Order Export
+
+```python
+cubit.cmd('radia_export gmsh "mesh_o3.msh" order 3 overwrite')
+```
+
+> Order 2+ generates a companion `.geo` file (with `Mesh.NumSubEdges=4`)
+> for proper curved element display in the Gmsh GUI.
 
 ## $Entities Section
 
@@ -127,4 +147,5 @@ The output file is compatible with:
 
 ## See Also
 
-- [Cubit_Element_Order.md](Cubit_Element_Order.md) - How to control element order
+- [export_NetgenMesh.md](export_NetgenMesh.md) - Netgen .vol export (order 1-5)
+- [Function_Reference.md](Function_Reference.md) - All plugin commands
