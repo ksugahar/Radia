@@ -71,6 +71,12 @@ bool NetgenCurver::build(const MeshData &md, int order)
              diag_path_calls_[1], diag_path_max_disp_[1],
              diag_path_calls_[2], diag_path_max_disp_[2],
              diag_path_calls_[3], diag_path_max_disp_[3]);
+  PRINT_INFO("NetgenCurver: path=0 disp histogram — "
+             "<0.01:%ld  [0.01,0.05):%ld  [0.05,0.1):%ld  [0.1,0.2):%ld  "
+             "[0.2,0.5):%ld  [0.5,1.0):%ld  >=1.0:%ld mm\n",
+             diag_path0_hist_[0], diag_path0_hist_[1], diag_path0_hist_[2],
+             diag_path0_hist_[3], diag_path0_hist_[4], diag_path0_hist_[5],
+             diag_path0_hist_[6]);
   if (diag_project_rejects_ > 0) {
     // Show top-5 offending surfaces by reject count + UV spread for each
     std::vector<std::pair<int,long>> ranked(diag_project_reject_per_surf_.begin(),
@@ -557,6 +563,7 @@ bool NetgenCurver::attach_callback_geometry()
     diag_path_calls_[i] = 0;
     diag_path_max_disp_[i] = 0.0;
   }
+  for (int i = 0; i < 7; i++) diag_path0_hist_[i] = 0;
   project_reject_log_entries_.clear();
 
   // Build per-surface bounding boxes from the Phase1e vertex-UV table.
@@ -719,6 +726,16 @@ bool NetgenCurver::attach_callback_geometry()
     if (path >= 0 && path < 4) {
       diag_path_calls_[path]++;
       if (disp > diag_path_max_disp_[path]) diag_path_max_disp_[path] = disp;
+    }
+    if (path == 0) {
+      int bin = 6;
+      if (disp < 0.01) bin = 0;
+      else if (disp < 0.05) bin = 1;
+      else if (disp < 0.1)  bin = 2;
+      else if (disp < 0.2)  bin = 3;
+      else if (disp < 0.5)  bin = 4;
+      else if (disp < 1.0)  bin = 5;
+      diag_path0_hist_[bin]++;
     }
     // path 0 (UV hint supplied by Netgen, eval via position_from_u_v) is
     // trusted unconditionally — the hint came from interpolating two
