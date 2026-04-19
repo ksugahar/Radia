@@ -159,6 +159,7 @@ setup(
 		"mkl>=2024.2.0",
 		"intel-cmplr-lib-rt>=2024.2.0",
 		"ngsolve==6.2.2603",
+		"netgen-mesher==6.2.2603",
 	],
 	extras_require={
 		"viz": [
