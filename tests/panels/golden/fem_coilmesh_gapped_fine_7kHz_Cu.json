@@ -1,0 +1,38 @@
+{
+  "description": "Golden reference for FEM A-V (gapped torus, source/sink, MCP-documented formulation).",
+  "rationale": "Locks: (1) A-V compound FES with phi Dirichlet-lift on source/sink ports; (2) volume-integral current extraction int J.grad(psi_n) dV (MCP ih_knowledge AV_COIL_SIGMA); (3) wp SIBC Robin. P_wp matches 2D axisym SIBC reference to <2% (primary metric for IH heating analysis). L and P_coil are mesh-sensitive when coil h > delta/3 and relax loosely.",
+  "sample": {
+    "vol": "src/radia/panels/samples/ih_fem_kelvin_skin_fine.vol",
+    "generator_jou": "src/radia/panels/samples/ih_fem_kelvin_skin_fine.jou",
+    "mesh_note": "Gapped torus (5 deg) with source/sink port sidesets, wp cylinder hole (sibc sideset), Kelvin exterior with periodic identification. Coil surface mesh ~0.16mm (delta/5 at Cu 7kHz); interior ~0.5mm (delta/1.6 — still under-resolved for |J|^2 convergence)."
+  },
+  "physics": {
+    "coil": "gapped torus R=30mm a=3mm gap=5deg, Cu sigma=5.8e7",
+    "workpiece": "cylinder R=25mm H=25mm as hole in air, Cu sigma=5.8e7, mu_r=1",
+    "frequency_Hz": 7000,
+    "current_A": 1.0,
+    "half_thickness_m": 0.0125,
+    "fes_order": 1
+  },
+  "reference_2d_axisym_sibc": {
+    "P_wp_W": 6.63e-5,
+    "note": "2D axisym, sigma_coil=0 (uniform J), wp full-eddy resolved. Matches PEEC+BEM and FEM A-V wp heating within 2%."
+  },
+  "reference_2d_axisym_full_eddy": {
+    "L_nH": 50.54,
+    "P_total_W": 1.507e-4,
+    "note": "2D axisym, sigma_coil=5.8e7, both coil + wp full-eddy. P_coil_implied ~ 8.4e-5."
+  },
+  "expected": {
+    "L_total_nH": 47.32,
+    "P_wp_W": 6.543e-5,
+    "P_coil_W": 1.476e-4,
+    "P_total_W": 2.130e-4,
+    "tolerance_L_pct": 5.0,
+    "tolerance_Pwp_pct": 5.0,
+    "tolerance_Pcoil_pct": 15.0,
+    "note_Pcoil": "P_coil is volumetric |J|^2/sigma; mesh-sensitive. On the ih_fem_kelvin_skin_fine sample it is ~75% above the 2D axisym full-eddy implied value; treat as upper bound.  For an exact thin-wire estimate use Dowell analytical in examples/ (panel-demoted 2026-04-19)."
+  },
+  "captured_at": "2026-04-19",
+  "source_of_truth": "A-V formulation per MCP ih_knowledge INDUCTION_HEATING_AV_COIL_SIGMA; volumetric |J|^2/sigma P_coil (mesh-sensitive, accepted as engineering approximation)."
+}
