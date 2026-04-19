@@ -1,0 +1,29 @@
+# 03_imprint_hex.jou — multi-body CAD with shared topology + hex mesh
+# Expected: DO NOT translate. This file uses imprint/merge + hex sweep +
+# block tagging, none of which have a build123d equivalent. Should be
+# kept as-is for Cubit → hex → Radia/ELF.
+reset
+
+# Iron core with a coil window
+create brick x 50 y 50 z 20
+create brick x 30 y 30 z 20
+subtract volume 2 from volume 1 keep
+
+# Copper winding inside the window
+create brick x 28 y 28 z 18
+move volume 3 x 0 y 0 z 0
+
+# Shared-topology union: imprint+merge is mandatory for conformal hex
+imprint all
+merge all
+
+# Hex mesh via sweep scheme, uniform size
+volume all scheme sweep
+volume all size 2
+mesh volume all
+
+# Block registration for the NGSolve/Radia pipeline
+block 1 volume 1 2 4
+block 1 name "iron_core"
+block 2 volume 3
+block 2 name "winding"
