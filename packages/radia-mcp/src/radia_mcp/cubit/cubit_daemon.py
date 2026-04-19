@@ -84,23 +84,55 @@ def _init_cubit(gui: bool):
     return cubit
 
 
+def _cubit_error_count(cubit_mod):
+    try:
+        return int(cubit_mod.get_error_count())
+    except Exception:
+        return 0
+
+
+def _cubit_last_error(cubit_mod):
+    try:
+        msg = cubit_mod.get_last_error()
+        return str(msg) if msg else ""
+    except Exception:
+        return ""
+
+
 def _op_cmd(cubit_mod, args):
     """Execute a list of cubit commands. Returns per-command success flags.
 
-    Cubit's `cmd` returns an int (1 on success, 0 on failure) per call.
-    We run them sequentially and stop at the first failure so downstream
-    state is recoverable.
+    Cubit's `cmd` returns rc=1 (truthy) even for commands that print
+    ERROR ("No volume with ID 99" etc.) — accepted but silent no-op.
+    We sample `get_error_count()` around each call so silent failures
+    are reported as ok=False instead of slipping through the batch
+    dry-run into the live GUI.
     """
     results = []
     for line in args:
+        err_before = _cubit_error_count(cubit_mod)
         try:
             rc = cubit_mod.cmd(str(line))
         except Exception:
             results.append({"line": line, "ok": False,
-                            "error": traceback.format_exc()})
+                            "error": traceback.format_exc(),
+                            "error_count_delta": 0})
             break
-        ok = bool(rc)
-        results.append({"line": line, "ok": ok, "rc": int(rc) if not isinstance(rc, bool) else int(rc)})
+        err_after = _cubit_error_count(cubit_mod)
+        delta = err_after - err_before
+        rc_ok = bool(rc)
+        ok = rc_ok and delta == 0
+        step = {
+            "line": line,
+            "ok": ok,
+            "rc": int(rc) if not isinstance(rc, bool) else int(rc),
+            "error_count_delta": int(delta),
+        }
+        if delta > 0:
+            msg = _cubit_last_error(cubit_mod)
+            step["error"] = (msg if msg
+                             else f"Cubit emitted {delta} ERROR line(s)")
+        results.append(step)
         if not ok:
             break
     return results
@@ -134,6 +166,39 @@ def _op_probe(cubit_mod, args):
                 "nodes": int(cubit_mod.get_node_count()),
                 "hexes": int(cubit_mod.get_hex_count()),
                 "tets": int(cubit_mod.get_tet_count()),
+            }
+        if q in ("quality_summary", "quality"):
+            try:
+                hex_ids = list(cubit_mod.parse_cubit_list("hex", "all"))
+                tet_ids = list(cubit_mod.parse_cubit_list("tet", "all"))
+            except Exception:
+                hex_ids, tet_ids = [], []
+            vals = []
+            try:
+                if hex_ids:
+                    vals.extend(float(v) for v in cubit_mod.get_quality_values(
+                        "hex", [int(x) for x in hex_ids], "scaled jacobian"))
+            except Exception:
+                pass
+            try:
+                if tet_ids:
+                    vals.extend(float(v) for v in cubit_mod.get_quality_values(
+                        "tet", [int(x) for x in tet_ids], "scaled jacobian"))
+            except Exception:
+                pass
+            if not vals:
+                return {"hex_count": len(hex_ids), "tet_count": len(tet_ids),
+                        "min": None, "max": None, "mean": None,
+                        "below_0.2": 0}
+            below = sum(1 for v in vals if v < 0.2)
+            return {
+                "hex_count": int(len(hex_ids)),
+                "tet_count": int(len(tet_ids)),
+                "min": round(min(vals), 6),
+                "max": round(max(vals), 6),
+                "mean": round(sum(vals) / len(vals), 6),
+                "below_0.2": int(below),
+                "below_0.2_pct": round(100 * below / len(vals), 2),
             }
     except Exception:
         return {"error": traceback.format_exc()}
@@ -174,8 +239,16 @@ def main():
         _write_response({"ready": False, "error": traceback.format_exc()})
         return 2
 
-    for line in sys.stdin:
-        line = line.strip()
+    # Read line-by-line from the raw bytes stream. Using
+    # `for line in sys.stdin` with a piped parent blocks on internal
+    # buffering and never releases individual lines until the writer
+    # closes. `sys.stdin.buffer.readline()` yields lines as they arrive.
+    stdin_bin = sys.stdin.buffer
+    while True:
+        line_bytes = stdin_bin.readline()
+        if not line_bytes:
+            break   # EOF
+        line = line_bytes.decode("utf-8", errors="replace").strip()
         if not line:
             continue
         try:

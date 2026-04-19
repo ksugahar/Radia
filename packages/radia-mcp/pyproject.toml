@@ -4,29 +4,71 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.4.0"
-description = "MCP servers for Radia CAE ecosystem (radia-ngsolve, ih, electromagnet, peec, cubit, gmsh)"
+version = "0.30.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.27.0: cubit_mesh_race_review (wait-all + shortlist sorted by min-Jacobian + persisted history) + cubit_mesh_apply_choice (human picks from shortlist) + quality_summary probe. Pivots from auto-commit to human-decides. 0.26.0 base: cubit_mesh_race_smart auto-generates N candidates from geometry."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
 authors = [{name = "Kengo Sugahara"}]
+# Core dependencies cover the Cubit + build123d MCP servers which are
+# standalone (no radia core, no MKL, no C++ build). Companies that only
+# need Cubit integration can `pip install radia-mcp` without pulling in
+# the full radia wheel.
 dependencies = [
-    "radia",
     "mcp>=1.0",
+]
+
+[project.optional-dependencies]
+# build123d-side tools need the build123d library itself.
+build123d = [
+    "build123d>=0.6",
+]
+# CadQuery interop: `execute_cadquery` + `cadquery_to_cubit_hex` let
+# users author geometry in either sibling OCCT CAD library and route
+# through the same Cubit hex-mesh pipeline. Enables interop with
+# rishigundakaram/cadquery-mcp-server via the STEP boundary.
+cadquery = [
+    "cadquery>=2.5",
+]
+# gmsh_post: MSH v4.1 inspect / validate / convert / write_node_data.
+# Depends only on the gmsh Python bindings (pure pip wheel, no MKL).
+gmsh = [
+    "gmsh>=4.10",
+]
+# YouTube transcript scraping for Cubit/build123d/gmsh tutorial
+# absorption (cubit_youtube / build123d_youtube / gmsh_youtube
+# sub-sources). stdlib-only otherwise.
+youtube = [
+    "youtube-transcript-api>=1.0",
+]
+# radia-coupled servers (radia-ngsolve, ih, electromagnet, peec, gmsh,
+# elf) require the radia core. Install with: pip install radia-mcp[radia]
+radia = [
+    "radia>=4.6.1",
+]
+# All MCP servers including the radia-coupled ones.
+full = [
+    "radia-mcp[build123d,cadquery,gmsh,youtube,radia]",
 ]
 
 [project.urls]
 Repository = "https://github.com/ksugahar/Radia"
 
 [project.scripts]
+# Standalone MCP servers (no radia core required)
+mcp-server-cubit = "radia_mcp.cubit.server:main"
+mcp-server-build123d = "radia_mcp.build123d.server:main"
+mcp-server-gmsh-post = "radia_mcp.gmsh_post.server:main"
+mcp-server-radia-interop = "radia_mcp.interop.server:main"
+
+# Radia-coupled MCP servers (live inside the `radia` package; require
+# `pip install radia-mcp[radia]`)
 mcp-server-radia-ngsolve = "radia.mcp_server.radia_ngsolve.server:main"
 mcp-server-ih = "radia.mcp_server.ih.server:main"
 mcp-server-electromagnet = "radia.mcp_server.electromagnet.server:main"
 mcp-server-peec = "radia.mcp_server.peec.server:main"
-mcp-server-cubit = "radia.mcp_server.cubit.server:main"
 mcp-server-gmsh = "radia.mcp_server.gmsh.server:main"
 mcp-server-elf = "radia.mcp_server.elf.server:main"
-mcp-server-build123d = "radia.mcp_server.build123d.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
