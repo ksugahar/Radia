@@ -486,7 +486,7 @@ print(f"Area error: {area_error:.4f}%")
 TROUBLESHOOTING = """
 # Troubleshooting High-Order Curving
 
-## export_NGSolveCurvedMesh() Fails or Produces Wrong Results
+## radia_export netgen() Fails or Produces Wrong Results
 
 ### Symptom: RuntimeError during Curve()
 
@@ -523,7 +523,7 @@ Fix: cubit.cmd("block 2 add tri all")  # Add boundary elements
 
 **Cause**: 1st order mesh without curving
 ```
-Fix: Use export_NGSolveCurvedMesh(cubit, order=2) or higher
+Fix: Use radia_export netgen(cubit, order=2) or higher
      Or use Gmsh 2nd order alternative
 ```
 
@@ -558,7 +558,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 
 **Key insight**: By using system Python with `CUBIT_PATH`, scripts can access both
 the Cubit API and NGSolve/Netgen simultaneously. This is essential for the
-export_NGSolveCurvedMesh() workflow.
+radia_export netgen() workflow.
 
 ## NGSolve/Cubit DLL Conflict: Import Order Matters
 
@@ -774,7 +774,7 @@ sideset 2 add surface <gap2>; sideset 2 name "sink"
 
 	topics = {
 		"overview": WORKFLOW_OVERVIEW,
-		"export_NGSolveCurvedMesh": WORKFLOW_EXPORT_CURVED,
+		"radia_export netgen": WORKFLOW_EXPORT_CURVED,
 		"simple_cylinder": WORKFLOW_CYLINDER,
 		"simple_sphere": WORKFLOW_SPHERE,
 		"simple_torus": WORKFLOW_TORUS,

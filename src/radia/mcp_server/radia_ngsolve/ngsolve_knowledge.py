@@ -4212,7 +4212,7 @@ Complete pipeline for accelerator electromagnet analysis.
 
 ```
 CoilBuilder → Biot-Savart Hs (no coil mesh)
-Cubit → hex mesh + export_NGSolveCurvedMesh(order=N)
+Cubit → hex mesh + radia_export netgen "mesh.vol" order N
 NGSolve → Omega-reduced Omega + Kelvin + Energy-based B-input Play
 ```
 

@@ -18,14 +18,16 @@ Path A is the recommended export path. Use `radia_export netgen "mesh.vol" order
 
 ## Supported Formats
 
-| Command | Format | Order 1 | Order 2 | Order 3-5 |
-|---------|--------|---------|---------|-----------|
-| `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | Yes | Yes | Yes |
-| `radia_export gmsh "f.msh"` | Gmsh v4.1 (.msh) | Yes | Yes | Yes |
-| `radia_export nastran "f.bdf"` | Nastran BDF (.bdf) | Yes | Yes | Yes |
-| `radia_export vtk "f.vtk"` | VTK Legacy (.vtk) | Yes | Yes | Yes |
+| Command | Format | Max Order | Notes |
+|---------|--------|-----------|-------|
+| `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
+| `radia_export gmsh "f.msh" order N` | Gmsh v4.1 (.msh) | 1-3 | Wedge limited to order 2 |
+| `radia_export nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
+| `radia_export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
+| `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
+| `radia_export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | Creates directory with 4 files |
 
-All formats use NetgenCurver (compact_netgen BuildCurvedElements) for curving.
+Order 2+ uses NetgenCurver (compact_netgen BuildCurvedElements + ACIS projection).
 No fallback to HighOrderMesh (removed).
 
 ## API
@@ -113,77 +115,56 @@ The BEM solver uses BND elements only. Volume elements are ignored.
 """
 
 EXPORT_GMSH_V2 = """
-# Gmsh v4.1 Export (default and only supported format)
+# Gmsh v4.1 Export (order 1-3)
 
-```python
-export_Gmesh(cubit, FileName)  # v4.1 is default (v2.2 no longer supported)
+```
+radia_export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .msh file path |
+v4.1 is the only supported GMSH format. No block assignment required.
 
 ## Supported Elements
 
-| 1st Order | 2nd Order | Gmsh Type |
-|-----------|-----------|-----------|
-| TET4 | TET10 | 4 / 11 |
-| HEX8 | HEX20 | 5 / 17 |
-| WEDGE6 | WEDGE15 | 6 / 18 |
-| PYRAMID5 | PYRAMID13 | 7 / 19 |
-| TRI3 | TRI6 | 2 / 9 |
-| QUAD4 | QUAD8 | 3 / 16 |
-| EDGE2 | EDGE3 | 1 / 8 |
+| Order 1 | Order 2 | Order 3 | Gmsh Type |
+|---------|---------|---------|-----------|
+| TET4 | TET10 (11) | TET20 (29) | 4/11/29 |
+| HEX8 | HEX20 (17) | HEX32 (99) | 5/17/99 |
+| WEDGE6 | WEDGE15 (18) | not supported | 6/18 |
+| PYRAMID5 | PYR13 (19) | PYR21 (125) | 7/19/125 |
+| TRI3 | TRI6 (9) | TRI10 (21) | 2/9/21 |
+| QUAD4 | QUAD8 (16) | QUAD12 (39) | 3/16/39 |
+
+Order 4-5 not supported in Gmsh export (use `radia_export netgen`).
+Wedge/Prism limited to order 2 (Gmsh limitation).
 
 ## Use Cases
 
-- **NGSolve/Netgen integration**: Export .vol via `radia_export netgen` (recommended)
 - **GMSH visualization**: View mesh in GMSH GUI
-- **2nd order elements**: Good accuracy for simple curving workflows
+- **NGSolve**: Use `radia_export netgen` instead (order 1-5)
 
 ```python
-# Recommended: radia_export netgen .vol (any order, best accuracy)
-cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
-from ngsolve import Mesh
-mesh = Mesh("mesh.vol")
+# Gmsh visualization (order 1-3)
+cubit.cmd('radia_export gmsh "mesh.msh" order 2 overwrite')
 
-# Alternative: Gmsh v4.1 (2nd order only, for GMSH visualization)
-cubit.cmd("block 1 element type tetra10")
-cubit.cmd('radia_export gmsh "mesh.msh" overwrite')
+# NGSolve FEM (recommended: .vol)
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
 ```
 """
 
 EXPORT_GMSH_V4 = """
-# Gmsh v4.1 Export
-
-```python
-export_Gmesh(cubit, FileName, version="4.1", DIM="auto")
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .msh file path |
-| `DIM` | str | "auto" | "auto", "2D", or "3D" |
-
-## DIM Options
-
-| Value | Description |
-|-------|-------------|
-| `"auto"` | Auto-detect (3D if volume elements exist) |
-| `"2D"` | Orient normals to +z, z-coordinates set to 0 |
-| `"3D"` | No normal orientation |
-
-## Format Version Policy
+# Gmsh v4.1 Format Policy
 
 v4.1 is the only supported GMSH format (v2.2 removed, lab-wide standard).
-For NGSolve, the input path is .vol via `radia_export netgen`.
+
+## Data Flow
 
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `radia_export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
-| **Output** (NGSolve ->) | **v4.1** | Field visualization in GMSH | `GmshPostExport.write()` -> GMSH GUI |
+| **Output** (Cubit ->) | **.msh v4.1** | Mesh visualization | `radia_export gmsh "mesh.msh" order N` |
+| **Output** (NGSolve ->) | **.msh v4.1** | Field visualization in GMSH | `GmshPostExport.write()` -> GMSH GUI |
+
+The ONLY input format for NGSolve is `.vol`. `.msh` is output-only (Cubit mesh export or NGSolve field visualization).
 
 ### GmshPostExport Methods
 
@@ -194,9 +175,9 @@ For NGSolve, the input path is .vol via `radia_export netgen`.
 
 ## When to Use Which
 
-- **`radia_export netgen "mesh.vol"`**: For NGSolve FEM computation (recommended, any order)
-- **`GmshPostExport.write()`**: For field visualization in GMSH GUI (v4.1)
-- **`export_Gmesh()`**: For direct Cubit mesh output to GMSH v4.1 (2nd order max)
+- **`radia_export netgen "mesh.vol"`**: For NGSolve FEM computation (any order, recommended)
+- **`radia_export gmsh "mesh.msh"`**: For Cubit mesh visualization in GMSH (order 1-3)
+- **`GmshPostExport.write()`**: For NGSolve field result visualization in GMSH
 """
 
 EXPORT_CURVED = """
@@ -267,41 +248,38 @@ For simple 2nd order without geometry, use `radia_export netgen "mesh.vol" order
 
 `export_NetgenMesh()`, `export_netgen()`, `export_netgen_with_names()`,
 `set_*_geominfo()`, `name_occ_faces()` are all removed.
-`export_NGSolveCurvedMesh()` replaces all of them.
+`radia_export netgen` replaces all of them.
 """
 
 EXPORT_NASTRAN = """
-# Nastran BDF Export
+# Nastran BDF Export (order 1-2)
 
-```python
-export_nastran(cubit, FileName, DIM="3D", PYRAM=True)
-# Aliases: export_Nastran
+```
+radia_export nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `cubit` | object | required | Cubit Python interface |
-| `FileName` | str | required | Output .bdf file path |
-| `DIM` | str | "3D" | "3D" or "2D" |
-| `PYRAM` | bool | True | Pyramid element handling |
+No block assignment required.
 
-## DIM Options
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| order | 1 | 1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20 (via NetgenCurver) |
+| dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
+| nopyramid | off | Convert pyramids to degenerate hex (JMAG compatible) |
 
-| Value | Elements |
-|-------|----------|
-| `"3D"` | CTETRA, CHEXA, CPENTA, CPYRAM |
-| `"2D"` | CTRIA3, CQUAD4 (normals oriented to +z) |
+## Supported Elements
 
-## PYRAM Options
+| Order 1 | Order 2 | Card |
+|---------|---------|------|
+| CTETRA (4) | CTETRA (10) | Tetrahedron |
+| CHEXA (8) | CHEXA (20) | Hexahedron |
+| CPENTA (6) | CPENTA (15) | Wedge/Prism |
+| CPYRAM (5) | CPYRAM (13) | Pyramid |
+| CTRIA3 (3) | CTRIA6 (6) | Triangle |
+| CQUAD4 (4) | CQUAD8 (8) | Quadrilateral |
 
-| Value | Output | Use Case |
-|-------|--------|----------|
-| `True` | CPYRAM (5-node) | Standard Nastran |
-| `False` | Degenerate CHEXA (8-node with repeated nodes) | JMAG compatibility |
+**IMPORTANT**: Use `radia_export nastran`, NOT `export nastran` (Cubit built-in has different format).
 
-## Limitation
-
-**1st order elements only.** Uses `get_connectivity()`.
+Nastran BDF is export-only. It is NOT a supported input path for Radia/NGSolve.
 """
 
 EXPORT_EXODUS = """
@@ -370,36 +348,33 @@ EXPORT_COMPARISON = """
 
 | Use Case | Recommended Format | Why |
 |----------|-------------------|-----|
-| NGSolve FEM (any order) | `radia_export netgen "f.vol" order N` | Arbitrary order via ACIS CallbackGeometry |
-| GMSH visualization | `export_Gmesh()` | GMSH GUI viewing (v4.1) |
-| JMAG solver | `export_nastran()` | PYRAM=False for degenerate hex |
-| Cubit-native archival | `export_exodus()` | Full fidelity, all features |
+| NGSolve FEM (any order) | `radia_export netgen "f.vol" order N` | Order 1-5 via ACIS CallbackGeometry |
+| GMSH visualization | `radia_export gmsh "f.msh" order N` | v4.1, order 1-3 |
+| JMAG / Nastran solver | `radia_export nastran "f.bdf" order N` | Order 1-2, nopyramid for JMAG |
+| ParaView visualization | `radia_export vtk "f.vtk" order N` | Order 1-2 |
+| ELF/MAGIC solver | `export meg "f.meg"` | Order 1, ELF element type labels |
+| FEMEEM solver | `radia_export femeem "dir"` | Order 1, tet only |
 
 ## Feature Comparison
 
-| Feature | curved | gmsh_v2 | gmsh_v4 | nastran | exodus |
-|---------|--------|---------|---------|---------|--------|
-| 1st order | Yes | Yes | Yes | Yes | Yes |
-| 2nd order | Yes | Yes | Yes | No | Yes |
-| 3rd order | Yes | Yes | Yes | No | Yes |
-| 4th-5th order | Yes | No | No | No | Yes |
-| In-memory | Yes | No | No | No | No |
-| BlockID metadata | N/A | Yes | Yes | Yes | Yes |
-| 2D support | No | No | Yes | Yes | No |
-
-Note: Gmsh v4.1 supports order 1-3 (TET, HEX, PYRAMID, TRI, QUAD).
-Wedge/Prism limited to order 2. Order 4-5: error (use radia_export netgen).
+| Feature | netgen | gmsh | nastran | vtk | meg | femeem |
+|---------|--------|------|---------|-----|-----|--------|
+| Max order | 5 | 3 | 2 | 2 | 1 | 1 |
+| Tet | Yes | Yes | Yes | Yes | Yes | Yes |
+| Hex | Yes | Yes | Yes | Yes | Yes | No |
+| Wedge | Yes | Yes (o2) | Yes | Yes | Yes | No |
+| Pyramid | Yes | Yes | Yes | Yes | degen hex | No |
+| Labels | block+sideset | block+sideset | block | block | block+sideset | block |
+| 2D mode | No | Yes | Yes | Yes | Yes (twod/axi) | No |
+| Companion | .vol.json | .geo | - | - | - | d3 |
 
 ## radia_export netgen vs Gmsh for NGSolve
 
 | Aspect | radia_export netgen | radia_export gmsh |
-|--------|----------------|---------------------------|
+|--------|---------------------|-------------------|
 | Max order | 5 | 3 (wedge: 2) |
-| Accuracy at order 2 | ~0.003% | ~0.001% |
-| Accuracy at order 3+ | ~0.0004% | ~0.0004% |
-| Complexity | Low (APREPRO command) | Low (APREPRO command) |
-| Geometry needed | ACIS (automatic) | ACIS (automatic, order 3+) |
-| Best for | NGSolve FEM/BEM | GMSH visualization, ReadGmsh |
+| NGSolve input | Yes (.vol is the ONLY input) | No (.msh not supported) |
+| Best for | NGSolve FEM/BEM | GMSH visualization |
 """
 
 
@@ -428,10 +403,11 @@ EXPORT_DECISION_GUIDE = """
 
 ## "I need structural FEA (Nastran / JMAG)"
 
--> Use `export_nastran()`
-- 3D: `export_nastran(cubit, "mesh.bdf", DIM="3D")`
-- 2D: `export_nastran(cubit, "mesh.bdf", DIM="2D")`
-- **Note**: 1st order elements only
+-> Use `radia_export nastran` (order 1-2):
+  ```python
+  cubit.cmd('radia_export nastran "mesh.bdf" order 2 overwrite')
+  cubit.cmd('radia_export nastran "mesh.bdf" order 2 nopyramid overwrite')  # JMAG
+  ```
 
 ### JMAG-specific: Pyramid Element Problem
 
@@ -439,7 +415,7 @@ JMAG **cannot read standard CPYRAM** (5-node pyramid) elements. When Cubit
 generates mixed hex-tet meshes, pyramid transition elements appear at
 the interface. Two solutions:
 
-1. **Use PYRAM=False** (recommended): Writes pyramids as degenerate CHEXA
+1. **Use nopyramid** (recommended): Writes pyramids as degenerate CHEXA
    ```python
    cubit.cmd('radia_export nastran "mesh.bdf" nopyramid overwrite')
    ```
@@ -464,18 +440,22 @@ geometry leads to poor quality or failed meshing.
 
 ## "I want Gmsh visualization"
 
--> Use `export_Gmesh()` for GMSH GUI viewing (v4.1 with $Entities)
+-> Use `radia_export gmsh` for GMSH GUI viewing (v4.1, order 1-3):
+  ```python
+  cubit.cmd('radia_export gmsh "mesh.msh" order 2 overwrite')
+  ```
 - **Note**: For NGSolve FEM, use `radia_export netgen "mesh.vol"` instead
 
 ## Performance & Feature Summary
 
-| Format | File Size | Max Order | 2D | 3D | In-Memory |
-|--------|-----------|-----------|----|----|-----------|
-| curved | N/A | Unlimited | No | Yes | Yes |
-| gmsh_v2 | Medium | 2nd | No | Yes | No |
-| gmsh_v4 | Medium | 2nd | Yes | Yes | No |
-| nastran | Medium | 2nd | Yes | Yes | No |
-| exodus | Medium | All | No | Yes | No |
+| Format | Max Order | 2D | 3D | HO Method |
+|--------|-----------|----|----|-----------|
+| netgen (.vol) | 5 | No | Yes | NetgenCurver + ACIS |
+| gmsh (.msh) | 3 | Yes | Yes | NetgenCurver + ACIS |
+| nastran (.bdf) | 2 | Yes | Yes | NetgenCurver + ACIS |
+| vtk (.vtk) | 2 | Yes | Yes | NetgenCurver + ACIS |
+| meg (.meg) | 1 | Yes | Yes | - |
+| femeem (dir) | 1 (tet) | No | Yes | - |
 
 ## IMPORTANT: `radia_export nastran` (NOT `export nastran`)
 
@@ -554,6 +534,8 @@ Export Mesh:                           Solve:
   GMSH...                               Generate Coil...
   Nastran BDF...                         --------
   VTK...                                 Reload Panels
+  MEG...
+  FEMEEM...
   --------
   Mesh Evaluation...
 ```
@@ -691,7 +673,7 @@ def get_export_documentation(format: str = "all") -> str:
 		"gmsh_v2": EXPORT_GMSH_V2,
 		"gmsh_v4": EXPORT_GMSH_V4,
 		"curved": EXPORT_CURVED,
-		"netgen": EXPORT_CURVED,  # Alias: old name redirects to export_NGSolveCurvedMesh
+		"netgen": EXPORT_CURVED,  # Alias: old name redirects to radia_export netgen
 		"nastran": EXPORT_NASTRAN,
 		"exodus": EXPORT_EXODUS,
 		"comparison": EXPORT_COMPARISON,

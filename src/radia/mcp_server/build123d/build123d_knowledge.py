@@ -612,6 +612,16 @@ assert result.is_valid, "Boolean produced invalid geometry"
 min_e = min(e.length for e in result.edges())
 assert min_e > 1e-6, f"Micro-edge: {min_e}"
 ```
+
+## Footgun: `is_valid` is an attribute, not a method
+
+In build123d 0.10+, `Shape.is_valid` is a **bool attribute**, not a
+method. Older training-data patterns that call `part.is_valid()` will
+raise `TypeError: 'bool' object is not callable`. Always write:
+```python
+assert part.is_valid           # correct
+# NOT: assert part.is_valid()  # wrong in 0.10+
+```
 """
 
 # ============================================================
@@ -821,8 +831,778 @@ wraps steps 3-5 in one call.
 - **Units**: build123d works in mm, PEEC in meters. scale = 1000.
 """
 
+EXAMPLES_INTRO = """\
+# build123d Introductory Examples (36 walk-through examples)
+
+Source: build123d `docs/introductory_examples.rst`. Each example is shown in
+both **Builder mode** (context-manager based) and **Algebra mode** (operator-
+based). For CAE work, either mode is acceptable — algebra mode is often more
+concise.
+
+## Ex 1 — Simple Rectangular Plate (Box)
+```python
+ex1 = Box(100, 100, 10)
+```
+
+## Ex 2 — Plate with Hole (Subtract)
+```python
+ex2 = Box(100, 100, 10) - Cylinder(radius=20, height=10)
+```
+
+## Ex 3 — Extruded Prismatic Solid (2D sketch + extrude)
+```python
+ex3_sk = Circle(40) - Rectangle(20, 20)
+ex3 = extrude(ex3_sk, amount=10)
+```
+
+## Ex 4 — Profile from Lines/Arcs + make_face + extrude
+```python
+l1 = Line((0,0), (100,0)); l2 = Line((100,0), (100,100))
+l3 = Line((100,100), (0,100)); l4 = Line((0,100), (0,0))
+profile = make_face(Curve() + [l1, l2, l3, l4])
+ex4 = extrude(profile, amount=10)
+```
+
+## Ex 5 — Moving the Working Point (Pos)
+```python
+box = Box(20, 20, 20)
+ex5 = Pos(0,0,0)*box + Pos(50,0,0)*box
+```
+
+## Ex 6 — Point Lists (Locations)
+```python
+cyl = Cylinder(radius=10, height=20)
+ex6 = Curve() + [Pos(p)*cyl for p in [(0,0,0),(50,0,0),(100,0,0)]]
+```
+
+## Ex 7 — Polygons at multiple locations
+```python
+poly = RegularPolygon(radius=20, side_count=6)
+sketch = Sketch() + [Pos(x,0)*poly for x in (0, 50, 100)]
+ex7 = extrude(sketch, amount=10)
+```
+
+## Ex 8 — Polylines + mirror
+```python
+poly = Polyline((0,0),(20,0),(20,10),(40,10),(40,20),(0,20))
+profile = make_face(poly)
+ex8 = extrude(profile + mirror(profile, about=Plane.YZ), amount=10)
+```
+
+## Ex 9 — Selectors + fillet
+```python
+box = Box(100, 100, 20)
+top_edges = box.edges().group_by(Axis.Z)[-1]
+ex9 = fillet(top_edges, radius=5)
+```
+
+## Ex 10 — Select LAST + Hole feature
+```python
+box = Box(100, 100, 20)
+filled = fillet(box.edges(), radius=5)
+ex10 = filled - Hole(radius=10, depth=20)
+```
+
+## Ex 11 — Face as plane + GridLocations
+```python
+box = Box(100, 100, 20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+grid = GridLocations(x_spacing=30, y_spacing=30, x_count=2, y_count=2)
+pent = RegularPolygon(radius=10, side_count=5)
+ex11 = box - extrude(topf * [loc*pent for loc in grid], amount=-5)
+```
+
+## Ex 12 — Spline curve
+```python
+pts = [(0,0),(10,20),(20,10),(30,30)]
+spline = Spline(*pts)       # -> used inside BuildLine
+```
+
+## Ex 13 — CounterBoreHole / CounterSinkHole + PolarLocations
+```python
+box = Box(100, 100, 20)
+locs = PolarLocations(radius=40, count=4)
+ex13 = box - [loc * CounterBoreHole(pilot_diameter=8, bore_diameter=12, bore_depth=10) for loc in locs]
+```
+
+## Ex 14 — '@'/'%' operators + sweep
+```python
+l1 = Line((0,0),(100,0)); l2 = Line((100,0),(100,100))
+ex14 = sweep(Circle(radius=5), path=l1 + l2)
+```
+
+## Ex 15 — Mirror 2D geometry
+```python
+base = Curve() + [l1, l2, l3]
+curve = make_face(base + mirror(base, about=Plane.YZ))
+ex15 = extrude(curve, amount=10)
+```
+
+## Ex 16 — Mirror 3D object
+```python
+box = Box(100,100,20)
+ex16 = box + mirror(box, about=Plane.XY.offset(10))
+```
+
+## Ex 17 — Mirror from face
+```python
+box = Box(100,100,20)
+mir = Plane(box.faces().sort_by(Axis.Y)[-1])
+ex17 = box + mirror(box, about=mir)
+```
+
+## Ex 18 — Workplane on face + subtract-extrude
+```python
+box = Box(100,100,20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+ex18 = box - extrude(topf * Rectangle(50,50), amount=-10)
+```
+
+## Ex 19 — Workplane on vertex
+```python
+box = Box(100,100,20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+vtx = topf.vertices().group_by(Axis.X)[-1]
+ex19 = box - [Pos(v.X, v.Y, 0) * Cylinder(radius=10, height=20) for v in vtx]
+```
+
+## Ex 20 — Offset sketch workplane
+```python
+box = Box(100,100,20)
+plane = Plane(box.faces().sort_by(Axis.X)[0]).offset(10)
+ex20 = box + extrude(plane * Circle(radius=20), amount=10)
+```
+
+## Ex 21 — Plane in center of cylinder
+```python
+cyl = Cylinder(radius=20, height=100)
+plane = Plane(origin=cyl.origin + (0,0,50), z_dir=cyl.z_dir)
+ex21 = cyl + extrude(plane * Circle(radius=10), amount=50)
+```
+
+## Ex 22 — Rotated workplane + GridLocations
+```python
+box = Box(100,100,20)
+plane = Plane.XY.rotated(Axis.X, 45)
+grid = GridLocations(x_spacing=30, y_spacing=30, x_count=2, y_count=2)
+ex22 = box + extrude(plane * [loc*Circle(radius=5) for loc in grid], amount=10)
+```
+
+## Ex 23 — Revolve + split
+```python
+poly = Polyline((0,0),(20,0),(20,20),(0,20))
+profile = split(make_face(poly - Rectangle(10,10)), Plane.ZY, keep=Keep.FORWARD)
+ex23 = revolve(profile, axis=Axis.Z)
+```
+
+## Ex 24 — Loft between circle and rectangle
+```python
+circle = Circle(radius=30)
+rect = Pos(0,0,50) * Rectangle(40, 40)
+ex24 = loft([circle, rect])
+```
+
+## Ex 25 — Offset sketch (2D)
+```python
+rect = Rectangle(100, 100)
+ex25 = extrude(offset(rect, amount=10), amount=10)
+```
+
+## Ex 26 — 3D offset / shell
+```python
+box = Box(100,100,100)
+ex26 = offset(box, amount=5)
+```
+
+## Ex 27 — Split object
+```python
+box = Box(100,100,20)
+plane = Plane(box.faces().sort_by(Axis.X)[0]).offset(50)
+ex27 = split(box, plane, keep=Keep.FORWARD)
+```
+
+## Ex 28 — Locate features using faces
+```python
+prism = extrude(RegularPolygon(radius=30, side_count=3), amount=20)
+sphere = Sphere(radius=50)
+ex28 = sphere - [Plane(f) * Cylinder(radius=10, height=30) for f in prism.faces()]
+```
+
+## Ex 29 — Classic OCC Bottle
+```python
+profile = make_face(Spline((0,0),(10,5),(10,30),(5,40),(5,70)))
+bottle = revolve(profile, axis=Axis.Z)
+ex29 = offset(bottle, amount=-2)
+```
+
+## Ex 30 — Bezier curve with weights
+```python
+pts = [(0,0),(20,10),(40,0),(50,20)]; wts = [1,1,1,1]
+curve = Polyline(*pts) + Bezier(*pts, weights=wts)
+ex30 = extrude(make_face(curve), amount=10)
+```
+
+## Ex 31 — Nested locations (PolarLocations)
+```python
+hex_solid = extrude(RegularPolygon(radius=10, side_count=6), amount=10)
+ex31 = [loc * hex_solid for loc in PolarLocations(radius=50, count=6)]
+```
+
+## Ex 32 — Python for-loop over GridLocations
+```python
+circles = Circle(radius=10)
+grid = GridLocations(x_spacing=30, y_spacing=30, x_count=2, y_count=2)
+ex32 = [extrude(loc*circles, amount=(i+1)*5) for i, loc in enumerate(grid)]
+```
+
+## Ex 33 — Function + for-loop
+```python
+def make_square(size): return Rectangle(size, size)
+ex33 = [Pos(0,0,i*10) * extrude(make_square(20+i*10), amount=10) for i in range(5)]
+```
+
+## Ex 34 — Embossed / debossed text
+```python
+box = Box(100,100,20)
+topf = box.faces().sort_by(Axis.Z)[-1]
+ex34 = box + extrude(topf * Text("Hello", font_size=20), amount=5) \\
+           - extrude(topf * Text("World", font_size=20), amount=5)
+```
+
+## Ex 35 — Slots (SlotCenterToCenter, SlotArc)
+```python
+slot = SlotCenterToCenter(center_point_distance=50, width=10, height=20)
+arc = RadiusArc((0,0),(10,10), radius=15)
+ex35 = extrude(slot + SlotArc(arc=arc, width=10), amount=10)
+```
+
+## Ex 36 — extrude until face (Until.LAST)
+```python
+box = Box(100,100,50)
+ex36 = extrude(Circle(radius=20), amount=Until.LAST)
+```
+
+## Key primitives/operations index
+
+| Category | Names |
+|---|---|
+| 3D primitives | Box, Cylinder, Sphere, Cone, Torus |
+| 2D primitives | Rectangle, Circle, RegularPolygon, SlotCenterToCenter, SlotArc, Text |
+| Curves | Line, Polyline, Spline, Bezier, RadiusArc, CenterArc |
+| Operations | extrude, revolve, sweep, loft, offset, split, fillet, chamfer, mirror |
+| Placement | Pos, Plane, Locations, GridLocations, PolarLocations, HexLocations |
+| Selectors | faces().sort_by(Axis.Z), edges().group_by(Axis.X), Select.LAST |
+| Modes | Mode.ADD, Mode.SUBTRACT, Mode.INTERSECT, Mode.PRIVATE |
+| Termination | Until.NEXT, Until.LAST, Until.FIRST |
+"""
+
+EXAMPLES_GALLERY = """\
+# build123d Gallery Examples (21 complete examples)
+
+Source: build123d `docs/examples_1.rst`. Real-world parametric designs
+showing idiomatic use of build123d. For each: title, what it demonstrates,
+and key primitives/operations.
+
+## 1. Benchy — STL import + BREP replacement
+- Imports STL model as Solid via Mesher class, modifies by replacing chimney
+  with BREP version. Shows STL/BREP interop.
+- Key: Mesher class, STL import, model editing
+
+## 2. Bicycle Tire — wrap_faces for 2D->3D projection
+- Realistic tire with patterned tread by projecting 2D planar geometry onto
+  curved 3D surface.
+- Key: wrap_faces, pattern projection
+
+## 3. Bracelet — Sweep + Gordon surfaces + text projection
+- Doubly-curved bracelet with embossed label. OCCT stress test with freeform
+  surfaces, swept sections, Gordon surfaces.
+- Key: sweep, Gordon surfaces, curve/text projection, location_at
+
+## 4. Canadian Flag in Wind — Face projection to non-planar
+- Projects planar faces onto non-planar face.
+- Key: Face projection, complex line snapping
+
+## 5. Cast Bearing Unit — Draft operations
+- Castable flanged bearing housing with draft angles for mold release.
+- Key: draft, flanged geometry, mold design
+
+## 6. Circuit Board With Holes — Locations / product / range
+- Placing holes around a part.
+- Key: Locations, product, range
+
+## 7. Clock Face — PolarLocations for radial features
+- 3D clock face with minute indicators, arcs, lines, fillets, hour labels, slots.
+- Key: PolarLocations, arcs, fillets, extrude
+
+## 8. Fast Grid Holes — Face-with-holes pattern (625 holes)
+- Efficient approach: 2D Face construction with hole wires, then extrude in
+  a single operation (vs 3D boolean subtraction).
+- Key: HexLocations, Face constructor with hole wires, perf optimization
+
+## 9. Handle — Multisection sweep
+- Drawer handle by sweeping through multiple profiles.
+- Key: multisection sweep, complex profiles
+
+## 10. Heat Exchanger — HexLocations + fillet
+- Parametric heat exchanger core, tube positions from HexLocations,
+  circular end caps, filleted tube ends.
+- Key: HexLocations, parametric design, fillet, circular constraints
+
+## 11. Key Cap — extrude with taper + extrude_until_next
+- Cherry MX key cap.
+- Key: extrude(..., taper=...), extrude until next
+
+## 12. Build123d Logo — Text and lines
+- Former build123d logo; builder mode generates SVG output.
+- Key: Text, lines, SVG export
+
+## 13. Maker Coin — DoubleTangentArc + text emboss
+- Smooth transitions via DoubleTangentArc, embossed text by projection
+  (even-depth text).
+- Key: DoubleTangentArc, text projection, embossing
+
+## 14. Multi-Sketch Loft — loft + type selection + shell
+- Key: loft, sort_by type, shell
+
+## 15. Peg Board J Hook — Complex path + flattening
+- J-shaped pegboard hook: sweep complex path, flatten sides for 3D printing.
+- Key: sweep, complex paths, flattening
+
+## 16. Platonic Solids — Custom Part object (PlatonicSolid)
+- Five highly symmetrical 3D shapes with congruent regular polygon faces.
+- Key: custom Part class, symmetrical geometry, polyhedra
+
+## 17. Playing Cards — Custom Sketch objects + Bezier
+- Club, Spade, Heart, Diamond, PlayingCard; two-part box with suit cutouts.
+- Key: Bezier curves, custom Sketch objects, SVG import
+
+## 18. Stud Wall — Custom Part + RigidJoints assembly
+- Custom Part objects, assemblies with snap-point RigidJoints.
+- Key: custom Part, assemblies, RigidJoints, object copy
+
+## 19. Tea Cup — Revolve + sweep + offset + fillet
+- Complex, non-flat geometry: revolve body, sweep handle, shell, fillet.
+- Key: revolve, sweep (2x), offset/shell, fillet
+
+## 20. Toy Truck — Sketch reuse + symmetry + tapered extrusions
+- Detailed body, cab, grill, bumper with joints for assembly.
+- Key: sketch reuse, symmetry, taper, selective fillet, joints
+
+## 21. Vase — Revolve + shell + selective fillet
+- Revolving, shelling, edge fillet by position and type.
+- Key: revolve, shell, edge selection by position/type, fillet
+
+## Distilled patterns for CAE (applicable ones)
+
+| Pattern from gallery | CAE relevance |
+|---|---|
+| Fast Grid Holes (Ex8): Face-with-holes + single extrude | Efficient boolean for perforated plates / cooling fins |
+| Heat Exchanger (Ex10): HexLocations + fillet | IH coil arrays, hex-packed tube fields |
+| Multi-Sketch Loft (Ex14): Loft + shell | Variable cross-section coils, taper windings |
+| Clock Face (Ex7): PolarLocations | Stator tooth arrangements, Halbach segment placement |
+| Tea Cup (Ex19): Revolve + shell | Axisymmetric coil bobbins, pressure vessels |
+| Key Cap (Ex11): extrude with taper | Drafted pole pieces, wedged magnets |
+| Vase (Ex21): Edge selection by position/type | Selective fillet on magnet poles / armature teeth |
+"""
+
+LAB_POLICY = """\
+# build123d Lab Context (2026-04-19)
+
+build123d is the **main CAD authoring tool** in this lab, complementary
+with (not replacing) Cubit. Use this topic when deciding which tool to
+use or when translating between the two.
+
+## Role split
+
+| Tool | Role | When to use |
+|---|---|---|
+| **build123d** (Python / OCCT) | **tet path, Python-driven** | Default CAD. VSCode-native authoring. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
+| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Shapes build123d cannot express cleanly (netgen.occ has limits). (3) Legacy `.jou` assets. |
+| (not used) | | FreeCAD (reproducibility), raw OCCT Python (verbose) |
+
+**This is a complementary split, not an either/or.** Both tools live in
+the lab toolchain permanently. Cubit is **not** being deprecated.
+
+## When you are asked to "translate a .jou to build123d"
+
+- **tet-only geometry** (boolean primitives, sweep, revolve, fillet):
+  translate directly — see `cubit_rosetta` topic for the mapping table.
+- **Cubit-only primitives** (`imprint all`, `merge all`, hex-sweep
+  schemes, `block`, `sideset`, `nodeset`): do **not** invent build123d
+  equivalents — these concepts don't exist here. Flag them and keep
+  the `.jou` for the hex path instead.
+- **Mesh directives** (`mesh volume N`, `scheme tetmesh`, size
+  settings): in the build123d pipeline, meshing is **Netgen's job**.
+  Drop these commands; pass `maxh` to `OCCGeometry.GenerateMesh()`.
+- **Block/sideset labels**: in the build123d pipeline, use
+  `part.label = "name"` + `Compound(children=[...])` + the
+  `run_pipeline_multi` helper in `examples/build123d_netgen_gmsh_flow/`
+  which bridges labels to Gmsh physical groups.
+
+## Related topics
+- `cubit_rosetta` — verb-by-verb mapping Cubit ↔ build123d
+- `examples_intro` — 36 build123d patterns from upstream docs
+- `cae_guidelines` — clean-geometry rules for meshing
+
+The companion mcp-server-cubit has the matching
+`scripting_lab_policy` / `scripting_build123d_crossref` topics.
+"""
+
+CUBIT_ROSETTA = """\
+# Cubit ↔ build123d Rosetta Stone (CAD subset)
+
+Side-by-side mapping for the most common Cubit CAD verbs and their
+build123d equivalents.  Use this when porting `.jou` scripts or when
+writing build123d by a Cubit-trained mental model.
+
+**Scope**: geometry only. Mesh directives, blocks, sidesets, imprint,
+merge, and hex-sweep schemes are **intentionally absent** — they have
+no direct build123d equivalent (see `lab_policy`).
+
+## 3D primitives
+
+| Cubit journal | build123d |
+|---|---|
+| `create brick x 10 y 20 z 5` | `Box(10, 20, 5)` |
+| `create cylinder radius 3 height 10` | `Cylinder(radius=3, height=10)` |
+| `create sphere radius 5` | `Sphere(radius=5)` |
+| `create prism height 10 sides 6 radius 5` | `extrude(RegularPolygon(radius=5, side_count=6), amount=10)` |
+| `create torus major radius 10 minor radius 2` | `Torus(major_radius=10, minor_radius=2)` |
+| `create cone radius 3 radius2 1 height 10` | `Cone(bottom_radius=3, top_radius=1, height=10)` |
+
+## 2D sketch primitives (prefixed with `BuildSketch` or algebra mode)
+
+| Cubit journal | build123d |
+|---|---|
+| `create surface rectangle width 10 height 5` | `Rectangle(10, 5)` |
+| `create surface circle radius 5` | `Circle(5)` |
+| `create surface polygon sides 6 radius 5` | `RegularPolygon(5, side_count=6)` |
+
+## Boolean operations
+
+| Cubit journal | build123d |
+|---|---|
+| `subtract volume 2 from volume 1` | `v1 - v2` |
+| `unite volume 1 2` | `v1 + v2` |
+| `intersect volume 1 2` | `v1 & v2` |
+| `chop volume 1 with plane zplane offset 0` | `split(v1, Plane.XY, keep=Keep.BOTH)` |
+
+## Transforms
+
+| Cubit journal | build123d |
+|---|---|
+| `move volume 1 x 10 y 0 z 0` | `Pos(10, 0, 0) * v1` |
+| `rotate volume 1 angle 45 about z` | `Rot(0, 0, 45) * v1` or `v1.rotate(Axis.Z, 45)` |
+| `scale volume 1 2` | `Pos((0,0,0), (0,0,0)) * v1.scale(2)` |
+| `reflect volume 1 about yplane` | `mirror(v1, about=Plane.YZ)` |
+
+## Sweep / revolve / loft
+
+| Cubit journal | build123d |
+|---|---|
+| `sweep surface 1 along curve 1` | `sweep(sketch, path=line)` |
+| `sweep surface 1 perpendicular distance 10` | `extrude(sketch, amount=10)` |
+| `revolve surface 1 about z angle 360` | `revolve(sketch_on_plane_containing_axis, axis=Axis.Z, revolution_arc=360)` |
+| `create volume loft surface 1 2 3` | `loft([sk1, sk2, sk3])` |
+
+### Revolve idiom (common Cubit → build123d remap)
+
+Cubit pattern — sketch on `zplane`, move out to radius, revolve about Z:
+```
+create surface rectangle width 5 height 10 zplane
+move surface 1 x 20 y 0 z 0
+revolve surface 1 about z angle 360
+```
+build123d equivalent — sketch placed on `Plane.XZ` (which contains the
+Z axis) at offset via Pos, then `revolve`:
+```python
+profile = Plane.XZ * Pos(20, 0) * Rectangle(5, 10)
+ring = revolve(profile, axis=Axis.Z)
+```
+Key swap: Cubit's "sketch in zplane then move" ↔ build123d's
+"Plane.XZ * Pos(...) * sketch". The revolve axis must lie **in** the
+sketch plane, so `Plane.XZ` or `Plane.YZ` are the common choices for
+`axis=Axis.Z`.
+
+## Fillet / chamfer
+
+| Cubit journal | build123d |
+|---|---|
+| `modify curve 1 blend radius 0.5` | `fillet(edge_selection, radius=0.5)` |
+| `modify curve in volume 1 blend radius 0.5` | `fillet(part.edges(), radius=0.5)` (all edges) |
+| `chamfer curve 1 length 0.5` | `chamfer(edge_selection, length=0.5)` |
+
+Edge selection in build123d uses selectors, e.g.
+`part.edges().sort_by(Axis.Z)[-1]` for top edge,
+`part.edges().group_by(Axis.Z)[-1]` for top-face ring,
+`part.edges()` for **all edges** (the "modify curve in volume N" case).
+
+## IDs vs variables
+
+| Cubit model | build123d model |
+|---|---|
+| Implicit numbered IDs: `volume 1`, `surface 3`, `curve 5` | Explicit Python variables: `part`, `sk`, `edges` |
+| `rename volume 1 "coil"` | `part.label = "coil"` |
+| `group "coils" add volume 1 2 3` | `coils = Compound(children=[v1, v2, v3])`; `coils.label = "coils"` |
+| `reset` | (no equivalent — build123d scripts start fresh each run, nothing to reset) |
+
+### Compound vs fused Part
+
+- `Compound(children=[v1, v2, v3])` — **tree-structured assembly**. Each
+  child keeps its own `.label` and geometry; good for multi-region
+  meshing via the `run_pipeline_multi` bridge (labels → physical groups).
+- `v1 + v2 + v3` — **fused single solid** (boolean union). Labels on the
+  children are lost; the result has a single volume. Use when the
+  downstream consumer treats the geometry as one part (e.g., single
+  domain FEM).
+- Heuristic: if the downstream pipeline will want **per-region material
+  names**, build a Compound. If you want one contiguous solid for a
+  single-domain mesh, fuse with `+`.
+
+## What has NO build123d equivalent (keep `.jou`!)
+
+- `imprint all` / `merge all` — build123d doesn't expose multi-body
+  shared-topology operations; it uses OCCT's Compound model directly.
+  If a design needs imprinted+merged faces for conformal meshing with
+  hex, **stay in Cubit**.
+- `mesh volume N`, `scheme tetmesh`, `size ...`, `interval N` —
+  meshing is Netgen's job downstream. Pass `maxh=...` to
+  `OCCGeometry(...).GenerateMesh(maxh=maxh)`.
+- `block 1 volume all`, `sideset 1 surface X`, `nodeset 1 curve Y` —
+  use build123d labels + Compound children + the
+  `run_pipeline_multi` bridge that maps labels to Gmsh physical groups.
+- `export mesh "file.e"` (Exodus) — not part of the build123d pipeline.
+  Export via NGSolve Mesh: `mesh.Export("file.msh", "Gmsh Format")`.
+- Cubit APREPRO variables (`{var = 10}`) — use plain Python variables.
+
+## Decision help
+
+If more than ~20% of a `.jou` file is in the "no equivalent" table
+above, **don't translate it** — keep the `.jou`, run it through Cubit,
+export hex to Radia/ELF. build123d is the wrong tool for that design.
+
+If the `.jou` is purely CAD primitives + booleans + sweep/revolve,
+translation to build123d is straightforward using the tables above,
+and the result will plug into the Netgen tet pipeline.
+"""
+
+
+EXAMPLES_LAB_PATTERNS = """\
+# Lab-domain CAD patterns (build123d)
+
+Parametric archetypes for the research lab's three application
+domains: induction heating (IH), accelerator magnets, and magnetic
+levitation, plus PEEC filament CAD. Each pattern is tet-pipeline
+friendly (build123d → Netgen → Gmsh). Hex-required designs (e.g.,
+large-scale Radia/ELF hex workpieces) stay in Cubit — see
+`lab_policy`.
+
+## IH coil archetypes
+
+### 1. Single-turn ring coil (simplest)
+
+```python
+from build123d import Cylinder, Pos
+
+r_in, r_out, h = 22.0, 28.0, 10.0   # mm
+coil = Cylinder(radius=r_out, height=h) - Cylinder(radius=r_in, height=h)
+coil.label = "coil"
+```
+Use: low-frequency IH concept demos, circuit-extraction sanity checks.
+
+### 2. Helical multi-turn coil (realistic IH / inductor)
+
+Use the `generate_helix_coil` MCP tool directly; or inline:
+```python
+import math
+from build123d import BuildSketch, Rectangle, Plane, loft
+
+R, pitch, n_turns = 30.0, 6.0, 5.0    # mm
+w, h = 3.0, 3.0                        # cross-section
+n_sec = int(n_turns * 12) + 1
+sketches = []
+for i in range(n_sec):
+    t = i / (n_sec - 1)
+    angle = 2 * math.pi * n_turns * t
+    z = pitch * n_turns * t
+    cx, cy = R * math.cos(angle), R * math.sin(angle)
+    dx, dy, dz = (
+        -R * math.sin(angle) * 2 * math.pi * n_turns,
+         R * math.cos(angle) * 2 * math.pi * n_turns,
+         pitch * n_turns,
+    )
+    norm = math.sqrt(dx*dx + dy*dy + dz*dz)
+    tangent = (dx/norm, dy/norm, dz/norm)
+    x_dir = (tangent[1], -tangent[0], 0)
+    x_norm = math.hypot(x_dir[0], x_dir[1]) or 1.0
+    x_dir = (x_dir[0]/x_norm, x_dir[1]/x_norm, 0)
+    plane = Plane(origin=(cx, cy, z), x_dir=x_dir, z_dir=tangent)
+    with BuildSketch(plane) as sk:
+        Rectangle(w, h)
+    sketches.append(sk.sketch)
+
+coil = loft(sketches); coil.label = "coil"
+```
+Use: IH inductor field solve, PEEC filament extraction (feed the
+centerline path to `section_along_path` tool).
+
+### 3. Pancake coil (flat spiral)
+
+```python
+import math
+from build123d import BuildSketch, BuildLine, Spline, make_face, Plane, extrude
+
+R0, dR_per_turn, n_turns, track_w, thickness = 5.0, 2.5, 6, 1.5, 1.0
+n_pts = 400
+pts = []
+for i in range(n_pts):
+    t = i / (n_pts - 1) * n_turns
+    r = R0 + dR_per_turn * t
+    ang = 2 * math.pi * t
+    pts.append((r * math.cos(ang), r * math.sin(ang)))
+
+with BuildLine() as center:
+    Spline(*pts)
+# Sweep a rectangular cross-section of width track_w along this path,
+# then extrude the resulting 2D trace by the PCB thickness.
+# (For CAE, a simpler extruded-strip approximation suffices.)
+```
+Use: PCB-style IH pancakes, wireless power TX/RX coils.
+
+## Accelerator magnet archetypes
+
+### 4. Dipole yoke quarter (BEM-friendly with symmetry)
+
+```python
+from build123d import BuildSketch, BuildLine, Line, CenterArc, make_face, Plane, extrude
+
+R_bore, R_outer, L_half = 30.0, 150.0, 200.0   # mm
+with BuildSketch(Plane.XZ) as yoke_sk:
+    with BuildLine():
+        Line((R_bore, 0), (R_outer, 0))
+        CenterArc((0, 0), R_outer, 0, 90)
+        Line((0, R_outer), (0, R_bore))
+        CenterArc((0, 0), R_bore, 90, -90)
+    make_face()
+yoke = extrude(yoke_sk.sketch, amount=L_half)
+yoke.label = "iron_yoke"
+```
+Use: Radia dipole field, beam trajectory calculation (scope upper bound
+= beam tracking; MBD is out of current scope per `lab_policy`).
+
+### 5. Quadrupole pole tip (quarter model)
+
+```python
+# Hyperbolic pole face (simplified by a parabolic approximation
+# adequate for initial BEM modeling)
+from build123d import BuildSketch, BuildLine, Polyline, make_face, Plane, extrude
+
+aperture, pole_half_width, L_half = 25.0, 30.0, 300.0
+with BuildSketch(Plane.XZ) as pole:
+    with BuildLine():
+        Polyline(
+            (aperture, aperture),
+            (aperture + pole_half_width, aperture),
+            (aperture + pole_half_width, aperture + 50),
+            (aperture, aperture + 50),
+            close=True,
+        )
+    make_face()
+pole_tip = extrude(pole.sketch, amount=L_half)
+pole_tip.label = "pole_tip_q1"
+```
+Use: quadrupole field modeling, pole shape optimization.
+
+## Halbach segmented PM array
+
+### 6. Halbach ring (labels-per-segment for magnetization direction)
+
+```python
+import math
+from build123d import Compound, Pos, Rot, Cylinder
+
+R_in, R_out, h, n_seg = 40.0, 55.0, 20.0, 12
+segments = []
+seg_arc = 360.0 / n_seg
+for k in range(n_seg):
+    angle = k * seg_arc
+    # Cut a radial wedge from an annulus.  In build123d, approximate
+    # the wedge by intersecting the annulus with a large pie slice.
+    # For mesh purposes, using the *full annulus* split by angle
+    # labels is often cleaner; Radia treats each labeled segment
+    # separately and takes its magnetization direction from the label.
+    pass   # (abridged; implementation depends on solver side)
+halbach = Compound(children=segments)
+halbach.label = "halbach_array"
+```
+Key idea: each segment's **label encodes the magnetization angle**,
+e.g. `f"seg_{k:02d}_m{k*2*seg_arc:.1f}deg"`, and the solver
+(Radia) dispatches on the label prefix to set magnetization direction.
+`run_pipeline_multi` (`examples/build123d_netgen_gmsh_flow/`) carries
+labels to Gmsh physical groups, preserving this mapping.
+
+## PEEC filament CAD
+
+### 7. Variable-cross-section helix for PEEC
+
+Use the `generate_helix_coil` MCP tool with a taper:
+```python
+generate_helix_coil(
+    radius=50.0, pitch=10.0, n_turns=5.0,
+    w_start=4.0, h_start=4.0,   # bottom cross-section
+    w_end=2.0,   h_end=2.0,     # top cross-section (thinner)
+    sections_per_turn=12,
+    label="tapered_coil",
+    export_dir="runs",
+)
+```
+Then call `section_along_path(step_file, helix_path_json)` with the
+centerline from the same tool, and feed per-segment (w, h) into
+`PEECBuilder.add_connected_segment(...)`.
+
+## Magnetic levitation (scope: CAD + SimMechanics connection)
+
+### 8. EMS attractive-force electromagnet + rail (SimMechanics ready)
+
+```python
+from build123d import Box, Cylinder, Pos, Compound
+
+# Electromagnet (C-core)
+core_w, core_h, core_d, gap = 60.0, 40.0, 50.0, 5.0
+core = (Box(core_w, core_h, core_d)
+        - Pos(0, 0, 0) * Box(core_w - 20, core_h - 10, core_d + 2))
+core.label = "magnet_core"
+
+# Rail (levitated body)
+rail = Pos(0, -(core_h/2 + gap + 10/2), 0) * Box(core_w * 3, 10, core_d)
+rail.label = "rail"
+
+levitation = Compound(children=[core, rail])
+levitation.label = "maglev_system"
+```
+Use: Radia force calculation per vertical position → feed to
+SimMechanics as a force-vs-displacement table. Scope per lab_policy:
+stops at SimMechanics connection (control loop is out of scope).
+
+## Pattern → pipeline fit
+
+| Pattern | Pipeline | Notes |
+|---|---|---|
+| Single-turn ring | tet, multi-region | `run_pipeline_multi`, label per region |
+| Helical coil | tet | single region enough for field; PEEC via section helper |
+| Pancake coil | tet | thin; watch min-edge quality |
+| Dipole / Quad yoke | tet with symmetry planes | Radia handles quarter model natively |
+| Halbach ring | tet, **multi-region** | segment labels drive magnetization |
+| Tapered coil (PEEC) | post-solve (no mesh) | PEEC operates on filaments, not FEM mesh |
+| Maglev EMS | tet, multi-region | rail + core, fuse or compound |
+"""
+
+
 _TOPICS = {
     "overview": OVERVIEW,
+    "lab_policy": LAB_POLICY,
+    "cubit_rosetta": CUBIT_ROSETTA,
+    "examples_lab_patterns": EXAMPLES_LAB_PATTERNS,
     "primitives_3d": PRIMITIVES_3D,
     "primitives_2d": PRIMITIVES_2D,
     "operations": OPERATIONS,
@@ -831,6 +1611,8 @@ _TOPICS = {
     "topology": TOPOLOGY,
     "cae_guidelines": CAE_GUIDELINES,
     "examples": EXAMPLES,
+    "examples_intro": EXAMPLES_INTRO,
+    "examples_gallery": EXAMPLES_GALLERY,
     "coil_modeling": COIL_MODELING,
 }
 
