@@ -193,14 +193,14 @@ def check_missing_step_reimport(filepath: str, lines: List[str]) -> List[Dict]:
 	findings = []
 	# Detect usage of deleted APIs
 	deleted_apis = [
-		('export_netgen', 'export_NGSolveCurvedMesh'),
-		('export_NetgenMesh', 'export_NGSolveCurvedMesh'),
-		('export_netgen_with_names', 'export_NGSolveCurvedMesh'),
-		('name_occ_faces', 'export_NGSolveCurvedMesh (no OCC needed)'),
-		('set_cylinder_geominfo', 'export_NGSolveCurvedMesh'),
-		('set_sphere_geominfo', 'export_NGSolveCurvedMesh'),
-		('set_torus_geominfo', 'export_NGSolveCurvedMesh'),
-		('set_cone_geominfo', 'export_NGSolveCurvedMesh'),
+		('export_netgen', 'radia_export netgen'),
+		('export_NetgenMesh', 'radia_export netgen'),
+		('export_netgen_with_names', 'radia_export netgen'),
+		('name_occ_faces', 'radia_export netgen (no OCC needed)'),
+		('set_cylinder_geominfo', 'radia_export netgen'),
+		('set_sphere_geominfo', 'radia_export netgen'),
+		('set_torus_geominfo', 'radia_export netgen'),
+		('set_cone_geominfo', 'radia_export netgen'),
 	]
 	for i, line in enumerate(lines, 1):
 		stripped = line.strip()
@@ -277,7 +277,7 @@ def check_missing_boundary_block(filepath: str, lines: List[str]) -> List[Dict]:
 	)
 	# Only flag for Netgen/curved exports (boundary elements most important)
 	has_netgen_export = any(
-		re.search(r'export_NGSolveCurvedMesh', line)
+		re.search(r'radia_export netgen', line)
 		for line in lines
 	)
 
@@ -386,7 +386,7 @@ def check_setgeominfo_without_geometry(filepath: str, lines: List[str]) -> List[
 
 
 def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dict]:
-	"""MODERATE: Manual mesh.Curve() without export_NGSolveCurvedMesh (legacy pattern)."""
+	"""MODERATE: Manual mesh.Curve() without radia_export netgen (legacy pattern)."""
 	findings = []
 	has_curve = False
 	curve_line = None
@@ -402,21 +402,21 @@ def check_curve_without_setgeominfo(filepath: str, lines: List[str]) -> List[Dic
 	if not has_curve:
 		return findings
 
-	# Check for export_NGSolveCurvedMesh (which handles Curve internally)
-	has_export_NGSolveCurvedMesh = any('export_NGSolveCurvedMesh' in line for line in lines)
+	# Check for radia_export netgen (which handles Curve internally)
+	has_radia_export_netgen = any('radia_export netgen' in line for line in lines)
 	# Check for OCC native mesh (which has built-in geometry)
 	has_occ_mesh = any('GenerateMesh' in line for line in lines)
 
-	if not has_export_NGSolveCurvedMesh and not has_occ_mesh:
+	if not has_radia_export_netgen and not has_occ_mesh:
 		findings.append({
 			'line': curve_line,
 			'severity': 'MODERATE',
 			'rule': 'curve-without-export-curved',
 			'message': (
-				'mesh.Curve() called but no export_NGSolveCurvedMesh() found. '
-				'For Cubit meshes, use export_NGSolveCurvedMesh(cubit, order=N) which '
+				'mesh.Curve() called but no radia_export netgen() found. '
+				'For Cubit meshes, use radia_export netgen(cubit, order=N) which '
 				'handles curving automatically via ACIS CallbackGeometry. '
-				'See: netgen_workflow_guide("export_NGSolveCurvedMesh")'
+				'See: netgen_workflow_guide("radia_export netgen")'
 			),
 		})
 	return findings

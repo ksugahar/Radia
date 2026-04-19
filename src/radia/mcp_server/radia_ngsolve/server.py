@@ -497,7 +497,7 @@ def ngsbem_inductance(topic: str = "all") -> str:
     on high-order curved surface elements.
 
     Key workflow:
-      Cubit mesh -> export_NGSolveCurvedMesh(cubit, order=N) -> LaplaceSL BEM -> L extraction
+      Cubit mesh -> radia_export netgen "mesh.vol" order N -> LaplaceSL BEM -> L extraction
 
     Sources:
       - https://docu.ngsolve.org/latest/how_to/ngsbem.html

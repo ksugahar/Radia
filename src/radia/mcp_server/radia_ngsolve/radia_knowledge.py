@@ -3889,7 +3889,7 @@ CRITICAL: The operation order matters. Mesh air FIRST, then create kelvin and co
    target curve <dst_c> target vertex <dst_v>
 7. Tet mesh kelvin volumes (copied surface constrains boundary)
 8. Create blocks: yoke, air, kelvin, kelvin_int, kelvin_ext
-9. export_NGSolveCurvedMesh -> Scale(mm_to_m) -> add_periodic_kelvin
+9. radia_export netgen -> Scale(mm_to_m) -> add_periodic_kelvin
 ```
 
 ### Why This Order

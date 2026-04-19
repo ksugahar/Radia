@@ -161,9 +161,16 @@ def gmsh_reference(topic: str = "all") -> str:
     """
     Get GMSH technical reference (options, algorithms, fields, formats).
 
-    Topics: algorithms, formats, fields, mesh_options, transfinite,
-            boolean, extrusion, periodic, mesh_commands, plugins,
-            view_options, geometry_options
+    Topics: algorithms, formats, fields, python_api_field, python_api_postproc,
+            mesh_options, transfinite, boolean, extrusion, periodic,
+            mesh_commands, plugins, view_options, geometry_options
+
+    Lab policy (2026-04-19): gmsh は Python API 経由の軽量**ポスト処理**専用。
+    mesh 生成は Netgen/Cubit が担当。Netgen は Tcl 実装でポストが弱いため、
+    gmsh Python API 駆動でポストを埋める構成。
+    - `python_api_postproc` — gmsh.view.*, gmsh.plugin.*, I/O（**研究室の本題**）
+    - `python_api_field` — gmsh.model.mesh.field.* (reference only, 研究室では不使用)
+    - `fields` — .geo syntax (legacy 参照用)
 
     Args:
         topic: Reference topic (default: "all").
