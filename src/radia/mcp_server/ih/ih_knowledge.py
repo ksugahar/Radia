@@ -1325,6 +1325,384 @@ Stage 2 implementation: `src/radia/panels/calc_heating.py`
 """
 
 
+INDUCTION_HEATING_PEEC_BEM_SIBC = """
+# PEEC (coil filament) + BEM-SIBC (workpiece) — production path for rotating WP
+
+## When to use this
+
+- Workpiece moves/rotates relative to coil (different relative position per step)
+- Coil geometry is fixed
+- Linear or nonlinear SIBC on workpiece (delta << WP size)
+- Frequency range where filament model captures coil AC redistribution
+
+## Advantages
+
+- **No coil volume mesh needed** — coil is a filament bundle from
+  `CoilBuilder.to_filaments()` or `coil_from_build123d_sweep()`.
+- Only workpiece surface mesh + per-step rebuild as WP moves.
+- BEM solver construction cached once per WP mesh (`IHWorkpieceContext`).
+- L from PEEC `Z_port` is mesh-independent (matches analytical to <1%).
+- Per-coil-variant eval ~3 seconds (MNA + Biot-Savart + BEM linear solve).
+
+## Pipeline (validated 2026-04-18)
+
+```python
+from radia_coil_builder import CoilBuilder
+from peec_bundle import build_bundle_solver
+from bem_sibc_solver import (ScalarBIESIBCSolver,
+                              compute_phi_inc_from_filaments)
+
+# 1. Coil geometry via CAD-first API (NO mesh)
+coil = (CoilBuilder(current=I_total)
+        .set_start([R_major, 0, 0])
+        .set_cross_section(width=SIDE, height=SIDE)
+        .add_arc(radius=R_major, arc_angle=355))
+paths, _ = coil.to_filaments(nw=3, nh=3, frequency=f,
+                              sigma=5.8e7, mu_r=1.0, n_arc=40)
+info = coil._last_filament_info
+dw, dh = info['w']/3, info['h']/3
+
+# 2. PEEC MNA -> per-filament complex AC currents
+solver_peec, seg_of_fil, _, _ = build_bundle_solver(paths, dw, dh, 5.8e7)
+I_branch = solver_peec.compute_branch_currents(f, [I_total+0j])
+I_peec = [np.mean([I_branch[s] for s in segs]) for segs in seg_of_fil]
+
+# 3. Inductance from port impedance (MESH-INDEPENDENT)
+Z_port = solver_peec.compute_port_impedance(f)
+L = Z_port.imag / (2*pi*f)
+R_ac = Z_port.real
+
+# 4. phi_inc at WP surface via Biot-Savart line integrals
+wp_pts = np.array([wp_mesh.vertices[v].point for v in range(wp_mesh.nv)])
+phi_inc = compute_phi_inc_from_filaments(wp_pts, paths, I_peec, n_quad=20)
+
+# 5. BEM-SIBC solve on workpiece (CACHE THE SOLVER)
+bem = ScalarBIESIBCSolver(wp_mesh)  # one-time ~10s
+sol = bem.solve(phi_inc, Z_s, omega)
+H_t_rms = sol['H_t_rms']
+P_total = sol['P_density'] * sol['area']
+```
+
+## Validation vs A-V FEM truth (2026-04-18)
+
+Geometry: gapped torus R=30mm, a=3mm, 5 deg gap. Steel WP R=25mm H=25mm.
+Frequency 7 kHz (Cu delta = 0.79 mm, delta/a = 0.26 — weak skin effect).
+
+| Method | L [nH] | H_t [A/m] | P [W] |
+|--------|--------|-----------|-------|
+| A-V FEM (coil-sigma) — truth | 100.25 | 10.36 | 4.95e-4 |
+| PEEC + BEM-SIBC | 88.57 | 10.67 | 5.24e-4 |
+| Agreement | -11.6% | **+3.0%** | +4.4% |
+
+L difference reflects FEM truncation vs analytical; H_t/P agree within method
+differences (FEM volume vs BEM surface on different WP mesh).
+
+## mu_r support
+
+Linear SIBC in the workpiece: `Z_s = (1+j)/(sigma*delta)` with
+`delta = sqrt(2/(omega*mu_0*mu_r*sigma))`. Pass mu_r via the material setup
+in `IHWorkpieceContext(mesh, freq, sigma, mu_r=100, ...)`.
+
+Nonlinear BH (saturation): use ESIM cell problem to compute per-panel Z_s,
+then `ScalarBIESIBCSolver.solve(phi_inc, Z_s_array, omega)` with per-node
+Z_s array. Karl iteration alternates ESIM and BEM solves.
+
+## Coil side: copper (linear, mu_r=1) is the default assumption
+
+PEEC filament MNA uses sigma_coil for AC R and M. Copper at typical IH
+frequencies is non-magnetic (mu_r=1). For ferromagnetic coil materials,
+PEEC filament model would need revision (not currently supported).
+
+## Panel integration: calc_peec_bem.py (2026-04-19)
+
+The `src/radia/panels/calc_peec_bem.py` script is the Layer-4 subprocess
+calc for the IH panel "PEEC+BEM (1-way)" method.  It wraps the demo
+pipeline above into a .vol-based / JSON-stdout interface.
+
+### BND extraction from wp-as-hole geometry (CRITICAL)
+
+When the workpiece is modeled as a HOLE in the air volume with a sibc
+sideset (closed-torus / skin sample convention), multiple FaceDescriptors
+may share the same 'sibc' name (e.g. air_top + air_bot halves after
+webcut).  Each FD's BND element winding gives an outward normal relative
+to its own domin, which CAN BE OPPOSITE between FDs.  A blanket flip is
+WRONG — 77% of triangles needed flipping in the closed-torus sample,
+23% did not.
+
+Robust fix (implemented in `_extract_bnd_only`):
+1. Collect the wp-surface vertex cloud.
+2. Compute wp_centroid = mean(coords).
+3. For each triangle, check sign of dot(normal, centroid_to_face).
+4. Flip winding if inward.
+
+Without this, BEM P output is silently wrong by 2-20x (not a failed
+solve — a plausible-looking but incorrect number).
+
+### Golden regression test (policy)
+
+`tests/panels/test_peec_bem_golden.py` runs `calc_peec_bem.py` on
+`ih_peec_bem_coarse.vol` at 7 kHz Cu and asserts:
+- L_coil within 1% of captured 88.57 nH (geometry-only, tight)
+- P_wp within 15% of 2D SIBC reference 6.63e-5 W (mesh-sensitive)
+
+Expected values in `tests/panels/golden/peec_bem_coarse_7kHz_Cu.json`.
+Re-generate the sample via Cubit headless:
+`coreform_cubit -batch -nojournal -nographics -input
+src/radia/panels/samples/ih_peec_bem_coarse.jou`.
+
+### Sibling: calc_fem_coilmesh.py (2026-04-19 FINAL, A-V + wp SIBC)
+
+Gapped-torus A-V formulation following the MCP-documented
+`INDUCTION_HEATING_AV_COIL_SIGMA` pattern.  Coil is volumetrically
+meshed with sigma; phi (scalar potential) is defined on coil material
+only, Dirichlet 1 on 'source' / 0 on 'sink' port sidesets.  Volume-
+integral current extraction `I_out = int J . grad(psi_n) dV`.  WP
+SIBC Robin as usual, Kelvin exterior.
+
+**Design journey that got us here (retired options)**:
+- Neumann-K on coil surface alone (2026-04-19 am): L collapsed 10x
+  because Robin SIBC cancels K_imposed exactly.  **Retired.**
+- Neumann-K without Robin (pure Dirichlet-source): got P_wp within
+  2D SIBC ref, but P_wp matched PEEC+BEM only to 24% — the uniform-K
+  surface source misses coil proximity effects.  **Retired.**
+- Dowell thin-wire analytical P_coil: good for research, but not a
+  panel-level primitive (hides mesh-dependence from the user).
+  **Demoted to examples/ on 2026-04-19.**
+
+### Validation (2026-04-19, ih_fem_kelvin_skin_fine, Cu 7 kHz)
+
+| Method | P_wp [W] | L [nH] | P_coil [W] |
+|--------|----------|--------|------------|
+| 2D axisym (ref) | 6.63e-5 (SIBC) | 50.54 | ~8.4e-5 (implied) |
+| PEEC+BEM | 6.48e-5 (-2.2%) | — | — |
+| FEM A-V   | **6.54e-5** (-1.3%) | 47.32 (-6.4%) | 1.48e-4 (+76% mesh-sens.) |
+
+**P_wp agreement PEEC+BEM vs FEM A-V: 1%** (!) — the primary IH
+engineering metric.  L is within 10% (coil mesh-sensitive).  P_coil
+is volumetric `|J|^2/sigma` and mesh-sensitive; captured value with
+tolerance 15% in golden.  For exact P_coil use Dowell analytical
+in examples/.
+
+### .vol / .jou requirements
+
+- 'coil' material, VOLUMETRIC-MESHED with `volume size <= delta/3`
+  (ideally; skin_fine sample uses 0.16mm surface + 0.5mm volume for
+  Cu 7kHz delta=0.79mm).
+- 'source', 'sink' sidesets on the two gap-face circles.  Real IH
+  coils have physical port terminations; use those.  Closed-torus
+  topology cannot drive A-V.
+- 'sibc' sideset on wp hole boundary.
+- 'kelvin' material (+ Periodic identification) for open boundary.
+- Canonical .jou: `src/radia/panels/samples/ih_fem_kelvin_skin_fine.jou`.
+
+### Panel UX (2026-04-19 refactored)
+
+`radia_ih.py` presents the above through a widget layout organized
+into sections (Method / Drive / Coil material / Coil geometry /
+Workpiece material / Workpiece impedance / Linear solver / Advanced).
+
+Non-obvious features:
+
+1. **Material presets** (Copper / Aluminum / Brass / Steel mu_r=100 /
+   Steel mu_r=500 / Stainless 304 / Custom).  Selecting a preset
+   auto-fills sigma+mu_r and disables their lineedits; `Custom`
+   re-enables manual entry.  **Coil and wp materials are INDEPENDENT**
+   — setting one does not change the other.
+
+2. **Impedance model** (Linear SIBC / Nonlinear ESIM-WIP).  Selecting
+   ESIM reveals bh_file, max_iter, tol widgets.  Calc scripts accept
+   `--impedance-model esim` but return `{"error":"ESIM WIP"}` — the
+   CLI path is plumbed for future extension.
+
+3. **Linear solver** per-method:
+   - PEEC+BEM: Dense LU (small) / HACApK (large, O(N log N))
+   - FEM A-V: pardiso / shifted AMS (p=1) / BDDC (p>=2) / iccg
+   `shifted_ams` and `hacapk` are CLI-plumbed but WIP (calc returns
+   error).  `pardiso` + `dense` are the tested paths.
+
+4. **.vol label validation** on load via `inspect_vol_labels`: status
+   label shows 'OK' (green), 'warn' (amber, e.g. missing kelvin),
+   'ERROR' (red, e.g. missing source/sink for FEM).  Run button
+   disabled on errors.
+
+5. **Physics sanity** shown under method:
+   - wp delta and R/delta ratio; warns when R/delta < 3
+     (SIBC approximation breaks, volumetric FEM preferred)
+   - Post-solve: coil h_max vs delta (flags under-resolved coil mesh)
+
+6. **Output** formatted in IH Summary section:
+   - `L_coil (vacuum)` vs `L_total (with wp)` distinguished
+   - `P_workpiece` (primary) / `P_coil (mesh-sensitive ±15%)` /
+     `P_total` / `Heating efficiency = P_wp/P_total`
+   - `H_t_rms`, `wp_area`, `coil delta`, `coil h_max` with OK/WARN tags
+
+### Implementation notes (2026-04-19)
+
+1. phi H1 DEFINED-ON coil only (`definedon=mesh.Materials('coil')`).
+2. `A + grad(phi)` compound term in the eddy bilinear form on coil.
+3. Dirichlet lift: set gf_phi = 1 on source, then solve
+   `A x^(-1) (- A . gfu) + gfu = gfu_new`.
+4. Post-solve volume current extraction uses a SEPARATE H1 scalar
+   `psi_n` with dirichlet=sink, Set(1) on source, then
+   `I_out = Integrate(J_coil * grad(psi_n) * dx('coil'))`.  Scale
+   the entire gfu by I_target / I_out to normalize.
+5. WP H_t from SIBC Robin:
+   `H_t_rms = |jw/Z_s_wp| * sqrt(int|A_t|^2 dS / A_wp)`.
+6. P_coil volumetric: `0.5 / sigma * int |J|^2 dV` over coil material.
+   Warn if coil h_max > delta — mesh-sensitive accuracy.
+"""
+
+INDUCTION_HEATING_AV_COIL_SIGMA = """
+# A-V formulation for coil eddy currents (--coil-sigma)
+
+## When to use
+
+- **FEM truth / static benchmark** — validating PEEC against resolved skin.
+- Coil is part of the .vol with source/sink sidesets.
+- Skin-depth-resolved coil mesh (wire surface <= delta/3, e.g. 0.3 mm at 7kHz Cu).
+
+## When NOT to use
+
+- Rotating/moving workpiece (requires re-meshing coil + WP each step — expensive).
+- Design sweeps where coil geometry varies (PEEC is faster).
+
+## Formulation
+
+A (vector potential) + phi (scalar potential in conductor) compound space.
+Driving force: phi Dirichlet lift (phi=1 on source, phi=0 on sink).
+Total current I_out computed post-solve, solution scaled to I_total.
+
+```python
+# FES: HCurl(A) x H1(phi, conductor-only)
+fesA = HCurl(mesh, order=1, nograds=True, complex=True, dirichlet=dirichlet_bnd)
+fesA_p = Periodic(fesA) if has_kelvin else fesA
+fesPhi = H1(mesh, order=1, complex=True, definedon="coil", dirichlet="source|sink")
+fes = fesA_p * fesPhi
+(A, phi), (N, psi) = fes.TnT()
+
+# Bilinear form (KEY: unified s*sigma*(A+grad(phi))*(N+grad(psi)) term)
+a = BilinearForm(fes, symmetric=True)
+a += nu_cf*curl(A)*curl(N)*dx(bonus_intorder=4)
+a += reg*NU_0*A*N*dx("<non-kelvin materials>")
+a += robin*A.Trace()*N.Trace()*ds("sibc")
+a += s*sigma_coil*(A+grad(phi))*(N+grad(psi))*dx("coil")
+a.Assemble()
+
+# Dirichlet lift: phi=1 on source, phi=0 on sink
+gfu = GridFunction(fes)
+gf_A, gf_phi = gfu.components
+gf_phi.Set(CF(1), definedon=mesh.Boundaries("source"))
+r = gfu.vec.CreateVector()
+r.data = -a.mat * gfu.vec
+gfu.vec.data += a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * r
+
+# Post-normalization to I_total
+s_eddy = 1j * omega
+J_coil = -s_eddy * sigma_coil * (gf_A + grad(gf_phi))
+fes_psi_n = H1(mesh, order=1, complex=True, dirichlet="sink", definedon="coil")
+gf_psi_n = GridFunction(fes_psi_n)
+gf_psi_n.Set(CF(1), definedon=mesh.Boundaries("source"))
+I_out = Integrate(J_coil * grad(gf_psi_n) * dx("coil"), mesh)
+scale = I_total / I_out
+gfu.vec.data = complex(scale) * gfu.vec
+```
+
+## Gotchas
+
+1. **nograds=True on HCurl** — standard NGSolve policy; phi provides the
+   gauge for the gradient part of A in the conductor. Both together give
+   a well-posed A-V system.
+2. **phi defined only on conductor** (`definedon="coil"`). If defined globally,
+   the unconstrained phi in air breaks the solution (A becomes pure gradient,
+   curl(A)=0 trivial solution).
+3. **Periodic Kelvin + pardiso works**. BDDC+CG diverges without additional
+   regularization (needs careful preconditioner design for saddle-point system).
+4. **GND nodeset does NOT constrain HCurl** — Dirichlet on HCurl works only
+   on sidesets (boundary faces), not nodesets (vertices). Regularization term
+   `reg * NU_0 * A * N * dx` provides uniqueness instead.
+5. **Mesh requirement**: coil surface elements < delta/3 (typically 0.3 mm
+   for Cu at 7 kHz). Use `surface with length < X interval N` in Cubit.
+6. **Post-normalize**: solve with V_applied=1 (phi Dirichlet), compute I_out
+   as integral of J.grad(psi_n) over coil, scale gfu by I_total/I_out.
+
+## Reference: existing A-V implementation
+`W:/31_Go-Tech/10_誘導加熱の解析/.../toymodel+lead_EddyCurent_APhi_bddc_CG_node.ipynb`
+by K. Sugahara. Production code pattern for A-V + BDDC+CG (non-Kelvin outer).
+"""
+
+INDUCTION_HEATING_FAILED_APPROACHES = """
+# Failed approaches for PEEC coupling to FEM workpiece (DO NOT retry)
+
+These were tried during 2026-04-18 skin-depth comparison and shown to fail.
+Documented so future sessions do not waste effort on broken formulations.
+
+## 1. PEEC reduced-A FEM (HCurl projection of Biot-Savart A_s)
+
+**Strategy**: sample A_s at mesh vertices via Biot-Savart, project into HCurl,
+use `-(nu - nu_0)*curl(A_s_proj)*curl(v)` as RHS for scattered field A_r.
+A_total = A_r + A_s on SIBC drives H_t.
+
+**Why it fails**: HCurl projection of vertex-interpolated A_s has curl errors
+up to 5x in the Kelvin domain. This is a "variational crime" — the
+cancellation of J_s in the reduced-A weak form assumes
+`curl(nu_0 curl A_s_proj) = J_s` exactly, which projection breaks.
+
+**Symptoms**: L ~ 10x too high (W_mag blown up by Kelvin curl error).
+H_t ~ 20x too small (Robin RHS `-robin*A_s` drives A_r to cancel A_s on SIBC).
+
+Even computing B_s directly via `h_segments_batch` at vertices (avoiding
+curl of projected A_s) did not fix H_t — the Robin surface term structure
+itself drives A_total -> 0 on SIBC when A_s is weaker than the volume-current
+reference.
+
+## 2. PEEC line-integral source FEM (delta-function line source in RHS)
+
+**Strategy**: assemble `f[dof_j] = sum_k I_k * int_path phi_j(x).dl` via
+per-quadrature-point HCurl basis evaluation. Each filament quadrature point
+finds containing element via `mesh(*pt).nr`, evaluates all 6 edge basis
+functions via scratch GridFunction, adds weighted contribution.
+
+**Why it fails partially**: Delta-function line source misses near-field
+contribution between mesh vertices. For geometries where coil-WP gap is
+similar to filament spacing (2mm gap, 1.5mm between filaments), the
+near-field at workpiece is under-represented.
+
+**Symptoms**: H_t = 7.77 A/m vs A-V truth 10.36 (-25%). Worse with more
+filaments (nwinc=5: H_t=7.46) because phase cancellation between filaments
+amplifies the miss. L is mesh-dependent (ln(1/h) divergence) — must use
+PEEC Z_port for L, not W_mag.
+
+**Implementation detail**: Works (no NaN, sensible order of magnitude),
+just not accurate enough for validation-grade physics.
+
+## 3. T0-modulated PEEC volume source (works but requires coil mesh)
+
+**Strategy**: use T0 spatial distribution `J_T0 = (I/Phi)*grad(T0)` as
+volume current pattern, multiply by PEEC filament current ratio
+`I_k_nearest / I_avg` in each coil element. Solve FEM with modulated
+volume source.
+
+**Result**: H_t -0.9%, P -1.8% vs A-V truth — **accurate**. BUT requires
+coil volume mesh. Defeats the purpose of PEEC (mesh-free coil for rotating
+WP). Noted as a valid static-benchmark alternative to A-V but not
+production-useful.
+
+## 4. PEEC-modulated surface current -> compute_phi_inc_from_surface_J
+
+**Strategy**: EFIE DC surface J (spatial pattern) multiplied by filament
+`I_k/I_avg` (AC redistribution) at each panel. Feed modulated complex J
+into `compute_phi_inc_from_surface_J`.
+
+**Why it fails**: `compute_phi_inc_from_surface_J` casts complex J_vecs to
+real (`np.asarray(src_J_vecs, dtype=float)`), discarding phase. Modulation
+is destroyed.
+
+**Resolution**: Direct filament -> `compute_phi_inc_from_filaments` is
+simpler and already handles complex currents correctly. This IS the PEEC+BEM
+production path. No modulation of surface panels needed.
+"""
+
+
 def get_induction_heating_documentation(topic: str = "all") -> str:
     """Return induction heating simulation documentation by topic."""
     topics = {
@@ -1336,6 +1714,9 @@ def get_induction_heating_documentation(topic: str = "all") -> str:
         "postprocess": INDUCTION_HEATING_POSTPROCESS,
         "pitfalls": INDUCTION_HEATING_PITFALLS,
         "esim_kelvin": INDUCTION_HEATING_ESIM_KELVIN,
+        "peec_bem_sibc": INDUCTION_HEATING_PEEC_BEM_SIBC,
+        "av_coil_sigma": INDUCTION_HEATING_AV_COIL_SIGMA,
+        "failed_approaches": INDUCTION_HEATING_FAILED_APPROACHES,
     }
 
     topic = topic.lower().strip()

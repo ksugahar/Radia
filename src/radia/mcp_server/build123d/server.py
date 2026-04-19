@@ -40,6 +40,8 @@ def build123d_usage(topic: str = "overview") -> str:
     Args:
         topic: Documentation topic. Options:
             "overview"        - What build123d is, CAE pipeline, safe subset
+            "lab_policy"      - Role split vs Cubit (tet vs hex), translation guidance
+            "cubit_rosetta"   - Cubit `.jou` verb ↔ build123d mapping table
             "primitives_3d"   - Box, Cylinder, Cone, Sphere, Torus, Wedge + boolean
             "primitives_2d"   - Circle, Rectangle, Polygon, etc. (sketch objects)
             "operations"      - extrude, revolve, sweep, loft, fillet, mirror, split
@@ -48,6 +50,10 @@ def build123d_usage(topic: str = "overview") -> str:
             "topology"        - faces/edges/vertices queries, labels, selectors
             "cae_guidelines"  - Clean geometry rules, quality checks, label conventions
             "examples"        - IH coil, E-core transformer, dipole yoke, parametric
+            "examples_intro"  - 36 introductory examples (Box/Cylinder -> loft/revolve/sweep)
+            "examples_gallery"- 21 gallery examples (Benchy, Heat Exchanger, Vase, ...)
+            "examples_lab_patterns" - Lab-specific: IH/Halbach/dipole/PEEC/maglev archetypes
+            "coil_modeling"   - PEEC filament extraction from CAD
             "all"             - Complete documentation
     """
     return get_build123d_documentation(topic)
@@ -198,6 +204,129 @@ def execute_build123d(
     if stdout_text:
         info["stdout"] = stdout_text
 
+    return json.dumps(info, indent=2)
+
+
+@mcp.tool()
+def preview_shape(script: str, name: str = "preview") -> str:
+    """
+    Run a build123d script and show the resulting Shape in the OCP CAD
+    Viewer (VSCode panel).
+
+    Lab policy (2026-04-19): build123d previews go **direct** —
+    `ocp_vscode.show(part)` on the in-memory Part. No STEP roundtrip.
+    This is mandatory; the Cubit path uses STEP because Cubit is
+    out-of-process, but build123d has no such constraint.
+
+    Prerequisite: the "OCP CAD Viewer" extension must be running in
+    VSCode (default port 3939). If it's not, `show()` raises and this
+    tool returns an error JSON — fix by opening the viewer panel.
+
+    Args:
+        script: Python code using build123d. Must be self-contained.
+            The last Shape-like object assigned in the namespace is
+            sent to the viewer.
+        name: Display name for the shape in the viewer sidebar.
+
+    Returns:
+        JSON with preview status, shape summary (volume / faces /
+        bbox), and any error traceback.
+    """
+    import sys as _sys
+    import traceback as _tb
+    from io import StringIO
+
+    namespace = {}
+    _buf = StringIO()
+    _orig_stdout = sys.stdout
+    sys.stdout = _buf
+    try:
+        exec(  # noqa: S102
+            "from build123d import *\n" + script,
+            namespace,
+        )
+    except Exception:
+        sys.stdout = _orig_stdout
+        return json.dumps({
+            "status": "error",
+            "stage": "script_exec",
+            "error": _tb.format_exc(),
+            "stdout": _buf.getvalue(),
+        }, indent=2)
+    finally:
+        sys.stdout = _orig_stdout
+    stdout_text = _buf.getvalue()
+
+    from build123d import Shape
+
+    target = None
+    target_name = None
+    for n, obj in namespace.items():
+        if n.startswith("_"):
+            continue
+        if isinstance(obj, Shape):
+            target, target_name = obj, n
+    if target is None:
+        return json.dumps({
+            "status": "error",
+            "stage": "extract",
+            "error": "Script executed but no build123d Shape was found "
+                     "in the namespace.",
+            "stdout": stdout_text,
+        }, indent=2)
+
+    # Direct Part -> OCP viewer. No STEP.
+    try:
+        from ocp_vscode import show
+    except ImportError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "ocp_import",
+            "error": f"ocp_vscode not installed: {e}. "
+                     f"Install via: pip install ocp-vscode",
+        }, indent=2)
+
+    try:
+        show(target, names=[name])
+    except Exception:
+        return json.dumps({
+            "status": "error",
+            "stage": "show",
+            "error": _tb.format_exc(),
+            "hint": "Is the OCP CAD Viewer panel open in VSCode? "
+                    "(Command Palette -> OCP CAD Viewer: Open)",
+        }, indent=2)
+
+    info = {
+        "status": "ok",
+        "stage": "shown",
+        "viewer": "ocp_vscode",
+        "name": name,
+        "variable": target_name,
+        "type": type(target).__name__,
+        "is_valid": target.is_valid,
+    }
+    try:
+        info["volume"] = round(target.volume, 6)
+    except Exception:
+        info["volume"] = None
+    try:
+        info["face_count"] = len(target.faces())
+        info["edge_count"] = len(target.edges())
+    except Exception:
+        pass
+    try:
+        bb = target.bounding_box()
+        info["bounding_box"] = {
+            "min": [round(bb.min.X, 4), round(bb.min.Y, 4),
+                    round(bb.min.Z, 4)],
+            "max": [round(bb.max.X, 4), round(bb.max.Y, 4),
+                    round(bb.max.Z, 4)],
+        }
+    except Exception:
+        pass
+    if stdout_text:
+        info["stdout"] = stdout_text
     return json.dumps(info, indent=2)
 
 
