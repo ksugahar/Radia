@@ -16,6 +16,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <string>
 #include <unordered_map>
 #include <iosfwd>
 #include <memory>
@@ -179,6 +180,52 @@ private:
   int total_nodes_ = 0;
   int next_node_id_ = 0;
   int order_ = 2;
+
+  // ---- Diagnostic counters for ACIS projection (Phase 2 callback) ----
+  // Populated during curve_and_extract -> BuildCurvedElements -> project().
+  // "reject" = projection displacement exceeded threshold, fallback applied.
+  mutable long diag_project_calls_ = 0;
+  mutable long diag_project_rejects_ = 0;
+  mutable double diag_project_max_disp_ = 0.0;
+  mutable int diag_project_max_disp_surf_ = -1;
+  mutable std::unordered_map<int, long> diag_project_reject_per_surf_;
+  mutable long diag_edge_calls_ = 0;
+  mutable long diag_edge_rejects_ = 0;
+  mutable double diag_edge_max_disp_ = 0.0;
+  // Reject thresholds (mm). If projection displaces the query point by more
+  // than this, fall back to identity (linear interpolation will pick up the
+  // edge in the final pass).
+  //
+  // Surface threshold is tight because wrong-side projections on thin wire
+  // cross-sections (full diameter ~6.3 mm) must be caught; raising to 5 mm
+  // blows volume up +13%.
+  //
+  // Edge/curve threshold is *also* tight on 3turnCoil: accepting chord
+  // midpoints that project more than ~1.5 mm away routinely picks up
+  // cross-curve jumps (6.3 mm = full wire cross-section). With edge
+  // threshold at 10 mm: volume +25.6%. At 1.5 mm: -0.80%.
+  double project_reject_threshold_ = 1.5;
+  double edge_reject_threshold_ = 1.5;
+
+  // Accumulated reject detail rows (written to file at end of build())
+  // Each string: "surfnr,cubit_sid,path,in_x,in_y,in_z,out_x,out_y,out_z,u_hint,v_hint,out_u,out_v,disp"
+  mutable std::vector<std::string> project_reject_log_entries_;
+  int project_reject_dump_max_ = 2000;
+
+  // Phase1e diagnostic: per-surface vertex UV spread (max|u1-u0|, max|v1-v0| within tris)
+  // Key = cubit_sid
+  mutable std::unordered_map<int, double> diag_tri_max_du_;
+  mutable std::unordered_map<int, double> diag_tri_max_dv_;
+  mutable std::unordered_map<int, int> diag_tri_count_;
+
+  // Per-surface "UV hint table": one entry per surface vertex, storing
+  // the 3D position alongside its canonical UV. The project() callback uses
+  // this to derive a UV guess on its no-hint first call (u_hint==v_hint==0)
+  // via the nearest stored vertex — letting `closest_point_uv_guess` start a
+  // local Newton iteration instead of the global `closest_point_trimmed`
+  // that can jump to the wrong surface branch on thin wire cross-sections.
+  // Key = cubit_sid. Each row = (x, y, z, u, v).
+  std::unordered_map<int, std::vector<std::array<double,5>>> surf_vertex_uvs_;
 };
 
 #endif

@@ -30,7 +30,9 @@ namespace ng = netgen;
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <set>
 
 NetgenCurver::NetgenCurver() {}
@@ -51,6 +53,52 @@ bool NetgenCurver::build(const MeshData &md, int order)
   PRINT_INFO("NetgenCurver: order %d, %d original + %d curved nodes = %d total\n",
              order, (int)cubit_nid_to_ng_pi_.size(),
              total_nodes_ - (int)cubit_nid_to_ng_pi_.size(), total_nodes_);
+
+  // Diagnostic report: projection reject stats
+  PRINT_INFO("NetgenCurver: projection stats — "
+             "project=%ld calls, %ld rejects (>%g mm), max_disp=%g mm (surf %d)\n",
+             diag_project_calls_, diag_project_rejects_,
+             project_reject_threshold_,
+             diag_project_max_disp_, diag_project_max_disp_surf_);
+  PRINT_INFO("NetgenCurver: edge_project stats — %ld calls, %ld rejects, max_disp=%g mm\n",
+             diag_edge_calls_, diag_edge_rejects_, diag_edge_max_disp_);
+  if (diag_project_rejects_ > 0) {
+    // Show top-5 offending surfaces by reject count + UV spread for each
+    std::vector<std::pair<int,long>> ranked(diag_project_reject_per_surf_.begin(),
+                                             diag_project_reject_per_surf_.end());
+    std::sort(ranked.begin(), ranked.end(),
+              [](const auto &a, const auto &b) { return a.second > b.second; });
+    int n_show = (int)ranked.size() < 5 ? (int)ranked.size() : 5;
+    PRINT_INFO("NetgenCurver: top-%d surfaces by reject count (with Phase1e UV spread):\n", n_show);
+    for (int i = 0; i < n_show; i++) {
+      int sid = ranked[i].first;
+      double mdu = diag_tri_max_du_.count(sid) ? diag_tri_max_du_[sid] : 0.0;
+      double mdv = diag_tri_max_dv_.count(sid) ? diag_tri_max_dv_[sid] : 0.0;
+      int ntri = diag_tri_count_.count(sid) ? diag_tri_count_[sid] : 0;
+      PRINT_INFO("  cubit_surf %d: %ld rejects | tris=%d, max_tri_Δu=%.3e, max_tri_Δv=%.3e\n",
+                 sid, ranked[i].second, ntri, mdu, mdv);
+    }
+  }
+
+  // Dump detailed reject CSV only when RADIA_NETGEN_REJECT_DUMP env var is
+  // set (to avoid noisy writes in production builds). Value is used as the
+  // output path. Typical debug usage: RADIA_NETGEN_REJECT_DUMP=C:\tmp\netgen_reject_log.csv
+  if (!project_reject_log_entries_.empty()) {
+    const char * dump_path = std::getenv("RADIA_NETGEN_REJECT_DUMP");
+    if (dump_path && *dump_path) {
+      std::ofstream ofs(dump_path);
+      if (ofs) {
+        ofs << "surfnr,cubit_sid,path,in_x,in_y,in_z,"
+               "out_x,out_y,out_z,u_hint,v_hint,out_u,out_v,disp\n";
+        for (auto &row : project_reject_log_entries_)
+          ofs << row << "\n";
+        PRINT_INFO("NetgenCurver: %d reject rows written to %s\n",
+                   (int)project_reject_log_entries_.size(), dump_path);
+      } else {
+        PRINT_INFO("NetgenCurver: failed to open %s for reject log\n", dump_path);
+      }
+    }
+  }
   return true;
 }
 
@@ -130,10 +178,84 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     for (int sid : surface_ids)
       rf_cache[sid] = GeometryQueryTool::instance()->get_ref_face(sid);
 
+    // Cache per-surface periodicity. Seam shift (below) is applied only to
+    // surfaces that ACIS flags as actually periodic in that parameter
+    // direction — for non-periodic (open) NURBS, `u_v_from_position` returns
+    // a unique UV in the parameter range, so there is no "seam" and shifting
+    // by the parameter range would push the UV outside the valid interval.
+    // period == 0 means "don't apply seam shift in this direction".
+    std::unordered_map<int, std::array<double,2>> period_cache;
+    for (int sid : surface_ids) {
+      RefFace* rf = rf_cache[sid];
+      double up = 0, vp = 0;
+      if (rf) {
+        double tmp = 0;
+        if (rf->is_periodic_in_U(tmp)) up = tmp;
+        if (rf->is_periodic_in_V(tmp)) vp = tmp;
+      }
+      period_cache[sid] = {up, vp};
+    }
+
+    // Helper: shift u1 by ±period to minimize |u1 - u0|. Returns adjusted u1.
+    auto seam_consistent = [](double u_ref, double u, double period) -> double {
+      if (period <= 0.0) return u;
+      double du = u - u_ref;
+      while (du > 0.5 * period) { u -= period; du -= period; }
+      while (du < -0.5 * period) { u += period; du += period; }
+      return u;
+    };
+
+    // Pre-pass: build per-node canonical UV per surface.
+    // Key = (int64)sid << 32 | cubit_nid. Value = (u, v) from first
+    // u_v_from_position call. For non-periodic surfaces this is the
+    // unique UV; for periodic surfaces it resolves the seam ambiguity
+    // deterministically (first-seen wins) so all triangles sharing that
+    // node get the same UV before per-triangle seam shift.
+    // In parallel we also populate surf_vertex_uvs_[sid] — a per-surface
+    // table of (x, y, z, u, v) rows used by the project() callback to
+    // derive a UV hint from the nearest stored vertex on its no-hint
+    // first call.
+    std::unordered_map<int64_t, std::pair<double,double>> node_canon_uv;
+    surf_vertex_uvs_.clear();
+    auto collect_uvs = [&](int sid, const std::vector<int> &conn) {
+      RefFace* rf = rf_cache[sid];
+      if (!rf) return;
+      for (int nid : conn) {
+        int64_t key = ((int64_t)sid << 32) | (uint32_t)nid;
+        if (node_canon_uv.count(key)) continue;
+        auto coords = CubitInterface::get_nodal_coordinates(nid);
+        CubitVector loc(coords[0], coords[1], coords[2]);
+        double u = 0, v = 0;
+        rf->u_v_from_position(loc, u, v);
+        node_canon_uv[key] = {u, v};
+        surf_vertex_uvs_[sid].push_back(
+            {coords[0], coords[1], coords[2], u, v});
+      }
+    };
+    for (int sid : surface_ids) {
+      RefFace* rf = rf_cache[sid];
+      if (!rf) continue;
+      std::vector<int> tri_ids = CubitInterface::parse_cubit_list("tri",
+          "in surface " + std::to_string(sid));
+      for (int tid : tri_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("tri", tid);
+        collect_uvs(sid, conn);
+      }
+      std::vector<int> face_ids = CubitInterface::parse_cubit_list("face",
+          "in surface " + std::to_string(sid));
+      for (int fid : face_ids) {
+        std::vector<int> conn = CubitInterface::get_connectivity("face", fid);
+        collect_uvs(sid, conn);
+      }
+    }
+
     int nse_added = 0;
+    long diag_shift_count = 0;
     for (int sid : surface_ids) {
       int ng_fd = cubit_sid_to_ng_fd_[sid];
       RefFace* rf = rf_cache[sid];
+      double u_period = period_cache[sid][0];
+      double v_period = period_cache[sid][1];
 
       // Triangles on this surface
       std::vector<int> tri_ids = CubitInterface::parse_cubit_list("tri",
@@ -144,19 +266,65 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
 
         ng::Element2d el(ng::TRIG);
         el.SetIndex(ng_fd);
+        // Pass 1: collect UVs from per-node canonical UV map (computed above)
+        double uu[3], vv[3];
+        int pis[3];
+        bool uv_ok = true;
         for (int k = 0; k < 3; k++) {
           auto it = cubit_nid_to_ng_pi_.find(conn[k]);
-          if (it == cubit_nid_to_ng_pi_.end()) goto skip_tri;
+          if (it == cubit_nid_to_ng_pi_.end()) { uv_ok = false; goto skip_tri; }
+          pis[k] = it->second;
           el[k] = it->second;
-
-          auto coords = CubitInterface::get_nodal_coordinates(conn[k]);
-          CubitVector loc(coords[0], coords[1], coords[2]);
-          double u = 0, v = 0;
-          if (rf) rf->u_v_from_position(loc, u, v);
+          int64_t ckey = ((int64_t)sid << 32) | (uint32_t)conn[k];
+          auto cit = node_canon_uv.find(ckey);
+          if (cit != node_canon_uv.end()) {
+            uu[k] = cit->second.first;
+            vv[k] = cit->second.second;
+          } else {
+            // Fallback: recompute (should not happen since pre-pass covered all tris)
+            auto coords = CubitInterface::get_nodal_coordinates(conn[k]);
+            CubitVector loc(coords[0], coords[1], coords[2]);
+            double u = 0, v = 0;
+            if (rf) rf->u_v_from_position(loc, u, v);
+            uu[k] = u; vv[k] = v;
+          }
+        }
+        // Seam-consistent UV pass: use vertex 0 as reference, shift v1, v2 by
+        // ±period so their UV is closest to vertex 0 in the periodic wraparound
+        // sense. Prevents Netgen from averaging (u=0.9, u=0.1) into hint=0.5
+        // which would land on the opposite side of a periodic NURBS seam.
+        if (u_period > 0.0) {
+          uu[1] = seam_consistent(uu[0], uu[1], u_period);
+          uu[2] = seam_consistent(uu[0], uu[2], u_period);
+        }
+        if (v_period > 0.0) {
+          vv[1] = seam_consistent(vv[0], vv[1], v_period);
+          vv[2] = seam_consistent(vv[0], vv[2], v_period);
+        }
+        // Record UV spread AFTER seam shift (should be small)
+        {
+          double du01 = std::fabs(uu[1]-uu[0]);
+          double du12 = std::fabs(uu[2]-uu[1]);
+          double du02 = std::fabs(uu[2]-uu[0]);
+          double dv01 = std::fabs(vv[1]-vv[0]);
+          double dv12 = std::fabs(vv[2]-vv[1]);
+          double dv02 = std::fabs(vv[2]-vv[0]);
+          double max_du = std::max({du01, du12, du02});
+          double max_dv = std::max({dv01, dv12, dv02});
+          auto &cur_du = diag_tri_max_du_[sid];
+          if (max_du > cur_du) cur_du = max_du;
+          auto &cur_dv = diag_tri_max_dv_[sid];
+          if (max_dv > cur_dv) cur_dv = max_dv;
+          diag_tri_count_[sid]++;
+          if (u_period > 0 && max_du > 0.5 * u_period) diag_shift_count++;
+          if (v_period > 0 && max_dv > 0.5 * v_period) diag_shift_count++;
+        }
+        // Pass 2: emit GeomInfo with seam-consistent UVs
+        for (int k = 0; k < 3; k++) {
           ng::PointGeomInfo gi;
           gi.trignum = ng_fd;
-          gi.u = u;
-          gi.v = v;
+          gi.u = uu[k];
+          gi.v = vv[k];
           el.GeomInfo()[k] = gi;
         }
         ng_mesh_->AddSurfaceElement(el);
@@ -173,19 +341,41 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
 
         ng::Element2d el(ng::QUAD);
         el.SetIndex(ng_fd);
+        double qu[4], qv[4];
         for (int k = 0; k < 4; k++) {
           auto it = cubit_nid_to_ng_pi_.find(conn[k]);
           if (it == cubit_nid_to_ng_pi_.end()) goto skip_quad;
           el[k] = it->second;
 
-          auto coords = CubitInterface::get_nodal_coordinates(conn[k]);
-          CubitVector loc(coords[0], coords[1], coords[2]);
-          double u = 0, v = 0;
-          if (rf) rf->u_v_from_position(loc, u, v);
+          int64_t ckey = ((int64_t)sid << 32) | (uint32_t)conn[k];
+          auto cit = node_canon_uv.find(ckey);
+          if (cit != node_canon_uv.end()) {
+            qu[k] = cit->second.first;
+            qv[k] = cit->second.second;
+          } else {
+            auto coords = CubitInterface::get_nodal_coordinates(conn[k]);
+            CubitVector loc(coords[0], coords[1], coords[2]);
+            double u = 0, v = 0;
+            if (rf) rf->u_v_from_position(loc, u, v);
+            qu[k] = u; qv[k] = v;
+          }
+        }
+        // Seam-consistent UV (anchor at vertex 0) for periodic surfaces
+        if (u_period > 0.0) {
+          qu[1] = seam_consistent(qu[0], qu[1], u_period);
+          qu[2] = seam_consistent(qu[0], qu[2], u_period);
+          qu[3] = seam_consistent(qu[0], qu[3], u_period);
+        }
+        if (v_period > 0.0) {
+          qv[1] = seam_consistent(qv[0], qv[1], v_period);
+          qv[2] = seam_consistent(qv[0], qv[2], v_period);
+          qv[3] = seam_consistent(qv[0], qv[3], v_period);
+        }
+        for (int k = 0; k < 4; k++) {
           ng::PointGeomInfo gi;
           gi.trignum = ng_fd;
-          gi.u = u;
-          gi.v = v;
+          gi.u = qu[k];
+          gi.v = qv[k];
           el.GeomInfo()[k] = gi;
         }
         ng_mesh_->AddSurfaceElement(el);
@@ -193,7 +383,8 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
         skip_quad:;
       }
     }
-    PRINT_INFO("  Phase1e: %d surface elements added\n", nse_added);
+    PRINT_INFO("  Phase1e: %d surface elements added (%ld seam-consistent UV shifts applied)\n",
+               nse_added, diag_shift_count);
   }
 
   // --- Phase1e2: Add segment elements on curves (inter-surface edges) ---
@@ -344,11 +535,24 @@ bool NetgenCurver::attach_callback_geometry()
 {
   int num_surfaces = (int)cubit_sid_to_ng_fd_.size();
 
+  // Reset diagnostic counters for this curving run
+  diag_project_calls_ = 0;
+  diag_project_rejects_ = 0;
+  diag_project_max_disp_ = 0.0;
+  diag_project_max_disp_surf_ = -1;
+  diag_project_reject_per_surf_.clear();
+  diag_edge_calls_ = 0;
+  diag_edge_rejects_ = 0;
+  diag_edge_max_disp_ = 0.0;
+  project_reject_log_entries_.clear();
+
   // Project callback: (surfnr, x,y,z, u_hint, v_hint) -> (xp,yp,zp, u,v)
   auto project = [this](int surfnr, double x, double y, double z,
                          double u_hint, double v_hint)
     -> std::tuple<double,double,double,double,double>
   {
+    diag_project_calls_++;
+
     auto it = ng_fd_to_cubit_sid_.find(surfnr);
     if (it == ng_fd_to_cubit_sid_.end())
       return {x, y, z, u_hint, v_hint};
@@ -360,6 +564,10 @@ bool NetgenCurver::attach_callback_geometry()
     ::Surface* surf = rf->get_surface_ptr();
     CubitVector loc(x, y, z);
     CubitVector closest;
+
+    // Path: 0=uv_guess, 1=uv_guess_failed_trimmed_fallback,
+    //       2=nearest-vertex-hint_then_uv_guess, 3=no_hint_table_trimmed
+    int path = -1;
 
     // Use UV-guided Newton iteration when UV hint is available (like OCC).
     // closest_point_trimmed is a global search that can cross-project
@@ -375,12 +583,77 @@ bool NetgenCurver::attach_callback_geometry()
         // Fallback to global search if Newton fails
         surf->closest_point_trimmed(loc, closest);
         rf->u_v_from_position(closest, u, v);
+        path = 1;
+      } else {
+        path = 0;
       }
     } else {
-      // First call: no UV hint available, use global search
-      surf->closest_point_trimmed(loc, closest);
-      rf->u_v_from_position(closest, u, v);
+      // First call: no UV hint from Netgen, but we have a per-surface UV
+      // table from Phase1e. Find the nearest stored vertex on this surface
+      // and reuse its canonical UV as a hint for closest_point_uv_guess —
+      // this converts the global search into a local Newton iteration,
+      // keeping the projection on the correct branch of thin-cross-section
+      // lofts where closest_point_trimmed tends to jump to the opposite
+      // wire face.
+      auto sit = surf_vertex_uvs_.find(cubit_sid);
+      bool guess_ok = false;
+      if (sit != surf_vertex_uvs_.end() && !sit->second.empty()) {
+        const auto &verts = sit->second;
+        double best_d2 = std::numeric_limits<double>::infinity();
+        double uh = 0, vh = 0;
+        for (const auto &row : verts) {
+          double dx = row[0] - x;
+          double dy = row[1] - y;
+          double dz = row[2] - z;
+          double d2 = dx*dx + dy*dy + dz*dz;
+          if (d2 < best_d2) { best_d2 = d2; uh = row[3]; vh = row[4]; }
+        }
+        u = uh; v = vh;
+        CubitStatus stat = surf->closest_point_uv_guess(loc, u, v, &closest, nullptr);
+        if (stat == CUBIT_SUCCESS) {
+          path = 2;
+          guess_ok = true;
+        }
+      }
+      if (!guess_ok) {
+        // No hint table (or Newton failed): fall back to global search.
+        surf->closest_point_trimmed(loc, closest);
+        rf->u_v_from_position(closest, u, v);
+        path = 3;
+      }
     }
+
+    // Diagnostic + defensive reject: if ACIS projection displaces the point
+    // beyond project_reject_threshold_, the projection is almost certainly
+    // a spike (seam jump or wrong local minimum on loft NURBS). Fall back
+    // to identity (returned point = original), which Phase 2 then handles
+    // via its linear-interpolation fill pass.
+    double dx = closest.x() - x;
+    double dy = closest.y() - y;
+    double dz = closest.z() - z;
+    double disp = std::sqrt(dx*dx + dy*dy + dz*dz);
+    if (disp > diag_project_max_disp_) {
+      diag_project_max_disp_ = disp;
+      diag_project_max_disp_surf_ = cubit_sid;
+    }
+    if (disp > project_reject_threshold_) {
+      diag_project_rejects_++;
+      diag_project_reject_per_surf_[cubit_sid]++;
+      // Detailed log for post-analysis (surf UV pattern vs projection outlier)
+      if ((int)project_reject_log_entries_.size() < project_reject_dump_max_) {
+        char buf[512];
+        snprintf(buf, sizeof(buf),
+                 "%d,%d,%d,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.9e,%.6e",
+                 surfnr, cubit_sid, path,
+                 x, y, z,
+                 closest.x(), closest.y(), closest.z(),
+                 u_hint, v_hint, u, v, disp);
+        project_reject_log_entries_.emplace_back(buf);
+      }
+      // Return identity so the HO node stays on the straight edge midpoint
+      return {x, y, z, u_hint, v_hint};
+    }
+
     return {closest.x(), closest.y(), closest.z(), u, v};
   };
 
@@ -425,10 +698,11 @@ bool NetgenCurver::attach_callback_geometry()
     }
   }
 
-  auto edge_project = [surfpair_to_curve](int surfnr1, int surfnr2,
-                                           double x, double y, double z)
+  auto edge_project = [this, surfpair_to_curve](int surfnr1, int surfnr2,
+                                                   double x, double y, double z)
     -> std::tuple<double,double,double>
   {
+    diag_edge_calls_++;
     int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
     auto it = surfpair_to_curve.find(key);
     if (it != surfpair_to_curve.end()) {
@@ -437,14 +711,99 @@ bool NetgenCurver::attach_callback_geometry()
         CubitVector loc(x, y, z);
         CubitVector closest;
         re->get_curve_ptr()->closest_point_trimmed(loc, closest);
+        double dx = closest.x() - x;
+        double dy = closest.y() - y;
+        double dz = closest.z() - z;
+        double disp = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (disp > diag_edge_max_disp_) diag_edge_max_disp_ = disp;
+        if (disp > edge_reject_threshold_) {
+          diag_edge_rejects_++;
+          return {x, y, z};  // reject spike: fall back to identity
+        }
         return {closest.x(), closest.y(), closest.z()};
       }
     }
     return {x, y, z};  // no projection if curve not found
   };
 
+  // Arc-length parametric midpoint on the shared curve.
+  // Inputs (x1,y1,z1) and (x2,y2,z2) are the segment's 3D endpoints. We
+  // compute each endpoint's curve parameter via u_from_position, derive the
+  // per-endpoint arc lengths from the curve's start, linearly interpolate
+  // the arc length at secpoint, then place the point at that arc-length
+  // position via position_from_fraction. On any error we fall back to the
+  // linear midpoint between p1 and p2 (caller is expected to then ignore or
+  // re-project). This avoids closest_point_trimmed jumping to the wrong part
+  // of a wavy curve when the linear midpoint is closer to a different
+  // segment of it.
+  auto between_edge = [this, surfpair_to_curve](int surfnr1, int surfnr2,
+                                                   double x1, double y1, double z1,
+                                                   double x2, double y2, double z2,
+                                                   double secpoint)
+    -> std::tuple<double,double,double>
+  {
+    auto linear_mid = [&]() -> std::tuple<double,double,double> {
+      return {x1 + secpoint * (x2 - x1),
+              y1 + secpoint * (y2 - y1),
+              z1 + secpoint * (z2 - z1)};
+    };
+
+    int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
+    auto it = surfpair_to_curve.find(key);
+    if (it == surfpair_to_curve.end()) return linear_mid();
+
+    RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(it->second);
+    if (!re) return linear_mid();
+
+    double crv_length = re->measure();
+    if (crv_length <= 0.0) return linear_mid();
+
+    CubitVector cv1(x1, y1, z1), cv2(x2, y2, z2);
+    double u1 = re->u_from_position(cv1);
+    double u2 = re->u_from_position(cv2);
+    double u_start = re->start_param();
+
+    // Arc length from curve start to each endpoint.
+    double L1 = re->length_from_u(u_start, u1);
+    double L2 = re->length_from_u(u_start, u2);
+    double L_mid = L1 + secpoint * (L2 - L1);
+    double frac = L_mid / crv_length;
+    if (frac < 0.0) frac = 0.0;
+    if (frac > 1.0) frac = 1.0;
+
+    CubitVector out;
+    CubitStatus st = re->position_from_fraction(frac, out);
+    if (st != CUBIT_SUCCESS) return linear_mid();
+
+    // Sanity: the arc-midpoint should not lie farther from the linear
+    // midpoint than the segment's chord length (otherwise something went
+    // wrong — e.g., u_from_position jumped to a different branch). For
+    // smooth well-curved segments the arc-chord offset is bounded by
+    // L^2 / (8 R), which is much less than L itself.
+    double chord = std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) + (z2-z1)*(z2-z1));
+    double lmx = x1 + secpoint * (x2 - x1);
+    double lmy = y1 + secpoint * (y2 - y1);
+    double lmz = z1 + secpoint * (z2 - z1);
+    double dd = std::sqrt((out.x()-lmx)*(out.x()-lmx) +
+                          (out.y()-lmy)*(out.y()-lmy) +
+                          (out.z()-lmz)*(out.z()-lmz));
+    if (dd > chord) return linear_mid();
+
+    return {out.x(), out.y(), out.z()};
+  };
+
+  // between_edge is implemented (arc-length parametric midpoint via
+  // u_from_position + position_from_fraction with chord-length sanity fall
+  // back) but routing Netgen's PointBetweenEdge through it gave a WORSE
+  // p=2 volume error on 3turnCoil than the legacy edge_project path
+  // (-0.90 % vs -0.80 %). Keeping the implementation compiled but wired as
+  // nullptr so the legacy closest_point_trimmed path stays in effect;
+  // revisit once we understand the residual discrepancy (likely Netgen's
+  // uniform-t polynomial fitting expects chord-perpendicular mid, not
+  // arc-length mid, on asymmetric arcs).
+  (void)between_edge;
   auto geom = std::make_shared<ng::CallbackGeometry>(
-      project, normal, num_surfaces, nullptr, edge_project);
+      project, normal, num_surfaces, nullptr, edge_project, nullptr);
   ng_mesh_->SetGeometry(geom);
 
   return true;
