@@ -26,7 +26,7 @@ PointGeomInfo CallbackGeometry::ProjectPoint(int surfind, Point<3> & p) const
   gi.trignum = surfind;
   if (!project_func) { gi.u = 0; gi.v = 0; return gi; }
 
-  auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2], 0, 0);
+  auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2], 0, 0, false);
   p = Point<3>(xp, yp, zp);
   gi.u = u;
   gi.v = v;
@@ -44,12 +44,12 @@ void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
     p = Point<3>(xp, yp, zp);
   } else {
     // Fallback: project onto first surface only
-    auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2], 0, 0);
+    auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2], 0, 0, false);
     p = Point<3>(xp, yp, zp);
   }
   // Get UV on surfind (query only, do NOT move the point again)
   if (gi) {
-    auto [xf, yf, zf, uf, vf] = project_func(surfind, p[0], p[1], p[2], 0, 0);
+    auto [xf, yf, zf, uf, vf] = project_func(surfind, p[0], p[1], p[2], 0, 0, false);
     gi->edgenr = 0;
     gi->body = 0;
     gi->dist = 0;
@@ -63,7 +63,7 @@ bool CallbackGeometry::ProjectPointGI(int surfind, Point<3> & p,
 {
   if (!project_func) return false;
   auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2],
-                                           gi.u, gi.v);
+                                           gi.u, gi.v, true);
   p = Point<3>(xp, yp, zp);
   gi.trignum = surfind;
   gi.u = u;
@@ -76,7 +76,7 @@ bool CallbackGeometry::CalcPointGeomInfo(int surfind, PointGeomInfo& gi,
 {
   if (!project_func) return false;
   Point<3> tmp = p3;
-  auto [xp, yp, zp, u, v] = project_func(surfind, tmp[0], tmp[1], tmp[2], 0, 0);
+  auto [xp, yp, zp, u, v] = project_func(surfind, tmp[0], tmp[1], tmp[2], 0, 0, false);
   gi.trignum = surfind;
   gi.u = u;
   gi.v = v;
@@ -118,14 +118,14 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
       // Fallback: project onto first surface
       auto [xp, yp, zp, u, v] = project_func(surfi1, newp[0], newp[1], newp[2],
                                                0.5*(ap1.u + ap2.u),
-                                               0.5*(ap1.v + ap2.v));
+                                               0.5*(ap1.v + ap2.v), true);
       newp = Point<3>(xp, yp, zp);
     }
   }
 
   // Get UV on surfi1
   if (project_func && surfi1 >= 0) {
-    auto [xf, yf, zf, uf, vf] = project_func(surfi1, newp[0], newp[1], newp[2], 0, 0);
+    auto [xf, yf, zf, uf, vf] = project_func(surfi1, newp[0], newp[1], newp[2], 0, 0, false);
     newgi.u = uf;
     newgi.v = vf;
   }
@@ -145,7 +145,7 @@ void CallbackGeometry::PointBetween(const Point<3> & p1, const Point<3> & p2,
     double u_hint = gi1.u + secpoint * (gi2.u - gi1.u);
     double v_hint = gi1.v + secpoint * (gi2.v - gi1.v);
     auto [xp, yp, zp, u, v] = project_func(surfi, newp[0], newp[1], newp[2],
-                                             u_hint, v_hint);
+                                             u_hint, v_hint, true);
     newp = Point<3>(xp, yp, zp);
     newgi.trignum = surfi;
     newgi.u = u;
