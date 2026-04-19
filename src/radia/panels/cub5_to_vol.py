@@ -23,7 +23,7 @@ import time
 
 
 def cub5_to_vol(cub5_file, order=2, output=None):
-    """Convert .cub5 to .vol with high-order curving via extract_curved_mesh.
+    """Convert .cub5 to .vol with high-order curving via radia_export netgen.
 
     Returns dict with mesh info and CAD reference values.
     """
