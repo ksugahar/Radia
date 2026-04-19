@@ -231,6 +231,16 @@ private:
   // that can jump to the wrong surface branch on thin wire cross-sections.
   // Key = cubit_sid. Each row = (x, y, z, u, v).
   std::unordered_map<int, std::vector<std::array<double,5>>> surf_vertex_uvs_;
+
+  // Per-surface axis-aligned bounding box derived from that surface's mesh
+  // vertices plus a pad of ~1 wire-thickness.  Used by project() to reject
+  // queries for inputs obviously outside the surface — a common failure
+  // mode after `unite volume all` where Netgen's curving pipeline
+  // occasionally asks us to project an interior midpoint to a distant
+  // terminal face, producing tens-of-mm "projection" spikes.
+  struct BBox { double xmin, ymin, zmin, xmax, ymax, zmax; };
+  std::unordered_map<int, BBox> surf_bbox_;
+  double surf_bbox_pad_ = 0.0;  // computed once from geometry diameter
 };
 
 #endif
