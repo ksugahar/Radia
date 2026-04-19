@@ -189,6 +189,11 @@ private:
   mutable double diag_project_max_disp_ = 0.0;
   mutable int diag_project_max_disp_surf_ = -1;
   mutable std::unordered_map<int, long> diag_project_reject_per_surf_;
+  // Per-path call counts: index 0..3 corresponds to the `path` value in
+  // project() — 0=uv_direct_eval, 1=uv_guess_fallback, 2=nearest-vertex hint,
+  // 3=no_hint_table_trimmed.
+  mutable long diag_path_calls_[4] = {0, 0, 0, 0};
+  mutable double diag_path_max_disp_[4] = {0, 0, 0, 0};
   mutable long diag_edge_calls_ = 0;
   mutable long diag_edge_rejects_ = 0;
   mutable double diag_edge_max_disp_ = 0.0;
