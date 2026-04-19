@@ -1206,11 +1206,47 @@ and key primitives/operations.
 """
 
 LAB_POLICY = """\
-# build123d Lab Context (2026-04-19)
+# Sugawara Lab (菅原研) CAD / meshing stance (2026-04-20, reaffirmed)
 
-build123d is the **main CAD authoring tool** in this lab, complementary
-with (not replacing) Cubit. Use this topic when deciding which tool to
-use or when translating between the two.
+**Official lab position: build123d + Cubit are the primary pair.**
+These two cover the vast majority of lab work — build123d for CAD
+authoring (AI-writable, Python-native, OCCT), Cubit for
+industrial-grade hex meshing and visualization.
+
+## Stance toward neighbouring CAD tools
+
+| Tool | Lab stance |
+|---|---|
+| **build123d** | **主力 (push)** — 新規 lab work はこれで執筆 |
+| **Cubit** | **主力 (push)** — hex mesh + visualization の正面 |
+| **FreeCAD** | **応援 (friendly)** — 菅原研は FreeCAD コミュニティを支持する。lab では主力ではないが、assembly/設計共有は FreeCAD が強いシーンがあるので interop を大切にする。`freecad_to_cubit_hex` 経由で pipeline に乗る |
+| CadQuery | interop / compat — OCCT sibling、既存資産の移行 |
+| OpenSCAD | interop / compat — 既存スクリプト対応 |
+
+FreeCAD は「前面には出さないが味方」のスタンス。コミュニティを応援
+し、貶める気は無い。ただし**研究室の運用 (lab-internal workflow) は
+build123d**であり、新規モデリング・反復・パラメータスイープ・CAE
+パイプラインの全てで build123d を使う。FreeCAD を lab 内部で使うこ
+とはない。`freecad_exec_safely` は外部 / community 向け interop。
+
+## Lab iteration pattern (build123d 派)
+
+build123d は stateless (毎 `execute_build123d` が fresh Python) なので、
+Cubit/FreeCAD 流の `*_exec_safely` (live state を checkpoint→ batch
+dry-run → commit) は不要。代わりに lab は:
+
+- **`build123d_try`** — 1 変種を subprocess 隔離試行
+- **`build123d_try_race(scripts, max_concurrent)`** — N 変種を並列
+  試行、`valid_largest_volume` / `first_valid` / `first_ok` 規則で
+  winner 自動選定。fillet 半径や寸法のパラメータスイープに最適
+- **`build123d_to_cubit_hex(script)`** — winner を STEP → Cubit hex
+  まで一発で
+
+source は git で管理 → revert は `git restore`、安全網は VCS 任せ。
+build123d パイプラインに `*_exec_safely` 不要、というのが lab 設計。
+
+Use this topic when deciding which tool to use or when translating
+between them.
 
 ## Role split
 
@@ -1598,6 +1634,435 @@ stops at SimMechanics connection (control loop is out of scope).
 """
 
 
+JOINTS_AND_MATES = """# Joints, Locations, and Assembly Mates
+
+build123d has first-class joint objects for kinematic / assembly
+relationships, mirroring FreeCAD / Fusion 360 mates.
+
+## Core joint types
+
+| class            | motion                        | typical use                |
+|------------------|-------------------------------|----------------------------|
+| `RigidJoint`     | none — glued pose             | bracket ↔ plate            |
+| `RevoluteJoint`  | single rotation axis          | hinge, axle                |
+| `LinearJoint`    | single translation axis       | slide, drawer              |
+| `CylindricalJoint` | rotate + slide along axis   | piston                     |
+| `BallJoint`      | 3-dof rotation                | knee, trackball            |
+
+## Minimal example
+
+```python
+from build123d import BuildPart, Box, Location, RigidJoint, export_step
+
+# Two parts
+with BuildPart() as plate:
+    Box(40, 40, 5)
+plate_part = plate.part
+plate_part.label = "plate"
+
+with BuildPart() as block:
+    Box(10, 10, 10)
+block_part = block.part
+block_part.label = "block"
+
+# Add named joints to each
+RigidJoint("top",  plate_part, Location((0, 0, 2.5)))
+RigidJoint("base", block_part, Location((0, 0, -5)))
+
+# Connect
+plate_part.joints["top"].connect_to(block_part.joints["base"])
+
+export_step(plate_part, "plate_with_block.step")
+```
+
+## Lab conventions
+
+1. Name every joint. Anonymous joints survive the STEP boundary as
+   anonymous locations, losing semantic meaning.
+2. Use `RigidJoint` for everything unless you explicitly need DOFs —
+   FEM consumers (Cubit, ngsolve) treat parts as rigidly glued
+   anyway.
+3. For radia-coil assemblies (coil + iron pole + air gap), rigid-
+   join each part to a shared origin frame so the exported STEP has
+   coincident coordinate systems (mesh imprint/merge picks up the
+   interfaces automatically).
+"""
+
+
+ASSEMBLIES_AND_COMPOUNDS = """# Assemblies: Compound, naming, STEP round-trip
+
+build123d represents assemblies as `Compound` objects — a tree of
+`Shape`s with shared children.  The STEP exporter walks the tree,
+preserving labels as block names (critical for Cubit downstream).
+
+## Build a compound
+
+```python
+from build123d import (
+    BuildPart, Box, Cylinder, Compound, Location, Mode, export_step,
+)
+
+with BuildPart() as magnet:
+    Box(20, 20, 10)
+    magnet.part.label = "magnet"
+
+with BuildPart() as pole:
+    Box(30, 30, 5, align=(0.5, 0.5, 0))
+    pole.part.label = "pole"
+pole.part.locate(Location((0, 0, 10)))
+
+with BuildPart() as air:
+    Box(100, 100, 100, align=(0.5, 0.5, 0))
+    with BuildPart(mode=Mode.SUBTRACT) as _cut:
+        Box(20, 20, 10)
+    air.part.label = "air"
+
+asm = Compound(children=[magnet.part, pole.part, air.part])
+export_step(asm, "asm.step")
+```
+
+## Labels matter
+
+STEP round-trip preserves `shape.label`.  After `import step "asm.step"`
+in Cubit, `block N add volume all; block N name "<label>"` will show
+"magnet", "pole", "air" — so physical-group naming is free.
+
+## Reverse: read assembly from STEP
+
+```python
+from build123d import import_step
+compound = import_step("asm.step")
+for child in compound.children:
+    print(child.label, child.volume)
+```
+"""
+
+
+CAE_WORKFLOW_TIPS = """# CAE workflow tips — getting from build123d to clean hex mesh
+
+## Pipeline (lab standard, 2026-04-19)
+
+```
+build123d (Python) → STEP → Cubit (hex mesh) → .msh v4.1 or .vol
+                                              → ngsolve / radia_ngsolve
+                                              → JMAG / Abaqus / Nastran
+```
+
+One-call equivalents (radia-mcp ≥ 0.17):
+  * `build123d_to_cubit_hex(script, target_size=1.0)` — build123d →
+    STEP → `cubit_mesh_auto` → live GUI replay.
+  * `cadquery_to_cubit_hex(...)` — same from cadquery source.
+
+## Hex-friendly geometry checklist
+
+1. **Prismatic**: extruded 2D sketches sweep to pure hex trivially.
+2. **Simple topology**: ≤ 8 surfaces per volume usually sweeps. The
+   `cubit_mesh_auto` geometry-split rung (0.16+) auto-webcuts when
+   `surfaces/volume > 7`.
+3. **Clean edges**: no micro-edges (< 1e-3 of characteristic length);
+   `lint_build123d_script` flags fillets/chamfers below threshold.
+4. **Coincident faces**: when assembling, rigidly-join parts so
+   shared faces are exactly coincident → Cubit's `imprint all;
+   merge all` picks them up without tolerance drift.
+5. **Named bodies**: set `part.label = "..."` for every region you
+   want as a Cubit block.
+
+## Unit convention
+
+build123d default units are **mm**. STEP preserves units. Cubit's
+mesh-size command takes the same unit scale, so `volume all size 1.0`
+= 1 mm hex edge on a 30-mm-side block = ~30 hexes per edge.
+
+For SI workflows (meters), scale the Cubit side: `volume all size
+0.001` = 1 mm for a model drawn in meters. Getting this wrong is
+the #1 reason "mesh is too fine / too coarse" calls come in.
+
+## Why build123d over cadquery for this pipeline
+
+1. Builder API is less error-prone in complex assemblies (explicit
+   context > chained `Workplane`).
+2. First-class `Compound` + labels survive STEP → Cubit better.
+3. Same OCCT backend, so interop is lossless via `execute_cadquery`
+   / `cadquery_to_cubit_hex` when users bring cadquery scripts.
+"""
+
+
+PLANE_AXIS_LOCATION_COOKBOOK = """# Plane / Axis / Location cookbook
+
+Three small classes cause ≥50% of "why doesn't this work" moments in
+build123d. Memorize the patterns below.
+
+## Plane: a sketching / operation surface with orientation
+
+### Built-in planes
+
+```python
+from build123d import Plane
+
+Plane.XY    # z-up, normal = +Z, x_dir = +X, origin (0,0,0)
+Plane.XZ    # y-up, normal = +Y, x_dir = +X
+Plane.YZ    # x-up, normal = +X, x_dir = +Y
+Plane.front # alias for XZ (visualisation term)
+Plane.top   # alias for XY
+Plane.right # alias for YZ
+# ... also Plane.back / Plane.bottom / Plane.left  (the negatives)
+```
+
+### Offset a plane along its normal
+
+```python
+sketch_plane = Plane.XY.offset(10)          # 10 mm up in +Z
+```
+
+### Build a plane at arbitrary origin + orientation
+
+```python
+# Plane with origin (10, 0, 0), normal pointing in -X, sketch x-axis = +Y
+p = Plane(origin=(10, 0, 0), x_dir=(0, 1, 0), z_dir=(-1, 0, 0))
+```
+
+`x_dir` fixes the in-plane "right" direction; `z_dir` fixes the
+out-of-plane normal. Both must be unit-ish; build123d normalizes.
+
+### Plane × Location (rotate / translate a plane)
+
+```python
+rotated = Plane.XY * Rotation(0, 0, 45)      # 45° about Z
+moved   = Plane.XY * Location((0, 0, 20))    # 20 mm up
+combined = Plane.XY * Location((5, 0, 0), (90, 0, 0))  # translate + rotate
+```
+
+### Use a plane to place a BuildSketch
+
+```python
+from build123d import BuildPart, BuildSketch, Rectangle, extrude, Plane
+
+with BuildPart() as bp:
+    with BuildSketch(Plane.XY.offset(10)) as sk:    # sketch lives 10 mm up
+        Rectangle(10, 5)
+    extrude(amount=5)
+```
+
+### Use a face as a plane
+
+```python
+top_face = bp.part.faces().sort_by(Axis.Z)[-1]
+with BuildSketch(top_face) as sk:                   # accept Face where Plane expected
+    Rectangle(3, 3)
+extrude(amount=2)
+```
+
+## Axis: an infinite line used for rotation / selection
+
+### Built-in axes
+
+```python
+from build123d import Axis
+Axis.X   # line through origin in +X
+Axis.Y   # line through origin in +Y
+Axis.Z   # line through origin in +Z
+```
+
+### Custom axis
+
+```python
+# Axis through (1, 0, 0) in direction (0, 1, 1) (normalized internally)
+a = Axis(origin=(1, 0, 0), direction=(0, 1, 1))
+```
+
+### Rotate a shape about an axis
+
+```python
+# Note: Shape.rotate(axis, angle) — axis first, angle second
+rotated = part.rotate(Axis.Z, 45)
+rotated = part.rotate(Axis((1, 0, 0), (0, 0, 1)), 30)
+```
+
+Common mistake: `part.rotate(45, axis=(0,0,1))` → `TypeError: got
+multiple values for argument 'axis'`. The shape method takes `axis`
+as the FIRST positional. Pass an `Axis`, not a tuple.
+
+### Select faces along an axis
+
+```python
+from build123d import SortBy
+top_face = part.faces().sort_by(Axis.Z)[-1]   # highest face along Z
+bottom   = part.faces().sort_by(Axis.Z)[0]    # lowest
+```
+
+## Location: rigid-body pose (position + orientation)
+
+### Just a translation
+
+```python
+from build123d import Location
+loc = Location((10, 0, 0))
+```
+
+### Translation + Euler rotation (degrees)
+
+```python
+loc = Location((10, 0, 0), (0, 0, 45))       # translate + rotate 45° about Z
+loc = Location((0, 0, 0),  (90, 0, 0))       # rotate 90° about X
+```
+
+### Rotation-only
+
+```python
+from build123d import Rotation
+loc = Rotation(0, 0, 45)                     # pure 45° about Z
+```
+
+### Apply a Location to a shape
+
+```python
+# Absolute placement (replaces any existing location)
+placed = part.locate(loc)
+# Relative placement (multiplies current location)
+placed = part.located(loc)
+# Shorthand via operator
+placed = part * loc
+```
+
+### Use a Location to place a BuildPart context
+
+```python
+# Open a BuildPart whose "identity" is already at a specific pose
+from build123d import BuildPart, Box, Mode, Location
+
+with BuildPart() as outer:
+    Box(10, 10, 10)
+    with BuildPart(Location((0, 0, 10)), mode=Mode.SUBTRACT):
+        Box(3, 3, 3)          # subtract a 3-cube centered at (0,0,10)
+```
+
+## Common recipes
+
+### Sketch on the top face of an existing part
+
+```python
+top = part.faces().sort_by(Axis.Z)[-1]
+with BuildSketch(top) as sk:
+    Circle(3)
+extrude(amount=5)
+```
+
+### Sketch on a plane rotated about Z
+
+```python
+with BuildSketch(Plane.XY * Rotation(0, 0, 30)) as sk:
+    Rectangle(10, 5)
+```
+
+### Place a part at polar coordinates
+
+```python
+import math
+for i in range(6):
+    deg = 60 * i
+    r = 20
+    pose = Location((r * math.cos(math.radians(deg)),
+                     r * math.sin(math.radians(deg)), 0), (0, 0, deg))
+    with BuildPart(pose):
+        Box(3, 3, 3)
+```
+
+### Offset a face's own plane outward by some distance
+
+```python
+cap = part.faces().sort_by(Axis.X)[-1]
+cap_plane = Plane(cap).offset(5)    # 5 mm along the face normal
+```
+"""
+
+
+BUILDER_VS_ALGEBRA_ROSETTA = """# Builder API vs Algebra API — side-by-side rosetta
+
+build123d ships two styles of script. Pick ONE per script; mixing
+leads to confusion. The lab standard is **Builder API** (clearer scope,
+explicit context, less clever-one-liners).
+
+| Goal | Builder API (`with ...` context) | Algebra API (direct operators) |
+|---|---|---|
+| 3-D box | `with BuildPart() as bp:`<br>`    Box(10, 10, 10)`<br>`part = bp.part` | `part = Box(10, 10, 10)` |
+| Extrude sketch | `with BuildPart() as bp:`<br>`    with BuildSketch() as sk:`<br>`        Rectangle(10, 5)`<br>`    extrude(amount=3)` | `sk = Rectangle(10, 5)`<br>`part = extrude(sk, amount=3)` |
+| Sweep along path | `with BuildPart() as bp:`<br>`    with BuildLine() as ln:`<br>`        Line((0,0,0), (10,0,0))`<br>`    with BuildSketch() as sk:`<br>`        Rectangle(2, 2)`<br>`    sweep(sk.sketch, path=ln.line)` | `ln = Line((0,0,0), (10,0,0))`<br>`sk = Rectangle(2, 2)`<br>`part = sweep(sk, path=ln)` |
+| Subtract hole | `with BuildPart() as bp:`<br>`    Box(20, 20, 10)`<br>`    with BuildPart(mode=Mode.SUBTRACT):`<br>`        Cylinder(radius=3, height=20)` | `base = Box(20, 20, 10)`<br>`hole = Cylinder(radius=3, height=20)`<br>`part = base - hole` |
+| Union (add) | `with BuildPart() as bp:`<br>`    Box(10, 10, 10)`<br>`    Sphere(radius=4)  # default Mode.ADD` | `part = Box(10, 10, 10) + Sphere(radius=4)` |
+| Intersect | `with BuildPart() as bp:`<br>`    Box(10, 10, 10)`<br>`    Sphere(radius=6, mode=Mode.INTERSECT)` | `part = Box(10, 10, 10) & Sphere(radius=6)` |
+| Fillet all edges | `fillet(bp.part.edges(), radius=0.5)` | `part = fillet(part.edges(), radius=0.5)` |
+| Place on rotated plane | `with BuildSketch(Plane.XY * Rotation(0, 0, 45)):`<br>`    Rectangle(5, 5)` | `sk = Rectangle(5, 5) * Rotation(0, 0, 45) * Location((0,0,0))` |
+| Assembly | `with BuildPart() as a: Box(10, 10, 10)`<br>`with BuildPart() as b: Sphere(5)`<br>`asm = Compound(children=[a.part, b.part])` | `a = Box(10, 10, 10)`<br>`b = Sphere(5)`<br>`asm = Compound(children=[a, b])` |
+
+## When to pick which
+
+| Situation | Prefer |
+|---|---|
+| Multi-step composition, nested modes | Builder (explicit scope) |
+| One-liner parametric formula | Algebra (terser) |
+| Teaching / onboarding | Builder (verbose → easier to debug) |
+| Porting from CadQuery | Either, but Builder maps more clearly |
+| Functional / immutable style | Algebra |
+
+## Operators (Algebra API)
+
+| Operator | Meaning |
+|---|---|
+| `a + b` | union |
+| `a - b` | subtract |
+| `a & b` | intersect |
+| `a * loc` | apply Location (translate / rotate) |
+| `a * rot` | apply Rotation |
+
+## Mode (Builder API, and mode kwarg on Algebra ops)
+
+```python
+from build123d import Mode
+Mode.ADD         # union (default for most primitives inside BuildPart)
+Mode.SUBTRACT    # boolean subtract
+Mode.INTERSECT   # boolean intersect
+Mode.REPLACE     # overwrite (useful in BuildSketch)
+Mode.PRIVATE     # scratchpad; not merged into context
+```
+
+## Sketch-side operators
+
+| Goal | Builder | Algebra |
+|---|---|---|
+| Rectangle | `Rectangle(10, 5)` inside `BuildSketch` | `sk = Rectangle(10, 5)` |
+| Subtract hole | `Circle(2, mode=Mode.SUBTRACT)` inside `BuildSketch` | `sk = Rectangle(10, 5) - Circle(2)` |
+| Union | `Rectangle(10, 5)` + another shape in same `BuildSketch` | `sk = Rectangle(10, 5) + Circle(2)` |
+
+## Gotcha: the "pending" concept
+
+Inside a `BuildPart` with a nested `BuildLine`, the line becomes a
+**pending path** that subsequent `sweep(sketch)` can consume. The
+Algebra API has no pending concept — you pass `path=` explicitly.
+
+```python
+# Builder: sweep picks up the pending line automatically
+with BuildPart() as bp:
+    with BuildLine() as ln:
+        Line((0,0,0), (10,0,0))
+    with BuildSketch() as sk:
+        Rectangle(2, 2)
+    sweep(sk.sketch)                     # <-- no path=, uses ln.line
+
+# Algebra: always pass path=
+sk = Rectangle(2, 2)
+ln = Line((0,0,0), (10,0,0))
+part = sweep(sk, path=ln)                # <-- explicit
+```
+
+`lint_build123d_script` flags `sweep(sketch)` positional calls
+without `path=` because the pending-curve implicit mode is a frequent
+source of `BRep_API: Make Shape failed` when forgotten.
+"""
+
+
+from .build123d_api import get_api_reference as _get_b3d_api_reference
+
+
 _TOPICS = {
     "overview": OVERVIEW,
     "lab_policy": LAB_POLICY,
@@ -1614,6 +2079,12 @@ _TOPICS = {
     "examples_intro": EXAMPLES_INTRO,
     "examples_gallery": EXAMPLES_GALLERY,
     "coil_modeling": COIL_MODELING,
+    "joints_and_mates": JOINTS_AND_MATES,
+    "assemblies_and_compounds": ASSEMBLIES_AND_COMPOUNDS,
+    "cae_workflow_tips": CAE_WORKFLOW_TIPS,
+    "plane_axis_location_cookbook": PLANE_AXIS_LOCATION_COOKBOOK,
+    "builder_vs_algebra_rosetta": BUILDER_VS_ALGEBRA_ROSETTA,
+    "api_reference": _get_b3d_api_reference(),
 }
 
 
