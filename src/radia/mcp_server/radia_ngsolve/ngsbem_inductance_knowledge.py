@@ -179,13 +179,13 @@ BEM inductance requires **dim=2 surface mesh**, NOT dim=3 volume mesh.
 ```python
 # CORRECT: dim=2 surface mesh (all HDivSurface DOFs are boundary edges)
 # Created by: OCCGeometry(surface_shape).GenerateMesh()
-# Or: export_NGSolveCurvedMesh(cubit, surface_only=True)
+# Or: radia_export netgen "mesh.vol" (surface-only via sideset)
 mesh = Mesh(ngmesh)  # mesh.dim == 2
 fes = HDivSurface(mesh, order=0)
 # fes.ndof = number of surface edges only (all active in BEM)
 
 # WRONG: dim=3 volume mesh (HDivSurface includes interior edges)
-# Created by: export_NGSolveCurvedMesh(cubit) with tet volume mesh
+# Created by: radia_export netgen "mesh.vol" with tet volume mesh
 mesh = Mesh(ngmesh)  # mesh.dim == 3
 fes = HDivSurface(mesh, order=0)
 # fes.ndof = ALL edges (interior + boundary)
@@ -193,7 +193,7 @@ fes = HDivSurface(mesh, order=0)
 # -> rank-deficient L matrix -> wrong inductance (3000%+ error)
 ```
 
-**For Cubit meshes**: Use `export_NGSolveCurvedMesh(cubit, surface_only=True)` which
+**For Cubit meshes**: Use `radia_export netgen "mesh.vol" (surface-only via sideset)` which
 creates a dim=2 surface mesh from Cubit surface blocks (triangles/quads only).
 
 **For OCC (netgen.occ) meshes**: Use `Glue(shape.faces)` to extract surface:
@@ -211,7 +211,7 @@ triangles. For 1mm wire: `maxh=0.5e-3`. Larger gives cond ~1e17 (singular).
 
 ## PITFALL: ds(label) Boundary Name Mismatch
 
-When using `export_NGSolveCurvedMesh(cubit, order=N)`, boundary labels come from
+When using `radia_export netgen "mesh.vol" order N`, boundary labels come from
 Cubit block names. Using `ds('conductor')` when the boundary block has
 a different name causes LaplaceSL to **hang indefinitely** (no error, no timeout).
 
@@ -467,11 +467,11 @@ NGBEM_CUBIT_WORKFLOW = """
 1. Cubit: Create geometry (torus, cylinder, helix, ...)
 2. Cubit: Tet or hex mesh
 3. Cubit: Define blocks (domain, conductor surface)
-4. Python: mesh = export_NGSolveCurvedMesh(cubit, order=3)
+4. Python: mesh = radia_export netgen "mesh.vol" order 3
 5. Python: ngsolve.bem LaplaceSL -> inductance extraction
 ```
 
-No STEP files, no OCC geometry, no SetGeomInfo needed. export_NGSolveCurvedMesh()
+No STEP files, no OCC geometry, no SetGeomInfo needed. radia_export netgen
 handles everything via Cubit's ACIS kernel + CallbackGeometry.
 
 ## Step-by-Step Code
@@ -544,7 +544,7 @@ but BEM inductance accuracy is dominated by **DOF density** (mesh refinement):
 significantly. HDivSurface order=0 (RT0) current resolution is the bottleneck.
 Mesh refinement (more DOFs) is more effective for L accuracy.
 
-`export_NGSolveCurvedMesh(cubit, order=2)` provides quadratic-accurate surfaces
+`radia_export netgen "mesh.vol" order 2` provides quadratic-accurate surfaces
 via ACIS CallbackGeometry. order=2 is the recommended default for BEM.
 
 See: `examples/cubit_panels/inductance/demo_curving_effect.py`
@@ -571,7 +571,7 @@ mesh = Mesh(vol_path)
 
 The old workflow using `export_NetgenMesh()`, `set_*_geominfo()`,
 STEP reimport, and OCCGeometry has been completely removed.
-Use `export_NGSolveCurvedMesh()` for all Cubit-to-NGSolve mesh transfers.
+Use `radia_export netgen` for all Cubit-to-NGSolve mesh transfers.
 """
 
 NGBEM_CURVE_ORDER_STUDY = """
@@ -591,7 +591,7 @@ Both tri (tet mesh) and quad (hex sweep mesh) surfaces are tested.
 | R/a ratio | 10 |
 | Analytical L | Neumann: L = mu_0*R*(ln(8R/a) - 2) = 149.7 nH |
 
-## Measured Results (Cubit mesh -> export_NGSolveCurvedMesh -> LaplaceSL)
+## Measured Results (Cubit mesh -> radia_export netgen -> LaplaceSL)
 
 ### Tri surface (tet mesh, gap torus)
 
@@ -652,7 +652,7 @@ See: `Radia/examples/cubit/netgen_torus_bem_inductance.py`
 This script:
 1. Creates a torus in Cubit
 2. Tet meshes, defines blocks
-3. Uses export_NGSolveCurvedMesh(cubit, order=N) for each order
+3. Uses radia_export netgen "mesh.vol" order N for each order
 4. Compares order=1, order=2, order=3:
    - Surface area vs analytical
    - Volume vs analytical
@@ -839,7 +839,7 @@ NGBEM_BEST_PRACTICES = """
    - Curve(2) = quadratic -> ~0.5% error
    - Curve(3) = cubic -> ~0.05% error (usually sufficient)
 
-5. **Use export_NGSolveCurvedMesh()** for Cubit meshes
+5. **Use radia_export netgen** for Cubit meshes
    - Handles curving automatically via ACIS CallbackGeometry
    - No SetGeomInfo, no STEP files, no OCC geometry needed
 
@@ -1252,7 +1252,7 @@ L = MU_0 * eigvals[1] * R / a
 ## Practical Notes
 
 1. **Closed surface required**: The mesh must be a closed surface (no boundary
-   edges). Use `surface_only=True` in `export_NGSolveCurvedMesh()` or OCC `Glue()`.
+   edges). Use `surface_only=True` in `radia_export netgen` or OCC `Glue()`.
 
 2. **Euler characteristic**: For genus-g: V - E + F = 2 - 2g. Torus: Euler = 0.
 
