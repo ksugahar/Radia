@@ -1,0 +1,1565 @@
+# 3-turn coil journal file
+# Generated from 3turnCoil.py (auto-read coordinates)
+# Total points: 385, Interior surfaces: 383, Loft volumes: 382
+reset
+create surface circle radius 3.15 zplane
+rotate Surface 1 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 1 x 129.394895 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 2 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 2 x 127.589790 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 3 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 3 x 125.784685 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 4 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 4 x 123.979580 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 5 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 5 x 122.174474 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 6 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 6 x 120.369369 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 7 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 7 x 118.564264 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 8 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 8 x 116.759159 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 9 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 9 x 114.954054 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 10 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 10 x 113.148949 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 11 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 11 x 111.343844 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 12 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 12 x 109.538739 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 13 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 13 x 107.733634 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 14 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 14 x 105.928528 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 15 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 15 x 104.123423 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 16 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 16 x 102.318318 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 17 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 17 x 100.513213 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 18 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 18 x 98.708108 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 19 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 19 x 96.903003 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 20 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 20 x 95.097898 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 21 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 21 x 93.292793 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 22 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 22 x 91.487688 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 23 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 23 x 89.682582 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 24 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 24 x 87.877477 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 25 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 25 x 86.072372 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 26 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 26 x 84.267267 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 27 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 27 x 82.462162 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 28 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 28 x 80.657057 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 29 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 29 x 78.851952 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 30 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 30 x 77.046847 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 31 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 31 x 75.241742 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 32 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 32 x 73.436636 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 33 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 33 x 71.631531 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 34 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 34 x 69.826426 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 35 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 -0.70710678 include_merged
+move Surface 35 x 68.021321 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 36 angle 119.93864541 about origin 0 0 0 direction -0.58569480 -0.57687790 0.56936235 include_merged
+move Surface 36 x 66.216216 y -12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 37 angle 119.82116030 about origin 0 0 0 direction -0.60204780 -0.57529809 0.55368814 include_merged
+move Surface 37 x 62.137659 y -12.410752 z 9.922833 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 38 angle 119.65249539 about origin 0 0 0 direction -0.63008576 -0.57069153 0.52659578 include_merged
+move Surface 38 x 58.448823 y -12.146862 z 9.702232 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 39 angle 119.48272928 about origin 0 0 0 direction -0.66097757 -0.56261109 0.49656561 include_merged
+move Surface 39 x 55.112817 y -11.714106 z 9.354543 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 40 angle 119.30393697 about origin 0 0 0 direction -0.69403051 -0.55029139 0.46422089 include_merged
+move Surface 40 x 52.092749 y -11.118262 z 8.896113 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 41 angle 119.09149922 about origin 0 0 0 direction -0.72808824 -0.53330204 0.43066977 include_merged
+move Surface 41 x 49.351729 y -10.365109 z 8.343290 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 42 angle 118.80171738 about origin 0 0 0 direction -0.76161344 -0.51184676 0.39743912 include_merged
+move Surface 42 x 46.852865 y -9.460424 z 7.712421 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 43 angle 118.37786735 about origin 0 0 0 direction -0.79293010 -0.48695327 0.36624905 include_merged
+move Surface 43 x 44.559266 y -8.409986 z 7.019854 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 44 angle 117.76448478 about origin 0 0 0 direction -0.82055677 -0.46039871 0.33870284 include_merged
+move Surface 44 x 42.434042 y -7.219571 z 6.281935 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 45 angle 116.92309162 about origin 0 0 0 direction -0.84348618 -0.43434473 0.31603119 include_merged
+move Surface 45 x 40.440300 y -5.894959 z 5.515011 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 46 angle 115.84126687 about origin 0 0 0 direction -0.86128547 -0.41084357 0.29898978 include_merged
+move Surface 46 x 38.541151 y -4.441927 z 4.735431 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 47 angle 114.53216449 about origin 0 0 0 direction -0.87400348 -0.39144421 0.28790512 include_merged
+move Surface 47 x 36.699703 y -2.866252 z 3.959541 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 48 angle 113.02810497 about origin 0 0 0 direction -0.88197801 -0.37702230 0.28278784 include_merged
+move Surface 48 x 34.879064 y -1.173713 z 3.203689 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 49 angle 111.37359962 about origin 0 0 0 direction -0.88564861 -0.36781409 0.28344193 include_merged
+move Surface 49 x 33.042344 y 0.629913 z 2.484221 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 50 angle 109.62049156 about origin 0 0 0 direction -0.88543609 -0.36355638 0.28953356 include_merged
+move Surface 50 x 31.152652 y 2.538847 z 1.817485 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 51 angle 107.82520515 about origin 0 0 0 direction -0.88169655 -0.36364793 0.30061832 include_merged
+move Surface 51 x 29.173096 y 4.547312 z 1.219829 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 52 angle 106.04651989 about origin 0 0 0 direction -0.87472878 -0.36729107 0.31614368 include_merged
+move Surface 52 x 27.066785 y 6.649530 z 0.707599 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 53 angle 104.34275359 about origin 0 0 0 direction -0.86481006 -0.37360430 0.33544506 include_merged
+move Surface 53 x 24.796829 y 8.839723 z 0.297143 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 54 angle 102.76787224 about origin 0 0 0 direction -0.85223847 -0.38171021 0.35775259 include_merged
+move Surface 54 x 22.326336 y 11.112113 z 0.004807 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 55 angle 101.36708178 about origin 0 0 0 direction -0.83736539 -0.39080409 0.38221900 include_merged
+move Surface 55 x 19.618415 y 13.460922 z -0.153060 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 56 angle 100.17300611 about origin 0 0 0 direction -0.82060807 -0.40020425 0.40796931 include_merged
+move Surface 56 x 16.636175 y 15.880372 z -0.160111 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 57 angle 99.73825997 about origin 0 0 0 direction -0.80688203 -0.40845527 0.42673843 include_merged
+move Surface 57 x 13.342725 y 18.364686 z 0.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 58 angle 100.80374145 about origin 0 0 0 direction -0.78044817 -0.42905501 0.45476636 include_merged
+move Surface 58 x 12.163268 y 19.166244 z 0.083000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 59 angle 102.47735469 about origin 0 0 0 direction -0.75751529 -0.44799330 0.47483954 include_merged
+move Surface 59 x 10.935808 y 19.892162 z 0.166000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 60 angle 104.22131326 about origin 0 0 0 direction -0.73418373 -0.46592725 0.49384820 include_merged
+move Surface 60 x 9.665190 y 20.539574 z 0.249000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 61 angle 106.03181398 about origin 0 0 0 direction -0.71053940 -0.48288204 0.51181901 include_merged
+move Surface 61 x 8.356427 y 21.105926 z 0.332000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 62 angle 107.90519270 about origin 0 0 0 direction -0.68665896 -0.49888686 0.52878292 include_merged
+move Surface 62 x 7.014686 y 21.588983 z 0.415000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 63 angle 109.83788242 about origin 0 0 0 direction -0.66261070 -0.51397349 0.54477363 include_merged
+move Surface 63 x 5.645260 y 21.986838 z 0.498000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 64 angle 111.82644175 about origin 0 0 0 direction -0.63845468 -0.52817564 0.55982685 include_merged
+move Surface 64 x 4.253556 y 22.297921 z 0.581000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 65 angle 113.86755989 about origin 0 0 0 direction -0.61424315 -0.54152821 0.57397958 include_merged
+move Surface 65 x 2.845064 y 22.521004 z 0.664000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 66 angle 115.95806240 about origin 0 0 0 direction -0.59002101 -0.55406665 0.58726941 include_merged
+move Surface 66 x 1.425345 y 22.655207 z 0.747000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 67 angle 180.00000000 about origin 0 0 0 direction 0.68624593 -0.00000000 -0.72736959 include_merged
+move Surface 67 x -0.000000 y 22.700000 z 0.830000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 68 angle 120.27519501 about origin 0 0 0 direction -0.54169149 -0.57684280 0.61141043 include_merged
+move Surface 68 x -1.425345 y 22.655207 z 0.913000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 69 angle 122.49615911 about origin 0 0 0 direction -0.51764239 -0.58715001 0.62233530 include_merged
+move Surface 69 x -2.845064 y 22.521004 z 0.996000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 70 angle 124.75515362 about origin 0 0 0 direction -0.49370052 -0.59678142 0.63254387 include_merged
+move Surface 70 x -4.253556 y 22.297921 z 1.079000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 71 angle 127.04966197 about origin 0 0 0 direction -0.46988264 -0.60576911 0.64207016 include_merged
+move Surface 71 x -5.645260 y 21.986838 z 1.162000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 72 angle 129.37728409 about origin 0 0 0 direction -0.44620152 -0.61414380 0.65094670 include_merged
+move Surface 72 x -7.014686 y 21.588983 z 1.245000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 73 angle 131.73573438 about origin 0 0 0 direction -0.42266632 -0.62193465 0.65920442 include_merged
+move Surface 73 x -8.356427 y 21.105926 z 1.328000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 74 angle 134.12283588 about origin 0 0 0 direction -0.39928305 -0.62916928 0.66687260 include_merged
+move Surface 74 x -9.665190 y 20.539574 z 1.411000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 75 angle 136.53653993 about origin 0 0 0 direction -0.37605468 -0.63587374 0.67397883 include_merged
+move Surface 75 x -10.935808 y 19.892162 z 1.494000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 76 angle 138.97484742 about origin 0 0 0 direction -0.35298223 -0.64207230 0.68054883 include_merged
+move Surface 76 x -12.163268 y 19.166244 z 1.577000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 77 angle 141.43586848 about origin 0 0 0 direction -0.33006438 -0.64778763 0.68660665 include_merged
+move Surface 77 x -13.342725 y 18.364686 z 1.660000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 78 angle 143.91782880 about origin 0 0 0 direction -0.30729768 -0.65304085 0.69217468 include_merged
+move Surface 78 x -14.469525 y 17.490651 z 1.743000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 79 angle 146.41898161 about origin 0 0 0 direction -0.28467761 -0.65785135 0.69727345 include_merged
+move Surface 79 x -15.539219 y 16.547588 z 1.826000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 80 angle 148.93764605 about origin 0 0 0 direction -0.26219825 -0.66223695 0.70192186 include_merged
+move Surface 80 x -16.547588 y 15.539219 z 1.909000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 81 angle 151.47228829 about origin 0 0 0 direction -0.23985184 -0.66621407 0.70613731 include_merged
+move Surface 81 x -17.490651 y 14.469525 z 1.992000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 82 angle 154.02135296 about origin 0 0 0 direction -0.21763031 -0.66979749 0.70993547 include_merged
+move Surface 82 x -18.364686 y 13.342725 z 2.075000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 83 angle 156.58334111 about origin 0 0 0 direction -0.19552473 -0.67300054 0.71333046 include_merged
+move Surface 83 x -19.166244 y 12.163268 z 2.158000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 84 angle 159.15685453 about origin 0 0 0 direction -0.17352499 -0.67583521 0.71633501 include_merged
+move Surface 84 x -19.892162 y 10.935808 z 2.241000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 85 angle 161.74050570 about origin 0 0 0 direction -0.15162065 -0.67831207 0.71896030 include_merged
+move Surface 85 x -20.539574 y 9.665190 z 2.324000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 86 angle 164.33292225 about origin 0 0 0 direction -0.12980096 -0.68044034 0.72121610 include_merged
+move Surface 86 x -21.105926 y 8.356427 z 2.407000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 87 angle 166.93281495 about origin 0 0 0 direction -0.10805434 -0.68222795 0.72311083 include_merged
+move Surface 87 x -21.588983 y 7.014686 z 2.490000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 88 angle 169.53889425 about origin 0 0 0 direction -0.08636910 -0.68368157 0.72465156 include_merged
+move Surface 88 x -21.986838 y 5.645260 z 2.573000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 89 angle 172.14989376 about origin 0 0 0 direction -0.06473329 -0.68480660 0.72584401 include_merged
+move Surface 89 x -22.297921 y 4.253556 z 2.656000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 90 angle 174.76456490 about origin 0 0 0 direction -0.04313473 -0.68560722 0.72669260 include_merged
+move Surface 90 x -22.521004 y 2.845064 z 2.739000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 91 angle 177.38167606 about origin 0 0 0 direction -0.02156110 -0.68608640 0.72720050 include_merged
+move Surface 91 x -22.655207 y 1.425345 z 2.822000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 92 angle 118.09490790 about origin 0 0 0 direction 0.56582648 -0.56582648 0.59973393 include_merged
+move Surface 92 x -22.700000 y 0.000000 z 2.905000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 93 angle 177.38167606 about origin 0 0 0 direction -0.02156110 0.68608640 -0.72720050 include_merged
+move Surface 93 x -22.655207 y -1.425345 z 2.988000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 94 angle 174.76456490 about origin 0 0 0 direction -0.04313473 0.68560722 -0.72669260 include_merged
+move Surface 94 x -22.521004 y -2.845064 z 3.071000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 95 angle 172.14989376 about origin 0 0 0 direction -0.06473329 0.68480660 -0.72584401 include_merged
+move Surface 95 x -22.297921 y -4.253556 z 3.154000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 96 angle 169.53889425 about origin 0 0 0 direction -0.08636910 0.68368157 -0.72465156 include_merged
+move Surface 96 x -21.986838 y -5.645260 z 3.237000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 97 angle 166.93281495 about origin 0 0 0 direction -0.10805434 0.68222795 -0.72311083 include_merged
+move Surface 97 x -21.588983 y -7.014686 z 3.320000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 98 angle 164.33292225 about origin 0 0 0 direction -0.12980096 0.68044034 -0.72121610 include_merged
+move Surface 98 x -21.105926 y -8.356427 z 3.403000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 99 angle 161.74050570 about origin 0 0 0 direction -0.15162065 0.67831207 -0.71896030 include_merged
+move Surface 99 x -20.539574 y -9.665190 z 3.486000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 100 angle 159.15685453 about origin 0 0 0 direction -0.17352499 0.67583521 -0.71633501 include_merged
+move Surface 100 x -19.892162 y -10.935808 z 3.569000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 101 angle 156.58334111 about origin 0 0 0 direction -0.19552473 0.67300054 -0.71333046 include_merged
+move Surface 101 x -19.166244 y -12.163268 z 3.652000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 102 angle 154.02135296 about origin 0 0 0 direction -0.21763031 0.66979749 -0.70993547 include_merged
+move Surface 102 x -18.364686 y -13.342725 z 3.735000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 103 angle 151.47228829 about origin 0 0 0 direction -0.23985184 0.66621407 -0.70613731 include_merged
+move Surface 103 x -17.490651 y -14.469525 z 3.818000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 104 angle 148.93764605 about origin 0 0 0 direction -0.26219825 0.66223695 -0.70192186 include_merged
+move Surface 104 x -16.547588 y -15.539219 z 3.901000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 105 angle 146.41898161 about origin 0 0 0 direction -0.28467761 0.65785135 -0.69727345 include_merged
+move Surface 105 x -15.539219 y -16.547588 z 3.984000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 106 angle 143.91782880 about origin 0 0 0 direction -0.30729768 0.65304085 -0.69217468 include_merged
+move Surface 106 x -14.469525 y -17.490651 z 4.067000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 107 angle 141.43586848 about origin 0 0 0 direction -0.33006438 0.64778763 -0.68660665 include_merged
+move Surface 107 x -13.342725 y -18.364686 z 4.150000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 108 angle 138.97484742 about origin 0 0 0 direction -0.35298223 0.64207230 -0.68054883 include_merged
+move Surface 108 x -12.163268 y -19.166244 z 4.233000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 109 angle 136.53653993 about origin 0 0 0 direction -0.37605468 0.63587374 -0.67397883 include_merged
+move Surface 109 x -10.935808 y -19.892162 z 4.316000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 110 angle 134.12283588 about origin 0 0 0 direction -0.39928305 0.62916928 -0.66687260 include_merged
+move Surface 110 x -9.665190 y -20.539574 z 4.399000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 111 angle 131.73573438 about origin 0 0 0 direction -0.42266632 0.62193465 -0.65920442 include_merged
+move Surface 111 x -8.356427 y -21.105926 z 4.482000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 112 angle 129.37728409 about origin 0 0 0 direction -0.44620152 0.61414380 -0.65094670 include_merged
+move Surface 112 x -7.014686 y -21.588983 z 4.565000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 113 angle 127.04966197 about origin 0 0 0 direction -0.46988264 0.60576911 -0.64207016 include_merged
+move Surface 113 x -5.645260 y -21.986838 z 4.648000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 114 angle 124.75515362 about origin 0 0 0 direction -0.49370052 0.59678142 -0.63254387 include_merged
+move Surface 114 x -4.253556 y -22.297921 z 4.731000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 115 angle 122.49615911 about origin 0 0 0 direction -0.51764239 0.58715001 -0.62233530 include_merged
+move Surface 115 x -2.845064 y -22.521004 z 4.814000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 116 angle 120.27519501 about origin 0 0 0 direction -0.54169149 0.57684280 -0.61141043 include_merged
+move Surface 116 x -1.425345 y -22.655207 z 4.897000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 117 angle 180.00000000 about origin 0 0 0 direction 0.68624593 0.00000000 0.72736959 include_merged
+move Surface 117 x -0.000000 y -22.700000 z 4.980000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 118 angle 115.95806240 about origin 0 0 0 direction -0.59002101 0.55406665 -0.58726941 include_merged
+move Surface 118 x 1.425345 y -22.655207 z 5.063000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 119 angle 113.86755989 about origin 0 0 0 direction -0.61424315 0.54152821 -0.57397958 include_merged
+move Surface 119 x 2.845064 y -22.521004 z 5.146000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 120 angle 111.82644175 about origin 0 0 0 direction -0.63845468 0.52817564 -0.55982685 include_merged
+move Surface 120 x 4.253556 y -22.297921 z 5.229000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 121 angle 109.83788242 about origin 0 0 0 direction -0.66261070 0.51397349 -0.54477363 include_merged
+move Surface 121 x 5.645260 y -21.986838 z 5.312000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 122 angle 107.90519270 about origin 0 0 0 direction -0.68665896 0.49888686 -0.52878292 include_merged
+move Surface 122 x 7.014686 y -21.588983 z 5.395000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 123 angle 106.03181398 about origin 0 0 0 direction -0.71053940 0.48288204 -0.51181901 include_merged
+move Surface 123 x 8.356427 y -21.105926 z 5.478000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 124 angle 104.22131326 about origin 0 0 0 direction -0.73418373 0.46592725 -0.49384820 include_merged
+move Surface 124 x 9.665190 y -20.539574 z 5.561000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 125 angle 102.47735469 about origin 0 0 0 direction -0.75751529 0.44799330 -0.47483954 include_merged
+move Surface 125 x 10.935808 y -19.892162 z 5.644000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 126 angle 100.80374145 about origin 0 0 0 direction -0.78044817 0.42905501 -0.45476636 include_merged
+move Surface 126 x 12.163268 y -19.166244 z 5.727000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 127 angle 99.20434694 about origin 0 0 0 direction -0.80288782 0.40909189 -0.43360694 include_merged
+move Surface 127 x 13.342725 y -18.364686 z 5.810000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 128 angle 97.68309362 about origin 0 0 0 direction -0.82473131 0.38808908 -0.41134553 include_merged
+move Surface 128 x 14.469525 y -17.490651 z 5.893000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 129 angle 96.24398005 about origin 0 0 0 direction -0.84586710 0.36603926 -0.38797436 include_merged
+move Surface 129 x 15.539219 y -16.547588 z 5.976000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 130 angle 94.89101475 about origin 0 0 0 direction -0.86617628 0.34294357 -0.36349465 include_merged
+move Surface 130 x 16.547588 y -15.539219 z 6.059000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 131 angle 93.62814278 about origin 0 0 0 direction -0.88553432 0.31881199 -0.33791697 include_merged
+move Surface 131 x 17.490651 y -14.469525 z 6.142000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 132 angle 92.45929441 about origin 0 0 0 direction -0.90381135 0.29366600 -0.31126409 include_merged
+move Surface 132 x 18.364686 y -13.342725 z 6.225000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 133 angle 91.38828902 about origin 0 0 0 direction -0.92087475 0.26753885 -0.28357126 include_merged
+move Surface 133 x 19.166244 y -12.163268 z 6.308000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 134 angle 90.41877524 about origin 0 0 0 direction -0.93659179 0.24047590 -0.25488655 include_merged
+move Surface 134 x 19.892162 y -10.935808 z 6.391000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 135 angle 89.55421877 about origin 0 0 0 direction -0.95083166 0.21253597 -0.22527230 include_merged
+move Surface 135 x 20.539574 y -9.665190 z 6.474000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 136 angle 88.79783934 about origin 0 0 0 direction -0.96346852 0.18379149 -0.19480529 include_merged
+move Surface 136 x 21.105926 y -8.356427 z 6.557000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 137 angle 88.15254083 about origin 0 0 0 direction -0.97438495 0.15432749 -0.16357565 include_merged
+move Surface 137 x 21.588983 y -7.014686 z 6.640000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 138 angle 87.62088658 about origin 0 0 0 direction -0.98347470 0.12424180 -0.13168706 include_merged
+move Surface 138 x 21.986838 y -5.645260 z 6.723000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 139 angle 87.20504504 about origin 0 0 0 direction -0.99064588 0.09364361 -0.09925526 include_merged
+move Surface 139 x 22.297921 y -4.253556 z 6.806000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 140 angle 86.90674843 about origin 0 0 0 direction -0.99582375 0.06265190 -0.06640634 include_merged
+move Surface 140 x 22.521004 y -2.845064 z 6.889000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 141 angle 86.72725813 about origin 0 0 0 direction -0.99895308 0.03139332 -0.03327458 include_merged
+move Surface 141 x 22.655207 y -1.425345 z 6.972000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 142 angle 118.09490790 about origin 0 0 0 direction -0.56582648 0.56582648 0.59973393 include_merged
+move Surface 142 x 22.700000 y -0.000000 z 7.055000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 143 angle 86.72725813 about origin 0 0 0 direction -0.99895308 -0.03139332 0.03327458 include_merged
+move Surface 143 x 22.655207 y 1.425345 z 7.138000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 144 angle 86.90674843 about origin 0 0 0 direction -0.99582375 -0.06265190 0.06640634 include_merged
+move Surface 144 x 22.521004 y 2.845064 z 7.221000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 145 angle 87.20504504 about origin 0 0 0 direction -0.99064588 -0.09364361 0.09925526 include_merged
+move Surface 145 x 22.297921 y 4.253556 z 7.304000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 146 angle 87.62088658 about origin 0 0 0 direction -0.98347470 -0.12424180 0.13168706 include_merged
+move Surface 146 x 21.986838 y 5.645260 z 7.387000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 147 angle 88.15254083 about origin 0 0 0 direction -0.97438495 -0.15432749 0.16357565 include_merged
+move Surface 147 x 21.588983 y 7.014686 z 7.470000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 148 angle 88.79783934 about origin 0 0 0 direction -0.96346852 -0.18379149 0.19480529 include_merged
+move Surface 148 x 21.105926 y 8.356427 z 7.553000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 149 angle 89.55421877 about origin 0 0 0 direction -0.95083166 -0.21253597 0.22527230 include_merged
+move Surface 149 x 20.539574 y 9.665190 z 7.636000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 150 angle 90.41877524 about origin 0 0 0 direction -0.93659179 -0.24047590 0.25488655 include_merged
+move Surface 150 x 19.892162 y 10.935808 z 7.719000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 151 angle 91.38828902 about origin 0 0 0 direction -0.92087475 -0.26753885 0.28357126 include_merged
+move Surface 151 x 19.166244 y 12.163268 z 7.802000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 152 angle 92.45929441 about origin 0 0 0 direction -0.90381135 -0.29366600 0.31126409 include_merged
+move Surface 152 x 18.364686 y 13.342725 z 7.885000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 153 angle 93.62814278 about origin 0 0 0 direction -0.88553432 -0.31881199 0.33791697 include_merged
+move Surface 153 x 17.490651 y 14.469525 z 7.968000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 154 angle 94.89101475 about origin 0 0 0 direction -0.86617628 -0.34294357 0.36349465 include_merged
+move Surface 154 x 16.547588 y 15.539219 z 8.051000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 155 angle 96.24398005 about origin 0 0 0 direction -0.84586710 -0.36603926 0.38797436 include_merged
+move Surface 155 x 15.539219 y 16.547588 z 8.134000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 156 angle 97.68309362 about origin 0 0 0 direction -0.82473131 -0.38808908 0.41134553 include_merged
+move Surface 156 x 14.469525 y 17.490651 z 8.217000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 157 angle 99.20434694 about origin 0 0 0 direction -0.80288782 -0.40909189 0.43360694 include_merged
+move Surface 157 x 13.342725 y 18.364686 z 8.300000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 158 angle 100.80374145 about origin 0 0 0 direction -0.78044817 -0.42905501 0.45476636 include_merged
+move Surface 158 x 12.163268 y 19.166244 z 8.383000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 159 angle 102.47735469 about origin 0 0 0 direction -0.75751529 -0.44799330 0.47483954 include_merged
+move Surface 159 x 10.935808 y 19.892162 z 8.466000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 160 angle 104.22131326 about origin 0 0 0 direction -0.73418373 -0.46592725 0.49384820 include_merged
+move Surface 160 x 9.665190 y 20.539574 z 8.549000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 161 angle 106.03181398 about origin 0 0 0 direction -0.71053940 -0.48288204 0.51181901 include_merged
+move Surface 161 x 8.356427 y 21.105926 z 8.632000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 162 angle 107.90519270 about origin 0 0 0 direction -0.68665896 -0.49888686 0.52878292 include_merged
+move Surface 162 x 7.014686 y 21.588983 z 8.715000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 163 angle 109.83788242 about origin 0 0 0 direction -0.66261070 -0.51397349 0.54477363 include_merged
+move Surface 163 x 5.645260 y 21.986838 z 8.798000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 164 angle 111.82644175 about origin 0 0 0 direction -0.63845468 -0.52817564 0.55982685 include_merged
+move Surface 164 x 4.253556 y 22.297921 z 8.881000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 165 angle 113.86755989 about origin 0 0 0 direction -0.61424315 -0.54152821 0.57397958 include_merged
+move Surface 165 x 2.845064 y 22.521004 z 8.964000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 166 angle 115.95806240 about origin 0 0 0 direction -0.59002101 -0.55406665 0.58726941 include_merged
+move Surface 166 x 1.425345 y 22.655207 z 9.047000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 167 angle 180.00000000 about origin 0 0 0 direction 0.68624593 -0.00000000 -0.72736959 include_merged
+move Surface 167 x 0.000000 y 22.700000 z 9.130000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 168 angle 120.27519501 about origin 0 0 0 direction -0.54169149 -0.57684280 0.61141043 include_merged
+move Surface 168 x -1.425345 y 22.655207 z 9.213000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 169 angle 122.49615911 about origin 0 0 0 direction -0.51764239 -0.58715001 0.62233530 include_merged
+move Surface 169 x -2.845064 y 22.521004 z 9.296000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 170 angle 124.75515362 about origin 0 0 0 direction -0.49370052 -0.59678142 0.63254387 include_merged
+move Surface 170 x -4.253556 y 22.297921 z 9.379000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 171 angle 127.04966197 about origin 0 0 0 direction -0.46988264 -0.60576911 0.64207016 include_merged
+move Surface 171 x -5.645260 y 21.986838 z 9.462000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 172 angle 129.37728409 about origin 0 0 0 direction -0.44620152 -0.61414380 0.65094670 include_merged
+move Surface 172 x -7.014686 y 21.588983 z 9.545000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 173 angle 131.73573438 about origin 0 0 0 direction -0.42266632 -0.62193465 0.65920442 include_merged
+move Surface 173 x -8.356427 y 21.105926 z 9.628000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 174 angle 134.12283588 about origin 0 0 0 direction -0.39928305 -0.62916928 0.66687260 include_merged
+move Surface 174 x -9.665190 y 20.539574 z 9.711000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 175 angle 136.53653993 about origin 0 0 0 direction -0.37605468 -0.63587374 0.67397883 include_merged
+move Surface 175 x -10.935808 y 19.892162 z 9.794000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 176 angle 138.97484742 about origin 0 0 0 direction -0.35298223 -0.64207230 0.68054883 include_merged
+move Surface 176 x -12.163268 y 19.166244 z 9.877000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 177 angle 141.43586848 about origin 0 0 0 direction -0.33006438 -0.64778763 0.68660665 include_merged
+move Surface 177 x -13.342725 y 18.364686 z 9.960000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 178 angle 143.91782880 about origin 0 0 0 direction -0.30729768 -0.65304085 0.69217468 include_merged
+move Surface 178 x -14.469525 y 17.490651 z 10.043000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 179 angle 146.41898161 about origin 0 0 0 direction -0.28467761 -0.65785135 0.69727345 include_merged
+move Surface 179 x -15.539219 y 16.547588 z 10.126000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 180 angle 148.93764605 about origin 0 0 0 direction -0.26219825 -0.66223695 0.70192186 include_merged
+move Surface 180 x -16.547588 y 15.539219 z 10.209000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 181 angle 151.47228829 about origin 0 0 0 direction -0.23985184 -0.66621407 0.70613731 include_merged
+move Surface 181 x -17.490651 y 14.469525 z 10.292000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 182 angle 154.02135296 about origin 0 0 0 direction -0.21763031 -0.66979749 0.70993547 include_merged
+move Surface 182 x -18.364686 y 13.342725 z 10.375000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 183 angle 156.58334111 about origin 0 0 0 direction -0.19552473 -0.67300054 0.71333046 include_merged
+move Surface 183 x -19.166244 y 12.163268 z 10.458000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 184 angle 159.15685453 about origin 0 0 0 direction -0.17352499 -0.67583521 0.71633501 include_merged
+move Surface 184 x -19.892162 y 10.935808 z 10.541000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 185 angle 161.74050570 about origin 0 0 0 direction -0.15162065 -0.67831207 0.71896030 include_merged
+move Surface 185 x -20.539574 y 9.665190 z 10.624000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 186 angle 164.33292225 about origin 0 0 0 direction -0.12980096 -0.68044034 0.72121610 include_merged
+move Surface 186 x -21.105926 y 8.356427 z 10.707000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 187 angle 166.93281495 about origin 0 0 0 direction -0.10805434 -0.68222795 0.72311083 include_merged
+move Surface 187 x -21.588983 y 7.014686 z 10.790000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 188 angle 169.53889425 about origin 0 0 0 direction -0.08636910 -0.68368157 0.72465156 include_merged
+move Surface 188 x -21.986838 y 5.645260 z 10.873000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 189 angle 172.14989376 about origin 0 0 0 direction -0.06473329 -0.68480660 0.72584401 include_merged
+move Surface 189 x -22.297921 y 4.253556 z 10.956000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 190 angle 174.76456490 about origin 0 0 0 direction -0.04313473 -0.68560722 0.72669260 include_merged
+move Surface 190 x -22.521004 y 2.845064 z 11.039000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 191 angle 177.38167606 about origin 0 0 0 direction -0.02156110 -0.68608640 0.72720050 include_merged
+move Surface 191 x -22.655207 y 1.425345 z 11.122000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 192 angle 118.09490790 about origin 0 0 0 direction 0.56582648 -0.56582648 0.59973393 include_merged
+move Surface 192 x -22.700000 y 0.000000 z 11.205000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 193 angle 177.38167606 about origin 0 0 0 direction -0.02156110 0.68608640 -0.72720050 include_merged
+move Surface 193 x -22.655207 y -1.425345 z 11.288000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 194 angle 174.76456490 about origin 0 0 0 direction -0.04313473 0.68560722 -0.72669260 include_merged
+move Surface 194 x -22.521004 y -2.845064 z 11.371000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 195 angle 172.14989376 about origin 0 0 0 direction -0.06473329 0.68480660 -0.72584401 include_merged
+move Surface 195 x -22.297921 y -4.253556 z 11.454000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 196 angle 169.53889425 about origin 0 0 0 direction -0.08636910 0.68368157 -0.72465156 include_merged
+move Surface 196 x -21.986838 y -5.645260 z 11.537000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 197 angle 166.93281495 about origin 0 0 0 direction -0.10805434 0.68222795 -0.72311083 include_merged
+move Surface 197 x -21.588983 y -7.014686 z 11.620000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 198 angle 164.33292225 about origin 0 0 0 direction -0.12980096 0.68044034 -0.72121610 include_merged
+move Surface 198 x -21.105926 y -8.356427 z 11.703000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 199 angle 161.74050570 about origin 0 0 0 direction -0.15162065 0.67831207 -0.71896030 include_merged
+move Surface 199 x -20.539574 y -9.665190 z 11.786000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 200 angle 159.15685453 about origin 0 0 0 direction -0.17352499 0.67583521 -0.71633501 include_merged
+move Surface 200 x -19.892162 y -10.935808 z 11.869000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 201 angle 156.58334111 about origin 0 0 0 direction -0.19552473 0.67300054 -0.71333046 include_merged
+move Surface 201 x -19.166244 y -12.163268 z 11.952000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 202 angle 154.02135296 about origin 0 0 0 direction -0.21763031 0.66979749 -0.70993547 include_merged
+move Surface 202 x -18.364686 y -13.342725 z 12.035000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 203 angle 151.47228829 about origin 0 0 0 direction -0.23985184 0.66621407 -0.70613731 include_merged
+move Surface 203 x -17.490651 y -14.469525 z 12.118000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 204 angle 148.93764605 about origin 0 0 0 direction -0.26219825 0.66223695 -0.70192186 include_merged
+move Surface 204 x -16.547588 y -15.539219 z 12.201000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 205 angle 146.41898161 about origin 0 0 0 direction -0.28467761 0.65785135 -0.69727345 include_merged
+move Surface 205 x -15.539219 y -16.547588 z 12.284000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 206 angle 143.91782880 about origin 0 0 0 direction -0.30729768 0.65304085 -0.69217468 include_merged
+move Surface 206 x -14.469525 y -17.490651 z 12.367000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 207 angle 141.43586848 about origin 0 0 0 direction -0.33006438 0.64778763 -0.68660665 include_merged
+move Surface 207 x -13.342725 y -18.364686 z 12.450000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 208 angle 138.97484742 about origin 0 0 0 direction -0.35298223 0.64207230 -0.68054883 include_merged
+move Surface 208 x -12.163268 y -19.166244 z 12.533000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 209 angle 136.53653993 about origin 0 0 0 direction -0.37605468 0.63587374 -0.67397883 include_merged
+move Surface 209 x -10.935808 y -19.892162 z 12.616000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 210 angle 134.12283588 about origin 0 0 0 direction -0.39928305 0.62916928 -0.66687260 include_merged
+move Surface 210 x -9.665190 y -20.539574 z 12.699000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 211 angle 131.73573438 about origin 0 0 0 direction -0.42266632 0.62193465 -0.65920442 include_merged
+move Surface 211 x -8.356427 y -21.105926 z 12.782000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 212 angle 129.37728409 about origin 0 0 0 direction -0.44620152 0.61414380 -0.65094670 include_merged
+move Surface 212 x -7.014686 y -21.588983 z 12.865000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 213 angle 127.04966197 about origin 0 0 0 direction -0.46988264 0.60576911 -0.64207016 include_merged
+move Surface 213 x -5.645260 y -21.986838 z 12.948000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 214 angle 124.75515362 about origin 0 0 0 direction -0.49370052 0.59678142 -0.63254387 include_merged
+move Surface 214 x -4.253556 y -22.297921 z 13.031000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 215 angle 122.49615911 about origin 0 0 0 direction -0.51764239 0.58715001 -0.62233530 include_merged
+move Surface 215 x -2.845064 y -22.521004 z 13.114000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 216 angle 120.27519501 about origin 0 0 0 direction -0.54169149 0.57684280 -0.61141043 include_merged
+move Surface 216 x -1.425345 y -22.655207 z 13.197000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 217 angle 180.00000000 about origin 0 0 0 direction 0.68624593 0.00000000 0.72736959 include_merged
+move Surface 217 x -0.000000 y -22.700000 z 13.280000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 218 angle 115.95806240 about origin 0 0 0 direction -0.59002101 0.55406665 -0.58726941 include_merged
+move Surface 218 x 1.425345 y -22.655207 z 13.363000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 219 angle 113.86755989 about origin 0 0 0 direction -0.61424315 0.54152821 -0.57397958 include_merged
+move Surface 219 x 2.845064 y -22.521004 z 13.446000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 220 angle 111.82644175 about origin 0 0 0 direction -0.63845468 0.52817564 -0.55982685 include_merged
+move Surface 220 x 4.253556 y -22.297921 z 13.529000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 221 angle 109.83788242 about origin 0 0 0 direction -0.66261070 0.51397349 -0.54477363 include_merged
+move Surface 221 x 5.645260 y -21.986838 z 13.612000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 222 angle 107.90519270 about origin 0 0 0 direction -0.68665896 0.49888686 -0.52878292 include_merged
+move Surface 222 x 7.014686 y -21.588983 z 13.695000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 223 angle 106.03181398 about origin 0 0 0 direction -0.71053940 0.48288204 -0.51181901 include_merged
+move Surface 223 x 8.356427 y -21.105926 z 13.778000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 224 angle 104.22131326 about origin 0 0 0 direction -0.73418373 0.46592725 -0.49384820 include_merged
+move Surface 224 x 9.665190 y -20.539574 z 13.861000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 225 angle 102.47735469 about origin 0 0 0 direction -0.75751529 0.44799330 -0.47483954 include_merged
+move Surface 225 x 10.935808 y -19.892162 z 13.944000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 226 angle 100.80374145 about origin 0 0 0 direction -0.78044817 0.42905501 -0.45476636 include_merged
+move Surface 226 x 12.163268 y -19.166244 z 14.027000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 227 angle 99.20434694 about origin 0 0 0 direction -0.80288782 0.40909189 -0.43360694 include_merged
+move Surface 227 x 13.342725 y -18.364686 z 14.110000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 228 angle 97.68309362 about origin 0 0 0 direction -0.82473131 0.38808908 -0.41134553 include_merged
+move Surface 228 x 14.469525 y -17.490651 z 14.193000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 229 angle 96.24398005 about origin 0 0 0 direction -0.84586710 0.36603926 -0.38797436 include_merged
+move Surface 229 x 15.539219 y -16.547588 z 14.276000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 230 angle 94.89101475 about origin 0 0 0 direction -0.86617628 0.34294357 -0.36349465 include_merged
+move Surface 230 x 16.547588 y -15.539219 z 14.359000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 231 angle 93.62814278 about origin 0 0 0 direction -0.88553432 0.31881199 -0.33791697 include_merged
+move Surface 231 x 17.490651 y -14.469525 z 14.442000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 232 angle 92.45929441 about origin 0 0 0 direction -0.90381135 0.29366600 -0.31126409 include_merged
+move Surface 232 x 18.364686 y -13.342725 z 14.525000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 233 angle 91.38828902 about origin 0 0 0 direction -0.92087475 0.26753885 -0.28357126 include_merged
+move Surface 233 x 19.166244 y -12.163268 z 14.608000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 234 angle 90.41877524 about origin 0 0 0 direction -0.93659179 0.24047590 -0.25488655 include_merged
+move Surface 234 x 19.892162 y -10.935808 z 14.691000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 235 angle 89.55421877 about origin 0 0 0 direction -0.95083166 0.21253597 -0.22527230 include_merged
+move Surface 235 x 20.539574 y -9.665190 z 14.774000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 236 angle 88.79783934 about origin 0 0 0 direction -0.96346852 0.18379149 -0.19480529 include_merged
+move Surface 236 x 21.105926 y -8.356427 z 14.857000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 237 angle 88.15254083 about origin 0 0 0 direction -0.97438495 0.15432749 -0.16357565 include_merged
+move Surface 237 x 21.588983 y -7.014686 z 14.940000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 238 angle 87.62088658 about origin 0 0 0 direction -0.98347470 0.12424180 -0.13168706 include_merged
+move Surface 238 x 21.986838 y -5.645260 z 15.023000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 239 angle 87.20504504 about origin 0 0 0 direction -0.99064588 0.09364361 -0.09925526 include_merged
+move Surface 239 x 22.297921 y -4.253556 z 15.106000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 240 angle 86.90674843 about origin 0 0 0 direction -0.99582375 0.06265190 -0.06640634 include_merged
+move Surface 240 x 22.521004 y -2.845064 z 15.189000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 241 angle 86.72725813 about origin 0 0 0 direction -0.99895308 0.03139332 -0.03327458 include_merged
+move Surface 241 x 22.655207 y -1.425345 z 15.272000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 242 angle 118.09490790 about origin 0 0 0 direction -0.56582648 0.56582648 0.59973393 include_merged
+move Surface 242 x 22.700000 y -0.000000 z 15.355000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 243 angle 86.72725813 about origin 0 0 0 direction -0.99895308 -0.03139332 0.03327458 include_merged
+move Surface 243 x 22.655207 y 1.425345 z 15.438000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 244 angle 86.90674843 about origin 0 0 0 direction -0.99582375 -0.06265190 0.06640634 include_merged
+move Surface 244 x 22.521004 y 2.845064 z 15.521000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 245 angle 87.20504504 about origin 0 0 0 direction -0.99064588 -0.09364361 0.09925526 include_merged
+move Surface 245 x 22.297921 y 4.253556 z 15.604000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 246 angle 87.62088658 about origin 0 0 0 direction -0.98347470 -0.12424180 0.13168706 include_merged
+move Surface 246 x 21.986838 y 5.645260 z 15.687000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 247 angle 88.15254083 about origin 0 0 0 direction -0.97438495 -0.15432749 0.16357565 include_merged
+move Surface 247 x 21.588983 y 7.014686 z 15.770000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 248 angle 88.79783934 about origin 0 0 0 direction -0.96346852 -0.18379149 0.19480529 include_merged
+move Surface 248 x 21.105926 y 8.356427 z 15.853000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 249 angle 89.55421877 about origin 0 0 0 direction -0.95083166 -0.21253597 0.22527230 include_merged
+move Surface 249 x 20.539574 y 9.665190 z 15.936000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 250 angle 90.41877524 about origin 0 0 0 direction -0.93659179 -0.24047590 0.25488655 include_merged
+move Surface 250 x 19.892162 y 10.935808 z 16.019000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 251 angle 91.38828902 about origin 0 0 0 direction -0.92087475 -0.26753885 0.28357126 include_merged
+move Surface 251 x 19.166244 y 12.163268 z 16.102000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 252 angle 92.45929441 about origin 0 0 0 direction -0.90381135 -0.29366600 0.31126409 include_merged
+move Surface 252 x 18.364686 y 13.342725 z 16.185000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 253 angle 93.62814278 about origin 0 0 0 direction -0.88553432 -0.31881199 0.33791697 include_merged
+move Surface 253 x 17.490651 y 14.469525 z 16.268000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 254 angle 94.89101475 about origin 0 0 0 direction -0.86617628 -0.34294357 0.36349465 include_merged
+move Surface 254 x 16.547588 y 15.539219 z 16.351000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 255 angle 96.24398005 about origin 0 0 0 direction -0.84586710 -0.36603926 0.38797436 include_merged
+move Surface 255 x 15.539219 y 16.547588 z 16.434000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 256 angle 97.68309362 about origin 0 0 0 direction -0.82473131 -0.38808908 0.41134553 include_merged
+move Surface 256 x 14.469525 y 17.490651 z 16.517000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 257 angle 99.20434694 about origin 0 0 0 direction -0.80288782 -0.40909189 0.43360694 include_merged
+move Surface 257 x 13.342725 y 18.364686 z 16.600000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 258 angle 100.80374145 about origin 0 0 0 direction -0.78044817 -0.42905501 0.45476636 include_merged
+move Surface 258 x 12.163268 y 19.166244 z 16.683000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 259 angle 102.47735469 about origin 0 0 0 direction -0.75751529 -0.44799330 0.47483954 include_merged
+move Surface 259 x 10.935808 y 19.892162 z 16.766000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 260 angle 104.22131326 about origin 0 0 0 direction -0.73418373 -0.46592725 0.49384820 include_merged
+move Surface 260 x 9.665190 y 20.539574 z 16.849000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 261 angle 106.03181398 about origin 0 0 0 direction -0.71053940 -0.48288204 0.51181901 include_merged
+move Surface 261 x 8.356427 y 21.105926 z 16.932000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 262 angle 107.90519270 about origin 0 0 0 direction -0.68665896 -0.49888686 0.52878292 include_merged
+move Surface 262 x 7.014686 y 21.588983 z 17.015000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 263 angle 109.83788242 about origin 0 0 0 direction -0.66261070 -0.51397349 0.54477363 include_merged
+move Surface 263 x 5.645260 y 21.986838 z 17.098000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 264 angle 111.82644175 about origin 0 0 0 direction -0.63845468 -0.52817564 0.55982685 include_merged
+move Surface 264 x 4.253556 y 22.297921 z 17.181000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 265 angle 113.86755989 about origin 0 0 0 direction -0.61424315 -0.54152821 0.57397958 include_merged
+move Surface 265 x 2.845064 y 22.521004 z 17.264000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 266 angle 115.95806240 about origin 0 0 0 direction -0.59002101 -0.55406665 0.58726941 include_merged
+move Surface 266 x 1.425345 y 22.655207 z 17.347000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 267 angle 180.00000000 about origin 0 0 0 direction 0.68624593 -0.00000000 -0.72736959 include_merged
+move Surface 267 x 0.000000 y 22.700000 z 17.430000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 268 angle 120.27519501 about origin 0 0 0 direction -0.54169149 -0.57684280 0.61141043 include_merged
+move Surface 268 x -1.425345 y 22.655207 z 17.513000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 269 angle 122.49615911 about origin 0 0 0 direction -0.51764239 -0.58715001 0.62233530 include_merged
+move Surface 269 x -2.845064 y 22.521004 z 17.596000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 270 angle 124.75515362 about origin 0 0 0 direction -0.49370052 -0.59678142 0.63254387 include_merged
+move Surface 270 x -4.253556 y 22.297921 z 17.679000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 271 angle 127.04966197 about origin 0 0 0 direction -0.46988264 -0.60576911 0.64207016 include_merged
+move Surface 271 x -5.645260 y 21.986838 z 17.762000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 272 angle 129.37728409 about origin 0 0 0 direction -0.44620152 -0.61414380 0.65094670 include_merged
+move Surface 272 x -7.014686 y 21.588983 z 17.845000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 273 angle 131.73573438 about origin 0 0 0 direction -0.42266632 -0.62193465 0.65920442 include_merged
+move Surface 273 x -8.356427 y 21.105926 z 17.928000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 274 angle 134.12283588 about origin 0 0 0 direction -0.39928305 -0.62916928 0.66687260 include_merged
+move Surface 274 x -9.665190 y 20.539574 z 18.011000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 275 angle 136.53653993 about origin 0 0 0 direction -0.37605468 -0.63587374 0.67397883 include_merged
+move Surface 275 x -10.935808 y 19.892162 z 18.094000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 276 angle 138.97484742 about origin 0 0 0 direction -0.35298223 -0.64207230 0.68054883 include_merged
+move Surface 276 x -12.163268 y 19.166244 z 18.177000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 277 angle 141.43586848 about origin 0 0 0 direction -0.33006438 -0.64778763 0.68660665 include_merged
+move Surface 277 x -13.342725 y 18.364686 z 18.260000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 278 angle 143.91782880 about origin 0 0 0 direction -0.30729768 -0.65304085 0.69217468 include_merged
+move Surface 278 x -14.469525 y 17.490651 z 18.343000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 279 angle 146.41898161 about origin 0 0 0 direction -0.28467761 -0.65785135 0.69727345 include_merged
+move Surface 279 x -15.539219 y 16.547588 z 18.426000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 280 angle 148.93764605 about origin 0 0 0 direction -0.26219825 -0.66223695 0.70192186 include_merged
+move Surface 280 x -16.547588 y 15.539219 z 18.509000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 281 angle 151.47228829 about origin 0 0 0 direction -0.23985184 -0.66621407 0.70613731 include_merged
+move Surface 281 x -17.490651 y 14.469525 z 18.592000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 282 angle 154.02135296 about origin 0 0 0 direction -0.21763031 -0.66979749 0.70993547 include_merged
+move Surface 282 x -18.364686 y 13.342725 z 18.675000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 283 angle 156.58334111 about origin 0 0 0 direction -0.19552473 -0.67300054 0.71333046 include_merged
+move Surface 283 x -19.166244 y 12.163268 z 18.758000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 284 angle 159.15685453 about origin 0 0 0 direction -0.17352499 -0.67583521 0.71633501 include_merged
+move Surface 284 x -19.892162 y 10.935808 z 18.841000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 285 angle 161.74050570 about origin 0 0 0 direction -0.15162065 -0.67831207 0.71896030 include_merged
+move Surface 285 x -20.539574 y 9.665190 z 18.924000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 286 angle 164.33292225 about origin 0 0 0 direction -0.12980096 -0.68044034 0.72121610 include_merged
+move Surface 286 x -21.105926 y 8.356427 z 19.007000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 287 angle 166.93281495 about origin 0 0 0 direction -0.10805434 -0.68222795 0.72311083 include_merged
+move Surface 287 x -21.588983 y 7.014686 z 19.090000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 288 angle 169.53889425 about origin 0 0 0 direction -0.08636910 -0.68368157 0.72465156 include_merged
+move Surface 288 x -21.986838 y 5.645260 z 19.173000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 289 angle 172.14989376 about origin 0 0 0 direction -0.06473329 -0.68480660 0.72584401 include_merged
+move Surface 289 x -22.297921 y 4.253556 z 19.256000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 290 angle 174.76456490 about origin 0 0 0 direction -0.04313473 -0.68560722 0.72669260 include_merged
+move Surface 290 x -22.521004 y 2.845064 z 19.339000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 291 angle 177.38167606 about origin 0 0 0 direction -0.02156110 -0.68608640 0.72720050 include_merged
+move Surface 291 x -22.655207 y 1.425345 z 19.422000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 292 angle 118.09490790 about origin 0 0 0 direction 0.56582648 -0.56582648 0.59973393 include_merged
+move Surface 292 x -22.700000 y 0.000000 z 19.505000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 293 angle 177.38167606 about origin 0 0 0 direction -0.02156110 0.68608640 -0.72720050 include_merged
+move Surface 293 x -22.655207 y -1.425345 z 19.588000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 294 angle 174.76456490 about origin 0 0 0 direction -0.04313473 0.68560722 -0.72669260 include_merged
+move Surface 294 x -22.521004 y -2.845064 z 19.671000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 295 angle 172.14989376 about origin 0 0 0 direction -0.06473329 0.68480660 -0.72584401 include_merged
+move Surface 295 x -22.297921 y -4.253556 z 19.754000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 296 angle 169.53889425 about origin 0 0 0 direction -0.08636910 0.68368157 -0.72465156 include_merged
+move Surface 296 x -21.986838 y -5.645260 z 19.837000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 297 angle 166.93281495 about origin 0 0 0 direction -0.10805434 0.68222795 -0.72311083 include_merged
+move Surface 297 x -21.588983 y -7.014686 z 19.920000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 298 angle 164.33292225 about origin 0 0 0 direction -0.12980096 0.68044034 -0.72121610 include_merged
+move Surface 298 x -21.105926 y -8.356427 z 20.003000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 299 angle 161.74050570 about origin 0 0 0 direction -0.15162065 0.67831207 -0.71896030 include_merged
+move Surface 299 x -20.539574 y -9.665190 z 20.086000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 300 angle 159.15685453 about origin 0 0 0 direction -0.17352499 0.67583521 -0.71633501 include_merged
+move Surface 300 x -19.892162 y -10.935808 z 20.169000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 301 angle 156.58334111 about origin 0 0 0 direction -0.19552473 0.67300054 -0.71333046 include_merged
+move Surface 301 x -19.166244 y -12.163268 z 20.252000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 302 angle 154.02135296 about origin 0 0 0 direction -0.21763031 0.66979749 -0.70993547 include_merged
+move Surface 302 x -18.364686 y -13.342725 z 20.335000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 303 angle 151.47228829 about origin 0 0 0 direction -0.23985184 0.66621407 -0.70613731 include_merged
+move Surface 303 x -17.490651 y -14.469525 z 20.418000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 304 angle 148.93764605 about origin 0 0 0 direction -0.26219825 0.66223695 -0.70192186 include_merged
+move Surface 304 x -16.547588 y -15.539219 z 20.501000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 305 angle 146.41898161 about origin 0 0 0 direction -0.28467761 0.65785135 -0.69727345 include_merged
+move Surface 305 x -15.539219 y -16.547588 z 20.584000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 306 angle 143.91782880 about origin 0 0 0 direction -0.30729768 0.65304085 -0.69217468 include_merged
+move Surface 306 x -14.469525 y -17.490651 z 20.667000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 307 angle 141.43586848 about origin 0 0 0 direction -0.33006438 0.64778763 -0.68660665 include_merged
+move Surface 307 x -13.342725 y -18.364686 z 20.750000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 308 angle 138.97484742 about origin 0 0 0 direction -0.35298223 0.64207230 -0.68054883 include_merged
+move Surface 308 x -12.163268 y -19.166244 z 20.833000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 309 angle 136.53653993 about origin 0 0 0 direction -0.37605468 0.63587374 -0.67397883 include_merged
+move Surface 309 x -10.935808 y -19.892162 z 20.916000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 310 angle 134.12283588 about origin 0 0 0 direction -0.39928305 0.62916928 -0.66687260 include_merged
+move Surface 310 x -9.665190 y -20.539574 z 20.999000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 311 angle 131.73573438 about origin 0 0 0 direction -0.42266632 0.62193465 -0.65920442 include_merged
+move Surface 311 x -8.356427 y -21.105926 z 21.082000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 312 angle 129.37728409 about origin 0 0 0 direction -0.44620152 0.61414380 -0.65094670 include_merged
+move Surface 312 x -7.014686 y -21.588983 z 21.165000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 313 angle 127.04966197 about origin 0 0 0 direction -0.46988264 0.60576911 -0.64207016 include_merged
+move Surface 313 x -5.645260 y -21.986838 z 21.248000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 314 angle 124.75515362 about origin 0 0 0 direction -0.49370052 0.59678142 -0.63254387 include_merged
+move Surface 314 x -4.253556 y -22.297921 z 21.331000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 315 angle 122.49615911 about origin 0 0 0 direction -0.51764239 0.58715001 -0.62233530 include_merged
+move Surface 315 x -2.845064 y -22.521004 z 21.414000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 316 angle 120.27519501 about origin 0 0 0 direction -0.54169149 0.57684280 -0.61141043 include_merged
+move Surface 316 x -1.425345 y -22.655207 z 21.497000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 317 angle 180.00000000 about origin 0 0 0 direction 0.68624593 0.00000000 0.72736959 include_merged
+move Surface 317 x -0.000000 y -22.700000 z 21.580000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 318 angle 115.95806240 about origin 0 0 0 direction -0.59002101 0.55406665 -0.58726941 include_merged
+move Surface 318 x 1.425345 y -22.655207 z 21.663000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 319 angle 113.86755989 about origin 0 0 0 direction -0.61424315 0.54152821 -0.57397958 include_merged
+move Surface 319 x 2.845064 y -22.521004 z 21.746000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 320 angle 111.82644175 about origin 0 0 0 direction -0.63845468 0.52817564 -0.55982685 include_merged
+move Surface 320 x 4.253556 y -22.297921 z 21.829000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 321 angle 109.83788242 about origin 0 0 0 direction -0.66261070 0.51397349 -0.54477363 include_merged
+move Surface 321 x 5.645260 y -21.986838 z 21.912000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 322 angle 107.90519270 about origin 0 0 0 direction -0.68665896 0.49888686 -0.52878292 include_merged
+move Surface 322 x 7.014686 y -21.588983 z 21.995000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 323 angle 106.03181398 about origin 0 0 0 direction -0.71053940 0.48288204 -0.51181901 include_merged
+move Surface 323 x 8.356427 y -21.105926 z 22.078000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 324 angle 104.22131326 about origin 0 0 0 direction -0.73418373 0.46592725 -0.49384820 include_merged
+move Surface 324 x 9.665190 y -20.539574 z 22.161000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 325 angle 102.47735469 about origin 0 0 0 direction -0.75751529 0.44799330 -0.47483954 include_merged
+move Surface 325 x 10.935808 y -19.892162 z 22.244000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 326 angle 100.80374145 about origin 0 0 0 direction -0.78044817 0.42905501 -0.45476636 include_merged
+move Surface 326 x 12.163268 y -19.166244 z 22.327000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 327 angle 99.87028309 about origin 0 0 0 direction -0.80730104 0.40866738 -0.42574171 include_merged
+move Surface 327 x 13.342725 y -18.364686 z 22.410000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 328 angle 100.53571176 about origin 0 0 0 direction -0.82165507 0.40071487 -0.40535237 include_merged
+move Surface 328 x 16.636175 y -15.880372 z 22.554237 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 329 angle 102.12740818 about origin 0 0 0 direction -0.83927891 0.39169714 -0.37707328 include_merged
+move Surface 329 x 19.618415 y -13.460922 z 22.501645 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 330 angle 103.94170939 about origin 0 0 0 direction -0.85481381 0.38286368 -0.35029810 include_merged
+move Surface 330 x 22.326336 y -11.112113 z 22.271694 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 331 angle 105.92923326 about origin 0 0 0 direction -0.86786149 0.37492255 -0.32595937 include_merged
+move Surface 331 x 24.796829 y -8.839723 z 21.883854 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 332 angle 108.02649922 about origin 0 0 0 direction -0.87810931 0.36871053 -0.30492061 include_merged
+move Surface 332 x 27.066785 y -6.649530 z 21.357595 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 333 angle 110.16182003 about origin 0 0 0 direction -0.88530910 0.36513790 -0.28792727 include_merged
+move Surface 333 x 29.173096 y -4.547312 z 20.712387 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 334 angle 112.26132950 about origin 0 0 0 direction -0.88923566 0.36511647 -0.27559010 include_merged
+move Surface 334 x 31.152652 y -2.538847 z 19.967700 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 335 angle 114.25361430 about origin 0 0 0 direction -0.88963726 0.36947059 -0.26839715 include_merged
+move Surface 335 x 33.042344 y -0.629913 z 19.143004 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 336 angle 116.07242565 about origin 0 0 0 direction -0.88619502 0.37882496 -0.26673962 include_merged
+move Surface 336 x 34.879064 y 1.173713 z 18.257769 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 337 angle 117.65822378 about origin 0 0 0 direction -0.87851160 0.39346329 -0.27093174 include_merged
+move Surface 337 x 36.699703 y 2.866252 z 17.331465 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 338 angle 118.96046157 about origin 0 0 0 direction -0.86615205 0.41316499 -0.28120332 include_merged
+move Surface 338 x 38.541151 y 4.441927 z 16.383562 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 339 angle 119.94275154 about origin 0 0 0 direction -0.84875664 0.43705871 -0.29764383 include_merged
+move Surface 339 x 40.440300 y 5.894959 z 15.433531 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 340 angle 120.59140419 about origin 0 0 0 direction -0.82621979 0.46357612 -0.32009067 include_merged
+move Surface 340 x 42.434042 y 7.219571 z 14.500840 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 341 angle 120.92468078 about origin 0 0 0 direction -0.79888088 0.49060775 -0.34798474 include_merged
+move Surface 341 x 44.559266 y 8.409986 z 13.604961 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 342 angle 120.99605300 about origin 0 0 0 direction -0.76763120 0.51589104 -0.38026146 include_merged
+move Surface 342 x 46.852865 y 9.460424 z 12.765363 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 343 angle 120.88552923 about origin 0 0 0 direction -0.73384799 0.53752088 -0.41537746 include_merged
+move Surface 343 x 49.351729 y 10.365109 z 12.001516 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 344 angle 120.68015427 about origin 0 0 0 direction -0.69915514 0.55435466 -0.45152297 include_merged
+move Surface 344 x 52.092749 y 11.118262 z 11.332890 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 345 angle 120.45295371 about origin 0 0 0 direction -0.66511158 0.56612987 -0.48695335 include_merged
+move Surface 345 x 55.112817 y 11.714106 z 10.778956 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 346 angle 120.25067064 about origin 0 0 0 direction -0.63295756 0.57329263 -0.52028867 include_merged
+move Surface 346 x 58.448823 y 12.146862 z 10.359183 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 347 angle 178.37809998 about origin 0 0 0 direction -0.72102627 -0.01360007 -0.69277424 include_merged
+move Surface 347 x 62.137659 y 12.410752 z 10.093041 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 348 angle 179.48500278 about origin 0 0 0 direction -0.71173948 -0.00443544 -0.70242953 include_merged
+move Surface 348 x 67.432432 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 349 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 349 x 69.203753 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 350 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 350 x 70.975075 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 351 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 351 x 72.746396 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 352 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 352 x 74.517717 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 353 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 353 x 76.289039 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 354 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 354 x 78.060360 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 355 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 355 x 79.831681 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 356 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 356 x 81.603003 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 357 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 357 x 83.374324 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 358 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 358 x 85.145645 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 359 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 359 x 86.916967 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 360 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 360 x 88.688288 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 361 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 361 x 90.459609 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 362 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 362 x 92.230931 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 363 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 363 x 94.002252 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 364 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 364 x 95.773573 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 365 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 365 x 97.544895 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 366 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 366 x 99.316216 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 367 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 367 x 101.087537 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 368 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 368 x 102.858859 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 369 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 369 x 104.630180 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 370 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 370 x 106.401501 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 371 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 371 x 108.172823 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 372 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 372 x 109.944144 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 373 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 373 x 111.715465 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 374 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 374 x 113.486787 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 375 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 375 x 115.258108 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 376 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 376 x 117.029429 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 377 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 377 x 118.800751 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 378 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 378 x 120.572072 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 379 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 379 x 122.343393 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 380 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 380 x 124.114715 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 381 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 381 x 125.886036 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 382 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 382 x 127.657357 y 12.500000 z 10.000000 include_merged
+create surface circle radius 3.15 zplane
+rotate Surface 383 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
+move Surface 383 x 129.428679 y 12.500000 z 10.000000 include_merged
+
+create volume loft surface 1 2
+create volume loft surface 2 3
+create volume loft surface 3 4
+create volume loft surface 4 5
+create volume loft surface 5 6
+create volume loft surface 6 7
+create volume loft surface 7 8
+create volume loft surface 8 9
+create volume loft surface 9 10
+create volume loft surface 10 11
+create volume loft surface 11 12
+create volume loft surface 12 13
+create volume loft surface 13 14
+create volume loft surface 14 15
+create volume loft surface 15 16
+create volume loft surface 16 17
+create volume loft surface 17 18
+create volume loft surface 18 19
+create volume loft surface 19 20
+create volume loft surface 20 21
+create volume loft surface 21 22
+create volume loft surface 22 23
+create volume loft surface 23 24
+create volume loft surface 24 25
+create volume loft surface 25 26
+create volume loft surface 26 27
+create volume loft surface 27 28
+create volume loft surface 28 29
+create volume loft surface 29 30
+create volume loft surface 30 31
+create volume loft surface 31 32
+create volume loft surface 32 33
+create volume loft surface 33 34
+create volume loft surface 34 35
+create volume loft surface 35 36
+create volume loft surface 36 37
+create volume loft surface 37 38
+create volume loft surface 38 39
+create volume loft surface 39 40
+create volume loft surface 40 41
+create volume loft surface 41 42
+create volume loft surface 42 43
+create volume loft surface 43 44
+create volume loft surface 44 45
+create volume loft surface 45 46
+create volume loft surface 46 47
+create volume loft surface 47 48
+create volume loft surface 48 49
+create volume loft surface 49 50
+create volume loft surface 50 51
+create volume loft surface 51 52
+create volume loft surface 52 53
+create volume loft surface 53 54
+create volume loft surface 54 55
+create volume loft surface 55 56
+create volume loft surface 56 57
+create volume loft surface 57 58
+create volume loft surface 58 59
+create volume loft surface 59 60
+create volume loft surface 60 61
+create volume loft surface 61 62
+create volume loft surface 62 63
+create volume loft surface 63 64
+create volume loft surface 64 65
+create volume loft surface 65 66
+create volume loft surface 66 67
+create volume loft surface 67 68
+create volume loft surface 68 69
+create volume loft surface 69 70
+create volume loft surface 70 71
+create volume loft surface 71 72
+create volume loft surface 72 73
+create volume loft surface 73 74
+create volume loft surface 74 75
+create volume loft surface 75 76
+create volume loft surface 76 77
+create volume loft surface 77 78
+create volume loft surface 78 79
+create volume loft surface 79 80
+create volume loft surface 80 81
+create volume loft surface 81 82
+create volume loft surface 82 83
+create volume loft surface 83 84
+create volume loft surface 84 85
+create volume loft surface 85 86
+create volume loft surface 86 87
+create volume loft surface 87 88
+create volume loft surface 88 89
+create volume loft surface 89 90
+create volume loft surface 90 91
+create volume loft surface 91 92
+create volume loft surface 92 93
+create volume loft surface 93 94
+create volume loft surface 94 95
+create volume loft surface 95 96
+create volume loft surface 96 97
+create volume loft surface 97 98
+create volume loft surface 98 99
+create volume loft surface 99 100
+create volume loft surface 100 101
+create volume loft surface 101 102
+create volume loft surface 102 103
+create volume loft surface 103 104
+create volume loft surface 104 105
+create volume loft surface 105 106
+create volume loft surface 106 107
+create volume loft surface 107 108
+create volume loft surface 108 109
+create volume loft surface 109 110
+create volume loft surface 110 111
+create volume loft surface 111 112
+create volume loft surface 112 113
+create volume loft surface 113 114
+create volume loft surface 114 115
+create volume loft surface 115 116
+create volume loft surface 116 117
+create volume loft surface 117 118
+create volume loft surface 118 119
+create volume loft surface 119 120
+create volume loft surface 120 121
+create volume loft surface 121 122
+create volume loft surface 122 123
+create volume loft surface 123 124
+create volume loft surface 124 125
+create volume loft surface 125 126
+create volume loft surface 126 127
+create volume loft surface 127 128
+create volume loft surface 128 129
+create volume loft surface 129 130
+create volume loft surface 130 131
+create volume loft surface 131 132
+create volume loft surface 132 133
+create volume loft surface 133 134
+create volume loft surface 134 135
+create volume loft surface 135 136
+create volume loft surface 136 137
+create volume loft surface 137 138
+create volume loft surface 138 139
+create volume loft surface 139 140
+create volume loft surface 140 141
+create volume loft surface 141 142
+create volume loft surface 142 143
+create volume loft surface 143 144
+create volume loft surface 144 145
+create volume loft surface 145 146
+create volume loft surface 146 147
+create volume loft surface 147 148
+create volume loft surface 148 149
+create volume loft surface 149 150
+create volume loft surface 150 151
+create volume loft surface 151 152
+create volume loft surface 152 153
+create volume loft surface 153 154
+create volume loft surface 154 155
+create volume loft surface 155 156
+create volume loft surface 156 157
+create volume loft surface 157 158
+create volume loft surface 158 159
+create volume loft surface 159 160
+create volume loft surface 160 161
+create volume loft surface 161 162
+create volume loft surface 162 163
+create volume loft surface 163 164
+create volume loft surface 164 165
+create volume loft surface 165 166
+create volume loft surface 166 167
+create volume loft surface 167 168
+create volume loft surface 168 169
+create volume loft surface 169 170
+create volume loft surface 170 171
+create volume loft surface 171 172
+create volume loft surface 172 173
+create volume loft surface 173 174
+create volume loft surface 174 175
+create volume loft surface 175 176
+create volume loft surface 176 177
+create volume loft surface 177 178
+create volume loft surface 178 179
+create volume loft surface 179 180
+create volume loft surface 180 181
+create volume loft surface 181 182
+create volume loft surface 182 183
+create volume loft surface 183 184
+create volume loft surface 184 185
+create volume loft surface 185 186
+create volume loft surface 186 187
+create volume loft surface 187 188
+create volume loft surface 188 189
+create volume loft surface 189 190
+create volume loft surface 190 191
+create volume loft surface 191 192
+create volume loft surface 192 193
+create volume loft surface 193 194
+create volume loft surface 194 195
+create volume loft surface 195 196
+create volume loft surface 196 197
+create volume loft surface 197 198
+create volume loft surface 198 199
+create volume loft surface 199 200
+create volume loft surface 200 201
+create volume loft surface 201 202
+create volume loft surface 202 203
+create volume loft surface 203 204
+create volume loft surface 204 205
+create volume loft surface 205 206
+create volume loft surface 206 207
+create volume loft surface 207 208
+create volume loft surface 208 209
+create volume loft surface 209 210
+create volume loft surface 210 211
+create volume loft surface 211 212
+create volume loft surface 212 213
+create volume loft surface 213 214
+create volume loft surface 214 215
+create volume loft surface 215 216
+create volume loft surface 216 217
+create volume loft surface 217 218
+create volume loft surface 218 219
+create volume loft surface 219 220
+create volume loft surface 220 221
+create volume loft surface 221 222
+create volume loft surface 222 223
+create volume loft surface 223 224
+create volume loft surface 224 225
+create volume loft surface 225 226
+create volume loft surface 226 227
+create volume loft surface 227 228
+create volume loft surface 228 229
+create volume loft surface 229 230
+create volume loft surface 230 231
+create volume loft surface 231 232
+create volume loft surface 232 233
+create volume loft surface 233 234
+create volume loft surface 234 235
+create volume loft surface 235 236
+create volume loft surface 236 237
+create volume loft surface 237 238
+create volume loft surface 238 239
+create volume loft surface 239 240
+create volume loft surface 240 241
+create volume loft surface 241 242
+create volume loft surface 242 243
+create volume loft surface 243 244
+create volume loft surface 244 245
+create volume loft surface 245 246
+create volume loft surface 246 247
+create volume loft surface 247 248
+create volume loft surface 248 249
+create volume loft surface 249 250
+create volume loft surface 250 251
+create volume loft surface 251 252
+create volume loft surface 252 253
+create volume loft surface 253 254
+create volume loft surface 254 255
+create volume loft surface 255 256
+create volume loft surface 256 257
+create volume loft surface 257 258
+create volume loft surface 258 259
+create volume loft surface 259 260
+create volume loft surface 260 261
+create volume loft surface 261 262
+create volume loft surface 262 263
+create volume loft surface 263 264
+create volume loft surface 264 265
+create volume loft surface 265 266
+create volume loft surface 266 267
+create volume loft surface 267 268
+create volume loft surface 268 269
+create volume loft surface 269 270
+create volume loft surface 270 271
+create volume loft surface 271 272
+create volume loft surface 272 273
+create volume loft surface 273 274
+create volume loft surface 274 275
+create volume loft surface 275 276
+create volume loft surface 276 277
+create volume loft surface 277 278
+create volume loft surface 278 279
+create volume loft surface 279 280
+create volume loft surface 280 281
+create volume loft surface 281 282
+create volume loft surface 282 283
+create volume loft surface 283 284
+create volume loft surface 284 285
+create volume loft surface 285 286
+create volume loft surface 286 287
+create volume loft surface 287 288
+create volume loft surface 288 289
+create volume loft surface 289 290
+create volume loft surface 290 291
+create volume loft surface 291 292
+create volume loft surface 292 293
+create volume loft surface 293 294
+create volume loft surface 294 295
+create volume loft surface 295 296
+create volume loft surface 296 297
+create volume loft surface 297 298
+create volume loft surface 298 299
+create volume loft surface 299 300
+create volume loft surface 300 301
+create volume loft surface 301 302
+create volume loft surface 302 303
+create volume loft surface 303 304
+create volume loft surface 304 305
+create volume loft surface 305 306
+create volume loft surface 306 307
+create volume loft surface 307 308
+create volume loft surface 308 309
+create volume loft surface 309 310
+create volume loft surface 310 311
+create volume loft surface 311 312
+create volume loft surface 312 313
+create volume loft surface 313 314
+create volume loft surface 314 315
+create volume loft surface 315 316
+create volume loft surface 316 317
+create volume loft surface 317 318
+create volume loft surface 318 319
+create volume loft surface 319 320
+create volume loft surface 320 321
+create volume loft surface 321 322
+create volume loft surface 322 323
+create volume loft surface 323 324
+create volume loft surface 324 325
+create volume loft surface 325 326
+create volume loft surface 326 327
+create volume loft surface 327 328
+create volume loft surface 328 329
+create volume loft surface 329 330
+create volume loft surface 330 331
+create volume loft surface 331 332
+create volume loft surface 332 333
+create volume loft surface 333 334
+create volume loft surface 334 335
+create volume loft surface 335 336
+create volume loft surface 336 337
+create volume loft surface 337 338
+create volume loft surface 338 339
+create volume loft surface 339 340
+create volume loft surface 340 341
+create volume loft surface 341 342
+create volume loft surface 342 343
+create volume loft surface 343 344
+create volume loft surface 344 345
+create volume loft surface 345 346
+create volume loft surface 346 347
+create volume loft surface 347 348
+create volume loft surface 348 349
+create volume loft surface 349 350
+create volume loft surface 350 351
+create volume loft surface 351 352
+create volume loft surface 352 353
+create volume loft surface 353 354
+create volume loft surface 354 355
+create volume loft surface 355 356
+create volume loft surface 356 357
+create volume loft surface 357 358
+create volume loft surface 358 359
+create volume loft surface 359 360
+create volume loft surface 360 361
+create volume loft surface 361 362
+create volume loft surface 362 363
+create volume loft surface 363 364
+create volume loft surface 364 365
+create volume loft surface 365 366
+create volume loft surface 366 367
+create volume loft surface 367 368
+create volume loft surface 368 369
+create volume loft surface 369 370
+create volume loft surface 370 371
+create volume loft surface 371 372
+create volume loft surface 372 373
+create volume loft surface 373 374
+create volume loft surface 374 375
+create volume loft surface 375 376
+create volume loft surface 376 377
+create volume loft surface 377 378
+create volume loft surface 378 379
+create volume loft surface 379 380
+create volume loft surface 380 381
+create volume loft surface 381 382
+create volume loft surface 382 383
+
+delete body 1 to 383
+imprint all
+merge all
+compress
+
+unite volume 1 to 56
+unite volume 57 to 326
+unite volume 327 to 382
+unite volume all
+
+
+#volume 1 scheme sweep
+volume 1 scheme tetmesh
+volume 1 size 6
+mesh volume all
+
+sideset 1 add surface 1
+sideset 1 name "source"
+
+sideset 2 add surface 765
+sideset 2 name "sink"
+
+sideset 3 add surface in volume 1
+sideset 3 remove surface 1 765
+sideset 3 name "boundary"
+
+block 1 add volume all
+block 1 name "coil"
