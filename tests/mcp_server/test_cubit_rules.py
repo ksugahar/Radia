@@ -196,9 +196,9 @@ class TestMissingStepReimport:
         findings = _run(check_missing_step_reimport, code)
         assert len(findings) >= 1
 
-    def test_allows_export_NGSolveCurvedMesh(self):
+    def test_allows_radia_export_netgen(self):
         code = (
-            'mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)\n'
+            'mesh = cubit.cmd("radia_export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_step_reimport, code) == []
 
@@ -229,7 +229,7 @@ class TestMissingBoundaryBlock:
     def test_detects_missing_surface_block(self):
         code = (
             'cubit.cmd("block 1 add tet all")\n'
-            'cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)\n'
+            'cubit.cmd("radia_export netgen output.vol order 2")\n'
         )
         findings = _run(check_missing_boundary_block, code)
         assert len(findings) == 1
@@ -238,7 +238,7 @@ class TestMissingBoundaryBlock:
         code = (
             'cubit.cmd("block 1 add tet all")\n'
             'cubit.cmd("block 2 add tri all")\n'
-            'cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=2)\n'
+            'cubit.cmd("radia_export netgen output.vol order 2")\n'
         )
         assert _run(check_missing_boundary_block, code) == []
 
@@ -256,7 +256,7 @@ class TestExportFileExtension:
 
 
 class TestCurveWithoutSetGeomInfo:
-    def test_detects_manual_curve_without_export_NGSolveCurvedMesh(self):
+    def test_detects_manual_curve_without_radia_export_netgen(self):
         code = (
             'mesh = Mesh("output.vol")\n'
             'mesh.Curve(3)\n'
@@ -264,9 +264,9 @@ class TestCurveWithoutSetGeomInfo:
         findings = _run(check_curve_without_setgeominfo, code)
         assert len(findings) == 1
 
-    def test_allows_export_NGSolveCurvedMesh(self):
+    def test_allows_radia_export_netgen(self):
         code = (
-            'mesh = cubit_mesh_export.export_NGSolveCurvedMesh(cubit, order=3)\n'
+            'cubit.cmd("radia_export netgen output.vol order 3")\n'
         )
         assert _run(check_curve_without_setgeominfo, code) == []
 
