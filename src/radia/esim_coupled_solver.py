@@ -84,38 +84,12 @@ class InductionHeatingCoil:
         self._create_analytical_model()
 
     def _create_coil(self):
-        """Create the coil using Radia's FastImp API."""
-        if self._rad is None:
-            return
+        """Legacy stub — CndSpiral/CndLoop APIs have been removed.
 
-        rad = self._rad
-
-        if self.coil_type == 'spiral':
-            self.handle = rad.CndSpiral(
-                self.params.get('center', [0, 0, 0]),
-                self.params.get('inner_radius', 0.02),
-                self.params.get('outer_radius', 0.05),
-                self.params.get('pitch', 0.005),
-                self.params.get('num_turns', 5),
-                self.params.get('axis', [0, 0, 1]),
-                self.params.get('cross_section', 'r'),
-                self.params.get('wire_width', 0.003),
-                self.params.get('wire_height', 0.002),
-                self.params.get('conductivity', 5.8e7),
-                self.params.get('num_panels_around', 8)
-            )
-        elif self.coil_type == 'loop':
-            self.handle = rad.CndLoop(
-                self.params.get('center', [0, 0, 0]),
-                self.params.get('radius', 0.05),
-                self.params.get('normal', [0, 0, 1]),
-                self.params.get('cross_section', 'r'),
-                self.params.get('wire_width', 0.003),
-                self.params.get('wire_height', 0.002),
-                self.params.get('conductivity', 5.8e7),
-                self.params.get('num_panels_around', 8),
-                self.params.get('num_panels_loop', 36)
-            )
+        Coil field is computed via the analytical model (_create_analytical_model).
+        This method is never called (self._rad is always None).
+        """
+        pass
 
     def _create_analytical_model(self):
         """Create analytical coil model for testing without radia."""

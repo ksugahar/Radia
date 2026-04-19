@@ -619,26 +619,13 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
     >>> # Create Radia objects with mu_r=1000
     >>> core = cubit_hex_to_radia(hex_elements, mu_r=1000)
 
-    Usage with CplMag solver:
-
-    >>> # Create coil
-    >>> coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r', 2e-3, 2e-3, 5.8e7, 8, 36)
-    >>>
-    >>> # Create multi-element core from Cubit mesh
-    >>> core = cubit_hex_to_radia(hex_elements, mu_r=1000)
-    >>>
-    >>> # Solve coupled system
-    >>> solver = rad.CplMagCreate(coil, core)
-    >>> rad.CplMagSetFrequency(solver, 1000)
-    >>> rad.CplMagSetMu(solver, 1000, 0)
-    >>> result = rad.CplMagSolve(solver)
-
     Notes
     -----
     - All coordinates must be in meters
     - Vertices should follow standard hexahedron numbering convention
-    - For CplMag, use with ObjCnt container (combine=True)
     - Multi-element meshes enable proper MMM demagnetization coupling
+    - Legacy CplMag APIs (CndLoop, CplMagCreate, etc.) have been removed.
+      Use PEECBuilder + CoupledPEECSolver instead.
 
     See Also
     --------
