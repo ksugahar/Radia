@@ -1,6 +1,6 @@
 # Radia Documentation
 
-**Version:** 2.3.0
+**Version:** 4.6.0
 
 ## API Reference
 
@@ -15,10 +15,14 @@
 - [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
 
+## Kelvin Transformation
+
+- [KELVIN_TRANSFORMATION.md](kelvin/KELVIN_TRANSFORMATION.md) - Theory, API, workflow, and references for open boundary magnetostatics
+
 ## PEEC (Partial Element Equivalent Circuit)
 
 - [PEEC_PANEL_IMPLEMENTATION.md](peec/PEEC_PANEL_IMPLEMENTATION.md) - Panel-based 2D surface integration implementation
-- [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling guide and implementation plan
+- [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling: filament model via `coil_from_cad.py`
 - [PEEC_MSC_COUPLING.md](peec/PEEC_MSC_COUPLING.md) - PEEC conductor + MSC magnetic material coupled solver
 - [PEEC_SHIELD_CONDUCTOR.md](peec/PEEC_SHIELD_CONDUCTOR.md) - Shield conductor modeling (`peec_shield.py`)
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
@@ -27,13 +31,16 @@
 
 ## Visualization
 
-- [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows for GMSH, Netgen, and Cubit
+- [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
 
 ## Cubit Mesh Export
 
-- [Function_Reference.md](cubit/Function_Reference.md) - Function reference index for the radia Cubit plugin and `radia_cubit_mesh` module
+- [Function_Reference.md](cubit/Function_Reference.md) - All plugin commands and Python API reference
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
-- [export_Gmsh.md](cubit/export_Gmsh.md) - Export to Gmsh format
-- [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Export Cubit mesh to Netgen with high-order curving support
-- [export_Nastran.md](cubit/export_Nastran.md) - Export to NX Nastran bulk data format
-- [export_exodus.md](cubit/export_exodus.md) - Export to Exodus II format
+- [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
+- [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.1 export (order 1-3)
+- [export_Nastran.md](cubit/export_Nastran.md) - Nastran BDF export (order 1-2)
+- [export_vtk.md](cubit/export_vtk.md) - VTK Legacy export (order 1-2)
+- [export_meg.md](cubit/export_meg.md) - ELF/MAGIC MEG export
+- [export_femeem.md](cubit/export_femeem.md) - FEMEEM format export (Gifu Univ.)
+- [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)
