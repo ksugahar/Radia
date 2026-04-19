@@ -1,15 +1,15 @@
-# Mesh Guide: GMSH, Netgen, and Cubit Workflows for Radia
+# Mesh Guide: Cubit and Netgen Workflows for Radia
 
 ## Overview
 
-This guide consolidates the mesh generation workflows for Radia, covering GMSH, Netgen, and Coreform Cubit. It explains mesh types, surface elements, the SetGeomInfo API for high-order curving, and troubleshooting procedures.
+This guide consolidates the mesh generation workflows for Radia. All mesh generation uses Coreform Cubit. The only input format for NGSolve/Radia is Netgen `.vol` (via `radia_export netgen`). GMSH is used for visualization only.
 
 ```
 +-----------------------------------------------------------------+
 |                    CAD -> Mesh -> Radia Workflow                 |
 +-----------------------------------------------------------------+
 |                                                                  |
-|  CAD (STEP/IGES) -> GMSH / Netgen / Cubit -> Mesh -> Radia      |
+|  CAD (STEP/IGES) -> Cubit -> radia_export netgen -> .vol -> Radia|
 |                                                                  |
 |  Mesh types by application:                                      |
 |    - Magnetic materials (MMM/MSC): Volume mesh (Tet4, Hex8)      |
@@ -18,7 +18,7 @@ This guide consolidates the mesh generation workflows for Radia, covering GMSH, 
 |  Mesh file formats:                                              |
 |    - GMSH:   .msh -> NGSolve -> Radia                            |
 |    - Netgen:  .vol -> NGSolve -> Radia                            |
-|    - Cubit:  radia_cubit_mesh.extract_curved_mesh() -> NGSolve -> Radia       |
+|    - Cubit:  radia_export netgen -> NGSolve -> Radia       |
 |                                                                  |
 +-----------------------------------------------------------------+
 ```
@@ -76,7 +76,7 @@ In every standard mesh-generation workflow surface elements are created automati
 |----------|-----------------|--------|
 | **Netgen direct** (`geo.GenerateMesh()`) | Auto | Boundary mesh generated automatically |
 | **NGSolve `Mesh()`** | Auto | STEP/OCC import recognises boundaries |
-| **Cubit -> `radia_cubit_mesh.extract_curved_mesh()`** | Auto | Cubit sidesets are converted to boundary elements |
+| **Cubit -> `radia_export netgen`** | Auto | Cubit sidesets are converted to boundary elements |
 | **GMSH -> NGSolve** | Auto | `.msh` files include boundary elements |
 
 **In short, normal mesh generation requires no extra steps.**
@@ -109,157 +109,112 @@ All NGSolve sample `.vol` files display correctly in the Netgen GUI.
 
 ---
 
-## 2. GMSH Workflows
+## 2. Cubit Export Workflows
+
+All mesh generation uses Coreform Cubit. The **only** input format for NGSolve/Radia is Netgen `.vol`.
+GMSH `.msh` is used only for visualization output (not as input to NGSolve).
 
 ### 2.1 Workflow 1: Magnetic Material (Volume Mesh)
 
-#### Loading from CAD File
+#### Cubit -> .vol -> Radia
 
 ```python
-import gmsh
+import cubit
 from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
+from radia.netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
 
-# GMSH initialization
-gmsh.initialize()
-gmsh.option.setNumber("General.Terminal", 1)
-gmsh.model.add("magnetic_core")
+# Cubit initialization
+cubit.init(['cubit', '-nojournal', '-batch'])
 
-# CAD file loading (supports STEP, IGES, BREP, STL)
-gmsh.merge("core.step")
-gmsh.model.geo.synchronize()
+# CAD file loading
+cubit.cmd('import step "core.step" heal')
 
-# Mesh size settings
-gmsh.option.setNumber("Mesh.CharacteristicLengthMin", 0.002)
-gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.005)
+# Mesh generation
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 0.005")
+cubit.cmd("mesh volume all")
 
-# Physical group definition (important!)
-volumes = gmsh.model.getEntities(3)
-if volumes:
-    volume_tags = [v[1] for v in volumes]
-    gmsh.model.addPhysicalGroup(3, volume_tags, 1)
-    gmsh.model.setPhysicalName(3, 1, "core")
+# Block definition (becomes material label in .vol)
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "core"')
 
-# Volume mesh generation
-gmsh.model.mesh.generate(3)  # 3D volume mesh
+# Export to .vol (order 3 curved)
+cubit.cmd('radia_export netgen "core.vol" order 3 overwrite')
 
-# Export
-gmsh.write('core.msh')
-gmsh.finalize()
-
-# Convert to Radia via NGSolve
-mesh = Mesh('core.msh')
+# Load in NGSolve -> Radia
+mesh = Mesh("core.vol")
 mag_obj = netgen_mesh_to_radia(mesh,
                                 material={'magnetization': [0, 0, 0]},
                                 units='m',
                                 material_filter='core')
 
-# Apply material
+# Apply material and solve
 mat = rad.MatLin(1000)  # mu_r = 1000
 rad.MatApl(mag_obj, mat)
-
-# Solve
 rad.Solve(mag_obj, 0.0001, 1000, 1)
 ```
 
 ### 2.2 Workflow 2: Conductor (Surface Mesh / PEEC)
 
-#### Coil Surface Mesh Generation
+For PEEC conductor analysis, Cubit generates the surface mesh and exports via `.vol`.
+The BEM solver uses BND elements only; volume elements are ignored.
 
 ```python
-import gmsh
+# Cubit surface mesh for PEEC
+cubit.cmd('import step "coil.step" heal')
+cubit.cmd("volume 1 scheme tetmesh")
+cubit.cmd("volume 1 size 0.001")
+cubit.cmd("mesh volume 1")
+
+cubit.cmd("block 1 add volume 1")
+cubit.cmd('block 1 name "coil"')
+
+# Terminal faces: sidesets -> boundary labels in .vol
+cubit.cmd("sideset 1 add surface 3")
+cubit.cmd('sideset 1 name "source"')
+cubit.cmd("sideset 2 add surface 5")
+cubit.cmd('sideset 2 name "sink"')
+
+cubit.cmd('radia_export netgen "coil.vol" order 2 overwrite')
+```
+
+For simple coils without surface mesh, use analytical current sources:
+
+```python
 import numpy as np
 
-gmsh.initialize()
-gmsh.model.add("coil_surface")
-
-# Define coil cross-section (rectangular) in XZ plane
-r_inner = 0.048  # m
-r_outer = 0.052  # m
-z_bottom = -0.001  # m
-z_top = 0.001  # m
-
-p1 = gmsh.model.geo.addPoint(r_inner, 0, z_bottom)
-p2 = gmsh.model.geo.addPoint(r_outer, 0, z_bottom)
-p3 = gmsh.model.geo.addPoint(r_outer, 0, z_top)
-p4 = gmsh.model.geo.addPoint(r_inner, 0, z_top)
-
-l1 = gmsh.model.geo.addLine(p1, p2)
-l2 = gmsh.model.geo.addLine(p2, p3)
-l3 = gmsh.model.geo.addLine(p3, p4)
-l4 = gmsh.model.geo.addLine(p4, p1)
-
-loop = gmsh.model.geo.addCurveLoop([l1, l2, l3, l4])
-surf = gmsh.model.geo.addPlaneSurface([loop])
-
-# Revolve around Z axis (generate full coil surface)
-gmsh.model.geo.revolve(
-    [(2, surf)],
-    0, 0, 0,  # Rotation axis origin
-    0, 0, 1,  # Rotation axis direction (Z)
-    2 * np.pi  # Angle (full revolution)
-)
-
-gmsh.model.geo.synchronize()
-
-# Mesh size
-gmsh.option.setNumber("Mesh.CharacteristicLengthMin", 0.0005)
-gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.001)
-
-# Physical group (surface only!)
-surfaces = gmsh.model.getEntities(2)
-surface_tags = [s[1] for s in surfaces]
-gmsh.model.addPhysicalGroup(2, surface_tags, 1)
-gmsh.model.setPhysicalName(2, 1, "conductor")
-
-# Generate surface mesh only (dim=2)
-gmsh.model.mesh.generate(2)  # Surface mesh ONLY
-
-# Verify: confirm no volume elements exist
-vol_elements = gmsh.model.mesh.getElements(3)
-if vol_elements[1] and any(len(e) > 0 for e in vol_elements[1]):
-    print("WARNING: Volume elements found - PEEC only needs surface!")
-
-gmsh.write('coil_surface.msh')
-gmsh.finalize()
-
-# PEEC conversion (future API)
-# from peec_mesh_import import surface_mesh_to_peec
-# conductor = surface_mesh_to_peec(mesh, sigma=5.8e7)
+# Circular coil: R=50mm, 1mm cross-section, J=1e6 A/m^2
+coil = rad.ObjArcCur([0, 0, 0], [0.0495, 0.0505],
+                     [-np.pi, np.pi], 0.001, 100, 1e6)
 ```
 
-**Current workaround**:
-
-```python
-# For simple shapes, use CndLoop
-coil = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r',
-                   0.002, 0.002, 5.8e7, 8, 36)
-```
-
-### 2.3 Workflow 3: Combined Model (Magnetic Material + Conductor)
+### 2.3 Workflow 3: Combined Model (Magnetic Material + Coil)
 
 #### Example: Electromagnet (Iron Core + Coil)
 
 ```python
-import gmsh
+import cubit
+import numpy as np
 from ngsolve import Mesh
-from netgen_mesh_import import netgen_mesh_to_radia
+from radia.netgen_mesh_import import netgen_mesh_to_radia
 import radia as rad
 
-# ===============================
-# 1. Iron Core (Volume Mesh)
-# ===============================
-gmsh.initialize()
-gmsh.model.add("core")
-gmsh.merge("core.step")  # Load CAD
+rad.UtiDelAll()
 
-# Volume mesh
-gmsh.model.mesh.generate(3)
-gmsh.write('core.msh')
-gmsh.finalize()
+# ===============================
+# 1. Iron Core (Volume Mesh via Cubit)
+# ===============================
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd('import step "core.step" heal')
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 0.005")
+cubit.cmd("mesh volume all")
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "core"')
+cubit.cmd('radia_export netgen "core.vol" order 3 overwrite')
 
-mesh_core = Mesh('core.msh')
+mesh_core = Mesh("core.vol")
 core_obj = netgen_mesh_to_radia(mesh_core,
                                  material={'magnetization': [0, 0, 0]},
                                  units='m')
@@ -267,16 +222,10 @@ mat_iron = rad.MatLin(1000)
 rad.MatApl(core_obj, mat_iron)
 
 # ===============================
-# 2. Coil (Surface Mesh or Analytical Shape)
+# 2. Coil (Analytical Source)
 # ===============================
-# Current approach: Use CndLoop (simple coil)
-coil_obj = rad.CndLoop([0, 0, 0], 0.05, [0, 0, 1], 'r',
-                       0.002, 0.002, 5.8e7, 8, 36)
-
-# Future: PEEC conversion from GMSH surface mesh
-# gmsh.initialize()
-# ... (coil surface mesh generation)
-# coil_obj = surface_mesh_to_peec(mesh_coil, sigma=5.8e7)
+coil_obj = rad.ObjArcCur([0, 0, 0], [0.0495, 0.0505],
+                         [-np.pi, np.pi], 0.001, 100, 1e6)
 
 # ===============================
 # 3. Combine and Solve
@@ -324,45 +273,36 @@ Element2d.SetGeomInfo(vertex_index, u, v, trignum=0)
 ### 3.4 Code Example
 
 ```python
-import radia_cubit_mesh
-from netgen.occ import OCCGeometry, Box, Cylinder, gp_Pnt, gp_Ax2, gp_Dir
+import cubit
 from ngsolve import Mesh
 
-# 1. Create geometry in OCC
-brick = Box(gp_Pnt(-1,-1,-1), gp_Pnt(1,1,1))
-cyl = Cylinder(gp_Ax2(gp_Pnt(0,0,-2), gp_Dir(0,0,1)), 0.3, 4)
-shape = brick - cyl
+cubit.init(['cubit', '-nojournal', '-batch'])
 
-# 2. Name faces (critical for correct mapping!)
-# NOTE: name_occ_faces() does not exist in radia_cubit_mesh; face naming
-#       is handled internally by radia_cubit_mesh.extract_curved_mesh().
+# 1. Import geometry into Cubit
+cubit.cmd('import step "geometry.step" heal')
 
-# 3. Export STEP
-shape.WriteStep("geometry.step")
+# 2. Mesh
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 0.15")
+cubit.cmd("mesh volume all")
+cubit.cmd("block 1 add volume all")
 
-# 4. Load geometry reference
-geo = OCCGeometry("geometry.step")
+# 3. Export with high-order curving (NetgenCurver + ACIS projection)
+cubit.cmd('radia_export netgen "mesh.vol" order 2 overwrite')
 
-# 5. Import into Cubit and mesh (Cubit commands)
-# cubit.cmd('import step "geometry.step" noheal')
-# cubit.cmd("volume all scheme tetmesh")
-# cubit.cmd("volume all size 0.15")
-# cubit.cmd("mesh volume all")
-
-# 6. Export with name-based mapping
-ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
-
-# 7. High-order curving (extract_curved_mesh handles SetGeomInfo automatically)
-ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
-mesh = Mesh(ngmesh)
+# 4. Load in NGSolve — high-order nodes embedded in .vol
+mesh = Mesh("mesh.vol")
 ```
 
 ### 3.5 Automatic Curving
 
-Use `radia_cubit_mesh.extract_curved_mesh()` which handles SetGeomInfo automatically:
+`radia_export netgen` handles all high-order curving automatically via
+NetgenCurver + ACIS CallbackGeometry. No SetGeomInfo, no STEP file, no
+`mesh.Curve()` call needed:
 
 ```python
-ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
+mesh = Mesh("mesh.vol")  # already curved to order 3
 ```
 
 ### 3.6 Accuracy Results
@@ -493,11 +433,11 @@ mesh.ngmesh.Save('with_surface.vol')
 
 ### 4.9 Cubit Meshes and Surface Elements
 
-When you define a **sideset** in Cubit and export via `radia_cubit_mesh.extract_curved_mesh()`, the sideset surfaces become surface elements:
+When you define a **sideset** in Cubit and export via `radia_export netgen`, the sideset surfaces become surface elements:
 
 ```python
 import cubit
-import radia_cubit_mesh
+import cubit
 from ngsolve import Mesh
 from netgen.gui import StartGUI
 
@@ -506,14 +446,15 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 cubit.cmd("import step 'model.step'")
 cubit.cmd("volume all scheme tetmesh")
 cubit.cmd("mesh volume all")
+cubit.cmd("block 1 add volume all")
 
-# Define sidesets (these become surface elements)
+# Define sidesets (these become boundary labels)
 cubit.cmd("sideset 1 surface all")
 cubit.cmd("sideset 1 name 'boundary'")
 
-# Export to Netgen (surface elements included)
-ngmesh = radia_cubit_mesh.extract_curved_mesh()
-mesh = Mesh(ngmesh)
+# Export to Netgen .vol
+cubit.cmd('radia_export netgen "model.vol" order 2 overwrite')
+mesh = Mesh("model.vol")
 
 # Verify
 print(f"Volume elements:  {mesh.ngmesh.ne}")
@@ -623,7 +564,7 @@ mesh.Save('test.vol')
 |------|------|--------|----------------|
 | **CAD Import** | STEP/IGES direct | STEP/OCC | STEP/IGES direct |
 | **License** | Open source | Open source | Commercial |
-| **NGSolve Integration** | Direct .msh import | Native | `radia_cubit_mesh.extract_curved_mesh()` |
+| **NGSolve Integration** | Direct .msh import | Native | `radia_export netgen` |
 | **2D/Axisymmetric** | Supported | 3D only recommended | Supported |
 | **Surface Mesh** | `generate(2)` | Auto-generated | Auto via sideset |
 | **Volume Mesh** | Tet/Hex supported | Tet (Hex via external tools) | Tet/Hex supported |
@@ -632,18 +573,17 @@ mesh.Save('test.vol')
 | **Visualization** | GMSH GUI | Netgen GUI | Cubit GUI |
 
 **Recommended**:
-- **Standard workflow**: GMSH (CAD import, surface mesh, NGSolve integration)
-- **Simple shapes**: Netgen OCC (code generation, automatic meshing)
-- **High-quality Hex / High-order curving**: Coreform Cubit + SetGeomInfo API
+- **All mesh generation**: Coreform Cubit (tet, hex, wedge, pyramid, boundary layers)
+- **High-order curving**: `radia_export netgen` (order 1-5 via ACIS CallbackGeometry)
+- **Simple test geometries**: Netgen OCC (code generation, automatic meshing)
+- **GMSH**: Visualization only (not mesh generation). Use `radia_export gmsh` for export.
 
-### Choosing Between GMSH and Netgen
+### GMSH Role in Radia
 
-| Use Case | Tool |
-|------|--------|
-| **CAD file import** | GMSH (supports more formats) |
-| **Simple shapes (OCC)** | Netgen (concise code generation) |
-| **Surface mesh only** | GMSH (explicit with `generate(2)`) |
-| **High-quality Tet mesh** | Netgen (better mesh quality) |
+GMSH is used **only** for visualization and post-processing:
+- View mesh exported via `radia_export gmsh "mesh.msh"`
+- View field results exported via `GmshPostExport.write("results.msh")`
+- GMSH is NOT used for mesh generation (GmshBuilder was removed)
 
 ---
 
@@ -662,19 +602,7 @@ mesh.Save('test.vol')
 
 ### Q2: Can GMSH generate hexahedral meshes?
 
-**A: Only in limited cases.**
-
-- **Tet (tetrahedron)**: Fully automatic generation
-- **Hex (hexahedron)**: Structured grid only
-- **Hex for complex shapes**: Coreform Cubit recommended
-
-**GMSH Hex mesh generation method**:
-```python
-# Structured grid (block shapes only)
-gmsh.model.mesh.setTransfiniteSurface(surf_tag)
-gmsh.model.mesh.setTransfiniteVolume(vol_tag)
-gmsh.model.mesh.setRecombine(3, vol_tag)
-```
+**A: GMSH is not used for mesh generation in Radia.** Use Coreform Cubit for all mesh generation, including hex meshing. Cubit supports `scheme map`, `scheme sweep`, `scheme tetmesh`, boundary layers, and webcut decomposition for complex geometries.
 
 ### Q3: Surface elements are always required?
 
@@ -682,7 +610,7 @@ gmsh.model.mesh.setRecombine(3, vol_tag)
 
 ### Q4: What if `mesh.Curve(order)` fails on an imported mesh?
 
-**A:** This happens because UV parametric coordinates (geominfo) are not set for externally imported meshes. Use the `SetGeomInfo` API (Section 3) to set these coordinates programmatically, or use the `radia_cubit_mesh` helper functions for standard geometric shapes.
+**A:** Use `radia_export netgen "mesh.vol" order N` which handles high-order curving automatically via NetgenCurver + ACIS CallbackGeometry. No `mesh.Curve()` call or SetGeomInfo API needed.
 
 ---
 
@@ -700,26 +628,27 @@ gmsh.model.mesh.setRecombine(3, vol_tag)
 
 ```
 Magnetic materials (permanent magnets / iron cores):
-  CAD -> GMSH -> Volume mesh (.msh) -> NGSolve -> Radia (MMM/MSC)
+  CAD -> Cubit -> radia_export netgen "mesh.vol" -> NGSolve Mesh() -> netgen_mesh_to_radia()
 
 Conductors (coils / shields):
-  CAD -> GMSH -> Surface mesh (.msh) -> (Future: PEEC conversion)
-  Current approach: rad.CndLoop() as alternative
+  Analytical: rad.ObjArcCur(), rad.ObjRaceTrk(), rad.ObjFlmCur()
+  PEEC: CAD -> Cubit -> radia_export netgen "coil.vol" -> PEEC solver
 
 Combined model (electromagnets, etc.):
-  Magnetic material + Conductor -> rad.ObjCnt() -> rad.Solve()
+  Iron mesh + Coil source -> rad.ObjCnt() -> rad.Solve()
 
 High-order curving (Cubit):
-  OCC -> STEP -> Cubit -> radia_cubit_mesh.extract_curved_mesh() -> SetGeomInfo -> mesh.Curve(order)
+  CAD -> Cubit -> radia_export netgen "mesh.vol" order N -> Mesh("mesh.vol")
+  (NetgenCurver + ACIS projection, no mesh.Curve() needed)
 ```
 
 ### Key Points
 
-1. **GMSH standard**: CAD import, open source, NGSolve integration
-2. **Mesh types**: Magnetic material = volume, Conductor = surface
-3. **Surface mesh only**: PEEC does not require volume mesh
-4. **Via NGSolve**: Seamless `.msh` file import
-5. **High-order curving**: SetGeomInfo API enables Curve() for external meshes
+1. **Cubit**: All mesh generation (tet, hex, wedge, pyramid, BL)
+2. **Mesh types**: Magnetic material = volume, Conductor = surface (PEEC) or analytical
+3. **Input format**: `.vol` is the only input to NGSolve/Radia
+4. **High-order curving**: Automatic via `radia_export netgen` + NetgenCurver + ACIS
+5. **GMSH**: Visualization only (view mesh via `radia_export gmsh`, view fields via `GmshPostExport`)
 
 ### External Links
 
