@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <iosfwd>
 #include <memory>
 #include <cstdint>
@@ -236,6 +237,19 @@ private:
   // that can jump to the wrong surface branch on thin wire cross-sections.
   // Key = cubit_sid. Each row = (x, y, z, u, v).
   std::unordered_map<int, std::vector<std::array<double,5>>> surf_vertex_uvs_;
+
+  // Polar (singular) surfaces: those with at least one singular pole on the
+  // underlying parametric surface (RefFace::num_poles() > 0) AND a planar
+  // trim — the classic wire-terminal end-cap geometry where the parameter
+  // space has a radial center that maps to a single 3D point ("center UV
+  // arbitrary"). On these faces `closest_point_uv_guess` degenerates: the
+  // Newton step cannot distinguish the true UV from a boundary-clamped one,
+  // and displacements of wire-diameter magnitude appear (observed: 61 mm on
+  // 3turnCoil's disk surf 1). Planar disks need no high-order curving in
+  // the first place, so we short-circuit the callback to identity on them.
+  // Populated in Phase1 from rf_cache.
+  std::unordered_set<int> polar_surfaces_;
+  mutable long diag_polar_skips_ = 0;
 
   // Per-surface axis-aligned bounding box derived from that surface's mesh
   // vertices plus a pad of ~1 wire-thickness.  Used by project() to reject
