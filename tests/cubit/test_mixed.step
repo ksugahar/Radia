@@ -1,7 +1,7 @@
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('STEP AP214'),'1');
-FILE_NAME('test_mixed.step','2026-04-12T14:47:29',('Cubit 2025.3'),(' '),'Spatial InterOp 3D',' ',' ');
+FILE_NAME('test_mixed.step','2026-04-17T11:30:15',('Cubit 2025.3'),(' '),'Spatial InterOp 3D',' ',' ');
 FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));
 ENDSEC;
 DATA;
