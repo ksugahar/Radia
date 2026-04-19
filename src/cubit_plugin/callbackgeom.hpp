@@ -28,9 +28,16 @@ namespace netgen
     //   between_edge:      (surfnr1, surfnr2, dist1, dist2, secpoint) -> (x, y, z)
     //                      [optional; arc-length parametric midpoint on curve,
     //                       preferred over project_edge when distances are known]
+    // NOTE: `has_hint` distinguishes "caller supplied an interpolated UV"
+    // (has_hint=true, use closest_point_uv_guess) from "caller has no UV
+    // and expects a global projection" (has_hint=false, use
+    // closest_point_trimmed).  This is necessary because a valid UV hint
+    // can legally be (0, 0) — e.g., a vertex sitting exactly at the
+    // parameter-space origin — which the older (u_hint, v_hint) !=
+    // (0, 0) discrimination incorrectly routed to the no-hint path.
     using ProjectFunc = std::function<std::tuple<double,double,double,double,double>
                                       (int surfnr, double x, double y, double z,
-                                       double u_hint, double v_hint)>;
+                                       double u_hint, double v_hint, bool has_hint)>;
     using NormalFunc = std::function<std::tuple<double,double,double>
                                     (int surfnr, double x, double y, double z)>;
     using TangentFunc = std::function<std::tuple<double,double,double>
