@@ -79,6 +79,12 @@ block 2 name "air"
 sideset 1 add surface in volume {wp_vid}
 sideset 1 name "sibc"
 
+# Coil outer surface for calc_fem_coilmesh (coil SIBC + K_phi source).
+# Closed torus has no gap faces, so the whole coil boundary is the
+# imposed-current surface.
+sideset 2 add surface in volume {coil_vid}
+sideset 2 name "coil_surface"
+
 volume {air_top} {air_bot} visibility off
 
 # === Next step: Kelvin + export ==============================================
