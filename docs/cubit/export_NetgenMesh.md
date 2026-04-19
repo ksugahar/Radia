@@ -76,6 +76,38 @@ Measured on a sphere mesh (tet):
 | 3     | ~1e-5%      |
 | 5     | ~1e-8%      |
 
+## Geometry Caveats for High Accuracy
+
+### Avoid `unite volume all` on coil-like swept assemblies
+
+For geometries built from many swept/lofted segments that share wire-shaped
+cross-sections (e.g. multi-turn coils, helical bundles), **do not run
+`unite volume all` before export**. The unite step merges end-cap disks at
+shared terminals and introduces a polar-NURBS face whose parameter center
+is singular (all UVs at one radial coordinate map to a single 3D point).
+This degenerate parameterization causes the projection callback to produce
+large displacement spikes (~wire diameter) that pollute neighboring
+curved-tet mid-edge nodes.
+
+Observed on a 3-turn coil (382 loft segments, wire ø6.3 mm, mesh size 6):
+
+| Workflow | p=2 volume error | Projection rejects | max node disp |
+|---|---|---|---|
+| `unite volume all` before export | −0.67% | 10,115 | 61.4 mm (disk) |
+| No `unite`, 382 independent volumes | **−0.31%** | 751 | 3.64 mm |
+
+**Recommended**: mesh each lofted body independently and let the `.vol`
+export preserve multi-volume topology. Downstream solvers (NGSolve, Kelvin)
+handle multi-domain meshes natively; there is no accuracy penalty from
+keeping volumes split, and the curving quality is nearly 2× better.
+
+### Keep mesh size smaller than local feature size
+
+For a wire-like cross-section with diameter `d`, pick tet size `≲ d / 2`
+so that mesh triangles do not straddle the full cross-section. When
+`mesh_size ≈ d` (e.g. `size 6` on ø6.3 mm wire), interior tet midpoints
+land inside the volume and the surface projection becomes ill-conditioned.
+
 ## Supported Elements
 
 ### Volume Elements

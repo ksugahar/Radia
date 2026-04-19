@@ -1563,3 +1563,6 @@ sideset 3 name "boundary"
 
 block 1 add volume all
 block 1 name "coil"
+
+export step "3turnCoil.stp" overwrite
+radia_export netgen "3turnCoil.vol" order 2 overwrite
