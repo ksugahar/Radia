@@ -559,9 +559,9 @@ bool NetgenCurver::attach_callback_geometry()
   }
   project_reject_log_entries_.clear();
 
-  // Project callback: (surfnr, x,y,z, u_hint, v_hint) -> (xp,yp,zp, u,v)
+  // Project callback: (surfnr, x,y,z, u_hint, v_hint, has_hint) -> (xp,yp,zp, u,v)
   auto project = [this](int surfnr, double x, double y, double z,
-                         double u_hint, double v_hint)
+                         double u_hint, double v_hint, bool has_hint)
     -> std::tuple<double,double,double,double,double>
   {
     diag_project_calls_++;
@@ -595,7 +595,7 @@ bool NetgenCurver::attach_callback_geometry()
     // midpoint offsets.  Keep the closest_point search but trust the
     // UV-hinted result unconditionally.
     double u, v;
-    if (u_hint != 0.0 || v_hint != 0.0) {
+    if (has_hint) {
       u = u_hint;
       v = v_hint;
       CubitStatus stat = surf->closest_point_uv_guess(loc, u, v, &closest, nullptr);
