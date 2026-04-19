@@ -91,20 +91,38 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
                                          Point<3> & newp,
                                          EdgePointGeomInfo & newgi) const
 {
-  // Linear interpolation, then project onto edge (curve)
-  newp = p1 + secpoint * (p2 - p1);
+  bool placed = false;
 
-  if (edge_project_func && surfi1 >= 0 && surfi2 >= 0) {
-    // Direct edge/curve projection (surfi1/2 are 0-based from BuildCurvedElements)
-    auto [xp, yp, zp] = edge_project_func(surfi1 + 1, surfi2 + 1, newp[0], newp[1], newp[2]);
+  // Preferred path: arc-length parametric midpoint on the shared curve,
+  // derived by the callback from the segment's 3D endpoints. This avoids
+  // closest_point_trimmed jumping to the wrong segment on wavy curves where
+  // the linear midpoint sits nearer to a different part of the curve than
+  // the true arc midpoint.
+  if (between_edge_func && surfi1 >= 0 && surfi2 >= 0) {
+    auto [xp, yp, zp] = between_edge_func(surfi1 + 1, surfi2 + 1,
+                                             p1[0], p1[1], p1[2],
+                                             p2[0], p2[1], p2[2],
+                                             secpoint);
     newp = Point<3>(xp, yp, zp);
-  } else if (project_func && surfi1 >= 0) {
-    // Fallback: project onto first surface
-    auto [xp, yp, zp, u, v] = project_func(surfi1, newp[0], newp[1], newp[2],
-                                             0.5*(ap1.u + ap2.u),
-                                             0.5*(ap1.v + ap2.v));
-    newp = Point<3>(xp, yp, zp);
+    placed = true;
   }
+
+  if (!placed) {
+    // Linear midpoint then project (legacy path)
+    newp = p1 + secpoint * (p2 - p1);
+    if (edge_project_func && surfi1 >= 0 && surfi2 >= 0) {
+      // Direct edge/curve projection (surfi1/2 are 0-based from BuildCurvedElements)
+      auto [xp, yp, zp] = edge_project_func(surfi1 + 1, surfi2 + 1, newp[0], newp[1], newp[2]);
+      newp = Point<3>(xp, yp, zp);
+    } else if (project_func && surfi1 >= 0) {
+      // Fallback: project onto first surface
+      auto [xp, yp, zp, u, v] = project_func(surfi1, newp[0], newp[1], newp[2],
+                                               0.5*(ap1.u + ap2.u),
+                                               0.5*(ap1.v + ap2.v));
+      newp = Point<3>(xp, yp, zp);
+    }
+  }
+
   // Get UV on surfi1
   if (project_func && surfi1 >= 0) {
     auto [xf, yf, zf, uf, vf] = project_func(surfi1, newp[0], newp[1], newp[2], 0, 0);
