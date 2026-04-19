@@ -1,0 +1,116 @@
+# Contributing to radia-mcp
+
+`radia-mcp` is the Sugawara Lab (菅原研究室) MCP suite for the Radia
+CAE ecosystem. Contributions are welcome — particularly in the
+directions outlined below — but the lab maintains the architectural
+conventions described in [README.md](README.md), so please skim that
+first.
+
+## Quick orientation
+
+- **Python ≥ 3.10**, pure-Python except for OCCT (via build123d),
+  gmsh, and the optional Radia core wheel.
+- Source layout:
+  ```
+  packages/radia-mcp/
+    src/radia_mcp/
+      cubit/          — mcp-server-cubit (52 tools)
+      build123d/      — mcp-server-build123d (37 tools)
+      gmsh_post/      — mcp-server-gmsh-post (21 tools)
+      interop/        — mcp-server-radia-interop (4 tools)
+      common/         — failure_log, web_docs, examples (scrape index)
+    pyproject.toml    — entry points + extras
+    CHANGELOG.md      — append a release entry
+  ```
+- Each MCP tool is a `@mcp.tool()` function with a docstring (the
+  docstring becomes the tool description LLMs see — write it for
+  AI consumers, not for humans).
+- The `cubit_session` Plan A architecture (PyQt5 QTimer + file-drop
+  IPC, no sockets) is non-negotiable for the live-Cubit path; if you
+  need a different transport, justify it in the PR description.
+
+## High-value contribution areas
+
+### 1. New CAD-MCP adapters in `radia_mcp.interop.server`
+
+Pattern: take an upstream CAD tool's script or export, produce a STEP
+file, hand to `any_step_to_cubit_hex`. See `freecad_to_cubit_hex` and
+`openscad_to_cubit_hex` for the template. Targets without adapters yet:
+Blender, Onshape, KiCad, AutoCAD, SolidWorks. Each adds about 80 lines.
+
+### 2. New scrape sub-sources in `radia_mcp.common.examples`
+
+Pattern: write `refresh_<source>(...) -> dict` that fetches, indexes
+to `_examples_dir(<source>) / *.md`, and writes the index.json.
+Then add to `REFRESH_FUNCS` and the appropriate `FAMILIES` list.
+Examples already shipped: GitHub Issues / Discussions (REST + GraphQL),
+Discourse forum search, GitLab issues, StackExchange API, YouTube
+transcripts via `youtube-transcript-api`. Targets: mailing list
+archives (mailman / Pipermail), more YouTube channels, blog posts via
+RSS.
+
+### 3. Cookbook KB topics
+
+Both `radia_mcp.build123d.build123d_knowledge._TOPICS` and
+`radia_mcp.gmsh_post.spec.SPEC` are dictionaries of markdown strings
+keyed by topic name. Add an entry, register it in the dict, and the
+unified retrieval picks it up automatically (`build123d_lookup` /
+`gmsh_post_spec`). Topics that would help: more Plane/Axis recipes,
+boundary-layer mesh recipes, sideset/nodeset conventions for specific
+solvers (Abaqus / Sierra / OpenFOAM).
+
+### 4. Lint rules
+
+`radia_mcp.cubit.rules` (cubit) and `radia_mcp.build123d.rules`
+(build123d) both follow the same shape: a function taking
+`(filepath, lines: list[str]) -> list[dict]` that returns
+`{line, severity, rule, message}` records. Add the function and
+append it to `ALL_RULES`. Keep `severity` to one of
+`CRITICAL | HIGH | MODERATE | LOW`.
+
+### 5. New starter templates in `generate_build123d_script`
+
+Add a key to `_B3D_TEMPLATES` (raw Python source string) and update
+the docstring on `generate_build123d_script`. Lab-relevant patterns
+particularly welcome: more Radia magnet topologies (Halbach 3D, ring
+quadrupole, …), motor / generator components, accelerator devices.
+
+## Workflow
+
+1. Open an issue first if the change is more than ~50 lines or
+   touches the public tool surface — let's align on tool name /
+   shape before you write the code.
+2. Fork → branch → PR. CI is light (no test suite mandated yet);
+   include a short manual-verification snippet in the PR description.
+3. Bump the version in `pyproject.toml` and `radia_mcp/__init__.py`,
+   add a CHANGELOG entry, and the maintainer will tag + publish.
+
+## Releasing (maintainer notes)
+
+```bash
+cd packages/radia-mcp
+rm -rf build/ dist/radia_mcp-*
+python -m build && python -m build --wheel
+PYTHONIOENCODING=utf-8 \
+  TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_TOKEN \
+  twine upload --disable-progress-bar dist/radia_mcp-X.Y.Z*
+```
+
+After upload, deploy to LAB and 100号機 via wheel-unpack (PyPI
+sometimes lags ~1 min; wheel-unpack avoids the .exe-launcher lock
+issue when MCP servers are running).
+
+## License
+
+By contributing you agree your contribution is BSD-3-Clause licensed
+(matching the project license).
+
+## Stance reminder
+
+The lab actively pushes **build123d + Cubit** as the primary CAD /
+mesh pair. CadQuery, OpenSCAD, FreeCAD adapters are welcome and
+maintained as **interop / compat** layers — they are not first-class
+authoring targets. FreeCAD specifically is a `friendly` source: the
+lab respects the FreeCAD community and maintains first-class interop
+through `freecad_to_cubit_hex`, but new lab work is authored in
+build123d.
