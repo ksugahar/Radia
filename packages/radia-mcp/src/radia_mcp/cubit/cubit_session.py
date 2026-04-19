@@ -2,30 +2,32 @@
 cubit_session.py — Python-3.12-side client for the Cubit Viewer daemon.
 
 This module is version-agnostic: stdlib only, works on any Python
->= 3.10.  The only version-sensitive piece is the daemon subprocess
-itself (Python 3.10 because `_cubit3.pyd` has a Python-ABI dependency),
-and its path is located at runtime via `find_cubit_install()`, not
-hardcoded.
+>= 3.10.
 
-Architecture (OCP-inspired, transposed to Cubit):
+Two transport modes share the same public API (call/ping/shutdown):
 
-    mcp-server-cubit  (this process, Python 3.12)
-        │  JSON-RPC over stdin/stdout
-        ▼
-    cubit_daemon.py  (subprocess, Cubit-Python 3.10)
-        │  cubit.cmd(...)
-        ▼
-    Cubit GUI  (persistent FLTK window)
+    mode="gui"    (DEFAULT, Plan A — 2026-04-19 file-drop bootstrap)
+        ─ Launches `coreform_cubit.exe -nojournal cubit_bootstrap.py`
+        ─ Bootstrap installs a QTimer inside Cubit's Qt event loop
+        ─ Client ↔ Bootstrap communicate via atomically-renamed JSON
+          files in a per-session drop directory (no sockets)
+        ─ Cubit GUI window is live & user-interactive throughout
 
-Unlike OCP (stateless per-call connect/send/close), our transport is
-a persistent stdio pipe because launching Cubit per call would be
-prohibitively slow (~5 s cold vs <1 ms hot). The singleton session
-holds the subprocess handle and pipes for the lifetime of the
-mcp-server process.
+    mode="batch"  (legacy, CI/scripting)
+        ─ Launches Cubit's bundled Python 3.10 with cubit_daemon.py
+        ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
+          stdin/stdout of the subprocess
+        ─ No GUI, no user interaction; pure headless
 
-Protocol version: 1. Stored in `PROTOCOL_VERSION` — increment if the
-JSON-RPC schema changes in a breaking way; the daemon echoes the
-version in its ready message for mutual compatibility check.
+Both modes preserve a persistent Cubit session across many client calls
+(~2 s cold start amortized) — launching per-call would be prohibitively
+slow. A process-wide singleton (`CubitSession.get()`) holds the handle.
+
+Protocol version:
+    v1 — stdio JSON-RPC (cubit_daemon.py)
+    v2 — file drop JSON-RPC (cubit_bootstrap.py, this module default)
+
+The ready message echoes `protocol_version` for mutual compatibility.
 """
 
 from __future__ import annotations
@@ -33,30 +35,27 @@ from __future__ import annotations
 import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2  # default (gui mode)
 
 _SESSION_LOCK = threading.Lock()
 _SINGLETON: "CubitSession | None" = None
 
 # Module-level overrides (OCP-inspired: cf. set_port / get_port).
-# Use these instead of mutating env vars at runtime.
 _OVERRIDE_BIN_DIR: Path | None = None
 
 
 def set_cubit_bin_dir(path: str | Path | None) -> None:
-    """Override the Cubit `bin/` directory lookup for subsequent sessions.
-
-    Mirrors OCP's `set_port(...)` accessor pattern. Calling with None
-    restores auto-discovery. Must be called before `CubitSession.get()`
-    to take effect on the singleton.
-    """
+    """Override the Cubit `bin/` directory lookup for subsequent sessions."""
     global _OVERRIDE_BIN_DIR
     _OVERRIDE_BIN_DIR = Path(path) if path is not None else None
 
@@ -69,33 +68,15 @@ def get_cubit_bin_dir() -> Path | None:
 
 
 def _session_info_path() -> Path:
-    """Location for the per-user daemon diagnostic file (OCP-inspired).
-
-    Mirrors OCP's `set_connection_file()` pattern. Used only for
-    debugging / external tooling that wants to know if a daemon is
-    running and under which pid.
-    """
     return Path.home() / ".cubit_viewer" / "session.json"
 
 
 # ---------------------------------------------------------------------------
-# Cubit install auto-discovery (no hardcoded version in a path)
+# Cubit install auto-discovery
 # ---------------------------------------------------------------------------
 
 def find_cubit_install(explicit: str | None = None) -> Path | None:
-    """Locate a Coreform Cubit install's `bin/` directory.
-
-    Resolution order (first hit wins):
-        1. `explicit` argument (if provided)
-        2. `CUBIT_BIN_DIR` environment variable
-        3. Windows registry `HKLM\\SOFTWARE\\Coreform\\*\\InstallDir`
-        4. Glob `C:/Program Files/Coreform Cubit */bin/`
-        5. Glob `/opt/Coreform-Cubit-*/bin/` (Linux, future-proof)
-        6. Return None (caller reports error)
-
-    Returns the absolute path to the `bin/` directory (containing
-    `coreform_cubit.exe`, `cubit.py`, and `_cubit3.pyd`), or None.
-    """
+    """Locate a Coreform Cubit install's `bin/` directory."""
     candidates: list[Path] = []
     if explicit:
         candidates.append(Path(explicit))
@@ -103,7 +84,6 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
     if env_bin:
         candidates.append(Path(env_bin))
 
-    # Windows registry lookup (best-effort)
     if sys.platform == "win32":
         try:
             import winreg
@@ -128,7 +108,6 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
         except OSError:
             pass
 
-    # Filesystem globs
     for pattern in (
         r"C:/Program Files/Coreform Cubit */bin",
         r"C:/Program Files (x86)/Coreform Cubit */bin",
@@ -146,11 +125,7 @@ def find_cubit_install(explicit: str | None = None) -> Path | None:
 
 
 def _cubit_python_exe(bin_dir: Path) -> Path:
-    """Locate Cubit's bundled Python interpreter under `bin_dir`.
-
-    Standard layout on Windows (Cubit 2025.x): `<bin>/python3/python.exe`.
-    Linux variants may differ; we also check `<bin>/python3/bin/python3`.
-    """
+    """Locate Cubit's bundled Python interpreter under `bin_dir`."""
     candidates = [
         bin_dir / "python3" / "python.exe",
         bin_dir / "python3" / "python3.exe",
@@ -166,6 +141,19 @@ def _cubit_python_exe(bin_dir: Path) -> Path:
     )
 
 
+def _cubit_gui_exe(bin_dir: Path) -> Path:
+    """Locate the Cubit GUI launcher (`coreform_cubit.exe` / `coreform_cubit`)."""
+    candidates = [
+        bin_dir / "coreform_cubit.exe",
+        bin_dir / "coreform_cubit",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c.resolve()
+    raise FileNotFoundError(
+        f"coreform_cubit launcher not found under {bin_dir}.")
+
+
 # ---------------------------------------------------------------------------
 # Session (singleton per mcp-server process)
 # ---------------------------------------------------------------------------
@@ -175,14 +163,13 @@ class CubitSessionError(Exception):
 
 
 class CubitSession:
-    """Manages a long-lived Cubit daemon subprocess via JSON-RPC.
+    """Manages a long-lived Cubit session via one of two transports.
 
-    Thread-safe via an internal lock around each call (Cubit itself is
-    single-threaded; serializing at the client side avoids reentrancy).
+    Thread-safe via an internal lock around each call.
 
-    Usage from mcp tools:
-        session = CubitSession.get()
-        r = session.call("cmd", ["create brick x 10", "mesh volume 1"])
+    Usage:
+        session = CubitSession.get()   # mode="gui" by default
+        r = session.call("cmd", ["create brick x 10"])
         if r["ok"]:
             ...
     """
@@ -204,13 +191,210 @@ class CubitSession:
         self._lock = threading.Lock()
         self._ready_info: dict | None = None
 
+        # gui-mode (file-drop) state
+        self._drop_dir: Path | None = None
+        self._outbox: Path | None = None
+
+        # batch-mode (stdio) stderr retention
+        self._stderr_tail: list[bytes] = []
+        self._stderr_tail_max = 200
+
     # ---- lifecycle ----
 
     def ensure_started(self) -> dict:
-        """Spawn the daemon if not already running. Returns ready info."""
+        """Spawn the Cubit session if not already running. Returns ready info."""
         if self._proc is not None and self._proc.poll() is None:
             return self._ready_info or {}
+        if self._mode == "gui":
+            return self._start_gui_bootstrap()
+        return self._start_stdio_daemon()
 
+    def shutdown(self, timeout_s: float = 3.0) -> None:
+        """Politely ask Cubit to exit, then force-kill after timeout."""
+        if self._proc is None:
+            return
+        try:
+            # Best-effort: issue shutdown op via the live transport.
+            self._lock_free_shutdown_op(timeout_s=timeout_s)
+            self._proc.wait(timeout=timeout_s)
+        except Exception:
+            pass
+        if self._proc.poll() is None:
+            self._proc.kill()
+        # Clean up gui drop dir
+        if self._mode == "gui" and self._drop_dir is not None:
+            try:
+                shutil.rmtree(self._drop_dir, ignore_errors=True)
+            except Exception:
+                pass
+            self._drop_dir = None
+            self._outbox = None
+        self._proc = None
+        self._ready_info = None
+
+    def is_alive(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
+    def ping(self, timeout_s: float = 5.0) -> bool:
+        """Heartbeat probe — returns True if Cubit responds."""
+        try:
+            r = self.call("ping", timeout_s=timeout_s)
+            return bool(r.get("ok") and r.get("result") == "pong")
+        except Exception:
+            return False
+
+    # ---- public RPC entrypoint ----
+
+    def call(self, op: str, args: list | None = None,
+             timeout_s: float = 60.0, _recover: bool = True) -> dict:
+        """Send one JSON-RPC request, return the response dict.
+
+        Response shape:
+            {"id": int, "ok": bool, "result": ..., "error": str?}
+
+        Error recovery (gui mode, 2026-04-19): if Cubit died mid-call,
+        the session is transparently reset and the call retried once.
+        `result` will then carry `_recovered=True` so callers know state
+        was lost (no geometry history; the user may need to re-import
+        or `cubit_restore` from a checkpoint). On second failure, raises
+        CubitSessionError.
+
+        Pass `_recover=False` to disable the one-shot retry (used by the
+        recovery path itself to avoid infinite loops).
+        """
+        with self._lock:
+            try:
+                self.ensure_started()
+                req_id = self._next_id
+                self._next_id += 1
+                req = {
+                    "id": req_id,
+                    "op": op,
+                    "args": args or [],
+                    "protocol_version": PROTOCOL_VERSION if self._mode == "gui" else 1,
+                }
+                if self._mode == "gui":
+                    return self._call_via_filedrop(req, timeout_s=timeout_s)
+                return self._call_via_stdio(req, timeout_s=timeout_s)
+            except CubitSessionError as e:
+                if not _recover:
+                    raise
+                # Auto-restart: Cubit died or misbehaved. Reset and try once.
+                self._force_reset()
+        # Outside the lock (avoid deadlock) — retry once with recovery off.
+        resp = self.call(op, args=args, timeout_s=timeout_s, _recover=False)
+        if isinstance(resp, dict):
+            resp.setdefault("_recovered", True)
+        return resp
+
+    def _force_reset(self) -> None:
+        """Tear down the current session without waiting for graceful exit.
+
+        Used by the recovery path in `call()`. Does NOT re-enter the lock
+        (caller is holding it).
+        """
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        if self._mode == "gui" and self._drop_dir is not None:
+            try:
+                shutil.rmtree(self._drop_dir, ignore_errors=True)
+            except Exception:
+                pass
+            self._drop_dir = None
+            self._outbox = None
+        self._proc = None
+        self._ready_info = None
+
+    # ---- mode: gui (file drop) ----
+
+    def _start_gui_bootstrap(self) -> dict:
+        """Launch coreform_cubit.exe + cubit_bootstrap.py, wait for ready."""
+        gui_exe = _cubit_gui_exe(self._bin_dir)
+        bootstrap_path = Path(__file__).with_name("cubit_bootstrap.py")
+        if not bootstrap_path.exists():
+            raise CubitSessionError(
+                f"Bootstrap script missing: {bootstrap_path}. Expected "
+                "sibling of cubit_session.py.")
+
+        drop = Path(tempfile.mkdtemp(prefix="cubit_drop_"))
+        (drop / "out").mkdir(exist_ok=True)
+        self._drop_dir = drop
+        self._outbox = drop / "out"
+
+        env = os.environ.copy()
+        env["CUBIT_BIN_DIR"] = str(self._bin_dir)
+        env["CUBIT_DROP_DIR"] = str(drop)
+
+        # stdout/stderr go to pipes we drain, same as batch mode — Cubit
+        # GUI still writes banner / warnings to these before the Qt
+        # widgets take over.
+        self._proc = subprocess.Popen(
+            [str(gui_exe), "-nojournal", str(bootstrap_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            bufsize=0,
+        )
+        self._start_stderr_drain()
+
+        # Wait for ready marker. Cold start ~2s on this lab, but allow
+        # generous slack for first-license-checkout.
+        ready_path = drop / "ready"
+        deadline = time.time() + 60.0
+        while time.time() < deadline:
+            if ready_path.exists():
+                try:
+                    info = json.loads(ready_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError:
+                    time.sleep(0.05)
+                    continue
+                self._ready_info = info
+                return info
+            if self._proc.poll() is not None:
+                raise CubitSessionError(
+                    f"Cubit exited during bootstrap "
+                    f"(rc={self._proc.returncode}).")
+            time.sleep(0.15)
+        raise CubitSessionError(
+            f"Cubit did not signal ready within 60 s. drop={drop}")
+
+    def _call_via_filedrop(self, req: dict, timeout_s: float) -> dict:
+        assert self._drop_dir is not None and self._outbox is not None
+        req_id = req["id"]
+        stem = f"{req_id:08d}"
+        req_path = self._drop_dir / f"{stem}.req"
+        tmp_path = self._drop_dir / f"{stem}.req.tmp"
+        resp_path = self._outbox / f"{stem}.resp"
+
+        tmp_path.write_text(json.dumps(req), encoding="utf-8")
+        os.replace(tmp_path, req_path)
+
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            if resp_path.exists():
+                try:
+                    text = resp_path.read_text(encoding="utf-8")
+                    resp = json.loads(text)
+                except (OSError, json.JSONDecodeError):
+                    # Partial write: back off and retry.
+                    time.sleep(0.03)
+                    continue
+                resp_path.unlink(missing_ok=True)
+                return resp
+            if self._proc is not None and self._proc.poll() is not None:
+                raise CubitSessionError(
+                    f"Cubit exited during call (rc={self._proc.returncode}).")
+            time.sleep(0.05)
+        raise CubitSessionError(
+            f"Response timeout after {timeout_s}s for op={req.get('op')!r}")
+
+    # ---- mode: batch (stdio JSON-RPC) ----
+
+    def _start_stdio_daemon(self) -> dict:
         python_exe = _cubit_python_exe(self._bin_dir)
         daemon_path = Path(__file__).with_name("cubit_daemon.py")
         if not daemon_path.exists():
@@ -220,12 +404,8 @@ class CubitSession:
 
         env = os.environ.copy()
         env["CUBIT_DAEMON_MODE"] = self._mode
-        # Help the daemon find its own cubit binding even if CUBIT_BIN_DIR
-        # is not preset in the user's shell.
         env["CUBIT_BIN_DIR"] = str(self._bin_dir)
 
-        # Use binary mode for stdin/stdout so we can control newline
-        # handling precisely across platforms.
         self._proc = subprocess.Popen(
             [str(python_exe), str(daemon_path)],
             stdin=subprocess.PIPE,
@@ -234,14 +414,13 @@ class CubitSession:
             env=env,
             bufsize=0,
         )
+        self._start_stderr_drain()
 
-        # Read daemon's "ready" line.
         line = self._proc.stdout.readline()
         if not line:
             stderr = self._proc.stderr.read().decode("utf-8", errors="replace")
             raise CubitSessionError(
-                f"Daemon died during startup. stderr:\n{stderr[-2000:]}"
-            )
+                f"Daemon died during startup. stderr:\n{stderr[-2000:]}")
         try:
             ready = json.loads(line.decode("utf-8"))
         except json.JSONDecodeError as e:
@@ -253,67 +432,17 @@ class CubitSession:
         self._ready_info = ready
         return ready
 
-    def shutdown(self, timeout_s: float = 3.0) -> None:
-        """Politely ask the daemon to exit, then force-kill after timeout."""
-        if self._proc is None:
-            return
-        try:
-            self._send({"id": self._next_id, "op": "shutdown", "args": []})
-            self._proc.wait(timeout=timeout_s)
-        except Exception:
-            pass
-        if self._proc.poll() is None:
-            self._proc.kill()
-        self._proc = None
-        self._ready_info = None
+    def _call_via_stdio(self, req: dict, timeout_s: float) -> dict:
+        self._send_stdio(req)
+        line = self._read_stdio_line(timeout_s=timeout_s)
+        resp = json.loads(line.decode("utf-8"))
+        if resp.get("id") is not None and resp["id"] != req["id"]:
+            raise CubitSessionError(
+                f"Response id {resp.get('id')} != request id {req['id']}")
+        return resp
 
-    def is_alive(self) -> bool:
-        return self._proc is not None and self._proc.poll() is None
-
-    def ping(self, timeout_s: float = 2.0) -> bool:
-        """Heartbeat probe — returns True if daemon responds."""
-        try:
-            r = self.call("ping", timeout_s=timeout_s)
-            return bool(r.get("ok") and r.get("result") == "pong")
-        except Exception:
-            return False
-
-    # ---- RPC ----
-
-    def call(self, op: str, args: list | None = None,
-             timeout_s: float = 60.0) -> dict:
-        """Send one JSON-RPC request, return the response dict.
-
-        Response shape:
-            {"id": int, "ok": bool, "result": ..., "error": str?}
-
-        On daemon death, raises CubitSessionError. Caller may retry
-        after calling `shutdown()` to reset state (rare).
-        """
-        with self._lock:
-            self.ensure_started()
-            req_id = self._next_id
-            self._next_id += 1
-            req = {
-                "id": req_id,
-                "op": op,
-                "args": args or [],
-                "protocol_version": PROTOCOL_VERSION,
-            }
-            self._send(req)
-            line = self._read_line(timeout_s=timeout_s)
-            resp = json.loads(line.decode("utf-8"))
-            # Basic sanity: id should match
-            if resp.get("id") is not None and resp["id"] != req_id:
-                raise CubitSessionError(
-                    f"Response id {resp.get('id')} != request id {req_id}"
-                )
-            return resp
-
-    # ---- internal ----
-
-    def _send(self, obj: dict) -> None:
-        assert self._proc is not None
+    def _send_stdio(self, obj: dict) -> None:
+        assert self._proc is not None and self._proc.stdin is not None
         line = (json.dumps(obj) + "\n").encode("utf-8")
         try:
             self._proc.stdin.write(line)
@@ -321,13 +450,8 @@ class CubitSession:
         except (BrokenPipeError, OSError) as e:
             raise CubitSessionError(f"Daemon pipe broken: {e}")
 
-    def _read_line(self, timeout_s: float) -> bytes:
-        """Read one newline-terminated frame from the daemon's stdout.
-
-        Uses a background thread to implement a timeout since
-        `subprocess.Popen.stdout.readline()` doesn't honor timeouts.
-        """
-        assert self._proc is not None
+    def _read_stdio_line(self, timeout_s: float) -> bytes:
+        assert self._proc is not None and self._proc.stdout is not None
         result: list[bytes | Exception] = []
 
         def _reader():
@@ -341,7 +465,6 @@ class CubitSession:
         t.start()
         t.join(timeout=timeout_s)
         if t.is_alive():
-            # Daemon hung; caller should probably shutdown and restart
             raise CubitSessionError(
                 f"Daemon response timed out after {timeout_s}s")
         if not result:
@@ -350,17 +473,56 @@ class CubitSession:
         if isinstance(out, Exception):
             raise CubitSessionError(f"Read error: {out}")
         if not out:
-            # EOF: daemon exited
-            stderr_tail = b""
-            try:
-                stderr_tail = self._proc.stderr.read() or b""
-            except Exception:
-                pass
+            stderr_tail = b"".join(self._stderr_tail)
             raise CubitSessionError(
                 f"Daemon exited unexpectedly (exit={self._proc.poll()}). "
                 f"stderr tail:\n"
                 f"{stderr_tail.decode('utf-8', errors='replace')[-1500:]}")
         return out
+
+    # ---- common: stderr drain, shutdown op ----
+
+    def _start_stderr_drain(self) -> None:
+        """Drain the subprocess' stderr into a bounded ring buffer.
+
+        If nobody reads stderr, Cubit's heavy progress output fills the
+        pipe buffer (~64 KB) and subsequent writes block, freezing
+        the whole session. Retained for post-mortem only.
+        """
+        assert self._proc is not None and self._proc.stderr is not None
+        self._stderr_tail = []
+
+        def _drain(pipe, buf, buf_max):
+            try:
+                for line in iter(pipe.readline, b""):
+                    buf.append(line)
+                    if len(buf) > buf_max:
+                        del buf[0]
+            except Exception:
+                pass
+
+        t = threading.Thread(
+            target=_drain,
+            args=(self._proc.stderr, self._stderr_tail, self._stderr_tail_max),
+            daemon=True,
+        )
+        t.start()
+
+    def _lock_free_shutdown_op(self, timeout_s: float) -> None:
+        """Fire-and-forget shutdown op — tolerate any error."""
+        try:
+            req_id = self._next_id
+            self._next_id += 1
+            req = {"id": req_id, "op": "shutdown", "args": []}
+            if self._mode == "gui":
+                try:
+                    self._call_via_filedrop(req, timeout_s=timeout_s)
+                except CubitSessionError:
+                    pass
+            else:
+                self._send_stdio(req)
+        except Exception:
+            pass
 
     # ---- singleton access ----
 

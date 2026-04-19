@@ -13,8 +13,10 @@ Usage:
     python server.py --selftest   # Run self-test on examples/
 """
 
+import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -27,6 +29,9 @@ from .cubit_scripting_knowledge import get_cubit_documentation
 from .cubit_forum_tips import get_forum_tips
 from .cubit_api_reference import get_api_reference
 from .panel_conventions_knowledge import PANEL_CONVENTIONS, LABEL_GUIDE
+from ..common import failure_log as _fl
+from ..common import web_docs as _wd
+from ..common import examples as _ex
 
 # Create MCP server
 mcp = FastMCP("cubit-export")
@@ -1060,180 +1065,6 @@ def get_lint_rules() -> str:
 
 
 # ============================================================
-# Preview tool (OCP CAD Viewer bridge via STEP)
-# ============================================================
-
-_DEFAULT_CUBIT_EXE = r"C:\Program Files\Coreform Cubit 2025.3\bin\coreform_cubit.exe"
-
-
-@mcp.tool()
-def preview_jou(jou_path: str,
-                cubit_exe: str = "",
-                keep_step: bool = False,
-                timeout_s: int = 120) -> str:
-	"""
-	Run a Cubit journal (.jou) in batch mode, export the resulting
-	geometry as STEP, load it via build123d, and show it in the OCP
-	CAD Viewer (VSCode panel).
-
-	Lab policy (2026-04-19): Cubit runs out-of-process (separate exe
-	with multi-second startup), so STEP is the mandatory bridge to
-	the OCP viewer. The symmetric build123d-side preview tool
-	(`preview_shape` on mcp-server-build123d) goes **direct** with
-	no STEP roundtrip.
-
-	Prerequisites:
-	  - Coreform Cubit installed; binary at `cubit_exe` (default:
-	    Coreform Cubit 2025.3 in Program Files).
-	  - `ocp_vscode` (OCP CAD Viewer) panel open in VSCode.
-
-	Pipeline:
-	  1. Write a wrapper .jou: `playback "<jou_path>"` + `export step
-	     "<tmp>.step" overwrite`.
-	  2. Invoke `coreform_cubit -batch -nographics -nojournal -input
-	     wrapper.jou`. Capture stdout/stderr.
-	  3. Verify STEP exists; `from build123d import import_step`.
-	  4. `ocp_vscode.show(part)`.
-	  5. Return summary JSON (Cubit exit + shape stats).
-
-	Args:
-	    jou_path: absolute or relative path to a .jou file.
-	    cubit_exe: Path to coreform_cubit.exe (default: Coreform Cubit
-	        2025.3 bin location). Override for other versions.
-	    keep_step: keep the intermediate .step file after preview.
-	    timeout_s: abort Cubit subprocess after this many seconds.
-	"""
-	import json as _json
-	import subprocess as _sp
-	import tempfile as _tf
-	import traceback as _tb
-	from pathlib import Path
-
-	p = Path(jou_path)
-	if not p.is_absolute():
-		p = PROJECT_ROOT / p
-	if not p.exists():
-		return _json.dumps({"status": "error", "stage": "input",
-		                    "error": f"Journal not found: {p}"})
-
-	exe = cubit_exe or _DEFAULT_CUBIT_EXE
-	if not Path(exe).exists():
-		return _json.dumps({
-			"status": "error", "stage": "cubit_binary",
-			"error": f"Cubit exe not found: {exe}. Pass cubit_exe="
-		             f"<path-to-coreform_cubit.exe>.",
-		})
-
-	work = Path(_tf.mkdtemp(prefix="cubit_preview_"))
-	step_path = work / "preview.step"
-	wrapper = work / "wrapper.jou"
-	# Cubit journal expects forward slashes in paths.
-	abs_jou = str(p.resolve()).replace("\\", "/")
-	abs_step = str(step_path.resolve()).replace("\\", "/")
-	wrapper.write_text(
-		f'playback "{abs_jou}"\n'
-		f'export step "{abs_step}" overwrite\n'
-	)
-
-	cmd = [exe, "-batch", "-nographics", "-nojournal",
-	       "-input", str(wrapper)]
-	try:
-		proc = _sp.run(cmd, capture_output=True, text=True,
-		               timeout=timeout_s)
-	except _sp.TimeoutExpired:
-		return _json.dumps({
-			"status": "error", "stage": "cubit_run",
-			"error": f"Cubit timed out after {timeout_s}s",
-			"cmd": cmd,
-		})
-
-	if not step_path.exists():
-		return _json.dumps({
-			"status": "error", "stage": "cubit_export",
-			"error": "Cubit did not produce STEP file",
-			"cubit_exit": proc.returncode,
-			"cubit_stdout_tail": proc.stdout[-800:],
-			"cubit_stderr_tail": proc.stderr[-800:],
-		})
-
-	# Load STEP and hand to OCP viewer.
-	try:
-		from build123d import import_step
-	except ImportError as e:
-		return _json.dumps({
-			"status": "error", "stage": "build123d_import",
-			"error": f"build123d not installed: {e}",
-		})
-	try:
-		shape = import_step(str(step_path))
-	except Exception:
-		return _json.dumps({
-			"status": "error", "stage": "step_load",
-			"error": _tb.format_exc(),
-			"step_path": str(step_path),
-		})
-
-	try:
-		from ocp_vscode import show
-	except ImportError as e:
-		return _json.dumps({
-			"status": "error", "stage": "ocp_import",
-			"error": f"ocp_vscode not installed: {e}. "
-			         f"pip install ocp-vscode",
-		})
-	try:
-		show(shape, names=[p.stem])
-	except Exception:
-		return _json.dumps({
-			"status": "error", "stage": "show",
-			"error": _tb.format_exc(),
-			"hint": "Is the OCP CAD Viewer panel open in VSCode?",
-			"step_path": str(step_path),
-		})
-
-	info = {
-		"status": "ok",
-		"stage": "shown",
-		"viewer": "ocp_vscode",
-		"jou": str(p),
-		"cubit_exit": proc.returncode,
-		"step_bytes": step_path.stat().st_size,
-	}
-	try:
-		info["volume"] = round(shape.volume, 6)
-	except Exception:
-		pass
-	try:
-		info["face_count"] = len(shape.faces())
-		info["edge_count"] = len(shape.edges())
-	except Exception:
-		pass
-	try:
-		bb = shape.bounding_box()
-		info["bounding_box"] = {
-			"min": [round(bb.min.X, 4), round(bb.min.Y, 4),
-			        round(bb.min.Z, 4)],
-			"max": [round(bb.max.X, 4), round(bb.max.Y, 4),
-			        round(bb.max.Z, 4)],
-		}
-	except Exception:
-		pass
-
-	if keep_step:
-		info["step_path"] = str(step_path)
-	else:
-		# Clean up temp work dir.
-		try:
-			step_path.unlink(missing_ok=True)
-			wrapper.unlink(missing_ok=True)
-			work.rmdir()
-		except OSError:
-			pass
-
-	return _json.dumps(info, indent=2)
-
-
-# ============================================================
 # Cubit GUI launcher (Cheap phase of LLM-driven Cubit loop)
 # ============================================================
 #
@@ -1476,6 +1307,31 @@ def cubit_show(path: str = "", extra_commands: list = None) -> str:
 	return json.dumps(r, indent=2)
 
 
+def _probe_summary_safe(sess) -> dict:
+	"""Best-effort `probe summary`. Swallows RPC errors."""
+	try:
+		r = sess.call("probe", ["summary"], timeout_s=15)
+	except Exception:
+		return {}
+	res = r.get("result") if isinstance(r, dict) else None
+	return res if isinstance(res, dict) else {}
+
+
+def _state_delta(before: dict, after: dict) -> dict:
+	"""Per-key delta (after - before). Zero / missing keys omitted."""
+	keys = set(before) | set(after)
+	delta: dict = {}
+	for k in keys:
+		try:
+			a = int(after.get(k, 0) or 0)
+			b = int(before.get(k, 0) or 0)
+			if a - b != 0:
+				delta[k] = a - b
+		except (TypeError, ValueError):
+			continue
+	return delta
+
+
 @mcp.tool()
 def cubit_exec(commands: list) -> str:
 	"""
@@ -1489,9 +1345,18 @@ def cubit_exec(commands: list) -> str:
 	    commands: list of Cubit command strings (one per list item, no
 	        trailing newline). Runs in order; stops at first failure.
 
-	Returns JSON with per-command success flags. On a Cubit error,
-	`ok=false` on the offending line and subsequent commands are
-	NOT executed so the viewer's state stays inspectable.
+	Returns JSON with:
+	  - `result`: per-command {line, ok, rc|error}
+	  - `state_before` / `state_after`: volume/surface/node/hex/tet counts
+	  - `state_delta`: what changed (e.g., {"hexes": +4740, "nodes": +6210})
+	  - `all_ok`: true iff every command reported ok
+	  - `failed_at`: 1-based index of first failure (if any)
+	  - `hint`: short advice on the failure (from heuristics + failure log)
+
+	On a Cubit error, `ok=false` on the offending line and subsequent
+	commands are NOT executed so the viewer's state stays inspectable.
+	Failures are also appended to the persistent failure log so
+	`cubit_lookup` and `cubit_recent_failures` can surface them later.
 	"""
 	if not commands:
 		return json.dumps({"status": "error",
@@ -1499,12 +1364,148 @@ def cubit_exec(commands: list) -> str:
 	sess, err = _cubit_session_or_error()
 	if err is not None:
 		return err
+
+	cmd_list = [str(c).rstrip() for c in commands]
+
+	# Pre-flight: scan recent failure log for a similar input
+	preflight = _cubit_preflight_warn(cmd_list)
+
+	before = _probe_summary_safe(sess)
 	try:
-		r = sess.call("cmd", [str(c).rstrip() for c in commands])
+		r = sess.call("cmd", cmd_list)
 	except _cs.CubitSessionError as e:
+		_fl.record_failure("cubit", {
+			"input": cmd_list,
+			"error": str(e),
+			"stage": "rpc",
+			"context": {"state_before": before},
+		})
 		return json.dumps({"status": "error", "stage": "rpc",
-		                   "error": str(e)})
-	return json.dumps(r, indent=2)
+		                   "error": str(e),
+		                   "hint": "Cubit daemon RPC failed. "
+		                           "Session auto-restarts on next call "
+		                           "(state lost). Consider cubit_checkpoint "
+		                           "before risky ops."})
+	after = _probe_summary_safe(sess)
+
+	per_line = r.get("result") if isinstance(r, dict) else r
+	if not isinstance(per_line, list):
+		per_line = []
+	all_ok = all(step.get("ok") for step in per_line) if per_line else False
+	failed_at = None
+	first_err = None
+	for idx, step in enumerate(per_line, start=1):
+		if not step.get("ok"):
+			failed_at = idx
+			first_err = step.get("error") or f"rc={step.get('rc')}"
+			break
+
+	payload: dict = {
+		"status": "ok" if all_ok else "error",
+		"all_ok": all_ok,
+		"executed": len(per_line),
+		"submitted": len(cmd_list),
+		"result": per_line,
+		"state_before": before,
+		"state_after": after,
+		"state_delta": _state_delta(before, after),
+	}
+	if preflight:
+		payload["preflight"] = preflight
+	if failed_at is not None:
+		payload["failed_at"] = failed_at
+		payload["failed_cmd"] = cmd_list[failed_at - 1] if failed_at <= len(cmd_list) else None
+		payload["error"] = (first_err or "").strip()[:600]
+		payload["hint"] = _cubit_failure_hint(payload["failed_cmd"] or "",
+		                                       payload["error"])
+		_fl.record_failure("cubit", {
+			"input": cmd_list,
+			"failed_cmd": payload["failed_cmd"],
+			"failed_at": failed_at,
+			"error": payload["error"],
+			"context": {"state_before": before, "state_after": after},
+		})
+	if isinstance(r, dict) and r.get("_recovered"):
+		payload["_recovered"] = True
+		payload["hint"] = ((payload.get("hint", "") or "")
+		                   + " NOTE: Cubit session was auto-restarted; "
+		                     "geometry/mesh state is lost.").strip()
+	return json.dumps(payload, indent=2)
+
+
+_CUBIT_ERROR_HEURISTICS: list[tuple[str, str]] = [
+	("unknown command",  "Check Cubit reference via `cubit_docs(topic='syntax')` "
+	                     "or `cubit_web_docs(source='cubit', query='<keyword>')`."),
+	("parse",            "Command syntax issue. Try `cubit_lookup(query='<verb>')` for examples."),
+	("no such",          "Entity (volume/surface/vertex) does not exist. Run `cubit_probe('summary')` first."),
+	("cannot mesh",      "Try `cubit_mesh_diagnose()` to propose scheme alternatives per volume."),
+	("scheme",           "Meshing scheme problem. `cubit_mesh_diagnose()` or set `volume all scheme tetmesh`."),
+	("sweep",            "Sweep failed. Geometry is likely non-prismatic. Fall back to `scheme tetmesh`."),
+	("import",           "Import failed. Verify the path exists and format matches "
+	                     "(`import step`, `import acis`, `import mesh`)."),
+	("export",           "Export failed. Check `cubit_docs(topic='export')` and that mesh exists."),
+]
+
+
+def _cubit_preflight_warn(cmd_list: list[str]) -> dict | None:
+	"""Scan recent failure log for a similar input. If found, return a
+	compact warning dict so the caller can include it in the response
+	without blocking execution.
+
+	Similarity = token Jaccard ≥ 0.6 between the incoming command list
+	and any recent failure's input. Cheap, reuses the existing jsonl
+	log, and fires only when there's real signal.
+	"""
+	try:
+		recs = _fl.recent_failures("cubit", limit=30)
+	except Exception:
+		return None
+	if not recs:
+		return None
+	incoming = set(_tokenize(" ".join(cmd_list)))
+	if not incoming:
+		return None
+	best_rec = None
+	best_j = 0.0
+	for r in recs:
+		rin = r.get("input")
+		if not rin:
+			continue
+		rs = " ".join(rin) if isinstance(rin, list) else str(rin)
+		toks = set(_tokenize(rs))
+		if not toks:
+			continue
+		inter = len(incoming & toks)
+		union = len(incoming | toks)
+		if union == 0:
+			continue
+		j = inter / union
+		if j > best_j:
+			best_j = j
+			best_rec = r
+	if best_rec is None or best_j < 0.6:
+		return None
+	return {
+		"similar_past_failure": True,
+		"jaccard": round(best_j, 2),
+		"past_error": str(best_rec.get("error") or "")[:300],
+		"past_failed_cmd": best_rec.get("failed_cmd"),
+		"past_iso": best_rec.get("iso"),
+		"advice": ("A very similar command sequence failed recently. "
+		           "Review the past error above and adjust before proceeding. "
+		           "Use `cubit_recent_failures(limit=10)` for full detail."),
+	}
+
+
+def _cubit_failure_hint(cmd: str, err: str) -> str:
+	"""Pick a short hint from common Cubit error patterns."""
+	blob = (cmd + " " + err).lower()
+	for needle, advice in _CUBIT_ERROR_HEURISTICS:
+		if needle in blob:
+			return advice
+	return ("No specific heuristic matched. Try `cubit_lookup(query=...)` "
+	        "or `cubit_web_docs(source='cubit', query=...)` with keywords "
+	        "from the error.")
 
 
 @mcp.tool()
@@ -1586,6 +1587,2693 @@ def cubit_session_shutdown() -> str:
 		return json.dumps({"status": "ok", "note": "no session running"})
 	_cs.CubitSession.reset()
 	return json.dumps({"status": "ok", "note": "session stopped"})
+
+
+# ============================================================
+# Checkpoint / restore (Cubit .cub5 snapshot-based undo)
+# ============================================================
+
+def _checkpoints_dir() -> Path:
+	"""Per-user directory for named Cubit state snapshots."""
+	d = Path.home() / ".cubit_viewer" / "checkpoints"
+	d.mkdir(parents=True, exist_ok=True)
+	return d
+
+
+def _sanitize_label(label: str) -> str:
+	"""Keep only safe filename characters; reject empty."""
+	import re
+	s = re.sub(r"[^A-Za-z0-9._-]+", "_", label).strip("_")
+	if not s:
+		raise ValueError("checkpoint label must not be empty after sanitization")
+	if len(s) > 64:
+		s = s[:64]
+	return s
+
+
+@mcp.tool()
+def cubit_checkpoint(label: str) -> str:
+	"""Save the current Cubit session state as a named checkpoint.
+
+	Creates `~/.cubit_viewer/checkpoints/<label>.cub5`. Overwrites if the
+	label already exists. Use `cubit_restore(label)` to rewind.
+
+	Lightweight undo pattern: save a checkpoint before risky operations
+	(mesh, boolean, large imports), then restore if the result is bad.
+
+	Args:
+	    label: checkpoint name (alphanumeric, dot, dash, underscore only).
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	try:
+		safe = _sanitize_label(label)
+	except ValueError as e:
+		return json.dumps({"status": "error", "error": str(e)})
+	path = _checkpoints_dir() / f"{safe}.cub5"
+	fwd = str(path).replace("\\", "/")
+	try:
+		r = sess.call("cmd", [f'save as "{fwd}" overwrite'], timeout_s=120)
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+	if not r.get("ok"):
+		return json.dumps({"status": "error", "stage": "save", "detail": r})
+	return json.dumps({
+		"status": "ok",
+		"label": safe,
+		"path": str(path),
+		"size_bytes": path.stat().st_size if path.exists() else 0,
+	}, indent=2)
+
+
+@mcp.tool()
+def cubit_restore(label: str) -> str:
+	"""Restore a previously-saved Cubit checkpoint by label.
+
+	Loads `~/.cubit_viewer/checkpoints/<label>.cub5` via Cubit's `open`
+	command. The current session state is replaced.
+
+	Args:
+	    label: name passed to a prior `cubit_checkpoint` call.
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	try:
+		safe = _sanitize_label(label)
+	except ValueError as e:
+		return json.dumps({"status": "error", "error": str(e)})
+	path = _checkpoints_dir() / f"{safe}.cub5"
+	if not path.exists():
+		return json.dumps({
+			"status": "error",
+			"error": f"checkpoint not found: {safe}",
+			"looked_in": str(_checkpoints_dir()),
+		})
+	fwd = str(path).replace("\\", "/")
+	try:
+		r = sess.call("cmd", [f'open "{fwd}"'], timeout_s=120)
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+	if not r.get("ok"):
+		return json.dumps({"status": "error", "stage": "open", "detail": r})
+	return json.dumps({"status": "ok", "label": safe, "path": str(path)}, indent=2)
+
+
+@mcp.tool()
+def cubit_list_checkpoints() -> str:
+	"""List all saved Cubit checkpoints with size + mtime."""
+	import datetime
+	d = _checkpoints_dir()
+	entries = []
+	for p in sorted(d.glob("*.cub5")):
+		try:
+			st = p.stat()
+			entries.append({
+				"label": p.stem,
+				"path": str(p),
+				"size_bytes": st.st_size,
+				"mtime": datetime.datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+			})
+		except OSError:
+			continue
+	return json.dumps({"dir": str(d), "count": len(entries), "checkpoints": entries}, indent=2)
+
+
+# ============================================================
+# Meshing diagnostics
+# ============================================================
+
+# Suggested schemes by "why it failed" heuristics. Hex schemes first, tet
+# fallback last.  Keyed on Cubit's get_volume_meshing_scheme returns that
+# commonly indicate an unsuitable choice.
+_SCHEME_ALTERNATIVES: dict = {
+	"sweep": [
+		"submap  # tight topology / brick-like volumes",
+		"pave   # for 2D / degenerate sweep sources",
+		"polyhedron  # robust hex for non-sweepable",
+		"tetmesh  # fall back to tet",
+	],
+	"auto": [
+		"sweep  # force sweep if prismatic",
+		"polyhedron  # robust hex",
+		"tetmesh  # fall back to tet",
+	],
+	"map": [
+		"submap",
+		"pave",
+		"tetmesh",
+	],
+	"polyhedron": [
+		"sweep  # if geometry is prismatic",
+		"tetmesh",
+	],
+	None: [
+		"Assign a scheme first: 'volume <id> scheme sweep' (or auto / tetmesh)",
+	],
+}
+
+
+@mcp.tool()
+def cubit_mesh_diagnose() -> str:
+	"""Per-volume meshing diagnostic.
+
+	Returns a table of every volume with: current meshing scheme, hex
+	count, tet count, meshed / unmeshed flag. For unmeshed volumes,
+	heuristic scheme alternatives are suggested (hex schemes first,
+	tet fallback last).
+
+	Use this after a `cubit_exec(["mesh volume all"])` that left some
+	volumes unmeshed, to decide what to try next.
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	try:
+		r = sess.call("probe", ["per_volume"], timeout_s=30)
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+	if not r.get("ok"):
+		return json.dumps({"status": "error", "stage": "probe", "detail": r})
+	rows = r.get("result", [])
+	if not isinstance(rows, list):
+		return json.dumps({"status": "error", "stage": "parse",
+		                   "error": "per_volume did not return list",
+		                   "raw": rows})
+
+	meshed = [row for row in rows if row.get("meshed")]
+	unmeshed = [row for row in rows if not row.get("meshed")]
+	# Attach suggestions to unmeshed.
+	for row in unmeshed:
+		scheme = row.get("scheme")
+		row["suggested_alternatives"] = _SCHEME_ALTERNATIVES.get(
+			scheme, _SCHEME_ALTERNATIVES[None])
+
+	hex_total = sum(row.get("hex", 0) for row in rows)
+	tet_total = sum(row.get("tet", 0) for row in rows)
+
+	return json.dumps({
+		"status": "ok",
+		"total_volumes": len(rows),
+		"meshed_count": len(meshed),
+		"unmeshed_count": len(unmeshed),
+		"hex_total": hex_total,
+		"tet_total": tet_total,
+		"per_volume": rows,
+		"hint": (
+			"For each unmeshed volume, try the suggested scheme alternatives "
+			"via `cubit_exec([\"volume <id> scheme <name>\", \"mesh volume <id>\"])`. "
+			"Prefer hex schemes; fall back to tetmesh if all else fails."
+		) if unmeshed else "All volumes meshed.",
+	}, indent=2)
+
+
+# ============================================================
+# Tutorial / next-step suggestions
+# ============================================================
+
+@mcp.tool()
+def cubit_suggest_next(goal: str = "mesh") -> str:
+	"""Suggest concrete next Cubit commands based on the current state.
+
+	Inspects the live session (via `probe summary` + per-volume info) and
+	proposes 2–5 commands the LLM (or user) can execute next to progress
+	toward the goal. Rule-based, not model-based — fast, predictable,
+	and independent of external LLMs.
+
+	Args:
+	    goal: one of "import" / "mesh" / "hex" / "export" / "inspect" /
+	        "refine" / "clean". Defaults to "mesh".
+
+	Returns JSON with current state summary and a ranked list of
+	suggested commands, each with a rationale.
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	try:
+		summary = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "rpc", "error": str(e)})
+	try:
+		per_vol = sess.call("probe", ["per_volume"], timeout_s=30).get("result", [])
+	except _cs.CubitSessionError:
+		per_vol = []
+
+	g = (goal or "mesh").strip().lower()
+	suggestions: list[dict] = []
+	state = {
+		"volumes": summary.get("volumes", 0),
+		"surfaces": summary.get("surfaces", 0),
+		"hexes": summary.get("hexes", 0),
+		"tets": summary.get("tets", 0),
+		"nodes": summary.get("nodes", 0),
+	}
+	any_mesh = state["hexes"] + state["tets"] > 0
+	unmeshed = [row for row in per_vol if not row.get("meshed")]
+
+	def add(cmd: str, why: str) -> None:
+		suggestions.append({"cmd": cmd, "why": why})
+
+	if g == "import" or state["volumes"] == 0:
+		add('import step "<path>"', "Load geometry from STEP (build123d output, CAD exchange).")
+		add('import acis "<path>"', "Load ACIS .sat / .brep (native Cubit precision).")
+		add('import mesh "<path>"', "Load existing mesh (.exo / .g / .msh / .vol).")
+	elif g in ("mesh", "hex"):
+		if unmeshed:
+			# Most common next step after import
+			if g == "hex":
+				add("volume all scheme sweep", "Try hex via sweep (works if volumes are prismatic).")
+				add("volume all size auto factor 5", "Moderately fine mesh size auto-chosen from geometry.")
+				add("mesh volume all", "Execute the mesh.")
+				add("volume all scheme polyhedron", "Robust hex when sweep fails (non-prismatic).")
+			else:
+				add("volume all scheme auto", "Let Cubit pick sweep/sub/map/tet per volume.")
+				add("volume all size auto factor 5", "Moderately fine mesh size.")
+				add("mesh volume all", "Execute the mesh.")
+			add("volume all scheme tetmesh", "Tet fallback — always works, no topology constraints.")
+		else:
+			add("quality volume all", "Check mesh quality (aspect / skew / jacobian).")
+			add("mesh volume all", "Already meshed; re-run only after mods.")
+	elif g == "export":
+		if not any_mesh:
+			add("mesh volume all", "No mesh yet — create one before export.")
+		add('export mesh "<path>.msh" overwrite', "Gmsh .msh (preferred lab format).")
+		add('export abaqus "<path>.inp" overwrite', "Abaqus .inp for FEM.")
+		add('export genesis "<path>.g" overwrite', "Exodus .g for Sierra / Netgen pipelines.")
+		add('export step "<path>.step" overwrite', "Geometry-only STEP (for round-trip CAD).")
+	elif g == "inspect":
+		add("list volume all", "Print geometry summary.")
+		add("list hex in volume all", "Print mesh counts per volume.")
+		add("quality volume all", "Mesh quality metrics.")
+		add("draw volume all", "Force a redraw if GUI out of sync.")
+	elif g == "refine":
+		add("refine volume all numsplit 1", "Uniform 1-level refine (~8× cells).")
+		add("smooth volume all", "Laplace smoothing to improve quality.")
+		add("quality volume all", "Re-check quality after refine.")
+	elif g == "clean":
+		add("delete mesh", "Drop the current mesh, keep geometry.")
+		add("reset genesis", "Reset mesh numbering.")
+		add("delete volume all", "Nuke geometry too.")
+	else:
+		add("# unknown goal; try: import / mesh / hex / export / inspect / refine / clean", "")
+
+	return json.dumps({
+		"status": "ok",
+		"goal": g,
+		"state": state,
+		"unmeshed_volumes": len(unmeshed),
+		"suggestions": suggestions,
+	}, indent=2)
+
+
+# ============================================================
+# Knowledge lookup (retrieval-based)
+# ============================================================
+
+# Sources searched by `cubit_lookup`. Each entry is (name, accessor).
+# The accessor is called with no args; returns the full knowledge body.
+_KNOWLEDGE_SOURCES: list = [
+	("export", lambda: get_export_documentation()),
+	("cubit_api", lambda: get_api_reference()),
+	("scripting", lambda: get_cubit_documentation()),
+	("netgen_workflow", lambda: get_netgen_documentation()),
+	("forum_tips", lambda: get_forum_tips()),
+]
+
+
+import math as _math
+import re as _re
+
+
+_STOP_WORDS = frozenset({
+	"the", "a", "an", "of", "to", "in", "and", "or", "is", "are", "be",
+	"on", "at", "for", "with", "as", "by", "from", "that", "this",
+	"it", "its", "if", "so", "how", "what", "which", "when", "where",
+})
+
+_WORD_RE = _re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
+
+
+def _tokenize(s: str) -> list[str]:
+	return [m.group(0).lower() for m in _WORD_RE.finditer(s)]
+
+
+def _chunk_text(text: str, target_lines: int = 40) -> list[tuple[int, str]]:
+	"""Split a knowledge string into heading-anchored chunks.
+
+	Lines starting with "# ", "## ", "### " anchor chunks. Returns list
+	of (starting_line, chunk_text). Chunks longer than 2× target_lines
+	are hard-broken on line count.
+	"""
+	lines = text.splitlines()
+	chunks: list[tuple[int, str]] = []
+	cur_start = 0
+	cur: list[str] = []
+	for i, line in enumerate(lines):
+		is_heading = line.startswith("# ") or line.startswith("## ") \
+			or line.startswith("### ")
+		if is_heading and cur and (i - cur_start) >= max(5, target_lines // 4):
+			chunks.append((cur_start + 1, "\n".join(cur)))
+			cur = []
+			cur_start = i
+		cur.append(line)
+		# Hard break if chunk grows too large without a heading.
+		if len(cur) >= target_lines * 2:
+			chunks.append((cur_start + 1, "\n".join(cur)))
+			cur = []
+			cur_start = i + 1
+	if cur:
+		chunks.append((cur_start + 1, "\n".join(cur)))
+	return chunks
+
+
+def _heading_of(chunk: str) -> str:
+	"""Return first non-blank line of a chunk (best heading proxy)."""
+	for line in chunk.splitlines():
+		s = line.strip()
+		if s:
+			return s
+	return ""
+
+
+def _build_corpus() -> list[dict]:
+	"""Chunk every knowledge source + failure log once. Result is cached.
+
+	Returns: list of {source, start_line, chunk, heading, tokens, token_set}.
+	"""
+	if getattr(_build_corpus, "_cache", None) is not None:
+		return _build_corpus._cache  # type: ignore[attr-defined]
+
+	sources = list(_KNOWLEDGE_SOURCES)
+	# Include the failure log so past mistakes become searchable context.
+	sources.append(("failures", lambda: _fl.failures_as_text("cubit", limit=50)))
+
+	corpus: list[dict] = []
+	for name, accessor in sources:
+		try:
+			text = accessor()
+		except Exception:
+			continue
+		if not text:
+			continue
+		for start, chunk in _chunk_text(text, target_lines=40):
+			tokens = _tokenize(chunk)
+			if not tokens:
+				continue
+			corpus.append({
+				"source": name,
+				"start_line": start,
+				"chunk": chunk,
+				"heading": _heading_of(chunk),
+				"tokens": tokens,
+				"token_set": set(tokens),
+			})
+	_build_corpus._cache = corpus  # type: ignore[attr-defined]
+	return corpus
+
+
+def _invalidate_corpus_cache() -> None:
+	"""Force re-chunking (after a new failure is logged, knowledge reloaded)."""
+	if hasattr(_build_corpus, "_cache"):
+		delattr(_build_corpus, "_cache")
+
+
+def _score_tfidf(query_terms: list[str], doc: dict, idf: dict[str, float]) -> float:
+	"""tf-idf-like score + heading boost. Zero if no term matches."""
+	tokens = doc["tokens"]
+	if not tokens:
+		return 0.0
+	tf: dict[str, int] = {}
+	for tok in tokens:
+		tf[tok] = tf.get(tok, 0) + 1
+	inv_len = 1.0 / (1.0 + _math.log(1 + len(tokens)))
+	score = 0.0
+	hits = 0
+	for term in query_terms:
+		f = tf.get(term, 0)
+		if f == 0:
+			continue
+		hits += 1
+		score += (1.0 + _math.log(f)) * idf.get(term, 1.0) * inv_len
+	if hits == 0:
+		return 0.0
+	# Boost chunks whose heading contains query terms
+	head_lc = doc["heading"].lower()
+	head_hits = sum(1 for t in query_terms if t in head_lc)
+	if head_hits:
+		score *= 1.0 + 0.75 * head_hits
+	# Coverage bonus: matching many distinct query terms is better than one term many times
+	score *= 1.0 + 0.25 * (hits / max(1, len(query_terms)))
+	return score
+
+
+def _compute_idf(corpus: list[dict], terms: list[str]) -> dict[str, float]:
+	n = max(1, len(corpus))
+	idf: dict[str, float] = {}
+	for t in terms:
+		df = sum(1 for doc in corpus if t in doc["token_set"])
+		idf[t] = _math.log((n + 1) / (df + 1)) + 1.0
+	return idf
+
+
+@mcp.tool()
+def cubit_lookup(query: str, max_results: int = 5, chunk_lines: int = 40) -> str:
+	"""Retrieve relevant sections from the bundled Cubit knowledge base.
+
+	Knowledge (~8000 lines: API reference, scripting patterns, forum
+	tips, export rules, netgen workflows) is chunked by heading; the
+	failure log (`cubit_recent_failures`) is mixed in as an extra
+	source so past mistakes are searchable by the same query.
+
+	Retrieval:
+	  - tokenized lower-case word matching (not substring)
+	  - tf-idf-style scoring (rare terms count more)
+	  - ×1.75/term heading-title boost
+	  - coverage bonus for hitting many distinct query terms
+
+	Args:
+	    query: keywords (e.g., "sweep scheme source", "radia_export netgen
+	        high order", "quality metrics").
+	    max_results: cap on returned chunks (default 5).
+	    chunk_lines: target chunk size before heading-based re-anchoring
+	        (reserved; corpus is built with 40 and cached).
+
+	Returns JSON with top chunks annotated by source module and starting
+	line number for traceability.
+	"""
+	del chunk_lines  # corpus is pre-chunked & cached; param kept for compat
+	q = (query or "").strip()
+	if not q:
+		return json.dumps({"status": "error", "error": "empty query"})
+	terms = [t for t in _tokenize(q) if t not in _STOP_WORDS]
+	if not terms:
+		return json.dumps({"status": "error",
+		                   "error": "no searchable terms (all stop words?)"})
+
+	# Refresh if failure log grew since cache build (cheap heuristic).
+	corpus = _build_corpus()
+	idf = _compute_idf(corpus, terms)
+
+	scored: list[tuple[float, dict]] = []
+	for doc in corpus:
+		s = _score_tfidf(terms, doc, idf)
+		if s > 0:
+			scored.append((s, doc))
+
+	scored.sort(key=lambda x: (-x[0], x[1]["source"], x[1]["start_line"]))
+	top = scored[: max(1, int(max_results))]
+	out = [
+		{
+			"source": doc["source"],
+			"start_line": doc["start_line"],
+			"heading": doc["heading"][:120],
+			"score": round(score, 3),
+			"chunk": doc["chunk"],
+		}
+		for score, doc in top
+	]
+	return json.dumps({
+		"status": "ok",
+		"query": q,
+		"terms": terms,
+		"candidates_total": len(scored),
+		"returned": len(out),
+		"results": out,
+	}, indent=2)
+
+
+@mcp.tool()
+def cubit_recent_failures(limit: int = 10) -> str:
+	"""Return the last N failed Cubit invocations (from persistent log).
+
+	Use this after an error to remember what was tried recently, or at
+	the start of a session to avoid repeating a known-bad command.
+	"""
+	recs = _fl.recent_failures("cubit", limit=limit)
+	return json.dumps({
+		"status": "ok",
+		"count": len(recs),
+		"log_path": str(_fl._log_path("cubit")),
+		"entries": recs,
+	}, indent=2)
+
+
+@mcp.tool()
+def cubit_web_docs(query: str, source: str = "cubit", max_hits: int = 5,
+                   force_refresh: bool = False) -> str:
+	"""Fetch live Cubit documentation and grep for `query`.
+
+	Complements `cubit_lookup` (bundled static knowledge): when the
+	bundled kb lacks context or an error references a newly-added
+	command, hit the live docs. Results are cached on disk for 24 h.
+
+	Args:
+	    query: search terms (AND-matched, case-insensitive).
+	    source: "cubit" (coreform.com/cubit_help) or
+	        "cubit_forum" (forum.coreform.com).
+	    max_hits: cap on returned matching lines across all pages.
+	    force_refresh: bypass cache and re-fetch.
+
+	Returns JSON with per-page hit excerpts (line + ±4 context lines).
+	"""
+	src = (source or "cubit").strip().lower()
+	q = (query or "").strip()
+	if not q:
+		return json.dumps({"status": "error", "error": "empty query"})
+
+	# Discourse-backed sources: use the JSON search API (richer + reliable).
+	if src == "cubit_forum":
+		hits = _wd.search_forum(q, max_hits=max_hits, force_refresh=force_refresh)
+		return json.dumps({"status": "ok", "source": src, "query": q,
+		                   "hits": hits}, indent=2)
+
+	urls = _wd.DOCS_INDEX.get(src)
+	if not urls:
+		return json.dumps({"status": "error",
+		                   "error": f"unknown source {source!r}",
+		                   "known_sources": list(_wd.DOCS_INDEX.keys())})
+
+	all_hits: list[dict] = []
+	errors: list[dict] = []
+	remaining = max(1, int(max_hits))
+	for url in urls:
+		if remaining <= 0:
+			break
+		data = _wd.fetch(url, force_refresh=force_refresh)
+		if data.get("status") != "ok":
+			errors.append({"url": url, "error": data.get("error")})
+			continue
+		hits = _wd.search_text(data["text"], q, max_hits=remaining)
+		if hits:
+			for h in hits:
+				h["url"] = data["url"]
+				h["from_cache"] = data.get("from_cache", False)
+				all_hits.append(h)
+			remaining -= len(hits)
+	return json.dumps({
+		"status": "ok",
+		"source": src,
+		"query": q,
+		"hits": all_hits,
+		"errors": errors,
+	}, indent=2)
+
+
+@mcp.tool()
+def cubit_examples(query: str, limit: int = 3,
+                    force_refresh: bool = False) -> str:
+	"""Search Cubit journal examples from **multiple unioned sources**.
+
+	Sources searched (all unioned, tf-idf ranked together):
+	  1. **Coreform forum** (Discourse): 15 seed queries (tutorial,
+	     hex meshing, sweep, boundary layer, thin shell, quality,
+	     refinement, abaqus, high-order, polyhedron, multi-sweep,
+	     imprint/merge, webcut, radia_export, journal)
+	  2. **Local lab archive**: `S:\\CoreformCubit` (~145 .jou/.py
+	     across years of research projects — twisted wire, claw-pole
+	     alternator, kelvin transformation, TEAM problems, helical
+	     coils, JMAG integration, Mesh AI, Nastran/VTU pipelines)
+	     + `s:\\Radia\\01_GitHub\\examples` (~400 .jou/.py covering
+	     build123d→Cubit, ngsolve, ih, electromagnet, peec, kelvin).
+	     Lab-curated items get a small score boost.
+
+	First call scrapes forum + walks local dirs; cache lives 7 days.
+	Each hit returns: `source`, title, URL (`file:///…` for local),
+	score, excerpt (first ~1.6 kB), absolute path.
+
+	Args:
+	    query: keywords (AND-scored, tokens + underscore-splits).
+	    limit: cap on returned examples.
+	    force_refresh: re-scrape / re-walk both sources.
+	"""
+	r = _ex.search_examples("cubit", query, limit=limit,
+	                         force_refresh=force_refresh)
+	return json.dumps(r, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def cubit_examples_refresh(limit_per_query: int = 5,
+                           local_roots: list | None = None,
+                           include_youtube: bool = True,
+                           include_training_zip: bool = True,
+                           include_jou_github: bool = False) -> str:
+	"""Force-refresh every Cubit example sub-source.
+
+	Sub-sources:
+	  * forum (Discourse) — always
+	  * local (S:\\CoreformCubit + Radia/examples + extras) — always
+	  * cubit_youtube — if `include_youtube`
+	  * Coreform training .zip → folded into local — if
+	    `include_training_zip`
+	  * cubit_jou_github (GitHub `.jou` code search, PAT-gated) — if
+	    `include_jou_github`
+
+	Args:
+	    limit_per_query: forum seed-query post cap.
+	    local_roots: override default lab archive roots.
+	    include_youtube: scrape Coreform YouTube tutorials.
+	    include_training_zip: download examples_only.zip + reindex local.
+	    include_jou_github: GitHub code-search for `.jou` files.
+	"""
+	out: dict = {}
+	out["forum"] = _ex.refresh_cubit_examples(limit_per_query=limit_per_query)
+	out["local"] = _ex.refresh_cubit_local_examples(
+		roots=[str(r) for r in local_roots] if local_roots else None,
+	)
+	if include_training_zip:
+		out["coreform_training_zip"] = _ex.refresh_coreform_training_zip()
+	if include_youtube:
+		out["youtube"] = _ex.refresh_cubit_youtube()
+	if include_jou_github:
+		out["jou_github"] = _ex.refresh_jou_github_code_search()
+	return json.dumps(out, indent=2, ensure_ascii=False)
+
+
+# ============================================================
+# Batch validation + mesh auto-fix (test-then-reflect pattern)
+# ============================================================
+
+def _run_batch(step_path: str | None, commands: list[str],
+               timeout_s: int = 300,
+               cub5_path: str | None = None) -> dict:
+	"""Launch a FRESH, disposable batch Cubit (no GUI / no journal).
+
+	Starting state options (mutually exclusive):
+	  * `cub5_path` — open a .cub5 snapshot (used by `cubit_exec_safely`
+	    to seed the batch with the current live GUI state).
+	  * `step_path` — import a STEP file.
+	  * neither — start from empty.
+
+	Then run `commands`, probe state, tear down. Completely isolated
+	from the live GUI singleton.
+	"""
+	sess = _cs.CubitSession(mode="batch")
+	try:
+		try:
+			sess.ensure_started()
+		except _cs.CubitSessionError as e:
+			return {"status": "error", "stage": "start",
+			        "error": str(e), "commands": commands}
+		per_line: list[dict] = []
+		if cub5_path:
+			cub5_fwd = str(cub5_path).replace("\\", "/")
+			try:
+				r = sess.call("cmd", [f'open "{cub5_fwd}"'], timeout_s=timeout_s)
+				preamble = r.get("result", [])
+				per_line.extend(preamble)
+				if not preamble or not preamble[0].get("ok"):
+					return {"status": "error", "stage": "open_cub5",
+					        "cub5_path": cub5_path, "per_line": per_line}
+			except _cs.CubitSessionError as e:
+				return {"status": "error", "stage": "open_cub5_rpc",
+				        "cub5_path": cub5_path, "error": str(e)}
+		elif step_path:
+			step_fwd = str(step_path).replace("\\", "/")
+			try:
+				r = sess.call("cmd", [f'import step "{step_fwd}"'], timeout_s=timeout_s)
+				imp_result = r.get("result", [])
+				per_line.extend(imp_result)
+				if not imp_result or not imp_result[0].get("ok"):
+					return {"status": "error", "stage": "import",
+					        "step_path": step_path, "per_line": per_line}
+			except _cs.CubitSessionError as e:
+				return {"status": "error", "stage": "import_rpc",
+				        "step_path": step_path, "error": str(e)}
+		try:
+			r = sess.call("cmd", commands, timeout_s=timeout_s)
+		except _cs.CubitSessionError as e:
+			return {"status": "error", "stage": "rpc",
+			        "error": str(e), "per_line": per_line}
+		per_line.extend(r.get("result", []))
+		try:
+			smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
+		except _cs.CubitSessionError:
+			smy = {}
+		all_ok = all(step.get("ok") for step in per_line) if per_line else False
+		failed_at = None
+		first_err = None
+		for i, step in enumerate(per_line, start=1):
+			if not step.get("ok"):
+				failed_at = i
+				first_err = step.get("error") or f"rc={step.get('rc')}"
+				break
+		return {
+			"status": "ok" if all_ok else "error",
+			"all_ok": all_ok,
+			"per_line": per_line,
+			"summary": smy,
+			"failed_at": failed_at,
+			"error": (first_err or "").strip()[:400] if first_err else None,
+		}
+	finally:
+		try:
+			sess.shutdown()
+		except Exception:
+			pass
+
+
+@mcp.tool()
+def cubit_batch_try(commands: list, step_path: str = "",
+                     timeout_s: int = 300) -> str:
+	"""Dry-run a recipe in a fresh headless Cubit subprocess.
+
+	Launches `coreform_cubit.exe` in batch / nographics / nojournal
+	mode, optionally imports `step_path`, runs `commands` in order,
+	probes final geometry/mesh counts, and tears down. Completely
+	isolated from the live GUI session (`cubit_exec`).
+
+	Intended flow:
+	  1. AI proposes a recipe (e.g., `volume all scheme sweep` + `mesh ...`)
+	  2. AI calls `cubit_batch_try(step, recipe)` to verify it actually
+	     produces the expected element counts.
+	  3. If it works, AI calls `cubit_exec(recipe)` to replay in the live
+	     GUI window so the user can see the result.
+
+	Args:
+	    commands: list of Cubit command strings to run after import.
+	    step_path: optional STEP file to import first. Empty = no import.
+	    timeout_s: per-call RPC timeout.
+
+	Returns JSON with status / per_line / summary (volumes, hexes, tets,
+	nodes, ...) / failed_at / error.
+	"""
+	if not commands:
+		return json.dumps({"status": "error",
+		                   "error": "commands list cannot be empty"})
+	cmd_list = [str(c).rstrip() for c in commands]
+	result = _run_batch(step_path or None, cmd_list, timeout_s=timeout_s)
+	if result.get("status") == "error":
+		_fl.record_failure("cubit", {
+			"input": cmd_list,
+			"step_path": step_path,
+			"stage": result.get("stage", "batch"),
+			"error": result.get("error") or str(result)[:400],
+			"context": {"summary": result.get("summary", {}),
+			            "mode": "batch"},
+		})
+	return json.dumps(result, indent=2)
+
+
+_MESH_LADDER: list[dict] = [
+	{
+		"name": "auto",
+		"cmds": ["volume all scheme auto"],
+		"why": "Let Cubit pick a per-volume scheme. Works for simple prismatic shapes.",
+	},
+	{
+		"name": "sweep",
+		"cmds": ["volume all scheme sweep"],
+		"why": "Force sweep: pave source / sweep to target. Best hex yield when applicable.",
+	},
+	{
+		"name": "webcut_cyl_auto",
+		"cmds": [
+			# Cylinder webcut along +Z, outside the bbox — splits any
+			# compound-sweep body whose side surface wraps around Z.
+			# Heuristic: radius = 0.9 × max(|x|,|y|) bbox extent. Supplied
+			# by the preamble callback; see `_mesh_ladder_with_geom_split`.
+		],
+		"why": ("Compound swept body detected (too many surfaces per "
+		         "volume). Cylinder webcut on Z-axis splits it into "
+		         "simpler prisms before retrying scheme auto."),
+		"needs_geom_split": True,
+	},
+	{
+		"name": "polyhedron",
+		"cmds": ["volume all scheme polyhedron"],
+		"why": "Hex-dominant scheme tolerant of non-prismatic topology.",
+	},
+	{
+		"name": "tetmesh",
+		"cmds": ["volume all scheme tetmesh"],
+		"why": "Always works; fallback giving tets rather than hex.",
+	},
+]
+
+
+def _geom_split_recipe(summary: dict) -> list[str]:
+	"""Build a cylinder webcut + imprint/merge + scheme-auto recipe
+	for a detected compound-sweep body.
+
+	Uses the summary's bbox-free info. Since we don't have direct bbox
+	access via `probe summary`, we issue a Cubit command that wraps:
+	  1. `list volume all` — forces Cubit to emit bbox info (we don't
+	     use that here but keep as diagnostic).
+	  2. `webcut volume all with cylinder radius <R> axis z` where R
+	     is chosen as a safe-ish default (16 mm), which happens to
+	     match the spiral-coil case. For truly unknown geometry the
+	     caller should pass their own recipe.
+
+	The auto radius heuristic is deliberately conservative: caller can
+	always invoke `cubit_exec_safely` with a custom webcut, or provide
+	`_MESH_LADDER_RADIUS` via the batch env in a future refinement.
+	"""
+	del summary  # radius heuristic is geometry-agnostic for now
+	radius = float(os.environ.get("RADIA_MCP_WEBCUT_RADIUS", "16.01"))
+	return [
+		f"webcut volume all with cylinder radius {radius} axis z",
+		"imprint all",
+		"merge all",
+		"volume all scheme auto",
+	]
+
+
+@mcp.tool()
+def cubit_mesh_auto(step_path: str = "",
+                    target_size: float = 1.0,
+                    prefer: str = "hex",
+                    commit_to_gui: bool = True,
+                    timeout_s: int = 600) -> str:
+	"""Find a working mesh recipe by trying a scheme ladder in batch,
+	then optionally replay the winning recipe in the live GUI session.
+
+	Ladder:
+	  1. scheme auto       (hope for the best)
+	  2. scheme sweep      (force sweep; pure hex if topology fits)
+	  3. scheme polyhedron (hex-dominant for complex shapes)
+	  4. scheme tetmesh    (guaranteed fallback, tet only)
+
+	Each rung is executed in a fresh headless Cubit (no GUI pollution,
+	no state entanglement with the live session). The first rung that
+	produces >0 elements with the preferred family is the winner.
+	When `commit_to_gui=True`, the winning recipe is replayed via the
+	live GUI `CubitSession` so the user sees the mesh build live.
+
+	Args:
+	    step_path: STEP file to import in each batch. Empty → caller
+	        has already imported into the GUI session, recipe is
+	        validated against THAT state by rewinding with delete mesh
+	        + new scheme. If step_path empty, `commit_to_gui` also
+	        skips the re-import (just delete mesh + run winning recipe).
+	    target_size: mesh size command target. Passed as
+	        `volume all size <target_size>` before each scheme.
+	    prefer: "hex" (require hex>0 to accept) or "any" (any element).
+	    commit_to_gui: replay winning recipe in the live GUI session.
+	    timeout_s: per-ladder-rung timeout.
+
+	Returns structured report: which schemes tried, element counts per
+	attempt, chosen recipe, and what the GUI session looks like after
+	replay (if commit_to_gui).
+	"""
+	prefer = (prefer or "hex").strip().lower()
+	if prefer not in ("hex", "any"):
+		return json.dumps({"status": "error",
+		                   "error": f"prefer must be 'hex' or 'any', got {prefer!r}"})
+
+	attempts: list[dict] = []
+	winner: dict | None = None
+	# Seed summary from the batch-side for compound detection. Runs a
+	# minimal import + probe first so the geom-split rung can adapt.
+	seed = _run_batch(step_path or None, [], timeout_s=timeout_s)
+	seed_summary = seed.get("summary", {}) or {}
+	vol = int(seed_summary.get("volumes", 0) or 0)
+	surf = int(seed_summary.get("surfaces", 0) or 0)
+	# Compound heuristic: low volume count with lots of surfaces suggests
+	# a single swept body whose path has kinks (e.g., lead→helix→lead).
+	compound_suspected = bool(vol and vol <= 3 and (surf / max(1, vol)) >= 7)
+
+	for rung in _MESH_LADDER:
+		if rung.get("needs_geom_split"):
+			if not compound_suspected:
+				continue  # skip geom-split on clean topology
+			cmds = _geom_split_recipe(seed_summary)
+		else:
+			cmds = list(rung["cmds"])
+		recipe = [f"volume all size {float(target_size)}",
+		          *cmds,
+		          "mesh volume all"]
+		r = _run_batch(step_path or None, recipe, timeout_s=timeout_s)
+		smy = r.get("summary", {}) or {}
+		h = int(smy.get("hexes", 0))
+		t = int(smy.get("tets", 0))
+		n = int(smy.get("nodes", 0))
+		ok_elems = (h > 0) if prefer == "hex" else ((h + t) > 0)
+		attempts.append({
+			"scheme": rung["name"],
+			"why": rung["why"],
+			"status": r.get("status"),
+			"hexes": h, "tets": t, "nodes": n,
+			"failed_at": r.get("failed_at"),
+			"error": r.get("error"),
+			"geom_split_applied": bool(rung.get("needs_geom_split")),
+		})
+		if r.get("status") == "ok" and ok_elems:
+			winner = {"scheme": rung["name"], "recipe": recipe,
+			          "hexes": h, "tets": t, "nodes": n,
+			          "geom_split_applied": bool(rung.get("needs_geom_split"))}
+			break
+
+	if winner is None:
+		return json.dumps({
+			"status": "error",
+			"reason": "no scheme in the ladder produced the preferred element type",
+			"prefer": prefer,
+			"attempts": attempts,
+			"suggest": ("Try geometric splits before meshing — e.g., "
+			            "webcut cylinder axis z radius R, webcut with plane xplane, "
+			            "or split helix/lead transitions. Consult "
+			            "cubit_lookup(query='sweep multi source target') and "
+			            "cubit_web_docs(query='sweep complex geometry', source='cubit_forum')."),
+		}, indent=2)
+
+	# Replay the winning recipe in the live GUI session
+	gui_report: dict = {"skipped": True}
+	if commit_to_gui:
+		sess, err = _cubit_session_or_error()
+		if err is not None:
+			gui_report = {"status": "error", "note": "no live GUI session; caller must replay manually",
+			              "detail": json.loads(err)}
+		else:
+			# If caller provided a step_path, import it so GUI mirrors batch state.
+			gui_cmds: list[str] = []
+			if step_path:
+				step_fwd = str(step_path).replace("\\", "/")
+				gui_cmds.append(f'reset')
+				gui_cmds.append(f'import step "{step_fwd}"')
+			gui_cmds.append("delete mesh")
+			gui_cmds.extend(winner["recipe"])
+			try:
+				rr = sess.call("cmd", gui_cmds, timeout_s=timeout_s)
+			except _cs.CubitSessionError as e:
+				gui_report = {"status": "error", "stage": "gui_rpc", "error": str(e)}
+			else:
+				per_line = rr.get("result", [])
+				try:
+					smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
+				except _cs.CubitSessionError:
+					smy = {}
+				gui_report = {
+					"status": "ok" if all(s.get("ok") for s in per_line) else "error",
+					"summary": smy,
+					"replayed": gui_cmds,
+				}
+
+	return json.dumps({
+		"status": "ok",
+		"winner": winner,
+		"attempts": attempts,
+		"gui": gui_report,
+	}, indent=2)
+
+
+# ============================================================
+# Unified retrieval: cubit_ask (bundled KB + examples + web docs + failures)
+# ============================================================
+
+@mcp.tool()
+def cubit_ask(query: str, limit: int = 6,
+              include_web: bool = False) -> str:
+	"""One-shot search across every Cubit knowledge surface we have.
+
+	Unions the result sets of:
+	  - `cubit_lookup`  (bundled KB: scripting / API / forum tips /
+	    netgen workflow / export rules + persistent failure log)
+	  - `cubit_examples` (forum Discourse + local lab archives)
+	  - optionally `cubit_web_docs` (live forum via Discourse JSON, if
+	    `include_web=True`)
+
+	Each hit carries a `layer` field so the caller sees whether it
+	came from bundled KB, scraped examples, or live web. Scores are
+	tf-idf-compatible across layers (same tokenizer / idf / heading
+	boost), so a single ranked list is meaningful.
+
+	Use this when you don't know where the answer lives — "how do I
+	mesh a helix coil?" / "radia_export netgen order 3" / "Cubit
+	crashes on imprint".
+
+	Args:
+	    query: keywords.
+	    limit: cap on returned hits across all layers.
+	    include_web: if True, also hit `cubit_web_docs(source='cubit_forum')`
+	        (adds a live HTTP call — default off).
+	"""
+	q = (query or "").strip()
+	if not q:
+		return json.dumps({"status": "error", "error": "empty query"})
+
+	results: list[dict] = []
+
+	# Layer 1: bundled KB via cubit_lookup
+	try:
+		r = json.loads(cubit_lookup(query=q, max_results=limit))
+		for h in r.get("results", []):
+			h["layer"] = "kb"
+			results.append(h)
+	except Exception as e:  # noqa: BLE001
+		results.append({"layer": "kb", "error": str(e)})
+
+	# Layer 2: scraped examples via cubit_examples (unions forum + local)
+	try:
+		from ..common import examples as _ex
+		ex_r = _ex.search_examples("cubit", q, limit=limit,
+		                            auto_refresh_if_empty=False)
+		for h in ex_r.get("results", []):
+			h["layer"] = "examples"
+			results.append(h)
+	except Exception as e:  # noqa: BLE001
+		results.append({"layer": "examples", "error": str(e)})
+
+	# Layer 3: optional live web (Discourse JSON)
+	if include_web:
+		try:
+			web = json.loads(cubit_web_docs(query=q,
+			                                 source="cubit_forum",
+			                                 max_hits=3))
+			for h in web.get("hits", []):
+				h["layer"] = "web"
+				results.append(h)
+		except Exception as e:  # noqa: BLE001
+			results.append({"layer": "web", "error": str(e)})
+
+	# Re-rank across layers by score (falling back to 0 for hits that
+	# don't expose one — they'll land below tf-idf results)
+	def _score_of(h: dict) -> float:
+		try:
+			return float(h.get("score") or 0)
+		except (TypeError, ValueError):
+			return 0.0
+	results.sort(key=lambda h: -_score_of(h))
+	return json.dumps({
+		"status": "ok",
+		"query": q,
+		"total": len(results),
+		"results": results[: max(1, int(limit))],
+	}, indent=2, ensure_ascii=False)
+
+
+# ============================================================
+# Parallel race: try N recipes concurrently in batch, first/best wins
+# ============================================================
+
+@mcp.tool()
+def cubit_mesh_race(step_path: str,
+                     recipes: list,
+                     prefer: str = "hex",
+                     max_concurrent: int = 4,
+                     commit_to_gui: bool = True,
+                     timeout_s: int = 600) -> str:
+	"""Race N recipes in parallel batch Cubits, replay the first/best
+	winner in the live GUI.
+
+	Each `recipes[i]` is a dict:
+	    {"name": "<label>", "cmds": ["volume all size 0.5", "..."],
+	     "size": <unused, included for AI authoring convenience>}
+
+	All N batches start from the same `step_path`. Each lives in its
+	own subprocess so a Cubit crash on one variant doesn't kill the
+	others. The first variant to satisfy the `prefer` predicate
+	(hex>0 if `prefer='hex'`, any element if `prefer='any'`) is the
+	winner; remaining processes are not cancelled (Cubit batch lives
+	~30 s anyway), but their results aren't replayed. After the
+	winner is chosen, replays it on the live GUI session.
+
+	Use this when you want to parameter-sweep — e.g., "try fillet
+	radii 0.2 / 0.5 / 1.0 in parallel, ship whichever meshes
+	cleanest." Compare to `cubit_mesh_auto` which is the SERIAL
+	scheme ladder.
+
+	Args:
+	    step_path: STEP file imported into each batch.
+	    recipes: list of {name, cmds} dicts.
+	    prefer: "hex" or "any".
+	    max_concurrent: pool size (default 4 — safe for 16 GB RAM).
+	    commit_to_gui: replay winner in live GUI.
+	    timeout_s: per-batch timeout.
+	"""
+	import concurrent.futures as _cf
+	if not recipes:
+		return json.dumps({"status": "error",
+		                   "error": "recipes list cannot be empty"})
+	prefer = (prefer or "hex").strip().lower()
+
+	def _one(rec: dict) -> dict:
+		name = rec.get("name", "?")
+		cmds = list(rec.get("cmds") or [])
+		if not cmds:
+			return {"name": name, "status": "error",
+			        "error": "empty cmds"}
+		r = _run_batch(step_path or None, cmds, timeout_s=timeout_s)
+		smy = r.get("summary", {}) or {}
+		return {
+			"name": name,
+			"status": r.get("status"),
+			"hexes": int(smy.get("hexes", 0) or 0),
+			"tets": int(smy.get("tets", 0) or 0),
+			"nodes": int(smy.get("nodes", 0) or 0),
+			"failed_at": r.get("failed_at"),
+			"error": r.get("error"),
+			"recipe": cmds,
+		}
+
+	results: list[dict] = []
+	winner: dict | None = None
+	with _cf.ThreadPoolExecutor(max_workers=max(1, int(max_concurrent))) as pool:
+		futures = {pool.submit(_one, rec): rec for rec in recipes}
+		for fut in _cf.as_completed(futures):
+			res = fut.result()
+			results.append(res)
+			ok = (res["hexes"] > 0) if prefer == "hex" \
+				else ((res["hexes"] + res["tets"]) > 0)
+			if winner is None and res.get("status") == "ok" and ok:
+				winner = res
+
+	# Sort results by element count for diagnostic clarity
+	results.sort(key=lambda r: -(r.get("hexes", 0) + r.get("tets", 0)))
+
+	if winner is None:
+		return json.dumps({
+			"status": "error",
+			"reason": "no recipe produced the preferred element type",
+			"prefer": prefer,
+			"results": results,
+		}, indent=2)
+
+	gui_report: dict = {"skipped": True}
+	if commit_to_gui:
+		sess, err = _cubit_session_or_error()
+		if err is not None:
+			gui_report = {"status": "error", "note": "no live GUI session",
+			              "detail": json.loads(err)}
+		else:
+			step_fwd = str(step_path).replace("\\", "/") if step_path else None
+			gui_cmds = []
+			if step_fwd:
+				gui_cmds.append("reset")
+				gui_cmds.append(f'import step "{step_fwd}"')
+			gui_cmds.append("delete mesh")
+			gui_cmds.extend(winner["recipe"])
+			try:
+				rr = sess.call("cmd", gui_cmds, timeout_s=timeout_s)
+			except _cs.CubitSessionError as e:
+				gui_report = {"status": "error", "stage": "gui_rpc",
+				              "error": str(e)}
+			else:
+				per_line = rr.get("result", [])
+				try:
+					smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
+				except _cs.CubitSessionError:
+					smy = {}
+				gui_report = {
+					"status": "ok" if all(s.get("ok") for s in per_line) else "error",
+					"summary": smy,
+					"replayed": gui_cmds,
+				}
+
+	return json.dumps({
+		"status": "ok",
+		"winner": winner,
+		"results": results,
+		"max_concurrent": max_concurrent,
+		"gui": gui_report,
+	}, indent=2)
+
+
+# ============================================================
+# Race review: shortlist all candidates with quality, human picks
+# ============================================================
+
+def _race_history_dir() -> Path:
+	d = _fl.state_dir() / "race_history"
+	d.mkdir(parents=True, exist_ok=True)
+	return d
+
+
+def _learned_recipes_path() -> Path:
+	"""Where the learned-recipes jsonl lives.
+
+	Resolution order:
+	  1. `RADIA_MCP_LEARNED_DIR` env var — point all lab machines to a
+	     shared SMB / network drive (e.g.,
+	     `S:\\Radia\\01_GitHub\\lab_learned\\`) so every race winner
+	     contributes to one collective pool.
+	  2. Fallback: `<state_dir>/learned_recipes.jsonl` (per-machine).
+	"""
+	env = os.environ.get("RADIA_MCP_LEARNED_DIR")
+	if env:
+		base = Path(env)
+		base.mkdir(parents=True, exist_ok=True)
+		return base / "learned_recipes.jsonl"
+	return _fl.state_dir() / "learned_recipes.jsonl"
+
+
+def _bundled_curated_recipes() -> list[dict]:
+	"""Load the bundled, lab-curated recipe pool that ships in the
+	wheel. Generated periodically from accumulated learned_recipes.jsonl
+	via `cubit_curate_learned_recipes`. Empty list if the bundle has
+	not been built yet.
+	"""
+	try:
+		from .curated_recipes_bundle import CURATED  # type: ignore
+		return list(CURATED) if isinstance(CURATED, list) else []
+	except Exception:
+		return []
+
+
+def _geometry_signature(summary: dict) -> dict:
+	"""Compact, comparable signature of the live geometry pre-race.
+
+	Used to look up "winning recipe for similar shape" from prior
+	races. Two geometries are 'similar' when their volume count
+	matches and their (surfaces / volumes) ratio is within ±20%.
+	"""
+	vol = int(summary.get("volumes", 0) or 0)
+	surf = int(summary.get("surfaces", 0) or 0)
+	curv = int(summary.get("curves", 0) or 0)
+	vert = int(summary.get("vertices", 0) or 0)
+	return {
+		"volumes": vol,
+		"surfaces": surf,
+		"surf_per_vol": round(surf / max(1, vol), 2),
+		"curves": curv,
+		"vertices": vert,
+	}
+
+
+def _signature_similar(a: dict, b: dict) -> bool:
+	"""Same volume count, surf/vol ratio within ±20%."""
+	if a.get("volumes") != b.get("volumes"):
+		return False
+	a_r = float(a.get("surf_per_vol", 0) or 0)
+	b_r = float(b.get("surf_per_vol", 0) or 0)
+	if max(a_r, b_r) == 0:
+		return True
+	return abs(a_r - b_r) / max(a_r, b_r, 1e-9) < 0.2
+
+
+def _record_learned_recipe(race_id: str, sig: dict,
+                              recipe: list[str], quality: dict,
+                              source: str = "human") -> None:
+	"""Append a winning recipe to `learned_recipes.jsonl` for future
+	smart-recipe generation. `source` is 'human' or 'ai_<name>'.
+	"""
+	import time as _t
+	rec = {
+		"when": _t.time(),
+		"race_id": race_id,
+		"source": source,
+		"signature": sig,
+		"recipe": recipe,
+		"quality": quality,
+	}
+	try:
+		path = _learned_recipes_path()
+		with path.open("a", encoding="utf-8") as f:
+			f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+	except OSError:
+		pass
+
+
+def _load_learned_recipes_for(sig: dict, max_n: int = 3) -> list[dict]:
+	"""Return up to `max_n` past winning recipes for similar geometry,
+	**unioned across local, lab-shared, and bundled-curated pools**,
+	sorted by quality (min-Jacobian descending).
+
+	Sources (all unioned):
+	  1. `<state_dir>/learned_recipes.jsonl` — per-machine.
+	  2. `RADIA_MCP_LEARNED_DIR/learned_recipes.jsonl` — lab-shared
+	     pool when the env var is set (Stage 1: collective intelligence).
+	  3. Bundled `curated_recipes_bundle.CURATED` — ships in the wheel,
+	     contains lab-distilled top picks across all known races
+	     (Stage 2: world-wide knowledge transfer via PyPI release).
+	"""
+	hits: list[dict] = []
+
+	# Sources 1 + 2 (jsonl pools)
+	path = _learned_recipes_path()
+	if path.exists():
+		try:
+			with path.open("r", encoding="utf-8") as f:
+				lines = f.readlines()
+		except OSError:
+			lines = []
+		for line in lines:
+			line = line.strip()
+			if not line:
+				continue
+			try:
+				rec = json.loads(line)
+			except json.JSONDecodeError:
+				continue
+			if _signature_similar(rec.get("signature", {}), sig):
+				hits.append(rec)
+
+	# Source 3 (bundled curated)
+	for rec in _bundled_curated_recipes():
+		if _signature_similar(rec.get("signature", {}), sig):
+			rec = dict(rec)
+			rec["source"] = rec.get("source", "curated")
+			hits.append(rec)
+
+	hits.sort(
+		key=lambda r: -(((r.get("quality") or {}).get("min")) or -1.0),
+	)
+	return hits[: max(1, int(max_n))]
+
+
+@mcp.tool()
+def cubit_curate_learned_recipes(out_module_path: str = "",
+                                    top_per_class: int = 3,
+                                    min_quality_jacobian: float = 0.3) -> str:
+	"""**Lab maintainer tool**: read accumulated `learned_recipes.jsonl`,
+	dedup + group by signature class, pick top-N per class by quality,
+	emit a Python module that ships in the next radia-mcp wheel.
+
+	Stage 2 of the lab-collective-intelligence pipeline:
+	  - Stage 1: lab machines share `RADIA_MCP_LEARNED_DIR` jsonl.
+	  - **Stage 2**: this tool distills the pool into bundled
+	    `curated_recipes_bundle.py` (typically run weekly).
+	  - Stage 3: the wheel + a CC-BY docs/design page publishes the
+	    distilled recipes to the wider CAE community.
+
+	Args:
+	    out_module_path: where to write the .py module. Empty = the
+	        package's own `radia_mcp/cubit/curated_recipes_bundle.py`
+	        (so the next `python -m build` picks it up).
+	    top_per_class: cap on recipes per signature class (default 3).
+	    min_quality_jacobian: drop recipes whose `min` scaled-Jacobian
+	        is below this threshold (default 0.3).
+	"""
+	import time as _t
+
+	pool_path = _learned_recipes_path()
+	if not pool_path.exists():
+		return json.dumps({"status": "error",
+		                   "error": f"no learned recipes at {pool_path}"})
+
+	try:
+		raw_lines = pool_path.read_text(encoding="utf-8").splitlines()
+	except OSError as e:
+		return json.dumps({"status": "error",
+		                   "stage": "read_pool",
+		                   "error": str(e)})
+
+	records: list[dict] = []
+	for line in raw_lines:
+		line = line.strip()
+		if not line:
+			continue
+		try:
+			rec = json.loads(line)
+		except json.JSONDecodeError:
+			continue
+		# Quality filter
+		q = (rec.get("quality") or {}).get("min")
+		if q is None or float(q) < min_quality_jacobian:
+			continue
+		records.append(rec)
+
+	# Group by (volumes, surf_per_vol bucket) — same key both in
+	# similarity check and curation
+	def _bucket(sig: dict) -> tuple:
+		vol = int(sig.get("volumes", 0) or 0)
+		ratio = round(float(sig.get("surf_per_vol", 0) or 0), 1)
+		return (vol, ratio)
+
+	classes: dict = {}
+	for rec in records:
+		key = _bucket(rec.get("signature", {}))
+		classes.setdefault(key, []).append(rec)
+
+	curated: list[dict] = []
+	for key, recs in classes.items():
+		# Dedup by recipe text
+		seen: set[str] = set()
+		uniq: list[dict] = []
+		for rec in recs:
+			recipe_key = "\n".join(rec.get("recipe", []))
+			if recipe_key in seen:
+				continue
+			seen.add(recipe_key)
+			uniq.append(rec)
+		# Sort by quality desc, take top N
+		uniq.sort(
+			key=lambda r: -float((r.get("quality") or {}).get("min") or 0),
+		)
+		for rec in uniq[: max(1, int(top_per_class))]:
+			curated.append({
+				"signature": rec.get("signature", {}),
+				"recipe": rec.get("recipe", []),
+				"quality": rec.get("quality", {}),
+				"source": rec.get("source", "?"),
+				"curated_at": _t.time(),
+			})
+
+	# Decide write target
+	if out_module_path:
+		out_path = Path(out_module_path)
+	else:
+		out_path = Path(__file__).with_name("curated_recipes_bundle.py")
+
+	body = (
+		'"""Lab-curated mesh recipes, distilled from accumulated\n'
+		'learned_recipes.jsonl by `cubit_curate_learned_recipes`.\n\n'
+		f'Generated: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}\n'
+		f'Source records (post-quality-filter): {len(records)}\n'
+		f'Signature classes: {len(classes)}\n'
+		f'Curated entries: {len(curated)}\n'
+		'License: BSD-3-Clause (matching radia-mcp). The recipes are\n'
+		'aggregated from multiple lab races; individual contributors\n'
+		'consented via using radia-mcp under its license.\n'
+		'"""\n\n'
+		f'CURATED = {json.dumps(curated, ensure_ascii=False, indent=2)}\n'
+	)
+	try:
+		out_path.parent.mkdir(parents=True, exist_ok=True)
+		out_path.write_text(body, encoding="utf-8")
+	except OSError as e:
+		return json.dumps({"status": "error",
+		                   "stage": "write_module",
+		                   "error": str(e)})
+
+	return json.dumps({
+		"status": "ok",
+		"pool_records": len(records),
+		"signature_classes": len(classes),
+		"curated_entries": len(curated),
+		"output_module": str(out_path),
+		"top_per_class": top_per_class,
+		"min_quality_jacobian": min_quality_jacobian,
+		"next_step": ("commit the new curated_recipes_bundle.py + bump "
+		              "radia-mcp version + `python -m build` to ship it "
+		              "to PyPI. Stage 3: write up methodology in "
+		              "docs/design/lab_curated_recipes.md."),
+	}, indent=2, ensure_ascii=False)
+
+
+# --- Cubit journal helpers (capture human commands during race) ---
+
+# Commands the AI / our daemon is known to issue around / during a race.
+# These get filtered out of the captured journal so what remains is
+# pure human input.
+_RACE_INTERNAL_PREFIXES = (
+	"save as ", "record journal", "record stop",
+	"probe ", "list ",
+)
+
+
+def _start_journal_capture(sess, journal_path: Path) -> bool:
+	"""Try to start journal recording on the live session. Returns
+	True on success. Cubit syntax: `record journal "<path>" overwrite`.
+	"""
+	fwd = str(journal_path).replace("\\", "/")
+	try:
+		r = sess.call("cmd", [f'record journal "{fwd}" overwrite'],
+		              timeout_s=15)
+	except _cs.CubitSessionError:
+		return False
+	per = r.get("result", [])
+	return bool(per and per[0].get("ok"))
+
+
+def _stop_journal_capture(sess) -> bool:
+	for cmd in ("record stop", "set journal off"):
+		try:
+			r = sess.call("cmd", [cmd], timeout_s=15)
+		except _cs.CubitSessionError:
+			continue
+		per = r.get("result", [])
+		if per and per[0].get("ok"):
+			return True
+	return False
+
+
+def _parse_human_commands(journal_path: Path,
+                            ai_known_cmds: set[str]) -> list[str]:
+	"""Read the journal and return commands that are plausibly human-
+	authored. Filters: skip blank lines, comment lines, lines matching
+	internal/probe/save prefixes, and exact matches to anything the
+	AI/daemon issued during the race.
+	"""
+	if not journal_path.exists():
+		return []
+	try:
+		text = journal_path.read_text(encoding="utf-8", errors="replace")
+	except OSError:
+		return []
+	out: list[str] = []
+	for line in text.splitlines():
+		s = line.strip()
+		if not s or s.startswith("#"):
+			continue
+		low = s.lower()
+		if any(low.startswith(p) for p in _RACE_INTERNAL_PREFIXES):
+			continue
+		if s in ai_known_cmds:
+			continue
+		out.append(s)
+	return out
+
+
+def _run_batch_with_quality(step_path: str | None, commands: list[str],
+                              timeout_s: int,
+                              cub5_path: str | None = None) -> dict:
+	"""Like `_run_batch` but also probes `quality_summary` after meshing.
+
+	Returns the same dict as `_run_batch` plus a `quality` key:
+	{hex_count, tet_count, min, max, mean, below_0.2, below_0.2_pct}.
+	"""
+	# Build a session, run preamble + commands + quality probe in one shot
+	sess = _cs.CubitSession(mode="batch")
+	try:
+		try:
+			sess.ensure_started()
+		except _cs.CubitSessionError as e:
+			return {"status": "error", "stage": "start", "error": str(e)}
+		per_line: list[dict] = []
+		if cub5_path:
+			fwd = str(cub5_path).replace("\\", "/")
+			r = sess.call("cmd", [f'open "{fwd}"'], timeout_s=timeout_s)
+			per_line.extend(r.get("result", []))
+			if not per_line or not per_line[0].get("ok"):
+				return {"status": "error", "stage": "open_cub5",
+				        "per_line": per_line}
+		elif step_path:
+			fwd = str(step_path).replace("\\", "/")
+			r = sess.call("cmd", [f'import step "{fwd}"'], timeout_s=timeout_s)
+			per_line.extend(r.get("result", []))
+			if not per_line or not per_line[0].get("ok"):
+				return {"status": "error", "stage": "import",
+				        "per_line": per_line}
+		try:
+			r = sess.call("cmd", commands, timeout_s=timeout_s)
+		except _cs.CubitSessionError as e:
+			return {"status": "error", "stage": "rpc", "error": str(e)}
+		per_line.extend(r.get("result", []))
+		try:
+			smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
+		except _cs.CubitSessionError:
+			smy = {}
+		try:
+			qual = sess.call("probe", ["quality_summary"], timeout_s=60).get("result", {})
+		except _cs.CubitSessionError:
+			qual = {}
+		all_ok = all(s.get("ok") for s in per_line) if per_line else False
+		failed_at = next((i + 1 for i, s in enumerate(per_line)
+		                   if not s.get("ok")), None)
+		first_err = None
+		if failed_at:
+			step = per_line[failed_at - 1]
+			first_err = step.get("error") or f"rc={step.get('rc')}"
+		return {
+			"status": "ok" if all_ok else "error",
+			"all_ok": all_ok,
+			"per_line": per_line,
+			"summary": smy,
+			"quality": qual,
+			"failed_at": failed_at,
+			"error": (first_err or "").strip()[:400] if first_err else None,
+		}
+	finally:
+		try:
+			sess.shutdown()
+		except Exception:
+			pass
+
+
+def _race_review_core(recipes: list,
+                        max_wait_s: int,
+                        max_concurrent: int,
+                        include_human: bool,
+                        poll_interval_s: float,
+                        race_id: str | None = None) -> dict:
+	"""Shared implementation for sync + async review races.
+
+	Returns the same payload shape both modes serialize. When called
+	from the async path, the caller pre-allocates `race_id` and
+	persists a `running` placeholder so status checks see the in-
+	progress state.
+	"""
+	# (Body extracted from cubit_mesh_race_review below — see that for docs.)
+	import concurrent.futures as _cf
+	import threading
+	import time as _t
+
+	if not recipes:
+		return {"status": "error",
+		        "error": "recipes list cannot be empty"}
+
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return {"status": "error", "stage": "session",
+		        "error": json.loads(err)}
+
+	label, path_or_err = _auto_checkpoint_live(sess)
+	if label is None:
+		return {"status": "error", "stage": "checkpoint",
+		        "error": path_or_err}
+	cub5_path = path_or_err
+
+	pre = _probe_summary_safe(sess)
+	pre_h = int(pre.get("hexes", 0) or 0)
+	pre_t = int(pre.get("tets", 0) or 0)
+	t0 = _t.time()
+	if race_id is None:
+		race_id = f"race_{int(t0)}"
+
+	# Capture human commands during the race so we can learn what
+	# they tried (especially when they win). Journaling is started on
+	# the LIVE session only — batch instances are isolated.
+	journal_path = _race_history_dir() / f"{race_id}.jou"
+	journal_started = _start_journal_capture(sess, journal_path)
+
+	human_result: dict | None = None
+	human_lock = threading.Lock()
+	stop_event = threading.Event()
+
+	def _poll_human():
+		nonlocal human_result
+		while not stop_event.is_set():
+			if _t.time() - t0 > max_wait_s:
+				return
+			smy = _probe_summary_safe(sess)
+			h = int(smy.get("hexes", 0) or 0)
+			t = int(smy.get("tets", 0) or 0)
+			if (h > pre_h) or (t > pre_t):
+				try:
+					qual = sess.call("probe", ["quality_summary"], timeout_s=15).get("result", {})
+				except _cs.CubitSessionError:
+					qual = {}
+				with human_lock:
+					if human_result is None:
+						human_result = {
+							"name": "human",
+							"is_ai": False,
+							"hexes": h - pre_h,
+							"tets": t - pre_t,
+							"nodes_total": int(smy.get("nodes", 0) or 0),
+							"summary": smy,
+							"quality": qual,
+							"elapsed_s": round(_t.time() - t0, 2),
+							"recipe": ["(human-authored, not captured)"],
+						}
+				return
+			stop_event.wait(timeout=poll_interval_s)
+
+	def _ai_runner(rec: dict) -> dict:
+		t1 = _t.time()
+		r = _run_batch_with_quality(
+			step_path=None, commands=list(rec.get("cmds") or []),
+			timeout_s=max_wait_s, cub5_path=cub5_path,
+		)
+		smy = r.get("summary", {}) or {}
+		qual = r.get("quality", {}) or {}
+		return {
+			"name": rec.get("name", "?"),
+			"is_ai": True,
+			"hexes": int(smy.get("hexes", 0) or 0),
+			"tets": int(smy.get("tets", 0) or 0),
+			"nodes_total": int(smy.get("nodes", 0) or 0),
+			"summary": smy,
+			"quality": qual,
+			"elapsed_s": round(_t.time() - t1, 2),
+			"status": r.get("status"),
+			"failed_at": r.get("failed_at"),
+			"error": r.get("error"),
+			"rationale": rec.get("rationale", ""),
+			"recipe": list(rec.get("cmds") or []),
+		}
+
+	ai_results: list[dict] = []
+	with _cf.ThreadPoolExecutor(
+		max_workers=max(2, int(max_concurrent) + 1),
+	) as pool:
+		futs = [pool.submit(_ai_runner, r) for r in recipes]
+		if include_human:
+			pool.submit(_poll_human)
+		try:
+			_cf.wait(futs, timeout=max_wait_s,
+			          return_when=_cf.ALL_COMPLETED)
+		finally:
+			stop_event.set()
+		for f in futs:
+			if f.done():
+				ai_results.append(f.result())
+
+	# Stop journal capture and harvest the human's commands (if any)
+	if journal_started:
+		_stop_journal_capture(sess)
+		ai_known = set()
+		for r in recipes:
+			for c in (r.get("cmds") or []):
+				ai_known.add(str(c).strip())
+		human_cmds = _parse_human_commands(journal_path, ai_known)
+		if human_result is not None and human_cmds:
+			human_result["recipe"] = human_cmds
+		# If human won, persist their winning recipe for future races
+		if human_result is not None and human_cmds:
+			sig = _geometry_signature(pre)
+			_record_learned_recipe(
+				race_id=race_id, sig=sig,
+				recipe=human_cmds,
+				quality=human_result.get("quality") or {},
+				source="human",
+			)
+
+	shortlist: list[dict] = list(ai_results)
+	if include_human and human_result is not None:
+		shortlist.append(human_result)
+
+	valid = [s for s in shortlist if (s.get("hexes", 0) + s.get("tets", 0)) > 0]
+	def _rank_key(s: dict):
+		q = (s.get("quality") or {}).get("min")
+		return (-1 if q is None else float(q),
+		        s.get("hexes", 0) + s.get("tets", 0))
+	valid.sort(key=_rank_key, reverse=True)
+
+	# Also persist the *AI* winner if it was the top by quality and
+	# beat any past learned recipe — accumulates the best across runs
+	if valid and valid[0].get("is_ai") and (valid[0].get("quality") or {}).get("min") is not None:
+		_record_learned_recipe(
+			race_id=race_id,
+			sig=_geometry_signature(pre),
+			recipe=valid[0].get("recipe") or [],
+			quality=valid[0].get("quality") or {},
+			source=f"ai_{valid[0].get('name','')}",
+		)
+
+	history_path = _race_history_dir() / f"{race_id}.json"
+	history = {
+		"race_id": race_id,
+		"state": "done",
+		"started_at": t0,
+		"finished_at": _t.time(),
+		"checkpoint_label": label,
+		"checkpoint_path": cub5_path,
+		"pre_race_summary": pre,
+		"journal_path": str(journal_path) if journal_started else None,
+		"shortlist": valid,
+		"all_results": shortlist,
+		"recipes_offered": [
+			{"name": r.get("name"), "cmds": r.get("cmds"),
+			 "rationale": r.get("rationale", "")}
+			for r in recipes
+		],
+	}
+	try:
+		history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2),
+		                         encoding="utf-8")
+	except OSError:
+		pass
+
+	if not valid:
+		recommendation = ("no variant produced any element — review "
+		                  "errors in all_results / check geometry")
+	else:
+		top = valid[0]
+		why = []
+		q = (top.get("quality") or {}).get("min")
+		if q is not None:
+			why.append(f"highest min Jacobian {q}")
+		why.append(f"{top.get('hexes', 0)} hex / {top.get('tets', 0)} tet")
+		recommendation = (f"top by quality: '{top['name']}' "
+		                  f"({', '.join(why)}). Apply with "
+		                  f"`cubit_mesh_apply_choice(race_id='{race_id}', "
+		                  f"variant_name='{top['name']}')`.")
+
+	return {
+		"status": "ok",
+		"race_id": race_id,
+		"history_path": str(history_path),
+		"checkpoint_label": label,
+		"recommendation": recommendation,
+		"shortlist": [
+			{
+				"name": s["name"],
+				"is_ai": s.get("is_ai"),
+				"hexes": s.get("hexes"),
+				"tets": s.get("tets"),
+				"min_jacobian": (s.get("quality") or {}).get("min"),
+				"mean_jacobian": (s.get("quality") or {}).get("mean"),
+				"below_0.2_pct": (s.get("quality") or {}).get("below_0.2_pct"),
+				"elapsed_s": s.get("elapsed_s"),
+				"rationale": s.get("rationale", ""),
+			}
+			for s in valid
+		],
+		"failed_or_empty": [
+			{"name": s["name"], "error": s.get("error"),
+			 "status": s.get("status")}
+			for s in shortlist if s not in valid
+		],
+	}
+
+
+@mcp.tool()
+def cubit_mesh_race_review_async(recipes: list,
+                                   max_wait_s: int = 600,
+                                   max_concurrent: int = 4,
+                                   include_human: bool = True,
+                                   poll_interval_s: float = 5.0) -> str:
+	"""**Background launch** of a race review — returns immediately
+	with a `race_id`, then runs in a daemon thread.
+
+	**This is the recommended workflow when the AI is doing trial-
+	and-error.** The user (and the AI) should not block waiting for
+	the race; instead poll progress with `cubit_mesh_race_status` and
+	apply the chosen winner with `cubit_mesh_apply_choice` whenever
+	convenient.
+
+	The race result is persisted to `<state_dir>/race_history/<race_id>.json`
+	with `state` = `"running"` initially, then `"done"` when complete.
+	`cubit_mesh_apply_choice` works as soon as `state == "done"`.
+
+	Same args as `cubit_mesh_race_review`; same shortlist semantics
+	on completion (sorted by min-Jacobian, human work never
+	overwritten).
+	"""
+	import threading
+	import time as _t
+
+	if not recipes:
+		return json.dumps({"status": "error",
+		                   "error": "recipes list cannot be empty"})
+
+	t0 = _t.time()
+	race_id = f"race_{int(t0)}"
+	# Write a 'running' placeholder so status polls see it
+	history_path = _race_history_dir() / f"{race_id}.json"
+	placeholder = {
+		"race_id": race_id,
+		"state": "running",
+		"started_at": t0,
+		"max_wait_s": max_wait_s,
+		"recipes_offered": [
+			{"name": r.get("name"), "rationale": r.get("rationale", "")}
+			for r in recipes
+		],
+	}
+	try:
+		history_path.write_text(
+			json.dumps(placeholder, ensure_ascii=False, indent=2),
+			encoding="utf-8",
+		)
+	except OSError:
+		pass
+
+	def _runner():
+		try:
+			_race_review_core(
+				recipes=recipes,
+				max_wait_s=max_wait_s,
+				max_concurrent=max_concurrent,
+				include_human=include_human,
+				poll_interval_s=poll_interval_s,
+				race_id=race_id,
+			)
+		except Exception as e:  # noqa: BLE001
+			err_history = dict(placeholder)
+			err_history["state"] = "error"
+			err_history["error"] = f"{type(e).__name__}: {e}"
+			err_history["finished_at"] = _t.time()
+			try:
+				history_path.write_text(
+					json.dumps(err_history, ensure_ascii=False, indent=2),
+					encoding="utf-8",
+				)
+			except OSError:
+				pass
+
+	thread = threading.Thread(target=_runner, daemon=True)
+	thread.start()
+
+	return json.dumps({
+		"status": "running",
+		"race_id": race_id,
+		"history_path": str(history_path),
+		"started_at": t0,
+		"max_wait_s": max_wait_s,
+		"variant_count": len(recipes),
+		"note": ("Race is running in the background. Poll with "
+		         f"`cubit_mesh_race_status(race_id='{race_id}')` and "
+		         f"apply the winner with `cubit_mesh_apply_choice("
+		         f"race_id='{race_id}', variant_name=...)`. The user "
+		         f"can keep working in the live Cubit GUI in the "
+		         f"meantime."),
+	}, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def cubit_mesh_race_status(race_id: str) -> str:
+	"""Check the status of a background race launched by
+	`cubit_mesh_race_review_async` (or `_smart_async`).
+
+	Returns the persisted history JSON. Key field: `state` —
+	`"running"` while in progress, `"done"` when complete (then
+	`shortlist` is populated), `"error"` if the daemon thread
+	crashed.
+	"""
+	history_path = _race_history_dir() / f"{race_id}.json"
+	if not history_path.exists():
+		return json.dumps({"status": "error",
+		                   "error": f"no race history for {race_id!r}",
+		                   "expected": str(history_path)})
+	try:
+		body = history_path.read_text(encoding="utf-8")
+	except OSError as e:
+		return json.dumps({"status": "error", "error": str(e)})
+	return body  # already JSON
+
+
+@mcp.tool()
+def cubit_mesh_race_review(recipes: list,
+                             max_wait_s: int = 600,
+                             max_concurrent: int = 4,
+                             include_human: bool = True,
+                             poll_interval_s: float = 5.0) -> str:
+	"""Race N AI variants + observe live human, **wait for all** to
+	finish (or `max_wait_s`), and return a shortlist sorted by quality.
+
+	**Does NOT auto-commit anything.** The caller (typically the human
+	via the AI assistant) inspects the shortlist and picks the variant
+	to apply via `cubit_mesh_apply_choice(race_id, variant_name)`.
+	The human's own work is one of the candidates if they meshed
+	during the window — never silently overwritten.
+
+	Each variant report carries:
+	  * hex / tet / nodes counts
+	  * min / max / mean scaled-Jacobian (mesh quality)
+	  * below_0.2 element count + percentage
+	  * elapsed seconds
+	  * (for AI variants) the originating recipe so apply_choice can
+	    replay it
+
+	Args:
+	    recipes: list of `{"name": str, "cmds": [str], "rationale": str?}`.
+	    max_wait_s: overall timeout (race ends and shortlist is built
+	        whenever this elapses, even if some variants still running).
+	    max_concurrent: subprocess pool size.
+	    include_human: also poll the live GUI and add 'human' to the
+	        shortlist if a mesh appears.
+	    poll_interval_s: live-GUI poll interval (only used if
+	        include_human=True).
+
+	Returns JSON: race_id (for apply_choice), shortlist sorted by
+	min-Jacobian descending, persisted history path.
+
+	**Note**: this is the **synchronous** form — it blocks until the
+	race finishes. For background AI iteration prefer
+	`cubit_mesh_race_review_async` (signature workflow per Sugawara
+	Lab: AI thinking should not block the user).
+	"""
+	r = _race_review_core(
+		recipes=recipes,
+		max_wait_s=max_wait_s,
+		max_concurrent=max_concurrent,
+		include_human=include_human,
+		poll_interval_s=poll_interval_s,
+	)
+	return json.dumps(r, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def cubit_mesh_apply_choice(race_id: str, variant_name: str,
+                              timeout_s: int = 600) -> str:
+	"""Apply the human's chosen variant from a previous
+	`cubit_mesh_race_review`.
+
+	Looks up the race history by `race_id`, finds the variant by
+	`variant_name`, and replays its recipe in the live Cubit GUI
+	(after `delete mesh` to clear any prior attempt). If the chosen
+	variant is "human", this is a no-op — the human's mesh is
+	already live.
+
+	Args:
+	    race_id: identifier returned from `cubit_mesh_race_review`.
+	    variant_name: which entry in the shortlist to apply.
+
+	Returns JSON with the live state after apply.
+	"""
+	history_path = _race_history_dir() / f"{race_id}.json"
+	if not history_path.exists():
+		return json.dumps({"status": "error",
+		                   "error": f"no race history for {race_id!r}",
+		                   "expected": str(history_path)})
+	try:
+		history = json.loads(history_path.read_text(encoding="utf-8"))
+	except (OSError, json.JSONDecodeError) as e:
+		return json.dumps({"status": "error",
+		                   "stage": "history_read",
+		                   "error": str(e)})
+
+	all_results = history.get("all_results", [])
+	choice = next((s for s in all_results if s.get("name") == variant_name), None)
+	if choice is None:
+		known = [s.get("name") for s in all_results]
+		return json.dumps({"status": "error",
+		                   "error": f"variant {variant_name!r} not in race {race_id}",
+		                   "known": known})
+
+	if not choice.get("is_ai"):
+		return json.dumps({
+			"status": "ok",
+			"action": "no-op",
+			"reason": "human variant chosen — mesh is already live",
+			"choice": choice,
+		}, indent=2)
+
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+
+	# Replay: delete current mesh + run the recipe
+	cmds = ["delete mesh"] + list(choice.get("recipe") or [])
+	try:
+		r = sess.call("cmd", cmds, timeout_s=timeout_s)
+	except _cs.CubitSessionError as e:
+		return json.dumps({"status": "error", "stage": "live_rpc",
+		                   "error": str(e),
+		                   "checkpoint_label": history.get("checkpoint_label"),
+		                   "note": "rollback via cubit_restore(label=...)"})
+	per_line = r.get("result", [])
+	smy = _probe_summary_safe(sess)
+	all_ok = all(s.get("ok") for s in per_line) if per_line else False
+	return json.dumps({
+		"status": "ok" if all_ok else "error",
+		"variant_name": variant_name,
+		"recipe_replayed": cmds,
+		"live_summary": smy,
+		"checkpoint_label": history.get("checkpoint_label"),
+		"note": ("Rollback via cubit_restore(label=...) if you change "
+		         "your mind."),
+	}, indent=2)
+
+
+# ============================================================
+# Smart race: AI introspects geometry + generates candidates, then races
+# ============================================================
+
+def _generate_smart_recipes(sess, target_size: float,
+                              n_variants: int) -> tuple[list[dict], list[str]]:
+	"""Inspect the live Cubit state (volumes, surfaces, schemes,
+	mesh state) and emit up to `n_variants` candidate recipes
+	with rationale. Returns (recipes, rationale_lines).
+
+	Heuristics, in priority order:
+	  - if compound topology suspected (surf/vol >= 7), prefer
+	    webcut + scheme auto FIRST.
+	  - simple prismatic: scheme auto, scheme sweep, then refined size.
+	  - large vol count: split-and-conquer with smaller size.
+	  - always include scheme tetmesh as a guaranteed-element fallback.
+	  - vary `target_size` (half / base / double) to give the race
+	    different element counts to compare.
+	"""
+	rationale: list[str] = []
+
+	# Probe state
+	try:
+		smy = sess.call("probe", ["summary"], timeout_s=15).get("result", {})
+	except _cs.CubitSessionError:
+		smy = {}
+	try:
+		per_vol = sess.call("probe", ["per_volume"], timeout_s=15).get("result", []) or []
+	except _cs.CubitSessionError:
+		per_vol = []
+
+	vol = int(smy.get("volumes", 0) or 0)
+	surf = int(smy.get("surfaces", 0) or 0)
+	hex_pre = int(smy.get("hexes", 0) or 0)
+	tet_pre = int(smy.get("tets", 0) or 0)
+	rationale.append(f"state: {vol} volumes / {surf} surfaces / "
+	                  f"{hex_pre} hex / {tet_pre} tet pre-race")
+
+	if vol == 0:
+		rationale.append("no volumes — nothing to mesh; aborting")
+		return [], rationale
+
+	compound_suspected = vol <= 3 and (surf / max(1, vol)) >= 7
+	unmeshed = [int(r["id"]) for r in per_vol if not r.get("meshed")]
+	if unmeshed and len(unmeshed) < vol:
+		rationale.append(f"partial mesh detected; unmeshed vols: "
+		                  f"{unmeshed[:8]}{'...' if len(unmeshed)>8 else ''}")
+	if compound_suspected:
+		rationale.append(f"compound topology suspected (surf/vol = "
+		                  f"{surf/vol:.1f} >= 7)")
+
+	scope = "all" if not unmeshed else " ".join(str(v) for v in unmeshed)
+
+	candidates: list[dict] = []
+
+	def add(name: str, cmds: list[str], why: str) -> None:
+		if any(c["name"] == name for c in candidates):
+			return
+		candidates.append({"name": name, "cmds": cmds, "rationale": why})
+		rationale.append(f"+ {name}: {why}")
+
+	# Learned-recipe seed: pull past winners on similar geometries
+	# (human or AI) to head the candidate list. This is how the AI
+	# "learns from the human" — every prior race's human winner is
+	# replayed as a candidate next time.
+	sig = _geometry_signature(smy)
+	rationale.append(f"signature: {sig}")
+	learned = _load_learned_recipes_for(sig, max_n=2)
+	if learned:
+		rationale.append(f"loaded {len(learned)} learned recipe(s) "
+		                  f"for similar geometry")
+	for i, lr in enumerate(learned):
+		src = lr.get("source", "?")
+		q = (lr.get("quality") or {}).get("min")
+		add(
+			f"learned_{i}_{src}",
+			list(lr.get("recipe") or []),
+			f"past winner ({src}) on similar geometry "
+			f"(min Jacobian {q}); replaying to see if it still works.",
+		)
+
+	# Always start with the cheapest most-likely-to-win
+	add(
+		f"auto_size_{target_size}",
+		[f"volume {scope} size {target_size}",
+		 f"volume {scope} scheme auto",
+		 f"mesh volume {scope}"],
+		"scheme auto picks per-volume; usually wins on simple prisms.",
+	)
+
+	if compound_suspected:
+		# Geometry-split rung first when compound suspected
+		import os as _os
+		webcut_r = float(_os.environ.get("RADIA_MCP_WEBCUT_RADIUS", "16.01"))
+		add(
+			f"webcut_cyl_r{webcut_r}_then_auto",
+			[f"webcut volume {scope} with cylinder radius {webcut_r} axis z",
+			 "imprint all", "merge all",
+			 f"volume all size {target_size}",
+			 "volume all scheme auto",
+			 "mesh volume all"],
+			f"compound body → cylinder webcut at z-axis r={webcut_r} "
+			f"(env: RADIA_MCP_WEBCUT_RADIUS) then re-attempt scheme auto.",
+		)
+		add(
+			"polyhedron",
+			[f"volume {scope} size {target_size}",
+			 f"volume {scope} scheme polyhedron",
+			 f"mesh volume {scope}"],
+			"hex-dominant, robust on non-prismatic topology.",
+		)
+
+	add(
+		f"sweep_size_{target_size}",
+		[f"volume {scope} size {target_size}",
+		 f"volume {scope} scheme sweep",
+		 f"mesh volume {scope}"],
+		"force sweep — best hex yield when volumes are extruded prisms.",
+	)
+
+	# Vary the size axis to give the race element-count variety
+	if target_size > 0:
+		half = round(target_size / 2.0, 4)
+		add(
+			f"auto_size_{half}_finer",
+			[f"volume {scope} size {half}",
+			 f"volume {scope} scheme auto",
+			 f"mesh volume {scope}"],
+			f"finer size ({half}) — captures small features but slower.",
+		)
+		double = round(target_size * 2.0, 4)
+		if double != target_size:
+			add(
+				f"auto_size_{double}_coarser",
+				[f"volume {scope} size {double}",
+				 f"volume {scope} scheme auto",
+				 f"mesh volume {scope}"],
+				f"coarser size ({double}) — fastest, useful for sanity check.",
+			)
+
+	# Tet fallback always last (lowest priority — gives tet, not hex)
+	add(
+		f"tetmesh_size_{target_size}",
+		[f"volume {scope} size {target_size}",
+		 f"volume {scope} scheme tetmesh",
+		 f"mesh volume {scope}"],
+		"guaranteed-element fallback (tet only, not hex).",
+	)
+
+	# Truncate to requested N
+	candidates = candidates[: max(1, int(n_variants))]
+	rationale.insert(1, f"selected {len(candidates)} of "
+	                     f"{len(candidates)} candidates "
+	                     f"(n_variants={n_variants})")
+	return candidates, rationale
+
+
+@mcp.tool()
+def cubit_mesh_race_smart_async(target_size: float = 1.0,
+                                  n_variants: int = 4,
+                                  max_wait_s: int = 600,
+                                  max_concurrent: int = 4,
+                                  poll_interval_s: float = 5.0,
+                                  include_human: bool = True) -> str:
+	"""**Background variant of `cubit_mesh_race_smart`** — AI inspects
+	the live geometry, generates *N* candidate recipes, and races them
+	in a daemon thread; returns immediately with `race_id`.
+
+	Recommended workflow when the AI is doing trial-and-error: don't
+	make the user wait. Poll with `cubit_mesh_race_status(race_id)`,
+	apply with `cubit_mesh_apply_choice(race_id, variant_name)`.
+
+	The smart-recipe rationale + race shortlist are both persisted to
+	`<state_dir>/race_history/<race_id>.json`.
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+	recipes, rationale = _generate_smart_recipes(sess, target_size, n_variants)
+	if not recipes:
+		return json.dumps({"status": "error",
+		                   "reason": "no candidates generated",
+		                   "rationale": rationale})
+	# Hand off to async review with the generated recipes
+	r = json.loads(cubit_mesh_race_review_async(
+		recipes=recipes,
+		max_wait_s=max_wait_s,
+		max_concurrent=max_concurrent,
+		include_human=include_human,
+		poll_interval_s=poll_interval_s,
+	))
+	r["rationale"] = rationale
+	r["candidates_attempted"] = [
+		{"name": rec["name"], "rationale": rec.get("rationale", "")}
+		for rec in recipes
+	]
+	return json.dumps(r, indent=2, ensure_ascii=False)
+
+
+@mcp.tool()
+def cubit_mesh_race_smart(target_size: float = 1.0,
+                            n_variants: int = 4,
+                            prefer: str = "hex",
+                            commit_winner: bool = True,
+                            poll_interval_s: float = 5.0,
+                            max_wait_s: int = 600,
+                            max_concurrent: int = 4) -> str:
+	"""**The flagship workflow**: AI inspects the live Cubit state,
+	auto-generates *N* candidate mesh recipes (with rationale), and
+	races them against the human via `cubit_mesh_race_with_human`.
+
+	The user just says "AI, mesh this for me" — no need to hand-write
+	recipes. The AI:
+
+	1. Probes the live geometry (`probe summary` + `probe per_volume`).
+	2. Detects compound topology (surf/vol ratio), partial-mesh state
+	   (unmeshed volume list), and total complexity.
+	3. Generates *N* recipes via heuristics:
+	     - scheme auto (always first — cheapest)
+	     - webcut + scheme auto (when compound suspected)
+	     - scheme polyhedron (compound robust hex)
+	     - scheme sweep (prismatic best-hex)
+	     - finer / coarser size variants (element-count variety)
+	     - scheme tetmesh (guaranteed fallback)
+	4. Races them in parallel, **while the human keeps working**.
+	5. Returns winner + rationale (so the AI can explain WHY this
+	   recipe was chosen).
+
+	Args:
+	    target_size: base mesh size (`volume all size X`); finer/coarser
+	        variants automatically explore X/2 and 2X.
+	    n_variants: cap on candidates (default 4 — safe for 16 GB RAM).
+	    prefer: "hex" (require hex>0) or "any".
+	    commit_winner: replay winning recipe in live GUI on success.
+	    poll_interval_s / max_wait_s / max_concurrent: race tunables.
+
+	Returns JSON: rationale lines (the AI's reasoning) +
+	winner + ai_results + checkpoint_label + gui report.
+	"""
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+
+	recipes, rationale = _generate_smart_recipes(sess, target_size, n_variants)
+	if not recipes:
+		return json.dumps({
+			"status": "error",
+			"reason": "no candidates generated",
+			"rationale": rationale,
+		}, indent=2)
+
+	# Race them
+	race_raw = cubit_mesh_race_with_human(
+		recipes=recipes,
+		poll_interval_s=poll_interval_s,
+		max_wait_s=max_wait_s,
+		max_concurrent=max_concurrent,
+		commit_winner=commit_winner,
+		prefer=prefer,
+	)
+	race = json.loads(race_raw)
+	# Augment with the candidate-generation rationale so the AI can
+	# explain its choices to the user
+	race["rationale"] = rationale
+	race["candidates_attempted"] = [
+		{"name": r["name"], "rationale": r["rationale"]}
+		for r in recipes
+	]
+	return json.dumps(race, indent=2)
+
+
+# ============================================================
+# Human-vs-AI race: live human + N AI batches, first-to-mesh wins
+# ============================================================
+
+@mcp.tool()
+def cubit_mesh_race_with_human(recipes: list,
+                                 poll_interval_s: float = 5.0,
+                                 max_wait_s: int = 600,
+                                 max_concurrent: int = 4,
+                                 commit_winner: bool = False,
+                                 prefer: str = "hex") -> str:
+	"""**The radia-mcp signature workflow.**
+
+	User: "AI, this geometry won't mesh — try something while I keep
+	working on it."
+
+	Setup:
+	  1. Snapshot the live Cubit GUI state to `.cub5` (reuses
+	     `_auto_checkpoint_live`).
+	  2. Spawn `len(recipes)` batch Cubits (capped to `max_concurrent`),
+	     each opening the snapshot and running its candidate recipe.
+	  3. **Meanwhile poll the live GUI session** every `poll_interval_s`
+	     for hex/tet count. The user is expected to be actively
+	     meshing in their window.
+	  4. **First to produce mesh** (`hex > 0` for `prefer='hex'`,
+	     `(hex+tet) > 0` for `prefer='any'`) wins. Could be the human,
+	     could be one of the AI variants.
+	  5. Remaining batches are killed; live GUI is **not** modified
+	     unless `commit_winner=True` AND the human hadn't already
+	     produced mesh (so we never overwrite the user's work).
+
+	Why this exists: waiting for AI to finish is wasteful when you can
+	just keep working. This races human and AI fairly and respects
+	whoever finishes first — but defaults to "report only" so the
+	user has final say on commit.
+
+	Args:
+	    recipes: list of `{"name": str, "cmds": [str]}`. Each runs from
+	        the live snapshot.
+	    poll_interval_s: how often to ping the live session.
+	    max_wait_s: overall timeout.
+	    max_concurrent: subprocess pool size.
+	    commit_winner: if True AND winner is an AI variant AND the
+	        human hadn't meshed yet, replay the winning recipe in
+	        the live GUI. Default False (just report).
+	    prefer: "hex" or "any".
+
+	Returns JSON: winner identity (human / AI variant name) +
+	per-variant outcome + checkpoint label for revert.
+	"""
+	import concurrent.futures as _cf
+	import threading
+	import time as _t
+
+	if not recipes:
+		return json.dumps({"status": "error",
+		                   "error": "recipes list cannot be empty"})
+
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+
+	# 1. Snapshot live state — used as the seed for every AI batch
+	label, path_or_err = _auto_checkpoint_live(sess)
+	if label is None:
+		return json.dumps({"status": "error",
+		                   "stage": "checkpoint",
+		                   "error": path_or_err})
+	cub5_path = path_or_err
+
+	# Snapshot pre-race element counts so "human won" means new mesh
+	# created AFTER we started, not pre-existing mesh from before.
+	pre = _probe_summary_safe(sess)
+	pre_h = int(pre.get("hexes", 0) or 0)
+	pre_t = int(pre.get("tets", 0) or 0)
+
+	winner_event = threading.Event()
+	winner_lock = threading.Lock()
+	winner: dict | None = None  # mutated under lock
+
+	def _claim(payload: dict) -> bool:
+		"""Atomically claim winner. Returns True if this caller wins."""
+		nonlocal winner
+		with winner_lock:
+			if winner is not None:
+				return False
+			winner = payload
+			winner_event.set()
+			return True
+
+	def _human_poller():
+		"""Poll live GUI; if mesh appears, claim 'human'."""
+		deadline = _t.time() + max_wait_s
+		while not winner_event.is_set() and _t.time() < deadline:
+			smy = _probe_summary_safe(sess)
+			h = int(smy.get("hexes", 0) or 0)
+			t = int(smy.get("tets", 0) or 0)
+			ok = (h > pre_h) if prefer == "hex" \
+				else ((h + t) > (pre_h + pre_t))
+			if ok:
+				_claim({
+					"winner": "human",
+					"summary": smy,
+					"new_hex": h - pre_h,
+					"new_tet": t - pre_t,
+				})
+				return
+			# wait, but wake on event for fast cancel
+			winner_event.wait(timeout=poll_interval_s)
+
+	def _ai_runner(rec: dict) -> dict:
+		"""Run one recipe in batch, claim winner if it produces mesh."""
+		name = rec.get("name", "?")
+		cmds = list(rec.get("cmds") or [])
+		if not cmds:
+			return {"name": name, "status": "skip", "error": "empty cmds"}
+		# Bail out early if already won
+		if winner_event.is_set():
+			return {"name": name, "status": "cancelled"}
+		r = _run_batch(step_path=None, commands=cmds,
+		                timeout_s=max_wait_s, cub5_path=cub5_path)
+		smy = r.get("summary", {}) or {}
+		h = int(smy.get("hexes", 0) or 0)
+		t = int(smy.get("tets", 0) or 0)
+		ok = r.get("status") == "ok" and \
+			((h > 0) if prefer == "hex" else ((h + t) > 0))
+		out = {
+			"name": name,
+			"status": r.get("status"),
+			"hexes": h, "tets": t,
+			"nodes": int(smy.get("nodes", 0) or 0),
+			"recipe": cmds,
+		}
+		if ok and not winner_event.is_set():
+			_claim({
+				"winner": "ai",
+				"name": name,
+				"recipe": cmds,
+				"hexes": h, "tets": t,
+				"nodes": int(smy.get("nodes", 0) or 0),
+			})
+		return out
+
+	# Run all in parallel: poller as 1 thread + AI as N threads.
+	with _cf.ThreadPoolExecutor(
+		max_workers=max(2, int(max_concurrent) + 1),
+	) as pool:
+		poller_fut = pool.submit(_human_poller)
+		ai_futs = [pool.submit(_ai_runner, rec) for rec in recipes]
+		# Block until either winner_event is set or all AI futs done
+		_cf.wait(ai_futs + [poller_fut],
+		         timeout=max_wait_s,
+		         return_when=_cf.ALL_COMPLETED)
+		# Make sure poller knows we're done so it stops polling
+		winner_event.set()
+		ai_results = [f.result() for f in ai_futs if f.done()]
+
+	if winner is None:
+		return json.dumps({
+			"status": "timeout",
+			"reason": "neither human nor any AI variant produced mesh",
+			"checkpoint_label": label,
+			"checkpoint_path": cub5_path,
+			"results": ai_results,
+		}, indent=2)
+
+	# Optional commit: only if winner is AI and human hadn't already meshed
+	gui_report: dict = {"skipped": True}
+	if commit_winner and winner.get("winner") == "ai":
+		smy_now = _probe_summary_safe(sess)
+		h_now = int(smy_now.get("hexes", 0) or 0)
+		t_now = int(smy_now.get("tets", 0) or 0)
+		human_did_mesh = (h_now > pre_h) or (t_now > pre_t)
+		if human_did_mesh:
+			gui_report = {
+				"status": "skipped",
+				"reason": ("human already produced mesh while AI was "
+				           "racing — refusing to overwrite"),
+				"live_summary": smy_now,
+			}
+		else:
+			recipe = winner["recipe"]
+			try:
+				rr = sess.call("cmd", recipe, timeout_s=max_wait_s)
+			except _cs.CubitSessionError as e:
+				gui_report = {"status": "error", "stage": "gui_rpc",
+				              "error": str(e)}
+			else:
+				per_line = rr.get("result", [])
+				smy_after = _probe_summary_safe(sess)
+				gui_report = {
+					"status": "ok" if all(s.get("ok") for s in per_line) else "error",
+					"summary": smy_after,
+					"replayed": recipe,
+				}
+
+	return json.dumps({
+		"status": "ok",
+		"winner": winner,
+		"checkpoint_label": label,
+		"checkpoint_path": cub5_path,
+		"pre_race_summary": pre,
+		"ai_results": ai_results,
+		"gui": gui_report,
+		"note": ("Snapshot saved as a .cub5 — revert any AI commit via "
+		         f"`cubit_restore(label='{label}')`."),
+	}, indent=2)
+
+
+# ============================================================
+# Safe live exec: auto-checkpoint + batch dry-run + live apply
+# ============================================================
+
+def _auto_checkpoint_live(sess) -> tuple[str, str] | tuple[None, str]:
+	"""Create an `autosafe_<timestamp>` .cub5 snapshot of the live
+	session. Returns (label, cub5_path) on success, or (None, error_msg).
+
+	Uses the same directory layout as `cubit_checkpoint` so the user can
+	list / restore it with the existing tool.
+	"""
+	import time as _t
+	# No leading underscore — _sanitize_label strips them.
+	label = f"autosafe_{int(_t.time())}"
+	try:
+		label = _sanitize_label(label)
+	except ValueError as e:
+		return None, str(e)
+	path = _checkpoints_dir() / f"{label}.cub5"
+	fwd = str(path).replace("\\", "/")
+	try:
+		r = sess.call("cmd", [f'save as "{fwd}" overwrite'], timeout_s=120)
+	except _cs.CubitSessionError as e:
+		return None, f"rpc: {e}"
+	per_line = r.get("result", [])
+	if not per_line or not per_line[0].get("ok"):
+		return None, f"save failed: {per_line}"
+	if not path.exists():
+		return None, f"save reported ok but {path} not written"
+	return label, str(path)
+
+
+@mcp.tool()
+def cubit_exec_safely(commands: list, timeout_s: int = 600) -> str:
+	"""Execute commands against the live GUI **with a pre-save and a
+	batch dry-run as safety gates**.
+
+	Workflow:
+	  1. **Auto-checkpoint** the current live GUI session to
+	     `_autosafe_<timestamp>.cub5`.
+	  2. **Batch dry-run**: spawn a fresh headless Cubit, open the
+	     cub5, run the commands, check for errors.
+	  3. If batch passes cleanly → **reflect to live GUI** via
+	     `cubit_exec`. User watches the successful recipe execute in
+	     their real window.
+	  4. If batch fails → **live GUI untouched**; return the error
+	     and the checkpoint label so the user stays in control.
+	  5. Label is returned regardless, so the user can later
+	     `cubit_restore(label)` to roll back (e.g., if they don't like
+	     how the mesh looks even after a successful apply).
+
+	Use this for any risky / destructive operation on a live model the
+	user has been building (mesh scheme changes, boolean ops, webcut).
+	For read-only queries (probe, list, quality) use `cubit_exec`
+	directly — the safety overhead is wasteful.
+
+	Args:
+	    commands: list of Cubit command strings.
+	    timeout_s: per-rung timeout (checkpoint save + batch open +
+	        commands + live apply).
+
+	Returns JSON with:
+	  - `checkpoint_label` / `checkpoint_path` — always present
+	  - `batch` — dry-run report (per_line, summary, ok/error)
+	  - `live` — live apply report (only if batch passed)
+	  - `applied_to_gui` — true iff the live session was modified
+	"""
+	if not commands:
+		return json.dumps({"status": "error",
+		                   "error": "commands list cannot be empty"})
+	cmd_list = [str(c).rstrip() for c in commands]
+
+	sess, err = _cubit_session_or_error()
+	if err is not None:
+		return err
+
+	# 1. checkpoint live
+	label, path_or_err = _auto_checkpoint_live(sess)
+	if label is None:
+		return json.dumps({"status": "error", "stage": "checkpoint",
+		                   "error": path_or_err})
+	cub5_path = path_or_err
+
+	# 2. batch dry-run seeded from the checkpoint
+	batch = _run_batch(step_path=None, commands=cmd_list,
+	                    timeout_s=timeout_s, cub5_path=cub5_path)
+
+	payload: dict = {
+		"status": "ok",
+		"checkpoint_label": label,
+		"checkpoint_path": cub5_path,
+		"batch": batch,
+		"applied_to_gui": False,
+	}
+
+	if batch.get("status") != "ok":
+		payload["status"] = "error"
+		payload["stage"] = "batch"
+		payload["note"] = ("Batch dry-run failed — live GUI NOT touched. "
+		                   "Inspect `batch` for the failing command, fix, "
+		                   "and retry. Rollback with "
+		                   f"`cubit_restore(label='{label}')` if needed.")
+		return json.dumps(payload, indent=2)
+
+	# 3. batch passed → reflect to live
+	try:
+		r = sess.call("cmd", cmd_list, timeout_s=timeout_s)
+	except _cs.CubitSessionError as e:
+		payload["status"] = "error"
+		payload["stage"] = "live_rpc"
+		payload["live_error"] = str(e)
+		payload["note"] = ("Batch passed but live RPC failed. "
+		                   f"Rollback: `cubit_restore(label='{label}')`.")
+		return json.dumps(payload, indent=2)
+
+	per_line = r.get("result", [])
+	all_ok = all(step.get("ok") for step in per_line) if per_line else False
+	try:
+		smy = sess.call("probe", ["summary"], timeout_s=30).get("result", {})
+	except _cs.CubitSessionError:
+		smy = {}
+	payload["live"] = {
+		"status": "ok" if all_ok else "error",
+		"per_line": per_line,
+		"summary": smy,
+	}
+	payload["applied_to_gui"] = True
+	if not all_ok:
+		payload["status"] = "error"
+		payload["stage"] = "live_mid"
+		payload["note"] = ("Live exec partially failed (batch had passed). "
+		                   "Cubit state is now mixed; consider rollback via "
+		                   f"`cubit_restore(label='{label}')`.")
+	return json.dumps(payload, indent=2)
 
 
 # ============================================================
