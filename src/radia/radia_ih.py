@@ -1,28 +1,26 @@
+"""Radia IH (Induction Heating) analysis window.
+
+Two methods (2026-04-19):
+
+  Fast workpiece heating (PEEC+BEM, 1-way)
+    -> calc_peec_bem.py   (~3 min, P_wp ±5%, L_coil vacuum only)
+
+  Full simulation (FEM A-V + wp SIBC + Kelvin)
+    -> calc_fem_coilmesh.py (~1-7 min, L + P_wp + P_coil)
+
+Both drive from a gapped torus coil (real IH has physical port
+terminations — closed-torus topology is not supported).
 """
-Radia IH (Induction Heating) analysis window.
-
-Modes:
-  PEEC+FEM -- PEEC filament coil (no mesh needed) + FEM-SIBC workpiece
-              with Kelvin open boundary.  Production path.
-  FEM      -- Full volume mesh + Omega-reduced / A + Kelvin + SIBC/ESIM.
-              Reference solver for validation.
-
-Switch via combo box -- single window.
-
-Usage:
-    python -m radia.radia_ih model.vol
-    python radia_ih.py model.vol
-"""
-
-import sys
+import math
 import os
+import sys
 
+# Ensure samples directory is reachable from Cubit panels even when
+# run from a site-packages install (no editable symlink).
 TITLE = "Induction Heating"
-# PEEC+FEM needs no source/sink sidesets — coil is defined by filament
-# topology (STEP -> centerline -> filaments -> PEECBuilder ports).
-# Workpiece .vol needs only material blocks (workpiece, air, kelvin).
 REQUIRED_LABELS = []
-OPTIONAL_LABELS = ["workpiece", "air", "kelvin", "kelvin_int", "kelvin_ext"]
+OPTIONAL_LABELS = ["coil", "air", "kelvin", "kelvin_int", "kelvin_ext",
+                    "sibc", "source", "sink", "coil_surface"]
 OPTIONAL_FILES = {}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,227 +28,453 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from radia_gui_base import (
     ModePanel, AnalysisWindow, calc_script, msh_output, run_app, _PYTHON,
 )
+from PySide6.QtWidgets import (QLabel, QCheckBox, QGroupBox, QVBoxLayout,
+                                 QFormLayout, QWidget)
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
+
+# ============================================================
+# Constants: method identifiers + labels
+# ============================================================
+
+METHOD_PEEC_BEM = "Fast workpiece heating (PEEC+BEM, 1-way)"
+METHOD_FEM_FULL = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
+
+METHOD_TOOLTIP = {
+    METHOD_PEEC_BEM: (
+        "<b>Fast P_workpiece only</b> (~3 min, ±5%).<br>"
+        "<ul>"
+        "<li>Coil as PEEC filament (no volume mesh, STEP input)</li>"
+        "<li>Workpiece as BEM-SIBC (surface charge, thin-skin limit)</li>"
+        "<li>1-way forward: coil field -> wp; no wp back-reaction</li>"
+        "<li>L is vacuum coil only (no wp effect)</li>"
+        "</ul>"
+        "Requires <b>sibc</b> sideset in .vol + <b>STEP</b> coil."
+    ),
+    METHOD_FEM_FULL: (
+        "<b>Full L + P_wp + P_coil</b> (~1-7 min depending on mesh).<br>"
+        "<ul>"
+        "<li>A-V compound FES (HCurl A + H1 phi on coil)</li>"
+        "<li>Coil volumetric + SIBC Robin BC on wp surface</li>"
+        "<li>Kelvin exterior for open boundary</li>"
+        "<li>L captures wp back-reaction (Lenz/ferromagnetic push)</li>"
+        "</ul>"
+        "Requires <b>coil</b> material + <b>source</b>/<b>sink</b>/"
+        "<b>sibc</b>/<b>kelvin</b> in .vol."
+    ),
+}
+
+
+# ============================================================
+# Material presets (common conductors for IH)
+# ============================================================
+
+# name -> {sigma [S/m], mu_r, color, default_for_wp, default_for_coil}
+MATERIAL_PRESETS = {
+    "Copper":          {"sigma": 5.8e7, "mu_r": 1.0},
+    "Aluminum":        {"sigma": 3.5e7, "mu_r": 1.0},
+    "Brass":           {"sigma": 1.5e7, "mu_r": 1.0},
+    "Steel (mu_r=100)": {"sigma": 5.0e6, "mu_r": 100.0},
+    "Steel (mu_r=500)": {"sigma": 5.0e6, "mu_r": 500.0},
+    "Stainless 304":   {"sigma": 1.4e6, "mu_r": 1.0},
+    "Custom":          {"sigma": None,  "mu_r": None},
+}
+
+
+MU_0 = 4e-7 * math.pi
+
+
+def skin_depth(freq_hz, sigma, mu_r=1.0):
+    omega = 2 * math.pi * freq_hz
+    return math.sqrt(2.0 / (omega * mu_r * MU_0 * sigma))
+
+
+# ============================================================
+# .vol label inspection (requires NGSolve lazily)
+# ============================================================
+
+def inspect_vol_labels(vol_path):
+    """Return (materials, boundaries) sets from the .vol.  Returns
+    ``(None, None)`` if the file cannot be loaded."""
+    if not vol_path or not os.path.isfile(vol_path):
+        return None, None
+    try:
+        # NGSolve import is heavy, do it lazily.
+        from ngsolve import Mesh
+        m = Mesh(vol_path)
+        return set(m.GetMaterials()), set(m.GetBoundaries())
+    except Exception:
+        return None, None
+
+
+def check_method_requirements(method, mats, bnds):
+    """Return (ok: bool, errors: list[str], warnings: list[str])."""
+    errors = []
+    warnings = []
+    if mats is None:
+        # .vol could not be loaded or not yet selected — skip silent.
+        return True, errors, warnings
+
+    if method == METHOD_FEM_FULL:
+        if "coil" not in mats:
+            errors.append("Missing material 'coil' (coil volume).")
+        if "kelvin" not in mats:
+            warnings.append(
+                "Missing material 'kelvin' — Dirichlet A=0 used "
+                "instead of Kelvin open boundary (truncation error).")
+        for b in ("source", "sink", "sibc"):
+            if b not in bnds:
+                errors.append(
+                    f"Missing boundary '{b}'.  FEM A-V needs gap-face "
+                    f"ports (source/sink) + wp surface (sibc).")
+    else:  # PEEC+BEM
+        if "sibc" not in bnds:
+            errors.append(
+                "Missing boundary 'sibc' (workpiece surface).")
+
+    return (len(errors) == 0), errors, warnings
+
+
+# ============================================================
+# IH Panel
+# ============================================================
 
 class IHPanel(ModePanel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._vol_mats = None   # populated by window on .vol load
+        self._vol_bnds = None
         self._build_ui()
 
+    # ----------------------- UI construction -----------------------
+
+    def _add_section(self, title):
+        """Insert a visual section header into the form."""
+        lbl = QLabel(f"<b>{title}</b>")
+        lbl.setStyleSheet("QLabel { margin-top: 6px; color: #444; }")
+        self._form.addRow("", lbl)
+
     def _build_ui(self):
-        # Method selector. user_settings restored later (in
-        # IHWindow.__init__) overrides this when present.
+        # Method selector
+        self._add_section("Method")
         self._method_combo = self.add_combo(
-            "method", "Method:", ["PEEC+FEM", "FEM"])
+            "method", "Method:",
+            [METHOD_PEEC_BEM, METHOD_FEM_FULL])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
+        self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_BEM])
 
-        self.add_spin("fes_order", "FES order:", 0, 0, 5)
+        # Per-method status line (.vol label check / skin depth hint).
+        self._status_label = QLabel("")
+        self._status_label.setWordWrap(True)
+        self._status_label.setStyleSheet("QLabel { color: #888; "
+                                           "font-size: 11px; }")
+        self._form.addRow("", self._status_label)
 
-        # Solver row — context-dependent items, populated by
-        # _on_method_changed. Single combo so the layout does NOT
-        # shift when switching modes.
-        solver_combo = self.add_combo("solver", "Solver:", ["LU (direct)"])
+        # ============ Drive (frequency + current) ============
+        self._add_section("Drive")
+        freq = self.add_line("freq", "Frequency [Hz]:", "7000")
+        freq.editingFinished.connect(self._update_status)
+        freq.setToolTip("Operating frequency.  Skin depth\n"
+                         "  delta = sqrt(2 / (w mu sigma))")
 
-        # FEM-only iteration cap.
-        self.add_spin("max_iter", "Max iterations:", 15, 1, 200)
+        current = self.add_line("current", "Coil current [A, peak]:", "1.0")
+        current.setToolTip(
+            "Peak (not RMS) coil port current.  Field quantities are "
+            "complex phasors; output P is time-averaged (1/2 Re).")
 
-        # ============ Coil parameters ============
-        # Frequency, current, sigma.
-        self.add_line("freq", "Frequency [Hz]:", "50000")
-        self.add_line("current", "Coil current [A]:", "1.0")
-        self.add_line("coil_sigma", "Coil sigma [S/m]:", "5.8e7")
+        # ============ Coil material (INDEPENDENT from WP) ============
+        self._add_section("Coil material")
+        coil_mat = self.add_combo(
+            "coil_material", "Preset:",
+            list(MATERIAL_PRESETS.keys()), default=0)  # Copper
+        coil_mat.currentTextChanged.connect(self._on_coil_material_changed)
+        coil_mat.setToolTip(
+            "Coil conductor material. Presets set sigma + mu_r. "
+            "'Custom' enables manual entry.")
 
-        # ============ FEM coil source: PEEC filament only ============
-        # T0 (source/sink Dirichlet Laplace) was retired 2026-04-18 after
-        # being shown unreliable on gapped geometries (1/r cusps at gap
-        # corners). All FEM source injection now goes through the PEEC
-        # filament Biot-Savart path.
-        self.add_browse("peec_step", "PEEC STEP file:",
+        self.add_line("coil_sigma", "sigma [S/m]:", "5.8e7")
+        self.add_line("coil_mu_r", "mu_r:", "1.0")
+
+        # ============ PEEC coil input (CAD STEP) ============
+        # (Only for PEEC+BEM method, hidden otherwise by _on_method_changed)
+        self._add_section("Coil geometry (PEEC+BEM only)")
+        self.add_browse("peec_step", "STEP file:",
                         filter_str="STEP files (*.step *.stp);;All (*)")
+
+        # ============ Workpiece material (INDEPENDENT from coil) ============
+        self._add_section("Workpiece material")
+        wp_mat = self.add_combo(
+            "wp_material", "Preset:",
+            list(MATERIAL_PRESETS.keys()), default=3)  # Steel 100
+        wp_mat.currentTextChanged.connect(self._on_wp_material_changed)
+        wp_mat.setToolTip(
+            "Workpiece material. Presets set sigma + mu_r. "
+            "'Custom' enables manual entry.")
+
+        self.add_line("wp_sigma", "sigma [S/m]:", "5.0e6")
+        self.add_line("mu_r", "mu_r:", "100")
+        ht = self.add_line("half_thickness", "half thickness [m]:",
+                            "0.0125")
+        ht.setToolTip(
+            "Half of the workpiece wall thickness for the Dowell "
+            "SIBC formula. For solid bulk wp, use min(R_wp, H_wp/2).")
+
+        # ============ Impedance model (Linear SIBC vs ESIM) ============
+        self._add_section("Workpiece impedance model")
+        imp = self.add_combo(
+            "impedance_model", "Model:",
+            ["Linear SIBC",
+             "Nonlinear ESIM (experimental, WIP)"],
+            default=0)
+        imp.currentTextChanged.connect(self._on_impedance_changed)
+        imp.setToolTip(
+            "<b>Linear SIBC</b>: Z_s = (1+j) rho/delta * sqrt(mu_r). "
+            "Ok for Cu/Al, and for steel with a constant mu_r.<br>"
+            "<b>ESIM</b>: 1D cell problem solves B-H(H) self-consistently "
+            "(Karl iteration). Needed when mu_r varies with H (saturated "
+            "steel). <b>Calc script support is WIP</b> — panel accepts "
+            "settings but the subprocess may reject.")
+
+        # ESIM-only widgets
+        self.add_browse("bh_file", "BH file:", default="",
+                         filter_str="BH tables (*.txt *.csv);;All (*)")
+        self.add_spin("esim_max_iter", "max iter:", 15, 1, 200)
+        self.add_line("esim_tol", "tolerance:", "1e-3")
+
+        # ============ Linear solver (method-dependent) ============
+        self._add_section("Linear solver")
+        solver = self.add_combo("solver", "Solver:", ["pardiso"])
+        solver.setToolTip(
+            "<b>PEEC+BEM</b>:<br>"
+            "  Dense LU — fast for small filament bundles (<500 segments)<br>"
+            "  HACApK — O(N log N), for large bundles<br>"
+            "<br>"
+            "<b>FEM A-V</b>:<br>"
+            "  pardiso — sparse direct (default, fast, memory-heavy)<br>"
+            "  shifted AMS — iterative for HCurl p=1 (low memory)<br>"
+            "  BDDC — preconditioned CG, recommended for p&gt;=2<br>"
+            "  iccg — generic fallback (Incomplete Cholesky + CG)")
+
+        # ============ Advanced (collapsed by default) ============
+        self._add_section("Advanced")
         self.add_spin("peec_nwinc", "PEEC nwinc:", 3, 1, 10)
         self.add_spin("peec_nhinc", "PEEC nhinc:", 3, 1, 10)
+        self.add_spin("fes_order", "FES order:", 1, 1, 3)
 
-        # ============ PEEC coil parameters (no mesh needed) ============
-        self.add_line("coil_radius", "Coil radius [m]:", "0.05")
-        self.add_line("coil_pitch", "Coil pitch [m]:", "0.008")
-        self.add_line("coil_turns", "Turns:", "5")
-        self.add_line("wire_w", "Wire width [m]:", "0.006")
-        self.add_line("wire_h", "Wire height [m]:", "0.006")
-        self.add_spin("nwinc", "nwinc (skin subdiv):", 3, 1, 10)
-        self.add_spin("seg_per_turn", "Segments/turn:", 20, 8, 50)
-        self.add_spin("prima_q", "PRIMA order:", 30, 5, 100)
+        # ============ Initial state ============
+        # Apply material presets to refresh coil_sigma / wp_sigma / mu_r
+        self._on_coil_material_changed(coil_mat.currentText())
+        self._on_wp_material_changed(wp_mat.currentText())
 
-        # ============ Workpiece parameters ============
-        #   off  -> coil-only (no workpiece coupling)
-        #   SIBC -> linear surface impedance + per-panel curvature
-        #   ESIM -> nonlinear 1D cell problem + per-panel curvature
-        wp_combo = self.add_combo("workpiece_mode", "Workpiece:",
-                                  ["off", "SIBC", "ESIM"])
-        wp_combo.currentTextChanged.connect(self._on_workpiece_changed)
+        self._method_combo.setCurrentText(METHOD_PEEC_BEM)
+        self._on_method_changed(METHOD_PEEC_BEM)
+        self._update_status()
 
-        self.add_line("wp_sigma", "WP sigma [S/m]:", "2e6")
-        self.add_line("half_thickness", "Half thickness [m]:", "0.005")
-        self.add_line("mu_r", "mu_r:", "100")
-        self.add_browse("bh_file", "BH file:",
-                        filter_str="Text files (*.txt *.csv);;All (*)")
-        # ESIM 1D cell-problem coordinate system.
-        self.add_combo("esim_geometry", "ESIM geometry:",
-                       ["local_curvature", "none"])
+    # ----------------------- Material presets -----------------------
 
-        # Initial state — default Method = PEEC.
-        self._method_combo.setCurrentText("PEEC+FEM")
-        self._on_method_changed("PEEC+FEM")
-        self._on_validation_changed()
+    def _apply_material(self, preset_name, sigma_key, mu_r_key):
+        preset = MATERIAL_PRESETS.get(preset_name, {})
+        sigma = preset.get("sigma")
+        mu_r = preset.get("mu_r")
+        sigma_w = self._widgets.get(sigma_key)
+        mu_w = self._widgets.get(mu_r_key)
+        is_custom = (preset_name == "Custom")
+        if sigma_w is not None:
+            if sigma is not None:
+                sigma_w.setText(f"{sigma:.3g}")
+            sigma_w.setEnabled(is_custom)
+        if mu_w is not None:
+            if mu_r is not None:
+                mu_w.setText(f"{mu_r:.3g}")
+            mu_w.setEnabled(is_custom)
+
+    def _on_coil_material_changed(self, name):
+        self._apply_material(name, "coil_sigma", "coil_mu_r")
+        self._update_status()
+
+    def _on_wp_material_changed(self, name):
+        self._apply_material(name, "wp_sigma", "mu_r")
+        # Hint: Steel materials often need ESIM for accurate saturation
+        # prediction.  Don't auto-switch — just nudge via status line.
+        self._update_status()
+
+    def _on_impedance_changed(self, name):
+        is_esim = name.startswith("Nonlinear ESIM")
+        for key in ("bh_file", "esim_max_iter", "esim_tol"):
+            self._set_row_visible(key, is_esim)
+        self._update_status()
+
+    # ----------------------- Method + visibility -----------------------
 
     def _on_method_changed(self, method):
-        is_peec = (method == "PEEC+FEM")
-        is_fem = (method == "FEM")
+        is_peec_bem = (method == METHOD_PEEC_BEM)
+        is_fem = (method == METHOD_FEM_FULL)
 
-        # Solver combo: same widget, different items per method.
+        self._method_combo.setToolTip(METHOD_TOOLTIP.get(method, ""))
+
+        # Solver selection per method.  Always visible — users want to
+        # know what is solving their problem.
         solver = self._widgets["solver"]
         prev = solver.currentText()
         solver.clear()
-        if is_peec:
-            solver.addItems(["Dense LU", "HACApK saddle", "PRIMA"])
-        else:
-            solver.addItems(["pardiso", "bddc", "iccg", "ams"])
+        if is_peec_bem:
+            solver.addItems(["Dense LU (small)",
+                              "HACApK (large)"])
+        else:  # FEM
+            solver.addItems(["pardiso (direct)",
+                              "shifted AMS (iterative, p=1)",
+                              "BDDC (iterative, p>=2)",
+                              "iccg (fallback)"])
         idx = solver.findText(prev)
         if idx >= 0:
             solver.setCurrentIndex(idx)
 
-        # PEEC coil parameters — visible only in PEEC+FEM mode.
-        for key in ("coil_radius", "coil_pitch", "coil_turns",
-                     "wire_w", "wire_h", "nwinc", "seg_per_turn"):
-            self._set_row_visible(key, is_peec)
-        self._set_row_visible("prima_q",
-                              is_peec and self.val("solver") == "PRIMA")
-
-        # FEM-only widgets.
-        self._set_row_visible("max_iter", is_fem)
+        # Visibility per method:
+        self._set_row_visible("peec_step", is_peec_bem)
+        self._set_row_visible("peec_nwinc", is_peec_bem)
+        self._set_row_visible("peec_nhinc", is_peec_bem)
         self._set_row_visible("fes_order", is_fem)
 
-        # PEEC filament fields are required whenever FEM is selected
-        # (T0 was retired; all FEM runs use the PEEC Biot-Savart source).
-        for key in ("peec_step", "peec_nwinc", "peec_nhinc"):
-            self._set_row_visible(key, is_fem)
-        # Workpiece: always visible. "off" = coil only; SIBC/ESIM = coupling.
-        # FEM requires workpiece (forces non-off).
-        self._set_row_visible("workpiece_mode", True)
-        if is_fem and self.val("workpiece_mode") == "off":
-            wp = self._widgets["workpiece_mode"]
-            sibc_idx = wp.findText("SIBC")
-            if sibc_idx >= 0:
-                wp.setCurrentIndex(sibc_idx)
+        self._update_status()
 
-        self._on_workpiece_changed()
-        self._on_validation_changed()
+    # ----------------------- Status line -----------------------
 
-    def _on_workpiece_changed(self, _text=None):
-        wp_mode = self.val("workpiece_mode")
-        has_wp = (wp_mode != "off")
+    def _update_status(self):
+        """Compose a short status string: .vol label check + skin depth."""
+        lines = []
+        method = self._method_combo.currentText()
+        ok, errors, warnings = check_method_requirements(
+            method, self._vol_mats, self._vol_bnds)
 
-        # Hide all WP-detail widgets first, then show only the
-        # subset that matches the current SIBC vs ESIM choice.
-        for key in ("wp_sigma", "half_thickness", "mu_r",
-                     "bh_file", "esim_geometry"):
-            self._set_row_visible(key, False)
+        if self._vol_mats is not None:
+            if ok and not warnings:
+                lines.append("<span style='color:#080;'>.vol OK</span>")
+            if warnings:
+                for w in warnings:
+                    lines.append(f"<span style='color:#A80;'>warn: {w}</span>")
+            if errors:
+                for e in errors:
+                    lines.append(f"<span style='color:#C00;'>ERROR: {e}</span>")
 
-        if has_wp:
-            is_esim = (wp_mode == "ESIM")
-            self._set_row_visible("wp_sigma", True)
-            self._set_row_visible("half_thickness", True)
-            self._set_row_visible("mu_r", not is_esim)
-            self._set_row_visible("bh_file", is_esim)
-            self._set_row_visible("esim_geometry", is_esim)
+        # Physics sanity: delta_wp vs half_thickness
+        try:
+            freq = float(self.val("freq"))
+            wp_sigma = float(self.val("wp_sigma"))
+            mu_r = float(self.val("mu_r"))
+            half_thickness = float(self.val("half_thickness"))
+            delta = skin_depth(freq, wp_sigma, mu_r)
+            ratio = half_thickness / delta
+            lines.append(
+                f"WP delta = {delta*1e3:.3f} mm, R/delta = {ratio:.1f}")
+            if ratio < 3:
+                lines.append(
+                    "<span style='color:#A80;'>warn: R/delta &lt; 3; "
+                    "SIBC may under-estimate (volumetric FEM preferred)."
+                    "</span>")
+        except (ValueError, ZeroDivisionError):
+            pass
 
-    def _on_validation_changed(self, _text=None):
-        cb = getattr(self, 'validationChanged', None)
-        if callable(cb):
-            cb()
+        self._status_label.setText("<br>".join(lines))
+
+    # ----------------------- External hooks -----------------------
+
+    def set_vol_labels(self, mats, bnds):
+        """Called by IHWindow after .vol load; refreshes status + run-enable."""
+        self._vol_mats = mats
+        self._vol_bnds = bnds
+        self._update_status()
 
     def is_runnable(self):
-        # All methods rely on .jou naming convention; no GUI label inputs.
-        return True
+        ok, _errors, _warnings = check_method_requirements(
+            self._method_combo.currentText(),
+            self._vol_mats, self._vol_bnds)
+        return ok and (self._vol_mats is not None)
+
+    # ----------------------- Command building -----------------------
 
     def build_command(self, vol_path):
-        method = self.val("method")
-        if method == "PEEC+FEM":
-            return self._build_peec_command(vol_path)
         if not vol_path:
             raise ValueError("No .vol file specified.")
-        return self._build_fem_command(vol_path)
+        method = self.val("method")
+        if method == METHOD_PEEC_BEM:
+            return self._build_peec_bem_command(vol_path)
+        return self._build_fem_coilmesh_command(vol_path)
 
-    # PEEC solver combo -> calc-script --solver value
+    # UI solver text -> CLI arg mapping
     _PEEC_SOLVER_MAP = {
-        "PRIMA": "prima",
-        "HACApK saddle": "hacapk",
-        "Dense LU": "dense",
+        "Dense LU (small)": "dense",
+        "HACApK (large)":   "hacapk",
+    }
+    _FEM_SOLVER_MAP = {
+        "pardiso (direct)":              "pardiso",
+        "shifted AMS (iterative, p=1)":  "shifted_ams",
+        "BDDC (iterative, p>=2)":        "bddc",
+        "iccg (fallback)":               "iccg",
     }
 
-    def _build_peec_command(self, vol_path):
-        cmd = [_PYTHON, calc_script("calc_peec.py"),
-               "--coil-radius", self.val("coil_radius"),
-               "--coil-pitch", self.val("coil_pitch"),
-               "--coil-turns", self.val("coil_turns"),
-               "--wire-w", self.val("wire_w"),
-               "--wire-h", self.val("wire_h"),
-               "--nwinc", str(self.val("nwinc")),
-               "--seg-per-turn", str(self.val("seg_per_turn")),
+    def _impedance_model_cli(self):
+        imp = self.val("impedance_model")
+        return "esim" if imp.startswith("Nonlinear ESIM") else "sibc"
+
+    def _build_peec_bem_command(self, vol_path):
+        step = self.val("peec_step")
+        if not step:
+            raise ValueError("PEEC STEP file is required for PEEC+BEM.")
+        solver = self._PEEC_SOLVER_MAP.get(self.val("solver"), "dense")
+        cmd = [_PYTHON, calc_script("calc_peec_bem.py"),
+               "--peec-step", step,
+               "--peec-nwinc", str(self.val("peec_nwinc")),
+               "--peec-nhinc", str(self.val("peec_nhinc")),
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
-               "--solver",
-               self._PEEC_SOLVER_MAP.get(self.val("solver"), "dense"),
-               "--prima-q", str(self.val("prima_q"))]
-        # Workpiece coupling: "off" = coil only, SIBC/ESIM = FEM coupling
-        wp_mode = self.val("workpiece_mode")
-        if wp_mode != "off" and vol_path:
-            imp = "esim" if wp_mode == "ESIM" else "sibc"
-            cmd += ["--vol", vol_path,
-                    "--workpiece", "sibc",
-                    "--impedance-model", imp,
-                    "--sigma", self.val("wp_sigma"),
-                    "--half-thickness", self.val("half_thickness"),
-                    "--mu-r", self.val("mu_r"),
-                    "--use-local-curvature"]
+               "--vol", vol_path,
+               "--wp-label", "sibc",
+               "--sigma", self.val("wp_sigma"),
+               "--half-thickness", self.val("half_thickness"),
+               "--mu-r", self.val("mu_r"),
+               "--impedance-model", self._impedance_model_cli(),
+               "--peec-solver", solver]
+        if self._impedance_model_cli() == "esim":
+            bh = self.val("bh_file")
+            if bh:
+                cmd += ["--bh-file", bh,
+                        "--esim-max-iter", str(self.val("esim_max_iter")),
+                        "--esim-tol", self.val("esim_tol")]
         return cmd
 
-    def _build_fem_command(self, vol_path):
-        # The same widget set drives FEM. wp_sigma + mu_r come from
-        # the shared workpiece group, so the FEM command no longer
-        # needs the legacy linear / BH-curve material combo.
-        wp_mode = self.val("workpiece_mode")
-        impedance = "esim" if wp_mode == "ESIM" else "sibc"
-        # FEM coil source is always PEEC filament (T0 retired 2026-04-18).
-        # For ESIM (nonlinear workpiece) we still need the Karl iteration
-        # path, so we use --source-mode total (PEEC line-integral RHS +
-        # .msh viz). For linear SIBC the default 'scattered' is faster.
-        source_mode = "total" if impedance == "esim" else "scattered"
-        cmd = [_PYTHON, calc_script("calc_fem_kelvin.py"),
+    def _build_fem_coilmesh_command(self, vol_path):
+        solver = self._FEM_SOLVER_MAP.get(self.val("solver"), "pardiso")
+        cmd = [_PYTHON, calc_script("calc_fem_coilmesh.py"),
                "--vol", vol_path,
-               "--fes-order", self.val("fes_order"),
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
-               "--material", "custom",
+               "--coil-sigma", self.val("coil_sigma"),
+               "--coil-mu-r", self.val("coil_mu_r"),
                "--sigma", self.val("wp_sigma"),
                "--mu-r", self.val("mu_r"),
                "--half-thickness", self.val("half_thickness"),
-               "--impedance", impedance,
-               "--solver", self.val("solver"),
-               "--max-iter", self.val("max_iter"),
-               "--msh-output", msh_output(vol_path, "_fem"),
-               "--source-mode", source_mode,
-               "--peec-step", self.val("peec_step"),
-               "--peec-sigma", self.val("coil_sigma"),
-               "--peec-nwinc", str(self.val("peec_nwinc")),
-               "--peec-nhinc", str(self.val("peec_nhinc"))]
-        if impedance == "esim":
+               "--fes-order", str(self.val("fes_order")),
+               "--solver", solver,
+               "--sibc-bnd", "sibc",
+               "--source-bnd", "source",
+               "--sink-bnd", "sink",
+               "--coil-mat", "coil",
+               "--impedance-model", self._impedance_model_cli()]
+        if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
-                cmd += ["--bh-file", bh]
+                cmd += ["--bh-file", bh,
+                        "--esim-max-iter", str(self.val("esim_max_iter")),
+                        "--esim-tol", self.val("esim_tol")]
         return cmd
 
+
+# ============================================================
+# IH Window (with .vol-load-hook + formatted output)
+# ============================================================
 
 class IHWindow(AnalysisWindow):
     def __init__(self, vol_path=""):
@@ -259,39 +483,88 @@ class IHWindow(AnalysisWindow):
         panel = IHPanel()
         self._set_panel(panel)
         self._restore_settings()
-        # Auto-populate workpiece/air fields from the .vol's materials
-        # so the user does not have to retype labels that the .jou
-        # already declared.
-        self._populate_optional_labels(vol_path)
+        # Inspect the .vol on launch.
+        self._reload_vol_info(vol_path)
         self._update_run_state()
 
-    def _populate_optional_labels(self, vol_path):
-        """Read materials from the .vol and pre-set workpiece/air combos
-        when the corresponding labels exist. The user can still flip the
-        combo back to "off" to disable that feature.
-        """
-        if not vol_path or not os.path.isfile(vol_path):
+    def _reload_vol_info(self, vol_path):
+        panel = self._panel
+        if panel is None or not hasattr(panel, "set_vol_labels"):
             return
-        from netgen.meshing import Mesh as NgMesh
-        ng = NgMesh()
-        ng.Load(vol_path)
-        mats = set()
-        for i in range(1, 64):
-            try:
-                n = ng.GetMaterial(i)
-            except Exception:
-                break
-            if n:
-                mats.add(n)
-        widgets = self._panel._widgets
-        # workpiece combo: default to SIBC when a "workpiece" material
-        # is present in the .vol (the user can flip to ESIM or off).
-        if "workpiece" in mats and "workpiece_mode" in widgets:
-            wp = widgets["workpiece_mode"]
-            if wp.currentText() == "off":
-                idx = wp.findText("SIBC")
-                if idx >= 0:
-                    wp.setCurrentIndex(idx)
+        mats, bnds = inspect_vol_labels(vol_path)
+        panel.set_vol_labels(mats, bnds)
+
+    def _on_finished(self, exit_code, exit_status):
+        # Delegate core finish handling + then append IH-specific summary.
+        super()._on_finished(exit_code, exit_status)
+        if exit_code != 0:
+            return
+        # Parse JSON one more time for IH-specific pretty-print
+        try:
+            import json
+            text = self._output.toPlainText()
+            result = None
+            for line in reversed(text.split("\n")):
+                line = line.strip()
+                if line.startswith("{"):
+                    try:
+                        result = json.loads(line)
+                        break
+                    except json.JSONDecodeError:
+                        pass
+            if result is None or "error" in result:
+                return
+
+            lines = ["", "=== IH Summary ==="]
+            method = result.get("method", "")
+            if method:
+                lines.append(f"  Method: {method}")
+            # Inductance
+            for key, label in (("L_coil_nH", "L_coil (vacuum)"),
+                                ("L_total_nH", "L_total (with wp)")):
+                if key in result:
+                    lines.append(f"  {label}: {result[key]:.3f} nH")
+            # Dissipation
+            if "P_wp_W" in result:
+                p = result["P_wp_W"]
+                lines.append(f"  P_workpiece: {p:.4e} W  ({p*1e3:.3f} mW)")
+            if "P_coil_W" in result:
+                p = result["P_coil_W"]
+                lines.append(f"  P_coil (ohmic):    {p:.4e} W "
+                              f"(mesh-sensitive ±15%)")
+            if "P_total_W" in result:
+                p = result["P_total_W"]
+                lines.append(f"  P_total: {p:.4e} W")
+            if "P_wp_W" in result and "P_total_W" in result and \
+                    result["P_total_W"] > 0:
+                eta = result["P_wp_W"] / result["P_total_W"] * 100
+                lines.append(f"  Heating efficiency: {eta:.1f}% "
+                              f"(P_wp/P_total)")
+            # H_t / area
+            if "H_t_rms_wp_Am" in result:
+                lines.append(f"  H_t_rms (wp): "
+                              f"{result['H_t_rms_wp_Am']:.2f} A/m")
+            if "wp_area_m2" in result:
+                lines.append(
+                    f"  wp area: {result['wp_area_m2']*1e4:.2f} cm^2")
+            # Coil diagnostics
+            if "coil_delta_mm" in result:
+                lines.append(
+                    f"  coil delta = {result['coil_delta_mm']:.3f} mm")
+            if "coil_h_max_mm" in result and "coil_delta_mm" in result:
+                h = result["coil_h_max_mm"]
+                d = result["coil_delta_mm"]
+                tag = " [OK]" if h <= d else " [WARN under-resolved]"
+                lines.append(
+                    f"  coil h_max = {h:.3f} mm "
+                    f"(delta = {d:.3f} mm){tag}")
+            # Timings
+            if "t_solve_s" in result:
+                lines.append(f"  solve: {result['t_solve_s']:.1f} s")
+
+            self._output.appendPlainText("\n".join(lines))
+        except Exception as e:
+            self._output.appendPlainText(f"(IH summary skipped: {e})")
 
 
 def main():

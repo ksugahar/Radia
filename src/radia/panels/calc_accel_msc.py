@@ -20,7 +20,7 @@ IMA symmetry (set in dialog):
 
 Coil is NOT meshed -- Biot-Savart analytical source via CoilBuilder.to_radia().
 
-Mesh extraction uses Cubit API directly (no export_Gmesh, no .msh intermediate):
+Mesh extraction uses Cubit API directly (no .msh intermediate):
   cubit.get_block_volumes() -> cubit.get_volume_hexes/tets/wedges()
   -> cubit.get_connectivity() -> cubit.get_nodal_coordinates()
 """

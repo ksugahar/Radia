@@ -124,29 +124,21 @@ PARAM_JA = {
 
 # Panel definitions: script -> panel metadata
 PANELS = {
-    "inductance": {
-        "script": "calc_inductance.py",
-        "function": "extract_inductance_vol",
-        "ja_name": "BEM インダクタンス抽出",
-        "ja_description": "source/sink 鞍点 EFIE によるコイル自己インダクタンス抽出 (BEM, 無限領域)",
-        "method": "BEM (LaplaceSL saddle point EFIE)",
-        "command_builder": "radia_ih.py:IHPanel._build_bem_command",
+    "peec_bem": {
+        "script": "calc_peec_bem.py",
+        "function": "solve_peec_bem_forward",
+        "ja_name": "PEEC+BEM 1-way (IH)",
+        "ja_description": "STEP コイル → PEEC filament → 表面 BEM-SIBC で wp 発熱 P_wp を算出。1-way forward (back-reaction なし)。",
+        "method": "PEEC filament bundle + Scalar BIE + SIBC Robin on wp",
+        "command_builder": "radia_ih.py:IHPanel._build_peec_bem_command",
     },
-    "fem_kelvin": {
-        "script": "calc_fem_kelvin.py",
-        "function": "solve_fem",
-        "ja_name": "FEM-SIBC 誘導加熱",
-        "ja_description": "3D FEM (HCurl) + SIBC/ESIM + Kelvin 変換。場分布と損失を計算",
-        "method": "FEM (HCurl curl-curl + Robin SIBC)",
-        "command_builder": "radia_ih.py:IHPanel._build_fem_command",
-    },
-    "heating_bem": {
-        "script": "calc_heating_bem.py",
-        "function": "compute_heating_bem",
-        "ja_name": "BEM-SIBC 加熱解析",
-        "ja_description": "スカラー BIE + SIBC。Biot-Savart コイル + ワークピース表面損失",
-        "method": "Scalar BIE (LaplaceSL + LaplaceDL + SIBC Robin)",
-        "command_builder": "radia_ih.py:IHPanel._build_bem_wp_command",
+    "fem_coilmesh": {
+        "script": "calc_fem_coilmesh.py",
+        "function": "solve_fem_coilmesh",
+        "ja_name": "FEM A-V (IH、コイル体積メッシュ)",
+        "ja_description": "A-V 定式化 (HCurl + H1 phi on coil) + source/sink Dirichlet lift + 体積積分電流抽出 + wp SIBC Robin + Kelvin。gapped torus 専用。L, P_wp, P_coil を出力。",
+        "method": "FEM A-V (HCurl A + H1 phi on coil, phi Dirichlet source/sink)",
+        "command_builder": "radia_ih.py:IHPanel._build_fem_coilmesh_command",
     },
     "volume": {
         "script": "calc_volume.py",
