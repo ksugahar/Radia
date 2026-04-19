@@ -31,12 +31,12 @@ dependencies = [
     "numpy>=1.20",
     "mkl>=2024.2.0",
     "intel-cmplr-lib-rt>=2024.2.0",
-    # NGSolve pinned to 6.2.2602 (netgen fork is built against this version)
+    # NGSolve pinned to 6.2.2603 (netgen fork is built against this version)
     # ksugahar/netgen fork adds CallbackGeometry + SetGeomInfo (PR#232 pending)
     # Fork wheel: https://github.com/ksugahar/netgen/releases
     # Install: python install_full.py (radia + netgen fork in one command)
     # Without the fork: export_NGSolveCurvedMesh() will not work
-    "ngsolve==6.2.2602.post2",
+    "ngsolve==6.2.2603",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
     "mcp>=1.0.0",
 ]
