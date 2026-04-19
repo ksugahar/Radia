@@ -44,59 +44,48 @@ radia_export nastran <"filename"> [order <1|2>] [dimension <2|3>] [nopyramid] [o
 
 ---
 
-## Plugin Command
+## Usage from Python
 
 ```python
-cubit.cmd('radia_export nastran "mesh.bdf" dimension 3 overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" order 2 overwrite')
+cubit.cmd('radia_export nastran "mesh.bdf" dimension 2 nopyramid overwrite')
 ```
-
-> **Note**: The old `cubit_mesh_export.export_Nastran()` Python function has been replaced by the `radia_export nastran` plugin command. The old Python module (`src/radia/cubit_mesh_export.py`) has been replaced by the C++ pybind11 module (`src/cubit_plugin/radia_cubit_pybind.cpp`).
-
-### Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `dimension 3` | yes | 3D mode - exports volume elements (CTETRA, CHEXA, CPENTA, CPYRAM) |
-| `dimension 2` | | 2D mode - exports surface elements (CTRIA3, CQUAD4), orients normals to +z |
-| `nopyramid` | off | Convert pyramids to degenerate CHEXA (8-node hex with duplicate nodes) |
-| `overwrite` | off | Overwrite existing file |
 
 **Background**: In hybrid meshes combining tetrahedra and hexahedra, pyramid elements are required at the interface between element types. However, some solvers (e.g., JMAG) cannot import pyramid elements from Nastran files and interpret them as degenerate hexahedra. Use `nopyramid` for compatibility with such solvers.
 
 ## Supported Elements
 
-### 3D Elements (DIM="3D")
+### 3D Elements — Order 1
 
-| Cubit Element | Nastran Card | Nodes | Description |
-|---------------|--------------|-------|-------------|
-| Tetrahedron | CTETRA | 4 | 4-node tetrahedral solid |
-| Hexahedron | CHEXA | 8 | 8-node hexahedral solid |
-| Wedge | CPENTA | 6 | 6-node pentahedral (prism) solid |
-| Pyramid | CPYRAM | 5 | 5-node pyramid solid |
+| Cubit Element | Nastran Card | Nodes |
+|---------------|--------------|-------|
+| Tetrahedron | CTETRA | 4 |
+| Hexahedron | CHEXA | 8 |
+| Wedge | CPENTA | 6 |
+| Pyramid | CPYRAM | 5 |
 
-### 2D Elements (DIM="2D")
+### 3D Elements — Order 2 (via NetgenCurver)
 
-| Cubit Element | Nastran Card | Nodes | Description |
-|---------------|--------------|-------|-------------|
-| Triangle | CTRIA3 | 3 | 3-node triangular shell |
-| Quadrilateral | CQUAD4 | 4 | 4-node quadrilateral shell |
+| Cubit Element | Nastran Card | Nodes |
+|---------------|--------------|-------|
+| Tetrahedron | CTETRA | 10 |
+| Hexahedron | CHEXA | 20 |
+| Wedge | CPENTA | 15 |
+| Pyramid | CPYRAM | 13 |
 
-### 1D Elements
+### 2D Elements
 
-| Cubit Element | Nastran Card | Nodes | Description |
-|---------------|--------------|-------|-------------|
-| Edge/Bar | CROD | 2 | 2-node rod/bar element |
+| Order | Triangle | Quadrilateral |
+|-------|----------|---------------|
+| 1 | CTRIA3 (3) | CQUAD4 (4) |
+| 2 | CTRIA6 (6) | CQUAD8 (8) |
 
-### 0D Elements
+### 1D / 0D Elements
 
-| Cubit Element | Nastran Card | Nodes | Description |
-|---------------|--------------|-------|-------------|
-| Node | CMASS | 1 | Point mass element |
-
-## Limitations
-
-- **First-order elements only**: Second-order elements (TETRA10, HEX20, etc.) are not supported
-- Elements are exported as 1st order regardless of Cubit element type setting
+| Cubit Element | Nastran Card | Nodes |
+|---------------|--------------|-------|
+| Edge/Bar | CROD | 2 |
+| Node | CMASS | 1 |
 
 ## File Format
 
@@ -176,5 +165,6 @@ The output file is compatible with:
 
 ## See Also
 
-- [Cubit_Element_Order.md](Cubit_Element_Order.md) - Element order control (note: Nastran export is 1st order only)
-- [export_Gmsh_ver4](export_Gmsh_ver4.md) - Alternative format with 2nd order support
+- [export_Gmsh.md](export_Gmsh.md) — Gmsh v4.1 export (order 1-3)
+- [export_NetgenMesh.md](export_NetgenMesh.md) — Netgen .vol export (order 1-5)
+- [Function_Reference.md](Function_Reference.md) — All plugin commands

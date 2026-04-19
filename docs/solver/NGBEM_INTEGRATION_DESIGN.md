@@ -478,8 +478,8 @@ NGSolve supports hexahedral elements:
 ```python
 from ngsolve import *
 
-# NGSolve can read hex mesh from GMSH
-mesh = Mesh("hex_mesh.msh")
+# NGSolve reads .vol (the only supported input format)
+mesh = Mesh("hex_mesh.vol")
 
 # Check element types
 for el in mesh.Elements(VOL):
@@ -490,57 +490,29 @@ for el in mesh.Elements(VOL):
 
 ### Coreform to Netgen Hex Pipeline
 
-#### Option 1: GMSH Intermediate Format
-
 ```
-Coreform (.cub5) -> GMSH (.msh) -> NGSolve Mesh
+Cubit -> radia_export netgen "model.vol" order N -> NGSolve Mesh("model.vol")
 ```
-
-```python
-# Use: cubit.cmd('radia_export gmsh "model.msh" overwrite')
-from ngsolve import Mesh
-
-# Export hex mesh from Cubit to GMSH
-export_to_gmsh("model.cub5", "model.msh", element_type="hex")
-
-# Import to NGSolve
-mesh = Mesh("model.msh")
-```
-
-#### Option 2: Exodus II Format (Native Cubit)
-
-```
-Coreform (.cub5) -> Exodus II (.exo) -> NGSolve Mesh
-```
-
-NGSolve may support Exodus format via VTK or custom reader.
-
-#### Option 3: Direct Python API
 
 ```python
 import cubit
-from ngsolve import *
-from ngsolve.meshes import Make3DMesh
+from ngsolve import Mesh
 
-# Get hex elements directly from Cubit
-cubit.init([""])
-cubit.cmd("import mesh 'model.cub5'")
+cubit.init(['cubit', '-nojournal', '-batch'])
+cubit.cmd('import step "model.step" heal')
+cubit.cmd("volume all scheme map")   # hex meshing
+cubit.cmd("volume all size 0.01")
+cubit.cmd("mesh volume all")
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "domain"')
 
-# Extract hex connectivity
-hex_elements = []
-for hex_id in cubit.get_hex_conn():
-    nodes = cubit.get_connectivity("hex", hex_id)
-    hex_elements.append(nodes)
+# Export .vol with high-order curving
+cubit.cmd('radia_export netgen "model.vol" order 3 overwrite')
 
-# Get node coordinates
-nodes = {}
-for node_id in cubit.get_nodeset_nodes(1):
-    coords = cubit.get_nodal_coordinates(node_id)
-    nodes[node_id] = coords
-
-# Create Netgen mesh directly
-# ... (requires netgen.mesh API)
+mesh = Mesh("model.vol")
 ```
+
+The `.vol` format supports all element types (tet, hex, wedge, pyramid) with order 1-5.
 
 ### Surface Extraction for BEM
 
@@ -549,8 +521,8 @@ For BEM analysis, only surface mesh is needed:
 ```python
 from ngsolve import *
 
-# Load volume mesh (hex or tet)
-mesh = Mesh("model.msh")
+# Load volume mesh (the only supported input is .vol)
+mesh = Mesh("model.vol")
 
 # Get boundary mesh for BEM
 # NGBEM automatically extracts surface from volume mesh
