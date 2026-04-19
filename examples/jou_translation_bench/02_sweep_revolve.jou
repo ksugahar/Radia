@@ -1,0 +1,15 @@
+# 02_sweep_revolve.jou — revolve + fillet
+# Expected: translate to build123d (BuildSketch on XZ, revolve, fillet)
+reset
+
+# Rectangular profile at r=20, w=5, h=10 (in XZ plane)
+create surface rectangle width 5 height 10 zplane
+move surface 1 x 20 y 0 z 0
+
+# Revolve 360° about Z to make a bobbin ring
+revolve surface 1 about z angle 360
+
+# Round the top and bottom edges
+modify curve in volume 1 blend radius 1
+
+rename volume 1 "ring_bobbin"
