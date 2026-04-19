@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the radia Cubit plugin export commands and the `radia_cubit_mesh` module.
+This document explains how to create and work with 1st and 2nd order elements in Coreform Cubit, and how they interact with the Radia Cubit plugin export commands (`radia_export`).
 
 ## Creating 2nd Order Elements
 
@@ -85,43 +85,25 @@ print(f"get_expanded_connectivity: {len(nodes_2nd)} nodes")  # 10
 
 ## Impact on Export Functions
 
-### radia_cubit_mesh.extract_curved_mesh()
-
-Uses `get_connectivity()` to export **only 1st order elements**:
-
-- TET4 ↁE4 nodes (exported)
-- TET10 ↁE4 nodes (only corners exported)
-
-This is intentional! Netgen's `mesh.Curve(order)` generates high-order nodes from geometry.
+All `radia_export` commands internally extract 1st order elements only, then use
+**NetgenCurver** (CallbackGeometry + ACIS projection) to generate high-order nodes
+at the requested order. Block element type settings (`tetra10`, etc.) are ignored.
 
 ```python
-# Even with TET10, exports as 1st order for Netgen
-cubit.cmd("block 1 element type tetra10")
-import radia_cubit_mesh
-ngmesh = radia_cubit_mesh.extract_curved_mesh(order=2)
-# ngmesh contains 4-node tets, mesh.Curve() adds high-order nodes
+# The order parameter controls high-order curving — not the block element type
+cubit.cmd('radia_export netgen "mesh.vol" order 3 overwrite')
+cubit.cmd('radia_export gmsh "mesh.msh" order 2 overwrite')
 ```
-
-### radia_export gmsh
-
-Uses `get_expanded_connectivity()` to export 2nd order elements:
-
-- TET4 ↁEGmsh type 4
-- TET10 ↁEGmsh type 11
 
 ## Design Philosophy
 
-### Why extract_curved_mesh Uses 1st Order Base Mesh
-
-The design philosophy for `radia_cubit_mesh.extract_curved_mesh()`:
-
 1. **Cubit's role**: Generate high-quality 1st order mesh (topology)
-2. **Netgen's role**: Add high-order nodes based on CAD geometry
+2. **NetgenCurver's role**: Add high-order nodes projected onto ACIS CAD surfaces
 
 This separation provides:
-- Arbitrary curve orders (2, 3, 4, 5, ...) via `mesh.Curve(order)`
+- Arbitrary curve orders (1-5 for .vol, 1-3 for .msh, 1-2 for .bdf/.vtk)
 - Nodes placed exactly on CAD geometry
-- No need for Cubit-Netgen node ordering conversion for high-order nodes
+- No Cubit-Netgen node ordering conversion needed for high-order nodes
 
 ## Complete Example
 
@@ -183,11 +165,10 @@ Output:
 | `radia_export gmsh "f.msh" order N` | NetgenCurver | 1-3 |
 | `radia_export nastran "f.bdf" order N` | NetgenCurver | 1-2 |
 | `radia_export vtk "f.vtk" order N` | NetgenCurver | 1-2 |
-| `extract_curved_mesh(cubit, order=N)` | CallbackGeometry + BuildCurvedElements | 1-5 |
 
 > **Note**: `radia_export nastran` (NOT `export nastran`). Cubit has a built-in `export nastran` with different format.
 
 ## See Also
 
-- [export_NetgenMesh.md](export_NetgenMesh.md) - Cubit to Netgen mesh export with high-order curving (`radia_cubit_mesh.extract_curved_mesh`)
-- [Cubit Documentation](https://coreform.com/products/coreform-cubit/documentation/)
+- [export_NetgenMesh.md](export_NetgenMesh.md) — Netgen .vol export (order 1-5)
+- [Function_Reference.md](Function_Reference.md) — All plugin commands

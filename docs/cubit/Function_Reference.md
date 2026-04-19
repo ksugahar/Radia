@@ -9,12 +9,18 @@ All commands are available in journal files (.jou) and the Cubit command line.
 
 ### Mesh Export Commands
 
-| Command | Format | Orders | Block Required |
-|---------|--------|--------|---------------|
-| `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | No |
-| `radia_export gmsh "f.msh" order N` | Gmsh v4.1 | 1-4 | No |
-| `radia_export nastran "f.bdf" order N` | Nastran BDF | 1-2 | No |
-| `radia_export vtk "f.vtk" order N` | VTK Legacy | 1-2 | No |
+| Command | Format | Orders | HO Method | Doc |
+|---------|--------|--------|-----------|-----|
+| `radia_export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | NetgenCurver + ACIS | [export_NetgenMesh](export_NetgenMesh.md) |
+| `radia_export gmsh "f.msh" order N` | Gmsh v4.1 | 1-3 | NetgenCurver + ACIS | [export_Gmsh](export_Gmsh.md) |
+| `radia_export nastran "f.bdf" order N` | Nastran BDF | 1-2 | NetgenCurver + ACIS | [export_Nastran](export_Nastran.md) |
+| `radia_export vtk "f.vtk" order N` | VTK Legacy | 1-2 | NetgenCurver + ACIS | [export_vtk](export_vtk.md) |
+| `export meg "f.meg"` | ELF/MAGIC MEG | 1 | — | [export_meg](export_meg.md) |
+| `radia_export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | — | [export_femeem](export_femeem.md) |
+
+> **IMPORTANT**: Use `radia_export`, NOT `export` (except for `export meg`).
+> Cubit has built-in `export nastran` and `export abaqus` commands with different
+> formats and no high-order support. `export gmsh` does NOT exist in Cubit.
 
 ### Coil Generation Command
 
@@ -24,18 +30,11 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | `coil "script.py" output "path.step"` | Custom output path |
 | `coil "script.py" noimport` | Generate STEP without importing |
 
-> **IMPORTANT**: Use `radia_export`, NOT `export`.
-> Cubit has built-in `export nastran` and `export abaqus` commands with different
-> formats and no high-order support. `export gmsh` does NOT exist in Cubit — only
-> `radia_export gmsh` is available. Using `export gmsh` will fail with
-> "is not a valid type of file to be exported".
-
 ### Build & Installation
 
 The plugin is built with **compact_netgen** (static link, no nglib.dll dependency):
 
 ```bash
-# Recommended: compact_netgen (no ABI mismatch risk)
 cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCubit_DIR="C:/Program Files/Coreform Cubit 2025.3/cmake" \
   -DNETGEN_SRC_DIR="C:/netgen_build/netgen_fork" \
@@ -62,20 +61,22 @@ Produces companion JSON (.vol.json) with CAD reference values for consistency ch
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| order | 1 | Curve order (1=linear, 2-5=high-order via NetgenCurver) |
+| order | 2 | Curve order (1=linear, 2-5=high-order via NetgenCurver) |
 | overwrite | off | Overwrite existing file |
 
 ### radia_export gmsh
 
 ```
-radia_export gmsh "filename.msh" [order <1-4>] [version <2|4>] [dimension <2|3>] [overwrite]
+radia_export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| order | 1 | Element order (1-4, order 3+ requires NetgenCurver) |
-| version | (ignored) | v4.1 is the only supported format; the `version` keyword is accepted for backward compatibility but ignored |
+| order | 1 | Element order (1-3; wedge limited to order 2) |
 | dimension | 3 | 2D or 3D mode |
+| overwrite | off | Overwrite existing file |
+
+Order 4-5 not supported (use `radia_export netgen`).
 
 ### radia_export nastran
 
@@ -95,7 +96,41 @@ radia_export nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] 
 radia_export vtk "filename.vtk" [order <1|2>] [dimension <2|3>] [overwrite]
 ```
 
-VTK Legacy format. Cell types: TET(10), HEX(12), WEDGE(13), PYRAMID(14), TRI(5), QUAD(9).
+VTK Legacy ASCII format. Cell types: TET(10/24), HEX(12/25), WEDGE(13/26), PYRAMID(14/27), TRI(5/22), QUAD(9/23).
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| order | 1 | Element order (1 or 2) |
+| dimension | 3 | 2D or 3D mode |
+
+### export meg
+
+```
+export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
+```
+
+ELF/MAGIC MEG format. Block names define ELF element type prefixes (MMB, MWL, MCO, etc.).
+Pyramids exported as degenerate 8-node hex. Nodesets/sidesets named `SPACE` become MGR2 spatial nodes.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| threed | yes | 3D analysis (DIM=T) |
+| twod | | 2D planar (DIM=K, z=0) |
+| axisymmetric | | Axisymmetric (DIM=R, y=0) |
+| labels | | Per-block prefix override (`blockID:PREFIX,...`) |
+
+### radia_export femeem
+
+```
+radia_export femeem "dirname" [scale <value>] [overwrite]
+```
+
+FEMEEM format (Gifu Univ. 3D FEM). Tet-only, 1st order.
+Creates directory with `in.dat`, `sin.dat.B`, `sina.dat`, and `d3`.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| scale | 1.0 | Coordinate scale factor |
 
 ### coil
 
@@ -144,6 +179,8 @@ Export Mesh (C++ .ccl):        Solve (Python):
   GMSH...                        Generate Coil...
   Nastran BDF...                 --------
   VTK...                         Reload Panels
+  MEG...
+  FEMEEM...
   --------
   Mesh Evaluation...
 ```
@@ -151,6 +188,21 @@ Export Mesh (C++ .ccl):        Solve (Python):
 - **Export Mesh**: Qt5 dialogs with settings persistence (`AppData/Roaming/Radia/export_settings.json`)
 - **Solve**: Python subprocess to external Python 3.12 (Cubit embeds Python 3.10)
 - **Generate Coil**: Calls `coil` APREPRO command via file dialog
+
+---
+
+## Export Format Comparison
+
+| Feature | netgen | gmsh | nastran | vtk | meg | femeem |
+|---------|--------|------|---------|-----|-----|--------|
+| Max order | 5 | 3 | 2 | 2 | 1 | 1 |
+| HO method | NetgenCurver | NetgenCurver | NetgenCurver | NetgenCurver | — | — |
+| Tet | yes | yes | yes | yes | yes | yes |
+| Hex | yes | yes | yes | yes | yes | no |
+| Wedge | yes | yes (o2) | yes | yes | yes | no |
+| Pyramid | yes | yes | yes | yes | degen hex | no |
+| Labels | block+sideset | block+sideset | block | block | block+sideset | block |
+| Companion | .vol.json | .geo | — | — | — | d3 |
 
 ---
 
@@ -163,3 +215,5 @@ Export Mesh (C++ .ccl):        Solve (Python):
 | `export nastran` wrong format | Using Cubit built-in | Use `radia_export nastran` |
 | cp932 UnicodeDecodeError | Non-ASCII in .py | Use ASCII only + encoding='utf-8' |
 | ccm size < 400 KB | Old full-Netgen build | Rebuild with compact_netgen (~600 KB) |
+| GMSH order 4-5 fails | Not supported in GMSH export | Use `radia_export netgen` |
+| Wedge order 3 in GMSH | GMSH limitation | Falls back to linear; use netgen |

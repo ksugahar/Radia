@@ -2,8 +2,8 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 2.3.0
-**Date**: 2026-02-16
+**Version**: 4.6.0
+**Date**: 2026-04-17
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
 
 ---
@@ -11,6 +11,7 @@ Complete reference for Radia Python API.
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Removed APIs](#removed-apis)
 - [Supported Elements](#supported-elements)
 - [Geometry Objects](#geometry-objects)
 - [Materials](#materials)
@@ -19,7 +20,7 @@ Complete reference for Radia Python API.
 - [Mesh Import](#mesh-import)
 - [NGSolve Integration](#ngsolve-integration)
 - [Utilities](#utilities)
-- [VTK Export](#vtk-export)
+- [ESIM VTK Export](#esim-vtk-export)
 - [PEEC Solver](#peec-solver)
 - [ESIM (Effective Surface Impedance Method)](#esim-effective-surface-impedance-method)
 
@@ -84,6 +85,47 @@ mag_obj = netgen_mesh_to_radia(mesh,
                                 material={'magnetization': [0, 0, 0]},
                                 units='m',
                                 material_filter='magnetic')
+```
+
+---
+
+## Removed APIs
+
+The following APIs have been removed from Radia. Calling them will raise an error.
+
+### Removed Functions
+
+| Removed API | Date | Replacement | Reason |
+|-------------|------|-------------|--------|
+| `FldUnits()` | — | None needed | Radia always uses meters. No configuration needed. |
+| `RlxPre()`, `RlxMan()`, `RlxAuto()` | — | `rad.Solve(obj, prec, maxiter, method)` | Unified solver API |
+| `RlxUpdSrc()`, `SetRelaxSubInterval()` | — | `rad.Solve()` | Unified solver API |
+| `TrfMlt()`, `SetIMASymmetry()`, `BuildIMAMatrix()`, `PreRelax()`, `Image()` | 2026-01-31 | `rad.Solve(image=...)` / `rad.BuildMatrix(image=...)` | Unified image symmetry parameter |
+| `CndLoop`, `CndRecBlock`, `CndLoopFromHelix`, `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency`, `CndHexahedron`, `CndWire`, `CndSpiral`, `MatSIBC` | 2026-02-13 | `PEECBuilder` + `CoupledPEECSolver` | Legacy PEEC conductor API |
+| `ObjDrwVTK()`, `exportGeometryToVTK()` | — | NGSolve WebGUI / `GmshPostExport` | Old VTK visualization removed |
+| `ObjDivMag()`, `ObjDivMagPln()`, `ObjCutMag()` | — | Netgen / Cubit | Mesh operations use external tools |
+| `FldVTS()` | 2026-03-22 | NGSolve + `GmshPostExport` | Field visualization removed |
+| `beam_tracking` module | 2026-03-22 | CERN Xsuite | Beam tracking removed |
+| `radia_pyvista_viewer.py` | — | NGSolve WebGUI | Visualization removed |
+
+### Removed Libraries
+
+| Library | Date | Replacement | Reason |
+|---------|------|-------------|--------|
+| ExaFMM-t (FMM acceleration, method 3) | 2026-03-06 | HACApK (H-matrix) | FMM removed from repo |
+| `GmshBuilder` | 2026-03-13 | Cubit plugin (`radia_export gmsh`) | GMSH is visualization-only, not mesh generation |
+
+### Removed Mesh Import Paths
+
+| Removed Path | Status |
+|-------------|--------|
+| Nastran BDF import (`.bdf` / `.nas`) | **Removed**. Was never a reliable path. |
+| Gmsh `.msh` import for geometry creation | **Not supported**. `.msh` is export-only (visualization / other solvers). |
+
+The **only supported mesh input format** for Radia and NGSolve is **Netgen `.vol`**:
+
+```
+Cubit → radia_export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_to_radia()
 ```
 
 ---
@@ -756,6 +798,17 @@ M_avg_z = np.mean([m[2] for m in M_list])
 
 ## Mesh Import
 
+### Supported Mesh Path
+
+The **only** supported mesh import path for Radia magnetostatic analysis is:
+
+```
+Cubit → radia_export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_to_radia()
+```
+
+Nastran BDF import and Gmsh `.msh` import are **not supported** for Radia/NGSolve input.
+The only input format is Netgen `.vol`.
+
 ### NGSolve Mesh Access Policy (MANDATORY)
 
 **CRITICAL**: All NGSolve mesh access MUST use functions from `netgen_mesh_import.py`.
@@ -764,7 +817,6 @@ M_avg_z = np.mean([m[2] for m in M_list])
 |------|-------------|
 | **ALWAYS** | Use `netgen_mesh_to_radia()` or `extract_elements()` |
 | **NEVER** | Directly access `mesh.ngmesh.Points()`, `mesh.vertices[]`, or `el.vertices[].nr` |
-| **NO EXCEPTIONS** | Applies to all scripts including examples, tests, and debugging code |
 
 **Why?** NGSolve has TWO different indexing schemes:
 
@@ -776,11 +828,13 @@ M_avg_z = np.mean([m[2] for m in M_list])
 
 Mixing these causes off-by-one errors that are difficult to debug.
 
-### netgen_mesh_to_radia - Netgen Tetrahedral
+### netgen_mesh_to_radia - Mesh to Radia Geometry
 
 ```python
-from netgen_mesh_import import netgen_mesh_to_radia
+from ngsolve import Mesh
+from radia.netgen_mesh_import import netgen_mesh_to_radia
 
+mesh = Mesh("mesh.vol")
 mag_obj = netgen_mesh_to_radia(mesh,
                                 material={'magnetization': [0, 0, 0]},
                                 units='m',
@@ -790,11 +844,11 @@ mag_obj = netgen_mesh_to_radia(mesh,
 ### extract_elements - Custom Processing
 
 ```python
-from netgen_mesh_import import extract_elements, compute_element_centroid
+from radia.netgen_mesh_import import extract_elements, compute_element_centroid
 
 elements, _ = extract_elements(mesh, material_filter='magnetic')
 for el in elements:
-    vertices = el['vertices']  # Correctly extracted coordinates
+    vertices = el['vertices']
     centroid = compute_element_centroid(vertices)
 ```
 
@@ -827,10 +881,10 @@ from ngsolve import *
 
 ### NGSolve Version Requirement
 
-**Use NGSolve 6.2.2601 or later**. Version 6.2.2406~6.2.2501 had a Periodic BC regression, fixed in 6.2.2601+.
+**Use NGSolve 6.2.2603 or later**. Version 6.2.2406~6.2.2501 had a Periodic BC regression. Version 6.2.2603+ includes `curvedelements` Load, hex/prism curving, and Periodic BC fix.
 
 ```bash
-pip install ngsolve>=6.2.2601
+pip install ngsolve>=6.2.2603
 ```
 
 ### RadiaField - CoefficientFunction (v2.5.0+)
@@ -1487,9 +1541,9 @@ C_res = 1 / (solver.omega**2 * solver.L_coil)
 print(f"Resonance capacitor: {C_res*1e6:.2f} uF")
 ```
 
-### VTK Export Functions
+### ESIM VTK Export
 
-Export ESIM results for visualization:
+Export ESIM results for visualization (requires `esim_vtk_export` module):
 
 ```python
 from radia import (
@@ -1643,7 +1697,7 @@ See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for implementation details.
 
 **Cause**: Legacy scripts may have used millimeters. Radia always uses meters now.
 
-**Solution**: Ensure all coordinates are specified in meters. No `FldUnits` call is needed.
+**Solution**: Ensure all coordinates are specified in meters. `FldUnits()` has been removed — Radia always uses meters.
 
 ### 2. DLL Load Failed
 
@@ -1685,7 +1739,7 @@ Radia always uses SI units (meters) internally.
 
 ### Design Principles
 
-1. **Always meters**: All coordinates are in meters. The `FldUnits` function is deprecated and has no effect.
+1. **Always meters**: All coordinates are in meters. `FldUnits()` has been removed.
 2. **Field values are always SI**: B, H, and A are always in SI units (T, A/m, T*m)
 3. **No field scaling**: Field values (B, H, A) are always in SI units
 
