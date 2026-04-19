@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.6.0"
+version = "4.6.1"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,12 +31,17 @@ dependencies = [
     "numpy>=1.20",
     "mkl>=2024.2.0",
     "intel-cmplr-lib-rt>=2024.2.0",
-    # NGSolve pinned to 6.2.2603 (netgen fork is built against this version)
+    # NGSolve + Netgen-mesher pinned to 6.2.2603 as a matched pair
+    # (netgen fork is built against this version; pip's resolver does
+    # not auto-tie the two when only ngsolve is constrained — a plain
+    # `pip install ngsolve==6.2.2603` can still downgrade netgen-mesher
+    # to 6.2.2602.post1 if another path allows it).
     # ksugahar/netgen fork adds CallbackGeometry + SetGeomInfo (PR#232 pending)
     # Fork wheel: https://github.com/ksugahar/netgen/releases
     # Install: python install_full.py (radia + netgen fork in one command)
     # Without the fork: export_NGSolveCurvedMesh() will not work
     "ngsolve==6.2.2603",
+    "netgen-mesher==6.2.2603",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
     "mcp>=1.0.0",
 ]
