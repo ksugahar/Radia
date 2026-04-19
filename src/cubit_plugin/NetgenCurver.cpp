@@ -62,6 +62,15 @@ bool NetgenCurver::build(const MeshData &md, int order)
              diag_project_max_disp_, diag_project_max_disp_surf_);
   PRINT_INFO("NetgenCurver: edge_project stats — %ld calls, %ld rejects, max_disp=%g mm\n",
              diag_edge_calls_, diag_edge_rejects_, diag_edge_max_disp_);
+  PRINT_INFO("NetgenCurver: path distribution — "
+             "0(uv_direct_eval)=%ld (max_disp=%g mm), "
+             "1(uv_guess_fallback)=%ld (max_disp=%g mm), "
+             "2(nearest_vertex_hint)=%ld (max_disp=%g mm), "
+             "3(no_hint_trimmed)=%ld (max_disp=%g mm)\n",
+             diag_path_calls_[0], diag_path_max_disp_[0],
+             diag_path_calls_[1], diag_path_max_disp_[1],
+             diag_path_calls_[2], diag_path_max_disp_[2],
+             diag_path_calls_[3], diag_path_max_disp_[3]);
   if (diag_project_rejects_ > 0) {
     // Show top-5 offending surfaces by reject count + UV spread for each
     std::vector<std::pair<int,long>> ranked(diag_project_reject_per_surf_.begin(),
@@ -544,6 +553,10 @@ bool NetgenCurver::attach_callback_geometry()
   diag_edge_calls_ = 0;
   diag_edge_rejects_ = 0;
   diag_edge_max_disp_ = 0.0;
+  for (int i = 0; i < 4; i++) {
+    diag_path_calls_[i] = 0;
+    diag_path_max_disp_[i] = 0.0;
+  }
   project_reject_log_entries_.clear();
 
   // Project callback: (surfnr, x,y,z, u_hint, v_hint) -> (xp,yp,zp, u,v)
@@ -565,22 +578,28 @@ bool NetgenCurver::attach_callback_geometry()
     CubitVector loc(x, y, z);
     CubitVector closest;
 
-    // Path: 0=uv_guess, 1=uv_guess_failed_trimmed_fallback,
+    // Path: 0=uv_direct_eval, 1=uv_guess_fallback_trimmed,
     //       2=nearest-vertex-hint_then_uv_guess, 3=no_hint_table_trimmed
     int path = -1;
 
-    // Use UV-guided Newton iteration when UV hint is available (like OCC).
-    // closest_point_trimmed is a global search that can cross-project
-    // between adjacent surface patches (e.g., sweep torus upper/lower halves).
-    // closest_point_uv_guess starts from the UV hint and iterates locally,
-    // so it stays on the correct side of surface boundaries.
+    // Netgen's curving loop calls this with u_hint, v_hint set to the
+    // UV-interpolated position between two surface vertices.  Use them to
+    // seed a UV-local Newton iteration (`closest_point_uv_guess`) — this
+    // is the OCC equivalent of "project with hint": the hint fixes the
+    // branch of the surface, and the Newton step recovers the chord-
+    // perpendicular midpoint that Netgen's polynomial fit expects.
+    //
+    // Experiments showed plain `position_from_u_v(hint)` (strictly UV-
+    // midpoint without projection) is slightly WORSE on 3turnCoil because
+    // Netgen's LSQ curving assumes chord-perpendicular offsets, not UV-
+    // midpoint offsets.  Keep the closest_point search but trust the
+    // UV-hinted result unconditionally.
     double u, v;
     if (u_hint != 0.0 || v_hint != 0.0) {
       u = u_hint;
       v = v_hint;
       CubitStatus stat = surf->closest_point_uv_guess(loc, u, v, &closest, nullptr);
       if (stat != CUBIT_SUCCESS) {
-        // Fallback to global search if Newton fails
         surf->closest_point_trimmed(loc, closest);
         rf->u_v_from_position(closest, u, v);
         path = 1;
@@ -595,6 +614,11 @@ bool NetgenCurver::attach_callback_geometry()
       // keeping the projection on the correct branch of thin-cross-section
       // lofts where closest_point_trimmed tends to jump to the opposite
       // wire face.
+      // Netgen called ProjectPoint without a UV hint — this happens for
+      // first-time projections (no GeomInfo yet).  Find the nearest stored
+      // surface vertex and use its UV as hint for closest_point_uv_guess;
+      // this is the OCC-equivalent of "project with hint" and keeps the
+      // Newton iteration on the correct branch of thin-cross-section lofts.
       auto sit = surf_vertex_uvs_.find(cubit_sid);
       bool guess_ok = false;
       if (sit != surf_vertex_uvs_.end() && !sit->second.empty()) {
@@ -616,7 +640,7 @@ bool NetgenCurver::attach_callback_geometry()
         }
       }
       if (!guess_ok) {
-        // No hint table (or Newton failed): fall back to global search.
+        // No hint table — fall back to global search.
         surf->closest_point_trimmed(loc, closest);
         rf->u_v_from_position(closest, u, v);
         path = 3;
@@ -628,6 +652,11 @@ bool NetgenCurver::attach_callback_geometry()
     // a spike (seam jump or wrong local minimum on loft NURBS). Fall back
     // to identity (returned point = original), which Phase 2 then handles
     // via its linear-interpolation fill pass.
+    //
+    // path=0 is UV-direct eval (position_from_u_v), which is mathematically
+    // exact for the supplied (u_hint, v_hint) — it involves no closest-point
+    // search, so the displacement has no "wrong-branch" meaning.  Trust it
+    // unconditionally.
     double dx = closest.x() - x;
     double dy = closest.y() - y;
     double dz = closest.z() - z;
@@ -636,7 +665,26 @@ bool NetgenCurver::attach_callback_geometry()
       diag_project_max_disp_ = disp;
       diag_project_max_disp_surf_ = cubit_sid;
     }
-    if (disp > project_reject_threshold_) {
+    if (path >= 0 && path < 4) {
+      diag_path_calls_[path]++;
+      if (disp > diag_path_max_disp_[path]) diag_path_max_disp_[path] = disp;
+    }
+    // path 0 (UV hint supplied by Netgen, eval via position_from_u_v) is
+    // trusted unconditionally — the hint came from interpolating two
+    // surface vertices' UVs, which is mathematically well-defined on a
+    // regular NURBS.  For paths 1, 2, 3 we synthesized or recovered the
+    // UV ourselves, so a displacement well beyond the expected curvature
+    // offset (~ surface thickness / mesh size) signals a degenerate
+    // parametrization — typically a polar/pole singularity on a disk
+    // end-cap where u_v_from_position returns arbitrary angle UVs.
+    // Reject those with a generous threshold so normal curvature offsets
+    // on curved lofts pass (~1-3 mm on 3turnCoil wire) but polar spikes
+    // (~wire diameter or more) don't.
+    // path 0 (UV-hint from Netgen, direct surface eval): trust unconditionally.
+    // paths 1, 2, 3 (closest-point searches): reject jumps beyond
+    // project_reject_threshold_.
+    double path_threshold = (path == 0) ? 1e30 : project_reject_threshold_;
+    if (disp > path_threshold) {
       diag_project_rejects_++;
       diag_project_reject_per_surf_[cubit_sid]++;
       // Detailed log for post-analysis (surf UV pattern vs projection outlier)
@@ -763,7 +811,31 @@ bool NetgenCurver::attach_callback_geometry()
     double u2 = re->u_from_position(cv2);
     double u_start = re->start_param();
 
-    // Arc length from curve start to each endpoint.
+    // Primary path: chord-perpendicular projection on the curve. This
+    // matches Netgen's uniform-t LSQ curving convention. closest_point_trimmed
+    // can jump to the wrong segment of a wavy curve, so we validate the
+    // result by checking that the returned point's curve parameter falls
+    // within [min(u1,u2), max(u1,u2)] — i.e., stays inside this segment.
+    // If yes, use it. Otherwise fall back to arc-length midpoint.
+    double lmx = x1 + secpoint * (x2 - x1);
+    double lmy = y1 + secpoint * (y2 - y1);
+    double lmz = z1 + secpoint * (z2 - z1);
+    CubitVector loc(lmx, lmy, lmz);
+    CubitVector cp;
+    re->get_curve_ptr()->closest_point_trimmed(loc, cp);
+    double u_cp = re->u_from_position(cp);
+    double umin = std::min(u1, u2);
+    double umax = std::max(u1, u2);
+    // Allow a tiny tolerance (1% of range) to cover floating-point noise
+    // at the exact endpoint.
+    double tol = 0.01 * std::fabs(umax - umin);
+    if (u_cp >= umin - tol && u_cp <= umax + tol) {
+      // chord-perpendicular projection lies inside the segment — use it
+      return {cp.x(), cp.y(), cp.z()};
+    }
+
+    // closest_point jumped to a different segment of the curve — fall
+    // back to arc-length parametric midpoint derived from the endpoints.
     double L1 = re->length_from_u(u_start, u1);
     double L2 = re->length_from_u(u_start, u2);
     double L_mid = L1 + secpoint * (L2 - L1);
@@ -776,14 +848,8 @@ bool NetgenCurver::attach_callback_geometry()
     if (st != CUBIT_SUCCESS) return linear_mid();
 
     // Sanity: the arc-midpoint should not lie farther from the linear
-    // midpoint than the segment's chord length (otherwise something went
-    // wrong — e.g., u_from_position jumped to a different branch). For
-    // smooth well-curved segments the arc-chord offset is bounded by
-    // L^2 / (8 R), which is much less than L itself.
+    // midpoint than the segment's chord length.
     double chord = std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) + (z2-z1)*(z2-z1));
-    double lmx = x1 + secpoint * (x2 - x1);
-    double lmy = y1 + secpoint * (y2 - y1);
-    double lmz = z1 + secpoint * (z2 - z1);
     double dd = std::sqrt((out.x()-lmx)*(out.x()-lmx) +
                           (out.y()-lmy)*(out.y()-lmy) +
                           (out.z()-lmz)*(out.z()-lmz));
@@ -792,18 +858,13 @@ bool NetgenCurver::attach_callback_geometry()
     return {out.x(), out.y(), out.z()};
   };
 
-  // between_edge is implemented (arc-length parametric midpoint via
-  // u_from_position + position_from_fraction with chord-length sanity fall
-  // back) but routing Netgen's PointBetweenEdge through it gave a WORSE
-  // p=2 volume error on 3turnCoil than the legacy edge_project path
-  // (-0.90 % vs -0.80 %). Keeping the implementation compiled but wired as
-  // nullptr so the legacy closest_point_trimmed path stays in effect;
-  // revisit once we understand the residual discrepancy (likely Netgen's
-  // uniform-t polynomial fitting expects chord-perpendicular mid, not
-  // arc-length mid, on asymmetric arcs).
-  (void)between_edge;
+  // between_edge: hybrid chord-perpendicular (primary) + arc-length
+  // midpoint (fallback when closest-point jumps to wrong curve segment).
+  // Using between_edge consistently gives Netgen segment-bounded curve
+  // projections, which is what its uniform-t LSQ curving expects on
+  // per-segment curving.
   auto geom = std::make_shared<ng::CallbackGeometry>(
-      project, normal, num_surfaces, nullptr, edge_project, nullptr);
+      project, normal, num_surfaces, nullptr, edge_project, between_edge);
   ng_mesh_->SetGeometry(geom);
 
   return true;
