@@ -62,6 +62,10 @@ bool NetgenCurver::build(const MeshData &md, int order)
              diag_project_max_disp_, diag_project_max_disp_surf_);
   PRINT_INFO("NetgenCurver: edge_project stats — %ld calls, %ld rejects, max_disp=%g mm\n",
              diag_edge_calls_, diag_edge_rejects_, diag_edge_max_disp_);
+  if (!polar_surfaces_.empty() || diag_polar_skips_ > 0) {
+    PRINT_INFO("NetgenCurver: polar-disk short-circuit — %zu surfaces, %ld HO skips (linear fallback)\n",
+               polar_surfaces_.size(), diag_polar_skips_);
+  }
   PRINT_INFO("NetgenCurver: path distribution — "
              "0(uv_direct_eval)=%ld (max_disp=%g mm), "
              "1(uv_guess_fallback)=%ld (max_disp=%g mm), "
@@ -210,6 +214,46 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
       }
       period_cache[sid] = {up, vp};
     }
+
+    // Detect polar-singular planar disks (wire end-cap faces produced by
+    // `unite volume all` on lofted coil assemblies). These have at least one
+    // singular pole on the parametric surface AND trim to a flat plane, so
+    // the radial center maps to a single 3D point with arbitrary UV angle.
+    // `closest_point_uv_guess` on such surfaces produces spikes on the order
+    // of the face radius (~wire diameter). Since a planar face requires no
+    // high-order curving at all, we short-circuit projection to identity in
+    // the callback.  Non-planar polar surfaces (sphere, cone apex) are NOT
+    // flagged — their curving paths work fine as long as meshes avoid the
+    // exact pole, which is the common case.
+    polar_surfaces_.clear();
+    int diag_n_poled = 0, diag_n_planar = 0, diag_n_both = 0;
+    for (int sid : surface_ids) {
+      RefFace* rf = rf_cache[sid];
+      if (!rf) continue;
+      int n_poles = rf->num_poles();
+      bool planar = (rf->is_planar() == CUBIT_TRUE);
+      if (n_poles > 0) diag_n_poled++;
+      if (planar) diag_n_planar++;
+      if (n_poles > 0 && planar) {
+        diag_n_both++;
+        polar_surfaces_.insert(sid);
+      }
+    }
+    PRINT_INFO("  Phase1: geometry inspection - %d surfaces, "
+               "%d with poles (num_poles>0), %d planar, %d both (=polar disk)\n",
+               (int)surface_ids.size(), diag_n_poled, diag_n_planar, diag_n_both);
+    if (!polar_surfaces_.empty()) {
+      PRINT_INFO("  Phase1: polar planar-disk surfaces detected = %zu "
+                 "(HO projection will be skipped)\n",
+                 polar_surfaces_.size());
+      // Dump their IDs for debugging
+      std::string ids_str;
+      for (int sid : polar_surfaces_) {
+        ids_str += std::to_string(sid) + " ";
+      }
+      PRINT_INFO("    polar surface ids: %s\n", ids_str.c_str());
+    }
+    fflush(stdout);
 
     // Helper: shift u1 by ±period to minimize |u1 - u0|. Returns adjusted u1.
     auto seam_consistent = [](double u_ref, double u, double period) -> double {
@@ -564,6 +608,7 @@ bool NetgenCurver::attach_callback_geometry()
     diag_path_max_disp_[i] = 0.0;
   }
   for (int i = 0; i < 7; i++) diag_path0_hist_[i] = 0;
+  diag_polar_skips_ = 0;
   project_reject_log_entries_.clear();
 
   // Build per-surface bounding boxes from the Phase1e vertex-UV table.
@@ -612,6 +657,19 @@ bool NetgenCurver::attach_callback_geometry()
       return {x, y, z, u_hint, v_hint};
 
     int cubit_sid = it->second;
+
+    // Polar planar-disk short-circuit: for faces flagged in Phase1 as
+    // polar-singular planar surfaces (e.g. wire terminal end-caps produced
+    // by `unite volume all` on lofted coils), there is no well-defined
+    // projection via UV — the radial-center pole maps all U values to one
+    // 3D point, and `closest_point_uv_guess` spikes on the order of the
+    // face radius (61 mm observed on 3turnCoil ø6.3 mm wire after unite).
+    // Planar faces require no high-order curving, so return identity.
+    if (polar_surfaces_.count(cubit_sid)) {
+      diag_polar_skips_++;
+      return {x, y, z, u_hint, v_hint};
+    }
+
     RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_sid);
     if (!rf) return {x, y, z, u_hint, v_hint};
 
