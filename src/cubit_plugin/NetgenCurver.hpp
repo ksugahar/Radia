@@ -194,6 +194,11 @@ private:
   // 3=no_hint_table_trimmed.
   mutable long diag_path_calls_[4] = {0, 0, 0, 0};
   mutable double diag_path_max_disp_[4] = {0, 0, 0, 0};
+  // Path=0 displacement histogram (UV-hinted surface projections).
+  // Bins: [0, 0.01), [0.01, 0.05), [0.05, 0.1), [0.1, 0.2), [0.2, 0.5),
+  //       [0.5, 1.0), [1.0, inf).  Tells us the true distribution of
+  //       curvature offsets Netgen is generating.
+  mutable long diag_path0_hist_[7] = {0, 0, 0, 0, 0, 0, 0};
   mutable long diag_edge_calls_ = 0;
   mutable long diag_edge_rejects_ = 0;
   mutable double diag_edge_max_disp_ = 0.0;
