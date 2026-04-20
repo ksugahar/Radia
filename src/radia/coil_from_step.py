@@ -83,15 +83,60 @@ class CenterlineResult:
 # ---------- STEP loading ----------------------------------------------------
 
 
-def load_step_solid(step_path):
-    """Load a STEP file and return a single Solid.
+def _load_step_via_build123d(step_path):
+    """Primary STEP reader: build123d (pythonocc-core / XCAF).
 
-    Multiple solids in the file (e.g. CoilBuilder.write_step output, one
-    solid per segment) are boolean-fused into one before returning.
+    Returns a netgen.occ Solid for the walking-plane pipeline.  The
+    transit is `build123d.import_step -> export_brep -> OCCGeometry`:
+    build123d reads XCAF (labels, colors, assembly structure) at the
+    front, BRep carries lossless geometry to the back-end mesher.
+
+    Multiple solids are fused so the downstream walking-plane sees one
+    body.  Returns None if build123d is not installed, so the caller can
+    fall through to the legacy netgen.occ path.
     """
-    from netgen.occ import OCCGeometry, Glue
-    if not os.path.isfile(step_path):
-        raise FileNotFoundError(step_path)
+    try:
+        import build123d as bd
+    except ImportError:
+        return None
+    import tempfile
+    from netgen.occ import OCCGeometry
+    shape = bd.import_step(step_path)
+    # Collect all Solids recursively (Compound.children may be Parts/Solids)
+    solids = list(shape.solids())
+    if not solids:
+        raise ValueError(f"STEP contains no solids: {step_path}")
+    if len(solids) == 1:
+        merged = solids[0]
+    else:
+        merged = solids[0]
+        for s in solids[1:]:
+            merged = merged.fuse(s)
+    tmp = tempfile.NamedTemporaryFile(suffix=".brep", delete=False)
+    tmp.close()
+    try:
+        bd.export_brep(merged, tmp.name)
+        ng_shape = OCCGeometry(tmp.name).shape
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+    ng_solids = list(ng_shape.solids)
+    if not ng_solids:
+        raise ValueError(
+            f"BRep transit produced no solid (empty geometry?) from {step_path}"
+        )
+    return ng_solids[0] if len(ng_solids) == 1 else ng_shape
+
+
+def _load_step_via_netgen(step_path):
+    """Fallback STEP reader: netgen.occ direct (legacy path, no XCAF).
+
+    Used when build123d is not installed.  Cannot read labels / colors
+    because netgen.occ does not expose the XCAF TDF attribute layer.
+    """
+    from netgen.occ import OCCGeometry
     geo = OCCGeometry(step_path)
     shape = geo.shape
     solids = list(shape.solids)
@@ -101,8 +146,37 @@ def load_step_solid(step_path):
         return solids[0]
     fused = solids[0]
     for s in solids[1:]:
-        fused = fused + s   # boolean union (OCC '+')
+        fused = fused + s
     return fused
+
+
+def load_step_solid(step_path):
+    """Load a STEP file and return a single Solid (netgen.occ).
+
+    Reader selection:
+      1. build123d (pythonocc-core / XCAF) — preferred, preserves label
+         and color metadata on the build123d side before BRep transit.
+      2. netgen.occ direct — fallback when build123d is not installed.
+
+    Unifying on build123d as the primary STEP reader means that label
+    / color auto-detection (see _start_hint_from_step_labels in
+    coil_from_cad) and geometry loading use the same parsed document
+    state, regardless of which CAD tool produced the STEP.
+
+    Note: in principle the XCAF reading should live in netgen.occ
+    itself — there is an open question to Joachim (2026-04-20) about
+    exposing XCAF labels on OCCGeometry.  Until that lands, build123d
+    is the pragmatic substitute.  See to_developers/ngsolve/2026_04_20
+    _to_joachim_glue_step_roundtrip.ipynb for the related thread.
+
+    Multiple solids in the file are fused into one.
+    """
+    if not os.path.isfile(step_path):
+        raise FileNotFoundError(step_path)
+    result = _load_step_via_build123d(step_path)
+    if result is None:
+        result = _load_step_via_netgen(step_path)
+    return result
 
 
 # ---------- Cross-section helpers -------------------------------------------
