@@ -5,7 +5,7 @@ then provides correct code and verifies no findings.
 """
 
 import pytest
-from radia.mcp_server.cubit.rules import (
+from radia_mcp.cubit.rules import (
     ALL_RULES,
     check_missing_block_registration,
     check_missing_mesh_command,
@@ -303,7 +303,7 @@ class TestMissingBlockNames:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        assert len(ALL_RULES) == 18
+        assert len(ALL_RULES) == 19
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
