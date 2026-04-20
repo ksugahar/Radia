@@ -3087,6 +3087,337 @@ not covered here yet.
 """
 
 
+CUBIT_BOOLEAN_POLICY = """
+# Boolean Operations: unite vs imprint+merge (CRITICAL)
+
+Cubit's ACIS kernel provides three distinct ways to combine bodies that
+touch or overlap.  Choosing the wrong one for a given geometry breaks the
+downstream mesh/curving pipeline silently (no error, just a bad mesh).
+
+## The Three Operations
+
+| Operation | Result | ACIS action | Shared topology? |
+|-----------|--------|-------------|------------------|
+| `unite volume all` | **1 solid** | Boolean union + face merge | Yes, but UV re-stitched |
+| `imprint all; merge all; compress` | **N solids** | No Boolean; mark shared faces | Yes, UV preserved |
+| (none) | N disjoint solids | No shared faces | No — mesh has duplicated nodes at interfaces |
+
+## When unite breaks things (the 3turnCoil lesson)
+
+On complex lofted / twisted geometry (many consecutive loft segments
+meeting tangentially), ACIS `unite` produces **UV-degenerate merged
+surfaces**.  Symptom chain:
+
+1. `unite volume 1 to 382` on a 382-loft coil
+2. ACIS merges 381 pairs of end-caps into trimmed surfaces with seams
+3. `radia_export netgen` curving attempts to project midpoints
+4. `closest_point_uv_guess` rejects most projections ("reject storm")
+5. Fallback to linear midpoints => **order=2 curving degrades to order=1**
+6. Volume error ~0.7% instead of the expected <0.01%
+
+Measured on 3turnCoil (commit `b085b1be`): 9,855 rejects with unite,
+Vol err -0.67%.  Without unite: 0 rejects, error at floating-point limit.
+
+**`unite` is safe on**:
+- Simple primitives (box, sphere, cylinder) added together
+- A single swept solid that won't be further united
+- Geometry where UV charts remain regular after merge
+
+**`unite` is UNSAFE on**:
+- Loft chains (3turnCoil-class: 10+ consecutive lofts)
+- Twisted / helical sweeps touching end-to-end
+- Any geometry where unite produces faces with seams or singular UV
+
+## The correct pattern for multi-body conformal mesh
+
+```python
+# Build N bodies however they come (loft chain, sweep, primitives, ...)
+cubit.cmd("create volume loft surface 1 2")
+cubit.cmd("create volume loft surface 2 3")
+# ... N lofts ...
+
+# Share topology WITHOUT Boolean union
+cubit.cmd("imprint all")
+cubit.cmd("merge all")
+cubit.cmd("compress")  # renumbers to dense IDs
+
+# Do NOT: cubit.cmd("unite volume all")
+
+# Mesh ALL volumes (not just volume 1):
+cubit.cmd("volume all scheme tetmesh")
+cubit.cmd("volume all size 6")
+cubit.cmd("mesh volume all")
+
+# Group all lofts as one material:
+cubit.cmd("block 1 add volume all")
+cubit.cmd('block 1 name "coil"')
+
+# Export .vol: the N solids come out as 1 material,
+# interface nodes are shared (conformal), UV never degenerated.
+cubit.cmd('radia_export netgen "coil.vol" order 3 overwrite')
+```
+
+The resulting `.vol` file has:
+- 1 material label "coil" (block 1)
+- N-1 shared interfaces, each represented by a single face set
+- Conformal tet mesh across all interfaces
+- Order-3 curving that converges to the CAD volume
+
+## Why imprint+merge works where unite fails
+
+`imprint` cuts coincident regions so each body has matching topology
+at the shared boundary (same faces on both sides).  `merge` then
+declares those matching faces equivalent at the ACIS-kernel level --
+the two solid references point to the SAME face object.  No Boolean
+classification runs, so **the original UV parametrization is kept
+intact on both sides** of every interface.
+
+When Cubit meshes, it sees the shared faces as a single entity and
+emits shared nodes on them.  The `radia_export netgen` C++ writer
+preserves this in the `.vol` text format (one face referenced twice,
+with consistent vertex order on both volume elements).
+
+## Checklist when adding a new multi-body Cubit script
+
+- [ ] Do I need a single solid downstream?  **(If NO: do not unite)**
+- [ ] Am I chaining loft/sweep segments?  **(If YES: must not unite)**
+- [ ] Am I combining bodies with different materials?  **(If YES: must not unite -- block labels would collapse)**
+- [ ] Are my bodies simple primitives summing into a bulk shape? **(Only then unite is safe)**
+- [ ] After imprint+merge, did I add `compress` to renumber? **(Always do)**
+- [ ] After imprint+merge, did I use `volume all` in scheme/size/mesh? **(If you used `volume 1` you meshed only 1 of N bodies)**
+
+## Related breakage modes (same family: ACIS sharing lost silently)
+
+### 1. `heal` may run a hidden unite
+
+```
+import step "coil.step" heal    # DANGER
+```
+
+`heal` is Cubit's ACIS repair pass.  To close tolerance gaps it will
+merge nearby faces -- effectively a partial unite.  On a clean STEP from
+build123d / OCC this is harmless; on a large / dirty STEP it can turn
+multi-body geometry into a single solid with UV-degenerate faces.
+
+**Rule**: `heal` without inspection is forbidden for geometry destined
+for high-order curving.  Either import without heal and fix issues
+manually, or run heal and then verify face count / UV continuity
+(measure area per loft; compare against CAD).
+
+### 2. `webcut` without subsequent `imprint+merge`
+
+```
+webcut volume 1 with plane normal 0 0 1 offset 0
+# volume 1 (lower half) and volume 2 (upper half) now exist
+mesh volume all    # BREAKS: interface faces are not shared
+```
+
+`webcut` splits a body into N sub-bodies but does NOT guarantee
+BRep sharing of the cut face (ACIS version-dependent).  Always follow
+with:
+
+```
+webcut volume 1 with plane ...
+imprint volume all
+merge volume all
+```
+
+Forgetting either one yields a mesh with duplicated nodes along the
+cut plane (no error message -- conformality silently lost).
+
+### 3. Mixed mesh schemes + imprint+merge forgotten
+
+```
+volume 1 scheme sweep                  # hex
+volume 2 scheme tetmesh                # tet, adjacent to volume 1
+# if imprint+merge was not done, the shared face has TWO node patterns
+mesh volume all                        # tet side and hex side disagree
+```
+
+For sweep + tetmesh adjacency, the shared face must be explicitly
+merged BEFORE meshing: Cubit picks a conformal node pattern only
+when the face is known to be shared.  Same applies to hex + hex
+across cut, tet + wedge transitions, etc.
+
+### 4. `include_merged` keyword on move/rotate
+
+When a body is already merged (shared face with neighbour), plain
+`move volume 1 x 1` un-merges it silently; use `include_merged` to
+move both sides of the shared face together:
+
+```
+# After imprint+merge:
+move volume 1 x 1 include_merged     # correct
+move volume 1 x 1                    # breaks the merge
+```
+
+## See also
+
+- `scripting_ngsolve_panel` -- the deployed Radia FEM path (Cubit -> .vol)
+  never goes through STEP, so OCCT Glue issues do not apply
+- `scripting_trampoline_pitfalls` -- other ways the Cubit -> .vol
+  pipeline silently breaks (NetgenCurver order limit, ACIS tolerance,
+  block/sideset label collision, Cubit version drift)
+- `scripting_troubleshooting` -> reject-storm symptoms
+- Note: the `Glue` concept in OCC/NGSolve (Python) is the analog of
+  Cubit's `imprint+merge`.  Do not confuse OCC Glue with Cubit unite
+  (opposites).  See mcp-server-radia-ngsolve topic `boolean_policy`.
+"""
+
+
+CUBIT_TRAMPOLINE_PITFALLS = """
+# Trampoline Pitfalls — silent breakage in the Cubit -> .vol -> NGSolve pipeline
+
+When Cubit geometry is "trampolined" through mesh export to NGSolve FEM,
+several subtle issues can produce a technically valid `.vol` file whose
+mesh is wrong.  None of these raise an error -- you only notice by
+checking volumes, mesh quality, or final solution accuracy.
+
+## 1. NetgenCurver order limit (order >= 4)
+
+`radia_export netgen "x.vol" order 4` or higher:
+
+- `.vol` writer: succeeds (curvedelements section emitted)
+- NGSolve reader: `mesh.Curve(4)` also works
+- BUT: NetgenCurver's face-interior / volume-interior HO node extraction
+  is experimental for order >= 4.  Edge midpoints and face-boundary
+  nodes are solid, but interior nodes of triangles (order 4 -> 1 face
+  interior node, order 5 -> 3) and tets (order 4+ -> interior) may fall
+  back to linear interpolation on complex surfaces.
+
+**Practical rule**:
+- order=2, 3: production-ready for any geometry
+- order=4: OK for clean geometry (spheres, torus), measure the volume
+- order=5: experimental, spot-check each new geometry
+
+Related: GMSH export (`radia_export gmsh`) ERRORS on order >= 4 (does
+not silently fall back); .vol export DOES write order 4-5 but without
+the same integrity guarantee.
+
+## 2. ACIS tolerance — "close but not equal" faces
+
+Two faces that are geometrically within ACIS `merge tolerance` (default
+~1e-6) but not exactly coincident may merge unpredictably:
+
+- Sometimes merge ("works by luck")
+- Sometimes don't merge ("no warning")
+- Between two Cubit sessions with the same .jou the outcome can flip
+
+Symptoms: mesh quality suddenly drops, one interface has conformal
+mesh and a similar interface does not.
+
+**Fix**: clean the geometric source rather than relaxing the tolerance.
+Loosening `merge tolerance` can merge faces that were never meant to
+share (catastrophic).  If you must loosen, target specific surface
+pairs with `merge surface A B tolerance T`.
+
+## 3. Block / sideset label collision
+
+`.vol` encodes:
+- `$PhysicalNames` entries from block names (volume labels)
+- `bcnames` entries from sideset names (boundary labels)
+
+If a block and a sideset share a name, NGSolve's `mesh.GetMaterials()`
+and `mesh.GetBoundaries()` may return the same string, breaking
+`Materials("iron")` / `Boundaries("iron")` lookups:
+
+```
+block 1 add volume 1
+block 1 name "coil"              # OK
+sideset 1 add surface 3
+sideset 1 name "coil"            # COLLIDES with block name
+```
+
+**Naming convention**:
+- Volume labels: `coil`, `iron`, `air`, `kelvin` (material semantic)
+- Boundary labels: `<material>_bnd`, `source`, `sink`, `sibc`,
+  `outer` (geometric / electrical semantic)
+
+Keep the two namespaces disjoint.
+
+## 4. Block with no volume, only surface elements
+
+```
+block 1 add tri in surface 1     # surface-only, no volume
+block 1 name "source"
+```
+
+`.vol` will write this as a material-like entity but with zero volume
+mesh -- NGSolve reports `Materials("source")` of area 0, which breaks
+`Integrate(1, mesh, definedon=Materials("source"))`.
+
+**Rule**: use `sideset` for boundary labels, `block` for volume labels.
+See the Cubit Block/Sideset Label Convention in CLAUDE.md.
+
+## 5. `volume all size <N>` after imprint+merge but before scheme
+
+Order matters:
+
+```
+# WRONG:
+volume all size 6
+volume all scheme tetmesh        # size hint may be overwritten
+mesh volume all
+
+# RIGHT:
+volume all scheme tetmesh
+volume all size 6
+mesh volume all
+```
+
+Some schemes (sweep, pave) reinitialise size defaults.  Set scheme
+FIRST, then size.
+
+## 6. Cubit version drift
+
+LAB / 100号機 / mdx must run the same Cubit (currently 2025.3).  ACIS
+version upgrades subtly change:
+- Default `merge tolerance`
+- UV parametrization of lofted surfaces (`b085b1be` reject count
+  changes between ACIS versions)
+- STEP import healing aggressiveness
+
+A .jou that works on 2025.2 may produce different mesh on 2025.4.
+Pin the version across all deploy targets.
+
+## 7. Learn Edition 50k element cap (cosmetic)
+
+Cubit Learn Edition prints:
+```
+ERROR: Coreform Cubit - Learn Edition restricts export to models
+with less than 50k elements.
+```
+
+This ERROR is **harmless for the Radia workflow**: `radia_export netgen`
+bypasses the internal cap and writes .vol correctly (verified on 147k
+element coil, commit log).  The cap applies only to Cubit's built-in
+`export gmsh` / `export vtk` / `export exo`, which radia does not use.
+
+Do NOT coarsen meshes to get under 50k.  See CLAUDE.md
+"Cubit Learn Edition 50k Element Cap: IGNORE" for details.
+
+## Minimal checklist before committing a new .jou
+
+- [ ] No `unite` on complex loft chains (use `imprint+merge` only)
+- [ ] No `heal` unless effect on mesh was measured
+- [ ] `webcut` followed by `imprint+merge`
+- [ ] Mixed hex/tet adjacency: merge done before mesh
+- [ ] Moves/rotates use `include_merged`
+- [ ] `radia_export netgen order <= 3` (or explicit 4+ validation)
+- [ ] Block names and sideset names in disjoint namespaces
+- [ ] Volumes in blocks, surfaces in sidesets (never mixed)
+- [ ] Scheme set before size
+- [ ] Tested on the Cubit version used on deploy targets
+
+## See also
+
+- `scripting_boolean_policy` -- unite / imprint+merge / heal (the
+  ACIS-sharing family of breakages)
+- `scripting_ngsolve_panel` -- FEM panel workflow
+- mcp-server-radia-ngsolve `boolean_policy` -- OCC side (Glue vs Fuse)
+"""
+
+
 def get_cubit_documentation(topic: str = "all") -> str:
 	"""Return Cubit scripting documentation by topic."""
 	topics = {
@@ -3122,8 +3453,22 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"post_processing": CUBIT_RESULTS_VISUALIZATION,
 		"geometry_commands": CUBIT_GEOMETRY_COMMANDS,
 		"geometry": CUBIT_GEOMETRY_COMMANDS,  # alias
-		"boolean": CUBIT_GEOMETRY_COMMANDS,  # alias
 		"webcut": CUBIT_GEOMETRY_COMMANDS,  # alias
+		"boolean_policy": CUBIT_BOOLEAN_POLICY,
+		"boolean": CUBIT_BOOLEAN_POLICY,  # override the old alias
+		"unite": CUBIT_BOOLEAN_POLICY,  # alias
+		"imprint_merge": CUBIT_BOOLEAN_POLICY,  # alias
+		"heal": CUBIT_BOOLEAN_POLICY,  # alias (heal = hidden unite)
+		"webcut": CUBIT_BOOLEAN_POLICY,  # override CUBIT_GEOMETRY_COMMANDS
+		"3turncoil": CUBIT_BOOLEAN_POLICY,  # alias
+		"loft_chain": CUBIT_BOOLEAN_POLICY,  # alias
+		"trampoline_pitfalls": CUBIT_TRAMPOLINE_PITFALLS,
+		"trampoline": CUBIT_TRAMPOLINE_PITFALLS,
+		"pitfalls": CUBIT_TRAMPOLINE_PITFALLS,
+		"curving_order": CUBIT_TRAMPOLINE_PITFALLS,
+		"acis_tolerance": CUBIT_TRAMPOLINE_PITFALLS,
+		"label_collision": CUBIT_TRAMPOLINE_PITFALLS,
+		"learn_edition": CUBIT_TRAMPOLINE_PITFALLS,
 		"helix_coil": CUBIT_HELIX_COIL,
 		"helix": CUBIT_HELIX_COIL,  # alias
 		"coil": CUBIT_HELIX_COIL,  # alias
