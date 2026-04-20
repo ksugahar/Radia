@@ -28,6 +28,10 @@ def setup_radia_path():
     if src_path.exists():
         sys.path.insert(0, str(src_path))
 
+    mcp_src = project_root / 'packages' / 'radia-mcp' / 'src'
+    if mcp_src.exists():
+        sys.path.insert(0, str(mcp_src))
+
     # Add MKL DLL directory for peec_matrices.pyd etc.
     mkl_bin = os.path.join(sys.prefix, 'Library', 'bin')
     if os.path.isdir(mkl_bin) and hasattr(os, 'add_dll_directory'):

@@ -44,9 +44,9 @@ def test_ngsolve_selftest_uses_fixtures(monkeypatch):
 def test_cubit_selftest_runs_without_examples(tmp_path, monkeypatch):
     """Cubit selftest should use fixtures when examples/ not found."""
     monkeypatch.setattr(
-        'radia.mcp_server.cubit.server.PROJECT_ROOT', tmp_path
+        'radia_mcp.cubit.server.PROJECT_ROOT', tmp_path
     )
-    from radia.mcp_server.cubit.server import _selftest
+    from radia_mcp.cubit.server import _selftest
 
     captured = StringIO()
     monkeypatch.setattr('sys.stdout', captured)
@@ -133,7 +133,7 @@ def test_clean_ngsolve_has_no_findings():
 # Fixture file validation (Cubit)
 # ============================================================
 
-from radia.mcp_server.cubit.server import _lint_file as _lint_file_cubit
+from radia_mcp.cubit.server import _lint_file as _lint_file_cubit
 
 
 def test_bad_cubit_has_findings():
