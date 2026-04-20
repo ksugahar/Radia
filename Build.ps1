@@ -331,6 +331,40 @@ try {
         }
     }
 
+    # === Freshness-check sync: touch bundled binaries to the newest source mtime ===
+    # cubit-mesh-export's pyproject.toml runs a freshness gate in
+    # `get_requires_for_build_wheel` that compares mtime of every file
+    # in src/cubit_plugin/ vs every bundled binary.  Ninja's incremental
+    # build only rebuilds targets whose transitive source changed, so
+    # editing RadiaComp.cpp (.ccl source) leaves radia_cubit.ccm
+    # (built from RadiaPlugin.cpp) untouched.  The freshness check then
+    # FALSE-alarms: "radia_cubit.ccm is 16 h older than RadiaComp.cpp"
+    # even though the CONTENT of .ccm is correct.
+    # Fix: after all copies, force-touch every bundled binary mtime so
+    # it >= newest source mtime.  Build.ps1 has already ensured the
+    # CONTENTS are up-to-date; this only corrects mtime for the gate.
+    $pluginSrcFiles = Get-ChildItem "$PROJECT_DIR\src\cubit_plugin" `
+        -Include "*.cpp","*.hpp","*.h","*.c" -File -Recurse `
+        -ErrorAction SilentlyContinue
+    if ($pluginSrcFiles) {
+        $newest = ($pluginSrcFiles | Measure-Object -Property LastWriteTime -Maximum).Maximum
+        # Bump by 1 s so freshness check sees ">= newest source".
+        $touchTime = $newest.AddSeconds(1)
+        foreach ($cc in $cmeCopies) {
+            $cmeDst = "$cmeDir\$($cc.name)"
+            if (Test-Path $cmeDst) {
+                (Get-Item -LiteralPath $cmeDst).LastWriteTime = $touchTime
+            }
+        }
+        # Also touch the src/radia/ copies so install_full.py /
+        # verify-deploy freshness checks see consistent mtimes.
+        foreach ($name in @("radia_cubit_mesh.pyd", "radia_cubit.ccm", "radia_cubit.ccl")) {
+            $p = "$PROJECT_DIR\src\radia\$name"
+            if (Test-Path $p) { (Get-Item -LiteralPath $p).LastWriteTime = $touchTime }
+        }
+        Write-Host "  bundled plugin binaries: mtime synced to newest source ($touchTime)" -ForegroundColor Cyan
+    }
+
     foreach ($mod in $modules) {
         $srcPath = "$BUILD_DIR\$($mod.src)"
         $dstPath = "$PROJECT_DIR\src\radia\$($mod.dst)"
