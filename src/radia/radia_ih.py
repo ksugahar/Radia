@@ -38,10 +38,21 @@ from PySide6.QtGui import QColor
 # Constants: method identifiers + labels
 # ============================================================
 
-METHOD_PEEC_BEM = "Fast workpiece heating (PEEC+BEM, 1-way)"
-METHOD_FEM_FULL = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
+METHOD_PEEC_IND  = "PEEC inductance (coil only, STEP)"
+METHOD_PEEC_BEM  = "Fast workpiece heating (PEEC+BEM, 1-way)"
+METHOD_FEM_FULL  = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
 
 METHOD_TOOLTIP = {
+    METHOD_PEEC_IND: (
+        "<b>Coil L and R only</b> (~30 s, vacuum).<br>"
+        "<ul>"
+        "<li>Coil as PEEC filament (no volume mesh, STEP input)</li>"
+        "<li>No workpiece, no BEM, no FEM, no .vol needed</li>"
+        "<li>Outputs L_coil [nH], R_coil [mOhm] at the given frequency</li>"
+        "</ul>"
+        "Requires <b>STEP</b> file only.  Use for fast coil impedance "
+        "before adding a workpiece."
+    ),
     METHOD_PEEC_BEM: (
         "<b>Fast P_workpiece only</b> (~3 min, ±5%).<br>"
         "<ul>"
@@ -112,6 +123,10 @@ def check_method_requirements(method, mats, bnds):
     """Return (ok: bool, errors: list[str], warnings: list[str])."""
     errors = []
     warnings = []
+    # PEEC-inductance (coil only) does NOT use .vol at all.
+    if method == METHOD_PEEC_IND:
+        return True, errors, warnings
+
     if mats is None:
         # .vol could not be loaded or not yet selected — skip silent.
         return True, errors, warnings
@@ -150,20 +165,28 @@ class IHPanel(ModePanel):
 
     # ----------------------- UI construction -----------------------
 
-    def _add_section(self, title):
-        """Insert a visual section header into the form."""
+    def _add_section(self, title, key=None):
+        """Insert a visual section header into the form.
+
+        If ``key`` is given, the row is registered in ``self._row_indices``
+        so it can be collapsed via ``_set_row_visible(key, False)``. Use
+        this when the whole section should hide together with its rows
+        (e.g. workpiece sections for PEEC-inductance mode).
+        """
         lbl = QLabel(f"<b>{title}</b>")
         lbl.setStyleSheet("QLabel { margin-top: 6px; color: #444; }")
         self._form.addRow("", lbl)
+        if key is not None:
+            self._row_indices[key] = self._form.rowCount() - 1
 
     def _build_ui(self):
         # Method selector
         self._add_section("Method")
         self._method_combo = self.add_combo(
             "method", "Method:",
-            [METHOD_PEEC_BEM, METHOD_FEM_FULL])
+            [METHOD_PEEC_IND, METHOD_PEEC_BEM, METHOD_FEM_FULL])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
-        self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_BEM])
+        self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_IND])
 
         # Per-method status line (.vol label check / skin depth hint).
         self._status_label = QLabel("")
@@ -198,13 +221,15 @@ class IHPanel(ModePanel):
         self.add_line("coil_mu_r", "mu_r:", "1.0")
 
         # ============ PEEC coil input (CAD STEP) ============
-        # (Only for PEEC+BEM method, hidden otherwise by _on_method_changed)
-        self._add_section("Coil geometry (PEEC+BEM only)")
-        self.add_browse("peec_step", "STEP file:",
-                        filter_str="STEP files (*.step *.stp);;All (*)")
+        # (Only for PEEC methods, hidden otherwise by _on_method_changed)
+        self._add_section("Coil geometry (PEEC)", key="_sec_peec_step")
+        step_w = self.add_browse(
+            "peec_step", "STEP file:",
+            filter_str="STEP files (*.step *.stp);;All (*)")
+        step_w.textChanged.connect(self._emit_validation)
 
         # ============ Workpiece material (INDEPENDENT from coil) ============
-        self._add_section("Workpiece material")
+        self._add_section("Workpiece material", key="_sec_wp_material")
         wp_mat = self.add_combo(
             "wp_material", "Preset:",
             list(MATERIAL_PRESETS.keys()), default=3)  # Steel 100
@@ -222,7 +247,7 @@ class IHPanel(ModePanel):
             "SIBC formula. For solid bulk wp, use min(R_wp, H_wp/2).")
 
         # ============ Impedance model (Linear SIBC vs ESIM) ============
-        self._add_section("Workpiece impedance model")
+        self._add_section("Workpiece impedance model", key="_sec_wp_imp")
         imp = self.add_combo(
             "impedance_model", "Model:",
             ["Linear SIBC",
@@ -259,8 +284,14 @@ class IHPanel(ModePanel):
 
         # ============ Advanced (collapsed by default) ============
         self._add_section("Advanced")
-        self.add_spin("peec_nwinc", "PEEC nwinc:", 3, 1, 10)
-        self.add_spin("peec_nhinc", "PEEC nhinc:", 3, 1, 10)
+        n_peri_w = self.add_spin("peec_n_peri",
+                                  "PEEC n_peri (perimeter):", 16, 4, 128)
+        n_peri_w.setToolTip(
+            "Number of filaments placed on the cross-section perimeter "
+            "(thin-skin regime).  Typical: 12-24 for circular, 16-32 "
+            "for rectangular.  Requires d / skin depth >= 3.")
+        self.add_spin("peec_nwinc", "PEEC nwinc (volume grid):", 3, 1, 10)
+        self.add_spin("peec_nhinc", "PEEC nhinc (volume grid):", 3, 1, 10)
         self.add_spin("fes_order", "FES order:", 1, 1, 3)
 
         # ============ Initial state ============
@@ -268,9 +299,15 @@ class IHPanel(ModePanel):
         self._on_coil_material_changed(coil_mat.currentText())
         self._on_wp_material_changed(wp_mat.currentText())
 
-        self._method_combo.setCurrentText(METHOD_PEEC_BEM)
-        self._on_method_changed(METHOD_PEEC_BEM)
+        self._method_combo.setCurrentText(METHOD_PEEC_IND)
+        self._on_method_changed(METHOD_PEEC_IND)
         self._update_status()
+
+    def _emit_validation(self, *_):
+        """Forward edits to AnalysisWindow so Run enables/disables."""
+        cb = getattr(self, "validationChanged", None)
+        if callable(cb):
+            cb()
 
     # ----------------------- Material presets -----------------------
 
@@ -309,8 +346,11 @@ class IHPanel(ModePanel):
     # ----------------------- Method + visibility -----------------------
 
     def _on_method_changed(self, method):
+        is_peec_ind = (method == METHOD_PEEC_IND)
         is_peec_bem = (method == METHOD_PEEC_BEM)
         is_fem = (method == METHOD_FEM_FULL)
+        needs_step = is_peec_ind or is_peec_bem
+        needs_wp = is_peec_bem or is_fem
 
         self._method_combo.setToolTip(METHOD_TOOLTIP.get(method, ""))
 
@@ -319,7 +359,7 @@ class IHPanel(ModePanel):
         solver = self._widgets["solver"]
         prev = solver.currentText()
         solver.clear()
-        if is_peec_bem:
+        if is_peec_ind or is_peec_bem:
             solver.addItems(["Dense LU (small)",
                               "HACApK (large)"])
         else:  # FEM
@@ -331,13 +371,36 @@ class IHPanel(ModePanel):
         if idx >= 0:
             solver.setCurrentIndex(idx)
 
-        # Visibility per method:
-        self._set_row_visible("peec_step", is_peec_bem)
+        # Visibility per method (rows + their section headers):
+        self._set_row_visible("_sec_peec_step", needs_step)
+        self._set_row_visible("peec_step", needs_step)
+        # Perimeter placement (n_peri) for PEEC-inductance only;
+        # volume grid (nwinc/nhinc) for PEEC+BEM only.
+        self._set_row_visible("peec_n_peri", is_peec_ind)
         self._set_row_visible("peec_nwinc", is_peec_bem)
         self._set_row_visible("peec_nhinc", is_peec_bem)
         self._set_row_visible("fes_order", is_fem)
+        self._set_row_visible("_sec_wp_material", needs_wp)
+        self._set_row_visible("_sec_wp_imp", needs_wp)
+
+        # Workpiece widgets (material, sigma, mu_r, thickness, impedance
+        # model, BH iter controls) are meaningless for PEEC-inductance.
+        for key in ("wp_material", "wp_sigma", "mu_r", "half_thickness",
+                    "impedance_model", "bh_file",
+                    "esim_max_iter", "esim_tol"):
+            self._set_row_visible(key, needs_wp)
+        # ESIM sub-widgets re-evaluated by _on_impedance_changed when
+        # needs_wp is True.
+        if needs_wp:
+            self._on_impedance_changed(self.val("impedance_model"))
+
+        # PEEC-inductance is mesh-free — hide the top-level .vol row.
+        set_vol_vis = getattr(self, "setVolRowVisible", None)
+        if callable(set_vol_vis):
+            set_vol_vis(not is_peec_ind)
 
         self._update_status()
+        self._emit_validation()
 
     # ----------------------- Status line -----------------------
 
@@ -358,23 +421,24 @@ class IHPanel(ModePanel):
                 for e in errors:
                     lines.append(f"<span style='color:#C00;'>ERROR: {e}</span>")
 
-        # Physics sanity: delta_wp vs half_thickness
-        try:
-            freq = float(self.val("freq"))
-            wp_sigma = float(self.val("wp_sigma"))
-            mu_r = float(self.val("mu_r"))
-            half_thickness = float(self.val("half_thickness"))
-            delta = skin_depth(freq, wp_sigma, mu_r)
-            ratio = half_thickness / delta
-            lines.append(
-                f"WP delta = {delta*1e3:.3f} mm, R/delta = {ratio:.1f}")
-            if ratio < 3:
+        # Physics sanity: delta_wp vs half_thickness (workpiece only).
+        if method != METHOD_PEEC_IND:
+            try:
+                freq = float(self.val("freq"))
+                wp_sigma = float(self.val("wp_sigma"))
+                mu_r = float(self.val("mu_r"))
+                half_thickness = float(self.val("half_thickness"))
+                delta = skin_depth(freq, wp_sigma, mu_r)
+                ratio = half_thickness / delta
                 lines.append(
-                    "<span style='color:#A80;'>warn: R/delta &lt; 3; "
-                    "SIBC may under-estimate (volumetric FEM preferred)."
-                    "</span>")
-        except (ValueError, ZeroDivisionError):
-            pass
+                    f"WP delta = {delta*1e3:.3f} mm, R/delta = {ratio:.1f}")
+                if ratio < 3:
+                    lines.append(
+                        "<span style='color:#A80;'>warn: R/delta &lt; 3; "
+                        "SIBC may under-estimate (volumetric FEM preferred)."
+                        "</span>")
+            except (ValueError, ZeroDivisionError):
+                pass
 
         self._status_label.setText("<br>".join(lines))
 
@@ -387,17 +451,24 @@ class IHPanel(ModePanel):
         self._update_status()
 
     def is_runnable(self):
+        method = self._method_combo.currentText()
         ok, _errors, _warnings = check_method_requirements(
-            self._method_combo.currentText(),
-            self._vol_mats, self._vol_bnds)
+            method, self._vol_mats, self._vol_bnds)
+        if method == METHOD_PEEC_IND:
+            # STEP file is the only input; .vol is not required.
+            step = self.val("peec_step") if "peec_step" in self._widgets else ""
+            return ok and bool(step) and os.path.isfile(step)
         return ok and (self._vol_mats is not None)
 
     # ----------------------- Command building -----------------------
 
     def build_command(self, vol_path):
+        method = self.val("method")
+        if method == METHOD_PEEC_IND:
+            # .vol not required for coil-only inductance.
+            return self._build_peec_inductance_command()
         if not vol_path:
             raise ValueError("No .vol file specified.")
-        method = self.val("method")
         if method == METHOD_PEEC_BEM:
             return self._build_peec_bem_command(vol_path)
         return self._build_fem_coilmesh_command(vol_path)
@@ -417,6 +488,27 @@ class IHPanel(ModePanel):
     def _impedance_model_cli(self):
         imp = self.val("impedance_model")
         return "esim" if imp.startswith("Nonlinear ESIM") else "sibc"
+
+    def _build_peec_inductance_command(self):
+        """PEEC coil-only inductance (STEP file, no workpiece, no .vol).
+
+        Uses perimeter placement (n_peri filaments equally spaced around
+        the cross-section outer boundary).  Assumes thin-skin regime
+        (d / delta >= 3), typical for IH operating conditions.
+        """
+        step = self.val("peec_step")
+        if not step:
+            raise ValueError("PEEC STEP file is required for "
+                              "PEEC inductance mode.")
+        if not os.path.isfile(step):
+            raise ValueError(f"STEP file not found: {step}")
+        cmd = [_PYTHON, calc_script("calc_peec_inductance.py"),
+               "--peec-step", step,
+               "--peec-n-peri", str(self.val("peec_n_peri")),
+               "--frequency", self.val("freq"),
+               "--current", self.val("current"),
+               "--coil-sigma", self.val("coil_sigma")]
+        return cmd
 
     def _build_peec_bem_command(self, vol_path):
         step = self.val("peec_step")
@@ -483,6 +575,11 @@ class IHWindow(AnalysisWindow):
         panel = IHPanel()
         self._set_panel(panel)
         self._restore_settings()
+        # Re-fire method change so visibility hooks that depend on the
+        # window (setVolRowVisible) run after the panel-window binding
+        # is complete.  The initial call inside IHPanel._build_ui() runs
+        # before _set_panel() has wired these hooks.
+        panel._on_method_changed(panel.val("method"))
         # Inspect the .vol on launch.
         self._reload_vol_info(vol_path)
         self._update_run_state()
@@ -524,6 +621,11 @@ class IHWindow(AnalysisWindow):
                                 ("L_total_nH", "L_total (with wp)")):
                 if key in result:
                     lines.append(f"  {label}: {result[key]:.3f} nH")
+            if "R_coil_mOhm" in result:
+                lines.append(
+                    f"  R_coil: {result['R_coil_mOhm']:.4f} mOhm")
+            if "n_filaments" in result:
+                lines.append(f"  filaments: {result['n_filaments']}")
             # Dissipation
             if "P_wp_W" in result:
                 p = result["P_wp_W"]

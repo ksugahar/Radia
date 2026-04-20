@@ -29,7 +29,8 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 _RADIA = _REPO / "src" / "radia"
 _PANELS = _RADIA / "panels"
-for p in (_RADIA, _PANELS):
+_TESTS_PANELS = Path(__file__).resolve().parent
+for p in (_RADIA, _PANELS, _TESTS_PANELS):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
