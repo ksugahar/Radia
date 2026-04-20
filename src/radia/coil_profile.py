@@ -51,6 +51,21 @@ class Profile(ABC):
         """(u, v) at normalized (alpha, beta) in [0,1]^2. Supports arrays."""
 
     @abstractmethod
+    def sample_perimeter(self, n):
+        """Return (u, v) arrays of length n, equally spaced by arc length
+        along the outer boundary of the cross-section.
+
+        Used for perimeter-only filament placement (thin-skin limit, IH
+        typical use).  Each sample is cell-centered on an arc-length bin:
+        s_k = (k + 0.5) * L_perimeter / n for k in [0, n).
+
+        The effective cross-section area per filament is taken as
+        ``total_area() / n`` (all perimeter filaments share the solid
+        cross-section equally, matching DC resistance of the bundle to
+        the solid conductor).
+        """
+
+    @abstractmethod
     def total_area(self):
         """Total cross-section area."""
 
@@ -120,6 +135,30 @@ class RectProfile(Profile):
         v = (beta - 0.5) * self.h
         return u, v
 
+    def sample_perimeter(self, n):
+        n = int(n)
+        if n < 1:
+            raise ValueError(f"n_peri must be >= 1, got {n}")
+        L = 2.0 * (self.w + self.h)
+        s = (np.arange(n) + 0.5) * (L / n)
+        u = np.empty(n)
+        v = np.empty(n)
+        # CCW starting from lower-left corner (-w/2, -h/2):
+        #   [0, w)        bottom:   u = -w/2 + s,            v = -h/2
+        #   [w, w+h)      right:    u =  w/2,                v = -h/2 + (s - w)
+        #   [w+h, 2w+h)   top:      u =  w/2 - (s - w - h),  v =  h/2
+        #   [2w+h, 2w+2h) left:     u = -w/2,                v =  h/2 - (s - 2w - h)
+        w, h = self.w, self.h
+        m1 = s < w
+        m2 = (s >= w) & (s < w + h)
+        m3 = (s >= w + h) & (s < 2 * w + h)
+        m4 = s >= 2 * w + h
+        u[m1] = -0.5 * w + s[m1];         v[m1] = -0.5 * h
+        u[m2] =  0.5 * w;                 v[m2] = -0.5 * h + (s[m2] - w)
+        u[m3] =  0.5 * w - (s[m3] - w - h); v[m3] =  0.5 * h
+        u[m4] = -0.5 * w;                 v[m4] =  0.5 * h - (s[m4] - 2 * w - h)
+        return u, v
+
     def total_area(self):
         return self.w * self.h
 
@@ -164,6 +203,13 @@ class CircleProfile(Profile):
         r = self.r * np.sqrt(np.clip(alpha, 0.0, 1.0))
         theta = 2.0 * np.pi * beta
         return r * np.cos(theta), r * np.sin(theta)
+
+    def sample_perimeter(self, n):
+        n = int(n)
+        if n < 1:
+            raise ValueError(f"n_peri must be >= 1, got {n}")
+        theta = 2.0 * np.pi * (np.arange(n) + 0.5) / n
+        return self.r * np.cos(theta), self.r * np.sin(theta)
 
     def total_area(self):
         return np.pi * self.r * self.r
@@ -211,6 +257,16 @@ class AnnularProfile(Profile):
         r = np.sqrt(rr2)
         theta = 2.0 * np.pi * beta
         return r * np.cos(theta), r * np.sin(theta)
+
+    def sample_perimeter(self, n):
+        """Outer boundary only.  Inner boundary filaments are not placed;
+        for hollow tubes where both surfaces carry skin current, use a
+        larger n on the outer or switch to a volume-grid model."""
+        n = int(n)
+        if n < 1:
+            raise ValueError(f"n_peri must be >= 1, got {n}")
+        theta = 2.0 * np.pi * (np.arange(n) + 0.5) / n
+        return self.r_out * np.cos(theta), self.r_out * np.sin(theta)
 
     def total_area(self):
         return np.pi * (self.r_out * self.r_out - self.r_in * self.r_in)
@@ -335,6 +391,14 @@ class PolygonProfile(Profile):
         v = self.centroid[1] + s * (B[..., 1] - self.centroid[1])
         return u, v
 
+    def sample_perimeter(self, n):
+        n = int(n)
+        if n < 1:
+            raise ValueError(f"n_peri must be >= 1, got {n}")
+        betas = (np.arange(n) + 0.5) / n
+        B = self._boundary_point(betas)
+        return B[..., 0], B[..., 1]
+
     def total_area(self):
         return self._area
 
@@ -386,6 +450,12 @@ class InterpolatedProfile(Profile):
     def sample_at(self, alpha, beta):
         ua, va = self.a.sample_at(alpha, beta)
         ub, vb = self.b.sample_at(alpha, beta)
+        t = self.t
+        return (1.0 - t) * ua + t * ub, (1.0 - t) * va + t * vb
+
+    def sample_perimeter(self, n):
+        ua, va = self.a.sample_perimeter(n)
+        ub, vb = self.b.sample_perimeter(n)
         t = self.t
         return (1.0 - t) * ua + t * ub, (1.0 - t) * va + t * vb
 

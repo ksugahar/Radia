@@ -1100,6 +1100,197 @@ class CoilBuilder:
 		}
 		return filament_paths, currents
 
+	def to_filaments_peri(self, n_peri, frequency=0.0, sigma=5.8e7,
+	                      mu_r=1.0, n_arc=20):
+		"""Perimeter-only filament placement (thin-skin limit, IH typical).
+
+		Places ``n_peri`` filaments equally spaced along the arc-length
+		perimeter of the cross-section.  Each filament carries an equal
+		share of the cross-section area (A_cell = total_area / n_peri),
+		so the bundle's DC resistance matches the solid conductor.
+
+		Appropriate regime:
+		  - Thin-skin: d / delta >= 3 (skin current localised near the
+		    outer surface).
+		  - For DC or thick-skin (d / delta < 2) this model is inaccurate
+		    because it forbids interior current paths.  Use the
+		    volume-grid ``to_filaments(nw, nh, ...)`` instead.
+
+		Args:
+		    n_peri (int): Number of filaments on the perimeter (>= 1).
+		    frequency, sigma, mu_r, n_arc: same as ``to_filaments``.
+
+		Returns:
+		    (filament_paths, currents) — list of length ``n_peri``,
+		    complex128 if frequency>0 else float64.
+		"""
+		if not self.segments:
+			raise ValueError("No segments to filament-ize.")
+		n_peri = int(n_peri)
+		if n_peri < 1:
+			raise ValueError(f"n_peri={n_peri}; must be >= 1.")
+
+		MU_0 = 4.0 * np.pi * 1e-7
+
+		w0, h0 = self.segments[0].profile.bounding_wh()
+
+		us0, vs0 = self.segments[0].profile.sample_perimeter(n_peri)
+		N = n_peri
+
+		filament_paths = [[] for _ in range(N)]
+		cell_wh = [[] for _ in range(N)]
+		lengths = np.zeros(N)
+		R_k = np.zeros(N)
+
+		def _check_arc_inner_radius(R_arc, us):
+			r_min = R_arc + float(np.min(us))
+			if r_min <= 0:
+				raise ValueError(
+					f"Minimum filament arc radius {r_min} <= 0: "
+					f"R_arc={R_arc}, min(u)={np.min(us):g}. Reduce "
+					"profile size or increase arc radius.")
+
+		def _cell_side(profile):
+			side = float(np.sqrt(profile.total_area() / n_peri))
+			return side, side
+
+		for seg in self.segments:
+			x_hat = seg.orientation[0, :]
+			y_hat = seg.orientation[1, :]
+			z_hat = seg.orientation[2, :]
+
+			if isinstance(seg, LoftStraightSegment):
+				n_sub = seg.n_sub
+				s_waypoints = np.linspace(0.0, 1.0, n_sub + 1)
+				profile_at_s = [seg.profile_start.interpolate(seg.profile_end, s)
+				                for s in s_waypoints]
+				uv_wp = [pr.sample_perimeter(n_peri) for pr in profile_at_s]
+				for p_idx in range(n_sub):
+					s1 = s_waypoints[p_idx]
+					s2 = s_waypoints[p_idx + 1]
+					u1, v1 = uv_wp[p_idx]
+					u2, v2 = uv_wp[p_idx + 1]
+					pr_mid = seg.profile_start.interpolate(
+						seg.profile_end, 0.5 * (s1 + s2))
+					dw_mid, dh_mid = _cell_side(pr_mid)
+					A_mid = pr_mid.total_area() / n_peri
+					for k in range(N):
+						p1 = (seg.start_pos + s1 * seg.length * y_hat
+						      + u1[k] * x_hat + v1[k] * z_hat)
+						p2 = (seg.start_pos + s2 * seg.length * y_hat
+						      + u2[k] * x_hat + v2[k] * z_hat)
+						filament_paths[k].append((tuple(p1), tuple(p2)))
+						cell_wh[k].append((dw_mid, dh_mid))
+						dl = float(np.linalg.norm(p2 - p1))
+						lengths[k] += dl
+						R_k[k] += dl / (sigma * A_mid)
+
+			elif isinstance(seg, StraightSegment):
+				us_s, vs_s = seg.profile.sample_perimeter(n_peri)
+				du_s, dv_s = _cell_side(seg.profile)
+				A_cell_s = seg.profile.total_area() / n_peri
+				for k in range(N):
+					offset = us_s[k] * x_hat + vs_s[k] * z_hat
+					p1 = seg.start_pos + offset
+					p2 = seg.end_pos + offset
+					filament_paths[k].append((tuple(p1), tuple(p2)))
+					cell_wh[k].append((du_s, dv_s))
+					lengths[k] += seg.length
+					R_k[k] += seg.length / (sigma * A_cell_s)
+
+			elif isinstance(seg, ArcSegment):
+				theta_total = np.deg2rad(seg.arc_angle)
+				R_arc = seg.radius
+				us_s, vs_s = seg.profile.sample_perimeter(n_peri)
+				du_s, dv_s = _cell_side(seg.profile)
+				A_cell_s = seg.profile.total_area() / n_peri
+				_check_arc_inner_radius(R_arc, us_s)
+				for k in range(N):
+					u, v = us_s[k], vs_s[k]
+					r_k = R_arc + u
+					z_off = v * z_hat
+					for p_idx in range(n_arc):
+						t1 = theta_total * p_idx / n_arc
+						t2 = theta_total * (p_idx + 1) / n_arc
+						p1 = (seg.arc_center + r_k * (np.cos(t1) * x_hat
+						      + np.sin(t1) * y_hat) + z_off)
+						p2 = (seg.arc_center + r_k * (np.cos(t2) * x_hat
+						      + np.sin(t2) * y_hat) + z_off)
+						filament_paths[k].append((tuple(p1), tuple(p2)))
+						cell_wh[k].append((du_s, dv_s))
+					arc_len_k = abs(r_k * theta_total)
+					lengths[k] += arc_len_k
+					R_k[k] += arc_len_k / (sigma * A_cell_s)
+
+			elif isinstance(seg, LoftArcSegment):
+				theta_total = np.deg2rad(seg.arc_angle)
+				R_arc = seg.radius
+				n_sub = seg.n_sub
+				s_waypoints = np.linspace(0.0, 1.0, n_sub + 1)
+				profile_at_s = [seg.profile_start.interpolate(seg.profile_end, s)
+				                for s in s_waypoints]
+				uv_wp = [pr.sample_perimeter(n_peri) for pr in profile_at_s]
+				for pr_idx, (u_s, _) in enumerate(uv_wp):
+					_check_arc_inner_radius(R_arc, u_s)
+				for p_idx in range(n_sub):
+					s1 = s_waypoints[p_idx]
+					s2 = s_waypoints[p_idx + 1]
+					theta1 = theta_total * s1
+					theta2 = theta_total * s2
+					u1, v1 = uv_wp[p_idx]
+					u2, v2 = uv_wp[p_idx + 1]
+					pr_mid = seg.profile_start.interpolate(
+						seg.profile_end, 0.5 * (s1 + s2))
+					dw_mid, dh_mid = _cell_side(pr_mid)
+					A_mid = pr_mid.total_area() / n_peri
+					for k in range(N):
+						r_k_1 = R_arc + u1[k]
+						r_k_2 = R_arc + u2[k]
+						p1 = (seg.arc_center
+						      + r_k_1 * (np.cos(theta1) * x_hat
+						                 + np.sin(theta1) * y_hat)
+						      + v1[k] * z_hat)
+						p2 = (seg.arc_center
+						      + r_k_2 * (np.cos(theta2) * x_hat
+						                 + np.sin(theta2) * y_hat)
+						      + v2[k] * z_hat)
+						filament_paths[k].append((tuple(p1), tuple(p2)))
+						cell_wh[k].append((dw_mid, dh_mid))
+						dl = float(np.linalg.norm(p2 - p1))
+						lengths[k] += dl
+						R_k[k] += dl / (sigma * A_mid)
+			else:
+				raise NotImplementedError(
+					f"Unsupported segment type {type(seg).__name__}")
+
+		# Perimeter filaments all sit on the surface: d_k = 0, so the
+		# Tier A skin factor = 1 for all.  Only the path-length bias
+		# (1/R_k, arcs have different r_k) drives the weight.
+		if frequency > 0:
+			weights = (1.0 / R_k).astype(np.complex128)
+		else:
+			weights = 1.0 / R_k
+
+		currents = self.current * weights / np.sum(weights)
+
+		self._last_filament_info = {
+			'us': us0, 'vs': vs0,
+			'n_peri': n_peri,
+			'w': w0, 'h': h0,
+			'lengths': lengths,
+			'R_k': R_k,
+			'cell_wh': cell_wh,
+			'currents': currents,
+			'frequency': frequency,
+			'sigma': sigma,
+			'mu_r': mu_r,
+			'has_loft': any(isinstance(s, (LoftStraightSegment,
+			                                 LoftArcSegment))
+			                for s in self.segments),
+			'placement': 'perimeter',
+		}
+		return filament_paths, currents
+
 	def plot_cross_section_current(self, nw, nh, frequency=0.0,
 	                               sigma=5.8e7, mu_r=1.0, fig=None):
 		"""Visualize the analytical filament current distribution.
