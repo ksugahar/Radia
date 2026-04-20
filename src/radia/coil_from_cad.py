@@ -268,6 +268,7 @@ def filaments_from_step(step_path: str,
                         sigma: float = 5.8e7,
                         nwinc: int = 1,
                         nhinc: int = 1,
+                        n_peri: Optional[int] = None,
                         cad_units_per_meter: float = 1000.0,
                         n_slices: int = 200,
                         use_coil_builder: bool = True):
@@ -291,7 +292,11 @@ def filaments_from_step(step_path: str,
         path_points_m: (N+1, 3) path vertices in meters, or None for
             auto-extraction.
         sigma: Conductivity [S/m].
-        nwinc, nhinc: Sub-filament subdivision.
+        nwinc, nhinc: Sub-filament subdivision for the volume-grid
+            placement.  Ignored when ``n_peri`` is set.
+        n_peri: If given, place ``n_peri`` filaments on the cross-section
+            PERIMETER only (thin-skin regime, d/delta >= 3).  Takes
+            priority over nwinc/nhinc.  Requires use_coil_builder=True.
         cad_units_per_meter: Scale factor (default 1000 = mm).
         n_slices: Z-slice count for auto-extraction (ignored if
             path_points_m is given).
@@ -306,7 +311,13 @@ def filaments_from_step(step_path: str,
         return _filaments_via_coil_builder(
             step_path, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
             n_slices=n_slices,
-            start_hint=None)  # auto-detect from bounding box
+            start_hint=None,  # auto-detect from bounding box
+            n_peri=n_peri)
+
+    if n_peri is not None:
+        raise ValueError(
+            "n_peri requires use_coil_builder=True; the legacy "
+            "C++ ExpandFilaments path is volume-grid-only.")
 
     # Legacy path: rectangular grid via C++ ExpandFilaments
     if path_points_m is None:
@@ -525,11 +536,14 @@ def _start_hint_from_step_labels(step_path: str,
 
 
 def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
-                                start_hint=None):
+                                start_hint=None, n_peri=None):
     """CoilBuilder path: STEP -> centerline -> CoilBuilder -> to_filaments.
 
     Uses Profile.sample_at() for cross-section-aware filament placement.
     Supports circular, rectangular, and lofted cross-sections.
+
+    If ``n_peri`` is given, uses perimeter-only placement via
+    ``to_filaments_peri`` (thin-skin limit) and ignores ``nwinc``/``nhinc``.
     """
     from coil_from_step import extract_centerline, to_coil_builder
     from peec_bundle import build_bundle_solver
@@ -561,8 +575,12 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
     coil, _segs = to_coil_builder(res, current=1.0)
 
     # Step 3: Generate profile-aware filaments
-    paths, _currents = coil.to_filaments(
-        nw=nwinc, nh=nhinc, frequency=0.0, sigma=sigma)
+    if n_peri is not None:
+        paths, _currents = coil.to_filaments_peri(
+            n_peri=n_peri, frequency=0.0, sigma=sigma)
+    else:
+        paths, _currents = coil.to_filaments(
+            nw=nwinc, nh=nhinc, frequency=0.0, sigma=sigma)
     cell_wh = coil._last_filament_info.get('cell_wh')
 
     # Step 4: Build PEEC topology via bundle solver
