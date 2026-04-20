@@ -9,6 +9,11 @@ export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] 
 ```
 
 > **Note**: This command uses `export meg`, not `radia_export meg`.
+> `export meg` is Cubit's built-in format command; the Radia plugin
+> (`radia_cubit.ccm`) extends it with block-name → ELF prefix
+> auto-detection (see "ELF Element Type Labels" below). There is no
+> separate `radia_export meg` because Cubit already owns the file
+> format; the plugin only contributes the label-mapping layer.
 
 Block names define ELF physics element types (3-character prefix).
 No explicit block assignment is required — all meshed elements are exported.
