@@ -28,6 +28,12 @@ def setup_radia_path():
     if src_path.exists():
         sys.path.insert(0, str(src_path))
 
+    # Also add src/radia directly so bare imports like
+    # `from coil_from_cad import ...` work (matches the CI PYTHONPATH).
+    src_radia = project_root / 'src' / 'radia'
+    if src_radia.exists():
+        sys.path.insert(0, str(src_radia))
+
     mcp_src = project_root / 'packages' / 'radia-mcp' / 'src'
     if mcp_src.exists():
         sys.path.insert(0, str(mcp_src))

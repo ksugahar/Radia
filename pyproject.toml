@@ -50,6 +50,13 @@ dependencies = [
 cubit = [
     "cubit-mesh-export",
 ]
+build123d = [
+    # Pythonic OCCT front-end used by PEEC coil-from-shape helpers
+    # (label / color reading, STEP XCAF access). netgen.occ does not
+    # expose XCAF labels, so a pythonocc-core-based reader is required
+    # when the user wants labeled STEP ports.
+    "build123d>=0.9",
+]
 gui = [
     "PySide6>=6.5",
 ]
