@@ -959,6 +959,10 @@ struct ModeScript {
   QString fileName;    // radia_ih.py
   QStringList required; // REQUIRED_LABELS
   QStringList optional; // OPTIONAL_LABELS
+  bool needsVol = true; // NEEDS_VOL — default true.  When false, the
+                        // launcher hides the `.vol` row and skips the
+                        // `radia_export netgen` call (e.g. PEEC-inductance
+                        // which takes a STEP file, not a mesh).
 };
 
 // Find radia package directory via external Python
@@ -994,6 +998,7 @@ static QList<ModeScript> discover_mode_scripts(const QString &pkgDir)
   QRegularExpression reTitle(R"(^TITLE\s*=\s*(["'])(.+?)\1)");
   QRegularExpression reReq(R"(^REQUIRED_LABELS\s*=\s*\[([^\]]*)\])");
   QRegularExpression reOpt(R"(^OPTIONAL_LABELS\s*=\s*\[([^\]]*)\])");
+  QRegularExpression reNeedsVol(R"(^NEEDS_VOL\s*=\s*(True|False))");
 
   auto parseList = [](const QString &raw) -> QStringList {
     QStringList result;
@@ -1023,6 +1028,8 @@ static QList<ModeScript> discover_mode_scripts(const QString &pkgDir)
       if (m.hasMatch()) ms.required = parseList(m.captured(1));
       m = reOpt.match(line);
       if (m.hasMatch()) ms.optional = parseList(m.captured(1));
+      m = reNeedsVol.match(line);
+      if (m.hasMatch()) ms.needsVol = (m.captured(1) == "True");
     }
     if (!ms.title.isEmpty())
       modes.append(ms);
@@ -1153,7 +1160,9 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   if (volBase.endsWith(".jou", Qt::CaseInsensitive))
     volBase.chop(4);
   QString defaultVol = volBase + ".vol";
-  QHBoxLayout *hVol = new QHBoxLayout();
+  QWidget *volRow = new QWidget();
+  QHBoxLayout *hVol = new QHBoxLayout(volRow);
+  hVol->setContentsMargins(0, 0, 0, 0);
   hVol->addWidget(new QLabel("Output .vol:"));
   QLineEdit *volEdit = new QLineEdit(defaultVol);
   hVol->addWidget(volEdit, 1);
@@ -1168,7 +1177,7 @@ void RadiaMenuHandler::launch_radia_ngsolve()
       volEdit->setText(picked);
     }
   });
-  layout->addLayout(hVol);
+  layout->addWidget(volRow);
 
   // OK / Cancel
   QDialogButtonBox *buttons = new QDialogButtonBox(
@@ -1183,6 +1192,13 @@ void RadiaMenuHandler::launch_radia_ngsolve()
     int idx = modeCombo->currentIndex();
     if (idx < 0 || idx >= modes.size()) return;
     const ModeScript &ms = modes[idx];
+
+    // Hide the `.vol` row entirely when this mode does not need one
+    // (e.g. PEEC-inductance takes a STEP, not a mesh).  Also hide the
+    // label-requirements widget since STEP-only modes have no block
+    // / sideset contract.
+    volRow->setVisible(ms.needsVol);
+    labelGroup->setVisible(ms.needsVol);
 
     QStringList modelLabels = get_model_labels();
     QSet<QString> labelSet;
@@ -1229,16 +1245,23 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   const ModeScript &ms = modes[modeIdx];
   int order = orderCombo->currentIndex() + 1;
 
-  // Use the (possibly user-edited) Output .vol path.
-  QString volPath = volEdit->text().trimmed().replace("\\", "/");
-  if (volPath.isEmpty() || volPath == "/" || volPath == "/.vol") {
-    PRINT_ERROR("Output .vol path is empty or invalid: %s\n",
-                volPath.toLocal8Bit().constData());
-    return;
+  QString volPath;
+  QString outDir;
+  if (ms.needsVol) {
+    // Use the (possibly user-edited) Output .vol path.
+    volPath = volEdit->text().trimmed().replace("\\", "/");
+    if (volPath.isEmpty() || volPath == "/" || volPath == "/.vol") {
+      PRINT_ERROR("Output .vol path is empty or invalid: %s\n",
+                  volPath.toLocal8Bit().constData());
+      return;
+    }
+    outDir = QFileInfo(volPath).absolutePath();
+  } else {
+    // STEP-only modes (e.g. PEEC-inductance): no .vol, the analysis
+    // window runs in the journal's directory.
+    outDir = QFileInfo(jouPath).absolutePath();
   }
-  QString outDir = QFileInfo(volPath).absolutePath();
   if (outDir.isEmpty()) outDir = ".";
-  QString baseName = QFileInfo(volPath).completeBaseName();
 
   // Save settings
   saveLauncherSettings({
@@ -1247,28 +1270,34 @@ void RadiaMenuHandler::launch_radia_ngsolve()
       {"last_jou_dir", outDir},
   });
 
-  // --- Export .vol ---
-  if (!QDir().mkpath(outDir)) {
-    PRINT_ERROR("Cannot create output directory: %s\n",
-                outDir.toLocal8Bit().constData());
-    return;
+  // --- Export .vol (only when the mode needs it) ---
+  if (ms.needsVol) {
+    if (!QDir().mkpath(outDir)) {
+      PRINT_ERROR("Cannot create output directory: %s\n",
+                  outDir.toLocal8Bit().constData());
+      return;
+    }
+    CubitInterface::silent_cmd(
+        ("cd \"" + outDir.toLocal8Bit() + "\"").constData());
+
+    PRINT_INFO("Exporting Netgen .vol (order %d) to %s...\n",
+               order, volPath.toLocal8Bit().constData());
+
+    std::string exportCmd = "radia_export netgen \"" +
+        volPath.toLocal8Bit().toStdString() +
+        "\" order " + std::to_string(order) + " overwrite";
+    CubitInterface::cmd(exportCmd.c_str());
+
+    if (!QFile::exists(volPath)) {
+      PRINT_ERROR("radia_export netgen failed. Check blocks/sidesets.\n");
+      return;
+    }
+    PRINT_INFO("Exported: %s (order %d)\n",
+               volPath.toLocal8Bit().constData(), order);
+  } else {
+    PRINT_INFO("Launching %s (STEP-only mode, no .vol export)...\n",
+               ms.title.toLocal8Bit().constData());
   }
-  CubitInterface::silent_cmd(("cd \"" + outDir.toLocal8Bit() + "\"").constData());
-
-  PRINT_INFO("Exporting Netgen .vol (order %d) to %s...\n",
-             order, volPath.toLocal8Bit().constData());
-
-  std::string exportCmd = "radia_export netgen \"" +
-      volPath.toLocal8Bit().toStdString() +
-      "\" order " + std::to_string(order) + " overwrite";
-  CubitInterface::cmd(exportCmd.c_str());
-
-  if (!QFile::exists(volPath)) {
-    PRINT_ERROR("radia_export netgen failed. Check blocks/sidesets.\n");
-    return;
-  }
-  PRINT_INFO("Exported: %s (order %d)\n",
-             volPath.toLocal8Bit().constData(), order);
 
   // --- Launch analysis window subprocess ---
   QString scriptPath = pkgDir + "/" + ms.fileName;
@@ -1280,7 +1309,10 @@ void RadiaMenuHandler::launch_radia_ngsolve()
 
   QStringList args;
   if (python == "py") args << "-3";
-  args << scriptPath << volPath;
+  args << scriptPath;
+  // Only pass the .vol path when the mode uses it; STEP-only modes
+  // launch with no positional argument (empty vol_path in Python).
+  if (ms.needsVol) args << volPath;
 
   PRINT_INFO("Launching: %s %s\n",
              python.toStdString().c_str(),
@@ -1296,8 +1328,9 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   else
     PRINT_WARNING("Failed to launch analysis window.\n");
 
-  // Open .vol with OS viewer as well
-  QDesktopServices::openUrl(QUrl::fromLocalFile(volPath));
+  // Open the exported .vol with OS viewer (only for mesh modes).
+  if (ms.needsVol)
+    QDesktopServices::openUrl(QUrl::fromLocalFile(volPath));
 }
 
 // ============================================================
