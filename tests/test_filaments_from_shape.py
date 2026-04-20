@@ -90,6 +90,46 @@ def test_start_hint_from_step_labels_unlabeled_returns_none(tmp_path):
     assert hint is None
 
 
+def test_export_step_with_labels_roundtrip(tmp_path):
+    """Label-preserving STEP writer: child labels survive a full round-trip.
+
+    build123d.export_step strips Compound-child labels; our
+    export_step_with_labels helper writes them via pythonocc-core XCAF
+    directly, producing FreeCAD-Import.export-compatible STEP.  Reload
+    via _start_hint_from_step_labels must recover the port hint.
+    """
+    import build123d as bd
+    from build123d import Shell, Box
+    from coil_from_cad import (export_step_with_labels,
+                                _start_hint_from_step_labels)
+
+    box = Box(10, 10, 30)
+    box.label = "peec_coil_body"
+    top = max(box.faces(), key=lambda f: f.center().Z)
+    port = Shell([top])
+    port.label = "peec_port_in"
+
+    step_path = tmp_path / "labeled.step"
+    export_step_with_labels([box, port], str(step_path))
+
+    # Grep-level sanity: both PRODUCTs present
+    with open(step_path, encoding="utf-8") as f:
+        content = f.read()
+    assert "peec_coil_body" in content
+    assert "peec_port_in" in content
+
+    # Reload path: helper returns a valid start_hint
+    hint = _start_hint_from_step_labels(str(step_path))
+    assert hint is not None, "label-based hint should be recovered"
+    p, t = hint
+    assert p.shape == (3,)
+    assert t.shape == (3,)
+    # Top face of the box sits at z=15 (symmetric Box) — verify p is up
+    # and normal is inward (=-Z after our convention)
+    assert p[2] > 0
+    assert np.isclose(t[2], -1.0, atol=1e-6)
+
+
 def test_start_hint_from_step_labels_freecad_fixture():
     """Real-world fixture: FreeCAD Import.export STEP with peec_port_in shell.
 
