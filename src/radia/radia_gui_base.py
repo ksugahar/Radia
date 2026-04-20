@@ -82,9 +82,20 @@ class ModePanel(QWidget):
         self._row_indices = {}
 
     def _set_row_visible(self, key, visible):
+        """Show / hide a form row and **collapse** its vertical space.
+
+        Qt 6.4+ provides QFormLayout.setRowVisible() which truly removes
+        the row height from the layout.  Without it, just calling
+        setVisible(False) on the widgets hides them but keeps the gap,
+        making the panel taller than it needs to be.
+        """
         row_idx = self._row_indices.get(key)
         if row_idx is None:
             return
+        if hasattr(self._form, "setRowVisible"):
+            self._form.setRowVisible(row_idx, bool(visible))
+            return
+        # Fallback: widget-only hide (row height remains — Qt < 6.4)
         label_item = self._form.itemAt(row_idx, QFormLayout.LabelRole)
         field_item = self._form.itemAt(row_idx, QFormLayout.FieldRole)
         if label_item and label_item.widget():
@@ -234,6 +245,7 @@ class AnalysisWindow(QMainWindow):
         self._panel = panel
         self._panel_area.addWidget(panel)
         panel.validationChanged = self._update_run_state
+        panel.setVolRowVisible = self.set_vol_row_visible
         self._update_run_state()
 
     def _build_ui(self, vol_path):
@@ -242,8 +254,11 @@ class AnalysisWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(10, 10, 10, 5)
 
-        # Model path
-        model_row = QHBoxLayout()
+        # Model path (wrapped in a container so subclasses can hide
+        # the whole row for mesh-free modes, e.g. PEEC-inductance).
+        self._vol_row = QWidget()
+        model_row = QHBoxLayout(self._vol_row)
+        model_row.setContentsMargins(0, 0, 0, 0)
         model_row.addWidget(QLabel("Model (.vol):"))
         self._vol_edit = QLineEdit(vol_path)
         self._vol_edit.setPlaceholderText(
@@ -252,7 +267,7 @@ class AnalysisWindow(QMainWindow):
         browse_btn = QPushButton("Browse...")
         browse_btn.clicked.connect(self._browse_vol)
         model_row.addWidget(browse_btn)
-        root.addLayout(model_row)
+        root.addWidget(self._vol_row)
 
         # Splitter: panel | output
         splitter = QSplitter(Qt.Vertical)
@@ -304,6 +319,11 @@ class AnalysisWindow(QMainWindow):
 
         # Status bar
         self._status = self.statusBar()
+
+    def set_vol_row_visible(self, visible):
+        """Show or hide the top-level .vol file input row.  Used by
+        mesh-free modes (e.g. PEEC-inductance) to reduce visual clutter."""
+        self._vol_row.setVisible(bool(visible))
 
     def _browse_vol(self):
         path, _ = QFileDialog.getOpenFileName(
