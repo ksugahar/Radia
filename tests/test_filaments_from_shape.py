@@ -72,57 +72,39 @@ def test_bd_shape_to_netgen_solid_single():
     assert np.isclose(dz, 30, atol=1e-6)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown Compound type:UserWarning")
-def test_start_hint_from_step_labels(tmp_path):
-    """Label-marked sub-Shell in STEP -> start_hint is recovered.
+def test_start_hint_from_step_labels_unlabeled_returns_none(tmp_path):
+    """STEP without any peec_* label -> helper returns None cleanly.
 
-    Builds a labeled assembly STEP in build123d (simulates what FreeCAD's
-    Import.export produces), then verifies _start_hint_from_step_labels
-    extracts the port face hint.
+    build123d.export_step does not preserve child labels, so build123d
+    is not expected to produce a label-bearing STEP.  The helper must
+    fall through to None in that case so the caller can use bbox auto.
     """
     import build123d as bd
     from coil_from_cad import _start_hint_from_step_labels
 
-    # Main coil body
     box = bd.Box(10, 10, 30)
-    box.label = "peec_coil_body"
+    step_path = tmp_path / "plain.step"
+    bd.export_step(box, str(step_path))
 
-    # Port marker: isolate the top face as its own Shell-with-label.
-    top_face = max(box.faces(), key=lambda f: f.center().Z)
-    # build123d exporter writes per-child PRODUCT only via Compound
-    # children, not via face.label.  Use a Shell wrapper labeled
-    # "peec_port_in".
-    from build123d import Shell
-    port_shell = Shell([top_face])
-    port_shell.label = "peec_port_in"
-
-    comp = bd.Compound([box, port_shell])
-    comp.label = "test_assembly"
-
-    step_path = tmp_path / "labeled.step"
-    bd.export_step(comp, str(step_path))
-
-    # Note: build123d's export_step currently strips child labels; this
-    # test therefore exercises the "graceful None" code path more than a
-    # full label round-trip.  When the FreeCAD Import.export-style label
-    # is present, the helper picks it up.
     hint = _start_hint_from_step_labels(str(step_path))
-    # Either the hint is recovered (if build123d starts preserving it),
-    # or it is None (current behaviour).  Both are valid; we just
-    # confirm we don't crash and the return type is well-formed.
-    assert hint is None or (
-        len(hint) == 2 and len(hint[0]) == 3 and len(hint[1]) == 3
-    )
+    assert hint is None
 
 
 def test_start_hint_from_step_labels_freecad_fixture():
-    """Fixture: FreeCAD Import.export-produced STEP with port shell label."""
+    """Real-world fixture: FreeCAD Import.export STEP with peec_port_in shell.
+
+    The label path in Radia is designed for external CAD tools that can
+    emit XCAF labels (FreeCAD Import.export, Cubit AP214-aware exporters
+    in the future, etc).  build123d STEPs are not expected to carry
+    labels — use `filaments_from_shape(shape, port_face=...)` for
+    build123d workflows instead.
+    """
     import os
     from coil_from_cad import _start_hint_from_step_labels
 
     fc_step = r"C:\tmp\fc_xcaf.step"
     if not os.path.exists(fc_step):
-        pytest.skip("FreeCAD fixture not available")
+        pytest.skip("FreeCAD fixture not available (see docs/peec)")
 
     hint = _start_hint_from_step_labels(fc_step)
     assert hint is not None, "expected label-based hint from FreeCAD STEP"
