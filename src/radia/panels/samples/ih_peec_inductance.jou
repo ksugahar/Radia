@@ -1,0 +1,41 @@
+## PEEC inductance sample: coil STEP only, NO workpiece, NO .vol.
+##
+## The PEEC inductance method computes L_coil / R_coil directly from a
+## STEP file via filament-based Biot-Savart + loop-bundle solve.  It
+## does NOT need a mesh or a .vol file -- only the STEP describing the
+## coil solid.
+##
+## Reference: gapped torus coil, analytical L ~ 88.55 nH.
+##   R_major = 0.030 m
+##   a_minor = 0.003 m
+##   gap     = 5 deg (3-loop analytical formula)
+##   L = mu_0 * R * (ln(8R/a) - 2) * (1 - gap/360) = 88.55 nH
+##
+## Usage from the IH panel:
+##   1. Open Cubit and play this .jou  (produces ih_peec_inductance_coil.step)
+##   2. Solve -> Radia-NGSolve
+##   3. Method: "PEEC inductance (coil only, STEP)"
+##   4. STEP file: Browse... -> ih_peec_inductance_coil.step
+##   5. Frequency / Coil material / n_peri (default 16)
+##   6. Run -> ~3 s -> L_coil_nH
+##
+## Expected output (Cu, 50 kHz, n_peri=16):
+##   L_coil ~ 78.7 nH (perimeter placement underestimates ~11% vs thin-shell
+##                     analytical 88.55 nH; increase n_peri to 32 / 64 for
+##                     tighter match in exchange for slower Biot-Savart).
+##   R_coil ~ 0.106 mOhm
+##   Runtime: ~5 s (STEP -> 16 filaments -> Loop-bundle)
+
+reset
+
+# === Coil: gapped torus ====================================================
+create vertex 0.030000 0 0
+create vertex 0.033000 0 0
+create vertex 0.030000 0 0.003000
+create curve arc center vertex 1 vertex 2 vertex 3 normal 0 1 0 full
+create surface curve 1
+sweep surface 1 axis 0 0 0 0 0 1 angle 355
+${coil_vid = Id("volume")}
+
+# === STEP export (coil volume only) ========================================
+export step "ih_peec_inductance_coil.step" volume {coil_vid} overwrite
