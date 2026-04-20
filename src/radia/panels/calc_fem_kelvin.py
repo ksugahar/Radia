@@ -283,6 +283,22 @@ def solve_fem(vol_file="", fes_order=1,
     # HCurl space for A (nograds=True always). T0-era A-V compound was
     # retired with T0; the PEEC filament source does not need an in-coil
     # scalar potential gauge.
+    #
+    # Design split (2026-04-20, confirmed by user):
+    #   - calc_fem_kelvin (this file):    HCurl A-only + PEEC filament
+    #     source (total-field RHS via line integrals). Production-fast
+    #     path, the coil is NOT meshed as material.
+    #   - calc_fem_coilmesh (sibling):    compound HCurl(A) x H1(phi)
+    #     with voltage-driven conductor source (--coil-sigma). "FEM truth"
+    #     for PEEC validation. Requires a `coil` material + source/sink
+    #     boundaries in the .vol.
+    #
+    # FEM reduced-A path (Biot-Savart B_s on integration points, HCurl
+    # projection) is intentionally NOT provided: it cancellation-errors
+    # against the coil-excluded A_r solution, and the PEEC line-integral
+    # RHS covers the same use case without the projection error. See
+    # project_fem_vs_peec_skin_2026_04_18.md for the validation
+    # comparison (A-V vs PEEC+BEM-SIBC: H_t +3.0%, P +4.4%).
     base_fes = HCurl(mesh, order=fes_order,
                      complex=use_complex,
                      nograds=True,
