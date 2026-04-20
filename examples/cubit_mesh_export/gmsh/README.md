@@ -86,5 +86,5 @@ cubit.cmd('radia_export gmsh "solid.msh" dimension 3 overwrite')
 
 ## See Also
 
-- [docs/cubit/export_Gmsh_ver4.md](../../../docs/cubit/export_Gmsh_ver4.md) - v4.1 documentation
+- [docs/cubit/export_Gmsh.md](../../../docs/cubit/export_Gmsh.md) - Gmsh export reference
 - [examples/netgen/README.md](../netgen/README.md) - NGSolve integration
