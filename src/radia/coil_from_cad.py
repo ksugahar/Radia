@@ -408,7 +408,6 @@ def _bd_shape_to_netgen_solid(bd_shape):
 
 def filaments_from_shape(shape,
                          port_face=None,
-                         port_label_prefix: str = "peec_port",
                          sigma: float = 5.8e7,
                          nwinc: int = 1,
                          nhinc: int = 1,
@@ -416,28 +415,28 @@ def filaments_from_shape(shape,
                          n_slices: int = 200):
     """End-to-end: build123d Shape -> PEEC topology (no STEP round-trip).
 
-    Bypasses the `filaments_from_step` STEP-file path so that build123d
-    in-memory markers (Python attribute `face.label`, `face.color`) are
-    usable without being stripped by STEP export.
+    Canonical entry point for build123d workflows.  The in-memory path
+    bypasses STEP export entirely — important because
+    `build123d.export_step` strips both face labels and child-solid
+    labels.  Pass the port face directly instead of relying on
+    through-STEP markers.
 
-    Two ways to specify the port:
-      1. Pass `port_face` explicitly (build123d Face object).  This is
-         the most robust — no label-persistence issues.
-      2. Omit `port_face`; the function then looks for a face with
-         `label.startswith(port_label_prefix)` on `shape`.  *Caveat:*
-         `shape.faces()` returns fresh Face wrappers on each call and
-         loses labels set elsewhere, so this path only works if the
-         caller attached labels in the same expression tree the shape
-         was built from.
+    Port specification:
+      - `port_face` (build123d Face, optional): explicit seed.  Center
+        + inward normal are used to construct the walking-plane start
+        hint.  Most reliable option; recommended for all build123d
+        callers.
+      - If omitted, the function falls back to the bbox-based auto-hint
+        (z-axis torus assumption; works for the classical single-axis
+        helical coils but not for off-axis geometry).
 
-    If neither works, falls back to the bbox-based auto-hint (z-axis
-    torus assumption, as in `filaments_from_step`).
+    STEP-file workflows should use `filaments_from_step(step_path)`
+    instead, which picks up XCAF labels written by external CAD tools
+    (e.g. FreeCAD's Import.export).
 
     Args:
         shape: build123d Shape (Solid / Compound / Part).
         port_face: Optional explicit build123d Face for the PEEC port.
-        port_label_prefix: Label prefix to search for when port_face is
-            None. Default matches "peec_port", "peec_port_in", etc.
         sigma, nwinc, nhinc, cad_units_per_meter, n_slices: forwarded
             to the underlying walking-plane / CoilBuilder pipeline.
 
@@ -451,16 +450,6 @@ def filaments_from_shape(shape,
     start_hint = None
     if port_face is not None:
         start_hint = _bd_face_to_start_hint(port_face, cad_units_per_meter)
-    else:
-        # Best-effort label scan (works only if labels persist on this
-        # shape's immediate face list).
-        try:
-            for f in shape.faces():
-                if getattr(f, "label", "") and f.label.startswith(port_label_prefix):
-                    start_hint = _bd_face_to_start_hint(f, cad_units_per_meter)
-                    break
-        except Exception:
-            pass
 
     # --- 2. Convert to netgen.occ solid ---
     ng_solid = _bd_shape_to_netgen_solid(shape)
