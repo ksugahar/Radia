@@ -1540,25 +1540,30 @@ imprint all
 merge all
 compress
 
-unite volume 1 to 56
-unite volume 57 to 326
-unite volume 327 to 382
-unite volume all
+# NO UNITE: keep the 382 loft volumes as separate bodies, share
+# topology via imprint+merge only.  Unite on complex loft chains
+# produces ACIS UV-degenerate merged faces that break high-order
+# curving (see mcp-server-cubit topic `boolean_policy`).
 
-
-#volume 1 scheme sweep
-volume 1 scheme tetmesh
-volume 1 size 6
+#volume all scheme sweep
+volume all scheme tetmesh
+volume all size 6
 mesh volume all
 
-sideset 1 add surface 1
+# Source / sink / boundary via num_parents filter (exterior surfaces
+# have num_parents=1; interface surfaces between adjacent lofts have
+# num_parents=2).  Surface IDs would shift between unite / no-unite,
+# so we use stable topological queries instead.
+# Cross-section area = pi * 3.15^2 ~= 31.17 mm^2 -> caps have area < 40.
+sideset 1 add surface in volume 1 with num_parents=1
+sideset 1 remove surface with area > 40
 sideset 1 name "source"
-
-sideset 2 add surface 765
+sideset 2 add surface in volume 382 with num_parents=1
+sideset 2 remove surface with area > 40
 sideset 2 name "sink"
-
-sideset 3 add surface in volume 1
-sideset 3 remove surface 1 765
+sideset 3 add surface in volume all with num_parents=1
+sideset 3 remove surface in sideset 1
+sideset 3 remove surface in sideset 2
 sideset 3 name "boundary"
 
 block 1 add volume all
