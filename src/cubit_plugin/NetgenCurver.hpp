@@ -187,6 +187,9 @@ private:
   // "reject" = projection displacement exceeded threshold, fallback applied.
   mutable long diag_project_calls_ = 0;
   mutable long diag_project_rejects_ = 0;
+  mutable long diag_refine_success_ = 0;  // trim-then-refine recoveries
+  mutable long diag_refine_tries_ = 0;
+  mutable double diag_refine_max_tdisp_ = 0.0;
   mutable double diag_project_max_disp_ = 0.0;
   mutable int diag_project_max_disp_surf_ = -1;
   mutable std::unordered_map<int, long> diag_project_reject_per_surf_;
