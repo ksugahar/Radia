@@ -484,6 +484,74 @@ def filaments_from_shape(shape,
     }
 
 
+def export_step_with_labels(items, path: str, schema: str = "AP214IS"):
+    """Write a STEP with per-shape XCAF labels preserved.
+
+    build123d's own `export_step` drops Compound-child labels in the
+    current release (only the top-level Compound label survives; see
+    2026-04-20 tests).  This helper bypasses the build123d writer and
+    uses pythonocc-core (OCP) XCAF directly, producing STEP files with
+    one `PRODUCT('<label>', ...)` entity per labeled sub-shape — the
+    same form FreeCAD emits via Import.export, and the form the rest of
+    Radia's label-detection pipeline expects.
+
+    Note: build123d `Compound([a, b])` returns `.children == ()` (the
+    `children` attribute is for explicit Part/Assembly trees), so we
+    cannot walk a Compound to recover its labeled members.  Callers must
+    pass the list of labeled shapes directly.
+
+    Args:
+        items: iterable of build123d shapes (Solid / Shell / Part), each
+            with its `label` attribute set.  A single Shape is also
+            accepted and written as one XCAF entity.
+        path: Output STEP file path.
+        schema: STEP schema, default "AP214IS" (same as FreeCAD default).
+
+    Side-effect: writes `path`. Raises `RuntimeError` if the OCP writer
+    does not return success.
+    """
+    try:
+        from OCP.TDocStd import TDocStd_Document
+        from OCP.TCollection import TCollection_ExtendedString
+        from OCP.XCAFApp import XCAFApp_Application
+        from OCP.XCAFDoc import XCAFDoc_DocumentTool
+        from OCP.TDataStd import TDataStd_Name
+        from OCP.STEPCAFControl import STEPCAFControl_Writer
+        from OCP.STEPControl import STEPControl_AsIs
+        from OCP.Interface import Interface_Static
+        from OCP.IFSelect import IFSelect_RetDone
+    except ImportError as exc:
+        raise RuntimeError(
+            "export_step_with_labels requires build123d (pythonocc-core)"
+        ) from exc
+
+    doc = TDocStd_Document(TCollection_ExtendedString("radia-coil"))
+    XCAFApp_Application.GetApplication_s().InitDocument(doc)
+    tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+
+    # Normalize: if a single shape was passed, wrap in a list.
+    if hasattr(items, "wrapped"):
+        items_iter = [items]
+    else:
+        items_iter = list(items)
+
+    for item in items_iter:
+        wrapped = getattr(item, "wrapped", None)
+        if wrapped is None:
+            continue
+        lab = tool.AddShape(wrapped, False, True)
+        name = getattr(item, "label", "") or ""
+        if name:
+            TDataStd_Name.Set_s(lab, TCollection_ExtendedString(name))
+
+    Interface_Static.SetCVal_s("write.step.schema", schema)
+    writer = STEPCAFControl_Writer()
+    writer.Transfer(doc, STEPControl_AsIs)
+    res = writer.Write(path)
+    if res != IFSelect_RetDone:
+        raise RuntimeError(f"STEP write failed: {res}")
+
+
 def _start_hint_from_step_labels(step_path: str,
                                   port_label_prefix: str = "peec_port"):
     """Return start_hint from XCAF labels in STEP, or None if unavailable.
