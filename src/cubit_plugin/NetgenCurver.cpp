@@ -62,6 +62,8 @@ bool NetgenCurver::build(const MeshData &md, int order)
              diag_project_max_disp_, diag_project_max_disp_surf_);
   PRINT_INFO("NetgenCurver: edge_project stats — %ld calls, %ld rejects, max_disp=%g mm\n",
              diag_edge_calls_, diag_edge_rejects_, diag_edge_max_disp_);
+  PRINT_INFO("NetgenCurver: trim-then-refine — tries=%ld, recovered=%ld, max_tdisp=%g mm\n",
+             diag_refine_tries_, diag_refine_success_, diag_refine_max_tdisp_);
   if (!polar_surfaces_.empty() || diag_polar_skips_ > 0) {
     PRINT_INFO("NetgenCurver: polar-disk short-circuit — %zu surfaces, %ld HO skips (linear fallback)\n",
                polar_surfaces_.size(), diag_polar_skips_);
@@ -597,6 +599,9 @@ bool NetgenCurver::attach_callback_geometry()
   // Reset diagnostic counters for this curving run
   diag_project_calls_ = 0;
   diag_project_rejects_ = 0;
+  diag_refine_success_ = 0;
+  diag_refine_tries_ = 0;
+  diag_refine_max_tdisp_ = 0.0;
   diag_project_max_disp_ = 0.0;
   diag_project_max_disp_surf_ = -1;
   diag_project_reject_per_surf_.clear();
@@ -811,6 +816,34 @@ bool NetgenCurver::attach_callback_geometry()
     // project_reject_threshold_.
     double path_threshold = (path == 0) ? 1e30 : project_reject_threshold_;
     if (disp > path_threshold) {
+      // Trim-then-refine: before accepting the reject, try a second pass
+      // starting from closest_point_trimmed (global trimmed projection).
+      // This recovers the correct UV branch when the nearest-vertex hint
+      // (path=2) landed on a wrong-side merged sub-chart.  Enabled via env
+      // var RADIA_NETGEN_TRIM_REFINE=1 so we can A/B test.
+      static const bool do_trim_refine = [](){
+        const char *s = std::getenv("RADIA_NETGEN_TRIM_REFINE");
+        return s && (*s == '1' || *s == 'y' || *s == 'Y');
+      }();
+      if (do_trim_refine) {
+        diag_refine_tries_++;
+        // Use closest_point_trimmed directly — this is guaranteed on the
+        // trimmed face and avoids the un-trimmed Newton jumping branches.
+        CubitVector trimmed_pt;
+        surf->closest_point_trimmed(loc, trimmed_pt);
+        double tdx = trimmed_pt.x() - x;
+        double tdy = trimmed_pt.y() - y;
+        double tdz = trimmed_pt.z() - z;
+        double tdisp = std::sqrt(tdx*tdx + tdy*tdy + tdz*tdz);
+        if (tdisp < disp) {
+          double trim_u = 0, trim_v = 0;
+          rf->u_v_from_position(trimmed_pt, trim_u, trim_v);
+          diag_refine_success_++;
+          if (tdisp > diag_refine_max_tdisp_) diag_refine_max_tdisp_ = tdisp;
+          return {trimmed_pt.x(), trimmed_pt.y(), trimmed_pt.z(),
+                  trim_u, trim_v};
+        }
+      }
       diag_project_rejects_++;
       diag_project_reject_per_surf_[cubit_sid]++;
       // Detailed log for post-analysis (surf UV pattern vs projection outlier)
