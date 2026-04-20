@@ -55,6 +55,27 @@ class PEECInductanceWindow(IHWindow):
         # hooks (workpiece rows hidden, .vol row hidden, n_peri shown).
         self._panel._method_combo.setCurrentText(METHOD_PEEC_IND)
         self._panel._on_method_changed(METHOD_PEEC_IND)
+        # Auto-fill the STEP path from the Cubit working directory
+        # (the .jou's dir, set by the .ccl launcher via startDetached).
+        # If the user just played a .jou that did `export step`, the
+        # freshest `.step` there is very likely the coil they want.
+        # Falls back silently when nothing is found.
+        self._auto_fill_step_from_cwd()
+
+    def _auto_fill_step_from_cwd(self):
+        """Populate the STEP Browse field with the newest *.step / *.stp
+        in the current working directory, if any.  The user can still
+        override via Browse..."""
+        import glob
+        candidates = sorted(glob.glob("*.step") + glob.glob("*.stp"),
+                             key=lambda p: os.path.getmtime(p),
+                             reverse=True)
+        if not candidates:
+            return
+        newest = os.path.abspath(candidates[0])
+        step_widget = self._panel._widgets.get("peec_step")
+        if step_widget is not None:
+            step_widget.setText(newest)
 
 
 def main():
