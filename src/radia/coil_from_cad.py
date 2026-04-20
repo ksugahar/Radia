@@ -484,6 +484,46 @@ def filaments_from_shape(shape,
     }
 
 
+def _start_hint_from_step_labels(step_path: str,
+                                  port_label_prefix: str = "peec_port"):
+    """Return start_hint from XCAF labels in STEP, or None if unavailable.
+
+    netgen.occ does not read XCAF labels. We use build123d (pythonocc-core)
+    only if it is installed. Any failure (missing package, no labels,
+    unexpected topology) silently returns None so the caller can fall
+    through to bbox auto-detect.
+    """
+    try:
+        import build123d as bd
+    except ImportError:
+        return None
+    try:
+        shape = bd.import_step(step_path)
+    except Exception:
+        return None
+    # Walk direct children of the top Compound (FreeCAD Import.export
+    # emits one PRODUCT per Part::Feature, each carrying its Label).
+    candidates = []
+    if getattr(shape, "children", None):
+        candidates.extend(shape.children)
+    candidates.append(shape)  # top-level label too
+    for c in candidates:
+        lab = getattr(c, "label", "") or ""
+        if not lab.startswith(port_label_prefix):
+            continue
+        faces = list(c.faces()) if hasattr(c, "faces") else []
+        if not faces:
+            continue
+        # For a Shell made from a single face (FreeCAD port marker
+        # pattern), faces[0] is THE port face.
+        port_face = faces[0]
+        try:
+            return _bd_face_to_start_hint(port_face)
+        except Exception:
+            continue
+    return None
+
+
 def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
                                 start_hint=None):
     """CoilBuilder path: STEP -> centerline -> CoilBuilder -> to_filaments.
@@ -495,14 +535,20 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
     from peec_bundle import build_bundle_solver
     import numpy as np
 
-    # Step 1: Extract centerline with profile classification
-    # For closed loops (torus), auto-detect a start hint from the
-    # solid's bounding box if not provided.
+    # Step 1: Extract centerline with profile classification.
+    # Start-hint resolution order (first hit wins):
+    #   1. Caller-supplied start_hint.
+    #   2. XCAF label on a "peec_port*" child (FreeCAD Import.export, or
+    #      build123d in-memory via filaments_from_shape).  Requires the
+    #      optional build123d dependency; silently skipped otherwise.
+    #   3. Bounding-box heuristic (z-axis torus assumption — works for
+    #      our canonical test cases but fails on x- or y-axis coils).
+    if start_hint is None:
+        start_hint = _start_hint_from_step_labels(step_path)
     if start_hint is None:
         from coil_from_step import load_step_solid
         solid = load_step_solid(step_path)
         bb = solid.bounding_box
-        # Start at +x extremity with tangent +y (works for z-axis torus)
         cx = 0.5 * (bb[0][0] + bb[1][0])
         cy = 0.5 * (bb[0][1] + bb[1][1])
         rx = 0.5 * (bb[1][0] - bb[0][0])
