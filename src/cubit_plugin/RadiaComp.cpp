@@ -1132,8 +1132,11 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   hMode->addStretch();
   layout->addLayout(hMode);
 
-  // Order combo
-  QHBoxLayout *hOrder = new QHBoxLayout();
+  // Order combo (wrapped in a container so the whole row can be
+  // hidden for STEP-only modes that do not export a mesh).
+  QWidget *orderRow = new QWidget();
+  QHBoxLayout *hOrder = new QHBoxLayout(orderRow);
+  hOrder->setContentsMargins(0, 0, 0, 0);
   hOrder->addWidget(new QLabel("Mesh order:"));
   QComboBox *orderCombo = new QComboBox();
   for (int p = 1; p <= 5; p++)
@@ -1141,7 +1144,7 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   orderCombo->setCurrentIndex(qBound(0, lastOrder - 1, 4));
   hOrder->addWidget(orderCombo);
   hOrder->addStretch();
-  layout->addLayout(hOrder);
+  layout->addWidget(orderRow);
 
   // Label validation area
   QLabel *labelWidget = new QLabel();
@@ -1193,11 +1196,12 @@ void RadiaMenuHandler::launch_radia_ngsolve()
     if (idx < 0 || idx >= modes.size()) return;
     const ModeScript &ms = modes[idx];
 
-    // Hide the `.vol` row entirely when this mode does not need one
-    // (e.g. PEEC-inductance takes a STEP, not a mesh).  Also hide the
-    // label-requirements widget since STEP-only modes have no block
-    // / sideset contract.
+    // Hide the `.vol` row, Mesh order, and label-requirements entirely
+    // when this mode does not need a mesh (e.g. PEEC-inductance takes a
+    // STEP, not a mesh).  Showing widgets the user cannot act on ("Mesh
+    // order: 2" while no mesh is exported) is confusing UX.
     volRow->setVisible(ms.needsVol);
+    orderRow->setVisible(ms.needsVol);
     labelGroup->setVisible(ms.needsVol);
 
     QStringList modelLabels = get_model_labels();
