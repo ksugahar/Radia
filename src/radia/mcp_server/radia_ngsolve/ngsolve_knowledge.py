@@ -4552,6 +4552,210 @@ A.vec.data = cocr * f.vec
 """
 
 
+NGSOLVE_BOOLEAN_POLICY = """
+# Boolean ops in netgen.occ: Glue vs Fuse vs Compound vs ACIS-unite
+
+Three OCC / netgen.occ operations combine multiple shapes; each behaves
+differently under "trampolining" (passing geometry through pipelines).
+Choosing wrong silently breaks FEM meshing: interface nodes duplicate,
+UV charts degenerate, or material labels collapse.
+
+## The three OCC operations
+
+| Op | Boolean runs? | Solids in output | UV preserved? | Interface shared? |
+|----|---------------|------------------|----------------|-------------------|
+| `Glue([s1, s2, ...])` | NO (annotation only) | N (all inputs kept) | YES | YES, if inputs already share faces |
+| `Fuse(s1, s2)` / `s1 + s2` | YES | 1 | Re-edited | One solid, no interface |
+| `Fuse(..., SetGlue(BOPAlgo_GlueFull))` (OCCT C++) | YES, with hint | 1 | Preserved | One solid, no interface |
+| `Compound([s1, s2])` | NO | N (independent) | YES | NO -- meshes duplicate at touching faces |
+
+## Decision tree
+
+```
+Do the input shapes already share faces (BRep-wise, same Face handle)?
+|-- YES: use Glue(...)
+|         Fastest. No Boolean runs. Multi-solid preserved.
+|         Best for in-memory OCC pipelines.
+|
+|-- NO, but they touch spatially:
+|   Do you need multi-solid output (different materials, etc.)?
+|   |-- YES: You cannot get a glued sharing from disjoint inputs in
+|   |         one step.  Either:
+|   |           (a) rebuild shapes as shared (e.g. extract the shared face
+|   |               once and reference it from both sides), or
+|   |           (b) mesh each solid alone and stitch the .vol text yourself.
+|   |
+|   |-- NO (one solid OK): use Fuse(...) with SetGlue(GlueFull) when
+|             available, or plain `s1 + s2` for simple shapes.
+|
+|-- NO, don't want any interaction: Compound(...)
+```
+
+## Glue and WriteStep do not commute
+
+NGSolve's `Glue()` hint is an **in-memory** BRep annotation.  Roundtrip
+through STEP loses it:
+
+```python
+geo = Glue([iron, air])
+# ... mesh here: interface shared (22 nodes on a circular interface)
+geo.WriteStep("model.step")
+geo2 = OCCGeometry("model.step")
+# ... mesh here: interface NOT shared (42 nodes, duplicated on both sides)
+```
+
+This is an OCCT STEP writer limitation (the STEP format can carry shared
+topology, but OCCT's writer emits each solid's faces independently).
+
+**Workarounds** (confirmed with NGSolve dev team, Christopher):
+
+1. Rebuild Glue after load:
+   ```python
+   geo = Glue(OCCGeometry("model.step").solids)
+   ```
+   Works only if original solids coincide at matching faces (they usually
+   do after OCCT read).
+
+2. Use BREP (OCC native):
+   ```python
+   # write
+   iron.WriteBrep("iron.brep")   # preserves BRep topology
+   # read
+   from OCC.Core.BRepTools import breptools
+   # ... shared faces preserved exactly
+   ```
+   Caveat: Cubit (ACIS) cannot write BREP.  Only useful when both sides
+   are OCC.
+
+3. Stay in memory; export the final mesh directly to `.vol` from
+   `OCCGeometry(glue).GenerateMesh(...)`.
+
+## Glue is NOT a solution for ACIS-derived STEP
+
+```python
+# Cubit STEP (from ACIS) has duplicated faces at every interface.
+# Glue on OCC-loaded-STEP is a no-op: no existing sharing to "keep".
+geo = Glue(OCCGeometry("cubit_export.step").solids)
+# ^^ interfaces are still duplicated; meshing will have 42 nodes.
+```
+
+Cubit's `imprint+merge` creates ACIS-kernel sharing, but OCCT's STEP
+reader does not propagate that sharing into BRep identity.  For ACIS
+origins, the **correct pipeline is Cubit -> radia_export netgen -> .vol**
+(no STEP round-trip, no OCC load, `.vol` text preserves sharing natively).
+
+## Correspondence with Cubit
+
+| OCC / netgen.occ | Cubit (ACIS) | Semantic |
+|------------------|--------------|----------|
+| `Glue([a, b])` | `imprint all; merge all; compress` (no unite) | multi-solid with shared interfaces |
+| `Fuse(a, b)` / `a + b` | `unite volume all` | single solid |
+| `Compound([a, b])` | (no direct equivalent; disjoint bodies) | independent meshes |
+
+But note: Cubit `unite` on complex lofted geometry (3turnCoil class)
+produces UV-degenerate merged faces, which break downstream high-order
+curving.  This is an ACIS-specific failure mode; OCC `Fuse` with
+`SetGlue(GlueFull)` handles the same cases cleanly, because OCCT is
+designed around BRep topology first.
+
+## Correct pattern for multi-material FEM (e.g. coil + air + iron)
+
+```python
+from netgen.occ import *
+coil_core = Cylinder(...).Face().Revolve(...)  # or from build
+iron_yoke = Box(...) - coil_core                 # carve hole
+air_domain = Sphere(...) - iron_yoke - coil_core  # exterior
+
+# All three must share the interfaces they were carved along.
+# Since we built them by subtraction, the faces ARE shared BRep-wise.
+coil_core.solids.name = "coil"
+iron_yoke.solids.name = "iron"
+air_domain.solids.name = "air"
+
+geo = Glue([coil_core, iron_yoke, air_domain])
+mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=0.01))
+
+# Result: dx("coil"), dx("iron"), dx("air") all work; Kelvin interfaces
+# are conformal; mu * curl(u) * curl(v) integrates cleanly over each.
+```
+
+## Pitfall: "I used Fuse by accident"
+
+```python
+# WRONG (seen often in tutorials that don't need materials):
+geo = iron + air
+# This is a Fuse, not a Glue.  The interface between iron and air is
+# consumed.  dx("iron") will cover the whole domain or raise.
+
+# CORRECT:
+geo = Glue([iron, air])
+```
+
+The `+` operator is Fuse, not Glue.  No way around it.  Always type the
+`Glue(...)` call explicitly.
+
+## Pitfall: Glue on INDEPENDENT solids is a no-op
+
+`Glue(...)` annotates BRep topology that already exists.  It cannot
+create sharing from scratch.  Two solids that were built independently
+(e.g. `Cylinder(...)` + `Box(...)` without carve) have disjoint Face
+handles -- calling `Glue` on them does nothing.
+
+```python
+# WRONG: disjoint solids, Glue is a no-op
+c = Cylinder(Pnt(0,0,0), Z, r=0.5, h=1.0)
+b = Box(Pnt(-1,-1,0), Pnt(1,1,1))
+# c and b are constructed independently; their touching face is
+# represented by TWO separate Face handles.
+geo = Glue([c, b])
+# The interface is NOT shared. Mesh will have duplicated nodes.
+
+# CORRECT: carve to establish BRep sharing
+air = b - c                        # now "air" has a carved face
+geo = Glue([c, air])
+# c.faces contains one cylinder lateral face;
+# air.faces contains the carved hole referencing the SAME face.
+# Glue sees the shared handle and keeps them merged.
+```
+
+**Rule**: the solids passed to `Glue(...)` must have been constructed
+so that their shared faces are actually the same OCC `Face` object
+(usually via Boolean subtract / intersection).  If you built two solids
+and they happen to touch in space, you need to Fuse (with `SetGlue`)
+to *create* the sharing; `Glue` alone will not.
+
+## Pitfall: STEP/BREP round-trip and Glue identity
+
+Even when the original solids were correctly carved, serialising and
+reloading breaks OCC Face identity:
+
+| Format | Reloaded `Glue([...])` works? |
+|--------|-------------------------------|
+| In-memory (no serialisation) | YES |
+| `.brep` (OCC native) | YES -- Face handles preserved |
+| `.step` (OCCT writer) | NO -- each solid gets fresh Face handles |
+| `.step` (Cubit-exported) | NO -- same reason + ACIS sharing is already lost upstream |
+| `.vol` (netgen) | N/A -- `.vol` already IS a mesh, not a shape |
+
+So: the trampoline via STEP always loses Glue.  BREP is the only
+serialisation format that carries it (Christopher's recommendation).
+
+**Practical implication**: if you must serialise AND want shared
+interfaces, either:
+- Use `.brep` (Python side only; Cubit cannot write BREP)
+- Rebuild the carve logic after `OCCGeometry(step).solids`
+- Use the Cubit -> `radia_export netgen` -> `.vol` pipeline entirely
+  (skips OCC on the Python side)
+
+## See also
+
+- topic `mesh` for general OCC meshing recipes
+- topic `pitfalls` for Glue-vs-Fusion basic cases (section 39)
+- mcp-server-cubit topic `boolean_policy` for the ACIS side (unite vs
+  imprint+merge)
+"""
+
+
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
@@ -4578,6 +4782,12 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "axisymmetric": NGSOLVE_AXISYMMETRIC,
         "accelerator": NGSOLVE_ACCELERATOR_MAGNET,
         "team7": NGSOLVE_TEAM7,
+        "boolean_policy": NGSOLVE_BOOLEAN_POLICY,
+        "boolean": NGSOLVE_BOOLEAN_POLICY,
+        "glue": NGSOLVE_BOOLEAN_POLICY,
+        "fuse": NGSOLVE_BOOLEAN_POLICY,
+        "compound": NGSOLVE_BOOLEAN_POLICY,
+        "trampoline": NGSOLVE_BOOLEAN_POLICY,
     }
 
     topic = topic.lower().strip()
