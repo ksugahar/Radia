@@ -1,0 +1,33 @@
+{
+  "description": "Golden reference for PEEC-inductance on a 3-turn loft coil (multi-turn, tight pancake).",
+  "rationale": "Locks in the cross-section-centroid chain method for loft-of-profiles solids.  Kubota's 3turncoil geometry (385 circle cross-sections spiralled through 3 turns, Z-pitch ~1.3mm) is the acid test for the centroid NN-chain with tangent continuity: naive NN jumps between turns and doubles the path length.  STEP-only path (no sibling .jou) is what the test asserts.",
+  "sample": {
+    "step": "W:/kubota/3turncoil.stp",
+    "jou": "W:/kubota/3turnCoil.jou",
+    "skip_if_missing": true,
+    "comment": "File lives on Kubota's 100号機 share (W:) not in-repo (10 MB).  Test skips if unavailable rather than duplicating the 10 MB in the repo."
+  },
+  "physics": {
+    "coil": "3-turn pancake coil R_avg~35mm r_wire=3.15mm",
+    "sigma_S_per_m": 5.8e7,
+    "frequency_Hz": 150000,
+    "current_A": 1.0,
+    "n_peri": 16
+  },
+  "reference_jou_path": {
+    "L_nH": 426.25,
+    "comment": "The .jou explicit-centerline parser produces 426.25 nH.  Treat this as the 'ground truth' for the cross-section-centroid method -- agreement within 2% confirms the NN chain traversed all 385 cross-sections in the correct order."
+  },
+  "expected": {
+    "L_coil_nH": 430.86,
+    "tolerance_L_pct": 2.0,
+    "R_coil_mOhm": 0.403,
+    "tolerance_R_pct": 10.0,
+    "input_kind": "STEP"
+  },
+  "regression_guard": {
+    "min_L_nH": 400.0,
+    "max_L_nH": 460.0,
+    "comment": "Hard band around the .jou reference.  2026-04-21 bugs that hit this: (1) longest-edge heuristic on loft-of-circles gave L=4.78 nH, (2) GeomType string compare 'PLANE' missed enum; (3) NN chain without tangent continuity got path=1280mm (~2x) and L off."
+  }
+}
