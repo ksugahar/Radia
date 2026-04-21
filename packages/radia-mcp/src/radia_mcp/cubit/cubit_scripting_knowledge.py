@@ -3265,6 +3265,85 @@ move volume 1 x 1                    # breaks the merge
 """
 
 
+CUBIT_TRIAL_ERROR_POLICY = """
+# Trial-and-error policy: batch first, commit after success
+
+**POLICY** (2026-04-21): AI / LLM that is iterating on a Cubit recipe
+MUST run the trials in **headless batch mode**.  The interactive /
+persistent GUI session is reserved for the final, validated recipe.
+
+## The two channels
+
+| Channel           | How                                        | When to use                               |
+|-------------------|--------------------------------------------|-------------------------------------------|
+| **Trial (batch)** | `coreform_cubit.exe -batch -nographics -nojournal wrapper.jou`, or the MCP tool `cubit_batch_try` | Exploring recipes, probing errors, mesh ladder search |
+| **Commit (GUI)**  | `cubit_exec` / `cubit_show` against the persistent Cubit GUI daemon | Apply a recipe whose bytes-level success was already verified in batch |
+
+## Why
+
+1. **Fast feedback**: each batch attempt is an independent Cubit
+   subprocess with a fresh state.  No cross-contamination between
+   attempts, no accumulated errors, no GUI lag.
+2. **No state leakage to the user**: a failed or half-built mesh in the
+   user-visible Cubit window is confusing.  Agents should not leave
+   broken state in the GUI the student is watching.
+3. **Crash isolation**: if an import / mesh command segfaults (large
+   STEP, topology singularity), the batch process dies cleanly.  The
+   live GUI session is untouched.
+4. **Reproducibility**: the batch wrapper.jou is the exact
+   reproducible recipe.  If it worked in batch, it will work in GUI;
+   if it didn't, don't ship it.
+
+## Required flags
+
+Always: `-batch -nographics -nojournal`.
+
+**Do NOT** use:
+- `-nogui` — unrecognised by Cubit 2025.3, instant segfault (exit 139).
+  Verified 2026-04-21 by the 3turncoil batch-mesh agent.
+- `-noecho` alone without `-nojournal` — still writes journal files,
+  pollutes the student's working directory.
+
+## Flow the MCP tools already encode
+
+`cubit_mesh_auto(step_path, target_size, prefer, commit_to_gui=True)`:
+1. Tries a ladder of schemes (`auto` -> `sweep` -> `polyhedron` -> `tetmesh`)
+   in fresh headless batch subprocesses.
+2. Picks the first rung that produces >0 elements of the preferred family.
+3. Only after that does it replay the winning recipe in the live GUI
+   session (when `commit_to_gui=True`).
+
+`cubit_batch_try(step_path, commands)`:
+- Pure batch dry-run.  Returns element counts and per-line results.
+- **Use this BEFORE `cubit_exec`** when iterating on a new recipe.
+
+## Anti-patterns
+
+- Calling `cubit_exec` with a speculative command sequence: if one
+  line fails, the GUI session enters a half-state and subsequent
+  `cubit_exec` calls inherit the mess.
+- Running `cubit_show <new_step>` in the live session just to test if
+  it loads: use `cubit_batch_try(step_path=new_step, commands=[])`
+  instead -- zero GUI impact.
+- Leaving a 1.5 M-tet mesh in the GUI from an exploratory run:
+  mesh cleanup / deletion IS a state change the user sees.
+
+## 3turncoil meshing incident (2026-04-21)
+
+The 3turncoil batch agent generated 1.5 M tets + order-2 NetgenCurver
+(9 min job).  Running this in the GUI session would have:
+- Locked the Cubit window for 9 min
+- Left 1.5 M tets on the user's screen even on success
+- Propagated the segfault-on-exit (exit 139) to the user-visible GUI
+
+Running it in a headless batch subprocess kept the GUI clean.  Only
+after the 7.7 MB .vol landed (32 k hexes from a separate sweep recipe
+that fit under the Learn Edition cap) would a commit-to-GUI make sense.
+
+See topic `mesh_auto` for the full ladder flow.
+"""
+
+
 CUBIT_TRAMPOLINE_PITFALLS = """
 # Trampoline Pitfalls — silent breakage in the Cubit -> .vol -> NGSolve pipeline
 
@@ -3462,6 +3541,12 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"webcut": CUBIT_BOOLEAN_POLICY,  # override CUBIT_GEOMETRY_COMMANDS
 		"3turncoil": CUBIT_BOOLEAN_POLICY,  # alias
 		"loft_chain": CUBIT_BOOLEAN_POLICY,  # alias
+		"trial_error_policy": CUBIT_TRIAL_ERROR_POLICY,
+		"trial_error": CUBIT_TRIAL_ERROR_POLICY,
+		"batch_first": CUBIT_TRIAL_ERROR_POLICY,
+		"commit_after_success": CUBIT_TRIAL_ERROR_POLICY,
+		"nographics": CUBIT_TRIAL_ERROR_POLICY,
+		"agent_policy": CUBIT_TRIAL_ERROR_POLICY,
 		"trampoline_pitfalls": CUBIT_TRAMPOLINE_PITFALLS,
 		"trampoline": CUBIT_TRAMPOLINE_PITFALLS,
 		"pitfalls": CUBIT_TRAMPOLINE_PITFALLS,
