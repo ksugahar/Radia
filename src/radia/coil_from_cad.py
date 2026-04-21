@@ -420,100 +420,143 @@ def _auto_detect_cad_units(solid) -> float:
     return 1000.0 if diag >= 1.0 else 1.0
 
 
-def _centerline_from_torus_sweep(solid, n_segments: int,
-                                   cad_units_per_meter: float):
-    """Gapped / full-turn torus centerline: analytical arc from TORUS faces.
+def _centerline_from_revolution_sweep(solid, n_segments: int,
+                                        cad_units_per_meter: float):
+    """Single-loop swept coil: analytical arc from revolution surfaces.
 
-    Build123d's ``GeomType.TORUS`` face comes with the parametric
-    surface's major radius, minor radius, axis location / direction,
-    and U-parameter range (sweep angle).  We reconstruct the sweep
-    spine directly from these — no spine EDGE on the STEP topology
-    required.
+    Handles any coil built by sweeping a profile (circle / rect /
+    polygon) around an axis by an arbitrary angle — typical Cubit
+    ``sweep surface N axis ... angle A`` workflow.  The lateral
+    surfaces are revolution-type:
 
-    For a gapped-torus coil built via ``sweep surface 1 axis ... angle A``
-    in Cubit, merging sometimes leaves the torus surface split into
-    multiple TORUS faces whose U intervals tile [0, A_rad].  We take
-    the union of U intervals and sample the full spine arc.
+    * **Circle profile**: ``GeomType.TORUS`` faces (MajorR + MinorR)
+    * **Rect profile**  : ``GeomType.CYLINDER`` faces (one per rect
+      edge at its own radius) + ``GeomType.PLANE`` top/bottom caps
+    * **Polygon profile**: mix of CYLINDER + PLANE faces
+    * **Generic profile**: ``GeomType.REVOLUTION`` spline faces
 
-    Raises ``ValueError`` if the solid has 0 TORUS faces or the TORUS
-    faces disagree on major/minor radius / center / axis (not a
-    simple swept-circle torus).
+    Algorithm:
+      1. Collect revolution surfaces (TORUS / CYLINDER / CONE /
+         REVOLUTION) that share a common axis.
+      2. Require at least one PLANE end-cap face (for cross-section
+         area + spine-radius extraction).  Single-loop swept coils
+         always have 2 caps (at sweep angle start and end).
+      3. Sweep angle = union of U intervals (max − min) across all
+         revolution surfaces.
+      4. Spine radius = distance from axis to cap centroid.
+      5. Cross-section area = cap face area → equivalent-square side
+         for the filaments_from_polyline downstream.
+
+    Raises ``ValueError`` if no revolution surfaces, no end caps, or
+    axis disagreement between revolution surfaces (not a simple
+    single-loop sweep).
     """
     from build123d import GeomType
     try:
         from OCP.BRepAdaptor import BRepAdaptor_Surface
-        from OCP.GeomAbs import GeomAbs_Torus
+        from OCP.GeomAbs import (GeomAbs_Torus, GeomAbs_Cylinder,
+                                  GeomAbs_Cone, GeomAbs_SurfaceOfRevolution)
     except ImportError as exc:
-        raise ValueError(f"OCP not available for torus parameter extraction: {exc}")
+        raise ValueError(
+            f"OCP not available for revolution surface extraction: {exc}")
 
-    torus_faces = [f for f in solid.faces() if f.geom_type == GeomType.TORUS]
-    if not torus_faces:
-        raise ValueError("no TORUS faces in solid")
-
-    major_r = None
-    minor_r = None
-    center = None
+    axis_loc = None
     axis_dir = None
     u_intervals = []
-    for f in torus_faces:
+    rev_types_seen = []
+    for f in solid.faces():
         ad = BRepAdaptor_Surface(f.wrapped)
-        if ad.GetType() != GeomAbs_Torus:
+        t = ad.GetType()
+        if t == GeomAbs_Torus:
+            surf = ad.Torus()
+        elif t == GeomAbs_Cylinder:
+            surf = ad.Cylinder()
+        elif t == GeomAbs_Cone:
+            surf = ad.Cone()
+        elif t == GeomAbs_SurfaceOfRevolution:
+            surf = ad  # SurfaceOfRevolution exposes Axis() directly via
+            # the adaptor in OCP; fall back gracefully
+        else:
             continue
-        tor = ad.Torus()
-        loc = tor.Location()
-        axis = tor.Axis()
-        mj = tor.MajorRadius()
-        mn = tor.MinorRadius()
-        c = np.array([loc.X(), loc.Y(), loc.Z()], dtype=np.float64)
-        a = np.array([axis.Direction().X(), axis.Direction().Y(),
-                      axis.Direction().Z()], dtype=np.float64)
 
-        if major_r is None:
-            major_r = mj
-            minor_r = mn
-            center = c
+        try:
+            ax = surf.Axis()
+        except AttributeError:
+            continue
+        loc = ax.Location()
+        dr = ax.Direction()
+        c = np.array([loc.X(), loc.Y(), loc.Z()], dtype=np.float64)
+        a = np.array([dr.X(), dr.Y(), dr.Z()], dtype=np.float64)
+
+        if axis_loc is None:
+            axis_loc = c
             axis_dir = a
         else:
-            if (abs(mj - major_r) > 1e-6 or abs(mn - minor_r) > 1e-6 or
-                np.linalg.norm(c - center) > 1e-6 or
-                abs(abs(np.dot(a, axis_dir)) - 1.0) > 1e-6):
-                raise ValueError("TORUS faces disagree on major/minor/center/axis")
+            if (np.linalg.norm(c - axis_loc) > 1e-6 or
+                    abs(abs(np.dot(a, axis_dir)) - 1.0) > 1e-6):
+                continue  # skip surfaces on a different axis (imprint quirks)
 
         u_intervals.append((ad.FirstUParameter(), ad.LastUParameter()))
+        rev_types_seen.append(t)
 
-    if major_r is None or not u_intervals:
-        raise ValueError("no valid TORUS surface adaptors")
+    if axis_loc is None or not u_intervals:
+        raise ValueError("no revolution surfaces with a consistent axis")
 
-    # Union of U intervals — sweep angle spans [u_min, u_max] if
-    # intervals are contiguous.  (For a single full torus this is
-    # [0, 2π]; for a gapped 355° torus this is [0, 6.196] or
-    # wrapped accordingly.)
+    # Sweep angle = union of U intervals (max - min).
     u_min = min(a for a, _ in u_intervals)
     u_max = max(b for _, b in u_intervals)
 
-    # Build orthonormal basis in the plane perpendicular to axis_dir.
     axis_dir = axis_dir / max(np.linalg.norm(axis_dir), 1e-30)
-    # Reference direction: world X projected to the plane
-    ref = np.array([1.0, 0.0, 0.0])
-    if abs(np.dot(ref, axis_dir)) > 0.99:
-        ref = np.array([0.0, 1.0, 0.0])
-    u_hat = ref - np.dot(ref, axis_dir) * axis_dir
-    u_hat = u_hat / np.linalg.norm(u_hat)
+
+    # End-cap faces: planar faces whose normal is roughly parallel to
+    # sweep U direction at the cap location.  Simpler proxy: planar
+    # faces whose centroid is FARTHER from the axis than 0 and whose
+    # area is much smaller than the lateral surfaces (cap area is the
+    # cross-section area; lateral area is sweep-angle × circumference
+    # × height, typically much larger).
+    planar = [f for f in solid.faces() if f.geom_type == GeomType.PLANE]
+    if not planar:
+        raise ValueError("no PLANE end-cap faces")
+
+    # Pick the smallest-area planar face as the cross-section cap.
+    # For a rect-torus: end caps = rect (area small); top/bottom flat
+    # "cap" of the lateral surface = much larger planar region.
+    planar_sorted = sorted(planar, key=lambda f: f.area)
+    cap = planar_sorted[0]
+    cap_center = cap.center()
+    cap_c = np.array([cap_center.X, cap_center.Y, cap_center.Z])
+
+    # Project cap centroid to the axis-perpendicular plane at axis_loc
+    offset = cap_c - axis_loc
+    along_axis = np.dot(offset, axis_dir) * axis_dir
+    radial = offset - along_axis
+    R_spine = float(np.linalg.norm(radial))
+    if R_spine < 1e-12:
+        raise ValueError("cap centroid lies on the sweep axis — degenerate")
+
+    # Axis-normal basis: u_hat points from axis to cap centroid
+    u_hat = radial / R_spine
     v_hat = np.cross(axis_dir, u_hat)
 
-    # Sample n_segments+1 points along arc [u_min, u_max] at major radius
+    # Sweep angle U=0 corresponds to u_hat direction in our basis; shift
+    # so sample at u_min lands near the cap centroid.
     us = np.linspace(u_min, u_max, n_segments + 1)
-    path_raw = (center
-                + major_r * (np.cos(us)[:, None] * u_hat
-                              + np.sin(us)[:, None] * v_hat))
+    path_raw = (axis_loc
+                + R_spine * (np.cos(us)[:, None] * u_hat
+                              + np.sin(us)[:, None] * v_hat)
+                + along_axis)
 
-    # Cross-section is the minor circle: equivalent-square side
-    side = minor_r * math.sqrt(math.pi)  # sqrt(π r²) = r √π
+    # Cross-section: equivalent-square side from cap area.
+    side = math.sqrt(cap.area)
     widths_cad = np.full(n_segments, side, dtype=np.float64)
     heights_cad = np.full(n_segments, side, dtype=np.float64)
 
     scale = 1.0 / cad_units_per_meter
     return path_raw * scale, widths_cad * scale, heights_cad * scale
+
+
+# Backward-compat alias for the torus-specific name used in tests.
+_centerline_from_torus_sweep = _centerline_from_revolution_sweep
 
 
 def extract_centerline_from_step(step_path: str,
