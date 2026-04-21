@@ -47,8 +47,23 @@ from typing import Any
 
 PROTOCOL_VERSION = 2  # default (gui mode)
 
+# Startup timeouts (step 2 of 2026-04-21 speed fix).
+# License checkout: RLM server round-trip can take 30+ s on cold start;
+# the warmup helper tries pre-warm via rlm_activate.exe with a shorter
+# budget (30 s) so the main wait only covers post-warmup Cubit startup.
+# Cubit ready: once the license is warm, Qt + bootstrap init finish in
+# 2 – 3 s on this lab (measured on LAB 2026-04-21).
+LICENSE_WARMUP_TIMEOUT_S = 30.0
+CUBIT_READY_TIMEOUT_S = 15.0
+
 _SESSION_LOCK = threading.Lock()
 _SINGLETON: "CubitSession | None" = None
+
+# Persistent drop-dir across singleton lifetime (step 3 of speed fix).
+# Creating a fresh tempdir on every bootstrap wastes time (50 ms per
+# launch) and leaks dirs when the session crashes before cleanup.
+# Keep one per process; reuse by clearing contents, not by re-creating.
+_PROCESS_DROP_DIR: Path | None = None
 
 # Module-level overrides (OCP-inspired: cf. set_port / get_port).
 _OVERRIDE_BIN_DIR: Path | None = None
@@ -195,6 +210,9 @@ class CubitSession:
         self._drop_dir: Path | None = None
         self._outbox: Path | None = None
 
+        # last license pre-warm result (None until first start)
+        self._last_license_warmup: dict = {}
+
         # batch-mode (stdio) stderr retention
         self._stderr_tail: list[bytes] = []
         self._stderr_tail_max = 200
@@ -222,13 +240,12 @@ class CubitSession:
         if self._proc.poll() is None:
             self._proc.kill()
         # Clean up gui drop dir
-        if self._mode == "gui" and self._drop_dir is not None:
-            try:
-                shutil.rmtree(self._drop_dir, ignore_errors=True)
-            except Exception:
-                pass
-            self._drop_dir = None
-            self._outbox = None
+        # drop-dir is module-level _PROCESS_DROP_DIR — reused across
+        # resets and shutdown()/ensure_started() cycles.  Clear the
+        # process-local references only.  Contents will be cleared by
+        # the next _start_gui_bootstrap before new use.
+        self._drop_dir = None
+        self._outbox = None
         self._proc = None
         self._ready_info = None
 
@@ -299,20 +316,30 @@ class CubitSession:
                 proc.kill()
             except Exception:
                 pass
-        if self._mode == "gui" and self._drop_dir is not None:
-            try:
-                shutil.rmtree(self._drop_dir, ignore_errors=True)
-            except Exception:
-                pass
-            self._drop_dir = None
-            self._outbox = None
+        # drop-dir is module-level _PROCESS_DROP_DIR — reused across
+        # resets and shutdown()/ensure_started() cycles.  Clear the
+        # process-local references only.  Contents will be cleared by
+        # the next _start_gui_bootstrap before new use.
+        self._drop_dir = None
+        self._outbox = None
         self._proc = None
         self._ready_info = None
 
     # ---- mode: gui (file drop) ----
 
     def _start_gui_bootstrap(self) -> dict:
-        """Launch coreform_cubit.exe + cubit_bootstrap.py, wait for ready."""
+        """Launch coreform_cubit.exe + cubit_bootstrap.py, wait for ready.
+
+        Three-step fast path (2026-04-21):
+        1. Pre-warm Learn license via rlm_activate cache check.  Mirrors
+           S:\\CoreformCubit\\coreform_cubit.ps1 logic.  Cold license
+           checkout from inside Cubit takes 30+ s; pre-warming cuts
+           the Cubit-ready wait to 2 – 3 s.
+        2. Separate timeouts for license (30 s) vs post-warmup Cubit
+           ready (15 s).  Fail-fast if something hangs at either stage.
+        3. Persistent drop-dir per process.  Skip tempdir recreation on
+           restart; just clear the outbox and ready marker.
+        """
         gui_exe = _cubit_gui_exe(self._bin_dir)
         bootstrap_path = Path(__file__).with_name("cubit_bootstrap.py")
         if not bootstrap_path.exists():
@@ -320,10 +347,47 @@ class CubitSession:
                 f"Bootstrap script missing: {bootstrap_path}. Expected "
                 "sibling of cubit_session.py.")
 
-        drop = Path(tempfile.mkdtemp(prefix="cubit_drop_"))
-        (drop / "out").mkdir(exist_ok=True)
+        # --- Step 1: license pre-warm --------------------------------
+        try:
+            from .cubit_license_warmup import warmup_license
+            warmup = warmup_license(self._bin_dir,
+                                     timeout_s=LICENSE_WARMUP_TIMEOUT_S)
+            # warmup_license never raises; log the action for debugging
+            # but do not fail the launch if pre-warm failed.
+            self._last_license_warmup = warmup
+        except Exception as exc:  # defensive — pre-warm is opt-in
+            self._last_license_warmup = {
+                "status": "error", "reason": f"warmup module: {exc}"}
+
+        # --- Step 3: drop-dir reuse ----------------------------------
+        global _PROCESS_DROP_DIR
+        if _PROCESS_DROP_DIR is None or not _PROCESS_DROP_DIR.is_dir():
+            _PROCESS_DROP_DIR = Path(tempfile.mkdtemp(prefix="cubit_drop_"))
+        drop = _PROCESS_DROP_DIR
+        outbox = drop / "out"
+        ready_path = drop / "ready"
+        # Clear stale artifacts from any previous session in this dir
+        try:
+            if ready_path.exists():
+                ready_path.unlink()
+            if outbox.exists():
+                for f in outbox.iterdir():
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+            else:
+                outbox.mkdir(exist_ok=True)
+            # Inbox: remove leftover JSON requests
+            for f in drop.glob("*.json"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        except OSError:
+            pass
         self._drop_dir = drop
-        self._outbox = drop / "out"
+        self._outbox = outbox
 
         env = os.environ.copy()
         env["CUBIT_BIN_DIR"] = str(self._bin_dir)
@@ -341,10 +405,16 @@ class CubitSession:
         )
         self._start_stderr_drain()
 
-        # Wait for ready marker. Cold start ~2s on this lab, but allow
-        # generous slack for first-license-checkout.
-        ready_path = drop / "ready"
-        deadline = time.time() + 60.0
+        # --- Step 2: ready wait with shorter timeout after warmup ---
+        # After license pre-warm, Cubit should be ready in ~3 s.  If
+        # the warmup was skipped (cache fresh, login not needed), the
+        # budget still includes the full license checkout.  So the
+        # actual deadline depends on whether we ran the warmup.
+        warmup_ok = (self._last_license_warmup.get("status") in ("ok", "skipped")
+                     and self._last_license_warmup.get("action")
+                         != "no_rlm_activate")
+        budget = CUBIT_READY_TIMEOUT_S if warmup_ok else 60.0
+        deadline = time.time() + budget
         while time.time() < deadline:
             if ready_path.exists():
                 try:
