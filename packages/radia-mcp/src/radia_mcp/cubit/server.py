@@ -29,6 +29,12 @@ from .cubit_scripting_knowledge import get_cubit_documentation
 from .cubit_forum_tips import get_forum_tips
 from .cubit_api_reference import get_api_reference
 from .panel_conventions_knowledge import PANEL_CONVENTIONS, LABEL_GUIDE
+from .custom_toolbar_knowledge import (
+	get_toolbar_documentation,
+	generate_toolbar_skeleton,
+	generate_dialog_skeleton,
+)
+from .mesh_diagnostics_knowledge import get_diagnostics_documentation
 from ..common import failure_log as _fl
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -1123,7 +1129,6 @@ def open_in_cubit(path: str = "",
 	import subprocess as _sp
 	import tempfile as _tf
 	from pathlib import Path
-
 	from .cubit_session import find_cubit_install, _cubit_gui_exe
 
 	if cubit_exe:
@@ -4367,6 +4372,213 @@ def cubit_element_types_reference() -> str:
 		"cubit.cmd('block 1 name \"domain\"')  # Then name\n"
 		"```\n"
 	)
+
+
+# ============================================================
+# Custom Toolbar / In-Cubit PySide6 (Coreform 2025 GUI webinar)
+# ============================================================
+
+@mcp.tool()
+def cubit_toolbar_guide(topic: str = "overview") -> str:
+	"""
+	Get documentation on building custom in-Cubit PySide6 toolbars.
+
+	Covers the Coreform 2025 custom-toolbar workflow: Python script
+	conventions (shebang, namespace, import gotchas), the Claro parent
+	helper, LLM prompt templates for generating dialogs, packaging as
+	.tar.gz, encapsulation patterns (tire cross-section example), and
+	quality convergence loops.
+
+	This is DIFFERENT from the Radia-NGSolve analysis panel conventions
+	(which are external Python 3.12 launchers). For those, use
+	`cubit_docs topic=panel_conventions`.
+
+	Args:
+		topic: Topic to document. Options:
+			"all"                    - All sections
+			"overview"               - When to use, entry points, button types
+			"python_conventions"     - Shebang, _coreform_cubit namespace,
+			                           import parens gotcha, cubit.cmd idioms
+			"claro"                  - find_claro() parent-window helper
+			"llm_prompt"             - LLM prompt template for dialogs
+			"packaging"              - .tar.gz layout + Cubit import
+			"encapsulation"          - Multi-step workflow -> one button
+			                           (tire cross-section case study)
+			"quality_convergence"    - Mesh -> query quality -> refine loop
+			"troubleshooting"        - Common failure modes
+
+	Aliases: import_gotcha, find_claro, prompt_template, tar_gz,
+	         tire_example, auto_refine, debug.
+	"""
+	return get_toolbar_documentation(topic)
+
+
+@mcp.tool()
+def cubit_scaffold_toolbar(toolbar_name: str, buttons_json: str,
+                            out_dir: str = "") -> str:
+	"""
+	Generate a complete Coreform-Cubit custom-toolbar skeleton on disk.
+
+	Writes:
+		<out_dir>/<toolbar_name>/
+			toolbar.xml                  - Toolbar definition (buttons, icons)
+			scripts/cubit_util.py        - Shared find_claro() helper
+			scripts/<button>.py or .jou  - One per button
+			resources/icons/             - Place button PNGs here
+			package-win.ps1              - Windows packaging -> .tgz
+			package-linux.sh             - Linux packaging -> .tgz
+			README.md                    - Layout + install instructions
+
+	All Python scripts include the correct `#!python` shebang,
+	`_coreform_cubit` namespace guard, `find_claro()` parent lookup, and
+	backslash-continuation imports (avoiding the Cubit importer
+	parenthesis bug).
+
+	Args:
+		toolbar_name: Name of the toolbar, e.g. "radia_ih_helpers". Used
+		    as the directory name and toolbar namespace inside Cubit.
+		buttons_json: JSON array of button specs. Each element:
+		    {
+		      "label": "Clean + Mesh",          # required, shown in UI
+		      "kind": "python" | "cubit_script", # default "python"
+		      "script_basename": "clean_and_mesh", # default "button"
+		      "body": "cubit.cmd('...')"         # initial script body
+		    }
+		out_dir: Parent directory to write into. Defaults to the current
+		    working directory. Must exist. The scaffolder creates
+		    `<out_dir>/<toolbar_name>/`.
+
+	Returns:
+		Summary of files written, with absolute paths.
+	"""
+	import json
+
+	try:
+		buttons = json.loads(buttons_json) if buttons_json else []
+	except json.JSONDecodeError as exc:
+		return f"ERROR: buttons_json is not valid JSON: {exc}"
+	if not isinstance(buttons, list):
+		return "ERROR: buttons_json must be a JSON array"
+
+	parent = Path(out_dir).expanduser().resolve() if out_dir else Path.cwd()
+	if not parent.exists():
+		return f"ERROR: out_dir does not exist: {parent}"
+
+	target = parent / toolbar_name
+	try:
+		files = generate_toolbar_skeleton(toolbar_name, buttons)
+	except Exception as exc:
+		return f"ERROR: skeleton generation failed: {type(exc).__name__}: {exc}"
+
+	target.mkdir(parents=True, exist_ok=True)
+	(target / "scripts").mkdir(exist_ok=True)
+	(target / "resources" / "icons").mkdir(parents=True, exist_ok=True)
+
+	written = []
+	for rel, content in files.items():
+		full = target / rel
+		full.parent.mkdir(parents=True, exist_ok=True)
+		full.write_text(content, encoding='utf-8')
+		written.append(str(full))
+
+	return (
+		f"Toolbar scaffold written to: {target}\n\n"
+		"Files:\n"
+		+ "\n".join(f"  {p}" for p in written)
+		+ "\n\nNext steps:\n"
+		f"  1. Add button icons under {target / 'resources' / 'icons'}\n"
+		f"  2. Flesh out the script bodies under {target / 'scripts'}\n"
+		f"  3. Package:  pwsh {target / 'package-win.ps1'}\n"
+		f"              (or:  bash {target / 'package-linux.sh'})\n"
+		f"  4. Open Cubit -> right-click toolbar panel -> Import "
+		f"{toolbar_name}.tgz\n"
+	)
+
+
+@mcp.tool()
+def cubit_generate_dialog(title: str, fields_json: str,
+                           commands_json: str) -> str:
+	"""
+	Generate a single complete PySide6 dialog script for a Cubit toolbar
+	button.
+
+	The returned script follows every Cubit in-process Python
+	convention: `#!python` shebang, no `import cubit`,
+	`_coreform_cubit` namespace guard, `find_claro()` parent lookup,
+	backslash-continuation imports, try/except around float conversion,
+	and QMessageBox error UX. Paste the output directly into a custom
+	toolbar Python-button or save it under `scripts/` in a toolbar
+	scaffold.
+
+	Args:
+		title: Dialog window title, e.g. "Create Parameterized Brick".
+		fields_json: JSON array of field specs. Each:
+		    {
+		      "name": "size",       # attribute name (-> self.size_edit)
+		      "label": "Brick size", # label shown next to QLineEdit
+		      "default": "1.0",     # default text in the edit
+		      "kind": "float"       # "float" | "int" | "text"
+		    }
+		commands_json: JSON array of Cubit command strings. Each may use
+		    `{<field_name>}` placeholders that are f-string substituted
+		    at runtime. Example:
+		      ["create brick x {size}",
+		       "create cylinder radius {radius} height {size}",
+		       "subtract volume 2 from volume 1"]
+
+	Returns:
+		Complete Python script as a string, ready to paste into Cubit.
+	"""
+	import json
+
+	try:
+		fields = json.loads(fields_json) if fields_json else []
+		commands = json.loads(commands_json) if commands_json else []
+	except json.JSONDecodeError as exc:
+		return f"ERROR: JSON parse error: {exc}"
+	if not isinstance(fields, list):
+		return "ERROR: fields_json must be a JSON array"
+	if not isinstance(commands, list):
+		return "ERROR: commands_json must be a JSON array"
+
+	try:
+		script = generate_dialog_skeleton(title, fields, commands)
+	except Exception as exc:
+		return f"ERROR: dialog generation failed: {type(exc).__name__}: {exc}"
+	return script
+
+
+# ============================================================
+# Mesh Diagnostics (Coreform 2025 "first 15 minutes" webinar)
+# ============================================================
+
+@mcp.tool()
+def cubit_diagnostics_guide(topic: str = "overview") -> str:
+	"""
+	Get the foundational mesh-diagnostics + cleanup + quality playbook.
+
+	This is the "why" layer below `cubit_docs scripting_*` - it explains
+	the reasoning behind imprint+merge, the Exodus data model, small-
+	feature cleanup, gap/overlap handling, mesh quality metrics, and
+	the journal-to-Python conversion workflow.
+
+	Args:
+		topic: Topic to document. Options:
+			"all"                 - Everything
+			"overview"            - Power Tools + Item Wizard + general flow
+			"imprint_merge"       - Why imprint+merge is necessary;
+			                        curve veance, is_merged, tolerance
+			"exodus"              - block / sideset / nodeset: what differs
+			"small_features"      - Detect + remove blend chains + re-check
+			"gaps_overlaps"       - find overlap + remove overlap workflow
+			"quality"             - shape / scaled_jacobian thresholds
+			"journal_to_python"   - History tab -> journal -> Python
+
+	Aliases: power_tools, item_wizard, contiguous_mesh, curve_veance,
+	         is_merged, block_sideset_nodeset, blend_chain, find_overlap,
+	         shape_metric, history_tab.
+	"""
+	return get_diagnostics_documentation(topic)
 
 
 # ============================================================
