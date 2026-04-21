@@ -147,10 +147,9 @@ setup(
 			"cubit-install-panels=radia.install_panels:main",
 			"radia-setup=radia.setup_cubit:main",
 			"radia-app=radia.radia_app:main",
-			"mcp-server-radia=radia.mcp_server.radia.server:main",
-			"mcp-server-ngsolve=radia.mcp_server.ngsolve.server:main",
-			"mcp-server-cubit=radia.mcp_server.cubit.server:main",
-			"mcp-server-gmsh=radia.mcp_server.gmsh.server:main",
+			# MCP server entry-points moved to packages/radia-mcp (public)
+			# and s:\mcp-server\mcp-server-{ih,electromagnet,peec} (LAB-private)
+			# as of 2026-04-21. radia wheel no longer ships MCP servers.
 		],
 	},
 	include_package_data=True,

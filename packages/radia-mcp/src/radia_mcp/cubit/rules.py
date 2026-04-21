@@ -647,6 +647,171 @@ def check_plain_gmsh_export(filepath: str, lines: List[str]) -> List[Dict]:
 	return findings
 
 
+def _looks_like_cubit_toolbar_script(filepath: str, lines: List[str]) -> bool:
+	"""Heuristic: is this a Cubit in-process toolbar script?
+
+	Triggers on any of:
+	  - First line is `#!python` (Cubit toolbar shebang convention).
+	  - Anywhere contains `__name__ == '_coreform_cubit'`.
+	  - File path includes a `scripts/` segment and imports PySide6/PyQt5
+	    (but does NOT call `cubit.init(` - that would be an external
+	    launcher / panel).
+	"""
+	if not lines:
+		return False
+	first = lines[0].strip() if lines else ""
+	if first.startswith("#!python"):
+		return True
+	joined = "".join(lines)
+	if "_coreform_cubit" in joined:
+		return True
+	# Heuristic path + import check
+	path_ok = (
+		os.sep + "scripts" + os.sep in filepath.replace("/", os.sep)
+		or "toolbar" in os.path.basename(filepath).lower()
+	)
+	if path_ok:
+		imports_qt = bool(re.search(r"from\s+(?:PySide6|PyQt5)\.", joined))
+		calls_init = "cubit.init(" in joined
+		if imports_qt and not calls_init:
+			return True
+	return False
+
+
+def check_cubit_toolbar_import_parens(filepath: str,
+                                       lines: List[str]) -> List[Dict]:
+	"""HIGH: Cubit in-process Python importer fails on parenthesized
+	multi-line imports. Use backslash continuations instead.
+
+	Only fires on scripts that look like Cubit in-process toolbar
+	scripts (detected via _looks_like_cubit_toolbar_script).
+	"""
+	findings: List[Dict] = []
+	if not _looks_like_cubit_toolbar_script(filepath, lines):
+		return findings
+
+	# Look for `from X import (` possibly on the same line, or `from X
+	# import \n(` pattern across two lines.
+	i = 0
+	while i < len(lines):
+		line = lines[i].rstrip("\n")
+		stripped = line.strip()
+		if stripped.startswith("#"):
+			i += 1
+			continue
+		m = re.match(r"from\s+(PySide6|PyQt5)\.\w+\s+import\s*(\(.*)?$",
+		             stripped)
+		if m:
+			has_paren_here = m.group(2) is not None and "(" in m.group(2)
+			# Either parens on this line or on the next non-blank line
+			next_line = ""
+			if i + 1 < len(lines):
+				next_line = lines[i + 1].strip()
+			if has_paren_here or next_line.startswith("("):
+				findings.append({
+					"line": i + 1,
+					"severity": "HIGH",
+					"rule": "cubit-toolbar-import-parens",
+					"message": (
+						"Parenthesized multi-line import will fail in "
+						"Cubit's in-process Python importer. Use "
+						"backslash continuations: "
+						"`from PySide6.QtWidgets import QDialog, "
+						"QLabel, \\\\\\n    QLineEdit`"
+					),
+				})
+		i += 1
+	return findings
+
+
+def check_cubit_toolbar_missing_shebang(filepath: str,
+                                         lines: List[str]) -> List[Dict]:
+	"""MODERATE: Cubit toolbar Python scripts should start with
+	`#!python` so Cubit's loader parses them as Python (not as journal
+	command language).
+
+	Fires only when a file is under a `scripts/` directory AND references
+	PySide6/PyQt5 (so it's clearly a Cubit toolbar script) but is missing
+	the shebang.
+	"""
+	findings: List[Dict] = []
+	if not lines:
+		return findings
+	# Use stricter detection: path must include `scripts/` or `toolbar`
+	# AND the file must import Qt (avoid false positives on normal
+	# external Python scripts).
+	path_norm = filepath.replace("/", os.sep).lower()
+	is_in_toolbar_dir = (
+		(os.sep + "scripts" + os.sep) in path_norm
+		or "toolbar" in os.path.basename(path_norm)
+	)
+	if not is_in_toolbar_dir:
+		return findings
+	joined = "".join(lines)
+	if not re.search(r"from\s+(?:PySide6|PyQt5)\.", joined):
+		return findings
+	first = lines[0].strip()
+	if first.startswith("#!python"):
+		return findings
+	# shebang may be valid but not python-specific (e.g. `#!/usr/bin/env python`)
+	if first.startswith("#!") and "python" in first:
+		return findings  # acceptable though not canonical
+	findings.append({
+		"line": 1,
+		"severity": "MODERATE",
+		"rule": "cubit-toolbar-missing-shebang",
+		"message": (
+			"Cubit toolbar Python scripts should start with "
+			"`#!python` so the toolbar loader parses them as Python "
+			"(not Cubit journal commands). Current first line: "
+			f"{first[:60]!r}"
+		),
+	})
+	return findings
+
+
+def check_cubit_toolbar_missing_claro_parent(filepath: str,
+                                              lines: List[str]) -> List[Dict]:
+	"""LOW: QDialog constructed inside a Cubit toolbar script without a
+	parent argument - the dialog can fall behind Cubit's main window.
+
+	Fix by calling `find_claro()` and passing the result as `parent=`.
+	See `cubit_toolbar_guide topic=claro`.
+	"""
+	findings: List[Dict] = []
+	if not _looks_like_cubit_toolbar_script(filepath, lines):
+		return findings
+
+	joined = "".join(lines)
+	# If find_claro is defined/imported AND passed, assume OK. Only fire
+	# on QDialog()/.__init__() calls that are clearly parent-less.
+	for i, line in enumerate(lines, 1):
+		stripped = line.strip()
+		if stripped.startswith("#"):
+			continue
+		# class FooDialog(QDialog): ... super().__init__()  <- no parent arg
+		m = re.match(r"\s*super\(\s*\)\.__init__\s*\(\s*\)\s*$", stripped)
+		if m:
+			# Heuristic: the containing class should be a QDialog
+			# subclass. Look backward for `class X(QDialog)`.
+			window = lines[max(0, i - 30): i]
+			if any(re.search(r"class\s+\w+\s*\(\s*QDialog", w)
+			       for w in window):
+				findings.append({
+					"line": i,
+					"severity": "LOW",
+					"rule": "cubit-toolbar-missing-claro-parent",
+					"message": (
+						"QDialog subclass calls super().__init__() with "
+						"no parent. In Cubit toolbar scripts, pass the "
+						"Cubit main window as parent (find_claro() + "
+						"parent=claro) so the dialog does not fall "
+						"behind the Cubit window."
+					),
+				})
+	return findings
+
+
 # All rules in execution order
 ALL_RULES = [
 	check_missing_block_registration,
@@ -668,4 +833,7 @@ ALL_RULES = [
 	check_non_ascii_bytes,
 	check_qt_imports,
 	check_plain_gmsh_export,
+	check_cubit_toolbar_import_parens,
+	check_cubit_toolbar_missing_shebang,
+	check_cubit_toolbar_missing_claro_parent,
 ]
