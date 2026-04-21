@@ -63,13 +63,22 @@ class PEECInductanceWindow(IHWindow):
         self._auto_fill_step_from_cwd()
 
     def _auto_fill_step_from_cwd(self):
-        """Populate the STEP Browse field with the newest *.step / *.stp
-        in the current working directory, if any.  The user can still
-        override via Browse..."""
+        """Populate the STEP/JOU Browse field with the newest coil
+        geometry file in the current working directory.  STEP has
+        priority over JOU (STEP is the canonical input; JOU is the
+        fallback for 3turnCoil-class multi-turn coils where the
+        STEP walker can't extract the full centerline).  The user
+        can still override via Browse..."""
         import glob
+        # STEP first (single-loop coils, walker works)
         candidates = sorted(glob.glob("*.step") + glob.glob("*.stp"),
                              key=lambda p: os.path.getmtime(p),
                              reverse=True)
+        # JOU fallback (walker can't handle, use explicit centerline)
+        if not candidates:
+            candidates = sorted(glob.glob("*.jou"),
+                                 key=lambda p: os.path.getmtime(p),
+                                 reverse=True)
         if not candidates:
             return
         newest = os.path.abspath(candidates[0])
