@@ -420,6 +420,102 @@ def _auto_detect_cad_units(solid) -> float:
     return 1000.0 if diag >= 1.0 else 1.0
 
 
+def _centerline_from_torus_sweep(solid, n_segments: int,
+                                   cad_units_per_meter: float):
+    """Gapped / full-turn torus centerline: analytical arc from TORUS faces.
+
+    Build123d's ``GeomType.TORUS`` face comes with the parametric
+    surface's major radius, minor radius, axis location / direction,
+    and U-parameter range (sweep angle).  We reconstruct the sweep
+    spine directly from these — no spine EDGE on the STEP topology
+    required.
+
+    For a gapped-torus coil built via ``sweep surface 1 axis ... angle A``
+    in Cubit, merging sometimes leaves the torus surface split into
+    multiple TORUS faces whose U intervals tile [0, A_rad].  We take
+    the union of U intervals and sample the full spine arc.
+
+    Raises ``ValueError`` if the solid has 0 TORUS faces or the TORUS
+    faces disagree on major/minor radius / center / axis (not a
+    simple swept-circle torus).
+    """
+    from build123d import GeomType
+    try:
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+        from OCP.GeomAbs import GeomAbs_Torus
+    except ImportError as exc:
+        raise ValueError(f"OCP not available for torus parameter extraction: {exc}")
+
+    torus_faces = [f for f in solid.faces() if f.geom_type == GeomType.TORUS]
+    if not torus_faces:
+        raise ValueError("no TORUS faces in solid")
+
+    major_r = None
+    minor_r = None
+    center = None
+    axis_dir = None
+    u_intervals = []
+    for f in torus_faces:
+        ad = BRepAdaptor_Surface(f.wrapped)
+        if ad.GetType() != GeomAbs_Torus:
+            continue
+        tor = ad.Torus()
+        loc = tor.Location()
+        axis = tor.Axis()
+        mj = tor.MajorRadius()
+        mn = tor.MinorRadius()
+        c = np.array([loc.X(), loc.Y(), loc.Z()], dtype=np.float64)
+        a = np.array([axis.Direction().X(), axis.Direction().Y(),
+                      axis.Direction().Z()], dtype=np.float64)
+
+        if major_r is None:
+            major_r = mj
+            minor_r = mn
+            center = c
+            axis_dir = a
+        else:
+            if (abs(mj - major_r) > 1e-6 or abs(mn - minor_r) > 1e-6 or
+                np.linalg.norm(c - center) > 1e-6 or
+                abs(abs(np.dot(a, axis_dir)) - 1.0) > 1e-6):
+                raise ValueError("TORUS faces disagree on major/minor/center/axis")
+
+        u_intervals.append((ad.FirstUParameter(), ad.LastUParameter()))
+
+    if major_r is None or not u_intervals:
+        raise ValueError("no valid TORUS surface adaptors")
+
+    # Union of U intervals — sweep angle spans [u_min, u_max] if
+    # intervals are contiguous.  (For a single full torus this is
+    # [0, 2π]; for a gapped 355° torus this is [0, 6.196] or
+    # wrapped accordingly.)
+    u_min = min(a for a, _ in u_intervals)
+    u_max = max(b for _, b in u_intervals)
+
+    # Build orthonormal basis in the plane perpendicular to axis_dir.
+    axis_dir = axis_dir / max(np.linalg.norm(axis_dir), 1e-30)
+    # Reference direction: world X projected to the plane
+    ref = np.array([1.0, 0.0, 0.0])
+    if abs(np.dot(ref, axis_dir)) > 0.99:
+        ref = np.array([0.0, 1.0, 0.0])
+    u_hat = ref - np.dot(ref, axis_dir) * axis_dir
+    u_hat = u_hat / np.linalg.norm(u_hat)
+    v_hat = np.cross(axis_dir, u_hat)
+
+    # Sample n_segments+1 points along arc [u_min, u_max] at major radius
+    us = np.linspace(u_min, u_max, n_segments + 1)
+    path_raw = (center
+                + major_r * (np.cos(us)[:, None] * u_hat
+                              + np.sin(us)[:, None] * v_hat))
+
+    # Cross-section is the minor circle: equivalent-square side
+    side = minor_r * math.sqrt(math.pi)  # sqrt(π r²) = r √π
+    widths_cad = np.full(n_segments, side, dtype=np.float64)
+    heights_cad = np.full(n_segments, side, dtype=np.float64)
+
+    scale = 1.0 / cad_units_per_meter
+    return path_raw * scale, widths_cad * scale, heights_cad * scale
+
+
 def extract_centerline_from_step(step_path: str,
                                  n_segments: int = 100,
                                  cad_units_per_meter: Optional[float] = None):
@@ -466,7 +562,18 @@ def extract_centerline_from_step(step_path: str,
     if cross_faces:
         return _centerline_from_cross_sections(solid, cad_units_per_meter)
 
-    # Fall back to open-spine method for single-loop swept solids.
+    # Torus-shaped single-loop coil (gapped torus, full torus): extract
+    # major / minor radius + axis + sweep angle analytically from the
+    # TORUS face parameters.  Handles the single-loop case that the
+    # open-spine fallback gets wrong (picks a cross-section arc as
+    # "longest open edge", path length comes out half the real arc).
+    try:
+        return _centerline_from_torus_sweep(solid, n_segments, cad_units_per_meter)
+    except ValueError:
+        pass
+
+    # Fall back to open-spine method for generic single-loop swept solids
+    # (non-torus: helical bend, spline coil, rectangular cross-section).
     return _centerline_from_open_spine(solid, n_segments, cad_units_per_meter)
 
 
@@ -476,7 +583,7 @@ def filaments_from_step(step_path: str,
                         nwinc: int = 1,
                         nhinc: int = 1,
                         n_peri: Optional[int] = None,
-                        cad_units_per_meter: float = 1000.0,
+                        cad_units_per_meter: Optional[float] = None,
                         n_slices: int = 200,
                         use_coil_builder: bool = True):
     """End-to-end: STEP solid -> PEEC topology.
