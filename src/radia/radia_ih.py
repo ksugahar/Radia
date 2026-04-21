@@ -243,8 +243,10 @@ class IHPanel(ModePanel):
         # (Only for PEEC methods, hidden otherwise by _on_method_changed)
         self._add_section("Coil geometry (PEEC)", key="_sec_peec_step")
         step_w = self.add_browse(
-            "peec_step", "STEP file:",
-            filter_str="STEP files (*.step *.stp);;All (*)")
+            "peec_step", "STEP or JOU:",
+            filter_str="Coil geometry (*.step *.stp *.jou);;"
+                       "STEP (*.step *.stp);;"
+                       "Cubit journal (*.jou);;All (*)")
         step_w.textChanged.connect(self._emit_validation)
 
         # ============ Workpiece material (INDEPENDENT from coil) ============
