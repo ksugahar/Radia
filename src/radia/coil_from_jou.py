@@ -166,52 +166,55 @@ def _parallel_transport_frame(pts: np.ndarray):
     return tangent, u_hat, v_hat
 
 
-def filaments_from_jou(jou_path: str, *,
-                       sigma: float = 5.8e7,
-                       n_peri: int = 16,
-                       cad_units_per_meter: float = 1000.0):
-    """Build a PEEC topology_dict from a Cubit .jou file.
+def filaments_from_polyline(pts_m: np.ndarray,
+                             radius_m: float,
+                             *,
+                             sigma: float = 5.8e7,
+                             n_peri: int = 16,
+                             source_tag: str = "polyline"):
+    """Build a PEEC topology from an explicit 3D polyline + circular profile.
+
+    Core engine shared by ``filaments_from_jou`` (Cubit journal input)
+    and the longest-edge STEP fallback in ``coil_from_cad``.
 
     Args:
-        jou_path: path to a Cubit .jou that places cross-sections via
-            `create surface circle radius R ... move Surface N x Y y Y z Z`.
-        sigma: coil conductivity [S/m].
-        n_peri: number of perimeter filaments (thin-skin regime).
-        cad_units_per_meter: 1000.0 for mm-unit jou (Cubit default).
+        pts_m: (N, 3) float64 centerline points in meters.
+        radius_m: circular cross-section radius in meters.
+        sigma, n_peri: solver parameters (thin-skin perimeter).
+        source_tag: free-form string copied into the result dict's
+            ``source`` field (e.g. "jou", "step_longest_edge").
 
     Returns:
-        Dict with keys `solver`, `seg_of_filament`, `filament_paths`,
-        `cell_wh`, `n_loop`, `port_plus`, `port_minus` -- identical
-        shape to what `filaments_from_step` returns, so downstream
-        PEEC code (`solve_loop_bundle`, `PEECCircuitSolver`) works
-        unchanged.
+        Same topology_dict shape as ``filaments_from_step``, so
+        downstream PEEC (``solve_loop_bundle``, ``PEECCircuitSolver``)
+        works unchanged.
     """
-    pts, radius = parse_jou_centerline(jou_path, cad_units_per_meter)
+    pts = np.asarray(pts_m, dtype=float)
     n_pts = len(pts)
+    if n_pts < 2:
+        raise ValueError(f"need at least 2 centerline points, got {n_pts}")
+
     _, u_hat, v_hat = _parallel_transport_frame(pts)
 
     # CircleProfile perimeter samples (cell-centered, arc-length-spaced)
     theta = 2.0 * np.pi * (np.arange(n_peri) + 0.5) / float(n_peri)
-    u_offset = radius * np.cos(theta)  # (n_peri,)
-    v_offset = radius * np.sin(theta)
+    u_offset = radius_m * np.cos(theta)  # (n_peri,)
+    v_offset = radius_m * np.sin(theta)
 
     # Per-filament cell area: total cross-section / n_peri (isotropic side)
-    A_cell = (math.pi * radius * radius) / float(n_peri)
+    A_cell = (math.pi * radius_m * radius_m) / float(n_peri)
     side = float(math.sqrt(A_cell))
 
     filament_paths = []
     cell_wh = []
     for k in range(n_peri):
-        # Offset every centerline vertex by (u_k * u_hat + v_k * v_hat)
         fil_pts = pts + u_offset[k] * u_hat + v_offset[k] * v_hat
-        # Consecutive vertex pairs → polyline segments
         segs = [(tuple(fil_pts[i]), tuple(fil_pts[i + 1]))
                 for i in range(n_pts - 1)]
         filament_paths.append(segs)
         cell_wh.append([(side, side)] * (n_pts - 1))
 
-    # Build PEEC topology via bundle solver (same as coil_from_cad)
-    # Deferred import: triggers radia's MKL DLL setup.
+    # Deferred import: triggers radia's MKL DLL setup before peec_bundle.
     import radia  # noqa: F401
     from peec_bundle import build_bundle_solver
     solver, seg_of_fil, port_p, port_m = build_bundle_solver(
@@ -225,7 +228,23 @@ def filaments_from_jou(jou_path: str, *,
         "n_loop": len(filament_paths),
         "port_plus": port_p,
         "port_minus": port_m,
-        "source": "jou",
+        "source": source_tag,
         "n_path_pts": n_pts,
-        "cross_section_radius_m": radius,
+        "cross_section_radius_m": radius_m,
     }
+
+
+def filaments_from_jou(jou_path: str, *,
+                       sigma: float = 5.8e7,
+                       n_peri: int = 16,
+                       cad_units_per_meter: float = 1000.0):
+    """Build a PEEC topology_dict from a Cubit .jou file.
+
+    Thin wrapper around ``filaments_from_polyline`` that first parses
+    the centerline and cross-section radius out of the .jou.
+    """
+    pts, radius = parse_jou_centerline(jou_path, cad_units_per_meter)
+    topo = filaments_from_polyline(pts, radius,
+                                    sigma=sigma, n_peri=n_peri,
+                                    source_tag="jou")
+    return topo
