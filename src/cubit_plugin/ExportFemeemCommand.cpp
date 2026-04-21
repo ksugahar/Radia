@@ -1,6 +1,7 @@
 #include "ExportFemeemCommand.hpp"
 #include "MeshData.hpp"
 #include "CubitMessage.hpp"
+#include "utf8_path.hpp"
 
 #include <fstream>
 #include <iomanip>
@@ -131,7 +132,7 @@ bool ExportFemeemCommand::write_femeem(const std::string &dirname, double scale)
 bool ExportFemeemCommand::write_in_dat(const std::string &path,
                                         const MeshData &mesh, double scale)
 {
-  std::ofstream fid(path);
+  std::ofstream fid(u8_string_to_path(path));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", path.c_str());
     return false;
@@ -207,7 +208,7 @@ bool ExportFemeemCommand::write_in_dat(const std::string &path,
 bool ExportFemeemCommand::write_sin_dat_B(const std::string &path,
                                            const MeshData &mesh)
 {
-  std::ofstream fid(path);
+  std::ofstream fid(u8_string_to_path(path));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", path.c_str());
     return false;
@@ -330,7 +331,7 @@ bool ExportFemeemCommand::write_sin_dat_B(const std::string &path,
 // ========================================================================
 bool ExportFemeemCommand::write_sina_dat(const std::string &path)
 {
-  std::ofstream fid(path);
+  std::ofstream fid(u8_string_to_path(path));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", path.c_str());
     return false;
@@ -366,7 +367,7 @@ bool ExportFemeemCommand::write_sina_dat(const std::string &path)
 // ========================================================================
 bool ExportFemeemCommand::write_d3(const std::string &path)
 {
-  std::ofstream fid(path);
+  std::ofstream fid(u8_string_to_path(path));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", path.c_str());
     return false;

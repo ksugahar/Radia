@@ -2,6 +2,7 @@
 #include "MeshData.hpp"
 #include "NetgenCurver.hpp"
 #include "CubitMessage.hpp"
+#include "utf8_path.hpp"
 
 #include <fstream>
 #include <map>
@@ -287,7 +288,7 @@ int ExportGmshCommand::elem_dim(const MeshElement &elem)
 bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
                                         const MeshData &mesh)
 {
-  std::ofstream fid(filename);
+  std::ofstream fid(u8_string_to_path(filename));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", filename.c_str());
     return false;
