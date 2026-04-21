@@ -36,28 +36,55 @@ for p in (SRC_RADIA, HERE):
 from calc_common import calc_main, progress
 
 
-def solve_peec_inductance(peec_step, n_peri,
+def solve_peec_inductance(peec_input, n_peri,
                           frequency, current, coil_sigma):
-    """STEP -> perimeter filaments -> PEEC Loop-bundle -> L_coil, R_coil (vacuum)."""
+    """Build PEEC topology from STEP or JOU input, then solve for L, R.
+
+    Routing:
+      - `.jou`            -> `coil_from_jou.filaments_from_jou` (explicit
+                              centerline from `move Surface` commands).
+                              Use for multi-turn / 3turnCoil-class coils
+                              where STEP walker heuristics fail.
+      - `.step` / `.stp`  -> `coil_from_cad.filaments_from_step` (walker
+                              centerline extraction).  Use for clean
+                              single-loop torus / helix coils.
+      - other             -> error.
+    """
     # Trigger Radia's MKL DLL path setup before peec_matrices loads.
     import radia  # noqa: F401
 
-    from coil_from_cad import filaments_from_step
     from peec_bundle import (build_loop_bundle_impedance,
                               solve_loop_bundle)
 
     omega = 2 * math.pi * frequency
 
-    progress("PEEC", f"STEP -> perimeter filaments (n_peri={n_peri})")
-    t0 = time.perf_counter()
-    topo = filaments_from_step(peec_step, sigma=coil_sigma,
-                                n_peri=n_peri,
-                                use_coil_builder=True)
+    ext = os.path.splitext(peec_input)[1].lower()
+    if ext == ".jou":
+        from coil_from_jou import filaments_from_jou
+        source_kind = "JOU"
+        progress("PEEC", f"JOU -> explicit centerline (n_peri={n_peri})")
+        t0 = time.perf_counter()
+        topo = filaments_from_jou(peec_input, sigma=coil_sigma,
+                                    n_peri=n_peri)
+    elif ext in (".step", ".stp"):
+        from coil_from_cad import filaments_from_step
+        source_kind = "STEP"
+        progress("PEEC", f"STEP -> perimeter filaments (n_peri={n_peri})")
+        t0 = time.perf_counter()
+        topo = filaments_from_step(peec_input, sigma=coil_sigma,
+                                    n_peri=n_peri,
+                                    use_coil_builder=True)
+    else:
+        raise ValueError(
+            f"Unsupported input extension {ext!r}. "
+            f"Expected .jou (Cubit journal with explicit centerline) or "
+            f".step / .stp (geometry file for walker extraction).")
+
     paths = topo["filament_paths"]
     seg_of_fil = topo["seg_of_filament"]
     solver = topo["solver"]
     t_topo = time.perf_counter() - t0
-    progress("PEEC", f"{len(paths)} filaments, {t_topo:.1f}s")
+    progress("PEEC", f"{len(paths)} filaments via {source_kind}, {t_topo:.1f}s")
 
     progress("PEEC", f"Loop-bundle solve @ {frequency:.0f} Hz")
     t0 = time.perf_counter()
@@ -73,6 +100,8 @@ def solve_peec_inductance(peec_step, n_peri,
     return {
         "status": "ok",
         "method": "PEEC inductance (coil only, STEP)",
+        "input_kind": source_kind,
+        "input_path": peec_input,
         "placement": "perimeter",
         "n_peri": int(n_peri),
         "frequency_hz": float(frequency),
@@ -97,7 +126,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="PEEC coil inductance from STEP (vacuum, no workpiece)")
     parser.add_argument("--peec-step", required=True,
-                        help="STEP file for PEEC coil")
+                        help="Input file for PEEC coil: .step / .stp "
+                             "(walker extraction) or .jou (explicit "
+                             "centerline from Cubit journal). The arg "
+                             "name stays --peec-step for backward "
+                             "compatibility; extension chooses the path.")
     parser.add_argument("--peec-n-peri", type=int, default=16,
                         help="Number of filaments on the cross-section "
                              "perimeter (thin-skin regime; d/delta>=3)")
@@ -110,7 +143,7 @@ def main():
 
     def run(args):
         return solve_peec_inductance(
-            peec_step=args.peec_step,
+            peec_input=args.peec_step,
             n_peri=args.peec_n_peri,
             frequency=args.frequency,
             current=args.current,
