@@ -1,6 +1,7 @@
 #include "ExportVtkCommand.hpp"
 #include "MeshData.hpp"
 #include "CubitMessage.hpp"
+#include "utf8_path.hpp"
 
 #include <fstream>
 #include <unordered_map>
@@ -192,7 +193,7 @@ bool ExportVtkCommand::write_vtk(const std::string &filename,
       add_elem(face, sg.id, 1);
 
   // --- Write VTK file ---
-  std::ofstream fid(filename);
+  std::ofstream fid(u8_string_to_path(filename));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", filename.c_str());
     return false;
