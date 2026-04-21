@@ -85,10 +85,34 @@ def solve_peec_inductance(peec_input, n_peri,
                 jou_sibling = os.path.join(peec_dir, name)
                 break
         if jou_sibling is not None:
-            progress("PEEC", f"found sibling .jou, preferring it: "
-                              f"{os.path.basename(jou_sibling)}")
-            peec_input = jou_sibling
-            ext = ".jou"
+            # Only prefer the sibling if it actually contains the
+            # PEEC explicit-centerline pattern (`move Surface N x Y y Y z Z`).
+            # A generic Cubit .jou (rect sweep, brick mesh script, etc.)
+            # has no centerline and would crash the .jou parser.  In that
+            # case fall through to the STEP path.
+            is_peec_jou = False
+            try:
+                with open(jou_sibling, encoding="utf-8",
+                          errors="replace") as jf:
+                    for line in jf:
+                        # Avoid importing the parser here; check the regex
+                        # inline.  Match `move Surface <int> x <n> y <n> z <n>`.
+                        s = line.strip()
+                        if (s.startswith("move Surface ")
+                                and " x " in s and " y " in s
+                                and " z " in s):
+                            is_peec_jou = True
+                            break
+            except OSError:
+                pass
+            if is_peec_jou:
+                progress("PEEC", f"found sibling .jou, preferring it: "
+                                  f"{os.path.basename(jou_sibling)}")
+                peec_input = jou_sibling
+                ext = ".jou"
+            else:
+                progress("PEEC", f"sibling .jou {os.path.basename(jou_sibling)} "
+                                  f"has no explicit centerline — using STEP")
 
     if ext == ".jou":
         from coil_from_jou import filaments_from_jou
