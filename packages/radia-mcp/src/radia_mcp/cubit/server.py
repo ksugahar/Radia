@@ -1130,9 +1130,11 @@ def open_in_cubit(path: str = "",
 	import tempfile as _tf
 	from pathlib import Path
 	from .cubit_session import find_cubit_install, _cubit_gui_exe
+	from .cubit_license_warmup import warmup_license
 
 	if cubit_exe:
 		exe = cubit_exe
+		bin_dir = Path(exe).parent
 	else:
 		bin_dir = find_cubit_install()
 		if bin_dir is None:
@@ -1147,6 +1149,12 @@ def open_in_cubit(path: str = "",
 	if not Path(exe).exists():
 		return _json.dumps({"status": "error", "stage": "cubit_binary",
 		                    "error": f"Cubit exe not found: {exe}"})
+
+	# Pre-warm Learn license (same logic as cubit_session):
+	# rlm_activate --login only if cache stale, otherwise skip.
+	# This shortens the visible Cubit launch from 30 – 60 s (cold
+	# in-process checkout) to ~3 s when the cache is fresh.
+	_license_warmup = warmup_license(Path(bin_dir), timeout_s=30.0)
 
 	work = Path(_tf.mkdtemp(prefix="cubit_gui_"))
 	wrapper = work / "wrapper.jou"
