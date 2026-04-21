@@ -282,6 +282,14 @@ def filaments_from_step(step_path: str,
         according to the actual cross-section shape (circular, rect,
         loft).  Correct for any cross-section geometry.
 
+        If the walker fails to reconstruct the centerline (``RuntimeError``
+        from ``to_coil_builder`` — happens on some single-loop STEPs
+        where the bbox-hint seed points the wrong way) and ``n_peri`` is
+        set, we fall back to the longest-edge spine extractor +
+        ``filaments_from_polyline`` (circular profile from mean area).
+        The result is marked with ``source`` = "step_longest_edge" and a
+        ``fallback_reason`` string for diagnostics.
+
     **Legacy path** (use_coil_builder=False):
         STEP -> extract_centerline -> build_peec_from_path
         -> C++ ExpandFilaments (rectangular grid only).
@@ -308,11 +316,36 @@ def filaments_from_step(step_path: str,
         topology_dict from PEECBuilder.build_topology().
     """
     if use_coil_builder:
-        return _filaments_via_coil_builder(
-            step_path, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
-            n_slices=n_slices,
-            start_hint=None,  # auto-detect from bounding box
-            n_peri=n_peri)
+        try:
+            return _filaments_via_coil_builder(
+                step_path, sigma=sigma, nwinc=nwinc, nhinc=nhinc,
+                n_slices=n_slices,
+                start_hint=None,  # auto-detect from bounding box
+                n_peri=n_peri)
+        except RuntimeError as exc:
+            # Walker heuristic failed (e.g. "no segments reconstructed"
+            # on Kubota result.step single-loop coils where the bbox-hint
+            # seed points in the wrong direction).  Fall back to the
+            # longest-edge spine extractor for the n_peri case — it is
+            # geometrically robust because it samples the whole spine
+            # rather than walking step-by-step.
+            if n_peri is None:
+                raise
+            import numpy as np
+            from coil_from_jou import filaments_from_polyline
+            path_m, w_m, h_m = extract_centerline_from_step(
+                step_path, n_segments=n_slices,
+                cad_units_per_meter=cad_units_per_meter)
+            # Profile is unknown on the longest-edge path — approximate
+            # with the equivalent circle matching the mean area.
+            mean_area = float(np.mean(w_m * h_m))
+            r_m = float(np.sqrt(mean_area / np.pi))
+            topo = filaments_from_polyline(
+                path_m, r_m,
+                sigma=sigma, n_peri=n_peri,
+                source_tag="step_longest_edge")
+            topo["fallback_reason"] = str(exc)
+            return topo
 
     if n_peri is not None:
         raise ValueError(
