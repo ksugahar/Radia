@@ -1,0 +1,33 @@
+{
+  "description": "Golden reference for PEEC-inductance (coil only, STEP) on a 355deg gapped-torus coil.",
+  "rationale": "Locks in the STEP-only centerline extraction + analytical TORUS sweep + n_peri=16 perimeter PEEC solve.  Regressions in extract_centerline_from_step dispatch (loft / TORUS / open-spine), unit auto-detection, or filaments_from_polyline fail loudly here.  The sample is a pure geometric problem so the expected L tracks the analytical formula tightly.",
+  "sample": {
+    "step": "src/radia/panels/samples/ih_peec_inductance_coil.step",
+    "generator_jou": "src/radia/panels/samples/ih_peec_inductance.jou",
+    "comment": "Cubit session in metres; STEP numeric values in metres but declared MILLIMETRE.  Unit auto-detect handles this from bbox diagonal."
+  },
+  "physics": {
+    "coil": "gapped torus R_maj=30mm R_min=3mm gap=5deg",
+    "sigma_S_per_m": 5.8e7,
+    "frequency_Hz": 50000,
+    "current_A": 1.0,
+    "n_peri": 16
+  },
+  "reference_analytical": {
+    "L_nH": 88.55,
+    "formula": "mu_0 * R * (ln(8R/r) - 2) * (1 - gap/360)",
+    "comment": "Thin-wire self-inductance of a circular loop (Maxwell) adjusted for the 5deg gap.  Analytical assumes uniform current on a 1D filament.  Perimeter-placed PEEC with n_peri=16 underestimates by 3-5% (current redistributes to the outer perimeter, effective loop radius slightly smaller)."
+  },
+  "expected": {
+    "L_coil_nH": 85.10,
+    "tolerance_L_pct": 3.0,
+    "R_coil_mOhm": 0.118,
+    "tolerance_R_pct": 10.0,
+    "input_kind": "STEP"
+  },
+  "regression_guard": {
+    "min_L_nH": 80.0,
+    "max_L_nH": 92.0,
+    "comment": "Hard band: if L falls outside [80, 92], something broke at order-of-magnitude level.  2026-04-21 bug: filaments_from_step default cad_units_per_meter=1000 over-scaled metre-unit STEP, L dropped to 0.086 nH -- hit this band."
+  }
+}
