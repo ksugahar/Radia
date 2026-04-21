@@ -2,6 +2,7 @@
 #include "MeshData.hpp"
 #include "CubitMessage.hpp"
 #include "CubitInterface.hpp"
+#include "utf8_path.hpp"
 
 #include <fstream>
 #include <set>
@@ -147,7 +148,7 @@ bool ExportMegCommand::write_meg(const std::string &filename, char dim,
   if (!mesh.extract(1))  // MEG is always 1st order
     return false;
 
-  std::ofstream fid(filename);
+  std::ofstream fid(u8_string_to_path(filename));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", filename.c_str());
     return false;
