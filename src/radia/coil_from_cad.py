@@ -165,59 +165,196 @@ def build_peec_from_path(path_points: np.ndarray,
     return builder.build_topology()
 
 
-def extract_centerline_from_step(step_path: str,
-                                 n_segments: int = 100,
-                                 cad_units_per_meter: float = 1000.0):
-    """Auto-extract coil centerline + cross-sections from a STEP file.
+def _collect_loft_cross_sections(solid,
+                                  min_count: int = 5,
+                                  area_variation_tol: float = 0.5):
+    """Return planar cross-section faces of a loft-of-profiles solid.
 
-    Algorithm:
-    1. Find the longest edge of the solid (= sweep/loft spine, one of
-       the rectangular cross-section corner paths).
-    2. Sample the spine at n_segments+1 points → approximate path.
-    3. At each segment midpoint, section perpendicular to the tangent.
-    4. Cross-section centroid = true centerline point (corrects for
-       the corner-to-center offset of the spine edge).
-    5. Cross-section area → estimated (w, h).
-
-    Works for any swept or lofted solid where the longest edge traces
-    the coil path (helix, spiral, arbitrary 3D curve).
-
-    Args:
-        step_path: Path to .step file (CAD units, typically mm).
-        n_segments: Number of filament segments to extract.
-        cad_units_per_meter: Scale factor (default 1000 = mm).
-
-    Returns:
-        path_m: (N+1, 3) centerline points in meters.
-        widths_m: (N,) per-segment width in meters.
-        heights_m: (N,) per-segment height in meters.
+    A loft solid (multi-turn coil, generic spline coil) has N planar
+    cross-section end-cap faces (circles / rects / custom profiles) +
+    N-1 spline lateral surfaces.  The cross-section faces share very
+    similar area (same profile).  Returns the filtered planar faces,
+    or [] if the solid does NOT look like a loft-of-profiles (too few
+    planar faces, or planar face area varies wildly).
     """
-    from build123d import import_step, section, Plane, Vector
+    try:
+        from build123d import GeomType
+        planar = [f for f in solid.faces() if f.geom_type == GeomType.PLANE]
+    except Exception:
+        return []
+    if len(planar) < min_count:
+        return []
+    areas = np.array([f.area for f in planar], dtype=np.float64)
+    median_area = float(np.median(areas))
+    if median_area <= 0:
+        return []
+    keep = np.abs(areas - median_area) / median_area < area_variation_tol
+    cross = [f for f, k in zip(planar, keep) if k]
+    if len(cross) < min_count:
+        return []
+    return cross
 
-    solid = import_step(step_path)
 
-    # Step 1: find spine (longest edge)
+def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
+    """Order a set of 3D points along a smooth polyline via nearest-neighbor.
+
+    Endpoint detection: interior points have 2 close neighbors at
+    similar distance; endpoints have only 1.  Rank points by
+    second-nearest / first-nearest distance ratio — endpoints have
+    the largest ratio.
+
+    Then greedy nearest-neighbor walk from one endpoint.  For tight
+    spiral / pancake geometries where 2 adjacent turns can be nearly
+    as close as consecutive cross-sections within a turn, add a
+    tangent-continuity bias: once we have 2 points, prefer neighbors
+    whose direction continues the current tangent (penalize backward
+    / perpendicular jumps to a different turn).
+    """
+    n = len(pts)
+    if n < 2:
+        return pts.copy()
+    # Pairwise distances (vectorised, O(N^2) — fine for N ≤ 1000 or so)
+    diff = pts[:, None, :] - pts[None, :, :]
+    D = np.linalg.norm(diff, axis=-1)
+    D_self_masked = D.copy()
+    np.fill_diagonal(D_self_masked, np.inf)
+    sorted_d = np.sort(D_self_masked, axis=1)
+    nearest = sorted_d[:, 0]
+    second = sorted_d[:, 1]
+    endpoint_score = second / np.maximum(nearest, 1e-12)
+    start = int(np.argmax(endpoint_score))
+
+    visited = [start]
+    remaining = set(range(n)) - {start}
+    while remaining:
+        curr = visited[-1]
+        if len(visited) >= 2:
+            prev = visited[-2]
+            tangent = pts[curr] - pts[prev]
+            t_norm = np.linalg.norm(tangent)
+            tangent = tangent / t_norm if t_norm > 1e-12 else np.zeros(3)
+            # Score: distance + backward-motion penalty
+            best_idx = None
+            best_score = float("inf")
+            for i in remaining:
+                vec = pts[i] - pts[curr]
+                d = np.linalg.norm(vec)
+                if d < 1e-12:
+                    continue
+                # Project vec onto tangent; negative cos means backward
+                cos_a = float(np.dot(vec, tangent) / d)
+                # Score combines nearness + forward alignment
+                # cos = 1 (forward) => score = d;  cos = 0 (perp) => d*2
+                # cos = -1 (backward) => d*inf effectively
+                penalty = max(1.0 - cos_a, 0.01)
+                score = d * penalty
+                if score < best_score:
+                    best_score = score
+                    best_idx = i
+            nxt = best_idx
+        else:
+            nxt = min(remaining, key=lambda i: D[curr][i])
+        visited.append(nxt)
+        remaining.discard(nxt)
+    return pts[visited]
+
+
+def _centerline_from_cross_sections(solid,
+                                      cad_units_per_meter: float = 1000.0):
+    """Loft-of-profiles centerline: chain of cross-section face centroids.
+
+    For lofted coils (multi-turn, tight pancake, Cubit `create volume
+    loft surface i j` chains), each input profile becomes a planar
+    end-cap face in the STEP.  Their centroids define the centerline
+    at each profile station.  This bypasses the "longest edge" spine
+    heuristic, which picks a cross-section circle (not a spine) and
+    gives wildly wrong cross-section area at section() on multi-turn
+    lofts.
+
+    Returns (path_m, widths_m, heights_m) with widths = heights =
+    equivalent-square-side from mean cross-section area.
+    """
+    cross = _collect_loft_cross_sections(solid)
+    if not cross:
+        raise ValueError(
+            "solid does not look like a loft-of-profiles "
+            "(fewer than 5 consistent-area planar faces)")
+    centroids_raw = np.array([[c.X, c.Y, c.Z] for c in
+                              (f.center() for f in cross)], dtype=np.float64)
+    # Dedupe near-duplicate centroids: Cubit lofts share their end-cap
+    # circle between adjacent loft volumes, and the shared surface can
+    # appear as two planar faces (one per owning volume) at nearly the
+    # same centroid.  Merge any two faces whose centroids are closer
+    # than 10% of the cross-section equivalent radius.
+    mean_area = float(np.mean([f.area for f in cross]))
+    eq_radius = math.sqrt(mean_area / math.pi)
+    dedup_tol = 0.1 * eq_radius
+
+    kept = []
+    for c in centroids_raw:
+        if not any(np.linalg.norm(c - k) < dedup_tol for k in kept):
+            kept.append(c)
+    centroids = np.array(kept, dtype=np.float64)
+    if len(centroids) < 3:
+        raise ValueError(
+            f"cross-section centroid dedupe left {len(centroids)} points "
+            f"(<3); solid may not be a loft-of-profiles")
+    ordered = _chain_centroids_nn(centroids)
+    side = math.sqrt(mean_area)
+
+    n_seg = len(ordered) - 1
+    widths_cad = np.full(n_seg, side, dtype=np.float64)
+    heights_cad = np.full(n_seg, side, dtype=np.float64)
+
+    scale = 1.0 / cad_units_per_meter
+    return ordered * scale, widths_cad * scale, heights_cad * scale
+
+
+def _centerline_from_open_spine(solid, n_segments: int,
+                                 cad_units_per_meter: float):
+    """Single-loop coil centerline: longest open edge (spine) sampling.
+
+    For swept / bent coils (gapped torus, single-turn helix), the STEP
+    solid has an open boundary edge that traces the coil spine.  We
+    pick the longest OPEN (non-closed-loop) edge — closed circle
+    edges are cross-section boundaries, not spines.
+
+    Raises ValueError if no open spine edge exists (e.g. loft of
+    circles: all edges are closed cross-section circles).  Caller
+    should fall back to ``_centerline_from_cross_sections``.
+    """
+    from build123d import section, Plane, Vector
     edges = solid.edges()
     if not edges:
         raise RuntimeError("STEP solid has no edges")
-    spine = max(edges, key=lambda e: e.length)
 
-    # Step 2: sample spine at n+1 points
+    def _is_closed(e):
+        try:
+            return bool(getattr(e, "is_closed", False))
+        except Exception:
+            try:
+                start, end = e.start_point(), e.end_point()
+                return (start - end).length < 1e-9
+            except Exception:
+                return False
+
+    open_edges = [e for e in edges if not _is_closed(e)]
+    if not open_edges:
+        raise ValueError("no open spine edges (all edges are closed loops)")
+    spine = max(open_edges, key=lambda e: e.length)
+
     spine_pts = np.zeros((n_segments + 1, 3), dtype=np.float64)
     for i in range(n_segments + 1):
         t = i / n_segments
         p = spine @ t
         spine_pts[i] = [p.X, p.Y, p.Z]
 
-    # Step 3-5: section at midpoints → centroids + areas
     tangents = path_tangents(spine_pts)
     midpoints = 0.5 * (spine_pts[:-1] + spine_pts[1:])
 
     centerline = np.zeros((n_segments + 1, 3), dtype=np.float64)
     widths_cad = np.zeros(n_segments, dtype=np.float64)
     heights_cad = np.zeros(n_segments, dtype=np.float64)
-
-    # First/last centerline points from spine endpoints
     centerline[0] = spine_pts[0]
     centerline[-1] = spine_pts[-1]
 
@@ -236,11 +373,9 @@ def extract_centerline_from_step(step_path: str,
             best = min(cross.faces(),
                        key=lambda f: (f.center() - origin).length)
             bc = best.center()
-            # Update centerline: midpoint between corrected centers
             if i < n_segments:
                 centerline[i] = [bc.X, bc.Y, bc.Z]
                 if i == n_segments - 1:
-                    # Last segment: also update final point
                     centerline[i + 1] = spine_pts[i + 1]
             side = math.sqrt(best.area)
             widths_cad[i] = side
@@ -250,9 +385,6 @@ def extract_centerline_from_step(step_path: str,
             heights_cad[i] = heights_cad[max(0, i - 1)]
             centerline[i] = c
 
-    # Rebuild path from centroids: use midpoints as node positions
-    # (shift from midpoint-of-spine to centroid-of-section)
-    # Simple: nodes = [centroid_0, centroid_1, ..., centroid_{N-1}, spine_end]
     path_cad = np.zeros((n_segments + 1, 3), dtype=np.float64)
     path_cad[0] = centerline[0]
     for i in range(n_segments - 1):
@@ -261,6 +393,81 @@ def extract_centerline_from_step(step_path: str,
 
     scale = 1.0 / cad_units_per_meter
     return path_cad * scale, widths_cad * scale, heights_cad * scale
+
+
+def _auto_detect_cad_units(solid) -> float:
+    """Return cad_units_per_meter inferred from the solid's bbox size.
+
+    build123d's ``import_step`` does NOT apply the STEP UNIT conversion
+    factor — it passes the raw numeric coordinates through.  Different
+    CAD tools / Cubit sessions write coils either in millimetres
+    (values ~ 10 – 1000) or in metres (values ~ 0.01 – 1), even
+    though both files declare CONVERSION_BASED_UNIT('MILLIMETRE').
+
+    Heuristic:
+      * bbox_diag >= 1.0  → values are millimetres (typical coil
+        0.01 – 1 m = 10 – 1000 mm)
+      * bbox_diag <  1.0  → values are metres (bbox diag ~ 0.05 m for
+        a typical IH coil)
+
+    Assumes coil physical size is 1 mm – 10 m (covers IH, WPT,
+    accelerator dipole magnets, transformer windings).  For unusual
+    coils outside this range, the caller should pass an explicit
+    ``cad_units_per_meter``.
+    """
+    bb = solid.bounding_box()
+    diag = ((bb.size.X) ** 2 + (bb.size.Y) ** 2 + (bb.size.Z) ** 2) ** 0.5
+    return 1000.0 if diag >= 1.0 else 1.0
+
+
+def extract_centerline_from_step(step_path: str,
+                                 n_segments: int = 100,
+                                 cad_units_per_meter: Optional[float] = None):
+    """Auto-extract coil centerline + cross-sections from a STEP file.
+
+    Dispatches on solid topology:
+
+    * **Loft of profiles** (multi-turn coil, tight pancake spiral):
+      solid has >= 5 planar end-cap faces of consistent area →
+      chain their centroids via nearest-neighbor + tangent continuity.
+      No section() calls, robust for tight geometries where adjacent
+      turns are close enough to confuse the spine method.
+
+    * **Single-loop swept coil** (gapped torus, simple bend):
+      solid has an open boundary edge that traces the coil spine →
+      sample the longest OPEN edge, section at midpoints, centroid
+      of each section gives the true centerline.  Open-edge filter
+      excludes closed circle edges (cross-section boundaries).
+
+    Args:
+        step_path: Path to .step file (CAD units, typically mm).
+        n_segments: Number of filament segments for the open-spine
+            path.  Ignored for the loft path (uses N planar faces).
+        cad_units_per_meter: Scale factor.  None (default) → auto-
+            detect from bbox diagonal (coils with values ~ 0.01 – 1
+            are treated as metres, ~ 10 – 1000 as millimetres).
+
+    Returns:
+        path_m: (N+1, 3) centerline points in meters.
+        widths_m: (N,) per-segment width in meters.
+        heights_m: (N,) per-segment height in meters.
+    """
+    from build123d import import_step
+
+    solid = import_step(step_path)
+
+    if cad_units_per_meter is None:
+        cad_units_per_meter = _auto_detect_cad_units(solid)
+
+    # Try loft-of-profiles first: if the solid clearly has many
+    # consistent-area cross-sections, chain their centroids.
+    # (This is the robust path for Kubota's 3turncoil.stp class.)
+    cross_faces = _collect_loft_cross_sections(solid)
+    if cross_faces:
+        return _centerline_from_cross_sections(solid, cad_units_per_meter)
+
+    # Fall back to open-spine method for single-loop swept solids.
+    return _centerline_from_open_spine(solid, n_segments, cad_units_per_meter)
 
 
 def filaments_from_step(step_path: str,
