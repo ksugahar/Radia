@@ -33,6 +33,7 @@ from .ngsolve_knowledge import get_ngsolve_documentation
 from .sparsesolv_knowledge import get_sparsesolv_documentation
 from .kelvin_knowledge import get_kelvin_documentation
 from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
+from .peec_inductance_knowledge import get_peec_inductance_documentation
 from .panel_gui_pitfalls_knowledge import get_panel_gui_pitfalls
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
@@ -517,6 +518,46 @@ def ngsbem_inductance(topic: str = "all") -> str:
             "known_limitations" - curvaturesafety, TaskManager, QUAD hang, grad(G) gap
     """
     return get_ngsbem_inductance_documentation(topic)
+
+
+@mcp.tool()
+def peec_inductance(topic: str = "all") -> str:
+    """
+    Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode.
+
+    Lightest mode in the Radia panel family: STEP / Cubit .jou → perimeter
+    filaments → Biot-Savart + Loop-bundle PEEC solve → L_coil, R_coil.
+    No workpiece, no BEM, no FEM mesh.  Use when the question is "what
+    is this coil's L / R at this frequency?" and you do not need
+    heating or workpiece physics.
+
+    Centerline extraction is geometry-aware:
+      * Multi-turn loft of profiles  → cross-section centroid NN-chain
+      * Single-loop revolution sweep → analytical arc from TORUS /
+                                        CYLINDER / CONE / REVOLUTION
+                                        surface parameters
+      * Generic swept (non-revolution) → longest open edge + section()
+      * .jou with explicit ``move Surface N x Y y Y z Z`` → direct parse
+
+    Sibling-.jou auto-preference: if the user picks ``foo.step`` and
+    ``foo.jou`` (case-insensitive stem match) coexists in the same
+    directory AND contains the PEEC explicit-centerline pattern,
+    the calc switches to the .jou parser automatically.
+
+    Unicode / Japanese path: verified end-to-end (Python + Cubit
+    plugin via utf8_path.hpp + PySide6 QProcess).
+
+    Args:
+        topic: Options:
+            "all"            - Complete documentation
+            "overview"       - What it solves, when to use, perimeter placement
+            "centerline"     - STEP centerline extraction algorithms
+                               (loft-of-profiles / revolution / open-spine)
+            "jou"            - .jou explicit centerline parser
+            "sibling_jou"    - Auto-prefer sibling .jou when co-located
+            "japanese_path"  - Unicode / Japanese path support
+    """
+    return get_peec_inductance_documentation(topic)
 
 
 # ============================================================

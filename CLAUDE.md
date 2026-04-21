@@ -122,6 +122,35 @@ the `radia` wheel and is what end-users see in the Cubit panel Browse dialog.
 the sample, it fails, and the panel looks broken.  One broken sample
 discredits the whole panel.
 
+### MCP Knowledge Placement Policy (2026-04-21)
+
+**POLICY**: Separate research-stage lab knowledge from stable public
+distribution.
+
+| Where | What |
+|-------|------|
+| `S:\Radia\01_GitHub\packages\radia-mcp\src\radia_mcp\` (**public**) | General, stable, externally-valid knowledge.  Ships to PyPI as `radia-mcp`.  End users outside the lab install and rely on this. |
+| `S:\mcp-server\mcp-server-ih\` (**lab-private**) | Research-stage, in-flight, LAB-only.  Not published.  Experiments, WIP results, lab-specific workflow notes. |
+
+**Promotion**: when a research-stage topic becomes stable and
+generally useful (= the knowledge no longer references WIP files,
+the feature is committed + deploy-verified + golden-tested), **move
+it from `S:\mcp-server\...` into the appropriate subfolder of
+`packages/radia-mcp/src/radia_mcp/` and register it as a tool in
+that server's `server.py`**.  Remove the now-duplicated copy from
+`S:\mcp-server\...`.
+
+**Example**: PEEC-inductance knowledge (2026-04-21) started in
+`mcp-server-ih` as research notes while the feature was being
+built.  After the Panel Mode Matrix row was validated (single-loop
+TORUS + multi-turn loft + sibling-jou + Japanese path, all golden-
+tested), it was moved to `radia-mcp/radia_ngsolve/peec_inductance_knowledge.py`
+and registered as the public `peec_inductance` tool.
+
+**Demotion** (rarely): if a public topic turns out to be lab-specific
+after all, move it back to `S:\mcp-server\...` and remove from public
+packaging.  Note the reason in CLAUDE.md.
+
 ### Unit System Policy
 
 **POLICY**: Radia always uses **meters**. There is no unit conversion in C++. All coordinates are in meters, all current densities in A/m^2.
