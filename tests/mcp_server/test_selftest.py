@@ -5,8 +5,8 @@ import sys
 from io import StringIO
 from pathlib import Path
 
-from radia.mcp_server.radia_ngsolve.server import _lint_file as _lint_file_radia
-from radia.mcp_server.radia_ngsolve.server import _lint_file as _lint_file_ngsolve
+from radia_mcp.radia_ngsolve.server import _lint_file as _lint_file_radia
+from radia_mcp.radia_ngsolve.server import _lint_file as _lint_file_ngsolve
 
 
 # ============================================================
@@ -16,9 +16,9 @@ from radia.mcp_server.radia_ngsolve.server import _lint_file as _lint_file_ngsol
 def test_radia_selftest_uses_fixtures(monkeypatch):
     """Radia selftest should use fixtures when examples/ not found."""
     monkeypatch.setattr(
-        'radia.mcp_server.radia_ngsolve.server.PROJECT_ROOT', Path("/nonexistent")
+        'radia_mcp.radia_ngsolve.server.PROJECT_ROOT', Path("/nonexistent")
     )
-    from radia.mcp_server.radia_ngsolve.server import _selftest
+    from radia_mcp.radia_ngsolve.server import _selftest
 
     captured = StringIO()
     monkeypatch.setattr('sys.stdout', captured)
@@ -30,9 +30,9 @@ def test_radia_selftest_uses_fixtures(monkeypatch):
 def test_ngsolve_selftest_uses_fixtures(monkeypatch):
     """NGSolve selftest should use fixtures when examples/ not found."""
     monkeypatch.setattr(
-        'radia.mcp_server.radia_ngsolve.server.PROJECT_ROOT', Path("/nonexistent")
+        'radia_mcp.radia_ngsolve.server.PROJECT_ROOT', Path("/nonexistent")
     )
-    from radia.mcp_server.radia_ngsolve.server import _selftest
+    from radia_mcp.radia_ngsolve.server import _selftest
 
     captured = StringIO()
     monkeypatch.setattr('sys.stdout', captured)
@@ -158,7 +158,7 @@ def test_clean_cubit_has_no_findings():
 # Fixture file validation (GMSH)
 # ============================================================
 
-from radia.mcp_server.gmsh.server import _lint_file as _lint_file_gmsh
+from radia_mcp.gmsh.server import _lint_file as _lint_file_gmsh
 
 
 def test_bad_gmsh_has_findings():

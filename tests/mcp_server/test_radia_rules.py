@@ -5,7 +5,7 @@ then provides correct code and verifies no findings.
 """
 
 import pytest
-from radia.mcp_server.radia_ngsolve.rules import (
+from radia_mcp.radia_ngsolve.rules import (
     ALL_RULES,
     check_objbckg_no_lambda,
     check_missing_utidelall,

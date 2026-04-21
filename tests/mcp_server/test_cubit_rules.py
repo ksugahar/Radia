@@ -303,7 +303,9 @@ class TestMissingBlockNames:
 
 class TestAllRulesList:
     def test_all_rules_count(self):
-        assert len(ALL_RULES) == 19
+        # 19 original + 3 Cubit in-process toolbar rules added 2026-04-21
+        # (import-parens, missing-shebang, missing-claro-parent)
+        assert len(ALL_RULES) == 22
 
     def test_all_rules_callable(self):
         for rule in ALL_RULES:
