@@ -59,6 +59,31 @@ def solve_peec_inductance(peec_input, n_peri,
     omega = 2 * math.pi * frequency
 
     ext = os.path.splitext(peec_input)[1].lower()
+
+    # Auto-prefer sibling .jou: explicit-centerline parsing is 100x faster
+    # than the longest-edge STEP spine extractor AND gives the true wire
+    # radius (STEP section() on multi-turn lofts reports a wildly-wrong
+    # equivalent area — Kubota's 3turncoil.stp: STEP path L=4.8 nH WRONG
+    # vs sibling 3turnCoil.jou L=426 nH correct).
+    if ext in (".step", ".stp"):
+        peec_dir = os.path.dirname(peec_input) or "."
+        base = os.path.splitext(os.path.basename(peec_input))[0]
+        jou_sibling = None
+        try:
+            entries = os.listdir(peec_dir)
+        except OSError:
+            entries = []
+        for name in entries:
+            stem, e = os.path.splitext(name)
+            if e.lower() == ".jou" and stem.lower() == base.lower():
+                jou_sibling = os.path.join(peec_dir, name)
+                break
+        if jou_sibling is not None:
+            progress("PEEC", f"found sibling .jou, preferring it: "
+                              f"{os.path.basename(jou_sibling)}")
+            peec_input = jou_sibling
+            ext = ".jou"
+
     if ext == ".jou":
         from coil_from_jou import filaments_from_jou
         source_kind = "JOU"
