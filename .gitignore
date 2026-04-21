@@ -14,6 +14,10 @@ build_log.txt
 logs/
 src/FastMaxwellv1.0/
 examples/peec_integration/spiral_inductor/
+# Scratch artifacts: use C:\temp, not in-repo temp/
+# (global policy — merged into C:\temp 2026-04-21)
+temp/
+/temp/
 
 # Demo output artifacts (regenerable from the .py script next to them)
 examples/**/out_*.png
