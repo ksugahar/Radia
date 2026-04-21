@@ -23,6 +23,7 @@
 #include <fstream>
 #include <map>
 #include <set>
+#include "utf8_path.hpp"
 
 // Ensure Netgen DLLs (nglib.dll, ngcore.dll) can be found.
 // They live in plugins/ which may not be on the DLL search path.
@@ -422,7 +423,10 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
 
   // Save .vol text format (includes curvedelements section for order >= 2).
   // NGSolve reads this with Mesh("file.vol") — no STEP/Cubit needed.
-  ng_mesh->Save(filename);
+  // Pass as std::filesystem::path built from UTF-8 so Unicode / Japanese
+  // directories work on Windows (cp932 narrow API path would otherwise
+  // throw "No mapping for the Unicode character").
+  ng_mesh->Save(u8_string_to_path(filename));
 
   int ne = ng_mesh->GetNE();
   int np = ng_mesh->GetNP();
@@ -433,15 +437,9 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // --- Write companion JSON with CAD reference values ---
   {
     std::string json_path = filename + ".json";
-#ifdef _WIN32
-    // Use wide path for Unicode support on Windows
-    int wlen = MultiByteToWideChar(CP_ACP, 0, json_path.c_str(), -1, NULL, 0);
-    std::wstring wpath(wlen, 0);
-    MultiByteToWideChar(CP_ACP, 0, json_path.c_str(), -1, &wpath[0], wlen);
-    std::ofstream jf(wpath);
-#else
-    std::ofstream jf(json_path);
-#endif
+    // ofstream on MSVC accepts const wchar_t* / std::filesystem::path for
+    // Unicode filenames.  Build via u8_string_to_path so UTF-8 path survives.
+    std::ofstream jf(u8_string_to_path(json_path));
     if (jf.is_open()) {
       jf << "{\n";
 
