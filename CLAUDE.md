@@ -99,6 +99,29 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 - `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
 - Build output goes to `build*/` or `dist/` (both gitignored)
 
+### Panel Samples Quality Policy (`src/radia/panels/samples/`)
+
+**POLICY**: Only **thoroughly debugged, high-quality** sample files may live in
+`src/radia/panels/samples/`.  Every `.jou` / `.step` / `.sol` there ships in
+the `radia` wheel and is what end-users see in the Cubit panel Browse dialog.
+
+- A sample enters `src/radia/panels/samples/` **only after** it runs end-to-end
+  through the panel it targets: Cubit `play <sample>.jou` → `radia_export`
+  (for .vol modes) → the panel's Run button → correct result.  A sample that
+  "should work" but hasn't been run is NOT ready.
+- For PEEC-inductance: the `.step` / `.jou` produces sensible L / R on the
+  known-good golden test (`tests/panels/test_*_golden.py`).
+- Work-in-progress / experimental samples belong in `examples/` or
+  `tests/**/fixtures/`, NOT in `panels/samples/`.  Moving a sample to
+  `panels/samples/` is a release action, not a dev convenience.
+- The wheel manifest check (`deploy` skill, L0 Wheel Manifest Audit) flags
+  any new sample in `panels/samples/` that is not listed in `pyproject.toml`
+  package-data.  Add to package-data only after the sample is validated.
+
+**Why**: end-users can't tell a broken sample from a user error — they try
+the sample, it fails, and the panel looks broken.  One broken sample
+discredits the whole panel.
+
 ### Unit System Policy
 
 **POLICY**: Radia always uses **meters**. There is no unit conversion in C++. All coordinates are in meters, all current densities in A/m^2.
@@ -765,7 +788,7 @@ GUI が絶対必要なもの (panel dialog のレンダリング) のみ例外�
 
 **前提**: `cubit` は Python API import (`S:/Radia/01_GitHub/src/radia/install_panels.py` の `find_cubit_bin()` で自動検出可)。バッチ起動でライセンス消費あり。
 
-**特記**: FEMEEM エクスポートの出力パスは **40 文字以下** にすること。`inpin.f90::chkinib(filename*40)` が長い Python `tempfile.TemporaryDirectory()` パスを切り詰めて `forrtl severe (29)` を起こす。`C:\tmp\<short>\` 等を使う。
+**特記**: FEMEEM エクスポートの出力パスは **40 文字以下** にすること。`inpin.f90::chkinib(filename*40)` が長い Python `tempfile.TemporaryDirectory()` パスを切り詰めて `forrtl severe (29)` を起こす。`C:\temp\<short>\` 等を使う。
 
 **Wheel Verification** (automated by Build_Wheel.ps1, also manual):
 ```python
