@@ -60,19 +60,25 @@ def solve_peec_inductance(peec_input, n_peri,
 
     ext = os.path.splitext(peec_input)[1].lower()
 
-    # Auto-prefer sibling .jou: explicit-centerline parsing is 100x faster
-    # than the longest-edge STEP spine extractor AND gives the true wire
-    # radius (STEP section() on multi-turn lofts reports a wildly-wrong
-    # equivalent area — Kubota's 3turncoil.stp: STEP path L=4.8 nH WRONG
-    # vs sibling 3turnCoil.jou L=426 nH correct).
+    # Auto-prefer sibling .jou (exact stem match, case-insensitive).
+    # When user happens to have both foo.step and foo.jou in the same
+    # directory — the common Cubit export pattern, since the panel's
+    # ensure_jou_path() saves the .jou before every STEP export — we
+    # use the .jou for correct L on multi-turn lofts.  The STEP
+    # longest-edge path currently mis-estimates cross-section area on
+    # tight-pancake multi-turn lofts (Kubota's 3turncoil.stp: STEP
+    # path L=4.8 nH WRONG vs sibling 3turnCoil.jou L=426 nH correct).
+    # Fixing that is a cross-section-geometry bug (see TODO below);
+    # meanwhile sibling-match gives the user the right answer when
+    # they have the right file.
     if ext in (".step", ".stp"):
         peec_dir = os.path.dirname(peec_input) or "."
         base = os.path.splitext(os.path.basename(peec_input))[0]
-        jou_sibling = None
         try:
             entries = os.listdir(peec_dir)
         except OSError:
             entries = []
+        jou_sibling = None
         for name in entries:
             stem, e = os.path.splitext(name)
             if e.lower() == ".jou" and stem.lower() == base.lower():
