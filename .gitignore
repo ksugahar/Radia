@@ -33,7 +33,10 @@ examples/KelvinTransformation/docs/digest/
 # Build Directories
 # ============================================================================
 build*/
-!src/radia/mcp_server/build123d/
+# build*/ accidentally matches the build123d/ source directory in the
+# radia-mcp package. Re-admit it (the pre-2026-04-21 path under
+# src/radia/mcp_server/ is obsolete after the monorepo restructure).
+!packages/radia-mcp/src/radia_mcp/build123d/
 dist/
 radia-*/
 !packages/radia-mcp/
