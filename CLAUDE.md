@@ -122,6 +122,64 @@ the `radia` wheel and is what end-users see in the Cubit panel Browse dialog.
 the sample, it fails, and the panel looks broken.  One broken sample
 discredits the whole panel.
 
+### Panel Design Workflow Policy (2026-04-23)
+
+**POLICY**: Panels are built in **three strict stages**, each gated by
+validation of the previous stage.  Do NOT jump straight to PySide.
+
+**Stage 1 — Enumerate the app-specific variables.**
+Write down every knob the user of this specific application might want
+to change.  This is a list, not code.  Pin the solver-specific variables
+(mesh size, frequency, material, source current, ...) and the
+**solver-switch variable** itself (e.g. `--impedance-model linear|esim`,
+`--solver pardiso|ams`).
+
+**Stage 2 — CLI Python script (`calc_*.py` under `src/radia/panels/`).**
+Turn the Stage-1 list into an argparse-driven Python script.
+Computation only, no GUI.  JSON on stdout.  The solver switch **must**
+also be a CLI flag so the same script can drive any supported backend.
+
+Stage 2 is validated by running the panel mode end-to-end against its
+*sample* input (see "Panel Samples Quality Policy") and comparing the
+resulting scalar against a golden band in
+`tests/panels/test_*_golden.py`.  Two or more solver choices must be
+exercised and produce numerically consistent results (within the
+mode's documented tolerance).
+
+Stage 2 is considered **合格 (pass)** when:
+- `python calc_<mode>.py --help` exits 0 and prints all knobs
+- running against the sample with **each** supported solver switch
+  produces JSON whose key numbers are inside the golden band
+- `tests/panels/test_<mode>_golden.py` locks the result
+
+**Stage 3 — PySide panel (`radia_ih.py` / `radia_em.py` / ... under
+`src/radia/`).**
+Wrap the **validated** Stage-2 script with a PySide `AnalysisWindow`
+widget.  The panel launches the CLI via `subprocess.Popen` (per the
+4-Layer Architecture) and is forbidden from re-implementing any
+computation.  Stage 3 ships only after Stage 2 passes its golden test.
+
+Only Stage-3-ready panels go into `panel_registry.json` and the
+`radia_*.py` auto-discovery under `src/radia/`.  Stage-2-only panels
+live as CLI scripts and wait for the Stage-3 promotion gate.
+
+**Why**:
+- Forces the hard thinking about *what is changeable* before any widget
+  code is written (Stage 1 is where over-scoping is cheapest to cut).
+- The solver switch being a Stage-2 argument means we catch
+  solver-specific bugs with the same sample + golden test; the panel
+  UI does not hide them.
+- Stage-3 promotion requires a passing golden — stops the historical
+  failure mode of shipping a panel whose Run button produces a wrong
+  number that nobody notices until a user publishes it.
+
+Related:
+- "Panel Samples Quality Policy" above — Stage 2's validation relies
+  on trustworthy samples.
+- "Cubit Panel Architecture" below (§ 4-Layer) — Stage 3 corresponds
+  to Layer 3 (PySide6 window), Stage 2 corresponds to Layer 4 (headless
+  calc_*.py).
+
 ### MCP Knowledge Placement Policy (2026-04-21)
 
 **POLICY**: Separate research-stage lab knowledge from stable public
