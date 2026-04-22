@@ -59,11 +59,86 @@ CUBIT_READY_TIMEOUT_S = 15.0
 _SESSION_LOCK = threading.Lock()
 _SINGLETON: "CubitSession | None" = None
 
-# Persistent drop-dir across singleton lifetime (step 3 of speed fix).
-# Creating a fresh tempdir on every bootstrap wastes time (50 ms per
-# launch) and leaks dirs when the session crashes before cleanup.
-# Keep one per process; reuse by clearing contents, not by re-creating.
-_PROCESS_DROP_DIR: Path | None = None
+
+def _user_daemon_dir() -> Path:
+    """Return the per-user stable path for the Cubit daemon's drop-dir.
+
+    Phase 1 of "MCP daemon survives VSCode restart" (2026-04-22).
+    Uses ``%LOCALAPPDATA%`` so each Windows user has their own
+    daemon, license cache, and drop-dir location.  Stable across
+    Python process restarts, so a fresh MCP server can discover
+    and attach to an already-running Cubit.
+    """
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP", ".")
+    d = Path(base) / "radia-mcp" / "cubit-session"
+    return d
+
+
+def _is_pid_alive(pid: int) -> bool:
+    """Check whether the given PID refers to a running process.
+
+    Works on Windows via ``OpenProcess`` with low query rights; on
+    POSIX via ``os.kill(pid, 0)``.
+    """
+    if pid <= 0:
+        return False
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            PROCESS_QUERY_LIMITED = 0x1000
+            STILL_ACTIVE = 259
+            h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED, False, pid)
+            if not h:
+                return False
+            try:
+                code = ctypes.c_ulong()
+                ok = ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
+                return bool(ok) and code.value == STILL_ACTIVE
+            finally:
+                ctypes.windll.kernel32.CloseHandle(h)
+        else:
+            os.kill(pid, 0)
+            return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _try_attach_existing_daemon(drop_dir: Path) -> dict | None:
+    """Return the daemon's ready_info if a live daemon is found, else None.
+
+    Attachment criteria (all must hold):
+      * ``pid.lock`` exists under ``drop_dir``
+      * the PID inside is a live process
+      * ``ready`` marker exists (daemon finished bootstrap, JSON-RPC
+        ready to accept calls)
+
+    On attach success, the caller reuses ``drop_dir`` as-is.  On
+    failure, stale artifacts are removed so the next spawn starts
+    clean.
+    """
+    pid_file = drop_dir / "pid.lock"
+    ready_file = drop_dir / "ready"
+    if not pid_file.exists() or not ready_file.exists():
+        return None
+    try:
+        pid = int(pid_file.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    if not _is_pid_alive(pid):
+        # Stale lock — clean up for the next spawn
+        for f in (pid_file, ready_file):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        return None
+    try:
+        info = json.loads(ready_file.read_text(encoding="utf-8"))
+        info["attached"] = True  # flag so callers can log "reused"
+        info["pid"] = pid
+        return info
+    except (OSError, json.JSONDecodeError):
+        return None
 
 # Module-level overrides (OCP-inspired: cf. set_port / get_port).
 _OVERRIDE_BIN_DIR: Path | None = None
@@ -220,37 +295,106 @@ class CubitSession:
     # ---- lifecycle ----
 
     def ensure_started(self) -> dict:
-        """Spawn the Cubit session if not already running. Returns ready info."""
+        """Spawn (or attach to) the Cubit session if not already running.
+
+        Three live-state paths:
+          1. Our own child is alive → reuse (``self._proc.poll() is None``)
+          2. GUI mode: an external daemon is alive and we've already
+             attached to it this Python process → reuse
+             (``self._drop_dir`` set + ``pid.lock`` matches a live PID)
+          3. Nothing alive → call _start_gui_bootstrap / _start_stdio_daemon
+        """
         if self._proc is not None and self._proc.poll() is None:
             return self._ready_info or {}
+        if self._mode == "gui" and self._drop_dir is not None and self._ready_info is not None:
+            # Phase-1 attached mode: verify the daemon PID is still alive
+            pid_file = self._drop_dir / "pid.lock"
+            if pid_file.exists():
+                try:
+                    pid = int(pid_file.read_text(encoding="utf-8").strip())
+                    if _is_pid_alive(pid):
+                        return self._ready_info
+                except (OSError, ValueError):
+                    pass
+            # daemon died — fall through to re-attach or re-spawn
+            self._drop_dir = None
+            self._outbox = None
+            self._ready_info = None
         if self._mode == "gui":
             return self._start_gui_bootstrap()
         return self._start_stdio_daemon()
 
     def shutdown(self, timeout_s: float = 3.0) -> None:
-        """Politely ask Cubit to exit, then force-kill after timeout."""
-        if self._proc is None:
-            return
+        """Politely ask Cubit to exit, then force-kill after timeout.
+
+        Handles both the normal case (``self._proc`` is OUR child) and
+        the Phase-1 attached case (daemon was started by a previous
+        process; we're only a client).  In the attached case, the
+        daemon's PID is in ``pid.lock`` and we kill it via
+        ``os.kill`` / ``TerminateProcess``.
+        """
+        # Best-effort polite shutdown via live transport
         try:
-            # Best-effort: issue shutdown op via the live transport.
             self._lock_free_shutdown_op(timeout_s=timeout_s)
-            self._proc.wait(timeout=timeout_s)
         except Exception:
             pass
-        if self._proc.poll() is None:
-            self._proc.kill()
-        # Clean up gui drop dir
-        # drop-dir is module-level _PROCESS_DROP_DIR — reused across
-        # resets and shutdown()/ensure_started() cycles.  Clear the
-        # process-local references only.  Contents will be cleared by
-        # the next _start_gui_bootstrap before new use.
+        # Kill our own child process
+        if self._proc is not None:
+            try:
+                self._proc.wait(timeout=timeout_s)
+            except Exception:
+                pass
+            if self._proc.poll() is None:
+                try:
+                    self._proc.kill()
+                except Exception:
+                    pass
+        # Kill an attached daemon (not our child) via pid.lock
+        if self._drop_dir is not None:
+            pid_file = self._drop_dir / "pid.lock"
+            if pid_file.exists():
+                try:
+                    pid = int(pid_file.read_text(encoding="utf-8").strip())
+                    if pid > 0 and _is_pid_alive(pid):
+                        if sys.platform == "win32":
+                            import ctypes
+                            h = ctypes.windll.kernel32.OpenProcess(
+                                0x0001, False, pid)  # PROCESS_TERMINATE
+                            if h:
+                                ctypes.windll.kernel32.TerminateProcess(h, 1)
+                                ctypes.windll.kernel32.CloseHandle(h)
+                        else:
+                            os.kill(pid, 9)
+                except (OSError, ValueError):
+                    pass
+                try:
+                    pid_file.unlink()
+                except OSError:
+                    pass
+            # Also remove ready marker so the next ensure_started spawns fresh
+            ready = self._drop_dir / "ready"
+            if ready.exists():
+                try: ready.unlink()
+                except OSError: pass
         self._drop_dir = None
         self._outbox = None
         self._proc = None
         self._ready_info = None
 
     def is_alive(self) -> bool:
-        return self._proc is not None and self._proc.poll() is None
+        # Our own child
+        if self._proc is not None and self._proc.poll() is None:
+            return True
+        # Phase-1 attached daemon: check pid.lock against a live PID
+        if self._mode == "gui" and self._drop_dir is not None:
+            pid_file = self._drop_dir / "pid.lock"
+            if pid_file.exists():
+                try:
+                    pid = int(pid_file.read_text(encoding="utf-8").strip())
+                    return _is_pid_alive(pid)
+                except (OSError, ValueError):
+                    pass
+        return False
 
     def ping(self, timeout_s: float = 5.0) -> bool:
         """Heartbeat probe — returns True if Cubit responds."""
@@ -316,10 +460,33 @@ class CubitSession:
                 proc.kill()
             except Exception:
                 pass
-        # drop-dir is module-level _PROCESS_DROP_DIR — reused across
-        # resets and shutdown()/ensure_started() cycles.  Clear the
-        # process-local references only.  Contents will be cleared by
-        # the next _start_gui_bootstrap before new use.
+        # Phase-1: if we attached to a pre-existing daemon, kill it via
+        # pid.lock so the next ensure_started spawns fresh.  Leaving a
+        # broken daemon alive would break every subsequent call.
+        if self._drop_dir is not None:
+            pid_file = self._drop_dir / "pid.lock"
+            if pid_file.exists():
+                try:
+                    pid = int(pid_file.read_text(encoding="utf-8").strip())
+                    if pid > 0 and _is_pid_alive(pid):
+                        if sys.platform == "win32":
+                            import ctypes
+                            h = ctypes.windll.kernel32.OpenProcess(0x0001, False, pid)
+                            if h:
+                                ctypes.windll.kernel32.TerminateProcess(h, 1)
+                                ctypes.windll.kernel32.CloseHandle(h)
+                        else:
+                            os.kill(pid, 9)
+                except (OSError, ValueError):
+                    pass
+                try: pid_file.unlink()
+                except OSError: pass
+            ready = self._drop_dir / "ready"
+            if ready.exists():
+                try: ready.unlink()
+                except OSError: pass
+        # Per-process state: cleared.  The per-user drop-dir on disk
+        # persists (it's _user_daemon_dir()) so the next spawn reuses it.
         self._drop_dir = None
         self._outbox = None
         self._proc = None
@@ -328,17 +495,25 @@ class CubitSession:
     # ---- mode: gui (file drop) ----
 
     def _start_gui_bootstrap(self) -> dict:
-        """Launch coreform_cubit.exe + cubit_bootstrap.py, wait for ready.
+        """Launch (or attach to) Cubit + bootstrap, wait for ready.
 
-        Three-step fast path (2026-04-21):
-        1. Pre-warm Learn license via rlm_activate cache check.  Mirrors
-           S:\\CoreformCubit\\coreform_cubit.ps1 logic.  Cold license
-           checkout from inside Cubit takes 30+ s; pre-warming cuts
-           the Cubit-ready wait to 2 – 3 s.
-        2. Separate timeouts for license (30 s) vs post-warmup Cubit
-           ready (15 s).  Fail-fast if something hangs at either stage.
-        3. Persistent drop-dir per process.  Skip tempdir recreation on
-           restart; just clear the outbox and ready marker.
+        Phase-1 daemon persistence (2026-04-22): drop-dir is now per-user
+        stable (``%LOCALAPPDATA%\\radia-mcp\\cubit-session``), not a
+        per-process tempdir.  Before spawning a new Cubit, check if a
+        previously-launched daemon is still alive and attach to it —
+        this lets a fresh VSCode / MCP-server process reuse the Cubit
+        that an earlier session left running (license stays warm,
+        imported STEPs survive, sphere in GUI stays as-is).
+
+        Fallback to spawn when no daemon found, with four layers:
+        1. Pre-warm Learn license via rlm_activate cache check.
+        2. Spawn Cubit with ``DETACHED_PROCESS`` + ``CREATE_NEW_PROCESS_GROUP``
+           so the subprocess survives this MCP-server process exit.
+           stdout/stderr → DEVNULL to avoid pipe breakage on parent exit.
+        3. Wait for ready marker, split timeouts (15 s / 60 s by whether
+           license warmup ran).
+        4. Record our PID into ``pid.lock`` so the next process can
+           find + attach.
         """
         gui_exe = _cubit_gui_exe(self._bin_dir)
         bootstrap_path = Path(__file__).with_name("cubit_bootstrap.py")
@@ -347,43 +522,48 @@ class CubitSession:
                 f"Bootstrap script missing: {bootstrap_path}. Expected "
                 "sibling of cubit_session.py.")
 
-        # --- Step 1: license pre-warm --------------------------------
+        # --- Per-user stable drop-dir ----------------------------------
+        drop = _user_daemon_dir()
+        drop.mkdir(parents=True, exist_ok=True)
+        outbox = drop / "out"
+        outbox.mkdir(exist_ok=True)
+        ready_path = drop / "ready"
+        pid_file = drop / "pid.lock"
+
+        # --- Attach to existing daemon if alive -------------------------
+        existing = _try_attach_existing_daemon(drop)
+        if existing is not None:
+            self._drop_dir = drop
+            self._outbox = outbox
+            self._proc = None  # not OUR child; we're just a client
+            self._ready_info = existing
+            self._last_license_warmup = {"status": "skipped",
+                                          "reason": "attached to existing daemon"}
+            return existing
+
+        # --- No live daemon: new spawn path ----------------------------
+        # Step 1: license pre-warm
         try:
             from .cubit_license_warmup import warmup_license
             warmup = warmup_license(self._bin_dir,
                                      timeout_s=LICENSE_WARMUP_TIMEOUT_S)
-            # warmup_license never raises; log the action for debugging
-            # but do not fail the launch if pre-warm failed.
             self._last_license_warmup = warmup
-        except Exception as exc:  # defensive — pre-warm is opt-in
+        except Exception as exc:
             self._last_license_warmup = {
                 "status": "error", "reason": f"warmup module: {exc}"}
 
-        # --- Step 3: drop-dir reuse ----------------------------------
-        global _PROCESS_DROP_DIR
-        if _PROCESS_DROP_DIR is None or not _PROCESS_DROP_DIR.is_dir():
-            _PROCESS_DROP_DIR = Path(tempfile.mkdtemp(prefix="cubit_drop_"))
-        drop = _PROCESS_DROP_DIR
-        outbox = drop / "out"
-        ready_path = drop / "ready"
-        # Clear stale artifacts from any previous session in this dir
+        # Clear stale artifacts from any previous spawn in this dir
         try:
             if ready_path.exists():
                 ready_path.unlink()
-            if outbox.exists():
-                for f in outbox.iterdir():
-                    try:
-                        f.unlink()
-                    except OSError:
-                        pass
-            else:
-                outbox.mkdir(exist_ok=True)
-            # Inbox: remove leftover JSON requests
+            if pid_file.exists():
+                pid_file.unlink()
+            for f in outbox.iterdir():
+                try: f.unlink()
+                except OSError: pass
             for f in drop.glob("*.json"):
-                try:
-                    f.unlink()
-                except OSError:
-                    pass
+                try: f.unlink()
+                except OSError: pass
         except OSError:
             pass
         self._drop_dir = drop
@@ -393,17 +573,31 @@ class CubitSession:
         env["CUBIT_BIN_DIR"] = str(self._bin_dir)
         env["CUBIT_DROP_DIR"] = str(drop)
 
-        # stdout/stderr go to pipes we drain, same as batch mode — Cubit
-        # GUI still writes banner / warnings to these before the Qt
-        # widgets take over.
+        # Detach the Cubit subprocess so it outlives THIS MCP server
+        # process.  DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP + DEVNULL
+        # pipes mean: no orphan child on VSCode exit, Cubit keeps running,
+        # and the next MCP server process finds it via pid.lock + attaches.
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = (
+                getattr(subprocess, "DETACHED_PROCESS", 0) |
+                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
         self._proc = subprocess.Popen(
             [str(gui_exe), "-nojournal", str(bootstrap_path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             env=env,
             bufsize=0,
+            creationflags=creationflags,
+            close_fds=True,
         )
-        self._start_stderr_drain()
+        # Write PID lock immediately so a sibling VSCode racing to spawn
+        # can also attach (once ready marker appears).
+        try:
+            pid_file.write_text(str(self._proc.pid), encoding="utf-8")
+        except OSError:
+            pass
+        # NOTE: no stderr drain needed — DEVNULL means no pipe to drain.
 
         # --- Step 2: ready wait with shorter timeout after warmup ---
         # After license pre-warm, Cubit should be ready in ~3 s.  If
