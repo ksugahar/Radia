@@ -178,13 +178,6 @@ if errorlevel 1 ( echo WARNING: cln_core build failed )
 
 echo.
 echo ========================================
-echo   Building mmm_core
-echo ========================================
-"$CMAKE_EXE" --build . --config Release --target mmm_core -j
-if errorlevel 1 ( echo WARNING: mmm_core build failed )
-
-echo.
-echo ========================================
 echo   Building radia_cubit_mesh (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
@@ -270,8 +263,7 @@ try {
     $modules = @(
         @{ src = "_radia_pybind.cp312-win_amd64.pyd"; dst = "_radia_pybind.pyd"; required = $true },
         @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $false },
-        @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false },
-        @{ src = "mmm_core.cp312-win_amd64.pyd";       dst = "mmm_core.pyd";      required = $false }
+        @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false }
     )
 
     # Cubit plugin files (built in separate build dirs)
