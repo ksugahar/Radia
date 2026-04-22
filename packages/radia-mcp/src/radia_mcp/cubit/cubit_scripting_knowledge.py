@@ -3497,6 +3497,242 @@ Do NOT coarsen meshes to get under 50k.  See CLAUDE.md
 """
 
 
+CUBIT_DAEMON_PERSISTENCE = """
+# Cubit daemon persistence (radia-mcp >= 0.32.0)
+
+From 0.32.0 onward the radia-mcp `cubit_session` module runs Cubit as a
+**detached Windows daemon** that survives VSCode / MCP-server restarts.
+Starting Cubit from scratch (cold license + GUI init) costs 30-60 s on
+100号機; attaching to an already-running daemon costs **0.01 s**.
+
+## The three timing regimes
+
+| Event                        | Time      | Source              |
+|------------------------------|-----------|---------------------|
+| First Cubit of the day       | ~3 s      | warm license cache  |
+| First Cubit without warm     | 30-60 s   | cold license (RLM)  |
+| VSCode restart, daemon alive | 0.01 s    | attach via pid.lock |
+| VSCode restart, daemon dead  | ~3 s      | re-spawn + warmup   |
+
+## How attach works (Phase 1)
+
+1. Per-user stable drop-dir: `%LOCALAPPDATA%/radia-mcp/cubit-session/`
+   (not a `TemporaryDirectory()` — that dies with the parent process).
+2. On spawn: write `pid.lock` with the daemon PID and the path to the
+   Unix-domain-equivalent named pipe + ready marker.
+3. On next MCP process start: `_try_attach_existing_daemon(drop_dir)`
+   reads `pid.lock`, checks PID alive via `OpenProcess(PROCESS_QUERY_
+   LIMITED_INFORMATION)` + `GetExitCodeProcess() == STILL_ACTIVE (259)`,
+   and re-uses the existing pipe if all checks pass.
+4. If any check fails (PID dead, pipe gone, ready-marker absent), we
+   fall through to normal spawn and overwrite `pid.lock`.
+
+## Why this survives VSCode restart
+
+The daemon is spawned with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`
+and `stdin/stdout/stderr = DEVNULL`.  Neither the console, nor the
+MCP-server process, nor VSCode is the daemon's parent or console owner,
+so closing VSCode does not SIGHUP the daemon.  The OS keeps it until
+something explicitly kills coreform_cubit.exe.
+
+## Phase 2 (standalone boot-time daemon) is deferred
+
+Cubit is a desktop GUI — if the user logs out, the desktop session dies
+and Cubit has nothing to render into.  Boot-time auto-start therefore
+has no practical value.  Phase 1 (attach-if-alive) already covers the
+VSCode-restart case, which is the only frequent reload event.
+
+## Debugging
+
+- `%LOCALAPPDATA%/radia-mcp/cubit-session/pid.lock` — current PID.
+- `tasklist | findstr coreform` — is the daemon actually alive.
+- If attach keeps failing: `taskkill /IM coreform_cubit.exe /F` and
+  delete the drop-dir; the next MCP call will re-spawn cleanly.
+- `MCP_CUBIT_FORCE_RESPAWN=1` env var skips the attach attempt.
+
+## See also
+
+- `license_warmup` -- the 3-day RLM cache that makes "first Cubit of
+  the day" cost 3 s instead of 30-60 s.
+- `utf8_path` -- how Cubit exporters handle Japanese / non-ASCII paths.
+"""
+
+
+CUBIT_LICENSE_WARMUP = """
+# Cubit license warmup (radia-mcp >= 0.32.0)
+
+Coreform Cubit 2025.3 authenticates via RLM (Reprise License Manager).
+The first `coreform_cubit.exe` call after a machine sits idle takes
+**30-60 s** because RLM:
+
+  1. Contacts the Coreform license server (internet round-trip).
+  2. Writes a renewal entry to
+     `%LOCALAPPDATA%/Coreform/CoreformCubit/renewals/*.ren`.
+  3. Caches for 3 days (renew) / 7 days (hard expiry).
+
+If a recent renewal is on disk, the same boot costs ~3 s.
+
+## What the warmup does
+
+`radia_mcp.cubit.cubit_license_warmup.warmup_license(bin_dir, timeout_s=30)`
+parses the renewals folder.  If the most recent `.ren` is within 3 days,
+it returns immediately.  Otherwise it runs
+`rlm_activate.exe --login <email> --password <pw>` **before** Cubit is
+spawned.  This turns a 60-s cold boot into a 3-s warm boot.
+
+## Credentials
+
+- `RADIA_CUBIT_LEARN_EMAIL` / `RADIA_CUBIT_LEARN_PASSWORD` env vars.
+- Default (on LAB / 100号機 / mdx): `ksugahar@kindai.ac.jp`.
+- These credentials are for the **Coreform Learn Edition** only.  Pro
+  machines use the local license server and skip the warmup path.
+
+## User-facing shortcut (100号機)
+
+Kubota and other shared-machine users get:
+
+- `Desktop\\Coreform Cubit (warm launch).lnk` — warmup + start Cubit.
+- `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` — warmup only,
+  no Cubit launch (the silent "one-click refresh" option).
+
+Both are drop-in replacements for clicking the normal Cubit icon.
+After the scheduled task `\\Coreform\\CubitLicenseRefresh` fires once
+per user logon, the cache is already warm and these shortcuts complete
+in < 5 s.
+
+## Debugging a slow cold boot
+
+1. `dir %LOCALAPPDATA%\\Coreform\\CoreformCubit\\renewals` — look for a
+   `.ren` file newer than 3 days.  If absent, warmup will run.
+2. `type C:\\ProgramData\\CoreformCubit\\cubit_refresh.log` (if present)
+   shows the last `rlm_activate` exit code.
+3. `rlm_activate.exe --login <email> --password <pw>` direct — if this
+   hangs, it is a network / firewall issue, not a Radia issue.
+
+## See also
+
+- `daemon_persistence` -- how the 0.01 s attach path works after warmup.
+- `trial_error_policy` -- batch-first testing minimises cold-boot hits.
+"""
+
+
+CUBIT_UTF8_PATH = """
+# UTF-8 / Japanese path support (cubit-mesh-export >= 0.6.0)
+
+Before 0.6.0, `radia_export netgen "C:/temp/日本語/coil.vol"` raised:
+
+```
+No mapping for the Unicode character exists in the target multi-byte
+code page.
+```
+
+and wrote no file.  Cause: `std::string -> std::filesystem::path`
+implicit conversion uses the system codepage, which is cp932 on Japanese
+Windows.  Non-ASCII path components could not round-trip.
+
+## The fix
+
+`src/cubit_plugin/utf8_path.hpp` provides one helper:
+
+```cpp
+std::filesystem::path u8_string_to_path(const std::string &s);
+```
+
+On Windows it calls `MultiByteToWideChar(CP_UTF8, ...)` to produce a
+`std::wstring`, then constructs `std::filesystem::path(wstring)`.  The
+wide-string path is then passed to the writer's `std::ofstream` / Cubit
+API as-is, bypassing the narrow-API cp932 bottleneck.
+
+## Applied to all 6 exporters
+
+- `ExportNetgenCommand.cpp` (.vol + .vol.json)
+- `ExportGmshCommand.cpp` (.msh v4.1)
+- `ExportNastranCommand.cpp` (.bdf)
+- `ExportVtkCommand.cpp` (.vtk)
+- `ExportMegCommand.cpp` (.meg — FEMEEM / MAGIC)
+- `ExportFemeemCommand.cpp` (in.dat + node.dat + ...)
+
+## Known limitation: cubit -batch <japanese.jou>
+
+Cubit's own argv parsing goes through the narrow cp932 API.  Passing a
+Japanese path **as a command-line argument** still breaks.  Workaround:
+an ASCII wrapper .jou containing `playback "C:/日本語/work.jou"` inside
+— the `playback` command uses Cubit's internal string handling which is
+UTF-8.  This is a Cubit core limitation; the Radia plugin cannot fix it.
+
+## Verification
+
+```
+radia_export netgen "C:/temp/日本語/coil.vol" overwrite
+# -> writes 22,521 bytes on the reference sphere test
+```
+
+Regression guard: `tests/cubit/test_ho_volume_all_formats.py` covers
+ASCII paths; a dedicated Japanese-path smoke test is run in the 100号機
+deploy phase (not in CI because CI runners do not have Cubit installed).
+
+## See also
+
+- `license_warmup` -- the 30-60 s -> 3 s first-boot speedup.
+- `batch_first` (alias of `trial_error_policy`) -- why CI can't easily
+  cover Cubit-dependent tests.
+"""
+
+
+CUBIT_V4_7_0_RELEASE = """
+# radia 4.7.0 / cubit-mesh-export 0.6.0 / radia-mcp 0.32.0 (2026-04-22)
+
+This is the **v4.7.0 release synopsis** for the Cubit side.  The three
+packages release in lockstep; see the per-package CHANGELOGs for
+Python- or build-specific details.
+
+## Headline features
+
+1. **PEEC-inductance now handles any STEP**
+   - 1-turn circular torus (gapped or closed) via TORUS analytical sweep.
+   - 1-turn rect-section torus via CYLINDER analytical sweep.
+   - Multi-turn pancake loft via cross-section centroid NN chain.
+   - Explicit `.jou` sidecar still supported (fastest path).
+   - New: auto-prefer `<base>.jou` sibling next to `<base>.step` if it
+     contains a PEEC `move Surface ... x Y y Y z Z` pattern.
+
+2. **Japanese / Unicode paths work**
+   All 6 Cubit exporters (Netgen / GMSH / Nastran / VTK / MEG / FEMEEM)
+   handle `C:/temp/日本語/...` correctly.  See `utf8_path` topic.
+
+3. **Cubit startup 30-60 s -> 3 s; VSCode restart 6 s -> 0.01 s**
+   License warmup + daemon attach-if-alive.  See `license_warmup` and
+   `daemon_persistence` topics.
+
+## Upgrade notes for existing users
+
+- LAB / 100号機: `release_triple.py` has already deployed; on each user's
+  next Windows logon the scheduled task `\\Coreform\\CubitLicenseRefresh`
+  will prime the RLM cache automatically.  Users in an existing logon
+  session can double-click `Coreform Cubit (warm launch)` on the desktop
+  or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
+  same effect immediately.
+- mdx / external users: `pip install --upgrade radia cubit-mesh-export
+  radia-mcp` + `cubit-plugin-install`.
+- VSCode MCP users: restart VSCode once to pick up the new daemon code.
+  After that, subsequent restarts attach in 0.01 s.
+
+## Known issues / non-goals
+
+- MCP Python module hot-reload without VSCode restart: not possible
+  (OS-level limit — existing imports are in the Python process).
+- Non-admin SSH user impersonation without password: not supported
+  (6 Windows routes tried; see `.claude/skills/debug-remote-user`).
+
+## See also
+
+- `daemon_persistence` -- Phase 1 attach-if-alive.
+- `license_warmup` -- the 3-day RLM cache + `cubit_refresh.cmd`.
+- `utf8_path` -- Japanese path handling.
+- Top-level `CHANGELOG.md` -- Python-side details.
+"""
+
+
 def get_cubit_documentation(topic: str = "all") -> str:
 	"""Return Cubit scripting documentation by topic."""
 	topics = {
@@ -3567,6 +3803,23 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"quality": CUBIT_MESH_QUALITY_DETAILED,  # alias
 		"boundary_layer": CUBIT_BOUNDARY_LAYER_MESH,
 		"skin_mesh": CUBIT_BOUNDARY_LAYER_MESH,  # alias
+		# v4.7.0 operational topics (radia-mcp >= 0.32.0)
+		"daemon_persistence": CUBIT_DAEMON_PERSISTENCE,
+		"daemon": CUBIT_DAEMON_PERSISTENCE,  # alias
+		"phase1_attach": CUBIT_DAEMON_PERSISTENCE,  # alias
+		"pid_lock": CUBIT_DAEMON_PERSISTENCE,  # alias
+		"license_warmup": CUBIT_LICENSE_WARMUP,
+		"warmup": CUBIT_LICENSE_WARMUP,  # alias
+		"rlm_activate": CUBIT_LICENSE_WARMUP,  # alias
+		"cubit_refresh": CUBIT_LICENSE_WARMUP,  # alias
+		"warm_launch": CUBIT_LICENSE_WARMUP,  # alias
+		"utf8_path": CUBIT_UTF8_PATH,
+		"japanese_path": CUBIT_UTF8_PATH,  # alias
+		"unicode_path": CUBIT_UTF8_PATH,  # alias
+		"cp932": CUBIT_UTF8_PATH,  # alias
+		"v4_7_0": CUBIT_V4_7_0_RELEASE,
+		"release_v4_7_0": CUBIT_V4_7_0_RELEASE,  # alias
+		"4.7.0": CUBIT_V4_7_0_RELEASE,  # alias
 	}
 
 	topic = topic.lower().strip()
