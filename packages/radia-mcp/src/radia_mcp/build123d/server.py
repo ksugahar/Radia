@@ -2901,6 +2901,8 @@ def build123d_heal(step_in: str, step_out: str = "",
 
 def main():
     if "--selftest" in sys.argv:
+        from radia_mcp.common.utf8_stdout import use_utf8_stdout
+        use_utf8_stdout()
         print("build123d MCP server self-test:")
 
         # Test knowledge base topics
