@@ -3362,7 +3362,6 @@ Build.ps1 (MSVC + MKL + NGSolve)
   |-> _radia_pybind.pyd (main C++ extension, required)
   |-> peec_matrices.pyd  (PEEC matrix assembly, optional)
   |-> cln_core.pyd       (Lanczos MOR, optional)
-  |-> mmm_core.pyd       (MMM solver, optional)
   +-> All copied to src/radia/
 ```
 
@@ -3507,7 +3506,6 @@ src/radia/
   _radia_pybind.pyd     # Main C++ extension (required)
   peec_matrices.pyd     # PEEC matrix assembly (optional)
   cln_core.pyd          # CLN transient solver (optional)
-  mmm_core.pyd          # MMM solver (optional)
   *.py                  # Python utility modules
   # NO .dll files (MKL loaded from pip install location)
 ```
@@ -3569,7 +3567,6 @@ Z = solver.solve_frequency(1e6)
 Any two levels validate each other on the same geometry:
 - PEEC vs NGSBEM: ~5% (filament vs surface current)
 - PEEC vs Analytical: ~0.1% (same approximation)
-- MMMBuilder vs Radia: ~0.03% (same MSC kernel)
 
 ## Magnetic Core Across Levels
 
@@ -3693,14 +3690,16 @@ schur.solve(freq, V_source)
 
 ## Validation (2026-03-28)
 
-MMMBuilder MSC matches Radia direct Solve:
-- 1 hex: ratio = 1.000002
-- 27 hex (3x3x3): ratio = 0.999685 (0.03%)
-- PEEC/NGSBEM loop inductance: 4.5% agreement
+Historical note: a standalone `mmm_core` pybind module (retired
+2026-04-23) was used to cross-validate the MSC kernel against Radia's
+direct `Solve()` on 1-hex and 27-hex (3x3x3) cases, matching to ~0.03 %.
+PEEC/NGSBEM loop-inductance agreement was ~4.5 %.  The kernel formulas
+below are what both implementations shared and remain the reference for
+the current `_radia_pybind` solver.
 """
 
 RADIA_MSC_KERNEL = """
-# MSC Kernel Implementation Notes (mmm_core / MMMBuilder)
+# MSC Kernel Implementation Notes
 
 ## Critical: FieldFromChargedTriangle must compute full 3D H vector
 
@@ -3761,7 +3760,7 @@ rhs_schur = -B_pm * Z_peec^{-1} * V_source
 ```
 
 The coupling matrices B_pm (Biot-Savart -> face normals) and M_mp (A-field -> flux linkage)
-must use the same face ordering as MMMBuilder:
+must use the canonical MSC face ordering:
 - Face 0: bottom (-Z), Face 1: top (+Z)
 - Face 2: front (-Y), Face 3: back (+Y)
 - Face 4: left (-X), Face 5: right (+X)

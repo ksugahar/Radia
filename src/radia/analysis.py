@@ -2378,16 +2378,14 @@ class UnifiedMMMAnalysis:
         >>> analysis.set_radia_model(container, mu_r=1000)
         >>> result = analysis.static()
 
-    Example 2: Matrix mode (with mmm_core)
+    Example 2: Matrix mode (caller supplies N)
         >>> from radia.analysis import UnifiedMMMAnalysis
-        >>> import mmm_core
         >>>
-        >>> # Build MMM matrices
-        >>> builder = mmm_core.MMMBuilder()
-        >>> builder.add_tetrahedra_from_mesh(vertices, elements)
-        >>> N, dof_offset = builder.build()
+        >>> # N is the MMM interaction (demagnetization) matrix.  Build it
+        >>> # externally (NGSolve assembly, custom analytic code, etc.) — the
+        >>> # standalone mmm_core pybind module was retired in 2026-04-23.
+        >>> N = ...  # shape (3*n_elem, 3*n_elem), np.ndarray
         >>>
-        >>> # Analysis with CLN transient
         >>> analysis = UnifiedMMMAnalysis()
         >>> analysis.set_mmm_matrices(N, mu_r=1000, tau=1e-6)
         >>>

@@ -96,7 +96,7 @@ Z = solver.solve_frequency(1e6)
 - Kelvin transformation for open boundaries
 - Adaptive mesh refinement
 
-**Modules**: NGSolve (external), `esim_coupled_solver.py`, `mmm_ngsolve.py`
+**Modules**: NGSolve (external), `esim_coupled_solver.py`
 
 **Typical workflow**:
 ```python
@@ -126,7 +126,6 @@ can validate each other** on the same geometry.
 | PEEC vs NGSBEM | Conductor self-inductance | ±5% |
 | PEEC vs Analytical | Filament formula accuracy | ±0.1% |
 | NGSBEM vs FEM | BEM vs volume method | ±1% |
-| MMMBuilder vs Radia | MSC kernel correctness | ±0.03% |
 | PEEC+MSC vs NGSBEM+MSC | Full coupled system | ±5% |
 | All vs FastHenry | External tool validation | ±5% |
 
@@ -285,7 +284,6 @@ L = np.imag(Z) / (2*np.pi*1e6)
 | NGSBEM (Laplace SL) | Working | Loop L within 5% of PEEC |
 | NGSBEM + eddy (scalar) | Working | Tested on Al cube |
 | NGSBEM + eddy (vector) | Working | Tested on steel cube |
-| MMMBuilder (standalone MSC) | Working | 27-element validated |
 | Schur complement solver | Working | Framework validated |
 | FEM (NGSolve) | Working | Via esim_coupled_solver |
 | H-matrix (HACApK) | Working | Integrated with Radia core |
@@ -300,13 +298,11 @@ src/radia/
 ├── peec_coupled.py          # Level 1: PEEC + Radia core coupling
 ├── peec_msc_schur.py        # Level 1-2: Schur complement bridge
 ├── fasthenry_parser.py      # Level 1: FastHenry format input
-├── mmm_core.pyd             # Level 1-2: Standalone MSC (C++)
 ├── ngsbem_peec.py           # Level 2: NGSBEM PEEC solver
 ├── ngsbem_coupled.py        # Level 2: NGSBEM + core coupling
 ├── ngsbem_eddy.py           # Level 2: Eddy current FEM-BEM
 ├── bem_inductance.py        # Level 2: Direct BEM inductance
-├── esim_coupled_solver.py   # Level 3: FEM coupled solver
-└── mmm_ngsolve.py           # Level 1-3: NGSolve mesh integration
+└── esim_coupled_solver.py   # Level 3: FEM coupled solver
 
 examples/peec_integration/
 ├── coupled/
