@@ -1,0 +1,190 @@
+"""Response regression tests for mcp-server-radia-ngsolve knowledge tools.
+
+These tests assert that the canonical knowledge-serving functions
+(``get_*_documentation``) return non-empty strings containing topic-
+specific markers for every advertised topic, and degrade gracefully
+on unknown topics.
+
+They catch regressions that the lint-rule tests miss:
+  * accidental empty topic body (e.g. variable rename on the docstring)
+  * topic removed but still advertised in the tool's docstring
+  * unknown-topic fallback becoming a hard error / KeyError / crash
+  * "all" topic returning only the first entry
+
+Run::
+
+    pytest tests/mcp_server/test_radia_ngsolve_responses.py -v
+
+Fast (all imports, no Cubit / NGSolve heavy work).
+"""
+from __future__ import annotations
+
+import pytest
+
+from radia_mcp.radia_ngsolve.kelvin_knowledge import get_kelvin_documentation
+from radia_mcp.radia_ngsolve.ngsbem_inductance_knowledge import (
+    get_ngsbem_inductance_documentation,
+)
+from radia_mcp.radia_ngsolve.ngsolve_knowledge import (
+    get_ngsolve_documentation,
+)
+from radia_mcp.radia_ngsolve.panel_gui_pitfalls_knowledge import (
+    get_panel_gui_pitfalls,
+)
+from radia_mcp.radia_ngsolve.peec_inductance_knowledge import (
+    get_peec_inductance_documentation,
+)
+from radia_mcp.radia_ngsolve.radia_knowledge import get_radia_documentation
+from radia_mcp.radia_ngsolve.sparsesolv_knowledge import (
+    get_sparsesolv_documentation,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _assert_substantial(body: str, *, min_chars: int = 200) -> None:
+    """A topic's body must be at least min_chars and have human-readable text."""
+    assert isinstance(body, str), f"expected str, got {type(body).__name__}"
+    assert len(body) >= min_chars, (
+        f"topic body is too short ({len(body)} chars); "
+        f"likely empty/truncated: {body[:100]!r}")
+
+
+def _assert_contains_any(body: str, markers: list[str], label: str) -> None:
+    """Body must contain at least one of the expected markers (case-insensitive)."""
+    low = body.lower()
+    hits = [m for m in markers if m.lower() in low]
+    assert hits, (
+        f"{label}: none of {markers} found in the {len(body)}-char body.\n"
+        f"First 200 chars:\n{body[:200]!r}")
+
+
+def _assert_unknown_topic_graceful(fn, *, unknown: str = "definitely_not_a_topic"):
+    """Unknown topic must return a helpful string (not raise, not empty)."""
+    r = fn(unknown)
+    assert isinstance(r, str), f"{fn.__name__}({unknown!r}) returned {type(r).__name__}, want str"
+    assert len(r) > 0, f"{fn.__name__}({unknown!r}) returned empty string"
+    low = r.lower()
+    assert "unknown" in low or "available" in low or unknown.lower() in low, (
+        f"{fn.__name__}({unknown!r}) does not mention unknown/available/topic name: {r[:200]!r}")
+
+
+# ---------------------------------------------------------------------------
+# peec_inductance (the new 0.32.0 tool — extra-strict checks)
+# ---------------------------------------------------------------------------
+
+class TestPeecInductanceKnowledge:
+    TOPICS = {
+        "overview":      ["PEEC", "perimeter", "filament"],
+        "centerline":    ["TORUS", "loft", "revolution", "spine"],
+        "jou":           ["move Surface", "explicit", "parser"],
+        "sibling_jou":   ["sibling", "auto", ".jou"],
+        "japanese_path": ["UTF-8", "CP_UTF8", "Windows"],
+    }
+
+    def test_all_topic_contains_every_subtopic(self):
+        body = get_peec_inductance_documentation("all")
+        _assert_substantial(body, min_chars=2000)
+        # 'all' should concatenate every topic body
+        for topic_markers in self.TOPICS.values():
+            _assert_contains_any(body, topic_markers, label="peec_inductance all")
+
+    @pytest.mark.parametrize("topic,markers", list(TOPICS.items()))
+    def test_subtopic(self, topic, markers):
+        body = get_peec_inductance_documentation(topic)
+        _assert_substantial(body)
+        _assert_contains_any(body, markers, label=f"peec_inductance.{topic}")
+
+    def test_unknown_topic(self):
+        _assert_unknown_topic_graceful(get_peec_inductance_documentation)
+
+
+# ---------------------------------------------------------------------------
+# kelvin
+# ---------------------------------------------------------------------------
+
+class TestKelvinKnowledge:
+    def test_all(self):
+        body = get_kelvin_documentation("all")
+        _assert_substantial(body, min_chars=1000)
+        _assert_contains_any(body, ["Kelvin", "open boundary", "sphere"],
+                              label="kelvin all")
+
+    def test_unknown_topic(self):
+        _assert_unknown_topic_graceful(get_kelvin_documentation)
+
+
+# ---------------------------------------------------------------------------
+# ngsbem_inductance
+# ---------------------------------------------------------------------------
+
+class TestNgsbemInductanceKnowledge:
+    def test_all(self):
+        body = get_ngsbem_inductance_documentation("all")
+        _assert_substantial(body, min_chars=1000)
+        _assert_contains_any(body, ["BEM", "inductance", "LaplaceSL", "ngsolve"],
+                              label="ngsbem all")
+
+    def test_unknown_topic(self):
+        _assert_unknown_topic_graceful(get_ngsbem_inductance_documentation)
+
+
+# ---------------------------------------------------------------------------
+# ngsolve
+# ---------------------------------------------------------------------------
+
+class TestNgsolveKnowledge:
+    def test_all(self):
+        body = get_ngsolve_documentation("all")
+        _assert_substantial(body, min_chars=1000)
+        _assert_contains_any(body, ["NGSolve", "FESpace", "HCurl", "BilinearForm"],
+                              label="ngsolve all")
+
+    def test_unknown_topic(self):
+        _assert_unknown_topic_graceful(get_ngsolve_documentation)
+
+
+# ---------------------------------------------------------------------------
+# radia
+# ---------------------------------------------------------------------------
+
+class TestRadiaKnowledge:
+    def test_all(self):
+        body = get_radia_documentation("all")
+        _assert_substantial(body, min_chars=1000)
+        _assert_contains_any(body, ["Radia", "ObjHexahedron", "magnetization", "MMM"],
+                              label="radia all")
+
+    def test_unknown_topic(self):
+        _assert_unknown_topic_graceful(get_radia_documentation)
+
+
+# ---------------------------------------------------------------------------
+# sparsesolv
+# ---------------------------------------------------------------------------
+
+class TestSparsesolvKnowledge:
+    def test_all(self):
+        body = get_sparsesolv_documentation("all")
+        _assert_substantial(body, min_chars=500)
+        _assert_contains_any(body, ["sparsesolv", "CompactAMS", "AMS", "HX",
+                                     "preconditioner"],
+                              label="sparsesolv all")
+
+
+# ---------------------------------------------------------------------------
+# panel_gui_pitfalls
+# ---------------------------------------------------------------------------
+
+class TestPanelGuiPitfalls:
+    def test_full_document(self):
+        # Convention for this tool: empty string returns the full document.
+        body = get_panel_gui_pitfalls("")
+        _assert_substantial(body, min_chars=500)
+        _assert_contains_any(body, ["panel", "combo", "widget", "GUI", "pitfall"],
+                              label="panel_gui_pitfalls full")
+
+    def test_unknown_topic(self):
+        _assert_unknown_topic_graceful(get_panel_gui_pitfalls)
