@@ -4651,6 +4651,8 @@ def _selftest():
 def main():
 	"""Entry point for mcp-server-cubit command."""
 	if len(sys.argv) > 1 and sys.argv[1] == '--selftest':
+		from radia_mcp.common.utf8_stdout import use_utf8_stdout
+		use_utf8_stdout()
 		_selftest()
 	else:
 		mcp.run(transport="stdio")

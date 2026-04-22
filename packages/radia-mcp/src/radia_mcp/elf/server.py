@@ -127,6 +127,8 @@ def new_elf_analysis(geometry: str, solver: str = "MAGIC") -> str:
 
 def main():
     if "--selftest" in sys.argv:
+        from radia_mcp.common.utf8_stdout import use_utf8_stdout
+        use_utf8_stdout()
         print("ELF MCP server self-test:")
         topics = [
             "overview", "mai_format", "mei_format", "meg_format",
