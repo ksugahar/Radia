@@ -1603,6 +1603,16 @@ def cubit_session_status() -> str:
 		status["alive"] = _cs._SINGLETON.is_alive()
 		if _cs._SINGLETON._proc is not None:
 			status["pid"] = _cs._SINGLETON._proc.pid
+			status["mode"] = "owned"
+		elif _cs._SINGLETON._drop_dir is not None:
+			# Phase-1 attached: read PID from pid.lock
+			pid_file = _cs._SINGLETON._drop_dir / "pid.lock"
+			if pid_file.exists():
+				try:
+					status["pid"] = int(pid_file.read_text(encoding="utf-8").strip())
+					status["mode"] = "attached"
+				except (OSError, ValueError):
+					pass
 		status["ready_info"] = _cs._SINGLETON._ready_info
 	return json.dumps(status, indent=2)
 
