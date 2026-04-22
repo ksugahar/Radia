@@ -595,6 +595,8 @@ def _try_import(module: str) -> bool:
 
 def main():
 	if "--selftest" in sys.argv:
+		from radia_mcp.common.utf8_stdout import use_utf8_stdout
+		use_utf8_stdout()
 		print("radia-interop MCP server self-test:")
 		print(list_cad_mcp_interop())
 		return
