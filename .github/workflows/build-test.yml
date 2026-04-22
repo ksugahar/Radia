@@ -224,3 +224,80 @@ jobs:
           name: radia-mcp-wheel
           path: packages/radia-mcp/dist/*.whl
           retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Post-install selftest: install the just-built radia-mcp wheel
+      # and invoke --selftest on every public MCP server.  This catches:
+      #   - broken CLI entrypoint (console_scripts mis-wired)
+      #   - missing imports only reachable from __main__
+      #   - lint-rule regressions against the fixture examples
+      # It's complementary to `tests/mcp_server/test_selftest.py` (which
+      # calls _selftest() directly in the source tree) — here we verify
+      # the *installed* wheel behaves the same.
+      # ----------------------------------------------------------------
+      - name: Post-install MCP selftest (all 6 public servers)
+        if: success()
+        shell: pwsh
+        run: |
+          $whl = Get-ChildItem "${{ github.workspace }}\packages\radia-mcp\dist\*.whl" `
+                 | Select-Object -First 1
+          if (-not $whl) {
+            Write-Host "::error::No radia-mcp wheel found"
+            exit 1
+          }
+          Write-Host "Installing $($whl.Name) for selftest..."
+          pip install --force-reinstall --no-deps "$($whl.FullName)" --quiet
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::radia-mcp wheel install failed"
+            exit $LASTEXITCODE
+          }
+
+          $servers = @(
+            'mcp-server-radia-ngsolve',
+            'mcp-server-cubit',
+            'mcp-server-build123d',
+            'mcp-server-gmsh',
+            'mcp-server-elf',
+            'mcp-server-radia-interop'
+          )
+          $failed = @()
+          foreach ($s in $servers) {
+            Write-Host ""
+            Write-Host "=== $s --selftest ==="
+            & $s --selftest
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::$s --selftest exited $LASTEXITCODE"
+              $failed += $s
+            }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Host "::error::selftest failed on: $($failed -join ', ')"
+            exit 1
+          }
+          Write-Host ""
+          Write-Host "All 6 MCP servers passed --selftest."
+
+      # ----------------------------------------------------------------
+      # MCP response regression tests (topic coverage + unknown-topic
+      # graceful-degrade checks across all knowledge servers). These
+      # run against the installed wheel so they also serve as a second
+      # validation pass on the --selftest step above.
+      # ----------------------------------------------------------------
+      - name: MCP response regression tests
+        if: success()
+        shell: pwsh
+        run: |
+          python -m pytest tests/mcp_server/ -v --tb=short `
+            --junitxml=mcp-test-results.xml
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::MCP response regression tests failed"
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload MCP test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-test-results
+          path: mcp-test-results.xml
+          retention-days: 30
