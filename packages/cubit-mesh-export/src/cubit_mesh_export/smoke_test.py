@@ -175,10 +175,18 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     # launcher dialog is reachable through the same code path the dialog
     # uses (RadiaLauncherLogic::get_model_labels). 2026-04-14 hardening.
     require_csv = ",".join(expect_materials + expect)
+    # Trailing `exit 0` matters on slower boxes (100号機 2026-04-22):
+    # Cubit's headless teardown sometimes access-violates before the
+    # mesh database destructor flushes the .vol writer; an explicit
+    # ``exit 0`` forces the Python/Qt shutdown path through the
+    # normal exit handler so the .vol is flushed first.  Without
+    # this the teardown crash beats the file close on fast-crash
+    # CPUs and the smoke test sees "no .vol produced" intermittently.
     driver.write_text(textwrap.dedent(f"""\
         play "{sample.as_posix()}"
         radia_export verify_launcher require "{require_csv}"
         radia_export netgen "{vol_path.as_posix()}" order {order} overwrite
+        exit 0
     """), encoding="utf-8")
     print(f"  Work:   {work}")
     print(f"  Vol:    {vol_path}")
