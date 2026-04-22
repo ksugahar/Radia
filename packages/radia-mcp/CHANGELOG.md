@@ -5,6 +5,25 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.32.0 — PEEC-inductance public topic + Cubit daemon speedup
+
+- **`peec_inductance` tool** in `mcp-server-radia-ngsolve`: 5 sub-topics
+  (overview / centerline / jou / sibling_jou / japanese_path) promoted
+  from LAB-private `mcp-server-ih` after the feature stabilised.
+- **Cubit daemon license warmup**: `cubit_license_warmup.py` mirrors
+  `coreform_cubit.ps1` renewals cache logic (3-day cache + 7-day
+  expiry).  Cold daemon start 30 – 60 s → 3 s.
+- **Cubit daemon Phase 1 attach**: per-user stable drop-dir
+  (`%LOCALAPPDATA%\radia-mcp\cubit-session\`) + `pid.lock` discovery.
+  VSCode restart → new MCP server attaches to living Cubit in
+  **0.01 s** instead of re-spawning (6 s cold).
+- `open_in_cubit`: same license warmup applied so one-shot GUI
+  launches from VSCode also get the speedup.
+- `cubit_session_status` reports `mode = owned | attached`.
+- New MCP knowledge placement policy in `CLAUDE.md`: stable /
+  general → public `radia-mcp` (PyPI), research-stage / lab-only →
+  `S:\mcp-server\mcp-server-ih`.
+
 ## 0.23.x — YouTube + training pack + GitHub `.jou` search
 
 - **0.23.1** (planned, docs-only): full README rewrite with badges /
