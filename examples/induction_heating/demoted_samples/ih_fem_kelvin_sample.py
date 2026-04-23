@@ -33,10 +33,27 @@ import sys
 
 import cubit
 
-# --- add_kelvin is in src/radia/panels/ ---
-panels_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-if panels_dir not in sys.path:
-    sys.path.insert(0, panels_dir)
+# --- Locate add_kelvin.py from the Radia panels folder. ------------------
+# This file was demoted from src/radia/panels/samples/ to the examples
+# tree on 2026-04-23 (see demoted_samples/README.md).  The loader below
+# tries two locations in order:
+#   1. Repo-relative (when running from a checked-out Radia source tree)
+#   2. pip-installed radia package (fallback for non-repo environments)
+_here = os.path.dirname(os.path.abspath(__file__))
+_panels_repo = os.path.normpath(
+    os.path.join(_here, "..", "..", "..", "src", "radia", "panels"))
+if os.path.isfile(os.path.join(_panels_repo, "add_kelvin.py")):
+    _panels_dir = _panels_repo
+else:
+    try:
+        import radia as _radia
+        _panels_dir = os.path.join(os.path.dirname(_radia.__file__), "panels")
+    except ImportError:
+        raise RuntimeError(
+            "Cannot find add_kelvin.py.  Install 'radia' (pip install radia) "
+            "or run this script from the Radia source tree.")
+if _panels_dir not in sys.path:
+    sys.path.insert(0, _panels_dir)
 from add_kelvin import add_kelvin_cubit
 
 cubit.cmd("reset")

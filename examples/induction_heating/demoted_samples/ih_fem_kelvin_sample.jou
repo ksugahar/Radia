@@ -1,10 +1,20 @@
 ## FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air sphere
 ##
+## DEMOTED from panels/samples/ to examples/induction_heating/demoted_samples/
+## on 2026-04-23.  See demoted_samples/README.md for rationale.
+##
 ## This .jou creates the PHYSICAL domain only (coil + workpiece + air).
-## Kelvin open-boundary sphere is added AUTOMATICALLY when launching
-## Radia-NGSolve (Solve -> Radia-NGSolve -> OK).
-## Manual alternative: from add_kelvin import add_kelvin_cubit
-##                     add_kelvin_cubit(R=0.060, symmetry=["z"])
+## KELVIN IS *NOT* ADDED by this journal.  To add Kelvin you must either:
+##   (a) playback the companion ih_fem_kelvin_sample.py instead
+##       (it creates the same geometry AND calls add_kelvin_cubit())
+##   (b) after playing this .jou, run these Cubit Python commands:
+##           python "from add_kelvin import add_kelvin_cubit"
+##           python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
+##       then export: radia_export netgen "foo.vol" order 1 overwrite
+##
+## Running this .jou alone produces a .vol WITHOUT the 'kelvin' material,
+## so calc_fem_coilmesh.py falls back to Dirichlet A=0 (truncation error,
+## ~3% L bias, ~20% P_wp bias on this geometry).
 ##
 ## Required labels (consumed by calc_fem_kelvin.py):
 ##   block 1 = "coil"      (gapped torus, source J)
@@ -97,7 +107,9 @@ sideset 3 name "sibc"
 # Hide air
 volume {air_top} {air_bot} visibility off
 
-# === Next step: Kelvin is added automatically ================================
-# Solve -> Radia-NGSolve -> OK  (auto-Kelvin + export + launch)
-# Manual: add_kelvin_cubit(R=0.060, symmetry=["z"])
-#         radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+# === Next step: add Kelvin yourself (this .jou does NOT do it) ================
+# In Cubit:
+#   python "from add_kelvin import add_kelvin_cubit"
+#   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
+#   radia_export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+# Or play the companion .py (does everything in one shot).
