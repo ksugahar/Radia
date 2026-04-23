@@ -297,10 +297,16 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None,
             % (src, dst, src_c, src_v, dst_c, dst_v))
 
     # ---- 7. Mesh exterior kelvin volumes ----
+    # When mesh_size is None (default), let the copied surface mesh
+    # constrain the interior — this matches adjacent air-sphere density.
+    # When mesh_size is given, impose it so the Kelvin exterior can be
+    # coarser than the physical domain (typical case, since Kelvin is
+    # just an open-boundary trick and doesn't need fine physics).
     k_str = " ".join(str(v) for v in kelvin_vols)
     for vid in kelvin_vols:
         cubit.cmd("volume %d scheme tetmesh" % vid)
-        # Do NOT set volume size -- let the copied surface mesh constrain
+        if mesh_size is not None:
+            cubit.cmd("volume %d size %g" % (vid, float(mesh_size)))
     cubit.cmd("mesh volume %s" % k_str)
 
     # ---- 8. Block assignment ----
@@ -388,7 +394,8 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None,
 
 
 def auto_add_kelvin_from_current_model(air_block="air",
-                                        kelvin_block="kelvin"):
+                                        kelvin_block="kelvin",
+                                        mesh_size=None):
     """Detect air sphere + symmetry, then call add_kelvin_cubit().
 
     Meant to be invoked by the Radia-NGSolve launcher just before
@@ -403,7 +410,13 @@ def auto_add_kelvin_from_current_model(air_block="air",
       5. Detect symmetry axes: for each of x/y/z, if the air block's
          vertices all have coord >= 0 AND at least one vertex sits on
          the axis plane (coord ~ 0), that axis is a symmetry plane.
-      6. Call ``add_kelvin_cubit(R, symmetry=[...])``.
+      6. Call ``add_kelvin_cubit(R, symmetry=[...], mesh_size=...)``.
+
+    ``mesh_size`` (float in meters, or None): tet edge length for the
+    Kelvin exterior.  None lets add_kelvin_cubit inherit from the air
+    outer surface via copy-mesh (the usual sensible default).  The
+    Kelvin region can usually be coarser than the physical domain —
+    pass an explicit value (e.g. 2-3x air surface size) to override.
 
     Returns the info dict from ``add_kelvin_cubit``, or None on skip /
     failure.  Never raises — the launcher should continue (and fall
@@ -494,13 +507,14 @@ def auto_add_kelvin_from_current_model(air_block="air",
             if half_domain or webcut_full:
                 symmetry.append(name)
 
-        print("Auto-Kelvin: air R=%.4f m, air_vols=%d, symmetry=%s"
-              % (R, len(air_vols), symmetry))
+        print("Auto-Kelvin: air R=%.4f m, air_vols=%d, symmetry=%s, "
+              "mesh_size=%s" % (R, len(air_vols), symmetry, mesh_size))
 
         # --- Step 6: delegate to add_kelvin_cubit ---
         info = add_kelvin_cubit(R=R, air_block=air_block,
                                 symmetry=symmetry,
-                                kelvin_block=kelvin_block)
+                                kelvin_block=kelvin_block,
+                                mesh_size=mesh_size)
         ox, oy, oz = info["center"]
         print("Auto-Kelvin: added at offset=(%.3f, %.3f, %.3f), "
               "symmetry=%s" % (ox, oy, oz, symmetry))
