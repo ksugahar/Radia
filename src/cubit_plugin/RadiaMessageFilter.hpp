@@ -23,6 +23,7 @@
 
 #include "CubitMessage.hpp"
 #include "CubitMessageHandler.hpp"
+#include <algorithm>
 #include <cstring>
 
 namespace radia {
@@ -33,6 +34,17 @@ class LearnEditionFilter : public CubitMessageHandler {
       : previous_(previous) {}
 
   void print_message(const char* message) override {
+    if (!message) {
+      if (previous_) previous_->print_message(message);
+      return;
+    }
+    // Our ScopedLearnEditionFilter decrements the error counter in its
+    // destructor to cancel the 50k-trap side effects.  Cubit tattles
+    // about that via a "WARNING: Error count manually changed from N
+    // to M" message, which is itself noise.  Swallow it.
+    if (std::strstr(message, "Error count manually changed")) {
+      return;
+    }
     if (previous_) previous_->print_message(message);
   }
 
@@ -44,6 +56,7 @@ class LearnEditionFilter : public CubitMessageHandler {
     // (1) 50k-cap Learn Edition notice — harmless, Radia bypasses the cap.
     if (std::strstr(message, "Learn Edition") &&
         std::strstr(message, "restricts export")) {
+      ++swallow_count_;
       return;
     }
     // (2) "Unable to find entities to write" — spurious during radia_export.
@@ -55,26 +68,44 @@ class LearnEditionFilter : public CubitMessageHandler {
     // This filter is RAII-scoped to radia_export execute() only, so builtin
     // Cubit export commands still see the real message normally.
     if (std::strstr(message, "Unable to find entities to write")) {
+      ++swallow_count_;
       return;
     }
     if (previous_) previous_->print_error(message);
   }
 
+  int swallow_count() const { return swallow_count_; }
+
  private:
   CubitMessageHandler* previous_;
+  int swallow_count_ = 0;
 };
 
 // RAII guard: install filter on construction, restore previous handler
-// on destruction. Use at the top of each radia_export command's execute().
+// on destruction.  Additionally decrements Cubit's internal error counter
+// by the number of spurious messages swallowed — otherwise Cubit's
+// session-end "Errors found during session." summary fires even when
+// every printed message was a spurious 50k-trap side effect.
+// Real errors (not matched by the filter) still count.
+// Use at the top of each radia_export command's execute().
 class ScopedLearnEditionFilter {
  public:
   ScopedLearnEditionFilter() {
     previous_ = CubitMessage::get_message_handler();
     filter_ = new LearnEditionFilter(previous_);
     CubitMessage::set_message_handler(filter_);
+    saved_error_count_ = CubitMessage::instance()->get_error_count();
   }
 
   ~ScopedLearnEditionFilter() {
+    // Subtract the number of spurious messages we swallowed from the
+    // error counter, but never go below the pre-filter baseline.
+    // That preserves legitimate errors logged during our execute()
+    // while cancelling the Cubit-internal 50k-trap side effects.
+    const int current = CubitMessage::instance()->get_error_count();
+    const int target = std::max(saved_error_count_,
+                                 current - filter_->swallow_count());
+    CubitMessage::instance()->reset_error_count(target);
     CubitMessage::set_message_handler(previous_);
     delete filter_;
   }
@@ -85,6 +116,7 @@ class ScopedLearnEditionFilter {
  private:
   CubitMessageHandler* previous_ = nullptr;
   LearnEditionFilter* filter_ = nullptr;
+  int saved_error_count_ = 0;
 };
 
 }  // namespace radia

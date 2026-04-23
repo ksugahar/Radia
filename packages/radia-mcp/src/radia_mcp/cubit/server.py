@@ -4361,7 +4361,7 @@ def cubit_export_decision_guide() -> str:
 		"| GMSH visualization | radia_export gmsh \"f.msh\" order N | 1-3 |\n"
 		"| Nastran / JMAG | radia_export nastran \"f.bdf\" order N | 1-2 |\n"
 		"| ParaView | radia_export vtk \"f.vtk\" order N | 1-2 |\n"
-		"| ELF/MAGIC | export meg \"f.meg\" | 1 |\n"
+		"| ELF/MAGIC | radia_export meg \"f.meg\" | 1 |\n"
 		"| Cubit-native archival | export mesh \"f.exo\" | all |\n"
 	)
 

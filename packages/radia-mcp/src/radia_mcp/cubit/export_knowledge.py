@@ -24,7 +24,7 @@ Path A is the recommended export path. Use `radia_export netgen "mesh.vol" order
 | `radia_export gmsh "f.msh" order N` | Gmsh v4.1 (.msh) | 1-3 | Wedge limited to order 2 |
 | `radia_export nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
 | `radia_export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
-| `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
+| `radia_export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
 | `radia_export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | Creates directory with 4 files |
 
 Order 2+ uses NetgenCurver (compact_netgen BuildCurvedElements + ACIS projection).
@@ -352,7 +352,7 @@ EXPORT_COMPARISON = """
 | GMSH visualization | `radia_export gmsh "f.msh" order N` | v4.1, order 1-3 |
 | JMAG / Nastran solver | `radia_export nastran "f.bdf" order N` | Order 1-2, nopyramid for JMAG |
 | ParaView visualization | `radia_export vtk "f.vtk" order N` | Order 1-2 |
-| ELF/MAGIC solver | `export meg "f.meg"` | Order 1, ELF element type labels |
+| ELF/MAGIC solver | `radia_export meg "f.meg"` | Order 1, ELF element type labels |
 | FEMEEM solver | `radia_export femeem "dir"` | Order 1, tet only |
 
 ## Feature Comparison
