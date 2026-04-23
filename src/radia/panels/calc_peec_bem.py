@@ -155,7 +155,7 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
                               solve_loop_bundle)
     from ngsolve import Mesh, BND
     from em_material import EMMaterial
-    from calc_heating_bem import _extract_surface_mesh_filtered
+    from surface_mesh_extract import _extract_surface_mesh_filtered
     from bem_sibc_solver import (ScalarBIESIBCSolver,
                                   compute_phi_inc_from_filaments)
 
