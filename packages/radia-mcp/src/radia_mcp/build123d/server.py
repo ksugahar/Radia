@@ -2905,7 +2905,7 @@ def main():
         use_utf8_stdout()
         print("build123d MCP server self-test:")
 
-        # Test knowledge base topics
+        # Test knowledge base topics (always available — pure text)
         topics = [
             "overview", "primitives_3d", "primitives_2d", "operations",
             "curves", "export_import", "topology", "cae_guidelines",
@@ -2916,28 +2916,48 @@ def main():
             print(f"  build123d_usage('{t}'): {len(result)} chars")
             assert len(result) > 100, f"Topic '{t}' too short"
 
-        # Test execute
-        result = execute_build123d("box = Box(10, 20, 30)")
-        print(f"  execute_build123d('Box(10,20,30)'): {len(result)} chars")
-        import json as _json
-        data = _json.loads(result)
-        assert data["status"] == "ok", f"Execute failed: {data}"
-        assert data["is_valid"], "Box should be valid"
-        assert abs(data["volume"] - 6000.0) < 1, f"Volume wrong: {data['volume']}"
+        # Tests that require the build123d library itself (optional
+        # extra). Skip gracefully in minimal installs — the MCP server
+        # CLI is still considered healthy without build123d present;
+        # the execute/generate tools report a structured "not installed"
+        # error at runtime when the user actually calls them.
+        try:
+            import build123d  # noqa: F401
+            _have_b3d = True
+        except ImportError:
+            _have_b3d = False
 
-        # Test generate_helix_coil
-        result = generate_helix_coil(radius=30, pitch=8, n_turns=2,
-                                     w_start=3, h_start=3, w_end=2, h_end=2,
-                                     sections_per_turn=8)
-        data = _json.loads(result)
-        print(f"  generate_helix_coil: volume={data.get('volume')}, "
-              f"path_pts={len(data.get('path_points', []))}")
-        assert data["status"] == "ok", f"generate_helix_coil failed: {data}"
-        assert data["is_valid"], "Helix coil should be valid"
-        assert data["volume"] > 0, "Volume should be positive"
-        assert len(data["path_points"]) > 10, "Path should have points"
+        if _have_b3d:
+            import json as _json
 
-        # Test prompt
+            # Test execute
+            result = execute_build123d("box = Box(10, 20, 30)")
+            print(f"  execute_build123d('Box(10,20,30)'): {len(result)} chars")
+            data = _json.loads(result)
+            assert data["status"] == "ok", f"Execute failed: {data}"
+            assert data["is_valid"], "Box should be valid"
+            assert abs(data["volume"] - 6000.0) < 1, (
+                f"Volume wrong: {data['volume']}")
+
+            # Test generate_helix_coil
+            result = generate_helix_coil(radius=30, pitch=8, n_turns=2,
+                                         w_start=3, h_start=3,
+                                         w_end=2, h_end=2,
+                                         sections_per_turn=8)
+            data = _json.loads(result)
+            print(f"  generate_helix_coil: volume={data.get('volume')}, "
+                  f"path_pts={len(data.get('path_points', []))}")
+            assert data["status"] == "ok", (
+                f"generate_helix_coil failed: {data}")
+            assert data["is_valid"], "Helix coil should be valid"
+            assert data["volume"] > 0, "Volume should be positive"
+            assert len(data["path_points"]) > 10, "Path should have points"
+        else:
+            print("  build123d library not installed — "
+                  "skipping execute/generate tests (install "
+                  "`radia-mcp[build123d]` for full coverage)")
+
+        # Test prompt (no build123d dep)
         prompt = new_cae_geometry("ih_coil")
         print(f"  new_cae_geometry('ih_coil'): {len(prompt)} chars")
         assert "workpiece" in prompt
