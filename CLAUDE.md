@@ -845,6 +845,38 @@ git push v* tag
 robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 ```
 
+### Distribution Test Policy (2026-04-24)
+
+**POLICY**: **PyPI 経由の配布試験は mdx で行う**。LAB と 100号機 は editable
+install (`pip install -e`) で運用し、PyPI wheel の manifest /
+RECORD / entry-points / package-data / `cubit-plugin-install`
+regular-file deploy の健全性検証は **mdx 限定**。100号機 は PyPI 版の
+テスト対象としない (editable 専用)。Stage-3 が通るまで PyPI 配布の OK を
+宣言してはいけない。
+
+**3 ステージ配布モデル**:
+
+| Stage | マシン | install 形態 | 目的 |
+|-------|--------|-----------|------|
+| 1 | LAB | `pip install -e .` | 開発者ループ。最速フィードバック |
+| 2 | 100号機 | `pip install -e W:\...` (all-users editable) | LAB 編集が 21 人全員で即 live。Cubit plugin は W: への symlink |
+| 3 | mdx | `pip install radia` / `pip install cubit-mesh-export` (PyPI) + `cubit-plugin-install` | PyPI 配布の唯一の検証点 |
+
+**100号機 全ユーザー editable**: `C:\Program Files\Python312` の
+machine-wide site-packages に editable install。`W:\00_CAE\Radia\01_GitHub`
+の ACL は `Authenticated Users Modify` なので全 local ユーザーが読める
+(admin 不要)。
+
+**100号機 Cubit plugin symlink** (editable の C++ 側):
+- `<Cubit>\bin\radia_cubit.ccl` → W:\…\src\radia\radia_cubit.ccl
+- `<Cubit>\bin\plugins\radia_cubit.ccm` → W:\…\src\radia\radia_cubit.ccm
+- `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` → W:\…\packages\cubit-mesh-export\src\cubit_mesh_export\radia_cubit_mesh.pyd
+
+LAB `Build.ps1` の出力が即座に 100 の Cubit で有効。symlink 下では
+**`cubit-plugin-install` を走らせない** (symlink が regular-file で上書き
+されて editable-deploy が壊れる)。mdx では regular-file deploy
+ (`cubit-plugin-install`) を検証する。
+
 ### CI Testing Policy
 
 **POLICY**: CI/CD のテストだけでは不十分。Cubit が必要な機能（`export_curved`, panels, BEM extractor）は **Cubit 環境でのローカルテストが必須**。CI は C++ ビルドと基本テスト（Cubit 不要なもの）のみ。
