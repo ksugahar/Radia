@@ -1,5 +1,6 @@
 #include "ExportMegCommand.hpp"
 #include "MeshData.hpp"
+#include "RadiaMessageFilter.hpp"
 #include "CubitMessage.hpp"
 #include "CubitInterface.hpp"
 #include "utf8_path.hpp"
@@ -85,6 +86,9 @@ static std::unordered_map<int, std::string> parse_labels(const std::string &s)
 
 bool ExportMegCommand::execute(CubitCommandData &data)
 {
+  // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.
+  radia::ScopedLearnEditionFilter _lef_guard;
+
   std::string filename;
   data.get_string("filename", filename);
 
