@@ -11,10 +11,17 @@ environment variable; this script reads the JSON and dispatches.
 Config schema (all keys optional; defaults in parens)::
 
     {
-      "add_kelvin":           bool   (default True)
-      "kelvin_air_block":     str    (default "air")
-      "kelvin_block_name":    str    (default "kelvin")
+      "add_kelvin":           bool         (default True)
+      "kelvin_air_block":     str          (default "air")
+      "kelvin_block_name":    str          (default "kelvin")
+      "kelvin_mesh_size":     float|null   (default null = auto from air)
     }
+
+``kelvin_mesh_size`` is the tet edge length [m] imposed on the Kelvin
+exterior sphere.  ``null`` (default) lets add_kelvin_cubit inherit the
+size from the air outer surface via copy-mesh — usually fine.  For
+large models you may want a COARSER Kelvin mesh (e.g. 2-3x the air
+surface size); specify an explicit float to override.
 
 If ``RADIA_LAUNCHER_CONFIG`` is not set or the file is missing, all
 defaults apply — i.e. the pre-argument-driven behaviour is preserved,
@@ -47,6 +54,7 @@ def _load_config():
         "add_kelvin":        True,
         "kelvin_air_block":  "air",
         "kelvin_block_name": "kelvin",
+        "kelvin_mesh_size":  None,
     }
     cfg_path = os.environ.get("RADIA_LAUNCHER_CONFIG", "")
     if not cfg_path:
@@ -79,7 +87,8 @@ else:
     try:
         _info = auto_add_kelvin_from_current_model(
             air_block=cfg["kelvin_air_block"],
-            kelvin_block=cfg["kelvin_block_name"])
+            kelvin_block=cfg["kelvin_block_name"],
+            mesh_size=cfg["kelvin_mesh_size"])
         if _info is not None:
             ox, oy, oz = _info["center"]
             print(f"[auto_kelvin_entry] Kelvin added at "
