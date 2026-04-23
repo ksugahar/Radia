@@ -1168,6 +1168,27 @@ void RadiaMenuHandler::launch_radia_ngsolve()
       "if a 'kelvin' block already exists.  Uncheck for Dirichlet-"
       "truncation baselines.");
   hKelvin->addWidget(kelvinCheck);
+
+  // Kelvin exterior mesh size (optional).  Blank means "auto" — let
+  // add_kelvin_cubit inherit the size from the air outer surface via
+  // copy-mesh (the current default).  A typical override is a value
+  // 2-3x the air surface size, since the Kelvin region is just an
+  // open-boundary trick and can be much coarser than the physical
+  // domain.  Value in meters.  Persisted across sessions via
+  // launcher.json / last_kelvin_mesh.
+  hKelvin->addSpacing(20);
+  hKelvin->addWidget(new QLabel("Mesh size [m]:"));
+  QLineEdit *kelvinMeshEdit = new QLineEdit();
+  kelvinMeshEdit->setPlaceholderText("auto (blank) or e.g. 0.03");
+  kelvinMeshEdit->setMaximumWidth(130);
+  kelvinMeshEdit->setToolTip(
+      "Tet edge length for the Kelvin exterior sphere.  Blank = auto "
+      "(inherit from air surface).  For faster meshing / smaller "
+      ".vol, specify a value coarser than your air mesh.");
+  QString lastKelvinMesh = prev.contains("last_kelvin_mesh")
+      ? prev["last_kelvin_mesh"].toString() : QString();
+  kelvinMeshEdit->setText(lastKelvinMesh);
+  hKelvin->addWidget(kelvinMeshEdit);
   hKelvin->addStretch();
   layout->addWidget(kelvinRow);
 
@@ -1293,13 +1314,28 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   if (outDir.isEmpty()) outDir = ".";
 
   bool kelvinAuto = kelvinCheck->isChecked();
+  QString kelvinMeshStr = kelvinMeshEdit->text().trimmed();
+  // Parse kelvin mesh size: empty -> auto (null in JSON), else float.
+  bool hasMeshSize = false;
+  double kelvinMeshSize = 0.0;
+  if (!kelvinMeshStr.isEmpty()) {
+    bool ok = false;
+    double v = kelvinMeshStr.toDouble(&ok);
+    if (ok && v > 0.0) { hasMeshSize = true; kelvinMeshSize = v; }
+    else {
+      PRINT_WARNING("Kelvin mesh size '%s' is not a positive number; "
+                    "using auto (blank).\n",
+                    kelvinMeshStr.toLocal8Bit().constData());
+    }
+  }
 
-  // Save settings
+  // Save settings (persist last values for next dialog open)
   saveLauncherSettings({
       {"last_mode", ms.title},
       {"last_order", order},
       {"last_jou_dir", outDir},
       {"last_kelvin_auto", kelvinAuto},
+      {"last_kelvin_mesh", kelvinMeshStr},  // store raw text so blank = blank
   });
 
   // --- Export .vol (only when the mode needs it) ---
@@ -1333,11 +1369,54 @@ void RadiaMenuHandler::launch_radia_ngsolve()
         PRINT_WARNING("Auto-Kelvin skipped: %s not found\n",
                       entryScript.toLocal8Bit().constData());
       } else {
+        // Write the entry-script config JSON so the Python helper
+        // picks up dialog state (add_kelvin + kelvin_mesh_size).
+        // Schema matches tests/panels/test_auto_kelvin_cli.py exactly.
+        QString cfgPath = outDir + "/radia_launcher_config.json";
+        cfgPath.replace("\\", "/");
+        {
+          QJsonObject cfg;
+          cfg["add_kelvin"]        = true;   // kelvinAuto == true here
+          cfg["kelvin_air_block"]  = QString("air");
+          cfg["kelvin_block_name"] = QString("kelvin");
+          if (hasMeshSize)
+            cfg["kelvin_mesh_size"] = kelvinMeshSize;
+          else
+            cfg["kelvin_mesh_size"] = QJsonValue();  // null = auto
+          QFile f(cfgPath);
+          if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            f.write(QJsonDocument(cfg).toJson(QJsonDocument::Compact));
+            f.close();
+            PRINT_INFO("Auto-Kelvin: config -> %s (mesh_size=%s)\n",
+                       cfgPath.toLocal8Bit().constData(),
+                       hasMeshSize
+                         ? QString::number(kelvinMeshSize).toLocal8Bit()
+                                   .constData()
+                         : "auto");
+          } else {
+            PRINT_WARNING("Auto-Kelvin: cannot write config %s, "
+                          "entry will run with defaults\n",
+                          cfgPath.toLocal8Bit().constData());
+          }
+        }
+
+        // Expose the config path to Cubit's embedded Python via the
+        // process environment block.  auto_kelvin_entry.py reads
+        // $RADIA_LAUNCHER_CONFIG.  SetEnvironmentVariable mutates the
+        // current process, which is what os.environ reads from.
+        SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG",
+                                (LPCWSTR)cfgPath.utf16());
+
         PRINT_INFO("Auto-Kelvin: playing %s\n",
                    entryScript.toLocal8Bit().constData());
         std::string playCmd = "play \"" +
             entryScript.toLocal8Bit().toStdString() + "\"";
         CubitInterface::cmd(playCmd.c_str());
+
+        // Clear the env var so it doesn't leak into subsequent
+        // invocations (user may re-open the dialog with different
+        // settings in the same Cubit session).
+        SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", nullptr);
       }
     }
 
