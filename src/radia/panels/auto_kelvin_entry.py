@@ -40,8 +40,30 @@ import os
 import sys
 
 # Locate add_kelvin: this file and add_kelvin.py live in the same
-# directory (radia/panels/), so its own dir is on sys.path.
-_here = os.path.dirname(os.path.abspath(__file__))
+# directory (radia/panels/).  Cubit's `play` exec's .py via
+# `exec(compile(source, "<string>", "exec"))` and does NOT bind
+# __file__ in the exec globals, so `os.path.abspath(__file__)` raises
+# NameError when invoked through `play`.  Three fallbacks in order:
+#   1. __file__             — available when imported normally
+#   2. RADIA_PANELS_DIR env — set by the C++ launcher next to
+#                              RADIA_LAUNCHER_CONFIG
+#   3. sys.path search      — find add_kelvin.py on any entry
+_here = None
+if "__file__" in globals():
+    _here = os.path.dirname(os.path.abspath(__file__))
+if not _here:
+    _here = os.environ.get("RADIA_PANELS_DIR")
+if not _here or not os.path.isfile(os.path.join(_here, "add_kelvin.py")):
+    for _p in sys.path:
+        if _p and os.path.isfile(os.path.join(_p, "add_kelvin.py")):
+            _here = _p
+            break
+if not _here or not os.path.isfile(os.path.join(_here, "add_kelvin.py")):
+    raise RuntimeError(
+        "auto_kelvin_entry.py: cannot locate panels dir "
+        "(no __file__, no RADIA_PANELS_DIR env, add_kelvin.py not in "
+        "sys.path).  The C++ launcher must set RADIA_PANELS_DIR or "
+        "prepend the panels directory to sys.path before `play`.")
 if _here not in sys.path:
     sys.path.insert(0, _here)
 

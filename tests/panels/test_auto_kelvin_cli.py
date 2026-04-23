@@ -140,6 +140,11 @@ def _run_cubit_with_config(tmpdir: Path, add_kelvin: bool,
     }), encoding="utf-8")
 
     env = os.environ.copy()
+    # RADIA_PANELS_DIR lets auto_kelvin_entry.py locate add_kelvin.py
+    # without relying on __file__ (Cubit's `play` does not bind it).
+    # The C++ launcher sets this env var alongside RADIA_LAUNCHER_CONFIG;
+    # the test does the same to exercise the same code path.
+    env["RADIA_PANELS_DIR"] = str(PANELS)
     if set_env:
         env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
     else:

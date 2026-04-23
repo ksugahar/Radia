@@ -1406,6 +1406,12 @@ void RadiaMenuHandler::launch_radia_ngsolve()
         // current process, which is what os.environ reads from.
         SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG",
                                 (LPCWSTR)cfgPath.utf16());
+        // Cubit's `play` exec's scripts without binding __file__,
+        // so auto_kelvin_entry.py cannot locate its sibling
+        // add_kelvin.py via os.path.abspath(__file__).  Pass the
+        // panels directory explicitly via RADIA_PANELS_DIR.
+        SetEnvironmentVariableW(L"RADIA_PANELS_DIR",
+                                (LPCWSTR)panelsDirFs.utf16());
 
         PRINT_INFO("Auto-Kelvin: playing %s\n",
                    entryScript.toLocal8Bit().constData());
@@ -1413,10 +1419,11 @@ void RadiaMenuHandler::launch_radia_ngsolve()
             entryScript.toLocal8Bit().toStdString() + "\"";
         CubitInterface::cmd(playCmd.c_str());
 
-        // Clear the env var so it doesn't leak into subsequent
+        // Clear both env vars so they don't leak into subsequent
         // invocations (user may re-open the dialog with different
         // settings in the same Cubit session).
         SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", nullptr);
+        SetEnvironmentVariableW(L"RADIA_PANELS_DIR", nullptr);
       }
     }
 
