@@ -104,7 +104,10 @@ sideset 3 name "sibc"
 # Hide air for visual inspection
 volume {air_top} {air_bot} visibility off
 
-# === Next step: Kelvin is added automatically ================================
-# Solve -> Radia-NGSolve -> OK  (auto-Kelvin + export + launch)
-# Manual: add_kelvin_cubit(R=0.060, symmetry=["z"])
-#         radia_export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
+# === Next step: add Kelvin yourself (this .jou does NOT do it) ================
+# DEMOTED to examples/induction_heating/demoted_samples/ on 2026-04-23.
+# See demoted_samples/README.md.  Play ih_fem_kelvin_skin.py instead to get
+# Kelvin added automatically, or run these Cubit Python commands manually:
+#   python "from add_kelvin import add_kelvin_cubit"
+#   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
+#   radia_export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
