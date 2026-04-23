@@ -387,6 +387,131 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None,
     }
 
 
+def auto_add_kelvin_from_current_model(air_block="air",
+                                        kelvin_block="kelvin"):
+    """Detect air sphere + symmetry, then call add_kelvin_cubit().
+
+    Meant to be invoked by the Radia-NGSolve launcher just before
+    `radia_export netgen`.  Runs inside Cubit's embedded Python.
+
+    Steps (matching the 2026-04-14 c60a6007 implementation):
+      1. If a `<kelvin_block>` block already exists, skip (idempotent).
+      2. Find the `<air_block>` block.  Abort with a warning if missing.
+      3. Across all volumes in that block, pick the surface with the
+         largest area -> the outer sphere boundary.
+      4. R = max vertex distance from the origin on that surface.
+      5. Detect symmetry axes: for each of x/y/z, if the air block's
+         vertices all have coord >= 0 AND at least one vertex sits on
+         the axis plane (coord ~ 0), that axis is a symmetry plane.
+      6. Call ``add_kelvin_cubit(R, symmetry=[...])``.
+
+    Returns the info dict from ``add_kelvin_cubit``, or None on skip /
+    failure.  Never raises — the launcher should continue (and fall
+    back to Dirichlet truncation) if auto-detection fails.
+    """
+    import math as _m
+    try:
+        import cubit
+    except ImportError:
+        print("WARNING: auto_add_kelvin_from_current_model requires the "
+              "cubit Python module (must run inside Cubit).")
+        return None
+
+    # --- Step 1: idempotent skip ---
+    for bid in cubit.get_block_id_list():
+        bn = cubit.get_exodus_entity_name("block", bid)
+        if bn and bn.lower() == kelvin_block.lower():
+            print("Auto-Kelvin: '%s' block already present — skipping."
+                  % kelvin_block)
+            return None
+
+    # --- Step 2: locate the air block ---
+    air_bid = None
+    for bid in cubit.get_block_id_list():
+        bn = cubit.get_exodus_entity_name("block", bid)
+        if bn and bn.lower() == air_block.lower():
+            air_bid = bid
+            break
+    if air_bid is None:
+        print("WARNING: Auto-Kelvin needs an '%s' block.  "
+              "None found — skipping." % air_block)
+        return None
+
+    try:
+        # --- Step 3: largest surface area among air volumes ---
+        air_vols = list(cubit.parse_cubit_list(
+            "volume", "in block %d" % air_bid))
+        if not air_vols:
+            print("WARNING: Auto-Kelvin: '%s' block is empty." % air_block)
+            return None
+
+        best_sid, best_area = 0, 0.0
+        for vid in air_vols:
+            for sid in cubit.get_relatives("volume", vid, "surface"):
+                a = cubit.surface(sid).area()
+                if a > best_area:
+                    best_area = a
+                    best_sid = sid
+        if best_sid == 0:
+            print("WARNING: Auto-Kelvin: no surfaces found on air volumes.")
+            return None
+
+        # --- Step 4: R from outer-surface vertices ---
+        vids_outer = cubit.get_relatives("surface", best_sid, "vertex")
+        R = max(
+            _m.sqrt(sum(c * c for c in cubit.vertex(v).coordinates()))
+            for v in vids_outer)
+
+        # --- Step 5: symmetry detection ---
+        # Two cases end up as the same axis-in-symmetry:
+        #   (a) half-domain: all vertices on one side of the plane, AND
+        #       at least one vertex sits on the plane (min == 0).
+        #   (b) webcut-kept-both: the air is split into >=2 volumes along
+        #       the plane but both halves are retained (full sphere).
+        #       Detected by: multi-volume air AND vertex range straddles
+        #       0 symmetrically AND a vertex sits on the plane.
+        # In case (b), passing the axis as "symmetry" to add_kelvin_cubit
+        # is what triggers the matching webcut on the Kelvin side, so
+        # the copy-mesh step can pair up the equator curves.
+        all_verts = set()
+        for vid in air_vols:
+            for v in cubit.get_relatives("volume", vid, "vertex"):
+                all_verts.add(v)
+        symmetry = []
+        multi_vol = len(air_vols) > 1
+        for axis, name in enumerate(("x", "y", "z")):
+            coords = [cubit.vertex(v).coordinates()[axis]
+                      for v in all_verts]
+            cmin, cmax = min(coords), max(coords)
+            on_plane = any(abs(c) < 1e-6 for c in coords)
+            # Case (a): half-domain
+            half_domain = cmin >= -1e-6 and on_plane
+            # Case (b): full-domain with webcut equator kept
+            scale = max(abs(cmin), abs(cmax), 1e-12)
+            webcut_full = (multi_vol and on_plane
+                           and abs(cmin + cmax) < 1e-6 * scale
+                           and cmin < -1e-6)
+            if half_domain or webcut_full:
+                symmetry.append(name)
+
+        print("Auto-Kelvin: air R=%.4f m, air_vols=%d, symmetry=%s"
+              % (R, len(air_vols), symmetry))
+
+        # --- Step 6: delegate to add_kelvin_cubit ---
+        info = add_kelvin_cubit(R=R, air_block=air_block,
+                                symmetry=symmetry,
+                                kelvin_block=kelvin_block)
+        ox, oy, oz = info["center"]
+        print("Auto-Kelvin: added at offset=(%.3f, %.3f, %.3f), "
+              "symmetry=%s" % (ox, oy, oz, symmetry))
+        return info
+    except Exception as e:
+        print("WARNING: Auto-Kelvin failed: %s" % e)
+        print("Proceeding without Kelvin (Dirichlet truncation on outer "
+              "boundary).")
+        return None
+
+
 # ====================================================================
 # OCC path (Layer 4 -- system Python 3.12 + NGSolve)
 # ====================================================================
