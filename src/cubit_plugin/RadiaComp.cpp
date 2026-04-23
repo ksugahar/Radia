@@ -1836,7 +1836,7 @@ QString ExportDialog::cubitCommand() const
         if (idx == 1) dimOpt = "twod";
         else if (idx == 2) dimOpt = "axisymmetric";
       }
-      cmd = QString("export meg \"%1\" %2").arg(file).arg(dimOpt);
+      cmd = QString("radia_export meg \"%1\" %2").arg(file).arg(dimOpt);
       // Encode per-block labels: "1:MMB,2:MWL,3:MCO"
       // Blocks with "(none)" are skipped (not exported)
       if (mBlockTable && mBlockTable->rowCount() > 0) {
