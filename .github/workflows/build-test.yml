@@ -245,29 +245,47 @@ jobs:
             Write-Host "::error::No radia-mcp wheel found"
             exit 1
           }
-          Write-Host "Installing $($whl.Name) for selftest..."
-          pip install --force-reinstall --no-deps "$($whl.FullName)" --quiet
+
+          # Install into a fresh venv so we don't fight with the
+          # self-hosted runner's persistent Python state.  Previous runs'
+          # mcp-server-*.exe in C:\Program Files\Python312\Scripts can be
+          # locked (WinError 32) if any orphan process holds them open,
+          # and those script wrappers are what `pip install --force-
+          # reinstall` tries to overwrite.  A dedicated venv side-steps
+          # the whole class of locking problems.
+          $venv = Join-Path $env:RUNNER_TEMP "radia-mcp-selftest-venv"
+          if (Test-Path $venv) { Remove-Item $venv -Recurse -Force }
+          python -m venv $venv
+          $pyInVenv = Join-Path $venv "Scripts\python.exe"
+          & $pyInVenv -m pip install --upgrade pip --quiet
+          Write-Host "Installing $($whl.Name) into selftest venv..."
+          & $pyInVenv -m pip install "$($whl.FullName)" --quiet
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::radia-mcp wheel install failed"
+            Write-Host "::error::radia-mcp wheel install failed in venv"
             exit $LASTEXITCODE
           }
 
+          # Drive each server via `python -m` rather than the .exe shim.
+          # Equivalent entrypoint (same module main()), but bypasses the
+          # console-script wrapper entirely — matches how end users would
+          # invoke these from `uv run --with radia-mcp -m ...` or
+          # `python -m radia_mcp.X.server`.
           $servers = @(
-            'mcp-server-radia-ngsolve',
-            'mcp-server-cubit',
-            'mcp-server-build123d',
-            'mcp-server-gmsh',
-            'mcp-server-elf',
-            'mcp-server-radia-interop'
+            @{ name = 'mcp-server-radia-ngsolve';  mod = 'radia_mcp.radia_ngsolve.server' },
+            @{ name = 'mcp-server-cubit';          mod = 'radia_mcp.cubit.server' },
+            @{ name = 'mcp-server-build123d';      mod = 'radia_mcp.build123d.server' },
+            @{ name = 'mcp-server-gmsh';           mod = 'radia_mcp.gmsh.server' },
+            @{ name = 'mcp-server-elf';            mod = 'radia_mcp.elf.server' },
+            @{ name = 'mcp-server-radia-interop';  mod = 'radia_mcp.interop.server' }
           )
           $failed = @()
           foreach ($s in $servers) {
             Write-Host ""
-            Write-Host "=== $s --selftest ==="
-            & $s --selftest
+            Write-Host "=== $($s.name) --selftest ==="
+            & $pyInVenv -m $s.mod --selftest
             if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::$s --selftest exited $LASTEXITCODE"
-              $failed += $s
+              Write-Host "::error::$($s.name) --selftest exited $LASTEXITCODE"
+              $failed += $s.name
             }
           }
           if ($failed.Count -gt 0) {
