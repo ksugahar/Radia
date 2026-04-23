@@ -1,5 +1,6 @@
 #include "ExportNetgenCommand.hpp"
 #include "MeshData.hpp"
+#include "RadiaMessageFilter.hpp"
 #include "CubitInterface.hpp"
 #include "CubitMessage.hpp"
 #include <chrono>
@@ -106,6 +107,11 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   PRINT_ERROR("radia_export netgen requires Netgen support (not built).\n");
   return false;
 #else
+  // Suppress Cubit Learn Edition's 50k-cap ERROR during the export.
+  // Radia bypasses the cap and exports successfully regardless, so
+  // the ERROR line is misleading noise confusing users in logs.
+  radia::ScopedLearnEditionFilter _lef_guard;
+
   auto t_start = std::chrono::high_resolution_clock::now();
 
   std::string filename;

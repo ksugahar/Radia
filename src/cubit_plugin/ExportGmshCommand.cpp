@@ -1,6 +1,7 @@
 #include "ExportGmshCommand.hpp"
 #include "MeshData.hpp"
 #include "NetgenCurver.hpp"
+#include "RadiaMessageFilter.hpp"
 #include "CubitMessage.hpp"
 #include "utf8_path.hpp"
 
@@ -52,6 +53,10 @@ std::vector<std::string> ExportGmshCommand::get_help()
 
 bool ExportGmshCommand::execute(CubitCommandData &data)
 {
+  // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.  Radia
+  // completes the export regardless; the ERROR is misleading noise.
+  radia::ScopedLearnEditionFilter _lef_guard;
+
   std::string filename;
   data.get_string("filename", filename);
 

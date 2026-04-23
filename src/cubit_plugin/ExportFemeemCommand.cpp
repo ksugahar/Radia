@@ -1,5 +1,6 @@
 #include "ExportFemeemCommand.hpp"
 #include "MeshData.hpp"
+#include "RadiaMessageFilter.hpp"
 #include "CubitMessage.hpp"
 #include "utf8_path.hpp"
 
@@ -59,6 +60,9 @@ std::vector<std::string> ExportFemeemCommand::get_help()
 
 bool ExportFemeemCommand::execute(CubitCommandData &data)
 {
+  // Suppress Cubit Learn Edition's harmless 50k-cap ERROR.
+  radia::ScopedLearnEditionFilter _lef_guard;
+
   std::string dirname;
   data.get_string("filename", dirname);
 
