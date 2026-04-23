@@ -15,6 +15,7 @@
 #include <direct.h>  // _getcwd
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDateTime>
@@ -1146,6 +1147,30 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   hOrder->addStretch();
   layout->addWidget(orderRow);
 
+  // Auto-Kelvin checkbox.  When checked (default) and the current
+  // Cubit model has an "air" block but no "kelvin" block, the launcher
+  // injects `add_kelvin_cubit()` via the auto_add_kelvin_from_current_
+  // model() helper just before `radia_export netgen`.  Uncheck for
+  // no-Kelvin baselines (Dirichlet truncation on the outer air
+  // boundary) or for BEM modes where Kelvin is unnecessary.
+  // Settings persist via launcher.json alongside last_mode / last_order.
+  QWidget *kelvinRow = new QWidget();
+  QHBoxLayout *hKelvin = new QHBoxLayout(kelvinRow);
+  hKelvin->setContentsMargins(0, 0, 0, 0);
+  QCheckBox *kelvinCheck = new QCheckBox(
+      "Add Kelvin open boundary (auto)");
+  bool lastKelvinAuto = prev.contains("last_kelvin_auto")
+      ? prev["last_kelvin_auto"].toBool() : true;
+  kelvinCheck->setChecked(lastKelvinAuto);
+  kelvinCheck->setToolTip(
+      "Before exporting the .vol, auto-add a Kelvin exterior sphere "
+      "to the Cubit model (needs an 'air' block).  Idempotent — skips "
+      "if a 'kelvin' block already exists.  Uncheck for Dirichlet-"
+      "truncation baselines.");
+  hKelvin->addWidget(kelvinCheck);
+  hKelvin->addStretch();
+  layout->addWidget(kelvinRow);
+
   // Label validation area
   QLabel *labelWidget = new QLabel();
   labelWidget->setWordWrap(true);
@@ -1267,11 +1292,14 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   }
   if (outDir.isEmpty()) outDir = ".";
 
+  bool kelvinAuto = kelvinCheck->isChecked();
+
   // Save settings
   saveLauncherSettings({
       {"last_mode", ms.title},
       {"last_order", order},
       {"last_jou_dir", outDir},
+      {"last_kelvin_auto", kelvinAuto},
   });
 
   // --- Export .vol (only when the mode needs it) ---
@@ -1283,6 +1311,35 @@ void RadiaMenuHandler::launch_radia_ngsolve()
     }
     CubitInterface::silent_cmd(
         ("cd \"" + outDir.toLocal8Bit() + "\"").constData());
+
+    // --- Auto-Kelvin: add open-boundary sphere if requested ---
+    // Plays radia/panels/auto_kelvin_entry.py, a tiny wrapper that
+    // imports add_kelvin.auto_add_kelvin_from_current_model() and
+    // invokes it.  The helper is idempotent (skips if a "kelvin"
+    // block already exists) and degrades gracefully (warns + returns
+    // None) when no "air" block is present or detection fails.
+    // Runs BEFORE `radia_export netgen` so the Kelvin block ends up
+    // in the .vol output.
+    //
+    // We use `play "<path>.py"` rather than `python "stmt"` because
+    // the `python` keyword is not recognised at the top level of
+    // Cubit's journal parser (verified 2026-04-23), while `play`
+    // works for both .jou and .py files.
+    if (kelvinAuto) {
+      QString panelsDirFs = pkgDir + "/panels";
+      panelsDirFs.replace("\\", "/");
+      QString entryScript = panelsDirFs + "/auto_kelvin_entry.py";
+      if (!QFile::exists(entryScript)) {
+        PRINT_WARNING("Auto-Kelvin skipped: %s not found\n",
+                      entryScript.toLocal8Bit().constData());
+      } else {
+        PRINT_INFO("Auto-Kelvin: playing %s\n",
+                   entryScript.toLocal8Bit().constData());
+        std::string playCmd = "play \"" +
+            entryScript.toLocal8Bit().toStdString() + "\"";
+        CubitInterface::cmd(playCmd.c_str());
+      }
+    }
 
     PRINT_INFO("Exporting Netgen .vol (order %d) to %s...\n",
                order, volPath.toLocal8Bit().constData());
