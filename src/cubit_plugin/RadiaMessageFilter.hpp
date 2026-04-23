@@ -37,9 +37,24 @@ class LearnEditionFilter : public CubitMessageHandler {
   }
 
   void print_error(const char* message) override {
-    if (message && std::strstr(message, "Learn Edition") &&
+    if (!message) {
+      if (previous_) previous_->print_error(message);
+      return;
+    }
+    // (1) 50k-cap Learn Edition notice — harmless, Radia bypasses the cap.
+    if (std::strstr(message, "Learn Edition") &&
         std::strstr(message, "restricts export")) {
-      // Swallow: this is the harmless 50k-cap notice.
+      return;
+    }
+    // (2) "Unable to find entities to write" — spurious during radia_export.
+    // Cubit's generic export-command dispatch layer expects entity-selector
+    // arguments (e.g. `export stl "f" volume all`) and prints this message
+    // when the 50k-cap trap fires.  radia_export does NOT use that dispatch
+    // model — it takes only a filename and walks the full mesh internally
+    // via CubitInterface.  So the message is misapplied to our command.
+    // This filter is RAII-scoped to radia_export execute() only, so builtin
+    // Cubit export commands still see the real message normally.
+    if (std::strstr(message, "Unable to find entities to write")) {
       return;
     }
     if (previous_) previous_->print_error(message);
