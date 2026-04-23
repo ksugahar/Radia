@@ -67,19 +67,32 @@ Optional: (none) -- uses FastHenry .inp, not .vol labels
 
 ## Sample .jou Files
 
-Each radia_*.py MUST have a corresponding sample in `panels/samples/`:
+Each radia_*.py MUST have a corresponding sample in `panels/samples/`.
+Only samples that are locked by a golden test under `tests/panels/` are
+shipped in the wheel — others live under `examples/` (see
+CLAUDE.md § "Panel Samples Quality Policy").
+
+Current layout (post-2026-04-23 demotion):
 
 ```
-radia_ih.py  -> panels/samples/ih_bem_sample.jou         (BEM: surface mesh, small air)
-                panels/samples/ih_fem_sample.jou         (FEM: volume mesh, large air Dirichlet)
-                panels/samples/ih_fem_kelvin_sample.jou  (FEM + Kelvin exterior domain, exact open BC)
+radia_ih.py  -> panels/samples/ih_bem_sample.jou            (BEM: cubit-mesh-export smoke test)
+                panels/samples/ih_peec_bem_coarse.jou        (peec_bem mode, golden)
+                panels/samples/ih_fem_kelvin_skin_fine.jou   (fem_coilmesh mode, golden)
+                panels/samples/ih_peec_inductance.jou        (peec_inductance mode, golden)
 radia_em.py  -> panels/samples/em_sample.jou
 radia_pcb.py -> panels/samples/pcb_sample.jou
+
+Demoted (examples/induction_heating/demoted_samples/):
+  ih_fem_sample.jou              (no-Kelvin FEM baseline, truncation demo)
+  ih_fem_kelvin_sample.jou/.py   (small-mesh FEM+Kelvin, misleading auto-Kelvin comment)
+  ih_fem_kelvin_skin.jou/.py     (coarse variant of skin_fine)
+  ih_closed_torus.jou/.py        (closed-torus research variant)
 ```
 
-Naming: {stem}_sample.jou where stem is the part after radia_ in the filename. A
-single radia_*.py panel may ship multiple samples when distinct solver methods
-need different mesh strategies — radia_ih ships three (BEM, FEM Dirichlet, FEM Kelvin).
+Naming: {stem}_sample.jou where stem is the part after radia_ in the filename.
+A single radia_*.py panel may ship multiple samples when distinct solver methods
+need different mesh strategies — radia_ih ships four (BEM smoke, peec_bem,
+fem_coilmesh, peec_inductance).
 
 Samples are packaged with pip install radia and serve as:
 - Default working folder for the launcher

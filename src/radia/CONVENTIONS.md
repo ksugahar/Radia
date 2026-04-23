@@ -23,17 +23,26 @@ OPTIONAL_FILES = {"Coil script": "Python (*.py)"}  # Optional input file browse 
 
 ## Sample Journal Files (required)
 
-Each `radia_*.py` must have a corresponding sample `.jou` file in `src/radia/panels/samples/`:
+Each `radia_*.py` must have a corresponding sample `.jou` file in `src/radia/panels/samples/`.
+Only golden-test-locked samples (`tests/panels/test_*_golden.py`) are shipped in the wheel.
+
+Current layout (post-2026-04-23 demotion):
 
 ```
-radia_ih.py   ->  samples/ih_bem_sample.jou         (BEM: coil + workpiece + small air)
-                  samples/ih_fem_sample.jou         (FEM: coil + workpiece + large air, Dirichlet truncation)
-                  samples/ih_fem_kelvin_sample.jou  (FEM + Kelvin: coil + workpiece + air + outer shell, exact open BC)
+radia_ih.py   ->  samples/ih_bem_sample.jou            (BEM: cubit-mesh-export smoke test)
+                  samples/ih_peec_bem_coarse.jou       (peec_bem mode, golden-locked)
+                  samples/ih_fem_kelvin_skin_fine.jou  (fem_coilmesh mode, golden-locked)
+                  samples/ih_peec_inductance.jou       (peec_inductance mode, golden-locked)
 radia_em.py   ->  samples/em_sample.jou
 radia_pcb.py  ->  samples/pcb_sample.jou
 ```
 
-Naming convention: `{stem}_sample.jou` where `{stem}` is the part after `radia_` (e.g., `radia_em.py` -> `em`). Multiple samples per stem are allowed when distinct solver methods need different mesh strategies — radia_ih ships three (BEM surface mesh, FEM Dirichlet, FEM Kelvin).
+Non-canonical / research-stage samples live under `examples/induction_heating/demoted_samples/`
+(see that directory's README for the demotion history — e.g., the old
+`ih_fem_sample.jou` no-Kelvin baseline and the small-mesh `ih_fem_kelvin_sample.jou`
+with its misleading "auto-Kelvin" comment).
+
+Naming convention: `{stem}_sample.jou` where `{stem}` is the part after `radia_` (e.g., `radia_em.py` -> `em`). Multiple samples per stem are allowed when distinct solver methods need different mesh strategies — radia_ih ships four shipped samples (one per panel mode).
 
 These samples are:
 - Packaged with `pip install radia` (included in wheel)
