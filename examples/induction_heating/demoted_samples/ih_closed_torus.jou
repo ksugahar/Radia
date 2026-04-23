@@ -87,7 +87,10 @@ sideset 2 name "coil_surface"
 
 volume {air_top} {air_bot} visibility off
 
-# === Next step: Kelvin + export ==============================================
-# Solve -> Radia-NGSolve -> OK (auto-Kelvin + export + launch)
-# Manual: add_kelvin_cubit(R=0.060, symmetry=["z"])
-#         radia_export netgen "ih_closed_torus.vol" order 1 overwrite
+# === Next step: add Kelvin yourself, then export =============================
+# DEMOTED to examples/induction_heating/demoted_samples/ on 2026-04-23.
+# See demoted_samples/README.md.  Play ih_closed_torus.py for one-shot
+# Kelvin + export, or run manually in Cubit after this .jou finishes:
+#   python "from add_kelvin import add_kelvin_cubit"
+#   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
+#   radia_export netgen "ih_closed_torus.vol" order 1 overwrite
