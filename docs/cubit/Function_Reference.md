@@ -15,12 +15,14 @@ All commands are available in journal files (.jou) and the Cubit command line.
 | `radia_export gmsh "f.msh" order N` | Gmsh v4.1 | 1-3 | NetgenCurver + ACIS | [export_Gmsh](export_Gmsh.md) |
 | `radia_export nastran "f.bdf" order N` | Nastran BDF | 1-2 | NetgenCurver + ACIS | [export_Nastran](export_Nastran.md) |
 | `radia_export vtk "f.vtk" order N` | VTK Legacy | 1-2 | NetgenCurver + ACIS | [export_vtk](export_vtk.md) |
-| `export meg "f.meg"` | ELF/MAGIC MEG | 1 | — | [export_meg](export_meg.md) |
+| `radia_export meg "f.meg"` | ELF/MAGIC MEG | 1 | — | [export_meg](export_meg.md) |
 | `radia_export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | — | [export_femeem](export_femeem.md) |
 
-> **IMPORTANT**: Use `radia_export`, NOT `export` (except for `export meg`).
-> Cubit has built-in `export nastran` and `export abaqus` commands with different
-> formats and no high-order support. `export gmsh` does NOT exist in Cubit.
+> **IMPORTANT**: Always use the `radia_export` prefix.  Cubit has built-in
+> `export nastran` and `export abaqus` commands with different formats
+> and no high-order support; `export gmsh` does not exist in Cubit.
+> `export meg` was a historical registration inconsistency (2026-04-24
+> fixed); use `radia_export meg` unconditionally.
 
 ### Coil Generation Command
 
@@ -103,10 +105,10 @@ VTK Legacy ASCII format. Cell types: TET(10/24), HEX(12/25), WEDGE(13/26), PYRAM
 | order | 1 | Element order (1 or 2) |
 | dimension | 3 | 2D or 3D mode |
 
-### export meg
+### radia_export meg
 
 ```
-export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
+radia_export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
 ```
 
 ELF/MAGIC MEG format. Block names define ELF element type prefixes (MMB, MWL, MCO, etc.).

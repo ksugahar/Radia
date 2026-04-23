@@ -5,15 +5,17 @@ Export mesh to ELF/MAGIC MEG format for electromagnetic field analysis.
 ## Syntax
 
 ```
-export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
+radia_export meg "filename.meg" [threed|twod|axisymmetric] [labels "1:MMB,2:MWL,..."] [overwrite]
 ```
 
-> **Note**: This command uses `export meg`, not `radia_export meg`.
-> `export meg` is Cubit's built-in format command; the Radia plugin
-> (`radia_cubit.ccm`) extends it with block-name → ELF prefix
-> auto-detection (see "ELF Element Type Labels" below). There is no
-> separate `radia_export meg` because Cubit already owns the file
-> format; the plugin only contributes the label-mapping layer.
+> **Note (2026-04-24)**: Earlier releases registered this command as
+> bare `export meg` under the assumption that Cubit owned the `.meg`
+> format. In practice Cubit has no built-in `meg` keyword, so the bare
+> `export meg` was rejected with `Unrecognized Identifier: 'meg'`.
+> The command now uses the `radia_export` prefix like every other
+> Radia exporter (`radia_export gmsh / netgen / nastran / vtk / femeem
+> / meg`). ELF block-name → prefix auto-detection (see "ELF Element
+> Type Labels" below) is unchanged.
 
 Block names define ELF physics element types (3-character prefix).
 No explicit block assignment is required — all meshed elements are exported.
@@ -56,7 +58,7 @@ Blocks named `AIR` also map to `MMB` (air is still a magnetic region in ELF).
 The `labels` option overrides block-name-based prefix detection:
 
 ```
-export meg "mesh.meg" labels "1:MMB,2:MWL,3:MCO" overwrite
+radia_export meg "mesh.meg" labels "1:MMB,2:MWL,3:MCO" overwrite
 ```
 
 ## Supported Elements
@@ -120,19 +122,19 @@ cubit.cmd("mesh volume 1")
 cubit.cmd("block 1 add tet all in volume 1")
 cubit.cmd('block 1 name "MMB_core"')
 
-cubit.cmd('export meg "model.meg" overwrite')
+cubit.cmd('radia_export meg "model.meg" overwrite')
 ```
 
 ### 2D Planar Analysis
 
 ```python
-cubit.cmd('export meg "model_2d.meg" twod overwrite')
+cubit.cmd('radia_export meg "model_2d.meg" twod overwrite')
 ```
 
 ### Axisymmetric Analysis
 
 ```python
-cubit.cmd('export meg "model_axi.meg" axisymmetric overwrite')
+cubit.cmd('radia_export meg "model_axi.meg" axisymmetric overwrite')
 ```
 
 ## Compatibility

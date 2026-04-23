@@ -18,7 +18,7 @@ std::vector<std::string> ExportMegCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
   syntax_list.push_back(
-    "export meg <string:label='filename',help='<filename>'> "
+    "radia_export meg <string:label='filename',help='<filename>'> "
     "[threed] [twod] [axisymmetric] "
     "[labels <string:label='labels',help='<block:prefix,...>'>] "
     "[overwrite]"
@@ -30,7 +30,7 @@ std::vector<std::string> ExportMegCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "export meg \"filename\" [threed|twod|axisymmetric] [labels \"1:MMB,2:MWL,...\"] [overwrite]"
+    "radia_export meg \"filename\" [threed|twod|axisymmetric] [labels \"1:MMB,2:MWL,...\"] [overwrite]"
   );
   return help;
 }
