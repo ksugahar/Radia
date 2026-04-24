@@ -413,12 +413,36 @@ def add_periodic_kelvin(mesh, kelvin_offset):
     if "kelvin_int" not in boundaries and "kelvin_ext" not in boundaries:
         return False
 
+    # Skip if identification was already written by the Cubit C++ exporter
+    # (mesh.ngmesh.GetIdentifications().Num() > 0).  Only run this fallback
+    # for OCC-generated meshes where the .vol has no identification.
+    ngmesh = mesh.ngmesh
+    try:
+        if ngmesh.GetIdentifications().Num() > 0:
+            return True  # Identification already present; nothing to do.
+    except Exception:
+        # Older NGSolve may not expose GetIdentifications; fall through
+        # to the identification attempt below.
+        pass
+
     from netgen.meshing import Trafo, Vec3d
     trafo = Trafo(Vec3d(*kelvin_offset))
 
-    ngmesh = mesh.ngmesh
-    identnr = ngmesh.IdentifyPeriodicBoundaries(
-        "kelvin", "kelvin_int", trafo, point_tolerance=1e-3)
+    try:
+        identnr = ngmesh.IdentifyPeriodicBoundaries(
+            "kelvin", "kelvin_int", trafo, point_tolerance=1e-3)
+    except Exception as e:
+        # Fallback failure is non-fatal: if the .vol already has a
+        # valid Cubit-written identification (most likely case when we
+        # get here via the Radia Cubit panel flow), the solver proceeds
+        # correctly without our help.  If there is really no periodic
+        # setup, downstream FES construction will raise a more
+        # informative error.
+        import warnings
+        warnings.warn(f"add_periodic_kelvin: IdentifyPeriodicBoundaries "
+                      f"raised {type(e).__name__}: {e}.  Continuing -- "
+                      f"assuming Cubit-written identification is in .vol.")
+        return False
 
     return identnr > 0
 
