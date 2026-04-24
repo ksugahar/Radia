@@ -1205,6 +1205,76 @@ void RadiaMenuHandler::launch_radia_ngsolve()
   hKelvin->addStretch();
   layout->addWidget(kelvinRow);
 
+  // ---- Kelvin symmetry-reduction row (2026-04-25) ----
+  //
+  // Per-axis BC type for domain-reduced models (1/2 or 1/4).  Three
+  // combos, one per Cartesian axis, each with {off, bn=0, ht=0}:
+  //
+  //   off    -- no reduction on this axis (air extends both sides OR
+  //             the axis is the mesh-seam direction).
+  //   bn=0   -- domain reduced to axis >= 0; on axis=0 plane B.n = 0
+  //             (flux parallel, mirror-symmetric, Radia image '+').
+  //             Omega formulation -> natural (do nothing).
+  //             A     formulation -> Dirichlet (A x n = 0).
+  //   ht=0   -- domain reduced to axis >= 0; on axis=0 plane H x n = 0
+  //             (flux perpendicular, antisymmetric, Radia image '-').
+  //             Omega formulation -> Dirichlet (Omega = const).
+  //             A     formulation -> natural.
+  //
+  // When ANY axis is set to bn=0 or ht=0, the launcher writes a
+  // `kelvin_reduction` dict into launcher_config.json and
+  // add_kelvin_cubit takes the reduction-mode path (air is expected
+  // to already be reduced to the positive side of each selected
+  // axis, the Kelvin sphere is cut on the same planes, and each cut
+  // plane gets a sym_<bc>_<axis> sideset).  When all three are
+  // "off", the existing mesh-seam auto-detect runs unchanged.
+  //
+  // 1/8 (all three axes bn=0/ht=0) is a geometric blocker with the
+  // offset-then-cut Kelvin strategy; add_kelvin_cubit raises
+  // NotImplementedError.  The UI doesn't prevent it (to give a clear
+  // error at the right layer).
+  QWidget *symRow = new QWidget();
+  QHBoxLayout *hSym = new QHBoxLayout(symRow);
+  hSym->setContentsMargins(0, 0, 0, 0);
+  hSym->addSpacing(24);         // indent under the Kelvin row
+  hSym->addWidget(new QLabel("Symmetry reduction:"));
+  auto makeSymCombo = [](const QString &axis) {
+    QComboBox *cb = new QComboBox();
+    cb->addItem("off");
+    cb->addItem("bn=0");
+    cb->addItem("ht=0");
+    cb->setMaximumWidth(75);
+    cb->setToolTip(
+        QString(
+            "BC label on the %1=0 symmetry plane (only when the air "
+            "block is reduced to %1>=0).  'bn=0' = flux parallel "
+            "(Radia '+', A Dirichlet, Omega natural).  'ht=0' = flux "
+            "perpendicular (Radia '-', A natural, Omega Dirichlet)."
+            ).arg(axis));
+    return cb;
+  };
+  QComboBox *symXCombo = makeSymCombo("x");
+  QComboBox *symYCombo = makeSymCombo("y");
+  QComboBox *symZCombo = makeSymCombo("z");
+  auto restoreSymCombo = [&prev](QComboBox *cb, const char *key) {
+    QString last = prev.contains(key) ? prev[key].toString() : QString();
+    int idx = cb->findText(last);
+    if (idx >= 0) cb->setCurrentIndex(idx);
+  };
+  restoreSymCombo(symXCombo, "last_kelvin_sym_x");
+  restoreSymCombo(symYCombo, "last_kelvin_sym_y");
+  restoreSymCombo(symZCombo, "last_kelvin_sym_z");
+  hSym->addWidget(new QLabel("x:"));
+  hSym->addWidget(symXCombo);
+  hSym->addSpacing(8);
+  hSym->addWidget(new QLabel("y:"));
+  hSym->addWidget(symYCombo);
+  hSym->addSpacing(8);
+  hSym->addWidget(new QLabel("z:"));
+  hSym->addWidget(symZCombo);
+  hSym->addStretch();
+  layout->addWidget(symRow);
+
   // Label validation area
   QLabel *labelWidget = new QLabel();
   labelWidget->setWordWrap(true);
@@ -1255,12 +1325,15 @@ void RadiaMenuHandler::launch_radia_ngsolve()
     if (idx < 0 || idx >= modes.size()) return;
     const ModeScript &ms = modes[idx];
 
-    // Hide the `.vol` row, Mesh order, and label-requirements entirely
-    // when this mode does not need a mesh (e.g. PEEC-inductance takes a
-    // STEP, not a mesh).  Showing widgets the user cannot act on ("Mesh
-    // order: 2" while no mesh is exported) is confusing UX.
+    // Hide the `.vol` row, Mesh order, Kelvin rows, and label-
+    // requirements entirely when this mode does not need a mesh
+    // (e.g. PEEC-inductance takes a STEP, not a mesh).  Showing
+    // widgets the user cannot act on ("Mesh order: 2" while no mesh
+    // is exported) is confusing UX.
     volRow->setVisible(ms.needsVol);
     orderRow->setVisible(ms.needsVol);
+    kelvinRow->setVisible(ms.needsVol);
+    symRow->setVisible(ms.needsVol);
     labelGroup->setVisible(ms.needsVol);
 
     QStringList modelLabels = get_model_labels();
@@ -1342,6 +1415,22 @@ void RadiaMenuHandler::launch_radia_ngsolve()
     }
   }
 
+  // Parse per-axis symmetry-reduction BC from the three combos.  An
+  // "off" value means no reduction on that axis; "bn=0" / "ht=0"
+  // enters the kelvin_reduction dict at launch time.
+  QString symX = symXCombo->currentText();
+  QString symY = symYCombo->currentText();
+  QString symZ = symZCombo->currentText();
+  QJsonObject reductionObj;
+  auto addIfSet = [&reductionObj](const QString &axis, const QString &bc) {
+    if (bc == "bn=0" || bc == "ht=0")
+      reductionObj[axis] = bc;
+  };
+  addIfSet("x", symX);
+  addIfSet("y", symY);
+  addIfSet("z", symZ);
+  bool hasReduction = !reductionObj.isEmpty();
+
   // Save settings (persist last values for next dialog open)
   saveLauncherSettings({
       {"last_mode", ms.title},
@@ -1349,6 +1438,9 @@ void RadiaMenuHandler::launch_radia_ngsolve()
       {"last_jou_dir", outDir},
       {"last_kelvin_auto", kelvinAuto},
       {"last_kelvin_mesh", kelvinMeshStr},  // store raw text so blank = blank
+      {"last_kelvin_sym_x", symX},
+      {"last_kelvin_sym_y", symY},
+      {"last_kelvin_sym_z", symZ},
   });
 
   // --- Export .vol (only when the mode needs it) ---
@@ -1396,16 +1488,26 @@ void RadiaMenuHandler::launch_radia_ngsolve()
             cfg["kelvin_mesh_size"] = kelvinMeshSize;
           else
             cfg["kelvin_mesh_size"] = QJsonValue();  // null = auto
+          if (hasReduction)
+            cfg["kelvin_reduction"] = reductionObj;
+          else
+            cfg["kelvin_reduction"] = QJsonValue();  // null = mesh-seam mode
           QFile f(cfgPath);
           if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
             f.write(QJsonDocument(cfg).toJson(QJsonDocument::Compact));
             f.close();
-            PRINT_INFO("Auto-Kelvin: config -> %s (mesh_size=%s)\n",
+            QString redDesc = hasReduction
+                ? QString::fromUtf8(
+                    QJsonDocument(reductionObj).toJson(QJsonDocument::Compact))
+                : QString("mesh-seam auto");
+            PRINT_INFO("Auto-Kelvin: config -> %s (mesh_size=%s, "
+                       "reduction=%s)\n",
                        cfgPath.toLocal8Bit().constData(),
                        hasMeshSize
                          ? QString::number(kelvinMeshSize).toLocal8Bit()
                                    .constData()
-                         : "auto");
+                         : "auto",
+                       redDesc.toLocal8Bit().constData());
           } else {
             PRINT_WARNING("Auto-Kelvin: cannot write config %s, "
                           "entry will run with defaults\n",
