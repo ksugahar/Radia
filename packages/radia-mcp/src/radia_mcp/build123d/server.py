@@ -28,6 +28,16 @@ from io import StringIO
 # Setting the level to WARNING restores normal throughput.
 logging.getLogger("build123d").setLevel(logging.WARNING)
 
+# Eager-import build123d in the main thread. OCCT (the underlying C++
+# kernel) is not safe to import for the first time from an arbitrary
+# worker thread — doing so can deadlock. Loading it here means all
+# subsequent `from build123d import *` inside execute_build123d hits the
+# sys.modules cache without triggering OCCT init on the worker thread.
+try:
+    import build123d as _preload_build123d  # noqa: F401
+except ImportError:
+    pass
+
 from mcp.server.fastmcp import FastMCP
 
 from .build123d_knowledge import get_build123d_documentation
@@ -103,7 +113,7 @@ def build123d_usage(topic: str = "overview") -> str:
 
 
 @mcp.tool()
-def execute_build123d(
+async def execute_build123d(
     script: str,
     export_dir: str = "",
     export_format: str = "step",
@@ -123,6 +133,23 @@ def execute_build123d(
         JSON with geometry info: validity, volume, area, face/edge counts,
         min edge length, bounding box, labels, and export path (if requested).
     """
+    # Run the blocking work in a worker thread so we don't stall the MCP
+    # stdio event loop. mcp 1.27.x FastMCP still calls sync @mcp.tool()
+    # functions directly inside the asyncio loop (see
+    # https://github.com/modelcontextprotocol/python-sdk/issues/1839 ),
+    # which makes any blocking I/O — including cold `from build123d import *` —
+    # freeze the whole server for every request.
+    import anyio
+    return await anyio.to_thread.run_sync(
+        lambda: _execute_build123d_sync(script, export_dir, export_format)
+    )
+
+
+def _execute_build123d_sync(
+    script: str,
+    export_dir: str = "",
+    export_format: str = "step",
+) -> str:
     # Capture stdout
     old_stdout = sys.stdout
     sys.stdout = captured = StringIO()
@@ -2356,7 +2383,7 @@ def build123d_try_race(scripts: list,
             return {**rec, "status": "error", "info": info,
                     "is_valid": None, "volume": None}
         # Now in-process inspect for validity / volume
-        inspect_raw = execute_build123d(script=rec["script"], export_dir="")
+        inspect_raw = _execute_build123d_sync(script=rec["script"], export_dir="")
         inspect = json.loads(inspect_raw)
         return {
             "name": rec["name"],
@@ -2436,9 +2463,9 @@ def build123d_to_cubit_hex(script: str,
     """
     import tempfile
     tmp_dir = Path(tempfile.mkdtemp(prefix="b3d_to_cubit_"))
-    exec_raw = execute_build123d(script=script,
-                                  export_dir=str(tmp_dir),
-                                  export_format="step")
+    exec_raw = _execute_build123d_sync(script=script,
+                                        export_dir=str(tmp_dir),
+                                        export_format="step")
     exec_info = json.loads(exec_raw)
     if exec_info.get("status") != "ok" or "exported" not in exec_info:
         return json.dumps({"status": "error",
@@ -2940,8 +2967,9 @@ def main():
         if _have_b3d:
             import json as _json
 
-            # Test execute
-            result = execute_build123d("box = Box(10, 20, 30)")
+            # Test execute (use the sync impl directly — selftest runs
+            # outside the FastMCP event loop and cannot `await` the tool)
+            result = _execute_build123d_sync("box = Box(10, 20, 30)")
             print(f"  execute_build123d('Box(10,20,30)'): {len(result)} chars")
             data = _json.loads(result)
             assert data["status"] == "ok", f"Execute failed: {data}"
