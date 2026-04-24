@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.32.4"
-description = "MCP servers for the Radia CAE ecosystem. 0.31.0 (2026-04-21): Monorepo restructure. Public MCPs (cubit/build123d/gmsh/elf/radia-ngsolve/radia-interop) now all live under radia_mcp.* namespace. Private MCPs (ih/electromagnet/peec) split out to separate s:\\mcp-server\\ packages. 0.27.0 base: cubit_mesh_race_review (wait-all + shortlist sorted by min-Jacobian + persisted history) + cubit_mesh_apply_choice."
+version = "0.33.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.33.0 (2026-04-24): Finish monorepo consolidation by promoting mcp-server-peec and mcp-server-electromagnet into radia_mcp.peec / radia_mcp.electromagnet subpackages (same pattern as 0.32.x mcp-server-ih promotion). All 9 MCP entry points now live under radia_mcp.* namespace; s:\\mcp-server\\mcp-server-{ih,peec,electromagnet} source trees are retained as safety nets until the commit lands on origin/main. 0.31.0 (2026-04-21): Monorepo restructure. 0.27.0 base: cubit_mesh_race_review (wait-all + shortlist sorted by min-Jacobian + persisted history) + cubit_mesh_apply_choice."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
@@ -69,6 +69,8 @@ mcp-server-gmsh = "radia_mcp.gmsh.server:main"
 mcp-server-elf = "radia_mcp.elf.server:main"
 mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
 mcp-server-ih = "radia_mcp.ih.server:main"
+mcp-server-peec = "radia_mcp.peec.server:main"
+mcp-server-electromagnet = "radia_mcp.electromagnet.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
