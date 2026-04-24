@@ -1,0 +1,50 @@
+{
+  "description": "Golden reference for calc_accel_magnet.py on the C-type dipole em_sample.jou (half-z model, linear mu_r=1000).",
+  "rationale": "Knowledge accumulation mechanism (per user feedback 2026-04-24 about losing working implementations): locks the end-to-end path yoke.jou -> radia_export netgen (with Auto-Kelvin quarter-detected -> full z-cut kelvin pair) -> NGSolve Mesh + BBBND GND via CD3 propagation -> FEM Omega-reduced + Kelvin periodic -> B_origin + W_mag + L.  Any regression in the Cubit plugin's nodeset/sideset export, in add_periodic_kelvin fallback, or in calc_accel_magnet's Dirichlet setup will trip this test.",
+  "sample": {
+    "vol": "C:/temp/em_sample.vol",
+    "step": "src/radia/panels/samples/em_sample_coil.step",
+    "coil_script": "src/radia/panels/samples/em_sample_coil.py",
+    "generator_jou": "src/radia/panels/samples/em_sample.jou",
+    "generator_cmd_note": "Regenerate via Cubit batch: python-run em_sample.jou + auto_add_kelvin_from_current_model() + radia_export netgen order=1 overwrite.  Reference template: C:/temp/run_em_sample.py (session work 2026-04-24)."
+  },
+  "geometry_note": "Half-y model: yoke in y=[0, 0.18] only (no y-reflection in mesh; physically the ELF reference is quarter-XZ with mesh reduced further).  Comparing to the ELF quarter-XZ -976 mT reference requires setting up sym_tangential/sym_normal BCs and matching the Radia image decomposition -- that variant lives in the future corpus entries em/em_1-4_quarter_xz.jou etc.",
+  "physics": {
+    "formulation": "omega",
+    "material": "linear",
+    "mu_r": 1000.0,
+    "fes_order": 1,
+    "current_A_coil_py": 2000.0,
+    "current_A_coil_step_default": 1.0,
+    "max_iter": 2,
+    "tol": 1e-2,
+    "solver": "pardiso"
+  },
+  "expected_linear": {
+    "note": "Linearity check: since calc_accel_magnet has no non-linear BH with --material linear, B is exactly proportional to the coil current.  Run with coil_script=.step gives current=1.0 (hardcoded in to_coil_builder); the .py coil script bakes current=NI=2000.  Each row here is an observation used as a regression guard, NOT a match to ELF CEFC 2020 reference (-976 mT @ NI=2000 mu_r=1000) which is a quarter-XZ Radia-MSC result on a different mesh discretization.",
+    "I_1A_coil_step": {
+      "B_origin_T": [7.446e-07, -3.481e-06, -1.763e-05],
+      "B_origin_mag_T": 1.798e-05,
+      "W_mag_J": 1.076e-06,
+      "L_H": 2.152e-06,
+      "iterations": 1,
+      "converged": true,
+      "ne": 456477,
+      "ndof": 83798,
+      "t_total_s_approx": 747
+    },
+    "I_2000A_coil_py": {
+      "B_origin_mag_T_approx": "TBD (filled after NI=2000 run completes)",
+      "L_H_approx": 2.152e-06,
+      "W_mag_J_approx": "TBD (expected 2000^2 x I_1A value = 4.30)",
+      "note": "Should be exactly 2000x the I_1A B values; L should be identical (geometry-only)."
+    }
+  },
+  "tolerance": {
+    "B_origin_pct": 3.0,
+    "L_pct": 2.0,
+    "W_mag_pct": 3.0,
+    "ndof_exact": true,
+    "ne_exact": true
+  }
+}

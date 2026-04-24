@@ -1,0 +1,80 @@
+# C-type dipole yoke -- half model (Z symmetry), HEX yoke + tet air
+# Canonical geometry: ELF CEFC 2020 C-Type model (yoke.jou -> yoke.step),
+# mirrored about x=0 to recover full depth so the Add Kelvin launcher
+# can reduce only the single (z>=0) half and use the IH-style zplane
+# seam to copy the air sphere mesh onto the Kelvin exterior 1:1.
+# Units: meters
+#
+# Coordinate system:
+#   y = gap direction (pole tip at y~0, main leg at y~0.15)
+#   z = beam direction (symmetry at z=0)
+#   x = depth/thickness (full width, no symmetry)
+#
+# Symmetry planes: z=0 only (quarter-model x=0 symmetry was dropped
+#   because Cubit's copy-mesh couldn't copy a 1/4-sphere surface onto
+#   the Kelvin exterior; half-z works reliably -- same pattern as the
+#   IH FEM-Kelvin samples).
+# Use "Half (Z)" in Add Kelvin dialog  (auto-detect picks this up).
+#
+# 3 volumes (NOT united) for structured hex meshing:
+#   Vol 1: Pole piece   (near gap)
+#   Vol 2: Yoke back    (horizontal return)
+#   Vol 3: Main leg     (coil location)
+reset
+
+# === Pole piece (near gap) ===
+# ELF: 40mm(y) x 100mm(z) x 25mm(x) - full depth
+brick x 0.025 y 0.040 z 0.050
+move volume 1 x 0 y 0.020 z 0.025
+
+# === Yoke back (horizontal return) ===
+# ELF: 80mm(y) x 50mm(z) x 25mm(x)
+brick x 0.025 y 0.080 z 0.025
+move volume 2 x 0 y 0.080 z 0.0125
+
+# === Main leg (where coil sits) ===
+# ELF: 62.5mm(y) x 105mm(z) x 25mm(x)
+brick x 0.025 y 0.0625 z 0.0525
+move volume 3 x 0 y 0.15125 z 0.02625
+
+# === Imprint/merge for shared surfaces (continuous mesh) ===
+imprint volume all
+merge volume all
+
+# === Hex mesh ===
+volume all scheme map
+volume 1 size 0.005
+volume 2 size 0.008
+volume 3 size 0.006
+mesh volume all
+
+# === Air domain for FEM (tet mesh) ===
+# Full air sphere + zplane webcut seam (IH FEM-Kelvin pattern).  BOTH
+# hemispheres are kept in the mesh; the zplane webcut just creates an
+# equator curve so the `add_kelvin_cubit` copy-mesh step has 1:1
+# vertex correspondence between air hemispheres and Kelvin hemispheres.
+# The "symmetry=['z']" declaration later is about the Kelvin OFFSET
+# direction (perpendicular to z), not about reducing the physical
+# mesh -- the 2 air volumes stay in the block.
+create sphere radius 0.40
+webcut volume 4 with plane zplane
+# After webcut: vol 4 = z>0, vol 5 = z<0.  Keep both.
+# Subtract yoke from both hemispheres
+subtract volume 1 2 3 from volume 4 5 keep
+imprint volume all
+merge volume all
+volume 4 5 scheme tetmesh
+volume 4 5 size 0.02
+mesh volume 4 5
+
+# === Blocks ===
+set duplicate block elements on
+block 1 add volume 1 2 3
+block 1 name "yoke"
+block 2 add volume 4 5
+block 2 name "air"
+
+# Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
+# boundary (auto)" checkbox with "Quarter (X,Z)" symmetry.  The
+# launcher injects add_kelvin_cubit(symmetry=["x","z"]) via
+# auto_kelvin_entry.py just before radia_export netgen.
