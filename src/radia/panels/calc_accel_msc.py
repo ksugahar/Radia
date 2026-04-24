@@ -65,13 +65,15 @@ def _load_coil_script(script_path):
 
     setup_paths()
 
+    # EM panel contract (2026-04-25): .py only.  See
+    # calc_accel_magnet._load_coil_script for the rationale.
     ext = os.path.splitext(script_path)[1].lower()
     if ext in ('.step', '.stp'):
-        # One-shot wrapper with diagonal-based step_size heuristic;
-        # see calc_accel_magnet._load_coil_script and
-        # coil_from_step.coil_builder_from_step for the rationale.
-        from coil_from_step import coil_builder_from_step
-        return coil_builder_from_step(script_path, current=1.0)
+        raise ValueError(
+            f"EM panel does not accept STEP coil inputs.  Use a Python "
+            f"module that defines `build_coil() -> CoilBuilder`.  "
+            f"PEEC workflows (IH panel) accept STEP via peec_step.  "
+            f"Got: {script_path}")
 
     script_dir = os.path.dirname(os.path.abspath(script_path))
     if script_dir not in sys.path:

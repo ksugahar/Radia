@@ -61,17 +61,16 @@ def _resolve(path: str) -> str:
     return os.path.join(ROOT, path)
 
 
-def _require_sample(g: dict) -> tuple[str, str, str]:
+def _require_sample(g: dict) -> tuple[str, str]:
     """Resolve sample file paths; skip test with a helpful message if
     any of them is missing.  The .vol is regenerated at deploy time
     (not tracked in git), so a fresh repo clone starts with a skipped
     test until deploy has been run on this machine.
     """
     vol = _resolve(g["sample"]["vol"])
-    step = _resolve(g["sample"]["step"])
     coil_py = _resolve(g["sample"]["coil_script"])
     jou = _resolve(g["sample"]["generator_jou"])
-    missing = [p for p in (vol, step, coil_py) if not os.path.isfile(p)]
+    missing = [p for p in (vol, coil_py) if not os.path.isfile(p)]
     if missing:
         pytest.skip(
             "EM golden sample files missing: "
@@ -80,7 +79,7 @@ def _require_sample(g: dict) -> tuple[str, str, str]:
               f" + auto_add_kelvin_from_current_model();"
               f" see tests/panels/golden/em_sample_mu1000.json"
               f" for the exact command template.")
-    return vol, step, coil_py
+    return vol, coil_py
 
 
 def _run(coil_path: str, vol: str, phys: dict, timeout_s: int = 1500) -> dict:
@@ -128,35 +127,16 @@ def _check_common(result: dict, exp: dict, tol: dict):
 
 
 @pytest.mark.slow
-def test_em_sample_coil_step_current_1A():
-    """STEP coil input: single closed-centerline polyline (20 wire
-    segments), current=1.0 baked by `coil_from_step.to_coil_builder`.
-    Absolute-value regression guard.
-    """
-    g = _load_golden()
-    vol, step, _coil_py = _require_sample(g)
-
-    result = _run(step, vol, g["physics"])
-    exp = g["observations"]["I_1A_coil_step"]
-    tol = g["tolerance"]
-
-    _check_common(result, exp, tol)
-    _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
-                  tol["B_origin_pct"], "B_origin_mag")
-    _assert_close(result["W_mag"], exp["W_mag_J"],
-                  tol["W_mag_pct"], "W_mag")
-    _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
-
-
-@pytest.mark.slow
 def test_em_sample_coil_py_NI_2000():
     """Python coil `build_coil()`: ELF racetrack via 4 straight + 4 arc
-    CoilBuilder segments (84 wire segments), NI=2000.  DIFFERENT coil
-    geometry from the .step variant, so checked as an absolute-value
-    snapshot (not linearity against the .step numbers).
+    CoilBuilder segments (84 wire segments), NI=2000.  Absolute-value
+    snapshot for regression guard.
+
+    EM panel policy (2026-04-25): analytical coils enter as a .py
+    module only; STEP coil input is reserved for PEEC workflows.
     """
     g = _load_golden()
-    vol, _step, coil_py = _require_sample(g)
+    vol, coil_py = _require_sample(g)
 
     result = _run(coil_py, vol, g["physics"])
     exp = g["observations"]["I_2000A_coil_py"]
@@ -173,3 +153,32 @@ def test_em_sample_coil_py_NI_2000():
     assert result["n_wire_segments"] == exp["n_wire_segments"], (
         f"n_wire_segments drift: {result['n_wire_segments']} vs "
         f"{exp['n_wire_segments']}")
+
+
+def test_em_panel_rejects_step_coil_input():
+    """Policy test (fast): EM panel rejects STEP coil inputs with a
+    clear error message pointing the user at the .py path (STEP is
+    reserved for PEEC).
+    """
+    import subprocess
+    # Use an EXISTING .step file so the extension-dispatch fires
+    # before the file-not-found check.
+    real_step = os.path.join(ROOT, "examples", "cubit_panels",
+                             "accel_magnet", "coil_wire.step")
+    if not os.path.isfile(real_step):
+        pytest.skip(f"reference .step not present: {real_step}")
+
+    proc = subprocess.run(
+        [sys.executable, CALC,
+         "--coil-script", real_step,
+         "--vol", "nonexistent.vol",
+         "--formulation", "omega",
+         "--material", "linear", "--mu-r", "1000"],
+        capture_output=True, text=True, timeout=60)
+
+    # calc_main wraps exceptions in JSON {"error": ...} with rc=0,
+    # so check the message text rather than the return code.
+    combined = (proc.stdout + proc.stderr).lower()
+    assert "step" in combined and "peec" in combined, (
+        f"Expected 'STEP'/'PEEC' in rejection message.  Got:\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
