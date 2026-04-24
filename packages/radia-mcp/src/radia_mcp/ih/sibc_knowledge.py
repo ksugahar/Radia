@@ -926,12 +926,31 @@ product, which mathematically equals `A_s_t · v_t` (because v_t · n = 0).
 The 1.84x ratio does NOT match a clean `√2`, `√π`, or `2`, so it is
 not a single missing factor — it is a numerical artifact of the
 cancellation magnified by something specific to the Robin RHS
-treatment.  Candidates still being tested:
+treatment.
+
+**Important** (2026-04-24 user insight): **basis-order increases
+will NOT fix this**.
+
+- For BEM: unknowns live on the surface (K or σ); the cancellation
+  is structural (between analytic A_inc and BEM-solved A_response
+  at the same surface), and higher HDivSurface order does not break
+  this symmetry.  `bem_coupled_solver.py:166`
+  (`InnerProduct(u_J.Trace(), A_cf)`) cannot be saved by `wp_order >= 1`.
+- For FEM: higher HCurl `fes_order` gives A_r more representation
+  flexibility but does NOT remove the cancellation between
+  analytically-evaluated A_s and FEM-solved A_r.  Empirically (skin_fine
+  Cu 7 kHz): fes_order=2 with scattered formulation does not converge
+  to fem_coilmesh's H_t.
+
+The fix must be in the **formulation** of how A_inc enters the
+coupling integral, not in the discretization.  Candidates being
+tested (formulation variants only):
 
 - explicit tangential projection `(A_s_cf - InnerProduct(A_s_cf, n)*n) * v_.Trace()`
-- E-field formulation `Cross(n, A_s_cf) · Cross(n, v_.Trace())`
-- higher fes_order (2 or 3) to give A_r more flexibility on sibc
-- higher bonus_intorder for Robin RHS (4 → 16) for tighter cancellation
+- E×H form `Cross(n, A_s_cf) · Cross(n, v_.Trace())`
+- factor adjustment in robin coefficient (1/Z_s vs 2/Z_s convention)
+- alternative: drop scattered, use line-integral RHS even for back-
+  reaction L computation (bypass cancellation entirely, like total mode)
 
 ## Practical guidance
 
