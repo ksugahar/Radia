@@ -1,0 +1,67 @@
+{
+  "args": {
+    "vol": "S:\\Radia\\01_GitHub\\examples\\induction_heating\\scattered_rhs_clean_test\\clean_filament.vol",
+    "rebuild_mesh": true,
+    "L_wire": 2.0,
+    "I": 1.0,
+    "d": 0.05,
+    "A_half": 0.5,
+    "h_gap": 0.01,
+    "maxh_air": 0.08,
+    "maxh_sibc": 0.005,
+    "frequency": 7000,
+    "fes_order": 1,
+    "alphas": "0.0,1.0",
+    "output": "S:\\Radia\\01_GitHub\\examples\\induction_heating\\scattered_rhs_clean_test\\results.json"
+  },
+  "analytical": {
+    "H_t_rms_free": 0.8918749845412233,
+    "H_t_rms_pec": 1.7837499690824465,
+    "H_t_center_infinite": 3.183098861837907,
+    "H_t_center_finite": 3.179127433140015
+  },
+  "sweep": [
+    {
+      "rhs_factor": 0.0,
+      "H_t_rms_robin": 23.637703502006154,
+      "H_t_rms_phys": 0.8891583242206197,
+      "H_t_rms_free": 0.8891583242206189,
+      "At_rms_total": 1.6590310582401747e-08,
+      "At_rms_s": 4.618849153578657e-07,
+      "At_rms_r": 4.568495568595966e-07,
+      "A_wp": 0.999999999999993,
+      "ndof": 440371,
+      "t_asm": 2.34,
+      "t_solve": 11.27,
+      "Z_s_real": 2.1827896587541918e-05,
+      "Z_s_imag": 2.1827922577228022e-05,
+      "omega_over_Zs": 1424789691.8265028,
+      "H_t_rms_free_ana": 0.8918749845412233,
+      "H_t_rms_pec_ana": 1.7837499690824465,
+      "ratio_robin_to_pec": 13.25169105071676,
+      "ratio_phys_to_pec": 0.49847699488847025,
+      "ratio_phys_to_free": 1.0000000000000009
+    },
+    {
+      "rhs_factor": 1.0,
+      "H_t_rms_robin": 23.898058030546252,
+      "H_t_rms_phys": 0.8891583242206197,
+      "H_t_rms_free": 0.8891583242206189,
+      "At_rms_total": 1.6773042483140262e-08,
+      "At_rms_s": 4.618849153578657e-07,
+      "At_rms_r": 4.565398295619775e-07,
+      "A_wp": 0.999999999999993,
+      "ndof": 440371,
+      "t_asm": 3.4,
+      "t_solve": 11.33,
+      "Z_s_real": 2.1827896587541918e-05,
+      "Z_s_imag": 2.1827922577228022e-05,
+      "omega_over_Zs": 1424789691.8265028,
+      "H_t_rms_free_ana": 0.8918749845412233,
+      "H_t_rms_pec_ana": 1.7837499690824465,
+      "ratio_robin_to_pec": 13.397650144229189,
+      "ratio_phys_to_pec": 0.49847699488847025,
+      "ratio_phys_to_free": 1.0000000000000009
+    }
+  ]
+}
