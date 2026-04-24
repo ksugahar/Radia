@@ -1055,13 +1055,18 @@ def main():
                         help="PEEC width subdivision (default 1)")
     parser.add_argument("--peec-nhinc", type=int, default=1,
                         help="PEEC height subdivision (default 1)")
-    parser.add_argument("--source-mode", default="scattered",
+    parser.add_argument("--source-mode", default="total",
                         choices=["scattered", "total"],
-                        help="scattered (default): Biot-Savart A_s excitation "
-                             "with FEM scattered A_r (fast, PEEC captures "
-                             "coil skin via nwinc). "
-                             "total: FEM line-integral PEEC RHS (total-field, "
-                             "supports ESIM Karl iteration and GMSH viz).")
+                        help="total (DEFAULT, recommended): FEM line-integral "
+                             "PEEC RHS — matches calc_fem_coilmesh P_wp to "
+                             "<1%% (validated 2026-04-24, ih_fem_kelvin_skin_fine "
+                             "Cu 7 kHz, P=6.56e-5 W). Supports ESIM Karl + GMSH viz. "
+                             "scattered (BUGGY, do not use for production): "
+                             "Biot-Savart A_s + Robin BC RHS via A_s_cf — gives "
+                             "P_wp ~3.4x under-prediction (H_t off by ~1.84x) "
+                             "regardless of nwinc/nhinc.  Root cause unresolved "
+                             "(2026-04-24); likely a missing tangential "
+                             "projection or factor in the Robin RHS. ")
 
     def run(args):
         if not args.peec_step:
@@ -1069,6 +1074,10 @@ def main():
                              "retired 2026-04-18; all FEM source injection "
                              "goes through PEEC filaments."}
         if args.source_mode == "scattered":
+            sys.stderr.write(
+                "WARNING: --source-mode scattered is BUGGY (~3.4x P_wp "
+                "under-prediction, validated 2026-04-24).  Use --source-mode "
+                "total for production.  Continuing anyway...\n")
             return solve_fem_biot_savart(
                 vol_file=args.vol,
                 fes_order=args.fes_order,

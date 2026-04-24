@@ -305,6 +305,52 @@ Note: the **Robustness Principle** ("be liberal in what you accept") is now wide
 
 **POLICY**: Compare magnetic fields using **vector difference** `norm(B1 - B2)`, not scalar magnitude difference `abs(|B1| - |B2|)`. Magnetic field is a vector quantity.
 
+### Scattered-Field Robin BC RHS: BUGGY (2026-04-24)
+
+**POLICY**: For PEEC + FEM-SIBC coupling, use the **total-field FEM
+line-integral PEEC RHS** (`--source-mode total` in
+`calc_fem_kelvin.py`). The **scattered formulation**
+(`solve_fem_biot_savart`, biot_savart_A_cf as Robin BC RHS) gives
+**~3.4x P_wp under-prediction** (H_t off by ~1.84x) regardless of
+nwinc/nhinc. Validated 2026-04-24 on ih_fem_kelvin_skin_fine sample,
+Cu 7 kHz: scattered = 1.95e-5 W, total = 6.56e-5 W, FEM coilmesh
+golden = 6.54e-5 W.
+
+**Physical sanity**: at constant port current (1A), H_t at workpiece
+should depend only on coil geometry (Ampere's law). Both formulations
+enforce I=1A; both see the same coil .step + same workpiece .vol;
+yet H_t differs by 1.84x → bug is in the formulation, not the physics.
+
+**Suspected root cause** (unresolved): in
+`calc_fem_kelvin.py:solve_fem_biot_savart`, the Robin RHS
+
+    f_lf += -robin * A_s_cf * v_.Trace() * ds('sibc')
+
+uses `A_s_cf` (3-vector CF) dotted with `v_.Trace()` (tangential
+trace). The full `A_s_cf` may need explicit tangential projection
+`A_s_cf - (A_s_cf · n) n` to match the LHS Robin term semantics, or
+the integrand may have a missed factor (the 1.84x ratio doesn't fall
+on a clean √2 / √π / etc., so the bug isn't a simple 2x).
+
+**Same bug pattern likely exists in BEM-derived back-reaction L**
+computed via Robin RHS with A_inc as a CoefficientFunction (e.g.
+historic `bem_coupled_solver.py` in examples/). The 2026-04-18 memory
+"PEEC+BEM L mesh-dep -18 to -46 nH" is the same class of issue.
+
+**Workaround** (production):
+- For P_wp: `calc_peec_bem.py` (PEEC+BEM 1-way, validated <1% vs
+  FEM-coilmesh) OR `calc_fem_coilmesh.py` (full FEM, golden test).
+- For L_total: `calc_fem_coilmesh.py` (volumetric coil + workpiece
+  SIBC + Kelvin, intrinsic back-reaction).
+- For PEEC + FEM-coupled L: `calc_fem_kelvin.py --source-mode total`
+  (line-integral RHS, validated against fem_coilmesh P_wp; L
+  decomposition still being calibrated).
+
+**Do not use** `--source-mode scattered` for production. The
+calc_fem_kelvin.py CLI default was changed to `total` 2026-04-24 to
+prevent silent bug propagation; an explicit warning fires if user
+overrides to `scattered`.
+
 ### FMM (Fast Multipole Method): Removed (2026-03-06)
 
 **ExaFMM-t was removed from the repository**. Do NOT re-implement FMM acceleration.
