@@ -113,7 +113,11 @@ jobs:
           }
           if ($needFetch) {
             Write-Host "  Downloading radia_cubit_mesh.pyd from binaries release tag..."
-            gh release download binaries -p "radia_cubit_mesh.pyd" -D "${{ github.workspace }}\src\radia" --clobber 2>&1 | Write-Host
+            # --repo bypasses gh's git-based repo detection (which fails on
+            # the self-hosted runner with "dubious ownership" because the
+            # workspace is owned by NETWORK SERVICE but gh runs as SYSTEM).
+            gh release download binaries --repo ${{ github.repository }} `
+              -p "radia_cubit_mesh.pyd" -D "${{ github.workspace }}\src\radia" --clobber 2>&1 | Write-Host
             if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pyd)) {
               Write-Host "::error::Failed to download radia_cubit_mesh.pyd from binaries release."
               Write-Host "         The pre-push hook on LAB uploads this file on every push;"
