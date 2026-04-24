@@ -671,42 +671,63 @@ FEM is needed for field distribution and full mu_r flux concentration.
 """
 
 IH_ESIM = """
-# ESIM: Effective Surface Impedance Method
+# ESIM for Induction Heating Workpieces
 
-ESIM extends linear SIBC to nonlinear magnetic materials by solving a 1D
-cell problem through the conductor depth.
+The ESIM (Effective Surface Impedance Method) general technique — 1D cell
+problem mathematics, Karl iteration, `radia.esim_cell_problem` module API
+— now lives in `radia_mcp.radia_ngsolve.esim_knowledge` (callable as
+`mcp-server-radia-ngsolve.esim(topic)`).  This topic only documents the
+**IH-specific** application of ESIM (workpiece SIBC for steel/ferrite under
+an induction coil).
 
-## Linear SIBC (Baseline)
-```python
-Z_s = (1+j) * rho / delta
-delta = sqrt(2*rho / (omega * mu0 * mu_r))
-```
-Fixed Z_s, no iteration. Fast but inaccurate for steel (mu depends on H).
+For general ESIM theory, call:
+- `esim(topic="overview")`        — when ESIM vs linear SIBC; nonlinear conductors
+- `esim(topic="cell_problem")`    — 1D BVP and supported geometries
+- `esim(topic="karl_iteration")`  — Picard relaxation + convergence pitfalls
+- `esim(topic="module_api")`      — `ESIMFiniteSlabSolver` + BEM/FEM coupling examples
 
-## ESIM Cell Problem
-Solves 1D BVP: `rho * d^2H/dz^2 + jw * mu(|H|) * H = 0`
-- Boundary: H(0) = H_t (surface field), dH/dz(d) = 0 (center)
-- Returns: Z_s(H_t) = E_t(0) / H_t(0) (surface impedance)
-- Handles: nonlinear BH curve, complex mu, finite thickness, cylinder geometry
+## IH-specific use of ESIM (this topic)
 
-## Karl Iteration
-```
-1. Initial Z_s from ESIM at estimated H_t
-2. Solve BEM/FEM with Z_s -> get H_t on workpiece surface
-3. Update Z_s from ESIM cell problem at new H_t
-4. Relaxation: Z_s = 0.5*Z_s_new + 0.5*Z_s_old
-5. Converge when dZ/Z < 1e-3 (typically 4-6 iterations)
-```
+### Typical IH workpiece materials needing ESIM
+- **Carbon steel** (S45C, S50C): saturates ~1.7 T, mu_r drops from ~500 (low H)
+  to ~10 (saturation). Linear SIBC underpredicts P_wp by 30–60% near the surface.
+- **Stainless ferritic** (SUS430): similar saturation but lower base mu_r.
+- **Electrical steel** (35JN230, 50A1300): laminated → ESIM with anisotropic mu
+  along the lamination plane (out-of-plane mu effectively zero).
+- **Ferrite cores** (Mn-Zn, Ni-Zn): use complex mu = mu' - j mu''.  Karl
+  iteration handles the loss term automatically.
 
-## Module
-```python
-from radia.esim_cell_problem import ESIMFiniteSlabSolver
-esim = ESIMFiniteSlabSolver(half_thickness=R_wp, bh_curve=BH_DATA,
-                            sigma=sigma, frequency=freq, geometry='cylinder')
-sol = esim.solve(H_t_rms)
-Z_s = sol['Z']        # Complex surface impedance
-P_prime = sol['P_prime']  # Power density [W/m^2]
-```
+### IH workflow integration
+
+1. Get `H_t` initial estimate from a single linear-SIBC BEM solve (Z_s from
+   nominal mu_r at the operating frequency).
+2. ESIM cell problem at that H_t → updated Z_s per surface element.
+3. Re-solve outer BEM/FEM with the new Z_s.  Karl iterate to convergence.
+4. Final P_wp + Joule heat distribution from the converged Z_s.
+
+Production scripts:
+- `calc_peec_bem.py`     — PEEC coil + BEM workpiece, Karl loop wrapped around BEM
+- `calc_fem_coilmesh.py` — Coil-mesh FEM with Robin SIBC, Karl loop wrapped around FEM
+
+### Geometry choice for IH workpieces
+
+| Workpiece shape  | ESIM `geometry=` | Notes                                  |
+|------------------|------------------|----------------------------------------|
+| Bar / cylinder   | `'cylinder'`     | radius = workpiece radius              |
+| Plate / coupon   | `'finite_slab'`  | half-thickness = sample / 2            |
+| Pipe (thin wall) | `'slab'`         | wall is essentially infinite plate     |
+| Coil-formed wire | `'cylinder'`     | wire radius (proximity effect ignored) |
+
+### Pitfalls specific to IH
+- **Don't use linear SIBC at low frequency** for steel (< 10 kHz) — the
+  field penetrates several mm and BH curve dominates. Use ESIM from the
+  start; the converged solution differs by an order of magnitude in P_wp.
+- **Per-node Z_s for sharp corners**: workpieces with edges (cube, prism)
+  have H_t spikes; per-element Z_s under-resolves them.  Use per-node
+  vertex averaging (see `mcp-server-radia-ngsolve.ngsbem_inductance`,
+  per-panel curvature SIBC topic).
+- **Karl iteration diverges with very high alpha**: drop to alpha = 0.3
+  for SUS430 / S50C above 30 kHz.
 """
 
 IH_BIOT_SAVART = """
