@@ -13,11 +13,17 @@ User workflow:
 Mesh materials (user sets in .jou before export):
   yoke  - volume material, hex/tet/wedge elements (iron)
 
-IMA symmetry (set in dialog):
-  '+x-z'  = quarter model (x>0, z>0)
-  '+x'    = half model (x>0)
-  '-z'    = half model (z>0)
-  ''      = full model (no IMA)
+Symmetry (auto-detected from `sym_<bc>_<axis>` sidesets in the .vol):
+
+  sym_bn=0_<axis> -- B . n = 0 on axis=0 plane (field parallel)
+                     -> Radia image sign '+' (mirror-symmetric)
+  sym_ht=0_<axis> -- H x n = 0 on axis=0 plane (field perpendicular)
+                     -> Radia image sign '-' (mirror-antisymmetric)
+
+E.g. a 1/4 xz model with sym_ht=0_x + sym_bn=0_z auto-produces the
+IMA string '-x+z'.  Pass --ima <string> to override.  Pre-2026-04-25
+samples that omit the sym_*_* sidesets work unchanged -- auto-detect
+yields '' which is "no IMA".
 
 Coil is NOT meshed -- Biot-Savart analytical source via CoilBuilder.to_radia().
 
@@ -51,6 +57,41 @@ from calc_common import (MU_0, setup_paths,
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
     progress("MSC", msg)
+
+
+def ima_from_mesh_labels(boundaries):
+    """Auto-assemble a Radia IMA string from sym_<bc>_<axis> labels.
+
+    Scans the list of mesh boundary labels for the canonical
+    `sym_bn=0_<axis>` / `sym_ht=0_<axis>` patterns created by
+    `add_kelvin.add_kelvin_cubit(reduction=...)` and maps them:
+
+        sym_bn=0_<axis> -> '+<axis>'   (mirror-symmetric, Radia '+')
+        sym_ht=0_<axis> -> '-<axis>'   (antisymmetric,    Radia '-')
+
+    Legacy labels "sym_tangential" / "sym_normal" have no axis, so they
+    are ignored here (the user should pass --ima explicitly for
+    pre-2026-04-25 samples).
+
+    The output axes come in canonical x/y/z order, e.g.
+    {'+x', '-z'} -> '+x-z'.  Empty string if no sym_*_* labels found.
+    """
+    # Accept either iterable of labels or a single string.
+    if isinstance(boundaries, str):
+        boundaries = [boundaries]
+    sign_by_axis = {}
+    for label in boundaries:
+        if not isinstance(label, str):
+            continue
+        for bc, sign in (("bn=0", "+"), ("ht=0", "-")):
+            prefix = f"sym_{bc}_"
+            if label.startswith(prefix):
+                axis = label[len(prefix):].lower()
+                if axis in ("x", "y", "z"):
+                    sign_by_axis[axis] = sign
+                break
+    return "".join(f"{sign_by_axis[a]}{a}"
+                   for a in ("x", "y", "z") if a in sign_by_axis)
 
 
 def _load_coil_script(script_path):
@@ -187,6 +228,17 @@ def solve_msc(coil_script="", vol_file="",
     if "yoke" not in set(mesh.GetMaterials()):
         return {"error": "Material 'yoke' not found in .vol "
                          f"(materials: {sorted(set(mesh.GetMaterials()))})"}
+
+    # Auto-assemble IMA string from sym_*_* sidesets when the caller
+    # left --ima empty.  Explicit --ima overrides (precedence: CLI >
+    # auto-detected labels).
+    if not ima:
+        mesh_bnds = list(mesh.GetBoundaries())
+        ima_auto = ima_from_mesh_labels(mesh_bnds)
+        if ima_auto:
+            _log(f"IMA:auto-detected {ima_auto!r} from sym_*_* labels "
+                 f"(pass --ima to override)")
+            ima = ima_auto
 
     elements = _extract_elements_from_mesh(mesh, material_name="yoke")
 

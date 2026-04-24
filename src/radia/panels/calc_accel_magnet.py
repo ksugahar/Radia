@@ -20,13 +20,16 @@ Mesh interface:
 Mesh materials / boundaries (named in the .jou before export):
   yoke            - volume material, nonlinear iron (BH curve)
   air             - volume material
-  sym_tangential  - boundary, B parallel to face (optional, 1/4 model)
-  sym_normal      - boundary, B normal to face (optional, 1/4 model)
+  sym_bn=0_<x|y|z>  - symmetry plane where B . n = 0 (field parallel)
+  sym_ht=0_<x|y|z>  - symmetry plane where H x n = 0 (field perpendicular)
+  sym_tangential   - LEGACY alias for sym_bn=0 (pre-2026-04-25)
+  sym_normal       - LEGACY alias for sym_ht=0 (pre-2026-04-25)
   kelvin          - volume material (optional, Periodic Kelvin)
 
-Symmetry BC (auto-swapped by formulation):
-  sym_tangential: A-form -> Dirichlet (A x n = 0), Omega -> natural
-  sym_normal:     A-form -> natural,                Omega -> Dirichlet (Omega = 0)
+Symmetry BC (auto-swapped by formulation - the label names the physics,
+the solver picks Dirichlet vs Natural based on whether it is A or Omega):
+  sym_bn=0_*:  B . n = 0 -> Omega: natural,  A: Dirichlet (A x n = 0)
+  sym_ht=0_*:  H x n = 0 -> Omega: Dirichlet (Omega=const), A: natural
 
 Auto-created by panel dialog:
   kelvin_int  - surface, periodic BC (interior hemisphere)
@@ -363,21 +366,36 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     # ============================================================
     # Step 5: FE space
     # ============================================================
-    # Symmetry BC: formulation-dependent Dirichlet assignment
-    # "sym_tangential" = B parallel to face  -> A: Dirichlet, Omega: natural
-    # "sym_normal"     = B normal to face    -> A: natural, Omega: Dirichlet
+    # Symmetry BC: formulation-dependent Dirichlet assignment.
+    # The mesh carries physics-named labels; the solver picks
+    # Dirichlet vs Natural based on whether it is A or Omega.
+    #   sym_bn=0_*  (B.n=0, field parallel)  -> Omega: natural,  A: Dirichlet
+    #   sym_ht=0_*  (Hxn=0, field perp)      -> Omega: Dirichlet, A: natural
+    # Legacy labels (pre-2026-04-25) "sym_tangential"/"sym_normal" are
+    # also recognised and behave as sym_bn=0/sym_ht=0 respectively.
     dir_parts = []
     if "GND" in boundaries:
         dir_parts.append("GND")
     if "outer" in boundaries:
         dir_parts.append("outer")
 
+    # Pick Dirichlet per formulation.
     if formulation == "omega":
-        if "sym_normal" in boundaries:
-            dir_parts.append("sym_normal")
+        dir_bc = "ht=0"       # Omega = const where H x n = 0
+        legacy_dir = "sym_normal"
     else:
-        if "sym_tangential" in boundaries:
-            dir_parts.append("sym_tangential")
+        dir_bc = "bn=0"       # A x n = 0 where B . n = 0
+        legacy_dir = "sym_tangential"
+
+    # Canonical labels: sym_<bc>_<axis> for axis in x/y/z.
+    for axis in ("x", "y", "z"):
+        label = f"sym_{dir_bc}_{axis}"
+        if label in boundaries:
+            dir_parts.append(label)
+
+    # Legacy label (axis-less) back-compat.
+    if legacy_dir in boundaries:
+        dir_parts.append(legacy_dir)
 
     dirichlet_bnd = "|".join(dir_parts) if dir_parts else ""
     _log(f"BC:dirichlet={dirichlet_bnd or '(none)'}")
