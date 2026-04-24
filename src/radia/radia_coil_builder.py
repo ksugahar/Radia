@@ -809,10 +809,8 @@ class CoilBuilder:
 		"""Export coil geometry as a SWEPT SOLID STEP file.
 
 		Produces the swept rectangular cross-section glued across all
-		segments; good for visualization and interchange with CAD
-		software that expects a 3D solid.  If you want a round-trip
-		centerline for `coil_from_step.coil_builder_from_wire_step`,
-		use :meth:`write_wire_step` instead.
+		segments.  The PEEC pipeline consumes this STEP (walker-based
+		centerline + cross-section subdivision via nwinc x nhinc).
 
 		Args:
 			filename: Output .step file path
@@ -822,53 +820,6 @@ class CoilBuilder:
 		"""
 		shape = self.to_occ()
 		shape.WriteStep(filename)
-		return filename
-
-	def write_wire_step(self, filename):
-		"""Export the centerline as a CLEAN WIRE STEP file.
-
-		Each StraightSegment becomes a single LINE edge; each
-		ArcSegment becomes a single CIRCLE edge (full parametric
-		representation with exact radius + angle).  No cross-section,
-		no solid body.
-
-		This is the canonical interchange format for round-trip
-		``CoilBuilder -> STEP -> CoilBuilder`` with no fidelity loss
-		(``coil_from_step.coil_builder_from_wire_step`` reconstructs
-		an identical CoilBuilder from the file).
-
-		Args:
-			filename: Output .step file path
-
-		Returns:
-			filename
-		"""
-		from netgen.occ import (Pnt, Segment, ArcOfCircle, Wire,
-		                         OCCGeometry, Axes, X, Y, Z)
-		edges = []
-		for seg in self.segments:
-			if isinstance(seg, StraightSegment):
-				p0 = Pnt(*seg.start_pos)
-				p1 = Pnt(*seg.end_pos)
-				edges.append(Segment(p0, p1))
-			elif isinstance(seg, ArcSegment):
-				# Sample start / mid / end points from the arc's
-				# parametric representation.
-				angle_rad = np.deg2rad(seg.arc_angle)
-				mid = 0.5 * angle_rad
-				pts = []
-				for t in (0.0, mid, angle_rad):
-					p = seg.arc_center + seg.radius * (
-						np.cos(t) * seg.orientation[0, :] +
-						np.sin(t) * seg.orientation[1, :])
-					pts.append(Pnt(*p))
-				edges.append(ArcOfCircle(pts[0], pts[1], pts[2]))
-			else:
-				raise NotImplementedError(
-					f"write_wire_step does not support {type(seg).__name__}; "
-					f"supported: StraightSegment, ArcSegment.")
-		wire = Wire(edges)
-		OCCGeometry(wire).shape.WriteStep(filename)
 		return filename
 
 	# ============================================================
