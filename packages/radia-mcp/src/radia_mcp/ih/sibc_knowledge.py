@@ -943,14 +943,66 @@ will NOT fix this**.
   to fem_coilmesh's H_t.
 
 The fix must be in the **formulation** of how A_inc enters the
-coupling integral, not in the discretization.  Candidates being
-tested (formulation variants only):
+coupling integral, not in the discretization.
 
-- explicit tangential projection `(A_s_cf - InnerProduct(A_s_cf, n)*n) * v_.Trace()`
-- E×H form `Cross(n, A_s_cf) · Cross(n, v_.Trace())`
-- factor adjustment in robin coefficient (1/Z_s vs 2/Z_s convention)
-- alternative: drop scattered, use line-integral RHS even for back-
-  reaction L computation (bypass cancellation entirely, like total mode)
+## Root cause (partially confirmed 2026-04-24)
+
+Integration-by-parts of the curl-curl term in the scattered
+decomposition produces a missing surface term on the workpiece:
+
+    -∫_sibc ν · (n × curl(A_s)) · v dS  =  -ν · ∫_sibc (n × B_s) · v dS
+
+where B_s = curl(A_s) is the analytical Biot-Savart magnetic field
+from the PEEC filaments.  In the current `solve_fem_biot_savart`
+code only the Robin RHS surface term `-robin · A_s_t · v_t` is
+present; the `(n × B_s) · v` term is missing.
+
+**Empirical validation** (ih_fem_kelvin_skin_fine, Cu 7 kHz; new
+helper `kelvin_source.biot_savart_B_cf` provides B_s as a CF):
+
+| variant added to RHS | H_t [A/m] | P_wp [W] |
+|---|---|---|
+| nothing (current bug)             | 15.10 | 1.95e-5 |
+| -NU_0 * Cross(n, B_s) * v.Trace() | 14.25 | 1.74e-5 |
+| +0.5 * NU_0 * Cross(n, B_s) * v.Trace() | 22.69 | 4.40e-5 |
+| **+1.0 * NU_0 * Cross(n, B_s) * v.Trace()** | **31.38** | **8.42e-5** |
+| (target — total mode + fem_coilmesh golden) | 27.55 | 6.54e-5 |
+
+**Sign**: +NU_0 (NGSolve `specialcf.normal(3)` returns the FEM-volume
+outward normal which, for a workpiece-as-hole, points INTO the hole
+= opposite of the conventional SIBC outward-normal of the conductor).
+
+**Magnitude factor**: linear interpolation gives optimum ≈ +0.78 ·
+NU_0, NOT a clean physical constant (1, 1/2, 1/π, ...).  The +1.0
+derivation result OVERSHOOTS by 14%.  This residual implies a
+SECOND missing piece — candidates:
+
+- Periodic Kelvin BC introduces additional cross-terms not captured
+  in the simple derivation (Kelvin-pulled-back A_s in the Kelvin
+  region contributes to the volume integral)
+- The PEEC `compute_branch_currents` returns complex per-filament
+  currents with sum |I_k| = 1.21 vs sum_complex(I_k) = 1.0 (proximity
+  effect phases); curl(A_s_cf) magnitude depends on this in a
+  non-linear way
+- Multi-FaceDescriptor sibc surface (5 FDs in skin_fine) may
+  introduce subtle integration weighting
+
+**Status (2026-04-24 EOD)**:
+- `biot_savart_B_cf` utility shipped in `kelvin_source.py` (correct
+  closed-form, formula B = (μ₀ I / 4π) · (dl_hat × R1) · (l1/L1 - l2/L2) / d_perp²,
+  validated against curl(biot_savart_A_cf) = B at infinite-wire limit)
+- `solve_fem_biot_savart` LEFT UNCHANGED (no half-fixed version
+  shipped) — production default remains `--source-mode total` which
+  works correctly
+- Same bug pattern exists in `examples/.../bem_coupled_solver.py`
+  (same Robin RHS contraction); applying the analogous +0.78 NU_0
+  Cross(n, B_s) correction is the natural next step but unverified.
+
+**Known good production paths** (unchanged):
+1. P_wp focus: `calc_peec_bem.py` (PEEC + BEM 1-way, ~3 min)
+2. L + P focus: `calc_fem_coilmesh.py` (full FEM, ~8 min)
+3. PEEC + FEM-coupled L (with --source-mode total): `calc_fem_kelvin.py`
+   (~4 min, P matches coilmesh to <0.5%)
 
 ## Practical guidance
 
