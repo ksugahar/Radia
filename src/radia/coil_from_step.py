@@ -1,36 +1,30 @@
 """coil_from_step.py
 
 Extract coil centerline + per-station profile from an arbitrary STEP
-solid via a walking-plane sweep.  The result feeds two distinct
-downstream coil models -- use the wrapper that matches your panel:
+swept-solid via a walking-plane sweep.  Used exclusively by the PEEC
+path (``coil_from_cad.filaments_from_step``); the EM / analytical
+Biot-Savart path is CoilBuilder-only (`.py` ``build_coil()``), not
+STEP.
 
-    STEP file
+    STEP file (swept solid with cross-section)
         |
-        +-> extract_centerline()  [common preprocessing]
+        +-> load_step_solid()
+        +-> extract_centerline()
                 |
-                +-> to_coil_builder()       (analytical Biot-Savart)
-                |   coil_builder_from_step()  -- one-shot wrapper
-                |       user: EM panel (calc_accel_magnet/msc)
-                |       CoilBuilder with straight + arc segments
-                |       NO cross-section subdivision (solid rect/circle)
-                |       Fast; no skin/proximity effects
-                |
-                +-> coil_from_cad.filaments_from_step()
-                        user: IH panel (calc_peec_inductance / bem)
-                        PEECBuilder topology with filaments
-                        Cross-section subdivided nwinc x nhinc
-                        Frequency-dependent skin / proximity effect
+                +-> to_coil_builder()  (intermediate -- NOT called
+                                          by any panel directly)
+                        then subdivided by coil_from_cad into
+                        PEECBuilder filaments (nwinc x nhinc) for
+                        skin / proximity effects.
 
-The SAME coil STEP can feed either path; the choice depends on
-what the panel wants to compute, not on the STEP itself.
-
-Pipeline (shared):
-    STEP file -> OCCGeometry -> single Solid
-              -> walking-plane sweep along the conductor
-              -> (centerline polyline, [Profile per station])
-
-The result is consumed directly by ``peec_bundle.build_bundle_solver``,
-or promoted to a CoilBuilder reconstruction via ``to_coil_builder``.
+Legacy note (2026-04-25): earlier revisions exposed
+``coil_builder_from_step`` and ``coil_builder_from_wire_step`` as
+one-shot wrappers for the EM panel.  Both were removed when the EM
+panel adopted a CoilBuilder-only policy (user: "AnalyticalCoilは、
+CoilBuilder経由で、PEECはstepファイル経由がよいよ").  If you need
+CoilBuilder-from-STEP today, author the coil as a `.py`
+``build_coil()`` module and call it directly; there is no longer a
+STEP -> CoilBuilder path through this module.
 
 Walking-plane algorithm
 -----------------------
@@ -787,204 +781,8 @@ def to_coil_builder(result, current=1.0):
     return builder, segs
 
 
-def coil_builder_from_step(step_path, *, current=1.0, step_size=None,
-                           verbose=False):
-    """One-shot STEP -> CoilBuilder for analytical Biot-Savart coils.
-
-    Wraps ``extract_centerline`` + ``to_coil_builder`` into a single
-    call for panel use.  This is the canonical entry point used by
-    `calc_accel_magnet` / `calc_accel_msc` (EM panel) when the coil
-    input is a STEP file.  For PEEC circuit extraction (skin /
-    proximity effect) use ``coil_from_cad.filaments_from_step``
-    instead.
-
-    Known fidelity limitation
-    -------------------------
-    The centerline walker has a Goldilocks zone for `step_size`: a
-    racetrack with 22.5 mm arcs + 62.5 mm straights decomposes
-    cleanly at step_size ~= 10 mm (5 segments: 4 arcs + 1 straight)
-    but collapses to a single 335 degree arc at step_size = 6 mm or
-    20 mm (the walker produces an irregularly spaced 7-point polyline
-    that polyline_to_segments cannot distinguish into straights +
-    arcs).  The default heuristic (mass based, typically 20 mm for
-    this class of coil) is STABLE but LOW FIDELITY -- it produces a
-    valid but approximate one-arc representation.
-
-    For high-fidelity analytical coils, prefer the `.py` coil script
-    path (a module that defines `build_coil() -> CoilBuilder`
-    directly) so the straight + arc segments are written explicitly.
-
-    Args:
-        step_path: Path to the coil STEP file.
-        current: Current in Amperes (NI for a multi-turn winding
-            represented as a single centerline).  Defaults to 1.0;
-            panels typically override via their own current widget
-            and pass the final value here.
-        step_size: Walker step in metres.  If None, uses the
-            cube-root-of-mass/100 heuristic from ``extract_centerline``.
-            Override when the resulting SegmentSpec decomposition
-            collapses to a single arc and accuracy matters.
-        verbose: Forwarded to ``extract_centerline``.
-
-    Returns:
-        CoilBuilder ready for Radia field evaluation.
-    """
-    result = extract_centerline(step_path, step_size=step_size,
-                                verbose=verbose)
-    builder, _segs = to_coil_builder(result, current=current)
-    return builder
-
-
-def coil_builder_from_wire_step(step_path, *, current=1.0,
-                                width=None, height=None,
-                                tol_chain=1e-5):
-    """EXACT STEP-wire -> CoilBuilder via build123d edge introspection.
-
-    For the case where the user authors the coil as a WIRE STEP
-    (not a swept solid), every edge is a parametric primitive
-    (``GeomType.LINE`` or ``GeomType.CIRCLE``) with exact endpoints,
-    radius, arc angle, etc.  No walker, no sampling, no ambiguity.
-
-    Edge -> SegmentSpec mapping::
-
-        GeomType.LINE    -> straight(length)
-        GeomType.CIRCLE  -> arc(radius, angle_deg)
-        GeomType.BSPLINE -> RuntimeError (raise -- ask user to
-                            regenerate the STEP with line/circle
-                            segments, or fall back to the walker
-                            in coil_builder_from_step)
-
-    Cross-section (width / height) is NOT in the wire STEP.  The
-    caller must pass it explicitly -- typical panel convention is a
-    separate "cross-section" widget.  Defaults to 1 mm x 1 mm
-    filament-like cross-section for field-evaluation smoke tests.
-
-    Typical accuracy vs. the walker:
-
-    +------------+-------------------+-------------------+
-    | Input      | Walker decomp     | wire-direct       |
-    +============+===================+===================+
-    | .step (w)  | polygonized       | 4 straight + 4    |
-    | true arcs  | (1 arc fallback)  | arcs (exact)      |
-    +------------+-------------------+-------------------+
-    | .step (w)  | polygonized       | 4 straight + 4    |
-    | chord arcs | (1 arc fallback)  | straight (loses   |
-    |            |                   | arc info but      |
-    |            |                   | honest -- each    |
-    |            |                   | polygon leg       |
-    |            |                   | shows up as its   |
-    |            |                   | own straight)     |
-    +------------+-------------------+-------------------+
-
-    Args:
-        step_path: Path to the coil WIRE STEP file (not a solid body).
-        current: Current in Amperes.  Defaults to 1.0.
-        width: Cross-section width in metres.  Defaults to 1 mm
-            (smoke-test filament).  Panels set their actual value.
-        height: Cross-section height in metres.  Defaults to 1 mm.
-        tol_chain: Distance tolerance [m] below which two edges are
-            considered chained (the end of edge i matches the start
-            of edge i+1).
-
-    Returns:
-        CoilBuilder with explicit straight + arc segments.
-
-    Raises:
-        ImportError: build123d not available.
-        RuntimeError: STEP contains non-LINE/CIRCLE edges (e.g.
-            B-splines) that cannot be represented as CoilBuilder
-            primitives.  Caller should either export the STEP with
-            LINE / CIRCLE segments or fall back to
-            ``coil_builder_from_step``.
-    """
-    from build123d import import_step, GeomType  # type: ignore
-
-    shape = import_step(step_path)
-    edges = list(shape.edges())
-    if not edges:
-        raise RuntimeError(f"STEP has no edges: {step_path}")
-
-    # Chain edges in traversal order by nearest-endpoint matching.
-    # build123d returns edges in arbitrary order; reorder so the end
-    # of edge i equals the start of edge i+1 (within tol_chain).
-    remaining = edges[:]
-    ordered = [remaining.pop(0)]
-    reversed_flags = [False]
-    while remaining:
-        last_end = ordered[-1] @ (0.0 if reversed_flags[-1] else 1.0)
-        best_idx = -1
-        best_rev = False
-        best_d = float("inf")
-        for i, e in enumerate(remaining):
-            for rev in (False, True):
-                candidate_start = e @ (1.0 if rev else 0.0)
-                d = (candidate_start - last_end).length
-                if d < best_d:
-                    best_d = d
-                    best_idx = i
-                    best_rev = rev
-        if best_d > tol_chain * 100:  # lenient factor
-            raise RuntimeError(
-                f"edge chain broken at gap = {best_d*1000:.3f} mm "
-                f"between edge {len(ordered)-1} end and next candidate; "
-                f"STEP wire may be disconnected")
-        ordered.append(remaining.pop(best_idx))
-        reversed_flags.append(best_rev)
-
-    # Build a CoilBuilder from the ordered chain.  We orient the
-    # builder at the first edge's start; CoilBuilder's internal
-    # chain rule carries orientation from segment to segment.
-    from radia_coil_builder import CoilBuilder
-
-    if width is None:
-        width = 1e-3
-    if height is None:
-        height = 1e-3
-
-    builder = CoilBuilder(current=current)
-    first = ordered[0]
-    first_rev = reversed_flags[0]
-    start_pt = first @ (1.0 if first_rev else 0.0)
-    start_pos = [start_pt.X, start_pt.Y, start_pt.Z]
-
-    # Seed orientation: Y-axis = tangent at edge start, X-axis
-    # arbitrary orthogonal.  CoilBuilder will re-derive X at each
-    # arc start from arc_center - start_pos.
-    t0 = (first @ (0.99 if first_rev else 0.01)) - start_pt
-    y_axis = np.array([t0.X, t0.Y, t0.Z])
-    if np.linalg.norm(y_axis) < 1e-12:
-        y_axis = np.array([0.0, 1.0, 0.0])
-    y_axis = y_axis / np.linalg.norm(y_axis)
-    # Pick any x orthogonal to y
-    ref = np.array([1.0, 0.0, 0.0])
-    if abs(np.dot(ref, y_axis)) > 0.9:
-        ref = np.array([0.0, 1.0, 0.0])
-    x_axis = ref - np.dot(ref, y_axis) * y_axis
-    x_axis = x_axis / np.linalg.norm(x_axis)
-    z_axis = np.cross(x_axis, y_axis)
-    orient = np.array([x_axis, y_axis, z_axis])
-    builder.set_start(start_pos, orientation=orient)
-    builder.set_cross_section(width=width, height=height)
-
-    for e, rev in zip(ordered, reversed_flags):
-        gt = e.geom_type
-        if gt == GeomType.LINE:
-            builder.add_straight(length=float(e.length))
-        elif gt == GeomType.CIRCLE:
-            radius = float(e.radius)
-            # Signed arc angle (positive = CCW about normal)
-            # build123d exposes total `length / radius` as absolute
-            # angle; sign handled by traversal direction.
-            angle_deg = math.degrees(float(e.length) / radius)
-            if rev:
-                angle_deg = -angle_deg
-            builder.add_arc(radius=radius, arc_angle=angle_deg)
-        else:
-            raise RuntimeError(
-                f"STEP edge has unsupported geom_type={gt!r}.  "
-                f"coil_builder_from_wire_step handles LINE and CIRCLE "
-                f"only.  Re-export the STEP with line + circle "
-                f"segments, or use coil_builder_from_step (walker-"
-                f"based, lower fidelity).")
-
-    return builder
+# coil_builder_from_step / coil_builder_from_wire_step were removed
+# 2026-04-25.  The EM panel is CoilBuilder-only (.py); the PEEC
+# pipeline uses `extract_centerline` + `to_coil_builder` internally
+# via `coil_from_cad.filaments_from_step`.  There is no supported
+# STEP -> CoilBuilder entry point in this module anymore.
