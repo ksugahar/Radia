@@ -8,14 +8,21 @@ Two formulations:
 User workflow:
   1. Write coil Python script (defines build_coil() -> CoilBuilder)
   2. Write .jou to create iron yoke + air + mesh + named blocks
-  3. Run journal in Cubit panel, click Solve
+  3. Cubit panel exports .vol via `radia_export netgen`, then runs Solve
 
-Cubit blocks (user sets in .jou):
-  yoke            - volume block, nonlinear iron (BH curve)
-  air             - volume block
-  sym_tangential  - surface block, B parallel to face (optional, 1/4 model)
-  sym_normal      - surface block, B normal to face (optional, 1/4 model)
-  kelvin          - volume block (optional, Periodic Kelvin)
+Mesh interface:
+  This script takes a Netgen .vol file via --vol (not .cub5).  The .vol
+  is the sole interface between Cubit and NGSolve per the Cubit/NGSolve
+  Complete Separation Policy in CLAUDE.md — this script does NOT
+  import cubit.  Mesh order + element types are embedded in the .vol
+  by the Cubit plugin at export time.
+
+Mesh materials / boundaries (named in the .jou before export):
+  yoke            - volume material, nonlinear iron (BH curve)
+  air             - volume material
+  sym_tangential  - boundary, B parallel to face (optional, 1/4 model)
+  sym_normal      - boundary, B normal to face (optional, 1/4 model)
+  kelvin          - volume material (optional, Periodic Kelvin)
 
 Symmetry BC (auto-swapped by formulation):
   sym_tangential: A-form -> Dirichlet (A x n = 0), Omega -> natural
@@ -26,8 +33,6 @@ Auto-created by panel dialog:
   kelvin_ext  - surface, periodic BC (exterior hemisphere)
 
 Coil is NOT meshed -- Biot-Savart source from CoilBuilder wire path.
-
-IMPORTANT: NGSolve must be imported BEFORE cubit.
 """
 
 import argparse
@@ -52,7 +57,7 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import (MU_0, NU_0, setup_paths, setup_cubit, export_mesh,
+from calc_common import (MU_0, NU_0, setup_paths,
                           add_periodic_kelvin, detect_kelvin_offset,
                           get_bh_curve, progress, calc_main,
                           EMMaterial, add_material_args)
@@ -158,8 +163,8 @@ def _create_bh_interpolators(bh_data):
     }
 
 
-def solve_accel(coil_script="", cub5_file="", formulation="omega",
-                order=2, fes_order=1,
+def solve_accel(coil_script="", vol_file="", formulation="omega",
+                fes_order=1,
                 mat=None, n_steps=1,
                 max_iter=30, tol=1e-3, relax=0.3,
                 newton=False, solver="auto", msh_output=""):
@@ -167,9 +172,11 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
 
     Args:
         coil_script: Path to Python script with build_coil()
-        cub5_file: Cubit .cub5 file
+        vol_file: Netgen .vol file (exported by Cubit `radia_export netgen`
+            or produced directly by Netgen; the .vol is the sole interface
+            between Cubit and NGSolve per the Cubit/NGSolve separation
+            policy — this script no longer imports cubit).
         formulation: "omega" (scalar H1) or "a" (vector HCurl)
-        order: Mesh curve order (1-3)
         fes_order: FE polynomial order
         mat: EMMaterial instance (iron yoke properties)
         n_steps: Number of quasi-static steps (hysteresis: 0->I->0)
@@ -188,12 +195,11 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
     bh_file = ""  # BH data now lives in mat.bh_curve
     hys_file = mat.hys_file
 
-    # NGSolve must be imported BEFORE Cubit
     import ngsolve  # noqa: F401
     from ngsolve import (H1, HCurl, L2, Periodic, BilinearForm, LinearForm,
                          GridFunction, Integrate, InnerProduct,
                          curl, grad, dx, CF, VOL,
-                         TaskManager, Preconditioner)
+                         TaskManager, Preconditioner, Mesh)
     from ngsolve import x, y, z, sqrt
 
     setup_paths()
@@ -221,18 +227,15 @@ def solve_accel(coil_script="", cub5_file="", formulation="omega",
     _log("COIL:RadiaField CF created (exact analytical)")
 
     # ============================================================
-    # Step 2: Load Cubit mesh
+    # Step 2: Load .vol mesh (Cubit-free; .vol is the sole interface)
     # ============================================================
     _log("MESH:loading")
     t0 = time.perf_counter()
 
-    if not cub5_file or not os.path.exists(cub5_file):
-        return {"error": f"Cubit .cub5 file required: {cub5_file}"}
+    if not vol_file or not os.path.exists(vol_file):
+        return {"error": f".vol file required: {vol_file}"}
 
-    cubit = setup_cubit(cub5_file)
-    if cubit is None:
-        return {"error": "Cubit not available"}
-    mesh = export_mesh(cubit, order=order)
+    mesh = Mesh(vol_file)
 
     # Kelvin: detect offset, estimate radius, add periodic identification
     a_kelvin = 0.060
@@ -835,12 +838,13 @@ def main():
         description="Accelerator magnet solver (Omega-reduced or A-formulation)")
     parser.add_argument("--coil-script", required=True,
                         help="Python script with build_coil() -> CoilBuilder")
-    parser.add_argument("--cub5", default="", help="Cubit .cub5 file")
+    parser.add_argument("--vol", default="",
+                        help="Netgen .vol file (sole interface between "
+                             "Cubit and NGSolve per Cubit/NGSolve separation "
+                             "policy -- this script no longer accepts .cub5)")
     parser.add_argument("--formulation", default="omega",
                         choices=["omega", "a"],
                         help="omega = scalar H1, a = vector HCurl")
-    parser.add_argument("--order", type=int, default=2,
-                        help="Curve order (1-3)")
     parser.add_argument("--fes-order", type=int, default=1,
                         help="FE polynomial order")
     add_material_args(parser, default_material="steel",
@@ -867,9 +871,8 @@ def main():
     def run(args):
         return solve_accel(
             coil_script=args.coil_script,
-            cub5_file=args.cub5,
+            vol_file=args.vol,
             formulation=args.formulation,
-            order=args.order,
             fes_order=args.fes_order,
             mat=EMMaterial.from_args(args),
             n_steps=args.n_steps,
