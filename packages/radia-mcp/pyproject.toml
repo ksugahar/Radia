@@ -68,6 +68,7 @@ mcp-server-radia-interop = "radia_mcp.interop.server:main"
 mcp-server-gmsh = "radia_mcp.gmsh.server:main"
 mcp-server-elf = "radia_mcp.elf.server:main"
 mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
+mcp-server-ih = "radia_mcp.ih.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

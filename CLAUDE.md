@@ -180,34 +180,43 @@ Related:
   to Layer 3 (PySide6 window), Stage 2 corresponds to Layer 4 (headless
   calc_*.py).
 
-### MCP Knowledge Placement Policy (2026-04-21)
+### MCP Knowledge Placement Policy (2026-04-21, updated 2026-04-24)
 
-**POLICY**: Separate research-stage lab knowledge from stable public
-distribution.
+**POLICY**: All MCP knowledge ships from the single Radia monorepo.
+LAB-private mcp-server packages have been retired.
 
 | Where | What |
 |-------|------|
-| `S:\Radia\01_GitHub\packages\radia-mcp\src\radia_mcp\` (**public**) | General, stable, externally-valid knowledge.  Ships to PyPI as `radia-mcp`.  End users outside the lab install and rely on this. |
-| `S:\mcp-server\mcp-server-ih\` (**lab-private**) | Research-stage, in-flight, LAB-only.  Not published.  Experiments, WIP results, lab-specific workflow notes. |
+| `S:\Radia\01_GitHub\packages\radia-mcp\src\radia_mcp\<topic>\` (**public**) | All MCP knowledge — general FEM/BEM/Kelvin **and** application-specific (induction heating, electromagnet, peec). Ships to PyPI as `radia-mcp`. Each topic is a subpackage with its own `server.py`. |
+| ~~`S:\mcp-server\mcp-server-ih\`~~ (**retired 2026-04-24**) | Promoted into `radia_mcp.ih` subpackage. Old path no longer exists. |
 
-**Promotion**: when a research-stage topic becomes stable and
-generally useful (= the knowledge no longer references WIP files,
-the feature is committed + deploy-verified + golden-tested), **move
-it from `S:\mcp-server\...` into the appropriate subfolder of
-`packages/radia-mcp/src/radia_mcp/` and register it as a tool in
-that server's `server.py`**.  Remove the now-duplicated copy from
-`S:\mcp-server\...`.
+**Subpackage layout** (one server per concern):
 
-**Example**: PEEC-inductance knowledge (2026-04-21) started in
-`mcp-server-ih` as research notes while the feature was being
-built.  After the Panel Mode Matrix row was validated (single-loop
-TORUS + multi-turn loft + sibling-jou + Japanese path, all golden-
-tested), it was moved to `radia-mcp/radia_ngsolve/peec_inductance_knowledge.py`
-and registered as the public `peec_inductance` tool.
+| Subpackage | Scope | Promoted from |
+|------------|-------|---------------|
+| `radia_mcp.cubit` | Cubit scripting / scaffolding / hex-mesh | n/a |
+| `radia_mcp.build123d` | build123d STEP authoring | n/a |
+| `radia_mcp.gmsh` | GMSH MSH v4.1 inspect/validate/convert | n/a |
+| `radia_mcp.elf` | Historical ELF reference | n/a |
+| `radia_mcp.interop` | Cross-CAD interop | n/a |
+| `radia_mcp.radia_ngsolve` | **General** Radia + NGSolve (FEM/BEM/Kelvin/PEEC inductance/sparsesolv/MSH post) | n/a |
+| `radia_mcp.ih` | **IH-specific**: induction heating workflow, ESIM cell problem, workpiece SIBC, Karl iteration, screening physics | `s:\mcp-server\mcp-server-ih\` (2026-04-24) |
 
-**Demotion** (rarely): if a public topic turns out to be lab-specific
-after all, move it back to `S:\mcp-server\...` and remove from public
-packaging.  Note the reason in CLAUDE.md.
+**Splitting rule** (general vs application):
+- If the topic is generally useful for FEM/BEM/Kelvin/.vol pipeline — `radia_ngsolve`
+- If the topic only makes sense in a specific application context (induction heating, accelerator magnets, PCB) — that application's subpackage
+
+**New research topics**: in flight WIP can live in `examples/` or
+`docs/research/` (`.gitignored` for LAB-only) until stable. Promotion
+into a `radia_mcp.<topic>` subpackage requires: feature committed +
+deploy-verified + golden-tested + knowledge stops referencing
+unpublished files. There is **no longer** a separate
+`S:\mcp-server\mcp-server-*\` tree — promote directly into the
+public subpackage when ready.
+
+**Past examples** (historical):
+- PEEC-inductance: `mcp-server-ih` → `radia_mcp.radia_ngsolve.peec_inductance_knowledge` (2026-04-21, general technique)
+- Induction Heating: `mcp-server-ih` → `radia_mcp.ih` (2026-04-24, application-specific subpackage)
 
 ### Unit System Policy
 
