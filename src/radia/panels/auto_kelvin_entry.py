@@ -15,6 +15,7 @@ Config schema (all keys optional; defaults in parens)::
       "kelvin_air_block":     str          (default "air")
       "kelvin_block_name":    str          (default "kelvin")
       "kelvin_mesh_size":     float|null   (default null = auto from air)
+      "kelvin_reduction":     dict|null    (default null = mesh-seam mode)
     }
 
 ``kelvin_mesh_size`` is the tet edge length [m] imposed on the Kelvin
@@ -22,6 +23,17 @@ exterior sphere.  ``null`` (default) lets add_kelvin_cubit inherit the
 size from the air outer surface via copy-mesh — usually fine.  For
 large models you may want a COARSER Kelvin mesh (e.g. 2-3x the air
 surface size); specify an explicit float to override.
+
+``kelvin_reduction`` is a JSON object keyed by axis ("x"|"y"|"z") with
+value in {"bn=0", "ht=0"}.  When present, it triggers domain-reduction
+mode in add_kelvin_cubit: the air block is assumed to already be
+reduced to the positive side of each listed axis plane, and the
+Kelvin sphere is cut on the same planes.  Each cut plane gets a
+`sym_<bc>_<axis>` sideset whose BC is chosen by the solver per its
+formulation (A vs Omega).  ``null`` (default) runs the existing
+symmetry auto-detection (mesh-seam mode).  Example::
+
+    "kelvin_reduction": {"x": "ht=0", "z": "bn=0"}   // 1/4 xz model
 
 If ``RADIA_LAUNCHER_CONFIG`` is not set or the file is missing, all
 defaults apply — i.e. the pre-argument-driven behaviour is preserved,
@@ -77,6 +89,7 @@ def _load_config():
         "kelvin_air_block":  "air",
         "kelvin_block_name": "kelvin",
         "kelvin_mesh_size":  None,
+        "kelvin_reduction":  None,
     }
     cfg_path = os.environ.get("RADIA_LAUNCHER_CONFIG", "")
     if not cfg_path:
@@ -110,7 +123,8 @@ else:
         _info = auto_add_kelvin_from_current_model(
             air_block=cfg["kelvin_air_block"],
             kelvin_block=cfg["kelvin_block_name"],
-            mesh_size=cfg["kelvin_mesh_size"])
+            mesh_size=cfg["kelvin_mesh_size"],
+            reduction=cfg["kelvin_reduction"])
         if _info is not None:
             ox, oy, oz = _info["center"]
             print(f"[auto_kelvin_entry] Kelvin added at "
