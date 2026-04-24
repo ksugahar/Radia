@@ -305,78 +305,26 @@ Note: the **Robustness Principle** ("be liberal in what you accept") is now wide
 
 **POLICY**: Compare magnetic fields using **vector difference** `norm(B1 - B2)`, not scalar magnitude difference `abs(|B1| - |B2|)`. Magnetic field is a vector quantity.
 
-### Scattered-Field Robin BC RHS: BUGGY (2026-04-24)
+### Scattered-Field Robin RHS: Removed (2026-04-24)
 
-**POLICY**: For PEEC + FEM-SIBC coupling, use the **total-field FEM
-line-integral PEEC RHS** (`--source-mode total` in
-`calc_fem_kelvin.py`). The **scattered formulation**
-(`solve_fem_biot_savart`, biot_savart_A_cf as Robin BC RHS) gives
-**~3.4x P_wp under-prediction** (H_t off by ~1.84x) regardless of
-nwinc/nhinc. Validated 2026-04-24 on ih_fem_kelvin_skin_fine sample,
-Cu 7 kHz: scattered = 1.95e-5 W, total = 6.56e-5 W, FEM coilmesh
-golden = 6.54e-5 W.
+**POLICY**: The PEEC Biot-Savart scattered path
+(`solve_fem_biot_savart`, `--source-mode scattered` in
+`calc_fem_kelvin.py`) was **removed 2026-04-24** after giving a
+~3.4x P_wp under-prediction that could not be traced to a clean
+formulation fix (the empirical correction factor landed at ~0.78,
+not the derivation's +1.0; remainder untraced).
 
-**Physical sanity**: at constant port current (1A), H_t at workpiece
-should depend only on coil geometry (Ampere's law). Both formulations
-enforce I=1A; both see the same coil .step + same workpiece .vol;
-yet H_t differs by 1.84x → bug is in the formulation, not the physics.
+Production paths for PEEC + FEM-SIBC:
+- **P_wp**: `calc_peec_bem.py` (PEEC+BEM 1-way) or
+  `calc_fem_coilmesh.py` (full FEM with volumetric coil).
+- **L_total**: `calc_fem_coilmesh.py` (volumetric coil + workpiece
+  SIBC + Kelvin, intrinsic back-reaction) OR `calc_fem_kelvin.py`
+  with the remaining total-field line-integral RHS.
 
-**Root cause investigation (2026-04-24, partially resolved)**:
-
-Integration-by-parts of the curl-curl in the scattered decomposition
-A_total = A_s + A_r yields a missing surface term on the workpiece:
-
-    -∫_sibc ν · (n × curl(A_s)) · v dS  =  -ν · ∫_sibc (n × B_s) · v dS
-
-where B_s = curl(A_s) is the Biot-Savart magnetic field from the
-PEEC filaments.  The current code has only the Robin RHS
-`-robin · A_s_t · v_t` term; the `(n × B_s) · v` term is missing.
-
-Empirical sweep (`kelvin_source.biot_savart_B_cf` helper now
-implements B_s as a closed-form CF):
-
-| RHS variant added | H_t [A/m] | error vs target |
-|---|---|---|
-| nothing (current bug) | 15.10 | -45% |
-| -NU_0 * Cross(n, B_s) * v.Trace() | 14.25 | -48% |
-| +0.5 * NU_0 * Cross(n, B_s) * v.Trace() | 22.69 | -18% |
-| **+1.0 * NU_0 * Cross(n, B_s) * v.Trace()** | **31.38** | **+14%** |
-| (target = total mode) | 27.55 | 0 |
-
-Sign confirmed: +NU_0 (NGSolve `specialcf.normal(3)` is the FEM-
-volume outward normal which for workpiece-as-hole points INTO the
-hole = opposite of the SIBC outward normal of the conductor).
-
-Magnitude residual: optimum factor ≈ +0.78, NOT a clean physical
-constant.  The +1.0 derivation result overshoots by 14% — implies a
-SECOND smaller missing piece (Periodic Kelvin coupling? PEEC
-complex-phase currents? multi-FD sibc weighting? — unresolved).
-
-**`biot_savart_B_cf` shipped in `kelvin_source.py`** (formula
-correctness verified against infinite-wire analytical limit), but
-`solve_fem_biot_savart` is LEFT UNCHANGED until the residual 14%
-is understood — would not want to ship a half-fix that under/over-
-predicts depending on geometry.  Production default remains
-`--source-mode total`.
-
-**Same bug pattern likely exists in BEM-derived back-reaction L**
-computed via Robin RHS with A_inc as a CoefficientFunction (e.g.
-historic `bem_coupled_solver.py` in examples/). The 2026-04-18 memory
-"PEEC+BEM L mesh-dep -18 to -46 nH" is the same class of issue.
-
-**Workaround** (production):
-- For P_wp: `calc_peec_bem.py` (PEEC+BEM 1-way, validated <1% vs
-  FEM-coilmesh) OR `calc_fem_coilmesh.py` (full FEM, golden test).
-- For L_total: `calc_fem_coilmesh.py` (volumetric coil + workpiece
-  SIBC + Kelvin, intrinsic back-reaction).
-- For PEEC + FEM-coupled L: `calc_fem_kelvin.py --source-mode total`
-  (line-integral RHS, validated against fem_coilmesh P_wp; L
-  decomposition still being calibrated).
-
-**Do not use** `--source-mode scattered` for production. The
-calc_fem_kelvin.py CLI default was changed to `total` 2026-04-24 to
-prevent silent bug propagation; an explicit warning fires if user
-overrides to `scattered`.
+`kelvin_source.biot_savart_A_cf` / `biot_savart_B_cf` helpers
+remain available for research uses (line-integral back-reaction,
+validation harnesses). See `memory/scattered_robin_rhs_bug.md` for
+the full investigation record.
 
 ### FMM (Fast Multipole Method): Removed (2026-03-06)
 

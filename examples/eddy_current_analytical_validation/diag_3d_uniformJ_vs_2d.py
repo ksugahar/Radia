@@ -2,8 +2,10 @@
 
 Bypasses the PEEC filament Biot-Savart A_s projection by imposing a
 uniform volume J in the 3D "coil" material (= same as the 2D axisym
-reference). Then solves the SAME SIBC Robin BC system as
-``solve_fem_biot_savart`` and extracts L and P.
+reference). Historical reference: the 3D "scattered" FEM path
+(``solve_fem_biot_savart``) that motivated this diagnostic was retired
+2026-04-24 due to an unresolved 3.4x P_wp under-prediction.  Production
+now uses ``calc_fem_kelvin --formulation total`` or ``calc_fem_coilmesh``.
 
 2D axisym SIBC (Cu, 7 kHz, closed torus):
   L = 57.65 nH, P = 6.62e-5 W   (validated against full-eddy 0.9% / 14%)
