@@ -38,9 +38,10 @@ from PySide6.QtGui import QColor
 # Constants: method identifiers + labels
 # ============================================================
 
-METHOD_PEEC_IND  = "PEEC inductance (coil only, STEP)"
-METHOD_PEEC_BEM  = "Fast workpiece heating (PEEC+BEM, 1-way)"
-METHOD_FEM_FULL  = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
+METHOD_PEEC_IND         = "PEEC inductance (coil only, STEP)"
+METHOD_PEEC_BEM         = "Fast workpiece heating (PEEC+BEM, 1-way)"
+METHOD_PEEC_FEM_KELVIN  = "PEEC coil + FEM wp (SIBC) + Kelvin"
+METHOD_FEM_FULL         = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
 
 METHOD_TOOLTIP = {
     METHOD_PEEC_IND: (
@@ -62,6 +63,17 @@ METHOD_TOOLTIP = {
         "<li>L is vacuum coil only (no wp effect)</li>"
         "</ul>"
         "Requires <b>sibc</b> sideset in .vol + <b>STEP</b> coil."
+    ),
+    METHOD_PEEC_FEM_KELVIN: (
+        "<b>PEEC coil + FEM wp + Kelvin</b> (~4-8 min).<br>"
+        "<ul>"
+        "<li>Coil as PEEC filament (no coil mesh, STEP input)</li>"
+        "<li>Workpiece as volumetric FEM with SIBC Robin BC on surface</li>"
+        "<li>Kelvin exterior domain for open boundary</li>"
+        "<li>Total-field line-integral RHS (scattered mode retired 2026-04-24)</li>"
+        "</ul>"
+        "Requires <b>sibc</b> sideset + <b>kelvin</b> material in .vol "
+        "+ <b>STEP</b> coil.  NO coil material / source / sink needed."
     ),
     METHOD_FEM_FULL: (
         "<b>Full L + P_wp + P_coil</b> (~1-7 min depending on mesh).<br>"
@@ -143,6 +155,16 @@ def check_method_requirements(method, mats, bnds):
                 errors.append(
                     f"Missing boundary '{b}'.  FEM A-V needs gap-face "
                     f"ports (source/sink) + wp surface (sibc).")
+    elif method == METHOD_PEEC_FEM_KELVIN:
+        # PEEC coil + FEM wp: no coil material, no source/sink, just the
+        # workpiece SIBC surface + a Kelvin exterior.
+        if "sibc" not in bnds:
+            errors.append(
+                "Missing boundary 'sibc' (workpiece surface).")
+        if "kelvin" not in mats:
+            warnings.append(
+                "Missing material 'kelvin' — Dirichlet A=0 used "
+                "instead of Kelvin open boundary (truncation error).")
     else:  # PEEC+BEM
         if "sibc" not in bnds:
             errors.append(
@@ -203,7 +225,8 @@ class IHPanel(ModePanel):
         self._add_section("Method")
         self._method_combo = self.add_combo(
             "method", "Method:",
-            [METHOD_PEEC_IND, METHOD_PEEC_BEM, METHOD_FEM_FULL])
+            [METHOD_PEEC_IND, METHOD_PEEC_BEM,
+             METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
         self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_IND])
 
@@ -313,7 +336,12 @@ class IHPanel(ModePanel):
             "for rectangular.  Requires d / skin depth >= 3.")
         self.add_spin("peec_nwinc", "PEEC nwinc (volume grid):", 3, 1, 10)
         self.add_spin("peec_nhinc", "PEEC nhinc (volume grid):", 3, 1, 10)
-        self.add_spin("fes_order", "FES order:", 1, 1, 3)
+        # Basis polynomial order.  Meaning depends on method:
+        #   PEEC+BEM -> H1 surface order   (--h1-order)
+        #   FEM full -> HCurl volume order (--fes-order)
+        # Same widget for both because the CLI range (1-3) and UX ("how
+        # smooth should the basis be?") are identical.
+        self.add_spin("fes_order", "Basis order:", 1, 1, 3)
 
         # ============ Initial state ============
         # Apply material presets to refresh coil_sigma / wp_sigma / mu_r
@@ -369,9 +397,11 @@ class IHPanel(ModePanel):
     def _on_method_changed(self, method):
         is_peec_ind = (method == METHOD_PEEC_IND)
         is_peec_bem = (method == METHOD_PEEC_BEM)
+        is_peec_fem_k = (method == METHOD_PEEC_FEM_KELVIN)
         is_fem = (method == METHOD_FEM_FULL)
-        needs_step = is_peec_ind or is_peec_bem
-        needs_wp = is_peec_bem or is_fem
+        # PEEC+FEM+Kelvin needs a STEP (for filament coil) AND .vol (for wp).
+        needs_step = is_peec_ind or is_peec_bem or is_peec_fem_k
+        needs_wp = is_peec_bem or is_peec_fem_k or is_fem
 
         self._method_combo.setToolTip(METHOD_TOOLTIP.get(method, ""))
 
@@ -383,8 +413,9 @@ class IHPanel(ModePanel):
         if is_peec_ind or is_peec_bem:
             solver.addItems(["Dense LU (small)",
                               "HACApK (large)"])
-        else:  # FEM
+        else:  # FEM side: PEEC+FEM+Kelvin and FEM-full share solver choices
             solver.addItems(["pardiso (direct)",
+                              "AMS (iterative, p=1)",
                               "shifted AMS (iterative, p=1)",
                               "BDDC (iterative, p>=2)",
                               "iccg (fallback)"])
@@ -398,9 +429,14 @@ class IHPanel(ModePanel):
         # Perimeter placement (n_peri) for PEEC-inductance only;
         # volume grid (nwinc/nhinc) for PEEC+BEM only.
         self._set_row_visible("peec_n_peri", is_peec_ind)
-        self._set_row_visible("peec_nwinc", is_peec_bem)
-        self._set_row_visible("peec_nhinc", is_peec_bem)
-        self._set_row_visible("fes_order", is_fem)
+        # Volume filament grid (nwinc/nhinc) used by PEEC+BEM AND
+        # PEEC+FEM+Kelvin (both drive calc scripts that accept the flag).
+        self._set_row_visible("peec_nwinc", is_peec_bem or is_peec_fem_k)
+        self._set_row_visible("peec_nhinc", is_peec_bem or is_peec_fem_k)
+        # fes_order spin is reused as --h1-order for PEEC+BEM and
+        # --fes-order for both FEM-side paths; hidden for PEEC-inductance.
+        self._set_row_visible("fes_order",
+                              is_peec_bem or is_peec_fem_k or is_fem)
         self._set_row_visible("_sec_wp_material", needs_wp)
         self._set_row_visible("_sec_wp_imp", needs_wp)
 
@@ -410,6 +446,12 @@ class IHPanel(ModePanel):
                     "impedance_model", "bh_file",
                     "esim_max_iter", "esim_tol"):
             self._set_row_visible(key, needs_wp)
+
+        # coil_mu_r is only used by the FEM coil-mesh path (calc_fem_coilmesh
+        # accepts --coil-mu-r).  PEEC-based calc scripts (peec_inductance,
+        # peec_bem, fem_kelvin) assume a non-magnetic coil, so hide the
+        # field to signal that Steel-coil analysis requires FEM-FULL.
+        self._set_row_visible("coil_mu_r", is_fem)
         # ESIM sub-widgets re-evaluated by _on_impedance_changed when
         # needs_wp is True.
         if needs_wp:
@@ -492,6 +534,8 @@ class IHPanel(ModePanel):
             raise ValueError("No .vol file specified.")
         if method == METHOD_PEEC_BEM:
             return self._build_peec_bem_command(vol_path)
+        if method == METHOD_PEEC_FEM_KELVIN:
+            return self._build_fem_kelvin_command(vol_path)
         return self._build_fem_coilmesh_command(vol_path)
 
     # UI solver text -> CLI arg mapping
@@ -501,6 +545,7 @@ class IHPanel(ModePanel):
     }
     _FEM_SOLVER_MAP = {
         "pardiso (direct)":              "pardiso",
+        "AMS (iterative, p=1)":          "ams",
         "shifted AMS (iterative, p=1)":  "shifted_ams",
         "BDDC (iterative, p>=2)":        "bddc",
         "iccg (fallback)":               "iccg",
@@ -549,13 +594,61 @@ class IHPanel(ModePanel):
                "--half-thickness", self.val("half_thickness"),
                "--mu-r", self.val("mu_r"),
                "--impedance-model", self._impedance_model_cli(),
-               "--peec-solver", solver]
+               "--peec-solver", solver,
+               "--h1-order", str(self.val("fes_order"))]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
                 cmd += ["--bh-file", bh,
                         "--esim-max-iter", str(self.val("esim_max_iter")),
                         "--esim-tol", self.val("esim_tol")]
+        return cmd
+
+    def _build_fem_kelvin_command(self, vol_path):
+        """PEEC coil (filament) + FEM workpiece (SIBC Robin) + Kelvin.
+
+        Uses ``calc_fem_kelvin.py --formulation total`` (the only
+        surviving formulation after scattered was retired 2026-04-24
+        for unfixable P_wp under-prediction).  The coil is driven by
+        the PEEC filament line-integral RHS, not by a coil mesh.
+
+        Workpiece material is passed via ``--material custom`` +
+        explicit ``--sigma`` / ``--mu-r`` so the panel's preset label
+        (e.g. "Steel (mu_r=100)") doesn't need to map 1:1 to the
+        add_material_args choices (steel/copper/aluminum/custom).
+
+        CLI-DIFF: ignore --reg --shift-eps --nthreads --output --msh-output -- advanced solver knobs and auto-generated output paths; deliberately defaulted.
+        """
+        step = self.val("peec_step")
+        if not step:
+            raise ValueError("PEEC STEP file is required for "
+                              "PEEC+FEM+Kelvin.")
+        if not os.path.isfile(step):
+            raise ValueError(f"STEP file not found: {step}")
+        solver = self._FEM_SOLVER_MAP.get(self.val("solver"), "pardiso")
+        cmd = [_PYTHON, calc_script("calc_fem_kelvin.py"),
+               "--vol", vol_path,
+               "--fes-order", str(self.val("fes_order")),
+               "--frequency", self.val("freq"),
+               "--material", "custom",
+               "--sigma", self.val("wp_sigma"),
+               "--mu-r", self.val("mu_r"),
+               "--impedance", self._impedance_model_cli(),
+               "--formulation", "total",
+               "--current", self.val("current"),
+               "--half-thickness", self.val("half_thickness"),
+               "--solver", solver,
+               "--peec-step", step,
+               "--peec-sigma", self.val("coil_sigma"),
+               "--peec-nwinc", str(self.val("peec_nwinc")),
+               "--peec-nhinc", str(self.val("peec_nhinc"))]
+        if self._impedance_model_cli() == "esim":
+            bh = self.val("bh_file")
+            if bh:
+                cmd += ["--bh-file", bh,
+                        "--max-iter", str(self.val("esim_max_iter"))]
+                # calc_fem_kelvin uses --max-iter, not --esim-max-iter
+                # --esim-tol has no equivalent; ESIM tolerance is hardcoded
         return cmd
 
     def _build_fem_coilmesh_command(self, vol_path):
