@@ -174,27 +174,34 @@ jobs:
             @{ src = "src\radia\radia_cubit.ccm";      dst = "radia_cubit.ccm" },
             @{ src = "src\radia\radia_cubit.ccl";      dst = "radia_cubit.ccl" }
           )
-          $hasBinaries = $false
+          # All 3 binaries are MANDATORY. Missing any of them indicates
+          # Build.ps1 failed silently for the corresponding artifact —
+          # we refuse to ship a wheel that cubit-plugin-install would
+          # then leave half-deployed (2026-04-24: PyPI 0.6.0 shipped
+          # without radia_cubit_mesh.pyd because this step warned only).
+          $missing = @()
           foreach ($b in $binaries) {
             $s = "${{ github.workspace }}\$($b.src)"
             $d = "$pkgDir\$($b.dst)"
             if (Test-Path $s) {
               Copy-Item $s $d -Force
               Write-Host "Copied $($b.dst) to cubit-mesh-export"
-              $hasBinaries = $true
             } else {
-              Write-Host "::warning::$($b.src) not found"
+              $missing += $b.src
             }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Host "::error::Build.ps1 did not produce required binaries: $($missing -join ', ')"
+            Write-Host "         Refusing to build a partial wheel."
+            exit 1
           }
           pip install build wheel --quiet
           Push-Location "${{ github.workspace }}\packages\cubit-mesh-export"
           python -m build --wheel
-          # Retag wheel with correct platform (pre-built .pyd is cp312/win_amd64)
+          # All 3 binaries are present (verified above) → retag as cp312/win_amd64
           $whl = Get-ChildItem dist\*.whl | Select-Object -First 1
-          if ($whl -and $hasBinaries) {
-            python -m wheel tags --python-tag cp312 --abi-tag cp312 --platform-tag win_amd64 --remove $whl.FullName
-            Write-Host "Retagged: $(Get-ChildItem dist\*.whl | Select-Object -First 1)"
-          }
+          python -m wheel tags --python-tag cp312 --abi-tag cp312 --platform-tag win_amd64 --remove $whl.FullName
+          Write-Host "Retagged: $(Get-ChildItem dist\*.whl | Select-Object -First 1)"
           Pop-Location
 
       - name: Upload cubit-mesh-export wheel

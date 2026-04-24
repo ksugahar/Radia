@@ -45,23 +45,18 @@ jobs:
           names = [f.filename for f in zf.infolist()]
 
           # Plugin binaries that MUST ship in every wheel. The Cubit plugin is
-          # useless without .ccm (APREPRO commands) or .ccl (Qt GUI slot); we
-          # refuse to publish a broken wheel (2026-04-14 hardening).
-          required = ["radia_cubit.ccm", "radia_cubit.ccl"]
+          # useless without any of these: .ccm (APREPRO commands), .ccl (Qt GUI
+          # slot), or .pyd (cubit-mesh-export pybind11 module).  We refuse to
+          # publish a partial wheel (2026-04-14 hardening; 2026-04-24 strengthened
+          # to include .pyd after PyPI 0.6.0 shipped without it and left mdx in a
+          # half-deployed state).
+          required = ["radia_cubit.ccm", "radia_cubit.ccl", "radia_cubit_mesh.pyd"]
           missing = [r for r in required if not any(n.endswith(r) for n in names)]
           if missing:
               print(f"::error::Wheel missing mandatory plugin binaries: {missing}")
               print(f"  Wheel contents: {names}")
               sys.exit(1)
           print(f"OK mandatory: {required}")
-
-          # .pyd is optional — only present when the build machine had a full
-          # (non-compact) Netgen + pybind11 at CMake time. Log but don't fail.
-          pyds = [n for n in names if n.endswith(".pyd")]
-          if pyds:
-              print(f"Bundled .pyd files: {pyds}")
-          else:
-              print("No .pyd in wheel (compact-netgen build path, expected in CI)")
 
           # Version consistency: the __version__ declared in __init__.py
           # must match the version in the wheel filename.
