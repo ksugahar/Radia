@@ -188,8 +188,9 @@ def solve_fem(vol_file="", fes_order=1,
     # T0 (Dirichlet-at-source/sink Laplace) was retired 2026-04-18 after
     # being shown unreliable on gapped geometries (1/r cusps at gap
     # corners). The remaining FEM source is the PEEC line-integral
-    # total-field excitation; for a scattered A_r variant use
-    # solve_fem_biot_savart().
+    # total-field excitation. The alternative Biot-Savart scattered
+    # formulation (solve_fem_biot_savart) was retired 2026-04-24 because
+    # of an unresolved ~3.4x P_wp under-prediction.
     has_kelvin = "kelvin" in materials
 
     if "sibc" in boundaries:
@@ -776,236 +777,6 @@ def solve_fem(vol_file="", fes_order=1,
     return result
 
 
-def solve_fem_biot_savart(vol_file="", fes_order=1,
-                           frequency=7000, mat=None,
-                           I_total=1.0, half_thickness=0.005,
-                           peec_step="",
-                           peec_sigma=5.8e7,
-                           peec_nwinc=3, peec_nhinc=3,
-                           solver="pardiso", nthreads=0):
-    """Scattered A_r formulation with Biot-Savart A_s excitation (no T0).
-
-    Solves for the scattered vector potential A_r on the given .vol mesh,
-    using the PEEC filament Biot-Savart A_s as the excitation (entering
-    through the SIBC Robin boundary term). The coil volume is treated
-    as air from the FEM side; PEEC captures the coil skin / proximity
-    effect through the nwinc/nhinc filament subdivision.
-
-    L is returned as ``L_peec + Delta_L`` where L_peec comes from the
-    PEEC circuit port impedance and Delta_L is the line integral of
-    A_r along the filament paths. This decomposition is numerically
-    well-behaved because neither term relies on a source/sink T0
-    Dirichlet lift, so there are no gap-corner 1/r cusps.
-
-    Returns a dict with keys matching solve_fem: P_total, L, Z_s, ...
-    """
-    if mat is None:
-        mat = EMMaterial.from_name("steel")
-    if not peec_step or not os.path.exists(peec_step):
-        return {"error": f"--peec-step is required for Biot-Savart mode "
-                         f"(got: {peec_step!r})"}
-
-    import ngsolve  # noqa: F401
-    from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
-                         GridFunction, Integrate, curl, dx, ds, CF,
-                         BND, VOL, TaskManager)
-    from ngsolve import x, y, z
-    from coil_from_cad import filaments_from_step
-    from kelvin_source import (biot_savart_A_cf,
-                                line_integral_A_filaments,
-                                compute_back_reaction)
-
-    setup_paths()
-    t_total_start = time.perf_counter()
-
-    # --- 1. PEEC topology + port impedance + per-filament currents ---
-    _log("MESH:loading")
-    t0 = time.perf_counter()
-    mesh = Mesh(vol_file)
-    t_mesh = time.perf_counter() - t0
-
-    materials = mesh.GetMaterials()
-    boundaries = set(mesh.GetBoundaries())
-
-    has_kelvin = 'kelvin' in materials
-    if 'sibc' not in boundaries:
-        return {"error": "Mesh has no 'sibc' boundary — SIBC workpiece required"}
-
-    if has_kelvin:
-        kelvin_center = np.array(detect_kelvin_offset(mesh))
-        kelvin_verts = set()
-        for el in mesh.Elements(VOL):
-            if el.mat == 'kelvin':
-                for v in el.vertices:
-                    kelvin_verts.add(v.nr)
-        coords = np.array([mesh.vertices[v].point for v in kelvin_verts])
-        dists = np.linalg.norm(coords - kelvin_center[None, :], axis=1)
-        a_kelvin = float(np.max(dists))
-        n_ident = mesh.ngmesh.GetNrIdentifications()
-        has_kelvin_periodic = n_ident > 0
-    else:
-        kelvin_center = np.array([0.0, 0.0, 0.0])
-        a_kelvin = 0.0
-        has_kelvin_periodic = False
-    _log(f"MESH:ne={mesh.GetNE(VOL)} kelvin={has_kelvin} "
-         f"periodic={has_kelvin_periodic} t={t_mesh:.1f}s")
-
-    # --- 2. PEEC filaments + currents ---
-    t0 = time.perf_counter()
-    topo = filaments_from_step(peec_step, sigma=peec_sigma,
-                                nwinc=peec_nwinc, nhinc=peec_nhinc)
-    peec_solver = topo['solver']
-    Z_port = peec_solver.compute_port_impedance(frequency)
-    L_peec = float(Z_port.imag) / (2 * math.pi * frequency)
-    R_peec = float(Z_port.real)
-
-    fil_paths = topo['filament_paths']
-    seg_of_fil = topo['seg_of_filament']
-    I_branch = peec_solver.compute_branch_currents(frequency, [I_total])
-    fil_currents = np.array([
-        complex(np.mean([I_branch[s] for s in segs]))
-        for segs in seg_of_fil
-    ])
-    _log(f"PEEC:n_fil={len(fil_paths)} L_peec={L_peec*1e9:.3f}nH "
-         f"t={time.perf_counter()-t0:.1f}s")
-
-    # --- 3. nu_cf: Kelvin weight, coil treated as air ---
-    kx, ky, kz = kelvin_center
-    nu_dict = {}
-    for m in materials:
-        if 'kelvin' in m.lower():
-            dx_k = x - kx
-            dy_k = y - ky
-            dz_k = z - kz
-            rp_sq = dx_k * dx_k + dy_k * dy_k + dz_k * dz_k + 1e-20
-            nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
-        else:
-            nu_dict[m] = NU_0
-    nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
-
-    # --- 4. Biot-Savart A_s as direct CoefficientFunction (no projection) ---
-    # Closed-form A for each straight segment; summed symbolically. This
-    # avoids the ~O(h^2) magnitude loss of an HCurl order=1 L2 projection
-    # (diagnosed 2026-04-18 -- gave factor-4 P under-prediction on the
-    # workpiece surface for the Cu 7 kHz closed-torus sample).
-    # Valid only for evaluating A_s in the INNER (physical) domain --
-    # fine here because the Robin RHS and At_int are both on the wp
-    # sibc boundary (inner) and the line integral is along filaments (inner).
-    t0 = time.perf_counter()
-    A_s_cf = biot_savart_A_cf(fil_paths, fil_currents)
-    _log(f"A_s:CF built in {time.perf_counter()-t0:.1f}s "
-         f"({sum(len(p) for p in fil_paths)} segments)")
-
-    # --- 5. FES + SIBC Robin system for scattered A_r ---
-    Z_s = mat.dowell_Zs(frequency, half_thickness)
-    omega = 2 * math.pi * frequency
-    robin = 1j * omega / Z_s
-    _log(f"SIBC:Z_s={Z_s:.4e}, Robin={robin:.4e}")
-
-    dirichlet_bnd = 'GND' if 'GND' in boundaries else ''
-    base_fes = HCurl(mesh, order=fes_order, nograds=True, complex=True,
-                     dirichlet=dirichlet_bnd)
-    fes = Periodic(base_fes) if has_kelvin_periodic else base_fes
-
-    u, v_ = fes.TnT()
-    non_kelvin_mats = [m for m in materials if 'kelvin' not in m.lower()]
-    a = BilinearForm(fes)
-    a += nu_cf * curl(u) * curl(v_) * dx(bonus_intorder=4)
-    if non_kelvin_mats:
-        a += 1e-6 * NU_0 * u * v_ * dx('|'.join(non_kelvin_mats))
-    a += robin * u.Trace() * v_.Trace() * ds('sibc')
-
-    f_lf = LinearForm(fes)
-    f_lf += -robin * A_s_cf * v_.Trace() * ds('sibc', bonus_intorder=4)
-
-    t0 = time.perf_counter()
-    a.Assemble()
-    f_lf.Assemble()
-    t_asm = time.perf_counter() - t0
-
-    gfu = GridFunction(fes)
-    t0 = time.perf_counter()
-    if nthreads > 0:
-        ngsolve.SetNumThreads(nthreads)
-    with TaskManager():
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse=solver) * f_lf.vec
-    t_solve = time.perf_counter() - t0
-    _log(f"FEM:ndof={fes.ndof} asm={t_asm:.1f}s solve={t_solve:.1f}s")
-
-    # --- 6. Back-reaction Delta_L, Delta_R from line integral ---
-    delta_phi = line_integral_A_filaments(gfu, mesh, fil_paths, n_quad=4)
-    back = compute_back_reaction(fil_currents, delta_phi, I_total)
-    Delta_L = back['Delta_L']
-    Delta_R = omega * back['Delta_R_over_omega']
-    P_wp = 0.5 * Delta_R * abs(I_total) ** 2
-
-    # --- 6b. Power + H_t_rms from SIBC surface integral ---
-    # A_total on the wp surface = A_s_cf + gfu (scattered).
-    from ngsolve import specialcf
-    n_bnd = specialcf.normal(3)
-    A_total = CF(tuple(A_s_cf[i] + gfu[i] for i in range(3)))
-    A_sq = sum(A_total[i].real * A_total[i].real
-               + A_total[i].imag * A_total[i].imag for i in range(3))
-    Adn_re = sum(A_total[i].real * n_bnd[i] for i in range(3))
-    Adn_im = sum(A_total[i].imag * n_bnd[i] for i in range(3))
-    An_sq = Adn_re * Adn_re + Adn_im * Adn_im
-    At_sq = A_sq - An_sq  # |A_t|^2
-
-    wp_region = mesh.Boundaries('sibc')
-    A_wp = Integrate(CF(1), mesh, BND, definedon=wp_region).real
-    At_int = Integrate(At_sq, mesh, BND, definedon=wp_region,
-                       order=8).real
-    At_rms = math.sqrt(max(At_int, 0) / max(A_wp, 1e-30))
-    H_t_rms = abs(1j * omega / Z_s) * At_rms
-    P_surf = 0.5 * Z_s.real * H_t_rms**2 * A_wp
-    Q_surf = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
-
-    # --- 6c. Skin-layer stored energy term (per sibc_skin_energy_fix) ---
-    # L_skin = omega * Im(Z_s)/|Z_s|^2 * int |A_t|^2 dS / |I|^2
-    # Captures the magnetic energy inside the workpiece skin layer that
-    # SIBC hides from the FEM mesh. For Cu (mu_r=1) this is small; for
-    # steel (mu_r=100) it dominates.
-    L_skin = omega * Z_s.imag / (abs(Z_s) ** 2) * At_int / abs(I_total) ** 2
-
-    L_total = L_peec + Delta_L
-    # Total L = PEEC circuit L + flux-linkage back-reaction + skin-layer stored energy.
-    L_total_with_skin = L_total + L_skin
-
-    _log(f"DONE:L={L_total_with_skin*1e9:.2f}nH "
-         f"(L_peec={L_peec*1e9:.2f} + DL={Delta_L*1e9:+.2f} "
-         f"+ L_skin={L_skin*1e9:+.2f}) "
-         f"P_line={P_wp:.4e} P_surf={P_surf:.4e} H_t={H_t_rms:.2f} "
-         f"t={time.perf_counter()-t_total_start:.1f}s")
-
-    return {
-        "P_total": P_surf,
-        "P_line": P_wp,
-        "Q_total": Q_surf,
-        "L": L_total_with_skin,
-        "L_no_skin": L_total,
-        "L_peec": L_peec,
-        "R_peec": R_peec,
-        "Delta_L": Delta_L,
-        "Delta_R": Delta_R,
-        "L_skin": L_skin,
-        "Z_s_real": Z_s.real,
-        "Z_s_imag": Z_s.imag,
-        "H_t_rms": H_t_rms,
-        "A_wp": A_wp,
-        "iterations": 0,
-        "converged": True,
-        "t_mesh": round(t_mesh, 2),
-        "t_total": round(time.perf_counter() - t_total_start, 2),
-        "frequency": frequency,
-        "sigma": mat.sigma,
-        "impedance_model": "sibc",
-        "formulation": "scattered-biot-savart",
-        "source_type": "biot-savart",
-        "has_kelvin": has_kelvin,
-        "msh_file": "",
-    }
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="3D FEM-SIBC with PEEC filament source + optional Kelvin")
@@ -1055,43 +826,12 @@ def main():
                         help="PEEC width subdivision (default 1)")
     parser.add_argument("--peec-nhinc", type=int, default=1,
                         help="PEEC height subdivision (default 1)")
-    parser.add_argument("--source-mode", default="total",
-                        choices=["scattered", "total"],
-                        help="total (DEFAULT, recommended): FEM line-integral "
-                             "PEEC RHS — matches calc_fem_coilmesh P_wp to "
-                             "<1%% (validated 2026-04-24, ih_fem_kelvin_skin_fine "
-                             "Cu 7 kHz, P=6.56e-5 W). Supports ESIM Karl + GMSH viz. "
-                             "scattered (BUGGY, do not use for production): "
-                             "Biot-Savart A_s + Robin BC RHS via A_s_cf — gives "
-                             "P_wp ~3.4x under-prediction (H_t off by ~1.84x) "
-                             "regardless of nwinc/nhinc.  Root cause unresolved "
-                             "(2026-04-24); likely a missing tangential "
-                             "projection or factor in the Robin RHS. ")
 
     def run(args):
         if not args.peec_step:
             return {"error": "--peec-step is required. T0/AV paths were "
                              "retired 2026-04-18; all FEM source injection "
                              "goes through PEEC filaments."}
-        if args.source_mode == "scattered":
-            sys.stderr.write(
-                "WARNING: --source-mode scattered is BUGGY (~3.4x P_wp "
-                "under-prediction, validated 2026-04-24).  Use --source-mode "
-                "total for production.  Continuing anyway...\n")
-            return solve_fem_biot_savart(
-                vol_file=args.vol,
-                fes_order=args.fes_order,
-                frequency=args.frequency,
-                mat=EMMaterial.from_args(args),
-                I_total=args.current,
-                half_thickness=args.half_thickness,
-                peec_step=args.peec_step,
-                peec_sigma=args.peec_sigma,
-                peec_nwinc=args.peec_nwinc,
-                peec_nhinc=args.peec_nhinc,
-                solver=args.solver,
-                nthreads=args.nthreads,
-            )
         return solve_fem(
             vol_file=args.vol,
             fes_order=args.fes_order,

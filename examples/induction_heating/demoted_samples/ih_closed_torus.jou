@@ -2,7 +2,9 @@
 ##
 ## Purpose: (2) A-V sanity check — on a closed torus there is no gap
 ## and no source/sink sideset, so T0 is topologically ill-defined.
-## Only --source-mode biot-savart applies. Expected result:
+## Historical: the PEEC Biot-Savart scattered path (which this sample
+## targeted) was retired 2026-04-24.  Sample retained only for the
+## analytical closed-torus L reference below. Expected result:
 ##
 ##   Analytical closed-torus L (DC, thin wire, GMD = a*exp(-1/4)):
 ##     L = mu_0 * R * (ln(8R/a) - 7/4) = 99.23 nH  (R=30mm, a=3mm)
