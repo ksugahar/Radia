@@ -34,6 +34,7 @@ from .sparsesolv_knowledge import get_sparsesolv_documentation
 from .kelvin_knowledge import get_kelvin_documentation
 from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
 from .peec_inductance_knowledge import get_peec_inductance_documentation
+from .esim_knowledge import get_esim_documentation
 from .panel_gui_pitfalls_knowledge import get_panel_gui_pitfalls
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
@@ -428,6 +429,34 @@ def sparsesolv(topic: str = "all") -> str:
             "example_compact_ams" - Ready-to-run: Compact AMS + COCR eddy current
     """
     return get_sparsesolv_documentation(topic)
+
+
+@mcp.tool()
+def esim(topic: str = "all") -> str:
+    """
+    Get ESIM (Effective Surface Impedance Method) general documentation.
+
+    ESIM extends linear SIBC to nonlinear magnetic materials by solving a 1D
+    cell problem through the conductor depth.  Returns a field-dependent
+    surface impedance Z_s(H_t) for use in BEM/FEM with surface impedance
+    boundary conditions.
+
+    This tool documents the GENERAL technique (cell problem mathematics,
+    Karl iteration, module API) without coupling to any specific
+    application.  For application-specific use of ESIM (induction heating
+    workpieces with steel BH curves), see `mcp-server-ih.ih_sibc(topic="esim")`.
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"             - Complete documentation
+            "overview"        - When ESIM vs linear SIBC; nonlinear conductors
+            "cell_problem"    - 1D BVP, BCs, geometries (slab/cylinder/finite_slab)
+            "karl_iteration"  - Picard relaxation, convergence pitfalls,
+                                per-element vs per-node Z_s
+            "module_api"      - radia.esim_cell_problem.ESIMFiniteSlabSolver
+                                + BEM-SIBC / FEM-SIBC coupling examples
+    """
+    return get_esim_documentation(topic)
 
 
 @mcp.tool()
