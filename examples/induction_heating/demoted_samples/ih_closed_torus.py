@@ -1,8 +1,10 @@
 """Closed (360 deg) torus variant of ih_fem_kelvin_skin.py.
 
 (2) A-V sanity check. On a closed torus T0 is topologically ill-defined
-(no valid Dirichlet phi for a single-valued potential), so only
---source-mode biot-savart applies. Expected closed-torus L:
+(no valid Dirichlet phi for a single-valued potential). Historical
+note: the PEEC Biot-Savart scattered path was retired 2026-04-24; this
+demoted sample is kept only for the analytical closed-torus L reference
+below. Expected closed-torus L:
 
   DC (uniform current, GMD = a * exp(-1/4)):
     L = mu_0 * R * (ln(8R/a) - 7/4) = 99.23 nH   (R=30mm, a=3mm)
