@@ -858,6 +858,115 @@ BEM solver modules are in `examples/induction_heating/bem_reference/`.
 """
 
 
+IH_SCATTERED_ROBIN_PITFALL = """
+# Scattered-field Robin RHS pitfall (research note, 2026-04-24)
+
+A bug class affecting any IH formulation that uses a **scattered-field
+Robin BC RHS** with the workpiece treated as a SIBC surface.  Two known
+incarnations:
+
+| Code path | Status |
+|-----------|--------|
+| `calc_fem_kelvin --source-mode scattered` (`solve_fem_biot_savart`) | **BUGGY** (default flipped to `total` 2026-04-24) |
+| `examples/induction_heating/bem_reference/bem_coupled_solver.py` (BEM-derived back-reaction Δ_L) | Same bug class likely; not fixed |
+
+## Symptom
+
+At constant 1A port current, the FEM returns H_t at the workpiece that
+is **~1.84x too low**, giving P_wp under-prediction by **~3.4x**.
+Validated 2026-04-24 on `ih_fem_kelvin_skin_fine` (Cu, 7 kHz):
+
+```
+scattered: P=1.95e-5 W, H_t=15.10 A/m, L_no_skin=41.18 nH
+total:     P=6.56e-5 W, H_t=27.70 A/m  (correct)
+fem_coilmesh golden: P=6.54e-5 W, H_t≈27.55 A/m  (gold reference)
+```
+
+H_t result is **independent of `--peec-nwinc`** (1 → 3 only changes
+H_t by 3.8%), so it is NOT a coil discretization issue.
+
+## Root cause analysis (in progress)
+
+The bug is **not in physics** — at constant port current, H_t at the
+workpiece is set by Ampere's law and the coil geometry, period. It does
+not depend on L. Both calc_fem_kelvin and calc_fem_coilmesh enforce
+exactly 1A; both use identical .vol + coil .step. So the discrepancy
+is a **formulation bug**.
+
+### Cancellation hypothesis (most likely)
+
+Probe of `A_s_cf` evaluated on the sibc surface (Cu 7 kHz sample):
+
+```
+|A_s_t|  alone (no FEM response)  ≈ 2.45e-7  →  naive H_t ≈ 350 A/m
+|A_total_t| (correct)              ≈ 1.94e-8  →  H_t = 27.7 A/m
+ratio                              ≈ 12.6
+```
+
+The workpiece "shorts out" ~92% of the incident A_t.  Scattered solve
+must compute `A_r ≈ −A_s` to within a few % so that
+`A_total = A_s + A_r` recovers the small residual.  This is a
+**12.6 : 1 cancellation problem**: a 5% bias in A_r → 60%+ bias in
+A_total → factor ≈2 in H_t.  With Cu and large Z_s ratio, the
+formulation is numerically fragile.
+
+### Suspected location: Robin BC RHS contraction
+
+`calc_fem_kelvin.py:919`:
+
+```python
+f_lf += -robin * A_s_cf * v_.Trace() * ds('sibc', bonus_intorder=4)
+```
+
+`A_s_cf` is the full 3-vector Biot-Savart CoefficientFunction;
+`v_.Trace()` is the HCurl tangential trace (the normal component of v
+is zero on the boundary).  The implicit `*` performs a 3-vector dot
+product, which mathematically equals `A_s_t · v_t` (because v_t · n = 0).
+
+The 1.84x ratio does NOT match a clean `√2`, `√π`, or `2`, so it is
+not a single missing factor — it is a numerical artifact of the
+cancellation magnified by something specific to the Robin RHS
+treatment.  Candidates still being tested:
+
+- explicit tangential projection `(A_s_cf - InnerProduct(A_s_cf, n)*n) * v_.Trace()`
+- E-field formulation `Cross(n, A_s_cf) · Cross(n, v_.Trace())`
+- higher fes_order (2 or 3) to give A_r more flexibility on sibc
+- higher bonus_intorder for Robin RHS (4 → 16) for tighter cancellation
+
+## Practical guidance
+
+1. **Production IH**: use `calc_peec_bem.py` (P_wp focus) +
+   `calc_fem_coilmesh.py` (L + P_wp + P_coil).  Both validated
+   <1% cross-method P_wp agreement.
+2. **PEEC + FEM-coupled L** (research): use
+   `calc_fem_kelvin.py --source-mode total` (default since 2026-04-24).
+   The "total" mode bypasses the scattered Robin RHS and matches
+   FEM coilmesh P_wp to <0.5%.  L decomposition (L_peec + Δ_L) is
+   then derived from line_integral_A_filaments(gfu) which works on
+   the directly-solved A_total.
+3. **Avoid** `--source-mode scattered` until the bug is fixed.  The
+   CLI now warns on explicit use.
+4. **BEM coupled L**: the historical
+   `examples/induction_heating/bem_reference/bem_coupled_solver.py`
+   has the same Robin RHS pattern (`InnerProduct(u_J.Trace(), A_cf)`)
+   and is suspected to have the same factor bias.  Treat its Δ_L
+   output as **research-grade only**.  Cross-check against
+   `calc_fem_coilmesh.py` L_total (gold standard).
+
+## Constant-current sanity check (rule of thumb)
+
+For any new IH simulation, a quick consistency check:
+
+> **At a fixed port current, H_t at the workpiece must depend only
+> on the coil geometry.  If H_t varies with `--fes-order`, mesh size,
+> or formulation by more than ~5%, suspect a Robin RHS / tangential
+> trace bug.**
+
+This rule directly catches the scattered Robin RHS bug, which the
+1.84x H_t deviation badly violates.
+"""
+
+
 def get_ih_sibc_documentation(topic="all"):
     """Return IH SIBC documentation by topic.
 
@@ -868,6 +977,7 @@ def get_ih_sibc_documentation(topic="all"):
         "peec_fem": IH_PEEC_FEM,
         "esim": IH_ESIM,
         "screening": IH_SCREENING,
+        "scattered_robin_pitfall": IH_SCATTERED_ROBIN_PITFALL,
     }
     # Legacy topics kept for backward compat but redirect to ngsolve MCP
     deprecated_topics = {"overview", "biot_savart"}
