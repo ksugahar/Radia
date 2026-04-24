@@ -10,13 +10,30 @@
 #include "CoilCommand.hpp"
 #include "VerifyLauncherCommand.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+#ifdef _WIN32
+#include <windows.h>  // MAX_PATH
+#else
+#include <climits>
+#ifndef MAX_PATH
+#define MAX_PATH 260
+#endif
+#endif
+
 // ============================================================
 // Python API plugin (CUBIT_PLUGIN_DIR / cubit.init)
 // ============================================================
 CUBIT_PLUGIN(RadiaPlugin)
 
 static void dbglog(const char* msg) {
-  FILE* f = fopen("C:\\compact_netgen_debug.log", "a");
+  // Per-user filename under C:\temp: shared machine-level log at
+  // C:\ root was not writable by non-admin users (2026-04-24).
+  const char* user = std::getenv("USERNAME");
+  if (!user || !*user) user = "unknown";
+  char path[MAX_PATH];
+  snprintf(path, sizeof(path), "C:\\temp\\compact_netgen_debug_%s.log", user);
+  FILE* f = fopen(path, "a");
   if (f) { fprintf(f, "%s\n", msg); fclose(f); }
 }
 
