@@ -13,9 +13,43 @@ consistent semantics:
 The caller supplies only the physical-domain geometry and the Kelvin
 radius.  Everything else is automatic.
 
+## Two symmetry modes (3D Cubit path)
+
+**webcut (existing, default)** -- the air sphere has a z-plane webcut
+but BOTH halves are retained in the mesh.  The webcut is a mesh seam
+for Periodic copy-mesh only; the geometry is still a full sphere.
+Symmetry of the physical problem (e.g. mirror coils about z=0) is
+handled by the source definition (coil + coil-mirror), not by the
+mesh.  Use this for field-line-continuation validation.  API::
+
+    add_kelvin_cubit(R=0.06, symmetry=["z"])
+
+**reduction (new, 2026-04-25)** -- the air block already contains only
+the reduced domain (x>=0 and/or y>=0 and/or z>=0).  The Kelvin sphere
+is cut on the same planes.  Each symmetry plane is given a sideset
+label that encodes the boundary-condition *physics* (not the math -
+A-formulation Dirichlet and Omega-formulation Dirichlet mean opposite
+things for the same symmetry).  The solver then chooses Dirichlet or
+Natural per formulation::
+
+    add_kelvin_cubit(R=0.06,
+                     reduction={"x": "ht=0", "z": "bn=0"})
+
+    # sideset labels produced:
+    #   sym_ht=0_x    -- H x n = 0 on x=0 plane (field perpendicular)
+    #                    -> Omega: Dirichlet (Omega=const)
+    #                    -> A:     Natural
+    #   sym_bn=0_z    -- B . n  = 0 on z=0 plane (field parallel)
+    #                    -> Omega: Natural
+    #                    -> A:     Dirichlet (A x n = 0)
+
+The two modes are mutually exclusive.  Passing both `symmetry=...` and
+`reduction=...` raises.
+
 Usage (Cubit Python -- Layer 2, inside Cubit):
     >>> from add_kelvin import add_kelvin_cubit
     >>> info = add_kelvin_cubit(R=0.06, symmetry=["z"])
+    >>> info = add_kelvin_cubit(R=0.06, reduction={"x": "ht=0", "z": "bn=0"})
 
 Usage (OCC 3D -- Layer 4, system Python 3.12):
     >>> from add_kelvin import add_kelvin_occ
@@ -63,6 +97,66 @@ import math
 
 # Map symmetry plane name -> normal vector
 _SYM_NORMALS = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}
+
+# Valid symmetry-plane BC labels in reduction mode.
+#   "bn=0"  -- B . n = 0 on the plane (flux parallel to plane).
+#              Omega: natural (do nothing).  A: Dirichlet (A x n = 0).
+#              Radia image sign: '+' (mirror-symmetric).
+#   "ht=0"  -- H x n = 0 on the plane (flux perpendicular to plane).
+#              Omega: Dirichlet (Omega=const).  A: natural.
+#              Radia image sign: '-' (mirror-antisymmetric).
+_VALID_BC = ("bn=0", "ht=0")
+
+
+def sym_sideset_name(axis, bc):
+    """Return the canonical sideset label for a symmetry plane.
+
+    Args:
+        axis: one of "x", "y", "z" (lowercase).
+        bc: one of "bn=0", "ht=0".
+
+    Returns:
+        e.g. "sym_bn=0_x", "sym_ht=0_z".  This string is the single
+        source of truth -- `calc_accel_magnet`/`calc_accel_msc` both
+        parse it with `parse_sym_label`.
+    """
+    axis = axis.lower()
+    if axis not in ("x", "y", "z"):
+        raise ValueError(f"axis must be x|y|z, got {axis!r}")
+    if bc not in _VALID_BC:
+        raise ValueError(
+            f"bc must be one of {_VALID_BC}, got {bc!r}")
+    return f"sym_{bc}_{axis}"
+
+
+def parse_sym_label(label):
+    """Inverse of `sym_sideset_name`.
+
+    Returns:
+        (axis, bc) tuple if label is a sym_*_* label, else None.
+
+    Recognises both the canonical "sym_bn=0_x" / "sym_ht=0_z" names and
+    the LEGACY "sym_tangential" / "sym_normal" labels (no axis).  For
+    the legacy names we return ("", "bn=0") / ("", "ht=0") so callers
+    can still apply the physically-correct BC without knowing which
+    axis it lives on.  Legacy = pre-2026-04-25; new code should emit
+    the canonical names.
+    """
+    if not isinstance(label, str):
+        return None
+    # Legacy back-compat.
+    if label == "sym_tangential":
+        return ("", "bn=0")   # tangential B = B parallel to plane = Bn=0
+    if label == "sym_normal":
+        return ("", "ht=0")   # normal B = B perpendicular = Ht=0 on plane
+    # Canonical: sym_<bc>_<axis>
+    for bc in _VALID_BC:
+        prefix = f"sym_{bc}_"
+        if label.startswith(prefix):
+            axis = label[len(prefix):].lower()
+            if axis in ("x", "y", "z"):
+                return (axis, bc)
+    return None
 
 
 def auto_offset_direction(symmetry):
@@ -164,7 +258,7 @@ def _sweep_params(symmetry):
 # Cubit path (Layer 2 -- Cubit Python 3.10)
 # ====================================================================
 
-def add_kelvin_cubit(R, air_block="air", symmetry=None,
+def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
                      offset_dir=None, offset_dist=None, mesh_size=None,
                      kelvin_block="kelvin", gnd_nodeset=100):
     """Add Kelvin open-boundary sphere to the current Cubit model.
@@ -186,8 +280,16 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None,
     Args:
         R: Kelvin sphere radius [m] (must match air sphere radius).
         air_block: Name of the existing air block (to find outer surface).
-        symmetry: List of symmetry planes, e.g. ["z"] or ["x","z"].
-            Default None = full sphere.
+        symmetry: List of webcut-seam axes (mesh-seam mode), e.g.
+            ["z"] = full sphere with z=0 mesh seam kept on both sides.
+            Mutually exclusive with `reduction`.  Default None.
+        reduction: Dict {axis: bc} for domain-reduction mode, e.g.
+            {"x": "ht=0", "z": "bn=0"}.  Air block is expected to
+            ALREADY be reduced; the Kelvin sphere is cut on the same
+            planes and each cut face gets a `sym_<bc>_<axis>` sideset.
+            Supports 1/2 (one axis) and 1/4 (two axes).  1/8 is a
+            geometric blocker -- raises NotImplementedError.
+            Mutually exclusive with `symmetry`.
         offset_dir: Explicit offset axis ("x"/"y"/"z") or None (auto).
         offset_dist: Explicit offset distance [m] or None (3*R).
         mesh_size: Kelvin tet size [m] or None (auto from copy mesh).
@@ -196,10 +298,23 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None,
 
     Returns:
         dict with keys:
-            'R', 'center', 'symmetry', 'offset_dir',
-            'air_vols', 'outer_vols'
+            'R', 'center', 'symmetry', 'reduction', 'offset_dir',
+            'air_vols', 'outer_vols', 'sym_sidesets'
     """
     import cubit  # Layer 2 only
+
+    if symmetry is not None and reduction is not None:
+        raise ValueError(
+            "symmetry= (webcut-seam mode) and reduction= (domain-"
+            "reduction mode) are mutually exclusive.  Pick one.")
+
+    # Domain-reduction path delegates to the dedicated implementation.
+    if reduction is not None:
+        return _add_kelvin_cubit_reduction(
+            R=R, air_block=air_block, reduction=reduction,
+            offset_dir=offset_dir, offset_dist=offset_dist,
+            mesh_size=mesh_size, kelvin_block=kelvin_block,
+            gnd_nodeset=gnd_nodeset)
 
     if symmetry is None:
         symmetry = []
@@ -387,15 +502,351 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None,
         "R": R,
         "center": (ox, oy, oz),
         "symmetry": list(symmetry),
+        "reduction": None,
         "offset_dir": actual_dir,
         "air_vols": air_vols,
         "outer_vols": kelvin_vols,
+        "sym_sidesets": {},
+    }
+
+
+# ====================================================================
+# Cubit path -- reduction mode (2026-04-25)
+# ====================================================================
+
+def _add_kelvin_cubit_reduction(R, air_block, reduction,
+                                 offset_dir, offset_dist, mesh_size,
+                                 kelvin_block, gnd_nodeset):
+    """Reduction-mode implementation (1/2 or 1/4 domain).
+
+    Contract:
+      - The air block already contains only the reduced domain
+        (vertices all >= 0 on each reduction axis).
+      - The Kelvin sphere is created at the offset location, then
+        webcut on the same symmetry planes so it also occupies the
+        reduced region.
+      - Each symmetry plane gets a `sym_<bc>_<axis>` sideset that
+        includes the air's cut face AND the Kelvin's cut face (both
+        sides of the plane - solver sees a single boundary).
+      - 1/8 (all three planes) raises NotImplementedError: the Kelvin
+        offset lands at (d/sqrt3, d/sqrt3, d/sqrt3) which does NOT
+        lie on the x=0/y=0/z=0 planes, so the Kelvin cut faces
+        cannot coincide with the air cut faces.  Requires a different
+        Kelvin mapping (e.g. 7 reflected copies) -- deferred.
+    """
+    import cubit
+
+    # Validate inputs.
+    if not isinstance(reduction, dict):
+        raise TypeError(
+            f"reduction must be a dict {{axis: bc}}, got {type(reduction).__name__}")
+    axes = []
+    for axis, bc in reduction.items():
+        axis = axis.lower()
+        if axis not in ("x", "y", "z"):
+            raise ValueError(f"reduction axis must be x|y|z, got {axis!r}")
+        if bc not in _VALID_BC:
+            raise ValueError(
+                f"reduction[{axis!r}] must be one of {_VALID_BC}, got {bc!r}")
+        axes.append(axis)
+    if len(axes) == 0:
+        raise ValueError(
+            "reduction dict is empty.  For full domain, pass "
+            "symmetry=None (no reduction).")
+    if len(axes) == 3:
+        raise NotImplementedError(
+            "1/8 reduction (x+y+z) is not yet supported.  The Kelvin "
+            "offset along the (1,1,1) diagonal does not intersect the "
+            "x=0/y=0/z=0 planes, so the Kelvin cut faces cannot be "
+            "coincident with the air cut faces.  Needs a different "
+            "Kelvin mapping (e.g. 7 reflected copies).  Track at "
+            "src/radia/panels/samples/em/README.md.")
+    if len(axes) not in (1, 2):
+        raise ValueError(
+            f"reduction supports 1 or 2 axes (1/2 or 1/4), got {len(axes)}")
+
+    # Offset direction: must be perpendicular to all reduction-axis
+    # normals, i.e. along a FREE axis not listed in reduction.
+    if offset_dir is None:
+        free = [d for d in ("x", "y", "z") if d not in axes]
+        if not free:
+            raise NotImplementedError("1/8 case -- see above")
+        offset_dir = free[0]
+    elif offset_dir.lower() in axes:
+        raise ValueError(
+            f"offset_dir={offset_dir!r} conflicts with reduction on "
+            f"the same axis (Kelvin sphere would poke through the "
+            f"symmetry plane).  Pick a free axis from "
+            f"{[d for d in ('x','y','z') if d not in axes]}.")
+
+    if offset_dist is None:
+        offset_dist = 3.0 * R
+    if offset_dist < 2.0 * R:
+        raise ValueError(
+            f"offset_dist {offset_dist:.4f} must be >= 2*R = {2*R:.4f}.")
+
+    idx = {"x": 0, "y": 1, "z": 2}[offset_dir.lower()]
+    center = [0.0, 0.0, 0.0]
+    center[idx] = offset_dist
+    ox, oy, oz = center
+
+    # ---- 1. Locate the air block ----
+    air_bid = None
+    for bid in cubit.parse_cubit_list("block", "all"):
+        try:
+            n = cubit.get_block_name(bid) or ""
+        except Exception:
+            n = ""
+        if n.lower() == air_block.lower():
+            air_bid = bid
+            break
+    if air_bid is None:
+        raise RuntimeError(
+            f"Block {air_block!r} not found.  Create and mesh the "
+            f"reduced air domain before calling add_kelvin_cubit().")
+    air_vols = list(cubit.parse_cubit_list("volume", f"in block {air_bid}"))
+    if not air_vols:
+        raise RuntimeError(f"Block {air_block!r} has no volumes.")
+
+    # ---- 2. Sanity-check reduction: all air vertices on the reduced side ----
+    tol = 1e-6
+    for axis in axes:
+        ai = {"x": 0, "y": 1, "z": 2}[axis]
+        min_coord = float("inf")
+        for vid in air_vols:
+            for v in cubit.get_relatives("volume", vid, "vertex"):
+                c = cubit.vertex(v).coordinates()[ai]
+                if c < min_coord:
+                    min_coord = c
+        if min_coord < -tol * max(R, 1.0):
+            raise RuntimeError(
+                f"reduction[{axis!r}] requested, but air block has "
+                f"vertices with {axis}={min_coord:.4e} (expected "
+                f">= 0).  The air domain must be reduced to the "
+                f"positive side of each reduction plane before "
+                f"calling add_kelvin_cubit(reduction=...).")
+
+    # ---- 3. Create exterior sphere, then cut on each reduction plane ----
+    cubit.cmd(f"create sphere radius {R:g}")
+    kelvin_sphere = cubit.get_last_id("volume")
+    cubit.cmd(f"move volume {kelvin_sphere} x {ox:g} y {oy:g} z {oz:g}")
+
+    # Webcut keeps the "positive" side of each plane by discarding the
+    # negative-side volume produced by `webcut ... with plane <axis>plane`.
+    kelvin_vol = kelvin_sphere
+    for axis in axes:
+        plane = f"{axis}plane"
+        before = set(cubit.parse_cubit_list("volume", "all"))
+        cubit.cmd(f"webcut volume {kelvin_vol} with plane {plane}")
+        after = set(cubit.parse_cubit_list("volume", "all"))
+        new_vols = list(after - before)
+        # Identify the two halves: one has centroid coord > 0 (keep),
+        # the other < 0 (delete).  After webcut, kelvin_vol is one of
+        # {kelvin_vol (unchanged id), the new id}.
+        keep, drop = None, None
+        candidates = [kelvin_vol] + new_vols
+        ai = {"x": 0, "y": 1, "z": 2}[axis]
+        for vid in candidates:
+            try:
+                c = cubit.volume(vid).centroid()[ai]
+            except Exception:
+                continue
+            if c > 0:
+                keep = vid
+            elif c < 0:
+                drop = vid
+        if keep is None or drop is None:
+            raise RuntimeError(
+                f"webcut on {plane} did not produce a positive/negative "
+                f"pair (candidates={candidates}).")
+        cubit.cmd(f"delete volume {drop}")
+        kelvin_vol = keep
+
+    cubit.cmd(f'volume {kelvin_vol} rename "kelvin_ext"')
+
+    # ---- 4. Find curved outer face of the reduced Kelvin volume ----
+    # After reduction, the Kelvin volume has 1+len(axes) outer faces:
+    # the curved sphere cap (we want this one) and the flat cut faces
+    # (which will become sym_* sidesets).  The curved one is the one
+    # whose bounding box spans all three coordinates when measured
+    # relative to the Kelvin center; the flat cut faces lie in one of
+    # the x=0 / y=0 / z=0 planes.
+    k_surfs = list(cubit.get_relatives("volume", kelvin_vol, "surface"))
+    k_curved = None
+    k_flat_by_axis = {}
+    for sid in k_surfs:
+        bb = cubit.surface(sid).bounding_box()
+        # bounding_box returns (xmin, ymin, zmin, xmax, ymax, zmax, ...)
+        xmin, ymin, zmin = bb[0], bb[1], bb[2]
+        xmax, ymax, zmax = bb[3], bb[4], bb[5]
+        spans = ((xmax - xmin), (ymax - ymin), (zmax - zmin))
+        # Flat face on axis=0 plane: the span along that axis is ~0 AND
+        # the coordinate is ~0 on that plane.
+        flat_axis = None
+        for ai, ax_name in enumerate(("x", "y", "z")):
+            lo, hi = bb[ai], bb[3 + ai]
+            if ax_name in axes and abs(hi - lo) < 1e-5 * R and abs(lo) < 1e-5 * R:
+                flat_axis = ax_name
+                break
+        if flat_axis is not None:
+            k_flat_by_axis[flat_axis] = sid
+        else:
+            # Curved surface is the largest-area non-flat face.
+            if (k_curved is None
+                or cubit.surface(sid).area()
+                   > cubit.surface(k_curved).area()):
+                k_curved = sid
+    if k_curved is None:
+        raise RuntimeError(
+            f"Cannot find curved face on Kelvin volume {kelvin_vol}.  "
+            f"Surfaces = {k_surfs}.")
+    for axis in axes:
+        if axis not in k_flat_by_axis:
+            raise RuntimeError(
+                f"Cannot find flat sym face on axis {axis!r} for the "
+                f"Kelvin volume (expected face with {axis}=0 plane).  "
+                f"Surfaces = {k_surfs}.")
+
+    # ---- 5. Find air's curved outer face + flat cut faces ----
+    a_curved = None
+    a_flat_by_axis = {axis: [] for axis in axes}
+    for vid in air_vols:
+        for sid in cubit.get_relatives("volume", vid, "surface"):
+            bb = cubit.surface(sid).bounding_box()
+            flat_axis = None
+            for ai, ax_name in enumerate(("x", "y", "z")):
+                lo, hi = bb[ai], bb[3 + ai]
+                if ax_name in axes and abs(hi - lo) < 1e-5 * R and abs(lo) < 1e-5 * R:
+                    flat_axis = ax_name
+                    break
+            if flat_axis is not None:
+                a_flat_by_axis[flat_axis].append(sid)
+            else:
+                # Largest-area non-flat surface is the curved outer.
+                if (a_curved is None
+                    or cubit.surface(sid).area()
+                       > cubit.surface(a_curved).area()):
+                    a_curved = sid
+    if a_curved is None:
+        raise RuntimeError(
+            "Cannot find curved outer face on air block.")
+
+    # ---- 6. Copy-mesh the Kelvin curved face from the air curved face ----
+    a_curves = list(cubit.get_relatives("surface", a_curved, "curve"))
+    k_curves = list(cubit.get_relatives("surface", k_curved, "curve"))
+    if not a_curves or not k_curves:
+        raise RuntimeError(
+            f"Air curved surface {a_curved} has {len(a_curves)} curves, "
+            f"Kelvin curved surface {k_curved} has {len(k_curves)} "
+            f"curves -- cannot copy mesh.")
+    a_c = max(a_curves, key=lambda c: cubit.curve(c).length())
+    k_c = max(k_curves, key=lambda c: cubit.curve(c).length())
+    a_v = cubit.get_relatives("curve", a_c, "vertex")[0]
+    k_v = cubit.get_relatives("curve", k_c, "vertex")[0]
+    cubit.cmd(
+        f"copy mesh surface {a_curved} onto surface {k_curved} "
+        f"source curve {a_c} source vertex {a_v} "
+        f"target curve {k_c} target vertex {k_v}")
+
+    # ---- 7. Mesh the Kelvin volume ----
+    cubit.cmd(f"volume {kelvin_vol} scheme tetmesh")
+    if mesh_size is not None:
+        cubit.cmd(f"volume {kelvin_vol} size {float(mesh_size):g}")
+    cubit.cmd(f"mesh volume {kelvin_vol}")
+
+    # ---- 8. Block assignment (kelvin) ----
+    existing_blocks = set(cubit.parse_cubit_list("block", "all"))
+    nb = (max(existing_blocks) + 1) if existing_blocks else 1
+    existing_block_names = {
+        (cubit.get_block_name(bid) or "").lower()
+        for bid in cubit.parse_cubit_list("block", "all")}
+    if kelvin_block.lower() not in existing_block_names:
+        cubit.cmd(f"block {nb} add volume {kelvin_vol}")
+        cubit.cmd(f'block {nb} name "{kelvin_block}"')
+
+    # ---- 9. Sidesets: kelvin_int / kelvin_ext + sym_<bc>_<axis> ----
+    existing_ss = set(cubit.parse_cubit_list("sideset", "all"))
+    ns = (max(existing_ss) + 1) if existing_ss else 1
+    existing_ss_names = set()
+    for sid in cubit.parse_cubit_list("sideset", "all"):
+        try:
+            n = cubit.get_sideset_name(sid) or ""
+        except Exception:
+            n = ""
+        existing_ss_names.add(n.lower())
+
+    def _next_ss():
+        nonlocal ns
+        cur = ns
+        ns += 1
+        return cur
+
+    if "kelvin_int" not in existing_ss_names:
+        sid = _next_ss()
+        cubit.cmd(f"sideset {sid} add surface {a_curved}")
+        cubit.cmd(f'sideset {sid} name "kelvin_int"')
+
+    if "kelvin_ext" not in existing_ss_names:
+        sid = _next_ss()
+        cubit.cmd(f"sideset {sid} add surface {k_curved}")
+        cubit.cmd(f'sideset {sid} name "kelvin_ext"')
+
+    # Per-axis sym sidesets -- each includes BOTH the air cut face(s)
+    # and the Kelvin cut face.  The solver sees a single boundary
+    # labelled `sym_<bc>_<axis>` and applies the appropriate BC.
+    sym_sidesets = {}
+    for axis in axes:
+        bc = reduction[axis] if axis in reduction else reduction[axis.lower()]
+        label = sym_sideset_name(axis, bc)
+        if label.lower() in existing_ss_names:
+            sym_sidesets[axis] = None
+            continue
+        faces = list(a_flat_by_axis.get(axis, []))
+        faces.append(k_flat_by_axis[axis])
+        if not faces:
+            raise RuntimeError(
+                f"No faces found for sym axis={axis!r}.")
+        sid = _next_ss()
+        cubit.cmd(f"sideset {sid} add surface {' '.join(str(f) for f in faces)}")
+        cubit.cmd(f'sideset {sid} name "{label}"')
+        sym_sidesets[axis] = sid
+
+    # ---- 10. GND nodeset at Kelvin center ----
+    cubit.cmd(f"create vertex {ox:g} {oy:g} {oz:g}")
+    gnd_vid = cubit.get_last_id("vertex")
+    cubit.cmd(f"nodeset {gnd_nodeset} add vertex {gnd_vid}")
+    cubit.cmd(f'nodeset {gnd_nodeset} name "GND"')
+
+    cubit.cmd(f"volume {kelvin_vol} visibility off")
+
+    frac = "1/%d" % (2 ** len(axes))
+    print("")
+    print("=== add_kelvin_cubit (reduction mode) ===")
+    print(f"  R = {R:g} m,  offset = ({ox:g}, {oy:g}, {oz:g}) m")
+    print(f"  reduction = {reduction} ({frac} model)")
+    print(f"  air_vols = {air_vols}, kelvin_vol = {kelvin_vol}")
+    print(f"  sideset 'kelvin_int' (air curved) / 'kelvin_ext' (kelvin curved)")
+    for axis, sid in sym_sidesets.items():
+        label = sym_sideset_name(axis, reduction[axis])
+        print(f"  sideset {sid} '{label}'  (air cut + kelvin cut on {axis}=0)")
+    print(f"  GND nodeset {gnd_nodeset} at Kelvin center")
+
+    return {
+        "R": R,
+        "center": (ox, oy, oz),
+        "symmetry": [],
+        "reduction": dict(reduction),
+        "offset_dir": offset_dir,
+        "air_vols": air_vols,
+        "outer_vols": [kelvin_vol],
+        "sym_sidesets": sym_sidesets,
     }
 
 
 def auto_add_kelvin_from_current_model(air_block="air",
                                         kelvin_block="kelvin",
-                                        mesh_size=None):
+                                        mesh_size=None,
+                                        reduction=None):
     """Detect air sphere + symmetry, then call add_kelvin_cubit().
 
     Meant to be invoked by the Radia-NGSolve launcher just before
@@ -421,6 +872,16 @@ def auto_add_kelvin_from_current_model(air_block="air",
     Returns the info dict from ``add_kelvin_cubit``, or None on skip /
     failure.  Never raises — the launcher should continue (and fall
     back to Dirichlet truncation) if auto-detection fails.
+
+    Args:
+        air_block: block name holding the air volumes.
+        kelvin_block: block name to assign to the Kelvin volume.
+        mesh_size: override Kelvin tet size (m), or None to inherit.
+        reduction: dict {axis: bc} forwarded verbatim to
+            add_kelvin_cubit(reduction=...).  When provided, the
+            function skips the auto-detection of mesh-seam symmetry
+            and takes the reduction path directly.  E.g.
+            reduction={"x": "ht=0", "z": "bn=0"} for a 1/4 xz model.
     """
     import math as _m
     try:
@@ -475,7 +936,21 @@ def auto_add_kelvin_from_current_model(air_block="air",
             _m.sqrt(sum(c * c for c in cubit.vertex(v).coordinates()))
             for v in vids_outer)
 
-        # --- Step 5: symmetry detection ---
+        # --- Step 5: short-circuit for explicit reduction= ---
+        if reduction is not None:
+            print("Auto-Kelvin: air R=%.4f m, air_vols=%d, "
+                  "reduction=%s, mesh_size=%s"
+                  % (R, len(air_vols), reduction, mesh_size))
+            info = add_kelvin_cubit(R=R, air_block=air_block,
+                                    reduction=reduction,
+                                    kelvin_block=kelvin_block,
+                                    mesh_size=mesh_size)
+            ox, oy, oz = info["center"]
+            print("Auto-Kelvin: added at offset=(%.3f, %.3f, %.3f), "
+                  "reduction=%s" % (ox, oy, oz, reduction))
+            return info
+
+        # --- Step 6: symmetry detection (mesh-seam mode) ---
         # Two cases end up as the same axis-in-symmetry:
         #   (a) half-domain: all vertices on one side of the plane, AND
         #       at least one vertex sits on the plane (min == 0).
@@ -510,7 +985,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
         print("Auto-Kelvin: air R=%.4f m, air_vols=%d, symmetry=%s, "
               "mesh_size=%s" % (R, len(air_vols), symmetry, mesh_size))
 
-        # --- Step 6: delegate to add_kelvin_cubit ---
+        # --- Step 7: delegate to add_kelvin_cubit ---
         info = add_kelvin_cubit(R=R, air_block=air_block,
                                 symmetry=symmetry,
                                 kelvin_block=kelvin_block,

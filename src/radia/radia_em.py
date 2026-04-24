@@ -66,12 +66,14 @@ class EMPanel(ModePanel):
         # Solver (content depends on formulation)
         self.add_combo("solver", "Solver:", self._OMEGA_SOLVERS)
 
-        # MSC-only: Radia image-method symmetry string.
-        # (FEM formulation uses sym_tangential/sym_normal sidesets
-        # declared in the .vol instead; --ima is not a CLI arg of
-        # calc_accel_magnet.)
+        # MSC-only: Radia image-method symmetry string.  Leave blank
+        # to let calc_accel_msc auto-detect from `sym_<bc>_<axis>`
+        # sidesets in the .vol (sym_bn=0_x -> '+x', sym_ht=0_x ->
+        # '-x', combined in x/y/z order).  Pass an explicit string to
+        # override.  (FEM formulation picks Dirichlet/Natural per
+        # formulation directly from the same sidesets; no widget.)
         self.add_line("ima", "IMA symmetry:", "",
-                      placeholder="e.g. +x-z")
+                      placeholder="auto from sym_*_* (blank) / e.g. +x-z")
         self.add_line("tol", "Tolerance:", "1e-3")
         self.add_spin("max_iter", "Max iterations:", 100, 1, 9999)
         self.add_line("relax", "Relaxation:", "0.0")
