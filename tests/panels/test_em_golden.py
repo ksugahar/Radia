@@ -114,28 +114,33 @@ def _assert_close(got: float, expected: float, tol_pct: float, label: str):
         f"({dev_pct:.2f}% dev, tol {tol_pct:.2f}%)")
 
 
-@pytest.mark.slow
-def test_em_sample_coil_step_current_1A():
-    """STEP coil input (current=1.0 baked by coil_from_step.to_coil_builder)."""
-    g = _load_golden()
-    vol, step, _coil_py = _require_sample(g)
-
-    result = _run(step, vol, g["physics"])
-
-    exp = g["expected_linear"]["I_1A_coil_step"]
-    tol = g["tolerance"]
-
-    # Exact checks (mesh-topology invariants)
+def _check_common(result: dict, exp: dict, tol: dict):
+    """Topology invariants + convergence, shared by both variants."""
     if tol["ndof_exact"]:
         assert result["ndof"] == exp["ndof"], \
             f"ndof drift: {result['ndof']} vs {exp['ndof']}"
     if tol["ne_exact"]:
         assert result["ne"] == exp["ne"], \
             f"ne drift: {result['ne']} vs {exp['ne']}"
-
     assert result["converged"] == exp["converged"]
+    assert result["iterations"] == exp["iterations"], \
+        f"iterations drift: {result['iterations']} vs {exp['iterations']}"
 
-    # Field quantities
+
+@pytest.mark.slow
+def test_em_sample_coil_step_current_1A():
+    """STEP coil input: single closed-centerline polyline (20 wire
+    segments), current=1.0 baked by `coil_from_step.to_coil_builder`.
+    Absolute-value regression guard.
+    """
+    g = _load_golden()
+    vol, step, _coil_py = _require_sample(g)
+
+    result = _run(step, vol, g["physics"])
+    exp = g["observations"]["I_1A_coil_step"]
+    tol = g["tolerance"]
+
+    _check_common(result, exp, tol)
     _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
                   tol["B_origin_pct"], "B_origin_mag")
     _assert_close(result["W_mag"], exp["W_mag_J"],
@@ -144,34 +149,27 @@ def test_em_sample_coil_step_current_1A():
 
 
 @pytest.mark.slow
-def test_em_sample_coil_py_linearity_NI_2000():
-    """Python coil build_coil() bakes NI=2000; B should scale linearly,
-    L and normalised energy should be invariant."""
+def test_em_sample_coil_py_NI_2000():
+    """Python coil `build_coil()`: ELF racetrack via 4 straight + 4 arc
+    CoilBuilder segments (84 wire segments), NI=2000.  DIFFERENT coil
+    geometry from the .step variant, so checked as an absolute-value
+    snapshot (not linearity against the .step numbers).
+    """
     g = _load_golden()
     vol, _step, coil_py = _require_sample(g)
 
-    # Skip gracefully if the NI=2000 golden value hasn't been populated
-    # yet (initial check-in placeholder).
-    exp_2k = g["expected_linear"]["I_2000A_coil_py"]
-    if isinstance(exp_2k.get("B_origin_mag_T_approx"), str):
-        pytest.skip("NI=2000 golden value not yet populated in em_sample_mu1000.json")
-
     result = _run(coil_py, vol, g["physics"])
-    ref_1A = g["expected_linear"]["I_1A_coil_step"]
+    exp = g["observations"]["I_2000A_coil_py"]
     tol = g["tolerance"]
 
-    # Scaling check: B at NI=2000 should be 2000x B at NI=1.
-    expected_mag = ref_1A["B_origin_mag_T"] * 2000.0
-    _assert_close(result["B_origin_mag"], expected_mag,
-                  tol["B_origin_pct"], "B_origin_mag (NI=2000 scaling)")
-
-    # L is geometry-only, independent of current.
-    _assert_close(result["L"], ref_1A["L_H"], tol["L_pct"],
-                  "L (invariant with I)")
-
-    # W ∝ I², 4e6x from NI=1 to NI=2000.
-    expected_W = ref_1A["W_mag_J"] * (2000.0 ** 2)
-    _assert_close(result["W_mag"], expected_W,
-                  tol["W_mag_pct"], "W_mag (NI=2000 scaling)")
-
-    assert result["converged"]
+    _check_common(result, exp, tol)
+    _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
+                  tol["B_origin_pct"], "B_origin_mag")
+    _assert_close(result["W_mag"], exp["W_mag_J"],
+                  tol["W_mag_pct"], "W_mag")
+    _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
+    # Sanity on coil segment count (protects against CoilBuilder
+    # resampling drift between runs).
+    assert result["n_wire_segments"] == exp["n_wire_segments"], (
+        f"n_wire_segments drift: {result['n_wire_segments']} vs "
+        f"{exp['n_wire_segments']}")
