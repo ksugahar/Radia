@@ -91,12 +91,25 @@ def _load_coil_script(script_path):
     if not script_path or not os.path.exists(script_path):
         raise FileNotFoundError(f"Coil script not found: {script_path}")
 
-    # Add script directory and radia src to path for imports
+    setup_paths()
+
+    # Dispatch by extension.  The canonical source-of-truth is the
+    # CAD STEP file (matches the IH panel convention where `peec_step`
+    # is the coil input).  A `.py` script is still supported as a
+    # legacy escape hatch for procedurally-defined coils.
+    ext = os.path.splitext(script_path)[1].lower()
+    if ext in ('.step', '.stp'):
+        from coil_from_step import extract_centerline, to_coil_builder
+        result = extract_centerline(script_path)
+        # Current is baked in by the panel via its own current widget
+        # (not yet plumbed through calc_accel_*) -- default 1 A for now
+        # and let the panel override via a future --current flag.
+        return to_coil_builder(result, current=1.0)
+
+    # .py fallback: load as module, call build_coil()
     script_dir = os.path.dirname(os.path.abspath(script_path))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    setup_paths()
-
     spec = importlib.util.spec_from_file_location("coil_module", script_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
