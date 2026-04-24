@@ -23,21 +23,18 @@ Why the split:
   swept-solid STEP carries that cross-section implicitly; a
   centerline `.py` does not.
 
-Cross-path utilities (not wired into any panel) -- use manually
-if you need to convert between CoilBuilder and a wire STEP:
+CoilBuilder -> STEP (swept solid, for PEEC):
 
 ```python
-# CoilBuilder -> wire STEP (exact LINE + CIRCLE edges, ~5 KB)
-coil.write_wire_step("coil_wire.step")
-
-# wire STEP -> CoilBuilder (exact round-trip)
-from coil_from_step import coil_builder_from_wire_step
-coil = coil_builder_from_wire_step("coil_wire.step",
-                                    current=NI, width=w, height=h)
+# CoilBuilder is the single source of truth for coil geometry.
+# For PEEC workflows that require a STEP swept solid, export via:
+coil.write_step("coil.step")   # PEEC pipeline consumes this
 ```
 
-These are documentation-quality interchange helpers; the panel
-Run buttons never call them.
+The reverse path (STEP -> CoilBuilder) is intentionally not
+supported: STEP's walker-based centerline decomposition is
+approximate (often collapses racetracks to a single arc), so
+CoilBuilder must remain the authoritative `.py` definition.
 
 ---
 
