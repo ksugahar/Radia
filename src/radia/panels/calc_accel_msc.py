@@ -54,14 +54,26 @@ def _log(msg):
 
 
 def _load_coil_script(script_path):
-    """Load coil script and call build_coil() -> CoilBuilder."""
+    """Load coil input -> CoilBuilder.
+
+    Accepts either a CAD STEP file (`.step` / `.stp`) or a Python module
+    that exposes ``build_coil() -> CoilBuilder``.  The canonical source
+    of truth is the STEP; the Python path is a legacy escape hatch.
+    """
     if not script_path or not os.path.exists(script_path):
         raise FileNotFoundError(f"Coil script not found: {script_path}")
+
+    setup_paths()
+
+    ext = os.path.splitext(script_path)[1].lower()
+    if ext in ('.step', '.stp'):
+        from coil_from_step import extract_centerline, to_coil_builder
+        result = extract_centerline(script_path)
+        return to_coil_builder(result, current=1.0)
 
     script_dir = os.path.dirname(os.path.abspath(script_path))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
-    setup_paths()
 
     spec = importlib.util.spec_from_file_location("coil_module", script_path)
     mod = importlib.util.module_from_spec(spec)
