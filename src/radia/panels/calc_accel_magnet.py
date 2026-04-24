@@ -99,13 +99,13 @@ def _load_coil_script(script_path):
     # legacy escape hatch for procedurally-defined coils.
     ext = os.path.splitext(script_path)[1].lower()
     if ext in ('.step', '.stp'):
-        from coil_from_step import extract_centerline, to_coil_builder
-        result = extract_centerline(script_path)
-        # Current is baked in by the panel via its own current widget
-        # (not yet plumbed through calc_accel_*) -- default 1 A for now
-        # and let the panel override via a future --current flag.
-        builder, _segs = to_coil_builder(result, current=1.0)
-        return builder
+        # One-shot wrapper that applies a safer default step_size
+        # so a racetrack STEP gets a clean straight+arc decomposition
+        # (the raw mass-based default often collapses to "1 arc").
+        # Current defaults to 1 A; panels typically override via
+        # their own current widget (not yet plumbed through calc_*).
+        from coil_from_step import coil_builder_from_step
+        return coil_builder_from_step(script_path, current=1.0)
 
     # .py fallback: load as module, call build_coil()
     script_dir = os.path.dirname(os.path.abspath(script_path))
