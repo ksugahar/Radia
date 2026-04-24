@@ -52,16 +52,29 @@
 #endif
 
 // ============================================================
-// CCL debug log — writes to C:\radia_ccl_log.txt
+// CCL debug log — writes to C:\temp\radia_ccl_log_<user>.txt
 // Append-mode, timestamped. Safe to leave on permanently.
+// Per-user filename so multi-user boxes (100号機) do not share a
+// single ACL-restricted file; C:\temp is the lab-policy scratch
+// directory (CLAUDE.md Temp Directory Policy).
 // ============================================================
 static void ccl_log(const char *fmt, ...)
 {
-  FILE *f = fopen("C:\\radia_ccl_log.txt", "a");
+  QString user = qEnvironmentVariable("USERNAME", "unknown");
+  // Sanitize: strip anything non-alnum to be safe in a filename.
+  QString safe;
+  for (QChar c : user) {
+    if (c.isLetterOrNumber() || c == '-' || c == '_' || c == '.')
+      safe.append(c);
+    else
+      safe.append('_');
+  }
+  if (safe.isEmpty()) safe = "unknown";
+  QString path = QString("C:\\temp\\radia_ccl_log_%1.txt").arg(safe);
+  FILE *f = fopen(path.toLocal8Bit().constData(), "a");
   if (!f) return;
   // Timestamp + username
   QDateTime now = QDateTime::currentDateTime();
-  QString user = qEnvironmentVariable("USERNAME", "?");
   fprintf(f, "[%s %s] ",
           now.toString("yyyy-MM-dd HH:mm:ss").toLocal8Bit().constData(),
           user.toLocal8Bit().constData());
