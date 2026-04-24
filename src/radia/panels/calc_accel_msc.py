@@ -67,10 +67,11 @@ def _load_coil_script(script_path):
 
     ext = os.path.splitext(script_path)[1].lower()
     if ext in ('.step', '.stp'):
-        from coil_from_step import extract_centerline, to_coil_builder
-        result = extract_centerline(script_path)
-        builder, _segs = to_coil_builder(result, current=1.0)
-        return builder
+        # One-shot wrapper with diagonal-based step_size heuristic;
+        # see calc_accel_magnet._load_coil_script and
+        # coil_from_step.coil_builder_from_step for the rationale.
+        from coil_from_step import coil_builder_from_step
+        return coil_builder_from_step(script_path, current=1.0)
 
     script_dir = os.path.dirname(os.path.abspath(script_path))
     if script_dir not in sys.path:

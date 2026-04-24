@@ -1,15 +1,36 @@
 """coil_from_step.py
 
-Sprint 1 (CAD-from-STEP): walking-plane centerline + per-station profile
-extraction from an arbitrary STEP coil solid.
+Extract coil centerline + per-station profile from an arbitrary STEP
+solid via a walking-plane sweep.  The result feeds two distinct
+downstream coil models -- use the wrapper that matches your panel:
 
-Pipeline:
+    STEP file
+        |
+        +-> extract_centerline()  [common preprocessing]
+                |
+                +-> to_coil_builder()       (analytical Biot-Savart)
+                |   coil_builder_from_step()  -- one-shot wrapper
+                |       user: EM panel (calc_accel_magnet/msc)
+                |       CoilBuilder with straight + arc segments
+                |       NO cross-section subdivision (solid rect/circle)
+                |       Fast; no skin/proximity effects
+                |
+                +-> coil_from_cad.filaments_from_step()
+                        user: IH panel (calc_peec_inductance / bem)
+                        PEECBuilder topology with filaments
+                        Cross-section subdivided nwinc x nhinc
+                        Frequency-dependent skin / proximity effect
+
+The SAME coil STEP can feed either path; the choice depends on
+what the panel wants to compute, not on the STEP itself.
+
+Pipeline (shared):
     STEP file -> OCCGeometry -> single Solid
               -> walking-plane sweep along the conductor
               -> (centerline polyline, [Profile per station])
 
 The result is consumed directly by ``peec_bundle.build_bundle_solver``,
-or it can be promoted to a CoilBuilder reconstruction in Sprint 2.
+or promoted to a CoilBuilder reconstruction via ``to_coil_builder``.
 
 Walking-plane algorithm
 -----------------------
@@ -764,3 +785,51 @@ def to_coil_builder(result, current=1.0):
         else:
             builder.add_arc(radius=s.radius, arc_angle=s.angle_deg)
     return builder, segs
+
+
+def coil_builder_from_step(step_path, *, current=1.0, step_size=None,
+                           verbose=False):
+    """One-shot STEP -> CoilBuilder for analytical Biot-Savart coils.
+
+    Wraps ``extract_centerline`` + ``to_coil_builder`` into a single
+    call for panel use.  This is the canonical entry point used by
+    `calc_accel_magnet` / `calc_accel_msc` (EM panel) when the coil
+    input is a STEP file.  For PEEC circuit extraction (skin /
+    proximity effect) use ``coil_from_cad.filaments_from_step``
+    instead.
+
+    Known fidelity limitation
+    -------------------------
+    The centerline walker has a Goldilocks zone for `step_size`: a
+    racetrack with 22.5 mm arcs + 62.5 mm straights decomposes
+    cleanly at step_size ~= 10 mm (5 segments: 4 arcs + 1 straight)
+    but collapses to a single 335 degree arc at step_size = 6 mm or
+    20 mm (the walker produces an irregularly spaced 7-point polyline
+    that polyline_to_segments cannot distinguish into straights +
+    arcs).  The default heuristic (mass based, typically 20 mm for
+    this class of coil) is STABLE but LOW FIDELITY -- it produces a
+    valid but approximate one-arc representation.
+
+    For high-fidelity analytical coils, prefer the `.py` coil script
+    path (a module that defines `build_coil() -> CoilBuilder`
+    directly) so the straight + arc segments are written explicitly.
+
+    Args:
+        step_path: Path to the coil STEP file.
+        current: Current in Amperes (NI for a multi-turn winding
+            represented as a single centerline).  Defaults to 1.0;
+            panels typically override via their own current widget
+            and pass the final value here.
+        step_size: Walker step in metres.  If None, uses the
+            cube-root-of-mass/100 heuristic from ``extract_centerline``.
+            Override when the resulting SegmentSpec decomposition
+            collapses to a single arc and accuracy matters.
+        verbose: Forwarded to ``extract_centerline``.
+
+    Returns:
+        CoilBuilder ready for Radia field evaluation.
+    """
+    result = extract_centerline(step_path, step_size=step_size,
+                                verbose=verbose)
+    builder, _segs = to_coil_builder(result, current=current)
+    return builder
