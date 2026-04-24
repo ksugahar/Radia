@@ -4,8 +4,13 @@ All Radia GUI components — Cubit-side ``register_toolbar.py``,
 external-Python ``radia_gui_base.py`` (the IH/EM/PCB analysis windows),
 and the ``calc_*.py`` subprocess scripts — write to the same file:
 
-    Windows: C:/radia_panel_log.txt
-    Other:   $TMPDIR/radia_panel_log.txt
+    Windows: C:/temp/radia_panel_log_<user>.txt
+    Other:   $TMPDIR/radia_panel_log_<user>.txt
+
+The ``<user>`` suffix is so that on a shared Windows machine (e.g.
+100号機 with 21 lab accounts) each user owns their own log file
+instead of fighting over a single ACL-restricted file that the
+first-to-open user (usually Administrator) effectively monopolises.
 
 This gives the user (and Claude) **one place** to look when something
 goes wrong in the GUI:
@@ -68,11 +73,45 @@ import traceback
 # ============================================================
 # Log file path
 # ============================================================
-if sys.platform == "win32":
-    PANEL_LOG_PATH = "C:/radia_panel_log.txt"
-else:
-    PANEL_LOG_PATH = os.path.join(
-        os.environ.get("TMPDIR", "/tmp"), "radia_panel_log.txt")
+# Per-user filename so that on a multi-user Windows box (e.g. 100号機
+# with 21 lab accounts) each user owns their own log file.  A shared
+# file at C:\radia_panel_log.txt was owned by whoever created it first
+# (usually Administrator) and non-admin users silently lost every write
+# attempt (ACL: Users=ReadAndExecute), which killed Cubit startup when
+# `init_panel_log(truncate=True)` tried to rotate a file it couldn't
+# open.  C:\temp is the lab-policy scratch dir (CLAUDE.md Temp Directory
+# Policy) and the Users group already has CreateFiles on it, so a
+# per-user filename works without any ACL surgery.
+def _init_panel_log_path():
+    try:
+        user = getpass.getuser() or "unknown"
+    except Exception:
+        user = (os.environ.get("USERNAME")
+                or os.environ.get("USER")
+                or os.environ.get("LOGNAME")
+                or "unknown")
+    # Sanitize: usernames may contain spaces / punctuation on Windows.
+    safe = "".join(c if (c.isalnum() or c in "-_.@") else "_" for c in user)
+    if sys.platform == "win32":
+        base = r"C:\temp"
+        try:
+            os.makedirs(base, exist_ok=True)
+        except Exception:
+            # If C:\temp cannot be created (ACL), fall back to per-user
+            # LOCALAPPDATA which is always writable by that user.
+            base = os.path.join(os.environ.get("LOCALAPPDATA",
+                                               os.path.expanduser("~")),
+                                "Radia")
+            try:
+                os.makedirs(base, exist_ok=True)
+            except Exception:
+                pass
+        return os.path.join(base, f"radia_panel_log_{safe}.txt")
+    return os.path.join(os.environ.get("TMPDIR", "/tmp"),
+                        f"radia_panel_log_{safe}.txt")
+
+
+PANEL_LOG_PATH = _init_panel_log_path()
 
 
 # Component tag — set per-process via init_panel_log() or auto-detected
