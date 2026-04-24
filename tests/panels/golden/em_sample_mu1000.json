@@ -20,8 +20,8 @@
     "tol": 1e-2,
     "solver": "pardiso"
   },
-  "expected_linear": {
-    "note": "Linearity check: since calc_accel_magnet has no non-linear BH with --material linear, B is exactly proportional to the coil current.  Run with coil_script=.step gives current=1.0 (hardcoded in to_coil_builder); the .py coil script bakes current=NI=2000.  Each row here is an observation used as a regression guard, NOT a match to ELF CEFC 2020 reference (-976 mT @ NI=2000 mu_r=1000) which is a quarter-XZ Radia-MSC result on a different mesh discretization.",
+  "observations": {
+    "note": "Absolute-value snapshots for regression guard.  The two rows use DIFFERENT coil geometries so their B/L/W are NOT related by a simple linearity ratio: (a) the .step path ships coil_from_step extracting a single closed centerline polyline (1 Radia object, 20 wire segments, current=1.0 baked by to_coil_builder); (b) the .py path calls em_sample_coil.build_coil() which builds the ELF racetrack via 4 straight + 4 arc CoilBuilder segments (8 Radia objects, 84 wire segments, NI=2000).  Neither is matched to the ELF CEFC 2020 quarter-XZ Radia-MSC reference (-976 mT); see src/radia/panels/samples/em/README.md for the variant plan.",
     "I_1A_coil_step": {
       "B_origin_T": [7.446e-07, -3.481e-06, -1.763e-05],
       "B_origin_mag_T": 1.798e-05,
@@ -31,13 +31,20 @@
       "converged": true,
       "ne": 456477,
       "ndof": 83798,
+      "n_wire_segments": 20,
       "t_total_s_approx": 747
     },
     "I_2000A_coil_py": {
-      "B_origin_mag_T_approx": "TBD (filled after NI=2000 run completes)",
-      "L_H_approx": 2.152e-06,
-      "W_mag_J_approx": "TBD (expected 2000^2 x I_1A value = 4.30)",
-      "note": "Should be exactly 2000x the I_1A B values; L should be identical (geometry-only)."
+      "B_origin_T": [4.773e-06, -2.936e-03, -8.283e-03],
+      "B_origin_mag_T": 8.788e-03,
+      "W_mag_J": 3.972e-01,
+      "L_H": 1.986e-07,
+      "iterations": 1,
+      "converged": true,
+      "ne": 456477,
+      "ndof": 83798,
+      "n_wire_segments": 84,
+      "t_total_s_approx": 1223
     }
   },
   "tolerance": {
