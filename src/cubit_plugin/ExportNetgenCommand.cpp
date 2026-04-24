@@ -272,6 +272,15 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // shared air|kelvin interface as "kelvin_int" and the outer kelvin
   // boundary (DomainOut=0) as "kelvin_ext".  This saves the user from
   // having to add manual sidesets in the .jou file.
+  //
+  // IMPORTANT (2026-04-25): a face descriptor that ALREADY has a
+  // sideset-derived name MUST NOT be overridden here.  In reduction
+  // mode, `add_kelvin_cubit(reduction=...)` creates sym_bn=0_<axis>
+  // / sym_ht=0_<axis> sidesets on the Kelvin's flat cut faces, which
+  // also border domain 0 -- matching the "kelvin_ext" condition.
+  // Overwriting them corrupts the label map.  `surf_to_ssname` (set
+  // up earlier from md.sidesets) is the authoritative source for
+  // user-chosen labels; the auto-detect only fills gaps.
   {
     int air_dom = 0, kelvin_dom = 0;
     for (int bid : md.block_ids) {
@@ -282,10 +291,18 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     }
 
     if (air_dom > 0 && kelvin_dom > 0) {
-      int n_int = 0, n_ext = 0;
+      int n_int = 0, n_ext = 0, n_skipped = 0;
       for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
         int di = ng_mesh->GetFaceDescriptor(fi).DomainIn();
         int dout = ng_mesh->GetFaceDescriptor(fi).DomainOut();
+        // Skip faces the user has already named via a sideset.  Lookup
+        // by original Cubit surface ID (orig_surf_ids[fi-1]) matches
+        // the sideset's surface-list exactly; the remapped BCProperty
+        // (= fi) is the contiguous index, not the Cubit surface ID.
+        if (surf_to_ssname.count(orig_surf_ids[fi - 1])) {
+          n_skipped++;
+          continue;
+        }
         // Shared face between air and kelvin = kelvin_int
         if ((di == air_dom && dout == kelvin_dom) ||
             (di == kelvin_dom && dout == air_dom)) {
@@ -304,11 +321,13 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         }
       }
       if (n_int > 0 && n_ext > 0) {
-        PRINT_INFO("Kelvin auto-detect: %d inner + %d outer face descriptors\n",
-                   n_int, n_ext);
+        PRINT_INFO("Kelvin auto-detect: %d inner + %d outer face "
+                   "descriptors (%d skipped due to user sideset)\n",
+                   n_int, n_ext, n_skipped);
       } else if (n_int > 0 || n_ext > 0) {
         PRINT_WARNING("Kelvin auto-detect: found %d inner, %d outer "
-                      "(need both > 0)\n", n_int, n_ext);
+                      "(need both > 0; %d skipped due to user sideset)\n",
+                      n_int, n_ext, n_skipped);
       }
     }
   }
@@ -435,12 +454,17 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // Identification = TRANSLATION: offset = mean(outer) - mean(inner).
   // With copy mesh, inner and outer have 1:1 vertex correspondence.
   //
-  // Algorithm:
   // Algorithm: translation-based nearest-neighbor vertex matching.
   //   1. Collect inner/outer vertex positions from bc names
   //   2. Offset = mean(outer) - mean(inner)
   //   3. For each inner vertex, find nearest unused outer vertex at (inner + offset)
   //   4. Write identification pairs via ident.Add()
+  //
+  // IMPORTANT (2026-04-25): match ONLY face descriptors with the exact
+  // bcnames kelvin_int / kelvin_ext -- not a substring test.  In
+  // reduction mode the sym_*_* cut faces border the Kelvin domain
+  // too; matching them as "kelvin" candidates would corrupt the
+  // pair set.
   {
     std::set<int> fd_inner_set, fd_outer_set;
     for (int fi = 1; fi <= ng_mesh->GetNFD(); fi++) {
