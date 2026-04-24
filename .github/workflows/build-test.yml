@@ -80,6 +80,52 @@ jobs:
           Write-Host "_radia_pybind.pyd: ${sz} MB"
 
       # ----------------------------------------------------------------
+      # Fetch radia_cubit_mesh.pyd from GitHub Releases binaries tag.
+      #
+      # CI runners do NOT have the Coreform Cubit SDK (cmake module),
+      # pybind11, or the qt5_sdk needed to build the Cubit plugin
+      # locally. Build.ps1 silently SKIPs this target on CI ("SKIP:
+      # Cubit SDK not found at C:/Program Files/Coreform Cubit
+      # 2025.3/cmake"). The pyd is built on LAB (which has the full
+      # Cubit Pro install) and uploaded to the `binaries` release tag
+      # by the pre-push hook (.git/hooks/pre-push). CI downloads it
+      # so the cubit-mesh-export wheel ships with the bundled pyd.
+      #
+      # Without this step, Build_Wheel.ps1 / build-cubit-mesh-export
+      # would fail their pyd-mandate check (added 2026-04-24 after
+      # the PyPI 0.6.0 partial-wheel incident).
+      # ----------------------------------------------------------------
+      - name: Fetch radia_cubit_mesh.pyd from binaries release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $pyd = "${{ github.workspace }}\src\radia\radia_cubit_mesh.pyd"
+          $needFetch = $true
+          if (Test-Path $pyd) {
+            $sz = (Get-Item $pyd).Length
+            if ($sz -gt 100000) {
+              Write-Host "  radia_cubit_mesh.pyd already built locally: $sz bytes (skip download)"
+              $needFetch = $false
+            } else {
+              Write-Host "  radia_cubit_mesh.pyd present but suspicious size ($sz bytes), re-fetching"
+            }
+          }
+          if ($needFetch) {
+            Write-Host "  Downloading radia_cubit_mesh.pyd from binaries release tag..."
+            gh release download binaries -p "radia_cubit_mesh.pyd" -D "${{ github.workspace }}\src\radia" --clobber 2>&1 | Write-Host
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $pyd)) {
+              Write-Host "::error::Failed to download radia_cubit_mesh.pyd from binaries release."
+              Write-Host "         The pre-push hook on LAB uploads this file on every push;"
+              Write-Host "         if it is missing, run on LAB:"
+              Write-Host "           gh release upload binaries src/radia/radia_cubit_mesh.pyd --clobber"
+              exit 1
+            }
+            $sz = (Get-Item $pyd).Length
+            Write-Host "  Downloaded radia_cubit_mesh.pyd: $sz bytes"
+          }
+
+      # ----------------------------------------------------------------
       # Test: Run basic pytest tests (~2 sec)
       # ----------------------------------------------------------------
       - name: Run basic tests
