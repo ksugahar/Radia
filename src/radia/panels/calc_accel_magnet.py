@@ -98,10 +98,7 @@ def _load_coil_script(script_path):
     # STEP input is intentionally NOT supported here; it belongs to
     # the PEEC side (IH panel -> coil_from_cad.filaments_from_step).
     # The separation is explicit: .py for Biot-Savart analytical,
-    # .step for PEEC filament circuits.  If a CAD-only user needs to
-    # round-trip a CoilBuilder through STEP, they can use
-    # CoilBuilder.write_wire_step / coil_from_step.coil_builder_from_wire_step
-    # manually, but the panel-default Run path stays .py-only.
+    # .step for PEEC filament circuits.
     ext = os.path.splitext(script_path)[1].lower()
     if ext in ('.step', '.stp'):
         raise ValueError(
