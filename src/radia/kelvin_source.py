@@ -1129,6 +1129,81 @@ def biot_savart_A_cf(filament_paths, fil_currents):
     return CF((A_x, A_y, A_z))
 
 
+def biot_savart_B_cf(filament_paths, fil_currents):
+    """Symbolic NGSolve CoefficientFunction for Biot-Savart B from a filament bundle.
+
+    Closed-form B from a finite straight current segment (the curl of the
+    closed-form A in biot_savart_A_cf):
+
+        B_seg(r) = (mu_0 I / 4 pi) * (dl_hat x R1) / d_perp^2
+                                   * (l1/L1 - l2/L2)
+          where  R1 = r - p1
+                 dl_hat = (p2 - p1) / |p2 - p1|
+                 l1 = dl_hat . R1, l2 = dl_hat . R2
+                 L1 = |R1|, L2 = |R2|
+                 d_perp^2 = L1^2 - l1^2
+
+    Equivalent to ``curl(biot_savart_A_cf(...))`` but evaluated as a
+    direct CF (no NGSolve AD on the symbolic A, no L2 projection).
+    Used by the scattered FEM-SIBC formulation to supply the surface
+    term ``-nu * (n x B_s) . v ds`` on the workpiece SIBC boundary
+    (the term that integration-by-parts of curl-curl in the scattered
+    decomposition demands).
+
+    Args:
+        filament_paths: list of K filaments, each a list of
+            ``(p1, p2)`` segment endpoint tuples.
+        fil_currents: length-K currents (real or complex).
+
+    Returns:
+        NGSolve 3-component CoefficientFunction (complex if any
+        current is complex).
+    """
+    from ngsolve import x, y, z, sqrt, CF
+
+    is_complex = any(np.iscomplexobj(I) or (isinstance(I, complex) and I.imag != 0)
+                     for I in fil_currents)
+
+    Bx = CF(0.0j if is_complex else 0.0)
+    By = CF(0.0j if is_complex else 0.0)
+    Bz = CF(0.0j if is_complex else 0.0)
+
+    four_pi = 4 * math.pi
+    eps = 1e-18
+    for path, I_k in zip(filament_paths, fil_currents):
+        I_val = complex(I_k) if is_complex else float(I_k)
+        pref = MU_0 * I_val / four_pi
+        for (p1, p2) in path:
+            p1 = np.asarray(p1, dtype=float)
+            p2 = np.asarray(p2, dtype=float)
+            dl = p2 - p1
+            L = np.linalg.norm(dl)
+            if L < 1e-15:
+                continue
+            dlh = dl / L
+            R1x = x - p1[0]; R1y = y - p1[1]; R1z = z - p1[2]
+            R2x = x - p2[0]; R2y = y - p2[1]; R2z = z - p2[2]
+            L1 = sqrt(R1x * R1x + R1y * R1y + R1z * R1z + eps)
+            L2 = sqrt(R2x * R2x + R2y * R2y + R2z * R2z + eps)
+            # sA = -l1, sB = -l2 (matching biot_savart_A_cf convention)
+            sA = -(dlh[0] * R1x + dlh[1] * R1y + dlh[2] * R1z)
+            sB = -(dlh[0] * R2x + dlh[1] * R2y + dlh[2] * R2z)
+            # angle factor (l1/L1 - l2/L2) = (-sA/L1) - (-sB/L2) = sB/L2 - sA/L1
+            angle = sB / L2 - sA / L1
+            # d_perp^2 = R1.R1 - l1^2 = R1.R1 - sA^2  (sA^2 = l1^2)
+            d_perp_sq = (R1x * R1x + R1y * R1y + R1z * R1z) - sA * sA + eps
+            # dl_hat x R1
+            cx = dlh[1] * R1z - dlh[2] * R1y
+            cy = dlh[2] * R1x - dlh[0] * R1z
+            cz = dlh[0] * R1y - dlh[1] * R1x
+            factor = pref * angle / d_perp_sq
+            Bx = Bx + factor * cx
+            By = By + factor * cy
+            Bz = Bz + factor * cz
+
+    return CF((Bx, By, Bz))
+
+
 def project_A_s_to_hcurl(mesh, filament_paths, fil_currents,
                          kelvin_center=None, R_kelvin=None,
                          factor_mode='pullback', is_complex=None,
