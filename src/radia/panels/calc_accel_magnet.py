@@ -272,7 +272,18 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
 
     t_mesh = time.perf_counter() - t0
     materials = mesh.GetMaterials()  # domain-indexed (short tuple)
-    boundaries = mesh.GetBoundaries()
+    # BND (codim-1, surface) + BBBND (codim-3, vertex).  "GND" for the
+    # Kelvin-centre Dirichlet is typically a BBBND vertex label set by
+    # `add_kelvin_cubit` via the Cubit nodeset -> Netgen CD3 propagation
+    # path in radia_export netgen.  Join both namespaces so the existing
+    # Dirichlet-pick logic that searches a single `boundaries` iterable
+    # still works.
+    bnd_list = list(mesh.GetBoundaries())
+    try:
+        bnd_list += list(mesh.GetBBBoundaries())
+    except Exception:
+        pass
+    boundaries = bnd_list
     ne = mesh.GetNE(VOL)
     elem_mat = _elem_mat(mesh, materials)  # el.nr -> material name
     _log(f"MESH:done ({ne} elems, {t_mesh:.1f}s)")
