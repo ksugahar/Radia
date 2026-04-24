@@ -49,26 +49,29 @@ volume 3 size 0.006
 mesh volume all
 
 # === Air domain for FEM (tet mesh) ===
-# Half-z model: air = upper hemisphere (z>=0).  Same pattern as the
-# IH FEM-Kelvin samples -- Add Kelvin copies the hemisphere surface
-# mesh onto a Kelvin exterior hemisphere 1:1.  The zplane webcut
-# creates an equator seam curve for the copy.
+# Full air sphere + zplane webcut seam (IH FEM-Kelvin pattern).  BOTH
+# hemispheres are kept in the mesh; the zplane webcut just creates an
+# equator curve so the `add_kelvin_cubit` copy-mesh step has 1:1
+# vertex correspondence between air hemispheres and Kelvin hemispheres.
+# The "symmetry=['z']" declaration later is about the Kelvin OFFSET
+# direction (perpendicular to z), not about reducing the physical
+# mesh -- the 2 air volumes stay in the block.
 create sphere radius 0.40
 webcut volume 4 with plane zplane
-delete volume 5
-# Subtract yoke from the upper hemisphere
-subtract volume 1 2 3 from volume 4 keep
+# After webcut: vol 4 = z>0, vol 5 = z<0.  Keep both.
+# Subtract yoke from both hemispheres
+subtract volume 1 2 3 from volume 4 5 keep
 imprint volume all
 merge volume all
-volume 4 scheme tetmesh
-volume 4 size 0.02
-mesh volume 4
+volume 4 5 scheme tetmesh
+volume 4 5 size 0.02
+mesh volume 4 5
 
 # === Blocks ===
 set duplicate block elements on
 block 1 add volume 1 2 3
 block 1 name "yoke"
-block 2 add volume 4
+block 2 add volume 4 5
 block 2 name "air"
 
 # Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
