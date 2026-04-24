@@ -1,40 +1,43 @@
 # EM sample corpus (accelerator magnet, C-type yoke)
 
-## Coil input: .py vs .step
+## Coil input policy (2026-04-25, user-set)
 
-`calc_accel_magnet` / `calc_accel_msc` (EM panel) accept **two**
-coil input formats via the `--coil-script` argument:
+Analytical coils and PEEC coils use DIFFERENT file formats by
+design.  The EM panel (`calc_accel_magnet` / `calc_accel_msc`)
+accepts **only** a Python module.  The PEEC path (IH panel,
+`calc_peec_inductance` / `calc_peec_bem`) accepts **only** STEP.
 
-| Extension | Loader | Fidelity | When to use |
-|-----------|--------|----------|-------------|
-| `.py` | `build_coil() -> CoilBuilder` in a user module | **High** -- segments written explicitly | Any analytic racetrack / solenoid where the straight + arc decomposition is known from geometry spec (e.g. `em_sample_coil.py` = ELF racetrack: 4 straight + 4 arc) |
-| `.step` / `.stp` | `coil_from_step.coil_builder_from_step` (walker) | **Low / approximate** -- often collapses a racetrack into a single ~300 deg arc | CAD-first workflow where no Python generator is available.  Expect an order-of-magnitude correct field but not the exact racetrack shape. |
+| Panel / calc | Coil input | Loader |
+|--------------|-----------|--------|
+| EM (`calc_accel_{magnet,msc}`) | `.py` module exposing `build_coil() -> CoilBuilder` | `_load_coil_script` (literal import) |
+| PEEC (`calc_peec_*`) | `.step` swept-solid coil | `coil_from_cad.filaments_from_step` (walker + nwinc x nhinc cross-section subdivision) |
 
-The separation is:
+Why the split:
 
+- CoilBuilder (analytical Biot-Savart) needs exact straight + arc
+  segments.  A Python `build_coil()` literal is the highest-
+  fidelity source.  STEP's walker-based decomposition is
+  approximate (often collapses a racetrack to a single arc).
+- PEEC needs the conductor's **cross-section** (to subdivide into
+  nwinc x nhinc filaments for skin / proximity effects).  The
+  swept-solid STEP carries that cross-section implicitly; a
+  centerline `.py` does not.
+
+Cross-path utilities (not wired into any panel) -- use manually
+if you need to convert between CoilBuilder and a wire STEP:
+
+```python
+# CoilBuilder -> wire STEP (exact LINE + CIRCLE edges, ~5 KB)
+coil.write_wire_step("coil_wire.step")
+
+# wire STEP -> CoilBuilder (exact round-trip)
+from coil_from_step import coil_builder_from_wire_step
+coil = coil_builder_from_wire_step("coil_wire.step",
+                                    current=NI, width=w, height=h)
 ```
-STEP file ---> coil_from_step.extract_centerline  (shared walker)
-                 |
-                 +--> coil_builder_from_step()    (EM panel, analytical Biot-Savart)
-                 +--> coil_from_cad.filaments_from_step()
-                                                  (IH panel, PEEC circuit)
-```
 
-Same STEP can feed either path; the choice is by panel method, not
-by the STEP itself.  The walker's fidelity issue for straight/arc
-decomposition is documented in `coil_from_step.coil_builder_from_step`
-docstring.  Before relying on the `.step` path for absolute field
-accuracy, verify the decomposition with::
-
-    from coil_from_step import extract_centerline, polyline_to_segments
-    r = extract_centerline("your_coil.step")
-    for s in polyline_to_segments(r):
-        print(s.kind, s.length, s.radius, s.angle_deg)
-
-If all segments come back as a single arc covering near 360 deg,
-the walker has missed the straight sections -- use the `.py` path
-instead, or tune `step_size` via
-`coil_builder_from_step(step, step_size=0.010)`.
+These are documentation-quality interchange helpers; the panel
+Run buttons never call them.
 
 ---
 

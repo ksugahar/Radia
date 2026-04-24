@@ -93,21 +93,23 @@ def _load_coil_script(script_path):
 
     setup_paths()
 
-    # Dispatch by extension.  The canonical source-of-truth is the
-    # CAD STEP file (matches the IH panel convention where `peec_step`
-    # is the coil input).  A `.py` script is still supported as a
-    # legacy escape hatch for procedurally-defined coils.
+    # EM panel contract (2026-04-25): analytical coils are authored
+    # as a Python module exposing `build_coil() -> CoilBuilder`.
+    # STEP input is intentionally NOT supported here; it belongs to
+    # the PEEC side (IH panel -> coil_from_cad.filaments_from_step).
+    # The separation is explicit: .py for Biot-Savart analytical,
+    # .step for PEEC filament circuits.  If a CAD-only user needs to
+    # round-trip a CoilBuilder through STEP, they can use
+    # CoilBuilder.write_wire_step / coil_from_step.coil_builder_from_wire_step
+    # manually, but the panel-default Run path stays .py-only.
     ext = os.path.splitext(script_path)[1].lower()
     if ext in ('.step', '.stp'):
-        # One-shot wrapper that applies a safer default step_size
-        # so a racetrack STEP gets a clean straight+arc decomposition
-        # (the raw mass-based default often collapses to "1 arc").
-        # Current defaults to 1 A; panels typically override via
-        # their own current widget (not yet plumbed through calc_*).
-        from coil_from_step import coil_builder_from_step
-        return coil_builder_from_step(script_path, current=1.0)
+        raise ValueError(
+            f"EM panel does not accept STEP coil inputs.  Use a Python "
+            f"module that defines `build_coil() -> CoilBuilder`.  "
+            f"PEEC workflows (IH panel) accept STEP via peec_step.  "
+            f"Got: {script_path}")
 
-    # .py fallback: load as module, call build_coil()
     script_dir = os.path.dirname(os.path.abspath(script_path))
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
