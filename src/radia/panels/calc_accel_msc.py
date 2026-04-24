@@ -69,7 +69,8 @@ def _load_coil_script(script_path):
     if ext in ('.step', '.stp'):
         from coil_from_step import extract_centerline, to_coil_builder
         result = extract_centerline(script_path)
-        return to_coil_builder(result, current=1.0)
+        builder, _segs = to_coil_builder(result, current=1.0)
+        return builder
 
     script_dir = os.path.dirname(os.path.abspath(script_path))
     if script_dir not in sys.path:

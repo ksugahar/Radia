@@ -104,7 +104,8 @@ def _load_coil_script(script_path):
         # Current is baked in by the panel via its own current widget
         # (not yet plumbed through calc_accel_*) -- default 1 A for now
         # and let the panel override via a future --current flag.
-        return to_coil_builder(result, current=1.0)
+        builder, _segs = to_coil_builder(result, current=1.0)
+        return builder
 
     # .py fallback: load as module, call build_coil()
     script_dir = os.path.dirname(os.path.abspath(script_path))
