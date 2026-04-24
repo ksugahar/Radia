@@ -321,16 +321,43 @@ should depend only on coil geometry (Ampere's law). Both formulations
 enforce I=1A; both see the same coil .step + same workpiece .vol;
 yet H_t differs by 1.84x → bug is in the formulation, not the physics.
 
-**Suspected root cause** (unresolved): in
-`calc_fem_kelvin.py:solve_fem_biot_savart`, the Robin RHS
+**Root cause investigation (2026-04-24, partially resolved)**:
 
-    f_lf += -robin * A_s_cf * v_.Trace() * ds('sibc')
+Integration-by-parts of the curl-curl in the scattered decomposition
+A_total = A_s + A_r yields a missing surface term on the workpiece:
 
-uses `A_s_cf` (3-vector CF) dotted with `v_.Trace()` (tangential
-trace). The full `A_s_cf` may need explicit tangential projection
-`A_s_cf - (A_s_cf · n) n` to match the LHS Robin term semantics, or
-the integrand may have a missed factor (the 1.84x ratio doesn't fall
-on a clean √2 / √π / etc., so the bug isn't a simple 2x).
+    -∫_sibc ν · (n × curl(A_s)) · v dS  =  -ν · ∫_sibc (n × B_s) · v dS
+
+where B_s = curl(A_s) is the Biot-Savart magnetic field from the
+PEEC filaments.  The current code has only the Robin RHS
+`-robin · A_s_t · v_t` term; the `(n × B_s) · v` term is missing.
+
+Empirical sweep (`kelvin_source.biot_savart_B_cf` helper now
+implements B_s as a closed-form CF):
+
+| RHS variant added | H_t [A/m] | error vs target |
+|---|---|---|
+| nothing (current bug) | 15.10 | -45% |
+| -NU_0 * Cross(n, B_s) * v.Trace() | 14.25 | -48% |
+| +0.5 * NU_0 * Cross(n, B_s) * v.Trace() | 22.69 | -18% |
+| **+1.0 * NU_0 * Cross(n, B_s) * v.Trace()** | **31.38** | **+14%** |
+| (target = total mode) | 27.55 | 0 |
+
+Sign confirmed: +NU_0 (NGSolve `specialcf.normal(3)` is the FEM-
+volume outward normal which for workpiece-as-hole points INTO the
+hole = opposite of the SIBC outward normal of the conductor).
+
+Magnitude residual: optimum factor ≈ +0.78, NOT a clean physical
+constant.  The +1.0 derivation result overshoots by 14% — implies a
+SECOND smaller missing piece (Periodic Kelvin coupling? PEEC
+complex-phase currents? multi-FD sibc weighting? — unresolved).
+
+**`biot_savart_B_cf` shipped in `kelvin_source.py`** (formula
+correctness verified against infinite-wire analytical limit), but
+`solve_fem_biot_savart` is LEFT UNCHANGED until the residual 14%
+is understood — would not want to ship a half-fix that under/over-
+predicts depending on geometry.  Production default remains
+`--source-mode total`.
 
 **Same bug pattern likely exists in BEM-derived back-reaction L**
 computed via Robin RHS with A_inc as a CoefficientFunction (e.g.
