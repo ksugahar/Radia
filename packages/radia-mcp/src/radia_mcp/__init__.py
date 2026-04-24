@@ -9,4 +9,4 @@ live in the `radia` package, reachable via entry points when the `radia`
 extra is installed (pip install radia-mcp[radia]).
 """
 
-__version__ = "0.30.0"
+__version__ = "0.32.1"
