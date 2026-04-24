@@ -593,10 +593,7 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     # ---- 1. Locate the air block ----
     air_bid = None
     for bid in cubit.parse_cubit_list("block", "all"):
-        try:
-            n = cubit.get_block_name(bid) or ""
-        except Exception:
-            n = ""
+        n = cubit.get_exodus_entity_name("block", bid) or ""
         if n.lower() == air_block.lower():
             air_bid = bid
             break
@@ -758,7 +755,7 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     existing_blocks = set(cubit.parse_cubit_list("block", "all"))
     nb = (max(existing_blocks) + 1) if existing_blocks else 1
     existing_block_names = {
-        (cubit.get_block_name(bid) or "").lower()
+        (cubit.get_exodus_entity_name("block", bid) or "").lower()
         for bid in cubit.parse_cubit_list("block", "all")}
     if kelvin_block.lower() not in existing_block_names:
         cubit.cmd(f"block {nb} add volume {kelvin_vol}")
@@ -767,13 +764,9 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     # ---- 9. Sidesets: kelvin_int / kelvin_ext + sym_<bc>_<axis> ----
     existing_ss = set(cubit.parse_cubit_list("sideset", "all"))
     ns = (max(existing_ss) + 1) if existing_ss else 1
-    existing_ss_names = set()
-    for sid in cubit.parse_cubit_list("sideset", "all"):
-        try:
-            n = cubit.get_sideset_name(sid) or ""
-        except Exception:
-            n = ""
-        existing_ss_names.add(n.lower())
+    existing_ss_names = {
+        (cubit.get_exodus_entity_name("sideset", sid) or "").lower()
+        for sid in cubit.parse_cubit_list("sideset", "all")}
 
     def _next_ss():
         nonlocal ns
