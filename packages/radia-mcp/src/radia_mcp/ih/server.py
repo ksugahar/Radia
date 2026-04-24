@@ -82,6 +82,11 @@ def ih_sibc(topic: str = "all") -> str:
             "esim"        - ESIM cell problem, Karl iteration
             "biot_savart" - Coil field computation (phi_inc, A_inc, H_inc)
             "screening"   - Screening physics, dimensionless parameter
+            "scattered_robin_pitfall" - 2026-04-24 research note: ~3.4x P_wp
+                            under-prediction in scattered Robin RHS formulations
+                            (calc_fem_kelvin --source-mode scattered, BEM coupled
+                            Δ_L). Constant-current sanity check; cancellation
+                            diagnosis; recommended workarounds.
     """
     return get_ih_sibc_documentation(topic)
 
