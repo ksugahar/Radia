@@ -110,6 +110,13 @@ public:
   // Get coordinates for any node ID (original or generated)
   std::array<double,3> get_node_coords(int node_id) const;
 
+  // Cubit node ID -> Netgen PointIndex (1-based).  Needed by the
+  // exporter to turn Cubit nodesets (GND, etc.) into Netgen CD3
+  // (BBBND vertex) names that round-trip through .vol load.
+  const std::unordered_map<int, int>& get_cubit_nid_to_ng_pi() const {
+    return cubit_nid_to_ng_pi_;
+  }
+
   // Get edge high-order nodes between two vertex node IDs.
   // Returns (order-1) node IDs along the edge from n0 to n1.
   std::vector<int> get_edge_nodes(int n0, int n1) const;
