@@ -2,15 +2,16 @@
 Accelerator magnet MSC solver for Cubit panel (ElectromagnetMSCDialog).
 
 Pipeline:
-  Cubit hex mesh (.cub5) -> Cubit API direct -> rad.ObjHexahedron -> Radia MSC Solve
+  Netgen .vol hex mesh -> NGSolve read -> rad.ObjHexahedron -> Radia MSC Solve
 
 User workflow:
   1. Write coil Python script (defines build_coil() -> CoilBuilder)
-  2. Write .jou to create iron yoke hex mesh + named blocks
-  3. Run journal in Cubit panel, click Solve
+  2. Write .jou to create iron yoke hex mesh + named blocks, export .vol
+     via `radia_export netgen`
+  3. Run this script with --vol <file>
 
-Cubit blocks (user sets in .jou):
-  yoke  - volume block, hex elements (iron)
+Mesh materials (user sets in .jou before export):
+  yoke  - volume material, hex/tet/wedge elements (iron)
 
 IMA symmetry (set in dialog):
   '+x-z'  = quarter model (x>0, z>0)
@@ -20,9 +21,12 @@ IMA symmetry (set in dialog):
 
 Coil is NOT meshed -- Biot-Savart analytical source via CoilBuilder.to_radia().
 
-Mesh extraction uses Cubit API directly (no .msh intermediate):
-  cubit.get_block_volumes() -> cubit.get_volume_hexes/tets/wedges()
-  -> cubit.get_connectivity() -> cubit.get_nodal_coordinates()
+Mesh interface:
+  This script takes a Netgen .vol file via --vol (not .cub5).  The .vol
+  is the sole interface between Cubit and NGSolve per the Cubit/NGSolve
+  Complete Separation Policy in CLAUDE.md -- this script does NOT
+  import cubit.  Element types (hex/tet/wedge) are extracted from the
+  NGSolve mesh directly.
 """
 
 import argparse
@@ -39,7 +43,7 @@ _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
-from calc_common import (MU_0, setup_paths, setup_cubit,
+from calc_common import (MU_0, setup_paths,
                           get_bh_curve, progress, calc_main,
                           EMMaterial, add_material_args)
 
@@ -70,81 +74,63 @@ def _load_coil_script(script_path):
     return mod.build_coil()
 
 
-def _extract_elements_from_cubit(cubit, block_name="yoke", unit_scale=0.001):
-    """Extract hex/tet/wedge elements from Cubit block via direct API.
+def _extract_elements_from_mesh(mesh, material_name="yoke"):
+    """Extract hex/tet/wedge elements for a given material from an NGSolve mesh.
+
+    Replaces the pre-policy `_extract_elements_from_cubit` helper.  The
+    `radia_export netgen` C++ command emits coordinates in meters (the
+    lab-wide unit) so no coordinate scaling is needed.
 
     Args:
-        cubit: Cubit module (initialized, model open)
-        block_name: Name of the block containing yoke elements
-        unit_scale: Coordinate scale (0.001 = mm->m, 1.0 = already meters)
+        mesh: ngsolve.Mesh
+        material_name: Material name whose elements should be extracted
+                       (matches `el.mat` from the .vol).
 
     Returns:
         list of dicts: [{'type': 'hex'|'tet'|'wedge', 'vertices': [[x,y,z],...]}]
     """
-    # Find block ID by name. Use get_block_name (NOT get_exodus_entity_name)
-    # to avoid the "Invalid list type for the get_mref_entity function: block"
-    # error on some Cubit versions where blocks are not registered as
-    # mref_entities.
-    yoke_bid = None
-    for bid in cubit.get_block_id_list():
-        try:
-            name = (cubit.get_block_name(bid) or "").lower()
-        except Exception:
-            name = ""
-        if name == block_name.lower():
-            yoke_bid = bid
-            break
-
-    if yoke_bid is None:
-        raise ValueError(f"Block '{block_name}' not found in Cubit model")
-
-    vids = cubit.get_block_volumes(yoke_bid)
-    if not vids:
-        raise ValueError(f"Block '{block_name}' has no volumes")
+    from ngsolve import VOL
+    from ngsolve.fem import ET
 
     elements = []
-    for vid in vids:
-        # Hexahedra
-        for eid in cubit.get_volume_hexes(vid):
-            nids = cubit.get_connectivity("hex", eid)
-            verts = [[c * unit_scale for c in cubit.get_nodal_coordinates(n)]
-                     for n in nids]
-            elements.append({'type': 'hex', 'vertices': verts})
-
-        # Tetrahedra
-        for eid in cubit.get_volume_tets(vid):
-            nids = cubit.get_connectivity("tet", eid)
-            verts = [[c * unit_scale for c in cubit.get_nodal_coordinates(n)]
-                     for n in nids]
-            elements.append({'type': 'tet', 'vertices': verts})
-
-        # Wedges (prisms)
-        for eid in cubit.get_volume_wedges(vid):
-            nids = cubit.get_connectivity("wedge", eid)
-            verts = [[c * unit_scale for c in cubit.get_nodal_coordinates(n)]
-                     for n in nids]
-            elements.append({'type': 'wedge', 'vertices': verts})
+    target = material_name.lower()
+    for el in mesh.Elements(VOL):
+        if el.mat.lower() != target:
+            continue
+        # NGSolve element type -> Radia polyhedron type
+        if el.type == ET.TET:
+            etype = 'tet'
+        elif el.type == ET.HEX:
+            etype = 'hex'
+        elif el.type == ET.PRISM:
+            etype = 'wedge'  # triangular prism
+        else:
+            # PYRAMID, other exotic types are not supported by Radia MSC
+            continue
+        verts = [list(mesh.vertices[v.nr].point) for v in el.vertices]
+        elements.append({'type': etype, 'vertices': verts})
 
     return elements
 
 
-def solve_msc(coil_script="", cub5_file="",
+def solve_msc(coil_script="", vol_file="",
               mat=None, ima="", solver=0,
               max_iter=100, tol=1e-3, relax=0.0,
-              unit_scale=0.001,
               msh_output=""):
-    """MSC solver: Cubit hex -> Radia ObjHexahedron -> Solve.
+    """MSC solver: Netgen .vol hex mesh -> Radia ObjHexahedron -> Solve.
 
     Args:
         coil_script: Path to Python script with build_coil()
-        cub5_file: Cubit .cub5 file with hex mesh
+        vol_file: Netgen .vol file with hex/tet/wedge elements for a
+            material named 'yoke' (sole interface between Cubit and
+            NGSolve; this script does NOT import cubit).  Coordinates
+            are in meters (radia_export netgen policy).
         mat: EMMaterial instance (iron yoke properties)
         ima: IMA string e.g. '+x-z' for quarter model ('' = no IMA)
         solver: 0=LU, 1=BiCGSTAB, 2=HACApK
         max_iter: Max nonlinear iterations
         tol: Convergence tolerance
         relax: Under-relaxation (0=full step)
-        unit_scale: Cubit coordinate scale (0.001=mm->m, 1.0=meters)
         msh_output: Optional GMSH .msh output path
 
     Returns:
@@ -172,29 +158,28 @@ def solve_msc(coil_script="", cub5_file="",
     _log(f"COIL:{len(radia_coil_objs)} Radia objects, I={current}A")
 
     # ============================================================
-    # Step 2: Extract elements from Cubit via direct API
+    # Step 2: Extract 'yoke' elements from the .vol via NGSolve
     # ============================================================
-    _log("MESH:loading Cubit model")
+    _log("MESH:loading .vol")
 
-    if not cub5_file or not os.path.exists(cub5_file):
-        return {"error": f"Cubit .cub5 file required: {cub5_file}"}
+    if not vol_file or not os.path.exists(vol_file):
+        return {"error": f".vol file required: {vol_file}"}
 
-    cubit = setup_cubit(cub5_file)
-    if cubit is None:
-        return {"error": "Cubit not available"}
+    from ngsolve import Mesh
+    mesh = Mesh(vol_file)
 
-    try:
-        elements = _extract_elements_from_cubit(
-            cubit, block_name="yoke", unit_scale=unit_scale)
-    except ValueError as e:
-        return {"error": str(e)}
+    if "yoke" not in set(mesh.GetMaterials()):
+        return {"error": "Material 'yoke' not found in .vol "
+                         f"(materials: {sorted(set(mesh.GetMaterials()))})"}
+
+    elements = _extract_elements_from_mesh(mesh, material_name="yoke")
 
     n_hex = sum(1 for e in elements if e['type'] == 'hex')
     n_tet = sum(1 for e in elements if e['type'] == 'tet')
     n_wedge = sum(1 for e in elements if e['type'] == 'wedge')
     n_total = len(elements)
     if n_total == 0:
-        return {"error": "No volume elements found in 'yoke' block"}
+        return {"error": "No volume elements found with material 'yoke'"}
 
     _log(f"MESH:{n_hex} hex + {n_tet} tet + {n_wedge} wedge = {n_total} elem")
 
@@ -405,7 +390,10 @@ def main():
         description="Accelerator magnet MSC solver (Radia hex)")
     parser.add_argument("--coil-script", required=True,
                         help="Python script with build_coil() -> CoilBuilder")
-    parser.add_argument("--cub5", default="", help="Cubit .cub5 file")
+    parser.add_argument("--vol", default="",
+                        help="Netgen .vol file with a 'yoke' material "
+                             "(sole interface between Cubit and NGSolve; "
+                             "this script no longer accepts .cub5)")
     add_material_args(parser, default_material="steel",
                       include_custom=False, include_hys=True)
     parser.add_argument("--ima", default="",
@@ -420,8 +408,6 @@ def main():
                         help="Convergence tolerance")
     parser.add_argument("--relax", type=float, default=0.0,
                         help="Under-relaxation (0=full step)")
-    parser.add_argument("--unit-scale", type=float, default=0.001,
-                        help="Cubit coordinate scale (0.001=mm->m)")
     parser.add_argument("--msh-output", default="",
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
@@ -430,14 +416,13 @@ def main():
     def run(args):
         return solve_msc(
             coil_script=args.coil_script,
-            cub5_file=args.cub5,
+            vol_file=args.vol,
             mat=EMMaterial.from_args(args),
             ima=args.ima,
             solver=args.solver,
             max_iter=args.max_iter,
             tol=args.tol,
             relax=args.relax,
-            unit_scale=args.unit_scale,
             msh_output=args.msh_output,
         )
 
