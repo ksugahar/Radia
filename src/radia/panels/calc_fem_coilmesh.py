@@ -321,6 +321,11 @@ def main():
     parser.add_argument("--source-bnd", default="source")
     parser.add_argument("--sink-bnd", default="sink")
     parser.add_argument("--coil-mat", default="coil")
+    parser.add_argument("--msh-output", default="",
+                        help="Optional GMSH .msh output path. When set, "
+                             "the .vol mesh is converted to .msh after "
+                             "solve so the panel's OpenGmsh button can "
+                             "view the geometry.")
 
     def run(args):
         if args.impedance_model == "esim":
@@ -336,7 +341,7 @@ def main():
                          "calc_fem_coilmesh. Use pardiso (direct) or "
                          "bddc (iterative p>=2) for now."
             }
-        return solve_fem_coilmesh(
+        result = solve_fem_coilmesh(
             vol=args.vol,
             frequency=args.frequency,
             I_target=args.current,
@@ -352,6 +357,22 @@ def main():
             sink_bnd=args.sink_bnd,
             coil_mat=args.coil_mat,
         )
+        # GMSH export (mesh geometry, no fields yet — minimum for the
+        # panel's OpenGmsh button to activate). Field export (B, J)
+        # is a future enhancement; the .vol+.sol pair is preserved
+        # by NGSolve so .msh can be regenerated post-hoc with vol2msh.
+        if args.msh_output and isinstance(result, dict) and "error" not in result:
+            try:
+                import sys, os as _os
+                radia_src = _os.path.dirname(_os.path.abspath(__file__)) + "/.."
+                if _os.path.abspath(radia_src) not in sys.path:
+                    sys.path.insert(0, _os.path.abspath(radia_src))
+                from gmsh_post_export import vol2msh
+                vol2msh(args.msh_output, args.vol, [])
+                result["msh_file"] = args.msh_output
+            except Exception as e:
+                result["msh_export_error"] = str(e)
+        return result
 
     calc_main(run, parser)
 
