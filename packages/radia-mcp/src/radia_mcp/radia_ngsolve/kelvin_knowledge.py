@@ -2043,6 +2043,63 @@ B_phys = eval_B_physical_from_gf(gf_B, mesh, r_phys=[0, 0, 1.0],
 """
 
 
+KELVIN_BENCHMARK_PANEL = """
+# Kelvin Benchmark Panel Mode (radia_em.py "Kelvin Benchmark")
+
+End-user verification path for the Cubit-meshed Kelvin pipeline.
+The EM panel ships with a 4th formulation -- "Kelvin Benchmark" --
+that runs `calc_kelvin_benchmark.py` on a `.vol` with a magnetic
+sphere in uniform external Hz and compares the interior field to
+the analytical solution `Hz_inside = 3 / (mu_r + 2) * H0`.
+
+## Required `.vol` structure
+
+The `.vol` must declare:
+- **blocks**: `magnetic`, `air`, `kelvin`
+- **sidesets**: `sphere` (mag-air interface), `kelvin_int`, `kelvin_ext`
+- **bbnodeset**: `GND` (Kelvin sphere centre, Dirichlet anchor)
+
+Use the bundled `kelvin_benchmark_sphere_1_4.vol` (1/4 reduction,
+mu_r=100, R=0.20 m, Kelvin offset 0.60 m along +z) as the reference.
+Build script: `panels/samples/kelvin_benchmark_sphere_1_4_build.py`.
+
+## Two non-obvious Cubit fixes embedded in the build script
+
+1. `subtract A from B keep` does NOT carve B in Cubit 2025.3.
+   Workaround: drop `keep`, then re-create A as a fresh primitive.
+
+2. Copy-mesh anchor curve selection for 1/8 octant caps was
+   non-deterministic (3 equal-length quarter-arcs). Fix in
+   `_add_kelvin_cubit_reduction`: pick `min(curves,
+   key=(centroid_z, centroid_y, centroid_x))` for translation-
+   equivalent source / target anchors.  See
+   `memory/feedback_kelvin_1_8_blocker.md` (mesh fixed; 1/8 numerical
+   solver still has a kelvin_far singularity issue, deferred).
+
+## CLI
+
+    python calc_kelvin_benchmark.py \\
+        --vol model.vol \\
+        --fes-order 2 \\
+        --mu-r 100 --H0 1.0 --field-axis z \\
+        --R-kelvin 0.20
+
+JSON output: `Hi_origin`, `Hi_analytical`, `error_pct`, `slaved_dofs`.
+
+## Tolerance band (verified 2026-04-25 on 1/4 sphere)
+
+  | order | typical error |
+  |-------|--------------:|
+  | p=1   |        +7.79% |
+  | p=2   |        +0.71% |
+  | p=3   |        +0.54% |
+
+Panel-level golden test:
+`tests/panels/test_kelvin_benchmark_golden.py` locks
+|error| < 1.5% at p=2.
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -2061,6 +2118,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "differential_forms": KELVIN_DIFFERENTIAL_FORMS,
         "radia_source_helpers": KELVIN_RADIA_SOURCE_HELPERS,
         "source_in_omega_form": KELVIN_SOURCE_IN_OMEGA_FORM,
+        "benchmark_panel": KELVIN_BENCHMARK_PANEL,
     }
 
     topic = topic.lower().strip()
