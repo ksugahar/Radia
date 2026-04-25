@@ -17,7 +17,7 @@ OPTIONAL_FILES = {"FastHenry .inp": "FastHenry (*.inp)"}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, run_app, _PYTHON,
+    ModePanel, AnalysisWindow, calc_script, json_output, run_app, _PYTHON,
 )
 
 
@@ -52,7 +52,8 @@ class PCBPanel(ModePanel):
                "--freq-min", self.val("freq_min"),
                "--freq-max", self.val("freq_max"),
                "--n-freq", self.val("n_freq"),
-               "--solver-method", solver_id]
+               "--solver-method", solver_id,
+               "--output", json_output(inp, "_pcb_peec")]
         spice = self.val("spice_output")
         if spice:
             cmd += ["--spice-output", spice]

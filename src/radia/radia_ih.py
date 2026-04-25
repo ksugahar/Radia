@@ -26,7 +26,8 @@ OPTIONAL_FILES = {}
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, msh_output, run_app, _PYTHON,
+    ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
+    run_app, _PYTHON,
 )
 from PySide6.QtWidgets import (QLabel, QCheckBox, QGroupBox, QVBoxLayout,
                                  QFormLayout, QWidget)
@@ -573,7 +574,8 @@ class IHPanel(ModePanel):
                "--peec-n-peri", str(self.val("peec_n_peri")),
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
-               "--coil-sigma", self.val("coil_sigma")]
+               "--coil-sigma", self.val("coil_sigma"),
+               "--output", json_output(step, "_peec_ind")]
         return cmd
 
     def _build_peec_bem_command(self, vol_path):
@@ -596,7 +598,8 @@ class IHPanel(ModePanel):
                "--impedance-model", self._impedance_model_cli(),
                "--peec-solver", solver,
                "--h1-order", str(self.val("fes_order")),
-               "--msh-output", msh_output(vol_path, "_peec_bem")]
+               "--msh-output", msh_output(vol_path, "_peec_bem"),
+               "--output", json_output(vol_path, "_peec_bem")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
@@ -643,7 +646,8 @@ class IHPanel(ModePanel):
                "--peec-sigma", self.val("coil_sigma"),
                "--peec-nwinc", str(self.val("peec_nwinc")),
                "--peec-nhinc", str(self.val("peec_nhinc")),
-               "--msh-output", msh_output(vol_path, "_fem_kelvin")]
+               "--msh-output", msh_output(vol_path, "_fem_kelvin"),
+               "--output", json_output(vol_path, "_fem_kelvin")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
@@ -671,7 +675,8 @@ class IHPanel(ModePanel):
                "--sink-bnd", "sink",
                "--coil-mat", "coil",
                "--impedance-model", self._impedance_model_cli(),
-               "--msh-output", msh_output(vol_path, "_fem_full")]
+               "--msh-output", msh_output(vol_path, "_fem_full"),
+               "--output", json_output(vol_path, "_fem_full")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
