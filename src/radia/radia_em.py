@@ -20,7 +20,8 @@ OPTIONAL_FILES = {"Coil script": "Python (*.py)", "Hysteresis file": "HYS (*.hys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, msh_output, run_app, _PYTHON,
+    ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
+    run_app, _PYTHON,
 )
 
 
@@ -184,8 +185,8 @@ class EMPanel(ModePanel):
         # not declare --ima, so do not emit it here.
         if self.val("method") == "Newton":
             cmd += ["--newton"]
-        cmd += ["--msh-output", msh_output(
-            vol_path or coil, "_emfem")]
+        cmd += ["--msh-output", msh_output(vol_path or coil, "_emfem"),
+                "--output", json_output(vol_path or coil, "_emfem")]
         return cmd
 
     def _build_msc_command(self, vol_path, coil):
@@ -221,8 +222,8 @@ class EMPanel(ModePanel):
         ima = self.val("ima")
         if ima:
             cmd += ["--ima", ima]
-        cmd += ["--msh-output", msh_output(
-            vol_path or coil, "_msc")]
+        cmd += ["--msh-output", msh_output(vol_path or coil, "_msc"),
+                "--output", json_output(vol_path or coil, "_msc")]
         return cmd
 
 

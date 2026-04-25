@@ -63,6 +63,17 @@ def msh_output(vol_path, suffix):
     return os.path.splitext(base)[0] + suffix + ".msh"
 
 
+def json_output(base_path, suffix):
+    """Companion to msh_output: <base>_<suffix>.json next to the input.
+
+    base_path: any input path the analysis is keyed on (.vol, .step, .jou).
+    The .json is written by calc_main when --output is passed and lives
+    next to the .msh so users can find both side-by-side.
+    """
+    base = base_path if base_path else "output"
+    return os.path.splitext(base)[0] + suffix + ".json"
+
+
 # ============================================================
 # ModePanel: form layout base
 # ============================================================
