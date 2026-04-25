@@ -53,8 +53,8 @@ adds the Kelvin exterior sphere and the GND nodeset.
 |---------|--------|--------|-------|
 | `em_1-1_full.jou` | TODO | — | No webcut, full mesh.  Simplest; Auto-Kelvin copies a full sphere 1:1 which should work without any plugin fix. |
 | `em_1-2_half_z.jou` | **WORKING** | [em_sample_mu1000.json](../../../../tests/panels/golden/em_sample_mu1000.json) | Z-plane webcut on air sphere (mesh seam for Kelvin copy-mesh).  Yoke has full x, full z; only coil + coil-mirror about z gives the physical field.  Verified end-to-end at NI=1 and NI=2000, mu_r=1000, PARDISO. |
-| `em_1-4_quarter_xz.jou` | TODO (blocked) | — | Blocker: `add_kelvin_cubit` currently only webcuts the Kelvin sphere at z-plane when `symmetry=['z']`.  For `symmetry=['x','z']` the Kelvin sphere must ALSO be x-webcut to match the air quarter-hemispheres, otherwise `copy_mesh` fails on one of the pair.  Fix lives in `src/radia/panels/add_kelvin.py` around the `if "z" in sym:` block. |
-| `em_1-8_eighth.jou` | TODO (blocked) | — | Same blocker as 1/4, plus y-plane handling. |
+| `em_1-4_quarter_xz.jou` | **WORKING** (2026-04-25) | [em_quarter_xz_mu1000.json](../../../../tests/panels/golden/em_quarter_xz_mu1000.json) | True 1/4 reduction (x>=0 AND z>=0) via `add_kelvin_cubit(reduction={x: bn=0, z: ht=0})`.  Air quarter-sphere via `intersect` with an octant brick (cleaner than webcut+delete).  `sym_bn=0_x` and `sym_ht=0_z` sidesets propagated to Netgen bcnames; FEM Omega picks Dirichlet on z=0 automatically.  Regression guard only, not a physics-accuracy match to the ELF published -976 mT (coil is not x/z-symmetric). |
+| `em_1-8_eighth.jou` | TODO (blocker: Kelvin mapping) | — | Offset-then-cut Kelvin strategy geometrically fails for 1/8 (diagonal offset does not intersect the x=0/y=0/z=0 planes so the Kelvin cut faces cannot coincide with the air cut faces).  `add_kelvin_cubit(reduction=...)` raises NotImplementedError for three-axis reduction.  Needs a different Kelvin mapping (e.g. 7 reflected copies, or spherical inversion without translation). |
 
 ## Workflow for each variant
 

@@ -1,0 +1,42 @@
+{
+  "description": "Golden reference for calc_accel_magnet.py on the C-type dipole em_1-4_quarter_xz.jou (1/4 xz model, linear mu_r=1000).",
+  "rationale": "Regression guard for the reduction-mode pipeline (add_kelvin.add_kelvin_cubit(reduction={x: bn=0, z: ht=0}) -> ExportNetgenCommand symmetry-bcname propagation -> calc_accel_magnet sym_ht=0_z Dirichlet pick).  Any regression in the add_kelvin reduction flow, the ExportNetgenCommand sideset-vs-auto-detect priority (2026-04-25 fix), or the calc_accel_magnet symmetry BC mapping will trip this test.  NOT a physics-accuracy comparison against any published reference -- the coil (em_sample_coil.py) is a full racetrack whose spatial distribution does not share the x=0 / z=0 symmetries implied by the sym_bn=0_x / sym_ht=0_z BCs.",
+  "sample": {
+    "vol": "C:/temp/em_quarter.vol",
+    "coil_script": "src/radia/panels/samples/em_sample_coil.py",
+    "generator_jou": "src/radia/panels/samples/em/em_1-4_quarter_xz.jou",
+    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-4_quarter_xz.jou + play auto_kelvin_entry.py (with RADIA_LAUNCHER_CONFIG containing kelvin_reduction={x: bn=0, z: ht=0}) + radia_export netgen order=2 overwrite."
+  },
+  "geometry_note": "1/4 xz quadrant: yoke reduced to x>=0 AND z>=0, air quarter-sphere (x>=0, z>=0 via intersect with octant brick), Kelvin 1/4 sphere offset in y.  Symmetry sidesets sym_bn=0_x and sym_ht=0_z enable Omega-reduced FEM to pick Dirichlet on z=0 (Omega=0) and Natural on x=0.",
+  "physics": {
+    "formulation": "omega",
+    "material": "linear",
+    "mu_r": 1000.0,
+    "fes_order": 1,
+    "current_A_coil_py": 2000.0,
+    "max_iter": 1,
+    "tol": 1e-2,
+    "solver": "pardiso"
+  },
+  "observations": {
+    "note": "Absolute-value snapshot for regression guard.  Different symmetry BCs than em_1-2_half_z so numbers differ -- that's expected.  Field magnitude here is much smaller (~0.16 mT vs 8.79 mT for half-z) because the quarter-xz symmetry BCs impose Bn=0 / Ht=0 constraints that the full-racetrack coil does not naturally satisfy.",
+    "I_2000A_coil_py": {
+      "B_origin_T": [0.0, 0.0, -1.632e-04],
+      "B_origin_mag_T": 1.632e-04,
+      "W_mag_J": 3.353e-01,
+      "L_H": 1.676e-07,
+      "iterations": 1,
+      "converged": true,
+      "ne": 105011,
+      "ndof": 20862,
+      "n_wire_segments": 84
+    }
+  },
+  "tolerance": {
+    "B_origin_pct": 5.0,
+    "L_pct": 3.0,
+    "W_mag_pct": 3.0,
+    "ndof_exact": true,
+    "ne_exact": true
+  }
+}
