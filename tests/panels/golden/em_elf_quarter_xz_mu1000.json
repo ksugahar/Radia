@@ -23,8 +23,9 @@
     "source": "examples/c_type_electromagnet/mu=1000/quarter/verify_elf_radia.py (ELF binary .mag output)",
     "fem_vs_elf_pct": 5.2
   },
+  "fem_convergence_note": "Empirical sweet spot (2026-04-25): 5mm + order=1 = 5.2% high; 2mm + order=1 = -22% (DIVERGES with finer mesh); 5mm + order=2 = -39% (broken: C++ Kelvin pair ID only handles LINEAR nodes, periodic BC fails for the high-order DOFs of curvedelements).  Both refinement paths need future fixes before this can converge to <1%.  Until then -- 5.2% is the practical ceiling for FEM Omega + offset-Kelvin on this geometry.",
   "observations": {
-    "note": "FEM result vs ELF: -240.02 mT (FEM) vs -228.1 mT (ELF) = 5.2% deviation.  Acceptable for linear-mu_r=1000 single-iteration FEM with 5mm yoke tetmesh.  Tightening tolerance, refining mesh, or running more iterations would converge closer to ELF.",
+    "note": "FEM result vs ELF: -240.02 mT (FEM) vs -228.1 mT (ELF) = 5.2% deviation.  See fem_convergence_note for refinement caveats.",
     "I_2000A_coil_elf": {
       "B_origin_T": [-5.398e-18, 4.646e-12, -2.400e-01],
       "B_origin_mag_T": 2.400e-01,
