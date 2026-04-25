@@ -66,6 +66,14 @@ class EMPanel(ModePanel):
     em_elf_quarter geometry (a separate formulation issue, NOT a
     Kelvin issue).  Kelvin Benchmark mode defaults fes_order=2 since
     its Dirichlet-lift formulation is verified at p>=2.
+
+    Bundled Kelvin Benchmark samples (verified 2026-04-26 at p=2):
+        kelvin_benchmark_sphere_1_2.vol   1/2 model, error +1.07%
+        kelvin_benchmark_sphere_1_4.vol   1/4 model, error +0.71%
+    The 1/8 build script ships
+    (`kelvin_benchmark_sphere_1_8_build.py`) but the .vol does NOT
+    -- the corner-GND geometry currently produces Hz~0; see
+    `memory/feedback_kelvin_1_8_blocker.md`.
     """
 
     _OMEGA_SOLVERS = ["Direct (PARDISO)", "AMG (Compact)", "BDDC"]
