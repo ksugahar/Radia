@@ -27,7 +27,12 @@ private:
   void * freelist;
   ///
   NgArray<char*> bablocks;
-  mutex block_allocator_mutex;
+  // Intentional leak: heap-allocated so the mutex outlives static destruction.
+  // Other static destructors (e.g. via operator delete on classes using this
+  // allocator) may call Free() after this BlockAllocator has been destroyed;
+  // with a member std::mutex, that would crash in MSVCP140!mtx_do_lock during
+  // DLL unload (static destruction order fiasco).
+  mutex* block_allocator_mutex;
 public:
   ///
   DLL_HEADER BlockAllocator (unsigned asize, unsigned ablocks = 100);
