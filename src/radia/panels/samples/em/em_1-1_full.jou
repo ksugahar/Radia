@@ -1,0 +1,98 @@
+# C-type dipole yoke -- 1/1 FULL model (full geometry in all 3 axes)
+#
+# All three coordinate ranges are FULL (no domain reduction):
+#   yoke x: [-12.5, +12.5] mm   (full pole thickness)
+#   yoke y: [0, 182.5] mm       (gap-to-back-leg, no symmetry to apply)
+#   yoke z: [-26.25, +26.25] mm (full pole / leg z-extent)
+#   air sphere: full 4pi sr at the origin
+#
+# The Kelvin sphere is offset along +x (auto-Kelvin's default for the
+# symmetry=["z"] case the auto-detect picks up here -- see below).
+# No sym sidesets, no kelvin_far -- the Kelvin transformation alone
+# handles the open boundary, with the GND vertex fixing the gauge.
+# This variant is the reference baseline for the 1/2, 1/4, 1/8
+# reductions: the same physics should give the SAME B-field at the
+# origin (within mesh discretization), just at 2/4/8x the DOF cost.
+#
+# Mesh seam at z=0:
+#   The air sphere is webcut at z=0 producing two hemispheres BOTH
+#   retained in the mesh.  The webcut is a mesh seam ONLY (the
+#   geometry is still a full sphere); it gives `add_kelvin_cubit`'s
+#   copy-mesh step a 1:1 vertex correspondence between the air's
+#   outer hemispheres and the Kelvin's webcut hemispheres.  Without
+#   the seam the air's outer surface is a single closed sphere with
+#   no curves, and copy-mesh has no source-curve / target-curve
+#   anchors to align against.  See the IH-style ih_fem_kelvin_sample
+#   (examples/induction_heating/) for the same pattern.
+#
+# Coordinate system (matching em_1-2_half_z and em_sample_coil.py):
+#   y = gap direction (pole tip at y~0, main leg at y~0.15)
+#   z = beam direction
+#   x = depth/thickness
+#
+# 3 yoke volumes, full extent in all three axes:
+#   Vol 1: Pole piece  (x: [-12.5, +12.5], y: [0, 40],   z: [-25, +25] mm)
+#   Vol 2: Yoke back   (x: [-12.5, +12.5], y: [40, 120], z: [-12.5, +12.5] mm)
+#   Vol 3: Main leg    (x: [-12.5, +12.5], y: [120, 182.5], z: [-26.25, +26.25] mm)
+#
+# Use "Symmetry reduction" all OFF in the Export Mesh dialog (the
+# default).  Auto-Kelvin auto-detects "no symmetry", places one
+# full Kelvin sphere offset along +x, and copies the mesh from the
+# air outer surface 1:1.
+reset
+
+# === Pole piece (near gap) ===
+# Full: x [-12.5, +12.5], y [0, 40], z [-25, +25] mm
+brick x 0.025 y 0.040 z 0.050
+move volume 1 x 0 y 0.020 z 0
+
+# === Yoke back (horizontal return) ===
+# Full: x [-12.5, +12.5], y [40, 120], z [-12.5, +12.5] mm
+brick x 0.025 y 0.080 z 0.025
+move volume 2 x 0 y 0.080 z 0
+
+# === Main leg (where coil sits) ===
+# Full: x [-12.5, +12.5], y [120, 182.5], z [-26.25, +26.25] mm
+brick x 0.025 y 0.0625 z 0.0525
+move volume 3 x 0 y 0.15125 z 0
+
+# === Imprint/merge for shared surfaces (continuous mesh) ===
+imprint volume all
+merge volume all
+
+# === Hex mesh ===
+volume all scheme map
+volume 1 size 0.005
+volume 2 size 0.008
+volume 3 size 0.006
+mesh volume all
+
+# === Air sphere (full geometry + z=0 mesh seam) ===
+create sphere radius 0.40
+webcut volume 4 with plane zplane
+# After webcut: vol 4 = z>0 hemisphere, vol 5 = z<0 hemisphere.  Both
+# kept -- the seam is for Kelvin copy-mesh only, geometry is full.
+
+# Subtract yoke from both hemispheres.
+subtract volume 1 2 3 from volume 4 5 keep
+imprint volume all
+merge volume all
+volume 4 5 scheme tetmesh
+volume 4 5 size 0.02
+mesh volume 4 5
+
+# === Blocks ===
+set duplicate block elements on
+block 1 add volume 1 2 3
+block 1 name "yoke"
+block 2 add volume 4 5
+block 2 name "air"
+
+# Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
+# boundary (auto)" with all three "Symmetry reduction" combos set
+# to OFF (default).  Auto-Kelvin auto-detects symmetry=["z"] from the
+# z=0 webcut seam (multi-volume air, on z=0 plane, vertex range
+# straddles 0 symmetrically), offsets a Kelvin sphere by +3R along x
+# to (1.2, 0, 0), webcuts it at z=0, and copy-meshes air's
+# hemispheres 1:1 onto the Kelvin's hemispheres.  GND nodeset at
+# Kelvin centre anchors Omega=0.
