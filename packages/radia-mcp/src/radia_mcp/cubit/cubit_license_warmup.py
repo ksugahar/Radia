@@ -125,8 +125,18 @@ def _needs_login() -> tuple[bool, dict]:
 
 
 def warmup_license(bin_dir: Path, timeout_s: float = 30.0,
-                    verbose: bool = False) -> dict:
+                    verbose: bool = False, force: bool = True) -> dict:
     """Pre-warm Cubit Learn license before launching Cubit.
+
+    `force=True` (default, 2026-04-25): always run `--logout` then `--login`
+    to clear any stale signed-renewals state that Cubit's runtime would
+    reject. Empirical observation: skipping rlm_activate when the cache
+    looks fresh is intermittently followed by a license-warning modal
+    dialog in GUI mode (which blocks `-input` playback). Forcing logout
+    + login eliminates the dialog.
+
+    `force=False`: legacy behavior — skip rlm_activate when cache is
+    fresh (`age <= _CACHE_AGE_DAYS` and `best_remaining > _MIN_REMAINING_DAYS`).
 
     Returns a dict with keys:
       status : "ok" | "skipped" | "error"
@@ -144,7 +154,7 @@ def warmup_license(bin_dir: Path, timeout_s: float = 30.0,
 
     needs_login, info = _needs_login()
     result["info"] = info
-    if not needs_login:
+    if not force and not needs_login:
         result["reason"] = info.get("reason", "cache fresh")
         return result
 
@@ -160,6 +170,17 @@ def warmup_license(bin_dir: Path, timeout_s: float = 30.0,
         result["reason"] = f"rlm_activate.exe not found in {bin_dir}"
         result["action"] = "no_rlm_activate"
         return result
+
+    # Force logout first to release any stuck server-side seat / clear
+    # stale renewals signature. Logout failure is non-fatal — proceed.
+    if force:
+        try:
+            subprocess.run(
+                [str(rlm_exe), "--logout"],
+                capture_output=True, text=True, timeout=timeout_s,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            pass
 
     try:
         proc = subprocess.run(
@@ -180,8 +201,9 @@ def warmup_license(bin_dir: Path, timeout_s: float = 30.0,
 
     if proc.returncode == 0:
         result["status"] = "ok"
-        result["reason"] = info.get("reason",
-                                     "login succeeded (cache was stale)")
+        result["reason"] = ("forced logout+login OK" if force
+                            else info.get("reason",
+                                          "login succeeded (cache was stale)"))
         result["action"] = "login_ran"
     else:
         result["status"] = "error"
