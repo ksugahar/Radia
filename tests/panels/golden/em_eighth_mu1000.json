@@ -27,8 +27,8 @@
       "L_H": 1.429e-06,
       "iterations": 1,
       "converged": true,
-      "ne": 56113,
-      "ndof": 11665,
+      "ne": 56289,
+      "ndof": 11695,
       "n_wire_segments": 84
     }
   },

@@ -798,6 +798,134 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         f"source curve {a_c} source vertex {a_v} "
         f"target curve {k_c} target vertex {k_v}")
 
+    # ---- 6b. Topology-preserving snap: align Kelvin curved-face nodes
+    # ----     to (air + exact offset).
+    #
+    # Why this exists (2026-04-25): Cubit's `copy mesh ... source/target
+    # curve` aligns one boundary curve and propagates -- for 1/8
+    # reduction (3 boundary curves on the curved cap) the interior
+    # nodes drift by up to ~15mm from a pure translation.  The C++
+    # Kelvin pair finder then can't 1:1 match those vertices and
+    # skips identification, leaving NGSolve's add_periodic_kelvin
+    # to recover at solve time.
+    #
+    # Strategy: per-TRIANGLE matching (NOT per-vertex).  For each src
+    # surface triangle, find the dst triangle whose centroid is
+    # nearest to (src_centroid + offset).  Then pair the 3 src
+    # vertices with the 3 dst vertices of that matched dst triangle
+    # by nearest-after-translation, and snap.  This preserves
+    # triangle topology (each src tri maps to one dst tri, vertices
+    # move WITH their tris), so Cubit's tetmesh accepts the result.
+    # Cubit mesh-element keyword: surface tris in a tetmesh are "tri",
+    # not "face" (face is geometric, tri is the mesh element).
+    src_faces = list(cubit.parse_cubit_list("tri", f"in surface {a_curved}"))
+    dst_faces = list(cubit.parse_cubit_list("tri", f"in surface {k_curved}"))
+    if len(src_faces) != len(dst_faces) or not src_faces:
+        print(f"WARNING: snap skipped: src has {len(src_faces)} tris, "
+              f"dst has {len(dst_faces)}; copy-mesh assumed topology-equal.")
+    else:
+        # Cache positions / connectivity.
+        src_conn = {f: cubit.get_connectivity("tri", f) for f in src_faces}
+        dst_conn = {f: cubit.get_connectivity("tri", f) for f in dst_faces}
+        all_src_nodes = set()
+        for c in src_conn.values():
+            all_src_nodes.update(c)
+        all_dst_nodes = set()
+        for c in dst_conn.values():
+            all_dst_nodes.update(c)
+        src_pos = {n: cubit.get_nodal_coordinates(n) for n in all_src_nodes}
+        dst_pos = {n: cubit.get_nodal_coordinates(n) for n in all_dst_nodes}
+
+        def centroid(nodes, pos):
+            xs, ys, zs = 0.0, 0.0, 0.0
+            for n in nodes:
+                p = pos[n]
+                xs += p[0]; ys += p[1]; zs += p[2]
+            k = len(nodes)
+            return (xs / k, ys / k, zs / k)
+
+        # Build dst centroid list.
+        dst_cent = {f: centroid(dst_conn[f], dst_pos) for f in dst_faces}
+
+        # For each src tri, find nearest dst tri by translated centroid.
+        # Vote on src_node -> dst_node mapping: each tri pair contributes
+        # 3 (src, dst) votes; we accept the majority vote per src node.
+        votes = {}  # src_node -> {dst_node: count}
+        for sf in src_faces:
+            sc = centroid(src_conn[sf], src_pos)
+            sc_t = (sc[0] + ox, sc[1] + oy, sc[2] + oz)
+            best_df = None; best_d2 = 1e30
+            for df, dc in dst_cent.items():
+                d2 = ((dc[0] - sc_t[0]) ** 2 + (dc[1] - sc_t[1]) ** 2
+                      + (dc[2] - sc_t[2]) ** 2)
+                if d2 < best_d2:
+                    best_d2 = d2; best_df = df
+            # Pair the 3 vertices of (sf, best_df) by nearest-after-offset.
+            sn_list = src_conn[sf]
+            dn_list = list(dst_conn[best_df])
+            for sn in sn_list:
+                sp = src_pos[sn]
+                expected = (sp[0] + ox, sp[1] + oy, sp[2] + oz)
+                # Among dn_list (= dst tri vertices), pick nearest.
+                best_dn = None; best_d2v = 1e30
+                for dn in dn_list:
+                    dp = dst_pos[dn]
+                    d2v = ((dp[0] - expected[0]) ** 2
+                           + (dp[1] - expected[1]) ** 2
+                           + (dp[2] - expected[2]) ** 2)
+                    if d2v < best_d2v:
+                        best_d2v = d2v; best_dn = dn
+                if best_dn is None:
+                    continue
+                votes.setdefault(sn, {}).setdefault(best_dn, 0)
+                votes[sn][best_dn] += 1
+
+        # Take majority vote per src node.
+        # Verify each src maps to a unique dst (consistency).
+        # For inconsistent pairings (a dst chosen by multiple src),
+        # break ties by preferring the closer translation distance.
+        sn_to_dn = {}
+        used_dn = {}  # dn -> (src_node, distance)
+        ambiguous = 0
+        for sn, dn_counts in votes.items():
+            # Top-voted dn.
+            dn_sorted = sorted(dn_counts.items(), key=lambda kv: -kv[1])
+            for dn, _votes in dn_sorted:
+                sp = src_pos[sn]
+                dp = dst_pos[dn]
+                expected = (sp[0] + ox, sp[1] + oy, sp[2] + oz)
+                d = ((dp[0] - expected[0]) ** 2
+                     + (dp[1] - expected[1]) ** 2
+                     + (dp[2] - expected[2]) ** 2) ** 0.5
+                if dn not in used_dn or used_dn[dn][1] > d:
+                    # Either unused, or this src is closer than the
+                    # previous one -- claim it.
+                    if dn in used_dn:
+                        # Bump the previous claimant; it'll find its
+                        # own dn in a later loop or stay unmatched.
+                        prev_sn, prev_d = used_dn[dn]
+                        ambiguous += 1
+                        if prev_sn in sn_to_dn:
+                            del sn_to_dn[prev_sn]
+                    used_dn[dn] = (sn, d)
+                    sn_to_dn[sn] = dn
+                    break
+
+        # Apply snap: relative move.
+        snapped = 0
+        for sn, dn in sn_to_dn.items():
+            sp = src_pos[sn]
+            dp = dst_pos[dn]
+            mvx = sp[0] + ox - dp[0]
+            mvy = sp[1] + oy - dp[1]
+            mvz = sp[2] + oz - dp[2]
+            cubit.cmd(f"node {dn} move x {mvx:.10g} y {mvy:.10g} "
+                      f"z {mvz:.10g}")
+            snapped += 1
+        print(f"Snap-to-offset (topology-preserving): {snapped}/"
+              f"{len(all_src_nodes)} Kelvin curved-cap nodes set "
+              f"(ambiguous tri-vote conflicts: {ambiguous}).")
+
     # ---- 7. Mesh the Kelvin volume ----
     cubit.cmd(f"volume {kelvin_vol} scheme tetmesh")
     if mesh_size is not None:
