@@ -49,6 +49,7 @@ CALC = os.path.join(ROOT, "src", "radia", "panels", "calc_accel_magnet.py")
 GOLDEN = os.path.join(HERE, "golden", "em_sample_mu1000.json")
 GOLDEN_QUARTER_XZ = os.path.join(HERE, "golden", "em_quarter_xz_mu1000.json")
 GOLDEN_EIGHTH = os.path.join(HERE, "golden", "em_eighth_mu1000.json")
+GOLDEN_FULL = os.path.join(HERE, "golden", "em_full_mu1000.json")
 
 
 def _load_golden(path: str = GOLDEN) -> dict:
@@ -177,6 +178,40 @@ def test_em_quarter_xz_coil_py_NI_2000():
     vol, coil_py = _require_sample(g)
 
     result = _run(coil_py, vol, g["physics"])
+    exp = g["observations"]["I_2000A_coil_py"]
+    tol = g["tolerance"]
+
+    _check_common(result, exp, tol)
+    _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
+                  tol["B_origin_pct"], "B_origin_mag")
+    _assert_close(result["W_mag"], exp["W_mag_J"],
+                  tol["W_mag_pct"], "W_mag")
+    _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
+    assert result["n_wire_segments"] == exp["n_wire_segments"], (
+        f"n_wire_segments drift: {result['n_wire_segments']} vs "
+        f"{exp['n_wire_segments']}")
+
+
+@pytest.mark.slow
+def test_em_full_coil_py_NI_2000():
+    """1/1 FULL model: full yoke (no reduction in any axis), full air
+    sphere with z=0 mesh seam, full Kelvin sphere with z=0 webcut for
+    1:1 copy-mesh.  Reference baseline -- the same physics as the
+    reductions, at higher DOF cost.
+
+    Regression guard for the no-reduction path:
+
+        - auto_add_kelvin centroid-straddle heuristic correctly
+          identifies symmetry=['z'] (not ['x', 'z']) on a z-only
+          webcut full sphere
+        - add_kelvin_cubit symmetry=['z'] webcut-seam path still works
+        - calc_accel_magnet has no Dirichlet beyond GND + kelvin_int/
+          kelvin_ext periodic identification
+    """
+    g = _load_golden(GOLDEN_FULL)
+    vol, coil_py = _require_sample(g)
+
+    result = _run(coil_py, vol, g["physics"], timeout_s=3600)
     exp = g["observations"]["I_2000A_coil_py"]
     tol = g["tolerance"]
 

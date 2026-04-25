@@ -1001,11 +1001,32 @@ def auto_add_kelvin_from_current_model(air_block="air",
             print("WARNING: Auto-Kelvin: no surfaces found on air volumes.")
             return None
 
-        # --- Step 4: R from outer-surface vertices ---
-        vids_outer = cubit.get_relatives("surface", best_sid, "vertex")
-        R = max(
-            _m.sqrt(sum(c * c for c in cubit.vertex(v).coordinates()))
-            for v in vids_outer)
+        # --- Step 4: R from outer-surface vertices, with bbox fallback ---
+        # A FULL closed sphere (1/1 case, no symmetry webcut) has zero
+        # explicit vertices on its outer surface in Cubit's CAD topology
+        # -- the surface wraps around without seams.  Fall back to the
+        # surface bounding box in that case.
+        vids_outer = list(cubit.get_relatives("surface", best_sid, "vertex"))
+        if vids_outer:
+            R = max(
+                _m.sqrt(sum(c * c for c in cubit.vertex(v).coordinates()))
+                for v in vids_outer)
+        else:
+            bb = cubit.surface(best_sid).bounding_box()
+            # bounding_box returns (xmin, ymin, zmin, xmax, ymax, zmax).
+            # Distance from origin to the farthest box corner.
+            R = max(
+                _m.sqrt(bb[0]**2 + bb[1]**2 + bb[2]**2),
+                _m.sqrt(bb[3]**2 + bb[4]**2 + bb[5]**2),
+                _m.sqrt(bb[0]**2 + bb[1]**2 + bb[5]**2),
+                _m.sqrt(bb[3]**2 + bb[4]**2 + bb[2]**2),
+                _m.sqrt(bb[0]**2 + bb[4]**2 + bb[2]**2),
+                _m.sqrt(bb[3]**2 + bb[1]**2 + bb[5]**2),
+                _m.sqrt(bb[0]**2 + bb[4]**2 + bb[5]**2),
+                _m.sqrt(bb[3]**2 + bb[1]**2 + bb[2]**2),
+            )
+            print("Auto-Kelvin: closed outer surface (no vertices); "
+                  "R=%.4f from bounding box." % R)
 
         # --- Step 5: short-circuit for explicit reduction= ---
         if reduction is not None:
@@ -1026,18 +1047,24 @@ def auto_add_kelvin_from_current_model(air_block="air",
         #   (a) half-domain: all vertices on one side of the plane, AND
         #       at least one vertex sits on the plane (min == 0).
         #   (b) webcut-kept-both: the air is split into >=2 volumes along
-        #       the plane but both halves are retained (full sphere).
-        #       Detected by: multi-volume air AND vertex range straddles
-        #       0 symmetrically AND a vertex sits on the plane.
-        # In case (b), passing the axis as "symmetry" to add_kelvin_cubit
-        # is what triggers the matching webcut on the Kelvin side, so
-        # the copy-mesh step can pair up the equator curves.
+        #       this specific axis plane (centroids straddle 0).
+        # Case (b) used to be detected via "multi-vol AND vertex range
+        # straddles 0", but that triggered SPURIOUSLY for any axis on a
+        # multi-vol sphere -- e.g. a 1/1 model with only a z-webcut would
+        # see x detected too, because the air's vertex range spans x in
+        # [-R, +R].  Fix (2026-04-25): require centroids of distinct
+        # volumes to straddle 0 on this axis -- this is true ONLY for
+        # the actually-webcut axis.
         all_verts = set()
         for vid in air_vols:
             for v in cubit.get_relatives("volume", vid, "vertex"):
                 all_verts.add(v)
+        # Volume centroids: used to discriminate which axis was webcut.
+        try:
+            centroids = [cubit.volume(vid).centroid() for vid in air_vols]
+        except Exception:
+            centroids = []
         symmetry = []
-        multi_vol = len(air_vols) > 1
         for axis, name in enumerate(("x", "y", "z")):
             coords = [cubit.vertex(v).coordinates()[axis]
                       for v in all_verts]
@@ -1045,11 +1072,11 @@ def auto_add_kelvin_from_current_model(air_block="air",
             on_plane = any(abs(c) < 1e-6 for c in coords)
             # Case (a): half-domain
             half_domain = cmin >= -1e-6 and on_plane
-            # Case (b): full-domain with webcut equator kept
-            scale = max(abs(cmin), abs(cmax), 1e-12)
-            webcut_full = (multi_vol and on_plane
-                           and abs(cmin + cmax) < 1e-6 * scale
-                           and cmin < -1e-6)
+            # Case (b): centroids straddle this axis plane.
+            cent_coords = [c[axis] for c in centroids]
+            has_pos = any(cc > 1e-6 for cc in cent_coords)
+            has_neg = any(cc < -1e-6 for cc in cent_coords)
+            webcut_full = on_plane and has_pos and has_neg
             if half_domain or webcut_full:
                 symmetry.append(name)
 
