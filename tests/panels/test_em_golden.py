@@ -50,6 +50,7 @@ GOLDEN = os.path.join(HERE, "golden", "em_sample_mu1000.json")
 GOLDEN_QUARTER_XZ = os.path.join(HERE, "golden", "em_quarter_xz_mu1000.json")
 GOLDEN_EIGHTH = os.path.join(HERE, "golden", "em_eighth_mu1000.json")
 GOLDEN_FULL = os.path.join(HERE, "golden", "em_full_mu1000.json")
+GOLDEN_ELF = os.path.join(HERE, "golden", "em_elf_quarter_xz_mu1000.json")
 
 
 def _load_golden(path: str = GOLDEN) -> dict:
@@ -190,6 +191,49 @@ def test_em_quarter_xz_coil_py_NI_2000():
     assert result["n_wire_segments"] == exp["n_wire_segments"], (
         f"n_wire_segments drift: {result['n_wire_segments']} vs "
         f"{exp['n_wire_segments']}")
+
+
+@pytest.mark.slow
+def test_em_elf_quarter_xz_NI_2000():
+    """ELF CEFC-2020 PHYSICS reproduction: yoke geometry from the
+    ELF .meg + ELF racetrack coil + sym_bn=0_x + sym_ht=0_z BCs.
+
+    Locks `Bz = -240.02 mT` at origin -- which matches the ELF
+    reference -228.1 mT to within 5.2% (this is the genuine physics
+    benchmark, NOT just a regression guard).
+
+    Uses uniteed-yoke + 5mm tetmesh (loses the exact 13-hex topology
+    for face-conformality at the air-yoke interface).  The ELF
+    13-hex topology is preserved in the .jou + builder for
+    reference; users who need the exact 13-hex mesh can disable the
+    `unite` step.  Runtime ~6.5 min on LAB.
+
+    Skipped if the ELF .meg is not present (CI / mdx environments).
+    """
+    g = _load_golden(GOLDEN_ELF)
+    vol, coil_py = _require_sample(g)
+
+    result = _run(coil_py, vol, g["physics"], timeout_s=900)
+    exp = g["observations"]["I_2000A_coil_elf"]
+    tol = g["tolerance"]
+
+    _check_common(result, exp, tol)
+    _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
+                  tol["B_origin_pct"], "B_origin_mag")
+    _assert_close(result["W_mag"], exp["W_mag_J"],
+                  tol["W_mag_pct"], "W_mag")
+    _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
+    assert result["n_wire_segments"] == exp["n_wire_segments"], (
+        f"n_wire_segments drift: {result['n_wire_segments']} vs "
+        f"{exp['n_wire_segments']}")
+
+    # Cross-check vs the ELF reference (NOT the regression value).
+    elf_Bz = g["elf_reference"]["Bz_T"]
+    fem_Bz = result["B_origin"][2]
+    elf_dev_pct = abs(fem_Bz - elf_Bz) / abs(elf_Bz) * 100
+    assert elf_dev_pct < 8.0, (
+        f"FEM vs ELF reference drift: {fem_Bz*1000:.2f} mT vs "
+        f"{elf_Bz*1000:.2f} mT ({elf_dev_pct:.2f}% > 8% tolerance)")
 
 
 @pytest.mark.slow
