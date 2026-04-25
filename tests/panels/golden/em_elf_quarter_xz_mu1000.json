@@ -1,0 +1,47 @@
+{
+  "description": "Golden reference for calc_accel_magnet.py on the ELF CEFC-2020 C-yoke quarter-xz reproduction (em_elf_quarter_xz.jou + em_elf_coil.py).",
+  "rationale": "PHYSICS-ACCURACY benchmark vs the published ELF reference (Bz = -228.1 mT at origin, NI=2000, mu_r=1000, IMA='+x-z').  FEM Omega + 5mm tetmesh on the unioned ELF yoke geometry + ELF racetrack coil (Y_CENTER=131.25 mm) reproduces Bz to within 5.2% (-240.0 mT FEM vs -228.1 mT ELF).  Locks the whole physics chain: ELF .meg-derived yoke, ELF coil, sym_bn=0_x + sym_ht=0_z BCs, Auto-Kelvin with kelvin_reduction = {x: bn=0, z: ht=0}.",
+  "sample": {
+    "vol": "C:/temp/em_elf_quarter.vol",
+    "coil_script": "src/radia/panels/samples/em_elf_coil.py",
+    "generator_jou": "src/radia/panels/samples/em/em_elf_quarter_xz.jou",
+    "generator_cmd_note": "Regenerate via Cubit batch with kelvin_reduction = {'x': 'bn=0', 'z': 'ht=0'} -> radia_export netgen order=2 overwrite.  Requires the ELF .meg at S:/ELF_MAGIC/2020_03_07_CEFC_2020/model_C-Type/mu=1000/ELF_MMB8T_EIEM2_1x1x1/quater/ELF_magic.meg or override via ELF_MEG_PATH env var."
+  },
+  "geometry_note": "Yoke: 13 ELF hex CAD volumes UNITED into 1 -> tetmesh at 5 mm.  This trades exact 13-hex topology for face-conformality (per-volume hex meshing fails: imprint+merge is 'overconstrained' for slanted hexes, and per-volume equivalence misses coincident nodes due to heal-perturbation).  Air: full sphere intersected with octant brick (x>=0, z>=0).  Kelvin: full sphere offset along +y, webcut at x=0/z=0 to give 1/4 Kelvin; Kelvin pair 1585/1585 at machine precision.",
+  "physics": {
+    "formulation": "omega",
+    "material": "linear",
+    "mu_r": 1000.0,
+    "fes_order": 1,
+    "current_A_coil_py": 2000.0,
+    "max_iter": 1,
+    "tol": 1e-2,
+    "solver": "pardiso"
+  },
+  "elf_reference": {
+    "Bz_T": -0.2281,
+    "source": "examples/c_type_electromagnet/mu=1000/quarter/verify_elf_radia.py (ELF binary .mag output)",
+    "fem_vs_elf_pct": 5.2
+  },
+  "observations": {
+    "note": "FEM result vs ELF: -240.02 mT (FEM) vs -228.1 mT (ELF) = 5.2% deviation.  Acceptable for linear-mu_r=1000 single-iteration FEM with 5mm yoke tetmesh.  Tightening tolerance, refining mesh, or running more iterations would converge closer to ELF.",
+    "I_2000A_coil_elf": {
+      "B_origin_T": [-5.398e-18, 4.646e-12, -2.400e-01],
+      "B_origin_mag_T": 2.400e-01,
+      "W_mag_J": 2.440e-01,
+      "L_H": 1.220e-07,
+      "iterations": 1,
+      "converged": true,
+      "ne": 137020,
+      "ndof": 26764,
+      "n_wire_segments": 84
+    }
+  },
+  "tolerance": {
+    "B_origin_pct": 3.0,
+    "L_pct": 3.0,
+    "W_mag_pct": 3.0,
+    "ndof_exact": true,
+    "ne_exact": true
+  }
+}
