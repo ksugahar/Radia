@@ -20,10 +20,13 @@
 
 namespace netgen { class Mesh; }
 
-// Callback types matching CallbackGeometry
+// Callback types matching CallbackGeometry (must match callbackgeom.hpp)
+// has_hint distinguishes "caller supplied a UV hint" from "no hint, use
+// global projection" — added 2026 to fix UV=(0,0) ambiguity at parameter
+// origin. See callbackgeom.hpp comment near line 30 for rationale.
 using ProjectFunc = std::function<std::tuple<double,double,double,double,double>
                                   (int surfnr, double x, double y, double z,
-                                   double u_hint, double v_hint)>;
+                                   double u_hint, double v_hint, bool has_hint)>;
 using NormalFunc = std::function<std::tuple<double,double,double>
                                 (int surfnr, double x, double y, double z)>;
 using EdgeProjectFunc = std::function<std::tuple<double,double,double>
