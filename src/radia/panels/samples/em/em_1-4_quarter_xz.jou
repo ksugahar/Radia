@@ -14,7 +14,7 @@
 # not a physics-accuracy comparison to any published reference.  The coil
 # (em_sample_coil.py) is a full racetrack -- the symmetry BCs impose the
 # field symmetry but do not "undo" the coil's actual spatial distribution.
-# End users chasing the published ELF MSC -976 mT reference need the full
+# End users chasing the published ELF MSC -228 mT reference need the full
 # ELF pipeline (Radia MSC via calc_accel_msc.py + matching coil symmetry).
 #
 # Units: meters
