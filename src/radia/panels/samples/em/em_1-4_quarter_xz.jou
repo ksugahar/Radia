@@ -1,0 +1,98 @@
+# C-type dipole yoke -- 1/4 xz model (x>=0 and z>=0), HEX yoke + tet air
+#
+# Variant of em_1-2_half_z.jou.  Both x=0 and z=0 become symmetry planes:
+#   x=0:  B . n = 0 (flux parallel)       -> sym_bn=0_x (Radia '+x')
+#   z=0:  H x n = 0 (flux perpendicular)  -> sym_ht=0_z (Radia '-z')
+#
+# Matches the ELF CEFC 2020 reference convention IMA='+x-z' for MSC.
+# For FEM Omega the solver picks:
+#   sym_bn=0_x -> Natural (do nothing)
+#   sym_ht=0_z -> Dirichlet (Omega = 0)
+# For FEM A the solver picks the opposite assignment.
+#
+# This variant is a REGRESSION GUARD for the reduction pipeline plumbing,
+# not a physics-accuracy comparison to any published reference.  The coil
+# (em_sample_coil.py) is a full racetrack -- the symmetry BCs impose the
+# field symmetry but do not "undo" the coil's actual spatial distribution.
+# End users chasing the published ELF MSC -976 mT reference need the full
+# ELF pipeline (Radia MSC via calc_accel_msc.py + matching coil symmetry).
+#
+# Units: meters
+#
+# Coordinate system:
+#   y = gap direction (pole tip at y~0, main leg at y~0.15)
+#   z = beam direction (symmetry at z=0)
+#   x = depth/thickness (symmetry at x=0)
+#
+# 3 yoke volumes (x>=0, z>=0 quadrant of the original C-yoke):
+#   Vol 1: Pole piece  (x: [0, 12.5], y: [0, 40],   z: [0, 50]  mm)
+#   Vol 2: Yoke back   (x: [0, 12.5], y: [40, 120], z: [0, 25]  mm)
+#   Vol 3: Main leg    (x: [0, 12.5], y: [120, 182.5], z: [0, 52.5] mm)
+#
+# Use "Symmetry reduction" x=bn=0, z=ht=0 in the Export Mesh dialog.
+reset
+
+# === Pole piece (near gap) ===
+# Reduced: x [0, 12.5], y [0, 40], z [0, 50] mm
+brick x 0.0125 y 0.040 z 0.050
+move volume 1 x 0.00625 y 0.020 z 0.025
+
+# === Yoke back (horizontal return) ===
+# Reduced: x [0, 12.5], y [40, 120], z [0, 25] mm
+brick x 0.0125 y 0.080 z 0.025
+move volume 2 x 0.00625 y 0.080 z 0.0125
+
+# === Main leg (where coil sits) ===
+# Reduced: x [0, 12.5], y [120, 182.5], z [0, 52.5] mm
+brick x 0.0125 y 0.0625 z 0.0525
+move volume 3 x 0.00625 y 0.15125 z 0.02625
+
+# === Imprint/merge for shared surfaces (continuous mesh) ===
+imprint volume all
+merge volume all
+
+# === Hex mesh ===
+volume all scheme map
+volume 1 size 0.005
+volume 2 size 0.008
+volume 3 size 0.006
+mesh volume all
+
+# === Air domain: 1/4 sphere (x>=0, z>=0 quadrant) ===
+# Use boolean intersection with an octant brick (cleaner topology than
+# webcut+delete for small quadrants; same technique that the reduction
+# end-to-end test uses).
+create sphere radius 0.40
+create brick x 0.80 y 0.80 z 0.80
+# Octant brick covers x: [0, 0.80], y: [-0.40, 0.40], z: [0, 0.80]
+move volume 5 x 0.40 y 0 z 0.40
+
+# Sphere - brick intersect = quarter-sphere (x>=0, z>=0)
+intersect volume 4 5 keep
+delete volume 4 5
+
+# After intersect+delete, exactly one air volume remains -- subtract yoke
+# from it.  The air volume ID is the next highest; identify by material.
+# (Using parse_cubit_list here would be more robust, but the .jou stays
+# ID-linear thanks to the deterministic Cubit allocation sequence.)
+subtract volume 1 2 3 from volume 6 keep
+imprint volume all
+merge volume all
+volume 6 scheme tetmesh
+volume 6 size 0.02
+mesh volume 6
+
+# === Blocks ===
+set duplicate block elements on
+block 1 add volume 1 2 3
+block 1 name "yoke"
+block 2 add volume 6
+block 2 name "air"
+
+# Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
+# boundary (auto)" checkbox with "Symmetry reduction" x=bn0, z=ht0.
+# The launcher writes a kelvin_reduction object into launcher_config.json
+# (keys 'x' and 'z' with values 'bn0' and 'ht0' respectively), then plays
+# auto_kelvin_entry.py which delegates to add_kelvin_cubit just before
+# radia_export netgen.  (APREPRO chokes on embedded braces + colons, so
+# this comment avoids showing the literal JSON.)
