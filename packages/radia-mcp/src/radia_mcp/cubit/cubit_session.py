@@ -584,6 +584,10 @@ class CubitSession:
                 getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
         self._proc = subprocess.Popen(
             [str(gui_exe), "-nojournal", str(bootstrap_path)],
+            # stdin=DEVNULL: prevent Cubit from inheriting the MCP server's
+            # stdio pipe (Claude Code JSON-RPC). Without it Cubit hangs at
+            # startup (resp=False, declining threads). Confirmed 2026-04-25.
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=env,
