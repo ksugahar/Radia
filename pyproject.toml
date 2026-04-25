@@ -96,6 +96,7 @@ radia = [
     "*.pyd", "*.ccm", "*.ccl", "*.png", "*.ico",
     "panels/samples/*.jou",
     "panels/samples/*.sol",
+    "panels/samples/*.vol",
     "panels/samples/*.json",
     "panels/samples/*.py",
     "panels/*.json",

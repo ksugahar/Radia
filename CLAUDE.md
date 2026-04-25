@@ -180,6 +180,150 @@ Related:
   to Layer 3 (PySide6 window), Stage 2 corresponds to Layer 4 (headless
   calc_*.py).
 
+### Verify-First Policy: FES inspection before physics solve (2026-04-25)
+
+**POLICY**: When debugging FEM setup (Periodic BC, Dirichlet, material
+labels, mesh.Curve, Kelvin identification, etc.), check the **finite
+element space** first -- BEFORE running any physics solve.  FES checks
+are sub-second; a botched Kelvin/Periodic setup wasted on a 5-minute
+solve is unacceptable.
+
+The minimum verify trio:
+
+1. **Materials / boundaries spelled as expected** -- one-line check:
+
+   ```python
+   print(mesh.GetMaterials(), mesh.GetBoundaries())
+   ```
+
+2. **Periodic / Dirichlet actually constrains DOFs** -- compare
+   `H1(...)` vs the constrained variant (`Periodic`, `dirichlet=...`):
+
+   ```python
+   fb = H1(mesh, order=p, dirichlet="GND")
+   fp = Periodic(fb)
+   slaved = sum(fb.FreeDofs()) - sum(fp.FreeDofs())   # must be > 0
+   ```
+
+3. **Functional boundary test for Periodic** -- set 1.0 on slave bnd,
+   integrate on master bnd, ratio must be 1.0:
+
+   ```python
+   gfu = GridFunction(fp); gfu.vec[:] = 0
+   gfu.Set(1.0, definedon=mesh.Boundaries("kelvin_int"))
+   r = Integrate(gfu*gfu, mesh, definedon=mesh.Boundaries("kelvin_ext")) \
+       / Integrate(gfu*gfu, mesh, definedon=mesh.Boundaries("kelvin_int"))
+   ```
+
+If any of (1)-(3) fails, the issue is in geometry / Identify / labels --
+fix that BEFORE solving.  Do NOT iterate solver runs to discover an
+FES-level bug; reading the wrong number from a wrong solve is the
+fastest way to mis-diagnose the next layer.
+
+**Real example (2026-04-25)**: commit 3297b5c9 reverted the EM panel
+default to `fes_order=1` based on a 5-minute physics-solve discrepancy
+("p=2 gives -138 mT vs ELF -228 mT"), claiming the C++ Kelvin pair
+identification only handled linear vertices.  An FES inspection done
+directly on `em_elf_quarter.vol` showed `slaved=6085` at p=2 with
+`Set(1)|kelvin_int -> kelvin_ext ratio=1.0`: the Kelvin BC was already
+correct at p=2.  The actual cause of the discrepancy is a separate
+Periodic-Omega-reduced single-space p-stability issue.  The expensive
+solve cost ~10 minutes; the FES check costs <1 second.
+
+### AI-Driven Cubit: Probe, Don't Guess (2026-04-25)
+
+**POLICY**: When AI is authoring Cubit Python that identifies entities
+(volumes / surfaces / curves / vertices) by geometric properties, it
+MUST first **probe Cubit** (`cubit.parse_cubit_list("...", "all")` +
+per-entity centroid / bbox / area) and **print the actual values**
+before writing the classification logic.  Do not derive a centroid
+filter "by hand" from the .jou source -- Cubit's webcut, subtract,
+imprint, and merge operations create surprising intermediate volumes,
+renumber entities, and (with `subtract ... keep`) leave artifacts.
+
+**Why**: AI does not have the geometry in its head.  An educated-guess
+centroid bound (e.g. "the kelvin outer cap has cx > kelvin_offset, the
+cut face has cx == kelvin_offset") is wrong as often as it is right --
+e.g. for an offset 1/4-sphere octant the outer cap's x-centroid is
+ALSO at the sphere center because of y-z mirror symmetry of the 1/4
+patch.  Same lesson at copy-mesh anchor selection: 1/8 spherical caps
+have 3 equal-length boundary arcs, so `max(curves, key=length)` ties
+non-deterministically and Cubit's listing order can pick different
+arcs on source vs target -- see
+`memory/feedback_kelvin_1_8_blocker.md` and the deterministic
+`min(curves, key=(centroid_z, y, x))` fix in
+`_add_kelvin_cubit_reduction`.  Running with assertion failures and patching by inspection is
+slow and noisy; running ONE probe pass first is fast and final.
+
+**Pattern**:
+
+```python
+# Step 1: probe -- print everything we might filter on.
+for vid in cubit.parse_cubit_list("volume", "all"):
+    v = cubit.volume(vid)
+    c = v.centroid()
+    bb = v.bounding_box()
+    print(f"vol {vid}: c=({c[0]:.3f},{c[1]:.3f},{c[2]:.3f}), "
+          f"extent=({bb[3]:.3f},{bb[4]:.3f},{bb[5]:.3f}), "
+          f"vol={v.volume():.3e}")
+for sid in cubit.parse_cubit_list("surface", "all"):
+    s = cubit.surface(sid)
+    cx, cy, cz = s.center_point()         # NOT centroid() -- Surface API
+    bb = s.bounding_box()
+    print(f"surf {sid}: c=({cx:.3f},{cy:.3f},{cz:.3f}), "
+          f"area={s.area():.3e}, extent=({bb[3]:.3f},{bb[4]:.3f},{bb[5]:.3f})")
+
+# Step 2: classify based on observed numbers.
+mag_vol = next(v for v in volumes if cubit.volume(v).volume() < 1e-4)
+# ...
+```
+
+**Specifics**:
+- `cubit.volume(vid).centroid()` exists (returns 3-tuple).
+- `cubit.surface(sid).center_point()` is the equivalent on Surface
+  (Cubit does NOT expose `.centroid()` on Surface).
+- `cubit.volume(vid).bounding_box()[3:6]` and `cubit.surface(sid).bounding_box()[3:6]`
+  are the (extent_x, extent_y, extent_z) tuple -- a flat cut face
+  has zero extent in its cut direction.
+- `cubit.volume(vid).volume()` returns the measured volume; for a
+  1/8 octant of radius R it is `(4*pi*R^3/3) / 8`.
+- After `subtract A from B keep`, expect the SUBTRAHEND (`A`, the
+  thing being removed) to remain at its original ID, the MINUEND
+  (`B`) to be modified to (B - A), AND a duplicate of B to also
+  appear -- delete the duplicate explicitly via centroid + volume
+  inspection (do not assume it does not exist).
+- After `webcut volume all with plane <plane> offset 0`, all volumes
+  intersecting the plane are split; volumes entirely on one side are
+  NOT split.  Do NOT assume "N volumes -> 2N volumes".
+
+This POLICY tightens "Journal File Portability Policy" (no hardcoded
+IDs, identify by geometric properties) for AI-authored Cubit scripts:
+the geometric predicate must be derived from a printed probe, not
+from an a-priori derivation.  Apply when:
+- A Cubit Python script fails an assertion on entity identification.
+- The script uses webcut, subtract, intersect, sweep, or imprint+merge.
+- The next-step user is the AI itself (i.e. you are about to debug
+  your own Cubit script).
+
+### Promotion-After-Verify Policy (2026-04-25)
+
+**POLICY**: When a debug session ends with a verified result, propagate
+the knowledge to ALL three layers BEFORE moving on:
+
+1. **`memory/<topic>.md` + `MEMORY.md` index entry** -- the lesson is
+   useless if the next conversation re-discovers it from scratch.
+2. **`examples/.../README.md`** mark the validated sample as
+   **VERIFIED** with the specific check (e.g. "VERIFIED p=2: slaved=8914
+   DOFs, ratio=1.0") so future contributors know the sample is golden,
+   not "should work".
+3. **`CLAUDE.md`** if the lesson is a method (e.g. "always check FES
+   first") that applies to future debugging.
+
+A debug session that produced a fix but did not propagate is
+**incomplete**.  The repository must grow knowledge along with code, or
+the next contributor (including future-you) will repeat the same
+multi-hour investigation.
+
 ### MCP Knowledge Placement Policy (2026-04-21, updated 2026-04-24)
 
 **POLICY**: All MCP knowledge ships from the single Radia monorepo.
