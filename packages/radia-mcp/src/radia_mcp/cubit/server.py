@@ -1198,8 +1198,13 @@ def open_in_cubit(path: str = "",
 
 	try:
 		if detach:
+			# stdin=DEVNULL: prevent Cubit from inheriting MCP server's
+			# stdio pipe (used for JSON-RPC with Claude Code). Without
+			# this, Cubit's startup hangs (Responding=False, threads
+			# decline) — observed 2026-04-25 LAB.
 			proc = _sp.Popen(
 				cmd,
+				stdin=_sp.DEVNULL,
 				stdout=_sp.DEVNULL,
 				stderr=_sp.DEVNULL,
 				creationflags=getattr(_sp, "DETACHED_PROCESS", 0)
