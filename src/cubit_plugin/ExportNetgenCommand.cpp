@@ -509,9 +509,41 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
 
         double tx = mox - mix, ty = moy - miy, tz = moz - miz;
 
+        // Pairing tolerance: was hard-coded at 1e-2 m which is too
+        // tight for accelerator-scale models (R~0.4 m, mesh edge
+        // ~20 mm).  Scale to 5% of the largest mesh edge length so
+        // copy-mesh imperfections at corner vertices still match.
+        // Cap at 5% of |offset| to avoid pairing wrong vertices for
+        // models with very fine meshes near the curved cap boundary.
+        double offset_len = sqrt(tx*tx + ty*ty + tz*tz);
+        // Estimate inner-side characteristic mesh edge length from
+        // the bounding-box span of the inner vertex set.
+        double ix_lo = 1e30, ix_hi = -1e30, iy_lo = 1e30, iy_hi = -1e30,
+               iz_lo = 1e30, iz_hi = -1e30;
+        for (auto &ip : inner_pts) {
+          double x = ip.second(0), y = ip.second(1), z = ip.second(2);
+          if (x < ix_lo) ix_lo = x;  if (x > ix_hi) ix_hi = x;
+          if (y < iy_lo) iy_lo = y;  if (y > iy_hi) iy_hi = y;
+          if (z < iz_lo) iz_lo = z;  if (z > iz_hi) iz_hi = z;
+        }
+        double inner_diag = sqrt((ix_hi-ix_lo)*(ix_hi-ix_lo) +
+                                 (iy_hi-iy_lo)*(iy_hi-iy_lo) +
+                                 (iz_hi-iz_lo)*(iz_hi-iz_lo));
+        // Heuristic edge length: diagonal / sqrt(N_pts) for a 2D
+        // surface mesh of N points.  (std::min/max wrapped in parens
+        // to dodge the Windows.h min/max macros.)
+        size_t n_pts = inner_pts.size();
+        if (n_pts < 4) n_pts = 4;
+        double mesh_edge = inner_diag / sqrt((double)n_pts);
+        double cap_offset = 0.05 * offset_len;
+        double cap_edge   = 0.5  * mesh_edge;
+        double tol_upper  = (cap_offset < cap_edge) ? cap_offset : cap_edge;
+        double match_tol  = (1e-3 > tol_upper) ? 1e-3 : tol_upper;
+
         PRINT_INFO("Kelvin periodic: %zu inner, %zu outer verts, "
-                   "offset=(%.4f,%.4f,%.4f)\n",
-                   inner_pts.size(), outer_pts.size(), tx, ty, tz);
+                   "offset=(%.4f,%.4f,%.4f), match_tol=%.3e\n",
+                   inner_pts.size(), outer_pts.size(), tx, ty, tz,
+                   match_tol);
 
         // Match: for each inner vertex, find nearest unused outer at (inner + offset)
         std::vector<std::pair<int, netgen::Point<3>>> outer_vec(
@@ -538,7 +570,7 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           }
 
           double dist = sqrt(best_d2);
-          if (dist < 1e-2 && best_ov > 0) {
+          if (dist < match_tol && best_ov > 0) {
             vertex_pair[ip.first] = best_ov;
             used_outer.insert(best_ov);
             if (dist > max_dist) max_dist = dist;
@@ -547,13 +579,32 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
           }
         }
 
-        // Write identification pairs
-        auto &ident = ng_mesh->GetIdentifications();
-        for (auto &p : vertex_pair) {
-          ident.Add(netgen::PointIndex(p.first),
-                    netgen::PointIndex(p.second),
-                    "kelvin",
-                    netgen::Identifications::PERIODIC);
+        // All-or-nothing policy: only write identification pairs if
+        // every inner vertex matched.  A partial identification leaves
+        // 4-out-of-N vertices "almost paired" -- NGSolve's Mesh()
+        // wrapper rejects such .vol files with NgException("Ask for
+        // unused hash-value") because it expects either a complete
+        // 1:1 pairing or none at all.  When there are unmatched
+        // vertices (typically corner / edge vertices where copy-mesh
+        // can leave sub-pixel mismatches at large geometry scale),
+        // we skip the C++ side entirely and rely on NGSolve's
+        // `add_periodic_kelvin` (in calc_common.py) to set up the
+        // identification at solve time using bcname-driven matching.
+        if (n_bad == 0) {
+          auto &ident = ng_mesh->GetIdentifications();
+          for (auto &p : vertex_pair) {
+            ident.Add(netgen::PointIndex(p.first),
+                      netgen::PointIndex(p.second),
+                      "kelvin",
+                      netgen::Identifications::PERIODIC);
+          }
+        } else {
+          PRINT_WARNING("Kelvin periodic: %d vertex pair(s) unmatched "
+                        "(max_dist=%.2e, tol=%.2e); skipping C++ "
+                        "identification entirely.  NGSolve's "
+                        "add_periodic_kelvin will build identification "
+                        "at solve time.\n",
+                        n_bad, max_dist, match_tol);
         }
 
         PRINT_INFO("Kelvin periodic: %d/%zu pairs (max_dist=%.2e, %d unmatched)\n",
@@ -616,20 +667,25 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
       jf << "\n  },\n";
 
-      // Boundaries (per-surface area from CAD, not mesh)
+      // Boundaries: sum CAD area per unique bcname.  Multiple face
+      // descriptors can share a bcname (e.g. sym_ht=0_y for both the
+      // air's and the Kelvin's y=0 cut faces in 1/8 reduction); the
+      // JSON should report the TOTAL area, not just the last entry's,
+      // otherwise key collision in JSON drops the others.
       jf << "  \"boundaries\": {";
-      first = true;
       int nfd_json = ng_mesh->GetNFD();
+      std::map<std::string, double> bname_to_area;
       for (int fi = 1; fi <= nfd_json; fi++) {
-        // Use original Cubit surface ID for CAD area query
         int cubit_surf_id = orig_surf_ids[fi - 1];
-        // Use the BCName written to .vol (matches mesh.GetBoundaries())
         std::string bname = ng_mesh->GetBCName(fi - 1);
-        // Get CAD area from Cubit surface
         RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_surf_id);
         double cad_area = rf ? rf->area() : 0.0;
+        bname_to_area[bname] += cad_area;
+      }
+      first = true;
+      for (auto& kv : bname_to_area) {
         if (!first) jf << ",";
-        jf << "\n    \"" << bname << "\": " << std::scientific << cad_area;
+        jf << "\n    \"" << kv.first << "\": " << std::scientific << kv.second;
         first = false;
       }
       jf << "\n  },\n";

@@ -97,14 +97,49 @@ def test_reduction_and_symmetry_are_mutually_exclusive():
                          reduction={"x": "bn=0"})
 
 
-def test_reduction_eighth_raises_not_implemented():
-    """1/8 reduction is geometrically impossible with the current Kelvin
-    offset-then-cut strategy; must fail loud."""
+def test_reduction_eighth_all_bn_rejected():
+    """1/8 reduction with all 3 planes set to bn=0 means B parallel to
+    three mutually perpendicular planes, which forces B = 0 everywhere.
+    Must fail loud with a physics-aware message."""
     from add_kelvin import add_kelvin_cubit
-    with pytest.raises(NotImplementedError, match="1/8"):
+    with pytest.raises(ValueError, match="physically impossible"):
         add_kelvin_cubit(
             R=0.1,
-            reduction={"x": "bn=0", "y": "ht=0", "z": "bn=0"})
+            reduction={"x": "bn=0", "y": "bn=0", "z": "bn=0"})
+
+
+def test_reduction_eighth_with_ht_axis_validates():
+    """1/8 with at least one ht=0 axis must pass argument validation
+    (no more NotImplementedError -- supported as of 2026-04-25).
+
+    Cubit is importable on the LAB machine so the helper proceeds
+    past validation into the actual Cubit work, which then fails
+    because no air block exists in the empty Cubit session.  We
+    accept any RuntimeError / NotImplementedError NOT containing
+    the obsolete 'reduction supports 1 or 2 axes' / '1/8 reduction
+    (x+y+z) is not yet supported' messages.
+    """
+    from add_kelvin import add_kelvin_cubit
+    # Catch broadly -- the goal is just to assert that the
+    # *validation* block doesn't raise.  If validation rejected this
+    # case, we'd get a ValueError saying "reduction supports 1 or 2"
+    # or NotImplementedError saying "1/8 ... not yet supported"; both
+    # would be caught here, so we additionally check the message.
+    try:
+        add_kelvin_cubit(
+            R=0.1,
+            reduction={"x": "ht=0", "y": "ht=0", "z": "bn=0"})
+    except (RuntimeError, ImportError, ModuleNotFoundError):
+        # Expected: cubit not in a valid state (no air block).
+        return
+    except (ValueError, NotImplementedError) as e:
+        msg = str(e).lower()
+        assert "1 or 2 axes" not in msg, \
+            f"validation still rejecting 1/8: {e}"
+        assert "not yet supported" not in msg, \
+            f"validation still has obsolete 'not yet supported': {e}"
+        # Any OTHER ValueError is also unexpected for this valid input.
+        raise
 
 
 def test_reduction_empty_rejected():
