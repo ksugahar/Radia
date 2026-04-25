@@ -112,20 +112,29 @@ source and target, which is the translation-equivalent curve.  After
 the fix, 1/8 vertex pairs match to machine precision (2.6e-16 m,
 143/143 paired).  1/4 case is unaffected (was already 5.6e-16 m).
 
-### Issue 2 (deferred): solver formulation singularity
+### Issue 2 (deferred): solver gives Hz_origin ~ 0 for 1/8
 
-With the mesh now perfect, the Omega-Reduced Omega solver still gives
-Hz_origin ~ 0 instead of analytical 0.029 for 1/8 reduction.  The
-root cause is geometric: 1/8 reduction with `offset_dir="x"` (the
-only viable direction when all 3 axes are reduction axes) creates a
-`kelvin_far` Dirichlet plane through the kelvin sphere centre.  The
-reluctivity `Mu = mu0 * (R/r')^2` is singular at r'=0, and that
-singular line lies on the Dirichlet boundary -- mesh elements near
-this line have ill-conditioned integration.
+With the mesh now perfect, the Omega-Reduced Omega solver still
+gives Hz_origin ~ -3.8e-4 (analytical 0.029, error -101%) for 1/8
+reduction.  Initial diagnosis was the singular reluctivity
+`Mu = mu0 * (R/r')^2` near r'=0 lying on the kelvin_far Dirichlet
+boundary, but **2026-04-26 sweeps disproved this**: capping `Mu` at
+`mu_0` everywhere (i.e. neutralising the Kelvin transformation
+entirely) STILL gives -101% on 1/8 -- yet 1/2 (+0.34%) and 1/4
+(-0.02%) work fine without the Kelvin reluctivity, because the
+Periodic identification + sym BCs alone do most of the open-
+boundary work.
 
-Fixes for Issue 2 require a regularised reluctivity, alternative
-Kelvin formulation, or higher-order singular integration scheme; see
-`memory/feedback_kelvin_1_8_blocker.md` for the full list.
+So the 1/8 failure is structural to the corner-GND geometry,
+not the (R/r')² singularity per se.  The user's observation that
+H1 only needs ONE Dirichlet point at r'=0 (since GND already plays
+that role) is theoretically correct and was applied to
+`calc_kelvin_benchmark.py` (kelvin_far dropped from the Dirichlet
+list); this frees ~250 DOFs but does not close the gap on its own.
+
+Open hypotheses for 1/8: corner-discretisation on coarse mesh,
+sym_ht=0_z combined with point GND, Periodic identification under
+offset_dir="x".  See `memory/feedback_kelvin_1_8_blocker.md`.
 
 ### Recommendation
 

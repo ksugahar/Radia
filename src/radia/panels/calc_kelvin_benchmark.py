@@ -121,11 +121,24 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
         _log(f"mesh.Curve({fes_order}) applied")
 
     # ---- Build Periodic FES with Dirichlet BCs ----
+    #
+    # Note (2026-04-26): `kelvin_far` is intentionally NOT included in
+    # the Dirichlet set when it is present on a 1/8 reduction mesh.
+    # For H1 + Kelvin transform, the "infinity" anchor only needs ONE
+    # Dirichlet point -- the `GND` vertex/nodeset placed at the Kelvin
+    # centre (= image of physical infinity).  Constraining the whole
+    # kelvin_far face overconstrains the system; it doesn't match the
+    # physical sym_bn=0 BC that the offset axis has in the un-mapped
+    # domain, and it removes ~250 DOFs that should be free.  This fix
+    # alone does NOT make the 1/8 sample produce the analytical
+    # answer (a separate corner-discretisation / sym_ht=0_z issue
+    # gives Hz ~ 0 there), but the change is theoretically correct
+    # for any future 1/8 path that gets the corner right and is
+    # transparent for 1/2 and 1/4 (they have no kelvin_far face).
     bnd = list(mesh.GetBoundaries())
     bbb = list(mesh.GetBBBoundaries()) if hasattr(mesh, "GetBBBoundaries") else []
     dir_parts = []
-    for label in ("GND", "sym_ht=0_x", "sym_ht=0_y", "sym_ht=0_z",
-                  "kelvin_far"):
+    for label in ("GND", "sym_ht=0_x", "sym_ht=0_y", "sym_ht=0_z"):
         if label in bnd or label in bbb:
             dir_parts.append(label)
     if "GND" not in dir_parts:
