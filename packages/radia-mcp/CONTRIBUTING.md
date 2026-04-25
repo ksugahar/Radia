@@ -75,6 +75,53 @@ the docstring on `generate_build123d_script`. Lab-relevant patterns
 particularly welcome: more Radia magnet topologies (Halbach 3D, ring
 quadrupole, …), motor / generator components, accelerator devices.
 
+## Common pitfalls
+
+### `subprocess.Popen` MUST set `stdin=subprocess.DEVNULL` for child GUI apps
+
+When an MCP tool spawns a long-running external GUI process
+(Cubit, Gmsh GUI, FreeCAD, etc.) with `subprocess.Popen`, set
+**all three** stdio streams explicitly. Specifically `stdin` —
+omitting it inherits the MCP server's stdin, which is the
+JSON-RPC pipe to Claude Code / the MCP host.
+
+Symptom of the bug: the spawned GUI starts but is `Responding=False`
+from the very first poll, threads decline (e.g. 23 → 15 → 12), and
+the process never reaches an interactive state. The same binary
+launched from PowerShell `Start-Process` works fine, masking the
+issue during local manual testing.
+
+```python
+# BAD — Cubit inherits MCP stdin (JSON-RPC pipe) and hangs.
+proc = subprocess.Popen(
+    [exe, "-nojournal", "-input", str(wrapper)],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+)
+
+# GOOD — stdin explicitly redirected.
+proc = subprocess.Popen(
+    [exe, "-nojournal", "-input", str(wrapper)],
+    stdin=subprocess.DEVNULL,    # <-- crucial
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+)
+```
+
+This is **not** fixed by `mcp` 1.27.0 (current as of 2026-04-25);
+the framework cannot guess which child processes a tool will spawn.
+Confirmed root cause of the long-standing "MCP-launched Cubit hangs
+intermittently" issue (fix landed in `cubit/server.py` `open_in_cubit`
+and `cubit/cubit_session.py` daemon launcher).
+
+The same caution applies whenever a tool runs a long-lived child
+that does **not** itself read from MCP stdin. For short-lived
+`subprocess.run` of CLI tools that finish in milliseconds, stdin
+inheritance usually does not matter, but explicit `stdin=DEVNULL`
+is still recommended for clarity.
+
 ## Workflow
 
 1. Open an issue first if the change is more than ~50 lines or
