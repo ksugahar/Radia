@@ -90,7 +90,10 @@ def evaluate_analytic(vol_path, expression, field_name="f",
     return {
         "vol_path": vol_path,
         "sol_path": sol_path,
-        "msh_path": msh_path,
+        # NOTE: key MUST be "msh_file" (not "msh_path") for the panel's
+        # OpenGmsh button to recognize this output.
+        # See radia_gui_base.py _on_finished gmsh_target search keys.
+        "msh_file": msh_path,
         "field_name": field_name,
         "expression": expression,
         "n_elements": mesh.ne,
