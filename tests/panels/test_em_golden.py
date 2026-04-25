@@ -47,10 +47,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 CALC = os.path.join(ROOT, "src", "radia", "panels", "calc_accel_magnet.py")
 GOLDEN = os.path.join(HERE, "golden", "em_sample_mu1000.json")
+GOLDEN_QUARTER_XZ = os.path.join(HERE, "golden", "em_quarter_xz_mu1000.json")
 
 
-def _load_golden() -> dict:
-    with open(GOLDEN, "r", encoding="utf-8") as f:
+def _load_golden(path: str = GOLDEN) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -150,6 +151,40 @@ def test_em_sample_coil_py_NI_2000():
     _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
     # Sanity on coil segment count (protects against CoilBuilder
     # resampling drift between runs).
+    assert result["n_wire_segments"] == exp["n_wire_segments"], (
+        f"n_wire_segments drift: {result['n_wire_segments']} vs "
+        f"{exp['n_wire_segments']}")
+
+
+@pytest.mark.slow
+def test_em_quarter_xz_coil_py_NI_2000():
+    """1/4 xz reduction model: yoke reduced to x>=0 and z>=0, sym_bn=0_x
+    + sym_ht=0_z sidesets from add_kelvin_cubit(reduction=...).
+    Regression guard for the whole reduction-mode plumbing (2026-04-25):
+
+        add_kelvin.add_kelvin_cubit(reduction={x: bn=0, z: ht=0})
+         -> ExportNetgenCommand sideset-vs-auto-detect priority fix
+            -> NGSolve .vol load (was broken before the fix)
+               -> calc_accel_magnet sym_ht=0_z -> Dirichlet pick
+
+    NOT a physics-accuracy comparison -- the coil is not x/z symmetric,
+    so the sym BCs impose artificial constraints.  Numbers are specific
+    to this discretization; they will drift if any of the above
+    components changes behaviour.
+    """
+    g = _load_golden(GOLDEN_QUARTER_XZ)
+    vol, coil_py = _require_sample(g)
+
+    result = _run(coil_py, vol, g["physics"])
+    exp = g["observations"]["I_2000A_coil_py"]
+    tol = g["tolerance"]
+
+    _check_common(result, exp, tol)
+    _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
+                  tol["B_origin_pct"], "B_origin_mag")
+    _assert_close(result["W_mag"], exp["W_mag_J"],
+                  tol["W_mag_pct"], "W_mag")
+    _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
     assert result["n_wire_segments"] == exp["n_wire_segments"], (
         f"n_wire_segments drift: {result['n_wire_segments']} vs "
         f"{exp['n_wire_segments']}")
