@@ -25,11 +25,14 @@ Mesh materials / boundaries (named in the .jou before export):
   sym_tangential   - LEGACY alias for sym_bn=0 (pre-2026-04-25)
   sym_normal       - LEGACY alias for sym_ht=0 (pre-2026-04-25)
   kelvin          - volume material (optional, Periodic Kelvin)
+  kelvin_far      - 1/8-reduction "infinity plane" (always Dirichlet)
 
 Symmetry BC (auto-swapped by formulation - the label names the physics,
 the solver picks Dirichlet vs Natural based on whether it is A or Omega):
   sym_bn=0_*:  B . n = 0 -> Omega: natural,  A: Dirichlet (A x n = 0)
   sym_ht=0_*:  H x n = 0 -> Omega: Dirichlet (Omega=const), A: natural
+  kelvin_far:  always Dirichlet (Omega=0 / A=0) -- represents the same
+               infinity plane as the GND vertex, extended to a face.
 
 Auto-created by panel dialog:
   kelvin_int  - surface, periodic BC (interior hemisphere)
@@ -373,11 +376,17 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     #   sym_ht=0_*  (Hxn=0, field perp)      -> Omega: Dirichlet, A: natural
     # Legacy labels (pre-2026-04-25) "sym_tangential"/"sym_normal" are
     # also recognised and behave as sym_bn=0/sym_ht=0 respectively.
+    # `kelvin_far` (1/8-reduction only) is the "infinity plane"
+    # through the Kelvin centre and is ALWAYS Dirichlet (Omega=0 / A=0)
+    # regardless of formulation -- it represents the same boundary as
+    # the GND vertex, just extended to a flat face.
     dir_parts = []
     if "GND" in boundaries:
         dir_parts.append("GND")
     if "outer" in boundaries:
         dir_parts.append("outer")
+    if "kelvin_far" in boundaries:
+        dir_parts.append("kelvin_far")
 
     # Pick Dirichlet per formulation.
     if formulation == "omega":
