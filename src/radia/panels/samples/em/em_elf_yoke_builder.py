@@ -97,20 +97,27 @@ def _build_yoke():
         vid = cubit.get_last_id("volume")
         yoke_vols.append(vid)
 
-    # Mesh each volume INDEPENDENTLY (no imprint+merge -- that
-    # collapses volumes for some slanted-hex topologies).
-    # interval 1 + scheme map gives 1 hex per volume (matching the
-    # ELF MMB8T discretization, 13 hexes total).
+    # Unite the 13 yoke volumes into ONE CAD volume so that:
+    #   - yoke-yoke interfaces are conformal by construction
+    #   - air-yoke imprint+merge produces a single shared boundary
+    #   - subsequent CAD subtraction (in the .jou) carves a single
+    #     yoke-shaped hole from the air sphere
+    # Cost: lose the EXACT 13-hex topology -- the unioned yoke
+    # tetmeshes (or hex-meshes if topology allows) at the user's
+    # chosen mesh size, NOT the per-region 1-hex-each ELF
+    # discretization.  Trade-off: physics fidelity (correct B at
+    # origin) vs mesh-count fidelity (exactly 13 hex).
     v_str = " ".join(str(v) for v in yoke_vols)
-    cubit.cmd(f"curve in volume {v_str} interval 1")
-    cubit.cmd(f"volume {v_str} scheme map")
-    cubit.cmd(f"mesh volume {v_str}")
-    # Equivalence node-merges duplicate nodes at coincident positions
-    # WITHOUT modifying volume topology (which `imprint+merge`
-    # collapses for some slanted hex pairs).  This yields a
-    # conformal mesh: adjacent yoke volumes share node IDs at their
-    # interface.
-    cubit.cmd("equivalence node all tolerance 1e-6")
+    cubit.cmd(f"unite volume {v_str}")
+    yoke_united = cubit.get_last_id("volume")
+    # Tetmesh with mesh size targeting the smallest ELF region
+    # (z=5..13mm bevel layer = 8 mm thick).  Use 5 mm for adequate
+    # discretization through that layer.
+    cubit.cmd(f"volume {yoke_united} scheme tetmesh")
+    cubit.cmd(f"volume {yoke_united} size 0.005")
+    cubit.cmd(f"mesh volume {yoke_united}")
+    yoke_vols = [yoke_united]
+    v_str = str(yoke_united)
 
     # Block assignment.
     cubit.cmd(f"block 1 add volume {v_str}")
