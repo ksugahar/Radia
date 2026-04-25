@@ -78,16 +78,28 @@ adds the Kelvin exterior sphere and the GND nodeset.
 The published ELF reference (`examples/c_type_electromagnet/mu=1000/
 quarter/verify_elf_radia.py`) is the **quarter_xz** variant with
 Radia MSC (direct hex-element extraction via `IMA='+x-z'` symmetry),
-giving `B_z = -976 mT` at `NI=2000, mu_r=1000`.  Matching that
-number in FEM requires:
+giving `B_z = -228.1 mT` at `NI=2000, mu_r=1000` (verified by
+running the ELF reference 2026-04-25; earlier README revisions
+incorrectly cited -976 mT, which was a transcription error).
+Matching that number in FEM requires:
 
-- `em_1-4_quarter_xz.jou` + its Add-Kelvin support (see blockers above).
-- `sym_tangential` / `sym_normal` sidesets on the X=0 and Z=0 planes
-  so `calc_accel_magnet` swaps the Dirichlet/natural pair correctly
-  per formulation.
-- Same mesh density order as the ELF reference for convergence.
+- `em_1-4_quarter_xz.jou` (now WORKING) at the ELF-matched yoke
+  geometry (NOT the simplified bricks currently shipped -- ELF uses
+  17mm pole bevel + 25mm thick C-back at specific positions).
+- The ELF racetrack coil (port `examples/c_type_electromagnet/
+  mu=1000/coil_model.py` to a CoilBuilder script with Y_CENTER =
+  131.25 mm, NOT the 151.25 mm in `em_sample_coil.py`).
+- Mesh refinement matching the ELF discretization for FEM
+  convergence to ~1% accuracy.
 
-The currently-shipping `em_1-2_half_z` variant is NOT a direct
-substitute for that reference — it's a half-z reduction that
-doesn't match the quarter-xz geometry.  The `em_1-2_half_z` golden
-is an internal regression guard, not a physics-accuracy check.
+The currently-shipping samples (`em_1-1_full`, `em_1-2_half_z`,
+`em_1-4_quarter_xz`, `em_1-8_eighth`) are INTERNAL REGRESSION GUARDS
+for the reduction-mode + Auto-Kelvin pipeline plumbing.  None of
+them match ELF physics: their yoke uses a simplified brick-only
+geometry and their coil (`em_sample_coil.py`) sits at y=151.25mm
+instead of the ELF y=131.25mm.  The 4 reductions give 4 different
+B numbers because the sym BCs impose different constraints on a
+non-symmetric source.
+
+A future ELF-matched sample (`em_elf_quarter_xz.jou` +
+`em_elf_coil.py`) would close this loop and target -228.1 mT.
