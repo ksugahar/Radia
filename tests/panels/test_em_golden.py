@@ -48,6 +48,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 CALC = os.path.join(ROOT, "src", "radia", "panels", "calc_accel_magnet.py")
 GOLDEN = os.path.join(HERE, "golden", "em_sample_mu1000.json")
 GOLDEN_QUARTER_XZ = os.path.join(HERE, "golden", "em_quarter_xz_mu1000.json")
+GOLDEN_EIGHTH = os.path.join(HERE, "golden", "em_eighth_mu1000.json")
 
 
 def _load_golden(path: str = GOLDEN) -> dict:
@@ -173,6 +174,47 @@ def test_em_quarter_xz_coil_py_NI_2000():
     components changes behaviour.
     """
     g = _load_golden(GOLDEN_QUARTER_XZ)
+    vol, coil_py = _require_sample(g)
+
+    result = _run(coil_py, vol, g["physics"])
+    exp = g["observations"]["I_2000A_coil_py"]
+    tol = g["tolerance"]
+
+    _check_common(result, exp, tol)
+    _assert_close(result["B_origin_mag"], exp["B_origin_mag_T"],
+                  tol["B_origin_pct"], "B_origin_mag")
+    _assert_close(result["W_mag"], exp["W_mag_J"],
+                  tol["W_mag_pct"], "W_mag")
+    _assert_close(result["L"], exp["L_H"], tol["L_pct"], "L")
+    assert result["n_wire_segments"] == exp["n_wire_segments"], (
+        f"n_wire_segments drift: {result['n_wire_segments']} vs "
+        f"{exp['n_wire_segments']}")
+
+
+@pytest.mark.slow
+def test_em_eighth_coil_py_NI_2000():
+    """1/8 reduction model: yoke + air at (x>=0, y>=0, z>=0), with
+    sym_ht=0_x + sym_ht=0_y + sym_bn=0_z + kelvin_far sidesets from
+    add_kelvin_cubit(reduction={x: ht=0, y: ht=0, z: bn=0}).
+
+    Regression guard for the 1/8-specific pieces (2026-04-25):
+
+        - add_kelvin.py reduction allows 3 axes (was NotImplementedError)
+        - all-bn=0 still rejected (B=0 physical impossibility)
+        - Kelvin offset along single reduction axis (default = first)
+        - 3-plane webcut: 2 sym planes coincide with air, 1 is the
+          new "kelvin_far" infinity plane through the Kelvin centre
+        - calc_accel_magnet treats kelvin_far as always-Dirichlet
+        - ExportNetgenCommand all-or-nothing identification policy
+          (when copy-mesh leaves a few unmatched corner vertices for
+          large geometry scales, skip C++ identification entirely;
+          NGSolve's add_periodic_kelvin recovers at solve time, and
+          the kelvin_far Dirichlet anchors the field)
+
+    NOT a physics-accuracy comparison -- coil is full racetrack, not
+    x/y-antisymmetric / z-symmetric.
+    """
+    g = _load_golden(GOLDEN_EIGHTH)
     vol, coil_py = _require_sample(g)
 
     result = _run(coil_py, vol, g["physics"])

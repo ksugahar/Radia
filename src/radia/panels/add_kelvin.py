@@ -553,26 +553,46 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         raise ValueError(
             "reduction dict is empty.  For full domain, pass "
             "symmetry=None (no reduction).")
-    if len(axes) == 3:
-        raise NotImplementedError(
-            "1/8 reduction (x+y+z) is not yet supported.  The Kelvin "
-            "offset along the (1,1,1) diagonal does not intersect the "
-            "x=0/y=0/z=0 planes, so the Kelvin cut faces cannot be "
-            "coincident with the air cut faces.  Needs a different "
-            "Kelvin mapping (e.g. 7 reflected copies).  Track at "
-            "src/radia/panels/samples/em/README.md.")
-    if len(axes) not in (1, 2):
+    if len(axes) > 3:
         raise ValueError(
-            f"reduction supports 1 or 2 axes (1/2 or 1/4), got {len(axes)}")
+            f"reduction has {len(axes)} axes; only x, y, z are valid.")
+    is_eighth = (len(axes) == 3)
 
-    # Offset direction: must be perpendicular to all reduction-axis
-    # normals, i.e. along a FREE axis not listed in reduction.
+    # Physically impossible: 3 mutually perpendicular planes ALL set to
+    # bn=0 means B parallel to all 3 planes, which forces B = 0.  Reject
+    # with a clear message so the user knows to pick at least one ht=0.
+    if is_eighth and all(reduction[a] == "bn=0" for a in axes):
+        raise ValueError(
+            "1/8 reduction with all 3 planes set to 'bn=0' is "
+            "physically impossible: B parallel to three mutually "
+            "perpendicular planes forces B = 0 everywhere.  "
+            "At least one axis must be 'ht=0' (antimirror).  "
+            "Common ELF-style choice: {'x': 'ht=0', 'y': 'ht=0', "
+            "'z': 'bn=0'} (Radia '-x-y+z').")
+
+    # Offset direction.
+    #   1/2 / 1/4: must lie along a FREE axis (perpendicular to all
+    #              reduction-axis normals); the reduction sym planes
+    #              are sym BCs and the Kelvin sits "outside" them.
+    #   1/8     : no free axis exists, so the offset MUST be along one
+    #              of the reduction axes.  Two of the three Kelvin cut
+    #              planes (those of the non-offset reduction axes) end
+    #              up coinciding with air sym planes; the third (the
+    #              offset-axis cut, through the Kelvin centre) is the
+    #              "infinity plane" and gets a fresh `kelvin_far`
+    #              sideset for a Dirichlet anchor.
     if offset_dir is None:
         free = [d for d in ("x", "y", "z") if d not in axes]
-        if not free:
-            raise NotImplementedError("1/8 case -- see above")
-        offset_dir = free[0]
-    elif offset_dir.lower() in axes:
+        if free:
+            offset_dir = free[0]
+        else:
+            # 1/8 default: offset along the first reduction axis.
+            offset_dir = axes[0]
+    offset_dir = offset_dir.lower()
+    if offset_dir not in ("x", "y", "z"):
+        raise ValueError(
+            f"offset_dir must be x|y|z, got {offset_dir!r}")
+    if (not is_eighth) and offset_dir in axes:
         raise ValueError(
             f"offset_dir={offset_dir!r} conflicts with reduction on "
             f"the same axis (Kelvin sphere would poke through the "
@@ -585,7 +605,7 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         raise ValueError(
             f"offset_dist {offset_dist:.4f} must be >= 2*R = {2*R:.4f}.")
 
-    idx = {"x": 0, "y": 1, "z": 2}[offset_dir.lower()]
+    idx = {"x": 0, "y": 1, "z": 2}[offset_dir]
     center = [0.0, 0.0, 0.0]
     center[idx] = offset_dist
     ox, oy, oz = center
@@ -628,34 +648,46 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     kelvin_sphere = cubit.get_last_id("volume")
     cubit.cmd(f"move volume {kelvin_sphere} x {ox:g} y {oy:g} z {oz:g}")
 
-    # Webcut keeps the "positive" side of each plane by discarding the
-    # negative-side volume produced by `webcut ... with plane <axis>plane`.
+    # Webcut Kelvin at three (or fewer) planes.  Each cut plane passes
+    # through the corresponding Kelvin-centre coordinate:
+    #   - reduction axis NOT == offset_dir  -> coord = 0  (sym plane,
+    #     coincides with the air's sym plane, sym_<bc>_<axis> sideset)
+    #   - reduction axis == offset_dir       -> coord = offset_dist
+    #     (1/8 only: "infinity plane" through Kelvin centre, kelvin_far
+    #     sideset)
+    # Always keep the half with centroid > cut_at; air points (in the
+    # positive octant by convention) translate to Kelvin points which
+    # are also > cut_at on every cut axis (sym cuts at 0 keep > 0;
+    # offset cut at offset_dist keeps > offset_dist, since translated
+    # air y goes from [0, R] to [offset_dist, offset_dist + R]).
     kelvin_vol = kelvin_sphere
+    far_axis = offset_dir if is_eighth else None
     for axis in axes:
-        plane = f"{axis}plane"
+        ai = {"x": 0, "y": 1, "z": 2}[axis]
+        cut_at = offset_dist if axis == far_axis else 0.0
+        # Cubit's `xplane offset <X>` takes a signed offset along the axis.
+        plane_cmd = f"{axis}plane offset {cut_at:g}" if cut_at != 0.0 \
+                    else f"{axis}plane"
         before = set(cubit.parse_cubit_list("volume", "all"))
-        cubit.cmd(f"webcut volume {kelvin_vol} with plane {plane}")
+        cubit.cmd(f"webcut volume {kelvin_vol} with plane {plane_cmd}")
         after = set(cubit.parse_cubit_list("volume", "all"))
         new_vols = list(after - before)
-        # Identify the two halves: one has centroid coord > 0 (keep),
-        # the other < 0 (delete).  After webcut, kelvin_vol is one of
-        # {kelvin_vol (unchanged id), the new id}.
         keep, drop = None, None
         candidates = [kelvin_vol] + new_vols
-        ai = {"x": 0, "y": 1, "z": 2}[axis]
         for vid in candidates:
             try:
                 c = cubit.volume(vid).centroid()[ai]
             except Exception:
                 continue
-            if c > 0:
+            if c > cut_at + tol * max(R, 1.0):
                 keep = vid
-            elif c < 0:
+            elif c < cut_at - tol * max(R, 1.0):
                 drop = vid
         if keep is None or drop is None:
             raise RuntimeError(
-                f"webcut on {plane} did not produce a positive/negative "
-                f"pair (candidates={candidates}).")
+                f"webcut on {axis}={cut_at:g} did not produce a clear "
+                f"keep/drop pair (candidates={candidates}, "
+                f"centroids={[cubit.volume(v).centroid()[ai] for v in candidates]}).")
         cubit.cmd(f"delete volume {drop}")
         kelvin_vol = keep
 
@@ -668,25 +700,39 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     # whose bounding box spans all three coordinates when measured
     # relative to the Kelvin center; the flat cut faces lie in one of
     # the x=0 / y=0 / z=0 planes.
+    # Each cut produces a flat face on a known plane:
+    #   sym cuts (axis != far_axis): plane at coord = 0
+    #   far cut (axis == far_axis):  plane at coord = offset_dist
+    # Detect by bounding-box: zero span on axis A AND coord matches the
+    # expected plane for A.
     k_surfs = list(cubit.get_relatives("volume", kelvin_vol, "surface"))
     k_curved = None
     k_flat_by_axis = {}
+    k_far = None             # 1/8 only: face on the offset axis at offset_dist
     for sid in k_surfs:
         bb = cubit.surface(sid).bounding_box()
-        # bounding_box returns (xmin, ymin, zmin, xmax, ymax, zmax, ...)
-        xmin, ymin, zmin = bb[0], bb[1], bb[2]
-        xmax, ymax, zmax = bb[3], bb[4], bb[5]
-        spans = ((xmax - xmin), (ymax - ymin), (zmax - zmin))
-        # Flat face on axis=0 plane: the span along that axis is ~0 AND
-        # the coordinate is ~0 on that plane.
+        # bb returns (xmin, ymin, zmin, xmax, ymax, zmax, ...)
         flat_axis = None
+        flat_role = None     # 'sym' or 'far'
         for ai, ax_name in enumerate(("x", "y", "z")):
             lo, hi = bb[ai], bb[3 + ai]
-            if ax_name in axes and abs(hi - lo) < 1e-5 * R and abs(lo) < 1e-5 * R:
+            if abs(hi - lo) > 1e-5 * R:
+                continue   # not flat in this axis
+            plane_coord = 0.5 * (lo + hi)
+            if ax_name in axes and ax_name != far_axis \
+                    and abs(plane_coord) < 1e-5 * max(R, 1.0):
                 flat_axis = ax_name
+                flat_role = 'sym'
                 break
-        if flat_axis is not None:
+            if ax_name == far_axis \
+                    and abs(plane_coord - offset_dist) < 1e-5 * max(R, 1.0):
+                flat_axis = ax_name
+                flat_role = 'far'
+                break
+        if flat_role == 'sym':
             k_flat_by_axis[flat_axis] = sid
+        elif flat_role == 'far':
+            k_far = sid
         else:
             # Curved surface is the largest-area non-flat face.
             if (k_curved is None
@@ -698,11 +744,18 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
             f"Cannot find curved face on Kelvin volume {kelvin_vol}.  "
             f"Surfaces = {k_surfs}.")
     for axis in axes:
-        if axis not in k_flat_by_axis:
-            raise RuntimeError(
-                f"Cannot find flat sym face on axis {axis!r} for the "
-                f"Kelvin volume (expected face with {axis}=0 plane).  "
-                f"Surfaces = {k_surfs}.")
+        if axis == far_axis:
+            if k_far is None:
+                raise RuntimeError(
+                    f"1/8 reduction: Kelvin offset-axis cut face "
+                    f"(at {axis}={offset_dist:g}) not found among "
+                    f"surfaces {k_surfs}.")
+        else:
+            if axis not in k_flat_by_axis:
+                raise RuntimeError(
+                    f"Cannot find flat sym face on axis {axis!r} for "
+                    f"the Kelvin volume (expected face with "
+                    f"{axis}=0 plane).  Surfaces = {k_surfs}.")
 
     # ---- 5. Find air's curved outer face + flat cut faces ----
     a_curved = None
@@ -784,18 +837,25 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         cubit.cmd(f"sideset {sid} add surface {k_curved}")
         cubit.cmd(f'sideset {sid} name "kelvin_ext"')
 
-    # Per-axis sym sidesets -- each includes BOTH the air cut face(s)
-    # and the Kelvin cut face.  The solver sees a single boundary
-    # labelled `sym_<bc>_<axis>` and applies the appropriate BC.
+    # Per-axis sym sidesets.  Each includes the AIR's flat cut face on
+    # the same plane.  For axes != far_axis, the Kelvin's cut face on
+    # that plane (at coord = 0) is also added -- both sides share the
+    # sideset so the solver sees one boundary.  For the far_axis (1/8
+    # only), the Kelvin's cut on that axis is at offset_dist (not 0)
+    # and gets its own `kelvin_far` sideset; the air's cut on far_axis
+    # at coord = 0 still becomes a sym sideset (single-side, air only).
     sym_sidesets = {}
     for axis in axes:
-        bc = reduction[axis] if axis in reduction else reduction[axis.lower()]
+        bc = reduction[axis]
         label = sym_sideset_name(axis, bc)
         if label.lower() in existing_ss_names:
             sym_sidesets[axis] = None
             continue
         faces = list(a_flat_by_axis.get(axis, []))
-        faces.append(k_flat_by_axis[axis])
+        if axis != far_axis:
+            kf = k_flat_by_axis.get(axis)
+            if kf is not None:
+                faces.append(kf)
         if not faces:
             raise RuntimeError(
                 f"No faces found for sym axis={axis!r}.")
@@ -803,6 +863,16 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         cubit.cmd(f"sideset {sid} add surface {' '.join(str(f) for f in faces)}")
         cubit.cmd(f'sideset {sid} name "{label}"')
         sym_sidesets[axis] = sid
+
+    # 1/8 only: the Kelvin offset-axis cut face becomes the "kelvin_far"
+    # sideset.  This is the "infinity plane" that passes through the
+    # Kelvin centre, perpendicular to the offset axis -- not a sym
+    # plane of the air.  calc_accel_magnet/msc treat it as a Dirichlet
+    # boundary regardless of formulation (the same way GND works).
+    if k_far is not None and "kelvin_far" not in existing_ss_names:
+        sid = _next_ss()
+        cubit.cmd(f"sideset {sid} add surface {k_far}")
+        cubit.cmd(f'sideset {sid} name "kelvin_far"')
 
     # ---- 10. GND nodeset at Kelvin center ----
     cubit.cmd(f"create vertex {ox:g} {oy:g} {oz:g}")
@@ -815,13 +885,20 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     frac = "1/%d" % (2 ** len(axes))
     print("")
     print("=== add_kelvin_cubit (reduction mode) ===")
-    print(f"  R = {R:g} m,  offset = ({ox:g}, {oy:g}, {oz:g}) m")
+    print(f"  R = {R:g} m,  offset = ({ox:g}, {oy:g}, {oz:g}) m  "
+          f"(offset_dir = {offset_dir})")
     print(f"  reduction = {reduction} ({frac} model)")
     print(f"  air_vols = {air_vols}, kelvin_vol = {kelvin_vol}")
     print(f"  sideset 'kelvin_int' (air curved) / 'kelvin_ext' (kelvin curved)")
     for axis, sid in sym_sidesets.items():
         label = sym_sideset_name(axis, reduction[axis])
-        print(f"  sideset {sid} '{label}'  (air cut + kelvin cut on {axis}=0)")
+        if axis == far_axis:
+            note = f"(air cut at {axis}=0; kelvin face is kelvin_far)"
+        else:
+            note = f"(air cut + kelvin cut at {axis}=0)"
+        print(f"  sideset {sid} '{label}'  {note}")
+    if k_far is not None:
+        print(f"  sideset 'kelvin_far'  (kelvin cut at {far_axis}={offset_dist:g})")
     print(f"  GND nodeset {gnd_nodeset} at Kelvin center")
 
     return {
@@ -833,6 +910,7 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
         "air_vols": air_vols,
         "outer_vols": [kelvin_vol],
         "sym_sidesets": sym_sidesets,
+        "has_kelvin_far": k_far is not None,
     }
 
 

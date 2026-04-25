@@ -1,0 +1,106 @@
+# C-type dipole yoke -- 1/8 model (x>=0, y>=0, z>=0), HEX yoke + tet air
+#
+# Variant of em_1-4_quarter_xz.jou.  All three coordinate planes become
+# symmetry planes:
+#   x=0:  H x n = 0  -> sym_ht=0_x  (Radia '-x', antimirror)
+#   y=0:  H x n = 0  -> sym_ht=0_y  (Radia '-y', antimirror)
+#   z=0:  B . n = 0  -> sym_bn=0_z  (Radia '+z', mirror)
+#
+# Matches the ELF CEFC 2020 reference convention IMA='-x-y+z' for MSC.
+# Physically, three mutually perpendicular planes with all-bn=0 would
+# force B = 0 everywhere; at least one axis must be antimirror (ht=0).
+#
+# For FEM Omega the solver picks:
+#   sym_ht=0_x, sym_ht=0_y -> Dirichlet (Omega = 0)
+#   sym_bn=0_z              -> Natural   (do nothing)
+#   kelvin_far              -> Dirichlet (Omega = 0, "infinity plane")
+# For FEM A: opposite mapping for sym_*; kelvin_far always Dirichlet.
+#
+# REGRESSION GUARD ONLY -- coil (em_sample_coil.py) is a full racetrack
+# whose spatial distribution does not share these reductions; numbers
+# reflect the artificial sym BCs imposed on a non-symmetric source.
+#
+# Units: meters
+#
+# Coordinate system:
+#   y = gap direction (pole tip at y~0, main leg at y~0.15)
+#   z = beam direction (symmetry at z=0)
+#   x = depth/thickness (symmetry at x=0)
+#
+# Reduction additionally requires y-symmetry.  The "main leg" volume
+# straddles y in [0.12, 0.1825] in the original yoke -- still all
+# y>=0, so the 1/8 cut at y=0 leaves the same yoke geometry as 1/4
+# (the yoke is already entirely in y>=0).  The 1/8 vs 1/4 difference
+# is in the air domain only -- 1/8 air is the (x>=0, y>=0, z>=0)
+# octant of the radius-0.40 sphere.
+#
+# Use "Symmetry reduction" x=ht0, y=ht0, z=bn0 in the Export Mesh
+# dialog.  The launcher writes a kelvin_reduction object into
+# launcher_config.json (keys 'x', 'y', 'z' with values 'ht0', 'ht0',
+# 'bn0' respectively); auto_kelvin_entry.py delegates to
+# add_kelvin_cubit just before radia_export netgen.  (APREPRO chokes
+# on embedded braces + colons, so this comment avoids the literal
+# JSON form.)
+reset
+
+# === Pole piece (near gap) ===
+# Reduced: x [0, 12.5], y [0, 40], z [0, 50] mm
+brick x 0.0125 y 0.040 z 0.050
+move volume 1 x 0.00625 y 0.020 z 0.025
+
+# === Yoke back (horizontal return) ===
+# Reduced: x [0, 12.5], y [40, 120], z [0, 25] mm
+brick x 0.0125 y 0.080 z 0.025
+move volume 2 x 0.00625 y 0.080 z 0.0125
+
+# === Main leg (where coil sits) ===
+# Reduced: x [0, 12.5], y [120, 182.5], z [0, 52.5] mm
+brick x 0.0125 y 0.0625 z 0.0525
+move volume 3 x 0.00625 y 0.15125 z 0.02625
+
+# === Imprint/merge for shared surfaces (continuous mesh) ===
+imprint volume all
+merge volume all
+
+# === Hex mesh ===
+volume all scheme map
+volume 1 size 0.005
+volume 2 size 0.008
+volume 3 size 0.006
+mesh volume all
+
+# === Air domain: 1/8 sphere (x>=0, y>=0, z>=0 octant) ===
+# Use boolean intersection with an octant brick (cleaner topology than
+# webcut+delete for small octants).
+create sphere radius 0.40
+create brick x 0.80 y 0.80 z 0.80
+# Octant brick covers x: [0, 0.80], y: [0, 0.80], z: [0, 0.80]
+move volume 5 x 0.40 y 0.40 z 0.40
+
+# Sphere - brick intersect = octant (1/8 sphere)
+intersect volume 4 5 keep
+delete volume 4 5
+
+# Subtract yoke from air octant.
+subtract volume 1 2 3 from volume 6 keep
+imprint volume all
+merge volume all
+volume 6 scheme tetmesh
+volume 6 size 0.02
+mesh volume 6
+
+# === Blocks ===
+set duplicate block elements on
+block 1 add volume 1 2 3
+block 1 name "yoke"
+block 2 add volume 6
+block 2 name "air"
+
+# Kelvin (FEM only): add via the launcher dialog "Add Kelvin open
+# boundary (auto)" with "Symmetry reduction" x=ht0, y=ht0, z=bn0.
+# add_kelvin_cubit picks offset_dir = first reduction axis (= x by
+# default), offsets the Kelvin sphere to (3R, 0, 0) = (1.2 m, 0, 0),
+# webcuts at x=1.2 (the "infinity plane", labelled kelvin_far for
+# Dirichlet), y=0 (sym, joins air's y=0 face into sym_ht=0_y), and
+# z=0 (sym, joins air's z=0 face into sym_bn=0_z).  GND nodeset at
+# (1.2, 0, 0) anchors Omega=0.
