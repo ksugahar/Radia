@@ -789,10 +789,34 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
             f"Air curved surface {a_curved} has {len(a_curves)} curves, "
             f"Kelvin curved surface {k_curved} has {len(k_curves)} "
             f"curves -- cannot copy mesh.")
-    a_c = max(a_curves, key=lambda c: cubit.curve(c).length())
-    k_c = max(k_curves, key=lambda c: cubit.curve(c).length())
-    a_v = cubit.get_relatives("curve", a_c, "vertex")[0]
-    k_v = cubit.get_relatives("curve", k_c, "vertex")[0]
+    # Anchor curve selection: pick the arc with the SMALLEST centroid
+    # z-coordinate.  For 1/4 / 1/8 reductions in the +octant the
+    # boundary arcs of a sphere cap are equal-length quarter-arcs;
+    # `max(..., key=length)` would tie and Cubit's internal listing
+    # order can pick DIFFERENT arcs on source vs target, producing a
+    # ~120-deg rotational mis-projection that lands ~5% of vertex
+    # pairs ~2 cm off (verified 2026-04-25).  The arc on the z=0 plane
+    # has centroid z=0; arcs on y=0 / x=0(or kelvin_far) planes have
+    # centroid z>0.  Picking min-z is therefore deterministic AND
+    # translation-equivalent on source and target.
+    def _pick_anchor(curves):
+        # Tuple-key for stable sorting: (centroid z, centroid y, centroid x)
+        def _key(c):
+            cp = cubit.curve(c).center_point()
+            return (cp[2], cp[1], cp[0])
+        return min(curves, key=_key)
+    a_c = _pick_anchor(a_curves)
+    k_c = _pick_anchor(k_curves)
+
+    # Vertex anchor: pick the endpoint with the smallest (z, y, x) tuple.
+    def _pick_anchor_vertex(curve_id):
+        verts = list(cubit.get_relatives("curve", curve_id, "vertex"))
+        def _key(v):
+            cp = cubit.vertex(v).coordinates()
+            return (cp[2], cp[1], cp[0])
+        return min(verts, key=_key)
+    a_v = _pick_anchor_vertex(a_c)
+    k_v = _pick_anchor_vertex(k_c)
     cubit.cmd(
         f"copy mesh surface {a_curved} onto surface {k_curved} "
         f"source curve {a_c} source vertex {a_v} "

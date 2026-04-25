@@ -359,9 +359,12 @@ def get_panel_registry():
          "_method_combo", radia_ih.METHOD_PEEC_BEM),
         ("ih_fem", radia_ih.IHWindow,
          "_method_combo", radia_ih.METHOD_FEM_FULL),
-        # EM — Picard / Newton
-        ("em_picard", radia_em.EMWindow, "method", "Picard"),
-        ("em_newton", radia_em.EMWindow, "method", "Newton"),
+        # EM — formulations (Omega / A-Phi / MSC / Kelvin Benchmark)
+        ("em_omega", radia_em.EMWindow, "formulation", "Omega"),
+        ("em_aphi", radia_em.EMWindow, "formulation", "A-Phi"),
+        ("em_msc", radia_em.EMWindow, "formulation", "MSC"),
+        ("em_kelvin_bench", radia_em.EMWindow,
+         "formulation", "Kelvin Benchmark"),
         # PCB — single layout
         ("pcb", radia_pcb.PCBWindow, None, None),
     ]
