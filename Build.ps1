@@ -190,7 +190,10 @@ rem No external NETGEN_SRC_DIR needed.
 if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if not exist "%CUBIT_PLUGIN_BUILD%" mkdir "%CUBIT_PLUGIN_BUILD%"
     cd /d "%CUBIT_PLUGIN_BUILD%"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
+    rem so radia_cubit_mesh.pyd builds against pip-installed Netgen + pybind11.
+    rem .ccm/.ccl in build-ccm continue to use compact_netgen (no DLL deps).
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
     "$CMAKE_EXE" --build . --config Release --target radia_cubit_mesh -j
     if errorlevel 1 ( echo WARNING: radia_cubit_mesh build failed )
 
