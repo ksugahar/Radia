@@ -1,0 +1,42 @@
+{
+  "description": "Golden reference for calc_accel_magnet.py on the C-type dipole em_1-1_full.jou (1/1 full geometry, linear mu_r=1000).",
+  "rationale": "Regression guard for the no-reduction baseline.  The yoke spans its full extent in all three axes (x, y, z); the air is a complete sphere with a z=0 mesh seam (geometry full, seam for Kelvin copy-mesh only).  Auto-Kelvin detects symmetry=['z'] from the air's volume centroids straddling z=0 (NOT from vertex range -- that older heuristic spuriously triggered 'x' too on a multi-vol z-only-webcut sphere).  The Kelvin sphere is offset along +x by 3R, webcut at z=0 to match the air's hemispheres.  No sym sidesets, no kelvin_far -- just kelvin_int / kelvin_ext periodic + GND.",
+  "sample": {
+    "vol": "C:/temp/em_full.vol",
+    "coil_script": "src/radia/panels/samples/em_sample_coil.py",
+    "generator_jou": "src/radia/panels/samples/em/em_1-1_full.jou",
+    "generator_cmd_note": "Regenerate via Cubit batch: play em_1-1_full.jou + play auto_kelvin_entry.py (with kelvin_reduction=null) + radia_export netgen order=2 overwrite."
+  },
+  "geometry_note": "Full geometry baseline: yoke at x in [-12.5, +12.5], y in [0, 182.5], z in [-26.25, +26.25] mm; air sphere radius 0.40 m centred at origin, with z=0 mesh seam (both hemispheres retained).  Kelvin sphere is full + offset along +x.  This is the largest of the 4 variants (8x more DOFs than 1/8).",
+  "physics": {
+    "formulation": "omega",
+    "material": "linear",
+    "mu_r": 1000.0,
+    "fes_order": 1,
+    "current_A_coil_py": 2000.0,
+    "max_iter": 1,
+    "tol": 1e-2,
+    "solver": "pardiso"
+  },
+  "observations": {
+    "note": "Absolute-value snapshot for regression guard.  Reference baseline -- reductions (1/2, 1/4, 1/8) impose sym BCs that change the field; the FULL model is the cleanest physics-realistic case for the C-yoke geometry.  Run time ~19 min on LAB (PARDISO factorization of 75k DOFs SPD matrix).",
+    "I_2000A_coil_py": {
+      "B_origin_T": [1.478e-07, 1.585e-06, -5.111e-04],
+      "B_origin_mag_T": 5.111e-04,
+      "W_mag_J": 3.803e-01,
+      "L_H": 1.902e-07,
+      "iterations": 1,
+      "converged": true,
+      "ne": 409068,
+      "ndof": 74787,
+      "n_wire_segments": 84
+    }
+  },
+  "tolerance": {
+    "B_origin_pct": 5.0,
+    "L_pct": 3.0,
+    "W_mag_pct": 3.0,
+    "ndof_exact": true,
+    "ne_exact": true
+  }
+}
