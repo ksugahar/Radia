@@ -2,6 +2,17 @@ cmake_minimum_required(VERSION 3.12)
 project(RadiaCubitPlugin)
 
 # --------------------------------------------------------
+# Emit PDBs for Release builds so crash dumps can be symbolicated.
+# /Zi: compiler-side debug info (PDB)
+# /DEBUG:FULL: linker emits full PDB (not stripped)
+# Optimization (/O2) is unchanged — this is like RelWithDebInfo.
+# --------------------------------------------------------
+if(MSVC)
+  add_compile_options($<$<CONFIG:Release>:/Zi>)
+  add_link_options($<$<CONFIG:Release>:/DEBUG:FULL>)
+endif()
+
+# --------------------------------------------------------
 # Cubit SDK
 # --------------------------------------------------------
 find_package(Cubit REQUIRED CONFIG)
@@ -195,6 +206,9 @@ set_target_properties(radia_cubit_ccm PROPERTIES
     OUTPUT_NAME "radia_cubit"
     SUFFIX ".ccm"
     CXX_STANDARD 17
+    # Separate PDB per target so .ccm and .ccl don't clobber each other.
+    PDB_NAME "radia_cubit_ccm"
+    COMPILE_PDB_NAME "radia_cubit_ccm"
 )
 target_link_libraries(radia_cubit_ccm cubiti cubit_util cubit_geom)
 
@@ -277,6 +291,9 @@ set_target_properties(radia_cubit_ccl PROPERTIES
     SUFFIX ".ccl"
     CXX_STANDARD 17
     AUTOMOC ON
+    # Separate PDB per target so .ccm and .ccl don't clobber each other.
+    PDB_NAME "radia_cubit_ccl"
+    COMPILE_PDB_NAME "radia_cubit_ccl"
 )
 target_link_libraries(radia_cubit_ccl cubiti cubit_util cubit_geom clarofw clarogui Qt5::Core Qt5::Widgets)
 
