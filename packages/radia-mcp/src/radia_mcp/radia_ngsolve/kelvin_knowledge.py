@@ -2059,11 +2059,33 @@ The `.vol` must declare:
 - **sidesets**: `sphere` (mag-air interface), `kelvin_int`, `kelvin_ext`
 - **bbnodeset**: `GND` (Kelvin sphere centre, Dirichlet anchor)
 
-Use the bundled `kelvin_benchmark_sphere_1_4.vol` (1/4 reduction,
-mu_r=100, R=0.20 m, Kelvin offset 0.60 m along +z) as the reference.
-Build script: `panels/samples/kelvin_benchmark_sphere_1_4_build.py`.
+## Bundled samples (verified 2026-04-26)
 
-## Two non-obvious Cubit fixes embedded in the build script
+Two `.vol` samples ship with the wheel for the panel's Browse dialog:
+
+  | sample (frac) | reduction                                | offset_dir | error @ p=2 |
+  |---------------|------------------------------------------|------------|------------:|
+  | `kelvin_benchmark_sphere_1_2.vol` | {"y":"bn=0"}                             | z          | +1.07%      |
+  | `kelvin_benchmark_sphere_1_4.vol` | {"x":"bn=0","y":"bn=0"}                  | z          | +0.71%      |
+
+The 1/8 variant (`{"x":"bn=0","y":"bn=0","z":"ht=0"}`, offset along
+x) is intentionally NOT shipped: the kelvin_far Dirichlet plane
+passes through r' = 0 (Kelvin centre), where the reluctivity
+Mu = mu0*(R/r')^2 is singular, and the linear solve gives Hz ~ 0
+(~-101% error) instead of analytical.  The build script
+`panels/samples/kelvin_benchmark_sphere_1_8_build.py` is kept for
+research; the .vol is omitted until the singularity is fixed.
+
+Build scripts:
+- `panels/samples/kelvin_benchmark_sphere_1_2_build.py` (thin wrapper)
+- `panels/samples/kelvin_benchmark_sphere_1_4_build.py` (thin wrapper)
+- `panels/samples/kelvin_benchmark_sphere_1_8_build.py` (research-only)
+- `panels/samples/kelvin_benchmark_sphere_build.py` (parameterised core,
+  `--frac 1_2|1_4|1_8`)
+
+All four scripts mu_r=100, R_air=0.20 m, Kelvin offset 3*R = 0.60 m.
+
+## Two non-obvious Cubit fixes embedded in the build core
 
 1. `subtract A from B keep` does NOT carve B in Cubit 2025.3.
    Workaround: drop `keep`, then re-create A as a fresh primitive.
@@ -2086,7 +2108,7 @@ Build script: `panels/samples/kelvin_benchmark_sphere_1_4_build.py`.
 
 JSON output: `Hi_origin`, `Hi_analytical`, `error_pct`, `slaved_dofs`.
 
-## Tolerance band (verified 2026-04-25 on 1/4 sphere)
+## p-convergence (1/4 sphere, validated 2026-04-25)
 
   | order | typical error |
   |-------|--------------:|
@@ -2095,8 +2117,8 @@ JSON output: `Hi_origin`, `Hi_analytical`, `error_pct`, `slaved_dofs`.
   | p=3   |        +0.54% |
 
 Panel-level golden test:
-`tests/panels/test_kelvin_benchmark_golden.py` locks
-|error| < 1.5% at p=2.
+`tests/panels/test_kelvin_benchmark_golden.py` parametrises over
+both 1/2 and 1/4 samples, locking |error| < 1.5% at p=2.
 """
 
 
