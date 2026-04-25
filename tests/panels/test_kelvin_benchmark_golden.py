@@ -6,13 +6,23 @@ End-to-end:
      fes_order=2, R_kelvin=0.20)
   3. Build the CLI command with the bundled sample .vol
   4. Run the CLI as subprocess
-  5. Assert: error_pct within +/-1.5% (matches Cubit_1_4_p_convergence
-     verification)
+  5. Assert: |error_pct| within the per-fraction golden band
+     (verified 2026-04-26 -- see VARIANTS table below)
 
 This is the **panel-level** companion to
 `tests/cubit/test_kelvin_1_4_p_convergence.py` (which exercises the
 mesh+solver scripts directly).  This test exercises the FULL panel
 chain: widget values -> build_command -> subprocess -> JSON output.
+
+Variants:
+  1_2 (half model, y >= 0):     +1.07% at p=2 -> band 1.5%
+  1_4 (quarter model, x,y >= 0): +0.71% at p=2 -> band 1.5%
+
+The 1/8 variant is intentionally NOT covered: the kelvin_far
+Dirichlet plane passes through r'=0 (Kelvin centre) where the
+reluctivity Mu = mu0*(R/r')^2 is singular, and the linear solve
+gives Hz ~ 0 instead of analytical.  Tracked in
+`memory/feedback_kelvin_1_8_blocker.md`.
 """
 
 from __future__ import annotations
@@ -27,8 +37,14 @@ import pytest
 
 
 REPO = Path(__file__).resolve().parents[2]
-SAMPLE_VOL = (REPO / "src" / "radia" / "panels" / "samples"
-              / "kelvin_benchmark_sphere_1_4.vol")
+SAMPLES_DIR = REPO / "src" / "radia" / "panels" / "samples"
+
+
+# (variant_id, sample_file, golden_band_pct)
+VARIANTS = [
+    ("1_2", "kelvin_benchmark_sphere_1_2.vol", 1.5),
+    ("1_4", "kelvin_benchmark_sphere_1_4.vol", 1.5),
+]
 
 
 @pytest.fixture(scope="module")
@@ -55,16 +71,18 @@ def kelvin_panel(panel_module):
     yield panel
 
 
-def test_sample_vol_present():
+@pytest.mark.parametrize("variant,sample_name,band_pct", VARIANTS,
+                         ids=[v[0] for v in VARIANTS])
+def test_sample_vol_present(variant, sample_name, band_pct):
     """The packaged Kelvin Benchmark sample .vol must ship with the wheel."""
-    if not SAMPLE_VOL.exists():
+    sample = SAMPLES_DIR / sample_name
+    if not sample.exists():
         pytest.skip(
-            f"Sample {SAMPLE_VOL.name} not built locally.  Run "
-            f"`python src/radia/panels/samples/kelvin_benchmark_sphere_1_4_build.py "
-            f"--out-dir src/radia/panels/samples --orders 2` to generate "
-            f"(requires Cubit).  CI / wheel build pulls this file from "
-            f"the GitHub Releases binaries tag (per CLAUDE.md Binary File "
-            f"Policy).")
+            f"Sample {sample_name} not built locally.  Run "
+            f"`python src/radia/panels/samples/_build_all_kelvin_benchmarks.py "
+            f"--fracs {variant}` to generate (requires Cubit).  CI / wheel "
+            f"build pulls the file from the GitHub Releases binaries tag "
+            f"(per CLAUDE.md Binary File Policy).")
 
 
 def test_panel_runnable_with_sample(kelvin_panel):
@@ -73,13 +91,16 @@ def test_panel_runnable_with_sample(kelvin_panel):
         "Kelvin Benchmark needs no coil_script -- panel should be runnable"
 
 
-def test_panel_build_command_minimal(kelvin_panel):
+@pytest.mark.parametrize("variant,sample_name,band_pct", VARIANTS,
+                         ids=[v[0] for v in VARIANTS])
+def test_panel_build_command_minimal(kelvin_panel, variant, sample_name, band_pct):
     """Verify all expected CLI flags are emitted with sane values."""
-    cmd = kelvin_panel.build_command(str(SAMPLE_VOL))
+    sample = SAMPLES_DIR / sample_name
+    cmd = kelvin_panel.build_command(str(sample))
     cmd_str = " ".join(cmd)
     for required_flag in (
             "calc_kelvin_benchmark.py",
-            "--vol", str(SAMPLE_VOL),
+            "--vol", str(sample),
             "--fes-order", "2",
             "--mu-r", "100",
             "--H0", "1.0",
@@ -89,19 +110,17 @@ def test_panel_build_command_minimal(kelvin_panel):
             f"build_command missing {required_flag!r}: {cmd_str}"
 
 
-def test_panel_end_to_end_golden(kelvin_panel, tmp_path):
-    """Run the panel-built CLI on the bundled sample; lock the numerics.
-
-    Tolerance band (validated 2026-04-25 for fes_order=2):
-        analytical Hz_inside = 3 / (mu_r + 2) * H0 = 0.029412
-        |error_pct| <= 1.5%   (Cubit_1_4_p_convergence reports 0.71%)
-    """
-    if not SAMPLE_VOL.exists():
-        pytest.skip(f"Sample {SAMPLE_VOL.name} not built locally.")
-    cmd = kelvin_panel.build_command(str(SAMPLE_VOL))
-    # Redirect outputs into tmp_path so we don't pollute the repo
-    out_json = tmp_path / "kelvin_bench_out.json"
-    out_msh = tmp_path / "kelvin_bench_out.msh"
+@pytest.mark.parametrize("variant,sample_name,band_pct", VARIANTS,
+                         ids=[v[0] for v in VARIANTS])
+def test_panel_end_to_end_golden(kelvin_panel, tmp_path,
+                                  variant, sample_name, band_pct):
+    """Run the panel-built CLI on the bundled sample; lock the numerics."""
+    sample = SAMPLES_DIR / sample_name
+    if not sample.exists():
+        pytest.skip(f"Sample {sample_name} not built locally.")
+    cmd = kelvin_panel.build_command(str(sample))
+    out_json = tmp_path / f"kelvin_bench_{variant}_out.json"
+    out_msh = tmp_path / f"kelvin_bench_{variant}_out.msh"
     new_cmd = []
     skip = 0
     for tok in cmd:
@@ -124,8 +143,9 @@ def test_panel_end_to_end_golden(kelvin_panel, tmp_path):
     data = json.loads(out_json.read_text())
     assert data.get("converged") is True, f"solver did not converge: {data}"
     err_pct = abs(data["error_pct"])
-    assert err_pct < 1.5, (
-        f"Kelvin Benchmark error {err_pct:.2f}% exceeds 1.5% bound; "
+    assert err_pct < band_pct, (
+        f"[{variant}] Kelvin Benchmark error {err_pct:.2f}% exceeds "
+        f"{band_pct}% bound; "
         f"Hi_origin={data['Hi_origin']:.6e}, "
         f"Hi_analytical={data['Hi_analytical']:.6e}")
 

@@ -328,6 +328,7 @@ hmat-assign.pl
 # ============================================================================
 examples/cube_uniform_field/nonlinear/*_results.json
 examples/cube_uniform_field/nonlinear/*_summary.json
+examples/kelvin_transformation/Cubit_1_4_p_convergence/p_convergence.json
 
 # ============================================================================
 # Temporary debugging scripts
@@ -353,6 +354,7 @@ src/radia/panels/samples/compare_*.py
 src/radia/panels/samples/test_*.py
 src/radia/panels/samples/test_*.jou
 src/radia/panels/samples/wp_*.sol
+src/radia/panels/samples/*_analytic.sol
 src/radia/panels/samples/3turnCoil.*
 
 # Panel inductance dev test scripts (one-shot probes, not regression suite)
