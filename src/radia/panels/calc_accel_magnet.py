@@ -275,6 +275,20 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
         mesh = ngsolve.Mesh(mesh.ngmesh)
         _log(f"PERIODIC:added (a={a_kelvin:.4f}, offset={kelvin_center})")
 
+    # Curve the mesh to match fes_order.  This is REQUIRED for the
+    # Kelvin transformation -- the (R/rho')^2 reluctivity scaling
+    # assumes a smooth (curved) Kelvin sphere; a polyhedral
+    # approximation of the sphere produces large geometric errors
+    # that propagate to the field outside the Kelvin shell.
+    # See memory/feedback_kelvin_high_order_required.md (validated
+    # 2026-04-17 to give 1.15% match vs 2D axisym at order=2 +
+    # Curve(2)).  The Cubit .vol's `curvedelements` section already
+    # has the high-order node positions; mesh.Curve(p) tells NGSolve
+    # to actually USE them when evaluating geometry mappings.
+    if fes_order >= 2:
+        mesh.Curve(fes_order)
+        _log(f"MESH:Curve({fes_order}) applied")
+
     t_mesh = time.perf_counter() - t0
     materials = mesh.GetMaterials()  # domain-indexed (short tuple)
     # BND (codim-1, surface) + BBBND (codim-3, vertex).  "GND" for the
