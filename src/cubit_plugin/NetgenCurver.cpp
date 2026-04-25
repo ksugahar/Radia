@@ -142,6 +142,16 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
   PRINT_INFO("  Phase1a: ng::Mesh created OK\n");
   PRINT_INFO("  Phase1b: SetDimension(3)\n");
   ng_mesh_->SetDimension(3);
+  // Mark the mesh as ACIS-derived so Netgen's Save() writes
+  // `surfaceelementsuv` (not plain `surfaceelements`) -- the UV
+  // parameters are already populated per-vertex via
+  // `el.GeomInfo()[k].u/.v` in Phase1e.  NGSolve uses these UVs to
+  // resolve high-order DOF coupling at periodic boundaries; without
+  // the UVs (geomtype == NO_GEOM, the constructor default), order=2
+  // FEM Omega + Periodic Kelvin produces wrong field magnitudes
+  // (verified 2026-04-25 on em_elf_quarter_xz: order=2 gave -138 mT
+  // instead of expected -228 mT).
+  ng_mesh_->geomtype = ng::Mesh::GEOM_ACIS;
 
   int num_nodes = (int)md.nodes.size();
   PRINT_INFO("  Phase1c: AddPoint for %d nodes\n", num_nodes);
