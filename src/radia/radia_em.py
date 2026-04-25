@@ -48,6 +48,14 @@ class EMPanel(ModePanel):
             self._on_formulation_changed)
 
         # FEM fields
+        # FES order default = 1.  Order >= 2 is technically supported
+        # but produces WORSE Bz results vs the ELF reference until the
+        # C++ Kelvin pair identification (ExportNetgenCommand.cpp) is
+        # extended to high-order surface nodes (the curvedelements
+        # added by `radia_export netgen order N` aren't currently
+        # paired across kelvin_int <-> kelvin_ext, breaking the
+        # periodic BC for order >= 2).  Tracked in
+        # `src/radia/panels/samples/em/README.md`.
         self.add_spin("fes_order", "FES order:", 1, 1, 5)
         self.add_browse("coil_script", "Coil script:",
                         filter_str="Python (*.py);;All (*)")
