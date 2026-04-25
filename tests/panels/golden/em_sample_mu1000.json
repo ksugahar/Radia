@@ -7,7 +7,7 @@
     "generator_jou": "src/radia/panels/samples/em_sample.jou",
     "generator_cmd_note": "Regenerate via Cubit batch: python-run em_sample.jou + auto_add_kelvin_from_current_model() + radia_export netgen order=1 overwrite.  Reference template: C:/temp/run_em_sample.py (session work 2026-04-24)."
   },
-  "geometry_note": "Half-y model: yoke in y=[0, 0.18] only (no y-reflection in mesh; physically the ELF reference is quarter-XZ with mesh reduced further).  Comparing to the ELF quarter-XZ -976 mT reference requires setting up sym_tangential/sym_normal BCs and matching the Radia image decomposition -- that variant lives in the future corpus entries em/em_1-4_quarter_xz.jou etc.",
+  "geometry_note": "Half-y model: yoke in y=[0, 0.18] only (no y-reflection in mesh; physically the ELF reference is quarter-XZ with mesh reduced further).  Comparing to the ELF quarter-XZ -228.1 mT reference (verified by examples/c_type_electromagnet/mu=1000/quarter/verify_elf_radia.py 2026-04-25) requires setting up sym_tangential/sym_normal BCs AND porting examples/c_type_electromagnet/mu=1000/coil_model.py to a CoilBuilder script (Y_CENTER=131.25 mm vs em_sample_coil's 151.25 mm) -- that variant lives in the future em/em_elf_quarter_xz.jou.",
   "physics": {
     "formulation": "omega",
     "material": "linear",
@@ -20,7 +20,7 @@
     "solver": "pardiso"
   },
   "observations": {
-    "note": "Absolute-value snapshot for regression guard.  EM panel accepts .py only (2026-04-25 policy); em_sample_coil.build_coil() returns the ELF racetrack with 4 straight + 4 arc CoilBuilder segments (8 Radia objects, 84 wire segments) at NI=2000.  Not matched to the ELF CEFC 2020 quarter-XZ Radia-MSC reference (-976 mT); see src/radia/panels/samples/em/README.md for the variant plan.",
+    "note": "Absolute-value snapshot for regression guard.  EM panel accepts .py only (2026-04-25 policy); em_sample_coil.build_coil() returns an ELF-LIKE (NOT ELF-matched) racetrack with 4 straight + 4 arc CoilBuilder segments (8 Radia objects, 84 wire segments) at NI=2000.  Not matched to the ELF CEFC 2020 quarter-XZ Radia-MSC reference (-228.1 mT); see src/radia/panels/samples/em/README.md for the variant plan.",
     "I_2000A_coil_py": {
       "B_origin_T": [4.773e-06, -2.936e-03, -8.283e-03],
       "B_origin_mag_T": 8.788e-03,
