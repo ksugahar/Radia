@@ -123,10 +123,10 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
             // surfnr in callbacks is 1-based FaceDescriptor index.
             // The Python side maps this to Cubit surface IDs.
             ProjectFunc proj = [project_func](int surfnr, double x, double y, double z,
-                                               double u_hint, double v_hint)
+                                               double u_hint, double v_hint, bool has_hint)
                 -> std::tuple<double,double,double,double,double>
             {
-                py::object result = project_func(surfnr, x, y, z, u_hint, v_hint);
+                py::object result = project_func(surfnr, x, y, z, u_hint, v_hint, has_hint);
                 return result.cast<std::tuple<double,double,double,double,double>>();
             };
 
@@ -252,8 +252,12 @@ PYBIND11_MODULE(radia_cubit_mesh, m)
                 surface_data: Per-surface data as list of dicts with keys:
                     id (int), tris (flat list), quads (flat list),
                     uvs (dict {node_id: (u, v)}).
-                project_func: Callable (surfnr, x,y,z, u_hint, v_hint) -> (xp,yp,zp, u,v).
+                project_func: Callable (surfnr, x,y,z, u_hint, v_hint, has_hint) -> (xp,yp,zp, u,v).
                     surfnr is 1-based FaceDescriptor index.
+                    has_hint=True signals (u_hint, v_hint) is a valid UV
+                    (use closest_point_uv_guess); has_hint=False means no
+                    hint, do a global projection. Distinguishes legitimate
+                    UV=(0,0) from "no hint".
                 normal_func: Callable (surfnr, x,y,z) -> (nx,ny,nz).
                 order: Polynomial order for curving (>= 2).
                 surface_only: Remove volume elements (BEM workflow).
