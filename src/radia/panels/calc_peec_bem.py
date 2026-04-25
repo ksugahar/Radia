@@ -316,6 +316,11 @@ def main():
                         help="ESIM Karl iteration tol (WIP).")
     parser.add_argument("--h1-order", type=int, default=1,
                         help="H1 polynomial order for BEM")
+    parser.add_argument("--msh-output", default="",
+                        help="Optional GMSH .msh output path. When set, "
+                             "the workpiece .vol mesh is converted to "
+                             ".msh after solve so the panel's OpenGmsh "
+                             "button can view the geometry.")
 
     def run(args):
         if args.impedance_model == "esim":
@@ -325,7 +330,7 @@ def main():
                          "nonlinear BH, use the FEM A-V panel method "
                          "(also WIP for ESIM)."
             }
-        return solve_peec_bem_forward(
+        result = solve_peec_bem_forward(
             peec_step=args.peec_step,
             peec_nwinc=args.peec_nwinc,
             peec_nhinc=args.peec_nhinc,
@@ -340,6 +345,21 @@ def main():
             impedance_model=args.impedance_model,
             h1_order=args.h1_order,
         )
+        # GMSH export (mesh geometry only — minimum to activate panel's
+        # OpenGmsh button). Field export (H_t, P_density on wp surface)
+        # is a future enhancement.
+        if args.msh_output and isinstance(result, dict) and "error" not in result:
+            try:
+                import sys, os as _os
+                radia_src = _os.path.dirname(_os.path.abspath(__file__)) + "/.."
+                if _os.path.abspath(radia_src) not in sys.path:
+                    sys.path.insert(0, _os.path.abspath(radia_src))
+                from gmsh_post_export import vol2msh
+                vol2msh(args.msh_output, args.vol, [])
+                result["msh_file"] = args.msh_output
+            except Exception as e:
+                result["msh_export_error"] = str(e)
+        return result
 
     calc_main(run, parser)
 

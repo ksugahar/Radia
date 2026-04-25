@@ -595,7 +595,8 @@ class IHPanel(ModePanel):
                "--mu-r", self.val("mu_r"),
                "--impedance-model", self._impedance_model_cli(),
                "--peec-solver", solver,
-               "--h1-order", str(self.val("fes_order"))]
+               "--h1-order", str(self.val("fes_order")),
+               "--msh-output", msh_output(vol_path, "_peec_bem")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
@@ -617,7 +618,7 @@ class IHPanel(ModePanel):
         (e.g. "Steel (mu_r=100)") doesn't need to map 1:1 to the
         add_material_args choices (steel/copper/aluminum/custom).
 
-        CLI-DIFF: ignore --reg --shift-eps --nthreads --output --msh-output -- advanced solver knobs and auto-generated output paths; deliberately defaulted.
+        CLI-DIFF: ignore --reg --shift-eps --nthreads --output -- advanced solver knobs and auto-generated output paths; deliberately defaulted.
         """
         step = self.val("peec_step")
         if not step:
@@ -641,7 +642,8 @@ class IHPanel(ModePanel):
                "--peec-step", step,
                "--peec-sigma", self.val("coil_sigma"),
                "--peec-nwinc", str(self.val("peec_nwinc")),
-               "--peec-nhinc", str(self.val("peec_nhinc"))]
+               "--peec-nhinc", str(self.val("peec_nhinc")),
+               "--msh-output", msh_output(vol_path, "_fem_kelvin")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
@@ -668,7 +670,8 @@ class IHPanel(ModePanel):
                "--source-bnd", "source",
                "--sink-bnd", "sink",
                "--coil-mat", "coil",
-               "--impedance-model", self._impedance_model_cli()]
+               "--impedance-model", self._impedance_model_cli(),
+               "--msh-output", msh_output(vol_path, "_fem_full")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
