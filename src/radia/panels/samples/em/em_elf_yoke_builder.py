@@ -114,6 +114,10 @@ def _build_yoke():
     # (z=5..13mm bevel layer = 8 mm thick).  Use 5 mm for adequate
     # discretization through that layer.
     cubit.cmd(f"volume {yoke_united} scheme tetmesh")
+    # Empirical (2026-04-25): 5mm yoke gives Bz=-240mT (5.2% off ELF
+    # -228.1mT).  Refining to 2mm gives Bz=-177mT (DIVERGES, -22%);
+    # higher fes_order also diverges (Kelvin pair ID is linear-only).
+    # 5mm + fes_order=1 is the empirical sweet spot for this geometry.
     cubit.cmd(f"volume {yoke_united} size 0.005")
     cubit.cmd(f"mesh volume {yoke_united}")
     yoke_vols = [yoke_united]
