@@ -671,7 +671,46 @@ class IHWindow(AnalysisWindow):
         panel._on_method_changed(panel.val("method"))
         # Inspect the .vol on launch.
         self._reload_vol_info(vol_path)
+        # PEEC-inductance convenience: if the method is PEEC-inductance
+        # AND the STEP field is empty (first launch / fresh QSettings),
+        # auto-populate from the newest *.step / *.stp / *.jou in cwd.
+        # This was previously a separate PEECInductanceWindow class;
+        # merged into IHWindow 2026-04-26 because PEEC-inductance is
+        # just one of IH's four methods and a standalone window only
+        # added a thin wrapper that forced the method.
+        self._maybe_auto_fill_step_from_cwd()
         self._update_run_state()
+
+    def _maybe_auto_fill_step_from_cwd(self):
+        """If the active method needs a STEP/JOU coil AND the field is
+        empty, populate it with the newest .step / .stp / .jou in the
+        current working directory (set by the launcher's startDetached
+        to the .jou's directory).  STEP has priority over JOU (STEP is
+        the canonical input; JOU is the fallback for 3turnCoil-class
+        multi-turn coils where the STEP walker can't extract the full
+        centerline).  No-op when the user already has a value."""
+        panel = self._panel
+        if panel is None:
+            return
+        method = panel.val("method")
+        # Only PEEC-inductance auto-fills; other PEEC methods (BEM /
+        # FEM-Kelvin) ALSO use peec_step but the wp .vol is the user's
+        # primary intent so we do not auto-fill them.
+        if method != METHOD_PEEC_IND:
+            return
+        step_widget = panel._widgets.get("peec_step")
+        if step_widget is None or step_widget.text().strip():
+            return
+        import glob
+        candidates = sorted(
+            glob.glob("*.step") + glob.glob("*.stp"),
+            key=lambda p: os.path.getmtime(p), reverse=True)
+        if not candidates:
+            candidates = sorted(
+                glob.glob("*.jou"),
+                key=lambda p: os.path.getmtime(p), reverse=True)
+        if candidates:
+            step_widget.setText(os.path.abspath(candidates[0]))
 
     def _reload_vol_info(self, vol_path):
         panel = self._panel
