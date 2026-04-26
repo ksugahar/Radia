@@ -74,6 +74,38 @@ adds the Kelvin exterior sphere and the GND nodeset.
    `tests/panels/golden/em/<variant>.json`.  Later runs of
    `tests/panels/test_em_golden.py` lock the numbers.
 
+## BH curve (nonlinear material)
+
+For nonlinear-iron analyses (`--material steel`, GUI "BH Curve"
+mode), the panel can either use the built-in `STEEL_BH` curve in
+`src/radia/em_material.py` (default) OR a user-supplied 2-column
+text file with `H[A/m]<TAB>B[T]` rows.  The bundled sample
+`em_sample_bh.txt` (100 points, 0..318 kA/m / 0..2.61 T, CEFC 2020
+soft-magnetic-steel reference) demonstrates the format.  It is
+the full-precision source from which the rounded built-in
+`STEEL_BH` table was extracted, so the two are functionally
+equivalent (max relative diff 2e-5).
+
+  - Pass via CLI: `--material steel --bh-file path/to/em_sample_bh.txt`
+  - Pass via GUI: select "BH Curve" in the Material combo, then
+    Browse to `em_sample_bh.txt` (or any equivalent 2-column file)
+  - File format (whitespace-separated, `numpy.loadtxt`-compatible,
+    `#` lines stripped):
+
+        # H[A/m]    B[T]
+        0.0        0.0
+        13.898     0.22296
+        ...
+
+The full canonical EM-panel trio (all shipped in this directory
+or its parent `panels/samples/`):
+
+| Artifact | File | Role |
+|---|---|---|
+| Coil | `em_sample_coil.py` (`build_coil() -> CoilBuilder`) | Analytical Biot-Savart source (panel `--coil-script`) |
+| Mesh | `em_sample.jou` -> `em_sample.vol` (yoke + air + Kelvin) | FEM domain (panel `--vol`) |
+| Material | `em_sample_bh.txt` (or built-in `STEEL_BH`) | Nonlinear iron BH curve (panel `--bh-file`) |
+
 ## The full-ELF-CEFC-2020 reference
 
 The published ELF reference (`examples/c_type_electromagnet/mu=1000/

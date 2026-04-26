@@ -346,6 +346,7 @@ pip_freeze*.txt
 # scratch scripts, query .jou files, accidental sample/ singular dir)
 src/radia/panels/sample/
 src/radia/panels/samples/*.txt
+!src/radia/panels/samples/em_sample_bh.txt
 src/radia/panels/samples/*.bdf
 src/radia/panels/samples/*.geo
 src/radia/panels/samples/_*.py
