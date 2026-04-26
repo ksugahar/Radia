@@ -239,6 +239,13 @@ class IHPanel(ModePanel):
                        "STEP (*.step *.stp);;"
                        "Cubit journal (*.jou);;All (*)")
         step_w.textChanged.connect(self._emit_validation)
+        # "New..." button: write a CoilBuilder racetrack starter .py
+        # next to the chosen .step destination AND run it once to
+        # materialise the .step the panel needs.  User edits the .py
+        # afterwards + re-runs `python coil.py` to refresh the .step.
+        self.add_browse_action(
+            "peec_step", "New...", self._on_new_coil_template_for_step,
+            fixed_width=60)
 
         # ============ Workpiece material (INDEPENDENT from coil) ============
         self._add_section("Workpiece material", key="_sec_wp_material")
@@ -325,6 +332,66 @@ class IHPanel(ModePanel):
         cb = getattr(self, "validationChanged", None)
         if callable(cb):
             cb()
+
+    # --------------- CoilBuilder template wizard (STEP) ---------------
+
+    def _on_new_coil_template_for_step(self, line_edit):
+        """IH-side companion to the EM "New..." wizard.
+
+        Writes a CoilBuilder starter .py at <basename>.py and immediately
+        runs it once to materialise <basename>.step (which the IH PEEC
+        modes consume).  Sets the peec_step field to the .step path.
+
+        For later customisation: the user edits the sibling .py and
+        re-runs `python <basename>.py` to refresh the .step (the
+        template's __main__ writes the .step automatically).
+        """
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from radia_gui_base import COIL_TEMPLATE
+        existing = line_edit.text().strip()
+        if existing and os.path.isdir(os.path.dirname(existing)):
+            suggested = os.path.join(
+                os.path.dirname(existing), "coil_new.step")
+        else:
+            suggested = os.path.abspath("coil.step")
+        step_path, _ = QFileDialog.getSaveFileName(
+            self, "Save new coil (.py + .step)", suggested,
+            "STEP (*.step *.stp);;All (*)")
+        if not step_path:
+            return
+        # Sibling .py path for editing.  COIL_TEMPLATE's __main__
+        # writes the .step using `splitext(__file__)[0] + '.step'`,
+        # so the .py basename must match the .step basename.
+        py_path = os.path.splitext(step_path)[0] + ".py"
+        try:
+            with open(py_path, "w", encoding="utf-8") as f:
+                f.write(COIL_TEMPLATE)
+        except OSError as exc:
+            QMessageBox.warning(
+                self, "Could not write coil .py",
+                f"Failed to write {py_path}:\n{exc}")
+            return
+        # Run the .py in-process so the .step is materialised
+        # immediately.  __main__ guards the write_step call so any
+        # netgen.occ failure surfaces here without leaving a stale
+        # peec_step pointing at a missing file.
+        try:
+            import runpy
+            runpy.run_path(py_path, run_name="__main__")
+        except Exception as exc:
+            QMessageBox.warning(
+                self, "Could not run coil .py",
+                f"Wrote {py_path} but failed to materialise .step:\n"
+                f"{exc}\n\nEdit the .py and run "
+                f"`python {os.path.basename(py_path)}` manually.")
+            return
+        if not os.path.isfile(step_path):
+            QMessageBox.warning(
+                self, "STEP not produced",
+                f"{py_path} ran but {step_path} was not written.\n"
+                "STEP export needs netgen.occ; check the .py output.")
+            return
+        line_edit.setText(step_path)
 
     # ----------------------- Material presets -----------------------
 
