@@ -3,6 +3,76 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.10.0 — Panel UX overhaul: font baseline, base-class unification, CoilBuilder wizards
+
+Released 2026-04-26.  All-Python release; no C++ rebuild needed.
+Focus is the panel runtime that EM, IH, and PCB share.
+
+### Font baseline (readable on 2K)
+
+The Qt OS default of 9pt Segoe UI was unreadable on the lab's 2K
+displays (per `feedback_panel_vertical_space.md`).  After three turns
+of bracketing with the user (9pt unreadable -> 11pt stingy -> 13pt
+overshoot -> **12pt chosen**), `apply_panel_base_font(app)` is now
+called from `run_app()` and from the test fixture; it inherits the OS
+default family (Segoe UI on Windows, system sans-serif on Linux/macOS)
+and bumps only the point size.
+
+Hardcoded smaller fonts removed:
+  - output text area: 9pt -> 12pt (Consolas)
+  - status label (IH): "font-size: 11px" deleted -- de-emphasis is
+    now colour-only (#888), font size inherits the baseline.
+
+Regression guard: new `panel_qa.check_font_size_min` walks every
+visible widget and fails if any renders below 10pt.  Width / height
+thresholds rebudgeted (1400 RED / 1350 RED) for the larger glyphs.
+
+### Panel base-class unification
+
+EM and IH carried two identical 9-line copies of the section-header
+helper.  One source of truth in `ModePanel`:
+
+  - `_add_section(title, key=None)`           hoisted to base
+  - `add_status_label(key=None)`              hoisted to base
+  - `_method_combo` attribute convention      adopted by EM
+                                              (was `_form_combo`)
+  - `add_browse_action(key, label, callback)` new helper -- attach
+                                              extra buttons to an
+                                              existing browse row
+
+PCB combo extraction `"0 (LU)".split()[0]` replaced with an explicit
+`PCB_SOLVERS = {"LU": 0, "BiCGSTAB": 1, "HACApK": 2}` map.
+
+### PEEC-inductance Window merged into IH
+
+`radia_peec_inductance.py` (95-line wrapper) deleted.  The same
+analysis is reached by selecting Method = "PEEC inductance (coil
+only, STEP)" in the IH window.  IH's `__init__` auto-fills the STEP
+field from the newest `*.step` / `*.stp` / `*.jou` in cwd when the
+field is empty -- behaviour previously specific to the wrapper
+window now applies to any IH launch in PEEC-inductance mode.
+
+The Cubit launcher (`RadiaComp.cpp`) discovers panels by globbing
+`radia_*.py` so the merged entry disappears from the menu without
+any .ccl change.
+
+### "New..." coil wizards (EM + IH)
+
+Both panels expose a [New...] button next to the coil-source field:
+
+  - **EM** -> writes a self-contained `.py` template (CoilBuilder
+    racetrack with EDIT BLOCK at the top).  The user picks the save
+    path, edits the 6 numbers (NI / START / WIDTH / HEIGHT /
+    STRAIGHT / ARC_R), and points the panel's Coil script at it.
+  - **IH** -> writes the same `.py` AND immediately runs it in-process
+    to materialise a sibling `.step` (the format the IH PEEC modes
+    consume).  User can later edit the `.py` and re-run
+    `python coil.py` to refresh the `.step`.
+
+Single COIL_TEMPLATE constant in `radia_gui_base.py` powers both.
+Verified end-to-end: 84-segment closed racetrack, 2000 A, gap=1e-17 m,
+.step = 125 KB OCC swept solid.
+
 ## 4.9.0 — EM canonical trio + 1/2 Kelvin Benchmark + MSC silent breakage fix
 
 Released 2026-04-26.
