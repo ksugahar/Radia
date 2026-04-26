@@ -32,6 +32,20 @@ try:
 except ImportError:
     _HAS_BEM = False
 
+# bem_inductance was retired from the IH panel 2026-04-19 and moved
+# to examples/induction_heating/bem_reference/.  Tests that import
+# it must add that directory to sys.path; if the module is missing
+# (or the directory was deleted in a slim checkout), the tests skip.
+_BEM_INDUCTANCE_DIR = os.path.join(
+    _repo, "examples", "induction_heating", "bem_reference")
+if os.path.isdir(_BEM_INDUCTANCE_DIR):
+    if _BEM_INDUCTANCE_DIR not in sys.path:
+        sys.path.insert(0, _BEM_INDUCTANCE_DIR)
+    _HAS_BEM_INDUCTANCE = os.path.isfile(
+        os.path.join(_BEM_INDUCTANCE_DIR, "bem_inductance.py"))
+else:
+    _HAS_BEM_INDUCTANCE = False
+
 
 def _run_script(script_name, args, timeout=120):
     """Run a calc script as subprocess and return parsed JSON."""
@@ -113,9 +127,20 @@ class TestIHBEM:
             "n_elements": mesh.GetNE(ngsolve.BND),
         }
 
-    @pytest.mark.skipif(not _HAS_BEM, reason="ngsolve.bem not available")
+    @pytest.mark.skipif(not (_HAS_BEM and _HAS_BEM_INDUCTANCE),
+                        reason="ngsolve.bem or bem_inductance.py "
+                               "(examples/induction_heating/bem_reference/) "
+                               "not available")
     def test_inductance_direct_call(self, occ_surface_mesh):
-        """Test BEM solver called directly (not as subprocess)."""
+        """Test BEM solver called directly (not as subprocess).
+
+        Tests retired-but-archived BEM inductance path
+        (`examples/induction_heating/bem_reference/bem_inductance.py`).
+        Skipped when the bem_reference directory is missing.  Per the
+        2026-04-19 IH panel restructure, the production IH workflow
+        does NOT use BEM inductance -- this test is a research safety
+        net only.
+        """
         from bem_inductance import compute_inductance_source_sink
         from netgen.meshing import Mesh as NetgenMesh
 
