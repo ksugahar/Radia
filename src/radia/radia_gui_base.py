@@ -26,15 +26,16 @@ _RESOURCES_DIR = os.path.join(_THIS_DIR, "resources")
 _PYTHON = sys.executable
 _SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".radia")
 
-# Lab-standard panel font baseline. Target display is 2K+ (per
-# feedback_panel_vertical_space.md); the Qt OS default of 9pt is
-# unreadable at that pixel density.  Bumped 2026-04-26 after user
-# feedback "GUIの窓のフォントサイズが小さすぎる" / "637x740みたいに
-# ケチらなくてよいよ" -- the 2K screen has ~2400x1350 usable, so a
-# panel that opens at ~640x740 wastes screen real-estate; 13pt feels
-# right at desk distance and naturally pushes the panel to ~750x870.
+# Lab-standard panel font baseline.  Target display is 2K+ (per
+# feedback_panel_vertical_space.md).  Bracketing from user feedback
+# 2026-04-26:
+#   -  9pt (Qt OS default) -- "小さすぎる", unreadable on 2K
+#   - 11pt (first bump)    -- "637x740みたいにケチらなくてよい",
+#                              still felt stingy at desk distance
+#   - 13pt (over-correct)  -- too big
+#   - 12pt                 -- "12pt あれば十分です" (chosen)
 PANEL_BASE_FONT_FAMILY = "Segoe UI"
-PANEL_BASE_FONT_POINT_SIZE = 13
+PANEL_BASE_FONT_POINT_SIZE = 12
 
 # Shared panel debug log (C:/radia_panel_log.txt on Windows). Append-only
 # from this process; the Cubit-side register_toolbar.py truncates it on
