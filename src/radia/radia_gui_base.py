@@ -134,6 +134,67 @@ class ModePanel(QWidget):
         self.setLayout(self._form)
         self._widgets = {}
         self._row_indices = {}
+        # Optional per-panel status line (created lazily by
+        # add_status_label).  Lives in self._status_label so panel_qa
+        # and subclasses can find it consistently.
+        self._status_label = None
+
+    # ------------------------------------------------------------------
+    # Section header (hoisted from radia_em / radia_ih -- 2026-04-26).
+    # Both panels had identical 9-line copies; kept the IH docstring
+    # which captures the offscreen-vs-real-desktop rendering lesson.
+    # ------------------------------------------------------------------
+    def _add_section(self, title, key=None):
+        """Insert a visual section header into the form.
+
+        Section header is a QLabel with bold HTML text.  Must use an
+        explicit fixed height computed from fontMetrics: stylesheet
+        ``padding`` / ``margin`` are painted INSIDE the widget rect but
+        NOT added to sizeHint, so QFormLayout gives the row a
+        too-small height and the bold text gets vertically clipped
+        (visible as dotted lines on the real desktop, even though
+        offscreen measurements read as "OK").
+
+        Section header font is +1pt above the panel baseline so
+        sections are clearly distinguished from their fields.
+
+        ``key`` registers the row in ``self._row_indices`` so it can be
+        collapsed together with the widgets it groups via
+        ``_set_row_visible(key, False)``.
+        """
+        lbl = QLabel(f"<b>{title}</b>")
+        f = lbl.font()
+        f.setPointSize(f.pointSize() + 1)
+        lbl.setFont(f)
+        lbl.setStyleSheet("QLabel { color: #444; }")
+        # Height = text bounding-box + 10 px breathing room above/below.
+        fm_h = lbl.fontMetrics().boundingRect("Mg").height()
+        lbl.setFixedHeight(fm_h + 10)
+        self._form.addRow("", lbl)
+        if key is not None:
+            self._row_indices[key] = self._form.rowCount() - 1
+
+    def add_status_label(self, key=None):
+        """Add an optional per-panel status / validation line.
+
+        Stored on ``self._status_label`` for subclasses to update via
+        ``self._status_label.setText("...")``.  De-emphasised by
+        colour (#888) only -- font size inherits the lab baseline so
+        it stays readable on 2K (per feedback_panel_font_baseline.md).
+
+        Returns the QLabel.  Idempotent: a second call returns the
+        existing label without adding another row.
+        """
+        if self._status_label is not None:
+            return self._status_label
+        lbl = QLabel("")
+        lbl.setWordWrap(True)
+        lbl.setStyleSheet("QLabel { color: #888; }")
+        self._form.addRow("", lbl)
+        self._status_label = lbl
+        if key is not None:
+            self._row_indices[key] = self._form.rowCount() - 1
+        return lbl
 
     def _set_row_visible(self, key, visible):
         """Show / hide a form row and **collapse** its vertical space.

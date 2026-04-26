@@ -21,6 +21,17 @@ from radia_gui_base import (
 )
 
 
+# Solver names shown in the combo, mapped to the integer ID that
+# calc_pcb_peec.py --solver-method expects.  Display name is the
+# human-readable form; do NOT cram the ID into the display text and
+# parse it back out (fragile, breaks if the wording changes).
+PCB_SOLVERS = {
+    "LU": 0,
+    "BiCGSTAB": 1,
+    "HACApK": 2,
+}
+
+
 class PCBPanel(ModePanel):
 
     def __init__(self, parent=None):
@@ -33,8 +44,7 @@ class PCBPanel(ModePanel):
         self.add_line("freq_min", "Freq min [Hz]:", "1e3")
         self.add_line("freq_max", "Freq max [Hz]:", "1e9")
         self.add_spin("n_freq", "N freq points:", 50, 1, 1000)
-        self.add_combo("solver", "Solver:",
-                       ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"])
+        self.add_combo("solver", "Solver:", list(PCB_SOLVERS.keys()))
         self.add_line("spice_output", "SPICE output:", "",
                       placeholder="e.g. output.cir")
 
@@ -46,13 +56,13 @@ class PCBPanel(ModePanel):
         inp = self.val("inp_file")
         if not inp:
             raise ValueError("No FastHenry .inp file specified.")
-        solver_id = self.val("solver").split()[0]
+        solver_id = PCB_SOLVERS[self.val("solver")]
         cmd = [_PYTHON, calc_script("calc_pcb_peec.py"),
                "--inp", inp,
                "--freq-min", self.val("freq_min"),
                "--freq-max", self.val("freq_max"),
                "--n-freq", self.val("n_freq"),
-               "--solver-method", solver_id,
+               "--solver-method", str(solver_id),
                "--output", json_output(inp, "_pcb_peec")]
         spice = self.val("spice_output")
         if spice:
