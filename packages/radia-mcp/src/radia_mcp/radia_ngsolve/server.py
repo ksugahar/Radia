@@ -27,15 +27,15 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from .rules import ALL_RULES
-from .radia_knowledge import get_radia_documentation
-from .md2html_knowledge import get_md2html_documentation
-from .ngsolve_knowledge import get_ngsolve_documentation
-from .sparsesolv_knowledge import get_sparsesolv_documentation
-from .kelvin_knowledge import get_kelvin_documentation
-from .ngsbem_inductance_knowledge import get_ngsbem_inductance_documentation
-from .peec_inductance_knowledge import get_peec_inductance_documentation
-from .esim_knowledge import get_esim_documentation
-from .panel_gui_pitfalls_knowledge import get_panel_gui_pitfalls
+from .knowledge.radia import get_radia_documentation
+from .knowledge.md2html import get_md2html_documentation
+from .knowledge.ngsolve import get_ngsolve_documentation
+from .knowledge.sparsesolv import get_sparsesolv_documentation
+from .knowledge.kelvin import get_kelvin_documentation
+from .knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
+from .knowledge.peec_inductance import get_peec_inductance_documentation
+from .knowledge.esim import get_esim_documentation
+from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
