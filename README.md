@@ -289,6 +289,35 @@ pip install --upgrade radia[cubit]
 cubit-plugin-install
 ```
 
+### Standalone GUI Panels (no Cubit required)
+
+The `pip install radia` install registers three console entry points
+that open the analysis panels as standalone PySide6 applications.
+**Cubit is not needed** — bring your own `.vol` mesh (from Cubit, from
+Netgen standalone via NGSolve OCC, or any other source that can write
+the Netgen `.vol` text format) and the panels run end-to-end:
+
+```bash
+radia-em [model.vol]      # Electromagnet: Omega / A-Phi / MSC / Kelvin Benchmark
+radia-ih [model.vol]      # Induction Heating: PEEC-IND / PEEC+BEM /
+                          #                    PEEC+FEM-Kelvin / FEM-FULL
+radia-pcb                 # PCB / FastHenry .inp (no .vol needed)
+```
+
+Pass the `.vol` path on the command line to open the panel pre-pointed
+at it, or omit the argument and use the in-panel `Model (.vol):
+[Browse...]` field.  All other knobs (formulation, material, solver,
+coil source) live in the panel itself; the only required input is the
+mesh.  The 2026-04-26 panel UX overhaul (Segoe UI 12pt baseline,
+ModePanel base-class unification, [New...] CoilBuilder wizards on
+both EM and IH) ships in radia 4.10.0.
+
+The Cubit launcher (`Solve -> Radia-NGSolve`) is the same set of
+panels surfaced inside Cubit's GUI; it adds `.jou`-aware mesh export
+on top.  If you have Cubit, install the plugin and use either
+launcher; if not, the standalone entry points above cover every
+analysis mode.
+
 ### Example 1: Magnetostatic Source Field
 
 ```python
