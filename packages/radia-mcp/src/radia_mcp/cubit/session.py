@@ -1,5 +1,5 @@
 """
-cubit_session.py — Python-3.12-side client for the Cubit Viewer daemon.
+session.py — Python-3.12-side client for the Cubit Viewer daemon.
 
 This module is version-agnostic: stdlib only, works on any Python
 >= 3.10.
@@ -7,14 +7,14 @@ This module is version-agnostic: stdlib only, works on any Python
 Two transport modes share the same public API (call/ping/shutdown):
 
     mode="gui"    (DEFAULT, Plan A — 2026-04-19 file-drop bootstrap)
-        ─ Launches `coreform_cubit.exe -nojournal cubit_bootstrap.py`
+        ─ Launches `coreform_cubit.exe -nojournal bootstrap.py`
         ─ Bootstrap installs a QTimer inside Cubit's Qt event loop
         ─ Client ↔ Bootstrap communicate via atomically-renamed JSON
           files in a per-session drop directory (no sockets)
         ─ Cubit GUI window is live & user-interactive throughout
 
     mode="batch"  (legacy, CI/scripting)
-        ─ Launches Cubit's bundled Python 3.10 with cubit_daemon.py
+        ─ Launches Cubit's bundled Python 3.10 with daemon.py
         ─ Client ↔ Daemon communicate via line-delimited JSON-RPC on
           stdin/stdout of the subprocess
         ─ No GUI, no user interaction; pure headless
@@ -24,8 +24,8 @@ Both modes preserve a persistent Cubit session across many client calls
 slow. A process-wide singleton (`CubitSession.get()`) holds the handle.
 
 Protocol version:
-    v1 — stdio JSON-RPC (cubit_daemon.py)
-    v2 — file drop JSON-RPC (cubit_bootstrap.py, this module default)
+    v1 — stdio JSON-RPC (daemon.py)
+    v2 — file drop JSON-RPC (bootstrap.py, this module default)
 
 The ready message echoes `protocol_version` for mutual compatibility.
 """
@@ -516,11 +516,11 @@ class CubitSession:
            find + attach.
         """
         gui_exe = _cubit_gui_exe(self._bin_dir)
-        bootstrap_path = Path(__file__).with_name("cubit_bootstrap.py")
+        bootstrap_path = Path(__file__).with_name("bootstrap.py")
         if not bootstrap_path.exists():
             raise CubitSessionError(
                 f"Bootstrap script missing: {bootstrap_path}. Expected "
-                "sibling of cubit_session.py.")
+                "sibling of session.py.")
 
         # --- Per-user stable drop-dir ----------------------------------
         drop = _user_daemon_dir()
@@ -544,7 +544,7 @@ class CubitSession:
         # --- No live daemon: new spawn path ----------------------------
         # Step 1: license pre-warm
         try:
-            from .cubit_license_warmup import warmup_license
+            from .license_warmup import warmup_license
             warmup = warmup_license(self._bin_dir,
                                      timeout_s=LICENSE_WARMUP_TIMEOUT_S)
             self._last_license_warmup = warmup
@@ -664,11 +664,11 @@ class CubitSession:
 
     def _start_stdio_daemon(self) -> dict:
         python_exe = _cubit_python_exe(self._bin_dir)
-        daemon_path = Path(__file__).with_name("cubit_daemon.py")
+        daemon_path = Path(__file__).with_name("daemon.py")
         if not daemon_path.exists():
             raise CubitSessionError(
                 f"Daemon script missing: {daemon_path}. Expected sibling "
-                "of cubit_session.py in the mcp-server-cubit package.")
+                "of session.py in the mcp-server-cubit package.")
 
         env = os.environ.copy()
         env["CUBIT_DAEMON_MODE"] = self._mode

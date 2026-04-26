@@ -3687,7 +3687,7 @@ If a recent renewal is on disk, the same boot costs ~3 s.
 
 ## What the warmup does
 
-`radia_mcp.cubit.cubit_license_warmup.warmup_license(bin_dir, timeout_s=30)`
+`radia_mcp.cubit.license_warmup.warmup_license(bin_dir, timeout_s=30)`
 parses the renewals folder.  If the most recent `.ren` is within 3 days,
 it returns immediately.  Otherwise it runs
 `rlm_activate.exe --login <email> --password <pw>` **before** Cubit is

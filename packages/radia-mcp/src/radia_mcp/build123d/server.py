@@ -383,7 +383,7 @@ def preview_shape_in_cubit(script: str, label: str = "preview") -> str:
 
     # Hand to Cubit viewer (lazy-start daemon).
     try:
-        from radia_mcp.cubit import cubit_session as _cs
+        from radia_mcp.cubit import session as _cs
     except ImportError as e:
         return json.dumps({
             "status": "error",

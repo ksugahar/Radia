@@ -1,7 +1,7 @@
 """
-cubit_bootstrap.py — Runs INSIDE the Cubit GUI process (Plan A).
+bootstrap.py — Runs INSIDE the Cubit GUI process (Plan A).
 
-Launched by `coreform_cubit.exe -nojournal cubit_bootstrap.py`. Cubit's
+Launched by `coreform_cubit.exe -nojournal bootstrap.py`. Cubit's
 embedded Python executes this script, at which point:
 
     - Cubit's Qt event loop is already running (GUI is up)
@@ -11,7 +11,7 @@ embedded Python executes this script, at which point:
 
 We install a QTimer (200 ms) that polls a drop directory for JSON-RPC
 request files, dispatches them on the Qt main thread, and writes
-JSON responses into a sibling `out/` directory. Client (cubit_session.py)
+JSON responses into a sibling `out/` directory. Client (session.py)
 drops a `<id>.req` file and polls for `out/<id>.resp`.
 
 This design completely avoids sockets / named pipes / TCP (lab aesthetic
@@ -19,7 +19,7 @@ policy: no COMSOL-pattern), runs commands on the Qt main thread (safe),
 and survives an arbitrary number of client requests for the lifetime of
 the Cubit GUI window.
 
-Protocol (mirrors cubit_daemon.py's stdio JSON-RPC):
+Protocol (mirrors daemon.py's stdio JSON-RPC):
     request file  `<drop>/<id>.req`:
         {"id": int, "op": str, "args": list}
     response file `<drop>/out/<id>.resp`:
@@ -47,7 +47,7 @@ from PyQt5.QtCore import QTimer
 import cubit  # Cubit-bundled module; present in the GUI's Python
 
 
-PROTOCOL_VERSION = 2  # file-drop variant of cubit_daemon.py's protocol 1
+PROTOCOL_VERSION = 2  # file-drop variant of daemon.py's protocol 1
 
 
 def _read_drop_dir() -> pathlib.Path:
@@ -56,7 +56,7 @@ def _read_drop_dir() -> pathlib.Path:
         # Fail loud: we don't want to silently squat on a hardcoded path.
         raise RuntimeError(
             "CUBIT_DROP_DIR env var not set — cannot locate drop directory. "
-            "cubit_session.py should set this before launch."
+            "session.py should set this before launch."
         )
     p = pathlib.Path(drop)
     p.mkdir(parents=True, exist_ok=True)
