@@ -23,18 +23,18 @@ from mcp.server.fastmcp import FastMCP
 
 # Import knowledge bases and rules (relative imports for pip package)
 from .rules import ALL_RULES
-from .export_knowledge import get_export_documentation
-from .netgen_workflow_knowledge import get_netgen_documentation
-from .scripting_knowledge import get_cubit_documentation
+from .knowledge.export import get_export_documentation
+from .knowledge.netgen_workflow import get_netgen_documentation
+from .knowledge.scripting import get_cubit_documentation
 from .forum_tips import get_forum_tips
 from .api_reference import get_api_reference
-from .panel_conventions_knowledge import PANEL_CONVENTIONS, LABEL_GUIDE
-from .custom_toolbar_knowledge import (
+from .knowledge.panel_conventions import PANEL_CONVENTIONS, LABEL_GUIDE
+from .knowledge.custom_toolbar import (
 	get_toolbar_documentation,
 	generate_toolbar_skeleton,
 	generate_dialog_skeleton,
 )
-from .mesh_diagnostics_knowledge import get_diagnostics_documentation
+from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from ..common import failure_log as _fl
 from ..common import web_docs as _wd
 from ..common import examples as _ex
