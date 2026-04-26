@@ -14,7 +14,10 @@ perimeter of each cross-section; no interior volume grid.
 Source: src/radia/panels/calc_peec_inductance.py,
         src/radia/coil_from_cad.py (STEP path),
         src/radia/coil_from_jou.py (.jou path),
-        src/radia/radia_peec_inductance.py (panel window, NEEDS_VOL=False).
+        src/radia/radia_ih.py -- IHWindow with Method = "PEEC inductance
+        (coil only, STEP)" (merged 2026-04-26 from the previously
+        standalone radia_peec_inductance.py wrapper; the wrapper added
+        no behaviour beyond auto-fill, which now lives on IHWindow).
 """
 
 
