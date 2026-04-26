@@ -1,6 +1,6 @@
 {
   "description": "Golden reference for calc_accel_magnet.py on the C-type dipole em_1-8_eighth.jou (1/8 model, linear mu_r=1000).",
-  "rationale": "Regression guard for the 1/8-reduction pipeline (single-axis Kelvin offset + 3-plane webcut + kelvin_far infinity-plane Dirichlet, 2026-04-25).  Verifies: 1/8 is no longer rejected as NotImplementedError, sym_<bc>_<axis> sidesets propagate for all 3 axes, kelvin_far is recognised as Dirichlet by calc_accel_magnet, and NGSolve loads the .vol despite a few unmatched Kelvin periodic vertices (the all-or-nothing C++ identification policy + add_periodic_kelvin solve-time fallback).  NOT a physics-accuracy comparison.",
+  "rationale": "Regression guard for the 1/8-reduction pipeline (single-axis Kelvin offset + 3-plane webcut + kelvin_far infinity-plane Dirichlet, 2026-04-25).  Verifies: 1/8 is no longer rejected as NotImplementedError, sym_<bc>_<axis> sidesets propagate for all 3 axes, kelvin_far is recognised as Dirichlet by calc_accel_magnet, and (after 2026-04-26 deterministic-anchor fix) NGSolve loads the .vol with all 774/774 Kelvin pairs identified at machine precision.  NOT a physics-accuracy comparison.",
   "sample": {
     "vol": "C:/temp/em_eighth.vol",
     "coil_script": "src/radia/panels/samples/em_sample_coil.py",
@@ -19,7 +19,7 @@
     "solver": "pardiso"
   },
   "observations": {
-    "note": "Absolute-value snapshot for regression guard.  Different sym BCs than em_1-4_quarter_xz (added sym_ht=0_y + kelvin_far Dirichlet), so numbers differ (~3x larger B_origin_mag because the additional Dirichlet planes restrict the field more aggressively).  Coil is full racetrack -- BCs do not match its actual symmetry.",
+    "note": "Absolute-value snapshot for regression guard.  Different sym BCs than em_1-4_quarter_xz (added sym_ht=0_y + kelvin_far Dirichlet), so numbers differ (~3x larger B_origin_mag because the additional Dirichlet planes restrict the field more aggressively).  Coil is full racetrack -- BCs do not match its actual symmetry.  Mesh topology lock refreshed 2026-04-26 after `_add_kelvin_cubit_reduction` deterministic-anchor fix landed: previous numbers (ne=56289, ndof=11695) were from the old `max(curves, key=length)` rule with C++ identification fallback; the deterministic `min(curves, key=(z,y,x))` rule produces a slightly different mesh (ne=56369, ndof=11708) with all 774/774 Kelvin pairs at machine precision (no fallback).  Physics (B_origin_mag, W_mag, L) unchanged within tolerance.",
     "I_2000A_coil_py": {
       "B_origin_T": [0.0, 0.0, -4.892e-04],
       "B_origin_mag_T": 4.892e-04,
@@ -27,8 +27,8 @@
       "L_H": 1.429e-06,
       "iterations": 1,
       "converged": true,
-      "ne": 56289,
-      "ndof": 11695,
+      "ne": 56369,
+      "ndof": 11708,
       "n_wire_segments": 84
     }
   },
