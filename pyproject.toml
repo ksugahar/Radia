@@ -94,6 +94,7 @@ radia-pcb = "radia.radia_pcb:main"
 [tool.setuptools.package-data]
 radia = [
     "*.pyd", "*.ccm", "*.ccl", "*.png", "*.ico",
+    "resources/*.png", "resources/*.ico",
     "panels/samples/*.jou",
     "panels/samples/*.sol",
     "panels/samples/*.vol",

@@ -47,11 +47,40 @@ except Exception:
 
 
 def _icon_path():
+    """Resolve the Radia panel window icon.
+
+    Prefers (in order):
+      1. `radia_icon.ico` or `radia_icon.png` (canonical fixed name)
+      2. The most recently-modified `.ico` or `.png` in
+         `src/radia/resources/` (dated logos like `2026_04_26.png`).
+
+    The dated-filename fallback lets the user drop a new logo into
+    `resources/` without renaming -- the resolver picks it up by
+    mtime.  Returns "" if no image is found.
+    """
+    if not os.path.isdir(_RESOURCES_DIR):
+        return ""
+    # 1. Canonical fixed name
     for ext in (".ico", ".png"):
         p = os.path.join(_RESOURCES_DIR, "radia_icon" + ext)
         if os.path.isfile(p):
             return p
-    return ""
+    # 2. Most recent .ico / .png in the resources directory
+    candidates = []
+    for fname in os.listdir(_RESOURCES_DIR):
+        ext = os.path.splitext(fname)[1].lower()
+        if ext in (".ico", ".png"):
+            full = os.path.join(_RESOURCES_DIR, fname)
+            try:
+                candidates.append((os.path.getmtime(full), ext, full))
+            except OSError:
+                pass
+    if not candidates:
+        return ""
+    # Prefer .ico over .png at equal mtime; among same ext, newest mtime.
+    candidates.sort(key=lambda t: (t[0], 0 if t[1] == ".ico" else 1),
+                    reverse=True)
+    return candidates[0][2]
 
 
 def calc_script(name):
