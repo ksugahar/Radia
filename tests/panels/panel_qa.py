@@ -31,12 +31,15 @@ from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QLineEdit,
 
 
 # 2K (2560x1440) minimum display, usable ~1350 px vertical, ~2400 horizontal.
-# Thresholds reflect the 11pt baseline font (Segoe UI); the 9pt-era
-# numbers (1100 / 900) under-budget by ~20% for the larger glyphs.
-MAX_HEIGHT_RED = 1300     # hard fail: bottom buttons off-screen on 2K
-MAX_HEIGHT_YELLOW = 1100  # warning: getting tall
-MAX_WIDTH_RED = 1300      # hard fail: panel eats too much horizontal real estate
-MAX_WIDTH_YELLOW = 1100   # warning: method combo text probably long
+# Thresholds reflect the 13pt baseline font (Segoe UI).  9pt-era numbers
+# (1100 / 900) under-budgeted by ~45% once the user said "ケチるな"
+# (don't be stingy) -- a comfortable panel on 2K is allowed to take
+# half the screen.  Hard fail still leaves room for output area
+# scrolling.
+MAX_HEIGHT_RED = 1350     # hard fail: bottom buttons off-screen on 2K
+MAX_HEIGHT_YELLOW = 1200  # warning: getting tall
+MAX_WIDTH_RED = 1400      # hard fail: panel eats too much horizontal real estate
+MAX_WIDTH_YELLOW = 1200   # warning: method combo text probably long
 
 # Minimum readable font size for the 2K target display.  Qt's OS default
 # of 9pt is unreadable on 2K+ at 100% scaling, so the lab baseline is
