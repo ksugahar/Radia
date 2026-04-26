@@ -25,9 +25,9 @@ from mcp.server.fastmcp import FastMCP
 from .rules import ALL_RULES
 from .export_knowledge import get_export_documentation
 from .netgen_workflow_knowledge import get_netgen_documentation
-from .cubit_scripting_knowledge import get_cubit_documentation
-from .cubit_forum_tips import get_forum_tips
-from .cubit_api_reference import get_api_reference
+from .scripting_knowledge import get_cubit_documentation
+from .forum_tips import get_forum_tips
+from .api_reference import get_api_reference
 from .panel_conventions_knowledge import PANEL_CONVENTIONS, LABEL_GUIDE
 from .custom_toolbar_knowledge import (
 	get_toolbar_documentation,
@@ -1129,8 +1129,8 @@ def open_in_cubit(path: str = "",
 	import subprocess as _sp
 	import tempfile as _tf
 	from pathlib import Path
-	from .cubit_session import find_cubit_install, _cubit_gui_exe
-	from .cubit_license_warmup import warmup_license
+	from .session import find_cubit_install, _cubit_gui_exe
+	from .license_warmup import warmup_license
 
 	if cubit_exe:
 		exe = cubit_exe
@@ -1255,7 +1255,7 @@ def open_in_cubit(path: str = "",
 # the role of OCP's WebView, and this mcp-server plays the role of
 # OCP's Python client.
 
-from . import cubit_session as _cs
+from . import session as _cs
 
 
 def _cubit_session_or_error():
