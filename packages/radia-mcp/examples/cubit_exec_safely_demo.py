@@ -5,7 +5,7 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 subprocess.run(['taskkill', '/F', '/IM', 'coreform_cubit.exe'],
                capture_output=True, check=False)
 
-from radia_mcp.cubit import cubit_session as cs
+from radia_mcp.cubit import session as cs
 from radia_mcp.cubit import server as srv
 
 cs.CubitSession.reset()

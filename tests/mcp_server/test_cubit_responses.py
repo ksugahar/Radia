@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from radia_mcp.cubit.cubit_scripting_knowledge import get_cubit_documentation
+from radia_mcp.cubit.scripting_knowledge import get_cubit_documentation
 from radia_mcp.cubit.custom_toolbar_knowledge import get_toolbar_documentation
 from radia_mcp.cubit.export_knowledge import get_export_documentation
 from radia_mcp.cubit.mesh_diagnostics_knowledge import (
