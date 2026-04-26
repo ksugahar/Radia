@@ -92,35 +92,21 @@ class EMPanel(ModePanel):
         self._build_ui()
 
     # ------------------------------------------------------------------
-    # Section header helper (copied from radia_ih.py 2026-04-25 -- the
-    # section style with explicit fixed-height label and padding is the
-    # one that survives both offscreen + real-desktop Qt rendering).
     # ------------------------------------------------------------------
-    def _add_section(self, title, key=None):
-        """Insert a bold section header row into the form.
-
-        ``key`` registers the row in ``self._row_indices`` so it can be
-        collapsed together with the widgets it groups via
-        ``_set_row_visible(key, False)``.
-        """
-        lbl = QLabel(f"<b>{title}</b>")
-        f = lbl.font(); f.setPointSize(f.pointSize() + 1); lbl.setFont(f)
-        lbl.setStyleSheet("QLabel { color: #444; }")
-        fm_h = lbl.fontMetrics().boundingRect("Mg").height()
-        lbl.setFixedHeight(fm_h + 10)
-        self._form.addRow("", lbl)
-        if key is not None:
-            self._row_indices[key] = self._form.rowCount() - 1
-
+    # _add_section is inherited from ModePanel (hoisted 2026-04-26).
     # ------------------------------------------------------------------
     # UI build
     # ------------------------------------------------------------------
     def _build_ui(self):
         # ---- Formulation ----
         self._add_section("Formulation")
-        self._form_combo = self.add_combo(
+        # Convention: every panel that switches solver modes exposes
+        # the combo as `self._method_combo` (used by panel_qa and
+        # generic mode-switch code).  The widget key stays the
+        # domain-meaningful "formulation" for build_command lookups.
+        self._method_combo = self.add_combo(
             "formulation", "Formulation:", FORMULATIONS)
-        self._form_combo.currentTextChanged.connect(
+        self._method_combo.currentTextChanged.connect(
             self._on_formulation_changed)
 
         # ---- Source ----
