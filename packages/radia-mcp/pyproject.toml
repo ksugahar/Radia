@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.33.4"
-description = "MCP servers for the Radia CAE ecosystem. 0.33.4 (2026-04-26): Kelvin knowledge maturity pass -- radia_ngsolve.kelvin (why 1/8 sphere benchmark is BVP-invalid, rho_min sweep diagnostic, -specialcf.normal sign), cubit kelvin_reduction_traps (subtract-keep no-op in 2025.3, octant anchor determinism), electromagnet symmetry_reductions (sphere vs C-yoke 1/8 path + ELF CEFC 2020 BC). 0.33.0: Finish monorepo consolidation."
+version = "0.33.5"
+description = "MCP servers for the Radia CAE ecosystem. 0.33.5 (2026-04-26): peec_inductance_knowledge updated to reflect radia_peec_inductance.py merge into IHWindow Method (radia 4.10.0 panel unification). 0.33.4: Kelvin knowledge maturity pass -- radia_ngsolve.kelvin / cubit kelvin_reduction_traps / electromagnet symmetry_reductions (1/8 sphere vs C-yoke clarification + ELF CEFC 2020 BC)."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
