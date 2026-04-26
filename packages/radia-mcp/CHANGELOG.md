@@ -5,6 +5,16 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.33.5 — Sync with radia 4.10.0 (PEEC-inductance Window merged into IH)
+
+`radia_ngsolve.peec_inductance_knowledge` Source list updated: the
+standalone `radia_peec_inductance.py` wrapper was merged into IHWindow
+in radia 4.10.0; the analysis is now reached via Method dropdown.
+Knowledge text re-points new users at the IHWindow path so MCP
+suggestions stay accurate.
+
+No behavioural changes to any MCP tool.
+
 ## 0.33.4 — Kelvin knowledge maturity pass (republished)
 
 Same content as 0.33.3 but with a shortened pyproject `description`
