@@ -41,10 +41,16 @@ def qapp():
 
     Importing PySide6 binds to whichever QPA plugin is in env at
     import time, so we set the env var FIRST and import lazily.
+
+    Applies the lab-standard panel font baseline so panel_qa
+    font-size checks see the same QApplication font as the real
+    runtime (apply_panel_base_font runs in run_app).
     """
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
+    from radia_gui_base import apply_panel_base_font
+    apply_panel_base_font(app)
     yield app
     # Do NOT call app.quit() — pytest may share the QApp across
     # tests and the next file's first instantiation would crash.
