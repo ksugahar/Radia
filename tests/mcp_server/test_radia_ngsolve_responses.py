@@ -21,21 +21,21 @@ from __future__ import annotations
 
 import pytest
 
-from radia_mcp.radia_ngsolve.kelvin_knowledge import get_kelvin_documentation
-from radia_mcp.radia_ngsolve.ngsbem_inductance_knowledge import (
+from radia_mcp.radia_ngsolve.knowledge.kelvin import get_kelvin_documentation
+from radia_mcp.radia_ngsolve.knowledge.ngsbem_inductance import (
     get_ngsbem_inductance_documentation,
 )
-from radia_mcp.radia_ngsolve.ngsolve_knowledge import (
+from radia_mcp.radia_ngsolve.knowledge.ngsolve import (
     get_ngsolve_documentation,
 )
-from radia_mcp.radia_ngsolve.panel_gui_pitfalls_knowledge import (
+from radia_mcp.radia_ngsolve.knowledge.panel_gui_pitfalls import (
     get_panel_gui_pitfalls,
 )
-from radia_mcp.radia_ngsolve.peec_inductance_knowledge import (
+from radia_mcp.radia_ngsolve.knowledge.peec_inductance import (
     get_peec_inductance_documentation,
 )
-from radia_mcp.radia_ngsolve.radia_knowledge import get_radia_documentation
-from radia_mcp.radia_ngsolve.sparsesolv_knowledge import (
+from radia_mcp.radia_ngsolve.knowledge.radia import get_radia_documentation
+from radia_mcp.radia_ngsolve.knowledge.sparsesolv import (
     get_sparsesolv_documentation,
 )
 
