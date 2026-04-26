@@ -188,38 +188,7 @@ class IHPanel(ModePanel):
 
     # ----------------------- UI construction -----------------------
 
-    def _add_section(self, title, key=None):
-        """Insert a visual section header into the form.
-
-        Section header is a QLabel with bold HTML text.  Must use
-        ``padding`` (not ``margin``) in the stylesheet: Qt's margin
-        in CSS is painted INSIDE the widget's rect but NOT added to
-        sizeHint, so QFormLayout gives the row a too-small height and
-        the bold text gets vertically clipped (visible as dotted lines
-        on the real desktop, even though offscreen measurements read
-        as "OK").
-
-        Also set an explicit minimum height so the row height is never
-        less than ~2x the font size — the section title must be legible.
-
-        If ``key`` is given, the row is registered in ``self._row_indices``
-        so it can be collapsed via ``_set_row_visible(key, False)``.
-        """
-        # Use a larger font + explicit fixed height computed from
-        # fontMetrics.  No stylesheet padding / border (they make the
-        # row height calculation inconsistent between offscreen and
-        # real-desktop Qt, causing vertical text clipping).
-        lbl = QLabel(f"<b>{title}</b>")
-        f = lbl.font()
-        f.setPointSize(f.pointSize() + 1)
-        lbl.setFont(f)
-        lbl.setStyleSheet("QLabel { color: #444; }")
-        # Height = text bounding-box + 10 px breathing room above/below.
-        fm_h = lbl.fontMetrics().boundingRect("Mg").height()
-        lbl.setFixedHeight(fm_h + 10)
-        self._form.addRow("", lbl)
-        if key is not None:
-            self._row_indices[key] = self._form.rowCount() - 1
+    # _add_section is inherited from ModePanel (hoisted 2026-04-26).
 
     def _build_ui(self):
         # Method selector
@@ -232,12 +201,9 @@ class IHPanel(ModePanel):
         self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_IND])
 
         # Per-method status line (.vol label check / skin depth hint).
-        self._status_label = QLabel("")
-        self._status_label.setWordWrap(True)
-        # De-emphasised by colour only; font-size inherits the lab-
-        # standard baseline (Segoe UI 11pt) from QApplication.
-        self._status_label.setStyleSheet("QLabel { color: #888; }")
-        self._form.addRow("", self._status_label)
+        # Base helper: idiom for de-emphasised status row; updates via
+        # self._status_label.setText(...) elsewhere in this class.
+        self.add_status_label()
 
         # ============ Drive (frequency + current) ============
         self._add_section("Drive")
