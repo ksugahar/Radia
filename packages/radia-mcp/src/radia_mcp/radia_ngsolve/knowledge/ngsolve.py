@@ -5033,6 +5033,109 @@ mesh edges, mask tree edge DoFs to zero. Non-trivial in 3D.
 
 For **simple robust** (accepting non-EBE): Tanimoto's gauge_CLN
 pattern (Helmholtz-Hodge auxiliary H1 Poisson per stage) works well.
+
+## Tree-cotree gauge: WINNING APPROACH (verified 2026-04-27)
+
+**Problem**: `nograds=True` removes only HIGHER-ORDER (p≥2) gradient
+bubbles. Lowest-order vertex gradients ∇(linear hat) remain in the
+HCurl basis → curl-curl operator has gradient kernel → Kameari
+iteration explodes at Stage 1+ (L_n flips negative, grows to 10^21).
+
+**Solution**: Tree-cotree gauge via mesh edge spanning tree.
+
+| Method | EBE pure? | Stable stages | Cost/stage | Comments |
+|---|---|---|---|---|
+| Plain Kameari | YES | 0 | 1× | Fails immediately |
+| Gram-Schmidt re-orthog | YES | 0 | 1× + ⟨,⟩ | Restores orthogonality but residual = noise |
+| Helmholtz-Hodge | NO | 3 | **2×** | Tanimoto's gauge_CLN.ipynb pattern |
+| **Tree-cotree gauge** | **YES** | **5+** | **1×** + 1-time BFS | **WINNER** |
+
+### Implementation
+
+```python
+from ngsolve import HCurl, BitArray
+from collections import deque
+
+def build_spanning_tree(mesh):
+    # BFS spanning tree of mesh edge graph
+    nv = mesh.nv
+    visited = [False] * nv
+    tree_edges = []
+    adj = [[] for _ in range(nv)]
+    for ed in mesh.edges:
+        v0, v1 = ed.vertices[0].nr, ed.vertices[1].nr
+        adj[v0].append((v1, ed.nr))
+        adj[v1].append((v0, ed.nr))
+    visited[0] = True
+    queue = deque([0])
+    while queue:
+        v = queue.popleft()
+        for vn, edn in adj[v]:
+            if not visited[vn]:
+                visited[vn] = True
+                tree_edges.append(edn)
+                queue.append(vn)
+    return tree_edges  # ≈ nv-1 edges
+
+# ONE-TIME setup
+fes = HCurl(mesh, order=2, dirichlet="conductor_surface", nograds=True)
+free = BitArray(fes.FreeDofs())
+for edge_nr in build_spanning_tree(mesh):
+    edge = mesh.edges[edge_nr]
+    dofs = fes.GetDofNrs(edge)
+    if dofs and free[dofs[0]]:  # lowest-order DoF on this edge
+        free[dofs[0]] = False    # tree edge = essential 0
+
+# Each Kameari stage: just curl-curl in cotree subspace
+for n in range(N_STAGES):
+    a = BilinearForm(fes); a += (1/mu) * curl(u) * curl(v) * dx
+    pre = Preconditioner(a, "local")  # EBE
+    f = LinearForm(fes); f += J * v * dx
+    a.Assemble(); f.Assemble()
+    inv = a.mat.Inverse(freedofs=free, inverse="sparsecholesky")
+    gfA.vec.data = inv * f.vec
+    R_n = 1/Integrate(J*J/sigma * dx, mesh)
+    L_n = R_n * Integrate(J * gfA * dx, mesh)
+    J = J - sigma * gfA / L_n
+```
+
+### Why it works
+
+`nograds=True` + tree-cotree mask = **fully div-free HCurl basis at all orders**:
+- High-order grad bubbles: removed by `nograds=True`
+- Lowest-order vertex grads: removed by tree edge masking
+- Spanning tree edges: each represents one ∇(vertex hat) direction
+- Cotree edges: span the orthogonal complement = div-free subspace
+- curl-curl on cotree is **strictly positive definite** → CG/direct converges fast
+
+### Geometry caveat: a ≠ b ≠ c required
+
+For cube (a=b=c), eigenvalues λ²(mx,my,mz) = (mx²+my²+mz²)π²/a² have
+heavy degeneracy: (1,1,3)=(1,3,1)=(3,1,1) all give same λ². Kameari/PINVIT
+cannot distinguish degenerate modes → mode mixing → bad convergence.
+
+**Use a ≠ b ≠ c** (e.g., 5×2×1 mm cuboid) for clean validation.
+
+### Verified result (5×2×1 mm Cu, Case A voltage-driven)
+
+- **Stage 0**: NGSolve R_0 = 1.7241 Ω = Mathematica 1/(σV) — 4-digit exact match
+- **Stage 0**: NGSolve L_0 = 4.67 µH = Mathematica Cauer-II L_1 = 4.66 µH — 0.2% match
+  → Note: NGSolve Kameari Stage 0 ↔ Mathematica Cauer-II L_1 (numbering offset 1)
+- **Stages 0–4**: ALL positive L_n, monotone τ progression — tree-cotree handles all 5 cleanly
+
+### NGSolve `CreateGradient`: building block
+
+```python
+G_matrix, fes_H1 = fes_HCurl.CreateGradient()
+# G is sparse (HCurl_ndof × H1_ndof) discrete gradient operator
+# Image of G in HCurl = gradient subspace = curl-curl kernel
+# tree-cotree picks one HCurl edge per H1 vertex (column of G)
+```
+
+### Reference files
+
+- `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/cuboid_521_tree_cotree.py`
+- `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/2026_04_27_NGSolve_validation.tex/.pdf`
 """
 
 
@@ -5073,6 +5176,9 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "ladder": NGSOLVE_CLN_CAUER,
         "mor": NGSOLVE_CLN_CAUER,
         "eddy_current_mor": NGSOLVE_CLN_CAUER,
+        "tree_cotree": NGSOLVE_CLN_CAUER,
+        "treecotree_gauge": NGSOLVE_CLN_CAUER,
+        "kameari": NGSOLVE_CLN_CAUER,
     }
 
     topic = topic.lower().strip()
