@@ -5,6 +5,14 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.33.4 — Kelvin knowledge maturity pass (republished)
+
+Same content as 0.33.3 but with a shortened pyproject `description`
+field (PyPI's 512-char `summary` limit rejected 0.33.3's metadata
+upload at 596 chars, so the wheel never made it to PyPI).  No
+behavioural / knowledge changes vs the unreleased 0.33.3; see below
+for the actual changes.
+
 ## 0.33.3 — Kelvin knowledge maturity pass
 
 Knowledge-only release across 3 subpackages, capturing the
