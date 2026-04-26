@@ -462,8 +462,14 @@ def main():
                         help="Netgen .vol file with a 'yoke' material "
                              "(sole interface between Cubit and NGSolve; "
                              "this script no longer accepts .cub5)")
+    # include_custom=True so the EM panel's MSC-mode build_command
+    # (which sends `--material custom --mu-r <user_value>` for the
+    # "mu_r (Linear)" radio) is accepted at argparse.  Without this
+    # the panel command fails silently with
+    # `error: argument --material: invalid choice: 'custom'` --
+    # caught 2026-04-26.  See tests/panels/test_em_msc_smoke.py.
     add_material_args(parser, default_material="steel",
-                      include_custom=False, include_hys=True)
+                      include_custom=True, include_hys=True)
     parser.add_argument("--ima", default="",
                         help="IMA string: '+x-z' (quarter), '+x' (half-x), "
                              "'-z' (half-z), '' (full)")
