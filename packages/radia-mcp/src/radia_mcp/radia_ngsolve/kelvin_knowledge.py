@@ -2119,6 +2119,58 @@ JSON output: `Hi_origin`, `Hi_analytical`, `error_pct`, `slaved_dofs`.
 Panel-level golden test:
 `tests/panels/test_kelvin_benchmark_golden.py` parametrises over
 both 1/2 and 1/4 samples, locking |error| < 1.5% at p=2.
+
+## Why 1/8 is unsupported for the sphere benchmark (physics)
+
+The benchmark BVP is "magnetic sphere in **uniform Hz**".  The z=0
+mirror plane reverses the source vector `H0 z_hat -> -H0 z_hat`,
+so the problem is **not 1/8-symmetric**.  No amount of BC tuning on
+the z=0 cut can recover the analytical solution -- the source itself
+breaks the third symmetry.  1/2 (split y) and 1/4 (split x and y) are
+the maximum reductions for this BVP and are the only samples shipped.
+
+Do NOT conflate this with the **EM panel (C-type magnet) 1/8 case**:
+that BVP has no source vector; the iron yoke + coil ampere-turns are
+fully octant-symmetric, so the 1/8 reduction is geometric only and
+ships in the EM panel via `panels/samples/em/em_1-8_eighth.jou` +
+`tests/panels/golden/em_eighth_mu1000.json` (ELF CEFC 2020 convention
+`-x-y+z`, opposite sign pattern from the sphere reductions).
+
+## Surprise: rho_min sweep up to R (2026-04-26)
+
+The Kelvin reluctivity Mu = mu_0 * (R/rho')^2 is bounded by clamping
+rho' >= rho_min in the build script.  Sweeping rho_min from a small
+value all the way up to R (which collapses Mu to a uniform mu_0
+everywhere in the Kelvin region) STILL gives 1/2 +0.34% / 1/4 -0.02%
+at p=2.  i.e. for compact geometry (Kelvin offset = 3*R), Periodic
+identification on (kelvin_int <-> kelvin_ext) plus the symmetric
+Dirichlet/Neumann BCs do MOST of the open-boundary work; the
+(R/rho')^2 reluctivity correction is a small refinement.
+
+**Practical debugging shortcut**: if a Kelvin solver gives wildly
+wrong numbers, re-run with rho_min = R (Mu collapses to mu_0).  If
+the answer becomes correct, the bug is in the Mu coefficient (rho_min
+clamp / Kelvin centre detection / domain assignment).  If the answer
+is still wrong, the bug is in BCs / Periodic identification / mesh.
+This isolates Kelvin-reluctivity issues from BC issues in one solve.
+
+## Cubit-meshed Kelvin needs `-specialcf.normal` (Neumann correction)
+
+The reduced-Omega Neumann BC `H_t.n` correction term has an extra
+sign flip on Cubit-meshed Kelvin compared to the OCC reference.
+Cubit assigns surface element normals with the opposite sign
+convention to NGSolve's WorkPlane-based OCC builder, so the line:
+
+    f += -H_s * specialcf.normal(3) * v.Trace() * ds("kelvin_int")
+
+becomes correct only when the sign matches the OCC reference run.
+On Cubit-meshed `.vol`, use `-specialcf.normal(3)` (i.e. the term
+above as-written, NOT `+specialcf.normal(3)`).  Verified by a
+sign-flip A/B test that drove the 1/4 sample from -7% to +0.71% at
+p=2.  The benchmark calc script (`calc_kelvin_benchmark.py`) hard-
+codes the Cubit-correct sign; the OCC examples in
+`examples/kelvin_transformation/` use the same expression because
+the sign convention is now unified across both mesh sources.
 """
 
 

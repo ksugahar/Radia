@@ -3265,6 +3265,119 @@ move volume 1 x 1                    # breaks the merge
 """
 
 
+CUBIT_KELVIN_REDUCTION_TRAPS = """
+# Cubit traps surfaced by symmetric-Kelvin benchmark builds (2026-04-26)
+
+Building 1/2 / 1/4 / 1/8 sphere reductions for the EM panel's
+"Kelvin Benchmark" mode (`panels/samples/kelvin_benchmark_sphere_*.vol`)
+exposed three Cubit-side traps that silently produce wrong meshes
+or wrong field-solve answers downstream.  These are not obvious
+from the Cubit docs and bit us on real models in 2025.3.
+
+## Trap 1: `subtract A from B keep` does NOT carve B in Cubit 2025.3
+
+The intended semantics ("subtract A from B, but keep A around as a
+separate body") changed silently between Cubit versions.  In 2025.3
+on the Kelvin sphere build, `subtract air_inner from kelvin_outer
+keep` left **kelvin_outer untouched** -- no spherical hollow cut --
+and the downstream FEM mesh had air and kelvin volumes overlapping.
+Worse, the operation succeeded with no error or warning.
+
+**Workaround** (verified to work across Cubit versions):
+
+```python
+# Save the body we need to keep BEFORE the subtract:
+A_id = ...  # air_inner
+B_id = ...  # kelvin_outer
+A_was_at = (cubit.volume(A_id).centroid(),
+            cubit.volume(A_id).bounding_box())
+
+# Drop the `keep` keyword -- this consumes A but actually carves B:
+cubit.cmd(f"subtract volume {A_id} from volume {B_id}")
+
+# Re-create A as a fresh primitive at the same place:
+cubit.cmd(f"create sphere radius {A_radius}")
+A_new = cubit.get_last_id("volume")
+cubit.cmd(f"move volume {A_new} location {A_was_at[0][0]} {A_was_at[0][1]} {A_was_at[0][2]}")
+```
+
+This is more verbose than `keep`, but works on Cubit 2024 / 2025.x
+without the silent-no-op bug.  The `panels/samples/kelvin_benchmark_
+sphere_build.py` core uses this pattern.
+
+## Trap 2: 1/8 octant copy-mesh anchor curve is non-deterministic
+
+For copy-mesh between two octant caps (1/8 sphere reduction), the
+Cubit Python API takes anchor curves on source and target faces.
+The cap of a 1/8 sphere octant has **3 equal-length quarter-arc
+boundary curves** (one along each coordinate plane intersection).
+
+A naive selector like `max(curves, key=lambda c: cubit.curve(c).length())`
+ties three ways and returns whichever curve Cubit listed first.
+**Cubit's listing order can differ between source and target faces**
+(version + history dependent), so the source-anchor and target-
+anchor pick different curves -> copy_mesh maps the meshes wrong ->
+all 143 expected node pairs land at random positions, not their
+geometric reflections.
+
+**Fix** (in `_add_kelvin_cubit_reduction`): break the tie with a
+stable secondary key derived from the curve centroid:
+
+```python
+def anchor_curve(face_id):
+    curves = cubit.parse_cubit_list("curve", f"in surface {face_id}")
+    # Equal-length tie-break by centroid: lowest z, then lowest y,
+    # then lowest x.  Stable across Cubit's listing order on both
+    # source and target faces:
+    def key(cid):
+        c = cubit.curve(cid).position_from_fraction(0.5)
+        return (c[2], c[1], c[0])
+    return min(curves, key=key)
+```
+
+Verified 2026-04-25: 143/143 copy-mesh pairs now land at machine
+precision (2.6e-16 m).  Same lesson applies to any copy-mesh between
+geometrically equivalent N-fold-symmetric faces.
+
+See `memory/feedback_kelvin_1_8_blocker.md` and CLAUDE.md
+"AI-Driven Cubit: Probe, Don't Guess" for the general principle:
+**probe Cubit and print the actual values before writing the
+classification logic** -- do not derive selectors from the .jou
+source by hand.
+
+## Trap 3: Cubit-meshed surface normal sign for FEM Neumann BCs
+
+Cubit assigns surface element normals with the **opposite sign
+convention** to NGSolve's WorkPlane-based OCC builder for the same
+geometry.  The reduced-Omega Kelvin Neumann correction term
+
+    f += -H_s * specialcf.normal(3) * v.Trace() * ds("kelvin_int")
+
+is correct AS-WRITTEN on Cubit-meshed `.vol`, but the OCC reference
+in `examples/kelvin_transformation/Omega_ReducedOmega/Sphere/...`
+needed the same sign after a 2026-04-26 unification pass.  If the
+BC is wrong-signed: 1/4 sample goes from +0.71% to about -7% at p=2.
+
+**Practical rule**: if a Kelvin-Neumann run gives a 5-10x error at
+p=2 on a known-good `.vol`, **flip the sign on the
+`specialcf.normal(3)` term first** -- this is a 30-second A/B test
+that catches the sign convention mismatch faster than re-deriving
+the formulation.  Cross-reference: see
+`mcp-server-radia-ngsolve` topic `kelvin_transformation` ->
+"Cubit-meshed Kelvin needs `-specialcf.normal`" for the
+NGSolve-side detail.
+
+## See also
+
+- `mcp-server-radia-ngsolve` topic `kelvin_transformation` ->
+  "Why 1/8 is unsupported for the sphere benchmark" -- physical
+  reason 1/8 sphere benchmark cannot work (Hzẑ source breaks the
+  z=0 mirror symmetry; nothing to do with Cubit)
+- CLAUDE.md "AI-Driven Cubit: Probe, Don't Guess"
+- `scripting_boolean_policy` -- related: ACIS sharing lost silently
+"""
+
+
 CUBIT_TRIAL_ERROR_POLICY = """
 # Trial-and-error policy: batch first, commit after success
 
@@ -3777,6 +3890,12 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"webcut": CUBIT_BOOLEAN_POLICY,  # override CUBIT_GEOMETRY_COMMANDS
 		"3turncoil": CUBIT_BOOLEAN_POLICY,  # alias
 		"loft_chain": CUBIT_BOOLEAN_POLICY,  # alias
+		"kelvin_reduction_traps": CUBIT_KELVIN_REDUCTION_TRAPS,
+		"subtract_keep": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"copy_mesh_anchor": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"specialcf_normal": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"normal_sign": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
+		"octant": CUBIT_KELVIN_REDUCTION_TRAPS,  # alias
 		"trial_error_policy": CUBIT_TRIAL_ERROR_POLICY,
 		"trial_error": CUBIT_TRIAL_ERROR_POLICY,
 		"batch_first": CUBIT_TRIAL_ERROR_POLICY,
