@@ -34,7 +34,10 @@ _SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".radia")
 #                              still felt stingy at desk distance
 #   - 13pt (over-correct)  -- too big
 #   - 12pt                 -- "12pt あれば十分です" (chosen)
-PANEL_BASE_FONT_FAMILY = "Segoe UI"
+#
+# Family is intentionally NOT hardcoded -- apply_panel_base_font
+# inherits the OS default family (Segoe UI on Windows, system
+# sans-serif on Linux/macOS) and bumps only the point size.
 PANEL_BASE_FONT_POINT_SIZE = 12
 
 # Shared panel debug log (C:/radia_panel_log.txt on Windows). Append-only
@@ -843,8 +846,15 @@ class AnalysisWindow(QMainWindow):
 
 
 def apply_panel_base_font(app):
-    """Apply the lab-standard panel font to a QApplication."""
-    app.setFont(QFont(PANEL_BASE_FONT_FAMILY, PANEL_BASE_FONT_POINT_SIZE))
+    """Apply the lab-standard panel point size to a QApplication.
+
+    Inherits the family from the OS default (Segoe UI on Windows,
+    system sans-serif on Linux/macOS) so the panels look native on
+    each platform; only the point size is bumped to PANEL_BASE_FONT_POINT_SIZE.
+    """
+    f = app.font()
+    f.setPointSize(PANEL_BASE_FONT_POINT_SIZE)
+    app.setFont(f)
 
 
 def run_app(window_class, vol_path=""):
