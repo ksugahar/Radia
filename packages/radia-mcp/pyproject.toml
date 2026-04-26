@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.33.1"
+version = "0.33.2"
 description = "MCP servers for the Radia CAE ecosystem. 0.33.0 (2026-04-24): Finish monorepo consolidation by promoting mcp-server-peec and mcp-server-electromagnet into radia_mcp.peec / radia_mcp.electromagnet subpackages (same pattern as 0.32.x mcp-server-ih promotion). All 9 MCP entry points now live under radia_mcp.* namespace. 0.31.0 (2026-04-21): Monorepo restructure. 0.27.0 base: cubit_mesh_race_review (wait-all + shortlist sorted by min-Jacobian + persisted history) + cubit_mesh_apply_choice."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}

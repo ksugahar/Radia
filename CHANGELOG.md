@@ -3,6 +3,108 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.9.0 — EM canonical trio + 1/2 Kelvin Benchmark + MSC silent breakage fix
+
+Released 2026-04-26.
+
+### MSC silent breakage fix (production bug)
+
+`calc_accel_msc.py` registered `add_material_args(include_custom=False)`,
+so the EM panel's MSC mode (which sends `--material custom --mu-r <user>`
+for the "mu_r (Linear)" material option) was rejected at argparse with
+`error: argument --material: invalid choice: 'custom'`.  Clicking Run in
+MSC mode produced no useful error in the GUI and no field result.  Fixed
+by flipping to `include_custom=True` (matches the FEM Omega/A-Phi
+convention in `calc_accel_magnet.py`).  Regression guard:
+`tests/panels/test_em_msc_smoke.py` (6 sub-second static checks of the
+MSC panel command vs argparse).
+
+### Kelvin Benchmark — 1/2 sample joins 1/4
+
+The EM panel's Kelvin Benchmark mode now ships **two** verification
+samples (was 1/4 only):
+
+| sample (frac) | reduction | error @ p=2 |
+|---|---|---|
+| `kelvin_benchmark_sphere_1_2.vol` | `{"y":"bn=0"}` | +1.07% |
+| `kelvin_benchmark_sphere_1_4.vol` | `{"x":"bn=0","y":"bn=0"}` | +0.71% |
+
+Build scripts refactored: parameterized core
+`kelvin_benchmark_sphere_build.py` with `--frac 1_2|1_4|1_8` plus three
+thin wrappers.  1/8 sphere build script ships for research only — the
+.vol is **not** shipped because the magnetic-sphere-in-uniform-Hz BVP
+fundamentally lacks 1/8 symmetry (z=0 mirror reverses Hzẑ source).
+Realistic 1/8 EM workloads (C-yokes, dipoles) use the existing
+`em/em_1-8_eighth.jou` C-yoke sample with the ELF `-x-y+z` convention.
+
+Surprise (rho_min sweep): for compact-geometry Kelvin samples
+(offset = 3R), the Periodic + sym BCs do most of the open-boundary
+work — the `(R/r')^2` reluctivity is a small correction.  Capping
+`Mu = mu_0` everywhere still gives 1/2 +0.34% / 1/4 -0.02% error.
+
+### EM panel canonical trio (coil + .vol + BH)
+
+Added two missing artifacts so the EM panel runs end-to-end on a
+fresh checkout / pip install without requiring local Cubit
+regeneration of every sample:
+
+  - `src/radia/panels/samples/em_sample.vol` — half-z C-type dipole
+    with auto-Kelvin (456k tets / 83k nodes).
+  - `src/radia/panels/samples/em_sample_bh.txt` — 100-point steel
+    BH curve (CEFC 2020 reference, 0..318 kA/m / 0..2.61 T).
+    Full-precision source of the rounded built-in `STEEL_BH` table;
+    functionally equivalent (relative diff < 2e-5).
+
+Coil was already shipped as `em_sample_coil.py`.  Sub-second smoke
+tests in `tests/panels/test_em_sample_artifacts.py` (8 tests) lock
+ship-presence + parse-correctness for the trio.
+
+### IH panel test refresh (4 stale test files repaired)
+
+The 2026-04-19 IH panel restructure (4-method combo, separate
+coil/wp material sections) left the test suite stale.  Rewrites:
+
+  - `tests/panels/test_ih_panel_qt.py` — was 14/15 failing, now 17/17
+    passing (method combo, per-method widget visibility, solver
+    items, SIBC vs ESIM toggle, build_command roundtrip).
+  - `tests/panels/test_panel_state_restore.py` — 6 tests rewritten
+    from the obsolete 2-method labels to the canonical METHOD_*
+    constants.  Round-trip widgets updated from retired
+    `workpiece_mode` to surviving `impedance_model`.
+  - `tests/panels/test_calc_inductance.py` — was failing at
+    collection (ModuleNotFoundError on retired `bem_inductance`).
+    `bem_inductance.py` now lives at
+    `examples/induction_heating/bem_reference/`; tests `importorskip`
+    cleanly when that dir is missing.
+  - `tests/panels/test_ih_solvers.py` — same fix pattern as
+    test_calc_inductance for the BEM precondition guard.
+
+Also: `tests/panels/golden/em_eighth_mu1000.json` topology lock
+refreshed for the post-2026-04-25 deterministic-anchor mesh
+(ne 56289 → 56369, ndof 11695 → 11708; physics unchanged).
+Slow physics regressions (`test_peec_bem_matches_2d_ref_coarse` 174s,
+`test_fem_coilmesh_matches_2d_ref_gapped` 510s) both pass on the
+shipped IH samples.
+
+### Sample matrix documentation
+
+Added `src/radia/panels/samples/README.md` indexing the canonical
+samples per panel/method, identifying stale/research-only artifacts
+that don't ship in CI-built wheels (gitignored .vol files).
+
+### New panel logo
+
+`src/radia/resources/2026_04_26.png` replaces the deleted
+`radia_icon.png`.  `_icon_path()` now falls back to the most-recent
+.ico/.png in `resources/` so future logo refreshes drop in without
+a code change.
+
+### radia-mcp 0.33.2
+
+Updates `radia_ngsolve.kelvin_knowledge.benchmark_panel` topic to
+document the 1/2 + 1/4 sphere samples + the rho_min sweep insight.
+No API change.
+
 ## 4.7.0 — PEEC-inductance full geometry coverage + Japanese path + daemon speedup
 
 Released 2026-04-22.
