@@ -26,6 +26,13 @@ _RESOURCES_DIR = os.path.join(_THIS_DIR, "resources")
 _PYTHON = sys.executable
 _SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".radia")
 
+# Lab-standard panel font baseline. Target display is 2K+ (per
+# feedback_panel_vertical_space.md); the Qt OS default of 9pt is
+# unreadable at that pixel density.  Bumped 2026-04-26 after user
+# feedback "GUIの窓のフォントサイズが小さすぎる".
+PANEL_BASE_FONT_FAMILY = "Segoe UI"
+PANEL_BASE_FONT_POINT_SIZE = 11
+
 # Shared panel debug log (C:/radia_panel_log.txt on Windows). Append-only
 # from this process; the Cubit-side register_toolbar.py truncates it on
 # session start so the file holds one continuous Cubit session log.
@@ -325,7 +332,7 @@ class AnalysisWindow(QMainWindow):
         out_layout.setContentsMargins(5, 5, 5, 5)
         self._output = QPlainTextEdit()
         self._output.setReadOnly(True)
-        self._output.setFont(QFont("Consolas", 9))
+        self._output.setFont(QFont("Consolas", PANEL_BASE_FONT_POINT_SIZE))
         out_layout.addWidget(self._output)
         splitter.addWidget(out_group)
         splitter.setSizes([300, 250])
@@ -831,9 +838,15 @@ class AnalysisWindow(QMainWindow):
         super().closeEvent(event)
 
 
+def apply_panel_base_font(app):
+    """Apply the lab-standard panel font to a QApplication."""
+    app.setFont(QFont(PANEL_BASE_FONT_FAMILY, PANEL_BASE_FONT_POINT_SIZE))
+
+
 def run_app(window_class, vol_path=""):
     """Entry point helper: create QApplication + window, exec."""
     app = QApplication(sys.argv)
+    apply_panel_base_font(app)
     vol = vol_path or (sys.argv[1] if len(sys.argv) > 1 else "")
     window = window_class(vol)
     window.show()
