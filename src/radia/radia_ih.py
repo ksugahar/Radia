@@ -234,8 +234,9 @@ class IHPanel(ModePanel):
         # Per-method status line (.vol label check / skin depth hint).
         self._status_label = QLabel("")
         self._status_label.setWordWrap(True)
-        self._status_label.setStyleSheet("QLabel { color: #888; "
-                                           "font-size: 11px; }")
+        # De-emphasised by colour only; font-size inherits the lab-
+        # standard baseline (Segoe UI 11pt) from QApplication.
+        self._status_label.setStyleSheet("QLabel { color: #888; }")
         self._form.addRow("", self._status_label)
 
         # ============ Drive (frequency + current) ============

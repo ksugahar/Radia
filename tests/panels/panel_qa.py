@@ -31,10 +31,18 @@ from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QLineEdit,
 
 
 # 2K (2560x1440) minimum display, usable ~1350 px vertical, ~2400 horizontal.
-MAX_HEIGHT_RED = 1200     # hard fail: bottom buttons off-screen on 2K
-MAX_HEIGHT_YELLOW = 1000  # warning: getting tall
-MAX_WIDTH_RED = 1100      # hard fail: panel eats too much horizontal real estate
-MAX_WIDTH_YELLOW = 900    # warning: method combo text probably long
+# Thresholds reflect the 11pt baseline font (Segoe UI); the 9pt-era
+# numbers (1100 / 900) under-budget by ~20% for the larger glyphs.
+MAX_HEIGHT_RED = 1300     # hard fail: bottom buttons off-screen on 2K
+MAX_HEIGHT_YELLOW = 1100  # warning: getting tall
+MAX_WIDTH_RED = 1300      # hard fail: panel eats too much horizontal real estate
+MAX_WIDTH_YELLOW = 1100   # warning: method combo text probably long
+
+# Minimum readable font size for the 2K target display.  Qt's OS default
+# of 9pt is unreadable on 2K+ at 100% scaling, so the lab baseline is
+# 11pt (set via apply_panel_base_font in radia_gui_base).  10pt leaves
+# 1pt of headroom for intentionally smaller status-line text.
+MIN_FONT_POINT_SIZE = 10
 
 # Unicode-math characters the console / cp932 cannot render.  If these
 # appear in any widget label / tooltip, they fail the ASCII check.
@@ -241,6 +249,48 @@ def check_method_combo_populated(window) -> CheckResult:
                         f"{n} items, current={cur!r}")
 
 
+def check_font_size_min(window) -> CheckResult:
+    """Every visible label / input / button must render at >= MIN_FONT_POINT_SIZE.
+
+    Qt's OS default font (Windows: 9pt Segoe UI) is unreadable on 2K+
+    displays at 100% scaling.  ``apply_panel_base_font`` bumps the
+    QApplication baseline to 11pt; this check guards against any
+    widget regressing back to the 9pt default via an explicit
+    ``setFont`` / ``font-size:`` style override.
+
+    Note: ``QFont.pointSize()`` returns -1 if the font was set in
+    pixels (``setPixelSize`` / ``font-size: Npx``).  In that case we
+    convert via ``QFontInfo`` which always returns a positive value.
+    """
+    from PySide6.QtGui import QFontInfo
+    too_small = []
+    widget_types = (QLabel, QLineEdit, QComboBox, QPushButton)
+    # Also include QPlainTextEdit / QSpinBox / QGroupBox if present
+    from PySide6.QtWidgets import QPlainTextEdit, QSpinBox, QGroupBox
+    widget_types = widget_types + (QPlainTextEdit, QSpinBox, QGroupBox)
+
+    for w in window.findChildren(QWidget):
+        if not isinstance(w, widget_types):
+            continue
+        if not w.isVisibleTo(window):
+            continue
+        f = w.font()
+        pt = f.pointSize()
+        if pt <= 0:
+            # Set via setPixelSize / font-size: Npx — use QFontInfo
+            pt = QFontInfo(f).pointSize()
+        if pt > 0 and pt < MIN_FONT_POINT_SIZE:
+            label = (w.text()[:30] if hasattr(w, "text") and w.text()
+                     else type(w).__name__)
+            too_small.append((label, pt))
+    if too_small:
+        return CheckResult("font_size_min", False,
+                            f"{len(too_small)} widget(s) below "
+                            f"{MIN_FONT_POINT_SIZE}pt: {too_small[:3]}")
+    return CheckResult("font_size_min", True,
+                        f"all >= {MIN_FONT_POINT_SIZE}pt")
+
+
 def check_visible_rows_have_labels(window) -> CheckResult:
     """Every visible input row must have a non-empty label in the
     label column.  Empty labels make the form ambiguous."""
@@ -281,6 +331,7 @@ DEFAULT_CHECKS = [
     check_ascii_only_labels,
     check_method_combo_populated,
     check_visible_rows_have_labels,
+    check_font_size_min,
 ]
 
 
@@ -389,7 +440,13 @@ def run_all_panel_checks(screenshot_dir="temp", strict=True):
     Raises PanelQAError if any panel fails a mandatory check (strict=True).
     """
     from PySide6.QtWidgets import QApplication
-    QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
+    # Mirror the real panel runtime: apply the lab-standard 11pt
+    # baseline before instantiating windows.  Without this, every
+    # widget renders at Qt's 9pt OS default and check_font_size_min
+    # fails by design.
+    from radia_gui_base import apply_panel_base_font
+    apply_panel_base_font(app)
     all_results = {}
     fails = []
     for tag, WinCls, combo_ref, value in get_panel_registry():
