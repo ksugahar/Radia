@@ -266,6 +266,33 @@ class ModePanel(QWidget):
         if path:
             line_edit.setText(path)
 
+    def add_browse_action(self, key, label, callback, fixed_width=None):
+        """Append an extra action button to an existing browse row.
+
+        ``key`` must refer to a row created by ``add_browse``.  The
+        button is appended to the right of the existing ``...`` browse
+        button so the row reads
+            [ <line edit> ] [ ... ] [ <label> ]
+
+        ``callback(line_edit)`` is invoked when the button is clicked,
+        receiving the existing QLineEdit so the action can read or
+        write the current path.
+
+        Returns the QPushButton.  Raises KeyError if the key has no
+        registered row index.
+        """
+        row_idx = self._row_indices[key]
+        field_item = self._form.itemAt(row_idx, QFormLayout.FieldRole)
+        container = field_item.widget()
+        layout = container.layout()
+        line_edit = self._widgets[key]
+        btn = QPushButton(label)
+        if fixed_width is not None:
+            btn.setFixedWidth(fixed_width)
+        btn.clicked.connect(lambda: callback(line_edit))
+        layout.addWidget(btn)
+        return btn
+
     def val(self, key):
         w = self._widgets[key]
         if isinstance(w, QLineEdit):
