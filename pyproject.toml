@@ -99,6 +99,7 @@ radia = [
     "panels/samples/*.vol",
     "panels/samples/*.json",
     "panels/samples/*.py",
+    "panels/samples/em_sample_bh.txt",
     "panels/*.json",
     "CONVENTIONS.md",
 ]
