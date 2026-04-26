@@ -5,6 +5,50 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.33.3 — Kelvin knowledge maturity pass
+
+Knowledge-only release across 3 subpackages, capturing the
+2026-04-26 1/2 + 1/4 Kelvin Benchmark debug session and clarifying
+why the 1/8 case has two completely different answers depending on
+which panel mode is asking.
+
+- **`radia_ngsolve.kelvin_transformation` (`benchmark_panel` topic)**:
+  - Why 1/8 is unsupported for the magnetic-sphere-in-uniform-Hz BVP
+    (the source `H0 z_hat` reverses sign under z=0 mirror -- a
+    physical limitation, not a Cubit/NGSolve bug).
+  - **rho_min sweep diagnostic**: setting rho_min = R collapses
+    Mu = mu_0 *(R/rho')^2 to uniform mu_0; if the answer becomes
+    correct, the bug is in the Mu coefficient; if still wrong,
+    the bug is in BCs / Periodic / mesh.  One solve isolates the
+    layer.
+  - Surprise: for compact geometry (Kelvin offset = 3*R), even
+    Mu = mu_0 in the Kelvin region gives 1/2 +0.34% / 1/4 -0.02% --
+    Periodic + sym BCs do most of the open-boundary work.
+  - **Cubit-meshed Kelvin needs `-specialcf.normal`** in the
+    reduced-Omega Neumann correction term (Cubit assigns surface
+    normals with opposite sign to NGSolve's WorkPlane OCC; sign-
+    flip A/B test takes 30 seconds and catches it).
+
+- **`cubit` (new `kelvin_reduction_traps` topic)**:
+  - Trap 1: `subtract A from B keep` is a silent no-op in Cubit
+    2025.3 -- workaround is to drop `keep` and re-create A as a
+    fresh primitive.
+  - Trap 2: 1/8 octant copy-mesh anchor curve picking is non-
+    deterministic (3 equal-length quarter-arcs); fix is
+    `min(curves, key=(centroid_z, y, x))` -- 143/143 pairs at
+    machine precision.
+  - Trap 3: surface normal sign convention differs between Cubit
+    and OCC (cross-ref to `radia_ngsolve.kelvin_transformation`).
+
+- **`electromagnet` (new `symmetry_reductions` topic)**:
+  - Two distinct Kelvin panel paths -- "Kelvin Benchmark" sphere
+    (1/2, 1/4 only) vs "EM panel FEM/MSC" C-yoke (1/1, 1/2, 1/4,
+    1/8).  Don't conflate.
+  - C-yoke 1/8 sample paths and ELF CEFC 2020 convention
+    `ht=0_x, ht=0_y, bn=0_z`.
+  - "Don't add a 1/8 sphere benchmark" -- multi-hour debug trail
+    capture so the next session doesn't re-investigate.
+
 ## 0.32.0 — PEEC-inductance public topic + Cubit daemon speedup
 
 - **`peec_inductance` tool** in `mcp-server-radia-ngsolve`: 5 sub-topics
