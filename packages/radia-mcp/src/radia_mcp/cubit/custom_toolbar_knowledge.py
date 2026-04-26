@@ -73,7 +73,7 @@ Cubit command-language scripts, Python scripts, or nested command panels.
 
 - `panel_conventions_knowledge.py` - external PySide6 launcher (Python
   3.12, NGSolve, spawns Cubit as subprocess).
-- `cubit_scripting_knowledge.py` - Cubit command-language + Python API
+- `scripting_knowledge.py` - Cubit command-language + Python API
   reference. The toolbar scripts described here *use* those APIs.
 """
 

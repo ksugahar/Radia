@@ -4756,6 +4756,286 @@ interfaces, either:
 """
 
 
+NGSOLVE_CLN_CAUER = r"""
+# Cauer Ladder Network (CLN) Validation in NGSolve
+
+CLN is a model-order-reduction technique for eddy current problems
+(Kameari et al. 2018, Köster et al. 2021). The full-order eddy current
+PDE is approximated by an infinite RL ladder, with each rung representing
+an eigenmode of the diffusion operator.
+
+## Two flavors of CLN
+
+| Flavor | Excitation | Method | NGSolve fit |
+|---|---|---|---|
+| **Köster A-T recursion** | voltage-driven coil | static A-T alternating recursion | YES (Köster 2021 §III.B) |
+| **Direct frequency sweep** | any (incl. external B) | solve harmonic eddy current at each ω | YES (standard FEM) |
+| **Eigenvalue + Foster sum** | any | analytical eigenfunction expansion | analytical only |
+
+**Key insight**: Köster's A-T recursion **does not directly apply to
+"isolated conductor in external B" (Case B)** because there is no
+terminal voltage. For Case B validation, use direct frequency sweep
+and compare with analytical Foster sum.
+
+## Köster A-T recursion (voltage-driven)
+
+For voltage-driven coil + conductor problems, recursive static problems:
+
+```python
+# Stage 0: T_0 with H_s × n BC from Biot-Savart of impressed coil
+fes_T = HCurl(mesh, order=2,
+              definedon=mesh.Materials("conductor"),
+              dirichlet="conductor_surface",
+              nograds=True)
+# Solve: ⟨σ⁻¹ curl T̃_0, curl v⟩_C = 0
+#   with essential BC T̃_0 × n = H_s × n on Γ_NC
+
+# Stage n: T̃_(n+1) with BC T̃_(n+1) × n = -T_n × n  (KEY for orthogonality)
+# RHS: ⟨σ⁻¹ curl T̃_(n+1), curl v⟩ = -⟨L_n⁻¹ A_n, curl v⟩
+
+# Stage n: A_n on full domain
+fes_A = HCurl(mesh, order=2, dirichlet="outer_box", nograds=True)
+# Solve: ⟨μ⁻¹ curl Ã_n, curl w⟩_Ω = R_n ⟨T_n, curl w⟩_Ω
+
+# Each stage: R_n = ⟨σ⁻¹ curl T_n, curl T_n⟩_C
+#             L_n = ⟨μ⁻¹ curl A_n, curl A_n⟩_Ω
+```
+
+## Element-by-element preconditioning
+
+For each static sub-problem, NGSolve `Preconditioner(a, "local")` gives
+a block-Jacobi (element-by-element) preconditioner. Use with CG:
+
+```python
+a = BilinearForm(fes_T)
+a += sigma_inv * curl(u) * curl(v) * dx("conductor")
+c = Preconditioner(a, type="local")
+# CG with local preconditioner = element-by-element iteration
+solvers.CG(sol=gf.vec, rhs=f.vec, mat=a.mat, pre=c.mat,
+           tol=1e-8, maxsteps=10000)
+```
+
+Avoids global LU/sparse direct solver. Suitable for large 3D problems.
+
+## Direct frequency sweep validation (Case B: external B field)
+
+For uniform external B_z on isolated cuboid, validate the analytical
+Foster sum P(ω)/B_0² = (ω²/2) Re[Y_eq(jω)] by direct FEM:
+
+```python
+fes = HCurl(mesh, order=2, dirichlet="conductor_surface",
+            complex=True, nograds=True)
+u, v = fes.TnT()
+
+A_ext = CoefficientFunction((-B0/2 * y, B0/2 * x, 0))  # uniform B_z gauge
+
+# Harmonic eddy current PDE for A_ind (induced)
+a = BilinearForm(fes, symmetric=False)
+a += (1/mu0) * curl(u) * curl(v) * dx
+a += 1j * omega * sigma * u * v * dx
+c = Preconditioner(a, type="local")
+
+f = LinearForm(fes)
+f += -1j * omega * sigma * A_ext * v * dx
+
+with TaskManager():
+    a.Assemble(); f.Assemble()
+gf_Aind = GridFunction(fes)
+GMRes(A=a.mat, b=f.vec, pre=c.mat, x=gf_Aind.vec, tol=1e-8)
+
+# Loss
+A_tot = gf_Aind + A_ext
+loss_density = sigma * (omega**2 / 2.0) * (
+    A_tot[0]*Conj(A_tot[0])
+    + A_tot[1]*Conj(A_tot[1])
+    + A_tot[2]*Conj(A_tot[2]))
+P = Integrate(loss_density, mesh).real
+```
+
+## Critical pitfalls
+
+### 1. Coordinate origin / gauge choice for A_ext
+
+For uniform B_z field, A_ext can be in any gauge:
+- A_ext = (B_0/2)(-y, x, 0) — rotates about origin (0,0,0)
+- A_ext = (B_0/2)(-(y-b/2), x-a/2, 0) — rotates about (a/2, b/2)
+
+Both give same B_z = B_0 (gauge invariance of B). However, with
+**Dirichlet BC A_ind = 0 on conductor surface**, the loss DEPENDS on
+the gauge choice (because A_total = A_ind + A_ext at boundary).
+
+→ **Match coordinate convention between analytical and FEM**:
+   if Mathematica derived for cuboid at [0,a]×[0,b]×[0,c], place
+   NGSolve cuboid at the same location (NOT centered).
+
+Wrong placement gives factor-8 disagreement in loss.
+
+### 2. Factor of 1/2 in P(ω) ↔ Y_eq(s)
+
+The relation is:
+  **P(ω) = (ω²/2) Re[Y_eq(jω)] · |B_0|²**
+
+NOT P = ω² Re[Y_eq] · B_0². The 1/2 comes from time-averaging
+|E|² for harmonic excitation: ⟨|E|²⟩_t = |E_phasor|²/2.
+
+### 3. Mesh resolution for skin depth
+
+At high frequency, skin depth δ = √(2/(ωμσ)) becomes small.
+For Cu at 1 MHz: δ = 66 µm. Mesh size must satisfy h < δ/4 for
+accurate FEM. If h > δ, FEM over-predicts loss (currents can't
+concentrate at surface as physics requires).
+
+→ For wide-band validation, use adaptive mesh refinement or
+   stop frequency sweep at ω where δ = 4·h.
+
+### 4. complex=True for harmonic problems
+
+NGSolve must use complex FE space for jω terms:
+```python
+fes = HCurl(mesh, order=2, complex=True, ...)
+```
+Use GMRes (not CG) for non-Hermitian complex systems.
+
+### 5. nograds=True for HCurl
+
+The curl-curl operator has gradient-field nullspace. Use
+`nograds=True` to remove gradient DOFs from the FE space:
+```python
+fes = HCurl(mesh, order=2, dirichlet="...", nograds=True)
+```
+Otherwise CG/GMRes can't converge.
+
+## Reference implementations
+
+- **Tanimoto's penalty CLN**: `W:/00_CAE/NGSolve/谷本/定式_誤差検証/
+  20231211_A_(Penalty)_CLN.ipynb` — A-formulation cylinder example
+- **Tanimoto's gauge CLN**: `..._A_gauge_CLN.ipynb` — adds H1 gauge
+  potential for div-free A
+- **Cuboid Case B validation**: `W:/30_CauerLadderNetwork/
+  2026_04_01_長方形CLN/ngsolve_validation/cuboid_CaseB_freq_sweep.py`
+  — direct frequency sweep, agrees with Mathematica Foster sum
+  (1 Hz - 100 kHz, <10% error with N_modes=21 truncation)
+
+## References
+
+- A. Kameari, H. Ebrahimi, K. Sugahara, Y. Shindo, T. Matsuo,
+  "Cauer ladder network representation of eddy-current fields...",
+  IEEE Trans. Magn. 54(3), 7201804 (2018).
+- N. Köster, O. König, O. Bíró, "Proper Generalized Decomposition
+  with Cauer Ladder Network Applied to Eddy Current Problems",
+  IEEE Trans. Magn. 57(6), 6300904 (2021).
+- H. Ebrahimi, K. Sugahara, T. Matsuo, H. Kaimori, A. Kameari,
+  "Modal decomposition of 3-D quasi-static Maxwell equations by
+  Cauer ladder network representation", IEEE Trans. Magn. 56(3),
+  7513004 (2020).
+
+## Validation findings (cuboid + cube, 2026-04-27)
+
+### EBE-only solve does NOT converge for general 3D problems
+
+Bíró (verbal): "EBE preconditioning alone is sufficient."
+Niels (verbal): "Sometimes works, sometimes doesn't."
+
+**Empirical**: For a 5x2x20 mm Cu cuboid + air with Köster A-T recursion,
+applying `Preconditioner(a, "local")` ONCE (no CG iteration) gives R_0
+off by 22 orders of magnitude. The HCurl local block on tetrahedra
+shares edges with neighbors, so block-diagonal inverse doesn't capture
+global coupling.
+
+**Recommendation**: Always wrap with CG or GMRes when using "local"
+preconditioner. EBE-only is suitable for very specific symmetric
+problems (1D axisymmetric, quasi-1D) but not general 3D.
+
+### Köster A-T is voltage-driven-coil-only
+
+Köster's Eq. (8) BC `T_tilde_n × n = -T_(n-1) × n on Gamma_NC` plus
+T_0 BC `T_0 × n = H_s × n` (Biot-Savart from impressed coil) assume
+a coil source. For "isolated conductor in external uniform B field"
+(Case B), there's no terminal voltage, so Köster's recursion does
+not directly apply. Use:
+  - **Direct frequency sweep**: solve harmonic eddy current at each ω
+  - **Kameari A-only iterative basis** (original, Tanimoto pattern)
+
+### Stage 0 exact validation (1mm Cu cube, Case A all-Dirichlet)
+
+NGSolve Kameari recursion vs Mathematica analytical:
+
+| Quantity | Mathematica | NGSolve | Match |
+|---|---|---|---|
+| `R_0` | `1/(σV) = 17.24 Ω` | 17.24 Ω | 4-digit ✓ |
+| `L_0` | (need conversion) | 2.56 µH | (different topology) |
+
+R_0 matches exactly because both compute the same Y_eq(0) = σ V_C
+(Parseval identity for constant-1 expansion in eigenbasis).
+
+### Higher stages numerically unstable
+
+Kameari's J update `J_(n+1) = J_n - σ A_n / L_n` accumulates roundoff.
+For cube at h=100µm, order=1: L_1 came out NEGATIVE (catastrophic
+cancellation). Remedies:
+  - Higher polynomial order (3+) with refined mesh
+  - Explicit Coulomb gauge (Tanimoto's H1 potential pattern)
+  - WorkingPrecision = 50 in symbolic computation (Mathematica), then
+    transfer to NGSolve as exact rational coefficients
+
+### Verified arithmetic with Mathematica Interval[]
+
+Mathematica `Interval[]` propagation through truncated Foster sum
+gives provable bounds on Y_eq(0):
+```
+Y(0) Parseval exact = 0.05800 S·m²
+Y(0) Interval sum (N=21^3) = [0.05486, 0.05486]
+Truncation deficit: 5.42% with N=21 truncation
+```
+Combine with NGSolve discretization for end-to-end verified Cauer
+ladder values.
+
+## EBE compatibility for div A = 0 / div T = 0 enforcement
+
+Köster orthogonality theorem requires div(curl T) = 0 i.e. T must be
+div-free. Standard methods to enforce:
+
+| Method | EBE compatible? | Cost | Exactness |
+|---|---|---|---|
+| Tokumasu penalty (γ‖div u‖²) | YES (same matrix) | +1 term | Approx (γ tuning) |
+| Helmholtz-Hodge projection | NO (extra H1 Poisson) | +1 global solve | Exact |
+| Tree-cotree gauge | YES | O(N) preprocess | Exact |
+| Gram-Schmidt re-orthogonalization | YES (inner products only) | O(N²) inner products | Recovers orthogonality but residual noise |
+| `nograds=True` (NGSolve) | YES | None | Removes high-order grads only |
+| A-V mixed with Lagrange multiplier | NO (mixed system) | 2x DoF | Exact |
+| PINVIT direct eigensolve | YES (Krylov + EBE pre) | similar to CG | Exact (with order ≥ 3) |
+
+### Empirical findings (1mm Cu cube validation)
+
+- **Stage 0**: R_0 = 17.24 Ω with EBE+CG matches Mathematica
+  Y_eq(0) = σV exactly to 4 digits.
+- **Stage 1+**: Kameari iteration `J_(n+1) = J_n - σA_n/L_n` suffers
+  from cancellation error. Result: L_1 < 0 (unphysical), L grows
+  by 10^20 per stage.
+- **Gram-Schmidt fix attempt**: Restores orthogonality (GS coef ~ 1e-9)
+  but residual J vector itself becomes noise-dominated, breaking
+  subsequent stages.
+- **PINVIT eigensolve at order=1**: Smallest eigenvalues are gradient
+  kernel pollution (1e-4 instead of physical 4e5). Needs order≥3 +
+  nograds=True to eliminate.
+
+### Recommendation
+
+For **practical robust validation** of CLN circuit constants:
+1. Use NGSolve `HCurl(order=3, nograds=True, dirichlet="all_boundary")`
+2. PINVIT for direct eigenvalue/eigenvector extraction
+3. Compute R_n = 1/(σ|β_n|²), L_n = μ/(λ_n²|β_n|²) per mode
+4. This is fully EBE compatible (PINVIT + EBE preconditioner)
+
+For **strict-EBE Kameari iteration**: tree-cotree gauge required
+for higher-stage stability. Implementation: build spanning tree of
+mesh edges, mask tree edge DoFs to zero. Non-trivial in 3D.
+
+For **simple robust** (accepting non-EBE): Tanimoto's gauge_CLN
+pattern (Helmholtz-Hodge auxiliary H1 Poisson per stage) works well.
+"""
+
+
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
@@ -4788,6 +5068,11 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "fuse": NGSOLVE_BOOLEAN_POLICY,
         "compound": NGSOLVE_BOOLEAN_POLICY,
         "trampoline": NGSOLVE_BOOLEAN_POLICY,
+        "cln": NGSOLVE_CLN_CAUER,
+        "cauer": NGSOLVE_CLN_CAUER,
+        "ladder": NGSOLVE_CLN_CAUER,
+        "mor": NGSOLVE_CLN_CAUER,
+        "eddy_current_mor": NGSOLVE_CLN_CAUER,
     }
 
     topic = topic.lower().strip()

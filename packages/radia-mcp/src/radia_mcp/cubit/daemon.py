@@ -1,5 +1,5 @@
 """
-cubit_daemon.py — JSON-RPC server exposing a persistent Cubit session.
+daemon.py — JSON-RPC server exposing a persistent Cubit session.
 
 Runs under Cubit's bundled Python 3.10 (`C:/Program Files/Coreform Cubit
 2025.3/bin/python3/python.exe`), NOT the system Python. This is because
