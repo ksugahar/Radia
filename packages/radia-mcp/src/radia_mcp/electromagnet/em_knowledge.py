@@ -598,6 +598,99 @@ Verified: IMA sign is correct for both linear and nonlinear problems.
 
 
 # ============================================================
+# Topic: Symmetry Reductions (1/2, 1/4, 1/8)
+# ============================================================
+SYMMETRY_REDUCTIONS = """
+# C-type Magnet Symmetry Reductions: 1/2, 1/4, 1/8
+
+## Two distinct Kelvin panel paths (do NOT conflate)
+
+The Radia EM stack ships **two unrelated panel modes** that both use
+Kelvin transformations.  Requests for "1/8 support" almost always
+mean the EM panel path, not the benchmark path.
+
+| Panel mode | Sample location | Purpose | Reductions |
+|------------|----------------|---------|------------|
+| **EM panel FEM/MSC** | `panels/samples/em/em_1-{1,2,4,8}.jou` | Production C-yoke dipole / quad analysis | 1/1, 1/2, 1/4, **1/8** |
+| **EM panel "Kelvin Benchmark"** | `panels/samples/kelvin_benchmark_sphere_1_{2,4}.vol` | Verify Kelvin pipeline against analytical sphere-in-uniform-Hz | 1/2, 1/4 only |
+
+The Kelvin Benchmark mode does **NOT** ship a 1/8 reduction because
+the magnetic-sphere-in-uniform-Hz BVP is fundamentally not
+1/8-symmetric: the source `H0 z_hat` reverses sign under the z=0
+mirror.  This is a property of the BVP, not a Cubit / NGSolve issue,
+and no formulation tweak can recover it.  See
+`mcp-server-radia-ngsolve` topic `kelvin_transformation` ->
+"Why 1/8 is unsupported for the sphere benchmark".
+
+## C-yoke 1/8 reduction (shipped, golden-tested)
+
+The C-type dipole geometry has full octant symmetry (yoke and coil
+both invariant under x->-x, y->-y, z->-z modulo current direction),
+so the 1/8 reduction is geometric and stable.  Sample:
+
+    panels/samples/em/em_1-8_eighth.jou
+    tests/panels/golden/em_eighth_mu1000.json
+
+Validated 2026-04-26: 774/774 Kelvin pairs identified at machine
+precision (post deterministic-anchor fix), 56,369 elements, 11,708
+DOFs at p=1, B_origin_mag = 4.892e-04 T at I=2000 A (regression
+guard, NOT physics accuracy -- the reduced coil BCs do not match
+the full racetrack).
+
+## ELF CEFC 2020 BC convention (C-yoke)
+
+The 1/8 C-yoke uses these symmetry boundary conditions:
+
+| Plane | BC | Meaning |
+|-------|-----|---------|
+| x=0 | `ht=0_x` | tangential H zero (mirror, B_x continuous) |
+| y=0 | `ht=0_y` | tangential H zero (mirror, B_y continuous) |
+| z=0 | `bn=0_z` | normal B zero (anti-mirror) |
+
+In the launcher config:
+
+    "kelvin_reduction": {"x": "ht=0", "y": "ht=0", "z": "bn=0"}
+
+The Kelvin offset goes along **x** (the first axis listed), and the
+Cubit auto-Kelvin script webcuts at x=offset_dist (`kelvin_far`,
+Dirichlet anchor), y=0 (`sym_ht=0_y`), z=0 (`sym_bn=0_z`).  GND
+nodeset sits at the Kelvin centre `(offset_dist, 0, 0)`.
+
+This is opposite in sign pattern to the sphere benchmark (which
+uses `bn=0` on both x and y for the lower-order reductions, then
+would need `ht=0_z` on z for 1/8 -- which fails as discussed
+above).  **The two BVPs need different BC patterns; copying the
+sphere convention onto the C-yoke (or vice-versa) gives wrong
+results.**
+
+## Reduction ladder for the EM panel
+
+| Reduction | jou | sym BCs | Kelvin path |
+|-----------|-----|---------|-------------|
+| 1/1 (full) | `em_1-1_full.jou` | none | full Kelvin shell or octant offset |
+| 1/2 (split y) | `em_1-2_half_z.jou` | `ht=0_y` | Kelvin offset along x |
+| 1/4 (split x,y) | `em_1-4_quarter_xz.jou` | `ht=0_x, ht=0_y` | Kelvin offset along x |
+| 1/8 (split x,y,z) | `em_1-8_eighth.jou` | `ht=0_x, ht=0_y, bn=0_z` | Kelvin offset along x |
+
+All four are golden-tested in `tests/panels/test_em_*_golden.py`.
+
+## Don't add a 1/8 sphere benchmark
+
+If a future task asks to "add 1/8 to the Kelvin benchmark panel",
+the answer is no -- the BVP doesn't admit it.  See
+`memory/feedback_kelvin_1_8_not_a_real_use_case.md` for the
+multi-hour debug trail (rho_min sweep + h-refinement both
+disproved numerical-issue hypotheses) before the BVP-symmetry
+realisation landed.
+
+The build script `panels/samples/kelvin_benchmark_sphere_1_8_build.py`
+exists for parameterised-core completeness (`--frac 1_2|1_4|1_8`)
+but the resulting `.vol` is intentionally NOT in the wheel and
+NOT in `panels/samples/`.
+"""
+
+
+# ============================================================
 # Topic: Harmonics
 # ============================================================
 HARMONICS = """
@@ -701,6 +794,11 @@ _TOPICS = {
     "hysteresis": HYSTERESIS,
     "ima": IMA,
     "harmonics": HARMONICS,
+    "symmetry_reductions": SYMMETRY_REDUCTIONS,
+    "1_8": SYMMETRY_REDUCTIONS,  # alias
+    "eighth": SYMMETRY_REDUCTIONS,  # alias
+    "c_yoke_symmetry": SYMMETRY_REDUCTIONS,  # alias
+    "kelvin_benchmark_vs_em": SYMMETRY_REDUCTIONS,  # alias
 }
 
 
@@ -709,7 +807,7 @@ def get_electromagnet_documentation(topic: str = "overview") -> str:
 
     Args:
         topic: One of: overview, coilbuilder, kelvin_workflow, hantila,
-               hysteresis, ima, harmonics, all
+               hysteresis, ima, harmonics, symmetry_reductions, all
 
     Returns:
         Documentation string for the requested topic.
