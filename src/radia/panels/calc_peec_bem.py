@@ -239,10 +239,51 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
     progress("BEM", f"BIE ({t_bie:.1f}s)")
 
     # 5. Report P over wp surface
-    from ngsolve import Integrate, CF
+    from ngsolve import (Integrate, CF, GridFunction, InnerProduct, grad)
     A_wp = float(Integrate(CF(1), wp_mesh, VOL_or_BND=BND).real)
     P_wp = float(res['P_density'] * A_wp)
     H_t_rms = float(res['H_t_rms'])
+
+    # 5b. Surface heat-flux distribution q_surf(x,y,z) [W/m^2].
+    # Mirrors calc_fem_kelvin.py Step 6b for optimization filtering:
+    # the scalar P_wp answers "how much", the q_surf_max/p95/mean
+    # answer "where".  |H_t|^2 = |grad_s phi_re|^2 + |grad_s phi_im|^2
+    # is the same CF the bem.solve() integrand uses, just kept as a
+    # CoefficientFunction so we can sample it pointwise.
+    q_surf_max = None
+    q_surf_mean = None
+    q_surf_p95 = None
+    P_total_check = None
+    try:
+        gf_phi_re = GridFunction(bem.fes)
+        gf_phi_im = GridFunction(bem.fes)
+        gf_phi_re.vec.FV().NumPy()[:] = res['phi_vec'].real
+        gf_phi_im.vec.FV().NumPy()[:] = res['phi_vec'].imag
+        H_t_sq_cf = (InnerProduct(grad(gf_phi_re), grad(gf_phi_re))
+                     + InnerProduct(grad(gf_phi_im), grad(gf_phi_im)))
+        Zs_re = float(Z_s.real)  # global SIBC: scalar
+        q_surf_cf = 0.5 * Zs_re * H_t_sq_cf
+
+        P_total_check = float(Integrate(q_surf_cf, wp_mesh,
+                                        VOL_or_BND=BND).real)
+        q_surf_mean = P_total_check / max(A_wp, 1e-30)
+
+        # Stats via per-vertex sampling on the BEM H1 FES.
+        gf_q = GridFunction(bem.fes)
+        gf_q.Set(q_surf_cf, definedon=wp_mesh.Boundaries(".*"))
+        q_arr = np.asarray(gf_q.vec.FV().NumPy())
+        if q_arr.size > 0:
+            q_surf_max = float(np.max(q_arr))
+            q_surf_p95 = float(np.percentile(q_arr, 95))
+        else:
+            q_surf_max = 0.0
+            q_surf_p95 = 0.0
+        progress("BEM", f"Q_SURF max={q_surf_max:.3e} "
+                        f"mean={q_surf_mean:.3e} p95={q_surf_p95:.3e} "
+                        f"W/m^2 (P_check={P_total_check:.4e} vs "
+                        f"P_wp={P_wp:.4e})")
+    except Exception as e:
+        progress("BEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
 
     return {
         "status": "ok",
@@ -262,6 +303,12 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
         "skin_depth_mm": float(delta * 1e3),
         "Z_s_real": float(Z_s.real),
         "Z_s_imag": float(Z_s.imag),
+        # Surface heat-flux distribution (optimization filter).
+        # Same schema as calc_fem_kelvin.py for cross-comparison.
+        "q_surf_max": q_surf_max,
+        "q_surf_mean": q_surf_mean,
+        "q_surf_p95": q_surf_p95,
+        "P_total_check": P_total_check,
         # Diagnostics
         "bem_ndof": int(bem.ndof),
         "bem_nv": int(wp_mesh.nv),
