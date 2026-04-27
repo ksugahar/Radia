@@ -287,12 +287,26 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
         gf_q = None
         progress("BEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
 
-    # 5c. GMSH .msh export with q_surf as ElementData / NodeData.
-    # Saves the BEM workpiece SURFACE mesh (a 2D-in-3D triangle mesh)
-    # so Kubota's Open GMSH button shows the q_surf hotspot
-    # distribution coloured per surface vertex.  Without this the
-    # exported .msh is just bare triangles and the user reports
-    # "GMSH opens but I don't see anything" -- 2026-04-27 fix.
+    # 5c. Surface current density |J_s| [A/m] = |H_t|.  In SIBC, the
+    # surface current sheet carries the same magnitude as the
+    # tangential H field; gives Kubota the "電流分布" overlay.  Built
+    # from the same |grad_s phi|^2 CF used for q_surf above.
+    gf_J = None
+    try:
+        from ngsolve import sqrt as ng_sqrt
+        H_t_mag_cf = ng_sqrt(InnerProduct(grad(gf_phi_re), grad(gf_phi_re))
+                              + InnerProduct(grad(gf_phi_im), grad(gf_phi_im)))
+        gf_J = GridFunction(bem.fes)
+        gf_J.Set(H_t_mag_cf, definedon=wp_mesh.Boundaries(".*"))
+    except Exception as e:
+        progress("BEM", f"J_SURF gen failed: {type(e).__name__}: {e}")
+
+    # 5d. GMSH .msh export with q_surf + J_surf as ElementData /
+    # NodeData.  Saves the BEM workpiece SURFACE mesh (a 2D-in-3D
+    # triangle mesh) so Kubota's Open GMSH button shows the
+    # hotspot + current-intensity distribution coloured per surface
+    # vertex.  Without this the exported .msh is just bare triangles
+    # and the user reports "GMSH opens but I don't see anything".
     gmsh_file = ""
     qsurf_sol_path = ""
     if msh_output and gf_q is not None:
@@ -312,10 +326,19 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
                  "fes_dim": 1,
                  "name": "q_surf", "ncomp": 1},
             ]
+            if gf_J is not None:
+                sol_J = os.path.join(base_dir,
+                                     f"{stem}_Jsurf.sol").replace("\\", "/")
+                gf_J.Save(sol_J)
+                sol_entries.append(
+                    {"sol": sol_J, "fes": "H1",
+                     "fes_order": int(h1_order),
+                     "fes_dim": 1,
+                     "name": "J_surf_Am", "ncomp": 1})
             vol2msh(msh_output, vol_q, sol_entries)
             gmsh_file = msh_output
             progress("BEM", f"GMSH:wrote {os.path.basename(msh_output)} "
-                             f"with q_surf field")
+                             f"({len(sol_entries)} fields)")
         except Exception as e:
             progress("BEM", f"GMSH_ERROR:{type(e).__name__}: {e}")
 

@@ -719,8 +719,24 @@ def solve_fem(vol_file="", fes_order=1,
             # main solve / JSON output.
             _log(f"Q_SURF:stats failed: {type(e).__name__}: {e}")
             gf_q = None
+
+        # Surface current density |J_s| [A/m] = |H_t|.  In SIBC, the
+        # surface current sheet has the same magnitude as the
+        # tangential H field.  GMSH renders this as the "電流分布"
+        # (current intensity) overlay on the SIBC face.  Direction
+        # vector is a v2 enhancement.
+        try:
+            J_mag_cf = sqrt(At_sq) * (omega / abs(Z_s))
+            fes_J = H1(mesh, order=fes_order)
+            gf_J = GridFunction(fes_J)
+            gf_J.vec[:] = 0
+            gf_J.Set(J_mag_cf, definedon=wp_region)
+        except Exception as e:
+            _log(f"J_SURF:gen failed: {type(e).__name__}: {e}")
+            gf_J = None
     else:
         gf_q = None
+        gf_J = None
 
     # ============================================================
     # Step 7: GMSH export — B vector + J vector + companion .msh.opt
@@ -805,6 +821,14 @@ def solve_fem(vol_file="", fes_order=1,
                 sol_entries.append(
                     {"sol": sol_Q, "fes": "H1", "fes_order": fes_order,
                      "fes_dim": 1, "name": "q_surf", "ncomp": 1})
+            if gf_J is not None:
+                sol_J = os.path.join(base_dir,
+                                     f"{name_stem}_Jsurf.sol").replace("\\", "/")
+                gf_J.Save(sol_J)
+                sol_paths["J_surf"] = sol_J
+                sol_entries.append(
+                    {"sol": sol_J, "fes": "H1", "fes_order": fes_order,
+                     "fes_dim": 1, "name": "J_surf_Am", "ncomp": 1})
             _log(f"SAVE:{os.path.basename(vol_B)} + {len(sol_paths)} .sol")
 
             # 3. Convert .vol + .sol to .msh via the shared helper.
