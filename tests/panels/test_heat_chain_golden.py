@@ -47,8 +47,14 @@ GOLDEN = os.path.join(HERE, "golden", "heat_chain_coarse_7kHz.json")
 FIXTURE_DIR = os.path.join(HERE, "fixtures")
 WP_VOL = os.path.join(FIXTURE_DIR, "heat_workpiece_cylinder_R25_H25.vol")
 GEN_SCRIPT = os.path.join(FIXTURE_DIR, "generate_heat_cylinder.py")
+WP_VOL_AXI = os.path.join(FIXTURE_DIR,
+                          "heat_workpiece_cylinder_R25_H25_axisym.vol")
+GEN_SCRIPT_AXI = os.path.join(FIXTURE_DIR,
+                              "generate_heat_cylinder_axisym.py")
 CALC_FEM = os.path.join(ROOT, "src", "radia", "panels", "calc_fem_kelvin.py")
 CALC_HEAT = os.path.join(ROOT, "src", "radia", "panels", "calc_heat.py")
+CALC_HEAT_AXI = os.path.join(ROOT, "src", "radia", "panels",
+                              "calc_heat_axisym.py")
 
 
 def _load_golden():
@@ -70,6 +76,20 @@ def _ensure_wp_fixture(tmp_path):
             f"Could not generate workpiece fixture {WP_VOL}.\n"
             f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
     return WP_VOL
+
+
+def _ensure_wp_axisym_fixture(tmp_path):
+    """Generate the 2D axisym workpiece .vol fixture on demand."""
+    if os.path.isfile(WP_VOL_AXI):
+        return WP_VOL_AXI
+    proc = subprocess.run(
+        [sys.executable, GEN_SCRIPT_AXI],
+        capture_output=True, text=True, timeout=120)
+    if proc.returncode != 0 or not os.path.isfile(WP_VOL_AXI):
+        pytest.skip(
+            f"Could not generate axisym fixture {WP_VOL_AXI}.\n"
+            f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+    return WP_VOL_AXI
 
 
 @pytest.mark.slow
@@ -219,3 +239,72 @@ def test_fem_kelvin_to_heat_chain(tmp_path):
         assert history[i] >= history[i - 1] - 1e-12, (
             f"T_probe history is non-monotone at step {i}: "
             f"{history[i-1]:.10f} -> {history[i]:.10f}")
+
+    # ----------------------------------------------------------------
+    # Axisymmetric leg: reuse the same EM-side qsurf.sol on a 2D
+    # axisym mesh and verify the v1.5 path agrees with the 3D leg
+    # within mesh-interpolation noise.  This is the regression catch
+    # for calc_heat_axisym.py specifically (phi-averaging, axisym
+    # weight 2*pi*r in the bilinear forms, 2D mesh handling).
+    # ----------------------------------------------------------------
+    exp_a = g["expected_heat_axisym"]
+    wp_vol_axi = _ensure_wp_axisym_fixture(tmp_path)
+    heat_axi_csv = str(tmp_path / "heat_probe_axi.csv")
+    heat_axi_cmd = [
+        sys.executable, CALC_HEAT_AXI,
+        "--wp-vol", wp_vol_axi,
+        "--surface-label", "outer",
+        "--material", phys["thermal_material"],
+        "--qsurf-sol", em_qsurf,
+        "--em-vol", em_fem_vol,
+        "--qsurf-order", str(phys["fes_order_em"]),
+        "--n-phi-samples", str(exp_a["n_phi_samples"]),
+        "--h-conv", str(phys["h_conv_Wm2K"]),
+        "--t-ext", str(phys["t_ext_C"]),
+        "--t-initial", str(phys["t_initial_C"]),
+        "--dt", str(phys["dt_s"]),
+        "--t-end", str(phys["t_end_s"]),
+        "--probe-point",
+        f"{exp_a['probe_point_rz'][0]},{exp_a['probe_point_rz'][1]}",
+        "--csv-output", heat_axi_csv,
+    ]
+    proc = subprocess.run(heat_axi_cmd, capture_output=True,
+                           text=True, timeout=300)
+    assert proc.returncode == 0, (
+        f"calc_heat_axisym failed:\nSTDOUT:\n{proc.stdout}\n"
+        f"STDERR:\n{proc.stderr}")
+    heat_axi_result = json.loads(proc.stdout)
+
+    # Schema marker.
+    assert heat_axi_result.get("mesh_type") == "axisymmetric"
+
+    # qsurf integral: lock the captured value AND verify it agrees
+    # with the EM-side P_total.  Two checks because the 3D and
+    # axisym surfaces are meshed independently and the axisym side
+    # carries an extra phi-average step.
+    qsurf_int_axi = heat_axi_result["q_surf_int_W"]
+    err_pct = abs(qsurf_int_axi - exp_a["qsurf_int_W"]) \
+        / exp_a["qsurf_int_W"] * 100
+    assert err_pct < exp_a["tolerance_qsurf_int_pct"], (
+        f"axisym qsurf_int drift: got {qsurf_int_axi:.4e} W, "
+        f"ref {exp_a['qsurf_int_W']:.4e} W, "
+        f"err {err_pct:.2f}% (tol {exp_a['tolerance_qsurf_int_pct']}%).")
+    rel_em = abs(qsurf_int_axi - p_em) / max(p_em, 1e-30) * 100
+    assert rel_em < 5.0, (
+        f"axisym qsurf vs EM P_total: got {qsurf_int_axi:.4e} W, "
+        f"P_total {p_em:.4e} W, err {rel_em:.2f}% (>5%).")
+
+    # Final-state temperature.
+    T_max_axi = heat_axi_result["T_max_C"]
+    T_probe_axi = heat_axi_result["T_probe_history_C"][-1]
+    assert abs(T_max_axi - exp_a["T_max_C"]) < exp_a["tolerance_temp_K"]
+    assert abs(T_probe_axi - exp_a["T_probe_final_C"]) < exp_a["tolerance_temp_K"]
+
+    # Cross-leg sanity: the 3D and axisym legs solve the SAME
+    # physical problem (cylindrical workpiece + cylindrical EM
+    # mesh).  Their final-state probe temperatures must agree
+    # within mesh-interpolation noise.
+    assert abs(T_probe_axi - T_probe) < 5.0e-6, (
+        f"3D vs axisym disagree on final probe temperature: "
+        f"3D={T_probe:.10f} C, axisym={T_probe_axi:.10f} C, "
+        f"diff {abs(T_probe_axi - T_probe):.2e} K (tol 5e-6 K).")
