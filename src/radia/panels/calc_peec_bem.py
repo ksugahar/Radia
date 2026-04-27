@@ -135,7 +135,8 @@ def _extract_bnd_only(vol_mesh, bnd_label):
 def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
                             frequency, current, coil_sigma,
                             vol, wp_label, sigma, half_thickness, mu_r,
-                            impedance_model, h1_order):
+                            impedance_model, h1_order,
+                            msh_output=""):
     """One-way forward PEEC->BEM pipeline.  No Delta_L back-reaction.
 
     wp_label is interpreted as:
@@ -283,7 +284,40 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
                         f"W/m^2 (P_check={P_total_check:.4e} vs "
                         f"P_wp={P_wp:.4e})")
     except Exception as e:
+        gf_q = None
         progress("BEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
+
+    # 5c. GMSH .msh export with q_surf as ElementData / NodeData.
+    # Saves the BEM workpiece SURFACE mesh (a 2D-in-3D triangle mesh)
+    # so Kubota's Open GMSH button shows the q_surf hotspot
+    # distribution coloured per surface vertex.  Without this the
+    # exported .msh is just bare triangles and the user reports
+    # "GMSH opens but I don't see anything" -- 2026-04-27 fix.
+    gmsh_file = ""
+    qsurf_sol_path = ""
+    if msh_output and gf_q is not None:
+        try:
+            from gmsh_post_export import save_vol_sol_pair, vol2msh
+            base_dir = os.path.dirname(os.path.abspath(msh_output))
+            stem = os.path.splitext(os.path.basename(msh_output))[0]
+            vol_q = os.path.join(base_dir,
+                                 f"{stem}_bem.vol").replace("\\", "/")
+            sol_q = os.path.join(base_dir,
+                                 f"{stem}_qsurf.sol").replace("\\", "/")
+            save_vol_sol_pair(vol_q, sol_q, wp_mesh.ngmesh, gf_q)
+            qsurf_sol_path = sol_q
+            sol_entries = [
+                {"sol": sol_q, "fes": "H1",
+                 "fes_order": int(h1_order),
+                 "fes_dim": 1,
+                 "name": "q_surf", "ncomp": 1},
+            ]
+            vol2msh(msh_output, vol_q, sol_entries)
+            gmsh_file = msh_output
+            progress("BEM", f"GMSH:wrote {os.path.basename(msh_output)} "
+                             f"with q_surf field")
+        except Exception as e:
+            progress("BEM", f"GMSH_ERROR:{type(e).__name__}: {e}")
 
     return {
         "status": "ok",
@@ -309,6 +343,8 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
         "q_surf_mean": q_surf_mean,
         "q_surf_p95": q_surf_p95,
         "P_total_check": P_total_check,
+        "qsurf_sol": qsurf_sol_path,
+        "msh_file": gmsh_file,
         # Diagnostics
         "bem_ndof": int(bem.ndof),
         "bem_nv": int(wp_mesh.nv),
@@ -391,21 +427,8 @@ def main():
             mu_r=args.mu_r,
             impedance_model=args.impedance_model,
             h1_order=args.h1_order,
+            msh_output=args.msh_output,
         )
-        # GMSH export (mesh geometry only — minimum to activate panel's
-        # OpenGmsh button). Field export (H_t, P_density on wp surface)
-        # is a future enhancement.
-        if args.msh_output and isinstance(result, dict) and "error" not in result:
-            try:
-                import sys, os as _os
-                radia_src = _os.path.dirname(_os.path.abspath(__file__)) + "/.."
-                if _os.path.abspath(radia_src) not in sys.path:
-                    sys.path.insert(0, _os.path.abspath(radia_src))
-                from gmsh_post_export import vol2msh
-                vol2msh(args.msh_output, args.vol, [])
-                result["msh_file"] = args.msh_output
-            except Exception as e:
-                result["msh_export_error"] = str(e)
         return result
 
     calc_main(run, parser)
