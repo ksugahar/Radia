@@ -746,7 +746,38 @@ class IHWindow(AnalysisWindow):
         # just one of IH's four methods and a standalone window only
         # added a thin wrapper that forced the method.
         self._maybe_auto_fill_step_from_cwd()
+        # "Run thermal..." chain button.  Inserted next to Open GMSH
+        # in the action row.  Enabled when an IH solve emits a usable
+        # qsurf.sol companion (Phase A keys "qsurf_sol" / "msh_file");
+        # click launches radia_heat.py with the EM-side outputs
+        # pre-filled so the user picks only the workpiece thermal
+        # mesh and the thermal parameters.
+        self._heat_qsurf_sol = ""
+        self._heat_em_vol = ""
+        self._heat_btn = self._install_heat_button()
         self._update_run_state()
+
+    def _install_heat_button(self):
+        """Append a 'Run thermal...' button to the AnalysisWindow
+        action row (Run / Stop / Open GMSH).  Initially disabled."""
+        from PySide6.QtWidgets import QPushButton, QStyle
+        btn_row = self._gmsh_btn.parent().layout()
+        if btn_row is None:
+            return None
+        style = self.style()
+        btn = QPushButton(
+            style.standardIcon(QStyle.SP_ArrowRight), " Run thermal...")
+        btn.setFixedHeight(32)
+        btn.setEnabled(False)
+        btn.setToolTip(
+            "Launch the thermal panel (radia_heat) with this run's "
+            "q_surf .sol pre-filled.  Pick a workpiece-volume .vol "
+            "in the new window; the EM-side q_surf is projected "
+            "onto its heating surface automatically.")
+        btn.clicked.connect(self._on_run_thermal)
+        gmsh_idx = btn_row.indexOf(self._gmsh_btn)
+        btn_row.insertWidget(gmsh_idx + 1, btn)
+        return btn
 
     def _maybe_auto_fill_step_from_cwd(self):
         """If the active method needs a STEP/JOU coil AND the field is
@@ -789,6 +820,12 @@ class IHWindow(AnalysisWindow):
     def _on_finished(self, exit_code, exit_status):
         # Delegate core finish handling + then append IH-specific summary.
         super()._on_finished(exit_code, exit_status)
+        # Reset chain state on every run -- "Run thermal..." is only
+        # offered for the most recent successful EM solve.
+        self._heat_qsurf_sol = ""
+        self._heat_em_vol = ""
+        if self._heat_btn is not None:
+            self._heat_btn.setEnabled(False)
         if exit_code != 0:
             return
         # Parse JSON one more time for IH-specific pretty-print
@@ -806,6 +843,30 @@ class IHWindow(AnalysisWindow):
                         pass
             if result is None or "error" in result:
                 return
+
+            # Detect a usable qsurf.sol pair from the JSON result.
+            # Phase A's calc_fem_kelvin emits "qsurf_sol" directly;
+            # the companion EM .vol is at "<msh stem>_fem.vol" by
+            # the save_vol_sol_pair convention.  Other IH methods
+            # (PEEC inductance / PEEC+BEM) do not save qsurf.sol so
+            # the chain button stays disabled for them.
+            qsurf = result.get("qsurf_sol") or ""
+            if qsurf and os.path.isfile(qsurf):
+                em_vol = ""
+                msh_file = result.get("msh_file") or ""
+                if msh_file:
+                    msh_stem = os.path.splitext(msh_file)[0]
+                    candidate = msh_stem + "_fem.vol"
+                    if os.path.isfile(candidate):
+                        em_vol = candidate
+                if not em_vol and qsurf.endswith("_qsurf.sol"):
+                    candidate = qsurf[:-len("_qsurf.sol")] + "_fem.vol"
+                    if os.path.isfile(candidate):
+                        em_vol = candidate
+                self._heat_qsurf_sol = qsurf
+                self._heat_em_vol = em_vol
+                if self._heat_btn is not None:
+                    self._heat_btn.setEnabled(True)
 
             lines = ["", "=== IH Summary ==="]
             method = result.get("method", "")
@@ -862,6 +923,39 @@ class IHWindow(AnalysisWindow):
             self._output.appendPlainText("\n".join(lines))
         except Exception as e:
             self._output.appendPlainText(f"(IH summary skipped: {e})")
+
+    def _on_run_thermal(self):
+        """Launch radia_heat.py with this run's qsurf .sol pre-filled.
+
+        We start a detached subprocess (CREATE_NEW_PROCESS_GROUP on
+        Windows so closing the IH window doesn't kill the thermal
+        window).  No state is shared with the IH window after launch
+        beyond the CLI arguments below.
+        """
+        if not self._heat_qsurf_sol:
+            return
+        import subprocess
+        heat_script = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "radia_heat.py")
+        cmd = [_PYTHON, heat_script,
+               "--qsurf-sol", self._heat_qsurf_sol]
+        if self._heat_em_vol:
+            cmd += ["--em-vol", self._heat_em_vol]
+        # CREATE_NEW_PROCESS_GROUP = 0x00000200 lets the child
+        # outlive the IH parent without needing fork().
+        flags = 0x00000200 if sys.platform == "win32" else 0
+        try:
+            subprocess.Popen(cmd, creationflags=flags)
+            self._output.appendPlainText(
+                f"\nLaunched thermal panel: {os.path.basename(heat_script)}")
+            self._output.appendPlainText(
+                f"  qsurf_sol = {self._heat_qsurf_sol}")
+            if self._heat_em_vol:
+                self._output.appendPlainText(
+                    f"  em_vol    = {self._heat_em_vol}")
+        except Exception as e:
+            self._output.appendPlainText(
+                f"\nFailed to launch thermal panel: {e}")
 
 
 def main():
