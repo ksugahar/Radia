@@ -657,6 +657,72 @@ def solve_fem(vol_file="", fes_order=1,
     _log(f"DONE:P={P_total:.4e} L={L*1e9:.2f}nH t={t_total:.1f}s")
 
     # ============================================================
+    # Step 6b: Surface heat flux q_surf(x,y,z) [W/m^2]
+    # ============================================================
+    # The SIBC boundary radiates time-averaged Poynting power per area
+    #   q_surf = 0.5 * Re(Z_s) * |H_t|^2
+    # where |H_t|^2 is the converged tangential field on the workpiece
+    # surface.  Building it as a boundary CoefficientFunction lets us:
+    #   - persist the spatial distribution as a .sol companion (so the
+    #     downstream thermal solver can apply it as a Neumann BC),
+    #   - emit hotspot statistics (max / mean / p95) for optimization
+    #     filtering, and
+    #   - cross-check that the surface integral matches P_total.
+    # No-op when there is no workpiece (At_sq does not exist in scope).
+    q_surf_max = None
+    q_surf_mean = None
+    q_surf_p95 = None
+    P_total_check = None
+    qsurf_sol_path = ""
+    if has_wp:
+        H_t_sq_cf = (omega / abs(Z_s)) ** 2 * At_sq
+        q_surf_cf = 0.5 * Z_s.real * H_t_sq_cf
+
+        # Surface integral as the cross-check for P_total above.
+        P_total_check = float(
+            Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
+        q_surf_mean = P_total_check / max(A_wp, 1e-30)
+
+        # Project to a global H1 GridFunction for stats + .sol storage.
+        # Set on the workpiece boundary only; the rest of the field is
+        # zero and tells the loader (Phase B thermal) which DOFs are
+        # active.  H1 order matches fes_order so the projection has the
+        # same accuracy as the EM solve itself.
+        try:
+            fes_q = H1(mesh, order=fes_order)
+            gf_q = GridFunction(fes_q)
+            gf_q.vec[:] = 0
+            gf_q.Set(q_surf_cf, definedon=wp_region)
+
+            # Stats on the boundary DOFs.  Workpiece-surface vertices
+            # are exactly the H1 DOFs whose value Set populated; we
+            # tag them via the scalar 1 mask trick so the stats do not
+            # depend on a numerical zero threshold.
+            mask_gf = GridFunction(fes_q)
+            mask_gf.vec[:] = 0
+            mask_gf.Set(CF(1.0), definedon=wp_region)
+            mask_arr = np.asarray(mask_gf.vec.FV().NumPy())
+            q_arr = np.asarray(gf_q.vec.FV().NumPy())
+            on_wp = mask_arr > 0.5
+            if np.any(on_wp):
+                vals = q_arr[on_wp]
+                q_surf_max = float(np.max(vals))
+                q_surf_p95 = float(np.percentile(vals, 95))
+            else:
+                q_surf_max = 0.0
+                q_surf_p95 = 0.0
+            _log(f"Q_SURF:max={q_surf_max:.3e} mean={q_surf_mean:.3e} "
+                 f"p95={q_surf_p95:.3e} W/m^2 "
+                 f"(P_check={P_total_check:.4e} vs P_total={P_total:.4e})")
+        except Exception as e:
+            # Stats are best-effort.  A failure here must not break the
+            # main solve / JSON output.
+            _log(f"Q_SURF:stats failed: {type(e).__name__}: {e}")
+            gf_q = None
+    else:
+        gf_q = None
+
+    # ============================================================
     # Step 7: GMSH export — B vector + J vector + companion .msh.opt
     # ============================================================
     # Match the BEM viz convention: VECTORS only (GMSH shows the
@@ -724,6 +790,21 @@ def solve_fem(vol_file="", fes_order=1,
                 sol_entries.append(
                     {"sol": sol_As, "fes": "H1", "fes_order": 1,
                      "fes_dim": 3, "name": "A_s", "ncomp": 3})
+
+            # Surface heat-flux distribution q_surf [W/m^2] on the
+            # workpiece SIBC face.  Phase B (calc_heat.py) loads this
+            # .sol and applies it as the Neumann BC for the heat solve.
+            # Saved at the same H1 order as the EM solve so the
+            # spatial detail is preserved in the round trip.
+            if gf_q is not None:
+                sol_Q = os.path.join(base_dir,
+                                     f"{name_stem}_qsurf.sol").replace("\\", "/")
+                gf_q.Save(sol_Q)
+                qsurf_sol_path = sol_Q
+                sol_paths["q_surf"] = sol_Q
+                sol_entries.append(
+                    {"sol": sol_Q, "fes": "H1", "fes_order": fes_order,
+                     "fes_dim": 1, "name": "q_surf", "ncomp": 1})
             _log(f"SAVE:{os.path.basename(vol_B)} + {len(sol_paths)} .sol")
 
             # 3. Convert .vol + .sol to .msh via the shared helper.
@@ -760,6 +841,14 @@ def solve_fem(vol_file="", fes_order=1,
         # H_t_rms is None when there is no workpiece (coil-only run);
         # serialize as null in JSON instead of crashing.
         "H_t_rms": float(H_t_rms) if H_t_rms is not None else None,
+        # Surface heat-flux statistics for optimization filtering.
+        # All keys present (None when no workpiece) so downstream
+        # consumers can rely on the schema.
+        "q_surf_max": q_surf_max,
+        "q_surf_mean": q_surf_mean,
+        "q_surf_p95": q_surf_p95,
+        "P_total_check": P_total_check,
+        "qsurf_sol": qsurf_sol_path,
         "delta": float(delta_skin),
         "ndof": ndof,
         "ne": ne,
