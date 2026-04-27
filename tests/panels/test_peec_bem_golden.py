@@ -94,3 +94,29 @@ def test_peec_bem_matches_2d_ref_coarse():
         f"err {err_pct:.2f}% (tol {exp['tolerance_P_pct']}%).  "
         f"If this fails, the normal-winding logic in "
         f"calc_peec_bem._extract_bnd_only likely regressed.")
+
+    # Surface heat-flux distribution (Phase A optimization filter).
+    # q_surf is the same physical quantity as P_wp/A_wp at the mean,
+    # but the max/p95 values lock the SPATIAL distribution: a regress
+    # that makes heat land in the wrong place (e.g. wrong tangential
+    # projection) shows up here even when the integrated P matches.
+    qmax_got = result["q_surf_max"]
+    qmean_got = result["q_surf_mean"]
+    qmax_ref = exp["q_surf_max_Wm2"]
+    qmean_ref = exp["q_surf_mean_Wm2"]
+    err_qmax = abs(qmax_got - qmax_ref) / qmax_ref * 100
+    err_qmean = abs(qmean_got - qmean_ref) / qmean_ref * 100
+    assert err_qmax < exp["tolerance_qsurf_max_pct"], (
+        f"q_surf_max drift: got {qmax_got:.3e}, ref {qmax_ref:.3e}, "
+        f"err {err_qmax:.2f}% (tol {exp['tolerance_qsurf_max_pct']}%).")
+    assert err_qmean < exp["tolerance_qsurf_mean_pct"], (
+        f"q_surf_mean drift: got {qmean_got:.3e}, ref {qmean_ref:.3e}, "
+        f"err {err_qmean:.2f}% (tol {exp['tolerance_qsurf_mean_pct']}%).")
+    # Cross-check: surface integral of q_surf must equal P_wp.
+    p_check = result["P_total_check"]
+    err_p_int = abs(p_check - p_got) / p_got * 100
+    assert err_p_int < 0.1, (
+        f"P_total_check / P_wp inconsistency: int q_surf dA = {p_check:.4e} W, "
+        f"P_wp = {p_got:.4e} W, err {err_p_int:.4f}% (tol 0.1%). "
+        f"If this fails, the q_surf CF construction has a different "
+        f"normalization than the bem.solve() P_density.")

@@ -819,6 +819,41 @@ class AnalysisWindow(QMainWindow):
                 if "t_total" in result:
                     self._output.appendPlainText(
                         f"  Time = {result['t_total']:.1f}s")
+            # Surface heat-flux statistics.  Emitted by calc_fem_kelvin
+            # and calc_peec_bem (the two SIBC production paths) — same
+            # schema for both, so this block does not need to know
+            # which solver produced the result.  Useful as an
+            # optimization filter ("does enough heat land where we
+            # want it?") before paying for a full thermal solve.
+            qmax = result.get("q_surf_max")
+            qmean = result.get("q_surf_mean")
+            qp95 = result.get("q_surf_p95")
+            pcheck = result.get("P_total_check")
+            if qmax is not None and qmean is not None:
+                self._output.appendPlainText("  --- Surface heat flux ---")
+                self._output.appendPlainText(
+                    f"  q_surf_max  = {qmax:.3e} W/m^2  (hotspot)")
+                self._output.appendPlainText(
+                    f"  q_surf_p95  = {qp95:.3e} W/m^2"
+                    if qp95 is not None else "  q_surf_p95  = n/a")
+                self._output.appendPlainText(
+                    f"  q_surf_mean = {qmean:.3e} W/m^2")
+                if qmean > 0:
+                    self._output.appendPlainText(
+                        f"  hotspot/mean = {qmax/qmean:.2f}  "
+                        f"(IH typical 2-10)")
+                if pcheck is not None:
+                    # Cross-check the surface integral against the
+                    # scalar P (the JSON key name differs by solver).
+                    p_main = result.get("P_total")
+                    if p_main is None:
+                        p_main = result.get("P_wp_W")
+                    if p_main and abs(p_main) > 0:
+                        rel = (pcheck - p_main) / p_main * 100.0
+                        self._output.appendPlainText(
+                            f"  integral check: P_int={pcheck:.4e} W "
+                            f"({rel:+.2f}% vs P_main)")
+
             # BEM coil + workpiece SIBC/ESIM (calc_inductance.py with
             # --workpiece). Distinct from BEM-SIBC (WP) which uses
             # P_total_W; this path uses wp_P_total + wp_R_effective.
