@@ -241,12 +241,14 @@ def solve_peec_inductance(peec_input, n_peri,
     # the coil so GMSH gets something to render.  Optional: only
     # runs when --msh-output is supplied.
     gmsh_file = ""
+    filament_msh = ""
     t_field = 0.0
     field_n_vertices = 0
     if msh_output:
         try:
             from ngsolve import H1, GridFunction
-            from gmsh_post_export import save_vol_sol_pair, vol2msh
+            from gmsh_post_export import (save_vol_sol_pair, vol2msh,
+                                            export_filaments_msh)
             t_field_start = time.perf_counter()
             field_mesh = _build_field_domain_mesh(paths)
             field_n_vertices = field_mesh.nv
@@ -271,6 +273,33 @@ def solve_peec_inductance(peec_input, n_peri,
             ]
             vol2msh(msh_output, vol_B, sol_entries)
             gmsh_file = msh_output
+
+            # Filament "surface J" view: write the filaments as GMSH
+            # 1D line elements with |I| per node so the GMSH window
+            # can show *which* of the n_peri filaments carries how
+            # much current.  This is the PEEC-native answer to
+            # "where does current flow on the coil surface?" -- the
+            # filament density traces the cross-section perimeter
+            # and |I_fil| variations show proximity-effect crowding.
+            #
+            # Saved as <stem>_filaments.msh, a sibling of the main
+            # field mesh.  open_gmsh.py auto-merges any sibling with
+            # this naming convention.
+            try:
+                fil_msh_path = os.path.join(
+                    base_dir,
+                    f"{stem}_filaments.msh").replace("\\", "/")
+                export_filaments_msh(
+                    paths, fil_msh_path,
+                    currents=I_fil, label="filament")
+                filament_msh = fil_msh_path
+                progress("PEEC", f"GMSH:wrote "
+                                  f"{os.path.basename(fil_msh_path)} "
+                                  f"({len(paths)} filaments + |I|)")
+            except Exception as e:
+                progress("PEEC", f"FIL_GMSH_ERROR:"
+                                  f"{type(e).__name__}: {e}")
+
             t_field = time.perf_counter() - t_field_start
             progress("PEEC", f"GMSH:wrote {os.path.basename(msh_output)} "
                               f"(B field on {field_n_vertices} verts, "
@@ -303,6 +332,7 @@ def solve_peec_inductance(peec_input, n_peri,
         "t_solve_s": float(t_topo + t_peec + t_field),
         "field_n_vertices": int(field_n_vertices),
         "msh_file": gmsh_file,
+        "filament_msh": filament_msh,
     }
 
 
