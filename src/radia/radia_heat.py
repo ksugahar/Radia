@@ -53,6 +53,9 @@ OPTIONAL_FILES = {}
 HEAT_SRC_UNIFORM = "Uniform q_surf [W/m^2]"
 HEAT_SRC_SPATIAL = "Spatial q_surf .sol (from IH)"
 
+MESH_TYPE_3D     = "3D volume"
+MESH_TYPE_AXISYM = "2D axisymmetric (r, z)"
+
 
 # Material thermal preset labels (UI-side; calc_heat.py knows the
 # numeric values).  Keep the order consistent with calc_heat.py's
@@ -93,6 +96,28 @@ class HeatPanel(ModePanel):
     # ------- UI construction -------
 
     def _build_ui(self):
+        # Mesh type selection (3D volume vs 2D axisymmetric).
+        # This is the routing key: 3D goes to calc_heat.py, axisym
+        # goes to calc_heat_axisym.py.  Both consume the same
+        # qsurf .sol from the IH solve.
+        self._add_section("Mesh type")
+        mesh_t = self.add_combo(
+            "mesh_type", "Mesh:",
+            [MESH_TYPE_3D, MESH_TYPE_AXISYM], default=0)
+        mesh_t.currentTextChanged.connect(self._on_mesh_type_changed)
+        mesh_t.setToolTip(
+            "<b>3D volume</b>: arbitrary 3D workpiece -- runs "
+            "calc_heat.py with the volumetric heat equation.<br>"
+            "<b>2D axisymmetric</b>: rotationally symmetric "
+            "workpiece (cylinder, stepped shaft) meshed in the "
+            "(r, z) plane -- runs calc_heat_axisym.py with "
+            "(2*pi*r) weighting.  10-100x faster than the "
+            "equivalent 3D mesh for typical IH cylinder cases.<br>"
+            "Cross-mesh q_surf transfer is phi-averaged in axisym "
+            "mode so a slightly non-axisymmetric coil (gapped "
+            "torus) still produces a physically sensible q.")
+        self.add_spin("n_phi_samples", "phi samples (axisym):", 8, 1, 64)
+
         # Heat source selection (the solver-switch variable).
         self._add_section("Heat source")
         src = self.add_combo(
@@ -190,8 +215,14 @@ class HeatPanel(ModePanel):
             filter_str="(no extension);;All (*)")
 
         # Initial visibility / preset.
+        self._on_mesh_type_changed(mesh_t.currentText())
         self._on_heat_source_changed(src.currentText())
         self._on_thermal_material_changed(mat.currentText())
+
+    def _on_mesh_type_changed(self, name):
+        is_axisym = (name == MESH_TYPE_AXISYM)
+        # n_phi_samples is meaningful only in axisym mode.
+        self._set_row_visible("n_phi_samples", is_axisym)
 
     # ------- Handlers -------
 
@@ -256,7 +287,11 @@ class HeatPanel(ModePanel):
         scheme_cli = scheme_map.get(
             self.val("time_scheme"), "backward-euler")
 
-        cmd = [_PYTHON, calc_script("calc_heat.py"),
+        # Route to the correct calc script based on mesh type.
+        is_axisym = (self.val("mesh_type") == MESH_TYPE_AXISYM)
+        calc = ("calc_heat_axisym.py" if is_axisym
+                else "calc_heat.py")
+        cmd = [_PYTHON, calc_script(calc),
                "--wp-vol", wp,
                "--surface-label", self.val("surface_label"),
                "--material", material_cli,
@@ -283,6 +318,8 @@ class HeatPanel(ModePanel):
             em_vol = self.val("em_vol")
             if em_vol:
                 cmd += ["--em-vol", em_vol]
+            if is_axisym:
+                cmd += ["--n-phi-samples", str(self.val("n_phi_samples"))]
 
         # Probe + CSV.
         probe = self.val("probe_point").strip()
