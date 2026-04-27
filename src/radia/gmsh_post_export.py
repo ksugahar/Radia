@@ -585,7 +585,11 @@ def _extract_mesh_data_grouped(mesh, is_surface):
     nodes = []
     for v in mesh.vertices:
         pt = v.point
-        nodes.append((pt[0], pt[1], pt[2]))
+        # 2D meshes (axisym, planar) carry only (x, y); pad z=0 for
+        # the 3D-anchored .msh format (GMSH itself is happy with a
+        # flat mesh in z=0).
+        z = pt[2] if len(pt) >= 3 else 0.0
+        nodes.append((pt[0], pt[1], z))
 
     # Detect if mesh is curved (order > 1)
     curve_order = _detect_curve_order(mesh)

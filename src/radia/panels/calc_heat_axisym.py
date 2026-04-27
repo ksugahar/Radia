@@ -310,46 +310,47 @@ def solve_heat_axisym(wp_vol,
     T_max = float(np.max(T_arr))
     T_min = float(np.min(T_arr))
 
-    # Final-state field export.
-    # vol2msh / GmshPostExport are 3D-only.  For the 2D axisym mesh
-    # we fall back to NGSolve VTKOutput, which natively handles 2D
-    # meshes, and point ``msh_file`` at the .vtu so the panel's
-    # Open GMSH button still works (gmsh.open accepts .vtu).
+    # Final-state field export.  GmshPostExport handles 2D meshes
+    # natively (z is padded to 0 in the .msh nodes table) so the
+    # axisym panel uses the same vol2msh path as the 3D thermal
+    # panel.  q_surf overlay is bundled alongside T so the user
+    # sees both the input flux and the resulting volume temperature
+    # in one GMSH view.
     gmsh_file = ""
     if msh_output:
         try:
+            from gmsh_post_export import save_vol_sol_pair, vol2msh
             base_dir = os.path.dirname(os.path.abspath(msh_output))
             stem = os.path.splitext(os.path.basename(msh_output))[0]
-
-            # Build a q_surf overlay GridFunction so the user can see
-            # the input flux on the SIBC face alongside the volume T.
+            sol_T = os.path.join(base_dir, f"{stem}_T.sol").replace("\\", "/")
+            vol_T = os.path.join(base_dir, f"{stem}_heat.vol").replace("\\", "/")
+            save_vol_sol_pair(vol_T, sol_T, wp_mesh.ngmesh, gfT)
+            sol_entries = [
+                {"sol": sol_T, "fes": "H1",
+                 "fes_order": int(fes_order),
+                 "fes_dim": 1,
+                 "name": "T_C", "ncomp": 1},
+            ]
             try:
                 fes_qg = H1(wp_mesh, order=int(fes_order))
                 gf_qg = GridFunction(fes_qg)
                 gf_qg.vec[:] = 0
                 gf_qg.Set(q_cf, definedon=surface_region)
+                sol_q = os.path.join(base_dir,
+                                     f"{stem}_qsurf.sol").replace("\\", "/")
+                gf_qg.Save(sol_q)
+                sol_entries.append(
+                    {"sol": sol_q, "fes": "H1",
+                     "fes_order": int(fes_order),
+                     "fes_dim": 1,
+                     "name": "q_surf", "ncomp": 1})
             except Exception as e:
                 _log(f"GMSH_qsurf overlay skipped: "
                      f"{type(e).__name__}: {e}")
-                gf_qg = None
-
-            vtu_path = os.path.join(base_dir, f"{stem}_T.vtu") \
-                .replace("\\", "/")
-            coefs = [gfT]
-            names = ["T_C"]
-            if gf_qg is not None:
-                coefs.append(gf_qg)
-                names.append("q_surf")
-            vtk = VTKOutput(wp_mesh, coefs=coefs, names=names,
-                            filename=os.path.splitext(vtu_path)[0],
-                            subdivision=0, legacy=False)
-            try:
-                vtk.Do()
-            finally:
-                del vtk
-            gmsh_file = vtu_path
-            _log(f"VTK:wrote {os.path.basename(vtu_path)} "
-                 f"({len(coefs)} fields, 2D axisym)")
+            vol2msh(msh_output, vol_T, sol_entries)
+            gmsh_file = msh_output
+            _log(f"GMSH:wrote {os.path.basename(msh_output)} "
+                 f"({len(sol_entries)} fields, 2D axisym)")
         except Exception as e:
             _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
 
