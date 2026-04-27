@@ -274,12 +274,19 @@ class ModePanel(QWidget):
 
         Returns the QLabel.  Idempotent: a second call returns the
         existing label without adding another row.
+
+        Min height accommodates ~5 wrapped lines so multi-error
+        validation messages (FEM-Full mode listing 2-3 missing
+        labels + skin-depth hint) display fully without QFormLayout
+        clipping the bottom (Kubota report, 2026-04-28).
         """
         if self._status_label is not None:
             return self._status_label
         lbl = QLabel("")
         lbl.setWordWrap(True)
         lbl.setStyleSheet("QLabel { color: #888; }")
+        fm_h = lbl.fontMetrics().boundingRect("Mg").height()
+        lbl.setMinimumHeight(fm_h * 5 + 8)
         self._form.addRow("", lbl)
         self._status_label = lbl
         if key is not None:
@@ -518,9 +525,14 @@ class AnalysisWindow(QMainWindow):
         self._output = QPlainTextEdit()
         self._output.setReadOnly(True)
         self._output.setFont(QFont("Consolas", PANEL_BASE_FONT_POINT_SIZE))
+        # Long error tracebacks + the new "Surface heat flux" summary
+        # block can run 15-20 lines; give the output box a workable
+        # minimum height so the user does not have to drag the
+        # splitter every time (Kubota request, 2026-04-28).
+        self._output.setMinimumHeight(220)
         out_layout.addWidget(self._output)
         splitter.addWidget(out_group)
-        splitter.setSizes([300, 250])
+        splitter.setSizes([300, 420])
 
         # Buttons
         style = self.style()
