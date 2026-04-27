@@ -36,6 +36,17 @@
     "tolerance_qsurf_int_pct": 5.0,
     "tolerance_temp_K": 1.0e-5
   },
+  "expected_heat_axisym": {
+    "qsurf_int_W": 6.790e-05,
+    "T_max_C": 20.000006,
+    "T_probe_final_C": 20.0000060,
+    "tolerance_qsurf_int_pct": 5.0,
+    "tolerance_temp_K": 1.0e-5,
+    "wp_vol_fixture": "tests/panels/fixtures/heat_workpiece_cylinder_R25_H25_axisym.vol",
+    "wp_vol_generator": "tests/panels/fixtures/generate_heat_cylinder_axisym.py",
+    "n_phi_samples": 8,
+    "probe_point_rz": [0.025, 0.0]
+  },
   "captured_at": "2026-04-27",
   "captured_commit": "33e6de86 + (a) Phase B end-to-end golden test",
   "notes": [
