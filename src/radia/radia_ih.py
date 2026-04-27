@@ -132,6 +132,33 @@ def inspect_vol_labels(vol_path):
         return None, None
 
 
+def _meaningful_labels(labels, *, max_n=12):
+    """Return user-named labels (filtering out Cubit auto-names like
+    'Surface_42', 'volume_17', 'boundary' so typos like 'sorce' stand
+    out at a glance).  Cap at ``max_n`` items to keep the validation
+    line short.
+    """
+    import re
+    if not labels:
+        return []
+    auto_pat = re.compile(r"^(Surface_|volume_|edge_|curve_)\d+$|^boundary$")
+    user = sorted({lbl for lbl in labels if not auto_pat.match(lbl)})
+    if len(user) > max_n:
+        user = user[:max_n] + [f"... (+{len(labels) - max_n} more)"]
+    return user
+
+
+def _label_hint(present, kind):
+    """Format a 'available <kind>: [...]' suffix listing the meaningful
+    labels actually in the .vol.  Empty string when there are no
+    user-named labels (the .vol is generic; nothing useful to list).
+    """
+    user = _meaningful_labels(present)
+    if not user:
+        return ""
+    return f" available {kind}: {user}"
+
+
 def check_method_requirements(method, mats, bnds):
     """Return (ok: bool, errors: list[str], warnings: list[str])."""
     errors = []
@@ -144,9 +171,13 @@ def check_method_requirements(method, mats, bnds):
         # .vol could not be loaded or not yet selected — skip silent.
         return True, errors, warnings
 
+    mat_hint = _label_hint(mats, "materials")
+    bnd_hint = _label_hint(bnds, "boundaries")
+
     if method == METHOD_FEM_FULL:
         if "coil" not in mats:
-            errors.append("Missing material 'coil' (coil volume).")
+            errors.append(
+                f"Missing material 'coil' (coil volume).{mat_hint}")
         if "kelvin" not in mats:
             warnings.append(
                 "Missing material 'kelvin' — Dirichlet A=0 used "
@@ -155,13 +186,15 @@ def check_method_requirements(method, mats, bnds):
             if b not in bnds:
                 errors.append(
                     f"Missing boundary '{b}'.  FEM A-V needs gap-face "
-                    f"ports (source/sink) + wp surface (sibc).")
+                    f"ports (source/sink) + wp surface (sibc)."
+                    f"{bnd_hint}")
     elif method == METHOD_PEEC_FEM_KELVIN:
         # PEEC coil + FEM wp: no coil material, no source/sink, just the
         # workpiece SIBC surface + a Kelvin exterior.
         if "sibc" not in bnds:
             errors.append(
-                "Missing boundary 'sibc' (workpiece surface).")
+                f"Missing boundary 'sibc' (workpiece surface)."
+                f"{bnd_hint}")
         if "kelvin" not in mats:
             warnings.append(
                 "Missing material 'kelvin' — Dirichlet A=0 used "
@@ -169,7 +202,8 @@ def check_method_requirements(method, mats, bnds):
     else:  # PEEC+BEM
         if "sibc" not in bnds:
             errors.append(
-                "Missing boundary 'sibc' (workpiece surface).")
+                f"Missing boundary 'sibc' (workpiece surface)."
+                f"{bnd_hint}")
 
     return (len(errors) == 0), errors, warnings
 
