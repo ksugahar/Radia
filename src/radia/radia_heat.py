@@ -303,7 +303,7 @@ class HeatPanel(ModePanel):
 # ============================================================
 
 class HeatWindow(AnalysisWindow):
-    def __init__(self, vol_path=""):
+    def __init__(self, vol_path="", *, prefill=None):
         super().__init__("Radia - Thermal", vol_path,
                          settings_key="heat")
         panel = HeatPanel()
@@ -316,11 +316,90 @@ class HeatWindow(AnalysisWindow):
         if vol_path and "wp_vol" in panel._widgets and \
                 not panel.val("wp_vol"):
             panel._widgets["wp_vol"].setText(vol_path)
+        # Apply chain-launch pre-fill (qsurf_sol, em_vol, ...).  The
+        # IH window passes these via the CLI when the user clicks
+        # "Run thermal..." after a successful IH solve so the user
+        # does not have to type the paths in twice.
+        if prefill:
+            self._apply_prefill(panel, prefill)
         self._update_run_state()
+
+    @staticmethod
+    def _apply_prefill(panel, prefill):
+        """Set widget values from a dict of {key: value}.
+
+        Auto-flips ``heat_source`` to spatial mode when a qsurf-sol
+        is present so the user lands directly on a runnable panel.
+        """
+        for key, value in prefill.items():
+            if not value:
+                continue
+            w = panel._widgets.get(key)
+            if w is None:
+                continue
+            if hasattr(w, "setText"):
+                w.setText(str(value))
+            elif hasattr(w, "setCurrentText"):
+                w.setCurrentText(str(value))
+            elif hasattr(w, "setValue"):
+                try:
+                    w.setValue(int(value))
+                except (TypeError, ValueError):
+                    pass
+        if prefill.get("qsurf_sol"):
+            src = panel._widgets.get("heat_source")
+            if src is not None and hasattr(src, "setCurrentText"):
+                src.setCurrentText(HEAT_SRC_SPATIAL)
 
 
 def main():
-    run_app(HeatWindow)
+    """Standalone entry point.
+
+    Usage::
+
+        python radia_heat.py [WP_VOL] [--qsurf-sol PATH]
+                              [--em-vol PATH] [--qsurf-order N]
+
+    The optional flags pre-fill the panel; they are how the IH
+    window's "Run thermal..." chain button passes its EM-side
+    output through.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="Radia thermal analysis panel.",
+        # Don't intercept --help inside the GUI subprocess; let it
+        # fall through to argparse's normal help-and-exit so the
+        # caller can discover the chain-fill flags.
+    )
+    parser.add_argument("wp_vol", nargs="?", default="",
+                        help="Optional workpiece .vol path (pre-fills "
+                             "the wp .vol field).")
+    parser.add_argument("--qsurf-sol", default="",
+                        help="Pre-fill the qsurf .sol field "
+                             "(typically <em-msh stem>_qsurf.sol "
+                             "from a calc_fem_kelvin.py run).")
+    parser.add_argument("--em-vol", default="",
+                        help="Pre-fill the EM .vol field "
+                             "(typically <em-msh stem>_fem.vol).")
+    parser.add_argument("--qsurf-order", type=int, default=None,
+                        help="Pre-fill the qsurf H1 order spinner.")
+    args = parser.parse_args()
+
+    prefill = {}
+    if args.qsurf_sol:
+        prefill["qsurf_sol"] = args.qsurf_sol
+    if args.em_vol:
+        prefill["em_vol"] = args.em_vol
+    if args.qsurf_order is not None:
+        prefill["qsurf_order"] = args.qsurf_order
+
+    from PySide6.QtWidgets import QApplication
+    from radia_gui_base import apply_panel_base_font
+    app = QApplication([sys.argv[0]])
+    apply_panel_base_font(app)
+    window = HeatWindow(args.wp_vol, prefill=prefill or None)
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
