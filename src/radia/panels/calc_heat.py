@@ -362,6 +362,13 @@ def solve_heat(wp_vol,
     T_min = float(np.min(T_arr))
 
     # GMSH .msh export of the final temperature field (Open GMSH).
+    # Bundled fields:
+    #   T_C    -- per-vertex temperature in degC (volume scalar)
+    #   q_surf -- the input flux density on the heating face (surface
+    #             scalar).  Saved alongside T so the user can confirm
+    #             that the projected EM source landed where expected
+    #             (q_surf is non-zero only on the SIBC vertices) and
+    #             cross-check the integral against P_total visually.
     gmsh_file = ""
     if msh_output:
         try:
@@ -377,9 +384,32 @@ def solve_heat(wp_vol,
                  "fes_dim": 1,
                  "name": "T_C", "ncomp": 1},
             ]
+            # Project q_cf onto a workpiece-mesh H1 GridFunction so
+            # GMSH renders it.  The CF itself may be either a uniform
+            # scalar (--q-uniform mode) or the cross-mesh projection
+            # already living in gf_q from _build_qsurf_cf; in either
+            # case Set on the surface region is the right thing.
+            try:
+                fes_qg = H1(wp_mesh, order=int(fes_order))
+                gf_qg = GridFunction(fes_qg)
+                gf_qg.vec[:] = 0
+                gf_qg.Set(q_cf,
+                           definedon=wp_mesh.Boundaries(surface_label))
+                sol_q = os.path.join(base_dir,
+                                     f"{stem}_qsurf.sol").replace("\\", "/")
+                gf_qg.Save(sol_q)
+                sol_entries.append(
+                    {"sol": sol_q, "fes": "H1",
+                     "fes_order": int(fes_order),
+                     "fes_dim": 1,
+                     "name": "q_surf", "ncomp": 1})
+            except Exception as e:
+                _log(f"GMSH_qsurf overlay skipped: "
+                     f"{type(e).__name__}: {e}")
             vol2msh(msh_output, vol_T, sol_entries)
             gmsh_file = msh_output
-            _log(f"GMSH:wrote {os.path.basename(msh_output)}")
+            _log(f"GMSH:wrote {os.path.basename(msh_output)} "
+                 f"({len(sol_entries)} fields)")
         except Exception as e:
             _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
 
