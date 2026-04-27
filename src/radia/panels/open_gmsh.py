@@ -69,7 +69,27 @@ def main(argv):
     try:
         gmsh.initialize(["-noconfig"])
         gmsh.open(msh_path)
-        panel_log("open_gmsh.py: gmsh.open OK, entering fltk.run")
+        panel_log("open_gmsh.py: gmsh.open OK")
+
+        # Auto-merge sibling overlay files written by calc_*.py:
+        #   <stem>_filaments.msh  : PEEC filament 1D lines + |I|
+        #                            (see calc_peec_inductance.py)
+        # This lets a single Open GMSH click show both the bbox B
+        # field AND the filament currents in one window without
+        # the user having to "File -> Merge..." manually.
+        stem, ext = os.path.splitext(msh_path)
+        for suffix in ("_filaments.msh",):
+            sibling = stem + suffix
+            if os.path.isfile(sibling):
+                try:
+                    gmsh.merge(sibling)
+                    panel_log(f"open_gmsh.py: merged "
+                              f"{os.path.basename(sibling)}")
+                except Exception:
+                    panel_log_exception(
+                        f"open_gmsh.py: merge {os.path.basename(sibling)}")
+
+        panel_log("open_gmsh.py: entering fltk.run")
         gmsh.fltk.run()
         gmsh.finalize()
         panel_log("open_gmsh.py: gmsh.finalize OK (window closed)")
