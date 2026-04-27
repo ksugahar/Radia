@@ -961,22 +961,37 @@ class AnalysisWindow(QMainWindow):
             msh_candidate = msh_path.rsplit('.', 1)[0] + '.msh'
             if os.path.exists(msh_candidate):
                 msh_path = msh_candidate
-        # gmsh.initialize(['-noconfig']) skips the session options
-        # file (%APPDATA%/gmsh-options) so only the .msh.opt companion
-        # controls display. This prevents user's GUI history from
-        # overriding our settings (VolumeFaces=1, VectorType=5, etc.).
-        # The .msh.opt also works for double-click (same result).
-        launcher = (
-            "import gmsh; gmsh.initialize(['-noconfig']);"
-            f" gmsh.open(r'{msh_path}');"
-            " gmsh.fltk.run(); gmsh.finalize()"
-        )
-        msh_dir = os.path.dirname(os.path.abspath(msh_path))
-        panel_log(f"_open_gmsh: launching GMSH, cwd={msh_dir}")
+        # Delegate to panels/open_gmsh.py.  Two reasons:
+        #   1. The launcher runs detached with CREATE_NO_WINDOW, so any
+        #      gmsh failure (missing package, bad path, fltk crash) used
+        #      to vanish silently.  open_gmsh.py wraps the gmsh calls in
+        #      try/except and writes the traceback to the panel debug
+        #      log so the user can see what happened.
+        #   2. Passing a UNC msh path inside a ``python -c "..."`` literal
+        #      is fragile (slash/quoting/escape issues on Windows shares).
+        #      Argv passes the path as a real argument, no quoting.
+        #
+        # cwd: do NOT pass a UNC cwd to subprocess.Popen.  On 100号機
+        # (multi-user Windows + W: SMB share) the .msh resolves to
+        # ``//192.168.11.100/...`` and ``os.path.abspath`` normalises it
+        # to ``\\192.168.11.100\...``, which CMD.EXE / CreateProcessW
+        # do not reliably accept as a working directory.  GMSH was
+        # silently failing to launch (Kubota, 2026-04-27).  GMSH does
+        # not need cwd to find the ``.msh.opt`` companion -- it derives
+        # that from the .msh path itself.
+        launcher_script = os.path.join(_PANELS_DIR, "open_gmsh.py")
+        cmd = [_PYTHON, launcher_script, msh_path]
+        panel_log(f"_open_gmsh: launching {launcher_script}")
         panel_log(f"  file: {msh_path}")
+        # Pass cwd only if it is on a local drive.  UNC cwd is the
+        # silent-failure trigger described above.
+        cwd = None
+        msh_dir = os.path.dirname(os.path.abspath(msh_path))
+        if not msh_dir.startswith("\\\\"):
+            cwd = msh_dir
         subprocess.Popen(
-            [_PYTHON, "-c", launcher],
-            cwd=msh_dir,
+            cmd,
+            cwd=cwd,
             creationflags=(0x08000000 if sys.platform == "win32" else 0))
 
     # Settings
