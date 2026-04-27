@@ -287,19 +287,38 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
         gf_q = None
         progress("BEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
 
-    # 5c. Surface current density |J_s| [A/m] = |H_t|.  In SIBC, the
-    # surface current sheet carries the same magnitude as the
-    # tangential H field; gives Kubota the "電流分布" overlay.  Built
-    # from the same |grad_s phi|^2 CF used for q_surf above.
+    # 5c. Surface current density on the wp face.
+    #   - |J_s| [A/m] (scalar)  : intensity colormap.
+    #   - Re(J_s) (3D vector)   : direction arrows (instantaneous-
+    #     phase snapshot, real part of -grad_s(phi) in BEM scalar
+    #     potential terms).
     gf_J = None
+    gf_J_vec = None
     try:
-        from ngsolve import sqrt as ng_sqrt
+        from ngsolve import sqrt as ng_sqrt, specialcf as _scf
         H_t_mag_cf = ng_sqrt(InnerProduct(grad(gf_phi_re), grad(gf_phi_re))
                               + InnerProduct(grad(gf_phi_im), grad(gf_phi_im)))
         gf_J = GridFunction(bem.fes)
         gf_J.Set(H_t_mag_cf, definedon=wp_mesh.Boundaries(".*"))
     except Exception as e:
-        progress("BEM", f"J_SURF gen failed: {type(e).__name__}: {e}")
+        progress("BEM", f"J_SURF scalar gen failed: {type(e).__name__}: {e}")
+    try:
+        # Tangential gradient of phi_re as the J vector snapshot.
+        n_bnd_v = _scf.normal(3)
+        gphi = grad(gf_phi_re)
+        gphi_dot_n = sum(gphi[i] * n_bnd_v[i] for i in range(3))
+        # J_s ~ -grad_s(phi); flip sign so arrows point along the
+        # current flow rather than against it (cosmetic).
+        J_s_re_vec = CF(tuple(
+            -(gphi[i] - gphi_dot_n * n_bnd_v[i]) for i in range(3)))
+        from ngsolve import H1 as _H1
+        fes_J_vec = _H1(wp_mesh, order=int(h1_order), dim=3)
+        gf_J_vec = GridFunction(fes_J_vec)
+        gf_J_vec.vec[:] = 0
+        gf_J_vec.Set(J_s_re_vec, definedon=wp_mesh.Boundaries(".*"))
+    except Exception as e:
+        progress("BEM", f"J_SURF vector gen failed: {type(e).__name__}: {e}")
+        gf_J_vec = None
 
     # 5d. GMSH .msh export with q_surf + J_surf as ElementData /
     # NodeData.  Saves the BEM workpiece SURFACE mesh (a 2D-in-3D
@@ -335,6 +354,15 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
                      "fes_order": int(h1_order),
                      "fes_dim": 1,
                      "name": "J_surf_Am", "ncomp": 1})
+            if gf_J_vec is not None:
+                sol_Jv = os.path.join(base_dir,
+                                      f"{stem}_Jvec.sol").replace("\\", "/")
+                gf_J_vec.Save(sol_Jv)
+                sol_entries.append(
+                    {"sol": sol_Jv, "fes": "H1",
+                     "fes_order": int(h1_order),
+                     "fes_dim": 3,
+                     "name": "J_surf_vec", "ncomp": 3})
             vol2msh(msh_output, vol_q, sol_entries)
             gmsh_file = msh_output
             progress("BEM", f"GMSH:wrote {os.path.basename(msh_output)} "
