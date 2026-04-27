@@ -643,6 +643,7 @@ class IHPanel(ModePanel):
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
+               "--msh-output", msh_output(step, "_peec_ind"),
                "--output", json_output(step, "_peec_ind")]
         return cmd
 
