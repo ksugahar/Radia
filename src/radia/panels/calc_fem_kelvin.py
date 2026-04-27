@@ -720,11 +720,19 @@ def solve_fem(vol_file="", fes_order=1,
             _log(f"Q_SURF:stats failed: {type(e).__name__}: {e}")
             gf_q = None
 
-        # Surface current density |J_s| [A/m] = |H_t|.  In SIBC, the
-        # surface current sheet has the same magnitude as the
-        # tangential H field.  GMSH renders this as the "電流分布"
-        # (current intensity) overlay on the SIBC face.  Direction
-        # vector is a v2 enhancement.
+        # Surface current density on the SIBC face.
+        #
+        # |J_s| [A/m] = |H_t| is saved as a scalar for the colormap.
+        #
+        # Re(J_s) is saved as a 3D vector for the arrow plot.  The
+        # SIBC relation E_t = Z_s * J_s combined with E_t = -j*omega*A_t
+        # gives J_s = -j*omega/Z_s * A_t.  We save the real part as
+        # an instantaneous-phase snapshot (the "電流分布" arrows
+        # Kubota wants); GMSH renders complex AC fields by phase
+        # animation only when both Re and Im are saved as separate
+        # views, so for v1 the time-snapshot is enough.
+        gf_J = None
+        gf_J_vec = None
         try:
             J_mag_cf = sqrt(At_sq) * (omega / abs(Z_s))
             fes_J = H1(mesh, order=fes_order)
@@ -732,11 +740,35 @@ def solve_fem(vol_file="", fes_order=1,
             gf_J.vec[:] = 0
             gf_J.Set(J_mag_cf, definedon=wp_region)
         except Exception as e:
-            _log(f"J_SURF:gen failed: {type(e).__name__}: {e}")
-            gf_J = None
+            _log(f"J_SURF:scalar gen failed: {type(e).__name__}: {e}")
+        try:
+            from ngsolve import specialcf as _scf
+            n_bnd_v = _scf.normal(3)
+            # Tangential A as complex 3D CF.
+            A_dot_n = sum(A_eval[i] * n_bnd_v[i] for i in range(3))
+            A_t_vec = CF(tuple(
+                A_eval[i] - A_dot_n * n_bnd_v[i] for i in range(3)))
+            # -j*omega/Z_s = -j*omega*conj(Z_s)/|Z_s|^2
+            # Re(-j*omega/Z_s) = -omega*Im(Z_s)/|Z_s|^2
+            # Im(-j*omega/Z_s) = -omega*Re(Z_s)/|Z_s|^2
+            zs_sq = Z_s.real ** 2 + Z_s.imag ** 2
+            re_coef = -omega * Z_s.imag / zs_sq
+            im_coef = -omega * Z_s.real / zs_sq
+            # Re(J_s) = re_coef*Re(A_t) - im_coef*Im(A_t)
+            J_s_re_cf = CF(tuple(
+                re_coef * A_t_vec[i].real - im_coef * A_t_vec[i].imag
+                for i in range(3)))
+            fes_J_vec = H1(mesh, order=fes_order, dim=3)
+            gf_J_vec = GridFunction(fes_J_vec)
+            gf_J_vec.vec[:] = 0
+            gf_J_vec.Set(J_s_re_cf, definedon=wp_region)
+        except Exception as e:
+            _log(f"J_SURF:vector gen failed: {type(e).__name__}: {e}")
+            gf_J_vec = None
     else:
         gf_q = None
         gf_J = None
+        gf_J_vec = None
 
     # ============================================================
     # Step 7: GMSH export — B vector + J vector + companion .msh.opt
@@ -829,6 +861,15 @@ def solve_fem(vol_file="", fes_order=1,
                 sol_entries.append(
                     {"sol": sol_J, "fes": "H1", "fes_order": fes_order,
                      "fes_dim": 1, "name": "J_surf_Am", "ncomp": 1})
+            if gf_J_vec is not None:
+                sol_Jv = os.path.join(base_dir,
+                                      f"{name_stem}_Jvec.sol").replace("\\", "/")
+                gf_J_vec.Save(sol_Jv)
+                sol_paths["J_surf_vec"] = sol_Jv
+                sol_entries.append(
+                    {"sol": sol_Jv, "fes": "H1", "fes_order": fes_order,
+                     "fes_dim": 3, "name": "J_surf_vec",
+                     "ncomp": 3})
             _log(f"SAVE:{os.path.basename(vol_B)} + {len(sol_paths)} .sol")
 
             # 3. Convert .vol + .sol to .msh via the shared helper.
