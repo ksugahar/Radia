@@ -36,8 +36,92 @@ for p in (SRC_RADIA, HERE):
 from calc_common import calc_main, progress
 
 
+def _build_field_domain_mesh(filament_paths, expand=2.5, n_cells=18):
+    """Generate an OCC Box mesh enclosing the coil bbox * ``expand``.
+
+    Used for the auto-field-domain visualisation in PEEC-inductance
+    mode (no user-supplied .vol).  Sized so a typical coil fits in
+    the centre with ~``n_cells`` divisions in each direction; the
+    mesh is dense enough that GMSH renders the field smoothly but
+    coarse enough that B-field evaluation runs in <10s.
+    """
+    import numpy as np
+    from netgen.occ import Box, Pnt, OCCGeometry
+    from ngsolve import Mesh
+
+    # filament_paths[k] is a list of segments [(p1, p2), ...]; each
+    # endpoint is an (x, y, z) tuple.  Flatten to a (n_pts, 3) view
+    # so we can take the AABB.
+    pts_list = []
+    for path in filament_paths:
+        arr = np.asarray(path, dtype=float)  # (n_seg, 2, 3)
+        if arr.ndim != 3 or arr.shape[-1] != 3:
+            continue
+        pts_list.append(arr.reshape(-1, 3))
+    if not pts_list:
+        raise ValueError(
+            "_build_field_domain_mesh: no valid filament paths.")
+    pts = np.concatenate(pts_list, axis=0)
+    pmin = pts.min(axis=0)
+    pmax = pts.max(axis=0)
+    centre = 0.5 * (pmin + pmax)
+    half = 0.5 * (pmax - pmin)
+    # Expand by ``expand`` factor; keep a floor so a planar coil
+    # (height ~ 0) still has some thickness in z.
+    half_exp = np.maximum(half * expand, half.max() * 0.3)
+    p_lo = centre - half_exp
+    p_hi = centre + half_exp
+
+    # netgen.occ.Pnt requires native Python floats; numpy scalars
+    # raise "Invoked with: array(...)" on the C++ binding.
+    pnt_lo = Pnt(float(p_lo[0]), float(p_lo[1]), float(p_lo[2]))
+    pnt_hi = Pnt(float(p_hi[0]), float(p_hi[1]), float(p_hi[2]))
+    box = Box(pnt_lo, pnt_hi)
+    box.faces.name = "outer"
+    box.solids.name = "field_domain"
+    geo = OCCGeometry(box)
+    maxh = float(np.max(p_hi - p_lo)) / max(n_cells, 4)
+    ngm = geo.GenerateMesh(maxh=maxh)
+    return Mesh(ngm)
+
+
+def _biot_savart_B_on_mesh(mesh, filament_paths, fil_currents):
+    """Vectorised Biot-Savart evaluation of B at every vertex of
+    ``mesh``.  Returns an (n_vertices, 3) NumPy array of B [T].
+    """
+    import numpy as np
+    from biot_savart import h_segments_batch, MU0
+
+    # Vertex coordinates as (n, 3).
+    verts = np.asarray([list(v.point) for v in mesh.vertices], dtype=float)
+    if verts.shape[1] == 2:
+        # 2D mesh would be a programming error here -- this helper is
+        # called from PEEC-inductance which always builds a 3D Box.
+        raise ValueError(
+            "_biot_savart_B_on_mesh: 2D mesh not supported.")
+
+    H_total = np.zeros((verts.shape[0], 3), dtype=float)
+    for path, I in zip(filament_paths, fil_currents):
+        # PEEC paths are ALREADY a list of segments (p1, p2 pairs);
+        # h_segments_batch expects exactly that, so pass the path
+        # straight through (no consecutive-pair zip).
+        segments = np.asarray(path, dtype=float)
+        if segments.ndim != 3 or segments.shape[1:] != (2, 3):
+            continue
+        # PEEC currents are complex phasors; visualise the magnitude
+        # of the time-harmonic B (peak amplitude) by feeding |I| to
+        # the Biot-Savart kernel.  Direction follows the geometry of
+        # the filament path -- identical to the DC current pattern.
+        Im = float(abs(complex(I)))
+        if Im < 1e-30:
+            continue
+        H_total += h_segments_batch(segments, verts, current=Im)
+    return MU0 * H_total  # B [T]
+
+
 def solve_peec_inductance(peec_input, n_peri,
-                          frequency, current, coil_sigma):
+                          frequency, current, coil_sigma,
+                          msh_output=""):
     """Build PEEC topology from STEP or JOU input, then solve for L, R.
 
     Routing:
@@ -152,6 +236,48 @@ def solve_peec_inductance(peec_input, n_peri,
     progress("PEEC", f"L_coil={L_coil*1e9:.3f} nH, "
                       f"R_coil={R_coil*1e3:.4f} mOhm ({t_peec:.1f}s)")
 
+    # B-field visualisation on an auto-generated bounding-box mesh.
+    # PEEC-inductance has no .vol input; we fabricate a 3D Box around
+    # the coil so GMSH gets something to render.  Optional: only
+    # runs when --msh-output is supplied.
+    gmsh_file = ""
+    t_field = 0.0
+    field_n_vertices = 0
+    if msh_output:
+        try:
+            from ngsolve import H1, GridFunction
+            from gmsh_post_export import save_vol_sol_pair, vol2msh
+            t_field_start = time.perf_counter()
+            field_mesh = _build_field_domain_mesh(paths)
+            field_n_vertices = field_mesh.nv
+            B_arr = _biot_savart_B_on_mesh(field_mesh, paths, I_fil)
+
+            fes_B = H1(field_mesh, order=1, dim=3)
+            gf_B = GridFunction(fes_B)
+            v = gf_B.vec.FV().NumPy()
+            v[:] = B_arr.reshape(-1)
+
+            base_dir = os.path.dirname(os.path.abspath(msh_output))
+            stem = os.path.splitext(os.path.basename(msh_output))[0]
+            sol_B = os.path.join(base_dir,
+                                 f"{stem}_B.sol").replace("\\", "/")
+            vol_B = os.path.join(base_dir,
+                                 f"{stem}_field.vol").replace("\\", "/")
+            save_vol_sol_pair(vol_B, sol_B, field_mesh.ngmesh, gf_B)
+            sol_entries = [
+                {"sol": sol_B, "fes": "H1",
+                 "fes_order": 1, "fes_dim": 3,
+                 "name": "B", "ncomp": 3},
+            ]
+            vol2msh(msh_output, vol_B, sol_entries)
+            gmsh_file = msh_output
+            t_field = time.perf_counter() - t_field_start
+            progress("PEEC", f"GMSH:wrote {os.path.basename(msh_output)} "
+                              f"(B field on {field_n_vertices} verts, "
+                              f"{t_field:.1f}s)")
+        except Exception as e:
+            progress("PEEC", f"GMSH_ERROR:{type(e).__name__}: {e}")
+
     return {
         "status": "ok",
         "method": "PEEC inductance (coil only, STEP)",
@@ -173,7 +299,10 @@ def solve_peec_inductance(peec_input, n_peri,
         "inductance_H": float(L_coil),
         "t_topology_s": float(t_topo),
         "t_peec_solve_s": float(t_peec),
-        "t_solve_s": float(t_topo + t_peec),
+        "t_field_s": float(t_field),
+        "t_solve_s": float(t_topo + t_peec + t_field),
+        "field_n_vertices": int(field_n_vertices),
+        "msh_file": gmsh_file,
     }
 
 
@@ -195,6 +324,11 @@ def main():
                         help="Port current [A]")
     parser.add_argument("--coil-sigma", type=float, default=5.8e7,
                         help="Coil conductivity [S/m]")
+    parser.add_argument("--msh-output", default="",
+                        help="Optional .msh path; when set, B field on "
+                             "an auto-generated bounding-box mesh is "
+                             "evaluated via Biot-Savart and exported "
+                             "for the panel's Open GMSH button.")
 
     def run(args):
         return solve_peec_inductance(
@@ -203,6 +337,7 @@ def main():
             frequency=args.frequency,
             current=args.current,
             coil_sigma=args.coil_sigma,
+            msh_output=args.msh_output,
         )
 
     calc_main(run, parser)
