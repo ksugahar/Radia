@@ -1,7 +1,7 @@
 """
 Check .vol mesh consistency against CAD reference values.
 
-Standalone checker — does NOT require Cubit.
+Standalone checker -- does NOT require Cubit.
 Reads .vol (NGSolve mesh) + .vol.json (CAD reference from export).
 
 Usage:
