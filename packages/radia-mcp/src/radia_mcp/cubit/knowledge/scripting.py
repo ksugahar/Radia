@@ -3696,7 +3696,10 @@ spawned.  This turns a 60-s cold boot into a 3-s warm boot.
 ## Credentials
 
 - `RADIA_CUBIT_LEARN_EMAIL` / `RADIA_CUBIT_LEARN_PASSWORD` env vars.
-- Default (on LAB / 100号機 / mdx): `ksugahar@kindai.ac.jp`.
+- No hard-coded defaults: when either env var is unset, warmup is
+  skipped and Cubit does its own license checkout (slower).  Set
+  the env vars in the lab launcher script before invoking Cubit
+  for the fast-warm path.
 - These credentials are for the **Coreform Learn Edition** only.  Pro
   machines use the local license server and skip the warmup path.
 
