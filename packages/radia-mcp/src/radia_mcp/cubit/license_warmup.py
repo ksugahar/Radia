@@ -13,11 +13,13 @@ Mirrors the user's `S:\\CoreformCubit\\coreform_cubit.ps1` flow:
 takes > 60 s to appear (Cubit blocks on RLM server contact).  After
 this warmup, the first command usually comes back in 2 – 3 s.
 
-**Credentials**: read from environment variables
+**Credentials**: read EXCLUSIVELY from environment variables
 ``RADIA_CUBIT_LEARN_EMAIL`` and ``RADIA_CUBIT_LEARN_PASSWORD`` at
-call time.  Falls back to the values in the ps1 file if neither is
-set (lab default).  If no credentials at all, warmup is skipped
-and we rely on whatever state is already in the Learn cache.
+call time.  No hardcoded defaults -- if either is unset, warmup is
+skipped and we rely on whatever state is already in the Learn
+cache.  This package is published to PyPI so it must not embed
+real credentials; lab-side setup is responsible for setting the
+env vars (e.g. via the launcher script that wraps this code).
 
 **Fail-open**: any failure here MUST NOT block Cubit launch.  The
 warmup is an optimisation; if it can't run (rlm_activate missing,
@@ -35,10 +37,11 @@ from pathlib import Path
 from typing import Optional
 
 
-# Default Learn credentials (match S:\CoreformCubit\coreform_cubit.ps1).
-# Overridable via env vars so other labs can share this code.
-_DEFAULT_EMAIL = "ksugahar@kindai.ac.jp"
-_DEFAULT_PASSWORD = "hfemhfem"  # Learn-edition only, not a secret
+# Credentials are read from env vars only.  Do NOT hard-code defaults
+# in this file -- this package is published to PyPI as radia-mcp and
+# any value here would be world-public the moment a release is cut.
+# Lab-side launchers are responsible for setting RADIA_CUBIT_LEARN_*
+# before invoking the warmup (see the Cubit launcher .ps1 / SKILL).
 _CACHE_AGE_DAYS = 3      # re-login if cache older than this
 _MIN_REMAINING_DAYS = 7  # re-login if best license has fewer days left
 
@@ -51,8 +54,8 @@ def _renewals_path() -> Path:
 
 
 def _credentials() -> tuple[Optional[str], Optional[str]]:
-    email = os.environ.get("RADIA_CUBIT_LEARN_EMAIL", _DEFAULT_EMAIL)
-    password = os.environ.get("RADIA_CUBIT_LEARN_PASSWORD", _DEFAULT_PASSWORD)
+    email = os.environ.get("RADIA_CUBIT_LEARN_EMAIL")
+    password = os.environ.get("RADIA_CUBIT_LEARN_PASSWORD")
     if not email or not password:
         return None, None
     return email, password
