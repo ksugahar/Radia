@@ -197,28 +197,42 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     "$CMAKE_EXE" --build . --config Release --target radia_cubit_mesh -j
     if errorlevel 1 ( echo WARNING: radia_cubit_mesh build failed )
 
-    echo.
-    echo ========================================
-    echo   Building radia_cubit.ccm (APREPRO commands)
-    echo ========================================
-    set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
-    if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
-    cd /d "!CUBIT_CCM_BUILD!"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
-    "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
-    if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
+    rem ========================================
+    rem   Building radia_cubit.ccm + .ccl (Qt5 SDK required)
+    rem ========================================
+    rem qt5_sdk is gitignored (repo-local on LAB only).  CI runners do
+    rem not have it -- the .ccm/.ccl are pre-built on LAB and uploaded
+    rem to the `binaries` GitHub Release tag by the pre-push hook;
+    rem CI / mdx fetch them from there.  Skip the build cleanly when
+    rem qt5_sdk is missing rather than letting cmake fail with
+    rem "moc.exe does not exist" (the 2026-04-28 v4.12.0 CI failure).
+    if exist "%CUBIT_PLUGIN_SRC%\qt5_sdk\bin\moc.exe" (
+        echo.
+        echo ========================================
+        echo   Building radia_cubit.ccm (APREPRO commands)
+        echo ========================================
+        set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
+        if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
+        cd /d "!CUBIT_CCM_BUILD!"
+        "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+        "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
+        if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
 
-    echo.
-    echo ========================================
-    echo   Building radia_cubit.ccl (GUI component)
-    echo ========================================
-    "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccl -j
-    if errorlevel 1 ( echo WARNING: radia_cubit_ccl build failed )
+        echo.
+        echo ========================================
+        echo   Building radia_cubit.ccl (GUI component)
+        echo ========================================
+        "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccl -j
+        if errorlevel 1 ( echo WARNING: radia_cubit_ccl build failed )
 
-    rem Copy ccl to src/radia/ so radia-setup deploys the latest version
-    if exist "!CUBIT_CCM_BUILD!\radia_cubit.ccl" (
-        copy /Y "!CUBIT_CCM_BUILD!\radia_cubit.ccl" "$PROJECT_DIR\src\radia\radia_cubit.ccl" >nul
-        echo   radia_cubit.ccl: copied to src/radia/
+        rem Copy ccl to src/radia/ so radia-setup deploys the latest version
+        if exist "!CUBIT_CCM_BUILD!\radia_cubit.ccl" (
+            copy /Y "!CUBIT_CCM_BUILD!\radia_cubit.ccl" "$PROJECT_DIR\src\radia\radia_cubit.ccl" >nul
+            echo   radia_cubit.ccl: copied to src/radia/
+        )
+    ) else (
+        echo SKIP: Qt5 SDK not found at %CUBIT_PLUGIN_SRC%\qt5_sdk\bin\moc.exe -- ccm / ccl are not built here
+        echo       LAB Build.ps1 builds them; CI fetches from binaries Release tag.
     )
 
     cd /d "$BUILD_DIR"
