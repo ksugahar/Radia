@@ -34,7 +34,9 @@ Limitations (current scope):
 
   - Cross-section: circular only (radius from `create surface circle`).
     Rect / lofted profiles need separate parsers.
-  - Units: mm (cad_units_per_meter=1000).  Override via arg.
+  - Units: meters by default (cad_units_per_meter=1.0, CLAUDE.md
+    "Unit System Policy: Radia always uses meters").  Override via
+    arg if your .jou is in mm or cm.
   - Open path only (no closure).  PEEC solver adds port_plus/port_minus
     at first/last centerline point.
 
@@ -63,7 +65,7 @@ RE_MOVE = re.compile(
 
 
 def parse_jou_centerline(jou_path: str,
-                          cad_units_per_meter: float = 1000.0
+                          cad_units_per_meter: float = 1.0
                           ) -> Tuple[np.ndarray, float]:
     """Return (points_m, radius_m) from a Cubit .jou file.
 
@@ -237,7 +239,7 @@ def filaments_from_polyline(pts_m: np.ndarray,
 def filaments_from_jou(jou_path: str, *,
                        sigma: float = 5.8e7,
                        n_peri: int = 16,
-                       cad_units_per_meter: float = 1000.0):
+                       cad_units_per_meter: float = 1.0):
     """Build a PEEC topology_dict from a Cubit .jou file.
 
     Thin wrapper around ``filaments_from_polyline`` that first parses

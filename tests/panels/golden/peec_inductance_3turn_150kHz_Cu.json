@@ -5,7 +5,7 @@
     "step": "W:/kubota/3turncoil.stp",
     "jou": "W:/kubota/3turnCoil.jou",
     "skip_if_missing": true,
-    "comment": "File lives on Kubota's 100号機 share (W:) not in-repo (10 MB).  Test skips if unavailable rather than duplicating the 10 MB in the repo."
+    "comment": "File lives on Kubota's 100号機 share (W:) not in-repo (10 MB).  Test skips if unavailable rather than duplicating the 10 MB in the repo.  POST-4.12.0: both files MUST be in metres (CLAUDE.md m-only policy, auto-detect removed).  If the .jou is in mm, multiply all `move Surface` x/y/z and `create surface circle radius R` values by 0.001 before running the test, OR re-run with explicit cad_units_per_meter=1000.0 (currently not exposed via CLI -- requires Python API call)."
   },
   "physics": {
     "coil": "3-turn pancake coil R_avg~35mm r_wire=3.15mm",

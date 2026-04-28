@@ -168,23 +168,31 @@ This path rarely fires for panel-generated coils (Cubit sweep /
 loft always produce revolution-type surfaces).  Reserved for
 externally-authored STEP files with exotic topology.
 
-## Unit auto-detection
+## Units: METRES ONLY (4.12.0, 2026-04-28)
 
-``build123d.import_step`` does NOT apply the STEP
-``CONVERSION_BASED_UNIT`` factor — it passes the raw numeric
-coordinates through.  Cubit exports are sometimes in mm (values
-10 – 1000) and sometimes in metres (values 0.01 – 1) depending on
-session units at export time, even when the file declares
-``CONVERSION_BASED_UNIT('MILLIMETRE')``.
+Per CLAUDE.md "Unit System Policy: Radia always uses meters", the
+PEEC inductance pipeline accepts METRE inputs only.  No auto-
+detection (the previous bbox heuristic was a CLAUDE.md No-Fallbacks
+violation that masked Cubit STEP-writer unit-declaration bugs and
+silently produced 10x / 1000x wrong inductances).
 
-``_auto_detect_cad_units`` picks ``cad_units_per_meter`` from bbox
-diagonal:
-  * bbox diag >= 1.0 → mm (1000)
-  * bbox diag <  1.0 → m  (1)
+``build123d.import_step`` passes raw numeric coordinates through
+without applying the STEP ``CONVERSION_BASED_UNIT`` declaration.
+Cubit's STEP writer often declares ``MILLIMETRE`` while writing
+metre-valued coordinates; that is OK because we ignore the
+declaration entirely.  The contract is simple:
 
-Assumption: physical coil size is 1 mm – 10 m (covers IH, WPT,
-accelerator magnets, transformer windings).  Outside this range,
-pass an explicit ``cad_units_per_meter`` to override.
+  * STEP coordinate values must be metres
+  * .jou ``move Surface`` x/y/z must be metres
+  * .jou ``create surface circle radius`` must be metres
+
+``filaments_from_step(...)`` and ``parse_jou_centerline(...)``
+default to ``cad_units_per_meter=1.0``.  Override only if you
+KNOW your input is in another unit (e.g. legacy mm-mode Cubit
+journals).
+
+Cubit set-up to produce metre-unit output:
+  ``set unit-system mks`` BEFORE building the coil geometry.
 """
 
 
@@ -239,8 +247,10 @@ the fallback when only a STEP is in hand.
   * Parser reads only ``move Surface`` positions.  Rotation +
     non-circular profiles are NOT reconstructed — the cross-section
     is assumed to match ``RE_CIRCLE`` radius (circle).
-  * Units: mm (``cad_units_per_meter=1000`` default).  Override via
-    argument for journal files written in other units.
+  * Units: METRES (``cad_units_per_meter=1.0`` default since 4.12.0).
+    Cubit set-up: ``set unit-system mks`` BEFORE generating the .jou.
+    For legacy mm .jou files, pass ``cad_units_per_meter=1000.0``
+    explicitly via the Python API.
   * Open path only (no closure).  The PEEC solver adds
     port_plus / port_minus at first / last centerline points.
 """
