@@ -673,7 +673,8 @@ def filaments_from_step(step_path: str,
         # circle from mean cross-section area is accurate enough in the
         # thin-skin regime this mode targets.
         import numpy as np
-        from coil_from_jou import filaments_from_polyline
+        # filaments_from_polyline lives at module bottom (was in
+        # coil_from_jou.py until 4.13.0 .jou-path retirement).
         path_m, w_m, h_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
             cad_units_per_meter=cad_units_per_meter)
@@ -1032,3 +1033,146 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
         "port_minus": port_m,
     }
     return result
+
+
+# ----------------------------------------------------------------------
+# Polyline -> PEEC topology (used by the longest-edge STEP path)
+#
+# Until 4.13.0 these helpers lived in coil_from_jou.py to support the
+# legacy `.jou` explicit-centerline input.  That input path was retired
+# (CLAUDE.md "Radia always uses meters" + No-Fallbacks: a single STEP
+# input is the canonical PEEC source, and cross-section centroids are
+# auto-extracted from B-Rep).  The polyline helpers themselves are
+# still useful internally -- the longest-edge path samples the spine
+# and feeds it through `filaments_from_polyline`.  Moving them here
+# lets coil_from_jou.py be deleted entirely.
+# ----------------------------------------------------------------------
+
+def _parallel_transport_frame(pts: np.ndarray):
+    """Compute (tangent, u_hat, v_hat) per vertex of a 3D polyline.
+
+    Uses parallel transport: start with an arbitrary u perpendicular to
+    the first tangent, then rotate u per segment by the bend angle using
+    Rodrigues' formula.  Avoids the Frenet-Serret twist that appears
+    when curvature vanishes (straight segments).
+
+    Returns 3 arrays of shape (N, 3) where N = len(pts).
+    """
+    n = len(pts)
+    if n < 2:
+        raise ValueError(f"need at least 2 points, got {n}")
+
+    seg_t = np.diff(pts, axis=0)
+    seg_len = np.linalg.norm(seg_t, axis=1, keepdims=True)
+    seg_len = np.maximum(seg_len, 1e-30)
+    seg_t = seg_t / seg_len
+
+    tangent = np.zeros((n, 3))
+    tangent[0] = seg_t[0]
+    tangent[-1] = seg_t[-1]
+    if n > 2:
+        tangent[1:-1] = seg_t[:-1] + seg_t[1:]
+        mid_norm = np.linalg.norm(tangent[1:-1], axis=1, keepdims=True)
+        mid_norm = np.maximum(mid_norm, 1e-30)
+        tangent[1:-1] = tangent[1:-1] / mid_norm
+
+    u_hat = np.zeros((n, 3))
+    v_hat = np.zeros((n, 3))
+    t0 = tangent[0]
+    pick = int(np.argmin(np.abs(t0)))
+    cand = np.zeros(3)
+    cand[pick] = 1.0
+    u0 = cand - np.dot(cand, t0) * t0
+    u0_norm = np.linalg.norm(u0)
+    if u0_norm < 1e-12:
+        cand = np.array([0.0, 1.0, 0.0]) if pick == 0 else np.array([1.0, 0.0, 0.0])
+        u0 = cand - np.dot(cand, t0) * t0
+        u0_norm = np.linalg.norm(u0)
+    u_hat[0] = u0 / u0_norm
+    v_hat[0] = np.cross(tangent[0], u_hat[0])
+
+    for i in range(1, n):
+        t_prev = tangent[i - 1]
+        t_curr = tangent[i]
+        axis = np.cross(t_prev, t_curr)
+        sin_a = np.linalg.norm(axis)
+        cos_a = float(np.clip(np.dot(t_prev, t_curr), -1.0, 1.0))
+        if sin_a < 1e-12:
+            u_hat[i] = u_hat[i - 1]
+        else:
+            k = axis / sin_a
+            u_prev = u_hat[i - 1]
+            u_new = (u_prev * cos_a
+                     + np.cross(k, u_prev) * sin_a
+                     + k * np.dot(k, u_prev) * (1.0 - cos_a))
+            u_hat[i] = u_new
+        u_hat[i] -= np.dot(u_hat[i], t_curr) * t_curr
+        u_hat[i] /= max(np.linalg.norm(u_hat[i]), 1e-30)
+        v_hat[i] = np.cross(tangent[i], u_hat[i])
+
+    return tangent, u_hat, v_hat
+
+
+def filaments_from_polyline(pts_m: np.ndarray,
+                             radius_m: float,
+                             *,
+                             sigma: float = 5.8e7,
+                             n_peri: int = 16,
+                             source_tag: str = "polyline"):
+    """Build a PEEC topology from an explicit 3D polyline + circular profile.
+
+    Internal helper.  Used by ``filaments_from_step`` longest-edge path
+    after sampling the spine of a clean swept-loop STEP solid.  The
+    n_peri filaments are placed at equal arc-length around the
+    cross-section circle perimeter (thin-skin perimeter PEEC).
+
+    Args:
+        pts_m: (N, 3) float64 centerline points in METERS.
+        radius_m: circular cross-section radius in METERS.
+        sigma, n_peri: solver parameters.
+        source_tag: free-form string copied into the result dict's
+            ``source`` field (e.g. "step_longest_edge").
+
+    Returns:
+        topology_dict, same shape as ``filaments_from_step``.
+    """
+    pts = np.asarray(pts_m, dtype=float)
+    n_pts = len(pts)
+    if n_pts < 2:
+        raise ValueError(f"need at least 2 centerline points, got {n_pts}")
+
+    _, u_hat, v_hat = _parallel_transport_frame(pts)
+
+    theta = 2.0 * np.pi * (np.arange(n_peri) + 0.5) / float(n_peri)
+    u_offset = radius_m * np.cos(theta)
+    v_offset = radius_m * np.sin(theta)
+
+    A_cell = (math.pi * radius_m * radius_m) / float(n_peri)
+    side = float(math.sqrt(A_cell))
+
+    filament_paths = []
+    cell_wh = []
+    for k in range(n_peri):
+        fil_pts = pts + u_offset[k] * u_hat + v_offset[k] * v_hat
+        segs = [(tuple(fil_pts[i]), tuple(fil_pts[i + 1]))
+                for i in range(n_pts - 1)]
+        filament_paths.append(segs)
+        cell_wh.append([(side, side)] * (n_pts - 1))
+
+    import radia  # noqa: F401
+    from peec_bundle import build_bundle_solver
+    solver, seg_of_fil, port_p, port_m = build_bundle_solver(
+        filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
+
+    return {
+        "solver": solver,
+        "seg_of_filament": seg_of_fil,
+        "filament_paths": filament_paths,
+        "cell_wh": cell_wh,
+        "n_loop": len(filament_paths),
+        "port_plus": port_p,
+        "port_minus": port_m,
+        "source": source_tag,
+        "n_path_pts": n_pts,
+        "cross_section_radius_m": radius_m,
+    }

@@ -122,17 +122,22 @@ def _biot_savart_B_on_mesh(mesh, filament_paths, fil_currents):
 def solve_peec_inductance(peec_input, n_peri,
                           frequency, current, coil_sigma,
                           msh_output=""):
-    """Build PEEC topology from STEP or JOU input, then solve for L, R.
+    """Build PEEC topology from a STEP file, then solve for L, R.
 
-    Routing:
-      - `.jou`            -> `coil_from_jou.filaments_from_jou` (explicit
-                              centerline from `move Surface` commands).
-                              Use for multi-turn / 3turnCoil-class coils
-                              where STEP walker heuristics fail.
-      - `.step` / `.stp`  -> `coil_from_cad.filaments_from_step` (walker
-                              centerline extraction).  Use for clean
-                              single-loop torus / helix coils.
-      - other             -> error.
+    Input contract (4.13.0+):
+      - `.step` / `.stp` only.  Coordinates in METRES (CLAUDE.md
+        "Unit System Policy: Radia always uses meters").
+      - The STEP B-Rep is dispatched on solid topology by
+        ``coil_from_cad.extract_centerline_from_step``:
+          * loft of profiles (multi-turn pancake) -> centroid chain
+          * single TORUS face (gapped torus)      -> analytical sweep
+          * other swept solid                     -> longest open edge
+
+    The legacy `.jou` explicit-centerline input was retired in 4.13.0
+    (CLAUDE.md No-Fallbacks).  The STEP-only path is verified to
+    produce correct L on both shipped samples and Kubota's 3-turn
+    pancake coil; .jou added a second silent path that disagreed with
+    Cubit when Cubit-side `volume all scale K` was present.
     """
     # Trigger Radia's MKL DLL path setup before peec_matrices loads.
     import radia  # noqa: F401
@@ -143,81 +148,22 @@ def solve_peec_inductance(peec_input, n_peri,
     omega = 2 * math.pi * frequency
 
     ext = os.path.splitext(peec_input)[1].lower()
-
-    # Auto-prefer sibling .jou (exact stem match, case-insensitive).
-    # When user happens to have both foo.step and foo.jou in the same
-    # directory — the common Cubit export pattern, since the panel's
-    # ensure_jou_path() saves the .jou before every STEP export — we
-    # use the .jou for correct L on multi-turn lofts.  The STEP
-    # longest-edge path currently mis-estimates cross-section area on
-    # tight-pancake multi-turn lofts (Kubota's 3turncoil.stp: STEP
-    # path L=4.8 nH WRONG vs sibling 3turnCoil.jou L=426 nH correct).
-    # Fixing that is a cross-section-geometry bug (see TODO below);
-    # meanwhile sibling-match gives the user the right answer when
-    # they have the right file.
-    if ext in (".step", ".stp"):
-        peec_dir = os.path.dirname(peec_input) or "."
-        base = os.path.splitext(os.path.basename(peec_input))[0]
-        try:
-            entries = os.listdir(peec_dir)
-        except OSError:
-            entries = []
-        jou_sibling = None
-        for name in entries:
-            stem, e = os.path.splitext(name)
-            if e.lower() == ".jou" and stem.lower() == base.lower():
-                jou_sibling = os.path.join(peec_dir, name)
-                break
-        if jou_sibling is not None:
-            # Only prefer the sibling if it actually contains the
-            # PEEC explicit-centerline pattern (`move Surface N x Y y Y z Z`).
-            # A generic Cubit .jou (rect sweep, brick mesh script, etc.)
-            # has no centerline and would crash the .jou parser.  In that
-            # case fall through to the STEP path.
-            is_peec_jou = False
-            try:
-                with open(jou_sibling, encoding="utf-8",
-                          errors="replace") as jf:
-                    for line in jf:
-                        # Avoid importing the parser here; check the regex
-                        # inline.  Match `move Surface <int> x <n> y <n> z <n>`.
-                        s = line.strip()
-                        if (s.startswith("move Surface ")
-                                and " x " in s and " y " in s
-                                and " z " in s):
-                            is_peec_jou = True
-                            break
-            except OSError:
-                pass
-            if is_peec_jou:
-                progress("PEEC", f"found sibling .jou, preferring it: "
-                                  f"{os.path.basename(jou_sibling)}")
-                peec_input = jou_sibling
-                ext = ".jou"
-            else:
-                progress("PEEC", f"sibling .jou {os.path.basename(jou_sibling)} "
-                                  f"has no explicit centerline — using STEP")
-
-    if ext == ".jou":
-        from coil_from_jou import filaments_from_jou
-        source_kind = "JOU"
-        progress("PEEC", f"JOU -> explicit centerline (n_peri={n_peri})")
-        t0 = time.perf_counter()
-        topo = filaments_from_jou(peec_input, sigma=coil_sigma,
-                                    n_peri=n_peri)
-    elif ext in (".step", ".stp"):
-        from coil_from_cad import filaments_from_step
-        source_kind = "STEP"
-        progress("PEEC", f"STEP -> perimeter filaments (n_peri={n_peri})")
-        t0 = time.perf_counter()
-        topo = filaments_from_step(peec_input, sigma=coil_sigma,
-                                    n_peri=n_peri,
-                                    use_coil_builder=True)
-    else:
+    if ext not in (".step", ".stp"):
         raise ValueError(
             f"Unsupported input extension {ext!r}. "
-            f"Expected .jou (Cubit journal with explicit centerline) or "
-            f".step / .stp (geometry file for walker extraction).")
+            f"PEEC inductance accepts STEP only since 4.13.0 "
+            f"(.step or .stp).  The legacy .jou explicit-centerline "
+            f"input was retired -- the STEP B-Rep is the canonical "
+            f"PEEC source and centerline + cross-section are auto-"
+            f"extracted from it.")
+
+    from coil_from_cad import filaments_from_step
+    source_kind = "STEP"
+    progress("PEEC", f"STEP -> perimeter filaments (n_peri={n_peri})")
+    t0 = time.perf_counter()
+    topo = filaments_from_step(peec_input, sigma=coil_sigma,
+                                n_peri=n_peri,
+                                use_coil_builder=True)
 
     paths = topo["filament_paths"]
     seg_of_fil = topo["seg_of_filament"]

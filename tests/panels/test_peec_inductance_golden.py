@@ -176,34 +176,7 @@ def test_peec_inductance_3turn_loft():
 
 
 # ---------------------------------------------------------------------------
-# Test 3: sibling .jou auto-preference
+# Test 3: .jou input retired in 4.13.0 -- only STEP is accepted now.
+#         The sibling-preference test is removed; STEP-only on the same
+#         multi-turn pancake fixture is covered by test 2 above.
 # ---------------------------------------------------------------------------
-
-@pytest.mark.slow
-def test_peec_inductance_sibling_jou_preference():
-    """Sibling .jou auto-preference: .stp + .jou coexist → .jou used."""
-    g = _load_golden("peec_inductance_3turn_150kHz_Cu.json")
-    step = _resolve_sample(g["sample"]["step"])
-    jou = _resolve_sample(g["sample"]["jou"])
-    if not (os.path.isfile(step) and os.path.isfile(jou)):
-        pytest.skip(
-            f"Multi-turn sample not available; both .stp and .jou "
-            f"needed: {step} / {jou}")
-
-    result = _run_peec(step,
-                       n_peri=g["physics"]["n_peri"],
-                       freq_hz=g["physics"]["frequency_Hz"],
-                       current_A=g["physics"]["current_A"],
-                       sigma=g["physics"]["sigma_S_per_m"])
-
-    # When sibling .jou is present with matching stem (case-insensitive),
-    # calc_peec_inductance must switch to the .jou explicit-centerline
-    # parser.  input_kind == "JOU" in the JSON result proves the switch.
-    assert result["input_kind"] == "JOU", (
-        f"sibling .jou auto-preference failed to kick in: "
-        f"input_kind = {result['input_kind']} (expected JOU).  "
-        f"STEP = {step}, sibling JOU = {jou}.")
-    # .jou path must produce the reference-quality L
-    ref = g["reference_jou_path"]["L_nH"]
-    _assert_close(result["L_coil_nH"], ref, 1.0,
-                  "L_coil_nH (.jou path)")
