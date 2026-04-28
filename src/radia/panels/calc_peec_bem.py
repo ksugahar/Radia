@@ -19,11 +19,17 @@ with --peec-step for L to 1%.
 
 Usage (from the IH panel):
     python calc_peec_bem.py --peec-step coil.step \\
-        --peec-nwinc 3 --peec-nhinc 3 \\
+        --peec-n-peri 16 \\
         --frequency 7000 --current 1.0 --coil-sigma 5.8e7 \\
         --vol workpiece.vol --wp-label wp_surface \\
         --sigma 5.8e7 --half-thickness 0.0125 --mu-r 1.0 \\
         --impedance-model sibc
+
+Note on inductance: the L_coil in the output is the VACUUM-COIL
+inductance only.  PEEC-BEM is a 1-way coupling (no Delta_L back-
+reaction), so L_coil here is NOT the physically correct in-system
+L when a magnetic / lossy workpiece is present.  Use
+calc_fem_coilmesh.py for accurate in-system L.
 
 Output: JSON to stdout (calc_main contract).
 """
@@ -132,12 +138,28 @@ def _extract_bnd_only(vol_mesh, bnd_label):
     return Mesh(ngmesh_new)
 
 
-def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
+def solve_peec_bem_forward(peec_step,
                             frequency, current, coil_sigma,
                             vol, wp_label, sigma, half_thickness, mu_r,
                             impedance_model, h1_order,
+                            n_peri=16,
                             msh_output=""):
     """One-way forward PEEC->BEM pipeline.  No Delta_L back-reaction.
+
+    Inductance reliability: the PEEC vacuum L_coil reported here is
+    the COIL-ONLY inductance from the Loop-bundle solve.  Because PEEC-
+    BEM is a 1-way coupling (BEM workpiece does NOT feed back into the
+    coil via Delta_L), the L_coil from this script is **not the
+    physically correct in-system inductance** when a magnetic / lossy
+    workpiece is present.  Use ``calc_fem_coilmesh.py`` (FEM A-V)
+    when an accurate in-system L is required; this PEEC-BEM script is
+    optimised for P_wp.
+
+    PEEC parameters:
+      - ``n_peri``: number of perimeter-only filaments around the
+        cross-section (thin-skin regime).  16 by default.
+      - ``nwinc`` / ``nhinc`` (volume-grid filament counts) are NOT
+        supported here -- PEEC-BEM uses perimeter placement only.
 
     wp_label is interpreted as:
       - a material name first (extract BND of that volume), else
@@ -162,11 +184,11 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
 
     omega = 2 * math.pi * frequency
 
-    # 1. STEP -> filaments
-    progress("PEEC", f"STEP -> filaments (nw={peec_nwinc}, nh={peec_nhinc})")
+    # 1. STEP -> filaments (perimeter-only, n_peri filaments)
+    progress("PEEC", f"STEP -> perimeter filaments (n_peri={n_peri})")
     t0 = time.perf_counter()
     topo = filaments_from_step(peec_step, sigma=coil_sigma,
-                                nwinc=peec_nwinc, nhinc=peec_nhinc,
+                                n_peri=n_peri,
                                 use_coil_builder=True)
     paths = topo["filament_paths"]
     seg_of_fil = topo["seg_of_filament"]
@@ -376,11 +398,20 @@ def solve_peec_bem_forward(peec_step, peec_nwinc, peec_nhinc,
         "frequency_hz": float(frequency),
         "current_A": float(current),
         "n_filaments": int(len(paths)),
-        # Coil (PEEC vacuum, no back-reaction)
+        # Coil (PEEC vacuum, no back-reaction).
+        # WARNING: this L_coil is the VACUUM-COIL inductance only --
+        # PEEC-BEM is a 1-way coupling, so the BEM workpiece does NOT
+        # feed back into the coil via Delta_L.  When a magnetic /
+        # lossy workpiece is present this number is NOT the physically
+        # correct in-system inductance.  Use ``calc_fem_coilmesh.py``
+        # (FEM A-V) when an accurate in-system L is required.
         "L_coil_nH": float(L_coil * 1e9),
         "R_coil_mOhm": float(R_coil * 1e3),
-        "L_coil_note": "vacuum coil, no workpiece back-reaction "
-                        "(use PEEC+FEM for L with back-reaction)",
+        "L_coil_note": "VACUUM coil only -- PEEC-BEM is 1-way and L "
+                        "ignores workpiece back-reaction.  For accurate "
+                        "in-system L with a workpiece, use FEM A-V "
+                        "(calc_fem_coilmesh.py).",
+        "L_coil_reliability": "low",
         # Workpiece (BEM-SIBC, 1-way forward)
         "P_wp_W": P_wp,
         "H_t_rms_Am": H_t_rms,
@@ -413,10 +444,12 @@ def main():
     # PEEC coil
     parser.add_argument("--peec-step", required=True,
                         help="STEP file for PEEC coil")
-    parser.add_argument("--peec-nwinc", type=int, default=3,
-                        help="Filament sub-cells width direction")
-    parser.add_argument("--peec-nhinc", type=int, default=3,
-                        help="Filament sub-cells height direction")
+    parser.add_argument("--peec-n-peri", type=int, default=16,
+                        help="Number of perimeter filaments around the "
+                             "cross-section (thin-skin regime, d/delta>=3). "
+                             "PEEC-BEM does NOT support volume-grid "
+                             "filament counts (--peec-nwinc / --peec-nhinc) "
+                             "-- perimeter placement only.")
     parser.add_argument("--frequency", type=float, required=True,
                         help="Frequency [Hz]")
     parser.add_argument("--current", type=float, default=1.0,
@@ -466,8 +499,7 @@ def main():
             }
         result = solve_peec_bem_forward(
             peec_step=args.peec_step,
-            peec_nwinc=args.peec_nwinc,
-            peec_nhinc=args.peec_nhinc,
+            n_peri=args.peec_n_peri,
             frequency=args.frequency,
             current=args.current,
             coil_sigma=args.coil_sigma,
