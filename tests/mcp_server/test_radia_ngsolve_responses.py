@@ -77,9 +77,10 @@ def _assert_unknown_topic_graceful(fn, *, unknown: str = "definitely_not_a_topic
 
 class TestPeecInductanceKnowledge:
     TOPICS = {
-        "overview":      ["PEEC", "perimeter", "filament"],
-        "centerline":    ["TORUS", "loft", "revolution", "spine"],
-        "japanese_path": ["UTF-8", "CP_UTF8", "Windows"],
+        "overview":          ["PEEC", "perimeter", "filament"],
+        "centerline":        ["TORUS", "loft", "revolution", "spine"],
+        "filament_dispatch": ["UV-map", "per-station", "n_peri", "Tier"],
+        "japanese_path":     ["UTF-8", "CP_UTF8", "Windows"],
     }
 
     def test_all_topic_contains_every_subtopic(self):
