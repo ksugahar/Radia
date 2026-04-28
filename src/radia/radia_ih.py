@@ -174,40 +174,31 @@ def check_method_requirements(method, mats, bnds):
     mat_hint = _label_hint(mats, "materials")
     bnd_hint = _label_hint(bnds, "boundaries")
 
-    # Far-field truncation warning -- HCurl-A method.
-    # Empirically (2026-04-28) HCurl(dirichlet="GND_vertex_tag") is a
-    # NO-OP: vertex labels do not constrain edge DOFs, so an earlier
-    # GND-vertex code path was silently dead.  The only Dirichlet that
-    # actually constrains HCurl A is a FACE label (BND).  This leaves
-    # three real cases:
-    #   (A) kelvin material -> Periodic Kelvin (open boundary).  The
-    #       gauge null-space is still locked by nograds=True + reg=1e-6
-    #       + (for AC) the j*omega*sigma*A term -- not by Dirichlet.
-    #   (B) outer boundary  -> Dirichlet A=0 on the truncating face
-    #       (the only working "no Kelvin" Dirichlet for HCurl A).
-    #   (C) neither         -> gauge regularisation only (reg=1e-6).
-    # Acknowledging case A explicitly clears the user concern that
-    # "Kelvin alone needs Dirichlet too" -- yes, but the gauge fix
-    # there is reg + ngrads, not vertex Dirichlet.
-    def _farfield_warning(mats_, bnds_, calc_name):
-        if "kelvin" in mats_:
-            return None  # case (A): Periodic Kelvin handles far field
-        if "outer" in bnds_:
-            return ("Missing material 'kelvin' -- Dirichlet A=0 on "
-                    "'outer' boundary used as truncation (error grows "
-                    "if 'outer' is close to the coil).")
-        return ("Missing 'kelvin' AND 'outer' -- outer face defaults "
-                "to natural Neumann (PMC reflection).  L is unreliable "
-                "(includes reflected flux).  Add 'kelvin' material or "
-                "tag the outer air face 'outer'.")
+    # Far-field truncation: NO panel-side warning.
+    #
+    # The user's intent (Kelvin vs regular FEM with truncation) is
+    # captured at .vol export time by the launcher's "Add Kelvin
+    # open boundary (auto)" checkbox.  When unchecked the user has
+    # explicitly opted into a regular FEM run -- the panel sees the
+    # .vol after the fact and cannot tell intent from accident, so
+    # warning here just adds noise to a deliberate choice
+    # (2026-04-28 user feedback).
+    #
+    # The audit trail still exists: calc_fem_kelvin emits a
+    # ``FARFIELD:`` log line per run telling exactly which path
+    # (Periodic Kelvin / outer Dirichlet / gauge-only) actually
+    # fired.  Users who care can read the panel debug log; users
+    # who don't are not interrupted.
+    #
+    # Empirical reminder: HCurl(dirichlet="GND_vertex_tag") is a
+    # NO-OP because HCurl DOFs live on edges.  Only FACE Dirichlet
+    # ("outer") actually constrains HCurl A.  See calc_fem_kelvin
+    # FARFIELD log for which case fires.
 
     if method == METHOD_FEM_FULL:
         if "coil" not in mats:
             errors.append(
                 f"Missing material 'coil' (coil volume).{mat_hint}")
-        ff = _farfield_warning(mats, bnds, "calc_fem_coilmesh")
-        if ff:
-            warnings.append(ff)
         for b in ("source", "sink", "sibc"):
             if b not in bnds:
                 errors.append(
@@ -216,14 +207,12 @@ def check_method_requirements(method, mats, bnds):
                     f"{bnd_hint}")
     elif method == METHOD_PEEC_FEM_KELVIN:
         # PEEC coil + FEM wp: no coil material, no source/sink, just the
-        # workpiece SIBC surface + a Kelvin exterior.
+        # workpiece SIBC surface (Kelvin is intent-driven via the
+        # launcher checkbox; the panel does not pre-warn here).
         if "sibc" not in bnds:
             errors.append(
                 f"Missing boundary 'sibc' (workpiece surface)."
                 f"{bnd_hint}")
-        ff = _farfield_warning(mats, bnds, "calc_fem_kelvin")
-        if ff:
-            warnings.append(ff)
     else:  # PEEC+BEM
         if "sibc" not in bnds:
             errors.append(
