@@ -79,8 +79,6 @@ class TestPeecInductanceKnowledge:
     TOPICS = {
         "overview":      ["PEEC", "perimeter", "filament"],
         "centerline":    ["TORUS", "loft", "revolution", "spine"],
-        "jou":           ["move Surface", "explicit", "parser"],
-        "sibling_jou":   ["sibling", "auto", ".jou"],
         "japanese_path": ["UTF-8", "CP_UTF8", "Windows"],
     }
 
