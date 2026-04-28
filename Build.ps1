@@ -115,9 +115,18 @@ $BatchContent = @"
 @echo off
 setlocal enabledelayedexpansion
 
-call "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
+echo === vcvars64.bat output ===
+call "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat"
 if errorlevel 1 (
-    echo ERROR: vcvars64.bat failed at "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat"
+    echo ERROR: vcvars64.bat failed with errorlevel %errorlevel% at "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat"
+    exit /b 1
+)
+echo === Verify cl.exe is in PATH ===
+where cl
+if errorlevel 1 (
+    echo ERROR: cl.exe not in PATH after vcvars64.bat
+    echo Current PATH:
+    echo %PATH%
     exit /b 1
 )
 
