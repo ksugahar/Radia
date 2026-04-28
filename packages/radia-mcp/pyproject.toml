@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.33.7"
-description = "MCP servers for the Radia CAE ecosystem. 0.33.7 (2026-04-28): peec_inductance knowledge updated for radia 4.12.0 m-only policy (auto-detect removed). 0.33.6: security fix (drop hardcoded Coreform Learn credentials from license_warmup.py); CLN tree-cotree gauge knowledge corrected to use R-weighted accumulated Apotential (validated against analytic Cauer-I); knowledge/ subdir refactor; redundant cubit_ prefix removed from radia_mcp.cubit.* modules. 0.33.5: peec_inductance_knowledge updated to reflect radia_peec_inductance.py merge into IHWindow Method (radia 4.10.0 panel unification)."
+version = "0.33.8"
+description = "MCP servers for the Radia CAE ecosystem. 0.33.8 (2026-04-28): summary trimmed for PyPI 512-char limit. 0.33.7: peec_inductance knowledge updated for radia 4.12.0 m-only policy (auto-detect removed). 0.33.6: security fix (drop hardcoded Coreform Learn credentials); CLN tree-cotree gauge knowledge corrected (R-weighted accumulated Apotential, validated to 0.05% vs Cauer-I)."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
