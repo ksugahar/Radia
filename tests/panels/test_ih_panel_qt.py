@@ -92,14 +92,16 @@ class TestModeSwitch:
         ih_panel._method_combo.setCurrentText(METHOD_PEEC_BEM)
         # STEP coil + workpiece widgets
         assert self._visible(ih_panel, "peec_step")
-        assert self._visible(ih_panel, "peec_nwinc")
-        assert self._visible(ih_panel, "peec_nhinc")
+        # 4.17.0+: PEEC+BEM uses perimeter-only filaments (n_peri),
+        # the volume grid (nwinc/nhinc) was retired -- it is now
+        # PEEC+FEM+Kelvin only.
+        assert self._visible(ih_panel, "peec_n_peri")
+        assert not self._visible(ih_panel, "peec_nwinc")
+        assert not self._visible(ih_panel, "peec_nhinc")
         assert self._visible(ih_panel, "wp_sigma")
         assert self._visible(ih_panel, "mu_r")
         assert self._visible(ih_panel, "half_thickness")
         assert self._visible(ih_panel, "impedance_model")
-        # n_peri is PEEC-IND only
-        assert not self._visible(ih_panel, "peec_n_peri")
 
     def test_FEM_full_no_step(self, ih_panel):
         from radia_ih import METHOD_FEM_FULL
@@ -109,9 +111,6 @@ class TestModeSwitch:
         # Workpiece widgets visible (coil mesh + WP mesh from .vol)
         assert self._visible(ih_panel, "wp_sigma")
         assert self._visible(ih_panel, "mu_r")
-        # coil_mu_r ONLY shown for FEM-full (the only path with a
-        # volumetric coil that can carry magnetic material)
-        assert self._visible(ih_panel, "coil_mu_r")
 
     def test_PEEC_FEM_KELVIN_step_AND_workpiece(self, ih_panel):
         from radia_ih import METHOD_PEEC_FEM_KELVIN
@@ -121,8 +120,6 @@ class TestModeSwitch:
         assert self._visible(ih_panel, "peec_nwinc")
         assert self._visible(ih_panel, "wp_sigma")
         assert self._visible(ih_panel, "mu_r")
-        # Non-magnetic-coil convention for PEEC-side: hide coil_mu_r
-        assert not self._visible(ih_panel, "coil_mu_r")
 
 
 # ============================================================
@@ -226,8 +223,11 @@ class TestBuildCommand:
         assert "--peec-step" in cmd
         assert "--vol" in cmd
         assert "model.vol" in cmd
-        assert "--peec-nwinc" in cmd
-        assert "--peec-nhinc" in cmd
+        # 4.17.0+: PEEC+BEM uses perimeter-only filaments like
+        # PEEC-inductance (volume grid nwinc/nhinc retired).
+        assert "--peec-n-peri" in cmd
+        assert "--peec-nwinc" not in cmd
+        assert "--peec-nhinc" not in cmd
         # Workpiece settings present
         assert "--sigma" in cmd
         assert "--mu-r" in cmd

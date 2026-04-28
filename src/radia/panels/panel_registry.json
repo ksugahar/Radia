@@ -167,12 +167,6 @@
           "physics": "コイル抵抗計算用 [S/m]"
         },
         {
-          "cli": "--coil-mu-r",
-          "name": "coil_mu_r",
-          "type": "float",
-          "default": 1.0
-        },
-        {
           "cli": "--sigma",
           "name": "sigma",
           "type": "float",
