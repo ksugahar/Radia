@@ -46,7 +46,7 @@ NU_0 = 1.0 / MU_0
 
 
 def solve_fem_coilmesh(vol, frequency, I_target,
-                       coil_sigma, coil_mu_r,
+                       coil_sigma,
                        wp_sigma, wp_mu_r, half_thickness,
                        fes_order=1, solver="pardiso",
                        sibc_bnd="sibc",
@@ -69,7 +69,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     Z_s_wp = wp_mat.dowell_Zs(frequency, half_thickness)
     robin_wp = s / Z_s_wp
 
-    coil_delta = math.sqrt(2.0 / (omega * coil_mu_r * MU_0 * coil_sigma))
+    # Non-magnetic coil convention (Cu/Al only -- coil_mu_r=1).
+    coil_delta = math.sqrt(2.0 / (omega * MU_0 * coil_sigma))
 
     progress("FEM", f"load {os.path.basename(vol)}")
     t0 = time.perf_counter()
@@ -143,7 +144,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             rp_sq = dxk * dxk + dyk * dyk + dzk * dzk + 1e-20
             nu_dict[m] = NU_0 * rp_sq / a_kelvin ** 2
         else:
-            nu_dict[m] = 1.0 / (coil_mu_r * MU_0) if m == coil_mat else NU_0
+            nu_dict[m] = NU_0  # non-magnetic coil + air share NU_0
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
 
     # Compound FES: HCurl(A) x H1(phi on coil).
@@ -307,7 +308,6 @@ def main():
     parser.add_argument("--current", type=float, default=1.0,
                         help="Port current I_target [A]")
     parser.add_argument("--coil-sigma", type=float, default=5.8e7)
-    parser.add_argument("--coil-mu-r", type=float, default=1.0)
     parser.add_argument("--sigma", type=float, required=True,
                         help="Workpiece conductivity [S/m]")
     parser.add_argument("--mu-r", type=float, default=1.0,
@@ -356,7 +356,6 @@ def main():
             frequency=args.frequency,
             I_target=args.current,
             coil_sigma=args.coil_sigma,
-            coil_mu_r=args.coil_mu_r,
             wp_sigma=args.sigma,
             wp_mu_r=args.mu_r,
             half_thickness=args.half_thickness,
