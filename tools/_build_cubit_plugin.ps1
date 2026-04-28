@@ -18,11 +18,33 @@ $env:NETGEN_DIR = 'C:\Program Files\Python312\Lib\site-packages\netgen'
 $cmake = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 
 # Resolve the cubit plugin source dir relative to this script.
-# Use ProviderPath to strip the "Microsoft.PowerShell.Core\FileSystem::"
-# wrapper that Resolve-Path inserts on UNC paths.
+#
+# CRITICAL: keep the path on the mapped drive form (e.g. S:\...) and
+# AVOID the UNC form (\\192.168.11.100\work\...).  CMake propagates
+# the source path into try-compile working directories, and CMD.EXE
+# refuses UNC pwds with "UNC paths are not supported. Defaulting to
+# Windows directory.", killing the toolchain probe.
+#
+# (Resolve-Path).ProviderPath canonicalizes mapped drives back to UNC
+# on this lab's setup -- DO NOT use it here.  Instead, look up which
+# PSDrive backs $scriptDir and rewrite UNC -> drive letter explicitly
+# if the script was invoked via UNC (e.g. by a Python caller that did
+# Path(__file__).resolve()).
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$src = (Resolve-Path (Join-Path $scriptDir "../src/cubit_plugin")).ProviderPath
-# CMake on Windows expects native backslashes for UNC paths.
+function Convert-UNCToMappedDrive($unc) {
+  if ($unc -notmatch '^\\\\') { return $unc }
+  foreach ($d in Get-PSDrive -PSProvider FileSystem) {
+    if (-not $d.DisplayRoot) { continue }
+    $root = $d.DisplayRoot.TrimEnd('\').ToLowerInvariant()
+    $u = $unc.ToLowerInvariant()
+    if ($u.StartsWith($root + '\') -or $u -eq $root) {
+      return ($d.Name + ':' + $unc.Substring($root.Length))
+    }
+  }
+  return $unc
+}
+$scriptDir = Convert-UNCToMappedDrive $scriptDir
+$src = Join-Path $scriptDir "..\src\cubit_plugin"
 $src = $src -replace '/', '\'
 
 # Pull MSVC vars into pwsh.
