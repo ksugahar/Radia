@@ -1,10 +1,10 @@
 {
   "description": "Golden reference for PEEC-inductance (coil only, STEP) on a 355deg gapped-torus coil.",
-  "rationale": "Locks in the STEP-only centerline extraction + analytical TORUS sweep + n_peri=16 perimeter PEEC solve.  Regressions in extract_centerline_from_step dispatch (loft / TORUS / open-spine), unit auto-detection, or filaments_from_polyline fail loudly here.  The sample is a pure geometric problem so the expected L tracks the analytical formula tightly.",
+  "rationale": "Locks in the STEP-only centerline extraction + analytical TORUS sweep + n_peri=16 perimeter PEEC solve.  Regressions in extract_centerline_from_step dispatch (loft / TORUS / open-spine) or filaments_from_polyline fail loudly here.  The sample is a pure geometric problem so the expected L tracks the analytical formula tightly.  Since 4.12.0 (m-only policy, auto-detect removed), all PEEC inputs must be in metres -- this STEP sample is.",
   "sample": {
     "step": "src/radia/panels/samples/ih_peec_inductance_coil.step",
     "generator_jou": "src/radia/panels/samples/ih_peec_inductance.jou",
-    "comment": "Cubit session in metres; STEP numeric values in metres but declared MILLIMETRE.  Unit auto-detect handles this from bbox diagonal."
+    "comment": "Cubit session in metres; STEP numeric values in metres (the file's CONVERSION_BASED_UNIT('MILLIMETRE') header is misleading -- Cubit's STEP writer does not convert).  Default cad_units_per_meter=1.0 (metres) per CLAUDE.md \"Unit System Policy: Radia always uses meters\"."
   },
   "physics": {
     "coil": "gapped torus R_maj=30mm R_min=3mm gap=5deg",
@@ -28,6 +28,6 @@
   "regression_guard": {
     "min_L_nH": 80.0,
     "max_L_nH": 92.0,
-    "comment": "Hard band: if L falls outside [80, 92], something broke at order-of-magnitude level.  2026-04-21 bug: filaments_from_step default cad_units_per_meter=1000 over-scaled metre-unit STEP, L dropped to 0.086 nH -- hit this band."
+    "comment": "Hard band: if L falls outside [80, 92], something broke at order-of-magnitude level.  2026-04-21 bug: filaments_from_step default cad_units_per_meter=1000 over-scaled metre-unit STEP, L dropped to 0.086 nH -- hit this band.  2026-04-28 fix (4.12.0): default switched to 1.0 (metres only); auto-detect heuristic removed per CLAUDE.md No-Fallbacks policy."
   }
 }
