@@ -5086,7 +5086,10 @@ for edge_nr in build_spanning_tree(mesh):
     if dofs and free[dofs[0]]:  # lowest-order DoF on this edge
         free[dofs[0]] = False    # tree edge = essential 0
 
-# Each Kameari stage: just curl-curl in cotree subspace
+# Each Kameari stage: curl-curl in cotree subspace + ACCUMULATED Apotential
+# (Tanimoto pattern, validated against analytic Cauer-I for both circular and
+#  rectangular cross sections — see W:/00_CAE/NGSolve/谷本/20241129_2次元CLN練習.ipynb)
+Apot = None
 for n in range(N_STAGES):
     a = BilinearForm(fes); a += (1/mu) * curl(u) * curl(v) * dx
     pre = Preconditioner(a, "local")  # EBE
@@ -5095,9 +5098,32 @@ for n in range(N_STAGES):
     inv = a.mat.Inverse(freedofs=free, inverse="sparsecholesky")
     gfA.vec.data = inv * f.vec
     R_n = 1/Integrate(J*J/sigma * dx, mesh)
-    L_n = R_n * Integrate(J * gfA * dx, mesh)
-    J = J - sigma * gfA / L_n
+    Apot = R_n*gfA if Apot is None else Apot + R_n*gfA  # accumulated, weighted by R
+    L_n = R_n * Integrate(J * Apot * dx, mesh)          # = R_n * <J_n, Σ R_k A_k>
+    J = J - sigma * Apot / L_n                           # subtract accumulated, not bare A_n
 ```
+
+### CRITICAL: L formula — accumulated A, NOT bare A
+
+A common mistake (which I made initially!) is to compute
+`L_n = R_n * <J_n, A_n>` and update `J -= σ A_n/L_n` using only the **current**
+stage's potential A_n. This **does not** reproduce the analytic Cauer-I ladder
+of Z(s). The correct Tanimoto formula uses the **R-weighted accumulated**
+potential `Apot_n = Σ_(k≤n) R_k A_k`:
+
+```
+L_n = R_n · ⟨J_n, Apot_n⟩      # Tanimoto, validated
+J_(n+1) = J_n - σ · Apot_n / L_n   # subtract accumulated potential
+```
+
+Empirical verification (5×2×1 mm Cu, Stage 0):
+- Wrong formula `L = R·⟨J,A⟩`: L_0 = 4.67 µH (3D) / 18.16 nH/m (2D) — does
+  NOT match Mathematica Cauer-I analytic
+- Correct formula `L = R²·⟨J,A⟩` (= Tanimoto for stage 0): L_0 = 8.05 µH /
+  31.34 nH/m — **matches Mathematica analytic limit μ·Σ(β²/λ²)/V² to 0.05%**
+
+For stage 1+ the accumulation matters because J_(n+1) needs to be subtracted
+against the cumulative response, not just the latest mode.
 
 ### Why it works
 
@@ -5116,12 +5142,19 @@ cannot distinguish degenerate modes → mode mixing → bad convergence.
 
 **Use a ≠ b ≠ c** (e.g., 5×2×1 mm cuboid) for clean validation.
 
-### Verified result (5×2×1 mm Cu, Case A voltage-driven)
+### Verified result — 2D rectangular bar, 5×2 mm Cu (Case A, per unit length)
 
-- **Stage 0**: NGSolve R_0 = 1.7241 Ω = Mathematica 1/(σV) — 4-digit exact match
-- **Stage 0**: NGSolve L_0 = 4.67 µH = Mathematica Cauer-II L_1 = 4.66 µH — 0.2% match
-  → Note: NGSolve Kameari Stage 0 ↔ Mathematica Cauer-II L_1 (numbering offset 1)
-- **Stages 0–4**: ALL positive L_n, monotone τ progression — tree-cotree handles all 5 cleanly
+With the **corrected Tanimoto formula** (accumulated Apotential):
+
+- **Stage 0**: NGSolve R_0 = 1.7241×10⁻³ Ω/m = 1/(σab) analytic — exact match
+- **Stage 0**: NGSolve L_0 = 31.34 nH/m = Mathematica analytic μ·Σ(β²/λ²)/(ab)²
+  = 31.32 nH/m — **0.05% match**
+- **Stages 0–11**: all positive R_n, L_n with Tanimoto-pattern J update
+
+Use this as the canonical CLN validation case. The 3D 5×2×1 mm cuboid case
+in `cuboid_521_treecotree_extended.py` was using the **incorrect** L formula
+(no accumulation) — needs to be re-run with the Tanimoto pattern for proper
+coefficient-by-coefficient comparison against analytic Cauer-I.
 
 ### NGSolve `CreateGradient`: building block
 
