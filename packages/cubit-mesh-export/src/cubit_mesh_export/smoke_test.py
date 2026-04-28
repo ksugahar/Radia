@@ -17,8 +17,8 @@ Usage::
     cubit-smoke-test --expect src sink sibc   # override required labels
 
 Exit codes:
-    0 — every expected boundary label is present in the exported .vol
-    1 — any step failed (Cubit not found, .jou missing, export failed,
+    0 -- every expected boundary label is present in the exported .vol
+    1 -- any step failed (Cubit not found, .jou missing, export failed,
         labels missing)
 """
 
@@ -59,7 +59,7 @@ def _find_cubit_exe():
 
 
 def shutil_which_fallback(name):
-    """``shutil.which`` without importing shutil lazily — portable."""
+    """``shutil.which`` without importing shutil lazily -- portable."""
     import shutil
     return shutil.which(name)
 
@@ -145,7 +145,7 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
     expect: boundary (sideset) labels required in the .vol bcnames section.
     expect_materials: block (volume / material) names required in the .vol
         materials section. Block names live in a different section than
-        sidesets — do not mix them up (2026-04-14 false-FAIL).
+        sidesets -- do not mix them up (2026-04-14 false-FAIL).
     """
     if expect is None:
         expect = ["source", "sink", "sibc"]
@@ -209,7 +209,7 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
         encoding="utf-8", errors="replace")
     print(f"  Log:    {log_path}")
 
-    # Parse VERIFY_LAUNCHER: lines from Cubit stdout — these are the
+    # Parse VERIFY_LAUNCHER: lines from Cubit stdout -- these are the
     # headless self-test of the launcher dialog logic.
     launcher_kv = {}
     for line in (proc.stdout or "").splitlines():
@@ -235,13 +235,13 @@ def run_smoke_test(*, jou: str = "", order: int = 2,
                   f"value = {launcher_kv.get('default_vol', '?')}")
             return 1
     else:
-        print("[FAIL] verify_launcher produced no output — the .ccm "
+        print("[FAIL] verify_launcher produced no output -- the .ccm "
               "lacks VerifyLauncherCommand. Rebuild the cubit plugin.")
         return 1
 
     # Cubit's headless mode is flaky: it often segfaults in the mesh-cleanup
     # stage AFTER radia_export has written the .vol. We therefore trust the
-    # .vol as the source of truth — its presence + valid bcnames means the
+    # .vol as the source of truth -- its presence + valid bcnames means the
     # plugin round-trip succeeded, regardless of Cubit's exit code.
     if not vol_path.is_file():
         print(f"[FAIL] radia_export did not produce {vol_path}")
