@@ -195,6 +195,191 @@ def _collect_loft_cross_sections(solid,
     return cross
 
 
+def _find_lateral_surface(solid):
+    """Pick the SINGLE dominant lateral surface from a coil solid.
+
+    A clean swept / lofted coil with a single continuous lateral
+    surface has exactly ONE lateral face that dominates the surface
+    area.  This function returns it for direct (u, v) sampling.
+
+    Returns ``None`` (caller falls through) when:
+      - There are no lateral-type candidates
+      - There are too many candidates (multi-fragment loft, united
+        multi-turn pancake) -- a single face only covers part of
+        the spine, sampling it would give a fragmented result
+      - The largest candidate's area is not clearly dominant
+        (gapped torus split into 4 TORUS quadrants by Cubit's
+        webcut at the gap, etc.)
+
+    The threshold "largest >= 80% of total" is a strong signal that
+    we have a single-piece lateral surface.  Anything below falls
+    through to the per-station-faces path or the legacy equivalent-
+    circle path.
+    """
+    from build123d import GeomType
+    candidates = []
+    for f in solid.faces():
+        gt = f.geom_type
+        if gt in (GeomType.BSPLINE, GeomType.CYLINDER, GeomType.TORUS,
+                   GeomType.REVOLUTION, GeomType.EXTRUSION):
+            candidates.append((float(f.area), f))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: -x[0])
+    largest_area = candidates[0][0]
+    total_area = sum(a for a, _ in candidates)
+    if total_area <= 0:
+        return None
+    dominance = largest_area / total_area
+    # Multi-fragment threshold.  Single-face lateral: dominance ~ 1.0.
+    # Anything below 0.8 indicates fragmentation -- fall through.
+    if dominance < 0.8:
+        return None
+    # Also reject if there are too many candidates even if the largest
+    # is technically dominant (defensive bound).
+    if len(candidates) > 3:
+        return None
+    return candidates[0][1]
+
+
+def _sample_lateral_surface_uv(face, n_stations: int, n_peri: int):
+    """Sample a coil's lateral surface at a (u, v) parametric grid.
+
+    OCC's parametric surface ``Geom_Surface.Value(u, v)`` evaluates
+    the 3D position at any (u, v) within the surface's parameter
+    range.  For a coil-style lateral surface, ONE axis is closed
+    (the cross-section perimeter wraps around the spine) and the
+    OTHER axis is open (the spine).  We auto-detect which is which
+    via ``IsUClosed`` / ``IsVClosed``.
+
+    Args:
+        face: build123d Face whose underlying ``Geom_Surface`` is
+            sampled (typically the largest BSPLINE / TORUS / CYLINDER
+            / REVOLUTION face from ``_find_lateral_surface``).
+        n_stations: number of samples along the spine direction.
+        n_peri: number of samples around the perimeter direction.
+
+    Returns:
+        (n_stations, n_peri, 3) array of 3D points in CAD raw units.
+        ``pts[i, k]`` is the position of filament k at station i.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTools import BRepTools
+
+    surface = BRep_Tool.Surface_s(face.wrapped)
+    u_min, u_max, v_min, v_max = BRepTools.UVBounds_s(face.wrapped)
+
+    u_closed = bool(surface.IsUClosed())
+    v_closed = bool(surface.IsVClosed())
+
+    if u_closed and not v_closed:
+        peri_lo, peri_hi = u_min, u_max
+        spine_lo, spine_hi = v_min, v_max
+        peri_axis = "u"
+    elif v_closed and not u_closed:
+        peri_lo, peri_hi = v_min, v_max
+        spine_lo, spine_hi = u_min, u_max
+        peri_axis = "v"
+    else:
+        # Closed both / neither: cannot identify perimeter unambiguously
+        raise ValueError(
+            f"lateral surface is unsuitable for UV sampling "
+            f"(IsUClosed={u_closed}, IsVClosed={v_closed}); coil "
+            f"shape may not be a clean swept loft")
+
+    pts = np.zeros((n_stations, n_peri, 3), dtype=np.float64)
+    spine_span = spine_hi - spine_lo
+    peri_span = peri_hi - peri_lo
+    for i in range(n_stations):
+        s = i / (n_stations - 1) if n_stations > 1 else 0.0
+        spine_p = spine_lo + spine_span * s
+        for k in range(n_peri):
+            # Cell-centred perimeter samples (avoid hitting the
+            # closed-loop seam exactly which can be a degenerate point
+            # for some surfaces).
+            t = (k + 0.5) / n_peri
+            peri_p = peri_lo + peri_span * t
+            if peri_axis == "u":
+                p = surface.Value(peri_p, spine_p)
+            else:
+                p = surface.Value(spine_p, peri_p)
+            pts[i, k] = (p.X(), p.Y(), p.Z())
+    return pts
+
+
+def _filaments_from_lateral_surface_uv(face,
+                                         cad_units_per_meter: float,
+                                         sigma: float,
+                                         n_stations: int,
+                                         n_peri: int,
+                                         source_tag: str = "step_uv"):
+    """Build a PEEC topology from a lateral surface's UV grid.
+
+    For each filament k (k in [0, n_peri-1]):
+      polyline = [pts[0,k], pts[1,k], ..., pts[n_stations-1, k]]
+
+    Per-segment cell area is computed from the local cross-section
+    polygon (the n_peri samples at one station), so this handles
+    variable cross-section automatically (rect, polygon, smooth
+    transition between shapes).
+    """
+    pts_cad = _sample_lateral_surface_uv(face, n_stations, n_peri)
+    pts_m = pts_cad / cad_units_per_meter
+
+    # Per-station cross-section area: shoelace polygon area in 3D.
+    # Project the n_peri points at each station onto a plane fit to
+    # them (= station cross-section plane), then 2D shoelace.
+    area_per_station = np.zeros(n_stations, dtype=np.float64)
+    for i in range(n_stations):
+        ring = pts_m[i]                         # (n_peri, 3)
+        center = ring.mean(axis=0)              # (3,)
+        # Best-fit plane normal via SVD on (ring - center)
+        delta = ring - center
+        _, _, vh = np.linalg.svd(delta, full_matrices=False)
+        normal = vh[-1] / np.linalg.norm(vh[-1])
+        # In-plane axes
+        u_axis = vh[0] / np.linalg.norm(vh[0])
+        v_axis = np.cross(normal, u_axis)
+        u_2d = delta @ u_axis
+        v_2d = delta @ v_axis
+        # Shoelace
+        area_per_station[i] = 0.5 * abs(float(np.sum(
+            u_2d * np.roll(v_2d, -1) - np.roll(u_2d, -1) * v_2d)))
+
+    # Build n_peri filaments
+    filament_paths = []
+    cell_wh = []
+    for k in range(n_peri):
+        fil = pts_m[:, k, :]
+        segs = [(tuple(fil[i]), tuple(fil[i + 1]))
+                for i in range(n_stations - 1)]
+        filament_paths.append(segs)
+        seg_areas = 0.5 * (area_per_station[:-1] + area_per_station[1:])
+        cell_wh.append([(float(math.sqrt(a / n_peri)),
+                          float(math.sqrt(a / n_peri)))
+                         for a in seg_areas])
+
+    import radia  # noqa: F401
+    from peec_bundle import build_bundle_solver
+    solver, seg_of_fil, port_p, port_m_idx = build_bundle_solver(
+        filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
+
+    return {
+        "solver": solver,
+        "seg_of_filament": seg_of_fil,
+        "filament_paths": filament_paths,
+        "cell_wh": cell_wh,
+        "n_loop": len(filament_paths),
+        "port_plus": port_p,
+        "port_minus": port_m_idx,
+        "source": source_tag,
+        "n_path_pts": n_stations,
+        "cross_section_area_m2_mean": float(np.mean(area_per_station)),
+        "cross_section_area_m2_min":  float(np.min(area_per_station)),
+        "cross_section_area_m2_max":  float(np.max(area_per_station)),
+    }
+
+
 def _collect_circle_edge_centers(solid):
     """Cross-section circle centers from CIRCLE edges (united-loft fallback).
 
@@ -779,25 +964,49 @@ def filaments_from_step(step_path: str,
             n_peri=None)
 
     if n_peri is not None and use_coil_builder:
-        # Perimeter-only placement.  Two paths, in priority order:
+        # Perimeter-only placement.  Three paths, in priority order:
         #
-        # 1. **Per-station from loft cross-section faces** (4.14.0+):
-        #    if the STEP is a loft-of-profiles solid, sample each
-        #    cross-section face's outer wire DIRECTLY -- this captures
-        #    rectangular / polygon / arbitrary cross-section shapes
-        #    AND any variation along the spine (tapered conductor,
-        #    varying-width pancake, twisted bus bar).  No equivalent-
-        #    circle approximation.
+        # 1. **Lateral surface UV sampling** (4.15.0+):
+        #    OCC's parametric Geom_Surface.Value(u, v) sampled on a
+        #    grid (n_stations x n_peri).  Handles ANY cross-section
+        #    shape (circle, rect, polygon, arbitrary) and ANY
+        #    variation along the spine (tapered, transition between
+        #    shapes), AND united multi-loft solids whose lateral
+        #    surfaces are merged into one big BSPLINE.  This is the
+        #    most general path.
         #
-        # 2. **Constant equivalent-circle** (legacy):
-        #    when path 1 does not apply (gapped torus, swept helix
-        #    via longest-edge / TORUS-sweep dispatch), use the cross-
-        #    section AREA averaged across the spine and place
-        #    filaments around an equivalent-circle of radius
-        #    sqrt(mean_area/pi).  Same behaviour as < 4.14.0.
+        # 2. **Per-station from loft cross-section faces** (4.14.0):
+        #    if the STEP is a NON-united loft-of-profiles solid,
+        #    sample each cross-section face's outer wire directly.
+        #    Triggered when path 1 cannot identify a single dominant
+        #    closed-perimeter lateral surface (e.g. multi-loft with
+        #    each lateral as a separate face).
+        #
+        # 3. **Constant equivalent-circle** (legacy):
+        #    when neither (1) nor (2) apply (gapped torus via TORUS
+        #    sweep, swept helix via open-spine), use mean cross-
+        #    section AREA + equivalent-circle radius.  Pre-4.14.0
+        #    behaviour.
         import numpy as np
         from build123d import import_step
         solid = import_step(step_path)
+
+        # Path 1: BSPLINE / TORUS / CYLINDER lateral surface UV grid.
+        lateral = _find_lateral_surface(solid)
+        if lateral is not None:
+            try:
+                return _filaments_from_lateral_surface_uv(
+                    lateral, cad_units_per_meter=cad_units_per_meter,
+                    sigma=sigma,
+                    n_stations=max(20, n_slices // 2),
+                    n_peri=n_peri,
+                    source_tag="step_uv")
+            except ValueError:
+                # Surface couldn't be sampled (no closed UV axis,
+                # degenerate shape).  Fall through.
+                pass
+
+        # Path 2: per-station planar end-cap faces (NON-united loft).
         loft = _try_extract_loft_with_profile(
             solid, cad_units_per_meter=cad_units_per_meter)
         if loft is not None:
@@ -806,6 +1015,8 @@ def filaments_from_step(step_path: str,
                 path_m, faces_ordered,
                 sigma=sigma, n_peri=n_peri,
                 source_tag="step_per_station")
+
+        # Path 3: constant equivalent-circle via existing dispatch.
         path_m, w_m, h_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
             cad_units_per_meter=cad_units_per_meter)
