@@ -174,34 +174,34 @@ def check_method_requirements(method, mats, bnds):
     mat_hint = _label_hint(mats, "materials")
     bnd_hint = _label_hint(bnds, "boundaries")
 
-    # Far-field truncation warning text -- mirrors the four code
-    # paths inside calc_fem_kelvin.py / calc_fem_coilmesh.py:
-    #   (A) kelvin material -> Periodic Kelvin (ideal)
-    #   (B) GND boundary    -> Dirichlet on a single vertex
-    #   (C) outer boundary  -> Dirichlet A=0 on the truncating face
-    #   (D) none of the above -> gauge regularisation only
-    # Phrasing the warning to match the actual fallback prevents the
-    # 2026-04-28 case where the panel claimed "Dirichlet A=0 used"
-    # while the .vol had neither 'outer' nor 'GND' and the solver was
-    # silently relying on the reg=1e-6 gauge term.  Result quality
-    # in case (D) is gauge-dependent -- only acceptable when an
-    # SIBC face absorbs the radiating field, otherwise unreliable.
+    # Far-field truncation warning -- HCurl-A method.
+    # Empirically (2026-04-28) HCurl(dirichlet="GND_vertex_tag") is a
+    # NO-OP: vertex labels do not constrain edge DOFs, so an earlier
+    # GND-vertex code path was silently dead.  The only Dirichlet that
+    # actually constrains HCurl A is a FACE label (BND).  This leaves
+    # three real cases:
+    #   (A) kelvin material -> Periodic Kelvin (open boundary).  The
+    #       gauge null-space is still locked by nograds=True + reg=1e-6
+    #       + (for AC) the j*omega*sigma*A term -- not by Dirichlet.
+    #   (B) outer boundary  -> Dirichlet A=0 on the truncating face
+    #       (the only working "no Kelvin" Dirichlet for HCurl A).
+    #   (C) neither         -> gauge regularisation only (reg=1e-6).
+    # Acknowledging case A explicitly clears the user concern that
+    # "Kelvin alone needs Dirichlet too" -- yes, but the gauge fix
+    # there is reg + ngrads, not vertex Dirichlet.
     def _farfield_warning(mats_, bnds_, calc_name):
         if "kelvin" in mats_:
-            return None  # case (A): no warning needed
-        if "GND" in bnds_:
-            return ("Missing material 'kelvin' -- Dirichlet on 'GND' "
-                    "vertex used (truncation error if outer is close).")
+            return None  # case (A): Periodic Kelvin handles far field
         if "outer" in bnds_:
             return ("Missing material 'kelvin' -- Dirichlet A=0 on "
-                    "'outer' boundary used (truncation error if "
-                    "outer is close).")
-        return ("Missing material 'kelvin' AND no 'outer' / 'GND' "
-                "boundary -- only gauge regularisation (reg=1e-6) "
-                "controls the far field.  Result is gauge-dependent "
-                "unless an SIBC face absorbs the radiating field.  "
-                "Add 'kelvin' material (preferred) or an 'outer' "
-                "Dirichlet boundary.")
+                    "'outer' boundary used as truncation (error grows "
+                    "if 'outer' is close to the coil).")
+        return ("Missing material 'kelvin' AND no 'outer' face -- "
+                "only gauge regularisation (reg=1e-6) controls the "
+                "far field.  Result is gauge-dependent unless an "
+                "SIBC face absorbs the radiating field.  Add "
+                "'kelvin' material (preferred) or an 'outer' "
+                "Dirichlet face.")
 
     if method == METHOD_FEM_FULL:
         if "coil" not in mats:

@@ -147,9 +147,19 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     nu_cf = mesh.MaterialCF(nu_dict, default=NU_0)
 
     # Compound FES: HCurl(A) x H1(phi on coil).
-    dirichlet_A = "GND" if "GND" in boundaries else ""
-    fesA_base = HCurl(mesh, order=fes_order, nograds=True, complex=True,
-                      dirichlet=dirichlet_A)
+    #
+    # NB: HCurl A has no Dirichlet here.  An earlier version passed
+    # dirichlet="GND" when a "GND" boundary was present; empirically
+    # (2026-04-28) HCurl(dirichlet=<vertex_tag>) is a no-op because
+    # HCurl DOFs live on edges, so the path was silently dead.  The
+    # gauge null-space of HCurl A in the A-phi system is locked by:
+    #   - phi's source/sink Dirichlet drives the coil current;
+    #   - nograds=True removes pure-gradient modes;
+    #   - the coil's j*omega*sigma*A term provides positive-definite
+    #     gauge fixing in the conducting region (AC);
+    #   - reg=1e-6 on the air mass term covers DC and harmonic-form
+    #     residuals.
+    fesA_base = HCurl(mesh, order=fes_order, nograds=True, complex=True)
     fesA = Periodic(fesA_base) if has_kelvin_periodic else fesA_base
     fesPhi = H1(mesh, order=fes_order, complex=True,
                 definedon=mesh.Materials(coil_mat),
