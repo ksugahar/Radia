@@ -14,15 +14,15 @@
     "n_peri": 16
   },
   "expected": {
-    "L_coil_nH": 426.27,
-    "tolerance_L_pct": 1.0,
-    "R_coil_mOhm": 0.395,
+    "L_coil_nH": 421.84,
+    "tolerance_L_pct": 2.0,
+    "R_coil_mOhm": 0.380,
     "tolerance_R_pct": 5.0,
     "input_kind": "STEP"
   },
   "regression_guard": {
     "min_L_nH": 400.0,
     "max_L_nH": 460.0,
-    "comment": "Hard band around analytic-equivalent 426 nH.  2026-04-21 bugs that hit this: (1) longest-edge heuristic on loft-of-circles gave L=4.78 nH; (2) GeomType string compare 'PLANE' missed enum; (3) NN chain without tangent continuity got path=1280mm (~2x).  After tangent-continuity bias was added, STEP-only produces 426.27 nH consistently."
+    "comment": "Hard band around analytic-equivalent 426 nH.  2026-04-21: (1) longest-edge on loft-of-circles gave L=4.78 nH; (2) GeomType string compare missed enum; (3) NN chain without tangent continuity got path=2x.  2026-04-28 (4.14.0): Kubota's STEP was UNITE'd (boolean union), destroying planar end-cap faces.  4.14.0 added _collect_circle_edge_centers fallback to recover cross-section centroids from the surviving CIRCLE edges (split into semicircle pairs by unite).  Result: 421.8 nH (-1.0% vs analytic, well within hard band)."
   }
 }

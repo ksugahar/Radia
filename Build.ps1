@@ -15,7 +15,7 @@
 #   -Verbose    Show detailed build output
 #
 # Requirements:
-#   - Visual Studio 2022 (MSVC compiler)
+#   - Visual Studio Build Tools (any version with VC.Tools.x86.x64) — auto-detected via vswhere
 #   - Intel oneAPI Base Toolkit (MKL only, NOT the compiler)
 #   - NGSolve (pip install or source build)
 #   - Python 3.12 with pybind11
@@ -56,11 +56,12 @@ if ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
     Write-Host "NGSolve: $env:NGSOLVE_DIR (from env)" -ForegroundColor Gray
 }
 
-# CMake (from Visual Studio 2022)
+# Visual Studio (any version) via vswhere
+$VS_PATH = $null
 $CMAKE_EXE = $null
 $VSWHERE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (Test-Path $VSWHERE) {
-    $VS_PATH = & $VSWHERE -latest -property installationPath 2>$null
+    $VS_PATH = & $VSWHERE -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
     if ($VS_PATH) {
         $CMAKE_CANDIDATE = "$VS_PATH\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
         if (Test-Path $CMAKE_CANDIDATE) {
@@ -68,15 +69,12 @@ if (Test-Path $VSWHERE) {
         }
     }
 }
+if (-not $VS_PATH) {
+    Write-Host "ERROR: Visual Studio (with VC x86/x64 tools) not found via vswhere." -ForegroundColor Red
+    Write-Host "Install Visual Studio Build Tools (any version)." -ForegroundColor Yellow
+    exit 1
+}
 if (-not $CMAKE_EXE) {
-    # Try BuildTools edition
-    $CMAKE_EXE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-}
-if (-not (Test-Path $CMAKE_EXE)) {
-    # Try Community edition
-    $CMAKE_EXE = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-}
-if (-not (Test-Path $CMAKE_EXE)) {
     # Fallback: pip-installed cmake
     $PIP_CMAKE = & python -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
     if ($PIP_CMAKE -and (Test-Path $PIP_CMAKE)) {
@@ -84,7 +82,7 @@ if (-not (Test-Path $CMAKE_EXE)) {
     }
 }
 if (-not (Test-Path $CMAKE_EXE)) {
-    Write-Host "ERROR: CMake not found. Install Visual Studio 2022 with CMake or pip install cmake." -ForegroundColor Red
+    Write-Host "ERROR: CMake not found. Install VS workload with CMake or pip install cmake." -ForegroundColor Red
     exit 1
 }
 
@@ -117,10 +115,10 @@ $BatchContent = @"
 @echo off
 setlocal enabledelayedexpansion
 
-if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
-    call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
-) else (
-    call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
+call "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat" > nul 2>&1
+if errorlevel 1 (
+    echo ERROR: vcvars64.bat failed at "$VS_PATH\VC\Auxiliary\Build\vcvars64.bat"
+    exit /b 1
 )
 
 REM Ninja header dependency tracking:

@@ -195,12 +195,108 @@ def _collect_loft_cross_sections(solid,
     return cross
 
 
-def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
-    """Order a set of 3D points along a smooth polyline via nearest-neighbor.
+def _collect_circle_edge_centers(solid):
+    """Cross-section circle centers from CIRCLE edges (united-loft fallback).
+
+    For UNITED multi-turn pancake STEP files where boolean ``unite``
+    has consumed the planar end-cap faces but the cross-section
+    CIRCLE edges are still present (often split into 2 semicircles
+    per cross-section by the unite operation), pull the circle centre
+    + radius from each CIRCLE edge's underlying ``Geom_Circle``,
+    filter by consistent radius, and dedupe semicircle pairs.
+
+    Returns ``None`` if the solid does not look like a multi-turn
+    coil with a clear consistent-radius circle population (lets the
+    caller fall through to ``_centerline_from_torus_sweep`` or
+    ``_centerline_from_open_spine``).
+
+    Returns ``(centers_cad, median_radius_cad)`` on success:
+        centers_cad: list of (3,) np arrays in raw CAD units
+        median_radius_cad: float in raw CAD units
+    """
+    from build123d import GeomType
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+
+    circles = [e for e in solid.edges() if e.geom_type == GeomType.CIRCLE]
+    if len(circles) < 5:
+        return None
+
+    raw_data = []
+    for e in circles:
+        try:
+            adapt = BRepAdaptor_Curve(e.wrapped)
+            circ = adapt.Circle()
+            c = circ.Location()
+            r = float(circ.Radius())
+            raw_data.append((np.array([c.X(), c.Y(), c.Z()],
+                                       dtype=np.float64), r))
+        except Exception:
+            continue
+
+    if not raw_data:
+        return None
+
+    radii = np.array([r for _, r in raw_data])
+    median_r = float(np.median(radii))
+    if median_r <= 0:
+        return None
+
+    # Filter by consistent radius (cross-section circles all share the
+    # nominal wire radius; any mavericks are e.g. lead arcs of a
+    # different radius).
+    mask = np.abs(radii - median_r) / median_r < 0.1
+    consistent = [c for (c, _r), keep in zip(raw_data, mask) if keep]
+    if len(consistent) < 5:
+        return None
+
+    # Dedupe near-duplicate centres (semicircles of the same circle
+    # share the same arc_center).
+    dedup_tol = 0.1 * median_r
+    kept = []
+    for c in consistent:
+        if not any(np.linalg.norm(c - k) < dedup_tol for k in kept):
+            kept.append(c)
+    if len(kept) < 5:
+        return None
+    return kept, median_r
+
+
+def _centerline_from_circle_edge_centers(centers_cad: list,
+                                           median_radius_cad: float,
+                                           cad_units_per_meter: float = 1.0):
+    """Centerline from a list of cross-section circle centres.
+
+    Companion of ``_collect_circle_edge_centers``: chain the centres
+    via NN + tangent continuity, expose a constant-circle equivalent
+    cross-section ``(width, height)`` in metres for downstream
+    ``filaments_from_polyline`` (which uses an equivalent-square side
+    derived from the cross-section area).
+
+    Returns the same ``(path_m, widths_m, heights_m)`` shape as the
+    other ``_centerline_from_*`` helpers.
+    """
+    centroids = np.array(centers_cad, dtype=np.float64)
+    perm = _chain_centroids_nn_index(centroids)
+    ordered = centroids[perm]
+
+    # Cross-section is a circle of radius `median_radius_cad`.
+    mean_area_cad2 = math.pi * median_radius_cad * median_radius_cad
+    side_cad = math.sqrt(mean_area_cad2)
+    n_seg = len(ordered) - 1
+    widths_cad = np.full(n_seg, side_cad, dtype=np.float64)
+    heights_cad = np.full(n_seg, side_cad, dtype=np.float64)
+
+    scale = 1.0 / cad_units_per_meter
+    return ordered * scale, widths_cad * scale, heights_cad * scale
+
+
+def _chain_centroids_nn_index(pts: np.ndarray) -> list:
+    """Return a permutation index that orders 3D points along a smooth
+    polyline via nearest-neighbor + tangent continuity.
 
     Endpoint detection: interior points have 2 close neighbors at
     similar distance; endpoints have only 1.  Rank points by
-    second-nearest / first-nearest distance ratio — endpoints have
+    second-nearest / first-nearest distance ratio -- endpoints have
     the largest ratio.
 
     Then greedy nearest-neighbor walk from one endpoint.  For tight
@@ -209,11 +305,14 @@ def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
     tangent-continuity bias: once we have 2 points, prefer neighbors
     whose direction continues the current tangent (penalize backward
     / perpendicular jumps to a different turn).
+
+    Returns an index list ``visited`` such that ``pts[visited]`` is
+    the ordered polyline.  Caller can apply the same index to any
+    aligned per-point data (e.g. cross-section face list).
     """
     n = len(pts)
     if n < 2:
-        return pts.copy()
-    # Pairwise distances (vectorised, O(N^2) — fine for N ≤ 1000 or so)
+        return list(range(n))
     diff = pts[:, None, :] - pts[None, :, :]
     D = np.linalg.norm(diff, axis=-1)
     D_self_masked = D.copy()
@@ -233,7 +332,6 @@ def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
             tangent = pts[curr] - pts[prev]
             t_norm = np.linalg.norm(tangent)
             tangent = tangent / t_norm if t_norm > 1e-12 else np.zeros(3)
-            # Score: distance + backward-motion penalty
             best_idx = None
             best_score = float("inf")
             for i in remaining:
@@ -241,11 +339,7 @@ def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
                 d = np.linalg.norm(vec)
                 if d < 1e-12:
                     continue
-                # Project vec onto tangent; negative cos means backward
                 cos_a = float(np.dot(vec, tangent) / d)
-                # Score combines nearness + forward alignment
-                # cos = 1 (forward) => score = d;  cos = 0 (perp) => d*2
-                # cos = -1 (backward) => d*inf effectively
                 penalty = max(1.0 - cos_a, 0.01)
                 score = d * penalty
                 if score < best_score:
@@ -256,7 +350,17 @@ def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
             nxt = min(remaining, key=lambda i: D[curr][i])
         visited.append(nxt)
         remaining.discard(nxt)
-    return pts[visited]
+    return visited
+
+
+def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
+    """Convenience wrapper: order 3D points using the index walker.
+
+    Returns the reordered array directly.  For callers that need the
+    permutation (e.g. to also order an aligned face list), use
+    ``_chain_centroids_nn_index``.
+    """
+    return pts[_chain_centroids_nn_index(pts)]
 
 
 def _centerline_from_cross_sections(solid,
@@ -575,10 +679,22 @@ def extract_centerline_from_step(step_path: str,
 
     # Try loft-of-profiles first: if the solid clearly has many
     # consistent-area cross-sections, chain their centroids.
-    # (This is the robust path for Kubota's 3turncoil.stp class.)
+    # (This is the robust path for non-united multi-loft coils.)
     cross_faces = _collect_loft_cross_sections(solid)
     if cross_faces:
         return _centerline_from_cross_sections(solid, cad_units_per_meter)
+
+    # United multi-turn pancake fallback: when boolean unite has
+    # consumed the planar end-caps but the cross-section CIRCLE edges
+    # are still present (split into 2 semicircles per cross-section
+    # by Cubit's unite operation).  Group circles by arc_center, dedupe
+    # the semicircle pair into one per cross-section, chain via NN +
+    # tangent continuity.  Handles Kubota's 3turncoil united.stp class.
+    circle_centers_radius = _collect_circle_edge_centers(solid)
+    if circle_centers_radius is not None:
+        centers_cad, median_r_cad = circle_centers_radius
+        return _centerline_from_circle_edge_centers(
+            centers_cad, median_r_cad, cad_units_per_meter)
 
     # Torus-shaped single-loop coil (gapped torus, full torus): extract
     # major / minor radius + axis + sweep angle analytically from the
@@ -663,18 +779,33 @@ def filaments_from_step(step_path: str,
             n_peri=None)
 
     if n_peri is not None and use_coil_builder:
-        # Perimeter-only placement: use the longest-edge extractor as the
-        # PRIMARY path.  The walker can hang or crash on multi-turn
-        # loft STEPs (observed: Kubota's 3turncoil.stp hangs netgen.occ
-        # indefinitely; on 100号機 the subprocess exits with a native
-        # error code that Python cannot catch via try/except).
-        # Longest-edge samples the spine globally and works for both
-        # simple loops and multi-turn lofts.  For n_peri the equivalent
-        # circle from mean cross-section area is accurate enough in the
-        # thin-skin regime this mode targets.
+        # Perimeter-only placement.  Two paths, in priority order:
+        #
+        # 1. **Per-station from loft cross-section faces** (4.14.0+):
+        #    if the STEP is a loft-of-profiles solid, sample each
+        #    cross-section face's outer wire DIRECTLY -- this captures
+        #    rectangular / polygon / arbitrary cross-section shapes
+        #    AND any variation along the spine (tapered conductor,
+        #    varying-width pancake, twisted bus bar).  No equivalent-
+        #    circle approximation.
+        #
+        # 2. **Constant equivalent-circle** (legacy):
+        #    when path 1 does not apply (gapped torus, swept helix
+        #    via longest-edge / TORUS-sweep dispatch), use the cross-
+        #    section AREA averaged across the spine and place
+        #    filaments around an equivalent-circle of radius
+        #    sqrt(mean_area/pi).  Same behaviour as < 4.14.0.
         import numpy as np
-        # filaments_from_polyline lives at module bottom (was in
-        # coil_from_jou.py until 4.13.0 .jou-path retirement).
+        from build123d import import_step
+        solid = import_step(step_path)
+        loft = _try_extract_loft_with_profile(
+            solid, cad_units_per_meter=cad_units_per_meter)
+        if loft is not None:
+            path_m, faces_ordered = loft
+            return _filaments_from_per_station_faces(
+                path_m, faces_ordered,
+                sigma=sigma, n_peri=n_peri,
+                source_tag="step_per_station")
         path_m, w_m, h_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
             cad_units_per_meter=cad_units_per_meter)
@@ -1176,3 +1307,234 @@ def filaments_from_polyline(pts_m: np.ndarray,
         "n_path_pts": n_pts,
         "cross_section_radius_m": radius_m,
     }
+
+
+# ----------------------------------------------------------------------
+# Variable cross-section path (4.14.0+):
+#   Sample each cross-section face's outer boundary directly in the
+#   parallel-transport frame so filament placement tracks rect /
+#   polygon / arbitrary cross-section shape AND any variation along
+#   the spine (tapered conductor, varying-width pancake, etc.).
+# ----------------------------------------------------------------------
+
+def _sample_face_perimeter_in_pt_frame(face, centroid_3d: np.ndarray,
+                                          u_hat: np.ndarray,
+                                          v_hat: np.ndarray,
+                                          n_peri: int) -> np.ndarray:
+    """Return (n_peri, 2) UV samples of a planar face's outer boundary.
+
+    The face's outer wire is sampled at n_peri arc-length-equispaced
+    positions and the 3D points are projected onto the parallel-
+    transport frame ``(u_hat, v_hat)`` rooted at ``centroid_3d``.
+
+    Args:
+        face: build123d Face whose outer boundary is sampled.
+        centroid_3d: (3,) face centroid in the same coordinate system.
+        u_hat: (3,) parallel-transport in-plane axis at this station.
+        v_hat: (3,) parallel-transport in-plane axis (= n x u_hat).
+        n_peri: number of samples along the perimeter.
+
+    Returns:
+        (n_peri, 2) array of (u, v) offsets, ordered by arc-length
+        traversal of the boundary starting from the boundary point
+        closest to +u_hat.
+    """
+    from build123d import PositionMode
+
+    wire = face.outer_wire()
+    edges = wire.edges()
+    seg_len = np.array([float(e.length) for e in edges], dtype=np.float64)
+    total_len = float(seg_len.sum())
+    if total_len <= 0 or len(edges) == 0:
+        raise ValueError("face has zero-perimeter outer wire")
+
+    cumlen = np.cumsum(np.concatenate([[0.0], seg_len]))
+    s_targets = (np.arange(n_peri) + 0.5) / n_peri * total_len
+
+    samples_3d = np.zeros((n_peri, 3), dtype=np.float64)
+    for k, s in enumerate(s_targets):
+        # Find which edge holds s
+        idx = int(np.searchsorted(cumlen[1:], s, side="right"))
+        idx = min(idx, len(edges) - 1)
+        s_local = float(s - cumlen[idx])
+        edge = edges[idx]
+        # build123d position_at uses parameter [0, 1] by default; pass
+        # PositionMode.LENGTH to sample by arc length within the edge.
+        pos = edge.position_at(s_local, position_mode=PositionMode.LENGTH)
+        samples_3d[k] = (pos.X, pos.Y, pos.Z)
+
+    # Project to parallel-transport UV
+    delta = samples_3d - centroid_3d
+    u_vals = delta @ u_hat
+    v_vals = delta @ v_hat
+    uv = np.column_stack([u_vals, v_vals])
+
+    # Roll the array so index 0 lands at the boundary point closest
+    # to +u_hat (smallest signed angle from +u in the (u,v) plane).
+    # This stabilises filament k across stations: all stations agree
+    # on which corner / side of the rect filament 0 is on.
+    angles = np.arctan2(v_vals, u_vals)
+    # Distance from theta=0, wrapped: |angle| in (-pi, pi)
+    abs_ang = np.abs((angles + np.pi) % (2 * np.pi) - np.pi)
+    start = int(np.argmin(abs_ang))
+    uv = np.roll(uv, -start, axis=0)
+    return uv
+
+
+def _filaments_from_per_station_faces(centroids_m: np.ndarray,
+                                        faces_ordered: list,
+                                        sigma: float = 5.8e7,
+                                        n_peri: int = 16,
+                                        source_tag: str = "step_per_station"):
+    """Build a PEEC topology from per-station planar faces.
+
+    Each face's outer boundary is sampled at n_peri arc-length-equi-
+    spaced points in the parallel-transport frame at that station.
+    Filament k connects the k-th sample at station i to the k-th
+    sample at station i+1.  This handles **variable cross-section**
+    along the spine (rect / polygon / arbitrary shape, possibly
+    tapered).  Also handles constant-circular cross-section (gives
+    same result as ``filaments_from_polyline`` to within numerical
+    noise).
+
+    Args:
+        centroids_m: (N, 3) cross-section centroids in metres,
+            ordered along the spine.
+        faces_ordered: list of N build123d Face objects (planar
+            cross-section caps) aligned with centroids.  faces[i] is
+            the cap whose centroid is centroids_m[i] (BEFORE the
+            cad_units_per_meter scale; the caller is responsible for
+            the centroid scale -- the face still lives in raw CAD
+            units).
+        sigma: conductivity.
+        n_peri: number of perimeter filaments.
+        source_tag: free-form string for the result dict's "source".
+
+    Returns:
+        topology_dict, same shape as filaments_from_step.
+    """
+    n_path = len(centroids_m)
+    if n_path < 2:
+        raise ValueError(
+            f"need at least 2 stations, got {n_path}")
+    if len(faces_ordered) != n_path:
+        raise ValueError(
+            f"faces_ordered length {len(faces_ordered)} does not match "
+            f"centroids length {n_path}")
+
+    _, u_hat, v_hat = _parallel_transport_frame(centroids_m)
+
+    # Per-station UV (n_path, n_peri, 2) and per-station perimeter (n_path,)
+    uv_per_station = np.zeros((n_path, n_peri, 2), dtype=np.float64)
+    area_per_station = np.zeros(n_path, dtype=np.float64)
+    for i in range(n_path):
+        face = faces_ordered[i]
+        c = face.center()
+        c_np = np.array([c.X, c.Y, c.Z], dtype=np.float64)
+        # The face is in raw CAD units; centroids_m is already scaled
+        # to metres.  But the UV are RELATIVE to the face centroid, so
+        # the relative offsets (samples - centroid) need to be scaled
+        # by the same factor as the centerline.  Since the relative
+        # offsets are dimensionless w.r.t. the centerline scale, we
+        # pull the scale from the matching centerline -> face delta.
+        # In practice for shipped samples both live in metres (Cubit
+        # mks).  We compute UV in CAD units and then scale below.
+        uv_cad = _sample_face_perimeter_in_pt_frame(
+            face, c_np, u_hat[i], v_hat[i], n_peri)
+        uv_per_station[i] = uv_cad
+        area_per_station[i] = float(face.area)
+
+    # Per-station UV is in CAD units of the face.  centroids_m is in
+    # metres after the caller's cad_units_per_meter scale.  Scale UV
+    # to metres via the inverse: detect by comparing one face centroid
+    # in raw units vs the matching centerline point in metres.  This
+    # is cleaner than threading cad_units_per_meter through here.
+    f0 = faces_ordered[0]
+    c0_cad = np.array([f0.center().X, f0.center().Y, f0.center().Z],
+                       dtype=np.float64)
+    c0_m = centroids_m[0]
+    cad_to_m = np.linalg.norm(c0_m) / max(np.linalg.norm(c0_cad), 1e-30) \
+        if np.linalg.norm(c0_cad) > 1e-30 else 1.0
+    uv_per_station *= cad_to_m
+    area_per_station *= cad_to_m * cad_to_m
+
+    # Build n_peri filaments, each as a polyline through the matching
+    # k-th sample at every station.
+    filament_paths = []
+    cell_wh = []
+    for k in range(n_peri):
+        fil_pts = np.zeros((n_path, 3), dtype=np.float64)
+        for i in range(n_path):
+            fil_pts[i] = (centroids_m[i]
+                           + uv_per_station[i, k, 0] * u_hat[i]
+                           + uv_per_station[i, k, 1] * v_hat[i])
+        segs = [(tuple(fil_pts[i]), tuple(fil_pts[i + 1]))
+                for i in range(n_path - 1)]
+        filament_paths.append(segs)
+        # Per-segment filament cell area = local face area / n_peri
+        # (face provides total cross-section); side = sqrt(area / n_peri)
+        seg_areas = 0.5 * (area_per_station[:-1] + area_per_station[1:])
+        cell_wh.append([(float(math.sqrt(a / n_peri)),
+                          float(math.sqrt(a / n_peri)))
+                         for a in seg_areas])
+
+    import radia  # noqa: F401
+    from peec_bundle import build_bundle_solver
+    solver, seg_of_fil, port_p, port_m = build_bundle_solver(
+        filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
+
+    return {
+        "solver": solver,
+        "seg_of_filament": seg_of_fil,
+        "filament_paths": filament_paths,
+        "cell_wh": cell_wh,
+        "n_loop": len(filament_paths),
+        "port_plus": port_p,
+        "port_minus": port_m,
+        "source": source_tag,
+        "n_path_pts": n_path,
+        "cross_section_area_m2_mean": float(np.mean(area_per_station)),
+        "cross_section_area_m2_min": float(np.min(area_per_station)),
+        "cross_section_area_m2_max": float(np.max(area_per_station)),
+    }
+
+
+def _try_extract_loft_with_profile(solid,
+                                     cad_units_per_meter: float = 1.0):
+    """Loft path that ALSO returns the ordered cross-section faces.
+
+    Mirrors ``_centerline_from_cross_sections`` but returns
+    ``(path_m, faces_ordered)`` where faces[i] aligns with path[i].
+
+    Returns None if the solid does not look like a loft of profiles
+    (caller falls back to the regular ``extract_centerline_from_step``).
+    """
+    cross = _collect_loft_cross_sections(solid)
+    if not cross:
+        return None
+    # Centroids in raw CAD units
+    centroids_raw = np.array(
+        [[c.X, c.Y, c.Z] for c in (f.center() for f in cross)],
+        dtype=np.float64)
+    mean_area = float(np.mean([f.area for f in cross]))
+    eq_radius = math.sqrt(mean_area / math.pi)
+    dedup_tol = 0.1 * eq_radius
+
+    kept_centroids = []
+    kept_faces = []
+    for c, face in zip(centroids_raw, cross):
+        if not any(np.linalg.norm(c - k) < dedup_tol
+                   for k in kept_centroids):
+            kept_centroids.append(c)
+            kept_faces.append(face)
+    centroids = np.array(kept_centroids, dtype=np.float64)
+    if len(centroids) < 3:
+        return None
+
+    perm = _chain_centroids_nn_index(centroids)
+    ordered_centroids = centroids[perm]
+    ordered_faces = [kept_faces[i] for i in perm]
+
+    scale = 1.0 / cad_units_per_meter
+    path_m = ordered_centroids * scale
+    return path_m, ordered_faces
