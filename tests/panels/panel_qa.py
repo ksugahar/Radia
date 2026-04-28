@@ -294,6 +294,104 @@ def check_font_size_min(window) -> CheckResult:
                         f"all >= {MIN_FONT_POINT_SIZE}pt")
 
 
+def check_run_button_unique(window) -> CheckResult:
+    """Exactly one QPushButton labelled 'Run' (exact match after strip).
+
+    Catches accidental duplicate Run buttons left behind during a
+    panel refactor.  Secondary actions ('Run thermal...', 'Run sweep')
+    are intentionally excluded by requiring exact 'Run' — they are
+    distinct user actions and SHOULD coexist with the main Run.
+    """
+    runs = [b for b in window.findChildren(QPushButton)
+            if b.text().strip() == "Run"]
+    if len(runs) == 1:
+        return CheckResult("run_button_unique", True,
+                            f"text={runs[0].text()!r}")
+    return CheckResult("run_button_unique", False,
+                        f"found {len(runs)} 'Run' buttons (exact match): "
+                        f"{[b.text() for b in runs]}")
+
+
+def check_widget_to_cli_coverage(window) -> CheckResult:
+    """Every visible user-input widget must reach build_command() output.
+
+    Catches the common "widget added to UI but forgotten in
+    build_command" silent bug -- the user types a value, hits Run, and
+    the calc subprocess never sees the change.
+
+    Algorithm:
+      1. For each panel widget key K (from panel._widgets):
+         - skip if widget is hidden in current mode
+         - skip if K is in panel._cli_orphan_keys (explicit whitelist
+           for GUI-only widgets like preset combos that drive *other*
+           widgets rather than emitting their own flag)
+         - skip if K is in panel._cli_value_only_keys (whitelist for
+           widgets whose value appears in cmd but key does not -- e.g.
+           filenames passed positionally)
+      2. Build the CLI via panel.build_command("").  Skip the check
+         entirely if build_command raises (some panels require a real
+         file path; that's caught by other tests).
+      3. The widget is "covered" if any of these tokens appears in cmd:
+            --{key.replace('_', '-')}
+            --{key}
+            the widget's val() (after kebab-casing for combos)
+    """
+    panel = getattr(window, "_panel", None)
+    if panel is None or not hasattr(panel, "_widgets"):
+        return CheckResult("widget_to_cli_coverage", True,
+                            "(no panel / no _widgets)")
+
+    if not hasattr(panel, "build_command"):
+        return CheckResult("widget_to_cli_coverage", True,
+                            "(no build_command)")
+
+    try:
+        cmd = panel.build_command("")
+    except Exception as e:
+        return CheckResult("widget_to_cli_coverage", True,
+                            f"(build_command raised: {type(e).__name__}; "
+                            f"skipped)")
+
+    cmd_text = " ".join(str(x) for x in cmd)
+
+    orphan_keys = set(getattr(panel, "_cli_orphan_keys", ()) or ())
+    value_only_keys = set(
+        getattr(panel, "_cli_value_only_keys", ()) or ())
+
+    missing = []
+    for key, w in panel._widgets.items():
+        if key in orphan_keys:
+            continue
+        if not w.isVisibleTo(window):
+            continue
+
+        kebab = key.replace("_", "-")
+        if f"--{kebab}" in cmd_text or f"--{key}" in cmd_text:
+            continue
+
+        # Fall back to value match (for value-only widgets and
+        # the heat panel's wp_vol that is passed as --wp-vol but
+        # we don't want to re-encode the kebab logic for paths).
+        try:
+            v = panel.val(key)
+        except Exception:
+            v = ""
+        if v and str(v) in cmd_text:
+            continue
+
+        if key in value_only_keys:
+            continue
+
+        missing.append(key)
+
+    if missing:
+        return CheckResult("widget_to_cli_coverage", False,
+                            f"visible widgets not in build_command: "
+                            f"{missing}",
+                            severity="warning")
+    return CheckResult("widget_to_cli_coverage", True)
+
+
 def check_visible_rows_have_labels(window) -> CheckResult:
     """Every visible input row must have a non-empty label in the
     label column.  Empty labels make the form ambiguous."""
@@ -330,11 +428,16 @@ DEFAULT_CHECKS = [
     check_height,
     check_width,
     check_buttons_reachable,
+    check_run_button_unique,
     check_no_orphan_section_headers,
     check_ascii_only_labels,
     check_method_combo_populated,
     check_visible_rows_have_labels,
     check_font_size_min,
+    # check_widget_to_cli_coverage is deliberately NOT in the default
+    # set: it requires a populated .vol/.step path for build_command()
+    # to run, which the deploy-skill render flow does not provide.
+    # test_build_command_parses.py invokes it explicitly with fixtures.
 ]
 
 
@@ -404,7 +507,7 @@ def get_panel_registry():
     Used by the deploy skill and pytest to iterate every supported
     panel × mode combination.
     """
-    import radia_ih, radia_em, radia_pcb
+    import radia_ih, radia_em, radia_pcb, radia_heat
     return [
         # IH — 3 methods
         ("ih_ind", radia_ih.IHWindow,
@@ -423,6 +526,12 @@ def get_panel_registry():
          "_method_combo", "Kelvin Benchmark"),
         # PCB — single layout
         ("pcb", radia_pcb.PCBWindow, None, None),
+        # Heat — 3D volume vs 2D axisymmetric (mesh_type is the routing
+        # key on HeatPanel; switched via _widgets["mesh_type"]).
+        ("heat_3d", radia_heat.HeatWindow,
+         "mesh_type", radia_heat.MESH_TYPE_3D),
+        ("heat_axisym", radia_heat.HeatWindow,
+         "mesh_type", radia_heat.MESH_TYPE_AXISYM),
     ]
 
 
