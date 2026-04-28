@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.34.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.34.0 (2026-04-28): peec_inductance knowledge updated for radia 4.13.0 STEP-only policy (.jou input retired). 0.33.8: summary trimmed for PyPI 512-char limit. 0.33.7: m-only policy (auto-detect removed). 0.33.6: security fix (Coreform Learn credentials)."
+version = "0.34.1"
+description = "MCP servers for the Radia CAE ecosystem. 0.34.1 (2026-04-28): radia 4.14.0 united multi-loft fallback documented. 0.34.0: STEP-only policy (.jou retired). 0.33.8: PyPI 512-char fix. 0.33.7: m-only policy. 0.33.6: security fix."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
