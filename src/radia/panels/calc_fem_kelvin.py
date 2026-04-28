@@ -278,6 +278,30 @@ def solve_fem(vol_file="", fes_order=1,
     # 2-sphere Kelvin: Periodic BC handles far field, no Dirichlet on kelvin_ext.
     # GND (vertex at kelvin sphere center) provides uniqueness if present.
 
+    # Log the actual far-field truncation chosen for this run -- the
+    # panel-side validation warning only sees the .vol's label set,
+    # but four very different paths can be active here:
+    #   (A) Periodic Kelvin (kelvin material + Periodic identifications)
+    #   (B) Dirichlet on GND vertex
+    #   (C) Dirichlet A=0 on 'outer' boundary
+    #   (D) Gauge regularisation only (reg*nu0*u*v) -- result depends
+    #       on reg if no SIBC absorbs in the air domain.
+    # Logging here lets us audit which case actually fired without
+    # re-deriving it from JSON keys.
+    if has_kelvin and has_kelvin_periodic:
+        _log("FARFIELD:Periodic Kelvin (open boundary, exact)")
+    elif dirichlet_bnd == "GND":
+        _log("FARFIELD:Dirichlet on 'GND' vertex (point gauge fix; "
+             "truncation error if domain is small)")
+    elif dirichlet_bnd == "outer":
+        _log("FARFIELD:Dirichlet A=0 on 'outer' boundary "
+             "(truncation error if outer is too close to coil)")
+    else:
+        _log(f"FARFIELD:gauge regularisation only (reg={reg:.1e}). "
+             "No 'kelvin' material AND no 'outer' / 'GND' boundary "
+             "-- result is gauge-dependent unless an SIBC face absorbs "
+             "the radiating field.")
+
     is_dc = (omega <= 0 or sigma <= 0)
     use_complex = not is_dc
 

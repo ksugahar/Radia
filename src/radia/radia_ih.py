@@ -174,14 +174,42 @@ def check_method_requirements(method, mats, bnds):
     mat_hint = _label_hint(mats, "materials")
     bnd_hint = _label_hint(bnds, "boundaries")
 
+    # Far-field truncation warning text -- mirrors the four code
+    # paths inside calc_fem_kelvin.py / calc_fem_coilmesh.py:
+    #   (A) kelvin material -> Periodic Kelvin (ideal)
+    #   (B) GND boundary    -> Dirichlet on a single vertex
+    #   (C) outer boundary  -> Dirichlet A=0 on the truncating face
+    #   (D) none of the above -> gauge regularisation only
+    # Phrasing the warning to match the actual fallback prevents the
+    # 2026-04-28 case where the panel claimed "Dirichlet A=0 used"
+    # while the .vol had neither 'outer' nor 'GND' and the solver was
+    # silently relying on the reg=1e-6 gauge term.  Result quality
+    # in case (D) is gauge-dependent -- only acceptable when an
+    # SIBC face absorbs the radiating field, otherwise unreliable.
+    def _farfield_warning(mats_, bnds_, calc_name):
+        if "kelvin" in mats_:
+            return None  # case (A): no warning needed
+        if "GND" in bnds_:
+            return ("Missing material 'kelvin' -- Dirichlet on 'GND' "
+                    "vertex used (truncation error if outer is close).")
+        if "outer" in bnds_:
+            return ("Missing material 'kelvin' -- Dirichlet A=0 on "
+                    "'outer' boundary used (truncation error if "
+                    "outer is close).")
+        return ("Missing material 'kelvin' AND no 'outer' / 'GND' "
+                "boundary -- only gauge regularisation (reg=1e-6) "
+                "controls the far field.  Result is gauge-dependent "
+                "unless an SIBC face absorbs the radiating field.  "
+                "Add 'kelvin' material (preferred) or an 'outer' "
+                "Dirichlet boundary.")
+
     if method == METHOD_FEM_FULL:
         if "coil" not in mats:
             errors.append(
                 f"Missing material 'coil' (coil volume).{mat_hint}")
-        if "kelvin" not in mats:
-            warnings.append(
-                "Missing material 'kelvin' — Dirichlet A=0 used "
-                "instead of Kelvin open boundary (truncation error).")
+        ff = _farfield_warning(mats, bnds, "calc_fem_coilmesh")
+        if ff:
+            warnings.append(ff)
         for b in ("source", "sink", "sibc"):
             if b not in bnds:
                 errors.append(
@@ -195,10 +223,9 @@ def check_method_requirements(method, mats, bnds):
             errors.append(
                 f"Missing boundary 'sibc' (workpiece surface)."
                 f"{bnd_hint}")
-        if "kelvin" not in mats:
-            warnings.append(
-                "Missing material 'kelvin' — Dirichlet A=0 used "
-                "instead of Kelvin open boundary (truncation error).")
+        ff = _farfield_warning(mats, bnds, "calc_fem_kelvin")
+        if ff:
+            warnings.append(ff)
     else:  # PEEC+BEM
         if "sibc" not in bnds:
             errors.append(
