@@ -509,13 +509,13 @@ class IHPanel(ModePanel):
         # Visibility per method (rows + their section headers):
         self._set_row_visible("_sec_peec_step", needs_step)
         self._set_row_visible("peec_step", needs_step)
-        # Perimeter placement (n_peri) for PEEC-inductance only;
-        # volume grid (nwinc/nhinc) for PEEC+BEM only.
-        self._set_row_visible("peec_n_peri", is_peec_ind)
-        # Volume filament grid (nwinc/nhinc) used by PEEC+BEM AND
-        # PEEC+FEM+Kelvin (both drive calc scripts that accept the flag).
-        self._set_row_visible("peec_nwinc", is_peec_bem or is_peec_fem_k)
-        self._set_row_visible("peec_nhinc", is_peec_bem or is_peec_fem_k)
+        # Perimeter placement (n_peri) for PEEC-inductance AND PEEC+BEM
+        # (4.16.0+: PEEC+BEM dropped volume-grid nwinc/nhinc -- it now
+        # uses perimeter-only filaments like PEEC-inductance).
+        self._set_row_visible("peec_n_peri", is_peec_ind or is_peec_bem)
+        # Volume filament grid (nwinc/nhinc) only PEEC+FEM+Kelvin now.
+        self._set_row_visible("peec_nwinc", is_peec_fem_k)
+        self._set_row_visible("peec_nhinc", is_peec_fem_k)
         # fes_order spin is reused as --h1-order for PEEC+BEM and
         # --fes-order for both FEM-side paths; hidden for PEEC-inductance.
         self._set_row_visible("fes_order",
@@ -668,8 +668,7 @@ class IHPanel(ModePanel):
         solver = self._PEEC_SOLVER_MAP.get(self.val("solver"), "dense")
         cmd = [_PYTHON, calc_script("calc_peec_bem.py"),
                "--peec-step", step,
-               "--peec-nwinc", str(self.val("peec_nwinc")),
-               "--peec-nhinc", str(self.val("peec_nhinc")),
+               "--peec-n-peri", str(self.val("peec_n_peri")),
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
