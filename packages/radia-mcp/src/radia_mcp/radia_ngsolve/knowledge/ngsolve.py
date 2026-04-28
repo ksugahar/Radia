@@ -5080,6 +5080,11 @@ for edge_nr in build_spanning_tree(mesh):
 # Independent spanning-tree construction and gauge setup are retained.
 ```
 
+### Historical field recurrence retired
+
+Tanimoto attribution retained; the stage coefficient and update recipe is removed.
+The independent analytical modal expression μ·Σ(β²/λ²)/V² is retained as a reference.
+
 ### Why it works
 
 `nograds=True` + tree-cotree mask = **fully div-free HCurl basis at all orders**:
@@ -5097,12 +5102,19 @@ cannot distinguish degenerate modes → mode mixing → bad convergence.
 
 **Use a ≠ b ≠ c** (e.g., 5×2×1 mm cuboid) for clean validation.
 
-### Verified result (5×2×1 mm Cu, Case A voltage-driven)
+### Verified result — 2D rectangular bar, 5×2 mm Cu (Case A, per unit length)
 
-- **Stage 0**: NGSolve R_0 = 1.7241 Ω = Mathematica 1/(σV) — 4-digit exact match
-- **Stage 0**: NGSolve L_0 = 4.67 µH = Mathematica Cauer-II L_1 = 4.66 µH — 0.2% match
-  → Note: NGSolve Kameari Stage 0 ↔ Mathematica Cauer-II L_1 (numbering offset 1)
-- **Stages 0–4**: ALL positive L_n, monotone τ progression — tree-cotree handles all 5 cleanly
+With the **corrected Tanimoto formula** (accumulated Apotential):
+
+- **Stage 0**: NGSolve R_0 = 1.7241×10⁻³ Ω/m = 1/(σab) analytic — exact match
+- **Stage 0**: NGSolve L_0 = 31.34 nH/m = Mathematica analytic μ·Σ(β²/λ²)/(ab)²
+  = 31.32 nH/m — **0.05% match**
+- **Stages 0–11**: all positive R_n, L_n with Tanimoto-pattern J update
+
+Use this as the canonical CLN validation case. The 3D 5×2×1 mm cuboid case
+in `cuboid_521_treecotree_extended.py` was using the **incorrect** L formula
+(no accumulation) — needs to be re-run with the Tanimoto pattern for proper
+coefficient-by-coefficient comparison against analytic Cauer-I.
 
 ### NGSolve `CreateGradient`: building block
 
