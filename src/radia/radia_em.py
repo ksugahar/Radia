@@ -40,6 +40,16 @@ FORM_MSC = "MSC"
 FORM_KELVIN_BENCH = "Kelvin Benchmark"
 FORMULATIONS = [FORM_OMEGA, FORM_APHI, FORM_MSC, FORM_KELVIN_BENCH]
 
+# Panel label -> calc_accel_magnet.py --formulation CLI value.
+# The calc only accepts {"omega", "a"}; "A-Phi" is the GUI label for
+# the A-vector formulation (the "Phi" alludes to the optional phi
+# gauge handled internally by the solver).  Bare lowercase doesn't
+# work: "A-Phi".lower() = "a-phi" which the calc rejects.
+_FEM_FORMULATION_CLI = {
+    FORM_OMEGA: "omega",
+    FORM_APHI:  "a",
+}
+
 
 # COIL_TEMPLATE moved to radia_gui_base.py 2026-04-26 so the IH
 # panel's "New..." wizard can share the same starter.  Re-exported
@@ -320,9 +330,16 @@ class EMPanel(ModePanel):
         if not coil:
             raise ValueError("No coil script specified.")
         solver_key = self._SOLVER_MAP.get(self.val("solver"), "pardiso")
+        try:
+            formulation_cli = _FEM_FORMULATION_CLI[formulation]
+        except KeyError:
+            raise ValueError(
+                f"_build_fem_command got formulation={formulation!r}; "
+                f"calc_accel_magnet.py accepts only "
+                f"{list(_FEM_FORMULATION_CLI.values())}.")
 
         cmd = [_PYTHON, calc_script("calc_accel_magnet.py"),
-               "--formulation", formulation.lower(),
+               "--formulation", formulation_cli,
                "--fes-order", self.val("fes_order"),
                "--coil-script", coil,
                "--solver", solver_key,
