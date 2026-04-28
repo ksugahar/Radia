@@ -167,31 +167,77 @@ def build_peec_from_path(path_points: np.ndarray,
 
 def _collect_loft_cross_sections(solid,
                                   min_count: int = 5,
-                                  area_variation_tol: float = 0.5):
-    """Return planar cross-section faces of a loft-of-profiles solid.
+                                  cluster_jump_threshold: float = 1.5):
+    """Return planar cross-section CAP faces of a loft-of-profiles solid.
 
-    A loft solid (multi-turn coil, generic spline coil) has N planar
-    cross-section end-cap faces (circles / rects / custom profiles) +
-    N-1 spline lateral surfaces.  The cross-section faces share very
-    similar area (same profile).  Returns the filtered planar faces,
-    or [] if the solid does NOT look like a loft-of-profiles (too few
-    planar faces, or planar face area varies wildly).
+    A loft solid has N planar cross-section end-caps + (for non-
+    circular cross-sections) additional planar top/bottom faces from
+    each loft segment.  For a 6 x 4 mm rect swept around a 30 mm arc
+    with 9.7 mm segments, each cross-section cap has 24 mm^2 (4 LINE
+    edges) while each top/bottom face has ~58 mm^2 (2 LINE + 2 BSPLINE
+    edges).  A pure area-cluster filter would still mix them when the
+    sizes overlap, so combine TWO filters:
+
+      1. Smallest area cluster (cap is smallest planar face by area)
+      2. Boundary made entirely of LINE / CIRCLE / ELLIPSE edges
+         (cross-section caps are bounded by the original 2D profile
+         curves -- straight lines or arcs.  Top / bottom strips of a
+         swept solid acquire BSPLINE edges along the spine direction
+         due to the curvature, so they fail this filter.)
+
+    Returns [] if the solid does NOT look like a loft-of-profiles
+    (too few planar faces of clean shape).
     """
     try:
         from build123d import GeomType
-        planar = [f for f in solid.faces() if f.geom_type == GeomType.PLANE]
+        planar_all = [f for f in solid.faces()
+                      if f.geom_type == GeomType.PLANE]
     except Exception:
         return []
+    if len(planar_all) < min_count:
+        return []
+
+    # Filter to faces whose outer wire has only "clean" cross-section
+    # edges (no BSPLINE).  Cross-section caps were drawn as 2D shapes
+    # (rect = 4 LINE, circle = 1 CIRCLE, polygon = N LINE, fillet rect
+    # = LINE + ELLIPSE/CIRCLE arcs); they have NO BSPLINE on their
+    # boundary.  Top/bottom strips ALWAYS pick up BSPLINE edges along
+    # the swept direction unless the spine is straight.
+    clean_types = {GeomType.LINE, GeomType.CIRCLE, GeomType.ELLIPSE}
+    planar = []
+    for f in planar_all:
+        try:
+            edges = f.outer_wire().edges()
+        except Exception:
+            continue
+        if not edges:
+            continue
+        if all(e.geom_type in clean_types for e in edges):
+            planar.append(f)
+
     if len(planar) < min_count:
+        # No clean caps detected -- this solid is not a clean loft of
+        # 2D profiles (or its cross-section uses freeform / spline
+        # boundaries).  Caller falls through to other paths.
         return []
+
     areas = np.array([f.area for f in planar], dtype=np.float64)
-    median_area = float(np.median(areas))
-    if median_area <= 0:
+    if not np.all(areas > 0):
         return []
-    keep = np.abs(areas - median_area) / median_area < area_variation_tol
-    cross = [f for f, k in zip(planar, keep) if k]
-    if len(cross) < min_count:
+
+    # Within the clean-bounded subset, keep the SMALLEST area cluster
+    # (handles the very rare case where some clean-bounded faces are
+    # still extras -- e.g. a flat tab welded onto the coil).
+    sorted_idx = np.argsort(areas)
+    sorted_areas = areas[sorted_idx]
+    cluster_end = 1
+    for i in range(1, len(sorted_areas)):
+        if sorted_areas[i] / sorted_areas[i - 1] > cluster_jump_threshold:
+            break
+        cluster_end = i + 1
+    if cluster_end < min_count:
         return []
+    cross = [planar[i] for i in sorted_idx[:cluster_end]]
     return cross
 
 
@@ -377,6 +423,134 @@ def _filaments_from_lateral_surface_uv(face,
         "cross_section_area_m2_mean": float(np.mean(area_per_station)),
         "cross_section_area_m2_min":  float(np.min(area_per_station)),
         "cross_section_area_m2_max":  float(np.max(area_per_station)),
+    }
+
+
+def _filaments_from_circle_edges_per_station(solid,
+                                                cad_units_per_meter: float,
+                                                sigma: float,
+                                                n_peri: int,
+                                                source_tag: str = "step_circle_uv"):
+    """Phase C-light: per-station variable-radius circle filaments
+    from CIRCLE edges in a united multi-loft solid.
+
+    Like ``_collect_circle_edge_centers`` + ``_centerline_from_circle_edge_centers``
+    but instead of collapsing every cross-section to the median radius
+    (= constant equivalent-circle, 4.14.0), place filaments around each
+    station's OWN circle radius via parallel-transport (u_hat, v_hat).
+    For constant-radius coils (Kubota 3turncoil) this is identical to
+    4.14.0; for tapered / varying circular cross-sections (some IH coil
+    designs) this respects the actual local radius.
+
+    Returns ``None`` (caller falls through to the constant equivalent-
+    circle path) when the solid does not have a clean population of
+    consistent-radius circle edges.
+    """
+    from build123d import GeomType
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+
+    circles = [e for e in solid.edges() if e.geom_type == GeomType.CIRCLE]
+    if len(circles) < 5:
+        return None
+
+    raw = []
+    for e in circles:
+        try:
+            adapt = BRepAdaptor_Curve(e.wrapped)
+            circ = adapt.Circle()
+            c = circ.Location()
+            r = float(circ.Radius())
+            ax = circ.Axis().Direction()
+            raw.append({
+                "center": np.array([c.X(), c.Y(), c.Z()], dtype=np.float64),
+                "radius": r,
+                "normal": np.array([ax.X(), ax.Y(), ax.Z()],
+                                     dtype=np.float64),
+            })
+        except Exception:
+            continue
+    if not raw:
+        return None
+
+    radii = np.array([d["radius"] for d in raw])
+    median_r = float(np.median(radii))
+    if median_r <= 0:
+        return None
+    # 30% radius spread allowed (tapered windings); rejects lead arcs
+    # of unrelated radius (e.g. coil terminals) and other artifacts.
+    consistent = [d for d, r in zip(raw, radii)
+                  if abs(r - median_r) / median_r < 0.3]
+    if len(consistent) < 5:
+        return None
+
+    # Dedupe semicircle pairs by center proximity (semicircles of one
+    # cross-section share the same arc_center).
+    dedup_tol = 0.1 * median_r
+    kept = []
+    for d in consistent:
+        if not any(np.linalg.norm(d["center"] - k["center"]) < dedup_tol
+                   for k in kept):
+            kept.append(d)
+    if len(kept) < 5:
+        return None
+
+    # Chain by center via NN + tangent continuity.
+    centers_cad = np.array([d["center"] for d in kept])
+    perm = _chain_centroids_nn_index(centers_cad)
+    ordered = [kept[i] for i in perm]
+
+    centroids_m = centers_cad[perm] / cad_units_per_meter
+    radii_m = np.array([d["radius"] for d in ordered]) / cad_units_per_meter
+
+    # Parallel-transport frame on the chained centerline.  By
+    # construction of the loft, each cross-section's normal is along
+    # the local spine tangent, so u_hat / v_hat are already in the
+    # cross-section plane and we can use them directly to place
+    # filaments around each station's circle.
+    _, u_hat, v_hat = _parallel_transport_frame(centroids_m)
+
+    n_path = len(ordered)
+    theta = 2.0 * np.pi * (np.arange(n_peri) + 0.5) / float(n_peri)
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+
+    filament_paths = []
+    cell_wh = []
+    for k in range(n_peri):
+        fil_pts = np.zeros((n_path, 3), dtype=np.float64)
+        for i in range(n_path):
+            r = radii_m[i]
+            fil_pts[i] = (centroids_m[i]
+                           + r * cos_t[k] * u_hat[i]
+                           + r * sin_t[k] * v_hat[i])
+        segs = [(tuple(fil_pts[i]), tuple(fil_pts[i + 1]))
+                for i in range(n_path - 1)]
+        filament_paths.append(segs)
+        # Per-segment cell side from local circle area.  For tapered
+        # windings the area changes per segment.
+        seg_areas = math.pi * 0.5 * (radii_m[:-1] ** 2 + radii_m[1:] ** 2)
+        cell_wh.append([(float(math.sqrt(a / n_peri)),
+                          float(math.sqrt(a / n_peri)))
+                         for a in seg_areas])
+
+    import radia  # noqa: F401
+    from peec_bundle import build_bundle_solver
+    solver, seg_of_fil, port_p, port_m_idx = build_bundle_solver(
+        filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
+
+    return {
+        "solver": solver,
+        "seg_of_filament": seg_of_fil,
+        "filament_paths": filament_paths,
+        "cell_wh": cell_wh,
+        "n_loop": len(filament_paths),
+        "port_plus": port_p,
+        "port_minus": port_m_idx,
+        "source": source_tag,
+        "n_path_pts": n_path,
+        "cross_section_radius_m_min": float(radii_m.min()),
+        "cross_section_radius_m_max": float(radii_m.max()),
+        "cross_section_radius_m_mean": float(radii_m.mean()),
     }
 
 
@@ -1015,6 +1189,19 @@ def filaments_from_step(step_path: str,
                 path_m, faces_ordered,
                 sigma=sigma, n_peri=n_peri,
                 source_tag="step_per_station")
+
+        # Path 2b: per-station VARIABLE-RADIUS CIRCLE from CIRCLE
+        # edges (united multi-loft with circular cross-section, possibly
+        # tapered).  Kubota 3turncoil class.  Stronger than the
+        # equivalent-circle fallback because each station gets its own
+        # radius (handles tapered windings); identical for constant-
+        # radius coils.
+        topo_circle = _filaments_from_circle_edges_per_station(
+            solid, cad_units_per_meter=cad_units_per_meter,
+            sigma=sigma, n_peri=n_peri,
+            source_tag="step_circle_uv")
+        if topo_circle is not None:
+            return topo_circle
 
         # Path 3: constant equivalent-circle via existing dispatch.
         path_m, w_m, h_m = extract_centerline_from_step(
