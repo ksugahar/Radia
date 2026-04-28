@@ -1019,10 +1019,10 @@ git push v* tag
 robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 ```
 
-### Distribution Test Policy (2026-04-24)
+### Distribution Test Policy (2026-04-24, updated 2026-04-28)
 
-**POLICY**: **PyPI 経由の配布試験は mdx で行う**。LAB と 100号機 は editable
-install (`pip install -e`) で運用し、PyPI wheel の manifest /
+**POLICY**: **PyPI 経由の配布試験は mdx で行う**。LAB と 100号機 は **3 パッケージ
+全て editable install** (`pip install -e`) で運用し、PyPI wheel の manifest /
 RECORD / entry-points / package-data / `cubit-plugin-install`
 regular-file deploy の健全性検証は **mdx 限定**。100号機 は PyPI 版の
 テスト対象としない (editable 専用)。Stage-3 が通るまで PyPI 配布の OK を
@@ -1032,9 +1032,17 @@ regular-file deploy の健全性検証は **mdx 限定**。100号機 は PyPI �
 
 | Stage | マシン | install 形態 | 目的 |
 |-------|--------|-----------|------|
-| 1 | LAB | `pip install -e .` | 開発者ループ。最速フィードバック |
-| 2 | 100号機 | `pip install -e W:\...` (all-users editable) | LAB 編集が 21 人全員で即 live。Cubit plugin は W: への symlink |
-| 3 | mdx | `pip install radia` / `pip install cubit-mesh-export` (PyPI) + `cubit-plugin-install` | PyPI 配布の唯一の検証点 |
+| 1 | LAB | `pip install -e .` + `pip install -e packages/cubit-mesh-export` + `pip install -e packages/radia-mcp` | 開発者ループ。最速フィードバック |
+| 2 | 100号機 | 上記 3 パッケージ全て `pip install -e W:\...` (all-users editable) | LAB 編集が 21 人全員で即 live。Cubit plugin は W: への symlink |
+| 3 | mdx | `pip install radia` / `pip install cubit-mesh-export` / `pip install radia-mcp` (PyPI) + `cubit-plugin-install` | PyPI 配布の唯一の検証点 |
+
+**LAB / 100号機 で editable な 4 パッケージ** (2026-04-28 追記):
+- `radia` (LAB: `S:\Radia\01_GitHub`, 100: `W:\00_CAE\Radia\01_GitHub`)
+- `cubit-mesh-export` (LAB: `S:\Radia\01_GitHub\packages\cubit-mesh-export`, 100: `W:\00_CAE\Radia\01_GitHub\packages\cubit-mesh-export`)
+- `radia-mcp` (LAB: `S:\Radia\01_GitHub\packages\radia-mcp`, 100: `W:\00_CAE\Radia\01_GitHub\packages\radia-mcp`)
+- `mcp-server-document` (LAB: `S:\mcp-server`, 100: `W:\00_CAE\mcp-server`) -- LAB-private (PyPI 配布なし)
+
+4 つとも editable で居続けることが正解。**LAB or 100号機 で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れる** (2026-04-28 release で実際に発生)。release 後の metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化すること。`pip install --upgrade` は **mdx 専用**。
 
 **100号機 全ユーザー editable**: `C:\Program Files\Python312` の
 machine-wide site-packages に editable install。`W:\00_CAE\Radia\01_GitHub`
