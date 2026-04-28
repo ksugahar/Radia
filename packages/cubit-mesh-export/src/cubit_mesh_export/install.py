@@ -13,10 +13,10 @@ After ``pip install cubit-mesh-export``, run::
 This is the SINGLE entry point for Cubit plugin deployment.
 Radia-NGSolve panels are installed separately via ``radia-setup``.
 
-Safety policy (2026-04-14 — post-incident hardening):
+Safety policy (2026-04-14 -- post-incident hardening):
 
 * All errors are **loud**. ``OSError`` during unlink / copy exits non-zero
-  with the offending path printed — never silently swallowed.
+  with the offending path printed -- never silently swallowed.
 * Cubit **must not be running** on the target machine before install. We
   detect live ``cubit*`` / ``coreform*`` processes and abort.
 * Every destination file is **verified** after copy (exists, size matches
@@ -114,7 +114,7 @@ def _check_radia_compat():
         import cubit_mesh_export as _cme
         import radia as _rad
     except ImportError:
-        return True, "radia not installed in this Python env — skipping"
+        return True, "radia not installed in this Python env -- skipping"
 
     cme_ver = _parse_version(getattr(_cme, "__version__", "0.0.0"))
     rad_ver = _parse_version(getattr(_rad, "__version__", "0.0.0"))
@@ -178,7 +178,7 @@ def _is_cubit_process_name(name: str) -> bool:
 def _running_cubit_processes():
     """Return a list of (pid, name) for running Cubit GUI processes.
 
-    A non-empty list means the plugin files are likely locked — installing
+    A non-empty list means the plugin files are likely locked -- installing
     over them is not safe. The 2026-04-14 incident on 100号機 was caused by
     a running Cubit holding radia_cubit.ccm open, which made copy silently
     produce a half-updated plugin set.
@@ -213,7 +213,7 @@ def _running_cubit_processes():
                         pid = 0
                     hits.append((pid, name))
         except Exception:
-            # Best-effort — if we cannot detect, fall through to the file-lock
+            # Best-effort -- if we cannot detect, fall through to the file-lock
             # check which is more reliable anyway.
             pass
     return hits
@@ -321,7 +321,7 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
     # Stale .ccl in plugins/ shadow guard.
     stale_ccl = cubit_dir / "bin" / "plugins" / "radia_cubit.ccl"
     if stale_ccl.is_file():
-        msg = (f"stale shadow file: {stale_ccl} — the .ccl belongs in "
+        msg = (f"stale shadow file: {stale_ccl} -- the .ccl belongs in "
                f"{cubit_dir / 'bin'}, not bin/plugins/. Re-run "
                "cubit-plugin-install to clean.")
         issues.append(msg)
@@ -408,7 +408,7 @@ def _clean_old_plugins(cubit_dir: Path):
     removed = 0
     errors = []
 
-    # Clean from BOTH plugins/ and bin/ — .ccl has historically landed in
+    # Clean from BOTH plugins/ and bin/ -- .ccl has historically landed in
     # either location. A stale copy in the wrong place silently shadows a
     # fresh one (2026-04-14 incident).
     for pattern in _CLEAN_PATTERNS:
@@ -502,11 +502,11 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         True on full success. False (or raises RuntimeError) on failure.
 
     Exit codes (via ``main``):
-        0 — install ok / preflight clean
-        1 — Cubit not found
-        2 — preflight failed (Cubit running, file locked, missing privs)
-        3 — clean or copy step failed
-        4 — post-install verification failed
+        0 -- install ok / preflight clean
+        1 -- Cubit not found
+        2 -- preflight failed (Cubit running, file locked, missing privs)
+        3 -- clean or copy step failed
+        4 -- post-install verification failed
     """
     pkg_dir = _package_dir()
     cubit_dir = _find_cubit_dir()
@@ -549,10 +549,10 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         raise SystemExit(2)
 
     if check_only:
-        print("  [OK] preflight clean — install would succeed. Exiting.")
+        print("  [OK] preflight clean -- install would succeed. Exiting.")
         return True
 
-    # Clean old files — abort if any unlink failed.
+    # Clean old files -- abort if any unlink failed.
     removed, clean_errs = _clean_old_plugins(cubit_dir)
     if clean_errs:
         print("  [FAIL] clean-up step hit errors:")
@@ -573,11 +573,11 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     if ccm_src.is_file():
         copy_jobs.append((ccm_src, plugins_dir / "radia_cubit.ccm"))
     else:
-        print(f"  [--] radia_cubit.ccm not found in {pkg_dir} — skipping")
+        print(f"  [--] radia_cubit.ccm not found in {pkg_dir} -- skipping")
 
     ccl_src = pkg_dir / "radia_cubit.ccl"
     if ccl_src.is_file():
-        # NOTE: .ccl goes in bin/, not bin/plugins/ — Cubit loads Qt
+        # NOTE: .ccl goes in bin/, not bin/plugins/ -- Cubit loads Qt
         # components from bin/ directly. See 2026-04-14 incident.
         copy_jobs.append((ccl_src, cubit_dir / "bin" / "radia_cubit.ccl"))
 
@@ -586,7 +586,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         copy_jobs.append(
             (pyd_src, plugins_dir / "radia_cubit_mesh.cp312-win_amd64.pyd"))
     else:
-        print(f"  [--] radia_cubit_mesh.pyd not found in {pkg_dir} — skipping")
+        print(f"  [--] radia_cubit_mesh.pyd not found in {pkg_dir} -- skipping")
 
     nglib, ngcore = _find_netgen_dlls()
     if nglib:
@@ -611,7 +611,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
             print(f"    - {e}")
         raise SystemExit(3)
 
-    # Final post-install sanity — delegated to verify_deployment for a
+    # Final post-install sanity -- delegated to verify_deployment for a
     # single source of truth (also exposed via --verify-only).
     print()
     ok_v, _ = verify_deployment(pkg_dir, cubit_dir, verbose=True)
