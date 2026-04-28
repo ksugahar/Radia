@@ -1,5 +1,11 @@
 ## Coarse-wp sample for PEEC+BEM 1-way validation (gap=5 deg).
 ##
+## NOTE: `export step` and `radia_export ...` below write to Cubit's
+## CWD (current working directory).  Cubit aprepro has no
+## "current journal path" variable, so the .jou cannot self-locate.
+## Before playing: either use **File -> Open Journal** (Cubit sets
+## CWD to the .jou's folder), or `cd "<this folder>" ; play "this.jou"`.
+##
 ## Geometry identical to ih_fem_kelvin_skin.jou (same Cu torus coil +
 ## cylindrical wp hole + air sphere), but with MUCH coarser meshes
 ## so BEM assembly is seconds, not minutes.  BEM 1-way P accuracy ~5%.

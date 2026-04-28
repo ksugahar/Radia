@@ -1,5 +1,11 @@
 ## PEEC inductance sample: coil STEP only, NO workpiece, NO .vol.
 ##
+## NOTE: `export step` below writes to Cubit's CWD (current working
+## directory).  Cubit aprepro has no "current journal path"
+## variable, so the .jou cannot self-locate.  Before playing:
+## either use **File -> Open Journal** (Cubit sets CWD to the .jou's
+## folder), or `cd "<this folder>" ; play "this.jou"`.
+##
 ## The PEEC inductance method computes L_coil / R_coil directly from a
 ## STEP file via filament-based Biot-Savart + loop-bundle solve.  It
 ## does NOT need a mesh or a .vol file -- only the STEP describing the

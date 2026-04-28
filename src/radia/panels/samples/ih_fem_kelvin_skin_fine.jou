@@ -1,5 +1,11 @@
 ## FEM-Kelvin sample with FINE coil mesh (skin depth well-resolved)
 ##
+## NOTE: `export step` and `radia_export ...` below write to Cubit's
+## CWD (current working directory).  Cubit aprepro has no
+## "current journal path" variable, so the .jou cannot self-locate.
+## Before playing: either use **File -> Open Journal** (Cubit sets
+## CWD to the .jou's folder), or `cd "<this folder>" ; play "this.jou"`.
+##
 ## Same geometry as ih_fem_kelvin_skin.jou but refined coil meshing:
 ##   Cross-section: 120 intervals -> edge ~ 0.16 mm
 ##   Volume size  : 0.5 mm (2x finer)
