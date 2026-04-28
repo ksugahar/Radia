@@ -260,7 +260,7 @@ def _chain_centroids_nn(pts: np.ndarray) -> np.ndarray:
 
 
 def _centerline_from_cross_sections(solid,
-                                      cad_units_per_meter: float = 1000.0):
+                                      cad_units_per_meter: float = 1.0):
     """Loft-of-profiles centerline: chain of cross-section face centroids.
 
     For lofted coils (multi-turn, tight pancake, Cubit `create volume
@@ -393,31 +393,6 @@ def _centerline_from_open_spine(solid, n_segments: int,
 
     scale = 1.0 / cad_units_per_meter
     return path_cad * scale, widths_cad * scale, heights_cad * scale
-
-
-def _auto_detect_cad_units(solid) -> float:
-    """Return cad_units_per_meter inferred from the solid's bbox size.
-
-    build123d's ``import_step`` does NOT apply the STEP UNIT conversion
-    factor — it passes the raw numeric coordinates through.  Different
-    CAD tools / Cubit sessions write coils either in millimetres
-    (values ~ 10 – 1000) or in metres (values ~ 0.01 – 1), even
-    though both files declare CONVERSION_BASED_UNIT('MILLIMETRE').
-
-    Heuristic:
-      * bbox_diag >= 1.0  → values are millimetres (typical coil
-        0.01 – 1 m = 10 – 1000 mm)
-      * bbox_diag <  1.0  → values are metres (bbox diag ~ 0.05 m for
-        a typical IH coil)
-
-    Assumes coil physical size is 1 mm – 10 m (covers IH, WPT,
-    accelerator dipole magnets, transformer windings).  For unusual
-    coils outside this range, the caller should pass an explicit
-    ``cad_units_per_meter``.
-    """
-    bb = solid.bounding_box()
-    diag = ((bb.size.X) ** 2 + (bb.size.Y) ** 2 + (bb.size.Z) ** 2) ** 0.5
-    return 1000.0 if diag >= 1.0 else 1.0
 
 
 def _centerline_from_revolution_sweep(solid, n_segments: int,
@@ -561,7 +536,7 @@ _centerline_from_torus_sweep = _centerline_from_revolution_sweep
 
 def extract_centerline_from_step(step_path: str,
                                  n_segments: int = 100,
-                                 cad_units_per_meter: Optional[float] = None):
+                                 cad_units_per_meter: float = 1.0):
     """Auto-extract coil centerline + cross-sections from a STEP file.
 
     Dispatches on solid topology:
@@ -579,12 +554,15 @@ def extract_centerline_from_step(step_path: str,
       excludes closed circle edges (cross-section boundaries).
 
     Args:
-        step_path: Path to .step file (CAD units, typically mm).
+        step_path: Path to .step file.  Coordinates MUST be in metres
+            unless ``cad_units_per_meter`` is explicitly overridden.
         n_segments: Number of filament segments for the open-spine
             path.  Ignored for the loft path (uses N planar faces).
-        cad_units_per_meter: Scale factor.  None (default) → auto-
-            detect from bbox diagonal (coils with values ~ 0.01 – 1
-            are treated as metres, ~ 10 – 1000 as millimetres).
+        cad_units_per_meter: Scale factor.  Default 1.0 = STEP
+            coordinates are in metres (CLAUDE.md "Unit System Policy:
+            Radia always uses meters").  Pass 1000.0 if the STEP is
+            in millimetres.  No auto-detection -- caller is
+            responsible for knowing the input unit (Fail Fast Loud).
 
     Returns:
         path_m: (N+1, 3) centerline points in meters.
@@ -594,9 +572,6 @@ def extract_centerline_from_step(step_path: str,
     from build123d import import_step
 
     solid = import_step(step_path)
-
-    if cad_units_per_meter is None:
-        cad_units_per_meter = _auto_detect_cad_units(solid)
 
     # Try loft-of-profiles first: if the solid clearly has many
     # consistent-area cross-sections, chain their centroids.
@@ -626,7 +601,7 @@ def filaments_from_step(step_path: str,
                         nwinc: int = 1,
                         nhinc: int = 1,
                         n_peri: Optional[int] = None,
-                        cad_units_per_meter: Optional[float] = None,
+                        cad_units_per_meter: float = 1.0,
                         n_slices: int = 200,
                         use_coil_builder: bool = True):
     """End-to-end: STEP solid -> PEEC topology.
@@ -666,7 +641,9 @@ def filaments_from_step(step_path: str,
         n_peri: If given, place ``n_peri`` filaments on the cross-section
             PERIMETER only (thin-skin regime, d/delta >= 3).  Takes
             priority over nwinc/nhinc.  Requires use_coil_builder=True.
-        cad_units_per_meter: Scale factor (default 1000 = mm).
+        cad_units_per_meter: Scale factor.  Default 1.0 = STEP coordinates
+            are in metres (CLAUDE.md "Unit System Policy: Radia always uses
+            meters").  Pass 1000.0 if the STEP is in millimetres.
         n_slices: Z-slice count for auto-extraction (ignored if
             path_points_m is given).
         use_coil_builder: If True (default), use CoilBuilder path for
@@ -750,12 +727,13 @@ def filaments_from_step(step_path: str,
     return topo
 
 
-def _bd_face_to_start_hint(face, cad_units_per_meter: float = 1000.0):
+def _bd_face_to_start_hint(face, cad_units_per_meter: float = 1.0):
     """Convert a build123d Face to ((px,py,pz), (tx,ty,tz)) start_hint.
 
     The tangent is the *inward* normal at the face center, which is what
     walking-plane expects as the initial seed direction.  Coordinates are
-    in CAD units (mm by default) — walking-plane operates in CAD units.
+    returned in raw CAD units -- walking-plane operates in CAD units, the
+    caller scales by 1/cad_units_per_meter at the boundary.
     """
     c = face.center()
     n = face.normal_at(c)
@@ -805,7 +783,7 @@ def filaments_from_shape(shape,
                          sigma: float = 5.8e7,
                          nwinc: int = 1,
                          nhinc: int = 1,
-                         cad_units_per_meter: float = 1000.0,
+                         cad_units_per_meter: float = 1.0,
                          n_slices: int = 200):
     """End-to-end: build123d Shape -> PEEC topology (no STEP round-trip).
 
