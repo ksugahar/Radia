@@ -276,7 +276,6 @@ class IHPanel(ModePanel):
             "'Custom' enables manual entry.")
 
         self.add_line("coil_sigma", "sigma [S/m]:", "5.8e7")
-        self.add_line("coil_mu_r", "mu_r:", "1.0")
 
         # ============ PEEC coil input (CAD STEP) ============
         # (Only for PEEC methods, hidden otherwise by _on_method_changed)
@@ -460,7 +459,7 @@ class IHPanel(ModePanel):
             mu_w.setEnabled(is_custom)
 
     def _on_coil_material_changed(self, name):
-        self._apply_material(name, "coil_sigma", "coil_mu_r")
+        self._apply_material(name, "coil_sigma", None)
         self._update_status()
 
     def _on_wp_material_changed(self, name):
@@ -530,11 +529,6 @@ class IHPanel(ModePanel):
                     "esim_max_iter", "esim_tol"):
             self._set_row_visible(key, needs_wp)
 
-        # coil_mu_r is only used by the FEM coil-mesh path (calc_fem_coilmesh
-        # accepts --coil-mu-r).  PEEC-based calc scripts (peec_inductance,
-        # peec_bem, fem_kelvin) assume a non-magnetic coil, so hide the
-        # field to signal that Steel-coil analysis requires FEM-FULL.
-        self._set_row_visible("coil_mu_r", is_fem)
         # ESIM sub-widgets re-evaluated by _on_impedance_changed when
         # needs_wp is True.
         if needs_wp:
@@ -746,7 +740,6 @@ class IHPanel(ModePanel):
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
-               "--coil-mu-r", self.val("coil_mu_r"),
                "--sigma", self.val("wp_sigma"),
                "--mu-r", self.val("mu_r"),
                "--half-thickness", self.val("half_thickness"),
