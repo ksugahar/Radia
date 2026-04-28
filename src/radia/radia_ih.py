@@ -197,11 +197,13 @@ def check_method_requirements(method, mats, bnds):
                     "'outer' boundary used as truncation (error grows "
                     "if 'outer' is close to the coil).")
         return ("Missing material 'kelvin' AND no 'outer' face -- "
-                "only gauge regularisation (reg=1e-6) controls the "
-                "far field.  Result is gauge-dependent unless an "
-                "SIBC face absorbs the radiating field.  Add "
-                "'kelvin' material (preferred) or an 'outer' "
-                "Dirichlet face.")
+                "the unconstrained outer boundary defaults to natural "
+                "Neumann (n x H = 0, equivalent to a perfect magnetic "
+                "conductor that REFLECTS flux).  The solve converges "
+                "via reg + j*omega*sigma, but L (magnetic energy) "
+                "includes spurious reflected flux and is unreliable.  "
+                "Add 'kelvin' material (preferred) or tag the outer "
+                "air boundary 'outer' for Dirichlet A=0 truncation.")
 
     if method == METHOD_FEM_FULL:
         if "coil" not in mats:
