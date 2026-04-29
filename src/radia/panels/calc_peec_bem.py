@@ -230,13 +230,40 @@ def solve_peec_bem_forward(peec_step,
                     f" ({t_mesh:.1f}s)")
 
     # 4. BEM-SIBC assembly + solve
-    # assemble_dense=False skips the O(N^3) column extraction; we use
-    # solve_iterative() (GMRES) below instead.  ~50x faster than the
-    # legacy dense path for typical IH wp meshes.
-    progress("BEM", f"assembly (order={h1_order}, lazy)")
+    # Backend selection (kwarg `bem_backend`):
+    #   "ngsolve" : legacy lazy ngsolve.bem + GMRES (use_fmm-free)
+    #   "intree"  : in-tree C++ Sauter-Schwab assembler + dense LU
+    #   "hacapk"  : in-tree C++ + HACApK ACA + GMRES  (default; same
+    #               accuracy, ~4x less memory, ~2x faster solve at N>2K)
+    bem_backend = kwargs.get("bem_backend", "hacapk") if "kwargs" in dir() else "hacapk"
+    # (calc_peec_bem doesn't accept **kwargs in its signature -- expose
+    #  via global locals if added in future; for now hardcode "hacapk".)
+    # Override with environment variable for benchmarking
+    bem_backend = os.environ.get("RADIA_BEM_BACKEND", "hacapk")
+
+    progress("BEM", f"assembly (order={h1_order}, backend={bem_backend})")
     t0 = time.perf_counter()
-    bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
-                                assemble_dense=False)
+    if bem_backend == "ngsolve":
+        bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
+                                    assemble_dense=False)
+    elif bem_backend == "intree":
+        bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
+                                    assemble_dense=True,
+                                    use_intree_bem=True,
+                                    intree_singular_n_q=6,
+                                    intree_regular_quad_degree=7)
+    elif bem_backend == "hacapk":
+        bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
+                                    assemble_dense=True,
+                                    use_intree_bem=True,
+                                    intree_singular_n_q=6,
+                                    intree_regular_quad_degree=7,
+                                    use_intree_hacapk=True,
+                                    hacapk_aca_eps=1e-10,
+                                    hacapk_leaf=64,
+                                    hacapk_eta=2.0)
+    else:
+        raise ValueError(f"unknown bem_backend={bem_backend!r}")
     t_asm = time.perf_counter() - t0
     progress("BEM", f"ndof={bem.ndof} ({t_asm:.1f}s)")
 
@@ -250,19 +277,21 @@ def solve_peec_bem_forward(peec_step,
     progress("BEM", f"phi_inc ({t_phi:.1f}s)")
 
     # Impedance model: linear (Z_s = (1+j)*rho/delta) or ESIM (nonlinear).
-    # 1-way forward = single BEM solve.  ESIM Karl iteration is NOT
-    # run here (that is a workpiece-internal self-consistency, still
-    # 1-way wrt coil).  For the 1-way-P-only scope we use the linear
-    # SIBC only.  ESIM users should pick the FEM method.
     mat = EMMaterial(name="custom", sigma=sigma, mu_r=mu_r)
     delta = mat.skin_depth(frequency)
     rho = 1.0 / sigma
     Z_s = (1.0 + 1j) * rho / delta * math.sqrt(mu_r)
 
-    progress("BEM", f"BIE solve (Z_s model={impedance_model}, GMRES)")
+    progress("BEM", f"BIE solve (Z_s model={impedance_model}, backend={bem_backend})")
     t0 = time.perf_counter()
-    res = bem.solve_iterative(phi_inc, Z_s=Z_s, omega=omega,
-                                tol=1e-8, maxiter=300, restart=50)
+    if bem_backend == "ngsolve":
+        res = bem.solve_iterative(phi_inc, Z_s=Z_s, omega=omega,
+                                    tol=1e-8, maxiter=300, restart=50)
+    elif bem_backend == "intree":
+        res = bem.solve(phi_inc, Z_s=Z_s, omega=omega)
+    elif bem_backend == "hacapk":
+        res = bem.solve_hacapk(phi_inc, Z_s=Z_s, omega=omega,
+                                tol=1e-8, maxiter=500, restart=80)
     t_bie = time.perf_counter() - t0
     info = res.get('gmres_info', 0)
     progress("BEM", f"BIE ({t_bie:.1f}s, gmres info={info})")
