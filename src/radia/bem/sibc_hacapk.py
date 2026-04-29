@@ -1150,6 +1150,376 @@ def assemble_DL_dense(verts, tris, *, regular_quad_degree=11,
 # ----------------------------------------------------------------------
 
 
+# ----------------------------------------------------------------------
+# Phase 1.8 (REJECTED) -- mesh.GetTrafo-based geometry experiment.
+#
+# Hypothesis was that NGSolve's mesh.Curve(2) uses higher-order curving
+# than P2 Lagrange, and Phase 1.6's P2 Lagrange interpolation would
+# leave residual geometry error.
+#
+# Empirically REFUTED on N=99 sphere: Phase 1.6 SL matches NGSolve.bem
+# (bonus_intorder=10 anchor) to rel 4.3e-10 already.  The earlier
+# "0.1-0.2 geometry mismatch" diagnostic was a buggy comparison test
+# that confused corner permutations between NGSolve's reference frame
+# (corner 0 at (1,0)) and our local frame (corner 0 at (0,0)).
+#
+# Phase 1.8 trafo path has been tested and is BOTH 70x slower (per-
+# quadpt Python trafo calls) AND less accurate (rel 0.24 vs reference)
+# due to permutation logic complexity.  Code below is kept as a
+# reference for future debugging only; it is NOT used by any public
+# entry point.
+# ----------------------------------------------------------------------
+
+
+def _trafo_eval(mesh, el_index_in_bnd, xi, eta):
+    """Evaluate physical position, dr/dxi, dr/deta, surface Jacobian, and
+    outward unit normal at points (xi, eta) on a single BND element.
+
+    Args:
+        mesh: NGSolve Mesh.
+        el_index_in_bnd: int, index in the BND iteration order (= ngsolve
+            ElementId(BND, idx) used by mesh.GetTrafo).  Caller is
+            responsible for ensuring this matches their tri row.
+        xi, eta: (Q,) arrays.
+
+    Returns:
+        r       (Q, 3) physical positions
+        J       (Q,)   surface element |dr/dxi x dr/deta|
+        n_hat   (Q, 3) unit outward normal (cross / J)
+    """
+    from ngsolve import IntegrationRule, ElementId, BND
+    Q = xi.shape[0]
+    pts_with_w = [(xi[k], eta[k], 0) for k in range(Q)]
+    ws = [1.0] * Q  # weights are dummy; we extract pos/Jac/normal only
+    ir = IntegrationRule(points=pts_with_w, weights=ws)
+    eid = ElementId(BND, el_index_in_bnd)
+    trafo = mesh.GetTrafo(eid)
+
+    r = np.zeros((Q, 3), dtype=np.float64)
+    J = np.zeros((Q,), dtype=np.float64)
+    n_hat = np.zeros((Q, 3), dtype=np.float64)
+    for k, ip in enumerate(ir):
+        mip = trafo(ip)
+        r[k, 0] = mip.point[0]; r[k, 1] = mip.point[1]; r[k, 2] = mip.point[2]
+        J[k] = mip.measure
+        jac = np.asarray(mip.jacobi)   # shape (3, 2): ∂r/∂xi, ∂r/∂eta
+        cross = np.cross(jac[:, 0], jac[:, 1])
+        nrm = np.linalg.norm(cross) + 1e-300
+        n_hat[k] = cross / nrm
+    return r, J, n_hat
+
+
+def _ss_block_curved_trafo(mesh, bnd_el_a, bnd_el_b, case, n_q,
+                            perm_a, perm_b):
+    """Curved Galerkin SL block evaluated via mesh.GetTrafo at SS quad pts.
+
+    Args:
+        mesh: NGSolve Mesh.
+        bnd_el_a, bnd_el_b: BND element indices (in mesh.Elements(BND) order).
+        case: "common_vertex" / "common_edge" / "identical".
+        n_q: 1D Gauss-Legendre order.
+        perm_a, perm_b: 3-tuples mapping canonical-perm corner k to
+            ORIGINAL local corner index.  We need to inverse-permute the
+            SS quad reference coords (xi, eta) before passing to the
+            mesh trafo.
+
+    Returns:
+        (3, 3) SL block in ORIGINAL local indexing of bnd_el_a/_b.
+    """
+    xi_a_canon, eta_a_canon, xi_b_canon, eta_b_canon, w_q = _ss_quad_pts(case, n_q)
+
+    # The SS quad coords are in CANONICAL permutation (shared corner at local 0).
+    # The trafo evaluates in ORIGINAL element ordering.  We need to map
+    # canonical (xi, eta) -> original (xi, eta) using the inverse of perm_a/_b.
+    # Coords transformation: new_corner_k = old_corner[perm[k]].  In barycentric:
+    #   L_canon = (L_canon_0, L_canon_1, L_canon_2)
+    #   L_orig[perm[k]] = L_canon[k]
+    # i.e. L_orig[perm[0]] = L_canon[0] = 1-xi-eta, L_orig[perm[1]] = xi, L_orig[perm[2]] = eta.
+    # Since perm is a permutation of (0,1,2), inverse perm sends each L back.
+    # In (xi, eta) coords: L_0 = 1-xi-eta, L_1 = xi, L_2 = eta.
+    # We want L_orig = inverse_perm(L_canon).  Then xi_orig = L_orig[1], eta_orig = L_orig[2].
+
+    def map_canonical_to_orig(xi_c, eta_c, perm):
+        # L_canon = (1 - xi_c - eta_c, xi_c, eta_c)
+        L_canon = np.stack([1.0 - xi_c - eta_c, xi_c, eta_c], axis=0)
+        # L_orig[perm[k]] = L_canon[k]
+        L_orig = np.zeros_like(L_canon)
+        for k in range(3):
+            L_orig[perm[k]] = L_canon[k]
+        xi_o = L_orig[1]
+        eta_o = L_orig[2]
+        return xi_o, eta_o
+
+    xi_a, eta_a = map_canonical_to_orig(xi_a_canon, eta_a_canon, perm_a)
+    xi_b, eta_b = map_canonical_to_orig(xi_b_canon, eta_b_canon, perm_b)
+
+    r_a, J_a, _      = _trafo_eval(mesh, bnd_el_a, xi_a, eta_a)
+    r_b, J_b, n_hat_b = _trafo_eval(mesh, bnd_el_b, xi_b, eta_b)
+
+    diff = r_a - r_b
+    r2 = np.sum(diff * diff, axis=1)
+    r_dist = np.sqrt(r2)
+    r_dist = np.where(r_dist == 0, 1e-300, r_dist)
+
+    # Hat values: in original local indexing, L_orig_i evaluated at the
+    # ORIGINAL (xi, eta) coords.  We have those.
+    L0_a = 1.0 - xi_a - eta_a
+    L1_a = xi_a
+    L2_a = eta_a
+    L0_b = 1.0 - xi_b - eta_b
+    L1_b = xi_b
+    L2_b = eta_b
+    La = np.stack([L0_a, L1_a, L2_a], axis=1)
+    Lb = np.stack([L0_b, L1_b, L2_b], axis=1)
+
+    weight = (J_a * J_b) / (4.0 * np.pi * r_dist) * w_q
+    return La.T @ (weight[:, None] * Lb)
+
+
+def _build_bnd_to_row_map(mesh, verts, tris, v_global, bnd_label):
+    """Build the bnd_to_row map: index in mesh.Elements(BND) iteration ->
+    row index in our `tris` array.  Used by trafo-based assembly to look
+    up each BND element's row.
+    """
+    from ngsolve import BND
+    g2l = {int(g): l for l, g in enumerate(v_global)}
+    bnd_labels = list(mesh.GetBoundaries())
+    if bnd_label is not None:
+        target_idx = {i for i, n in enumerate(bnd_labels) if n == bnd_label}
+    else:
+        target_idx = set(range(len(bnd_labels)))
+    tri_set_to_row = {}
+    for r in range(len(tris)):
+        key = tuple(sorted(int(c) for c in tris[r]))
+        tri_set_to_row[key] = r
+
+    bnd_to_row = []      # bnd iter index -> our row (or -1)
+    bnd_corner_perm = []  # bnd iter idx -> 3-tuple perm such that
+                          # verts[tris[r, perm[k]]] == el.vertices[k]
+    for el in mesh.Elements(BND):
+        if el.index not in target_idx:
+            bnd_to_row.append(-1)
+            bnd_corner_perm.append(None)
+            continue
+        local_corners = [g2l[v.nr] for v in el.vertices]
+        key = tuple(sorted(local_corners))
+        r = tri_set_to_row.get(key, -1)
+        bnd_to_row.append(r)
+        if r >= 0:
+            # Build perm: perm[k] = local index in tris[r] of el.vertices[k]
+            tris_row = list(int(c) for c in tris[r])
+            perm = [tris_row.index(c) for c in local_corners]
+            bnd_corner_perm.append(tuple(perm))
+        else:
+            bnd_corner_perm.append(None)
+    return bnd_to_row, bnd_corner_perm
+
+
+def _assemble_SL_dense_trafo(mesh, verts, tris, v_global, *,
+                              bnd_label=None,
+                              regular_quad_degree=11,
+                              singular_n_q=8):
+    """Build dense Galerkin SL using mesh.GetTrafo for curved geometry.
+
+    Slower than P2 Lagrange (multiple trafo calls per pair) but uses
+    exactly the same curving as NGSolve.bem.
+
+    Returns:
+        SL (n_v, n_v) dense matrix, indexed by surface-local vertex
+        (matches extract_surface conventions).
+    """
+    from ngsolve import BND
+    n_v = len(verts)
+    n_t = len(tris)
+    SL = np.zeros((n_v, n_v), dtype=np.float64)
+    bnd_to_row, bnd_corner_perm = _build_bnd_to_row_map(
+        mesh, verts, tris, v_global, bnd_label)
+    # Inverse: row -> bnd iter index
+    row_to_bnd = [-1] * n_t
+    for bi, r in enumerate(bnd_to_row):
+        if r >= 0:
+            row_to_bnd[r] = bi
+
+    # Pre-cache regular Gauss reference quadrature points.
+    q = tri_quad(regular_quad_degree)
+    qxi  = q[:, 0].astype(np.float64)
+    qeta = q[:, 1].astype(np.float64)
+    qw_ref = q[:, 2].astype(np.float64)
+
+    # Pre-evaluate per-tri regular-pair physical positions and Jacobians
+    # via trafo (one call per tri, n_q points each).
+    pts_cache = []
+    w_cache = []
+    L_cache = []
+    for t in range(n_t):
+        bi = row_to_bnd[t]
+        # Apply inverse perm so we evaluate at the ORIGINAL element local
+        # frame (where mesh.GetTrafo expects).  Our `tris[t, k]` is in
+        # surface-local order; we need to know which local index in the
+        # NGSolve element corresponds to our local k.
+        # bnd_corner_perm[bi][k] = our_local_idx of el.vertices[k].
+        # So inv_perm[our_k] = el_k.  We want xi, eta in EL frame given
+        # they're set in OUR frame (with corners 0,1,2 of tris[t]).
+        perm_el_to_our = bnd_corner_perm[bi]
+        perm_our_to_el = [perm_el_to_our.index(k) for k in range(3)]
+        # qxi, qeta are in OUR frame.  Convert to EL frame: L_our_i evaluated
+        # at our (xi, eta).  L_el_k = L_our_{perm_el_to_our[k]}.
+        # Then xi_el = L_el_1, eta_el = L_el_2.
+        L_our = np.stack([1.0 - qxi - qeta, qxi, qeta], axis=0)
+        L_el = np.zeros_like(L_our)
+        for k in range(3):
+            L_el[k] = L_our[perm_el_to_our[k]]
+        xi_el = L_el[1]
+        eta_el = L_el[2]
+        r_t, J_t, _ = _trafo_eval(mesh, bi, xi_el, eta_el)
+        pts_cache.append(r_t)
+        w_cache.append(qw_ref * J_t)
+        L_cache.append(np.stack([1.0 - qxi - qeta, qxi, qeta], axis=1))
+
+    for a in range(n_t):
+        Va = tris[a]
+        bi_a = row_to_bnd[a]
+        for b in range(n_t):
+            Vb = tris[b]
+            bi_b = row_to_bnd[b]
+            cls, _ = share_class(Va, Vb)
+            if cls == 'regular':
+                pts_a, w_a, La = pts_cache[a], w_cache[a], L_cache[a]
+                pts_b, w_b, Lb = pts_cache[b], w_cache[b], L_cache[b]
+                dx = pts_a[:, None, :] - pts_b[None, :, :]
+                r = np.sqrt(np.sum(dx * dx, axis=-1))
+                G = INV_4PI / r
+                Tmat = (G * w_b[None, :]) @ Lb
+                block = La.T @ (w_a[:, None] * Tmat)
+            else:
+                # Build canonical-perm permutations for SS rule.
+                shared_pairs = [(la, lb) for la in range(3) for lb in range(3)
+                                if int(Va[la]) == int(Vb[lb])]
+                if cls == 'vertex':
+                    la, lb = shared_pairs[0]
+                    perm_a_canon = (la, (la + 1) % 3, (la + 2) % 3)
+                    perm_b_canon = (lb, (lb + 1) % 3, (lb + 2) % 3)
+                elif cls == 'edge':
+                    (la0, lb0), (la1, lb1) = shared_pairs
+                    apex_a = ({0, 1, 2} - {la0, la1}).pop()
+                    apex_b = ({0, 1, 2} - {lb0, lb1}).pop()
+                    perm_a_canon = (la0, la1, apex_a)
+                    perm_b_canon = (lb0, lb1, apex_b)
+                else:  # identical
+                    perm_a_canon = (0, 1, 2)
+                    perm_b_canon = [None, None, None]
+                    for la, lb in shared_pairs:
+                        perm_b_canon[la] = lb
+                    perm_b_canon = tuple(perm_b_canon)
+
+                # Compose: canonical -> our_local -> el_local
+                # canonical perm_a maps canonical k -> our local
+                # our_local -> el_local via bnd_corner_perm (which is el_k -> our_k)
+                # So total perm: canonical k -> el_k where:
+                #   our_local = perm_a_canon[k]
+                #   el_local = bnd_corner_perm[bi_a].index(our_local)
+                perm_a_full = tuple(
+                    bnd_corner_perm[bi_a].index(perm_a_canon[k]) for k in range(3))
+                perm_b_full = tuple(
+                    bnd_corner_perm[bi_b].index(perm_b_canon[k]) for k in range(3))
+
+                cls_quad = {"vertex": "common_vertex",
+                             "edge": "common_edge",
+                             "identical": "identical"}[cls]
+                block_perm = _ss_block_curved_trafo(
+                    mesh, bi_a, bi_b, cls_quad, singular_n_q,
+                    perm_a_full, perm_b_full)
+                # block_perm is in EL local indexing (rows: el_a, cols: el_b).
+                # Map back to OUR local (rows: our_a, cols: our_b).
+                # bnd_corner_perm[bi_a][k] = our_local_idx of el.vertices[k].
+                # block_perm[el_i, el_j] in el local.  We want
+                #   block_our[our_i, our_j] = block_perm[el_i, el_j] where
+                #   el_i = bnd_corner_perm[bi_a].index(our_i), etc.
+                block = np.zeros((3, 3))
+                for our_i in range(3):
+                    el_i = bnd_corner_perm[bi_a].index(our_i)
+                    for our_j in range(3):
+                        el_j = bnd_corner_perm[bi_b].index(our_j)
+                        block[our_i, our_j] = block_perm[el_i, el_j]
+            SL[np.ix_(Va, Vb)] += block
+
+    return SL
+
+
+def assemble_bem_matrices_trafo(mesh, *, bnd_label=None,
+                                  regular_quad_degree=11, singular_n_q=8):
+    """Phase 1.8 entry point: build SL, M, K via mesh.GetTrafo (no P2 Lagrange).
+
+    DL is omitted in this initial Phase 1.8 (its diagonal-jump convention
+    needs separate reconciliation; the SIBC formula folds the (1/2)M
+    jump into the system matrix anyway).
+
+    Returns dict with keys SL, M, K, verts, tris, v_global.
+    """
+    verts, tris, v_global = extract_surface(mesh, bnd_label=bnd_label)
+    SL = _assemble_SL_dense_trafo(mesh, verts, tris, v_global,
+                                    bnd_label=bnd_label,
+                                    regular_quad_degree=regular_quad_degree,
+                                    singular_n_q=singular_n_q)
+
+    # M and K: closed-form per-tri 3x3 blocks (P1 hat).  Use the
+    # CURVED Jacobian via trafo so M and K match NGSolve exactly on
+    # curved meshes.
+    n_v = len(verts)
+    n_t = len(tris)
+    M = np.zeros((n_v, n_v))
+    K = np.zeros((n_v, n_v))
+    bnd_to_row, bnd_corner_perm = _build_bnd_to_row_map(
+        mesh, verts, tris, v_global, bnd_label)
+    row_to_bnd = [-1] * n_t
+    for bi, r in enumerate(bnd_to_row):
+        if r >= 0:
+            row_to_bnd[r] = bi
+
+    # Use a moderate quadrature for M, K; their integrand is polynomial
+    # times surface-element factor.
+    q = tri_quad(regular_quad_degree)
+    qxi  = q[:, 0]; qeta = q[:, 1]; qw_ref = q[:, 2]
+    # Hat values on T_ref
+    L_ref = np.stack([1.0 - qxi - qeta, qxi, qeta], axis=1)   # (n_q, 3)
+
+    for t in range(n_t):
+        bi = row_to_bnd[t]
+        perm_el_to_our = bnd_corner_perm[bi]
+        L_our = np.stack([1.0 - qxi - qeta, qxi, qeta], axis=0)
+        L_el = np.zeros_like(L_our)
+        for k in range(3):
+            L_el[k] = L_our[perm_el_to_our[k]]
+        xi_el = L_el[1]; eta_el = L_el[2]
+        # r evaluated at trafo, plus Jacobian
+        r_t, J_t, _ = _trafo_eval(mesh, bi, xi_el, eta_el)
+        # Surface element factor: w_q_phys = qw_ref * J_t
+        w_q_phys = qw_ref * J_t
+        # M_ij = sum_q L_ref_i(q) * L_ref_j(q) * w_q_phys
+        M_loc = L_ref.T @ (w_q_phys[:, None] * L_ref)
+        # For K (Laplace-Beltrami): use the cotangent formula on the
+        # CURVED triangle (approx by flat tri at corners).  For Phase 1.8
+        # production we use the same formula as Phase 1.5.  TODO: use
+        # surface-grad of P1 hats in (xi, eta) and evaluate on curved
+        # geometry for a more accurate K.
+        v0, v1, v2 = verts[tris[t]]
+        e0_v = v2 - v1; e1_v = v0 - v2; e2_v = v1 - v0
+        cross = np.cross(v1 - v0, v2 - v0)
+        A_flat = 0.5 * np.linalg.norm(cross)
+        K_loc = np.zeros((3, 3))
+        for i in range(3):
+            for j in range(3):
+                ei = (e0_v, e1_v, e2_v)[i]
+                ej = (e0_v, e1_v, e2_v)[j]
+                K_loc[i, j] = (ei @ ej) / (4.0 * A_flat)
+        idx = tris[t]
+        M[np.ix_(idx, idx)] += M_loc
+        K[np.ix_(idx, idx)] += K_loc
+
+    return {"SL": SL, "M": M, "K": K,
+            "verts": verts, "tris": tris, "v_global": v_global}
+
+
 def assemble_SL_dense_curved(verts, tris, tri_p2_nodes, *,
                                 regular_quad_degree=11,
                                 singular_n_q=8):
