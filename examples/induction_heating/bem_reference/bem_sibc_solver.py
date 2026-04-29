@@ -64,16 +64,14 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
 
-        # BEM operators.  use_fmm=True selects FMM (Fast Multipole)
-        # matvec, dropping per-matvec cost from O(N^2) to O(N log N).
-        # For typical IH wp meshes (N=2000-5000) this is 100-1000x
-        # faster than dense matvec, both for the legacy column-by-
-        # column extraction (assemble_dense=True) and the matrix-free
-        # GMRES path (solve_iterative).  Verified 2026-04-29: 67 min
-        # assembly -> seconds with FMM on the same 2474-dof wp.
+        # BEM operators.  Probed 2026-04-29 on N=2477 wp:
+        # use_fmm=True and use_fmm=False both run at ~1.67 s/matvec
+        # (NGSolve.bem default uses H-matrix internally regardless), so
+        # FMM provides no benefit at typical IH wp size and only adds
+        # tree-build overhead.  Default H-matrix is used.
         with TaskManager():
-            DL_bf = LaplaceDL(u.Trace() * ds, use_fmm=True) * v.Trace() * ds
-            SL_bf = LaplaceSL(u.Trace() * ds, use_fmm=True) * v.Trace() * ds
+            DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
+            SL_bf = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
         # Always retain the bilinear forms so solve_iterative() can
         # call DL_bf.mat * vec without re-assembling.
         self._DL_bf = DL_bf
