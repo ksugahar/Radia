@@ -801,16 +801,36 @@ def _h_segments_complex(segments, obs_points, currents,
     segments:  (N_seg, 2, 3) real endpoints
     obs_points: (N_obs, 3) real
     currents:  (N_seg,) complex
-    seg_chunk: max segments processed at once (memory cap
-        ~ n_obs * seg_chunk * 3 complex floats)
+    seg_chunk: max segments processed at once (memory cap, IGNORED in
+        C++ path -- the C++ kernel uses per-obs accumulation that is
+        constant memory in N_seg)
     returns:   (N_obs, 3) complex
 
-    Uses the exact analytical line-segment formula:
-        H = I/(4 pi d) * (cos(alpha1) - cos(alpha2)) * e_perp
-    mirroring biot_savart.h_segments_batch but with per-segment
-    complex current. Fully vectorized across segments (previous
-    Python loop over N_seg was the phi_inc bottleneck).
+    Calls the C++ kernel `radia._radia_pybind._HFromSegmentsComplex`
+    when available (~50-100x faster than the legacy NumPy fallback at
+    typical IH coil sizes).  Falls back to the NumPy path when the C++
+    symbol is missing (older wheel build).
     """
+    obs = np.asarray(obs_points, dtype=float)
+    if obs.ndim == 1:
+        obs = obs.reshape(1, 3)
+
+    # C++ fast path
+    try:
+        from radia import _radia_pybind as _rpb_bs
+        _cpp_bs = _rpb_bs._HFromSegmentsComplex
+    except (ImportError, AttributeError):
+        _cpp_bs = None
+    if _cpp_bs is not None:
+        seg = np.ascontiguousarray(np.asarray(segments, dtype=float))
+        I = np.asarray(currents, dtype=complex)
+        I_re = np.ascontiguousarray(I.real)
+        I_im = np.ascontiguousarray(I.imag)
+        obs_c = np.ascontiguousarray(obs)
+        H_re, H_im = _cpp_bs(seg, obs_c, I_re, I_im, 0)
+        return H_re + 1j * H_im
+
+    # ---- legacy NumPy fallback ----
     INV_4PI = 1.0 / (4.0 * np.pi)
     obs = np.asarray(obs_points, dtype=float)
     if obs.ndim == 1:

@@ -47,6 +47,7 @@
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
+#include "rad_biot_savart_filaments.h" // Fast Biot-Savart H from finite-segment filaments
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
@@ -4216,5 +4217,69 @@ PYBIND11_MODULE(_radia_pybind, m) {
                 (SL, DL): tuple of (n_v, n_v) float64 ndarrays.
                           Convention matches NGSolve.bem LaplaceSL/LaplaceDL
                           (verified bit-exact to 1e-10).
+        )pbdoc");
+
+    // ========================================================================
+    // Fast finite-segment Biot-Savart H (complex per-segment currents).
+    // Replaces the pure-numpy compute_phi_inc_from_filaments inner kernel.
+    // ========================================================================
+    m.def("_HFromSegmentsComplex",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> segs,
+           py::array_t<double, py::array::c_style | py::array::forcecast> obs,
+           py::array_t<double, py::array::c_style | py::array::forcecast> I_re,
+           py::array_t<double, py::array::c_style | py::array::forcecast> I_im,
+           int n_threads)
+        {
+            auto sb = segs.unchecked<3>();
+            auto ob = obs.unchecked<2>();
+            auto rb = I_re.unchecked<1>();
+            auto ib = I_im.unchecked<1>();
+            const int n_seg = static_cast<int>(sb.shape(0));
+            const int n_obs = static_cast<int>(ob.shape(0));
+            if (sb.shape(1) != 2 || sb.shape(2) != 3)
+                throw std::invalid_argument("segs must be (N_seg, 2, 3)");
+            if (ob.shape(1) != 3)
+                throw std::invalid_argument("obs must be (N_obs, 3)");
+            if ((int)rb.shape(0) != n_seg || (int)ib.shape(0) != n_seg)
+                throw std::invalid_argument("I_re/I_im must have length N_seg");
+
+            py::array_t<double> H_re({n_obs, 3});
+            py::array_t<double> H_im({n_obs, 3});
+
+            const double* segs_ptr = static_cast<const double*>(segs.data());
+            const double* obs_ptr  = static_cast<const double*>(obs.data());
+            const double* re_ptr   = static_cast<const double*>(I_re.data());
+            const double* im_ptr   = static_cast<const double*>(I_im.data());
+            double* hre_ptr        = static_cast<double*>(H_re.mutable_data());
+            double* him_ptr        = static_cast<double*>(H_im.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::bs::HFromSegmentsComplex(
+                    segs_ptr, n_seg, obs_ptr, n_obs,
+                    re_ptr, im_ptr,
+                    hre_ptr, him_ptr,
+                    n_threads);
+            }
+            return py::make_tuple(H_re, H_im);
+        },
+        py::arg("segs"), py::arg("obs"),
+        py::arg("I_re"), py::arg("I_im"),
+        py::arg("n_threads") = 0,
+        R"pbdoc(
+            Finite-segment Biot-Savart H at obs points with complex per-segment
+            currents.  Drop-in replacement for the pure-numpy
+            _h_segments_complex helper used by compute_phi_inc_from_filaments.
+
+            Args:
+                segs:  (N_seg, 2, 3) endpoints (p1, p2) for each segment [m]
+                obs:   (N_obs, 3) observation points [m]
+                I_re:  (N_seg,) real part of complex per-segment current [A]
+                I_im:  (N_seg,) imag part
+                n_threads: 0 = TaskManager default; > 0 = request that many.
+
+            Returns:
+                (H_re, H_im): tuple of (N_obs, 3) float64 arrays such that
+                             H = H_re + 1j*H_im is the complex H [A/m].
         )pbdoc");
 }
