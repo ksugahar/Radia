@@ -128,7 +128,8 @@ if __name__ == "__main__":
 # Family is intentionally NOT hardcoded -- apply_panel_base_font
 # inherits the OS default family (Segoe UI on Windows, system
 # sans-serif on Linux/macOS) and bumps only the point size.
-PANEL_BASE_FONT_POINT_SIZE = 12
+PANEL_BASE_FONT_POINT_SIZE = 11
+PANEL_OUTPUT_FONT_POINT_SIZE = 10  # smaller for the log/output text box
 
 # Shared panel debug log (C:/radia_panel_log.txt on Windows). Append-only
 # from this process; the Cubit-side register_toolbar.py truncates it on
@@ -221,13 +222,13 @@ class ModePanel(QWidget):
         super().__init__(parent)
         self._form = QFormLayout()
         self._form.setLabelAlignment(Qt.AlignRight)
-        # Row spacing = 14 px to match the typographic rule "12 pt
-        # body text wants ~14 pt line spacing".  Windows default
-        # QFormLayout verticalSpacing (~6 px) was too tight at the
-        # lab's 12 pt Segoe UI baseline -- rows packed together,
-        # labels cramped on 2K display, text unreadable until window
-        # resize (2026-04-29 user report).
-        self._form.setVerticalSpacing(14)
+        # Row spacing = 17 px (= 13 pt) for the user-set 11 pt body
+        # text baseline (2026-04-29 update: panel font 12 -> 11 pt,
+        # text-box font 10 pt, line spacing 13 pt).  Windows default
+        # QFormLayout verticalSpacing (~6 px) was too tight at any
+        # of those sizes; explicit setVerticalSpacing keeps the form
+        # readable without window resize.
+        self._form.setVerticalSpacing(17)
         self._form.setHorizontalSpacing(10)
         self.setLayout(self._form)
         self._widgets = {}
@@ -543,7 +544,7 @@ class AnalysisWindow(QMainWindow):
         out_layout.setContentsMargins(5, 5, 5, 5)
         self._output = QPlainTextEdit()
         self._output.setReadOnly(True)
-        self._output.setFont(QFont("Consolas", PANEL_BASE_FONT_POINT_SIZE))
+        self._output.setFont(QFont("Consolas", PANEL_OUTPUT_FONT_POINT_SIZE))
         # Long error tracebacks + the new "Surface heat flux" summary
         # block can run 15-20 lines; give the output box a workable
         # minimum height so the user does not have to drag the
