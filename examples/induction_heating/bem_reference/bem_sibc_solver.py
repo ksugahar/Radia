@@ -37,7 +37,7 @@ class ScalarBIESIBCSolver:
     def __init__(self, mesh, order=1, assemble_dense=True,
                   use_intree_bem=False, intree_geom_order=2,
                   intree_singular_n_q=8, intree_regular_quad_degree=11,
-                  use_intree_hacapk=False, hacapk_aca_eps=1e-6,
+                  use_intree_hacapk=False, hacapk_aca_eps=1e-10,
                   hacapk_leaf=64, hacapk_eta=2.0):
         """Initialize solver and assemble BEM operators.
 
