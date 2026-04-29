@@ -400,10 +400,10 @@ class GmshPostExport:
 
         # Companion .msh.opt for high-order surface display
         if is_surface and _detect_curve_order(self.mesh) >= 2:
-            n_vec = sum(1 for _, nc, _, _, _ in self._fields if nc >= 2)
-            n_scl = sum(1 for _, nc, _, _, _ in self._fields if nc == 1)
-            write_companion_opt(filename, n_vector_views=n_vec,
-                                n_scalar_views=n_scl)
+            # Per-view ncomp in the order GmshPostExport.add_field()
+            # was called -- avoids the "vectors come first" assumption.
+            view_ncomps = [nc for _, nc, _, _, _ in self._fields]
+            write_companion_opt(filename, view_ncomps=view_ncomps)
 
         n_fields = len(self._fields)
         mat_str = ', '.join(f'{m}({len(mat_elem_map.get(m, []))})' for m in mat_names)
@@ -888,7 +888,7 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
 
 
 def write_companion_opt(msh_filename, n_vector_views=0,
-                        n_scalar_views=0):
+                        n_scalar_views=0, view_ncomps=None):
     """Write a .msh.opt file with display settings for GMSH.
 
     GMSH auto-loads ``<file>.msh.opt`` when opening ``<file>.msh``.
@@ -904,18 +904,40 @@ def write_companion_opt(msh_filename, n_vector_views=0,
       - View[i].ArrowSizeMin = 20 (fixed 20 px -- THE kirei knob)
       - View[i].IntervalsType = 2 (filled iso for scalars)
 
-    View ordering: vector views first [0..n_vector-1],
-    then scalar views [n_vector..n_vector+n_scalar-1].
+    Two ways to specify which views are vectors vs scalars:
+
+    1. ``view_ncomps``: list of ncomp per view IN ORDER, e.g.
+       ``[1, 1, 3]`` means View[0]=scalar, View[1]=scalar, View[2]=vec.
+       PREFERRED -- avoids assumptions about ordering.
+    2. ``n_vector_views`` + ``n_scalar_views`` (legacy): assumes vectors
+       come FIRST.  Wrong when the caller appends views in any other
+       order (this caused q_surf to be misclassified as a vector and
+       displayed with linear scale, hiding its log-distributed hot
+       spot -- 2026-04-29 calc_peec_bem GUI bug).
 
     Args:
         msh_filename: Path to the .msh file (the .opt is written next to it).
-        n_vector_views: Number of vector views (View[0]..View[n-1]).
-        n_scalar_views: Number of scalar views (View[n]..View[n+m-1]).
+        n_vector_views: legacy; vectors are View[0..n-1].
+        n_scalar_views: legacy; scalars are View[n..n+m-1].
+        view_ncomps: per-view component counts (preferred over the
+            legacy split args).  Indices in this list match the view
+            indices in the .msh.
 
     Returns:
         Path to the .msh.opt file.
     """
     import os
+    # Resolve which view indices are vectors vs scalars.
+    if view_ncomps is not None:
+        vector_indices = [i for i, n in enumerate(view_ncomps)
+                          if (n or 0) >= 2]
+        scalar_indices = [i for i, n in enumerate(view_ncomps)
+                          if (n or 0) < 2]
+    else:
+        # Legacy split (vectors first).
+        vector_indices = list(range(n_vector_views))
+        scalar_indices = list(range(n_vector_views,
+                                     n_vector_views + n_scalar_views))
     opt_filename = msh_filename + '.opt'
     with open(opt_filename, 'w', encoding='utf-8') as f:
         f.write('// Auto-generated display options (gmsh_post_spec)\n')
@@ -932,7 +954,7 @@ def write_companion_opt(msh_filename, n_vector_views=0,
         f.write('Mesh.Lines = 0;\n')
         f.write('Mesh.LineWidth = 1;\n')
         # Vector views: 3D arrows, fixed 20px (the kirei knob)
-        for i in range(n_vector_views):
+        for i in vector_indices:
             f.write(f'View[{i}].Visible = 1;\n')
             f.write(f'View[{i}].VectorType = 4;\n')
             f.write(f'View[{i}].ArrowSizeMin = 20;\n')
@@ -942,8 +964,7 @@ def write_companion_opt(msh_filename, n_vector_views=0,
         # spans 2-5 decades from skin-depth local peak to far-side
         # minimum) shows visible contrast instead of a uniform near-
         # max band (2026-04-15: sugahara GUI feedback).
-        for j in range(n_scalar_views):
-            idx = n_vector_views + j
+        for idx in scalar_indices:
             f.write(f'View[{idx}].Visible = 1;\n')
             f.write(f'View[{idx}].IntervalsType = 2;\n')  # Filled
             f.write(f'View[{idx}].ScaleType = 2;\n')  # 1=Linear 2=Log 3=Double-log
@@ -1002,6 +1023,7 @@ def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
 
     n_vec = 0
     n_sca = 0
+    view_ncomps = []
     for f in fields:
         name = f["name"]
         ncomp = f.get("ncomp")
@@ -1036,6 +1058,7 @@ def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
         else:
             raise ValueError(
                 f"vol2msh: field {name!r} has neither 'array' nor 'sol'")
+        view_ncomps.append(ncomp or 1)
         if (ncomp or 0) >= 2:
             n_vec += 1
         else:
@@ -1043,8 +1066,14 @@ def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
 
     post.write(output_msh)
     if companion_opt:
+        # Pass view_ncomps so write_companion_opt classifies each view
+        # by its actual component count (vector vs scalar) rather than
+        # assuming vectors-first ordering.  This was the cause of the
+        # 2026-04-29 calc_peec_bem GUI bug: q_surf (scalar appended at
+        # idx 0) was misclassified as a vector and rendered with
+        # default linear color scale -- hot helical bands invisible.
         write_companion_opt(output_msh,
-                             n_vector_views=n_vec, n_scalar_views=n_sca)
+                             view_ncomps=view_ncomps)
     return output_msh
 
 
