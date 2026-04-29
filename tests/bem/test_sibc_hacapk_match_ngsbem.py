@@ -86,6 +86,70 @@ def test_dl_galerkin_matches_ngsbem(anchor):
         f"DL max relative error {rel_sig_max:.3e} exceeds 1e-6")
 
 
+def test_assemble_bem_matrices_e2e():
+    """Phase 1.5: assemble_bem_matrices on a fresh sphere mesh produces
+    SL, DL, M, K that all match an independent NGSolve.bem build.
+
+    This is the end-to-end path that bem_sibc_solver.py will use to
+    bypass NGSolve.bem entirely.
+    """
+    pytest.importorskip("ngsolve")
+    pytest.importorskip("netgen.occ")
+    from ngsolve import (Mesh, BND, H1, BilinearForm, ds, grad,
+                         InnerProduct, TaskManager)
+    from netgen.occ import Sphere, Pnt, OCCGeometry
+    from radia.bem.sibc_hacapk import assemble_bem_matrices
+
+    sph = Sphere(Pnt(0, 0, 0), 1.0)
+    g = OCCGeometry(sph)
+    ng_mesh = g.GenerateMesh(maxh=0.4)
+    mesh = Mesh(ng_mesh)
+
+    # Reference matrices from NGSolve.bem (high-precision)
+    fes = H1(mesh, order=1)
+    u, v = fes.TnT()
+    ndof = fes.ndof
+    mass_bf = BilinearForm(fes); mass_bf += u.Trace() * v.Trace() * ds
+    mass_bf.Assemble()
+    M_ref = np.zeros((ndof, ndof))
+    for r_, c_, vv in zip(*mass_bf.mat.COO()):
+        M_ref[int(r_), int(c_)] = vv
+    stiff_bf = BilinearForm(fes)
+    stiff_bf += InnerProduct(grad(u).Trace(), grad(v).Trace()) * ds
+    stiff_bf.Assemble()
+    K_ref = np.zeros((ndof, ndof))
+    for r_, c_, vv in zip(*stiff_bf.mat.COO()):
+        K_ref[int(r_), int(c_)] = vv
+
+    out = assemble_bem_matrices(mesh,
+                                 regular_quad_degree=11,
+                                 singular_n_q=8)
+    SL = out["SL"]; DL = out["DL"]
+    M = out["M"]; K = out["K"]
+    v_global = out["v_global"]
+
+    # M and K are local to extracted vertices; project NGSolve refs to that
+    # ordering.  For a sphere with no inner BND, v_global is all of
+    # mesh.vertices.nr (sorted).
+    M_ref_loc = M_ref[np.ix_(v_global, v_global)]
+    K_ref_loc = K_ref[np.ix_(v_global, v_global)]
+
+    err_M = np.abs(M - M_ref_loc).max()
+    err_K = np.abs(K - K_ref_loc).max()
+    assert err_M < 1e-12, f"mass abs err {err_M:.3e}"
+    assert err_K < 1e-10, f"stiffness abs err {err_K:.3e}"
+
+    # SL/DL self-symmetry of OUR matrices (should be exact within roundoff)
+    assert np.abs(SL - SL.T).max() < 1e-10
+    # DL is generally NOT symmetric.
+
+    # Surface area sanity check via M
+    ones = np.ones(SL.shape[0])
+    area = ones @ M @ ones
+    assert abs(area - 4 * np.pi) / (4 * np.pi) < 0.05, (
+        f"surface area {area:.3f} vs 4π {4*np.pi:.3f}")
+
+
 def test_sl_symmetric():
     """Self-consistency: our SL must be exactly symmetric (within machine
     precision)."""

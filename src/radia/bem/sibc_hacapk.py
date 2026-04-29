@@ -712,6 +712,93 @@ def assemble_DL_dense(verts, tris, *, regular_quad_degree=11,
     return DL
 
 
+# ----------------------------------------------------------------------
+# Phase 1.5 -- end-to-end pipeline: build SL, DL, M, K from a NGSolve mesh
+# without invoking ngsolve.bem.  Wires into bem_sibc_solver.py as a
+# drop-in replacement.
+# ----------------------------------------------------------------------
+
+
+def assemble_bem_matrices(mesh, *, bnd_label=None,
+                            regular_quad_degree=11, singular_n_q=8):
+    """Build SL, DL, M (surface mass), K (Laplace-Beltrami) for one BND
+    label of an NGSolve mesh, using our in-tree Sauter-Schwab BEM.
+
+    Args:
+        mesh: NGSolve Mesh.  May be a volume mesh (will use its BND elements)
+              or a surface mesh (BND elements are the surface tris).
+        bnd_label: optional string name of the boundary label to keep.
+                   If None, all BND elements are used.
+        regular_quad_degree: outer Gauss degree for non-singular tri pairs.
+        singular_n_q: 1D Gauss-Legendre order for the Sauter-Schwab quadrature.
+
+    Returns:
+        dict with keys:
+            SL  (ndof, ndof) Galerkin Laplace single-layer matrix
+            DL  (ndof, ndof) Galerkin Laplace double-layer matrix
+            M   (ndof, ndof) surface mass matrix (P1 hat)
+            K   (ndof, ndof) Laplace-Beltrami stiffness matrix
+            verts (n_v, 3) vertex coords (P1 DOF coordinates)
+            tris  (n_t, 3) triangle vertex indices into verts
+            v_global (n_v,) the original mesh.vertices index for each
+                local vertex, so the caller can map to/from full-mesh
+                vector layouts when ``bnd_label`` was used.
+    """
+    verts, tris, v_global = extract_surface(mesh, bnd_label=bnd_label)
+    n_v = len(verts)
+    n_t = len(tris)
+
+    SL = assemble_SL_dense(verts, tris,
+                            regular_quad_degree=regular_quad_degree,
+                            include_singular=True,
+                            singular_n_q=singular_n_q)
+    DL = assemble_DL_dense(verts, tris,
+                            regular_quad_degree=regular_quad_degree,
+                            include_singular=True,
+                            singular_n_q=singular_n_q)
+
+    # Surface mass and Laplace-Beltrami for P1 hat functions on flat tris.
+    # Both have closed-form per-element 3x3 blocks.
+    #   M_local = (Area / 12) * [[2,1,1],[1,2,1],[1,1,2]]
+    #   K_local = (1 / (4*Area)) * (B^T B), where B[k,:] = (v[k+1] - v[k+2])
+    #             rotated by 90deg in the triangle's plane.  Equivalent:
+    #   K_local[i,j] = -(e_i . e_j) / (4 Area)  where e_i is the OPPOSITE
+    #             edge of vertex i, AS A 3D VECTOR.  Also equals
+    #             cot(theta_k) / 2 between vertices i, j -- the standard
+    #             cotangent formula.
+    M = np.zeros((n_v, n_v))
+    K = np.zeros((n_v, n_v))
+    for t in range(n_t):
+        v0, v1, v2 = verts[tris[t]]
+        e0 = v2 - v1   # opposite vertex 0
+        e1 = v0 - v2   # opposite vertex 1
+        e2 = v1 - v0   # opposite vertex 2
+        edges = (e0, e1, e2)
+        Acr = np.cross(v1 - v0, v2 - v0)
+        A = 0.5 * np.linalg.norm(Acr)
+
+        # Mass
+        M_loc = (A / 12.0) * np.array([[2, 1, 1],
+                                        [1, 2, 1],
+                                        [1, 1, 2]], dtype=np.float64)
+        # Laplace-Beltrami: K_ij = (e_i . e_j) / (4 A)
+        # (e_i is the edge OPPOSITE vertex i.  Off-diag ij sign as in the
+        # standard cotan-Laplace formula; diagonal is sum of -off-diags.)
+        K_loc = np.zeros((3, 3))
+        for i in range(3):
+            for j in range(3):
+                K_loc[i, j] = (edges[i] @ edges[j]) / (4.0 * A)
+
+        idx = tris[t]
+        M[np.ix_(idx, idx)] += M_loc
+        K[np.ix_(idx, idx)] += K_loc
+
+    return {
+        "SL": SL, "DL": DL, "M": M, "K": K,
+        "verts": verts, "tris": tris, "v_global": v_global,
+    }
+
+
 def assemble_SL_dense(verts, tris, *, regular_quad_degree=11,
                       include_singular=True, singular_n_q=8):
     """Build the dense Galerkin Laplace SL matrix on a flat triangulation.
