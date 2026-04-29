@@ -77,11 +77,12 @@ def test_dl_galerkin_matches_ngsbem(anchor):
     sig = dl_abs > 1e-10 * dl_abs.max()
     rel_sig_max = rel[sig].max()
 
-    # DL has a more singular kernel than SL (1/r^3 vs 1/r), so the
-    # convergence floor against NGSolve.bem (bonus_intorder=10) sits
-    # at ~3.5e-7 relative / ~1e-10 absolute.
-    assert abs_err.max() < 1e-9, (
-        f"DL max absolute error {abs_err.max():.3e} exceeds 1e-9")
+    # After the edge-winding fix (commit 99db78a0), our DL is bit-exact
+    # with NGSolve.bem at bonus_intorder=10:
+    #   max abs ~1.7e-10 (machine precision)
+    #   max rel ~3.5e-7 (limited to small-magnitude entries)
+    assert abs_err.max() < 5e-10, (
+        f"DL max absolute error {abs_err.max():.3e} exceeds 5e-10")
     assert rel_sig_max < 1e-6, (
         f"DL max relative error {rel_sig_max:.3e} exceeds 1e-6")
 
