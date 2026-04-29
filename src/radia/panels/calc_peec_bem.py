@@ -331,24 +331,33 @@ def solve_peec_bem_forward(peec_step,
     except Exception as e:
         progress("BEM", f"J_SURF scalar gen failed: {type(e).__name__}: {e}")
     try:
-        # Surface current density J_s = n x H_t (real-part snapshot
-        # for instantaneous-phase visualisation).
-        # SIBC scalar BIE: H_t = -grad_s(phi).  Therefore
-        #   J_s = n x H_t = -n x grad_s(phi).
-        # Earlier versions of this code emitted just -grad_s(phi)
-        # (= H_t) as "J_surf_vec" -- arrows showed the tangential H
-        # direction, NOT the actual current flow direction.  Surface
-        # current rotates 90 deg from H_t in the surface plane;
-        # without the n x ... cross product the arrows pointed along
-        # H_t (parallel to coil axis) rather than around the wp's
-        # axis (azimuthal current loops).  Fixed 2026-04-29.
+        # Surface current density J_s for visualization (real-part
+        # snapshot at instantaneous phase).
+        #
+        # Sign convention -- the hole approach matters here.  In this
+        # .vol the wp is NOT meshed: only air + coil are present, and
+        # the "sibc" boundary is the air-side cavity surface.  So
+        # specialcf.normal(3) on the sibc bnd is the AIR-domain outward
+        # normal -- it points FROM air INTO the (fictitious) wp, i.e.
+        # OPPOSITE the standard "conductor outward normal" used in the
+        # textbook formula J_s = n_cond x H_t.
+        #
+        # Let n = NGSolve normal (air-outward, into-wp).  Then
+        #   n_cond = -n
+        #   H_t   = -grad_s(phi)
+        #   J_s   = n_cond x H_t  =  (-n) x (-grad_s phi)  =  +n x grad_s phi
+        # so the correct expression with the NGSolve normal is
+        #   J_s = +Cross(n, grad_s phi).
+        # 2026-04-29 morning version had -Cross (got the textbook formula
+        # right but missed the inverted normal), so all azimuthal arrows
+        # pointed the wrong way.  Fixed evening 2026-04-29.
         from ngsolve import Cross
         n_bnd_v = _scf.normal(3)
         gphi = grad(gf_phi_re)
         gphi_dot_n = sum(gphi[i] * n_bnd_v[i] for i in range(3))
         gphi_t = CF(tuple(gphi[i] - gphi_dot_n * n_bnd_v[i]
                            for i in range(3)))
-        J_s_re_vec = -Cross(n_bnd_v, gphi_t)  # = n x H_t (real part)
+        J_s_re_vec = Cross(n_bnd_v, gphi_t)  # = n_air x grad_s(phi) = J_s
         from ngsolve import H1 as _H1
         fes_J_vec = _H1(wp_mesh, order=int(h1_order), dim=3)
         gf_J_vec = GridFunction(fes_J_vec)
