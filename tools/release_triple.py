@@ -347,7 +347,11 @@ print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
 print(f"VER radia-mcp          = {ver('radia-mcp')}")
 print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
-for r in ["panels/register_toolbar.py","panels/calc_inductance.py","panels/calc_heating_bem.py","bem_inductance.py"]:
+for r in ["panels/register_toolbar.py",
+          "panels/calc_peec_bem.py",
+          "panels/calc_peec_inductance.py",
+          "panels/calc_fem_kelvin.py",
+          "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
 for r in ["radia_cubit.ccm","radia_cubit.ccl"]:
     print(f"SHA cme/{r:35s} = {hsh_bin(os.path.join(cme,r))}")
