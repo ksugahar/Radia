@@ -46,6 +46,7 @@
 #include "rad_highorder_nodes.h"
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
+#include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
@@ -4140,4 +4141,80 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def("GetStats", &PyHACApKBEMManager::GetStats,
              "Return dict with n_dof, n_leaves, n_lowrank, n_dense, "
              "max_rank, compression, build_time [s], memory_mb, dense_memory_mb.");
+
+    // ========================================================================
+    // Fast C++ Galerkin SL/DL assembler -- Phase 1.9
+    // ========================================================================
+    m.def("_AssembleSLDL_Galerkin",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> verts,
+           py::array_t<int64_t, py::array::c_style | py::array::forcecast> tris,
+           py::array_t<double, py::array::c_style | py::array::forcecast> p2_nodes,
+           int regular_quad_degree,
+           int singular_n_q,
+           int n_threads)
+        {
+            auto vb = verts.unchecked<2>();
+            auto tb = tris.unchecked<2>();
+            auto pb = p2_nodes.unchecked<3>();
+            const int n_v = static_cast<int>(vb.shape(0));
+            const int n_t = static_cast<int>(tb.shape(0));
+            if (vb.shape(1) != 3) throw std::invalid_argument("verts must be (N, 3)");
+            if (tb.shape(1) != 3) throw std::invalid_argument("tris must be (N_t, 3)");
+            if (pb.shape(0) != n_t || pb.shape(1) != 6 || pb.shape(2) != 3)
+                throw std::invalid_argument("p2_nodes must be (N_t, 6, 3)");
+
+            py::array_t<double> SL({n_v, n_v});
+            py::array_t<double> DL({n_v, n_v});
+            // Direct pointers into numpy buffers
+            const double* verts_ptr = static_cast<const double*>(verts.data());
+            const int64_t* tris_ptr = static_cast<const int64_t*>(tris.data());
+            const double* p2_ptr = static_cast<const double*>(p2_nodes.data());
+            double* SL_ptr = static_cast<double*>(SL.mutable_data());
+            double* DL_ptr = static_cast<double*>(DL.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::bem::AssembleSLDL(
+                    verts_ptr, n_v,
+                    tris_ptr, n_t,
+                    p2_ptr,
+                    regular_quad_degree,
+                    singular_n_q,
+                    n_threads,
+                    SL_ptr,
+                    DL_ptr);
+            }
+            return py::make_tuple(SL, DL);
+        },
+        py::arg("verts"), py::arg("tris"), py::arg("p2_nodes"),
+        py::arg("regular_quad_degree") = 11,
+        py::arg("singular_n_q") = 8,
+        py::arg("n_threads") = 0,
+        R"pbdoc(
+            Build dense SL and DL Galerkin matrices on a P1 H1 surface
+            mesh with optional P2-curved geometry.  Uses Sauter-Schwab
+            Duffy 4D quadrature for singular pairs and tensor-product
+            Gauss for regular pairs.  Internally OpenMP-parallel.
+
+            Args:
+                verts: (n_v, 3) vertex coords [m]
+                tris:  (n_t, 3) int64 triangle vertex indices into verts
+                p2_nodes: (n_t, 6, 3) per-tri P2 Lagrange node coords in
+                          order [v0, v1, v2, mid01, mid12, mid20].
+                          For flat tris: pass corner mid-points (0.5*(v0+v1)
+                          etc.).  For curved geometry: pass nodes
+                          extracted via mesh.GetTrafo at the 6 P2 ref pts.
+                regular_quad_degree: triangle Gauss degree for non-singular
+                          pairs (default 11; uses Stroud 7-pt for <=5,
+                          13-pt for <=7, Duffy n*n GL for higher).
+                singular_n_q: 1D Gauss-Legendre order for SS Duffy sub-cubes.
+                          n_q^4 nodes per sub-cube; 2/5/6 sub-cubes for
+                          vertex/edge/identical (default 8 -> ~25k pts/pair).
+                n_threads: 0 = OpenMP default (typically all cores).
+
+            Returns:
+                (SL, DL): tuple of (n_v, n_v) float64 ndarrays.
+                          Convention matches NGSolve.bem LaplaceSL/LaplaceDL
+                          (verified bit-exact to 1e-10).
+        )pbdoc");
 }
