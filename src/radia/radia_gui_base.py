@@ -221,6 +221,14 @@ class ModePanel(QWidget):
         super().__init__(parent)
         self._form = QFormLayout()
         self._form.setLabelAlignment(Qt.AlignRight)
+        # Row spacing = 14 px to match the typographic rule "12 pt
+        # body text wants ~14 pt line spacing".  Windows default
+        # QFormLayout verticalSpacing (~6 px) was too tight at the
+        # lab's 12 pt Segoe UI baseline -- rows packed together,
+        # labels cramped on 2K display, text unreadable until window
+        # resize (2026-04-29 user report).
+        self._form.setVerticalSpacing(14)
+        self._form.setHorizontalSpacing(10)
         self.setLayout(self._form)
         self._widgets = {}
         self._row_indices = {}
@@ -465,8 +473,17 @@ class AnalysisWindow(QMainWindow):
     def __init__(self, title, vol_path="", settings_key="default"):
         super().__init__()
         self.setWindowTitle(title)
-        self.resize(650, 600)
-        self.setMinimumSize(500, 400)
+        # Initial window size targets the lab-baseline 2K display per
+        # memory/feedback_panel_vertical_space.md: < 1200 px FAIL,
+        # < 1000 px sub-optimal.  650x600 (the previous default) was
+        # too small -- QFormLayout compressed visible rows to their
+        # minimum widget heights, cropping label text and creating
+        # the "line spacing too narrow, text unreadable until window
+        # is resized" bug user reported on 2026-04-29.  720x1000 fits
+        # the full IH/EM/PCB panel forms (~20 rows + status 7-line
+        # min + 220-px output area + buttons) without compression.
+        self.resize(720, 1000)
+        self.setMinimumSize(620, 800)
         self._settings_key = settings_key
 
         icon = _icon_path()
