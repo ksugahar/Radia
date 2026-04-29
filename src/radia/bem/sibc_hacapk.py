@@ -107,12 +107,56 @@ _TRI_GAUSS_13 = np.array([
     (0.048690315425316, 0.638444188569809,  0.077113760890257 * 0.5),
 ], dtype=np.float64)
 
+# Higher-order triangle Gauss-Legendre rules generated on demand.
+# Use a Duffy-collapsed product of two 1D Gauss-Legendre rules:
+#   xi  = s,  eta = s * t   with (s, t) ∈ [0, 1]^2, Jacobian s.
+# This integrates exactly any polynomial of total degree (2n-1) in (xi, eta)
+# for n-point 1D rules in each direction.  Sum of weights = 1/2 (= area of T_ref).
+_TRI_GL_CACHE = {}
+
+
+def _tri_gl_duffy(n):
+    """Duffy-collapsed n*n point Gauss-Legendre quadrature on T_ref.
+
+    Mapping: (xi, eta) = (s*(1-t), s*t), Jacobian = s.  Maps the unit
+    square (s, t) ∈ [0,1]^2 onto T_ref = {xi >= 0, eta >= 0, xi+eta<=1}
+    (xi+eta = s).  Sum of weights = 1/2 (= area of T_ref).
+
+    Returns (n*n, 3) array of (xi, eta, w).
+    Exact for polynomials of total degree 2n - 1 in (xi, eta).
+    """
+    if n in _TRI_GL_CACHE:
+        return _TRI_GL_CACHE[n]
+    x, w = np.polynomial.legendre.leggauss(n)
+    s_pts = 0.5 * (x + 1.0); s_w = 0.5 * w
+    t_pts = 0.5 * (x + 1.0); t_w = 0.5 * w
+    out = []
+    for i in range(n):
+        for j in range(n):
+            s = s_pts[i]; t = t_pts[j]
+            xi = s * (1.0 - t)
+            eta = s * t
+            wt = s * s_w[i] * t_w[j]
+            out.append((xi, eta, wt))
+    arr = np.array(out, dtype=np.float64)
+    _TRI_GL_CACHE[n] = arr
+    return arr
+
 
 def tri_quad(degree=5):
-    """Pick a triangle Gauss quadrature rule by polynomial degree."""
+    """Pick a triangle Gauss quadrature rule by polynomial degree.
+
+    For degree <= 5 (resp. <= 7), use the Stroud symmetric 7-pt (resp.
+    13-pt) rule.  For higher requested degree, fall back to a
+    Duffy-collapsed n x n Gauss-Legendre product with n = ceil((degree+1)/2),
+    which is exact through total degree 2n - 1.
+    """
     if degree <= 5:
         return _TRI_GAUSS_7
-    return _TRI_GAUSS_13
+    if degree <= 7:
+        return _TRI_GAUSS_13
+    n = (degree + 1 + 1) // 2  # ceil((degree+1)/2), giving exact 2n-1
+    return _tri_gl_duffy(n)
 
 
 def map_quad(verts, tri, q_xi_eta_w):
@@ -220,171 +264,469 @@ def sl_pair_regular(verts, tri_a, tri_b, q_a, q_b):
 
 
 # ----------------------------------------------------------------------
-# Phase 1.2 -- Singular pair handling via h-refinement + Duffy.
+# Phase 1.2 -- Sauter-Schwab Duffy 4D for singular pairs.
 #
-# Strategy: for any singular pair (identical / edge / vertex shared),
-# uniformly sub-divide each triangle into k^2 sub-triangles and apply
-# the regular kernel between every sub-tri pair, EXCEPT pairs of
-# sub-tris that themselves share a vertex/edge/are identical (which
-# we further sub-divide recursively, OR cap the recursion and accept
-# residual error).
+# Direct port of NGSolve.bem's intrules_SauterSchwab.cpp (CommonVertex
+# 2 sub-cubes, CommonEdge 5 sub-cubes, IdenticPanel 6 sub-cubes).
+# Reference T_ref = [(0,0), (1,0), (0,1)] (xi >= 0, eta >= 0, xi+eta <= 1)
+# matches NGSolve.  Hat functions:
+#   L_0(xi, eta) = 1 - xi - eta
+#   L_1(xi, eta) = xi
+#   L_2(xi, eta) = eta
 #
-# This converges as O(k^{-1}) for the Laplace SL kernel, which is
-# slow but predictable.  A spectral method (Sauter-Schwab) would be
-# faster but is more code; here we trade convergence rate for
-# verifiability.
+# Each rule produces (xi_a, eta_a), (xi_b, eta_b), and a quadrature
+# weight w_q.  The pair-wise SL Galerkin entry is then
+#   M_ij = sum_q L_i(xi_a^q, eta_a^q) * (1/(4*pi*|r_a^q - r_b^q|))
+#                * L_j(xi_b^q, eta_b^q) * (4 * A_a * A_b) * w_q
+# where (4*A_a*A_b) is the surface-area Jacobian for both T_ref -> T_phys
+# maps, and the singular factor (rho-equivalent) is already absorbed in
+# w_q via the Sauter-Schwab Jacobian.
 # ----------------------------------------------------------------------
 
-def _subdivide_triangle(verts_tri, k):
-    """Subdivide a flat triangle with vertices (3, 3) into k^2 sub-tris.
-
-    Returns (k^2, 3, 3) sub-vertex coordinates.
-
-    Uses uniform barycentric sub-division.
-    """
-    v0, v1, v2 = verts_tri
-    # Generate (k+1)*(k+2)/2 lattice points on the reference triangle
-    sub_tris = []
-    for i in range(k):
-        for j in range(k - i):
-            # Upward sub-tri at lattice (i, j)
-            a = ((k - i - j) * v0 + i * v1 + j * v2) / k
-            b = ((k - i - j - 1) * v0 + (i + 1) * v1 + j * v2) / k
-            c = ((k - i - j - 1) * v0 + i * v1 + (j + 1) * v2) / k
-            sub_tris.append([a, b, c])
-            if j + i + 2 <= k:
-                # Downward sub-tri (filling between upward ones)
-                d = ((k - i - j - 2) * v0 + (i + 1) * v1 + (j + 1) * v2) / k
-                sub_tris.append([b, d, c])
-    return np.asarray(sub_tris)
+def _gl1d(n):
+    """n-point Gauss-Legendre on [0, 1]."""
+    x, w = np.polynomial.legendre.leggauss(n)
+    return 0.5 * (x + 1.0), 0.5 * w
 
 
-def _hat_at_subtri_quadpts(verts_tri, sub_tris, q_xi_eta_w):
-    """Evaluate parent-triangle hat functions at quadrature points of
-    each sub-triangle.
+_SS_CACHE = {}  # (case, n_q) -> (xi_a, eta_a, xi_b, eta_b, weight) all flat
 
-    Args:
-        verts_tri (3, 3): parent triangle vertices
-        sub_tris (m, 3, 3): m sub-triangles
-        q_xi_eta_w (n_q, 3): quadrature on reference triangle
+
+def _ss_quad_pts(case, n_q):
+    """Build Sauter-Schwab quadrature nodes for one of the singular cases.
+
+    case ∈ {"common_vertex", "common_edge", "identical"}.  Direct port of
+    NGSolve.bem CommonVertexIntegrationRule / CommonEdgeIntegrationRule /
+    IdenticPanelIntegrationRule.
+
+    The quadrature is a 4D tensor product of n_q-point 1D Gauss-Legendre,
+    multiplied by 2 / 5 / 6 sub-cubes.
 
     Returns:
-        pts_global (m * n_q, 3) physical points
-        w_global   (m * n_q,)   physical weights
-        Lparent    (m * n_q, 3) parent hat values at each quad point
+        xi_a, eta_a, xi_b, eta_b: (N,) arrays of points on T_ref^a x T_ref^b
+        weight: (N,) array of quadrature weights such that
+                 sum_q f(xi_a, eta_a, xi_b, eta_b) * weight_q
+                 approximates the singular integral
+                 int_{T_ref} int_{T_ref} f * (1/|...|) dxi_a deta_a dxi_b deta_b
+                 EXCEPT that the Sauter-Schwab xi^3 and similar Jacobian
+                 factors are NOT pre-divided by |...| -- we supply weight
+                 = J(xi, e1, e2, e3) * w_xi * w_e1 * w_e2 * w_e3 directly.
+        Caller multiplies by 1/|r_a - r_b| (with the r_a, r_b computed
+        from xi_a, eta_a, xi_b, eta_b) and the physical area Jacobian
+        (4 * A_a * A_b) and the kernel prefactor (1/(4*pi)).
     """
-    v0, v1, v2 = verts_tri
-    # Parent area-coordinates: solve the linear system
-    e1 = v1 - v0
-    e2 = v2 - v0
-    # Normal of parent
-    n_par = np.cross(e1, e2)
-    A_par = 0.5 * np.linalg.norm(n_par)
-    # We can find barycentric coords via simple linear system later.
-    # For each sub-tri, map its quadrature pts to physical, then
-    # express in parent's barycentric coords via inverse 2D transform.
-    pts_all = []
-    w_all = []
-    L_par_all = []
-    for k_sub in range(len(sub_tris)):
-        st = sub_tris[k_sub]
-        s0, s1, s2 = st
-        e1_s = s1 - s0
-        e2_s = s2 - s0
-        cross = np.cross(e1_s, e2_s)
-        A_sub = 0.5 * np.linalg.norm(cross)
-        jac_sub = 2.0 * A_sub
-        xi = q_xi_eta_w[:, 0]
-        eta = q_xi_eta_w[:, 1]
-        w_ref = q_xi_eta_w[:, 2]
-        L0 = 1.0 - xi - eta
-        L1 = xi
-        L2 = eta
-        pts = (L0[:, None] * s0 + L1[:, None] * s1 + L2[:, None] * s2)
-        w_phys = w_ref * jac_sub
-        # Now express each pts in parent (v0, v1, v2)'s barycentric coords.
-        # Use 2D projection: solve [e1 e2] * [L1_par, L2_par]^T = pts - v0
-        # (in plane).  We just need L1_par, L2_par; L0_par = 1 - L1 - L2.
-        rel = pts - v0[None, :]
-        # Project onto e1 and e2 via Gram-Schmidt-like (use 2x2 system on
-        # the in-plane basis).
-        a11 = e1 @ e1
-        a12 = e1 @ e2
-        a22 = e2 @ e2
-        det = a11 * a22 - a12 ** 2
-        b1 = rel @ e1
-        b2 = rel @ e2
-        L1_par = (a22 * b1 - a12 * b2) / det
-        L2_par = (-a12 * b1 + a11 * b2) / det
-        L0_par = 1.0 - L1_par - L2_par
-        L_par = np.stack([L0_par, L1_par, L2_par], axis=1)
-        pts_all.append(pts)
-        w_all.append(w_phys)
-        L_par_all.append(L_par)
-    return (np.concatenate(pts_all, axis=0),
-            np.concatenate(w_all, axis=0),
-            np.concatenate(L_par_all, axis=0))
+    key = (case, n_q)
+    if key in _SS_CACHE:
+        return _SS_CACHE[key]
+
+    x_q, w_q = _gl1d(n_q)
+    # NGSolve: irhex (e1, e2, e3) outer x irsegm (xi) inner.
+    # We build all 4D combinations.  Use indexing='ij' to mimic
+    # the C++ nested-for ordering, but that doesn't actually matter
+    # since we sum over all of them.
+    e1_g, e2_g, e3_g, xi_g = np.meshgrid(x_q, x_q, x_q, x_q, indexing='ij')
+    we1, we2, we3, wxi = np.meshgrid(w_q, w_q, w_q, w_q, indexing='ij')
+    e1 = e1_g.ravel(); e2 = e2_g.ravel(); e3 = e3_g.ravel(); xi = xi_g.ravel()
+    w_4d = (we1 * we2 * we3 * wxi).ravel()
+
+    # Each sub-cube contributes (ip0, ip1, ip2, ip3) and a Jacobian J.
+    # NGSolve trafo: (xi_a, eta_a) = (ip0 - ip1, ip1),
+    #                (xi_b, eta_b) = (ip2 - ip3, ip3).
+    sub_cubes = []
+    if case == "common_vertex":
+        # Duffies[0] = xi*(1, e1, e2, e2*e3), J = xi^3 * e2
+        # Duffies[1] = xi*(e2, e2*e3, 1, e1)
+        sub_cubes.append((xi*1.0,    xi*e1,    xi*e2,    xi*e2*e3, xi**3 * e2))
+        sub_cubes.append((xi*e2,     xi*e2*e3, xi*1.0,   xi*e1,    xi**3 * e2))
+    elif case == "common_edge":
+        # 5 sub-cubes
+        # Duffies[0] = xi*(1, e1*e3, 1-e1*e2, e1*(1-e2)),    J = xi^3 * e1^2
+        # Duffies[1] = xi*(1, e1, 1-e1*e2*e3, e1*e2*(1-e3)), J = xi^3 * e1^2 * e2
+        # Duffies[2] = xi*(1-e1*e2, e1*(1-e2), 1, e1*e2*e3), J = xi^3 * e1^2 * e2
+        # Duffies[3] = xi*(1-e1*e2*e3, e1*e2*(1-e3), 1, e1), J = xi^3 * e1^2 * e2
+        # Duffies[4] = xi*(1-e1*e2*e3, e1*(1-e2*e3), 1, e1*e2), J = xi^3 * e1^2 * e2
+        J_a = xi**3 * e1**2
+        J_b = xi**3 * e1**2 * e2
+        sub_cubes.append((xi*1.0,           xi*e1*e3,          xi*(1-e1*e2),     xi*e1*(1-e2),       J_a))
+        sub_cubes.append((xi*1.0,           xi*e1,             xi*(1-e1*e2*e3),  xi*e1*e2*(1-e3),    J_b))
+        sub_cubes.append((xi*(1-e1*e2),     xi*e1*(1-e2),      xi*1.0,           xi*e1*e2*e3,        J_b))
+        sub_cubes.append((xi*(1-e1*e2*e3),  xi*e1*e2*(1-e3),   xi*1.0,           xi*e1,              J_b))
+        sub_cubes.append((xi*(1-e1*e2*e3),  xi*e1*(1-e2*e3),   xi*1.0,           xi*e1*e2,           J_b))
+    elif case == "identical":
+        # 6 sub-cubes, J = xi^3 * e1^2 * e2  for all
+        J = xi**3 * e1**2 * e2
+        # Duffies[0] = xi*(1, 1-e1+e1*e2, 1-e1*e2*e3, 1-e1)
+        # Duffies[1] = xi*(1-e1*e2*e3, 1-e1, 1, 1-e1+e1*e2)
+        # Duffies[2] = xi*(1, e1*(1-e2+e2*e3), 1-e1*e2, e1*(1-e2))
+        # Duffies[3] = xi*(1-e1*e2, e1*(1-e2), 1, e1*(1-e2+e2*e3))
+        # Duffies[4] = xi*(1-e1*e2*e3, e1*(1-e2*e3), 1, e1*(1-e2))
+        # Duffies[5] = xi*(1, e1*(1-e2), 1-e1*e2*e3, e1*(1-e2*e3))
+        sub_cubes.append((xi*1.0,           xi*(1-e1+e1*e2),    xi*(1-e1*e2*e3),  xi*(1-e1),            J))
+        sub_cubes.append((xi*(1-e1*e2*e3),  xi*(1-e1),          xi*1.0,           xi*(1-e1+e1*e2),      J))
+        sub_cubes.append((xi*1.0,           xi*e1*(1-e2+e2*e3), xi*(1-e1*e2),     xi*e1*(1-e2),         J))
+        sub_cubes.append((xi*(1-e1*e2),     xi*e1*(1-e2),       xi*1.0,           xi*e1*(1-e2+e2*e3),   J))
+        sub_cubes.append((xi*(1-e1*e2*e3),  xi*e1*(1-e2*e3),    xi*1.0,           xi*e1*(1-e2),         J))
+        sub_cubes.append((xi*1.0,           xi*e1*(1-e2),       xi*(1-e1*e2*e3),  xi*e1*(1-e2*e3),      J))
+    else:
+        raise ValueError(f"unknown SS case: {case!r}")
+
+    xi_a_all = []
+    eta_a_all = []
+    xi_b_all = []
+    eta_b_all = []
+    weight_all = []
+    for ip0, ip1, ip2, ip3, J_per in sub_cubes:
+        # NGSolve trafo
+        xi_a_all.append(ip0 - ip1)
+        eta_a_all.append(ip1)
+        xi_b_all.append(ip2 - ip3)
+        eta_b_all.append(ip3)
+        weight_all.append(J_per * w_4d)
+
+    out = (np.concatenate(xi_a_all),
+           np.concatenate(eta_a_all),
+           np.concatenate(xi_b_all),
+           np.concatenate(eta_b_all),
+           np.concatenate(weight_all))
+    _SS_CACHE[key] = out
+    return out
 
 
-def sl_pair_singular_subdivide(verts, tri_a, tri_b, *,
-                                k_sub=8, q_degree=5,
-                                drop_self_subpairs=True):
-    """3x3 SL local block for a singular pair, using sub-division.
+def _ss_block(va, vb, case, n_q):
+    """Common-vertex/edge/identical Galerkin SL block in PERMUTED indexing.
 
-    Sub-divide each parent triangle into k_sub^2 children.  Apply the
-    regular formula on every sub-pair except those that ARE singular
-    (same sub-tri, edge-shared, vertex-shared).  Drop singular sub-pairs
-    or recurse (here we drop -- this gives O(k^{-1}) convergence but
-    is finite and verifiable).
+    Both va and vb are in NGSolve canonical permutation:
+      common_vertex: shared vertex at local 0 of both
+      common_edge:   shared edge from local 0 to local 1, with vertex 0 of
+                     T_a == vertex 0 of T_b and vertex 1 of T_a == vertex 1
+                     of T_b (same edge orientation)
+      identical:     T_a == T_b (same vertex order)
+
+    Returns (3, 3) block where rows are L_i^a (canonical local) and cols
+    are L_j^b (canonical local).
     """
-    Va = verts[tri_a]
-    Vb = verts[tri_b]
-    sub_a = _subdivide_triangle(Va, k_sub)
-    sub_b = _subdivide_triangle(Vb, k_sub)
-    q = tri_quad(q_degree)
+    e1a = va[1] - va[0]
+    e2a = va[2] - va[0]
+    e1b = vb[1] - vb[0]
+    e2b = vb[2] - vb[0]
+    Aa = 0.5 * np.linalg.norm(np.cross(e1a, e2a))
+    Ab = 0.5 * np.linalg.norm(np.cross(e1b, e2b))
 
-    # Compute physical quad pts + parent hat values on both sides
-    pa_all, wa_all, Lpar_a = _hat_at_subtri_quadpts(Va, sub_a, q)
-    pb_all, wb_all, Lpar_b = _hat_at_subtri_quadpts(Vb, sub_b, q)
+    xi_a, eta_a, xi_b, eta_b, w_q = _ss_quad_pts(case, n_q)
 
-    # We want sum over all (i_qa, i_qb) of
-    #   wa[i_qa] * Lpar_a[i_qa, i] * G(pa[i_qa], pb[i_qb])
-    #            * wb[i_qb] * Lpar_b[i_qb, j]
-    # EXCEPT where i_qa and i_qb belong to a "too-singular" sub-pair.
-    # For simplicity here we evaluate ALL pairs with regularised G:
-    # G_reg(r, r') = 1 / (4 pi sqrt(|r-r'|^2 + eps^2)) where eps is a
-    # small fraction of typical sub-tri size.  This is approximate but
-    # avoids the explicit case split.
-    h_a = np.sqrt(2.0 * (np.linalg.norm(np.cross(sub_a[:, 1] - sub_a[:, 0],
-                                                  sub_a[:, 2] - sub_a[:, 0]),
-                                          axis=1) / 2.0))
-    h_typ = float(h_a.mean()) * 0.05  # 5% of mean sub-tri size
-    dx = pa_all[:, None, :] - pb_all[None, :, :]
-    r2 = np.sum(dx * dx, axis=-1)
-    G = INV_4PI / np.sqrt(r2 + h_typ ** 2)
+    # Physical positions
+    r_a = va[0] + xi_a[:, None] * e1a + eta_a[:, None] * e2a
+    r_b = vb[0] + xi_b[:, None] * e1b + eta_b[:, None] * e2b
+    diff = r_a - r_b
+    r_dist = np.sqrt(np.sum(diff * diff, axis=1))
+    # Guard against exact zero (numerically vanishingly rare on physical pairs)
+    r_dist = np.where(r_dist == 0, 1e-300, r_dist)
 
-    # Outer products to build the 3x3 block in PARENT indexing
-    T = (G * wb_all[None, :]) @ Lpar_b
-    M = Lpar_a.T @ (wa_all[:, None] * T)
-    return M
+    # Hat values at quadrature points
+    L0_a = 1.0 - xi_a - eta_a
+    L1_a = xi_a
+    L2_a = eta_a
+    L0_b = 1.0 - xi_b - eta_b
+    L1_b = xi_b
+    L2_b = eta_b
+    La = np.stack([L0_a, L1_a, L2_a], axis=1)
+    Lb = np.stack([L0_b, L1_b, L2_b], axis=1)
+
+    # Galerkin entry weight per quad point:
+    #   1/(4*pi*r_dist) * w_q * (4 * A_a * A_b)   [4 from 2*A_a * 2*A_b]
+    # = w_q * A_a * A_b / (pi * r_dist)
+    weight = w_q * Aa * Ab / (np.pi * r_dist)
+    return La.T @ (weight[:, None] * Lb)
+
+
+def _ss_common_vertex_block(va, vb, share_a, share_b, n_q=5):
+    """SL block for vertex-shared pair, returning (3,3) in ORIGINAL indexing.
+
+    Permutes va, vb so the shared vertex is at local 0, applies
+    Sauter-Schwab common-vertex rule, then unpermutes.
+    """
+    pa = (share_a, (share_a + 1) % 3, (share_a + 2) % 3)
+    pb = (share_b, (share_b + 1) % 3, (share_b + 2) % 3)
+    va_p = np.array([va[pa[0]], va[pa[1]], va[pa[2]]])
+    vb_p = np.array([vb[pb[0]], vb[pb[1]], vb[pb[2]]])
+    M_perm = _ss_block(va_p, vb_p, "common_vertex", n_q)
+    M_orig = np.zeros((3, 3))
+    M_orig[np.ix_(pa, pb)] = M_perm
+    return M_orig
+
+
+def _ss_common_edge_block(va, vb, shared_pairs, n_q=5):
+    """SL block for edge-shared pair via Sauter-Schwab common-edge rule.
+
+    shared_pairs: list of 2 (la, lb) tuples; va[la] == vb[lb] for each.
+    Returns (3, 3) block in ORIGINAL indexing.
+
+    Permutation: place both shared vertices at local 0 and 1 of the
+    permuted triangles, with consistent edge orientation
+    (va_p[0] == vb_p[0], va_p[1] == vb_p[1]).
+    """
+    (la0, lb0), (la1, lb1) = shared_pairs
+    apex_a = ({0, 1, 2} - {la0, la1}).pop()
+    apex_b = ({0, 1, 2} - {lb0, lb1}).pop()
+    pa = (la0, la1, apex_a)
+    pb = (lb0, lb1, apex_b)
+    va_p = np.array([va[pa[0]], va[pa[1]], va[pa[2]]])
+    vb_p = np.array([vb[pb[0]], vb[pb[1]], vb[pb[2]]])
+    M_perm = _ss_block(va_p, vb_p, "common_edge", n_q)
+    M_orig = np.zeros((3, 3))
+    M_orig[np.ix_(pa, pb)] = M_perm
+    return M_orig
+
+
+def _ss_identical_block(va, vb, shared_pairs, n_q=5):
+    """SL block for identical pair via Sauter-Schwab IdenticPanel rule.
+
+    Vertex sets of T_a and T_b are equal but possibly permuted.
+    Returns (3, 3) block in ORIGINAL indexing of va (rows), vb (cols).
+    """
+    perm_b = [None, None, None]
+    for la, lb in shared_pairs:
+        perm_b[la] = lb
+    # vb_in_va_order[la] = vb[perm_b[la]] == va[la]
+    vb_in_va_order = np.array([vb[perm_b[0]], vb[perm_b[1]], vb[perm_b[2]]])
+    M_va = _ss_block(va, vb_in_va_order, "identical", n_q)
+    # M_va[i, k] is in (va index, va_order_b index).  Map va_order_b -> vb_orig.
+    M_orig = np.zeros((3, 3))
+    for la in range(3):
+        M_orig[:, perm_b[la]] = M_va[:, la]
+    return M_orig
+
+
+def sl_pair_singular(verts, tri_a, tri_b, n_q=5):
+    """Public Phase 1.2 entry: SL block for any singular pair.
+
+    Dispatches to vertex / edge / identical handler.
+
+    Args:
+        verts (n_v, 3): mesh vertex coords.
+        tri_a, tri_b: (3,) global vertex indices of T_a, T_b.
+        n_q: 1D Gauss-Legendre order (n_q^4 nodes per sub-cube; 2 / 5 / 6
+            sub-cubes for vertex / edge / identical).
+
+    Returns:
+        (3, 3) SL block in tri_a (rows) and tri_b (cols) local indexing.
+    """
+    va = verts[tri_a]
+    vb = verts[tri_b]
+    cls, _shared = share_class(tri_a, tri_b)
+    shared_pairs = []
+    for la in range(3):
+        for lb in range(3):
+            if int(tri_a[la]) == int(tri_b[lb]):
+                shared_pairs.append((la, lb))
+
+    if cls == 'vertex':
+        la, lb = shared_pairs[0]
+        return _ss_common_vertex_block(va, vb, share_a=la, share_b=lb, n_q=n_q)
+    if cls == 'edge':
+        return _ss_common_edge_block(va, vb, shared_pairs, n_q=n_q)
+    if cls == 'identical':
+        return _ss_identical_block(va, vb, shared_pairs, n_q=n_q)
+    raise ValueError(f"sl_pair_singular called on non-singular pair: cls={cls}")
 
 
 # ----------------------------------------------------------------------
 # Dense SL assembly (Phase 1, regular pairs only first; singular added
 # in 1.2, then HACApK in 1.4)
 # ----------------------------------------------------------------------
-def assemble_SL_dense(verts, tris, *, regular_quad_degree=5,
-                      include_singular=False):
+# ----------------------------------------------------------------------
+# Phase 1.3 -- Laplace double-layer (DL) kernel.
+#
+# Galerkin DL convention (matches NGSolve.bem LaplaceDL):
+#   M_ij = int_{T_a} int_{T_b} L_i^a(r)
+#                              [ -(r - r')·n_y / (4*pi |r-r'|^3) ]
+#                              L_j^b(r')   dS dS'
+# where n_y is the OUTWARD normal of T_b at r'.
+#
+# Same Sauter-Schwab Duffy 4D quadrature as SL; the kernel substitution
+# is the only difference.  The (r-r') · n_y / |r-r'|^3 = O(1/r^2)
+# singularity is absorbed by the same xi^3 Jacobian (since (r-r')·n_y =
+# O(rho * r^something) typically vanishes at the shared singularity).
+# ----------------------------------------------------------------------
+
+
+def _ss_block_dl(va, vb, case, n_q, n_b):
+    """Common-vertex/edge/identical Galerkin DL block in PERMUTED indexing.
+
+    n_b: outward unit normal of T_b (constant on a flat triangle).
+
+    DL Galerkin entry:
+        M[i, j] = sum_q L_i^a * [-(r_a - r_b)·n_b / (4*pi*r_dist^3)]
+                                  * L_j^b * (4*A_a*A_b) * w_q
+    """
+    e1a = va[1] - va[0]
+    e2a = va[2] - va[0]
+    e1b = vb[1] - vb[0]
+    e2b = vb[2] - vb[0]
+    Aa = 0.5 * np.linalg.norm(np.cross(e1a, e2a))
+    Ab = 0.5 * np.linalg.norm(np.cross(e1b, e2b))
+
+    xi_a, eta_a, xi_b, eta_b, w_q = _ss_quad_pts(case, n_q)
+
+    r_a = va[0] + xi_a[:, None] * e1a + eta_a[:, None] * e2a
+    r_b = vb[0] + xi_b[:, None] * e1b + eta_b[:, None] * e2b
+    diff = r_a - r_b
+    r2 = np.sum(diff * diff, axis=1)
+    r_dist = np.sqrt(r2)
+    r_dist = np.where(r_dist == 0, 1e-300, r_dist)
+
+    L0_a = 1.0 - xi_a - eta_a
+    L1_a = xi_a
+    L2_a = eta_a
+    L0_b = 1.0 - xi_b - eta_b
+    L1_b = xi_b
+    L2_b = eta_b
+    La = np.stack([L0_a, L1_a, L2_a], axis=1)
+    Lb = np.stack([L0_b, L1_b, L2_b], axis=1)
+
+    # DL kernel ∂G/∂n_y, NGSolve.bem convention (positive sign):
+    # ∂G/∂n_y = (r - r') · n_y / (4*pi * |r-r'|^3).
+    # Combined with the 4*A_a*A_b = 2*A_a * 2*A_b area Jacobian:
+    #   weight per quad pt = (r-r')·n_y / (4pi r^3) * 4*A_a*A_b * w_q
+    #                      = (r-r')·n_y * A_a * A_b / (pi * r^3) * w_q
+    dot_n = diff @ n_b
+    weight = dot_n / (np.pi * r_dist**3) * w_q * Aa * Ab
+    return La.T @ (weight[:, None] * Lb)
+
+
+def _outward_normal(verts, tri):
+    """Unit normal of a flat triangle, oriented per the vertex ordering."""
+    v0, v1, v2 = verts[tri[0]], verts[tri[1]], verts[tri[2]]
+    cross = np.cross(v1 - v0, v2 - v0)
+    n = cross / (np.linalg.norm(cross) + 1e-300)
+    return n
+
+
+def dl_pair_singular(verts, tri_a, tri_b, n_q=8):
+    """DL block for a singular pair (any sharing class).
+
+    Args:
+        verts (n_v, 3): vertex coords.
+        tri_a, tri_b: (3,) global vertex indices.
+        n_q: 1D Gauss-Legendre order (n_q^4 nodes per sub-cube).
+
+    Returns:
+        (3, 3) DL block in tri_a (rows) x tri_b (cols) local indexing.
+    """
+    va = verts[tri_a]
+    vb = verts[tri_b]
+    n_b = _outward_normal(verts, tri_b)
+    cls, _ = share_class(tri_a, tri_b)
+    shared_pairs = [(la, lb) for la in range(3) for lb in range(3)
+                    if int(tri_a[la]) == int(tri_b[lb])]
+
+    if cls == 'vertex':
+        la, lb = shared_pairs[0]
+        pa = (la, (la + 1) % 3, (la + 2) % 3)
+        pb = (lb, (lb + 1) % 3, (lb + 2) % 3)
+        va_p = np.array([va[pa[0]], va[pa[1]], va[pa[2]]])
+        vb_p = np.array([vb[pb[0]], vb[pb[1]], vb[pb[2]]])
+        M_perm = _ss_block_dl(va_p, vb_p, "common_vertex", n_q, n_b)
+        M_orig = np.zeros((3, 3))
+        M_orig[np.ix_(pa, pb)] = M_perm
+        return M_orig
+    if cls == 'edge':
+        (la0, lb0), (la1, lb1) = shared_pairs
+        apex_a = ({0, 1, 2} - {la0, la1}).pop()
+        apex_b = ({0, 1, 2} - {lb0, lb1}).pop()
+        pa = (la0, la1, apex_a)
+        pb = (lb0, lb1, apex_b)
+        va_p = np.array([va[pa[0]], va[pa[1]], va[pa[2]]])
+        vb_p = np.array([vb[pb[0]], vb[pb[1]], vb[pb[2]]])
+        M_perm = _ss_block_dl(va_p, vb_p, "common_edge", n_q, n_b)
+        M_orig = np.zeros((3, 3))
+        M_orig[np.ix_(pa, pb)] = M_perm
+        return M_orig
+    if cls == 'identical':
+        # For identical pair, (r - r') · n_b = 0 since both r and r' lie on
+        # the same plane.  So DL kernel is identically zero.  But the limit
+        # from one side gives the well-known +/- 1/2 jump.  The Cauchy
+        # principal value of the DL integral (excluding the diagonal jump)
+        # is zero for a flat triangle on itself.
+        # NGSolve.bem returns the Cauchy PV (consistent with the
+        # 1/2 - DL identity on closed surfaces).
+        return np.zeros((3, 3))
+    raise ValueError(f"dl_pair_singular: unexpected class {cls}")
+
+
+def assemble_DL_dense(verts, tris, *, regular_quad_degree=11,
+                       include_singular=True, singular_n_q=8):
+    """Build the dense Galerkin Laplace DL matrix on a flat triangulation.
+
+    Convention matches NGSolve.bem LaplaceDL:
+        M_ij = int_{T_a} int_{T_b} L_i^a(r) [-(r-r')·n_y / (4*pi*|r-r'|^3)]
+                                  L_j^b(r') dS dS'
+
+    For the diagonal (identical) pair on a flat triangle, the kernel
+    (r - r') · n_y vanishes identically, so the Cauchy PV is zero.
+
+    Args: as for assemble_SL_dense.
+    """
+    n_v = len(verts)
+    n_t = len(tris)
+    DL = np.zeros((n_v, n_v), dtype=np.float64)
+    q = tri_quad(regular_quad_degree)
+
+    # Pre-cache per-tri quadrature data + outward normals
+    pts_cache = []
+    w_cache = []
+    L_cache = []
+    n_cache = []
+    for t in range(n_t):
+        pts, w, L = map_quad(verts, tris[t], q)
+        pts_cache.append(pts)
+        w_cache.append(w)
+        L_cache.append(L)
+        n_cache.append(_outward_normal(verts, tris[t]))
+
+    for a in range(n_t):
+        Va = tris[a]
+        for b in range(n_t):
+            Vb = tris[b]
+            cls, _ = share_class(Va, Vb)
+            n_b = n_cache[b]
+            if cls == 'regular':
+                pts_a, w_a, La = pts_cache[a], w_cache[a], L_cache[a]
+                pts_b, w_b, Lb = pts_cache[b], w_cache[b], L_cache[b]
+                dx = pts_a[:, None, :] - pts_b[None, :, :]
+                r2 = np.sum(dx * dx, axis=-1)
+                r = np.sqrt(r2)
+                # ∂G/∂n_y = (r-r')·n_y / (4*pi*|r-r'|^3) (NGSolve convention)
+                dot_n = dx @ n_b   # (n_qa, n_qb)
+                K = dot_n / (4.0 * np.pi * r2 * r)
+                # Weights: w_a (n_qa,), w_b (n_qb,)
+                # block[i, j] = sum_a sum_b La[a, i] * w_a[a] * K[a, b] * w_b[b] * Lb[b, j]
+                Tmat = (K * w_b[None, :]) @ Lb
+                block = La.T @ (w_a[:, None] * Tmat)
+            else:
+                if not include_singular:
+                    continue
+                block = dl_pair_singular(verts, Va, Vb, n_q=singular_n_q)
+            DL[np.ix_(Va, Vb)] += block
+
+    return DL
+
+
+def assemble_SL_dense(verts, tris, *, regular_quad_degree=11,
+                      include_singular=True, singular_n_q=8):
     """Build the dense Galerkin Laplace SL matrix on a flat triangulation.
 
     Args:
         verts (n_v, 3): vertex coords
         tris  (n_t, 3): triangle vertex indices
         regular_quad_degree: triangle Gauss degree for non-singular pairs
-        include_singular: if False, mark identical/edge/vertex pairs as
-            zero (returns matrix with unfilled diagonal blocks -- useful
-            for unit-testing the regular-case kernel against NGSolve.bem
-            on the off-diagonal far block).
+            (5 = 7-pt; 7 = 13-pt)
+        include_singular: if True (default), use Sauter-Schwab Duffy on
+            identical/edge/vertex pairs.  If False, set them to zero
+            (used by Phase 1.1 verification harness).
+        singular_n_q: 1D Gauss-Legendre order for the Sauter-Schwab 4D
+            tensor product (default 5 -- adequate for ~1e-8 accuracy on
+            smooth post-Duffy integrands).
 
     Returns (n_v, n_v) float64 SL matrix.
     """
@@ -408,21 +750,18 @@ def assemble_SL_dense(verts, tris, *, regular_quad_degree=5,
         for b in range(n_t):
             Vb = tris[b]
             cls, _ = share_class(Va, Vb)
-            if cls != 'regular':
-                if include_singular:
-                    raise NotImplementedError(
-                        f"singular pair handling (case={cls}) is "
-                        f"Phase 1.2 -- not implemented yet")
-                continue
-            # Inline regular formula using cached quadrature data
-            pts_a, w_a, La = pts_cache[a], w_cache[a], L_cache[a]
-            pts_b, w_b, Lb = pts_cache[b], w_cache[b], L_cache[b]
-            dx = pts_a[:, None, :] - pts_b[None, :, :]
-            r = np.sqrt(np.sum(dx * dx, axis=-1))
-            G = INV_4PI / r
-            T = (G * w_b[None, :]) @ Lb
-            block = La.T @ (w_a[:, None] * T)
-            # Scatter into global SL
+            if cls == 'regular':
+                pts_a, w_a, La = pts_cache[a], w_cache[a], L_cache[a]
+                pts_b, w_b, Lb = pts_cache[b], w_cache[b], L_cache[b]
+                dx = pts_a[:, None, :] - pts_b[None, :, :]
+                r = np.sqrt(np.sum(dx * dx, axis=-1))
+                G = INV_4PI / r
+                Tmat = (G * w_b[None, :]) @ Lb
+                block = La.T @ (w_a[:, None] * Tmat)
+            else:
+                if not include_singular:
+                    continue
+                block = sl_pair_singular(verts, Va, Vb, n_q=singular_n_q)
             SL[np.ix_(Va, Vb)] += block
 
     return SL
