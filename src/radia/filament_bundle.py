@@ -15,12 +15,14 @@ Internally backed by the C++ Biot-Savart kernel
 SIBC path-integral phi via ``compute_phi_inc_from_filaments`` (also
 C++-accelerated since Phase 1.12).
 
-Note: rad.Fld(filament, ...) integration is deferred until Radia's
-core radTFlmLinCur unit factor (``ConI = 1e-4 * I`` in
-src/core/rad_filament.cpp:105) is reconciled with SI conventions --
-its current B output is ~795x smaller than the analytical SI result,
-suggesting a residual non-SI legacy factor.  This module bypasses
-that path and uses our SI-correct C++ Biot-Savart kernel.
+Note: as of 2026-04-30 the core ``radTFlmLinCur`` (used by
+``rad.ObjFlmCur`` + ``rad.Fld``) is also SI-correct (legacy
+``ConI = 1.E-04 * I`` was replaced with proper ``INV_FOUR_PI``
+for B/H and ``MU_0_OVER_FOUR_PI`` for A in
+``src/core/rad_filament.cpp``).  This module continues to use
+``_HFromSegmentsComplex`` directly because it is faster for large
+AC bundles (one batched C++ call vs many ``rad.ObjFlmCur`` element
+allocations + ``rad.Fld`` dispatches).
 """
 from __future__ import annotations
 import numpy as np
@@ -32,6 +34,14 @@ def _cpp_h_segments_complex():
     try:
         from radia import _radia_pybind as _rpb
         return _rpb._HFromSegmentsComplex
+    except (ImportError, AttributeError):
+        return None
+
+
+def _cpp_a_segments_complex():
+    try:
+        from radia import _radia_pybind as _rpb
+        return _rpb._AFromSegmentsComplex
     except (ImportError, AttributeError):
         return None
 
@@ -109,9 +119,7 @@ class FilamentBundleAC:
             H = self._compute_H(obs_c, n_threads)
             return MU_0 * H
         if kind_low == 'a':
-            raise NotImplementedError(
-                "fld('a') not implemented yet -- need vector potential "
-                "C++ kernel.  Use 'h' or 'b' for now.")
+            return self._compute_A(obs_c, n_threads)
         if kind_low == 'phi':
             return self._compute_phi(obs_c)
         raise ValueError(f"unknown field kind {kind!r}, expected one of "
@@ -125,6 +133,15 @@ class FilamentBundleAC:
                 "radia with Phase 1.12 (commit b1213a7b).")
         H_re, H_im = cpp(self._segs, obs, self._I_re, self._I_im, n_threads)
         return H_re + 1j * H_im
+
+    def _compute_A(self, obs, n_threads):
+        cpp = _cpp_a_segments_complex()
+        if cpp is None:
+            raise RuntimeError(
+                "C++ _AFromSegmentsComplex not available; rebuild "
+                "radia with the 2026-04-30 vector-potential kernel.")
+        A_re, A_im = cpp(self._segs, obs, self._I_re, self._I_im, n_threads)
+        return A_re + 1j * A_im
 
     def _compute_phi(self, obs):
         """phi from path integral phi(P) = -int H.dl from far to P.
