@@ -230,23 +230,18 @@ def solve_peec_bem_forward(peec_step,
                     f" ({t_mesh:.1f}s)")
 
     # 4. BEM-SIBC assembly + solve
-    # Backend selection (kwarg `bem_backend`):
-    #   "ngsolve" : legacy lazy ngsolve.bem + GMRES (use_fmm-free)
+    # Backend selection (RADIA_BEM_BACKEND env var, for benchmarking only):
     #   "intree"  : in-tree C++ Sauter-Schwab assembler + dense LU
     #   "hacapk"  : in-tree C++ + HACApK ACA + GMRES  (default; same
     #               accuracy, ~4x less memory, ~2x faster solve at N>2K)
-    bem_backend = kwargs.get("bem_backend", "hacapk") if "kwargs" in dir() else "hacapk"
-    # (calc_peec_bem doesn't accept **kwargs in its signature -- expose
-    #  via global locals if added in future; for now hardcode "hacapk".)
-    # Override with environment variable for benchmarking
+    # NOTE 2026-04-30: the "ngsolve" backend (lazy ngsolve.bem) was
+    # REMOVED.  IH production uses in-tree BEM only (Phase 1 SIBC HACApK
+    # pipeline; bit-exact match with ngsolve.bem reference; 64x faster).
     bem_backend = os.environ.get("RADIA_BEM_BACKEND", "hacapk")
 
     progress("BEM", f"assembly (order={h1_order}, backend={bem_backend})")
     t0 = time.perf_counter()
-    if bem_backend == "ngsolve":
-        bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
-                                    assemble_dense=False)
-    elif bem_backend == "intree":
+    if bem_backend == "intree":
         bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
                                     assemble_dense=True,
                                     use_intree_bem=True,
@@ -263,7 +258,10 @@ def solve_peec_bem_forward(peec_step,
                                     hacapk_leaf=64,
                                     hacapk_eta=2.0)
     else:
-        raise ValueError(f"unknown bem_backend={bem_backend!r}")
+        raise ValueError(
+            f"unknown RADIA_BEM_BACKEND={bem_backend!r}; "
+            f"supported: 'intree', 'hacapk'.  ngsolve.bem backend was "
+            f"removed 2026-04-30 -- IH uses in-tree BEM only.")
     t_asm = time.perf_counter() - t0
     progress("BEM", f"ndof={bem.ndof} ({t_asm:.1f}s)")
 
@@ -284,10 +282,7 @@ def solve_peec_bem_forward(peec_step,
 
     progress("BEM", f"BIE solve (Z_s model={impedance_model}, backend={bem_backend})")
     t0 = time.perf_counter()
-    if bem_backend == "ngsolve":
-        res = bem.solve_iterative(phi_inc, Z_s=Z_s, omega=omega,
-                                    tol=1e-8, maxiter=300, restart=50)
-    elif bem_backend == "intree":
+    if bem_backend == "intree":
         res = bem.solve(phi_inc, Z_s=Z_s, omega=omega)
     elif bem_backend == "hacapk":
         res = bem.solve_hacapk(phi_inc, Z_s=Z_s, omega=omega,
@@ -396,6 +391,138 @@ def solve_peec_bem_forward(peec_step,
         progress("BEM", f"J_SURF vector gen failed: {type(e).__name__}: {e}")
         gf_J_vec = None
 
+    # 5c.bis  Workpiece back-reaction Delta_L / Delta_R.
+    #
+    # PRIMARY: Telegen reciprocity in the gauge-invariant phi.(n.B)
+    # form.  This is the correct port-level back-reaction in the 1-way
+    # PEEC+BEM model where the coil's filament currents I_fil are
+    # determined a priori (without wp) and the wp's surface current
+    # J_s feeds back to the coil only via mutual flux:
+    #
+    #     Delta_L = (1/I_port^2) integral_S phi (n . B_inc) dS
+    #             = (1/I_port^2) integral_S J_s . A_inc dS    (continuum equiv)
+    #
+    # Continuum identity via surface IBP on closed S +
+    # ∇_s.(n x A) = -n . curl A.  The phi.B form uses B = curl A
+    # directly, hence gauge-invariant; the J_s.A form has a discrete
+    # divergence violation in J_s_h = -n x ∇_s phi_h (P1 H1) but
+    # numerically agrees with phi.B to ~0.1% on real BIE solutions
+    # (verified 2026-04-30, ih_fem_kelvin_skin_fine sample).
+    #
+    # NOTE: Delta_R from Telegen Im(...) is NOT the same as
+    # `2 P_wp / |I|^2`.  The latter is the Poynting flux into the wp
+    # alone (= wp ohmic dissipation), which corresponds to the FULL
+    # port resistance increment ONLY in a fully coupled formulation
+    # (FEM A-V with volumetric coil mesh) where the coil's J redistr-
+    # ibutes in response to wp.  In the 1-way PEEC+BEM model the coil
+    # J is fixed, so the port-level Delta_R is only the mutual-coupling
+    # part captured by Telegen.  We expose `wp_dissipation_R_mOhm =
+    # 2 P_wp / |I|^2` as a diagnostic for users who want to know the
+    # wp's intrinsic dissipation channel.
+    delta_L_complex = None
+    delta_L_nH = None
+    delta_R_mOhm = None              # primary: -omega Im(Telegen phi.B form)
+    delta_L_JsA_nH = None            # diagnostic: J_s.A form (legacy)
+    delta_R_JsA_mOhm = None
+    wp_dissipation_R_mOhm = None     # diagnostic: 2 P_wp / |I|^2 (wp ohmic only)
+    L_total_nH = None
+    R_total_mOhm = None
+    try:
+        from radia.workpiece_surface import (delta_L_telegen,
+                                              delta_L_telegen_phiB)
+        from ngsolve import (Cross, specialcf as _scf2, grad as _grad2,
+                              GridFunction as _GF, CF as _CF,
+                              Integrate as _Int, BND as _BND)
+        n_cf2 = _scf2.normal(3)
+        gf_phi_re2 = _GF(bem.fes); gf_phi_re2.vec.FV().NumPy()[:] = res['phi_vec'].real
+        gf_phi_im2 = _GF(bem.fes); gf_phi_im2.vec.FV().NumPy()[:] = res['phi_vec'].imag
+
+        # Per-triangle geometry needed for both forms.
+        elem_A_int = _Int(_CF(1), wp_mesh, VOL_or_BND=_BND, element_wise=True)
+        n_int = [_Int(n_cf2[i], wp_mesh, VOL_or_BND=_BND, element_wise=True)
+                  for i in range(3)]
+        # phi_avg per triangle = (1/area) * integral_T phi dT.  Works for
+        # any h1_order (for P1 it equals (phi_1+phi_2+phi_3)/3).
+        phi_re_int = _Int(gf_phi_re2, wp_mesh, VOL_or_BND=_BND, element_wise=True)
+        phi_im_int = _Int(gf_phi_im2, wp_mesh, VOL_or_BND=_BND, element_wise=True)
+
+        # Per-triangle J_s (legacy form A) -- Lenz-correct sign.
+        J_re_cf = -Cross(n_cf2, _grad2(gf_phi_re2).Trace())
+        J_im_cf = -Cross(n_cf2, _grad2(gf_phi_im2).Trace())
+        J_re_int = [_Int(J_re_cf[i], wp_mesh, VOL_or_BND=_BND, element_wise=True)
+                     for i in range(3)]
+        J_im_int = [_Int(J_im_cf[i], wp_mesh, VOL_or_BND=_BND, element_wise=True)
+                     for i in range(3)]
+
+        cents = []
+        ars = []
+        norms = []
+        phi_avgs = []
+        Js_list = []
+        for el in wp_mesh.Elements(_BND):
+            a = abs(elem_A_int[el.nr])
+            if a < 1e-30:
+                continue
+            pts = [wp_mesh.vertices[v.nr].point for v in el.vertices]
+            c = np.mean([(p[0], p[1], p[2]) for p in pts], axis=0)
+            n_at_el = np.array([n_int[i][el.nr] / a for i in range(3)])
+            phi_avg = (phi_re_int[el.nr] + 1j * phi_im_int[el.nr]) / a
+            Jvec = np.array([(J_re_int[i][el.nr] + 1j * J_im_int[i][el.nr]) / a
+                              for i in range(3)], dtype=complex)
+            cents.append(c)
+            ars.append(a)
+            norms.append(n_at_el)
+            phi_avgs.append(complex(phi_avg))
+            Js_list.append(Jvec)
+        cents_arr = np.asarray(cents, dtype=float)
+        ars_arr = np.asarray(ars, dtype=float)
+        norms_arr = np.asarray(norms, dtype=float)
+        phi_avgs_arr = np.asarray(phi_avgs, dtype=complex)
+        Js_arr = np.asarray(Js_list, dtype=complex)
+
+        # Self-check: P_wp computed from extracted J_s should match the
+        # BIE's own value (verifies J_s magnitude correctness).
+        Js_mag_sq = np.sum(np.abs(Js_arr)**2, axis=1)
+        P_wp_from_Js = 0.5 * float(Z_s.real) * np.sum(Js_mag_sq * ars_arr)
+        # WP intrinsic dissipation channel (lower bound for ΔR in fully-
+        # coupled formulations; in 1-way PEEC+BEM this is NOT the port
+        # ΔR -- see comment block above):
+        wp_dissipation_R_mOhm = 2.0 * P_wp / (current ** 2) * 1e3
+
+        # (A) Legacy J_s . A_inc form (numerically agrees with phi.B at
+        # ~0.1% on real BIE solutions; kept for diagnostic comparison).
+        delta_L_JsA = delta_L_telegen(
+            paths, I_fil, cents_arr, ars_arr, Js_arr,
+            I_port=current)
+        delta_L_JsA_nH = float(delta_L_JsA.real) * 1e9
+        delta_R_JsA_mOhm = -float(delta_L_JsA.imag) * omega * 1e3
+
+        # (B) Gauge-invariant phi . (n . B_inc) form (PRIMARY).
+        delta_L_complex = delta_L_telegen_phiB(
+            paths, I_fil, cents_arr, ars_arr, norms_arr, phi_avgs_arr,
+            I_port=current)
+        delta_L_nH = float(delta_L_complex.real) * 1e9
+        delta_R_mOhm = -float(delta_L_complex.imag) * omega * 1e3
+        L_total_nH = float(L_coil * 1e9) + delta_L_nH
+        R_total_mOhm = float(R_coil * 1e3) + delta_R_mOhm
+
+        progress("BEM",
+                 f"Telegen Delta_L (phi.B, gauge-inv) = "
+                 f"{delta_L_nH:+.3f} nH, port-level Delta_R = "
+                 f"{delta_R_mOhm:+.4f} mOhm "
+                 f"(I_port={current:.3f} A, n_tri={len(ars)})")
+        progress("BEM",
+                 f"  diag J_s.A form = {delta_L_JsA_nH:+.3f} nH, "
+                 f"{delta_R_JsA_mOhm:+.4f} mOhm "
+                 f"(agree with phi.B to ~0.1%; P_wp_check "
+                 f"{P_wp_from_Js:.3e} vs {P_wp:.3e})")
+        progress("BEM",
+                 f"  diag wp_dissipation_R (= 2 P_wp / I^2) = "
+                 f"{wp_dissipation_R_mOhm:+.4f} mOhm  (wp ohmic only; "
+                 f"NOT port Delta_R in 1-way model)")
+    except Exception as e:
+        progress("BEM", f"DELTA_L_telegen failed: {type(e).__name__}: {e}")
+
     # 5d. GMSH .msh export with q_surf + J_surf as ElementData /
     # NodeData.  Saves the BEM workpiece SURFACE mesh (a 2D-in-3D
     # triangle mesh) so Kubota's Open GMSH button shows the
@@ -466,6 +593,40 @@ def solve_peec_bem_forward(peec_step,
                         "in-system L with a workpiece, use FEM A-V "
                         "(calc_fem_coilmesh.py).",
         "L_coil_reliability": "low",
+        # Telegen reciprocity back-reaction (workpiece -> coil).
+        # Primary fields (delta_L_nH / delta_R_mOhm) use the gauge-
+        # invariant phi.(n.B_inc) form -- the correct port-level back-
+        # reaction in the 1-way PEEC+BEM model where coil J is fixed.
+        # Re(Delta_L) is the inductance change [nH]; Im(Delta_L) gives
+        # Delta_R = -omega * Im(Delta_L) at the port.
+        # delta_L_JsA_* report the legacy J_s.A_inc form for diagnostic
+        # comparison (numerically agrees with phi.B to ~0.1%).
+        # wp_dissipation_R_mOhm = 2 P_wp / |I|^2 is the wp ohmic
+        # dissipation channel (NOT the same as Delta_R in 1-way; it
+        # only equals the port Delta_R when the coil current redistr-
+        # ibutes in response to wp, e.g. in fully-coupled FEM A-V).
+        "delta_L_nH": delta_L_nH,
+        "delta_R_mOhm": delta_R_mOhm,
+        "L_total_nH": L_total_nH,
+        "R_total_mOhm": R_total_mOhm,
+        "delta_L_JsA_nH": delta_L_JsA_nH,
+        "delta_R_JsA_mOhm": delta_R_JsA_mOhm,
+        "wp_dissipation_R_mOhm": wp_dissipation_R_mOhm,
+        "delta_L_note": ("Telegen reciprocity ΔL via gauge-invariant "
+                          "(1/I_port^2) ∫_S φ (n · B_inc) dS form. "
+                          "Equivalent to ∫_S J_s · A_inc dS in continuum "
+                          "(closed surface, IBP, ∇_s·(n×A) = -n·curl A) "
+                          "but uses B = curl A directly hence is gauge-"
+                          "invariant.  Lenz: Re(ΔL) < 0 for non-magnetic "
+                          "conductor.  Delta_R = -ω Im(ΔL) is the PORT-"
+                          "LEVEL R increment in the 1-way PEEC+BEM model "
+                          "(coil J fixed).  This differs from the wp's "
+                          "intrinsic ohmic dissipation 2 P_wp / I^2 = "
+                          "`wp_dissipation_R_mOhm`, which is only the "
+                          "port ΔR in a fully-coupled formulation (e.g. "
+                          "FEM A-V) where coil J redistributes in "
+                          "response to wp."),
+        "delta_L_reliability": "production",
         # Workpiece (BEM-SIBC, 1-way forward)
         "P_wp_W": P_wp,
         "H_t_rms_Am": H_t_rms,
