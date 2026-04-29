@@ -230,9 +230,13 @@ def solve_peec_bem_forward(peec_step,
                     f" ({t_mesh:.1f}s)")
 
     # 4. BEM-SIBC assembly + solve
-    progress("BEM", f"assembly (order={h1_order})")
+    # assemble_dense=False skips the O(N^3) column extraction; we use
+    # solve_iterative() (GMRES) below instead.  ~50x faster than the
+    # legacy dense path for typical IH wp meshes.
+    progress("BEM", f"assembly (order={h1_order}, lazy)")
     t0 = time.perf_counter()
-    bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order)
+    bem = ScalarBIESIBCSolver(wp_mesh, order=h1_order,
+                                assemble_dense=False)
     t_asm = time.perf_counter() - t0
     progress("BEM", f"ndof={bem.ndof} ({t_asm:.1f}s)")
 
@@ -255,11 +259,13 @@ def solve_peec_bem_forward(peec_step,
     rho = 1.0 / sigma
     Z_s = (1.0 + 1j) * rho / delta * math.sqrt(mu_r)
 
-    progress("BEM", f"BIE solve (Z_s model={impedance_model})")
+    progress("BEM", f"BIE solve (Z_s model={impedance_model}, GMRES)")
     t0 = time.perf_counter()
-    res = bem.solve(phi_inc, Z_s=Z_s, omega=omega)
+    res = bem.solve_iterative(phi_inc, Z_s=Z_s, omega=omega,
+                                tol=1e-8, maxiter=300, restart=50)
     t_bie = time.perf_counter() - t0
-    progress("BEM", f"BIE ({t_bie:.1f}s)")
+    info = res.get('gmres_info', 0)
+    progress("BEM", f"BIE ({t_bie:.1f}s, gmres info={info})")
 
     # 5. Report P over wp surface
     from ngsolve import (Integrate, CF, GridFunction, InnerProduct, grad)
@@ -325,14 +331,24 @@ def solve_peec_bem_forward(peec_step,
     except Exception as e:
         progress("BEM", f"J_SURF scalar gen failed: {type(e).__name__}: {e}")
     try:
-        # Tangential gradient of phi_re as the J vector snapshot.
+        # Surface current density J_s = n x H_t (real-part snapshot
+        # for instantaneous-phase visualisation).
+        # SIBC scalar BIE: H_t = -grad_s(phi).  Therefore
+        #   J_s = n x H_t = -n x grad_s(phi).
+        # Earlier versions of this code emitted just -grad_s(phi)
+        # (= H_t) as "J_surf_vec" -- arrows showed the tangential H
+        # direction, NOT the actual current flow direction.  Surface
+        # current rotates 90 deg from H_t in the surface plane;
+        # without the n x ... cross product the arrows pointed along
+        # H_t (parallel to coil axis) rather than around the wp's
+        # axis (azimuthal current loops).  Fixed 2026-04-29.
+        from ngsolve import Cross
         n_bnd_v = _scf.normal(3)
         gphi = grad(gf_phi_re)
         gphi_dot_n = sum(gphi[i] * n_bnd_v[i] for i in range(3))
-        # J_s ~ -grad_s(phi); flip sign so arrows point along the
-        # current flow rather than against it (cosmetic).
-        J_s_re_vec = CF(tuple(
-            -(gphi[i] - gphi_dot_n * n_bnd_v[i]) for i in range(3)))
+        gphi_t = CF(tuple(gphi[i] - gphi_dot_n * n_bnd_v[i]
+                           for i in range(3)))
+        J_s_re_vec = -Cross(n_bnd_v, gphi_t)  # = n x H_t (real part)
         from ngsolve import H1 as _H1
         fes_J_vec = _H1(wp_mesh, order=int(h1_order), dim=3)
         gf_J_vec = GridFunction(fes_J_vec)

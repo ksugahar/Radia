@@ -56,7 +56,8 @@ def solve_fem(vol_file="", fes_order=1,
               peec_step="",
               peec_sigma=5.8e7,
               peec_nwinc=1,
-              peec_nhinc=1):
+              peec_nhinc=1,
+              peec_n_peri=0):
     """3D FEM-SIBC solver for .vol mesh.
 
     Args:
@@ -367,8 +368,16 @@ def solve_fem(vol_file="", fes_order=1,
         from ngsolve import ElementId
 
         _log("PEEC:building topology")
-        topo = filaments_from_step(peec_step, sigma=peec_sigma,
-                                    nwinc=peec_nwinc, nhinc=peec_nhinc)
+        if peec_n_peri > 0:
+            # Perimeter-only placement (thin-skin, dispatch path 2b
+            # with circle-edge centers).  Use this for 3turn helix
+            # / racetrack STEPs where the walker fails on seed plane.
+            topo = filaments_from_step(peec_step, sigma=peec_sigma,
+                                        n_peri=peec_n_peri,
+                                        use_coil_builder=True)
+        else:
+            topo = filaments_from_step(peec_step, sigma=peec_sigma,
+                                        nwinc=peec_nwinc, nhinc=peec_nhinc)
 
         if "filament_paths" in topo:
             fil_paths = topo["filament_paths"]
@@ -1009,6 +1018,12 @@ def main():
                         help="PEEC width subdivision (default 1)")
     parser.add_argument("--peec-nhinc", type=int, default=1,
                         help="PEEC height subdivision (default 1)")
+    parser.add_argument("--peec-n-peri", type=int, default=0,
+                        help="If >0, use perimeter-only filament "
+                             "placement (path 2b: circle-edge centres) "
+                             "instead of the volume-grid walker.  "
+                             "Required for 3-turn helix / racetrack "
+                             "STEPs whose seed plane is hard to find.")
 
     def run(args):
         if not args.peec_step:
@@ -1034,6 +1049,7 @@ def main():
             peec_sigma=args.peec_sigma,
             peec_nwinc=args.peec_nwinc,
             peec_nhinc=args.peec_nhinc,
+            peec_n_peri=args.peec_n_peri,
         )
 
     calc_main(run, parser)
