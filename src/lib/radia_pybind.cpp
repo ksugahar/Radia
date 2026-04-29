@@ -47,7 +47,8 @@
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
-#include "rad_biot_savart_filaments.h" // Fast Biot-Savart H from finite-segment filaments
+#include "rad_biot_savart_filaments.h" // Fast Biot-Savart H/A from finite-segment filaments
+#include "rad_biot_savart_surface.h"   // Fast Biot-Savart B/A from triangulated surface
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
@@ -4281,5 +4282,199 @@ PYBIND11_MODULE(_radia_pybind, m) {
             Returns:
                 (H_re, H_im): tuple of (N_obs, 3) float64 arrays such that
                              H = H_re + 1j*H_im is the complex H [A/m].
+        )pbdoc");
+
+    // ========================================================================
+    // Fast finite-segment vector potential A (complex per-segment currents).
+    // Companion to _HFromSegmentsComplex.  Used by FilamentBundleAC.fld('a')
+    // and by Telegen-reciprocity DeltaL = (1/I^2) * int_S J_s . A_inc dS.
+    // ========================================================================
+    m.def("_AFromSegmentsComplex",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> segs,
+           py::array_t<double, py::array::c_style | py::array::forcecast> obs,
+           py::array_t<double, py::array::c_style | py::array::forcecast> I_re,
+           py::array_t<double, py::array::c_style | py::array::forcecast> I_im,
+           int n_threads)
+        {
+            auto sb = segs.unchecked<3>();
+            auto ob = obs.unchecked<2>();
+            auto rb = I_re.unchecked<1>();
+            auto ib = I_im.unchecked<1>();
+            const int n_seg = static_cast<int>(sb.shape(0));
+            const int n_obs = static_cast<int>(ob.shape(0));
+            if (sb.shape(1) != 2 || sb.shape(2) != 3)
+                throw std::invalid_argument("segs must be (N_seg, 2, 3)");
+            if (ob.shape(1) != 3)
+                throw std::invalid_argument("obs must be (N_obs, 3)");
+            if ((int)rb.shape(0) != n_seg || (int)ib.shape(0) != n_seg)
+                throw std::invalid_argument("I_re/I_im must have length N_seg");
+
+            py::array_t<double> A_re({n_obs, 3});
+            py::array_t<double> A_im({n_obs, 3});
+
+            const double* segs_ptr = static_cast<const double*>(segs.data());
+            const double* obs_ptr  = static_cast<const double*>(obs.data());
+            const double* re_ptr   = static_cast<const double*>(I_re.data());
+            const double* im_ptr   = static_cast<const double*>(I_im.data());
+            double* are_ptr        = static_cast<double*>(A_re.mutable_data());
+            double* aim_ptr        = static_cast<double*>(A_im.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::bs::AFromSegmentsComplex(
+                    segs_ptr, n_seg, obs_ptr, n_obs,
+                    re_ptr, im_ptr,
+                    are_ptr, aim_ptr,
+                    n_threads);
+            }
+            return py::make_tuple(A_re, A_im);
+        },
+        py::arg("segs"), py::arg("obs"),
+        py::arg("I_re"), py::arg("I_im"),
+        py::arg("n_threads") = 0,
+        R"pbdoc(
+            Finite-segment vector potential A at obs points with complex
+            per-segment currents.  Companion to _HFromSegmentsComplex.
+
+            For each segment of length L from p1 to p2 with unit direction e_l,
+            and obs P, with t = (P-p1) . e_l, r1 = |P-p1|, r2 = |P-p2|:
+
+                A = (mu_0/(4*pi)) * I * log( ((L-t) + r2) / (-t + r1) ) * e_l
+
+            Output is in T*m (SI).  Sums contributions from all segments.
+
+            Args:
+                segs:  (N_seg, 2, 3) endpoints (p1, p2) for each segment [m]
+                obs:   (N_obs, 3) observation points [m]
+                I_re:  (N_seg,) real part of complex per-segment current [A]
+                I_im:  (N_seg,) imag part
+                n_threads: 0 = TaskManager default; > 0 = request that many.
+
+            Returns:
+                (A_re, A_im): tuple of (N_obs, 3) float64 arrays such that
+                             A = A_re + 1j*A_im is the complex A [T*m].
+        )pbdoc");
+
+    // ========================================================================
+    // Fast surface-current Biot-Savart on triangulated surface
+    // (piecewise-constant complex J_s per triangle).  Used to evaluate the
+    // workpiece's induced B and A from the SIBC stream function.
+    // ========================================================================
+    m.def("_AFromTrianglesComplex",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> verts,
+           py::array_t<double, py::array::c_style | py::array::forcecast> J_re,
+           py::array_t<double, py::array::c_style | py::array::forcecast> J_im,
+           py::array_t<double, py::array::c_style | py::array::forcecast> obs,
+           int n_threads)
+        {
+            auto vb = verts.unchecked<3>();
+            auto jr = J_re.unchecked<2>();
+            auto ji = J_im.unchecked<2>();
+            auto ob = obs.unchecked<2>();
+            const int n_t   = static_cast<int>(vb.shape(0));
+            const int n_obs = static_cast<int>(ob.shape(0));
+            if (vb.shape(1) != 3 || vb.shape(2) != 3)
+                throw std::invalid_argument("verts must be (N_t, 3, 3)");
+            if ((int)jr.shape(0) != n_t || (int)ji.shape(0) != n_t
+                || jr.shape(1) != 3 || ji.shape(1) != 3)
+                throw std::invalid_argument("J_re/J_im must be (N_t, 3)");
+            if (ob.shape(1) != 3)
+                throw std::invalid_argument("obs must be (N_obs, 3)");
+
+            py::array_t<double> A_re({n_obs, 3});
+            py::array_t<double> A_im({n_obs, 3});
+
+            const double* v_ptr = static_cast<const double*>(verts.data());
+            const double* jr_ptr = static_cast<const double*>(J_re.data());
+            const double* ji_ptr = static_cast<const double*>(J_im.data());
+            const double* o_ptr  = static_cast<const double*>(obs.data());
+            double* are = static_cast<double*>(A_re.mutable_data());
+            double* aim = static_cast<double*>(A_im.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::bs::AFromTrianglesComplex(
+                    v_ptr, n_t, jr_ptr, ji_ptr,
+                    o_ptr, n_obs, are, aim, n_threads);
+            }
+            return py::make_tuple(A_re, A_im);
+        },
+        py::arg("verts"), py::arg("J_re"), py::arg("J_im"),
+        py::arg("obs"), py::arg("n_threads") = 0,
+        R"pbdoc(
+            Vector potential A at obs points from a triangulated surface
+            with piecewise-constant complex J_s per triangle.
+
+            Args:
+                verts: (N_t, 3, 3) triangle vertices [m]
+                J_re:  (N_t, 3) real part of per-triangle J_s [A/m]
+                J_im:  (N_t, 3) imag part
+                obs:   (N_obs, 3) observation points [m]
+                n_threads: 0 = TaskManager default; > 0 = request that many.
+
+            Returns:
+                (A_re, A_im): tuple of (N_obs, 3) float64 arrays such that
+                             A = A_re + 1j*A_im is the complex A [T*m].
+
+            3-point Gauss quadrature; non-singular evaluation only.
+        )pbdoc");
+
+    m.def("_BFromTrianglesComplex",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> verts,
+           py::array_t<double, py::array::c_style | py::array::forcecast> J_re,
+           py::array_t<double, py::array::c_style | py::array::forcecast> J_im,
+           py::array_t<double, py::array::c_style | py::array::forcecast> obs,
+           int n_threads)
+        {
+            auto vb = verts.unchecked<3>();
+            auto jr = J_re.unchecked<2>();
+            auto ji = J_im.unchecked<2>();
+            auto ob = obs.unchecked<2>();
+            const int n_t   = static_cast<int>(vb.shape(0));
+            const int n_obs = static_cast<int>(ob.shape(0));
+            if (vb.shape(1) != 3 || vb.shape(2) != 3)
+                throw std::invalid_argument("verts must be (N_t, 3, 3)");
+            if ((int)jr.shape(0) != n_t || (int)ji.shape(0) != n_t
+                || jr.shape(1) != 3 || ji.shape(1) != 3)
+                throw std::invalid_argument("J_re/J_im must be (N_t, 3)");
+            if (ob.shape(1) != 3)
+                throw std::invalid_argument("obs must be (N_obs, 3)");
+
+            py::array_t<double> B_re({n_obs, 3});
+            py::array_t<double> B_im({n_obs, 3});
+
+            const double* v_ptr = static_cast<const double*>(verts.data());
+            const double* jr_ptr = static_cast<const double*>(J_re.data());
+            const double* ji_ptr = static_cast<const double*>(J_im.data());
+            const double* o_ptr  = static_cast<const double*>(obs.data());
+            double* bre = static_cast<double*>(B_re.mutable_data());
+            double* bim = static_cast<double*>(B_im.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::bs::BFromTrianglesComplex(
+                    v_ptr, n_t, jr_ptr, ji_ptr,
+                    o_ptr, n_obs, bre, bim, n_threads);
+            }
+            return py::make_tuple(B_re, B_im);
+        },
+        py::arg("verts"), py::arg("J_re"), py::arg("J_im"),
+        py::arg("obs"), py::arg("n_threads") = 0,
+        R"pbdoc(
+            Magnetic flux density B at obs points from a triangulated
+            surface with piecewise-constant complex J_s per triangle.
+
+            Args:
+                verts: (N_t, 3, 3) triangle vertices [m]
+                J_re:  (N_t, 3) real part of per-triangle J_s [A/m]
+                J_im:  (N_t, 3) imag part
+                obs:   (N_obs, 3) observation points [m]
+                n_threads: 0 = TaskManager default; > 0 = request that many.
+
+            Returns:
+                (B_re, B_im): tuple of (N_obs, 3) float64 arrays such that
+                             B = B_re + 1j*B_im is the complex B [T].
+
+            3-point Gauss quadrature; non-singular evaluation only.
         )pbdoc");
 }
