@@ -102,22 +102,47 @@ void radTFlmLinCur::B_comp(radTField* FieldPtr)
 	double SqRt0 = sqrt(V0.x*V0.x + y0y0_p_z0z0);
 	double SqRt1 = sqrt(x1*x1 + y0y0_p_z0z0);
 
-	double ConI = 1.E-04 * I;
+	// SI-correct factors (commit 2026-04-30, replaces legacy 1.E-04
+	// which produced B ~ 1/795x analytical SI value).
+	//
+	// Radia internal storage convention (see OutFieldCompRes in
+	// rad_material_impl.cpp:1764 and the radTArcCur comment at
+	// rad_arc_current.cpp:440-443):
+	//   - Field.B is stored as B/mu_0 (in A/m, same as H in free space)
+	//     and OutFieldCompRes multiplies by mu_0 to produce Tesla output.
+	//   - Field.H is stored in A/m (output as-is).
+	//   - Field.A is stored in T*m (output as-is, no scaling).
+	// SI Biot-Savart for a finite straight segment, distance d from wire,
+	// signed angles a1, a2 to endpoints:
+	//   H [A/m] = (1/(4*pi)) * I/d * (cos a1 - cos a2)
+	//   B [T]   = mu_0 * H
+	// So both B-internal and H-internal are filled with the SAME H value,
+	// using INV_FOUR_PI (= 1/(4*pi)).  A is stored directly in T*m using
+	// MU_0_OVER_FOUR_PI (= mu_0/(4*pi) = 1e-7).
+	const double INV_FOUR_PI       = 1.0 / (4.0 * 3.141592653589793238);
+	const double MU_0_OVER_FOUR_PI = 1.0e-7;
 	double ComMult;
 
 	if(FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_)
 	{
-		ComMult = ConI*(V0.x/SqRt0 - x1/SqRt1)/y0y0_p_z0z0;
-		TVector3d BufB(0., -ComMult*V0.z, ComMult*V0.y);
-		BufB = NativeRotation.TrVectField(BufB);
-		if(FieldPtr->FieldKey.B_) FieldPtr->B += BufB;
-		if(FieldPtr->FieldKey.H_) FieldPtr->H += BufB;
+		// Geometric factor: g = (cos a1 - cos a2) / d^2  with d = sqrt(y0y0_p_z0z0)
+		// BufB direction = cross(e_l, V0), magnitude factor = d (so BufB = g * d * e_perp)
+		// => H = INV_FOUR_PI * I * g * d * e_perp = INV_FOUR_PI * I * (cos a1 - cos a2) / d * e_perp
+		double geom = (V0.x/SqRt0 - x1/SqRt1) / y0y0_p_z0z0;
+		double k = INV_FOUR_PI * I * geom;
+		TVector3d BufHB(0., -k*V0.z, k*V0.y);
+		BufHB = NativeRotation.TrVectField(BufHB);
+		// Both B (output * mu_0) and H slots get the same A/m value.
+		if(FieldPtr->FieldKey.B_) FieldPtr->B += BufHB;
+		if(FieldPtr->FieldKey.H_) FieldPtr->H += BufHB;
 	}
 	if(FieldPtr->FieldKey.A_)
 	{
+		// A = (mu_0/(4*pi)) * I * log((x1+SqRt1)/(V0.x+SqRt0)) along wire direction
+		// A is output as-is (no mu_0 scaling in OutFieldCompRes), so store T*m directly.
 		double V0x_p_SqRt0 = V0.x+SqRt0;
 		if(V0x_p_SqRt0==0.) V0x_p_SqRt0 = SmallPositive;
-		ComMult = ConI*log((x1+SqRt1)/V0x_p_SqRt0);
+		ComMult = MU_0_OVER_FOUR_PI * I * log((x1+SqRt1)/V0x_p_SqRt0);
 		TVector3d BufA(ComMult, 0., 0.);
 		FieldPtr->A += NativeRotation.TrVectPoten(BufA);
 	}
@@ -194,17 +219,25 @@ void radTFlmLinCur::B_intComp(radTField* FieldPtr)
 	double Mod_v = sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
 	v.x /= Mod_v; v.y /= Mod_v; v.z /= Mod_v;
 
-	double ConI = 2.E-04 * I;
-	TVector3d BufIntB(0.,0.,0.);
-	double ComMult;
+	// SI-correct factor (commit 2026-04-30, replaces legacy 2.E-04
+	// which was 1/795x SI value).  The "2" prefactor is from the
+	// integral identity, INDEPENDENT of the unit conversion.
+	const double INV_FOUR_PI       = 1.0 / (4.0 * 3.141592653589793238);
+	const double MU_0_OVER_FOUR_PI = 1.0e-7;
+	// We compute the geometric kernel once and apply the proper unit
+	// factor (mu_0/4pi for Ib in T*m, 1/4pi for Ih in A) to each.
+	double GeomY = 0.0;  // geometric numerator for Ib_y / Ih_y direction
+	double GeomZ = 0.0;
+	TVector3d BufIntB(0.,0.,0.);  // legacy variable, will hold geometric only
 
 	const double SpecCaseZeroToler = 1.E-12;
 	double vyvy_p_vzvz = v.y*v.y + v.z*v.z;
 	if(vyvy_p_vzvz < SpecCaseZeroToler)
 	{
-		ComMult = ConI*(x2-VV.x)/(VV.z*VV.z + VV.y*VV.y);
-		BufIntB.y = ComMult*VV.z;
-		BufIntB.z = -ComMult*VV.y;
+		// Use a unit-less geometric multiplier; multiply by SI factor below.
+		double Geom = 2.0*I*(x2-VV.x)/(VV.z*VV.z + VV.y*VV.y);
+		GeomY = Geom*VV.z;
+		GeomZ = -Geom*VV.y;
 		goto FinalDefinitionOfFieldIntegrals;
 	}
 	{
@@ -224,13 +257,24 @@ void radTFlmLinCur::B_intComp(radTField* FieldPtr)
 		double F = (atan(TransAtans((vyvy_p_vzvz*VV.x-vxvyY_p_vxvzZ)/vzY_mi_vyZ, -(vyvy_p_vzvz*x2-vxvyY_p_vxvzZ)/vzY_mi_vyZ, PiMult)) + Pi*PiMult)/vyvy_p_vzvz;
 		double G = 0.5*v.x*log((vzYmivyZ_mu_vzYmivyZ + vzX1_mi_vxZ*vzX1_mi_vxZ + vxY_mi_vyX1*vxY_mi_vyX1)/(vzYmivyZ_mu_vzYmivyZ + vzX2_mi_vxZ*vzX2_mi_vxZ + vxY_mi_vyX2*vxY_mi_vyX2))/vyvy_p_vzvz;
 
-		BufIntB.y = ConI*(v.y*F+v.z*G);
-		BufIntB.z = ConI*(v.z*F-v.y*G);
+		// Geometric (current-included) multiplier.  2 from integral
+		// identity; SI factor applied per-output below.
+		double Geom = 2.0*I;
+		GeomY = Geom*(v.y*F+v.z*G);
+		GeomZ = Geom*(v.z*F-v.y*G);
 	}
 FinalDefinitionOfFieldIntegrals:
-	BufIntB = NativeRotation.TrVectField(BufIntB);
-	if(FieldPtr->FieldKey.Ib_) FieldPtr->Ib += BufIntB;
-	if(FieldPtr->FieldKey.Ih_) FieldPtr->Ih += BufIntB;
+	if(FieldPtr->FieldKey.Ib_) {
+		TVector3d BufB(0., MU_0_OVER_FOUR_PI*GeomY, MU_0_OVER_FOUR_PI*GeomZ);
+		BufB = NativeRotation.TrVectField(BufB);
+		FieldPtr->Ib += BufB;
+	}
+	if(FieldPtr->FieldKey.Ih_) {
+		TVector3d BufH(0., INV_FOUR_PI*GeomY, INV_FOUR_PI*GeomZ);
+		BufH = NativeRotation.TrVectField(BufH);
+		FieldPtr->Ih += BufH;
+	}
+	(void)BufIntB;  // silence unused-variable warning
 }
 
 //-------------------------------------------------------------------------
