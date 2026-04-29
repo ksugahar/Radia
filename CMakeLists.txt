@@ -180,6 +180,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_hacapk_peec.cpp           # HACApK PEEC adapter (Ruehli filament kernel)
 	${CORE_DIR}/rad_hacapk_bem.cpp            # HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 	${CORE_DIR}/rad_bem_galerkin.cpp          # Fast Galerkin SL/DL assembler (Sauter-Schwab + OpenMP)
+	${CORE_DIR}/rad_biot_savart_filaments.cpp # Fast Biot-Savart H from finite-segment filaments (complex I)
 )
 
 # Radia ext sources
