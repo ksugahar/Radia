@@ -45,6 +45,7 @@
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
+#include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
@@ -4011,6 +4012,132 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def("GetNDOF", &PyHACApKPEECManager::GetNDOF)
         .def("IsValid", &PyHACApKPEECManager::IsValid)
         .def("GetStats", &PyHACApKPEECManager::GetStats,
+             "Return dict with n_dof, n_leaves, n_lowrank, n_dense, "
+             "max_rank, compression, build_time [s], memory_mb, dense_memory_mb.");
+
+    // ========================================================================
+    // HACApK scalar BEM adapter (Phase 1.4 of in-tree SIBC HACApK pipeline)
+    // ========================================================================
+    //
+    // Wraps RadHACApKBEMManager: takes a pre-computed dense Galerkin matrix
+    // (built in Python via radia.bem.sibc_hacapk.assemble_SL_dense or
+    // assemble_DL_dense) and wraps it as a HACApK H-matrix for ACA
+    // compression and fast O(N log N) MatVec.
+    //
+    py::class_<RadHACApKBEMManager>(m, "_HACApKBEMManagerInternal");
+
+    class PyHACApKBEMManager {
+    public:
+        PyHACApKBEMManager(py::array_t<double, py::array::c_style | py::array::forcecast> coords,
+                            py::array_t<double, py::array::c_style | py::array::forcecast> entries)
+            : coords_(coords)   // hold a Python ref so the buffer outlives manager_
+            , entries_(entries)
+        {
+            auto c = coords_.unchecked<2>();
+            auto e = entries_.unchecked<2>();
+            const int64_t n = static_cast<int64_t>(c.shape(0));
+            if (c.shape(1) != 3)
+                throw std::invalid_argument("coords must have shape (N, 3)");
+            if (e.shape(0) != n || e.shape(1) != n)
+                throw std::invalid_argument("entries must have shape (N, N) matching coords");
+
+            const double* c_ptr = static_cast<const double*>(coords_.data());
+            const double* e_ptr = static_cast<const double*>(entries_.data());
+            manager_ = std::make_unique<RadHACApKBEMManager>(c_ptr, e_ptr,
+                                                              static_cast<int>(n));
+        }
+
+        bool BuildHMatrix(double aca_eps, int leaf_size, double eta,
+                          int max_rank, int print_level) {
+            RadHACApKParams p = RadHACApKBEMDefaultParams();
+            if (aca_eps > 0)   p.aca_eps   = aca_eps;
+            if (leaf_size > 0) p.leaf_size = leaf_size;
+            if (eta > 0)       p.eta       = eta;
+            if (max_rank > 0)  p.max_rank  = max_rank;
+            p.print_level = print_level;
+            return manager_->BuildHMatrix(p);
+        }
+
+        py::array_t<double> MatVec(py::array_t<double,
+                                                py::array::c_style |
+                                                py::array::forcecast> x) {
+            const int n = manager_->GetNDOF();
+            auto xb = x.unchecked<1>();
+            if ((int)xb.shape(0) != n) {
+                throw std::invalid_argument(
+                    "x size must equal NDOF (= number of vertices)");
+            }
+            std::vector<double> xv(n), yv(n);
+            for (int i = 0; i < n; ++i) xv[i] = xb(i);
+            manager_->MatVec(xv, yv);
+            py::array_t<double> y(n);
+            auto yb = y.mutable_unchecked<1>();
+            for (int i = 0; i < n; ++i) yb(i) = yv[i];
+            return y;
+        }
+
+        int GetNDOF() const { return manager_->GetNDOF(); }
+        bool IsValid() const { return manager_->IsValid(); }
+
+        py::dict GetStats() const {
+            const auto& s = manager_->GetStats();
+            py::dict d;
+            d["n_dof"] = s.n_dof;
+            d["n_leaves"] = s.n_leaves;
+            d["n_lowrank"] = s.n_lowrank;
+            d["n_dense"] = s.n_dense;
+            d["max_rank"] = s.max_rank;
+            d["compression"] = s.compression;
+            d["build_time"] = s.build_time;
+            d["memory_mb"] = s.memory_mb;
+            d["dense_memory_mb"] = s.dense_memory_mb;
+            return d;
+        }
+
+    private:
+        py::array_t<double, py::array::c_style | py::array::forcecast> coords_;
+        py::array_t<double, py::array::c_style | py::array::forcecast> entries_;
+        std::unique_ptr<RadHACApKBEMManager> manager_;
+    };
+
+    py::class_<PyHACApKBEMManager>(m, "HACApKBEMManager",
+        R"pbdoc(
+            HACApK adapter for a scalar Galerkin BEM matrix (Laplace SL/DL).
+
+            Wraps a pre-computed dense (N, N) entry table as an
+            ACA-compressed H-matrix.  Build the dense table once in Python
+            via radia.bem.sibc_hacapk.assemble_SL_dense / assemble_DL_dense
+            and hand it here for storage compression and fast MatVec.
+
+            After BuildHMatrix() succeeds, the dense table can be discarded
+            (still held internally by the manager via numpy refcounting,
+            but the H-matrix is what MatVec uses).
+
+            Args:
+                coords: (N, 3) DOF coordinates [m] (= vertex coordinates
+                        for P1 Galerkin)
+                entries: (N, N) dense matrix, row-major.
+        )pbdoc")
+        .def(py::init<py::array_t<double, py::array::c_style | py::array::forcecast>,
+                       py::array_t<double, py::array::c_style | py::array::forcecast>>(),
+             py::arg("coords"), py::arg("entries"))
+        .def("BuildHMatrix", &PyHACApKBEMManager::BuildHMatrix,
+             py::arg("aca_eps") = -1.0, py::arg("leaf_size") = -1,
+             py::arg("eta") = -1.0, py::arg("max_rank") = -1,
+             py::arg("print_level") = 0,
+             R"pbdoc(
+                 Build the H-matrix.  Negative arguments use the BEM-tuned
+                 defaults (aca_eps=1e-6, leaf_size=64, eta=2.0, max_rank=400).
+                 Returns True on success.
+             )pbdoc")
+        .def("MatVec", &PyHACApKBEMManager::MatVec, py::arg("x"),
+             R"pbdoc(
+                 Real matvec y = M * x.  Both x and y are length-N double
+                 arrays where N = number of vertices = NDOF.
+             )pbdoc")
+        .def("GetNDOF", &PyHACApKBEMManager::GetNDOF)
+        .def("IsValid", &PyHACApKBEMManager::IsValid)
+        .def("GetStats", &PyHACApKBEMManager::GetStats,
              "Return dict with n_dof, n_leaves, n_lowrank, n_dense, "
              "max_rank, compression, build_time [s], memory_mb, dense_memory_mb.");
 }

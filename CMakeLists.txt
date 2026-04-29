@@ -178,6 +178,7 @@ set(RADIA_CORE_SOURCES
 	# PEEC Loop-Star matrix construction (Laplace kernel only)
 	${CORE_DIR}/rad_peec_matrices.cpp         # PEEC Loop-Star matrix construction
 	${CORE_DIR}/rad_hacapk_peec.cpp           # HACApK PEEC adapter (Ruehli filament kernel)
+	${CORE_DIR}/rad_hacapk_bem.cpp            # HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 )
 
 # Radia ext sources
