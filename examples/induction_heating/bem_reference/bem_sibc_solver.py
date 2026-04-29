@@ -34,7 +34,9 @@ class ScalarBIESIBCSolver:
     with different Z_s (frequency sweep) or phi_inc (different sources).
     """
 
-    def __init__(self, mesh, order=1, assemble_dense=True):
+    def __init__(self, mesh, order=1, assemble_dense=True,
+                  use_intree_bem=False, intree_geom_order=2,
+                  intree_singular_n_q=8, intree_regular_quad_degree=11):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -52,10 +54,10 @@ class ScalarBIESIBCSolver:
         """
         from ngsolve import (H1, BilinearForm, GridFunction, ds, grad,
                              TaskManager, InnerProduct)
-        from ngsolve.bem import LaplaceDL, LaplaceSL
 
         self.mesh = mesh
         self.order = order
+        self.use_intree_bem = use_intree_bem
 
         # H1 on surface
         self.fes = H1(mesh, order=order)
@@ -64,40 +66,62 @@ class ScalarBIESIBCSolver:
 
         t0 = time.perf_counter()
 
-        # BEM operators.  Probed 2026-04-29 on N=2477 wp:
-        # use_fmm=True and use_fmm=False both run at ~1.67 s/matvec
-        # (NGSolve.bem default uses H-matrix internally regardless), so
-        # FMM provides no benefit at typical IH wp size and only adds
-        # tree-build overhead.  Default H-matrix is used.
-        with TaskManager():
-            DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
-            SL_bf = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
-        # Always retain the bilinear forms so solve_iterative() can
-        # call DL_bf.mat * vec without re-assembling.
-        self._DL_bf = DL_bf
-        self._SL_bf = SL_bf
-
         ndof = self.ndof
-        if assemble_dense:
-            self.DL = np.zeros((ndof, ndof))
+
+        if use_intree_bem:
+            # In-tree Sauter-Schwab Galerkin BEM (no ngsolve.bem dep).
+            # Always assembles dense.  Cannot do solve_iterative -- but
+            # the in-tree path is intended for HACApK acceleration in a
+            # follow-up step, not iterative scipy GMRES.
+            from radia.bem.sibc_hacapk import (
+                extract_surface_curved,
+                assemble_SL_dense_curved, assemble_DL_dense_curved)
+            verts, tris, v_global, tri_p2 = extract_surface_curved(
+                mesh, geom_order=intree_geom_order)
+            SL_loc = assemble_SL_dense_curved(
+                verts, tris, tri_p2,
+                regular_quad_degree=intree_regular_quad_degree,
+                singular_n_q=intree_singular_n_q)
+            DL_loc = assemble_DL_dense_curved(
+                verts, tris, tri_p2,
+                regular_quad_degree=intree_regular_quad_degree,
+                singular_n_q=intree_singular_n_q)
+            # Lift to full ndof basis (interior vertices contribute zero
+            # rows/cols since their hat is 0 on BND).
             self.SL = np.zeros((ndof, ndof))
-            for j in range(ndof):
-                ej = GridFunction(self.fes)
-                ej.vec[:] = 0
-                ej.vec[j] = 1.0
-                r1 = ej.vec.CreateVector()
-                r1.data = DL_bf.mat * ej.vec
-                self.DL[:, j] = r1.FV().NumPy().copy()
-                r2 = ej.vec.CreateVector()
-                r2.data = SL_bf.mat * ej.vec
-                self.SL[:, j] = r2.FV().NumPy().copy()
+            self.DL = np.zeros((ndof, ndof))
+            self.SL[np.ix_(v_global, v_global)] = SL_loc
+            self.DL[np.ix_(v_global, v_global)] = DL_loc
+            self._intree_v_global = v_global
+            self._DL_bf = None
+            self._SL_bf = None
         else:
-            # Dense matrices are NOT extracted -- caller must use
-            # solve_iterative().  These attributes are set None so that
-            # any accidental call to solve() (which expects dense .DL
-            # and .SL) fails loudly instead of producing garbage.
-            self.DL = None
-            self.SL = None
+            from ngsolve.bem import LaplaceDL, LaplaceSL
+            # BEM operators.  Probed 2026-04-29 on N=2477 wp:
+            # use_fmm=True/False both run at ~1.67 s/matvec; default
+            # H-matrix used.
+            with TaskManager():
+                DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
+                SL_bf = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
+            self._DL_bf = DL_bf
+            self._SL_bf = SL_bf
+
+            if assemble_dense:
+                self.DL = np.zeros((ndof, ndof))
+                self.SL = np.zeros((ndof, ndof))
+                for j in range(ndof):
+                    ej = GridFunction(self.fes)
+                    ej.vec[:] = 0
+                    ej.vec[j] = 1.0
+                    r1 = ej.vec.CreateVector()
+                    r1.data = DL_bf.mat * ej.vec
+                    self.DL[:, j] = r1.FV().NumPy().copy()
+                    r2 = ej.vec.CreateVector()
+                    r2.data = SL_bf.mat * ej.vec
+                    self.SL[:, j] = r2.FV().NumPy().copy()
+            else:
+                self.DL = None
+                self.SL = None
 
         # Surface mass M
         mass_bf = BilinearForm(self.fes)
