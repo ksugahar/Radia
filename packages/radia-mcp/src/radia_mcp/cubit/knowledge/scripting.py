@@ -3849,6 +3849,122 @@ Python- or build-specific details.
 """
 
 
+CUBIT_APREPRO_VS_PREDICATE = """
+# Cubit APREPRO macros vs `with` predicate -- two different mechanisms
+
+This is one of the more confusing aspects of Cubit's command syntax.
+The two are **different mechanisms** that often appear next to each
+other in the same .jou file.  Confusing them costs hours of debugging.
+
+## APREPRO -- macro / template language
+
+Evaluated **before** Cubit parses the command.  Pure textual
+substitution + simple expressions.  Syntax: `#{...}`.
+
+```cubit
+brick x 0.300 y 0.300 z 0.300
+#{air_id = Id("volume")}              # captures last-created vol ID
+subtract volume 1 from volume {air_id} keep_tool
+```
+
+Built-in functions:
+- `Id("volume")` / `Id("surface")` -- ID of last-created entity
+- `IdList(type, query_string)` -- list of IDs matching query
+- arithmetic: `#{x = 5}`, `#{y = 2*x}`
+- conditional: `#{if cond}`, `#{else}`, `#{endif}`
+
+**Limitation**: APREPRO captures are **textual snapshots**.  After
+`unite` / `compress` / `subtract` / `imprint+merge` renumber the
+entities, the captured IDs become STALE.  Example failure:
+
+```cubit
+unite volume 1 to 382
+#{coil_id = Id("volume")}             # captured = some ID e.g. 1
+compress                              # IDs renumber
+# ...further topo ops...
+sideset 1 add surface 765             # surface 765 from 382-loft
+                                      # state DOES NOT EXIST anymore
+                                      # -> "Empty sideset; removing..."
+```
+
+## Cubit `with` predicate -- command-language entity selection
+
+Evaluated **at command-parse time**, fresh on every play.  Selects
+entities by GEOMETRIC PROPERTIES.  This is the renumber-resistant
+approach.
+
+```cubit
+sideset 1 add surface in volume 1 with area > 3.1e-5 with y_coord > 0
+sideset 1 name "source"
+```
+
+Filter dimensions (combined with multiple `with` clauses or `and`):
+- `area`, `length`, `volume` -- size of the entity
+- `x_coord`, `y_coord`, `z_coord` -- centroid coordinate
+- `x_min`, `x_max`, `y_min`, `y_max`, `z_min`, `z_max` -- bbox
+- `name`, `id` -- attribute predicates
+
+Stackable predicate examples:
+```cubit
+# Disk faces at +X tip of coil, +Y side
+surface in volume 1 with area > 3.1e-5 with area < 3.13e-5 \\
+                                       with y_coord > 0
+
+# Cylindrical surfaces (large area, long curved)
+surface in volume 1 with area > 1e-3
+
+# Surfaces near a specific Z plane
+surface in volume 1 with z_coord > 0.04 with z_coord < 0.06
+```
+
+## Hybrid pattern (recommended for portable .jou)
+
+Use APREPRO `Id()` to track volume IDs during construction (before
+destructive ops).  Then switch to `with` predicate for any selection
+AFTER topological operations renumber.
+
+```cubit
+# Geometry construction phase: APREPRO Id() captures stable here
+create Cylinder height 0.150 radius 0.005
+#{wp_id = Id("volume")}
+
+brick x 0.3 y 0.3 z 0.3
+#{air_id = Id("volume")}
+
+# Topological op -- IDs MAY renumber (esp. after subtract):
+subtract volume 1 to {wp_id} from volume {air_id} keep_tool
+compress
+
+# After compress: the old captured IDs MAY still work, but for
+# SURFACES (which were renumbered by subtract) use `with` predicate:
+sideset 1 add surface in volume 1 with area > 3.1e-5 \\
+                                  with area < 3.13e-5 \\
+                                  with y_coord > 0
+sideset 1 name "source"
+```
+
+## subtract gotchas (verified 2026-04-29)
+
+| Form | Tool | Body | Result |
+|------|------|------|--------|
+| `subtract A from B` | consumed | modified | 1 less volume |
+| `subtract A from B keep_tool` | kept | modified IN PLACE | same #vols, body = (B-A) |
+| `subtract A from B keep` | kept | KEPT + new vol created | +1 volume (B-A duplicate); the original B is now ORPHAN |
+
+**Use `keep_tool` for "carve a hole" semantics** (preserve coil + wp,
+modify air-brick to be (brick - coil - wp)).  `keep` instead leaves
+the un-carved brick orphaned and any block assignment using the
+captured `air_id` points at the wrong (un-carved) volume.
+
+## Common confusion (corrected by user 2026-04-29)
+
+> "that's APREPRO, right?" -> No.  `with area > X` is Cubit's
+> command-language predicate, NOT APREPRO macro syntax.  APREPRO is
+> the `#{...}` substitution + `Id()`/`IdList()` etc.  Everything
+> outside `#{...}` is ordinary Cubit command syntax.
+"""
+
+
 def get_cubit_documentation(topic: str = "all") -> str:
 	"""Return Cubit scripting documentation by topic."""
 	topics = {
@@ -3942,6 +4058,15 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"v4_7_0": CUBIT_V4_7_0_RELEASE,
 		"release_v4_7_0": CUBIT_V4_7_0_RELEASE,  # alias
 		"4.7.0": CUBIT_V4_7_0_RELEASE,  # alias
+		# 2026-04-29: APREPRO vs `with` predicate distinction
+		"aprepro_vs_predicate": CUBIT_APREPRO_VS_PREDICATE,
+		"aprepro_predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"with_predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"predicate": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"subtract_keep": CUBIT_APREPRO_VS_PREDICATE,  # alias (subtract gotchas)
+		"subtract_keep_tool": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"unite_renumber": CUBIT_APREPRO_VS_PREDICATE,  # alias
+		"renumber": CUBIT_APREPRO_VS_PREDICATE,  # alias
 	}
 
 	topic = topic.lower().strip()
