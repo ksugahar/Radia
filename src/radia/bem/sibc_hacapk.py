@@ -887,8 +887,29 @@ def sl_pair_singular_curved(p2_a, p2_b, tri_a, tri_b, n_q=8):
     raise ValueError(f"sl_pair_singular_curved: non-singular cls={cls}")
 
 
+def _perm_parity_sign(perm):
+    """+1 if perm is a cyclic (= even) permutation of (0, 1, 2),
+    -1 if odd (one swap from cyclic).  For triangle permutations,
+    even = winding preserved (= natural outward normal preserved).
+    """
+    a, b, c = int(perm[0]), int(perm[1]), int(perm[2])
+    cyclic_orderings = {(0, 1, 2), (1, 2, 0), (2, 0, 1)}
+    return +1 if (a, b, c) in cyclic_orderings else -1
+
+
 def dl_pair_singular_curved(p2_a, p2_b, tri_a, tri_b, n_q=8):
-    """DL block for any singular pair using P2-curved geometry."""
+    """DL block for any singular pair using P2-curved geometry.
+
+    NOTE on orientation: when we permute corners to bring the SS rule's
+    canonical "shared vertex/edge at local 0/0-1" form, the resulting
+    canonical winding may differ from the element's NATURAL winding.
+    For SL (kernel = 1/r) this is irrelevant.  For DL (kernel
+    (r-r')*n_y/r^3) the n_y direction depends on the cross-product of
+    edge vectors, which flips sign if the canonical permutation is a
+    non-cyclic permutation of (0, 1, 2).  We detect non-cyclic perm
+    via _perm_parity_sign and negate the result accordingly so n_y
+    always points outward.
+    """
     cls, _ = share_class(tri_a, tri_b)
     shared_pairs = [(la, lb) for la in range(3) for lb in range(3)
                     if int(tri_a[la]) == int(tri_b[lb])]
@@ -897,9 +918,12 @@ def dl_pair_singular_curved(p2_a, p2_b, tri_a, tri_b, n_q=8):
         la, lb = shared_pairs[0]
         pa = (la, (la + 1) % 3, (la + 2) % 3)
         pb = (lb, (lb + 1) % 3, (lb + 2) % 3)
+        # pa, pb are always cyclic perms (constructed via cyclic shift),
+        # so winding is preserved and no sign correction needed.
         p2a = _permute_p2_corners(p2_a, pa)
         p2b = _permute_p2_corners(p2_b, pb)
         M_perm = _ss_block_dl_curved(p2a, p2b, "common_vertex", n_q)
+        # Sign: pa and pb both cyclic -> normals point outward -> +1
         M_orig = np.zeros((3, 3))
         M_orig[np.ix_(pa, pb)] = M_perm
         return M_orig
@@ -909,9 +933,19 @@ def dl_pair_singular_curved(p2_a, p2_b, tri_a, tri_b, n_q=8):
         apex_b = ({0, 1, 2} - {lb0, lb1}).pop()
         pa = (la0, la1, apex_a)
         pb = (lb0, lb1, apex_b)
+        # If pa or pb is non-cyclic, the canonical T_a/T_b winding is
+        # reversed from natural (= cross gives INWARD normal).  Flip the
+        # contribution sign for each non-cyclic perm.
+        sign_a = _perm_parity_sign(pa)
+        sign_b = _perm_parity_sign(pb)
         p2a = _permute_p2_corners(p2_a, pa)
         p2b = _permute_p2_corners(p2_b, pb)
         M_perm = _ss_block_dl_curved(p2a, p2b, "common_edge", n_q)
+        # n_b only enters via dot_n in the kernel -> sign of n_b flips
+        # the kernel sign.  pa winding doesn't enter the kernel
+        # (dr_a/dxi etc. only set positions, not n).  So only sign_b
+        # affects DL.
+        M_perm *= sign_b
         M_orig = np.zeros((3, 3))
         M_orig[np.ix_(pa, pb)] = M_perm
         return M_orig
@@ -919,8 +953,10 @@ def dl_pair_singular_curved(p2_a, p2_b, tri_a, tri_b, n_q=8):
         perm_b = [None, None, None]
         for la, lb in shared_pairs:
             perm_b[la] = lb
+        sign_b = _perm_parity_sign(tuple(perm_b))
         p2b_in_va = _permute_p2_corners(p2_b, tuple(perm_b))
         M_va = _ss_block_dl_curved(p2_a, p2b_in_va, "identical", n_q)
+        M_va *= sign_b   # flip if T_b winding got reversed
         M_orig = np.zeros((3, 3))
         for la in range(3):
             M_orig[:, perm_b[la]] = M_va[:, la]
