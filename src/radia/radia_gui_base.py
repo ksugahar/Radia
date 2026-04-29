@@ -473,17 +473,18 @@ class AnalysisWindow(QMainWindow):
     def __init__(self, title, vol_path="", settings_key="default"):
         super().__init__()
         self.setWindowTitle(title)
-        # Initial window size targets the lab-baseline 2K display per
-        # memory/feedback_panel_vertical_space.md: < 1200 px FAIL,
-        # < 1000 px sub-optimal.  650x600 (the previous default) was
-        # too small -- QFormLayout compressed visible rows to their
-        # minimum widget heights, cropping label text and creating
-        # the "line spacing too narrow, text unreadable until window
-        # is resized" bug user reported on 2026-04-29.  720x1000 fits
-        # the full IH/EM/PCB panel forms (~20 rows + status 7-line
-        # min + 220-px output area + buttons) without compression.
-        self.resize(720, 1000)
-        self.setMinimumSize(620, 800)
+        # Initial window size MUST be tall enough that QFormLayout
+        # doesn't compress visible rows to their min widget heights
+        # (which crops label text -- the "line spacing too narrow,
+        # unreadable until resize" bug, 2026-04-29).  At 12 pt Segoe
+        # UI baseline + 14 px QFormLayout vertical spacing, ~20 rows
+        # of widgets need ~750 px just for the form.  Status label
+        # (7 wrapped lines) ~110 px, output area 220 px, buttons +
+        # margins ~80 px -> total ~1160 px panel content.  Use 1300
+        # px to leave a small bottom margin.  Drop the prior
+        # "<= 1000 px" guideline -- readability beats compactness.
+        self.resize(720, 1300)
+        self.setMinimumSize(620, 900)
         self._settings_key = settings_key
 
         icon = _icon_path()
