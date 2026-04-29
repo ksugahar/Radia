@@ -918,9 +918,39 @@ class IHWindow(AnalysisWindow):
                                 ("L_total_nH", "L_total (with wp)")):
                 if key in result:
                     lines.append(f"  {label}: {result[key]:.3f} nH")
+            if "delta_L_nH" in result and result["delta_L_nH"] is not None:
+                tag = ""
+                rel = result.get("delta_L_reliability", "")
+                if rel == "experimental":
+                    tag = " [EXPERIMENTAL]"
+                form_label = "Telegen φ·B" if rel == "production" else "Telegen"
+                lines.append(
+                    f"  ΔL_wp ({form_label}): {result['delta_L_nH']:+.3f} nH"
+                    f"{tag}")
+                if "delta_L_JsA_nH" in result \
+                        and result["delta_L_JsA_nH"] is not None:
+                    lines.append(
+                        f"    diag J_s·A:  "
+                        f"{result['delta_L_JsA_nH']:+.3f} nH "
+                        f"(continuum-equivalent)")
             if "R_coil_mOhm" in result:
                 lines.append(
                     f"  R_coil: {result['R_coil_mOhm']:.4f} mOhm")
+            if "R_total_mOhm" in result and result["R_total_mOhm"] is not None:
+                lines.append(
+                    f"  R_total: {result['R_total_mOhm']:.4f} mOhm "
+                    f"(coil + wp Telegen)")
+            if ("delta_R_mOhm" in result and result["delta_R_mOhm"] is not None
+                and "delta_R_expected_mOhm" in result
+                and result["delta_R_expected_mOhm"] is not None):
+                dR = result["delta_R_mOhm"]
+                dRe = result["delta_R_expected_mOhm"]
+                ratio = (dR / dRe) if abs(dRe) > 1e-30 else 0.0
+                tag = "" if 0.5 < ratio < 2.0 else \
+                    f" [WARN: {ratio:.3f}x energy-balance]"
+                lines.append(
+                    f"  ΔR_wp (Telegen): {dR:+.4f} mOhm  "
+                    f"(energy-balance: {dRe:+.4f}){tag}")
             if "n_filaments" in result:
                 lines.append(f"  filaments: {result['n_filaments']}")
             # Dissipation
