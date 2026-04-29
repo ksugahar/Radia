@@ -36,7 +36,9 @@ class ScalarBIESIBCSolver:
 
     def __init__(self, mesh, order=1, assemble_dense=True,
                   use_intree_bem=False, intree_geom_order=2,
-                  intree_singular_n_q=8, intree_regular_quad_degree=11):
+                  intree_singular_n_q=8, intree_regular_quad_degree=11,
+                  use_intree_hacapk=False, hacapk_aca_eps=1e-6,
+                  hacapk_leaf=64, hacapk_eta=2.0):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -110,6 +112,41 @@ class ScalarBIESIBCSolver:
             self._intree_v_global = v_global
             self._DL_bf = None
             self._SL_bf = None
+
+            # Optional: compress SL and DL via HACApK for fast MatVec.
+            # When use_intree_hacapk=True the compressed handles are
+            # built and stored as self._SL_hacapk / self._DL_hacapk; the
+            # caller can then choose between solve() (dense LU) and
+            # solve_hacapk() (GMRES via H-matrix MatVec).  At N<5000 on
+            # compact wp geometries (~80%+ near-field) compression gives
+            # essentially no speedup, but at N>10K or for frequency
+            # sweeps with reused operators the compressed MatVec wins.
+            self._SL_hacapk = None
+            self._DL_hacapk = None
+            if use_intree_hacapk:
+                from radia import _radia_pybind as _rpb_h
+                # Build coordinate array sized for the FULL ndof; for
+                # interior vertices that don't appear in BND we use the
+                # MESH vertex coordinate (the H-matrix clustering only
+                # uses these for spatial bisection, never for kernel).
+                coords_full = np.zeros((ndof, 3), dtype=np.float64)
+                for i in range(ndof):
+                    coords_full[i] = mesh.vertices[i].point
+                coords_full = np.ascontiguousarray(coords_full)
+                SL_arr = np.ascontiguousarray(self.SL)
+                DL_arr = np.ascontiguousarray(self.DL)
+                self._SL_hacapk = _rpb_h.HACApKBEMManager(coords_full, SL_arr)
+                self._SL_hacapk.BuildHMatrix(
+                    aca_eps=hacapk_aca_eps,
+                    leaf_size=int(hacapk_leaf),
+                    eta=hacapk_eta,
+                    max_rank=-1, print_level=0)
+                self._DL_hacapk = _rpb_h.HACApKBEMManager(coords_full, DL_arr)
+                self._DL_hacapk.BuildHMatrix(
+                    aca_eps=hacapk_aca_eps,
+                    leaf_size=int(hacapk_leaf),
+                    eta=hacapk_eta,
+                    max_rank=-1, print_level=0)
         else:
             from ngsolve.bem import LaplaceDL, LaplaceSL
             # BEM operators.  Probed 2026-04-29 on N=2477 wp:
@@ -268,6 +305,130 @@ class ScalarBIESIBCSolver:
             'P_density': float(P_density),
             'area': float(abs(area)),
             'gamma': gamma_for_log,
+            't_solve': round(t_solve, 3),
+        }
+
+    def solve_hacapk(self, phi_inc_cf, Z_s, omega, *,
+                       tol=1e-8, maxiter=300, restart=50):
+        """SIBC solve via scipy GMRES + HACApK H-matrix MatVec.
+
+        Requires use_intree_bem=True and use_intree_hacapk=True at
+        construction.  Wraps the in-tree HACApK-compressed SL and DL
+        operators in a scipy LinearOperator and solves the SIBC
+        scalar BIE without ever assembling A_sys densely.
+
+        For compact workpiece meshes at N ~ 2-5K, this is typically
+        comparable in speed to dense LU because the H-matrix has
+        near-zero compression (>80% near-field pairs).  For N > 10K
+        or frequency sweeps reusing the same SL/DL it can be faster.
+
+        Args / Returns: same as solve().
+        """
+        from ngsolve import (LinearForm, GridFunction, Integrate, CF, ds,
+                             grad, BND, InnerProduct)
+        from scipy.sparse.linalg import LinearOperator, gmres
+        if self._SL_hacapk is None or self._DL_hacapk is None:
+            raise RuntimeError(
+                "solve_hacapk: HACApK handles not built.  Construct the "
+                "solver with use_intree_bem=True and use_intree_hacapk=True.")
+
+        t0 = time.perf_counter()
+        ndof = self.ndof
+
+        # RHS: <phi_inc, v>_S
+        if isinstance(phi_inc_cf, np.ndarray):
+            rhs_vec = self.M @ phi_inc_cf
+        else:
+            v_h1 = self.fes.TestFunction()
+            lf = LinearForm(self.fes)
+            lf += phi_inc_cf * v_h1.Trace() * ds
+            lf.Assemble()
+            rhs_vec = lf.vec.FV().NumPy().copy()
+
+        # gamma scalar (per-node Z_s not yet supported through HACApK)
+        if isinstance(Z_s, np.ndarray):
+            raise NotImplementedError(
+                "solve_hacapk currently only supports scalar Z_s; per-node "
+                "Z_s requires a row-scaled HACApK MatVec wrapper -- TODO.")
+        gamma = (Z_s / (1j * omega * MU_0)) if (omega > 0 and Z_s != 0) else 0+0j
+
+        # Pre-compute M^{-1} @ K (real) once for reuse in MatVec.
+        # The Robin term `SL @ M_inv @ K` applied to x is:
+        #   (SL @ M_inv @ K) @ x = SL @ (M_inv @ K @ x)
+        # so caching M_inv @ K saves one dense matmul per MatVec.
+        Minv_K = self.M_inv @ self.K  # ndof x ndof, real
+
+        SL_op = self._SL_hacapk
+        DL_op = self._DL_hacapk
+        M_full = self.M
+
+        def matvec_complex(x_complex):
+            """y = A_sys @ x where A_sys = (1/2)M - DL + gamma*SL*M^-1*K."""
+            x_re = np.ascontiguousarray(x_complex.real)
+            x_im = np.ascontiguousarray(x_complex.imag)
+            # (1/2)*M - DL part (real)
+            half_M_re = 0.5 * (M_full @ x_re)
+            half_M_im = 0.5 * (M_full @ x_im)
+            DL_re = DL_op.MatVec(x_re)
+            DL_im = DL_op.MatVec(x_im)
+            # SL @ M^-1 @ K @ x part (real intermediate, complex via gamma)
+            MinvK_re = Minv_K @ x_re
+            MinvK_im = Minv_K @ x_im
+            SL_re = SL_op.MatVec(np.ascontiguousarray(MinvK_re))
+            SL_im = SL_op.MatVec(np.ascontiguousarray(MinvK_im))
+            # gamma * (SL_re + j*SL_im) = (gr*SL_re - gi*SL_im) + j*(gr*SL_im + gi*SL_re)
+            gr, gi = gamma.real, gamma.imag
+            term_re = gr * SL_re - gi * SL_im
+            term_im = gr * SL_im + gi * SL_re
+            y_re = half_M_re - DL_re + term_re
+            y_im = half_M_im - DL_im + term_im
+            return y_re + 1j * y_im
+
+        # Augment with gauge multiplier
+        c_gauge = self._c_gauge
+
+        def matvec_aug(x_aug):
+            x = x_aug[:ndof]
+            mu = x_aug[ndof]
+            y = matvec_complex(x)
+            y = y + mu * c_gauge.astype(complex)
+            y_aug = np.empty(ndof + 1, dtype=complex)
+            y_aug[:ndof] = y
+            y_aug[ndof] = c_gauge @ x
+            return y_aug
+
+        A_aug = LinearOperator((ndof + 1, ndof + 1), matvec=matvec_aug,
+                                dtype=complex)
+        rhs_aug = np.zeros(ndof + 1, dtype=complex)
+        rhs_aug[:ndof] = rhs_vec
+        sol_aug, info = gmres(A_aug, rhs_aug, rtol=tol,
+                                atol=0.0, maxiter=maxiter, restart=restart)
+        if info != 0:
+            print(f"  WARN: gmres did not converge cleanly (info={info})",
+                  flush=True)
+        phi_vec = sol_aug[:ndof]
+        t_solve = time.perf_counter() - t0
+
+        # Compute H_t_rms / P_density (same as solve())
+        gf = GridFunction(self.fes)
+        gf.vec.FV().NumPy()[:] = phi_vec.real
+        Hsq_re = Integrate(InnerProduct(grad(gf), grad(gf)),
+                           self.mesh, BND)
+        gf.vec.FV().NumPy()[:] = phi_vec.imag
+        Hsq_im = Integrate(InnerProduct(grad(gf), grad(gf)),
+                           self.mesh, BND)
+        area = Integrate(CF(1), self.mesh, BND)
+        H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
+        P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0.0
+        gf_phi = GridFunction(self.fes)
+        gf_phi.vec.FV().NumPy()[:] = phi_vec.real
+        return {
+            'phi': gf_phi,
+            'phi_vec': phi_vec,
+            'H_t_rms': float(H_t_rms),
+            'P_density': float(P_density),
+            'area': float(abs(area)),
+            'gamma': complex(gamma),
             't_solve': round(t_solve, 3),
         }
 
