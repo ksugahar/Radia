@@ -70,22 +70,37 @@ class ScalarBIESIBCSolver:
 
         if use_intree_bem:
             # In-tree Sauter-Schwab Galerkin BEM (no ngsolve.bem dep).
-            # Always assembles dense.  Cannot do solve_iterative -- but
-            # the in-tree path is intended for HACApK acceleration in a
-            # follow-up step, not iterative scipy GMRES.
-            from radia.bem.sibc_hacapk import (
-                extract_surface_curved,
-                assemble_SL_dense_curved, assemble_DL_dense_curved)
+            # Uses the C++ assembler (radia._radia_pybind._AssembleSLDL_
+            # Galerkin) when available -- pure-Python fallback only when
+            # the C++ symbol is missing (older wheel without Phase 1.9).
+            from radia.bem.sibc_hacapk import extract_surface_curved
             verts, tris, v_global, tri_p2 = extract_surface_curved(
                 mesh, geom_order=intree_geom_order)
-            SL_loc = assemble_SL_dense_curved(
-                verts, tris, tri_p2,
-                regular_quad_degree=intree_regular_quad_degree,
-                singular_n_q=intree_singular_n_q)
-            DL_loc = assemble_DL_dense_curved(
-                verts, tris, tri_p2,
-                regular_quad_degree=intree_regular_quad_degree,
-                singular_n_q=intree_singular_n_q)
+            try:
+                from radia import _radia_pybind as _rpb
+                _cpp_assemble = _rpb._AssembleSLDL_Galerkin
+            except (ImportError, AttributeError):
+                _cpp_assemble = None
+            if _cpp_assemble is not None:
+                v_arr = np.ascontiguousarray(verts, dtype=np.float64)
+                t_arr = np.ascontiguousarray(tris, dtype=np.int64)
+                p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
+                SL_loc, DL_loc = _cpp_assemble(
+                    v_arr, t_arr, p_arr,
+                    intree_regular_quad_degree,
+                    intree_singular_n_q,
+                    0)   # n_threads=0 -> OpenMP default
+            else:
+                from radia.bem.sibc_hacapk import (
+                    assemble_SL_dense_curved, assemble_DL_dense_curved)
+                SL_loc = assemble_SL_dense_curved(
+                    verts, tris, tri_p2,
+                    regular_quad_degree=intree_regular_quad_degree,
+                    singular_n_q=intree_singular_n_q)
+                DL_loc = assemble_DL_dense_curved(
+                    verts, tris, tri_p2,
+                    regular_quad_degree=intree_regular_quad_degree,
+                    singular_n_q=intree_singular_n_q)
             # Lift to full ndof basis (interior vertices contribute zero
             # rows/cols since their hat is 0 on BND).
             self.SL = np.zeros((ndof, ndof))
