@@ -36,6 +36,7 @@ from .knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
 from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
+from .knowledge.analytical_formulas import get_analytical_formulas_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -515,6 +516,54 @@ def radia_usage(topic: str = "all") -> str:
 def md2html_usage() -> str:
     """Get md2html converter documentation (MathJax, reference links, styled HTML)."""
     return get_md2html_documentation()
+
+
+@mcp.tool()
+def analytical_formulas(topic: str = "all") -> str:
+    """
+    Get documentation for radia.analytical_formulas (closed-form reference layer).
+
+    The package collects nine modules of closed-form expressions taken from
+    the Wakao-Igarashi-Fujiwara-Kameari review series (IEE Japan, 2002-2004).
+    These are the trusted-baseline analytical results that the rest of Radia
+    (MMM, MSC, PEEC, FEM panels, ngsolve.bem) is sanity-checked against.
+
+    For any new analysis the FIRST QUESTION to ask is "is there a closed form
+    here that I can validate against?". Use the validation_use_cases topic
+    for the practical mapping from analysis type -> applicable formula.
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"                  - Complete documentation
+            "overview"             - Module index, conventions, quick API surface
+            "ellipsoid"            - Rotational ellipsoid demag factor + torque
+                                     (Part 5 §5, eq 38-44; Osborn references included)
+            "ac_locus"             - B_max / B_min of an AC vector phasor's locus
+                                     (Part 5 §4, eq 29-37)
+            "shielding"            - Magnetic-shell shielding factor S
+                                     (Part 1 §5, eq 23-24)
+            "rect_magnet_2d"       - 2D rectangular bar A_z, B_x, B_y
+                                     (Part 2 §2, eq 2-3)
+            "plate_eddy"           - Thin rectangular-plate eddy current
+                                     (Part 1 §6.1, eq 26-27)
+            "solenoid_central"     - Fabri form factor + closed-form axial field
+                                     (Part 4 §4, eq 26-27)
+            "three_phase_line"     - Triangle / planar / helical line field
+                                     (Part 4 §5, Part 5 §3)
+            "elliptic_integrals"   - K(k), E(k) Hastings polynomial approximation
+                                     (Part 3 §3, Tables 1-2)
+            "gauss_legendre"       - Gauss-Legendre nodes / weights to n=24
+                                     (Part 3 §4, Table 3)
+            "validation_use_cases" - "I have X, sanity-check it with Y" mapping
+
+    Sources:
+        - src/radia/analytical_formulas/   (9 modules, ~30 functions)
+        - tests/analytical_formulas/       (145+ pytest tests, < 1 s)
+        - examples/analytical_formulas/    (10 runnable scripts + PNGs)
+        - docs/analytical_formulas.md      (PDF -> code cross-reference)
+        - to_developers/                   (the 5 PDFs)
+    """
+    return get_analytical_formulas_documentation(topic)
 
 
 @mcp.tool()
