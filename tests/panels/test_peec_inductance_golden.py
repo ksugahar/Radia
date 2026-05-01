@@ -176,7 +176,43 @@ def test_peec_inductance_3turn_loft():
 
 
 # ---------------------------------------------------------------------------
-# Test 3: .jou input retired in 4.13.0 -- only STEP is accepted now.
-#         The sibling-preference test is removed; STEP-only on the same
-#         multi-turn pancake fixture is covered by test 2 above.
+# Test 3: united multi-loft RECT cross-section torus -- Phase C-heavy
+# (Path 2c, _filaments_from_section_planes).  Locks in v4.24.0+
+# behaviour: previously NaN, now 138 nH.
 # ---------------------------------------------------------------------------
+
+@pytest.mark.slow
+def test_peec_inductance_rect_united():
+    """Phase C-heavy regression: united multi-loft + rect cross-section.
+
+    The fixture is a synthetic 355deg torus with a 8x6mm rect cross-
+    section, built as 12 ruled lofts then UNITED into one solid.  Pre-
+    v4.24.0 this returned NaN (Tier 3 longest-edge picked a lateral
+    rect edge as spine).  v4.24.0 added Path 2c (section-planes)
+    which recovers a proper cross-section at each of n_stations sample
+    points along a rotation-axis-derived spine.
+    """
+    g = _load_golden("peec_inductance_rect_united_50kHz_Cu.json")
+    step = _resolve_sample(g["sample"]["step"])
+    if not os.path.isfile(step):
+        pytest.fail(f"Sample STEP missing: {step}")
+
+    result = _run_peec(step,
+                       n_peri=g["physics"]["n_peri"],
+                       freq_hz=g["physics"]["frequency_Hz"],
+                       current_A=g["physics"]["current_A"],
+                       sigma=g["physics"]["sigma_S_per_m"])
+
+    assert result["status"] == "ok", f"solver status != ok: {result}"
+    assert result["input_kind"] == g["expected"]["input_kind"]
+
+    # Hard band first
+    guard = g["regression_guard"]
+    _assert_in_range(result["L_coil_nH"], guard["min_L_nH"],
+                      guard["max_L_nH"], "L_coil_nH (hard band)",
+                      hint=guard["comment"])
+
+    # Golden tolerance
+    exp = g["expected"]
+    _assert_close(result["L_coil_nH"], exp["L_coil_nH"],
+                  exp["tolerance_L_pct"], "L_coil_nH (golden)")
