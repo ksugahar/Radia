@@ -48,7 +48,7 @@ priority is correctness and traceability, not raw speed.
 | [`shielding`](../src/radia/analytical_formulas/shielding.py) (extensions)    | `shielding_factor_sphere_thin_ac`, `shielding_factor_cylinder_thin_ac` (AC, complex S), `spherical_shell_internal_field` (interior H, M, image dipole) | Part 6 §2, Part 8 §2 |
 | [`conductor_impedance`](../src/radia/analytical_formulas/conductor_impedance.py) | `skin_depth`, `planar_surface_impedance` (Z_s = (1+j)/(σδ)), `cylinder_ac_impedance` (full Bessel solution), `cylinder_dc_resistance`, `cylinder_internal_inductance` | Part 6 §4–§5 |
 | [`adaptive_quadrature`](../src/radia/analytical_formulas/adaptive_quadrature.py) | `patterson_nodes_weights` (n=0..3, 1/3/7/15 points), `adaptive_integrate` (node-reusing refinement) | Part 9 §2, Table 1 |
-| [`cuboid_average_field`](../src/radia/analytical_formulas/cuboid_average_field.py) | `average_B_in_box` (numerical-integration path; closed-form C++ kernel deferred — see notes below) | Part 6 §7, eq 53–56 |
+| [`cuboid_average_field`](../src/radia/analytical_formulas/cuboid_average_field.py) | `average_B_in_box` (closed-form C++ 64-corner sum; `method="numerical"` Gauss-Legendre kept for cross-checks), `average_demag_tensor` | Part 6 §7, eq 53–56 |
 
 Tests live in [`tests/analytical_formulas/`](../tests/analytical_formulas/);
 runnable demonstrations in [`examples/analytical_formulas/`](../examples/analytical_formulas/).
@@ -353,26 +353,45 @@ against ``x^p`` for p up to 22 (n=3 rule). Higher-order tables
 (n=4, 5 from PDF Table 1) were OCR-extracted but rejected pending
 high-fidelity verification.
 
-## cuboid_average_field — Part 6 §7 (numerical-integration path)
+## cuboid_average_field — Part 6 §7 (closed-form C++ kernel, v4.22.0)
 
 Spatial average of ``B`` over a target rectangular box from a uniform
-``M`` source box, by tensor-product Gauss-Legendre quadrature of
-``radia.analytical_magnet.CuboidMagnet.get_B``. Useful for FEM-MMM
-coupling (cell-averaged ``B`` in a rectangular FEM element),
-mesh-to-mesh transfer, and micromagnetics on a regular cubic
-lattice (the original PDF use case).
+``M`` source box. Useful for FEM-MMM coupling (cell-averaged ``B`` in
+a rectangular FEM element), mesh-to-mesh transfer, and micromagnetics
+on a regular cubic lattice (the original PDF use case).
 
-**Deferred work — closed-form C++ kernel.** The PDF derivation
-collapses an 8 × 8 = 64 source/target corner sum to a 27-term
-finite-difference pattern under the same-size assumption, with
-antiderivatives ``F1`` and ``F2`` (eq 56). My OCR-extracted ``F2``
-formula could not be reconciled with the y/z-mirror symmetries
-required when only ``M_x`` is non-zero (B_y, B_z components leak in
-violation of symmetry). A clean re-derivation against
-Newell-Williams-Dunlop, J. Geophys. Res. 98 (1993) 9551–9555 is
-deferred to a follow-up release. The Python numerical-integration
-path is fast enough (sub-millisecond at ``n_quad = 4``, ten
-milliseconds at ``n_quad = 12``) for typical Radia call sites.
+The default path is a **closed-form 64-corner inclusion-exclusion
+sum** of two 3-fold antiderivative primitives ``G1`` (diagonal demag)
+and ``G2`` (off-diagonal demag), implemented in C++
+(``src/core/rad_average_field.cpp``) with permutation rules that cover
+all 9 entries of the average demag tensor. Performance is ~40 µs per
+call (817× faster than the Gauss-Legendre numerical baseline).
+
+Both ``G1`` and ``G2`` were derived in-house by direct sympy
+integration of ``-∂²(1/R)/∂X²`` and ``-∂²(1/R)/∂X∂Y`` (the demag-tensor
+kernels) over the displacement-box, after observing that the originally
+cited parent reference Stafl 1967 §3.4 is a 2D rectangular-conductor
+problem and not the 3D cuboid-magnetisation problem of Wakao Part 6 §7.
+Verified at ``rel_err ≈ 1e-13`` against the Gauss-Legendre baseline
+across diagonal-offset, side-by-side, distant, and self-source
+geometries; the canonical self-cube demag tensor evaluates to ``-(1/3)·I``
+exactly (trace = -1).
+
+The closed-form path handles overlapping source-target boxes (including
+the self-source case) via a ``mu_0 * M * V_overlap / V_T`` correction
+term added to the H-field part returned by the corner sum.
+
+**Numerical caveat.** The 64-corner sum suffers ULP cancellation when
+``V_T ≪ V_S`` (the corner-primitive values are O(1) and the
+alternating sum needs to evaluate to a much smaller number). For
+true point-field evaluation, call ``CuboidMagnet.get_B(point)``
+directly. For mismatched-scale box averages, ``average_B_in_box(...,
+method="numerical", n_quad=8)`` falls back to tensor-product
+Gauss-Legendre quadrature kept for diagnostic / cross-validation use.
+
+References for the derivation: Wakao-Igarashi-Fujiwara-Kameari Part 6
+§7 eq 53–56; Newell, Williams & Dunlop, J. Geophys. Res. 98 (1993)
+9551–9555.
 
 ## Updating this document
 
