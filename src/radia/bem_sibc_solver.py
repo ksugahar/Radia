@@ -292,15 +292,29 @@ class ScalarBIESIBCSolver:
         self.M_inv = np.linalg.inv(self.M)
         self._c_gauge = self.M @ np.ones(n_dof)
 
-        # HACApK compression of P2-Lagrange SL/DL is not yet plumbed in.
-        # The HACApK manager assumes one coordinate per DOF, which we have
-        # via dof_coords, so this is a small follow-up; defer for now.
+        # HACApK compression: feed the manager `dof_coords` (one position
+        # per Lagrange DOF -- vertex or edge midpoint).  HACApK is
+        # basis-agnostic; it only uses the coords for spatial bisection
+        # of the cluster tree.
         self._SL_hacapk = None
         self._DL_hacapk = None
         if use_intree_hacapk:
-            raise NotImplementedError(
-                "HACApK compression for the Lagrange-P2 path is not yet "
-                "implemented.  Use use_intree_hacapk=False for order=2.")
+            from radia import _radia_pybind as _rpb_h
+            coords_full = np.ascontiguousarray(dof_coords, dtype=np.float64)
+            SL_arr = np.ascontiguousarray(self.SL)
+            DL_arr = np.ascontiguousarray(self.DL)
+            self._SL_hacapk = _rpb_h.HACApKBEMManager(coords_full, SL_arr)
+            self._SL_hacapk.BuildHMatrix(
+                aca_eps=hacapk_aca_eps,
+                leaf_size=int(hacapk_leaf),
+                eta=hacapk_eta,
+                max_rank=-1, print_level=0)
+            self._DL_hacapk = _rpb_h.HACApKBEMManager(coords_full, DL_arr)
+            self._DL_hacapk.BuildHMatrix(
+                aca_eps=hacapk_aca_eps,
+                leaf_size=int(hacapk_leaf),
+                eta=hacapk_eta,
+                max_rank=-1, print_level=0)
 
     def solve(self, phi_inc_cf, Z_s, omega):
         """Solve scalar BIE + SIBC for given incident potential and impedance.
@@ -446,8 +460,9 @@ class ScalarBIESIBCSolver:
 
         Args / Returns: same as solve().
         """
-        from ngsolve import (LinearForm, GridFunction, Integrate, CF, ds,
-                             grad, BND, InnerProduct)
+        if not self._intree_lagrange_p2:
+            from ngsolve import (LinearForm, GridFunction, Integrate, CF, ds,
+                                 grad, BND, InnerProduct)
         from scipy.sparse.linalg import LinearOperator, gmres
         if self._SL_hacapk is None or self._DL_hacapk is None:
             raise RuntimeError(
@@ -460,6 +475,10 @@ class ScalarBIESIBCSolver:
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
             rhs_vec = self.M @ phi_inc_cf
+        elif self._intree_lagrange_p2:
+            raise TypeError(
+                "Lagrange-P2 path requires phi_inc as an ndarray of length "
+                f"ndof={ndof}.  Sample your CF at solver.dof_coords.")
         else:
             v_h1 = self.fes.TestFunction()
             lf = LinearForm(self.fes)
@@ -532,18 +551,25 @@ class ScalarBIESIBCSolver:
         t_solve = time.perf_counter() - t0
 
         # Compute H_t_rms / P_density (same as solve())
-        gf = GridFunction(self.fes)
-        gf.vec.FV().NumPy()[:] = phi_vec.real
-        Hsq_re = Integrate(InnerProduct(grad(gf), grad(gf)),
-                           self.mesh, BND)
-        gf.vec.FV().NumPy()[:] = phi_vec.imag
-        Hsq_im = Integrate(InnerProduct(grad(gf), grad(gf)),
-                           self.mesh, BND)
-        area = Integrate(CF(1), self.mesh, BND)
-        H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
+        if self._intree_lagrange_p2:
+            Hsq_re = float(phi_vec.real @ (self.K @ phi_vec.real))
+            Hsq_im = float(phi_vec.imag @ (self.K @ phi_vec.imag))
+            area = float(np.ones(ndof) @ (self.M @ np.ones(ndof)))
+            H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
+            gf_phi = None
+        else:
+            gf = GridFunction(self.fes)
+            gf.vec.FV().NumPy()[:] = phi_vec.real
+            Hsq_re = Integrate(InnerProduct(grad(gf), grad(gf)),
+                               self.mesh, BND)
+            gf.vec.FV().NumPy()[:] = phi_vec.imag
+            Hsq_im = Integrate(InnerProduct(grad(gf), grad(gf)),
+                               self.mesh, BND)
+            area = Integrate(CF(1), self.mesh, BND)
+            H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
+            gf_phi = GridFunction(self.fes)
+            gf_phi.vec.FV().NumPy()[:] = phi_vec.real
         P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0.0
-        gf_phi = GridFunction(self.fes)
-        gf_phi.vec.FV().NumPy()[:] = phi_vec.real
         return {
             'phi': gf_phi,
             'phi_vec': phi_vec,
