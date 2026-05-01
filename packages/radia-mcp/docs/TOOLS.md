@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **103 tools** across 9 MCP servers.
+Total: **104 tools** across 9 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 17 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 18 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
 | [`mcp-server-elf`](#mcp-server-elf) | `radia_mcp.elf` | 1 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
@@ -112,6 +112,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
+| `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
