@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.34.2"
-description = "MCP servers for the Radia CAE ecosystem. 0.34.2 (2026-04-28): peec_inductance new filament_dispatch topic — 3-tier filament placement (UV-map/per-station/equiv-circle) covering radia 4.13-4.15. 0.34.1: radia 4.14.0 united multi-loft fallback documented. 0.34.0: STEP-only policy (.jou retired). 0.33.8: PyPI 512-char fix."
+version = "0.35.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.35.0 (2026-05-01): new analytical_formulas tool exposing radia.analytical_formulas (Wakao-Igarashi-Fujiwara-Kameari Part 1-5) — closed-form reference for ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rect bar, thin-plate eddy, Fabri solenoid, three-phase line, K(k)/E(k), Gauss-Legendre. 0.34.2 (2026-04-28): peec_inductance new filament_dispatch topic. 0.34.1: radia 4.14.0 united multi-loft fallback documented. 0.34.0: STEP-only policy (.jou retired)."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
