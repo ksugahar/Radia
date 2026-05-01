@@ -49,6 +49,7 @@ priority is correctness and traceability, not raw speed.
 | [`conductor_impedance`](../src/radia/analytical_formulas/conductor_impedance.py) | `skin_depth`, `planar_surface_impedance` (Z_s = (1+j)/(σδ)), `cylinder_ac_impedance` (full Bessel solution), `cylinder_dc_resistance`, `cylinder_internal_inductance` | Part 6 §4–§5 |
 | [`adaptive_quadrature`](../src/radia/analytical_formulas/adaptive_quadrature.py) | `patterson_nodes_weights` (n=0..3, 1/3/7/15 points), `adaptive_integrate` (node-reusing refinement) | Part 9 §2, Table 1 |
 | [`cuboid_average_field`](../src/radia/analytical_formulas/cuboid_average_field.py) | `average_B_in_box` (closed-form C++ 64-corner sum; `method="numerical"` Gauss-Legendre kept for cross-checks), `average_demag_tensor` | Part 6 §7, eq 53–56 |
+| [`induction_heating`](../src/radia/analytical_formulas/induction_heating.py) | `cylinder_axial_eddy_loss` (full Bessel form), `cylinder_axial_eddy_loss_small_ka` (Faraday eddy limit), `cylinder_axial_eddy_loss_thin_skin` (planar surface-impedance limit) | Smythe §11.07, Landau-Lifshitz §59, Jackson §5.18 |
 
 Tests live in [`tests/analytical_formulas/`](../tests/analytical_formulas/);
 runnable demonstrations in [`examples/analytical_formulas/`](../examples/analytical_formulas/).
@@ -392,6 +393,52 @@ Gauss-Legendre quadrature kept for diagnostic / cross-validation use.
 References for the derivation: Wakao-Igarashi-Fujiwara-Kameari Part 6
 §7 eq 53–56; Newell, Williams & Dunlop, J. Geophys. Res. 98 (1993)
 9551–9555.
+
+## induction_heating — canonical AC cylinder Joule loss (v4.23.0)
+
+Closed-form time-averaged Joule loss per unit length of an infinite
+conductive cylinder placed inside a long axial-current solenoid, the
+canonical induction-furnace work-piece geometry. Closed-form via the
+Kelvin functions (`scipy.special.{ber, bei, berp, beip}`):
+
+```
+P = (π / σ) H_0² (ka)
+    · (ber(ka) ber'(ka) + bei(ka) bei'(ka))
+    / (ber(ka)² + bei(ka)²),    k = sqrt(ω σ μ).
+```
+
+Two asymptotic forms validated against the full Bessel formula:
+
+* `cylinder_axial_eddy_loss_small_ka` — thick-skin / Faraday-eddy
+  limit: `P → π σ ω² μ² H_0² a^4 / 16`.  Matches the elementary
+  derivation by Faraday's law plus Joule integral over a cylinder
+  with uniform internal `B`.
+
+* `cylinder_axial_eddy_loss_thin_skin` — high-frequency planar
+  surface-impedance limit: `P → π a H_0² Re(Z_s)` with
+  `Re(Z_s) = sqrt(ω μ / (2 σ))`.
+
+Both limits agree with the full formula across the parameter sweep
+in `tests/analytical_formulas/test_induction_heating.py` (tested
+ka = 0.001 ... 100; small-ka rtol 1e-4, thin-skin rtol 0.02-0.10
+depending on ka).
+
+**Phase γ history.** v4.23.0's `induction_heating` module was the
+*pivot* result of an aborted attempt to absorb Stafl 1967
+"Electrodynamics of Electrical Machines" Chapter 4 §4.1-§4.4 closed-
+forms. The PDF-OCR'd Stafl formulas systematically failed validation
+against the canonical thick-skin and thin-skin limits (sphere ~1e10×
+overestimate, transverse-cylinder *negative* losses, longitudinal-
+cylinder ~800× off at low frequency).  The cylinder formula above
+was therefore re-derived from first principles in-house and matches
+the textbook references directly. Stafl §4.1 (transformer winding)
+and §4.5 (filament near plate) remain unimplemented.
+
+References: Smythe W. R., *Static and Dynamic Electricity*
+(McGraw-Hill, 3rd ed. 1968), §11.07. Landau L. D., Lifshitz E. M.,
+*Electrodynamics of Continuous Media* (Pergamon, 2nd ed. 1984), §59.
+Jackson J. D., *Classical Electrodynamics* (Wiley, 3rd ed. 1999),
+§5.18.
 
 ## Updating this document
 
