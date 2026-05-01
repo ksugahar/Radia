@@ -68,7 +68,7 @@ def run_bem(vol_path, frequency, sigma, mu_r, R_wp, tmpdir):
 
     from calc_common import setup_paths
     setup_paths()
-    from bem_sibc_solver import ScalarBIESIBCSolver, compute_phi_inc_from_loop
+    from radia.bem_sibc_solver import ScalarBIESIBCSolver, compute_phi_inc_from_loop
 
     # BEM assembly
     solver = ScalarBIESIBCSolver(mesh, order=1)
