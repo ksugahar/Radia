@@ -148,15 +148,7 @@ class FilamentBundleAC:
         Uses the Phase 1.12 C++-accelerated compute_phi_inc_from_filaments
         helper (same gauge: phi -> 0 at z_far).
         """
-        # Local import to keep this module Radia-only
-        try:
-            import sys
-            sys.path.insert(0,
-                "S:/Radia/01_GitHub/examples/induction_heating/bem_reference")
-            from bem_sibc_solver import compute_phi_inc_from_filaments
-        except ImportError as e:
-            raise RuntimeError(
-                "compute_phi_inc_from_filaments unavailable: " + str(e))
+        from radia.bem_sibc_solver import compute_phi_inc_from_filaments
         return compute_phi_inc_from_filaments(
             obs, self._filament_paths, self._currents)
 

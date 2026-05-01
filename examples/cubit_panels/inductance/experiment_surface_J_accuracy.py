@@ -28,7 +28,7 @@ MU_0 = 4e-7 * np.pi
 def main():
     from ngsolve import Mesh, Integrate, CF, ds, BND, TaskManager
     from netgen.occ import Cylinder, Pnt, Dir, OCCGeometry, Glue
-    from bem_sibc_solver import (ScalarBIESIBCSolver,
+    from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                   compute_phi_inc_from_loop,
                                   compute_phi_inc_from_surface_J)
     from bem_inductance import compute_inductance_source_sink

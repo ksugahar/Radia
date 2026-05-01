@@ -44,7 +44,7 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     """
     from ngsolve import (Mesh, Integrate, CF, ds, BND, TaskManager)
     from netgen.occ import (Cylinder, Pnt, Dir, OCCGeometry, Glue)
-    from bem_sibc_solver import (ScalarBIESIBCSolver, compute_phi_inc_from_loop)
+    from radia.bem_sibc_solver import (ScalarBIESIBCSolver, compute_phi_inc_from_loop)
     from esim_cell_problem import ESIMFiniteSlabSolver
 
     omega = 2 * np.pi * frequency
