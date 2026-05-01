@@ -106,6 +106,70 @@ def test_sphere_shielding_high_mu_limit():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Solenoid axial field  vs.  numerical Biot-Savart (stacked CurrentLoops)
+# ---------------------------------------------------------------------------
+
+
+def _stacked_loops_axial_Bz(z_obs, a1, a2, b, J, n_r=20, n_z=80):
+    """Numerical reference: midpoint-rule stacking of analytical
+    ``CurrentLoop`` rings to represent the rectangular-section solenoid.
+
+    Each annular slice of radial thickness ``dr`` and axial thickness
+    ``dz`` carries current ``dI = J * dr * dz`` and is modelled as a
+    circular current loop at the cell centre.
+
+    Convergence is ``O((dr / a)**2 + (dz / b)**2)`` (midpoint-rule).
+    """
+    from radia.analytical_magnet import CurrentLoop
+
+    dr = (a2 - a1) / n_r
+    dz = (2.0 * b) / n_z
+    Bz = 0.0
+    for i in range(n_r):
+        r = a1 + (i + 0.5) * dr
+        for k in range(n_z):
+            z_ring = -b + (k + 0.5) * dz
+            dI = J * dr * dz
+            loop = CurrentLoop(
+                center=[0.0, 0.0, z_ring],
+                diameter=2.0 * r,
+                current=dI,
+                axis="z",
+                units="m",
+            )
+            Bz += loop.get_B([0.0, 0.0, z_obs])[2]
+    return Bz
+
+
+@pytest.mark.parametrize("z_obs", [0.0, 0.05, 0.15])
+def test_solenoid_axial_field_matches_stacked_currentloops(z_obs):
+    """Closed-form ``solenoid_axial_field`` matches a numerical stack of
+    ``CurrentLoop`` rings to midpoint-rule precision.
+    """
+    from radia.analytical_formulas import solenoid_axial_field
+
+    a1, a2, b, J = 0.05, 0.10, 0.10, 1.0e7
+    Bz_closed = float(solenoid_axial_field(z_obs, a1, a2, b, J))
+    Bz_num = _stacked_loops_axial_Bz(z_obs, a1, a2, b, J, n_r=20, n_z=80)
+    # 20 x 80 midpoint rule is well below 1e-3 relative on this problem.
+    assert Bz_num == pytest.approx(Bz_closed, rel=2e-3, abs=1e-9)
+
+
+def test_solenoid_axial_field_midpoint_convergence():
+    """The stacked-loop approximation converges as the grid is refined."""
+    from radia.analytical_formulas import solenoid_axial_field
+
+    a1, a2, b, J = 0.05, 0.10, 0.10, 1.0e7
+    Bz_ref = float(solenoid_axial_field(0.05, a1, a2, b, J))
+    err1 = abs(_stacked_loops_axial_Bz(0.05, a1, a2, b, J, n_r=10, n_z=40)
+               - Bz_ref)
+    err2 = abs(_stacked_loops_axial_Bz(0.05, a1, a2, b, J, n_r=20, n_z=80)
+               - Bz_ref)
+    # Doubling resolution should reduce error by at least 3x (midpoint is O(h^2)).
+    assert err2 < err1 / 3.0
+
+
 def test_plate_eddy_total_moment_against_quick_estimate():
     """The total in-plane current density integrated as a magnetic
     moment ``m_z = (1/2) integral (r x J)_z dx dy`` should be
