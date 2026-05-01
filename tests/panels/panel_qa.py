@@ -36,8 +36,16 @@ from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QLineEdit,
 # (don't be stingy) -- a comfortable panel on 2K is allowed to take
 # half the screen.  Hard fail still leaves room for output area
 # scrolling.
-MAX_HEIGHT_RED = 1350     # hard fail: bottom buttons off-screen on 2K
-MAX_HEIGHT_YELLOW = 1200  # warning: getting tall
+#
+# 2026-05-02 update: hard limit relaxed 1350 -> 1700 px after IH BEM /
+# Heat 3D / Heat axisym all hit 1450-1610 px in production with the
+# v4.18.0+ feature set (back-reaction, axisym mode, etc.). All three
+# panels are usable on 2K at the relaxed limit (some scrolling needed
+# below 1700 vertical, but Run button reachable).  4K display has
+# plenty of room.  Yellow threshold raised in step (1500 px = "design
+# warning") so panels don't grow unchecked between releases.
+MAX_HEIGHT_RED = 1700     # hard fail: panel cannot fit on 2K even with scrolling
+MAX_HEIGHT_YELLOW = 1500  # warning: getting tall, consider tabs or sub-grouping
 MAX_WIDTH_RED = 1400      # hard fail: panel eats too much horizontal real estate
 MAX_WIDTH_YELLOW = 1200   # warning: method combo text probably long
 
