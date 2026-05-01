@@ -300,6 +300,34 @@ regression for shipped golden cases.
     ``regularize`` that fragments it).  Tier 1 will UV-sample.
   * If you must ``unite`` (e.g. for downstream Cubit meshing), expect
     Tier 3 fallback and accept the equivalent-circle approximation.
+
+## Unsupported topology (DO NOT silently trust the result)
+
+The 3-tier dispatch covers the **smooth-coil regime**: continuous
+spine + continuous cross-section + 2-port + non-magnetic conductor +
+``d/δ ≥ 3``.  Outside that regime, Tier 3 (equivalent-circle)
+"runs but is not physical".  The known unsupported / inaccurate
+cases:
+
+| Case                                              | Behaviour                  | Fix path |
+|---------------------------------------------------|----------------------------|----------|
+| Cross-section **discontinuity** along the spine (circle→rect, sudden step in area) | Tier 2 connects sample-k-station-i to sample-k-station-i+1 across the discontinuity → non-physical filament path; Tier 3 averages the area → loses detail | **Phase C-heavy** (deferred since v4.17.0; see ``project_peec_phase_c_heavy_deferred.md``) |
+| **United** multi-loft with non-circular cross-section (rect / polygon / shape-transition) | Tier 1 UV-map trips because the lateral surface is fragmented across the ``unite()`` boolean; Tier 3 falls back to equivalent-circle (Kubota's 3turncoil case: 421.837 nH vs 426.25 nH golden = -1.0 %) | Phase C-heavy (BSPLINE-adjacency graph traversal + Hamiltonian path) |
+| **T-junction / Y-branch** bus bar                  | single-spine polyline assumption breaks; ``filaments_from_polyline`` cannot represent topology | Multi-spine PEEC re-architecture (no concrete plan) |
+| **>2-port** coil (multi-tap)                       | ``add_port(n1, n2)`` is single-pair; cannot express 3+ port impedance matrix | Multi-port PEEC topology extension |
+| **Closed loop** with no external terminals         | port assignment fails; cannot define the source current | Out of scope; PEEC inherently needs at least 1 driving port |
+| **Litz wire** (N strands per cross-section)        | perimeter is sampled as a single outer wire; bundle inter-strand mutual L is not represented | Bundle-PEEC (multiple parallel filament sets per spine station) |
+| **Magnetic conductor** (μ_r > 1, e.g. iron busbar) | SIBC ``Z_s = (1+j) / (σ δ)`` is for non-magnetic; need ``Z_s = (1+j) sqrt(ω μ / (2 σ))`` with the correct μ | One-line patch in ``rad_peec_surface_impedance.cpp`` after deciding the σ + μ_r input UX |
+| **Thick-skin** ``d/δ < 3``                         | perimeter-only filaments miss the interior current distribution | Out of scope for this panel; switch to FEM A-V (volumetric coil mesh) |
+| **Self-intersecting** STEP                         | OCC topology load undefined behaviour | Reject at parse time |
+| **Non-manifold** STEP                              | ``build123d.import_step`` partial-parses or silently drops shells | Add a manifold-check before dispatch |
+
+**Action when the user asks for any of the above**: do NOT silently
+fall back to Tier 3. Either (a) refuse + explain the limitation
+(if the inaccuracy is unacceptable), or (b) accept Tier 3 with a
+WARN log line that names the specific limitation (e.g. ``WARN:
+united multi-loft falling back to equivalent-circle, expect -1 to
+-5 % on L``).
 """
 
 
