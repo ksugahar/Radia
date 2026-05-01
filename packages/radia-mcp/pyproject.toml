@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.35.1"
-description = "MCP servers for the Radia CAE ecosystem. 0.35.x (2026-05-01): new analytical_formulas tool exposing closed-form reference layer (Wakao-Igarashi-Fujiwara-Kameari Part 1-5: ellipsoid demag/torque, AC locus, shielding, 2D rect bar, plate eddy, Fabri solenoid, 3-phase line, K(k)/E(k), Gauss-Legendre). 0.34.2: peec_inductance filament_dispatch topic. 0.34.0: STEP-only policy."
+version = "0.36.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.36.0 (2026-05-01): analytical_formulas Group D extensions (Part 6/8/9): plate dissipation, AC thin-shell shielding, conductor impedance, Patterson quadrature, cuboid average B. 0.35.x: analytical_formulas tool (Wakao Part 1-5). 0.34.2: peec_inductance filament_dispatch."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
