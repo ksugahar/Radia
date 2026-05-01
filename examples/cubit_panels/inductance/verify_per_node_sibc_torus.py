@@ -67,7 +67,7 @@ from ngsolve import Mesh, BND
 from netgen.occ import (Pnt, Dir, Axes, Axis, OCCGeometry, Glue,
                          WorkPlane)
 
-from bem_sibc_solver import ScalarBIESIBCSolver
+from radia.bem_sibc_solver import ScalarBIESIBCSolver
 from calc_inductance import (_extract_panels_from_mesh,
                               _compute_panel_local_radii,
                               _build_per_node_Zs, _dowell_Zs)

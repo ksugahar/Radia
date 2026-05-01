@@ -45,12 +45,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC_RADIA = os.path.abspath(os.path.join(HERE, ".."))
-# bem_sibc_solver lives under examples/bem_reference/ (demoted from
-# production per memory project_ih_bem_to_examples.md).  We import it
-# from there; this keeps only one canonical copy.
-BEM_REF = os.path.abspath(os.path.join(
-    HERE, "..", "..", "..", "examples", "induction_heating", "bem_reference"))
-for p in (SRC_RADIA, HERE, BEM_REF):
+for p in (SRC_RADIA, HERE):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -179,8 +174,8 @@ def solve_peec_bem_forward(peec_step,
     from ngsolve import Mesh, BND
     from em_material import EMMaterial
     from surface_mesh_extract import _extract_surface_mesh_filtered
-    from bem_sibc_solver import (ScalarBIESIBCSolver,
-                                  compute_phi_inc_from_filaments)
+    from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
+                                        compute_phi_inc_from_filaments)
 
     omega = 2 * math.pi * frequency
 

@@ -1349,7 +1349,7 @@ INDUCTION_HEATING_PEEC_BEM_SIBC = """
 ```python
 from radia_coil_builder import CoilBuilder
 from peec_bundle import build_bundle_solver
-from bem_sibc_solver import (ScalarBIESIBCSolver,
+from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                               compute_phi_inc_from_filaments)
 
 # 1. Coil geometry via CAD-first API (NO mesh)

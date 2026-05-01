@@ -20,7 +20,7 @@ def run():
     from impedance_esim import make_gapped_torus_mesh
     from bem_coupled_solver import (CoupledBEMSolver, extract_element_J,
                                      vector_potential_from_J)
-    from bem_sibc_solver import compute_phi_inc_from_surface_J
+    from radia.bem_sibc_solver import compute_phi_inc_from_surface_J
     from esim_cell_problem import ESIMFiniteSlabSolver
     from scipy.linalg import lu_solve
 
