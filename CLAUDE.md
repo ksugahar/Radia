@@ -1020,45 +1020,51 @@ git push v* tag
 robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 ```
 
-### Distribution Test Policy (2026-04-24, updated 2026-04-28)
+### Distribution Test Policy (2026-04-24, updated 2026-05-01)
 
-**POLICY**: **PyPI 経由の配布試験は mdx で行う**。LAB と 100号機 は **3 パッケージ
-全て editable install** (`pip install -e`) で運用し、PyPI wheel の manifest /
-RECORD / entry-points / package-data / `cubit-plugin-install`
-regular-file deploy の健全性検証は **mdx 限定**。100号機 は PyPI 版の
-テスト対象としない (editable 専用)。Stage-3 が通るまで PyPI 配布の OK を
-宣言してはいけない。
+**POLICY (2026-05-01 update)**: 100号機 を **PyPI install** に切替え、mdx を
+**editable install** に切替え。配布テストは **100号機** で行う (Cubit panels 含む
+end-to-end のリリース wheel 検証)。mdx は **editable + local clone** で動かし、
+ヘッドレス検証 + LAB 独立な dev iteration に使う。LAB は変わらず editable
+(NAS source).
 
-**3 ステージ配布モデル**:
+**3 ステージ配布モデル (2026-05-01 reconfigured)**:
 
 | Stage | マシン | install 形態 | 目的 |
 |-------|--------|-----------|------|
-| 1 | LAB | `pip install -e .` + `pip install -e packages/cubit-mesh-export` + `pip install -e packages/radia-mcp` | 開発者ループ。最速フィードバック |
-| 2 | 100号機 | 上記 3 パッケージ全て `pip install -e W:\...` (all-users editable) | LAB 編集が 21 人全員で即 live。Cubit plugin は W: への symlink |
-| 3 | mdx | `pip install radia` / `pip install cubit-mesh-export` / `pip install radia-mcp` (PyPI) + `cubit-plugin-install` | PyPI 配布の唯一の検証点 |
+| 1 | LAB | `pip install -e .` + `pip install -e packages/cubit-mesh-export` + `pip install -e packages/radia-mcp` | 開発者ループ。最速フィードバック (NAS source 直接編集) |
+| 2 | mdx | local clone (`C:\Radia\01_GitHub`) + 全 3 パッケージ editable | ヘッドレス検証 (no Cubit) + LAB 独立な dev iteration が必要なら mdx でも commit 可 |
+| 3 | 100号機 | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` (regular-file deploy) | PyPI wheel + Cubit plugin の唯一の end-to-end 検証点。21 人全員が触る本番。Stage-3 が通るまで release OK を宣言しない。 |
 
-**LAB / 100号機 で editable な 4 パッケージ** (2026-04-28 追記):
-- `radia` (LAB: `S:\Radia\01_GitHub`, 100: `W:\00_CAE\Radia\01_GitHub`)
-- `cubit-mesh-export` (LAB: `S:\Radia\01_GitHub\packages\cubit-mesh-export`, 100: `W:\00_CAE\Radia\01_GitHub\packages\cubit-mesh-export`)
-- `radia-mcp` (LAB: `S:\Radia\01_GitHub\packages\radia-mcp`, 100: `W:\00_CAE\Radia\01_GitHub\packages\radia-mcp`)
-- `mcp-server-document` (LAB: `S:\mcp-server`, 100: `W:\00_CAE\mcp-server`) -- LAB-private (PyPI 配布なし)
+**変更点 (2026-05-01)**:
+- 旧: 100号機 = editable from NAS, mdx = PyPI.
+- 新: 100号機 = PyPI, mdx = editable from local clone.
+- 理由 (推定): 100号機 を本番として扱い、リリース wheel が 21 ユーザに正しく届くかを 100号機 自体で検証する方が合理的。mdx は LAB-NAS にアクセスできず (UNC 不可) ので local clone 経由 editable で開発作業継続可。
 
-4 つとも editable で居続けることが正解。**LAB or 100号機 で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れる** (2026-04-28 release で実際に発生)。release 後の metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化すること。`pip install --upgrade` は **mdx 専用**。
+**LAB のみ editable な 4 パッケージ** (2026-05-01 追記):
+- `radia` (LAB: `S:\Radia\01_GitHub`)
+- `cubit-mesh-export` (LAB: `S:\Radia\01_GitHub\packages\cubit-mesh-export`)
+- `radia-mcp` (LAB: `S:\Radia\01_GitHub\packages\radia-mcp`)
+- `mcp-server-document` (LAB: `S:\mcp-server`) -- LAB-private (PyPI 配布なし)
 
-**100号機 全ユーザー editable**: `C:\Program Files\Python312` の
-machine-wide site-packages に editable install。`W:\00_CAE\Radia\01_GitHub`
-の ACL は `Authenticated Users Modify` なので全 local ユーザーが読める
-(admin 不要)。
+LAB で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意 (2026-04-28 incident)。release 後の LAB 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx および 100号機 用** (mdx は editable 上書きを避けて local clone を refresh、100号機 は PyPI から普通に upgrade).
 
-**100号機 Cubit plugin symlink** (editable の C++ 側):
-- `<Cubit>\bin\radia_cubit.ccl` → W:\…\src\radia\radia_cubit.ccl
-- `<Cubit>\bin\plugins\radia_cubit.ccm` → W:\…\src\radia\radia_cubit.ccm
-- `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` → W:\…\packages\cubit-mesh-export\src\cubit_mesh_export\radia_cubit_mesh.pyd
+**100号機 全ユーザー PyPI install (2026-05-01)**: `C:\Program Files\Python312`
+の machine-wide site-packages に PyPI install。21 人の local ユーザは
+全員同じ install を共有。リリース毎に admin が `pip install --upgrade
+radia==X.Y.Z radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z` + `cubit-plugin-install
+--all-users` を実行。
 
-LAB `Build.ps1` の出力が即座に 100 の Cubit で有効。symlink 下では
-**`cubit-plugin-install` を走らせない** (symlink が regular-file で上書き
-されて editable-deploy が壊れる)。mdx では regular-file deploy
- (`cubit-plugin-install`) を検証する。
+**100号機 Cubit plugin (2026-05-01: regular file)**:
+- `<Cubit>\bin\radia_cubit.ccl` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` (regular file from PyPI wheel)
+
+LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるが、100号機 の
+PyPI install には反映されない**。C++ 変更を 100号機 で試すには PyPI release を
+切るか、一時的に 100号機 で `pip install --force-reinstall --no-cache-dir
+//192.168.11.100/work/00_CAE/Radia/01_GitHub` で NAS-source install へ切戻す。
+通常運用は **PyPI release → 100号機 で `pip install --upgrade`**。
 
 ### CI Testing Policy
 
