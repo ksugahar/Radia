@@ -940,19 +940,18 @@ void AssembleSLDL_P2(
     (void)verts;
     (void)n_v;
 
-    // Same admissibility-dispatched quadrature setup as the P1 entry.
+    // Quadrature rules.  For the P2 Lagrange basis the integrand on
+    // each triangle is degree 2 in (xi, eta) (the Lagrange hats) times
+    // a smooth distance kernel.  A 1-point centroid rule is too crude
+    // at far field because the vertex hats N_0..N_2 evaluate to
+    // -1/9 at the centroid (a NON-AVERAGE value for the rank-1
+    // outer product) and the rank-1 quadrature systematically biases
+    // the far-field block.  We therefore swap the far rule for
+    // Stroud 7-pt (deg 5, exact for polynomials of total degree <= 5)
+    // and keep eta thresholds the same as P1.
     TriQuad q_reg_near = pick_tri_quad(regular_quad_degree);
-    TriQuad q_reg_mid;
-    {
-        TriQuad q5 = make_stroud_7();
-        q_reg_mid = q5;
-    }
-    TriQuad q_reg_far;
-    {
-        q_reg_far.xi.push_back(1.0/3.0);
-        q_reg_far.eta.push_back(1.0/3.0);
-        q_reg_far.w.push_back(0.5);
-    }
+    TriQuad q_reg_mid  = make_stroud_7();
+    TriQuad q_reg_far  = make_stroud_7();
     constexpr double admissibility_eta_far = 4.0;
     constexpr double admissibility_eta_mid = 2.0;
     SSQuad ss_cv, ss_ce, ss_id;
