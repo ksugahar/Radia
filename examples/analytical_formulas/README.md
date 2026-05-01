@@ -1,15 +1,16 @@
 # Analytical Formula Examples
 
-These five short scripts exercise [`radia.analytical_formulas`](../../src/radia/analytical_formulas/),
+These short scripts exercise [`radia.analytical_formulas`](../../src/radia/analytical_formulas/),
 which collects closed-form expressions taken from the IEE Japan review series
 
 > 若尾真治, 五十嵐一, 藤原耕二, 野口聡, 松尾哲司, 亀有昭久,
 > "Useful Formulas of Analytical Integration in Electromagnetic Field
-> Computations (Part 1..5)", IEE Japan Joint Technical Meeting,
-> 2002–2004.
+> Computations (Part 1..9)", IEE Japan Joint Technical Meeting,
+> 2002–2007.
 
-The PDFs of the review live in [`to_developers/`](../../to_developers/);
-each example below pins the relevant Part and equation numbers.
+Each example below pins the relevant Part and equation numbers; for
+the full PDF↔code cross-reference see
+[`docs/analytical_formulas.md`](../../docs/analytical_formulas.md).
 
 | Script | Topic | PDF reference |
 |--------|-------|---------------|
