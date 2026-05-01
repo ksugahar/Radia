@@ -18,6 +18,11 @@ each example below pins the relevant Part and equation numbers.
 | [`cylinder_sphere_shielding.py`](cylinder_sphere_shielding.py) | Static shielding factor of cylindrical and spherical magnetic shells in a uniform external field; thin-shell asymptote check. | Part 1 §5, eq 23–24 |
 | [`rect_magnet_2d_field.py`](rect_magnet_2d_field.py) | 2D field of a uniformly magnetised rectangular bar; verifies far-field 2D dipole law. | Part 2 §2, eq 2–3 |
 | [`rectangular_plate_eddy.py`](rectangular_plate_eddy.py) | Eddy current in a thin rectangular plate under a slowly-varying perpendicular B-field; plots streamlines and cross-sections. | Part 1 §6.1, eq 26–27 |
+| [`cross_validation_3d_vs_2d.py`](cross_validation_3d_vs_2d.py) | Cross-check the 2D bar formula against `radia.analytical_magnet.CuboidMagnet` in the long-bar limit (`L_z -> infty`); convergence is `O(1 / L_z**2)`. | Part 2 §2 + 3D Yang/Camacho |
+| [`solenoid_axial_field.py`](solenoid_axial_field.py) | Central- and axial-field profile of a rectangular-section solenoid; verifies the long-coil limit `B_0 -> mu_0 J (a_2 - a_1)`. | Part 4 §4, eq 26–27 |
+| [`three_phase_line_field.py`](three_phase_line_field.py) | Three-phase line far-field decay: triangle (1/r²), planar (1/r², √3 prefactor), helical (exp(-2π r/p)). | Part 4 §5, Part 5 §3 |
+| [`elliptic_integrals_accuracy.py`](elliptic_integrals_accuracy.py) | Absolute-error plot of degree-2 vs degree-4 Hastings approximations of K(k), E(k) against `scipy.special`. | Part 3 §3, Tables 1–2 |
+| [`gauss_legendre_demo.py`](gauss_legendre_demo.py) | Gauss-Legendre nodes / weights table and spectral-convergence plot for two smooth integrands. | Part 3 §4, Table 3 |
 
 All scripts run in seconds on a laptop, write a PNG next to themselves
 when matplotlib is available, and print a tabular numerical summary

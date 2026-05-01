@@ -150,3 +150,53 @@ def test_torque_volume_scaling():
     T2 = ellipsoid_torque(100.0, math.pi / 4, chi_r=10.0, a=0.02, c=0.04)
     # Doubling both a and c gives V * 8
     assert T2 / T1 == pytest.approx(8.0, rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# Osborn 1945 reference values (Phys. Rev. 67, 351, Tables I and II)
+# ---------------------------------------------------------------------------
+
+# Polar demag factor along the symmetry axis, computed from the closed forms
+# in Osborn, J.A., "Demagnetizing Factors of the General Ellipsoid",
+# Phys. Rev. 67 (1945) 351-357 with high-precision SymPy. Aspect ratio
+# m = c / a (polar / equatorial).
+OSBORN_REFERENCE = {
+    # (m, expected N_z) -- 18-digit values produced by an independent
+    # mpmath script (mp.dps = 30) using the same closed forms.
+    "prolate, m=2":   (2.0,  0.17356399753396423),
+    "prolate, m=5":   (5.0,  0.0558209698024552),
+    "prolate, m=10":  (10.0, 0.02028588030156383),
+    "prolate, m=100": (100.0, 0.000429898719881890),
+    "oblate, m=0.5":  (0.5,  0.5272002825625699),
+    "oblate, m=0.1":  (0.1,  0.8608042765278006),
+    "oblate, m=0.01": (0.01, 0.9844897069128692),
+}
+
+
+@pytest.mark.parametrize("label", list(OSBORN_REFERENCE))
+def test_against_osborn_reference(label):
+    m, expected = OSBORN_REFERENCE[label]
+    Nz = demag_factor_rotational(m, 1.0)[2]
+    # double precision input is the bottleneck; allow ~1e-14 absolute drift.
+    assert Nz == pytest.approx(expected, rel=1e-13, abs=1e-14)
+
+
+# ---------------------------------------------------------------------------
+# Limit consistency: the half-difference between branches at fixed |c/a - 1|
+# ---------------------------------------------------------------------------
+
+
+def test_branches_agree_with_taylor_series():
+    # For very small (c/a - 1) the two branches must match the Taylor series
+    # N_z = 1/3 - 2 eps / 15 + 8 eps**2 / 105 - O(eps**3)  (eps = (c/a)**2 - 1).
+    # The next-order coefficient is ~ -8/315, so the truncation residual is
+    # bounded by ~ |eps|**3 / 30.
+    eps = 5e-3
+    Nz_pro = demag_factor_prolate(1.0 + eps, 1.0)
+    Nz_obl = demag_factor_oblate(1.0 - eps, 1.0)
+    eps_pro = (1.0 + eps) ** 2 - 1.0
+    eps_obl = (1.0 - eps) ** 2 - 1.0
+    Nz_pro_series = 1.0 / 3.0 - 2 * eps_pro / 15 + 8 * eps_pro ** 2 / 105
+    Nz_obl_series = 1.0 / 3.0 - 2 * eps_obl / 15 + 8 * eps_obl ** 2 / 105
+    assert abs(Nz_pro - Nz_pro_series) < abs(eps_pro) ** 3
+    assert abs(Nz_obl - Nz_obl_series) < abs(eps_obl) ** 3
