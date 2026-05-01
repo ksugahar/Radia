@@ -557,11 +557,11 @@ def analytical_formulas(topic: str = "all") -> str:
             "validation_use_cases" - "I have X, sanity-check it with Y" mapping
 
     Sources:
-        - src/radia/analytical_formulas/   (9 modules, ~30 functions)
-        - tests/analytical_formulas/       (145+ pytest tests, < 1 s)
-        - examples/analytical_formulas/    (10 runnable scripts + PNGs)
+        - src/radia/analytical_formulas/   (Python modules, ~40 functions across Part 1-9)
+        - tests/analytical_formulas/       (170+ pytest tests, < 1 s)
+        - examples/analytical_formulas/    (11 runnable scripts + PNGs)
         - docs/analytical_formulas.md      (PDF -> code cross-reference)
-        - to_developers/                   (the 5 PDFs)
+        - PDFs themselves: lab-internal, not redistributed with the repo.
     """
     return get_analytical_formulas_documentation(topic)
 
