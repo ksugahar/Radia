@@ -5,13 +5,12 @@ back to its origin in the IEE Japan review series
 
 > 若尾真治, 五十嵐一, 藤原耕二, 野口聡, 松尾哲司, 亀有昭久,
 > "Useful Formulas of Analytical Integration in Electromagnetic Field
-> Computations (Part 1..5)", IEE Japan Joint Technical Meeting on
-> Static Apparatus and Rotating Machinery (SA / RM), 2002–2004.
+> Computations (Part 1..9)", IEE Japan Joint Technical Meeting on
+> Static Apparatus and Rotating Machinery (SA / RM), 2002–2007.
 
-The five PDFs live in [`to_developers/`](../to_developers/) (Japanese
-texts; PyMuPDF text extracts are alongside as `*.txt` for grep
-convenience). Numbering below is `Part N, eq M` exactly as printed in
-the review.
+Numbering below is `Part N, eq M` exactly as printed in the original
+research-meeting reports. The PDFs themselves are not redistributed with
+the Radia repository (lab-internal copies).
 
 ## Scope
 
