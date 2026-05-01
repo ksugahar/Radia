@@ -41,6 +41,16 @@ priority is correctness and traceability, not raw speed.
 | [`elliptic_integrals`](../src/radia/analytical_formulas/elliptic_integrals.py) | `K_hastings_2`, `E_hastings_2`, `K_hastings_4`, `E_hastings_4` | Part 3 §3, Tables 1–2 |
 | [`gauss_legendre`](../src/radia/analytical_formulas/gauss_legendre.py)       | `gauss_legendre_nodes_weights`, `gauss_legendre_integrate`, `gauss_legendre_integrate_2d` | Part 3 §4, Table 3 |
 
+### Group D — Part 6 / 8 / 9 extensions (eddy currents, AC, numerics, average B)
+
+| Module | Symbols | PDF reference |
+|--------|---------|---------------|
+| [`plate_eddy`](../src/radia/analytical_formulas/plate_eddy.py) (extension)   | `plate_eddy_dissipation` (total Joule loss in the plate via numerical integration of the analytic J series) | Part 6 §3 |
+| [`shielding`](../src/radia/analytical_formulas/shielding.py) (extensions)    | `shielding_factor_sphere_thin_ac`, `shielding_factor_cylinder_thin_ac` (AC, complex S), `spherical_shell_internal_field` (interior H, M, image dipole) | Part 6 §2, Part 8 §2 |
+| [`conductor_impedance`](../src/radia/analytical_formulas/conductor_impedance.py) | `skin_depth`, `planar_surface_impedance` (Z_s = (1+j)/(σδ)), `cylinder_ac_impedance` (full Bessel solution), `cylinder_dc_resistance`, `cylinder_internal_inductance` | Part 6 §4–§5 |
+| [`adaptive_quadrature`](../src/radia/analytical_formulas/adaptive_quadrature.py) | `patterson_nodes_weights` (n=0..3, 1/3/7/15 points), `adaptive_integrate` (node-reusing refinement) | Part 9 §2, Table 1 |
+| [`cuboid_average_field`](../src/radia/analytical_formulas/cuboid_average_field.py) | `average_B_in_box` (numerical-integration path; closed-form C++ kernel deferred — see notes below) | Part 6 §7, eq 53–56 |
+
 Tests live in [`tests/analytical_formulas/`](../tests/analytical_formulas/);
 runnable demonstrations in [`examples/analytical_formulas/`](../examples/analytical_formulas/).
 
@@ -280,6 +290,90 @@ and `_integrate_2d` apply the rule on a general interval / rectangle.
 The implementation delegates to ``numpy.polynomial.legendre.leggauss``
 for the underlying computation, so all 24 entries of PDF Table 3 are
 machine-precision rather than the printed-table truncation.
+
+## plate_eddy (extended) — total Joule dissipation
+
+```
+P = (d / sigma) integral_{-a}^{+a} integral_{-b}^{+b} (J_x**2 + J_y**2) dx dy
+```
+
+with the analytic ``J_x``, ``J_y`` of Part 1 §6.1 evaluated by the
+existing :func:`plate_eddy_J`. The PDF Part 6 §3 gives a compact
+closed form
+
+```
+P = (4 sigma a**3 b d / 3) Bdot**2
+    - (256 a**4 d / pi**5 sigma) sum_n tanh(lambda_n b) / lambda_n**5
+```
+
+but the OCR-extracted formula leaves the second-term sign and the
+position of ``sigma`` ambiguous. We integrate the analytic ``J``
+numerically by tensor-product Gauss-Legendre — exact up to
+quadrature truncation, no ambiguity.
+
+## shielding (extensions) — AC and shell-interior fields
+
+Part 8 §2 gives the AC thin-shell shielding factors when the wall
+thickness is much smaller than both the radius and the skin depth:
+
+```
+S_sph = 1 / (1 + j omega mu_0 sigma a Delta / 3)
+S_cyl = 1 / (1 + j omega mu_0 sigma a Delta / 2)
+```
+
+The phase of ``S`` is the field's lag relative to the applied field.
+
+Part 6 §2 gives the four uniform fields (interior, shell wall, image
+moment) for a magnetic spherical shell:
+
+```
+H_hollow = 9 H0 / [9 + 2 (mu_r - 1)**2 (1 - (a/b)**3) / mu_r],
+H_shell  = (3 (2 + mu_r) / (3 mu_r)) * H_hollow,
+M_shell  = (mu_r - 1) * H_shell,
+M_image  = -((mu_r - 1)(mu_r + 2) / (3 mu_r)) * H_hollow * V_outer.
+```
+
+## conductor_impedance — Part 6 §4 + §5
+
+Skin depth, planar surface impedance, and the full Bessel solution
+for the AC impedance of a solid cylindrical conductor. Limits:
+
+* low frequency: ``Z = R_dc + j omega L_int``,
+  ``L_int = mu_0 / (8 pi)`` per unit length.
+* high frequency: ``Z = Z_s / (2 pi a)`` with the planar
+  ``Z_s = (1 + j) / (sigma d_skin)``.
+
+## adaptive_quadrature — Part 9 §2
+
+Gauss-Patterson family of nested rules (n=0,1,2,3 give 1, 3, 7, 15
+points) where the nodes of the lower-order rule are exactly contained
+in the higher-order rules. Together with a dict-cache on
+:func:`adaptive_integrate` this halves the function-evaluation cost
+of refining quadrature accuracy. Polynomial exactness verified
+against ``x^p`` for p up to 22 (n=3 rule). Higher-order tables
+(n=4, 5 from PDF Table 1) were OCR-extracted but rejected pending
+high-fidelity verification.
+
+## cuboid_average_field — Part 6 §7 (numerical-integration path)
+
+Spatial average of ``B`` over a target rectangular box from a uniform
+``M`` source box, by tensor-product Gauss-Legendre quadrature of
+``radia.analytical_magnet.CuboidMagnet.get_B``. Useful for FEM-MMM
+coupling (cell-averaged ``B`` in a rectangular FEM element),
+mesh-to-mesh transfer, and micromagnetics on a regular cubic
+lattice (the original PDF use case).
+
+**Deferred work — closed-form C++ kernel.** The PDF derivation
+collapses an 8 × 8 = 64 source/target corner sum to a 27-term
+finite-difference pattern under the same-size assumption, with
+antiderivatives ``F1`` and ``F2`` (eq 56). My OCR-extracted ``F2``
+formula could not be reconciled with the y/z-mirror symmetries
+required when only ``M_x`` is non-zero (B_y, B_z components leak in
+violation of symmetry). A clean re-derivation against
+Newell-Williams-Dunlop, J. Geophys. Res. 98 (1993) 9551–9555 is
+deferred to a follow-up release. The Python numerical-integration
+path is fast enough (sub-millisecond at ``n_quad = 4``, ten
+milliseconds at ``n_quad = 12``) for typical Radia call sites.
 
 ## Updating this document
 

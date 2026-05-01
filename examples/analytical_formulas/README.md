@@ -24,6 +24,7 @@ each example below pins the relevant Part and equation numbers.
 | [`elliptic_integrals_accuracy.py`](elliptic_integrals_accuracy.py) | Absolute-error plot of degree-2 vs degree-4 Hastings approximations of K(k), E(k) against `scipy.special`. | Part 3 §3, Tables 1–2 |
 | [`gauss_legendre_demo.py`](gauss_legendre_demo.py) | Gauss-Legendre nodes / weights table and spectral-convergence plot for two smooth integrands. | Part 3 §4, Table 3 |
 | [`cross_validation_solenoid_currentloop.py`](cross_validation_solenoid_currentloop.py) | Compare `solenoid_axial_field` (closed form) against a stacked set of `radia.analytical_magnet.CurrentLoop` rings; midpoint-rule converges as `O(h^2)` (4x error reduction per grid halving). | Part 4 §4 |
+| [`eddy_current_complete.py`](eddy_current_complete.py) | Combined Part 6 / 8 / 9 extensions: skin depth + planar Z_s, cylinder AC impedance frequency sweep, thin-shell AC shielding, plate Joule dissipation, magnetic-shell internal-field decomposition, average B from cuboid magnet. | Part 6 / 8 / 9 |
 
 All scripts run in seconds on a laptop, write a PNG next to themselves
 when matplotlib is available, and print a tabular numerical summary

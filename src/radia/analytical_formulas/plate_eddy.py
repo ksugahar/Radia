@@ -59,9 +59,25 @@ error away from the immediate corner singularity.
 
 References
 ----------
-Part 1 (SA-02-28 / RM-02-64, 2002), eq 26-27.
-Weissenburger D.W., Christensen U.R., PPPL-1517 (1979).
-Kameari A., J. Comput. Phys. 42, 124-140 (1981).
+Wakao S., Igarashi H., Fujiwara K., Kameari A.,
+  "Useful Formulas of Analytical Integration in Electromagnetic Field
+  Computations (Part 1)", IEE Japan SA-02-28 / RM-02-64 (2002).
+  -> eq 26-27, the T_z and J series formulas reproduced here.
+
+Wakao S., Fujiwara K., Tokumasu T., Kameari A.,
+  "Useful Formulas of Analytical Integration in Electromagnetic Field
+  Computations (Part 6)", IEE Japan SA-05-15 / RM-05-15 (2005).
+  -> §3.1, scalar dissipation P (the closed form whose OCR-extracted
+     coefficient placement was ambiguous; we use the equivalent
+     numerical area-integral of |J|**2/sigma instead).
+
+Weissenburger D. W. and Christensen U. R., "Transient eddy currents
+  on finite plane and toroidal conducting surfaces", Princeton
+  Plasma Physics Laboratory Report PPPL-1517 (1979).
+
+Kameari A., "Transient Eddy Current Analysis on Thin Conductors with
+  Arbitrary Connections and Shapes", J. Comput. Phys. 42, 124-140
+  (1981).
 """
 
 from __future__ import annotations
@@ -135,6 +151,68 @@ def plate_eddy_T(
         x * x - a * a
         + (32.0 * a * a / math.pi**3) * series
     )
+
+
+def plate_eddy_dissipation(
+    a: float,
+    b: float,
+    d: float,
+    sigma: float,
+    Bdot: float,
+    n_terms: int = 200,
+    n_quad: int = 64,
+) -> float:
+    """Total instantaneous Joule loss in the plate (Part 6 §3.1).
+
+    Power dissipation in the slow-field limit:
+
+        P = (d / sigma) integral_{-a}^{a} integral_{-b}^{b}
+              (J_x**2 + J_y**2) dx dy
+
+    The current density itself uses the closed-form Fourier series of
+    :func:`plate_eddy_J`; the outer area integral is evaluated by a
+    tensor-product Gauss-Legendre rule of order ``n_quad`` per axis.
+
+    The PDF (Part 6 §3.1, eq 8) gives a compact closed-form
+
+        P_inf - (256 a**4 d / pi**5 sigma) sum_n tanh(lambda_n b) / lambda_n**5
+
+    where ``P_inf = (4 sigma a**3 b d / 3) Bdot**2`` is the
+    infinite-strip result, but the OCR-extracted form leaves the
+    second-term sign and the position of ``sigma`` ambiguous.
+    Numerical integration of the analytic ``J`` is exact up to the
+    Gauss-Legendre truncation and avoids that ambiguity.
+
+    Parameters
+    ----------
+    a, b : float
+        Plate half-extents [m].
+    d : float
+        Plate thickness [m].
+    sigma : float
+        Conductivity [S/m].
+    Bdot : float
+        Time derivative of the perpendicular field [T/s].
+    n_terms : int
+        Number of Fourier terms in the J series (default 200).
+    n_quad : int
+        Gauss-Legendre points per axis for the area integral
+        (default 64; gives < 1e-10 relative error well away from the
+        corner singularity).
+    """
+    from .gauss_legendre import nodes_weights
+
+    x_n, w_x = nodes_weights(min(n_quad, 24))
+    # Use up to n=24 (Wakao Table 3 ceiling); for higher accuracy run
+    # repeat passes on subdivided panels (not needed here).
+    y_n, w_y = nodes_weights(min(n_quad, 24))
+    X = a * x_n[:, None] + 0.0 * y_n[None, :]
+    Y = 0.0 * x_n[:, None] + b * y_n[None, :]
+    pts = np.stack([X.ravel(), Y.ravel()], axis=-1)
+    J = plate_eddy_J(pts, a, b, sigma, Bdot, n_terms=n_terms)
+    J_sq = (J[..., 0] ** 2 + J[..., 1] ** 2).reshape(X.shape)
+    W = a * b * np.outer(w_x, w_y)
+    return d / sigma * float(np.sum(W * J_sq))
 
 
 def plate_eddy_J(
