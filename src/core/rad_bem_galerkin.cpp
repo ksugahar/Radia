@@ -849,4 +849,388 @@ void AssembleSLDL(
     }
 }
 
+
+// =====================================================================
+// P2 Lagrange variant -- 6 basis functions per triangle, (n_dof, n_dof)
+// output.  Same Sauter-Schwab quadrature, same regular admissibility
+// dispatch, just heavier per-pair work (6x6 instead of 3x3).
+// =====================================================================
+namespace {  // file-local helpers for the P2 version
+
+// Edge-of-corner-pair lookup (matches Python convention in
+// sibc_hacapk._EDGE_OF_CORNERS):
+//   (0,1) or (1,0) -> 3   ;   (1,2) or (2,1) -> 4   ;   (0,2) or (2,0) -> 5
+inline int edge_of_corners(int a, int b) {
+    int lo = std::min(a, b), hi = std::max(a, b);
+    if (lo == 0 && hi == 1) return 3;
+    if (lo == 1 && hi == 2) return 4;
+    if (lo == 0 && hi == 2) return 5;
+    return -1;
+}
+
+// Build the 6-element basis-index permutation corresponding to a
+// 3-element corner permutation.  perm_basis[k_new] = k_old for k_new in 0..5.
+inline void p2_basis_perm_from_corner_perm(int p0, int p1, int p2,
+                                           int perm_basis[6]) {
+    int corners[3] = {p0, p1, p2};
+    perm_basis[0] = corners[0];
+    perm_basis[1] = corners[1];
+    perm_basis[2] = corners[2];
+    for (int i = 0; i < 3; ++i) {
+        int a = corners[i];
+        int b = corners[(i + 1) % 3];
+        perm_basis[3 + i] = edge_of_corners(a, b);
+    }
+}
+
+// Accumulate 6x6 contributions of one Sauter-Schwab quad point onto
+// SL_block and DL_block (in PERMUTED indexing).  Matches the P1
+// `accumulate_pair_quadpt` but with 6 P2 Lagrange hats.
+inline void accumulate_pair_quadpt_p2(double xi_a, double eta_a,
+                                      double xi_b, double eta_b,
+                                      double weight,
+                                      const double* p2a, const double* p2b,
+                                      double sl_out[36], double dl_out[36]) {
+    double r_a[3], r_b[3], n_hat_b[3];
+    double J_a, J_b;
+    p2_geom(p2a, xi_a, eta_a, r_a, &J_a, nullptr);
+    p2_geom(p2b, xi_b, eta_b, r_b, &J_b, n_hat_b);
+
+    double dx = r_a[0] - r_b[0];
+    double dy = r_a[1] - r_b[1];
+    double dz = r_a[2] - r_b[2];
+    double r2 = dx*dx + dy*dy + dz*dz;
+    if (r2 < 1e-300) r2 = 1e-300;
+    double r = std::sqrt(r2);
+
+    double Na[6], Nb[6];
+    p2_basis(xi_a, eta_a, Na);
+    p2_basis(xi_b, eta_b, Nb);
+
+    double JaJb = J_a * J_b;
+    double w_sl = weight * JaJb / (4.0 * PI * r);
+    double dot_n = dx * n_hat_b[0] + dy * n_hat_b[1] + dz * n_hat_b[2];
+    double w_dl = weight * JaJb * dot_n / (4.0 * PI * r2 * r);
+
+    for (int i = 0; i < 6; ++i) {
+        double LiA_sl = w_sl * Na[i];
+        double LiA_dl = w_dl * Na[i];
+        for (int j = 0; j < 6; ++j) {
+            sl_out[i * 6 + j] += LiA_sl * Nb[j];
+            dl_out[i * 6 + j] += LiA_dl * Nb[j];
+        }
+    }
+}
+
+}  // namespace (P2 helpers)
+
+
+void AssembleSLDL_P2(
+    const double* verts, int n_v,
+    const int64_t* tris, int n_t,
+    const double* p2_nodes,
+    const int64_t* dofs_per_tri,
+    int n_dof,
+    int regular_quad_degree,
+    int singular_n_q,
+    int n_threads,
+    double* SL_out,
+    double* DL_out)
+{
+    (void)verts;
+    (void)n_v;
+
+    // Same admissibility-dispatched quadrature setup as the P1 entry.
+    TriQuad q_reg_near = pick_tri_quad(regular_quad_degree);
+    TriQuad q_reg_mid;
+    {
+        TriQuad q5 = make_stroud_7();
+        q_reg_mid = q5;
+    }
+    TriQuad q_reg_far;
+    {
+        q_reg_far.xi.push_back(1.0/3.0);
+        q_reg_far.eta.push_back(1.0/3.0);
+        q_reg_far.w.push_back(0.5);
+    }
+    constexpr double admissibility_eta_far = 4.0;
+    constexpr double admissibility_eta_mid = 2.0;
+    SSQuad ss_cv, ss_ce, ss_id;
+    build_ss_common_vertex(singular_n_q, ss_cv);
+    build_ss_common_edge(singular_n_q,   ss_ce);
+    build_ss_identical(singular_n_q,     ss_id);
+
+    int requested_threads = (n_threads > 0)
+        ? n_threads
+        : ngcore::TaskManager::GetMaxThreads();
+    if (requested_threads <= 0) requested_threads = 1;
+    ngcore::RegionTaskManager rtm(requested_threads);
+
+    // Pre-cache per-tri regular-pair physical positions, weights, normals,
+    // AND 6-hat values per quadpt.  N_*[t * nq + qq] is a 6-element
+    // contiguous block (so 6 hats per quadpt, n_t * nq quadpts total).
+    auto build_per_tri = [&](const TriQuad& q,
+                              std::vector<double>& pts,
+                              std::vector<double>& w,
+                              std::vector<double>& n_arr,
+                              std::vector<double>& N_arr) {
+        int nq = q.n();
+        ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+            const double* p2 = &p2_nodes[t * 6 * 3];
+            for (int qq = 0; qq < nq; ++qq) {
+                double r[3], n_hat[3], J;
+                p2_geom(p2, q.xi[qq], q.eta[qq], r, &J, n_hat);
+                size_t base = (t * nq + qq) * 3;
+                pts[base + 0] = r[0]; pts[base + 1] = r[1]; pts[base + 2] = r[2];
+                n_arr[base + 0] = n_hat[0]; n_arr[base + 1] = n_hat[1];
+                n_arr[base + 2] = n_hat[2];
+                w[t * nq + qq] = q.w[qq] * J;
+            }
+        });
+        // Hat values: identical for every tri (depend only on (xi, eta)).
+        // Build once for nq points.
+        N_arr.resize((size_t)nq * 6);
+        for (int qq = 0; qq < nq; ++qq) {
+            p2_basis(q.xi[qq], q.eta[qq], &N_arr[qq * 6]);
+        }
+    };
+    int nq_near = q_reg_near.n();
+    int nq_mid  = q_reg_mid.n();
+    int nq_far  = q_reg_far.n();
+    std::vector<double> pts_near((size_t)n_t * nq_near * 3);
+    std::vector<double> w_near  ((size_t)n_t * nq_near);
+    std::vector<double> n_near  ((size_t)n_t * nq_near * 3);
+    std::vector<double> N_near;
+    std::vector<double> pts_mid ((size_t)n_t * nq_mid  * 3);
+    std::vector<double> w_mid   ((size_t)n_t * nq_mid);
+    std::vector<double> n_mid   ((size_t)n_t * nq_mid  * 3);
+    std::vector<double> N_mid;
+    std::vector<double> pts_far ((size_t)n_t * nq_far  * 3);
+    std::vector<double> w_far   ((size_t)n_t * nq_far);
+    std::vector<double> n_far   ((size_t)n_t * nq_far  * 3);
+    std::vector<double> N_far;
+    build_per_tri(q_reg_near, pts_near, w_near, n_near, N_near);
+    build_per_tri(q_reg_mid,  pts_mid,  w_mid,  n_mid,  N_mid);
+    build_per_tri(q_reg_far,  pts_far,  w_far,  n_far,  N_far);
+
+    // Centroid + diameter per tri.
+    std::vector<double> tri_centroid((size_t)n_t * 3);
+    std::vector<double> tri_diam((size_t)n_t);
+    ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t t) {
+        const double* p2 = &p2_nodes[t * 6 * 3];
+        double cx = (p2[0] + p2[3] + p2[6]) / 3.0;
+        double cy = (p2[1] + p2[4] + p2[7]) / 3.0;
+        double cz = (p2[2] + p2[5] + p2[8]) / 3.0;
+        tri_centroid[t * 3 + 0] = cx;
+        tri_centroid[t * 3 + 1] = cy;
+        tri_centroid[t * 3 + 2] = cz;
+        double e0 = (p2[3]-p2[0])*(p2[3]-p2[0]) + (p2[4]-p2[1])*(p2[4]-p2[1]) + (p2[5]-p2[2])*(p2[5]-p2[2]);
+        double e1 = (p2[6]-p2[3])*(p2[6]-p2[3]) + (p2[7]-p2[4])*(p2[7]-p2[4]) + (p2[8]-p2[5])*(p2[8]-p2[5]);
+        double e2 = (p2[6]-p2[0])*(p2[6]-p2[0]) + (p2[7]-p2[1])*(p2[7]-p2[1]) + (p2[8]-p2[2])*(p2[8]-p2[2]);
+        tri_diam[t] = std::sqrt(std::max({e0, e1, e2}));
+    });
+
+    std::fill(SL_out, SL_out + (size_t)n_dof * n_dof, 0.0);
+    std::fill(DL_out, DL_out + (size_t)n_dof * n_dof, 0.0);
+
+    // Thread-local n_dof^2 accumulators when the working set fits.
+    // For very large n_dof we fall back to atomic scatter (single-threaded).
+    const bool use_thread_local = (n_dof <= 5000);
+    int n_thr = std::max(1, ngcore::TaskManager::GetMaxThreads());
+    std::vector<std::vector<double>> SL_local;
+    std::vector<std::vector<double>> DL_local;
+    if (use_thread_local) {
+        SL_local.resize(n_thr);
+        DL_local.resize(n_thr);
+        for (int k = 0; k < n_thr; ++k) {
+            SL_local[k].assign((size_t)n_dof * n_dof, 0.0);
+            DL_local[k].assign((size_t)n_dof * n_dof, 0.0);
+        }
+    }
+
+    ngcore::ParallelFor(ngcore::IntRange(n_t), [&](size_t a_sz) {
+        int a = static_cast<int>(a_sz);
+        int tid = use_thread_local ? ngcore::TaskManager::GetThreadId() : 0;
+        double* SL_acc = use_thread_local ? SL_local[tid].data() : SL_out;
+        double* DL_acc = use_thread_local ? DL_local[tid].data() : DL_out;
+
+        const int64_t* Va = &tris[a * 3];
+        const double* p2a = &p2_nodes[a * 6 * 3];
+        const int64_t* Da = &dofs_per_tri[a * 6];
+
+        for (int b = 0; b < n_t; ++b) {
+            const int64_t* Vb = &tris[b * 3];
+            const double* p2b = &p2_nodes[b * 6 * 3];
+            const int64_t* Db = &dofs_per_tri[b * 6];
+
+            int la_arr[3], lb_arr[3];
+            int n_sh = find_shared(Va, Vb, la_arr, lb_arr);
+
+            double SL_block[36] = {0};
+            double DL_block[36] = {0};
+            int parity_sign_b = +1;
+
+            if (n_sh == 0) {
+                // Regular pair: dispatch to far / mid / near rule.
+                double cx = tri_centroid[(size_t)a*3]   - tri_centroid[(size_t)b*3];
+                double cy = tri_centroid[(size_t)a*3+1] - tri_centroid[(size_t)b*3+1];
+                double cz = tri_centroid[(size_t)a*3+2] - tri_centroid[(size_t)b*3+2];
+                double d_centroid = std::sqrt(cx*cx + cy*cy + cz*cz);
+                double diam_sum = tri_diam[a] + tri_diam[b];
+
+                int nq_use;
+                const double* pts_a_use; const double* w_a_use;
+                const double* N_use_a;
+                const double* pts_b_use; const double* w_b_use;
+                const double* n_b_use; const double* N_use_b;
+                if (d_centroid > admissibility_eta_far * diam_sum) {
+                    nq_use = nq_far;
+                    pts_a_use = &pts_far[(size_t)a * nq_far * 3];
+                    w_a_use   = &w_far[(size_t)a * nq_far];
+                    pts_b_use = &pts_far[(size_t)b * nq_far * 3];
+                    w_b_use   = &w_far[(size_t)b * nq_far];
+                    n_b_use   = &n_far[(size_t)b * nq_far * 3];
+                    N_use_a = N_far.data();  N_use_b = N_far.data();
+                } else if (d_centroid > admissibility_eta_mid * diam_sum) {
+                    nq_use = nq_mid;
+                    pts_a_use = &pts_mid[(size_t)a * nq_mid * 3];
+                    w_a_use   = &w_mid[(size_t)a * nq_mid];
+                    pts_b_use = &pts_mid[(size_t)b * nq_mid * 3];
+                    w_b_use   = &w_mid[(size_t)b * nq_mid];
+                    n_b_use   = &n_mid[(size_t)b * nq_mid * 3];
+                    N_use_a = N_mid.data();  N_use_b = N_mid.data();
+                } else {
+                    nq_use = nq_near;
+                    pts_a_use = &pts_near[(size_t)a * nq_near * 3];
+                    w_a_use   = &w_near[(size_t)a * nq_near];
+                    pts_b_use = &pts_near[(size_t)b * nq_near * 3];
+                    w_b_use   = &w_near[(size_t)b * nq_near];
+                    n_b_use   = &n_near[(size_t)b * nq_near * 3];
+                    N_use_a = N_near.data();  N_use_b = N_near.data();
+                }
+
+                for (int qa = 0; qa < nq_use; ++qa) {
+                    double xa[3] = {pts_a_use[qa*3], pts_a_use[qa*3+1], pts_a_use[qa*3+2]};
+                    const double* Na6 = &N_use_a[qa * 6];
+                    double wa = w_a_use[qa];
+                    for (int qb = 0; qb < nq_use; ++qb) {
+                        double xb[3] = {pts_b_use[qb*3], pts_b_use[qb*3+1], pts_b_use[qb*3+2]};
+                        const double* Nb6 = &N_use_b[qb * 6];
+                        double wb = w_b_use[qb];
+                        double dx = xa[0] - xb[0];
+                        double dy = xa[1] - xb[1];
+                        double dz = xa[2] - xb[2];
+                        double r2 = dx*dx + dy*dy + dz*dz;
+                        double r = std::sqrt(r2);
+                        double K_sl = INV_4PI / r;
+                        double dot_n = dx * n_b_use[qb*3] + dy * n_b_use[qb*3+1] + dz * n_b_use[qb*3+2];
+                        double K_dl = dot_n * INV_4PI / (r2 * r);
+                        double w_pair = wa * wb;
+                        double w_sl = K_sl * w_pair;
+                        double w_dl = K_dl * w_pair;
+                        for (int i = 0; i < 6; ++i) {
+                            double Li_sl = w_sl * Na6[i];
+                            double Li_dl = w_dl * Na6[i];
+                            for (int j = 0; j < 6; ++j) {
+                                SL_block[i*6+j] += Li_sl * Nb6[j];
+                                DL_block[i*6+j] += Li_dl * Nb6[j];
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Singular pair: SS rule + corner permutation; for P2 the
+                // permutation acts on 6 basis indices via
+                // p2_basis_perm_from_corner_perm.
+                int pa[3], pb[3];
+                const SSQuad* qss = nullptr;
+
+                if (n_sh == 1) {
+                    int la = la_arr[0], lb = lb_arr[0];
+                    pa[0] = la; pa[1] = (la + 1) % 3; pa[2] = (la + 2) % 3;
+                    pb[0] = lb; pb[1] = (lb + 1) % 3; pb[2] = (lb + 2) % 3;
+                    qss = &ss_cv;
+                } else if (n_sh == 2) {
+                    int la0 = la_arr[0], lb0 = lb_arr[0];
+                    int la1 = la_arr[1], lb1 = lb_arr[1];
+                    int apex_a = 0 + 1 + 2 - la0 - la1;
+                    int apex_b = 0 + 1 + 2 - lb0 - lb1;
+                    pa[0] = la0; pa[1] = la1; pa[2] = apex_a;
+                    pb[0] = lb0; pb[1] = lb1; pb[2] = apex_b;
+                    qss = &ss_ce;
+                } else {
+                    int perm_b_canon[3] = {-1, -1, -1};
+                    for (int k = 0; k < 3; ++k) {
+                        perm_b_canon[la_arr[k]] = lb_arr[k];
+                    }
+                    pa[0] = 0; pa[1] = 1; pa[2] = 2;
+                    pb[0] = perm_b_canon[0]; pb[1] = perm_b_canon[1]; pb[2] = perm_b_canon[2];
+                    qss = &ss_id;
+                }
+
+                parity_sign_b = perm_parity_sign(pb[0], pb[1], pb[2]);
+
+                double p2a_perm[18], p2b_perm[18];
+                permute_p2(p2a, pa[0], pa[1], pa[2], p2a_perm);
+                permute_p2(p2b, pb[0], pb[1], pb[2], p2b_perm);
+
+                int n_quad = qss->n();
+                for (int q = 0; q < n_quad; ++q) {
+                    accumulate_pair_quadpt_p2(qss->xi_a[q], qss->eta_a[q],
+                                              qss->xi_b[q], qss->eta_b[q],
+                                              qss->w[q], p2a_perm, p2b_perm,
+                                              SL_block, DL_block);
+                }
+
+                if (parity_sign_b == -1) {
+                    for (int k = 0; k < 36; ++k) DL_block[k] = -DL_block[k];
+                }
+
+                // Un-permute the 6x6 block back to ORIGINAL p2_a / p2_b
+                // basis indexing.
+                int perm_a6[6], perm_b6[6];
+                p2_basis_perm_from_corner_perm(pa[0], pa[1], pa[2], perm_a6);
+                p2_basis_perm_from_corner_perm(pb[0], pb[1], pb[2], perm_b6);
+                double SL_orig[36] = {0};
+                double DL_orig[36] = {0};
+                for (int i_p = 0; i_p < 6; ++i_p) {
+                    int ii = perm_a6[i_p];
+                    for (int j_p = 0; j_p < 6; ++j_p) {
+                        int jj = perm_b6[j_p];
+                        SL_orig[ii * 6 + jj] = SL_block[i_p * 6 + j_p];
+                        DL_orig[ii * 6 + jj] = DL_block[i_p * 6 + j_p];
+                    }
+                }
+                for (int k = 0; k < 36; ++k) {
+                    SL_block[k] = SL_orig[k];
+                    DL_block[k] = DL_orig[k];
+                }
+            }
+
+            // Scatter the 6x6 block into (n_dof, n_dof) using dofs_per_tri.
+            for (int i = 0; i < 6; ++i) {
+                int gi = static_cast<int>(Da[i]);
+                for (int j = 0; j < 6; ++j) {
+                    int gj = static_cast<int>(Db[j]);
+                    SL_acc[(size_t)gi * n_dof + gj] += SL_block[i*6 + j];
+                    DL_acc[(size_t)gi * n_dof + gj] += DL_block[i*6 + j];
+                }
+            }
+        }
+    });
+
+    // Reduce thread-local accumulators in parallel.
+    if (use_thread_local) {
+        ngcore::ParallelFor(ngcore::IntRange((size_t)n_dof * n_dof), [&](size_t idx) {
+            double sl_sum = 0.0, dl_sum = 0.0;
+            for (int k = 0; k < n_thr; ++k) {
+                sl_sum += SL_local[k][idx];
+                dl_sum += DL_local[k][idx];
+            }
+            SL_out[idx] = sl_sum;
+            DL_out[idx] = dl_sum;
+        });
+    }
+}
+
 }}  // namespace radia::bem
