@@ -22,6 +22,8 @@ priority is correctness and traceability, not raw speed.
 
 ## Module index
 
+### Group B — fields and global quantities
+
 | Module | Symbols | PDF reference |
 |--------|---------|---------------|
 | [`ellipsoid`](../src/radia/analytical_formulas/ellipsoid.py)   | `demag_factor_prolate`, `demag_factor_oblate`, `demag_factor_rotational`, `ellipsoid_internal_field`, `ellipsoid_torque` | Part 5, eq 38–44 |
@@ -29,6 +31,15 @@ priority is correctness and traceability, not raw speed.
 | [`shielding`](../src/radia/analytical_formulas/shielding.py)   | `shielding_factor_cylinder`, `shielding_factor_sphere` | Part 1, eq 23–24 |
 | [`rect_magnet_2d`](../src/radia/analytical_formulas/rect_magnet_2d.py) | `rect_magnet_2d_A`, `rect_magnet_2d_B` | Part 2, eq 2–3 |
 | [`plate_eddy`](../src/radia/analytical_formulas/plate_eddy.py) | `plate_eddy_T`, `plate_eddy_J` | Part 1, eq 26–27 |
+
+### Group C — coil geometries and numerical utilities
+
+| Module | Symbols | PDF reference |
+|--------|---------|---------------|
+| [`solenoid_central`](../src/radia/analytical_formulas/solenoid_central.py)   | `fabri_F`, `solenoid_central_field`, `solenoid_axial_field` | Part 4 §4, eq 26–27 |
+| [`three_phase_line`](../src/radia/analytical_formulas/three_phase_line.py)   | `vector_potential_z`, `field_xy`, `triangle_far_field_amplitude`, `planar_far_field_amplitude`, `helical_near_field_amplitude`, `helical_far_field_amplitude`, plus arrangement and balanced-current builders | Part 4 §5, Part 5 §3 |
+| [`elliptic_integrals`](../src/radia/analytical_formulas/elliptic_integrals.py) | `K_hastings_2`, `E_hastings_2`, `K_hastings_4`, `E_hastings_4` | Part 3 §3, Tables 1–2 |
+| [`gauss_legendre`](../src/radia/analytical_formulas/gauss_legendre.py)       | `gauss_legendre_nodes_weights`, `gauss_legendre_integrate`, `gauss_legendre_integrate_2d` | Part 3 §4, Table 3 |
 
 Tests live in [`tests/analytical_formulas/`](../tests/analytical_formulas/);
 runnable demonstrations in [`examples/analytical_formulas/`](../examples/analytical_formulas/).
@@ -51,7 +62,7 @@ Equatorial factors are ``N_x = N_y = (1 − N_z) / 2`` and the trace is
 [`test_demag_factors_sum_to_unity`](../tests/analytical_formulas/test_ellipsoid.py)).
 
 For aspect ratios within ``|c/a − 1| < 1e−4`` the implementation
-switches to the Taylor series ``N_z = 1/3 − 2 ε /15 + 4 ε² /35 − ⋯``
+switches to the Taylor series ``N_z = 1/3 − 2 ε /15 + 8 ε² /105 − ⋯``
 with ``ε = (c/a)² − 1``, valid for both branches; this avoids the
 ``0/0`` form of the closed expressions at ``e → 0``.
 
@@ -180,6 +191,95 @@ the ``cosh(k_n y) / cosh(k_n b)`` ratio decays exponentially in ``n``
 for ``|y| < b``. The default ``n_terms = 200`` gives ``< 1e−10``
 relative error away from the corner singularity. Use ``n_terms = 2000``
 for sub-``1e−5`` accuracy at the boundary.
+
+## solenoid_central — rectangular cross-section solenoid central / axial field
+
+Geometry: rectangular cross-section solenoid with inner radius
+``a_1``, outer radius ``a_2``, half-length ``b``, azimuthal current
+density ``J``. With ``alpha = a_2 / a_1`` and ``beta = b / a_1``,
+
+```
+B_0 = mu_0 a_1 J F(alpha, beta)                                  (eq 26)
+F(alpha, beta) = beta ln[(alpha + sqrt(alpha² + beta²))
+                         / (1 + sqrt(1 + beta²))]                (eq 27)
+```
+
+The on-axis field at general ``z`` follows in closed form:
+
+```
+B_z(0, z) = (mu_0 J / 2) * [
+    (b - z) ln((a_2 + sqrt(a_2² + (b - z)²))
+              /(a_1 + sqrt(a_1² + (b - z)²)))
+  + (b + z) ln((a_2 + sqrt(a_2² + (b + z)²))
+              /(a_1 + sqrt(a_1² + (b + z)²)))
+]
+```
+
+Limits: ``B_0 -> mu_0 J (a_2 - a_1)`` for an infinitely long
+solenoid; ``B_0 ~ mu_0 a_1 J beta ln(alpha)`` for a thin pancake.
+
+## three_phase_line — three-phase straight and helical lines
+
+The phasor convention is the **peak** amplitude (eq 33 of Part 4):
+``I_k(t) = Re(I_peak,k exp(j omega t))`` with
+``I_peak,k = I_peak exp(- j 2 k pi / 3)``. For an RMS input
+``I_rms`` pass ``I_peak = sqrt(2) I_rms``.
+
+```
+triangle (3 lines on circle a):       |B|(t) ~ 3 mu_0 a I_peak / (4 pi r²)   (eq 38-39)
+planar   (3 lines spaced d):           |B|_max ~ sqrt(3) mu_0 d I_peak / (2 pi r²)   (eq 41-43)
+helical  (a << p << r):               |B| ~ (3 pi mu_0 a I_peak / (4 sqrt(p r))) * exp(-2 pi r / p)   (eq 28)
+```
+
+Triangle far-field is circularly polarised
+(``|B|_max = |B|_min``); planar is linearly polarised
+(``|B|_min = 0``). The square-root-3 in the planar coefficient comes
+from ``q* − q = j sqrt(3)`` of the three-phase set; this differs from
+the OCR-extracted PDF text, but matches the rigorous Biot-Savart
+calculation of [`field_xy`](../src/radia/analytical_formulas/three_phase_line.py)
+to converging precision (verified in
+[`test_three_phase_line.py`](../tests/analytical_formulas/test_three_phase_line.py)).
+
+The hexagon arrangement that gives a 1/r**3 quadrupole asymptote
+(Part 4, eq 44) requires a **specific** phase-on-vertex assignment
+that is *not* satisfied by the simple
+``hexagon_positions + balanced_six_phase_currents`` builder pair --
+that combination gives a 1/r**2 dipole far-field (regression tested).
+The 1/r**3 closed-form is therefore not exposed; users who need it
+can construct the proper arrangement and integrate via
+[`field_xy`](../src/radia/analytical_formulas/three_phase_line.py).
+
+## elliptic_integrals — Hastings polynomial K(k), E(k)
+
+```
+K(k) ~ sum_{i=0}^{n} (a_i + b_i ln(1/x)) x**i,   x = 1 - k²
+E(k) ~ sum_{i=0}^{n} (c_i + d_i ln(1/x)) x**i
+```
+
+Coefficients are listed in PDF Tables 1 (n = 2) and 2 (n = 4); they
+are reproduced verbatim in
+[`elliptic_integrals.py`](../src/radia/analytical_formulas/elliptic_integrals.py).
+Accuracy:
+
+|                   | claimed (PDF) | observed vs scipy |
+|-------------------|---------------|-------------------|
+| degree 2          | < 4e-5        | ~ 4e-5            |
+| degree 4          | < 2e-8        | ~ 2e-8            |
+
+`scipy.special.ellipk` / `ellipe` provide the same quantities to
+machine precision via Carlson's reductions; the polynomial form is
+preserved here as a documented reference and as a no-scipy fallback.
+
+## gauss_legendre — quadrature nodes / weights up to n = 24
+
+Standard ``n``-point rule on ``[-1, +1]``: roots of ``P_n`` as nodes,
+``w_i = 2 (1 - x_i²) / (n P_{n-1}(x_i))²`` as weights, exact for
+polynomials of degree ``2 n - 1``. Affine-mapped helpers
+[`gauss_legendre_integrate`](../src/radia/analytical_formulas/gauss_legendre.py)
+and `_integrate_2d` apply the rule on a general interval / rectangle.
+The implementation delegates to ``numpy.polynomial.legendre.leggauss``
+for the underlying computation, so all 24 entries of PDF Table 3 are
+machine-precision rather than the printed-table truncation.
 
 ## Updating this document
 

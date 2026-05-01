@@ -105,3 +105,46 @@ def test_batch_validates_shape():
 def test_invalid_shape():
     with pytest.raises(ValueError):
         ac_locus_axes([1.0, 0.0])
+
+
+# ---------------------------------------------------------------------------
+# Pathological phasors
+# ---------------------------------------------------------------------------
+
+
+def test_pure_imaginary_phasor():
+    # Multiplying a real phasor by j is a 90 deg time shift; locus unchanged.
+    Bmax_re, Bmin_re = ac_locus_axes([1.0 + 0j, 0.0 + 0j, 0.0 + 0j])
+    Bmax_im, Bmin_im = ac_locus_axes([0.0 + 1j, 0.0 + 0j, 0.0 + 0j])
+    assert Bmax_re == pytest.approx(Bmax_im, abs=1e-12)
+    assert Bmin_re == pytest.approx(Bmin_im, abs=1e-12)
+
+
+def test_circular_left_vs_right_handed():
+    # Left- and right-circular (B_y = +- j B_x) must give identical (max, min).
+    Bmax_l, Bmin_l = ac_locus_axes([1.0 + 0j, 0.0 + 1j, 0.0])
+    Bmax_r, Bmin_r = ac_locus_axes([1.0 + 0j, 0.0 - 1j, 0.0])
+    assert Bmax_l == pytest.approx(Bmax_r, abs=1e-12)
+    assert Bmin_l == pytest.approx(Bmin_r, abs=1e-12)
+
+
+def test_two_orthogonal_in_phase_components_is_linear():
+    # Two real components in phase -> oscillates along a fixed direction.
+    Bmax, Bmin = ac_locus_axes([3.0 + 0j, 4.0 + 0j, 0.0])
+    assert Bmax == pytest.approx(5.0, abs=1e-12)
+    assert Bmin == pytest.approx(0.0, abs=1e-12)
+
+
+def test_3d_circular_polarisation_in_arbitrary_plane():
+    # n x m circular: orthonormal n, m with phase j between them.
+    n = np.array([1.0, 0.5, 0.3])
+    n /= np.linalg.norm(n)
+    # construct m perpendicular to n
+    tmp = np.array([0.0, 1.0, 0.0])
+    m = tmp - (tmp @ n) * n
+    m /= np.linalg.norm(m)
+    R = 1.7   # radius
+    B = R * (n + 1j * m)
+    Bmax, Bmin = ac_locus_axes(B)
+    assert Bmax == pytest.approx(R, abs=1e-12)
+    assert Bmin == pytest.approx(R, abs=1e-12)

@@ -68,11 +68,14 @@ MU_0 = 4.0e-7 * math.pi
 def _demag_series_near_sphere(eps: float) -> float:
     """Polar demag factor near sphere, ``eps = (c/a)**2 - 1``.
 
-    Series: ``N_z = 1/3 - 2 eps / 15 + 4 eps**2 / 35 - ...``
+    Series: ``N_z = 1/3 - 2 eps / 15 + 8 eps**2 / 105 - ...``
 
-    Valid for both prolate (``eps > 0``) and oblate (``eps < 0``).
+    Valid for both prolate (``eps > 0``) and oblate (``eps < 0``);
+    derived by expanding ``e**2 = eps / (1 + eps)`` and substituting in
+    ``N_z = 1/3 - 2 e**2 / 15 - 2 e**4 / 35 - ...`` (the ``e``-series
+    obtained from atanh / atan around 0).
     """
-    return 1.0 / 3.0 - 2.0 * eps / 15.0 + 4.0 * eps * eps / 35.0
+    return 1.0 / 3.0 - 2.0 * eps / 15.0 + 8.0 * eps * eps / 105.0
 
 
 def demag_factor_prolate(c: float, a: float) -> float:

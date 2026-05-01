@@ -29,6 +29,10 @@
 - [PEEC_VALIDATION_PLAN.md](peec/PEEC_VALIDATION_PLAN.md) - Systematic validation plan for PEEC solver and PEEC-MSC coupling
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 
+## Analytical Reference Formulas
+
+- [analytical_formulas.md](analytical_formulas.md) - Closed-form formulas (demag factor of rotational ellipsoid, AC vector locus, magnetic shielding, 2D rectangular magnet, thin plate eddy current, ...). PDF-equation -> code cross-reference for the Wakao-Igarashi-Fujiwara-Kameari series. Source: [src/radia/analytical_formulas/](../src/radia/analytical_formulas/), tests: [tests/analytical_formulas/](../tests/analytical_formulas/), examples: [examples/analytical_formulas/](../examples/analytical_formulas/).
+
 ## Visualization
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
