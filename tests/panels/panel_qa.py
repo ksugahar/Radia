@@ -109,13 +109,20 @@ def check_width(window) -> CheckResult:
 
 
 def check_buttons_reachable(window) -> CheckResult:
-    """Run button's bottom must be within the window's sizeHint height.
+    """Run button's bottom must be within the window's *actual* height.
 
     Does NOT mutate window size — previous implementation called
     ``window.resize()`` which inflated subsequent sizeHint() calls
     for other checks.  Use ``geometry()`` (which is valid after
     ``adjustSize()`` ran in ``check_panel_health``) to read the
     button's y position.
+
+    Compares against ``max(sizeHint.h, minimumSize.h)`` because Qt
+    enforces ``minimumSize`` even when ``sizeHint`` is smaller — for
+    panels with few form rows (PCB has 6) the layout sizeHint can
+    fall below ``minimumSize`` and Qt forces the window to expand
+    to ``minimumSize``, placing the Run button toward the bottom of
+    the actual rendered window (NOT the sizeHint).
     """
     btns = [b for b in window.findChildren(QPushButton)
             if "Run" in b.text().strip()]
@@ -126,10 +133,14 @@ def check_buttons_reachable(window) -> CheckResult:
     g = run_btn.geometry()  # local to button's parent
     # Map bottom-left of the button to window coordinates
     btn_bottom = run_btn.mapTo(window, QPoint(0, g.height())).y()
-    win_h = window.sizeHint().height()
+    # Actual rendered height = max(sizeHint, minimumSize) after adjustSize
+    win_h = max(window.sizeHint().height(),
+                window.minimumSize().height())
     if btn_bottom > win_h + 2:  # 2 px tolerance for frame/padding
         return CheckResult("buttons_reachable", False,
-                            f"Run bottom y={btn_bottom} > sizeHint h={win_h}")
+                            f"Run bottom y={btn_bottom} > window h={win_h} "
+                            f"(sizeHint={window.sizeHint().height()}, "
+                            f"minimumSize={window.minimumSize().height()})")
     return CheckResult("buttons_reachable", True,
                         f"Run y={btn_bottom} of {win_h}")
 
