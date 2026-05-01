@@ -235,7 +235,7 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
     from ngsolve import Mesh, Integrate, CF, BND
 
     setup_paths()
-    from bem_sibc_solver import ScalarBIESIBCSolver, compute_phi_inc_from_loop
+    from radia.bem_sibc_solver import ScalarBIESIBCSolver, compute_phi_inc_from_loop
 
     omega = 2 * np.pi * frequency
     t_total_start = _time.perf_counter()
@@ -284,7 +284,7 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
 
     if coil_vol:
         # --- Mesh coil path: BEM EFIE for J, then phi_inc from surface J ---
-        from bem_sibc_solver import compute_phi_inc_from_surface_J
+        from radia.bem_sibc_solver import compute_phi_inc_from_surface_J
         from bem_inductance import compute_inductance_source_sink
         from ngsolve import Mesh as NGSolveMesh
         from ngsolve import Integrate, CF, BND

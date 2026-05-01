@@ -176,7 +176,7 @@ class CoupledBEMSolver:
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
                              TaskManager, ds, BND, div)
         from ngsolve.bem import LaplaceSL
-        from bem_sibc_solver import ScalarBIESIBCSolver
+        from radia.bem_sibc_solver import ScalarBIESIBCSolver
         from scipy.sparse import coo_matrix
 
         self.mesh_coil = mesh_coil
@@ -274,7 +274,7 @@ class CoupledBEMSolver:
         ``H_t_rms``, ``iterations``, ``J_coil_re``, ``J_coil_im``.
         """
         from ngsolve import GridFunction
-        from bem_sibc_solver import compute_phi_inc_from_surface_J
+        from radia.bem_sibc_solver import compute_phi_inc_from_surface_J
 
         n_J = self.n_J
         n_c = self.n_constraint

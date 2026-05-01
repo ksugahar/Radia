@@ -10,7 +10,7 @@ MU_0 = 4e-7 * np.pi
 
 from ngsolve import Mesh, H1, ds, BND, TaskManager, z
 from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
-from bem_sibc_solver import ScalarBIESIBCSolver
+from radia.bem_sibc_solver import ScalarBIESIBCSolver
 
 R = 0.01
 B0 = 0.001

@@ -169,7 +169,7 @@ def main():
     from ngsolve import BND
     print(f"  wp nv={wp_mesh.nv}  ne(BND)={wp_mesh.GetNE(BND)}  "
           f"({time.perf_counter() - t0:.1f}s)")
-    from bem_sibc_solver import (ScalarBIESIBCSolver,
+    from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                   compute_phi_inc_from_filaments,
                                   extract_surface_J_from_phi,
                                   flux_linkage_in_filaments)
