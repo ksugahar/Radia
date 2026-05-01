@@ -1203,6 +1203,35 @@ def filaments_from_step(step_path: str,
         if topo_circle is not None:
             return topo_circle
 
+        # Path 2c (Phase C-heavy, v4.24.0+): united multi-loft with
+        # NON-circular cross-section (rect / polygon / shape transition).
+        # Sections the solid at n_stations along the spine to recover
+        # cross-section faces, then reuses Tier 2's per-station-faces
+        # filament placement.  Slow (BRepAlgoAPI_Section per station)
+        # but works on cases where Tier 1 / Tier 2 / Tier 2b all trip.
+        # GATED: only fire if the lateral has many PLANE faces (>= 4)
+        # AND no revolution-type surfaces (TORUS / CYLINDER / REVOLUTION)
+        # -- those are handled by Path 1 / Path 2b at higher accuracy.
+        # Without this gate we'd intercept gapped-torus (circular
+        # cross-section, TORUS lateral) and degrade its accuracy.
+        from build123d import GeomType
+        face_geom_counts = {}
+        for f in solid.faces():
+            face_geom_counts[f.geom_type] = face_geom_counts.get(f.geom_type, 0) + 1
+        n_plane = face_geom_counts.get(GeomType.PLANE, 0)
+        n_revolution_like = sum(face_geom_counts.get(g, 0) for g in (
+            GeomType.TORUS, GeomType.CYLINDER, GeomType.CONE,
+            GeomType.REVOLUTION,
+        ))
+        if n_plane >= 4 and n_revolution_like == 0:
+            topo_section = _filaments_from_section_planes(
+                solid, cad_units_per_meter=cad_units_per_meter,
+                sigma=sigma, n_peri=n_peri,
+                n_stations=20,
+                source_tag="step_section_planes")
+            if topo_section is not None:
+                return topo_section
+
         # Path 3: constant equivalent-circle via existing dispatch.
         path_m, w_m, h_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
@@ -1895,6 +1924,309 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
         "cross_section_area_m2_min": float(np.min(area_per_station)),
         "cross_section_area_m2_max": float(np.max(area_per_station)),
     }
+
+
+def _section_solid_at_plane(solid, point_xyz, normal_xyz):
+    """Section a build123d Solid by a plane at point_xyz with given normal.
+
+    Returns a build123d Face if the section produced a single closed
+    cross-section, or None if the section failed / produced multiple
+    or no closed wires.
+
+    Uses OCP BRepAlgoAPI_Section + BRepBuilderAPI_MakeWire +
+    BRepBuilderAPI_MakeFace.  Phase C-heavy helper (2026-05-02).
+    """
+    try:
+        from OCP.BRepAlgoAPI import BRepAlgoAPI_Section
+        from OCP.gp import gp_Pln, gp_Pnt, gp_Dir
+        from OCP.BRepBuilderAPI import (
+            BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace,
+        )
+        from OCP.TopExp import TopExp_Explorer
+        from OCP.TopAbs import TopAbs_EDGE
+        from OCP.TopoDS import TopoDS
+        from build123d import Face
+    except ImportError:
+        return None
+
+    # Build cutting plane
+    gp_origin = gp_Pnt(float(point_xyz[0]),
+                       float(point_xyz[1]),
+                       float(point_xyz[2]))
+    gp_normal = gp_Dir(float(normal_xyz[0]),
+                       float(normal_xyz[1]),
+                       float(normal_xyz[2]))
+    plane = gp_Pln(gp_origin, gp_normal)
+
+    # Section: returns a Compound of edges
+    sec = BRepAlgoAPI_Section(solid.wrapped, plane, False)
+    sec.ComputePCurveOn1(True)
+    sec.Approximation(False)
+    sec.Build()
+    if not sec.IsDone():
+        return None
+
+    # Collect edges from the section result
+    section_shape = sec.Shape()
+    edges = []
+    exp = TopExp_Explorer(section_shape, TopAbs_EDGE)
+    while exp.More():
+        edges.append(TopoDS.Edge_s(exp.Current()))
+        exp.Next()
+    if not edges:
+        return None
+
+    # Build wires from the edges. ConnectEdgesToWires does the ordering.
+    # NOTE: a single cutting plane can intersect the solid at MULTIPLE
+    # locations (e.g. the y=0 plane cuts a torus at theta=0 AND
+    # theta=180).  ConnectEdgesToWires returns one wire per intersection
+    # locus.  We pick the wire whose centroid is closest to the
+    # query point, NOT the largest wire (which was the previous bug).
+    try:
+        from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
+        from OCP.TopTools import TopTools_HSequenceOfShape
+        from OCP.GProp import GProp_GProps
+        from OCP.BRepGProp import BRepGProp
+        edge_seq = TopTools_HSequenceOfShape()
+        for e in edges:
+            edge_seq.Append(e)
+        wires_seq = TopTools_HSequenceOfShape()
+        ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(
+            edge_seq, 1e-6, False, wires_seq)
+        if wires_seq.Length() < 1:
+            return None
+
+        query = np.asarray(point_xyz, dtype=np.float64)
+        best_wire = None
+        best_dist = float("inf")
+        for i in range(1, wires_seq.Length() + 1):
+            w_ds = TopoDS.Wire_s(wires_seq.Value(i))
+            # Wire centroid via LinearProperties center-of-mass
+            props = GProp_GProps()
+            BRepGProp.LinearProperties_s(w_ds, props)
+            com = props.CentreOfMass()
+            d = np.linalg.norm(np.array([com.X(), com.Y(), com.Z()]) - query)
+            if d < best_dist:
+                best_dist = d
+                best_wire = w_ds
+        if best_wire is None:
+            return None
+
+        # Make a planar face from the wire
+        face_maker = BRepBuilderAPI_MakeFace(plane, best_wire, True)
+        if not face_maker.IsDone():
+            return None
+        ds_face = face_maker.Face()
+        return Face(ds_face)
+    except Exception:
+        return None
+
+
+def _filaments_from_section_planes(solid,
+                                    cad_units_per_meter: float,
+                                    sigma: float,
+                                    n_peri: int,
+                                    n_stations: int,
+                                    source_tag: str = "step_section_planes"):
+    """Phase C-heavy fallback: united multi-loft (any cross-section).
+
+    Used when:
+      * Tier 1 lateral-surface UV trips (multi-fragment lateral)
+      * Tier 2 per-station faces trips (no surviving end-cap faces, e.g.
+        after ``unite()`` on a multi-loft)
+      * Tier 2b circle-edge per-station trips (non-circular cross-section)
+
+    Algorithm:
+      1. Extract spine polyline + per-station tangents (existing
+         ``extract_centerline_from_step`` falls back to longest-edge
+         spine; we reuse its result and recompute tangents here).
+      2. At each station, build a cutting plane perpendicular to the
+         local tangent, section the solid, recover the cross-section
+         Face from the resulting edges.
+      3. Pass (centroids, faces) to ``_filaments_from_per_station_faces``
+         (existing Tier 2 algorithm) for the actual filament placement.
+
+    Returns None if sectioning fails on >50 % of stations (the spine
+    is unreliable) or if any structural assumption breaks.
+
+    Cost: one ``BRepAlgoAPI_Section`` call per station.  ~5-30 s for
+    a 10 MB STEP at n_stations=20.  Acceptable for production; the
+    much faster Tier 1 / Tier 2 paths are tried first.
+    """
+    if solid is None:
+        return None
+    # Spine polyline using whatever centerline path works
+    try:
+        # We need step_path to call extract_centerline_from_step, but
+        # our caller has already imported the solid.  Use the in-core
+        # centerline extractor (no STEP-path dependency).
+        from build123d import Plane as Bd_Plane
+        path_m_via_solid = _centerline_from_solid_geometry(
+            solid, n_segments=n_stations,
+            cad_units_per_meter=cad_units_per_meter)
+        if path_m_via_solid is None:
+            return None
+        path_m = path_m_via_solid
+    except Exception:
+        return None
+
+    n_path = len(path_m)
+    if n_path < 3:
+        return None
+
+    # Convert path_m back to CAD units for sectioning (which works in
+    # the solid's native frame).
+    path_cad = path_m * cad_units_per_meter
+
+    # Tangents via central differences
+    tangents = np.zeros_like(path_cad)
+    for i in range(n_path):
+        if i == 0:
+            t = path_cad[1] - path_cad[0]
+        elif i == n_path - 1:
+            t = path_cad[-1] - path_cad[-2]
+        else:
+            t = path_cad[i + 1] - path_cad[i - 1]
+        nrm = np.linalg.norm(t)
+        if nrm > 1e-30:
+            tangents[i] = t / nrm
+        else:
+            tangents[i] = np.array([1.0, 0.0, 0.0])
+
+    # Section at each station
+    faces_attempted = []
+    centroids_attempted = []
+    areas_attempted = []
+    for i in range(n_path):
+        face = _section_solid_at_plane(
+            solid, path_cad[i], tangents[i])
+        if face is None:
+            continue
+        faces_attempted.append(face)
+        centroids_attempted.append(path_m[i])
+        areas_attempted.append(float(face.area))
+
+    if len(faces_attempted) < max(3, int(0.5 * n_path)):
+        return None
+
+    # Robust outlier filter: at the spine endpoints (especially for
+    # gapped toruses) the cutting plane can catch the gap or multiple
+    # disjoint pieces, producing an inflated cross-section area.
+    # Drop stations whose area deviates by >30 % from the median.
+    areas_arr = np.array(areas_attempted)
+    median_area = float(np.median(areas_arr))
+    if median_area <= 0:
+        return None
+    keep_mask = np.abs(areas_arr - median_area) <= 0.3 * median_area
+    if int(np.sum(keep_mask)) < max(3, int(0.5 * len(areas_arr))):
+        # Outlier filter would drop too many; bail out so a downstream
+        # tier (or the equivalent-circle Path 3) can take a shot.
+        return None
+
+    faces_kept = [faces_attempted[i]
+                  for i in range(len(faces_attempted)) if keep_mask[i]]
+    # KEY: replace the (possibly broken, e.g. longest-edge spine
+    # picking a lateral edge) initial spine with the actual cross-
+    # section CENTROIDS recovered from sectioning.  Then re-chain the
+    # centroids by nearest-neighbor: the sectioning order follows the
+    # original (broken) spine path, which may visit the centroids in
+    # a non-spine order; nearest-neighbor chaining recovers the
+    # correct spine traversal.
+    centroids_from_sections_cad = np.array(
+        [[f.center().X, f.center().Y, f.center().Z]
+         for f in faces_kept],
+        dtype=np.float64,
+    )
+    perm = _chain_centroids_nn_index(centroids_from_sections_cad)
+    centroids_ordered_cad = centroids_from_sections_cad[perm]
+    faces_ordered = [faces_kept[i] for i in perm]
+    centroids_kept_np = centroids_ordered_cad / cad_units_per_meter
+    return _filaments_from_per_station_faces(
+        centroids_kept_np, faces_ordered,
+        sigma=sigma, n_peri=n_peri, source_tag=source_tag)
+
+
+def _spine_from_rotation_axis_z(solid,
+                                 n_segments: int = 30,
+                                 cad_units_per_meter: float = 1.0):
+    """Generate a spine arc around the z-axis from solid bbox + centroid.
+
+    Used by Phase C-heavy when the solid is a sweep / loft around the
+    z-axis (covers gapped torus, multi-turn pancake, rect / polygon
+    cross-section, united / non-united multi-loft alike).
+
+    Algorithm:
+      1. Bbox in (x, y); set rotation axis = z-axis through origin
+         (heuristic — assumes the user has the coil's revolution axis
+         on the z-axis, which the Cubit and build123d helpers default
+         to).
+      2. Estimate spine radius R from the average of bbox extremes
+         (typical (x_max - x_min) / 2 for a coil centered at origin).
+      3. Sweep ``n_segments`` angular samples uniformly in [0, 2π).
+         Sections that fail or produce outlier areas are dropped
+         downstream (in `_filaments_from_section_planes`).
+
+    Returns the path in metres (n_segments points, NOT closed).
+    """
+    bbox = solid.bounding_box()
+    # Spine radius: use mean of horizontal half-widths
+    # (works for coils centered on the z-axis).
+    R_x = max(abs(bbox.max.X), abs(bbox.min.X))
+    R_y = max(abs(bbox.max.Y), abs(bbox.min.Y))
+    R_outer = max(R_x, R_y)
+    # The spine sits INSIDE the cross-section's outer edge.  For a
+    # rect cross-section of half-width w, R_spine = R_outer - w.
+    # We don't know w yet; use 0.85 * R_outer as a first guess
+    # (typical for coils where w is ~10-20 % of R).
+    R_spine = 0.85 * R_outer
+    if R_spine <= 0:
+        return None
+    thetas = np.linspace(0.0, 2.0 * math.pi, n_segments, endpoint=False)
+    path = np.column_stack([
+        R_spine * np.cos(thetas),
+        R_spine * np.sin(thetas),
+        np.zeros_like(thetas),
+    ])
+    # Convert to metres (path is already in CAD units)
+    return path / cad_units_per_meter
+
+
+def _centerline_from_solid_geometry(solid,
+                                     n_segments: int = 30,
+                                     cad_units_per_meter: float = 1.0):
+    """Spine polyline from a build123d Solid (no step_path dependency).
+
+    Tries (1) revolution-sweep, (2) z-axis rotation-symmetry, (3)
+    longest-edge fallback, in that order.  Returns the path in metres
+    (n_segments+1 points).
+    """
+    # Try revolution-sweep
+    try:
+        path_m, _, _ = _centerline_from_revolution_sweep(
+            solid, n_segments, cad_units_per_meter)
+        if path_m is not None and len(path_m) >= 3:
+            return path_m
+    except Exception:
+        pass
+    # Try z-axis rotation-symmetric spine (rect / polygon cross-section
+    # sweeps around z-axis: NOT triggered by revolution-sweep because
+    # the lateral surfaces are PLANE, not TORUS / CYLINDER / REVOLUTION).
+    try:
+        path_m = _spine_from_rotation_axis_z(
+            solid, n_segments, cad_units_per_meter)
+        if path_m is not None and len(path_m) >= 3:
+            return path_m
+    except Exception:
+        pass
+    # Try open-spine longest-edge
+    try:
+        path_m, _, _ = _centerline_from_open_spine(
+            solid, n_segments, cad_units_per_meter)
+        if path_m is not None and len(path_m) >= 3:
+            return path_m
+    except Exception:
+        pass
+    return None
 
 
 def _try_extract_loft_with_profile(solid,

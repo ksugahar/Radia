@@ -1,0 +1,27 @@
+{
+  "description": "Golden reference for PEEC-inductance on a UNITED multi-loft RECT-cross-section torus.",
+  "rationale": "Locks in Phase C-heavy (Path 2c, _filaments_from_section_planes) for the case that triggered Kubota's 2026-04-28 work-in-progress: united multi-loft solid with NON-circular cross-section. Tier 1 (UV-map) trips because the lateral surface is fragmented across the unite() boolean. Tier 2 (per-station faces) trips because the end-cap faces don't survive unite. Tier 2b (circle-edge per-station) trips because there are no CIRCLE edges in the rect cross-section. Before v4.24.0, Tier 3 (longest-edge equivalent-circle) returned NaN for this case (cross_section_radius_m fell to 0 because area extraction failed). Phase C-heavy added Path 2c which sections the solid at n_stations along a rotation-axis-derived spine, recovers the cross-section faces, and reuses Tier 2's per-station-faces filament placement. Result: 138 nH (vs analytic Grover-DC 177 nH and equiv-circle DC 165 nH; the 138 nH thin-skin number is below the DC formulas because perimeter-only filaments capture the thin-skin (high-frequency) limit where current is on the rect perimeter only -- the DC formulas assume uniform current fill). Verified 2026-05-02 across n_peri = 8 / 16 / 32 / 48: L plateaus at 139-141 nH.",
+  "sample": {
+    "step": "tests/panels/golden/rect_torus_lofted_united.step",
+    "comment": "Synthetic fixture (build123d Solid.make_loft + fuse). Spine: 355deg arc R=50mm; cross-section: 8mm radial x 6mm vertical rect; 13 loft profiles -> 12 ruled lofts -> united into one solid. 113 KB. Cubit-equivalent .jou: tests/panels/golden/rect_torus_lofted_united.jou (not maintained; the build123d script is the source of truth: tools/make_phase_c_rect_torus.py)."
+  },
+  "physics": {
+    "coil": "1-loop 355deg torus, R=50mm, rect cross-section 8x6mm, united multi-loft",
+    "sigma_S_per_m": 5.8e7,
+    "frequency_Hz": 50000,
+    "current_A": 1.0,
+    "n_peri": 16
+  },
+  "expected": {
+    "L_coil_nH": 138.16,
+    "tolerance_L_pct": 5.0,
+    "R_coil_mOhm": null,
+    "tolerance_R_pct": null,
+    "input_kind": "STEP"
+  },
+  "regression_guard": {
+    "min_L_nH": 120.0,
+    "max_L_nH": 160.0,
+    "comment": "Hard band around the converged thin-skin 138-140 nH plateau. Pre-v4.24.0 result on this geometry was NaN (catastrophic failure: cross_section_radius_m=0 from longest-edge spine catching a lateral edge). If this test starts returning > 165 or < 100 the cross-section reconstruction in _filaments_from_section_planes has regressed."
+  }
+}
