@@ -62,6 +62,11 @@ cuboid_average_field  Average B over a target box from a uniform-M
                       source box (Part 6 §7; closed-form C++ kernel
                       from sympy-derived G1, G2 antiderivatives,
                       v4.22.0+; method="numerical" fallback kept)
+
+induction_heating     Canonical AC eddy-current Joule-loss formulas
+                      from textbook references (Smythe, Landau-
+                      Lifshitz, Jackson) -- not the Stafl 1967
+                      transcription, see commit history (v4.23.0+)
 """
 
 from .ellipsoid import (
@@ -133,7 +138,12 @@ from .adaptive_quadrature import (
     patterson_nodes_weights,
     adaptive_integrate,
 )
-from .cuboid_average_field import average_B_in_box
+from .cuboid_average_field import average_B_in_box, average_demag_tensor
+from .induction_heating import (
+    cylinder_axial_eddy_loss,
+    cylinder_axial_eddy_loss_small_ka,
+    cylinder_axial_eddy_loss_thin_skin,
+)
 
 __all__ = [
     # ellipsoid
@@ -194,6 +204,11 @@ __all__ = [
     # adaptive_quadrature (Part 9 §2)
     "patterson_nodes_weights",
     "adaptive_integrate",
-    # cuboid_average_field (Part 6 §7 -- numerical-integration path)
+    # cuboid_average_field (Part 6 §7 -- closed-form C++ kernel + numerical fallback)
     "average_B_in_box",
+    "average_demag_tensor",
+    # induction_heating (canonical AC cylinder eddy-loss formulas, v4.23.0+)
+    "cylinder_axial_eddy_loss",
+    "cylinder_axial_eddy_loss_small_ka",
+    "cylinder_axial_eddy_loss_thin_skin",
 ]
