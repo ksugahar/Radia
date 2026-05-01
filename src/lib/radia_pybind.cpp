@@ -4222,6 +4222,88 @@ PYBIND11_MODULE(_radia_pybind, m) {
         )pbdoc");
 
     // ========================================================================
+    // Lagrange-P2 H1 variant of the C++ Galerkin SL/DL assembler.
+    // 6 basis functions per triangle: 3 vertex + 3 edge mid-point hats.
+    // ========================================================================
+    m.def("_AssembleSLDL_Galerkin_P2",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> verts,
+           py::array_t<int64_t, py::array::c_style | py::array::forcecast> tris,
+           py::array_t<double, py::array::c_style | py::array::forcecast> p2_nodes,
+           py::array_t<int64_t, py::array::c_style | py::array::forcecast> dofs_per_tri,
+           int n_dof,
+           int regular_quad_degree,
+           int singular_n_q,
+           int n_threads)
+        {
+            auto vb = verts.unchecked<2>();
+            auto tb = tris.unchecked<2>();
+            auto pb = p2_nodes.unchecked<3>();
+            auto db = dofs_per_tri.unchecked<2>();
+            const int n_v = static_cast<int>(vb.shape(0));
+            const int n_t = static_cast<int>(tb.shape(0));
+            if (vb.shape(1) != 3) throw std::invalid_argument("verts must be (N, 3)");
+            if (tb.shape(1) != 3) throw std::invalid_argument("tris must be (N_t, 3)");
+            if (pb.shape(0) != n_t || pb.shape(1) != 6 || pb.shape(2) != 3)
+                throw std::invalid_argument("p2_nodes must be (N_t, 6, 3)");
+            if (db.shape(0) != n_t || db.shape(1) != 6)
+                throw std::invalid_argument("dofs_per_tri must be (N_t, 6)");
+            if (n_dof <= 0)
+                throw std::invalid_argument("n_dof must be positive");
+
+            py::array_t<double> SL({n_dof, n_dof});
+            py::array_t<double> DL({n_dof, n_dof});
+            const double* verts_ptr = static_cast<const double*>(verts.data());
+            const int64_t* tris_ptr = static_cast<const int64_t*>(tris.data());
+            const double* p2_ptr = static_cast<const double*>(p2_nodes.data());
+            const int64_t* dofs_ptr = static_cast<const int64_t*>(dofs_per_tri.data());
+            double* SL_ptr = static_cast<double*>(SL.mutable_data());
+            double* DL_ptr = static_cast<double*>(DL.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::bem::AssembleSLDL_P2(
+                    verts_ptr, n_v,
+                    tris_ptr, n_t,
+                    p2_ptr,
+                    dofs_ptr,
+                    n_dof,
+                    regular_quad_degree,
+                    singular_n_q,
+                    n_threads,
+                    SL_ptr,
+                    DL_ptr);
+            }
+            return py::make_tuple(SL, DL);
+        },
+        py::arg("verts"), py::arg("tris"), py::arg("p2_nodes"),
+        py::arg("dofs_per_tri"), py::arg("n_dof"),
+        py::arg("regular_quad_degree") = 11,
+        py::arg("singular_n_q") = 8,
+        py::arg("n_threads") = 0,
+        R"pbdoc(
+            Build dense SL and DL Galerkin matrices on a P2 H1 LAGRANGE
+            surface basis (6 hats per triangle: 3 vertices + 3 edge
+            mid-points), with optional P2-curved geometry.  Output is
+            (n_dof, n_dof) where n_dof = n_v + n_unique_edges.
+
+            Args:
+                verts: (n_v, 3) corner vertex coords [m]
+                tris:  (n_t, 3) int64 corner-vertex indices
+                p2_nodes: (n_t, 6, 3) per-tri Lagrange node coords in
+                          order [v0, v1, v2, mid01, mid12, mid20]
+                dofs_per_tri: (n_t, 6) int64 global Lagrange DOF indices
+                          per local basis function, same node ordering
+                          as p2_nodes.
+                n_dof:    output matrix size.
+                regular_quad_degree, singular_n_q: same semantics as
+                          _AssembleSLDL_Galerkin (P1 entry).
+                n_threads: 0 = OpenMP default.
+
+            Returns:
+                (SL, DL) of shape (n_dof, n_dof) float64.
+        )pbdoc");
+
+    // ========================================================================
     // Fast finite-segment Biot-Savart H (complex per-segment currents).
     // Replaces the pure-numpy compute_phi_inc_from_filaments inner kernel.
     // ========================================================================

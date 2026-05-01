@@ -77,6 +77,54 @@ void AssembleSLDL(
     double* SL_out,
     double* DL_out);
 
+/**
+ * Build the Laplace SL and DL Galerkin matrices on a P2 H1 Lagrange
+ * surface basis (6 DOFs per triangle: 3 vertices + 3 edge midpoints),
+ * with curved-P2 geometry.  Output dense (n_dof, n_dof) matrices.
+ *
+ * Convention: the 6 Lagrange basis functions on T_ref are
+ *   N_0 = (1-xi-eta) (2*(1-xi-eta) - 1)   (vertex v0)
+ *   N_1 = xi (2*xi - 1)                    (vertex v1)
+ *   N_2 = eta (2*eta - 1)                  (vertex v2)
+ *   N_3 = 4 * (1-xi-eta) * xi              (mid-edge v0-v1)
+ *   N_4 = 4 * xi * eta                     (mid-edge v1-v2)
+ *   N_5 = 4 * (1-xi-eta) * eta             (mid-edge v2-v0)
+ *
+ * Singular pairs use the same Sauter-Schwab Duffy 4D rules as the P1
+ * version; the only changes are the per-tri 6-hat evaluation and the
+ * 6-element index permutation that maps mid-edge basis indices through
+ * a corner permutation.
+ *
+ * Args:
+ *   verts        (n_v, 3): row-major corner vertex coords
+ *   tris         (n_t, 3): row-major triangle corner-vertex indices
+ *   p2_nodes     (n_t, 6, 3): per-tri curved-geometry P2 node positions
+ *                  in [v0, v1, v2, mid01, mid12, mid20] order
+ *   dofs_per_tri (n_t, 6): row-major P2 Lagrange DOF index per local
+ *                  basis function, in the same [v0..mid20] order.  This
+ *                  is what extract_surface_p2_lagrange returns on the
+ *                  Python side.
+ *   n_v, n_t     mesh dimensions (n_v = number of corner vertices)
+ *   n_dof        size of the output square matrices (= n_v + n_unique_edges)
+ *   regular_quad_degree   triangle Gauss order, same semantics as the P1 entry
+ *   singular_n_q          1D Gauss-Legendre order for SS sub-cubes
+ *   n_threads             0 = OpenMP default
+ *
+ * Outputs:
+ *   SL_out, DL_out: pre-allocated n_dof * n_dof doubles, row-major.
+ */
+void AssembleSLDL_P2(
+    const double* verts, int n_v,
+    const int64_t* tris, int n_t,
+    const double* p2_nodes,
+    const int64_t* dofs_per_tri,
+    int n_dof,
+    int regular_quad_degree,
+    int singular_n_q,
+    int n_threads,
+    double* SL_out,
+    double* DL_out);
+
 }}  // namespace radia::bem
 
 #endif  // __RAD_BEM_GALERKIN_H
