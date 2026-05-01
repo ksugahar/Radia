@@ -59,10 +59,9 @@ adaptive_quadrature  Adaptive Gauss-Patterson with node reuse
 Field averaging:
 
 cuboid_average_field  Average B over a target box from a uniform-M
-                      source box (Part 6 §7; numerical-integration
-                      path -- closed-form C++ kernel deferred pending
-                      higher-fidelity copy of Part 6 to verify the F2
-                      antiderivative)
+                      source box (Part 6 §7; closed-form C++ kernel
+                      from sympy-derived G1, G2 antiderivatives,
+                      v4.22.0+; method="numerical" fallback kept)
 """
 
 from .ellipsoid import (
