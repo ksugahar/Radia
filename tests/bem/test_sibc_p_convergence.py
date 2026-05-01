@@ -10,24 +10,22 @@ tangential current is::
     H_t_rms    = max(|J_s|) * sqrt(2/3)
 
 This test asserts that H1 order=2 reduces the error vs analytical by
-at least 100x compared to order=1 on the same mesh.  Currently the
-in-tree C++ assembler is P1-only (`AssembleSLDL` in rad_bem_galerkin.cpp
-documents "P1-H1 surface mesh"), so this test runs through the
-ngsolve.bem path (use_intree_bem=False).  Once the C++ assembler is
-extended to P2 H1, set DEFAULT_USE_INTREE=True below to gate on the
-in-tree path instead.
+at least 100x compared to order=1 on the same mesh.  Both orders run
+through the in-tree path (use_intree_bem=True): order=1 uses the C++
+P1 Galerkin assembler (`AssembleSLDL`), order=2 uses the Python
+Lagrange-P2 assembler (`assemble_SL/DL_dense_curved_p2`) with the
+solver bypassing NGSolve's H1 hierarchical FES so the matrices are
+self-consistent in the Lagrange basis.
 
-Phase 0 baseline (2026-05-01, ngsolve.bem path):
-    maxh/R   order    ndof    rel.err
-    R/3       1       128     2.5e-3
-    R/3       2       506     7.7e-7   (3300x better)
-    R/5       1       363     8.7e-4
-    R/5       2      1446     8.7e-8   (10000x better)
+Phase 0 / Phase A baseline (2026-05-01):
+    maxh/R   order    ndof    rel.err  (in-tree)   notes
+    R/3       1       128     ~2.5e-3              C++ P1 assembler
+    R/3       2       506     ~2.1e-6              Python Lagrange P2
+                                                   (~1000x improvement;
+                                                   ngsolve.bem oracle
+                                                   gives 7.7e-7).
 """
 import math
-import os
-import sys
-
 import numpy as np
 import pytest
 
@@ -35,18 +33,18 @@ import pytest
 MU_0 = 4e-7 * math.pi
 
 
-def _have_ngsolve_bem():
+def _have_netgen_occ():
     try:
-        from ngsolve.bem import LaplaceDL, LaplaceSL  # noqa: F401
+        from netgen.occ import Sphere  # noqa: F401
         return True
     except Exception:
         return False
 
 
-@pytest.mark.skipif(not _have_ngsolve_bem(),
-                     reason="ngsolve.bem not available")
-def test_p_convergence_sphere():
-    """p=2 must give >= 100x lower error than p=1 on the same mesh."""
+@pytest.mark.skipif(not _have_netgen_occ(),
+                     reason="netgen.occ not available")
+def test_p_convergence_sphere_intree():
+    """In-tree path: p=2 must give >= 100x lower error than p=1."""
     from ngsolve import Mesh
     from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
     from radia.bem_sibc_solver import ScalarBIESIBCSolver
@@ -69,29 +67,35 @@ def test_p_convergence_sphere():
     geo = OCCGeometry(Glue(sph.faces))
     mesh = Mesh(geo.GenerateMesh(maxh=R / 3))
     mesh.Curve(2)
-
     H0 = B0 / MU_0
+
     errs = {}
-    for order in (1, 2):
-        solver = ScalarBIESIBCSolver(mesh, order=order, use_intree_bem=False,
-                                      assemble_dense=True)
-        # phi_inc = -H0 * z, projected onto the FES at the BND
-        from ngsolve import GridFunction, z
-        gf = GridFunction(solver.fes)
-        gf.Set(-H0 * z, definedon=mesh.Boundaries(".*"))
-        phi_inc = np.asarray(gf.vec.FV().NumPy(), dtype=complex).copy()
 
-        sol = solver.solve(phi_inc, Z_s=Z_s, omega=omega)
-        H_t_rms = float(sol["H_t_rms"])
-        errs[order] = abs(H_t_rms - H_t_rms_ana) / H_t_rms_ana
+    # order = 1 : in-tree P1 path (uses C++ AssembleSLDL).  phi_inc must be
+    # an ndarray of length n_v (vertex DOFs), so we sample analytical phi
+    # at each surface vertex.
+    solver1 = ScalarBIESIBCSolver(mesh, order=1, use_intree_bem=True,
+                                    assemble_dense=True)
+    phi_inc1 = np.zeros(solver1.ndof, dtype=complex)
+    for i in range(mesh.nv):
+        phi_inc1[i] = -H0 * mesh.vertices[i].point[2]
+    sol1 = solver1.solve(phi_inc1, Z_s=Z_s, omega=omega)
+    errs[1] = abs(sol1["H_t_rms"] - H_t_rms_ana) / H_t_rms_ana
 
-    assert errs[1] > 0, f"p=1 error vanished unexpectedly: {errs[1]}"
-    assert errs[2] > 0, f"p=2 error vanished unexpectedly: {errs[2]}"
+    # order = 2 : in-tree Lagrange-P2 path.  Caller samples phi at each
+    # Lagrange node via solver.dof_coords (vertices + edge mid-points).
+    solver2 = ScalarBIESIBCSolver(mesh, order=2, use_intree_bem=True,
+                                    assemble_dense=True)
+    phi_inc2 = (-H0 * solver2.dof_coords[:, 2]).astype(complex)
+    sol2 = solver2.solve(phi_inc2, Z_s=Z_s, omega=omega)
+    errs[2] = abs(sol2["H_t_rms"] - H_t_rms_ana) / H_t_rms_ana
+
+    print(f"\np=1 rel.err = {errs[1]:.3e}  (ndof={solver1.ndof})")
+    print(f"p=2 rel.err = {errs[2]:.3e}  (ndof={solver2.ndof})")
     speedup = errs[1] / errs[2]
-    print(f"\np=1 rel.err = {errs[1]:.3e}")
-    print(f"p=2 rel.err = {errs[2]:.3e}")
-    print(f"p=2/p=1 ratio (smaller is better) = {errs[2]/errs[1]:.3e}")
-    print(f"speedup factor = {speedup:.0f}x")
+    print(f"p=2 vs p=1 error ratio = {errs[2]/errs[1]:.3e} ({speedup:.0f}x lower err)")
+
+    assert errs[1] > 0 and errs[2] > 0
     assert speedup > 100, (
         f"p=2 should give at least 100x lower error than p=1 on the "
         f"same mesh (got {speedup:.1f}x). p=1 err={errs[1]:.3e}, "
@@ -99,5 +103,5 @@ def test_p_convergence_sphere():
 
 
 if __name__ == "__main__":
-    test_p_convergence_sphere()
+    test_p_convergence_sphere_intree()
     print("OK: p-convergence regression test passed.")

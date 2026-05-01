@@ -60,8 +60,26 @@ class ScalarBIESIBCSolver:
         self.mesh = mesh
         self.order = order
         self.use_intree_bem = use_intree_bem
+        # Lagrange-P2 in-tree path is taken when use_intree_bem and order >= 2.
+        # In that mode self.fes is None (we don't use NGSolve FES at all):
+        # SL, DL, M, K are all assembled in Lagrange P2 basis directly
+        # (NGSolve uses hierarchical Lobatto for H1 order>=2; mixing the
+        # two would introduce a basis-mismatch in the assembled SL/DL).
+        self._intree_lagrange_p2 = bool(use_intree_bem and order >= 2)
+        self.dof_coords = None   # populated for the Lagrange-P2 path
 
-        # H1 on surface
+        if self._intree_lagrange_p2:
+            # Skip NGSolve FES creation entirely.
+            self.fes = None
+            t0 = time.perf_counter()
+            self._init_lagrange_p2_path(
+                mesh, order, intree_geom_order,
+                intree_singular_n_q, intree_regular_quad_degree,
+                use_intree_hacapk, hacapk_aca_eps, hacapk_leaf, hacapk_eta)
+            self.t_assembly = time.perf_counter() - t0
+            return
+
+        # H1 on surface (P1, or order>=2 with use_intree_bem=False)
         self.fes = H1(mesh, order=order)
         u, v = self.fes.TnT()
         self.ndof = self.fes.ndof
@@ -200,6 +218,90 @@ class ScalarBIESIBCSolver:
 
         self.t_assembly = time.perf_counter() - t0
 
+    def _init_lagrange_p2_path(self, mesh, order,
+                                intree_geom_order,
+                                intree_singular_n_q,
+                                intree_regular_quad_degree,
+                                use_intree_hacapk,
+                                hacapk_aca_eps, hacapk_leaf, hacapk_eta):
+        """Build SL, DL, M, K, gauge entirely in Lagrange P2 basis.
+
+        Bypasses NGSolve's H1 hierarchical FES so that all matrices are
+        consistent in the same basis -- the user passes phi_inc as an
+        ndarray of length ``ndof`` whose i-th entry is the scalar
+        potential value at the i-th Lagrange P2 node (vertex or edge
+        mid-point).  ``self.dof_coords`` exposes those node positions
+        so the caller can sample any analytical phi at the right places.
+        """
+        if order != 2:
+            raise NotImplementedError(
+                f"Lagrange-P2 in-tree path supports order=2 only "
+                f"(got order={order}).  Higher H1 orders need a generalized "
+                f"Lagrange basis assembler.")
+        from radia.bem.sibc_hacapk import (
+            extract_surface_p2_lagrange,
+            assemble_SL_dense_curved_p2, assemble_DL_dense_curved_p2,
+            assemble_mass_curved_p2, assemble_stiffness_curved_p2,
+        )
+
+        verts, tris, v_global, tri_p2, dofs_per_tri, n_dof, dof_coords = \
+            extract_surface_p2_lagrange(mesh, geom_order=intree_geom_order)
+
+        self.ndof = n_dof
+        self.dof_coords = dof_coords
+        self._intree_v_global = v_global
+        self._intree_dofs_per_tri = dofs_per_tri
+        self._intree_tri_p2 = tri_p2
+
+        # SL / DL: Python implementation (slow O(n_t^2)).  Replaced with a
+        # C++ binding ``_AssembleSLDL_Galerkin_P2`` once the .pyd ships
+        # the P2 entry point.
+        try:
+            from radia import _radia_pybind as _rpb
+            _cpp_assemble_p2 = getattr(_rpb, "_AssembleSLDL_Galerkin_P2",
+                                       None)
+        except ImportError:
+            _cpp_assemble_p2 = None
+        if _cpp_assemble_p2 is not None:
+            v_arr = np.ascontiguousarray(verts, dtype=np.float64)
+            t_arr = np.ascontiguousarray(tris, dtype=np.int64)
+            p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
+            d_arr = np.ascontiguousarray(dofs_per_tri, dtype=np.int64)
+            self.SL, self.DL = _cpp_assemble_p2(
+                v_arr, t_arr, p_arr, d_arr, int(n_dof),
+                int(intree_regular_quad_degree),
+                int(intree_singular_n_q),
+                0)
+        else:
+            self.SL = assemble_SL_dense_curved_p2(
+                verts, tris, tri_p2, dofs_per_tri, n_dof,
+                regular_quad_degree=intree_regular_quad_degree,
+                singular_n_q=intree_singular_n_q)
+            self.DL = assemble_DL_dense_curved_p2(
+                verts, tris, tri_p2, dofs_per_tri, n_dof,
+                regular_quad_degree=intree_regular_quad_degree,
+                singular_n_q=intree_singular_n_q)
+
+        self.M = assemble_mass_curved_p2(
+            tri_p2, dofs_per_tri, n_dof,
+            regular_quad_degree=intree_regular_quad_degree)
+        self.K = assemble_stiffness_curved_p2(
+            tri_p2, dofs_per_tri, n_dof,
+            regular_quad_degree=intree_regular_quad_degree)
+
+        self.M_inv = np.linalg.inv(self.M)
+        self._c_gauge = self.M @ np.ones(n_dof)
+
+        # HACApK compression of P2-Lagrange SL/DL is not yet plumbed in.
+        # The HACApK manager assumes one coordinate per DOF, which we have
+        # via dof_coords, so this is a small follow-up; defer for now.
+        self._SL_hacapk = None
+        self._DL_hacapk = None
+        if use_intree_hacapk:
+            raise NotImplementedError(
+                "HACApK compression for the Lagrange-P2 path is not yet "
+                "implemented.  Use use_intree_hacapk=False for order=2.")
+
     def solve(self, phi_inc_cf, Z_s, omega):
         """Solve scalar BIE + SIBC for given incident potential and impedance.
 
@@ -224,8 +326,9 @@ class ScalarBIESIBCSolver:
                 gamma: complex - Z_s / (jw * mu_0) (or its mean if per-node)
                 t_solve: float - solve time [s]
         """
-        from ngsolve import (LinearForm, GridFunction, Integrate, CF, ds,
-                             grad, BND, InnerProduct)
+        if not self._intree_lagrange_p2:
+            from ngsolve import (LinearForm, GridFunction, Integrate, CF, ds,
+                                 grad, BND, InnerProduct)
 
         t0 = time.perf_counter()
         ndof = self.ndof
@@ -233,6 +336,12 @@ class ScalarBIESIBCSolver:
         # RHS: <phi_inc, v>_S
         if isinstance(phi_inc_cf, np.ndarray):
             rhs_vec = self.M @ phi_inc_cf
+        elif self._intree_lagrange_p2:
+            raise TypeError(
+                "Lagrange-P2 path requires phi_inc as an ndarray of length "
+                f"ndof={ndof}.  Sample your CF at solver.dof_coords (the "
+                "physical positions of the Lagrange P2 nodes -- vertices + "
+                "edge mid-points) and pass the resulting array.")
         else:
             v_h1 = self.fes.TestFunction()
             lf = LinearForm(self.fes)
@@ -274,15 +383,25 @@ class ScalarBIESIBCSolver:
         t_solve = time.perf_counter() - t0
 
         # Extract H_t_rms = sqrt(<|grad_s phi|^2> / area)
-        gf = GridFunction(self.fes)
-        gf.vec.FV().NumPy()[:] = phi_vec.real
-        Hsq_re = Integrate(InnerProduct(grad(gf), grad(gf)),
-                           self.mesh, BND)
-        gf.vec.FV().NumPy()[:] = phi_vec.imag
-        Hsq_im = Integrate(InnerProduct(grad(gf), grad(gf)),
-                           self.mesh, BND)
-        area = Integrate(CF(1), self.mesh, BND)
-        H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
+        if self._intree_lagrange_p2:
+            # Use our Lagrange-P2 stiffness K to compute the surface-
+            # gradient norm of phi:  ||grad_S phi||^2_L2 = phi^T K phi
+            # (works for both real and imaginary parts).  The total area
+            # is 1^T M 1.
+            Hsq_re = float(phi_vec.real @ (self.K @ phi_vec.real))
+            Hsq_im = float(phi_vec.imag @ (self.K @ phi_vec.imag))
+            area = float(np.ones(ndof) @ (self.M @ np.ones(ndof)))
+            H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
+        else:
+            gf = GridFunction(self.fes)
+            gf.vec.FV().NumPy()[:] = phi_vec.real
+            Hsq_re = Integrate(InnerProduct(grad(gf), grad(gf)),
+                               self.mesh, BND)
+            gf.vec.FV().NumPy()[:] = phi_vec.imag
+            Hsq_im = Integrate(InnerProduct(grad(gf), grad(gf)),
+                               self.mesh, BND)
+            area = Integrate(CF(1), self.mesh, BND)
+            H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
 
         # Power density: P' = (1/2) Re(Z_s) |J_s|^2 = (1/2) Re(Z_s) H_t_rms^2
         # (time-averaged). For per-node Z_s, the area-averaged Re(Z_s) is
@@ -294,9 +413,12 @@ class ScalarBIESIBCSolver:
         else:
             P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0
 
-        # GridFunction output
-        gf_phi = GridFunction(self.fes)
-        gf_phi.vec.FV().NumPy()[:] = phi_vec.real  # real part
+        # GridFunction output (None for the Lagrange-P2 path)
+        if self._intree_lagrange_p2:
+            gf_phi = None
+        else:
+            gf_phi = GridFunction(self.fes)
+            gf_phi.vec.FV().NumPy()[:] = phi_vec.real  # real part
 
         return {
             'phi': gf_phi,

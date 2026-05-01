@@ -167,6 +167,76 @@ def extract_surface_curved(mesh, bnd_label=None, geom_order=2):
     return verts, tris, v_global, tri_p2_nodes
 
 
+def extract_surface_p2_lagrange(mesh, bnd_label=None, geom_order=2):
+    """Extract Lagrange-P2 connectivity on a surface mesh.
+
+    Built on top of ``extract_surface_curved``: the corner topology and
+    the per-tri 6 P2 geometry nodes are exactly what that returns.  This
+    helper additionally enumerates the unique edges and assigns each one
+    a global Lagrange DOF index, so the caller can build (n_dof, n_dof)
+    BEM operators with H1 P2 Lagrange basis.
+
+    Lagrange P2 DOF layout:
+      * indices 0 .. n_v-1     -> vertex DOFs (one per surface vertex)
+      * indices n_v .. n_v+n_e -> edge mid-point DOFs (one per unique edge)
+
+    Per-tri DOF list ``dofs_per_tri[t]`` is::
+        [v0, v1, v2, e01, e12, e20]
+
+    matching the local node ordering used by ``extract_surface_curved`` and
+    by ``permute_p2`` (mid-edge k = mid-point of new corners (k, (k+1)%3)).
+
+    Args:
+        mesh: NGSolve Mesh.
+        bnd_label: optional BND label to filter on.
+        geom_order: passed through to extract_surface_curved.
+
+    Returns:
+        verts (n_v, 3): corner vertex coords
+        tris (n_t, 3) int: triangle corner-vertex indices into verts
+        v_global (n_v,) int: original mesh.vertices index per local vertex
+        tri_p2_nodes (n_t, 6, 3): per-tri P2 Lagrange node coords (curved
+            geometry positions at the 6 reference Lagrange points)
+        dofs_per_tri (n_t, 6) int64: global Lagrange DOF index per local
+            P2 node (3 corners + 3 edge mid-points)
+        n_dof (int): n_v + n_unique_edges
+        dof_coords (n_dof, 3): physical position of each Lagrange DOF
+    """
+    verts, tris, v_global, tri_p2_nodes = extract_surface_curved(
+        mesh, bnd_label=bnd_label, geom_order=geom_order)
+    n_v = len(verts)
+    n_t = len(tris)
+
+    # Enumerate unique edges across all tris.  Each tri has 3 edges:
+    #   local edge k (k=0,1,2) goes between corners (k, (k+1) % 3)
+    edge_dof = {}        # (lo, hi) -> global edge DOF (offset by n_v)
+    edge_coord = []       # parallel list of edge mid-point coords
+    dofs_per_tri = np.zeros((n_t, 6), dtype=np.int64)
+
+    for t in range(n_t):
+        for k in range(3):
+            dofs_per_tri[t, k] = int(tris[t, k])
+        for k in range(3):
+            a = int(tris[t, k])
+            b = int(tris[t, (k + 1) % 3])
+            key = (min(a, b), max(a, b))
+            if key not in edge_dof:
+                edge_dof[key] = n_v + len(edge_coord)
+                # mid-point coord from THIS tri's curved P2 nodes
+                edge_coord.append(np.array(tri_p2_nodes[t, 3 + k, :],
+                                            dtype=np.float64))
+            dofs_per_tri[t, 3 + k] = edge_dof[key]
+
+    n_e = len(edge_coord)
+    n_dof = n_v + n_e
+    dof_coords = np.zeros((n_dof, 3), dtype=np.float64)
+    dof_coords[:n_v] = verts
+    if n_e > 0:
+        dof_coords[n_v:] = np.array(edge_coord)
+
+    return verts, tris, v_global, tri_p2_nodes, dofs_per_tri, n_dof, dof_coords
+
+
 def extract_surface(mesh, bnd_label=None):
     """Extract a flat-triangle surface from a NGSolve volume or surface
     mesh, restricted to one BND label (or all BND if label is None).
@@ -1804,3 +1874,368 @@ def assemble_SL_dense(verts, tris, *, regular_quad_degree=11,
             SL[np.ix_(Va, Vb)] += block
 
     return SL
+
+
+# ======================================================================
+# Lagrange P2 H1 basis: assembler + mass + stiffness
+# ======================================================================
+#
+# Reference T_ref nodes:
+#   k=0  -> (0, 0)        L_0 = (1-xi-eta) * (2*(1-xi-eta) - 1)   [vertex v0]
+#   k=1  -> (1, 0)        L_1 = xi * (2*xi - 1)                   [vertex v1]
+#   k=2  -> (0, 1)        L_2 = eta * (2*eta - 1)                 [vertex v2]
+#   k=3  -> (0.5, 0)      L_3 = 4 * (1-xi-eta) * xi               [mid v0-v1]
+#   k=4  -> (0.5, 0.5)    L_4 = 4 * xi * eta                      [mid v1-v2]
+#   k=5  -> (0, 0.5)      L_5 = 4 * (1-xi-eta) * eta              [mid v2-v0]
+#
+# Already implemented in `_p2_basis_and_grad(xi, eta)` -- shared with the
+# curved-geometry evaluator.
+
+# Edge index lookup (corner pair to mid-edge basis index):
+#   (0, 1) or (1, 0) -> 3   ;  (1, 2) or (2, 1) -> 4   ;  (0, 2) or (2, 0) -> 5
+_EDGE_OF_CORNERS = {(0, 1): 3, (1, 0): 3,
+                    (1, 2): 4, (2, 1): 4,
+                    (0, 2): 5, (2, 0): 5}
+
+
+def _p2_basis_perm_from_corner_perm(pa):
+    """Given a corner permutation pa = (pa[0], pa[1], pa[2]) (each in {0,1,2}),
+    build the corresponding 6-element P2-basis permutation perm_basis such
+    that perm_basis[k_new] = k_old for k_new = 0..5, with the convention
+    that mid-edge k_new = 3+i lies between NEW corners (i, (i+1) % 3) and
+    therefore corresponds to OLD mid-edge between OLD corners
+    (pa[i], pa[(i+1) % 3]).
+    """
+    perm = np.empty(6, dtype=np.int64)
+    perm[0] = pa[0]
+    perm[1] = pa[1]
+    perm[2] = pa[2]
+    for i in range(3):
+        a = pa[i]
+        b = pa[(i + 1) % 3]
+        perm[3 + i] = _EDGE_OF_CORNERS[(a, b)]
+    return perm
+
+
+def _ss_block_curved_p2(p2a, p2b, case, n_q):
+    """Sauter-Schwab Galerkin SL block (6x6) on P2-curved geometry with
+    P2 Lagrange H1 basis.  Returns the block in PERMUTED indexing -- caller
+    is responsible for un-permuting back to the original tri local indices.
+    """
+    xi_a, eta_a, xi_b, eta_b, w_q = _ss_quad_pts(case, n_q)
+    r_a, _, _, J_a = _eval_p2_geom(p2a, xi_a, eta_a)
+    r_b, _, _, J_b = _eval_p2_geom(p2b, xi_b, eta_b)
+
+    diff = r_a - r_b
+    r_dist = np.sqrt(np.sum(diff * diff, axis=1))
+    r_dist = np.where(r_dist == 0, 1e-300, r_dist)
+
+    Na, _, _ = _p2_basis_and_grad(xi_a, eta_a)   # (Q, 6)
+    Nb, _, _ = _p2_basis_and_grad(xi_b, eta_b)   # (Q, 6)
+
+    weight = (J_a * J_b) / (4.0 * np.pi * r_dist) * w_q   # (Q,)
+    return Na.T @ (weight[:, None] * Nb)                  # (6, 6)
+
+
+def _ss_block_dl_curved_p2(p2a, p2b, case, n_q):
+    """Sauter-Schwab Galerkin DL block (6x6) on P2-curved geometry with
+    P2 Lagrange basis, returned in PERMUTED indexing.  Caller un-permutes.
+    """
+    xi_a, eta_a, xi_b, eta_b, w_q = _ss_quad_pts(case, n_q)
+    r_a, _, _, J_a            = _eval_p2_geom(p2a, xi_a, eta_a)
+    r_b, _, _, J_b, n_hat_b   = _eval_p2_geom_with_normal(p2b, xi_b, eta_b)
+
+    diff = r_a - r_b
+    r2 = np.sum(diff * diff, axis=1)
+    r_dist = np.sqrt(r2)
+    r_dist = np.where(r_dist == 0, 1e-300, r_dist)
+    dot_n = np.sum(diff * n_hat_b, axis=1)
+
+    Na, _, _ = _p2_basis_and_grad(xi_a, eta_a)
+    Nb, _, _ = _p2_basis_and_grad(xi_b, eta_b)
+
+    weight = dot_n / (4.0 * np.pi * r2 * r_dist) * J_a * J_b * w_q
+    return Na.T @ (weight[:, None] * Nb)
+
+
+def sl_pair_singular_curved_p2(p2_a, p2_b, tri_a, tri_b, n_q=8):
+    """SL singular block (6x6) on P2-curved geometry, P2 Lagrange basis.
+
+    Returns the (6, 6) block indexed by ORIGINAL local node ordering of
+    p2_a (rows) x p2_b (cols).
+    """
+    cls, _ = share_class(tri_a, tri_b)
+    shared_pairs = [(la, lb) for la in range(3) for lb in range(3)
+                    if int(tri_a[la]) == int(tri_b[lb])]
+
+    if cls == 'vertex':
+        la, lb = shared_pairs[0]
+        pa = (la, (la + 1) % 3, (la + 2) % 3)
+        pb = (lb, (lb + 1) % 3, (lb + 2) % 3)
+    elif cls == 'edge':
+        (la0, lb0), (la1, lb1) = shared_pairs
+        apex_a = ({0, 1, 2} - {la0, la1}).pop()
+        apex_b = ({0, 1, 2} - {lb0, lb1}).pop()
+        pa = (la0, la1, apex_a)
+        pb = (lb0, lb1, apex_b)
+    elif cls == 'identical':
+        perm_b_canon = [None, None, None]
+        for la, lb in shared_pairs:
+            perm_b_canon[la] = lb
+        pa = (0, 1, 2)
+        pb = tuple(perm_b_canon)
+    else:
+        raise ValueError(f"sl_pair_singular_curved_p2: non-singular cls={cls}")
+
+    p2a = _permute_p2_corners(p2_a, pa)
+    p2b = _permute_p2_corners(p2_b, pb)
+    case = {'vertex': 'common_vertex',
+            'edge':   'common_edge',
+            'identical': 'identical'}[cls]
+    M_perm = _ss_block_curved_p2(p2a, p2b, case, n_q)
+
+    # Un-permute the 6x6 block back to ORIGINAL p2_a / p2_b indexing.
+    perm_a = _p2_basis_perm_from_corner_perm(pa)
+    perm_b = _p2_basis_perm_from_corner_perm(pb)
+    M_orig = np.zeros((6, 6))
+    M_orig[np.ix_(perm_a, perm_b)] = M_perm
+    return M_orig
+
+
+def dl_pair_singular_curved_p2(p2_a, p2_b, tri_a, tri_b, n_q=8):
+    """DL singular block (6x6) on P2-curved geometry, P2 Lagrange basis.
+
+    Sign correction logic mirrors `dl_pair_singular_curved` (P1): only the
+    n_b normal direction can flip under non-cyclic corner permutations of
+    T_b, so multiply by `_perm_parity_sign(pb)` for edge / identical cases.
+    """
+    cls, _ = share_class(tri_a, tri_b)
+    shared_pairs = [(la, lb) for la in range(3) for lb in range(3)
+                    if int(tri_a[la]) == int(tri_b[lb])]
+
+    sign_b = +1
+    if cls == 'vertex':
+        la, lb = shared_pairs[0]
+        pa = (la, (la + 1) % 3, (la + 2) % 3)
+        pb = (lb, (lb + 1) % 3, (lb + 2) % 3)
+        # Both are cyclic shifts -> parity +1 -> no sign flip
+    elif cls == 'edge':
+        (la0, lb0), (la1, lb1) = shared_pairs
+        apex_a = ({0, 1, 2} - {la0, la1}).pop()
+        apex_b = ({0, 1, 2} - {lb0, lb1}).pop()
+        pa = (la0, la1, apex_a)
+        pb = (lb0, lb1, apex_b)
+        sign_b = _perm_parity_sign(pb)
+    elif cls == 'identical':
+        perm_b_canon = [None, None, None]
+        for la, lb in shared_pairs:
+            perm_b_canon[la] = lb
+        pa = (0, 1, 2)
+        pb = tuple(perm_b_canon)
+        sign_b = _perm_parity_sign(pb)
+    else:
+        raise ValueError(f"dl_pair_singular_curved_p2: non-singular cls={cls}")
+
+    p2a = _permute_p2_corners(p2_a, pa)
+    p2b = _permute_p2_corners(p2_b, pb)
+    case = {'vertex': 'common_vertex',
+            'edge':   'common_edge',
+            'identical': 'identical'}[cls]
+    M_perm = _ss_block_dl_curved_p2(p2a, p2b, case, n_q)
+    M_perm = M_perm * sign_b
+
+    perm_a = _p2_basis_perm_from_corner_perm(pa)
+    perm_b = _p2_basis_perm_from_corner_perm(pb)
+    M_orig = np.zeros((6, 6))
+    M_orig[np.ix_(perm_a, perm_b)] = M_perm
+    return M_orig
+
+
+def assemble_SL_dense_curved_p2(verts, tris, tri_p2_nodes, dofs_per_tri,
+                                  n_dof, *, regular_quad_degree=11,
+                                  singular_n_q=8):
+    """Build dense Galerkin Laplace SL on curved-P2 geometry with P2
+    Lagrange H1 basis.
+
+    Args:
+        verts (n_v, 3): corner vertex coords.
+        tris (n_t, 3) int: triangle corner-vertex indices into verts.
+        tri_p2_nodes (n_t, 6, 3): per-tri P2 Lagrange node coords (curved
+            geometry).
+        dofs_per_tri (n_t, 6) int: global Lagrange DOF index per local
+            P2 node, as built by ``extract_surface_p2_lagrange``.
+        n_dof (int): total DOFs (n_v + n_unique_edges).
+        regular_quad_degree, singular_n_q: as for the P1 version.
+
+    Returns (n_dof, n_dof) float64 SL matrix.
+    """
+    n_t = len(tris)
+    SL = np.zeros((n_dof, n_dof), dtype=np.float64)
+
+    q = tri_quad(regular_quad_degree)
+    qxi  = q[:, 0].astype(np.float64)
+    qeta = q[:, 1].astype(np.float64)
+    qw_ref = q[:, 2].astype(np.float64)
+
+    # Per-tri quadrature cache: physical positions, surface weight (w_ref * J),
+    # and 6-hat values at each quadrature point.
+    pts_cache, w_cache, N_cache = [], [], []
+    Nq, _, _ = _p2_basis_and_grad(qxi, qeta)   # (n_q, 6) -- same for every tri
+    for t in range(n_t):
+        r_t, _, _, J_t = _eval_p2_geom(tri_p2_nodes[t], qxi, qeta)
+        pts_cache.append(r_t)
+        w_cache.append(qw_ref * J_t)
+        N_cache.append(Nq)   # alias; identical reference values
+
+    for a in range(n_t):
+        Da = dofs_per_tri[a]
+        Va = tris[a]
+        for b in range(n_t):
+            Db = dofs_per_tri[b]
+            Vb = tris[b]
+            cls, _ = share_class(Va, Vb)
+            if cls == 'regular':
+                pts_a, w_a, Na = pts_cache[a], w_cache[a], N_cache[a]
+                pts_b, w_b, Nb = pts_cache[b], w_cache[b], N_cache[b]
+                dx = pts_a[:, None, :] - pts_b[None, :, :]
+                r = np.sqrt(np.sum(dx * dx, axis=-1))
+                G = INV_4PI / r
+                Tmat = (G * w_b[None, :]) @ Nb
+                block = Na.T @ (w_a[:, None] * Tmat)
+            else:
+                block = sl_pair_singular_curved_p2(
+                    tri_p2_nodes[a], tri_p2_nodes[b],
+                    Va, Vb, n_q=singular_n_q)
+            SL[np.ix_(Da, Db)] += block
+
+    return SL
+
+
+def assemble_DL_dense_curved_p2(verts, tris, tri_p2_nodes, dofs_per_tri,
+                                  n_dof, *, regular_quad_degree=11,
+                                  singular_n_q=8):
+    """Build dense Galerkin Laplace DL on curved-P2 geometry with P2
+    Lagrange H1 basis.  See ``assemble_SL_dense_curved_p2``.
+    """
+    n_t = len(tris)
+    DL = np.zeros((n_dof, n_dof), dtype=np.float64)
+
+    q = tri_quad(regular_quad_degree)
+    qxi  = q[:, 0].astype(np.float64)
+    qeta = q[:, 1].astype(np.float64)
+    qw_ref = q[:, 2].astype(np.float64)
+
+    pts_cache, w_cache, N_cache, n_cache = [], [], [], []
+    Nq, _, _ = _p2_basis_and_grad(qxi, qeta)
+    for t in range(n_t):
+        r_t, _, _, J_t, n_t_arr = _eval_p2_geom_with_normal(
+            tri_p2_nodes[t], qxi, qeta)
+        pts_cache.append(r_t)
+        w_cache.append(qw_ref * J_t)
+        N_cache.append(Nq)
+        n_cache.append(n_t_arr)
+
+    for a in range(n_t):
+        Da = dofs_per_tri[a]
+        Va = tris[a]
+        for b in range(n_t):
+            Db = dofs_per_tri[b]
+            Vb = tris[b]
+            cls, _ = share_class(Va, Vb)
+            if cls == 'regular':
+                pts_a, w_a, Na = pts_cache[a], w_cache[a], N_cache[a]
+                pts_b, w_b, Nb = pts_cache[b], w_cache[b], N_cache[b]
+                n_b_q = n_cache[b]
+                dx = pts_a[:, None, :] - pts_b[None, :, :]
+                r2 = np.sum(dx * dx, axis=-1)
+                r = np.sqrt(r2)
+                dot = np.einsum('abc,bc->ab', dx, n_b_q)
+                K = dot / (4.0 * np.pi * r2 * r)
+                Tmat = (K * w_b[None, :]) @ Nb
+                block = Na.T @ (w_a[:, None] * Tmat)
+            else:
+                block = dl_pair_singular_curved_p2(
+                    tri_p2_nodes[a], tri_p2_nodes[b],
+                    Va, Vb, n_q=singular_n_q)
+            DL[np.ix_(Da, Db)] += block
+
+    return DL
+
+
+def assemble_mass_curved_p2(tri_p2_nodes, dofs_per_tri, n_dof, *,
+                             regular_quad_degree=11):
+    """Surface mass matrix M[i,j] = int N_i N_j dS on curved-P2 geometry,
+    P2 Lagrange basis.  Local 6x6 per tri scattered via dofs_per_tri.
+    """
+    n_t = len(tri_p2_nodes)
+    M = np.zeros((n_dof, n_dof), dtype=np.float64)
+
+    q = tri_quad(regular_quad_degree)
+    qxi  = q[:, 0].astype(np.float64)
+    qeta = q[:, 1].astype(np.float64)
+    qw_ref = q[:, 2].astype(np.float64)
+    Nq, _, _ = _p2_basis_and_grad(qxi, qeta)   # (n_q, 6)
+
+    for t in range(n_t):
+        _, _, _, J_t = _eval_p2_geom(tri_p2_nodes[t], qxi, qeta)
+        w = qw_ref * J_t                         # (n_q,)
+        block = Nq.T @ (w[:, None] * Nq)         # (6, 6)
+        Dt = dofs_per_tri[t]
+        M[np.ix_(Dt, Dt)] += block
+
+    return M
+
+
+def assemble_stiffness_curved_p2(tri_p2_nodes, dofs_per_tri, n_dof, *,
+                                   regular_quad_degree=11):
+    """Surface (Laplace-Beltrami) stiffness matrix
+    K[i,j] = int grad_S N_i . grad_S N_j dS on curved-P2 geometry,
+    P2 Lagrange basis.
+
+    Surface gradient via the metric:
+       g_{a b} = dr/dxi_a . dr/dxi_b
+       g^{a b} = inverse(g)
+       grad_S N . grad_S M = (dN/dxi_a) g^{a b} (dM/dxi_b)
+       dS = sqrt(det g) dxi deta
+    """
+    n_t = len(tri_p2_nodes)
+    K = np.zeros((n_dof, n_dof), dtype=np.float64)
+
+    q = tri_quad(regular_quad_degree)
+    qxi  = q[:, 0].astype(np.float64)
+    qeta = q[:, 1].astype(np.float64)
+    qw_ref = q[:, 2].astype(np.float64)
+    Nq, dN_dxi, dN_deta = _p2_basis_and_grad(qxi, qeta)   # all (n_q, 6)
+
+    for t in range(n_t):
+        _, dr_dxi, dr_deta, J_t = _eval_p2_geom(
+            tri_p2_nodes[t], qxi, qeta)
+        # Per-quadpt metric components (Q,)
+        g11 = np.sum(dr_dxi * dr_dxi, axis=1)
+        g22 = np.sum(dr_deta * dr_deta, axis=1)
+        g12 = np.sum(dr_dxi * dr_deta, axis=1)
+        det_g = g11 * g22 - g12 * g12
+        # det_g should equal J_t**2 (cross product magnitude squared)
+        # Inverse metric components
+        inv_g11 = g22 / det_g
+        inv_g22 = g11 / det_g
+        inv_g12 = -g12 / det_g
+
+        # grad_a^q = dN_dxi[q, a]   (shape (n_q, 6))
+        # K_ij    = sum_q sqrt(det g) qw_ref *
+        #            ( dN_dxi[q,i] * inv_g11[q] * dN_dxi[q,j]
+        #            + dN_dxi[q,i] * inv_g12[q] * dN_deta[q,j]
+        #            + dN_deta[q,i] * inv_g12[q] * dN_dxi[q,j]
+        #            + dN_deta[q,i] * inv_g22[q] * dN_deta[q,j] )
+        sqrt_det_g = np.sqrt(det_g)
+        w = qw_ref * sqrt_det_g                  # (n_q,)
+        # Pre-multiply dN_dxi/dN_deta by per-quadpt scalar inv-metric weights.
+        A_xi  = dN_dxi  * inv_g11[:, None] + dN_deta * inv_g12[:, None]
+        A_eta = dN_dxi  * inv_g12[:, None] + dN_deta * inv_g22[:, None]
+        # Galerkin pairwise integration.
+        block = (dN_dxi.T  @ (w[:, None] * A_xi) +
+                 dN_deta.T @ (w[:, None] * A_eta))   # (6, 6)
+        Dt = dofs_per_tri[t]
+        K[np.ix_(Dt, Dt)] += block
+
+    return K
