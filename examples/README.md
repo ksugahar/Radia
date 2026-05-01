@@ -24,7 +24,7 @@ python arc_current_with_magnet.py
 | [simple_problems/](simple_problems/) | 5 | Basic Radia API: magnets, coils, materials, field computation |
 | [smco_magnet_array/](smco_magnet_array/) | 1 | SmCo permanent magnet array design |
 | [vtk_export/](vtk_export/) | 1 | VTS field export for ParaView visualization |
-| [analytical_formulas/](analytical_formulas/) | 5 | Closed-form reference formulas from Wakao-Igarashi-Fujiwara-Kameari Part 1-5: ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular magnet, thin plate eddy current. See [docs/analytical_formulas.md](../docs/analytical_formulas.md). |
+| [analytical_formulas/](analytical_formulas/) | 11 | Closed-form reference formulas from Wakao-Igarashi-Fujiwara-Kameari Part 1-9. Group B+C: ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular magnet, thin-plate eddy, Fabri solenoid, three-phase line, K(k)/E(k), Gauss-Legendre. Group D (v4.21.0): plate Joule dissipation, AC thin-shell shielding, magnetic-shell internal fields, conductor AC impedance (Bessel), Gauss-Patterson nested quadrature, cuboid-average B. See [docs/analytical_formulas.md](../docs/analytical_formulas.md). |
 
 ### Magnetostatics (Intermediate)
 
