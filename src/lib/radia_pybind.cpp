@@ -49,6 +49,7 @@
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
 #include "rad_biot_savart_filaments.h" // Fast Biot-Savart H/A from finite-segment filaments
 #include "rad_biot_savart_surface.h"   // Fast Biot-Savart B/A from triangulated surface
+#include "rad_average_field.h" // Closed-form cuboid average B (Wakao Part 6 §7)
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
@@ -4476,5 +4477,81 @@ PYBIND11_MODULE(_radia_pybind, m) {
                              B = B_re + 1j*B_im is the complex B [T].
 
             3-point Gauss quadrature; non-singular evaluation only.
+        )pbdoc");
+
+    // ========================================================================
+    // Closed-form cuboid average B (Wakao Part 6 §7) -- Phase beta v4.22.0
+    // ========================================================================
+    m.def("_average_B_in_box",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> M,
+           py::array_t<double, py::array::c_style | py::array::forcecast> src_min,
+           py::array_t<double, py::array::c_style | py::array::forcecast> src_max,
+           py::array_t<double, py::array::c_style | py::array::forcecast> tgt_min,
+           py::array_t<double, py::array::c_style | py::array::forcecast> tgt_max)
+        {
+            if (M.size() != 3 || src_min.size() != 3 || src_max.size() != 3
+                || tgt_min.size() != 3 || tgt_max.size() != 3)
+                throw std::invalid_argument("M, src_min, src_max, tgt_min, tgt_max must each have length 3");
+            py::array_t<double> B(3);
+            radia::average_field::AverageBInBox(
+                static_cast<const double*>(M.data()),
+                static_cast<const double*>(src_min.data()),
+                static_cast<const double*>(src_max.data()),
+                static_cast<const double*>(tgt_min.data()),
+                static_cast<const double*>(tgt_max.data()),
+                static_cast<double*>(B.mutable_data()));
+            return B;
+        },
+        py::arg("M"), py::arg("src_min"), py::arg("src_max"),
+        py::arg("tgt_min"), py::arg("tgt_max"),
+        R"pbdoc(
+            Spatial average of B over a target rectangular box from
+            uniform magnetisation in a source rectangular box.
+
+            Closed form: 64-corner sum of 3-fold antiderivatives G1, G2
+            (Phase alpha derivation, sympy-verified). Both source and
+            target must be axis-aligned cuboids. Overlapping cuboids are
+            handled via a mu_0 * M * V_overlap / V_T correction term.
+
+            Args:
+                M:        (3,) magnetisation [A/m]
+                src_min:  (3,) lower corner of source cuboid [m]
+                src_max:  (3,) upper corner of source cuboid [m]
+                tgt_min:  (3,) lower corner of target cuboid [m]
+                tgt_max:  (3,) upper corner of target cuboid [m]
+
+            Returns:
+                B: (3,) average <B_x>, <B_y>, <B_z> over target box [T]
+
+            Caveat: the 64-corner sum suffers ULP cancellation when V_T
+            is much smaller than the source box; in that regime use the
+            Gauss-Legendre numerical fallback in
+            radia.analytical_formulas.cuboid_average_field.
+        )pbdoc");
+
+    m.def("_average_demag_tensor",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> src_min,
+           py::array_t<double, py::array::c_style | py::array::forcecast> src_max,
+           py::array_t<double, py::array::c_style | py::array::forcecast> tgt_min,
+           py::array_t<double, py::array::c_style | py::array::forcecast> tgt_max)
+        {
+            if (src_min.size() != 3 || src_max.size() != 3
+                || tgt_min.size() != 3 || tgt_max.size() != 3)
+                throw std::invalid_argument("src_min, src_max, tgt_min, tgt_max must each have length 3");
+            py::array_t<double> A({3, 3});
+            radia::average_field::AverageDemagTensor(
+                static_cast<const double*>(src_min.data()),
+                static_cast<const double*>(src_max.data()),
+                static_cast<const double*>(tgt_min.data()),
+                static_cast<const double*>(tgt_max.data()),
+                static_cast<double*>(A.mutable_data()));
+            return A;
+        },
+        py::arg("src_min"), py::arg("src_max"),
+        py::arg("tgt_min"), py::arg("tgt_max"),
+        R"pbdoc(
+            3x3 average demag tensor A_T such that
+                <B>_T = mu_0 * (A_T @ M + M * V_overlap / V_T)
+            for source/target axis-aligned cuboids.
         )pbdoc");
 }

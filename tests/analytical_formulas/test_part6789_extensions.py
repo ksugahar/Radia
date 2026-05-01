@@ -211,6 +211,12 @@ def test_adaptive_integrate_caches_evaluations():
 def test_average_B_far_field_dipole_limit():
     """Far from a magnetised cube, the volume-averaged B over a small
     target box equals the 3D dipole field at the target centre.
+
+    Uses ``method="numerical"`` to exercise the legacy Gauss-Legendre
+    path (the production closed-form path is exercised in
+    ``test_cuboid_average_field.py``; small target boxes far from a
+    larger source trigger ULP cancellation in the closed-form 64-corner
+    sum, see module docstring).
     """
     src_min = np.array([-0.01, -0.01, -0.005])
     src_max = +1 * np.array([0.01, 0.01, 0.005])
@@ -220,7 +226,8 @@ def test_average_B_far_field_dipole_limit():
     d = 1.0
     tgt_min = np.array([d - 1e-4, -1e-4, -1e-4])
     tgt_max = np.array([d + 1e-4, +1e-4, +1e-4])
-    B_avg = average_B_in_box(M, src_min, src_max, tgt_min, tgt_max, n_quad=4)
+    B_avg = average_B_in_box(M, src_min, src_max, tgt_min, tgt_max,
+                             method="numerical", n_quad=4)
     # On +x axis, M along x: dipole B_x = (mu_0 / 4 pi) * 2 m / d**3
     B_dipole = (MU_0 / (4 * math.pi)) * 2 * m / d ** 3
     assert B_avg[0] == pytest.approx(B_dipole, rel=2e-3)
@@ -231,13 +238,17 @@ def test_average_B_far_field_dipole_limit():
 def test_average_B_y_z_zero_by_symmetry():
     """For ``M = (M_x, 0, 0)`` and target/source symmetric in y & z,
     the volume-average ``B_y`` and ``B_z`` vanish exactly.
+
+    Tests the legacy numerical path; the closed-form path's symmetry
+    is checked in ``test_cuboid_average_field.test_demag_tensor_symmetric``.
     """
     src_min = np.array([-0.01, -0.01, -0.005])
     src_max = np.array([0.01, 0.01, 0.005])
     tgt_min = np.array([0.05, -0.001, -0.001])
     tgt_max = np.array([0.07, 0.001, 0.001])
     M = np.array([1e6, 0.0, 0.0])
-    B_avg = average_B_in_box(M, src_min, src_max, tgt_min, tgt_max, n_quad=6)
+    B_avg = average_B_in_box(M, src_min, src_max, tgt_min, tgt_max,
+                             method="numerical", n_quad=6)
     assert abs(B_avg[1]) < 1e-15
     assert abs(B_avg[2]) < 1e-15
 
@@ -248,9 +259,9 @@ def test_average_B_linear_in_M():
     tgt_min = np.array([0.04, -0.001, -0.001])
     tgt_max = np.array([0.06, 0.001, 0.001])
     B1 = average_B_in_box([1e6, 0., 0.], src_min, src_max, tgt_min, tgt_max,
-                          n_quad=4)
+                          method="numerical", n_quad=4)
     B2 = average_B_in_box([3e6, 0., 0.], src_min, src_max, tgt_min, tgt_max,
-                          n_quad=4)
+                          method="numerical", n_quad=4)
     # B_x scales linearly in M; B_y, B_z are zero by symmetry
     # (both at floating-point dust level), so an absolute tolerance
     # equal to the dust suppresses the relative-tolerance failure.
