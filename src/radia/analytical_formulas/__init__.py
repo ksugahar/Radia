@@ -37,12 +37,32 @@ three_phase_line   Three-phase straight-line and helical-line field;
                    triangle, planar, hexagon arrangements + far-field
                    asymptotes (Part 4 §5, Part 5 §3)
 
+Eddy-current and AC analysis:
+
+plate_eddy           Plate eddy current T_z, J + total dissipation P
+                     (Part 1 §6.1 + Part 6 §3)
+shielding            Static + thin-shell AC shielding factor; spherical
+                     shell internal field (Part 1 §5, Part 6 §2,
+                     Part 8 §2)
+conductor_impedance  Planar surface impedance and full Bessel cylinder
+                     AC impedance (Part 6 §4 + §5)
+
 Numerics and special functions:
 
-elliptic_integrals K(k), E(k) Hastings polynomial approximations
-                   (Part 3 §3, Tables 1-2)
-gauss_legendre     Gauss-Legendre nodes and weights and convenience
-                   integrators on a general interval (Part 3 §4)
+elliptic_integrals   K(k), E(k) Hastings polynomial approximations
+                     (Part 3 §3, Tables 1-2)
+gauss_legendre       Gauss-Legendre nodes and weights and convenience
+                     integrators on a general interval (Part 3 §4)
+adaptive_quadrature  Adaptive Gauss-Patterson with node reuse
+                     (Part 9 §2, n=0..3)
+
+Field averaging:
+
+cuboid_average_field  Average B over a target box from a uniform-M
+                      source box (Part 6 §7; numerical-integration
+                      path -- closed-form C++ kernel deferred pending
+                      higher-fidelity copy of Part 6 to verify the F2
+                      antiderivative)
 """
 
 from .ellipsoid import (
@@ -97,6 +117,24 @@ from .gauss_legendre import (
     integrate as gauss_legendre_integrate,
     integrate_2d as gauss_legendre_integrate_2d,
 )
+from .plate_eddy import plate_eddy_dissipation
+from .shielding import (
+    shielding_factor_sphere_thin_ac,
+    shielding_factor_cylinder_thin_ac,
+    spherical_shell_internal_field,
+)
+from .conductor_impedance import (
+    skin_depth,
+    planar_surface_impedance,
+    cylinder_ac_impedance,
+    cylinder_dc_resistance,
+    cylinder_internal_inductance,
+)
+from .adaptive_quadrature import (
+    patterson_nodes_weights,
+    adaptive_integrate,
+)
+from .cuboid_average_field import average_B_in_box
 
 __all__ = [
     # ellipsoid
@@ -142,4 +180,21 @@ __all__ = [
     "gauss_legendre_nodes_weights",
     "gauss_legendre_integrate",
     "gauss_legendre_integrate_2d",
+    # plate_eddy (extension)
+    "plate_eddy_dissipation",
+    # shielding (extensions)
+    "shielding_factor_sphere_thin_ac",
+    "shielding_factor_cylinder_thin_ac",
+    "spherical_shell_internal_field",
+    # conductor_impedance (Part 6 §4-§5)
+    "skin_depth",
+    "planar_surface_impedance",
+    "cylinder_ac_impedance",
+    "cylinder_dc_resistance",
+    "cylinder_internal_inductance",
+    # adaptive_quadrature (Part 9 §2)
+    "patterson_nodes_weights",
+    "adaptive_integrate",
+    # cuboid_average_field (Part 6 §7 -- numerical-integration path)
+    "average_B_in_box",
 ]

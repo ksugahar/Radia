@@ -45,6 +45,17 @@ Group C -- coil geometries and numerical utilities
 | elliptic_integrals | K(k), E(k) Hastings polynomial approximation | Part 3 §3, Tables 1-2 |
 | gauss_legendre     | Gauss-Legendre nodes / weights to n=24 + integrate helpers | Part 3 §4, Table 3 |
 
+Group D -- Part 6 / 8 / 9 extensions (eddy / AC / numerics / averaging)
+
+| Module | Purpose | PDF reference |
+|--------|---------|---------------|
+| plate_eddy.plate_eddy_dissipation | Total Joule dissipation in thin-plate eddy current (numerical integration of analytic J series) | Part 6 §3 |
+| shielding.shielding_factor_*_thin_ac | Frequency-dependent thin-shell AC shielding factor (complex S, sphere/cylinder) | Part 8 §2, eq 4-5 |
+| shielding.spherical_shell_internal_field | All four uniform fields (interior, shell wall, M, image dipole) of magnetic spherical shell | Part 6 §2, eq 5 |
+| conductor_impedance | Skin depth, planar surface impedance Z_s=(1+j)/(sigma delta), full Bessel cylindrical-conductor AC impedance | Part 6 §4-§5 |
+| adaptive_quadrature | Gauss-Patterson nested rules n=0..3 + adaptive integrate with node-reuse caching | Part 9 §2, Table 1 |
+| cuboid_average_field.average_B_in_box | Spatial average of B over a target box from uniform M source box; numerical-integration path. (Closed-form C++ kernel deferred: OCR of Part 6 §7 F2 antiderivative not reconciled with mirror-symmetry constraints.) | Part 6 §7 |
+
 ## Conventions
 
 * All quantities in **SI (m, A, A/m, A/m**2, T)**.
