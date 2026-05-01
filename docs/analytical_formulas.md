@@ -1,0 +1,197 @@
+# Analytical Formulas — PDF cross-reference
+
+This document maps each formula in [`src/radia/analytical_formulas/`](../src/radia/analytical_formulas/)
+back to its origin in the IEE Japan review series
+
+> 若尾真治, 五十嵐一, 藤原耕二, 野口聡, 松尾哲司, 亀有昭久,
+> "Useful Formulas of Analytical Integration in Electromagnetic Field
+> Computations (Part 1..5)", IEE Japan Joint Technical Meeting on
+> Static Apparatus and Rotating Machinery (SA / RM), 2002–2004.
+
+The five PDFs live in [`to_developers/`](../to_developers/) (Japanese
+texts; PyMuPDF text extracts are alongside as `*.txt` for grep
+convenience). Numbering below is `Part N, eq M` exactly as printed in
+the review.
+
+## Scope
+
+The package collects **closed-form** expressions only. It is the
+reference layer that the rest of Radia (numerical solvers, BEM, FEM)
+can be checked against. Each formula is one short Python module:
+priority is correctness and traceability, not raw speed.
+
+## Module index
+
+| Module | Symbols | PDF reference |
+|--------|---------|---------------|
+| [`ellipsoid`](../src/radia/analytical_formulas/ellipsoid.py)   | `demag_factor_prolate`, `demag_factor_oblate`, `demag_factor_rotational`, `ellipsoid_internal_field`, `ellipsoid_torque` | Part 5, eq 38–44 |
+| [`ac_locus`](../src/radia/analytical_formulas/ac_locus.py)     | `ac_locus_axes`, `ac_locus_axes_batch` | Part 5, eq 29–37 |
+| [`shielding`](../src/radia/analytical_formulas/shielding.py)   | `shielding_factor_cylinder`, `shielding_factor_sphere` | Part 1, eq 23–24 |
+| [`rect_magnet_2d`](../src/radia/analytical_formulas/rect_magnet_2d.py) | `rect_magnet_2d_A`, `rect_magnet_2d_B` | Part 2, eq 2–3 |
+| [`plate_eddy`](../src/radia/analytical_formulas/plate_eddy.py) | `plate_eddy_T`, `plate_eddy_J` | Part 1, eq 26–27 |
+
+Tests live in [`tests/analytical_formulas/`](../tests/analytical_formulas/);
+runnable demonstrations in [`examples/analytical_formulas/`](../examples/analytical_formulas/).
+
+## ellipsoid — rotational ellipsoid demag and torque
+
+Geometry: semi-axes ``(a, a, c)`` with ``c`` the polar axis.
+``c > a`` ⇒ prolate (cigar); ``c < a`` ⇒ oblate (disk); ``c = a`` ⇒
+sphere (``N_x = N_y = N_z = 1/3``).
+
+Polar demagnetization factor:
+
+```
+prolate  (eq 40)  N_z = (1 - e²)/e³ · (atanh e − e),   e = √(1 − (a/c)²)
+oblate   (eq 39)  N_z = (1 + e²)/e³ · (e − atan e),    e = √((a/c)² − 1)
+```
+
+Equatorial factors are ``N_x = N_y = (1 − N_z) / 2`` and the trace is
+1 (verified in
+[`test_demag_factors_sum_to_unity`](../tests/analytical_formulas/test_ellipsoid.py)).
+
+For aspect ratios within ``|c/a − 1| < 1e−4`` the implementation
+switches to the Taylor series ``N_z = 1/3 − 2 ε /15 + 4 ε² /35 − ⋯``
+with ``ε = (c/a)² − 1``, valid for both branches; this avoids the
+``0/0`` form of the closed expressions at ``e → 0``.
+
+Internal field (linear material, applied along principal axis ``i``,
+eq 38):
+
+```
+H_i = H_0 / (1 + χ_r · N_i)
+```
+
+Torque (uniform field, axis tilted by ``α``, eq 44):
+
+```
+T_z = − μ_0 χ_r² (1 − 3 N_z)
+        / [2 (1 + χ_r N_z) (2 + χ_r (1 − N_z))]
+        · sin(2 α) H_0² V,    V = (4/3) π a² c.
+```
+
+Sign convention: ``T_z < 0`` is the restoring torque pulling ``α → 0``;
+this is the prolate / soft-iron case. For oblate (``N_z > 1/3``) the
+torque is repulsive (axis aligns perpendicular to the field).
+
+## ac_locus — major / minor axis of an AC vector locus
+
+Closed form (eq 37): for a complex 3-vector phasor ``B`` whose
+time-domain version is ``b(t) = Re(B e^{j ω t})``,
+
+```
+s² = |B_x|² + |B_y|² + |B_z|²
+z² = B_x² + B_y² + B_z²        (complex; the complex dot of B with itself)
+
+|B|_max = √((s² + |z²|) / 2)
+|B|_min = √((s² − |z²|) / 2)
+```
+
+The locus is a planar ellipse (3D mode) parameterised by time. Useful
+to extract the peak field over a period for hysteresis-loss estimates
+and the peak current for inductive heating uniformity constraints.
+
+Tests cover (a) linear, circular and elliptical limit cases,
+(b) invariance under physical-space rotations, (c) match against a
+4 000-sample brute-force time sweep
+([`test_axes_match_brute_force_time_sweep`](../tests/analytical_formulas/test_ac_locus.py)),
+(d) batch / higher-rank shape handling.
+
+## shielding — cylindrical / spherical magnetic shell
+
+```
+S_cyl = 4 μ_r / [(μ_r + 1)² − (a/b)² (μ_r − 1)²]                     (eq 23)
+S_sph = 9 μ_r / [(μ_r + 2)(2 μ_r + 1) − 2 (a/b)³ (μ_r − 1)²]         (eq 24)
+```
+
+``S = |H_inside| / |H_applied|``; ``S → 1`` at ``μ_r → 1`` (no
+shielding) and ``S → 0`` at ``μ_r → ∞`` for any finite wall thickness.
+The cylinder formula assumes infinite length and a perpendicular
+applied field; finite-cylinder caps are discussed in Rikitake [13] of
+the PDF (not implemented).
+
+## rect_magnet_2d — 2D uniformly-magnetised rectangular bar
+
+Cross-section ``2 a × 2 b``, infinitely long along ``z``, magnetisation
+``M = (M_x, M_y)`` in A/m (Radia convention; ``J = μ_0 M`` in Tesla).
+With
+
+```
+u_i = x − x_i,  x_i ∈ {−a, +a},  i = 1, 2
+v_j = y − y_j,  y_j ∈ {−b, +b},  j = 1, 2
+
+G(u, v)      = u ln(u² + v²) + 2 v atan(u / v)
+G_swap(u, v) = v ln(u² + v²) + 2 u atan(v / u)
+```
+
+```
+A_z = (μ_0 / 4π) Σ_{i,j} (−1)^{i+j} [M_x G(u_i, v_j) − M_y G_swap(u_i, v_j)]
+```
+
+The PDF prints only the ``M_x`` term (eq 2); the ``M_y`` term is the
+result of applying the same surface-magnetisation-current derivation to
+the left and right faces.
+
+```
+B_x =  ∂A_z/∂y = (μ_0 / 2π) Σ (−1)^{i+j} [M_x atan(u_i/v_j) − ½ M_y ln(u_i² + v_j²)]
+B_y = −∂A_z/∂x = −(μ_0 / 4π) Σ (−1)^{i+j} [M_x ln(u_i² + v_j²) − 2 M_y atan(v_j/u_i)]
+```
+
+Constants in ``∂(ln)/∂u`` and ``∂(atan)/∂v`` drop under the alternating
+``(−1)^{i+j}`` sum.
+
+Branch choice: ``np.arctan`` (principal branch ``[−π/2, π/2]``), not
+``np.arctan2`` — the latter would introduce a ``2π·v`` jump at
+``v = 0``.
+
+## plate_eddy — eddy current in a thin rectangular plate
+
+Slow-field limit of a plate of in-plane half-extents ``a × b`` and
+thickness ``d`` in a uniform perpendicular ``B_z(t)``; valid when
+``d / (μ σ Ḃ · min(a, b) / B) << 1`` (eq 25). Eddy current is purely
+in-plane and is the curl of a single z-component vector potential
+``T_z``:
+
+```
+T_z(x, y) = (σ Ḃ / 8) · {
+    x² − a²
+    + (32 a² / π³) Σ_{n=0}^∞ ((−1)^n / (2n+1)³)
+          · cos(k_n x) cosh(k_n y) / cosh(k_n b)
+}                                                   (eq 26)
+```
+
+with ``k_n = (2 n + 1) π / (2 a)``. Direct differentiation gives
+(eq 27)
+
+```
+J_x =  (2 σ Ḃ a / π²) Σ ((−1)^n / (2n+1)²) cos(k_n x) sinh(k_n y) / cosh(k_n b)
+J_y = −(σ Ḃ x / 4)
+      + (2 σ Ḃ a / π²) Σ ((−1)^n / (2n+1)²) sin(k_n x) cosh(k_n y) / cosh(k_n b)
+```
+
+The closed-form ``− σ Ḃ x / 4`` term in ``J_y`` cancels exactly with
+the cosh-cosh series at ``y = ± b`` so that ``J · n = 0`` on the y
+edges (the residual is the Fourier triangle-wave reconstruction error
+of ``x`` on ``[−a, a]``); on the x edges ``J_x`` vanishes term-by-term
+because ``cos(k_n a) = 0``.
+
+Truncation: terms decay as ``1/(2n+1)³`` (T) and ``1/(2n+1)²`` (J);
+the ``cosh(k_n y) / cosh(k_n b)`` ratio decays exponentially in ``n``
+for ``|y| < b``. The default ``n_terms = 200`` gives ``< 1e−10``
+relative error away from the corner singularity. Use ``n_terms = 2000``
+for sub-``1e−5`` accuracy at the boundary.
+
+## Updating this document
+
+When a new analytical formula is added to
+[`src/radia/analytical_formulas/`](../src/radia/analytical_formulas/),
+please:
+
+1. add a row to the "Module index" table with the symbol names
+   exported in `__init__.py`,
+2. add a section that pins the PDF reference (Part N, eq M) and
+   restates the formula in unambiguous notation, and
+3. cross-link the corresponding test file under
+   [`tests/analytical_formulas/`](../tests/analytical_formulas/) and the
+   demonstration script under
+   [`examples/analytical_formulas/`](../examples/analytical_formulas/).
