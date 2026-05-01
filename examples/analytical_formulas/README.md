@@ -23,6 +23,7 @@ each example below pins the relevant Part and equation numbers.
 | [`three_phase_line_field.py`](three_phase_line_field.py) | Three-phase line far-field decay: triangle (1/r²), planar (1/r², √3 prefactor), helical (exp(-2π r/p)). | Part 4 §5, Part 5 §3 |
 | [`elliptic_integrals_accuracy.py`](elliptic_integrals_accuracy.py) | Absolute-error plot of degree-2 vs degree-4 Hastings approximations of K(k), E(k) against `scipy.special`. | Part 3 §3, Tables 1–2 |
 | [`gauss_legendre_demo.py`](gauss_legendre_demo.py) | Gauss-Legendre nodes / weights table and spectral-convergence plot for two smooth integrands. | Part 3 §4, Table 3 |
+| [`cross_validation_solenoid_currentloop.py`](cross_validation_solenoid_currentloop.py) | Compare `solenoid_axial_field` (closed form) against a stacked set of `radia.analytical_magnet.CurrentLoop` rings; midpoint-rule converges as `O(h^2)` (4x error reduction per grid halving). | Part 4 §4 |
 
 All scripts run in seconds on a laptop, write a PNG next to themselves
 when matplotlib is available, and print a tabular numerical summary
