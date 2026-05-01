@@ -37,6 +37,7 @@ from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
+from .knowledge.install_deploy import get_install_deploy_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -1039,6 +1040,37 @@ def panel_gui_pitfalls(topic: str = "") -> str:
                keywords above for a single section.
     """
     return get_panel_gui_pitfalls(topic)
+
+
+@mcp.tool()
+def install_deploy(topic: str = "") -> str:
+    """
+    Radia install / deploy policy and recipes — 3-tier configuration
+    (LAB / mdx / 100号機), reversible migration steps, and the
+    non-obvious gotchas that cause silent breakage.
+
+    Read this when:
+      * Setting up a new lab machine.
+      * Migrating a machine between editable / PyPI install.
+      * Diagnosing "import works but pip says wrong version" or
+        "DLL load failed" on a freshly-deployed machine.
+
+    Topics:
+      three_tier                  -- current 3-tier configuration (2026-05-01)
+      lab_editable                -- LAB editable install
+      mdx_editable                -- mdx editable install (full recipe + 5 gotchas)
+      hyaku_pypi                  -- 100号機 PyPI install
+      editable_to_pypi_migration  -- e.g. 100号機 NAS-editable -> PyPI
+      pypi_to_editable_migration  -- e.g. mdx PyPI -> editable
+      metadata_sync               -- pip metadata vs radia.__version__
+      pyd_dll_bootstrap           -- radia_cubit_mesh requires `import radia` first
+      cubit_plugin_layers         -- Cubit plugin lives in TWO places
+      common_failure_modes        -- symptoms and fixes table
+
+    Args:
+        topic: Empty for the full document, or one of the topics above.
+    """
+    return get_install_deploy_documentation(topic)
 
 
 def _selftest():
