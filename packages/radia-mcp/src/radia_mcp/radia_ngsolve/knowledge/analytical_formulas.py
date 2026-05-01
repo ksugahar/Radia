@@ -55,6 +55,7 @@ Group D -- Part 6 / 8 / 9 extensions (eddy / AC / numerics / averaging)
 | conductor_impedance | Skin depth, planar surface impedance Z_s=(1+j)/(sigma delta), full Bessel cylindrical-conductor AC impedance | Part 6 §4-§5 |
 | adaptive_quadrature | Gauss-Patterson nested rules n=0..3 + adaptive integrate with node-reuse caching | Part 9 §2, Table 1 |
 | cuboid_average_field.average_B_in_box, average_demag_tensor | Spatial average of B over a target box from uniform M source box. Closed-form 64-corner C++ kernel (G1/G2 antiderivatives, sympy-derived in-house, ~40 us/call, 817x faster than Gauss-Legendre); method="numerical" fallback kept for cross-checks. v4.22.0+. | Part 6 §7 |
+| induction_heating.cylinder_axial_eddy_loss (+ small_ka, thin_skin asymptotes) | Time-averaged Joule loss per unit length of a conductive cylinder inside a long axial-current solenoid (canonical induction-furnace workpiece). Closed-form via Kelvin functions ber/bei. Two limits: small-ka (Faraday eddy P=πσω²μ²H₀²a⁴/16) and thin-skin (P=πa·H₀²·Re(Z_s)). Validated in-house; replaces aborted Stafl 1967 §4.4 OCR transcription. v4.23.0+. | Smythe §11.07, Landau-Lifshitz §59, Jackson §5.18 |
 
 ## Conventions
 
