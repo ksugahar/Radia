@@ -361,6 +361,7 @@ public subpackage when ready.
 **Past examples** (historical):
 - PEEC-inductance: `mcp-server-ih` → `radia_mcp.radia_ngsolve.peec_inductance_knowledge` (2026-04-21, general technique)
 - Induction Heating: `mcp-server-ih` → `radia_mcp.ih` (2026-04-24, application-specific subpackage)
+- Analytical Formulas: new in `radia_mcp.radia_ngsolve.analytical_formulas` (2026-05-01) — closed-form reference layer (Wakao-Igarashi-Fujiwara-Kameari Part 1-5) covering ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular bar, thin-plate eddy current, Fabri solenoid, three-phase line, K(k)/E(k) Hastings, Gauss-Legendre. MCP tool `analytical_formulas(topic)` exposes 11 topics including a `validation_use_cases` mapping that says "given analysis X, which closed form is the trusted reference?". Use it as the FIRST QUESTION when validating any new analysis result.
 
 ### Unit System Policy
 
