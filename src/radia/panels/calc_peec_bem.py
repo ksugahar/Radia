@@ -260,9 +260,17 @@ def solve_peec_bem_forward(peec_step,
     t_asm = time.perf_counter() - t0
     progress("BEM", f"ndof={bem.ndof} ({t_asm:.1f}s)")
 
-    # phi_inc from filaments with I_fil
-    obs = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
-                     for i in range(wp_mesh.nv)])
+    # phi_inc from filaments with I_fil.
+    # For P1 (h1_order=1) we sample at the wp surface vertices (one per
+    # NGSolve H1 DOF).  For Lagrange-P2 (h1_order>=2, in-tree path) the
+    # solver bypasses NGSolve FES and stores the per-DOF Lagrange node
+    # coordinates in ``bem.dof_coords`` (vertices + edge mid-points), so
+    # we sample there to fill all ndof entries.
+    if getattr(bem, "_intree_lagrange_p2", False):
+        obs = np.ascontiguousarray(bem.dof_coords)
+    else:
+        obs = np.array([[wp_mesh.vertices[i].point[j] for j in range(3)]
+                         for i in range(wp_mesh.nv)])
     progress("BEM", "phi_inc from filaments")
     t0 = time.perf_counter()
     phi_inc = compute_phi_inc_from_filaments(obs, paths, I_fil)
@@ -706,6 +714,24 @@ def main():
                          "Use --impedance-model sibc for now. For "
                          "nonlinear BH, use the FEM A-V panel method "
                          "(also WIP for ESIM)."
+            }
+        if args.h1_order >= 2:
+            # The in-tree Lagrange-P2 BEM path bypasses NGSolve's
+            # hierarchical H1 FES (basis-mismatch otherwise -- Lagrange
+            # vs Lobatto), so panel post-processing that relies on
+            # GridFunction(bem.fes) (q_surf visualisation, J_s vector
+            # field, Telegen Delta_L via grad / Integrate, .msh export)
+            # is not yet wired.  ScalarBIESIBCSolver itself fully
+            # supports order=2 with the C++ Lagrange-P2 assembler --
+            # use the direct API (or tests/bem/test_sibc_p_convergence.py)
+            # if you only need L_coil / P_wp / H_t_rms.
+            return {
+                "error": f"--h1-order={args.h1_order} is not yet wired "
+                         f"through the panel post-processing.  Use "
+                         f"--h1-order=1 for now (the kubota fix "
+                         f"2026-05-01 made this path solid; in-tree "
+                         f"P2 is reserved for the next iteration of "
+                         f"the panel)."
             }
         result = solve_peec_bem_forward(
             peec_step=args.peec_step,
