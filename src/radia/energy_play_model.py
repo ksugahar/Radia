@@ -72,23 +72,49 @@ class EnergyBasedPlayModel:
     def _compute_nu_rev(self):
         """Compute reversible reluctivity for convex decomposition.
 
-        nu_rev must be large enough that ALL g_k have non-negative slopes.
-        This means nu_rev >= max total slope of H(B) at any B.
+        nu_rev = max_B sum_k f_k'(p_k(B)) along the virgin curve, where
+        p_k(B) = max(B - eta_k, 0). This is the actual maximum reluctivity
+        encountered on the major-loop ascending branch and matches the
+        production C++ implementation in
+        radTPlayHysteresisMaterial::ComputeNuRev (rad_material_impl.cpp).
 
-        For Picard convergence: contraction ratio = (nu_total - nu_rev)/nu_rev.
-        We choose nu_rev = max slope of the total H(B) curve, which gives
-        contraction ratio = 0 at the steepest point.
+        Bug fix 2026-05-02: previous version used `sum_k max|f_k'|` which is
+        a loose upper bound (typically 2-3x larger than the empirical max).
+        That made Picard contraction ratio too small near 1, causing
+        gradient-descent-like slow convergence in the inverse.
         """
-        # Compute total slope dH/dB = sum of all f_k slopes
-        # nu_rev should equal the maximum of sum_k f_k'
-        total_max_slope = 0.0
-        for k in range(self.K):
-            rk, fk = self.f_k_tables[k]
-            if len(rk) >= 2:
-                slopes = np.diff(fk) / np.diff(rk)
-                total_max_slope += float(np.max(np.abs(slopes)))
+        # Determine B_sat
+        B_sat = 0.0
+        for rk, _ in self.f_k_tables:
+            B_sat = max(B_sat, float(np.max(np.abs(np.asarray(rk)))))
+        if B_sat < 1e-10:
+            return 0.0
 
-        return total_max_slope
+        # Pre-build df_k(r) interpolants on r >= 0
+        df_interps = []
+        for rk, fk in self.f_k_tables:
+            r = np.asarray(rk); f = np.asarray(fk)
+            mask = r >= 0
+            r = r[mask]; f = f[mask]
+            idx = np.argsort(r); r = r[idx]; f = f[idx]
+            df = np.gradient(f, r)
+            df_interps.append((r, df))
+
+        # Scan virgin curve B in (0, B_sat]
+        n_scan = 500
+        max_dHdB = 0.0
+        for i in range(1, n_scan + 1):
+            B_val = B_sat * i / n_scan
+            dHdB = 0.0
+            for k in range(self.K):
+                pk_val = B_val - float(self.eta[k])
+                if pk_val <= 1e-30:
+                    continue
+                r, df = df_interps[k]
+                dHdB += float(np.interp(pk_val, r, df))
+            if dHdB > max_dHdB:
+                max_dHdB = dHdB
+        return max_dHdB
 
     def _build_irreversible_tables(self):
         """Build g_k tables: g_0 = f_0 - nu_rev*r, g_k = f_k for k>=1."""
@@ -106,11 +132,29 @@ class EnergyBasedPlayModel:
         self._p = np.zeros(self.K)
 
     def _play_operator(self, B, k):
-        """Evaluate play operator p_k(B) with threshold eta_k."""
+        """Evaluate B-input Play operator p_k(B) with threshold eta_k.
+
+        Standard Play update:
+            p_new = max(B - eta_k, min(B + eta_k, p_old))
+        i.e.,
+            elastic regime |B - p_old| <= eta:  p_new = p_old
+            B above:    B > p_old + eta:        p_new = B - eta
+            B below:    B < p_old - eta:        p_new = B + eta
+
+        Bug fix 2026-05-02: previous version used `np.clip(B, p-eta, p+eta)`
+        which clamps B to [p-eta, p+eta] instead of advancing the Play state.
+        That returned the wrong scalar (e.g., elastic regime returned B
+        instead of p_old).
+        """
         if k == 0:
             return B  # eta_0 = 0
         eta_k = self.eta[k]
-        self._p[k] = np.clip(B, self._p[k] - eta_k, self._p[k] + eta_k)
+        p_old = self._p[k]
+        if B > p_old + eta_k:
+            self._p[k] = B - eta_k
+        elif B < p_old - eta_k:
+            self._p[k] = B + eta_k
+        # else: stuck, p_state unchanged
         return self._p[k]
 
     def forward(self, B):
@@ -129,16 +173,28 @@ class EnergyBasedPlayModel:
     def irreversible(self, B):
         """Evaluate irreversible component H_irr(B).
 
+        For each Play operator k, the contribution is g_k(|p_k|) * sign(p_k),
+        respecting the anti-symmetry of the shape function f_k(-r) = -f_k(r).
+
+        Bug fix 2026-05-02: previous version did `g_k_interp[k](pk)` directly
+        with signed pk. The interpolant's tables span only r >= 0, so for
+        negative pk it linearly extrapolated, which gives roughly correct
+        values near r=0 but increasingly wrong values for large |pk|. The
+        symptom was H(-Bm) coming out positive instead of negative.
+
         Args:
             B: float, magnetic flux density
-
         Returns:
             H_irr: float, irreversible field
         """
         H_irr = 0.0
         for k in range(self.K):
             pk = self._play_operator(B, k)
-            H_irr += float(self.g_k_interp[k](pk))
+            if abs(pk) < 1e-30:
+                continue
+            mag = abs(pk)
+            sign = 1.0 if pk > 0 else -1.0
+            H_irr += sign * float(self.g_k_interp[k](mag))
         return H_irr
 
     def inverse(self, H, B_init=None, max_iter=50, tol=1e-10, method='newton'):
@@ -200,29 +256,32 @@ class EnergyBasedPlayModel:
     def _jacobian(self, B):
         """Compute dH_irr/dB (analytical Jacobian for Newton).
 
-        dH_irr/dB = sum_k g_k'(p_k) * dp_k/dB
+        dH_irr/dB = sum_k g_k'(|p_k|) * dp_k/dB
 
-        dp_k/dB = 1 if play operator is active (not at limit)
-        dp_k/dB = 0 if play operator is stuck at limit
+        Uses |p_k| since g_k tables only span r >= 0 and g_k is anti-symmetric
+        (g_k' is even). Bug fix 2026-05-02: previous version evaluated the
+        interpolant at signed pk, giving wrong slope for negative pk via
+        unintended linear extrapolation.
+
+        dp_k/dB = 1 if play operator is active (following), 0 if stuck.
         """
         dH_dB = 0.0
         for k in range(self.K):
             pk = self._p[k]
             eta_k = self.eta[k] if k > 0 else 0.0
 
-            # dp_k/dB: active if B is within [p_k - eta_k, p_k + eta_k]
+            # dp_k/dB: active if Play is following the boundary
             if eta_k == 0 or (pk - eta_k < B < pk + eta_k):
                 dp_dB = 1.0
             else:
                 dp_dB = 0.0
 
             if dp_dB > 0:
-                # g_k'(p_k) via finite difference on interpolator
-                rk, gk = self.g_k_tables[k]
-                eps = max(1e-10, abs(pk) * 1e-8)
-                g_plus = float(self.g_k_interp[k](pk + eps))
-                g_minus = float(self.g_k_interp[k](pk - eps))
-                dg_dp = (g_plus - g_minus) / (2 * eps)
+                mag = abs(pk)
+                eps = max(1e-10, mag * 1e-8)
+                g_plus = float(self.g_k_interp[k](max(0.0, mag + eps)))
+                g_minus = float(self.g_k_interp[k](max(0.0, mag - eps)))
+                dg_dp = (g_plus - g_minus) / (2 * eps)   # >=0 (g convex)
                 dH_dB += dg_dp * dp_dB
 
         return dH_dB
@@ -254,21 +313,28 @@ class EnergyBasedPlayModel:
     def energy(self, B):
         """Compute total free energy W(B) = W_rev + W_irr.
 
+        Uses G_k(|p_k|) = integral_0^{|p_k|} g_k(s) ds. Since g_k is
+        anti-symmetric (g_k(-r) = -g_k(r)), G_k is even — energy depends on
+        |p_k|, not signed p_k.
+
+        Bug fix 2026-05-02: previous version used `mask = rk <= pk` which
+        produced an empty integration range for negative pk (because rk >= 0),
+        wrongly returning W_irr = 0 on the negative half-plane.
+
         Args:
             B: float
-
         Returns:
             W: float, energy density (J/m^3)
         """
         W_rev = 0.5 * self.nu_rev * B**2
         W_irr = 0.0
+        _trapz = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
         for k in range(self.K):
             pk = self._play_operator(B, k)
             rk, gk = self.g_k_tables[k]
-            # Integrate g_k from 0 to pk
-            mask = rk <= pk
+            mag = abs(pk)
+            mask = rk <= mag
             if np.any(mask):
-                _trapz = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
                 W_irr += float(_trapz(gk[mask], rk[mask]))
         return W_rev + W_irr
 
