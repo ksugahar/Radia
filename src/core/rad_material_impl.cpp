@@ -3448,49 +3448,65 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 		TVector3d H_at = Forward(B);
 		TVector3d res_now(H_at.x - H_target.x, H_at.y - H_target.y, H_at.z - H_target.z);
 		double res_now_norm = sqrt(res_now.x*res_now.x + res_now.y*res_now.y + res_now.z*res_now.z);
-		if(res_now_norm > 0.01)   // tighten threshold (was 1.0; missed sub-A/m residuals)
+		if(res_now_norm > 0.01)
 		{
 			double inv_Hmag = 1.0 / H_target_mag;
 			TVector3d uH(H_target.x * inv_Hmag, H_target.y * inv_Hmag, H_target.z * inv_Hmag);
 
-			// Center s on the projection of current B onto H direction
+			// Center s on projection of current B onto H direction
 			double s_center = B.x * uH.x + B.y * uH.y + B.z * uH.z;
-			double Brange = 0.30 * B_max;   // stay LOCAL — preserve Newton's branch
 
-			// Bracket: scan s in [s_center - Brange, s_center + Brange]
-			int n_scan = 21;
+			// Expanding-range bracket search: try local first, expand on miss.
+			// Picks the sign-change CLOSEST to s_center to preserve Newton's branch.
 			TVector3d B_probe;
-			double s_prev = s_center - Brange;
-			B_probe.x = s_prev * uH.x; B_probe.y = s_prev * uH.y; B_probe.z = s_prev * uH.z;
-			TVector3d H_probe = Forward(B_probe);
-			double F_prev = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
-			double s_lo = s_prev, F_lo = F_prev;
-			double s_hi = s_lo, F_hi = F_lo;
 			bool bracketed = false;
-			for(int i = 1; i < n_scan; i++)
+			double s_lo = 0, s_hi = 0, F_lo = 0, F_hi = 0;
+			double Brange_attempts[4] = { 0.30 * B_max, 0.60 * B_max, B_max, 2.0 * B_max };
+			for(int attempt = 0; attempt < 4 && !bracketed; attempt++)
 			{
-				double s_curr = (s_center - Brange) + (2*Brange) * i / (n_scan - 1);
-				if(fabs(s_curr) > B_max) continue;
-				B_probe.x = s_curr * uH.x; B_probe.y = s_curr * uH.y; B_probe.z = s_curr * uH.z;
-				H_probe = Forward(B_probe);
-				double F_curr = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
-				if(F_prev * F_curr <= 0.0)
+				double Brange = Brange_attempts[attempt];
+				int n_scan = 41;   // doubled for finer granularity
+				// Search outward from s_center, alternating + and - directions, to
+				// pick up the NEAREST sign change first.
+				double best_dist = 1e30;
+				for(int side = 0; side < 2; side++)
 				{
-					s_lo = s_prev; F_lo = F_prev;
-					s_hi = s_curr; F_hi = F_curr;
-					bracketed = true;
-					break;
+					int sign_dir = (side == 0) ? +1 : -1;
+					double s_prev = s_center;
+					B_probe.x = s_prev * uH.x; B_probe.y = s_prev * uH.y; B_probe.z = s_prev * uH.z;
+					TVector3d H_probe = Forward(B_probe);
+					double F_prev = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
+					for(int i = 1; i <= n_scan; i++)
+					{
+						double s_curr = s_center + sign_dir * Brange * i / n_scan;
+						if(fabs(s_curr) > B_max) break;
+						B_probe.x = s_curr * uH.x; B_probe.y = s_curr * uH.y; B_probe.z = s_curr * uH.z;
+						H_probe = Forward(B_probe);
+						double F_curr = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
+						if(F_prev * F_curr <= 0.0)
+						{
+							double dist = fabs((s_prev + s_curr) * 0.5 - s_center);
+							if(dist < best_dist)
+							{
+								best_dist = dist;
+								s_lo = s_prev; F_lo = F_prev;
+								s_hi = s_curr; F_hi = F_curr;
+								bracketed = true;
+							}
+							break;   // take nearest sign change in this direction
+						}
+						s_prev = s_curr; F_prev = F_curr;
+					}
 				}
-				s_prev = s_curr; F_prev = F_curr;
 			}
 
 			if(bracketed)
 			{
-				for(int it = 0; it < 50; it++)
+				for(int it = 0; it < 60; it++)
 				{
 					double s_mid = 0.5 * (s_lo + s_hi);
 					B_probe.x = s_mid * uH.x; B_probe.y = s_mid * uH.y; B_probe.z = s_mid * uH.z;
-					H_probe = Forward(B_probe);
+					TVector3d H_probe = Forward(B_probe);
 					double F_mid = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
 					if(fabs(F_mid) < 1e-10) break;
 					if(F_lo * F_mid < 0) { s_hi = s_mid; F_hi = F_mid; }
@@ -3498,7 +3514,7 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 				}
 				double s_final = 0.5 * (s_lo + s_hi);
 				B.x = s_final * uH.x; B.y = s_final * uH.y; B.z = s_final * uH.z;
-				Forward(B);   // populate m_pk_current, m_last_B
+				Forward(B);
 			}
 		}
 	}
