@@ -2688,25 +2688,45 @@ TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H)
 		hess.Str0.x += reg; hess.Str1.y += reg; hess.Str2.z += reg;
 		TVector3d dJ = Solve3x3(hess, (-1.0) * grad);
 
-		// Armijo backtracking
+		// Armijo backtracking — track whether decrease was found.
+		//
+		// Bug fix 2026-05-02: previously the loop ran 20 backtracks and
+		// then unconditionally took `Jk += tau * dJ`, even when no
+		// `F_new <= F_curr + ...` was found (i.e., line search FAILED).
+		// That could push Jk uphill on ill-conditioned residuals
+		// (rotational hysteresis at saturation).
 		double tau = 1.0;
 		double F_curr = ObjectiveForwardK(k, Jk, H);
-		double dir_deriv = grad * dJ;  // directional derivative
+		double dir_deriv = grad * dJ;
+		bool ls_accepted = false;
 		for(int ls = 0; ls < 20; ls++)
 		{
 			double F_new = ObjectiveForwardK(k, Jk + tau * dJ, H);
-			if(F_new <= F_curr + 0.1 * tau * dir_deriv) break;
+			if(F_new <= F_curr + 0.1 * tau * dir_deriv)
+			{
+				ls_accepted = true;
+				break;
+			}
 			tau *= 0.5;
 		}
-		Jk += tau * dJ;
-		// Clamp to saturation bound
+		if(ls_accepted)
+		{
+			Jk += tau * dJ;
+		}
+		// else: skip the update; Jk stays at the last accepted iterate.
+
+		// Clamp J magnitude (isotropic) to saturation bound, not per-component.
+		//
+		// Bug fix 2026-05-02: per-component L_inf clamp let |J| reach
+		// sqrt(3) * r_max along the cube diagonal, then Uk(k, |J|) flat-
+		// extrapolated beyond r_max. Clamp by magnitude instead.
 		double Jmax = 0.9999 * m_tables[k].r_max;
-		if(Jk.x > Jmax) Jk.x = Jmax;
-		else if(Jk.x < -Jmax) Jk.x = -Jmax;
-		if(Jk.y > Jmax) Jk.y = Jmax;
-		else if(Jk.y < -Jmax) Jk.y = -Jmax;
-		if(Jk.z > Jmax) Jk.z = Jmax;
-		else if(Jk.z < -Jmax) Jk.z = -Jmax;
+		double Jmag_now = sqrt(Jk.x*Jk.x + Jk.y*Jk.y + Jk.z*Jk.z);
+		if(Jmag_now > Jmax)
+		{
+			double sc = Jmax / Jmag_now;
+			Jk.x *= sc; Jk.y *= sc; Jk.z *= sc;
+		}
 	}
 	return Jk;
 }
@@ -2864,14 +2884,18 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& B)
 		for(int k = 0; k < m_K; k++)
 		{
 			Jk_list[k] += tau * dJk_list[k];
-			// Clamp each component to saturation bound (matches Python L-BFGS-B bounds)
+			// Isotropic |J| clamp (was per-component L_inf which let
+			// |J| reach sqrt(3)*r_max along the cube diagonal,
+			// triggering flat-extrapolation of Uk beyond r_max).
 			double Jmax = 0.9999 * m_tables[k].r_max;
-			if(Jk_list[k].x > Jmax) Jk_list[k].x = Jmax;
-			else if(Jk_list[k].x < -Jmax) Jk_list[k].x = -Jmax;
-			if(Jk_list[k].y > Jmax) Jk_list[k].y = Jmax;
-			else if(Jk_list[k].y < -Jmax) Jk_list[k].y = -Jmax;
-			if(Jk_list[k].z > Jmax) Jk_list[k].z = Jmax;
-			else if(Jk_list[k].z < -Jmax) Jk_list[k].z = -Jmax;
+			double Jmag_now = sqrt(Jk_list[k].x*Jk_list[k].x +
+			                        Jk_list[k].y*Jk_list[k].y +
+			                        Jk_list[k].z*Jk_list[k].z);
+			if(Jmag_now > Jmax)
+			{
+				double sc = Jmax / Jmag_now;
+				Jk_list[k].x *= sc; Jk_list[k].y *= sc; Jk_list[k].z *= sc;
+			}
 		}
 	}
 
