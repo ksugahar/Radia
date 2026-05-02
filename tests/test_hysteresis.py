@@ -245,3 +245,122 @@ class TestEnergyHysteresisMaterial:
         rad.MatMvsH(mat, 'm', [5000.0, 0, 0])
         rad.MatHysRestoreState(mat, state)
         # Should not raise
+
+
+class TestShapeFunctionIdentificationRegression:
+    """Regression tests for the JMAG shape function identification pipeline.
+
+    These tests would have caught the three hysteresis_io.py bugs fixed on
+    2026-05-02 (load_mat .flat[0] bug, sort direction inverted, r=0 anchor
+    lost to fp rounding). Each bug produced shape functions that
+    individually look reasonable but fail to reproduce the input descending
+    branches when fed back through the Play model.
+    """
+
+    def test_load_mat_preserves_full_branch(self):
+        """load_mat must return all H/B values, not just the first scalar."""
+        from radia.hysteresis_io import load_mat
+        mat_file = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
+                    r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
+        if not os.path.exists(mat_file):
+            pytest.skip("Potter-Schmulian B_input.mat not available")
+        loops, dB, BMax = load_mat(mat_file)
+        # Each loop must have B and H of length > 1; the .flat[0] bug
+        # produced single-element arrays.
+        for i, loop in enumerate(loops):
+            assert len(loop['B']) > 1, \
+                f"loop[{i}] has only {len(loop['B'])} B-points (load_mat regression)"
+            assert len(loop['H']) == len(loop['B']), \
+                f"loop[{i}]: H/B length mismatch"
+
+    def test_jmag_identification_reproduces_input_branches(self):
+        """Identified shape functions must reproduce input descending branches.
+
+        The JMAG identification is exact for the input data (it inverts a
+        finite-difference operator). Forward-evaluating the identified Play
+        model on the same B trajectory must reconstruct H to machine
+        precision (< 1e-9 A/m). Any deviation indicates a bug in
+        build_shape_functions, load_mat, or the Play evaluator.
+        """
+        from radia.hysteresis_io import load_mat, build_shape_functions
+        mat_file = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
+                    r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
+        if not os.path.exists(mat_file):
+            pytest.skip("Potter-Schmulian B_input.mat not available")
+        loops, dB, BMax = load_mat(mat_file)
+        eta, f_tables, _ = build_shape_functions(loops, dB)
+        K = len(eta)
+
+        # Run scalar Play on the largest input branch and compare to input H.
+        # Pre-saturate first to set Play states consistently.
+        loops_desc = sorted(loops, key=lambda x: x['Bmax'], reverse=True)
+        largest = loops_desc[0]
+        Bm = float(largest['Bmax'])
+
+        # Build interpolators with anti-symmetric extension
+        interps = []
+        for k in range(K):
+            r = np.asarray(f_tables[k][0])
+            f = np.asarray(f_tables[k][1])
+            mask = r >= 0
+            r = r[mask]; f = f[mask]
+            idx = np.argsort(r)
+            r = r[idx]; f = f[idx]
+            r_full = np.concatenate([-r[::-1], r[1:]])
+            f_full = np.concatenate([-f[::-1], f[1:]])
+            r_unique, ia = np.unique(r_full, return_index=True)
+            interps.append((r_unique, f_full[ia]))
+
+        def play_eval(B_traj, eta, interps, K):
+            p = np.zeros(K)
+            H = np.zeros_like(B_traj)
+            for n, B in enumerate(B_traj):
+                Hn = 0.0
+                for k in range(K):
+                    if eta[k] < 1e-30:
+                        p[k] = B
+                    else:
+                        if B > p[k] + eta[k]:
+                            p[k] = B - eta[k]
+                        elif B < p[k] - eta[k]:
+                            p[k] = B + eta[k]
+                    Hn += float(np.interp(p[k], interps[k][0], interps[k][1]))
+                H[n] = Hn
+            return H
+
+        # Pre-saturate by going from 0 up to Bm
+        n_pre = 200
+        B_pre = np.linspace(0, Bm, n_pre)
+        # Then follow the largest descending branch
+        B_input = np.asarray(largest['B'])
+        H_input = np.asarray(largest['H'])
+        B_full = np.concatenate([B_pre, B_input])
+        H_model_full = play_eval(B_full, eta, interps, K)
+        H_model = H_model_full[n_pre:]
+        max_err = float(np.max(np.abs(H_model - H_input)))
+        assert max_err < 1e-9, \
+            (f"JMAG identification reconstruction error {max_err:.3e} A/m "
+             f"exceeds 1e-9 tolerance — possible regression in "
+             f"hysteresis_io.build_shape_functions or load_mat.")
+
+    def test_shape_function_table_has_origin(self):
+        """Each f_k table must include r=0 anchor for clean interpolation.
+
+        Regression for the 2026-05-02 fix where np.arange floating-point
+        noise caused `Bplay >= 0` to drop the middle index, leaving
+        f_k tables that started at r = dB/2 instead of 0.
+        """
+        from radia.hysteresis_io import load_mat, build_shape_functions
+        mat_file = (r"W:\999_菅原賢悟\19_磁気ヒステリシス\2024_IGTE_共同研究"
+                    r"\2024_03_08_H-input_B-input\Potter_Schmulian\B_input.mat")
+        if not os.path.exists(mat_file):
+            pytest.skip("Potter-Schmulian B_input.mat not available")
+        loops, dB, BMax = load_mat(mat_file)
+        _, f_tables, _ = build_shape_functions(loops, dB)
+        for k, (r, f) in enumerate(f_tables):
+            r0 = float(np.asarray(r)[0])
+            f0 = float(np.asarray(f)[0])
+            assert r0 == 0.0, \
+                f"f_tables[{k}] starts at r={r0:.3e}, expected exact 0"
+            assert f0 == 0.0, \
+                f"f_tables[{k}] f(r=0)={f0:.3e}, expected exact 0 (anti-symm)"
