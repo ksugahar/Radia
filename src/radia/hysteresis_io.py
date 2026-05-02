@@ -99,11 +99,15 @@ def load_mat(filepath, bh_var='BH', db_var='dB', bmax_var='BMax'):
 
     loops = []
     for item in BH_struct:
-        B = np.asarray(item['B'].flat[0] if hasattr(item['B'], 'flat') else item['B'])
-        H = np.asarray(item['H'].flat[0] if hasattr(item['H'], 'flat') else item['H'])
+        # Bug fix 2026-05-02: previous version did `item['B'].flat[0]` which
+        # returns only the FIRST scalar element of the flat iterator, not the
+        # whole branch. This produced HdataLUT with a single non-zero row per
+        # column, breaking the JMAG identification at the input stage.
+        B = np.asarray(item['B']).flatten()
+        H = np.asarray(item['H']).flatten()
         loops.append({
-            'B': B.flatten(),
-            'H': H.flatten(),
+            'B': B,
+            'H': H,
             'Bmax': float(np.max(np.abs(B)))
         })
 
@@ -137,25 +141,34 @@ def build_shape_functions(loops, dB=None):
     Bplay : ndarray
         B-axis grid points for shape functions.
     """
-    # Sort loops by Bmax ascending (smallest first, like MATLAB indexing)
-    loops_asc = sorted(loops, key=lambda x: x['Bmax'])
+    # Sort loops by Bmax descending (largest first).
+    #
+    # The ShapeFunction.m algorithm requires column 0 = LARGEST Bmax (longest
+    # branch). The "last point correction" uses last_col = column1 - 2*ii - 1,
+    # which decreases with ii — only consistent when ii=0 corresponds to the
+    # longest branch.
+    #
+    # Bug fix 2026-05-02: prior version sorted ASCENDING, producing shape
+    # functions that diverge from the input branches by ~1500 A/m in
+    # reconstruction. Verified against bqm_model.compute_shape_functions
+    # (independent port) and the MATLAB +bie/computeShapeFunctions reference.
+    loops_desc = sorted(loops, key=lambda x: x['Bmax'], reverse=True)
 
     if dB is None:
-        if len(loops_asc) >= 2:
-            dB = loops_asc[1]['Bmax'] - loops_asc[0]['Bmax']
+        if len(loops_desc) >= 2:
+            dB = loops_desc[-1]['Bmax'] - loops_desc[-2]['Bmax']
         else:
-            dB = loops_asc[0]['Bmax'] / 10.0
+            dB = loops_desc[0]['Bmax'] / 10.0
 
-    n_loops = len(loops_asc)  # = column0 = row1
-    Bmax = loops_asc[-1]['Bmax']
+    n_loops = len(loops_desc)  # = column0 = row1
+    Bmax = loops_desc[0]['Bmax']
 
-    # Build HdataLUT: each column = H values at B-grid for one Bmax level
-    # B-grid for each loop: Bmax_i -> -Bmax_i with step dB
-    # The LUT has uniform rows: largest loop defines the grid
+    # Build HdataLUT: column 0 = LARGEST Bmax (longest branch), column k = k-th
+    # largest. Padded with trailing zeros for shorter branches.
     max_n_B = int(round(2 * Bmax / dB)) + 1
     HdataLUT = np.zeros((max_n_B, n_loops))
 
-    for col, loop in enumerate(loops_asc):
+    for col, loop in enumerate(loops_desc):
         n_pts = len(loop['B'])
         HdataLUT[:n_pts, col] = loop['H'][:n_pts]
 
@@ -217,13 +230,21 @@ def build_shape_functions(loops, dB=None):
     # Create shape function interpolants
     f_k_tables = []
     Bplay_asc = Bplay[::-1]  # ascending for interpolation
+    # Bug fix 2026-05-02: tolerance on the mask to keep the r=0 point even
+    # when Bplay's middle element is something like -5e-17 due to arange
+    # rounding. Without this, the (0, f_k(0)=0) anchor was dropped, causing
+    # ~30 A/m residual reconstruction error from extrapolation near r=0.
+    bp_tol = (dB / 2) * 1e-6
     for jj in range(column1):
         Hfunc_asc = Hfunc[::-1, jj]
-        # Shape function is defined for r = |p| >= 0
-        # Use the positive B side (Bplay >= 0)
-        mask = Bplay_asc >= 0
-        r_pos = Bplay_asc[mask]
+        mask = Bplay_asc >= -bp_tol
+        r_pos = np.maximum(Bplay_asc[mask], 0.0)   # snap tiny-negative to 0
         f_pos = Hfunc_asc[mask]
+        # Force f_k(0) = 0 exactly (anti-symmetry); guard against accumulated
+        # rounding in cumsum when r=0 is the first index.
+        if r_pos[0] == 0:
+            f_pos = f_pos.copy()
+            f_pos[0] = 0.0
         f_k_tables.append((r_pos.copy(), f_pos.copy()))
 
     # Thresholds

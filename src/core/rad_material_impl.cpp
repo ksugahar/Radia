@@ -3251,14 +3251,20 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 	}
 
 	// Initial guess
+	//
+	// Bug fix 2026-05-02: previous condition `m_has_result && H_target_mag > 1e-20`
+	// suppressed the warmstart for H=0, falling through to B = mu_0*mu_r*H = 0.
+	// On a descending branch with non-trivial committed state, the Newton then
+	// settles at B=0 instead of finding the true remanence. Warmstart from the
+	// last committed B regardless of |H_target|.
 	TVector3d B;
-	if(m_has_result && H_target_mag > 1e-20)
+	if(m_has_result)
 	{
 		B = m_last_B;
 	}
 	else
 	{
-		// B = mu_0 * (1 + chi_init) * H
+		// Cold start: linear estimate B = mu_0 * (1 + chi_init) * H
 		double chi_init = GetInitialChi_ELF_Style();
 		if(chi_init < 1.0) chi_init = 1.0;
 		double mu_r = 1.0 + chi_init;
