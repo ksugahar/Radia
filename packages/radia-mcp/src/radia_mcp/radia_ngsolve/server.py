@@ -38,6 +38,7 @@ from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
+from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -1071,6 +1072,35 @@ def install_deploy(topic: str = "") -> str:
         topic: Empty for the full document, or one of the topics above.
     """
     return get_install_deploy_documentation(topic)
+
+
+@mcp.tool()
+def standalone_panels(topic: str = "") -> str:
+    """
+    Cubit-bypass standalone launch of the four Radia-NGSolve panels —
+    how to run radia-ih / radia-em / radia-pcb / radia-heat as plain
+    PySide6 desktop apps without Cubit installed.
+
+    Read this when:
+      * A user has a `.vol` mesh from any source (Cubit, Netgen-OCC,
+        build123d, etc.) and wants to run an analysis panel without
+        paying the Coreform Cubit licence.
+      * Setting up a non-Cubit lab seat.
+      * Diagnosing "the panel I see in Cubit's Solve menu — can I
+        run it outside Cubit?"  (Yes, via the standalone .exe entries.)
+
+    Topics:
+      quick_start      -- end-to-end recipe (pip install -> radia-ih .vol -> Run)
+      four_panels      -- what each launcher does
+      vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
+      vs_cubit         -- standalone vs Cubit Solve menu
+      ih_methods       -- 6 IH methods + their .vol requirements
+      troubleshooting  -- common errors when launching standalone
+
+    Args:
+        topic: Empty for the full document, or one of the topics above.
+    """
+    return get_standalone_panels_documentation(topic)
 
 
 def _selftest():
