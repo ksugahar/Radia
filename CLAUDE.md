@@ -99,28 +99,56 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 - `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
 - Build output goes to `build*/` or `dist/` (both gitignored)
 
-### Panel Samples Quality Policy (`src/radia/panels/samples/`)
+### Sample Promotion Ladder: tests → examples → panels (2026-05-02)
 
-**POLICY**: Only **thoroughly debugged, high-quality** sample files may live in
-`src/radia/panels/samples/`.  Every `.jou` / `.step` / `.sol` there ships in
-the `radia` wheel and is what end-users see in the Cubit panel Browse dialog.
+**POLICY**: Every sample lives in exactly ONE of three tiers.  The tiers
+have distinct purposes and a strict promotion ladder:
 
-- A sample enters `src/radia/panels/samples/` **only after** it runs end-to-end
-  through the panel it targets: Cubit `play <sample>.jou` → `radia_export`
-  (for .vol modes) → the panel's Run button → correct result.  A sample that
-  "should work" but hasn't been run is NOT ready.
-- For PEEC-inductance: the `.step` / `.jou` produces sensible L / R on the
-  known-good golden test (`tests/panels/test_*_golden.py`).
-- Work-in-progress / experimental samples belong in `examples/` or
-  `tests/**/fixtures/`, NOT in `panels/samples/`.  Moving a sample to
-  `panels/samples/` is a release action, not a dev convenience.
-- The wheel manifest check (`deploy` skill, L0 Wheel Manifest Audit) flags
-  any new sample in `panels/samples/` that is not listed in `pyproject.toml`
-  package-data.  Add to package-data only after the sample is validated.
+| Tier | Purpose (intent) | Audience | Ships in wheel? |
+|------|------------------|----------|-----------------|
+| `tests/**/fixtures/` | **実装の基本機能の確認** — golden test fixture, machine-readable, minimal. | CI / Claude / developer | No |
+| `examples/<topic>/` | **研究的側面も含む例題の提供** — research-oriented demonstration, exploratory geometry, README-backed. | researchers, contributors | No (gitignored outputs OK) |
+| `src/radia/panels/samples/` | **工学的実問題を動く形で提供** — engineering real-problem solution, runs end-to-end through the panel. | end users (Cubit panel Browse dialog) | Yes (package-data) |
 
-**Why**: end-users can't tell a broken sample from a user error — they try
+**Promotion gates** (each is a hard gate; no skipping):
+
+- **tests/ → examples/**: golden test for the geometry passes
+  (`tests/panels/test_*_golden.py` JSON inside hard band) AND a
+  human-readable `README.md` is added that explains the physics /
+  research question / expected ballpark numbers AND the example runs
+  standalone (`python <example>.py` without the panel UI).
+- **examples/ → panels/samples/**: the example runs end-to-end through
+  the **panel UI** (Layer 3, Cubit `play <sample>.jou` → `radia_export`
+  → panel Run button) on the actual engineering geometry — not a toy
+  proxy.  Sample listed in `pyproject.toml` package-data.  Wheel
+  manifest audit (`deploy` skill, L0) clean.
+
+**Why three tiers, not two**: a sample that locks numerical correctness
+(tests) is a different artifact from a sample that teaches a research
+concept (examples) which is again different from a sample that solves
+an engineer's actual problem on the panel (panels).  Conflating them
+either ships incomplete work to end users (panels = examples) or
+buries production-ready engineering examples in tests/.
+
+**Concrete consequences**:
+
+- A new geometry STARTS at `tests/**/fixtures/` with a golden lock.
+  Promote up only after the next-tier gate is met.
+- Demoting (panels → examples → tests) is allowed: e.g. an engineering
+  sample that turns out to need rework can move back to `examples/`
+  while the issue is investigated, with the wheel package-data line
+  removed in the same commit.
+- Same geometry MAY exist at multiple tiers if the artifacts differ in
+  scope (a minimal fixture in tests/, a richer commented version in
+  examples/, a panel-friendly .jou in panels/samples/).  Each lives
+  separately and is maintained separately.
+- A sample at `panels/samples/` MUST also have a passing golden test
+  in `tests/panels/test_*_golden.py` — the upper tier inherits the
+  correctness gate of the lower.
+
+**Why end users can't tell broken samples from user error**: they try
 the sample, it fails, and the panel looks broken.  One broken sample
-discredits the whole panel.
+discredits the whole panel.  The tier discipline above prevents this.
 
 ### Panel Design Workflow Policy (2026-04-23)
 
@@ -1020,51 +1048,50 @@ git push v* tag
 robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 ```
 
-### Distribution Test Policy (2026-04-24, updated 2026-05-01)
+### Distribution Test Policy (2026-04-24, updated 2026-05-02)
 
-**POLICY (2026-05-01 update)**: 100号機 を **PyPI install** に切替え、mdx を
-**editable install** に切替え。配布テストは **100号機** で行う (Cubit panels 含む
-end-to-end のリリース wheel 検証)。mdx は **editable + local clone** で動かし、
-ヘッドレス検証 + LAB 独立な dev iteration に使う。LAB は変わらず editable
-(NAS source).
+**POLICY (2026-05-02 update)**: **2-tier 配布**: LAB は editable (NAS source、developer
+loop)、100号機 と mdx は両方 PyPI install (`pip install radia[cubit] radia-mcp` +
+`cubit-plugin-install --all-users`). リリース wheel + Cubit plugin の end-to-end
+検証点を 100号機 と mdx の 2 マシンで二重化。mdx editable は 2026-05-02 に retire
+(`tools/push_pyds_to_mdx.py` は branch-test 用にのみ残置).
 
-**3 ステージ配布モデル (2026-05-01 reconfigured)**:
+**2 ステージ配布モデル (2026-05-02 simplified)**:
 
 | Stage | マシン | install 形態 | 目的 |
 |-------|--------|-----------|------|
 | 1 | LAB | `pip install -e .` + `pip install -e packages/cubit-mesh-export` + `pip install -e packages/radia-mcp` | 開発者ループ。最速フィードバック (NAS source 直接編集) |
-| 2 | mdx | local clone (`C:\Radia\01_GitHub`) + 全 3 パッケージ editable | ヘッドレス検証 (no Cubit) + LAB 独立な dev iteration が必要なら mdx でも commit 可 |
-| 3 | 100号機 | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` (regular-file deploy) | PyPI wheel + Cubit plugin の唯一の end-to-end 検証点。21 人全員が触る本番。Stage-3 が通るまで release OK を宣言しない。 |
+| 2 | 100号機 / mdx | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` (regular-file deploy) | PyPI wheel + Cubit plugin の end-to-end 検証点。100号機 = 21 ユーザの本番、mdx = 別マシンでの cross-machine consistency probe (release-triple Phase 9). Stage-2 が両機で通るまで release OK を宣言しない。 |
 
-**変更点 (2026-05-01)**:
-- 旧: 100号機 = editable from NAS, mdx = PyPI.
-- 新: 100号機 = PyPI, mdx = editable from local clone.
-- 理由 (推定): 100号機 を本番として扱い、リリース wheel が 21 ユーザに正しく届くかを 100号機 自体で検証する方が合理的。mdx は LAB-NAS にアクセスできず (UNC 不可) ので local clone 経由 editable で開発作業継続可。
+**変更点 (2026-05-02)**:
+- 旧: LAB editable / 100号機 PyPI / mdx editable (3-tier).
+- 新: LAB editable / 100号機 + mdx 両方 PyPI (2-tier).
+- 理由: mdx editable は (a) gh CLI 不在で `download_binaries.sh` 不可, (b) legacy site-packages shadow の手動削除が必要, (c) `.pyd` を base64-over-ssh で push する `tools/push_pyds_to_mdx.py` が必須, など落とし穴が多い割に PyPI 検証の代替価値が小さかった。100号機 と同じ "PyPI が動くか" の純粋な検証点に統一。
 
-**LAB のみ editable な 4 パッケージ** (2026-05-01 追記):
+**LAB のみ editable な 4 パッケージ**:
 - `radia` (LAB: `S:\Radia\01_GitHub`)
 - `cubit-mesh-export` (LAB: `S:\Radia\01_GitHub\packages\cubit-mesh-export`)
 - `radia-mcp` (LAB: `S:\Radia\01_GitHub\packages\radia-mcp`)
 - `mcp-server-document` (LAB: `S:\mcp-server`) -- LAB-private (PyPI 配布なし)
 
-LAB で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意 (2026-04-28 incident)。release 後の LAB 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx および 100号機 用** (mdx は editable 上書きを避けて local clone を refresh、100号機 は PyPI から普通に upgrade).
+LAB で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意 (2026-04-28 incident)。release 後の LAB 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **100号機 / mdx 用** (PyPI から通常通り upgrade).
 
-**100号機 全ユーザー PyPI install (2026-05-01)**: `C:\Program Files\Python312`
-の machine-wide site-packages に PyPI install。21 人の local ユーザは
-全員同じ install を共有。リリース毎に admin が `pip install --upgrade
-radia==X.Y.Z radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z` + `cubit-plugin-install
---all-users` を実行。
+**100号機 / mdx 全ユーザー PyPI install**: `C:\Program Files\Python312`
+の machine-wide site-packages に PyPI install。リリース毎に admin が
+`pip install --upgrade radia==X.Y.Z radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z`
++ `cubit-plugin-install --all-users` を実行。
 
-**100号機 Cubit plugin (2026-05-01: regular file)**:
+**100号機 / mdx Cubit plugin (regular file)**:
 - `<Cubit>\bin\radia_cubit.ccl` (regular file from PyPI wheel)
 - `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel)
 - `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` (regular file from PyPI wheel)
 
-LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるが、100号機 の
-PyPI install には反映されない**。C++ 変更を 100号機 で試すには PyPI release を
-切るか、一時的に 100号機 で `pip install --force-reinstall --no-cache-dir
-//192.168.11.100/work/00_CAE/Radia/01_GitHub` で NAS-source install へ切戻す。
-通常運用は **PyPI release → 100号機 で `pip install --upgrade`**。
+LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるが、100号機 / mdx の
+PyPI install には反映されない**。C++ 変更を 100号機 / mdx で試すには PyPI release を
+切るのが正規ルート。緊急時のみ `tools/push_pyds_to_mdx.py` (mdx) や
+`pip install --force-reinstall --no-cache-dir //192.168.11.100/work/00_CAE/Radia/01_GitHub`
+(100号機 NAS source override) を使う。通常運用は **PyPI release → 100号機 / mdx で
+`pip install --upgrade`**。
 
 ### CI Testing Policy
 
@@ -2078,6 +2105,49 @@ GMSH を可視化ツールとして使用する理由:
 - **STEP ファイルを直接読み込み** → 幾何形状と磁場を重ねて表示
 - Per-material Physical Groups で材料別表示
 - **.msh v4.1 only** (lab-wide standard; netgen I/O は常に .vol 経由)
+
+### GMSH Invocation Policy: Python API Only
+
+**POLICY**: GMSH は **常に pip-gmsh の Python API 経由** で呼ぶ. 単独
+``gmsh.exe`` を探したり (CST 同梱のものを含む) 別 install するスクリプトを書かない.
+
+理由:
+- pip-gmsh (PyPI ``gmsh``) は OCC + FLTK GUI を含む完全な Windows
+  バイナリ. `gmsh.fltk.run()` は blocking で window が安定して開く.
+- 仮に Python プロセスから起動した GMSH window が「すぐ消える」と
+  いう報告があっても、それは **呼び出し側で process kill / timeout
+  をしている** ことが原因 (実例: 2026-05-02 Claude が `timeout 4`
+  + `taskkill` で background process を殺し、ユーザに「GUI が瞬殺
+  される」と誤って報告).  pip-gmsh GUI 自体は問題ない.
+- ``C:\Program Files\CST Studio Suite ...\gmsh.exe`` のような他社
+  バンドル版を呼ばない. version 不一致 (CST: 4.11.1, pip: 4.15+) や
+  別途 install を強制するワークフローは避ける.
+
+```python
+# CORRECT
+import gmsh
+gmsh.initialize()
+gmsh.open(msh_path)
+# ... display options ...
+gmsh.fltk.run()       # blocking GUI; user closes the window to exit
+gmsh.finalize()
+```
+
+```python
+# WRONG -- do not do this
+subprocess.Popen([r"C:\Program Files\CST...\gmsh.exe", msh_path])  # external binary
+subprocess.Popen([r"C:\Tools\gmsh\gmsh.exe", msh_path])             # ad-hoc install path
+```
+
+If `fltk.run()` appears to flash and exit on a user's machine, debug:
+1. Confirm the script reaches `gmsh.fltk.run()` (add a print before).
+2. Check that no caller wraps the launch in a `timeout` or kills the
+   Python process. background launches (`run_in_background=True`) MUST
+   NOT be later `taskkill`'d if you want the user to keep interacting
+   with the window.
+3. If the GUI genuinely doesn't display, check pip-gmsh installation
+   (`pip show gmsh`) -- a corrupted install, not a missing executable,
+   is the failure mode.
 
 ### GmshPostExport: High-Order Field Visualization
 

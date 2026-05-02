@@ -13,15 +13,16 @@
     "n_peri": 16
   },
   "expected": {
-    "L_coil_nH": 138.16,
+    "L_coil_nH": 145.30,
     "tolerance_L_pct": 5.0,
     "R_coil_mOhm": null,
     "tolerance_R_pct": null,
-    "input_kind": "STEP"
+    "input_kind": "STEP",
+    "comment_2026_05_02_cap_aware_fix": "Updated from 138.16 -> 145.30 nH after the unified OPEN/CLOSED cap-aware spine fix (src/radia/coil_topology.py).  Path 2c was previously sampling the spine via _spine_from_rotation_axis_z = linspace(0, 2pi, n, endpoint=False), clipping ~14 deg of conductor on a 355 deg gapped torus.  After the fix, filament span = 354 deg (vs actual 355 deg).  BEM-A intree on this geometry gives ~153 nH; the remaining ~5 % BEM-vs-PEEC diff is attributed to rect-corner current crowding (BEM-A surface RWG captures it; PEEC perimeter filaments do not)."
   },
   "regression_guard": {
-    "min_L_nH": 120.0,
+    "min_L_nH": 130.0,
     "max_L_nH": 160.0,
-    "comment": "Hard band around the converged thin-skin 138-140 nH plateau. Pre-v4.24.0 result on this geometry was NaN (catastrophic failure: cross_section_radius_m=0 from longest-edge spine catching a lateral edge). If this test starts returning > 165 or < 100 the cross-section reconstruction in _filaments_from_section_planes has regressed."
+    "comment": "Hard band around the cap-aware thin-skin 145 nH (2026-05-02 fix).  Pre-v4.24.0 result on this geometry was NaN (catastrophic failure: cross_section_radius_m=0 from longest-edge spine catching a lateral edge); pre-2026-05-02 it was 138 nH (filament 14 deg short of caps).  If this test starts returning > 165 or < 130 the cap-aware spine in coil_topology.extract_coil_topology / generate_spine has regressed, OR the cross-section reconstruction in _filaments_from_section_planes has."
   }
 }
