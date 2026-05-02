@@ -29,7 +29,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify wheel
+      - name: Verify wheel (exists + version consistency)
         run: |
           echo "=== radia-mcp wheel ==="
           ls -la dist/
@@ -39,6 +39,35 @@ jobs:
             exit 1
           fi
           echo "Wheel: $WHL"
+          python3 - "$WHL" <<'PY'
+          import sys, zipfile, re
+          whl = sys.argv[1]
+          zf = zipfile.ZipFile(whl)
+          names = [f.filename for f in zf.infolist()]
+
+          # Version consistency: the __version__ declared in __init__.py
+          # must match the version in the wheel filename.  Mirrors the
+          # check shipped in release-cubit-mesh-export.yml.  Without this
+          # check, radia-mcp 0.36.6 (2026-05-02) silently published with
+          # __init__.__version__ = "0.34.2" baked in, so the published
+          # wheel had `radia_mcp.__version__ == "0.34.2"` while pip
+          # reported `radia-mcp 0.36.6`.  Discovered + fixed in 0.36.7.
+          whl_ver = re.match(r"[^-]+-([^-]+)-", whl.rsplit("/", 1)[-1]).group(1)
+          init = zf.read(next(n for n in names
+              if n.endswith("radia_mcp/__init__.py"))).decode()
+          m = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M)
+          if not m:
+              print("::error::__version__ not found in wheel __init__.py")
+              sys.exit(1)
+          pkg_ver = m.group(1)
+          if whl_ver != pkg_ver:
+              print(f"::error::Version mismatch -- wheel={whl_ver} "
+                    f"vs __init__.__version__={pkg_ver}. "
+                    f"Bump pyproject.toml AND src/radia_mcp/__init__.py "
+                    f"in lockstep, not just one.")
+              sys.exit(1)
+          print(f"OK version consistency: {pkg_ver}")
+          PY
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
