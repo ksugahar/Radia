@@ -2590,17 +2590,33 @@ double radTEnergyHysteresisMaterial::d2Uk(int k, double J_mag) const
 //-------------------------------------------------------------------------
 // Vector gradient and Hessian of U_k
 //-------------------------------------------------------------------------
+//
+// Bug fix 2026-05-02: throughout the energy hysteresis material, magnitude
+// of TVector3d quantities used to feed the per-particle energy table U_k
+// MUST be the L2 (Euclidean) norm sqrt(x^2+y^2+z^2). The codebase's
+// `NormAbs` from gmvect.h is the L_inf norm (max absolute component) — a
+// different mathematical object. Using L_inf where L2 is required broke
+// 3D isotropy of the model: for J along (1,1,0)/sqrt(2) vs J along +x of
+// the same magnitude, the table was indexed at different "magnitudes" and
+// gave anisotropic results. The bug was invisible in scalar 1D tests
+// (only one component nonzero -> L_inf == L2) and across all axis-aligned
+// 3D drives (Test 1 of the audit). Surfaced by the isotropy / circular
+// rotation tests in verify/type5_vector3d/.
+static inline double VL2(const TVector3d& v)
+{
+	return sqrt(v * v);   // dot-product gives |v|^2 in L2
+}
 
 TVector3d radTEnergyHysteresisMaterial::GradUk(int k, const TVector3d& J) const
 {
-	double J_mag = NormAbs(J);
+	double J_mag = VL2(J);
 	if(J_mag < 1e-30) return TVector3d(0, 0, 0);
 	return (dUk(k, J_mag) / J_mag) * J;
 }
 
 TMatrix3d radTEnergyHysteresisMaterial::HessUk(int k, const TVector3d& J) const
 {
-	double J_mag = NormAbs(J);
+	double J_mag = VL2(J);
 	if(J_mag < 1e-30) return d2Uk(k, 0.0) * Eye();
 
 	TVector3d e = (1.0 / J_mag) * J;
@@ -2642,7 +2658,7 @@ double radTEnergyHysteresisMaterial::ObjectiveForwardK(
 	int k, const TVector3d& J, const TVector3d& H) const
 {
 	TVector3d diff = J - m_Jk_prev[k];
-	return Uk(k, NormAbs(J)) - (H * J) + m_chi[k] * NormEps(diff);
+	return Uk(k, VL2(J)) - (H * J) + m_chi[k] * NormEps(diff);
 }
 
 double radTEnergyHysteresisMaterial::ObjectiveForward(
@@ -2657,7 +2673,7 @@ double radTEnergyHysteresisMaterial::ObjectiveForward(
 	for(int k = 0; k < m_K; k++)
 	{
 		TVector3d diff = Jk_list[k] - m_Jk_prev[k];
-		G += Uk(k, NormAbs(Jk_list[k]));
+		G += Uk(k, VL2(Jk_list[k]));
 		G += m_chi[k] * NormEps(diff);
 	}
 	return G;
@@ -2677,7 +2693,7 @@ TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H)
 	{
 		TVector3d diff = Jk - m_Jk_prev[k];
 		TVector3d grad = GradUk(k, Jk) - H + m_chi[k] * GradNormEps(diff);
-		double grad_norm = NormAbs(grad);
+		double grad_norm = VL2(grad);
 		if(grad_norm < tol) break;
 
 		TMatrix3d hess = HessUk(k, Jk) + m_chi[k] * HessNormEps(diff);
@@ -2801,7 +2817,7 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& B)
 			hess_list[k] = EHYST_NU_0 * I3 + HessUk(k, Jk_list[k])
 			               + m_chi[k] * HessNormEps(diff);
 
-			double gn = NormAbs(grad_list[k]);
+			double gn = VL2(grad_list[k]);
 			if(gn > max_grad) max_grad = gn;
 		}
 
@@ -2957,8 +2973,8 @@ void radTEnergyHysteresisMaterial::DefineInstantKsiTensor(
 	const TVector3d& H, TMatrix3d& KsiTensor, TVector3d& Mr)
 {
 	TVector3d B = Inverse(H);  // H -> B
-	double H_mag = NormAbs(H);
-	double B_mag = NormAbs(B);
+	double H_mag = VL2(H);
+	double B_mag = VL2(B);
 
 	double chi_scalar = 0.0;
 	if(H_mag > 1e-30)
@@ -2975,8 +2991,8 @@ void radTEnergyHysteresisMaterial::DefineInstantKsiTensor(
 double radTEnergyHysteresisMaterial::ComputeChiFromH(const TVector3d& H)
 {
 	TVector3d B = Inverse(H);  // H -> B
-	double H_mag = NormAbs(H);
-	double B_mag = NormAbs(B);
+	double H_mag = VL2(H);
+	double B_mag = VL2(B);
 
 	if(H_mag < 1e-30) return GetInitialChi_ELF_Style();
 	m_last_chi = B_mag / (EHYST_MU_0 * H_mag) - 1.0;
@@ -2990,14 +3006,14 @@ double radTEnergyHysteresisMaterial::ComputeChiDualMethod(
 
 	// Reconstruct H vector using last known direction
 	TVector3d H;
-	double last_H_mag = NormAbs(m_last_H);
+	double last_H_mag = VL2(m_last_H);
 	if(last_H_mag > 1e-30)
 		H = (H_mag / last_H_mag) * m_last_H;
 	else
 		H = TVector3d(H_mag, 0, 0);  // Default direction
 
 	TVector3d B = Inverse(H);  // H -> B
-	double B_mag = NormAbs(B);
+	double B_mag = VL2(B);
 
 	m_last_chi = B_mag / (EHYST_MU_0 * H_mag) - 1.0;
 	if(m_last_chi < 0) m_last_chi = 0;
