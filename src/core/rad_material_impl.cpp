@@ -3224,30 +3224,50 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 	double H_target_mag = sqrt(H_target.x*H_target.x + H_target.y*H_target.y + H_target.z*H_target.z);
 
 	// Monotone constraint: B clamped to [0, m_B_mono_max] where dH/dB > 0.
-	// For H > m_H_mono_max (beyond model range), return B_mono_max directly.
 	double B_max = m_B_mono_max;
 	double max_dB_step = 0.05 * B_max;  // max |dB| per Newton iteration
 
-	// Early return: H_target beyond monotone range -> saturated at B_mono_max
+	// Saturation early-return for COLLINEAR case only.
+	//
+	// Bug fix 2026-05-02: prior version always early-returned for
+	// |H_target| > H_mono_max. That snapped B to (B_max/|H|)*H regardless
+	// of the committed Play state, destroying rotational hysteresis on
+	// 3D rotating-field excitation (ang(B)-ang(H) = 0 instead of ~22°).
+	//
+	// Restrict the early-return to the case where H_target is roughly
+	// COLLINEAR with the last committed B (or is the very first call,
+	// where there is no previous direction). For 3D rotating fields, fall
+	// through to the full Newton + bisection fallback so the Play state
+	// history is honoured.
 	if(H_target_mag > m_H_mono_max && m_H_mono_max > 1e-10)
 	{
-		TVector3d B_sat_dir;
-		if(H_target_mag > 1e-20)
+		bool collinear = true;
+		if(m_has_result)
 		{
+			double m_last_B_mag = sqrt(m_last_B.x*m_last_B.x +
+			                            m_last_B.y*m_last_B.y +
+			                            m_last_B.z*m_last_B.z);
+			if(m_last_B_mag > 1e-10)
+			{
+				double dot = (m_last_B.x * H_target.x + m_last_B.y * H_target.y +
+				              m_last_B.z * H_target.z) / (m_last_B_mag * H_target_mag);
+				// Treat as collinear if cos(angle) within ±5° of ±1
+				collinear = (fabs(dot) > 0.996);
+			}
+		}
+		if(collinear)
+		{
+			TVector3d B_sat_dir;
 			double sc = m_B_mono_max / H_target_mag;
 			B_sat_dir.x = sc * H_target.x;
 			B_sat_dir.y = sc * H_target.y;
 			B_sat_dir.z = sc * H_target.z;
+			Forward(B_sat_dir);
+			for(int k = 0; k < m_K; k++)
+				m_pk_prev[k] = m_pk_current[k];
+			return m_last_B;
 		}
-		else
-		{
-			B_sat_dir.x = B_sat_dir.y = B_sat_dir.z = 0;
-		}
-		Forward(B_sat_dir);
-		// Auto-commit
-		for(int k = 0; k < m_K; k++)
-			m_pk_prev[k] = m_pk_current[k];
-		return m_last_B;
+		// else: fall through to full Newton with saturation B as initial guess
 	}
 
 	// Initial guess
@@ -3279,6 +3299,17 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 	{
 		double scale = B_max / B_init_mag;
 		B.x *= scale; B.y *= scale; B.z *= scale;
+	}
+
+	// If H_target is past saturation AND we fell through (non-collinear /
+	// rotating case from the early-return guard above), override warmstart
+	// with the saturation-aligned B so Newton starts on the correct side.
+	if(H_target_mag > m_H_mono_max && m_H_mono_max > 1e-10 && H_target_mag > 1e-20)
+	{
+		double sc_sat = B_max / H_target_mag;
+		B.x = sc_sat * H_target.x;
+		B.y = sc_sat * H_target.y;
+		B.z = sc_sat * H_target.z;
 	}
 
 	if(H_target_mag < 1e-20)
