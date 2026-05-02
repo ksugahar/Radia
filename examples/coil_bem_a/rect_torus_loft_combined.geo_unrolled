@@ -1,0 +1,4 @@
+Physical Curve("peec_fil") = {10};
+Physical Surface("body") = {1};
+Physical Surface("source") = {2};
+Physical Surface("sink") = {3};

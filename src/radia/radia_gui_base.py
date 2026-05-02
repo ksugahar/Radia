@@ -852,7 +852,7 @@ class AnalysisWindow(QMainWindow):
                     self._output.appendPlainText(
                         f"  Time = {result['t_total']:.1f}s")
             # Surface heat-flux statistics.  Emitted by calc_fem_kelvin
-            # and calc_peec_bem (the two SIBC production paths) — same
+            # and calc_inductance (the two SIBC production paths) — same
             # schema for both, so this block does not need to know
             # which solver produced the result.  Useful as an
             # optimization filter ("does enough heat land where we

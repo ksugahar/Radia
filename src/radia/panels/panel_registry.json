@@ -5,33 +5,208 @@
     "ja_description": "Radia-NGSolve パネル定義。自然言語 <-> CLI パラメータの双方向変換に使用。"
   },
   "panels": {
-    "peec_bem": {
-      "script": "calc_peec_bem.py",
-      "function": "solve_peec_bem_forward",
-      "ja_name": "PEEC+BEM 1-way (IH)",
-      "ja_description": "STEP コイル → PEEC filament → 表面 BEM-SIBC で wp 発熱 P_wp を算出。1-way forward (back-reaction なし)。",
-      "method": "PEEC filament bundle + Scalar BIE + SIBC Robin on wp",
+    "inductance": {
+      "script": "calc_inductance.py",
+      "function": "run_inductance",
+      "ja_name": "Inductance (vacuum + weak-coupled BEM-SIBC)",
+      "ja_description": "コイル STEP -> L_coil (vacuum) または L_coil + ΔL (weak-coupled).  --coil-solver peec | bem-a で切替。--vol 指定で workpiece 弱結合 (Telegen φ・B back-reaction)。",
+      "method": "PEEC perimeter filaments OR BEM-A Weggler EFIE saddle (RWG); workpiece scalar BIE + SIBC Robin",
       "command_builder": "radia_ih.py:IHPanel._build_peec_bem_command",
       "params": [
         {
-          "cli": "--peec-step",
-          "name": "peec_step",
+          "cli": "--coil-step",
+          "name": "coil_step",
           "required": true,
-          "help": "STEP file for PEEC coil"
+          "help": "Coil STEP file path"
         },
         {
-          "cli": "--peec-nwinc",
-          "name": "peec_nwinc",
-          "type": "int",
-          "default": 3,
-          "help": "Filament sub-cells width direction"
+          "cli": "--coil-solver",
+          "name": "coil_solver",
+          "required": true,
+          "choices": [
+            "peec",
+            "bem-a"
+          ],
+          "help": "peec: PEEC perimeter filaments (fast). bem-a: Weggler EFIE on RWG (accurate)."
         },
         {
-          "cli": "--peec-nhinc",
-          "name": "peec_nhinc",
+          "cli": "--peec-n-peri",
+          "name": "peec_n_peri",
           "type": "int",
-          "default": 3,
-          "help": "Filament sub-cells height direction"
+          "default": 16,
+          "help": "PEEC perimeter filament count (peec only)"
+        },
+        {
+          "cli": "--coil-maxh",
+          "name": "coil_maxh",
+          "type": "float",
+          "default": 0.012,
+          "help": "BEM-A surface mesh maxh [m] (bem-a only)"
+        },
+        {
+          "cli": "--coil-source-name",
+          "name": "coil_source_name",
+          "default": "source",
+          "help": "Coil source-cap face name (bem-a; falls back to area-based detection if absent)"
+        },
+        {
+          "cli": "--coil-sink-name",
+          "name": "coil_sink_name",
+          "default": "sink",
+          "help": "Coil sink-cap face name (bem-a; same fallback)"
+        },
+        {
+          "cli": "--coil-rwg-quad-degree",
+          "name": "coil_rwg_quad_degree",
+          "type": "int",
+          "default": 5,
+          "help": "RWG regular-pair quadrature degree (bem-a)"
+        },
+        {
+          "cli": "--coil-rwg-singular-nq",
+          "name": "coil_rwg_singular_nq",
+          "type": "int",
+          "default": 6,
+          "help": "RWG Sauter-Schwab Duffy n_q (bem-a)"
+        },
+        {
+          "cli": "--coil-bem-solver",
+          "name": "coil_bem_solver",
+          "default": "auto",
+          "choices": [
+            "dense-lu",
+            "hacapk-gmres",
+            "auto"
+          ],
+          "help": "dense-lu (current) / hacapk-gmres (Phase C.7 future)"
+        },
+        {
+          "cli": "--coil-aca-eps",
+          "name": "coil_aca_eps",
+          "type": "float",
+          "default": 1e-10,
+          "help": "HACApK ACA eps for coil (bem-a, future)"
+        },
+        {
+          "cli": "--coil-gmres-tol",
+          "name": "coil_gmres_tol",
+          "type": "float",
+          "default": 1e-10,
+          "help": "HACApK GMRES tol for coil (bem-a, future)"
+        },
+        {
+          "cli": "--coil-sigma",
+          "name": "coil_sigma",
+          "type": "float",
+          "default": 58000000.0,
+          "help": "Coil conductivity [S/m] (Cu default; mu_r=1)",
+          "ja": "コイル導電率",
+          "physics": "コイル抵抗計算用 [S/m]"
+        },
+        {
+          "cli": "--vol",
+          "name": "vol",
+          "default": "",
+          "help": "Workpiece .vol file (omit for vacuum L only)",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+        },
+        {
+          "cli": "--wp-label",
+          "name": "wp_label",
+          "default": "sibc",
+          "help": "Workpiece label (volume material OR sideset)",
+          "ja": "WP 境界ラベル",
+          "physics": ""
+        },
+        {
+          "cli": "--sigma",
+          "name": "sigma",
+          "type": "float",
+          "default": 0.0,
+          "help": "Workpiece conductivity [S/m] (REQUIRED if --vol)",
+          "ja": "導電率",
+          "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
+        },
+        {
+          "cli": "--mu-r",
+          "name": "mu_r",
+          "type": "float",
+          "default": 1.0,
+          "help": "Workpiece relative permeability",
+          "ja": "比透磁率",
+          "physics": "mu = mu_0 * mu_r"
+        },
+        {
+          "cli": "--half-thickness",
+          "name": "half_thickness",
+          "type": "float",
+          "default": 0.01,
+          "help": "ESIM half-thickness [m] (unused in linear)",
+          "ja": "半厚さ",
+          "physics": "ESIM 厚さ [m]"
+        },
+        {
+          "cli": "--bh-file",
+          "name": "bh_file",
+          "default": "",
+          "help": "ESIM BH table (WIP)",
+          "ja": "BH カーブファイル",
+          "physics": "2列: H[A/m] B[T]"
+        },
+        {
+          "cli": "--impedance-model",
+          "name": "impedance_model",
+          "default": "sibc",
+          "choices": [
+            "sibc",
+            "esim"
+          ],
+          "help": "sibc: linear Dowell.  esim: WIP.",
+          "ja": "インピーダンスモデル",
+          "physics": "esim/dowell/sibc"
+        },
+        {
+          "cli": "--esim-max-iter",
+          "name": "esim_max_iter",
+          "type": "int",
+          "default": 15
+        },
+        {
+          "cli": "--esim-tol",
+          "name": "esim_tol",
+          "type": "float",
+          "default": 0.001
+        },
+        {
+          "cli": "--h1-order",
+          "name": "h1_order",
+          "type": "int",
+          "default": 1,
+          "help": "H1 order (1 only)",
+          "ja": "H1 次数",
+          "physics": ""
+        },
+        {
+          "cli": "--wp-bem-backend",
+          "name": "wp_bem_backend",
+          "default": "hacapk",
+          "choices": [
+            "hacapk",
+            "intree-dense"
+          ]
+        },
+        {
+          "cli": "--wp-aca-eps",
+          "name": "wp_aca_eps",
+          "type": "float",
+          "default": 1e-10
+        },
+        {
+          "cli": "--wp-gmres-tol",
+          "name": "wp_gmres_tol",
+          "type": "float",
+          "default": 1e-10
         },
         {
           "cli": "--frequency",
@@ -52,76 +227,53 @@
           "physics": "ソース電流 [A]。J = I / A_cross で電流密度に変換"
         },
         {
-          "cli": "--coil-sigma",
-          "name": "coil_sigma",
-          "type": "float",
-          "default": 58000000.0,
-          "help": "Coil conductivity [S/m]",
-          "ja": "コイル導電率",
-          "physics": "コイル抵抗計算用 [S/m]"
-        },
-        {
-          "cli": "--vol",
-          "name": "vol",
-          "required": true,
-          "help": ".vol file containing workpiece mesh",
-          "ja": ".vol メッシュファイル",
-          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
-        },
-        {
-          "cli": "--wp-label",
-          "name": "wp_label",
-          "default": "sibc",
-          "help": "Workpiece label: volume material name OR boundary sideset label (wp-as-hole + sibc)",
-          "ja": "WP 境界ラベル",
-          "physics": ""
-        },
-        {
-          "cli": "--sigma",
-          "name": "sigma",
-          "type": "float",
-          "required": true,
-          "help": "Workpiece conductivity [S/m]",
-          "ja": "導電率",
-          "physics": "材料の電気伝導率。銅: 5.8e7, 鉄: 2e6 [S/m]"
-        },
-        {
-          "cli": "--half-thickness",
-          "name": "half_thickness",
-          "type": "float",
-          "default": 0.01,
-          "help": "Half-thickness for ESIM (unused in linear)",
-          "ja": "半厚さ",
-          "physics": "ESIM 厚さ [m]"
-        },
-        {
-          "cli": "--mu-r",
-          "name": "mu_r",
-          "type": "float",
-          "default": 1.0,
-          "help": "Workpiece relative permeability",
-          "ja": "比透磁率",
-          "physics": "mu = mu_0 * mu_r"
-        },
-        {
-          "cli": "--impedance-model",
-          "name": "impedance_model",
-          "default": "sibc",
+          "cli": "--coupling-mode",
+          "name": "coupling_mode",
+          "default": "weak",
           "choices": [
-            "sibc"
+            "weak"
           ],
-          "help": "linear SIBC only (ESIM not supported in 1-way)",
-          "ja": "インピーダンスモデル",
-          "physics": "esim/dowell/sibc"
+          "help": "weak: back-reacted Telegen ΔL (only mode)"
         },
         {
-          "cli": "--h1-order",
-          "name": "h1_order",
+          "cli": "--telegen-form",
+          "name": "telegen_form",
+          "default": "phi-B",
+          "choices": [
+            "phi-B"
+          ],
+          "help": "Telegen form (only phi.B currently)"
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": "",
+          "help": "Workpiece .msh viz output path",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
+        },
+        {
+          "cli": "--coil-msh-output",
+          "name": "coil_msh_output",
+          "default": "",
+          "help": "Coil .msh viz output path (future, no-op)"
+        },
+        {
+          "cli": "--write-summary",
+          "name": "write_summary",
+          "help": "Add extra diagnostics in JSON"
+        },
+        {
+          "cli": "--coil-only",
+          "name": "coil_only",
+          "help": "Skip workpiece even if --vol given"
+        },
+        {
+          "cli": "--n-threads",
+          "name": "n_threads",
           "type": "int",
-          "default": 1,
-          "help": "H1 polynomial order for BEM",
-          "ja": "H1 次数",
-          "physics": ""
+          "default": 0,
+          "help": "0 = auto (TaskManager)"
         }
       ]
     },
@@ -208,10 +360,45 @@
             "pardiso",
             "bddc",
             "iccg",
-            "ams"
+            "ams",
+            "shifted_ams"
           ],
           "ja": "線形ソルバー",
           "physics": "pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR"
+        },
+        {
+          "cli": "--impedance-model",
+          "name": "impedance_model",
+          "default": "sibc",
+          "choices": [
+            "sibc",
+            "esim"
+          ],
+          "help": "sibc: linear Dowell (production). esim: Karl iteration (WIP, raises).",
+          "ja": "インピーダンスモデル",
+          "physics": "esim/dowell/sibc"
+        },
+        {
+          "cli": "--bh-file",
+          "name": "bh_file",
+          "default": "",
+          "help": "BH table for ESIM (WIP).",
+          "ja": "BH カーブファイル",
+          "physics": "2列: H[A/m] B[T]"
+        },
+        {
+          "cli": "--esim-max-iter",
+          "name": "esim_max_iter",
+          "type": "int",
+          "default": 15,
+          "help": "ESIM Karl iteration max (WIP)."
+        },
+        {
+          "cli": "--esim-tol",
+          "name": "esim_tol",
+          "type": "float",
+          "default": 0.001,
+          "help": "ESIM Karl iteration tol (WIP)."
         },
         {
           "cli": "--sibc-bnd",
@@ -232,6 +419,14 @@
           "cli": "--coil-mat",
           "name": "coil_mat",
           "default": "coil"
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": "",
+          "help": "Optional GMSH .msh output path. When set, the .vol mesh is converted to .msh after solve so the panel's OpenGmsh button can view the geometry.",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
         }
       ]
     },
@@ -301,12 +496,12 @@
           "physics": ""
         },
         {
-          "cli": "--cub5",
-          "name": "cub5",
+          "cli": "--vol",
+          "name": "vol",
           "default": "",
-          "help": "Cubit .cub5 file",
-          "ja": "Cubit モデル",
-          "physics": ".cub5 ファイル (メッシュ生成に Cubit 必要)"
+          "help": "Netgen .vol file (sole interface between Cubit and NGSolve per Cubit/NGSolve separation policy -- this script no longer accepts .cub5)",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
         },
         {
           "cli": "--formulation",
@@ -319,15 +514,6 @@
           "help": "omega = scalar H1, a = vector HCurl",
           "ja": "定式化",
           "physics": "omega=スカラーH1, a=ベクトルHCurl"
-        },
-        {
-          "cli": "--order",
-          "name": "order",
-          "type": "int",
-          "default": 2,
-          "help": "Curve order (1-3)",
-          "ja": "曲線次数",
-          "physics": "メッシュ高次要素次数 (1-5)"
         },
         {
           "cli": "--fes-order",
@@ -431,12 +617,12 @@
           "physics": ""
         },
         {
-          "cli": "--cub5",
-          "name": "cub5",
+          "cli": "--vol",
+          "name": "vol",
           "default": "",
-          "help": "Cubit .cub5 file",
-          "ja": "Cubit モデル",
-          "physics": ".cub5 ファイル (メッシュ生成に Cubit 必要)"
+          "help": "Netgen .vol file with a 'yoke' material (sole interface between Cubit and NGSolve; this script no longer accepts .cub5)",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
         },
         {
           "cli": "--ima",
@@ -486,15 +672,6 @@
           "help": "Under-relaxation (0=full step)",
           "ja": "緩和係数",
           "physics": "0=フルステップ, 0.3=30%減衰"
-        },
-        {
-          "cli": "--unit-scale",
-          "name": "unit_scale",
-          "type": "float",
-          "default": 0.001,
-          "help": "Cubit coordinate scale (0.001=mm->m)",
-          "ja": "座標スケール",
-          "physics": ""
         },
         {
           "cli": "--msh-output",
