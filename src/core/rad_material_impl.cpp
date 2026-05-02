@@ -3428,7 +3428,78 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 		double res_final_norm = sqrt(res_final.x*res_final.x + res_final.y*res_final.y + res_final.z*res_final.z);
 		if(res_final_norm > best_res * 1.01)
 		{
-			Forward(B_best);  // restore best state
+			Forward(B_best);
+			B = B_best;
+		}
+	}
+
+	// Local bisection fallback: when Newton stalled at residual > 1 A/m,
+	// bisect WITHIN A SMALL NEIGHBORHOOD of B_best along H_target direction.
+	//
+	// Bug fix 2026-05-02: post-saturation descending states with B-input
+	// Play data have piecewise-constant dH/dB (jumps when Play operators
+	// engage/disengage). Newton stalls at residuals O(1-100) A/m because
+	// the linearization breaks down at cusps. Forward(B) is monotone
+	// locally near B_best (Newton already found the right neighborhood),
+	// so a small-range bracket-and-bisect along H_target converges to the
+	// true root without disturbing the branch selection.
+	if(H_target_mag > 1e-20)
+	{
+		TVector3d H_at = Forward(B);
+		TVector3d res_now(H_at.x - H_target.x, H_at.y - H_target.y, H_at.z - H_target.z);
+		double res_now_norm = sqrt(res_now.x*res_now.x + res_now.y*res_now.y + res_now.z*res_now.z);
+		if(res_now_norm > 0.01)   // tighten threshold (was 1.0; missed sub-A/m residuals)
+		{
+			double inv_Hmag = 1.0 / H_target_mag;
+			TVector3d uH(H_target.x * inv_Hmag, H_target.y * inv_Hmag, H_target.z * inv_Hmag);
+
+			// Center s on the projection of current B onto H direction
+			double s_center = B.x * uH.x + B.y * uH.y + B.z * uH.z;
+			double Brange = 0.30 * B_max;   // stay LOCAL — preserve Newton's branch
+
+			// Bracket: scan s in [s_center - Brange, s_center + Brange]
+			int n_scan = 21;
+			TVector3d B_probe;
+			double s_prev = s_center - Brange;
+			B_probe.x = s_prev * uH.x; B_probe.y = s_prev * uH.y; B_probe.z = s_prev * uH.z;
+			TVector3d H_probe = Forward(B_probe);
+			double F_prev = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
+			double s_lo = s_prev, F_lo = F_prev;
+			double s_hi = s_lo, F_hi = F_lo;
+			bool bracketed = false;
+			for(int i = 1; i < n_scan; i++)
+			{
+				double s_curr = (s_center - Brange) + (2*Brange) * i / (n_scan - 1);
+				if(fabs(s_curr) > B_max) continue;
+				B_probe.x = s_curr * uH.x; B_probe.y = s_curr * uH.y; B_probe.z = s_curr * uH.z;
+				H_probe = Forward(B_probe);
+				double F_curr = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
+				if(F_prev * F_curr <= 0.0)
+				{
+					s_lo = s_prev; F_lo = F_prev;
+					s_hi = s_curr; F_hi = F_curr;
+					bracketed = true;
+					break;
+				}
+				s_prev = s_curr; F_prev = F_curr;
+			}
+
+			if(bracketed)
+			{
+				for(int it = 0; it < 50; it++)
+				{
+					double s_mid = 0.5 * (s_lo + s_hi);
+					B_probe.x = s_mid * uH.x; B_probe.y = s_mid * uH.y; B_probe.z = s_mid * uH.z;
+					H_probe = Forward(B_probe);
+					double F_mid = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
+					if(fabs(F_mid) < 1e-10) break;
+					if(F_lo * F_mid < 0) { s_hi = s_mid; F_hi = F_mid; }
+					else                  { s_lo = s_mid; F_lo = F_mid; }
+				}
+				double s_final = 0.5 * (s_lo + s_hi);
+				B.x = s_final * uH.x; B.y = s_final * uH.y; B.z = s_final * uH.z;
+				Forward(B);   // populate m_pk_current, m_last_B
+			}
 		}
 	}
 
