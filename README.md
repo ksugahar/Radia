@@ -291,18 +291,24 @@ cubit-plugin-install
 
 ### Standalone GUI Panels (no Cubit required)
 
-The `pip install radia` install registers three console entry points
+The `pip install radia[gui]` install registers four console entry points
 that open the analysis panels as standalone PySide6 applications.
 **Cubit is not needed** — bring your own `.vol` mesh (from Cubit, from
 Netgen standalone via NGSolve OCC, or any other source that can write
 the Netgen `.vol` text format) and the panels run end-to-end:
 
 ```bash
-radia-em [model.vol]      # Electromagnet: Omega / A-Phi / MSC / Kelvin Benchmark
-radia-ih [model.vol]      # Induction Heating: PEEC-IND / PEEC+BEM /
+radia-em   [model.vol]    # Electromagnet: Omega / A-Phi / MSC / Kelvin Benchmark
+radia-ih   [model.vol]    # Induction Heating: PEEC inductance / BEM-A inductance /
+                          #                    PEEC+BEM weak / BEM-A+BEM weak /
                           #                    PEEC+FEM-Kelvin / FEM-FULL
 radia-pcb                 # PCB / FastHenry .inp (no .vol needed)
+radia-heat [results.vol]  # Thermal post-processing (q_surf -> T field)
 ```
+
+`radia[gui]` extras (or `radia[cubit,gui]`) installs PySide6, which the
+panels need.  `pip install radia` alone gives you the C++ core + Python
+API + `calc_*.py` CLIs, but no panel windows.
 
 Pass the `.vol` path on the command line to open the panel pre-pointed
 at it, or omit the argument and use the in-panel `Model (.vol):
