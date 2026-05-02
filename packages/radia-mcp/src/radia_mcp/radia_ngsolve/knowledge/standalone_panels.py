@@ -31,30 +31,37 @@ Topics: quick_start, four_panels, vol_sources, vs_cubit, ih_methods,
         troubleshooting
 
 ============================================================
-## quick_start — Kubota recipe: run radia-ih on an existing .vol (no Cubit)
+## quick_start — Kubota recipe: 100% Cubit-free panel launch
 ============================================================
 
-End-to-end recipe for a lab member (e.g. Kubota) who has a `.vol`
-mesh and wants to compute IH coil + workpiece quantities without
-opening Cubit:
+End-to-end recipe for a lab member (e.g. Kubota) who wants to run an
+analysis panel **without Cubit installed at all** — no Coreform Cubit
+licence, no `cubit-plugin-install`, no Cubit process running in the
+background.  Cubit literally does not appear anywhere in this flow.
 
 ```cmd
-:: 1. install (one-time per machine, machine-wide on 100号機).
-::    [cubit,gui] extras pull cubit-mesh-export AND PySide6.
-::    [gui] alone is enough if you don't need the Cubit plugin.
-pip install --upgrade "radia[cubit,gui]==4.25.1" radia-mcp==0.36.7
+:: 1. install — `[gui]` extras only.  Note: NOT `[cubit,gui]`.
+::    `[cubit]` would pull cubit-mesh-export which only matters if
+::    you ALSO want the in-Cubit Solve menu launcher.  For a
+::    Cubit-free workflow, `[gui]` alone is enough.
+pip install --upgrade "radia[gui]==4.25.1" radia-mcp==0.37.0
 
 :: 2. confirm the four .exe launchers are on PATH.
 where radia-ih radia-em radia-pcb radia-heat
 
 :: 3. launch the IH panel pre-pointed at your .vol.
-::    No Cubit process needed; the panel pops up directly.
+::    The panel pops up directly as a desktop app.
 radia-ih C:\\path\\to\\model.vol
 
 :: (optional) launch with no argument and use the in-panel
 ::            "Model (.vol):  [Browse...]" field instead.
 radia-ih
 ```
+
+Where does `model.vol` come from?  See the `vol_sources` topic — the
+short answer is **NGSolve OCC standalone** (Python-only, no Cubit
+licence; takes a STEP file in, writes a `.vol` out).  Once the `.vol`
+exists, steps 2 and 3 above are the entire panel workflow.
 
 Inside the IH panel:
 
@@ -92,52 +99,110 @@ clicks **Run** that process spawns a Layer 4 `calc_*.py`
 subprocess.  Cubit is not in either chain.
 
 ============================================================
-## vol_sources — where .vol files come from
+## vol_sources — generate .vol without Cubit
 ============================================================
 
 The standalone panels accept any Netgen `.vol` (text format) that
-declares the labels each method expects.  Source choices, in order
-of typical lab use:
+declares the labels each method expects.  For a **fully Cubit-free**
+pipeline (no licence, no plugin, no Cubit process), use NGSolve OCC
+or build123d directly.
 
-1. **Coreform Cubit** — `radia_export netgen "model.vol" order N`
-   (the production source for accelerator magnets and most IH
-   workpieces).  Requires Cubit licence + the radia plugin.
-2. **NGSolve OCC standalone** — `OCCGeometry("model.step")` →
-   `geo.GenerateMesh(maxh=...)` → `mesh.ngmesh.Save("model.vol")`.
-   No Cubit licence; pure Python; meshes a STEP file from build123d
-   / Onshape / FreeCAD / etc.  See `examples/` for templates.
-3. **build123d → STEP → NGSolve** — the BEM-A test fixtures
-   (`tests/bem/fixtures/`) use build123d to generate STEP +
-   `OCCGeometry(...).GenerateMesh(...)` to produce `.vol`.
-4. **Existing `.vol` from a colleague** — Kubota receives a `.vol`
-   over the W: NAS share or by email; just pass it to the launcher.
+### NGSolve OCC standalone (recommended Cubit-free path)
+
+Pure Python, ships with `pip install ngsolve` (already a transitive
+dependency of `radia[gui]`).  Reads a STEP, attaches face names for
+the panel-required labels, writes a `.vol`:
+
+```python
+# make_vol_ih.py  --  example: IH workpiece with sibc sideset.
+from netgen.occ import OCCGeometry
+from netgen.meshing import MeshingParameters
+
+geo = OCCGeometry("workpiece.step")
+shape = geo.shape
+
+# Tag faces.  Panel methods read these as boundary labels.
+# For PEEC + BEM weak (radia-ih) the workpiece needs `sibc` on its
+# whole outer surface.
+for f in shape.faces:
+    f.name = "sibc"
+
+# Volumetric label (becomes the .vol material).
+shape.solids.first.name = "workpiece"
+
+ngmesh = OCCGeometry(shape).GenerateMesh(
+    mp=MeshingParameters(maxh=0.005, curvaturesafety=1.0))
+ngmesh.Save("workpiece.vol")
+print("wrote workpiece.vol")
+```
+
+For FEM A-V full mode, the coil also needs `coil` / `source` / `sink`
+labels — see `examples/induction_heating/` for templates.
+
+### build123d → STEP → NGSolve OCC
+
+For programmatic geometry (parametric coils, parametric workpieces),
+build geometry in build123d, write STEP, mesh via NGSolve OCC.  See
+`tests/bem/fixtures/make_gapped_torus_2port.py` for a working
+example used by the BEM-A tests.
+
+### From a colleague over W:\\ / e-mail
+
+If a `.vol` already exists (NAS share, attachment, etc.) just pass
+its path to the launcher.  Cubit's authorship of the `.vol` is
+irrelevant — once written, a `.vol` is a plain text file the panel
+reads directly.
+
+### `.vol` label requirements per panel method
 
 The `.vol` is text and can be inspected with any editor; the
 required label sets are documented per-method in the panel's
-`check_method_requirements()` (e.g. for FEM A-V the `.vol` must
-have `coil` / `source` / `sink` / `sibc` / `kelvin` labels).
+`check_method_requirements()`:
+
+| Panel method                          | Required volume materials | Required boundaries          |
+|---------------------------------------|---------------------------|-------------------------------|
+| PEEC inductance (vacuum)              | none                      | none                          |
+| BEM-A inductance (vacuum)             | none                      | none                          |
+| PEEC + BEM weak coupling              | none                      | `sibc`                        |
+| BEM-A + BEM weak coupling             | none                      | `sibc`                        |
+| PEEC coil + FEM Kelvin                | `kelvin`                  | `sibc`                        |
+| FEM A-V full                          | `coil`, `kelvin`          | `source`, `sink`, `sibc`      |
+
+Tip: launch the panel first with no `.vol`, pick the method, then
+read the status line under the Method dropdown — it lists exactly
+which labels are missing or present in your `.vol`.
 
 ============================================================
-## vs_cubit — standalone launcher vs Cubit Solve menu
+## vs_cubit — when (if ever) you need Cubit
 ============================================================
 
-The Cubit launcher (`Solve -> Radia-NGSolve` inside Coreform Cubit)
-and the standalone .exe entry-points run the **same Layer 3 panel
-window** and the **same Layer 4 calc_*.py subprocess**.  The only
-real difference is what is exposed BEFORE the panel opens:
+The standalone .exe launchers (`radia-ih` / `radia-em` / `radia-pcb`
+/ `radia-heat`) are the **default and only path** that this knowledge
+module documents.  Cubit is mentioned here only to clarify what is
+NOT needed:
 
-|                                            | Cubit Solve menu | Standalone `.exe` |
-|--------------------------------------------|------------------|-------------------|
-| Run a .jou file → mesh → `.vol` in one go | Yes              | No                |
-| Run an analysis on an existing `.vol`     | Yes              | Yes               |
-| Cubit licence required                     | Yes              | No                |
-| Mesh inspection in 3D                      | Yes (Cubit GUI)  | No (use GMSH)     |
-| `.vol` label edit / fix                    | Yes (re-export)  | No (text edit)    |
+* **Cubit licence** — not needed for the standalone launchers.
+* **`cubit-plugin-install`** — not needed.  Skip it entirely on a
+  Cubit-free machine.
+* **A running Cubit process** — never started.  The standalone
+  panels are top-level PySide6 desktop apps.
+* **`[cubit]` extras in pip install** — not needed; use `[gui]`
+  alone.  `[cubit,gui]` only adds value for users who also want the
+  in-Cubit Solve-menu launcher.
 
-For pure analysis ("I have the `.vol`, run the panel"), the two
-launchers are equivalent.  The Cubit launcher's added value is the
-mesh-generation pipeline (`.jou` → Cubit batch → `radia_export
-netgen` → `.vol`).
+A separate launch path exists inside Coreform Cubit (`Solve ->
+Radia-NGSolve`) for users who already use Cubit for mesh generation
+and prefer to stay inside Cubit's GUI.  That path is documented in
+`cubit_plugin_layers` (different topic, different audience).  For
+the Kubota-style "open my .vol, run the analysis, close the window"
+workflow this knowledge module is concerned with, no Cubit-side
+component is involved.
+
+Practical implication: the standalone-panel install on a developer
+laptop / non-Cubit lab seat is a single `pip install` line
+(`radia[gui]==X.Y.Z`) plus whatever generates the `.vol` (NGSolve
+OCC standalone — see `vol_sources`).  Total install state: a
+Python interpreter + the radia wheel + PySide6.
 
 ============================================================
 ## ih_methods — 6 IH methods on radia-ih (with/without workpiece)
