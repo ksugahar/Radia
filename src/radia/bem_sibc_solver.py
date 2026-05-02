@@ -721,6 +721,156 @@ class ScalarBIESIBCSolver:
             'gmres_info': int(info),
         }
 
+    # ------------------------------------------------------------------
+    # 2-port driven solve (DELETED 2026-05-02): see solve_port_jump
+    # ------------------------------------------------------------------
+    # An earlier attempt (2026-05-02) implemented `solve_port` /
+    # `solve_port_hacapk` with naive Dirichlet phi=V_source on src cap and
+    # phi=0 on sink cap.  The implementation was numerically self-
+    # consistent (dense LU vs HACApK GMRES agreed to 1e-12) but PHYSICALLY
+    # BROKEN: on a closed conductor surface the exterior is simply
+    # connected (for ball-topology bodies), so Ampere's law forces
+    # enclosed current = 0 around any exterior loop.  The Dirichlet
+    # voltage doesn't correspond to an EE port voltage in this framework.
+    # The smoke test on a Cu rod gave KCL violation 89% and negative R.
+    #
+    # Replaced by `solve_port_jump`: closed-loop coil with cut-surface
+    # jump constraint psi_src - psi_snk = I (current source driven), L/R
+    # via Telegen energy/dissipation post-processing.  See Phase A series
+    # in the implementation log for details.
+    # ------------------------------------------------------------------
+
+    def _identify_port_dofs(self, source_label, sink_label):
+        """Identify body / source / sink surface DOF indices from BND labels.
+
+        For the cut-surface (jump) port formulation, we treat the source
+        and sink BND labels as the two "lips" of the topological cut.
+        Returns dict with int64 arrays:
+          'source_idx', 'sink_idx', 'body_idx', 'surface_idx'.
+        Body = surface - source - sink.  Source and sink must be
+        DISJOINT at the node level (caps must be geometrically separate).
+        """
+        from ngsolve import BND
+        bnd_labels = list(self.mesh.GetBoundaries())
+
+        src_label_indices = {i for i, n in enumerate(bnd_labels)
+                             if n == source_label}
+        snk_label_indices = {i for i, n in enumerate(bnd_labels)
+                             if n == sink_label}
+        if not src_label_indices:
+            raise ValueError(
+                f"port: source BND label {source_label!r} not found; "
+                f"available: {bnd_labels}")
+        if not snk_label_indices:
+            raise ValueError(
+                f"port: sink BND label {sink_label!r} not found; "
+                f"available: {bnd_labels}")
+        if src_label_indices & snk_label_indices:
+            raise ValueError(
+                f"port: source and sink labels resolve to the same BND "
+                f"index — labels must be distinct.")
+
+        src_set, snk_set, surf_set = set(), set(), set()
+        for el in self.mesh.Elements(BND):
+            for v in el.vertices:
+                surf_set.add(v.nr)
+                if el.index in src_label_indices:
+                    src_set.add(v.nr)
+                elif el.index in snk_label_indices:
+                    snk_set.add(v.nr)
+
+        overlap = src_set & snk_set
+        if overlap:
+            raise ValueError(
+                f"port: {len(overlap)} vertices belong to BOTH source "
+                f"and sink labels — port caps must be geometrically "
+                f"disconnected.")
+
+        body_set = surf_set - src_set - snk_set
+
+        return {
+            'source_idx': np.array(sorted(src_set), dtype=np.int64),
+            'sink_idx': np.array(sorted(snk_set), dtype=np.int64),
+            'body_idx': np.array(sorted(body_set), dtype=np.int64),
+            'surface_idx': np.array(sorted(surf_set), dtype=np.int64),
+        }
+
+
+def telegen_extract_coil_LR(solver, phi_vec, current, omega, Z_s):
+    """Telegen extraction of self-inductance L and resistance R for a
+    closed-loop coil driven by a cut-surface BEM-SIBC solve.
+
+    Inputs:
+        solver  : ScalarBIESIBCSolver, with M and K already assembled.
+        phi_vec : complex ndarray (ndof,) -- TOTAL psi on the coil
+                  surface (= phi_inc + phi_response from solver.solve()).
+        current : complex scalar -- prescribed coil current I [A]
+                  (the current carried by the topological cut filament
+                  used to build phi_inc).
+        omega   : angular frequency [rad/s].
+        Z_s     : surface impedance (complex scalar) -- the same value
+                  used for the BEM-SIBC solve.
+
+    Method:
+        Time-averaged magnetic energy stored in the exterior::
+
+            <W_mag> = (mu_0 / 4) * integral_(ext) |H|^2 dV
+                    = -(mu_0 / 4) * Re(psi^H M q)        (Green's id.)
+
+        Power dissipated in the body skin layer (Leontovich SIBC)::
+
+            P_diss = (1/2) Re(Z_s) * (psi^H K psi)
+
+        Self-inductance::
+
+            L = 4 <W_mag> / |I|^2 = -mu_0 * Re(psi^H M q) / |I|^2
+
+        Series resistance::
+
+            R = P_diss / |I_rms|^2 = P_diss / (|I|^2 / 2) = 2 P_diss / |I|^2
+
+        (using the convention that ``current`` is the peak phasor
+        amplitude.)  Z = R + j omega L.
+
+    The companion ``q`` vector is reconstructed via the workpiece-flow
+    Robin closure ``q = gamma * M^-1 K psi`` where
+    ``gamma = Z_s / (j omega mu_0)``.
+
+    Returns:
+        dict with R_port, L_port, Z_port, W_mag, P_diss, plus the raw
+        bilinear-form diagnostics.
+    """
+    if abs(current) < 1e-30:
+        raise ValueError(
+            "telegen_extract_coil_LR: prescribed current is zero")
+    I2 = abs(current) ** 2
+
+    gamma = (Z_s / (1j * omega * MU_0)
+             if (omega > 0 and Z_s != 0) else 0+0j)
+    q = gamma * (solver.M_inv @ (solver.K @ phi_vec))
+
+    Mq = solver.M @ q
+    psi_H_M_q = np.vdot(phi_vec, Mq)   # complex
+    W_mag = -0.25 * MU_0 * psi_H_M_q.real
+    L = -MU_0 * psi_H_M_q.real / I2
+
+    Kpsi = solver.K @ phi_vec
+    psi_H_K_psi = np.vdot(phi_vec, Kpsi).real
+    P_diss = 0.5 * Z_s.real * psi_H_K_psi
+    R = 2.0 * P_diss / I2
+
+    Z = R + 1j * omega * L
+    return {
+        'R_port': float(R),
+        'L_port': float(L),
+        'Z_port': complex(Z),
+        'W_mag': float(W_mag),
+        'P_diss': float(P_diss),
+        'psi_H_M_q': complex(psi_H_M_q),
+        'psi_H_K_psi': float(psi_H_K_psi),
+        'gamma': complex(gamma),
+    }
+
 
 
 def compute_phi_inc_from_loop(obs_points, loop_center, loop_radius, current,

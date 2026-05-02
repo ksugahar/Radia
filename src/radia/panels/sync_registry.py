@@ -124,12 +124,12 @@ PARAM_JA = {
 
 # Panel definitions: script -> panel metadata
 PANELS = {
-    "peec_bem": {
-        "script": "calc_peec_bem.py",
-        "function": "solve_peec_bem_forward",
-        "ja_name": "PEEC+BEM 1-way (IH)",
-        "ja_description": "STEP コイル → PEEC filament → 表面 BEM-SIBC で wp 発熱 P_wp を算出。1-way forward (back-reaction なし)。",
-        "method": "PEEC filament bundle + Scalar BIE + SIBC Robin on wp",
+    "inductance": {
+        "script": "calc_inductance.py",
+        "function": "run_inductance",
+        "ja_name": "Inductance (vacuum + weak-coupled BEM-SIBC)",
+        "ja_description": "コイル STEP -> L_coil (vacuum) または L_coil + ΔL (weak-coupled).  --coil-solver peec | bem-a で切替。--vol 指定で workpiece 弱結合 (Telegen φ・B back-reaction)。",
+        "method": "PEEC perimeter filaments OR BEM-A Weggler EFIE saddle (RWG); workpiece scalar BIE + SIBC Robin",
         "command_builder": "radia_ih.py:IHPanel._build_peec_bem_command",
     },
     "fem_coilmesh": {

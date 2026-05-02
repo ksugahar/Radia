@@ -442,6 +442,18 @@ def _filaments_from_circle_edges_per_station(solid,
     4.14.0; for tapered / varying circular cross-sections (some IH coil
     designs) this respects the actual local radius.
 
+    Spine policy (2026-05-02 unified):
+      * PRIMARY: ``coil_topology.extract_coil_topology`` +
+        ``generate_spine`` -- OPEN/CLOSED-aware.  CLOSED full torus
+        (no caps) gets a full 360deg spine; OPEN gapped torus gets
+        cap_a -> cap_b along the LONG arc.  R_spine is refined from
+        the actual mean of the cross-section centroids around the
+        rotation axis (more accurate than the bbox 0.85 fallback).
+      * FALLBACK: legacy ``_chain_centroids_nn_index`` on the dedupd
+        circle centroids.  Used only when topology extraction fails.
+        NN-chain handles OPEN reliably (endpoint score detects caps)
+        but NOT CLOSED full torus (no endpoints -> ~half-loop only).
+
     Returns ``None`` (caller falls through to the constant equivalent-
     circle path) when the solid does not have a clean population of
     consistent-radius circle edges.
@@ -494,13 +506,79 @@ def _filaments_from_circle_edges_per_station(solid,
     if len(kept) < 5:
         return None
 
-    # Chain by center via NN + tangent continuity.
     centers_cad = np.array([d["center"] for d in kept])
-    perm = _chain_centroids_nn_index(centers_cad)
-    ordered = [kept[i] for i in perm]
+    radii_cad_kept = np.array([d["radius"] for d in kept])
 
-    centroids_m = centers_cad[perm] / cad_units_per_meter
-    radii_m = np.array([d["radius"] for d in ordered]) / cad_units_per_meter
+    # Multi-turn helix guard: ``coil_topology`` builds a single planar
+    # arc spine in the rotation-axis (= z) plane.  For a 3turnCoil-class
+    # helix the actual conductor spans multiple turns at different
+    # z-levels, so the planar topology spine is geometrically wrong --
+    # nearest-neighbour mapping would still produce a single-turn loop
+    # at z = 0 with the right cross-section radius (collapsing 3 turns
+    # to 1 -- L drops by a factor ~6).  Detect via z-extent of the
+    # consistent cross-section centroids: a single-turn coil has
+    # z_extent <= cross-section radius; a multi-turn helix has
+    # z_extent >> cross-section radius.
+    z_extent = float(centers_cad[:, 2].max() - centers_cad[:, 2].min())
+    is_multi_turn_helix = (z_extent > 2.0 * median_r)
+
+    # PRIMARY: unified topology spine (OPEN/CLOSED-aware) for single-
+    # turn coils.  Multi-turn helix uses the legacy NN-chain (tangent
+    # continuity correctly walks the spiral).
+    centroids_m = None
+    radii_m = None
+    if not is_multi_turn_helix:
+        try:
+            from radia.coil_topology import (
+                extract_coil_topology as _extract_topo,
+                generate_spine as _gen_spine,
+                CoilTopology as _CoilTopology,
+            )
+            topo = _extract_topo(solid)
+            # Refine R_spine from the actual cross-section centroid
+            # distance to the rotation axis (axis = z).  The bbox-based
+            # 0.85 * R_outer fallback in coil_topology is conservative;
+            # using the mean of the cross-section centroid radii is exact
+            # for a well-behaved swept geometry.
+            R_spine_refined_cad = float(np.mean(
+                np.linalg.norm(centers_cad[:, :2], axis=1)))
+            topo_refined = _CoilTopology(
+                is_open=topo.is_open,
+                cap_a=topo.cap_a, cap_b=topo.cap_b,
+                theta_a=topo.theta_a, theta_b=topo.theta_b,
+                sweep_deg=topo.sweep_deg,
+                axis=topo.axis,
+                R_spine=R_spine_refined_cad,
+                cross_section_kind=topo.cross_section_kind,
+            )
+            # Use at least as many spine stations as we have circle
+            # cross-sections in the original geometry; cap to a sensible
+            # upper bound so dense 3turncoil-class coils don't blow up.
+            n_stations = max(20, len(kept))
+            n_stations = min(n_stations, 200)
+            spine_cad = _gen_spine(topo_refined, n_stations)
+            # Map each spine station to its nearest circle-edge centroid
+            # to recover the per-station radius.  For constant-radius
+            # geometry this is identical to a uniform median; for tapered
+            # geometry this respects the local radius.
+            radii_at_stations_cad = np.zeros(n_stations, dtype=np.float64)
+            for i in range(n_stations):
+                d2 = np.sum((centers_cad - spine_cad[i]) ** 2, axis=1)
+                radii_at_stations_cad[i] = radii_cad_kept[int(np.argmin(d2))]
+            centroids_m = spine_cad / cad_units_per_meter
+            radii_m = radii_at_stations_cad / cad_units_per_meter
+        except Exception:
+            centroids_m = None
+            radii_m = None
+
+    if centroids_m is None:
+        # FALLBACK: legacy NN-chain on circle centroids.  Works for
+        # OPEN coils (endpoint score finds caps) but on CLOSED full
+        # torus (no endpoints) traces only ~half the loop.
+        perm = _chain_centroids_nn_index(centers_cad)
+        ordered = [kept[i] for i in perm]
+        centroids_m = centers_cad[perm] / cad_units_per_meter
+        radii_m = np.array([d["radius"] for d in ordered]) / cad_units_per_meter
 
     # Parallel-transport frame on the chained centerline.  By
     # construction of the loft, each cross-section's normal is along
@@ -509,7 +587,7 @@ def _filaments_from_circle_edges_per_station(solid,
     # filaments around each station's circle.
     _, u_hat, v_hat = _parallel_transport_frame(centroids_m)
 
-    n_path = len(ordered)
+    n_path = len(centroids_m)
     theta = 2.0 * np.pi * (np.arange(n_peri) + 0.5) / float(n_peri)
     cos_t = np.cos(theta)
     sin_t = np.sin(theta)
@@ -997,6 +1075,81 @@ def _centerline_from_revolution_sweep(solid, n_segments: int,
 _centerline_from_torus_sweep = _centerline_from_revolution_sweep
 
 
+def _centerline_from_topology_spine(solid, n_segments: int,
+                                     cad_units_per_meter: float):
+    """OPEN/CLOSED-aware spine via ``coil_topology`` + sectioning for w/h.
+
+    Used when ``_centerline_from_revolution_sweep`` raises (typically
+    "no PLANE end-cap faces" on a CLOSED full revolution): the
+    unified ``coil_topology.extract_coil_topology`` returns a
+    correct ``CoilTopology`` for both OPEN and CLOSED coils, and
+    ``generate_spine`` produces the correct spine arc (full 360deg
+    for CLOSED, cap-aware long arc for OPEN).  Cross-section
+    width/height come from a single sectioning at the spine midpoint
+    -- equivalent-square side from the section area.
+
+    Raises ``ValueError`` if topology extraction fails or sectioning
+    at the midpoint produces no face.  Caller should then fall
+    through to ``_centerline_from_open_spine`` (longest-open-edge
+    fallback, the historical Path 3 behaviour).
+    """
+    from build123d import section, Plane, Vector
+    try:
+        from radia.coil_topology import (
+            extract_coil_topology as _extract_topo,
+            generate_spine as _gen_spine,
+        )
+    except Exception as exc:
+        raise ValueError(
+            f"coil_topology import failed: {exc}") from exc
+    try:
+        topo = _extract_topo(solid)
+    except Exception as exc:
+        raise ValueError(
+            f"extract_coil_topology failed: {exc}") from exc
+
+    spine_cad = _gen_spine(topo, n_segments + 1)
+    n_path = spine_cad.shape[0]
+
+    # Section at the polyline midpoint to get a representative
+    # cross-section area.  For a uniform sweep this is the only
+    # information we need; tapered sweeps would degrade gracefully
+    # to the median area, which is a sound default for the
+    # equivalent-circle filaments_from_polyline.
+    mid = n_path // 2
+    if 0 < mid < n_path - 1:
+        c = 0.5 * (spine_cad[mid] + spine_cad[mid + 1])
+        t = spine_cad[mid + 1] - spine_cad[mid]
+    else:
+        c = spine_cad[0]
+        t = spine_cad[1] - spine_cad[0] if n_path > 1 else np.array(
+            [1.0, 0.0, 0.0])
+    t_n = float(np.linalg.norm(t))
+    if t_n < 1e-30:
+        raise ValueError("topology spine has zero-length midpoint tangent")
+    t = t / t_n
+    origin = Vector(float(c[0]), float(c[1]), float(c[2]))
+    z_dir = Vector(float(t[0]), float(t[1]), float(t[2]))
+    sec_plane = Plane(origin=origin, z_dir=z_dir)
+    try:
+        cross = section(solid, section_by=sec_plane)
+    except Exception as exc:
+        raise ValueError(
+            f"midpoint sectioning failed: {exc}") from exc
+    faces = cross.faces() if cross is not None else []
+    if not faces:
+        raise ValueError("midpoint sectioning produced no face")
+
+    best = min(faces, key=lambda f: (f.center() - origin).length)
+    side = math.sqrt(float(best.area))
+
+    widths_cad = np.full(n_segments, side, dtype=np.float64)
+    heights_cad = np.full(n_segments, side, dtype=np.float64)
+
+    scale = 1.0 / cad_units_per_meter
+    return spine_cad * scale, widths_cad * scale, heights_cad * scale
+
+
 def extract_centerline_from_step(step_path: str,
                                  n_segments: int = 100,
                                  cad_units_per_meter: float = 1.0):
@@ -1062,6 +1215,22 @@ def extract_centerline_from_step(step_path: str,
     # "longest open edge", path length comes out half the real arc).
     try:
         return _centerline_from_torus_sweep(solid, n_segments, cad_units_per_meter)
+    except ValueError:
+        pass
+
+    # Unified-topology spine: catches CLOSED full-revolution coils that
+    # ``_centerline_from_torus_sweep`` rejects for "no PLANE end-cap
+    # faces".  ``coil_topology.extract_coil_topology`` returns
+    # is_open=False for CLOSED and ``generate_spine`` produces the
+    # correct full 360deg spine; sectioning at the spine midpoint
+    # recovers the cross-section area (equivalent-circle radius).
+    # Without this path, CLOSED coils fall through to
+    # ``_centerline_from_open_spine`` which picks a half-arc seam edge
+    # and produces a 178deg spine -- the regression-test failure on
+    # ih_closed_torus_coil.step.
+    try:
+        return _centerline_from_topology_spine(
+            solid, n_segments, cad_units_per_meter)
     except ValueError:
         pass
 
@@ -2055,20 +2224,48 @@ def _filaments_from_section_planes(solid,
     """
     if solid is None:
         return None
-    # Spine polyline using whatever centerline path works
+    # Spine polyline.  PRIMARY PATH (2026-05-02): the unified
+    # ``coil_topology.extract_coil_topology`` + ``generate_spine``
+    # which is OPEN/CLOSED-aware (cap detection + cap-aware arc
+    # endpoints).  This replaces the prior call to
+    # ``_centerline_from_solid_geometry`` whose
+    # ``_spine_from_rotation_axis_z`` sub-path always sampled
+    # ``np.linspace(0, 2*pi, n, endpoint=False)``, clipping ~14 deg
+    # of conductor on a 355 deg gapped torus.  Fallback to the legacy
+    # multi-path extractor if topology extraction fails so previously-
+    # working geometries don't regress.
+    #
+    # ``spine_is_topology_ordered`` records whether the spine came from
+    # the unified extractor (which already orders stations cap_a ->
+    # ... -> cap_b along the LONG arc).  When True, we SKIP the
+    # downstream NN-chain re-ordering on the recovered cross-section
+    # centroids: NN-chain assumes Euclidean nearest neighbours, which
+    # for OPEN coils with a small angular gap WRONGLY hops cap_a ->
+    # cap_b across the gap (e.g. 5 deg vs 18 deg/station along the
+    # conductor) and the resulting filament zigzags through the gap.
+    # The unified spine already gives the correct order; only the
+    # legacy longest-edge / rotation_axis_z paths needed NN-chain
+    # because those samplers visited centroids in a non-spine order.
+    spine_is_topology_ordered = False
     try:
-        # We need step_path to call extract_centerline_from_step, but
-        # our caller has already imported the solid.  Use the in-core
-        # centerline extractor (no STEP-path dependency).
-        from build123d import Plane as Bd_Plane
-        path_m_via_solid = _centerline_from_solid_geometry(
-            solid, n_segments=n_stations,
-            cad_units_per_meter=cad_units_per_meter)
-        if path_m_via_solid is None:
-            return None
-        path_m = path_m_via_solid
+        from radia.coil_topology import (
+            extract_coil_topology as _extract_topo,
+            generate_spine as _gen_spine,
+        )
+        topo = _extract_topo(solid)
+        path_cad = _gen_spine(topo, n_stations)
+        path_m = path_cad / cad_units_per_meter
+        spine_is_topology_ordered = True
     except Exception:
-        return None
+        try:
+            path_m_via_solid = _centerline_from_solid_geometry(
+                solid, n_segments=n_stations,
+                cad_units_per_meter=cad_units_per_meter)
+            if path_m_via_solid is None:
+                return None
+            path_m = path_m_via_solid
+        except Exception:
+            return None
 
     n_path = len(path_m)
     if n_path < 3:
@@ -2125,21 +2322,27 @@ def _filaments_from_section_planes(solid,
 
     faces_kept = [faces_attempted[i]
                   for i in range(len(faces_attempted)) if keep_mask[i]]
-    # KEY: replace the (possibly broken, e.g. longest-edge spine
-    # picking a lateral edge) initial spine with the actual cross-
-    # section CENTROIDS recovered from sectioning.  Then re-chain the
-    # centroids by nearest-neighbor: the sectioning order follows the
-    # original (broken) spine path, which may visit the centroids in
-    # a non-spine order; nearest-neighbor chaining recovers the
-    # correct spine traversal.
     centroids_from_sections_cad = np.array(
         [[f.center().X, f.center().Y, f.center().Z]
          for f in faces_kept],
         dtype=np.float64,
     )
-    perm = _chain_centroids_nn_index(centroids_from_sections_cad)
-    centroids_ordered_cad = centroids_from_sections_cad[perm]
-    faces_ordered = [faces_kept[i] for i in perm]
+    if spine_is_topology_ordered:
+        # The unified topology spine already orders stations cap_a ->
+        # ... -> cap_b along the LONG arc.  Sectioning preserves this
+        # order (sections returned in spine traversal order); NN-chain
+        # would WRONGLY hop cap_a -> cap_b across the small angular
+        # gap and break the filament path.  See the spine-construction
+        # block above for the full rationale.
+        centroids_ordered_cad = centroids_from_sections_cad
+        faces_ordered = faces_kept
+    else:
+        # Legacy spine (longest-edge / rotation_axis_z fallback): the
+        # sectioning order is unreliable, so re-chain by nearest-
+        # neighbour to recover the spine traversal.
+        perm = _chain_centroids_nn_index(centroids_from_sections_cad)
+        centroids_ordered_cad = centroids_from_sections_cad[perm]
+        faces_ordered = [faces_kept[i] for i in perm]
     centroids_kept_np = centroids_ordered_cad / cad_units_per_meter
     return _filaments_from_per_station_faces(
         centroids_kept_np, faces_ordered,
