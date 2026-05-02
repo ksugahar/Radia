@@ -2681,6 +2681,11 @@ TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H)
 		if(grad_norm < tol) break;
 
 		TMatrix3d hess = HessUk(k, Jk) + m_chi[k] * HessNormEps(diff);
+		// Regularize against singular Hessian (chi_k=0, Jk=0,
+		// f_0'(0)=0). Without it, Solve3x3 divides by zero -> NaN.
+		double diag_max = std::max({fabs(hess.Str0.x), fabs(hess.Str1.y), fabs(hess.Str2.z)});
+		double reg = std::max(1e-30, 1e-12 * diag_max);
+		hess.Str0.x += reg; hess.Str1.y += reg; hess.Str2.z += reg;
 		TVector3d dJ = Solve3x3(hess, (-1.0) * grad);
 
 		// Armijo backtracking
@@ -2780,6 +2785,24 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& B)
 			if(gn > max_grad) max_grad = gn;
 		}
 
+		// Build hk_priv = HessUk + chi*HessNormEps once (cached for Schur).
+		//
+		// Bug fix 2026-05-02: previously hk_priv was recovered as
+		//     hk_priv = hess_list[k] - EHYST_NU_0 * I3
+		// which subtracts ~8e5 from a quantity of similar magnitude,
+		// losing ~6 decimal digits of precision (catastrophic
+		// cancellation). For weak-pinning materials (chi_k ~ 0) or
+		// near-flat shape functions (HessUk ~ 0) the subtraction
+		// produced near-zero hk_priv that propagated round-off into
+		// Matrix3d_inv → Schur S → the Newton step.
+		// Build hk_priv directly to preserve full precision.
+		std::vector<TMatrix3d> hk_priv_list(m_K);
+		for(int k = 0; k < m_K; k++)
+		{
+			TVector3d diff = Jk_list[k] - m_Jk_prev[k];
+			hk_priv_list[k] = HessUk(k, Jk_list[k]) + m_chi[k] * HessNormEps(diff);
+		}
+
 		// Bug fix 2026-05-02: relative tolerance. Previous absolute tol = 1e-12
 		// was unreachable because gradient magnitudes scale with EHYST_NU_0 ~ 8e5,
 		// putting the floating-point floor at ~3e-12 even on a fully-converged
@@ -2791,7 +2814,17 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& B)
 		std::vector<TMatrix3d> hk_priv_inv(m_K);
 		for(int k = 0; k < m_K; k++)
 		{
-			TMatrix3d hk_priv = hess_list[k] - EHYST_NU_0 * I3;
+			// Regularize against singular Hessian when chi_k=0 and Jk=0
+			// AND HessUk(0)=0 (initial slope of f_0 vanishes). Add a tiny
+			// diagonal so Matrix3d_inv can't divide by zero.
+			TMatrix3d hk_priv = hk_priv_list[k];
+			double hk_diag_max = std::max({fabs(hk_priv.Str0.x),
+			                                fabs(hk_priv.Str1.y),
+			                                fabs(hk_priv.Str2.z)});
+			double reg = std::max(1e-30, 1e-12 * hk_diag_max);
+			hk_priv.Str0.x += reg;
+			hk_priv.Str1.y += reg;
+			hk_priv.Str2.z += reg;
 			hk_priv_inv[k] = Matrix3d_inv(hk_priv);
 		}
 
