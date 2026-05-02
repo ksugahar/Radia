@@ -1154,8 +1154,12 @@ public:
 		m_has_result = false;
 	}
 
-	// Full state save/restore for FEM Picard iteration (array-based for Python)
-	int GetStateSize() const override { return m_K * 9; }
+	// Full state save/restore for FEM Picard iteration (array-based for Python).
+	// Bug fix 2026-05-02: extended by 7 doubles to include the warm-start
+	// cache (m_last_B, m_last_H, m_has_result). Without it, Restore was not
+	// state-equivalent to driving the material to that point — see Type 6
+	// for the matching fix and the cross-validation evidence.
+	int GetStateSize() const override { return m_K * 9 + 7; }
 	void SaveStateToArray(double* pState) const override
 	{
 		int idx = 0;
@@ -1165,6 +1169,9 @@ public:
 			pState[idx++] = m_Jk_pinning[k].x; pState[idx++] = m_Jk_pinning[k].y; pState[idx++] = m_Jk_pinning[k].z;
 			pState[idx++] = m_Jk_current[k].x; pState[idx++] = m_Jk_current[k].y; pState[idx++] = m_Jk_current[k].z;
 		}
+		pState[idx++] = m_last_B.x; pState[idx++] = m_last_B.y; pState[idx++] = m_last_B.z;
+		pState[idx++] = m_last_H.x; pState[idx++] = m_last_H.y; pState[idx++] = m_last_H.z;
+		pState[idx++] = m_has_result ? 1.0 : 0.0;
 	}
 	void RestoreStateFromArray(const double* pState) override
 	{
@@ -1175,7 +1182,9 @@ public:
 			m_Jk_pinning[k].x = pState[idx++]; m_Jk_pinning[k].y = pState[idx++]; m_Jk_pinning[k].z = pState[idx++];
 			m_Jk_current[k].x = pState[idx++]; m_Jk_current[k].y = pState[idx++]; m_Jk_current[k].z = pState[idx++];
 		}
-		m_has_result = false;
+		m_last_B.x = pState[idx++]; m_last_B.y = pState[idx++]; m_last_B.z = pState[idx++];
+		m_last_H.x = pState[idx++]; m_last_H.y = pState[idx++]; m_last_H.z = pState[idx++];
+		m_has_result = (pState[idx++] >= 0.5);
 	}
 	void CommitState() override
 	{
@@ -1399,7 +1408,17 @@ public:
 		}
 	}
 
-	int GetStateSize() const override { return m_K * 9; }
+	// State size = K*9 (Play states) + 7 (warm-start cache: m_last_B[3] +
+	// m_last_H[3] + m_has_result flag).
+	//
+	// Bug fix 2026-05-02: prior format omitted the warm-start cache so
+	// RestoreStateFromArray was NOT state-equivalent to "having driven the
+	// material to that point". On hard branches (post-saturation
+	// crossings), the next Inverse cold-started instead of warmstarting
+	// from m_last_B → Newton landed in a different basin. Cross-validation
+	// observed a 2.83e6 A/m sign flip in M (Type 6) at H = (2000, 500,
+	// -300) post-restore vs the equivalent in-line drive sequence.
+	int GetStateSize() const override { return m_K * 9 + 7; }
 	void SaveStateToArray(double* pState) const override
 	{
 		int idx = 0;
@@ -1409,6 +1428,9 @@ public:
 			pState[idx++] = m_pk_pinning[k].x; pState[idx++] = m_pk_pinning[k].y; pState[idx++] = m_pk_pinning[k].z;
 			pState[idx++] = m_pk_current[k].x; pState[idx++] = m_pk_current[k].y; pState[idx++] = m_pk_current[k].z;
 		}
+		pState[idx++] = m_last_B.x; pState[idx++] = m_last_B.y; pState[idx++] = m_last_B.z;
+		pState[idx++] = m_last_H.x; pState[idx++] = m_last_H.y; pState[idx++] = m_last_H.z;
+		pState[idx++] = m_has_result ? 1.0 : 0.0;
 	}
 	void RestoreStateFromArray(const double* pState) override
 	{
@@ -1419,7 +1441,9 @@ public:
 			m_pk_pinning[k].x = pState[idx++]; m_pk_pinning[k].y = pState[idx++]; m_pk_pinning[k].z = pState[idx++];
 			m_pk_current[k].x = pState[idx++]; m_pk_current[k].y = pState[idx++]; m_pk_current[k].z = pState[idx++];
 		}
-		m_has_result = false;
+		m_last_B.x = pState[idx++]; m_last_B.y = pState[idx++]; m_last_B.z = pState[idx++];
+		m_last_H.x = pState[idx++]; m_last_H.y = pState[idx++]; m_last_H.z = pState[idx++];
+		m_has_result = (pState[idx++] >= 0.5);
 	}
 
 	// DumpBin REMOVED (Phase B2c, 2026-04-15)
