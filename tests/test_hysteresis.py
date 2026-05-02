@@ -343,6 +343,52 @@ class TestShapeFunctionIdentificationRegression:
              f"exceeds 1e-9 tolerance — possible regression in "
              f"hysteresis_io.build_shape_functions or load_mat.")
 
+    def test_inverse_monotone_continuous_sweep(self, full_fixture):
+        """Virgin Play material driven by continuous ascending H sweep should
+        produce monotone non-decreasing M.
+
+        Regression for the 2026-05-02 fix where the saturation early-return in
+        radTPlayHysteresisMaterial::Inverse used to be unconditional. Without
+        the collinear guard, a tiny disturbance pushed Newton onto the wrong
+        branch of the multi-valued residual function above the saturation knee.
+        Symptom: M jumped from +1.5e6 to -1.5e6 A/m crossing H ~ H_mono_max.
+        """
+        K, eta, tables = full_fixture
+        rad.UtiDelAll()
+        mat = rad.MatPlayHysteresis(K, eta, tables)
+
+        H_sweep = np.linspace(0, 20000, 100)
+        M = np.zeros(len(H_sweep))
+        for i, H in enumerate(H_sweep):
+            Mv = rad.MatMvsH(mat, 'm', [float(H), 0, 0])
+            rad.MatHysCommitState(mat)
+            M[i] = float(Mv[0])
+
+        dM = np.diff(M)
+        # Allow tiny FP-level wiggles, but no jumps > 1e3 A/m downward.
+        max_drop = float(-dM.min()) if len(dM) > 0 else 0.0
+        assert max_drop < 1e3, \
+            (f"M dropped by {max_drop:.3e} A/m on continuous ascending sweep — "
+             f"branch-flip bug in MatMvsH (regression of cf1b6d2e fix).")
+
+    def test_inverse_no_branch_flip_at_saturation(self, full_fixture):
+        """MatMvsH should not flip B sign across saturation.
+
+        Specific case that broke before cf1b6d2e: virgin material, drive H
+        through positive saturation; B must stay positive.
+        """
+        K, eta, tables = full_fixture
+        rad.UtiDelAll()
+        mat = rad.MatPlayHysteresis(K, eta, tables)
+
+        # Approach saturation from below
+        for H in [1000.0, 5000.0, 10000.0, 12000.0, 15000.0, 20000.0]:
+            Mv = rad.MatMvsH(mat, 'm', [float(H), 0, 0])
+            rad.MatHysCommitState(mat)
+            B = MU_0 * (H + float(Mv[0]))
+            assert B > 0, (f"B={B:+.4f} T at H={H} A/m — Inverse picked the "
+                           f"wrong branch (regression of cf1b6d2e fix).")
+
     def test_shape_function_table_has_origin(self):
         """Each f_k table must include r=0 anchor for clean interpolation.
 

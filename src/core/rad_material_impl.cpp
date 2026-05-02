@@ -2780,7 +2780,12 @@ TVector3d radTEnergyHysteresisMaterial::Forward(const TVector3d& B)
 			if(gn > max_grad) max_grad = gn;
 		}
 
-		if(max_grad < 1e-12) break;
+		// Bug fix 2026-05-02: relative tolerance. Previous absolute tol = 1e-12
+		// was unreachable because gradient magnitudes scale with EHYST_NU_0 ~ 8e5,
+		// putting the floating-point floor at ~3e-12 even on a fully-converged
+		// convex problem. As a result this Newton always ran all 100 iterations.
+		// Use a tolerance that scales with the problem.
+		if(max_grad < 1e-10 * EHYST_NU_0) break;
 
 		// Schur complement
 		std::vector<TMatrix3d> hk_priv_inv(m_K);
