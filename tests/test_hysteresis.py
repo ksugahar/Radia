@@ -126,7 +126,9 @@ class TestPlayStateManagement:
         mat = rad.MatPlayHysteresis(K, eta, tables)
         rad.MatMvsH(mat, 'm', [1000.0, 0, 0])
         state = rad.MatHysSaveState(mat)
-        assert len(state) == K * 9, f"State size should be K*9={K*9}, got {len(state)}"
+        # State = K*9 (Play states) + 7 (warm-start cache, fixed 2026-05-02)
+        assert len(state) == K * 9 + 7, \
+            f"State size should be K*9+7={K*9+7}, got {len(state)}"
 
     def test_restore_recovers_state(self, play_fixture):
         """Restore after modification returns to saved state."""
@@ -240,7 +242,8 @@ class TestEnergyHysteresisMaterial:
 
         rad.MatMvsH(mat, 'm', [1000.0, 0, 0])
         state = rad.MatHysSaveState(mat)
-        assert len(state) == K * 9
+        # K*9 (per-particle J states) + 7 (warm-start cache, fixed 2026-05-02)
+        assert len(state) == K * 9 + 7
 
         rad.MatMvsH(mat, 'm', [5000.0, 0, 0])
         rad.MatHysRestoreState(mat, state)
@@ -370,6 +373,40 @@ class TestShapeFunctionIdentificationRegression:
         assert max_drop < 1e3, \
             (f"M dropped by {max_drop:.3e} A/m on continuous ascending sweep — "
              f"branch-flip bug in MatMvsH (regression of cf1b6d2e fix).")
+
+    def test_state_warmstart_invariance_play(self, full_fixture):
+        """RestoreStateFromArray must be state-equivalent to having driven
+        the material to that state (not just to the Play states alone).
+
+        Regression for the 2026-05-02 fix that extended GetStateSize from
+        K*9 to K*9+7 to include the warm-start cache (m_last_B, m_last_H,
+        m_has_result). Without that cache, a Save → drive-elsewhere →
+        Restore → probe sequence cold-started the next Inverse, which
+        landed on a different Newton basin on hard branches and produced a
+        2.83e6 A/m sign flip in M.
+        """
+        K, eta, tables = full_fixture
+
+        # Path A: in-line drive
+        rad.UtiDelAll()
+        mat_A = rad.MatPlayHysteresis(K, eta, tables)
+        rad.MatMvsH(mat_A, 'm', [2000.0, 0, 0]); rad.MatHysCommitState(mat_A)
+        M_A = np.array(rad.MatMvsH(mat_A, 'm', [2000.0, 500.0, -300.0]))
+
+        # Path B: drive elsewhere, restore, probe
+        rad.UtiDelAll()
+        mat_B = rad.MatPlayHysteresis(K, eta, tables)
+        rad.MatMvsH(mat_B, 'm', [2000.0, 0, 0]); rad.MatHysCommitState(mat_B)
+        state = rad.MatHysSaveState(mat_B)
+        rad.MatMvsH(mat_B, 'm', [-30000.0, 0, 0]); rad.MatHysCommitState(mat_B)
+        rad.MatMvsH(mat_B, 'm', [+30000.0, 30000.0, 0]); rad.MatHysCommitState(mat_B)
+        rad.MatHysRestoreState(mat_B, state)
+        M_B = np.array(rad.MatMvsH(mat_B, 'm', [2000.0, 500.0, -300.0]))
+
+        err = float(np.linalg.norm(M_A - M_B))
+        assert err < 1.0, (f"||M_A - M_B|| = {err:.3e} A/m — RestoreState is "
+                            f"not state-equivalent to in-line drive (regression "
+                            f"of the K*9+7 state-size fix).")
 
     def test_inverse_no_branch_flip_at_saturation(self, full_fixture):
         """MatMvsH should not flip B sign across saturation.
