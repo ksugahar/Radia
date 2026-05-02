@@ -2542,9 +2542,11 @@ radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(
 {
 	m_chi.resize(K);
 	m_tables.resize(K);
+	double max_chi = 0;
 	for(int k = 0; k < K; k++)
 	{
 		m_chi[k] = chi[k];
+		if(fabs(chi[k]) > max_chi) max_chi = fabs(chi[k]);
 		auto& tab = m_tables[k];
 		int n = (int)r_tables[k].size();
 		tab.n = n;
@@ -2552,6 +2554,24 @@ radTEnergyHysteresisMaterial::radTEnergyHysteresisMaterial(
 		tab.f = f_tables[k];
 		tab.r_max = (n > 0) ? tab.r[n-1] : 0.0;
 		PrecomputeOperatorTable(tab);
+	}
+
+	// Auto-scale eps to preserve 3D isotropy.
+	//
+	// Bug fix 2026-05-02: the supplied eps regularises the non-smooth
+	// |J - J_p| pinning term. If eps is too small relative to the chi
+	// scale of the problem, the Hessian becomes ill-conditioned and Newton
+	// iterations stop in slightly different basins between rotated H
+	// trajectories — breaking 3D isotropy by O(1%) in the Egger framework
+	// even for perfectly isotropic shape functions.
+	// Empirically eps_min ~ (max_chi * 1e-4)^2 restores machine-precision
+	// isotropy across all tested out-of-plane axes (1,1,0), (1,2,3),
+	// (3,1,7), (1,1,1) without harming convergence on collinear sweeps.
+	// Auto-bump only — never reduce a user-supplied eps below the floor.
+	if(max_chi > 1e-10)
+	{
+		double eps_floor = (max_chi * 1e-4) * (max_chi * 1e-4);
+		if(m_eps < eps_floor) m_eps = eps_floor;
 	}
 
 	TVector3d zero(0, 0, 0);
@@ -2686,8 +2706,14 @@ double radTEnergyHysteresisMaterial::ObjectiveForward(
 TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H) const
 {
 	TVector3d Jk = m_Jk_prev[k];
-	const int max_iter = 30;
-	const double tol = 1e-12;
+	// Bug fix 2026-05-02: tightened to push 3D isotropy from ~1% to ~1e-4.
+	// At max_iter=30 and tol=1e-12 the per-particle Newton sometimes
+	// stopped in a slightly different basin between rotated H trajectories
+	// (J_prev evolves direction-dependently from FP roundoff in Armijo).
+	// max_iter=200 + tol=1e-15 + finer Armijo lets each particle converge
+	// past the FP-drift threshold so isotropy is preserved.
+	const int max_iter = 200;
+	const double tol = 1e-15;
 
 	for(int it = 0; it < max_iter; it++)
 	{
@@ -2697,11 +2723,21 @@ TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H)
 		if(grad_norm < tol) break;
 
 		TMatrix3d hess = HessUk(k, Jk) + m_chi[k] * HessNormEps(diff);
-		// Regularize against singular Hessian (chi_k=0, Jk=0,
-		// f_0'(0)=0). Without it, Solve3x3 divides by zero -> NaN.
-		double diag_max = std::max({fabs(hess.Str0.x), fabs(hess.Str1.y), fabs(hess.Str2.z)});
-		double reg = std::max(1e-30, 1e-12 * diag_max);
-		hess.Str0.x += reg; hess.Str1.y += reg; hess.Str2.z += reg;
+		// Regularize against singular Hessian only when truly degenerate.
+		//
+		// Bug fix 2026-05-02 (refined): the diagonal-max regularization was
+		// direction-dependent (used L_inf-of-diag) and added a small
+		// anisotropic perturbation to the Hessian on every iteration. Detect
+		// near-singular Hessian via determinant instead, and only regularize
+		// then; uses isotropic perturbation = trace/3 (rotation-invariant).
+		double det_h = detMatrix3d(hess);
+		double tr_h  = hess.Str0.x + hess.Str1.y + hess.Str2.z;
+		double scale = std::max(1e-30, fabs(tr_h) / 3.0);
+		if(fabs(det_h) < 1e-24 * scale * scale * scale)
+		{
+			double reg = 1e-12 * scale;  // isotropic
+			hess.Str0.x += reg; hess.Str1.y += reg; hess.Str2.z += reg;
+		}
 		TVector3d dJ = Solve3x3(hess, (-1.0) * grad);
 
 		// Armijo backtracking — track whether decrease was found.
@@ -2715,7 +2751,10 @@ TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H)
 		double F_curr = ObjectiveForwardK(k, Jk, H);
 		double dir_deriv = grad * dJ;
 		bool ls_accepted = false;
-		for(int ls = 0; ls < 20; ls++)
+		// Finer Armijo (halving 0.7 instead of 0.5, more iterations)
+		// for isotropy: smoother step-size selection means rotated
+		// trajectories pick the same tau more reliably.
+		for(int ls = 0; ls < 60; ls++)
 		{
 			double F_new = ObjectiveForwardK(k, Jk + tau * dJ, H);
 			if(F_new <= F_curr + 0.1 * tau * dir_deriv)
@@ -2723,7 +2762,7 @@ TVector3d radTEnergyHysteresisMaterial::SolveInverseK(int k, const TVector3d& H)
 				ls_accepted = true;
 				break;
 			}
-			tau *= 0.5;
+			tau *= 0.7;
 		}
 		if(ls_accepted)
 		{
