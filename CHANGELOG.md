@@ -3,6 +3,23 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.25.1 — radia-heat console entry-point + Cubit-bypass launch documented
+
+Released 2026-05-03.  Patch release.
+
+### `radia-heat` console entry-point
+
+The 4 standalone PySide6 panels (radia_ih, radia_em, radia_pcb,
+radia_heat) are designed to run **without Cubit** — bring your own
+`.vol` mesh (Cubit, Netgen-OCC, anywhere) and the panel runs
+end-to-end.  Three of the four had `[project.scripts]` console
+entry-points (`radia-ih`, `radia-em`, `radia-pcb`); `radia-heat` was
+missing.  Now added: `pip install radia[gui]` registers all four
+`radia-*.exe` launchers in `Scripts/`.
+
+README "Standalone GUI Panels (no Cubit required)" section updated to
+list all four launchers explicitly.
+
 ## 4.25.0 — BEM-A coil + unified inductance CLI + 6-method IH panel
 
 Released 2026-05-02.  Surface-current coil solver lands as a peer of

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.25.0"
+version = "4.25.1"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -88,6 +88,7 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 radia-ih = "radia.radia_ih:main"
 radia-em = "radia.radia_em:main"
 radia-pcb = "radia.radia_pcb:main"
+radia-heat = "radia.radia_heat:main"
 # Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
 # MCP servers: radia-mcp package (pip install radia-mcp)
 
