@@ -3448,7 +3448,7 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 		TVector3d H_at = Forward(B);
 		TVector3d res_now(H_at.x - H_target.x, H_at.y - H_target.y, H_at.z - H_target.z);
 		double res_now_norm = sqrt(res_now.x*res_now.x + res_now.y*res_now.y + res_now.z*res_now.z);
-		if(res_now_norm > 0.01)
+		if(res_now_norm > 0.001)   // tighten further
 		{
 			double inv_Hmag = 1.0 / H_target_mag;
 			TVector3d uH(H_target.x * inv_Hmag, H_target.y * inv_Hmag, H_target.z * inv_Hmag);
@@ -3502,18 +3502,27 @@ TVector3d radTPlayHysteresisMaterial::Inverse(const TVector3d& H_target)
 
 			if(bracketed)
 			{
+				// Track best mid-point in case of early break (was a bug:
+				// s_final = 0.5*(s_lo+s_hi) didn't reflect the s_mid that
+				// triggered |F_mid|<tol).
+				double s_best = 0.5 * (s_lo + s_hi);
+				double F_best_abs = 1e30;
 				for(int it = 0; it < 60; it++)
 				{
 					double s_mid = 0.5 * (s_lo + s_hi);
 					B_probe.x = s_mid * uH.x; B_probe.y = s_mid * uH.y; B_probe.z = s_mid * uH.z;
 					TVector3d H_probe = Forward(B_probe);
 					double F_mid = (H_probe.x*uH.x + H_probe.y*uH.y + H_probe.z*uH.z) - H_target_mag;
-					if(fabs(F_mid) < 1e-10) break;
+					if(fabs(F_mid) < F_best_abs)
+					{
+						F_best_abs = fabs(F_mid);
+						s_best = s_mid;
+					}
+					if(fabs(F_mid) < 1e-12) break;
 					if(F_lo * F_mid < 0) { s_hi = s_mid; F_hi = F_mid; }
 					else                  { s_lo = s_mid; F_lo = F_mid; }
 				}
-				double s_final = 0.5 * (s_lo + s_hi);
-				B.x = s_final * uH.x; B.y = s_final * uH.y; B.z = s_final * uH.z;
+				B.x = s_best * uH.x; B.y = s_best * uH.y; B.z = s_best * uH.z;
 				Forward(B);
 			}
 		}
