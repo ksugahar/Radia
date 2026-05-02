@@ -73,7 +73,7 @@ def main(argv):
 
         # Auto-merge sibling overlay files written by calc_*.py:
         #   <stem>_filaments.msh  : PEEC filament 1D lines + |I|
-        #                            (see calc_peec_inductance.py)
+        #                            (see calc_inductance.py --coil-solver peec)
         # This lets a single Open GMSH click show both the bbox B
         # field AND the filament currents in one window without
         # the user having to "File -> Merge..." manually.

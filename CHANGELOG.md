@@ -3,6 +3,103 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.25.0 — BEM-A coil + unified inductance CLI + 6-method IH panel
+
+Released 2026-05-02.  Surface-current coil solver lands as a peer of
+PEEC; three scoped CLIs collapse into one.
+
+### BEM-A coil solver (Phase C.1-C.5 shipped)
+
+`radia.bem.efie_rwg` (~1 kLOC) — Weggler stabilized EFIE saddle on
+HDivSurface RWG (= Lucy decomposition implicit), in-tree Sauter-Schwab
+Duffy 4-D Galerkin assembler, source/sink port-driven self-inductance,
+DC + AC SIBC closure for R extraction.  Tested against ngsolve.bem
+oracle to 0.025-0.004 % on standard fixtures (5 test files, 13 cases).
+
+Cross-method validation against PEEC golden on
+`rect_torus_lofted_united.step` (8x6 mm rect, 50 kHz Cu):
+- BEM-A converged 153.5 nH vs PEEC asymptote ~149 nH (n_peri → ∞)
+- ~3.5 % residual gap is real modeling difference (BEM-A surface RWG
+  resolves rect-corner current crowding; PEEC perimeter filaments do
+  not).  Both methods are SIBC; both converge correctly within their
+  discretisation classes.
+
+### Unified `calc_inductance.py` (Refactor A1+B+C)
+
+Single CLI replaces three scoped predecessors:
+
+| OLD | NEW |
+|-----|-----|
+| `calc_peec_inductance.py` | `calc_inductance.py --coil-solver peec` |
+| `calc_peec_bem.py` | `calc_inductance.py --coil-solver peec --vol …` |
+| `calc_coil_bem_a_workpiece.py` | `calc_inductance.py --coil-solver bem-a --vol …` |
+
+Dispatch on `--coil-solver {peec, bem-a}` × `--vol {present, absent}`
+gives 4 modes (vacuum or weak-coupled, PEEC or BEM-A coil).  All
+share the workpiece scalar BEM-SIBC block.
+
+**Coupling terminology corrected**: previous "1-way forward" was
+misleading because Telegen φ·(n·B) ΔL IS computed, capturing port-level
+back-reaction even though coil J is fixed.  Renamed to **weak coupling**
+throughout (CLI flag, panel labels, docstrings).  Strict one-way
+(no ΔL) and strong coupling (coil J recomputed iteratively, FEM A-V)
+remain distinct.
+
+### IH panel: 6-method dropdown
+
+`radia_ih.py` adds two BEM-A counterparts to the existing PEEC modes:
+
+| Method | Coil | Workpiece | Notes |
+|--------|------|-----------|-------|
+| PEEC inductance (vacuum) | PEEC filament | — | existing |
+| **BEM-A inductance (vacuum)** | BEM-A surface RWG | — | new |
+| PEEC + BEM weak coupling | PEEC | scalar BEM-SIBC | renamed (was "1-way") |
+| **BEM-A + BEM weak coupling** | BEM-A | scalar BEM-SIBC | new |
+| PEEC coil + FEM Kelvin | PEEC | volumetric FEM-SIBC | unchanged |
+| FEM A-V full | volumetric coil | volumetric FEM-SIBC | unchanged |
+
+`coil_maxh` widget added (visible only for BEM-A modes).  19/19
+`tests/panels/test_ih_panel_qt.py` PASS; 36/36 combined panel +
+inductance + coil_topology golden tests PASS.
+
+### PEEC unified OPEN/CLOSED cap-aware spine
+
+New `radia.coil_topology` module (~280 LOC) — single source of truth
+for OPEN vs CLOSED coil classification (cap detection, spine arc
+parameters).  Consumed by:
+- Path 2c (`_filaments_from_section_planes`) — `rect_torus_lofted_united`
+  PEEC L 138.16 → 145.30 nH (filament was clipping ~14° off the 355°
+  arc due to a `linspace(0, 2π)` fallback).
+- Path 2b (`_filaments_from_circle_edges_per_station`) — single-turn
+  coils now use topology spine; multi-turn helix guard
+  (z_extent > 2 · median_r) keeps 3turncoil 422 nH on legacy NN-chain.
+- Path 3 fallback — new `_centerline_from_topology_spine` helper
+  inserted between `_centerline_from_torus_sweep` and
+  `_centerline_from_open_spine`: closed-torus filament sweep
+  178° → 358° (was tracing one half-arc seam edge).
+
+Golden update: `peec_inductance_rect_united_50kHz_Cu.json`
+138.16 → 145.30 nH, `regression_guard.min_L_nH` 120 → 130.
+
+### Files
+
+| Action | Path |
+|--------|------|
+| New | `src/radia/bem/efie_rwg.py` |
+| New | `src/radia/coil_topology.py` |
+| New | `src/radia/panels/calc_inductance.py` |
+| Removed | `src/radia/panels/calc_peec_inductance.py` |
+| Removed | `src/radia/panels/calc_peec_bem.py` |
+| Removed | `src/radia/panels/calc_coil_bem_a_workpiece.py` |
+| New | `tests/panels/test_inductance_golden.py` (6 tests) |
+| New | `tests/test_coil_topology.py` (11 tests) |
+| New | `tests/bem/test_coil_bem_a_*.py` (5 files, 13 tests) |
+| Removed | `tests/panels/test_peec_inductance_golden.py` |
+| Removed | `tests/panels/test_peec_bem_golden.py` |
+| New | `examples/coil_bem_a/` (build123d demo + GMSH viz) |
+| Updated | `src/radia/radia_ih.py` (6-method dropdown + dispatch) |
+| Updated | `src/radia/panels/sync_registry.py` + `panel_registry.json` |
+
 ## 4.10.0 — Panel UX overhaul: font baseline, base-class unification, CoilBuilder wizards
 
 Released 2026-04-26.  All-Python release; no C++ rebuild needed.

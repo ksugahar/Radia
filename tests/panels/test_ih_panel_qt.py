@@ -45,12 +45,15 @@ class TestMethodCombo:
         from radia_ih import METHOD_PEEC_IND
         assert ih_panel._method_combo.currentText() == METHOD_PEEC_IND
 
-    def test_four_methods_present(self, ih_panel):
-        from radia_ih import (METHOD_PEEC_IND, METHOD_PEEC_BEM,
+    def test_six_methods_present(self, ih_panel):
+        """6-method dropdown after 2026-05-02 BEM-A addition."""
+        from radia_ih import (METHOD_PEEC_IND, METHOD_BEMA_IND,
+                              METHOD_PEEC_BEM, METHOD_BEMA_BEM,
                               METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL)
         items = [ih_panel._method_combo.itemText(i)
                  for i in range(ih_panel._method_combo.count())]
-        assert items == [METHOD_PEEC_IND, METHOD_PEEC_BEM,
+        assert items == [METHOD_PEEC_IND, METHOD_BEMA_IND,
+                         METHOD_PEEC_BEM, METHOD_BEMA_BEM,
                          METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL]
 
     def test_no_legacy_methods(self, ih_panel):
@@ -202,37 +205,81 @@ class TestBuildCommand:
         return str(f)
 
     def test_PEEC_inductance_command(self, ih_panel, fake_step):
+        """Vacuum inductance via unified calc_inductance.py (--coil-solver peec)."""
         from radia_ih import METHOD_PEEC_IND
         ih_panel._method_combo.setCurrentText(METHOD_PEEC_IND)
         ih_panel._widgets["peec_step"].setText(fake_step)
-        cmd = ih_panel.build_command(None)  # PEEC-IND ignores .vol
-        assert cmd[1].endswith("calc_peec_inductance.py"), cmd[1]
-        assert "--peec-step" in cmd
+        cmd = ih_panel.build_command(None)
+        assert cmd[1].endswith("calc_inductance.py"), cmd[1]
+        assert "--coil-step" in cmd
         assert fake_step in cmd
+        assert "--coil-solver" in cmd
+        # PEEC mode: --coil-solver peec; --peec-n-peri present
+        i = cmd.index("--coil-solver")
+        assert cmd[i + 1] == "peec", f"expected 'peec', got {cmd[i + 1]!r}"
+        assert "--peec-n-peri" in cmd
+        assert "--coil-maxh" not in cmd
         assert "--frequency" in cmd
         assert "--current" in cmd
         assert "--coil-sigma" in cmd
-        assert "--peec-n-peri" in cmd
+
+    def test_BEMA_inductance_command(self, ih_panel, fake_step):
+        """Vacuum inductance via calc_inductance.py (--coil-solver bem-a)."""
+        from radia_ih import METHOD_BEMA_IND
+        ih_panel._method_combo.setCurrentText(METHOD_BEMA_IND)
+        ih_panel._widgets["peec_step"].setText(fake_step)
+        cmd = ih_panel.build_command(None)
+        assert cmd[1].endswith("calc_inductance.py"), cmd[1]
+        assert "--coil-step" in cmd
+        assert "--coil-solver" in cmd
+        i = cmd.index("--coil-solver")
+        assert cmd[i + 1] == "bem-a", f"expected 'bem-a', got {cmd[i + 1]!r}"
+        # BEM-A mode: --coil-maxh present, --peec-n-peri absent
+        assert "--coil-maxh" in cmd
+        assert "--peec-n-peri" not in cmd
 
     def test_PEEC_BEM_command(self, ih_panel, fake_step):
+        """Weak-coupled PEEC coil + scalar BEM-SIBC."""
         from radia_ih import METHOD_PEEC_BEM
         ih_panel._method_combo.setCurrentText(METHOD_PEEC_BEM)
         ih_panel._widgets["peec_step"].setText(fake_step)
         cmd = ih_panel.build_command("model.vol")
-        assert cmd[1].endswith("calc_peec_bem.py"), cmd[1]
-        assert "--peec-step" in cmd
+        assert cmd[1].endswith("calc_inductance.py"), cmd[1]
+        assert "--coil-step" in cmd
+        assert "--coil-solver" in cmd
+        i = cmd.index("--coil-solver")
+        assert cmd[i + 1] == "peec"
         assert "--vol" in cmd
         assert "model.vol" in cmd
-        # 4.17.0+: PEEC+BEM uses perimeter-only filaments like
-        # PEEC-inductance (volume grid nwinc/nhinc retired).
         assert "--peec-n-peri" in cmd
+        assert "--coil-maxh" not in cmd
+        # Volume-grid nwinc/nhinc retired (4.17.0+)
         assert "--peec-nwinc" not in cmd
         assert "--peec-nhinc" not in cmd
         # Workpiece settings present
         assert "--sigma" in cmd
         assert "--mu-r" in cmd
         assert "--half-thickness" in cmd
-        # Impedance model
+        assert "--impedance-model" in cmd
+
+    def test_BEMA_BEM_command(self, ih_panel, fake_step):
+        """Weak-coupled BEM-A coil + scalar BEM-SIBC."""
+        from radia_ih import METHOD_BEMA_BEM
+        ih_panel._method_combo.setCurrentText(METHOD_BEMA_BEM)
+        ih_panel._widgets["peec_step"].setText(fake_step)
+        cmd = ih_panel.build_command("model.vol")
+        assert cmd[1].endswith("calc_inductance.py"), cmd[1]
+        assert "--coil-step" in cmd
+        assert "--coil-solver" in cmd
+        i = cmd.index("--coil-solver")
+        assert cmd[i + 1] == "bem-a"
+        assert "--vol" in cmd
+        assert "--coil-maxh" in cmd
+        assert "--peec-n-peri" not in cmd
+        # Workpiece args still present
+        assert "--sigma" in cmd
+        assert "--mu-r" in cmd
+        assert "--half-thickness" in cmd
         assert "--impedance-model" in cmd
 
     def test_PEEC_FEM_KELVIN_command(self, ih_panel, fake_step):
