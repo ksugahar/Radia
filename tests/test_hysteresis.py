@@ -374,6 +374,67 @@ class TestShapeFunctionIdentificationRegression:
             (f"M dropped by {max_drop:.3e} A/m on continuous ascending sweep — "
              f"branch-flip bug in MatMvsH (regression of cf1b6d2e fix).")
 
+    def test_type5_isotropy_3d(self):
+        """Type 5 (Energy) must be 3D isotropic to machine precision.
+
+        Regression for the 2026-05-02 fixes:
+          - 00a13857: L_inf -> L2 norm in U_k argument
+          - 2b6db1cf: auto-scale eps to (max_chi * 1e-4)^2 floor
+
+        Synthetic isotropic shape functions f_k(r) = a_k * r driven by
+        the SAME H amplitude trajectory along (a) +x and (b) (1,2,3)/||.||
+        must produce B related by exact rotation. Pre-fix: 37% relative
+        error (broken). Post-fix: < 1e-6 relative (machine-precision).
+        """
+        K = 10
+        a_k = list(np.geomspace(1e3, 5e4, K))
+        chi_k = list(np.geomspace(20.0, 800.0, K))
+        r_max = 0.20
+        r_grid = list(np.linspace(0, r_max, 200))
+        tables = [(r_grid, [a * r for r in r_grid]) for a in a_k]
+
+        n = 30
+        Hs = 800.0 * np.sin(np.linspace(0, 4 * np.pi, n))
+
+        def drive(direction):
+            rad.UtiDelAll()
+            mat = rad.MatEnergyHysteresis(K, chi_k, tables, 1e-8)
+            B = np.zeros((n, 3))
+            for i, h in enumerate(Hs):
+                Hv = h * np.asarray(direction)
+                Mv = rad.MatMvsH(mat, 'm', list(Hv))
+                rad.MatHysCommitState(mat)
+                B[i] = MU_0 * (Hv + np.array(Mv))
+            return B
+
+        B_x = drive([1.0, 0, 0])
+
+        # Test multiple out-of-plane directions
+        for axis in [(1, 1, 0), (1, 2, 3), (3, 1, 7), (1, 1, 1)]:
+            e = np.array(axis, dtype=float); e /= np.linalg.norm(e)
+            B_e = drive(e)
+
+            # Build rotation matrix sending +x to e (Rodrigues' formula)
+            a = np.array([1.0, 0, 0])
+            v = np.cross(a, e)
+            sn = np.linalg.norm(v); cs = a @ e
+            if sn > 1e-30:
+                nx = v / sn
+                Vx = np.array([[0, -nx[2], nx[1]],
+                                [nx[2], 0, -nx[0]],
+                                [-nx[1], nx[0], 0]])
+                R = np.eye(3) + sn * Vx + (1 - cs) * Vx @ Vx
+            else:
+                R = np.eye(3)
+
+            B_x_rot = (R @ B_x.T).T
+            err = float(np.max(np.linalg.norm(B_e - B_x_rot, axis=1)))
+            scale = float(np.max(np.linalg.norm(B_x, axis=1)))
+            rel = err / max(scale, 1e-30)
+            assert rel < 1e-6, \
+                (f"Type 5 isotropy failed for axis {axis}: rel error "
+                 f"{rel:.3e} (was 1e-2 pre-fix, must be < 1e-6 post-fix).")
+
     def test_state_warmstart_invariance_play(self, full_fixture):
         """RestoreStateFromArray must be state-equivalent to having driven
         the material to that state (not just to the Play states alone).
