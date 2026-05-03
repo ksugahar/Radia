@@ -38,11 +38,19 @@ class ScalarBIESIBCSolver:
                   use_intree_bem=False, intree_geom_order=2,
                   intree_singular_n_q=8, intree_regular_quad_degree=11,
                   use_intree_hacapk=False, hacapk_aca_eps=1e-10,
-                  hacapk_leaf=64, hacapk_eta=2.0):
+                  hacapk_leaf=64, hacapk_eta=2.0,
+                  bnd_label=None):
         """Initialize solver and assemble BEM operators.
 
         Args:
             mesh: NGSolve Mesh (surface mesh, dim=2, or volume mesh with BND).
+                When ``bnd_label`` is given, ``mesh`` is interpreted as a
+                volume (or larger surface) mesh, and only the BND elements
+                whose boundary label equals ``bnd_label`` are used.  This
+                is the path used for curved scalar SIBC BEM: pass the
+                parent ``vol_mesh`` (after ``vol_mesh.Curve(p)``) plus the
+                workpiece sideset name, and the curving is preserved via
+                ``mesh.GetTrafo(el)`` on the parent.
             order: H1 polynomial order on surface (default 1).
             assemble_dense: if True (default, backward-compat), extract
                 ``DL`` and ``SL`` to dense ``ndof x ndof`` numpy arrays
@@ -53,6 +61,13 @@ class ScalarBIESIBCSolver:
                 bilinear forms only and use ``solve_iterative()`` (GMRES
                 with LinearOperator wrappers).  ~50x faster for typical
                 IH wp meshes -- recommended for new code.
+            bnd_label: optional NGSolve boundary label name to filter BND
+                elements by.  Required when ``mesh`` is the parent volume
+                mesh and only a subset of its boundary belongs to the
+                workpiece (e.g. ``bnd_label="sibc"`` selects the SIBC
+                sideset only).  Only consumed by the in-tree paths
+                (``use_intree_bem=True``); the ngsolve.bem path uses
+                ``ds`` over all BND.
         """
         from ngsolve import (H1, BilinearForm, GridFunction, ds, grad,
                              TaskManager, InnerProduct)
@@ -60,6 +75,7 @@ class ScalarBIESIBCSolver:
         self.mesh = mesh
         self.order = order
         self.use_intree_bem = use_intree_bem
+        self._bnd_label = bnd_label
         # Lagrange-P2 in-tree path is taken when use_intree_bem and order >= 2.
         # In that mode self.fes is None (we don't use NGSolve FES at all):
         # SL, DL, M, K are all assembled in Lagrange P2 basis directly
@@ -75,7 +91,8 @@ class ScalarBIESIBCSolver:
             self._init_lagrange_p2_path(
                 mesh, order, intree_geom_order,
                 intree_singular_n_q, intree_regular_quad_degree,
-                use_intree_hacapk, hacapk_aca_eps, hacapk_leaf, hacapk_eta)
+                use_intree_hacapk, hacapk_aca_eps, hacapk_leaf, hacapk_eta,
+                bnd_label=bnd_label)
             self.t_assembly = time.perf_counter() - t0
             return
 
@@ -223,7 +240,8 @@ class ScalarBIESIBCSolver:
                                 intree_singular_n_q,
                                 intree_regular_quad_degree,
                                 use_intree_hacapk,
-                                hacapk_aca_eps, hacapk_leaf, hacapk_eta):
+                                hacapk_aca_eps, hacapk_leaf, hacapk_eta,
+                                bnd_label=None):
         """Build SL, DL, M, K, gauge entirely in Lagrange P2 basis.
 
         Bypasses NGSolve's H1 hierarchical FES so that all matrices are
@@ -232,6 +250,11 @@ class ScalarBIESIBCSolver:
         potential value at the i-th Lagrange P2 node (vertex or edge
         mid-point).  ``self.dof_coords`` exposes those node positions
         so the caller can sample any analytical phi at the right places.
+
+        When ``bnd_label`` is given, only BND elements with that label are
+        included.  Combined with passing the parent (already curved)
+        volume mesh as ``mesh``, this gives a true curved-Tri6 P2
+        scalar BEM on the workpiece surface.
         """
         if order != 2:
             raise NotImplementedError(
@@ -245,7 +268,8 @@ class ScalarBIESIBCSolver:
         )
 
         verts, tris, v_global, tri_p2, dofs_per_tri, n_dof, dof_coords = \
-            extract_surface_p2_lagrange(mesh, geom_order=intree_geom_order)
+            extract_surface_p2_lagrange(mesh, bnd_label=bnd_label,
+                                        geom_order=intree_geom_order)
 
         self.ndof = n_dof
         self.dof_coords = dof_coords
