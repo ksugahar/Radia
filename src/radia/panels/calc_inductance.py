@@ -181,30 +181,13 @@ def _arrays_from_bema_coil_mesh(mesh):
             np.array(snk_mask, dtype=bool))
 
 
-def _eval_J_per_triangle(verts, tris, J_rwg, tri_edges):
-    """Convert RWG coefficients to per-triangle J_s vectors at centroids.
-
-    Returns (centroids, areas, J_per_tri) -- (n_t, *)-shaped arrays.
-    """
-    from radia.bem.efie_rwg import rwg_eval
-    n_t = len(tris)
-    J_per_tri = np.zeros((n_t, 3), dtype=np.float64)
-    centroids = np.zeros((n_t, 3), dtype=np.float64)
-    areas = np.zeros(n_t, dtype=np.float64)
-    xi_c = np.array([1.0 / 3.0])
-    eta_c = np.array([1.0 / 3.0])
-    for t in range(n_t):
-        pts, Js_basis, A = rwg_eval(verts, tris[t], xi_c, eta_c)
-        centroids[t] = pts[0]
-        areas[t] = A
-        for k in range(3):
-            e = int(tri_edges[t, k])
-            J_per_tri[t] += J_rwg[e] * Js_basis[0, k, :]
-    return centroids, areas, J_per_tri
-
-
 def _solve_coil_bem_a(args):
-    """BEM-A coil layer (Weggler EFIE saddle on HDivSurface RWG).
+    """BEM-A coil layer via ngsolve.bem (Weggler EFIE saddle on HDivSurface RT0).
+
+    Replaced the intree pure-Python assembler 2026-05-03 after benchmarks
+    showed ngsolve.bem was 50-60x faster across all tested sizes.  See
+    ``src/radia/bem/coil_inductance_ngsolve.py`` docstring for the full
+    rationale.
 
     Returns a dict with:
       * L_coil [H], R_coil [Ω] at unit terminal current  (R is AC SIBC)
@@ -213,13 +196,14 @@ def _solve_coil_bem_a(args):
         -- all REAL; multiply by complex args.current downstream as needed
       * coil_residual, coil_mesh_nv, coil_mesh_n_tris
     """
-    from radia.bem.efie_rwg import (
-        solve_inductance_source_sink_intree, build_edge_topology)
+    from radia.bem.coil_inductance_ngsolve import (
+        compute_inductance_source_sink, compute_centroids_areas_J)
 
     omega = 2.0 * math.pi * args.frequency
     progress("BEMA", f"coil STEP -> mesh maxh={args.coil_maxh}")
     t0 = time.perf_counter()
     coil_mesh = _build_bema_coil_mesh(args)
+    # We still extract verts/tris/masks for diagnostics + N_tris reporting.
     coil_verts, coil_tris, src_mask, snk_mask = \
         _arrays_from_bema_coil_mesh(coil_mesh)
     t_mesh = time.perf_counter() - t0
@@ -238,31 +222,31 @@ def _solve_coil_bem_a(args):
                   if omega > 0 else 1.0
     Z_s_coil_re = 1.0 / (args.coil_sigma * delta_skin) if omega > 0 else 0.0
     progress("BEMA",
-        f"intree solve (n_tris={len(coil_tris)}, "
-        f"q_reg={args.coil_rwg_quad_degree}, "
-        f"n_q_sing={args.coil_rwg_singular_nq}, Z_s_re={Z_s_coil_re:.3e})")
+        f"ngsolve.bem solve (n_tris={len(coil_tris)}, "
+        f"fes_order=0, Z_s_re={Z_s_coil_re:.3e})")
     t0 = time.perf_counter()
-    res = solve_inductance_source_sink_intree(
-        coil_verts, coil_tris, src_mask, snk_mask,
-        regular_quad_degree=args.coil_rwg_quad_degree,
-        singular_n_q=args.coil_rwg_singular_nq,
-        Z_s=Z_s_coil_re,
+    res = compute_inductance_source_sink(
+        coil_mesh,
+        source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name,
+        fes_order=0,
+        solver="lu",
+        Z_s_re=Z_s_coil_re,
     )
     t_solve = time.perf_counter() - t0
     if "error" in res:
         raise RuntimeError(f"BEM-A solve failed: {res['error']}")
     L_coil = float(res["L"])
     R_coil = float(res["R"])
-    J_rwg = np.asarray(res["J"])
     residual = float(res["residual"])
     progress("BEMA",
         f"L_coil={L_coil * 1e9:.3f} nH, R_coil(SIBC)={R_coil * 1e3:.4f} mΩ "
         f"residual={residual:.2e} ({t_solve:.1f}s)")
 
     # Per-triangle J_s vectors at centroids (workpiece bridge prep).
-    edges, tri_edges, _, _ = build_edge_topology(coil_tris)
-    coil_centroids, coil_areas, coil_J_per_tri = _eval_J_per_triangle(
-        coil_verts, coil_tris, J_rwg, tri_edges)
+    # NGSolve element-wise Integrate of gf_J components / element area.
+    coil_centroids, coil_areas, coil_J_per_tri = compute_centroids_areas_J(
+        coil_mesh, res["gf_J"])
 
     return {
         "source_type": "surface",
