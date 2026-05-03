@@ -2,7 +2,9 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **107 tools** across 9 MCP servers.
+Total: **106 tools** across 8 MCP servers.
+
+> **Note:** `mcp-server-elf` was extracted to a standalone PyPI package: [`mcp-server-elf`](https://pypi.org/project/mcp-server-elf/) ([repo](https://github.com/ksugahar/mcp-server-elf)). Install separately with `pip install mcp-server-elf`.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,7 +12,6 @@ Total: **107 tools** across 9 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 21 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
-| [`mcp-server-elf`](#mcp-server-elf) | `radia_mcp.elf` | 1 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 2 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 1 |
@@ -148,16 +149,6 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `lint_gmsh_directory` | Lint all Python scripts in a directory for GMSH policy violations. |
 | `lint_gmsh_script` | Lint a single Python script for GMSH policy violations. |
-
-## `mcp-server-elf`
-
-_ELF (Electromagnetic Loss/Field) postprocessing knowledge_
-
-Module: `radia_mcp.elf.server`
-
-| Tool | Description |
-|---|---|
-| `elf_usage` | Get ELF600 electromagnetic field analysis documentation. |
 
 ## `mcp-server-electromagnet`
 
