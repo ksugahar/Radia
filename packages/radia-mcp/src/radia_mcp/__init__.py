@@ -4,7 +4,6 @@ Layout:
   radia_mcp.cubit         — standalone Cubit MCP server (Plan A: GUI + QTimer + file drop)
   radia_mcp.build123d     — standalone build123d MCP server (STEP → Cubit workflow)
   radia_mcp.gmsh          — standalone gmsh MSH v4.1 inspect/validate/convert
-  radia_mcp.elf           — historical ELF reference (no live deps)
   radia_mcp.interop       — Radia <-> third-party CAD interop
   radia_mcp.radia_ngsolve — Radia + NGSolve general FEM/BEM/Kelvin/PEEC/MSH knowledge
   radia_mcp.ih            — Induction Heating workflow (workpiece SIBC, ESIM,
