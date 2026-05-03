@@ -1,11 +1,12 @@
 """Generate docs/TOOLS.md — single-file inventory of all radia-mcp tools.
 
-radia-mcp ships 9 separate MCP servers (cubit / build123d / radia-ngsolve /
-gmsh / elf / electromagnet / ih / peec / interop), each with its own
-FastMCP instance and console-script entry point. This script imports
-each server module, enumerates its tools, and writes a unified markdown
-inventory so an AI agent can grep one file to find any tool across the
-9 servers.
+radia-mcp ships 8 separate MCP servers (cubit / build123d / radia-ngsolve /
+gmsh / electromagnet / ih / peec / interop), each with its own
+FastMCP instance and console-script entry point.  ELF was extracted to
+the standalone PyPI package mcp-server-elf as of radia-mcp 0.39.0.
+This script imports each server module, enumerates its tools, and
+writes a unified markdown inventory so an AI agent can grep one file
+to find any tool across the 8 servers.
 
 Usage:
     python scripts/gen_tools_doc.py            # write docs/TOOLS.md
@@ -27,7 +28,6 @@ SERVERS = [
     ("build123d",      "mcp-server-build123d",      "build123d (Pythonic OCCT) + STEP/XCAF labels + Cubit pipeline interop"),
     ("radia_ngsolve",  "mcp-server-radia-ngsolve",  "Radia + NGSolve coupled magnetostatics, Kelvin transformation, sparse solver"),
     ("gmsh",           "mcp-server-gmsh",           "Gmsh script linting + post-processing spec helpers"),
-    ("elf",            "mcp-server-elf",            "ELF (Electromagnetic Loss/Field) postprocessing knowledge"),
     ("electromagnet",  "mcp-server-electromagnet",  "Electromagnet design (symmetry reductions, BC choices)"),
     ("ih",             "mcp-server-ih",             "IH (induction-heating) coil + load workflow"),
     ("peec",           "mcp-server-peec",           "PEEC (partial element equivalent circuit) inductance modeling"),
