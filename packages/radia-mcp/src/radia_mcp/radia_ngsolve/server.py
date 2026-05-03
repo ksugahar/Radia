@@ -39,6 +39,7 @@ from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
+from .knowledge.basis_functions import get_basis_functions_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -1101,6 +1102,49 @@ def standalone_panels(topic: str = "") -> str:
         topic: Empty for the full document, or one of the topics above.
     """
     return get_standalone_panels_documentation(topic)
+
+
+@mcp.tool()
+def basis_functions(topic: str = "") -> str:
+    """
+    Finite-element basis function library — Mathematica-canonical
+    reference for H1, HCurl, HDiv, L2 on triangle / tet / quad / hex
+    / prism / pyramid, arbitrary order.
+
+    Phase 1 (radia-mcp 0.38.0) covers triangle + tetrahedron with
+    H1 Lagrange P1-P5 (triangle) / P1-P3 (tet), HDiv RT₀ (= RWG used
+    by BEM-A), and L2 P0-P3.  Mathematica notation is the canonical
+    form; SymPy / NumPy translations are CI-verified in
+    ``tests/basis/test_basis_functions.py``.
+
+    Read this when:
+      * Implementing a new BEM / FEM panel and need the canonical
+        basis formula + a verified NumPy translation.
+      * Cross-checking NGSolve's hierarchical output against a
+        textbook Lagrange definition.
+      * Debugging RWG sign / divergence issues in BEM-A.
+      * Generating a code-gen template (NumPy / MATLAB / SymPy /
+        Maple) from the Mathematica canonical form.
+
+    Topics:
+      theory_overview               -- what each space (H1/HCurl/HDiv/L2) means
+      code_gen_pattern              -- Mathematica → NumPy / SymPy translation rules
+      triangle_h1_lagrange          -- Triangle P1, P2, P3, P4, P5 (Lagrange nodal)
+      triangle_h1_hierarchical      -- Triangle hierarchical (NGSolve compat)
+      triangle_rwg                  -- Triangle HDiv RT₀ (= RWG, BEM-A workhorse)
+      triangle_l2                   -- Triangle L2 P0-P3, Dubiner orthogonal
+      tet_h1_lagrange               -- Tetrahedron P1, P2, P3
+      tet_rwg                       -- Tetrahedron HDiv RT₀ (3D RWG, future)
+      verification_recipes          -- partition of unity, div=σ/A, etc.
+
+    Companion files:
+      examples/mathematica/RadiaBasis.m  -- canonical Mathematica package
+      tests/basis/test_basis_functions.py -- CI-verified NumPy ports
+
+    Args:
+        topic: Empty for the full document, or one of the topics above.
+    """
+    return get_basis_functions_documentation(topic)
 
 
 def _selftest():
