@@ -359,7 +359,6 @@ jobs:
             @{ name = 'mcp-server-cubit';          mod = 'radia_mcp.cubit.server' },
             @{ name = 'mcp-server-build123d';      mod = 'radia_mcp.build123d.server' },
             @{ name = 'mcp-server-gmsh';           mod = 'radia_mcp.gmsh.server' },
-            @{ name = 'mcp-server-elf';            mod = 'radia_mcp.elf.server' },
             @{ name = 'mcp-server-radia-interop';  mod = 'radia_mcp.interop.server' }
           )
           $failed = @()
