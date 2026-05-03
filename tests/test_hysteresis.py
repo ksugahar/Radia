@@ -508,3 +508,168 @@ class TestShapeFunctionIdentificationRegression:
                 f"f_tables[{k}] starts at r={r0:.3e}, expected exact 0"
             assert f0 == 0.0, \
                 f"f_tables[{k}] f(r=0)={f0:.3e}, expected exact 0 (anti-symm)"
+
+
+class TestEnergyBasedPlayModelPython:
+    """Regression tests for the Python EnergyBasedPlayModel reference.
+
+    Covers the 4 bugs fixed in commit 6909af1c (2026-05-02) in
+    src/radia/energy_play_model.py — the documented Python reference of the
+    rev/irrev separation form of B-input Play.
+    """
+
+    def test_compute_nu_rev_matches_virgin_curve_scan(self, full_fixture):
+        """Bug 1: nu_rev must equal max_B sum_k f_k'(p_k(B)) on the virgin curve.
+
+        The pre-fix implementation returned `sum_k max|f_k'|`, a loose
+        triangle-inequality upper bound (typically 2-3x the actual maximum).
+        Symptom: Picard contraction ratio close to 1 -> slow inverse
+        convergence. Verify nu_rev matches an independent virgin-curve scan.
+        """
+        from radia.energy_play_model import EnergyBasedPlayModel
+        K, eta, f_k_tables = full_fixture
+        f_k_tables = [(np.asarray(r), np.asarray(f)) for r, f in f_k_tables]
+        model = EnergyBasedPlayModel(eta, f_k_tables)
+
+        # Independent virgin-curve scan of max_B sum_k f_k'(max(B - eta_k, 0))
+        eta_arr = np.asarray(eta)
+        B_sat = max(float(np.max(np.abs(np.asarray(rk))))
+                    for rk, _ in f_k_tables)
+        df_interps = []
+        for rk, fk in f_k_tables:
+            r = np.asarray(rk); f = np.asarray(fk)
+            mask = r >= 0
+            r = r[mask]; f = f[mask]
+            idx = np.argsort(r); r = r[idx]; f = f[idx]
+            df_interps.append((r, np.gradient(f, r)))
+        n_scan = 1000
+        max_dHdB = 0.0
+        for i in range(1, n_scan + 1):
+            B_val = B_sat * i / n_scan
+            dHdB = 0.0
+            for k in range(K):
+                pk = B_val - eta_arr[k]
+                if pk <= 1e-30:
+                    continue
+                r, df = df_interps[k]
+                dHdB += float(np.interp(pk, r, df))
+            max_dHdB = max(max_dHdB, dHdB)
+
+        rel_err = abs(model.nu_rev - max_dHdB) / max_dHdB
+        assert rel_err < 0.05, \
+            f"nu_rev = {model.nu_rev:.3e} should match virgin-curve max " \
+            f"= {max_dHdB:.3e} within 5% (got {rel_err*100:.1f}%); " \
+            f"loose triangle-inequality bound (old bug) is typically 2-3x larger"
+
+    def test_play_operator_three_regimes(self, full_fixture):
+        """Bug 2: _play_operator must implement the Play update, not np.clip.
+
+        Standard B-input Play: p_new = max(B - eta_k, min(B + eta_k, p_old))
+          - elastic regime |B - p_old| <= eta:  p_new = p_old
+          - following up    B > p_old + eta:    p_new = B - eta
+          - following down  B < p_old - eta:    p_new = B + eta
+
+        Pre-fix used np.clip(B, p-eta, p+eta), which clamps B to that range
+        and returns the wrong scalar (e.g., elastic regime returned B
+        instead of p_old).
+        """
+        from radia.energy_play_model import EnergyBasedPlayModel
+        K, eta, f_k_tables = full_fixture
+        f_k_tables = [(np.asarray(r), np.asarray(f)) for r, f in f_k_tables]
+        model = EnergyBasedPlayModel(eta, f_k_tables)
+
+        # Pick a hysteron with non-trivial threshold
+        k_test = next(k for k in range(K) if eta[k] > 1e-3)
+        eta_k = float(eta[k_test])
+        p_old = 0.5
+
+        # Elastic regime: |B - p_old| <= eta_k -> p_new = p_old
+        model._p[k_test] = p_old
+        B_elastic = p_old + 0.5 * eta_k
+        p_new = model._play_operator(B_elastic, k_test)
+        assert abs(p_new - p_old) < 1e-12, \
+            f"Elastic regime: p_new should equal p_old={p_old}, got {p_new}"
+
+        # Following-up regime: B > p_old + eta_k -> p_new = B - eta_k
+        model._p[k_test] = p_old
+        B_above = p_old + 2.0 * eta_k
+        p_new = model._play_operator(B_above, k_test)
+        assert abs(p_new - (B_above - eta_k)) < 1e-12, \
+            f"Following-up: p_new should equal B-eta_k={B_above-eta_k}, " \
+            f"got {p_new}"
+
+        # Following-down regime: B < p_old - eta_k -> p_new = B + eta_k
+        model._p[k_test] = p_old
+        B_below = p_old - 2.0 * eta_k
+        p_new = model._play_operator(B_below, k_test)
+        assert abs(p_new - (B_below + eta_k)) < 1e-12, \
+            f"Following-down: p_new should equal B+eta_k={B_below+eta_k}, " \
+            f"got {p_new}"
+
+    def test_irreversible_anti_symmetric_at_negative_B(self, full_fixture):
+        """Bug 3: H_irr(-Bm) must be NEGATIVE, not positive.
+
+        Pre-fix evaluated g_k_interp(pk) with signed pk, but tables span
+        only r >= 0; linear extrapolation gave wrong sign for large negative
+        |pk|. Symptom: H(-Bm) came out POSITIVE (sign wrong).
+        Fix: evaluate at |pk|, then multiply by sign(pk) (anti-symmetry).
+        """
+        from radia.energy_play_model import EnergyBasedPlayModel
+        K, eta, f_k_tables = full_fixture
+        f_k_tables = [(np.asarray(r), np.asarray(f)) for r, f in f_k_tables]
+        model = EnergyBasedPlayModel(eta, f_k_tables)
+
+        Bm = 1.5
+        N = 200
+        B_seq = np.concatenate([
+            np.linspace(0.0, Bm, N),
+            np.linspace(Bm, -Bm, N),
+        ])
+        H_seq = np.array([model.forward(B) for B in B_seq])
+
+        # H at the final point (B = -Bm) must be negative
+        assert H_seq[-1] < 0, \
+            f"H(B=-Bm) = {H_seq[-1]:.3e} should be NEGATIVE, " \
+            f"old bug returned positive value (sign error in g_k extrapolation)"
+
+        # Sweep range should be roughly symmetric (|min| ~ |max|)
+        H_max, H_min = float(H_seq.max()), float(H_seq.min())
+        asymmetry = abs(H_max + H_min) / max(H_max, abs(H_min))
+        assert asymmetry < 0.1, \
+            f"H range [{H_min:.1f}, {H_max:.1f}] asymmetric: " \
+            f"{asymmetry*100:.1f}% > 10% threshold (bug 3 regression)"
+
+    def test_energy_nonzero_on_negative_half_plane(self, full_fixture):
+        """Bug 4: W_irr(B) for negative B must be > 0, not zero.
+
+        Pre-fix used `mask = rk <= pk` with rk >= 0 (g_k tables span r >= 0)
+        and pk < 0; the mask was always empty, so W_irr stayed 0 on the
+        entire negative half-plane. Fix: integrate over |pk|, exploiting
+        evenness of G_k by anti-symmetry of g_k.
+        """
+        from radia.energy_play_model import EnergyBasedPlayModel
+        K, eta, f_k_tables = full_fixture
+        f_k_tables = [(np.asarray(r), np.asarray(f)) for r, f in f_k_tables]
+        model = EnergyBasedPlayModel(eta, f_k_tables)
+
+        Bm = 1.0
+        N = 100
+        B_seq = np.concatenate([
+            np.linspace(0.0, Bm, N),
+            np.linspace(Bm, -Bm, N),
+        ])
+        for B in B_seq:
+            model.forward(B)  # advance Play state through the trajectory
+
+        W_neg = model.energy(-Bm)
+        W_rev = 0.5 * model.nu_rev * Bm**2
+        W_irr_neg = W_neg - W_rev
+
+        # The pre-fix bug returned W_irr = 0 EXACTLY on the entire negative
+        # half-plane (empty integration mask). Post-fix: W_irr is non-zero
+        # because integration is over |pk|. Sign of W_irr is not the issue
+        # (G_k can be negative by design); the issue was identical-zero.
+        assert abs(W_irr_neg) > 1e-3 * abs(W_rev), \
+            f"W_irr(-Bm) = {W_irr_neg:.3e} should be non-trivial " \
+            f"(|W_irr| >> 0); old bug had empty integration mask on " \
+            f"negative B and returned exactly 0"
