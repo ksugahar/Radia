@@ -3,6 +3,83 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.26.0 — BEM-A coil migrated from intree (Python) to ngsolve.bem; intree code retired
+
+Released 2026-05-03.  Strategic pivot after benchmarking.
+
+### Why
+
+The intree BEM-A assembler shipped in 4.25.0
+(`radia.bem.efie_rwg.solve_inductance_source_sink_intree`) was a pure-
+Python double loop over N² triangle pairs with no C++ acceleration.
+Benchmarking on `tests/panels/golden/rect_torus_lofted_united.step`
+across N=302..1014 triangles showed ngsolve.bem (`use_fmm=False` +
+`mat.COO()` extract) is **50-60x faster at every measured N** with no
+crossover.  L values agree to 0.025-0.05 %, so the methods are
+numerically equivalent — only speed differs.
+
+| maxh (mm) | n_tris | intree (Python) | ngsolve.bem | speedup |
+|-----------|-------|-----|-----|-----|
+| 12        | 302   | 23.5 s | 0.39 s | 60x |
+| 8         | 340   | 28.8 s | 0.47 s | 61x |
+| 6         | 436   | 44.2 s | 0.81 s | 55x |
+| 4         | 1014  | 209 s  | 5.91 s | 35x |
+
+### What changed
+
+* `src/radia/bem/coil_inductance_ngsolve.py` — new (promoted from
+  `examples/induction_heating/bem_reference/bem_inductance.py`).
+  Adds:
+    * `compute_inductance_source_sink(mesh, ..., Z_s_re=...)` — returns
+      `L`, `R` (AC SIBC), `J`, `gf_J`, etc.  ngsolve.bem LaplaceSL on
+      HDivSurface, dense extract via `_to_dense(mat) = mat.COO()`.
+    * `compute_centroids_areas_J(mesh, gf_J)` — per-tri J sampling
+      via NGSolve `Integrate(..., element_wise=True)`, ready for the
+      workpiece weak-coupling bridge.
+* `src/radia/panels/calc_inductance.py:_solve_coil_bem_a` rewritten
+  to call `compute_inductance_source_sink` + `compute_centroids_areas_J`.
+  At maxh=0.005 the coil layer time dropped from 99.7 s to 2.3 s
+  (43x faster) on the full weak-coupled IH pipeline.
+
+### Files retired
+
+* `src/radia/bem/efie_rwg.py` (-996 LOC; intree assembler + verification helpers)
+* `tests/bem/test_coil_bem_a_dc_resistance.py` (-3 tests)
+* `tests/bem/test_coil_bem_a_efie_golden.py` (-2 tests)
+* `tests/bem/test_coil_bem_a_intree_match.py` (-3 tests)
+* `tests/bem/test_coil_bem_a_order_convergence.py` (-2 tests)
+* `tests/bem/test_coil_bem_a_rect_torus_loft.py` (-3 tests)
+* `examples/coil_bem_a/` (entire directory — build123d demo, GMSH viz,
+  PEEC-vs-BEM comparison scripts; the production path no longer needs
+  these as showcase / orientation material)
+
+### What was kept
+
+* **Scalar BEM intree (Phase 1.9 C++ + 1.11 HACApK)** — kept and
+  unchanged.  At N=595 intree scalar is 7x faster than ngsolve.bem
+  with the COO fix, and supports HACApK ACA compression for large N.
+  The HDiv asymmetry doesn't apply: H1 P1 has higher per-pair
+  Galerkin product cost, which Phase 1.9's TaskManager parallel
+  + admissibility cutoff offsets.
+* **PEEC** path on `--coil-solver peec` — unchanged.
+
+### Lesson learned
+
+Benchmark new implementations against the alternative BEFORE shipping.
+4.25.0 shipped intree BEM-A based on a single ngsolve.bem timing
+(104 s @ N_J=5064) measured at a problem size 5x larger than the
+panel uses.  At production N (300-1500), ngsolve.bem is ~0.4-6 s, not
+slow.  See `memory/project_bem_a_ngsolve_chosen_2026_05_03.md`.
+
+### Future Phase 6 (radia-mcp 0.39.x or radia 4.27.x)
+
+Add curved-element support (`mesh.Curve(p)`) to the intree C++ scalar
+BEM (`rad_bem_galerkin.cpp`).  ngsolve.bem already provides curved
+geometry for the coil; only the workpiece (intree) needs the
+extension.  Estimated 1.5-2 weeks: ~400 LOC C++ for isoparametric
+Jacobian + Sauter-Schwab on curved triangles, ~50 LOC Python for
+high-order node extraction, ~200 LOC tests.
+
 ## 4.25.1 — radia-heat console entry-point + Cubit-bypass launch documented
 
 Released 2026-05-03.  Patch release.
