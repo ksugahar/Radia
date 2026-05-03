@@ -41,6 +41,10 @@ from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
+from .knowledge.cln_3d import (
+    get_cln_3d_documentation,
+    get_cln_3d_notebook,
+)
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -462,6 +466,88 @@ def esim(topic: str = "all") -> str:
                                 + BEM-SIBC / FEM-SIBC coupling examples
     """
     return get_esim_documentation(topic)
+
+
+@mcp.tool()
+def cln_3d(topic: str = "all") -> str:
+    """
+    Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration
+    documentation for eddy current analysis with NGSolve.
+
+    Captures Tanimoto-Kameari iterative methods from the master's thesis
+    + production code (W:/00_CAE/NGSolve/谷本/, ~25 notebooks):
+      - A-T formulation (primary)
+      - T-Ω formulation (H1 confined to conductor)
+      - A-Φ formulation (HCurl + H1 mixed)
+      - Constraint variants: penalty stabilization, explicit Coulomb gauge
+      - Production solvers: SparseSolvPy ICCG, accICCG, NGSolve CG, direct
+
+    Each formulation produces a Cauer-II ladder {R_n, L_n} via Schmidt
+    orthogonalization on impressed J source. Validated against
+    cylindrical TM-mode analytical R/L for n=0..9.
+
+    Open research: Kameari + Kelvin transformation combination (3D
+    HCurl A-formulation hits ~25× discrepancy with mpmath BEM Foster
+    target due to A_ext gauge being unbounded at infinity; future
+    work includes T-Ω with reduced-Ω = -H_0·z + Ω_r).
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"           - Complete documentation
+            "overview"      - Mathematical foundation, three formulations
+            "notebooks"     - Index of 修論 / 定式_誤差検証 / 静止器回転機用
+            "formulas"      - Cauer-II synthesis, drift diagnostic,
+                              bonus_intorder critical setting
+    """
+    full_doc = get_cln_3d_documentation()
+    if topic == "all":
+        return full_doc
+    sections = {
+        "overview": "OVERVIEW",
+        "notebooks": "NOTEBOOK_INDEX",
+        "formulas": "KEY_FORMULAS",
+    }
+    if topic in sections:
+        # Split on H2 markdown headers as section breaks
+        from .knowledge import cln_3d
+        if topic == "overview":
+            return cln_3d.CLN_3D_OVERVIEW
+        if topic == "notebooks":
+            return cln_3d.CLN_3D_NOTEBOOK_INDEX
+        if topic == "formulas":
+            return cln_3d.CLN_3D_KEY_FORMULAS
+    return full_doc
+
+
+@mcp.tool()
+def cln_3d_notebook(name: str = "list") -> str:
+    """
+    Retrieve Tanimoto's raw 3D CLN notebook Python code.
+
+    Provides direct access to the canonical Python code from Tanimoto's
+    master's thesis + production notebooks at W:/00_CAE/NGSolve/谷本/.
+    Use this when you need to see the actual implementation details
+    (HCurl space construction, Kameari iteration loop, ICCG solver
+    invocation, output extraction, etc.).
+
+    Args:
+        name: Notebook identifier. Options:
+            "list"       - List available notebooks with file sizes
+            "AT"         - A-T formulation (primary 修論 reference,
+                           cylinder, 10-stage Kameari, SparseSolvPy ICCG)
+            "T_Omega"    - T-Ω formulation (HCurl × H1 with Ω confined
+                           to conductor)
+            "APhi"       - A-Φ formulation (HCurl + H1, body current
+                           via σ∇Φ)
+            "2D"         - 2D scalar reference (pedagogical, Kameari
+                           formula validation)
+            "production" - 2024-09-17 production: A + ICCG with inline
+                           gauge correction, accICCG params, type1 HCurl
+
+    Returns:
+        Full Python script content (~3-9 KB each), or list of available.
+    """
+    return get_cln_3d_notebook(name)
 
 
 @mcp.tool()
