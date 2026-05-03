@@ -34,12 +34,36 @@ Output: JSON to stdout (calc_main contract).
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import sys
 import time
 
 import numpy as np
+
+
+def _detect_vol_curving_order(vol_path: str) -> int:
+    """Read companion ``<vol_path>.json`` (written by Cubit's
+    ``radia_export netgen``) to find the curving order baked into the
+    .vol.  Returns the integer ``order`` field, or 1 if the companion
+    JSON is missing / malformed (= flat, safe default).
+
+    This is the SOURCE OF TRUTH for the workpiece BEM basis order in
+    ``calc_inductance.py``: the .vol's ``curvedelements`` is fixed at
+    Cubit-export time, and trying to upgrade via ``mesh.Curve(p)``
+    after-the-fact silently falls back to flat without a CAD callback.
+    """
+    json_path = vol_path + ".json"
+    if not os.path.isfile(json_path):
+        return 1
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        order = int(data.get("order", 1))
+        return max(1, order)
+    except (OSError, ValueError, KeyError):
+        return 1
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -338,13 +362,49 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     vol_mesh = Mesh(args.vol)
     mats = set(vol_mesh.GetMaterials())
     bnds = set(vol_mesh.GetBoundaries())
+
+    # Detect the .vol's baked-in curving order from companion .vol.json
+    # (written by Cubit ``radia_export netgen``).  The .vol's
+    # ``curvedelements`` section is loaded automatically by Mesh(); a
+    # post-load ``mesh.Curve(p)`` would try to UPGRADE and, without a
+    # CAD callback, silently fall back to flat -- so we never call it.
+    # The curve order is FIXED at Cubit-export time and is not a panel
+    # knob.  Capped at 2 for the Lagrange-P2 in-tree assembler (the C++
+    # Tri6 geometry kernel takes 6 nodes / tri, so a curve_order=3 .vol
+    # is treated as Tri6 here -- the extra mid-face / interior nodes
+    # are not currently used by the SS BIE assembler).
+    vol_curve_order = min(_detect_vol_curving_order(args.vol), 2)
+    # Basis order is a separate, user-selectable knob (--h1-order), not
+    # tied to the geometry order.  P1 + P2 supported.
+    basis_order = int(args.h1_order)
+    if basis_order not in (1, 2):
+        raise ValueError(
+            f"--h1-order must be 1 or 2 (got {basis_order}).  P3+ "
+            f"basis is not implemented in the in-tree Lagrange "
+            f"assembler.")
+    progress("BEM",
+        f"vol curve_order={vol_curve_order} "
+        f"(from {os.path.basename(args.vol)}.json), "
+        f"basis_order={basis_order} (--h1-order)")
+    # The Lagrange-P2 path (basis_order=2) builds M, K, SL, DL all in the
+    # in-tree P2 basis directly off the parent vol_mesh's curved Tri6
+    # nodes; it requires a sideset bnd_label so it can filter the parent
+    # mesh's BND.
+    if basis_order >= 2 and args.wp_label not in bnds:
+        raise ValueError(
+            f"--h1-order=2 requires --wp-label to name a boundary "
+            f"sideset (got {args.wp_label!r}, available BND labels: "
+            f"{sorted(bnds)}).  Material-adjacency wp_label is only "
+            f"supported with basis_order=1 (flat-FES path).")
+
     if args.wp_label in mats:
         progress("BEM", f"wp_label {args.wp_label!r} as material")
-        wp_mesh = _extract_surface_mesh_filtered(
-            vol_mesh, keep_label=args.wp_label)
+        wp_mesh, _wp_new_to_old = _extract_surface_mesh_filtered(
+            vol_mesh, keep_label=args.wp_label, return_vertex_map=True)
     elif args.wp_label in bnds:
         progress("BEM", f"wp_label {args.wp_label!r} as boundary sideset")
         wp_mesh = _extract_bnd_only(vol_mesh, args.wp_label)
+        _wp_new_to_old = None
     else:
         raise ValueError(
             f"wp_label {args.wp_label!r} not found in materials "
@@ -359,28 +419,48 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             "ESIM is not implemented in calc_inductance.  Use "
             "--impedance-model sibc.  For nonlinear BH consider "
             "calc_fem_coilmesh.py.")
-    if args.h1_order >= 2:
-        raise NotImplementedError(
-            f"--h1-order={args.h1_order} not yet wired through panel "
-            f"post-processing.  Use --h1-order=1.")
 
-    # 3. ScalarBIESIBCSolver assembly
+    # 3. ScalarBIESIBCSolver assembly.
+    #
+    # Two independent knobs feed the solver:
+    #   * vol_curve_order : geometry order (auto-detected from .vol.json).
+    #     Forwarded as ``intree_geom_order``.
+    #   * basis_order     : Lagrange basis order (user-selectable, --h1-order).
+    #     Forwarded as ``order``.
+    #
+    # When basis_order=2 the in-tree Lagrange-P2 path bypasses NGSolve's
+    # H1 hierarchical FES entirely and routes through the parent
+    # ``vol_mesh`` (whose ``curvedelements`` is already loaded) plus the
+    # ``bnd_label`` filter; the extracted flat ``wp_mesh`` is used only
+    # for post-processing (Telegen per-element ΔL averaging).
+    # When basis_order=1 we keep the existing flat-extracted wp_mesh
+    # path; H1+ngsolve.bem trace integration runs on flat triangles
+    # consistent with the P1 hat (curving has no benefit at P1 since the
+    # basis cannot resolve geometric curvature).
+    use_curved_p2 = (basis_order >= 2)
+    bem_input_mesh = vol_mesh if use_curved_p2 else wp_mesh
+    bem_bnd_label = args.wp_label if use_curved_p2 else None
     progress("BEM",
-        f"assembly (h1_order={args.h1_order}, backend={args.wp_bem_backend})")
+        f"assembly (basis_order={basis_order}, "
+        f"vol_curve_order={vol_curve_order}, "
+        f"backend={args.wp_bem_backend}, "
+        f"input_mesh={'vol_mesh+bnd_label' if use_curved_p2 else 'wp_mesh'})")
     t0 = time.perf_counter()
     if args.wp_bem_backend == "intree-dense":
         bem = ScalarBIESIBCSolver(
-            wp_mesh, order=args.h1_order, assemble_dense=True,
-            use_intree_bem=True,
-            intree_singular_n_q=6, intree_regular_quad_degree=7)
+            bem_input_mesh, order=basis_order, assemble_dense=True,
+            use_intree_bem=True, intree_geom_order=vol_curve_order,
+            intree_singular_n_q=6, intree_regular_quad_degree=7,
+            bnd_label=bem_bnd_label)
     elif args.wp_bem_backend == "hacapk":
         bem = ScalarBIESIBCSolver(
-            wp_mesh, order=args.h1_order, assemble_dense=True,
-            use_intree_bem=True,
+            bem_input_mesh, order=basis_order, assemble_dense=True,
+            use_intree_bem=True, intree_geom_order=vol_curve_order,
             intree_singular_n_q=6, intree_regular_quad_degree=7,
             use_intree_hacapk=True,
             hacapk_aca_eps=args.wp_aca_eps,
-            hacapk_leaf=64, hacapk_eta=2.0)
+            hacapk_leaf=64, hacapk_eta=2.0,
+            bnd_label=bem_bnd_label)
     else:
         raise ValueError(
             f"unknown --wp-bem-backend {args.wp_bem_backend!r}; "
@@ -441,15 +521,60 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     H_t_rms = float(res_bem["H_t_rms"])
     wp_dissipation_R_mOhm = 2.0 * P_wp / (args.current ** 2) * 1e3
 
-    # 7. Telegen ΔL via φ·B form -- aggregate per-triangle wp data first
+    # 7. Telegen ΔL via φ·B form -- aggregate per-triangle wp data first.
+    # Two post-proc paths:
+    #   * P1 (basis_order=1): phi_vec is indexed by wp_mesh vertices;
+    #     bem.fes is the wp_mesh H1 FES; use NGSolve element_wise integrals.
+    #   * P2 (basis_order>=2): phi_vec is indexed by Lagrange P2 DOFs on
+    #     the parent vol_mesh BND; bem.fes is None.  Build phi-at-wp-
+    #     vertices by matching wp_mesh.vertices coords to solver vertex
+    #     DOFs (the first n_v entries of dof_coords), then average over
+    #     each flat wp_mesh triangle (corner-mean = area-weighted P1 mean).
     n_cf = _scf.normal(3)
-    gf_phi_re = _GF(bem.fes); gf_phi_re.vec.FV().NumPy()[:] = res_bem["phi_vec"].real
-    gf_phi_im = _GF(bem.fes); gf_phi_im.vec.FV().NumPy()[:] = res_bem["phi_vec"].imag
     elem_A_int = _Int(_CF(1), wp_mesh, VOL_or_BND=_BND, element_wise=True)
     n_int = [_Int(n_cf[i], wp_mesh, VOL_or_BND=_BND, element_wise=True)
               for i in range(3)]
-    phi_re_int = _Int(gf_phi_re, wp_mesh, VOL_or_BND=_BND, element_wise=True)
-    phi_im_int = _Int(gf_phi_im, wp_mesh, VOL_or_BND=_BND, element_wise=True)
+
+    if basis_order >= 2:
+        # Build phi-at-wp-vertices via coordinate match.
+        n_v_solver = len(bem._intree_v_global)
+        solver_vert_coords = np.asarray(bem.dof_coords[:n_v_solver])
+        coord_to_dof = {}
+        for i in range(n_v_solver):
+            key = (round(solver_vert_coords[i, 0], 12),
+                   round(solver_vert_coords[i, 1], 12),
+                   round(solver_vert_coords[i, 2], 12))
+            coord_to_dof[key] = i
+        phi_at_wp = np.zeros(wp_mesh.nv, dtype=complex)
+        n_missed = 0
+        for i in range(wp_mesh.nv):
+            p = wp_mesh.vertices[i].point
+            key = (round(p[0], 12), round(p[1], 12), round(p[2], 12))
+            j = coord_to_dof.get(key)
+            if j is None:
+                n_missed += 1
+                continue
+            phi_at_wp[i] = res_bem["phi_vec"][j]
+        if n_missed > 0:
+            raise RuntimeError(
+                f"P2 post-proc: {n_missed}/{wp_mesh.nv} wp vertices did "
+                f"not match any solver vertex DOF coord.  This indicates "
+                f"the extracted wp_mesh vertices and the parent vol_mesh "
+                f"BND={args.wp_label!r} vertices are not coincident.")
+        wp_phi_re_at_v = phi_at_wp.real
+        wp_phi_im_at_v = phi_at_wp.imag
+        phi_re_int = None  # not used in this branch
+        phi_im_int = None
+    else:
+        gf_phi_re = _GF(bem.fes)
+        gf_phi_re.vec.FV().NumPy()[:] = res_bem["phi_vec"].real
+        gf_phi_im = _GF(bem.fes)
+        gf_phi_im.vec.FV().NumPy()[:] = res_bem["phi_vec"].imag
+        phi_re_int = _Int(gf_phi_re, wp_mesh, VOL_or_BND=_BND,
+                           element_wise=True)
+        phi_im_int = _Int(gf_phi_im, wp_mesh, VOL_or_BND=_BND,
+                           element_wise=True)
+        wp_phi_re_at_v = wp_phi_im_at_v = None
 
     wp_centroids_l, wp_areas_l, wp_norms_l, wp_phi_avg_l = [], [], [], []
     for el in wp_mesh.Elements(_BND):
@@ -459,7 +584,14 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         pts = [wp_mesh.vertices[v.nr].point for v in el.vertices]
         c = np.mean([(p[0], p[1], p[2]) for p in pts], axis=0)
         n_at_el = np.array([n_int[i][el.nr] / a for i in range(3)])
-        phi_avg = (phi_re_int[el.nr] + 1j * phi_im_int[el.nr]) / a
+        if basis_order >= 2:
+            corner_phi_re = np.array(
+                [wp_phi_re_at_v[v.nr] for v in el.vertices])
+            corner_phi_im = np.array(
+                [wp_phi_im_at_v[v.nr] for v in el.vertices])
+            phi_avg = corner_phi_re.mean() + 1j * corner_phi_im.mean()
+        else:
+            phi_avg = (phi_re_int[el.nr] + 1j * phi_im_int[el.nr]) / a
         wp_centroids_l.append(c); wp_areas_l.append(a)
         wp_norms_l.append(n_at_el); wp_phi_avg_l.append(phi_avg)
     wp_centroids_arr = np.asarray(wp_centroids_l, dtype=float)
@@ -730,7 +862,17 @@ def main():
     parser.add_argument("--esim-max-iter", type=int, default=15)
     parser.add_argument("--esim-tol", type=float, default=1e-3)
     parser.add_argument("--h1-order", type=int, default=1,
-                        help="H1 order (1 only)")
+                        choices=[1, 2],
+                        help="Workpiece BEM Lagrange basis order "
+                             "(NOT the geometry curving order, which is "
+                             "auto-detected from the .vol's companion "
+                             ".vol.json -- the .vol's curvedelements is "
+                             "fixed at Cubit-export time and a post-load "
+                             "mesh.Curve(p) silently falls back to flat). "
+                             "1 = P1 hat (flat-friendly default).  "
+                             "2 = Lagrange-P2 (uses curved Tri6 geometry "
+                             "if the .vol has curve order >= 2, otherwise "
+                             "P2 basis on flat Tri3 geometry).")
     parser.add_argument("--wp-bem-backend", default="hacapk",
                         choices=["hacapk", "intree-dense"])
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)

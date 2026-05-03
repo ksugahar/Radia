@@ -386,10 +386,21 @@ class IHPanel(ModePanel):
         self.add_spin("peec_nwinc", "PEEC nwinc (volume grid):", 3, 1, 10)
         self.add_spin("peec_nhinc", "PEEC nhinc (volume grid):", 3, 1, 10)
         # Basis polynomial order.  Meaning depends on method:
-        #   PEEC+BEM -> H1 surface order   (--h1-order)
-        #   FEM full -> HCurl volume order (--fes-order)
-        # Same widget for both because the CLI range (1-3) and UX ("how
-        # smooth should the basis be?") are identical.
+        #   PEEC+BEM / BEM-A+BEM -> --h1-order (BEM Lagrange basis on
+        #     the workpiece surface; 1 = P1 hat, 2 = Lagrange P2).
+        #   PEEC+FEM+Kelvin / Full FEM -> --fes-order (HCurl volume
+        #     basis order; 1-3 supported).
+        # Same widget for both because the UX ("how smooth should the
+        # basis be?") is identical.  P3 is NOT supported on the BEM
+        # side (no Lagrange-P3 in-tree assembler) but IS supported on
+        # the FEM side -- the calc_inductance.py CLI hard-rejects
+        # h1_order=3 with a clear error.
+        # NOTE: the GEOMETRY curve order is NOT a panel knob -- it is
+        # fixed by the .vol's baked curvedelements (set at Cubit-export
+        # time via ``radia_export netgen "f.vol" order N``) and
+        # auto-detected by calc_inductance.py from the companion
+        # ``.vol.json``.  A post-load ``mesh.Curve(p)`` silently falls
+        # back to flat without a CAD callback, so we never expose it.
         self.add_spin("fes_order", "Basis order:", 1, 1, 3)
 
         # ============ Initial state ============
@@ -555,9 +566,15 @@ class IHPanel(ModePanel):
         # Volume filament grid (nwinc/nhinc) only PEEC+FEM+Kelvin now.
         self._set_row_visible("peec_nwinc", is_peec_fem_k)
         self._set_row_visible("peec_nhinc", is_peec_fem_k)
-        # fes_order spin is reused as --h1-order for the weak-coupled
-        # workpiece BIE (peec-bem and bem-a-bem) and --fes-order for
-        # both FEM-side paths; hidden for vacuum-only modes.
+        # fes_order spin is shown for all weak-coupled / FEM modes:
+        #   * PEEC+BEM / BEM-A+BEM    -> --h1-order (Lagrange basis order)
+        #   * PEEC+FEM+Kelvin / Full FEM -> --fes-order (HCurl volume order)
+        # Hidden for vacuum-only modes (no workpiece, no FEM volume).
+        # Note: for BEM modes, this is the BASIS order only.  The
+        # geometry CURVE order is fixed at Cubit-export time
+        # (.vol.json) and auto-detected by calc_inductance.py -- a
+        # post-load mesh.Curve(p) silently falls back to flat, so we
+        # don't expose it as a knob.
         self._set_row_visible("fes_order",
                               is_weak or is_peec_fem_k or is_fem)
         self._set_row_visible("_sec_wp_material", needs_wp)
@@ -762,6 +779,13 @@ class IHPanel(ModePanel):
                "--h1-order", str(self.val("fes_order")),
                "--msh-output", msh_output(vol_path, "_peec_bem"),
                "--output", json_output(vol_path, "_peec_bem")]
+        # Note: --h1-order is the BEM Lagrange BASIS order (1 or 2),
+        # user-selectable via the "Basis order" spin.  The geometry
+        # CURVE order is independent: it is fixed at Cubit-export time
+        # (companion .vol.json's "order" field) and auto-detected by
+        # calc_inductance.py -- there is no knob for it because a
+        # post-load mesh.Curve(p) silently falls back to flat without
+        # a CAD callback.
         if coil_solver == "peec":
             cmd += ["--peec-n-peri", str(self.val("peec_n_peri"))]
         else:
