@@ -3,15 +3,16 @@
 Cross-references:
   * Mathematica canonical: ``examples/mathematica/RadiaBasis.m``
   * MCP knowledge:         ``radia_mcp.radia_ngsolve.knowledge.basis_functions``
-  * Production NumPy (RWG): ``radia.bem.efie_rwg.rwg_eval``
+  * Production NumPy (RWG): ngsolve.bem (HDivSurface RT0 internal C++).
+    The intree ``radia.bem.efie_rwg`` Python assembler was retired
+    2026-05-03 after benchmarks showed ngsolve.bem was 50-60x faster.
 
 Invariants checked (Phase 1):
   H1 Lagrange:  partition of unity, DOF count, Kronecker delta, polynomial completeness
-  HDiv RT₀:     div = sigma/A constant, trace condition on associated edge,
-                numerical match against ``radia.bem.efie_rwg.rwg_eval``
+  HDiv RT₀:     div = sigma/A constant, trace condition on associated edge
   L2 P0/P1:     basis spans constant/linear, no continuity assumed
 
-Runtime: ~5 sec on LAB.  Suitable for CI without Mathematica.
+Runtime: ~1 sec on LAB.  Suitable for CI without Mathematica.
 """
 from __future__ import annotations
 
