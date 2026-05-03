@@ -66,7 +66,8 @@ mcp-server-cubit = "radia_mcp.cubit.server:main"
 mcp-server-build123d = "radia_mcp.build123d.server:main"
 mcp-server-radia-interop = "radia_mcp.interop.server:main"
 mcp-server-gmsh = "radia_mcp.gmsh.server:main"
-mcp-server-elf = "radia_mcp.elf.server:main"
+# mcp-server-elf moved to standalone package: pip install mcp-server-elf
+# (https://github.com/ksugahar/mcp-server-elf, https://pypi.org/project/mcp-server-elf/)
 mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
 mcp-server-ih = "radia_mcp.ih.server:main"
 mcp-server-peec = "radia_mcp.peec.server:main"
