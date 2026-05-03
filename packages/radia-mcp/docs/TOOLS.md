@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **105 tools** across 9 MCP servers.
+Total: **107 tools** across 9 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 19 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 21 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
 | [`mcp-server-elf`](#mcp-server-elf) | `radia_mcp.elf` | 1 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
@@ -113,6 +113,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | Tool | Description |
 |---|---|
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
+| `basis_functions` | Finite-element basis function library — Mathematica-canonical |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
@@ -131,6 +132,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `sparsesolv` | Get sparsesolv documentation and code examples (now in ngsolve.la). |
+| `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 
 ## `mcp-server-gmsh`
 
