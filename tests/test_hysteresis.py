@@ -469,6 +469,61 @@ class TestShapeFunctionIdentificationRegression:
                             f"not state-equivalent to in-line drive (regression "
                             f"of the K*9+7 state-size fix).")
 
+    def test_roundtrip_BHB_play_hysteresis(self, full_fixture):
+        """B -> H -> B round-trip via the C++ Type 5 (Play) material.
+
+        The IGTE'26 digest claims B -> H -> B accuracy of 1.4e-10 T from the
+        MATLAB BInputEnergyModel reference. This test verifies the same
+        property holds for the production C++ Play implementation in Radia
+        (the Play forward is algebraically identical to the Energy forward
+        by the rev/irrev separation, so accuracy must transfer).
+
+        Forward B -> H:  H = nu_rev * B + MatHysIrreversible(B)
+        Inverse H -> B:  M = MatMvsH(H);  B' = mu_0 * (H + M)
+
+        State is saved before the forward pass and restored before the
+        inverse, so both directions evaluate from the same play history.
+        """
+        K, eta, tables = full_fixture
+        rad.UtiDelAll()
+        mat = rad.MatPlayHysteresis(K, eta, tables)
+        nu_rev = rad.MatHysGetNuRev(mat)
+
+        # Sweep B over a range that includes both linear and saturation
+        Bm = 1.5
+        B_seq = np.linspace(0.1, Bm, 20).tolist() + [Bm, 0.5 * Bm, -0.5 * Bm]
+
+        max_err = 0.0
+        for B in B_seq:
+            B_vec = [float(B), 0.0, 0.0]
+
+            # Save play state before any evaluation
+            state = rad.MatHysSaveState(mat)
+
+            # Forward B -> H
+            H_irr = rad.MatHysIrreversible(mat, B_vec)
+            H = [nu_rev * B_vec[i] + H_irr[i] for i in range(3)]
+
+            # Restore state so the inverse starts from the same history
+            rad.MatHysRestoreState(mat, state)
+
+            # Inverse H -> M -> B'
+            M = rad.MatMvsH(mat, 'm', H)
+            B_rec = [MU_0 * (H[i] + M[i]) for i in range(3)]
+
+            err = abs(B - B_rec[0])
+            max_err = max(max_err, err)
+
+            # Commit and continue to the next B
+            rad.MatHysCommitState(mat)
+
+        # MATLAB reference achieves ~1.4e-10 T on this fixture; allow
+        # a bit of headroom for the C++ Newton tolerance settings.
+        assert max_err < 1e-8, \
+            f"B->H->B round-trip max error {max_err:.3e} T exceeds 1e-8 T " \
+            f"(MATLAB reference: 1.4e-10 T). Possible regression in " \
+            f"MatMvsH/MatHysIrreversible coupling for Type 6 material."
+
     def test_inverse_no_branch_flip_at_saturation(self, full_fixture):
         """MatMvsH should not flip B sign across saturation.
 
