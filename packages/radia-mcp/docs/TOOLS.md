@@ -4,8 +4,6 @@ Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.
 
 Total: **106 tools** across 8 MCP servers.
 
-> **Note:** `mcp-server-elf` was extracted to a standalone PyPI package: [`mcp-server-elf`](https://pypi.org/project/mcp-server-elf/) ([repo](https://github.com/ksugahar/mcp-server-elf)). Install separately with `pip install mcp-server-elf`.
-
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
