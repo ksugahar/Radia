@@ -38,6 +38,7 @@ from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
+from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
@@ -1073,6 +1074,40 @@ def install_deploy(topic: str = "") -> str:
         topic: Empty for the full document, or one of the topics above.
     """
     return get_install_deploy_documentation(topic)
+
+
+@mcp.tool()
+def release_workflow(topic: str = "") -> str:
+    """
+    Triple-package release workflow for the Radia monorepo
+    (radia + cubit-mesh-export + radia-mcp).  Documents the 9-phase
+    pipeline, the 4 pre-flight gates added 2026-05-03, the historical
+    CI failure modes + their root causes, and the patch-bump recovery
+    protocol when a tag CI fails.
+
+    Read this when:
+      * The user asks for a release / version bump / PyPI publish.
+      * CI on a tag ref fails after `git push --tags`.
+      * "Release" workflow shows skipped in `gh run list` (CI never
+        went green).
+      * A user reports "is X.Y.Z on PyPI yet?" and propagation is
+        stuck.
+
+    Topics:
+      overview               -- what gets released and why atomically
+      phases                 -- the 9-phase pipeline (table)
+      preflight_gates        -- Phase 2.5 4-gate pre-push validation
+      ci_failure_modes       -- known CI failures + cause + fix table
+      recovery               -- when CI on a tag fails AFTER push
+      patch_bump_protocol    -- exact steps for retry after CI failure
+      lab_lock_release       -- pre-deploy: stop processes that hold .pyd
+      monorepo_lockstep      -- 4-6 version files that must stay in sync
+      ci_monitor_skill       -- companion skill for Phase 7
+
+    Args:
+        topic: Empty for the full document, or one of the topics above.
+    """
+    return get_release_workflow_documentation(topic)
 
 
 @mcp.tool()

@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **106 tools** across 8 MCP servers.
+Total: **107 tools** across 8 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 21 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 22 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 2 |
@@ -130,6 +130,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `panel_widget_locations` | Return file:line locations for everything that touches a widget. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_usage` | Get Radia C++ library usage documentation. |
+| `release_workflow` | Triple-package release workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples (now in ngsolve.la). |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 
