@@ -236,8 +236,12 @@ file_format_documents/
 #
 # Note: Build_PyPI_Package.ps1 is now ignored (merged into Build_Wheel.ps1)
 
-# MATLAB files (use Python matplotlib instead)
+# MATLAB files (use Python matplotlib instead).  Mathematica also uses
+# .m for its package files; the basis-function reference at
+# examples/mathematica/ is the canonical source of FEM basis formulas
+# and must be tracked, so explicitly un-ignore it.
 *.m
+!examples/mathematica/*.m
 
 # Reference repositories (local only)
 参考/
