@@ -5,6 +5,36 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.40.0 — 3D CLN (Tanimoto-Kameari) knowledge module
+
+New `radia_ngsolve.knowledge.cln_3d` module captures Tanimoto's 3D
+Cauer Ladder Network (CLN) methods from W:/00_CAE/NGSolve/谷本/
+master's thesis + production code (~25 notebooks). Covers:
+
+  - **A-T**, **T-Ω**, **A-Φ** formulations (mathematical foundation,
+    iteration pseudocode, common boilerplate)
+  - **Constraint variants**: penalty stabilization, explicit Coulomb gauge
+  - **Solver variants**: SparseSolvPy ICCG, accICCG, NGSolve CG, direct
+  - **Validation**: cylindrical TM-mode analytical R/L, Schmidt drift
+    diagnostic, bonus_intorder=8 critical setting
+  - **Open research note**: Kameari + Kelvin combination remains
+    unsolved (3D HCurl A-formulation gives ~25× discrepancy with
+    mpmath BEM Foster target due to A_ext gauge unboundedness)
+
+Five canonical notebooks embedded as `cln_notebooks/*.py` resources:
+  - `CLN_AT.py` (primary 修論 reference, 7.4 KB)
+  - `CLN_T_Omega.py` (T-Ω formulation, 7.6 KB)
+  - `CLN_APhi.py` (A-Φ formulation, 8.6 KB)
+  - `CLN_2D.py` (2D scalar reference, 2.7 KB)
+  - `A_ICCG_production.py` (latest 2024-09-17 production, 6.9 KB)
+
+New MCP tools:
+  - `cln_3d(topic="all"|"overview"|"notebooks"|"formulas")`:
+    structured documentation
+  - `cln_3d_notebook(name="list"|"AT"|"T_Omega"|"APhi"|"2D"|"production")`:
+    raw Python code retrieval
+
+
 ## 0.33.5 — Sync with radia 4.10.0 (PEEC-inductance Window merged into IH)
 
 `radia_ngsolve.peec_inductance_knowledge` Source list updated: the

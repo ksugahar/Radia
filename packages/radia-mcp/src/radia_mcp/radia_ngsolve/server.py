@@ -464,6 +464,10 @@ def esim(topic: str = "all") -> str:
     return get_esim_documentation(topic)
 
 
+
+
+
+
 @mcp.tool()
 def kelvin_transformation(topic: str = "all") -> str:
     """
@@ -1241,3 +1245,9 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# References retained from removed tool documentation:
+# Canonical bibliography key: Kameari2018
+
+# Method attribution retained: Kameari and Tanimoto.
