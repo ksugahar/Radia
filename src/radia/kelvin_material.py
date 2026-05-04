@@ -1,9 +1,8 @@
 """kelvin_material.py
 
 Layer 2 of the Kelvin helper API: build NGSolve CoefficientFunctions
-for the Kelvin-modulated material parameter (nu) and for an external
-A_s source field with the Kelvin pullback automatically applied in the
-Kelvin exterior domain.
+for the Kelvin-modulated material parameter (nu) and for external
+source / background fields applied in the Kelvin exterior domain.
 
 Canonical convention (Nagamine, Yamaguchi, Sugahara,
 "A Pullback-Based Formulation of Kelvin Transformation in
@@ -18,13 +17,38 @@ functional (Nagamine eq. 9). Numerical validation on toroidal current
 loop: analytical dipole exterior energy 3.333e-8 J vs FEM on Omega'
 = 3.344e-8 J (+0.33%).
 
-Solution pullback (A 1-form, DIFFERENT from material factor):
-    A_comp(r') = (R/rho')^2 * H * A_phys(r_phys)
-    B_comp(r') = -(R/rho')^4 * H * B_phys(r_phys)    (2-form pseudovector)
+TWO DIFFERENT BACKGROUND-FIELD CONVENTIONS (DON'T CONFUSE):
 
-See examples/kelvin_transformation/CONVENTION.md for the declaration
-and examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8
-for the derivation.
+(A) Solution / 1-form pullback for source localized in physical region
+    (e.g. PEEC filament coil in inner air):
+        A_comp(r') = (R/rho')^2 * H * A_phys(r_phys)        (1-form)
+        B_comp(r') = -(R/rho')^4 * H * B_phys(r_phys)       (2-form)
+    Helper: make_kelvin_aware_A_s_cf (full pullback, evaluates A_phys
+    at the Kelvin-mapped physical point r_phys = T(r')).
+    Has 1/rho'^3 singularity at offset for unbounded A_phys.
+
+(B) Reduced-potential background field for source defined globally
+    (e.g. uniform B_0 z_hat applied at infinity, dipole / quadrupole
+    background fields). Per Sugahara-Nagamine-Kameari internal note
+    (2026, reflected in docs/kelvin/KELVIN_TRANSFORMATION.md §7), the
+    metric-tensor scaling gives:
+        H_s'(r') = -(rho'/R)^2 * H_s(r')   (3D, evaluated at comp coords)
+        A_s'(r') = -(rho'/R)^2 * A_s(r')   (3D, A is also a 1-form)
+    Helper: make_reduced_potential_background_cf (vanishes at offset =
+    no singularity, sign-flipped for opposite-normal periodic BC matching
+    at the Kelvin sphere boundary).
+    See docs/Reduced_Potential_Kelvin.md for the derivation.
+
+These two conventions are INCOMPATIBLE: (A) is a covariant 1-form
+pullback that preserves line integrals exactly but is singular at
+infinity; (B) is a metric-tensor-derived "engineering" formula that is
+finite, bounded, and chosen to make the discrete weak form give the
+right physical answer for reduced-potential formulations.
+
+See:
+    examples/kelvin_transformation/CONVENTION.md  (material modulation)
+    docs/kelvin/KELVIN_TRANSFORMATION.md §2  (1-form)
+    docs/kelvin/KELVIN_TRANSFORMATION.md §7  (red-pot)
 """
 
 from __future__ import annotations
@@ -76,7 +100,15 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
 
 def make_kelvin_aware_A_s_cf(mesh, A_phys_factory, R_K, offset,
                               kelvin_mats=("kelvin",)):
-    """Build an A_s vector CF that handles inner / Kelvin domains.
+    """Build an A_s vector CF using the FULL 1-form pullback (Convention A).
+
+    *** USE THIS FOR PEEC FILAMENT COIL SOURCES ***
+    *** localized in the inner physical domain.   ***
+
+    For a source field defined globally (e.g. uniform B_0 z_hat applied
+    at infinity, dipole / quadrupole background fields), use
+    ``make_reduced_potential_background_cf`` instead — the full pullback
+    is singular at offset for unbounded physical fields.
 
     In non-Kelvin materials: A_s_comp(x, y, z) = A_phys_factory(x, y, z).
     In Kelvin materials: evaluate A_phys at the Kelvin-mapped physical
@@ -146,3 +178,111 @@ def make_kelvin_aware_A_s_cf(mesh, A_phys_factory, R_K, offset,
     Ay = _switch(A_kelvin_y, A_inner[1])
     Az = _switch(A_kelvin_z, A_inner[2])
     return CF((Ax, Ay, Az))
+
+
+def make_reduced_potential_background_cf(mesh, F_inner_factory, R_K, offset,
+                                          kelvin_mats=("kelvin",),
+                                          dim=3):
+    """Build a reduced-potential background field CF (Convention B).
+
+    *** USE THIS FOR GLOBALLY-DEFINED BACKGROUND FIELDS ***
+    *** (uniform B, dipole, quadrupole at infinity)      ***
+
+    Per Sugahara-Nagamine-Kameari internal note (2026, see
+    docs/kelvin/KELVIN_TRANSFORMATION.md §7): a 1-form background
+    field (H_s for H-formulation, A_s for
+    A-formulation) transforms in the Kelvin exterior with a
+    metric-tensor scaling factor:
+
+        F_s'(r') = -(rho'/R)^2 * F_s(r' - offset)   in 3D
+        F_s'(r') = -F_s(r' - offset)                in 2D
+
+    where F_s on the RHS is evaluated at coordinates measured from the
+    KELVIN SPHERE CENTER (the offset point), NOT at the global origin
+    or at the Kelvin-mapped physical point r_phys = T(r'). The local
+    evaluation is essential for position-dependent A_s = (B_0/2)(-y,x,0):
+    using global coords would introduce a spurious offset-dependent term.
+
+    This differs from the proper 1-form pullback (make_kelvin_aware_A_s_cf)
+    in three crucial ways:
+
+    1. NO Householder reflection — preserves the source's direction.
+    2. Evaluated at LOCAL coords (offset-relative), NOT at r_phys.
+       The physical-frame functional form is reused with offset as the
+       new origin, multiplied by the scalar factor.
+    3. Vanishes at offset (rho' -> 0) — no singularity, even when the
+       physical field is unbounded at infinity (e.g. uniform B_z).
+
+    The sign flip ensures matching at the periodic Kelvin boundary
+    (rho' = R) where the inner and exterior normals are opposite.
+
+    Args:
+        mesh: NGSolve Mesh.
+        F_inner_factory: callable ``(x_cf, y_cf, z_cf) -> VectorCF``
+            returning the background field (3-vector) evaluated at the
+            given coordinates. The factory receives GLOBAL coords for
+            inner-region values and LOCAL (offset-relative) coords for
+            Kelvin-region values. For uniform B_0 z_hat, A-formulation:
+            ``lambda x, y, z: CF((-y, x, 0)) * (B_0 / 2)``.
+        R_K: Kelvin sphere radius.
+        offset: 3-tuple, Kelvin sphere center.
+        kelvin_mats: substring(s) used to detect Kelvin materials.
+        dim: 2 or 3 (default 3). Selects between 2D and 3D scaling.
+
+    Returns:
+        VectorCoefficientFunction (length 3) with:
+            inner materials:  F_s(x, y, z)                       (global)
+            kelvin materials: -(rho'/R)^2 * F_s(x-ox, y-oy, z-oz) (3D, local)
+                              -F_s(x-ox, y-oy, z-oz)              (2D, local)
+
+    Example::
+
+        # Uniform B_0 z_hat applied at infinity, A-formulation:
+        A_s_cf = make_reduced_potential_background_cf(
+            mesh,
+            lambda xc, yc, zc: CF((-yc, xc, 0)) * 0.5,   # B_0 = 1
+            R_K=R_K, offset=offset, kelvin_mats=("kelvin",))
+
+        # Uniform H_0 z_hat applied at infinity, H-formulation:
+        # (constant field; local vs global eval gives the same result)
+        H_s_cf = make_reduced_potential_background_cf(
+            mesh,
+            lambda xc, yc, zc: CF((0, 0, 1)),
+            R_K=R_K, offset=offset, kelvin_mats=("kelvin",))
+
+    See:
+        docs/kelvin/KELVIN_TRANSFORMATION.md §7
+    """
+    from ngsolve import x, y, z, CoefficientFunction as CF
+
+    if dim not in (2, 3):
+        raise ValueError(f"dim must be 2 or 3, got {dim}")
+
+    ox, oy, oz = offset
+    # Inner region: evaluate at global coordinates
+    F_inner = F_inner_factory(x, y, z)
+    # Kelvin region: evaluate at local (offset-relative) coordinates
+    F_local = F_inner_factory(x - ox, y - oy, z - oz)
+
+    if dim == 3:
+        rho2 = ((x - ox) ** 2 + (y - oy) ** 2 + (z - oz) ** 2 + 1e-24)
+        kelvin_factor = -rho2 / (R_K * R_K)            # -(rho'/R)^2
+    else:  # dim == 2
+        kelvin_factor = -1.0                            # 2D: sign flip only
+
+    F_kelvin_x = kelvin_factor * F_local[0]
+    F_kelvin_y = kelvin_factor * F_local[1]
+    F_kelvin_z = kelvin_factor * F_local[2]
+
+    def _switch(kelvin_comp, inner_comp):
+        d = {}
+        for m in mesh.GetMaterials():
+            ml = m.lower()
+            is_kelvin = any(kw in ml for kw in kelvin_mats)
+            d[m] = kelvin_comp if is_kelvin else inner_comp
+        return mesh.MaterialCF(d, default=inner_comp)
+
+    Fx = _switch(F_kelvin_x, F_inner[0])
+    Fy = _switch(F_kelvin_y, F_inner[1])
+    Fz = _switch(F_kelvin_z, F_inner[2])
+    return CF((Fx, Fy, Fz))

@@ -392,11 +392,28 @@ def main():
     a_bf += 1e-8 * NU_0 * u * v * dx   # gauge regularization
 
     f_lf = LinearForm(fes)
-    # Reduced-A RHS: - (nu - nu_0) * curl(A_s) . curl(v) over whole mesh
-    # (non-zero only where nu != nu_0). curl_As comes from HCurl
-    # projection — curl() on symbolic A_s_cf is not supported.
-    f_lf += -(nu_cf - NU_0) * InnerProduct(curl_As, curl(v)) \
-        * dx(bonus_intorder=4)
+    # Reduced-A RHS for Kelvin-coupled problem (CORRECTED 2026-05-04):
+    #
+    #   a(A_r, v) = (J, v)_inner - int_full nu * curl(A_s) . curl(v) dV
+    #
+    # In inner, A_s = Biot-Savart satisfies nu_0 Maxwell (Ampere), so
+    #   (J, v)_inner = int_inner nu_0 * curl(A_s) . curl(v)
+    # which cancels the inner part of the second term (where nu=nu_0).
+    # Only the kext contribution remains:
+    #
+    #   a(A_r, v) = - int_kext nu' * curl(A_s_pullback) . curl(v) dV
+    #
+    # The previous form `-(nu - nu_0) curl(A_s) curl(v) dx` is WRONG for
+    # Kelvin because A_s in kext (the pullback) satisfies nu' Maxwell,
+    # NOT nu_0 Maxwell. The "(nu - nu_0)" simplification requires A_s
+    # to satisfy nu_0 Maxwell over the WHOLE domain, which fails when
+    # the Kelvin pullback is in play. This bug previously caused +43%
+    # inductance error; the correct form gives +6% (matching the J-source
+    # baseline +5%).
+    #
+    # See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5 for the derivation.
+    f_lf += -nu_cf * InnerProduct(curl_As, curl(v)) \
+        * dx("kelvin", bonus_intorder=4)
 
     with TaskManager():
         a_bf.Assemble()

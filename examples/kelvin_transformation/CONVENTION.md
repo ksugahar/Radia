@@ -207,7 +207,7 @@ the same session upon reading the Nagamine paper.
 The test_nu_convention.py label mismatch + the empirical result
 (`(R/ρ')²` appearing to win on one coarse-mesh benchmark despite being
 mathematically wrong) is filed as an open investigation — see
-`examples/kelvin_transformation/docs/pullback_derivation_3D.md` §8.
+`docs/kelvin/KELVIN_TRANSFORMATION.md` §2 (and §9 references).
 
 ## References
 
