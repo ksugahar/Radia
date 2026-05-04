@@ -15,7 +15,18 @@ nu_ext = (rho'/R)^2 * nu_0          [HCurl A-formulation]
 mu_ext = (R/rho')^2 * mu_0          [H1 Omega / H-formulation]
 ```
 
-These are pointwise reciprocals (mu * nu = 1), consistent with Kelvin as a *physical* coordinate transformation. See [CONVENTION.md](CONVENTION.md) for the full declaration and derivation, and [docs/pullback_derivation_3D.md](docs/pullback_derivation_3D.md) §8 for the pullback + bilinear energy functional derivation (validated numerically against analytical dipole energy to +0.33%).
+These are pointwise reciprocals (mu * nu = 1), consistent with Kelvin as a *physical* coordinate transformation. See [CONVENTION.md](CONVENTION.md) for the one-page canonical convention declaration.
+
+**Comprehensive theory** (consolidated 2026-05-04):
+[`docs/kelvin/KELVIN_TRANSFORMATION.md`](../../docs/kelvin/KELVIN_TRANSFORMATION.md) — single master doc covering:
+- §2: 1-form / 2-form pullback derivations (Convention A)
+- §3-5: Geometry (Sugahara two-sphere) and FEM workflow
+- §7: Reduced potential formulations + Kelvin (H- and A-formulations, including the **(ν - ν₀) form pitfall** — critical for PEEC + Kelvin)
+- §8: API reference, §9: Cubit workflow, §10: usage examples
+- §11: Known limitations
+- §12: References
+
+This README only describes example problems; formulation theory is not duplicated here.
 
 **Quickstart (student-friendly API)**: Import factors from `radia.kelvin_source` rather than re-deriving inline:
 
