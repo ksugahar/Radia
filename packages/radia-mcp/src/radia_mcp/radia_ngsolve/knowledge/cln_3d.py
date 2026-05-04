@@ -185,17 +185,46 @@ CLN_3D_NOTEBOOK_INDEX = """
 - Lukas_A-Φ_test.ipynb             : Mixed HCurl×H1, order=3
 - curlT = A.ipynb                  : T-from-A reconstruction validation
 
-## Open Problem (本研究 2026-05)
+## CLN + Kelvin: Status (Updated 2026-05-04)
 
-**Kameari + Kelvin transformation has not been combined to date.**
-The 2D practice example (W:/30_CauerLadderNetwork/2020_11_04_線形のCLNの練習/
-CLN_H1_mode_Kelvin_NG.m) is COMSOL-based with auxiliary HelmholtzEquation
-fields. 3D HCurl + Kelvin pullback for Kameari iteration remains a
-research direction. The 2026-05-04 attempt (cuboid 5×2×1, NGSolve A
-formulation) gave τ_0 = 326 μs vs target ~14 μs — discrepancy attributed
-to A_ext = (B_0/2)(-y, x, 0) being unbounded at infinity, incompatible
-with Kelvin pullback. Future direction: H-formulation or T-Ω with
-reduced-Ω = -H_0 z + Ω_r where Ω_r decays at infinity.
+**Major progress 2026-05-04**: the (ν - ν₀) reduced-A form was found
+to be INVALID when combined with Kelvin pullback. Root cause: the
+(ν - ν₀) simplification requires A_s to satisfy ν₀ Maxwell globally,
+but the Kelvin pullback A_s_kext satisfies the metric-dependent ν'
+Maxwell instead. Symptom: +43% inductance error on a torus benchmark.
+
+**Fix**: drop the (ν - ν₀) middle step and use directly:
+  a(A_r, v) = - ∫_kext ν' · curl(A_s_pullback) · curl(v) dV
+This gives +6% (matches J-source baseline +5%). Applied to
+`examples/.../Coil_3D_A_HCurl_PEEC_source.py` and
+`src/radia/kelvin_solver.py::solve_reduced_A_kelvin`.
+
+**Implication for CLN**: Kameari + Kelvin needs the same fix:
+- A-T or A-Φ formulation: same (ν - ν₀) pitfall — use direct form.
+- T-Ω formulation: structurally cleaner (T in conductor only, no
+  Kelvin pullback for T; Ω is 0-form with trivial pullback).
+  RECOMMENDED for CLN + Kelvin.
+
+**Cuboid 5×2×1 in vacuum** (canonical CLN + Kelvin benchmark):
+The 2026-05-04 v11/v12/v13 attempts (NGSolve A-formulation reduced-A
++ Kelvin) all failed (+43% to +1.95e9× off) due to:
+1. (ν - ν₀) form pitfall (now fixed in solver)
+2. A_ext = (B_0/2)(-y, x, 0) being unbounded at infinity (incompatible
+   with Convention A pullback that has 1/ρ'^3 singularity at offset)
+
+**Recommended path forward** for applied uniform field CLN + Kelvin:
+- Use H-formulation or T-Ω with Convention B background:
+    H_s' = -(ρ'/R)² H_s (vanishes at offset, no singularity)
+- Or use reduced-Ω = -H_0 z + Ω_r where Ω_r decays at infinity (0-form
+  pullback is trivial).
+
+**Recommended path** for PEEC coil source CLN + Kelvin:
+- A-formulation with Convention A pullback (works for decaying field)
+- Direct form -ν' curl(A_s) curl(v) on kext (NOT (ν-ν₀))
+- Validated 2026-05-04 on torus benchmark: +6.11%.
+
+See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5 for full derivation.
+See docs/cln/CAUER_LADDER_NETWORK.md §6 for CLN + Kelvin specifics.
 """
 
 
