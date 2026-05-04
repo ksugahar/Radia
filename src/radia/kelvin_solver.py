@@ -108,12 +108,20 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
     The source A_s is supplied as a CF that is ALREADY Kelvin-aware
     (built via ``make_kelvin_aware_A_s_cf``): it returns the physical
     A in non-Kelvin materials and the pulled-back A' in Kelvin
-    materials. The reduced unknown A_r satisfies
+    materials. The reduced unknown A_r satisfies (CORRECTED 2026-05-04)
 
-        a(A_r, v) = - int (nu_kelvin - nu_0) * curl(A_s_cf) . curl(v) dV
+        a(A_r, v) = - int_kext nu_kelvin * curl(A_s_cf) . curl(v) dV
 
-    Only the Kelvin material contributes to the RHS (where nu differs
-    from nu_0). The total vector potential is ``A_total = A_r + A_s``.
+    See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5 for derivation.
+
+    The previous form ``-(nu - nu_0) * curl(A_s) * curl(v) dx`` is INVALID
+    when A_s is a Kelvin pullback because the pullback satisfies nu'
+    Maxwell (NOT nu_0 Maxwell) in the Kelvin region; the (nu - nu_0)
+    simplification requires nu_0 Maxwell globally. The bug previously
+    caused +43% inductance error vs +6% with the correct form on a
+    PEEC torus benchmark.
+
+    The total vector potential is ``A_total = A_r + A_s``.
 
     Args:
         mesh, R_K, offset, nu_0, order, dirichlet_bbnd, gauge_eps,
@@ -133,10 +141,14 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
     a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=bonus_intorder)
     a_bf += gauge_eps * nu_0 * u * v * dx
     f_lf = LinearForm(fes)
-    # RHS: -(nu - nu_0) curl(A_s) . curl(v) everywhere; vanishes in
-    # non-Kelvin materials where nu == nu_0.
-    f_lf += -(nu_cf - nu_0) * curl(A_s_cf) * curl(v) \
-        * dx(bonus_intorder=bonus_intorder)
+    # RHS (CORRECTED 2026-05-04): - int_kext nu' curl(A_s) . curl(v) dV
+    # The OLD form -(nu - nu_0) curl(A_s) . curl(v) dx is WRONG when A_s
+    # is a Kelvin pullback (Convention A): the pullback satisfies nu'
+    # Maxwell, not nu_0 Maxwell, breaking the (nu - nu_0) simplification.
+    # See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5.
+    kelvin_mat_str = "|".join(kelvin_mats)
+    f_lf += -nu_cf * curl(A_s_cf) * curl(v) \
+        * dx(kelvin_mat_str, bonus_intorder=bonus_intorder)
 
     gfu_r = _assemble_and_solve(a_bf, f_lf, fes, inverse=inverse)
     return {"gfu_r": gfu_r, "fes": fes, "nu_cf": nu_cf, "A_s_cf": A_s_cf}

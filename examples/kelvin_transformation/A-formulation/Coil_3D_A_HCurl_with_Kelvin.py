@@ -2,7 +2,7 @@
 3D A-formulation (HCurl) with Periodic Kelvin transformation.
 
 This script is the canonical baseline regression test for the Layer 1-3
-Kelvin helper API (see ``examples/kelvin_transformation/docs/api_plan.md``
+Kelvin helper API (see ``docs/kelvin/api_plan.md``
 M2 milestone). The whole workflow is now a handful of helper calls:
 
     inner_air+torus  --> add_kelvin_exterior_domain (L1)

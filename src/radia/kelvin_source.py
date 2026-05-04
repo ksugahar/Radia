@@ -127,7 +127,7 @@ def is_in_kelvin_exterior_domain(points, center, R):
 def kelvin_pullback_vector(A_phys, r_prime, center, R):
     """Exact 1-form pullback of A under 3D sphere Kelvin inversion.
 
-    See examples/kelvin_transformation/docs/pullback_derivation_3D.md
+    See docs/kelvin/KELVIN_TRANSFORMATION.md §2
     for the full derivation. Summary:
 
     Kelvin map (origin at `center`, radius `R`):
@@ -754,7 +754,7 @@ def B_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
 # 58(9) [ref [3] in Nagamine]. Full declaration in
 #   examples/kelvin_transformation/CONVENTION.md
 # and derivation in
-#   examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8.
+#   docs/kelvin/KELVIN_TRANSFORMATION.md §2 sec 8.
 #
 # 3D spherical (conformal) Kelvin:
 #     nu' = (rho'/R)^2 * nu_0          [HCurl A-formulation]
