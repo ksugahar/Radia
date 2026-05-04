@@ -16,7 +16,7 @@ was incorrect. Nagamine CEFC 2026 derives (rho'/R)^2 rigorously
 (pullback + bilinear energy functional) and validates numerically
 on a toroidal loop to +0.33%. See
   examples/kelvin_transformation/CONVENTION.md
-  examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8
+  docs/kelvin/KELVIN_TRANSFORMATION.md §2
 
 Run this to verify the canonical convention reproduces L_analytical
 on this benchmark. Any discrepancy from the old empirical result

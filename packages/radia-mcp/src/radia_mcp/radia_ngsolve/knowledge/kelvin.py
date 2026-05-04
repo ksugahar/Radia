@@ -26,9 +26,12 @@ functional. Validated numerically on a toroidal current loop
 (analytical dipole exterior energy 3.333e-8 J vs FEM on Omega'
 = 3.344e-8 J, +0.33%).
 
-Reference docs:
-  examples/kelvin_transformation/CONVENTION.md (canonical declaration)
-  examples/kelvin_transformation/docs/pullback_derivation_3D.md sec 8
+Reference docs (consolidated 2026-05-04):
+  examples/kelvin_transformation/CONVENTION.md (canonical declaration, 1 page)
+  docs/kelvin/KELVIN_TRANSFORMATION.md (comprehensive theory + API + workflow)
+    - §2: 1-form / 2-form pullback derivation
+    - §7: Reduced potential formulations + Kelvin
+      including the (nu - nu_0) form pitfall (CRITICAL)
 """
 
 KELVIN_OVERVIEW = """
