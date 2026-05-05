@@ -35,6 +35,7 @@ from .knowledge.custom_toolbar import (
 	generate_dialog_skeleton,
 )
 from .knowledge.mesh_diagnostics import get_diagnostics_documentation
+from .knowledge.license import get_license_documentation
 from ..common import failure_log as _fl
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -416,6 +417,12 @@ def cubit_docs(topic: str = "all") -> str:
 	        --- Radia-NGSolve panels ---
 	        "panel_conventions"      - Analysis window conventions (TITLE, LABELS, etc.)
 	        "panel_labels"           - Label guide (blocks/sidesets -> .vol -> NGSolve)
+	        --- Cubit license (multi-user lab) ---
+	        "license_per_user"       - Each user activates Cubit license in their OWN
+	                                   account (renewals cache is bound to the user's
+	                                   logon token; admin cannot bootstrap it for them).
+	        "license_admin_overwrite"- Same as license_per_user, framed as the
+	                                   anti-pattern: do NOT rewrite renewals from admin.
 	"""
 	topic = topic.lower().strip()
 
@@ -447,6 +454,14 @@ def cubit_docs(topic: str = "all") -> str:
 		return PANEL_CONVENTIONS
 	if topic == "panel_labels":
 		return LABEL_GUIDE
+
+	# License topics: each user activates their own license in their
+	# own session.  Admin cannot bootstrap it (the renewals cache is
+	# bound to the user's logon token).
+	if topic in ("license_per_user", "license_per_user_rule"):
+		return get_license_documentation("per_user_rule")
+	if topic in ("license_admin_overwrite", "license_admin", "license"):
+		return get_license_documentation("admin_overwrite")
 
 	# Try without prefix (backward compat for simple names)
 	result = get_export_documentation(topic)
