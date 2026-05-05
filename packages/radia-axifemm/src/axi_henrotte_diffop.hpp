@@ -23,13 +23,23 @@ using namespace ngfem;
 
 // ---------------------------------------------------------------------------
 // AxiHenrotteDiffOpId — value evaluator
+//
+// DifferentialOperator(dim, blockdim, vb, difforder):
+//   dim      = dimension of range (output): 1 for scalar value
+//   blockdim = block multiplicity for BlockDifferentialOperator (1 for scalar FE)
+//   vb       = VOL / BND
+//   difforder = differentiation order
 // ---------------------------------------------------------------------------
 
 class AxiHenrotteDiffOpId : public DifferentialOperator {
 public:
     AxiHenrotteDiffOpId()
-        : DifferentialOperator(/*dim=*/1, /*dim_diffop=*/1,
-                               /*vb=*/VOL, /*difforder=*/0) {}
+        : DifferentialOperator(/*dim=*/1, /*blockdim=*/1,
+                               /*vb=*/VOL, /*difforder=*/0)
+    {
+        // Match standard H1: scalar field → empty Dimensions (not [1]).
+        SetDimensions(Array<int>{});
+    }
 
     string Name() const override { return "AxiHenrotte:Id"; }
 
@@ -54,7 +64,7 @@ public:
 class AxiHenrotteDiffOpGradient : public DifferentialOperator {
 public:
     AxiHenrotteDiffOpGradient()
-        : DifferentialOperator(/*dim=*/2, /*dim_diffop=*/2,
+        : DifferentialOperator(/*dim=*/2, /*blockdim=*/1,
                                /*vb=*/VOL, /*difforder=*/1) {}
 
     string Name() const override { return "AxiHenrotte:Gradient"; }
