@@ -73,10 +73,22 @@ ExportNetgenCommand::~ExportNetgenCommand() {}
 std::vector<std::string> ExportNetgenCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
+  // Kelvin / symmetry options were APREPRO-promoted on 2026-05-05.  The
+  // .vol is the only mesh format that consumes Kelvin (open-boundary
+  // FEM), so these knobs live on the netgen subcommand instead of as a
+  // global GUI launcher.  Each kelvin_sym_<axis> takes a string in
+  // {off, bn, ht}; "off" is the default and means "no reduction".
   syntax_list.push_back(
     "radia_export netgen <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1-5>'>] "
-    "[overwrite]"
+    "[overwrite] "
+    "[add_kelvin] "
+    "[kelvin_air <string:label='kelvin_air',help='<block name, default \"air\">'>] "
+    "[kelvin_block <string:label='kelvin_block',help='<block name, default \"kelvin\">'>] "
+    "[kelvin_mesh <value:label='kelvin_mesh',help='<size in m, blank=auto>'>] "
+    "[kelvin_sym_x <string:label='kelvin_sym_x',help='<off|bn|ht>'>] "
+    "[kelvin_sym_y <string:label='kelvin_sym_y',help='<off|bn|ht>'>] "
+    "[kelvin_sym_z <string:label='kelvin_sym_z',help='<off|bn|ht>'>]"
   );
   return syntax_list;
 }
@@ -85,7 +97,13 @@ std::vector<std::string> ExportNetgenCommand::get_syntax_help()
 {
   std::vector<std::string> help;
   help.push_back(
-    "radia_export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]"
+    "radia_export netgen \"filename.vol\" [order {1|2|3|4|5}] [overwrite]\n"
+    "                  [add_kelvin]\n"
+    "                  [kelvin_air \"air\"] [kelvin_block \"kelvin\"]\n"
+    "                  [kelvin_mesh <size_m>]\n"
+    "                  [kelvin_sym_x {off|bn|ht}]\n"
+    "                  [kelvin_sym_y {off|bn|ht}]\n"
+    "                  [kelvin_sym_z {off|bn|ht}]"
   );
   return help;
 }
@@ -97,9 +115,175 @@ std::vector<std::string> ExportNetgenCommand::get_help()
     "Export mesh as Netgen .vol with high-order curving and labels.\n"
     "Uses C++ NetgenCurver (no Python subprocess, no .cub5 needed).\n"
     "Produces .vol file + companion .json with CAD reference values.\n"
-    "Order 1-5 supported (default: 2). Requires Netgen."
+    "Order 1-5 supported (default: 2). Requires Netgen.\n"
+    "\n"
+    "Kelvin open-boundary (optional, .vol only):\n"
+    "  add_kelvin                   Auto-create the exterior Kelvin sphere\n"
+    "                               (idempotent: skipped if a 'kelvin' block\n"
+    "                               already exists; needs an 'air' block).\n"
+    "  kelvin_mesh <size_m>         Tet edge length on the Kelvin shell;\n"
+    "                               omit to inherit from the air surface.\n"
+    "  kelvin_sym_<axis> bn|ht      Per-axis symmetry-plane BC label on a\n"
+    "                               domain-reduced (1/2 or 1/4) model.\n"
+    "                               'bn' = B.n=0 (flux parallel, Radia '+').\n"
+    "                               'ht' = HxN=0 (flux perp,  Radia '-').\n"
+    "                               'off' = no reduction (default)."
   );
   return help;
+}
+
+// ----------------------------------------------------------------
+// find_plugin_dir() -- return the directory containing this .ccm
+// (and, by deployment convention, the cubit_helpers/ subdirectory
+// holding add_kelvin.py and auto_kelvin_entry.py).  Mirrors the
+// search used by ensure_netgen_dll_path.
+// ----------------------------------------------------------------
+static std::string find_plugin_dir()
+{
+#ifdef _WIN32
+  const char *pd = std::getenv("CUBIT_PLUGIN_DIR");
+  if (pd && pd[0])
+    return std::string(pd);
+  HMODULE hm = nullptr;
+  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                     (LPCSTR)&find_plugin_dir, &hm);
+  if (hm) {
+    char path[MAX_PATH];
+    if (GetModuleFileNameA(hm, path, MAX_PATH)) {
+      std::string dir(path);
+      auto pos = dir.find_last_of("\\/");
+      if (pos != std::string::npos)
+        return dir.substr(0, pos);
+    }
+  }
+#endif
+  return std::string();
+}
+
+// ----------------------------------------------------------------
+// run_auto_kelvin -- write a JSON config and `play` the Cubit-side
+// auto_kelvin_entry.py, which calls add_kelvin_cubit() in Cubit's
+// embedded Python.  Runs BEFORE mesh extract so the new Kelvin
+// volume / sidesets are present when extract() runs.
+//
+// add_kelvin == false short-circuits without writing the JSON.
+// Failures are logged but do NOT abort the export -- user gets
+// Dirichlet truncation on the air outer surface as a fallback.
+// ----------------------------------------------------------------
+static void run_auto_kelvin(bool add_kelvin,
+                            const std::string &air_block,
+                            const std::string &kelvin_block,
+                            bool has_mesh_size, double mesh_size,
+                            const std::string &sym_x,
+                            const std::string &sym_y,
+                            const std::string &sym_z,
+                            const std::string &filename)
+{
+  if (!add_kelvin) return;
+
+  std::string plugin_dir = find_plugin_dir();
+  if (plugin_dir.empty()) {
+    PRINT_WARNING("Auto-Kelvin skipped: cannot locate plugin directory.\n");
+    return;
+  }
+  std::string helpers_dir = plugin_dir + "/cubit_helpers";
+  std::string entry = helpers_dir + "/auto_kelvin_entry.py";
+  // Normalize separators
+  for (auto &c : entry)       if (c == '\\') c = '/';
+  for (auto &c : helpers_dir) if (c == '\\') c = '/';
+
+  std::ifstream probe(entry);
+  if (!probe.good()) {
+    PRINT_WARNING("Auto-Kelvin skipped: %s not found.  Re-run "
+                  "cubit-plugin-install to deploy cubit_helpers/.\n",
+                  entry.c_str());
+    return;
+  }
+  probe.close();
+
+  // Place the config JSON next to the output .vol so the user can see
+  // exactly what was passed.
+  std::string out_dir = filename;
+  auto pos = out_dir.find_last_of("\\/");
+  if (pos != std::string::npos) out_dir = out_dir.substr(0, pos);
+  else                          out_dir = ".";
+  std::string cfg_path = out_dir + "/radia_kelvin_config.json";
+  for (auto &c : cfg_path) if (c == '\\') c = '/';
+
+  // Build the JSON config.  Schema matches auto_kelvin_entry.py.
+  auto bc_token = [](const std::string &s) -> std::string {
+    if (s == "bn" || s == "bn=0") return "bn=0";
+    if (s == "ht" || s == "ht=0") return "ht=0";
+    return std::string();   // "off" / "" -> no reduction on this axis
+  };
+  std::string rx = bc_token(sym_x);
+  std::string ry = bc_token(sym_y);
+  std::string rz = bc_token(sym_z);
+  bool has_reduction = !rx.empty() || !ry.empty() || !rz.empty();
+
+  {
+    std::ofstream jf(cfg_path);
+    if (!jf.good()) {
+      PRINT_WARNING("Auto-Kelvin: cannot write %s; aborting Kelvin step.\n",
+                    cfg_path.c_str());
+      return;
+    }
+    jf << "{";
+    jf << "\"add_kelvin\": true";
+    jf << ", \"kelvin_air_block\": \""  << air_block    << "\"";
+    jf << ", \"kelvin_block_name\": \"" << kelvin_block << "\"";
+    if (has_mesh_size && mesh_size > 0.0)
+      jf << ", \"kelvin_mesh_size\": " << std::scientific << mesh_size;
+    else
+      jf << ", \"kelvin_mesh_size\": null";
+    if (has_reduction) {
+      jf << ", \"kelvin_reduction\": {";
+      bool first = true;
+      // Cannot name this lambda `emit` -- the .ccl build path links
+      // Qt5 and Qt's `emit` keyword is a preprocessor macro defined
+      // to nothing, which would expand `auto emit = ...` to
+      // `auto = ...` and fail with C2513.
+      auto write_axis = [&](const char *axis, const std::string &bc) {
+        if (bc.empty()) return;
+        if (!first) jf << ", ";
+        jf << "\"" << axis << "\": \"" << bc << "\"";
+        first = false;
+      };
+      write_axis("x", rx);
+      write_axis("y", ry);
+      write_axis("z", rz);
+      jf << "}";
+    } else {
+      jf << ", \"kelvin_reduction\": null";
+    }
+    jf << "}\n";
+  }
+
+  PRINT_INFO("Auto-Kelvin: config -> %s\n", cfg_path.c_str());
+
+#ifdef _WIN32
+  // Wide-char env vars survive non-ASCII paths cleanly.
+  std::wstring wcfg(cfg_path.begin(), cfg_path.end());
+  std::wstring whlp(helpers_dir.begin(), helpers_dir.end());
+  SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", wcfg.c_str());
+  SetEnvironmentVariableW(L"CUBIT_HELPERS_DIR",     whlp.c_str());
+#else
+  setenv("RADIA_LAUNCHER_CONFIG", cfg_path.c_str(),    1);
+  setenv("CUBIT_HELPERS_DIR",     helpers_dir.c_str(), 1);
+#endif
+
+  std::string play_cmd = "play \"" + entry + "\"";
+  PRINT_INFO("Auto-Kelvin: %s\n", play_cmd.c_str());
+  CubitInterface::cmd(play_cmd.c_str());
+
+#ifdef _WIN32
+  SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", nullptr);
+  SetEnvironmentVariableW(L"CUBIT_HELPERS_DIR",     nullptr);
+#else
+  unsetenv("RADIA_LAUNCHER_CONFIG");
+  unsetenv("CUBIT_HELPERS_DIR");
+#endif
 }
 
 bool ExportNetgenCommand::execute(CubitCommandData &data)
@@ -127,6 +311,36 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   if (order < 1 || order > 5) {
     PRINT_ERROR("Order must be 1-5.\n");
     return false;
+  }
+
+  // ---- Auto-Kelvin (optional) ----------------------------------
+  // `add_kelvin` is a bare keyword flag (matches `overwrite` /
+  // `nopyramid` in the other export commands).  find_keyword is the
+  // Cubit SDK probe for "did the user supply this token".
+  bool add_kelvin = data.find_keyword("add_kelvin");
+  std::string kelvin_air = "air";
+  std::string kelvin_block = "kelvin";
+  data.get_string("kelvin_air", kelvin_air);
+  data.get_string("kelvin_block", kelvin_block);
+  if (kelvin_air.empty())   kelvin_air   = "air";
+  if (kelvin_block.empty()) kelvin_block = "kelvin";
+
+  // get_value leaves the variable untouched when the keyword is
+  // absent.  Detect "user supplied a positive size" by initialising
+  // to 0 and re-checking.
+  double kelvin_mesh = 0.0;
+  data.get_value("kelvin_mesh", kelvin_mesh);
+  bool has_mesh_size = (kelvin_mesh > 0.0);
+
+  std::string sym_x = "off", sym_y = "off", sym_z = "off";
+  data.get_string("kelvin_sym_x", sym_x);
+  data.get_string("kelvin_sym_y", sym_y);
+  data.get_string("kelvin_sym_z", sym_z);
+
+  if (add_kelvin) {
+    run_auto_kelvin(true, kelvin_air, kelvin_block,
+                    has_mesh_size, kelvin_mesh,
+                    sym_x, sym_y, sym_z, filename);
   }
 
   // Ensure Netgen DLLs are findable (DELAYLOAD resolution)

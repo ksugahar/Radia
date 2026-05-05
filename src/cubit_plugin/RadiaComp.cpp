@@ -4,7 +4,6 @@
 #include "Claro.hpp"
 #include "CubitInterface.hpp"
 #include "CubitMessage.hpp"
-#include "LauncherLogic.hpp"
 
 // Export logic (integrated, no .ccm needed)
 #include "ExportGmshCommand.hpp"
@@ -220,20 +219,13 @@ void RadiaComp::setup_menus()
   QObject::connect(a_vol, SIGNAL(triggered()), handler, SLOT(mesh_volume()));
   menu_list.push_back(a_vol);
 
-  // Separator before analysis launcher
-  QAction* sep2 = new QAction(handler);
-  sep2->setSeparator(true);
-  menu_list.push_back(sep2);
-
-  // Radia-NGSolve analysis launcher (was in Python Solve menu, now C++)
-  QAction* a_ngs = new QAction("Radia-NGSolve...", handler);
-  a_ngs->setStatusTip("Export .vol and launch analysis window (IH / EM / PCB)");
-  QObject::connect(a_ngs, SIGNAL(triggered()), handler, SLOT(launch_radia_ngsolve()));
-  menu_list.push_back(a_ngs);
-
   gui->add_to_menu("&Export Mesh", menu_list, "radiacomp");
 
-  // Python Solve menu is removed (2026-04-14). Radia-NGSolve is here in C++.
+  // Per cubit-mesh-export's target-centric architecture (2026-05-05),
+  // domain panels (radia-ih / radia-electromagnet / radia-pcb / ...)
+  // are launched by the user, NOT by this plugin.  cubit-mesh-export
+  // ships .vol + Kelvin + symmetry + Dirichlet-label conventions; the
+  // domain tools consume those primitives separately.
 
   mMenuInitialized = true;
 }
@@ -467,9 +459,11 @@ void RadiaMenuHandler::export_netgen()
   ccl_log("export_netgen: jou=%s order=%d",
           jouPath.toLocal8Bit().constData(), order);
   PRINT_INFO("Exporting Netgen .vol (order %d)...\n", order);
-  std::string cmd = std::string("radia_export netgen \"")
-    + volPath.toLocal8Bit().constData()
-    + "\" order " + std::to_string(order) + " overwrite";
+  // Use the dialog's cubitCommand() so Kelvin / symmetry options
+  // entered in the GUI are forwarded to the APREPRO call.  The
+  // command already ends with " overwrite" (cubitCommand always
+  // appends it).
+  std::string cmd = dlgOpt.cubitCommand().toStdString();
   CubitInterface::silent_cmd(cmd.c_str());
 
   // Check .vol was created
@@ -963,637 +957,6 @@ void RadiaMenuHandler::mesh_volume()
   dlg.exec();
 }
 
-// ============================================================
-// Radia-NGSolve launcher — replaces Python register_toolbar.py
-// ============================================================
-
-// Metadata parsed from radia_*.py scripts
-struct ModeScript {
-  QString title;       // TITLE = "Induction Heating"
-  QString fileName;    // radia_ih.py
-  QStringList required; // REQUIRED_LABELS
-  QStringList optional; // OPTIONAL_LABELS
-  bool needsVol = true; // NEEDS_VOL — default true.  When false, the
-                        // launcher hides the `.vol` row and skips the
-                        // `radia_export netgen` call (e.g. PEEC-inductance
-                        // which takes a STEP file, not a mesh).
-};
-
-// Find radia package directory via external Python
-static QString find_radia_package_dir(const QString &python)
-{
-  QProcess p;
-  QStringList args;
-  if (python == "py") args << "-3";
-  args << "-c"
-       << "import importlib.util, os; "
-          "spec = importlib.util.find_spec('radia'); "
-          "print(os.path.dirname(spec.origin) if spec else '')";
-  p.start(python, args);
-  if (p.waitForFinished(10000) && p.exitCode() == 0) {
-    QString dir = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
-    if (!dir.isEmpty() && QDir(dir).exists())
-      return dir;
-  }
-  return QString();
-}
-
-// Discover radia_*.py analysis windows and their metadata
-static QList<ModeScript> discover_mode_scripts(const QString &pkgDir)
-{
-  QList<ModeScript> modes;
-  if (pkgDir.isEmpty()) return modes;
-
-  QDir dir(pkgDir);
-  QStringList files = dir.entryList({"radia_*.py"}, QDir::Files, QDir::Name);
-
-  // Match Python string assignment: TITLE = "..." or TITLE = '...'
-  // Use backreference to ensure matching quote type (handles apostrophes).
-  QRegularExpression reTitle(R"(^TITLE\s*=\s*(["'])(.+?)\1)");
-  QRegularExpression reReq(R"(^REQUIRED_LABELS\s*=\s*\[([^\]]*)\])");
-  QRegularExpression reOpt(R"(^OPTIONAL_LABELS\s*=\s*\[([^\]]*)\])");
-  QRegularExpression reNeedsVol(R"(^NEEDS_VOL\s*=\s*(True|False))");
-
-  auto parseList = [](const QString &raw) -> QStringList {
-    QStringList result;
-    // Parse Python list literal: ["a", "b", 'c']
-    // Backreference \1 ensures matching quote type.
-    QRegularExpression reItem(R"((["'])([^"']+?)\1)");
-    auto it = reItem.globalMatch(raw);
-    while (it.hasNext())
-      result << it.next().captured(2);
-    return result;
-  };
-
-  for (const QString &fname : files) {
-    if (fname == "radia_gui_base.py") continue;
-
-    QFile f(dir.filePath(fname));
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) continue;
-
-    ModeScript ms;
-    ms.fileName = fname;
-
-    while (!f.atEnd()) {
-      QString line = QString::fromUtf8(f.readLine());
-      auto m = reTitle.match(line);
-      if (m.hasMatch()) ms.title = m.captured(2);
-      m = reReq.match(line);
-      if (m.hasMatch()) ms.required = parseList(m.captured(1));
-      m = reOpt.match(line);
-      if (m.hasMatch()) ms.optional = parseList(m.captured(1));
-      m = reNeedsVol.match(line);
-      if (m.hasMatch()) ms.needsVol = (m.captured(1) == "True");
-    }
-    if (!ms.title.isEmpty())
-      modes.append(ms);
-  }
-  return modes;
-}
-
-// Thin Qt wrapper around RadiaLauncherLogic::get_model_labels.
-// All actual API calls live in LauncherLogic.hpp so that the headless
-// `radia_export verify_launcher` command tests the SAME code that the
-// dialog runs (2026-04-14 hardening — see feedback_gui_test_with_deploy).
-static QStringList get_model_labels()
-{
-  QStringList out;
-  for (auto &n : RadiaLauncherLogic::get_model_labels())
-    out.append(QString::fromStdString(n));
-  return out;
-}
-
-// Launcher settings persistence (separate from export settings)
-static QString launcherSettingsPath()
-{
-  QString home = QDir::homePath() + "/.radia";
-  QDir().mkpath(home);
-  return home + "/radia_launcher.json";
-}
-
-static QJsonObject loadLauncherSettings()
-{
-  QFile f(launcherSettingsPath());
-  if (!f.open(QIODevice::ReadOnly)) return {};
-  return QJsonDocument::fromJson(f.readAll()).object();
-}
-
-static void saveLauncherSettings(const QJsonObject &obj)
-{
-  QJsonObject existing = loadLauncherSettings();
-  for (auto it = obj.begin(); it != obj.end(); ++it)
-    existing[it.key()] = it.value();
-  QFile f(launcherSettingsPath());
-  if (f.open(QIODevice::WriteOnly))
-    f.write(QJsonDocument(existing).toJson(QJsonDocument::Indented));
-}
-
-void RadiaMenuHandler::launch_radia_ngsolve()
-{
-  // --- Ensure model loaded ---
-  if (CubitInterface::get_volume_count() == 0) {
-    QString jou = ensure_model();
-    if (CubitInterface::get_volume_count() == 0) return;
-    if (!jou.isEmpty())
-      s_lastJouPath = jou;
-  }
-
-  ensure_netgen_dll_path();
-
-  // --- Find external Python and radia package ---
-  QString python = find_external_python();
-  QString pkgDir = find_radia_package_dir(python);
-  if (pkgDir.isEmpty()) {
-    PRINT_ERROR("Cannot find radia package. Is radia installed? "
-                "(pip install radia)\n");
-    return;
-  }
-
-  // --- Discover analysis windows ---
-  QList<ModeScript> modes = discover_mode_scripts(pkgDir);
-  if (modes.isEmpty()) {
-    PRINT_ERROR("No radia_*.py analysis windows found in %s\n",
-                pkgDir.toStdString().c_str());
-    return;
-  }
-
-  // Ensure .jou is saved — determines output basename
-  QString jouPath = ensure_jou_path();
-  if (jouPath.isEmpty()) return;
-
-  // --- Load saved settings ---
-  QJsonObject prev = loadLauncherSettings();
-  QString lastMode = prev["last_mode"].toString();
-  int lastOrder = prev["last_order"].toInt(2);
-
-  // --- Build dialog ---
-  QDialog dlg;
-  dlg.setWindowTitle("Radia-NGSolve");
-  dlg.setMinimumWidth(500);
-  QVBoxLayout *layout = new QVBoxLayout(&dlg);
-
-  // Mode combo
-  QHBoxLayout *hMode = new QHBoxLayout();
-  hMode->addWidget(new QLabel("Analysis:"));
-  QComboBox *modeCombo = new QComboBox();
-  for (const auto &ms : modes)
-    modeCombo->addItem(ms.title);
-  if (!lastMode.isEmpty()) {
-    int idx = modeCombo->findText(lastMode);
-    if (idx >= 0) modeCombo->setCurrentIndex(idx);
-  }
-  hMode->addWidget(modeCombo);
-  hMode->addStretch();
-  layout->addLayout(hMode);
-
-  // Order combo (wrapped in a container so the whole row can be
-  // hidden for STEP-only modes that do not export a mesh).
-  QWidget *orderRow = new QWidget();
-  QHBoxLayout *hOrder = new QHBoxLayout(orderRow);
-  hOrder->setContentsMargins(0, 0, 0, 0);
-  hOrder->addWidget(new QLabel("Mesh order:"));
-  QComboBox *orderCombo = new QComboBox();
-  for (int p = 1; p <= 5; p++)
-    orderCombo->addItem(QString::number(p));
-  orderCombo->setCurrentIndex(qBound(0, lastOrder - 1, 4));
-  hOrder->addWidget(orderCombo);
-  hOrder->addStretch();
-  layout->addWidget(orderRow);
-
-  // Auto-Kelvin checkbox.  When checked (default) and the current
-  // Cubit model has an "air" block but no "kelvin" block, the launcher
-  // injects `add_kelvin_cubit()` via the auto_add_kelvin_from_current_
-  // model() helper just before `radia_export netgen`.  Uncheck for
-  // no-Kelvin baselines (Dirichlet truncation on the outer air
-  // boundary) or for BEM modes where Kelvin is unnecessary.
-  // Settings persist via launcher.json alongside last_mode / last_order.
-  QWidget *kelvinRow = new QWidget();
-  QHBoxLayout *hKelvin = new QHBoxLayout(kelvinRow);
-  hKelvin->setContentsMargins(0, 0, 0, 0);
-  QCheckBox *kelvinCheck = new QCheckBox(
-      "Add Kelvin open boundary (auto)");
-  bool lastKelvinAuto = prev.contains("last_kelvin_auto")
-      ? prev["last_kelvin_auto"].toBool() : true;
-  kelvinCheck->setChecked(lastKelvinAuto);
-  kelvinCheck->setToolTip(
-      "Before exporting the .vol, auto-add a Kelvin exterior sphere "
-      "to the Cubit model (needs an 'air' block).  Idempotent — skips "
-      "if a 'kelvin' block already exists.  Uncheck for Dirichlet-"
-      "truncation baselines.");
-  hKelvin->addWidget(kelvinCheck);
-
-  // Kelvin exterior mesh size (optional).  Blank means "auto" — let
-  // add_kelvin_cubit inherit the size from the air outer surface via
-  // copy-mesh (the current default).  A typical override is a value
-  // 2-3x the air surface size, since the Kelvin region is just an
-  // open-boundary trick and can be much coarser than the physical
-  // domain.  Value in meters.  Persisted across sessions via
-  // launcher.json / last_kelvin_mesh.
-  hKelvin->addSpacing(20);
-  hKelvin->addWidget(new QLabel("Mesh size [m]:"));
-  QLineEdit *kelvinMeshEdit = new QLineEdit();
-  kelvinMeshEdit->setPlaceholderText("auto (blank) or e.g. 0.03");
-  kelvinMeshEdit->setMaximumWidth(130);
-  kelvinMeshEdit->setToolTip(
-      "Tet edge length for the Kelvin exterior sphere.  Blank = auto "
-      "(inherit from air surface).  For faster meshing / smaller "
-      ".vol, specify a value coarser than your air mesh.");
-  QString lastKelvinMesh = prev.contains("last_kelvin_mesh")
-      ? prev["last_kelvin_mesh"].toString() : QString();
-  kelvinMeshEdit->setText(lastKelvinMesh);
-  hKelvin->addWidget(kelvinMeshEdit);
-  hKelvin->addStretch();
-  layout->addWidget(kelvinRow);
-
-  // ---- Kelvin symmetry-reduction row (2026-04-25) ----
-  //
-  // Per-axis BC type for domain-reduced models (1/2 or 1/4).  Three
-  // combos, one per Cartesian axis, each with {off, bn=0, ht=0}:
-  //
-  //   off    -- no reduction on this axis (air extends both sides OR
-  //             the axis is the mesh-seam direction).
-  //   bn=0   -- domain reduced to axis >= 0; on axis=0 plane B.n = 0
-  //             (flux parallel, mirror-symmetric, Radia image '+').
-  //             Omega formulation -> natural (do nothing).
-  //             A     formulation -> Dirichlet (A x n = 0).
-  //   ht=0   -- domain reduced to axis >= 0; on axis=0 plane H x n = 0
-  //             (flux perpendicular, antisymmetric, Radia image '-').
-  //             Omega formulation -> Dirichlet (Omega = const).
-  //             A     formulation -> natural.
-  //
-  // When ANY axis is set to bn=0 or ht=0, the launcher writes a
-  // `kelvin_reduction` dict into launcher_config.json and
-  // add_kelvin_cubit takes the reduction-mode path (air is expected
-  // to already be reduced to the positive side of each selected
-  // axis, the Kelvin sphere is cut on the same planes, and each cut
-  // plane gets a sym_<bc>_<axis> sideset).  When all three are
-  // "off", the existing mesh-seam auto-detect runs unchanged.
-  //
-  // 1/8 (all three axes bn=0/ht=0) is a geometric blocker with the
-  // offset-then-cut Kelvin strategy; add_kelvin_cubit raises
-  // NotImplementedError.  The UI doesn't prevent it (to give a clear
-  // error at the right layer).
-  QWidget *symRow = new QWidget();
-  QHBoxLayout *hSym = new QHBoxLayout(symRow);
-  hSym->setContentsMargins(0, 0, 0, 0);
-  hSym->addSpacing(24);         // indent under the Kelvin row
-  hSym->addWidget(new QLabel("Symmetry reduction:"));
-  auto makeSymCombo = [](const QString &axis) {
-    QComboBox *cb = new QComboBox();
-    cb->addItem("off");
-    cb->addItem("bn=0");
-    cb->addItem("ht=0");
-    cb->setMaximumWidth(75);
-    cb->setToolTip(
-        QString(
-            "BC label on the %1=0 symmetry plane (only when the air "
-            "block is reduced to %1>=0).  'bn=0' = flux parallel "
-            "(Radia '+', A Dirichlet, Omega natural).  'ht=0' = flux "
-            "perpendicular (Radia '-', A natural, Omega Dirichlet)."
-            ).arg(axis));
-    return cb;
-  };
-  QComboBox *symXCombo = makeSymCombo("x");
-  QComboBox *symYCombo = makeSymCombo("y");
-  QComboBox *symZCombo = makeSymCombo("z");
-  auto restoreSymCombo = [&prev](QComboBox *cb, const char *key) {
-    QString last = prev.contains(key) ? prev[key].toString() : QString();
-    int idx = cb->findText(last);
-    if (idx >= 0) cb->setCurrentIndex(idx);
-  };
-  restoreSymCombo(symXCombo, "last_kelvin_sym_x");
-  restoreSymCombo(symYCombo, "last_kelvin_sym_y");
-  restoreSymCombo(symZCombo, "last_kelvin_sym_z");
-  hSym->addWidget(new QLabel("x:"));
-  hSym->addWidget(symXCombo);
-  hSym->addSpacing(8);
-  hSym->addWidget(new QLabel("y:"));
-  hSym->addWidget(symYCombo);
-  hSym->addSpacing(8);
-  hSym->addWidget(new QLabel("z:"));
-  hSym->addWidget(symZCombo);
-  hSym->addStretch();
-  layout->addWidget(symRow);
-
-  // Label validation area
-  QLabel *labelWidget = new QLabel();
-  labelWidget->setWordWrap(true);
-  labelWidget->setTextFormat(Qt::RichText);
-  QGroupBox *labelGroup = new QGroupBox("Labels (blocks / sidesets)");
-  QVBoxLayout *labelLayout = new QVBoxLayout(labelGroup);
-  labelLayout->addWidget(labelWidget);
-  layout->addWidget(labelGroup);
-
-  // Output .vol path: derived from the journal path (.jou -> .vol in the
-  // same directory). Editable + Browse so the user can override.
-  // 2026-04-14: ensure_jou_path now refuses to return "/" or other
-  // unusable paths, so this derivation cannot produce "/.vol" anymore.
-  QString volBase = jouPath;
-  if (volBase.endsWith(".jou", Qt::CaseInsensitive))
-    volBase.chop(4);
-  QString defaultVol = volBase + ".vol";
-  QWidget *volRow = new QWidget();
-  QHBoxLayout *hVol = new QHBoxLayout(volRow);
-  hVol->setContentsMargins(0, 0, 0, 0);
-  hVol->addWidget(new QLabel("Output .vol:"));
-  QLineEdit *volEdit = new QLineEdit(defaultVol);
-  hVol->addWidget(volEdit, 1);
-  QPushButton *volBrowseBtn = new QPushButton("Browse...");
-  hVol->addWidget(volBrowseBtn);
-  QObject::connect(volBrowseBtn, &QPushButton::clicked, [&dlg, volEdit]() {
-    QString picked = QFileDialog::getSaveFileName(
-        &dlg, "Output .vol path", volEdit->text(),
-        "Netgen Vol (*.vol);;All Files (*)");
-    if (!picked.isEmpty()) {
-      picked.replace("\\", "/");
-      volEdit->setText(picked);
-    }
-  });
-  layout->addWidget(volRow);
-
-  // OK / Cancel
-  QDialogButtonBox *buttons = new QDialogButtonBox(
-      QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
-  QPushButton *okBtn = buttons->button(QDialogButtonBox::Ok);
-  QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
-  QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
-  layout->addWidget(buttons);
-
-  // Label update lambda
-  auto updateLabels = [&]() {
-    int idx = modeCombo->currentIndex();
-    if (idx < 0 || idx >= modes.size()) return;
-    const ModeScript &ms = modes[idx];
-
-    // Hide the `.vol` row, Mesh order, Kelvin rows, and label-
-    // requirements entirely when this mode does not need a mesh
-    // (e.g. PEEC-inductance takes a STEP, not a mesh).  Showing
-    // widgets the user cannot act on ("Mesh order: 2" while no mesh
-    // is exported) is confusing UX.
-    volRow->setVisible(ms.needsVol);
-    orderRow->setVisible(ms.needsVol);
-    kelvinRow->setVisible(ms.needsVol);
-    symRow->setVisible(ms.needsVol);
-    labelGroup->setVisible(ms.needsVol);
-
-    QStringList modelLabels = get_model_labels();
-    QSet<QString> labelSet;
-    for (const QString &l : modelLabels)
-      labelSet.insert(l.toLower());
-
-    QStringList lines;
-    bool allOk = true;
-    for (const QString &lbl : ms.required) {
-      if (labelSet.contains(lbl.toLower())) {
-        lines << QString("<span style=\"color:green\">"
-                         "[OK] %1 (required)</span>").arg(lbl);
-      } else {
-        lines << QString("<span style=\"color:red; font-weight:bold\">"
-                         "[MISSING] %1 (required)</span>").arg(lbl);
-        allOk = false;
-      }
-    }
-    for (const QString &lbl : ms.optional) {
-      if (labelSet.contains(lbl.toLower())) {
-        lines << QString("<span style=\"color:green\">"
-                         "[OK] %1 (optional)</span>").arg(lbl);
-      } else {
-        lines << QString("<span style=\"color:gray\">"
-                         "[ - ] %1 (optional)</span>").arg(lbl);
-      }
-    }
-    if (ms.required.isEmpty() && ms.optional.isEmpty())
-      lines << "<span style=\"color:gray\">No label requirements</span>";
-
-    labelWidget->setText(lines.join("<br>"));
-    okBtn->setEnabled(allOk);
-  };
-
-  QObject::connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                   [&](int) { updateLabels(); });
-  updateLabels();
-
-  // --- Execute dialog ---
-  if (dlg.exec() != QDialog::Accepted)
-    return;
-
-  int modeIdx = modeCombo->currentIndex();
-  const ModeScript &ms = modes[modeIdx];
-  int order = orderCombo->currentIndex() + 1;
-
-  QString volPath;
-  QString outDir;
-  if (ms.needsVol) {
-    // Use the (possibly user-edited) Output .vol path.
-    volPath = volEdit->text().trimmed().replace("\\", "/");
-    if (volPath.isEmpty() || volPath == "/" || volPath == "/.vol") {
-      PRINT_ERROR("Output .vol path is empty or invalid: %s\n",
-                  volPath.toLocal8Bit().constData());
-      return;
-    }
-    outDir = QFileInfo(volPath).absolutePath();
-  } else {
-    // STEP-only modes (e.g. PEEC-inductance): no .vol, the analysis
-    // window runs in the journal's directory.
-    outDir = QFileInfo(jouPath).absolutePath();
-  }
-  if (outDir.isEmpty()) outDir = ".";
-
-  bool kelvinAuto = kelvinCheck->isChecked();
-  QString kelvinMeshStr = kelvinMeshEdit->text().trimmed();
-  // Parse kelvin mesh size: empty -> auto (null in JSON), else float.
-  bool hasMeshSize = false;
-  double kelvinMeshSize = 0.0;
-  if (!kelvinMeshStr.isEmpty()) {
-    bool ok = false;
-    double v = kelvinMeshStr.toDouble(&ok);
-    if (ok && v > 0.0) { hasMeshSize = true; kelvinMeshSize = v; }
-    else {
-      PRINT_WARNING("Kelvin mesh size '%s' is not a positive number; "
-                    "using auto (blank).\n",
-                    kelvinMeshStr.toLocal8Bit().constData());
-    }
-  }
-
-  // Parse per-axis symmetry-reduction BC from the three combos.  An
-  // "off" value means no reduction on that axis; "bn=0" / "ht=0"
-  // enters the kelvin_reduction dict at launch time.
-  QString symX = symXCombo->currentText();
-  QString symY = symYCombo->currentText();
-  QString symZ = symZCombo->currentText();
-  QJsonObject reductionObj;
-  auto addIfSet = [&reductionObj](const QString &axis, const QString &bc) {
-    if (bc == "bn=0" || bc == "ht=0")
-      reductionObj[axis] = bc;
-  };
-  addIfSet("x", symX);
-  addIfSet("y", symY);
-  addIfSet("z", symZ);
-  bool hasReduction = !reductionObj.isEmpty();
-
-  // Save settings (persist last values for next dialog open)
-  saveLauncherSettings({
-      {"last_mode", ms.title},
-      {"last_order", order},
-      {"last_jou_dir", outDir},
-      {"last_kelvin_auto", kelvinAuto},
-      {"last_kelvin_mesh", kelvinMeshStr},  // store raw text so blank = blank
-      {"last_kelvin_sym_x", symX},
-      {"last_kelvin_sym_y", symY},
-      {"last_kelvin_sym_z", symZ},
-  });
-
-  // --- Export .vol (only when the mode needs it) ---
-  if (ms.needsVol) {
-    if (!QDir().mkpath(outDir)) {
-      PRINT_ERROR("Cannot create output directory: %s\n",
-                  outDir.toLocal8Bit().constData());
-      return;
-    }
-    CubitInterface::silent_cmd(
-        ("cd \"" + outDir.toLocal8Bit() + "\"").constData());
-
-    // --- Auto-Kelvin: add open-boundary sphere if requested ---
-    // Plays radia/panels/auto_kelvin_entry.py, a tiny wrapper that
-    // imports add_kelvin.auto_add_kelvin_from_current_model() and
-    // invokes it.  The helper is idempotent (skips if a "kelvin"
-    // block already exists) and degrades gracefully (warns + returns
-    // None) when no "air" block is present or detection fails.
-    // Runs BEFORE `radia_export netgen` so the Kelvin block ends up
-    // in the .vol output.
-    //
-    // We use `play "<path>.py"` rather than `python "stmt"` because
-    // the `python` keyword is not recognised at the top level of
-    // Cubit's journal parser (verified 2026-04-23), while `play`
-    // works for both .jou and .py files.
-    if (kelvinAuto) {
-      QString panelsDirFs = pkgDir + "/panels";
-      panelsDirFs.replace("\\", "/");
-      QString entryScript = panelsDirFs + "/auto_kelvin_entry.py";
-      if (!QFile::exists(entryScript)) {
-        PRINT_WARNING("Auto-Kelvin skipped: %s not found\n",
-                      entryScript.toLocal8Bit().constData());
-      } else {
-        // Write the entry-script config JSON so the Python helper
-        // picks up dialog state (add_kelvin + kelvin_mesh_size).
-        // Schema matches tests/panels/test_auto_kelvin_cli.py exactly.
-        QString cfgPath = outDir + "/radia_launcher_config.json";
-        cfgPath.replace("\\", "/");
-        {
-          QJsonObject cfg;
-          cfg["add_kelvin"]        = true;   // kelvinAuto == true here
-          cfg["kelvin_air_block"]  = QString("air");
-          cfg["kelvin_block_name"] = QString("kelvin");
-          if (hasMeshSize)
-            cfg["kelvin_mesh_size"] = kelvinMeshSize;
-          else
-            cfg["kelvin_mesh_size"] = QJsonValue();  // null = auto
-          if (hasReduction)
-            cfg["kelvin_reduction"] = reductionObj;
-          else
-            cfg["kelvin_reduction"] = QJsonValue();  // null = mesh-seam mode
-          QFile f(cfgPath);
-          if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            f.write(QJsonDocument(cfg).toJson(QJsonDocument::Compact));
-            f.close();
-            QString redDesc = hasReduction
-                ? QString::fromUtf8(
-                    QJsonDocument(reductionObj).toJson(QJsonDocument::Compact))
-                : QString("mesh-seam auto");
-            PRINT_INFO("Auto-Kelvin: config -> %s (mesh_size=%s, "
-                       "reduction=%s)\n",
-                       cfgPath.toLocal8Bit().constData(),
-                       hasMeshSize
-                         ? QString::number(kelvinMeshSize).toLocal8Bit()
-                                   .constData()
-                         : "auto",
-                       redDesc.toLocal8Bit().constData());
-          } else {
-            PRINT_WARNING("Auto-Kelvin: cannot write config %s, "
-                          "entry will run with defaults\n",
-                          cfgPath.toLocal8Bit().constData());
-          }
-        }
-
-        // Expose the config path to Cubit's embedded Python via the
-        // process environment block.  auto_kelvin_entry.py reads
-        // $RADIA_LAUNCHER_CONFIG.  SetEnvironmentVariable mutates the
-        // current process, which is what os.environ reads from.
-        SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG",
-                                (LPCWSTR)cfgPath.utf16());
-        // Cubit's `play` exec's scripts without binding __file__,
-        // so auto_kelvin_entry.py cannot locate its sibling
-        // add_kelvin.py via os.path.abspath(__file__).  Pass the
-        // panels directory explicitly via RADIA_PANELS_DIR.
-        SetEnvironmentVariableW(L"RADIA_PANELS_DIR",
-                                (LPCWSTR)panelsDirFs.utf16());
-
-        PRINT_INFO("Auto-Kelvin: playing %s\n",
-                   entryScript.toLocal8Bit().constData());
-        std::string playCmd = "play \"" +
-            entryScript.toLocal8Bit().toStdString() + "\"";
-        CubitInterface::cmd(playCmd.c_str());
-
-        // Clear both env vars so they don't leak into subsequent
-        // invocations (user may re-open the dialog with different
-        // settings in the same Cubit session).
-        SetEnvironmentVariableW(L"RADIA_LAUNCHER_CONFIG", nullptr);
-        SetEnvironmentVariableW(L"RADIA_PANELS_DIR", nullptr);
-      }
-    }
-
-    PRINT_INFO("Exporting Netgen .vol (order %d) to %s...\n",
-               order, volPath.toLocal8Bit().constData());
-
-    std::string exportCmd = "radia_export netgen \"" +
-        volPath.toLocal8Bit().toStdString() +
-        "\" order " + std::to_string(order) + " overwrite";
-    CubitInterface::cmd(exportCmd.c_str());
-
-    if (!QFile::exists(volPath)) {
-      PRINT_ERROR("radia_export netgen failed. Check blocks/sidesets.\n");
-      return;
-    }
-    PRINT_INFO("Exported: %s (order %d)\n",
-               volPath.toLocal8Bit().constData(), order);
-  } else {
-    PRINT_INFO("Launching %s (STEP-only mode, no .vol export)...\n",
-               ms.title.toLocal8Bit().constData());
-  }
-
-  // --- Launch analysis window subprocess ---
-  QString scriptPath = pkgDir + "/" + ms.fileName;
-  if (!QFile::exists(scriptPath)) {
-    PRINT_ERROR("Analysis script not found: %s\n",
-                scriptPath.toStdString().c_str());
-    return;
-  }
-
-  QStringList args;
-  if (python == "py") args << "-3";
-  args << scriptPath;
-  // Only pass the .vol path when the mode uses it; STEP-only modes
-  // launch with no positional argument (empty vol_path in Python).
-  if (ms.needsVol) args << volPath;
-
-  PRINT_INFO("Launching: %s %s\n",
-             python.toStdString().c_str(),
-             args.join(" ").toStdString().c_str());
-
-  // Static startDetached: no heap QProcess needed, no memory leak.
-  // Environment cleaning (Qt/PySide) is handled by the PySide6 app
-  // itself (it imports its own Qt, ignoring Cubit's env vars).
-  qint64 pid = 0;
-  QProcess::startDetached(python, args, outDir, &pid);
-  if (pid > 0)
-    PRINT_INFO("PID: %lld\n", pid);
-  else
-    PRINT_WARNING("Failed to launch analysis window.\n");
-
-  // Open the exported .vol with OS viewer (only for mesh modes).
-  if (ms.needsVol)
-    QDesktopServices::openUrl(QUrl::fromLocalFile(volPath));
-}
 
 // ============================================================
 // ExportDialog - format-specific options
@@ -1630,7 +993,9 @@ static void saveSettings(const QJsonObject &obj)
 
 ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* parent)
   : QDialog(parent), mFormat(format),
-    mVersion(nullptr), mNoPyramid(nullptr), mScale(nullptr)
+    mVersion(nullptr), mNoPyramid(nullptr), mScale(nullptr),
+    mKelvinEnable(nullptr), mKelvinMeshSize(nullptr),
+    mKelvinSymX(nullptr), mKelvinSymY(nullptr), mKelvinSymZ(nullptr)
 {
   // Window title
   const char* titles[] = {"Export Netgen Vol", "Export GMSH", "Export Nastran BDF", "Export VTK", "Export FEMEEM", "Export MEG (ELF/MAGIC)"};
@@ -1785,6 +1150,81 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     layout->addLayout(form);
   }
 
+  // ---- Netgen .vol only: Kelvin + per-axis symmetry-plane BC ----
+  // Kelvin is a .vol-only feature (open-boundary FEM); the other
+  // formats do not consume it.  Per the target-centric architecture
+  // this UI is solver-neutral: it produces the Cubit blocks /
+  // sidesets that the Dirichlet-label convention defines, and the
+  // domain panels (radia-ih / radia-electromagnet / ...) decide what
+  // each label means physically.
+  if (format == NETGEN_VOL) {
+    QGroupBox *kelvinBox = new QGroupBox(
+        "Kelvin open-boundary  (auto-add exterior sphere; needs an "
+        "'air' block)");
+    kelvinBox->setCheckable(false);
+    QVBoxLayout *kvLayout = new QVBoxLayout(kelvinBox);
+
+    QHBoxLayout *kvRow1 = new QHBoxLayout();
+    mKelvinEnable = new QCheckBox("Add Kelvin (idempotent)");
+    mKelvinEnable->setToolTip(
+        "Idempotent: skipped if a 'kelvin' block already exists.\n"
+        "Uncheck for Dirichlet-truncation baselines.");
+    connect(mKelvinEnable, SIGNAL(toggled(bool)), this,
+            SLOT(updatePreview()));
+    kvRow1->addWidget(mKelvinEnable);
+    kvRow1->addSpacing(20);
+    kvRow1->addWidget(new QLabel("Mesh size [m]:"));
+    mKelvinMeshSize = new QLineEdit();
+    mKelvinMeshSize->setPlaceholderText("auto (blank) or e.g. 0.03");
+    mKelvinMeshSize->setMaximumWidth(140);
+    mKelvinMeshSize->setToolTip(
+        "Tet edge length on the Kelvin shell.  Blank inherits the "
+        "size from the air outer surface (copy-mesh).");
+    connect(mKelvinMeshSize, SIGNAL(textChanged(QString)), this,
+            SLOT(updatePreview()));
+    kvRow1->addWidget(mKelvinMeshSize);
+    kvRow1->addStretch();
+    kvLayout->addLayout(kvRow1);
+
+    QHBoxLayout *kvRow2 = new QHBoxLayout();
+    kvRow2->addWidget(new QLabel("Symmetry reduction:"));
+    auto makeSym = [this](const QString &axis) {
+      QComboBox *cb = new QComboBox();
+      cb->addItem("off");
+      cb->addItem("bn");
+      cb->addItem("ht");
+      cb->setMaximumWidth(70);
+      cb->setToolTip(
+          QString(
+              "BC label on the %1=0 plane when the air block is "
+              "reduced to %1>=0.\n"
+              "  bn = B.n=0   (flux parallel,   Radia '+',  "
+              "A:Dirichlet, Omega:natural)\n"
+              "  ht = HxN=0   (flux perp,       Radia '-',  "
+              "A:natural,    Omega:Dirichlet)\n"
+              "  off = no reduction on this axis"
+              ).arg(axis));
+      connect(cb, SIGNAL(currentIndexChanged(int)), this,
+              SLOT(updatePreview()));
+      return cb;
+    };
+    mKelvinSymX = makeSym("x");
+    mKelvinSymY = makeSym("y");
+    mKelvinSymZ = makeSym("z");
+    kvRow2->addWidget(new QLabel("x:"));
+    kvRow2->addWidget(mKelvinSymX);
+    kvRow2->addSpacing(8);
+    kvRow2->addWidget(new QLabel("y:"));
+    kvRow2->addWidget(mKelvinSymY);
+    kvRow2->addSpacing(8);
+    kvRow2->addWidget(new QLabel("z:"));
+    kvRow2->addWidget(mKelvinSymZ);
+    kvRow2->addStretch();
+    kvLayout->addLayout(kvRow2);
+
+    layout->addWidget(kelvinBox);
+  }
+
   // Command preview: left-aligned, click to select all for easy copy
   QFormLayout* previewForm = new QFormLayout();
   mPreview = new QLineEdit();
@@ -1816,6 +1256,11 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
     if (mDimension) s["dimension"] = mDimension->currentIndex();
     if (mNoPyramid) s["nopyramid"] = mNoPyramid->currentIndex();
     if (mScale) s["scale"] = mScale->text();
+    if (mKelvinEnable)   s["kelvin_enable"]    = mKelvinEnable->isChecked();
+    if (mKelvinMeshSize) s["kelvin_mesh_size"] = mKelvinMeshSize->text();
+    if (mKelvinSymX)     s["kelvin_sym_x"]     = mKelvinSymX->currentText();
+    if (mKelvinSymY)     s["kelvin_sym_y"]     = mKelvinSymY->currentText();
+    if (mKelvinSymZ)     s["kelvin_sym_z"]     = mKelvinSymZ->currentText();
     all[keys[mFormat]] = s;
     saveSettings(all);
     accept();
@@ -1835,6 +1280,18 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
       mNoPyramid->setCurrentIndex(s["nopyramid"].toInt());
     if (s.contains("scale") && mScale)
       mScale->setText(s["scale"].toString());
+    if (mKelvinEnable && s.contains("kelvin_enable"))
+      mKelvinEnable->setChecked(s["kelvin_enable"].toBool());
+    if (mKelvinMeshSize && s.contains("kelvin_mesh_size"))
+      mKelvinMeshSize->setText(s["kelvin_mesh_size"].toString());
+    auto restoreSym = [&s](QComboBox *cb, const QString &k) {
+      if (!cb || !s.contains(k)) return;
+      int idx = cb->findText(s[k].toString());
+      if (idx >= 0) cb->setCurrentIndex(idx);
+    };
+    restoreSym(mKelvinSymX, "kelvin_sym_x");
+    restoreSym(mKelvinSymY, "kelvin_sym_y");
+    restoreSym(mKelvinSymZ, "kelvin_sym_z");
   }
 
   updatePreview();
@@ -1914,8 +1371,30 @@ QString ExportDialog::cubitCommand() const
   QString cmd;
   switch (mFormat) {
     case NETGEN_VOL: {
-      // Not a Cubit APREPRO command — shown as preview only
       cmd = QString("radia_export netgen \"%1\" order %2").arg(file).arg(order);
+      // Kelvin / symmetry args (.vol only).  Always emit when add_kelvin
+      // is checked; per-axis sym_* only when set to "bn" or "ht".
+      if (mKelvinEnable && mKelvinEnable->isChecked()) {
+        cmd += " add_kelvin";
+        if (mKelvinMeshSize) {
+          QString ms = mKelvinMeshSize->text().trimmed();
+          if (!ms.isEmpty()) {
+            bool ok = false;
+            double v = ms.toDouble(&ok);
+            if (ok && v > 0.0)
+              cmd += QString(" kelvin_mesh %1").arg(v, 0, 'g', 8);
+          }
+        }
+        auto emit_sym = [&cmd](const QComboBox *cb, const char *flag) {
+          if (!cb) return;
+          QString s = cb->currentText();
+          if (s == "bn" || s == "ht")
+            cmd += QString(" %1 %2").arg(flag).arg(s);
+        };
+        emit_sym(mKelvinSymX, "kelvin_sym_x");
+        emit_sym(mKelvinSymY, "kelvin_sym_y");
+        emit_sym(mKelvinSymZ, "kelvin_sym_z");
+      }
       break;
     }
     case GMSH: {
