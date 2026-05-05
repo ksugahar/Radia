@@ -7,8 +7,10 @@
 #include <QComboBox>
 #include <QLineEdit>
 #include <QTableWidget>
+#include <QCheckBox>
 
 class QAction;
+class QWidget;
 
 //! Radia Component for Coreform Cubit GUI.
 //!
@@ -45,7 +47,6 @@ public slots:
   void export_femeem();
   void export_meg();
   void mesh_volume();
-  void launch_radia_ngsolve();
 };
 
 //! Export options dialog.
@@ -90,6 +91,15 @@ private:
   QLineEdit* mScale;      // FEMEEM only
   QTableWidget* mBlockTable;  // MEG only: per-block ELF label
   QLineEdit* mPreview;
+
+  // Netgen .vol only: open-boundary Kelvin transformation + per-axis
+  // symmetry-plane BC.  These widgets are nullptr for non-Netgen
+  // formats; .vol is the only format that consumes Kelvin.
+  QCheckBox* mKelvinEnable;
+  QLineEdit* mKelvinMeshSize;
+  QComboBox* mKelvinSymX;
+  QComboBox* mKelvinSymY;
+  QComboBox* mKelvinSymZ;
 
   void populateBlockTable();
   void updateBlockLabels();  // called when DIM changes
