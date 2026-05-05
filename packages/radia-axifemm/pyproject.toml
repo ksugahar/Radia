@@ -1,0 +1,75 @@
+# radia-axifemm — FEMM/Henrotte axisymmetric finite elements for NGSolve.
+#
+# Brings the Henrotte (1993) / Meeker FEMM r²-linear interpolation to NGSolve
+# as a custom FESpace, providing piecewise-constant B_z and 1/r-scaled B_r per
+# element on axis-aligned rectangles and triangles. Recovers FEMM-grade smooth
+# fields without forking NGSolve.
+#
+# Part of the Sugahara-lab Radia public extension family. See:
+#   https://github.com/ksugahar/radia-axifemm
+
+[project]
+name = "radia-axifemm"
+version = "0.1.0"
+description = "FEMM/Henrotte axisymmetric finite elements as an NGSolve extension (Radia public-fork family)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Kengo Sugahara", email = "ksugahar@ele.kindai.ac.jp"},
+]
+keywords = ["ngsolve", "fem", "axisymmetric", "femm", "henrotte", "eddy-current", "radia"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/ksugahar/radia-axifemm"
+Repository = "https://github.com/ksugahar/radia-axifemm"
+Issues = "https://github.com/ksugahar/radia-axifemm/issues"
+"References" = "https://www.femm.info/wiki/AxisymmetricFormulation"
+
+[build-system]
+requires = [
+            "ngsolve>=6.2.2405.post22.dev0",
+            "scikit-build-core>=0.9.0",
+            "pybind11_stubgen",
+            "cmake",
+            "toml;  python_version >= '3.11'",
+            "tomli>=1.1.0; python_version < '3.11'"
+]
+build-backend = "scikit_build_core.build"
+
+##########################################################################
+# scikit-build / cibuildwheel settings (pinned NGSolve version, matrix wheels)
+##########################################################################
+
+[tool.scikit-build]
+experimental = true
+metadata.dependencies.provider = "ngsolve._scikit_build_core_dependencies"
+
+[tool.cibuildwheel]
+manylinux-x86_64-image = "manylinux_2_28"
+skip = """
+  pp*
+  *_i686
+  *musllinux*
+  *win32
+"""
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "mv {wheel} {dest_dir} && rename linux_x86_64 manylinux_2_28_x86_64.manylinux2014_x86_64 {dest_dir}/*-linux_x86_64*.whl"
+
+[tool.cibuildwheel.macos]
+environment = {MACOSX_DEPLOYMENT_TARGET="10.15"}
+repair-wheel-command = ""
+archs = ["universal2"]

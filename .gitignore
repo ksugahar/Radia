@@ -40,6 +40,7 @@ build*/
 dist/
 radia-*/
 !packages/radia-mcp/
+!packages/radia-axifemm/
 *.egg-info/
 .eggs/
 
