@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "0.7.4"
-description = "High-order curved mesh export from Coreform Cubit to NGSolve/Netgen"
+version = "0.8.0"
+description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -39,6 +39,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 cubit_mesh_export = ["*.pyd", "*.so", "*.ccm", "*.ccl"]
+"cubit_mesh_export.cubit_helpers" = ["*.py"]
 
 [tool.setuptools.exclude-package-data]
 cubit_mesh_export = ["bridge.py"]

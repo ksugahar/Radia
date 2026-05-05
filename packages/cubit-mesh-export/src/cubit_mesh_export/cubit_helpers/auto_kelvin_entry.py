@@ -1,12 +1,13 @@
 """Cubit entry point for Auto-Kelvin addition (argument-driven).
 
-Invoked by the Radia-NGSolve C++ launcher via::
+Invoked by ``radia_export netgen ... add_kelvin ...`` (C++) via::
 
-    play "<panels_dir>/auto_kelvin_entry.py"
+    play "<plugin_dir>/cubit_helpers/auto_kelvin_entry.py"
 
-just before the `radia_export netgen` call.  The launcher writes a JSON
-config first and exports its path via the ``RADIA_LAUNCHER_CONFIG``
-environment variable; this script reads the JSON and dispatches.
+just before the actual Netgen .vol export.  The C++ command writes a
+JSON config file first and exports its path via the
+``RADIA_LAUNCHER_CONFIG`` environment variable; this script reads the
+JSON and dispatches to ``add_kelvin.auto_add_kelvin_from_current_model``.
 
 Config schema (all keys optional; defaults in parens)::
 
@@ -20,51 +21,42 @@ Config schema (all keys optional; defaults in parens)::
 
 ``kelvin_mesh_size`` is the tet edge length [m] imposed on the Kelvin
 exterior sphere.  ``null`` (default) lets add_kelvin_cubit inherit the
-size from the air outer surface via copy-mesh — usually fine.  For
-large models you may want a COARSER Kelvin mesh (e.g. 2-3x the air
-surface size); specify an explicit float to override.
+size from the air outer surface via copy-mesh.
 
 ``kelvin_reduction`` is a JSON object keyed by axis ("x"|"y"|"z") with
 value in {"bn=0", "ht=0"}.  When present, it triggers domain-reduction
-mode in add_kelvin_cubit: the air block is assumed to already be
-reduced to the positive side of each listed axis plane, and the
-Kelvin sphere is cut on the same planes.  Each cut plane gets a
-`sym_<bc>_<axis>` sideset whose BC is chosen by the solver per its
-formulation (A vs Omega).  ``null`` (default) runs the existing
+mode in add_kelvin_cubit.  ``null`` (default) runs the existing
 symmetry auto-detection (mesh-seam mode).  Example::
 
     "kelvin_reduction": {"x": "ht=0", "z": "bn=0"}   // 1/4 xz model
 
 If ``RADIA_LAUNCHER_CONFIG`` is not set or the file is missing, all
-defaults apply — i.e. the pre-argument-driven behaviour is preserved,
-so existing samples / tests keep working.
-
-Argument-driven rationale (2026-04-23, CLAUDE.md § Panel Design
-Workflow Policy):  the Cubit panel's only job becomes collecting
-dialog state and writing this JSON.  Every knob that matters for
-computation is in the config file, so `pytest` can exercise every
-combination without driving the GUI.  Per the policy, a panel is
-Stage-3-ready only after Stage-2 (this CLI / config layer) is
-golden-locked.
+defaults apply.
 """
 import json
 import os
 import sys
 
-# Locate add_kelvin: this file and add_kelvin.py live in the same
-# directory (radia/panels/).  Cubit's `play` exec's .py via
+# Locate add_kelvin.py.  This file and add_kelvin.py live in the same
+# directory (cubit_helpers/).  Cubit's `play` exec's .py via
 # `exec(compile(source, "<string>", "exec"))` and does NOT bind
 # __file__ in the exec globals, so `os.path.abspath(__file__)` raises
 # NameError when invoked through `play`.  Three fallbacks in order:
-#   1. __file__             — available when imported normally
-#   2. RADIA_PANELS_DIR env — set by the C++ launcher next to
-#                              RADIA_LAUNCHER_CONFIG
-#   3. sys.path search      — find add_kelvin.py on any entry
+#   1. __file__              -- available when imported normally
+#   2. CUBIT_HELPERS_DIR env -- set by the C++ caller alongside
+#                                RADIA_LAUNCHER_CONFIG
+#   3. sys.path search       -- find add_kelvin.py on any entry
 _here = None
 if "__file__" in globals():
     _here = os.path.dirname(os.path.abspath(__file__))
 if not _here:
-    _here = os.environ.get("RADIA_PANELS_DIR")
+    _here = os.environ.get("CUBIT_HELPERS_DIR")
+if not _here or not os.path.isfile(os.path.join(_here, "add_kelvin.py")):
+    # Back-compat with the pre-2026-05-05 RADIA_PANELS_DIR name; old
+    # code paths and tests may still set it.
+    legacy = os.environ.get("RADIA_PANELS_DIR")
+    if legacy and os.path.isfile(os.path.join(legacy, "add_kelvin.py")):
+        _here = legacy
 if not _here or not os.path.isfile(os.path.join(_here, "add_kelvin.py")):
     for _p in sys.path:
         if _p and os.path.isfile(os.path.join(_p, "add_kelvin.py")):
@@ -72,10 +64,10 @@ if not _here or not os.path.isfile(os.path.join(_here, "add_kelvin.py")):
             break
 if not _here or not os.path.isfile(os.path.join(_here, "add_kelvin.py")):
     raise RuntimeError(
-        "auto_kelvin_entry.py: cannot locate panels dir "
-        "(no __file__, no RADIA_PANELS_DIR env, add_kelvin.py not in "
-        "sys.path).  The C++ launcher must set RADIA_PANELS_DIR or "
-        "prepend the panels directory to sys.path before `play`.")
+        "auto_kelvin_entry.py: cannot locate cubit_helpers dir "
+        "(no __file__, no CUBIT_HELPERS_DIR env, add_kelvin.py not in "
+        "sys.path).  The C++ caller must set CUBIT_HELPERS_DIR or "
+        "prepend the cubit_helpers directory to sys.path before `play`.")
 if _here not in sys.path:
     sys.path.insert(0, _here)
 
@@ -134,6 +126,6 @@ else:
             print("[auto_kelvin_entry] auto_add_kelvin returned None "
                   "(already present or no air block) -- noop")
     except Exception as _e:
-        # Never re-raise: the launcher should proceed even if Kelvin
+        # Never re-raise: the export should proceed even if Kelvin
         # fails (user gets Dirichlet truncation + a console warning).
         print(f"[auto_kelvin_entry] ERROR: {_e}")
