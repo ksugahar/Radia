@@ -28,11 +28,16 @@ import ngsolve  # noqa: F401
 
 from .radia_axifemm import version, hello  # noqa: F401
 
-# Phase 2-B will export H1Henrotte / AxiHenrotteFESpace here.
+# Phase 2-B/C/E exports.
 try:
-    from .radia_axifemm import H1Henrotte, AxiHenrotteFESpace  # noqa: F401
+    from .radia_axifemm import (  # noqa: F401
+        H1Henrotte,
+        AxiHenrotteFESpace,
+        AxiHenrotteStiffnessBFI,
+        AxiHenrotteSigmaMassBFI,
+    )
 except ImportError:
-    # Phase 2-A bootstrap — FESpace not yet built.
+    # Phase 2-A bootstrap — FESpace/Integrators not yet built.
     pass
 
 __version__ = "0.1.0"

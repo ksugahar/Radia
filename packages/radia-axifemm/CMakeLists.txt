@@ -6,13 +6,16 @@ set(addon_name radia_axifemm)
 project(${addon_name})
 include(ngsolve_addon.cmake)
 
-# Phase 2-A: build only the smoke-test entry; FE/FESpace land in 2-B.
-# Set RADIA_AXIFEMM_PHASE_2B=ON once the abstract methods are implemented.
-option(RADIA_AXIFEMM_PHASE_2B "Build the AxiHenrotteFE/FESpace classes" OFF)
+# Phase 2-B/C are merged: AxiHenrotteFE/FESpace + DiffOps build by default.
+# Toggle off only to rebuild the bootstrap smoke-test variant.
+option(RADIA_AXIFEMM_PHASE_2B "Build the AxiHenrotteFE/FESpace classes" ON)
 
 set(SOURCES src/radia_axifemm.cpp)
 if(RADIA_AXIFEMM_PHASE_2B)
-    list(APPEND SOURCES src/axi_henrotte_fe.cpp src/axi_henrotte_fespace.cpp)
+    list(APPEND SOURCES
+         src/axi_henrotte_fe.cpp
+         src/axi_henrotte_fespace.cpp
+         src/axi_henrotte_integrators.cpp)
     add_compile_definitions(RADIA_AXIFEMM_PHASE_2B)
 endif()
 
