@@ -1,7 +1,9 @@
-// axi_henrotte_fespace.cpp — minimal FESpace stub. Full impl in Phase 2-C.
+// axi_henrotte_fespace.cpp — FESpace returning AxiHenrotteFE elements +
+// custom DiffOps wired into evaluator[VOL] (Phase 2-C).
 
 #include "axi_henrotte_fespace.hpp"
 #include "axi_henrotte_fe.hpp"
+#include "axi_henrotte_diffop.hpp"
 #include <python_comp.hpp>
 
 namespace radia_axifemm {
@@ -11,11 +13,17 @@ using namespace ngcomp;
 AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & flags)
   : FESpace(ma, flags)
 {
-    // Phase 2-A: vertex-DOF only (one DOF per mesh vertex).
     type = "axihenrotte";
     needs_transform_vec = false;
 
-    // For a real implementation we'd register evaluators here; stubbed for now.
+    // Wire our custom DiffOps so that SymbolicBilinearForm can integrate
+    // u, grad(u) for u : H1Henrotte.
+    //   evaluator[VOL]: invoked when ProxyFunction is sampled with no derivative
+    //   additional_evaluators.Set("grad", ...): exposes grad(u) syntax in Python
+    //   flux_evaluator[VOL]: used by visualization / flux post-processing
+    evaluator[VOL]      = make_shared<AxiHenrotteDiffOpId>();
+    flux_evaluator[VOL] = make_shared<AxiHenrotteDiffOpGradient>();
+    additional_evaluators.Set("grad", make_shared<AxiHenrotteDiffOpGradient>());
 }
 
 void AxiHenrotteFESpace::Update() {
