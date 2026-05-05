@@ -11,6 +11,7 @@
 namespace radia_axifemm {
     void ExportAxiHenrotteFE(pybind11::module& m);
     void ExportAxiHenrotteFESpace(pybind11::module& m);
+    void ExportAxiHenrotteIntegrators(pybind11::module& m);
 }
 #endif
 
@@ -28,5 +29,6 @@ PYBIND11_MODULE(radia_axifemm, m) {
 #ifdef RADIA_AXIFEMM_PHASE_2B
     radia_axifemm::ExportAxiHenrotteFE(m);
     radia_axifemm::ExportAxiHenrotteFESpace(m);
+    radia_axifemm::ExportAxiHenrotteIntegrators(m);
 #endif
 }
