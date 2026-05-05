@@ -460,10 +460,12 @@ and uses H1 scalar FES with u = r * A_phi substitution.
 confirming the reluctivity modulation formula nu_0 * (rho'/R)^2 is
 correct.
 
-**Helper function** (`src/radia/panels/add_kelvin.py`):
+**Helper function** (canonical:
+`packages/cubit-mesh-export/src/cubit_mesh_export/cubit_helpers/add_kelvin.py`;
+back-compat shim at `src/radia/panels/add_kelvin.py`):
 
 ```python
-from add_kelvin import add_kelvin_2d_axisym
+from cubit_mesh_export.cubit_helpers.add_kelvin import add_kelvin_2d_axisym
 # interior_shape: your 2D OCC face on x>=0 with outer arc named "kelvin_int"
 shape, info = add_kelvin_2d_axisym(interior_shape, R=0.10, z_offset=0.25)
 # info['axis_labels']  -> "axis|axis_ext" (pass to H1 dirichlet=...)

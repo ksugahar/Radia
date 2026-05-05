@@ -31,8 +31,12 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-PANELS = ROOT / "src" / "radia" / "panels"
-ENTRY_SCRIPT = PANELS / "auto_kelvin_entry.py"
+# Auto-Kelvin entry point + add_kelvin.py moved to cubit-mesh-export
+# 2026-05-05.  The cubit_helpers/ directory holds both the entry
+# script (auto_kelvin_entry.py) and the implementation (add_kelvin.py).
+CUBIT_HELPERS = ROOT / "packages" / "cubit-mesh-export" / "src" / \
+                "cubit_mesh_export" / "cubit_helpers"
+ENTRY_SCRIPT = CUBIT_HELPERS / "auto_kelvin_entry.py"
 
 
 def _find_cubit() -> Path | None:
@@ -140,11 +144,12 @@ def _run_cubit_with_config(tmpdir: Path, add_kelvin: bool,
     }), encoding="utf-8")
 
     env = os.environ.copy()
-    # RADIA_PANELS_DIR lets auto_kelvin_entry.py locate add_kelvin.py
+    # CUBIT_HELPERS_DIR lets auto_kelvin_entry.py locate add_kelvin.py
     # without relying on __file__ (Cubit's `play` does not bind it).
-    # The C++ launcher sets this env var alongside RADIA_LAUNCHER_CONFIG;
-    # the test does the same to exercise the same code path.
-    env["RADIA_PANELS_DIR"] = str(PANELS)
+    # The .ccm code (run_auto_kelvin in ExportNetgenCommand.cpp) sets
+    # this env var alongside RADIA_LAUNCHER_CONFIG; the test does the
+    # same to exercise the same code path.
+    env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
     if set_env:
         env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
     else:

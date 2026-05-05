@@ -271,6 +271,15 @@ def _expected_deployments(pkg_dir: Path, cubit_dir: Path):
     if nglib:
         pairs.append((nglib, plugins_dir / nglib.name))
         pairs.append((ngcore, plugins_dir / ngcore.name))
+    # Cubit-side Python helpers (Kelvin transformation, etc.).  Deployed
+    # to bin/plugins/cubit_helpers/ so the .ccm code can locate them via
+    # the plugin directory and add them to the embedded Python sys.path
+    # before invoking `play "<dir>/auto_kelvin_entry.py"`.
+    helpers_src = pkg_dir / "cubit_helpers"
+    if helpers_src.is_dir():
+        helpers_dst = plugins_dir / "cubit_helpers"
+        for py in sorted(helpers_src.glob("*.py")):
+            pairs.append((py, helpers_dst / py.name))
     return pairs
 
 
@@ -419,6 +428,29 @@ def _clean_old_plugins(cubit_dir: Path):
                     removed += 1
                 except OSError as e:
                     errors.append(f"Could not delete {f}: {e}")
+
+    # Clean Python helpers (cubit_helpers/*.py) so a removed helper
+    # doesn't linger.  Also drop __pycache__ from the previous install.
+    helpers_dst = plugins_dir / "cubit_helpers"
+    if helpers_dst.is_dir():
+        for f in helpers_dst.glob("*.py"):
+            try:
+                f.unlink()
+                removed += 1
+            except OSError as e:
+                errors.append(f"Could not delete {f}: {e}")
+        pyc_dir = helpers_dst / "__pycache__"
+        if pyc_dir.is_dir():
+            for f in pyc_dir.glob("*"):
+                try:
+                    f.unlink()
+                    removed += 1
+                except OSError as e:
+                    errors.append(f"Could not delete {f}: {e}")
+            try:
+                pyc_dir.rmdir()
+            except OSError:
+                pass  # __pycache__ may have new entries; harmless
 
     for name in ["cubit_radia.bat"]:
         f = bin_dir / name
@@ -594,6 +626,16 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         copy_jobs.append((ngcore, plugins_dir / ngcore.name))
     else:
         print("  [--] Netgen DLLs not found (high-order curving disabled)")
+
+    # Cubit-side Python helpers (Kelvin transformation, etc.).
+    helpers_src = pkg_dir / "cubit_helpers"
+    if helpers_src.is_dir():
+        helpers_dst = plugins_dir / "cubit_helpers"
+        for py in sorted(helpers_src.glob("*.py")):
+            copy_jobs.append((py, helpers_dst / py.name))
+    else:
+        print(f"  [--] cubit_helpers/ not found in {pkg_dir} -- "
+              "Kelvin / symmetry helpers will be unavailable in Cubit")
 
     copy_errors = []
     for src, dst in copy_jobs:

@@ -1,14 +1,30 @@
 # cubit-mesh-export
 
-High-order curved mesh export from [Coreform Cubit](https://coreform.com/products/coreform-cubit/) to [NGSolve](https://ngsolve.org)/[Netgen](https://github.com/NGSolve/netgen).
+Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/coreform-cubit/) to [NGSolve](https://ngsolve.org)/[Netgen](https://github.com/NGSolve/netgen).
+
+`cubit-mesh-export` is the **shared infrastructure layer** in the Radia
+toolchain. It ships mesh export, the Kelvin open-boundary
+transformation, symmetry helpers, and the Dirichlet label conventions
+that every domain-specific Radia tool consumes. The domain panels
+(`radia-ih` for induction heating, `radia-electromagnet` for
+accelerator magnets, `radia-pcb`, `radia-heat`, ...) are launched by
+the user, NOT by this plugin.
 
 ## Features
 
-- **Cubit plugin**: `radia_export netgen/gmsh/nastran/vtk` APREPRO commands + Export Mesh GUI
+- **Cubit plugin** (`.ccm` + `.ccl` + `.pyd`):
+  - `radia_export {netgen|gmsh|nastran|vtk|femeem|meg}` APREPRO commands
+  - **Export Mesh** GUI menu
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
-- **Label preservation**: material (block), boundary (sideset), edge (BBND)
-- **Companion JSON**: CAD reference values for Volume/Area/Length consistency checking
-- **Standalone checker**: verify mesh quality without Cubit (`check-vol` CLI)
+- **Kelvin open-boundary** transformation built into `radia_export netgen`
+  (auto-add an exterior sphere with copy-mesh + periodic identification)
+- **Per-axis symmetry-plane BC labels** (`bn`/`ht`) for 1/2 and 1/4 reduced
+  domains
+- **Dirichlet / Neumann label conventions** at three levels
+  (BND / BBND / BBBND -- see table below)
+- **Companion JSON** beside every `.vol` with CAD reference values for
+  Volume / Area / Length consistency checking
+- **Standalone checker** that does NOT require Cubit (`check-vol` CLI)
 
 ## Install
 
@@ -17,7 +33,10 @@ pip install cubit-mesh-export
 cubit-plugin-install
 ```
 
-The second command deploys the plugin binaries (.ccm, .ccl, .pyd) to your Coreform Cubit installation.
+The second command deploys the Cubit plugin binaries, the Netgen DLLs,
+and the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
+`cubit_helpers/auto_kelvin_entry.py`) into your Coreform Cubit
+installation.
 
 ### Upgrade
 
@@ -26,27 +45,149 @@ pip install --upgrade cubit-mesh-export
 cubit-plugin-install
 ```
 
-Always run `cubit-plugin-install` after upgrading to deploy the new binaries.
+Always re-run `cubit-plugin-install` after upgrading.
 
-## Usage
-
-### Cubit commands (recommended)
-
-After installation, these commands are available in Cubit:
+## Cubit commands
 
 ```
-radia_export netgen "model.vol" order 3 overwrite     # NGSolve FEM (.vol)
-radia_export gmsh "model.msh" order 2 overwrite       # GMSH v4.1 (lab standard)
-radia_export nastran "model.bdf" order 2 overwrite    # Nastran BDF
-radia_export vtk "model.vtk" order 2 overwrite        # VTK Legacy
+radia_export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
+radia_export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 (lab standard)
+radia_export nastran "model.bdf" order 2 overwrite                # Nastran BDF
+radia_export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
 
-Or use the **Export Mesh** menu in the Cubit GUI.
+The `radia_export netgen` command additionally accepts Kelvin / symmetry
+options (see below). The other formats do not consume Kelvin.
 
-### Python API (for scripting / verification)
+## Workflow
+
+```
+   ┌────────────┐    radia_export netgen        ┌──────────┐
+   │  Cubit     │   ─────────────────────────▶  │  .vol    │
+   │  geometry  │   (+add_kelvin, +sym)         │          │
+   └────────────┘                                └──────────┘
+                                                      │
+                                                      ▼
+                       user launches the domain tool of their choice:
+                            radia-ih   /  radia-electromagnet  /
+                            radia-pcb  /  radia-heat   /  ...
+```
+
+`cubit-mesh-export` produces the `.vol` and the label conventions; the
+domain tool reads the `.vol` and applies the physics. There is no
+"pick your analysis" launcher in this plugin -- end-user tools split by
+analysis target (IH designer / electromagnet designer / ...), not by
+solver type.
+
+## Kelvin open-boundary transformation
+
+Idempotent helper: skipped if a `kelvin` block already exists; needs an
+`air` block in the current Cubit model.
+
+```
+radia_export netgen "model.vol" order 3 overwrite \
+    add_kelvin                       # auto-create the exterior Kelvin sphere
+    [kelvin_air "air"]               # name of the air block (default "air")
+    [kelvin_block "kelvin"]          # name to give the Kelvin block (default "kelvin")
+    [kelvin_mesh 0.03]               # tet size [m] on the Kelvin shell
+                                     # (omit to inherit from air outer surface)
+    [kelvin_sym_x {off|bn|ht}]       # per-axis symmetry-plane BC
+    [kelvin_sym_y {off|bn|ht}]       # off = no reduction (default)
+    [kelvin_sym_z {off|bn|ht}]       # bn  = B.n=0    (flux parallel)
+                                     # ht  = HxN=0    (flux perpendicular)
+```
+
+In the Export Mesh GUI, the same options appear as widgets on the
+Netgen Vol export dialog (only there -- Kelvin is `.vol`-specific).
+
+The Kelvin step runs **before** the mesh extract / .vol write, so the
+new `kelvin` block, the `kelvin_int` / `kelvin_ext` sidesets, and the
+optional `sym_<bc>_<axis>` sidesets all end up in the `.vol`.
+
+### Symmetry semantics
+
+| `kelvin_sym_<axis>` | Sideset name produced  | B/H constraint    | Radia image | A formulation | Omega formulation |
+|--------------------|------------------------|-------------------|-------------|---------------|-------------------|
+| `off`              | (none)                 | (full domain)     | n/a         | n/a           | n/a               |
+| `bn`               | `sym_bn=0_<axis>`      | B·n = 0           | `+`         | Dirichlet (A×n=0) | natural          |
+| `ht`               | `sym_ht=0_<axis>`      | H×n = 0           | `-`         | natural          | Dirichlet (Ω=const) |
+
+The convention is **physics-named, formulation-agnostic**: the same
+`sym_bn=0_x` sideset means "B.n = 0 on x = 0 plane" regardless of
+whether the domain panel solves A or Omega. Each domain tool decides
+which BC type to apply per its formulation.
+
+1/8 reduction (all three axes set to `bn` or `ht`) is supported when at
+least one axis is `ht`. Three `bn` axes are physically impossible (B
+parallel to three mutually perpendicular planes forces B = 0
+everywhere) and rejected.
+
+## Label conventions
+
+`cubit-mesh-export` reserves a small set of label names and prefixes
+across all three NGSolve dimension levels (BND / BBND / BBBND). The
+domain tools rely on these to wire up Dirichlet / Kelvin / symmetry
+without having to inspect geometry.
+
+### BND -- surface labels (NGSolve `mesh.GetBoundaries()`)
+
+Source: Cubit **sidesets** on surfaces.
+
+| Cubit sideset name  | NGSolve BND name    | Meaning                                                     |
+|---------------------|---------------------|-------------------------------------------------------------|
+| `kelvin_int`        | `kelvin_int`        | Inner Kelvin face (auto-paired with outer via copy-mesh)    |
+| `kelvin_ext`        | `kelvin_ext`        | Outer Kelvin face                                           |
+| `sym_bn=0_<axis>`   | `sym_bn=0_<axis>`   | B.n = 0 (flux parallel) symmetry plane                      |
+| `sym_ht=0_<axis>`   | `sym_ht=0_<axis>`   | H×n = 0 (flux perpendicular) symmetry plane                 |
+| `dir_<name>`        | `dir_<name>`        | **Dirichlet** surface (variable = 0; physics is solver-side)|
+| `neu_<name>`        | `neu_<name>`        | Explicit Neumann (= no-op; documentation only)              |
+| anything else       | (passes through)    | Free-form name; meaning is up to the domain tool            |
+
+`kelvin_int` / `kelvin_ext` are auto-detected from the air ↔ kelvin
+block topology when the user does not name them explicitly, so .jou
+files using a plain "concentric Kelvin" pattern need no manual sideset
+work.
+
+### BBND -- edge / curve labels (NGSolve `mesh.GetBBoundaries()`)
+
+Source: Cubit **named curves** + Cubit **sidesets-on-curves**.
+
+CD2 segment generation is planned (see TODO note); in the current
+release, BBND-style Dirichlet on a 3D curve should be expressed by
+putting the curve in a Cubit **nodeset** -- the C++ exporter expands
+the nodeset to its constituent vertices and writes them as BBBND
+points (next table).
+
+The BBND label-name convention to be respected once segment
+generation lands:
+
+| Cubit name on a curve | NGSolve BBND name | Meaning                                       |
+|-----------------------|-------------------|-----------------------------------------------|
+| `dir_<name>`          | `dir_<name>`      | Dirichlet edge (e.g. ground line in 2D)       |
+| `neu_<name>`          | `neu_<name>`      | Explicit Neumann edge                         |
+| anything else         | (passes through)  | Free-form; meaning is solver-side             |
+
+### BBBND -- vertex / point labels (NGSolve `mesh.GetBBBoundaries()`)
+
+Source: Cubit **nodesets**. Free-floating vertices (not merged into any
+meshed volume, e.g. the bare vertex `add_kelvin_cubit` creates at the
+Kelvin sphere centre) are anchored to the nearest mesh node so the
+BBBND point is always usable as a Dirichlet anchor.
+
+| Cubit nodeset name | NGSolve BBBND name | Meaning                                                    |
+|--------------------|--------------------|------------------------------------------------------------|
+| `GND`              | `GND`              | Special: Omega-reduced anchor at Kelvin sphere centre      |
+| `dir_<name>`       | `dir_<name>`       | Dirichlet point (e.g. PEEC port gnd, source / sink reference) |
+| anything else      | (passes through)   | Free-form name; meaning is solver-side                     |
+
+`GND` is automatically created by the Auto-Kelvin helper at the
+Kelvin sphere centre (the image of physical infinity) for use by
+Omega-reduced FEM formulations.
+
+## Python API
 
 ```python
-import netgen       # must import before cubit
+import netgen          # must import before cubit
 import ngsolve
 import cubit
 
@@ -58,11 +199,39 @@ ng_mesh = extract_curved_mesh(cubit, order=3)
 ng_mesh.Save("model.vol")
 ```
 
-### Check (does NOT require Cubit)
+The Cubit-side Python helpers (Kelvin transformation, etc.) live in
+`cubit_mesh_export.cubit_helpers`:
+
+```python
+from cubit_mesh_export.cubit_helpers.add_kelvin import (
+    add_kelvin_cubit,        # 3D Cubit path
+    add_kelvin_occ,          # 3D OCC path
+    add_kelvin_2d_axisym,    # 2D axisymmetric (r, z) path
+    sym_sideset_name,        # canonical sym_<bc>_<axis> string
+    parse_sym_label,         # inverse
+)
+```
+
+In Cubit-embedded Python (where `cubit_mesh_export` itself is not
+importable), the same helpers are available directly after
+`cubit-plugin-install` deploys them to `<Cubit>/bin/plugins/cubit_helpers/`:
+
+```python
+# Inside a .jou or panel script, after add_kelvin is on sys.path:
+python "import sys; sys.path.insert(0, r'<Cubit>/bin/plugins/cubit_helpers')"
+python "from add_kelvin import add_kelvin_cubit"
+python "add_kelvin_cubit(R=0.06, symmetry=['z'])"
+```
+
+The `radia_export netgen ... add_kelvin` flow handles `sys.path`
+itself, so users invoking Kelvin via the new APREPRO args do not need
+to set anything by hand.
+
+## Mesh consistency check (does NOT require Cubit)
 
 ```bash
-check-vol model.vol                         # basic check
-check-vol model.vol --json model.vol.json   # compare vs CAD values
+check-vol model.vol                          # basic check
+check-vol model.vol --json model.vol.json    # compare vs CAD values
 ```
 
 ```python

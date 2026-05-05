@@ -36,8 +36,10 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-PANELS = ROOT / "src" / "radia" / "panels"
-ENTRY_SCRIPT = PANELS / "auto_kelvin_entry.py"
+# Auto-Kelvin moved to cubit-mesh-export 2026-05-05.
+CUBIT_HELPERS = ROOT / "packages" / "cubit-mesh-export" / "src" / \
+                "cubit_mesh_export" / "cubit_helpers"
+ENTRY_SCRIPT = CUBIT_HELPERS / "auto_kelvin_entry.py"
 
 
 def _find_cubit() -> Path | None:
@@ -130,7 +132,7 @@ def test_reduction_quarter_xz_emits_sym_labels(tmp_path):
 
     env = os.environ.copy()
     env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
-    env["RADIA_PANELS_DIR"] = str(PANELS)
+    env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
 
     proc = subprocess.run(
         [str(CUBIT), "-batch", "-nographics", "-nojournal", str(jou)],
@@ -267,7 +269,7 @@ def test_reduction_eighth_emits_sym_and_kelvin_far(tmp_path):
 
     env = os.environ.copy()
     env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
-    env["RADIA_PANELS_DIR"] = str(PANELS)
+    env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
 
     proc = subprocess.run(
         [str(CUBIT), "-batch", "-nographics", "-nojournal", str(jou)],
@@ -331,7 +333,7 @@ def test_reduction_eighth_all_bn_rejected_at_runtime(tmp_path):
 
     env = os.environ.copy()
     env["RADIA_LAUNCHER_CONFIG"] = str(cfg)
-    env["RADIA_PANELS_DIR"] = str(PANELS)
+    env["CUBIT_HELPERS_DIR"] = str(CUBIT_HELPERS)
 
     proc = subprocess.run(
         [str(CUBIT), "-batch", "-nographics", "-nojournal", str(jou)],

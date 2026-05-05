@@ -8,7 +8,6 @@
 #include "ExportFemeemCommand.hpp"
 #include "ExportMegCommand.hpp"
 #include "CoilCommand.hpp"
-#include "VerifyLauncherCommand.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -55,7 +54,6 @@ std::vector<std::string> RadiaPlugin::get_keys()
   keys.push_back("ExportFemeemCommand");
   keys.push_back("ExportMegCommand");
   keys.push_back("CoilCommand");
-  keys.push_back("VerifyLauncherCommand");
   return keys;
 }
 
@@ -78,8 +76,6 @@ CubitCommand* RadiaPlugin::create_command(const std::string &key)
     return new ExportMegCommand();
   else if (key == "CoilCommand")
     return new CoilCommand();
-  else if (key == "VerifyLauncherCommand")
-    return new VerifyLauncherCommand();
   return nullptr;
 }
 
