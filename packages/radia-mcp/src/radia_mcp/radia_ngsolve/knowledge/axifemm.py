@@ -247,6 +247,39 @@ AXIFEMM_VALIDATION = """\
 * `packages/radia-axifemm/tests/test_hiruma_disk_q2.py` — full disk Cu disk
   eddy-current Hiruma 3-term, expects τ₁ ≈ 223.7 µs.
 
+## 3-way Cauer-I cross-validation (Phase 3-(3))
+
+Beyond the leading τ₁ Foster comparison, the Cauer ladder per-stage time
+constants τ_rung[n] = L_n × λ_{2n-1} have been cross-checked against an
+**independent BEM-Foster-to-Cauer pipeline**: Mathematica `bem_disk_axisym_cauer.wls`
+computes 50 Foster eigenvalues and amplitudes on a 1920-element ring mesh,
+20 α_n moments are derived, and a Python script applies a 50-digit mpmath
+Cauer-I CFE (repeated Taylor inversion) to extract τ_rung[n].
+
+```
+n   BEM Cauer    Q2 fine    Q1 very-fine    Q2/BEM gap    Q1/BEM gap
+1   219.32 us    218.71     218.05          -0.28 %       -0.58 %
+2    78.65       78.12       77.77          -0.68 %       -1.12 %
+3    40.04       39.54       39.37          -1.24 %       -1.66 %
+4    23.74       23.16       23.14          -2.46 %       -2.54 %
+5    17.07       16.07       16.06          -5.86 %       -5.91 %
+6    14.70       13.12       13.01         -10.77 %      -11.50 %
+```
+
+Three **independent** numerical pipelines (Mathematica BEM elliptic
+integrals + Cauer CFE; Python Q1 prototype + Hiruma 3-term; C++
+axihenrotte p=2 + Hiruma 3-term) agree on the leading 3 Cauer rungs to
+~1 % and on the leading rung to 0.28 %. axihenrotte p=2 is closer to
+BEM than axihenrotte p=1 at every stage.
+
+Test: `packages/radia-axifemm/tests/test_3way_cauer_cross_validation.py`
+Reference data (separate working tree, not in this repo):
+  W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+    bem_disk_axisym_cauer.wls     (Mathematica BEM + Foster amplitudes)
+    disk_bem_cauer.py             (Python mpmath Cauer-I CFE)
+    bem_disk_axisym_cauer.json
+    bem_disk_axisym_cauer_python_results.json
+
 ## Hessian-of-W convention (load-bearing)
 
 Both `K_phi` and `M_sigma_phi` are emitted in the **Hessian-of-W**
