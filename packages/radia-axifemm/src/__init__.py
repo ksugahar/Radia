@@ -37,7 +37,6 @@ try:
         AxiHenrotteSigmaMassBFI,
         AxiHenrotteFE_Q1_AxisAligned,
         AxiHenrotteFE_Q2_AxisAligned,
-        AxiHenrotteFE_Q3_AxisAligned,
         AxiHenrotteFE_P1_Triangle,
     )
 except ImportError:
