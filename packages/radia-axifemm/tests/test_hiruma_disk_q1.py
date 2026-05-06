@@ -128,43 +128,78 @@ def to_scipy_csr(mat, n):
 
 
 def hiruma_3term(K, M, b, N_stages, label=""):
+    """Hiruma 3-term Lanczos recursion -> Cauer ladder R_{2k}, L_{2k+1}.
+
+    The Cauer ladder follows Nagamine et al. 2026 Fig. 3 / Eq. (11):
+        in --R_0--+--R_2--+--R_4--+-...
+                  |        |        |
+                  L_1      L_3      L_5  ...
+                  |        |        |
+                  gnd      gnd      gnd
+    -- R_{2k} are the series resistors (even subscripts) and L_{2k+1} are
+    the shunt inductors (odd subscripts). Per-pair time constant:
+        tau_pair[k] = L_{2k+1} / R_{2k}
+
+    The Hiruma 3-term recursion produces the K^{-1} M Krylov-orthogonal
+    basis {w_1, w_2, ...}. The diagonal coefficients lam[i] = w_i^T A w_i
+    map to the Cauer ladder via:
+        lam[2k+1] = w_{2k+1}^T K w_{2k+1} = 1 / R_{2k}      (conductance)
+        lam[2k+2] = w_{2k+2}^T M w_{2k+2} =     L_{2k+1}    (inductance)
+    so that  tau_pair[k] = L_{2k+1} / R_{2k} = lam[2k+1] * lam[2k+2].
+    """
     factor = spla.factorized(K.tocsc())
 
     w = [None] * (2 * N_stages + 3)
     lam = [None] * (2 * N_stages + 3)
 
     w[1] = factor(b)
-    lam[1] = float(w[1] @ (K @ w[1]))
+    lam[1] = float(w[1] @ (K @ w[1]))           # = 1 / R_0
     w[2] = -w[1] / lam[1]
 
-    print(f"\n  [{label}] λ_1 = {lam[1]:.6e}")
-    print(f"  {'n':>3} {'L_n (λ_2n)':>14} {'1/R_{n+1} (λ_{2n+1})':>22} "
-          f"{'τ_per_stage μs':>16} {'orth_drift':>12}")
+    print(f"\n  [{label}] 1/R_0 = lam_1 = {lam[1]:.6e}  =>  R_0 = {1.0/lam[1]:.6e}")
+    print(f"  {'k':>3} {'R_{2k}':>13} {'L_{2k+1}':>13} "
+          f"{'tau_pair us':>13} {'orth_drift':>12}")
 
     out = []
     for n in range(1, N_stages + 1):
-        lam[2*n] = float(w[2*n] @ (M @ w[2*n]))
+        # n is the iteration number; Nagamine k-pair index is k = n-1 the
+        # FIRST iteration produces (R_0, L_1) corresponding to k=0; n-th
+        # iteration produces (R_{2(n-1)}, L_{2n-1}).
+        lam[2*n] = float(w[2*n] @ (M @ w[2*n]))         # = L_{2n-1}
         Cw = M @ w[2*n]
         Aw = -factor(Cw)
         w[2*n+1] = w[2*n-1].copy() - Aw / lam[2*n]
-        lam[2*n+1] = float(w[2*n+1] @ (K @ w[2*n+1]))
+        lam[2*n+1] = float(w[2*n+1] @ (K @ w[2*n+1]))    # = 1 / R_{2n}
 
-        tau_us = lam[2*n] * lam[2*n-1] * 1e6 if lam[2*n-1] > 0 else None
+        # Cauer values for THIS iteration (Nagamine k-pair index = n-1)
+        R_2k = 1.0 / lam[2*n - 1]                # R_{2(n-1)} (already known
+                                                 # from prev iter or init)
+        L_2k_plus_1 = lam[2*n]                   # L_{2(n-1)+1} = L_{2n-1}
+        # tau_pair for the (n-1)-th Nagamine pair:
+        tau_pair_us = (L_2k_plus_1 / R_2k * 1e6
+                       if R_2k > 0 else None)
 
         drift = 0.0
-        for k in range(1, n):
-            cross = float(w[2*k+1] @ (K @ w[2*n+1]))
+        for kk in range(1, n):
+            cross = float(w[2*kk+1] @ (K @ w[2*n+1]))
             drift = max(drift, abs(cross) / abs(lam[2*n+1]))
 
         w[2*n+2] = w[2*n].copy() - w[2*n+1] / lam[2*n+1]
 
-        ts = f"{tau_us:.4f}" if tau_us is not None else "N/A"
-        print(f"  {n:>3} {lam[2*n]:>14.6e} {lam[2*n+1]:>22.6e} {ts:>16} "
-              f"{drift:>12.3e}")
+        ts = f"{tau_pair_us:.4f}" if tau_pair_us is not None else "N/A"
+        k_idx = n - 1                             # Nagamine pair index
+        print(f"  {k_idx:>3} {R_2k:>13.6e} {L_2k_plus_1:>13.6e} "
+              f"{ts:>13} {drift:>12.3e}")
 
-        out.append({"n": n, "L_n": lam[2*n], "inv_R_n_plus_1": lam[2*n+1],
-                    "tau_per_stage_us": tau_us, "orth_drift": drift})
-    return {"lam_1": lam[1], "stages": out}
+        out.append({"k": k_idx,
+                    "R_2k": R_2k,
+                    "L_2k_plus_1": L_2k_plus_1,
+                    "tau_pair_us": tau_pair_us,
+                    "orth_drift": drift,
+                    # Back-compat aliases (n indexed from 1)
+                    "n": n, "L_n": lam[2*n], "inv_R_n_plus_1": lam[2*n+1],
+                    "tau_per_stage_us": tau_pair_us})
+    return {"lam_1": lam[1], "R_0": 1.0 / lam[1], "stages": out}
 
 
 def solve_disk(NR_disk, Nz_disk, NR_air, Nz_air, R_air, Z_air, N_stages=6,
