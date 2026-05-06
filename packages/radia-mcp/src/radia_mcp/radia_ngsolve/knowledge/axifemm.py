@@ -247,37 +247,66 @@ AXIFEMM_VALIDATION = """\
 * `packages/radia-axifemm/tests/test_hiruma_disk_q2.py` — full disk Cu disk
   eddy-current Hiruma 3-term, expects τ₁ ≈ 223.7 µs.
 
-## Cauer-I cross-validation against BEM (Phase 3-(3))
+## Cauer-ladder cross-validation against BEM (Phase 3-(3), Nagamine pipeline)
 
-Beyond the leading τ₁ Foster comparison, the Cauer ladder per-stage time
-constants τ_rung[n] = L_n × λ_{2n-1} have been cross-checked against an
-**independent integral-equation BEM pipeline**: Mathematica
-`bem_disk_axisym_cauer.wls` computes 50 Foster eigenvalues and amplitudes
-on a 1920-element ring mesh, 20 α_n moments are derived, and a Python
-script applies a 50-digit mpmath Cauer-I CFE (repeated Taylor inversion)
-to extract τ_rung[n].
+The Cauer ladder for the eddy-current problem follows Nagamine et al. 2026:
+
+  in --R_0--+--R_2--+--R_4--+- ...
+            |       |       |
+           L_1     L_3     L_5  ...
+            |       |       |
+           gnd     gnd     gnd
+
+R_{2k} (k = 0, 1, 2, ...) are the *series* resistors (even subscripts) and
+L_{2k+1} are the *shunt* inductors (odd subscripts). Per-pair time constant:
+    tau_pair[k] = L_{2k+1} / R_{2k}.
+
+Two paths to the same ladder:
+
+  (A) Nagamine BEM-Foster pipeline (independent reference):
+      Mathematica bem_disk_axisym_cauer.wls computes 50 Foster eigenvalues
+      and amplitudes on a 1920-element ring mesh, 20 alpha_n moments are
+      derived, and Python disk_bem_cauer.py applies a 50-digit mpmath
+      classical Cauer extraction. This is the mathematical equivalent of
+      Nagamine's QD + equivalence-transform pipeline (Fig. 5 of his
+      paper); we do NOT implement the verified-interval-arithmetic
+      part, so our values are high-precision floats, not interval-
+      rigorous bounds.
+
+  (B) Differential-equation Henrotte FE + Hiruma 3-term Lanczos:
+      C++ axihenrotte at order=1 / order=2, with Hiruma's 3-term
+      recurrence reading off Cauer R, L coefficients directly:
+          lambda_{2k+1} = w_{2k+1}^T K w_{2k+1} = 1 / R_{2k}    (conductance)
+          lambda_{2k+2} = w_{2k+2}^T M w_{2k+2} =     L_{2k+1}  (inductance)
+      so tau_pair[k] = lambda_{2k+1} * lambda_{2k+2}.
+
+The Foster-amplitude normalisation differs between BEM and FE, so the
+absolute R, L values differ by a common scale factor. The ratio
+tau_pair[k] = L_{2k+1}/R_{2k} is normalisation-invariant and is the
+comparison endpoint:
 
 ```
-n   BEM Cauer    p=2 fine    p=1 very-fine    p=2/BEM gap    p=1/BEM gap
-1   219.32 us    218.71      218.05          -0.28 %        -0.58 %
-2    78.65       78.12        77.77          -0.68 %        -1.12 %
-3    40.04       39.54        39.37          -1.24 %        -1.66 %
-4    23.74       23.16        23.14          -2.46 %        -2.54 %
-5    17.07       16.07        16.06          -5.86 %        -5.91 %
-6    14.70       13.12        13.01         -10.77 %       -11.50 %
+k   BEM Cauer    p=2 fine    p=1 very-fine    p=2/BEM gap    p=1/BEM gap
+0   219.32 us    218.71      218.05          -0.28 %        -0.58 %
+1    78.65       78.12        77.77          -0.68 %        -1.12 %
+2    40.04       39.54        39.37          -1.24 %        -1.66 %
+3    23.74       23.16        23.14          -2.46 %        -2.54 %
+4    17.07       16.07        16.06          -5.86 %        -5.91 %
+5    14.70       13.12        13.01         -10.77 %       -11.50 %
 ```
 
-The comparison is between two FORMULATIONS, both implemented in C++:
-  (A) integral-equation BEM (Mathematica + mpmath Cauer CFE) -- independent
-      reference;
-  (B) differential-equation Henrotte FE (axihenrotte order=1/2) +
-      Hiruma 3-term recurrence -- the order=1 / order=2 entries are a
-      convergence study WITHIN the same FE solver, not two independent
-      methods.
+axihenrotte p=2 beats axihenrotte p=1 at every k (closer to the BEM
+Cauer reference). The high-mode (k >= 4) divergence is the combined
+effect of FE basis-order error at higher modes plus numerical
+conditioning of the Cauer extraction at high stages (BEM itself starts
+producing negative tau for k >= 6, addressed in Nagamine's verified-
+interval pipeline which we have not implemented).
 
-Both formulations agree on the leading 3 Cauer rungs to ~1 % and on the
-leading rung to 0.28 %. axihenrotte p=2 is closer to BEM than axihenrotte
-p=1 at every stage.
+Reference:
+  Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune, Matsuo, "Verified
+  Numerical Computations of the Cauer Network Representation of a Square
+  Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
+  Math. submission).
 
 Test: `packages/radia-axifemm/tests/test_3way_cauer_cross_validation.py`
 Reference data (separate working tree, not in this repo):
