@@ -36,6 +36,7 @@ from .knowledge.custom_toolbar import (
 )
 from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from .knowledge.license import get_license_documentation
+from .knowledge.format_routing import get_format_routing_documentation
 from ..common import failure_log as _fl
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -423,6 +424,13 @@ def cubit_docs(topic: str = "all") -> str:
 	                                   logon token; admin cannot bootstrap it for them).
 	        "license_admin_overwrite"- Same as license_per_user, framed as the
 	                                   anti-pattern: do NOT rewrite renewals from admin.
+	        --- Mesh format routing ---
+	        "format_routing"         - .vol carries labels (FEM input); .step is
+	                                   geometry-only (PEEC input); cubit-mesh-export
+	                                   is the single chokepoint for producing labeled
+	                                   .vol.  STEP-with-extra-tricks workarounds
+	                                   (OCC face name regex, sidecar JSON, AP242
+	                                   OCAF reader) are uniformly worse.
 	"""
 	topic = topic.lower().strip()
 
@@ -462,6 +470,15 @@ def cubit_docs(topic: str = "all") -> str:
 		return get_license_documentation("per_user_rule")
 	if topic in ("license_admin_overwrite", "license_admin", "license"):
 		return get_license_documentation("admin_overwrite")
+
+	# Mesh format routing: .vol carries labels (FEM input);
+	# .step is geometry-only (PEEC input); cubit-mesh-export is the
+	# single chokepoint for producing labeled .vol.
+	if topic in (
+		"format_routing", "routing", "vol_vs_step",
+		"step_vs_vol", "labels_format", "format",
+	):
+		return get_format_routing_documentation("format_routing")
 
 	# Try without prefix (backward compat for simple names)
 	result = get_export_documentation(topic)
