@@ -103,6 +103,258 @@ void AxiHenrotteFE_Q1_AxisAligned::CalcDShape(
 }
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteFE_Q2_AxisAligned
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr double EPS_AXIS_FE = 1.0e-14;
+
+// In-place Gauss-Jordan inverse of a small dense N x N matrix stored as
+// double a[N][N]. Returns true on success, false on singular pivot. inv[][]
+// must be allocated by caller (N x N).
+template <int N>
+bool InvertNxN(double a[N][N], double inv[N][N])
+{
+    double work[N][2*N];
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) work[i][j] = a[i][j];
+        for (int j = 0; j < N; ++j) work[i][N + j] = (i == j) ? 1.0 : 0.0;
+    }
+    for (int col = 0; col < N; ++col) {
+        // Partial pivot.
+        int piv = col;
+        double best = std::abs(work[col][col]);
+        for (int i = col + 1; i < N; ++i)
+            if (std::abs(work[i][col]) > best) { best = std::abs(work[i][col]); piv = i; }
+        if (best < 1e-300) return false;
+        if (piv != col)
+            for (int j = 0; j < 2*N; ++j) std::swap(work[col][j], work[piv][j]);
+        double diag = work[col][col];
+        double inv_diag = 1.0 / diag;
+        for (int j = 0; j < 2*N; ++j) work[col][j] *= inv_diag;
+        for (int i = 0; i < N; ++i) {
+            if (i == col) continue;
+            double f = work[i][col];
+            if (f == 0.0) continue;
+            for (int j = 0; j < 2*N; ++j) work[i][j] -= f * work[col][j];
+        }
+    }
+    for (int i = 0; i < N; ++i)
+        for (int j = 0; j < N; ++j) inv[i][j] = work[i][N + j];
+    return true;
+}
+
+// Q2 monomial basis (general, 9 entries) at (s, z).
+inline void Q2MonomialsGeneral(double s, double z, double M[9])
+{
+    M[0] = 1.0;
+    M[1] = s;
+    M[2] = s * s;
+    M[3] = z;
+    M[4] = s * z;
+    M[5] = s * s * z;
+    M[6] = z * z;
+    M[7] = s * z * z;
+    M[8] = s * s * z * z;
+}
+
+inline void Q2MonomialsGeneralDs(double s, double z, double dM[9])
+{
+    dM[0] = 0.0;
+    dM[1] = 1.0;
+    dM[2] = 2.0 * s;
+    dM[3] = 0.0;
+    dM[4] = z;
+    dM[5] = 2.0 * s * z;
+    dM[6] = 0.0;
+    dM[7] = z * z;
+    dM[8] = 2.0 * s * z * z;
+}
+
+inline void Q2MonomialsGeneralDz(double s, double z, double dM[9])
+{
+    dM[0] = 0.0;
+    dM[1] = 0.0;
+    dM[2] = 0.0;
+    dM[3] = 1.0;
+    dM[4] = s;
+    dM[5] = s * s;
+    dM[6] = 2.0 * z;
+    dM[7] = 2.0 * s * z;
+    dM[8] = 2.0 * s * s * z;
+}
+
+// Q2 axis monomial basis (6 entries) at (s, z): {s, s^2, sz, s^2 z, sz^2, s^2 z^2}.
+inline void Q2MonomialsAxis(double s, double z, double M[6])
+{
+    M[0] = s;
+    M[1] = s * s;
+    M[2] = s * z;
+    M[3] = s * s * z;
+    M[4] = s * z * z;
+    M[5] = s * s * z * z;
+}
+
+inline void Q2MonomialsAxisDs(double s, double z, double dM[6])
+{
+    dM[0] = 1.0;
+    dM[1] = 2.0 * s;
+    dM[2] = z;
+    dM[3] = 2.0 * s * z;
+    dM[4] = z * z;
+    dM[5] = 2.0 * s * z * z;
+}
+
+inline void Q2MonomialsAxisDz(double s, double z, double dM[6])
+{
+    dM[0] = 0.0;
+    dM[1] = 0.0;
+    dM[2] = s;
+    dM[3] = s * s;
+    dM[4] = 2.0 * s * z;
+    dM[5] = 2.0 * s * s * z;
+}
+
+}  // anonymous namespace
+
+AxiHenrotteFE_Q2_AxisAligned::AxiHenrotteFE_Q2_AxisAligned(
+    double ra, double rb, double za, double zb)
+  : AxiHenrotteBaseFE(9, 4),  // 9 DOFs, polynomial degree 4 in r (s^2 = r^4)
+    r_a(ra), r_b(rb), z_a(za), z_b(zb),
+    is_axis(ra < EPS_AXIS_FE)
+{
+    // Initialise Vinv to zero (axis nodes will stay zero in axis case).
+    for (int i = 0; i < 9; ++i)
+        for (int j = 0; j < 9; ++j) Vinv[i][j] = 0.0;
+
+    double sa = ra * ra, sb = rb * rb;
+    double sm = 0.5 * (sa + sb);
+    double zm = 0.5 * (za + zb);
+
+    // Node (s, z) coords matching JSON node_order_general.
+    const double s_n[9] = { sa, sb, sb, sa, sm, sb, sm, sa, sm };
+    const double z_n[9] = { za, za, zb, zb, za, zm, zb, zm, zm };
+
+    if (!is_axis) {
+        // Interior 9x9 Vandermonde V[i, j] = monomial_j evaluated at node i.
+        double V[9][9];
+        for (int i = 0; i < 9; ++i) {
+            double M[9];
+            Q2MonomialsGeneral(s_n[i], z_n[i], M);
+            for (int j = 0; j < 9; ++j) V[i][j] = M[j];
+        }
+        double Vi[9][9];
+        if (!InvertNxN<9>(V, Vi))
+            throw Exception("AxiHenrotteFE_Q2_AxisAligned: singular interior Vandermonde");
+        for (int i = 0; i < 9; ++i)
+            for (int j = 0; j < 9; ++j) Vinv[i][j] = Vi[i][j];
+        for (int k = 0; k < 9; ++k) nz_idx[k] = k;
+        n_nz = 9;
+    } else {
+        // Axis-touching: 6 non-axis nodes are local indices {1, 2, 4, 5, 6, 8}.
+        // (Axis nodes 0, 3, 7 have sa = 0 and contribute no DOF — A_phi(0) = 0.)
+        const int idx[6] = { 1, 2, 4, 5, 6, 8 };
+        double V[6][6];
+        for (int i = 0; i < 6; ++i) {
+            double M[6];
+            Q2MonomialsAxis(s_n[idx[i]], z_n[idx[i]], M);
+            for (int j = 0; j < 6; ++j) V[i][j] = M[j];
+        }
+        double Vi[6][6];
+        if (!InvertNxN<6>(V, Vi))
+            throw Exception("AxiHenrotteFE_Q2_AxisAligned: singular axis Vandermonde");
+        // Embed 6x6 Vinv into 9x9 storage: row `idx[i]` <-> Vi[i, ...]; columns
+        // 0..5 correspond to monomial_axis indices (different from monomial_general!).
+        // Storage convention: Vinv[mono_general_index, local_node_index] would be
+        // ambiguous in the axis case because the monomial index space differs.
+        // Instead store Vinv[axis_mono_index, local_node_index] for axis case
+        // (only first 6 rows used).
+        for (int i = 0; i < 6; ++i)
+            for (int j = 0; j < 6; ++j)
+                Vinv[i][idx[j]] = Vi[i][j];
+        for (int k = 0; k < 6; ++k) nz_idx[k] = idx[k];
+        n_nz = 6;
+    }
+}
+
+void AxiHenrotteFE_Q2_AxisAligned::CalcShape(
+    const IntegrationPoint & ip, BareSliceVector<> shape) const
+{
+    // Reference (xi, eta) in [0, 1]^2 -> physical (r, z) -> (s, z).
+    double xi = ip(0), eta = ip(1);
+    double r = r_a + (r_b - r_a) * xi;
+    double z = z_a + (z_b - z_a) * eta;
+    double s = r * r;
+
+    for (int j = 0; j < 9; ++j) shape(j) = 0.0;
+
+    if (!is_axis) {
+        double M[9];
+        Q2MonomialsGeneral(s, z, M);
+        // L_j(s, z) = sum_k Vinv[k, j] * M_k
+        for (int j = 0; j < 9; ++j) {
+            double v = 0.0;
+            for (int k = 0; k < 9; ++k) v += Vinv[k][j] * M[k];
+            shape(j) = v;
+        }
+    } else {
+        double M[6];
+        Q2MonomialsAxis(s, z, M);
+        for (int q = 0; q < 6; ++q) {
+            int j = nz_idx[q];          // global local-DOF index
+            double v = 0.0;
+            for (int k = 0; k < 6; ++k) v += Vinv[k][j] * M[k];
+            shape(j) = v;
+        }
+        // Axis-side DOFs (0, 3, 7) stay at 0.
+    }
+}
+
+void AxiHenrotteFE_Q2_AxisAligned::CalcDShape(
+    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
+{
+    double xi = ip(0), eta = ip(1);
+    double r = r_a + (r_b - r_a) * xi;
+    double z = z_a + (z_b - z_a) * eta;
+    double s = r * r;
+    // ds/dxi  = 2 r * (r_b - r_a),   dz/deta = z_b - z_a
+    double ds_dxi  = 2.0 * r * (r_b - r_a);
+    double dz_deta = z_b - z_a;
+
+    for (int j = 0; j < 9; ++j) { dshape(j, 0) = 0.0; dshape(j, 1) = 0.0; }
+
+    if (!is_axis) {
+        double dM_ds[9], dM_dz[9];
+        Q2MonomialsGeneralDs(s, z, dM_ds);
+        Q2MonomialsGeneralDz(s, z, dM_dz);
+        for (int j = 0; j < 9; ++j) {
+            double dL_ds = 0.0, dL_dz = 0.0;
+            for (int k = 0; k < 9; ++k) {
+                dL_ds += Vinv[k][j] * dM_ds[k];
+                dL_dz += Vinv[k][j] * dM_dz[k];
+            }
+            dshape(j, 0) = ds_dxi  * dL_ds;
+            dshape(j, 1) = dz_deta * dL_dz;
+        }
+    } else {
+        double dM_ds[6], dM_dz[6];
+        Q2MonomialsAxisDs(s, z, dM_ds);
+        Q2MonomialsAxisDz(s, z, dM_dz);
+        for (int q = 0; q < 6; ++q) {
+            int j = nz_idx[q];
+            double dL_ds = 0.0, dL_dz = 0.0;
+            for (int k = 0; k < 6; ++k) {
+                dL_ds += Vinv[k][j] * dM_ds[k];
+                dL_dz += Vinv[k][j] * dM_dz[k];
+            }
+            dshape(j, 0) = ds_dxi  * dL_ds;
+            dshape(j, 1) = dz_deta * dL_dz;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AxiHenrotteFE_P1_Triangle
 // ---------------------------------------------------------------------------
 
@@ -194,6 +446,18 @@ void ExportAxiHenrotteFE(pybind11::module & m) {
         "Shape functions: a + b r^2 + c z + d r^2 z.")
         .def(py::init<double, double, double, double>(),
              py::arg("r_a"), py::arg("r_b"), py::arg("z_a"), py::arg("z_b"));
+
+    py::class_<AxiHenrotteFE_Q2_AxisAligned, ngfem::FiniteElement,
+               std::shared_ptr<AxiHenrotteFE_Q2_AxisAligned>>(
+        m, "AxiHenrotteFE_Q2_AxisAligned",
+        "Q2 Henrotte FE on axis-aligned rectangle. 9 DOFs (4 vertices + 4 edge\n"
+        "midnodes + 1 face center) at s-midpoints (NOT physical r-midpoints).\n"
+        "Axis-touching elements (r_a < EPS_AXIS) auto-switch to a 6-monomial\n"
+        "restricted basis with zero shape functions on the axis-side nodes.")
+        .def(py::init<double, double, double, double>(),
+             py::arg("r_a"), py::arg("r_b"), py::arg("z_a"), py::arg("z_b"))
+        .def_readonly("is_axis", &AxiHenrotteFE_Q2_AxisAligned::is_axis)
+        .def_readonly("n_nz",    &AxiHenrotteFE_Q2_AxisAligned::n_nz);
 
     py::class_<AxiHenrotteFE_P1_Triangle, ngfem::FiniteElement,
                std::shared_ptr<AxiHenrotteFE_P1_Triangle>>(

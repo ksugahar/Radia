@@ -28,6 +28,7 @@
 #include <cmath>
 #include "axi_henrotte_integrators.hpp"
 #include "axi_henrotte_fe.hpp"
+#include "q2_henrotte_generated.hpp"
 
 namespace radia_axifemm {
 
@@ -190,6 +191,125 @@ void Q1ElementMatrix(double ra, double rb, double za, double zb,
             double v = T[i] * M_phi(i, j) * T[j];
             elmat(i, j) = 0.5 * (v + T[j] * M_phi(j, i) * T[i]);
         }
+}
+
+// ---------------------------------------------------------------------------
+// Q2 element matrix (interior or axis-touching, 9 DOFs in V-DOF basis).
+//
+//   M_phi (monomial)  =  KPhiGeneral / MSigmaPhiGeneral / KPhiAxis / ...
+//                        (delivered by q2_henrotte_generated.hpp)
+//   M_node (Lagrange) =  Vinv^T * M_phi * Vinv
+//   M_V (psi-DOF)     =  T * M_node * T,    T_jj = 2 pi r_node_j
+//
+// For axis elements the axis nodes (local indices 0, 3, 7) get zero rows and
+// columns — caller MUST Dirichlet those global DOFs.
+// ---------------------------------------------------------------------------
+
+// Returns r-coord at each of the 9 local nodes (sm convention).
+inline void Q2NodeRCoords(double ra, double rb, double r_node[9])
+{
+    double sa = ra * ra, sb = rb * rb;
+    double rm = std::sqrt(0.5 * (sa + sb));   // r at s-midpoint = sqrt((ra^2+rb^2)/2)
+    r_node[0] = ra;
+    r_node[1] = rb;
+    r_node[2] = rb;
+    r_node[3] = ra;
+    r_node[4] = rm;
+    r_node[5] = rb;
+    r_node[6] = rm;
+    r_node[7] = ra;
+    r_node[8] = rm;
+}
+
+// Generic V-DOF transform driver.
+//   For interior:  9x9 monomial matrix M_phi[81] -> 9x9 V-DOF matrix elmat.
+//   For axis    :  6x6 monomial matrix M_phi[36] embedded into 9x9 elmat.
+//                  Uses fe.Vinv[k=0..5][j_local] for the 6-monomial axis basis.
+template <int N_PHI>
+void Q2MonomialToVDof(const AxiHenrotteFE_Q2_AxisAligned & fe,
+                      const double M_phi_flat[],
+                      FlatMatrix<double> elmat)
+{
+    static_assert(N_PHI == 9 || N_PHI == 6, "Q2MonomialToVDof: N_PHI must be 6 or 9");
+
+    elmat = 0.0;
+
+    double r_node[9];
+    Q2NodeRCoords(fe.r_a, fe.r_b, r_node);
+    double T[9];
+    for (int j = 0; j < 9; ++j) T[j] = 2.0 * PI * r_node[j];
+
+    // M_phi flat -> M_phi[N_PHI][N_PHI]
+    double Mphi[N_PHI][N_PHI];
+    for (int i = 0; i < N_PHI; ++i)
+        for (int j = 0; j < N_PHI; ++j)
+            Mphi[i][j] = M_phi_flat[i * N_PHI + j];
+
+    // Step 1: tmp[k, j_local] = sum_l M_phi[k, l] * Vinv[l, j_local]
+    // (Vinv stored as Vinv[mono_index, local_node_index]; for axis case only
+    // the first 6 rows of Vinv are non-zero, indices into nz_idx.)
+    int n_active = fe.n_nz;
+    double tmp[N_PHI][9];
+    for (int k = 0; k < N_PHI; ++k) {
+        for (int q = 0; q < n_active; ++q) {
+            int j = fe.nz_idx[q];
+            double s = 0.0;
+            for (int l = 0; l < N_PHI; ++l) s += Mphi[k][l] * fe.Vinv[l][j];
+            tmp[k][j] = s;
+        }
+    }
+
+    // Step 2: M_node[i_local, j_local] = sum_k Vinv[k, i_local] * tmp[k, j_local]
+    // Then M_V[i, j] = T[i] * M_node[i, j] * T[j].
+    for (int p = 0; p < n_active; ++p) {
+        int i = fe.nz_idx[p];
+        for (int q = 0; q < n_active; ++q) {
+            int j = fe.nz_idx[q];
+            double s = 0.0;
+            for (int k = 0; k < N_PHI; ++k) s += fe.Vinv[k][i] * tmp[k][j];
+            elmat(i, j) = T[i] * s * T[j];
+        }
+    }
+
+    // Symmetrise (numerical noise).
+    for (int i = 0; i < 9; ++i)
+        for (int j = i + 1; j < 9; ++j) {
+            double avg = 0.5 * (elmat(i, j) + elmat(j, i));
+            elmat(i, j) = avg;
+            elmat(j, i) = avg;
+        }
+}
+
+void Q2StiffnessElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double mu,
+                        FlatMatrix<double> elmat)
+{
+    double sa = fe.r_a * fe.r_a, sb = fe.r_b * fe.r_b;
+    double za = fe.z_a,           zb = fe.z_b;
+    if (!fe.is_axis) {
+        double M[81];
+        q2_henrotte::KPhiGeneral(sa, sb, za, zb, mu, mu, M);
+        Q2MonomialToVDof<9>(fe, M, elmat);
+    } else {
+        double M[36];
+        q2_henrotte::KPhiAxis(sb, za, zb, mu, mu, M);
+        Q2MonomialToVDof<6>(fe, M, elmat);
+    }
+}
+
+void Q2SigmaMassElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double sigma,
+                        FlatMatrix<double> elmat)
+{
+    double sa = fe.r_a * fe.r_a, sb = fe.r_b * fe.r_b;
+    double za = fe.z_a,           zb = fe.z_b;
+    if (!fe.is_axis) {
+        double M[81];
+        q2_henrotte::MSigmaPhiGeneral(sa, sb, za, zb, sigma, M);
+        Q2MonomialToVDof<9>(fe, M, elmat);
+    } else {
+        double M[36];
+        q2_henrotte::MSigmaPhiAxis(sb, za, zb, sigma, M);
+        Q2MonomialToVDof<6>(fe, M, elmat);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -381,6 +501,10 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
                         elmat);
         return;
     }
+    if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
+        Q2StiffnessElement(*q2, mu, elmat);
+        return;
+    }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
         P1TriangleStiffness(p1->r, p1->z, mu, elmat);
         return;
@@ -415,6 +539,10 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
                             return Q1SigmaMassCoef(sa, sb, za, zb, sigma);
                         },
                         elmat);
+        return;
+    }
+    if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
+        Q2SigmaMassElement(*q2, sigma, elmat);
         return;
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
