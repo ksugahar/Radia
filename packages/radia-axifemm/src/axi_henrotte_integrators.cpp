@@ -29,7 +29,6 @@
 #include "axi_henrotte_integrators.hpp"
 #include "axi_henrotte_fe.hpp"
 #include "q2_henrotte_generated.hpp"
-#include "q3_henrotte_generated.hpp"
 
 namespace radia_axifemm {
 
@@ -314,114 +313,6 @@ void Q2SigmaMassElement(const AxiHenrotteFE_Q2_AxisAligned & fe, double sigma,
 }
 
 // ---------------------------------------------------------------------------
-// Q3 element matrix dispatch (16 DOFs, tensor-product local indexing).
-// Mirror of Q2 path with N_PHI = 16 (interior) or 12 (axis).
-// ---------------------------------------------------------------------------
-
-inline void Q3NodeRCoords(double ra, double rb, double r_node[16])
-{
-    double sa = ra * ra, sb = rb * rb;
-    double s_t1 = (2.0*sa + sb) / 3.0;
-    double s_t2 = (sa + 2.0*sb) / 3.0;
-    // Local node order matches AxiHenrotteFE_Q3_AxisAligned (see header):
-    //   0..3:  corners (sa, sb, sb, sa)
-    //   4-5:   bottom (s_t1, s_t2)
-    //   6-7:   top    (s_t1, s_t2)
-    //   8-9:   left   (sa, sa)
-    //   10-11: right  (sb, sb)
-    //   12-15: face   (s_t1, s_t2, s_t1, s_t2)
-    double r_t1 = std::sqrt(s_t1);
-    double r_t2 = std::sqrt(s_t2);
-    double sn[16] = { sa, sb, sb, sa,
-                      s_t1, s_t2, s_t1, s_t2,
-                      sa, sa, sb, sb,
-                      s_t1, s_t2, s_t1, s_t2 };
-    for (int i = 0; i < 16; ++i) r_node[i] = std::sqrt(sn[i]);
-    (void)r_t1; (void)r_t2;
-}
-
-template <int N_PHI>
-void Q3MonomialToVDof(const AxiHenrotteFE_Q3_AxisAligned & fe,
-                      const double M_phi_flat[],
-                      FlatMatrix<double> elmat)
-{
-    static_assert(N_PHI == 16 || N_PHI == 12, "Q3MonomialToVDof: N_PHI must be 12 or 16");
-
-    elmat = 0.0;
-
-    double r_node[16];
-    Q3NodeRCoords(fe.r_a, fe.r_b, r_node);
-    double T[16];
-    for (int j = 0; j < 16; ++j) T[j] = 2.0 * PI * r_node[j];
-
-    double Mphi[N_PHI][N_PHI];
-    for (int i = 0; i < N_PHI; ++i)
-        for (int j = 0; j < N_PHI; ++j)
-            Mphi[i][j] = M_phi_flat[i * N_PHI + j];
-
-    int n_active = fe.n_nz;
-    double tmp[N_PHI][16];
-    for (int k = 0; k < N_PHI; ++k) {
-        for (int q = 0; q < n_active; ++q) {
-            int j = fe.nz_idx[q];
-            double s = 0.0;
-            for (int l = 0; l < N_PHI; ++l) s += Mphi[k][l] * fe.Vinv[l][j];
-            tmp[k][j] = s;
-        }
-    }
-
-    for (int p = 0; p < n_active; ++p) {
-        int i = fe.nz_idx[p];
-        for (int q = 0; q < n_active; ++q) {
-            int j = fe.nz_idx[q];
-            double s = 0.0;
-            for (int k = 0; k < N_PHI; ++k) s += fe.Vinv[k][i] * tmp[k][j];
-            elmat(i, j) = T[i] * s * T[j];
-        }
-    }
-
-    // Symmetrise.
-    for (int i = 0; i < 16; ++i)
-        for (int j = i + 1; j < 16; ++j) {
-            double avg = 0.5 * (elmat(i, j) + elmat(j, i));
-            elmat(i, j) = avg;
-            elmat(j, i) = avg;
-        }
-}
-
-void Q3StiffnessElement(const AxiHenrotteFE_Q3_AxisAligned & fe, double mu,
-                        FlatMatrix<double> elmat)
-{
-    double sa = fe.r_a * fe.r_a, sb = fe.r_b * fe.r_b;
-    double za = fe.z_a,           zb = fe.z_b;
-    if (!fe.is_axis) {
-        double M[256];
-        q3_henrotte::KPhiGeneral(sa, sb, za, zb, mu, mu, M);
-        Q3MonomialToVDof<16>(fe, M, elmat);
-    } else {
-        double M[144];
-        q3_henrotte::KPhiAxis(sb, za, zb, mu, mu, M);
-        Q3MonomialToVDof<12>(fe, M, elmat);
-    }
-}
-
-void Q3SigmaMassElement(const AxiHenrotteFE_Q3_AxisAligned & fe, double sigma,
-                        FlatMatrix<double> elmat)
-{
-    double sa = fe.r_a * fe.r_a, sb = fe.r_b * fe.r_b;
-    double za = fe.z_a,           zb = fe.z_b;
-    if (!fe.is_axis) {
-        double M[256];
-        q3_henrotte::MSigmaPhiGeneral(sa, sb, za, zb, sigma, M);
-        Q3MonomialToVDof<16>(fe, M, elmat);
-    } else {
-        double M[144];
-        q3_henrotte::MSigmaPhiAxis(sb, za, zb, sigma, M);
-        Q3MonomialToVDof<12>(fe, M, elmat);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // P1 triangle stiffness (FEMM prob3big.cpp via axifemm_core.element_matrices).
 // Inputs: rn[3], zn[3] vertex coords, mu (isotropic).
 // Returns 3x3 in psi-DOF (= phi/V_FEMM = nodal value of FE function).
@@ -614,10 +505,6 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
         Q2StiffnessElement(*q2, mu, elmat);
         return;
     }
-    if (auto * q3 = dynamic_cast<const AxiHenrotteFE_Q3_AxisAligned*>(&fel)) {
-        Q3StiffnessElement(*q3, mu, elmat);
-        return;
-    }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
         P1TriangleStiffness(p1->r, p1->z, mu, elmat);
         return;
@@ -656,10 +543,6 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
     }
     if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
         Q2SigmaMassElement(*q2, sigma, elmat);
-        return;
-    }
-    if (auto * q3 = dynamic_cast<const AxiHenrotteFE_Q3_AxisAligned*>(&fel)) {
-        Q3SigmaMassElement(*q3, sigma, elmat);
         return;
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {

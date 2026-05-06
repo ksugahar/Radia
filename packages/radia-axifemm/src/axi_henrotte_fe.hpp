@@ -108,59 +108,6 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// AxiHenrotteFE_Q3_AxisAligned
-//   - 16 DOFs/element on an axis-aligned rectangle [r_a, r_b] x [z_a, z_b]
-//   - Tensor-product Lagrange in (s = r^2, z) on a 4x4 grid; monomial basis
-//     ordered with `a` (s-power) major, `b` (z-power) minor:
-//        {1, z, z^2, z^3, s, sz, sz^2, sz^3, s^2, s^2z, s^2z^2, s^2z^3,
-//         s^3, s^3z, s^3z^2, s^3z^3}
-//   - 16 nodes (4 corners + 8 edge midnodes + 4 face interior). Tensor-product
-//     local indexing (matches NGSolve QUAD edge order [bottom, top, left, right])
-//     -- no permutation in GetDofNrs.
-//
-//   Local node order:
-//     0..3:  4 corners (NGSolve QUAD vertex order: (sa,za),(sb,za),(sb,zb),(sa,zb))
-//     4-5:   edge 0 = bottom (z=za)  midnodes at s=s_t1, s_t2  (low->high s)
-//     6-7:   edge 1 = top    (z=zb)  midnodes at s=s_t1, s_t2  (low->high s)
-//     8-9:   edge 2 = left   (s=sa)  midnodes at z=z_t1, z_t2  (low->high z)
-//     10-11: edge 3 = right  (s=sb)  midnodes at z=z_t1, z_t2  (low->high z)
-//     12-15: face interior   at (s_t1,z_t1), (s_t2,z_t1), (s_t1,z_t2), (s_t2,z_t2)
-//   where s_t1 = (2sa+sb)/3, s_t2 = (sa+2sb)/3, z_t1 = (2za+zb)/3, z_t2 = (za+2zb)/3.
-//
-//   Axis-touching case (ra < EPS_AXIS): 12-monomial restricted basis
-//     {s^a z^b : 1 <= a <= 3, 0 <= b <= 3}; the 4 axis-side nodes (local
-//     indices 0, 3, 8, 9) get zero shape functions.
-//
-//   *** CONDITIONING WARNING ***
-//   The 16x16 Vandermonde for the raw {s^a z^b} basis has a condition number
-//   that scales as ~(sb/sa)^6 / (sb-sa)^6, easily exceeding 1e30 for refined
-//   meshes (where (sb-sa) is small). The matrix InvertNxN<16> via Gauss-Jordan
-//   then produces noise that contaminates the assembled K_V and M_V.
-//   On a Cu-disk Hiruma test the *coarse* mesh happens to give the right
-//   tau_1 because the dominant mode is robust to noise, but mesh refinement
-//   makes results worse, not better. To use Q3 in production, switch to an
-//   orthogonal basis (shifted Legendre on [sa, sb] x [za, zb]) -- see TODO.
-// ---------------------------------------------------------------------------
-
-class AxiHenrotteFE_Q3_AxisAligned : public AxiHenrotteBaseFE {
-public:
-    double r_a, r_b, z_a, z_b;
-    bool   is_axis;
-    double Vinv[16][16];        // padded; axis case fills only 12x12 (rows 0..11, cols nz_idx)
-    int    nz_idx[16];          // active (non-zero-shape) local DOF indices
-    int    n_nz;                // 16 (interior) or 12 (axis)
-
-    AxiHenrotteFE_Q3_AxisAligned(double ra, double rb, double za, double zb);
-
-    ELEMENT_TYPE ElementType() const override { return ET_QUAD; }
-
-    void CalcShape(const IntegrationPoint & ip,
-                   BareSliceVector<> shape) const override;
-    void CalcDShape(const IntegrationPoint & ip,
-                    BareSliceMatrix<> dshape) const override;
-};
-
-// ---------------------------------------------------------------------------
 // AxiHenrotteFE_P1_Triangle
 //   - 3 DOFs/element on a general triangle (r_i, z_i) in (r, z) plane
 //   - shape_i(r, z) = a_i + b_i*r^2 + c_i*z
