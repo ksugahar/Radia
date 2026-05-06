@@ -82,15 +82,15 @@ Empirical comparison on the Cu disk eddy-current benchmark
 `axihenrotte p=2` outperforms NGSolve `H1 order=3` with fewer DOFs; this is
 the value of the axisymmetric-specific basis.
 
-### 3-way Cauer-I cross-validation
+### Cauer-I cross-validation against BEM
 
 Beyond the leading τ₁ comparison, the per-stage Cauer ladder time constants
 `τ_rung[n] = L_n × λ_{2n-1}` (Hiruma's "stage time constant") have been
-cross-checked against an **independent BEM-Foster-to-Cauer pipeline**
+cross-checked against an **independent integral-equation BEM pipeline**
 (Mathematica `bem_disk_axisym_cauer.wls` → 50-digit mpmath Cauer-I CFE on
 the 20 leading α_n moments):
 
-| n | BEM Cauer (µs) | Q2 fine (µs) | Q1 very-fine (µs) | Q2/BEM gap | Q1/BEM gap |
+| n | BEM Cauer (µs) | axihenrotte p=2 fine (µs) | axihenrotte p=1 very-fine (µs) | p=2/BEM gap | p=1/BEM gap |
 |---|---|---|---|---|---|
 | 1 | 219.32 | 218.71 | 218.05 | **-0.28 %** | -0.58 % |
 | 2 |  78.65 |  78.12 |  77.77 | **-0.68 %** | -1.12 % |
@@ -99,16 +99,24 @@ the 20 leading α_n moments):
 | 5 |  17.07 |  16.07 |  16.06 |  -5.86 %    | -5.91 % |
 | 6 |  14.70 |  13.12 |  13.01 | -10.77 %    | -11.50 % |
 
-Three **independent** numerical pipelines —
-(i) Mathematica BEM with elliptic integrals + Foster-amplitude moments +
-50-digit mpmath Cauer CFE,
-(ii) Python Q1 axifemm prototype + Hiruma 3-term recurrence,
-(iii) C++ `axihenrotte p=2` extension + Hiruma 3-term recurrence —
-agree on the leading three Cauer rungs to ~ 1 % and on the leading rung to
-0.28 %. `axihenrotte p=2` is closer to BEM than `axihenrotte p=1` at every
-stage. This is **Phase 3-(3) cross-validation**, executed 2026-05-06; the
-test lives at
+**Two formulations, one answer:**
+* (A) Integral-equation BEM with elliptic-integral Newton kernel,
+  Foster-amplitude moments, 50-digit mpmath Cauer-I CFE — independent
+  reference.
+* (B) Differential-equation Henrotte FE (`axihenrotte` C++ NGSolve add-on)
+  + Hiruma 3-term recurrence — shown at order=1 and order=2 as a
+  convergence study within the same FE solver.
+
+Both agree on the leading three Cauer rungs to ~ 1 % and on the leading
+rung to **0.28 %**. `axihenrotte p=2` is closer to BEM than `axihenrotte p=1`
+at every stage. This is **Phase 3-(3) cross-validation**, executed
+2026-05-06; the test lives at
 [`tests/test_3way_cauer_cross_validation.py`](../../packages/radia-axifemm/tests/test_3way_cauer_cross_validation.py).
+
+The high-mode (n ≥ 5) divergence is the expected combined effect of FE
+discretisation error at higher modes plus the numerical conditioning of
+the Cauer extraction at high stages (BEM itself starts producing negative
+τ for n ≥ 7, a known artefact of finite-precision moment reconstruction).
 
 ## Basis details
 
