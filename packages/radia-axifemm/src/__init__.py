@@ -35,6 +35,9 @@ try:
         AxiHenrotteFESpace,
         AxiHenrotteStiffnessBFI,
         AxiHenrotteSigmaMassBFI,
+        AxiHenrotteFE_Q1_AxisAligned,
+        AxiHenrotteFE_Q2_AxisAligned,
+        AxiHenrotteFE_P1_Triangle,
     )
 except ImportError:
     # Phase 2-A bootstrap — FESpace/Integrators not yet built.
