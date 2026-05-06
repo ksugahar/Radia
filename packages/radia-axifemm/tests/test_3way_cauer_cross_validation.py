@@ -1,20 +1,32 @@
-"""3-way Cauer-I cross-validation: BEM-Foster vs Q1 Hiruma vs Q2 Hiruma.
+"""Cauer-I cross-validation: BEM-Foster vs axihenrotte order=1/2 (Hiruma 3-term).
 
-This is the Phase 3-(3) cross-check ("BEM 経由 CLN") — three independent
-implementations of the eddy-current Cauer-I ladder for the Cu disk
-benchmark all reproduce the same per-stage time constant τ_rung[n] within
-0.3 % for the leading stages, climbing to a few % for higher modes (which
-is the expected discretisation error of the underlying methods).
+This is the Phase 3-(3) cross-check ("BEM 経由 CLN"). It compares two
+formulations of the eddy-current Cauer-I ladder for the Cu disk benchmark:
+
+  (A) Integral-equation BEM-Foster (independent reference):
+      Mathematica `bem_disk_axisym_cauer.wls` builds a 1920-element ring
+      mesh with the elliptic-integral Newton kernel, solves the symmetric
+      eigenproblem (top 50 modes), computes Foster amplitudes and 20
+      moments α_n, then Python applies a 50-digit mpmath Cauer-I CFE
+      (repeated Taylor inversion) to extract the per-stage time constants.
+
+  (B) Differential-equation Henrotte FE + Hiruma 3-term (this package):
+      C++ `axihenrotte` FESpace (NGSolve add-on) at order=1 (4 DOFs/quad)
+      and order=2 (9 DOFs/quad) on structured axis-aligned quad meshes.
+      Both share the same Hiruma 3-term recurrence wrapper, only the FE
+      basis functions differ -- so order=1 vs order=2 is a *convergence
+      study* in basis order, not two fully independent methods.
+
+So the cross-check is BEM (integral) vs FE (differential), with FE shown
+at two basis orders for free convergence-study evidence.
 
 Pipelines:
-  1. BEM-Foster: Mathematica `bem_disk_axisym_cauer.wls`
-       ne=1920 ring elements, elliptic-integral Newton kernel, top 50
-       eigenvalues + Foster amplitudes, 20 moments α_n. Python-side
-       Cauer-I CFE via repeated Taylor inversion (50-digit mpmath).
-  2. Q1 Hiruma: this package's `test_hiruma_disk_q1.py` very-fine mesh
-       (ne=15170, ndof=14904).
-  3. Q2 Hiruma: this package's `test_hiruma_disk_q2.py` fine mesh
-       (ne=2530, ndof=9919).
+  1. BEM Foster -> Cauer:    `W:/.../bem_disk_axisym_cauer.{wls,json}` +
+                             `W:/.../disk_bem_cauer.py`
+  2. order=1 Hiruma 3-term:  `tests/test_hiruma_disk_q1.py`, very-fine
+                             mesh (ne=15170, ndof=14904).
+  3. order=2 Hiruma 3-term:  `tests/test_hiruma_disk_q2.py`, fine mesh
+                             (ne=2530, ndof=9919).
 
 Reference data location (separate working tree, not part of this repo):
   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
@@ -56,11 +68,11 @@ def main():
     q1_tau  = [s["tau_per_stage_us"] for s in q1["stages"]]
 
     print("=" * 76)
-    print("Phase 3-(3) 3-way Cauer-I cross-validation, Cu disk")
-    print("(BEM Foster -> Cauer  vs  Q1 Hiruma  vs  Q2 Hiruma)")
+    print("Phase 3-(3) Cauer-I cross-validation, Cu disk")
+    print("(BEM-Foster integral  vs  axihenrotte Hiruma 3-term, p=1 / p=2)")
     print("=" * 76)
-    print(f"{'n':>3} {'BEM Cauer':>12} {'Q2 fine':>11} {'Q1 vfine':>11} "
-          f"{'Q2/BEM%':>9} {'Q1/BEM%':>9}")
+    print(f"{'n':>3} {'BEM Cauer':>12} {'p=2 fine':>11} {'p=1 vfine':>11} "
+          f"{'p=2/BEM%':>9} {'p=1/BEM%':>9}")
     n_compare = min(6, len(q2_tau), len(bem_tau))
     rows = []
     for n in range(n_compare):
@@ -85,11 +97,12 @@ def main():
     for n, g2, g1, tol in fail:
         print(f"  n={n}: Q2 {g2:+.2f}% / Q1 {g1:+.2f}% exceeds tol {tol}%")
     print()
-    print("=> Q2 Henrotte beats Q1 Henrotte at every stage (closer to BEM Cauer).")
-    print("=> BEM/Q1/Q2 are three INDEPENDENT methods (elliptic integrals +")
-    print("   Cauer CFE; two FE prototypes + Hiruma 3-term) and converge to the")
-    print("   same per-stage time constants -- strong validation of the radia-")
-    print("   axifemm Q1 and Q2 implementations.")
+    print("=> p=2 Henrotte beats p=1 Henrotte at every stage (closer to BEM Cauer).")
+    print("=> BEM (integral, independent reference) and the FE Henrotte solver")
+    print("   (differential, axihenrotte order=1/2 + Hiruma 3-term) converge to")
+    print("   the same per-stage time constants. order=1 vs order=2 is a")
+    print("   convergence study within the same FE solver, not two independent")
+    print("   methods.")
 
     return rows
 
