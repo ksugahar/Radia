@@ -32,6 +32,7 @@ from .knowledge.md2html import get_md2html_documentation
 from .knowledge.ngsolve import get_ngsolve_documentation
 from .knowledge.sparsesolv import get_sparsesolv_documentation
 from .knowledge.kelvin import get_kelvin_documentation
+from .knowledge.axifemm import get_axifemm_documentation
 from .knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
 from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
@@ -575,6 +576,36 @@ def kelvin_transformation(topic: str = "all") -> str:
             "periodic_wedge" - 1/n sector (symmetry model) with Periodic BC
     """
     return get_kelvin_documentation(topic)
+
+
+@mcp.tool()
+def axifemm_documentation(topic: str = "all") -> str:
+    """
+    Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE
+    add-on for NGSolve (registered FESpace name: "axihenrotte").
+
+    Use this when designing or reviewing axisymmetric eddy-current /
+    magnetostatic FEM problems with axis-touching elements, or when
+    comparing axihenrotte to standard NGSolve H1 elements.
+
+    Canonical API: ``FESpace("axihenrotte", mesh, order=k)`` for
+    k = 1 (Q-element p=1, 4 DOFs/quad) or k = 2 (Q-element p=2,
+    9 DOFs/quad). On the Cu-disk benchmark, p=2 beats NGSolve
+    H1 order=3 with fewer DOFs (0.27 % gap to BEM-Foster vs 2.5 %).
+
+    Args:
+        topic: Documentation section. Options:
+            "all"             - all sections concatenated
+            "overview"        - what it is and why NGSolve doesn't already have it
+            "api"             - FESpace("axihenrotte", mesh, order=k) usage
+            "basis_p1"        - p=1 Q-element (4 DOFs) basis details
+            "basis_p2"        - p=2 Q-element (9 DOFs) basis + s-midpoint convention
+            "vs_standard_h1"  - 6-property comparison table vs H1 order=2
+            "validation"      - cross-validation references; Hessian-of-W convention
+            "file_layout"     - where each piece lives (C++, Mathematica, tests)
+            "why_dropped_p3"  - why p=3 was attempted and reverted (Vandermonde cond ~ 1e30)
+    """
+    return get_axifemm_documentation(topic)
 
 
 @mcp.tool()
