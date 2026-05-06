@@ -16,10 +16,10 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
     type = "axihenrotte";
     needs_transform_vec = false;
     axi_order = int(flags.GetNumFlag("order", 1.0));
-    if (axi_order != 1 && axi_order != 2)
-        throw Exception("AxiHenrotteFESpace: only order=1 (Q1/P1) and order=2 "
-                        "(Q2 quad-only) are supported.");
-    order = axi_order;  // base-class field; 4 = poly-degree-in-r for Q2
+    if (axi_order != 1 && axi_order != 2 && axi_order != 3)
+        throw Exception("AxiHenrotteFESpace: only order=1 (Q1/P1), order=2 "
+                        "(Q2 quad-only), and order=3 (Q3 quad-only) are supported.");
+    order = axi_order;
 
     // Wire our custom DiffOps so that SymbolicBilinearForm can integrate
     // u, grad(u) for u : H1Henrotte.
@@ -33,11 +33,13 @@ AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & 
 
 void AxiHenrotteFESpace::Update() {
     FESpace::Update();
+    int nv = ma->GetNV(), ne = ma->GetNEdges(), nf = ma->GetNE();
     if (axi_order == 1) {
-        SetNDof(ma->GetNV());
-    } else {
-        // Q2 (quad only): vertex DOFs + edge midnode DOFs + face center DOFs.
-        SetNDof(ma->GetNV() + ma->GetNEdges() + ma->GetNE());
+        SetNDof(nv);
+    } else if (axi_order == 2) {
+        SetNDof(nv + ne + nf);              // Q2: 1 vertex + 1 edge + 1 face per
+    } else /* axi_order == 3 */ {
+        SetNDof(nv + 2 * ne + 4 * nf);      // Q3: 1 vertex + 2 edge + 4 face per
     }
 }
 
@@ -55,6 +57,17 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
         double r_a = p[0](0), r_b = p[1](0);
         double z_a = p[0](1), z_b = p[2](1);
         return *new (lh) AxiHenrotteFE_Q2_AxisAligned(r_a, r_b, z_a, z_b);
+    }
+    if (axi_order == 3) {
+        if (ngel.GetType() != ET_QUAD || vertices.Size() != 4)
+            throw Exception("AxiHenrotteFESpace order=3 requires an all-quad "
+                            "axis-aligned mesh; element " + ToString(ei) +
+                            " is not a quad.");
+        Vec<3> p[4];
+        for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
+        double r_a = p[0](0), r_b = p[1](0);
+        double z_a = p[0](1), z_b = p[2](1);
+        return *new (lh) AxiHenrotteFE_Q3_AxisAligned(r_a, r_b, z_a, z_b);
     }
     // axi_order == 1 path
     if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
@@ -87,41 +100,63 @@ void AxiHenrotteFESpace::GetDofNrs(ElementId ei, Array<DofId> & dnums) const {
             dnums[i] = vertices[i];
         return;
     }
-    // order == 2 — distinguish VOL (2D quad: 9 DOFs) from BND (1D segment:
-    // 2 vertex DOFs + 1 edge midnode DOF).
     int nv = ma->GetNV();
     int ne = ma->GetNEdges();
 
-    if (ei.VB() != VOL) {
-        // Boundary segment (or vertex-only element). Expose vertex + edge DOFs
-        // so the user can Dirichlet axis edges.
+    if (axi_order == 2) {
+        // order == 2 - distinguish VOL (2D quad: 9 DOFs) from BND (1D segment:
+        // 2 vertex DOFs + 1 edge midnode DOF).
+        if (ei.VB() != VOL) {
+            auto edges = ngel.Edges();
+            dnums.SetSize(vertices.Size() + edges.Size());
+            for (size_t i = 0; i < vertices.Size(); ++i)
+                dnums[i] = vertices[i];
+            for (size_t i = 0; i < edges.Size(); ++i)
+                dnums[vertices.Size() + i] = nv + edges[i];
+            return;
+        }
+        if (ngel.GetType() != ET_QUAD)
+            throw Exception("AxiHenrotteFESpace order=2: VOL element must be quad");
         auto edges = ngel.Edges();
-        dnums.SetSize(vertices.Size() + edges.Size());
-        for (size_t i = 0; i < vertices.Size(); ++i)
-            dnums[i] = vertices[i];
-        for (size_t i = 0; i < edges.Size(); ++i)
-            dnums[vertices.Size() + i] = nv + edges[i];
+        dnums.SetSize(9);
+        for (int i = 0; i < 4; ++i) dnums[i] = vertices[i];
+        // NGSolve's QUAD local edge order is the tensor-product convention:
+        //   edges[0]: bottom, edges[1]: top, edges[2]: left, edges[3]: right
+        // Our Q2 FE local node order is cyclic CCW (bottom, right, top, left).
+        dnums[4] = nv + edges[0];
+        dnums[5] = nv + edges[3];
+        dnums[6] = nv + edges[1];
+        dnums[7] = nv + edges[2];
+        dnums[8] = nv + ne + ei.Nr();
         return;
     }
-    // VOL element — must be quad.
+    // order == 3: 16 DOFs/quad (4 vertex + 8 edge + 4 face). Q3 FE uses
+    // NGSolve's tensor-product local edge order DIRECTLY (no permutation).
+    if (ei.VB() != VOL) {
+        // BND segment: 2 vertex + 2 edge midnode DOFs.
+        auto edges = ngel.Edges();
+        dnums.SetSize(vertices.Size() + 2 * edges.Size());
+        for (size_t i = 0; i < vertices.Size(); ++i)
+            dnums[i] = vertices[i];
+        for (size_t i = 0; i < edges.Size(); ++i) {
+            dnums[vertices.Size() + 2*i + 0] = nv + 2 * edges[i] + 0;
+            dnums[vertices.Size() + 2*i + 1] = nv + 2 * edges[i] + 1;
+        }
+        return;
+    }
     if (ngel.GetType() != ET_QUAD)
-        throw Exception("AxiHenrotteFESpace order=2: VOL element must be quad");
+        throw Exception("AxiHenrotteFESpace order=3: VOL element must be quad");
     auto edges = ngel.Edges();
-    dnums.SetSize(9);
+    dnums.SetSize(16);
     for (int i = 0; i < 4; ++i) dnums[i] = vertices[i];
-    // NGSolve's QUAD local edge order is the tensor-product convention:
-    //   edges[0]: bottom (v0 -> v1), at (sm, za)
-    //   edges[1]: top    (v2 -> v3), at (sm, zb)
-    //   edges[2]: left   (v0 -> v2), at (sa, zm)
-    //   edges[3]: right  (v1 -> v3), at (sb, zm)
-    // Our Q2 FE local node order is the cyclic-CCW convention:
-    //   local 4: bottom, local 5: right, local 6: top, local 7: left.
-    // Permute accordingly so dnums[k] matches the FE's local-DOF k.
-    dnums[4] = nv + edges[0];   // bottom
-    dnums[5] = nv + edges[3];   // right
-    dnums[6] = nv + edges[1];   // top
-    dnums[7] = nv + edges[2];   // left
-    dnums[8] = nv + ne + ei.Nr();
+    for (int e = 0; e < 4; ++e) {
+        // edges[0]: bottom, edges[1]: top, edges[2]: left, edges[3]: right
+        // Q3 FE local indices: 4-5 bottom, 6-7 top, 8-9 left, 10-11 right
+        dnums[4 + 2*e + 0] = nv + 2 * edges[e] + 0;
+        dnums[4 + 2*e + 1] = nv + 2 * edges[e] + 1;
+    }
+    int face_base = nv + 2 * ne + 4 * ei.Nr();
+    for (int k = 0; k < 4; ++k) dnums[12 + k] = face_base + k;
 }
 
 // Free creator function (so we can pass it as a function pointer to AddFESpace).
