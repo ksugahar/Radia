@@ -63,6 +63,51 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteFE_Q2_AxisAligned
+//   - 9 DOFs/element on an axis-aligned rectangle [r_a, r_b] x [z_a, z_b]
+//   - shape monomials (in s = r^2, z):
+//       {1, s, s^2, z, s*z, s^2*z, z^2, s*z^2, s^2*z^2}
+//     (Lagrange-interpolatory at 9 nodes; s-midpoint convention).
+//
+//   Node order (matches JSON `node_order_general`):
+//      0: (sa, za)    1: (sb, za)    2: (sb, zb)    3: (sa, zb)    (corners)
+//      4: (sm, za)    5: (sb, zm)    6: (sm, zb)    7: (sa, zm)    (edge mid)
+//      8: (sm, zm)                                                  (face center)
+//     where sm = (sa+sb)/2 and zm = (za+zb)/2 — NOTE the s-midpoint
+//     convention: physical r at edge midpoints is sqrt(sm) = sqrt((ra^2+rb^2)/2),
+//     not (ra+rb)/2.
+//
+//   Axis-touching case (ra < EPS_AXIS):
+//     6 monomials {s, s^2, s*z, s^2*z, s*z^2, s^2*z^2} on 6 non-axis nodes.
+//     The 3 axis-side nodes (0, 3, 7) get zero shape functions and zero
+//     gradient; physically A_phi vanishes on the symmetry axis.
+//     Caller MUST Dirichlet the 3 axis-side global DOFs to zero.
+// ---------------------------------------------------------------------------
+
+class AxiHenrotteFE_Q2_AxisAligned : public AxiHenrotteBaseFE {
+public:
+    double r_a, r_b, z_a, z_b;
+    bool   is_axis;            // sa < EPS_AXIS triggers the 6-monomial axis basis
+    // Cached Vandermonde inverse (column j = coefficients of Lagrange basis L_j
+    // in the monomial basis). For interior elements: 9x9 dense. For axis: 6x6
+    // padded into the same 9x9 storage (rows/cols at axis-node indices are 0).
+    double Vinv[9][9];
+    // Local-index mapping for axis case: which 6 of the 9 nodes are non-axis.
+    // For axis-touching: {1, 2, 4, 5, 6, 8}. For interior: identity {0..8}.
+    int    nz_idx[9];          // first n_nz entries are valid
+    int    n_nz;               // 9 (interior) or 6 (axis)
+
+    AxiHenrotteFE_Q2_AxisAligned(double ra, double rb, double za, double zb);
+
+    ELEMENT_TYPE ElementType() const override { return ET_QUAD; }
+
+    void CalcShape(const IntegrationPoint & ip,
+                   BareSliceVector<> shape) const override;
+    void CalcDShape(const IntegrationPoint & ip,
+                    BareSliceMatrix<> dshape) const override;
+};
+
+// ---------------------------------------------------------------------------
 // AxiHenrotteFE_P1_Triangle
 //   - 3 DOFs/element on a general triangle (r_i, z_i) in (r, z) plane
 //   - shape_i(r, z) = a_i + b_i*r^2 + c_i*z
