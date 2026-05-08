@@ -3,6 +3,43 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.28.1 — radia_ih Run button stays disabled after Browse... fix
+
+Released 2026-05-08.  Hot-fix for kubota's report on mdx + 100号機.
+
+### Why
+
+When `radia_ih` was launched directly (`python -m radia.radia_ih` /
+console entry, no `--vol` arg) and the user picked a `.vol` via the
+"Browse..." dialog, the Run button stayed grayed out for every non-
+vacuum method (PEEC+BEM, BEM-A+BEM, PEEC+FEM+Kelvin, Full FEM A-V).
+Two parallel bugs:
+
+1. `AnalysisWindow._browse_vol()` updated the `.vol` line edit text but
+   never re-inspected the file.  `IHPanel._vol_mats` stayed `None`,
+   `is_runnable()` returned `False`, the Run button never enabled.
+2. `IHWindow.__init__` called `_reload_vol_info(vol_path)` using the
+   constructor argument, so even when `_restore_settings()` repopulated
+   the line edit from saved `radia_ih.json`, the QSettings-restored
+   path was never inspected.
+
+### What changed
+
+* `radia_gui_base.AnalysisWindow` — added overridable
+  `_on_vol_changed(path)` hook, invoked from `_browse_vol()` and from
+  `QLineEdit.editingFinished` (manual edits).  Default no-op so panels
+  that do not depend on `.vol` contents (radia_em, radia_pcb,
+  radia_heat) are unaffected.
+* `radia_ih.IHWindow._on_vol_changed` — re-runs `_reload_vol_info` +
+  `_update_run_state`.
+* `radia_ih.IHWindow.__init__` — now passes `self._vol_edit.text()`
+  (post-restore) to the initial `_reload_vol_info` instead of the
+  stale arg.
+
+Headless QApplication test confirms: fresh launch with empty `vol_path`
+leaves Run disabled (expected); Browse... to a valid `.vol` with `sibc`
+boundary now enables Run for PEEC+BEM and PEEC+FEM+Kelvin.
+
 ## 4.26.0 — BEM-A coil migrated from intree (Python) to ngsolve.bem; intree code retired
 
 Released 2026-05-03.  Strategic pivot after benchmarking.
