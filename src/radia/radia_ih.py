@@ -892,8 +892,11 @@ class IHWindow(AnalysisWindow):
         # is complete.  The initial call inside IHPanel._build_ui() runs
         # before _set_panel() has wired these hooks.
         panel._on_method_changed(panel.val("method"))
-        # Inspect the .vol on launch.
-        self._reload_vol_info(vol_path)
+        # Inspect the .vol on launch.  Use the line-edit value rather
+        # than the constructor arg so QSettings-restored paths are
+        # honoured (otherwise the panel sees the empty initial path
+        # and Run stays disabled even with a valid .vol restored).
+        self._reload_vol_info(self._vol_edit.text())
         # PEEC-inductance convenience: if the method is PEEC-inductance
         # AND the STEP field is empty (first launch / fresh QSettings),
         # auto-populate from the newest *.step / *.stp / *.jou in cwd.
@@ -972,6 +975,14 @@ class IHWindow(AnalysisWindow):
             return
         mats, bnds = inspect_vol_labels(vol_path)
         panel.set_vol_labels(mats, bnds)
+
+    def _on_vol_changed(self, path):
+        """Re-inspect labels and refresh Run-enable when the user picks
+        a new .vol via Browse... or manual edit.  Without this, the panel
+        ships with _vol_mats=None forever and Run never enables for
+        non-vacuum methods."""
+        self._reload_vol_info(path)
+        self._update_run_state()
 
     def _on_finished(self, exit_code, exit_status):
         # Delegate core finish handling + then append IH-specific summary.
