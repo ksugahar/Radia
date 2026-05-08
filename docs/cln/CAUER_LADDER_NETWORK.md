@@ -291,27 +291,35 @@ boundary). Combining the two enables CLN for problems where the
 eddy current decays into an unbounded region (e.g., isolated coil
 in vacuum).
 
-### 6.1 Status (2026-05-04)
+### 6.1 Status (2026-05-05)
 
-**Recent finding**: CLN + Kelvin had been an open research problem.
-Combining standard reduced-A formulation with Kelvin pullback gave
-+43% inductance error on a benchmark torus problem until the root
-cause was identified.
+**Important context**: Kelvin transformation in NGSolve is a **proven,
+high-accuracy** technique when properly formulated. Kameari (2025/10/14
+slides `W:/00_CAE/NGSolve/亀有/4-05.pdf`) demonstrates:
+- Magnetic sphere in uniform B with COARSE mesh (Order 3, μ_r=1000):
+  **A-Ω_r gives 0.001% error**, **Ω-Ω_r Order 4 gives 0.029% error**
+- **Independent of Kelvin radius rk** — even rk=100 (huge) gives same
+  accuracy with adaptive refinement (slide 18)
+- Three canonical reductions: Ω-Ω_r, A-Ω_r, A-A_r (slide 4)
+- Eddy current uses A-φ-A_r (slide 25, TEAM Workshop Problem 7)
 
-**Root cause**: the popular `(ν - ν₀) curl(A_s) · curl(v)` reduced-A
-weak form is **invalid when A_s in the Kelvin region is the proper
-1-form pullback**. The simplification requires A_s to satisfy
-ν₀ Maxwell globally; the pullback satisfies ν' Maxwell instead
-(metric-dependent).
+**Canonical Kameari weak-form pattern** (slide 7-9):
+- Ω-Ω_r: `∫_Ω μ ∇ω·∇Ω = -∫_∂Ω ω B_s·n ds  ∀ω ∈ H¹⁰(order N)`
+- A-Ω_r: `∫_Ω μ⁻¹ ∇×N·∇×A = ∫_∂Ω N×H_s·n ds  ∀N ∈ H_curl⁰(order N)`
+- A-φ-A_r (eddy): adds `jωσ(N+∇ψ)·(A+∇φ)` and same boundary integral
 
-**Correct form**: drop the (ν - ν₀) middle step and use directly:
-```
-a(A_r, v) = -∫_kext ν' · (∇×A_s_pullback) · (∇×v) dV
-```
-which gives +6% (matching the J-source baseline).
+The **source field is injected via a boundary integral at the inner-Kelvin
+interface ∂Ω**, NOT via a `(ν-ν₀)` bulk term. This is structurally
+different from the volume-source reduced-A patterns we tried in v11-v14
+on the cuboid problem.
+
+**v11-v14 issue revisited (2026-05-05)**: the historical `(ν-ν₀)` bulk
+form was NOT Kameari's canonical method. The correct pattern is the
+boundary-integral injection. Re-examining v14 against Kameari reference
+is on the open work-list.
 
 See [`docs/kelvin/KELVIN_TRANSFORMATION.md`](../kelvin/KELVIN_TRANSFORMATION.md)
-§7.5 for the full derivation.
+§7.5 for the (ν-ν₀) pitfall analysis.
 
 ### 6.2 Implications for CLN + Kelvin
 
@@ -357,6 +365,120 @@ bundle with finite extent):
 2. Direct form: `-ν' (∇×A_s) (∇×v) dx("kelvin")` (NOT (ν-ν₀)).
 3. Iterate Kameari.
 
+### 6.4.1 Kameari's Three Reduction Methods (2025/10/14 reference)
+
+From `W:/00_CAE/NGSolve/亀有/4-05.pdf` (Kameari, "Electromagnetic
+Analyses Using Higher Order Hierarchic Finite Elements"):
+
+| Method | Inner region | Outer (Kelvin) region | Use case |
+|---|---|---|---|
+| Ω-Ω_r | H = -∇Ω_t | H = -∇Ω_r + H_s | Linear magnetic, H source |
+| A-Ω_r | B = ∇×A_t | H = -∇Ω_r + H_s | Mixed, recommended for sphere/cuboid |
+| A-A_r | B = ∇×A_t | B = ∇×(A_r + A_s) | Vector source / coil |
+| A-φ-A_r | A in air, A+φ in cond | A_r in Kelvin | Eddy current (TEAM7) |
+
+**Convergence (magnetic sphere a=1m, μ_r=1000, B_0=1T, theory=2.9940 T)**:
+| Method | Order | Coarse-mesh Bz0 | Error |
+|---|---|---|---|
+| Ω-Ω_r | 2 | 3.3813 | 12.9% |
+| Ω-Ω_r | 3 | 2.9995 | 0.184% |
+| Ω-Ω_r | 4 | 2.9985 | 0.029% |
+| A-A_r | 3 | 2.9928 | 0.040% |
+| **A-Ω_r** | **3** | **2.9940** | **0.001%** ⭐ |
+
+A-Ω_r with Order 3 is the recommended winner.
+
+Source injection is **boundary integral at inner-Kelvin interface**, not
+bulk volume term:
+```python
+# A-Ω_r weak form (slide 8)
+a += 1/mu * curl(N) * curl(A) * dx
+f += N.Trace() * Cross(H_s, n) * ds(kelvin_interface)  # H_s on boundary
+```
+where `H_s` is the applied uniform H on the inner-Kelvin boundary
+(NOT inside the bulk).
+
+### 6.5 Open-Boundary CLN — When Truncation Works vs When It Doesn't
+
+**Numerically the Kameari iteration is healthy** with the canonical recipe
+(nograds=True, NO penalty, tree-cotree, box-shaped outer PEC). Verified
+2026-05-03 (`cuboid_521_vacuum_kameari_breakdown.py`, AIR_SCALE=5 box,
+ORDER=2, 12 stages):
+
+- All R_n > 0, L_n > 0 (no sign flip)
+- Schmidt drift `|⟨J_n, J_m/σ⟩|/⟨J_n, J_n/σ⟩` ranges 3.5e-17 (n=1) to
+  9.8e-10 (n=11) — machine precision throughout
+- Gram matrix conditioning bounded
+
+The classical "Kameari breaks down at high N" claim is **incorrect for the
+iteration itself**; that breakdown is inner-solver origin.
+
+**Physical accuracy depends on geometry / current pattern**:
+
+| Setup | Field decay | Dirichlet truncation? |
+|---|---|---|
+| 2 parallel cylinders, opposite I (Sugahara 2017 Compumag) | 1/r² (dipole) | ✅ Works at moderate AIR_SCALE |
+| Closed magnetic circuit (DC-DC core, 2017 §III.B) | localized | ✅ Works |
+| **Isolated conductor + uniform B_z (no return)** | **1/r³ (induced dipole)** | ❌ τ_0 wrong by 9× at AIR_SCALE=5 |
+| Coil + open-air return | depends | depends |
+
+For "isolated conductor in applied uniform B_z" specifically (our cuboid
+5×2×1 case), AIR_SCALE-sweep showed:
+- AIR_SCALE = 3 / 5 / 8 / 12 → τ_0 = 42.5 / 104.4 / 148.3 / 204.6 μs
+  (**diverges** as box grows — PEC reflection generates progressively
+  longer-wavelength spurious cavity modes)
+- vs ELF τ_lead = 11.51 μs → never converges
+
+This is the use case that **Kelvin transformation specifically solves**
+(unbounded exterior with proper radiation-like BC). The recent v14
+work fixed the historical `(ν-ν₀)` pitfall in reduced-A + Kelvin (see
+§6.1); applying the corrected formulation to the cuboid problem is the
+ongoing research thread.
+
+**Anti-patterns that look like structural failure but are bugs**:
+- `GAUGE_EPS / mu * u * v * dx` penalty term → numerical sign flip
+- Sphere-shaped outer air with tetrahedral mesh near cuboid corners →
+  irregular elements near sharp interfaces
+- Use BOX outer (matches conductor symmetry) and avoid all penalty terms.
+
+**Conclusion**: open-boundary 3D CLN is **not unfixable** — the choice
+of method must match the geometry:
+- Closed-loop / fast-decay fields → Dirichlet truncation works
+  (Sugahara 2017 Compumag is the canonical demonstration)
+- Isolated conductor + slow-decay field → Kelvin (or BEM) is required.
+  **Kelvin works extremely well** when properly implemented (Kameari
+  2025 demos: 0.001% error on magnetic sphere with coarse mesh, no
+  dependence on Kelvin radius rk). The key is using the canonical
+  weak-form pattern (boundary integral at ∂Ω, NOT (ν-ν₀) bulk term).
+  See §6.4.1.
+- For canonical analytical benchmarks, Nagamine-style infinite-series
+  CLN (CEFC 2026) is a complementary validation tool.
+
+### 6.6 The "AJ vs B²" Inductance Formula Choice
+
+Tanimoto canonical implementations use BOTH formulas:
+- **AJ form**: `L_n = R_n × ∫_cond J_n · A_pot dV`
+- **B² form**: `L_n = ∫_full curl(A_pot)·curl(A_pot)/μ dV` = magnetic energy
+
+For closed PEC (Dirichlet on conductor surface), they are EQUAL via
+integration by parts (no boundary term). For air-box / Kelvin, they
+DIFFER by the conductor-surface boundary term.
+
+| Property | AJ form | B² form |
+|---|---|---|
+| Compute domain | conductor only | full + Kelvin region |
+| Sign | can go negative (air-box) | always positive |
+| Use in Schmidt update | gives meaningful J update | denominator too large → J_n+1 ≈ J_n (drift→1) |
+| With Kelvin region | trivial (no Kelvin in cond) | must integrate B² in pulled-back metric |
+
+**Tradeoff**: B² is physically correct (magnetic energy) but expensive
+to compute over Kelvin region. AJ is cheap but can fail (sign or
+unphysical Schmidt) when conductor is surrounded by σ=0 region.
+
+The **canonical 20240917 production** (closed PEC) uses AJ. For air-box
++ Kelvin, neither formula has been demonstrated to give clean Cauer
+ladder for "uniform B_z applied" — open research question.
+
 ---
 
 ## 7. Solver Variants and Production Code
@@ -372,6 +494,53 @@ bundle with finite extent):
 
 **Production**: A + ICCG (`20240917_A_ICCG_最新版.ipynb`), includes
 inline gauge correction.
+
+### 7.1.1 Canonical A-form Recipe (Tanimoto, do not deviate)
+
+Audited from `W:/00_CAE/NGSolve/谷本/20240910_静止器回転機用/20240917_A_ICCG_最新版.ipynb`
+and `修論/CLN_AT.ipynb`:
+
+```python
+fes = HCurl(mesh, order=order, dirichlet="...", nograds=True)   # OR type1=True
+gauge = H1(mesh, order=order, dirichlet="...")
+
+# Bilinear forms — NO penalty term, NO gauge_eps
+a_HC += (1/mu) * curl(u) * curl(v) * dx
+a_HH += grad(uu) * grad(vv) * dx
+
+for nStage in range(N):
+    R = 1/Integrate(J*J/sigma*dx, mesh)
+
+    # Solve A from J
+    f += v * J * dx
+    solve gfA = inv_HC * f
+
+    # Helmholtz-Hodge gauge correction (REQUIRED, even with nograds=True)
+    ff += grad(vv) * gfA * dx
+    solve gfu = inv_HH * (-ff)        # rhs sign flip
+
+    # Accumulate (CF expression)
+    if nStage == 0:
+        Apot = R * (gfA + grad(gfu))   # A is corrected, R-weighted
+        B = R * curl(gfA)              # B unaffected by gauge
+    else:
+        Apot = Apot + R * (gfA + grad(gfu))
+        B = B + R * curl(gfA)
+
+    # L (Tanimoto canonical 20240917): AJ form
+    L = Integrate(R * J * Apot * dx, mesh)
+    # OR Tanimoto修論 (CLN_AT): B^2 form
+    # L = Integrate(B*B/mu * dx, mesh)
+
+    # Schmidt orthogonalization
+    J = J - sigma * Apot / L
+```
+
+**Anti-patterns (avoid)**:
+- `a += GAUGE_EPS / mu * u * v * dx` — penalty perturbs ladder values
+- Skipping Helmholtz-Hodge correction — divergence accumulates over stages
+- Tree-cotree mask + nograds=True simultaneously — over-constrains
+- Mixing seed types between stages
 
 ### 7.2 bonus_intorder for Higher-Order Elements
 
@@ -456,40 +625,100 @@ W:/00_CAE/NGSolve/谷本/
 - 2026_04_01_長方形CLN/ — current rectangular CLN + Kelvin work
 - prior phases for various conductor shapes (sphere, cuboid, etc.)
 
+### Kameari Reference Library (canonical NGSolve hierarchic FEM + Kelvin)
+
+`W:/00_CAE/NGSolve/亀有/` — Kameari's NGSolve notebooks:
+- `4-05.pdf` — 2025/10/14 slides ⭐ canonical reference for hierarchic
+  FEM + 3 reduction methods (Ω-Ω_r, A-Ω_r, A-A_r) + Kelvin in NGSolve
+- `5-03.html` — adaptive meshing for reluctance (2D)
+- `導体球/Sphere_UnifB_Mod.ipynb` — analytical for AC magnetic sphere
+- `CLN_AT.ipynb`, `CLN_T-Omega.ipynb`, `CLN_APhi.ipynb` — three CLN
+  formulations on cylinder (Tanimoto-style)
+- `TEAM Problem #3 *.ipynb` — TEAM workshop benchmark
+- `Error estimation/` — ZZ-type error estimator notebooks
+
 ---
 
 ## 10. References
 
-1. **A. Kameari**, "Calculation of transient 3D eddy current using
-   edge-elements," IEEE Trans. Magn. (foundational paper for FEM eddy
-   current).
-2. **谷本** (Tanimoto), Master's Thesis, Kindai University, 2024.
+### CLN method
+
+1. **A. Kameari**, "Calculation of transient 3D eddy current using edge
+   elements," *IEEE Trans. Magn.*, vol. 26, no. 2, pp. 466-469, 1990.
+   Foundational FEM eddy-current paper introducing edge-element
+   formulations on which the CLN iterative orthogonalisation builds.
+2. **A. Kameari, J. Ebrahimi, K. Fujiwara, Y. Takahashi, N. Takahashi**,
+   "Cauer Ladder Network Representation of Eddy-Current Fields for
+   Model Order Reduction Using Finite-Element Method," *IEEE Trans.
+   Magn.*, vol. 54, no. 3, 7201804, 2018. CLN method introduction
+   (the basis of Tanimoto's thesis below).
+3. **谷本** (Tanimoto), Master's Thesis, Kindai University, 2024.
    3D HCurl CLN formulations (A-T, T-Ω, A-Φ) and verification.
-3. **K. Sugahara**, "Electromagnetic analysis of eddy current testing
-   with Kelvin transformation," IEEE Trans. Magn. 58(9), 2022.
-4. **H. Nagamine, T. Yamaguchi, K. Sugahara**, "A Pullback-Based
+4. **A. Kameari**, "Electromagnetic Analyses Using Higher Order
+   Hierarchic Finite Elements", presentation 2025/10/14
+   (`W:/00_CAE/NGSolve/亀有/4-05.pdf`). Canonical demonstration of
+   Ω-Ω_r / A-Ω_r / A-A_r reductions with Kelvin transformation in
+   NGSolve. Magnetic sphere reference: A-Ω_r Order 3 with coarse mesh
+   gives 0.001% error, independent of Kelvin radius `r_k`.
+
+### Classical circuit-theory background
+
+5. **W. Cauer**, *Synthesis of Linear Communication Networks*,
+   McGraw-Hill, 1958.
+6. **R.M. Foster**, "A reactance theorem," *Bell Syst. Tech. J.*,
+   vol. 3, pp. 259-267, 1924.
+7. **O. Brune**, "Synthesis of a finite two-terminal network whose
+   driving point impedance is a prescribed function of frequency,"
+   *J. Math. Phys.*, vol. 10, pp. 191-236, 1931.
+
+### Open-boundary side (Kelvin)
+
+8. **K. Sugahara**, "Electromagnetic analysis of eddy current testing
+   with Kelvin transformation," *IEEE Trans. Magn.*, vol. 58, no. 9,
+   1-6, 2022. A-formulation Kelvin truncation used in §6.
+9. **H. Nagamine, T. Yamaguchi, K. Sugahara**, "A Pullback-Based
    Formulation of Kelvin Transformation in Electromagnetic Field
-   Analysis," CEFC 2026 (Thessaloniki), id 350.
-5. *Foster network synthesis* — classical circuit theory references
-   (Brune, Foster, Cauer).
-6. **TEAM Workshop Problem 28** — induction levitation benchmark
-   used by `A_CG_TEAM28size.ipynb`.
+   Analysis," CEFC 2026 (Thessaloniki), id 350. Pullback derivation of
+   the (ν − ν₀) reduced-A form used jointly with CLN.
+10. **Q. Chen**, "A Review of Finite Element Open Boundary Techniques
+    for Static and Quasi-Static Electromagnetic Field Problems,"
+    *IEEE Trans. Magn.*, vol. 58, no. 9, 2022. 3D Kelvin theory cited
+    by Kameari (Ref [4]) for the open-boundary side.
+
+### Validation
+
+11. **TEAM Workshop Problem 28** — induction-levitation benchmark used
+    by `A_CG_TEAM28size.ipynb` for 3D CLN validation.
 
 ---
 
 ## 11. Open Questions / Future Work
 
-1. **CLN + Kelvin for applied uniform field** (§6.3): A-formulation
+1. **CLN + Kelvin for applied uniform field** (§6.3, §6.5): A-formulation
    reduced + Kelvin breaks down due to A_s unboundedness; H-form or
    T-Ω with Convention B background field is the recommended path.
+   Step 0a (no Kelvin, just air-box, 2026-05-05) showed that even WITHOUT
+   Kelvin, Kameari struggles when conductor is surrounded by σ=0 region:
+   sign flip (AJ form) or Schmidt collapse (B² form) at stage 1.
    Implementation TODO.
-2. **Convergence acceleration**: Schmidt drift limits N ≤ 25; could
+2. **AJ vs B² inductance choice** (§6.6): which form converges to clean
+   Cauer ladder when conductor is in air/Kelvin? Closed PEC: equivalent.
+   Air-box: AJ goes negative (boundary term), B² stays positive but
+   produces drift→1 in Schmidt. Hybrid (B² for L_n display, AJ for
+   Schmidt update with proper sign control) untested.
+3. **Convergence acceleration**: Schmidt drift limits N ≤ 25; could
    re-orthogonalize periodically (Gram-Schmidt-Modified) to extend.
-3. **Adaptive mesh + CLN**: standard adaptive refinement via ZZ
+4. **Adaptive mesh + CLN**: standard adaptive refinement via ZZ
    estimator could reduce ladder construction cost; not yet
    integrated.
-4. **CLN + Kelvin + adaptive**: combining all three for production
+5. **CLN + Kelvin + adaptive**: combining all three for production
    open-boundary CLN. Major future work.
+6. **Nagamine-style analytical infinite-domain CLN as alternative**:
+   For canonical geometries (cuboid in vacuum, sphere, etc.), an
+   analytical infinite-series CLN (Nagamine CEFC 2026 derivation) avoids
+   the FEM+Kelvin+Kameari structural difficulties documented in §6.5.
+   When 3D FEM hits open-boundary Kameari barriers, falling back to the
+   analytical Nagamine approach for benchmark validation is recommended.
 
 ---
 

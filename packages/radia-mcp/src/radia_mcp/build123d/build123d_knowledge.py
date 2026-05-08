@@ -831,6 +831,294 @@ wraps steps 3-5 in one call.
 - **Units**: build123d works in mm, PEEC in meters. scale = 1000.
 """
 
+COIL_FROM_POLYLINE = """
+# Coil Construction from a Centerline Polyline (build123d loft)
+
+## When to Use
+
+The centerline is given as **discrete 3D points** `r[0..N-1]` (measured
+wire path, optimization output, FEA tool export, scan data) — NOT an
+analytical helix and NOT extracted from existing CAD.
+
+Counterparts:
+- `coil_modeling` (this file) — analytical helix with `loft()` over
+  parametric sections.
+- `radia_mcp.cubit` `coil_from_polyline` topic — same algorithm, Cubit
+  flavour (creates one body per station, lofts pairwise).
+- `radia.coil_from_cad` — centerline EXTRACTION from existing STEP CAD.
+
+This topic is the **forward** problem: discrete points → solid CAD.
+
+## Algorithm (frame at each station + global loft)
+
+```
+Input:  r[0], r[1], ..., r[N-1]   (ordered 3D centerline points, mm)
+        R                         (cross-section radius / dims)
+
+For each interior point n = 1 .. N-2:
+    # 1. Tangent at r[n] via centered finite difference
+    w = (r[n+1] - r[n-1]) / |r[n+1] - r[n-1]|
+
+    # 2. "Up" vector — smallest-component trick to avoid up // w
+    k  = argmin |w[i]|     (the tangent's smallest absolute component)
+    up = e_k
+
+    # 3. Orthonormal frame at r[n]
+    u = normalize(w x up)        # in-plane x-axis
+    v = w x u                    # in-plane y-axis (= z_dir x x_dir)
+
+    # 4. build123d Plane: x_dir=u, z_dir=w => y_dir is auto = w x u = v
+    plane = Plane(origin=r[n], x_dir=u, z_dir=w)
+    section_n = Circle(R)  applied on plane     # or Rectangle, etc.
+
+# 5. Single global loft over all sections in order
+coil = loft(sections)                           # build123d Solid
+```
+
+`Plane(origin, x_dir, z_dir)` automatically derives the in-plane y-axis
+as `z_dir x x_dir`. With our conventions this gives **exactly** the
+columns of `M = [u | v | w]` from the Cubit flavour — so the two
+flavours produce geometrically identical cross-section placements.
+
+## Why the Smallest-Component Up Vector
+
+`up = e_k` with `k = argmin|w_i|` GUARANTEES `up` is not parallel to
+`w`, so `w x up` is well-conditioned. A naive `up = (0, 0, 1)` fails
+when the centerline is vertical.
+
+It is **NOT** a parallel-transport / rotation-minimizing frame (RMF):
+
+| Frame                   | Twist between stations | Cost                |
+|-------------------------|------------------------|---------------------|
+| Smallest-component up   | uncontrolled (random)  | O(1) per station    |
+| Parallel transport      | minimal (Bishop / RMF) | O(N) sequential     |
+| Frenet (binormal)       | ill-defined at straights | requires curvature |
+
+For **circular** cross-section the twist is invisible (rotational
+symmetry), so this cheap frame is fine. For **rectangle / racetrack /
+ellipse**, the twist between adjacent stations may produce a visibly
+twisted lofted solid — switch to RMF (double-reflection / Bishop).
+
+## Reference Implementation (algebra API, recommended)
+
+```python
+import numpy as np
+from build123d import Plane, Circle, loft, export_step
+
+# r is a list of np.array([x, y, z]) centerline points (mm), length N
+R_cross = 1.0   # cross-section radius (mm)
+
+sections = []
+for n in range(1, len(r) - 1):
+    # 1. tangent
+    w = r[n + 1] - r[n - 1]
+    w = w / np.linalg.norm(w)
+
+    # 2. smallest-component up
+    up = np.zeros(3)
+    up[int(np.argmin(np.abs(w)))] = 1.0
+
+    # 3. orthonormal frame
+    u = np.cross(w, up); u /= np.linalg.norm(u)
+    # v = np.cross(w, u)  # implied by Plane (z_dir x x_dir)
+
+    # 4. build123d plane and section
+    plane = Plane(origin=tuple(r[n]), x_dir=tuple(u), z_dir=tuple(w))
+    sections.append(plane * Circle(R_cross))   # algebra: place sketch on plane
+
+# 5. global loft
+coil = loft(sections)
+coil.label = "coil"
+export_step(coil, "coil_from_polyline.step")
+```
+
+`plane * Circle(R)` is the algebra-API idiom: the `Plane.__mul__`
+operator places the sketch on that plane (equivalent to
+`Plane.from_local_coords(sketch)`).
+
+## Builder API Variant
+
+```python
+from build123d import BuildPart, BuildSketch, Plane, Circle, loft
+
+with BuildPart() as part:
+    sections = []
+    for n in range(1, len(r) - 1):
+        w  = r[n + 1] - r[n - 1]; w  /= np.linalg.norm(w)
+        up = np.zeros(3); up[int(np.argmin(np.abs(w)))] = 1.0
+        u  = np.cross(w, up); u  /= np.linalg.norm(u)
+        plane = Plane(origin=tuple(r[n]), x_dir=tuple(u), z_dir=tuple(w))
+        with BuildSketch(plane) as sk:
+            Circle(R_cross)
+        sections.append(sk.sketch)
+    loft(sections)         # appended to BuildPart context
+
+coil = part.part
+```
+
+## Pairwise (Chain) Loft Variant — for Wiggly Polylines
+
+`loft([s_0, s_1, ..., s_{N-2}])` is a SINGLE OCC global loft. For
+densely sampled, wiggly polylines this can fail with self-intersection
+or surface tolerance errors. The Cubit flavour avoids this by lofting
+**pairwise** (one volume per adjacent pair, then `imprint+merge+unite`).
+The build123d analog is:
+
+```python
+from build123d import Compound
+
+pieces = []
+for n in range(len(sections) - 1):
+    pieces.append(loft([sections[n], sections[n + 1]]))
+coil = Compound(children=pieces)
+# Optional fuse: from build123d import Part; coil = Part() + pieces
+```
+
+`Compound` keeps each segment as a separate solid (good if you want
+to tag per-segment labels for PEEC). `Part() + pieces` fuses them into
+one body with shared internal faces removed (analogous to Cubit's
+`unite volume all` after `imprint+merge+compress`).
+
+## Caveats and Failure Modes
+
+1. **Endpoints are dropped.** The centered finite difference needs
+   both neighbours, so the first and last input points are NOT used as
+   stations — the resulting solid is shorter than the input polyline.
+   To preserve length, prepend / append ghost points or use one-sided
+   differences at the ends.
+
+2. **Closed loops require a wrap-around section.** For a closed coil
+   `r[N-1] approx r[0]`, append `sections[0]` to the end of the list
+   before the final `loft(...)` so the global loft wraps around — and
+   compute the centered tangent at the seam with periodic neighbours.
+
+3. **Twist visible for non-circular cross-section.** The
+   smallest-component frame can flip discretely when the dominant
+   tangent component changes between adjacent stations (e.g. tangent
+   rotates from +x-dominant to +y-dominant, k jumps from 1 to 2).
+   Adjacent sections then differ by a 90 deg roll → loft self-intersects
+   or twists. Fix: parallel-transport (Bishop / double-reflection) frame.
+
+4. **Polyline density matters.** Too sparse → faceted polygonal solid;
+   too dense → many input sections (slow loft, may fail OCC tolerance).
+   For wire paths from physical measurement, smooth and resample to a
+   uniform arc-length spacing before invoking this algorithm.
+
+5. **Units.** build123d default unit is mm. Make sure `r` is in mm
+   (or scale before/after). For PEEC the downstream pipeline scales
+   by 1/1000 to meters when calling `PEECBuilder.add_connected_segment`.
+
+6. **Global vs pairwise loft choice.** Default to `loft(sections)`
+   (smoother solid, single body); fall back to pairwise + Compound if
+   OCC raises self-intersection or surface tolerance errors on a
+   wiggly polyline.
+
+## Comparison to Existing Coil Topics in This Knowledge Base
+
+| Method                    | Input                  | Best For                        |
+|---------------------------|------------------------|----------------------------------|
+| `coil_modeling`           | analytical helix       | Regular cylindrical solenoid     |
+| `coil_from_polyline` (this) | discrete 3D points    | Measured / optimized free-form  |
+| `radia.coil_from_cad`     | existing STEP CAD      | Reverse-engineering filament from CAD |
+| `radia.coil_builder`      | analytical primitives  | Beam-optics design (straight + arc) |
+
+Pipeline downstream is identical: STEP export →
+`coil_from_cad.extract_centerline_from_step` → filaments →
+`PEECBuilder` → `PEECCircuitSolver`.
+
+## Cubit Flavour — Same Algorithm, Different Engine
+
+Identical math; different engine. See the `coil_from_polyline` topic
+in `radia_mcp.cubit` for the Cubit version. Key engine differences:
+
+| Aspect              | build123d                    | Cubit                       |
+|---------------------|------------------------------|-----------------------------|
+| Frame placement     | `Plane(origin, x_dir, z_dir)` | `rotate Surface ... about origin` then `move` |
+| Loft strategy       | `loft([s0..sM])` (global)     | `create volume loft surface n n+1` (pairwise) |
+| Cleanup             | `Part() + pieces` to fuse     | `imprint all; merge all; compress; unite volume all` |
+| Section primitive   | `Circle(R)`, `Rectangle(w,h)` | `create surface circle ... zplane` |
+| STEP export         | `export_step(coil, ...)`      | `export step "..." overwrite` |
+| Use it when ...     | Scripted, no Cubit license needed | Already in a Cubit meshing pipeline |
+
+## Downstream Consumers (after STEP export)
+
+Once the lofted coil is exported to STEP, it feeds two production
+paths in this codebase. The path FROM the build123d solid is identical
+to the Cubit case — engine choice does not affect downstream usage.
+
+### A. Radia PEEC (filament-based circuit extraction)
+
+```python
+from build123d import export_step
+export_step(coil, "coil.step")
+
+from radia.coil_from_cad import extract_centerline_from_step
+from radia.peec_topology import PEECBuilder, PEECCircuitSolver
+
+path_m, w_m, h_m = extract_centerline_from_step("coil.step")  # mm -> m
+b = PEECBuilder()
+prev = b.add_node_at(*path_m[0])
+for p, w, h in zip(path_m[1:], w_m[1:], h_m[1:]):
+    nxt = b.add_node_at(*p)
+    b.add_connected_segment(prev, nxt, w, h, sigma=5.8e7,
+                            nwinc=3, nhinc=3)
+    prev = nxt
+b.add_port(b.nodes[0], b.nodes[-1])
+solver = PEECCircuitSolver(b.build_topology())
+Z = solver.compute_port_impedance(freq=1e6)
+```
+
+`extract_centerline_from_step` 5-Path dispatch handles the topology
+produced by this algorithm (single lofted tube, possibly closed).
+
+### B. BEM-A (port-driven self-inductance via ngsolve.bem)
+
+BEM-A consumes a **meshed** coil with `source` / `sink` BND labels on
+the two terminal faces. build123d alone cannot mesh — pipe the STEP
+through Cubit (preferred for hex) or Netgen (tet):
+
+```python
+# Option 1: Cubit hex mesh
+#   import "coil.step"; mesh volume all
+#   sideset 1 add surface <source_id>; sideset 1 name "source"
+#   sideset 2 add surface <sink_id>;   sideset 2 name "sink"
+#   radia_export netgen "coil.vol" overwrite
+
+# Option 2: Netgen tet mesh from build123d directly
+from build123d import export_step
+from ngsolve import Mesh
+from netgen.occ import OCCGeometry
+# Tag the two end faces in build123d BEFORE export:
+coil.faces().sort_by(Axis.Z)[0].label = "source"   # bottom cap
+coil.faces().sort_by(Axis.Z)[-1].label = "sink"    # top cap
+export_step(coil, "coil.step")
+geo = OCCGeometry("coil.step")
+mesh = Mesh(geo.GenerateMesh(maxh=2.0))
+
+from radia.bem.coil_inductance_ngsolve import compute_inductance_source_sink
+res = compute_inductance_source_sink(
+    mesh, source_label="source", sink_label="sink",
+    Z_s_re=1.0/(5.8e7 * 9.3e-5),  # optional AC SIBC at 50 kHz Cu
+)
+print("L =", res["L"], "H,  R =", res["R"], "Ω")
+```
+
+**Critical: BEM-A requires terminal faces.**
+- *Open-ended path* (`r[0] != r[N-1]`): the two end-cap faces of the
+  lofted solid are natural source/sink. Tag them before export.
+- *Closed loop* (`r[N-1] ≈ r[0]`): the solid has no end faces. Either
+  (a) leave a small gap in the polyline (skip the wrap station) so two
+  caps appear, or (b) cut a thin slice perpendicular to the path
+  post-loft and tag the two new faces. PEEC has no equivalent
+  constraint — it can drive a closed loop via a port between any two
+  interior nodes.
+
+| Pipeline | Input from STEP                   | Output                | Use when                   |
+|----------|-----------------------------------|-----------------------|----------------------------|
+| PEEC     | centerline + (w, h)               | R + jωL, SPICE / Z(f) | DC-1 MHz, multi-port, MOR  |
+| BEM-A    | surface mesh + source/sink labels | L (+ optional AC R)   | high-fidelity self-L on free-form paths |
+"""
+
 EXAMPLES_INTRO = """\
 # build123d Introductory Examples (36 walk-through examples)
 
@@ -2079,6 +2367,12 @@ _TOPICS = {
     "examples_intro": EXAMPLES_INTRO,
     "examples_gallery": EXAMPLES_GALLERY,
     "coil_modeling": COIL_MODELING,
+    "coil_from_polyline": COIL_FROM_POLYLINE,
+    "polyline_coil": COIL_FROM_POLYLINE,  # alias
+    "centerline_coil": COIL_FROM_POLYLINE,  # alias
+    "coil_from_points": COIL_FROM_POLYLINE,  # alias
+    "frame_sweep": COIL_FROM_POLYLINE,  # alias
+    "loft_polyline": COIL_FROM_POLYLINE,  # alias
     "joints_and_mates": JOINTS_AND_MATES,
     "assemblies_and_compounds": ASSEMBLIES_AND_COMPOUNDS,
     "cae_workflow_tips": CAE_WORKFLOW_TIPS,

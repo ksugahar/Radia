@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-03-09T23:00:00",
-  "hostname": "WIN-RADIA",
+  "timestamp": "2026-05-08T18:03:19.426837",
+  "hostname": "lab",
   "benchmark": "compact_ams_cocr",
   "solver": {
     "krylov": "COCR",
@@ -9,7 +9,7 @@
     "amg": "CompactAMG (PMIS coarsening, l1-Jacobi, V-cycle)"
   },
   "physics": {
-    "frequency_hz": 30000,
+    "frequency_hz": 30000.0,
     "sigma_cu": 59600000.0,
     "mu_r_core": 1000,
     "epsilon_regularization": 1e-06,
@@ -17,27 +17,11 @@
     "maxiter": 2000
   },
   "environment": {
-    "platform": "Windows-10.0.20348-SP0",
-    "processor": "Intel64 Family 6",
-    "python": "3.12"
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "processor": "Intel64 Family 6 Model 158 Stepping 13, GenuineIntel",
+    "python": "3.12.10"
   },
   "results": [
-    {
-      "mesh": "mesh1_2.5T.msh",
-      "ne": 130460,
-      "nv": 23731,
-      "ndof_hcurl": 155527,
-      "ndof_h1": 23731,
-      "method": "Compact AMS + COCR",
-      "iterations": 144,
-      "t_setup": 0.736,
-      "t_solve": 3.719,
-      "t_total": 4.455,
-      "ms_per_iter": 25.8,
-      "true_residual": 6.49e-11,
-      "converged": true,
-      "peak_memory_mb": 368
-    },
     {
       "mesh": "mesh1_3.5T.msh",
       "ne": 166198,
@@ -46,61 +30,13 @@
       "ndof_h1": 29901,
       "method": "Compact AMS + COCR",
       "iterations": 168,
-      "t_setup": 0.929,
-      "t_solve": 6.333,
-      "t_total": 7.263,
-      "ms_per_iter": 37.7,
-      "true_residual": 7.82e-11,
+      "t_setup": 0.91,
+      "t_solve": 5.782,
+      "t_total": 6.692,
+      "ms_per_iter": 34.4,
+      "true_residual": 7.816886452848333e-11,
       "converged": true,
-      "peak_memory_mb": 460
-    },
-    {
-      "mesh": "mesh1_4.5T.msh",
-      "ne": 203403,
-      "nv": 36473,
-      "ndof_hcurl": 241129,
-      "ndof_h1": 36473,
-      "method": "Compact AMS + COCR",
-      "iterations": 210,
-      "t_setup": 1.256,
-      "t_solve": 9.198,
-      "t_total": 10.454,
-      "ms_per_iter": 43.8,
-      "true_residual": 1.74e-10,
-      "converged": true,
-      "peak_memory_mb": 543
-    },
-    {
-      "mesh": "mesh1_5.5T.msh",
-      "ne": 280278,
-      "nv": 49643,
-      "ndof_hcurl": 331595,
-      "ndof_h1": 49643,
-      "method": "Compact AMS + COCR",
-      "iterations": 249,
-      "t_setup": 1.918,
-      "t_solve": 14.280,
-      "t_total": 16.198,
-      "ms_per_iter": 57.3,
-      "true_residual": 7.32e-11,
-      "converged": true,
-      "peak_memory_mb": 725
-    },
-    {
-      "mesh": "mesh1_20.5T.msh",
-      "ne": 1227241,
-      "nv": 211337,
-      "ndof_hcurl": 1441102,
-      "ndof_h1": 211337,
-      "method": "Compact AMS + COCR",
-      "iterations": 499,
-      "t_setup": 24.916,
-      "t_solve": 197.708,
-      "t_total": 222.624,
-      "ms_per_iter": 396.2,
-      "true_residual": 2.01e-10,
-      "converged": true,
-      "peak_memory_mb": 2933
+      "peak_memory_mb": 507.0
     }
   ]
 }

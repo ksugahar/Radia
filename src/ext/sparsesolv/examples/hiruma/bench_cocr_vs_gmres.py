@@ -19,7 +19,7 @@ import numpy as np
 # TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 
 mu0 = 4e-7 * np.pi
 freq = 30e3

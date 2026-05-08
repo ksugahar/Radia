@@ -2347,6 +2347,247 @@ Each wire is modeled as helix + cross-section sweep, then duplicated with
 rotational symmetry matching the strand count.
 """
 
+CUBIT_COIL_FROM_POLYLINE = """\
+# Coil Construction from a Centerline Polyline (Frame-Sweep + Loft Chain)
+
+## When to Use
+
+Use this when the coil centerline is given as a **discrete sequence of 3D
+points** `r[0..N-1]` (e.g. measured wire path, optimization output, or
+exported from an FEA tool as a point list) — not an analytical helix
+and not extracted from existing CAD. Complements:
+
+- `helix` topic — analytical helix sweep (parametric coil).
+- `radia.coil_from_cad` — centerline EXTRACTION from existing STEP CAD.
+- `radia.coil_builder` — analytical `add_straight` / `add_arc` primitives.
+
+This topic is the **forward** problem: discrete points → solid coil CAD.
+
+## Algorithm
+
+```
+Input:  r[0], r[1], ..., r[N-1]   (ordered 3D centerline points)
+        R                          (cross-section radius)
+
+For each interior point n = 1 .. N-2:
+    # 1. Tangent at r[n] via centered finite difference
+    w = (r[n+1] - r[n-1]) / |r[n+1] - r[n-1]|
+
+    # 2. Up vector — smallest-component trick to avoid up // w
+    k  = argmin |w[i]|     (the tangent's smallest absolute component)
+    up = e_k               (unit basis vector along that axis)
+
+    # 3. Orthonormal frame at r[n]
+    u = normalize(w x up)
+    v = w x u
+    M = [u | v | w]        (3x3 with columns u,v,w; M maps local +z -> w)
+
+    # 4. Build the cross-section in Cubit and place it
+    #    (default 'circle ... zplane' has normal = +z; rotate by M places
+    #     it so its normal aligns with the tangent w)
+    create surface circle radius R zplane
+    rotate Surface <id> by axis-angle(M) about origin
+    move   Surface <id> to r[n]
+
+For each adjacent pair n = 1 .. N-3:
+    create volume loft surface n n+1     # piecewise loft chain
+
+delete body 1 to N-2     # original section surfaces are now consumed
+imprint all
+merge all
+compress
+unite volume all          # 'unit volume all' in Cubit shorthand
+```
+
+## Why the Smallest-Component Up Vector
+
+Choosing `up = e_k` where `k = argmin |w[i]|` GUARANTEES `up` is not
+nearly parallel to `w`, so `w x up` is well-conditioned. A naive
+`up = (0,0,1)` fails when the centerline is vertical. This is the same
+trick used in CAD libraries to bootstrap a frame from a single tangent.
+
+It is **NOT** a parallel-transport / rotation-minimizing frame (RMF):
+
+| Frame                  | Twist between stations | Cost                |
+|------------------------|------------------------|---------------------|
+| Smallest-component up  | uncontrolled (random)  | O(1) per station    |
+| Parallel transport     | minimal                | O(N) sequential     |
+| Frenet (binormal)      | ill-defined at straight segments | requires curvature |
+
+For **circular** cross-section the twist is invisible (rotational
+symmetry), so this cheap frame is fine. For **non-circular** cross-section
+(rectangle, ellipse, racetrack), the twist between adjacent stations
+will produce a visibly twisted lofted solid — switch to RMF
+(double-reflection / Bishop frame).
+
+## Reference Python Implementation
+
+```python
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+import cubit
+
+# r is a list of np.array([x, y, z]) centerline points (length N)
+R_cross = 1.0   # cross-section radius
+
+for n in range(1, len(r) - 1):
+    # 1. tangent
+    w = r[n + 1] - r[n - 1]
+    w = w / np.linalg.norm(w)
+
+    # 2. smallest-component up vector
+    up = np.zeros(3)
+    up[int(np.argmin(np.abs(w)))] = 1.0
+
+    # 3. orthonormal frame
+    u = np.cross(w, up); u /= np.linalg.norm(u)
+    v = np.cross(w, u)
+    M = np.array([u, v, w]).T          # columns = u, v, w
+
+    # 4. axis-angle from rotation matrix
+    rotvec = R.from_matrix(M).as_rotvec()
+    angle  = np.linalg.norm(rotvec)
+
+    cubit.cmd(f'create surface circle radius {R_cross} zplane')
+    sid = cubit.get_last_id("surface")
+    if angle > 1e-6:
+        axis = rotvec / angle
+        cubit.cmd(
+            f'rotate Surface {sid} angle {np.degrees(angle)} '
+            f'about origin 0 0 0 direction {axis[0]} {axis[1]} {axis[2]} '
+            f'include_merged'
+        )
+    cubit.cmd(
+        f'move Surface {sid} x {r[n][0]} y {r[n][1]} z {r[n][2]} '
+        f'include_merged'
+    )
+
+# Loft chain (N-3 segments between N-2 cross-sections)
+for n in range(1, len(r) - 2):
+    cubit.cmd(f'create volume loft surface {n} {n + 1}')
+
+cubit.cmd(f'delete body 1 to {len(r) - 2}')
+cubit.cmd('imprint all')
+cubit.cmd('merge all')
+cubit.cmd('compress')
+cubit.cmd('unite volume all')
+```
+
+## Caveats and Failure Modes
+
+1. **Endpoints are dropped.** The centered finite difference needs both
+   neighbours, so the first and last input points are NOT used as
+   stations — the resulting solid is shorter than the input polyline.
+   To preserve length, prepend / append ghost points or switch to
+   one-sided differences at the ends.
+
+2. **Closed loops require an extra wrap-around loft.** For a closed coil
+   `r[N-1] ≈ r[0]`, the loft chain above ends at station N-2; you must
+   add `create volume loft surface (N-2) 1` to close the loop. The
+   centered tangent at the wrap point also needs `r[N-1] - r[N-2]`
+   replaced by a periodic neighbour.
+
+3. **Twist visible for non-circular cross-section.** The
+   smallest-component frame can flip discretely when the dominant
+   tangent component changes between adjacent stations (e.g. tangent
+   rotates from +x-dominant to +y-dominant). Adjacent cross-sections
+   then differ by a 90° roll → lofted volume self-intersects or twists.
+   Fix: parallel-transport frame (Bishop / double-reflection RMF).
+
+4. **Polyline density matters.** Too sparse → faceted polygonal solid;
+   too dense → many ACIS lofts (slow, may fail tolerance). For wire
+   paths from physical measurement, smooth and resample to a uniform
+   arc-length spacing before invoking this algorithm.
+
+5. **`delete body 1 to (N-2)` assumes Cubit IDs start at 1 and were
+   consecutive.** This is true in a fresh `cubit.init([...])` session
+   with no other geometry. In an existing model, capture each surface
+   ID via `cubit.get_last_id("surface")` and delete by recorded IDs,
+   or use `delete surface all` AFTER lofting (the loft consumed the
+   originals, so nothing happens — confirm with `list surface`).
+
+6. **`unite volume all` after `imprint+merge` produces a single body
+   with shared internal faces removed.** Skip if you want each loft
+   segment to remain a separate volume (e.g. for Cubit `block` tagging
+   per segment).
+
+7. **Coordinate units.** The script writes raw `r[n][0..2]` into Cubit
+   as `move Surface ... x ... y ... z ...`. Cubit interprets this in
+   the current `set undo unit length` system (default mm). Match the
+   units of `r` to the Cubit session unit BEFORE running, or scale
+   `r` explicitly.
+
+## Comparison to Existing Coil Topics
+
+| Method                       | Input                  | Best For                         |
+|------------------------------|------------------------|----------------------------------|
+| `helix` (analytical)         | radius, pitch, turns   | Regular cylindrical solenoid     |
+| `coil_from_polyline` (this)  | discrete 3D points     | Measured/optimized free-form path |
+| `radia.coil_from_cad`        | existing STEP CAD      | Reverse-engineering filament from CAD |
+| `radia.coil_builder`         | analytical primitives  | Beam-optics-style design (straight + arc) |
+
+## Downstream Consumers (after STEP export)
+
+Once the lofted coil is exported to STEP (`export step "coil.step"
+overwrite`), it feeds two production paths in this codebase:
+
+### A. Radia PEEC (filament-based circuit extraction)
+
+```python
+from radia.coil_from_cad import extract_centerline_from_step
+from radia.peec_topology import PEECBuilder, PEECCircuitSolver
+
+path_m, w_m, h_m = extract_centerline_from_step("coil.step")  # CAD mm -> m
+b = PEECBuilder()
+prev = b.add_node_at(*path_m[0])
+for p, w, h in zip(path_m[1:], w_m[1:], h_m[1:]):
+    nxt = b.add_node_at(*p)
+    b.add_connected_segment(prev, nxt, w, h, sigma=5.8e7,
+                            nwinc=3, nhinc=3)
+    prev = nxt
+b.add_port(b.nodes[0], b.nodes[-1])
+solver = PEECCircuitSolver(b.build_topology())
+Z = solver.compute_port_impedance(freq=1e6)        # R + jωL
+```
+
+`extract_centerline_from_step` 5-Path dispatch picks the right spine
+recovery for closed-torus / multi-loft / per-station-faces / lofted
+section solids — including the topology produced by this algorithm.
+
+### B. BEM-A (port-driven self-inductance via ngsolve.bem)
+
+```python
+from radia.bem.coil_inductance_ngsolve import compute_inductance_source_sink
+from ngsolve import Mesh
+# Mesh must have BND labels "source" and "sink" on the two terminal faces.
+# In Cubit:
+#   sideset 1 add surface <source_face_id>;  sideset 1 name "source"
+#   sideset 2 add surface <sink_face_id>;    sideset 2 name "sink"
+#   radia_export netgen "coil.vol" overwrite
+mesh = Mesh("coil.vol")
+res = compute_inductance_source_sink(
+    mesh, source_label="source", sink_label="sink",
+    Z_s_re=1.0/(5.8e7 * 9.3e-5),  # 1/(σ·δ) at 50 kHz Cu, optional AC SIBC
+)
+print("L =", res["L"], "H,  R =", res["R"], "Ω")
+```
+
+**Critical: BEM-A requires terminal faces.**
+- *Open-ended path* (`r[0] != r[N-1]`): the two end-cap faces of the
+  lofted solid are the natural source/sink. Tag them before meshing.
+- *Closed loop* (`r[N-1] ≈ r[0]`): the solid has no end faces. Either
+  (a) leave a small gap in the polyline (skip one wrap station) so two
+  cap faces appear and label them, or (b) cut a thin slice
+  perpendicular to the path post-loft and label the two new faces.
+  PEEC has no equivalent constraint — it can drive a closed loop via a
+  port between any two interior nodes.
+
+| Pipeline | Input from STEP    | Output                | Use when                  |
+|----------|--------------------|-----------------------|---------------------------|
+| PEEC     | centerline + (w,h) | R + jωL, SPICE / Z(f) | DC-1 MHz, multi-port, MOR |
+| BEM-A    | surface mesh + source/sink labels | L (+ optional AC R) | high-fidelity self-L on free-form paths |
+"""
+
 CUBIT_VISUALIZATION = """\
 # Visualization and Display Commands
 
@@ -4031,6 +4272,12 @@ def get_cubit_documentation(topic: str = "all") -> str:
 		"helix_coil": CUBIT_HELIX_COIL,
 		"helix": CUBIT_HELIX_COIL,  # alias
 		"coil": CUBIT_HELIX_COIL,  # alias
+		"coil_from_polyline": CUBIT_COIL_FROM_POLYLINE,
+		"polyline_coil": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"centerline_coil": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"coil_from_points": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"frame_sweep": CUBIT_COIL_FROM_POLYLINE,  # alias
+		"cross_section_loft": CUBIT_COIL_FROM_POLYLINE,  # alias
 		"visualization": CUBIT_VISUALIZATION,
 		"display": CUBIT_VISUALIZATION,  # alias
 		"pyramid_handling": CUBIT_PYRAMID_HANDLING,

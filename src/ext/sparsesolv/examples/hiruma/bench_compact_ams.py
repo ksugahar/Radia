@@ -22,7 +22,7 @@ import numpy as np
 # TODO: Replace ReadGmsh with Mesh(.vol) when .vol files are generated
 from netgen.read_gmsh import ReadGmsh
 from ngsolve import *
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 
 # Physical parameters (match Hiruma SA-26-001)
 mu0 = 4e-7 * np.pi

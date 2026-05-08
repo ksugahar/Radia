@@ -2017,9 +2017,16 @@ def export_filaments_msh(filament_paths, output_msh, *,
             nodes.append(key)
         return node_map[key]
 
-    # Per-filament physical groups
+    # Per-filament physical groups.  Element tags start at a high
+    # offset so the filament lines don't collide with the volume-mesh
+    # element tags when GMSH merges this file as a sibling overlay
+    # (open_gmsh.py auto-merge).  Without the offset, GMSH's merge
+    # warns "Skipping duplicate element N" for every line and silently
+    # DROPS the filament geometry, leaving the panel user with an
+    # empty filament view.
     n_fil = len(filament_paths)
-    elem_tag = 0
+    ELEM_TAG_OFFSET = 10_000_000
+    elem_tag = ELEM_TAG_OFFSET
     fil_of_node = {}  # node_id -> filament index (for current assignment)
 
     for k, path in enumerate(filament_paths):
@@ -2071,7 +2078,10 @@ def export_filaments_msh(filament_paths, output_msh, *,
         for (tag, phys, n1, n2) in elements:
             elems_by_fil[phys - 1].append((tag, n1, n2))
 
-        f.write(f"{n_fil} {n_elems} 1 {elem_tag}\n")
+        # GMSH 4.1: numEntityBlocks numElements minTag maxTag
+        min_tag = ELEM_TAG_OFFSET + 1
+        max_tag = elem_tag  # last assigned
+        f.write(f"{n_fil} {n_elems} {min_tag} {max_tag}\n")
         for k in range(n_fil):
             es = elems_by_fil[k]
             # dim=1, entityTag=k+1, elemType=1 (2-node line), numElems

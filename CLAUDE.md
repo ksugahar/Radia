@@ -26,7 +26,7 @@ S:\Radia\01_GitHub\
   src/core/               # C++ source
   src/ext/
     HACApK_LH-Cimplm/    # H-matrix library (MIT)
-    sparsesolv/           # Compact AMS/COCR (source, build is separate PyPI)
+    sparsesolv/           # Compact AMS/COCR (built into radia wheel, exposed as radia.sparsesolv_ngsolve)
   packages/
     cubit-mesh-export/    # Independent PyPI package (pip install cubit-mesh-export)
       src/cubit_mesh_export/
@@ -1477,14 +1477,34 @@ Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
 
 ---
 
-## Compact HX Preconditioner (ngsolve.la)
+## Compact HX Preconditioner (radia.sparsesolv_ngsolve)
 
-Compact AMS/AMG/COCR types are in `ngsolve.la`. Source: `src/ext/sparsesolv/` (monorepo integrated).
-Import: `from ngsolve.la import CompactAMSPreconditioner, COCRSolver`
+Compact AMS/AMG/COCR types live in the `radia.sparsesolv_ngsolve` submodule.
+Source: `src/ext/sparsesolv/` (monorepo integrated).
+The `.pyd` is built by Build.ps1 via `add_ngsolve_python_module(sparsesolv_ngsolve ...)`
+and shipped inside the radia wheel at `src/radia/sparsesolv_ngsolve.pyd`.
+
+Import:
+```python
+import radia.sparsesolv_ngsolve as ssn
+from radia.sparsesolv_ngsolve import (
+    CompactAMSPreconditioner,
+    ComplexCompactAMSPreconditioner,
+    COCRSolver,
+    SparseSolvSolver,
+)
+```
+
+(History: 2026-05 the standalone `ngsolve-sparsesolv` PyPI package was
+retired and absorbed into the Radia wheel. The top-level
+`import sparsesolv_ngsolve` no longer resolves — always use
+`radia.sparsesolv_ngsolve`. An earlier CLAUDE.md draft described these
+symbols as living in `ngsolve.la`; that integration was aspirational
+and never landed.)
 
 ### Policy: Compact HX for HCurl Problems
 
-**POLICY**: Use **Compact HX** (Compact Hiptmair-Xu) as the default preconditioner for HCurl curl-curl + mass systems. Compact HX is a HYPRE-free, TaskManager-native AMS implementation available via `ngsolve.la`.
+**POLICY**: Use **Compact HX** (Compact Hiptmair-Xu) as the default preconditioner for HCurl curl-curl + mass systems. Compact HX is a HYPRE-free, TaskManager-native AMS implementation available via `radia.sparsesolv_ngsolve`.
 
 **Name origin**: HX = Hiptmair-Xu (2007), "Nodal auxiliary space preconditioning in H(curl) and H(div) spaces", SIAM J. Numer. Anal. 45(6). "Compact" = lightweight, HYPRE-free, TaskManager-native.
 
