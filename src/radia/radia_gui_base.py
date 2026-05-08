@@ -522,6 +522,8 @@ class AnalysisWindow(QMainWindow):
         self._vol_edit = QLineEdit(vol_path)
         self._vol_edit.setPlaceholderText(
             ".vol file (exported from Cubit or Netgen)")
+        self._vol_edit.editingFinished.connect(
+            lambda: self._on_vol_changed(self._vol_edit.text()))
         model_row.addWidget(self._vol_edit, 1)
         browse_btn = QPushButton("Browse...")
         browse_btn.clicked.connect(self._browse_vol)
@@ -596,6 +598,14 @@ class AnalysisWindow(QMainWindow):
             "Netgen Vol (*.vol);;All (*)")
         if path:
             self._vol_edit.setText(path)
+            self._on_vol_changed(path)
+
+    def _on_vol_changed(self, path):
+        """Hook for subclasses to re-inspect the .vol after the user
+        changes the path (Browse... or manual edit).  Default: no-op.
+        Subclasses that depend on .vol contents (label-driven Run-enable)
+        must override and refresh both panel state and run-state."""
+        pass
 
     def _update_run_state(self):
         if self._process is not None:
