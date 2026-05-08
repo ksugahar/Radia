@@ -3008,15 +3008,32 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("K"), py::arg("chi"), py::arg("f_k_tables"),
           py::arg("eps") = 1e-8,
           R"pbdoc(
-              Create energy-based vector hysteresis material with table-based shape functions.
+              Create energy-based vector hysteresis material (Type 5).
+
+              Refactor 2026-05-XX: Type 5 is now a thin subclass of Type 6
+              (radTPlayHysteresisMaterial). The original Schur-complement
+              Newton implementation (Henrotte-Egger formulation with
+              per-hysteron J_k as variables) is structurally incompatible
+              with Potter B-input shape functions (sign-indefinite per-k
+              Hessian). The current implementation uses Type 6's 3D Newton
+              with analytical Jacobian on F(B)=H(B)-H_target=0 in O(K) per
+              element, while preserving the energy formulation
+              W(B) = (1/2) nu_rev |B|^2 + sum_k G_k(|p_k|) as a property.
 
               Args:
                   K: Number of partial polarizations (play operators)
-                  chi: Pinning strengths chi_k [A/m], array of K values
-                  f_k_tables: List of K tuples (r_array, f_array), shape function tables.
-                      r_array: |J| grid points [0, r_max], monotonically increasing.
-                      f_array: f_k(r) = U_k'(r) shape function values.
-                  eps: Regularization parameter (default 1e-8)
+                  chi: Play thresholds chi_k = eta_k [Tesla], array of K
+                      values. The "chi" naming is retained for API
+                      compatibility; numerically these are the Play
+                      thresholds eta_k from Hane-Sugahara identification.
+                  f_k_tables: List of K tuples (r_array, f_array), shape
+                      function tables.
+                      r_array: |p| grid points [0, r_max], monotonically increasing.
+                      f_array: f_k(|p|) shape function values (can be
+                          negative for k >= 1 by Potter loop closure).
+                  eps: Retained for ABI compatibility, unused. The
+                      Bergqvist regularization |x|_eps had no role in the
+                      rev/irrev separated formulation.
 
               Returns:
                   Material handle

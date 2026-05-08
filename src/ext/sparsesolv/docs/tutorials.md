@@ -15,7 +15,7 @@ import ngsolve
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
-from sparsesolv_ngsolve import ICPreconditioner
+from radia.sparsesolv_ngsolve import ICPreconditioner
 
 # Mesh generation
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
@@ -92,7 +92,7 @@ import ngsolve
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
-from sparsesolv_ngsolve import ICPreconditioner
+from radia.sparsesolv_ngsolve import ICPreconditioner
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -174,7 +174,7 @@ import ngsolve
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
-from sparsesolv_ngsolve import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -237,7 +237,7 @@ import ngsolve
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
-from sparsesolv_ngsolve import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -305,7 +305,7 @@ import ngsolve
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -367,7 +367,7 @@ print(f"AMS+CG: setup={t_setup:.3f}s, solve={t_solve:.3f}s, "
 行列依存部分のみを再構築します。
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 from netgen.occ import Box, Pnt
@@ -454,7 +454,7 @@ import time
 import ngsolve
 from ngsolve import *
 from netgen.occ import Box, Pnt
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 
 # --- Mesh ---
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))

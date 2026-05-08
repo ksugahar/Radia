@@ -4,7 +4,7 @@
 
 ```python
 import ngsolve  # Must be imported first (loads shared libraries)
-from sparsesolv_ngsolve import (
+from radia.sparsesolv_ngsolve import (
     # Preconditioners (IC)
     ICPreconditioner,      # Incomplete Cholesky preconditioner
 
@@ -203,7 +203,7 @@ pre = CompactAMSPreconditioner(
 ### 使用例
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 
@@ -286,7 +286,7 @@ pre = ComplexCompactAMSPreconditioner(
 ### 使用例
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 
 pre = ssn.ComplexCompactAMSPreconditioner(
     a_real_mat=a_real.mat, grad_mat=G_mat,
@@ -342,7 +342,7 @@ COCR（Conjugate Orthogonal Conjugate Residual）ソルバー。ネイティブC
 NGSolveの `CGSolver` と同じインタフェース。AMS前処理等と組み合わせて使用する。
 
 ```python
-import sparsesolv_ngsolve
+import radia.sparsesolv_ngsolve as sparsesolv_ngsolve
 
 inv = sparsesolv_ngsolve.COCRSolver(mat, pre, freedofs=fes.FreeDofs(),
                                     maxiter=500, tol=1e-8, printrates=False)
@@ -433,7 +433,7 @@ print(f"GMRES converged in {inv.iterations} iterations")
 ### 使用例
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve.krylovspace import CGSolver
 
 # IC preconditioner + GMRES
@@ -475,7 +475,7 @@ pre = CompactAMGPreconditioner(mat, freedofs=None,
 ### 使用例
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve.krylovspace import CGSolver
 
 pre = ssn.CompactAMGPreconditioner(a.mat, freedofs=fes.FreeDofs())

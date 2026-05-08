@@ -2179,6 +2179,111 @@ the sign convention is now unified across both mesh sources.
 """
 
 
+KELVIN_KAMEARI_CANONICAL = """
+# Kameari Canonical Pattern: Boundary-Integral Source Injection (2026-05-05)
+
+Reference: Kameari (2025/10/14 slides), W:/00_CAE/NGSolve/亀有/4-05.pdf,
+"Electromagnetic Analyses Using Higher Order Hierarchic Finite Elements".
+
+## Key Insight
+
+Kelvin transformation in NGSolve is a PROVEN, HIGH-ACCURACY technique when
+properly formulated. The critical distinction:
+
+- WRONG (historical v11-v14): "(nu - nu_0) bulk source" reduced-A form.
+  The (nu - nu_0) simplification requires A_s to satisfy nu_0 Maxwell
+  globally, but the Kelvin pullback satisfies the metric-dependent nu'
+  Maxwell instead. This caused +43% inductance error.
+
+- CORRECT (Kameari canonical): Source coupling via BOUNDARY INTEGRAL on the
+  inner-Kelvin interface dOmega, NOT via volume integral with (nu - nu_0).
+
+## Three Canonical Reductions (Kameari slide 4)
+
+| Method   | Inner region      | Outer (Kelvin) region  | Use case                     |
+|----------|-------------------|------------------------|------------------------------|
+| Omega-Omega_r | H = -grad(Omega_t) | H = -grad(Omega_r) + H_s | Linear magnetic, scalar |
+| A-Omega_r | B = curl(A_t)   | H = -grad(Omega_r) + H_s | ** Recommended: sphere/cuboid |
+| A-A_r    | B = curl(A_t)     | B = curl(A_r + A_s)    | Vector source / coil         |
+| A-phi-A_r | A_t, phi in cond | A_r in air/Kelvin      | Eddy current (TEAM Problem 7)|
+
+## Weak Forms (Kameari slides 7-9)
+
+```python
+# A-Omega_r (slide 8): vector A in conductor/inner, scalar Omega_r in Kelvin
+# Bulk terms:
+a += 1/mu * curl(N) * curl(A) * dx           # inner + Kelvin regions
+a += mu * grad(omega) * grad(Omega_r) * dx   # Kelvin region only
+
+# Source coupling via BOUNDARY INTEGRAL at inner-Kelvin interface dOmega:
+f += N.Trace() * Cross(H_s, n) * ds("kelvin_int")   # A side
+f += -omega.Trace() * (B_s * n) * ds("kelvin_int")  # Omega_r side
+```
+
+The applied field (H_s or B_s) enters via a boundary integral on the interface
+between inner physical region and Kelvin region -- NOT in the bulk volume.
+
+## Performance (Kameari slide 17)
+
+Magnetic sphere a=1m, mu_r=1000, B_0=1T, analytical Bz0=2.9940 T, COARSE mesh:
+
+| Method     | Order | Bz0    | Error  |
+|------------|-------|--------|--------|
+| Omega-Omega_r | 2  | 3.3813 | 12.9%  |
+| Omega-Omega_r | 3  | 2.9995 | 0.184% |
+| Omega-Omega_r | 4  | 2.9985 | 0.029% |
+| A-A_r      | 3     | 2.9928 | 0.040% |
+| A-Omega_r  | 3     | 2.9940 | **0.001%** (best) |
+
+A-Omega_r Order 3 achieves sub-0.01% error on a coarse mesh.
+
+## Independence from Kelvin Radius rk (Kameari slide 18)
+
+rk = 100 (very large Kelvin sphere) gives the SAME accuracy as small rk
+with adaptive refinement. The Kelvin region size is a FREE parameter --
+no tuning needed.
+
+## Practical Recommendation
+
+For "isolated conductor + applied uniform B" problems:
+- Use Kameari A-Omega_r with Order >= 3 and boundary-integral source
+- Do NOT use (nu - nu_0) bulk source (the "reduced-A" pattern from pre-2026 code)
+- The boundary integral at kelvin_int replaces all volume-source terms
+
+For eddy current with external conductors (TEAM Problem 7):
+- Use A-phi-A_r (slide 25): A + phi inside conductor, A_r in Kelvin region
+- Proved in TEAM Workshop Problem 7 computations
+
+## NGSolve Implementation Sketch (A-Omega_r)
+
+```python
+from ngsolve import *
+
+# Two FE spaces: HCurl inside + Kelvin, H1 (Kelvin only)
+fesA = HCurl(mesh, order=3, dirichlet="<conductor_bcs>")
+fesO = H1(mesh, order=3, definedon=mesh.Materials("kelvin"),
+          dirichlet_bbnd="GND")
+fes = fesA * fesO
+(A, Omega_r), (N, omega) = fes.TnT()
+
+mu_cf = mesh.MaterialCF({"inner": mu_0, "kelvin": (R/rho_p)**2 * mu_0})
+nu_cf = mesh.MaterialCF({"inner": nu_0, "kelvin": (rho_p/R)**2 * nu_0})
+
+a = BilinearForm(fes)
+a += 1/mu_cf * curl(N) * curl(A) * dx
+a += nu_cf * grad(omega) * grad(Omega_r) * dx("kelvin")
+
+f = LinearForm(fes)
+# Boundary-integral source (NOT bulk (nu - nu_0) term)
+f += N.Trace() * Cross(H_s_vec, specialcf.normal(3)) * ds("kelvin_int")
+f += -omega.Trace() * (B_s_vec * specialcf.normal(3)) * ds("kelvin_int")
+```
+
+See docs/kelvin/KELVIN_TRANSFORMATION.md §7.4.1 for full derivation.
+See docs/cln/CAUER_LADDER_NETWORK.md §6.4.1 for CLN + Kelvin specifics.
+"""
+
+
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
     topics = {
@@ -2198,6 +2303,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "radia_source_helpers": KELVIN_RADIA_SOURCE_HELPERS,
         "source_in_omega_form": KELVIN_SOURCE_IN_OMEGA_FORM,
         "benchmark_panel": KELVIN_BENCHMARK_PANEL,
+        "kameari_canonical": KELVIN_KAMEARI_CANONICAL,
     }
 
     topic = topic.lower().strip()

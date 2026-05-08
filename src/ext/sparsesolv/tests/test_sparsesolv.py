@@ -16,8 +16,8 @@ import pytest
 from netgen.geom2d import unit_square
 from netgen.csg import unit_cube
 from ngsolve import *
-from sparsesolv_ngsolve import ICPreconditioner
-from sparsesolv_ngsolve import SparseSolvSolver
+from radia.sparsesolv_ngsolve import ICPreconditioner
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 from ngsolve.krylovspace import CGSolver
 
 
@@ -1055,7 +1055,7 @@ class TestCOCRSolverStandalone:
 
     def test_cocr_complex_solve(self, eddy_current_3d):
         """COCRSolver converges on complex-symmetric eddy current problem."""
-        from sparsesolv_ngsolve import COCRSolver
+        from radia.sparsesolv_ngsolve import COCRSolver
 
         mesh, fes, a, f = eddy_current_3d
 
@@ -1070,7 +1070,7 @@ class TestCOCRSolverStandalone:
 
     def test_cocr_with_freedofs(self, eddy_current_3d):
         """COCRSolver works with freedofs parameter."""
-        from sparsesolv_ngsolve import COCRSolver
+        from radia.sparsesolv_ngsolve import COCRSolver
 
         mesh, fes, a, f = eddy_current_3d
 
@@ -1091,7 +1091,7 @@ class TestGMRESSolver:
 
     def test_gmres_basic_solve(self):
         """GMRESSolver solves a non-symmetric system (convection-diffusion)."""
-        from sparsesolv_ngsolve import GMRESSolver
+        from radia.sparsesolv_ngsolve import GMRESSolver
 
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
         fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -1119,7 +1119,7 @@ class TestGMRESSolver:
 
     def test_gmres_with_preconditioner(self):
         """GMRESSolver works with IC preconditioner."""
-        from sparsesolv_ngsolve import GMRESSolver
+        from radia.sparsesolv_ngsolve import GMRESSolver
 
         mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
         fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -1151,13 +1151,13 @@ class TestCompactAMG:
 
     @pytest.fixture
     def has_amg(self):
-        from sparsesolv_ngsolve import has_compact_ams
+        from radia.sparsesolv_ngsolve import has_compact_ams
         if not has_compact_ams():
             pytest.skip("CompactAMG not available")
 
     def test_compact_amg_basic(self, has_amg):
         """CompactAMG + CG solves 3D Poisson."""
-        from sparsesolv_ngsolve import CompactAMGPreconditioner
+        from radia.sparsesolv_ngsolve import CompactAMGPreconditioner
 
         mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
         fes = H1(mesh, order=1, dirichlet="left|right|top|bottom|front|back")
@@ -1194,7 +1194,7 @@ class TestCompactAMS:
 
     @pytest.fixture
     def has_ams(self):
-        from sparsesolv_ngsolve import has_compact_ams
+        from radia.sparsesolv_ngsolve import has_compact_ams
         if not has_compact_ams():
             pytest.skip("CompactAMS not available")
 
@@ -1222,7 +1222,7 @@ class TestCompactAMS:
 
     def test_compact_ams_basic(self, has_ams, curl_curl_3d):
         """CompactAMS + CG solves curl-curl + mass system."""
-        from sparsesolv_ngsolve import CompactAMSPreconditioner
+        from radia.sparsesolv_ngsolve import CompactAMSPreconditioner
 
         mesh, fes, a, f = curl_curl_3d
 
@@ -1255,7 +1255,7 @@ class TestCompactAMS:
 
     def test_compact_ams_update(self, has_ams, curl_curl_3d):
         """CompactAMS Update() preserves solution quality."""
-        from sparsesolv_ngsolve import CompactAMSPreconditioner
+        from radia.sparsesolv_ngsolve import CompactAMSPreconditioner
 
         mesh, fes, a, f = curl_curl_3d
 
@@ -1300,13 +1300,13 @@ class TestComplexCompactAMS:
 
     @pytest.fixture
     def has_ams(self):
-        from sparsesolv_ngsolve import has_compact_ams
+        from radia.sparsesolv_ngsolve import has_compact_ams
         if not has_compact_ams():
             pytest.skip("ComplexCompactAMS not available")
 
     def test_complex_ams_basic(self, has_ams, eddy_current_3d):
         """ComplexCompactAMS + COCR solves eddy current problem."""
-        from sparsesolv_ngsolve import ComplexCompactAMSPreconditioner, COCRSolver
+        from radia.sparsesolv_ngsolve import ComplexCompactAMSPreconditioner, COCRSolver
 
         mesh, fes, a, f = eddy_current_3d
         u, v = fes.TnT()
@@ -1339,7 +1339,7 @@ class TestComplexCompactAMS:
 
     def test_complex_ams_ndof_auto(self, has_ams, eddy_current_3d):
         """ComplexCompactAMS with ndof_complex=0 auto-derives from matrix."""
-        from sparsesolv_ngsolve import ComplexCompactAMSPreconditioner
+        from radia.sparsesolv_ngsolve import ComplexCompactAMSPreconditioner
 
         mesh, fes, a, f = eddy_current_3d
 

@@ -134,7 +134,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | Triple-package release workflow for the Radia monorepo |
-| `sparsesolv` | Get sparsesolv documentation and code examples (now in ngsolve.la). |
+| `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
 
 ## `mcp-server-gmsh`

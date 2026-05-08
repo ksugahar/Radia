@@ -73,12 +73,17 @@ def main(argv):
 
         # Auto-merge sibling overlay files written by calc_*.py:
         #   <stem>_filaments.msh  : PEEC filament 1D lines + |I|
-        #                            (see calc_inductance.py --coil-solver peec)
-        # This lets a single Open GMSH click show both the bbox B
-        # field AND the filament currents in one window without
-        # the user having to "File -> Merge..." manually.
+        #                            (calc_inductance.py --coil-solver peec)
+        #   <stem>_wp_surface.msh : workpiece surface mesh from wp BEM solve
+        #   <stem>_wp.msh         : ditto, alternate naming
+        #   <stem>_surface.msh    : generic surface mesh overlay
+        # This lets a single Open GMSH click show all relevant overlays
+        # (B field on bbox + filament currents + wp surface) in one
+        # window without the user having to "File -> Merge..." manually.
         stem, ext = os.path.splitext(msh_path)
-        for suffix in ("_filaments.msh",):
+        merge_suffixes = ("_filaments.msh", "_wp_surface.msh",
+                          "_wp.msh", "_surface.msh")
+        for suffix in merge_suffixes:
             sibling = stem + suffix
             if os.path.isfile(sibling):
                 try:

@@ -1167,408 +1167,28 @@ create surface circle radius 0.003150000 zplane
 rotate Surface 383 angle 180.00000000 about origin 0 0 0 direction 0.70710678 0.00000000 0.70710678 include_merged
 move Surface 383 x 0.129428679 y 0.012500000 z 0.010000000 include_merged
 
-create volume loft surface 1 2
-create volume loft surface 2 3
-create volume loft surface 3 4
-create volume loft surface 4 5
-create volume loft surface 5 6
-create volume loft surface 6 7
-create volume loft surface 7 8
-create volume loft surface 8 9
-create volume loft surface 9 10
-create volume loft surface 10 11
-create volume loft surface 11 12
-create volume loft surface 12 13
-create volume loft surface 13 14
-create volume loft surface 14 15
-create volume loft surface 15 16
-create volume loft surface 16 17
-create volume loft surface 17 18
-create volume loft surface 18 19
-create volume loft surface 19 20
-create volume loft surface 20 21
-create volume loft surface 21 22
-create volume loft surface 22 23
-create volume loft surface 23 24
-create volume loft surface 24 25
-create volume loft surface 25 26
-create volume loft surface 26 27
-create volume loft surface 27 28
-create volume loft surface 28 29
-create volume loft surface 29 30
-create volume loft surface 30 31
-create volume loft surface 31 32
-create volume loft surface 32 33
-create volume loft surface 33 34
-create volume loft surface 34 35
-create volume loft surface 35 36
-create volume loft surface 36 37
-create volume loft surface 37 38
-create volume loft surface 38 39
-create volume loft surface 39 40
-create volume loft surface 40 41
-create volume loft surface 41 42
-create volume loft surface 42 43
-create volume loft surface 43 44
-create volume loft surface 44 45
-create volume loft surface 45 46
-create volume loft surface 46 47
-create volume loft surface 47 48
-create volume loft surface 48 49
-create volume loft surface 49 50
-create volume loft surface 50 51
-create volume loft surface 51 52
-create volume loft surface 52 53
-create volume loft surface 53 54
-create volume loft surface 54 55
-create volume loft surface 55 56
-create volume loft surface 56 57
-create volume loft surface 57 58
-create volume loft surface 58 59
-create volume loft surface 59 60
-create volume loft surface 60 61
-create volume loft surface 61 62
-create volume loft surface 62 63
-create volume loft surface 63 64
-create volume loft surface 64 65
-create volume loft surface 65 66
-create volume loft surface 66 67
-create volume loft surface 67 68
-create volume loft surface 68 69
-create volume loft surface 69 70
-create volume loft surface 70 71
-create volume loft surface 71 72
-create volume loft surface 72 73
-create volume loft surface 73 74
-create volume loft surface 74 75
-create volume loft surface 75 76
-create volume loft surface 76 77
-create volume loft surface 77 78
-create volume loft surface 78 79
-create volume loft surface 79 80
-create volume loft surface 80 81
-create volume loft surface 81 82
-create volume loft surface 82 83
-create volume loft surface 83 84
-create volume loft surface 84 85
-create volume loft surface 85 86
-create volume loft surface 86 87
-create volume loft surface 87 88
-create volume loft surface 88 89
-create volume loft surface 89 90
-create volume loft surface 90 91
-create volume loft surface 91 92
-create volume loft surface 92 93
-create volume loft surface 93 94
-create volume loft surface 94 95
-create volume loft surface 95 96
-create volume loft surface 96 97
-create volume loft surface 97 98
-create volume loft surface 98 99
-create volume loft surface 99 100
-create volume loft surface 100 101
-create volume loft surface 101 102
-create volume loft surface 102 103
-create volume loft surface 103 104
-create volume loft surface 104 105
-create volume loft surface 105 106
-create volume loft surface 106 107
-create volume loft surface 107 108
-create volume loft surface 108 109
-create volume loft surface 109 110
-create volume loft surface 110 111
-create volume loft surface 111 112
-create volume loft surface 112 113
-create volume loft surface 113 114
-create volume loft surface 114 115
-create volume loft surface 115 116
-create volume loft surface 116 117
-create volume loft surface 117 118
-create volume loft surface 118 119
-create volume loft surface 119 120
-create volume loft surface 120 121
-create volume loft surface 121 122
-create volume loft surface 122 123
-create volume loft surface 123 124
-create volume loft surface 124 125
-create volume loft surface 125 126
-create volume loft surface 126 127
-create volume loft surface 127 128
-create volume loft surface 128 129
-create volume loft surface 129 130
-create volume loft surface 130 131
-create volume loft surface 131 132
-create volume loft surface 132 133
-create volume loft surface 133 134
-create volume loft surface 134 135
-create volume loft surface 135 136
-create volume loft surface 136 137
-create volume loft surface 137 138
-create volume loft surface 138 139
-create volume loft surface 139 140
-create volume loft surface 140 141
-create volume loft surface 141 142
-create volume loft surface 142 143
-create volume loft surface 143 144
-create volume loft surface 144 145
-create volume loft surface 145 146
-create volume loft surface 146 147
-create volume loft surface 147 148
-create volume loft surface 148 149
-create volume loft surface 149 150
-create volume loft surface 150 151
-create volume loft surface 151 152
-create volume loft surface 152 153
-create volume loft surface 153 154
-create volume loft surface 154 155
-create volume loft surface 155 156
-create volume loft surface 156 157
-create volume loft surface 157 158
-create volume loft surface 158 159
-create volume loft surface 159 160
-create volume loft surface 160 161
-create volume loft surface 161 162
-create volume loft surface 162 163
-create volume loft surface 163 164
-create volume loft surface 164 165
-create volume loft surface 165 166
-create volume loft surface 166 167
-create volume loft surface 167 168
-create volume loft surface 168 169
-create volume loft surface 169 170
-create volume loft surface 170 171
-create volume loft surface 171 172
-create volume loft surface 172 173
-create volume loft surface 173 174
-create volume loft surface 174 175
-create volume loft surface 175 176
-create volume loft surface 176 177
-create volume loft surface 177 178
-create volume loft surface 178 179
-create volume loft surface 179 180
-create volume loft surface 180 181
-create volume loft surface 181 182
-create volume loft surface 182 183
-create volume loft surface 183 184
-create volume loft surface 184 185
-create volume loft surface 185 186
-create volume loft surface 186 187
-create volume loft surface 187 188
-create volume loft surface 188 189
-create volume loft surface 189 190
-create volume loft surface 190 191
-create volume loft surface 191 192
-create volume loft surface 192 193
-create volume loft surface 193 194
-create volume loft surface 194 195
-create volume loft surface 195 196
-create volume loft surface 196 197
-create volume loft surface 197 198
-create volume loft surface 198 199
-create volume loft surface 199 200
-create volume loft surface 200 201
-create volume loft surface 201 202
-create volume loft surface 202 203
-create volume loft surface 203 204
-create volume loft surface 204 205
-create volume loft surface 205 206
-create volume loft surface 206 207
-create volume loft surface 207 208
-create volume loft surface 208 209
-create volume loft surface 209 210
-create volume loft surface 210 211
-create volume loft surface 211 212
-create volume loft surface 212 213
-create volume loft surface 213 214
-create volume loft surface 214 215
-create volume loft surface 215 216
-create volume loft surface 216 217
-create volume loft surface 217 218
-create volume loft surface 218 219
-create volume loft surface 219 220
-create volume loft surface 220 221
-create volume loft surface 221 222
-create volume loft surface 222 223
-create volume loft surface 223 224
-create volume loft surface 224 225
-create volume loft surface 225 226
-create volume loft surface 226 227
-create volume loft surface 227 228
-create volume loft surface 228 229
-create volume loft surface 229 230
-create volume loft surface 230 231
-create volume loft surface 231 232
-create volume loft surface 232 233
-create volume loft surface 233 234
-create volume loft surface 234 235
-create volume loft surface 235 236
-create volume loft surface 236 237
-create volume loft surface 237 238
-create volume loft surface 238 239
-create volume loft surface 239 240
-create volume loft surface 240 241
-create volume loft surface 241 242
-create volume loft surface 242 243
-create volume loft surface 243 244
-create volume loft surface 244 245
-create volume loft surface 245 246
-create volume loft surface 246 247
-create volume loft surface 247 248
-create volume loft surface 248 249
-create volume loft surface 249 250
-create volume loft surface 250 251
-create volume loft surface 251 252
-create volume loft surface 252 253
-create volume loft surface 253 254
-create volume loft surface 254 255
-create volume loft surface 255 256
-create volume loft surface 256 257
-create volume loft surface 257 258
-create volume loft surface 258 259
-create volume loft surface 259 260
-create volume loft surface 260 261
-create volume loft surface 261 262
-create volume loft surface 262 263
-create volume loft surface 263 264
-create volume loft surface 264 265
-create volume loft surface 265 266
-create volume loft surface 266 267
-create volume loft surface 267 268
-create volume loft surface 268 269
-create volume loft surface 269 270
-create volume loft surface 270 271
-create volume loft surface 271 272
-create volume loft surface 272 273
-create volume loft surface 273 274
-create volume loft surface 274 275
-create volume loft surface 275 276
-create volume loft surface 276 277
-create volume loft surface 277 278
-create volume loft surface 278 279
-create volume loft surface 279 280
-create volume loft surface 280 281
-create volume loft surface 281 282
-create volume loft surface 282 283
-create volume loft surface 283 284
-create volume loft surface 284 285
-create volume loft surface 285 286
-create volume loft surface 286 287
-create volume loft surface 287 288
-create volume loft surface 288 289
-create volume loft surface 289 290
-create volume loft surface 290 291
-create volume loft surface 291 292
-create volume loft surface 292 293
-create volume loft surface 293 294
-create volume loft surface 294 295
-create volume loft surface 295 296
-create volume loft surface 296 297
-create volume loft surface 297 298
-create volume loft surface 298 299
-create volume loft surface 299 300
-create volume loft surface 300 301
-create volume loft surface 301 302
-create volume loft surface 302 303
-create volume loft surface 303 304
-create volume loft surface 304 305
-create volume loft surface 305 306
-create volume loft surface 306 307
-create volume loft surface 307 308
-create volume loft surface 308 309
-create volume loft surface 309 310
-create volume loft surface 310 311
-create volume loft surface 311 312
-create volume loft surface 312 313
-create volume loft surface 313 314
-create volume loft surface 314 315
-create volume loft surface 315 316
-create volume loft surface 316 317
-create volume loft surface 317 318
-create volume loft surface 318 319
-create volume loft surface 319 320
-create volume loft surface 320 321
-create volume loft surface 321 322
-create volume loft surface 322 323
-create volume loft surface 323 324
-create volume loft surface 324 325
-create volume loft surface 325 326
-create volume loft surface 326 327
-create volume loft surface 327 328
-create volume loft surface 328 329
-create volume loft surface 329 330
-create volume loft surface 330 331
-create volume loft surface 331 332
-create volume loft surface 332 333
-create volume loft surface 333 334
-create volume loft surface 334 335
-create volume loft surface 335 336
-create volume loft surface 336 337
-create volume loft surface 337 338
-create volume loft surface 338 339
-create volume loft surface 339 340
-create volume loft surface 340 341
-create volume loft surface 341 342
-create volume loft surface 342 343
-create volume loft surface 343 344
-create volume loft surface 344 345
-create volume loft surface 345 346
-create volume loft surface 346 347
-create volume loft surface 347 348
-create volume loft surface 348 349
-create volume loft surface 349 350
-create volume loft surface 350 351
-create volume loft surface 351 352
-create volume loft surface 352 353
-create volume loft surface 353 354
-create volume loft surface 354 355
-create volume loft surface 355 356
-create volume loft surface 356 357
-create volume loft surface 357 358
-create volume loft surface 358 359
-create volume loft surface 359 360
-create volume loft surface 360 361
-create volume loft surface 361 362
-create volume loft surface 362 363
-create volume loft surface 363 364
-create volume loft surface 364 365
-create volume loft surface 365 366
-create volume loft surface 366 367
-create volume loft surface 367 368
-create volume loft surface 368 369
-create volume loft surface 369 370
-create volume loft surface 370 371
-create volume loft surface 371 372
-create volume loft surface 372 373
-create volume loft surface 373 374
-create volume loft surface 374 375
-create volume loft surface 375 376
-create volume loft surface 376 377
-create volume loft surface 377 378
-create volume loft surface 378 379
-create volume loft surface 379 380
-create volume loft surface 380 381
-create volume loft surface 381 382
-create volume loft surface 382 383
+# ============================================================
+# Single multi-section loft through every-4th cross-section
+# ============================================================
+# Replaces the 382-pairwise loft chain (with imprint+merge+unite
+# afterwards) by ONE multi-section loft through 97 of the 383
+# original cross-sections (every 4th + the last to preserve the
+# lead-out tip).  Cubit/ACIS produces a single C^2 B-spline-skinned
+# helical tube body — no internal seams, no C^0 creases, so the
+# tetmesher does not fit sliver tets along artificial edges.
+# Probed 2026-05-08 (temp/loft_geometry_recipes.py): on the coil
+# alone, scaled_jacobian min jumps from 0.219 (chain) to 0.349,
+# n_tet drops from 90,294 to 34,004, build+mesh time 84.7s -> 10.7s.
+# Chord error of the 4x subsampling vs the original 1.8 mm spacing
+# is below 0.1 mm — well under the 0.17 mm Cu skin depth at 150 kHz.
+# The unused 286 sheet bodies (and the 97 used ones) are all
+# deleted by `delete body 1 to 383` below.
+create volume loft surface 1 5 9 13 17 21 25 29 33 37 41 45 49 53 57 61 65 69 73 77 81 85 89 93 97 101 105 109 113 117 121 125 129 133 137 141 145 149 153 157 161 165 169 173 177 181 185 189 193 197 201 205 209 213 217 221 225 229 233 237 241 245 249 253 257 261 265 269 273 277 281 285 289 293 297 301 305 309 313 317 321 325 329 333 337 341 345 349 353 357 361 365 369 373 377 381 383
 
 delete body 1 to 383
-imprint all
-merge all
 compress
-
-# ============================================================
-# Unite the 382 loft segments into a single coil solid
-# ============================================================
-# After imprint+merge the lofts share faces but are still 382 separate
-# volumes -- the PEEC-BEM `filaments_from_step` parser then fails the
-# UV-map / per-station-faces / variable-radius-circle dispatch tiers
-# and falls back to a degenerate single-cross-section ring (n_filaments
-# stuck at n_peri=16, no helical resolution -- 2026-04-29 debug).
-# Uniting collapses the 382-loft fragmentation into one continuous
-# helical tube which the parser handles cleanly.
-unite volume 1 to 382
 #{coil_id = Id("volume")}
 
-compress
 
 # ============================================================
 # Workpiece + air domain
@@ -1642,6 +1262,25 @@ compress
 # (centroid in coil bbox) are excluded.
 sideset 3 add surface in volume 3 with x_coord > -0.006 with x_coord < 0.006 with y_coord > -0.006 with y_coord < 0.006 with z_coord > -0.08 with z_coord < 0.08
 sideset 3 name "sibc"
+
+# ============================================================
+# Outer-face sideset for FEM far-field truncation
+# ============================================================
+# Without an 'outer' Dirichlet face (or Kelvin), HCurl A is gauge-
+# undetermined: the curl-curl + tiny reg + workpiece-surface SIBC Robin
+# combination is effectively singular and the iterative solver returns
+# a numerically-zero solution.  Mark the 6 outer brick faces (centroid
+# at |x|=0.15, |y|=0.15, or |z|=0.15) so calc_fem_kelvin.py picks up
+# `dirichlet_bnd="outer"` and applies A=0 on the far-field box.
+# Truncation error from the tight 30 cm cube is a few percent — for
+# better accuracy switch to a sphere + Kelvin shell variant.
+sideset 4 add surface in volume 3 with x_coord > 0.149
+sideset 4 add surface in volume 3 with x_coord < -0.149
+sideset 4 add surface in volume 3 with y_coord > 0.149
+sideset 4 add surface in volume 3 with y_coord < -0.149
+sideset 4 add surface in volume 3 with z_coord > 0.149
+sideset 4 add surface in volume 3 with z_coord < -0.149
+sideset 4 name "outer"
 
 # ============================================================
 # Blocks (NO 'work' block per WP HOLE policy)
