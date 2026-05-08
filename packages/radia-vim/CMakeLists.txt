@@ -14,7 +14,7 @@ include(ngsolve_addon.cmake)
 #   F-5: Foster solver + Cauer pipeline (Python wrapper)
 option(RADIA_VIM_PHASE_F2 "Build the HDiv div-free hex basis" ON)
 option(RADIA_VIM_PHASE_F3 "Build the Sauter-Schwab quadrature routines" ON)
-option(RADIA_VIM_PHASE_F4 "Build the K matrix assembler" OFF)
+option(RADIA_VIM_PHASE_F4 "Build the K matrix assembler" ON)
 
 # Optional high-precision support via Boost.Multiprecision. Quad and MPFR are
 # only needed for orders >= 5 (see precision_sensitivity_study.py). Defaulting
