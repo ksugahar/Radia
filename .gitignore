@@ -6,6 +6,7 @@
 CLAUDE.md
 ROADMAP.md
 .claude/
+.mcp.json
 publish_to_pypi.cmd
 ngsolve_developers/
 to_developers/
@@ -41,6 +42,7 @@ dist/
 radia-*/
 !packages/radia-mcp/
 !packages/radia-axifemm/
+!packages/radia-vim/
 *.egg-info/
 .eggs/
 

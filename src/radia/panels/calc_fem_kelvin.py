@@ -122,6 +122,13 @@ def solve_fem(vol_file="", fes_order=1,
         curve_order = mesh.ngmesh.GetCurveOrder()
     except Exception:
         curve_order = 1
+    # Resolve solver=auto: ams for fes_order=1 (Compact AMS+COCR is the
+    # cheapest preconditioner for HCurl order-1 AC), bddc for higher
+    # orders (CompactAMS auxiliary space requires order-1).
+    if solver == "auto":
+        solver = "ams" if fes_order == 1 else "bddc"
+        _log(f"SOLVER:auto -> {solver} (fes_order={fes_order})")
+
     if fes_order > curve_order:
         return {
             "error": f"fes_order ({fes_order}) > mesh curve_order ({curve_order}). "
@@ -516,17 +523,97 @@ def solve_fem(vol_file="", fes_order=1,
 
         # Solver-specific setup
         if solver == "ams":
-            # AMS was built around the T0 / J_source volume source; with
-            # PEEC line-integral RHS (the only remaining path) it has
-            # never been wired up. Fail loud rather than run the wrong
-            # configuration silently.
-            return {"error": "solver=ams is not supported with the PEEC "
-                             "filament source. Use pardiso or bddc."}
+            # Compact AMS preconditioner + COCR solver (AC eddy-current).
+            # Reference: src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py
+            #
+            # Re-wired 2026-05-08 for the PEEC line-integral RHS path:
+            # the bilinear form a_bf above already has curl-curl + reg +
+            # SIBC Robin; the PEEC RHS is in f_lf.vec.  We only need to
+            # build the REAL auxiliary bilinear form a_real (CompactAMS
+            # internal preconditioner space) + grab vertex coords.
+            #
+            # Constraints carried over from the pre-fec3465f impl:
+            #   - fes_order = 1 (CompactAMS auxiliary space is order-1 HCurl)
+            #   - nograds = True (already set on base_fes; H1 aux space
+            #                     matches vertex count)
+            #   - AC mode (omega > 0)
+            #   - No Periodic Kelvin (DOF dimensions don't match)
+            if fes_order > 1:
+                return {"error": f"solver=ams requires fes_order=1 "
+                                 f"(got {fes_order}); use solver=bddc for p>=2"}
+            if not (omega > 0):
+                return {"error": "solver=ams requires AC (frequency>0). "
+                                 "For DC use solver=bddc or pardiso."}
+            if has_kelvin and has_kelvin_periodic:
+                return {"error": "solver=ams is not supported with "
+                                 "Periodic Kelvin BC. Use bddc."}
+
+            import radia.sparsesolv_ngsolve as ssn
+
+            # Real auxiliary fes for the AMS preconditioner.  Same edge
+            # topology as the complex `fes` (HCurl order=1 nograds=True
+            # dirichlet=dirichlet_bnd).
+            fes_real = HCurl(mesh, order=1, complex=False, nograds=True,
+                              dirichlet=dirichlet_bnd)
+            ur, vr = fes_real.TnT()
+            a_real = BilinearForm(fes_real)
+            a_real += nu_cf * curl(ur) * curl(vr) * dx(bonus_intorder=4)
+            if reg > 0:
+                if has_kelvin and has_kelvin_periodic:
+                    if non_kelvin_mats:
+                        a_real += shift_eps * NU_0 * ur * vr * dx(
+                            "|".join(non_kelvin_mats))
+                else:
+                    a_real += shift_eps * NU_0 * ur * vr * dx
+            if has_wp and abs(robin) > 0:
+                a_real += abs(robin) * ur.Trace() * vr.Trace() * ds(sibc_bnd)
+            # AIR-REGION REGULARIZATION (preconditioner only — NOT a_bf):
+            # CompactAMS auxiliary form expects a substantial volumetric
+            # mass `|omega| * sigma * u*v*dx("cond")` that dominates
+            # curl-curl (cf. bench_compact_ams.py:80-83).  With SIBC the
+            # workpiece is a HOLE — no volumetric sigma anywhere — so
+            # the auxiliary form a_real has only curl-curl + tiny
+            # shift_eps mass + boundary Robin trace.  The CompactAMS
+            # internal factorization then segfaults at COCR matvec.
+            # Fix: add an air-region "synthetic AC mass" |omega| * NU_0
+            # to a_real ONLY (a_bf is unchanged → physics preserved).
+            # Scale matches the bench's conductor mass within ~2 orders
+            # of magnitude and gives the AMS algebra something to grip.
+            a_real += abs(omega) * NU_0 * ur * vr * dx
+            a_real.Assemble()
+
+            grad_mat, fes_h1 = fes_real.CreateGradient()
+            nv = mesh.nv
+            coord_x = [0.0] * nv
+            coord_y = [0.0] * nv
+            coord_z = [0.0] * nv
+            for i in range(nv):
+                pt = mesh.vertices[i].point
+                coord_x[i] = float(pt[0])
+                coord_y[i] = float(pt[1])
+                coord_z[i] = float(pt[2])
+
+            t0_pre = time.perf_counter()
+            pre_ams = ssn.ComplexCompactAMSPreconditioner(
+                a_real_mat=a_real.mat, grad_mat=grad_mat,
+                freedofs=fes_real.FreeDofs(),
+                coord_x=coord_x, coord_y=coord_y, coord_z=coord_z,
+                ndof_complex=fes.ndof, cycle_type=1, print_level=0)
+            _log(f"AMS:preconditioner setup {time.perf_counter()-t0_pre:.1f}s")
+
+            a_bf.Assemble()
+            with TaskManager():
+                cocr = ssn.COCRSolver(a_bf.mat, pre_ams,
+                                       freedofs=fes.FreeDofs(),
+                                       maxiter=500, tol=1e-8,
+                                       printrates=False)
+                gfu.vec.data = cocr * rhs_vec
+            _log(f"AMS:COCR iters={cocr.iterations}")
         elif solver == "iccg":
             # Shifted ICCG (IC preconditioned CG, single-thread efficient)
             a_bf.Assemble()
 
-            import sparsesolv_ngsolve as ssn
+            import radia.sparsesolv_ngsolve as ssn
             iccg = ssn.SparseSolvSolver(
                 a_bf.mat, method="ICCG",
                 freedofs=fes.FreeDofs(),
@@ -996,9 +1083,10 @@ def main():
                              "ESIM nonlinear path.")
     parser.add_argument("--max-iter", type=int, default=15,
                         help="Max Karl iterations")
-    parser.add_argument("--solver", default="pardiso",
-                        choices=["pardiso", "bddc", "iccg", "ams"],
-                        help="pardiso (direct), bddc (iterative), "
+    parser.add_argument("--solver", default="auto",
+                        choices=["auto", "pardiso", "bddc", "iccg", "ams"],
+                        help="auto: ams for fes-order=1, bddc otherwise. "
+                             "pardiso (direct), bddc (iterative), "
                              "iccg (shifted IC+CG), ams (Compact AMS+COCR)")
     parser.add_argument("--reg", type=float, default=1e-6,
                         help="Gauge regularization (add reg*nu0*u*v*dx)")

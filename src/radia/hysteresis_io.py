@@ -321,8 +321,11 @@ def play_hysteron(f_k_interps, Bx, By, eta, px, py):
 def convert_play_to_energy(eta, f_k_tables):
     """Convert B-input Play parameters to energy-based model parameters.
 
-    B-input Play shape function f_k = U_k' (derivative of internal energy).
-    Pinning strength chi_k = eta_k.
+    Refactor 2026-05-XX: After consolidating Type 5 (energy hysteresis)
+    as a thin subclass of Type 6 (Play model), the "chi" parameter of
+    MatEnergyHysteresis is numerically identical to the Play threshold
+    eta_k. The conversion is therefore a no-op pass-through; the
+    function is retained for backward-compatible call sites.
 
     Parameters
     ----------
@@ -338,7 +341,7 @@ def convert_play_to_energy(eta, f_k_tables):
         Ready for rad.MatEnergyHysteresis(**params).
     """
     K = len(f_k_tables)
-    chi = eta.copy()
+    chi = eta.copy()  # numerically identical to eta in the unified Type 5/6 formulation
 
     return {
         'K': K,

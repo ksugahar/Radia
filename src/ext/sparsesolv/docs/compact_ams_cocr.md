@@ -44,7 +44,7 @@ sigma は電気伝導率である。系行列 A は**複素対称**（A^T = A、
 ### 実数系（静磁場）
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 
@@ -81,7 +81,7 @@ with TaskManager():
 ### 複素数系（渦電流）
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve import *
 
 omega = 2 * pi * 30000          # 30 kHz
@@ -418,7 +418,7 @@ pre.Update(new_mat)
 ### 実数系（静磁場 + CG）
 
 ```python
-import sparsesolv_ngsolve as ssn
+import radia.sparsesolv_ngsolve as ssn
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
 

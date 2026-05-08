@@ -1,28 +1,40 @@
 """
-ngsolve-sparsesolv knowledge base for MCP server.
+sparsesolv (Compact AMS / COCR) knowledge base for MCP server.
 
-Repository: https://github.com/ksugahar/ngsolve-sparsesolv
-Version: 3.1.1
-License: MPL 2.0
-Based on: JP-MARs/SparseSolv
+Source:     src/ext/sparsesolv/ (in-tree, monorepo integrated 2026-05-08)
+License:    MPL 2.0
+Based on:   JP-MARs/SparseSolv
 
-Import: from ngsolve.la import CompactAMSPreconditioner, COCRSolver, etc.
-Install: Bundled with radia (pip install radia). Source: src/ext/sparsesolv/
+Distribution: bundled inside the radia wheel as `radia.sparsesolv_ngsolve`.
+              Build.ps1 produces `src/radia/sparsesolv_ngsolve.pyd` via
+              `add_ngsolve_python_module(sparsesolv_ngsolve ...)` in the
+              top-level CMakeLists.txt.  The legacy standalone PyPI
+              package `ngsolve-sparsesolv` was retired in the same
+              cleanup; do NOT pip install it.
+
+Import: from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver, ...
+Install: pip install radia
 Requires: ngsolve >= 6.2.2603
+
+History note: an earlier draft of this knowledge module (and CLAUDE.md)
+documented the symbols as living in `ngsolve.la`.  That integration
+was aspirational and never landed; symbols stay in
+`radia.sparsesolv_ngsolve`.  `from ngsolve.la import CompactAMSPreconditioner`
+will fail at import time on every machine.
 """
 
 SPARSESOLV_OVERVIEW = """
-# ngsolve-sparsesolv
+# sparsesolv (radia.sparsesolv_ngsolve)
 
 ## What It Is
 
-Bundled with Radia, providing iterative solvers
-and preconditioners. Install: `pip install radia`
+Bundled inside the radia wheel as `radia.sparsesolv_ngsolve`,
+providing iterative solvers and preconditioners.  Install: `pip install radia`
 
 ```python
-from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver
 # or:
-from ngsolve.la import (
+from radia.sparsesolv_ngsolve import (
     SparseSolvSolver, ICPreconditioner, SGSPreconditioner,
     CompactAMSPreconditioner, ComplexCompactAMSPreconditioner,
     CompactAMGPreconditioner, COCRSolver, GMRESSolver,
@@ -41,13 +53,13 @@ from ngsolve.la import (
 | ABMC ordering        | Parallel triangular solve with level scheduling   |
 | Divergence detection | Stagnation-based early termination                |
 
-Repository: https://github.com/ksugahar/ngsolve-sparsesolv
+Source: src/ext/sparsesolv/ (in the Radia monorepo)
 Based on: JP-MARs/SparseSolv (https://github.com/JP-MARs/SparseSolv)
 
 ## Architecture
 
-- **Header-only C++17 core**: `include/sparsesolv/` (no separate .cpp compilation)
-- **Bundled with Radia**: `pip install radia` includes sparsesolv
+- **Header-only C++17 core**: `src/ext/sparsesolv/include/sparsesolv/` (no separate .cpp compilation)
+- **Built into Radia wheel**: Build.ps1 emits `src/radia/sparsesolv_ngsolve.pyd`
 - **NGSolve integration**: Links against NGSolve's `SparseMatrix`, `BaseVector`,
   `BitArray`, `BilinearForm`, `FESpace` for seamless interop
 - **Parallel backend**: Compile-time dispatch to NGSolve TaskManager, OpenMP, or serial
@@ -97,7 +109,7 @@ SPARSESOLV_API = """
 
 ```python
 # sparsesolv is bundled with Radia (source: src/ext/sparsesolv/)
-from ngsolve.la import (
+from radia.sparsesolv_ngsolve import (
     SparseSolvSolver,      # All-in-one solver factory
     ICPreconditioner,      # IC preconditioner for use with NGSolve CGSolver
     SGSPreconditioner,     # SGS preconditioner for use with NGSolve CGSolver
@@ -113,7 +125,11 @@ from ngsolve.la import (
 )
 ```
 
-Note: `import ngsolve` must be done before `import ngsolve.la`.
+Note: `import radia` (which transitively imports ngsolve and registers the
+DLL search paths) is required before any `import radia.sparsesolv_ngsolve`.
+The radia package's __init__.py handles ngcore.dll / mkl_rt.dll discovery
+on Windows; calling `import radia.sparsesolv_ngsolve` without going
+through `import radia` first will fail with "DLL load failed".
 
 ## SparseSolvSolver
 
@@ -226,7 +242,7 @@ SPARSESOLV_EXAMPLES = """
 
 ```python
 from ngsolve import *
-from ngsolve.la import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -342,7 +358,7 @@ result = solver.Solve(f.vec, gfu.vec)
 
 ```python
 from ngsolve.krylovspace import CGSolver
-from ngsolve.la import ICPreconditioner
+from radia.sparsesolv_ngsolve import ICPreconditioner
 
 pre = ICPreconditioner(a.mat, freedofs=fes.FreeDofs(), shift=1.05)
 pre.Update()
@@ -536,24 +552,33 @@ pip install radia    # Includes sparsesolv
 Verify:
 
 ```bash
-python -c "from ngsolve.la import SparseSolvSolver, CompactAMSPreconditioner; print('OK')"
+python -c "from radia.sparsesolv_ngsolve import SparseSolvSolver, CompactAMSPreconditioner; print('OK')"
 ```
 
 ## Building from source (development only)
 
-```bash
-git clone https://github.com/ksugahar/ngsolve-sparsesolv.git
-cd ngsolve-sparsesolv
-pip install -e .  # editable install with scikit-build-core
+sparsesolv lives in-tree under `src/ext/sparsesolv/`.  Build it as part of
+the Radia C++ core:
+
+```powershell
+# from the Radia repo root
+pwsh -ExecutionPolicy Bypass -File Build.ps1
 ```
 
-Repository: https://github.com/ksugahar/ngsolve-sparsesolv
+Build.ps1 invokes `cmake --build build-msvc --target sparsesolv_ngsolve`,
+which is a top-level CMake target that uses
+`add_ngsolve_python_module(sparsesolv_ngsolve src/ext/sparsesolv/ngsolve/python_module.cpp)`.
+The .pyd is copied to `src/radia/sparsesolv_ngsolve.pyd` and ships in the
+radia wheel.  Do NOT run `pip install src/ext/sparsesolv` — the standalone
+`pyproject.toml` was deleted in the 2026-05-08 cleanup.
+
+Source: src/ext/sparsesolv/ in the Radia monorepo (ksugahar/Radia).
 """
 
 
 SPARSESOLV_EXAMPLE_POISSON = '''# 2D Poisson Problem with ICCG
 from ngsolve import *
-from ngsolve.la import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -583,7 +608,7 @@ print(f"Final residual: {result.final_residual:.2e}")
 SPARSESOLV_EXAMPLE_CURLCURL = '''# 3D Curl-Curl (Electromagnetic) with Auto-Shift ICCG
 from ngsolve import *
 from netgen.occ import Box, Pnt
-from ngsolve.la import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -618,7 +643,7 @@ print(f"Converged: {result.converged}, Iterations: {result.iterations}")
 SPARSESOLV_EXAMPLE_EDDY = '''# Complex Eddy Current Problem
 from ngsolve import *
 from netgen.occ import Box, Pnt, OCCGeometry
-from ngsolve.la import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 box = Box(Pnt(0, 0, 0), Pnt(1, 1, 1))
 for face in box.faces:
@@ -655,7 +680,7 @@ print(f"Converged: {result.converged}, Iterations: {result.iterations}")
 SPARSESOLV_EXAMPLE_PRECOND = '''# Using IC/SGS Preconditioners with NGSolve CGSolver
 from ngsolve import *
 from ngsolve.krylovspace import CGSolver
-from ngsolve.la import ICPreconditioner, SGSPreconditioner
+from radia.sparsesolv_ngsolve import ICPreconditioner, SGSPreconditioner
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.05))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -688,7 +713,7 @@ print(f"SGS+CG done")
 
 SPARSESOLV_EXAMPLE_DIVERGENCE = '''# Divergence Detection and Early Termination
 from ngsolve import *
-from ngsolve.la import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 mesh = Mesh(unit_square.GenerateMesh(maxh=0.1))
 fes = H1(mesh, order=2, dirichlet="bottom|right|top|left")
@@ -877,7 +902,7 @@ when using `CompactAMGPreconditioner` as a preconditioner in NGSolve's `CGSolver
 
 **Root cause**: `CompactAMG` C++ class was not registered as a pybind11 type.
 When the factory function returned `shared_ptr<BaseMatrix>`, pybind11 could not
-find the runtime type and wrapped it as the base `ngsolve.la.BaseMatrix` Python
+find the runtime type and wrapped it as the base `BaseMatrix` (NGSolve's BaseMatrix) Python
 type. Python-level virtual dispatch then called `BaseMatrix::Mult` (which throws)
 instead of `CompactAMG::Mult`.
 
@@ -936,7 +961,7 @@ ICCG iteration count **grows** as O(h^-1).
 ## Python API
 
 ```python
-from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver
 
 # Real Compact AMS (for real SPD HCurl magnetostatics)
 pre_real = ssn.CompactAMSPreconditioner(
@@ -1009,7 +1034,7 @@ SPARSESOLV_EXAMPLE_COMPACT_AMS = '''# Compact AMS + COCR for Complex Eddy Curren
 #   Case A: Uniform sigma (all conducting) -> no regularization needed
 #   Case B: Conductor-in-air -> mass regularization required for COCR
 from ngsolve import *
-from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver
 import math
 
 # --- Case B: Conductor-in-Air (common real-world setup) ---
@@ -1082,8 +1107,71 @@ print(f"COCR converged in {solver.iterations} iterations")
 '''
 
 
+SPARSESOLV_KNOWN_ISSUES = """
+# Known Issues
+
+## CompactAMS + COCR segfaults at first matvec (2026-05-08)
+
+**Symptom**: `gfu.vec.data = cocr * rhs_vec` (or any first apply of a
+ComplexCompactAMSPreconditioner-backed COCRSolver) crashes the Python
+process with `Segmentation fault` (Linux) or access violation (Windows).
+The preconditioner SETUP completes cleanly (logs `CompactAMS setup
+complete: ...s total`); the crash happens when COCR invokes the
+preconditioner's apply() during its first iteration.
+
+**Diagnostic test**: run `src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py`
+directly without any pipeline (`python bench_compact_ams.py > log.txt
+2>&1; echo $?`).  If this canonical bench reproduces the segfault, the
+issue is NOT in your wiring -- it's in the deployed sparsesolv_ngsolve
+binary.
+
+**WARNING about pipeline masking**: DO NOT debug AMS segfaults via
+`python ... | tee log | tail -N` -- the trailing `tail` returns its own
+exit code (0) and HIDES the SIGSEGV (139) from Python.  Always run with
+direct stdout redirection (`> log.txt 2>&1`) and check `$?` afterwards.
+
+**Root cause (hypothesis, 2026-05-08)**: ABI / version mismatch between
+`sparsesolv_ngsolve.pyd` and the running NGSolve.  Verified on LAB:
+- `sparsesolv_ngsolve.pyd` last modified 2026-03-15
+- `ngsolve` binaries last modified 2026-04-10 (later)
+
+When NGSolve's BaseVector / SparseMatrix layout changes between minor
+releases, a stale sparsesolv_ngsolve compiled against the older NGSolve
+header set will pass type checks at construction (the .pyd's pybind11
+binding accepts whatever pybind11 thinks is a valid argument) but
+crashes at apply time when it walks the C++ vtable layouts.
+
+**Workarounds**:
+1. **Rebuild sparsesolv_ngsolve** against the current NGSolve.  This is
+   the canonical fix.  Build via `python -m pip install -e
+   S:/Radia/01_GitHub/src/ext/sparsesolv` or follow `src/ext/sparsesolv/
+   docs/development.md`.
+2. **Use BDDC** (`solver=bddc`) as a substitute for AMS in the
+   FEM-Kelvin panel.  It's a different preconditioner family but
+   handles the same problem class (HCurl complex AC).  Does NOT need
+   sparsesolv.
+
+**Verification after rebuild**: re-run `bench_compact_ams.py` -- it
+should print `Iters: NN  Solve: NNs ... Residual: 1e-NN  Memory: NN MB`
+to completion.  If it still segfaults, the issue is deeper than ABI
+mismatch and needs source-level debugging in
+`src/ext/sparsesolv/include/sparsesolv/compact_ams.hpp`.
+
+**Affected callers** in Radia repository:
+- `src/radia/panels/calc_fem_kelvin.py::solve_fem` -- `solver=ams`
+  branch (re-wired 2026-05-08 for PEEC source path).  Falls through to
+  the same crash; not a calc_fem_kelvin bug.
+- `src/radia/panels/calc_fem_coilmesh.py` -- declares `solver=ams` but
+  errors out at runtime; not affected by this issue (different branch).
+- `src/ext/sparsesolv/examples/hiruma/bench_compact_ams.py` --
+  reference reproducer.
+
+**Memory file**: `memory/project_3turncoil_fem_convergence_blockers.md`
+"""
+
+
 def get_full_documentation() -> str:
-    """Return complete ngsolve-sparsesolv documentation."""
+    """Return complete sparsesolv (radia.sparsesolv_ngsolve) documentation."""
     return "\n\n".join([
         SPARSESOLV_OVERVIEW,
         SPARSESOLV_API,
@@ -1092,6 +1180,7 @@ def get_full_documentation() -> str:
         SPARSESOLV_COMPACT_AMS,
         SPARSESOLV_BEST_PRACTICES,
         SPARSESOLV_BUILD,
+        SPARSESOLV_KNOWN_ISSUES,
     ])
 
 
@@ -1111,6 +1200,7 @@ def get_sparsesolv_documentation(topic: str = "all") -> str:
         "example_divergence": SPARSESOLV_EXAMPLE_DIVERGENCE,
         "compact_ams": SPARSESOLV_COMPACT_AMS,
         "example_compact_ams": SPARSESOLV_EXAMPLE_COMPACT_AMS,
+        "known_issues": SPARSESOLV_KNOWN_ISSUES,
         # Legacy aliases
         "hypre_ams": SPARSESOLV_COMPACT_AMS,
         "example_hypre_ams": SPARSESOLV_EXAMPLE_COMPACT_AMS,

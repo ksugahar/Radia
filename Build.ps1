@@ -176,6 +176,13 @@ if errorlevel 1 ( echo WARNING: cln_core build failed )
 
 echo.
 echo ========================================
+echo   Building sparsesolv_ngsolve
+echo ========================================
+"$CMAKE_EXE" --build . --config Release --target sparsesolv_ngsolve -j
+if errorlevel 1 ( echo WARNING: sparsesolv_ngsolve build failed )
+
+echo.
+echo ========================================
 echo   Building radia_cubit_mesh (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"

@@ -103,7 +103,7 @@ sys.stdout.flush()
 print("\n=== Two-step A-only + SparseSolv ICCG ===")
 sys.stdout.flush()
 
-from sparsesolv_ngsolve import SparseSolvSolver
+from radia.sparsesolv_ngsolve import SparseSolvSolver
 
 # Step a: DC current distribution (Laplace for phi in conductor)
 print("  Step a: DC current distribution...")

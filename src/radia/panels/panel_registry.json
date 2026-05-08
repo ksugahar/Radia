@@ -256,7 +256,7 @@
           "cli": "--coil-msh-output",
           "name": "coil_msh_output",
           "default": "",
-          "help": "Coil .msh viz output path (future, no-op)"
+          "help": "Coil .msh viz output path. PEEC: writes B-on-bbox + sibling _filaments.msh (auto-merged)."
         },
         {
           "cli": "--write-summary",
@@ -355,16 +355,16 @@
         {
           "cli": "--solver",
           "name": "solver",
-          "default": "pardiso",
+          "default": "auto",
           "choices": [
+            "auto",
             "pardiso",
             "bddc",
             "iccg",
-            "ams",
-            "shifted_ams"
+            "ams"
           ],
           "ja": "線形ソルバー",
-          "physics": "pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR"
+          "physics": "auto: p=1なら ams, p>=2なら bddc。pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR (p=1専用)"
         },
         {
           "cli": "--impedance-model",
