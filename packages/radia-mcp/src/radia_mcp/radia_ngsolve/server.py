@@ -6,7 +6,7 @@ Provides tools for both Radia (MMM/MSC/PEEC C++ core) and NGSolve (FEM/BEM):
 - Radia C++ library usage (MMM, MSC, field computation, materials, solver)
 - NGSolve FEM usage (22 topics: EM formulations, axisymmetric, materials)
 - ngsolve.bem (BEM operators, inductance extraction)
-- ngsolve.la (Compact AMS/COCR/ICCG preconditioners)
+- radia.sparsesolv_ngsolve (Compact AMS/COCR/ICCG preconditioners)
 - Kelvin transformation for open boundary FEM
 - md2html converter documentation
 
@@ -414,12 +414,14 @@ def ngsolve_usage(topic: str = "all") -> str:
 @mcp.tool()
 def sparsesolv(topic: str = "all") -> str:
     """
-    Get sparsesolv documentation and code examples (now in ngsolve.la).
+    Get sparsesolv documentation and code examples.
 
-    Since v3.1.0, sparsesolv types are unified into ngsolve.la module.
-    Import: from ngsolve.la import CompactAMSPreconditioner, COCRSolver, etc.
+    Since 2026-05-08, sparsesolv ships inside the radia wheel as the
+    submodule `radia.sparsesolv_ngsolve` (built from src/ext/sparsesolv/).
+    The legacy standalone `ngsolve-sparsesolv` PyPI package is retired.
+    Import: from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver, ...
 
-    Repository: https://github.com/ksugahar/ngsolve-sparsesolv
+    Source: src/ext/sparsesolv/ in the Radia monorepo.
 
     Args:
         topic: Documentation topic. Options:

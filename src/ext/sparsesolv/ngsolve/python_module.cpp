@@ -4,10 +4,14 @@
 
 /**
  * @file python_module.cpp
- * @brief Standalone pybind11 module for SparseSolv NGSolve integration
+ * @brief pybind11 module for SparseSolv NGSolve integration
  *
- * Builds as an independent .pyd/.so that links against NGSolve.
- * Usage: import sparsesolv_ngsolve
+ * Built into the radia wheel as `radia/sparsesolv_ngsolve.pyd` via the
+ * top-level Radia CMake target `add_ngsolve_python_module(sparsesolv_ngsolve ...)`.
+ * Usage: `import radia.sparsesolv_ngsolve as ssn`
+ *
+ * (`import radia` first to register the NGSolve / MKL DLL search paths
+ * on Windows; otherwise the .pyd will fail to load.)
  */
 
 #include <pybind11/pybind11.h>

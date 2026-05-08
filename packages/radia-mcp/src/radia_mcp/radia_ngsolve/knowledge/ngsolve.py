@@ -28,7 +28,7 @@ pip install ngsolve   # Use official PyPI ngsolve >= 6.2.2603
 # Version 6.2.2603 includes: MKL, PARDISO, Periodic BC fix, curvedelements Load, hex/prism curving
 # Periodic BC regression (6.2.2406~6.2.2501) is FIXED in 6.2.2603+
 # See: https://forum.ngsolve.org/t/3805
-# Optional: pip install ngsolve-sparsesolv  # Compact AMS/COCR solvers
+# Compact AMS / COCR ships inside Radia: import radia.sparsesolv_ngsolve as ssn
 ```
 
 ## Basic Workflow
@@ -4524,7 +4524,7 @@ This TEAM-7 problem is an ideal test case for the shifted AMS preconditioner:
 To use shifted AMS + COCR instead of BDDC:
 
 ```python
-from ngsolve.la import CompactAMSPreconditioner, COCRSolver
+from radia.sparsesolv_ngsolve import CompactAMSPreconditioner, COCRSolver
 
 # Original system (no regularization)
 a = BilinearForm(fes, symmetric=True)

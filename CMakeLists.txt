@@ -573,3 +573,62 @@ add_custom_command(TARGET _radia_pybind POST_BUILD
 )
 
 message(STATUS "_radia_pybind module configured (pybind11 bindings)")
+
+# ========================================
+# sparsesolv_ngsolve module (NGSolve preconditioners + Krylov solvers)
+# ========================================
+# Compact AMS + COCR / ICCG / SGS for HCurl eddy-current systems.
+# Source: src/ext/sparsesolv/ (formerly the standalone ngsolve-sparsesolv
+# PyPI package; absorbed into the Radia wheel 2026-05-08 to fix the
+# 100号機 ImportError that was blocking calc_fem_kelvin and
+# vector_potential_solver).
+#
+# Imported as `radia.sparsesolv_ngsolve` (the .pyd lives at
+# src/radia/sparsesolv_ngsolve.pyd alongside _radia_pybind.pyd).
+
+set(SPARSESOLV_DIR "${EXT_DIR}/sparsesolv")
+
+add_ngsolve_python_module(sparsesolv_ngsolve
+	${SPARSESOLV_DIR}/ngsolve/python_module.cpp
+)
+
+target_include_directories(sparsesolv_ngsolve PRIVATE
+	${SPARSESOLV_DIR}/include
+)
+
+target_compile_definitions(sparsesolv_ngsolve PRIVATE
+	SPARSESOLV_USE_NGSOLVE_TASKMANAGER
+	SPARSESOLV_USE_MKL
+	_CRT_SECURE_NO_WARNINGS
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+)
+
+if(MSVC)
+	target_compile_options(sparsesolv_ngsolve PRIVATE
+		/arch:AVX2
+		/O2
+		/fp:fast
+		/W0
+		/wd4244
+		/wd4267
+	)
+else()
+	target_compile_options(sparsesolv_ngsolve PRIVATE -mavx2 -mfma)
+endif()
+
+# Intel MKL for BLAS/LAPACK (sparsesolv uses dense ops in AMG coarse solve)
+if(WIN32 AND USE_MKL_FOUND)
+	target_link_libraries(sparsesolv_ngsolve PRIVATE ${BLAS_LIB})
+	target_include_directories(sparsesolv_ngsolve PRIVATE ${BLAS_INCLUDE_DIR})
+endif()
+
+# Post-build: Copy to src/radia
+add_custom_command(TARGET sparsesolv_ngsolve POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:sparsesolv_ngsolve>"
+		"${CMAKE_SOURCE_DIR}/src/radia/sparsesolv_ngsolve.pyd"
+	COMMENT "Copying sparsesolv_ngsolve.pyd to src/radia"
+)
+
+message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")

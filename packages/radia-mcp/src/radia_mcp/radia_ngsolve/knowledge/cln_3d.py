@@ -185,46 +185,51 @@ CLN_3D_NOTEBOOK_INDEX = """
 - Lukas_A-Φ_test.ipynb             : Mixed HCurl×H1, order=3
 - curlT = A.ipynb                  : T-from-A reconstruction validation
 
-## CLN + Kelvin: Status (Updated 2026-05-04)
+## CLN + Kelvin: Status (Updated 2026-05-05)
 
-**Major progress 2026-05-04**: the (ν - ν₀) reduced-A form was found
-to be INVALID when combined with Kelvin pullback. Root cause: the
-(ν - ν₀) simplification requires A_s to satisfy ν₀ Maxwell globally,
-but the Kelvin pullback A_s_kext satisfies the metric-dependent ν'
-Maxwell instead. Symptom: +43% inductance error on a torus benchmark.
+**Context**: Kelvin transformation in NGSolve is a PROVEN, HIGH-ACCURACY
+technique when properly formulated. Kameari (2025/10/14 slides,
+W:/00_CAE/NGSolve/亀有/4-05.pdf) demonstrates:
+- Magnetic sphere (mu_r=1000), coarse mesh, Order 3:
+  A-Omega_r gives **0.001% error**, Omega-Omega_r Order 4 gives 0.029%
+- **Independent of Kelvin radius rk** -- even rk=100 (huge) gives same
+  accuracy with adaptive refinement (slide 18)
 
-**Fix**: drop the (ν - ν₀) middle step and use directly:
-  a(A_r, v) = - ∫_kext ν' · curl(A_s_pullback) · curl(v) dV
-This gives +6% (matches J-source baseline +5%). Applied to
-`examples/.../Coil_3D_A_HCurl_PEEC_source.py` and
-`src/radia/kelvin_solver.py::solve_reduced_A_kelvin`.
+**Kameari's Three Canonical Reductions** (slide 4):
 
-**Implication for CLN**: Kameari + Kelvin needs the same fix:
-- A-T or A-Φ formulation: same (ν - ν₀) pitfall — use direct form.
-- T-Ω formulation: structurally cleaner (T in conductor only, no
-  Kelvin pullback for T; Ω is 0-form with trivial pullback).
-  RECOMMENDED for CLN + Kelvin.
+| Method      | Inner          | Outer (Kelvin)          | Use case         |
+|-------------|----------------|-------------------------|------------------|
+| Omega-Omega_r | H=-grad(Omega_t) | H=-grad(Omega_r)+H_s | Linear magnetic |
+| A-Omega_r   | B=curl(A_t)    | H=-grad(Omega_r)+H_s    | Recommended      |
+| A-A_r       | B=curl(A_t)    | B=curl(A_r+A_s)         | Vector source    |
+| A-phi-A_r   | A,phi in cond  | A_r in Kelvin           | Eddy (TEAM7)     |
 
-**Cuboid 5×2×1 in vacuum** (canonical CLN + Kelvin benchmark):
-The 2026-05-04 v11/v12/v13 attempts (NGSolve A-formulation reduced-A
-+ Kelvin) all failed (+43% to +1.95e9× off) due to:
-1. (ν - ν₀) form pitfall (now fixed in solver)
-2. A_ext = (B_0/2)(-y, x, 0) being unbounded at infinity (incompatible
-   with Convention A pullback that has 1/ρ'^3 singularity at offset)
+**Source injection**: Source field enters via BOUNDARY INTEGRAL at the
+inner-Kelvin interface (dOmega), NOT via (nu - nu_0) bulk volume term.
+This is structurally different from the v11-v14 approaches tried in 2026-05-04.
 
-**Recommended path forward** for applied uniform field CLN + Kelvin:
-- Use H-formulation or T-Ω with Convention B background:
-    H_s' = -(ρ'/R)² H_s (vanishes at offset, no singularity)
-- Or use reduced-Ω = -H_0 z + Ω_r where Ω_r decays at infinity (0-form
-  pullback is trivial).
+**v11-v14 revisited (2026-05-05)**: the historical (nu - nu_0) bulk form
+was NOT Kameari's canonical method. Correct pattern = boundary-integral
+injection. Re-examining v14 against Kameari reference is on the open list.
 
-**Recommended path** for PEEC coil source CLN + Kelvin:
-- A-formulation with Convention A pullback (works for decaying field)
-- Direct form -ν' curl(A_s) curl(v) on kext (NOT (ν-ν₀))
-- Validated 2026-05-04 on torus benchmark: +6.11%.
+**Implication for CLN + Kelvin**:
+- A-T or A-Phi: use Kameari A-Omega_r boundary-integral coupling, NOT bulk
+- T-Omega: structurally cleanest (T in conductor only, Omega_r outside;
+  no A_s pullback required in the conductor region). RECOMMENDED.
+- A-phi-A_r: appropriate for eddy current with applied A_s from coil
 
-See docs/kelvin/KELVIN_TRANSFORMATION.md §7.5 for full derivation.
-See docs/cln/CAUER_LADDER_NETWORK.md §6 for CLN + Kelvin specifics.
+**Recommended path** for applied uniform B + CLN:
+- Omega-Omega_r or A-Omega_r with Kameari boundary-integral source
+- H_s enters at dOmega interface: f += -omega * (B_s.n) * ds("kelvin_int")
+
+**Recommended path** for PEEC coil source + CLN:
+- A-formulation with A-A_r (decaying coil field, no singularity issue)
+- Direct boundary form, NOT (nu - nu_0) bulk
+
+See docs/kelvin/KELVIN_TRANSFORMATION.md §7.4.1 for Kameari weak forms.
+See docs/cln/CAUER_LADDER_NETWORK.md §6.4.1 for convergence table + three
+reduction methods.
+See kelvin knowledge topic "kameari_canonical" for implementation sketch.
 """
 
 

@@ -768,6 +768,176 @@ def _assemble_full_output(args, coil_data, wp_data):
 
 
 # ======================================================================
+# Coil viz: filament .msh + B-on-bbox / B-on-air-volume .msh
+#
+# Restored 2026-05-08 -- v4.25.0 unification refactor (commit 16e7e6e7)
+# accidentally dropped the visualization branch from the deleted
+# calc_peec_inductance.py.  The panel passes --coil-msh-output but the
+# unified script silently ignored it.  open_gmsh.py auto-merges any
+# sibling <stem>_filaments.msh so we just need to emit the files.
+# ======================================================================
+def _build_coil_bbox_mesh(filament_paths, expand=2.5, n_cells=18):
+    """Generate an OCC Box mesh enclosing the coil bbox * ``expand``.
+
+    Used for the auto-field-domain visualisation when no air-volume
+    .vol is available (vacuum case) OR when the user wants a clean
+    Box-shaped overlay on top of the workpiece air domain.
+    """
+    from netgen.occ import Box, Pnt, OCCGeometry
+    from ngsolve import Mesh
+
+    pts_list = []
+    for path in filament_paths:
+        arr = np.asarray(path, dtype=float)
+        if arr.ndim != 3 or arr.shape[-1] != 3:
+            continue
+        pts_list.append(arr.reshape(-1, 3))
+    if not pts_list:
+        raise ValueError("_build_coil_bbox_mesh: no valid filament paths.")
+    pts = np.concatenate(pts_list, axis=0)
+    pmin = pts.min(axis=0)
+    pmax = pts.max(axis=0)
+    centre = 0.5 * (pmin + pmax)
+    half = 0.5 * (pmax - pmin)
+    half_exp = np.maximum(half * expand, half.max() * 0.3)
+    p_lo = centre - half_exp
+    p_hi = centre + half_exp
+    box = Box(Pnt(float(p_lo[0]), float(p_lo[1]), float(p_lo[2])),
+              Pnt(float(p_hi[0]), float(p_hi[1]), float(p_hi[2])))
+    box.faces.name = "outer"
+    box.solids.name = "field_domain"
+    geo = OCCGeometry(box)
+    maxh = float(np.max(p_hi - p_lo)) / max(n_cells, 4)
+    return Mesh(geo.GenerateMesh(maxh=maxh))
+
+
+def _biot_savart_B_on_vertices(mesh, filament_paths, fil_currents):
+    """Vectorised Biot-Savart B at every vertex of ``mesh``.
+
+    Returns (n_verts, 3) numpy array of B [T] using |I| (peak amplitude
+    of the complex phasor) so the magnitude pattern matches the physical
+    AC peak field.
+    """
+    from biot_savart import h_segments_batch, MU0
+    verts = np.asarray([list(v.point) for v in mesh.vertices], dtype=float)
+    if verts.shape[1] != 3:
+        raise ValueError("_biot_savart_B_on_vertices: 3D mesh required")
+    H_total = np.zeros_like(verts)
+    for path, I in zip(filament_paths, fil_currents):
+        segments = np.asarray(path, dtype=float)
+        if segments.ndim != 3 or segments.shape[1:] != (2, 3):
+            continue
+        Im = float(abs(complex(I)))
+        if Im < 1e-30:
+            continue
+        H_total += h_segments_batch(segments, verts, current=Im)
+    return MU0 * H_total
+
+
+def _resolve_coil_msh_path(args):
+    """Decide where to write the coil viz .msh.
+
+    Priority:
+      1. ``--coil-msh-output`` (explicit)
+      2. ``--msh-output`` if vacuum / coil-only (no workpiece — the wp
+         surface output is NOT competing for that path)
+      3. ``<msh_output_stem>_coil.msh`` sibling (with-wp case — keeps
+         the wp surface at ``args.msh_output``, panel button opens
+         the coil viz via gmsh_file priority and open_gmsh.py auto-
+         merges the ``_filaments.msh`` sibling)
+
+    Returns "" if no viz path can be derived (no msh-output flags).
+    """
+    if args.coil_msh_output:
+        return args.coil_msh_output
+    if not args.msh_output:
+        return ""
+    if args.coil_only or not args.vol:
+        return args.msh_output
+    base, ext = os.path.splitext(args.msh_output)
+    return base + "_coil" + (ext or ".msh")
+
+
+def _export_coil_msh_viz(args, coil_data):
+    """Write the PEEC/coil visualization .msh files.
+
+    Writes (when a coil viz path can be derived from ``--coil-msh-output``
+    or ``--msh-output``, see ``_resolve_coil_msh_path``):
+      * ``<coil_msh_path>``         : auto-bbox volume mesh + B vector
+      * ``<stem>_filaments.msh``    : 1D filament polylines + |I|
+        (auto-merged by open_gmsh.py as a sibling)
+
+    Returns ``{"coil_field_msh": ..., "filament_msh": ..., "field_n_vertices": ...}``
+    or empty dict on failure.  Errors are logged via ``progress`` and do
+    NOT abort the inductance solve.
+
+    PEEC-only.  The BEM-A coil path returns surface current density on
+    a triangle mesh; that has its own viz route (TODO, not in scope).
+    """
+    if coil_data.get("source_type") != "filament":
+        return {}
+
+    out_msh = _resolve_coil_msh_path(args)
+    if not out_msh:
+        return {}
+
+    paths = coil_data["paths"]
+    I_fil = coil_data["I_fil"]
+    base_dir = os.path.dirname(os.path.abspath(out_msh)) or "."
+    stem = os.path.splitext(os.path.basename(out_msh))[0]
+    os.makedirs(base_dir, exist_ok=True)
+
+    # ---- B field on auto-bbox mesh -----------------------------------
+    coil_field_msh = ""
+    field_n_vertices = 0
+    try:
+        from ngsolve import H1, GridFunction
+        from gmsh_post_export import save_vol_sol_pair, vol2msh
+
+        t0 = time.perf_counter()
+        field_mesh = _build_coil_bbox_mesh(paths)
+        field_n_vertices = field_mesh.nv
+        B_arr = _biot_savart_B_on_vertices(field_mesh, paths, I_fil)
+        fes_B = H1(field_mesh, order=1, dim=3)
+        gf_B = GridFunction(fes_B)
+        gf_B.vec.FV().NumPy()[:] = B_arr.reshape(-1)
+
+        sol_B = os.path.join(base_dir, f"{stem}_B.sol").replace("\\", "/")
+        vol_B = os.path.join(base_dir, f"{stem}_field.vol").replace("\\", "/")
+        save_vol_sol_pair(vol_B, sol_B, field_mesh.ngmesh, gf_B)
+        vol2msh(out_msh, vol_B, [
+            {"sol": sol_B, "fes": "H1", "fes_order": 1, "fes_dim": 3,
+             "name": "B", "ncomp": 3},
+        ])
+        coil_field_msh = out_msh
+        progress("VIZ", f"wrote {os.path.basename(out_msh)} "
+                         f"(B field on {field_n_vertices} verts, "
+                         f"{time.perf_counter()-t0:.1f}s)")
+    except Exception as e:
+        progress("VIZ", f"BBOX_ERROR:{type(e).__name__}: {e}")
+
+    # ---- 1D filament polylines + |I| ---------------------------------
+    filament_msh = ""
+    try:
+        from radia.gmsh_post_export import export_filaments_msh
+        fil_msh_path = os.path.join(base_dir,
+                                     f"{stem}_filaments.msh").replace("\\", "/")
+        export_filaments_msh(paths, fil_msh_path, currents=I_fil,
+                              label="filament")
+        filament_msh = fil_msh_path
+        progress("VIZ", f"wrote {os.path.basename(fil_msh_path)} "
+                         f"({len(paths)} filaments + |I|)")
+    except Exception as e:
+        progress("VIZ", f"FIL_ERROR:{type(e).__name__}: {e}")
+
+    return {
+        "coil_field_msh": coil_field_msh,
+        "filament_msh": filament_msh,
+        "field_n_vertices": int(field_n_vertices),
+    }
+
+
+# ======================================================================
 # Top-level dispatch
 # ======================================================================
 def run_inductance(args):
@@ -791,13 +961,34 @@ def run_inductance(args):
         return {"status": "error",
                 "error": f"unknown --coil-solver {args.coil_solver!r}"}
 
+    # Coil viz (filament .msh + bbox B .msh).  PEEC only; BEM-A surface
+    # current viz is TODO.  Failures here are non-fatal.
+    viz = _export_coil_msh_viz(args, coil_data)
+
     # Vacuum-only branch
     if args.coil_only or not args.vol:
-        return _assemble_vacuum_output(args, coil_data)
+        out = _assemble_vacuum_output(args, coil_data)
+        if viz.get("coil_field_msh"):
+            out["gmsh_file"] = viz["coil_field_msh"]
+            out["coil_field_msh"] = viz["coil_field_msh"]
+            out["field_n_vertices"] = viz["field_n_vertices"]
+        if viz.get("filament_msh"):
+            out["filament_msh"] = viz["filament_msh"]
+        return out
 
     # Weak-coupled branch
     wp_data = _solve_workpiece_weak_coupled(args, coil_data)
-    return _assemble_full_output(args, coil_data, wp_data)
+    out = _assemble_full_output(args, coil_data, wp_data)
+    if viz.get("coil_field_msh"):
+        # Promote bbox B msh to gmsh_file -- it has volumetric B vectors
+        # (Air-volume B viz the user can merge interactively).  The wp
+        # surface .msh remains in `msh_file` for compatibility.
+        out["gmsh_file"] = viz["coil_field_msh"]
+        out["coil_field_msh"] = viz["coil_field_msh"]
+        out["field_n_vertices"] = viz["field_n_vertices"]
+    if viz.get("filament_msh"):
+        out["filament_msh"] = viz["filament_msh"]
+    return out
 
 
 def main():
@@ -896,7 +1087,10 @@ def main():
     parser.add_argument("--msh-output", default="",
                         help="Workpiece .msh viz output path")
     parser.add_argument("--coil-msh-output", default="",
-                        help="Coil .msh viz output path (future, no-op)")
+                        help="Coil .msh viz output path. PEEC: writes "
+                             "<this>=B-on-bbox + <stem>_filaments.msh "
+                             "(1D polylines + |I|).  open_gmsh.py auto-"
+                             "merges the filament sibling.")
     parser.add_argument("--write-summary", action="store_true",
                         help="Add extra diagnostics in JSON")
     parser.add_argument("--coil-only", action="store_true",

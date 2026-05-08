@@ -1104,7 +1104,7 @@ class VectorPotentialSolver:
             Magnetostatic: eps (gauge regularization).
             Eddy current: eps * nu + omega * sigma.
         """
-        import sparsesolv_ngsolve as ssn
+        import radia.sparsesolv_ngsolve as ssn
         from ngsolve import BilinearForm, Preconditioner, grad, dx
 
         opts = self._ams_options
@@ -1158,7 +1158,7 @@ class VectorPotentialSolver:
         if fes_ndof <= 200_000:
             return 'direct'
         try:
-            import sparsesolv_ngsolve  # noqa: F401
+            import radia.sparsesolv_ngsolve  # noqa: F401
             return 'ams'
         except ImportError:
             return 'bddc'

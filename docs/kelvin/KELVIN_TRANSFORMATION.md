@@ -595,6 +595,61 @@ For position-dependent backgrounds (e.g., `A_s = (B₀/2)(-y, x, 0)`):
 
 API: `radia.kelvin_material.make_reduced_potential_background_cf`.
 
+### 7.4.1 Kameari Canonical Pattern (boundary-integral source, NOT bulk)
+
+⭐ **Reference**: Kameari (2025/10/14 slides),
+`W:/00_CAE/NGSolve/亀有/4-05.pdf`. 
+
+The historical "(ν-ν₀) bulk source" reduced-A form (next subsection §7.5)
+is one route. Kameari's canonical NGSolve+Kelvin recipe takes a
+DIFFERENT route: source coupling via **boundary integral on the
+inner-Kelvin interface ∂Ω**, not via volume integral with (ν-ν₀).
+
+**Three reductions** (Kameari slide 4):
+
+| Method | Inner | Outer (Kelvin) | Use case |
+|---|---|---|---|
+| Ω-Ω_r | H = -∇Ω_t | H = -∇Ω_r + H_s | Linear magnetic, scalar |
+| **A-Ω_r** | B = ∇×A_t | H = -∇Ω_r + H_s | **Recommended for sphere/cuboid** |
+| A-A_r | B = ∇×A_t | B = ∇×(A_r + A_s) | Vector source |
+| A-φ-A_r | A_t,φ in cond | A_r in air/Kelvin | Eddy current (TEAM 7) |
+
+**Weak forms (Kameari slides 7-9)**:
+
+```python
+# A-Ω_r weak form (slide 8) — for vector A in conductor, Ω_r outside
+a += 1/mu * curl(N) * curl(A) * dx                       # bulk
+f += N.Trace() * Cross(H_s, n) * ds(inner_kelvin_bdry)   # ∂Ω boundary integral
+
+# Ω-Ω_r weak form (slide 7) — for scalar Ω
+a += mu * grad(omega) * grad(Omega) * dx
+f += -omega.Trace() * (B_s * n) * ds(inner_kelvin_bdry)
+```
+
+The applied field (`H_s` or `B_s`) enters via a **boundary integral on
+the interface** between inner physical region and Kelvin region (or
+between inner and outer truncation). NOT in the bulk.
+
+**Performance** (Kameari slide 17, magnetic sphere a=1m, μ_r=1000,
+B_0=1T, theory Bz0=2.9940 T, **coarse mesh**):
+
+| Method | Order | Bz0 | Error | Wm |
+|---|---|---|---|---|
+| Ω-Ω_r | 2 | 3.3813 | 12.9% | — |
+| Ω-Ω_r | 3 | 2.9995 | 0.184% | 1883.8 |
+| Ω-Ω_r | 4 | 2.9985 | 0.029% | 1868.4 |
+| A-A_r | 3 | 2.9928 | 0.040% | 1867.8 |
+| **A-Ω_r** | **3** | **2.9940** | **0.001%** ⭐ | **1867.6** |
+
+**Independence from Kelvin radius rk** (slide 18): rk = 100 (very large)
+gives the same accuracy as small rk with adaptive refinement. The
+Kelvin region size is a free parameter.
+
+**Recommendation**: for "isolated conductor + applied uniform B" problems,
+use Kameari's A-Ω_r with Order ≥ 3 and boundary-integral source. The
+(ν-ν₀) bulk-source approach (next §7.5) requires extra care and was
+the source of the v11-v14 cuboid CLN issues.
+
 ### 7.5 The (ν − ν₀) Form Pitfall with Kelvin (CRITICAL)
 
 The popular `(ν - ν₀)` reduced-A simplification (eq. 7' above) is

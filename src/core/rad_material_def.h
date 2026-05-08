@@ -1008,15 +1008,6 @@ public:
 //-------------------------------------------------------------------------
 
 // Per-operator shape function table (replaces analytical A_s*tan formula)
-struct OperatorTable {
-	std::vector<double> r;     // |J| grid points [0, r_max], monotonically increasing
-	std::vector<double> f;     // f_k(r) = U_k'(r) shape function values
-	std::vector<double> U;     // U_k(r) = integral_0^r f_k(s) ds (precomputed via trapezoidal)
-	std::vector<double> df;    // f_k'(r) = U_k''(r) (precomputed via finite differences)
-	int n;                     // Number of grid points
-	double r_max;              // Maximum |J| = r[n-1] (saturation bound)
-};
-
 //-------------------------------------------------------------------------
 // Abstract base class for hysteresis materials
 // Provides common interface for Energy-based and Play-based models.
@@ -1050,217 +1041,8 @@ public:
 	virtual double GetBsaturation() const = 0;
 };
 
-class radTEnergyHysteresisMaterial : public radTHysteresisMaterial {
-
-	// Model parameters (immutable after construction)
-	int m_K;                              // Number of partial polarizations (play operators)
-	std::vector<OperatorTable> m_tables;  // Per-operator shape function tables
-	std::vector<double> m_chi;            // Pinning strength chi_k [A/m]
-	double m_eps;                         // Regularization parameter for |x|_eps
-
-	// Internal state: K partial polarizations (mutable during solve)
-	std::vector<TVector3d> m_Jk_prev;     // Current J_{k,p} [K]
-	std::vector<TVector3d> m_Jk_pinning;  // Pinning reference (saved before forward/inverse) [K]
-	std::vector<TVector3d> m_Jk_current;  // Last computed J_k solution [K]
-
-	// Cached results from last Forward() call
-	TVector3d m_last_H;                   // Last H input
-	TVector3d m_last_B;                   // Last B output
-	double m_last_chi;                    // Scalar chi from last call
-	double m_last_chi_d;                  // Differential chi from last call
-	bool m_has_result;                    // Whether cache is valid
-
-public:
-	// Constructor from table-based shape functions
-	radTEnergyHysteresisMaterial(int K, const double* chi,
-	                             const std::vector<std::vector<double>>& r_tables,
-	                             const std::vector<std::vector<double>>& f_tables,
-	                             double eps);
-
-	// Serialization constructor radTEnergyHysteresisMaterial(CAuxBinStrVect&) REMOVED (Phase B2c, 2026-04-15)
-
-	// Default constructor
-	radTEnergyHysteresisMaterial()
-		: m_K(0), m_eps(1e-8), m_last_chi(0), m_last_chi_d(0), m_has_result(false) {}
-
-	int Type_Material() { return 5; }
-
-	// radTMaterial virtual overrides
-	TVector3d M(const TVector3d& H);
-	void DefineInstantKsiTensor(const TVector3d& H, TMatrix3d& KsiTensor, TVector3d& Mr);
-
-	// Solver integration (same interface as radTNonlinearIsotropMaterial)
-	double ComputeChiFromH(const TVector3d& H) override;
-	double ComputeChiDualMethod(double H_mag, double mu_old, double relax = 0.0);
-	double ComputeDifferentialChi(double H_mag) override;
-
-	double GetInitialChi_ELF_Style() const override
-	{
-		// Compute initial chi from table-based shape functions
-		// chi_init ~ sum_k f_k'(0) / mu_0 = sum_k (f[1]/r[1]) / mu_0
-		if(m_K <= 0 || m_tables.empty()) return 1.0;
-		const double MU_0_local = 4.0 * 3.14159265358979323846 * 1.0e-7;
-		double chi_init = 0.0;
-		for(int k = 0; k < m_K; k++)
-		{
-			const auto& tab = m_tables[k];
-			if(tab.n >= 2 && tab.r[1] > 1e-30)
-				chi_init += tab.f[1] / (tab.r[1] * MU_0_local);
-		}
-		if(chi_init < 1.0) chi_init = 1.0;
-		return chi_init;
-	}
-
-	double GetBsaturation() const override
-	{
-		// Total saturation: sum of r_max per operator
-		double Jsat = 0.0;
-		for(int k = 0; k < m_K; k++) Jsat += m_tables[k].r_max;
-		if(Jsat < 1e-10) return 1.0;
-		return Jsat;
-	}
-
-	// Core operators (B-input naming: Forward = natural direction for B-input Play)
-	TVector3d Forward(const TVector3d& B) override;
-	TVector3d Inverse(const TVector3d& H) override;
-
-	// Jacobian dB/dH: 3x3 tensor + scalar chi_d (public for B-input Newton solver)
-	void ComputeJacobian(TMatrix3d& dBdH, double& chi_d) const override;
-
-	// State management
-	void SaveState(std::vector<TVector3d>& saved) const override
-	{
-		saved.resize(m_K);
-		for(int k = 0; k < m_K; k++) saved[k] = m_Jk_prev[k];
-	}
-	void RestoreState(const std::vector<TVector3d>& saved) override
-	{
-		for(int k = 0; k < m_K; k++)
-		{
-			m_Jk_prev[k] = saved[k];
-			m_Jk_pinning[k] = saved[k];
-		}
-		m_has_result = false;
-	}
-	void ResetState() override
-	{
-		TVector3d zero(0, 0, 0);
-		for(int k = 0; k < m_K; k++)
-		{
-			m_Jk_prev[k] = zero;
-			m_Jk_pinning[k] = zero;
-			m_Jk_current[k] = zero;
-		}
-		m_has_result = false;
-	}
-
-	// Full state save/restore for FEM Picard iteration (array-based for Python).
-	// Bug fix 2026-05-02: extended by 7 doubles to include the warm-start
-	// cache (m_last_B, m_last_H, m_has_result). Without it, Restore was not
-	// state-equivalent to driving the material to that point — see Type 6
-	// for the matching fix and the cross-validation evidence.
-	int GetStateSize() const override { return m_K * 9 + 7; }
-	void SaveStateToArray(double* pState) const override
-	{
-		int idx = 0;
-		for(int k = 0; k < m_K; k++)
-		{
-			pState[idx++] = m_Jk_prev[k].x; pState[idx++] = m_Jk_prev[k].y; pState[idx++] = m_Jk_prev[k].z;
-			pState[idx++] = m_Jk_pinning[k].x; pState[idx++] = m_Jk_pinning[k].y; pState[idx++] = m_Jk_pinning[k].z;
-			pState[idx++] = m_Jk_current[k].x; pState[idx++] = m_Jk_current[k].y; pState[idx++] = m_Jk_current[k].z;
-		}
-		pState[idx++] = m_last_B.x; pState[idx++] = m_last_B.y; pState[idx++] = m_last_B.z;
-		pState[idx++] = m_last_H.x; pState[idx++] = m_last_H.y; pState[idx++] = m_last_H.z;
-		pState[idx++] = m_has_result ? 1.0 : 0.0;
-	}
-	void RestoreStateFromArray(const double* pState) override
-	{
-		int idx = 0;
-		for(int k = 0; k < m_K; k++)
-		{
-			m_Jk_prev[k].x = pState[idx++]; m_Jk_prev[k].y = pState[idx++]; m_Jk_prev[k].z = pState[idx++];
-			m_Jk_pinning[k].x = pState[idx++]; m_Jk_pinning[k].y = pState[idx++]; m_Jk_pinning[k].z = pState[idx++];
-			m_Jk_current[k].x = pState[idx++]; m_Jk_current[k].y = pState[idx++]; m_Jk_current[k].z = pState[idx++];
-		}
-		m_last_B.x = pState[idx++]; m_last_B.y = pState[idx++]; m_last_B.z = pState[idx++];
-		m_last_H.x = pState[idx++]; m_last_H.y = pState[idx++]; m_last_H.z = pState[idx++];
-		m_has_result = (pState[idx++] >= 0.5);
-	}
-	void CommitState() override
-	{
-		for(int k = 0; k < m_K; k++)
-		{
-			m_Jk_prev[k] = m_Jk_current[k];
-			m_Jk_pinning[k] = m_Jk_current[k];
-		}
-	}
-
-	// DumpBin REMOVED (Phase B2c, 2026-04-15)
-
-	int DuplicateItself(radThg& hg, radTApplication*, char)
-	{
-		radTSend Send;
-		radTEnergyHysteresisMaterial* pNew = new radTEnergyHysteresisMaterial();
-		if(pNew == 0) { Send.ErrorMessage("Radia::Error900"); return 0; }
-		*pNew = *this;  // Copy all members
-		return FinishDuplication(pNew, hg);
-	}
-
-	int SizeOfThis() { return sizeof(radTEnergyHysteresisMaterial); }
-
-private:
-	// Internal energy U_k(|J|) and its derivatives (table interpolation)
-	double Uk(int k, double J_mag) const;   // U_k(r) from precomputed integral table
-	double dUk(int k, double J_mag) const;  // f_k(r) = U_k'(r) from shape function table
-	double d2Uk(int k, double J_mag) const; // f_k'(r) = U_k''(r) from precomputed derivative table
-
-	// Vector gradient of U_k(J): grad U_k = U_k'(|J|) * J/|J|
-	TVector3d GradUk(int k, const TVector3d& J) const;
-	// Hessian of U_k(J): d x d matrix
-	// H_U = U_k'' * e*e^T + U_k'/|J| * (I - e*e^T) where e = J/|J|
-	TMatrix3d HessUk(int k, const TVector3d& J) const;
-
-	// Precompute U (integral) and df (derivative) tables from r, f data
-	static void PrecomputeOperatorTable(OperatorTable& tab);
-
-	// Regularized norm |x|_eps = sqrt(|x|^2 + eps) and derivatives
-	double NormEps(const TVector3d& x) const;
-	TVector3d GradNormEps(const TVector3d& x) const;
-	TMatrix3d HessNormEps(const TVector3d& x) const;
-
-	// Newton solver for single J_k: min_J U_k(J) - <H,J> + chi_k |J - J_{k,p}|_eps
-	TVector3d SolveInverseK(int k, const TVector3d& H) const;
-
-	// Objective function for single J_k: U_k(J) - <H,J> + chi_k |J - J_{k,p}|_eps
-	double ObjectiveForwardK(int k, const TVector3d& J, const TVector3d& H) const;
-
-	// Objective function for Forward (B->H): G*(B, {J_k})
-	double ObjectiveForward(const TVector3d& B, const std::vector<TVector3d>& Jk_list) const;
-
-	// Helper: outer product a*b^T -> 3x3 matrix
-	static TMatrix3d OuterProduct(const TVector3d& a, const TVector3d& b)
-	{
-		return TMatrix3d(
-			TVector3d(a.x*b.x, a.x*b.y, a.x*b.z),
-			TVector3d(a.y*b.x, a.y*b.y, a.y*b.z),
-			TVector3d(a.z*b.x, a.z*b.y, a.z*b.z));
-	}
-
-	// Helper: 3x3 identity matrix
-	static TMatrix3d Eye()
-	{
-		return TMatrix3d(
-			TVector3d(1, 0, 0),
-			TVector3d(0, 1, 0),
-			TVector3d(0, 0, 1));
-	}
-
-	// Helper: solve 3x3 system A*x = b via inverse
-	static TVector3d Solve3x3(const TMatrix3d& A, const TVector3d& b)
-	{
-		return Matrix3d_inv(A) * b;
-	}
-};
+// radTEnergyHysteresisMaterial (Type 5) is defined as a thin subclass of
+// radTPlayHysteresisMaterial below, AFTER Type 6 is fully declared.
 
 //-------------------------------------------------------------------------
 // B-input Play hysteresis material
@@ -1482,6 +1264,69 @@ private:
 			TVector3d(0, 1, 0),
 			TVector3d(0, 0, 1));
 	}
+};
+
+//-------------------------------------------------------------------------
+// Energy-based vector hysteresis material (Type 5)
+//
+// Refactor 2026-05-XX: Type 5 is now a thin subclass of Type 6
+// (radTPlayHysteresisMaterial). The original Schur-complement Newton
+// implementation (Henrotte–Egger formulation with per-hysteron J_k as
+// independent variables) is structurally incompatible with the
+// Potter B-input shape functions identified by Hane–Sugahara: f_k < 0
+// for k >= 1 makes the per-hysteron Hessian h^priv_k = f'_k
+// sign-indefinite, the Sherman–Morrison Schur scalar can vanish or
+// change sign, and the Newton descent direction reverses.
+//
+// The current implementation uses Type 6's 3D Newton with analytical
+// Jacobian on F(B) = nu_rev*B + sum_k g_k(|p_k|) p_k/|p_k| - H = 0,
+// which preserves the energy formulation interpretation
+// W(B) = (1/2) nu_rev |B|^2 + sum_k G_k(|p_k|)
+// where g_0 = f_0 - nu_rev*r and g_k = f_k for k >= 1. The forward
+// map is algebraically identical to direct Play (H-axis congruency
+// preserved exactly), and nu_rev is exposed for Hantila one-time-LU
+// coupling in MMM/MSC nonlinear iteration.
+//
+// API: MatEnergyHysteresis(K, chi, tables, eps). The chi parameter is
+// numerically equal to the Play threshold eta_k by Hane–Sugahara
+// identification convention; it is forwarded to the Type 6 base
+// constructor as eta. The eps parameter is retained for ABI
+// compatibility but is no longer used (the Bergqvist regularization
+// |x|_eps had no role in the rev/irrev separated formulation).
+//-------------------------------------------------------------------------
+
+class radTEnergyHysteresisMaterial : public radTPlayHysteresisMaterial {
+public:
+	// Constructor: chi -> eta (numerically identical), eps unused.
+	radTEnergyHysteresisMaterial(int K, const double* chi,
+	                             const std::vector<std::vector<double>>& r_tables,
+	                             const std::vector<std::vector<double>>& f_tables,
+	                             double /*eps*/)
+		: radTPlayHysteresisMaterial(K, chi, r_tables, f_tables) {}
+
+	// Default constructor
+	radTEnergyHysteresisMaterial() : radTPlayHysteresisMaterial() {}
+
+	// Distinct material type ID (5) — distinguishes from Type 6 (Play)
+	int Type_Material() { return 5; }
+
+	// DuplicateItself must produce another Type 5 instance, not Type 6
+	int DuplicateItself(radThg& hg, radTApplication*, char)
+	{
+		radTSend Send;
+		radTEnergyHysteresisMaterial* pNew = new radTEnergyHysteresisMaterial();
+		if(pNew == 0) { Send.ErrorMessage("Radia::Error900"); return 0; }
+		*pNew = *this;
+		return FinishDuplication(pNew, hg);
+	}
+
+	int SizeOfThis() { return sizeof(radTEnergyHysteresisMaterial); }
+
+	// All other methods (M, DefineInstantKsiTensor, ComputeChiFromH,
+	// ComputeDifferentialChi, GetInitialChi_ELF_Style, GetBsaturation,
+	// Forward, Inverse, ComputeJacobian, SaveState, RestoreState,
+	// ResetState, CommitState, GetStateSize, SaveStateToArray,
+	// RestoreStateFromArray) are inherited from radTPlayHysteresisMaterial.
 };
 
 //-------------------------------------------------------------------------
