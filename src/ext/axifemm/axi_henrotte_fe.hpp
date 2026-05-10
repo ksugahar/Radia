@@ -108,6 +108,63 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteFE_Edge_Q1 / _Q2
+//
+// 1-D restriction of the Q1 / Q2 axis-aligned-quad Henrotte basis to a
+// single edge (axis-aligned in (r, z)):
+//
+//   - Horizontal edge (z = const): basis values are Lagrange in s = r^2
+//     across the edge endpoints.
+//   - Vertical edge (r = const): basis values are Lagrange in z.
+//
+// This is needed for `LinearForm += q * v * ds(label)` patterns -- the
+// axisymmetric Neumann-BC RHS of heat / magnetic Henrotte solvers.
+//
+// Edge endpoint convention: (r0, z0) and (r1, z1) are the two segment
+// vertices in the order returned by `ma->GetElement(BND ei).Vertices()`.
+// The order does NOT need to match the parent quad's vertex numbering
+// because Lagrange basis values depend only on the edge endpoint
+// coordinates, not on the parent quad's other two corners.
+//
+// Q1 case: 2 DOFs (the two segment vertices).
+// Q2 case: 3 DOFs (vertex0, vertex1, edge midnode at the s-midpoint
+// (= NGSolve's segment edge index, listed after the vertices in
+// AxiHenrotteFESpace::GetDofNrs for BND elements)).
+// ---------------------------------------------------------------------------
+
+class AxiHenrotteFE_Edge_Q1 : public AxiHenrotteBaseFE {
+public:
+    double r0, z0, r1, z1;
+
+    AxiHenrotteFE_Edge_Q1(double ar0, double az0, double ar1, double az1)
+        : AxiHenrotteBaseFE(2, 1),
+          r0(ar0), z0(az0), r1(ar1), z1(az1) {}
+
+    ELEMENT_TYPE ElementType() const override { return ET_SEGM; }
+
+    void CalcShape(const IntegrationPoint & ip,
+                   BareSliceVector<> shape) const override;
+    void CalcDShape(const IntegrationPoint & ip,
+                    BareSliceMatrix<> dshape) const override;
+};
+
+class AxiHenrotteFE_Edge_Q2 : public AxiHenrotteBaseFE {
+public:
+    double r0, z0, r1, z1;
+
+    AxiHenrotteFE_Edge_Q2(double ar0, double az0, double ar1, double az1)
+        : AxiHenrotteBaseFE(3, 2),
+          r0(ar0), z0(az0), r1(ar1), z1(az1) {}
+
+    ELEMENT_TYPE ElementType() const override { return ET_SEGM; }
+
+    void CalcShape(const IntegrationPoint & ip,
+                   BareSliceVector<> shape) const override;
+    void CalcDShape(const IntegrationPoint & ip,
+                    BareSliceMatrix<> dshape) const override;
+};
+
+// ---------------------------------------------------------------------------
 // AxiHenrotteFE_P1_Triangle
 //   - 3 DOFs/element on a general triangle (r_i, z_i) in (r, z) plane
 //   - shape_i(r, z) = a_i + b_i*r^2 + c_i*z

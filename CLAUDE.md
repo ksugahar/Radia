@@ -391,6 +391,69 @@ public subpackage when ready.
 - Induction Heating: `mcp-server-ih` → `radia_mcp.ih` (2026-04-24, application-specific subpackage)
 - Analytical Formulas: in `radia_mcp.radia_ngsolve.analytical_formulas` (2026-05-01, extended same day) — closed-form reference layer (Wakao-Igarashi-Fujiwara-Kameari Part 1-9). Group B+C (radia 4.20.0): ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular bar, thin-plate eddy current, Fabri solenoid, three-phase line, K(k)/E(k) Hastings, Gauss-Legendre. Group D (radia 4.21.0, Part 6/8/9): plate Joule dissipation, AC thin-shell shielding, magnetic-shell interior fields, planar surface impedance, full Bessel cylindrical-conductor AC impedance, Gauss-Patterson nested quadrature, cuboid average B (numerical-integration path). **radia 4.22.0**: cuboid_average_field closed-form C++ kernel shipped — sympy-derived G1, G2 antiderivatives + 64-corner inclusion-exclusion sum (~40 µs/call, 817× faster than Gauss-Legendre baseline); `method="numerical"` fallback retained for cross-checks and the V_T ≪ V_S ULP-cancellation regime. The originally-cited Stafl 1967 §3.4 was confirmed unrelated (2D rectangular conductor, not 3D cuboid magnetisation). MCP tool `analytical_formulas(topic)` exposes 11 topics including a `validation_use_cases` mapping that says "given analysis X, which closed form is the trusted reference?". Use it as the FIRST QUESTION when validating any new analysis result.
 
+### Axisymmetric FE: Henrotte Basis Only (NEVER NGSolve H1 + 2 pi r)
+
+**POLICY (2026-05-10)**: All axisymmetric finite-element calculations
+in this codebase MUST use the Henrotte/Meeker `{1, r^2, z, ...}` basis
+via `radia.radia_axifemm`.  Do NOT use standard NGSolve `H1(mesh,
+order=p)` with a `2 pi r` Jacobian weight for **any** axisymmetric
+field, regardless of physics (magnetic A_phi, scalar temperature T,
+electric potential phi, ...).
+
+**The mathematical reason**: any axisymmetric scalar field, viewed as
+a function of `r` extended across the axis to `r < 0`, must be an
+**even function in r** (cylindrical symmetry implies T(-r, z) =
+T(r, z)).  Even functions Taylor-expand only in even powers of r
+(`r^0, r^2, r^4, ...`).  Standard P1/P2/Pp `H1` basis on `(r, z)`
+contains odd-r modes that **cannot occur in any axisymmetric
+distribution**; the FE solver wastes DOFs driving those non-physical
+modes to zero through the `2 pi r` Jacobian weight.  The Henrotte
+basis spans exactly the even-r polynomial space, matching the
+admissible function space.
+
+This is the same reason FEMM (Meeker) uses `{1, r^2, z}` for both
+its magnetic (`prob3big.cpp`) and thermal (`heatprob.cpp`) solvers.
+
+**API**:
+
+```python
+import radia
+import radia.radia_axifemm as ax
+
+mesh = Mesh(...)                                  # axis-aligned quad mesh
+fes  = ax.H1Henrotte(mesh, order=p)               # p = 1 (Q1) or p = 2 (Q2)
+
+# Magnetic A_phi:
+a_mag = BilinearForm(fes, symmetric=True)
+a_mag += ax.AxiHenrotteStiffnessBFI(mu_cf)
+a_mag += ax.AxiHenrotteSigmaMassBFI(sigma_cf)     # eddy-current term
+
+# Heat T (radia 4.31.0+):
+a_heat = BilinearForm(fes, symmetric=True)
+a_heat += ax.AxiHenrotteHeatStiffnessBFI(k_cf)
+a_heat += ax.AxiHenrotteHeatMassBFI(rho_c_cf)     # transient term
+```
+
+**Allowed exceptions**:
+
+- 3D solvers (`calc_fem_kelvin.py`, `calc_fem_coilmesh.py`) are
+  exempt because they are not axisymmetric.
+- Cross-mesh interpolation / projection helpers (e.g. φ-averaging
+  the qsurf 3D GridFunction onto an axisym mesh) MAY temporarily
+  hold a function in standard `H1` if the interpolation primitive
+  requires it; the **solve** must still happen on Henrotte.
+- Pure-NumPy reference prototypes in
+  `tests/axifemm/_reference_python/` may use direct integration
+  without an FE basis — they are validation oracles, not production
+  paths.
+
+**Reference**: see [`docs/axifemm/FORMULATION.md`](docs/axifemm/FORMULATION.md)
+sections 5-6 (basis derivation), 10b (heat-equation operator), and
+the parity argument.  Pre-radia-4.31.0 axisymmetric solvers that
+used standard `H1(mesh, order=p)` + `2 pi r` weighting were a
+historical compromise (no Henrotte heat BFI yet) and have been
+migrated.
+
 ### Unit System Policy
 
 **POLICY**: Radia always uses **meters**. There is no unit conversion in C++. All coordinates are in meters, all current densities in A/m^2.
