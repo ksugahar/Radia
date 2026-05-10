@@ -174,8 +174,28 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
     from ngsolve import CoefficientFunction
     nu_cf = mesh.MaterialCF(nu_d, default=NU_0)
 
-    # Static solve
-    sys.stderr.write("HEATING_SOLVE:FEM static solve\n")
+    # Static solve.
+    #
+    # POLICY VIOLATION FLAG (2026-05-10): this script uses standard
+    # `H1(mesh, order=p)` which CLAUDE.md "Axisymmetric FE: Henrotte
+    # Basis Only" forbids for axisymmetric solves.  Migration to
+    # `radia.radia_axifemm.H1Henrotte + AxiHenrotteStiffnessBFI` was
+    # attempted in radia 4.33.0 development and **deferred** because
+    # the Kelvin transformation here uses a spatially-varying nu_cf
+    # (kf = (rs/a_kelvin)^2 in the air_outer region) and the existing
+    # AxiHenrotteStiffnessBFI samples mu_cf only at the element
+    # centroid.  Centroid sampling cannot represent the kf variation
+    # within an element, and the migration produced numerically wrong
+    # P_total (~3580x off) and L (~70x off) on the steel cylinder
+    # benchmark.  Proper fix needs per-quadrature-point mu evaluation
+    # in the BFI (loses closed-form benefit) OR rederiving the Kelvin
+    # transform on the Henrotte (s = r^2, z) basis; both are larger
+    # tasks than a calc-script migration.
+    #
+    # This script remains on standard H1 + 2 pi r weighting until
+    # the Henrotte BFI gains spatially-varying mu support.
+    sys.stderr.write("HEATING_SOLVE:FEM static solve (legacy H1 -- "
+                      "Henrotte migration blocked on Kelvin nu_cf)\n")
     sys.stderr.flush()
     t0 = time.perf_counter()
     fes = Periodic(H1(mesh, order=order, complex=False,
