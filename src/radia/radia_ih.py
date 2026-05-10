@@ -40,7 +40,7 @@ from PySide6.QtGui import QColor
 # ============================================================
 
 METHOD_PEEC_IND         = "PEEC inductance (coil only, STEP)"
-METHOD_BEMA_IND         = "BEM-A inductance (coil only, STEP)"
+METHOD_BEMA_IND         = "BEM-A inductance (coil only, .vol)"
 METHOD_PEEC_BEM         = "PEEC + BEM weak coupling (workpiece)"
 METHOD_BEMA_BEM         = "BEM-A + BEM weak coupling (workpiece)"
 METHOD_PEEC_FEM_KELVIN  = "PEEC coil + FEM wp (SIBC) + Kelvin"
@@ -63,9 +63,10 @@ METHOD_TOOLTIP = {
         "<li>Coil as Weggler stabilized EFIE saddle on HDivSurface RWG</li>"
         "<li>n_peri-free (resolves rect-corner current crowding)</li>"
         "<li>Slightly higher L than PEEC (~3% on rect cross-section)</li>"
-        "<li>STEP input (face names 'source'/'sink' OR area-based detect)</li>"
+        "<li>Pre-meshed surface .vol input "
+        "(Cubit / Netgen; <b>source</b>/<b>sink</b> sidesets on caps)</li>"
         "</ul>"
-        "Requires <b>STEP</b> file only.  Use when PEEC perimeter "
+        "Requires a coil <b>.vol</b> file only.  Use when PEEC perimeter "
         "filaments cannot resolve the cross-section geometry."
     ),
     METHOD_PEEC_BEM: (
@@ -89,7 +90,8 @@ METHOD_TOOLTIP = {
         "<li>Weak coupling: Telegen φ·B back-reaction at port</li>"
         "<li>Cross-method check vs PEEC+BEM: agrees ~5% on P_wp</li>"
         "</ul>"
-        "Requires <b>sibc</b> sideset in .vol + <b>STEP</b> coil."
+        "Requires <b>sibc</b> sideset in workpiece .vol + a separate "
+        "pre-meshed coil <b>.vol</b> (source/sink sidesets on caps)."
     ),
     METHOD_PEEC_FEM_KELVIN: (
         "<b>PEEC coil + FEM wp + Kelvin</b> (~4-8 min).<br>"
@@ -308,10 +310,8 @@ class IHPanel(ModePanel):
         # (Only for PEEC methods, hidden otherwise by _on_method_changed)
         self._add_section("Coil geometry (PEEC)", key="_sec_peec_step")
         step_w = self.add_browse(
-            "peec_step", "STEP or JOU:",
-            filter_str="Coil geometry (*.step *.stp *.jou);;"
-                       "STEP (*.step *.stp);;"
-                       "Cubit journal (*.jou);;All (*)")
+            "peec_step", "STEP:",
+            filter_str="STEP (*.step *.stp);;All (*)")
         step_w.textChanged.connect(self._emit_validation)
         # "New..." button: write a CoilBuilder racetrack starter .py
         # next to the chosen .step destination AND run it once to
@@ -320,6 +320,18 @@ class IHPanel(ModePanel):
         self.add_browse_action(
             "peec_step", "New...", self._on_new_coil_template_for_step,
             fixed_width=60)
+
+        # ============ BEM-A coil input (pre-meshed surface .vol) ============
+        # BEM-A reads a Cubit / Netgen .vol whose 'source' / 'sink'
+        # boundary labels mark the cap faces.  No on-the-fly OCC re-mesh
+        # (consistent with CLAUDE.md "Cubit/NGSolve Complete Separation
+        # Policy": .vol is the sole computation interface).
+        # (Only for BEM-A methods, hidden otherwise by _on_method_changed)
+        self._add_section("Coil geometry (BEM-A)", key="_sec_coil_vol")
+        coil_vol_w = self.add_browse(
+            "coil_vol", "Coil .vol:",
+            filter_str="Coil mesh (*.vol);;All (*)")
+        coil_vol_w.textChanged.connect(self._emit_validation)
 
         # ============ Workpiece material (INDEPENDENT from coil) ============
         self._add_section("Workpiece material", key="_sec_wp_material")
@@ -527,8 +539,11 @@ class IHPanel(ModePanel):
         is_inductance_path = is_vacuum or is_weak    # any calc_inductance.py mode
         is_bem_a = is_bema_ind or is_bema_bem
         is_peec = is_peec_ind or is_peec_bem
-        # PEEC+FEM+Kelvin needs a STEP (for filament coil) AND .vol (for wp).
-        needs_step = is_inductance_path or is_peec_fem_k
+        # PEEC + PEEC+FEM+Kelvin take CAD STEP (filament coil); BEM-A
+        # variants take a pre-meshed .vol coil.  FEM-full uses a
+        # volumetric coil baked into its workpiece .vol.
+        needs_step = is_peec or is_peec_fem_k
+        needs_coil_vol = is_bem_a
         needs_wp = is_weak or is_peec_fem_k or is_fem
 
         self._method_combo.setToolTip(METHOD_TOOLTIP.get(method, ""))
@@ -554,15 +569,15 @@ class IHPanel(ModePanel):
             solver.setCurrentIndex(idx)
 
         # Visibility per method (rows + their section headers):
+        # PEEC modes -> CAD STEP row; BEM-A modes -> pre-meshed .vol row.
         self._set_row_visible("_sec_peec_step", needs_step)
         self._set_row_visible("peec_step", needs_step)
-        # Perimeter placement (n_peri) only for PEEC variants (peec coil
-        # solver); BEM-A variants use surface mesh maxh instead.
+        self._set_row_visible("_sec_coil_vol", needs_coil_vol)
+        self._set_row_visible("coil_vol", needs_coil_vol)
+        # Perimeter placement (n_peri) only for PEEC variants.  BEM-A
+        # variants no longer have a runtime mesh-maxh knob (the .vol
+        # was meshed externally by Cubit / Netgen).
         self._set_row_visible("peec_n_peri", is_peec)
-        # BEM-A coil mesh maxh -- only for BEM-A variants.  Widget is
-        # added lazily in _ensure_coil_maxh_widget on first need.
-        self._ensure_coil_maxh_widget()
-        self._set_row_visible("coil_maxh", is_bem_a)
         # Volume filament grid (nwinc/nhinc) only PEEC+FEM+Kelvin now.
         self._set_row_visible("peec_nwinc", is_peec_fem_k)
         self._set_row_visible("peec_nhinc", is_peec_fem_k)
@@ -651,27 +666,15 @@ class IHPanel(ModePanel):
         method = self._method_combo.currentText()
         ok, _errors, _warnings = check_method_requirements(
             method, self._vol_mats, self._vol_bnds)
-        # Vacuum inductance modes need a STEP only; .vol is not required.
-        if method in (METHOD_PEEC_IND, METHOD_BEMA_IND):
+        # Vacuum inductance modes need a coil input only; the workpiece
+        # .vol row is hidden.  PEEC takes STEP; BEM-A takes pre-meshed .vol.
+        if method == METHOD_PEEC_IND:
             step = self.val("peec_step") if "peec_step" in self._widgets else ""
             return ok and bool(step) and os.path.isfile(step)
+        if method == METHOD_BEMA_IND:
+            cv = self.val("coil_vol") if "coil_vol" in self._widgets else ""
+            return ok and bool(cv) and os.path.isfile(cv)
         return ok and (self._vol_mats is not None)
-
-    # ----------------------- Coil maxh widget (BEM-A modes only) ----------
-    def _ensure_coil_maxh_widget(self):
-        """Lazily add the BEM-A surface mesh maxh row.
-
-        Stays hidden in PEEC modes (PEEC perimeter filaments don't have
-        a surface mesh); activated by ``_on_method_changed`` when a
-        BEM-A method is selected.
-        """
-        if "coil_maxh" in self._widgets:
-            return
-        w = self.add_line("coil_maxh", "Coil mesh maxh [m]:", "0.012")
-        w.setToolTip(
-            "BEM-A coil surface mesh maxh.  Default 0.012 m converged on "
-            "8 mm-class rect cross-section; tighten for thinner conductors "
-            "or higher accuracy at the cost of N^2 assembly time.")
 
     # ----------------------- Command building -----------------------
 
@@ -730,26 +733,34 @@ class IHPanel(ModePanel):
         chosen by the panel.  Method retains the old name for backward
         compatibility with the IH panel registry / hooks; the underlying
         CLI is the new unified one.
+
+        PEEC -> --coil-step (CAD); BEM-A -> --coil-vol (pre-meshed).
         """
-        step = self.val("peec_step")
-        if not step:
-            raise ValueError("Coil STEP file is required for inductance mode.")
-        if not os.path.isfile(step):
-            raise ValueError(f"STEP file not found: {step}")
         coil_solver = self._coil_solver_cli()
+        if coil_solver == "peec":
+            coil_in = self.val("peec_step")
+            if not coil_in:
+                raise ValueError("Coil STEP file is required for PEEC mode.")
+            if not os.path.isfile(coil_in):
+                raise ValueError(f"STEP file not found: {coil_in}")
+            coil_arg = ["--coil-step", coil_in]
+        else:  # bem-a
+            coil_in = self.val("coil_vol") if "coil_vol" in self._widgets else ""
+            if not coil_in:
+                raise ValueError("Coil .vol file is required for BEM-A mode.")
+            if not os.path.isfile(coil_in):
+                raise ValueError(f"Coil .vol not found: {coil_in}")
+            coil_arg = ["--coil-vol", coil_in]
         cmd = [_PYTHON, calc_script("calc_inductance.py"),
-               "--coil-step", step,
+               *coil_arg,
                "--coil-solver", coil_solver,
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
-               "--msh-output", msh_output(step, "_peec_ind"),
-               "--output", json_output(step, "_peec_ind")]
+               "--msh-output", msh_output(coil_in, "_peec_ind"),
+               "--output", json_output(coil_in, "_peec_ind")]
         if coil_solver == "peec":
             cmd += ["--peec-n-peri", str(self.val("peec_n_peri"))]
-        else:
-            cmd += ["--coil-maxh", str(
-                self.val("coil_maxh") if "coil_maxh" in self._widgets else 0.012)]
         return cmd
 
     def _build_peec_bem_command(self, vol_path):
@@ -759,13 +770,22 @@ class IHPanel(ModePanel):
         ``--vol`` for weak coupling.  Replaces ``calc_peec_bem.py``
         (PEEC coil) and ``calc_coil_bem_a_workpiece.py`` (BEM-A coil)
         in a single dispatch.
+
+        PEEC -> --coil-step (CAD); BEM-A -> --coil-vol (pre-meshed).
         """
-        step = self.val("peec_step")
-        if not step:
-            raise ValueError("Coil STEP file is required for weak-coupled mode.")
         coil_solver = self._coil_solver_cli()
+        if coil_solver == "peec":
+            coil_in = self.val("peec_step")
+            if not coil_in:
+                raise ValueError("Coil STEP file is required for PEEC weak-coupled mode.")
+            coil_arg = ["--coil-step", coil_in]
+        else:  # bem-a
+            coil_in = self.val("coil_vol") if "coil_vol" in self._widgets else ""
+            if not coil_in:
+                raise ValueError("Coil .vol file is required for BEM-A weak-coupled mode.")
+            coil_arg = ["--coil-vol", coil_in]
         cmd = [_PYTHON, calc_script("calc_inductance.py"),
-               "--coil-step", step,
+               *coil_arg,
                "--coil-solver", coil_solver,
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
@@ -788,9 +808,6 @@ class IHPanel(ModePanel):
         # a CAD callback.
         if coil_solver == "peec":
             cmd += ["--peec-n-peri", str(self.val("peec_n_peri"))]
-        else:
-            cmd += ["--coil-maxh", str(
-                self.val("coil_maxh") if "coil_maxh" in self._widgets else 0.012)]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
             if bh:
@@ -899,7 +916,7 @@ class IHWindow(AnalysisWindow):
         self._reload_vol_info(self._vol_edit.text())
         # PEEC-inductance convenience: if the method is PEEC-inductance
         # AND the STEP field is empty (first launch / fresh QSettings),
-        # auto-populate from the newest *.step / *.stp / *.jou in cwd.
+        # auto-populate from the newest *.step / *.stp in cwd.
         # This was previously a separate PEECInductanceWindow class;
         # merged into IHWindow 2026-04-26 because PEEC-inductance is
         # just one of IH's four methods and a standalone window only
@@ -939,13 +956,11 @@ class IHWindow(AnalysisWindow):
         return btn
 
     def _maybe_auto_fill_step_from_cwd(self):
-        """If the active method needs a STEP/JOU coil AND the field is
-        empty, populate it with the newest .step / .stp / .jou in the
-        current working directory (set by the launcher's startDetached
-        to the .jou's directory).  STEP has priority over JOU (STEP is
-        the canonical input; JOU is the fallback for 3turnCoil-class
-        multi-turn coils where the STEP walker can't extract the full
-        centerline).  No-op when the user already has a value."""
+        """If the active method needs a STEP coil AND the field is
+        empty, populate it with the newest .step / .stp in the current
+        working directory.  No-op when the user already has a value.
+        Layer 3 panels never accept .jou (Cubit-only Layer 1 input);
+        the calc layer is fed STEP / .vol only."""
         panel = self._panel
         if panel is None:
             return
@@ -962,10 +977,6 @@ class IHWindow(AnalysisWindow):
         candidates = sorted(
             glob.glob("*.step") + glob.glob("*.stp"),
             key=lambda p: os.path.getmtime(p), reverse=True)
-        if not candidates:
-            candidates = sorted(
-                glob.glob("*.jou"),
-                key=lambda p: os.path.getmtime(p), reverse=True)
         if candidates:
             step_widget.setText(os.path.abspath(candidates[0]))
 
