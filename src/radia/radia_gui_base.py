@@ -200,7 +200,7 @@ def msh_output(vol_path, suffix):
 def json_output(base_path, suffix):
     """Companion to msh_output: <base>_<suffix>.json next to the input.
 
-    base_path: any input path the analysis is keyed on (.vol, .step, .jou).
+    base_path: any input path the analysis is keyed on (.vol or .step).
     The .json is written by calc_main when --output is passed and lives
     next to the .msh so users can find both side-by-side.
     """

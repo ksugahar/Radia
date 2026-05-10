@@ -7,12 +7,20 @@ scoped CLIs that overlapped on workflow but differed on coil solver:
   * calc_peec_bem.py               -> --coil-solver peec, --vol present
   * calc_coil_bem_a_workpiece.py   -> --coil-solver bem-a, --vol present
 
+Coil-input format (one per solver):
+  * PEEC   -> --coil-step (CAD STEP; perimeter filaments derived from
+              centerline)
+  * BEM-A  -> --coil-vol  (pre-meshed surface .vol from Cubit / Netgen;
+              must contain 'source'/'sink' boundary labels on the cap
+              faces)
+
 Coil solver (``--coil-solver``):
   * ``peec`` : PEEC perimeter filaments + Loop-bundle solve.
                Fast (~10x BEM-A); n_peri-discretisation-limited (~3% under
                on rect cross-section at n_peri=16 vs converged BEM-A).
   * ``bem-a``: intree Weggler stabilized EFIE on HDivSurface RWG
                (Phase C.1-C.5).  Surface-current physics, n_peri-free.
+               Reads a pre-meshed coil .vol; no on-the-fly OCC re-mesh.
 
 Workpiece is OPTIONAL.  Without ``--vol`` the script returns only the
 vacuum coil L_coil + R_coil.  With ``--vol`` it adds weak-coupled BEM-SIBC:
@@ -134,55 +142,35 @@ def _solve_coil_peec(args):
 # Coil solver: BEM-A (intree Weggler EFIE saddle on RWG)
 # ======================================================================
 def _build_bema_coil_mesh(args):
-    """Coil STEP -> NGSolve OCC mesh with source/sink labelling.
+    """Load pre-meshed coil surface from --coil-vol.
 
-    Resolution order:
-      1. Match face.name == args.coil_source_name / args.coil_sink_name.
-      2. Auto-area fallback: 2 smallest PLANE faces, distinguished by
-         |y-centroid| (matches all current test fixtures).
+    BEM-A operates on a Cubit-/Netgen-meshed .vol whose 2D boundary
+    elements form the coil surface.  The .vol must already contain
+    boundary labels matching args.coil_source_name / args.coil_sink_name
+    on the two cap faces (Layer-1 Cubit responsibility); no on-the-fly
+    OCC re-mesh and no auto-detection -- fail-fast per CLAUDE.md
+    "No Fallbacks" policy if the labels are missing.
     """
-    from netgen.occ import OCCGeometry, Glue
-    from netgen.meshing import MeshingParameters
     from ngsolve import Mesh
 
-    geo = OCCGeometry(args.coil_step)
-    shape = geo.shape
-    faces = list(shape.faces)
-    src_idx = snk_idx = None
-    for i, f in enumerate(faces):
-        nm = getattr(f, "name", None)
-        if nm == args.coil_source_name and src_idx is None:
-            src_idx = i
-        elif nm == args.coil_sink_name and snk_idx is None:
-            snk_idx = i
+    if not args.coil_vol:
+        raise ValueError(
+            "--coil-vol is required for --coil-solver bem-a.  PEEC consumes "
+            "STEP (--coil-step); BEM-A consumes a pre-meshed surface .vol.")
+    if not os.path.isfile(args.coil_vol):
+        raise FileNotFoundError(f"--coil-vol not found: {args.coil_vol}")
 
-    if src_idx is None or snk_idx is None:
-        try:
-            fs_sorted = sorted(enumerate(faces), key=lambda x: x[1].mass)
-        except Exception as exc:
-            raise ValueError(
-                f"could not sort coil faces by mass: {exc}.  "
-                f"Set face.name = {args.coil_source_name!r}/"
-                f"{args.coil_sink_name!r} in build123d before export.")
-        ca, fa = fs_sorted[0]
-        cb, fb = fs_sorted[1]
-        if abs(fa.center[1]) < abs(fb.center[1]):
-            src_idx, snk_idx = ca, cb
-        else:
-            src_idx, snk_idx = cb, ca
-
-    for i, f in enumerate(faces):
-        if i == src_idx:
-            f.name = "source"
-        elif i == snk_idx:
-            f.name = "sink"
-        else:
-            f.name = "body"
-
-    ngmesh = OCCGeometry(Glue(faces)).GenerateMesh(
-        mp=MeshingParameters(maxh=args.coil_maxh, curvaturesafety=1.0,
-                              segmentsperedge=1))
-    return Mesh(ngmesh)
+    mesh = Mesh(args.coil_vol)
+    bnd_names = list(mesh.GetBoundaries())
+    src_name = args.coil_source_name
+    snk_name = args.coil_sink_name
+    if src_name not in bnd_names or snk_name not in bnd_names:
+        raise ValueError(
+            f"--coil-vol {args.coil_vol!r} is missing the required boundary "
+            f"labels {src_name!r}/{snk_name!r}.  Available boundaries: "
+            f"{bnd_names}.  Set the source/sink sidesets in the Cubit .jou "
+            f"before exporting the coil .vol.")
+    return mesh
 
 
 def _arrays_from_bema_coil_mesh(mesh):
@@ -224,7 +212,8 @@ def _solve_coil_bem_a(args):
         compute_inductance_source_sink, compute_centroids_areas_J)
 
     omega = 2.0 * math.pi * args.frequency
-    progress("BEMA", f"coil STEP -> mesh maxh={args.coil_maxh}")
+    progress("BEMA", f"loading pre-meshed coil .vol: "
+                       f"{os.path.basename(args.coil_vol)}")
     t0 = time.perf_counter()
     coil_mesh = _build_bema_coil_mesh(args)
     # We still extract verts/tris/masks for diagnostics + N_tris reporting.
@@ -239,8 +228,9 @@ def _solve_coil_bem_a(args):
         raise RuntimeError(
             f"coil source/sink mesh empty after labelling "
             f"(src={int(src_mask.sum())}, snk={int(snk_mask.sum())}).  "
-            f"Set face.name = {args.coil_source_name!r}/{args.coil_sink_name!r} "
-            f"in build123d, or use a STEP whose 2 smallest PLANE faces are caps.")
+            f"Check that the {args.coil_source_name!r}/"
+            f"{args.coil_sink_name!r} sidesets in --coil-vol contain "
+            f"surface elements (not just labelled but empty).")
 
     delta_skin = math.sqrt(2.0 / (omega * MU_0 * args.coil_sigma)) \
                   if omega > 0 else 1.0
@@ -952,6 +942,16 @@ def run_inductance(args):
     if args.coil_only and args.vol:
         progress("INDUCT", "--coil-only: skipping workpiece despite --vol")
 
+    # Coil-input format must match coil-solver:
+    #   peec  -> --coil-step (CAD geometry, filaments derived)
+    #   bem-a -> --coil-vol  (pre-meshed surface, no on-the-fly OCC re-mesh)
+    if args.coil_solver == "peec" and not args.coil_step:
+        return {"status": "error",
+                "error": "--coil-step is required for --coil-solver peec"}
+    if args.coil_solver == "bem-a" and not args.coil_vol:
+        return {"status": "error",
+                "error": "--coil-vol is required for --coil-solver bem-a"}
+
     # Coil layer
     if args.coil_solver == "peec":
         coil_data = _solve_coil_peec(args)
@@ -998,12 +998,19 @@ def main():
                     "calc_coil_bem_a_workpiece.")
 
     # ----- Coil geometry & solver switch -----
-    parser.add_argument("--coil-step", required=True,
-                        help="Coil STEP file path")
+    # PEEC consumes a CAD .step (filaments derived from centerline);
+    # BEM-A consumes a pre-meshed surface .vol (no on-the-fly OCC re-mesh).
+    # Each solver requires its own input format -- no cross-feeding.
+    parser.add_argument("--coil-step", default="",
+                        help="Coil CAD STEP file (required for --coil-solver peec)")
+    parser.add_argument("--coil-vol", default="",
+                        help="Coil pre-meshed surface .vol (required for "
+                             "--coil-solver bem-a; must contain "
+                             "'source'/'sink' boundary labels)")
     parser.add_argument("--coil-solver", required=True,
                         choices=["peec", "bem-a"],
-                        help="peec: PEEC perimeter filaments (fast). "
-                             "bem-a: Weggler EFIE on RWG (accurate).")
+                        help="peec: PEEC perimeter filaments from STEP (fast). "
+                             "bem-a: Weggler EFIE on RWG, reads pre-meshed .vol.")
 
     # ----- PEEC-specific args -----
     parser.add_argument("--peec-n-peri", type=int, default=16,
@@ -1011,7 +1018,9 @@ def main():
 
     # ----- BEM-A-specific args -----
     parser.add_argument("--coil-maxh", type=float, default=0.012,
-                        help="BEM-A surface mesh maxh [m] (bem-a only)")
+                        help="DEPRECATED (kept for back-compat); BEM-A "
+                             "now reads pre-meshed --coil-vol instead of "
+                             "re-meshing CAD on-the-fly.")
     parser.add_argument("--coil-source-name", default="source",
                         help="Coil source-cap face name (bem-a; falls back "
                              "to area-based detection if absent)")
