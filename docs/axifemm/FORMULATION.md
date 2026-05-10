@@ -417,6 +417,57 @@ production induction-heating workpiece thermal analyses use
 structured quad meshes for accuracy anyway (Q2 quad converges much
 faster than P1 triangle on the axis).
 
+## 10c. Boundary trace + Neumann RHS (radia 4.32.0+)
+
+For axisymmetric Neumann BC patterns
+`LinearForm += q * v * weight * ds(label)` (heat flux, current sheet,
+etc.), the Henrotte FESpace ships an edge-trace evaluator `BND` of the
+shape function value.  Two implementation pieces:
+
+- **`AxiHenrotteFE_Edge_Q1` / `_Q2`** (1D segment FE for a single edge
+  of an axis-aligned quad).  CalcShape returns the values of the parent
+  quad's Lagrange basis restricted to the edge.  For a horizontal edge
+  (z = const), the trace is Lagrange in `s = r²`; for a vertical edge
+  (r = const), Lagrange in `z`.  The Q2 variant uses 3 shape functions
+  (two endpoint vertices + one edge midnode at the s- or z-midpoint).
+- **`AxiHenrotteDiffOpIdBnd`** (DiffOp with `vb = BND`) wired into
+  `evaluator[BND]` of the FESpace.  Calls the edge FE's CalcShape at
+  each boundary integration point and writes the trace values into
+  the assembly matrix row.
+
+### NGSolve Trace() requirement
+
+Standard NGSolve H1 `LinearForm += q * v * ds(label)` works without an
+explicit `.Trace()`.  The Henrotte FESpace currently requires the
+explicit form
+`LinearForm += q * v.Trace() * weight * ds(label)`
+because the proxy-function machinery does not auto-inject our custom
+BND DiffOp at the implicit-trace site.  Affects both LinearForm RHS
+(q-source, Robin convective term) and BilinearForm boundary terms
+like `h_conv * u.Trace() * v.Trace() * ds(label)`.
+
+This is a pragmatic limitation, not a design choice; if you hit
+`NgException: Testfunction does not support BND-forms, maybe a Trace()
+operator is missing`, add `.Trace()` to the test (and trial)
+function in the boundary-form expression.
+
+### Mesh requirement: structured axis-aligned quads
+
+The Q1 / Q2 axis-aligned-quad Henrotte FE classes assume the parent
+quad's four corners share exactly two distinct r-values and two
+distinct z-values (= a rectangle in the (r, z) plane).  Netgen's
+`quad_dominated=True` mesher produces slightly skewed quads that
+violate this assumption and yield NaN in the closed-form element
+matrices.
+
+Use a **structured rectangular grid generator** (see
+[`tests/panels/fixtures/generate_heat_cylinder_axisym.py`](../../tests/panels/fixtures/generate_heat_cylinder_axisym.py)
+for the canonical pattern: hand-build with `netgen.meshing.MeshPoint
++ Element2D + Element1D` on a regular `(NR, NZ)` lattice).  P1
+triangle support exists for unstructured meshes on the magnetic side
+(`AxiHenrotteFE_P1_Triangle` + `AxiHenrotteStiffnessBFI`); the heat
+BFIs are quad-only as of radia 4.32.0.
+
 ## 11. Cross-validation
 
 The closed-form C++ implementation is cross-checked against three
