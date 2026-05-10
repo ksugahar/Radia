@@ -346,6 +346,77 @@ where `V` is the global vector of nodal `A_φ` DOFs.  In the API:
   and feeds them into any solver (direct, iterative, eigenvalue,
   Hiruma 3-term recurrence for Cauer ladder extraction).
 
+## 10b. Heat-equation operator on the same FESpace (radia 4.31.0+)
+
+The Henrotte basis is also the **mathematically natural function space
+for axisymmetric scalar fields** like temperature `T(r, z)`.  The
+reasoning is parity:
+
+- Analytically extending an axisymmetric `T(r, z)` to `r < 0` gives
+  `T(-r, z) = T(r, z)` — `T` is **an even function in r**.
+- Even functions Taylor-expand only in even powers:
+  `T = c_0 + c_2 r^2 + c_4 r^4 + ...`
+- Standard P1 / P2 H1 basis on `(r, z)` includes `r`-linear and
+  higher odd-`r` modes that **cannot occur in any axisymmetric
+  distribution**.  The FE solver wastes DOFs trying to drive those
+  spurious modes to zero through the `2 pi r` Jacobian weight.
+- The Henrotte basis spans only even-`r` polynomials by construction
+  (`{1, r², z}` for Q1, `{1, r², r⁴, z, r²z, r⁴z, ...}` for Q2),
+  exactly matching the admissible function space.
+
+The axisymmetric heat weak form (no eddy-current source for clarity):
+
+$$
+a_{\text{heat}}(T, v) = \int_\Omega k\,(\nabla T \cdot \nabla v)\,
+                          \cdot 2\pi r\, dr\, dz
+$$
+
+After the change of variable `s = r²` (and the Jacobian
+`2 pi r dr dz = pi ds dz` from § 5), this becomes
+
+$$
+a_{\text{heat}}(T, v) = \pi \int_\Omega k
+   \big[\, 4 s\, \partial_s T\, \partial_s v
+        + \partial_z T\, \partial_z v \,\big]\, ds\, dz.
+$$
+
+Note **no `1/s` factor** — heat is integrand-clean even on axis-
+touching elements.  This is the architectural difference from the
+magnetic stiffness (§ 6 has `1/(\mu_r s)` in the second term), and
+it means **the full 9-monomial Q2 basis is admissible on axis-
+touching elements** for heat (no axis basis reduction needed).
+
+The transient heat capacity term is similarly clean:
+
+$$
+m_{\text{heat}}(T, v) = \pi \int_\Omega \rho c_p \, T \, v \, ds\, dz.
+$$
+
+Both element matrices are derived in closed form via sympy in
+`packages/radia-axifemm/scripts/codegen_q_heat_henrotte.py` (or its
+`C:/temp/codegen_axi_heat_henrotte.py` ad-hoc twin used during the
+2026-05-10 derivation), emitted as
+[`src/ext/axifemm/q_heat_henrotte_generated.hpp`](../../src/ext/axifemm/q_heat_henrotte_generated.hpp),
+and assembled by the C++ integrators
+
+- `radia.radia_axifemm.AxiHenrotteHeatStiffnessBFI(k_cf)` — `K_T`
+- `radia.radia_axifemm.AxiHenrotteHeatMassBFI(rho_c_cf)` — `M_T`
+
+DOF semantics are **nodal `T(vertex)`** directly — no
+`T = diag(2 pi r_node)` flux-function transformation (T has no axis
+boundary condition; standard nodal interpolation is correct).
+
+Smoke test:
+[`tests/axifemm/test_heat_henrotte_smoke.py`](../../tests/axifemm/test_heat_henrotte_smoke.py)
+asserts that the assembled `K_T` is symmetric with one zero mode
+(constant-T null space), `M_T` is SPD, and axis-touching elements
+remain finite (no `1/s` divergence).
+
+P1-triangle heat support is intentionally deferred to a follow-up;
+production induction-heating workpiece thermal analyses use
+structured quad meshes for accuracy anyway (Q2 quad converges much
+faster than P1 triangle on the axis).
+
 ## 11. Cross-validation
 
 The closed-form C++ implementation is cross-checked against three
