@@ -255,6 +255,10 @@ class HeatPanel(ModePanel):
 
     # ------- Validation / command building -------
 
+    def wp_vol_path(self):
+        """Used by AnalysisWindow._on_run() to set subprocess work_dir."""
+        return self.val("wp_vol") if "wp_vol" in self._widgets else ""
+
     def is_runnable(self):
         wp = self.val("wp_vol") if "wp_vol" in self._widgets else ""
         if not (wp and os.path.isfile(wp)):
@@ -347,12 +351,11 @@ class HeatWindow(AnalysisWindow):
         self._set_panel(panel)
         self._restore_settings()
         # If the launcher passed a .vol, treat it as the wp .vol
-        # (the most common chain-from-IH case where the user picks
-        # the workpiece thermal mesh in a file dialog separate
-        # from the EM .vol).
+        # (the most common chain-from-IH case).  Display the path
+        # relative to the working folder if it lives inside it.
         if vol_path and "wp_vol" in panel._widgets and \
                 not panel.val("wp_vol"):
-            panel._widgets["wp_vol"].setText(vol_path)
+            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
         # Apply chain-launch pre-fill (qsurf_sol, em_vol, ...).  The
         # IH window passes these via the CLI when the user clicks
         # "Run thermal..." after a successful IH solve so the user

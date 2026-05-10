@@ -355,6 +355,11 @@ class ModePanel(QWidget):
     def add_browse(self, key, label, default="", filter_str="All files (*.*)"):
         row = QHBoxLayout()
         le = QLineEdit(default)
+        # Mark this LineEdit as a browse-row absolute-path holder so
+        # _refresh_browse_displays / val() know to round-trip through
+        # the AnalysisWindow's display_path / resolve_path helpers.
+        le.setProperty("_radia_browse_row", True)
+        le.setProperty("_radia_browse_filter", filter_str)
         btn = QPushButton("...")
         btn.setFixedWidth(30)
         btn.clicked.connect(lambda: self._do_browse(le, filter_str))
@@ -369,9 +374,47 @@ class ModePanel(QWidget):
         return le
 
     def _do_browse(self, line_edit, filter_str):
-        path, _ = QFileDialog.getOpenFileName(self, "Select file", "", filter_str)
+        # Default-open in the AnalysisWindow's working folder when the
+        # field is currently empty; otherwise honour the existing path
+        # so the user can re-pick a sibling file quickly.
+        win = getattr(self, "_analysis_window", None)
+        existing = (line_edit.text() or "").strip()
+        if existing and win is not None:
+            start_dir = os.path.dirname(win.resolve_path(existing))
+        elif existing:
+            start_dir = os.path.dirname(existing)
+        elif win is not None:
+            start_dir = win.working_folder
+        else:
+            start_dir = ""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select file", start_dir, filter_str)
         if path:
-            line_edit.setText(path)
+            # Store display path: relative-to-folder when inside, abs
+            # when outside.  val() round-trips back through resolve_path
+            # so subprocess CLI still receives an absolute path.
+            if win is not None:
+                line_edit.setText(win.display_path(os.path.abspath(path)))
+            else:
+                line_edit.setText(path)
+
+    def _refresh_browse_displays(self):
+        """Re-render every browse-row's displayed path against the
+        AnalysisWindow's current working folder.  Called after the user
+        changes the folder so existing paths flip between relative and
+        absolute as appropriate."""
+        win = getattr(self, "_analysis_window", None)
+        if win is None:
+            return
+        for le in self._widgets.values():
+            if not hasattr(le, "property"):
+                continue
+            if not le.property("_radia_browse_row"):
+                continue
+            cur = (le.text() or "").strip()
+            if not cur:
+                continue
+            le.setText(win.display_path(win.resolve_path(cur)))
 
     def add_browse_action(self, key, label, callback, fixed_width=None):
         """Append an extra action button to an existing browse row.
@@ -403,7 +446,16 @@ class ModePanel(QWidget):
     def val(self, key):
         w = self._widgets[key]
         if isinstance(w, QLineEdit):
-            return w.text().strip()
+            txt = w.text().strip()
+            # Browse-row paths are stored as display paths (relative
+            # to the working folder when inside, absolute otherwise).
+            # Resolve to absolute for downstream consumers (CLI args,
+            # os.path.isfile checks).
+            if w.property("_radia_browse_row") and txt:
+                win = getattr(self, "_analysis_window", None)
+                if win is not None:
+                    return win.resolve_path(txt)
+            return txt
         elif isinstance(w, QComboBox):
             return w.currentText()
         elif isinstance(w, QSpinBox):
@@ -496,6 +548,14 @@ class AnalysisWindow(QMainWindow):
         self._last_msh = None
         self._panel = None  # set by subclass via _set_panel()
         self._vol_path = vol_path
+        # Working folder = root for all per-panel file pickers.  Defaults
+        # to the directory of the .vol the launcher passed in (set by
+        # Cubit's startDetached at .jou's directory) or cwd otherwise.
+        # All add_browse() rows below resolve their default-open dir +
+        # display relative-to-this-folder when the picked file is inside.
+        self._working_folder = (
+            os.path.dirname(os.path.abspath(vol_path)) if vol_path
+            else os.getcwd())
 
         self._build_ui(vol_path)
 
@@ -504,7 +564,9 @@ class AnalysisWindow(QMainWindow):
         self._panel = panel
         self._panel_area.addWidget(panel)
         panel.validationChanged = self._update_run_state
-        panel.setVolRowVisible = self.set_vol_row_visible
+        # Back-pointer so panel.add_browse() can default file dialogs to
+        # the AnalysisWindow's working folder and display relative paths.
+        panel._analysis_window = self
         self._update_run_state()
 
     def _build_ui(self, vol_path):
@@ -513,22 +575,37 @@ class AnalysisWindow(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(10, 10, 10, 5)
 
-        # Model path (wrapped in a container so subclasses can hide
-        # the whole row for mesh-free modes, e.g. PEEC-inductance).
+        # Working folder picker -- root for all per-panel file pickers.
+        # Replaces the historic "Model (.vol):" top row (radia 4.35.0).
+        # Per-panel sections add their own .vol / .step / .sol / .bh
+        # browse rows; all default to opening inside this folder and
+        # display picked paths as relative when inside.
+        self._folder_row = QWidget()
+        folder_layout = QHBoxLayout(self._folder_row)
+        folder_layout.setContentsMargins(0, 0, 0, 0)
+        folder_layout.addWidget(QLabel("Working folder:"))
+        self._folder_edit = QLineEdit(self._working_folder)
+        self._folder_edit.setPlaceholderText(
+            "Project folder (.vol, .step, .sol, .bh files live here)")
+        self._folder_edit.editingFinished.connect(
+            lambda: self._on_folder_changed(self._folder_edit.text()))
+        folder_layout.addWidget(self._folder_edit, 1)
+        folder_btn = QPushButton("Browse...")
+        folder_btn.clicked.connect(self._browse_folder)
+        folder_layout.addWidget(folder_btn)
+        root.addWidget(self._folder_row)
+
+        # Backward-compat shim: the old `_vol_edit` widget was the
+        # single source of truth for the workpiece .vol.  After 4.35.0
+        # subclasses own their own wp_vol picker inside the panel, but
+        # we keep an empty hidden QLineEdit here so settings restore
+        # (_apply_settings) and any third-party probe of `_vol_edit`
+        # still works without crashing.  Subclasses that need the wp
+        # .vol read it from their own per-panel widget directly.
+        self._vol_edit = QLineEdit("")
+        self._vol_edit.hide()
         self._vol_row = QWidget()
-        model_row = QHBoxLayout(self._vol_row)
-        model_row.setContentsMargins(0, 0, 0, 0)
-        model_row.addWidget(QLabel("Model (.vol):"))
-        self._vol_edit = QLineEdit(vol_path)
-        self._vol_edit.setPlaceholderText(
-            ".vol file (exported from Cubit or Netgen)")
-        self._vol_edit.editingFinished.connect(
-            lambda: self._on_vol_changed(self._vol_edit.text()))
-        model_row.addWidget(self._vol_edit, 1)
-        browse_btn = QPushButton("Browse...")
-        browse_btn.clicked.connect(self._browse_vol)
-        model_row.addWidget(browse_btn)
-        root.addWidget(self._vol_row)
+        self._vol_row.hide()
 
         # Splitter: panel | output
         splitter = QSplitter(Qt.Vertical)
@@ -586,26 +663,54 @@ class AnalysisWindow(QMainWindow):
         # Status bar
         self._status = self.statusBar()
 
-    def set_vol_row_visible(self, visible):
-        """Show or hide the top-level .vol file input row.  Used by
-        mesh-free modes (e.g. PEEC-inductance) to reduce visual clutter."""
-        self._vol_row.setVisible(bool(visible))
+    @property
+    def working_folder(self):
+        """Absolute path to the panel's working folder.  All per-panel
+        ``add_browse()`` rows resolve their default-open dir + relative
+        display against this folder."""
+        return os.path.abspath(self._folder_edit.text() or self._working_folder)
 
-    def _browse_vol(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select .vol file",
-            os.path.dirname(self._vol_edit.text()),
-            "Netgen Vol (*.vol);;All (*)")
+    def resolve_path(self, p):
+        """Return absolute path for ``p``.  If ``p`` is already absolute,
+        return it normalised; if relative, resolve against the working
+        folder.  Empty string maps to empty string."""
+        if not p:
+            return ""
+        if os.path.isabs(p):
+            return os.path.abspath(p)
+        return os.path.abspath(os.path.join(self.working_folder, p))
+
+    def display_path(self, abs_path):
+        """Return the path string the user should see in the UI: relative
+        when ``abs_path`` is inside the working folder, absolute otherwise.
+        Empty string maps to empty string."""
+        if not abs_path:
+            return ""
+        ap = os.path.abspath(abs_path)
+        try:
+            rel = os.path.relpath(ap, self.working_folder)
+        except ValueError:
+            return ap          # different drive on Windows -> abs only
+        if rel.startswith(".."):
+            return ap          # outside the folder -> abs
+        return rel.replace(os.sep, "/")
+
+    def _browse_folder(self):
+        path = QFileDialog.getExistingDirectory(
+            self, "Select working folder",
+            self._folder_edit.text() or os.getcwd())
         if path:
-            self._vol_edit.setText(path)
-            self._on_vol_changed(path)
+            path = os.path.abspath(path)
+            self._folder_edit.setText(path)
+            self._on_folder_changed(path)
 
-    def _on_vol_changed(self, path):
-        """Hook for subclasses to re-inspect the .vol after the user
-        changes the path (Browse... or manual edit).  Default: no-op.
-        Subclasses that depend on .vol contents (label-driven Run-enable)
-        must override and refresh both panel state and run-state."""
-        pass
+    def _on_folder_changed(self, path):
+        """Hook for subclasses to react to a working-folder change.
+        Default: refresh the panel's per-panel browse rows so their
+        displayed paths re-render relative to the new folder."""
+        self._working_folder = os.path.abspath(path) if path else os.getcwd()
+        if self._panel and hasattr(self._panel, "_refresh_browse_displays"):
+            self._panel._refresh_browse_displays()
 
     def _update_run_state(self):
         if self._process is not None:
@@ -616,7 +721,13 @@ class AnalysisWindow(QMainWindow):
     def _on_run(self):
         if self._process is not None:
             return
-        vol = self._vol_edit.text().strip()
+        # build_command() may probe its panel widgets directly (4.35.0+);
+        # the legacy ``vol_path`` argument now passes the panel's own
+        # wp-vol widget if it exposes one, else "" (so subclasses that
+        # don't use a wp .vol receive an empty string).
+        vol = ""
+        if self._panel is not None and hasattr(self._panel, "wp_vol_path"):
+            vol = self._panel.wp_vol_path()
         try:
             cmd = self._panel.build_command(vol)
         except ValueError as e:
@@ -624,7 +735,7 @@ class AnalysisWindow(QMainWindow):
             QMessageBox.warning(self, "Input Error", str(e))
             return
 
-        panel_log(f"_on_run: vol={vol}")
+        panel_log(f"_on_run: working_folder={self.working_folder} vol={vol}")
         panel_log(f"  cmd: {' '.join(cmd)}")
 
         self._save_settings()
@@ -633,7 +744,11 @@ class AnalysisWindow(QMainWindow):
         self._last_msh = None
         self._gmsh_btn.setEnabled(False)
 
-        work_dir = os.path.dirname(vol) if vol else os.getcwd()
+        # Working dir = folder picker (4.35.0+); falls back to wp .vol
+        # parent dir if folder is unset, then cwd.
+        work_dir = self.working_folder
+        if not os.path.isdir(work_dir):
+            work_dir = os.path.dirname(vol) if vol else os.getcwd()
         if not os.path.isdir(work_dir):
             work_dir = os.getcwd()
 
@@ -1078,6 +1193,11 @@ class AnalysisWindow(QMainWindow):
     def _save_settings(self):
         os.makedirs(_SETTINGS_DIR, exist_ok=True)
         data = {
+            "working_folder": self._folder_edit.text(),
+            # ``vol`` kept for backward-compat with older settings JSONs
+            # written by radia <= 4.34.0; safe to drop in a future
+            # cleanup once all panels have been opened at least once on
+            # 4.35.0+ to migrate the wp .vol into panel state.
             "vol": self._vol_edit.text(),
             "panel": self._panel.save_state() if self._panel else {},
         }
@@ -1096,6 +1216,12 @@ class AnalysisWindow(QMainWindow):
                 data = json.load(f)
         except (OSError, json.JSONDecodeError):
             return
+        # Restore working folder first (the panel's restore_state may
+        # display relative paths against it).
+        wf = data.get("working_folder")
+        if wf and not self._folder_edit.text():
+            self._folder_edit.setText(wf)
+            self._working_folder = os.path.abspath(wf)
         if not self._vol_edit.text() and "vol" in data:
             self._vol_edit.setText(data["vol"])
         if self._panel:

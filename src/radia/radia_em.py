@@ -155,7 +155,13 @@ class EMPanel(ModePanel):
         mat_combo.currentIndexChanged.connect(self._on_material_changed)
 
         # ---- Mesh ----
+        # 4.35.0+: per-panel wp .vol replaces the legacy top-level Model
+        # row in AnalysisWindow.  Optional for FEM/MSC (coil-only
+        # simulation works without it), required for Kelvin Benchmark.
         self._add_section("Mesh", key="_sec_mesh")
+        self.add_browse(
+            "wp_vol", "Mesh .vol:",
+            filter_str="Netgen Vol (*.vol);;All (*)")
         self.add_spin("fes_order", "FES order:", 1, 1, 5)
         # Kelvin Benchmark only -- declared here so panel layout stays
         # consistent across modes.  Hidden when not Kelvin Benchmark.
@@ -298,6 +304,12 @@ class EMPanel(ModePanel):
     # ------------------------------------------------------------------
     # Command builders (one per formulation)
     # ------------------------------------------------------------------
+    def wp_vol_path(self):
+        """Used by AnalysisWindow._on_run() to source the mesh .vol from
+        the panel's own wp_vol widget (4.35.0+).  Empty for coil-only
+        runs that don't need a workpiece mesh."""
+        return self.val("wp_vol") if "wp_vol" in self._widgets else ""
+
     def build_command(self, vol_path):
         formulation = self.val("formulation")
         if formulation == FORM_MSC:
@@ -409,6 +421,11 @@ class EMWindow(AnalysisWindow):
                          settings_key="em")
         panel = EMPanel()
         self._set_panel(panel)
+        # Pre-fill the panel's wp_vol field from the constructor arg
+        # (display path = relative when inside the working folder).
+        if vol_path and "wp_vol" in panel._widgets and \
+                not panel.val("wp_vol"):
+            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
         self._restore_settings()
         self._update_run_state()
 
