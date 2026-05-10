@@ -195,10 +195,14 @@ def test_inductance_bem_a_vacuum_rect_united():
         pytest.fail(f"Sample STEP missing: {step}")
 
     phys = g["physics"]
+    # BEM-A reads pre-meshed .vol (4.33.0 redesign).  Pre-mesh the STEP
+    # via the test helper -- this replaces the retired on-the-fly
+    # _build_bema_coil_mesh() inside calc_inductance.py.
+    from _bema_coil_vol_helper import coil_vol_for
+    coil_vol = coil_vol_for(step, maxh=0.012)
     result = _run_calc([
-        "--coil-step", step,
+        "--coil-vol", coil_vol,
         "--coil-solver", "bem-a",
-        "--coil-maxh", "0.012",
         "--frequency", str(phys["frequency_Hz"]),
         "--current", str(phys["current_A"]),
         "--coil-sigma", str(phys["sigma_S_per_m"]),
@@ -289,10 +293,13 @@ def test_inductance_bem_a_weak_gapped_torus():
         pytest.skip(f"missing fixture: {coil_step} or {vol}")
 
     phys = g["physics"]
+    # BEM-A 4.33.0 redesign: pre-mesh coil STEP -> .vol (with
+    # source/sink labels) before calling calc_inductance.py.
+    from _bema_coil_vol_helper import coil_vol_for
+    coil_vol = coil_vol_for(coil_step, maxh=phys["coil_maxh_m"])
     result = _run_calc([
-        "--coil-step", coil_step,
+        "--coil-vol", coil_vol,
         "--coil-solver", "bem-a",
-        "--coil-maxh", str(phys["coil_maxh_m"]),
         "--coil-rwg-quad-degree", str(phys["coil_rwg_quad_degree"]),
         "--coil-rwg-singular-nq", str(phys["coil_rwg_singular_nq"]),
         "--frequency", str(phys["frequency_Hz"]),
