@@ -1,9 +1,17 @@
-# radia-axifemm — Henrotte Axisymmetric Q-Element FE for NGSolve
+# radia.radia_axifemm — Henrotte Axisymmetric Q-Element FE for NGSolve
 
-`radia-axifemm` is a NGSolve add-on package that adds a **Henrotte/Meeker
-axisymmetric finite-element family** to NGSolve. It registers a FESpace named
-`axihenrotte` and provides closed-form `BilinearFormIntegrator`s; the rest of
-the workflow (mesh, dirichlet, eigsh, Hiruma 3-term) is plain NGSolve.
+> See [`FORMULATION.md`](FORMULATION.md) for the full derivation
+> (Maxwell → axisymmetric reduction → energy functional → Henrotte
+> `s = r²` change of variable → element matrices in closed form).
+> This document covers usage, API, and validation results.
+
+`radia.radia_axifemm` adds a **Henrotte/Meeker axisymmetric finite-element
+family** to NGSolve.  It registers a FESpace named `axihenrotte` and
+provides closed-form `BilinearFormIntegrator`s; the rest of the workflow
+(mesh, dirichlet, eigsh, Hiruma 3-term) is plain NGSolve.
+
+Built into the radia wheel since 2026-05-10 (radia ≥ 4.30.0).  Source
+under [`src/ext/axifemm/`](../../src/ext/axifemm/).
 
 The basis lives on **axis-aligned quadrilateral meshes**; it is polynomial of
 order `p` in the variable `s = r²` (not `r`), with the function being
@@ -243,32 +251,52 @@ script must keep the Hessian convention.
 * `packages/radia-axifemm/scripts/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
 
-## File layout
+## File layout (post-2026-05-10 Path A integration)
 
 ```
-packages/radia-axifemm/
-  src/
-    axi_henrotte_fe.{hpp,cpp}            # Q1, Q2 quad + P1 triangle FE classes
-    axi_henrotte_fespace.{hpp,cpp}       # FESpace with order=1 / order=2 dispatch
-    axi_henrotte_diffop.hpp              # DifferentialOperators (value, gradient)
-    axi_henrotte_integrators.{hpp,cpp}   # closed-form K and σ-mass BFI
-    q2_henrotte_generated.hpp            # auto-generated, do not edit
-    radia_axifemm.cpp                    # pybind11 module entry
-    __init__.py                          # Python re-exports
-  scripts/
-    codegen_q2_henrotte.py               # JSON → C++ codegen
-    validate_q2_codegen.py               # closed-form vs Gauss prototype
-    q2_henrotte_test_values.json         # numerical reference values
-  tests/
-    test_q2_single_element.py            # per-element BFI sanity check
-    test_hiruma_disk_q1.py               # disk Hiruma 3-term, p=1
-    test_hiruma_disk_q2.py               # disk Hiruma 3-term, p=2
-    test_q2_assembly_diag.py             # 2-quad assembly diagnostic
+src/ext/axifemm/                          # built into radia wheel
+  axi_henrotte_fe.{hpp,cpp}              # Q1, Q2 quad + P1 triangle FE classes
+  axi_henrotte_fespace.{hpp,cpp}         # FESpace with order=1 / order=2 dispatch
+  axi_henrotte_diffop.hpp                # DifferentialOperators (value, gradient)
+  axi_henrotte_integrators.{hpp,cpp}     # closed-form K and σ-mass BFI
+  q2_henrotte_generated.hpp              # auto-generated, do not edit
+  radia_axifemm.cpp                      # pybind11 module entry
+
+src/radia/radia_axifemm.pyd              # build output (Build.ps1 + top-level CMake)
+
+tests/axifemm/                            # public test surface
+  conftest.py                             # adds _reference_python/ to sys.path
+  test_element_matrices.py                # P1 triangle symmetry + axis cases
+  test_python_reference_consistency.py    # Q1 quad C++ vs Python ref spectrum
+  _reference_python/                      # pure-Python prototype (test fixture)
+    axifemm_core.py                       #   P1 triangle Henrotte ref
+    axifemm_quad.py                       #   Q1 axis-aligned quad ref
+    axifemm_quad_q2.py                    #   Q2 quad with Gauss 8x8 ref
+    sigma_mass.py                         #   σ-mass operator ref
+
+examples/axifemm/                         # research-tier examples
+  disk_convergence/                       # Cu disk τ_1 vs BEM-Foster ref
+  nmr_validation/                         # FEMM NMR axisymmetric reproduction
+
+packages/radia-axifemm/                   # research workspace (no longer
+  tests/                                  # installable; pyproject removed)
+  scripts/                                #   research scripts: BEM Cauer cross-
+  demos/                                  #   validation, breakdown studies, etc.
+  README.md
+  LICENSE
 ```
+
+The standalone `pyproject.toml`, `CMakeLists.txt`, and `ngsolve_addon.cmake`
+were removed when axifemm was absorbed into the radia wheel
+(2026-05-10 cleanup).  See [`FORMULATION.md`](FORMULATION.md) for the
+mathematical derivation behind the C++ source.
 
 The Mathematica derivation lives upstream at
 `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifemm/`
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
+Re-run `packages/radia-axifemm/scripts/codegen_q2_henrotte.py` if the
+JSON changes — the regenerated `q2_henrotte_generated.hpp` should be
+copied into `src/ext/axifemm/`.
 
 ## Why this is "an NGSolve feature NGSolve does not have"
 
