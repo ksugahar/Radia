@@ -204,6 +204,18 @@ class TestBuildCommand:
         f.write_text("ISO-10303-21;\nENDSEC;\nEND-ISO-10303-21;")
         return str(f)
 
+    @pytest.fixture
+    def fake_coil_vol(self, tmp_path):
+        """Materialise a fake coil .vol for BEM-A paths.
+
+        Only an existence check is exercised by build_command(); the file
+        contents are not parsed in these UI tests (NGSolve Mesh() loading
+        is exercised in tests/cubit/test_inductance_p_convergence.py).
+        """
+        f = tmp_path / "fake_coil.vol"
+        f.write_text("mesh3d 1\n# stub for build_command existence check\n")
+        return str(f)
+
     def test_PEEC_inductance_command(self, ih_panel, fake_step):
         """Vacuum inductance via unified calc_inductance.py (--coil-solver peec)."""
         from radia_ih import METHOD_PEEC_IND
@@ -223,19 +235,28 @@ class TestBuildCommand:
         assert "--current" in cmd
         assert "--coil-sigma" in cmd
 
-    def test_BEMA_inductance_command(self, ih_panel, fake_step):
-        """Vacuum inductance via calc_inductance.py (--coil-solver bem-a)."""
+    def test_BEMA_inductance_command(self, ih_panel, fake_coil_vol):
+        """Vacuum inductance via calc_inductance.py (--coil-solver bem-a).
+
+        BEM-A consumes a pre-meshed surface .vol (--coil-vol), NOT a
+        CAD .step.  The coil_vol panel row is shown when method=BEM-A
+        and replaces peec_step.
+        """
         from radia_ih import METHOD_BEMA_IND
         ih_panel._method_combo.setCurrentText(METHOD_BEMA_IND)
-        ih_panel._widgets["peec_step"].setText(fake_step)
+        ih_panel._widgets["coil_vol"].setText(fake_coil_vol)
         cmd = ih_panel.build_command(None)
         assert cmd[1].endswith("calc_inductance.py"), cmd[1]
-        assert "--coil-step" in cmd
+        # BEM-A: --coil-vol present, --coil-step absent.
+        assert "--coil-vol" in cmd
+        assert "--coil-step" not in cmd
+        assert fake_coil_vol in cmd
         assert "--coil-solver" in cmd
         i = cmd.index("--coil-solver")
         assert cmd[i + 1] == "bem-a", f"expected 'bem-a', got {cmd[i + 1]!r}"
-        # BEM-A mode: --coil-maxh present, --peec-n-peri absent
-        assert "--coil-maxh" in cmd
+        # --coil-maxh retired from the panel CLI (BEM-A reads pre-meshed
+        # .vol, no on-the-fly OCC re-mesh).  --peec-n-peri PEEC-only.
+        assert "--coil-maxh" not in cmd
         assert "--peec-n-peri" not in cmd
 
     def test_PEEC_BEM_command(self, ih_panel, fake_step):
@@ -262,19 +283,27 @@ class TestBuildCommand:
         assert "--half-thickness" in cmd
         assert "--impedance-model" in cmd
 
-    def test_BEMA_BEM_command(self, ih_panel, fake_step):
-        """Weak-coupled BEM-A coil + scalar BEM-SIBC."""
+    def test_BEMA_BEM_command(self, ih_panel, fake_coil_vol):
+        """Weak-coupled BEM-A coil + scalar BEM-SIBC.
+
+        BEM-A coil consumes --coil-vol (pre-meshed); workpiece consumes
+        the AnalysisWindow's main .vol.  Two .vol files (coil + wp) are
+        passed independently.
+        """
         from radia_ih import METHOD_BEMA_BEM
         ih_panel._method_combo.setCurrentText(METHOD_BEMA_BEM)
-        ih_panel._widgets["peec_step"].setText(fake_step)
+        ih_panel._widgets["coil_vol"].setText(fake_coil_vol)
         cmd = ih_panel.build_command("model.vol")
         assert cmd[1].endswith("calc_inductance.py"), cmd[1]
-        assert "--coil-step" in cmd
+        assert "--coil-vol" in cmd
+        assert fake_coil_vol in cmd
+        assert "--coil-step" not in cmd
         assert "--coil-solver" in cmd
         i = cmd.index("--coil-solver")
         assert cmd[i + 1] == "bem-a"
         assert "--vol" in cmd
-        assert "--coil-maxh" in cmd
+        assert "model.vol" in cmd
+        assert "--coil-maxh" not in cmd
         assert "--peec-n-peri" not in cmd
         # Workpiece args still present
         assert "--sigma" in cmd
