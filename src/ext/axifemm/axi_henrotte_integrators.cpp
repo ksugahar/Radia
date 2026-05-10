@@ -29,6 +29,7 @@
 #include "axi_henrotte_integrators.hpp"
 #include "axi_henrotte_fe.hpp"
 #include "q2_henrotte_generated.hpp"
+#include "q_heat_henrotte_generated.hpp"
 
 namespace radia_axifemm {
 
@@ -553,6 +554,181 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
                     + typeid(fel).name());
 }
 
+// ===========================================================================
+// HEAT EQUATION BFI implementations (no T = diag(2 pi r) wrap; nodal-T DOFs)
+// ===========================================================================
+//
+// For axisymmetric heat the integrand is polynomial in (s, z) with NO 1/s
+// term, so axis-touching elements are integrable with the FULL Q2 9-monomial
+// basis (unlike magnetic which drops 3 axis-incompatible monomials).
+//
+// We therefore bypass fe.Vinv (which assumes the magnetic axis-reduced basis)
+// and compute the full 9x9 inverse Vandermonde in-place from element corner
+// + s-midpoint edge midnode + face center coordinates.
+//
+// All matrices in q_heat_henrotte_generated.hpp already include the leading
+// pi factor (from 2 pi r dr dz = pi ds dz).
+
+namespace {
+
+inline void Q2HeatInverseVandermonde(double ra, double rb, double za, double zb,
+                                      Mat<9,9> & inv_V)
+{
+    // Q2 monomial basis: {1, s, s^2, z, sz, s^2 z, z^2, sz^2, s^2 z^2}
+    // 9 nodes (s-midpoint convention; edge midnodes at s_m = (s_a + s_b)/2,
+    // i.e. r = sqrt((ra^2 + rb^2)/2)).
+    double sa = ra * ra, sb = rb * rb;
+    double sm = 0.5 * (sa + sb);
+    double zm = 0.5 * (za + zb);
+    // Local node order: (s, z) coords
+    //   0: (sa, za)   1: (sb, za)   2: (sb, zb)   3: (sa, zb)   (vertices)
+    //   4: (sm, za)   5: (sb, zm)   6: (sm, zb)   7: (sa, zm)   (edge mids)
+    //   8: (sm, zm)                                              (face center)
+    double s_n[9] = { sa, sb, sb, sa, sm, sb, sm, sa, sm };
+    double z_n[9] = { za, za, zb, zb, za, zm, zb, zm, zm };
+    Mat<9,9> V;
+    for (int j = 0; j < 9; ++j) {
+        double s = s_n[j], z = z_n[j];
+        V(j, 0) = 1.0;
+        V(j, 1) = s;
+        V(j, 2) = s * s;
+        V(j, 3) = z;
+        V(j, 4) = s * z;
+        V(j, 5) = s * s * z;
+        V(j, 6) = z * z;
+        V(j, 7) = s * z * z;
+        V(j, 8) = s * s * z * z;
+    }
+    CalcInverse(V, inv_V);
+}
+
+// Q1 heat element matrix: elmat = inv_V^T * K_mono * inv_V * coef.
+// No T = diag(2 pi r) wrap (heat DOFs are nodal T directly).
+template <int N, typename MonoBuilder>
+void HeatElementMatrix_Q1(double ra, double rb, double za, double zb,
+                          MonoBuilder build_mono, double coef,
+                          FlatMatrix<double> elmat)
+{
+    Mat<4,4> inv_V;
+    Q1InverseVandermonde(ra, rb, za, zb, inv_V);
+    double M_flat[16];
+    build_mono(ra*ra, rb*rb, za, zb, M_flat);
+    Mat<4,4> M_mono;
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            M_mono(i, j) = M_flat[i * 4 + j];
+    Mat<4,4> M_node = Trans(inv_V) * M_mono * inv_V;
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j)
+            elmat(i, j) = coef * M_node(i, j);
+    // Symmetrise (numerical noise).
+    for (int i = 0; i < 4; ++i)
+        for (int j = i + 1; j < 4; ++j) {
+            double avg = 0.5 * (elmat(i, j) + elmat(j, i));
+            elmat(i, j) = avg;
+            elmat(j, i) = avg;
+        }
+}
+
+// Q2 heat element matrix: elmat = inv_V^T * K_mono * inv_V * coef.
+template <typename MonoBuilder>
+void HeatElementMatrix_Q2(double ra, double rb, double za, double zb,
+                          MonoBuilder build_mono, double coef,
+                          FlatMatrix<double> elmat)
+{
+    Mat<9,9> inv_V;
+    Q2HeatInverseVandermonde(ra, rb, za, zb, inv_V);
+    double M_flat[81];
+    build_mono(ra*ra, rb*rb, za, zb, M_flat);
+    Mat<9,9> M_mono;
+    for (int i = 0; i < 9; ++i)
+        for (int j = 0; j < 9; ++j)
+            M_mono(i, j) = M_flat[i * 9 + j];
+    Mat<9,9> M_node = Trans(inv_V) * M_mono * inv_V;
+    for (int i = 0; i < 9; ++i)
+        for (int j = 0; j < 9; ++j)
+            elmat(i, j) = coef * M_node(i, j);
+    for (int i = 0; i < 9; ++i)
+        for (int j = i + 1; j < 9; ++j) {
+            double avg = 0.5 * (elmat(i, j) + elmat(j, i));
+            elmat(i, j) = avg;
+            elmat(j, i) = avg;
+        }
+}
+
+}  // namespace
+
+// ---------------------------------------------------------------------------
+// AxiHenrotteHeatStiffnessBFI
+// ---------------------------------------------------------------------------
+
+AxiHenrotteHeatStiffnessBFI::AxiHenrotteHeatStiffnessBFI(
+    shared_ptr<CoefficientFunction> ak_cf)
+  : k_cf(ak_cf)
+{ SetName("AxiHenrotteHeatStiffnessBFI"); }
+
+void AxiHenrotteHeatStiffnessBFI::CalcElementMatrix(
+    const FiniteElement & fel,
+    const ElementTransformation & eltrans,
+    FlatMatrix<double> elmat,
+    LocalHeap & lh) const
+{
+    elmat = 0.0;
+    ELEMENT_TYPE et = fel.ElementType();
+    double k_val = SampleAtCentroid(*k_cf, eltrans, et, lh);
+
+    if (auto * q1 = dynamic_cast<const AxiHenrotteFE_Q1_AxisAligned*>(&fel)) {
+        HeatElementMatrix_Q1<4>(q1->r_a, q1->r_b, q1->z_a, q1->z_b,
+                                 q_heat::KMonomialQ1, k_val, elmat);
+        return;
+    }
+    if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
+        HeatElementMatrix_Q2(q2->r_a, q2->r_b, q2->z_a, q2->z_b,
+                             q_heat::KMonomialQ2, k_val, elmat);
+        return;
+    }
+    throw Exception(string("AxiHenrotteHeatStiffnessBFI: unsupported FE type ")
+                    + typeid(fel).name()
+                    + " (P1 triangle heat support not yet implemented; "
+                      "use a structured quad mesh)");
+}
+
+// ---------------------------------------------------------------------------
+// AxiHenrotteHeatMassBFI
+// ---------------------------------------------------------------------------
+
+AxiHenrotteHeatMassBFI::AxiHenrotteHeatMassBFI(
+    shared_ptr<CoefficientFunction> arho_c_cf)
+  : rho_c_cf(arho_c_cf)
+{ SetName("AxiHenrotteHeatMassBFI"); }
+
+void AxiHenrotteHeatMassBFI::CalcElementMatrix(
+    const FiniteElement & fel,
+    const ElementTransformation & eltrans,
+    FlatMatrix<double> elmat,
+    LocalHeap & lh) const
+{
+    elmat = 0.0;
+    ELEMENT_TYPE et = fel.ElementType();
+    double rho_c = SampleAtCentroid(*rho_c_cf, eltrans, et, lh);
+    if (rho_c == 0.0) return;
+
+    if (auto * q1 = dynamic_cast<const AxiHenrotteFE_Q1_AxisAligned*>(&fel)) {
+        HeatElementMatrix_Q1<4>(q1->r_a, q1->r_b, q1->z_a, q1->z_b,
+                                 q_heat::MMonomialQ1, rho_c, elmat);
+        return;
+    }
+    if (auto * q2 = dynamic_cast<const AxiHenrotteFE_Q2_AxisAligned*>(&fel)) {
+        HeatElementMatrix_Q2(q2->r_a, q2->r_b, q2->z_a, q2->z_b,
+                             q_heat::MMonomialQ2, rho_c, elmat);
+        return;
+    }
+    throw Exception(string("AxiHenrotteHeatMassBFI: unsupported FE type ")
+                    + typeid(fel).name()
+                    + " (P1 triangle heat support not yet implemented; "
+                      "use a structured quad mesh)");
+}
+
 // ---------------------------------------------------------------------------
 // Python bindings
 // ---------------------------------------------------------------------------
@@ -578,6 +754,27 @@ void ExportAxiHenrotteIntegrators(pybind11::module & m)
         "7-point quadrature (exact for polynomial degree 5).")
         .def(py::init<shared_ptr<CoefficientFunction>>(),
              py::arg("sigma"));
+
+    py::class_<AxiHenrotteHeatStiffnessBFI, BilinearFormIntegrator,
+               shared_ptr<AxiHenrotteHeatStiffnessBFI>>(
+        m, "AxiHenrotteHeatStiffnessBFI",
+        "Closed-form axisymmetric HEAT stiffness on Q1/Q2 quad with the\n"
+        "Henrotte {1, r^2, z, ...} basis.  Weak form (after s = r^2):\n"
+        "  a(T, v) = pi * Integrate( k * [ 4 s d_s T d_s v + d_z T d_z v ]\n"
+        "                            ds dz )\n"
+        "Nodal-T DOFs (no flux-function transformation).  Axis elements\n"
+        "use the full 9-monomial Q2 basis (no 1/s factor in heat).")
+        .def(py::init<shared_ptr<CoefficientFunction>>(),
+             py::arg("k"));
+
+    py::class_<AxiHenrotteHeatMassBFI, BilinearFormIntegrator,
+               shared_ptr<AxiHenrotteHeatMassBFI>>(
+        m, "AxiHenrotteHeatMassBFI",
+        "Closed-form axisymmetric HEAT capacity (transient term):\n"
+        "  m(T, v) = pi * Integrate( rho_c * T * v ) ds dz.\n"
+        "Pass rho_c = rho * c_p [J/(m^3 K)] as a CoefficientFunction.")
+        .def(py::init<shared_ptr<CoefficientFunction>>(),
+             py::arg("rho_c"));
 }
 
 }  // namespace radia_axifemm
