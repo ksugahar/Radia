@@ -346,9 +346,23 @@ where `V` is the global vector of nodal `A_φ` DOFs.  In the API:
   and feeds them into any solver (direct, iterative, eigenvalue,
   Hiruma 3-term recurrence for Cauer ladder extraction).
 
-## 10b. Heat-equation operator on the same FESpace (radia 4.31.0+)
+## 10b. Heat-equation operator on the same FESpace (radia 4.31.0+, OPTIONAL infrastructure)
 
-The Henrotte basis is also the **mathematically natural function space
+> **Status (2026-05-10)**: This section documents the Henrotte heat
+> BFIs as **optional** infrastructure.  The production heat solver
+> [`src/radia/panels/calc_heat_axisym.py`](../../src/radia/panels/calc_heat_axisym.py)
+> uses **standard NGSolve `H1` + `2 pi r` weighting** instead, matching
+> the FEMM 4.2 reference implementation
+> (`hsolv/prob1big.cpp` — standard P1 triangle with the `2 pi r`
+> Jacobian evaluated at the element centroid, no Henrotte basis).
+>
+> The Henrotte heat BFIs documented below are kept in the codebase as
+> parity-conscious infrastructure for research / publication uses
+> (e.g. comparing convergence rates of Henrotte vs standard H1 on a
+> scalar problem).  See CLAUDE.md "Axisymmetric FE: Henrotte for
+> Magnetic, Standard H1 for Scalar" for the canonical scope.
+
+The Henrotte basis is the **mathematically natural function space
 for axisymmetric scalar fields** like temperature `T(r, z)`.  The
 reasoning is parity:
 
@@ -358,11 +372,17 @@ reasoning is parity:
   `T = c_0 + c_2 r^2 + c_4 r^4 + ...`
 - Standard P1 / P2 H1 basis on `(r, z)` includes `r`-linear and
   higher odd-`r` modes that **cannot occur in any axisymmetric
-  distribution**.  The FE solver wastes DOFs trying to drive those
-  spurious modes to zero through the `2 pi r` Jacobian weight.
+  distribution**.
 - The Henrotte basis spans only even-`r` polynomials by construction
   (`{1, r², z}` for Q1, `{1, r², r⁴, z, r²z, r⁴z, ...}` for Q2),
   exactly matching the admissible function space.
+
+**Why this isn't required in practice**: although the parity argument
+is mathematically correct, the `2 pi r` Jacobian in the standard H1
+weak form **automatically suppresses** the spurious odd-r modes (they
+contribute zero to the integrated weight), so the practical accuracy
+benefit on scalar Laplacians is small.  FEMM ships production thermal
+accuracy with standard P1; we follow that proven convention.
 
 The axisymmetric heat weak form (no eddy-current source for clarity):
 
@@ -417,7 +437,16 @@ production induction-heating workpiece thermal analyses use
 structured quad meshes for accuracy anyway (Q2 quad converges much
 faster than P1 triangle on the axis).
 
-## 10c. Boundary trace + Neumann RHS (radia 4.32.0+)
+## 10c. Boundary trace + Neumann RHS (radia 4.32.0+, OPTIONAL infrastructure)
+
+> **Status (2026-05-10)**: Like § 10b, this section documents
+> infrastructure shipped with the Henrotte FESpace that is **not
+> required** by the production heat path.  Standard NGSolve `H1`
+> already supports `LinearForm += q * v * 2 pi r * ds(label)` directly
+> without any custom BND DiffOp; the production
+> `calc_heat_axisym.py` uses that path.  The Henrotte BND machinery
+> below is needed only if you actually instantiate `H1Henrotte` for a
+> scalar problem (e.g. for a research convergence comparison).
 
 For axisymmetric Neumann BC patterns
 `LinearForm += q * v * weight * ds(label)` (heat flux, current sheet,
