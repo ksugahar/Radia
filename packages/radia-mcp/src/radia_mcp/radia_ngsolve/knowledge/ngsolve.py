@@ -1385,10 +1385,10 @@ mesh = Mesh(OCCGeometry(rect, dim=2).GenerateMesh(maxh=1))
 ```python
 # WRONG - preconditioner doesn't see element matrices
 a.Assemble()
-c = Preconditioner(a, "bddc")  # Too late!
+c = Preconditioner(a, \"bddc\")  # Too late!
 
 # CORRECT - register before assembly
-c = Preconditioner(a, "bddc")
+c = Preconditioner(a, \"bddc\")
 a.Assemble()
 ```
 
@@ -1432,36 +1432,36 @@ V = LaplaceSL(j_trial.Trace() * ds) * j_test.Trace() * ds
 
 ```python
 # WRONG - singular system for curl-curl
-fes = HCurl(mesh, order=2, dirichlet="outer")
+fes = HCurl(mesh, order=2, dirichlet=\"outer\")
 
 # CORRECT - removes gradient null space
-fes = HCurl(mesh, order=2, dirichlet="outer", nograds=True)
+fes = HCurl(mesh, order=2, dirichlet=\"outer\", nograds=True)
 ```
 
 ## 9. GridFunction.Set() vs Direct Assignment
 
 ```python
 # CORRECT - projects function onto FE space
-gfu.Set(sin(x)*cos(y), definedon=mesh.Materials("domain"))
+gfu.Set(sin(x)*cos(y), definedon=mesh.Materials(\"domain\"))
 
 # CORRECT - set with BND flag for Dirichlet
 gfu.Set(x, BND)
 
 # WRONG - BND only sets on Dirichlet-marked boundaries
-gfu.Set(x, BND)  # Only sets on dirichlet="..." boundaries!
+gfu.Set(x, BND)  # Only sets on dirichlet=\"...\" boundaries!
 
 # To set on ALL boundaries:
-gfu.Set(x, mesh.Boundaries(".*"))
+gfu.Set(x, mesh.Boundaries(\".*\"))
 ```
 
 ## 10. Complex Spaces
 
 ```python
 # For eddy current / time-harmonic: MUST use complex=True
-fes = HCurl(mesh, order=2, complex=True, dirichlet="outer")
+fes = HCurl(mesh, order=2, complex=True, dirichlet=\"outer\")
 
 # WRONG - real space for complex problem
-fes = HCurl(mesh, order=2, dirichlet="outer")
+fes = HCurl(mesh, order=2, dirichlet=\"outer\")
 a += 1j * omega * sigma * u * v * dx  # Will fail or give wrong results!
 ```
 
@@ -1469,7 +1469,7 @@ a += 1j * omega * sigma * u * v * dx  # Will fail or give wrong results!
 
 ```python
 # Material names must match EXACTLY
-mu_r = mesh.MaterialCF({"core": 1000}, default=1)
+mu_r = mesh.MaterialCF({\"core\": 1000}, default=1)
 
 # Check available materials:
 print(mesh.GetMaterials())  # ['air', 'core', 'coil']
@@ -1492,8 +1492,8 @@ a += curl(u) * curl(v) * dx
 ```python
 # Export to VTK for ParaView
 vtk = VTKOutput(mesh, coefs=[gfu, curl(gfu)],
-                names=["A", "B"],
-                filename="output",
+                names=[\"A\", \"B\"],
+                filename=\"output\",
                 subdivision=2)
 vtk.Do()
 ```
@@ -1518,7 +1518,7 @@ term does nothing.
 ## 15. curl(E) Has No Trace on Edges in HCurl (Forum: Thread 3757)
 
 ```python
-# WRONG - "don't know how I shall evaluate" error
+# WRONG - \"don't know how I shall evaluate\" error
 line_integral = Integrate(curl(E), mesh, definedon=edge)
 
 # CORRECT - interpolate H field first, then integrate
@@ -1619,7 +1619,7 @@ Use SurfaceL2 as Lagrange multiplier space for matching HDiv normals:
 ```python
 # SurfaceL2 is the proper space for HDiv normal-trace continuity
 fes_lambda = SurfaceL2(mesh, order=order,
-                       definedon=mesh.Boundaries("interface"))
+                       definedon=mesh.Boundaries(\"interface\"))
 ```
 
 ## 21. type1=True for Nedelec Elements (EMPY)
@@ -1670,11 +1670,11 @@ and use ZRefine to create a single element layer:
 ```python
 # Geometry: identify top and bottom
 iron.faces.Min(Z).Identify(
-    iron.faces.Max(Z), "bot-top", type=IdentificationType.CLOSESURFACES)
+    iron.faces.Max(Z), \"bot-top\", type=IdentificationType.CLOSESURFACES)
 
 # Mesh: single z-layer
 ngmesh = OCCGeometry(geo).GenerateMesh(maxh=0.1)
-ngmesh.ZRefine("bot-top", [])  # Empty list = no intermediate layers
+ngmesh.ZRefine(\"bot-top\", [])  # Empty list = no intermediate layers
 mesh = Mesh(ngmesh).Curve(1)
 ```
 
@@ -1827,7 +1827,7 @@ gradmat, fesh1 = fes.CreateGradient()
 gradmattrans = gradmat.CreateTranspose()
 math1 = gradmattrans @ m.mat @ gradmat
 math1[0,0] += 1  # Pin one DOF
-invh1 = math1.Inverse(inverse="sparsecholesky")
+invh1 = math1.Inverse(inverse=\"sparsecholesky\")
 
 # Projected preconditioner
 proj = IdentityMatrix() - gradmat @ invh1 @ gradmattrans @ m.mat
@@ -1908,7 +1908,7 @@ elements, leading to incorrect results or excessive memory usage.
 
 ```python
 # Space restricted to subdomain has many UNUSED_DOF entries
-fes1 = H1(mesh, definedon="conductor")
+fes1 = H1(mesh, definedon=\"conductor\")
 print(fes1.ndof)  # Same as full mesh ndof (many unused)
 
 # CORRECT - use Compress() to remove unused DOFs
@@ -1955,8 +1955,8 @@ fes = HCurl(mesh, order=3, complex=True) * N
 # Bilinear form with circuit equation
 a = BilinearForm(fes)
 a += nu * curl(A) * curl(v) * dx           # EM equation
-a += I * J_coil * v * dx("coil")           # Current source
-a += A * J_coil * w * dx("coil")           # Flux linkage
+a += I * J_coil * v * dx(\"coil\")           # Current source
+a += A * J_coil * w * dx(\"coil\")           # Flux linkage
 a += R * I * w * dx                         # Resistance
 
 # I (current) is solved simultaneously with A (vector potential)
@@ -1972,7 +1972,7 @@ The coil current is unknown and coupled to the field via flux linkage.
 geo = iron + air  # Single material, no interface!
 
 # CORRECT: Glue preserves internal interface
-geo = Glue([iron, air])  # dx("iron") and dx("air") work
+geo = Glue([iron, air])  # dx(\"iron\") and dx(\"air\") work
 
 # CORRECT: Use - for subtraction (different from fusion)
 air = Sphere(...) - iron  # Air = Sphere minus iron region
@@ -1984,11 +1984,11 @@ air = Sphere(...) - iron  # Air = Sphere minus iron region
 import pickle
 
 # Save mesh + solution
-with open("solution.pkl", "wb") as f:
+with open(\"solution.pkl\", \"wb\") as f:
     pickle.dump([mesh, gfu], f)
 
 # Load (shared references preserved: gfu.space.mesh == mesh)
-with open("solution.pkl", "rb") as f:
+with open(\"solution.pkl\", \"rb\") as f:
     mesh2, gfu2 = pickle.load(f)
 
 # CoefficientFunction expression trees also supported
@@ -1998,6 +1998,60 @@ pickle.dump([mesh, func], outfile)
 
 **Supported**: Mesh, FESpace, GridFunction, CoefficientFunction expressions.
 Shared references (e.g., two GridFunctions on same space) are preserved.
+
+## 41. GridFunction Mutable Reference Trap in CoefficientFunctions (CRITICAL)
+
+`GridFunction` objects are **mutable**. When embedded in a
+`CoefficientFunction` expression, the CF stores a **reference**, not a
+copy, of the GridFunction's data. Re-assigning `gf.vec.data` between
+uses silently changes the value of every CF that references it.
+
+```python
+# WRONG: stored expressions share the mutable GridFunction.
+gf_acc = GridFunction(fes)
+gf_acc.vec[:] = 0.0
+history = []
+for n in range(N):
+    gf_acc.vec.data += increment.vec
+    history.append(gf_acc)
+
+# CORRECT: copy the values into a fresh GridFunction.
+gf_acc.vec[:] = 0.0
+history = []
+for n in range(N):
+    gf_acc.vec.data += increment.vec
+    snap = GridFunction(fes, name=f\"snap_{n}\")
+    snap.vec.data = gf_acc.vec
+    history.append(snap)
+```
+
+**Symptom**: in iterative schemes (Kameari accumulation CLN, Picard
+non-linear loops, time stepping that reuses prior states), `stage 0`
+matches the analytical answer to machine precision, but `stage 1+`
+returns wrong-sign or wildly wrong values that look like algorithmic
+divergence — when in fact the prior `J_n_cf` expressions are silently
+re-evaluating against the *current* (updated) `gf_acc`, not the
+`gf_acc` value at the time the CF was built.
+
+**Verified failure mode** (2026-05-10, Cu sphere a=10mm, B0=1T, 3D
+Kameari + Kelvin):
+- Without snapshot: τ_0 = 693.95 μs (matches Stoll Cauer-I 694.14
+  to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
+  stages 2+ diverge by orders of magnitude.
+- With snapshot: τ_0 = 693.95 (−0.027 %), τ_1 = 154.46 (−0.094 %),
+  τ_2 = 63.45 (−0.97 %), τ_3 = 33.08 (−4.06 %); stage 4 hits the
+  FP64 Hankel-Padé wall.
+
+**Diagnostic strategy**: if a 3D iteration matches axisym at stage 0
+but breaks at stage 1+, suspect this trap before suspecting H-H
+projection, gauge fixing, ORDER, Schmidt orthogonalisation, or
+solver tolerance. None of those help if the GridFunction the CFs
+refer to keeps mutating beneath them.
+
+**Cross-references**:
+- `cln_3d.py` knowledge — Kameari accumulation snapshot pattern
+- W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+  cln_team28_kelvin.py — reference fix in `Apot_acc -> snap_acc`
 """
 
 NGSOLVE_LINALG = """

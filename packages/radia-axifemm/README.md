@@ -42,20 +42,32 @@ solver). The independent BEM-Foster reference (integral equation, elliptic
 kernel, 1920-element ring mesh) is run via Mathematica (`bem_disk_axisym_cauer.wls`)
 and a 50-digit mpmath classical Cauer extraction (`disk_bem_cauer.py`).
 
-## Build (development)
+## Build
 
-```bash
-cd packages/radia-axifemm
-pip install --no-build-isolation -e .
+axifemm is built into the radia wheel (since 2026-05-10) — no separate
+package install.  Just rebuild radia:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File S:/Radia/01_GitHub/Build.ps1
 ```
 
-Requires NGSolve 6.2.2405+, CMake ≥ 3.16, and a C++17 compiler.
+The C++ source lives in `src/ext/axifemm/` and the top-level
+`CMakeLists.txt` defines an `add_ngsolve_python_module(radia_axifemm ...)`
+target.  Output is copied to `src/radia/radia_axifemm.pyd` and ships in
+the radia wheel.  Requires NGSolve 6.2.2603+, CMake ≥ 3.16, MSVC.
+
+This `packages/radia-axifemm/` directory is now a **research workspace**
+(tests / scripts / demos) — it is not installable as a separate
+package.  The `pyproject.toml`, `CMakeLists.txt`, and `src/` were
+removed when axifemm was absorbed into the radia wheel (2026-05-10
+cleanup).
 
 ## Quick usage
 
 ```python
 from ngsolve import *
-from radia_axifemm import (
+import radia                                          # registers DLL paths
+from radia.radia_axifemm import (
     H1Henrotte,
     AxiHenrotteStiffnessBFI,
     AxiHenrotteSigmaMassBFI,

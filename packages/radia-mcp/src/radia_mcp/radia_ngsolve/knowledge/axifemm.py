@@ -73,8 +73,8 @@ AXIFEMM_API = """\
 
 ```python
 from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction
-from radia_axifemm import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
-import radia_axifemm   # import once to register the FESpace
+from radia.radia_axifemm import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
+import radia.radia_axifemm   # import once to register the FESpace
 
 mesh = Mesh(...)                                    # axis-aligned quad mesh
 fes  = FESpace("axihenrotte", mesh, order=2,
@@ -315,6 +315,38 @@ Reference data (separate working tree, not in this repo):
     disk_bem_cauer.py             (Python mpmath Cauer-I CFE)
     bem_disk_axisym_cauer.json
     bem_disk_axisym_cauer_python_results.json
+
+## Hiruma 3-term ≠ Stoll χ-Foster Cauer-I (verified 2026-05-10)
+
+The Hiruma 3-term Lanczos recurrence used here computes Cauer-I rungs of
+  f_H(s) = bᵀ·(K - sM)⁻¹·b
+which is the **Krylov-Padé impedance** representation. This is NOT the
+same generating function as Sugahara/Kameari accumulation, which expands
+  f_K(s) = uᵀ·M·(sM - K)⁻¹·M·u  with u = M⁻¹·b
+giving the **χ-Foster (susceptibility)** Cauer-I — the one that matches
+analytical Stoll Bessel for sphere and Stoll-equivalent BEM-Foster.
+
+Sphere ground truth (Cu a=10 mm, B₀=1 T uniform; Mathematica Hankel-Padé
+240 digits on Stoll spectrum):
+  k=0  Stoll/Kameari τ = 694.142 μs  Hiruma 3-term τ = 728.85  (+5.0%)
+  k=1  Stoll/Kameari τ = 154.604 μs  Hiruma 3-term τ = 171.51  (+10.9%)
+  k=2  Stoll/Kameari τ =  64.075 μs  Hiruma 3-term τ =  71.68  (+11.9%)
+
+Implication for axifemm: the τ₁ ≈ 223.7 μs cylinder reference (Hiruma) is
+in the **Hiruma convention** and should not be mixed with BEM-Foster Cauer
+values (which are in the Stoll/χ-Foster convention) without conversion.
+
+To convert Hiruma matrices → Kameari/Stoll Cauer-I, swap the moment
+formula:
+  α_n^Kameari = uᵀ M (K⁻¹M)ⁿ u   (u = M⁻¹·b)
+  α_n^Hiruma  = bᵀ (K⁻¹M)ⁿ K⁻¹ b
+then run identical Hankel-Padé continued-fraction extraction.
+
+POLICY (2026-05-10): Project repository (CauerLadderNetwork) has dropped
+Hiruma in favour of Kameari accumulation as the canonical extractor. The
+axifemm package retains its Hiruma routine for legacy verification, but
+**new tests should target Kameari accumulation** so τ values are directly
+comparable to Stoll analytical and BEM-Foster.
 
 ## Hessian-of-W convention (load-bearing)
 
