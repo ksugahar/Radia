@@ -1,7 +1,7 @@
-"""End-to-end test for `calc_heat_axisym.py` after the Henrotte
-migration (radia 4.32.0+).  Runs the production CLI as a subprocess
-on the structured-grid cylinder fixture and asserts the temperature
-rise is in the analytically-expected band.
+"""End-to-end test for `calc_heat_axisym.py` (FEMM-canonical standard
+H1 + 2 pi r weighting; matches FEMM 4.2 hsolv/prob1big.cpp).  Runs the
+production CLI as a subprocess on the structured-grid cylinder fixture
+and asserts the temperature rise is in the analytically-expected band.
 
 Geometry: Cu-disk-style steel cylinder R = 25 mm, H = 25 mm, structured
 9x9 quad grid (NR x NZ = 9 x 9 = 81 quads, 100 nodes).
@@ -43,7 +43,7 @@ def regenerate_fixture():
     return FIXTURE
 
 
-def test_calc_heat_axisym_henrotte_temperature_band(regenerate_fixture):
+def test_calc_heat_axisym_temperature_band(regenerate_fixture):
     """Run calc_heat_axisym.py end-to-end and check T_max / T_min are
     in the analytically-expected band."""
     cmd = [sys.executable, SCRIPT,
@@ -81,7 +81,8 @@ def test_calc_heat_axisym_henrotte_temperature_band(regenerate_fixture):
     assert abs(Q_input - expected_Q) / expected_Q < 0.01, (
         f"Q_input = {Q_input} J vs expected {expected_Q} J")
 
-    # Confirm we're using the Henrotte FESpace (the log line is in stderr).
-    assert "H1Henrotte" in proc.stderr, (
-        f"calc_heat_axisym did not log H1Henrotte usage; current stderr "
+    # Confirm we're using the standard H1 FESpace (FEMM-canonical;
+    # matches FEMM 4.2 hsolv/prob1big.cpp).
+    assert "FES:H1" in proc.stderr, (
+        f"calc_heat_axisym did not log H1 FESpace usage; current stderr "
         f"shows: {proc.stderr[:500]}")

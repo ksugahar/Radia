@@ -348,6 +348,64 @@ axifemm package retains its Hiruma routine for legacy verification, but
 **new tests should target Kameari accumulation** so τ values are directly
 comparable to Stoll analytical and BEM-Foster.
 
+## Henrotte + (Kelvin or air box) + CLN — workflow composition
+
+The full eddy-current workflow on axisymmetric problems composes three pieces;
+each is documented in its own knowledge file but the *combination* is the
+intended canonical use:
+
+  Henrotte axisym FE basis  +  finite air box (NOT Kelvin)  +  CLN extraction
+
+* **Henrotte basis** (this file): polynomial in `s = r²` for `ψ = 2π r A_φ`.
+  Produces `K`, `M` matrices in axisym geometry without `1/r`-Gauss errors
+  near the axis.
+
+* **Open-domain truncation for axisym = finite air box, NOT Kelvin**:
+  axisymmetric FEM truncates the exterior with a finite air rectangle
+  `[0, R_air] × [-Z_air, Z_air]` (typical R_air, Z_air = 5×–25× the
+  conductor extent) and homogeneous Dirichlet `A_φ = 0` on the outer
+  edges. Kelvin transformation (`kelvin.py` knowledge) is the open-domain
+  mechanism for **3D HCurl** problems on a *Cartesian* mesh, where you
+  need `nu' = (rho'/R)² nu_0` in the exterior Kelvin sphere; it does not
+  apply to the `axihenrotte` basis. If you find yourself wanting Kelvin
+  with axihenrotte, you are mixing two different formulations — use
+  `H1Henrotte` with a bigger air rectangle instead.
+
+* **CLN extraction** (`cln_3d.py` + `cln_notebooks/`): once you have
+  `K, M, b` from the Henrotte assembly, choose a convention:
+  - Hiruma 3-term Lanczos (Krylov-Padé impedance), or
+  - Kameari accumulation (χ-Foster susceptibility, project canonical
+    since 2026-05-10),
+  and run the same Hankel-Padé continued-fraction Cauer extraction.
+
+The two open-domain truncations match in the appropriate limit (Kelvin
+exact at `R → ∞`; air box converges as `R_air, Z_air → ∞`), but their
+DOF structure differs and they are not interchangeable inside a single
+assembly.
+
+Cross-validation reference (2026-05-10, Cu disk R=10 mm, t=2 mm,
+σ=5.8e7, B₀=1 T, leading Cauer rung τ_pair[0]):
+
+| method                              | τ_pair[0] [μs] | gap to BEM |
+|-------------------------------------|----------------|------------|
+| BEM-Foster v3 (Nagamine pipeline)   | 219.32 (ref)   | —          |
+| axihenrotte p=2 (Hiruma 3-term)     | 218.71         | -0.28 %    |
+| axihenrotte p=1 very-fine (Hiruma)  | 218.05         | -0.58 %    |
+| 3D HCurl (NGSolve + Kelvin)         | ≈ 218.7        | < 1 %      |
+| Cylinder axisym VIM (144 cells)     | 211.85         | -3.4 %     |
+
+The Cylinder VIM is run at a single coarse grid as a sanity check, not for
+high accuracy; the axifemm `p=2` Q-element remains the recommended
+production path for axisym Cu eddy-current Cauer extraction.
+
+The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth):
+
+| method                              | τ_pair[0] [μs] | gap to Stoll |
+|-------------------------------------|----------------|--------------|
+| Stoll analytical (Mathematica HP)   | 694.14 (ref)   | —            |
+| 3D HCurl (NGSolve + Kelvin)         | ≈ 694          | 0.027 % at L₁ |
+| Sphere axisym VIM (480 cells)       | 708.4          | +2.07 %      |
+
 ## Hessian-of-W convention (load-bearing)
 
 Both `K_phi` and `M_sigma_phi` are emitted in the **Hessian-of-W**
