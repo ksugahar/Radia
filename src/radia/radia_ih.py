@@ -333,6 +333,16 @@ class IHPanel(ModePanel):
             filter_str="Coil mesh (*.vol);;All (*)")
         coil_vol_w.textChanged.connect(self._emit_validation)
 
+        # ============ Workpiece geometry (.vol) =====================
+        # Replaces the legacy top-level Model row in AnalysisWindow
+        # (radia 4.35.0+).  Hidden for vacuum-only modes; shown for
+        # weak-coupled / FEM modes that need a workpiece mesh.
+        self._add_section("Workpiece geometry", key="_sec_wp_vol")
+        wp_vol_w = self.add_browse(
+            "wp_vol", "Workpiece .vol:",
+            filter_str="Netgen Vol (*.vol);;All (*)")
+        wp_vol_w.textChanged.connect(self._on_wp_vol_changed_text)
+
         # ============ Workpiece material (INDEPENDENT from coil) ============
         self._add_section("Workpiece material", key="_sec_wp_material")
         wp_mat = self.add_combo(
@@ -592,6 +602,10 @@ class IHPanel(ModePanel):
         # don't expose it as a knob.
         self._set_row_visible("fes_order",
                               is_weak or is_peec_fem_k or is_fem)
+        # Workpiece geometry (.vol) is shown for all modes that need a
+        # workpiece mesh; the legacy top-level Model row is gone.
+        self._set_row_visible("_sec_wp_vol", needs_wp)
+        self._set_row_visible("wp_vol", needs_wp)
         self._set_row_visible("_sec_wp_material", needs_wp)
         self._set_row_visible("_sec_wp_imp", needs_wp)
 
@@ -605,11 +619,6 @@ class IHPanel(ModePanel):
         # needs_wp is True.
         if needs_wp:
             self._on_impedance_changed(self.val("impedance_model"))
-
-        # Vacuum-only inductance is mesh-free — hide the top-level .vol row.
-        set_vol_vis = getattr(self, "setVolRowVisible", None)
-        if callable(set_vol_vis):
-            set_vol_vis(not is_vacuum)
 
         self._update_status()
         self._emit_validation()
@@ -656,12 +665,6 @@ class IHPanel(ModePanel):
 
     # ----------------------- External hooks -----------------------
 
-    def set_vol_labels(self, mats, bnds):
-        """Called by IHWindow after .vol load; refreshes status + run-enable."""
-        self._vol_mats = mats
-        self._vol_bnds = bnds
-        self._update_status()
-
     def is_runnable(self):
         method = self._method_combo.currentText()
         ok, _errors, _warnings = check_method_requirements(
@@ -675,6 +678,32 @@ class IHPanel(ModePanel):
             cv = self.val("coil_vol") if "coil_vol" in self._widgets else ""
             return ok and bool(cv) and os.path.isfile(cv)
         return ok and (self._vol_mats is not None)
+
+    # AnalysisWindow._on_run() asks the panel for its workpiece .vol so it
+    # can pass an absolute path into build_command and set the subprocess
+    # work_dir.  Read from the per-panel wp_vol widget (4.35.0+).  Empty
+    # string for vacuum modes that don't have a workpiece.
+    def wp_vol_path(self):
+        if "wp_vol" not in self._widgets:
+            return ""
+        return self.val("wp_vol")
+
+    def _on_wp_vol_changed_text(self, _text):
+        """Re-inspect the workpiece .vol labels after the user edits the
+        wp_vol field (Browse... or manual edit).  Mirrors the legacy
+        IHWindow._on_vol_changed wiring against the panel-owned widget.
+        """
+        path = self.val("wp_vol")
+        # Reset label cache on empty path (e.g. user cleared the field).
+        if not path or not os.path.isfile(path):
+            self._vol_mats = None
+            self._vol_bnds = None
+        else:
+            mats, bnds = inspect_vol_labels(path)
+            self._vol_mats = mats
+            self._vol_bnds = bnds
+        self._update_status()
+        self._emit_validation()
 
     # ----------------------- Command building -----------------------
 
@@ -903,17 +932,20 @@ class IHWindow(AnalysisWindow):
                          settings_key="ih")
         panel = IHPanel()
         self._set_panel(panel)
+        # Pre-fill the panel's wp_vol field from the constructor arg
+        # BEFORE _restore_settings() runs.  add_browse() rounds the abs
+        # path through the AnalysisWindow display_path helper so the
+        # text shows as relative when inside the working folder.
+        if vol_path and "wp_vol" in panel._widgets:
+            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
         self._restore_settings()
-        # Re-fire method change so visibility hooks that depend on the
-        # window (setVolRowVisible) run after the panel-window binding
-        # is complete.  The initial call inside IHPanel._build_ui() runs
-        # before _set_panel() has wired these hooks.
+        # Re-fire method change so visibility hooks run after the panel-
+        # window binding (wp_vol section visibility) is wired.
         panel._on_method_changed(panel.val("method"))
-        # Inspect the .vol on launch.  Use the line-edit value rather
-        # than the constructor arg so QSettings-restored paths are
-        # honoured (otherwise the panel sees the empty initial path
-        # and Run stays disabled even with a valid .vol restored).
-        self._reload_vol_info(self._vol_edit.text())
+        # Trigger label re-inspection for the panel-owned wp_vol widget
+        # (in case the constructor / settings restored a non-empty path).
+        if "wp_vol" in panel._widgets:
+            panel._on_wp_vol_changed_text(panel._widgets["wp_vol"].text())
         # PEEC-inductance convenience: if the method is PEEC-inductance
         # AND the STEP field is empty (first launch / fresh QSettings),
         # auto-populate from the newest *.step / *.stp in cwd.
@@ -979,21 +1011,6 @@ class IHWindow(AnalysisWindow):
             key=lambda p: os.path.getmtime(p), reverse=True)
         if candidates:
             step_widget.setText(os.path.abspath(candidates[0]))
-
-    def _reload_vol_info(self, vol_path):
-        panel = self._panel
-        if panel is None or not hasattr(panel, "set_vol_labels"):
-            return
-        mats, bnds = inspect_vol_labels(vol_path)
-        panel.set_vol_labels(mats, bnds)
-
-    def _on_vol_changed(self, path):
-        """Re-inspect labels and refresh Run-enable when the user picks
-        a new .vol via Browse... or manual edit.  Without this, the panel
-        ships with _vol_mats=None forever and Run never enables for
-        non-vacuum methods."""
-        self._reload_vol_info(path)
-        self._update_run_state()
 
     def _on_finished(self, exit_code, exit_status):
         # Delegate core finish handling + then append IH-specific summary.
