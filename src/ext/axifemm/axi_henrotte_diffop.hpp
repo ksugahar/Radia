@@ -58,6 +58,43 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteDiffOpIdBnd — boundary-trace value evaluator
+//
+// NGSolve's SymbolicLinearForm checks DifferentialOperator::VB() to decide
+// whether a given evaluator can serve as a test function's trace.  We need
+// a separate DiffOp with vb=BND for `LinearForm += q * v * ds(label)` to
+// work on H1Henrotte.  CalcMatrix is identical to the VOL variant -- our
+// AxiHenrotteFE_Edge_{Q1,Q2} CalcShape already returns the appropriate
+// 1D trace values.  The 2026-05-10 Henrotte-only-axisym policy made this
+// class load-bearing for axisymmetric Neumann RHS assembly.
+// ---------------------------------------------------------------------------
+
+class AxiHenrotteDiffOpIdBnd : public DifferentialOperator {
+public:
+    AxiHenrotteDiffOpIdBnd()
+        : DifferentialOperator(/*dim=*/1, /*blockdim=*/1,
+                               /*vb=*/BND, /*difforder=*/0)
+    {
+        SetDimensions(Array<int>{});
+    }
+
+    string Name() const override { return "AxiHenrotte:Id:Bnd"; }
+
+    void CalcMatrix(const FiniteElement & fel,
+                    const BaseMappedIntegrationPoint & mip,
+                    BareSliceMatrix<double, ColMajor> mat,
+                    LocalHeap & lh) const override
+    {
+        const auto & afel = static_cast<const AxiHenrotteBaseFE&>(fel);
+        IntegrationPoint ip = mip.IP();
+        FlatVector<double> shape(afel.GetNDof(), lh);
+        afel.CalcShape(ip, shape);
+        for (size_t i = 0; i < afel.GetNDof(); ++i)
+            mat(0, i) = shape(i);
+    }
+};
+
+// ---------------------------------------------------------------------------
 // AxiHenrotteDiffOpGradient — gradient evaluator (returns 2D vector in r, z)
 // ---------------------------------------------------------------------------
 
