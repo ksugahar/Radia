@@ -78,6 +78,70 @@ public:
         LocalHeap & lh) const override;
 };
 
+// ---------------------------------------------------------------------------
+// AxiHenrotteHeatStiffnessBFI -- axisymmetric heat conduction stiffness
+// ---------------------------------------------------------------------------
+//
+// Closed-form heat stiffness for the axisymmetric Henrotte basis.  The
+// weak form (after substitution s = r^2, ds = 2r dr, 2 pi r dr dz =
+// pi ds dz) is
+//
+//   a(T, v) = pi * Integrate( k * [ 4 s d_s T d_s v + d_z T d_z v ] ds dz )
+//
+// Both terms are POLYNOMIAL in (s, z) -- no 1/s factor (unlike the
+// magnetic case).  Element matrices come from sympy-derived closed forms
+// in q_heat_henrotte_generated.hpp.
+//
+// DOF semantics: nodal temperature T_j (NOT the magnetic flux psi_j =
+// 2 pi r_j A_phi).  No T = diag(2 pi r_node) wrap is applied -- T is
+// regular at the axis and stays in nodal form.  This is the key
+// difference from AxiHenrotteStiffnessBFI.
+class AxiHenrotteHeatStiffnessBFI : public BilinearFormIntegrator {
+public:
+    shared_ptr<CoefficientFunction> k_cf;
+
+    AxiHenrotteHeatStiffnessBFI(shared_ptr<CoefficientFunction> ak_cf);
+
+    xbool IsSymmetric() const override { return true; }
+    VorB VB() const override { return VOL; }
+    int DimElement() const override { return 2; }
+    int DimSpace()   const override { return 2; }
+    string Name() const override { return "AxiHenrotteHeatStiffnessBFI"; }
+
+    void CalcElementMatrix(
+        const FiniteElement & fel,
+        const ElementTransformation & eltrans,
+        FlatMatrix<double> elmat,
+        LocalHeap & lh) const override;
+};
+
+// ---------------------------------------------------------------------------
+// AxiHenrotteHeatMassBFI -- axisymmetric heat capacity (transient term)
+// ---------------------------------------------------------------------------
+//
+//   m(T, v) = pi * Integrate( rho_c * T * v ) ds dz
+//
+// rho_c = rho * c_p [J/(m^3 K)]; pass via CoefficientFunction.  Same
+// nodal-T DOF semantics as AxiHenrotteHeatStiffnessBFI.
+class AxiHenrotteHeatMassBFI : public BilinearFormIntegrator {
+public:
+    shared_ptr<CoefficientFunction> rho_c_cf;
+
+    AxiHenrotteHeatMassBFI(shared_ptr<CoefficientFunction> arho_c_cf);
+
+    xbool IsSymmetric() const override { return true; }
+    VorB VB() const override { return VOL; }
+    int DimElement() const override { return 2; }
+    int DimSpace()   const override { return 2; }
+    string Name() const override { return "AxiHenrotteHeatMassBFI"; }
+
+    void CalcElementMatrix(
+        const FiniteElement & fel,
+        const ElementTransformation & eltrans,
+        FlatMatrix<double> elmat,
+        LocalHeap & lh) const override;
+};
+
 }  // namespace radia_axifemm
 
 #endif
