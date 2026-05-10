@@ -197,20 +197,31 @@ def solve_heat_axisym(wp_vol,
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
 
-    # Henrotte axisymmetric FE (radia 4.30.0+ for FESpace,
-    # 4.31.0 for the heat operator BFIs).  See CLAUDE.md
-    # "Axisymmetric FE: Henrotte Basis Only" policy: the standard
-    # NGSolve `H1(mesh, order=p)` + 2 pi r weight path is forbidden
-    # for axisymmetric solves because its odd-r polynomial modes are
-    # not in the admissible function space (T(r,z) is even in r by
-    # cylindrical symmetry).  The Henrotte {1, r^2, z, ...} basis
-    # spans exactly the even-r polynomial space.
-    import radia.radia_axifemm as _ax
-    fes_T = _ax.H1Henrotte(wp_mesh, order=int(fes_order))
+    # Standard NGSolve H1 + 2 pi r weighting (FEMM-canonical; matches
+    # the heat solver in FEMM's hsolv/prob1big.cpp -- standard P1
+    # triangle on physical (r, z) with the 2 pi r Jacobian evaluated
+    # at the element centroid).
+    #
+    # Per CLAUDE.md "Axisymmetric FE: Henrotte Basis Only" policy
+    # (refined 2026-05-10 after surveying FEMM 4.2 source):
+    #   * Henrotte basis is REQUIRED for axisymmetric MAGNETIC solves
+    #     (curl operator brings 1/r axis singularity that standard FE
+    #     cannot integrate accurately near the axis).
+    #   * Standard H1 + 2 pi r is FINE for axisymmetric SCALAR solves
+    #     (heat, electric potential, diffusion) because the weak form
+    #     contains 2 pi r as a smooth Jacobian, NOT a 1/r integrand.
+    #     Meeker uses standard P1 triangle for FEMM's heat solver and
+    #     ships production accuracy.
+    #
+    # The `radia.radia_axifemm.AxiHenrotteHeat{Stiffness,Mass}BFI`
+    # classes (added in radia 4.31.0) remain available as optional
+    # parity-conscious infrastructure; they are not used here because
+    # the FEMM convention says we don't need them for scalar T.
+    fes_T = H1(wp_mesh, order=int(fes_order))
     u, v = fes_T.TnT()
     gfT = GridFunction(fes_T)
     gfT.vec[:] = float(t_initial)
-    _log(f"FES:H1Henrotte order={fes_order} ndof={fes_T.ndof}")
+    _log(f"FES:H1 order={fes_order} ndof={fes_T.ndof}")
 
     class _Args:
         pass
@@ -222,29 +233,19 @@ def solve_heat_axisym(wp_vol,
     a_local.n_phi_samples = n_phi_samples
     gf_q, q_cf = _build_axisym_qsurf_gf(wp_mesh, surface_label, a_local)
 
-    # ------- Bilinear forms (Henrotte axisymmetric BFIs) -------
-    # The volume stiffness + mass come from the closed-form Henrotte
-    # BFIs which already bake the 2 pi r Jacobian (= pi ds dz under
-    # the s = r^2 substitution).  No `weight * dx` needed.
-    #
-    # The Robin convective term (h_conv * u * v on the heated surface)
-    # remains a boundary integral with explicit 2 pi r weighting; the
-    # Henrotte FESpace's edge FE (radia 4.32.0) handles `u.Trace() *
-    # v.Trace() * weight * ds(label)` patterns now.
-    #
+    # ------- Bilinear forms (axisym weight = 2*pi*r) -------
     # ``r_coord`` is NGSolve's x global coordinate (= radial coord).
     weight = 2 * math.pi * r_coord
     K_cf = CF(float(k_v))
     rho_cp = CF(float(rho_v) * float(cp_v))
 
     a_form = BilinearForm(fes_T, symmetric=True)
-    a_form += _ax.AxiHenrotteHeatStiffnessBFI(K_cf)
-    a_form += float(h_conv) * v.Trace() * u.Trace() * weight \
-        * ds(surface_label)
+    a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
+    a_form += float(h_conv) * v * u * weight * ds(surface_label)
     a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
-    m_form += _ax.AxiHenrotteHeatMassBFI(rho_cp)
+    m_form += rho_cp * u * v * weight * dx
     m_form.Assemble()
 
     if time_scheme not in ("backward-euler", "crank-nicolson"):
@@ -296,8 +297,8 @@ def solve_heat_axisym(wp_vol,
     for step in range(1, n_steps + 1):
         t = step * float(dt)
         f_form = LinearForm(fes_T)
-        f_form += q_cf * v.Trace() * weight * ds(surface_label)
-        f_form += float(h_conv) * float(t_ext) * v.Trace() * weight \
+        f_form += q_cf * v * weight * ds(surface_label)
+        f_form += float(h_conv) * float(t_ext) * v * weight \
             * ds(surface_label)
         f_form.Assemble()
         with TaskManager():

@@ -391,68 +391,73 @@ public subpackage when ready.
 - Induction Heating: `mcp-server-ih` → `radia_mcp.ih` (2026-04-24, application-specific subpackage)
 - Analytical Formulas: in `radia_mcp.radia_ngsolve.analytical_formulas` (2026-05-01, extended same day) — closed-form reference layer (Wakao-Igarashi-Fujiwara-Kameari Part 1-9). Group B+C (radia 4.20.0): ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular bar, thin-plate eddy current, Fabri solenoid, three-phase line, K(k)/E(k) Hastings, Gauss-Legendre. Group D (radia 4.21.0, Part 6/8/9): plate Joule dissipation, AC thin-shell shielding, magnetic-shell interior fields, planar surface impedance, full Bessel cylindrical-conductor AC impedance, Gauss-Patterson nested quadrature, cuboid average B (numerical-integration path). **radia 4.22.0**: cuboid_average_field closed-form C++ kernel shipped — sympy-derived G1, G2 antiderivatives + 64-corner inclusion-exclusion sum (~40 µs/call, 817× faster than Gauss-Legendre baseline); `method="numerical"` fallback retained for cross-checks and the V_T ≪ V_S ULP-cancellation regime. The originally-cited Stafl 1967 §3.4 was confirmed unrelated (2D rectangular conductor, not 3D cuboid magnetisation). MCP tool `analytical_formulas(topic)` exposes 11 topics including a `validation_use_cases` mapping that says "given analysis X, which closed form is the trusted reference?". Use it as the FIRST QUESTION when validating any new analysis result.
 
-### Axisymmetric FE: Henrotte Basis Only (NEVER NGSolve H1 + 2 pi r)
+### Axisymmetric FE: Henrotte for Magnetic, Standard H1 for Scalar (FEMM-Canonical)
 
-**POLICY (2026-05-10)**: All axisymmetric finite-element calculations
-in this codebase MUST use the Henrotte/Meeker `{1, r^2, z, ...}` basis
-via `radia.radia_axifemm`.  Do NOT use standard NGSolve `H1(mesh,
-order=p)` with a `2 pi r` Jacobian weight for **any** axisymmetric
-field, regardless of physics (magnetic A_phi, scalar temperature T,
-electric potential phi, ...).
+**POLICY (2026-05-10, refined from earlier "all axisym Henrotte"
+framing)**: Axisymmetric FE convention follows the FEMM 4.2 split:
 
-**The mathematical reason**: any axisymmetric scalar field, viewed as
-a function of `r` extended across the axis to `r < 0`, must be an
-**even function in r** (cylindrical symmetry implies T(-r, z) =
-T(r, z)).  Even functions Taylor-expand only in even powers of r
-(`r^0, r^2, r^4, ...`).  Standard P1/P2/Pp `H1` basis on `(r, z)`
-contains odd-r modes that **cannot occur in any axisymmetric
-distribution**; the FE solver wastes DOFs driving those non-physical
-modes to zero through the `2 pi r` Jacobian weight.  The Henrotte
-basis spans exactly the even-r polynomial space, matching the
-admissible function space.
+| Physics | Basis | Reason |
+|---------|-------|--------|
+| **Magnetic A_phi (curl-curl)** | **Henrotte** `{1, r^2, z}` (`radia.radia_axifemm`) | The cylindrical curl operator `B_z = (1/r) d(r A_phi)/dr` produces a `1/r` integrand that standard FE Gauss quadrature cannot integrate accurately near the axis.  Henrotte's `s = r^2` substitution gives clean closed-form integration. |
+| **Scalar T / phi (Laplacian)** | **Standard NGSolve `H1`** + `2 pi r` weighting | The weak form `int k grad T . grad v . 2 pi r dr dz` has `2 pi r` as a **smooth Jacobian** (not a `1/r` integrand).  Standard FE handles this fine; no axis-special treatment is needed. |
 
-This is the same reason FEMM (Meeker) uses `{1, r^2, z}` for both
-its magnetic (`prob3big.cpp`) and thermal (`heatprob.cpp`) solvers.
+This matches the FEMM 4.2 reference implementation (verified against
+`S:/FEMM/02_source/femm42src_22Oct2023/`):
 
-**API**:
+- `belasolv/prob3big.cpp` — magnetic, uses Henrotte `{1, r^2, z}`
+- `hsolv/prob1big.cpp` — heat, uses **standard P1 triangle** with
+  `2 pi r` evaluated at the element centroid, **no** Henrotte basis,
+  **no** `s = r^2` substitution
+
+**Why not "all axisym Henrotte"**: Henrotte basis IS the natural
+function space for axisymmetric scalars (the parity / even-function
+argument is mathematically correct).  But the practical accuracy
+benefit is small for scalar Laplacians because the `2 pi r` Jacobian
+suppresses spurious odd-r modes automatically.  FEMM ships
+production-grade thermal accuracy with standard P1; we follow that
+proven convention.
+
+**API for magnetic axisym**:
 
 ```python
-import radia
 import radia.radia_axifemm as ax
 
-mesh = Mesh(...)                                  # axis-aligned quad mesh
+mesh = Mesh(...)                                  # axis-aligned (r, z) mesh
 fes  = ax.H1Henrotte(mesh, order=p)               # p = 1 (Q1) or p = 2 (Q2)
 
-# Magnetic A_phi:
 a_mag = BilinearForm(fes, symmetric=True)
 a_mag += ax.AxiHenrotteStiffnessBFI(mu_cf)
 a_mag += ax.AxiHenrotteSigmaMassBFI(sigma_cf)     # eddy-current term
-
-# Heat T (radia 4.31.0+):
-a_heat = BilinearForm(fes, symmetric=True)
-a_heat += ax.AxiHenrotteHeatStiffnessBFI(k_cf)
-a_heat += ax.AxiHenrotteHeatMassBFI(rho_c_cf)     # transient term
 ```
 
-**Allowed exceptions**:
+**API for scalar axisym (heat, electric potential, diffusion)**:
 
-- 3D solvers (`calc_fem_kelvin.py`, `calc_fem_coilmesh.py`) are
-  exempt because they are not axisymmetric.
-- Cross-mesh interpolation / projection helpers (e.g. φ-averaging
-  the qsurf 3D GridFunction onto an axisym mesh) MAY temporarily
-  hold a function in standard `H1` if the interpolation primitive
-  requires it; the **solve** must still happen on Henrotte.
-- Pure-NumPy reference prototypes in
-  `tests/axifemm/_reference_python/` may use direct integration
-  without an FE basis — they are validation oracles, not production
-  paths.
+```python
+from ngsolve import H1, BilinearForm, x as r_coord, dx, ds, grad, InnerProduct
+import math
 
-**Reference**: see [`docs/axifemm/FORMULATION.md`](docs/axifemm/FORMULATION.md)
-sections 5-6 (basis derivation), 10b (heat-equation operator), and
-the parity argument.  Pre-radia-4.31.0 axisymmetric solvers that
-used standard `H1(mesh, order=p)` + `2 pi r` weighting were a
-historical compromise (no Henrotte heat BFI yet) and have been
-migrated.
+mesh = Mesh(...)
+fes  = H1(mesh, order=p)                          # standard NGSolve H1
+
+weight = 2 * math.pi * r_coord                    # axisym Jacobian
+a_heat = BilinearForm(fes, symmetric=True)
+a_heat += k_cf * InnerProduct(grad(u), grad(v)) * weight * dx
+a_heat += h_conv * v * u * weight * ds(surface_label)   # Robin
+```
+
+**Optional Henrotte heat infrastructure**: The
+`radia.radia_axifemm.AxiHenrotteHeat{Stiffness,Mass}BFI` classes
+(added in radia 4.31.0) and the `H1Henrotte` BND DiffOp (radia
+4.32.0) are kept in the codebase as parity-conscious infrastructure
+for research / publication uses (e.g. comparing convergence rates of
+Henrotte vs standard H1 on a scalar problem).  They are NOT used by
+production heat solvers and are NOT required.
+
+**Reference**: see
+[`docs/axifemm/FORMULATION.md`](docs/axifemm/FORMULATION.md)
+sections 5-6 (Henrotte basis derivation for magnetic) and 10b/10c
+(optional heat BFIs).  The FEMM convention split is documented in
+`memory/reference_femm_source_axisym_conventions.md`.
 
 ### Unit System Policy
 
