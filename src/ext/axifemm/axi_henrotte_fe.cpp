@@ -434,6 +434,113 @@ void AxiHenrotteFE_P1_Triangle::CalcDShape(
 }
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteFE_Edge_Q1 / _Q2 -- 1D restriction of the parent quad's
+// Lagrange basis to a single edge.  Used for Neumann RHS integration
+// `LinearForm += q * v * ds(label)` in axisymmetric heat / magnetic
+// solvers.  Basis values depend only on the edge's two endpoint
+// coordinates (and the s-midpoint for Q2); no parent-quad info is
+// required because the off-edge corners' Lagrange factors evaluate
+// to 1 along the edge.
+//
+// CalcDShape is intentionally not implemented -- Neumann RHS does not
+// need grad(v).  Throws if called, to surface unintended use.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Evaluate Lagrange basis at the 2 endpoints of a 1D segment in u-space,
+// where u = s = r^2 (horizontal edge) or u = z (vertical edge).
+//   L_0(u) = (u_1 - u) / (u_1 - u_0)
+//   L_1(u) = (u - u_0) / (u_1 - u_0)
+inline void LagrangeQ1Edge(double u0, double u1, double u, double L[2])
+{
+    double denom = u1 - u0;
+    if (std::abs(denom) < 1e-300) { L[0] = L[1] = 0.0; return; }
+    L[0] = (u1 - u) / denom;
+    L[1] = (u  - u0) / denom;
+}
+
+// Q2 1D Lagrange: 3 nodes at u_0, u_1, u_m = (u_0 + u_1) / 2 (s-midpoint
+// or z-midpoint convention).  L_0(u_0) = 1, L_1(u_1) = 1, L_m(u_m) = 1.
+inline void LagrangeQ2Edge(double u0, double u1, double u, double L[3])
+{
+    double um = 0.5 * (u0 + u1);
+    double d01 = u0 - u1, d0m = u0 - um;
+    double d10 = u1 - u0, d1m = u1 - um;
+    double dm0 = um - u0, dm1 = um - u1;
+    if (std::abs(d01) < 1e-300 || std::abs(d0m) < 1e-300 ||
+        std::abs(d1m) < 1e-300) {
+        L[0] = L[1] = L[2] = 0.0;
+        return;
+    }
+    L[0] = (u - u1) * (u - um) / (d01 * d0m);  // L at u0
+    L[1] = (u - u0) * (u - um) / (d10 * d1m);  // L at u1
+    L[2] = (u - u0) * (u - u1) / (dm0 * dm1);  // L at um
+}
+
+}  // namespace
+
+void AxiHenrotteFE_Edge_Q1::CalcShape(
+    const IntegrationPoint & ip, BareSliceVector<> shape) const
+{
+    // Segment reference parameter t in [0, 1].  Map to physical (r, z)
+    // along the edge.
+    double t = ip(0);
+    double rp = (1.0 - t) * r0 + t * r1;
+    double zp = (1.0 - t) * z0 + t * z1;
+    bool horizontal = std::abs(z0 - z1) < 1e-12;
+    double L[2];
+    if (horizontal) {
+        // Edge varies in r; basis varies in s = r^2.
+        double s0 = r0 * r0;
+        double s1 = r1 * r1;
+        LagrangeQ1Edge(s0, s1, rp * rp, L);
+    } else {
+        // Edge varies in z (or oblique; we use z for axis-aligned grids).
+        LagrangeQ1Edge(z0, z1, zp, L);
+    }
+    shape(0) = L[0];
+    shape(1) = L[1];
+}
+
+void AxiHenrotteFE_Edge_Q1::CalcDShape(
+    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
+{
+    throw Exception("AxiHenrotteFE_Edge_Q1::CalcDShape not implemented "
+                    "(boundary gradient evaluation not supported; "
+                    "Neumann RHS only needs the value trace)");
+}
+
+void AxiHenrotteFE_Edge_Q2::CalcShape(
+    const IntegrationPoint & ip, BareSliceVector<> shape) const
+{
+    double t = ip(0);
+    double rp = (1.0 - t) * r0 + t * r1;
+    double zp = (1.0 - t) * z0 + t * z1;
+    bool horizontal = std::abs(z0 - z1) < 1e-12;
+    double L[3];
+    if (horizontal) {
+        double s0 = r0 * r0;
+        double s1 = r1 * r1;
+        LagrangeQ2Edge(s0, s1, rp * rp, L);
+    } else {
+        LagrangeQ2Edge(z0, z1, zp, L);
+    }
+    // GetDofNrs orders: vertex0, vertex1, edge midnode (NV + edge index).
+    shape(0) = L[0];     // at vertex0
+    shape(1) = L[1];     // at vertex1
+    shape(2) = L[2];     // at edge midnode
+}
+
+void AxiHenrotteFE_Edge_Q2::CalcDShape(
+    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
+{
+    throw Exception("AxiHenrotteFE_Edge_Q2::CalcDShape not implemented "
+                    "(boundary gradient evaluation not supported; "
+                    "Neumann RHS only needs the value trace)");
+}
+
+// ---------------------------------------------------------------------------
 // Python bindings (Phase 2-A: just expose ctors for inspection)
 // ---------------------------------------------------------------------------
 
