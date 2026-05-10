@@ -16,10 +16,11 @@ scripts/validate_q2_codegen.py at the per-entry level — this test exercises
 the BFI assembly end-to-end).
 """
 import sys
+import os
 import numpy as np
 from scipy.linalg import eigh
 
-sys.path.insert(0, r"W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifemm")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "tests", "axifemm", "_reference_python"))
 from axifemm_quad_q2 import (  # type: ignore
     element_matrices_q2_numerical,
     element_sigma_mass_q2_numerical,
@@ -27,7 +28,7 @@ from axifemm_quad_q2 import (  # type: ignore
 
 from ngsolve import Mesh, BilinearForm, CoefficientFunction, TaskManager
 from netgen.occ import OCCGeometry, MoveTo
-from radia_axifemm import (
+from radia.radia_axifemm import (
     H1Henrotte,
     AxiHenrotteStiffnessBFI,
     AxiHenrotteSigmaMassBFI,

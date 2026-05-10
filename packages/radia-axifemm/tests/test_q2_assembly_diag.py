@@ -5,9 +5,10 @@ manual reference.
 Goal: find the source of the factor-~8 error in test_hiruma_disk_q2.py.
 """
 import sys
+import os
 import numpy as np
 
-sys.path.insert(0, r"W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifemm")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "tests", "axifemm", "_reference_python"))
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (
@@ -16,7 +17,7 @@ from netgen.meshing import (
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, TaskManager,
 )
-from radia_axifemm import (
+from radia.radia_axifemm import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

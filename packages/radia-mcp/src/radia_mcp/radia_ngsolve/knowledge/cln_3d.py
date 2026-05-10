@@ -257,10 +257,277 @@ For 3D HCurl order=3 with bonus_intorder=8 (closed PEC):
   N = 25: drift = 5.5% (1% breakdown threshold)
   N ≥ 26: corrupted regime
 
+### CRITICAL LINT: NGSolve GridFunction is mutable — snapshot before
+### embedding in CoefficientFunction expressions across iteration stages
+
+In the Kameari accumulation iteration (and any 3D CLN iterative scheme),
+the accumulator `Apot_acc` is a GridFunction whose `.vec.data` is updated
+each stage. If you build a CoefficientFunction that *references*
+Apot_acc (e.g., `A_acc_proj_cf = Apot_acc - grad(gf_phi_acc)`), then store
+that CF inside `J_n_cf` (`J_n_cf = J_n_cf - sigma_cf * A_acc_proj_cf / L_n`),
+the CF holds a *reference* — not a copy — to Apot_acc. When Apot_acc is
+updated next stage, every previous J_n_cf silently re-evaluates with the
+new (wrong) accumulator value.
+
+Symptom: stage 0 matches the analytical Cauer-I to 0.027 % (BEM-Foster
+ground truth), but stage 1 returns the wrong sign (e.g. τ_1 = −796 μs
+when the analytical Stoll χ-Foster gives +154.6 μs), then stages 2+
+diverge. H-H projection of A_acc, ORDER_PHI matching, ORDER bumps,
+Schmidt orthogonalization — all fail to fix the symptom because they
+all keep the mutable-Apot_acc reference alive across stages.
+
+Fix (verified 2026-05-10 on Cu sphere a=10mm, B0=1T): snapshot Apot_acc
+into a fresh GridFunction *each stage* and reference the snapshot in
+the CF expression:
+
+    Apot_acc.vec.data += R_n * gfAphi.vec
+    snap_acc = GridFunction(fesA, name=f"snap_acc_{nStage}")
+    snap_acc.vec.data = Apot_acc.vec       # explicit copy
+    A_acc_proj_cf = snap_acc - grad(gf_phi_acc)   # frozen refs
+    J_n_cf = J_n_cf - sigma_cf * A_acc_proj_cf / L_n
+
+After this fix the sphere 3D Kameari + Kelvin gives stage 0/1/2/3 with
+−0.03 / −0.09 / −1.0 / −4.1 % gap vs analytical Stoll Cauer-I ladder
+(v.s. 7-stage axisym H1 reaching machine precision and 40-stage BEM
+analytical). FP64 precision wall remains (~k = 4 onwards).
+
 ### bonus_intorder Critical Setting
 For order ≥ 3 HCurl with quadratic A_ext source, default integration
 order is too low. Use `bonus_intorder=8` in all `dx()` calls to keep
 Schmidt drift at machine precision through 11+ stages.
+
+### IMPORTANT: Hiruma 3-term Lanczos vs Kameari accumulation —
+### they extract DIFFERENT Cauer-I sequences (verified 2026-05-10)
+
+Hiruma & Igarashi (IEEE TMag 56(3) 2020) and Kameari (TEAM 28
+accumulation, Sugahara 2017 Compumag) BOTH produce Cauer-I ladders
+{R_n, L_n, τ_n} from the same FE matrices (K, M, b), but they
+expand DIFFERENT generating functions, so the resulting τ_n
+sequences are MATHEMATICALLY DIFFERENT (typically 5–12% offset
+in low stages):
+
+- Hiruma 3-term Lanczos: Cauer-I of f_H(s) = bᵀ·(K - sM)⁻¹·b
+  (Krylov-Padé impedance representation, Lanczos-style three-term
+   recurrence on (K, M))
+- Kameari accumulation: Cauer-I of f_K(s) = uᵀ·M·(sM - K)⁻¹·M·u,
+  with u = M⁻¹·b   (susceptibility-like representation)
+
+Sphere (Cu a=10 mm, B₀=1 T uniform) ground-truth comparison vs
+analytical Stoll Bessel Cauer-I (Mathematica 240-digit Hankel-Padé):
+
+  k │ Stoll χ-Foster Cauer-I │ Hiruma 3-term  │ gap
+ ───┼───────────────────────┼────────────────┼────────
+  0 │      694.142 μs        │   728.85       │ +5.0%
+  1 │      154.604 μs        │   171.51       │ +10.9%
+  2 │       64.075 μs        │    71.68       │ +11.9%
+
+  k │ Stoll Cauer-I │ Kameari accumulation NGSolve │ gap
+ ───┼──────────────┼──────────────────────────────┼────────
+  0 │  694.142 μs   │           694.142            │  0.000%
+  1 │  154.604 μs   │           154.604            │  0.000%
+  2 │   64.075 μs   │            64.075            │ −0.000%
+  4 │   21.400 μs   │            21.398            │ −0.014%
+
+Conclusion: Sugahara/Kameari accumulation = exact analytical
+Cauer-I (susceptibility). Hiruma 3-term = a different Cauer-I
+convention (Krylov-Padé impedance) which is not directly comparable
+to Stoll/χ-Foster spectra. To convert Hiruma matrices to the
+Kameari/Stoll Cauer-I, use:
+  α_n = uᵀ M (K⁻¹M)ⁿ u   with u = M⁻¹·b
+then Hankel-Padé continued-fraction extract.
+
+FP64 NGSolve: both methods reach k=6 reliably (precision wall at
+k=7). For higher stages, use mpmath ≥60 digits offline.
+
+### CRITICAL: BEM-Foster CLN extracted from g_k² τ_k moments is the
+### Hiruma convention, NOT the Kameari convention
+
+When extracting Cauer-I from a BEM-Foster spectrum (eigenmodes v_k of the
+boundary integral operator with eigenvalues τ_k), the moment definition
+chooses the convention. Two distinct conventions appear in the literature:
+
+  (Hiruma / Krylov-Padé impedance):
+    α_n^Hiruma = (-1)^n Σ_k g_k^2 · τ_k^(n+1)
+    where g_k = Re(v_k · a_ext) is the Foster amplitude
+    matches Hiruma 3-term Lanczos on (K, M, b)
+
+  (Kameari / χ-Foster susceptibility):
+    α_n^Kameari = (-1)^n Σ_k a_k · τ_k^(n+1)
+    where a_k is the χ-susceptibility amplitude (sums to 1; for sphere
+    a_n = 6/(n²π²))
+    matches Kameari accumulation iteration
+
+Verified 2026-05-10: cylinder R=10mm t=2mm Cu disk
+  cylinder BEM-Foster (Hiruma conv, axisym moments + Hankel-Padé):
+    τ_pair = [219.3, 78.6, 40.0, 23.6, 16.8, 14.0] μs
+  cylinder NGSolve axisym Kameari accumulation:
+    τ_pair = [208.4, 67.5, 32.6, 20.4, 15.7, 11.3] μs
+  cylinder NGSolve 3D Kameari + snapshot fix:
+    τ_pair = [208.3, 67.3, 31.8, 19.8, 15.8, 12.9] μs
+
+Cylinder axisym Kameari and 3D Kameari agree to 0.02-3 % (algorithm
+verified), both differ from BEM-Hiruma by 5-15 % (convention difference,
+not algorithm error). Confusing the two leads to phantom validation
+gaps that no h- or p-refinement can close.
+
+**Sphere is special**: Stoll Bessel χ(s) = -1 + Σ(6/(n²π²))/(1+sτ_n) is
+a χ-susceptibility (Kameari) representation, so the Mathematica Hankel-
+Padé extract from a_n = 6/(n²π²) IS the Kameari Cauer-I. This is why
+sphere Kameari NGSolve matches Stoll to 0.000 % — same convention.
+
+**Lesson**: when validating a 3D Kameari implementation against an
+"axisym BEM Cauer reference", first verify the BEM extraction convention.
+If the BEM script uses g_k² · τ_k moments, expect a 5-15 % offset that
+is structural, not numerical. To get an apples-to-apples Kameari ground
+truth, run Kameari accumulation on the axisym mesh (cln_team28_axisym.py
+pattern).
+
+### POLICY (CRITICAL): always compare in Cauer-rung convention
+### never mix Foster-pole values with Cauer-rung values
+
+When comparing CLN-related τ values across methods, always extract
+Cauer-I rungs τ_pair[k] = L_{2k+1} / R_{2k} via Hankel-Padé and compare
+those. NEVER substitute "Foster pole" τ_n (= leading eigenvalue of the
+diffusion operator, or = max|g|²·τ entry of a Foster expansion, or
+= leading time-constant of an ELF time-domain exponential fit) in place
+of the Cauer rung. They are different physical quantities.
+
+  Foster pole τ_n:    individual eddy-current eigenmode time constant
+  Cauer rung τ_pair[k]: ladder-stage time constant in {R_n, L_n} synthesis
+
+They differ systematically:
+  Sphere    : Foster τ_1 = 738 μs ≠ Cauer rung τ_pair[0] = 694 μs (-6%)
+  Cylinder  : Foster τ_1 = 224 μs ≠ Cauer rung τ_pair[0] = 209 μs (-7%)
+  Cuboid    : Foster pole 10.85 μs (Phase F-4 / ELF) ≠ estimated Cauer rung
+              ~10 μs (analogous -8% offset)
+
+Forbidden:
+  - Comparing Phase F-4 Spherical Duffy "leading τ" directly with a Cauer
+    rung (radia-vim Phase F-4 reports a Foster pole, not a Cauer rung)
+  - Comparing ELF time-domain leading exponential decay τ directly with
+    a Cauer rung (the exponential is a Foster pole)
+  - Comparing BEM-Foster spectrum eigenvalues τ_k directly with a Cauer
+    rung (use kameari_cauer_from_bem() to extract Cauer-I first)
+
+Required:
+  - Pass every method's spectrum through Hankel-Padé to get Cauer rungs
+  - Use the BEM-to-Kameari converter (kameari_cauer_from_bem in this
+    knowledge file) to convert Foster amplitudes {τ_k, g_k²} into Cauer
+    rungs in the Kameari (susceptibility) convention
+  - When reporting "the leading τ", state explicitly whether it is the
+    Foster pole τ_1 or the Cauer rung τ_pair[0]
+
+Verified failure mode (2026-05-10): cuboid 5×2×1 NGSolve 3D Kameari with
+snapshot fix gave τ_pair[0] = 9.95 μs (Cauer rung), erroneously compared
+to Phase F-4 10.85 μs (Foster pole) and ELF 11.51 μs (Foster pole),
+producing a phantom -10..-14 % gap. After applying the conventional -8 %
+Foster→Cauer correction the 3D Kameari result is in fact consistent with
+the Foster-pole references.
+
+### CONVERSION: derive Kameari Cauer-I from BEM-Foster {τ_k, g_k}
+
+The BEM Foster spectrum (eigenvalues τ_k and amplitudes g_k = Re(v_k·a_ext))
+is the *same physical data* — just two different Cauer extractions:
+
+  **Hiruma ladder** (Krylov-Padé impedance, what bem_disk_axisym_cauer.wls
+  computes by default):
+    α_n^Hiruma = (-1)^n · Σ_k g_k² · τ_k^(n+1)
+    f(s) = Σ_k g_k² · τ_k / (1 + s · τ_k)
+    Hankel-Padé(α_n^Hiruma) → R, L pairs in impedance convention
+
+  **Kameari ladder** (χ-Foster susceptibility, what NGSolve Kameari
+  accumulation computes from FE matrices):
+    α_n^Kameari = (-1)^n · Σ_k g_k² · τ_k^n          (POWER LOWERED BY 1)
+    g(s) = Σ_k g_k² / (1 + s · τ_k)
+    Hankel-Padé(α_n^Kameari) → R, L pairs in susceptibility convention
+
+The two satisfy f(s) = -s · g(s) + Σ_k g_k² (DC offset) — different
+generating functions, different Cauer ladders.
+
+Verified 2026-05-10 cylinder R=10mm t=2mm Cu disk (50 BEM modes,
+mpmath 60 digit Hankel-Padé):
+
+  BEM Hiruma  : τ_pair = [219.32, 78.65, 40.04, 23.74, 17.07, 14.73] μs
+  BEM Kameari : τ_pair = [209.14, 68.59, 34.14, 22.41, 18.52, 15.41] μs   ← NEW
+  NGSolve axisym Kameari accumulation: [208.4, 67.5, 32.6, 20.4, 15.7, 11.3]
+  NGSolve 3D Kameari + snapshot     : [208.3, 67.3, 31.8, 19.8, 15.8, 12.9]
+
+BEM Kameari leading τ matches NGSolve axisym/3D Kameari to 0.4 %
+(remaining gap = BEM mode-count truncation, axisym/3D agree to 0.02 %).
+This finally closes the apples-to-apples loop: any future BEM-Foster
+benchmark for a Kameari iteration code MUST drop the τ_k power by 1.
+
+Reference: bem_to_kameari_cauer.py at
+W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+
+### REFERENCE IMPLEMENTATION: BEM-Foster spectrum → Kameari Cauer-I
+
+```python
+import mpmath as mp
+mp.mp.dps = 60   # 60 decimal digits sufficient for ~12 stages
+
+def hankel_pade_cauer(alphas, max_stages):
+    '''Continued-fraction inversion: Cauer-I rungs from Taylor moments.
+    Returns p-coefficients [p_0, p_1, ...] where R_2k=p_2k, 1/L_2k+1=p_2k+1.
+    '''
+    c = [mp.mpf(a) for a in alphas]
+    p_list = []
+    for _ in range(max_stages):
+        if len(c) < 2 or abs(c[0]) < mp.mpf(10) ** (-mp.mp.dps + 10):
+            break
+        n = len(c)
+        e = [mp.mpf(0)] * n
+        e[0] = 1 / c[0]
+        for k in range(1, n):
+            e[k] = -sum(c[j + 1] * e[k - j - 1]
+                        for j in range(k) if k - j - 1 >= 0) / c[0]
+        p_list.append(e[0])
+        c = e[1:]
+    return p_list
+
+def kameari_cauer_from_bem(g_squared_list, tau_list_seconds, max_pairs=12):
+    '''Extract Kameari Cauer-I from BEM-Foster spectrum {τ_k, g_k²}.
+    Power of τ in moment formula is n (NOT n+1) - that's the conversion.
+    '''
+    n_moments = 2 * max_pairs + 4
+    alphas = []
+    for n in range(n_moments):
+        a = sum(X * t ** n for X, t in zip(g_squared_list, tau_list_seconds))
+        alphas.append((mp.mpf(-1)) ** n * a)
+    p = hankel_pade_cauer(alphas, 2 * max_pairs)
+    rungs = []
+    for k in range(len(p) // 2):
+        R = p[2*k]; Linv = p[2*k + 1]
+        if abs(Linv) < mp.mpf(10) ** (-50): break
+        L = 1 / Linv
+        rungs.append({'k': k, 'R_2k': float(R), 'L_2k+1': float(L),
+                      'tau_pair_us': float(L / R * mp.mpf('1e6'))})
+    return rungs
+
+# Hiruma extraction (for reference / what bem_disk_axisym_cauer.wls does):
+# replace "X * t ** n" with "X * t ** (n+1)" in the moment formula.
+```
+
+Verified results (Cu, B0 = 1 T uniform):
+  Sphere R=10mm (Stoll spectrum, both Hiruma and Kameari work; Kameari
+    matches NGSolve to 0.000% for 6 stages):
+      Hiruma  τ_pair = [728.85, 171.51, 71.68, 38.41, 23.68, 15.96] μs
+      Kameari τ_pair = [694.14, 154.60, 64.08, 34.47, 21.40, 14.54] μs
+  Cylinder R=10mm t=2mm (50 BEM modes; Kameari matches NGSolve to 0.4%):
+      Hiruma  τ_pair = [219.32, 78.65, 40.04, 23.74, 17.07, 14.73] μs
+      Kameari τ_pair = [209.14, 68.59, 34.14, 22.41, 18.52, 15.41] μs
+
+Source: W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+        bem_to_kameari_cauer.py
+
+POLICY (2026-05-10): For new CLN extraction code, prefer Kameari
+accumulation. Hiruma 3-term Lanczos may be retained for legacy
+verification but is NOT the canonical Cauer-I extractor (its
+sequence diverges from the physical χ-Foster representation).
+References:
+  Hiruma & Igarashi, IEEE TMag 56(3), 2020.
+  Sugahara, Compumag 2017 (TEAM 28 axisym Matlab).
+  Stoll, "The Analysis of Eddy Currents", 1974 (Bessel for sphere).
 """
 
 

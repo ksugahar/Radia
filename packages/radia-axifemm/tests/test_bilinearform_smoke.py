@@ -5,7 +5,7 @@
 import numpy as np
 from ngsolve import *
 from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
-from radia_axifemm import H1Henrotte
+from radia.radia_axifemm import H1Henrotte
 
 
 def main():

@@ -1998,6 +1998,65 @@ pickle.dump([mesh, func], outfile)
 
 **Supported**: Mesh, FESpace, GridFunction, CoefficientFunction expressions.
 Shared references (e.g., two GridFunctions on same space) are preserved.
+
+## 41. GridFunction Mutable Reference Trap in CoefficientFunctions (CRITICAL)
+
+`GridFunction` objects are **mutable**. When embedded in a
+`CoefficientFunction` expression, the CF stores a **reference**, not a
+copy, of the GridFunction's data. Re-assigning `gf.vec.data` between
+uses silently changes the value of every CF that references it.
+
+```python
+# WRONG — gf_acc is updated in the loop, every prior expression breaks
+gf_acc = GridFunction(fes)
+gf_acc.vec[:] = 0.0
+J_history = []                        # list of CFs we want to keep
+for n in range(N):
+    ...
+    gf_acc.vec.data += R_n * Aphi_n.vec        # MUTATES the SHARED gf_acc
+    proj_cf = gf_acc - grad(phi_acc_n)         # CF holds a REFERENCE
+    J_n_cf = J_n_cf - sigma * proj_cf / L_n    # captures gf_acc by ref
+    J_history.append(J_n_cf)                    # later evaluations see
+                                                # the LATEST gf_acc value!
+
+# CORRECT — snapshot to a fresh GridFunction each iteration
+for n in range(N):
+    ...
+    gf_acc.vec.data += R_n * Aphi_n.vec
+    snap = GridFunction(fes, name=f"snap_{n}")  # fresh object
+    snap.vec.data = gf_acc.vec                  # explicit copy
+    proj_cf = snap - grad(phi_acc_n)            # frozen reference
+    J_n_cf = J_n_cf - sigma * proj_cf / L_n
+    J_history.append(J_n_cf)                    # safe: snap never mutates
+```
+
+**Symptom**: in iterative schemes (Kameari accumulation CLN, Picard
+non-linear loops, time stepping that reuses prior states), `stage 0`
+matches the analytical answer to machine precision, but `stage 1+`
+returns wrong-sign or wildly wrong values that look like algorithmic
+divergence — when in fact the prior `J_n_cf` expressions are silently
+re-evaluating against the *current* (updated) `gf_acc`, not the
+`gf_acc` value at the time the CF was built.
+
+**Verified failure mode** (2026-05-10, Cu sphere a=10mm, B0=1T, 3D
+Kameari + Kelvin):
+- Without snapshot: τ_0 = 693.95 μs (matches Stoll Cauer-I 694.14
+  to 0.027 %), τ_1 = −796 μs (sign flip; analytical 154.6 μs),
+  stages 2+ diverge by orders of magnitude.
+- With snapshot: τ_0 = 693.95 (−0.027 %), τ_1 = 154.46 (−0.094 %),
+  τ_2 = 63.45 (−0.97 %), τ_3 = 33.08 (−4.06 %); stage 4 hits the
+  FP64 Hankel-Padé wall.
+
+**Diagnostic strategy**: if a 3D iteration matches axisym at stage 0
+but breaks at stage 1+, suspect this trap before suspecting H-H
+projection, gauge fixing, ORDER, Schmidt orthogonalisation, or
+solver tolerance. None of those help if the GridFunction the CFs
+refer to keeps mutating beneath them.
+
+**Cross-references**:
+- `cln_3d.py` knowledge — Kameari accumulation snapshot pattern
+- W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+  cln_team28_kelvin.py — reference fix in `Apot_acc -> snap_acc`
 """
 
 NGSOLVE_LINALG = """
