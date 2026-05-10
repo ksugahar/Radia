@@ -310,7 +310,7 @@ def main():
                     "tau_us": float(result["tau_us"][result["sorted_idx"][rank]]),
                     "g2":      float(result["g2"][result["sorted_idx"][rank]]),
                 }
-                for rank in range(min(20, n))
+                for rank in range(n)   # save ALL modes for Cauer-I extraction
             ],
         }
         Path(args.save_json).write_text(json.dumps(out, indent=2))

@@ -12,7 +12,7 @@ from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, TaskManager,
 )
 from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
-from radia_axifemm import (
+from radia.radia_axifemm import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 

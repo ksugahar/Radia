@@ -632,3 +632,61 @@ add_custom_command(TARGET sparsesolv_ngsolve POST_BUILD
 )
 
 message(STATUS "sparsesolv_ngsolve module configured (NGSolve preconditioners)")
+
+# ========================================
+# radia_axifemm module (Henrotte/Meeker axisymmetric FE for NGSolve)
+# ========================================
+# FEMM-style axisymmetric finite elements: shape functions linear in
+# {1, r^2, z}, giving B_z constant per element and B_r ~ 1/r per element
+# without the standard P1 axis singularity.  P1 triangles + Q1/Q2 axis-
+# aligned quads + bilinear form integrators (Stiffness, SigmaMass).
+#
+# Source: src/ext/axifemm/ (formerly the standalone packages/radia-axifemm
+# editable install; absorbed into the Radia wheel 2026-05-10 to fix the
+# 100号機 / mdx ImportError that was blocking IH axisymmetric work).
+#
+# Imported as `radia.radia_axifemm` (the .pyd lives at
+# src/radia/radia_axifemm.pyd alongside _radia_pybind.pyd).
+#
+# Reference: F. Henrotte et al., IEEE TMag 9(2):1352-1355, 1993.
+#            D. Meeker, FEMM 4.2 axisymmetric formulation notes.
+
+set(AXIFEMM_DIR "${EXT_DIR}/axifemm")
+
+add_ngsolve_python_module(radia_axifemm
+	${AXIFEMM_DIR}/radia_axifemm.cpp
+	${AXIFEMM_DIR}/axi_henrotte_fe.cpp
+	${AXIFEMM_DIR}/axi_henrotte_fespace.cpp
+	${AXIFEMM_DIR}/axi_henrotte_integrators.cpp
+)
+
+target_include_directories(radia_axifemm PRIVATE
+	${AXIFEMM_DIR}
+)
+
+target_compile_definitions(radia_axifemm PRIVATE
+	RADIA_AXIFEMM_PHASE_2B
+	_CRT_SECURE_NO_WARNINGS
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+)
+
+if(MSVC)
+	target_compile_options(radia_axifemm PRIVATE
+		/O2
+		/fp:fast
+		/W0
+		/wd4244
+		/wd4267
+	)
+endif()
+
+# Post-build: Copy to src/radia
+add_custom_command(TARGET radia_axifemm POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:radia_axifemm>"
+		"${CMAKE_SOURCE_DIR}/src/radia/radia_axifemm.pyd"
+	COMMENT "Copying radia_axifemm.pyd to src/radia"
+)
+
+message(STATUS "radia_axifemm module configured (Henrotte axisymmetric FE)")

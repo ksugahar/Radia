@@ -183,6 +183,13 @@ if errorlevel 1 ( echo WARNING: sparsesolv_ngsolve build failed )
 
 echo.
 echo ========================================
+echo   Building radia_axifemm
+echo ========================================
+"$CMAKE_EXE" --build . --config Release --target radia_axifemm -j
+if errorlevel 1 ( echo WARNING: radia_axifemm build failed )
+
+echo.
+echo ========================================
 echo   Building radia_cubit_mesh (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"

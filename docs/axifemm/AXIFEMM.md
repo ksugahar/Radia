@@ -34,8 +34,8 @@ matches FEMM `.mat` outputs to 0.1 % on the FEMM NMR benchmark.
 
 ```python
 from ngsolve import Mesh, FESpace, BilinearForm, CoefficientFunction
-from radia_axifemm import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
-import radia_axifemm   # registers the FESpace
+from radia.radia_axifemm import AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI
+import radia.radia_axifemm   # registers the FESpace
 
 mesh = Mesh(...)                                    # axis-aligned quad mesh
 fes  = FESpace("axihenrotte", mesh, order=2,

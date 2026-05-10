@@ -8,9 +8,10 @@
 """
 
 import sys
+import os
 import numpy as np
 
-sys.path.insert(0, r"W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifemm")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "tests", "axifemm", "_reference_python"))
 from axifemm_quad import (
     _element_matrices_quad_closed_form,
     element_sigma_mass_quad,
@@ -22,7 +23,7 @@ from ngsolve import (
     TaskManager,
 )
 from netgen.occ import OCCGeometry, MoveTo, X, Y
-from radia_axifemm import (
+from radia.radia_axifemm import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
 
