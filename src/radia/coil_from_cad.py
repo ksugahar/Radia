@@ -2247,6 +2247,7 @@ def _filaments_from_section_planes(solid,
     # legacy longest-edge / rotation_axis_z paths needed NN-chain
     # because those samplers visited centroids in a non-spine order.
     spine_is_topology_ordered = False
+    topo = None
     try:
         from radia.coil_topology import (
             extract_coil_topology as _extract_topo,
@@ -2257,6 +2258,7 @@ def _filaments_from_section_planes(solid,
         path_m = path_cad / cad_units_per_meter
         spine_is_topology_ordered = True
     except Exception:
+        topo = None
         try:
             path_m_via_solid = _centerline_from_solid_geometry(
                 solid, n_segments=n_stations,
@@ -2290,13 +2292,33 @@ def _filaments_from_section_planes(solid,
         else:
             tangents[i] = np.array([1.0, 0.0, 0.0])
 
+    # OPEN coils: the spine endpoints sit on cap_a / cap_b, so the
+    # cutting plane the section call would build is COINCIDENT with
+    # the cap face.  BRepAlgoAPI_Section then returns either a
+    # degenerate (~0 area) or multi-disjoint wire from grazing the
+    # cap, the area-outlier filter below drops the station, and the
+    # loft end cells get no filaments.  Skip the section call at the
+    # endpoints and use the cap face directly -- it IS exactly the
+    # cross-section we want there (centroid, area, normal all match
+    # the conductor geometry by construction).
+    cap_a_face = None
+    cap_b_face = None
+    if topo is not None and getattr(topo, "is_open", False):
+        cap_a_face = getattr(topo, "cap_a", None)
+        cap_b_face = getattr(topo, "cap_b", None)
+
     # Section at each station
     faces_attempted = []
     centroids_attempted = []
     areas_attempted = []
     for i in range(n_path):
-        face = _section_solid_at_plane(
-            solid, path_cad[i], tangents[i])
+        if i == 0 and cap_a_face is not None:
+            face = cap_a_face
+        elif i == n_path - 1 and cap_b_face is not None:
+            face = cap_b_face
+        else:
+            face = _section_solid_at_plane(
+                solid, path_cad[i], tangents[i])
         if face is None:
             continue
         faces_attempted.append(face)
@@ -2306,15 +2328,34 @@ def _filaments_from_section_planes(solid,
     if len(faces_attempted) < max(3, int(0.5 * n_path)):
         return None
 
-    # Robust outlier filter: at the spine endpoints (especially for
-    # gapped toruses) the cutting plane can catch the gap or multiple
-    # disjoint pieces, producing an inflated cross-section area.
-    # Drop stations whose area deviates by >30 % from the median.
+    # Robust outlier filter: at INTERIOR spine stations the cutting
+    # plane can catch the gap or multiple disjoint pieces, producing
+    # an inflated cross-section area.  Drop stations whose area
+    # deviates by >30 % from the median.  Cap-face endpoints
+    # (replaced above) are excluded from the filter so they always
+    # contribute a filament.
+    cap_endpoint_idx = set()
+    if cap_a_face is not None and len(faces_attempted) > 0 and \
+            faces_attempted[0] is cap_a_face:
+        cap_endpoint_idx.add(0)
+    if cap_b_face is not None and len(faces_attempted) > 0 and \
+            faces_attempted[-1] is cap_b_face:
+        cap_endpoint_idx.add(len(faces_attempted) - 1)
     areas_arr = np.array(areas_attempted)
-    median_area = float(np.median(areas_arr))
+    interior_mask = np.array(
+        [i not in cap_endpoint_idx for i in range(len(areas_arr))],
+        dtype=bool)
+    if int(np.sum(interior_mask)) > 0:
+        median_area = float(np.median(areas_arr[interior_mask]))
+    else:
+        median_area = float(np.median(areas_arr))
     if median_area <= 0:
         return None
     keep_mask = np.abs(areas_arr - median_area) <= 0.3 * median_area
+    # Always keep cap-face endpoints regardless of area (cap area can
+    # legitimately differ slightly from the lofted-section median).
+    for i in cap_endpoint_idx:
+        keep_mask[i] = True
     if int(np.sum(keep_mask)) < max(3, int(0.5 * len(areas_arr))):
         # Outlier filter would drop too many; bail out so a downstream
         # tier (or the equivalent-circle Path 3) can take a shot.
