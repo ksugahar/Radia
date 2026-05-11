@@ -162,27 +162,91 @@ def _build_bema_coil_mesh(args):
 
     mesh = Mesh(args.coil_vol)
     bnd_names = list(mesh.GetBoundaries())
+    mat_names = list(mesh.GetMaterials())
     src_name = args.coil_source_name
     snk_name = args.coil_sink_name
     if src_name not in bnd_names or snk_name not in bnd_names:
+        # Diagnostic hint for Block-vs-Sideset confusion:
+        # in Cubit, source/sink may have been assigned to a BLOCK
+        # (volume material) instead of a SIDESET (surface boundary),
+        # which puts the names into mesh.GetMaterials() but NOT
+        # GetBoundaries().  Surface the materials list too so the
+        # user can spot the mistake without re-running anything.
+        in_mats = [n for n in (src_name, snk_name) if n in mat_names]
+        hint = ""
+        if in_mats:
+            hint = (f"  HINT: {in_mats!r} appear in the .vol's "
+                    f"MATERIAL labels (mesh.GetMaterials() -> "
+                    f"{mat_names}) but NOT the boundary labels.  "
+                    f"In Cubit, assign source/sink as SIDESETS, not "
+                    f"BLOCKS, and re-export.  See CLAUDE.md "
+                    f"\"Cubit Block/Sideset Label Convention\".")
+        # Case-insensitive near-match hint (e.g. user wrote "Source"
+        # in Cubit but the panel default is "source"):
+        bnd_lower = {n.lower(): n for n in bnd_names}
+        near = [bnd_lower[n.lower()] for n in (src_name, snk_name)
+                if n.lower() in bnd_lower and bnd_lower[n.lower()] != n]
+        if near:
+            hint += (f"  CASE HINT: case-insensitive matches found: "
+                      f"{near!r}.  Either rename the Cubit sideset to "
+                      f"match {src_name!r}/{snk_name!r}, or pass "
+                      f"--coil-source-name / --coil-sink-name with the "
+                      f"actual case as it appears in the .vol.")
+        # Fuzzy / typo hint (e.g. user wrote "sorce" instead of
+        # "source").  Use difflib.get_close_matches at cutoff=0.7 so
+        # 1-2 char edits count but unrelated names don't.  This is the
+        # actual kubota / mdx 2026-05-11 case (sideset name typo).
+        try:
+            import difflib
+            typos = []
+            for required in (src_name, snk_name):
+                if required in bnd_names:
+                    continue
+                matches = difflib.get_close_matches(
+                    required, bnd_names, n=3, cutoff=0.7)
+                # Skip matches already covered by the case hint above
+                # so we don't double-report.
+                matches = [m for m in matches if m.lower() != required.lower()]
+                if matches:
+                    typos.append((required, matches))
+            if typos:
+                lines = [f"{r!r} ~~ {m!r}" for r, m in typos]
+                hint += (f"  TYPO HINT: similar names in the .vol "
+                          f"(possible typo): {'; '.join(lines)}.  Fix "
+                          f"the sideset name in the Cubit .jou or pass "
+                          f"--coil-source-name / --coil-sink-name with "
+                          f"the actual spelling.")
+        except Exception:
+            pass
         raise ValueError(
             f"--coil-vol {args.coil_vol!r} is missing the required boundary "
             f"labels {src_name!r}/{snk_name!r}.  Available boundaries: "
-            f"{bnd_names}.  Set the source/sink sidesets in the Cubit .jou "
-            f"before exporting the coil .vol.")
+            f"{bnd_names}.{hint}  Set the source/sink sidesets in the "
+            f"Cubit .jou before exporting the coil .vol.")
     return mesh
 
 
-def _arrays_from_bema_coil_mesh(mesh):
-    """Extract verts / tris / source-mask / sink-mask arrays."""
+def _arrays_from_bema_coil_mesh(mesh, source_name="source", sink_name="sink"):
+    """Extract verts / tris / source-mask / sink-mask arrays.
+
+    The source/sink boundary names default to "source" / "sink" but
+    callers MUST pass ``source_name`` / ``sink_name`` from
+    ``args.coil_source_name`` / ``args.coil_sink_name`` so the array
+    extraction stays in lockstep with the .vol-validation step in
+    ``_build_bema_coil_mesh``.  Hardcoding the strings here was a
+    silent failure mode: validation passed (using the user's name) but
+    the masks were empty (using "source"/"sink"), giving a misleading
+    "coil source/sink mesh empty after labelling" runtime error
+    (kubota / mdx, 2026-05-11).
+    """
     from ngsolve import BND
     n_v = mesh.nv
     verts = np.empty((n_v, 3), dtype=np.float64)
     for i in range(n_v):
         verts[i] = [mesh.vertices[i].point[k] for k in range(3)]
     bnd_names = list(mesh.GetBoundaries())
-    src_idx = {i for i, n in enumerate(bnd_names) if n == "source"}
-    snk_idx = {i for i, n in enumerate(bnd_names) if n == "sink"}
+    src_idx = {i for i, n in enumerate(bnd_names) if n == source_name}
+    snk_idx = {i for i, n in enumerate(bnd_names) if n == sink_name}
     tris, src_mask, snk_mask = [], [], []
     for el in mesh.Elements(BND):
         tris.append([int(v.nr) for v in el.vertices])
@@ -217,8 +281,13 @@ def _solve_coil_bem_a(args):
     t0 = time.perf_counter()
     coil_mesh = _build_bema_coil_mesh(args)
     # We still extract verts/tris/masks for diagnostics + N_tris reporting.
+    # Pass user-supplied source/sink names so the array masks stay in
+    # sync with the .vol-validation step inside _build_bema_coil_mesh.
     coil_verts, coil_tris, src_mask, snk_mask = \
-        _arrays_from_bema_coil_mesh(coil_mesh)
+        _arrays_from_bema_coil_mesh(
+            coil_mesh,
+            source_name=args.coil_source_name,
+            sink_name=args.coil_sink_name)
     t_mesh = time.perf_counter() - t0
     progress("BEMA",
         f"coil nv={coil_mesh.nv} n_tris={len(coil_tris)} "
