@@ -473,6 +473,171 @@ void P1TriangleSigmaMass(const double rn[3], const double zn[3], double sigma,
             elmat(i, j) = 0.5 * (Me(i, j) + Me(j, i));
 }
 
+// ---------------------------------------------------------------------------
+// P2 triangle stiffness in V-DOF via Duffy-Gauss quadrature on the physical
+// triangle. FEMM Henrotte vector formulation:
+//
+//   K[i, j] = (2 pi / mu) * r_i * r_j *
+//             Integrate_T [ (d psi_i/dr)(d psi_j/dr)
+//                         + (d psi_i/dz)(d psi_j/dz) ] / r dA
+//
+// Reference: w:/.../axifemm/axifemm_p2_triangle.py Phase B1c (sphere vs
+// Stoll: -0.51% for 50 mm finite air box, Phase B3 Kelvin removes that).
+// Axis DOFs (r_i = 0) auto-decouple (zero row/column via the r_i factor).
+//
+// Quadrature: 8x8 = 64-point Duffy-Gauss-Legendre. Exact for polynomial
+// degree 15 in each variable; integrand has degree <=10, so 8-point is
+// safe. Axis-touching cells have integrable 1/r near-axis singularity;
+// the quadrature handles it numerically with degraded accuracy near axis.
+// ---------------------------------------------------------------------------
+
+// Module-static Duffy-Gauss 8x8 = 64 reference-triangle points (xi, eta, w).
+// Computed at first call from numpy-equivalent 1D Gauss-Legendre on [0, 1].
+// Weights sum to 1/2 = area of reference triangle.
+namespace {
+constexpr int N_GL = 8;
+double _gl_nodes_01[N_GL] = {
+    0.01985507175123188,  0.10166676129318664,  0.23723379504183551,
+    0.40828267875217508,  0.59171732124782492,  0.76276620495816449,
+    0.89833323870681336,  0.98014492824876812,
+};
+double _gl_weights_01[N_GL] = {
+    0.05061426814518813,  0.11119051722668724,  0.15685332293894364,
+    0.18134189168918100,  0.18134189168918100,  0.15685332293894364,
+    0.11119051722668724,  0.05061426814518813,
+};
+
+// Iterate over Duffy-Gauss reference-triangle points. Inner body uses (xi,
+// eta, weight). Weight already includes Duffy Jacobian (1 - u).
+template <typename F>
+inline void DuffyGauss8x8(F && body)
+{
+    for (int i = 0; i < N_GL; ++i) {
+        double u = _gl_nodes_01[i];
+        double u_w = _gl_weights_01[i];
+        double one_minus_u = 1.0 - u;
+        for (int k = 0; k < N_GL; ++k) {
+            double v = _gl_nodes_01[k];
+            double v_w = _gl_weights_01[k];
+            double xi = u;
+            double eta = v * one_minus_u;
+            double w = u_w * v_w * one_minus_u;
+            body(xi, eta, w);
+        }
+    }
+}
+}  // anonymous namespace
+
+void P2TriangleStiffness(const double rn[6], const double zn[6], double mu,
+                          FlatMatrix<double> elmat)
+{
+    // Build 6x6 Vandermonde inverse so psi_i(r, z) = sum_j Vinv[j, i] m_j(r, z).
+    Mat<6,6> Vand;
+    for (int i = 0; i < 6; ++i) {
+        double si = rn[i] * rn[i];
+        Vand(i, 0) = 1.0;
+        Vand(i, 1) = si;
+        Vand(i, 2) = zn[i];
+        Vand(i, 3) = si * si;
+        Vand(i, 4) = si * zn[i];
+        Vand(i, 5) = zn[i] * zn[i];
+    }
+    Mat<6,6> Vinv;
+    CalcInverse(Vand, Vinv);
+
+    double drxi = rn[1] - rn[0];
+    double dreta = rn[2] - rn[0];
+    double dzxi = zn[1] - zn[0];
+    double dzeta = zn[2] - zn[0];
+    double detJ = abs(drxi * dzeta - dreta * dzxi);
+
+    Mat<6,6> K;
+    K = 0.0;
+    DuffyGauss8x8([&](double xi, double eta, double w) {
+        double rp = rn[0] + drxi * xi + dreta * eta;
+        double zp = zn[0] + dzxi * xi + dzeta * eta;
+        if (rp <= EPS_AXIS) return;  // 1/r integrand near axis (integrable)
+        double sp = rp * rp;
+        // Monomial gradients wrt physical (r, z).
+        double dm_dr[6] = { 0.0, 2.0 * rp, 0.0, 4.0 * rp * sp, 2.0 * rp * zp, 0.0 };
+        double dm_dz[6] = { 0.0, 0.0, 1.0, 0.0, sp, 2.0 * zp };
+        // psi_i gradients
+        double dpsi_dr[6], dpsi_dz[6];
+        for (int i = 0; i < 6; ++i) {
+            double sr = 0.0, sz = 0.0;
+            for (int j = 0; j < 6; ++j) {
+                sr += Vinv(j, i) * dm_dr[j];
+                sz += Vinv(j, i) * dm_dz[j];
+            }
+            dpsi_dr[i] = sr;
+            dpsi_dz[i] = sz;
+        }
+        double factor = w * detJ / rp;
+        for (int i = 0; i < 6; ++i)
+            for (int j = 0; j < 6; ++j)
+                K(i, j) += factor * (dpsi_dr[i] * dpsi_dr[j]
+                                    + dpsi_dz[i] * dpsi_dz[j]);
+    });
+    // Apply (2 pi / mu) * r_i * r_j pre-factor.
+    double inv_mu = 1.0 / mu;
+    for (int i = 0; i < 6; ++i)
+        for (int j = 0; j < 6; ++j)
+            elmat(i, j) = 2.0 * PI * inv_mu * rn[i] * rn[j] * K(i, j);
+}
+
+// ---------------------------------------------------------------------------
+// P2 triangle sigma-mass in V-DOF via Duffy-Gauss 8x8 quadrature.
+// FEMM Henrotte: N_A_i = r_i * psi_i / r,
+//   M[i, j] = 2 pi sigma r_i r_j * Integrate_T psi_i psi_j / r dA
+// Axis DOFs auto-decouple via the r_i factor.
+// ---------------------------------------------------------------------------
+void P2TriangleSigmaMass(const double rn[6], const double zn[6], double sigma,
+                          FlatMatrix<double> elmat)
+{
+    Mat<6,6> Vand;
+    for (int i = 0; i < 6; ++i) {
+        double si = rn[i] * rn[i];
+        Vand(i, 0) = 1.0;
+        Vand(i, 1) = si;
+        Vand(i, 2) = zn[i];
+        Vand(i, 3) = si * si;
+        Vand(i, 4) = si * zn[i];
+        Vand(i, 5) = zn[i] * zn[i];
+    }
+    Mat<6,6> Vinv;
+    CalcInverse(Vand, Vinv);
+
+    double drxi = rn[1] - rn[0];
+    double dreta = rn[2] - rn[0];
+    double dzxi = zn[1] - zn[0];
+    double dzeta = zn[2] - zn[0];
+    double detJ = abs(drxi * dzeta - dreta * dzxi);
+
+    Mat<6,6> M;
+    M = 0.0;
+    DuffyGauss8x8([&](double xi, double eta, double w) {
+        double rp = rn[0] + drxi * xi + dreta * eta;
+        double zp = zn[0] + dzxi * xi + dzeta * eta;
+        if (rp <= EPS_AXIS) return;
+        double sp = rp * rp;
+        double m[6] = { 1.0, sp, zp, sp * sp, sp * zp, zp * zp };
+        double psi[6];
+        for (int i = 0; i < 6; ++i) {
+            double s = 0.0;
+            for (int j = 0; j < 6; ++j) s += Vinv(j, i) * m[j];
+            psi[i] = s;
+        }
+        double factor = w * detJ / rp;
+        for (int i = 0; i < 6; ++i)
+            for (int j = 0; j < 6; ++j)
+                M(i, j) += factor * psi[i] * psi[j];
+    });
+    for (int i = 0; i < 6; ++i)
+        for (int j = 0; j < 6; ++j)
+            elmat(i, j) = 2.0 * PI * sigma * rn[i] * rn[j]
+                        * 0.5 * (M(i, j) + M(j, i));
+}
+
 }  // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -508,6 +673,10 @@ void AxiHenrotteStiffnessBFI::CalcElementMatrix(
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
         P1TriangleStiffness(p1->r, p1->z, mu, elmat);
+        return;
+    }
+    if (auto * p2 = dynamic_cast<const AxiHenrotteFE_P2_Triangle*>(&fel)) {
+        P2TriangleStiffness(p2->r, p2->z, mu, elmat);
         return;
     }
     throw Exception(string("AxiHenrotteStiffnessBFI: unsupported FE type ")
@@ -548,6 +717,10 @@ void AxiHenrotteSigmaMassBFI::CalcElementMatrix(
     }
     if (auto * p1 = dynamic_cast<const AxiHenrotteFE_P1_Triangle*>(&fel)) {
         P1TriangleSigmaMass(p1->r, p1->z, sigma, elmat);
+        return;
+    }
+    if (auto * p2 = dynamic_cast<const AxiHenrotteFE_P2_Triangle*>(&fel)) {
+        P2TriangleSigmaMass(p2->r, p2->z, sigma, elmat);
         return;
     }
     throw Exception(string("AxiHenrotteSigmaMassBFI: unsupported FE type ")
