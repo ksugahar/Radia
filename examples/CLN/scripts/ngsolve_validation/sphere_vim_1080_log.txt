@@ -1,0 +1,30 @@
+Sphere VIM axisym: N_rho=30, N_theta=36, n_dofs=1080
+R=10.0 mm, sigma=5.80e+07
+Stoll analytical leading tau = 738.48 us
+
+Assembling K, M, b matrices...
+  done in 82.9s
+  K symmetry: max|K - K^T| = 0.00e+00
+Solving generalized eigenproblem...
+  Top 10 modes by |g|^2:
+    rank=0: tau=743.6905 us, g2=3.8746e-11
+    rank=1: tau=188.4673 us, g2=2.4002e-12
+    rank=2: tau=85.5753 us, g2=4.6617e-13
+    rank=3: tau=49.5603 us, g2=1.4369e-13
+    rank=4: tau=32.9039 us, g2=5.6644e-14
+    rank=5: tau=23.8757 us, g2=2.5884e-14
+    rank=6: tau=18.4549 us, g2=1.2995e-14
+    rank=7: tau=14.9618 us, g2=6.9343e-15
+    rank=8: tau=12.5935 us, g2=3.8400e-15
+    rank=9: tau=10.9273 us, g2=2.1552e-15
+
+Kameari Cauer-I extraction (top 80 modes, mpmath 80 dig):
+  k | R_2k       | L_2k+1     | tau_pair us
+  0 | 2.3884e+10 | 1.6724e+07 | 700.2223
+  1 | 4.9532e+11 | 7.9515e+07 | 160.5330
+  2 | 3.5892e+12 | 2.5428e+08 | 70.8451
+  3 | 1.8725e+13 | 7.8747e+08 | 42.0551
+  4 | 9.5471e+13 | 2.8162e+09 | 29.4982
+  5 | 5.6149e+14 | 1.2845e+10 | 22.8767
+
+Saved: W:\30_CauerLadderNetwork\2026_04_01_長方形CLN\ngsolve_validation\sphere_vim_axisym_results.json

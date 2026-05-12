@@ -1,0 +1,29 @@
+{
+  "method": "Kameari + Kelvin v9, Tanimoto A-T (boundary E source)",
+  "R_K_mm": 25.0,
+  "h_cond_mm": 0.5,
+  "h_air_mm": 2.0,
+  "order": 2,
+  "ne": 75903,
+  "stages": [
+    {
+      "n": 0,
+      "R_n": 2162748.6918952796,
+      "L_n": 555.8101117000298,
+      "tau_us": 256.99246231560875,
+      "energy_norm": 4.623745716492242e-07,
+      "sign_L": "+"
+    },
+    {
+      "n": 1,
+      "R_n": 106151.62596952896,
+      "L_n": -877.3902805657814,
+      "tau_us": null,
+      "energy_norm": 9.420486882481216e-06,
+      "sign_L": "-"
+    }
+  ],
+  "R0_analytic": 2853745.5410225927,
+  "target_tau_0_us": 14.4,
+  "elf_tau_lead_us": 11.51
+}

@@ -1,0 +1,24 @@
+{
+  "method": "PINVIT eigenvalue extraction -> Foster -> Cauer-I (ATTEMPTED, FAILED)",
+  "geometry_mm": [5.0, 2.0, 1.0],
+  "h_mm": 0.20,
+  "order": 2,
+  "ne": 4131,
+  "n_eigen_used": 30,
+  "n_modes_after_filter": 30,
+  "Y0_numerical_30modes": 6.92e-11,
+  "Y0_analytic_sigmaV": 0.58,
+  "ratio_PINVIT_over_analytic": 1.19e-10,
+  "comments": [
+    "PINVIT gave 30 eigenmodes with eigenvalues [1700, 20000] and beta^2 [1e-22, 1e-19].",
+    "But Foster Y(0) = sum |beta|^2 / (sigma * lambda^2) needs Parseval sum_beta^2 = V = 1e-8.",
+    "30 modes give sum_beta^2 ~ 1e-18, off by 10 orders of magnitude.",
+    "Mathematica reference uses 250000 modes; PINVIT cannot realistically reach that count.",
+    "CONCLUSION: PINVIT approach fundamentally insufficient at practical mesh sizes.",
+    "  Kameari recursion (with tree-cotree + HH) remains the practical path.",
+    "  Trade-off: Kameari good Stage 0-7 (2-13 digits), broken Stage 9+ from cancellation."
+  ],
+  "foster_R": "[Stored modes show R_F values 1e10 to 1e14, beta^2 1e-19 to 1e-22, all wildly off]",
+  "cauer_R": [],
+  "cauer_L": []
+}
