@@ -1267,12 +1267,18 @@ ExportDialog::ExportDialog(Format format, const QString &jouPath, QWidget* paren
   });
   layout->addWidget(buttons);
 
-  // Load saved settings (override defaults with previous values)
+  // Load saved settings (override defaults with previous values).
+  // Exception: when a .jou path was provided (Cubit Solve menu launch
+  // with a current journal), the .jou-derived defaultDir set above
+  // wins over the previous-session dir.  Otherwise users see the
+  // last session's dir even when they have explicitly loaded a new
+  // .jou in a different folder, and the .vol silently lands away
+  // from the .jou's directory.
   {
     const char* keys[] = {"netgen_vol", "gmsh", "nastran", "vtk", "femeem", "meg"};
     QJsonObject all = loadSettings();
     QJsonObject s = all[keys[format]].toObject();
-    if (s.contains("dir")) mDir->setText(s["dir"].toString());
+    if (jouPath.isEmpty() && s.contains("dir")) mDir->setText(s["dir"].toString());
     if (s.contains("order")) mOrderCombo->setCurrentIndex(s["order"].toInt());
     if (s.contains("dimension") && mDimension)
       mDimension->setCurrentIndex(s["dimension"].toInt());

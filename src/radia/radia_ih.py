@@ -25,14 +25,26 @@ OPTIONAL_FILES = {}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
-    run_app, _PYTHON,
-)
-from PySide6.QtWidgets import (QLabel, QCheckBox, QGroupBox, QVBoxLayout,
-                                 QFormLayout, QWidget)
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+try:
+    from radia_gui_base import (
+        ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
+        run_app, _PYTHON,
+    )
+    from PySide6.QtWidgets import (QLabel, QCheckBox, QGroupBox, QVBoxLayout,
+                                     QFormLayout, QWidget)
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor
+except ImportError as e:
+    # Most likely cause: ``pip install radia[cubit]`` was used without
+    # the ``[gui]`` extra, so PySide6 is missing.  The Cubit Solve menu
+    # launches this panel via subprocess and would otherwise silently
+    # fail with no visible error.  Print a clear install hint to stderr.
+    sys.stderr.write(
+        "Radia IH panel requires PySide6 but it could not be imported:\n"
+        "  {}\n\n"
+        "Install with:\n"
+        "  pip install --upgrade 'radia[cubit,gui]'\n".format(e))
+    sys.exit(1)
 
 
 # ============================================================
@@ -332,6 +344,18 @@ class IHPanel(ModePanel):
             "coil_vol", "Coil .vol:",
             filter_str="Coil mesh (*.vol);;All (*)")
         coil_vol_w.textChanged.connect(self._emit_validation)
+        # BEM-A coil expects sideset (or block) labels for the source/
+        # sink port caps.  Defaults match the lab convention "source"
+        # and "sink", but some .jou files use abbreviations like
+        # "src"/"snk" or capitalised "Source"/"Sink".  Exposing them as
+        # editable fields avoids the v4.37.0 "coil source/sink mesh
+        # empty" failure for users on a non-default convention.
+        self.add_line("coil_source_name", "Source label:",
+                       default="source",
+                       placeholder="sideset/block name for the +I cap")
+        self.add_line("coil_sink_name", "Sink label:",
+                       default="sink",
+                       placeholder="sideset/block name for the -I cap")
 
         # ============ Workpiece geometry (.vol) =====================
         # Replaces the legacy top-level Model row in AnalysisWindow
@@ -393,7 +417,7 @@ class IHPanel(ModePanel):
             "<br>"
             "<b>FEM A-V</b>:<br>"
             "  pardiso — sparse direct (default, fast, memory-heavy)<br>"
-            "  shifted AMS — iterative for HCurl p=1 (low memory)<br>"
+            "  AMS — Compact AMS+COCR for HCurl p=1 (low memory; shifted preconditioner internally)<br>"
             "  BDDC — preconditioned CG, recommended for p&gt;=2<br>"
             "  iccg — generic fallback (Incomplete Cholesky + CG)")
 
@@ -571,7 +595,6 @@ class IHPanel(ModePanel):
         else:  # FEM side: PEEC+FEM+Kelvin and FEM-full share solver choices
             solver.addItems(["pardiso (direct)",
                               "AMS (iterative, p=1)",
-                              "shifted AMS (iterative, p=1)",
                               "BDDC (iterative, p>=2)",
                               "iccg (fallback)"])
         idx = solver.findText(prev)
@@ -584,6 +607,9 @@ class IHPanel(ModePanel):
         self._set_row_visible("peec_step", needs_step)
         self._set_row_visible("_sec_coil_vol", needs_coil_vol)
         self._set_row_visible("coil_vol", needs_coil_vol)
+        # Source/sink labels only meaningful for BEM-A coil .vol.
+        self._set_row_visible("coil_source_name", needs_coil_vol)
+        self._set_row_visible("coil_sink_name", needs_coil_vol)
         # Perimeter placement (n_peri) only for PEEC variants.  BEM-A
         # variants no longer have a runtime mesh-maxh knob (the .vol
         # was meshed externally by Cubit / Netgen).
@@ -602,6 +628,12 @@ class IHPanel(ModePanel):
         # don't expose it as a knob.
         self._set_row_visible("fes_order",
                               is_weak or is_peec_fem_k or is_fem)
+        # Weak-coupled BEM modes flow through calc_inductance.py
+        # --h1-order which has choices=[1, 2] -- selecting 3 would
+        # fire an argparse error.  FEM-side modes (PEEC+FEM+Kelvin,
+        # FEM-full) accept --fes-order up to 3.
+        fes_spin = self._widgets["fes_order"]
+        fes_spin.setMaximum(2 if is_weak else 3)
         # Workpiece geometry (.vol) is shown for all modes that need a
         # workpiece mesh; the legacy top-level Model row is gone.
         self._set_row_visible("_sec_wp_vol", needs_wp)
@@ -724,14 +756,19 @@ class IHPanel(ModePanel):
         return self._build_fem_coilmesh_command(vol_path)
 
     # UI solver text -> CLI arg mapping
+    # Inductance / weak-coupled modes: one "size" knob maps to both the
+    # coil-side BEM solver (--coil-bem-solver) and the workpiece-side
+    # BEM backend (--wp-bem-backend).  Dense LU is the small/exact path;
+    # HACApK is the large/ACA-compressed path.
     _PEEC_SOLVER_MAP = {
-        "Dense LU (small)": "dense",
-        "HACApK (large)":   "hacapk",
+        "Dense LU (small)": {"coil_bem_solver": "dense-lu",
+                              "wp_bem_backend":  "intree-dense"},
+        "HACApK (large)":   {"coil_bem_solver": "hacapk-gmres",
+                              "wp_bem_backend":  "hacapk"},
     }
     _FEM_SOLVER_MAP = {
         "pardiso (direct)":              "pardiso",
         "AMS (iterative, p=1)":          "ams",
-        "shifted AMS (iterative, p=1)":  "shifted_ams",
         "BDDC (iterative, p>=2)":        "bddc",
         "iccg (fallback)":               "iccg",
     }
@@ -753,6 +790,10 @@ class IHPanel(ModePanel):
         if method in (METHOD_BEMA_IND, METHOD_BEMA_BEM):
             return "bem-a"
         return "peec"
+
+    # CLI-DIFF: ignore --output -- auto-injected by calc_main wrapper
+    # (calc_common.py:1173-1177).  Static scanners flag this as REJECT
+    # for every builder, but the flag IS accepted at runtime.
 
     def _build_peec_inductance_command(self):
         """Coil-only inductance (vacuum, no workpiece).
@@ -779,10 +820,16 @@ class IHPanel(ModePanel):
                 raise ValueError("Coil .vol file is required for BEM-A mode.")
             if not os.path.isfile(coil_in):
                 raise ValueError(f"Coil .vol not found: {coil_in}")
-            coil_arg = ["--coil-vol", coil_in]
+            coil_arg = ["--coil-vol", coil_in,
+                        "--coil-source-name", self.val("coil_source_name"),
+                        "--coil-sink-name",   self.val("coil_sink_name")]
+        bem_size = self._PEEC_SOLVER_MAP.get(
+            self.val("solver"),
+            {"coil_bem_solver": "auto", "wp_bem_backend": "hacapk"})
         cmd = [_PYTHON, calc_script("calc_inductance.py"),
                *coil_arg,
                "--coil-solver", coil_solver,
+               "--coil-bem-solver", bem_size["coil_bem_solver"],
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
@@ -812,10 +859,17 @@ class IHPanel(ModePanel):
             coil_in = self.val("coil_vol") if "coil_vol" in self._widgets else ""
             if not coil_in:
                 raise ValueError("Coil .vol file is required for BEM-A weak-coupled mode.")
-            coil_arg = ["--coil-vol", coil_in]
+            coil_arg = ["--coil-vol", coil_in,
+                        "--coil-source-name", self.val("coil_source_name"),
+                        "--coil-sink-name",   self.val("coil_sink_name")]
+        bem_size = self._PEEC_SOLVER_MAP.get(
+            self.val("solver"),
+            {"coil_bem_solver": "auto", "wp_bem_backend": "hacapk"})
         cmd = [_PYTHON, calc_script("calc_inductance.py"),
                *coil_arg,
                "--coil-solver", coil_solver,
+               "--coil-bem-solver", bem_size["coil_bem_solver"],
+               "--wp-bem-backend",  bem_size["wp_bem_backend"],
                "--frequency", self.val("freq"),
                "--current", self.val("current"),
                "--coil-sigma", self.val("coil_sigma"),
@@ -859,6 +913,7 @@ class IHPanel(ModePanel):
         add_material_args choices (steel/copper/aluminum/custom).
 
         CLI-DIFF: ignore --reg --shift-eps --nthreads --output -- advanced solver knobs and auto-generated output paths; deliberately defaulted.
+        CLI-DIFF: ignore --output -- auto-injected by calc_main wrapper (calc_common.py).
         """
         step = self.val("peec_step")
         if not step:
@@ -883,6 +938,7 @@ class IHPanel(ModePanel):
                "--peec-sigma", self.val("coil_sigma"),
                "--peec-nwinc", str(self.val("peec_nwinc")),
                "--peec-nhinc", str(self.val("peec_nhinc")),
+               "--peec-n-peri", str(self.val("peec_n_peri")),
                "--msh-output", msh_output(vol_path, "_fem_kelvin"),
                "--output", json_output(vol_path, "_fem_kelvin")]
         if self._impedance_model_cli() == "esim":
@@ -932,13 +988,15 @@ class IHWindow(AnalysisWindow):
                          settings_key="ih")
         panel = IHPanel()
         self._set_panel(panel)
-        # Pre-fill the panel's wp_vol field from the constructor arg
-        # BEFORE _restore_settings() runs.  add_browse() rounds the abs
-        # path through the AnalysisWindow display_path helper so the
-        # text shows as relative when inside the working folder.
+        # Restore previous session's widget state FIRST, then let any
+        # explicit constructor-supplied vol_path override the restored
+        # wp_vol.  The previous order (setText before restore) silently
+        # lost the Cubit Solve menu's current .vol path whenever a
+        # different .vol was saved last session, because restore would
+        # overwrite the just-set wp_vol text.
+        self._restore_settings()
         if vol_path and "wp_vol" in panel._widgets:
             panel._widgets["wp_vol"].setText(self.display_path(vol_path))
-        self._restore_settings()
         # Re-fire method change so visibility hooks run after the panel-
         # window binding (wp_vol section visibility) is wired.
         panel._on_method_changed(panel.val("method"))
