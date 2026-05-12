@@ -1,0 +1,94 @@
+{
+  "method": "HCurl + Kelvin Kameari iteration (breakdown demo)",
+  "purpose": "Paper motivation: shows HCurl Kameari iteration breaks down on isolated-conductor-in-vacuum problems. The proposed BEM Foster-CLN does not.",
+  "R_K_mm": 25.0,
+  "h_cond_mm": 0.5,
+  "h_air_mm": 2.0,
+  "order": 2,
+  "ne": 75903,
+  "rel_err_gfA_s_cond": 3.797101755547713e-14,
+  "stages": [
+    {
+      "n": 0,
+      "R_n": 2853745.541022836,
+      "L_n": 932.4452960644242,
+      "tau_us": 326.74437249588067,
+      "energy_norm": 3.504166666666367e-07,
+      "rel_drift": 0.0,
+      "sign_L": "+",
+      "sign_R": "+"
+    },
+    {
+      "n": 1,
+      "R_n": 192241.57010166254,
+      "L_n": -1295.1822246709194,
+      "tau_us": null,
+      "energy_norm": 5.201788559421216e-06,
+      "rel_drift": 2.4309953143907548e-17,
+      "sign_L": "-",
+      "sign_R": "+"
+    },
+    {
+      "n": 2,
+      "R_n": 1090329.1563991616,
+      "L_n": -44294.5390404082,
+      "tau_us": null,
+      "energy_norm": 9.171542319408611e-07,
+      "rel_drift": 1.1376376839984128,
+      "sign_L": "-",
+      "sign_R": "+"
+    },
+    {
+      "n": 3,
+      "R_n": 93996.28586848897,
+      "L_n": -1019.9631337898097,
+      "tau_us": null,
+      "energy_norm": 1.0638718229772491e-05,
+      "rel_drift": 0.38118714624833144,
+      "sign_L": "-",
+      "sign_R": "+"
+    },
+    {
+      "n": 4,
+      "R_n": 47981.61929094248,
+      "L_n": 3433.121842086775,
+      "tau_us": 71550.77074972431,
+      "energy_norm": 2.0841314127736632e-05,
+      "rel_drift": 0.6679897458306068,
+      "sign_L": "+",
+      "sign_R": "+"
+    },
+    {
+      "n": 5,
+      "R_n": 55971.06425724434,
+      "L_n": 4637.332992888446,
+      "tau_us": 82852.32833120975,
+      "energy_norm": 1.7866374586053542e-05,
+      "rel_drift": 1.0777074035809064,
+      "sign_L": "+",
+      "sign_R": "+"
+    },
+    {
+      "n": 6,
+      "R_n": 121291.24729483794,
+      "L_n": 9735.146270371693,
+      "tau_us": 80262.56211800053,
+      "energy_norm": 8.244617994315565e-06,
+      "rel_drift": 1.5788679627114814,
+      "sign_L": "+",
+      "sign_R": "+"
+    },
+    {
+      "n": 7,
+      "R_n": 249702.34310665453,
+      "L_n": 19314.779216978128,
+      "tau_us": 77351.21335536796,
+      "energy_norm": 4.004768187428955e-06,
+      "rel_drift": 2.23774543118897,
+      "sign_L": "+",
+      "sign_R": "+"
+    }
+  ],
+  "R0_analytic": 2853745.5410225927,
+  "sign_flip_first_n": 1
+}

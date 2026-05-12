@@ -1,0 +1,62 @@
+C:\Program Files\Python312\Lib\site-packages\cupy\_environment.py:275: UserWarning: CUDA path could not be detected. Set CUDA_PATH environment variable if CuPy fails to load.
+  warnings.warn(
+========================================================================
+Production DD Cauer extraction: A1 (17.72×17.72×2 mm)
+========================================================================
+
+  order=3, n_dofs=81
+  Production quad: (12, 24, 12, 6)
+
+--- DD K assembly (GPU) ---
+
+=== DD K assembly (GPU) ===
+  order=3, n_dofs=81
+  quad: th=12, ph=24, rh=12, c=6, n_q=746496
+  Phi memory (hi+lo, single side): 2.90 GB
+  Precomputing 746496 quadrature points in mpmath 40-digit...
+  Geometry precompute: 39.08s
+  Geometry precompute (CPU mpmath): 39.12s
+  DD Phi_L (basis at r): 1.64s
+  DD Phi_R (basis at r'): 0.97s
+  c-component 0:
+    DD matmul: (746496, 81) @ (746496, 81) -> (81, 81), 365 chunks of 2048
+  c-component 1:
+    DD matmul: (746496, 81) @ (746496, 81) -> (81, 81), 365 chunks of 2048
+  c-component 2:
+    DD matmul: (746496, 81) @ (746496, 81) -> (81, 81), 365 chunks of 2048
+  DD matmul total: 23.51s
+  Total: 66.1s
+
+--- DD M, b assembly ---
+  Total: 0.2s
+  K_lo/K_hi: 1.09e-16
+  M_lo/M_hi: 1.07e-16
+
+--- mpmath eigh ---
+    Computing eigenvalues of symmetric n=81 matrix in mpmath...
+    mpmath eig: 22.32s
+  Total: 25.5s
+
+  Top 5 Foster modes:
+    rank=0: tau=212.1182 us, g²=6.0804e-12
+    rank=1: tau=70.3017 us, g²=5.6592e-13
+    rank=2: tau=65.4940 us, g²=1.3568e-13
+    rank=3: tau=48.6233 us, g²=1.1999e-13
+    rank=4: tau=74.2760 us, g²=2.0494e-14
+
+--- Verified-interval Hankel-Padé (DD input) ---
+
+  Cauer rungs (DD input, verified-interval):
+    k            R_2k          L_2k+1   tau_pair us  reliable?
+    0      1.4432e+11      2.8032e+07      194.2335       True
+    1      2.3656e+12      1.6758e+08       70.8386       True
+    2      9.3182e+13      3.2927e+09       35.3360       True
+    3      2.5687e+14      4.1395e+09       16.1156       True
+    4      5.4381e+14      3.9309e+10       72.2837       True
+    5      2.7318e+15      1.6485e+11       60.3437       True
+    6      5.9319e+15      6.6742e+10       11.2514       True
+    7      1.1371e+16      3.4697e+11       30.5143       True
+    8      3.1978e+15     -9.0169e+11     -281.9748       True
+    9      3.0047e+15      7.3867e+11      245.8353       True
+
+Saved: W:\30_CauerLadderNetwork\2026_04_01_長方形CLN\ngsolve_validation\dd_production_A1_order3_results.json

@@ -1,0 +1,16 @@
+{
+  "_comment": "Example MCP server config to add to your Claude Desktop or Claude Code mcp.json",
+  "_paths": {
+    "claude_desktop_windows": "%APPDATA%/Claude/claude_desktop_config.json",
+    "claude_code": ".claude/mcp.json (project-local) or ~/.claude/mcp.json (user-global)"
+  },
+  "mcpServers": {
+    "hcurl-bem": {
+      "command": "python",
+      "args": [
+        "w:/30_CauerLadderNetwork/2026_04_01_long-shape-CLN/ngsolve_validation/mcp_hcurl_bem_server.py"
+      ],
+      "_description": "Schoberl-Zaglmayr H(curl) basis + closed-form Newton potential tools (Mathematica backend)"
+    }
+  }
+}

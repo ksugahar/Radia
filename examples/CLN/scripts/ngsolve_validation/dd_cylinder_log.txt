@@ -1,0 +1,58 @@
+========================================================================
+DD axisym VIM cylinder Cu disk R=10mm t=2mm
+========================================================================
+
+  Nr=24, Nz=6, total 144 cells
+  N=144 cells, n_q_total=576, n_pairs=331776
+  Building DD G matrix via mpmath elliptic...
+    qi=0/576 (0%), elapsed 0s
+    qi=28/576 (5%), elapsed 4s
+    qi=56/576 (10%), elapsed 7s
+    qi=84/576 (15%), elapsed 11s
+    qi=112/576 (19%), elapsed 15s
+    qi=140/576 (24%), elapsed 19s
+    qi=168/576 (29%), elapsed 22s
+    qi=196/576 (34%), elapsed 26s
+    qi=224/576 (39%), elapsed 30s
+    qi=252/576 (44%), elapsed 34s
+    qi=280/576 (49%), elapsed 37s
+    qi=308/576 (53%), elapsed 41s
+    qi=336/576 (58%), elapsed 45s
+    qi=364/576 (63%), elapsed 49s
+    qi=392/576 (68%), elapsed 53s
+    qi=420/576 (73%), elapsed 56s
+    qi=448/576 (78%), elapsed 60s
+    qi=476/576 (83%), elapsed 64s
+    qi=504/576 (88%), elapsed 68s
+    qi=532/576 (92%), elapsed 71s
+    qi=560/576 (97%), elapsed 75s
+  K assembly: 77.3s
+  Total assembly: 77.4s
+  K_lo/K_hi: 1.10e-16
+
+  Converting to mpmath + eigh...
+    Computing eigenvalues of symmetric n=144 matrix in mpmath...
+    mpmath eig: 113.35s
+  mpmath eigh: 121.9s
+
+  Top 5 Foster:
+    rank=0: tau=227.0243 us, g²=7.0642e-12
+    rank=1: tau=91.0842 us, g²=5.4984e-13
+    rank=2: tau=52.0924 us, g²=1.3093e-13
+    rank=3: tau=34.5628 us, g²=4.7462e-14
+    rank=4: tau=25.0042 us, g²=2.1435e-14
+
+  Cauer rungs (DD axisym):
+    k            R_2k          L_2k+1   tau_pair us
+    0      1.2736e+11      2.6981e+07      211.8436
+    1      2.6844e+12      1.9201e+08       71.5297
+    2      1.5133e+13      5.6249e+08       37.1691
+    3      5.1764e+13      1.3105e+09       25.3172
+    4      1.8098e+14      3.8331e+09       21.1797
+    5      8.7302e+14      1.5355e+10       17.5887
+    6      4.3825e+15      5.9259e+10       13.5216
+    7     -1.7981e+16      3.2421e+13    -1803.0439
+    8      2.4553e+16     -2.3119e+12      -94.1569
+    9     -1.0162e+16      1.0648e+12     -104.7874
+
+Saved: W:\30_CauerLadderNetwork\2026_04_01_長方形CLN\ngsolve_validation\dd_cylinder_axisym_Nr24_Nz6_results.json

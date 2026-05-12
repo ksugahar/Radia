@@ -1,0 +1,42 @@
+{
+  "method": "HCurl + Kelvin Kameari iteration (v21: T-formulation source, J = curl(T))",
+  "L_n_formula": "L_n = R_n\u00b2 \u00d7 \u222b_full \u03bd |curl(gfA_r)|\u00b2 dV (canonical B\u00b2 form)",
+  "gauge_recipe": "nograds=True + tree-cotree + Helmholtz-Hodge + T-formulation source (no penalty)",
+  "R_K_mm": 25.0,
+  "h_cond_mm": 0.5,
+  "h_air_mm": 2.0,
+  "order": 2,
+  "ne": 75903,
+  "rel_err_gfA_s_cond": 3.797101755547713e-14,
+  "HDiv_Jn_int": 0.0,
+  "sigma_A_phys_n_orig_int": 18642.166666666355,
+  "HDiv_proj_err": 16.38147501333188,
+  "stages": [
+    {
+      "n": 0,
+      "R_n": 14710762.367365872,
+      "L_n": 108.7845015199821,
+      "L_n_v17_form": 77.28221150940776,
+      "B2_int": 5.026858561382665e-13,
+      "tau_us": 7.394892175085905,
+      "energy_norm": 6.797744229886987e-08,
+      "rel_drift": 0.0,
+      "sign_L": "+",
+      "sign_R": "+"
+    },
+    {
+      "n": 1,
+      "R_n": 25802142.57039742,
+      "L_n": 2187.619086724775,
+      "L_n_v17_form": -424.57690495693384,
+      "B2_int": 3.285944036916301e-12,
+      "tau_us": 84.78439651886164,
+      "energy_norm": 3.87564713771984e-08,
+      "rel_drift": 0.05223744755556341,
+      "sign_L": "+",
+      "sign_R": "+"
+    }
+  ],
+  "R0_analytic": 2853745.5410225927,
+  "sign_flip_first_n": null
+}
