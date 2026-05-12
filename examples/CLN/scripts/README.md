@@ -12,6 +12,7 @@ NGSolve / `radia.*` consumers live next to the Radia source and ship with
 |---|---|
 | `axifemm/` | Phase B1c/B2 P2 triangle Henrotte FE development — Python reference, NGSolve + C++ benchmarks, edge-convention probes, multi-stage debug reproducers. |
 | `ngsolve_validation/` | The bulk of the CLN validation framework — 3D HCurl Hiruma, COMSOL TEAM 28 port, Kameari accumulation, Tanimoto A-T + H-H projection, DD pipeline experiments, sphere/cylinder/cuboid/A1 sweeps, Schöberl-Zaglmayr basis source, and the legacy FP64 references. |
+| `tanimoto_canonical/` | M.~Tanimoto 修論 (2025) canonical 4-formulation CLN notebook set (2D H1 scalar / 3D A-T / 3D A-Phi / 3D T-Omega) on a 1 cm Cu cylinder. Reference baseline against which the ngsolve_validation/ scripts cross-check. Mirrored from `S:/NGSolve/谷本/修論/`. See `tanimoto_canonical/README.md` for formula table. |
 
 ## Why these scripts live here
 
