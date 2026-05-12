@@ -15,7 +15,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QComboBox, QSpinBox,
+    QLabel, QLineEdit, QComboBox, QSpinBox, QCheckBox,
     QPushButton, QPlainTextEdit, QFileDialog,
     QMessageBox, QSplitter, QGroupBox, QStyle,
 )
@@ -352,6 +352,17 @@ class ModePanel(QWidget):
         self._row_indices[key] = self._form.rowCount() - 1
         return w
 
+    def add_check(self, key, label, default=False):
+        w = QCheckBox(label)
+        w.setChecked(bool(default))
+        # Form layout: leave the left label cell blank — the checkbox
+        # text itself acts as the label, so a duplicate column is
+        # noisy and stacks oddly with the disable/enable toggles.
+        self._form.addRow("", w)
+        self._widgets[key] = w
+        self._row_indices[key] = self._form.rowCount() - 1
+        return w
+
     def add_browse(self, key, label, default="", filter_str="All files (*.*)"):
         row = QHBoxLayout()
         le = QLineEdit(default)
@@ -460,6 +471,8 @@ class ModePanel(QWidget):
             return w.currentText()
         elif isinstance(w, QSpinBox):
             return str(w.value())
+        elif isinstance(w, QCheckBox):
+            return "1" if w.isChecked() else "0"
         return ""
 
     def save_state(self):
@@ -476,6 +489,8 @@ class ModePanel(QWidget):
                 state[key] = w.currentText()
             elif isinstance(w, QSpinBox):
                 state[key] = w.value()
+            elif isinstance(w, QCheckBox):
+                state[key] = w.isChecked()
         return state
 
     def restore_state(self, state):
@@ -506,6 +521,8 @@ class ModePanel(QWidget):
                             w.setCurrentIndex(ival)
                 elif isinstance(w, QSpinBox):
                     w.setValue(int(val))
+                elif isinstance(w, QCheckBox):
+                    w.setChecked(bool(val))
             except (ValueError, TypeError):
                 pass
 
