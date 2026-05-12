@@ -45,7 +45,10 @@ void AxiHenrotteFESpace::Update() {
     if (axi_order == 1) {
         SetNDof(ma->GetNV());
     } else {
-        // Q2 (quad only): vertex DOFs + edge midnode DOFs + face center DOFs.
+        // order==2: vertex DOFs + edge midnode DOFs + face-center DOFs.
+        // Q2 (quad) uses all three; P2 (trig) uses only the first two. We
+        // allocate NV + NEdges + NE so each quad gets its face-center via
+        // ei.Nr(); trig elements have an unused slot at ei.Nr() (harmless).
         SetNDof(ma->GetNV() + ma->GetNEdges() + ma->GetNE());
     }
 }
@@ -66,15 +69,33 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     }
 
     if (axi_order == 2) {
-        if (ngel.GetType() != ET_QUAD || vertices.Size() != 4)
-            throw Exception("AxiHenrotteFESpace order=2 requires an all-quad "
-                            "axis-aligned mesh; element " + ToString(ei) +
-                            " is not a quad.");
-        Vec<3> p[4];
-        for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
-        double r_a = p[0](0), r_b = p[1](0);
-        double z_a = p[0](1), z_b = p[2](1);
-        return *new (lh) AxiHenrotteFE_Q2_AxisAligned(r_a, r_b, z_a, z_b);
+        if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
+            Vec<3> p[4];
+            for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
+            double r_a = p[0](0), r_b = p[1](0);
+            double z_a = p[0](1), z_b = p[2](1);
+            return *new (lh) AxiHenrotteFE_Q2_AxisAligned(r_a, r_b, z_a, z_b);
+        }
+        if (ngel.GetType() == ET_TRIG && vertices.Size() == 3) {
+            // P2 triangle: 6 DOFs at 3 vertices + 3 edge midpoints.
+            // Node order: [v0, v1, v2, m01, m12, m20].
+            double rs[6], zs[6];
+            for (int i = 0; i < 3; ++i) {
+                auto pt = ma->GetPoint<3>(vertices[i]);
+                rs[i] = pt(0);
+                zs[i] = pt(1);
+            }
+            // Edge midpoints (physical midpoint of straight edge).
+            rs[3] = 0.5 * (rs[0] + rs[1]);   // m01
+            zs[3] = 0.5 * (zs[0] + zs[1]);
+            rs[4] = 0.5 * (rs[1] + rs[2]);   // m12
+            zs[4] = 0.5 * (zs[1] + zs[2]);
+            rs[5] = 0.5 * (rs[2] + rs[0]);   // m20
+            zs[5] = 0.5 * (zs[2] + zs[0]);
+            return *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
+        }
+        throw Exception("AxiHenrotteFESpace order=2: element " + ToString(ei) +
+                        " is neither a quad (Q2) nor a triangle (P2).");
     }
     // axi_order == 1 path
     if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
@@ -123,9 +144,25 @@ void AxiHenrotteFESpace::GetDofNrs(ElementId ei, Array<DofId> & dnums) const {
             dnums[vertices.Size() + i] = nv + edges[i];
         return;
     }
-    // VOL element — must be quad.
+    // VOL element — quad (Q2, 9 DOFs) or triangle (P2, 6 DOFs).
+    if (ngel.GetType() == ET_TRIG) {
+        // P2 triangle: 3 vertex DOFs + 3 edge midpoint DOFs.
+        // Local order [v0, v1, v2, m01, m12, m20] matches FE's CalcShape.
+        auto edges = ngel.Edges();
+        dnums.SetSize(6);
+        for (int i = 0; i < 3; ++i) dnums[i] = vertices[i];
+        // NGSolve's TRIG local edge order (verified empirically 2026-05-12):
+        //   edges[0] connects (V0, V2)  -> midpoint = m20
+        //   edges[1] connects (V1, V2)  -> midpoint = m12
+        //   edges[2] connects (V0, V1)  -> midpoint = m01
+        // Permute to our local-DOF order [m01, m12, m20]:
+        dnums[3] = nv + edges[2];   // m01 = edge V0-V1
+        dnums[4] = nv + edges[1];   // m12 = edge V1-V2
+        dnums[5] = nv + edges[0];   // m20 = edge V0-V2
+        return;
+    }
     if (ngel.GetType() != ET_QUAD)
-        throw Exception("AxiHenrotteFESpace order=2: VOL element must be quad");
+        throw Exception("AxiHenrotteFESpace order=2: VOL element must be quad or triangle");
     auto edges = ngel.Edges();
     dnums.SetSize(9);
     for (int i = 0; i < 4; ++i) dnums[i] = vertices[i];

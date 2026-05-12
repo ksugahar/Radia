@@ -434,6 +434,85 @@ void AxiHenrotteFE_P1_Triangle::CalcDShape(
 }
 
 // ---------------------------------------------------------------------------
+// AxiHenrotteFE_P2_Triangle
+// ---------------------------------------------------------------------------
+
+AxiHenrotteFE_P2_Triangle::AxiHenrotteFE_P2_Triangle(
+    const double rs[6], const double zs[6])
+  : AxiHenrotteBaseFE(6, 4)  // 6 DOFs, polynomial degree 4 (in r, via r^4)
+{
+    for (int i = 0; i < 6; ++i) { r[i] = rs[i]; z[i] = zs[i]; }
+    // Build 6x6 Vandermonde V[i, j] = m_j(r_i, z_i) where monomials are
+    //   m = (1, s, z, s^2, s*z, z^2),  s = r^2.
+    // Then Vinv = V^{-1}, and psi_i(r, z) = sum_j Vinv[j, i] * m_j(r, z).
+    Mat<6,6> V;
+    for (int i = 0; i < 6; ++i) {
+        double s_i = r[i] * r[i];
+        V(i, 0) = 1.0;
+        V(i, 1) = s_i;
+        V(i, 2) = z[i];
+        V(i, 3) = s_i * s_i;
+        V(i, 4) = s_i * z[i];
+        V(i, 5) = z[i] * z[i];
+    }
+    Mat<6,6> Vinv_local;
+    CalcInverse(V, Vinv_local);
+    for (int i = 0; i < 6; ++i)
+        for (int j = 0; j < 6; ++j)
+            Vinv[i][j] = Vinv_local(i, j);
+}
+
+void AxiHenrotteFE_P2_Triangle::CalcShape(
+    const IntegrationPoint & ip, BareSliceVector<> shape) const
+{
+    // Reference triangle (xi, eta) -> physical (r, z) via affine map of
+    // the 3 vertex nodes (P2 with straight edges).
+    double xi = ip(0);
+    double eta = ip(1);
+    double rp = r[0] + (r[1] - r[0]) * xi + (r[2] - r[0]) * eta;
+    double zp = z[0] + (z[1] - z[0]) * xi + (z[2] - z[0]) * eta;
+    double sp = rp * rp;
+    // Monomials m_j(rp, zp).
+    double m[6] = { 1.0, sp, zp, sp * sp, sp * zp, zp * zp };
+    // psi_i(rp, zp) = sum_j Vinv[j, i] * m[j].
+    for (int i = 0; i < 6; ++i) {
+        double v = 0.0;
+        for (int j = 0; j < 6; ++j) v += Vinv[j][i] * m[j];
+        shape(i) = v;
+    }
+}
+
+void AxiHenrotteFE_P2_Triangle::CalcDShape(
+    const IntegrationPoint & ip, BareSliceMatrix<> dshape) const
+{
+    double xi = ip(0);
+    double eta = ip(1);
+    double rp = r[0] + (r[1] - r[0]) * xi + (r[2] - r[0]) * eta;
+    double zp = z[0] + (z[1] - z[0]) * xi + (z[2] - z[0]) * eta;
+    double sp = rp * rp;
+    // Gradients of monomials wrt physical (r, z).
+    //   d m_j / dr = (0, 2r, 0, 4 r^3, 2 r z, 0)
+    //   d m_j / dz = (0, 0, 1, 0, r^2, 2 z)
+    double dm_dr[6] = { 0.0, 2.0 * rp, 0.0, 4.0 * rp * sp, 2.0 * rp * zp, 0.0 };
+    double dm_dz[6] = { 0.0, 0.0, 1.0, 0.0, sp, 2.0 * zp };
+    // Affine map Jacobian: dr/dxi, dr/deta, dz/dxi, dz/deta.
+    double dr_dxi = r[1] - r[0];
+    double dr_deta = r[2] - r[0];
+    double dz_dxi = z[1] - z[0];
+    double dz_deta = z[2] - z[0];
+    for (int i = 0; i < 6; ++i) {
+        double dpsi_dr = 0.0, dpsi_dz = 0.0;
+        for (int j = 0; j < 6; ++j) {
+            dpsi_dr += Vinv[j][i] * dm_dr[j];
+            dpsi_dz += Vinv[j][i] * dm_dz[j];
+        }
+        // Chain rule: d psi / d(xi, eta) = J^T * d psi / d(r, z).
+        dshape(i, 0) = dpsi_dr * dr_dxi + dpsi_dz * dz_dxi;
+        dshape(i, 1) = dpsi_dr * dr_deta + dpsi_dz * dz_deta;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AxiHenrotteFE_Edge_Q1 / _Q2 -- 1D restriction of the parent quad's
 // Lagrange basis to a single edge.  Used for Neumann RHS integration
 // `LinearForm += q * v * ds(label)` in axisymmetric heat / magnetic
@@ -573,6 +652,19 @@ void ExportAxiHenrotteFE(pybind11::module & m) {
         "Shape functions: a + b r^2 + c z.")
         .def(py::init([](std::array<double, 3> rs, std::array<double, 3> zs) {
                 return std::make_shared<AxiHenrotteFE_P1_Triangle>(rs.data(), zs.data());
+            }),
+             py::arg("rs"), py::arg("zs"));
+
+    py::class_<AxiHenrotteFE_P2_Triangle, ngfem::FiniteElement,
+               std::shared_ptr<AxiHenrotteFE_P2_Triangle>>(
+        m, "AxiHenrotteFE_P2_Triangle",
+        "P2 Henrotte FE on a triangle in (r, z) — 6 DOFs (3 vertex + 3 edge mid).\n"
+        "Shape functions: {1, r^2, z, r^4, r^2 z, z^2} Lagrange interpolant.\n"
+        "Node order: [v0, v1, v2, m01, m12, m20]. FEMM Henrotte vector\n"
+        "convention: N_A_i = (r_i / r) psi_i. Axis vertices auto-decouple.\n"
+        "Phase B1c reference: w:/.../axifemm/axifemm_p2_triangle.py")
+        .def(py::init([](std::array<double, 6> rs, std::array<double, 6> zs) {
+                return std::make_shared<AxiHenrotteFE_P2_Triangle>(rs.data(), zs.data());
             }),
              py::arg("rs"), py::arg("zs"));
 }
