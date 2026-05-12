@@ -528,6 +528,63 @@ inline void DuffyGauss8x8(F && body)
 }
 }  // anonymous namespace
 
+// Reference-triangle P2 Lagrange shape function and derivative helpers.
+// Kept identical to the FE-side helpers (axi_henrotte_fe.cpp) so that the
+// integrator uses the SAME geometric map as the FE itself (essential for
+// curved meshes -- mesh.Curve(p>=2) makes the edge nodes lie off the
+// straight-chord midpoint, and the FE's mid-edge nodes returned by the
+// FESpace already include that curvature).
+// NGSolve ET_TRIG convention (verified): V0 at ref (1,0), V1 at (0,1), V2 at (0,0).
+// Local order [v0, v1, v2, m01, m12, m20]. Area coords lam_0=xi, lam_1=eta, lam_2=1-xi-eta.
+static inline void IntP2RefShape(double xi, double eta, double N[6])
+{
+    double l0 = xi;
+    double l1 = eta;
+    double l2 = 1.0 - xi - eta;
+    N[0] = l0 * (2.0 * l0 - 1.0);
+    N[1] = l1 * (2.0 * l1 - 1.0);
+    N[2] = l2 * (2.0 * l2 - 1.0);
+    N[3] = 4.0 * l0 * l1;
+    N[4] = 4.0 * l1 * l2;
+    N[5] = 4.0 * l2 * l0;
+}
+static inline void IntP2RefDShape(double xi, double eta,
+                                   double dN_dxi[6], double dN_deta[6])
+{
+    dN_dxi[0]  = 4.0 * xi - 1.0;
+    dN_dxi[1]  = 0.0;
+    dN_dxi[2]  = -3.0 + 4.0 * xi + 4.0 * eta;
+    dN_dxi[3]  = 4.0 * eta;
+    dN_dxi[4]  = -4.0 * eta;
+    dN_dxi[5]  = 4.0 - 8.0 * xi - 4.0 * eta;
+    dN_deta[0] = 0.0;
+    dN_deta[1] = 4.0 * eta - 1.0;
+    dN_deta[2] = -3.0 + 4.0 * xi + 4.0 * eta;
+    dN_deta[3] = 4.0 * xi;
+    dN_deta[4] = 4.0 - 4.0 * xi - 8.0 * eta;
+    dN_deta[5] = -4.0 * xi;
+}
+static inline void IntP2GeomMap(const double rn[6], const double zn[6],
+                                 double xi, double eta,
+                                 double & rp, double & zp,
+                                 double & dr_dxi, double & dr_deta,
+                                 double & dz_dxi, double & dz_deta)
+{
+    double N[6], dNxi[6], dNeta[6];
+    IntP2RefShape(xi, eta, N);
+    IntP2RefDShape(xi, eta, dNxi, dNeta);
+    rp = zp = 0.0;
+    dr_dxi = dr_deta = dz_dxi = dz_deta = 0.0;
+    for (int k = 0; k < 6; ++k) {
+        rp      += N[k]    * rn[k];
+        zp      += N[k]    * zn[k];
+        dr_dxi  += dNxi[k] * rn[k];
+        dr_deta += dNeta[k]* rn[k];
+        dz_dxi  += dNxi[k] * zn[k];
+        dz_deta += dNeta[k]* zn[k];
+    }
+}
+
 void P2TriangleStiffness(const double rn[6], const double zn[6], double mu,
                           FlatMatrix<double> elmat)
 {
@@ -545,23 +602,19 @@ void P2TriangleStiffness(const double rn[6], const double zn[6], double mu,
     Mat<6,6> Vinv;
     CalcInverse(Vand, Vinv);
 
-    double drxi = rn[1] - rn[0];
-    double dreta = rn[2] - rn[0];
-    double dzxi = zn[1] - zn[0];
-    double dzeta = zn[2] - zn[0];
-    double detJ = abs(drxi * dzeta - dreta * dzxi);
-
     Mat<6,6> K;
     K = 0.0;
     DuffyGauss8x8([&](double xi, double eta, double w) {
-        double rp = rn[0] + drxi * xi + dreta * eta;
-        double zp = zn[0] + dzxi * xi + dzeta * eta;
+        // Per-quadrature-point geometric map + Jacobian (handles curved P2
+        // meshes; reduces to the affine map for straight edges).
+        double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
+        IntP2GeomMap(rn, zn, xi, eta, rp, zp,
+                     dr_dxi, dr_deta, dz_dxi, dz_deta);
         if (rp <= EPS_AXIS) return;  // 1/r integrand near axis (integrable)
+        double detJ = abs(dr_dxi * dz_deta - dr_deta * dz_dxi);
         double sp = rp * rp;
-        // Monomial gradients wrt physical (r, z).
         double dm_dr[6] = { 0.0, 2.0 * rp, 0.0, 4.0 * rp * sp, 2.0 * rp * zp, 0.0 };
         double dm_dz[6] = { 0.0, 0.0, 1.0, 0.0, sp, 2.0 * zp };
-        // psi_i gradients
         double dpsi_dr[6], dpsi_dz[6];
         for (int i = 0; i < 6; ++i) {
             double sr = 0.0, sz = 0.0;
@@ -607,18 +660,15 @@ void P2TriangleSigmaMass(const double rn[6], const double zn[6], double sigma,
     Mat<6,6> Vinv;
     CalcInverse(Vand, Vinv);
 
-    double drxi = rn[1] - rn[0];
-    double dreta = rn[2] - rn[0];
-    double dzxi = zn[1] - zn[0];
-    double dzeta = zn[2] - zn[0];
-    double detJ = abs(drxi * dzeta - dreta * dzxi);
-
     Mat<6,6> M;
     M = 0.0;
     DuffyGauss8x8([&](double xi, double eta, double w) {
-        double rp = rn[0] + drxi * xi + dreta * eta;
-        double zp = zn[0] + dzxi * xi + dzeta * eta;
+        // Per-quadrature-point Lagrange geometric map (curved-P2-aware).
+        double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
+        IntP2GeomMap(rn, zn, xi, eta, rp, zp,
+                     dr_dxi, dr_deta, dz_dxi, dz_deta);
         if (rp <= EPS_AXIS) return;
+        double detJ = abs(dr_dxi * dz_deta - dr_deta * dz_dxi);
         double sp = rp * rp;
         double m[6] = { 1.0, sp, zp, sp * sp, sp * zp, zp * zp };
         double psi[6];
