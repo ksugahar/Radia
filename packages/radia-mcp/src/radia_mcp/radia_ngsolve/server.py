@@ -471,6 +471,8 @@ def esim(topic: str = "all") -> str:
 
 
 
+
+
 @mcp.tool()
 def kelvin_transformation(topic: str = "all") -> str:
     """
@@ -1284,3 +1286,9 @@ if __name__ == '__main__':
 # Canonical bibliography key: Kameari2018
 
 # Method attribution retained: Kameari and Tanimoto.
+
+# Canonical bibliography key: Stoll1974
+
+# Canonical bibliography key: Sugahara2017team28
+
+# Method attributions retained: Nagamine and Hiruma.
