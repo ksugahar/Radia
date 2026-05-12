@@ -79,19 +79,35 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
         if (ngel.GetType() == ET_TRIG && vertices.Size() == 3) {
             // P2 triangle: 6 DOFs at 3 vertices + 3 edge midpoints.
             // Node order: [v0, v1, v2, m01, m12, m20].
+            //
+            // Edge midpoint positions are obtained via the mesh's element
+            // transformation. For a straight-edge mesh this reduces to the
+            // geometric midpoint of the chord; for a mesh that has been
+            // `.Curve(p)`-d the transformation returns the curved-geometry
+            // position of the mid-edge node so that the P2 FE can follow
+            // curved boundaries (e.g. a sphere) exactly to the order of the
+            // curve.
+            //
+            // NGSolve's reference triangle (verified 2026-05-12 in
+            // examples/CLN/scripts/axifemm/test_ngsolve_ref_tri_vertices.py):
+            //   ref (1, 0) <-> mesh vertex 0 (V0)
+            //   ref (0, 1) <-> mesh vertex 1 (V1)
+            //   ref (0, 0) <-> mesh vertex 2 (V2)
+            // So mid-edges are at:
+            //   m01 = midpoint V0-V1 -> ref (0.5, 0.5)
+            //   m12 = midpoint V1-V2 -> ref (0, 0.5)
+            //   m20 = midpoint V2-V0 -> ref (0.5, 0)
+            const double xi_refs[6]  = { 1.0, 0.0, 0.0, 0.5, 0.0, 0.5 };
+            const double eta_refs[6] = { 0.0, 1.0, 0.0, 0.5, 0.5, 0.0 };
+            auto & eltrans = ma->GetTrafo(ei, lh);
             double rs[6], zs[6];
-            for (int i = 0; i < 3; ++i) {
-                auto pt = ma->GetPoint<3>(vertices[i]);
-                rs[i] = pt(0);
-                zs[i] = pt(1);
+            for (int k = 0; k < 6; ++k) {
+                IntegrationPoint ip(xi_refs[k], eta_refs[k], 0.0);
+                auto & mip = eltrans(ip, lh);
+                auto pt = mip.GetPoint();
+                rs[k] = pt(0);
+                zs[k] = pt(1);
             }
-            // Edge midpoints (physical midpoint of straight edge).
-            rs[3] = 0.5 * (rs[0] + rs[1]);   // m01
-            zs[3] = 0.5 * (zs[0] + zs[1]);
-            rs[4] = 0.5 * (rs[1] + rs[2]);   // m12
-            zs[4] = 0.5 * (zs[1] + zs[2]);
-            rs[5] = 0.5 * (rs[2] + rs[0]);   // m20
-            zs[5] = 0.5 * (zs[2] + zs[0]);
             return *new (lh) AxiHenrotteFE_P2_Triangle(rs, zs);
         }
         throw Exception("AxiHenrotteFESpace order=2: element " + ToString(ei) +
