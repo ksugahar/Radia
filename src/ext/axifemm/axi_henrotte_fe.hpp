@@ -185,6 +185,42 @@ public:
                     BareSliceMatrix<> dshape) const override;
 };
 
+// ---------------------------------------------------------------------------
+// AxiHenrotteFE_P2_Triangle
+//   - 6 DOFs/element on a P2 triangle in (r, z) plane (3 vertex + 3 edge mid)
+//   - psi_i(r, z) = a_i + b_i*r^2 + c_i*z + d_i*r^4 + e_i*r^2*z + f_i*z^2
+//     (Lagrange-interpolatory at 6 nodes: psi_i(r_k, z_k) = delta_ik)
+//   - V-DOF basis: N_A_i(r, z) = r_i * psi_i(r, z) / r
+//
+//   Node order: [v0, v1, v2, m01, m12, m20] where v_i are vertices and
+//   m_ij is the midpoint of edge (v_i, v_j). This matches the standard
+//   NGSolve P2 layout (vertex DOFs first, then edge DOFs).
+//
+//   For axis vertices (r_i = 0), N_A_i = 0 trivially due to the r_i factor;
+//   the corresponding global DOF is auto-decoupled (zero row/column in K, M)
+//   and is naturally pinned to A_phi = 0 (axis regularity).
+//
+//   Phase B1c reference: w:/.../axifemm/axifemm_p2_triangle.py
+// ---------------------------------------------------------------------------
+
+class AxiHenrotteFE_P2_Triangle : public AxiHenrotteBaseFE {
+public:
+    double r[6], z[6];
+    // psi_i(r, z) = sum_j Vinv[j, i] * m_j(r, z), where m = (1, s, z, s^2, s*z, z^2)
+    // and s = r^2. Vinv is the inverse of the 6x6 Vandermonde matrix on the
+    // 6 P2 nodes. Storing as Vinv[6][6] in row-major.
+    double Vinv[6][6];
+
+    AxiHenrotteFE_P2_Triangle(const double rs[6], const double zs[6]);
+
+    ELEMENT_TYPE ElementType() const override { return ET_TRIG; }
+
+    void CalcShape(const IntegrationPoint & ip,
+                   BareSliceVector<> shape) const override;
+    void CalcDShape(const IntegrationPoint & ip,
+                    BareSliceMatrix<> dshape) const override;
+};
+
 }  // namespace radia_axifemm
 
 #endif  // RADIA_AXIFEMM_AXI_HENROTTE_FE_HPP
