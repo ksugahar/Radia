@@ -1405,6 +1405,44 @@ def filaments_from_step(step_path: str,
         path_m, w_m, h_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
             cad_units_per_meter=cad_units_per_meter)
+
+        # Sanity check (v4.42.0): the Path 3 longest-edge fallback
+        # picks a SINGLE OPEN edge as spine.  For a multi-turn lofted
+        # helix whose lateral has been merged into one BSPLINE face
+        # (no surviving CIRCLE edges => Path 2b skipped; no >=4 PLANE
+        # end-caps => Path 2c gate fails), this picks an INNER edge
+        # at z=zmin that traces a flat 1-turn loop, silently collapsing
+        # N turns to 1.  Detect: solid bbox z-extent >> spine z-extent
+        # means the spine is missing the helix's axial coverage.
+        bb_solid = solid.bounding_box()
+        bb_z = float(bb_solid.max.Z - bb_solid.min.Z)
+        bb_xy = max(float(bb_solid.max.X - bb_solid.min.X),
+                    float(bb_solid.max.Y - bb_solid.min.Y))
+        spine_z = float(path_m[:, 2].max() - path_m[:, 2].min())
+        # Multi-turn-helix-shaped solid: bbox z is significant AND the
+        # spine doesn't span it.  ``bb_z / cad_units_per_meter`` puts
+        # the bbox z-extent into metres for direct comparison with
+        # spine_z (already in metres).
+        bb_z_m = bb_z / cad_units_per_meter
+        bb_xy_m = bb_xy / cad_units_per_meter
+        if (bb_z_m > 0.3 * bb_xy_m  # axially-extending solid
+                and spine_z < 0.5 * bb_z_m):  # spine misses the axis
+            raise ValueError(
+                "PEEC filament extraction: the STEP solid has a "
+                f"significant axial extent (bbox z = {bb_z_m * 1000:.1f} "
+                f"mm) but the auto-detected spine only spans "
+                f"{spine_z * 1000:.1f} mm of it (< 50%). This is the "
+                "classic 'multi-turn lofted helix collapsed to 1 turn' "
+                "failure: the lateral surface is a merged BSPLINE with "
+                "no CIRCLE edges (Path 2b skipped) and only 2 PLANE "
+                "end-cap faces (Path 2c gate fails), so the dispatch "
+                "falls to longest-edge which traces a flat inner loop. "
+                "Workarounds: "
+                "(a) re-export the STEP with CIRCLE cross-section "
+                "edges preserved (NON-united loft, or use Cubit's "
+                "pipe-shell instead of loft+unite); "
+                "(b) mesh the coil in Cubit and run with --coil-solver "
+                "bem-a + --coil-vol instead of PEEC + --coil-step.")
         mean_area = float(np.mean(w_m * h_m))
         r_m = float(np.sqrt(mean_area / np.pi))
         topo = filaments_from_polyline(
