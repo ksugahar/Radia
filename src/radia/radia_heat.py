@@ -165,9 +165,32 @@ class HeatPanel(ModePanel):
             "manually.  Presets are room-temperature values; for "
             "high-temperature accuracy use Custom and dial in the "
             "values from a property table.")
+        ov = self.add_check(
+            "override_kcprho",
+            "Override rho/cp/k (use preset values as starting point, "
+            "edit below)", default=False)
+        ov.toggled.connect(self._on_override_toggled)
+        ov.setToolTip(
+            "When OFF, rho/cp/k are locked to the preset's "
+            "room-temperature values.  When ON, you can edit any of "
+            "the three values directly -- the preset is still emitted "
+            "to --material so the JSON output keeps a human-readable "
+            "label, and --rho/--cp/--k act as overrides "
+            "(calc_heat _resolve_material).")
         self.add_line("rho", "rho [kg/m^3]:", "7800")
         self.add_line("cp",  "cp [J/(kg.K)]:", "467")
         self.add_line("k",   "k [W/(m.K)]:", "46.6")
+
+        # Workpiece rotation.  Treated as MET ADATA for the 3D solver
+        # (q_surf is held azimuthally static -- a true spinning
+        # workpiece in 3D would need per-timestep coordinate rotation,
+        # not yet implemented).  For the axisym solver the rotation
+        # itself is implicit in the axisymmetric assumption; this
+        # value documents the physical scenario and validates that
+        # cross-mesh phi-averaging is the right model.
+        self.add_line(
+            "rotation_rpm",
+            "Rotation [rpm] (0 = stationary):", "0")
 
         # Boundary conditions.
         self._add_section("Boundary conditions")
@@ -245,13 +268,34 @@ class HeatPanel(ModePanel):
         cli = THERMAL_PRESET_TO_CLI.get(name, "custom")
         is_custom = (cli == "custom")
         preset = THERMAL_PRESET_VALUES.get(name, {})
+        override = self._is_override_kcprho()
         for key in ("rho", "cp", "k"):
             w = self._widgets.get(key)
             if w is None:
                 continue
+            # When the preset changes we re-seed the LineEdits with
+            # the preset's room-T values, both when locked (showing the
+            # values the solver will use) and when Override is on
+            # (treating preset as the starting point for the override).
             if not is_custom and key in preset:
                 w.setText(f"{preset[key]:g}")
-            w.setEnabled(is_custom)
+            w.setEnabled(is_custom or override)
+
+    def _is_override_kcprho(self):
+        w = self._widgets.get("override_kcprho")
+        return bool(w and w.isChecked())
+
+    def _on_override_toggled(self, checked):
+        # Re-apply enablement to rho/cp/k without reseeding values: the
+        # user wants to keep whatever they've typed when toggling
+        # override on/off.
+        cli = THERMAL_PRESET_TO_CLI.get(
+            self.val("thermal_material"), "custom")
+        is_custom = (cli == "custom")
+        for key in ("rho", "cp", "k"):
+            w = self._widgets.get(key)
+            if w is not None:
+                w.setEnabled(is_custom or bool(checked))
 
     # ------- Validation / command building -------
 
@@ -299,9 +343,6 @@ class HeatPanel(ModePanel):
                "--wp-vol", wp,
                "--surface-label", self.val("surface_label"),
                "--material", material_cli,
-               "--rho", self.val("rho"),
-               "--cp",  self.val("cp"),
-               "--k",   self.val("k"),
                "--h-conv",   self.val("h_conv"),
                "--t-ext",    self.val("t_ext"),
                "--t-initial",self.val("t_init"),
@@ -310,8 +351,21 @@ class HeatPanel(ModePanel):
                "--time-scheme", scheme_cli,
                "--linear-solver", self.val("linear_solver"),
                "--fes-order", str(self.val("fes_order")),
+               "--rotation-rpm", self.val("rotation_rpm"),
                "--msh-output", msh_output(wp, "_heat"),
                "--output", json_output(wp, "_heat")]
+
+        # Material overrides.  Always pass --rho/--cp/--k when the
+        # selected preset is "custom" (then they are required) or when
+        # the user has ticked the Override checkbox (then they shadow
+        # the preset values via calc_heat._resolve_material).  When
+        # neither, we omit them so the JSON output's "rho_kg_m3" etc.
+        # report the preset's canonical room-T values rather than a
+        # silently echoed copy.
+        if material_cli == "custom" or self._is_override_kcprho():
+            cmd += ["--rho", self.val("rho"),
+                    "--cp",  self.val("cp"),
+                    "--k",   self.val("k")]
 
         # Heat source.
         if self.val("heat_source") == HEAT_SRC_UNIFORM:
