@@ -462,19 +462,96 @@ AxiHenrotteFE_P2_Triangle::AxiHenrotteFE_P2_Triangle(
             Vinv[i][j] = Vinv_local(i, j);
 }
 
+// Reference-triangle P2 Lagrange shape functions on NGSolve's ET_TRIG
+// reference triangle convention (verified 2026-05-12 via
+// examples/CLN/scripts/axifemm/test_ngsolve_ref_tri_vertices.py):
+//
+//   Local DOF 0 (= mesh vertex V0) at ref (1, 0)
+//   Local DOF 1 (= mesh vertex V1) at ref (0, 1)
+//   Local DOF 2 (= mesh vertex V2) at ref (0, 0)
+//   Local DOF 3 (= m01, midpoint V0-V1) at ref (0.5, 0.5)
+//   Local DOF 4 (= m12, midpoint V1-V2) at ref (0, 0.5)
+//   Local DOF 5 (= m20, midpoint V2-V0) at ref (0.5, 0)
+//
+// Area coords (NGSolve convention): lam_0 = xi, lam_1 = eta, lam_2 = 1-xi-eta.
+//   N_0 = lam_0 (2 lam_0 - 1) = xi (2 xi - 1)            -- at V0
+//   N_1 = lam_1 (2 lam_1 - 1) = eta (2 eta - 1)          -- at V1
+//   N_2 = lam_2 (2 lam_2 - 1) = (1-xi-eta)(1-2xi-2eta)   -- at V2
+//   N_3 = 4 lam_0 lam_1 = 4 xi eta                       -- at m01
+//   N_4 = 4 lam_1 lam_2 = 4 eta (1-xi-eta)               -- at m12
+//   N_5 = 4 lam_2 lam_0 = 4 (1-xi-eta) xi                -- at m20
+//
+// For a mesh that has been `.Curve(p>=2)`-d, the 6 nodes (r[k], z[k])
+// returned by the FESpace are the curved-geometry positions of the
+// corresponding NGSolve-reference nodes. The same shape functions then
+// act as the geometric map (r(xi, eta), z(xi, eta)) = sum_k N_k (r[k], z[k]).
+// For straight-edge meshes this reduces to the affine 3-vertex map.
+static inline void P2RefShape(double xi, double eta, double N[6])
+{
+    double l0 = xi;
+    double l1 = eta;
+    double l2 = 1.0 - xi - eta;
+    N[0] = l0 * (2.0 * l0 - 1.0);
+    N[1] = l1 * (2.0 * l1 - 1.0);
+    N[2] = l2 * (2.0 * l2 - 1.0);
+    N[3] = 4.0 * l0 * l1;
+    N[4] = 4.0 * l1 * l2;
+    N[5] = 4.0 * l2 * l0;
+}
+
+static inline void P2RefDShape(double xi, double eta,
+                                double dN_dxi[6], double dN_deta[6])
+{
+    // dN/dxi
+    dN_dxi[0]  = 4.0 * xi - 1.0;                       // d/dxi[xi(2xi-1)]
+    dN_dxi[1]  = 0.0;                                   // d/dxi[eta(2eta-1)]
+    dN_dxi[2]  = -3.0 + 4.0 * xi + 4.0 * eta;          // d/dxi[(1-xi-eta)(1-2xi-2eta)]
+    dN_dxi[3]  = 4.0 * eta;                             // d/dxi[4 xi eta]
+    dN_dxi[4]  = -4.0 * eta;                            // d/dxi[4 eta (1-xi-eta)]
+    dN_dxi[5]  = 4.0 - 8.0 * xi - 4.0 * eta;            // d/dxi[4 (1-xi-eta) xi]
+    // dN/deta
+    dN_deta[0] = 0.0;
+    dN_deta[1] = 4.0 * eta - 1.0;
+    dN_deta[2] = -3.0 + 4.0 * xi + 4.0 * eta;
+    dN_deta[3] = 4.0 * xi;
+    dN_deta[4] = 4.0 - 4.0 * xi - 8.0 * eta;
+    dN_deta[5] = -4.0 * xi;
+}
+
+// Map (xi, eta) -> (r, z) and its Jacobian using the 6-node Lagrange map.
+static inline void P2GeomMap(const double r[6], const double z[6],
+                              double xi, double eta,
+                              double & rp, double & zp,
+                              double & dr_dxi, double & dr_deta,
+                              double & dz_dxi, double & dz_deta)
+{
+    double N[6], dNxi[6], dNeta[6];
+    P2RefShape(xi, eta, N);
+    P2RefDShape(xi, eta, dNxi, dNeta);
+    rp = zp = 0.0;
+    dr_dxi = dr_deta = dz_dxi = dz_deta = 0.0;
+    for (int k = 0; k < 6; ++k) {
+        rp      += N[k]    * r[k];
+        zp      += N[k]    * z[k];
+        dr_dxi  += dNxi[k] * r[k];
+        dr_deta += dNeta[k]* r[k];
+        dz_dxi  += dNxi[k] * z[k];
+        dz_deta += dNeta[k]* z[k];
+    }
+}
+
 void AxiHenrotteFE_P2_Triangle::CalcShape(
     const IntegrationPoint & ip, BareSliceVector<> shape) const
 {
-    // Reference triangle (xi, eta) -> physical (r, z) via affine map of
-    // the 3 vertex nodes (P2 with straight edges).
+    // 6-node quadratic Lagrange geometric map: (xi, eta) -> (r, z).
+    // For straight-edge meshes this reduces to the affine 3-vertex map.
     double xi = ip(0);
     double eta = ip(1);
-    double rp = r[0] + (r[1] - r[0]) * xi + (r[2] - r[0]) * eta;
-    double zp = z[0] + (z[1] - z[0]) * xi + (z[2] - z[0]) * eta;
+    double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
+    P2GeomMap(r, z, xi, eta, rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta);
     double sp = rp * rp;
-    // Monomials m_j(rp, zp).
+    // psi_i(rp, zp) = sum_j Vinv[j, i] * m_j with m = {1, s, z, s^2, sz, z^2}.
     double m[6] = { 1.0, sp, zp, sp * sp, sp * zp, zp * zp };
-    // psi_i(rp, zp) = sum_j Vinv[j, i] * m[j].
     for (int i = 0; i < 6; ++i) {
         double v = 0.0;
         for (int j = 0; j < 6; ++j) v += Vinv[j][i] * m[j];
@@ -487,26 +564,19 @@ void AxiHenrotteFE_P2_Triangle::CalcDShape(
 {
     double xi = ip(0);
     double eta = ip(1);
-    double rp = r[0] + (r[1] - r[0]) * xi + (r[2] - r[0]) * eta;
-    double zp = z[0] + (z[1] - z[0]) * xi + (z[2] - z[0]) * eta;
+    double rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta;
+    P2GeomMap(r, z, xi, eta, rp, zp, dr_dxi, dr_deta, dz_dxi, dz_deta);
     double sp = rp * rp;
-    // Gradients of monomials wrt physical (r, z).
-    //   d m_j / dr = (0, 2r, 0, 4 r^3, 2 r z, 0)
-    //   d m_j / dz = (0, 0, 1, 0, r^2, 2 z)
+    // d m_j / d(r, z) at the physical point.
     double dm_dr[6] = { 0.0, 2.0 * rp, 0.0, 4.0 * rp * sp, 2.0 * rp * zp, 0.0 };
     double dm_dz[6] = { 0.0, 0.0, 1.0, 0.0, sp, 2.0 * zp };
-    // Affine map Jacobian: dr/dxi, dr/deta, dz/dxi, dz/deta.
-    double dr_dxi = r[1] - r[0];
-    double dr_deta = r[2] - r[0];
-    double dz_dxi = z[1] - z[0];
-    double dz_deta = z[2] - z[0];
     for (int i = 0; i < 6; ++i) {
         double dpsi_dr = 0.0, dpsi_dz = 0.0;
         for (int j = 0; j < 6; ++j) {
             dpsi_dr += Vinv[j][i] * dm_dr[j];
             dpsi_dz += Vinv[j][i] * dm_dz[j];
         }
-        // Chain rule: d psi / d(xi, eta) = J^T * d psi / d(r, z).
+        // Chain rule: d psi / d(xi, eta) = (d(r, z)/d(xi, eta))^T * d psi/d(r, z).
         dshape(i, 0) = dpsi_dr * dr_dxi + dpsi_dz * dz_dxi;
         dshape(i, 1) = dpsi_dr * dr_deta + dpsi_dz * dz_deta;
     }
