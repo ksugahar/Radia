@@ -1976,7 +1976,10 @@ def convert_sol_to_msh(output_msh,
 # =====================================================================
 
 def export_filaments_msh(filament_paths, output_msh, *,
-                         currents=None, label="filament"):
+                         currents=None, label="filament",
+                         viz_subdivide_long=True,
+                         viz_subdivide_threshold=5.0,
+                         viz_subdivide_n=8):
     """Export PEEC filament paths as GMSH .msh v4.1 line elements.
 
     Each filament is a polyline of ((x1,y1,z1),(x2,y2,z2)) segments.
@@ -2001,8 +2004,54 @@ def export_filaments_msh(filament_paths, output_msh, *,
         currents: optional complex ndarray (N,) of per-filament currents.
             Written as |I| NodeData.
         label: Physical group base name (default "filament").
+        viz_subdivide_long: if True (default), subdivide segments
+            whose length exceeds ``viz_subdivide_threshold`` x the
+            per-filament median.  This is a VISUAL-ONLY refinement
+            (the PEEC solver kept the original ``filament_paths``);
+            without it, a coil whose chain has a lead-to-helix
+            endpoint jump (e.g. kubota 3turn coil's 62mm lead
+            segment) renders in GMSH as a single line that looks
+            like the filament leaves the conductor body.  Set False
+            to write raw chain segments.
+        viz_subdivide_threshold: factor of per-filament median above
+            which a segment is treated as a long jump (default 5.0).
+        viz_subdivide_n: number of sub-segments to split a long
+            segment into (default 8 -- coarse enough to keep the .msh
+            small, fine enough that GMSH renders a continuous line).
     """
     import numpy as np
+
+    if viz_subdivide_long:
+        filament_paths_viz = []
+        for path in filament_paths:
+            if not path:
+                filament_paths_viz.append(path)
+                continue
+            seglens = np.array(
+                [np.linalg.norm(np.subtract(s[1], s[0])) for s in path])
+            if len(seglens) == 0:
+                filament_paths_viz.append(path)
+                continue
+            med = float(np.median(seglens))
+            if med <= 0:
+                filament_paths_viz.append(path)
+                continue
+            thresh = viz_subdivide_threshold * med
+            new_path = []
+            for s in path:
+                p0 = np.asarray(s[0], dtype=np.float64)
+                p1 = np.asarray(s[1], dtype=np.float64)
+                d = float(np.linalg.norm(p1 - p0))
+                if d > thresh:
+                    n = int(viz_subdivide_n)
+                    for k in range(n):
+                        a = p0 + (p1 - p0) * (k / n)
+                        b = p0 + (p1 - p0) * ((k + 1) / n)
+                        new_path.append((tuple(a), tuple(b)))
+                else:
+                    new_path.append(s)
+            filament_paths_viz.append(new_path)
+        filament_paths = filament_paths_viz
 
     # Collect unique nodes and build element connectivity
     node_map = {}   # (x,y,z) rounded -> node_id (1-based)
