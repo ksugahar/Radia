@@ -223,6 +223,18 @@ def _build_bema_coil_mesh(args):
             f"labels {src_name!r}/{snk_name!r}.  Available boundaries: "
             f"{bnd_names}.{hint}  Set the source/sink sidesets in the "
             f"Cubit .jou before exporting the coil .vol.")
+
+    # compute_inductance_source_sink uses HDivSurface(mesh, order=0) +
+    # LaplaceSL — these assume a PURE SURFACE MESH (no volume elements).
+    # When the .vol has volume tetrahedra (the common Cubit export
+    # case), the saddle-point K matrix gains a 0-pivot from extra null
+    # modes that the existing D[:-1, :] deflation doesn't remove, and
+    # LU fails with "singular matrix detected".
+    # Convert volume → surface in-memory before returning.
+    # (Keiko mdx + LAB gapped_torus_2port both reproduced 2026-05-12.)
+    if mesh.ne > 0:
+        from surface_mesh_extract import _extract_surface_mesh_filtered
+        mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
     return mesh
 
 
