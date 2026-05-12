@@ -1,0 +1,44 @@
+{
+  "method": "Kameari + Kelvin (Sugahara two-sphere) on cuboid 5x2x1 vacuum",
+  "geometry_mm": [
+    5.0,
+    2.0,
+    1.0
+  ],
+  "R_K_mm": 25.0,
+  "OFFSET_mm": [
+    100.0,
+    0,
+    0
+  ],
+  "h_cond_mm": 0.5,
+  "h_air_mm": 4.0,
+  "h_kelvin_mm": 8.0,
+  "order": 1,
+  "ne": 12174,
+  "nv": 2703,
+  "R0_analytic": 2853745.5410225927,
+  "n_stages_attempted": 8,
+  "n_stages_completed": 2,
+  "stages": [
+    {
+      "n": 0,
+      "R_n": 2853745.541022535,
+      "L_n": 2210018339323040.5,
+      "tau_us": 774427259737797.6,
+      "energy_norm": 3.504166666666737e-07,
+      "sign_L": "+",
+      "sign_R": "+"
+    },
+    {
+      "n": 1,
+      "R_n": 182612.9231273946,
+      "L_n": -1261708856993009.2,
+      "tau_us": null,
+      "energy_norm": 5.476063702799275e-06,
+      "sign_L": "-",
+      "sign_R": "+"
+    }
+  ],
+  "elf_foster_tau_lead_us": 11.51
+}

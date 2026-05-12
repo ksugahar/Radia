@@ -1,0 +1,38 @@
+{
+  "method": "Nagamine-style verified Mathematica reference (2D rect, per unit length): S_1 closed form (Poisson + tanh, eq.52 generalized to a!=b), S_2..25 brute force at Mmax=999 with WorkingPrecision=100, Cauer-I via polynomial division at prec=100",
+  "geometry_mm": [5.0, 2.0],
+  "Mmax_higher_Sk": 999,
+  "WorkingPrecision": 100,
+  "S1_residual_truncation_M1bar": 31,
+  "M_0_closed_form": "sigma * a * b = 5.8e-4 (exact, per unit length)",
+  "L0_predicted_R0_squared_M1_nH_per_m": 31.33613947060433,
+  "comments": "S_1 cross-check: Nagamine vs brute Mmax=999 differ by ~1e-9 relative (brute tail-limited); Nagamine taken as truth. Previous Mmax=299/prec=50 reference gave L_0 = 31.33613762986299 nH/m (off by 1.84e-3 nH/m = 6e-5 relative).",
+  "R_Ohm_per_m": [
+    0.001724137931034483,
+    0.005252094470417638,
+    0.004573019762555098,
+    0.007537061336491676,
+    0.006648029616583380,
+    0.01155107204665852,
+    0.01250535676028344,
+    0.01203902352053383,
+    0.009698801664788287,
+    0.01464706482177232,
+    0.008546835591353295,
+    0.01249333585877264
+  ],
+  "L_nH_per_m": [
+    31.33613947060433,
+    19.13532576367513,
+    22.79012941144125,
+    13.16595525638899,
+    14.74064732476663,
+    7.985067705820403,
+    10.57730273971740,
+    8.301132306504542,
+    11.07580067611906,
+    9.225440702191695,
+    9.038563737192535,
+    9.573868149681500
+  ]
+}

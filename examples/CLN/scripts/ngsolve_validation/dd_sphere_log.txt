@@ -1,0 +1,55 @@
+========================================================================
+DD axisym VIM sphere Cu R=10mm
+========================================================================
+
+  N_rho=15, N_theta=18, total 270 cells
+  N=270 cells, n_q_total=1080, n_pairs=1166400
+  Computing G(qi, qj) via mpmath elliptic...
+    qi=0/1080 (0%), elapsed 0s
+    qi=54/1080 (5%), elapsed 13s
+    qi=108/1080 (10%), elapsed 26s
+    qi=162/1080 (15%), elapsed 40s
+    qi=216/1080 (20%), elapsed 53s
+    qi=270/1080 (25%), elapsed 67s
+    qi=324/1080 (30%), elapsed 80s
+    qi=378/1080 (35%), elapsed 94s
+    qi=432/1080 (40%), elapsed 107s
+    qi=486/1080 (45%), elapsed 121s
+    qi=540/1080 (50%), elapsed 134s
+    qi=594/1080 (55%), elapsed 148s
+    qi=648/1080 (60%), elapsed 162s
+    qi=702/1080 (65%), elapsed 175s
+    qi=756/1080 (70%), elapsed 189s
+    qi=810/1080 (75%), elapsed 203s
+    qi=864/1080 (80%), elapsed 217s
+    qi=918/1080 (85%), elapsed 230s
+    qi=972/1080 (90%), elapsed 244s
+    qi=1026/1080 (95%), elapsed 258s
+  K assembly: 271.4s
+  Total assembly: 271.5s
+  K_lo/K_hi: 1.10e-16
+    Computing eigenvalues of symmetric n=270 matrix in mpmath...
+    mpmath eig: 784.89s
+  mpmath eigh: 842.2s
+
+  Top 5 Foster:
+    rank=0: tau=761.1226 us, g²=3.8886e-11
+    rank=1: tau=201.5606 us, g²=2.3345e-12
+    rank=2: tau=97.8836 us, g²=4.2378e-13
+    rank=3: tau=61.8909 us, g²=1.1530e-13
+    rank=4: tau=45.6277 us, g²=3.6284e-14
+
+  Cauer rungs (DD sphere axisym):
+    k            R_2k          L_2k+1   tau_pair us
+    0      2.3918e+10      1.7229e+07      720.3576
+    1      5.5775e+11      1.0028e+08      179.7927
+    2      6.0508e+12      5.5420e+08       91.5912
+    3      7.5561e+13      4.7458e+09       62.8072
+    4      1.6003e+15      7.9021e+10       49.3787
+    5      2.6455e+16      4.3518e+12      164.4944
+    6      4.8772e+17      1.7098e+15     3505.7021
+    7     -4.4171e+17      2.8201e+13      -63.8438
+    8     -6.7064e+16     -5.7794e+13      861.7772
+    9      1.3936e+17     -2.6256e+14    -1883.9690
+
+Saved: W:\30_CauerLadderNetwork\2026_04_01_長方形CLN\ngsolve_validation\dd_sphere_axisym_Nrho15_Nth18_results.json
