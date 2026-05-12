@@ -65,6 +65,12 @@ python arc_current_with_magnet.py
 |-----------|---------|-------------|
 | [universal_relaxation_network/](universal_relaxation_network/) | 24 | KAN-inspired URN for BH curves, SPICE time-domain |
 
+### Eddy-current Network Identification
+
+| Directory | Scripts | Description |
+|-----------|---------|-------------|
+| [CLN/](CLN/) | — | Cauer Ladder Network research line: IGTE 2026 sphere digest (DD GPU pipeline pushes Cauer-extraction precision wall from FP64 stage 4-5 to DD stage 12+); cross-linked with the `cln_sphere_dd_pipeline` MCP tool. |
+
 ---
 
 ## Example Selection Guide
