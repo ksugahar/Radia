@@ -272,6 +272,10 @@ class IHPanel(ModePanel):
         super().__init__(parent)
         self._vol_mats = None   # populated by window on .vol load
         self._vol_bnds = None
+        # Status messages surfaced by _update_status when a widget
+        # value was silently clamped by a method switch or a
+        # cross-session restore.  None = no message.
+        self._fes_clamp_msg = None
         self._build_ui()
 
     # ----------------------- UI construction -----------------------
@@ -556,7 +560,46 @@ class IHPanel(ModePanel):
         is_esim = name.startswith("Nonlinear ESIM")
         for key in ("bh_file", "esim_max_iter", "esim_tol"):
             self._set_row_visible(key, is_esim)
+        # Re-apply the PEEC_FEM_KELVIN esim_tol hide (it's the one
+        # ESIM mode that has no --esim-tol equivalent on the calc
+        # side, so we must keep that row invisible even when ESIM is
+        # selected).
+        if is_esim and self.val("method") == METHOD_PEEC_FEM_KELVIN:
+            self._set_row_visible("esim_tol", False)
         self._update_status()
+
+    def restore_state(self, state):
+        """Override to detect cross-session fes_order silent clamp.
+
+        ModePanel.restore_state walks widgets in dict-insertion order;
+        the method combo is restored before fes_order and its
+        currentTextChanged signal fires _on_method_changed which sets
+        the fes_order spin's max to 2 for weak-coupled methods.  When
+        fes_order=3 was saved against a weak method, Qt then silently
+        clamps the value to 2.  We compare the saved value to the
+        actual restored value and surface a status warning when they
+        differ.
+        """
+        super().restore_state(state)
+        if not state:
+            return
+        saved_fes = state.get("fes_order")
+        if saved_fes is None or "fes_order" not in self._widgets:
+            return
+        try:
+            target = int(saved_fes)
+        except (ValueError, TypeError):
+            return
+        actual = self._widgets["fes_order"].value()
+        if target > actual:
+            # Append to whatever _on_method_changed already set.
+            note = (f"fes_order saved={target} -> restored={actual} "
+                    f"(current method max).  Switch to a non-weak "
+                    f"method to use p={target} again.")
+            self._fes_clamp_msg = (
+                note if not self._fes_clamp_msg
+                else f"{self._fes_clamp_msg}; {note}")
+            self._update_status()
 
     # ----------------------- Method + visibility -----------------------
 
@@ -633,7 +676,19 @@ class IHPanel(ModePanel):
         # fire an argparse error.  FEM-side modes (PEEC+FEM+Kelvin,
         # FEM-full) accept --fes-order up to 3.
         fes_spin = self._widgets["fes_order"]
-        fes_spin.setMaximum(2 if is_weak else 3)
+        new_max = 2 if is_weak else 3
+        old_val = fes_spin.value()
+        fes_spin.setMaximum(new_max)
+        # Qt silently clamps spin.value() when setMaximum drops it
+        # below the current value.  Surface the demotion in the
+        # status line so the user sees it (otherwise switching from
+        # FEM-full p=3 to PEEC_BEM would silently demote to p=2).
+        if old_val > new_max:
+            self._fes_clamp_msg = (
+                f"fes_order {old_val} -> {new_max} for {method} "
+                f"(weak-coupled BEM is choices=[1,2])")
+        else:
+            self._fes_clamp_msg = None
         # Workpiece geometry (.vol) is shown for all modes that need a
         # workpiece mesh; the legacy top-level Model row is gone.
         self._set_row_visible("_sec_wp_vol", needs_wp)
@@ -651,6 +706,15 @@ class IHPanel(ModePanel):
         # needs_wp is True.
         if needs_wp:
             self._on_impedance_changed(self.val("impedance_model"))
+
+        # esim_tol is forwarded via --esim-tol by calc_inductance.py
+        # (PEEC_BEM / BEMA_BEM) and calc_fem_coilmesh.py (FEM_FULL),
+        # but calc_fem_kelvin.py (PEEC_FEM_KELVIN) only accepts
+        # --max-iter -- it has no --esim-tol equivalent.  Hiding the
+        # row in PEEC_FEM_KELVIN avoids the user setting a tolerance
+        # that the solver never sees.
+        if is_peec_fem_k:
+            self._set_row_visible("esim_tol", False)
 
         self._update_status()
         self._emit_validation()
@@ -692,6 +756,13 @@ class IHPanel(ModePanel):
                         "</span>")
             except (ValueError, ZeroDivisionError):
                 pass
+
+        # Surface any spin-clamp warning (cross-session restore or
+        # in-session method switch demoted fes_order silently).
+        if self._fes_clamp_msg:
+            lines.append(
+                f"<span style='color:#A80;'>warn: "
+                f"{self._fes_clamp_msg}</span>")
 
         self._status_label.setText("<br>".join(lines))
 
@@ -922,6 +993,10 @@ class IHPanel(ModePanel):
         if not os.path.isfile(step):
             raise ValueError(f"STEP file not found: {step}")
         solver = self._FEM_SOLVER_MAP.get(self.val("solver"), "pardiso")
+        # The method name promises "+ Kelvin" so enforce that the .vol
+        # actually has a kelvin material with periodic ID -- otherwise
+        # calc_fem_kelvin silently downgrades to reg-only gauge
+        # truncation (RISK 3 fix, 2026-05-12).
         cmd = [_PYTHON, calc_script("calc_fem_kelvin.py"),
                "--vol", vol_path,
                "--fes-order", str(self.val("fes_order")),
@@ -939,6 +1014,7 @@ class IHPanel(ModePanel):
                "--peec-nwinc", str(self.val("peec_nwinc")),
                "--peec-nhinc", str(self.val("peec_nhinc")),
                "--peec-n-peri", str(self.val("peec_n_peri")),
+               "--require-kelvin",
                "--msh-output", msh_output(vol_path, "_fem_kelvin"),
                "--output", json_output(vol_path, "_fem_kelvin")]
         if self._impedance_model_cli() == "esim":
@@ -952,6 +1028,9 @@ class IHPanel(ModePanel):
 
     def _build_fem_coilmesh_command(self, vol_path):
         solver = self._FEM_SOLVER_MAP.get(self.val("solver"), "pardiso")
+        # METHOD_FEM_FULL's label is "Full simulation (FEM A-V + wp SIBC
+        # + Kelvin)" -- enforce that the .vol actually carries the
+        # Kelvin extension (RISK 3 fix, 2026-05-12).
         cmd = [_PYTHON, calc_script("calc_fem_coilmesh.py"),
                "--vol", vol_path,
                "--frequency", self.val("freq"),
@@ -967,6 +1046,7 @@ class IHPanel(ModePanel):
                "--sink-bnd", "sink",
                "--coil-mat", "coil",
                "--impedance-model", self._impedance_model_cli(),
+               "--require-kelvin",
                "--msh-output", msh_output(vol_path, "_fem_full"),
                "--output", json_output(vol_path, "_fem_full")]
         if self._impedance_model_cli() == "esim":
