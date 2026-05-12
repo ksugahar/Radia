@@ -461,6 +461,39 @@ def solve_fem(vol_file="", fes_order=1,
                         f_vec[d] += Ik * w01[q] * dot
 
         t_li = time.perf_counter() - t0_li
+        # Total quadrature points attempted: sum over filaments and
+        # segments of n_quad_line.  If 100% of them were skipped
+        # (every filament point lies outside the volume mesh), the
+        # RHS will be exactly zero and the downstream solve will
+        # silently return gfu=0 → all P_total, L, q_surf evaluate to
+        # zero.  This is a frequent setup error: the workpiece .vol
+        # mesh doesn't include the coil region.
+        # Detect and abort BEFORE solving so the user sees a clear,
+        # actionable error instead of "AMS broken".
+        n_seg_total = sum(len(p) for p in fil_paths)
+        n_quad_total = n_seg_total * n_quad_line
+        if n_quad_total > 0 and n_skip == n_quad_total:
+            return {
+                "error": (
+                    f"PEEC line-integral RHS is zero: every one of "
+                    f"the {n_skip}/{n_quad_total} filament "
+                    f"quadrature points falls OUTSIDE the workpiece "
+                    f".vol mesh.  The coil STEP "
+                    f"({os.path.basename(peec_step)}) must lie "
+                    f"inside the air region of the workpiece .vol "
+                    f"({os.path.basename(vol_file)}).  Either: (a) extend "
+                    f"the .vol's air region (Cubit .jou) to enclose "
+                    f"the coil, OR (b) use a different method "
+                    f"(PEEC inductance / weak-coupled BEM) that "
+                    f"does NOT require the coil to be inside the "
+                    f"workpiece mesh.")
+            }
+        if n_quad_total > 0 and n_skip > 0:
+            pct = 100.0 * n_skip / n_quad_total
+            _log(f"PEEC:WARN {pct:.1f}% of quadrature points are "
+                 f"outside the workpiece mesh ({n_skip}/"
+                 f"{n_quad_total}).  The coil may extend beyond the "
+                 f"air region; check .vol geometry.")
         _log(f"PEEC:line-integral RHS assembled ({t_li:.1f}s, "
              f"{n_skip} skipped)")
         # Mark as total-field (no A_s to add later)
@@ -609,6 +642,38 @@ def solve_fem(vol_file="", fes_order=1,
                                        printrates=False)
                 gfu.vec.data = cocr * rhs_vec
             _log(f"AMS:COCR iters={cocr.iterations}")
+
+            # Sanity check: COCR can spuriously "converge" in 0
+            # iterations when the synthetic-air-mass preconditioner
+            # (line 582 above) is so dominant that pre_ams * b is
+            # below the tolerance threshold.  The result is gfu == 0
+            # everywhere — physics broken, downstream P_total / L /
+            # q_surf all evaluate to 0.  Detect this case and refuse
+            # rather than emit silently-wrong numbers.
+            # (kubota mdx report 2026-05-12: 3turnCoil_work, no
+            # Kelvin, SIBC workpiece; iters=0, all stats zero.)
+            import numpy as _np
+            sol_norm = float(_np.linalg.norm(
+                _np.asarray(gfu.vec.FV().NumPy())))
+            rhs_norm = float(_np.linalg.norm(
+                _np.asarray(rhs_vec.FV().NumPy())))
+            if cocr.iterations == 0 or (
+                    rhs_norm > 1e-30 and sol_norm / rhs_norm < 1e-30):
+                return {
+                    "error": (
+                        f"solver=ams produced a null solution "
+                        f"(iters={cocr.iterations}, "
+                        f"|gfu|={sol_norm:.3e}, |rhs|={rhs_norm:.3e}).  "
+                        f"The Compact AMS preconditioner is not "
+                        f"well-conditioned for SIBC-only problems "
+                        f"(workpiece is a hole, no volumetric "
+                        f"conductor mass).  Re-run with "
+                        f"--solver bddc (iterative, supports any "
+                        f"order) or --solver pardiso (direct, "
+                        f"memory-heavy).  Tracked: AMS works for "
+                        f"problems with a volumetric conductor "
+                        f"(non-SIBC).")
+                }
         elif solver == "iccg":
             # Shifted ICCG (IC preconditioned CG, single-thread efficient)
             a_bf.Assemble()
