@@ -51,7 +51,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                        fes_order=1, solver="pardiso",
                        sibc_bnd="sibc",
                        source_bnd="source", sink_bnd="sink",
-                       coil_mat="coil"):
+                       coil_mat="coil",
+                       msh_output=""):
     """A-V formulation for volumetric coil + SIBC workpiece + Kelvin."""
     import radia  # noqa: F401  DLL path setup
 
@@ -263,6 +264,149 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     P_total = P_coil + P_wp
     L_total = L_vol + L_skin_wp
 
+    # ============================================================
+    # Field export to GMSH .msh: B + q_surf + J_surf (mirror of
+    # calc_fem_kelvin.py save block).  Without this, the panel's
+    # Open GMSH button shows a mesh with NO views attached -- kubota
+    # reported "qsurf not in view list" for FEM-full because that
+    # mode had never produced any field views (calc_fem_coilmesh
+    # used to call vol2msh with an empty fields list).
+    # ============================================================
+    q_surf_max = None
+    q_surf_p95 = None
+    q_surf_mean = None
+    P_total_check = None
+    qsurf_sol_path = ""
+    gmsh_file = ""
+    msh_export_error = None
+    if msh_output:
+        from ngsolve import HDiv
+        try:
+            H_t_sq_cf = (omega / abs(Z_s_wp)) ** 2 * At_sq
+            q_surf_cf = 0.5 * Z_s_wp.real * H_t_sq_cf
+            P_total_check = float(
+                Integrate(q_surf_cf, mesh, BND, definedon=wp_region).real)
+            q_surf_mean = P_total_check / max(A_wp, 1e-30)
+            # H1 scalar field; non-wp DOFs remain at 0 by .Set's
+            # definedon=wp_region restriction.  Thermal Phase B loads
+            # this same .sol as the Neumann BC source.
+            fes_q = H1(mesh, order=fes_order)
+            gf_q = GridFunction(fes_q)
+            gf_q.vec[:] = 0
+            gf_q.Set(q_surf_cf, definedon=wp_region)
+            # Stats via mask trick (matches calc_fem_kelvin).
+            mask_gf = GridFunction(fes_q)
+            mask_gf.vec[:] = 0
+            mask_gf.Set(CF(1.0), definedon=wp_region)
+            mask_arr = np.asarray(mask_gf.vec.FV().NumPy())
+            q_arr = np.asarray(gf_q.vec.FV().NumPy())
+            on_wp = mask_arr > 0.5
+            if np.any(on_wp):
+                vals = q_arr[on_wp]
+                q_surf_max = float(np.max(vals))
+                q_surf_p95 = float(np.percentile(vals, 95))
+            else:
+                q_surf_max = 0.0
+                q_surf_p95 = 0.0
+            progress("FEM",
+                     f"Q_SURF max={q_surf_max:.3e} mean={q_surf_mean:.3e} "
+                     f"p95={q_surf_p95:.3e} W/m^2 "
+                     f"(P_check={P_total_check:.4e} vs P_total={P_total:.4e})")
+        except Exception as e:
+            progress("FEM", f"Q_SURF stats failed: {type(e).__name__}: {e}")
+            gf_q = None
+        # |J_s| = |H_t| on wp surface (scalar) and Re(J_s) (vector).
+        gf_J = None
+        gf_J_vec = None
+        try:
+            J_mag_cf = ngsqrt(At_sq) * (omega / abs(Z_s_wp))
+            fes_J = H1(mesh, order=fes_order)
+            gf_J = GridFunction(fes_J)
+            gf_J.vec[:] = 0
+            gf_J.Set(J_mag_cf, definedon=wp_region)
+        except Exception as e:
+            progress("FEM",
+                     f"J_SURF scalar gen failed: {type(e).__name__}: {e}")
+        try:
+            n_bnd_v = specialcf.normal(3)
+            A_dot_n = sum(gf_A[i] * n_bnd_v[i] for i in range(3))
+            A_t_vec = CF(tuple(
+                gf_A[i] - A_dot_n * n_bnd_v[i] for i in range(3)))
+            zs_sq = Z_s_wp.real ** 2 + Z_s_wp.imag ** 2
+            re_coef = -omega * Z_s_wp.imag / zs_sq
+            im_coef = -omega * Z_s_wp.real / zs_sq
+            J_s_re_cf = CF(tuple(
+                re_coef * A_t_vec[i].real - im_coef * A_t_vec[i].imag
+                for i in range(3)))
+            fes_J_vec = H1(mesh, order=fes_order, dim=3)
+            gf_J_vec = GridFunction(fes_J_vec)
+            gf_J_vec.vec[:] = 0
+            gf_J_vec.Set(J_s_re_cf, definedon=wp_region)
+        except Exception as e:
+            progress("FEM",
+                     f"J_SURF vector gen failed: {type(e).__name__}: {e}")
+            gf_J_vec = None
+        # Save .vol + .sol pairs and build the GMSH .msh via vol2msh.
+        try:
+            import sys as _sys
+            import os as _os
+            radia_src = _os.path.dirname(_os.path.abspath(__file__)) + "/.."
+            if _os.path.abspath(radia_src) not in _sys.path:
+                _sys.path.insert(0, _os.path.abspath(radia_src))
+            from gmsh_post_export import save_vol_sol_pair, vol2msh
+            base_dir = _os.path.dirname(_os.path.abspath(msh_output))
+            name_stem = _os.path.splitext(_os.path.basename(msh_output))[0]
+            # Real-component B field (HDiv order=1 with H1(dim=3) fallback).
+            B_cf = CF(tuple(curl(gf_A)[i].real for i in range(3)))
+            fes_B = HDiv(mesh, order=1)
+            gf_B = GridFunction(fes_B)
+            try:
+                gf_B.Set(B_cf)
+            except Exception:
+                fes_B = H1(mesh, order=1, dim=3)
+                gf_B = GridFunction(fes_B)
+                gf_B.Set(B_cf)
+            vol_B = _os.path.join(base_dir, f"{name_stem}_fem.vol").replace("\\", "/")
+            sol_B = _os.path.join(base_dir, f"{name_stem}_B.sol").replace("\\", "/")
+            save_vol_sol_pair(vol_B, sol_B, mesh.ngmesh, gf_B)
+            sol_entries = [
+                {"sol": sol_B, "fes": type(fes_B).__name__,
+                 "fes_order": 1,
+                 "fes_dim": getattr(fes_B, "dim", 1),
+                 "name": "B", "ncomp": 3},
+            ]
+            if gf_q is not None:
+                sol_Q = _os.path.join(base_dir,
+                                      f"{name_stem}_qsurf.sol").replace("\\", "/")
+                gf_q.Save(sol_Q)
+                qsurf_sol_path = sol_Q
+                sol_entries.append(
+                    {"sol": sol_Q, "fes": "H1", "fes_order": fes_order,
+                     "fes_dim": 1, "name": "q_surf", "ncomp": 1})
+            if gf_J is not None:
+                sol_J = _os.path.join(base_dir,
+                                      f"{name_stem}_Jsurf.sol").replace("\\", "/")
+                gf_J.Save(sol_J)
+                sol_entries.append(
+                    {"sol": sol_J, "fes": "H1", "fes_order": fes_order,
+                     "fes_dim": 1, "name": "J_surf_Am", "ncomp": 1})
+            if gf_J_vec is not None:
+                sol_Jv = _os.path.join(base_dir,
+                                       f"{name_stem}_Jvec.sol").replace("\\", "/")
+                gf_J_vec.Save(sol_Jv)
+                sol_entries.append(
+                    {"sol": sol_Jv, "fes": "H1", "fes_order": fes_order,
+                     "fes_dim": 3, "name": "J_surf_vec", "ncomp": 3})
+            vol2msh(msh_output, vol_B, sol_entries)
+            gmsh_file = msh_output
+            progress("FEM",
+                     f"GMSH wrote {_os.path.basename(msh_output)} "
+                     f"({len(sol_entries)} views: "
+                     f"{', '.join(e['name'] for e in sol_entries)})")
+        except Exception as e:
+            msh_export_error = f"{type(e).__name__}: {e}"
+            progress("FEM", f"GMSH export failed: {msh_export_error}")
+
     return {
         "status": "ok",
         "method": "FEM A-V (coil meshed + wp SIBC + Kelvin)",
@@ -292,6 +436,15 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         "coil_h_max_mm": coil_h_max * 1e3,
         "Z_s_wp_real": float(Z_s_wp.real),
         "Z_s_wp_imag": float(Z_s_wp.imag),
+        # Surface heat-flux stats (Phase B thermal input)
+        "q_surf_max": q_surf_max,
+        "q_surf_mean": q_surf_mean,
+        "q_surf_p95": q_surf_p95,
+        "P_total_check": P_total_check,
+        # File outputs
+        "msh_file": gmsh_file,
+        "qsurf_sol": qsurf_sol_path,
+        "msh_export_error": msh_export_error,
         # Timings
         "t_load_s": float(t_load),
         "t_assembly_s": float(t_asm),
@@ -365,22 +518,8 @@ def main():
             source_bnd=args.source_bnd,
             sink_bnd=args.sink_bnd,
             coil_mat=args.coil_mat,
+            msh_output=args.msh_output,
         )
-        # GMSH export (mesh geometry, no fields yet — minimum for the
-        # panel's OpenGmsh button to activate). Field export (B, J)
-        # is a future enhancement; the .vol+.sol pair is preserved
-        # by NGSolve so .msh can be regenerated post-hoc with vol2msh.
-        if args.msh_output and isinstance(result, dict) and "error" not in result:
-            try:
-                import sys, os as _os
-                radia_src = _os.path.dirname(_os.path.abspath(__file__)) + "/.."
-                if _os.path.abspath(radia_src) not in sys.path:
-                    sys.path.insert(0, _os.path.abspath(radia_src))
-                from gmsh_post_export import vol2msh
-                vol2msh(args.msh_output, args.vol, [])
-                result["msh_file"] = args.msh_output
-            except Exception as e:
-                result["msh_export_error"] = str(e)
         return result
 
     calc_main(run, parser)
