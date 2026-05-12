@@ -197,6 +197,68 @@ void AxiHenrotteFESpace::GetDofNrs(ElementId ei, Array<DofId> & dnums) const {
     dnums[8] = nv + ne + ei.Nr();
 }
 
+void AxiHenrotteFESpace::GetVertexDofNrs(int vnr, Array<DofId> & dnums) const {
+    dnums.SetSize(0);
+    dnums.Append(vnr);
+}
+
+void AxiHenrotteFESpace::GetEdgeDofNrs(int ednr, Array<DofId> & dnums) const {
+    dnums.SetSize(0);
+    if (axi_order == 1) return;  // order==1 has no edge DOF
+    const int nv = ma->GetNV();
+    dnums.Append(nv + ednr);
+}
+
+void AxiHenrotteFESpace::GetFaceDofNrs(int fanr, Array<DofId> & dnums) const {
+    dnums.SetSize(0);
+    if (axi_order == 1) return;
+    // 2D mesh: face-DOF slot per element (P2 trig: harmless unused slot,
+    // Q2 quad: face-center DOF). Periodic 2D normally doesn't query NT_FACE
+    // but we expose it for symmetry.
+    const int nv = ma->GetNV();
+    const int ne = ma->GetNEdges();
+    dnums.Append(nv + ne + fanr);
+}
+
+void AxiHenrotteFESpace::GetDofNrs(NodeId ni, Array<DofId> & dnums) const {
+    // Needed for ngsolve.Periodic(H1Henrotte(...)) to discover which DOFs
+    // sit on each vertex / edge participating in a PERIODIC identification.
+    // PeriodicFESpace::Update walks identifications and calls
+    // space->GetDofNrs(NodeId(NT_VERTEX|NT_EDGE|NT_FACE, idx), dnums) on
+    // the wrapped space; the base FESpace default returns an empty array
+    // and silently disables coupling.
+    //
+    // DOF layout mirrors AxiHenrotteFESpace::Update():
+    //   order==1: dnums[i] = vertex i,                  range [0,  NV)
+    //   order==2: dnums[i] = vertex i,                  range [0,  NV)
+    //             dnums[NV + j] = edge midnode j,       range [NV, NV+NE)
+    //             dnums[NV + NE + k] = face slot k      range [NV+NE, NV+NE+NEl)
+    //                                                   (P2 trig: unused slot,
+    //                                                    Q2 quad: face-center DOF)
+    // Periodic identification in 2D only walks NT_VERTEX and NT_EDGE, so the
+    // face slot is never queried for 2D periodicity; we expose it anyway in
+    // case a future 3D-axisymmetric extension wires Q2 face DOFs to NT_FACE.
+    dnums.SetSize(0);
+    if (axi_order == 1) {
+        if (ni.GetType() == NT_VERTEX)
+            dnums.Append(ni.GetNr());
+        return;
+    }
+    // axi_order == 2
+    const int nv = ma->GetNV();
+    const int ne = ma->GetNEdges();
+    if (ni.GetType() == NT_VERTEX) {
+        dnums.Append(ni.GetNr());
+    } else if (ni.GetType() == NT_EDGE) {
+        dnums.Append(nv + ni.GetNr());
+    } else if (ni.GetType() == NT_FACE) {
+        // 2D-axisymmetric meshes treat each surface element as a "face" node;
+        // P2 trig leaves the slot unused (harmless), Q2 quad uses it for the
+        // face-center DOF.
+        dnums.Append(nv + ne + ni.GetNr());
+    }
+}
+
 // Free creator function (so we can pass it as a function pointer to AddFESpace).
 static shared_ptr<FESpace> CreateAxiHenrotteFESpace(
     shared_ptr<MeshAccess> ma, const Flags & flags)

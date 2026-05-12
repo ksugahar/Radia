@@ -34,6 +34,19 @@ public:
     void Update() override;
     FiniteElement & GetFE(ElementId ei, Allocator & lh) const override;
     void GetDofNrs(ElementId ei, Array<DofId> & dnums) const override;
+    // NodeId overload — needed so ngsolve.Periodic(H1Henrotte(...)) can
+    // discover which DOFs sit on each vertex / edge that participates in
+    // a PERIODIC identification, and couple them. The base FESpace's
+    // default is empty (returns 0 DOFs), which silently disables Periodic
+    // coupling. Phase B3 (2026-05-12).
+    void GetDofNrs(NodeId ni, Array<DofId> & dnums) const override;
+    // Per-node-type variants — base FESpace::GetDofNrs(NodeId) default
+    // implementation actually dispatches to these by node-type, so we
+    // override each one explicitly in addition to the unified NodeId
+    // variant.
+    void GetVertexDofNrs(int vnr, Array<DofId> & dnums) const override;
+    void GetEdgeDofNrs(int ednr, Array<DofId> & dnums) const override;
+    void GetFaceDofNrs(int fanr, Array<DofId> & dnums) const override;
 
     string GetClassName() const override { return "AxiHenrotteFESpace"; }
 };

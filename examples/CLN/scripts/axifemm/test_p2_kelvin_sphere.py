@@ -1,111 +1,117 @@
-"""Phase B3 axifemm + Kelvin transformation sphere benchmark (STUB).
+"""Phase B3 axifemm + Kelvin transformation sphere benchmark.
 
-STATUS (2026-05-12): Phase B3 stub. The geometry construction via OCC
-boolean ("kelvin = big - small") collapses the two domains into a single
-material, so this script cannot yet assign per-region mu_eff. The
-SplineGeometry path used here works for 2 domains but uses parabolic
-spline3 Bezier arcs (not true circles), so mesh geometry has its own
-error. Full Phase B3 needs either:
-  - OCC variant that preserves material names through boolean ops, or
-  - per-quadrature-point mu evaluation so even constant-mu in a Kelvin
-    cell is accurate (because mu varies a lot within a cell near the
-    Kelvin center).
-The radia.kelvin_source.kelvin_mu_factor_axisym_cf helper is wired
-correctly; the bottleneck is geometry + material assignment.
+Compares Cu sphere leading time-constant tau_1 vs Stoll analytical
+(mu_0 sigma R^2 / pi^2 = 738.48 us at R = 10 mm) using:
 
+  - canonical z-offset Kelvin geometry (per radia-mcp kelvin knowledge
+    base; same pattern as examples/CLN/scripts/ngsolve_validation/
+    sphere_axisym_kelvin.py which uses NGSolve H1 + SymbolicBFI)
+  - axifemm P2 triangle FE (AxiHenrotteStiffnessBFI + Periodic)
+  - mu_eff = mu_0 * (R_K / rho')^2 in the "kelvin" material region
+    via radia.kelvin_source.kelvin_mu_factor_axisym_cf
 
+KNOWN axifemm caveat (logged for Phase B3.2): AxiHenrotteStiffnessBFI
+samples mu at the element CENTROID (axi_henrotte_integrators.cpp:710),
+so the (R_K/rho')^2 modulation -- which diverges at rho'=0 (=GND vertex)
+-- has discretisation error proportional to the cell variance of
+(R_K/rho')^2. To upper-bound that error we (a) put the Kelvin center
+at z_offset = 5*R_K (i.e. far from the conductor), (b) refine the
+"kelvin" face with maxh_kelvin so cells near the GND vertex are small.
+If even refined results stay > a few percent off Stoll, the resolution
+will need the integrator API extended to per-quadpt mu evaluation
+(Phase B3.2 work item).
 
-Compares Cu sphere benchmark via axifemm-P2 with vs without the Kelvin
-transformation. The Kelvin route should eliminate the finite-air-box
-truncation error and converge to Stoll's analytical
-tau_1 = mu_0 sigma R^2 / pi^2 = 738.48 us.
-
-Setup (axisym, half-disk):
-  Conductor:   r^2 + z^2 < R_sphere
-  Inner air:   R_sphere <= rho <= R_bond  (small buffer to keep mesh-aspect
-                                            ratio sane)
-  Kelvin air:  rho <= R_bond (the Kelvin sphere; "exterior" mapped to
-                              "interior" by inversion)
-
-  Material assignment:
-    conductor: mu_0, sigma_Cu
-    air_phys:  mu_0, 0
-    air_kelv:  mu_eff = mu_0 * (R_bond / rho')^2, 0  [varying]
-
-Per-element centroid sampling means the Kelvin factor is constant
-within each cell -- discretisation error scales with the variance of
-(R_bond/rho)^2 across the cell. Refine near rho' = 0 for accuracy.
-
-Limitations of this Phase B3 stub:
-  - Centroid mu-sampling caps accuracy; for high precision the
-    integrator needs per-quadrature-point mu evaluation.
-  - Dirichlet at rho' = 0 (Kelvin center = physical infinity) is
-    approximated by Dirichlet on a small mesh disc; alternatively
-    Dirichlet on the outermost Kelvin point.
-
-Cu sphere R=10 mm vs Stoll 738.48 us.
+Mesh strategy: conductor (sphere half-disc, R_SPHERE) sits in
+"air_inner" half-disc of radius R_K centered at origin. add_kelvin_
+2d_axisym appends the "kelvin" half-disc at z_offset = 5*R_K, names
+"axis"/"axis_ext"/"GND" boundaries, and Periodic-identifies the two
+arcs.
 """
 from __future__ import annotations
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
+sys.path.insert(0, r"S:/Radia/01_GitHub/src/radia")
 
-from math import pi
+from math import pi, sqrt as msqrt
 import time
 import numpy as np
 import scipy.sparse as sp
 import scipy.linalg as sla
 
-from netgen.geom2d import SplineGeometry
+from netgen.occ import (
+    WorkPlane, MoveTo, Vertex, Glue, OCCGeometry, Pnt,
+)
 from ngsolve import (
-    Mesh, BilinearForm, CoefficientFunction, TaskManager, ngsglobals,
-    x, y, sqrt, IfPos,
+    Mesh, BilinearForm, CoefficientFunction, Periodic, TaskManager, ngsglobals,
 )
 from radia.radia_axifemm import (
     H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
 )
+from radia.panels.add_kelvin import add_kelvin_2d_axisym
+from radia.kelvin_source import kelvin_mu_factor_axisym_cf, build_material_cf
 
 R_SPHERE = 10.0e-3
-R_BOND = 30.0e-3      # bond surface where physical air meets Kelvin air
+R_K = 50.0e-3
 SIGMA_CU = 5.8e7
 MU0 = 4 * pi * 1e-7
 STOLL_TAU_1 = MU0 * SIGMA_CU * R_SPHERE ** 2 / (pi ** 2)
 
 
-def build_geometry_with_kelvin():
-    """Two-domain SplineGeometry: conductor half-disk + Kelvin annulus.
+def build_interior_half_disk(maxh_cond=1.0e-3):
+    """Build interior half-disc (conductor + air_inner) on x >= 0.
 
-    Uses straight-line approximations of the half-circles (spline3 quadratic
-    Bezier is NOT a true circle). For curved geometry, OCC boolean is the
-    right route but the material-tagging-through-boolean is fragile -- see
-    test_p2_kelvin_sphere_occ.py for the OCC variant once we can keep the
-    material names through the boolean operation.
+    Outer arc named "kelvin_int", axis "axis", sphere boundary "sphere_bnd".
+    Conductor face material is "conductor"; surrounding annulus is
+    "air_inner".
     """
-    geo = SplineGeometry()
-    # Conductor half-disk vertices
-    p_in_bot = geo.AppendPoint(0.0, -R_SPHERE)
-    p_in_apex = geo.AppendPoint(R_SPHERE, 0.0)
-    p_in_top = geo.AppendPoint(0.0, R_SPHERE)
-    p_out_bot = geo.AppendPoint(0.0, -R_BOND)
-    p_out_apex = geo.AppendPoint(R_BOND, 0.0)
-    p_out_top = geo.AppendPoint(0.0, R_BOND)
+    # Full inner disc (kelvin radius) and full sphere disc (both centered
+    # at origin). Cut with rectangle at x < 0 to get half-discs.
+    wp_inner = WorkPlane()
+    inner_full = wp_inner.Circle(R_K).Face()
 
-    # Inner arc (conductor boundary). leftdomain=1 (conductor), rightdomain=2 (kelvin).
-    geo.Append(["spline3", p_in_bot, p_in_apex, p_in_top],
-               bc="sphereBND", leftdomain=1, rightdomain=2)
-    # Outer arc (Kelvin outer = physical infinity after inversion).
-    geo.Append(["spline3", p_out_bot, p_out_apex, p_out_top],
-               bc="kelvin_outer", leftdomain=2, rightdomain=0)
-    # Axis lines (r = 0).
-    geo.Append(["line", p_out_bot, p_in_bot],
-               bc="axis", leftdomain=2, rightdomain=0)
-    geo.Append(["line", p_in_bot, p_in_top],
-               bc="axis_cond", leftdomain=1, rightdomain=0)
-    geo.Append(["line", p_in_top, p_out_top],
-               bc="axis", leftdomain=2, rightdomain=0)
+    wp_sphere = WorkPlane()
+    sphere_full = wp_sphere.Circle(R_SPHERE).Face()
+    sphere_full.name = "conductor"
+    sphere_full.maxh = maxh_cond
 
-    geo.SetMaterial(1, "conductor")
-    geo.SetMaterial(2, "kelvin")
-    return geo
+    # Half-plane cutter (x < 0)
+    margin = 0.1
+    cutter = MoveTo(-R_K - margin, -R_K - margin).Rectangle(
+        R_K + margin, 2 * R_K + 2 * margin).Face()
+
+    inner_half = inner_full - cutter
+    sphere_half = sphere_full - cutter
+
+    # air_inner = inner_half minus sphere_half
+    air_inner = inner_half - sphere_half
+    air_inner.name = "air_inner"
+
+    # Name conductor edges (axis or sphere boundary)
+    for edge in sphere_half.edges:
+        cx = edge.center.x
+        edge.name = "axis" if cx < 1e-4 else "sphere_bnd"
+
+    # Name air_inner edges: x=0 -> axis, outer arc -> kelvin_int
+    for edge in air_inner.edges:
+        cx = edge.center.x
+        try:
+            v0, v1 = edge.vertices
+            d0 = msqrt(v0.p.x ** 2 + v0.p.y ** 2)
+            d1 = msqrt(v1.p.x ** 2 + v1.p.y ** 2)
+            is_outer = (abs(d0 - R_K) < 0.01 * R_K and
+                        abs(d1 - R_K) < 0.01 * R_K and cx > 0.01 * R_K)
+        except Exception:
+            is_outer = False
+        if cx < 1e-4:
+            edge.name = "axis"
+        elif is_outer:
+            edge.name = "kelvin_int"
+        else:
+            edge.name = "default"
+
+    # Glue conductor + annulus into single interior shape
+    interior = Glue([air_inner, sphere_half])
+    return interior
 
 
 def to_csr(mat, n):
@@ -116,42 +122,53 @@ def to_csr(mat, n):
     ).toarray()
 
 
-def run_one(maxh, kelvin=True):
+def run_one(maxh, maxh_kelvin, curve_order=0):
     ngsglobals.msg_level = 0
-    geo = build_geometry_with_kelvin()
-    mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    print(f"  Materials: {mesh.GetMaterials()}, boundaries: {mesh.GetBoundaries()}")
 
-    # Build mu CF: conductor + bonded air both get mu_0; kelvin region gets
-    # mu_0 * (R_BOND / rho')^2 with mu evaluated at element centroid.
-    rho = sqrt(x * x + y * y)
-    rho_safe = IfPos(rho - 1e-10, rho, 1e-10)
-    if kelvin:
-        mu_kelvin = MU0 * (R_BOND / rho_safe) ** 2
-        mu_cf = mesh.MaterialCF({
-            "conductor": CoefficientFunction(MU0),
-            "kelvin":    mu_kelvin,
-        }, default=CoefficientFunction(MU0))
-    else:
-        mu_cf = CoefficientFunction(MU0)
+    interior = build_interior_half_disk(maxh_cond=maxh)
+    shape, info = add_kelvin_2d_axisym(
+        interior, R=R_K, z_offset=5 * R_K, maxh_kelvin=maxh_kelvin)
+    geo = OCCGeometry(shape, dim=2)
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh_kelvin))
+    if curve_order >= 2:
+        mesh.Curve(curve_order)
 
+    materials = mesh.GetMaterials()
+    print(f"  Materials: {materials}, boundaries: {mesh.GetBoundaries()}")
+
+    # Wrap H1Henrotte with Periodic to couple kelvin_int <-> kelvin_ext DOFs.
+    # AxiHenrotteFESpace subclasses FESpace, so ngsolve.Periodic works on it
+    # the same way as on a stock H1 space.
+    fes_pre = H1Henrotte(
+        mesh, order=2,
+        dirichlet="axis|axis_ext",
+        dirichlet_bbnd="GND",
+    )
+    fes = Periodic(fes_pre)
+
+    mu_factor = kelvin_mu_factor_axisym_cf(z_offset=5 * R_K, R=R_K)
+    mu_cf = build_material_cf(
+        mesh, MU0, mu_factor, outer_keyword="kelvin")
     sigma_cf = mesh.MaterialCF({"conductor": SIGMA_CU}, default=0.0)
 
-    fes = H1Henrotte(mesh, order=2, dirichlet="kelvin_outer")
     a = BilinearForm(fes, symmetric=True, check_unused=False)
     a += AxiHenrotteStiffnessBFI(mu_cf)
-    with TaskManager(): a.Assemble()
+    with TaskManager():
+        a.Assemble()
     m_bf = BilinearForm(fes, symmetric=True, check_unused=False)
     m_bf += AxiHenrotteSigmaMassBFI(sigma_cf)
-    with TaskManager(): m_bf.Assemble()
+    with TaskManager():
+        m_bf.Assemble()
 
-    free = np.array([i for i in range(fes.ndof) if fes.FreeDofs()[i]], dtype=int)
+    free = np.array([i for i in range(fes.ndof) if fes.FreeDofs()[i]],
+                    dtype=int)
     K = to_csr(a.mat, fes.ndof)[np.ix_(free, free)]
     M = to_csr(m_bf.mat, fes.ndof)[np.ix_(free, free)]
     K = 0.5 * (K + K.T)
     M = 0.5 * (M + M.T)
 
-    diag_M = np.diag(M); diag_K = np.diag(K)
+    diag_M = np.diag(M)
+    diag_K = np.diag(K)
     cond_mask = diag_M > 1e-30 * (np.max(diag_M) + 1e-30)
     nonzero_K = diag_K > 1e-30 * (np.max(diag_K) + 1e-30)
     air_mask = (~cond_mask) & nonzero_K
@@ -170,7 +187,8 @@ def run_one(maxh, kelvin=True):
     S = 0.5 * (S + S.T)
     M_cc = 0.5 * (M_cc + M_cc.T)
 
-    eigvals = sla.eigvalsh(S, M_cc, subset_by_index=[0, min(3, S.shape[0] - 1)])
+    eigvals = sla.eigvalsh(
+        S, M_cc, subset_by_index=[0, min(3, S.shape[0] - 1)])
     pos = eigvals[eigvals > 0]
     tau = 1.0 / pos[0] if len(pos) > 0 else np.nan
     gap = (tau - STOLL_TAU_1) / STOLL_TAU_1 * 100
@@ -179,18 +197,31 @@ def run_one(maxh, kelvin=True):
 
 def main():
     print("=" * 70)
-    print(f"Phase B3 axifemm + Kelvin sphere benchmark vs Stoll {STOLL_TAU_1*1e6:.4f} us")
-    print(f"  Cu sphere R={R_SPHERE*1e3} mm, Kelvin bond R={R_BOND*1e3} mm")
+    print(f"Phase B3 axifemm + Kelvin sphere benchmark vs Stoll "
+          f"{STOLL_TAU_1*1e6:.4f} us")
+    print(f"  Cu sphere R={R_SPHERE*1e3} mm, Kelvin R_K={R_K*1e3} mm, "
+          f"z_offset={5*R_K*1e3} mm")
+    print(f"  z-offset Kelvin: nu_kelvin = nu_0 (rho'/R_K)^2 (Nagamine "
+          f"CEFC 2026 canonical)")
+    print(f"  axifemm AxiHenrotteStiffnessBFI: mu sampled at element "
+          f"CENTROID")
     print("=" * 70)
 
-    levels = [5e-3, 3e-3, 2e-3]
-    for maxh in levels:
-        for kel in [False, True]:
-            tag = "Kelvin" if kel else "noKelv"
-            print(f"\nmaxh={maxh:.1e}  [{tag}]")
+    levels = [
+        # (maxh_cond, maxh_kelvin)
+        (2.0e-3, 8.0e-3),
+        (1.0e-3, 5.0e-3),
+        (0.7e-3, 3.0e-3),
+        (0.5e-3, 2.0e-3),
+    ]
+    for maxh_c, maxh_k in levels:
+        for cv in [0, 2]:
+            tag = f"Curve({cv})"
+            print(f"\nmaxh_cond={maxh_c:.1e}  maxh_kelvin={maxh_k:.1e}  {tag}")
             try:
-                ne, ndof, tau, gap = run_one(maxh, kelvin=kel)
-                print(f"  ne={ne}  ndof={ndof}  tau_1={tau*1e6:.4f} us  gap={gap:+.3f}%")
+                ne, ndof, tau, gap = run_one(maxh_c, maxh_k, curve_order=cv)
+                print(f"  ne={ne}  ndof={ndof}  tau_1={tau*1e6:.4f} us  "
+                      f"gap={gap:+.3f}%")
             except Exception as e:
                 print(f"  FAIL: {type(e).__name__}: {e}")
 
