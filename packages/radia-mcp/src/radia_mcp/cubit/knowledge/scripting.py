@@ -1309,6 +1309,60 @@ play "export_mesh.py"
 | GUI | `play "script.py"` in command panel | Yes (pre-imported) | Interactive |
 | Batch | `coreform_cubit -batch ... journal.jou` | Yes (pre-imported) | Automated |
 | Standalone | `python script.py` (with sys.path) | Need `import cubit` | Development |
+
+## CRITICAL: `play` is line-by-line REPL — keep every statement on one line
+
+`play "script.py"` does NOT exec the file as one Python module. It feeds
+each physical line to a REPL-like interpreter independently. Indented
+blocks (`def`, `for`, `if`, `try/except`) survive because the REPL
+recognizes the colon + indent. **But a function call split across
+physical lines breaks** — the open paren on one line is compiled alone:
+
+```
+File "<string>", line 1
+    cubit.cmd(
+             ^
+SyntaxError: '(' was never closed
+```
+
+### Forbidden in `play`-targeted scripts
+
+```python
+# WRONG — opens paren on its own line; play() compiles line 1 alone:
+cubit.cmd(
+    f"create curve arc radius {R_arc} center location 0 0 0 "
+    f"normal 0 0 1 start angle {THETA0_DEG} stop angle {THETA1_DEG}"
+)
+```
+
+### Required pattern
+
+```python
+# RIGHT — build the string first, then call cubit.cmd on a single line:
+cmd = "create curve arc radius {0} center location 0 0 0 normal 0 0 1 start angle {1} stop angle {2}".format(R_arc, TH0, TH1)
+cubit.cmd(cmd)
+
+# Also OK — long single line is fine:
+cubit.cmd("rotate Surface {0} angle {1} about origin 0 0 0 direction {2} {3} {4} include_merged".format(sid, deg, ax, ay, az))
+```
+
+### Other things that fail under `play`
+
+- `from scipy.spatial.transform import Rotation as R` — Cubit's bundled
+  Python typically lacks scipy. Use numpy + hand-rolled axis-angle.
+- Triple-quoted strings spanning many lines — the REPL is OK with them
+  (open-quote is recognized) but mixing them with multi-line calls
+  compounds the risk. Prefer single-line `#` comments at top.
+- Line continuation with `\\` — works, but a single long line is more
+  robust against editor auto-wrap.
+
+This affects ALL three execution paths that funnel through `play`,
+including `radia-mcp`'s `open_in_cubit(path=*.py)` and `cubit_show(path=*.py)`,
+both of which dispatch `.py → play "<abs_path>"`.
+
+For multi-line ergonomic Python, use **standalone mode** instead:
+`python script.py` with `cubit.init([...])` at the top — no `play`,
+no REPL, normal Python compile.
 """
 
 

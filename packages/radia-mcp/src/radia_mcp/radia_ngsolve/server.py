@@ -46,6 +46,7 @@ from .knowledge.cln_3d import (
     get_cln_3d_documentation,
     get_cln_3d_notebook,
 )
+from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -551,6 +552,36 @@ def cln_3d_notebook(name: str = "list") -> str:
         Full Python script content (~3-9 KB each), or list of available.
     """
     return get_cln_3d_notebook(name)
+
+
+@mcp.tool()
+def cln_sphere_dd_pipeline() -> str:
+    """
+    Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network
+    extraction pipeline reference.
+
+    Verified-arithmetic CLN extractor demonstrated on the canonical Cu
+    sphere benchmark (R=10mm, sigma=5.8e7 S/m, uniform B_z=1T). Pure
+    Python/CuPy implementation of the entire VIM-CLN chain in DD
+    precision: kernel evaluation (mpmath elliptic K(m), E(m) at 40 digit
+    via dd_axisym_kernel.py), DD K/M/b assembly with multiprocessing
+    (dd_sphere_axisym_mp.py), mpmath Cholesky-based generalized eigh
+    at dps=35-50, and verified-interval Hankel-Pade Cauer extraction
+    (mpmath.iv at 80 digit).
+
+    Reaches DD precision floor K_lo/K_hi = 1.1e-16 across all matrix
+    entries (the entire 14 trailing decimal digits below FP64 are
+    correctly captured), with verified-interval relative width < 1e-30
+    on all extracted Cauer rungs.
+
+    Returns:
+        Markdown documentation covering algorithm steps, sigma-rescaling
+        for canonical normalization, multiprocessing speedup, file
+        inventory, production scaling estimates, key implementation
+        lessons, and cross-references to Nagamine, Stoll, Hiruma,
+        Sugahara TEAM 28.
+    """
+    return get_cln_sphere_dd_documentation()
 
 
 @mcp.tool()

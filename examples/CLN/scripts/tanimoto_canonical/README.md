@@ -46,6 +46,15 @@ notebooks rather than the final canonical implementation.
   *rectangular* / sharp-corner geometries (memory: `project_tanimoto_AT_HH_projection_breakthrough.md`).
   Tanimoto's notebooks all use the smooth cylinder, where the boundary
   source converges cleanly without an explicit H-H step.
+- **T-Ω requires single-connectedness.** `CLN_T-Omega.ipynb` uses a Cu
+  cylinder, which is simply connected, so the T-Ω matrix is non-singular
+  out of the box. For multiply-connected conductors (plate with holes,
+  torus, gear teeth ring — genus g ≥ 1), the T-Ω formulation needs g extra
+  loop-current DOFs coupled to the FE system via the Hiptmair-Ostrowski
+  Loop Method. See `../multiconn_loop_method/` for the reference
+  implementation (EMPY-derived) and memory key
+  `reference_loop_method_multiconnected_TOmega.md` for the algorithm
+  summary.
 - The 1 cm cylinder is in the *long-aspect* regime where the analytical
   $R_{\text{theory}}, L_{\text{theory}}$ formulas above hold. For Stoll-style
   sphere / TEAM 28 / cuboid 5×2×1 you must use the proper analytical reference

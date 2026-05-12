@@ -1134,6 +1134,7 @@ def open_in_cubit(path: str = "",
 
 	File-type dispatch (by extension):
 	  .jou  → `playback "<path>"`
+	  .py   → `play "<path>"`           (Cubit's `play` runs Python files)
 	  .step .stp → `import step "<path>"`
 	  .brep .brp → `import acis "<path>"`  (Cubit uses ACIS for BREP)
 	  .msh         → `import mesh "<path>"`
@@ -1203,6 +1204,9 @@ def open_in_cubit(path: str = "",
 		suffix = p.suffix.lower()
 		if suffix == ".jou":
 			lines.append(f'playback "{abs_path}"')
+		elif suffix == ".py":
+			# Cubit の `play` は .jou と .py の両方を受け付ける.
+			lines.append(f'play "{abs_path}"')
 		elif suffix in (".step", ".stp"):
 			lines.append(f'import step "{abs_path}"')
 		elif suffix in (".brep", ".brp"):
@@ -1314,6 +1318,10 @@ def _cubit_path_dispatch(path: Path) -> str:
     abs_path = str(path.resolve()).replace("\\", "/")
     if suffix == ".jou":
         return f'playback "{abs_path}"'
+    if suffix == ".py":
+        # Cubit の `play` は .jou と .py の両方を受け付ける.
+        # See: cubit_scripting_knowledge topic="aprepro_journal".
+        return f'play "{abs_path}"'
     if suffix in (".step", ".stp"):
         return f'import step "{abs_path}"'
     if suffix in (".brep", ".brp"):
@@ -1330,8 +1338,9 @@ def cubit_show(path: str = "", extra_commands: list = None) -> str:
 	follow-up commands. First call launches the daemon + Cubit GUI;
 	subsequent calls reuse the session (sub-second command cycles).
 
-	Supported inputs: .jou (playback), .step/.stp (import step), .brep
-	(import acis), .msh/.vol/.g/.e/.exo (import mesh).
+	Supported inputs: .jou (playback), .py (play — Cubit-side Python),
+	.step/.stp (import step), .brep (import acis),
+	.msh/.vol/.g/.e/.exo (import mesh).
 
 	Args:
 	    path: file to load. Leave empty to run only `extra_commands`.
