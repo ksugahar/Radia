@@ -489,8 +489,36 @@ def main():
                              "the .vol mesh is converted to .msh after "
                              "solve so the panel's OpenGmsh button can "
                              "view the geometry.")
+    parser.add_argument("--require-kelvin", action="store_true",
+                        help="Fail-fast if the .vol does not have a "
+                             "'kelvin' material with periodic "
+                             "identification. The IH panel's FEM-full "
+                             "method sets this; without it a typo'd "
+                             "kelvin block name would silently demote "
+                             "the open BC to reg-only gauge truncation. "
+                             "Per CLAUDE.md 'No Fallbacks'.")
 
     def run(args):
+        if args.require_kelvin:
+            from ngsolve import Mesh
+            try:
+                probe_mesh = Mesh(args.vol)
+            except Exception as e:
+                return {"error":
+                        f"--require-kelvin: cannot open {args.vol!r}: {e}"}
+            mats = list(probe_mesh.GetMaterials())
+            if "kelvin" not in mats:
+                return {"error":
+                        f"--require-kelvin: .vol has no 'kelvin' material "
+                        f"(materials = {mats}). The IH panel's FEM-full "
+                        f"method requires a Kelvin-extended mesh: re-run "
+                        f"the Cubit .jou with add_kelvin enabled."}
+            if probe_mesh.ngmesh.GetNrIdentifications() == 0:
+                return {"error":
+                        f"--require-kelvin: .vol has 'kelvin' material but "
+                        f"no periodic identifications. Ensure the .jou "
+                        f"sidesets kelvin_int / kelvin_ext are paired via "
+                        f"'copy mesh surface' in the Cubit script."}
         if args.impedance_model == "esim":
             return {
                 "error": "ESIM is not implemented in calc_fem_coilmesh "

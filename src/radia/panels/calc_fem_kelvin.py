@@ -1175,14 +1175,52 @@ def main():
                         help="If >0, use perimeter-only filament "
                              "placement (path 2b: circle-edge centres) "
                              "instead of the volume-grid walker.  "
-                             "Required for 3-turn helix / racetrack "
+                             "Required for 3-turn helix / radia "
                              "STEPs whose seed plane is hard to find.")
+    parser.add_argument("--require-kelvin", action="store_true",
+                        help="Fail-fast if the .vol does not have a "
+                             "'kelvin' material with periodic "
+                             "identification.  The IH panel's "
+                             "PEEC+FEM+Kelvin method sets this to "
+                             "prevent silent fallback to "
+                             "reg-only gauge truncation (which "
+                             "produces a physically wrong open-BC "
+                             "result that looks like a successful "
+                             "solve).  Per CLAUDE.md 'No Fallbacks'.")
 
     def run(args):
         if not args.peec_step:
             return {"error": "--peec-step is required. T0/AV paths were "
                              "retired 2026-04-18; all FEM source injection "
                              "goes through PEEC filaments."}
+        if args.require_kelvin:
+            # Sniff the .vol's materials list before the solver gets a
+            # chance to silently downgrade to reg-only gauge truncation.
+            # Cheap O(1) check using Netgen's mesh loader; full mesh
+            # construction happens inside solve_fem anyway.
+            from ngsolve import Mesh
+            try:
+                probe_mesh = Mesh(args.vol)
+            except Exception as e:
+                return {"error":
+                        f"--require-kelvin: cannot open {args.vol!r}: {e}"}
+            mats = list(probe_mesh.GetMaterials())
+            if "kelvin" not in mats:
+                return {"error":
+                        f"--require-kelvin: .vol has no 'kelvin' material "
+                        f"(materials = {mats}). The IH panel's "
+                        f"PEEC+FEM+Kelvin method requires a Kelvin-extended "
+                        f"mesh: re-run the Cubit .jou with "
+                        f"add_kelvin enabled, OR switch to a method "
+                        f"that doesn't need the open boundary."}
+            if probe_mesh.ngmesh.GetNrIdentifications() == 0:
+                return {"error":
+                        f"--require-kelvin: .vol has 'kelvin' material but "
+                        f"no periodic identifications. The Kelvin pair "
+                        f"sidesets (kelvin_int, kelvin_ext) need 'copy "
+                        f"mesh surface' in the Cubit .jou so the C++ "
+                        f"exporter can write Netgen identification "
+                        f"records."}
         return solve_fem(
             vol_file=args.vol,
             fes_order=args.fes_order,
