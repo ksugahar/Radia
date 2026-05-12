@@ -165,6 +165,7 @@ def solve_heat_axisym(wp_vol,
                       time_scheme="backward-euler",
                       linear_solver="sparsecholesky",
                       fes_order=1,
+                      rotation_rpm=0.0,
                       probe_point=None,
                       msh_output="",
                       vtu_prefix="",
@@ -196,6 +197,17 @@ def solve_heat_axisym(wp_vol,
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
+
+    # In axisym mode the workpiece is rotation-symmetric by
+    # construction, so a non-zero rotation_rpm justifies the
+    # phi-averaging of the cross-mesh q_surf transfer.  Log the
+    # value for the JSON output; the solve itself is unchanged
+    # (rotation is implicit in the axisymmetric assumption).
+    if float(rotation_rpm) > 0.0:
+        _log(f"ROTATION:rpm={float(rotation_rpm):g} axisym -- "
+             f"phi-averaging over {int(n_phi_samples)} samples "
+             "models the long-time-average heat input from a "
+             "spinning workpiece.")
 
     # Standard NGSolve H1 + 2 pi r weighting (FEMM-canonical; matches
     # the heat solver in FEMM's hsolv/prob1big.cpp -- standard P1
@@ -411,6 +423,7 @@ def solve_heat_axisym(wp_vol,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),
         "k_W_mK": float(k_v),
+        "rotation_rpm": float(rotation_rpm),
         "h_conv_W_m2K": float(h_conv),
         "t_ext_C": float(t_ext),
         "surface_label": surface_label,
@@ -468,6 +481,11 @@ def main():
     parser.add_argument("--linear-solver", default="sparsecholesky",
                         choices=["sparsecholesky", "umfpack", "pardiso"])
     parser.add_argument("--fes-order", type=int, default=1)
+    parser.add_argument("--rotation-rpm", type=float, default=0.0,
+                        help="Workpiece rotation [rpm] (default 0). "
+                             "Recorded for metadata + justifies the "
+                             "phi-averaging of cross-mesh q_surf "
+                             "transfer when > 0.")
     parser.add_argument("--probe-point", default="",
                         help="Probe point 'r,z' [m] for the T(t) "
                              "history (axisym is 2D, so 2 coords).")
@@ -508,6 +526,7 @@ def main():
             time_scheme=args.time_scheme,
             linear_solver=args.linear_solver,
             fes_order=args.fes_order,
+            rotation_rpm=args.rotation_rpm,
             probe_point=probe_point,
             msh_output=args.msh_output,
             vtu_prefix=args.vtu_prefix,

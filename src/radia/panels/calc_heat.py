@@ -218,6 +218,7 @@ def solve_heat(wp_vol,
                time_scheme="backward-euler",
                linear_solver="sparsecholesky",
                fes_order=1,
+               rotation_rpm=0.0,
                probe_point=None,
                msh_output="",
                vtu_prefix="",
@@ -246,6 +247,15 @@ def solve_heat(wp_vol,
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
+
+    # Rotation is metadata in 3D mode -- q_surf is held azimuthally
+    # static. Warn if the user passes a non-zero rotation_rpm with the
+    # 3D solver because the result is the "frozen at one azimuthal
+    # configuration" answer, not the "spinning workpiece" answer.
+    if float(rotation_rpm) > 0.0:
+        _log(f"ROTATION:rpm={float(rotation_rpm):g} (3D solver: NOTE "
+             "q_surf held azimuthally static; for a true spinning "
+             "workpiece run the axisym solver with phi-averaging)")
 
     # H1 FES on the workpiece volume.  No Dirichlet BC -- the
     # surface flux + Robin convection give a well-posed problem.
@@ -451,6 +461,7 @@ def solve_heat(wp_vol,
         "rho_kg_m3": float(rho_v),
         "cp_J_kgK": float(cp_v),
         "k_W_mK": float(k_v),
+        "rotation_rpm": float(rotation_rpm),
         "h_conv_W_m2K": float(h_conv),
         "t_ext_C": float(t_ext),
         "surface_label": surface_label,
@@ -540,6 +551,15 @@ def main():
     parser.add_argument("--fes-order", type=int, default=1,
                         help="H1 polynomial order (default 1).")
 
+    # Workpiece rotation (metadata for the 3D solver; the result is
+    # "frozen at one azimuthal configuration" -- q_surf is not
+    # rotated per timestep).  For a physically spinning workpiece in
+    # the time average use the axisym solver with phi-averaging.
+    parser.add_argument("--rotation-rpm", type=float, default=0.0,
+                        help="Workpiece rotation speed [rpm] "
+                             "(default 0 = stationary).  3D solver "
+                             "treats this as metadata.")
+
     # Observation / output.
     parser.add_argument("--probe-point", default="",
                         help="Probe point 'x,y,z' [m] for the T(t) "
@@ -581,6 +601,7 @@ def main():
             time_scheme=args.time_scheme,
             linear_solver=args.linear_solver,
             fes_order=args.fes_order,
+            rotation_rpm=args.rotation_rpm,
             probe_point=probe_point,
             msh_output=args.msh_output,
             vtu_prefix=args.vtu_prefix,
