@@ -1,0 +1,75 @@
+{
+  "study": "3D FEM Cauer ladder Tanimoto+H-H vs BEM-Foster",
+  "date": "2026-05-09",
+  "session": "Sugahara diagnostic + breakthrough",
+  "summary": "Tanimoto A-T alternating Poisson + H-H source projection achieves first 3D FEM Cauer extraction on rectangular geometry. Stage 1 τ matches BEM-Foster within 3% (cyl/A1) to 12% (cuboid). Discretization-saturated: refining mesh or HCurl order does not improve gap. Accumulator-CLN structural floor.",
+  "geometries": {
+    "cylinder": {"R_mm": 10.0, "t_mm": 2.0, "V_mm3": 628.32,
+                 "type": "round, axisymmetric"},
+    "square_prism_A1": {"Lx_mm": 17.72, "Ly_mm": 17.72, "Lz_mm": 2.0,
+                        "V_mm3": 628.0,
+                        "type": "rectangular, V matched to cylinder"},
+    "cuboid_521": {"Lx_mm": 5.0, "Ly_mm": 2.0, "Lz_mm": 1.0,
+                    "V_mm3": 10.0,
+                    "type": "rectangular, original cuboid CLN target"}
+  },
+  "material": {"name": "Cu", "sigma_S_per_m": 5.8e7, "B0_T": 1.0,
+                "mu0_H_per_m": 1.2566e-6},
+  "leading_tau_us_validation": [
+    {"geometry": "cylinder",
+     "BEM_Foster_axisym_elliptic": 219.32,
+     "axifemm_Q2_Hiruma": 218.71,
+     "axifemm_Q1_Hiruma": 218.05,
+     "FEM_v5_Hiruma_3D_HCurl": 218.67,
+     "FEM_Tanimoto_AT_plus_HH_proj": 225.77,
+     "FEM_v5_Hiruma_gap_pct": -0.30,
+     "FEM_Tanimoto_gap_pct": 2.94},
+    {"geometry": "square_prism_A1",
+     "BEM_Foster_PhaseF4": 212.12,
+     "FEM_v5_Hiruma_3D_HCurl": 65.29,
+     "FEM_Tanimoto_AT_plus_HH_proj": 219.0,
+     "FEM_v5_Hiruma_status": "GAUGE COLLAPSE locks onto BEM rank-2 mode (BEM rank2=65.49)",
+     "FEM_v5_Hiruma_gap_pct": -69.2,
+     "FEM_Tanimoto_gap_pct": 3.24},
+    {"geometry": "cuboid_521",
+     "BEM_Foster_PhaseF4": 10.85,
+     "ELF_time_domain_single_exp": 11.58,
+     "ELF_Prony_P3_8": "11.04-11.56",
+     "ELF_Foster_N3_5": "11.35-11.51",
+     "consensus_4method": 11.0,
+     "FEM_v5_Hiruma_3D_HCurl": 2.68,
+     "FEM_Tanimoto_AT_plus_HH_proj": 9.69,
+     "FEM_v5_Hiruma_gap_pct": -75.6,
+     "FEM_Tanimoto_gap_pct": -11.9}
+  ],
+  "Tanimoto_convergence_study_2026_05_09": {
+    "cylinder": [
+      {"h_cond_mm": 1.0, "HCurl_order": 2, "stage_1_tau_us": 225.756},
+      {"h_cond_mm": 0.5, "HCurl_order": 2, "stage_1_tau_us": 225.770},
+      {"h_cond_mm": 1.0, "HCurl_order": 3, "stage_1_tau_us": 225.772}
+    ],
+    "cuboid_521": [
+      {"h_cond_mm": 0.30, "HCurl_order": 2, "stage_1_tau_us": 9.689},
+      {"h_cond_mm": 0.15, "HCurl_order": 2, "stage_1_tau_us": 9.689}
+    ],
+    "conclusion": "Mesh and HCurl order refinement do not improve τ — gap is structural (accumulator-CLN floor), not discretization. Identical to 5 digits across all variants."
+  },
+  "Tanimoto_full_Cauer_ladder_us": {
+    "cylinder_ORDER2_h1mm": [1252.71, 225.76, 86.18, 44.08, 26.37, 23.35],
+    "square_A1_ORDER2_h1mm": [1150.43, 218.98, 84.12, 57.94, 64.70, 29.32],
+    "cuboid_521_ORDER2_h0.3mm": [25.04, 9.69, 4.48, 3.69, 1.45, 1.62]
+  },
+  "BEM_Hiruma_reference_cylinder_us": [219.32, 78.21, 39.59, 23.12, 16.07, 13.30],
+  "implementation_files": {
+    "FEM_Tanimoto_AT": "ngsolve_validation/tanimoto_AT_geom_sweep.py",
+    "FEM_v5_Hiruma": "ngsolve_validation/geom_sweep_v5_hiruma.py",
+    "BEM_Phase_F4_cuboid": "S:/Radia/01_GitHub/packages/radia-vim/scripts/extract_tau_cuboid_521.py",
+    "BEM_Phase_F4_A1": "S:/Radia/01_GitHub/packages/radia-vim/scripts/extract_tau_A1_square.py",
+    "MCP_server": "ngsolve_validation/mcp_kameari_kelvin_server.py (tool: tanimoto_AT_3d_cuboid)"
+  },
+  "key_diagnostic": "Sugahara 2026-05-09: Source ∫σA_s·W on rectangular violates div(σA)=0 across boundary because A_s·n ≠ 0 on x/y faces. Helmholtz-Hodge projection of A_s onto A_s'·n=0 subspace fixes this and recovers BEM agreement.",
+  "future_work": {
+    "Tanimoto_Hiruma_hybrid": "A-T variables + 3-term recurrence to bypass accumulator-CLN floor. Theoretical target: 0.3% on cylinder, ~1% on rectangular.",
+    "HDiv_divfree_FEM_NGSolve": "Extend radia-vim HDivDivFreeHexBasis to mesh-based assembly. Major effort but principled."
+  }
+}

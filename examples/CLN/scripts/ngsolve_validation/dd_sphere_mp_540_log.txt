@@ -1,0 +1,62 @@
+========================================================================
+DD axisym VIM sphere (multiprocessing)
+========================================================================
+
+  N_rho=20, N_theta=27, total 540 cells
+  Workers: 16, n_quad=2, eigh_dps=35
+  N=540 cells, n_q_total=2160, n_pairs=4665600
+  Parallelizing over 16 workers...
+    worker 1/16 done (110.8s)
+    worker 2/16 done (126.6s)
+    worker 3/16 done (132.6s)
+    worker 4/16 done (133.9s)
+    worker 5/16 done (134.2s)
+    worker 6/16 done (135.2s)
+    worker 7/16 done (135.4s)
+    worker 8/16 done (146.6s)
+    worker 9/16 done (156.4s)
+    worker 10/16 done (167.2s)
+    worker 11/16 done (174.7s)
+    worker 12/16 done (174.7s)
+    worker 13/16 done (174.9s)
+    worker 14/16 done (175.8s)
+    worker 15/16 done (175.8s)
+    worker 16/16 done (176.1s)
+  K assembly (MP): 176.2s
+  Total assembly: 176.3s
+  K_lo/K_hi: 1.11e-16
+    Computing eigenvalues of symmetric n=540 matrix in mpmath...
+    mpmath eig: 5889.51s
+  mpmath eigh: 6344.8s
+
+  Top 5 Foster:
+    rank=0: tau=749.2930 us, g²=3.8796e-11
+    rank=1: tau=192.5483 us, g²=2.3791e-12
+    rank=2: tau=89.3300 us, g²=4.5270e-13
+    rank=3: tau=53.2442 us, g²=1.3476e-13
+    rank=4: tau=36.6229 us, g²=5.0265e-14
+
+  Cauer rungs (DD sphere axisym, MP):
+    k            R_2k          L_2k+1   tau_pair us      rel_w
+    0      2.3895e+10      1.6888e+07      706.7545   0.00e+00
+    1      5.1524e+11      8.5939e+07      166.7954   0.00e+00
+    2      4.2779e+12      3.3278e+08       77.7907   0.00e+00
+    3      3.0319e+13      1.4958e+09       49.3357   0.00e+00
+    4      2.6062e+14      9.5288e+09       36.5623   0.00e+00
+    5      3.1550e+15      9.1277e+10       28.9313   0.00e+00
+    6      4.3915e+14     -2.7170e+11     -618.6905   0.00e+00
+    7     -9.4228e+15     -9.1044e+13     9662.0399   0.00e+00
+    8      8.8777e+15      9.3207e+11      104.9893   0.00e+00
+    9     -1.1951e+16      7.7477e+13    -6482.9249   0.00e+00
+   10      1.2173e+16     -3.3574e+11      -27.5811   0.00e+00
+   11     -2.6615e+14      4.2350e+11    -1591.2066   0.00e+00
+   12      2.8638e+16     -2.9493e+14   -10298.5825   0.00e+00
+   13     -2.6838e+16      3.1833e+12     -118.6101   0.00e+00
+   14     -5.9184e+15      1.0329e+13    -1745.2899   0.00e+00
+   15      4.9208e+15      1.3789e+11       28.0215   6.97e-33
+   16      6.8371e+13     -1.6214e+11    -2371.4830   1.25e-30
+   17      2.7691e+15     -1.8432e+12     -665.6167   2.01e-26
+   18     -3.8064e+14      1.2209e+12    -3207.3904   1.39e-24
+   19     -3.9151e+15     -2.1572e+12      551.0012   5.20e-21
+
+Saved: W:\30_CauerLadderNetwork\2026_04_01_長方形CLN\ngsolve_validation\dd_sphere_axisym_mp_Nrho20_Nth27_nq2_results.json

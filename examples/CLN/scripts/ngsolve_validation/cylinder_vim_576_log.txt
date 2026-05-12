@@ -1,0 +1,29 @@
+Cylinder VIM axisym: Nr=48, Nz=12, n_dofs=576
+R=10.0 mm, t=2.0 mm, sigma=5.80e+07
+
+Assembling K, M, b matrices...
+  done in 16.1s
+  K symmetry: max|K - K^T| = 0.00e+00
+Solving generalized eigenproblem...
+  Top 10 modes by |g|^2:
+    rank=0: tau=224.5141 us, g2=7.0636e-12
+    rank=1: tau=88.6528 us, g2=5.4863e-13
+    rank=2: tau=49.7537 us, g2=1.3092e-13
+    rank=3: tau=32.2901 us, g2=4.7609e-14
+    rank=4: tau=22.7769 us, g2=2.1661e-14
+    rank=5: tau=16.9850 us, g2=1.1384e-14
+    rank=6: tau=13.1890 us, g2=6.6455e-15
+    rank=7: tau=7.4922 us, g2=4.5748e-15
+    rank=8: tau=10.5659 us, g2=4.2587e-15
+    rank=9: tau=8.6798 us, g2=3.1064e-15
+
+Kameari Cauer-I extraction (top 50 modes, mpmath 80 dig):
+  k | R_2k       | L_2k+1     | tau_pair us
+  0 | 1.2734e+11 | 2.6651e+07 | 209.2862
+  1 | 2.6085e+12 | 1.7899e+08 | 68.6167
+  2 | 1.3338e+13 | 4.5222e+08 | 33.9056
+  3 | 3.7579e+13 | 8.2473e+08 | 21.9468
+  4 | 9.8394e+13 | 1.7494e+09 | 17.7795
+  5 | 3.2429e+14 | 4.5662e+09 | 14.0808
+
+Saved: W:\30_CauerLadderNetwork\2026_04_01_長方形CLN\ngsolve_validation\cylinder_vim_axisym_results.json
