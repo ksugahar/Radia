@@ -396,188 +396,59 @@ def build_occ_ih_mesh_hole(R_coil=0.030, a_coil=0.003, gap_deg=5,
 
 def _add_kelvin_point_idents_manual(mesh, kelvin_offset, idnr=1,
                                      point_tolerance=None):
-    """Manual point-only Kelvin identification (1/8-octant fallback).
+    """Compatibility shim -- delegates to `kelvin_identify_ngsolve`.
 
-    Walks BND surface elements, classifies by bcname, and registers
-    point-pair identifications via `AddPointIdentification` -- skipping
-    the segment / surface-element levels that NGSolve's
-    `IdentifyPeriodicBoundaries` would also try to add.
-
-    Why this exists: in 1/8 octant Kelvin geometry, the curved
-    `kelvin_ext` cap shares edges with `sym_bn=0_*` / `kelvin_far`
-    face descriptors.  IDPB's segment-level identification confuses
-    these multi-FD edges and leaves a corrupt hash table that breaks
-    the subsequent `Mesh(ngmesh)` rewrap with `NgException: Ask for
-    unused hash-value`.  Point-only identification is sufficient
-    because NGSolve's `Periodic` H1 FES infers high-order edge / face
-    DOF coupling from point pairs + mesh topology (verified
-    2026-04-25 on em_elf_quarter at p=2: slaved=6085 with point-only
-    Cubit-written identifications).
-
-    Args:
-        mesh: ngsolve.Mesh
-        kelvin_offset: (x, y, z) translation interior -> exterior
-        idnr: identification number to use (default 1)
-        point_tolerance: tolerance for vertex matching [m].  Default:
-            5% of |kelvin_offset|, floored at 1 mm.
-
-    Returns:
-        Number of point-pair identifications registered (0 if anything
-        prevented setup).
+    The full implementation lives in
+    `radia.kelvin_identify_ngsolve.add_kelvin_identification`.  This
+    function is preserved only because it appears as a private
+    helper name in older docstrings / code review threads.  New code
+    should use the public API.
     """
-    import numpy as np
-    from ngsolve import BND
-    from netgen.meshing import IdentificationType
-
-    boundaries = mesh.GetBoundaries()
-    if "kelvin_int" not in boundaries or "kelvin_ext" not in boundaries:
-        return 0
-
-    if point_tolerance is None:
-        import math
-        off_len = math.sqrt(sum(c*c for c in kelvin_offset))
-        point_tolerance = max(0.05 * off_len, 1e-3)
-
-    # Collect vertex IDs (1-based netgen PointIndex) on each side
-    inner_pids, outer_pids = set(), set()
-    for el in mesh.Elements(BND):
-        bc = boundaries[el.index]
-        if bc == "kelvin_int":
-            for v in el.vertices:
-                inner_pids.add(int(v.nr) + 1)   # ngsolve 0-based -> netgen 1-based
-        elif bc == "kelvin_ext":
-            for v in el.vertices:
-                outer_pids.add(int(v.nr) + 1)
-
-    if not inner_pids or not outer_pids:
-        return 0
-
-    # Build position arrays
-    inner_pids = sorted(inner_pids)
-    outer_pids = sorted(outer_pids)
-    inner_pos = np.array([mesh.vertices[p-1].point for p in inner_pids])
-    outer_pos = np.array([mesh.vertices[p-1].point for p in outer_pids])
-    offset = np.array(kelvin_offset, dtype=float)
-
-    # Translate inner positions
-    inner_pos_t = inner_pos + offset
-
-    # Optimal assignment via Hungarian algorithm to avoid greedy
-    # mis-pairings (a near-vertex may be stolen by an earlier inner
-    # leaving its actual partner unmatched).  Falls back to greedy
-    # if scipy is unavailable.
-    try:
-        from scipy.optimize import linear_sum_assignment
-        cost = np.sqrt(np.sum(
-            (inner_pos_t[:, None, :] - outer_pos[None, :, :]) ** 2, axis=2))
-        row_ind, col_ind = linear_sum_assignment(cost)
-        pairs, max_dist, n_unmatched = [], 0.0, 0
-        for i, j in zip(row_ind, col_ind):
-            d = float(cost[i, j])
-            if d <= point_tolerance:
-                pairs.append((inner_pids[i], outer_pids[j]))
-                if d > max_dist:
-                    max_dist = d
-            else:
-                n_unmatched += 1
-    except ImportError:
-        # Greedy fallback (may leave 1+ inner unmatched if vertex
-        # ordering is bad).
-        used = set()
-        pairs, max_dist, n_unmatched = [], 0.0, 0
-        for i, ipt in enumerate(inner_pos_t):
-            d2_all = np.sum((outer_pos - ipt) ** 2, axis=1)
-            if used:
-                d2_all = d2_all.copy()
-                for j in used:
-                    d2_all[j] = float("inf")
-            j_best = int(np.argmin(d2_all))
-            d_best = float(np.sqrt(d2_all[j_best]))
-            if d_best <= point_tolerance:
-                pairs.append((inner_pids[i], outer_pids[j_best]))
-                used.add(j_best)
-                if d_best > max_dist:
-                    max_dist = d_best
-            else:
-                n_unmatched += 1
-
-    if not pairs:
-        return 0
-
-    # Register point-pair identifications
-    ngmesh = mesh.ngmesh
-    for p1, p2 in pairs:
-        ngmesh.AddPointIdentification(p1, p2, identnr=idnr,
-                                       type=IdentificationType.PERIODIC)
-
-    print(f"[add_periodic_kelvin/manual] {len(pairs)}/{len(inner_pids)} "
-          f"point pairs (max_dist={max_dist:.2e}, "
-          f"unmatched={n_unmatched}, tol={point_tolerance:.2e})")
-    return len(pairs)
+    from radia.kelvin_identify_ngsolve import add_kelvin_identification
+    info = add_kelvin_identification(
+        mesh, kelvin_offset=kelvin_offset, idnr=idnr,
+        point_tolerance=point_tolerance, skip_if_existing=False)
+    return info["n_pairs"]
 
 
 def add_periodic_kelvin(mesh, kelvin_offset):
     """Ensure Kelvin Periodic identification exists on the mesh.
 
-    Two upstream identification sources exist; both are adequate for
-    Periodic H1 at order=1 AND order>=2 (verified 2026-04-25 by FES
-    `slaved`-DOF count and `Set(1)` boundary-integral ratio test):
+    Thin compatibility shim around the public
+    `radia.kelvin_identify_ngsolve.add_kelvin_identification`.  Kept here
+    so existing panel code (`calc_fem_kelvin.py`, `calc_accel_magnet.py`,
+    ...) continues to work without import changes.  New callers should
+    prefer the public API:
 
-      * Cubit C++ exporter (`ExportNetgenCommand.cpp`) writes POINT
-        pair identifications via `Identifications::Add(PointIndex,
-        PointIndex, "kelvin", PERIODIC)`.  NGSolve's `Periodic` FES
-        deduces edge / face high-order DOF coupling from the point
-        pairs + mesh topology, so high-order Kelvin works without
-        explicitly added segment / surface-element pairs.
+        from radia import add_kelvin_identification
+        info = add_kelvin_identification(mesh)   # auto-detects offset
 
-      * NGSolve OCC `Identify(IdentificationType.PERIODIC)` (called
-        AFTER `Glue`) writes point pairs PLUS segment / surface
-        pairs, also working at any order.
-
-    This function is the FALLBACK for OCC-mesh paths that did not
-    Identify, or copy-mesh paths where the C++ side could not match
-    every vertex.  When the .vol already has matching identifications,
-    re-calling `IdentifyPeriodicBoundaries` is harmless (NGSolve
-    re-uses the existing idnr) and our verification check still
-    confirms the FES is correctly coupled.
-
-    Args:
-        mesh: ngsolve.Mesh
-        kelvin_offset: (x, y, z) rigid translation from interior to
-            exterior Kelvin sphere.  Use `detect_kelvin_offset(mesh)`
-            which computes mean(kelvin_ext) - mean(kelvin_int) -- exact
-            for any 1:1 copy-mesh regardless of partial-octant geometry.
-
-    Returns:
-        True if some identification ended up on the mesh, False otherwise.
+    Behaviour matches the pre-2026-05-13 implementation:
+      - returns True iff some identification ended up on the mesh
+      - skips silently when kelvin_int / kelvin_ext labels are missing
+      - skips silently when ngmesh already has identifications
+      - delegates the actual point-pair matching + AddPointIdentification
+        calls to the public module
     """
+    from radia.kelvin_identify_ngsolve import (
+        add_kelvin_identification, has_kelvin_identification,
+    )
+
     boundaries = mesh.GetBoundaries()
     if "kelvin_int" not in boundaries or "kelvin_ext" not in boundaries:
         return False
 
-    ngmesh = mesh.ngmesh
-
-    # If C++ has already written identifications (typical Cubit-export
-    # 1/2 / 1/4 path), trust them and do not touch.  Adding more via
-    # IDPB risks corrupting the segment / surface-element hash table
-    # for 1/8 geometries.  At p>=2 NGSolve infers high-order DOF
-    # coupling from the existing point pairs + topology (verified
-    # 2026-04-25 on em_elf_quarter at p=2: slaved=6085).
-    try:
-        existing = ngmesh.GetIdentifications()
-        n_existing = len(existing) if hasattr(existing, "__len__") else 0
-    except Exception:
-        n_existing = 0
-    if n_existing > 0:
+    if has_kelvin_identification(mesh):
         return True
 
-    # No existing identifications -- either OCC repro path that did not
-    # call Identify(), or Cubit 1/8 path where the C++ exporter's
-    # all-or-nothing pairing skipped due to a single unmatched vertex.
-    # Use the manual point-only path which avoids IDPB's segment +
-    # surface-element ident corruption on 1/8 geometries.
-    n_added = _add_kelvin_point_idents_manual(mesh, kelvin_offset)
-    return n_added > 0
+    info = add_kelvin_identification(
+        mesh, kelvin_offset=kelvin_offset, skip_if_existing=False)
+    if info["n_pairs"] > 0:
+        print(f"[add_periodic_kelvin/manual] {info['n_pairs']} point pairs "
+              f"(max_dist={info['max_dist']:.2e}, "
+              f"unmatched={info['n_unmatched']}, "
+              f"tol={info['point_tolerance']:.2e})")
+    return info["n_pairs"] > 0
 
 
 def detect_outer_boundary(mesh):
@@ -680,42 +551,17 @@ def estimate_kelvin_maxh(mesh, outer_bnd_name):
 
 
 def detect_kelvin_offset(mesh):
-    """Detect Kelvin translation offset from kelvin_int/kelvin_ext BND vertices.
+    """Compatibility shim -- delegates to `kelvin_identify_ngsolve`.
 
-    The offset is the rigid translation that maps interior Kelvin sphere
-    onto exterior Kelvin sphere.  Cubit's `copy mesh surface ... source
-    vertex ... target vertex` and OCC's `Identify(IdentificationType.PERIODIC)`
-    both produce 1:1 vertex correspondence; therefore the mean of the
-    kelvin_ext vertices minus the mean of the kelvin_int vertices gives
-    the exact translation -- regardless of partial-octant geometry.
-
-    Returns:
-        (x, y, z) offset, or (0, 0, 0) if either kelvin_int or kelvin_ext
-        is missing from the mesh.
+    The full implementation lives in
+    `radia.kelvin_identify_ngsolve.detect_kelvin_offset`.  Kept here for
+    backward compatibility with existing panel callers
+    (`calc_fem_kelvin.py`, `calc_fem_coilmesh.py`, `calc_kelvin_benchmark.py`,
+    `calc_accel_magnet.py`).  New code should `from radia import
+    detect_kelvin_offset` directly.
     """
-    import numpy as np
-    from ngsolve import BND
-    try:
-        boundaries = mesh.GetBoundaries()
-        if "kelvin_int" not in boundaries or "kelvin_ext" not in boundaries:
-            return (0, 0, 0)
-
-        int_pts, ext_pts = [], []
-        for el in mesh.Elements(BND):
-            bc = boundaries[el.index]
-            if bc == "kelvin_int":
-                int_pts.extend(mesh.vertices[v.nr].point for v in el.vertices)
-            elif bc == "kelvin_ext":
-                ext_pts.extend(mesh.vertices[v.nr].point for v in el.vertices)
-
-        if not int_pts or not ext_pts:
-            return (0, 0, 0)
-
-        int_mean = np.mean(int_pts, axis=0)
-        ext_mean = np.mean(ext_pts, axis=0)
-        return tuple(ext_mean - int_mean)
-    except Exception:
-        return (0, 0, 0)
+    from radia.kelvin_identify_ngsolve import detect_kelvin_offset as _impl
+    return _impl(mesh)
 
 
 # ============================================================
