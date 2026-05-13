@@ -9,7 +9,7 @@
 # pybind11 Migration Complete (2026-01):
 # All bindings now use pybind11 exclusively.
 
-__version__ = "4.44.0"
+__version__ = "4.45.0"
 
 # Compatibility window with the cubit-mesh-export package. The .ccm/.ccl
 # plugin binaries built there must match this radia minor series; the
@@ -161,3 +161,17 @@ try:
 except ImportError:
     # Analysis requires numpy
     ANALYSIS_AVAILABLE = False
+
+# Post-hoc Kelvin Periodic identification on an NGSolve mesh (no Cubit /
+# OCC needed).  See `radia.kelvin_identify_ngsolve` for full docs.
+try:
+    from .kelvin_identify_ngsolve import (
+        add_kelvin_identification,
+        detect_kelvin_offset,
+        has_kelvin_identification,
+    )
+    KELVIN_IDENTIFY_AVAILABLE = True
+except ImportError:
+    # Requires ngsolve + scipy (greedy fallback) -- both should be
+    # present in any Radia install, so this is just defensive.
+    KELVIN_IDENTIFY_AVAILABLE = False
