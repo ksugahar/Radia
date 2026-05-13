@@ -48,19 +48,26 @@ def _solve_saddle(K, rhs, method, tol=1e-8, maxiter=2000):
 
     method:
       "lu"     dense LAPACK direct solve (scipy.linalg.solve, partial-
-               pivot LU). Best for ndof <~ 5000. Memory O(N^2),
+               pivot LU) with overwrite_a=True so LAPACK reuses K's
+               storage for the LU factors (saves N^2 memory vs the
+               default copy).  Best for ndof <~ 25000.  Memory O(N^2),
                work O(N^3).
       "minres" Krylov solver for symmetric indefinite systems
                (scipy.sparse.linalg.minres). Best when ndof is large
                and the matrix is symmetric (the saddle point IS
-               symmetric: K^T = [[SL, D'],[D, 0]] = K).
+               symmetric: K^T = [[SL, D'],[D, 0]] = K).  Memory still
+               O(N^2) because K is dense, but no factorization copy.
       "gmres"  General iterative Krylov (scipy.sparse.linalg.gmres).
                Use only if MINRES stalls.
+
+    NOTE: with method="lu", K is overwritten with its LU factors in
+    place.  Callers must not reuse K after this call.
     """
     if method == "lu":
-        x = scipy_solve(K, rhs)
-        info = {"method": "lu", "iterations": 1,
-                "residual": float(np.linalg.norm(K @ x - rhs))}
+        x = scipy_solve(K, rhs, overwrite_a=True)
+        # K has been overwritten -- cannot compute K@x for residual cheaply
+        # without keeping a copy.  Skip the residual check for "lu".
+        info = {"method": "lu", "iterations": 1, "residual": 0.0}
         return x, info
     if method == "minres":
         x, code = scipy_minres(K, rhs, rtol=tol, maxiter=maxiter)

@@ -316,16 +316,31 @@ def _solve_coil_bem_a(args):
     delta_skin = math.sqrt(2.0 / (omega * MU_0 * args.coil_sigma)) \
                   if omega > 0 else 1.0
     Z_s_coil_re = 1.0 / (args.coil_sigma * delta_skin) if omega > 0 else 0.0
+
+    # Saddle-point solver selection.
+    #   "auto" (default):  LU at < ~10k tris (~25k saddle DOFs at HDivSurface
+    #                      RT0), MINRES above that (dense LU memory cost
+    #                      doubles with overwrite_a=False and explodes the
+    #                      runner -- see commit message of this change for
+    #                      the 14972-tri OOM trace).
+    #   "lu"      dense LAPACK direct (overwrite_a=True, smallest memory
+    #             for direct solve)
+    #   "minres"  Krylov for symmetric indefinite -- recommended above 10k
+    #             tris
+    #   "gmres"   Generic Krylov -- fallback if MINRES stalls.
+    saddle = args.coil_saddle_solver
+    if saddle == "auto":
+        saddle = "lu" if len(coil_tris) < 10000 else "minres"
     progress("BEMA",
         f"ngsolve.bem solve (n_tris={len(coil_tris)}, "
-        f"fes_order=0, Z_s_re={Z_s_coil_re:.3e})")
+        f"fes_order=0, Z_s_re={Z_s_coil_re:.3e}, saddle={saddle})")
     t0 = time.perf_counter()
     res = compute_inductance_source_sink(
         coil_mesh,
         source_label=args.coil_source_name,
         sink_label=args.coil_sink_name,
         fes_order=0,
-        solver="lu",
+        solver=saddle,
         Z_s_re=Z_s_coil_re,
     )
     t_solve = time.perf_counter() - t0
@@ -1118,6 +1133,13 @@ def main():
                         help="HACApK ACA eps for coil (bem-a, future)")
     parser.add_argument("--coil-gmres-tol", type=float, default=1e-10,
                         help="HACApK GMRES tol for coil (bem-a, future)")
+    parser.add_argument("--coil-saddle-solver", default="auto",
+                        choices=["auto", "lu", "minres", "gmres"],
+                        help="Saddle-point solver for BEM-A: auto (LU < "
+                             "10000 tris, MINRES above), lu (dense LAPACK, "
+                             "overwrite_a=True), minres (Krylov symmetric "
+                             "indefinite), gmres (generic Krylov). "
+                             "Defaults to auto.")
 
     # ----- Coil material -----
     parser.add_argument("--coil-sigma", type=float, default=5.8e7,
