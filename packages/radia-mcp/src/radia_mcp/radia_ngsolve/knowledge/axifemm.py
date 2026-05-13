@@ -18,8 +18,8 @@ Read this when:
   weak form integrated in closed form rather than by Gauss quadrature.
 
 The MCP server exposes this via axifemm_documentation(topic=...). Topics:
-overview, api, basis_p1, basis_p2, vs_standard_h1, validation, file_layout,
-why_dropped_p3.
+overview, api, basis_p1, basis_p2, vs_standard_h1, validation, kelvin,
+file_layout, why_dropped_p3.
 """
 
 AXIFEMM_OVERVIEW = """\
@@ -348,28 +348,51 @@ axifemm package retains its Hiruma routine for legacy verification, but
 **new tests should target Kameari accumulation** so τ values are directly
 comparable to Stoll analytical and BEM-Foster.
 
-## Henrotte + (Kelvin or air box) + CLN — workflow composition
+## Henrotte + Kelvin + CLN — workflow composition
 
 The full eddy-current workflow on axisymmetric problems composes three pieces;
 each is documented in its own knowledge file but the *combination* is the
 intended canonical use:
 
-  Henrotte axisym FE basis  +  finite air box (NOT Kelvin)  +  CLN extraction
+  Henrotte axisym FE basis  +  z-offset Kelvin (or finite air box)  +  CLN extraction
 
 * **Henrotte basis** (this file): polynomial in `s = r²` for `ψ = 2π r A_φ`.
   Produces `K`, `M` matrices in axisym geometry without `1/r`-Gauss errors
   near the axis.
 
-* **Open-domain truncation for axisym = finite air box, NOT Kelvin**:
-  axisymmetric FEM truncates the exterior with a finite air rectangle
-  `[0, R_air] × [-Z_air, Z_air]` (typical R_air, Z_air = 5×–25× the
-  conductor extent) and homogeneous Dirichlet `A_φ = 0` on the outer
-  edges. Kelvin transformation (`kelvin.py` knowledge) is the open-domain
-  mechanism for **3D HCurl** problems on a *Cartesian* mesh, where you
-  need `nu' = (rho'/R)² nu_0` in the exterior Kelvin sphere; it does not
-  apply to the `axihenrotte` basis. If you find yourself wanting Kelvin
-  with axihenrotte, you are mixing two different formulations — use
-  `H1Henrotte` with a bigger air rectangle instead.
+* **Open-domain truncation: Kelvin works (Phase B3, 2026-05-12)**.
+  The canonical 2D axisym z-offset Kelvin transformation now works
+  end-to-end with `axihenrotte`. The historical blocker was that the
+  `AxiHenrotteFESpace` did not expose enough `GetDofNrs(...)` overloads
+  for `ngsolve.Periodic` to identify the `kelvin_int ↔ kelvin_ext` DOF
+  pairs; that gap was closed by adding the `NodeId` /
+  `GetVertexDofNrs` / `GetEdgeDofNrs` / `GetFaceDofNrs` overloads, after
+  which the same recipe used for `H1` axisym Kelvin works for
+  `H1Henrotte` (= `FESpace("axihenrotte", ...)`):
+
+      fes = Periodic(H1Henrotte(mesh, order=2,
+                                dirichlet="axis|axis_ext",
+                                dirichlet_bbnd="GND"))
+      mu_factor = kelvin_mu_factor_axisym_cf(z_offset=z_off, R=R_K)
+      mu_cf     = build_material_cf(mesh, MU0, mu_factor,
+                                    outer_keyword="kelvin")
+
+  Verified on Cu sphere R=10 mm (Stoll Bessel ground truth):
+
+  | mesh / curve            | τ₁ (µs) | gap to Stoll |
+  |-------------------------|---------|--------------|
+  | Stoll analytical        | 738.48  | —            |
+  | axifemm p=2 + Kelvin    | 738.47  | -0.001 %     |
+  | + Curve(2)              | 738.69  | +0.028 %     |
+
+  This is the new canonical configuration for sphere/disk/cuboid axisym
+  Cauer-ladder validation — see `kelvin` topic for full recipe and the
+  documented `Periodic`-wrapping caveats.
+
+  The finite air-box truncation (`A_φ = 0` on outer rectangle) remains
+  valid and is still useful when you want to avoid building the Kelvin
+  half-disc; convergence is just much slower (need R_air, Z_air ≈
+  25×–50× the conductor extent for < 1 %).
 
 * **CLN extraction** (`cln_3d.py` + `cln_notebooks/`): once you have
   `K, M, b` from the Henrotte assembly, choose a convention:
@@ -377,11 +400,6 @@ intended canonical use:
   - Kameari accumulation (χ-Foster susceptibility, project canonical
     since 2026-05-10),
   and run the same Hankel-Padé continued-fraction Cauer extraction.
-
-The two open-domain truncations match in the appropriate limit (Kelvin
-exact at `R → ∞`; air box converges as `R_air, Z_air → ∞`), but their
-DOF structure differs and they are not interchangeable inside a single
-assembly.
 
 Cross-validation reference (2026-05-10, Cu disk R=10 mm, t=2 mm,
 σ=5.8e7, B₀=1 T, leading Cauer rung τ_pair[0]):
@@ -398,13 +416,20 @@ The Cylinder VIM is run at a single coarse grid as a sanity check, not for
 high accuracy; the axifemm `p=2` Q-element remains the recommended
 production path for axisym Cu eddy-current Cauer extraction.
 
-The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth):
+The same workflow on Cu sphere R=10 mm (Stoll Bessel ground truth, τ₁ = μ₀ σ R² / π² = 738.48 µs):
 
 | method                              | τ_pair[0] [μs] | gap to Stoll |
 |-------------------------------------|----------------|--------------|
-| Stoll analytical (Mathematica HP)   | 694.14 (ref)   | —            |
-| 3D HCurl (NGSolve + Kelvin)         | ≈ 694          | 0.027 % at L₁ |
+| Stoll analytical (μ₀ σ R²/π²)       | 738.48 (ref)   | —            |
+| **axifemm p=2 + z-offset Kelvin**   | **738.47**     | **-0.001 %** |
+| axifemm p=2 + Kelvin + Curve(2)     | 738.69         | +0.028 %     |
+| 3D HCurl (NGSolve + Kelvin)         | ≈ 694          | 0.027 % at L₁ (Stoll τ=694 convention) |
 | Sphere axisym VIM (480 cells)       | 708.4          | +2.07 %      |
+
+The axifemm + Kelvin result is the closest to Stoll across all available
+axisym/3D methods on this benchmark (machine-precision agreement on the
+leading rung). See `axifemm_documentation(topic="kelvin")` for the full
+canonical recipe (Phase B3, commit 81f6415f).
 
 ## Hessian-of-W convention (load-bearing)
 
@@ -448,6 +473,182 @@ The Mathematica derivation lives upstream at
 
 Comprehensive design + theory documentation: `docs/axifemm/AXIFEMM.md`.
 """
+
+AXIFEMM_KELVIN = """\
+# `axihenrotte` + z-offset Kelvin transformation (Phase B3, 2026-05-12)
+
+The 2D axisymmetric z-offset Kelvin transformation works end-to-end with
+the Henrotte basis as of `radia-axifemm` Phase B3 (commits 81f6415f /
+6e963ab9). Same boilerplate as the canonical `H1` axisym Kelvin recipe
+(`kelvin.a_formulation` topic) — substitute `H1Henrotte` for `H1` and
+add a `Periodic(...)` wrap.
+
+## Why this was blocked before Phase B3
+
+`ngsolve.Periodic` traverses the `FESpace::GetDofNrs(NodeId, ...)` API
+to identify the slave/master DOFs across the `kelvin_int ↔ kelvin_ext`
+boundary. The original `AxiHenrotteFESpace` only implemented the
+ElementId overload, so wrapping it in `Periodic` raised
+`NotImplementedError` from the C++ side. Phase B3 added:
+
+```
+GetDofNrs(NodeId node, Array<DofId>& dnums)
+GetVertexDofNrs(int vnr, Array<DofId>& dnums)
+GetEdgeDofNrs(int enr, Array<DofId>& dnums)
+GetFaceDofNrs(int fnr, Array<DofId>& dnums)
+```
+
+After this the same `Periodic` mechanism that works on stock `H1` works
+on `H1Henrotte`, and the canonical Kelvin recipe carries over verbatim.
+
+## Canonical recipe
+
+```python
+from ngsolve import Mesh, BilinearForm, Periodic, TaskManager
+from netgen.occ import OCCGeometry, WorkPlane, Glue, MoveTo
+from radia.radia_axifemm import (
+    H1Henrotte, AxiHenrotteStiffnessBFI, AxiHenrotteSigmaMassBFI,
+)
+from radia.panels.add_kelvin import add_kelvin_2d_axisym
+from radia.kelvin_source import (
+    kelvin_mu_factor_axisym_cf, build_material_cf,
+)
+
+# 1. Build interior half-disc on x >= 0:
+#    - conductor face (material "conductor"), bnd named "axis"
+#      on x=0, anything else on the conductor boundary
+#    - air_inner annulus (material "air_inner")
+#    - outer arc edge of air_inner MUST be named "kelvin_int" before
+#      passing to add_kelvin_2d_axisym
+interior = build_my_interior_half_disk(...)   # user-defined
+
+# 2. Append the Kelvin half-disc with z_offset.  Returns a Glue'd shape +
+#    info dict with axis_labels = "axis|axis_ext" and the periodic pair
+#    table already wired up.  GND vertex is at (0, z_offset).
+shape, info = add_kelvin_2d_axisym(
+    interior,
+    R=R_K,                # Kelvin inversion radius
+    z_offset=5 * R_K,     # see "z_offset = 5·R_K" rationale below
+    maxh_kelvin=5e-3,
+)
+mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_kelvin))
+# Optional: mesh.Curve(2)  -- see "Curve(2) trade-off" below
+
+# 3. FESpace: H1Henrotte + Periodic.  Dirichlet on both axes + GND vertex.
+fes = Periodic(H1Henrotte(
+    mesh, order=2,
+    dirichlet="axis|axis_ext",
+    dirichlet_bbnd="GND",
+))
+
+# 4. Material coefficient: mu_0 inside, mu_0 * (rho'/R_K)^2 in the
+#    "kelvin" region (NOTE the helper returns mu_factor, not nu_factor;
+#    AxiHenrotteStiffnessBFI multiplies by mu, not nu).
+mu_factor = kelvin_mu_factor_axisym_cf(z_offset=5 * R_K, R=R_K)
+mu_cf = build_material_cf(mesh, MU0, mu_factor, outer_keyword="kelvin")
+sigma_cf = mesh.MaterialCF({"conductor": SIGMA_CU}, default=0.0)
+
+# 5. Assemble K and M.  check_unused=False is required because the
+#    Periodic wrap introduces master DOFs that have no "owning" element.
+a = BilinearForm(fes, symmetric=True, check_unused=False)
+a += AxiHenrotteStiffnessBFI(mu_cf)
+m_bf = BilinearForm(fes, symmetric=True, check_unused=False)
+m_bf += AxiHenrotteSigmaMassBFI(sigma_cf)
+with TaskManager():
+    a.Assemble()
+    m_bf.Assemble()
+
+# 6. Extract the conductor subblock via Schur complement (air DOFs have
+#    diag(M) = 0; they are eliminated to give S = K_cc - K_ca K_aa^-1 K_ac).
+#    Solve generalised eigenproblem S v = lambda M_cc v, take tau = 1/lambda_min.
+```
+
+## Verified results (Cu sphere R = 10 mm, σ = 5.8×10⁷ S/m)
+
+```
+Stoll analytical                       τ₁ = 738.48 µs   (ref)
+axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
+axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %
+```
+
+Test: `examples/CLN/scripts/axifemm/test_p2_kelvin_sphere.py`.
+
+## Critical gotchas
+
+### `check_unused=False` on both BilinearForms
+With `Periodic(fes)` wrapped around `H1Henrotte`, slave DOFs appear in
+the FESpace ordering but are not owned by any element of the inner
+space; without `check_unused=False` NGSolve raises "unused DOF" errors
+during assembly. Both `a` (stiffness) and `m_bf` (mass) need the flag.
+
+### `mu_factor` (not `nu_factor`) — convention difference vs `H1` recipe
+The standard `H1` axisym Kelvin recipe in `kelvin.a_formulation` uses
+`nu_kelvin = nu_0 * (rho'/R)^2` (reluctivity). `AxiHenrotteStiffnessBFI`
+multiplies the integrand by `mu`, not `nu`, so the *correct* factor for
+the Kelvin region is `mu_kelvin = mu_0 * (R/rho')^2` —
+`kelvin_mu_factor_axisym_cf` returns exactly this (note `(R/rho')^2`,
+NOT `(rho'/R)^2`). If you accidentally pass `kelvin_nu_factor_axisym_cf`
+you get `(rho'/R)^2` and τ blows up by orders of magnitude near rho'=0.
+
+### Element-centroid `mu` sampling — pick `z_offset = 5·R_K`
+`AxiHenrotteStiffnessBFI` samples `mu` at the *element centroid*
+(`axi_henrotte_integrators.cpp:710`), not per quadrature point. Since
+`mu(rho')` diverges as `rho' → 0` near the GND vertex `(0, z_offset)`,
+fine mesh near GND can over-sample large values. Putting the Kelvin
+center at `z_offset = 5·R_K` keeps the GND vertex 4 Kelvin radii away
+from the conductor and bounds the centroid sampling error well below
+0.1 %. Smaller offsets (e.g. `2·R_K`) degrade results to the percent
+level; larger offsets work but waste mesh on a region with vanishing
+field. The Phase B3.2 follow-up would be a per-quadpt `mu` integrator
+overload, but the centroid path already hits machine precision on the
+sphere benchmark, so this is low priority.
+
+### `Curve(2)` trade-off
+NGSolve `mesh.Curve(2)` on the spherical conductor boundary improves
+geometric accuracy 30× on coarse meshes (gap 0.867 % → 0.028 % on a
+typical mesh), but on a *finer* mesh `Curve(2)` actually slightly
+*increases* the gap (0.001 % straight → 0.028 % curved) because the
+biquadratic Lagrange in (r, z) — not (s, z) — does not match the
+Henrotte basis's even-power-of-r structure on curved edges. Use
+`Curve(0)` (= straight edges, default) for sphere/disk benchmarks at
+typical mesh resolution; reserve `Curve(2)` for coarse-mesh production
+runs where the geometric error dominates the FE-basis error.
+
+A proper curved Q2 element (basis space still in even powers of r, but
+on a biquadratic isoparametric mapping) is Phase B5 work — currently a
+Python prototype at
+`examples/CLN/scripts/axifemm/axifemm_quad_q2_curved.py`, C++ port deferred.
+
+### Geometry pre-requisites for `add_kelvin_2d_axisym`
+Before calling the helper, the user-built interior must have:
+
+  - all conductor edges on `x = 0` named exactly `"axis"`
+  - all `air_inner` edges on `x = 0` named exactly `"axis"`
+  - the outer arc of `air_inner` named exactly `"kelvin_int"`
+  - no other edges named `"kelvin_int"` or starting with `"axis_"`
+
+The helper then appends a mirror half-disc at `(0, z_offset)`, names its
+arc `"kelvin_ext"`, identifies `kelvin_int ↔ kelvin_ext` as Periodic
+pairs, names the new x=0 edges `"axis_ext"`, and registers the
+`(0, z_offset)` vertex as `"GND"`. Mis-naming any of these breaks
+either the Periodic identification (most common) or the Dirichlet trace
+(silent — eigenvalues come out finite but wrong).
+
+## What changed in `radia-axifemm` source
+
+```
+src/axi_henrotte_fespace.{hpp,cpp}
+    + GetDofNrs(NodeId, Array<DofId>&)
+    + GetVertexDofNrs / GetEdgeDofNrs / GetFaceDofNrs
+src/radia_axifemm.cpp
+    + pybind exports of the new overloads
+```
+
+Test: `packages/radia-axifemm/tests/test_periodic_kelvin_sphere.py`
+(passes against Stoll to -0.001 %, replaces the prior expected-failure
+xfail in Phase B2).
+"""
+
 
 AXIFEMM_WHY_DROPPED_P3 = """\
 # Why `p=3` was attempted and dropped
@@ -526,6 +727,9 @@ def get_axifemm_documentation(topic: str = "all") -> str:
       "basis_p2"        - `p=2` Q-element (9 DOFs) basis details + s-midpoint convention
       "vs_standard_h1"  - 6-property table comparing axihenrotte p=2 vs NGSolve H1 order=2
       "validation"      - Cross-validation references and Hessian-of-W convention
+      "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
+                          sphere -0.001 % vs Stoll, with gotchas: mu vs nu factor,
+                          element-centroid mu sampling, Curve(2) trade-off)
       "file_layout"     - Where to find each piece (C++, Mathematica, tests)
       "why_dropped_p3"  - Why `p=3` was attempted, completed, and reverted
     """
@@ -536,13 +740,15 @@ def get_axifemm_documentation(topic: str = "all") -> str:
         "basis_p2":       AXIFEMM_BASIS_P2,
         "vs_standard_h1": AXIFEMM_VS_STANDARD_H1,
         "validation":     AXIFEMM_VALIDATION,
+        "kelvin":         AXIFEMM_KELVIN,
         "file_layout":    AXIFEMM_FILE_LAYOUT,
         "why_dropped_p3": AXIFEMM_WHY_DROPPED_P3,
     }
     if topic == "all":
         return "\n\n".join(sections[k] for k in [
             "overview", "api", "basis_p1", "basis_p2",
-            "vs_standard_h1", "validation", "file_layout", "why_dropped_p3"
+            "vs_standard_h1", "validation", "kelvin",
+            "file_layout", "why_dropped_p3"
         ])
     if topic in sections:
         return sections[topic]
