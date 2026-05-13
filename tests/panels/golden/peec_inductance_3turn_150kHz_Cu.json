@@ -1,28 +1,28 @@
 {
-  "description": "Golden reference for PEEC-inductance on a 3-turn loft coil (multi-turn, tight pancake).",
-  "rationale": "Locks in the cross-section-centroid chain method for loft-of-profiles solids.  Kubota's 3turncoil geometry (385 circle cross-sections spiralled through 3 turns, Z-pitch ~1.3mm) is the acid test for the centroid NN-chain with tangent continuity: naive NN jumps between turns and doubles the path length.  Verified 2026-04-28: STEP-only path (no .jou) produces 426.265 nH within 0.004% of the analytic-equivalent reference 426.25 nH.  Since 4.13.0 the .jou input was retired; the canonical input is STEP and the centerline + cross-section are auto-extracted from B-Rep.",
+  "description": "Golden reference for PEEC-inductance on a 3-turn loft coil (multi-turn, tight pancake) with explicit lead bars.",
+  "rationale": "Locks in the cross-section-centroid chain method PLUS lead-bar-aware chain augmentation for loft-of-profiles solids whose terminal leads are straight cylindrical bars (CYLINDER faces, no intermediate CIRCLE samples).  Kubota's 3turncoil geometry has 2 lead bars at y=+/-12.5mm extending 60-61mm in +/-X from the helix end to the lead terminal.  Pre-2026-05-13 the NN-chain saw only the lead cap CIRCLE edges (no body samples), giving a chain like: lead_inner_cap_A -> [helix 314 segs] -> lead_inner_cap_B -> lead_outer_cap_B (61mm single seg) -> lead_outer_cap_A (25mm fake U-bend through air).  This produced L = 421.84 nH (-1.04% vs analytic 426.25 nH).  The 421.84 nH happened to be near analytic because the missing lead B body under-prediction + the fake 25mm air-jump over-prediction approximately cancelled.  Since 4.44.0 the chain is augmented after NN-chain by _augment_chain_with_lead_bars: long segs on a lead axis are subdivided into N intermediate stations; fake air-jumps at chain ends are dropped; missing lead bodies are prepended/appended.  Result: L = 426.30 nH (+0.02% vs analytic 426.25 nH, on both the in-repo 3turnCoil_work_coil.step and W:/kubota/3turncoil.stp).  The chain now correctly starts at one lead's outer tip (port +) and ends at the other lead's outer tip (port -).",
   "sample": {
     "step": "W:/kubota/3turncoil.stp",
     "skip_if_missing": true,
-    "comment": "File lives on Kubota's 100号機 share (W:) not in-repo (4 MB).  Test skips if unavailable rather than duplicating the binary in the repo.  Coordinates in metres (CLAUDE.md m-only policy)."
+    "comment": "File lives on Kubota's 100号機 share (W:) not in-repo (4 MB).  Test skips if unavailable rather than duplicating the binary in the repo.  Coordinates in metres (CLAUDE.md m-only policy).  The in-repo sibling src/radia/panels/samples/3turnCoil_work_coil.step has the same physical geometry and produces the same L (verified 2026-05-13)."
   },
   "physics": {
-    "coil": "3-turn pancake coil R_avg~35mm r_wire=3.15mm",
+    "coil": "3-turn pancake coil R_avg~35mm r_wire=3.15mm, 2 lead bars 60-61mm at y=+/-12.5mm",
     "sigma_S_per_m": 5.8e7,
     "frequency_Hz": 150000,
     "current_A": 1.0,
     "n_peri": 16
   },
   "expected": {
-    "L_coil_nH": 421.84,
-    "tolerance_L_pct": 2.0,
-    "R_coil_mOhm": 0.380,
+    "L_coil_nH": 426.30,
+    "tolerance_L_pct": 1.5,
+    "R_coil_mOhm": 0.3945,
     "tolerance_R_pct": 5.0,
     "input_kind": "STEP"
   },
   "regression_guard": {
-    "min_L_nH": 400.0,
-    "max_L_nH": 460.0,
-    "comment": "Hard band around analytic-equivalent 426 nH.  2026-04-21: (1) longest-edge on loft-of-circles gave L=4.78 nH; (2) GeomType string compare missed enum; (3) NN chain without tangent continuity got path=2x.  2026-04-28 (4.14.0): Kubota's STEP was UNITE'd (boolean union), destroying planar end-cap faces.  4.14.0 added _collect_circle_edge_centers fallback to recover cross-section centroids from the surviving CIRCLE edges (split into semicircle pairs by unite).  Result: 421.8 nH (-1.0% vs analytic, well within hard band)."
+    "min_L_nH": 415.0,
+    "max_L_nH": 440.0,
+    "comment": "Hard band centred on analytic 426.25 nH (+/-3%).  Historical baselines: 2026-04-21 longest-edge gave L=4.78 nH; GeomType string compare missed enum; NN chain without tangent continuity doubled path length.  2026-04-28 (4.14.0): _collect_circle_edge_centers recovered cross-section centroids from semicircle pairs of a UNITE'd STEP.  2026-05-13 (4.44.0): _augment_chain_with_lead_bars repairs lead-related NN-chain artifacts (single-seg lead bodies, fake U-bends, missing lead bodies) -- the 421.84 nH plateau was a topology bug masquerading as accuracy."
   }
 }

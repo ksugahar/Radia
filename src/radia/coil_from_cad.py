@@ -426,6 +426,331 @@ def _filaments_from_lateral_surface_uv(face,
     }
 
 
+def _detect_lead_bars_cad(solid, median_radius_cad: float):
+    """Detect straight lead bars in a coil STEP as CYLINDER faces.
+
+    Each detected lead is a cylindrical wire segment whose radius
+    matches the helix cross-section radius (within 10%) and whose
+    axial length is at least 5x the radius (i.e. not a short cylindrical
+    fillet).  Multiple CYLINDER faces may share an axis (e.g. when the
+    boolean unite splits the lateral cylinder into 2 half-faces); they
+    are merged into a single lead by axis identity.
+
+    For 3turnCoil_work_coil.step this returns the 2 lead bars at
+    y=+/-12.5 mm extending 60-61 mm in +/-X from the helix end to the
+    lead terminal.
+
+    Args:
+        solid: build123d Solid (CAD units, NOT yet scaled to meters).
+        median_radius_cad: median cross-section radius of the helix
+            (CAD units).  CYLINDER faces with a different radius are
+            rejected.
+
+    Returns:
+        list of lead dicts, each with:
+            "loc":      axis Location() as np.array(3,) in CAD units
+            "dir":      unit axis direction as np.array(3,)
+            "length":   total axial length (CAD units)
+            "radius":   cylinder radius (CAD units)
+            "cap_a":    one cap center (CAD units, np.array(3,))
+            "cap_b":    other cap center (CAD units)
+        Empty list if no qualifying lead bars are present.
+    """
+    from build123d import GeomType
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+
+    cyl_faces = [f for f in solid.faces() if f.geom_type == GeomType.CYLINDER]
+    leads = []
+    for f in cyl_faces:
+        try:
+            adapt = BRepAdaptor_Surface(f.wrapped)
+            cyl = adapt.Cylinder()
+            ax = cyl.Axis()
+            loc = np.array([ax.Location().X(),
+                            ax.Location().Y(),
+                            ax.Location().Z()], dtype=np.float64)
+            direc = np.array([ax.Direction().X(),
+                              ax.Direction().Y(),
+                              ax.Direction().Z()], dtype=np.float64)
+            r = float(cyl.Radius())
+        except Exception:
+            continue
+        # Radius must match median cross-section radius (10% spread).
+        if median_radius_cad > 0 and abs(r - median_radius_cad) / median_radius_cad > 0.1:
+            continue
+        # Compute axial extent from face bounding box (project corners).
+        bb = f.bounding_box()
+        bb_min = np.array([bb.min.X, bb.min.Y, bb.min.Z], dtype=np.float64)
+        bb_max = np.array([bb.max.X, bb.max.Y, bb.max.Z], dtype=np.float64)
+        ts = []
+        for cx in (bb_min[0], bb_max[0]):
+            for cy in (bb_min[1], bb_max[1]):
+                for cz in (bb_min[2], bb_max[2]):
+                    ts.append(float(np.dot(
+                        np.array([cx, cy, cz], dtype=np.float64) - loc,
+                        direc)))
+        t_min, t_max = min(ts), max(ts)
+        length = t_max - t_min
+        # Reject short cylinders (fillets, cap radii).  A real lead bar
+        # is at least ~5 wire-radii long; helix profile cylinders are
+        # never that long.
+        if length < 5.0 * r:
+            continue
+        cap_a = loc + direc * t_min
+        cap_b = loc + direc * t_max
+        # Merge with an existing lead that shares this axis (same axis
+        # line, same cap positions up to direction sign).  Two CYLINDER
+        # faces with cap_a/cap_b swapped (because the unite split the
+        # cylinder into 2 lateral half-faces with opposite axis_dir
+        # parameterisation) get merged here.
+        merged = False
+        for existing in leads:
+            same_cap = (
+                (np.linalg.norm(cap_a - existing["cap_a"]) < 1e-6 and
+                 np.linalg.norm(cap_b - existing["cap_b"]) < 1e-6) or
+                (np.linalg.norm(cap_a - existing["cap_b"]) < 1e-6 and
+                 np.linalg.norm(cap_b - existing["cap_a"]) < 1e-6))
+            if same_cap:
+                merged = True
+                break
+        if not merged:
+            # Store axis as (cap_a + axis_dir_normed * t) with t in
+            # [0, length].  This way _point_on_lead_axis can use t in
+            # [0, length] without caring about the BRepAdaptor's loc
+            # parameterisation (which may put loc at EITHER end).
+            length_ab = float(np.linalg.norm(cap_b - cap_a))
+            if length_ab > 1e-12:
+                axis_dir_ab = (cap_b - cap_a) / length_ab
+            else:
+                axis_dir_ab = direc
+            leads.append({"loc": loc, "dir": direc,  # raw BRepAdaptor values
+                          "length": length_ab,
+                          "radius": r,
+                          "cap_a": cap_a, "cap_b": cap_b,
+                          "axis_dir_ab": axis_dir_ab})
+    return leads
+
+
+def _classify_lead_caps(leads: list, chain_centroids_cad: np.ndarray):
+    """For each lead, decide which cap is INNER (attached to helix) vs OUTER (tip).
+
+    Inner = closer to a helix-only centroid (chain vertex that is NOT
+    itself at a lead cap position).  Without the helix-only filter, the
+    chain vertices at lead cap positions create distance=0 ties on both
+    caps and argmin picks the wrong cap (whichever appears first), which
+    flips the orientation.  See the W:/kubota/3turncoil.stp case where
+    chain[0] = inner_cap AND chain[-1] = outer_cap of the same lead --
+    both produce d=0 and argmin returns the first match.
+
+    Mutates each lead dict in place, adding "inner_cap" and "outer_cap".
+    """
+    if chain_centroids_cad.shape[0] == 0:
+        for lead in leads:
+            lead["inner_cap"] = lead["cap_a"]
+            lead["outer_cap"] = lead["cap_b"]
+        return
+    # Build helix-only set: chain vertices NOT at any lead cap position.
+    # Tolerance = 0.5 * smallest lead radius (catches exact cap matches
+    # but not nearby helix points).
+    if leads:
+        cap_match_tol = 0.5 * min(lead["radius"] for lead in leads)
+    else:
+        cap_match_tol = 1e-6
+    helix_mask = np.ones(chain_centroids_cad.shape[0], dtype=bool)
+    for lead in leads:
+        for cap in (lead["cap_a"], lead["cap_b"]):
+            d = np.linalg.norm(chain_centroids_cad - cap, axis=1)
+            helix_mask &= (d > cap_match_tol)
+    if not np.any(helix_mask):
+        # Fallback: every vertex is a lead cap (degenerate)
+        helix_only = chain_centroids_cad
+    else:
+        helix_only = chain_centroids_cad[helix_mask]
+    for lead in leads:
+        d_a = float(np.min(np.linalg.norm(helix_only - lead["cap_a"], axis=1)))
+        d_b = float(np.min(np.linalg.norm(helix_only - lead["cap_b"], axis=1)))
+        if d_a <= d_b:
+            lead["inner_cap"] = lead["cap_a"]
+            lead["outer_cap"] = lead["cap_b"]
+        else:
+            lead["inner_cap"] = lead["cap_b"]
+            lead["outer_cap"] = lead["cap_a"]
+
+
+def _point_on_lead_axis(p: np.ndarray, lead: dict,
+                        perp_tol_factor: float = 1.5) -> bool:
+    """Return True if point ``p`` lies within ``perp_tol_factor*radius`` of
+    the lead's axis line, AND its along-axis parameter is within [0, length].
+
+    Uses ``cap_a`` as origin and ``axis_dir_ab`` as direction, NOT the raw
+    BRepAdaptor ``loc``/``dir`` which may parameterise the axis with loc
+    at EITHER cap and dir pointing in either direction along the axis line.
+    """
+    v = p - lead["cap_a"]
+    t = float(np.dot(v, lead["axis_dir_ab"]))
+    if t < -1e-9 or t > lead["length"] + 1e-9:
+        return False
+    perp = v - t * lead["axis_dir_ab"]
+    return float(np.linalg.norm(perp)) < perp_tol_factor * lead["radius"]
+
+
+def _segment_on_lead_body(p0: np.ndarray, p1: np.ndarray, lead: dict) -> bool:
+    """Return True if both segment endpoints lie on the same lead axis."""
+    return _point_on_lead_axis(p0, lead) and _point_on_lead_axis(p1, lead)
+
+
+def _augment_chain_with_lead_bars(centroids_cad: np.ndarray,
+                                  radii_cad: np.ndarray,
+                                  leads: list,
+                                  median_seg_len_cad: float):
+    """Repair an NN-chain that suffers from lead-related artifacts.
+
+    The NN-chain on dedup'd cross-section CIRCLE centers handles the
+    helix densely (sub-mm samples) but the straight lead bars are
+    represented by only their cap circles -- producing 1-segment leads
+    and, when a lead's body is entirely skipped, a "fake" segment
+    jumping through air between two unrelated cap positions.
+
+    This helper post-processes the chain to:
+      1. Subdivide each long segment whose endpoints both lie on the
+         same lead axis -- this IS the lead body, just under-sampled.
+      2. Drop orphan trailing vertices that produce a fake air-jump
+         (e.g. v[-1] is dangling at a lead's outer tip with no path
+         through wire reaching it).
+      3. Prepend / append missing lead bodies for leads whose body is
+         not present anywhere in the chain.  An end of the chain that
+         coincides with a lead's inner cap becomes the attachment
+         point.
+
+    Args:
+        centroids_cad: (N, 3) NN-chain centroids in CAD units.
+        radii_cad: (N,) per-centroid radius in CAD units.
+        leads: list of lead dicts as returned by _detect_lead_bars_cad
+            and classified by _classify_lead_caps.
+        median_seg_len_cad: median segment length of the input chain
+            (CAD units); used to set the long-segment threshold and
+            the subdivision density.
+
+    Returns:
+        (new_centroids_cad, new_radii_cad): repaired chain.
+    """
+    if not leads or len(centroids_cad) < 2:
+        return centroids_cad, radii_cad
+
+    long_thresh = 5.0 * median_seg_len_cad
+    n_stations_per_lead_body = lambda L: max(2, min(50, int(round(
+        L / max(median_seg_len_cad, 1e-12)))))
+    # Cap inclusion tolerance: how close a chain vertex must be to a
+    # lead's cap to count as a hit (in CAD units).
+    cap_match_tol = max(2.0 * median_seg_len_cad,
+                        1.5 * max(lead["radius"] for lead in leads))
+
+    centroids = list(centroids_cad)
+    radii = list(radii_cad)
+
+    # --- Step 1: subdivide long segments that lie on a single lead's body.
+    # Walk the chain backwards (so indices remain valid as we splice).
+    i = len(centroids) - 1
+    while i >= 1:
+        p0 = centroids[i - 1]
+        p1 = centroids[i]
+        seg_len = float(np.linalg.norm(p1 - p0))
+        if seg_len > long_thresh:
+            host_lead = None
+            for lead in leads:
+                if _segment_on_lead_body(p0, p1, lead):
+                    host_lead = lead
+                    break
+            if host_lead is not None:
+                # Subdivide into n new stations between p0 and p1.
+                n_new = n_stations_per_lead_body(seg_len)
+                for k in range(n_new - 1, 0, -1):
+                    alpha = k / n_new
+                    p_new = (1.0 - alpha) * p0 + alpha * p1
+                    centroids.insert(i, p_new)
+                    radii.insert(i, host_lead["radius"])
+        i -= 1
+
+    # --- Step 2: drop a dangling LAST vertex that produces a fake jump.
+    # After step 1 the chain has all valid lead-body segs subdivided,
+    # so any remaining long segment whose endpoints are not co-axial on
+    # a single lead is a fake jump.  We only handle the boundary case
+    # where the LAST segment is fake (the only one observed in
+    # 3turnCoil_work_coil.step's broken chain).  Interior fake jumps
+    # would require a graph-split which is out of scope here.
+    if len(centroids) >= 2:
+        last_seg_len = float(np.linalg.norm(centroids[-1] - centroids[-2]))
+        if last_seg_len > long_thresh:
+            on_a_lead = any(
+                _segment_on_lead_body(centroids[-2], centroids[-1], lead)
+                for lead in leads)
+            if not on_a_lead:
+                # Drop the orphan tip.  The chain now ends at what used
+                # to be v[-2], which (for 3turnCoil) is a lead outer
+                # tip -- a valid port location.
+                centroids.pop()
+                radii.pop()
+    # Symmetric check at the chain start.
+    if len(centroids) >= 2:
+        first_seg_len = float(np.linalg.norm(centroids[1] - centroids[0]))
+        if first_seg_len > long_thresh:
+            on_a_lead = any(
+                _segment_on_lead_body(centroids[0], centroids[1], lead)
+                for lead in leads)
+            if not on_a_lead:
+                centroids.pop(0)
+                radii.pop(0)
+
+    # --- Step 3: prepend/append a missing lead body to either chain end.
+    # For each lead, decide whether its body is already in the chain.
+    # We say "in the chain" if some segment has both endpoints on this
+    # lead's axis.  If not, the lead is missing; we attach it at the
+    # chain end whose vertex matches its inner_cap.
+    centroids_arr = np.array(centroids)
+    for lead in leads:
+        # Already represented?
+        already = False
+        for j in range(len(centroids) - 1):
+            if _segment_on_lead_body(centroids[j], centroids[j + 1], lead):
+                already = True
+                break
+        if already:
+            continue
+        # Find which chain endpoint matches this lead's inner cap.
+        d_start = float(np.linalg.norm(centroids[0] - lead["inner_cap"]))
+        d_end = float(np.linalg.norm(centroids[-1] - lead["inner_cap"]))
+        n_new = n_stations_per_lead_body(lead["length"])
+        if d_start <= d_end and d_start <= cap_match_tol:
+            # Prepend: outer_tip -> stations -> inner_cap (= existing chain start).
+            new_stations = []
+            new_radii = []
+            for k in range(n_new + 1):  # include both endpoints
+                alpha = k / n_new
+                p_new = (1.0 - alpha) * lead["outer_cap"] + alpha * lead["inner_cap"]
+                new_stations.append(p_new)
+                new_radii.append(lead["radius"])
+            # Drop duplicate inner_cap -- existing chain[0] is the inner end.
+            new_stations = new_stations[:-1]
+            new_radii = new_radii[:-1]
+            centroids = new_stations + centroids
+            radii = new_radii + radii
+        elif d_end < d_start and d_end <= cap_match_tol:
+            # Append: inner_cap (= existing chain end) -> stations -> outer_tip.
+            new_stations = []
+            new_radii = []
+            for k in range(n_new + 1):
+                alpha = k / n_new
+                p_new = (1.0 - alpha) * lead["inner_cap"] + alpha * lead["outer_cap"]
+                new_stations.append(p_new)
+                new_radii.append(lead["radius"])
+            new_stations = new_stations[1:]  # drop duplicate inner_cap
+            new_radii = new_radii[1:]
+            centroids = centroids + new_stations
+            radii = radii + new_radii
+
+    return np.array(centroids), np.array(radii)
+
+
 def _filaments_from_circle_edges_per_station(solid,
                                                 cad_units_per_meter: float,
                                                 sigma: float,
@@ -579,6 +904,33 @@ def _filaments_from_circle_edges_per_station(solid,
         ordered = [kept[i] for i in perm]
         centroids_m = centers_cad[perm] / cad_units_per_meter
         radii_m = np.array([d["radius"] for d in ordered]) / cad_units_per_meter
+
+    # Repair lead-related artifacts in the NN-chain:
+    # - Single-segment lead bodies (no intermediate samples)
+    # - Fake air-jumps between unrelated lead tips
+    # - Lead bodies missing from the chain entirely
+    # See _augment_chain_with_lead_bars docstring for details.
+    leads_cad = _detect_lead_bars_cad(solid, median_r)
+    if leads_cad:
+        centroids_cad_chain = centroids_m * cad_units_per_meter
+        radii_cad_chain = radii_m * cad_units_per_meter
+        _classify_lead_caps(leads_cad, centroids_cad_chain)
+        seg_lens_cad = np.linalg.norm(
+            np.diff(centroids_cad_chain, axis=0), axis=1)
+        # Use median over the SHORT segments only (lead jumps would
+        # poison the median otherwise).  Filter by length < 5x mean.
+        if len(seg_lens_cad) > 0:
+            mean_seg = float(np.mean(seg_lens_cad))
+            short_segs = seg_lens_cad[seg_lens_cad < 5.0 * mean_seg]
+            median_seg_cad = float(np.median(short_segs)) if len(short_segs) > 0 \
+                else float(np.median(seg_lens_cad))
+        else:
+            median_seg_cad = 1.0
+        centroids_cad_chain, radii_cad_chain = _augment_chain_with_lead_bars(
+            centroids_cad_chain, radii_cad_chain,
+            leads_cad, median_seg_cad)
+        centroids_m = centroids_cad_chain / cad_units_per_meter
+        radii_m = radii_cad_chain / cad_units_per_meter
 
     # Parallel-transport frame on the chained centerline.  By
     # construction of the loft, each cross-section's normal is along
