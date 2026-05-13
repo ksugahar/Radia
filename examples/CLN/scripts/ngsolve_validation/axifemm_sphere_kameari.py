@@ -21,6 +21,8 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 import numpy as np
 import scipy.linalg as la
+import scipy.sparse as sp
+import scipy.sparse.linalg as sla
 import mpmath as mp
 
 mp.mp.dps = 80
@@ -137,38 +139,153 @@ def hankel_pade_cauer(alphas, max_stages):
     return p
 
 
-def schur_foster_kameari(K_dense, M_dense, b, cond_idx, air_idx, label=""):
+def _generalized_eigh_gpu(S_np, M_np):
+    """Generalized eigh via Cholesky transform with GPU/CPU dispatch.
+
+    Solve S v = λ M v with M SPD: decompose M = L L^T, transform
+    to standard form C = L^{-1} S L^{-T}, eigh(C) → λ, w; recover
+    v = L^{-T} w. Eigenvectors satisfy v^T M v = 1.
+
+    Strategy: do Cholesky + triangular solves on GPU (cheap), then
+    eigh of standard-form C on CPU because cuSOLVER eigh needs
+    ~5x matrix memory and A100 40GB OOMs at N>~25000. GPU is still
+    used for the most expensive non-eigh kernels.
+    """
+    import cupy as cp
+    from cupyx.scipy.linalg import solve_triangular as cp_solve_tri
+
+    S_gpu = cp.asarray(S_np)
+    M_gpu = cp.asarray(M_np)
+    print(f"  [GPU] Cholesky of M ({M_gpu.shape[0]}x{M_gpu.shape[1]}) ...")
+    L_gpu = cp.linalg.cholesky(M_gpu)
+    del M_gpu
+    print(f"  [GPU] Transform to standard form C = L^-1 S L^-T ...")
+    Linv_S = cp_solve_tri(L_gpu, S_gpu, lower=True)
+    del S_gpu
+    C_gpu = cp_solve_tri(L_gpu, Linv_S.T, lower=True).T
+    del Linv_S
+    C_gpu = 0.5 * (C_gpu + C_gpu.T)
+    # eigh on C: try GPU first, fall back to CPU if cuSOLVER OOM.
+    N = C_gpu.shape[0]
+    try:
+        print(f"  [GPU] eigh of C ({N}x{N}) ...")
+        eigvals_gpu, W_gpu = cp.linalg.eigh(C_gpu)
+        del C_gpu
+        print(f"  [GPU] Back-transform v = L^-T w ...")
+        V_gpu = cp_solve_tri(L_gpu.T, W_gpu, lower=False)
+        del L_gpu, W_gpu
+        eigvals = cp.asnumpy(eigvals_gpu)
+        eigvecs = cp.asnumpy(V_gpu)
+        del eigvals_gpu, V_gpu
+    except Exception as e:
+        print(f"  [GPU eigh failed: {e}] falling back to CPU eigh on C ...")
+        C_cpu = cp.asnumpy(C_gpu)
+        del C_gpu
+        cp.get_default_memory_pool().free_all_blocks()
+        print(f"  [CPU] eigh of C ({N}x{N}) ... (may take 30-60 min)")
+        eigvals, W_cpu = la.eigh(C_cpu, overwrite_a=True)
+        del C_cpu
+        print(f"  [GPU] Back-transform v = L^-T w (GPU) ...")
+        W_gpu = cp.asarray(W_cpu)
+        del W_cpu
+        V_gpu = cp_solve_tri(L_gpu.T, W_gpu, lower=False)
+        del L_gpu, W_gpu
+        eigvecs = cp.asnumpy(V_gpu)
+        del V_gpu
+    cp.get_default_memory_pool().free_all_blocks()
+    return eigvals, eigvecs
+
+
+def schur_foster_kameari(K_sp, M_sp, b, cond_idx, air_idx,
+                          label="", use_gpu=True):
+    """Foster spectrum via dense Schur complement + Cholesky-transform eigh.
+
+    K_sp, M_sp are sparse matrices on the free DOF set. Block submatrices
+    are extracted as sparse then converted to dense one at a time so we
+    avoid allocating the full free-DOF dense matrices (saves ~80 GB for
+    Q2 fine: 71631² × 8 × 2 = 82 GB).
+    """
     print(f"\n  [{label}] cond DOFs={len(cond_idx)}, air DOFs={len(air_idx)}")
-    K_aa = K_dense[air_idx[:, None], air_idx[None, :]]
-    K_ac = K_dense[air_idx[:, None], cond_idx[None, :]]
-    K_ca = K_dense[cond_idx[:, None], air_idx[None, :]]
-    K_cc = K_dense[cond_idx[:, None], cond_idx[None, :]]
-    M_cc = M_dense[cond_idx[:, None], cond_idx[None, :]]
+    # K_aa is sparse FE stiffness; keep it sparse and use sparse splu
+    # for K_aa^{-1} K_ac. Sparse LU fill-in (~N^1.5 entries) is far smaller
+    # than the dense 7.8 GB Cholesky workspace that OOMs at Q2 fine.
+    print(f"  Extracting K_aa block ({len(air_idx)}^2) sparse ...")
+    K_aa_sp = sp.csc_matrix(K_sp[air_idx[:, None], air_idx[None, :]])
+    print(f"  K_aa sparse: nnz={K_aa_sp.nnz}, mem={K_aa_sp.data.nbytes/1e6:.1f} MB")
+    print(f"  Extracting K_ac block ({len(air_idx)}x{len(cond_idx)}) dense ...")
+    K_ac = np.asarray(K_sp[air_idx[:, None], cond_idx[None, :]].todense())
+    print(f"  Sparse splu(K_aa) factorization ...")
+    K_aa_lu = sla.splu(K_aa_sp)
+    print(f"  Sparse solve Y = K_aa^-1 K_ac (full dense RHS) ...")
+    Y = K_aa_lu.solve(K_ac)
+    del K_aa_lu, K_aa_sp
+    print(f"  Extracting K_cc block ({len(cond_idx)}^2) ...")
+    K_cc = np.asarray(K_sp[cond_idx[:, None], cond_idx[None, :]].todense())
+    print(f"  Building S = K_cc - K_ac.T @ Y ({len(cond_idx)}^2 GEMM) ...")
+    S = K_cc - K_ac.T @ Y
+    S = 0.5 * (S + S.T)
+    del K_ac, Y, K_cc
+    print(f"  Extracting M_cc block ({len(cond_idx)}^2) ...")
+    M_cc = np.asarray(M_sp[cond_idx[:, None], cond_idx[None, :]].todense())
     b_c = b[cond_idx]
 
-    print(f"  Building Schur complement ...")
-    K_aa_inv_K_ac = la.solve(K_aa, K_ac, assume_a="pos")
-    S = K_cc - K_ca @ K_aa_inv_K_ac
-    S = 0.5 * (S + S.T)
+    # Adaptive Tikhonov: try eigh with progressively larger α until Cholesky
+    # succeeds. With cell-based cond_idx, this loop typically exits at α=0.
+    # In-place diagonal modification avoids np.eye(N) which is 13 GB at N=40k.
+    m_max = float(np.max(np.abs(np.diag(M_cc))))
+    orig_diag = np.diag(M_cc).copy()
+    eigvals = None
+    eigvecs = None
+    for alpha_rel in [0.0, 1e-12, 1e-10, 1e-8, 1e-6, 1e-4]:
+        alpha = alpha_rel * m_max
+        if alpha > 0:
+            np.fill_diagonal(M_cc, orig_diag + alpha)
+        else:
+            np.fill_diagonal(M_cc, orig_diag)
+        try:
+            if use_gpu:
+                eigvals, eigvecs = _generalized_eigh_gpu(S, M_cc)
+            else:
+                print(f"  CPU eigh (α_rel={alpha_rel:.0e}) ...")
+                eigvals, eigvecs = la.eigh(S, M_cc)
+            print(f"  [eigh OK] α_rel={alpha_rel:.0e}")
+            break
+        except Exception as e:
+            print(f"  [eigh failed] α_rel={alpha_rel:.0e}: {e}")
+            continue
+    # Restore M_cc for subsequent M-norm normalization
+    np.fill_diagonal(M_cc, orig_diag)
+    if eigvals is None:
+        raise RuntimeError("All Tikhonov α values failed; "
+                            "M_cc fundamentally indefinite")
 
-    eigvals, eigvecs = la.eigh(S, M_cc)
-    for k in range(len(eigvals)):
+    # M-norm renormalize (eigh from Cholesky transform already satisfies this,
+    # but recompute for robustness against GPU FP rounding)
+    for k in range(eigvecs.shape[1]):
         v = eigvecs[:, k]
         nrm = float(v @ (M_cc @ v))
         if nrm > 1e-30:
             eigvecs[:, k] = v / np.sqrt(nrm)
 
-    tau_seconds_all = np.where(eigvals > 1e-30, 1.0 / eigvals, 0.0)
+    tau_seconds_all = np.where(np.abs(eigvals) > 1e-30, 1.0 / eigvals, 0.0)
     tau_us = tau_seconds_all * 1e6
     g = eigvecs.T @ b_c
     g2 = g * g
 
     order = np.argsort(-g2)
-    print(f"  Top 10 modes by |g|^2:")
-    for rank in range(min(10, len(order))):
+    g2_total = float(np.sum(g2))
+    foster_modes = []
+    print(f"  Top 15 modes by |g|^2:")
+    for rank in range(min(15, len(order))):
         idx = order[rank]
         print(f"    rank={rank}: tau={tau_us[idx]:.4f} us, "
               f"g2={g2[idx]:.4e}")
+        foster_modes.append({
+            "rank": rank,
+            "tau_us": float(tau_us[idx]),
+            "g2": float(g2[idx]),
+            "g2_normalized": float(g2[idx]) / g2_total if g2_total > 0 else 0.0,
+        })
 
     n_use = min(80, int(np.sum(g2 > 1e-32)))
     sorted_idx = order[:n_use]
@@ -201,22 +318,29 @@ def schur_foster_kameari(K_dense, M_dense, b, cond_idx, air_idx, label=""):
     return {
         "label": label,
         "leading_tau_us": float(tau_us[order[0]]),
+        "top_modes": foster_modes,
         "Cauer_rungs_Kameari": rungs,
     }
 
 
 def main():
+    # Q1 default (order=1): dense Schur + Cholesky-transform GPU eigh.
+    # medium = NR=40/Nz=80, fine = NR=80/Nz=160. Q2 (order=2) was attempted
+    # as an upgrade but Q2 fine eigh exceeds A100 40GB cuSOLVER memory and
+    # Cauer high-k extraction degrades; documented as future work in the
+    # supplement paper. Q1 fine remains the production axifemm path for
+    # sphere Cauer extraction.
     cases = [
         (40,  80, 12, 12, 100e-3, 100e-3, "medium"),
         (80, 160, 15, 15, 200e-3, 200e-3, "fine"),
     ]
     all_res = {}
     for NR_s, Nz_s, NR_a, Nz_a, R_a, Z_a, lbl in cases:
-        print(f"\n=== axifemm Kameari Cu sphere: NR_s={NR_s} Nz_s={Nz_s} "
+        print(f"\n=== axifemm Q2 Kameari Cu sphere: NR_s={NR_s} Nz_s={Nz_s} "
               f"NR_a={NR_a} Nz_a={Nz_a} R_air={R_a*1e3}mm  {lbl} ===")
         ngsglobals.msg_level = 0
         mesh = make_sphere_quad_mesh(NR_s, Nz_s, NR_a, Nz_a, R_a, Z_a)
-        fes = H1Henrotte(mesh, dirichlet="axis|right|top|bot")
+        fes = H1Henrotte(mesh, order=1, dirichlet="axis|right|top|bot")
         n_free = sum(1 for f in fes.FreeDofs() if f)
         print(f"  mesh ne={mesh.ne}, ndof={fes.ndof}, free={n_free}")
 
@@ -248,25 +372,43 @@ def main():
         M_red = M_csr[free[:, None], free[None, :]]
         b_red = b_full[free]
 
-        K_dense = K_red.toarray()
-        M_dense = M_red.toarray()
-        M_diag = np.diag(M_dense)
-        cond_mask = np.abs(M_diag) > 1e-25
-        cond_idx = np.where(cond_mask)[0]
-        air_idx = np.where(~cond_mask)[0]
+        # Cell-based cond classification: a DOF is "conductor" iff at
+        # least one of its supporting elements is in the conductor
+        # material. This is the FEM-correct classification and yields
+        # a strictly PD M_cc submatrix on cond_idx (avoids the M_diag>0
+        # threshold ambiguity that broke Q2 Cholesky).
+        from ngsolve import VOL
+        materials = mesh.GetMaterials()
+        cond_global = set()
+        for el in mesh.Elements(VOL):
+            mat_name = materials[el.mat] if isinstance(el.mat, int) else el.mat
+            if str(mat_name).startswith("conductor"):
+                for d in fes.GetDofNrs(el):
+                    if d >= 0:
+                        cond_global.add(int(d))
+        # Map global DOF index -> position in `free` array
+        free_to_local = {int(g): i for i, g in enumerate(free)}
+        cond_idx = np.array(sorted(free_to_local[d] for d in cond_global
+                                    if d in free_to_local), dtype=int)
+        air_mask = np.ones(len(free), dtype=bool)
+        air_mask[cond_idx] = False
+        air_idx = np.where(air_mask)[0]
+        print(f"  Cell-based cond_idx: {len(cond_idx)} DOFs "
+              f"(air_idx: {len(air_idx)} DOFs)")
 
-        all_res[lbl] = schur_foster_kameari(K_dense, M_dense, b_red,
-                                            cond_idx, air_idx, label=lbl)
+        all_res[lbl] = schur_foster_kameari(
+            K_red, M_red, b_red, cond_idx, air_idx,
+            label=lbl, use_gpu=True)
 
     print("\n" + "="*78)
-    print("Summary: axifemm Q1 Kameari Cauer-I (sphere Cu)")
+    print("Summary: axifemm Q2 Kameari Cauer-I (sphere Cu)")
     print("="*78)
     print(f"  Stoll analytical leading tau (Mathematica HP) = 694.14 us")
     for lbl, r in all_res.items():
         rungs = r["Cauer_rungs_Kameari"]
         if rungs:
             tau0 = rungs[0]["tau_pair_us"]
-            print(f"  {lbl:<10} axifemm Q1 sphere Kameari "
+            print(f"  {lbl:<10} axifemm Q2 sphere Kameari "
                   f"tau_pair[0] = {tau0:.4f} us")
 
     out_path = (Path(__file__).parent

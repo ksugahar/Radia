@@ -635,6 +635,8 @@ def axifemm_documentation(topic: str = "all") -> str:
             "basis_p2"        - p=2 Q-element (9 DOFs) basis + s-midpoint convention
             "vs_standard_h1"  - 6-property comparison table vs H1 order=2
             "validation"      - cross-validation references; Hessian-of-W convention
+            "kelvin"          - Phase B3 z-offset Kelvin recipe (Periodic + H1Henrotte,
+                                sphere -0.001 % vs Stoll, mu-vs-nu factor & Curve(2) gotchas)
             "file_layout"     - where each piece lives (C++, Mathematica, tests)
             "why_dropped_p3"  - why p=3 was attempted and reverted (Vandermonde cond ~ 1e30)
     """
