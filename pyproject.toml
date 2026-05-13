@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.44.0"
+version = "4.45.0"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -40,6 +40,16 @@ dependencies = [
     # Fork wheel: https://github.com/ksugahar/netgen/releases
     # Install: python install_full.py (radia + netgen fork in one command)
     # Without the fork: export_NGSolveCurvedMesh() will not work
+    # NOTE (2026-05-13): tried bumping to 6.2.2604; reverted because
+    # 2604 switched the BLAS backend to OpenBLAS (new `ngsolve-openblas`
+    # mandatory dep) which conflicts with CLAUDE.md "Intel MKL only"
+    # policy, AND because the upstream HTool callback bridge added in
+    # 2604 (commit d90c59ea) is NOT yet wired into `use_hmatrix=` kwargs
+    # on LaplaceSL/HelmholtzSL/etc. -- the kwarg is silently absorbed
+    # by **kwargs and ignored. Wait for Joachim's full HTool wiring
+    # before bumping again; that bump will also need to rebuild the
+    # `_radia_pybind.pyd` (NGSolve `ngfem::CoefficientFunction` ABI
+    # changed between 2603 and 2604, causing import-time failure).
     "ngsolve==6.2.2603",
     "netgen-mesher==6.2.2603",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
