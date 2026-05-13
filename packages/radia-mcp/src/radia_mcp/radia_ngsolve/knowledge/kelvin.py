@@ -455,6 +455,15 @@ unchanged between interior and exterior domains, simplifying the
 transformation. The physical domain lives on x >= 0 (r = x, z = y)
 and uses H1 scalar FES with u = r * A_phi substitution.
 
+**Same recipe also works with `axihenrotte`** (Phase B3, 2026-05-12).
+Substitute `H1Henrotte(...)` for `H1(...)`, wrap with `Periodic(...)`,
+pass `kelvin_mu_factor_axisym_cf` to `AxiHenrotteStiffnessBFI`, and set
+`check_unused=False` on the BilinearForm.  Sphere Cu R=10 mm hits
+Stoll to -0.001 % with this configuration.  See
+`axifemm_documentation(topic="kelvin")` for the canonical recipe and
+the documented gotchas (`mu` vs `nu` factor convention, element-
+centroid mu sampling, Curve(2) trade-off).
+
 **Verified 2026-04-14**: L is independent of Kelvin radius R within
 0.07% for R in [0.08, 0.25] m on a R_coil=30mm + R_wp=25mm test case,
 confirming the reluctivity modulation formula nu_0 * (rho'/R)^2 is
