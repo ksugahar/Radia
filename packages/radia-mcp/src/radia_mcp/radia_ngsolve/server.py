@@ -32,6 +32,8 @@ from .knowledge.md2html import get_md2html_documentation
 from .knowledge.ngsolve import get_ngsolve_documentation
 from .knowledge.sparsesolv import get_sparsesolv_documentation
 from .knowledge.kelvin import get_kelvin_documentation
+from .knowledge.kelvin_identify_post_hoc import (
+    get_post_hoc_documentation as _get_kelvin_identify_post_hoc_doc)
 from .knowledge.axifemm import get_axifemm_documentation
 from .knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
 from .knowledge.peec_inductance import get_peec_inductance_documentation
@@ -582,6 +584,78 @@ def cln_sphere_dd_pipeline() -> str:
         Sugahara TEAM 28.
     """
     return get_cln_sphere_dd_documentation()
+
+
+@mcp.tool()
+def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
+    """
+    Add Kelvin Periodic Identifications to an existing NGSolve mesh
+    AFTER load (no Cubit launcher / OCC Identify needed).
+
+    Use this when you have a `.vol` file with `kelvin_int` /
+    `kelvin_ext` boundary labels but no `Identifications` section yet
+    -- typical when the Cubit C++ exporter's all-or-nothing vertex
+    matching skipped due to a single tolerance miss (1/8-octant
+    geometry), or when the mesh came from outside the Cubit panel
+    pipeline.
+
+    Public Python API (call this from user code, NOT from the AI):
+        from radia import add_kelvin_identification
+        info = add_kelvin_identification(mesh)
+        # -> dict(n_pairs, n_unmatched, kelvin_offset, max_dist, ...)
+
+    Args:
+        topic: Documentation topic. Options:
+            "all"           - Full documentation (overview + API + workflow + caveats)
+            "overview"      - Why this exists, when to use, the 3-line solution
+            "api"           - add_kelvin_identification() signature + return dict
+            "workflow"      - 3-step usage: detect_offset -> add -> verify
+            "snippet"       - Copy-paste minimal example code
+            "caveats"       - 1:1 mesh requirement, tolerance, idnr handling
+            "verify"        - If vol_path given: load .vol and run helper
+                              (returns the helper's diagnostic dict as text)
+        vol_path: optional path to a .vol file to actually run the helper
+                  against (only used when topic="verify").
+
+    Companion tool: `kelvin_transformation` provides the underlying
+    theory (Kelvin inversion, material scaling, formulations).  This
+    tool is specifically about the post-hoc identification helper.
+    """
+    if topic == "verify":
+        if not vol_path:
+            return ("topic='verify' requires vol_path argument.  "
+                    "Pass the path to a .vol file with kelvin_int / "
+                    "kelvin_ext labels.")
+        import json
+        import os
+        if not os.path.exists(vol_path):
+            return f"vol_path not found: {vol_path}"
+        try:
+            from ngsolve import Mesh
+            from radia import (add_kelvin_identification,
+                                detect_kelvin_offset,
+                                has_kelvin_identification)
+        except ImportError as e:
+            return (f"Cannot import ngsolve / radia in this process: {e}.  "
+                    f"This tool needs radia + ngsolve installed in the MCP "
+                    f"server's Python environment.")
+        mesh = Mesh(vol_path)
+        report = {
+            "vol_path": vol_path,
+            "materials": list(mesh.GetMaterials()),
+            "boundaries": list(mesh.GetBoundaries()),
+            "has_existing_identifications": has_kelvin_identification(mesh),
+            "detected_offset": detect_kelvin_offset(mesh),
+        }
+        try:
+            info = add_kelvin_identification(mesh)
+            report["add_kelvin_identification"] = info
+            report["status"] = "ok"
+        except ValueError as e:
+            report["status"] = "error"
+            report["error"] = str(e)
+        return json.dumps(report, indent=2, default=str)
+    return _get_kelvin_identify_post_hoc_doc(topic)
 
 
 @mcp.tool()
