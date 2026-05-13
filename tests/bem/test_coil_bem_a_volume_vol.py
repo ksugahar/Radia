@@ -95,6 +95,10 @@ def test_bem_a_inductance_from_volume_vol(gapped_torus_vol):
         coil_bem_solver="auto",
         coil_aca_eps=1e-10,
         coil_gmres_tol=1e-10,
+        coil_saddle_solver="auto",   # added in commit e4a30197 (BEM-A
+                                     # saddle solver memory-efficient
+                                     # path).  "auto" picks lu / minres
+                                     # by n_tris (lu < 10000 < minres).
         coil_sigma=5.8e7,
         frequency=150_000.0,
         current=1.0,
