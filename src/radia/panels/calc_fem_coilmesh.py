@@ -56,7 +56,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                        impedance_model="sibc",
                        bh_file="",
                        esim_max_iter=15,
-                       esim_tol=1e-3):
+                       esim_tol=1e-3,
+                       esim_relax=0.5):
     """A-V formulation for volumetric coil + SIBC workpiece + Kelvin.
 
     ``impedance_model="esim"`` runs a Karl iteration: per outer iteration
@@ -304,9 +305,12 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         H_t_rms_iter = abs(s / Z_s_wp) * math.sqrt(
             max(At_int_wp_loop, 0.0) / max(A_wp, 1e-30))
 
+        # Karl update with under-relaxation (matches calc_fem_kelvin
+        # default 0.5; damps oscillation near saturation).
         Z_s_old = Z_s_wp
         sol_new = esim_solver.solve(max(float(H_t_rms_iter), 1e-3))
-        Z_s_wp = complex(sol_new['Z'])
+        Z_s_new = complex(sol_new['Z'])
+        Z_s_wp = esim_relax * Z_s_new + (1 - esim_relax) * Z_s_old
         dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
         esim_history.append({
             "iteration": iteration,
@@ -319,7 +323,11 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
             f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} "
             f"t={t_asm_iter+t_solve_iter:.1f}s")
-        if dZ < esim_tol and iteration > 0:
+        # Require iteration > 0 to avoid spurious convergence on the
+        # seed Z_s (= esim.solve(5.0)), EXCEPT when esim_max_iter
+        # <= 1: the user explicitly asked for one iteration so the
+        # dZ we just computed is the only result available.
+        if dZ < esim_tol and (iteration > 0 or esim_max_iter <= 1):
             esim_converged = True
             progress("FEM", f"ESIM:CONVERGED iter={iteration}")
             break
@@ -618,9 +626,15 @@ def main():
     parser.add_argument("--bh-file", default="",
                         help="BH table for ESIM (WIP).")
     parser.add_argument("--esim-max-iter", type=int, default=15,
-                        help="ESIM Karl iteration max (WIP).")
+                        help="ESIM Karl iteration max.")
     parser.add_argument("--esim-tol", type=float, default=1e-3,
-                        help="ESIM Karl iteration tol (WIP).")
+                        help="ESIM Karl iteration relative tolerance "
+                             "(|dZ_s| / |Z_s|).")
+    parser.add_argument("--esim-relax", type=float, default=0.5,
+                        help="Karl under-relaxation (0,1]; 1.0 = full "
+                             "step, 0.5 = half-step (default, matches "
+                             "calc_fem_kelvin).  Lower if Karl "
+                             "oscillates near saturation.")
     parser.add_argument("--sibc-bnd", default="sibc")
     parser.add_argument("--source-bnd", default="source")
     parser.add_argument("--sink-bnd", default="sink")
@@ -690,6 +704,7 @@ def main():
             bh_file=args.bh_file,
             esim_max_iter=args.esim_max_iter,
             esim_tol=args.esim_tol,
+            esim_relax=args.esim_relax,
         )
         return result
 

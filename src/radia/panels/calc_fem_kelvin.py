@@ -812,7 +812,12 @@ def solve_fem(vol_file="", fes_order=1,
         _log(f"ITER:{iteration} |Z_s|={abs(Z_s):.4e} H_t={h_t_str} "
              f"dZ={dZ:.4e} t={t_solve_iter:.1f}s")
 
-        if dZ < tol and iteration > 0:
+        # Convergence: dZ below tol.  Require iteration > 0 to avoid
+        # spurious convergence on the seed Z_s, EXCEPT when max_iter
+        # <= 1: the user explicitly asked for one iteration, so the
+        # dZ we just computed is what they get -- report it as
+        # converged if it passes tol, NOT-CONVERGED otherwise.
+        if dZ < tol and (iteration > 0 or max_iter <= 1):
             _log(f"CONVERGED:iter={iteration}")
             break
 
