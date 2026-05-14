@@ -499,12 +499,11 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     progress("BEM",
         f"wp nv={wp_mesh.nv} ne(BND)={wp_mesh.GetNE(BND)} ({t_wp_mesh:.1f}s)")
 
-    # 2. Solver gating
-    if args.impedance_model == "esim":
-        raise NotImplementedError(
-            "ESIM is not implemented in calc_inductance.  Use "
-            "--impedance-model sibc.  For nonlinear BH consider "
-            "calc_fem_coilmesh.py.")
+    # 2. ESIM prerequisite check (Karl iteration needs a BH curve).
+    if args.impedance_model == "esim" and not args.bh_file:
+        raise ValueError(
+            "--impedance-model esim requires --bh-file with a 2-column "
+            "BH curve (H[A/m], B[T]).  Linear SIBC is the default.")
 
     # 3. ScalarBIESIBCSolver assembly.
     #
@@ -582,24 +581,96 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     t_phi = time.perf_counter() - t0
     progress("BEM", f"phi_inc ({t_phi:.1f}s)")
 
-    # 5. Workpiece SIBC: BIE solve
-    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
+    # 5. Workpiece SIBC: BIE solve (optionally Karl-iterated for ESIM)
+    bh_curve = None
+    if args.bh_file:
+        from em_material import _load_bh_file
+        bh_curve = _load_bh_file(args.bh_file)
+    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r,
+                         bh_curve=bh_curve)
     delta_wp = mat_wp.skin_depth(args.frequency)
-    rho_wp = 1.0 / args.sigma
-    Z_s_wp = (1.0 + 1j) * rho_wp / delta_wp * math.sqrt(args.mu_r)
+
+    if args.impedance_model == "esim":
+        # ESIM cell solver: 1D nonlinear B-H(H) Karl iteration on a
+        # cylindrical workpiece slice of radius `half_thickness`.
+        esim_solver = mat_wp.create_esim_solver(
+            args.frequency, args.half_thickness, geometry='cylinder')
+        Z_s_wp = complex(esim_solver.solve(5.0)['Z'])
+        max_iter = max(int(args.esim_max_iter), 1)
+    else:
+        # Linear SIBC: Dowell tanh formula closed form.
+        rho_wp = 1.0 / args.sigma
+        Z_s_wp = (1.0 + 1j) * rho_wp / delta_wp * math.sqrt(args.mu_r)
+        esim_solver = None
+        max_iter = 1
 
     progress("BEM",
         f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
-    t0 = time.perf_counter()
-    if args.wp_bem_backend == "intree-dense":
-        res_bem = bem.solve(phi_inc, Z_s=Z_s_wp, omega=omega)
+    res_bem = None
+    esim_history = []
+    esim_converged = (esim_solver is None)
+    H_t_rms_iter = 0.0
+    t_bie = 0.0
+    n_iter_done = 0
+    dZ = float("inf")
+    for iteration in range(max_iter):
+        n_iter_done = iteration + 1
+        t0 = time.perf_counter()
+        if args.wp_bem_backend == "intree-dense":
+            res_bem = bem.solve(phi_inc, Z_s=Z_s_wp, omega=omega)
+        else:
+            res_bem = bem.solve_hacapk(
+                phi_inc, Z_s=Z_s_wp, omega=omega,
+                tol=args.wp_gmres_tol, maxiter=500, restart=80)
+        t_iter = time.perf_counter() - t0
+        t_bie += t_iter
+        H_t_rms_iter = float(res_bem["H_t_rms"])
+
+        if esim_solver is None:
+            progress("BEM", f"BIE ({t_iter:.1f}s)")
+            break
+
+        # Karl update: re-evaluate Z_s from ESIM at the new H_t_rms.
+        Z_s_old = Z_s_wp
+        sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
+        Z_s_wp = complex(sol_new['Z'])
+        dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
+        esim_history.append({
+            "iteration": iteration,
+            "Z_s_abs": float(abs(Z_s_wp)),
+            "H_t_rms": H_t_rms_iter,
+            "dZ": float(dZ),
+            "t_solve": float(t_iter),
+        })
+        progress("BEM",
+            f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
+            f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} t={t_iter:.1f}s")
+        if dZ < args.esim_tol and iteration > 0:
+            progress("BEM", f"ESIM:CONVERGED iter={iteration}")
+            esim_converged = True
+            break
     else:
-        res_bem = bem.solve_hacapk(
-            phi_inc, Z_s=Z_s_wp, omega=omega,
-            tol=args.wp_gmres_tol, maxiter=500, restart=80)
-    t_bie = time.perf_counter() - t0
+        # Loop exhausted max_iter without convergence (ESIM only).
+        if esim_solver is not None:
+            esim_converged = False
+            progress("BEM",
+                f"ESIM:NOT-CONVERGED after {max_iter} iter "
+                f"(dZ={dZ:.4e} > tol={args.esim_tol:.1e})")
+    if esim_solver is not None:
+        # Re-solve once at the final Z_s so res_bem reflects the
+        # converged impedance (the last iter computed H_t_rms with the
+        # PREVIOUS Z_s, not the updated one).
+        t0 = time.perf_counter()
+        if args.wp_bem_backend == "intree-dense":
+            res_bem = bem.solve(phi_inc, Z_s=Z_s_wp, omega=omega)
+        else:
+            res_bem = bem.solve_hacapk(
+                phi_inc, Z_s=Z_s_wp, omega=omega,
+                tol=args.wp_gmres_tol, maxiter=500, restart=80)
+        t_bie += time.perf_counter() - t0
     info = res_bem.get("gmres_info", 0)
-    progress("BEM", f"BIE ({t_bie:.1f}s, gmres info={info})")
+    progress("BEM",
+        f"BIE total ({t_bie:.1f}s over {n_iter_done} iter, gmres info={info})")
 
     # 6. Workpiece scalar outputs
     A_wp = float(Integrate(CF(1), wp_mesh, VOL_or_BND=BND).real)
@@ -727,6 +798,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "Z_s_wp_real": float(Z_s_wp.real),
         "Z_s_wp_imag": float(Z_s_wp.imag),
         "skin_depth_wp_mm": float(delta_wp * 1e3),
+        "impedance_model": args.impedance_model,
+        "esim_iterations": int(n_iter_done),
+        "esim_converged": bool(esim_converged),
+        "esim_history": esim_history,
         "msh_file": msh_file,
         "t_wp_mesh_s": t_wp_mesh,
         "t_bem_assembly_s": t_asm,

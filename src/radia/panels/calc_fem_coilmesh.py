@@ -52,8 +52,20 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                        sibc_bnd="sibc",
                        source_bnd="source", sink_bnd="sink",
                        coil_mat="coil",
-                       msh_output=""):
-    """A-V formulation for volumetric coil + SIBC workpiece + Kelvin."""
+                       msh_output="",
+                       impedance_model="sibc",
+                       bh_file="",
+                       esim_max_iter=15,
+                       esim_tol=1e-3):
+    """A-V formulation for volumetric coil + SIBC workpiece + Kelvin.
+
+    ``impedance_model="esim"`` runs a Karl iteration: per outer iteration
+    the BilinearForm is re-assembled with the current ``Z_s_wp`` (the
+    Robin SIBC term ``robin_wp = s / Z_s_wp`` depends on it), the A-V
+    system is solved, ``H_t_rms_wp`` is read off the workpiece surface,
+    and ``Z_s_wp`` is refreshed by ``esim.solve(H_t_rms)``.  ``bh_file``
+    is required for ESIM (a 2-column ``H[A/m] B[T]`` table).
+    """
     import radia  # noqa: F401  DLL path setup
 
     from ngsolve import (Mesh, HCurl, H1, Periodic, BilinearForm, LinearForm,
@@ -65,9 +77,25 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     omega = 2 * math.pi * frequency
     s = 1j * omega
 
-    wp_mat = EMMaterial(name="wp", sigma=wp_sigma, mu_r=wp_mu_r)
+    bh_curve = None
+    if bh_file:
+        from em_material import _load_bh_file
+        bh_curve = _load_bh_file(bh_file)
+    if impedance_model == "esim" and bh_curve is None:
+        raise ValueError(
+            "impedance_model='esim' requires bh_file with a 2-column "
+            "BH curve (H[A/m], B[T]).")
+
+    wp_mat = EMMaterial(name="wp", sigma=wp_sigma, mu_r=wp_mu_r,
+                         bh_curve=bh_curve)
     delta_wp = wp_mat.skin_depth(frequency)
-    Z_s_wp = wp_mat.dowell_Zs(frequency, half_thickness)
+    if impedance_model == "esim":
+        esim_solver = wp_mat.create_esim_solver(
+            frequency, half_thickness, geometry='cylinder')
+        Z_s_wp = complex(esim_solver.solve(5.0)['Z'])
+    else:
+        esim_solver = None
+        Z_s_wp = wp_mat.dowell_Zs(frequency, half_thickness)
     robin_wp = s / Z_s_wp
 
     # Non-magnetic coil convention (Cu/Al only -- coil_mu_r=1).
@@ -170,60 +198,169 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     (A, phi), (N, psi) = fes.TnT()
     progress("FEM", f"ndof={fes.ndof} (A:{fesA.ndof} + phi:{fesPhi.ndof})")
 
-    # Bilinear form (MCP pattern)
-    a_bf = BilinearForm(fes, symmetric=True)
-    a_bf += nu_cf * curl(A) * curl(N) * dx(bonus_intorder=4)
-    # Tiny mass regularisation on non-Kelvin materials (HCurl gauge)
+    # Bilinear form pieces (Robin term depends on Z_s_wp and is rebuilt
+    # per Karl iteration; everything else is geometry/material-only and
+    # is reassembled trivially because BilinearForm composition is cheap).
     non_kelvin = [m for m in materials if "kelvin" not in m.lower()]
-    if non_kelvin:
-        a_bf += 1e-6 * NU_0 * A * N * dx("|".join(non_kelvin))
-    # Workpiece SIBC Robin
-    a_bf += robin_wp * A.Trace() * N.Trace() * ds(sibc_bnd)
-    # A-V compound eddy term on coil
-    a_bf += s * coil_sigma * (A + grad(phi)) * (N + grad(psi)) * dx(coil_mat)
 
-    progress("FEM", "assemble A-V")
-    t0 = time.perf_counter()
-    with TaskManager():
-        a_bf.Assemble()
-    t_asm = time.perf_counter() - t0
-    progress("FEM", f"assembled ({t_asm:.1f}s)")
+    def _assemble_a_bf(robin_coeff):
+        """(Re)build + assemble the A-V BilinearForm at given Robin coef.
 
-    # Dirichlet lift: phi=1 on source, phi=0 on sink
-    gfu = GridFunction(fes)
-    gf_A, gf_phi = gfu.components
-    gf_phi.Set(CF(1), definedon=mesh.Boundaries(source_bnd))
+        Re-built per Karl iteration because robin_wp = s / Z_s_wp varies
+        with the updated SIBC impedance.
+        """
+        a_bf = BilinearForm(fes, symmetric=True)
+        a_bf += nu_cf * curl(A) * curl(N) * dx(bonus_intorder=4)
+        if non_kelvin:
+            a_bf += 1e-6 * NU_0 * A * N * dx("|".join(non_kelvin))
+        a_bf += robin_coeff * A.Trace() * N.Trace() * ds(sibc_bnd)
+        a_bf += s * coil_sigma * (A + grad(phi)) * (N + grad(psi)) * \
+                dx(coil_mat)
+        with TaskManager():
+            a_bf.Assemble()
+        return a_bf
 
-    progress("FEM", f"solve ({solver})")
-    t0 = time.perf_counter()
-    with TaskManager():
-        r = gfu.vec.CreateVector()
-        r.data = -a_bf.mat * gfu.vec
-        gfu.vec.data += a_bf.mat.Inverse(fes.FreeDofs(),
-                                           inverse=solver) * r
-    t_solve = time.perf_counter() - t0
-    progress("FEM", f"solved ({t_solve:.1f}s)")
-
-    # Volume-integral current extraction (Gauss-consistent).
-    # I_out = int_coil J . grad(psi_n) dV, with psi_n scalar H1
-    # Dirichlet 1 on source, 0 on sink.  Equals port flux int J . n dS.
-    J_coil = -s * coil_sigma * (gf_A + grad(gf_phi))
+    # Test function psi_n for I_out volume-integral extraction
+    # (geometry-only, independent of Z_s_wp).
     fes_psi_n = H1(mesh, order=1, complex=True,
                     definedon=mesh.Materials(coil_mat),
                     dirichlet=sink_bnd)
     gf_psi_n = GridFunction(fes_psi_n)
     gf_psi_n.Set(CF(1), definedon=mesh.Boundaries(source_bnd))
-    I_out_pre = complex(Integrate(
-        J_coil * grad(gf_psi_n), mesh,
-        definedon=mesh.Materials(coil_mat)))
-    progress("FEM", f"I_out (pre-scale) = {abs(I_out_pre):.4e}")
 
-    if abs(I_out_pre) < 1e-20:
-        raise RuntimeError("FEM I_out is zero; A-V setup failed.")
+    # Pre-compute wp surface (geometry-only); used inside the loop for
+    # H_t_rms_wp and in the post-step.
+    wp_region = mesh.Boundaries(sibc_bnd)
+    A_wp = float(Integrate(CF(1), mesh, BND, definedon=wp_region).real)
 
-    scale = complex(I_target) / I_out_pre
-    gfu.vec.data = complex(scale) * gfu.vec
-    # Recompute J_coil expression after scaling (CF re-evaluates).
+    gfu = GridFunction(fes)
+    gf_A, gf_phi = gfu.components
+    n_bnd = specialcf.normal(3)
+
+    esim_history = []
+    esim_converged = (esim_solver is None)
+    max_iter = max(int(esim_max_iter), 1) if esim_solver is not None else 1
+    t_asm = 0.0
+    t_solve = 0.0
+    n_iter_done = 0
+    dZ = float("inf")
+    H_t_rms_iter = 0.0
+    a_bf = None
+
+    for iteration in range(max_iter):
+        n_iter_done = iteration + 1
+        robin_wp = s / Z_s_wp
+
+        progress("FEM",
+            f"assemble A-V (iter {iteration}, Z_s={Z_s_wp:.3e})")
+        t0 = time.perf_counter()
+        a_bf = _assemble_a_bf(robin_wp)
+        t_asm_iter = time.perf_counter() - t0
+        t_asm += t_asm_iter
+
+        # Reset Dirichlet lift each iteration
+        gfu.vec[:] = 0
+        gf_phi.Set(CF(1), definedon=mesh.Boundaries(source_bnd))
+
+        progress("FEM", f"solve ({solver}, iter {iteration})")
+        t0 = time.perf_counter()
+        with TaskManager():
+            r = gfu.vec.CreateVector()
+            r.data = -a_bf.mat * gfu.vec
+            gfu.vec.data += a_bf.mat.Inverse(fes.FreeDofs(),
+                                               inverse=solver) * r
+        t_solve_iter = time.perf_counter() - t0
+        t_solve += t_solve_iter
+
+        # Scale gfu to physical I_target so H_t_rms reflects the actual
+        # operating point ESIM is supposed to see.  Without this Karl
+        # iterates around the Dirichlet-phi=1 system, whose H_t depends
+        # on workpiece back-reaction (I_out) and Z_s_wp simultaneously
+        # — the Karl fixed point would no longer be physical.
+        J_coil = -s * coil_sigma * (gf_A + grad(gf_phi))
+        I_out_pre = complex(Integrate(
+            J_coil * grad(gf_psi_n), mesh,
+            definedon=mesh.Materials(coil_mat)))
+        if abs(I_out_pre) < 1e-20:
+            raise RuntimeError(
+                f"FEM I_out is zero at Karl iter {iteration}; A-V setup "
+                f"failed.  Check source/sink labels and coil mesh.")
+        scale = complex(I_target) / I_out_pre
+        gfu.vec.data = complex(scale) * gfu.vec
+
+        if esim_solver is None:
+            progress("FEM",
+                f"solved ({t_solve_iter:.1f}s, I_out={abs(I_out_pre):.4e})")
+            break
+
+        # H_t_rms_wp from the just-scaled gfu (physical magnitude).
+        A_sq = sum(gf_A[i].real ** 2 + gf_A[i].imag ** 2 for i in range(3))
+        Adn_re = sum(gf_A[i].real * n_bnd[i] for i in range(3))
+        Adn_im = sum(gf_A[i].imag * n_bnd[i] for i in range(3))
+        An_sq = Adn_re ** 2 + Adn_im ** 2
+        At_sq_loop = A_sq - An_sq
+        At_int_wp_loop = float(Integrate(
+            At_sq_loop, mesh, BND, definedon=wp_region).real)
+        H_t_rms_iter = abs(s / Z_s_wp) * math.sqrt(
+            max(At_int_wp_loop, 0.0) / max(A_wp, 1e-30))
+
+        Z_s_old = Z_s_wp
+        sol_new = esim_solver.solve(max(float(H_t_rms_iter), 1e-3))
+        Z_s_wp = complex(sol_new['Z'])
+        dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
+        esim_history.append({
+            "iteration": iteration,
+            "Z_s_abs": float(abs(Z_s_wp)),
+            "H_t_rms": float(H_t_rms_iter),
+            "dZ": float(dZ),
+            "t_solve": float(t_solve_iter),
+        })
+        progress("FEM",
+            f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
+            f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} "
+            f"t={t_asm_iter+t_solve_iter:.1f}s")
+        if dZ < esim_tol and iteration > 0:
+            esim_converged = True
+            progress("FEM", f"ESIM:CONVERGED iter={iteration}")
+            break
+    else:
+        if esim_solver is not None:
+            esim_converged = False
+            progress("FEM",
+                f"ESIM:NOT-CONVERGED after {max_iter} iter "
+                f"(dZ={dZ:.4e} > tol={esim_tol:.1e})")
+    # After ESIM convergence, re-solve once at the converged Z_s so
+    # downstream post-processing (energy, P_wp, q_surf) sees the same
+    # gfu that produced the final Karl Z_s.
+    if esim_solver is not None:
+        progress("FEM", f"final re-solve at Z_s={Z_s_wp:.3e}")
+        t0 = time.perf_counter()
+        a_bf = _assemble_a_bf(s / Z_s_wp)
+        t_asm += time.perf_counter() - t0
+        gfu.vec[:] = 0
+        gf_phi.Set(CF(1), definedon=mesh.Boundaries(source_bnd))
+        t0 = time.perf_counter()
+        with TaskManager():
+            r = gfu.vec.CreateVector()
+            r.data = -a_bf.mat * gfu.vec
+            gfu.vec.data += a_bf.mat.Inverse(fes.FreeDofs(),
+                                               inverse=solver) * r
+        t_solve += time.perf_counter() - t0
+        J_coil = -s * coil_sigma * (gf_A + grad(gf_phi))
+        I_out_pre = complex(Integrate(
+            J_coil * grad(gf_psi_n), mesh,
+            definedon=mesh.Materials(coil_mat)))
+        if abs(I_out_pre) < 1e-20:
+            raise RuntimeError("FEM I_out is zero on final re-solve.")
+        scale = complex(I_target) / I_out_pre
+        gfu.vec.data = complex(scale) * gfu.vec
+
+    progress("FEM",
+        f"FEM total (asm {t_asm:.1f}s + solve {t_solve:.1f}s "
+        f"over {n_iter_done} iter)")
+
+    # Recompute J_coil CF at final physical-scale gfu for downstream
+    # post-processing (P_coil, J_surf export, etc.).
     J_coil = -s * coil_sigma * (gf_A + grad(gf_phi))
 
     # Post-solve quantities
@@ -436,6 +573,10 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         "coil_h_max_mm": coil_h_max * 1e3,
         "Z_s_wp_real": float(Z_s_wp.real),
         "Z_s_wp_imag": float(Z_s_wp.imag),
+        "impedance_model": impedance_model,
+        "esim_iterations": int(n_iter_done),
+        "esim_converged": bool(esim_converged),
+        "esim_history": esim_history,
         # Surface heat-flux stats (Phase B thermal input)
         "q_surf_max": q_surf_max,
         "q_surf_mean": q_surf_mean,
@@ -519,12 +660,10 @@ def main():
                         f"no periodic identifications. Ensure the .jou "
                         f"sidesets kelvin_int / kelvin_ext are paired via "
                         f"'copy mesh surface' in the Cubit script."}
-        if args.impedance_model == "esim":
+        if args.impedance_model == "esim" and not args.bh_file:
             return {
-                "error": "ESIM is not implemented in calc_fem_coilmesh "
-                         "yet. Use --impedance-model sibc (linear SIBC "
-                         "Dowell) for now. Karl iteration + BH-curve "
-                         "ESIM coupling is WIP."
+                "error": "--impedance-model esim requires --bh-file "
+                         "with a 2-column BH curve (H[A/m], B[T])."
             }
         if args.solver == "shifted_ams":
             return {
@@ -547,6 +686,10 @@ def main():
             sink_bnd=args.sink_bnd,
             coil_mat=args.coil_mat,
             msh_output=args.msh_output,
+            impedance_model=args.impedance_model,
+            bh_file=args.bh_file,
+            esim_max_iter=args.esim_max_iter,
+            esim_tol=args.esim_tol,
         )
         return result
 
