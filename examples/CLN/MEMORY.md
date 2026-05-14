@@ -586,6 +586,58 @@
 ```
 
 
+### Q25. Matsuo 論文 SA-26-014 — Cauer ladder の素子べき乗則と分数べき周波数応答
+**典拠**: T. Matsuo (Kyoto Univ.), "A Study of fractional power-law frequency response represented by Cauer circuit", SA-26-014 / RM-26-014, IEE Japan Joint TC on Static Apparatus & Rotating Machinery, 2026.3.5-6
+**Path**: `W:/02_学会資料/2026年度/2026_09_IGTE_Symposium/CauerLadderNetwork@菅原/digest/referece_paper/SA26-014.pdf`
+
+**核心主張 (eq. 4 / 40)**:
+Cauer ladder 素子が漸近的に
+- L_{2n-1} = L_1 / c_L(n), c_L(n) ~ (2n-1)^{k_L}
+- R_{2n} = c_R(n) R_2, c_R(n) ~ n^{k_R}
+
+の power-law 形で成長/減衰するとき、マクロインピーダンスが **分数べき周波数応答** に従う:
+
+| 量 | 漸近形 | 指数 |
+|---|---|---|
+| L_eff(ω) | ∝ ω^{−(k_L+1)/(k_L+k_R+2)} | 減少 |
+| R_eff(ω) | ∝ ω^{(k_R+1)/(k_L+k_R+2)} | 増加 |
+| \|Z\|, Re(Y) | ∝ ω^{(k_R+1)/(k_L+k_R+2)} | — |
+
+特殊値:
+- k_L=k_R=0 (定数素子): 指数 = 1/2 (古典渦電流 sheet/wire diffusion)
+- k_L=k_R=1: 指数 = 1/2 (同じ)
+- k_R=0, k_L=1: 指数 = 1/3
+- k_R=1, k_L=0: 指数 = 2/3
+- 一般 (k_R+1)/(k_L+k_R+2) ∈ (0, 1)
+
+**N 段打ち切り Cauer の corner frequency (eq. 39)**:
+- ω_N ~ N^{k_L+k_R+2} · R_2 / L_1
+- ω < ω_N で truncated ladder は infinite ladder を再現、ω > ω_N で破綻
+- 段 N での値: L_N ~ L_1/N^{k_L+1}, R_N ~ R_2·N^{k_R+1}
+
+**Appendix B: 非線形拡張**:
+材料構成則が h = L(b) ~ h_0(b/b_0)^{β_L}, v = R(i) ~ v_0(i/i_0)^{β_R} と分数べきの場合、最終指数は (β_L·k_L+1)/(β_L·k_L+β_R·k_R+2) と β_L, β_R で再スケールされる。
+
+**菅原の洞察 (2026-05-14)**:
+> 分数べき指数 α が分かれば、そこから (k_L, k_R) を介して **終端すべき素子の特性** と **その基底関数** が分かるのでは
+
+**展開**:
+1. **観測 α → (k_L, k_R) bijection**: 分数べき指数 α = (k_R+1)/(k_L+k_R+2) は (k_L, k_R) を一意に決めない (1 方程式 2 未知数) が、Re(Y) と L_eff 両方の漸近曲線から k_L, k_R 個別に取れる。あるいは k_L=k_R 仮定で 1 方程式 1 未知数化。
+2. **終端素子 (truncation strategy)**: N 段で打ち切る場合、ω > ω_N の漸近応答を再現する **fractional-order termination element** (Constant Phase Element, Z_term = K_term · (jω)^α) を末尾に付加。これで finite-stage Cauer + CPE termination = exact 表現。
+3. **基底関数の対応**: 我々の HDiv integrated-Legendre basis は **多項式** のみ。分数べき α が 1/2 以外を取る場合、その分数べきを担う **特異基底** (例: 角近傍の r^{1/2} singularity) が VIM basis に欠落していることになる。Cauer rung から逆算した k_L, k_R は **どの singular basis を追加すべきか** を直接教える。
+4. **検証ルート**: 我々の p=3 VIM Cauer rung k=0..2 (R, L 列) の log-log 漸近傾き → k_L, k_R 推定 → α 予測 → NGSolve 高周波 sim 直接測定の α と比較。一致すれば paper の主張が cuboid に拡張されたことの実証。
+
+**IGTE digest への活用**:
+- §3 (BEM-style single-element CLN) の補強: 「polynomial basis のみで p=3..5 のスケール内でも、分数べき指数 α は Cauer rung 漸近挙動から直接読み取れる」と数値示せる。
+- §4 future work: 「terminated Cauer (N段 + CPE_α) → 同精度を低段で達成」を提案、Matsuo paper を引用。
+- 観点として「**精度なしには存在しない CLN**」 + 「**情報圧縮として最適**」 + 「**terminator で finite + fractional element に追加圧縮可能**」の 3 層構造で動機を組み立てられる。
+
+**つながる関連**:
+- Q1 (BEM 的要素で CLN): polynomial basis 限界の認識
+- Q2 (FEM positioning): Foster spectrum sparsity の構造的理解
+- Cuboid 5x2x1 / A1 の breakdown stage k=3 (今回 p=3 で観測) は precision floor が主因だが、もう一つの上界として basis-truncation 由来の "ladder の存在域" もあり、Matsuo paper の corner frequency ω_N と整合する可能性
+
+
 
 
 
