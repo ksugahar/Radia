@@ -402,8 +402,8 @@ class IHPanel(ModePanel):
             "Ok for Cu/Al, and for steel with a constant mu_r.<br>"
             "<b>ESIM</b>: 1D cell problem solves B-H(H) self-consistently "
             "(Karl iteration). Needed when mu_r varies with H (saturated "
-            "steel). <b>Calc script support is WIP</b> — panel accepts "
-            "settings but the subprocess may reject.")
+            "steel). Requires a BH-file. Wired for PEEC+BEM, "
+            "BEM-A+BEM, PEEC+FEM+Kelvin, and Full FEM (since v4.46).")
 
         # ESIM-only widgets
         self.add_browse("bh_file", "BH file:", default="",
