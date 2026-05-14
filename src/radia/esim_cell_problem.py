@@ -481,22 +481,34 @@ class ESIMFiniteSlabSolver:
         z = self.mesh_points
         a = self.half_thickness
 
-        # Initial guess using analytical solution for linear material
+        # Initial guess using analytical solution for linear material.
+        #
+        # NB: bessel_iv(0, gamma*a) and np.cosh(gamma*a) silently return
+        # inf at large |gamma*a| = xi = a/delta (typically xi > 30) --
+        # scipy / numpy do NOT raise OverflowError, so the try/except is
+        # a no-op for the inf/inf -> NaN case.  The Picard loop below
+        # rebuilds H from H0+mu_dist on every step, so a corrupted
+        # initial H is overwritten before it matters -- the only
+        # user-visible effect was RuntimeWarning spam in the log.
+        # We now silence the numerical warnings within this block and
+        # fall back to the thin-skin exponential when the analytical
+        # initial guess is not finite.
         if self.delta < float('inf') and self.delta > 0:
             gamma = complex(1, 1) / self.delta
-            if self.geometry == 'cylinder':
-                # Cylinder: H(r) = H0 * I0(gamma*r) / I0(gamma*R)
-                from scipy.special import iv as bessel_iv
-                try:
+            with np.errstate(invalid='ignore', divide='ignore', over='ignore'):
+                if self.geometry == 'cylinder':
+                    # Cylinder: H(r) = H0 * I0(gamma*r) / I0(gamma*R)
+                    from scipy.special import iv as bessel_iv
                     H = H0 * bessel_iv(0, gamma * z) / bessel_iv(0, gamma * a)
-                except (OverflowError, FloatingPointError):
-                    H = H0 * np.exp(-(a - z) / self.delta)
-            else:
-                # Slab: H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
-                try:
+                else:
+                    # Slab: H(z) = H0 * cosh(gamma*(a-z)) / cosh(gamma*a)
                     H = H0 * np.cosh(gamma * (a - z)) / np.cosh(gamma * a)
-                except (OverflowError, FloatingPointError):
-                    H = H0 * np.exp(-z / self.delta) * np.exp(-1j * z / self.delta)
+            if not np.all(np.isfinite(H)):
+                if self.geometry == 'cylinder':
+                    H = H0 * np.exp(-(a - z) / self.delta).astype(complex)
+                else:
+                    H = (H0 * np.exp(-z / self.delta) *
+                         np.exp(-1j * z / self.delta))
         else:
             H = np.full(n, H0, dtype=complex)  # DC: uniform current
 

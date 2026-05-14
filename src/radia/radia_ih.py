@@ -964,10 +964,14 @@ class IHPanel(ModePanel):
             cmd += ["--peec-n-peri", str(self.val("peec_n_peri"))]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
-            if bh:
-                cmd += ["--bh-file", bh,
-                        "--esim-max-iter", str(self.val("esim_max_iter")),
-                        "--esim-tol", self.val("esim_tol")]
+            if not bh:
+                raise ValueError(
+                    "Nonlinear ESIM impedance model requires a BH "
+                    "file (2-column H[A/m] B[T]).  Fill the 'BH file' "
+                    "field, or switch to Linear SIBC.")
+            cmd += ["--bh-file", bh,
+                    "--esim-max-iter", str(self.val("esim_max_iter")),
+                    "--esim-tol", self.val("esim_tol")]
         return cmd
 
     def _build_fem_kelvin_command(self, vol_path):
@@ -1019,11 +1023,15 @@ class IHPanel(ModePanel):
                "--output", json_output(vol_path, "_fem_kelvin")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
-            if bh:
-                cmd += ["--bh-file", bh,
-                        "--max-iter", str(self.val("esim_max_iter"))]
-                # calc_fem_kelvin uses --max-iter, not --esim-max-iter
-                # --esim-tol has no equivalent; ESIM tolerance is hardcoded
+            if not bh:
+                raise ValueError(
+                    "Nonlinear ESIM impedance model requires a BH "
+                    "file (2-column H[A/m] B[T]).  Fill the 'BH file' "
+                    "field, or switch to Linear SIBC.")
+            cmd += ["--bh-file", bh,
+                    "--max-iter", str(self.val("esim_max_iter"))]
+            # calc_fem_kelvin uses --max-iter, not --esim-max-iter
+            # --esim-tol has no equivalent; ESIM tolerance is hardcoded
         return cmd
 
     def _build_fem_coilmesh_command(self, vol_path):
@@ -1051,10 +1059,14 @@ class IHPanel(ModePanel):
                "--output", json_output(vol_path, "_fem_full")]
         if self._impedance_model_cli() == "esim":
             bh = self.val("bh_file")
-            if bh:
-                cmd += ["--bh-file", bh,
-                        "--esim-max-iter", str(self.val("esim_max_iter")),
-                        "--esim-tol", self.val("esim_tol")]
+            if not bh:
+                raise ValueError(
+                    "Nonlinear ESIM impedance model requires a BH "
+                    "file (2-column H[A/m] B[T]).  Fill the 'BH file' "
+                    "field, or switch to Linear SIBC.")
+            cmd += ["--bh-file", bh,
+                    "--esim-max-iter", str(self.val("esim_max_iter")),
+                    "--esim-tol", self.val("esim_tol")]
         return cmd
 
 
