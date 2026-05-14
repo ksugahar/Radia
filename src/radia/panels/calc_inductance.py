@@ -630,10 +630,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             progress("BEM", f"BIE ({t_iter:.1f}s)")
             break
 
-        # Karl update: re-evaluate Z_s from ESIM at the new H_t_rms.
+        # Karl update: re-evaluate Z_s from ESIM at the new H_t_rms,
+        # then under-relax (matches calc_fem_kelvin's default 0.5 to
+        # damp oscillation near saturation).
         Z_s_old = Z_s_wp
         sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
-        Z_s_wp = complex(sol_new['Z'])
+        Z_s_new = complex(sol_new['Z'])
+        Z_s_wp = args.esim_relax * Z_s_new + (1 - args.esim_relax) * Z_s_old
         dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
         esim_history.append({
             "iteration": iteration,
@@ -645,7 +648,11 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         progress("BEM",
             f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
             f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} t={t_iter:.1f}s")
-        if dZ < args.esim_tol and iteration > 0:
+        # Require iteration > 0 to avoid spurious convergence on the
+        # seed Z_s (= esim.solve(5.0)), EXCEPT when max_iter <= 1:
+        # the user explicitly asked for one iteration so the dZ we
+        # just computed is the only result available.
+        if dZ < args.esim_tol and (iteration > 0 or max_iter <= 1):
             progress("BEM", f"ESIM:CONVERGED iter={iteration}")
             esim_converged = True
             break
@@ -1236,9 +1243,16 @@ def main():
     # ----- Workpiece BEM-SIBC solver -----
     parser.add_argument("--impedance-model", default="sibc",
                         choices=["sibc", "esim"],
-                        help="sibc: linear Dowell.  esim: WIP.")
+                        help="sibc: linear Dowell tanh formula. "
+                             "esim: nonlinear Karl iteration; requires "
+                             "--bh-file.")
     parser.add_argument("--esim-max-iter", type=int, default=15)
     parser.add_argument("--esim-tol", type=float, default=1e-3)
+    parser.add_argument("--esim-relax", type=float, default=0.5,
+                        help="Karl under-relaxation (0,1]; 1.0 = full "
+                             "step, 0.5 = half-step (default, matches "
+                             "calc_fem_kelvin).  Lower if Karl "
+                             "oscillates near saturation.")
     parser.add_argument("--h1-order", type=int, default=1,
                         choices=[1, 2],
                         help="Workpiece BEM Lagrange basis order "
