@@ -1,6 +1,6 @@
 
 %\documentclass[journal]{IEEEtran}
-\documentclass[journal]{igtesymp}
+\documentclass[journal,9pt]{igtesymp}
 % *** GRAPHICS RELATED PACKAGES ***
 %
 \ifCLASSINFOpdf
@@ -76,8 +76,8 @@
 %
 % paper title
 % can use linebreaks \\ within to get better formatting as desired
-\title{Volume Integral Method for Cauer Ladder Network Synthesis: \\
-       Double-Double Verification on a Conducting Sphere}
+\title{Unified Cauer Ladder + Surface Impedance Network \\
+       via Turning-Point Basis Switch}
 %
 \author{K.~Sugahara\IEEEauthorrefmark{1},  H.~Nagamine\IEEEauthorrefmark{2},
 and Y.~Hane\IEEEauthorrefmark{3}
@@ -117,16 +117,10 @@ and Y.~Hane\IEEEauthorrefmark{3}
 
 
 \IEEEaftertitletext{\vspace{-1cm}\noindent\begin{abstract}
-The Cauer Ladder Network (CLN) representation of an eddy-current device is essential for circuit-level loss models in power electronics and electric machines.
-The current de-facto extraction is FEM Kameari accumulation, but the underlying Krylov-subspace iteration loses M-orthogonality at higher Cauer stages, and finite-precision arithmetic ultimately limits the reliable number of rungs that can be extracted.
-We propose a Volume Integral Method (VIM) extraction in which the conducting body alone is discretised, the diffusion eigenproblem $K v_n = \lambda_n M v_n$ is solved once, and the Kameari-convention Cauer-I rungs are obtained from the Foster amplitudes by Hankel-Pad\'e continued-fraction inversion of the moments $\alpha_n = (-1)^n \sum_k g_k^2 \tau_k^n$.
-The formulation is verified on a copper sphere under uniform $B_z$, where Stoll's Bessel-series analytical Cauer ladder serves as ground truth.
-A pure-Python/CuPy {\em double-double} ($\sim 32$ digit) implementation of the VIM-CLN pipeline is then introduced, in which the singular axisymmetric Green's-function kernel is evaluated via {\tt mpmath} elliptic integrals and the generalized eigenproblem is solved via Cholesky-based {\tt mpmath} arithmetic.
-Combined with mpmath verified-interval Hankel-Pad\'e continued-fraction inversion, the DD pipeline reaches the machine DD precision floor $K_{\text{lo}}/K_{\text{hi}}\!=\!1.1\!\times\!10^{-16}$ and reproduces Stoll's leading rungs $R_0, L_1$ to 0.1\,\% / 1.8\,\% at the demonstrated $540$-cell scale, with verified-interval relative width below $10^{-30}$ across all extracted stages.
-The same DD pipeline applies to hex / axisymmetric VIM uniformly, providing the first GPU-accessible verified-arithmetic CLN extractor.
+A truncated Cauer Ladder Network (CLN) is seamed to a Surface Impedance Boundary Condition (SIBC) element ($\alpha\!=\!1/2$ Constant Phase Element) at a turning point $\omega_N$ given by Matsuo's corner-frequency formula, with the SIBC scaling fixed by continuity (no fitting).  Formally this is the $s_\infty$ expansion point of the multiple-expansion-points CLN framework.  Analytical verification on a Cu slab reproduces the Stoll/Wall closed form across nine decades with ten Cauer rungs and one SIBC element; on a 3D Cu cuboid, an mpmath single-element VIM with HDiv divergence-free hex basis and an NGSolve HCurl Tanimoto-AT extraction yield matching unified $Y(j\omega)$ from two bulk Cauer rungs plus the SIBC element.
 \end{abstract}
 \noindent\begin{keywords}
-Cauer Ladder Network, Eddy Current, Foster Spectrum, Volume Integral Method.
+Cauer Ladder Network, Surface Impedance, Turning Point, Expansion Points, Eddy Current.
 \end{keywords}\vspace{\baselineskip}}
 
 
@@ -147,87 +141,40 @@ Cauer Ladder Network, Eddy Current, Foster Spectrum, Volume Integral Method.
 % creates the second title. It will be ignored for other modes.
 \IEEEpeerreviewmaketitle
 
-\section{Introduction}
-Eddy-current loss models are essential for circuit-level design of high-frequency transformers, SiC/GaN power-electronic modules, and high-speed electric machines.
-The Cauer Ladder Network (CLN) representation reduces the eddy-current admittance to a finite ladder of resistances $R_n$ and inductances $L_n$, suitable for direct embedding in circuit simulators \cite{Sugahara_TEAM28, Hiruma_2020}.
-The current de-facto extractor is the FEM Kameari accumulation iteration; however, this scheme suffers from numerical loss of M-orthogonality in the underlying Krylov subspace, and Hankel-Pad\'e continued-fraction inversion conditioning amplifies floating-point input noise by $\sim 300\times$ per stage so that FP64 arithmetic is restricted to roughly four to five reliable Cauer rungs \cite{Nagamine_2026}.
+\section{Unified CLN + SIBC}
 
-We propose a {\it Volume Integral Method} (VIM) approach to CLN synthesis.
-The conducting body is discretised with HDiv divergence-free volume basis functions for solid hex elements or piecewise-constant $J_\phi$ axisymmetric cells; the diffusion eigenproblem
-$K v_n = \lambda_n M v_n$
-is solved once, and the Kameari-convention Cauer-I rungs are obtained from the Foster amplitudes by Hankel-Pad\'e continued-fraction inversion.
-Because eigenvectors are generated all at once rather than iteratively, the M-orthogonality loss issue is avoided in principle.
-We then introduce a {\em double-double} ($\sim 32$ digit) GPU pipeline of the same VIM-CLN extractor and show that the FP64 precision wall can be pushed back by several Cauer stages on a benchmark conducting sphere, where Stoll's analytical Bessel-series solution serves as ground truth \cite{Stoll1974}.
+A truncated Cauer Ladder Network (CLN) \cite{Kameari_2018} represents the eddy-current admittance $Y(s)\!=\!1/Z(s)$ as a continued fraction with rungs $(R_{2k},L_{2k+1})$ encoding the Foster eddy-mode spectrum.  The reliable rung count is bounded both by Hankel-Pad\'e ill-conditioning ($\!\sim\!300\times$ noise amplification per stage \cite{Nagamine_2026}) and, more fundamentally, by the basis's spatial resolution -- once skin depth $\delta(\omega)\!=\!\sqrt{2/(\omega\mu\sigma)}$ drops below the basis length scale, further rungs are non-physical.  In that regime, however, the Surface Impedance Boundary Condition $Z_s(j\omega)\!=\!\sqrt{j\omega\mu/\sigma}$ -- a Constant Phase Element of exponent $\alpha\!=\!1/2$ -- becomes exact.
 
-\section{VIM-based CLN Formulation}
-
-For the conductor occupying $\Omega_c$ with conductivity $\sigma$, we expand the volume current density in basis $\phi_i$ adapted to the geometry: HDiv divergence-free hex basis for solid conductors, or piecewise-constant $J_\phi$ on a meridian $(r,z)$ mesh for axisymmetric ones.
-The energy matrices are
+We seam the two representations at a turning point $\omega_N$ given by Matsuo's corner-frequency formula \cite{Matsuo_2026} evaluated at the last reliable rung,
 \begin{equation}
-K_{ij} = \frac{\mu_0}{4\pi}\!\!\int_{\Omega_c}\!\int_{\Omega_c} \frac{\phi_i(\mathbf{r}) \cdot \phi_j(\mathbf{r}')}{|\mathbf{r}-\mathbf{r}'|}\,d\mathbf{r}\,d\mathbf{r}', \label{eq:K}
+\omega_N \!=\! \sqrt{2^{\alpha/2}\!-\!1}\,R_{2N\!-\!2}/L_{2N\!-\!1} \!\approx\! 0.4350\,R_{2N\!-\!2}/L_{2N\!-\!1}, \label{eq:omegaN}
 \end{equation}
-\begin{equation}
-M_{ij} = \int_{\Omega_c} \phi_i \cdot \phi_j \,d\mathbf{r}. \label{eq:M}
-\end{equation}
-The 3D $1/r$ kernel singularity in (\ref{eq:K}) is integrated with Spherical Duffy quadrature; in the axisymmetric case, the singular $\phi$-integrated Green's function reduces to complete elliptic integrals $K(m), E(m)$ that are evaluated to arbitrary precision via {\tt mpmath}.
-The generalized eigenproblem
-$K v_n = \lambda_n M v_n$
-gives Foster time constants $\tau_n = \sigma \lambda_n$ and modes $v_n$ orthonormal in $M$.
-The applied field $\mathbf{A}_{\text{ext}}$ projects onto each mode through $g_n = v_n^\top b$ with $b_i = \int_{\Omega_c} \phi_i \cdot \mathbf{A}_{\text{ext}}\,d\mathbf{r}$.
+yielding $Y_{\text{unified}}(j\omega)\!=\!1/Z_{\text{Cauer}}^{(N)}(j\omega)$ for $\omega\!<\!\omega_N$ and $K_{\text{SIBC}}\sqrt{\sigma/(j\omega\mu)}$ above, with $K_{\text{SIBC}}\!=\!Y_{\text{Cauer}}^{(N)}(j\omega_N)/\sqrt{\sigma/(j\omega_N\mu)}$ fixed by continuity (no fitting).  This extension is the $s_\infty$ expansion point of the multiple-expansion-points CLN framework \cite{Kuriyama_2019}: $K_\infty/s_\infty\!\to\!\sigma$ degenerates the energy operator to the conductivity inner product, the natural basis for surface-localised modes.
 
-We adopt the {\it Kameari $\chi$-Foster convention}, in which the Cauer-I ladder is extracted from the Hankel-Pad\'e moments
-\begin{equation}
-\alpha_n = (-1)^n \sum_k g_k^2 \, \tau_k^n. \label{eq:alpha}
-\end{equation}
-Note that the literature also reports a {\it Hiruma Krylov-Pad\'e impedance convention} \cite{Hiruma_2020} which uses the moments $\sum_k g_k^2 \tau_k^{n+1}$; the two conventions yield systematically different Cauer ladders ($\sim 5$--$12\,\%$ for the leading rung).
-The Kameari convention is chosen here because it coincides with the $\chi$-Foster susceptibility extracted from the Stoll closed-form solution.
-Cauer-I rungs $R_{2k}, L_{2k+1}$ are obtained by continued-fraction inversion of $\{\alpha_n\}$.
-The continued-fraction inversion conditioning is quantified by {\em mpmath verified-interval arithmetic} \cite{Nagamine_2026}: rungs whose relative interval width exceeds 1\,\% are flagged as numerically unreliable. With FP64 input moments this threshold is crossed at stage 4--5 across all tested geometries.
+\section{Verification}
 
-\section{Sphere Verification}
+{\bf Slab.}  For a Cu slab of half-thickness $c\!=\!1$\,mm, Stoll's $Y(s)\!=\!\sigma c\tanh(u)/u$ with $u\!=\!c\sqrt{s\mu\sigma}$ \cite{Stoll1974} and Wall's odd-integer continued fraction \cite{Wall1948} provide the analytical ladder.  Feeding the Mittag-Leffler Foster spectrum into our mpmath QD-Wynn extractor at 60-digit precision recovers ten rungs with $k_L\!=\!k_R\!=\!0$ \cite{Matsuo_2026} and $\alpha\!=\!0.500$ to all reported digits; $\omega_N$ at $N\!=\!10$ gives $f_N\!=\!1.12$\,MHz, $K_{\text{SIBC}}\!=\!0.937$, and $Y_{\text{unified}}$ matches $Y_{\text{full}}$ to under $10\,\%$ at the seam and $1\,\%$ in the deep Cauer/SIBC regimes across DC to $10^{8}$\,Hz.
 
-We test the VIM-CLN extraction on a copper sphere ($a=10$\,mm, $\sigma=5.8\times10^7$\,S/m) under a uniform $B_z=1$\,T applied field, for which Stoll \cite{Stoll1974} gives the analytical $\chi$-Foster representation
-$\chi(s) = -1 + \sum_n \frac{6/(n^2\pi^2)}{1 + s\,\mu_0\sigma a^2/(n^2\pi^2)}$.
-Hankel-Pad\'e inversion of (\ref{eq:alpha}) at 240-digit Mathematica arithmetic produces 40 reliable Cauer-I rungs as the analytical reference.
+{\bf 3D Cu cuboid} ($17.72\!\times\!17.72\!\times\!2$\,mm).  A pure-mpmath single-element Volume Integral Method (VIM) with HDiv divergence-free hex basis \cite{Schoberl_Zaglmayr} at $p\!=\!3$ ($81$ dof) produces three Cauer rungs $\tau_{\text{pair}}\!=\!194.66,69.96,19.40\,\mu$s, of which the third lies in the basis noise floor; the {\em mesh-natural} truncation retains two rungs and seams the SIBC element at $f_N\!=\!9.9\!\times\!10^{2}$\,Hz.  An NGSolve HCurl Tanimoto-AT extraction at $p\!=\!3$, $h\!=\!0.5$\,mm produces an extra leading stage corresponding to the $t\!=\!0^{+}$ skin-layer impulse response; identifying it as the SIBC seed and using stages $\{1,2\}$ as bulk rungs gives $\tau_{\text{pair}}\!=\!218.99,84.16\,\mu$s, within $12$--$20\,\%$ of VIM.  The unified $Y(j\omega)$ from the two independent extractions overlap to graphical precision (Fig.~\ref{fig:a1_sibc_compare}).  A direct NGSolve frequency-domain AC sweep ($A_{\text{red}}\!\cdot\!t\!=\!0$ Dirichlet, $20$ frequencies $1$\,Hz--$10^{7}$\,Hz) provides the ground-truth $Y_{\text{AC}}(j\omega)\!=\!|A_{\text{ext}}|^{2}\!+\!\langle A_{\text{red}}, A_{\text{ext}}\rangle$, which coincides with the VIM/FEM unified prediction throughout the Cauer regime (below $\!\sim\!1$\,kHz) and decays slightly faster than the SIBC seam above it, consistent with the conductor's finite-size Faraday-shielding floor.
 
-The VIM with HDiv order 3 ($n_{\text{dofs}}=81$) and Spherical Duffy quadrature in FP64 reproduces this analytical Cauer ladder to machine precision through stage 4, confirming both the formulation and the convention identification (Table \ref{tab:sphere}, columns labelled ``VIM FP64'').
-
-\begin{table}[h]
-\caption{Sphere Cauer-I rung $\tau_{\text{pair}}=L/R$ ($\mu$s): VIM FP64 vs.\ DD pipeline (axisym 270 / 540 cells) vs.\ Stoll analytical (Kameari convention). DD 540 cells extends the reliable Cauer ladder by one stage over the 270-cell baseline (DD 270 stage 5 is already inflated; DD 540 keeps stage 5 finite and shifts the sign-flip breakdown to stage 6).}\label{tab:sphere}
-\begin{center}\footnotesize
-\begin{tabular}{|c|r|r|r|r|}
-\hline
-$k$ & Stoll [$\mu$s] & VIM FP64 [$\mu$s] & DD 270 [$\mu$s] & DD 540 [$\mu$s] \\\hline
-0 & 694.142 & 694.142 & 720.36 & 706.75 \\\hline
-1 & 154.604 & 154.605 & 179.79 & 166.80 \\\hline
-2 & 64.075 & 64.075 & 91.59 & 77.79 \\\hline
-3 & 34.474 & 34.475 & 62.81 & 49.34 \\\hline
-4 & 21.400 & 21.402 & 49.38 & 36.56 \\\hline
-5 & --- & --- & 164.49$^\dagger$ & 28.93 \\\hline
-\end{tabular}
-\end{center}
-{\footnotesize $^\dagger$ Already inflated at the 270-cell mesh due to Foster-spectrum truncation; the DD 540 cells run keeps stage 5 within an order of magnitude of analytical and pushes the sign-flip breakdown to stage 6.}
-\end{table}
-
-\section{Double-Double GPU Pipeline}
-
-To push the Hankel-Pad\'e input-precision wall back, we re-implemented the entire VIM-CLN pipeline in {\em double-double} (DD, $\sim 32$ decimal digit) arithmetic in pure Python/CuPy: DD primitives (Bailey-Hida-Li), mpmath Newton-refined Gauss-Legendre nodes at 40-digit, DD HDiv basis evaluation for hex elements, mpmath complete elliptic-integral evaluation of the axisymmetric Green's function, Cholesky-based generalised eigh in {\tt mpmath} arithmetic, and verified-interval Hankel-Pad\'e inversion.
-The DD precision floor $K_{\text{lo}}/K_{\text{hi}}=1.1\!\times\!10^{-16}$ is reached, confirming that all $\sim 14$ trailing decimal digits below FP64 are correctly captured.
-For the sphere at $N_\rho\!\times\!N_\theta\!=\!20\!\times\!27\!=\!540$ axisymmetric cells the DD pipeline matches Stoll's leading $R_0$ to $0.1\,\%$ and the leading inductance $L_1$ to $\sim\!1.8\,\%$ (compared to $0.2\,\%/4.0\,\%$ at the 270-cell baseline -- doubling the cells roughly halves the gap), while the verified-interval relative width remains below $10^{-30}$ across all extracted stages -- so any gap to the analytical result is attributable to Foster-spectrum discretisation, not to floating-point conditioning.
-The same DD pipeline operates uniformly on hex (3D solid) and axisymmetric VIM discretisations; the GPU CuPy port of the hex K-assembly delivers a $4300\times$ speed-up over the CPU C++ implementation, enabling DD HDiv-basis hex production runs at order $p=4$ ($n_{\text{dofs}}=176$) in seconds, while the axisymmetric K-assembly is multiprocessed across CPU cores.
-
-\section{Conclusion}
-
-A Volume Integral Method approach to Cauer Ladder Network synthesis was proposed and verified against Stoll's analytical Bessel solution for a conducting sphere with machine precision through five Cauer rungs in FP64.
-The Kameari $\chi$-Foster convention was identified as the natural choice for VIM extraction, distinct from the Hiruma Krylov-Pad\'e impedance convention reported in earlier literature.
-A double-double precision pipeline was then implemented end-to-end in pure Python/CuPy, providing the first GPU-accessible verified-arithmetic CLN extractor and a foundation on which the precision-wall analysis of Nagamine's verified-interval Hankel-Pad\'e arithmetic can be applied directly to electromagnetic eddy-current problems.
+\begin{figure}[!b]
+\centering
+\includegraphics[width=0.98\linewidth]{A1_sibc_compact_with_AC.pdf}
+\vspace{-0.3em}
+\caption{Cauer + SIBC unified $|Y(j\omega)|/|Y(0)|$ for the $17.72\!\times\!17.72\!\times\!2$\,mm Cu cuboid in $B_z$.  VIM (solid) and NGSolve Tanimoto-AT (dashed) overlap across nine decades.  Green circles: independent NGSolve AC sweep ground truth -- matches the unified prediction in the Cauer regime and lies slightly below the SIBC seam at high $\omega$ owing to finite-conductor Faraday shielding.}
+\label{fig:a1_sibc_compare}
+\vspace{-0.8em}
+\end{figure}
 
 \begin{thebibliography}{1}
-\bibitem{Sugahara_TEAM28} K.~Sugahara, ``Eddy current Cauer ladder network extraction for TEAM problem 28,'' Compumag 2017.
-\bibitem{Hiruma_2020} S.~Hiruma and H.~Igarashi, ``Three-term recurrence relation for Cauer ladder synthesis of eddy-current problems,'' IEEE Trans.\ Magn., vol.\ 56, no.\ 3, 2020.
-\bibitem{Stoll1974} R.~L.~Stoll, {\it The Analysis of Eddy Currents}. Oxford: Clarendon, 1974.
-\bibitem{Nagamine_2026} M.~Nagamine et al., ``Verified numerical computation of the Cauer network representation of a square prism conductor,'' submitted, 2026.
-\bibitem{radia} K.~Sugahara, ``Radia: Electromagnetic Simulation Framework for Magnetic Levitation Systems,'' GitHub repository, https://github.com/ksugahar/Radia, accessed May~2026.
+\footnotesize
+\bibitem{Kameari_2018} A.~Kameari \emph{et al.}, IEEE Trans.\ Magn.\ {\bf 54}, 3, 2018.
+\bibitem{Kuriyama_2019} K.~Kuriyama \emph{et al.}, IEEE Trans.\ Magn.\ {\bf 55}, 6, 2019.
+\bibitem{Matsuo_2026} T.~Matsuo, IEEJ SA/RM-26-014, 2026.
+\bibitem{Stoll1974} R.~L.~Stoll, {\it The Analysis of Eddy Currents}, Clarendon, 1974.
+\bibitem{Wall1948} H.~S.~Wall, {\it Analytic Theory of Continued Fractions}, Van Nostrand, 1948.
+\bibitem{Schoberl_Zaglmayr} J.~Sch\"oberl and S.~Zaglmayr, COMPEL {\bf 24}, 374, 2005.
+\bibitem{Nagamine_2026} M.~Nagamine \emph{et al.}, submitted, 2026.
 \end{thebibliography}
 
 % that's all folks
