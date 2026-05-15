@@ -699,15 +699,64 @@ For general ESIM theory, call:
 
 ### IH workflow integration
 
-1. Get `H_t` initial estimate from a single linear-SIBC BEM solve (Z_s from
-   nominal mu_r at the operating frequency).
-2. ESIM cell problem at that H_t → updated Z_s per surface element.
-3. Re-solve outer BEM/FEM with the new Z_s.  Karl iterate to convergence.
-4. Final P_wp + Joule heat distribution from the converged Z_s.
+1. Get an initial Z_s estimate via `esim.solve(H0)` at a small seed |H_t|
+   (~5 A/m) — the outer Karl loop will refresh it on iter 0.
+2. Solve outer BEM/FEM with current Z_s -> read mesh-RMS H_t on the
+   workpiece surface.
+3. Refresh Z_s = esim.solve(H_t)['Z']; under-relax: Z_s = relax * Z_s_new
+   + (1 - relax) * Z_s_old (relax = 0.5 default).
+4. Repeat until |dZ_s| / |Z_s| < tol (default 1e-3, ~5-10 iter typical).
+5. Final P_wp + L from the converged Z_s.
 
-Production scripts:
-- `calc_peec_bem.py`     — PEEC coil + BEM workpiece, Karl loop wrapped around BEM
-- `calc_fem_coilmesh.py` — Coil-mesh FEM with Robin SIBC, Karl loop wrapped around FEM
+### Production scripts (v4.46+; Karl iteration wired in all four)
+
+All four scripts accept `--impedance-model esim --bh-file <BH.txt>` and
+report converged Z_s, iteration count, and convergence history in JSON:
+
+| Script | Coil model | Workpiece model | Notes |
+|---|---|---|---|
+| `calc_inductance.py --coil-solver peec` | PEEC filament from STEP | scalar BEM-SIBC | Fast (~few s); 1-D Karl |
+| `calc_inductance.py --coil-solver bem-a` | BEM-A (Weggler EFIE, RWG on .vol) | scalar BEM-SIBC | Same Karl loop |
+| `calc_fem_kelvin.py --impedance esim` | PEEC filament source | FEM-HCurl A with Robin | PEEC+FEM+Kelvin |
+| `calc_fem_coilmesh.py --impedance-model esim` | FEM A-V volumetric coil | FEM with Robin SIBC | Full FEM A-V; re-assembles per Karl iter |
+
+`calc_heating.py` is a separate standalone script that uses the same
+`ESIMFiniteSlabSolver` for a simple 2D-axisymmetric IH heating predictor
+(not part of the production Karl-coupled paths above).
+
+#### Common CLI flags
+
+```
+--impedance-model {sibc|esim}    sibc = linear Dowell; esim = Karl
+--bh-file BH_FILE                required for esim; 2-col [H[A/m] B[T]]
+--esim-max-iter N                outer Karl cap (default 15)
+--esim-tol T                     |dZ|/|Z| convergence (default 1e-3)
+--esim-relax R                   under-relaxation (default 0.5)
+--half-thickness D               ESIM cell radius / half-slab [m]
+```
+
+`calc_fem_kelvin` has the same physics but exposes `--max-iter` (not
+`--esim-max-iter`) and currently does NOT take an `--esim-tol` knob.
+
+#### JSON output schema (Karl diagnostics, all four scripts)
+
+```json
+{
+  "impedance_model": "esim",
+  "esim_iterations": 6,
+  "esim_converged": true,
+  "esim_history": [
+    {"iteration": 0, "Z_s_abs": ..., "H_t_rms": ..., "dZ": ..., "t_solve": ...},
+    ...
+  ],
+  "Z_s_wp_real": 0.0172,
+  "Z_s_wp_imag": 0.0314,
+  ...
+}
+```
+
+Use `esim_history[-1].dZ` for a final convergence indicator; `esim_history`
+length will equal `esim_iterations` (one entry per outer Karl iter).
 
 ### Geometry choice for IH workpieces
 
@@ -719,15 +768,20 @@ Production scripts:
 | Coil-formed wire | `'cylinder'`     | wire radius (proximity effect ignored) |
 
 ### Pitfalls specific to IH
+
 - **Don't use linear SIBC at low frequency** for steel (< 10 kHz) — the
   field penetrates several mm and BH curve dominates. Use ESIM from the
   start; the converged solution differs by an order of magnitude in P_wp.
-- **Per-node Z_s for sharp corners**: workpieces with edges (cube, prism)
-  have H_t spikes; per-element Z_s under-resolves them.  Use per-node
-  vertex averaging (see `mcp-server-radia-ngsolve.ngsbem_inductance`,
-  per-panel curvature SIBC topic).
-- **Karl iteration diverges with very high alpha**: drop to alpha = 0.3
-  for SUS430 / S50C above 30 kHz.
+- **BH file required for ESIM**: panel + calc scripts raise if
+  `--bh-file` is empty when `--impedance-model esim` is selected
+  (pre-validation in `radia_ih.py:_build_*_command`).
+- **Karl iteration diverges with very high relax**: lower the relax flag
+  for SUS430 / S50C above 30 kHz: `--esim-relax 0.3`.  (CLI default is
+  0.5; matches `calc_fem_kelvin`'s historical setting.)
+- **Single Z_s per workpiece is mesh-RMS averaged**.  For workpieces with
+  large H_t variation (sharp corners, coil shadow effects), the current
+  implementation under-resolves the spatial saturation pattern.
+  Per-element ESIM is on the roadmap; track via the radia-mcp tool.
 """
 
 IH_BIOT_SAVART = """
