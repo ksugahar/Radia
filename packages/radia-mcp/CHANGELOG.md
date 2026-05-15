@@ -5,6 +5,15 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.48.5 — coordinated bump for radia 4.48.2 (PEEC L fail-fast on NaN)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.48.2 which adds `_assert_solver_L_finite` to
+`peec_bundle.build_bundle_solver` so that silent NaN in the PEEC
+mutual-inductance matrix is converted to a hard `ValueError` with
+a HINT pointing at vertex-aligned-loft fix path.  See radia
+CHANGELOG 4.48.2.
+
 ## 0.48.4 — peec_inductance knowledge updated for v4.48.1 STEP-only centerline
 
 Released 2026-05-16.  Pairs with radia 4.48.1 which replaced the
