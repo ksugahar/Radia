@@ -83,27 +83,48 @@ solve produces.  Karl iteration breaks the chicken-and-egg with under-
 relaxed fixed-point iteration:
 
 ```
-1. Initial Z_s from ESIM at estimated H_t (e.g. 1 A/m, or from linear SIBC)
-2. Solve outer BEM/FEM with current Z_s -> get H_t on conductor surface
-3. Update Z_s from ESIM cell problem at the new H_t (per surface element)
-4. Relaxation:  Z_s_new = (1 - alpha) * Z_s_old + alpha * Z_s_from_ESIM
-                          (typical alpha = 0.5, lower for stiff problems)
-5. Converge when ||dZ_s|| / ||Z_s|| < 1e-3 (typically 4-6 iterations for
-   linear-ish steel, 10-20 for deep saturation)
+1. Seed Z_s = esim.solve(H0)['Z']    # H0 = small estimate, e.g. 5 A/m
+2. Solve outer BEM/FEM with current Z_s -> read mesh-RMS H_t
+3. Z_s_new = esim.solve(H_t)['Z']
+4. Z_s = relax * Z_s_new + (1 - relax) * Z_s_old   # relax = 0.5 default
+5. dZ = |Z_s - Z_s_old| / |Z_s_old|
+6. break if dZ < tol (tol = 1e-3 default; 5-10 iter typical for steel)
 ```
 
-## Convergence pitfalls
-- **Diverging at low frequency**: linear SIBC initial guess is far from
-  the saturated solution. Start with a single ESIM solve at average |H_t|.
-- **Oscillating**: alpha too high. Drop to 0.3 or use Anderson acceleration.
-- **Stuck at coarse error**: outer BEM/FEM mesh too coarse — local H_t
-  spikes drive ESIM into very nonlinear regime. Refine the surface mesh
-  or smooth Z_s spatially (per-node Z_s with vertex averaging).
+## CLI (v4.46+ production scripts)
+- `--esim-max-iter N`   outer Karl cap (default 15)
+- `--esim-tol T`        relative tolerance |dZ|/|Z| (default 1e-3)
+- `--esim-relax R`      under-relaxation (default 0.5; lower if stiff)
+- `--bh-file FILE`      required; 2-column [H[A/m] B[T]] table
 
-## Per-element vs per-node Z_s
-- Per-element (cheaper, FEM panel-quadrature compatible)
-- Per-node (smoother, needed for high-curvature BEM, see
-  `radia_mcp.radia_ngsolve.ngsbem_inductance` per-panel curvature SIBC)
+`calc_fem_kelvin.py` uses `--max-iter` (legacy name) and currently
+does NOT expose `--esim-tol`.  The other three Karl scripts
+(`calc_inductance`, `calc_fem_coilmesh`, `calc_heating`) use the
+new flag names.
+
+## Convergence pitfalls
+- **Diverging at low frequency**: linear SIBC initial guess is far
+  from the saturated solution.  The seed `esim.solve(5.0)` at small
+  H is preferred over copying the linear Dowell Z_s.
+- **Oscillating**: relax too high.  Drop to `--esim-relax 0.3` for
+  SUS430 / S45C above 30 kHz.  Anderson acceleration is on the
+  roadmap.
+- **max_iter=1 false-not-converged** (pre v4.46.1): the convergence
+  check required `iteration > 0` which made any 1-iter run report
+  `esim_converged = false`.  Fixed in v4.46.1 to accept iter 0 when
+  the user explicitly asked for max_iter <= 1.
+- **Stuck at coarse error**: outer BEM/FEM mesh too coarse - local
+  H_t spikes drive ESIM into very nonlinear regime. Refine the
+  surface mesh or upgrade to per-element Z_s.
+
+## Scalar (current production) vs per-element Z_s (roadmap)
+- **Scalar (v4.46.x)**: one Z_s for the entire workpiece surface,
+  derived from the mesh-RMS H_t.  Fast (one ESIM call per outer
+  iter) but spatially averaged — under-resolves H_t spikes.
+- **Per-element (roadmap)**: each surface panel gets its own Z_s
+  from ESIM(H_t at panel centroid).  N_panel ESIM calls per outer
+  iter, but resolves spatial saturation pattern.  BEM solver API
+  must accept `Z_s = ndarray[n_panels]` instead of scalar.
 """
 
 MODULE_API = """
@@ -125,24 +146,47 @@ P_prime = sol['P_prime']    # surface power density [W/m^2]
 H_profile = sol['H_z']      # H(z) profile inside the cell (debug)
 ```
 
-## Coupling to BEM-SIBC
+## Coupling pattern (v4.46+ production scripts use this)
 
 ```python
-# Per-surface-element Karl iteration loop
-for it in range(max_iter):
-    Z_s_per_elem = np.array([esim.solve(np.abs(H_t[i]))['Z']
-                             for i in range(n_elem)])
-    H_t_new = solve_bem_sibc(Z_s_per_elem)   # outer BEM solve
-    if np.linalg.norm(H_t_new - H_t) / np.linalg.norm(H_t) < 1e-3:
+# Scalar Karl iteration loop (current production)
+esim = ESIMFiniteSlabSolver(half_thickness=R_wp, bh_curve=bh,
+                            sigma=sigma, frequency=freq,
+                            geometry='cylinder')
+Z_s = complex(esim.solve(5.0, max_iter=5)['Z'])   # seed
+history = []
+for k in range(max_iter):
+    res = solve_outer_BEM_or_FEM(Z_s=Z_s)         # bem.solve / a_bf re-assemble
+    H_t_rms = float(res['H_t_rms'])               # mesh-RMS amplitude
+    Z_s_old = Z_s
+    Z_s_new = complex(esim.solve(max(H_t_rms, 1e-3))['Z'])
+    Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+    dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+    history.append({"iteration": k, "Z_s_abs": abs(Z_s),
+                    "H_t_rms": H_t_rms, "dZ": dZ})
+    if dZ < tol and (k > 0 or max_iter <= 1):
         break
-    H_t = (1 - alpha) * H_t + alpha * H_t_new
+# One final outer solve at the converged Z_s so post-proc sees the
+# matching residual.
+final_res = solve_outer_BEM_or_FEM(Z_s=Z_s)
 ```
 
-## Coupling to FEM-SIBC
+## Production sites (v4.46+)
 
-The same Karl loop wraps the FEM solve.  See
-`radia_mcp.ih.ih_sibc(topic='peec_fem')` for the production
-PEEC + FEM induction-heating workflow that uses this exact pattern.
+| Outer model | Script (`src/radia/panels/`) | Karl loop location |
+|---|---|---|
+| Scalar BEM-SIBC (PEEC coil) | `calc_inductance.py` | `_solve_workpiece_weak_coupled` |
+| Scalar BEM-SIBC (BEM-A coil) | `calc_inductance.py` (same) | (same) |
+| FEM-HCurl with Robin (PEEC coil) | `calc_fem_kelvin.py` | `solve_fem_kelvin` |
+| FEM A-V with Robin (FEM coil) | `calc_fem_coilmesh.py` | `solve_fem_coilmesh` |
+
+All four return the same JSON Karl diagnostic schema:
+`esim_iterations`, `esim_converged`, `esim_history` (list of per-iter
+dicts), plus the final converged `Z_s_wp_real` / `Z_s_wp_imag`.
+
+For application-specific guidance on choosing the right script (PEEC+BEM
+vs Full FEM, half_thickness for non-cylindrical workpieces, etc.) call
+`radia_mcp.ih.ih_sibc(topic='esim')`.
 """
 
 
