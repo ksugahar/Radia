@@ -584,8 +584,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # 5. Workpiece SIBC: BIE solve (optionally Karl-iterated for ESIM)
     bh_curve = None
     if args.bh_file:
-        from em_material import _load_bh_file
-        bh_curve = _load_bh_file(args.bh_file)
+        from em_material import load_bh_file
+        bh_curve = load_bh_file(args.bh_file)
     mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r,
                          bh_curve=bh_curve)
     delta_wp = mat_wp.skin_depth(args.frequency)
@@ -593,9 +593,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     if args.impedance_model == "esim":
         # ESIM cell solver: 1D nonlinear B-H(H) Karl iteration on a
         # cylindrical workpiece slice of radius `half_thickness`.
+        # The seed solve at a small H0=5 A/m only needs a rough Z_s
+        # to start the outer Karl loop; cap inner Picard at 5 iter
+        # to avoid wasting time on a 50-iter solve whose result the
+        # next outer iter overrides anyway.
         esim_solver = mat_wp.create_esim_solver(
             args.frequency, args.half_thickness, geometry='cylinder')
-        Z_s_wp = complex(esim_solver.solve(5.0)['Z'])
+        Z_s_wp = complex(esim_solver.solve(5.0, max_iter=5)['Z'])
         max_iter = max(int(args.esim_max_iter), 1)
     else:
         # Linear SIBC: Dowell tanh formula closed form.

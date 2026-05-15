@@ -80,8 +80,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
 
     bh_curve = None
     if bh_file:
-        from em_material import _load_bh_file
-        bh_curve = _load_bh_file(bh_file)
+        from em_material import load_bh_file
+        bh_curve = load_bh_file(bh_file)
     if impedance_model == "esim" and bh_curve is None:
         raise ValueError(
             "impedance_model='esim' requires bh_file with a 2-column "
@@ -91,9 +91,11 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                          bh_curve=bh_curve)
     delta_wp = wp_mat.skin_depth(frequency)
     if impedance_model == "esim":
+        # Seed Z_s with a small-H Picard solve; cap inner iter at 5
+        # because the outer Karl loop will refresh Z_s immediately.
         esim_solver = wp_mat.create_esim_solver(
             frequency, half_thickness, geometry='cylinder')
-        Z_s_wp = complex(esim_solver.solve(5.0)['Z'])
+        Z_s_wp = complex(esim_solver.solve(5.0, max_iter=5)['Z'])
     else:
         esim_solver = None
         Z_s_wp = wp_mat.dowell_Zs(frequency, half_thickness)

@@ -263,9 +263,11 @@ def solve_fem(vol_file="", fes_order=1,
         esim = None
         has_wp = False
     elif impedance_model == "esim":
+        # Seed Z_s with a small-H Picard solve; cap inner iter at 5
+        # because the outer Karl loop will refresh Z_s immediately.
         esim = mat.create_esim_solver(frequency, half_thickness,
                                       geometry='cylinder')
-        Z_s = esim.solve(5.0)['Z']
+        Z_s = esim.solve(5.0, max_iter=5)['Z']
     else:
         # Linear SIBC via Dowell tanh formula
         Z_s = mat.dowell_Zs(frequency, half_thickness)
@@ -827,7 +829,16 @@ def solve_fem(vol_file="", fes_order=1,
     # ============================================================
     # Step 6: Post-process
     # ============================================================
-    # Time-averaged power: P = 0.5 * Re(Z_s) * H_t_rms^2 * A_wp
+    # Time-averaged power: P = 0.5 * Re(Z_s) * |H_t|_amp^2 * A_wp.
+    #
+    # Naming note: `H_t_rms` here is **spatial RMS of the amplitude**
+    # of H_t over the workpiece surface (= sqrt(2) * time-RMS for a
+    # single-frequency phasor).  The factor 0.5 in the power formula
+    # corresponds to <cos^2(omega t)> = 1/2 and is correct for this
+    # amplitude convention.  Do NOT replace H_t_rms with a true
+    # time-RMS without dropping the 0.5 -- the same misnomer is used
+    # consistently in calc_inductance, calc_fem_coilmesh, and the
+    # underlying bem_sibc_solver, ESIM cell solver.
     if has_wp:
         P_total = 0.5 * Z_s.real * H_t_rms**2 * A_wp
         Q_total = 0.5 * Z_s.imag * H_t_rms**2 * A_wp
