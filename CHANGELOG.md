@@ -3,6 +3,55 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.48.1 — STEP centerline classification dispatch + path_points_m removal
+
+Released 2026-05-15.  Hot-fix for keiko's `1turn_coil_loft_outsideline.step`
+on mdx (4 PEEC runs FAIL with "Filament path does not match the
+conductor solid bbox").
+
+### Why
+
+The STEP file is a BSPLINE-lofted "arc + 2 lead-bars" coil: 4 faces
+(2 BSPLINE lateral halves + 2 PLANE caps), bbox y=[-33, +50] mm with
+the leads extending out to y=+50 mm.  The pre-v4.48.1 dispatcher in
+`extract_centerline_from_step` was a try/except cascade
+`revolution_sweep -> topology_spine -> open_spine`.  The middle path
+`_centerline_from_topology_spine` "succeeded" with a planar arc at
+R = 0.85 * bbox_max = 42.5 mm that overshot the conductor in x
+(12 mm) AND missed the lead bar in y (6 mm), and the longest-edge
+fallback `_centerline_from_open_spine` (which produces the CORRECT
+spine for this geometry, x=+-30 mm + lead at y=+50 mm) was shadowed.
+The downstream `_check_filaments_cover_solid_bbox` sanity check fired
+and told the user to pass `--path-points-m` -- but the auto-detect
+path that handled their geometry already existed; it was the eager
+upstream branch that was wrong.
+
+### What shipped
+
+1. **Classification-based dispatch** in `extract_centerline_from_step`
+   (No-Fallback policy, CLAUDE.md "No Fallbacks - Fail Fast, Fail
+   Loud").  Five positive-match predicates instead of a try/except
+   cascade: multi-station loft -> `_cross_sections`; united multi-
+   turn -> `_circle_edge_centers`; revolution+plane -> `_revolution_
+   sweep`; OPEN -> `_open_spine`; CLOSED -> `_topology_spine`.
+2. **`_centerline_from_topology_spine` is now CLOSED-only** and raises
+   if called on an OPEN coil (programming-error indicator, not a
+   soft-fallback signal).
+3. **`path_points_m` parameter removed** from `filaments_from_step`.
+   STEP files are now the single source of truth for the centerline.
+   If auto-detection cannot recover a covering spine the user fixes
+   the CAD rather than papering over breakage with a hand-crafted
+   JSON.  The HINT in `_check_filaments_cover_solid_bbox` was updated
+   to drop the `--path-points-m` reference.
+4. **Regression fixture + tests** at
+   `tests/coil_from_cad/fixtures/keiko_outsideline.step` exercising
+   lead-bar coverage, x-bbox no-overshoot, equiv wire radius
+   recovery, and the API contract (`path_points_m` removed).
+5. **`radia-mcp` 0.48.3** coordinated patch bump per release-triple
+   policy.
+
+`cubit-mesh-export` is unchanged this release.
+
 ## 4.28.1 — radia_ih Run button stays disabled after Browse... fix
 
 Released 2026-05-08.  Hot-fix for kubota's report on mdx + 100号機.

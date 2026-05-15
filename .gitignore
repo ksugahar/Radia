@@ -287,6 +287,9 @@ rad.ObjBckgCF/
 *.msh.opt
 *.step
 !examples/**/gmsh_models/*.msh
+# Test fixtures: hand-curated STEP files checked into the repo as
+# regression inputs (e.g. keiko's 1turn_coil_loft_outsideline.step).
+!tests/**/fixtures/*.step
 
 # Transient launcher config written by RadiaComp.cpp next to the .jou
 # (auto-Kelvin dialog state handed to auto_kelvin_entry.py)
