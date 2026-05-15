@@ -125,7 +125,83 @@ def build_bundle_solver(filament_paths, dw, dh, sigma, cell_wh=None):
     topo['ports'] = [(0, 1, 0)]
 
     solver = PEECCircuitSolver(topo)
+    _assert_solver_L_finite(solver, seg_indices, filament_paths)
     return solver, seg_indices, 0, 1
+
+
+def _assert_solver_L_finite(solver, seg_indices, filament_paths):
+    """Fail fast (CLAUDE.md "No Fallbacks - Fail Fast, Fail Loud") when
+    the assembled mutual-inductance matrix contains non-finite entries.
+
+    Background (2026-05-16, keiko 1turn_coil_loft_outsideline.step):
+    when the open-spine path samples a coil with a sharp corner at
+    the lead-cap junction, parallel transport of the cross-section
+    perimeter across the corner places adjacent filament segments
+    near-coincident.  The Ruehli mutual-inductance kernel is singular
+    on coincident segment pairs, and the dense kernel returned NaN /
+    Inf silently rather than raising.  Downstream
+    ``compute_port_impedance`` then propagated the NaN into a
+    ``L_coil_nH = NaN`` JSON output that exited 0 -- the user saw
+    a "successful" run with garbage numbers.
+
+    This guard converts the silent NaN into a hard ValueError that
+    points at the offending filament/segment pairs and (per CLAUDE.md
+    "STEP-Only Centerline: Auto-Detect or Fail") at the documented
+    fix path: regenerate the STEP with vertex-aligned cross-sections
+    so the lateral surface is a single dominant BSPLINE / TORUS,
+    routing the centerline through Predicate 1 (UV-map sampling)
+    which does NOT use parallel-transport.
+    """
+    L = getattr(solver, "L", None)
+    if L is None:
+        return  # HACApK path: no dense L assembled
+    L = np.asarray(L)
+    bad = ~np.isfinite(L)
+    if not bad.any():
+        return  # clean L, normal path
+
+    # Map the N_seg-indexed L matrix back to (filament, segment_in_fil)
+    # so the diagnostic names something the user can act on.
+    n_seg_total = L.shape[0]
+    fil_of_seg = np.full(n_seg_total, -1, dtype=np.int64)
+    pos_in_fil = np.full(n_seg_total, -1, dtype=np.int64)
+    for k, segs in enumerate(seg_indices):
+        for j, s in enumerate(segs):
+            if 0 <= s < n_seg_total:
+                fil_of_seg[s] = k
+                pos_in_fil[s] = j
+
+    rows, cols = np.where(bad)
+    n_bad = int(bad.sum())
+    diag_bad = int(np.isfinite(np.diag(L)).sum() - L.shape[0]) * -1
+    # Sample first 8 pairs for the diagnostic (avoid spamming on
+    # massively degenerate geometries).
+    samples = []
+    for r, c in zip(rows[:8], cols[:8]):
+        fr, sr = int(fil_of_seg[r]), int(pos_in_fil[r])
+        fc, sc = int(fil_of_seg[c]), int(pos_in_fil[c])
+        samples.append(
+            f"  L[{int(r)},{int(c)}] = fil{fr}.seg{sr} <-> fil{fc}.seg{sc}")
+
+    n_fil = len(filament_paths)
+    n_per_fil = n_seg_total // max(n_fil, 1)
+    raise ValueError(
+        "PEEC mutual-inductance matrix L contains "
+        f"{n_bad} non-finite entries ({diag_bad} on the diagonal).  "
+        "This means the open-spine cross-section sampler placed "
+        "filament segments near-coincident across a sharp spine corner "
+        "(typically a lead-to-arc junction) and the Ruehli kernel "
+        "returned NaN / Inf silently.\n"
+        f"Geometry: {n_fil} filaments x {n_per_fil} segments each.\n"
+        "Sample degenerate pairs (within-filament, near a corner):\n"
+        + "\n".join(samples) +
+        "\nFIX: regenerate the STEP with vertex-aligned cross-sections "
+        "(e.g. gen_1turn_coil_loft.py vertex_side='inner' or 'outer', "
+        "or build123d sweep(circle_profile, smooth_spline_path)) so "
+        "the lateral surface is a single dominant BSPLINE / TORUS.  "
+        "That routes the centerline through Predicate 1 (UV-map "
+        "sampling) which samples directly from the lateral surface "
+        "without parallel transport, eliminating the singular pair.")
 
 
 def build_loop_bundle_impedance(solver, seg_of_filament):
