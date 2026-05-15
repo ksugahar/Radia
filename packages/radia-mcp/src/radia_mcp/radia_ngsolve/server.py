@@ -839,13 +839,21 @@ def peec_inductance(topic: str = "all") -> str:
     is this coil's L / R at this frequency?" and you do not need
     heating or workpiece physics.
 
-    Centerline extraction is geometry-aware:
-      * Multi-turn loft of profiles  → cross-section centroid NN-chain
-      * Single-loop revolution sweep → analytical arc from TORUS /
-                                        CYLINDER / CONE / REVOLUTION
-                                        surface parameters
-      * Generic swept (non-revolution) → longest open edge + section()
-      * .jou with explicit ``move Surface N x Y y Y z Z`` → direct parse
+    Centerline extraction is **STEP-only** (v4.48.1, 2026-05-15):
+    no caller-supplied JSON, no ``--path-points-m`` flag.
+    Classification-based single dispatch picks ONE of 5 predicates;
+    if none cover the conductor bbox, raises with a HINT pointing at
+    CAD regeneration or BEM-A switch (NEVER a silent fallback).
+
+    Five centerline predicates (positive-match, no try/except cascade):
+      1. Loft of profiles (>= 5 planar end-caps)  -> NN-chain centroids
+      2. United multi-turn pancake (CIRCLE-edge stations) -> NN-chain
+         circle centres
+      3. Single-loop revolution sweep (TORUS / CYLINDER / CONE /
+         REVOLUTION + PLANE caps) -> analytical arc
+      4. OPEN coil with caps -> longest open lateral rim edge
+         (handles "arc + leads" e.g. keiko outsideline.step)
+      5. CLOSED full revolution (no caps) -> coil_topology spine
 
     Sibling-.jou auto-preference: if the user picks ``foo.step`` and
     ``foo.jou`` (case-insensitive stem match) coexists in the same
@@ -857,13 +865,14 @@ def peec_inductance(topic: str = "all") -> str:
 
     Args:
         topic: Options:
-            "all"            - Complete documentation
-            "overview"       - What it solves, when to use, perimeter placement
-            "centerline"     - STEP centerline extraction algorithms
-                               (loft-of-profiles / revolution / open-spine)
-            "jou"            - .jou explicit centerline parser
-            "sibling_jou"    - Auto-prefer sibling .jou when co-located
-            "japanese_path"  - Unicode / Japanese path support
+            "all"             - Complete documentation
+            "overview"        - What it solves, when to use, perimeter placement
+            "centerline"      - STEP centerline extraction (5 classification predicates)
+            "filament_dispatch" - n_peri filament placement paths (single-dispatch)
+            "step_authoring"  - Cubit / build123d recipes for auto-detect-friendly STEPs
+            "jou"             - .jou explicit centerline parser
+            "sibling_jou"     - Auto-prefer sibling .jou when co-located
+            "japanese_path"   - Unicode / Japanese path support
     """
     return get_peec_inductance_documentation(topic)
 

@@ -5,6 +5,49 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.48.4 — peec_inductance knowledge updated for v4.48.1 STEP-only centerline
+
+Released 2026-05-16.  Pairs with radia 4.48.1 which replaced the
+spine-extractor try/except cascades in `coil_from_cad.py` with
+classification-based single dispatch + removed the `path_points_m`
+parameter ("STEP-Only Centerline: Auto-Detect or Fail" policy in
+CLAUDE.md).  The 0.48.3 bump was a version-coordination only; this
+0.48.4 ships the actual knowledge updates:
+
+### What shipped
+
+- **`PEEC_IND_FILAMENT_DISPATCH`** (topic `filament_dispatch`): rewritten
+  from "3-tier fallback chain" language to **classification-based
+  single dispatch**.  Documents Path 1 (UV-map; predicate now
+  includes the UV-closure check so downstream sampling MUST succeed
+  -- no try/except in Path 1), Path 2 (per-station faces), Path 2b
+  (CIRCLE-edge stations), Path 2c (section-planes), Path 3
+  (equivalent-circle catch-all with the new fail-fast sanity check).
+- **`PEEC_IND_CENTERLINE`** (topic `centerline`): expanded from 3
+  paths to **5 classification predicates** (Loft / Circle-edge /
+  Revolution-sweep / OPEN longest-edge / CLOSED full-revolution).
+  Documents the CLOSED-only guard in `_centerline_from_topology_spine`
+  and the keiko `1turn_coil_loft_outsideline.step` lesson (OPEN
+  geometries with leads must route to Predicate 4, not 5).
+- **New `PEEC_IND_STEP_AUTHORING`** (topic `step_authoring` +
+  aliases `cubit_recipe`, `build123d_recipe`, `anti_patterns`):
+  concrete recipes for authoring auto-detect-friendly STEPs.
+  Quick-decision table mapping Cubit/build123d operations to
+  predicate hits, full Cubit `.jou` recipes for gapped torus and
+  multi-turn pancake, build123d `sweep()` recipe for curved
+  spine + circular profile, anti-patterns (lateral split into 2
+  halves, pairwise loft chain, hardcoded IDs, non-manifold,
+  self-intersecting), and a 10-line build123d probe script for
+  verifying a STEP is auto-detect-friendly BEFORE running the panel.
+
+### Why
+
+radia-mcp 0.48.3 (released 2026-05-15 alongside radia 4.48.1) only
+bumped versions for release-triple coordination -- the knowledge
+documents still described the obsolete try/except cascade.  Users
+asking the `peec_inductance(topic=...)` MCP tool got stale guidance.
+0.48.4 reconciles the knowledge layer with the v4.48.1 dispatcher.
+
 ## 0.40.0 — 3D CLN (Tanimoto-Kameari) knowledge module
 
 New `radia_ngsolve.knowledge.cln_3d` module captures Tanimoto's 3D
