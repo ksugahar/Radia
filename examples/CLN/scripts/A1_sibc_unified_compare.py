@@ -273,7 +273,13 @@ def main():
                     help="Optional NGSolve AC sweep JSON for ground-truth "
                          "overlay (from A1_AC_sweep.py)")
     ap.add_argument("--n-stages", type=int, default=3,
-                    help="Number of Cauer stages to use (default 3)")
+                    help="Number of Cauer stages to use for BOTH methods "
+                         "(default 3). Overridden by --vim-n-stages / "
+                         "--fem-n-stages.")
+    ap.add_argument("--vim-n-stages", type=int, default=None,
+                    help="Number of Cauer stages to use for VIM only.")
+    ap.add_argument("--fem-n-stages", type=int, default=None,
+                    help="Number of Cauer stages to use for FEM only.")
     ap.add_argument("--fem-skip-stages", type=int, default=0,
                     help="Drop first N Tanimoto-AT rungs before forming the "
                          "Cauer ladder (default 0). Use 1 to treat Tanimoto "
@@ -309,21 +315,25 @@ def main():
           f"n_omega = {args.n_omega}")
     print()
 
+    vim_n = args.vim_n_stages if args.vim_n_stages is not None else args.n_stages
+    fem_n = args.fem_n_stages if args.fem_n_stages is not None else args.n_stages
+
     # --- VIM ---
     print(f"Loading VIM Foster: {args.vim_foster}")
     vim_rungs, vim_p_array = load_vim_rungs_from_foster(
         Path(args.vim_foster),
-        n_cauer_stages=max(args.n_stages, 6),
+        n_cauer_stages=max(vim_n, 6),
         tau_min_us=args.tau_min_us,
     )
-    vim_rungs = vim_rungs[: args.n_stages]
-    vim_p_array = vim_p_array[: 2 * args.n_stages]
-    print_rungs("VIM mpmath HDivDivFreeHex p=3", vim_rungs, vim_p_array)
+    vim_rungs = vim_rungs[: vim_n]
+    vim_p_array = vim_p_array[: 2 * vim_n]
+    print_rungs(f"VIM mpmath HDivDivFreeHex p=3 (n={vim_n})",
+                vim_rungs, vim_p_array)
 
     # --- FEM ---
     print(f"\nLoading FEM Tanimoto-AT: {args.fem_results}")
     fem_rungs, fem_p_array = load_fem_rungs(
-        Path(args.fem_results), n_stages=args.n_stages,
+        Path(args.fem_results), n_stages=fem_n,
         skip_stages=args.fem_skip_stages,
     )
     fem_label = "FEM NGSolve Tanimoto-AT"
@@ -486,8 +496,12 @@ def main():
 
     ax1.set_ylim(top=2.0)
     ax1.set_ylabel(r"$|Y(j\omega)| / |Y(0)|$  (normalized)")
+    if args.vim_n_stages or args.fem_n_stages:
+        stage_str = f"VIM {vim_n} + FEM {fem_n} stages"
+    else:
+        stage_str = f"{args.n_stages} stages"
     ax1.set_title(f"A1 cuboid 17.72×17.72×2 mm Cu — Cauer + SIBC unified Y "
-                  f"({args.n_stages} stages)")
+                  f"({stage_str})")
     ax1.legend(fontsize=8, loc="lower left")
     ax1.grid(True, which="both", alpha=0.4)
 
