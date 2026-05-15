@@ -601,13 +601,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             args.frequency, args.half_thickness, geometry='cylinder')
         Z_s_seed = complex(esim_solver.solve(5.0, max_iter=5)['Z'])
         if args.esim_per_panel:
-            if args.wp_bem_backend != "intree-dense":
-                raise ValueError(
-                    "--esim-per-panel requires --wp-bem-backend "
-                    "intree-dense (the HACApK GMRES path does not yet "
-                    "accept ndarray Z_s).")
-            # Seed every DOF with the same scalar; subsequent iters
-            # refresh Z_s_wp[i] from the per-DOF H_t.
+            # Per-DOF Z_s works on BOTH intree-dense and HACApK backends
+            # (v4.47.2+).  Seed every DOF with the same scalar; subsequent
+            # iters refresh Z_s_wp[i] from the per-DOF H_t.
             Z_s_wp = np.full(bem.ndof, Z_s_seed, dtype=complex)
         else:
             Z_s_wp = Z_s_seed
