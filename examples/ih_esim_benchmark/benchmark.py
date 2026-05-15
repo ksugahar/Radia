@@ -113,7 +113,7 @@ def _run(cmd, label):
     return result
 
 
-def run_inductance(freq, output_json):
+def run_inductance(freq, output_json, per_panel=False):
     cmd = [sys.executable, str(PANELS / "calc_inductance.py"),
            "--coil-solver", "peec",
            "--coil-step", str(COIL_STEP),
@@ -130,7 +130,16 @@ def run_inductance(freq, output_json):
            "--frequency", f"{freq:.6e}",
            "--current", str(CURRENT),
            "--output", str(output_json)]
-    return _run(cmd, f"inductance @ {freq:.2e} Hz")
+    if per_panel:
+        cmd += ["--esim-per-panel", "--wp-bem-backend", "intree-dense"]
+        label = f"inductance_per_panel @ {freq:.2e} Hz"
+    else:
+        label = f"inductance @ {freq:.2e} Hz"
+    return _run(cmd, label)
+
+
+def run_inductance_per_panel(freq, output_json):
+    return run_inductance(freq, output_json, per_panel=True)
 
 
 def run_fem_kelvin(freq, output_json):
@@ -168,6 +177,7 @@ def run_fem_coilmesh(freq, output_json):
 
 PATH_RUNNERS = {
     "inductance": run_inductance,
+    "inductance_per_panel": run_inductance_per_panel,
     "fem_kelvin": run_fem_kelvin,
     "fem_coilmesh": run_fem_coilmesh,
 }

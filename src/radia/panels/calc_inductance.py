@@ -599,7 +599,18 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # next outer iter overrides anyway.
         esim_solver = mat_wp.create_esim_solver(
             args.frequency, args.half_thickness, geometry='cylinder')
-        Z_s_wp = complex(esim_solver.solve(5.0, max_iter=5)['Z'])
+        Z_s_seed = complex(esim_solver.solve(5.0, max_iter=5)['Z'])
+        if args.esim_per_panel:
+            if args.wp_bem_backend != "intree-dense":
+                raise ValueError(
+                    "--esim-per-panel requires --wp-bem-backend "
+                    "intree-dense (the HACApK GMRES path does not yet "
+                    "accept ndarray Z_s).")
+            # Seed every DOF with the same scalar; subsequent iters
+            # refresh Z_s_wp[i] from the per-DOF H_t.
+            Z_s_wp = np.full(bem.ndof, Z_s_seed, dtype=complex)
+        else:
+            Z_s_wp = Z_s_seed
         max_iter = max(int(args.esim_max_iter), 1)
     else:
         # Linear SIBC: Dowell tanh formula closed form.
@@ -608,8 +619,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         esim_solver = None
         max_iter = 1
 
-    progress("BEM",
-        f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
+    if isinstance(Z_s_wp, np.ndarray):
+        progress("BEM",
+            f"BIE solve Z_s=ndarray[{Z_s_wp.shape[0]}] "
+            f"(mean|Z_s|={abs(np.mean(Z_s_wp)):.3e}, model=esim per-panel)")
+    else:
+        progress("BEM",
+            f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
     res_bem = None
     esim_history = []
     esim_converged = (esim_solver is None)
@@ -634,24 +650,66 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             progress("BEM", f"BIE ({t_iter:.1f}s)")
             break
 
-        # Karl update: re-evaluate Z_s from ESIM at the new H_t_rms,
-        # then under-relax (matches calc_fem_kelvin's default 0.5 to
-        # damp oscillation near saturation).
+        # Karl update.
         Z_s_old = Z_s_wp
-        sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
-        Z_s_new = complex(sol_new['Z'])
-        Z_s_wp = args.esim_relax * Z_s_new + (1 - args.esim_relax) * Z_s_old
-        dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
-        esim_history.append({
-            "iteration": iteration,
-            "Z_s_abs": float(abs(Z_s_wp)),
-            "H_t_rms": H_t_rms_iter,
-            "dZ": float(dZ),
-            "t_solve": float(t_iter),
-        })
-        progress("BEM",
-            f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
-            f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} t={t_iter:.1f}s")
+        if args.esim_per_panel:
+            # Extract per-DOF |H_t|^2 from phi_vec via the same
+            # variational form the scalar path uses, but DOF-localised:
+            #   total Hsq = phi^T K phi = sum_i phi_i * (K phi)_i
+            # → per-DOF contribution to Hsq = phi_i * (K phi)_i.
+            # Per-DOF effective area = M_lump_i = (M @ 1)_i (row sum).
+            phi_vec = np.asarray(res_bem["phi_vec"])
+            Kphi_re = bem.K @ phi_vec.real
+            Kphi_im = bem.K @ phi_vec.imag
+            Hsq_re = phi_vec.real * Kphi_re
+            Hsq_im = phi_vec.imag * Kphi_im
+            Hsq_per = np.abs(Hsq_re) + np.abs(Hsq_im)
+            M_lump = bem.M @ np.ones(bem.ndof)
+            H_t_per = np.sqrt(Hsq_per / np.maximum(M_lump, 1e-30))
+            # Per-DOF ESIM
+            Z_s_new = np.empty(bem.ndof, dtype=complex)
+            for i in range(bem.ndof):
+                Z_s_new[i] = complex(
+                    esim_solver.solve(max(float(H_t_per[i]), 1e-3),
+                                       max_iter=20)['Z'])
+            Z_s_wp = (args.esim_relax * Z_s_new
+                      + (1 - args.esim_relax) * Z_s_old)
+            dZ_per_dof = (np.abs(Z_s_wp - Z_s_old)
+                          / np.maximum(np.abs(Z_s_old), 1e-30))
+            dZ = float(np.max(dZ_per_dof))
+            Zabs_mean = float(np.mean(np.abs(Z_s_wp)))
+            Ht_mean = float(np.mean(H_t_per))
+            Ht_max = float(np.max(H_t_per))
+            esim_history.append({
+                "iteration": iteration,
+                "Z_s_abs_mean": Zabs_mean,
+                "Z_s_abs_max": float(np.max(np.abs(Z_s_wp))),
+                "Z_s_abs_min": float(np.min(np.abs(Z_s_wp))),
+                "H_t_per_dof_mean": Ht_mean,
+                "H_t_per_dof_max": Ht_max,
+                "dZ_max": dZ,
+                "t_solve": float(t_iter),
+            })
+            progress("BEM",
+                f"ESIM:ITER {iteration} per-panel "
+                f"<|Z_s|>={Zabs_mean:.4e} "
+                f"<H_t>={Ht_mean:.2f} max(H_t)={Ht_max:.2f} "
+                f"max(dZ)={dZ:.4e} t={t_iter:.1f}s")
+        else:
+            sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
+            Z_s_new = complex(sol_new['Z'])
+            Z_s_wp = args.esim_relax * Z_s_new + (1 - args.esim_relax) * Z_s_old
+            dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            esim_history.append({
+                "iteration": iteration,
+                "Z_s_abs": float(abs(Z_s_wp)),
+                "H_t_rms": H_t_rms_iter,
+                "dZ": float(dZ),
+                "t_solve": float(t_iter),
+            })
+            progress("BEM",
+                f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
+                f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} t={t_iter:.1f}s")
         # Require iteration > 0 to avoid spurious convergence on the
         # seed Z_s (= esim.solve(5.0)), EXCEPT when max_iter <= 1:
         # the user explicitly asked for one iteration so the dZ we
@@ -799,6 +857,23 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         except Exception as exc:
             progress("BEM", f"msh export failed: {exc}")
 
+    # Z_s_wp may be scalar (default) or ndarray (--esim-per-panel).
+    # Report mean Re/Im for the array case to keep the JSON schema
+    # backward-compatible; full array goes under esim_per_panel_Zs.
+    if isinstance(Z_s_wp, np.ndarray):
+        Z_s_mean = complex(np.mean(Z_s_wp))
+        Z_s_real_out = float(Z_s_mean.real)
+        Z_s_imag_out = float(Z_s_mean.imag)
+        per_panel_block = {
+            "esim_per_panel": True,
+            "esim_per_panel_Z_s_real": Z_s_wp.real.tolist(),
+            "esim_per_panel_Z_s_imag": Z_s_wp.imag.tolist(),
+        }
+    else:
+        Z_s_real_out = float(Z_s_wp.real)
+        Z_s_imag_out = float(Z_s_wp.imag)
+        per_panel_block = {"esim_per_panel": False}
+
     return {
         "P_wp": P_wp, "H_t_rms": H_t_rms, "A_wp": A_wp,
         "delta_L_nH": delta_L_nH, "delta_R_mOhm": delta_R_mOhm,
@@ -806,13 +881,14 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_mesh_nv": int(wp_mesh.nv),
         "wp_mesh_n_tris": int(wp_mesh.GetNE(BND)),
         "wp_gmres_info": int(info),
-        "Z_s_wp_real": float(Z_s_wp.real),
-        "Z_s_wp_imag": float(Z_s_wp.imag),
+        "Z_s_wp_real": Z_s_real_out,
+        "Z_s_wp_imag": Z_s_imag_out,
         "skin_depth_wp_mm": float(delta_wp * 1e3),
         "impedance_model": args.impedance_model,
         "esim_iterations": int(n_iter_done),
         "esim_converged": bool(esim_converged),
         "esim_history": esim_history,
+        **per_panel_block,
         "msh_file": msh_file,
         "t_wp_mesh_s": t_wp_mesh,
         "t_bem_assembly_s": t_asm,
@@ -1261,6 +1337,16 @@ def main():
                              "step, 0.5 = half-step (default, matches "
                              "calc_fem_kelvin).  Lower if Karl "
                              "oscillates near saturation.")
+    parser.add_argument("--esim-per-panel", action="store_true",
+                        help="Per-DOF ESIM Karl iteration (Phase B): the "
+                             "ESIM cell solver is called once per BEM "
+                             "DOF using a per-node H_t extracted from "
+                             "the phi_vec, building a per-node Z_s "
+                             "ndarray instead of a single scalar.  "
+                             "Resolves the spatial saturation pattern; "
+                             "costs N_DOF extra ESIM calls per Karl "
+                             "iter (~5 ms each).  Requires "
+                             "--wp-bem-backend intree-dense.")
     parser.add_argument("--h1-order", type=int, default=1,
                         choices=[1, 2],
                         help="Workpiece BEM Lagrange basis order "
