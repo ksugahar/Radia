@@ -57,7 +57,8 @@ def solve_fem_coilmesh(vol, frequency, I_target,
                        bh_file="",
                        esim_max_iter=15,
                        esim_tol=1e-3,
-                       esim_relax=0.5):
+                       esim_relax=0.5,
+                       esim_per_panel=False):
     """A-V formulation for volumetric coil + SIBC workpiece + Kelvin.
 
     ``impedance_model="esim"`` runs a Karl iteration: per outer iteration
@@ -240,6 +241,27 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     gf_A, gf_phi = gfu.components
     n_bnd = specialcf.normal(3)
 
+    # Per-panel ESIM (v4.48.0+): build a surface H1 GridFunction on the
+    # workpiece BND so the Robin coefficient becomes a per-DOF CF.  Same
+    # pattern as calc_fem_kelvin.py.
+    if esim_per_panel and esim_solver is not None:
+        fes_Zs = H1(mesh, order=fes_order, complex=True)
+        gf_Zs = GridFunction(fes_Zs)
+        gf_Zs.vec[:] = 0
+        gf_Zs.Set(CF(Z_s_wp), definedon=wp_region)
+        mask_gf = GridFunction(H1(mesh, order=fes_order))
+        mask_gf.vec[:] = 0
+        mask_gf.Set(CF(1.0), definedon=wp_region)
+        bnd_mask = np.asarray(mask_gf.vec.FV().NumPy()) > 0.5
+        n_bnd_dofs = int(bnd_mask.sum())
+        progress("FEM",
+            f"PER_PANEL: wp surface H1 dofs={n_bnd_dofs}")
+    else:
+        fes_Zs = None
+        gf_Zs = None
+        bnd_mask = None
+        n_bnd_dofs = 0
+
     esim_history = []
     esim_converged = (esim_solver is None)
     max_iter = max(int(esim_max_iter), 1) if esim_solver is not None else 1
@@ -252,10 +274,15 @@ def solve_fem_coilmesh(vol, frequency, I_target,
 
     for iteration in range(max_iter):
         n_iter_done = iteration + 1
-        robin_wp = s / Z_s_wp
-
-        progress("FEM",
-            f"assemble A-V (iter {iteration}, Z_s={Z_s_wp:.3e})")
+        if gf_Zs is not None:
+            robin_wp = s / gf_Zs  # CF
+            progress("FEM",
+                f"assemble A-V (iter {iteration}, per-panel, "
+                f"<|Z_s|>={float(np.mean(np.abs(np.asarray(gf_Zs.vec.FV().NumPy())[bnd_mask]))):.3e})")
+        else:
+            robin_wp = s / Z_s_wp
+            progress("FEM",
+                f"assemble A-V (iter {iteration}, Z_s={Z_s_wp:.3e})")
         t0 = time.perf_counter()
         a_bf = _assemble_a_bf(robin_wp)
         t_asm_iter = time.perf_counter() - t0
@@ -304,27 +331,87 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         At_sq_loop = A_sq - An_sq
         At_int_wp_loop = float(Integrate(
             At_sq_loop, mesh, BND, definedon=wp_region).real)
-        H_t_rms_iter = abs(s / Z_s_wp) * math.sqrt(
-            max(At_int_wp_loop, 0.0) / max(A_wp, 1e-30))
+        At_rms_loop = math.sqrt(max(At_int_wp_loop, 0.0) / max(A_wp, 1e-30))
 
         # Karl update with under-relaxation (matches calc_fem_kelvin
         # default 0.5; damps oscillation near saturation).
-        Z_s_old = Z_s_wp
-        sol_new = esim_solver.solve(max(float(H_t_rms_iter), 1e-3))
-        Z_s_new = complex(sol_new['Z'])
-        Z_s_wp = esim_relax * Z_s_new + (1 - esim_relax) * Z_s_old
-        dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
-        esim_history.append({
-            "iteration": iteration,
-            "Z_s_abs": float(abs(Z_s_wp)),
-            "H_t_rms": float(H_t_rms_iter),
-            "dZ": float(dZ),
-            "t_solve": float(t_solve_iter),
-        })
-        progress("FEM",
-            f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
-            f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} "
-            f"t={t_asm_iter+t_solve_iter:.1f}s")
+        if gf_Zs is not None:
+            # Per-DOF Karl: project |A_t|^2 per-DOF, ESIM per-DOF.
+            fes_real = H1(mesh, order=fes_order)
+            gf_At_re = GridFunction(fes_real)
+            gf_At_im = GridFunction(fes_real)
+            gf_At_re.vec[:] = 0
+            gf_At_im.vec[:] = 0
+            A_sq_re = sum(gf_A[i].real ** 2 for i in range(3))
+            A_sq_im = sum(gf_A[i].imag ** 2 for i in range(3))
+            Adn_re_sq = Adn_re ** 2
+            Adn_im_sq = Adn_im ** 2
+            At_sq_re = A_sq_re - Adn_re_sq
+            At_sq_im = A_sq_im - Adn_im_sq
+            gf_At_re.Set(At_sq_re, definedon=wp_region)
+            gf_At_im.Set(At_sq_im, definedon=wp_region)
+            At_re_arr = np.asarray(gf_At_re.vec.FV().NumPy())
+            At_im_arr = np.asarray(gf_At_im.vec.FV().NumPy())
+            At_amp_per_dof = np.sqrt(
+                np.maximum(At_re_arr, 0.0) + np.maximum(At_im_arr, 0.0))
+            Z_s_old_arr = np.asarray(gf_Zs.vec.FV().NumPy()).copy()
+            Z_s_new_arr = Z_s_old_arr.copy()
+            n_called = 0
+            for i in np.flatnonzero(bnd_mask):
+                Zsi_old = Z_s_old_arr[i]
+                if abs(Zsi_old) <= 1e-30:
+                    continue
+                Ht_i = abs(s / Zsi_old) * float(At_amp_per_dof[i])
+                sol_new = esim_solver.solve(max(Ht_i, 1e-3))
+                Z_s_new_arr[i] = complex(sol_new['Z'])
+                n_called += 1
+            Z_s_blend = (esim_relax * Z_s_new_arr
+                         + (1 - esim_relax) * Z_s_old_arr)
+            gf_Zs.vec.FV().NumPy()[:] = Z_s_blend
+            dZ_per = (np.abs(Z_s_blend[bnd_mask] - Z_s_old_arr[bnd_mask])
+                      / np.maximum(np.abs(Z_s_old_arr[bnd_mask]), 1e-30))
+            dZ = float(np.max(dZ_per)) if dZ_per.size else 0.0
+            Zabs = np.abs(Z_s_blend[bnd_mask])
+            Z_s_avg = complex(np.mean(Z_s_blend[bnd_mask]))
+            Z_s_wp = Z_s_avg  # for downstream legacy uses + log
+            Ht_amp = abs(s) * At_amp_per_dof[bnd_mask] / np.maximum(
+                np.abs(Z_s_old_arr[bnd_mask]), 1e-30)
+            H_t_rms_iter = float(np.mean(Ht_amp))
+            esim_history.append({
+                "iteration": iteration,
+                "Z_s_abs_mean": float(np.mean(Zabs)),
+                "Z_s_abs_min": float(np.min(Zabs)),
+                "Z_s_abs_max": float(np.max(Zabs)),
+                "H_t_per_dof_mean": float(np.mean(Ht_amp)),
+                "H_t_per_dof_max": float(np.max(Ht_amp)),
+                "dZ_max": dZ,
+                "t_solve": float(t_solve_iter),
+            })
+            progress("FEM",
+                f"ESIM:ITER {iteration} per-panel "
+                f"<|Z_s|>={np.mean(Zabs):.4e} "
+                f"<H_t>={np.mean(Ht_amp):.2f} "
+                f"max(H_t)={np.max(Ht_amp):.2f} "
+                f"max(dZ)={dZ:.4e} "
+                f"t={t_asm_iter+t_solve_iter:.1f}s")
+        else:
+            H_t_rms_iter = abs(s / Z_s_wp) * At_rms_loop
+            Z_s_old = Z_s_wp
+            sol_new = esim_solver.solve(max(float(H_t_rms_iter), 1e-3))
+            Z_s_new = complex(sol_new['Z'])
+            Z_s_wp = esim_relax * Z_s_new + (1 - esim_relax) * Z_s_old
+            dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            esim_history.append({
+                "iteration": iteration,
+                "Z_s_abs": float(abs(Z_s_wp)),
+                "H_t_rms": float(H_t_rms_iter),
+                "dZ": float(dZ),
+                "t_solve": float(t_solve_iter),
+            })
+            progress("FEM",
+                f"ESIM:ITER {iteration} |Z_s|={abs(Z_s_wp):.4e} "
+                f"H_t={H_t_rms_iter:.2f} dZ={dZ:.4e} "
+                f"t={t_asm_iter+t_solve_iter:.1f}s")
         # Require iteration > 0 to avoid spurious convergence on the
         # seed Z_s (= esim.solve(5.0)), EXCEPT when esim_max_iter
         # <= 1: the user explicitly asked for one iteration so the
@@ -343,9 +430,14 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     # downstream post-processing (energy, P_wp, q_surf) sees the same
     # gfu that produced the final Karl Z_s.
     if esim_solver is not None:
-        progress("FEM", f"final re-solve at Z_s={Z_s_wp:.3e}")
+        if gf_Zs is not None:
+            progress("FEM", f"final re-solve at Z_s (per-panel)")
+            robin_final = s / gf_Zs
+        else:
+            progress("FEM", f"final re-solve at Z_s={Z_s_wp:.3e}")
+            robin_final = s / Z_s_wp
         t0 = time.perf_counter()
-        a_bf = _assemble_a_bf(s / Z_s_wp)
+        a_bf = _assemble_a_bf(robin_final)
         t_asm += time.perf_counter() - t0
         gfu.vec[:] = 0
         gf_phi.Set(CF(1), definedon=mesh.Boundaries(source_bnd))
@@ -554,7 +646,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
             msh_export_error = f"{type(e).__name__}: {e}"
             progress("FEM", f"GMSH export failed: {msh_export_error}")
 
-    return {
+    result = {
         "status": "ok",
         "method": "FEM A-V (coil meshed + wp SIBC + Kelvin)",
         "frequency_hz": float(frequency),
@@ -587,6 +679,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         "esim_iterations": int(n_iter_done),
         "esim_converged": bool(esim_converged),
         "esim_history": esim_history,
+        "esim_per_panel": bool(gf_Zs is not None),
         # Surface heat-flux stats (Phase B thermal input)
         "q_surf_max": q_surf_max,
         "q_surf_mean": q_surf_mean,
@@ -601,6 +694,13 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         "t_assembly_s": float(t_asm),
         "t_solve_s": float(t_solve),
     }
+    if gf_Zs is not None:
+        Z_s_arr = np.asarray(gf_Zs.vec.FV().NumPy())
+        Z_s_bnd = Z_s_arr[bnd_mask]
+        result["esim_per_panel_Z_s_real"] = Z_s_bnd.real.tolist()
+        result["esim_per_panel_Z_s_imag"] = Z_s_bnd.imag.tolist()
+        result["esim_per_panel_n_dof"] = int(n_bnd_dofs)
+    return result
 
 
 def main():
@@ -637,6 +737,13 @@ def main():
                              "step, 0.5 = half-step (default, matches "
                              "calc_fem_kelvin).  Lower if Karl "
                              "oscillates near saturation.")
+    parser.add_argument("--esim-per-panel", action="store_true",
+                        help="Per-BND-DOF ESIM Karl (v4.48.0+): one ESIM "
+                             "cell solve per H1 workpiece-boundary DOF "
+                             "using a per-DOF |H_t| from the FEM "
+                             "solution.  Resolves spatial saturation "
+                             "patterns; ~N_bnd_dofs cell-solve cost "
+                             "per Karl iter.")
     parser.add_argument("--sibc-bnd", default="sibc")
     parser.add_argument("--source-bnd", default="source")
     parser.add_argument("--sink-bnd", default="sink")
@@ -707,6 +814,7 @@ def main():
             esim_max_iter=args.esim_max_iter,
             esim_tol=args.esim_tol,
             esim_relax=args.esim_relax,
+            esim_per_panel=args.esim_per_panel,
         )
         return result
 
