@@ -1591,6 +1591,106 @@ def extract_centerline_from_step(step_path: str,
     return _centerline_from_open_spine(solid, n_segments, cad_units_per_meter)
 
 
+def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
+                                       tier: str, slack_factor: float = 1.5):
+    """Sanity-check that the extracted filaments span the conductor solid.
+
+    Two failure modes both detected:
+
+    1. **Coverage gap** (lead skipped): filament max in some axis falls
+       short of solid bbox max by more than ``slack`` -- typical when
+       a planar bbox-radius spine arc bypasses a straight lead bar.
+    2. **Overshoot** (wrong-radius fallback): filament min/max
+       extends BEYOND the solid bbox by more than ``slack`` -- typical
+       when the bbox-radius fallback produces a spine OUTSIDE the
+       actual conductor centerline.
+
+    Both cases mean PEEC silently produces a topologically-wrong path.
+    Raise with a hint.
+
+    ``slack_factor`` is in units of cross_section_radius.  Default 1.5
+    accommodates loft chamfers / round-downs without false-positive on
+    clean coils, while still catching keiko's lead bar (6 mm gap,
+    wire_radius=3 mm, ratio 2.0).
+    """
+    import numpy as np
+    paths = topo.get("filament_paths")
+    if paths is None:
+        return
+    paths_arr = np.asarray(paths)
+    if paths_arr.size == 0:
+        return
+    # Shape variants: (n_fil, n_seg, 2, 3) or (n_fil, n_pts, 3).
+    if paths_arr.ndim >= 3:
+        pts = paths_arr.reshape(-1, 3)
+    else:
+        return  # unknown shape -> skip silently
+    fil_min = pts.min(axis=0)
+    fil_max = pts.max(axis=0)
+    wire_r = float(topo.get("cross_section_radius_m") or 0.0)
+    if wire_r > 0:
+        slack = slack_factor * wire_r
+    else:
+        # Tiers that don't report cross_section_radius (e.g. Tier 2b
+        # circle-uv).  Estimate from the smallest non-zero solid bbox
+        # extent (typically the wire thickness for a planar coil).
+        extents = np.asarray(solid_bbox_max) - np.asarray(solid_bbox_min)
+        nonzero = extents[extents > 1e-6]
+        if nonzero.size:
+            slack = slack_factor * float(nonzero.min()) / 2.0
+        else:
+            slack = 1e-3
+    slack = max(slack, 5e-4)  # absolute floor 0.5 mm
+
+    msgs = []
+    for axis, name in enumerate(("x", "y", "z")):
+        s_min = float(solid_bbox_min[axis])
+        s_max = float(solid_bbox_max[axis])
+        s_ext = s_max - s_min
+        if s_ext < 1e-9:
+            continue
+        f_min, f_max = float(fil_min[axis]), float(fil_max[axis])
+        # Coverage gaps.
+        gap_lo = max(f_min - s_min, 0.0)
+        gap_hi = max(s_max - f_max, 0.0)
+        # Overshoot beyond solid.
+        over_lo = max(s_min - f_min, 0.0)
+        over_hi = max(f_max - s_max, 0.0)
+        if gap_lo > slack:
+            msgs.append(
+                f"{name}: filament min {f_min:+.4f} but solid min "
+                f"{s_min:+.4f} (gap {gap_lo*1e3:.1f} mm > "
+                f"slack {slack*1e3:.1f} mm) -- lead/extension not traced")
+        if gap_hi > slack:
+            msgs.append(
+                f"{name}: filament max {f_max:+.4f} but solid max "
+                f"{s_max:+.4f} (gap {gap_hi*1e3:.1f} mm > "
+                f"slack {slack*1e3:.1f} mm) -- lead/extension not traced")
+        if over_lo > slack:
+            msgs.append(
+                f"{name}: filament min {f_min:+.4f} BELOW solid min "
+                f"{s_min:+.4f} (overshoot {over_lo*1e3:.1f} mm > "
+                f"slack {slack*1e3:.1f} mm) -- bbox-radius fallback spine")
+        if over_hi > slack:
+            msgs.append(
+                f"{name}: filament max {f_max:+.4f} ABOVE solid max "
+                f"{s_max:+.4f} (overshoot {over_hi*1e3:.1f} mm > "
+                f"slack {slack*1e3:.1f} mm) -- bbox-radius fallback spine")
+    if msgs:
+        raise ValueError(
+            f"Filament path does not match the conductor solid bbox "
+            f"(tier={tier!r}, wire_radius={wire_r*1e3:.1f} mm, "
+            f"slack={slack*1e3:.1f} mm). "
+            f"Spine extraction likely bypassed a lead or used the "
+            f"bbox-radius fallback at a wrong radius -- PEEC would "
+            f"silently produce a number that does not reflect the "
+            f"intended coil.\nDiagnostics:\n  " + "\n  ".join(msgs)
+            + "\nHINT: regenerate the STEP with a clean centerline "
+              "(e.g. consistent loft vertex alignment), pass "
+              "--path-points-m explicitly, OR switch to "
+              "--coil-solver bem-a --coil-vol <pre-meshed.vol>.")
+
+
 def filaments_from_step(step_path: str,
                         path_points_m: Optional[np.ndarray] = None,
                         sigma: float = 5.8e7,
@@ -1686,16 +1786,32 @@ def filaments_from_step(step_path: str,
         from build123d import import_step
         solid = import_step(step_path)
 
+        # Compute the solid bounding box ONCE; we re-use it to sanity-
+        # check that the extracted filaments cover the conductor in
+        # every axis.  Without this check a spine that bypasses a
+        # lead returns a "successful" topology whose downstream physics
+        # (L_coil, P_wp) silently differs from the intended coil --
+        # the v4.38.0 Tier-2c check did NOT cover Tier 1/2/2b which
+        # is the path the keiko `_outsideline` lofts trip (2026-05-15).
+        bb = solid.bounding_box()
+        solid_bbox_min = np.array([float(bb.min.X), float(bb.min.Y),
+                                    float(bb.min.Z)]) / cad_units_per_meter
+        solid_bbox_max = np.array([float(bb.max.X), float(bb.max.Y),
+                                    float(bb.max.Z)]) / cad_units_per_meter
+
         # Path 1: BSPLINE / TORUS / CYLINDER lateral surface UV grid.
         lateral = _find_lateral_surface(solid)
         if lateral is not None:
             try:
-                return _filaments_from_lateral_surface_uv(
+                topo_uv = _filaments_from_lateral_surface_uv(
                     lateral, cad_units_per_meter=cad_units_per_meter,
                     sigma=sigma,
                     n_stations=max(20, n_slices // 2),
                     n_peri=n_peri,
                     source_tag="step_uv")
+                _check_filaments_cover_solid_bbox(
+                    topo_uv, solid_bbox_min, solid_bbox_max, tier="step_uv")
+                return topo_uv
             except ValueError:
                 # Surface couldn't be sampled (no closed UV axis,
                 # degenerate shape).  Fall through.
@@ -1706,10 +1822,14 @@ def filaments_from_step(step_path: str,
             solid, cad_units_per_meter=cad_units_per_meter)
         if loft is not None:
             path_m, faces_ordered = loft
-            return _filaments_from_per_station_faces(
+            topo_pst = _filaments_from_per_station_faces(
                 path_m, faces_ordered,
                 sigma=sigma, n_peri=n_peri,
                 source_tag="step_per_station")
+            _check_filaments_cover_solid_bbox(
+                topo_pst, solid_bbox_min, solid_bbox_max,
+                tier="step_per_station")
+            return topo_pst
 
         # Path 2b: per-station VARIABLE-RADIUS CIRCLE from CIRCLE
         # edges (united multi-loft with circular cross-section, possibly
@@ -1722,6 +1842,9 @@ def filaments_from_step(step_path: str,
             sigma=sigma, n_peri=n_peri,
             source_tag="step_circle_uv")
         if topo_circle is not None:
+            _check_filaments_cover_solid_bbox(
+                topo_circle, solid_bbox_min, solid_bbox_max,
+                tier="step_circle_uv")
             return topo_circle
 
         # Path 2c (Phase C-heavy, v4.24.0+): united multi-loft with
@@ -1751,6 +1874,9 @@ def filaments_from_step(step_path: str,
                 n_stations=20,
                 source_tag="step_section_planes")
             if topo_section is not None:
+                _check_filaments_cover_solid_bbox(
+                    topo_section, solid_bbox_min, solid_bbox_max,
+                    tier="step_section_planes")
                 return topo_section
 
         # Path 3: constant equivalent-circle via existing dispatch.
@@ -1763,6 +1889,9 @@ def filaments_from_step(step_path: str,
             path_m, r_m,
             sigma=sigma, n_peri=n_peri,
             source_tag="step_longest_edge")
+        _check_filaments_cover_solid_bbox(
+            topo, solid_bbox_min, solid_bbox_max,
+            tier="step_longest_edge")
         return topo
 
     if n_peri is not None:
