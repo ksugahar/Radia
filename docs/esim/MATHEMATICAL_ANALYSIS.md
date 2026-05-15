@@ -187,7 +187,72 @@ bars, pipes, plates).  It is an **approximation** for:
   `H_t ≪ H̄` — the saturation pattern is spatial, but the scalar Z_s
   is mesh-RMS averaged.
 
-### 3.3 The infrastructure for per-panel curvature exists but is not wired in
+### 3.3 Per-DOF Z_s (per-panel ESIM, available since v4.47.0)
+
+**Status (v4.47.0+)**: `calc_inductance.py --esim-per-panel` invokes
+per-DOF Z_s — one ESIM cell solve per BEM surface DOF, using the
+locally extracted `|H_t|` from `phi_vec`.  See § 3.4 below for the
+per-DOF `|H_t|` discretisation.
+
+The underlying `ScalarBIESIBCSolver.solve()` accepts
+`Z_s: ndarray[ndof]` directly
+([`bem_sibc_solver.py:401-412`](../../src/radia/bem_sibc_solver.py#L401-L412))
+via row-scaling: `A_sys[i, :] = 0.5 M - DL + (gamma[i] · SL · M⁻¹ · K)[i, :]`.
+The Karl loop in
+[`calc_inductance.py:_solve_workpiece_weak_coupled`](../../src/radia/panels/calc_inductance.py)
+seeds `Z_s_wp = full(ndof, esim.solve(5.0)['Z'])` and refreshes per
+iteration as
+
+    Z_s_wp[i]  ←  relax · esim.solve(|H_t|[i])['Z']
+                + (1 - relax) · Z_s_wp_old[i]
+
+Convergence metric uses `max_i |dZ[i]| / |Z_s[i]|`.
+
+Caveats:
+- HACApK GMRES backend does not yet accept ndarray `Z_s` — the script
+  raises if `--esim-per-panel` is combined with `--wp-bem-backend
+  hacapk`.  This is a backend gap, not a math gap.
+- Per-DOF ESIM costs N_DOF extra cell solves per Karl iter.  For
+  166-DOF wp + 10 iter ≈ 1660 ESIM calls × ~4 ms = ~7 s overhead.
+  On larger meshes (~5000 DOF) the per-DOF ESIM call cost dominates
+  (~200 s per iter); add Anderson acceleration or batch the cell
+  solve if needed.
+- `calc_fem_kelvin` and `calc_fem_coilmesh` are NOT yet wired for
+  per-DOF Z_s; the FEM Robin term construction uses scalar `s/Z_s`.
+  Extending would mean replacing the constant Robin coefficient with
+  a `CoefficientFunction` of per-element Z_s.  Tracked in § 7.
+
+### 3.4 Per-DOF |H_t| extraction inside the Karl loop
+
+The BEM system stores the scalar potential `phi` on H1 P1 DOFs.  The
+tangential field is `H_t = -∇_S phi`.  The cell-solver wants `|H_t|`
+at each DOF.
+
+For scalar Karl we use the mesh-RMS:
+
+    |H_t|_rms² = (phi^T K phi) / area
+              = sum_i [ phi_i · (K phi)_i ] / area
+
+For per-DOF Karl we localise the same form: the i-th summand of
+`phi^T K phi` is `phi_i · (K phi)_i`.  Dividing by the i-th lumped
+mass `M_lump[i] = (M · 1)[i]` (row sum of M, = effective area of
+basis function i) gives a per-DOF density:
+
+    |H_t at i|² ≈ |phi_i · (K phi)_i| / M_lump[i]
+              + (same for imag(phi))
+
+`abs()` is needed because each term `phi_i · (K phi)_i` can be
+signed; only the total sum is guaranteed nonneg.
+
+This is what
+[`calc_inductance.py`](../../src/radia/panels/calc_inductance.py)
+computes inside the Karl loop.  It is consistent with the scalar
+formula in the limit of a uniform basis-function gradient — when
+all `(K phi)_i / M_lump_i` ratios are equal, the per-DOF and scalar
+mesh-RMS values coincide to floating-point precision (verified by
+the unit-uniform-Z_s smoke test).
+
+### 3.5 The infrastructure for per-panel curvature exists but is not wired in
 
 The `ESIMFiniteSlabSolver` class has a per-call radius override:
 
