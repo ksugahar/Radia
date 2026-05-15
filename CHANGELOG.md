@@ -3,6 +3,53 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.48.2 — PEEC bundle solver fail-fast on non-finite L (silent NaN -> ValueError)
+
+Released 2026-05-16.  Hot-fix for the symptom that surfaced AFTER
+v4.48.1 routed keiko's `1turn_coil_loft_outsideline.step` through the
+correct OPEN longest-edge predicate: the build succeeded, the bbox
+covered the leads, but `compute_port_impedance` returned
+`L_coil_nH = NaN` -- a "successful" run with garbage numbers (CLAUDE.md
+"No Fallbacks - Fail Fast, Fail Loud" violation).
+
+### Why
+
+The OPEN longest-edge path samples the 16 cross-section perimeter
+filaments via parallel transport of the spine's tangent frame.  At
+the lead-cap junction (a 64 deg corner in keiko's spine), parallel
+transport places adjacent segments on the SAME filament near-coincident
+(verified: `fil1.seg195 <-> fil1.seg196`, `fil5.seg0 <-> fil5.seg4`,
+`fil9.seg195 <-> fil9.seg196`, `fil13.seg0 <-> fil13.seg4`).  The
+Ruehli mutual-inductance kernel is singular on coincident segment
+pairs and the dense kernel returned NaN / Inf silently.  Downstream
+`np.linalg.solve` propagated the NaN into the port impedance.
+
+The user saw `exit_code: 0`, `n_filaments: 16`, `L_coil_nH: NaN` --
+the worst possible failure mode (silently wrong "OK" output).
+
+### What shipped
+
+1. **`peec_bundle.build_bundle_solver` now calls
+   `_assert_solver_L_finite`** immediately after constructing
+   `PEECCircuitSolver`.  If `solver.L` has any non-finite entries,
+   raises `ValueError` with: NaN count, diagonal-NaN count, sample
+   degenerate filament/segment pairs (first 8), and a HINT pointing
+   at the v4.48.1 vertex-aligned-loft fix path (Predicate 1 UV
+   sampling, which does NOT use parallel transport).
+2. **Regression test rewrite** in
+   `tests/coil_from_cad/test_keiko_outsideline_centerline.py`:
+   - `test_keiko_outsideline_filaments_raises_on_singular_L`:
+     asserts that the keiko fixture now raises ValueError instead of
+     returning a NaN-laden topo.
+   - `test_vertex_aligned_replica_routes_predicate_1_uv` (new):
+     builds a vertex-aligned synthetic STEP via build123d
+     `sweep(circle, smooth_spline)`, asserts Predicate 1 UV path is
+     hit, asserts `np.isfinite(L).all()`, asserts L_coil in
+     [50, 300] nH (physical band for 1-turn 30 mm coil + leads).
+3. **`radia-mcp` 0.48.5** coordinated bump.
+
+`cubit-mesh-export` unchanged.
+
 ## 4.48.1 — STEP centerline classification dispatch + path_points_m removal
 
 Released 2026-05-15.  Hot-fix for keiko's `1turn_coil_loft_outsideline.step`

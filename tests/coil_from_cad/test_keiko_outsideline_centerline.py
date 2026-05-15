@@ -83,28 +83,29 @@ def test_keiko_outsideline_centerline_covers_lead():
         f"recovered wire radius {r_equiv*1e3:.2f} mm out of band [2.5, 3.5] mm")
 
 
-def test_keiko_outsideline_filaments_pass_bbox_check():
-    """End-to-end: `filaments_from_step` must NOT raise the bbox-coverage check."""
+def test_keiko_outsideline_filaments_raises_on_singular_L():
+    """v4.48.2 fail-fast: silent NaN in PEEC L matrix is converted to ValueError.
+
+    Prior to v4.48.2 this STEP routed through Predicate 4 (OPEN
+    longest-edge) which placed filament cross-sections via parallel
+    transport.  At the lead-cap junction (a 64 deg corner in the
+    spine), parallel transport produced near-coincident segment pairs
+    on the SAME filament; the Ruehli mutual-inductance kernel returned
+    NaN / Inf silently; downstream `compute_port_impedance` propagated
+    the NaN into a "successful" `L_coil_nH = NaN` JSON output.
+
+    v4.48.2 adds `_assert_solver_L_finite` inside
+    `build_bundle_solver` which raises ValueError when
+    `np.isfinite(solver.L)` has any False entries, with a diagnostic
+    pointing at the offending filament/segment pairs and at the
+    vertex-aligned loft fix path (Predicate 1 UV).
+    """
     from coil_from_cad import filaments_from_step
+    import pytest
 
     assert os.path.exists(KEIKO_STEP), KEIKO_STEP
-    # Must not raise -- the v4.47.x fail-fast check was the symptom of
-    # the dispatch bug.  After v4.48.0 the topology_spine path falls
-    # through and open_spine produces a covering centerline.
-    topo = filaments_from_step(KEIKO_STEP, sigma=5.8e7, n_peri=16)
-    assert "filament_paths" in topo
-
-    paths = np.asarray(topo["filament_paths"])
-    pts = paths.reshape(-1, 3)
-    # Filament bbox must include the lead.
-    assert pts[:, 1].max() >= 0.048, (
-        f"filament y_max={pts[:, 1].max()*1e3:.1f} mm < 48 mm "
-        "(lead not traced)")
-    # Filament bbox must NOT overshoot the arc radius.  Allow one
-    # wire-radius (3 mm) slack on each side.
-    assert pts[:, 0].max() < 0.037 and pts[:, 0].min() > -0.037, (
-        f"filament x bbox [{pts[:, 0].min()*1e3:.1f},{pts[:, 0].max()*1e3:.1f}] "
-        "mm overshoots conductor (bbox-fallback regression)")
+    with pytest.raises(ValueError, match="non-finite entries"):
+        filaments_from_step(KEIKO_STEP, sigma=5.8e7, n_peri=16)
 
 
 def test_filaments_from_step_no_path_points_kwarg():
@@ -116,3 +117,96 @@ def test_filaments_from_step_no_path_points_kwarg():
     assert "path_points_m" not in sig.parameters, (
         "filaments_from_step still accepts path_points_m -- the v4.48.0 "
         "policy is STEP auto-detect as the single source of truth")
+
+
+def test_vertex_aligned_replica_routes_predicate_1_uv():
+    """v4.48.2: a vertex-aligned single-piece BSPLINE coil routes through
+    Predicate 1 (UV-map sampling) and returns a finite L_coil.
+
+    This is the documented FIX path for keiko's outsideline.step:
+    regenerate the STEP with a clean centerline so the lateral
+    surface is a single dominant BSPLINE (dominance ~ 1.00), at
+    which point `_find_lateral_surface` returns the single face,
+    UV sampling MUST succeed (UV-closure check is part of the
+    predicate), and the filament cross-sections come directly from
+    the lateral surface without parallel transport -- no degenerate
+    near-coincident segment pairs.
+
+    Geometry: a 1-turn coil with 2 leads, matching keiko's bbox
+    (x=+-30 mm, y=[-30, +50] mm, wire radius 2.9 mm).  Built via
+    build123d sweep(circle, smooth_spline_path).
+    """
+    import math
+    import build123d as bd
+    import tempfile
+
+    from coil_from_cad import _find_lateral_surface, filaments_from_step
+
+    WIRE_R = 0.0029
+    ARC_R = 0.030
+    LEAD_X = 0.012
+    LEAD_Y_TIP = 0.050
+    JUNCTION_Y = ARC_R * math.sqrt(1 - (LEAD_X / ARC_R) ** 2)
+
+    # Spine waypoints: lead_a (top -> junction), arc CCW through bottom,
+    # lead_b (junction -> top).  Use Spline so the resulting sweep has
+    # ONE BSPLINE lateral instead of N CYLINDER segments.
+    ang_a = math.degrees(math.atan2(JUNCTION_Y, -LEAD_X))
+    ang_b = math.degrees(math.atan2(JUNCTION_Y,  LEAD_X))
+    sweep_deg = 360.0 - (ang_a - ang_b)
+
+    pts = [
+        (-LEAD_X, LEAD_Y_TIP, 0.0),
+        (-LEAD_X, (LEAD_Y_TIP + JUNCTION_Y) / 2, 0.0),
+        (-LEAD_X, JUNCTION_Y, 0.0),
+    ]
+    n_arc = 60
+    for i in range(1, n_arc):
+        t = i / n_arc
+        ang = math.radians(ang_a - sweep_deg * t)
+        pts.append((ARC_R * math.cos(ang), ARC_R * math.sin(ang), 0.0))
+    pts.extend([
+        (LEAD_X, JUNCTION_Y, 0.0),
+        (LEAD_X, (LEAD_Y_TIP + JUNCTION_Y) / 2, 0.0),
+        (LEAD_X, LEAD_Y_TIP, 0.0),
+    ])
+
+    spine = bd.Spline(*[bd.Vector(*p) for p in pts])
+    profile_plane = bd.Plane(origin=bd.Vector(*pts[0]),
+                              z_dir=bd.Vector(0, -1, 0))
+    profile = profile_plane * bd.Circle(WIRE_R)
+    coil = bd.sweep(profile, spine)
+
+    with tempfile.NamedTemporaryFile(suffix=".step", delete=False) as f:
+        step_path = f.name
+    try:
+        bd.export_step(coil, step_path)
+
+        # Sanity: lateral surface is single-piece BSPLINE
+        solid = bd.import_step(step_path)
+        lat = _find_lateral_surface(solid)
+        assert lat is not None, (
+            "expected single-piece BSPLINE lateral; "
+            "smooth Spline sweep produced fragmented surface")
+
+        # PEEC build must succeed and produce finite L
+        topo = filaments_from_step(step_path, sigma=5.8e7, n_peri=16)
+        assert topo["source"] == "step_uv", (
+            f"expected source='step_uv' (Predicate 1 UV), "
+            f"got {topo['source']!r}")
+        L = np.asarray(topo["solver"].L)
+        assert np.isfinite(L).all(), (
+            "L matrix has non-finite entries even on the smooth "
+            "vertex-aligned reference geometry")
+
+        Z = topo["solver"].compute_port_impedance(150_000.0)
+        L_nH = float(Z.imag) / (2 * 3.141592653589793 * 150_000.0) * 1e9
+        # 1-turn coil at R~30 mm, leads ~25 mm: physically L ~ 100-200 nH
+        assert 50.0 < L_nH < 300.0, (
+            f"L_coil_nH={L_nH:.2f} out of physical band [50, 300] nH "
+            "for 1-turn 30 mm-radius coil + leads")
+    finally:
+        try:
+            os.unlink(step_path)
+        except OSError:
+            pass
