@@ -510,12 +510,28 @@ class ScalarBIESIBCSolver:
             lf.Assemble()
             rhs_vec = lf.vec.FV().NumPy().copy()
 
-        # gamma scalar (per-node Z_s not yet supported through HACApK)
+        # Accept scalar OR per-node ndarray Z_s.  The MatVec below
+        # uses element-wise multiplication of the SL block by
+        # ``gr_vec`` / ``gi_vec`` (length-ndof), so the scalar case
+        # is handled by broadcasting a full-length array with the
+        # same value at every DOF -- no separate code path.
         if isinstance(Z_s, np.ndarray):
-            raise NotImplementedError(
-                "solve_hacapk currently only supports scalar Z_s; per-node "
-                "Z_s requires a row-scaled HACApK MatVec wrapper -- TODO.")
-        gamma = (Z_s / (1j * omega * MU_0)) if (omega > 0 and Z_s != 0) else 0+0j
+            if Z_s.shape != (ndof,):
+                raise ValueError(
+                    f"Per-node Z_s must have shape ({ndof},), "
+                    f"got {Z_s.shape}")
+            if omega <= 0:
+                gamma_vec = np.zeros(ndof, dtype=complex)
+            else:
+                gamma_vec = Z_s.astype(complex) / (1j * omega * MU_0)
+            gamma_for_log = complex(np.mean(gamma_vec))
+        else:
+            gamma_scalar = (Z_s / (1j * omega * MU_0)
+                             if (omega > 0 and Z_s != 0) else 0 + 0j)
+            gamma_vec = np.full(ndof, gamma_scalar, dtype=complex)
+            gamma_for_log = complex(gamma_scalar)
+        gr_vec = np.ascontiguousarray(gamma_vec.real)
+        gi_vec = np.ascontiguousarray(gamma_vec.imag)
 
         # Pre-compute M^{-1} @ K (real) once for reuse in MatVec.
         # The Robin term `SL @ M_inv @ K` applied to x is:
@@ -528,7 +544,12 @@ class ScalarBIESIBCSolver:
         M_full = self.M
 
         def matvec_complex(x_complex):
-            """y = A_sys @ x where A_sys = (1/2)M - DL + gamma*SL*M^-1*K."""
+            """y = A_sys @ x where A_sys = (1/2)M - DL + diag(gamma)*SL*M^-1*K.
+
+            Per-node Z_s is implemented by element-wise scaling of the
+            SL block's output rows by gr_vec/gi_vec; scalar Z_s reduces
+            to the same path with gamma_vec broadcast to a constant.
+            """
             x_re = np.ascontiguousarray(x_complex.real)
             x_im = np.ascontiguousarray(x_complex.imag)
             # (1/2)*M - DL part (real)
@@ -536,15 +557,15 @@ class ScalarBIESIBCSolver:
             half_M_im = 0.5 * (M_full @ x_im)
             DL_re = DL_op.MatVec(x_re)
             DL_im = DL_op.MatVec(x_im)
-            # SL @ M^-1 @ K @ x part (real intermediate, complex via gamma)
+            # SL @ M^-1 @ K @ x part (real intermediate)
             MinvK_re = Minv_K @ x_re
             MinvK_im = Minv_K @ x_im
             SL_re = SL_op.MatVec(np.ascontiguousarray(MinvK_re))
             SL_im = SL_op.MatVec(np.ascontiguousarray(MinvK_im))
-            # gamma * (SL_re + j*SL_im) = (gr*SL_re - gi*SL_im) + j*(gr*SL_im + gi*SL_re)
-            gr, gi = gamma.real, gamma.imag
-            term_re = gr * SL_re - gi * SL_im
-            term_im = gr * SL_im + gi * SL_re
+            # diag(gamma) * (SL_re + j*SL_im) row-wise:
+            # term[i] = (gr_i*SL_re[i] - gi_i*SL_im[i]) + j(gr_i*SL_im[i] + gi_i*SL_re[i])
+            term_re = gr_vec * SL_re - gi_vec * SL_im
+            term_im = gr_vec * SL_im + gi_vec * SL_re
             y_re = half_M_re - DL_re + term_re
             y_im = half_M_im - DL_im + term_im
             return y_re + 1j * y_im
@@ -593,14 +614,20 @@ class ScalarBIESIBCSolver:
             H_t_rms = math.sqrt((abs(Hsq_re) + abs(Hsq_im)) / abs(area))
             gf_phi = GridFunction(self.fes)
             gf_phi.vec.FV().NumPy()[:] = phi_vec.real
-        P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0.0
+        # Per-node Z_s: report the area-averaged Re(Z_s) for the scalar
+        # power-density quantity, matching the dense path's convention.
+        if isinstance(Z_s, np.ndarray):
+            Z_s_avg_re = float(np.mean(Z_s.real))
+            P_density = 0.5 * Z_s_avg_re * H_t_rms ** 2
+        else:
+            P_density = 0.5 * Z_s.real * H_t_rms ** 2 if Z_s != 0 else 0.0
         return {
             'phi': gf_phi,
             'phi_vec': phi_vec,
             'H_t_rms': float(H_t_rms),
             'P_density': float(P_density),
             'area': float(abs(area)),
-            'gamma': complex(gamma),
+            'gamma': complex(gamma_for_log),
             't_solve': round(t_solve, 3),
         }
 
