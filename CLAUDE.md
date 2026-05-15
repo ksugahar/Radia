@@ -542,6 +542,49 @@ Note: the **Robustness Principle** ("be liberal in what you accept") is now wide
 - Optional features genuinely not needed for the result (e.g. "if matplotlib is installed, also save a PNG").
 - Default *parameter values* declared at the function signature — these are the user's contract, not a runtime fallback.
 
+### STEP-Only Centerline: Auto-Detect or Fail (2026-05-15)
+
+**POLICY**: PEEC coil filament generation extracts the centerline
+**exclusively from the STEP file** via
+`coil_from_cad.extract_centerline_from_step`.  There is no
+caller-supplied centerline override (`path_points_m` was removed in
+v4.48.1) and no JSON ingestion path.  If auto-detection cannot
+recover a centerline that covers the conductor's bounding box, the
+panel / CLI **raises** -- the user fixes the CAD rather than papering
+over the breakage with a hand-crafted polyline.
+
+**Reasoning**: A user-supplied centerline JSON is unauditable -- the
+user types numbers into a file, PEEC consumes them, and the only
+sanity check is the user re-reading their own JSON.  Real-world
+incidents (e.g. keiko 2026-05-15 `1turn_coil_loft_outsideline.step`)
+show that the auto-detect failure mode is the geometry being
+ambiguous -- not the auto-detect being wrong -- so the right fix is
+to make the geometry unambiguous, not to bypass detection.
+
+**How it is enforced**:
+
+- `extract_centerline_from_step` uses **classification-based single
+  dispatch** (5 positive-match predicates: multi-station loft / united
+  multi-turn / revolution+plane / OPEN / CLOSED), no `try/except`
+  cascade across paths.
+- `_centerline_from_topology_spine` is **CLOSED-only**: it raises if
+  called with `topo.is_open=True` (programming-error indicator, not a
+  soft-fallback signal).
+- `_find_lateral_surface` checks UV-closure inline -- when it returns
+  a face, downstream UV sampling MUST succeed (no `try/except` in
+  `filaments_from_step` Path 1).
+- `_check_filaments_cover_solid_bbox` raises with a HINT pointing at
+  CAD regeneration or BEM-A switch -- it never suggests
+  "pass --path-points-m" because that escape hatch no longer exists.
+
+**Failure mode users should expect**: a hard `ValueError` with a
+diagnostic that names the axis / overshoot / gap.  Users address it
+by (a) regenerating the STEP with cleaner loft vertex alignment so
+the lateral surface is a single dominant BSPLINE / TORUS, OR (b)
+switching the panel to `--coil-solver bem-a --coil-vol <pre-meshed.vol>`
+which bypasses spine extraction entirely (meshed conductor in, no
+filament topology needed).
+
 ### Field Comparison: Vector Difference
 
 **POLICY**: Compare magnetic fields using **vector difference** `norm(B1 - B2)`, not scalar magnitude difference `abs(|B1| - |B2|)`. Magnetic field is a vector quantity.
