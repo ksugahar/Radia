@@ -78,12 +78,21 @@ STEEL_BH: List[List[float]] = [
 ]
 
 
-def _load_bh_file(path: str) -> List[List[float]]:
-    """Load a 2-column BH file (H [A/m], B [T])."""
+def load_bh_file(path: str) -> List[List[float]]:
+    """Load a 2-column BH file (H [A/m], B [T]).
+
+    Public helper used by `calc_inductance` / `calc_fem_coilmesh` to
+    parse `--bh-file` for ESIM Karl iteration.
+    """
     data = np.loadtxt(path)
     if data.ndim != 2 or data.shape[1] < 2:
         raise ValueError(f"Invalid BH file format (need 2+ columns): {path}")
     return data[:, :2].tolist()
+
+
+# Backward-compatibility alias: existing callers may still import
+# `_load_bh_file`.  Prefer the public `load_bh_file` in new code.
+_load_bh_file = load_bh_file
 
 
 @dataclass
