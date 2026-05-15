@@ -246,9 +246,11 @@ def _find_lateral_surface(solid):
 
     A clean swept / lofted coil with a single continuous lateral
     surface has exactly ONE lateral face that dominates the surface
-    area.  This function returns it for direct (u, v) sampling.
+    area AND has at least one closed UV axis (so that the cross-
+    section perimeter wraps around the spine).  This function returns
+    it for direct (u, v) sampling by ``_filaments_from_lateral_surface_uv``.
 
-    Returns ``None`` (caller falls through) when:
+    Returns ``None`` (caller dispatches to a different predicate) when:
       - There are no lateral-type candidates
       - There are too many candidates (multi-fragment loft, united
         multi-turn pancake) -- a single face only covers part of
@@ -256,11 +258,18 @@ def _find_lateral_surface(solid):
       - The largest candidate's area is not clearly dominant
         (gapped torus split into 4 TORUS quadrants by Cubit's
         webcut at the gap, etc.)
+      - The candidate's UV parameter range has neither U nor V closed
+        (cannot identify a perimeter direction; e.g. keiko-class
+        "arc + lead bars" loft where the lateral is split into two
+        BSPLINE halves at the z=0 equator)
 
     The threshold "largest >= 80% of total" is a strong signal that
-    we have a single-piece lateral surface.  Anything below falls
-    through to the per-station-faces path or the legacy equivalent-
-    circle path.
+    we have a single-piece lateral surface.  Anything below dispatches
+    to the per-station-faces / circle-edge / open-spine paths
+    instead.  This predicate must be PRECISE -- once it returns a
+    face, the downstream UV sampling must succeed.  Per CLAUDE.md
+    "No Fallbacks -- Fail Fast, Fail Loud", we do NOT try-and-recover
+    inside ``filaments_from_step``.
     """
     from build123d import GeomType
     candidates = []
@@ -278,14 +287,23 @@ def _find_lateral_surface(solid):
         return None
     dominance = largest_area / total_area
     # Multi-fragment threshold.  Single-face lateral: dominance ~ 1.0.
-    # Anything below 0.8 indicates fragmentation -- fall through.
+    # Anything below 0.8 indicates fragmentation -- different dispatch.
     if dominance < 0.8:
         return None
     # Also reject if there are too many candidates even if the largest
     # is technically dominant (defensive bound).
     if len(candidates) > 3:
         return None
-    return candidates[0][1]
+    # UV-closure check: the lateral must have at least one closed UV
+    # axis for ``_sample_lateral_surface_uv`` to identify a perimeter
+    # direction.  Doing this here makes ``_find_lateral_surface`` a
+    # complete precondition for Path 1 -- no try/except downstream.
+    candidate = candidates[0][1]
+    from OCP.BRep import BRep_Tool
+    surface = BRep_Tool.Surface_s(candidate.wrapped)
+    if not (bool(surface.IsUClosed()) or bool(surface.IsVClosed())):
+        return None
+    return candidate
 
 
 def _sample_lateral_surface_uv(face, n_stations: int, n_peri: int):
@@ -1429,21 +1447,25 @@ _centerline_from_torus_sweep = _centerline_from_revolution_sweep
 
 def _centerline_from_topology_spine(solid, n_segments: int,
                                      cad_units_per_meter: float):
-    """OPEN/CLOSED-aware spine via ``coil_topology`` + sectioning for w/h.
+    """CLOSED full-revolution coil spine via ``coil_topology``.
 
-    Used when ``_centerline_from_revolution_sweep`` raises (typically
-    "no PLANE end-cap faces" on a CLOSED full revolution): the
-    unified ``coil_topology.extract_coil_topology`` returns a
-    correct ``CoilTopology`` for both OPEN and CLOSED coils, and
-    ``generate_spine`` produces the correct spine arc (full 360deg
-    for CLOSED, cap-aware long arc for OPEN).  Cross-section
-    width/height come from a single sectioning at the spine midpoint
-    -- equivalent-square side from the section area.
+    Restricted to CLOSED coils (no cap faces) by the
+    ``extract_centerline_from_step`` classification dispatch.  OPEN
+    coils with cap faces (gapped torus, arc + leads, ...) route to
+    ``_centerline_from_open_spine`` instead -- ``generate_spine``
+    produces a planar arc at the bbox-derived R_spine which is wrong
+    for "arc + lead extensions" geometries where caps sit far from
+    the swept arc (verified 2026-05-15 on keiko's
+    1turn_coil_loft_outsideline.step: R_spine = 0.85 * 50 mm = 42.5 mm
+    while the actual arc is at ~30 mm + 20 mm straight leads).
 
-    Raises ``ValueError`` if topology extraction fails or sectioning
-    at the midpoint produces no face.  Caller should then fall
-    through to ``_centerline_from_open_spine`` (longest-open-edge
-    fallback, the historical Path 3 behaviour).
+    The function raises ``ValueError`` if it is called on an OPEN
+    coil -- this is a programming-error indicator, NOT a soft-fallback
+    signal; the dispatcher should never route OPEN coils here per the
+    No-Fallback policy (CLAUDE.md).
+
+    Cross-section width/height come from a single sectioning at the
+    spine midpoint -- equivalent-square side from the section area.
     """
     from build123d import section, Plane, Vector
     try:
@@ -1459,6 +1481,13 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     except Exception as exc:
         raise ValueError(
             f"extract_coil_topology failed: {exc}") from exc
+
+    if topo.is_open:
+        raise ValueError(
+            "_centerline_from_topology_spine is CLOSED-only; OPEN "
+            "coils (cap faces detected) must route to "
+            "_centerline_from_open_spine via the classification "
+            "dispatch in extract_centerline_from_step.")
 
     spine_cad = _gen_spine(topo, n_segments + 1)
     n_path = spine_cad.shape[0]
@@ -1537,58 +1566,74 @@ def extract_centerline_from_step(step_path: str,
         widths_m: (N,) per-segment width in meters.
         heights_m: (N,) per-segment height in meters.
     """
-    from build123d import import_step
+    from build123d import import_step, GeomType
 
     solid = import_step(step_path)
 
-    # Try loft-of-profiles first: if the solid clearly has many
-    # consistent-area cross-sections, chain their centroids.
-    # (This is the robust path for non-united multi-loft coils.)
-    cross_faces = _collect_loft_cross_sections(solid)
-    if cross_faces:
+    # Classification-based dispatch (No-Fallback policy, CLAUDE.md
+    # "No Fallbacks - Fail Fast, Fail Loud"): inspect the solid's
+    # features upfront and route to exactly ONE specialized centerline
+    # extractor.  No try/except cascades; each predicate is positive-
+    # match only.  If a predicate misclassifies, the failure surfaces
+    # as a hard error from the specialised extractor rather than being
+    # silently swallowed by "try the next path".
+
+    # Predicate 1: multi-station loft of profiles (NON-united).  When
+    # the solid has many consistent-area cross-section PLANE faces,
+    # chain their centroids.  Robust for non-united multi-loft coils.
+    if _collect_loft_cross_sections(solid):
         return _centerline_from_cross_sections(solid, cad_units_per_meter)
 
-    # United multi-turn pancake fallback: when boolean unite has
-    # consumed the planar end-caps but the cross-section CIRCLE edges
-    # are still present (split into 2 semicircles per cross-section
-    # by Cubit's unite operation).  Group circles by arc_center, dedupe
-    # the semicircle pair into one per cross-section, chain via NN +
-    # tangent continuity.  Handles Kubota's 3turncoil united.stp class.
+    # Predicate 2: united multi-turn pancake.  Boolean unite consumes
+    # the planar end-caps but cross-section CIRCLE edges remain (split
+    # into 2 semicircles per cross-section by Cubit's unite).  Group
+    # circles by arc_center, dedupe the semicircle pair into one per
+    # cross-section, chain via NN + tangent continuity.  Handles
+    # Kubota's 3turncoil united.stp class.
     circle_centers_radius = _collect_circle_edge_centers(solid)
     if circle_centers_radius is not None:
         centers_cad, median_r_cad = circle_centers_radius
         return _centerline_from_circle_edge_centers(
             centers_cad, median_r_cad, cad_units_per_meter)
 
-    # Torus-shaped single-loop coil (gapped torus, full torus): extract
-    # major / minor radius + axis + sweep angle analytically from the
-    # TORUS face parameters.  Handles the single-loop case that the
-    # open-spine fallback gets wrong (picks a cross-section arc as
-    # "longest open edge", path length comes out half the real arc).
-    try:
-        return _centerline_from_torus_sweep(solid, n_segments, cad_units_per_meter)
-    except ValueError:
-        pass
-
-    # Unified-topology spine: catches CLOSED full-revolution coils that
-    # ``_centerline_from_torus_sweep`` rejects for "no PLANE end-cap
-    # faces".  ``coil_topology.extract_coil_topology`` returns
-    # is_open=False for CLOSED and ``generate_spine`` produces the
-    # correct full 360deg spine; sectioning at the spine midpoint
-    # recovers the cross-section area (equivalent-circle radius).
-    # Without this path, CLOSED coils fall through to
-    # ``_centerline_from_open_spine`` which picks a half-arc seam edge
-    # and produces a 178deg spine -- the regression-test failure on
-    # ih_closed_torus_coil.step.
-    try:
-        return _centerline_from_topology_spine(
+    # Predicate 3: single-loop revolution sweep.  Solid has at least
+    # one TORUS / CYLINDER / CONE / REVOLUTION lateral surface AND at
+    # least one PLANE end-cap face -- the gapped-torus / rect-torus
+    # case.  ``_centerline_from_revolution_sweep`` extracts axis +
+    # major-R + sweep angle analytically.  Note: a CLOSED full torus
+    # has revolution surfaces but NO planar end-caps and therefore
+    # falls through to predicate 5 below.
+    has_revolution_face = any(
+        f.geom_type in (GeomType.TORUS, GeomType.CYLINDER, GeomType.CONE,
+                         GeomType.REVOLUTION)
+        for f in solid.faces())
+    has_plane_face = any(f.geom_type == GeomType.PLANE for f in solid.faces())
+    if has_revolution_face and has_plane_face:
+        return _centerline_from_revolution_sweep(
             solid, n_segments, cad_units_per_meter)
-    except ValueError:
-        pass
 
-    # Fall back to open-spine method for generic single-loop swept solids
-    # (non-torus: helical bend, spline coil, rectangular cross-section).
-    return _centerline_from_open_spine(solid, n_segments, cad_units_per_meter)
+    # Predicates 4 / 5 require coil-topology classification (OPEN vs
+    # CLOSED based on cap-face detection).
+    from radia.coil_topology import extract_coil_topology as _extract_topo
+    topo = _extract_topo(solid)
+
+    # Predicate 4: OPEN coil (2 cap faces detected) without simple
+    # revolution surfaces -- BSPLINE-lofted "arc + leads" geometries
+    # such as keiko's 1turn_coil_loft_outsideline.step.
+    # ``_centerline_from_open_spine`` samples the longest open lateral
+    # rim edge as the spine, which correctly traces lead extensions.
+    if topo.is_open:
+        return _centerline_from_open_spine(
+            solid, n_segments, cad_units_per_meter)
+
+    # Predicate 5: CLOSED full-revolution (no caps, no revolution
+    # surfaces with planar end-caps -- e.g. CLOSED bspline-lofted
+    # torus).  ``_centerline_from_topology_spine`` uses the topology-
+    # aware ``generate_spine`` for a full 360deg arc.  Sectioning at
+    # the midpoint recovers the cross-section area.  This path is
+    # CLOSED-only; OPEN coils route to predicate 4 above.
+    return _centerline_from_topology_spine(
+        solid, n_segments, cad_units_per_meter)
 
 
 def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
@@ -1686,13 +1731,14 @@ def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
             f"silently produce a number that does not reflect the "
             f"intended coil.\nDiagnostics:\n  " + "\n  ".join(msgs)
             + "\nHINT: regenerate the STEP with a clean centerline "
-              "(e.g. consistent loft vertex alignment), pass "
-              "--path-points-m explicitly, OR switch to "
-              "--coil-solver bem-a --coil-vol <pre-meshed.vol>.")
+              "(e.g. consistent loft vertex alignment so the lateral "
+              "surface is a single dominant BSPLINE / TORUS instead of "
+              "two equal half-faces split at the equator), OR switch "
+              "to --coil-solver bem-a --coil-vol <pre-meshed.vol> "
+              "which bypasses spine extraction entirely.")
 
 
 def filaments_from_step(step_path: str,
-                        path_points_m: Optional[np.ndarray] = None,
                         sigma: float = 5.8e7,
                         nwinc: int = 1,
                         nhinc: int = 1,
@@ -1701,6 +1747,16 @@ def filaments_from_step(step_path: str,
                         n_slices: int = 200,
                         use_coil_builder: bool = True):
     """End-to-end: STEP solid -> PEEC topology.
+
+    The centerline is ALWAYS auto-detected from the STEP solid via
+    ``extract_centerline_from_step`` (dispatches across multiple
+    topology-aware paths: loft cross-sections, circle-edge stations,
+    torus sweep, topology spine, open-spine longest-edge).  There is
+    no caller-provided ``path_points_m`` override -- if the auto-
+    detection produces a spine that does not cover the conductor's
+    bounding box, ``_check_filaments_cover_solid_bbox`` raises
+    fail-fast so the caller fixes the CAD rather than papering over
+    the bad geometry with a hand-crafted centerline JSON.
 
     Two paths are available:
 
@@ -1729,8 +1785,6 @@ def filaments_from_step(step_path: str,
 
     Args:
         step_path: STEP file path.
-        path_points_m: (N+1, 3) path vertices in meters, or None for
-            auto-extraction.
         sigma: Conductivity [S/m].
         nwinc, nhinc: Sub-filament subdivision for the volume-grid
             placement.  Ignored when ``n_peri`` is set.
@@ -1740,8 +1794,7 @@ def filaments_from_step(step_path: str,
         cad_units_per_meter: Scale factor.  Default 1.0 = STEP coordinates
             are in metres (CLAUDE.md "Unit System Policy: Radia always uses
             meters").  Pass 1000.0 if the STEP is in millimetres.
-        n_slices: Z-slice count for auto-extraction (ignored if
-            path_points_m is given).
+        n_slices: Z-slice count for auto-extraction.
         use_coil_builder: If True (default), use CoilBuilder path for
             profile-aware filament placement.  Falls back to legacy
             path if CoilBuilder reconstruction fails.
@@ -1800,22 +1853,21 @@ def filaments_from_step(step_path: str,
                                     float(bb.max.Z)]) / cad_units_per_meter
 
         # Path 1: BSPLINE / TORUS / CYLINDER lateral surface UV grid.
+        # ``_find_lateral_surface`` is a strict predicate: when it
+        # returns a face, UV sampling MUST succeed (UV-closure check
+        # already passed).  Per CLAUDE.md "No Fallbacks", any failure
+        # here propagates -- we do NOT silently try Path 2.
         lateral = _find_lateral_surface(solid)
         if lateral is not None:
-            try:
-                topo_uv = _filaments_from_lateral_surface_uv(
-                    lateral, cad_units_per_meter=cad_units_per_meter,
-                    sigma=sigma,
-                    n_stations=max(20, n_slices // 2),
-                    n_peri=n_peri,
-                    source_tag="step_uv")
-                _check_filaments_cover_solid_bbox(
-                    topo_uv, solid_bbox_min, solid_bbox_max, tier="step_uv")
-                return topo_uv
-            except ValueError:
-                # Surface couldn't be sampled (no closed UV axis,
-                # degenerate shape).  Fall through.
-                pass
+            topo_uv = _filaments_from_lateral_surface_uv(
+                lateral, cad_units_per_meter=cad_units_per_meter,
+                sigma=sigma,
+                n_stations=max(20, n_slices // 2),
+                n_peri=n_peri,
+                source_tag="step_uv")
+            _check_filaments_cover_solid_bbox(
+                topo_uv, solid_bbox_min, solid_bbox_max, tier="step_uv")
+            return topo_uv
 
         # Path 2: per-station planar end-cap faces (NON-united loft).
         loft = _try_extract_loft_with_profile(
@@ -1899,32 +1951,13 @@ def filaments_from_step(step_path: str,
             "n_peri requires use_coil_builder=True; the legacy "
             "C++ ExpandFilaments path is volume-grid-only.")
 
-    # Legacy path: rectangular grid via C++ ExpandFilaments
-    if path_points_m is None:
-        path_m, widths_m, heights_m = extract_centerline_from_step(
-            step_path, n_segments=n_slices,
-            cad_units_per_meter=cad_units_per_meter,
-        )
-    else:
-        n_seg = path_points_m.shape[0] - 1
-        tangents = path_tangents(path_points_m)
-        midpoints = 0.5 * (path_points_m[:-1] + path_points_m[1:])
-        sections = section_solid_along_path(
-            step_path, midpoints, tangents,
-            units_scale=cad_units_per_meter,
-        )
-        scale_inv = 1.0 / cad_units_per_meter
-        widths_m = np.zeros(n_seg, dtype=np.float64)
-        heights_m = np.zeros(n_seg, dtype=np.float64)
-        for i, sec in enumerate(sections):
-            if sec["w_est"] is not None:
-                widths_m[i] = sec["w_est"] * scale_inv
-                heights_m[i] = sec["h_est"] * scale_inv
-            else:
-                raise RuntimeError(
-                    f"Section {i} at midpoint {midpoints[i]} failed."
-                )
-        path_m = path_points_m
+    # Legacy path: rectangular grid via C++ ExpandFilaments.
+    # Centerline always comes from STEP auto-detection (no caller-
+    # provided override -- see module docstring "Fail Fast Loud").
+    path_m, widths_m, heights_m = extract_centerline_from_step(
+        step_path, n_segments=n_slices,
+        cad_units_per_meter=cad_units_per_meter,
+    )
 
     topo = build_peec_from_path(
         path_m, widths_m, heights_m,
@@ -2727,28 +2760,29 @@ def _filaments_from_section_planes(solid,
     # The unified spine already gives the correct order; only the
     # legacy longest-edge / rotation_axis_z paths needed NN-chain
     # because those samplers visited centroids in a non-spine order.
-    spine_is_topology_ordered = False
-    topo = None
-    try:
-        from radia.coil_topology import (
-            extract_coil_topology as _extract_topo,
-            generate_spine as _gen_spine,
-        )
-        topo = _extract_topo(solid)
+    # No-Fallback policy: route OPEN coils through the topology spine
+    # (which has cap-aware long-arc handling) and CLOSED coils through
+    # the same classification path used by ``extract_centerline_from_step``.
+    # Errors propagate; we do NOT try-and-catch from one spine method
+    # into another.
+    from radia.coil_topology import (
+        extract_coil_topology as _extract_topo,
+        generate_spine as _gen_spine,
+    )
+    topo = _extract_topo(solid)
+    spine_is_topology_ordered = True
+    if topo.is_open:
+        # OPEN coil with leads: use the same path as the main dispatch
+        # (``_centerline_from_open_spine`` traces the long lateral rim).
+        # ``_centerline_from_solid_geometry`` already routes OPEN solids
+        # there via classification dispatch.
+        path_m = _centerline_from_solid_geometry(
+            solid, n_segments=n_stations,
+            cad_units_per_meter=cad_units_per_meter)
+        spine_is_topology_ordered = False  # NN-chain re-order downstream
+    else:
         path_cad = _gen_spine(topo, n_stations)
         path_m = path_cad / cad_units_per_meter
-        spine_is_topology_ordered = True
-    except Exception:
-        topo = None
-        try:
-            path_m_via_solid = _centerline_from_solid_geometry(
-                solid, n_segments=n_stations,
-                cad_units_per_meter=cad_units_per_meter)
-            if path_m_via_solid is None:
-                return None
-            path_m = path_m_via_solid
-        except Exception:
-            return None
 
     n_path = len(path_m)
     if n_path < 3:
@@ -2973,37 +3007,50 @@ def _centerline_from_solid_geometry(solid,
                                      cad_units_per_meter: float = 1.0):
     """Spine polyline from a build123d Solid (no step_path dependency).
 
-    Tries (1) revolution-sweep, (2) z-axis rotation-symmetry, (3)
-    longest-edge fallback, in that order.  Returns the path in metres
-    (n_segments+1 points).
+    Mirrors the classification dispatch in
+    ``extract_centerline_from_step`` (No-Fallback policy, CLAUDE.md
+    "No Fallbacks - Fail Fast, Fail Loud"): inspect the solid's
+    features and route to ONE extractor.  No try/except cascade -- if
+    the chosen extractor fails, the failure propagates.  Returns the
+    path in metres (n_segments+1 points).
+
+    Note: the rect / polygon swept-around-z case (lateral surfaces are
+    PLANE, not TORUS / CYLINDER) is handled by predicate 3 below
+    because such a solid has revolution-style topology even though
+    its individual faces are planar -- the
+    ``_spine_from_rotation_axis_z`` helper remains available as an
+    explicit utility but the main dispatch does not chain it as a
+    fallback.
     """
-    # Try revolution-sweep
-    try:
-        path_m, _, _ = _centerline_from_revolution_sweep(
-            solid, n_segments, cad_units_per_meter)
-        if path_m is not None and len(path_m) >= 3:
-            return path_m
-    except Exception:
-        pass
-    # Try z-axis rotation-symmetric spine (rect / polygon cross-section
-    # sweeps around z-axis: NOT triggered by revolution-sweep because
-    # the lateral surfaces are PLANE, not TORUS / CYLINDER / REVOLUTION).
-    try:
-        path_m = _spine_from_rotation_axis_z(
-            solid, n_segments, cad_units_per_meter)
-        if path_m is not None and len(path_m) >= 3:
-            return path_m
-    except Exception:
-        pass
-    # Try open-spine longest-edge
-    try:
-        path_m, _, _ = _centerline_from_open_spine(
-            solid, n_segments, cad_units_per_meter)
-        if path_m is not None and len(path_m) >= 3:
-            return path_m
-    except Exception:
-        pass
-    return None
+    from build123d import GeomType
+
+    if _collect_loft_cross_sections(solid):
+        # _centerline_from_cross_sections returns path only.
+        return _centerline_from_cross_sections(
+            solid, cad_units_per_meter)[0]
+
+    circle_centers_radius = _collect_circle_edge_centers(solid)
+    if circle_centers_radius is not None:
+        centers_cad, median_r_cad = circle_centers_radius
+        return _centerline_from_circle_edge_centers(
+            centers_cad, median_r_cad, cad_units_per_meter)[0]
+
+    has_revolution_face = any(
+        f.geom_type in (GeomType.TORUS, GeomType.CYLINDER, GeomType.CONE,
+                         GeomType.REVOLUTION)
+        for f in solid.faces())
+    has_plane_face = any(f.geom_type == GeomType.PLANE for f in solid.faces())
+    if has_revolution_face and has_plane_face:
+        return _centerline_from_revolution_sweep(
+            solid, n_segments, cad_units_per_meter)[0]
+
+    from radia.coil_topology import extract_coil_topology as _extract_topo
+    topo = _extract_topo(solid)
+    if topo.is_open:
+        return _centerline_from_open_spine(
+            solid, n_segments, cad_units_per_meter)[0]
+    return _centerline_from_topology_spine(
+        solid, n_segments, cad_units_per_meter)[0]
 
 
 def _try_extract_loft_with_profile(solid,
