@@ -3,6 +3,83 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.53.0 — keiko's "arc + leads" 1-turn coil now works end-to-end (CCW winding + adaptive resampling)
+
+Released 2026-05-16.  Responds to keiko's patch report
+(`W:\31_Go-Tech\10_IH_toymodel\2026_05_10_1turn_coil_loft\README_coil_from_cad_patch.txt`)
+which documents 3 patches she applied locally to get her
+`1turn_coil_loft_outsideline.step` PEEC-solvable.  v4.53.0
+integrates her bug fix verbatim (CCW winding) and replaces her
+spine-thinning workaround with a design-level adaptive sampling
+that is policy-compliant (CLAUDE.md "No Fallbacks").
+
+### Fix 1: CCW winding in `_sample_face_perimeter_in_pt_frame`
+
+**Bug**: per-segment Cubit lofts produce shared cross-section faces
+whose outer-wire orientation alternates between adjacent volumes.
+The unmodified sampler returns CW samples at alternating stations;
+the downstream parallel-bundle solver assumes consistent orientation
+and connects sample k at station i to sample k at station i+1.
+With orientation flip, adjacent stations zigzag in opposite
+directions around the cross-section -- filament paths self-intersect
+and the Ruehli L matrix degenerates to NaN.
+
+**Fix** (keiko's patch verbatim): after projecting samples to (u, v)
+in the parallel-transport frame, compute the signed polygon area
+(`sum(u[i]*v[i+1] - u[i+1]*v[i])`) and reverse the array if
+negative.  Idempotent on already-CCW samples.
+
+### Fix 2: Adaptive resampling in `_centerline_from_open_spine`
+
+**Background**: keiko reported that hardcoded `n_segments=100` on
+her 208 mm spine gives 2.08 mm segments -- with 2.9 mm wire radius
+the ratio is 0.72 (below the 1.0 threshold), and the
+lead-arc 64 deg bend tripped `_check_spine_no_singular_corner`
+even though the geometry is physically fine.
+
+**Her proposed workaround** (Fix 2/3 in the README): iteratively
+delete the shortest segment until ratio >= 1.  This is a SILENT
+geometry modification -- conflicts with CLAUDE.md "No Fallbacks"
+(she acknowledged this in the README).
+
+**v4.53.0 alternative**: adaptive resampling UPFRONT.  Before the
+spine sampling loop, probe one OCC section at the midpoint to
+estimate the wire radius, then cap `n_segments` at
+`floor(spine_length / (1.10 * wire_radius_estimate))`.  Result:
+keiko's 208 mm spine resamples to 65 segments (3.2 mm each, ratio
+1.10), which clears the singular-corner check by design.  The
+check still fires on genuinely degenerate geometries (caller-
+supplied path with literal overlap, etc.).
+
+This is NOT a fallback -- the design contract is "adjacent stations
+are at least 1 wire-radius apart so parallel transport is stable".
+The caller's `n_segments` is interpreted as an upper bound, not an
+absolute count (the function already takes liberties with the
+caller's request to satisfy other constraints).
+
+### Test: keiko's STEP now produces L_coil = 91.70 nH
+
+Replaced the v4.49.0 `test_keiko_outsideline_filaments_raises_on_singular_L`
+with `test_keiko_outsideline_succeeds_with_adaptive_resampling`,
+asserting `np.isfinite(L).all()` and `50 < L_coil_nH < 300`.
+
+On the synthetic vertex-aligned replica (Predicate 1 UV path,
+unchanged from v4.49.0), L_coil = 142 nH.  On keiko's actual
+non-vertex-aligned STEP (Predicate 4 + adaptive resampling),
+L_coil = 91.70 nH.  Different by 35% because the spine traces a
+slightly different path through the lead-arc junction; both are in
+the physical range for a 1-turn 30 mm-radius coil + leads.
+
+### Coordinated bumps
+
+- radia 4.52.0 -> 4.53.0
+- radia-mcp 0.52.0 -> 0.53.0
+- cubit-mesh-export unchanged
+
+52 passed, 1 skipped on the coil-pipeline regression suite (same
+count as v4.52.0; -1 raises-on-singular test, +1 succeeds-with-
+adaptive test).
+
 ## 4.52.0 — final magic-number pins + negative-confidence tests
 
 Released 2026-05-16.  Closes the PEEC STEP-loading magic-number

@@ -83,34 +83,37 @@ def test_keiko_outsideline_centerline_covers_lead():
         f"recovered wire radius {r_equiv*1e3:.2f} mm out of band [2.5, 3.5] mm")
 
 
-def test_keiko_outsideline_filaments_raises_on_singular_L():
-    """v4.48.2 fail-fast: silent NaN in PEEC L matrix is converted to ValueError.
+def test_keiko_outsideline_succeeds_with_adaptive_resampling():
+    """v4.53.0: adaptive resampling in `_centerline_from_open_spine`
+    chooses n_segments such that segment_length >= 1.10 * wire_radius,
+    which prevents the singular-corner check from firing on the
+    lead-arc junction.  PEEC then produces a finite L_coil for
+    keiko's 1turn_coil_loft_outsideline.step.
 
-    Prior to v4.48.2 this STEP routed through Predicate 4 (OPEN
-    longest-edge) which placed filament cross-sections via parallel
-    transport.  At the lead-cap junction (a 64 deg corner in the
-    spine), parallel transport produced near-coincident segment pairs
-    on the SAME filament; the Ruehli mutual-inductance kernel returned
-    NaN / Inf silently; downstream `compute_port_impedance` propagated
-    the NaN into a "successful" `L_coil_nH = NaN` JSON output.
-
-    v4.48.2 adds `_assert_solver_L_finite` inside
-    `build_bundle_solver` which raises ValueError when
-    `np.isfinite(solver.L)` has any False entries, with a diagnostic
-    pointing at the offending filament/segment pairs and at the
-    vertex-aligned loft fix path (Predicate 1 UV).
+    Previously (v4.49.0 to v4.52.0) this STEP raised
+    "singular corner" because hardcoded n_segments=100 on a 208 mm
+    spine gave 2.08 mm segments (< 2.9 mm wire radius) and the lead-
+    arc 64 deg bend tripped the singular-corner check.  Adaptive
+    resampling caps n_segments at floor(spine_length / (1.10 *
+    wire_radius)) = floor(208 / 3.19) = 65, giving segments >= 3.2 mm.
     """
     from coil_from_cad import filaments_from_step
-    import pytest
+    import numpy as np
 
     assert os.path.exists(KEIKO_STEP), KEIKO_STEP
-    # v4.49.0 catches the same condition EARLIER -- the singular-corner
-    # check at filaments_from_polyline construction layer raises before
-    # the O(N^2) Ruehli kernel build.  Match either message; both
-    # indicate the same root-cause failure mode.
-    with pytest.raises(ValueError,
-                        match="(non-finite entries|singular corner)"):
-        filaments_from_step(KEIKO_STEP, sigma=5.8e7, n_peri=16)
+    topo = filaments_from_step(KEIKO_STEP, sigma=5.8e7, n_peri=16)
+    L = np.asarray(topo["solver"].L)
+    assert np.isfinite(L).all(), (
+        "L matrix has non-finite entries even after adaptive resampling")
+
+    Z = topo["solver"].compute_port_impedance(150_000.0)
+    L_nH = float(Z.imag) / (2 * np.pi * 150_000.0) * 1e9
+    # keiko's coil: 1-turn 30 mm arc + 25 mm leads.  Physical band
+    # [50, 300] nH (same band as the vertex-aligned replica test).
+    assert 50.0 < L_nH < 300.0, (
+        f"L_coil_nH = {L_nH:.2f} out of physical band [50, 300] nH "
+        "for keiko's 1-turn 30 mm-radius coil + leads (v4.53.0 should "
+        "have produced a finite physical inductance)")
 
 
 def test_filaments_from_step_no_path_points_kwarg():
