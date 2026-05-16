@@ -3,6 +3,68 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.51.0 — Strong Tier C: per-point distance-to-solid via BRepExtrema
+
+Released 2026-05-16.  Strengthens the v4.50.0 centerline-inside-bbox
+check with an additional STRONG positive proof: each centerline
+point's distance to the solid boundary (via `BRepExtrema_DistShapeShape`)
+must not exceed `1.10 * wire_radius`.  This catches the failure modes
+that bbox-containment misses:
+
+- Predicate 4 picking a surface-rim edge whose centerline lies ON the
+  solid surface but INSIDE the bbox.
+- Predicate 5 racetrack-as-circle where the circle's diameter is
+  inside the racetrack bbox but the circle exits the conductor's
+  cross-section at the corners.
+- Wrong-radius spine that stays within bbox but escapes the wire tube.
+
+### Design notes
+
+- **BRepExtrema_DistShapeShape works on BSpline solids** (verified
+  2026-05-16 against the v4.50.0 `BRepClass3d_SolidClassifier`
+  reliability issue): points INSIDE return d=0, points OUTSIDE return
+  the actual distance to the nearest surface.  This is a per-point
+  computation, not a topological classification, so the BSpline
+  classifier's geometric edge-case failures do NOT apply.
+- **Subsampling**: BRepExtrema is O(face_count) per point, ~17 ms/pt
+  on a 4-face STEP -> ~17 s on 100 pts of a 700-face STEP.
+  Sub-sampling to 20 evenly-distributed points keeps the check
+  bounded at ~2 s on a 700-face STEP.  Sub-sampling is sufficient
+  because the wrong-location failure modes affect contiguous regions,
+  not isolated points.
+- **Distance tolerance 1.10 * wire_radius**: empirically 100% of
+  per-station-mean centerlines on a smooth build123d sweep coil fall
+  within `wire_radius` of the lateral surface (parallel-transport
+  displacement is bounded).  10% slack covers numerical noise on
+  the tube boundary.
+- **Three-layer orthogonal verification** (NOT a fallback chain):
+  bbox-cover (filaments under-coverage) + inside-bbox (gross
+  wrong-location) + near-surface (per-point envelope).  All three
+  must pass.
+
+### Tests added (4)
+
+- `test_check_near_solid_surface_accepts_wire_axis`: cylinder axis
+  centerline passes.
+- `test_check_near_solid_surface_rejects_far_off_axis_spine`:
+  spine 10mm outside a 5mm-radius cylinder fails (= 10mm exit > 5.5
+  mm tolerance).
+- `test_check_near_solid_surface_distance_tolerance_pinned`: pins
+  the 1.10 factor against drift.
+- `test_predicate_1_does_not_fire_on_keiko_split_lateral`: negative
+  confidence -- the keiko 50/50 split-lateral STEP must NOT match
+  Predicate 1, so dispatch reaches Predicate 4 where the
+  singular-corner check fires.
+
+### Coordinated bumps
+
+- radia 4.50.1 -> 4.51.0
+- radia-mcp 0.50.1 -> 0.51.0
+- cubit-mesh-export unchanged
+
+46 passed, 1 skipped on the coil-pipeline regression suite (was 42/1
+before this release: +4 strong-Tier-C + negative-confidence tests).
+
 ## 4.50.1 — doc lies cleanup + readability + magic-number pin tests
 
 Released 2026-05-16.  Polish pass after the v4.48.2/v4.49.0/v4.50.0

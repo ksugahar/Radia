@@ -315,6 +315,87 @@ def test_check_centerline_inside_solid_slack_0_05_pinned():
         "still rejects the failing case.")
 
 
+def test_check_near_solid_surface_accepts_wire_axis():
+    """`_check_centerline_near_solid_surface` must PASS when spine
+    points lie ON the wire axis (inside the tube, d=0 from
+    BRepExtrema_DistShapeShape).  Pins the happy path.
+    """
+    import build123d as bd
+    from coil_from_cad import _check_centerline_near_solid_surface
+
+    # Cylinder of radius 5 mm, height 20 mm centered at origin.
+    # Wire axis = z-axis from (0,0,-10) to (0,0,+10).
+    cyl = bd.Cylinder(radius=0.005, height=0.020)
+    path = np.column_stack([
+        np.zeros(20), np.zeros(20),
+        np.linspace(-0.010, 0.010, 20),
+    ])
+    _check_centerline_near_solid_surface(
+        cyl, path, wire_radius_m=0.005,
+        source_tag="test_axis", cad_units_per_meter=1.0)
+
+
+def test_check_near_solid_surface_rejects_far_off_axis_spine():
+    """`_check_centerline_near_solid_surface` must RAISE when the
+    centerline is displaced > 1.10 * wire_radius from the solid
+    boundary (catches the Predicate 5 racetrack-as-circle class
+    via per-point distance, not just bbox-containment).
+    """
+    import build123d as bd
+    from coil_from_cad import _check_centerline_near_solid_surface
+
+    # Cylinder R=5mm at origin, wire_radius=5mm -> tolerance = 1.10 *
+    # 5 = 5.5mm.  Spine at x=15mm -> 10mm outside surface, well above
+    # 5.5mm tolerance.
+    cyl = bd.Cylinder(radius=0.005, height=0.020)
+    path = np.column_stack([
+        np.full(20, 0.015),  # 15 mm off axis = 10 mm outside surface
+        np.zeros(20),
+        np.linspace(-0.010, 0.010, 20),
+    ])
+    with pytest.raises(ValueError, match="exits the wire tube envelope"):
+        _check_centerline_near_solid_surface(
+            cyl, path, wire_radius_m=0.005,
+            source_tag="test_off_axis", cad_units_per_meter=1.0)
+
+
+def test_check_near_solid_surface_distance_tolerance_pinned():
+    """`_check_centerline_near_solid_surface` uses default
+    `distance_tolerance_factor=1.10`.  Pins against drift.
+    """
+    import inspect
+    from coil_from_cad import _check_centerline_near_solid_surface
+    sig = inspect.signature(_check_centerline_near_solid_surface)
+    p = sig.parameters.get("distance_tolerance_factor")
+    assert p is not None
+    assert p.default == 1.10, (
+        f"distance_tolerance_factor drifted from 1.10 to {p.default}; "
+        "this controls how far the spine can deviate from the wire "
+        "axis (empirically 100% of build123d smooth-sweep centerlines "
+        "fall within 1.0x wire_radius; 1.10 gives 10% slack for "
+        "numerical noise on the tube boundary).")
+
+
+def test_predicate_1_does_not_fire_on_keiko_split_lateral():
+    """Negative confidence: Predicate 1 (`_find_lateral_surface`) must
+    NOT fire on keiko's split-lateral STEP (dominance ~0.5 < 0.8).
+    The dispatch then correctly routes to Predicate 4 (OPEN longest-
+    edge), which is the path that catches the singular corner.
+    """
+    fixture = os.path.join(os.path.dirname(__file__), "fixtures",
+                            "keiko_outsideline.step")
+    if not os.path.exists(fixture):
+        pytest.skip(f"fixture not present: {fixture}")
+    import build123d as bd
+    from coil_from_cad import _find_lateral_surface
+    solid = bd.import_step(fixture)
+    lat = _find_lateral_surface(solid)
+    assert lat is None, (
+        "Predicate 1 fired on keiko's split-lateral STEP; "
+        "dispatch order is broken -- this geometry must reach "
+        "Predicate 4 to fail-fast on the lead-cap singular corner")
+
+
 def test_extract_centerline_rejects_multi_solid_step():
     """v4.49.0 entry guard: STEP with > 1 solid must RAISE."""
     import tempfile
