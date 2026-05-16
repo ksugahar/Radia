@@ -173,7 +173,7 @@ def _assert_solver_L_finite(solver, seg_indices, filament_paths):
 
     rows, cols = np.where(bad)
     n_bad = int(bad.sum())
-    diag_bad = int(np.isfinite(np.diag(L)).sum() - L.shape[0]) * -1
+    diag_bad = int((~np.isfinite(np.diag(L))).sum())
     # Sample first 8 pairs for the diagnostic (avoid spamming on
     # massively degenerate geometries).
     samples = []
