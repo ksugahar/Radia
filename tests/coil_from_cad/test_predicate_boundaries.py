@@ -168,6 +168,73 @@ def test_check_spine_passes_long_segments_at_sharp_bend():
                                       source_tag="test_long_seg_90deg")
 
 
+def test_check_centerline_inside_solid_accepts_centerline_inside_bbox():
+    """`_check_centerline_inside_solid` must PASS when centerline is
+    entirely within solid bbox + slack.  Pins the happy path.
+    """
+    import build123d as bd
+    from coil_from_cad import _check_centerline_inside_solid
+
+    # Solid: 10mm radius torus-like
+    solid = bd.Cylinder(radius=0.030, height=0.005)
+    path = np.array([
+        [0.020, 0, 0], [0.0, 0.020, 0], [-0.020, 0, 0], [0, -0.020, 0],
+    ])
+    _check_centerline_inside_solid(solid, path, "test_inside",
+                                     cad_units_per_meter=1.0)
+
+
+def test_check_centerline_inside_solid_rejects_racetrack_as_circle():
+    """`_check_centerline_inside_solid` must RAISE when the spine is a
+    circle whose corners exceed the conductor's rectangular bbox.
+
+    Simulates the Predicate 5 racetrack-as-circle failure: a CLOSED
+    rectangular-ish coil gets mapped to a planar circle of radius
+    0.85 * R_outer; the circle's diagonal corners lie outside the
+    rectangle's bbox.
+    """
+    import build123d as bd
+    from coil_from_cad import _check_centerline_inside_solid
+
+    # Solid: a "racetrack" shaped solid (thin rectangular ring),
+    # bbox x=+-30 mm, y=+-15 mm (much narrower in y).
+    racetrack = bd.Box(0.060, 0.030, 0.005,
+                        align=(bd.Align.CENTER,
+                               bd.Align.CENTER,
+                               bd.Align.CENTER))
+
+    # Spine: a circle of radius 28 mm in the XY plane -- corners at
+    # (+-28, +-28, 0) far outside the y=+-15 bbox.
+    n = 64
+    th = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    path = np.stack([0.028 * np.cos(th), 0.028 * np.sin(th),
+                      np.zeros_like(th)], axis=1)
+
+    with pytest.raises(ValueError, match="extends beyond solid bbox"):
+        _check_centerline_inside_solid(racetrack, path,
+                                         "test_racetrack_as_circle",
+                                         cad_units_per_meter=1.0)
+
+
+def test_check_centerline_inside_solid_slack_accommodates_cap():
+    """The default 5%% slack must tolerate centerline endpoints that
+    sit on the cap face of an open-spine coil (cap centroid IS on
+    the bbox boundary, often outside by epsilon due to OCC tolerance).
+    """
+    import build123d as bd
+    from coil_from_cad import _check_centerline_inside_solid
+
+    solid = bd.Cylinder(radius=0.005, height=0.020)
+    # Path endpoints on/slightly past the bbox extremes; 5% slack of
+    # the bbox diagonal (~21 mm) is ~1 mm, plenty for cap eps.
+    path = np.array([
+        [0.0, 0.0, -0.010],   # bottom cap centroid
+        [0.0, 0.0, +0.010],   # top cap centroid
+    ])
+    _check_centerline_inside_solid(solid, path, "test_cap_slack",
+                                     cad_units_per_meter=1.0)
+
+
 def test_extract_centerline_rejects_multi_solid_step():
     """v4.49.0 entry guard: STEP with > 1 solid must RAISE."""
     import tempfile
