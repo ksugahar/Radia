@@ -5,6 +5,12 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.55.0 — coordinated bump for radia 4.55.0 (cap-centroid endpoint anchoring)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.55.0 (rim-end kink fix at lead caps).
+See radia CHANGELOG 4.55.0.
+
 ## 0.54.0 — coordinated bump for radia 4.54.0 (RMF + corner densification)
 
 Released 2026-05-16.  No knowledge changes; coordinated version
