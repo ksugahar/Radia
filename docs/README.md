@@ -29,7 +29,6 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 - [SOLVER_ARCHITECTURE.md](solver/SOLVER_ARCHITECTURE.md) - Solver design philosophy and architecture overview
 - [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
-- [ELF_COMPATIBILITY_GUIDE.md](solver/ELF_COMPATIBILITY_GUIDE.md) - Compatibility guide between Radia and ELF/MAGIC solvers
 - [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
 
@@ -70,7 +69,8 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
 - [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.1 export (order 1-3)
 - [export_vtk.md](cubit/export_vtk.md) - VTK Legacy export (order 1-2)
-- [export_meg.md](cubit/export_meg.md) - ELF/MAGIC MEG export
+- [export_Nastran.md](cubit/export_Nastran.md) - Nastran BDF export (order 1-2)
+- [export_meg.md](cubit/export_meg.md) - MEG export (Gifu Univ. FEM mesh format)
 - [export_femeem.md](cubit/export_femeem.md) - FEMEEM format export (Gifu Univ.)
 - [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)
 
@@ -78,7 +78,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 The following features were removed; their docs were deleted to prevent confusion:
 
-- **Nastran BDF export** (`docs/cubit/export_Nastran.md`): removed; the format was never reliably maintained.  Use Netgen `.vol` (preferred) or GMSH v4.1 instead.
+- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed.  Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve.  Note: **Cubit-side Nastran BDF export** (`radia_export nastran`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships.
 - **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable for MSC coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.
