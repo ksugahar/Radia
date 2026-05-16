@@ -5,6 +5,16 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.49.0 — coordinated bump for radia 4.49.0 (Tier A+B+D+E weakness sweep)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.49.0 which removes silent fallbacks in the
+open-spine extractor, adds spine-corner detection at the filament
+construction layer (covers HACApK), adds entry guards
+(multi-solid STEP raise, cad_to_m silent-1.0/0 bug fix), and adds
+8 boundary tests pinning the magic numbers.  See radia CHANGELOG
+4.49.0 for the full breakdown.
+
 ## 0.48.5 — coordinated bump for radia 4.48.2 (PEEC L fail-fast on NaN)
 
 Released 2026-05-16.  No knowledge changes; coordinated version
