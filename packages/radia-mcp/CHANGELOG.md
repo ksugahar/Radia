@@ -5,6 +5,13 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.52.0 — coordinated bump for radia 4.52.0 (magic-number audit complete)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.52.0 which adds 4 magic-number pin tests + 2
+negative-confidence tests, closing the PEEC STEP-loading audit
+started in v4.48.2.  See radia CHANGELOG 4.52.0.
+
 ## 0.51.0 — coordinated bump for radia 4.51.0 (Strong Tier C: per-point distance check)
 
 Released 2026-05-16.  No knowledge changes; coordinated version
