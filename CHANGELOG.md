@@ -3,6 +3,74 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.54.0 — RMF (Wang-Joe) + corner densification for filament viz smoothing
+
+Released 2026-05-16.  Follow-up to v4.53.0 addressing keiko's viz
+report (filament "bunching" visible at lead-arc junction in GMSH).
+
+### Background
+
+Even though v4.53.0's adaptive resampling gives correct PEEC L_coil
+(keiko's STEP -> 91.70 nH, physical), GMSH visualization showed the
+16 perimeter filaments compressing at the corner.  Diagnosis: this
+is partly FORESHORTENING (the cross-section plane rotates with the
+spine bend; viewed perpendicular to the bend axis it projects to a
+narrower visual extent) and partly POLYLINE COARSENESS (each
+filament's polyline has a single hard kink at the corner, no
+smoothing).
+
+### What shipped
+
+**Rotation-Minimizing Frame (RMF) replaces parallel-transport**:
+`_parallel_transport_frame` now implements Wang-Joe double-reflection
+(Wang et al. 2008, "Computation of rotation minimizing frames",
+ACM TOG 27(1):2) instead of incremental Rodrigues rotations.  The
+double-reflection method minimizes the integral of squared angular
+velocity along the curve -- provably-minimum accumulated twist on
+polylines with kinks.  Function name retained for backward compat.
+
+On the keiko fixture, RMF gives L_coil = 91.82 nH vs v4.53.0
+parallel-transport's 91.70 nH -- 0.13% difference, within numerical
+noise (both methods agree on circular cross-section; only differ on
+twist accumulation which is a secondary effect).  Tests added:
+- `test_rmf_orthogonality`: strict (t, u, v) orthonormal at every
+  vertex including sharp kinks.
+- `test_rmf_twist_minimization_vs_pt_on_straight_path`: zero twist
+  on straight path (frame must NOT rotate).
+
+**Corner densification** in `_centerline_from_open_spine`: after
+adaptive resampling, insert intermediate spine points ON THE OCC
+CURVE near sharp bends until the per-segment bend angle <=
+`max_bend_per_step_deg` (default 20 deg).  Each insertion bisects
+the LARGER of the worst vertex's two neighbours to balance segment
+lengths.  Hard cap at 500 total points to prevent infinite blowup
+on numerical jitter.
+
+On the keiko fixture, the spine densifies from 68 -> 80 stations
+(+12 inserted near the lead-arc corners), reducing max bend per
+step from 64 -> 41.6 deg with mean bend 6.3 deg / median 5.6 deg.
+The 41.6 deg residual is the TRUE polyline kink at the lead-arc
+junction -- bisecting a linear segment around it gives the same
+bend at the bisection midpoint, so the kink itself cannot be
+softened.  But the SURROUNDING bends are smoothed, which is what
+the viz needs.
+
+### Performance
+
+RMF: ~same cost as PT (both O(N) per vertex).  Corner densification:
+adds a few iterations of segment scanning + OCC `spine @ t` queries
+near corners -- typically +5-20 stations on coil geometries, ~10-50
+extra ms.
+
+### Coordinated bumps
+
+- radia 4.53.0 -> 4.54.0
+- radia-mcp 0.53.0 -> 0.54.0
+- cubit-mesh-export unchanged
+
+55 passed, 1 skipped on the coil-pipeline regression suite (was 52/1
+in v4.53.0: +3 RMF + densification tests).
+
 ## 4.53.0 — keiko's "arc + leads" 1-turn coil now works end-to-end (CCW winding + adaptive resampling)
 
 Released 2026-05-16.  Responds to keiko's patch report
