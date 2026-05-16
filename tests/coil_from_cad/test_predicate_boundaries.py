@@ -396,6 +396,134 @@ def test_predicate_1_does_not_fire_on_keiko_split_lateral():
         "Predicate 4 to fail-fast on the lead-cap singular corner")
 
 
+def test_dedup_tol_circle_edges_pinned_at_0_1_median_r():
+    """`_collect_circle_edge_centers` dedupes semicircle pairs by
+    centre proximity within `0.1 * median_r` (coil_from_cad.py:843).
+    Pin the factor against drift; mis-tuning either splits one
+    cross-section into two stations (factor too tight) or merges
+    distinct cross-sections (factor too loose), silently distorting
+    the centerline for multi-turn pancake STEPs.
+
+    Pin by reading the source token directly -- a constructed-fixture
+    pin would require building a STEP with controlled circle-edge
+    centres at the boundary, which is expensive build123d work.
+    A source-token pin is sufficient defence against accidental
+    edit (CHANGELOG bump required if someone changes this).
+    """
+    import inspect
+    from coil_from_cad import _collect_circle_edge_centers
+    src = inspect.getsource(_collect_circle_edge_centers)
+    assert "0.1 * median_r" in src, (
+        "dedup_tol factor 0.1 * median_r drifted in "
+        "_collect_circle_edge_centers.  This factor controls "
+        "semicircle-pair merging on united multi-turn pancake STEPs "
+        "(Kubota 3turncoil class).  Any change must be paired with "
+        "the test_step_to_peec_inductance.py 3turncoil golden range "
+        "to confirm L_coil is still within 0.5% of 426.25 nH.")
+
+
+def test_dedup_tol_loft_cross_sections_pinned_at_0_1_eq_radius():
+    """`_centerline_from_cross_sections` dedupes near-duplicate planar
+    cross-section centroids within `0.1 * eq_radius`
+    (coil_from_cad.py:1205).  Pins the factor.
+    """
+    import inspect
+    from coil_from_cad import _centerline_from_cross_sections
+    src = inspect.getsource(_centerline_from_cross_sections)
+    assert "0.1 * eq_radius" in src, (
+        "dedup_tol factor 0.1 * eq_radius drifted in "
+        "_centerline_from_cross_sections.  This factor controls the "
+        "shared-end-cap merge for NON-united multi-loft STEPs "
+        "(typical Cubit `create volume loft surface ...` output).  "
+        "Any change must be paired with regression on Kubota "
+        "3turncoil non-united + the synthetic multi-loft fixture "
+        "in test_step_to_peec_inductance.py.")
+
+
+def test_detect_lead_bars_radius_spread_pinned_at_0_1():
+    """`_detect_lead_bars_cad` requires CYLINDER face radius to match
+    the median wire radius within 10% (coil_from_cad.py:497).  Pin
+    the factor.
+    """
+    import inspect
+    from coil_from_cad import _detect_lead_bars_cad
+    src = inspect.getsource(_detect_lead_bars_cad)
+    assert "median_radius_cad > 0.1" in src or "/ median_radius_cad > 0.1" in src, (
+        "radius spread threshold 0.1 drifted in _detect_lead_bars_cad. "
+        "This controls which CYLINDER faces are accepted as lead bars; "
+        "loosening admits unrelated cylinders (terminal sleeves, fillets) "
+        "and tightening rejects real leads with slight CAD imperfections. "
+        "Any change must be paired with regression on the 3turncoil "
+        "lead-aware-chain fixture (tests/panels/test_lead_aware_chain.py).")
+
+
+def test_detect_lead_bars_length_factor_pinned_at_5_0():
+    """`_detect_lead_bars_cad` rejects CYLINDER faces shorter than
+    5.0 * radius (coil_from_cad.py:515).  Pin the factor.
+    """
+    import inspect
+    from coil_from_cad import _detect_lead_bars_cad
+    src = inspect.getsource(_detect_lead_bars_cad)
+    assert "length < 5.0 * r" in src, (
+        "lead length factor 5.0 drifted in _detect_lead_bars_cad.  "
+        "This rejects short fillet / cap-radius cylinders that have "
+        "the wire radius but are not lead bars.  Loosening admits "
+        "fillets as leads; tightening rejects short real leads.  "
+        "Any change must be paired with regression on "
+        "test_lead_aware_chain.py.")
+
+
+def test_predicate_3_does_not_fire_on_keiko_no_revolution_faces():
+    """Negative confidence: Predicate 3 (revolution_sweep) requires
+    BOTH a revolution face AND a PLANE face.  keiko's outsideline
+    STEP has 2 PLANE + 2 BSPLINE (no revolution face), so Predicate 3
+    must NOT fire.
+    """
+    fixture = os.path.join(os.path.dirname(__file__), "fixtures",
+                            "keiko_outsideline.step")
+    if not os.path.exists(fixture):
+        pytest.skip(f"fixture not present: {fixture}")
+    import build123d as bd
+    from build123d import GeomType
+
+    solid = bd.import_step(fixture)
+    has_revolution = any(
+        f.geom_type in (GeomType.TORUS, GeomType.CYLINDER, GeomType.CONE,
+                         GeomType.REVOLUTION)
+        for f in solid.faces())
+    has_plane = any(f.geom_type == GeomType.PLANE for f in solid.faces())
+    # Predicate 3 condition: has_revolution AND has_plane.  Must be
+    # FALSE here so dispatch reaches Predicate 4.
+    assert not (has_revolution and has_plane), (
+        f"Predicate 3 condition fired on keiko's STEP "
+        f"(has_revolution={has_revolution}, has_plane={has_plane}).  "
+        "This would route a BSPLINE-lateral OPEN coil to the wrong "
+        "extractor.  Geometry should remain 2 PLANE + 2 BSPLINE.")
+
+
+def test_predicate_5_does_not_fire_on_open_coil():
+    """Negative confidence: Predicate 5 (topology_spine) is CLOSED-only.
+    An OPEN coil (cap faces detected) must NOT route to Predicate 5
+    (which would produce a planar circle spine bypassing the leads).
+    """
+    fixture = os.path.join(os.path.dirname(__file__), "fixtures",
+                            "keiko_outsideline.step")
+    if not os.path.exists(fixture):
+        pytest.skip(f"fixture not present: {fixture}")
+    import build123d as bd
+    from coil_topology import extract_coil_topology
+
+    solid = bd.import_step(fixture)
+    topo = extract_coil_topology(solid)
+    # Predicate 5 fires when topo.is_open is FALSE.  keiko's STEP is
+    # OPEN, so this assertion must hold.
+    assert topo.is_open, (
+        "keiko's outsideline STEP misclassified as CLOSED -- this "
+        "would route to Predicate 5 (topology_spine) which produces a "
+        "planar circle bypassing the leads (the v4.48.1 bug class).  "
+        "Geometry has 2 PLANE caps that MUST be detected.")
+
+
 def test_extract_centerline_rejects_multi_solid_step():
     """v4.49.0 entry guard: STEP with > 1 solid must RAISE."""
     import tempfile
