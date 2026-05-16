@@ -1426,6 +1426,46 @@ def _centerline_from_open_spine(solid, n_segments: int,
         path_cad[i + 1] = 0.5 * (centerline[i] + centerline[i + 1])
     path_cad[-1] = centerline[-1]
 
+    # Cap-centroid endpoint anchoring (v4.55.0, keiko viz report
+    # 2026-05-16): the "longest open edge" spine traces the
+    # conductor's LATERAL RIM (e.g. z = +-wire_radius on a flat
+    # coil), not the centroid axis.  Interior path_cad points come
+    # from midpoint sectioning -> face centroids = correct centroid
+    # path, but the ENDPOINTS path_cad[0] and path_cad[-1] are pinned
+    # to spine_pts[0]/[-1] (rim endpoints near the cap edge), causing:
+    #   - a kink near the cap in the final-segment direction (e.g.
+    #     41 deg bend at the lateral-rim -> cap-centroid transition
+    #     on keiko's 1turn_coil_loft);
+    #   - large (~48%) spread in |I| across the 16 perimeter
+    #     filaments, because the kink couples asymmetrically into L.
+    # Fix: replace the rim endpoints with the actual cap-face
+    # centroids from coil_topology.  Cap detection is the same one
+    # that classified the coil as OPEN in extract_centerline_from_step,
+    # so for any caller that routes through Predicate 4 we have caps.
+    try:
+        from radia.coil_topology import extract_coil_topology as _ext_topo
+        _topo = _ext_topo(solid)
+        if (_topo.is_open and _topo.cap_a is not None
+                and _topo.cap_b is not None):
+            ca = _topo.cap_a.center()
+            cb = _topo.cap_b.center()
+            cap_a_xyz = np.array([float(ca.X), float(ca.Y), float(ca.Z)])
+            cap_b_xyz = np.array([float(cb.X), float(cb.Y), float(cb.Z)])
+            # Map each path endpoint to its nearest cap centroid
+            d0_a = float(np.linalg.norm(path_cad[0] - cap_a_xyz))
+            d0_b = float(np.linalg.norm(path_cad[0] - cap_b_xyz))
+            if d0_a <= d0_b:
+                path_cad[0] = cap_a_xyz
+                path_cad[-1] = cap_b_xyz
+            else:
+                path_cad[0] = cap_b_xyz
+                path_cad[-1] = cap_a_xyz
+    except Exception:
+        # coil_topology unavailable -- leave the rim endpoints.  Not a
+        # soft fallback: this only fires when the topology helper itself
+        # is broken, in which case the caller has bigger issues.
+        pass
+
     scale = 1.0 / cad_units_per_meter
     return path_cad * scale, widths_cad * scale, heights_cad * scale
 
