@@ -5,6 +5,14 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.50.0 — coordinated bump for radia 4.50.0 (Tier C: PEEC STEP-loading sweep complete)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.50.0 which adds `_check_centerline_inside_solid`
+(bbox-containment positive proof) wired into all 5 predicates and
+4 filament-construction paths.  Completes the PEEC STEP-loading
+weakness sweep started in v4.48.2.  See radia CHANGELOG 4.50.0.
+
 ## 0.49.0 — coordinated bump for radia 4.49.0 (Tier A+B+D+E weakness sweep)
 
 Released 2026-05-16.  No knowledge changes; coordinated version
