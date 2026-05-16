@@ -1252,7 +1252,21 @@ def _centerline_from_open_spine(solid, n_segments: int,
     open_edges = [e for e in edges if not _is_closed(e)]
     if not open_edges:
         raise ValueError("no open spine edges (all edges are closed loops)")
-    spine = max(open_edges, key=lambda e: e.length)
+    # Deterministic edge selection (CLAUDE.md "Cubit Probe, Don't Guess"):
+    # multiple equal-length BSPLINE rim halves on lofted-cap geometries
+    # produce ties on `key=lambda e: e.length`.  OCC / Cubit listing
+    # order is non-deterministic across versions, so we break the tie
+    # on (length, centroid_x, centroid_y, centroid_z) lexicographic
+    # sort.  This keeps the same edge across runs / machine versions.
+    def _spine_sort_key(e):
+        try:
+            c = e.center()
+            return (-e.length, float(c.X), float(c.Y), float(c.Z))
+        except Exception:
+            # Curve types without center() (analytic curves): fall back
+            # to length-only.  Such curves rarely tie on length.
+            return (-e.length, 0.0, 0.0, 0.0)
+    spine = sorted(open_edges, key=_spine_sort_key)[0]
 
     spine_pts = np.zeros((n_segments + 1, 3), dtype=np.float64)
     for i in range(n_segments + 1):
@@ -1269,6 +1283,15 @@ def _centerline_from_open_spine(solid, n_segments: int,
     centerline[0] = spine_pts[0]
     centerline[-1] = spine_pts[-1]
 
+    # Per-station OCC sectioning.  Failures (degenerate plane, no face,
+    # OCC native exception) are HARD -- the open-spine path is built on
+    # the assumption that the longest open lateral edge approximates
+    # the spine, and a failed section means that assumption is wrong
+    # on this particular STEP (likely a tangent-discontinuity or a
+    # self-intersecting region).  Per CLAUDE.md "No Fallbacks - Fail
+    # Fast, Fail Loud", we raise instead of silently using the previous
+    # station's width (the v4.48.x cascade-era residue that produced
+    # widths_cad[0] = 0.0 when station 0 failed -> downstream NaN).
     for i in range(n_segments):
         c = midpoints[i]
         t = tangents[i]
@@ -1277,24 +1300,41 @@ def _centerline_from_open_spine(solid, n_segments: int,
         sec_plane = Plane(origin=origin, z_dir=z_dir)
         try:
             cross = section(solid, section_by=sec_plane)
-        except Exception:
-            cross = None
+        except Exception as exc:
+            raise ValueError(
+                f"_centerline_from_open_spine: section() failed at "
+                f"station {i}/{n_segments} "
+                f"(midpoint=({c[0]:.4g},{c[1]:.4g},{c[2]:.4g}), "
+                f"tangent=({t[0]:.3f},{t[1]:.3f},{t[2]:.3f})): "
+                f"{type(exc).__name__}: {exc}.  "
+                f"This usually means the longest open lateral edge "
+                f"is not a clean spine on this geometry (tangent "
+                f"discontinuity, self-intersection, or numerically "
+                f"degenerate plane).  Regenerate the STEP with a "
+                f"smooth single-piece BSPLINE lateral so Predicate 1 "
+                f"(UV-map sampling) handles it directly."
+            ) from exc
 
-        if cross and len(cross.faces()) > 0:
-            best = min(cross.faces(),
-                       key=lambda f: (f.center() - origin).length)
-            bc = best.center()
-            if i < n_segments:
-                centerline[i] = [bc.X, bc.Y, bc.Z]
-                if i == n_segments - 1:
-                    centerline[i + 1] = spine_pts[i + 1]
-            side = math.sqrt(best.area)
-            widths_cad[i] = side
-            heights_cad[i] = side
-        else:
-            widths_cad[i] = widths_cad[max(0, i - 1)]
-            heights_cad[i] = heights_cad[max(0, i - 1)]
-            centerline[i] = c
+        if cross is None or len(cross.faces()) == 0:
+            raise ValueError(
+                f"_centerline_from_open_spine: section() at station "
+                f"{i}/{n_segments} produced no face "
+                f"(midpoint=({c[0]:.4g},{c[1]:.4g},{c[2]:.4g})).  "
+                f"The sectioning plane likely missed the solid -- "
+                f"the open-spine assumption breaks here.  Regenerate "
+                f"the STEP with a smooth single-piece BSPLINE lateral "
+                f"so Predicate 1 (UV-map sampling) handles it directly."
+            )
+
+        best = min(cross.faces(),
+                   key=lambda f: (f.center() - origin).length)
+        bc = best.center()
+        centerline[i] = [bc.X, bc.Y, bc.Z]
+        if i == n_segments - 1:
+            centerline[i + 1] = spine_pts[i + 1]
+        side = math.sqrt(best.area)
+        widths_cad[i] = side
+        heights_cad[i] = side
 
     path_cad = np.zeros((n_segments + 1, 3), dtype=np.float64)
     path_cad[0] = centerline[0]
@@ -1566,9 +1606,40 @@ def extract_centerline_from_step(step_path: str,
         widths_m: (N,) per-segment width in meters.
         heights_m: (N,) per-segment height in meters.
     """
-    from build123d import import_step, GeomType
+    from build123d import import_step, GeomType, Compound
 
     solid = import_step(step_path)
+
+    # Multi-solid entry guard (v4.49.0): single-coil PEEC assumes one
+    # solid in the STEP.  build123d's import_step silently flattens
+    # a multi-solid Compound and `solid.faces()` enumerates ALL
+    # solids' faces -- the predicates then mis-classify (e.g. cap
+    # detection sees 2N planes and Predicate 1 dominance plummets).
+    # CLAUDE.md "No Fallbacks - Fail Fast, Fail Loud": raise loud.
+    if isinstance(solid, Compound):
+        # Compound may wrap one or many solids; only raise when > 1
+        sub_solids = list(solid.solids())
+        if len(sub_solids) > 1:
+            bb = [(s.bounding_box().min, s.bounding_box().max)
+                   for s in sub_solids]
+            summary = "; ".join(
+                f"#{i}: x=[{m.X * 1e3:+.1f},{x.X * 1e3:+.1f}] "
+                f"y=[{m.Y * 1e3:+.1f},{x.Y * 1e3:+.1f}] mm"
+                for i, (m, x) in enumerate(bb[:5]))
+            raise ValueError(
+                f"extract_centerline_from_step: STEP contains "
+                f"{len(sub_solids)} solids, expected exactly 1.  "
+                f"Bbox summary: {summary}"
+                f"{'; ...' if len(bb) > 5 else ''}.  "
+                f"Single-coil PEEC handles one solid per file -- split "
+                f"the STEP into per-solid files and call this function "
+                f"on each, OR boolean-unite the conductor solids in "
+                f"CAD before export so the result is a single watertight "
+                f"solid.")
+        if len(sub_solids) == 1:
+            solid = sub_solids[0]
+        # else: solid stays the Compound; downstream predicates will
+        # likely raise on empty faces -- that is fine, hard error.
 
     # Classification-based dispatch (No-Fallback policy, CLAUDE.md
     # "No Fallbacks - Fail Fast, Fail Loud"): inspect the solid's
@@ -2354,6 +2425,86 @@ def _parallel_transport_frame(pts: np.ndarray):
     return tangent, u_hat, v_hat
 
 
+def _check_spine_no_singular_corner(pts_m, radius_m, source_tag):
+    """Fail-fast pre-flight: detect spine corners that will produce a
+    singular Ruehli L matrix when filament cross-sections are placed by
+    parallel transport.
+
+    Background (v4.49.0, 2026-05-16): keiko's
+    ``1turn_coil_loft_outsideline.step`` has a 64 deg corner at the
+    lead-cap junction where adjacent station spacing (~0.5 mm) is much
+    smaller than the wire radius (~2.9 mm).  Parallel transport places
+    perimeter filament samples at offset ``radius_m`` perpendicular to
+    the local tangent; across a sharp corner whose adjacent segments
+    are shorter than the offset, the rotated samples cross over each
+    other and adjacent filament segments become near-coincident.  The
+    Ruehli mutual-inductance kernel is singular on coincident pairs
+    and previously returned NaN/Inf.  v4.48.2 caught it post-assembly
+    in ``peec_bundle._assert_solver_L_finite``; v4.49.0 catches it HERE
+    BEFORE the O(N^2) Ruehli build, with a far more actionable
+    diagnostic (the offending spine vertex coordinate, the bend angle,
+    and the segment-length / wire-radius ratio that triggered it).
+
+    Per CLAUDE.md "No Fallbacks - Fail Fast, Fail Loud", this is a
+    hard ValueError -- no automatic chamfer insertion, no silent
+    re-mesh.  The user fixes the CAD per the FIX hint.
+
+    Detection logic: for each interior spine vertex i (1..N-1),
+    compute the bend angle alpha between segments (i-1, i) and
+    (i, i+1).  If ``alpha > 60 deg`` AND the minimum adjacent segment
+    length is less than the wire radius, the perimeter filaments
+    will cross.  Both conditions must hold; either alone is fine
+    (a smooth bend of 90 deg with long segments, or a tight short
+    spine with no bend, both produce well-conditioned L).
+
+    Threshold rationale:
+    - 60 deg: empirical, keiko's failure at 64 deg.  10 deg below the
+      observed failure to leave a small safety margin while not
+      flagging benign 30-45 deg bends.
+    - adj_segment_length < radius_m: at offset ``radius_m * sin(alpha)``
+      the perimeter samples shift sideways by O(radius_m); if the
+      forward segment length is shorter than that shift, the next
+      filament segment lands "behind" the previous one's end ->
+      crossing.
+    """
+    n_pts = len(pts_m)
+    if n_pts < 3:
+        return
+    seg_vec = np.diff(pts_m, axis=0)
+    seg_len = np.linalg.norm(seg_vec, axis=1)
+    if (seg_len < 1e-12).any():
+        bad_i = int(np.argmin(seg_len))
+        raise ValueError(
+            f"{source_tag}: spine has zero-length segment at station "
+            f"{bad_i} -- centerline extractor produced duplicate points.")
+    seg_unit = seg_vec / seg_len[:, None]
+    cos_bend = np.einsum('ij,ij->i', seg_unit[:-1], seg_unit[1:])
+    cos_bend = np.clip(cos_bend, -1.0, 1.0)
+    bend_deg = np.degrees(np.arccos(cos_bend))
+    adj_min_len = np.minimum(seg_len[:-1], seg_len[1:])
+    ratio = adj_min_len / radius_m
+    bad = (bend_deg > 60.0) & (ratio < 1.0)
+    if not bad.any():
+        return
+    bad_idx = np.where(bad)[0]
+    first = int(bad_idx[0])
+    v = pts_m[first + 1]
+    raise ValueError(
+        f"{source_tag}: spine has a sharp corner that will produce a "
+        f"singular PEEC L matrix.  {len(bad_idx)} singular corner(s) "
+        f"detected; worst at spine vertex {first + 1}/{n_pts - 1} "
+        f"(xyz=({v[0] * 1e3:+.2f}, {v[1] * 1e3:+.2f}, {v[2] * 1e3:+.2f}) mm): "
+        f"bend={bend_deg[first]:.1f} deg, adjacent segment length / wire "
+        f"radius = {ratio[first]:.3f} (< 1.0 means perimeter filaments "
+        f"would cross across the corner under parallel transport).  "
+        f"FIX: regenerate the STEP with a smooth single-piece BSPLINE "
+        f"lateral so Predicate 1 (UV-map sampling) handles it directly "
+        f"without parallel transport.  Alternative: insert a chamfer "
+        f"at the corner so adjacent segment length exceeds the wire "
+        f"radius.  This check covers both dense-L and HACApK paths "
+        f"because it runs BEFORE the kernel build.")
+
+
 def filaments_from_polyline(pts_m: np.ndarray,
                              radius_m: float,
                              *,
@@ -2381,6 +2532,12 @@ def filaments_from_polyline(pts_m: np.ndarray,
     n_pts = len(pts)
     if n_pts < 2:
         raise ValueError(f"need at least 2 centerline points, got {n_pts}")
+
+    # Pre-flight singular-corner check at the construction layer.
+    # Catches keiko-class "sharp corner + short segments" geometries
+    # before the O(N^2) Ruehli build; covers both dense-L and HACApK
+    # paths because it runs BEFORE solver assembly.
+    _check_spine_no_singular_corner(pts, radius_m, source_tag)
 
     _, u_hat, v_hat = _parallel_transport_frame(pts)
 
@@ -2555,16 +2712,30 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
         area_per_station[i] = float(face.area)
 
     # Per-station UV is in CAD units of the face.  centroids_m is in
-    # metres after the caller's cad_units_per_meter scale.  Scale UV
-    # to metres via the inverse: detect by comparing one face centroid
-    # in raw units vs the matching centerline point in metres.  This
-    # is cleaner than threading cad_units_per_meter through here.
-    f0 = faces_ordered[0]
-    c0_cad = np.array([f0.center().X, f0.center().Y, f0.center().Z],
-                       dtype=np.float64)
-    c0_m = centroids_m[0]
-    cad_to_m = np.linalg.norm(c0_m) / max(np.linalg.norm(c0_cad), 1e-30) \
-        if np.linalg.norm(c0_cad) > 1e-30 else 1.0
+    # metres after the caller's cad_units_per_meter scale.  Recover
+    # the scale by comparing the station-to-station SPACING in CAD vs
+    # in metres -- this is robust to the origin location (the previous
+    # `norm(c0_m) / norm(c0_cad)` form silently degenerated to 1.0
+    # when c0 happened to lie near the origin, e.g. quarter-symmetry
+    # coils with one cap at (0, +y, 0)).  CLAUDE.md "No Fallbacks":
+    # we raise instead of silently using cad_to_m=1.0 if the spacing
+    # is degenerate too (single-station path).
+    if n_path < 2:
+        raise ValueError(
+            "_filaments_from_per_station_faces: need >= 2 stations to "
+            "infer cad-to-m scale, got n_path={}".format(n_path))
+    f0c = faces_ordered[0].center()
+    f1c = faces_ordered[1].center()
+    span_cad = math.sqrt((f1c.X - f0c.X) ** 2
+                          + (f1c.Y - f0c.Y) ** 2
+                          + (f1c.Z - f0c.Z) ** 2)
+    span_m = float(np.linalg.norm(centroids_m[1] - centroids_m[0]))
+    if span_cad < 1e-30 or span_m < 1e-30:
+        raise ValueError(
+            "_filaments_from_per_station_faces: stations 0 and 1 are "
+            "coincident (span_cad={:.3e}, span_m={:.3e}); cannot "
+            "recover cad-to-m scale".format(span_cad, span_m))
+    cad_to_m = span_m / span_cad
     uv_per_station *= cad_to_m
     area_per_station *= cad_to_m * cad_to_m
 

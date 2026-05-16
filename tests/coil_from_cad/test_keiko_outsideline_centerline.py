@@ -104,7 +104,12 @@ def test_keiko_outsideline_filaments_raises_on_singular_L():
     import pytest
 
     assert os.path.exists(KEIKO_STEP), KEIKO_STEP
-    with pytest.raises(ValueError, match="non-finite entries"):
+    # v4.49.0 catches the same condition EARLIER -- the singular-corner
+    # check at filaments_from_polyline construction layer raises before
+    # the O(N^2) Ruehli kernel build.  Match either message; both
+    # indicate the same root-cause failure mode.
+    with pytest.raises(ValueError,
+                        match="(non-finite entries|singular corner)"):
         filaments_from_step(KEIKO_STEP, sigma=5.8e7, n_peri=16)
 
 
