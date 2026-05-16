@@ -5,6 +5,14 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.51.0 — coordinated bump for radia 4.51.0 (Strong Tier C: per-point distance check)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.51.0 which adds `_check_centerline_near_solid_surface`
+(BRepExtrema_DistShapeShape sub-sampled per-point distance check)
+as the third orthogonal positive proof in the centerline-verification
+chain.  See radia CHANGELOG 4.51.0.
+
 ## 0.50.1 — coordinated bump for radia 4.50.1 (PEEC pipeline polish)
 
 Released 2026-05-16.  No knowledge changes; coordinated version
