@@ -1275,6 +1275,65 @@ def _centerline_from_open_spine(solid, n_segments: int,
             return (-e.length, 0.0, 0.0, 0.0)
     spine = sorted(open_edges, key=_spine_sort_key)[0]
 
+    # Adaptive sampling (v4.53.0, keiko's request 2026-05-16): the
+    # caller's ``n_segments`` is treated as an UPPER bound only.  The
+    # actual segment count is chosen so that the resulting spine
+    # segment length is at least ``1.10 * wire_radius_estimate``,
+    # which prevents the downstream ``_check_spine_no_singular_corner``
+    # check from firing on benign smooth bends that happen to be
+    # over-sampled.  Without this, a 208 mm spine with caller-default
+    # ``n_segments = 100`` gives 2.08 mm segments -- with a 2.9 mm
+    # wire radius the ratio is 0.72 (below the 1.0 threshold), and any
+    # > 60 deg bend along the spine (e.g. the lead-arc junction on
+    # keiko's 1turn_coil_loft) trips the singular-corner check even
+    # though the geometry is physically fine.  Adaptive sampling makes
+    # the check semantically correct: it fires on TRUE corners (sharp
+    # AND densely-sampled by user request) but not on smooth bends
+    # accidentally over-sampled.
+    #
+    # Wire radius is estimated by a CHEAP midpoint section before the
+    # full sampling loop runs.
+    spine_length_cad = float(spine.length)
+    try:
+        from build123d import section as _bd_section
+        from build123d import Plane as _bd_Plane
+        from build123d import Vector as _bd_Vector
+        mid_p = spine @ 0.5
+        # Use a vague tangent: x-axis is fine for the probe since the
+        # cap area depends only on the orthogonal cross-section.
+        mid_tangent = spine @ 0.51 - mid_p
+        tn = math.sqrt(mid_tangent.X ** 2 + mid_tangent.Y ** 2
+                        + mid_tangent.Z ** 2)
+        if tn > 1e-12:
+            probe_plane = _bd_Plane(
+                origin=_bd_Vector(float(mid_p.X), float(mid_p.Y),
+                                    float(mid_p.Z)),
+                z_dir=_bd_Vector(float(mid_tangent.X / tn),
+                                   float(mid_tangent.Y / tn),
+                                   float(mid_tangent.Z / tn)))
+            probe_section = _bd_section(solid, section_by=probe_plane)
+            probe_faces = (probe_section.faces() if probe_section is not None
+                            else [])
+            if probe_faces:
+                # Pick the face closest to the spine midpoint
+                best_probe = min(
+                    probe_faces,
+                    key=lambda f: ((f.center() - _bd_Vector(
+                        float(mid_p.X), float(mid_p.Y), float(mid_p.Z))
+                    ).length))
+                cross_area_cad = float(best_probe.area)
+                wire_r_cad = math.sqrt(cross_area_cad / math.pi)
+                min_seg_cad = 1.10 * wire_r_cad
+                if min_seg_cad > 0:
+                    max_segments_by_density = max(
+                        3, int(spine_length_cad / min_seg_cad))
+                    n_segments = min(n_segments, max_segments_by_density)
+    except Exception:
+        # Probe failed (e.g. degenerate section) -- proceed with the
+        # caller-supplied n_segments.  The downstream singular-corner
+        # check will raise if the result is genuinely bad.
+        pass
+
     spine_pts = np.zeros((n_segments + 1, 3), dtype=np.float64)
     for i in range(n_segments + 1):
         t = i / n_segments
@@ -2984,6 +3043,26 @@ def _sample_face_perimeter_in_pt_frame(face, centroid_3d: np.ndarray,
     u_vals = delta @ u_hat
     v_vals = delta @ v_hat
     uv = np.column_stack([u_vals, v_vals])
+
+    # CCW winding normalisation (v4.53.0, keiko's bug 2026-05-16):
+    # per-segment Cubit lofts produce shared cross-section faces with
+    # alternating outer-wire orientation -- one volume's "end cap" is
+    # the same OCC face as its neighbour's "start cap", but the wire
+    # parametrization is reversed.  Without normalisation
+    # ``_sample_face_perimeter_in_pt_frame`` returns CW samples at
+    # alternating stations, the downstream parallel-bundle solver
+    # connects sample k at station i to sample k at station i+1
+    # ASSUMING consistent orientation, so adjacent stations zigzag in
+    # opposite directions around the cross-section -- the resulting
+    # filament paths self-intersect and the Ruehli L matrix
+    # degenerates to NaN.  Normalise to CCW (signed area > 0) here
+    # so the caller never sees orientation flip.
+    signed_area = float(np.sum(uv[:-1, 0] * uv[1:, 1]
+                                - uv[:-1, 1] * uv[1:, 0]))
+    if signed_area < 0:
+        uv = uv[::-1, :].copy()
+        u_vals = uv[:, 0]
+        v_vals = uv[:, 1]
 
     # Roll the array so index 0 lands at the boundary point closest
     # to +u_hat (smallest signed angle from +u in the (u,v) plane).
