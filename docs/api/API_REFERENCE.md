@@ -2,9 +2,18 @@
 
 Complete reference for Radia Python API.
 
-**Version**: 4.6.0
-**Date**: 2026-04-17
+**Version**: 4.55.0
+**Date**: 2026-05-16
 **Original ESRF Documentation**: https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html
+
+> Refer to [CHANGELOG.md](../../CHANGELOG.md) for per-release additions / removals
+> since v4.6.0.  The PEEC STEP-loading subsystem
+> (`coil_from_cad.filaments_from_step`, classification dispatch, RMF,
+> adaptive resampling, cap-centroid anchoring) was overhauled in
+> v4.48.2 -> v4.55.0; see
+> [docs/peec/PEEC_CONDUCTOR_MODELING_GUIDE.md](../peec/PEEC_CONDUCTOR_MODELING_GUIDE.md)
+> for the architectural overview and `radia-mcp peec_inductance(topic=...)`
+> for the runnable knowledge layer.
 
 ---
 

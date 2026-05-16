@@ -1,6 +1,24 @@
 # Radia Documentation
 
-**Version:** 4.6.0
+**Version:** 4.55.0
+
+For installation, see the top-level [README.md](../README.md) Quick Start (covers
+the pinned production install of `radia[cubit,gui]` + `radia-mcp` + `cubit-mesh-export`,
+multi-user lab deploy, verify, and troubleshooting).
+
+For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
+
+> **Where is the canonical PEEC / FEM / Cubit knowledge?**
+> Per CLAUDE.md "MCP Knowledge Placement Policy", the **single source of
+> truth** for PEEC / FEM / Cubit / build123d / GMSH knowledge is the
+> `radia-mcp` package's knowledge modules at
+> [packages/radia-mcp/src/radia_mcp/](../packages/radia-mcp/src/radia_mcp/),
+> not `docs/`.  `docs/` is the **academic / historical reference layer** --
+> useful for citations and architectural overviews, but not the place to
+> look for "how do I do X today".  For runnable how-tos and the current
+> recipe for any task, query `radia-mcp` via Claude / your MCP client
+> (e.g. `peec_inductance(topic="step_authoring")` returns Cubit + build123d
+> recipes for auto-detect-friendly STEPs).
 
 ## API Reference
 
@@ -22,12 +40,19 @@
 ## PEEC (Partial Element Equivalent Circuit)
 
 - [PEEC_PANEL_IMPLEMENTATION.md](peec/PEEC_PANEL_IMPLEMENTATION.md) - Panel-based 2D surface integration implementation
-- [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling: filament model via `coil_from_cad.py`
+- [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling via `coil_from_cad.py` (5-predicate classification dispatch, RMF, adaptive resampling, cap-centroid endpoint anchoring -- updated for v4.55.0)
 - [PEEC_MSC_COUPLING.md](peec/PEEC_MSC_COUPLING.md) - PEEC conductor + MSC magnetic material coupled solver
 - [PEEC_SHIELD_CONDUCTOR.md](peec/PEEC_SHIELD_CONDUCTOR.md) - Shield conductor modeling (`peec_shield.py`)
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
 - [PEEC_VALIDATION_PLAN.md](peec/PEEC_VALIDATION_PLAN.md) - Systematic validation plan for PEEC solver and PEEC-MSC coupling
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
+
+> **For "how do I author a STEP that PEEC can solve?"**: query
+> `radia-mcp` `peec_inductance(topic="step_authoring")` for Cubit + build123d
+> recipes, anti-patterns, and a 10-line build123d probe script that
+> verifies a STEP is auto-detect-friendly BEFORE running the panel.
+> The MCP knowledge is the runnable layer; `PEEC_CONDUCTOR_MODELING_GUIDE.md`
+> is the architectural / theoretical overview.
 
 ## Analytical Reference Formulas
 
@@ -44,8 +69,16 @@
 - [Cubit_Element_Order.md](cubit/Cubit_Element_Order.md) - Element order control (1st/2nd order) in Coreform Cubit
 - [export_NetgenMesh.md](cubit/export_NetgenMesh.md) - Netgen .vol export (order 1-5, recommended)
 - [export_Gmsh.md](cubit/export_Gmsh.md) - Gmsh v4.1 export (order 1-3)
-- [export_Nastran.md](cubit/export_Nastran.md) - Nastran BDF export (order 1-2)
 - [export_vtk.md](cubit/export_vtk.md) - VTK Legacy export (order 1-2)
 - [export_meg.md](cubit/export_meg.md) - ELF/MAGIC MEG export
 - [export_femeem.md](cubit/export_femeem.md) - FEMEEM format export (Gifu Univ.)
 - [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)
+
+## Removed (historical reference)
+
+The following features were removed; their docs were deleted to prevent confusion:
+
+- **Nastran BDF export** (`docs/cubit/export_Nastran.md`): removed; the format was never reliably maintained.  Use Netgen `.vol` (preferred) or GMSH v4.1 instead.
+- **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable for MSC coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
+
+See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.

@@ -1,7 +1,73 @@
 # PEEC Conductor Modeling Guide
 
-**Date**: 2026-04-17 (revised from 2026-02-13 proposal)
+**Date**: 2026-05-16 (revised from 2026-04-17; original proposal 2026-02-13)
 **Status**: Implemented — filament model via `coil_from_cad.py`
+
+---
+
+> ## v4.48.2 -> v4.55.0 STEP-loading subsystem overhaul (2026-05-15 / 2026-05-16)
+>
+> This guide's architectural overview is correct, but the implementation
+> underwent an 8-release fail-fast hardening campaign that significantly
+> changed the internal behaviour of `filaments_from_step`.  Summary of
+> the new layered defense (all enforced in current code):
+>
+> 1. **Multi-solid entry guard** -- raise on STEP containing > 1 solid
+>    (v4.49.0 Tier D).
+> 2. **Classification-based single dispatch** in
+>    `extract_centerline_from_step`: 5 positive-match predicates
+>    (Loft cross-sections / Circle-edge stations /
+>    Revolution-sweep / OPEN longest-edge / CLOSED topology-spine) --
+>    NO `try/except` cascade, NO `path_points_m` JSON override
+>    (v4.49.0 Tier A).
+> 3. **Adaptive resampling upfront** in `_centerline_from_open_spine`:
+>    midpoint section to estimate `wire_radius`, then cap `n_segments`
+>    at `floor(spine_length / (1.10 * wire_radius))` so adjacent
+>    stations are always >= 1.10 wire-radius apart (v4.53.0).
+> 4. **Wang-Joe Rotation-Minimizing Frame** replaces Rodrigues
+>    parallel-transport in `_parallel_transport_frame` -- provably
+>    minimum accumulated twist on polylines with kinks (v4.54.0).
+> 5. **Corner densification** in `_centerline_from_open_spine`:
+>    after adaptive resampling, insert intermediate spine points ON
+>    the OCC curve near sharp bends until per-step bend angle <= 20 deg
+>    (v4.54.0).
+> 6. **Cap-centroid endpoint anchoring** in
+>    `_centerline_from_open_spine`: replace rim-spine endpoints with
+>    cap-face centroids from `coil_topology.extract_coil_topology` --
+>    fixes the rim-to-cap kink at vertex N-1 that produced asymmetric
+>    |I| distributions (v4.55.0).
+> 7. **CCW winding normalisation** in `_sample_face_perimeter_in_pt_frame`:
+>    signed-area check + reverse if CW; fixes per-segment Cubit lofts
+>    where shared cross-section faces have alternating orientation
+>    (v4.53.0, keiko's patch verbatim).
+> 8. **Three orthogonal positive proofs** on every centerline / topo:
+>    `_check_filaments_cover_solid_bbox` (under-coverage),
+>    `_check_centerline_inside_solid` (gross wrong-location, bbox+5%
+>    slack), `_check_centerline_near_solid_surface` (per-point
+>    distance to solid surface via `BRepExtrema_DistShapeShape`,
+>    tolerance 1.10 * wire_radius, 20-point subsample).  ALL three
+>    must pass; orthogonal failure modes, NOT a fallback chain
+>    (v4.50.0 + v4.51.0).
+> 9. **Pre-Ruehli singular-corner check** in `filaments_from_polyline`:
+>    raise if `bend > 60 deg AND adj_min_seg_len < wire_radius` --
+>    covers HACApK path too because it runs BEFORE solver assembly
+>    (v4.49.0 Tier B).
+> 10. **Post-assembly finite-L safety net** in
+>     `peec_bundle._assert_solver_L_finite`: raise on any non-finite
+>     entry in `solver.L`, with diagnostic naming the offending
+>     filament/segment pairs (v4.48.2; mostly belt-and-suspenders
+>     since the v4.49.0 corner detect catches the same condition
+>     pre-assembly).
+>
+> The `filaments_from_step(step_path, sigma=..., n_peri=...)` API is
+> unchanged from v4.48.1; `path_points_m` kwarg was REMOVED in v4.48.0.
+>
+> **For the runnable how-to layer** (Cubit + build123d recipes that
+> produce STEPs the auto-detect dispatch can solve, anti-patterns,
+> 10-line build123d probe script), query
+> `radia-mcp peec_inductance(topic="step_authoring")` -- the MCP
+> knowledge module is updated with every release and is the
+> canonical source per CLAUDE.md "MCP Knowledge Placement Policy".
 
 ---
 
