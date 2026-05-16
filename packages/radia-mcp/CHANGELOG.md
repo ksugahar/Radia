@@ -5,6 +5,13 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.50.1 — coordinated bump for radia 4.50.1 (PEEC pipeline polish)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.50.1 (doc lies cleanup, peec_bundle.py
+readability fix, 4 magic-number pin tests).  See radia CHANGELOG
+4.50.1.
+
 ## 0.50.0 — coordinated bump for radia 4.50.0 (Tier C: PEEC STEP-loading sweep complete)
 
 Released 2026-05-16.  No knowledge changes; coordinated version

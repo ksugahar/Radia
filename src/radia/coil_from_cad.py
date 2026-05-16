@@ -1013,9 +1013,12 @@ def _collect_circle_edge_centers(solid):
     filter by consistent radius, and dedupe semicircle pairs.
 
     Returns ``None`` if the solid does not look like a multi-turn
-    coil with a clear consistent-radius circle population (lets the
-    caller fall through to ``_centerline_from_torus_sweep`` or
-    ``_centerline_from_open_spine``).
+    coil with a clear consistent-radius circle population.  This is
+    a predicate-style negative ("the cap-circle pattern does not
+    match"); the classification dispatch in
+    ``extract_centerline_from_step`` then tries the next predicate.
+    Returning None is NOT a fallback -- predicates are positive
+    matches by design.
 
     Returns ``(centers_cad, median_radius_cad)`` on success:
         centers_cad: list of (3,) np arrays in raw CAD units
@@ -1231,8 +1234,12 @@ def _centerline_from_open_spine(solid, n_segments: int,
     edges are cross-section boundaries, not spines.
 
     Raises ValueError if no open spine edge exists (e.g. loft of
-    circles: all edges are closed cross-section circles).  Caller
-    should fall back to ``_centerline_from_cross_sections``.
+    circles: all edges are closed cross-section circles).  This is
+    a hard error -- the classification dispatch in
+    ``extract_centerline_from_step`` chooses this extractor based on
+    a positive predicate (``topo.is_open``); a failure here means
+    the dispatcher's predicate was wrong, not that "the next path
+    should be tried" (CLAUDE.md "No Fallbacks").
     """
     from build123d import section, Plane, Vector
     edges = solid.edges()
@@ -2028,8 +2035,13 @@ def filaments_from_step(step_path: str,
             meters").  Pass 1000.0 if the STEP is in millimetres.
         n_slices: Z-slice count for auto-extraction.
         use_coil_builder: If True (default), use CoilBuilder path for
-            profile-aware filament placement.  Falls back to legacy
-            path if CoilBuilder reconstruction fails.
+            profile-aware filament placement (volume-grid via
+            nwinc/nhinc OR n_peri perimeter-only).  If False, use the
+            legacy C++ ExpandFilaments path which only supports a
+            rectangular sub-filament grid.  These are SEPARATE entry
+            paths chosen by the caller -- per CLAUDE.md "No Fallbacks",
+            there is no automatic switchover when one fails; failures
+            propagate as ValueError.
 
     Returns:
         topology_dict from PEECBuilder.build_topology().
@@ -2071,13 +2083,18 @@ def filaments_from_step(step_path: str,
         from build123d import import_step
         solid = import_step(step_path)
 
-        # Compute the solid bounding box ONCE; we re-use it to sanity-
-        # check that the extracted filaments cover the conductor in
-        # every axis.  Without this check a spine that bypasses a
-        # lead returns a "successful" topology whose downstream physics
-        # (L_coil, P_wp) silently differs from the intended coil --
-        # the v4.38.0 Tier-2c check did NOT cover Tier 1/2/2b which
-        # is the path the keiko `_outsideline` lofts trip (2026-05-15).
+        # Compute the solid bounding box ONCE; reused by the
+        # `_verify_topo` helper below to run the bbox-cover check on
+        # every Path 1/2/2b/2c filament output (in addition to the
+        # centerline-inside-bbox check from v4.50.0).  Both checks
+        # must pass (orthogonal failure modes, not a fallback chain):
+        # bbox-cover catches under-coverage / wrong-radius overshoot;
+        # inside-bbox catches wrong-location spine.  Single-extractor
+        # geometries that fail either get a hard ValueError pointing
+        # at CAD regeneration -- this prevents the keiko-class
+        # ``_outsideline`` regression (silent NaN L from an
+        # under-covered spine, 2026-05-15) and the Predicate 5
+        # racetrack-as-circle class (2026-05-16).
         bb = solid.bounding_box()
         solid_bbox_min = np.array([float(bb.min.X), float(bb.min.Y),
                                     float(bb.min.Z)]) / cad_units_per_meter

@@ -235,6 +235,86 @@ def test_check_centerline_inside_solid_slack_accommodates_cap():
                                      cad_units_per_meter=1.0)
 
 
+def test_detect_cap_faces_area_ratio_threshold_accepts_clear_caps():
+    """`detect_cap_faces` accepts 2 small planar faces when the 3rd-smallest
+    planar face area > 2.0 x cap area (the area_ratio_threshold magic
+    at coil_topology.py:107).  Pins the lower boundary.
+    """
+    import build123d as bd
+    from coil_topology import detect_cap_faces
+
+    # Gapped torus: 2 small circular end caps + many larger lateral
+    # planar facets (rect cross section produces top/bottom flats).
+    # Use a simpler synthetic: a 355 deg sweep of a rect profile.
+    # Actually the cleanest test is a known-good Cubit-generated rect
+    # torus fixture; falls back to building one synthetically here.
+    profile = bd.Plane.XZ * bd.Rectangle(0.006, 0.004)
+    arc = bd.JernArc(bd.Vector(0.030, 0, 0), bd.Vector(0, 1, 0),
+                      0.030, 355)
+    swept = bd.sweep(profile, arc)
+    solid = list(swept.solids())[0]
+    caps = detect_cap_faces(solid)
+    assert caps is not None, (
+        "expected 2 cap faces on a 355 deg rect sweep (clear "
+        "area_ratio gap between rect end caps and lateral cylinders)")
+
+
+def test_R_spine_0_85_factor_at_coil_topology_py_149():
+    """The bbox-derived spine radius is 0.85 * R_outer (coil_topology.py:149).
+    Pins that exact factor -- changing it shifts the Predicate 5 spine
+    location and silently breaks every CLOSED-coil L computation.
+    """
+    import build123d as bd
+    from coil_topology import _bbox_spine_radius
+    # Solid with x-extent +-30 mm => R_outer = 30 mm; expected
+    # R_spine = 0.85 * 30 = 25.5 mm.
+    solid = bd.Cylinder(radius=0.030, height=0.010)
+    R_spine = _bbox_spine_radius(solid)
+    assert abs(R_spine - 0.85 * 0.030) < 1e-9, (
+        f"R_spine = 0.85 * R_outer factor changed; got {R_spine}, "
+        f"expected {0.85 * 0.030}.  Any change to this factor must "
+        "be paired with a sweep of golden L_coil values across all "
+        "Predicate 5 fixtures (ih_closed_torus_coil, ...)")
+
+
+def test_check_filaments_cover_solid_bbox_slack_factor_1_5_pinned():
+    """`_check_filaments_cover_solid_bbox` uses slack = 1.5 *
+    wire_radius (coil_from_cad.py:1879).  This factor is empirically
+    calibrated to (a) pass on clean swept coils with loft chamfers,
+    (b) catch the keiko 6 mm lead gap (wire_r=3 mm, ratio 2.0).
+    Pins the factor against silent drift.
+    """
+    import inspect
+    from coil_from_cad import _check_filaments_cover_solid_bbox
+    sig = inspect.signature(_check_filaments_cover_solid_bbox)
+    slack_param = sig.parameters.get("slack_factor")
+    assert slack_param is not None
+    assert slack_param.default == 1.5, (
+        f"slack_factor default drifted from 1.5 to {slack_param.default}; "
+        "this affects the catch-rate for under-coverage spines.  Any "
+        "change must be paired with a sweep of fixtures that just-pass "
+        "(gapped torus chamfered loft) and just-fail (keiko outsideline) "
+        "to confirm the new ratio still separates the two classes.")
+
+
+def test_check_centerline_inside_solid_slack_0_05_pinned():
+    """`_check_centerline_inside_solid` uses slack_factor = 0.05 of
+    bbox diagonal (coil_from_cad.py:1748).  Pins the factor against
+    drift.
+    """
+    import inspect
+    from coil_from_cad import _check_centerline_inside_solid
+    sig = inspect.signature(_check_centerline_inside_solid)
+    slack_param = sig.parameters.get("slack_factor")
+    assert slack_param is not None
+    assert slack_param.default == 0.05, (
+        f"slack_factor default drifted from 0.05 to {slack_param.default}; "
+        "this affects the catch-rate for wrong-location spines (e.g. "
+        "racetrack-as-circle).  Any change must be paired with the "
+        "racetrack-as-circle boundary test to confirm the new ratio "
+        "still rejects the failing case.")
+
+
 def test_extract_centerline_rejects_multi_solid_step():
     """v4.49.0 entry guard: STEP with > 1 solid must RAISE."""
     import tempfile

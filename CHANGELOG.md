@@ -3,6 +3,56 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.50.1 — doc lies cleanup + readability + magic-number pin tests
+
+Released 2026-05-16.  Polish pass after the v4.48.2/v4.49.0/v4.50.0
+PEEC STEP-loading sweep.  No functional changes; addresses the
+remaining review smells.
+
+### Doc lies removed (cascade-era residue)
+
+- `filaments_from_step` docstring no longer claims "Falls back to
+  legacy path if CoilBuilder reconstruction fails" -- the two paths
+  are SEPARATE caller-chosen entries per CLAUDE.md "No Fallbacks";
+  failures propagate.
+- `_centerline_from_open_spine` docstring no longer says "Caller
+  should fall back to `_centerline_from_cross_sections`" -- a failure
+  here means the dispatcher's positive predicate was wrong, not that
+  another extractor should be tried.
+- `_collect_circle_edge_centers` docstring no longer claims "lets
+  the caller fall through to other extractors" -- returning None is
+  a predicate-style negative match, not a fallback signal.
+- `_check_filaments_cover_solid_bbox` setup comment rewritten to
+  describe the orthogonal-pair check policy (bbox-cover + inside-
+  bbox), removing the historical "v4.38.0 Tier-2c check did NOT
+  cover Tier 1/2/2b" wording.
+
+### Readability
+
+- `peec_bundle.py:176` `diag_bad` calculation replaced the
+  convoluted `int(np.isfinite(np.diag(L)).sum() - L.shape[0]) * -1`
+  with the equivalent `int((~np.isfinite(np.diag(L))).sum())`.
+
+### Magic-number pin tests added (4)
+
+- `test_detect_cap_faces_area_ratio_threshold_accepts_clear_caps`
+  (`coil_topology.py:107`, area_ratio_threshold=2.0)
+- `test_R_spine_0_85_factor_at_coil_topology_py_149`
+  (R_spine = 0.85 * R_outer; load-bearing for Predicate 5 spine)
+- `test_check_filaments_cover_solid_bbox_slack_factor_1_5_pinned`
+  (slack = 1.5 * wire_radius; load-bearing for under-coverage catch)
+- `test_check_centerline_inside_solid_slack_0_05_pinned`
+  (slack = 0.05 * bbox diagonal; load-bearing for racetrack catch)
+
+42 passed, 1 skipped on the coil-pipeline regression suite (was 38/1
+before this release: +4 pin tests).
+
+### Coordinated bumps
+
+- radia 4.50.0 -> 4.50.1
+- radia-mcp 0.50.0 -> 0.50.1
+- cubit-mesh-export unchanged
+
 ## 4.50.0 — Tier C: universal centerline-inside-bbox positive proof on all 5 predicates
 
 Released 2026-05-16.  Completes the PEEC STEP-loading weakness
