@@ -524,6 +524,93 @@ def test_predicate_5_does_not_fire_on_open_coil():
         "Geometry has 2 PLANE caps that MUST be detected.")
 
 
+def test_rmf_orthogonality():
+    """Wang-Joe RMF must produce (tangent, u, v) with strict
+    orthonormality at every vertex, even on sharp-kink polylines
+    (the v4.54.0 replacement for parallel-transport Rodrigues).
+    """
+    from coil_from_cad import _parallel_transport_frame
+
+    # Z-axis line with sharp 90-deg kink to +x at vertex 2
+    pts = np.array([[0, 0, 0], [0, 0, 1e-3], [0, 0, 2e-3],
+                     [1e-3, 0, 2e-3], [2e-3, 0, 2e-3]])
+    t, u, v = _parallel_transport_frame(pts)
+    for i in range(len(pts)):
+        # Unit length
+        assert abs(np.linalg.norm(t[i]) - 1.0) < 1e-9, f"|t[{i}]| != 1"
+        assert abs(np.linalg.norm(u[i]) - 1.0) < 1e-9, f"|u[{i}]| != 1"
+        assert abs(np.linalg.norm(v[i]) - 1.0) < 1e-9, f"|v[{i}]| != 1"
+        # Orthogonality
+        assert abs(np.dot(t[i], u[i])) < 1e-9, f"t.u != 0 at {i}"
+        assert abs(np.dot(t[i], v[i])) < 1e-9, f"t.v != 0 at {i}"
+        assert abs(np.dot(u[i], v[i])) < 1e-9, f"u.v != 0 at {i}"
+        # Right-handed: v == t x u
+        cross = np.cross(t[i], u[i])
+        assert np.linalg.norm(cross - v[i]) < 1e-9, f"v != t x u at {i}"
+
+
+def test_rmf_twist_minimization_vs_pt_on_straight_path():
+    """On a straight path the frame must NOT rotate (zero twist).
+    Pins this property against future regression in the RMF kernel.
+    """
+    from coil_from_cad import _parallel_transport_frame
+
+    pts = np.column_stack([np.linspace(0, 1e-3, 10),
+                             np.zeros(10), np.zeros(10)])
+    t, u, v = _parallel_transport_frame(pts)
+    # All u_hat should be identical (no twist on straight path)
+    for i in range(1, len(pts)):
+        assert np.allclose(u[i], u[0], atol=1e-12), (
+            f"u rotated on straight path at step {i}: "
+            f"u[0]={u[0]}, u[{i}]={u[i]}")
+
+
+def test_corner_densification_inserts_intermediate_stations():
+    """`_densify_at_corners` must insert intermediate spine points
+    near sharp bends until the per-step bend angle <= the threshold
+    (default 20 deg)."""
+    from coil_from_cad import _densify_at_corners
+
+    class _MockSpine:
+        """Mock OCC edge supporting `spine @ t` linear interpolation
+        along a 3-segment polyline.
+        """
+        def __init__(self, waypoints):
+            self.waypoints = np.asarray(waypoints, dtype=float)
+
+        def __matmul__(self, t):
+            # Linear interpolation in segment-fraction space
+            n_seg = len(self.waypoints) - 1
+            t = max(0.0, min(1.0, t))
+            seg_t = t * n_seg
+            i = min(int(seg_t), n_seg - 1)
+            frac = seg_t - i
+            p = (1 - frac) * self.waypoints[i] + frac * self.waypoints[i + 1]
+
+            class _Pt:
+                def __init__(self, x, y, z):
+                    self.X, self.Y, self.Z = x, y, z
+            return _Pt(p[0], p[1], p[2])
+
+    # Spine with one 90 deg kink at the middle
+    waypoints = [[0, 0, 0], [0.010, 0, 0], [0.010, 0.010, 0]]
+    spine = _MockSpine(waypoints)
+    init_pts = np.array(waypoints, dtype=float)  # 3 points, 1 kink
+
+    densified = _densify_at_corners(spine, init_pts,
+                                       max_bend_per_step_deg=20.0,
+                                       max_total_points=20)
+    # On a TRUE polyline kink (mock), linear interp gives the same
+    # kink at any bisection midpoint, so the loop fills up to
+    # max_total_points without reducing the kink itself.  This test
+    # only asserts the function INSERTS points (and reaches the cap).
+    # The real-OCC behaviour is exercised by the keiko fixture
+    # end-to-end test which verifies smoothed bend distribution.
+    assert len(densified) > len(init_pts), (
+        f"densification did not insert intermediate points: "
+        f"{len(init_pts)} -> {len(densified)}")
+
+
 def test_extract_centerline_rejects_multi_solid_step():
     """v4.49.0 entry guard: STEP with > 1 solid must RAISE."""
     import tempfile
