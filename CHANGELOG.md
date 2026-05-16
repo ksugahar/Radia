@@ -3,6 +3,49 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.55.0 — endpoint anchoring to cap centroids (eliminates rim-end kink at lead caps)
+
+Released 2026-05-16.  Final fix in the keiko viz response chain.
+v4.54.0 reduced corner bunching via Wang-Joe RMF + densification but
+left a residual 41.6 deg kink at vertex N-1 visible in GMSH near the
+cap tips (keiko's 2nd viz report image).  Root cause: the "longest
+open edge" spine traces the conductor's LATERAL RIM (z=+wire_radius
+on a flat coil), while interior centerline points correctly come from
+midpoint sectioning -> face centroids (z=0).  The path_cad endpoints
+path_cad[0] / path_cad[-1] were pinned to the rim endpoints, creating
+a kink at the rim-to-centroid transition in the final segment.
+
+Symptoms (keiko's outsideline.step):
+- 41.6 deg bend at vertex N-1 (visible kink in GMSH near each cap)
+- 48% spread in |I| across the 16 perimeter filaments, distorted by
+  the kink coupling asymmetrically into L
+
+Fix: replace the rim endpoints with the cap-face centroids from
+`coil_topology.extract_coil_topology(solid).cap_a/b.center()`.  Map
+each spine endpoint to its NEAREST cap centroid (handles the cap_a /
+cap_b ordering automatically).
+
+Results after fix:
+- Max bend per step: 41.6 deg -> 24.9 deg (cap-end kink eliminated;
+  the residual 24.9 deg is the TRUE structural lead-arc 64 deg corner
+  densified by v4.54.0 to 24.9 deg per step)
+- Zero bends > 30 deg (was 1)
+- L_coil 91.82 -> 92.22 nH (+0.4%, the corrected geometry slightly
+  changes the L matrix; the new value is more physically accurate)
+- |I| distribution now reflects the TRUE inner-vs-outer asymmetry
+  of a curved wire (wire_r=3mm, arc_R=30mm, ratio 0.1 -> ~55% spread
+  expected from physics).  Previous distorted distribution was an
+  artifact of the rim-end kink.
+
+### Coordinated bumps
+
+- radia 4.54.0 -> 4.55.0
+- radia-mcp 0.54.0 -> 0.55.0
+- cubit-mesh-export unchanged
+
+55 passed, 1 skipped on the coil-pipeline regression suite (same
+count: endpoint anchoring is a behavior change, not a new test).
+
 ## 4.54.0 — RMF (Wang-Joe) + corner densification for filament viz smoothing
 
 Released 2026-05-16.  Follow-up to v4.53.0 addressing keiko's viz
