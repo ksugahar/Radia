@@ -1649,11 +1649,32 @@ def extract_centerline_from_step(step_path: str,
     # as a hard error from the specialised extractor rather than being
     # silently swallowed by "try the next path".
 
+    # Each predicate's extractor returns (path_m, widths_m, heights_m).
+    # Per CLAUDE.md "No Fallbacks", AFTER the chosen extractor returns
+    # we run TWO orthogonal positive checks (NOT a fallback chain --
+    # both must pass):
+    #   1. _check_centerline_inside_solid: the centerline is inside
+    #      the conductor (catches wrong-shape / wrong-radius spines)
+    #   2. (bbox-cover check runs later in filaments_from_step on the
+    #      filament paths, since filaments may extend slightly beyond
+    #      the bare centerline)
+    def _dispatch_and_verify(extractor, predicate_name, *args, **kwargs):
+        result = extractor(*args, **kwargs)
+        path_m = result[0]
+        _check_centerline_inside_solid(
+            solid, path_m,
+            f"extract_centerline_from_step({predicate_name})",
+            cad_units_per_meter=cad_units_per_meter)
+        return result
+
     # Predicate 1: multi-station loft of profiles (NON-united).  When
     # the solid has many consistent-area cross-section PLANE faces,
     # chain their centroids.  Robust for non-united multi-loft coils.
     if _collect_loft_cross_sections(solid):
-        return _centerline_from_cross_sections(solid, cad_units_per_meter)
+        return _dispatch_and_verify(
+            _centerline_from_cross_sections,
+            "loft_cross_sections",
+            solid, cad_units_per_meter)
 
     # Predicate 2: united multi-turn pancake.  Boolean unite consumes
     # the planar end-caps but cross-section CIRCLE edges remain (split
@@ -1664,7 +1685,9 @@ def extract_centerline_from_step(step_path: str,
     circle_centers_radius = _collect_circle_edge_centers(solid)
     if circle_centers_radius is not None:
         centers_cad, median_r_cad = circle_centers_radius
-        return _centerline_from_circle_edge_centers(
+        return _dispatch_and_verify(
+            _centerline_from_circle_edge_centers,
+            "circle_edge_centers",
             centers_cad, median_r_cad, cad_units_per_meter)
 
     # Predicate 3: single-loop revolution sweep.  Solid has at least
@@ -1680,7 +1703,9 @@ def extract_centerline_from_step(step_path: str,
         for f in solid.faces())
     has_plane_face = any(f.geom_type == GeomType.PLANE for f in solid.faces())
     if has_revolution_face and has_plane_face:
-        return _centerline_from_revolution_sweep(
+        return _dispatch_and_verify(
+            _centerline_from_revolution_sweep,
+            "revolution_sweep",
             solid, n_segments, cad_units_per_meter)
 
     # Predicates 4 / 5 require coil-topology classification (OPEN vs
@@ -1694,7 +1719,9 @@ def extract_centerline_from_step(step_path: str,
     # ``_centerline_from_open_spine`` samples the longest open lateral
     # rim edge as the spine, which correctly traces lead extensions.
     if topo.is_open:
-        return _centerline_from_open_spine(
+        return _dispatch_and_verify(
+            _centerline_from_open_spine,
+            "open_spine",
             solid, n_segments, cad_units_per_meter)
 
     # Predicate 5: CLOSED full-revolution (no caps, no revolution
@@ -1703,8 +1730,142 @@ def extract_centerline_from_step(step_path: str,
     # aware ``generate_spine`` for a full 360deg arc.  Sectioning at
     # the midpoint recovers the cross-section area.  This path is
     # CLOSED-only; OPEN coils route to predicate 4 above.
-    return _centerline_from_topology_spine(
+    return _dispatch_and_verify(
+        _centerline_from_topology_spine,
+        "topology_spine",
         solid, n_segments, cad_units_per_meter)
+
+
+def _check_centerline_inside_solid(solid, path_m, source_tag,
+                                     cad_units_per_meter=1.0,
+                                     slack_factor=0.05):
+    """Universal positive proof that the extracted centerline lies
+    within the conductor's bounding box, plus a small slack
+    (v4.50.0, CLAUDE.md "No Fallbacks - Fail Fast, Fail Loud").
+
+    Background: the existing ``_check_filaments_cover_solid_bbox`` is
+    an EXCLUSION proof on the FILAMENT extents -- it catches "spine
+    doesn't extend to bbox extents" (under-coverage / fallback-radius
+    overshoot).  It does NOT catch the orthogonal failure where the
+    spine sits at the wrong location entirely (e.g. Predicate 5
+    mapping a non-axisymmetric CLOSED racetrack loop to a planar
+    circle of radius 0.85 * R_outer that misses the rectangular
+    corners; the circle spine and the conductor bbox have similar
+    extents, but the circle points outside the conductor's corner
+    regions lie outside the conductor bbox).
+
+    This check verifies each centerline point falls within the
+    solid's bounding box + ``slack_factor`` of the bbox diagonal.
+    It is a WEAK positive proof -- the bbox is convex and any
+    non-convex conductor (e.g. a coil with a gap) has bbox points
+    NOT inside the conductor.  A stronger check would use
+    ``BRepClass3d_SolidClassifier`` to verify INSIDE-ness, but that
+    classifier is unreliable on BSpline solids (tested 2026-05-16
+    on a smooth sweep coil: 78%% of true-interior centerline points
+    classified as OUT, including the wire axis along the lead).
+
+    Catches:
+    - Predicate 5 racetrack-as-circle (circle corners far outside
+      bbox)
+    - Predicate 4 picking an obviously-wrong edge whose extent
+      exceeds the solid bbox
+    - Predicate 1 UV sampling a wrong face (e.g. a stray helper
+      surface) that bounces outside the bbox
+
+    Does NOT catch (acceptable false-negatives on the weak bbox check;
+    the bbox-cover check + corner detect cover most cases):
+    - Predicate 4 picking a surface-rim edge that LIES inside the
+      solid bbox but on the solid's surface (would need the
+      stronger SolidClassifier, which is unreliable on BSpline)
+    - Spines with wrong centerline within bbox (need per-point
+      distance-to-surface check; deferred to v4.51.0+ pending a
+      reliable OCC inside-test API)
+
+    Args:
+        solid: build123d Solid in CAD units.
+        path_m: (N, 3) centerline polyline in METERS.
+        source_tag: free-form string for the diagnostic (extractor name).
+        cad_units_per_meter: scale to convert path_m back to CAD units.
+        slack_factor: bbox padding as fraction of bbox diagonal.
+            Default 0.05 (5%%) accommodates wire-radius extent at
+            cap faces; spines that exceed 5%% are clearly wrong.
+    """
+    path = np.asarray(path_m, dtype=float)
+    n_pts = len(path)
+    if n_pts == 0:
+        return
+
+    pts_cad = path * cad_units_per_meter
+    bb = solid.bounding_box()
+    bb_min = np.array([float(bb.min.X), float(bb.min.Y), float(bb.min.Z)])
+    bb_max = np.array([float(bb.max.X), float(bb.max.Y), float(bb.max.Z)])
+    diag = float(np.linalg.norm(bb_max - bb_min))
+    slack = slack_factor * diag
+
+    over_min = np.maximum(bb_min - slack - pts_cad, 0.0)
+    over_max = np.maximum(pts_cad - (bb_max + slack), 0.0)
+    excursion = np.maximum(over_min, over_max).max(axis=1)
+    bad = excursion > 0.0
+    n_bad = int(bad.sum())
+    if n_bad == 0:
+        return  # PASS
+
+    bad_idx = np.where(bad)[0]
+    samples = []
+    for idx in bad_idx[:5]:
+        p_m = path[idx]
+        e_mm = float(excursion[idx]) * 1e3 / cad_units_per_meter
+        samples.append(
+            f"  point {idx}/{n_pts - 1}: xyz=({p_m[0] * 1e3:+.2f}, "
+            f"{p_m[1] * 1e3:+.2f}, {p_m[2] * 1e3:+.2f}) mm, "
+            f"excursion beyond bbox+slack = {e_mm:.2f} mm")
+    raise ValueError(
+        f"{source_tag}: centerline extends beyond solid bbox + "
+        f"{slack_factor:.0%} slack ({n_bad}/{n_pts} points outside).  "
+        f"Solid bbox: x=[{bb_min[0] * 1e3 / cad_units_per_meter:+.1f},"
+        f"{bb_max[0] * 1e3 / cad_units_per_meter:+.1f}] "
+        f"y=[{bb_min[1] * 1e3 / cad_units_per_meter:+.1f},"
+        f"{bb_max[1] * 1e3 / cad_units_per_meter:+.1f}] "
+        f"z=[{bb_min[2] * 1e3 / cad_units_per_meter:+.1f},"
+        f"{bb_max[2] * 1e3 / cad_units_per_meter:+.1f}] mm; "
+        f"slack=({slack * 1e3 / cad_units_per_meter:.1f} mm = "
+        f"{slack_factor:.0%} of diag).\n"
+        f"Sample outside points:\n" + "\n".join(samples) +
+        f"\nThis means the extracted spine has the wrong shape for "
+        f"the conductor's topology.  Common cause: Predicate 5 maps "
+        f"a non-axisymmetric CLOSED loop (e.g. racetrack) to a "
+        f"planar circle whose corners lie outside the racetrack bbox.  "
+        f"FIX: regenerate the STEP with a clean single-piece BSPLINE "
+        f"lateral so Predicate 1 (UV-map sampling) handles it "
+        f"directly, OR ensure the CAD topology matches one of the "
+        f"supported predicate classes (gapped torus / loft-of-circles "
+        f"/ united multi-turn pancake / sweep)."
+    )
+
+
+def _centerline_from_filament_paths(filament_paths):
+    """Derive a centerline from a filament_paths list by averaging the
+    n_peri filaments at each station.
+
+    For Paths 1/2/2b/2c the filaments are placed around the cross-
+    section perimeter; their mean per station IS the centerline.
+    Used to feed `_check_centerline_inside_solid` from extractors
+    that build filaments directly without an explicit centerline.
+    """
+    import numpy as np
+    paths_arr = np.asarray(filament_paths)
+    # Shape: (n_fil, n_seg, 2, 3) [(start, end) per segment per fil]
+    if paths_arr.ndim != 4 or paths_arr.shape[2] != 2 or paths_arr.shape[3] != 3:
+        # Fall back to flat sample
+        return paths_arr.reshape(-1, 3)
+    n_fil, n_seg, _, _ = paths_arr.shape
+    # Centerline = per-station mean of filament endpoints
+    # Station 0 = mean of seg-0 starts; station 1..n_seg = mean of seg-i ends
+    stations = np.empty((n_seg + 1, 3), dtype=np.float64)
+    stations[0] = paths_arr[:, 0, 0, :].mean(axis=0)
+    for i in range(n_seg):
+        stations[i + 1] = paths_arr[:, i, 1, :].mean(axis=0)
+    return stations
 
 
 def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
@@ -1923,6 +2084,22 @@ def filaments_from_step(step_path: str,
         solid_bbox_max = np.array([float(bb.max.X), float(bb.max.Y),
                                     float(bb.max.Z)]) / cad_units_per_meter
 
+        # Helper: derive an effective centerline from the per-station
+        # filament mean, then run BOTH orthogonal positive checks
+        # (bbox-cover for under-coverage, inside-solid for
+        # wrong-location).  Per CLAUDE.md "No Fallbacks", both must
+        # pass or this raises.  Not a fallback chain -- the two
+        # checks catch disjoint failure modes.
+        def _verify_topo(topo_dict, tier_name):
+            _check_filaments_cover_solid_bbox(
+                topo_dict, solid_bbox_min, solid_bbox_max, tier=tier_name)
+            path_eff = _centerline_from_filament_paths(
+                topo_dict.get("filament_paths", []))
+            _check_centerline_inside_solid(
+                solid, path_eff,
+                f"filaments_from_step({tier_name})",
+                cad_units_per_meter=cad_units_per_meter)
+
         # Path 1: BSPLINE / TORUS / CYLINDER lateral surface UV grid.
         # ``_find_lateral_surface`` is a strict predicate: when it
         # returns a face, UV sampling MUST succeed (UV-closure check
@@ -1936,8 +2113,7 @@ def filaments_from_step(step_path: str,
                 n_stations=max(20, n_slices // 2),
                 n_peri=n_peri,
                 source_tag="step_uv")
-            _check_filaments_cover_solid_bbox(
-                topo_uv, solid_bbox_min, solid_bbox_max, tier="step_uv")
+            _verify_topo(topo_uv, "step_uv")
             return topo_uv
 
         # Path 2: per-station planar end-cap faces (NON-united loft).
@@ -1949,9 +2125,7 @@ def filaments_from_step(step_path: str,
                 path_m, faces_ordered,
                 sigma=sigma, n_peri=n_peri,
                 source_tag="step_per_station")
-            _check_filaments_cover_solid_bbox(
-                topo_pst, solid_bbox_min, solid_bbox_max,
-                tier="step_per_station")
+            _verify_topo(topo_pst, "step_per_station")
             return topo_pst
 
         # Path 2b: per-station VARIABLE-RADIUS CIRCLE from CIRCLE
@@ -1965,9 +2139,7 @@ def filaments_from_step(step_path: str,
             sigma=sigma, n_peri=n_peri,
             source_tag="step_circle_uv")
         if topo_circle is not None:
-            _check_filaments_cover_solid_bbox(
-                topo_circle, solid_bbox_min, solid_bbox_max,
-                tier="step_circle_uv")
+            _verify_topo(topo_circle, "step_circle_uv")
             return topo_circle
 
         # Path 2c (Phase C-heavy, v4.24.0+): united multi-loft with
@@ -1997,12 +2169,17 @@ def filaments_from_step(step_path: str,
                 n_stations=20,
                 source_tag="step_section_planes")
             if topo_section is not None:
-                _check_filaments_cover_solid_bbox(
-                    topo_section, solid_bbox_min, solid_bbox_max,
-                    tier="step_section_planes")
+                _verify_topo(topo_section, "step_section_planes")
                 return topo_section
 
         # Path 3: constant equivalent-circle via existing dispatch.
+        # extract_centerline_from_step ALREADY runs
+        # _check_centerline_inside_solid on its dispatched extractor's
+        # output, so the centerline is verified before we get here.
+        # We still run the bbox-cover check on the filament_paths
+        # (orthogonal: catches "filaments extend beyond solid", which
+        # the centerline check misses since the centerline itself is
+        # at the conductor centroid, not its surface).
         path_m, w_m, h_m = extract_centerline_from_step(
             step_path, n_segments=n_slices,
             cad_units_per_meter=cad_units_per_meter)

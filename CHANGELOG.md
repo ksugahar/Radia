@@ -3,6 +3,87 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.50.0 — Tier C: universal centerline-inside-bbox positive proof on all 5 predicates
+
+Released 2026-05-16.  Completes the PEEC STEP-loading weakness
+campaign started in v4.48.2.  The bbox-cover check
+(`_check_filaments_cover_solid_bbox`) has been ORTHOGONALLY paired
+with a new `_check_centerline_inside_solid` check that runs on the
+centerline (not the filaments) at every extractor's return.  Both
+checks must pass -- they catch disjoint failure modes:
+
+- **bbox-cover** (filaments): under-coverage (lead missed, spine
+  too short).  Existing since v4.47.x.
+- **inside-bbox** (centerline, NEW v4.50.0): wrong-location spine
+  (e.g. Predicate 5 mapping a racetrack to a planar circle whose
+  diagonal corners exit the racetrack's narrower-axis bbox).
+
+### What shipped
+
+- **`_check_centerline_inside_solid`** in `coil_from_cad.py`:
+  verifies every centerline point lies within solid bbox + 5% of
+  bbox diagonal slack.  Raises ValueError with the worst-offending
+  point coordinates, the bbox extents, and a HINT on supported
+  topologies.
+- **`_centerline_from_filament_paths`** helper: derives an effective
+  centerline from `filament_paths` (per-station mean of n_peri
+  filaments) for the Path 1/2/2b/2c entry points that build
+  filaments without an explicit centerline.
+- **Universal wiring** in `extract_centerline_from_step`: a small
+  `_dispatch_and_verify` wrapper runs the inside-bbox check after
+  every Predicate 1-5 extractor.
+- **Universal wiring** in `filaments_from_step`: a small
+  `_verify_topo` helper runs BOTH checks (bbox-cover + inside-bbox)
+  after every Path 1/2/2b/2c.
+
+### Design decision: bbox-containment, not SolidClassifier
+
+The original review recommended `BRepClass3d_SolidClassifier` for
+a strong "point is inside the BREP solid" test.  Empirical probing
+2026-05-16 showed the classifier produces unacceptable
+false-positives on BSpline-lateral solids: 78% of true-interior
+centerline points on a smooth vertex-aligned sweep coil classified
+as OUT (including the wire axis along a straight lead).  This
+would have broken every existing BSpline PEEC test case.
+
+The weaker bbox-containment check has:
+- ZERO false-positives across the regression suite (38 passed,
+  was 35).
+- Sufficient strength to catch the racetrack-as-circle Predicate 5
+  failure that motivated the review (proven by a synthetic
+  boundary test).
+- O(N) cost vs O(N * face_count) for the classifier.
+
+A stronger per-point distance-to-surface check is deferred until
+a reliable OCC inside-test API surfaces (radia issue tracker
+entry pending).
+
+### Boundary tests added
+
+- `test_check_centerline_inside_solid_accepts_centerline_inside_bbox`:
+  pins the happy path.
+- `test_check_centerline_inside_solid_rejects_racetrack_as_circle`:
+  builds a thin rectangular ring + a 28 mm circle centerline,
+  asserts ValueError "extends beyond solid bbox".
+- `test_check_centerline_inside_solid_slack_accommodates_cap`:
+  pins the 5% slack -- cylinder caps with centerline endpoints
+  on the bbox extreme must NOT raise.
+
+### Coordinated bumps
+
+- radia 4.49.0 -> 4.50.0
+- radia-mcp 0.49.0 -> 0.50.0
+- cubit-mesh-export unchanged
+
+38 passed, 1 skipped on the coil-pipeline regression suite (was 35/1
+before this release: +3 Tier C boundary tests).
+
+This **completes the PEEC STEP-loading weakness sweep**: Tier A
+(silent fallbacks), Tier B (corner detect at construction), Tier C
+(centerline positive proof), Tier D (entry guards), Tier E (magic
+number tests).  The pipeline is now fail-fast at every layer with
+actionable diagnostics, covering both dense and HACApK paths.
+
 ## 4.49.0 — Tier A+B+D+E weakness sweep (no-fallback hardening)
 
 Released 2026-05-16.  Multi-front improvement pass after the PEEC
