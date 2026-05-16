@@ -5,6 +5,12 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.54.0 — coordinated bump for radia 4.54.0 (RMF + corner densification)
+
+Released 2026-05-16.  No knowledge changes; coordinated version
+release with radia 4.54.0 (Wang-Joe RMF + corner-densification for
+filament viz smoothing).  See radia CHANGELOG 4.54.0.
+
 ## 0.53.0 — coordinated bump for radia 4.53.0 (keiko's "arc + leads" coil now PEEC-solvable)
 
 Released 2026-05-16.  No knowledge changes; coordinated version

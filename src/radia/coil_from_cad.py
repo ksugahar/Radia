@@ -1340,6 +1340,24 @@ def _centerline_from_open_spine(solid, n_segments: int,
         p = spine @ t
         spine_pts[i] = [p.X, p.Y, p.Z]
 
+    # Corner densification (v4.54.0): uniform sampling gives smooth
+    # bend angles per segment, but at the lead-arc junctions of "arc
+    # + leads" coils a single bend can absorb 60+ deg of curvature in
+    # one station.  This makes the cross-section frame rotate ~60 deg
+    # in one step, which (a) visually shows as filament "bunching"
+    # when GMSH viewers project the tilted cross-section plane onto an
+    # axis-aligned view, and (b) makes the parallel-bundle filament
+    # path very piecewise-linear at the corner.  Insert intermediate
+    # stations along the spine arc-length so any one segment-to-segment
+    # bend is at most ``max_bend_per_step_deg`` (default 20 deg).
+    # The insertion runs along the OCC spine curve (smoothly param-
+    # eterized), so the inserted points lie on the real spine, not on
+    # a polyline interpolation.
+    max_bend_per_step_deg = 20.0
+    spine_pts = _densify_at_corners(
+        spine, spine_pts, max_bend_per_step_deg)
+    n_segments = len(spine_pts) - 1
+
     tangents = path_tangents(spine_pts)
     midpoints = 0.5 * (spine_pts[:-1] + spine_pts[1:])
 
@@ -2768,15 +2786,104 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
 # lets coil_from_jou.py be deleted entirely.
 # ----------------------------------------------------------------------
 
-def _parallel_transport_frame(pts: np.ndarray):
-    """Compute (tangent, u_hat, v_hat) per vertex of a 3D polyline.
+def _densify_at_corners(spine, init_pts, max_bend_per_step_deg=20.0,
+                          max_total_points=500):
+    """Insert intermediate spine points until adjacent segments bend
+    by no more than ``max_bend_per_step_deg`` at any interior vertex.
 
-    Uses parallel transport: start with an arbitrary u perpendicular to
-    the first tangent, then rotate u per segment by the bend angle using
-    Rodrigues' formula.  Avoids the Frenet-Serret twist that appears
-    when curvature vanishes (straight segments).
+    Resamples the spine ON the OCC curve (using ``spine @ t``) so
+    inserted points lie exactly on the real spine, not on a polyline
+    interpolation of ``init_pts``.
+
+    Used by ``_centerline_from_open_spine`` to smooth visual filament
+    bunching at sharp lead-arc corners on "arc + leads" 1-turn coil
+    geometries (v4.54.0 response to keiko 2026-05-16 viz report).
+
+    Args:
+        spine: OCC edge supporting ``spine @ t`` for t in [0, 1].
+        init_pts: (N+1, 3) initial uniform sampling of the spine.
+        max_bend_per_step_deg: bend cap per segment transition.
+            Default 20 deg keeps cross-section frame rotation gradual
+            (3 stations to traverse a 60 deg corner).
+        max_total_points: hard cap to prevent infinite blowup on
+            spines with cusps or numerical jitter.  Default 500.
+
+    Returns:
+        (M+1, 3) densified spine points, M >= N.
+    """
+    n_init = len(init_pts) - 1
+    # Map each sample to its OCC parameter t in [0, 1].  Uniform
+    # init samples were taken at t_i = i / n_init.
+    t_vals = [i / n_init for i in range(n_init + 1)]
+    pts_list = [tuple(p) for p in init_pts]
+    cos_max = math.cos(math.radians(max_bend_per_step_deg))
+
+    # Iterative refinement: at each pass, find the worst interior
+    # vertex (highest bend angle) and bisect the larger neighbouring
+    # segment.  Stop when no vertex exceeds the threshold OR we hit
+    # the total-point cap.
+    pass_count = 0
+    while len(pts_list) < max_total_points and pass_count < max_total_points:
+        pass_count += 1
+        arr = np.asarray(pts_list)
+        seg_v = np.diff(arr, axis=0)
+        seg_n = np.linalg.norm(seg_v, axis=1, keepdims=True)
+        seg_n = np.maximum(seg_n, 1e-30)
+        seg_u = seg_v / seg_n
+        cos_bend = np.einsum('ij,ij->i', seg_u[:-1], seg_u[1:])
+        cos_bend = np.clip(cos_bend, -1.0, 1.0)
+        worst_i = int(np.argmin(cos_bend))  # interior vertex idx +1
+        if cos_bend[worst_i] >= cos_max:
+            break  # all bends are acceptable
+
+        # Insert ONE intermediate sample on either side of vertex
+        # (worst_i + 1) -- bisect the LONGER neighbour to balance
+        # segment lengths.
+        v_idx = worst_i + 1
+        left_len = float(seg_n[worst_i, 0])
+        right_len = float(seg_n[worst_i + 1, 0])
+        if left_len >= right_len:
+            t_a = t_vals[v_idx - 1]
+            t_b = t_vals[v_idx]
+            insert_pos = v_idx
+        else:
+            t_a = t_vals[v_idx]
+            t_b = t_vals[v_idx + 1]
+            insert_pos = v_idx + 1
+        t_mid = 0.5 * (t_a + t_b)
+        p_mid = spine @ t_mid
+        pts_list.insert(insert_pos, (p_mid.X, p_mid.Y, p_mid.Z))
+        t_vals.insert(insert_pos, t_mid)
+
+    return np.array(pts_list, dtype=np.float64)
+
+
+def _parallel_transport_frame(pts: np.ndarray):
+    """Compute (tangent, u_hat, v_hat) per vertex of a 3D polyline
+    using a Rotation-Minimizing Frame (Wang-Joe double-reflection,
+    Wang et al. 2008, "Computation of rotation minimizing frames",
+    ACM TOG 27(1):2).
+
+    The double-reflection method minimizes the integral of squared
+    angular velocity along the curve -- the resulting frame has the
+    smallest possible accumulated twist between adjacent vertices.
+    This matters for filament cross-section orientation at sharp
+    spine bends: PT (Rodrigues) and RMF agree for smooth curves but
+    RMF has better numerical stability + provably-minimum twist on
+    polylines with kinks (the v4.53.0 keiko 1turn_coil case).
+
+    Note: visual "bunching" of perimeter filaments at sharp corners
+    when viewed from an axis-aligned angle is FORESHORTENING (the
+    cross-section plane rotates with the bend; viewed perpendicular
+    it projects to a narrower line) -- NOT a twist issue.  RMF and
+    PT give the same visual at a 64 deg bend.  To address visual
+    bunching, increase spine sampling density near corners or use
+    a smooth-curve viz renderer; the frame choice is independent.
 
     Returns 3 arrays of shape (N, 3) where N = len(pts).
+
+    Function name retained from the v4.13.0 PT implementation for
+    backward compat; behaviour changed to RMF in v4.54.0.
     """
     n = len(pts)
     if n < 2:
@@ -2798,6 +2905,9 @@ def _parallel_transport_frame(pts: np.ndarray):
 
     u_hat = np.zeros((n, 3))
     v_hat = np.zeros((n, 3))
+
+    # Initial frame at p_0: pick an arbitrary u perpendicular to t_0
+    # (avoid alignment with t_0's largest component direction).
     t0 = tangent[0]
     pick = int(np.argmin(np.abs(t0)))
     cand = np.zeros(3)
@@ -2811,24 +2921,39 @@ def _parallel_transport_frame(pts: np.ndarray):
     u_hat[0] = u0 / u0_norm
     v_hat[0] = np.cross(tangent[0], u_hat[0])
 
-    for i in range(1, n):
-        t_prev = tangent[i - 1]
-        t_curr = tangent[i]
-        axis = np.cross(t_prev, t_curr)
-        sin_a = np.linalg.norm(axis)
-        cos_a = float(np.clip(np.dot(t_prev, t_curr), -1.0, 1.0))
-        if sin_a < 1e-12:
-            u_hat[i] = u_hat[i - 1]
+    # Wang-Joe double-reflection: at each step (p_i, t_i) -> (p_{i+1}, t_{i+1}):
+    #   v1 = p_{i+1} - p_i;  c1 = v1.v1
+    #   r_L = r_i - (2/c1)*(v1.r_i)*v1     (reflection through plane normal to v1)
+    #   t_L = t_i - (2/c1)*(v1.t_i)*v1
+    #   v2 = t_{i+1} - t_L;  c2 = v2.v2
+    #   r_{i+1} = r_L - (2/c2)*(v2.r_L)*v2 (reflection through plane normal to v2)
+    #   s_{i+1} = t_{i+1} x r_{i+1}
+    for i in range(n - 1):
+        p_i = pts[i]
+        p_next = pts[i + 1]
+        t_i = tangent[i]
+        t_next = tangent[i + 1]
+        r_i = u_hat[i]
+
+        v1 = p_next - p_i
+        c1 = float(np.dot(v1, v1))
+        if c1 < 1e-30:
+            u_hat[i + 1] = r_i
         else:
-            k = axis / sin_a
-            u_prev = u_hat[i - 1]
-            u_new = (u_prev * cos_a
-                     + np.cross(k, u_prev) * sin_a
-                     + k * np.dot(k, u_prev) * (1.0 - cos_a))
-            u_hat[i] = u_new
-        u_hat[i] -= np.dot(u_hat[i], t_curr) * t_curr
-        u_hat[i] /= max(np.linalg.norm(u_hat[i]), 1e-30)
-        v_hat[i] = np.cross(tangent[i], u_hat[i])
+            r_L = r_i - (2.0 / c1) * float(np.dot(v1, r_i)) * v1
+            t_L = t_i - (2.0 / c1) * float(np.dot(v1, t_i)) * v1
+            v2 = t_next - t_L
+            c2 = float(np.dot(v2, v2))
+            if c2 < 1e-30:
+                u_hat[i + 1] = r_L
+            else:
+                u_hat[i + 1] = r_L - (2.0 / c2) * float(np.dot(v2, r_L)) * v2
+
+        # Re-orthogonalise (numerical defensiveness; reflections are
+        # exact in theory but float rounding can drift over long paths).
+        u_hat[i + 1] -= np.dot(u_hat[i + 1], t_next) * t_next
+        u_hat[i + 1] /= max(np.linalg.norm(u_hat[i + 1]), 1e-30)
+        v_hat[i + 1] = np.cross(t_next, u_hat[i + 1])
 
     return tangent, u_hat, v_hat
 
