@@ -3,6 +3,63 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.52.0 — final magic-number pins + negative-confidence tests
+
+Released 2026-05-16.  Closes the PEEC STEP-loading magic-number
+audit by pinning the remaining load-bearing factors that the
+v4.49.0/v4.50.1 boundary tests did not cover.  No functional
+changes; +6 tests.
+
+### Magic-number pins added (4)
+
+- `test_dedup_tol_circle_edges_pinned_at_0_1_median_r`
+  (`coil_from_cad.py:843` / `:1064`, semicircle pair dedup tolerance
+  on Cubit unite-split CIRCLE edges)
+- `test_dedup_tol_loft_cross_sections_pinned_at_0_1_eq_radius`
+  (`coil_from_cad.py:1205`, shared-end-cap merge on NON-united loft
+  STEPs)
+- `test_detect_lead_bars_radius_spread_pinned_at_0_1`
+  (`coil_from_cad.py:497`, CYLINDER face radius / median tolerance
+  for lead-bar acceptance)
+- `test_detect_lead_bars_length_factor_pinned_at_5_0`
+  (`coil_from_cad.py:515`, lead length >= 5.0 * wire_radius
+  threshold)
+
+### Negative-confidence tests added (2)
+
+- `test_predicate_3_does_not_fire_on_keiko_no_revolution_faces`:
+  keiko's 2-BSPLINE + 2-PLANE STEP must NOT match Predicate 3
+  (which requires a revolution-type face); dispatch must reach
+  Predicate 4.
+- `test_predicate_5_does_not_fire_on_open_coil`: keiko's STEP has
+  2 cap faces so `extract_coil_topology` returns `is_open=True`;
+  Predicate 5 (CLOSED-only) must NOT fire.
+
+### Coordinated bumps
+
+- radia 4.51.0 -> 4.52.0
+- radia-mcp 0.51.0 -> 0.52.0
+- cubit-mesh-export unchanged
+
+52 passed, 1 skipped on the coil-pipeline regression suite (was
+46/1 before this release: +6 pin + negative tests).
+
+### PEEC STEP-loading sweep -- audit complete
+
+Across v4.48.2 / v4.49.0 / v4.50.0 / v4.50.1 / v4.51.0 / v4.52.0,
+every layer of the pipeline now has fail-fast positive proof:
+
+| Layer | Check |
+|-------|-------|
+| CAD entry | multi-solid raise |
+| Centerline dispatch | classification single dispatch |
+| Centerline result | bbox-containment + per-point distance |
+| Filament construction | corner detect (pre-Ruehli, covers HACApK) |
+| Filament topology | bbox-cover + inside-bbox + near-surface |
+| Solver assembly | finite-L safety net (post-Ruehli) |
+
+19 load-bearing magic numbers pinned by boundary/source tests.
+
 ## 4.51.0 — Strong Tier C: per-point distance-to-solid via BRepExtrema
 
 Released 2026-05-16.  Strengthens the v4.50.0 centerline-inside-bbox
