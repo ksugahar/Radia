@@ -3,6 +3,88 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.49.0 — Tier A+B+D+E weakness sweep (no-fallback hardening)
+
+Released 2026-05-16.  Multi-front improvement pass after the PEEC
+STEP-loading review identified silent fallbacks, layer-violations,
+and absent entry guards that the v4.48.x classification dispatch
+left in place.  All fixes obey CLAUDE.md "No Fallbacks - Fail
+Fast, Fail Loud" -- there is no automatic recovery; the user gets
+a hard error with a HINT.
+
+### Tier A: silent fallbacks removed in `_centerline_from_open_spine`
+
+- **`coil_from_cad.py:1255`**: `max(open_edges, key=length)` was
+  non-deterministic on equal-length BSPLINE rim halves (Cubit/OCC
+  listing-order tie).  Replaced with deterministic
+  `(length, centroid_x, centroid_y, centroid_z)` lex sort.
+- **`:1278-1281`** `try: section() except: cross = None`: removed,
+  raises ValueError with station index, midpoint, tangent, and the
+  underlying OCC exception name.
+- **`:1294-1297`** "use previous width on section fail": removed.
+  Section failure is hard (the open-spine assumption is broken on
+  this geometry).
+- **`:1295` bug**: `widths_cad[max(0, i-1)]` at i=0 copied 0.0
+  (uninitialized).  Now unreachable -- the only path that hit it was
+  the silent fallback above.
+
+### Tier B: corner detection moved to filament construction layer
+
+- **New `_check_spine_no_singular_corner`** in `coil_from_cad.py`:
+  scans interior spine vertices, raises if `bend > 60 deg AND
+  adj_min_segment_length < wire_radius` (the keiko condition,
+  captured exactly).  Runs as the first step inside
+  `filaments_from_polyline` BEFORE the O(N^2) Ruehli build.
+- **HACApK path coverage**: because the check runs before solver
+  assembly, both dense-L and HACApK paths are protected by the
+  same single check.  v4.48.2's
+  `peec_bundle._assert_solver_L_finite` (post-assembly safety net)
+  remains as belt-and-suspenders.
+- **Diagnostic improvement**: error names the offending spine vertex
+  in mm coordinates, the bend angle, and the seg/radius ratio --
+  far more actionable than v4.48.2's "non-finite entries at L[395,396]".
+
+### Tier D: entry guards
+
+- **Multi-solid STEP raise** in `extract_centerline_from_step`: a
+  STEP containing more than one solid raises ValueError with bbox
+  summary (single-coil PEEC handles one solid).
+- **`cad_to_m` silent 1.0/0 bug fix** at
+  `coil_from_cad.py:_filaments_from_per_station_faces` (line ~2692):
+  the previous `norm(c0_m) / norm(c0_cad)` form silently degenerated
+  to 1.0 when c0 happened to lie near the origin (quarter-symmetry
+  coil with cap at (0, +y, 0)).  Replaced with station-spacing-based
+  recovery (`norm(c1 - c0)`), which is origin-independent.  Raises
+  if the spacing itself is degenerate (single-station path).
+
+### Tier E: magic number boundary tests
+
+- **New `tests/coil_from_cad/test_predicate_boundaries.py`**:
+  - `dominance >= 0.8` accept (clean torus) / reject (keiko 50/50 split)
+  - `_check_spine_no_singular_corner` accepts smooth (30 deg, long
+    segs), accepts below-threshold (59.9 deg short segs), accepts
+    long-seg sharp (90 deg, 5x wire_r), rejects keiko-class
+    (64 deg, 0.17x wire_r), rejects zero-length segments
+  - multi-solid STEP raises
+
+### What this DOES NOT include (deferred to v4.50.0)
+
+- **Tier C** (universal positive proof, "centerline-inside-solid"):
+  requires `BRepClass3d_SolidClassifier` integration + broad-fixture
+  validation (rect_torus_lofted_united, ih_closed_torus_coil,
+  3turncoil united + non-united, etc.) to confirm no behavior shift
+  on existing passing geometries.  Rolling separately so it can be
+  reverted if a fixture regresses.
+
+### Coordinated bumps
+
+- radia 4.48.2 -> 4.49.0
+- radia-mcp 0.48.5 -> 0.49.0
+- cubit-mesh-export unchanged
+
+35 passed, 1 skipped on the coil-pipeline regression suite (was 27/1
+before this release: +8 boundary tests).
+
 ## 4.48.2 — PEEC bundle solver fail-fast on non-finite L (silent NaN -> ValueError)
 
 Released 2026-05-16.  Hot-fix for the symptom that surfaced AFTER
