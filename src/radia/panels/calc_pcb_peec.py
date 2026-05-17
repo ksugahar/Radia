@@ -58,7 +58,7 @@ def solve_peec(inp_file="", inp_text="",
     """
     setup_paths()
     from fasthenry_parser import FastHenryParser
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_topology import PEECCircuitSolver
 
     t_total_start = time.perf_counter()
 

@@ -248,8 +248,8 @@ def compute_shield_effect(coil_p1_m, coil_p2_m, wire_width, wire_height,
             n_coil_segments: number of coil filaments
             n_shield_segments: number of shield filaments
     """
-    from peec_matrices import PEECBuilder
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_matrices import PEECBuilder
+    from radia.peec_topology import PEECCircuitSolver
 
     freqs = np.asarray(freqs, dtype=np.float64)
 
@@ -327,8 +327,8 @@ def compute_shield_effect_2port(
         dict with Z_matrix, L, k for both with and without shield cases,
         plus Delta values.
     """
-    from peec_matrices import PEECBuilder
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_matrices import PEECBuilder
+    from radia.peec_topology import PEECCircuitSolver
 
     omega = 2 * np.pi * freq
 

@@ -40,7 +40,7 @@ Part of Radia project
 """
 
 import numpy as np
-from peec_topology import PEECCircuitSolver
+from radia.peec_topology import PEECCircuitSolver
 
 
 class ShieldedPEECSolver(PEECCircuitSolver):

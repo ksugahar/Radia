@@ -58,7 +58,7 @@ def test_dominance_threshold_080_accepts_at_081():
     (`if dominance < 0.8: return None`).  Mocked face-area scenario:
     one BSPLINE area=81, one BSPLINE area=19, total=100, dominance=0.81.
     """
-    from coil_from_cad import _find_lateral_surface
+    from radia.coil_from_cad import _find_lateral_surface
 
     # Synthetic: a clean swept torus (single TORUS lateral) -- this is
     # the "trivially dominant" case (dominance ~ 1.0).  Asserts the
@@ -84,7 +84,7 @@ def test_dominance_threshold_080_rejects_split_lateral():
     if not os.path.exists(fixture):
         pytest.skip(f"fixture not present: {fixture}")
     import build123d as bd
-    from coil_from_cad import _find_lateral_surface
+    from radia.coil_from_cad import _find_lateral_surface
 
     solid = bd.import_step(fixture)
     lat = _find_lateral_surface(solid)
@@ -114,7 +114,7 @@ def test_check_spine_no_singular_corner_accepts_smooth_path():
 
     Boundary: bend < 60 deg OR adj_seg_len >= radius_m -> pass.
     """
-    from coil_from_cad import _check_spine_no_singular_corner
+    from radia.coil_from_cad import _check_spine_no_singular_corner
 
     # 30 deg bend with 10 mm segments and 1 mm wire radius: ratio=10
     # -> well above 1.0, must pass even though bend is non-zero.
@@ -129,7 +129,7 @@ def test_check_spine_no_singular_corner_rejects_keiko_class():
     exact keiko condition (bend=64 deg, seg=0.5 mm, wire_r=2.9 mm,
     ratio=0.17).
     """
-    from coil_from_cad import _check_spine_no_singular_corner
+    from radia.coil_from_cad import _check_spine_no_singular_corner
     pts = _make_corner(bend_deg=64.0, seg_m=0.5e-3)
     with pytest.raises(ValueError, match="singular corner"):
         _check_spine_no_singular_corner(pts, radius_m=2.9e-3,
@@ -138,7 +138,7 @@ def test_check_spine_no_singular_corner_rejects_keiko_class():
 
 def test_check_spine_no_singular_corner_zero_length_segment_raises():
     """Zero-length segment (duplicate consecutive points) must RAISE."""
-    from coil_from_cad import _check_spine_no_singular_corner
+    from radia.coil_from_cad import _check_spine_no_singular_corner
     pts = np.array([[0, 0, 0], [0, 0, 0], [1e-3, 0, 0]])
     with pytest.raises(ValueError, match="zero-length segment"):
         _check_spine_no_singular_corner(pts, radius_m=0.001,
@@ -149,10 +149,48 @@ def test_check_spine_passes_below_60deg_threshold():
     """Bend at 59.9 deg (just below the 60 deg threshold) must PASS
     even with short adjacent segments.  Pins the bend-angle boundary.
     """
-    from coil_from_cad import _check_spine_no_singular_corner
+    from radia.coil_from_cad import _check_spine_no_singular_corner
     pts = _make_corner(bend_deg=59.9, seg_m=0.5e-3)
     _check_spine_no_singular_corner(pts, radius_m=2.9e-3,
                                       source_tag="test_below_threshold")
+
+
+def test_check_spine_fails_just_above_60deg_threshold():
+    """Bend at 60.1 deg (just above the 60 deg threshold) with short
+    adjacent segments MUST RAISE.  Pins the UPPER side of the bend
+    boundary -- without this, the threshold could silently creep up
+    (e.g. to 70 deg) and the keiko-class corner would slip through.
+    """
+    from radia.coil_from_cad import _check_spine_no_singular_corner
+    pts = _make_corner(bend_deg=60.1, seg_m=0.5e-3)
+    with pytest.raises(ValueError, match="singular corner"):
+        _check_spine_no_singular_corner(pts, radius_m=2.9e-3,
+                                          source_tag="test_above_threshold")
+
+
+def test_adaptive_resampling_1_10_factor_pinned():
+    """`_centerline_from_open_spine` adaptive resampling targets
+    ``min_seg_cad = 1.10 * wire_r_cad`` so the resulting per-segment
+    ratio (min_seg / radius) lands above the 1.0 singular-corner
+    threshold with 10% slack.  Pin the factor against drift:
+
+      - <= 1.0 = resampling pushes segments to exactly the boundary,
+        every smooth bend trips the check (false positives across all
+        OPEN coils).
+      - >> 1.10 = resampling under-samples, making the spine
+        polyline-coarse on long arcs (silently degrades L accuracy).
+    """
+    import inspect
+    from radia.coil_from_cad import _centerline_from_open_spine
+    src = inspect.getsource(_centerline_from_open_spine)
+    assert "1.10 * wire_r_cad" in src, (
+        "adaptive-resampling min_seg factor 1.10 drifted in "
+        "_centerline_from_open_spine.  This factor pins the "
+        "resampled per-segment ratio just above the 1.0 "
+        "singular-corner threshold; any change must be paired with "
+        "the keiko_outsideline.step golden L=92.22 nH regression "
+        "and the test_check_spine_passes_below_60deg_threshold + "
+        "test_check_spine_fails_just_above_60deg_threshold pair.")
 
 
 def test_check_spine_passes_long_segments_at_sharp_bend():
@@ -162,7 +200,7 @@ def test_check_spine_passes_long_segments_at_sharp_bend():
     Pins the orthogonal boundary -- sharp bends are OK if the spine
     has enough segment length to spread the parallel-transport rotation.
     """
-    from coil_from_cad import _check_spine_no_singular_corner
+    from radia.coil_from_cad import _check_spine_no_singular_corner
     pts = _make_corner(bend_deg=90.0, seg_m=5e-3)  # SEG >> 1mm wire_r
     _check_spine_no_singular_corner(pts, radius_m=0.001,
                                       source_tag="test_long_seg_90deg")
@@ -173,7 +211,7 @@ def test_check_centerline_inside_solid_accepts_centerline_inside_bbox():
     entirely within solid bbox + slack.  Pins the happy path.
     """
     import build123d as bd
-    from coil_from_cad import _check_centerline_inside_solid
+    from radia.coil_from_cad import _check_centerline_inside_solid
 
     # Solid: 10mm radius torus-like
     solid = bd.Cylinder(radius=0.030, height=0.005)
@@ -194,7 +232,7 @@ def test_check_centerline_inside_solid_rejects_racetrack_as_circle():
     rectangle's bbox.
     """
     import build123d as bd
-    from coil_from_cad import _check_centerline_inside_solid
+    from radia.coil_from_cad import _check_centerline_inside_solid
 
     # Solid: a "racetrack" shaped solid (thin rectangular ring),
     # bbox x=+-30 mm, y=+-15 mm (much narrower in y).
@@ -222,7 +260,7 @@ def test_check_centerline_inside_solid_slack_accommodates_cap():
     the bbox boundary, often outside by epsilon due to OCC tolerance).
     """
     import build123d as bd
-    from coil_from_cad import _check_centerline_inside_solid
+    from radia.coil_from_cad import _check_centerline_inside_solid
 
     solid = bd.Cylinder(radius=0.005, height=0.020)
     # Path endpoints on/slightly past the bbox extremes; 5% slack of
@@ -241,7 +279,7 @@ def test_detect_cap_faces_area_ratio_threshold_accepts_clear_caps():
     at coil_topology.py:107).  Pins the lower boundary.
     """
     import build123d as bd
-    from coil_topology import detect_cap_faces
+    from radia.coil_topology import detect_cap_faces
 
     # Gapped torus: 2 small circular end caps + many larger lateral
     # planar facets (rect cross section produces top/bottom flats).
@@ -265,7 +303,7 @@ def test_R_spine_0_85_factor_at_coil_topology_py_149():
     location and silently breaks every CLOSED-coil L computation.
     """
     import build123d as bd
-    from coil_topology import _bbox_spine_radius
+    from radia.coil_topology import _bbox_spine_radius
     # Solid with x-extent +-30 mm => R_outer = 30 mm; expected
     # R_spine = 0.85 * 30 = 25.5 mm.
     solid = bd.Cylinder(radius=0.030, height=0.010)
@@ -285,7 +323,7 @@ def test_check_filaments_cover_solid_bbox_slack_factor_1_5_pinned():
     Pins the factor against silent drift.
     """
     import inspect
-    from coil_from_cad import _check_filaments_cover_solid_bbox
+    from radia.coil_from_cad import _check_filaments_cover_solid_bbox
     sig = inspect.signature(_check_filaments_cover_solid_bbox)
     slack_param = sig.parameters.get("slack_factor")
     assert slack_param is not None
@@ -303,7 +341,7 @@ def test_check_centerline_inside_solid_slack_0_05_pinned():
     drift.
     """
     import inspect
-    from coil_from_cad import _check_centerline_inside_solid
+    from radia.coil_from_cad import _check_centerline_inside_solid
     sig = inspect.signature(_check_centerline_inside_solid)
     slack_param = sig.parameters.get("slack_factor")
     assert slack_param is not None
@@ -321,7 +359,7 @@ def test_check_near_solid_surface_accepts_wire_axis():
     BRepExtrema_DistShapeShape).  Pins the happy path.
     """
     import build123d as bd
-    from coil_from_cad import _check_centerline_near_solid_surface
+    from radia.coil_from_cad import _check_centerline_near_solid_surface
 
     # Cylinder of radius 5 mm, height 20 mm centered at origin.
     # Wire axis = z-axis from (0,0,-10) to (0,0,+10).
@@ -342,7 +380,7 @@ def test_check_near_solid_surface_rejects_far_off_axis_spine():
     via per-point distance, not just bbox-containment).
     """
     import build123d as bd
-    from coil_from_cad import _check_centerline_near_solid_surface
+    from radia.coil_from_cad import _check_centerline_near_solid_surface
 
     # Cylinder R=5mm at origin, wire_radius=5mm -> tolerance = 1.10 *
     # 5 = 5.5mm.  Spine at x=15mm -> 10mm outside surface, well above
@@ -364,7 +402,7 @@ def test_check_near_solid_surface_distance_tolerance_pinned():
     `distance_tolerance_factor=1.10`.  Pins against drift.
     """
     import inspect
-    from coil_from_cad import _check_centerline_near_solid_surface
+    from radia.coil_from_cad import _check_centerline_near_solid_surface
     sig = inspect.signature(_check_centerline_near_solid_surface)
     p = sig.parameters.get("distance_tolerance_factor")
     assert p is not None
@@ -387,7 +425,7 @@ def test_predicate_1_does_not_fire_on_keiko_split_lateral():
     if not os.path.exists(fixture):
         pytest.skip(f"fixture not present: {fixture}")
     import build123d as bd
-    from coil_from_cad import _find_lateral_surface
+    from radia.coil_from_cad import _find_lateral_surface
     solid = bd.import_step(fixture)
     lat = _find_lateral_surface(solid)
     assert lat is None, (
@@ -411,7 +449,7 @@ def test_dedup_tol_circle_edges_pinned_at_0_1_median_r():
     edit (CHANGELOG bump required if someone changes this).
     """
     import inspect
-    from coil_from_cad import _collect_circle_edge_centers
+    from radia.coil_from_cad import _collect_circle_edge_centers
     src = inspect.getsource(_collect_circle_edge_centers)
     assert "0.1 * median_r" in src, (
         "dedup_tol factor 0.1 * median_r drifted in "
@@ -428,7 +466,7 @@ def test_dedup_tol_loft_cross_sections_pinned_at_0_1_eq_radius():
     (coil_from_cad.py:1205).  Pins the factor.
     """
     import inspect
-    from coil_from_cad import _centerline_from_cross_sections
+    from radia.coil_from_cad import _centerline_from_cross_sections
     src = inspect.getsource(_centerline_from_cross_sections)
     assert "0.1 * eq_radius" in src, (
         "dedup_tol factor 0.1 * eq_radius drifted in "
@@ -446,7 +484,7 @@ def test_detect_lead_bars_radius_spread_pinned_at_0_1():
     the factor.
     """
     import inspect
-    from coil_from_cad import _detect_lead_bars_cad
+    from radia.coil_from_cad import _detect_lead_bars_cad
     src = inspect.getsource(_detect_lead_bars_cad)
     assert "median_radius_cad > 0.1" in src or "/ median_radius_cad > 0.1" in src, (
         "radius spread threshold 0.1 drifted in _detect_lead_bars_cad. "
@@ -462,7 +500,7 @@ def test_detect_lead_bars_length_factor_pinned_at_5_0():
     5.0 * radius (coil_from_cad.py:515).  Pin the factor.
     """
     import inspect
-    from coil_from_cad import _detect_lead_bars_cad
+    from radia.coil_from_cad import _detect_lead_bars_cad
     src = inspect.getsource(_detect_lead_bars_cad)
     assert "length < 5.0 * r" in src, (
         "lead length factor 5.0 drifted in _detect_lead_bars_cad.  "
@@ -511,7 +549,7 @@ def test_predicate_5_does_not_fire_on_open_coil():
     if not os.path.exists(fixture):
         pytest.skip(f"fixture not present: {fixture}")
     import build123d as bd
-    from coil_topology import extract_coil_topology
+    from radia.coil_topology import extract_coil_topology
 
     solid = bd.import_step(fixture)
     topo = extract_coil_topology(solid)
@@ -529,7 +567,7 @@ def test_rmf_orthogonality():
     orthonormality at every vertex, even on sharp-kink polylines
     (the v4.54.0 replacement for parallel-transport Rodrigues).
     """
-    from coil_from_cad import _parallel_transport_frame
+    from radia.coil_from_cad import _parallel_transport_frame
 
     # Z-axis line with sharp 90-deg kink to +x at vertex 2
     pts = np.array([[0, 0, 0], [0, 0, 1e-3], [0, 0, 2e-3],
@@ -553,7 +591,7 @@ def test_rmf_twist_minimization_vs_pt_on_straight_path():
     """On a straight path the frame must NOT rotate (zero twist).
     Pins this property against future regression in the RMF kernel.
     """
-    from coil_from_cad import _parallel_transport_frame
+    from radia.coil_from_cad import _parallel_transport_frame
 
     pts = np.column_stack([np.linspace(0, 1e-3, 10),
                              np.zeros(10), np.zeros(10)])
@@ -569,7 +607,7 @@ def test_corner_densification_inserts_intermediate_stations():
     """`_densify_at_corners` must insert intermediate spine points
     near sharp bends until the per-step bend angle <= the threshold
     (default 20 deg)."""
-    from coil_from_cad import _densify_at_corners
+    from radia.coil_from_cad import _densify_at_corners
 
     class _MockSpine:
         """Mock OCC edge supporting `spine @ t` linear interpolation
@@ -615,7 +653,7 @@ def test_extract_centerline_rejects_multi_solid_step():
     """v4.49.0 entry guard: STEP with > 1 solid must RAISE."""
     import tempfile
     import build123d as bd
-    from coil_from_cad import extract_centerline_from_step
+    from radia.coil_from_cad import extract_centerline_from_step
 
     # Build a 2-solid Compound: two cylinders 50 mm apart in y.
     cyl_a = bd.Cylinder(radius=0.005, height=0.020)

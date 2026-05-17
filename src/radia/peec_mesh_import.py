@@ -50,7 +50,7 @@ def surface_mesh_to_peec(mesh_source, sigma=5.8e7, thickness=1e-3,
     Returns:
         PEECBuilder: Configured builder ready for build_topology()
     """
-    from peec_matrices import PEECBuilder
+    from radia.peec_matrices import PEECBuilder
 
     # Parse mesh source
     if isinstance(mesh_source, (str,)):

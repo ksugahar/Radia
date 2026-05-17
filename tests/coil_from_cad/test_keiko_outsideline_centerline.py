@@ -57,7 +57,7 @@ KEIKO_STEP = os.path.join(FIXTURE_DIR, "keiko_outsideline.step")
 
 def test_keiko_outsideline_centerline_covers_lead():
     """STEP auto-detect must trace the lead bar (y -> +50 mm), not bypass it."""
-    from coil_from_cad import extract_centerline_from_step
+    from radia.coil_from_cad import extract_centerline_from_step
 
     assert os.path.exists(KEIKO_STEP), KEIKO_STEP
     path_m, widths_m, heights_m = extract_centerline_from_step(
@@ -97,7 +97,7 @@ def test_keiko_outsideline_succeeds_with_adaptive_resampling():
     resampling caps n_segments at floor(spine_length / (1.10 *
     wire_radius)) = floor(208 / 3.19) = 65, giving segments >= 3.2 mm.
     """
-    from coil_from_cad import filaments_from_step
+    from radia.coil_from_cad import filaments_from_step
     import numpy as np
 
     assert os.path.exists(KEIKO_STEP), KEIKO_STEP
@@ -119,7 +119,7 @@ def test_keiko_outsideline_succeeds_with_adaptive_resampling():
 def test_filaments_from_step_no_path_points_kwarg():
     """`path_points_m` was removed in v4.48.0 (STEP-only centerline policy)."""
     import inspect
-    from coil_from_cad import filaments_from_step
+    from radia.coil_from_cad import filaments_from_step
 
     sig = inspect.signature(filaments_from_step)
     assert "path_points_m" not in sig.parameters, (
@@ -148,7 +148,7 @@ def test_vertex_aligned_replica_routes_predicate_1_uv():
     import build123d as bd
     import tempfile
 
-    from coil_from_cad import _find_lateral_surface, filaments_from_step
+    from radia.coil_from_cad import _find_lateral_surface, filaments_from_step
 
     WIRE_R = 0.0029
     ARC_R = 0.030
