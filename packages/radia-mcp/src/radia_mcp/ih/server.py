@@ -66,9 +66,11 @@ def ih_sibc(topic: str = "all") -> str:
     """
     Get IH solver architecture and SIBC documentation.
 
-    Panel pipeline (2026-04-19):
-    - PEEC+BEM (1-way)        -> calc_peec_bem.py       (P_wp focus, fast)
-    - FEM A-V + wp SIBC + Kelvin -> calc_fem_coilmesh.py (L+P_wp+P_coil, exact)
+    Panel pipeline (v4.25.0 unified Layer 4):
+    - PEEC+BEM (weak coupling)   -> calc_inductance.py --coil-solver peec --vol <wp>  (Telegen ΔL + P_wp)
+    - BEM-A+BEM (weak coupling)  -> calc_inductance.py --coil-solver bem-a --vol <wp> (n_peri-free coil)
+    - PEEC + FEM wp + Kelvin     -> calc_fem_kelvin.py --formulation total --peec-step ...
+    - Full FEM A-V + wp SIBC + Kelvin -> calc_fem_coilmesh.py    (L+P_wp+P_coil, exact)
 
     Surface Impedance Boundary Condition approaches:
     - SIBC: linear surface impedance (Cu, Al)
@@ -97,11 +99,14 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
         f"Set up an induction heating simulation for: {geometry}\n"
         f"Material: {material}\n\n"
         "Use the ih_sibc and ih_knowledge tools.\n"
-        "Key points (panel pipeline 2026-04-19):\n"
-        "1. P_wp fast + rotating WP: PEEC+BEM (1-way) / calc_peec_bem.py\n"
-        "2. L + P_wp + P_coil exact: FEM A-V / calc_fem_coilmesh.py\n"
-        "3. Both need GAPPED torus (real port terminations)\n"
-        "4. For nonlinear steel: ESIM + Karl iteration (FEM path)\n"
+        "Key points (panel pipeline, v4.25.0+ unified Layer 4):\n"
+        "1. L + P_wp via weak coupling (PEEC coil, Telegen ΔL):\n"
+        "     calc_inductance.py --coil-solver peec --coil-step <coil.step>\n"
+        "                         --vol <wp.vol>\n"
+        "2. L + P_wp + P_coil exact: calc_fem_coilmesh.py (FEM A-V)\n"
+        "3. All paths assume GAPPED torus (real port terminations)\n"
+        "4. For nonlinear steel: ESIM + Karl iteration\n"
+        "   (--impedance-model esim --bh-file ...)\n"
         "5. Sample .jou: ih_peec_bem_coarse.jou / ih_fem_kelvin_skin_fine.jou\n"
     )
 

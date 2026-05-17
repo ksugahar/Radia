@@ -1413,11 +1413,22 @@ PEEC filament MNA uses sigma_coil for AC R and M. Copper at typical IH
 frequencies is non-magnetic (mu_r=1). For ferromagnetic coil materials,
 PEEC filament model would need revision (not currently supported).
 
-## Panel integration: calc_peec_bem.py (2026-04-19)
+## Panel integration: calc_inductance.py (v4.25.0+ unified Layer 4)
 
-The `src/radia/panels/calc_peec_bem.py` script is the Layer-4 subprocess
-calc for the IH panel "PEEC+BEM (1-way)" method.  It wraps the demo
-pipeline above into a .vol-based / JSON-stdout interface.
+The `src/radia/panels/calc_inductance.py` script is the Layer-4
+subprocess for the IH panel's "PEEC + BEM weak coupling" method.  It
+unified three legacy scripts (`calc_peec_inductance.py`,
+`calc_peec_bem.py`, `calc_coil_bem_a_workpiece.py`) into one CLI with a
+``--coil-solver {peec,bem-a}`` switch.  Invocation:
+
+    python calc_inductance.py \\
+        --coil-solver peec --coil-step <coil.step> \\
+        --vol <wp.vol> --wp-label sibc \\
+        --sigma <S/m> --mu-r <...> --half-thickness <m> \\
+        --frequency <Hz> --current <A>
+
+It wraps the demo pipeline above into a .vol-based / JSON-stdout
+interface.
 
 ### BND extraction from wp-as-hole geometry (CRITICAL)
 
@@ -1429,7 +1440,8 @@ to its own domin, which CAN BE OPPOSITE between FDs.  A blanket flip is
 WRONG — 77% of triangles needed flipping in the closed-torus sample,
 23% did not.
 
-Robust fix (implemented in `_extract_bnd_only`):
+Robust fix (implemented in `_extract_bnd_only_inline`, formerly in the
+deleted `calc_peec_bem.py`):
 1. Collect the wp-surface vertex cloud.
 2. Compute wp_centroid = mean(coords).
 3. For each triangle, check sign of dot(normal, centroid_to_face).
@@ -1440,7 +1452,7 @@ solve — a plausible-looking but incorrect number).
 
 ### Golden regression test (policy)
 
-`tests/panels/test_peec_bem_golden.py` runs `calc_peec_bem.py` on
+`tests/panels/test_peec_bem_golden.py` runs `calc_inductance.py` on
 `ih_peec_bem_coarse.vol` at 7 kHz Cu and asserts:
 - L_coil within 1% of captured 88.57 nH (geometry-only, tight)
 - P_wp within 15% of 2D SIBC reference 6.63e-5 W (mesh-sensitive)

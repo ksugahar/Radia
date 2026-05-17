@@ -10,12 +10,19 @@ documentation (`em/README.md` for the EM-specific corpus).
 
 ## IH panel (`radia_ih.py`) — Induction Heating
 
-| Method (UI label) | Calc script | .jou recipe | Canonical .vol | Coil source |
+| Method (UI label) | Calc script (Layer 4) | .jou recipe | Canonical .vol | Coil source |
 |---|---|---|---|---|
-| PEEC inductance (coil only, STEP) | `calc_peec_inductance.py` | `ih_peec_inductance.jou` | (none — coil-only) | `ih_peec_inductance_coil.step` |
-| Fast workpiece heating (PEEC+BEM, 1-way) | `calc_peec_bem.py` | `ih_peec_bem_coarse.jou` | `ih_peec_bem_coarse.vol` | `ih_peec_bem_coarse_coil.step` |
-| PEEC coil + FEM wp (SIBC) + Kelvin | `calc_fem_kelvin.py` | (reuses ih_peec_bem_coarse for wp+Kelvin) | `ih_peec_bem_coarse.vol` | `ih_peec_bem_coarse_coil.step` |
+| PEEC inductance (coil only, STEP) | `calc_inductance.py --coil-solver peec` | `ih_peec_inductance.jou` | (none — coil-only) | `ih_peec_inductance_coil.step` |
+| BEM-A inductance (coil only, .vol) | `calc_inductance.py --coil-solver bem-a` | (Cubit-meshed coil .vol) | (none — coil-only) | `<coil>.vol` (source/sink sidesets) |
+| PEEC + BEM weak coupling (workpiece) | `calc_inductance.py --coil-solver peec --vol <wp.vol>` | `ih_peec_bem_coarse.jou` | `ih_peec_bem_coarse.vol` | `ih_peec_bem_coarse_coil.step` |
+| BEM-A + BEM weak coupling (workpiece) | `calc_inductance.py --coil-solver bem-a --vol <wp.vol>` | (Cubit-meshed coil .vol) | `ih_peec_bem_coarse.vol` | `<coil>.vol` (source/sink sidesets) |
+| PEEC coil + FEM wp (SIBC) + Kelvin | `calc_fem_kelvin.py --formulation total --peec-step ...` | (reuses ih_peec_bem_coarse for wp+Kelvin) | `ih_peec_bem_coarse.vol` | `ih_peec_bem_coarse_coil.step` |
 | Full simulation (FEM A-V + wp SIBC + Kelvin) | `calc_fem_coilmesh.py` | `ih_fem_kelvin_skin_fine.jou` | `ih_fem_kelvin_skin_fine.vol` | `ih_fem_kelvin_skin_fine_coil.step` |
+
+`calc_peec_inductance.py`, `calc_peec_bem.py`, and
+`calc_coil_bem_a_workpiece.py` were unified into a single
+`calc_inductance.py` in v4.25.0 (2026-05); see its module docstring
+for the migration history.
 
 Golden tests:
 - `tests/panels/golden/peec_inductance_torus_50kHz_Cu.json`
@@ -24,7 +31,7 @@ Golden tests:
 - `tests/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json`
 
 Production paths (per memory `IH panel 最終構成 2026-04-19`): the
-**PEEC+BEM 1-way** and **FEM Full** paths are the validated
+**PEEC+BEM weak-coupling** and **FEM Full** paths are the validated
 production methods, both verified to give P_wp within 1% of each
 other on Cu @ 7 kHz.  The PEEC+FEM Kelvin path solves the same
 physics by a different formulation but does not have its own
