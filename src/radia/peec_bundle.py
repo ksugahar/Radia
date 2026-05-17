@@ -31,8 +31,8 @@ logical node 1.
 
 import numpy as np
 
-from peec_matrices import PEECBuilder
-from peec_topology import PEECCircuitSolver
+from radia.peec_matrices import PEECBuilder
+from radia.peec_topology import PEECCircuitSolver
 
 
 def build_bundle_solver(filament_paths, dw, dh, sigma, cell_wh=None):

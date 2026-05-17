@@ -19,7 +19,7 @@ print("=" * 70)
 
 # Import PEEC module
 try:
-    from peec_matrices import PEECBuilder
+    from radia.peec_matrices import PEECBuilder
     print("\nUsing C++ PEEC implementation with quad panel support")
 except ImportError as e:
     print(f"\nERROR: PEEC module not available: {e}")

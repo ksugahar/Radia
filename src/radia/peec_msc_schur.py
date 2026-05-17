@@ -31,6 +31,7 @@ Part of Radia project
 """
 
 import numpy as np
+import radia as rad
 from scipy.sparse.linalg import LinearOperator, bicgstab, gmres
 import scipy
 
@@ -216,44 +217,30 @@ class SchurComplementSolver:
                 H = h_filament(p1, p2, obs, current=1.0)
                 B_pm[i, k] = MU0 * np.dot(H, self._msc_face_normals[i])
 
-        # M_mp: Flux linkage at PEEC segments from MSC magnetization
-        if self._field_computer is not None:
-            # Proper computation via MMMFieldComputer.compute_a_field
-            # For each MSC DOF i, set unit magnetization/charge, compute A
-            # at all PEEC segment centers, then flux linkage.
-            obs_points = self._seg_centers  # (n_peec, 3)
-            for i in range(n_msc):
-                # Unit vector for DOF i
-                sigma = np.zeros(n_msc)
-                sigma[i] = 1.0
-                # Compute A from this magnetization state
-                A = self._field_computer.compute_a_field(sigma, obs_points)
-                # A has shape (n_peec, 3)
-                for k in range(n_peec):
-                    M_mp[k, i] = (np.dot(A[k], self._seg_directions[k])
-                                  * self._seg_lengths[k])
-        else:
-            # Fallback: point dipole approximation (less accurate)
-            # Reconstruct M from sigma for each element, compute dipole A
-            import warnings
-            warnings.warn(
-                "No MMMFieldComputer set. Using point dipole approximation "
-                "for M_mp. Call set_field_computer() for proper computation.",
-                stacklevel=2
+        # M_mp: Flux linkage at PEEC segments from MSC magnetization.
+        # Requires MMMFieldComputer.compute_a_field for the exact analytical
+        # surface-charge A-field.  Per CLAUDE.md "No Fallbacks - Fail Fast,
+        # Fail Loud" we do NOT silently degrade to a point-dipole
+        # approximation (the prior fallback gave ~30% L errors on tight
+        # core-coil geometries while emitting only a warning that callers
+        # routinely missed).
+        if self._field_computer is None:
+            raise RuntimeError(
+                "PEECMSCSchurCoupler.compute_coupling_matrices() requires a "
+                "field computer.  Call set_field_computer(MMMFieldComputer(...)) "
+                "before computing coupling matrices.  The previous silent "
+                "point-dipole fallback was removed because it gave wrong L "
+                "by ~30% on near-field geometries without explicit caller "
+                "consent."
             )
-            for i in range(n_msc):
-                r_face = self._msc_eval_points[i]
-                n_hat = self._msc_face_normals[i]
-                area_i = self._msc_face_areas[i]
-                for k in range(n_peec):
-                    r_seg = self._seg_centers[k]
-                    dr = r_seg - r_face
-                    dist = np.linalg.norm(dr)
-                    if dist < 1e-20:
-                        continue
-                    A_vec = (MU_0 / (4.0 * np.pi)) * area_i * n_hat / dist
-                    M_mp[k, i] = (np.dot(A_vec, self._seg_directions[k])
-                                  * self._seg_lengths[k])
+        obs_points = self._seg_centers  # (n_peec, 3)
+        for i in range(n_msc):
+            sigma = np.zeros(n_msc)
+            sigma[i] = 1.0
+            A = self._field_computer.compute_a_field(sigma, obs_points)
+            for k in range(n_peec):
+                M_mp[k, i] = (np.dot(A[k], self._seg_directions[k])
+                              * self._seg_lengths[k])
 
         self._B_pm = B_pm
         self._M_mp = M_mp
@@ -290,15 +277,11 @@ class SchurComplementSolver:
             B_pm: (n_msc, n_peec) coupling matrix
             M_mp: (n_peec, n_msc) coupling matrix
         """
-        try:
-            from _radia_pybind import (ObjBckg, ObjCnt, Solve, Fld, UtiDel)
-        except ImportError:
-            import radia as _rad
-            ObjBckg = _rad.ObjBckg
-            ObjCnt = _rad.ObjCnt
-            Solve = _rad.Solve
-            Fld = _rad.Fld
-            UtiDel = _rad.UtiDel
+        ObjBckg = rad.ObjBckg
+        ObjCnt = rad.ObjCnt
+        Solve = rad.Solve
+        Fld = rad.Fld
+        UtiDel = rad.UtiDel
 
         n_msc = self._n_msc
         n_peec = self._n_peec
@@ -336,17 +319,9 @@ class SchurComplementSolver:
         # get A at PEEC centers, and build the linear map from M to Φ.
         # Then convert from M-basis to sigma-basis using face normals.
 
-        try:
-            from _radia_pybind import (ObjHexahedron, Fld as RadFld, UtiDel as RadUtiDel)
-        except ImportError:
-            RadFld = Fld
-            RadUtiDel = UtiDel
-            ObjHexahedron = None
-            try:
-                import radia as _rad2
-                ObjHexahedron = _rad2.ObjHexahedron
-            except ImportError:
-                pass
+        ObjHexahedron = rad.ObjHexahedron
+        RadFld = Fld
+        RadUtiDel = UtiDel
 
         # Extract hex vertex data from magnetic_objects for creating
         # temporary objects with fixed M.

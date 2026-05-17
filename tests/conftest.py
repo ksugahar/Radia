@@ -28,11 +28,12 @@ def setup_radia_path():
     if src_path.exists():
         sys.path.insert(0, str(src_path))
 
-    # Also add src/radia directly so bare imports like
-    # `from coil_from_cad import ...` work (matches the CI PYTHONPATH).
-    src_radia = project_root / 'src' / 'radia'
-    if src_radia.exists():
-        sys.path.insert(0, str(src_radia))
+    # Note: `sys.path.insert(0, src/radia)` used to be added here so bare
+    # imports like `from coil_from_cad import ...` worked.  Removed
+    # because bare imports + canonical `radia.coil_from_cad` simul-
+    # taneously load peec_matrices.pyd under two module keys, triggering
+    # pybind11's "type X is already registered" error.  All tests now
+    # use `from radia.X import Y` exclusively.
 
     mcp_src = project_root / 'packages' / 'radia-mcp' / 'src'
     if mcp_src.exists():

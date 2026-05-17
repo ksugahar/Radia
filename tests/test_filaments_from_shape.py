@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore", message=".*Unknown Compound type.*")
 def test_bd_face_to_start_hint_planar():
     """Planar Face at z=0 should yield p=(0,0,0), inward normal ~ +Z."""
     import build123d as bd
-    from coil_from_cad import _bd_face_to_start_hint
+    from radia.coil_from_cad import _bd_face_to_start_hint
 
     box = bd.Box(10, 10, 10, align=bd.Align.MIN)
     faces = box.faces()
@@ -44,7 +44,7 @@ def test_bd_face_to_start_hint_planar():
 def test_bd_face_to_start_hint_circular():
     """Circular face on tilted plane."""
     import build123d as bd
-    from coil_from_cad import _bd_face_to_start_hint
+    from radia.coil_from_cad import _bd_face_to_start_hint
 
     with bd.BuildSketch(bd.Plane.XY.offset(5.0)) as sk:
         bd.Circle(2.0)
@@ -58,7 +58,7 @@ def test_bd_face_to_start_hint_circular():
 def test_bd_shape_to_netgen_solid_single():
     """build123d Box -> netgen.occ Solid (via BRep)."""
     import build123d as bd
-    from coil_from_cad import _bd_shape_to_netgen_solid
+    from radia.coil_from_cad import _bd_shape_to_netgen_solid
 
     box = bd.Box(10, 20, 30)
     ng = _bd_shape_to_netgen_solid(box)
@@ -80,7 +80,7 @@ def test_start_hint_from_step_labels_unlabeled_returns_none(tmp_path):
     fall through to None in that case so the caller can use bbox auto.
     """
     import build123d as bd
-    from coil_from_cad import _start_hint_from_step_labels
+    from radia.coil_from_cad import _start_hint_from_step_labels
 
     box = bd.Box(10, 10, 30)
     step_path = tmp_path / "plain.step"
@@ -100,7 +100,7 @@ def test_export_step_with_labels_roundtrip(tmp_path):
     """
     import build123d as bd
     from build123d import Shell, Box
-    from coil_from_cad import (export_step_with_labels,
+    from radia.coil_from_cad import (export_step_with_labels,
                                 _start_hint_from_step_labels)
 
     box = Box(10, 10, 30)
@@ -140,7 +140,7 @@ def test_start_hint_from_step_labels_freecad_fixture():
     build123d workflows instead.
     """
     import os
-    from coil_from_cad import _start_hint_from_step_labels
+    from radia.coil_from_cad import _start_hint_from_step_labels
 
     fc_step = r"C:\tmp\fc_xcaf.step"
     if not os.path.exists(fc_step):
@@ -162,7 +162,7 @@ def test_filaments_from_shape_smoke_box():
     crash when port_face is provided (start_hint construction path).
     """
     import build123d as bd
-    from coil_from_cad import (_bd_face_to_start_hint,
+    from radia.coil_from_cad import (_bd_face_to_start_hint,
                                 _bd_shape_to_netgen_solid)
 
     box = bd.Box(10, 10, 30)

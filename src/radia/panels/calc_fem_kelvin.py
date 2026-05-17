@@ -374,7 +374,7 @@ def solve_fem(vol_file="", fes_order=1,
         #
         # No Biot-Savart vertex sampling, no HCurl projection, no
         # reduced-A cancellation error.
-        from coil_from_cad import filaments_from_step
+        from radia.coil_from_cad import filaments_from_step
         from ngsolve import ElementId
 
         _log("PEEC:building topology")

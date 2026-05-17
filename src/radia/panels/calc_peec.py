@@ -36,7 +36,7 @@ if SRC not in sys.path:
 
 def build_peec_topology(args):
     """Build PEEC topology from helix parameters."""
-    from coil_from_cad import helix_path, build_peec_from_path
+    from radia.coil_from_cad import helix_path, build_peec_from_path
 
     n_seg = int(args.coil_turns * args.seg_per_turn)
     path = helix_path(
@@ -81,7 +81,7 @@ def solve_prima(topo, args):
 
 def solve_hacapk(topo, args):
     """Single-frequency HACApK saddle-point solve."""
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_topology import PEECCircuitSolver
 
     t0 = time.perf_counter()
     solver = PEECCircuitSolver(
@@ -97,7 +97,7 @@ def solve_hacapk(topo, args):
 
 def solve_dense(topo, args):
     """Dense C++ MNA solve (reference)."""
-    from peec_topology import PEECCircuitSolver
+    from radia.peec_topology import PEECCircuitSolver
 
     t0 = time.perf_counter()
     solver = PEECCircuitSolver(topo)
