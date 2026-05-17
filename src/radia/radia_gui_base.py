@@ -674,6 +674,22 @@ class AnalysisWindow(QMainWindow):
         self._gmsh_btn.clicked.connect(self._open_gmsh)
         btn_row.addWidget(self._gmsh_btn)
 
+        # "Show command..." -- preview the exact Python CLI the panel
+        # would launch, without running it.  Pops a read-only dialog
+        # with a Copy-to-clipboard button so the user can re-run the
+        # command in a terminal, paste it into a batch script, or send
+        # it to a colleague for diagnosis.
+        self._show_cmd_btn = QPushButton(
+            style.standardIcon(QStyle.SP_FileDialogContentsView),
+            " Show command...")
+        self._show_cmd_btn.setFixedHeight(32)
+        self._show_cmd_btn.setToolTip(
+            "Preview the Python CLI command this panel would run "
+            "(without executing it).  Useful for batch scripting, "
+            "copying into a terminal, or reporting issues.")
+        self._show_cmd_btn.clicked.connect(self._on_show_command)
+        btn_row.addWidget(self._show_cmd_btn)
+
         btn_row.addStretch()
         root.addLayout(btn_row)
 
@@ -757,7 +773,19 @@ class AnalysisWindow(QMainWindow):
 
         self._save_settings()
         self._output.clear()
-        self._output.appendPlainText(f"> {' '.join(cmd)}\n")
+        # Echo the exact command being launched so the user sees what
+        # arguments the panel passed to python.  Both forms are useful:
+        # the multi-line form is readable in the box; the single-line
+        # form is one copy-paste away in the log line.  The "Show
+        # command..." button reproduces this without running.
+        single, multi = self._format_cmd(cmd)
+        self._output.appendPlainText("=== Launching ===")
+        self._output.appendPlainText(f"working dir: {self.working_folder}")
+        self._output.appendPlainText(multi)
+        self._output.appendPlainText(
+            "(single line, copy-paste friendly:)")
+        self._output.appendPlainText(f"  {single}")
+        self._output.appendPlainText("=================\n")
         self._last_msh = None
         self._gmsh_btn.setEnabled(False)
 
@@ -806,6 +834,104 @@ class AnalysisWindow(QMainWindow):
         if self._process:
             self._process.kill()
             self._process.waitForFinished(3000)
+
+    @staticmethod
+    def _format_cmd(cmd):
+        """Render an argv list as (single_line, multi_line) strings.
+
+        Single-line form: tokens joined by spaces, with any token
+        containing whitespace double-quoted.  Copy-pastable into a
+        terminal as-is.
+
+        Multi-line form: one ``--flag value`` per indented line, joined
+        with shell line-continuation (``^`` on Windows cmd/PowerShell,
+        ``\\`` on POSIX).  Easier to read in the output box; copy-
+        pastable into a batch script.
+        """
+        def _quote(tok):
+            return f'"{tok}"' if (" " in tok or "\t" in tok) else tok
+        single = " ".join(_quote(t) for t in cmd)
+        lines = [_quote(cmd[0])]
+        i = 1
+        while i < len(cmd):
+            tok = cmd[i]
+            if tok.startswith("--") and i + 1 < len(cmd) \
+                    and not cmd[i + 1].startswith("--"):
+                lines.append(f"    {tok} {_quote(cmd[i + 1])}")
+                i += 2
+            else:
+                lines.append(f"    {_quote(tok)}")
+                i += 1
+        cont = " ^" if sys.platform == "win32" else " \\"
+        multi = (cont + "\n").join(lines)
+        return single, multi
+
+    def _on_show_command(self):
+        """Display the Python CLI command this panel would launch.
+
+        Builds the command via the panel's ``build_command(vol_path)``
+        hook (the same one used by ``_on_run``), then pops a non-modal
+        dialog with a read-only text box and a Copy-to-clipboard button.
+        Does NOT execute the command.
+
+        If ``build_command`` raises ``ValueError`` (missing input file,
+        empty required field, etc.) the user sees the validation error
+        message instead of a stub.  This mirrors ``_on_run``'s error path
+        so the two buttons agree about runnability.
+        """
+        vol = ""
+        if self._panel is not None and hasattr(self._panel, "wp_vol_path"):
+            vol = self._panel.wp_vol_path()
+        try:
+            cmd = self._panel.build_command(vol)
+        except ValueError as e:
+            QMessageBox.warning(self, "Input Error", str(e))
+            return
+
+        line, multi = self._format_cmd(cmd)
+        dlg = QMainWindow(self)
+        dlg.setWindowTitle("Python command")
+        dlg.resize(900, 360)
+        central = QWidget()
+        dlg.setCentralWidget(central)
+        v = QVBoxLayout(central)
+        v.addWidget(QLabel(
+            "This is the exact CLI the Run button would launch.  "
+            "Copy + paste into a terminal or batch script:"))
+        text = QPlainTextEdit()
+        text.setReadOnly(True)
+        text.setFont(QFont("Consolas", PANEL_OUTPUT_FONT_POINT_SIZE))
+        text.setPlainText(multi)
+        v.addWidget(text, 1)
+
+        row = QHBoxLayout()
+        copy_line_btn = QPushButton("Copy single-line")
+        copy_line_btn.setToolTip(
+            "Copy as one line (handy for inline paste).")
+        copy_line_btn.clicked.connect(
+            lambda: (QApplication.clipboard().setText(line),
+                     dlg.statusBar().showMessage(
+                         "Single-line command copied to clipboard.", 4000)))
+        row.addWidget(copy_line_btn)
+        copy_multi_btn = QPushButton("Copy multi-line")
+        copy_multi_btn.setToolTip(
+            "Copy with one --flag per line (handy for scripts).")
+        copy_multi_btn.clicked.connect(
+            lambda: (QApplication.clipboard().setText(multi),
+                     dlg.statusBar().showMessage(
+                         "Multi-line command copied to clipboard.", 4000)))
+        row.addWidget(copy_multi_btn)
+        row.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.close)
+        row.addWidget(close_btn)
+        v.addLayout(row)
+        dlg.statusBar().showMessage(
+            f"Working directory: {self.working_folder}")
+        dlg.show()
+        # Keep a reference so Qt doesn't garbage-collect the dialog as
+        # soon as this method returns.
+        self._show_cmd_dlg = dlg
 
     def _read_stdout(self):
         data = self._process.readAllStandardOutput().data()

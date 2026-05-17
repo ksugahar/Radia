@@ -431,14 +431,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         ScalarBIESIBCSolver, compute_phi_inc_from_filaments,
         compute_phi_inc_from_surface_J)
     from em_material import EMMaterial
-    # Re-use the hole-extractor from calc_peec_bem (will be inlined when
-    # calc_peec_bem is deleted in the same commit; for the transition
-    # window keep importing from there until removal).
-    try:
-        from calc_peec_bem import _extract_bnd_only
-    except ImportError:
-        # Inline if calc_peec_bem.py has been deleted (Refactor C step).
-        _extract_bnd_only = _extract_bnd_only_inline
+    # Hole-extractor for wp-as-hole geometry (closed-torus convention).
+    # Inlined from the deleted calc_peec_bem.py.
+    _extract_bnd_only = _extract_bnd_only_inline
 
     omega = 2.0 * math.pi * args.frequency
 
@@ -894,13 +889,17 @@ def _solve_workpiece_weak_coupled(args, coil_data):
 
 
 def _extract_bnd_only_inline(vol_mesh, bnd_label):
-    """Local copy of the calc_peec_bem.py helper.
+    """Hole-extractor for wp-as-hole geometry (closed-torus convention).
 
-    Falls back when calc_peec_bem.py has been deleted as part of the
-    same commit (Refactor C).  Walks the .vol mesh, collects BND
-    elements whose ``el.index`` matches a FD with name ``bnd_label``,
-    and emits a closed surface mesh with outward-oriented triangles
-    (centroid-aligned for the wp-as-hole convention).
+    Walks the .vol mesh, collects BND elements whose ``el.index``
+    matches a FaceDescriptor with name ``bnd_label``, and emits a
+    closed surface mesh with outward-oriented triangles (centroid-
+    aligned outward).  Multiple FDs may share the same name after
+    webcut (e.g. air_top + air_bot halves) and the per-FD winding can
+    flip relative to its own domin -- a blanket flip would be wrong.
+
+    Originally lived in ``calc_peec_bem.py``; inlined here when the
+    three legacy CLIs were unified into ``calc_inductance.py``.
     """
     from ngsolve import Mesh, BND
     import netgen.meshing as ngm
