@@ -691,7 +691,7 @@ class FastHenryParser:
         """
         for block in self.panel_blocks:
             if block['type'] == 'plate':
-                from peec_mesh_import import create_plate_mesh
+                from radia.peec_mesh_import import create_plate_mesh
                 # Use a temporary builder to get the panel vertices
                 center = block['center']
                 size = block['size']
@@ -885,13 +885,13 @@ class FastHenryParser:
         """
         # Import PEECBuilder
         try:
-            from peec_matrices import PEECBuilder as PyPEECBuilder
+            from radia.peec_matrices import PEECBuilder as PyPEECBuilder
         except ImportError:
             # Try adding src/radia to path
             src_radia = os.path.join(os.path.dirname(__file__))
             if src_radia not in sys.path:
                 sys.path.insert(0, src_radia)
-            from peec_matrices import PEECBuilder as PyPEECBuilder
+            from radia.peec_matrices import PEECBuilder as PyPEECBuilder
 
         builder = PyPEECBuilder()
 
@@ -1082,8 +1082,8 @@ class FastHenryParser:
 
         if self.shield_blocks and self.magnetic_blocks:
             # Combined: magnetic core + conducting shield
-            from peec_coupled import CoupledPEECSolver
-            from peec_shielded import ShieldedPEECSolver
+            from radia.peec_coupled import CoupledPEECSolver
+            from radia.peec_shielded import ShieldedPEECSolver
 
             # Step 1: Compute Delta_L from magnetic coupling
             mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
@@ -1123,7 +1123,7 @@ class FastHenryParser:
 
         elif self.shield_blocks:
             # Shielded PEEC solve (BEM + SIBC)
-            from peec_shielded import ShieldedPEECSolver
+            from radia.peec_shielded import ShieldedPEECSolver
 
             shield_solvers = self.build_shield_solvers()
             shield = shield_solvers[0]
@@ -1132,7 +1132,7 @@ class FastHenryParser:
 
         elif self.magnetic_blocks:
             # Coupled PEEC + MMM solve
-            from peec_coupled import CoupledPEECSolver
+            from radia.peec_coupled import CoupledPEECSolver
 
             mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
             mu_r_real = self.magnetic_blocks[0].get('mu_r', 1000.0)
@@ -1149,7 +1149,7 @@ class FastHenryParser:
             Z_port = solver.frequency_sweep(freqs, Zs_func)
         else:
             # Standard PEEC solve (no magnetic coupling)
-            from peec_topology import PEECCircuitSolver
+            from radia.peec_topology import PEECCircuitSolver
             solver = PEECCircuitSolver(topo)
             Z_port = solver.frequency_sweep(freqs, Zs_func)
 
@@ -1196,7 +1196,7 @@ class FastHenryParser:
                 "ngsbem backend requires NGSolve and ngsbem. "
                 "Install with: pip install ngsolve ngsbem")
 
-        from peec_topology import PEECCircuitSolver
+        from radia.peec_topology import PEECCircuitSolver
 
         if freqs is None:
             freqs = self.get_frequencies()

@@ -61,8 +61,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from coil_profile import (Profile, RectProfile, CircleProfile,
-                          InterpolatedProfile)
+from radia.coil_profile import (Profile, RectProfile, CircleProfile,
+                                InterpolatedProfile)
 
 
 # ---------- Data containers -------------------------------------------------

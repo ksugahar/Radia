@@ -101,8 +101,8 @@ def _solve_coil_peec(args):
       * t_coil_s, n_filaments
     """
     progress("PEEC", f"STEP -> perimeter filaments (n_peri={args.peec_n_peri})")
-    from coil_from_cad import filaments_from_step
-    from peec_bundle import build_loop_bundle_impedance, solve_loop_bundle
+    from radia.coil_from_cad import filaments_from_step
+    from radia.peec_bundle import build_loop_bundle_impedance, solve_loop_bundle
 
     omega = 2.0 * math.pi * args.frequency
     t0 = time.perf_counter()

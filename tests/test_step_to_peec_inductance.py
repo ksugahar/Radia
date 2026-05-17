@@ -23,14 +23,6 @@ import pytest
 
 import radia  # noqa: F401 — must be first (sets up MKL DLL paths)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.abspath(os.path.join(HERE, "..", "src", "radia"))
-# Ensure src/radia is at position 0 so its peec_matrices.pyd wins over
-# site-packages (avoids pybind11 double-registration error).
-if SRC in sys.path:
-    sys.path.remove(SRC)
-sys.path.insert(0, SRC)
-
 MU_0 = 4e-7 * math.pi
 
 
@@ -88,9 +80,9 @@ def _build_square_torus_step(path, R, w):
 def _step_to_peec_inductance(step_path, R, wire_w, wire_h,
                              sigma=5.8e7, nwinc=1, step_size=None):
     """Full pipeline: STEP -> centerline -> filaments -> PEEC -> L."""
-    from coil_from_step import extract_centerline
-    from coil_from_cad import build_peec_from_path
-    from peec_topology import PEECCircuitSolver
+    from radia.coil_from_step import extract_centerline
+    from radia.coil_from_cad import build_peec_from_path
+    from radia.peec_topology import PEECCircuitSolver
 
     res = extract_centerline(
         step_path,
