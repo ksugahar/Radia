@@ -599,11 +599,16 @@ formulation fix (the empirical correction factor landed at ~0.78,
 not the derivation's +1.0; remainder untraced).
 
 Production paths for PEEC + FEM-SIBC:
-- **P_wp**: `calc_peec_bem.py` (PEEC+BEM 1-way) or
+- **P_wp**: `calc_inductance.py --coil-solver peec --vol <wp>`
+  (PEEC+BEM weak coupling; emits L_coil + ΔL_telegen + P_wp) or
   `calc_fem_coilmesh.py` (full FEM with volumetric coil).
 - **L_total**: `calc_fem_coilmesh.py` (volumetric coil + workpiece
   SIBC + Kelvin, intrinsic back-reaction) OR `calc_fem_kelvin.py`
   with the remaining total-field line-integral RHS.
+
+`calc_peec_bem.py` was unified into `calc_inductance.py` in v4.25.0
+(2026-05).  References to the old script name in older release notes
+or knowledge files predate that refactor.
 
 `kelvin_source.biot_savart_A_cf` / `biot_savart_B_cf` helpers
 remain available for research uses (line-integral back-reaction,

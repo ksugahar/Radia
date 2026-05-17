@@ -1,15 +1,30 @@
 """Radia IH (Induction Heating) analysis window.
 
-Two methods (2026-04-19):
+Six methods (Layer-4 dispatch table):
 
-  Fast workpiece heating (PEEC+BEM, 1-way)
-    -> calc_peec_bem.py   (~3 min, P_wp ±5%, L_coil vacuum only)
+  PEEC inductance (coil only, STEP)
+    -> calc_inductance.py --coil-solver peec (no --vol)         (~30 s, L+R_coil)
+
+  BEM-A inductance (coil only, .vol)
+    -> calc_inductance.py --coil-solver bem-a (no --vol)        (~25 s, L+R_coil)
+
+  PEEC + BEM weak coupling (workpiece)
+    -> calc_inductance.py --coil-solver peec --vol <wp.vol>     (~3 min, L+ΔL+P_wp)
+
+  BEM-A + BEM weak coupling (workpiece)
+    -> calc_inductance.py --coil-solver bem-a --vol <wp.vol>    (~3-5 min, L+ΔL+P_wp)
+
+  PEEC coil + FEM wp (SIBC) + Kelvin
+    -> calc_fem_kelvin.py --formulation total --peec-step ...   (~4-8 min)
 
   Full simulation (FEM A-V + wp SIBC + Kelvin)
-    -> calc_fem_coilmesh.py (~1-7 min, L + P_wp + P_coil)
+    -> calc_fem_coilmesh.py                                     (~1-7 min)
 
-Both drive from a gapped torus coil (real IH has physical port
-terminations — closed-torus topology is not supported).
+Coil topology: gapped torus (real IH has physical port terminations;
+closed-torus is unsupported).  Workpiece-coupled modes use weak
+coupling: Telegen φ·B back-reaction at the port, coil current
+distribution FIXED.  ``calc_peec_bem.py`` was unified into
+``calc_inductance.py`` in v4.25.0 (2026-05).
 """
 import math
 import os
@@ -415,15 +430,23 @@ class IHPanel(ModePanel):
         self._add_section("Linear solver")
         solver = self.add_combo("solver", "Solver:", ["pardiso"])
         solver.setToolTip(
-            "<b>PEEC+BEM</b>:<br>"
-            "  Dense LU — fast for small filament bundles (<500 segments)<br>"
-            "  HACApK — O(N log N), for large bundles<br>"
+            "<b>Inductance / weak-coupled modes</b> "
+            "(PEEC-IND, BEM-A-IND, PEEC+BEM, BEM-A+BEM):<br>"
+            "&nbsp;&nbsp;Dense LU — workpiece BEM-SIBC assembled densely "
+            "(suitable when wp surface DOFs &lt; ~5k)<br>"
+            "&nbsp;&nbsp;HACApK — ACA-compressed H-matrix + GMRES "
+            "(for wp surface DOFs &gt; ~5k; O(N log N) memory)<br>"
+            "<i>Note:</i> For PEEC coil, the perimeter-filament bundle "
+            "is ALWAYS dense LU regardless of this selector.  The size "
+            "knob gates the WORKPIECE BIE backend (and the BEM-A coil "
+            "saddle backend when the coil solver is BEM-A).<br>"
             "<br>"
-            "<b>FEM A-V</b>:<br>"
-            "  pardiso — sparse direct (default, fast, memory-heavy)<br>"
-            "  AMS — Compact AMS+COCR for HCurl p=1 (low memory; shifted preconditioner internally)<br>"
-            "  BDDC — preconditioned CG, recommended for p&gt;=2<br>"
-            "  iccg — generic fallback (Incomplete Cholesky + CG)")
+            "<b>FEM A-V modes</b> (PEEC+FEM+Kelvin, Full FEM):<br>"
+            "&nbsp;&nbsp;pardiso — sparse direct (default, fast, memory-heavy)<br>"
+            "&nbsp;&nbsp;AMS — Compact AMS+COCR for HCurl p=1 "
+            "(low memory; shifted preconditioner internally)<br>"
+            "&nbsp;&nbsp;BDDC — preconditioned CG, recommended for p&gt;=2<br>"
+            "&nbsp;&nbsp;iccg — generic fallback (Incomplete Cholesky + CG)")
 
         # ============ Advanced (collapsed by default) ============
         self._add_section("Advanced")
@@ -925,11 +948,15 @@ class IHPanel(ModePanel):
             coil_in = self.val("peec_step")
             if not coil_in:
                 raise ValueError("Coil STEP file is required for PEEC weak-coupled mode.")
+            if not os.path.isfile(coil_in):
+                raise ValueError(f"STEP file not found: {coil_in}")
             coil_arg = ["--coil-step", coil_in]
         else:  # bem-a
             coil_in = self.val("coil_vol") if "coil_vol" in self._widgets else ""
             if not coil_in:
                 raise ValueError("Coil .vol file is required for BEM-A weak-coupled mode.")
+            if not os.path.isfile(coil_in):
+                raise ValueError(f"Coil .vol not found: {coil_in}")
             coil_arg = ["--coil-vol", coil_in,
                         "--coil-source-name", self.val("coil_source_name"),
                         "--coil-sink-name",   self.val("coil_sink_name")]
