@@ -5,12 +5,13 @@
 Analytical coils and PEEC coils use DIFFERENT file formats by
 design.  The EM panel (`calc_accel_magnet` / `calc_accel_msc`)
 accepts **only** a Python module.  The PEEC path (IH panel,
-`calc_peec_inductance` / `calc_peec_bem`) accepts **only** STEP.
+`calc_inductance.py --coil-solver peec` for inductance-only and
+weak-coupled workpiece modes) accepts **only** STEP.
 
 | Panel / calc | Coil input | Loader |
 |--------------|-----------|--------|
 | EM (`calc_accel_{magnet,msc}`) | `.py` module exposing `build_coil() -> CoilBuilder` | `_load_coil_script` (literal import) |
-| PEEC (`calc_peec_*`) | `.step` swept-solid coil | `coil_from_cad.filaments_from_step` (walker + nwinc x nhinc cross-section subdivision) |
+| PEEC (`calc_inductance.py --coil-solver peec`) | `.step` swept-solid coil | `coil_from_cad.filaments_from_step` (walker + nwinc x nhinc cross-section subdivision) |
 
 Why the split:
 
