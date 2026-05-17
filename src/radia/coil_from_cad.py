@@ -140,7 +140,7 @@ def build_peec_from_path(path_points: np.ndarray,
     Returns:
         topology_dict from PEECBuilder.build_topology().
     """
-    from peec_matrices import PEECBuilder
+    from radia.peec_matrices import PEECBuilder
 
     n_seg = len(widths)
     if path_points.shape[0] != n_seg + 1:
@@ -424,7 +424,7 @@ def _filaments_from_lateral_surface_uv(face,
                          for a in seg_areas])
 
     import radia  # noqa: F401
-    from peec_bundle import build_bundle_solver
+    from radia.peec_bundle import build_bundle_solver
     solver, seg_of_fil, port_p, port_m_idx = build_bundle_solver(
         filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 
@@ -982,7 +982,7 @@ def _filaments_from_circle_edges_per_station(solid,
                          for a in seg_areas])
 
     import radia  # noqa: F401
-    from peec_bundle import build_bundle_solver
+    from radia.peec_bundle import build_bundle_solver
     solver, seg_of_fil, port_p, port_m_idx = build_bundle_solver(
         filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 
@@ -1294,45 +1294,50 @@ def _centerline_from_open_spine(solid, n_segments: int,
     # Wire radius is estimated by a CHEAP midpoint section before the
     # full sampling loop runs.
     spine_length_cad = float(spine.length)
-    try:
-        from build123d import section as _bd_section
-        from build123d import Plane as _bd_Plane
-        from build123d import Vector as _bd_Vector
-        mid_p = spine @ 0.5
-        # Use a vague tangent: x-axis is fine for the probe since the
-        # cap area depends only on the orthogonal cross-section.
-        mid_tangent = spine @ 0.51 - mid_p
-        tn = math.sqrt(mid_tangent.X ** 2 + mid_tangent.Y ** 2
-                        + mid_tangent.Z ** 2)
-        if tn > 1e-12:
-            probe_plane = _bd_Plane(
-                origin=_bd_Vector(float(mid_p.X), float(mid_p.Y),
-                                    float(mid_p.Z)),
-                z_dir=_bd_Vector(float(mid_tangent.X / tn),
-                                   float(mid_tangent.Y / tn),
-                                   float(mid_tangent.Z / tn)))
-            probe_section = _bd_section(solid, section_by=probe_plane)
-            probe_faces = (probe_section.faces() if probe_section is not None
-                            else [])
-            if probe_faces:
-                # Pick the face closest to the spine midpoint
-                best_probe = min(
-                    probe_faces,
-                    key=lambda f: ((f.center() - _bd_Vector(
-                        float(mid_p.X), float(mid_p.Y), float(mid_p.Z))
-                    ).length))
-                cross_area_cad = float(best_probe.area)
-                wire_r_cad = math.sqrt(cross_area_cad / math.pi)
-                min_seg_cad = 1.10 * wire_r_cad
-                if min_seg_cad > 0:
-                    max_segments_by_density = max(
-                        3, int(spine_length_cad / min_seg_cad))
-                    n_segments = min(n_segments, max_segments_by_density)
-    except Exception:
-        # Probe failed (e.g. degenerate section) -- proceed with the
-        # caller-supplied n_segments.  The downstream singular-corner
-        # check will raise if the result is genuinely bad.
-        pass
+    from build123d import section as _bd_section
+    from build123d import Plane as _bd_Plane
+    from build123d import Vector as _bd_Vector
+    mid_p = spine @ 0.5
+    mid_tangent = spine @ 0.51 - mid_p
+    tn = math.sqrt(mid_tangent.X ** 2 + mid_tangent.Y ** 2
+                    + mid_tangent.Z ** 2)
+    if tn <= 1e-12:
+        raise ValueError(
+            "_centerline_from_open_spine: spine midpoint tangent is "
+            "degenerate (|spine@0.51 - spine@0.50| < 1e-12).  The "
+            "selected open edge is not a usable spine -- regenerate "
+            "the STEP with a smooth single-piece BSPLINE lateral so "
+            "Predicate 1 (UV-map sampling) handles it directly."
+        )
+    probe_plane = _bd_Plane(
+        origin=_bd_Vector(float(mid_p.X), float(mid_p.Y),
+                            float(mid_p.Z)),
+        z_dir=_bd_Vector(float(mid_tangent.X / tn),
+                           float(mid_tangent.Y / tn),
+                           float(mid_tangent.Z / tn)))
+    probe_section = _bd_section(solid, section_by=probe_plane)
+    probe_faces = (probe_section.faces() if probe_section is not None
+                    else [])
+    if not probe_faces:
+        raise ValueError(
+            "_centerline_from_open_spine: adaptive-resampling probe "
+            "at spine midpoint produced no cross-section face.  The "
+            "open-spine assumption breaks here -- regenerate the "
+            "STEP with a smooth single-piece BSPLINE lateral so "
+            "Predicate 1 (UV-map sampling) handles it directly."
+        )
+    best_probe = min(
+        probe_faces,
+        key=lambda f: ((f.center() - _bd_Vector(
+            float(mid_p.X), float(mid_p.Y), float(mid_p.Z))
+        ).length))
+    cross_area_cad = float(best_probe.area)
+    wire_r_cad = math.sqrt(cross_area_cad / math.pi)
+    min_seg_cad = 1.10 * wire_r_cad
+    if min_seg_cad > 0:
+        max_segments_by_density = max(
+            3, int(spine_length_cad / min_seg_cad))
+        n_segments = min(n_segments, max_segments_by_density)
 
     spine_pts = np.zeros((n_segments + 1, 3), dtype=np.float64)
     for i in range(n_segments + 1):
@@ -1432,39 +1437,37 @@ def _centerline_from_open_spine(solid, n_segments: int,
     # coil), not the centroid axis.  Interior path_cad points come
     # from midpoint sectioning -> face centroids = correct centroid
     # path, but the ENDPOINTS path_cad[0] and path_cad[-1] are pinned
-    # to spine_pts[0]/[-1] (rim endpoints near the cap edge), causing:
-    #   - a kink near the cap in the final-segment direction (e.g.
-    #     41 deg bend at the lateral-rim -> cap-centroid transition
-    #     on keiko's 1turn_coil_loft);
-    #   - large (~48%) spread in |I| across the 16 perimeter
-    #     filaments, because the kink couples asymmetrically into L.
-    # Fix: replace the rim endpoints with the actual cap-face
-    # centroids from coil_topology.  Cap detection is the same one
-    # that classified the coil as OPEN in extract_centerline_from_step,
-    # so for any caller that routes through Predicate 4 we have caps.
-    try:
-        from radia.coil_topology import extract_coil_topology as _ext_topo
-        _topo = _ext_topo(solid)
-        if (_topo.is_open and _topo.cap_a is not None
-                and _topo.cap_b is not None):
-            ca = _topo.cap_a.center()
-            cb = _topo.cap_b.center()
-            cap_a_xyz = np.array([float(ca.X), float(ca.Y), float(ca.Z)])
-            cap_b_xyz = np.array([float(cb.X), float(cb.Y), float(cb.Z)])
-            # Map each path endpoint to its nearest cap centroid
-            d0_a = float(np.linalg.norm(path_cad[0] - cap_a_xyz))
-            d0_b = float(np.linalg.norm(path_cad[0] - cap_b_xyz))
-            if d0_a <= d0_b:
-                path_cad[0] = cap_a_xyz
-                path_cad[-1] = cap_b_xyz
-            else:
-                path_cad[0] = cap_b_xyz
-                path_cad[-1] = cap_a_xyz
-    except Exception:
-        # coil_topology unavailable -- leave the rim endpoints.  Not a
-        # soft fallback: this only fires when the topology helper itself
-        # is broken, in which case the caller has bigger issues.
-        pass
+    # to spine_pts[0]/[-1] (rim endpoints near the cap edge), causing
+    # a 41 deg cap-direction kink + ~48% |I| spread.  Fix: replace
+    # the rim endpoints with the cap-face centroids from
+    # coil_topology.  Predicate 4 (OPEN) routes here precisely
+    # because cap detection succeeded, so cap_a/cap_b MUST be
+    # available.  If they are not, the caller's classification is
+    # inconsistent -- raise loudly per CLAUDE.md "No Fallbacks".
+    from radia.coil_topology import extract_coil_topology as _ext_topo
+    _topo = _ext_topo(solid)
+    if not (_topo.is_open and _topo.cap_a is not None
+            and _topo.cap_b is not None):
+        raise ValueError(
+            "_centerline_from_open_spine: coil_topology.extract_coil_topology "
+            "returned is_open={} cap_a={} cap_b={} -- inconsistent with "
+            "Predicate 4 (OPEN) classification that routed here.  This "
+            "indicates a regression in coil_topology cap detection; "
+            "regenerate the STEP with planar end-caps or file a bug."
+            .format(_topo.is_open, _topo.cap_a is not None,
+                    _topo.cap_b is not None))
+    ca = _topo.cap_a.center()
+    cb = _topo.cap_b.center()
+    cap_a_xyz = np.array([float(ca.X), float(ca.Y), float(ca.Z)])
+    cap_b_xyz = np.array([float(cb.X), float(cb.Y), float(cb.Z)])
+    d0_a = float(np.linalg.norm(path_cad[0] - cap_a_xyz))
+    d0_b = float(np.linalg.norm(path_cad[0] - cap_b_xyz))
+    if d0_a <= d0_b:
+        path_cad[0] = cap_a_xyz
+        path_cad[-1] = cap_b_xyz
+    else:
+        path_cad[0] = cap_b_xyz
+        path_cad[-1] = cap_a_xyz
 
     scale = 1.0 / cad_units_per_meter
     return path_cad * scale, widths_cad * scale, heights_cad * scale
@@ -2162,7 +2165,11 @@ def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
     if paths_arr.ndim >= 3:
         pts = paths_arr.reshape(-1, 3)
     else:
-        return  # unknown shape -> skip silently
+        raise ValueError(
+            "_check_filaments_cover_solid_bbox: filament_paths has "
+            f"unexpected ndim={paths_arr.ndim} shape={paths_arr.shape}; "
+            "expected (n_fil, n_seg, 2, 3) or (n_fil, n_pts, 3)."
+        )
     fil_min = pts.min(axis=0)
     fil_max = pts.max(axis=0)
     wire_r = float(topo.get("cross_section_radius_m") or 0.0)
@@ -2594,8 +2601,8 @@ def filaments_from_shape(shape,
     Returns:
         dict compatible with `filaments_from_step` CoilBuilder result.
     """
-    from coil_from_step import extract_centerline, to_coil_builder
-    from peec_bundle import build_bundle_solver
+    from radia.coil_from_step import extract_centerline, to_coil_builder
+    from radia.peec_bundle import build_bundle_solver
 
     # --- 1. Resolve start_hint ---
     start_hint = None
@@ -2753,8 +2760,8 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
     If ``n_peri`` is given, uses perimeter-only placement via
     ``to_filaments_peri`` (thin-skin limit) and ignores ``nwinc``/``nhinc``.
     """
-    from coil_from_step import extract_centerline, to_coil_builder
-    from peec_bundle import build_bundle_solver
+    from radia.coil_from_step import extract_centerline, to_coil_builder
+    from radia.peec_bundle import build_bundle_solver
     import numpy as np
 
     # Step 1: Extract centerline with profile classification.
@@ -2768,7 +2775,7 @@ def _filaments_via_coil_builder(step_path, sigma, nwinc, nhinc, n_slices,
     if start_hint is None:
         start_hint = _start_hint_from_step_labels(step_path)
     if start_hint is None:
-        from coil_from_step import load_step_solid
+        from radia.coil_from_step import load_step_solid
         solid = load_step_solid(step_path)
         bb = solid.bounding_box
         cx = 0.5 * (bb[0][0] + bb[1][0])
@@ -3131,7 +3138,7 @@ def filaments_from_polyline(pts_m: np.ndarray,
         cell_wh.append([(side, side)] * (n_pts - 1))
 
     import radia  # noqa: F401
-    from peec_bundle import build_bundle_solver
+    from radia.peec_bundle import build_bundle_solver
     solver, seg_of_fil, port_p, port_m = build_bundle_solver(
         filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 
@@ -3353,7 +3360,7 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
                          for a in seg_areas])
 
     import radia  # noqa: F401
-    from peec_bundle import build_bundle_solver
+    from radia.peec_bundle import build_bundle_solver
     solver, seg_of_fil, port_p, port_m = build_bundle_solver(
         filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 

@@ -40,7 +40,7 @@ def topology():
     if not os.path.isfile(SAMPLE_STEP):
         pytest.skip(f"Sample STEP not available: {SAMPLE_STEP}")
     import radia  # noqa: F401  -- ensure DLL setup runs first
-    from coil_from_cad import filaments_from_step
+    from radia.coil_from_cad import filaments_from_step
     return filaments_from_step(SAMPLE_STEP, n_peri=8, sigma=5.8e7,
                                 cad_units_per_meter=1.0)
 

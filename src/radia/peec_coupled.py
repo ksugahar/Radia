@@ -47,7 +47,9 @@ Part of Radia project
 """
 
 import numpy as np
-from peec_topology import PEECCircuitSolver
+import radia as rad
+from radia.peec_topology import PEECCircuitSolver
+from radia.peec_matrices import MNASolver
 
 # Physical constants
 MU_0 = 4.0 * np.pi * 1e-7  # H/m
@@ -157,18 +159,16 @@ class CoupledPEECSolver(PEECCircuitSolver):
         Returns:
             Delta_L matrix (n_seg x n_seg) in Henries
         """
-        try:
-            import sys
-            import os
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-            from _radia_pybind import (ObjBckg, ObjCnt, Solve, Fld, UtiDel)
-        except ImportError:
-            import radia as rad
-            ObjBckg = rad.ObjBckg
-            ObjCnt = rad.ObjCnt
-            Solve = rad.Solve
-            Fld = rad.Fld
-            UtiDel = rad.UtiDel
+        # Per CLAUDE.md "No Fallbacks": use the canonical `radia` package
+        # namespace.  The prior shim attempted bare `_radia_pybind` import
+        # with sys.path mutation -> editable-install hack that mutates
+        # global state on every call.  `import radia as rad` at module
+        # top handles both editable and wheel layouts uniformly.
+        ObjBckg = rad.ObjBckg
+        ObjCnt = rad.ObjCnt
+        Solve = rad.Solve
+        Fld = rad.Fld
+        UtiDel = rad.UtiDel
 
         # Store mu_r_real for tan_delta computation
         if mu_r_real is not None:
@@ -343,8 +343,6 @@ class CoupledPEECSolver(PEECCircuitSolver):
 
     def _rebuild_mna_solver(self):
         """Rebuild C++ MNASolver with current self.L matrix."""
-        from peec_matrices import MNASolver
-
         seg_nodes_int = np.ascontiguousarray(self.segment_nodes, dtype=np.int32)
         port_tuples = [(int(p[0]), int(p[1]), int(p[2])) for p in self.ports]
 
