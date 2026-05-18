@@ -90,11 +90,95 @@ INV_4PI = 1.0 / (4.0 * math.pi)
 # ======================================================================
 # Coil solver: PEEC
 # ======================================================================
+def _equivalent_wire_radius_m(topo, n_peri):
+    """Derive an equivalent-circle wire radius [m] from the PEEC topology.
+
+    Priority:
+      1. ``cross_section_radius_m_mean`` (circle-edge / round-wire path)
+      2. ``cross_section_area_m2_mean`` -> sqrt(A / pi)
+      3. ``cell_wh`` mean (last resort): each filament's (w, h) area
+         times n_peri gives the bundle area, then sqrt(A_bundle / pi).
+    Returns 0.0 if none of the above are available -- the caller falls
+    back to the R_DC-only behaviour.
+    """
+    r = float(topo.get("cross_section_radius_m_mean") or 0.0)
+    if r > 0:
+        return r
+    A = float(topo.get("cross_section_area_m2_mean") or 0.0)
+    if A > 0:
+        return math.sqrt(A / math.pi)
+    cell_wh = topo.get("cell_wh") or []
+    if cell_wh:
+        areas = [float(w) * float(h)
+                 for fil in cell_wh for (w, h) in fil]
+        if areas:
+            A_bundle = (sum(areas) / len(areas)) * int(n_peri)
+            return math.sqrt(A_bundle / math.pi)
+    return 0.0
+
+
+def _peec_skin_impedance_per_filament(paths, wire_radius_m, sigma, omega,
+                                       n_peri):
+    """Per-filament complex skin-impedance ``Zs_fil`` for ``solve_loop_bundle``.
+
+    Derivation (BEM-A analogue, see docs/esim/R_MISMATCH_PEEC_VS_BEMA.md).
+    A round-wire bundle of n_peri parallel filaments has:
+
+        Z_port(omega) = Z_cyl(omega) * L_filament
+
+    where ``Z_cyl(omega)`` is the closed-form per-unit-length Bessel
+    impedance of a SOLID cylinder (analytical_formulas.conductor_impedance.
+    cylinder_ac_impedance).  In the parallel-filament solve each
+    filament's self-impedance contributes as Z_fil / n_peri (parallel
+    of n_peri identical filaments).  Combined with the PEEC builder's
+    R_DC_per_filament = n_peri * rho * L / (pi a^2) the self diagonal
+    should reach::
+
+        Z_self_k = n_peri * Z_cyl(omega) * L_k
+
+    so the additive correction over the existing R_DC term is::
+
+        Zs_fil_k = n_peri * (Z_cyl(omega) - R_DC_per_unit_length) * L_k.
+
+    This recovers the full Bessel impedance smoothly across frequencies:
+    at omega=0 we get R_DC; at high omega we get (1+j)/(sigma*delta*P) per
+    unit length (the BEM-A SIBC limit).
+    """
+    import numpy as np
+    from radia.analytical_formulas.conductor_impedance import (
+        cylinder_ac_impedance, cylinder_dc_resistance,
+    )
+
+    if wire_radius_m <= 0 or omega <= 0:
+        return None
+    Z_ac = cylinder_ac_impedance(a=wire_radius_m, sigma=sigma, omega=omega)
+    R_dc = cylinder_dc_resistance(a=wire_radius_m, sigma=sigma)
+    dZ_per_m = complex(Z_ac) - complex(R_dc, 0.0)  # AC-skin contribution / m
+    Zs_fil = []
+    for path_k in paths:
+        # filament length = sum of |p2 - p1| over polyline tuples
+        L_k = 0.0
+        for (p1, p2) in path_k:
+            d = np.asarray(p2, dtype=float) - np.asarray(p1, dtype=float)
+            L_k += float(np.linalg.norm(d))
+        Zs_fil.append(int(n_peri) * dZ_per_m * L_k)
+    return np.asarray(Zs_fil, dtype=complex)
+
+
 def _solve_coil_peec(args):
     """PEEC coil layer.
 
     Returns a dict with:
-      * L_coil [H], R_coil [Ω] at unit terminal current
+      * L_coil [H], R_coil [Ω] at unit terminal current.
+        R is the full Bessel AC resistance for a round-wire bundle:
+        per-filament ``Zs_fil = n_peri * (Z_cyl(omega) - R_DC_per_m) * L_k``
+        is injected into ``solve_loop_bundle`` so the loop-bundle
+        impedance approaches ``Z_cyl(omega) * L_filament`` at all
+        frequencies (R_DC at omega=0, SIBC asymptote at high omega).
+        Falls back to R_DC-only when the wire radius cannot be inferred
+        from the PEEC topology (rectangular cross-sections with no
+        cross_section_radius_m_mean / cross_section_area_m2_mean keys);
+        in that case a WARNING is logged on the progress channel.
       * source_type = "filament"
       * paths : list of filament polylines (m)
       * I_fil : (K,) complex per-filament current at args.current
@@ -116,11 +200,30 @@ def _solve_coil_peec(args):
     t_topo = time.perf_counter() - t0
     progress("PEEC", f"{len(paths)} filaments ({t_topo:.1f}s)")
 
+    # Compute per-filament Bessel skin impedance Zs_fil so the bundle
+    # impedance reaches the proper round-wire AC value at args.frequency.
+    a_eq = _equivalent_wire_radius_m(topo, args.peec_n_peri)
+    Zs_fil = _peec_skin_impedance_per_filament(
+        paths, a_eq, args.coil_sigma, omega, args.peec_n_peri)
+    if Zs_fil is None:
+        progress("PEEC", "WARNING: wire radius unknown -- returning R_DC "
+                          "(no Bessel skin correction).")
+    else:
+        from radia.analytical_formulas.conductor_impedance import (
+            skin_depth as _skin_depth,
+        )
+        delta_m = _skin_depth(args.coil_sigma, omega)
+        progress("PEEC",
+            f"Bessel skin: a_eq={a_eq * 1e3:.3f} mm, "
+            f"delta={delta_m * 1e3:.3f} mm, "
+            f"a/delta={a_eq / delta_m:.2f}")
+
     progress("PEEC", f"Loop-bundle solve @ {args.frequency:.0f} Hz")
     t0 = time.perf_counter()
     R_f, L_f = build_loop_bundle_impedance(solver, seg_of_fil)
     I_fil, V_port = solve_loop_bundle(R_f, L_f, args.frequency,
-                                       I_port=args.current)
+                                       I_port=args.current,
+                                       Zs_fil=Zs_fil)
     t_peec = time.perf_counter() - t0
     Z_coil = V_port / args.current
     L_coil = Z_coil.imag / omega if omega > 0 else 0.0

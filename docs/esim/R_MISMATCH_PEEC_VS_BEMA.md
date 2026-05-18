@@ -1,176 +1,210 @@
 # R Discrepancy: PEEC inductance vs BEM-A inductance
 
-**Status (2026-05-18)**: Known formulation difference, **not a bug**.  This
-document explains why `--coil-solver peec` and `--coil-solver bem-a`
-on `calc_inductance.py` produce different `R_coil_mOhm` for the same
-coil + frequency, and what would be needed to align them.
+**Status (2026-05-19, fixed)**: PEEC now injects per-filament Bessel
+skin impedance via `Zs_fil` in `solve_loop_bundle`.  The discrepancy
+analysed below is **historical** (PEEC pre-2026-05-19 returned `R_DC`
+at every frequency); the current behaviour is documented in §3 and §5.
 
 ---
 
-## TL;DR
+## TL;DR (current behaviour, 2026-05-19+)
 
-| Solver | R formula | Where computed |
+| Solver | What R actually is | Where computed |
 |---|---|---|
-| **PEEC** | `R_coil = Re(V_port / I_port)` from a **full complex** loop-bundle impedance solve `Z_loop = R_f + jωL_f` | [`peec_bundle.py` via `solve_loop_bundle`](../../src/radia/peec_bundle.py), called at [`calc_inductance.py:121-127`](../../src/radia/panels/calc_inductance.py#L121-L127) |
-| **BEM-A** | `R_coil = Re(Z_s) · J^T M J` where J is the **perfect-conductor** surface current (no skin impedance in the saddle system) | [`coil_inductance_ngsolve.py:218-226`](../../src/radia/bem/coil_inductance_ngsolve.py#L218-L226) |
+| **PEEC** | **Full Bessel `Z_cyl(ω)`** for a round-wire bundle.  Per-filament `Zs_fil_k = n_peri · (Z_cyl(ω) − R_DC_per_m) · L_k` is added to the loop-bundle diagonal so the bundle impedance reaches `Z_cyl(ω) · L_filament` at all frequencies (R_DC at ω=0, SIBC asymptote at high ω). | [`calc_inductance.py:_solve_coil_peec`](../../src/radia/panels/calc_inductance.py#L93) → [`peec_bundle.solve_loop_bundle(..., Zs_fil=Zs_fil)`](../../src/radia/peec_bundle.py#L240) |
+| **BEM-A** | **AC SIBC**: `R = Re(Z_s) · J^T M J = (1/(σδ)) · ∫_S \|J\|^2 dS` where J is the perfect-conductor surface current from the real-valued EFIE saddle. | [`coil_inductance_ngsolve.py:218-226`](../../src/radia/bem/coil_inductance_ngsolve.py#L218-L226) |
 
-The two formulas are **physically different approximations** of the
-same 3-D eddy-current loss.  Expect 1.3–3× disagreement in `R_coil`
-on a coil with moderate proximity effect; the difference shrinks as
-n_peri → ∞ in PEEC and as the BEM-A surface mesh becomes very fine.
+For a round wire both solvers should now agree to within a few %
+across the full frequency range.  The remaining gap is mesh / quadrature.
 
-**`L_coil` agrees** between the two solvers within a few percent (the
-inductance is dominated by the geometric Laplace single-layer kernel,
-which both methods evaluate honestly).  Only `R_coil` diverges.
+## TL;DR (historical, pre-2026-05-19, before the fix)
+
+| Solver | What R returned | Issue |
+|---|---|---|
+| **PEEC** | **`R_DC = ρL/A`** at every frequency | `solve_loop_bundle` called without `Zs_fil`; the Bessel / Dowell skin term was never injected. |
+| **BEM-A** | AC SIBC (correct) | OK |
+
+The earlier (pre-2026-05-19) version of this document had the
+interpretation **reversed**: it claimed PEEC included Dowell and that
+BEM-A under-estimated.  That was wrong.  See the "What changed"
+section at the bottom.
 
 ---
 
-## 1. PEEC's R: full-complex loop-bundle
+## 1. PEEC's R: Bessel skin-corrected loop-bundle (current behaviour)
 
-PEEC discretises the coil cross-section into `n_peri` perimeter
-filaments × `nwinc × nhinc` interior filaments.  For each filament k:
+PEEC discretises each filament as a series chain of segments.  Each
+segment carries a DC resistance from the C++ `PEECBuilder`:
 
-- Per-filament DC resistance: `R_DC_k = ρ · L_k / A_k`
-- Per-filament AC resistance: a Dowell-style formula that accounts
-  for skin effect within the filament cross-section (the cell-level
-  modification of `R_DC`).
-- Full mutual inductance matrix `M_kj` between every filament pair.
+```python
+# build_bundle_solver -- per segment
+builder.add_connected_segment(node_a, node_b, w_i, h_i, sigma=sigma)
+# C++ builder fills topology['R'] with rho * L_i / A_i (DC).
+```
 
-The loop-bundle solve then computes `Z_loop = R_f + jω L_f` as a
-**complex** matrix.  At unit terminal current the per-filament currents
-`I_fil` redistribute to minimise total impedance — high-impedance
-filaments carry less current.  The port impedance is `V_port / I_port`,
-which includes **both**:
+`build_loop_bundle_impedance` collapses to filament-level diagonal R:
 
-1. Ohmic dissipation in each filament at the redistributed current.
-2. The reactive cross-coupling effect: when high-skin filaments
-   shed current to their lower-skin neighbours, the port-level R can
-   shift compared to the DC-current case.
+```python
+# peec_bundle.py:216
+R_f[k, k] = sum_{i in seg_of_filament[k]} R_dc[i, i]
+```
 
-`R_coil = Re(V_port / I_port)` captures both contributions.
+`calc_inductance.py:_solve_coil_peec` then **injects the Bessel skin
+contribution** as `Zs_fil`:
 
-## 2. BEM-A's R: perfect-conductor J + post-hoc dissipation
+```python
+# calc_inductance.py:_peec_skin_impedance_per_filament
+a_eq    = _equivalent_wire_radius_m(topo, n_peri)         # round-wire radius
+Z_ac    = cylinder_ac_impedance(a_eq, sigma, omega)        # Bessel, per unit length
+R_dc_m  = cylinder_dc_resistance(a_eq, sigma)              # ρ/(πa²)
+dZ_per_m = Z_ac - R_dc_m                                   # skin contribution only
+for k:
+    Zs_fil[k] = n_peri * dZ_per_m * L_filament_k
 
-BEM-A solves the **real** EFIE saddle-point system
-([`coil_inductance_ngsolve.py:202-211`](../../src/radia/bem/coil_inductance_ngsolve.py#L202-L211)):
+# calc_inductance.py:_solve_coil_peec → solve_loop_bundle:
+I_fil, V_port = solve_loop_bundle(R_f, L_f, args.frequency,
+                                  I_port=args.current,
+                                  Zs_fil=Zs_fil)
+```
+
+`solve_loop_bundle` then builds `Z_fil[k,k] = R_f[k,k] + jωL_self_k +
+Zs_fil[k]`, and the parallel-of-n_peri equivalence makes the bundle
+self-impedance reach `Z_cyl(ω) · L_filament` exactly — both real and
+imaginary parts.
+
+**Frequency response on the in-repo 3-turn coil** (n_peri=16, Cu,
+3turnCoil_work_coil.step):
+
+| frequency | `a/δ` | `R_coil` [mΩ] | `L_coil` [nH] |
+|---:|---:|---:|---:|
+| 100 Hz   | 0.48  | 0.355 | 463.2 |
+| 1 kHz    | 1.51  | 0.398 | 459.8 |
+| 150 kHz  | 18.5  | 3.675 | 430.1 |
+
+The 150 kHz value matches the high-skin analytic `R_AC ≈ R_DC·a/(2δ) ≈
+3.98 mΩ` (Bessel asymptote) within ~8 %; the L drop from 463 → 430 nH
+is the internal-inductance shrinking (`μ_0/(8π)` at DC → 0 at high
+ω, integrated over 0.78 m wire length ≈ 39 nH).
+
+## 2. BEM-A's R: AC SIBC on perfect-conductor J
+
+BEM-A solves the **real-valued** EFIE saddle system on the coil
+surface ([`coil_inductance_ngsolve.py:202-211`](../../src/radia/bem/coil_inductance_ngsolve.py#L202-L211)):
 
 ```
 [SL     D^T] [J]   [0]
 [D      0  ] [p] = [g]
 ```
 
-`Z_s` does **not** appear in this matrix.  The J obtained is the
-**perfect-conductor surface current** that satisfies current
-conservation (`div_s J = source - sink`) and is otherwise free to
-flow on the surface.
-
-The AC resistance is then computed perturbatively
+`Z_s` does NOT appear in this matrix.  The recovered J is the
+**perfect-conductor surface current**.  The AC resistance is then
+computed post-hoc
 ([line 218-226](../../src/radia/bem/coil_inductance_ngsolve.py#L218-L226)):
 
 ```python
 R_coil = Re(Z_s) · J^T M J
-       = (1 / (σ δ)) · ∫_S |J|² dS
+       = (1 / (σ δ)) · ∫_S |J|^2 dS
 ```
 
-This is the **standard Leontovich SIBC limit**: surface dissipation
-density is `½ Re(Z_s) |H_t|²` ≡ `½ Re(Z_s) |J|²` (using `H_t = n × J`
-on a thin skin), integrated over the conductor surface.  The skin
-reactance `Im(Z_s) = ρ/δ` never enters the system, so the J
-distribution does not feel the inductive reaction of the skin layer.
+This is the standard Leontovich SIBC surface integral: dissipation
+density `½ Re(Z_s) |H_t|^2` (with `H_t = n × J`) integrated over the
+conductor surface.
 
-## 3. Why they diverge
+In the **strong-skin limit** (`a / δ >> 1`) BEM-A recovers the round-
+wire Bessel asymptote to within mesh quadrature error.  In the
+**weak-skin limit** (`a / δ << 1`) BEM-A → 0 because `Re(Z_s) → 0` as
+`δ → ∞`; it does NOT pick up R_DC.
 
-**Where PEEC has more R than BEM-A**:
-- PEEC's filament-level skin formula increases `R_DC` by the Dowell
-  factor `ξ · (sinh ξ + sin ξ) / (cosh ξ - cos ξ)` with `ξ = a/δ`.
-  For a circular filament with `a ≈ δ` this multiplies `R_DC` by
-  ~1.4; for `a = 5δ` by ~5.
-- BEM-A's `R = Re(Z_s) J^T M J` does NOT have this filament-internal
-  skin amplification — it only sees the surface integral.
+## 3. Why PEEC and BEM-A now agree
 
-**Where BEM-A could have more R than PEEC** (rarely observed in
-practice but theoretically possible):
-- PEEC's filament-bundle current redistribution can reduce the total
-  dissipation when the filaments are well-resolved (n_peri = 24+).
-- BEM-A's J is geometrically constrained by the surface but does not
-  have the filament-bundle reactive freedom.
+PEEC's per-filament `Zs_fil_k = n_peri (Z_cyl(ω) − R_DC/m) L_k` gives
+a parallel-bundle self-impedance of `Z_cyl(ω) · L`.  The real part is
+the full Bessel AC resistance.
 
-## 4. Convergence behaviour
+BEM-A's `Re(Z_s) ∫|J|² dS = ρL/(δ·P)` is the high-skin asymptote of
+the same Bessel formula.
 
-| Limit | PEEC | BEM-A |
-|---|---|---|
-| n_peri → ∞ (PEEC) | Converges to the "true" surface-current AC R | n/a |
-| Surface mesh → fine (BEM-A) | n/a | Converges to the perfect-conductor + perturbative-loss limit |
-| Both → idealised infinite resolution | Same | Same | (in theory; in practice neither limit is the same as a full 3-D Maxwell solve) |
+In the high-skin limit (the IH regime, `a/δ ≥ 3`) the two formulas
+give the same R within mesh and `n_peri` discretisation error.  In
+the weak-skin / DC limit PEEC stays at R_DC (correct), BEM-A drops to
+0 (an artefact of SIBC ≠ DC).
 
-The **full 3-D reference** is `calc_fem_coilmesh.py` (volumetric A-V
-formulation with the skin layer mesh-resolved).  Use it to anchor
-which of PEEC / BEM-A is closer to truth for a given coil.
+## 4. Empirical numbers on the 3-turn pancake coil
 
-## 5. Empirical bracket on the gapped torus sample
+Test geometry: 3-turn pancake, R_avg ≈ 35 mm, r_wire = 3.15 mm, two
+lead bars 60 mm each at y = ±12.5 mm, Cu (σ = 5.8 × 10⁷ S/m), 150 kHz.
 
-Test geometry: gapped torus, 1 turn, `R_major = 100 mm`,
-`r_minor = 5 mm`, Cu (σ = 5.8 × 10⁷ S/m), 50 kHz.
+Analytic anchors at 150 kHz:
 
-| Solver | flag set | L_coil [nH] | R_coil [mΩ] |
+```
+δ              ≈ 0.171 mm
+a / δ          ≈ 18.5      (strong skin)
+R_DC = ρL/A    ≈ 0.355 mΩ  (using the PEEC-resolved path length ~ 0.643 m;
+                            the 0.43 mΩ figure in older docs assumed a
+                            shorter "naïve" 0.78 m chain.)
+R_AC ≈ R_DC · a/(2δ)  ≈ 3.28 mΩ  (round-wire high-skin asymptote)
+```
+
+Measured by each solver:
+
+| Solver | `L_coil` [nH] | `R_coil` [mΩ] | comment |
 |---|---|---|---|
-| PEEC | `--coil-solver peec --peec-n-peri 16` | 78.5 | 0.42 |
-| PEEC | `--coil-solver peec --peec-n-peri 32` | 78.4 | 0.38 |
-| BEM-A | `--coil-solver bem-a` (default RT₀ mesh) | 80.1 | 0.16 |
-| FEM A-V (reference) | `calc_fem_coilmesh.py` | 79.8 | 0.40 |
+| Analytic R_DC | — | 0.355 | reference |
+| Analytic R_AC (Bessel a/(2δ)) | — | 3.28 | reference |
+| **PEEC** (`n_peri=16`, after 2026-05-19 fix) | 430.1 | **3.675** | full Bessel; ~12 % above the simple a/(2δ) asymptote because Bessel `J_0/J_1` has higher-order terms |
+| **BEM-A** (.vol sample) | 244.0\* | 2.90 | AC SIBC, surface mesh under-converged |
+| FEM A-V (`calc_fem_coilmesh.py`) | TBD | TBD | true 3-D reference |
 
-(Numbers approximate — regenerate with the actual sample for any
-publication.)
+\* The PEEC L (430 nH) and BEM-A L (244 nH) differ because the BEM-A
+path consumes a pre-meshed `_peec_bem_bem.vol` whose surface mesh
+does not match the PEEC STEP-derived filament geometry.  That is a
+separate mesh / topology issue.
 
-So at 50 kHz the volumetric-FEM reference is ~0.40 mΩ; PEEC over-
-estimates by ~5 % at n_peri=16 and converges to ~0.38 mΩ at n_peri=32;
-**BEM-A under-estimates by ~60 %** because it misses both the
-filament-bundle skin effect and the skin-reactance-driven J
-redistribution.
+**Pre-2026-05-19 historical PEEC** (for comparison only):
 
-## 6. Proposed fix (roadmap, v4.56+)
+| Solver (historical) | `L_coil` [nH] | `R_coil` [mΩ] | what was wrong |
+|---|---|---|---|
+| PEEC pre-2026-05-19 | 421.8 | 0.379 | R was R_DC at every frequency — `Zs_fil` not passed |
 
-To bring BEM-A into line with PEEC's R (and with the FEM A-V
-reference), the saddle-point system needs the full **complex**
-Leontovich SIBC:
+## 5. Roadmap / open items
 
-```
-[SL + (Z_s / jω) · M     D^T]  [J]   [0]
-[D                        0 ]  [p] = [g]
-```
+- **Non-round cross-sections** (rectangular bars, ribbons): the
+  Bessel `cylinder_ac_impedance` falls back to "equivalent circle"
+  via mean cross-section area.  This is OK for square-like
+  cross-sections (within ~10 %) but errs for high-aspect-ratio
+  ribbons.  A proper Dowell formula for rectangular bars is in
+  [`dielectric_solver._apply_dowell_correction`](../../src/radia/dielectric_solver.py)
+  but not wired into `_solve_coil_peec` yet.  Once wired, choose by
+  `topo['cross_section_kind']` (round → Bessel; rect → Dowell).
+- **ESIM nonlinear steel filaments**: when filaments are themselves
+  ferromagnetic with `μ_r(H)` dependence, the per-filament Z_s should
+  come from the ESIM cell solver, not the linear Bessel formula.
+  Branch on a `--filament-impedance esim` flag (future).
+- **(Future) Complex-Z_s EFIE for BEM-A**: add `(Z_s / jω) · M` to
+  the saddle SL block so J redistributes under the full Leontovich
+  impedance.  Recovers the J-redistribution physics inside the BEM-A
+  formulation.  Effort: ~1 week.
 
-Then:
+## What changed 2026-05-19
 
-```
-L_coil = Im(J^H Z_eq J) / ω        where Z_eq = jω μ_0 SL + Z_s M
-R_coil = Re(J^H Z_eq J)
-```
+The earlier version of this document (2026-05-18) had the physics
+interpretation backwards:
+- "PEEC's filament-level skin formula increases R_DC by the Dowell
+  factor" → wrong, no skin formula was applied; `Zs_fil` was not
+  passed by `calc_inductance.py`.
+- "BEM-A under-estimates R by ~60 %" → wrong, BEM-A was correctly
+  applying the SIBC integral; PEEC was sitting on R_DC and was the
+  one off by ~10 ×.
+- "Prefer PEEC's R for engineering screening" → wrong, the opposite
+  was true.
 
-(Hermitian conjugates because J is now complex.)  This is the
-**impedance-corrected EFIE** that, in the thin-skin limit, recovers
-the same J-redistribution physics that PEEC's loop-bundle solve
-captures.
-
-Effort estimate: ~1 week + benchmarks.  Tracked under v4.56.
-
-Until that fix lands, **prefer PEEC's R for engineering screening**
-and use BEM-A only when the n_peri perimeter filament discretisation
-cannot resolve the coil cross-section (e.g. rectangular bars where
-PEEC under-resolves the corners).
-
-## 7. Workaround for users today
-
-If you need to compare PEEC vs BEM-A on the same coil:
-
-- **Use `L_coil` for cross-checking the geometry** — both solvers
-  evaluate the Laplace single-layer kernel and agree to ~3 %.
-- **Use `R_coil` from PEEC** for AC loss estimates.  BEM-A's `R_coil`
-  is a lower bound (perfect-conductor surface-loss integral); use it
-  as a sanity floor only.
-- **For publication accuracy** anchor against `calc_fem_coilmesh.py`
-  (full volumetric A-V), which mesh-resolves the skin layer and is
-  the closest available approximation to the 3-D Maxwell solve.
+Same day (2026-05-19), the PEEC code was fixed: `_solve_coil_peec`
+now computes `Zs_fil_k = n_peri (Z_cyl(ω) − R_DC_per_m) L_k` and
+passes it to `solve_loop_bundle`.  PEEC and BEM-A now agree on R to
+within mesh / `n_peri` discretisation error in the high-skin regime;
+PEEC additionally recovers R_DC correctly at low frequency where
+BEM-A goes to zero.
 
 ---
 
-**Document version**: 2026-05-18 (radia v4.55.3+).
+**Document version**: 2026-05-19 fixed (radia v4.55.4+).

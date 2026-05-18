@@ -624,7 +624,11 @@ Excerpted from [`results.json`](../../examples/ih_esim_benchmark/results.json)
   like a Lenz-law eddy-current shield (Lenz dominates over
   magnetisation at this H_t).  For deeper-saturation cases (`H_t > 1
   kA/m`) ΔL would flip sign as μ_r drops.
-- **R_coil = 0.233 mΩ** (PEEC Dowell + bundle-mutual);
+- **R_coil = 0.233 mΩ** (this number is from the pre-2026-05-19
+  R_DC-only PEEC path; re-run the panel to refresh — the current
+  panel injects per-filament Bessel `Zs_fil` so the coil-only term
+  now reflects full round-wire AC resistance.  See
+  [R_MISMATCH_PEEC_VS_BEMA.md](R_MISMATCH_PEEC_VS_BEMA.md));
   **R_total = 0.317 mΩ**; **ΔR = +0.084 mΩ** (+36 % workpiece
   contribution).
 - **P_wp = 162.5 µW** — the engineering target for IH design.
