@@ -44,6 +44,10 @@ from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
+from .knowledge.cln_sibc_orthogonal import (
+    get_cln_sibc_orthogonal_documentation,
+    get_cln_sibc_orthogonal_section,
+)
 from .knowledge.cln_3d import (
     get_cln_3d_documentation,
     get_cln_3d_notebook,
@@ -523,6 +527,57 @@ def cln_3d(topic: str = "all") -> str:
         if topic == "formulas":
             return cln_3d.CLN_3D_KEY_FORMULAS
     return full_doc
+
+
+@mcp.tool()
+def cln_sibc_orthogonal(section: str = "all") -> str:
+    """
+    Get CLN expansion-point + SIBC orthogonal-residual theory documentation.
+
+    New theory established 2026-05-16 in IGTE 2026 Sugahara work:
+    a small number N of Cauer ladder stages plus the SIBC analytical
+    asymptote span the full eddy-current frequency response via
+    Foster eigenmode L^2-orthogonality:
+
+        L^2(Ω) = span{φ_0, ..., φ_{N-1}} ⊕ span{φ_N, φ_{N+1}, ...}
+        Y_exact(jω) = Y_CLN^N(jω) + Y_SIBC^⊥(jω)
+        Y_SIBC^⊥(jω) -> K_SIBC (jω)^{-1/2}  as  ω -> ∞
+
+    K_SIBC = √(σ/μ) × geometric factor (slab=1, 2D prism=perimeter,
+    3D body=surface integral with edge/corner corrections).  This
+    avoids the precision frontier of high-stage Cauer extraction
+    (Nagamine et al. 2026 verified interval arithmetic shows
+    ~60×/stage interval growth even with 192-bit MPFR + affine).
+
+    Verified analytically with Mathematica on:
+      - 1D slab (c = 1 mm Cu)
+      - 2D rectangular prism (17.72 × 2 mm, Dirichlet A_z = 0)
+
+    Open: 2D square (Nagamine geometry, degeneracy bundling) and
+    3D cuboid (HDivDivFreeHex + Green's theorem on surface integrals).
+
+    Companion to Nagamine, Yamaguchi, Sugahara, Hiruma, Mifune,
+    Matsuo (JJIAM 2026 submitted) verified 2D square prism Cauer
+    extraction — Nagamine = high-N verified rungs, this theory =
+    small-N + SIBC asymptote.
+
+    Args:
+        section: Documentation section to return:
+            "list"          - list available sections
+            "overview"      - one-page summary of the construction
+            "matsuo"        - relation to Matsuo SA-26-014 expansion point
+            "math"          - derivation, orthogonality, asymptote
+            "verification"  - Mathematica results (1D slab + 2D rectangle)
+            "nagamine"      - link to Nagamine 2026 verified extraction
+            "outlook"       - 2D Nagamine square + 3D cuboid completion path
+            "all"           - full documentation (default)
+
+    Returns:
+        Markdown text of the requested section.
+    """
+    if section == "all":
+        return get_cln_sibc_orthogonal_documentation()
+    return get_cln_sibc_orthogonal_section(section)
 
 
 @mcp.tool()
