@@ -475,6 +475,8 @@ def esim(topic: str = "all") -> str:
 
 
 
+
+
 @mcp.tool()
 def kelvin_identify_post_hoc(topic: str = "all", vol_path: str = "") -> str:
     """
@@ -1368,6 +1370,10 @@ if __name__ == '__main__':
 
 
 # References retained from removed tool documentation:
+# Canonical bibliography key: Nagamine2026
+
+# Sugahara, IGTE 2026, expansion-point/SIBC theory; original short attribution, publication details unverified.
+
 # Canonical bibliography key: Kameari2018
 
 # Method attribution retained: Kameari and Tanimoto.
