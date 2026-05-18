@@ -5,6 +5,19 @@ This document explains how to invoke ESIM through Radia's three Layer-4
 calc scripts and what flags each accepts.  For physics / discretisation
 details refer to the mathematical analysis.
 
+**Method origin.**  The "Karl iteration" mentioned throughout this
+document is **Karl Hollaus's** outer Picard fixed-point loop for the
+nonlinear scalar-potential ESIM formulation:
+
+> K. Hollaus, M. Kaltenbacher, J. Schöberl, *"A Nonlinear Effective
+> Surface Impedance in a Magnetic Scalar Potential Formulation,"*
+> **IEEE Trans. Magn.**, 2025.  DOI:
+> [10.1109/TMAG.2025.3613932](https://doi.org/10.1109/TMAG.2025.3613932).
+
+External readers should cite this paper at first use of "Karl
+iteration"; the in-source code uses the name as lab shorthand for the
+canonical Hollaus-type Picard relaxation.
+
 ---
 
 ## 1. When to choose ESIM over linear SIBC
