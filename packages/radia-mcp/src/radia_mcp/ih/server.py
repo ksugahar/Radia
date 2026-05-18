@@ -110,19 +110,29 @@ def ih_esim(topic: str = "all") -> str:
 
     Args:
         topic: Section to return.  Options:
-            "all"                - All sections concatenated
-            "overview"           - When to use ESIM vs linear SIBC
-                                   (decision table, cost vs benefit)
-            "bh_file"            - BH-curve file format spec
-            "inductance_cli"     - calc_inductance.py CLI flags + example
-            "fem_kelvin_cli"     - calc_fem_kelvin.py CLI flags + example
-                                   (note inconsistent flag names!)
-            "fem_coilmesh_cli"   - calc_fem_coilmesh.py CLI flags + example
-            "per_element"        - --esim-per-panel: when it pays off,
-                                   convergence caveats, backend restrictions
-            "convergence"        - --esim-relax tuning, reading esim_history
-            "json_output"        - Output JSON schema (esim_history, etc.)
-            "troubleshooting"    - Common errors + sanity checks
+            "all"                  - All sections concatenated
+            "overview"             - When to use ESIM vs linear SIBC
+                                     (decision table, cost vs benefit)
+            "bh_file"              - BH-curve file format spec
+            "inductance_cli"       - calc_inductance.py CLI flags + example
+            "fem_kelvin_cli"       - calc_fem_kelvin.py CLI flags + example
+                                     (note inconsistent flag names!)
+            "fem_coilmesh_cli"     - calc_fem_coilmesh.py CLI flags + example
+            "per_element"          - --esim-per-panel: when it pays off,
+                                     convergence caveats, backend restrictions
+            "convergence"          - --esim-relax tuning, reading esim_history
+            "json_output"          - Output JSON schema (esim_history, etc.)
+            "troubleshooting"      - Common errors + sanity checks
+            "scalar_vs_vector_bem" - Why scalar BIE-SIBC + curved Tri6 is
+                                     the right combination (vs vector BEM-A
+                                     / FEM-Kelvin / FEM-coilmesh).  Decision
+                                     matrix, error-rate match, Karl per-iter
+                                     cost comparison, reviewer Q&A.
+                                     (IGTE 2026 paper marketing line.)
+            "headline_numbers"     - Locked-in numerical results for paper
+                                     citation: 48 % per-element vs scalar
+                                     headline, three-path consistency table,
+                                     Bessel cell validation table.
     """
     return get_ih_esim_documentation(topic)
 

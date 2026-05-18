@@ -8,6 +8,7 @@ Karl iteration.
 **Companion documents.**
 - [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) — formulation and weak forms.
 - [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) — numerical benchmarks.
+- [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) — why this implementation architecture (scalar BIE on path A) is the right one to publish.
 - [`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) — focused note on the PEEC vs BEM-A coil R discrepancy.
 
 ---
