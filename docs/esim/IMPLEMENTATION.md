@@ -174,7 +174,7 @@ back to a thin-skin exponential `H ~ H0 * exp(-(a-z)/δ)` (line 506-511).
 | `P_prime` | float | Active power density `½ Re(Z) |H_0|²` [W/m²] |
 | `Q_prime` | float | Reactive power density `½ Im(Z) |H_0|²` [VAR/m²] |
 | `P_magnetic` | float | Hysteretic / grain-eddy magnetic loss density [W/m²] (only nonzero when `complex_mu` is supplied) |
-| `R_ratio` | float | AC-to-DC resistance ratio `R_ac / R_dc` (used by `peec_bundle` for per-filament Dowell scaling — see § 4.5) |
+| `R_ratio` | float | AC-to-DC resistance ratio `R_ac / R_dc` (diagnostic output from ESIM; the panel itself uses `cylinder_ac_impedance` from `analytical_formulas.conductor_impedance` for the Bessel per-filament `Zs_fil` injection — see [R_MISMATCH_PEEC_VS_BEMA.md](R_MISMATCH_PEEC_VS_BEMA.md)) |
 | `H_solution` | complex array | H(r) profile, length `n_nodes` |
 | `mu_final` | float | Surface-region mean μ from the converged iteration |
 | `converged` | bool | True if `rel_change < tol` reached |
