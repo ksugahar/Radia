@@ -12,6 +12,7 @@ The companion documents are:
 - [`docs/esim/USAGE.md`](USAGE.md) — user-facing CLI guide.
 - [`docs/esim/IMPLEMENTATION.md`](IMPLEMENTATION.md) — code architecture, three-solver dispatch, Karl-loop internals, performance characterisation.
 - [`docs/esim/CROSS_VALIDATION.md`](CROSS_VALIDATION.md) — analytical / internal-consistency / external 2-D axisymmetric validation matrix with concrete numerical data (IGTE-grade tables).
+- [`docs/esim/SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) — why scalar BIE + curved Tri6 + per-element ESIM is the right combination (vs vector BEM-A / FEM-Kelvin / FEM-coilmesh), with the error-order match argument and the per-iteration Karl cost comparison.
 - [`docs/esim/R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) — focused diagnosis of why PEEC and BEM-A produce different coil R values.
 - [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.md`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.md) — research-WIP notes.
 - [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md) — wide-band nonlocal extension (deferred).
