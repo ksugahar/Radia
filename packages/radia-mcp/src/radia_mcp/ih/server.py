@@ -28,7 +28,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .ih_knowledge import get_induction_heating_documentation
 from .sibc_knowledge import get_ih_sibc_documentation
-from .esim_usage_knowledge import get_esim_usage_documentation
+from .esim_knowledge import get_ih_esim_documentation
 
 mcp = FastMCP("mcp-server-ih")
 
@@ -90,20 +90,23 @@ def ih_sibc(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def esim_usage(topic: str = "all") -> str:
+def ih_esim(topic: str = "all") -> str:
     """
-    How to use the Effective Surface Impedance Method (ESIM) in Radia.
+    Induction-heating ESIM (Effective Surface Impedance Method) usage.
 
-    Covers practical usage of the nonlinear ESIM cell-problem solver
-    through the three production CLIs (calc_inductance.py,
-    calc_fem_kelvin.py, calc_fem_coilmesh.py).  Topics range from
-    "when to use ESIM vs linear SIBC" to BH-curve file format, CLI
-    flag reference, scalar-vs-per-element decision, Karl-iteration
-    tuning, and troubleshooting.
+    Practical how-to-use guide for the nonlinear ESIM cell-problem
+    solver in the IH workflow.  Sibling to `ih_sibc` (which covers
+    linear SIBC + general IH-solver architecture).
+
+    Covers the three production CLIs (calc_inductance.py,
+    calc_fem_kelvin.py, calc_fem_coilmesh.py): CLI flag reference,
+    BH-curve file format, scalar-vs-per-element decision, Karl-
+    iteration tuning, JSON output schema, and troubleshooting.
 
     For the underlying physics + formulation, see the canonical docs
     at s:/Radia/01_GitHub/docs/esim/ (especially MATHEMATICAL_ANALYSIS.md
-    and IMPLEMENTATION.md).
+    and IMPLEMENTATION.md) or the sibling tool `esim` in
+    radia_ngsolve server (physics-side overview).
 
     Args:
         topic: Section to return.  Options:
@@ -121,7 +124,7 @@ def esim_usage(topic: str = "all") -> str:
             "json_output"        - Output JSON schema (esim_history, etc.)
             "troubleshooting"    - Common errors + sanity checks
     """
-    return get_esim_usage_documentation(topic)
+    return get_ih_esim_documentation(topic)
 
 
 # ============================================================
@@ -157,8 +160,8 @@ def main():
         print(f"  ih_sibc('overview'): {len(ih_sibc('overview'))} chars")
         print(f"  induction_heating('overview'): "
               f"{len(induction_heating('overview'))} chars")
-        print(f"  esim_usage('overview'): "
-              f"{len(esim_usage('overview'))} chars")
+        print(f"  ih_esim('overview'): "
+              f"{len(ih_esim('overview'))} chars")
         print("  PASSED")
         return
 

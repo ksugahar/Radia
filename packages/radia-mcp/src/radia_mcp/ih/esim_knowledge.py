@@ -424,7 +424,7 @@ TOPICS = {
 }
 
 
-def get_esim_usage_documentation(topic: str = "all") -> str:
+def get_ih_esim_documentation(topic: str = "all") -> str:
     """Return ESIM usage knowledge for the requested topic."""
     topic = (topic or "all").strip().lower()
     if topic == "all":
