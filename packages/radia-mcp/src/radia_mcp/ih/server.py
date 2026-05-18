@@ -28,7 +28,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .ih_knowledge import get_induction_heating_documentation
 from .sibc_knowledge import get_ih_sibc_documentation
-from .esim_paper_knowledge import get_esim_paper_documentation
+from .esim_usage_knowledge import get_esim_usage_documentation
 
 mcp = FastMCP("mcp-server-ih")
 
@@ -90,39 +90,38 @@ def ih_sibc(topic: str = "all") -> str:
 
 
 @mcp.tool()
-def esim_paper(topic: str = "all") -> str:
+def esim_usage(topic: str = "all") -> str:
     """
-    Get the IGTE Symposium 2026 ESIM paper content (BEM curved per-element
-    nonlinear surface impedance method).
+    How to use the Effective Surface Impedance Method (ESIM) in Radia.
 
-    Paper: "A Curved-Element, Per-Element Nonlinear Surface Impedance
-    Method for Boundary Element Eddy-Current Analysis" (Sugahara et al.,
-    target: IGTE 2026 / IEEE Trans. Magn.).
+    Covers practical usage of the nonlinear ESIM cell-problem solver
+    through the three production CLIs (calc_inductance.py,
+    calc_fem_kelvin.py, calc_fem_coilmesh.py).  Topics range from
+    "when to use ESIM vs linear SIBC" to BH-curve file format, CLI
+    flag reference, scalar-vs-per-element decision, Karl-iteration
+    tuning, and troubleshooting.
 
-    Background: extends Hollaus-Kaltenbacher-Schöberl 2025 (IEEE TMAG,
-    DOI 10.1109/TMAG.2025.3613932) from FEM scalar magnetic potential
-    to BEM with curved Tri6 elements + per-element nonlinear Z_s.
-
-    Headline result: 48% scalar P_wp under-estimate vs per-element on a
-    steel cylinder driven through the BH knee at I=100A.
-
-    Canonical source: s:/Radia/01_GitHub/docs/esim/*.md (7 files,
-    ~3300 lines).  This tool serves a condensed topic-keyed extract.
+    For the underlying physics + formulation, see the canonical docs
+    at s:/Radia/01_GitHub/docs/esim/ (especially MATHEMATICAL_ANALYSIS.md
+    and IMPLEMENTATION.md).
 
     Args:
         topic: Section to return.  Options:
-            "all"            - All sections concatenated (long)
-            "overview"       - 1-paragraph summary + headline result + when-to-use
-            "contribution"   - 4-pillar contribution statement
-            "formulation"    - Cell-problem PDE, BIE, Lorentz reciprocity, Karl
-            "implementation" - 3-solver architecture, code structure
-            "validation"     - Real numerical data from results.json (Bessel,
-                               3-path, 2-D axisym, headline per-element table,
-                               curve-order benchmark)
-            "caveats"        - Scope limits, out-of-scope regimes, open items
-            "references"     - 9 IEEE/textbook refs led by Hollaus 2025
+            "all"                - All sections concatenated
+            "overview"           - When to use ESIM vs linear SIBC
+                                   (decision table, cost vs benefit)
+            "bh_file"            - BH-curve file format spec
+            "inductance_cli"     - calc_inductance.py CLI flags + example
+            "fem_kelvin_cli"     - calc_fem_kelvin.py CLI flags + example
+                                   (note inconsistent flag names!)
+            "fem_coilmesh_cli"   - calc_fem_coilmesh.py CLI flags + example
+            "per_element"        - --esim-per-panel: when it pays off,
+                                   convergence caveats, backend restrictions
+            "convergence"        - --esim-relax tuning, reading esim_history
+            "json_output"        - Output JSON schema (esim_history, etc.)
+            "troubleshooting"    - Common errors + sanity checks
     """
-    return get_esim_paper_documentation(topic)
+    return get_esim_usage_documentation(topic)
 
 
 # ============================================================
@@ -158,8 +157,8 @@ def main():
         print(f"  ih_sibc('overview'): {len(ih_sibc('overview'))} chars")
         print(f"  induction_heating('overview'): "
               f"{len(induction_heating('overview'))} chars")
-        print(f"  esim_paper('overview'): "
-              f"{len(esim_paper('overview'))} chars")
+        print(f"  esim_usage('overview'): "
+              f"{len(esim_usage('overview'))} chars")
         print("  PASSED")
         return
 
