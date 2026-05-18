@@ -373,12 +373,19 @@ from 100 to ~5 across a small H range), the local Lipschitz
 constant `L_i ≈ 2-3`, exceeding the contraction condition `α·L < 1`
 at `α = 0.5`.
 
-**Workarounds (under investigation)**:
-- Lower relaxation (`--esim-relax 0.3` or 0.2) — running now with
-  max_iter = 60.
-- Anderson acceleration on the Z_s vector (planned, see § 8 below).
-- Per-DOF adaptive relaxation: `α_i = min(0.5, 0.7 / L_i)` where
-  `L_i` is estimated from the recent `dZ[i]` ratio.
+**Workarounds — measured**:
+- Lower relaxation (`--esim-relax 0.3 --esim-max-iter 60`):
+  P_wp converges to **45.76 W** (vs 45.36 W at α=0.5/15 iter — only
+  0.9 % drift), but `dZ_max` still oscillates between 0.07 and 0.22
+  in iterations 50-60 (`dZ_max[59] = 0.093`).  **Even at α=0.3 with
+  60 iterations, scalar tolerance `1e-3` is not reached.** P_wp is
+  stable to ~1 %; ΔL stable to ~1 %.
+- This confirms that **simple damped Picard is insufficient** for
+  per-element Karl in the deep-saturation regime.
+- **Anderson acceleration** on the Z_s vector (planned, see § 8 below)
+  is needed for tight convergence.
+- Per-DOF adaptive relaxation `α_i = min(0.5, 0.7 / L_i)` is an
+  alternative; not implemented.
 
 ### 6b.3 What this means for the IGTE paper
 
