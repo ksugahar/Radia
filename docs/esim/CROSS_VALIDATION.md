@@ -7,6 +7,7 @@ implementation and its three coupled-solver dispatch paths.
 **Companion documents.**
 - [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) — formulation and discretisation.
 - [`IMPLEMENTATION.md`](IMPLEMENTATION.md) — code architecture and algorithmic details.
+- [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) — the methodological argument that ties together everything below (scalar BIE + curved Tri6 + per-element ESIM as the uniquely-matched discretisation).
 - [`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) — focused note on the PEEC vs BEM-A coil R discrepancy.
 - [`USAGE.md`](USAGE.md) — CLI invocation guide.
 
