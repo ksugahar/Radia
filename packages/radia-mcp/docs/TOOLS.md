@@ -172,7 +172,7 @@ Module: `radia_mcp.ih.server`
 
 | Tool | Description |
 |---|---|
-| `esim_usage` | How to use the Effective Surface Impedance Method (ESIM) in Radia. |
+| `ih_esim` | Induction-heating ESIM (Effective Surface Impedance Method) usage. |
 | `ih_sibc` | Get IH solver architecture and SIBC documentation. |
 | `induction_heating` | Get induction heating simulation documentation. |
 
