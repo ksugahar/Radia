@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **113 tools** across 8 MCP servers.
+Total: **112 tools** across 8 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 28 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 27 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 2 |
@@ -116,7 +116,6 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
 | `cln_3d` | Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration |
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
-| `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
