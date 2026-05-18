@@ -196,7 +196,7 @@ mesh) AND surface projection via ACIS kernel.
 
 **All element types** (tet, hex, wedge) p-converge to machine precision at p=5.
 Hex face bubbles and prism curving both work in 6.2.2603.
-curvedelements Save/Load roundtrip works out of the box (no fork needed).
+curvedelements Save/Load roundtrip works out of the box.
 
 ## Multi-Surface Topology Warning
 
@@ -213,7 +213,7 @@ The Cubit Export Mesh > Netgen Vol + Pkl menu supports order 1-5:
 - order=1: .vol only (linear mesh, no curving needed)
 - order>=2: .vol (linear) + .pkl (curving preserved)
 
-.vol files now preserve curving data (netgen post26 curvedelements section).
+.vol files now preserve curving data (curvedelements section).
 """
 
 CUBIT_MESH_SCHEMES = """
