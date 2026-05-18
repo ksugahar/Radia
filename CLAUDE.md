@@ -1164,7 +1164,23 @@ git push v* tag
 robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 ```
 
-### Distribution Test Policy (2026-04-24, updated 2026-05-02)
+### Distribution Test Policy (2026-04-24, updated 2026-05-19)
+
+**POLICY (上位ルール、2026-05-19 追加)**: **LAB は開発マシン。 菅原研究室で開発する
+パッケージは全て editable install を default とする** — 特定の 4 パッケージに限らない
+**一般原則**。 source edit が即座にランタイムへ反映される dev loop を維持するため。
+- `pip show <pkg>` → `Editable project location:` が `S:\Radia\01_GitHub\...` を指す
+  ことを確認できればよい。他の場所 (site-packages snapshot、CI runner clone、PyPI
+  install) を指していたら **発見次第 LAB source に戻す**:
+  ```
+  pip install -e S:\Radia\01_GitHub\packages\<pkg> --no-deps --no-cache-dir
+  ```
+- LAB 上で `pip install --upgrade <Sugahara-lab-package>` は **禁止** — editable を
+  silently 上書きして dev loop を破壊する (2026-04-28 incident、2026-05-19 再発)。
+- Upgrade route は **100号機 / mdx 側** (PyPI consumer)。 LAB は release 後に
+  metadata 同期のため `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。
+- CI/CD 環境 (e.g. `C:\actions-runner\_work\Radia\Radia\...`) は別管理 (NETWORK
+  SERVICE 所有)。 LAB の editable pointer がそちらに drift していたら戻す。
 
 **POLICY (2026-05-02 update)**: **2-tier 配布**: LAB は editable (NAS source、developer
 loop)、100号機 と mdx は両方 PyPI install (`pip install radia[cubit] radia-mcp` +
