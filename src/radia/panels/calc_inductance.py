@@ -1011,6 +1011,13 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["t_bem_assembly_s"] = wp_data["t_bem_assembly_s"]
     out["t_phi_inc_s"] = wp_data["t_phi_inc_s"]
     out["t_bem_solve_s"] = wp_data["t_bem_solve_s"]
+    # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag)
+    # — emitted by _solve_workpiece_weak_coupled when --esim-per-panel is set.
+    for key in ("esim_per_panel",
+                "esim_per_panel_Z_s_real",
+                "esim_per_panel_Z_s_imag"):
+        if key in wp_data:
+            out[key] = wp_data[key]
     return out
 
 
