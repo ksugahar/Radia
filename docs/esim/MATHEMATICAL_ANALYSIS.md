@@ -9,7 +9,10 @@ about "the implementation does X" carries a file:line citation.
 
 The companion documents are:
 
-- [`docs/esim/USAGE.md`](USAGE.md) — user-facing CLI guide (TBD).
+- [`docs/esim/USAGE.md`](USAGE.md) — user-facing CLI guide.
+- [`docs/esim/IMPLEMENTATION.md`](IMPLEMENTATION.md) — code architecture, three-solver dispatch, Karl-loop internals, performance characterisation.
+- [`docs/esim/CROSS_VALIDATION.md`](CROSS_VALIDATION.md) — analytical / internal-consistency / external 2-D axisymmetric validation matrix with concrete numerical data (IGTE-grade tables).
+- [`docs/esim/R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) — focused diagnosis of why PEEC and BEM-A produce different coil R values.
 - [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.md`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.md) — research-WIP notes.
 - [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md) — wide-band nonlocal extension (deferred).
 
@@ -62,6 +65,142 @@ independent observables in publication tables.  Implementations:
 - Slab / cylinder solver: [`esim_cell_problem.py:545`](../../src/radia/esim_cell_problem.py#L545).
 - Finite-slab (2-sided heating, `ESIMFiniteSlabSolver`):
   [`esim_cell_problem.py:1010`](../../src/radia/esim_cell_problem.py#L1010).
+
+---
+
+## 1.5 Derivation of the Cell-Problem Strong and Weak Forms
+
+This section derives the cylinder cell PDE from Maxwell's equations
+and presents both the strong (PDE) and weak (variational) forms.  The
+finite-difference solver implements the strong form directly; the FE
+finite-difference solver mathematically can be viewed as the limit of
+a P0 / P1 weak-form solver on a uniform mesh.  The derivation is
+included for reviewers who prefer the variational view.
+
+### 1.5.1 Maxwell → 1-D diffusion equation inside the conductor
+
+Inside a homogeneous conductor (no free charge, no displacement
+current in the magneto-quasi-static (MQS) limit), Maxwell's equations
+reduce to:
+
+$$
+\nabla \times \mathbf{E} = -j\omega \mathbf{B}, \quad
+\nabla \times \mathbf{H} = \mathbf{J} = \sigma \mathbf{E}, \quad
+\mathbf{B} = \mu(|\mathbf{H}|)\,\mathbf{H}.
+$$
+
+Eliminating `E` and `J`:
+
+$$
+\nabla \times (\rho\,\nabla \times \mathbf{H}) = -j\omega\,\mu(|\mathbf{H}|)\,\mathbf{H},
+\qquad \rho = 1/\sigma.
+$$
+
+For a tangential field on a cylindrical surface with radius `R` and the
+conductor at `r ≤ R`, assume the only relevant component of `H` is
+azimuthal `H_φ(r) e^{jωt}` (the canonical IH workpiece geometry).
+Then `∇ × H = -∂_r H_φ ẑ + (1/r) ∂_r(r H_φ) r̂` (in cylindrical
+coordinates), and substituting:
+
+$$
+-\frac{1}{r}\,\partial_r\!\left[r\,\rho\,\partial_r H_\varphi\right]
+= -j\omega\,\mu(|H_\varphi|)\,H_\varphi.
+$$
+
+For constant `ρ` (uniform conductivity), this rearranges to the cell
+PDE used in [`esim_cell_problem.py`](../../src/radia/esim_cell_problem.py):
+
+$$
+\boxed{\quad
+\frac{\rho}{r}\,\partial_r\!\left[r\,\partial_r H\right] + j\omega\,\mu(|H|)\,H = 0,
+\qquad r \in [0, R].
+\quad}
+$$
+
+### 1.5.2 Boundary conditions
+
+- **Surface** (`r = R`).  The Robin / Leontovich SIBC is *not* applied
+  on the cell — instead the cell is driven by the tangential field
+  `H(R) = H_t` set by the outer (BEM / FEM) solve.  In the cell, this
+  becomes a Dirichlet BC.
+- **Axis** (`r = 0`).  Regularity of `H` (no infinite derivatives at
+  the axis) implies `∂_r H(0) = 0` by symmetry.
+
+The pair (Dirichlet at `R`, Neumann at `0`) gives a well-posed BVP
+for any `μ(|H|) > 0`.
+
+### 1.5.3 Weak form
+
+Multiply the strong PDE by a test function `v(r)` (complex,
+sufficiently smooth), and integrate against the **radial measure**
+`r\,dr` over `[0, R]`:
+
+$$
+\int_0^R \left\{ \frac{\rho}{r}\,\partial_r[r\,\partial_r H] +
+                 j\omega\,\mu(|H|)\,H \right\}\,v\,r\,dr = 0.
+$$
+
+Integrate by parts the first term, using `∂_r H(0) = 0`:
+
+$$
+-\int_0^R \rho\,r\,(\partial_r H)\,(\partial_r v^*)\,dr
++ \left[\rho\,r\,(\partial_r H)\,v^*\right]_{r=R}
++ j\omega \int_0^R \mu\,H\,v^*\,r\,dr = 0.
+$$
+
+The boundary term at `r = R` is `ρ R (∂_r H)|_R v^*(R)`.  Since
+`∂_r H|_R = -j ω σ A_φ + j κ H_t` evaluates via Ampère's law to a
+quantity proportional to the surface current density, this term is
+absorbed into the Dirichlet lift and does not appear in the
+homogeneous problem (we test against `v(R) = 0`).
+
+The resulting weak form:
+
+$$
+\boxed{\quad
+\int_0^R \rho\,r\,\partial_r H\,\partial_r v^*\,dr
+\;-\;j\omega \int_0^R \mu(|H|)\,H\,v^*\,r\,dr = 0,
+\quad}
+\qquad v(R) = 0,\ \partial_r v(0) = 0.
+$$
+
+This is a curl-curl-like form on a 1-D radial mesh with radial-weighted
+inner product.  Galerkin FE discretisation with P1 basis on a uniform
+mesh and one-point quadrature recovers exactly the finite-difference
+stencil used in [`esim_cell_problem.py:594-602`](../../src/radia/esim_cell_problem.py#L594-L602):
+
+$$
+\frac{\rho\,r_{i+1/2}}{h^2}\,(H_{i+1} - H_i) -
+\frac{\rho\,r_{i-1/2}}{h^2}\,(H_i - H_{i-1})
++ j\omega\,\mu_i\,r_i\,H_i = 0,
+$$
+
+after dividing by `r_i`.  The L'Hôpital limit at `r = 0` produces
+exactly the `4ρ/h²` coefficient documented at
+[`esim_cell_problem.py:609-611`](../../src/radia/esim_cell_problem.py#L609-L611).
+
+### 1.5.4 Why a finite-difference solver in production
+
+The weak form is **mathematically equivalent** to the production
+finite-difference (FD) solver on a uniform mesh.  We use FD instead of
+a full FE machinery because:
+
+1. The 1-D cell is small (`n_nodes = 100`) — FE-assembly overhead
+   would dominate the actual linear solve.
+2. The tridiagonal structure is exact under FD, allowing
+   `scipy.sparse.linalg.spsolve` with `O(n)` work per solve.  An FE
+   approach needs explicit mass-matrix assembly, which has the same
+   tridiagonal structure but more boilerplate.
+3. The L'Hôpital regularisation at `r = 0` is naturally handled by
+   the FD stencil; FE requires a ghost-cell convention or special
+   axis basis function (Henrotte basis — used by Radia's axisymmetric
+   *magnetic* solver, NOT by ESIM, see CLAUDE.md "Axisymmetric FE"
+   policy).
+
+For higher-dimensional problems (the planned 2-D nonlocal SIBC
+extension to capture finite-coil-aperture wide-band effects, see
+[`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.md)),
+a proper FE discretisation would be preferred.
 
 ---
 
@@ -365,6 +504,112 @@ NGSolve docs on `Curve()`.
 FEM paths.**  The single Z_s ESIM call that consumes this H_t is then
 geometry-aware via cylinder mode but does NOT see the local curvature
 (§ 3.1) — that's a separate, deeper limitation.
+
+### 4.2.5 Telegen reciprocity and the ΔL_telegen φ·B form
+
+This subsection derives the gauge-invariant Telegen formula for the
+workpiece-induced port inductance change `ΔL`, used in
+`calc_inductance.py` via [`radia.workpiece_surface.delta_L_telegen_phiB`](../../src/radia/workpiece_surface.py).
+
+**Setup.**  Let `Ω_wp` be the workpiece domain with boundary
+`Γ = ∂Ω_wp` and outward unit normal `n`.  The coil drives a port
+current `I_port`.  In the absence of the workpiece, the coil's
+own field has scalar potential `φ_inc` and vector potential `A_inc`
+on Γ such that `H_inc = -∇φ_inc` (scalar) and `B_inc = ∇ × A_inc`
+(vector) — both well-defined by Biot–Savart from the coil filaments.
+
+When the workpiece is added, an induced surface current `J_s` flows
+on Γ and produces a scattered field.  The total port impedance is
+`Z_port = Z_vacuum + ΔZ`, and we want a closed-form for `ΔZ`.
+
+**Telegen reciprocity** (energy form): the back-reaction at the port
+equals the volume integral of the field interaction:
+
+$$
+I_{\mathrm{port}}\,\Delta V_{\mathrm{port}}
+\;=\; \int_{\Omega_{\mathrm{wp}}} \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,d\Omega
+\;=\; \int_\Gamma \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,dS
+$$
+
+(the volume integral reduces to a surface integral because, in the
+SIBC limit, `J_s` is confined to a thin skin layer at Γ).  Hence
+
+$$
+\Delta Z = \frac{\Delta V_{\mathrm{port}}}{I_{\mathrm{port}}}
+        = \frac{1}{I_{\mathrm{port}}^2}\,\int_\Gamma \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,dS.
+$$
+
+This is the **`J_s · A_inc` form** ([`workpiece_surface.py:209-291`](../../src/radia/workpiece_surface.py#L209-L291)).
+It is gauge-dependent in the discrete setting: changing the gauge of
+`A_inc` (e.g. `A_inc → A_inc + ∇χ`) adds a surface-divergence term
+`∫_Γ J_s · ∇χ dS = -∫_Γ (∇_s · J_s) χ dS`.  In the continuum,
+`∇_s · J_s = 0` for the induced eddy currents (Faraday's law +
+surface charge balance), so the gauge term vanishes.  In a P1 FE
+discretisation, however, `∇_s · J_s_h` has element-edge jumps that
+behave as a weak surface divergence — leading to a ~100× error on
+`Im(ΔL)` compared to energy-balance predictions.
+
+**The fix — `φ · (n · B_inc)` form.**  Use the surface vector-calculus
+identity (closed Γ, MQS limit):
+
+$$
+\int_\Gamma \mathbf{J}_s \cdot \mathbf{A}\,dS
+\;=\;\int_\Gamma \varphi\,(\mathbf{n} \cdot \mathrm{curl}\,\mathbf{A})\,dS
+\;=\;\int_\Gamma \varphi\,(\mathbf{n} \cdot \mathbf{B}_{\mathrm{inc}})\,dS,
+$$
+
+where `φ` is the workpiece-side scalar potential from the SIBC BIE
+solve (`H_t = -∇_s φ` on Γ).  Step-by-step:
+
+1. `J_s = -n × ∇_s φ` on the workpiece surface (definition).
+2. `∫_Γ J_s · A dS = -∫_Γ (n × ∇_s φ) · A dS = ∫_Γ ∇_s φ · (n × A) dS`
+   (using `(a × b) · c = (b × c) · a`).
+3. `∫_Γ ∇_s φ · (n × A) dS = -∫_Γ φ · (∇_s · (n × A)) dS`
+   (surface integration by parts on the closed surface).
+4. `∇_s · (n × A) = -n · curl A` (a standard surface vector-calculus
+   identity), so the result follows: `∫_Γ φ · (n · curl A) dS = ∫_Γ φ · (n · B) dS`.
+
+The right-hand side uses `B = curl A` directly — gauge-invariant.
+This is the formula implemented in
+[`workpiece_surface.py:294-379`](../../src/radia/workpiece_surface.py#L294-L379):
+
+$$
+\boxed{\quad
+\Delta L = \mathrm{Re}\,\frac{1}{I_{\mathrm{port}}^2}
+          \int_\Gamma \varphi(r)\,\bigl(\mathbf{n}(r) \cdot \mathbf{B}_{\mathrm{inc}}(r)\bigr)\,dS,
+\quad}
+$$
+
+and the resistive contribution:
+
+$$
+\Delta R = -\omega\,\mathrm{Im}\,\frac{1}{I_{\mathrm{port}}^2}
+           \int_\Gamma \varphi(r)\,\bigl(\mathbf{n}(r) \cdot \mathbf{B}_{\mathrm{inc}}(r)\bigr)\,dS.
+$$
+
+(See [`calc_inductance.py:839-840`](../../src/radia/panels/calc_inductance.py#L839-L840) for the implementation of the sign convention.)
+
+**Discrete quadrature.**  Each workpiece triangle `T` contributes:
+
+$$
+\Delta L|_T = \mathrm{Re}\,\frac{1}{I_{\mathrm{port}}^2}\,
+              \varphi_{\mathrm{avg},T} \cdot
+              (\mathbf{n}_T \cdot \mathbf{B}_{\mathrm{inc}}(c_T)) \cdot A_T,
+$$
+
+where `c_T`, `A_T`, `n_T` are the centroid, area, and outward unit
+normal of `T`, and `φ_avg,T = (1/A_T) ∫_T φ_h dS` is the area-
+averaged potential on `T` (for P1 `φ_h` this equals
+`(φ_1 + φ_2 + φ_3)/3`).  `B_inc(c_T)` is evaluated by direct
+Biot–Savart from the coil filaments at the triangle centroid —
+single-point quadrature is sufficient because `B_inc` varies smoothly
+on the workpiece scale, while `φ_h` and `n_T` vary rapidly on the
+mesh scale.
+
+**Cost.**  `O(N_filaments × N_triangles)` for the Biot–Savart kernel
+evaluation; in the production gapped-torus benchmark this is
+~50 ms.  C++ kernel `_HFromSegmentsComplex` is used
+([`workpiece_surface.py:340-365`](../../src/radia/workpiece_surface.py#L340-L365)).
 
 ### 4.3 What is and is not "curve-order-aware"
 
