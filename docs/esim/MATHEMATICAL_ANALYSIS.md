@@ -18,6 +18,97 @@ The companion documents are:
 
 ---
 
+## 0. Nomenclature
+
+For self-contained reading.  All quantities are SI; phasor convention
+`e^{+jωt}` (engineering / Hollaus 2025 / NGSolve convention).
+
+### Fields and potentials
+
+| Symbol | Meaning | Units |
+|---|---|---|
+| **H** | Magnetic field intensity (vector) | A/m |
+| **B** | Magnetic flux density (vector) | T |
+| **E** | Electric field (vector) | V/m |
+| **J** | Volume current density (vector) | A/m² |
+| **J_s** | Surface current density on workpiece | A/m |
+| **A** | Magnetic vector potential | T·m |
+| φ | Scalar magnetic potential (on workpiece surface for BIE) | A |
+| **H_t** | Tangential H on workpiece surface | A/m |
+| H_0, H_t_rms | Driven surface H magnitude / mesh-RMS value | A/m |
+| **A_t** | Tangential A on workpiece surface (= A − (A·n)n) | T·m |
+
+### Material parameters
+
+| Symbol | Meaning | Units |
+|---|---|---|
+| σ | Electrical conductivity | S/m |
+| ρ | Electrical resistivity (= 1/σ) | Ω·m |
+| μ_0 | Vacuum permeability (4π·10⁻⁷) | H/m |
+| μ_r | Relative permeability (real, possibly H-dependent) | 1 |
+| μ | Total permeability (= μ_0 μ_r) | H/m |
+| μ' − jμ" | Complex permeability (real + hysteretic loss) | H/m |
+| BH curve | Tabulated H[A/m] → B[T] for ferromagnetic materials | (table) |
+
+### Geometric / numerical parameters
+
+| Symbol | Meaning | Units |
+|---|---|---|
+| R | Cylinder radius (cell-problem half-thickness) | m |
+| a | Slab half-thickness | m |
+| δ | Linear skin depth `√(2ρ / (ω μ_0 μ_r))` | m |
+| ξ | Dimensionless skin parameter `R/δ` or `a/δ` | 1 |
+| ω | Angular frequency (= 2πf) | rad/s |
+| f | Frequency | Hz |
+| n_peri | PEEC perimeter filament count per coil cross-section | 1 |
+| n_nodes | Cell-problem radial mesh resolution (default 100) | 1 |
+
+### Solver outputs
+
+| Symbol | Meaning | Units | Source |
+|---|---|---|---|
+| Z_s | Complex effective surface impedance | Ω | cell solver |
+| P' | Active surface power density `½ Re(Z_s)|H_t|²` | W/m² | cell solver |
+| Q' | Reactive surface power density `½ Im(Z_s)|H_t|²` | VAR/m² | cell solver |
+| P_wp | Workpiece total dissipation `∫_Γ P' dS` | W | outer solver |
+| L_coil | Self-inductance of coil (vacuum) | H | outer solver |
+| ΔL | Workpiece-induced port inductance change | H | Telegen reciprocity |
+| L_total | L_coil + ΔL (with workpiece) | H | outer solver |
+| R_coil | AC resistance of coil | Ω | outer solver |
+| ΔR | Workpiece-induced port resistance change | Ω | Telegen reciprocity |
+| R_total | R_coil + ΔR | Ω | outer solver |
+| R_ac/R_dc | AC-to-DC resistance ratio (per Dowell) | 1 | cell solver |
+
+### Iteration parameters
+
+| Symbol | Meaning | Default |
+|---|---|---|
+| α | Karl-iteration under-relaxation parameter `--esim-relax` | 0.5 |
+| tol_Karl | Karl convergence threshold `--esim-tol` | 1e-3 |
+| max_iter_Karl | Karl max iterations `--esim-max-iter` | 15 |
+| tol_cell | Cell-problem inner Picard tolerance | 1e-6 (hard-coded) |
+| max_iter_cell | Cell-problem inner Picard max iter | 50 |
+| L (Lipschitz) | Local contraction-factor of `T = E ∘ H_t` | empirical ≈ 1 |
+
+### Acronyms
+
+| | |
+|---|---|
+| ESIM | Effective Surface Impedance Method |
+| SIBC | Surface Impedance Boundary Condition |
+| BIE | Boundary Integral Equation |
+| BEM | Boundary Element Method |
+| PEEC | Partial Element Equivalent Circuit |
+| FEM | Finite Element Method |
+| HCurl | H(curl) Nédélec edge-element finite-element space |
+| MQS | Magneto-Quasi-Static (no displacement current) |
+| RWG | Rao–Wilton–Glisson (HDivSurface RT₀ basis) |
+| RT₀ | Lowest-order Raviart–Thomas (= RWG) |
+| Telegen | Telegen's reciprocity theorem |
+| Karl iter. | Hollaus-type outer Picard iteration (see § 6) |
+
+---
+
 ## 1. What ESIM Solves
 
 ESIM ("Effective Surface Impedance Method") replaces the linear Dowell
@@ -622,6 +713,257 @@ evaluation; in the production gapped-torus benchmark this is
 | FEM `H_t_rms` (Integrate on BND) | **Yes** | [`calc_fem_kelvin.py:791-793`](../../src/radia/panels/calc_fem_kelvin.py#L791-L793) |
 | ESIM cell solve (1-D radial mesh) | **N/A** — cell has no surface curving concept | n/a |
 | Z_s scalar fed back to outer | **Same Z_s regardless of curve order** | by design (scalar mesh-RMS Karl) |
+
+---
+
+## 4.4 HCurl Weak Form (FEM-Kelvin and FEM-coilmesh Paths)
+
+This section formally derives the HCurl weak form used by
+`calc_fem_kelvin.py` and `calc_fem_coilmesh.py`, from Maxwell's
+equations to the Galerkin assembly.  The BIE weak form has already
+been described under § 1.5 (the workpiece scalar BIE is dual to the
+cell-problem weak form on the surface).
+
+### 4.4.1 Strong form (MQS A formulation with SIBC)
+
+In the MQS limit (no displacement current), the magnetic vector
+potential `A` satisfies:
+
+$$
+\nabla \times (\nu\,\nabla \times \mathbf{A}) + j\omega\,\sigma\,\mathbf{A}
+= \mathbf{J}_{\mathrm{coil}}, \qquad \nu = 1/\mu.
+$$
+
+In the air domain `Ω_air` (σ = 0): `∇ × (ν ∇ × A) = J_coil`.
+In the workpiece volume `Ω_wp`: replaced by the SIBC on `Γ_wp = ∂Ω_wp`,
+which couples `A_t` to the workpiece scalar surface impedance via the
+Leontovich relation `n × E = Z_s H_t`:
+
+$$
+\mathbf{n} \times (\nu\,\nabla \times \mathbf{A}) =
+\frac{j\omega}{Z_s}\,\mathbf{A}_t \quad\text{on } \Gamma_{\mathrm{wp}}.
+$$
+
+(Derivation: from `n × E = Z_s H_t`, substitute `E = -jω A` (gauge),
+`H_t = (1/μ_0) (n × A_t) · t / |t|` — and after simplification using
+`n × (curl A) = -μ_0 H_t` on the workpiece surface, the Robin
+coefficient `jω/Z_s` emerges.)
+
+### 4.4.2 Weak form (Galerkin H(curl))
+
+Multiply by a test function `v ∈ H(curl; Ω)`, integrate over Ω, use
+integration by parts:
+
+$$
+\int_\Omega \nu\,(\nabla \times \mathbf{A}) \cdot (\nabla \times \mathbf{v})\,d\Omega
+\;+\; \int_{\Gamma_{\mathrm{wp}}} \frac{j\omega}{Z_s}\,\mathbf{A}_t \cdot \mathbf{v}_t\,dS
+\;=\; \int_\Omega \mathbf{J}_{\mathrm{coil}} \cdot \mathbf{v}\,d\Omega.
+$$
+
+The boundary term on the outer Dirichlet `Γ_∞` is dropped by choice
+of trial space (`A_t = 0` on `Γ_∞` or its Kelvin-transformed image).
+
+This is exactly the bilinear form assembled at
+[`calc_fem_kelvin.py:565`](../../src/radia/panels/calc_fem_kelvin.py#L565):
+
+```python
+a_bf = BilinearForm(fes)
+a_bf += nu_cf * curl(u) * curl(v) * dx                    # curl-curl
+a_bf += (1j*omega / Z_s_cf) * u.Trace() * v.Trace() * ds(sibc_bnd)  # Robin
+```
+
+with the Kelvin transformation realised through `nu_cf` taking the
+scaled value `NU_0 (r'/R)²` inside the Kelvin-inverted sphere
+([`calc_fem_kelvin.py:240-252`](../../src/radia/panels/calc_fem_kelvin.py#L240-L252)).
+
+### 4.4.3 Per-DOF Robin coefficient
+
+In the per-DOF Karl variant, `Z_s` becomes a function of position on
+`Γ_wp` — represented as an H1(`Γ_wp`)-valued GridFunction:
+
+```python
+gf_Zs = GridFunction(fes_Zs_on_sibc_bnd)
+# ... per-DOF ESIM call to populate gf_Zs ...
+robin_coeff = 1j * omega / gf_Zs    # CoefficientFunction broadcasting
+a_bf += robin_coeff * u.Trace() * v.Trace() * ds(sibc_bnd)
+```
+
+NGSolve broadcasts the per-DOF coefficient onto each quadrature point
+at assembly time.  Convergence of the per-DOF Karl loop is on
+`max_i |Z_s_new[i] − Z_s_old[i]| / |Z_s_old[i]|` (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4).
+
+### 4.4.4 Compound A-V form (calc_fem_coilmesh)
+
+For volumetric coil, the bilinear form gains:
+
+$$
+\int_{\Omega_{\mathrm{coil}}} j\omega\,\sigma_{\mathrm{coil}}\,
+(\mathbf{A} + \nabla\varphi) \cdot (\mathbf{v} + \nabla\psi)\,d\Omega
+$$
+
+(see [`calc_fem_coilmesh.py:216-222`](../../src/radia/panels/calc_fem_coilmesh.py#L216-L222)),
+where `(φ, ψ) ∈ H1(Ω_coil)` is the source scalar potential on the
+coil volume with Dirichlet BC `φ = 1` (source face) / `φ = 0` (sink
+face).  The compound FES is `HCurl(A) × H1(φ_coil)` and the linear
+solve is a single block-direct factorisation.
+
+---
+
+## 4.5 Complex-μ Permeability (Hysteretic Loss)
+
+The ESIM cell solver supports two BH-relation modes (the design is in
+[`ComplexPermeabilityInterpolator`](../../src/radia/esim_cell_problem.py#L49)
+and `ESIMCellProblemSolver.__init__`, lines 866-875):
+
+### 4.5.1 Real BH curve (saturation only)
+
+A two-column table `H[A/m] → B[T]` is loaded via
+[`em_material.load_bh_file`](../../src/radia/em_material.py#L81).
+The cell solver interpolates `μ(|H|) = B(|H|) / |H|` (cubic spline if
+≥4 points, linear otherwise — see [`esim_cell_problem.py:75`](../../src/radia/esim_cell_problem.py#L75)).
+This branch models **saturation only**; the loss is purely Joule
+(`P' = ½ Re(Z_s) |H_t|²`).
+
+Use case: structural / electrical steel, lamination cores, IH workpieces.
+
+### 4.5.2 Complex permeability `μ' − jμ"` (hysteretic + grain eddy loss)
+
+For lossy ferrite cores, the constitutive relation is
+
+$$
+B = \mu(H) \cdot H, \qquad \mu = \mu' - j\mu",
+$$
+
+where the imaginary part `μ"` captures both hysteretic loss and
+grain-level eddy-current loss inside the conductor.  The cell PDE is
+unchanged in form but `μ` is now complex:
+
+$$
+\frac{\rho}{r}\,\partial_r[r\,\partial_r H] + j\omega\,\mu(|H|)\,H = 0,
+\qquad \mu = \mu'(|H|) - j\mu"(|H|).
+$$
+
+The dissipation formula gains an extra "magnetic" term:
+
+$$
+P' = \tfrac{1}{2}\,\rho\,\int_0^R |\partial_r H|^2 r\,dr
+   + \underbrace{\tfrac{1}{2}\omega\,\int_0^R \mu"(|H|)\,|H|^2 r\,dr}_{P_{\text{magnetic}}}.
+$$
+
+(See [`esim_cell_problem.py:1100-1158`](../../src/radia/esim_cell_problem.py#L1100-L1158)
+where `P_magnetic` is computed separately and returned in the result dict.)
+
+**Input format** (cell-solver `complex_mu` argument):
+
+1. Constant tuple `(μ'_r, μ"_r)` — constant complex permeability.
+2. Table `[[H, μ'_r, μ"_r], ...]` — H-dependent.
+3. Dict `{'H': [...], 'mu_prime': [...], 'mu_double_prime': [...]}` —
+   numpy-friendly form.
+
+Use case: Mn-Zn / Ni-Zn ferrites, ferromagnetic insulators where
+the bulk loss is non-negligible vs the eddy loss.
+
+**Not yet exposed via CLI**: the production CLIs accept only `--bh-file`
+(real BH curve) at present.  Complex-μ requires direct Python use of
+the cell solver.  This is a roadmap item.
+
+---
+
+## 4.6 R_ac/R_dc Output of the Finite-Slab / Cylinder Solver
+
+`ESIMFiniteSlabSolver.solve(H0)` also returns an **R_ac/R_dc ratio**:
+
+$$
+\frac{R_{\mathrm{ac}}}{R_{\mathrm{dc}}} =
+\frac{P_{\mathrm{ohmic, ac}}}{P_{\mathrm{ohmic, dc}}}
+$$
+
+where `P_ohmic,ac` is the actual eddy-current dissipation at the
+given `H_t` and `P_ohmic,dc` is the equivalent DC dissipation
+`I² R_dc = I² ρ L / A`.  This ratio is used inside `peec_bundle`
+to scale per-filament Dowell resistances (when `Zs_fil` is provided
+to `solve_loop_bundle`).
+
+Implementation:
+[`esim_cell_problem.py:706-744`](../../src/radia/esim_cell_problem.py#L706-L744)
+(numerical integration of `|∂_r H|² r dr`).
+
+Closed-form Dowell reference for circular cross-section is at
+[`esim_cell_problem.py:787-813`](../../src/radia/esim_cell_problem.py#L787-L813):
+
+$$
+\frac{R_{\mathrm{ac}}}{R_{\mathrm{dc}}}\bigg|_{\mathrm{Dowell}} =
+\xi \cdot \frac{\sinh(2\xi) + \sin(2\xi)}{\cosh(2\xi) - \cos(2\xi)},
+\qquad \xi = a/\delta.
+$$
+
+The numerical R_ac/R_dc from the BVP solver matches the Dowell
+closed form to ~10⁻³ in the regime `1 ≤ ξ ≤ 10`; outside that
+range either the Dowell limit (`ξ → 0`: R_ratio → 1; `ξ → ∞`:
+R_ratio → ξ) or the BVP solver alone is preferred.
+
+---
+
+## 4.7 Limitations and Regime of Validity
+
+The Radia ESIM implementation is validated and expected to perform
+well **inside** a specific physics regime.  Outside it, the user
+should not rely on the results.
+
+### 4.7.1 Frequency regime
+
+| Frequency | Validity | Reason |
+|---|---|---|
+| DC – 1 Hz | **Outside** (use FEM A-V with `--impedance-model sibc` and `mu_r=1`) | δ ≫ workpiece size; no skin layer to apply SIBC to |
+| 10 Hz – 10 kHz | OK if workpiece is conductive (δ ~ workpiece size); marginal otherwise | Transition regime — verify with `calc_fem_coilmesh` |
+| 10 kHz – 1 MHz | **In regime** | Production IH frequencies; thin-skin approx valid |
+| 1 MHz – 100 MHz | OK if δ ≪ workpiece size, but verify | Displacement current still negligible for most engineering scales |
+| > 100 MHz | **Outside** | Wave effects in the air (radiation, ε₀ matters); use full-wave EFIE/MFIE (`ngsolve.bem`) |
+
+The MQS approximation (no displacement current) is hard-coded
+throughout Radia (see CLAUDE.md "Green's Function: Laplace Kernel
+Only").  For high-frequency wave problems, use ngsolve.bem with the
+Helmholtz kernel.
+
+### 4.7.2 Material regime
+
+| Material class | Validity | Caveat |
+|---|---|---|
+| Non-magnetic conductor (Cu, Al, brass, μ_r = 1) | **In regime** | Use `--impedance-model sibc`; ESIM is over-engineered here |
+| Linear ferromagnetic (μ_r constant > 1) | **In regime** | Use `--impedance-model sibc --mu-r 100` |
+| Soft-magnetic with single-valued BH curve (silicon steel, electrical steel, soft iron) | **In regime** | Use `--impedance-model esim --bh-file ...` |
+| Hard-magnetic / hysteretic materials (rare-earth magnets) | **Outside** | ESIM assumes single-valued μ(|H|); does not model branching BH loops |
+| Lossy ferrite (Mn-Zn, Ni-Zn) | **In regime** but CLI not yet exposed | Use the Python cell-solver directly with `complex_mu` argument |
+| Anisotropic materials (laminated cores) | **Outside** | ESIM cell solver is scalar / isotropic; for laminated cores use the homogenisation method of Hollaus/Hannukainen/Hiptmair (separate solver) |
+
+### 4.7.3 Geometric regime
+
+| Geometric feature | Validity | Caveat |
+|---|---|---|
+| Idealised cylindrical / planar workpieces | **In regime** | Single global radius / thickness OK |
+| Complex shapes with locally varying curvature | OK with caveat | Single scalar Z_s assumes a single global radius; per-panel R is roadmap (see § 3.4) |
+| Sharp corners (gear roots, fillets) | **Marginal** | Cell solver assumes locally-1D field; corners violate this. Mesh refinement in the corner region + FEM A-V comparison is recommended |
+| Very thin workpieces (`a < δ`) | **Outside** the thin-skin approximation that SIBC requires | Use `--impedance-model sibc` with thin-shell formulation, OR use FEM A-V volumetric workpiece mesh |
+| Very thick workpieces (`a > 100 δ`) | **In regime** but cell mesh too coarse | Bump `n_nodes` to 2000+ (see § 5.1 cross-check) |
+
+### 4.7.4 Coupling-mode regime
+
+| Coupling assumption | Validity | When it fails |
+|---|---|---|
+| Weak coupling (coil current fixed, workpiece reacts) | **In regime** for most IH | Strong-coupling cases (deep saturation + strong workpiece back-reaction onto coil current distribution) need `calc_fem_coilmesh.py` full A-V |
+| Linear coil (Dowell skin formula in filament bundle) | **In regime** | Strong coil saturation (NOT a coil mode in Radia — coil materials are linear by design, see CLAUDE.md) |
+
+### 4.7.5 Known accuracy caveats
+
+- Scalar mesh-RMS H_t → single Z_s gives ±5 % accuracy for typical IH
+  designs.  For < 5 % accuracy use `--esim-per-panel`.
+- Telegen ΔL is gauge-invariant in continuum but ~1 % error from
+  centroid quadrature on coarse workpiece meshes.
+- The PEEC ↔ BEM-A R_coil discrepancy (1.3 – 3 ×) is **expected** —
+  see [`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md).
+- For publication accuracy, always anchor against
+  `calc_fem_coilmesh.py` (volumetric A-V); it is the highest-fidelity
+  reference inside Radia.
 
 ---
 
