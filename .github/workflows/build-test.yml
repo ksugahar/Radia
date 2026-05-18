@@ -29,13 +29,25 @@ jobs:
       - uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
-      # Install test dependencies (MCP server tests need mcp package)
+      # Install test dependencies (MCP server tests need mcp package).
+      #
+      # Also editable-install radia-mcp from the freshly-checked-out
+      # source so `import radia_mcp.<subpkg>.server` resolves to THIS
+      # commit, not a stale wheel that a previous tag CI may have
+      # left in system site-packages.  Without this,
+      # test_tools_doc.py silently runs against an older radia_mcp;
+      # if any tool docstring changed between releases, the
+      # committed TOOLS.md (regenerated from this commit's source)
+      # will NOT match the `render()` output (stale source) and the
+      # test fails as "stale".  2026-05-18 v4.55.1 hit this when the
+      # IH MCP tool docstrings were updated.
       # ----------------------------------------------------------------
       - name: Install test dependencies
         shell: pwsh
         run: |
           python -m pip install mcp pytest-rerunfailures --quiet
-          Write-Host "mcp + pytest-rerunfailures installed"
+          python -m pip install -e packages/radia-mcp --no-deps --quiet
+          Write-Host "mcp + pytest-rerunfailures + radia-mcp (editable from this checkout) installed"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: pip-installed version (6.2.2602+)
