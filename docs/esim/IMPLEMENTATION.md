@@ -165,18 +165,35 @@ back to a thin-skin exponential `H ~ H0 * exp(-(a-z)/δ)` (line 506-511).
 
 ### 2.4 Output dict
 
-`solve(H0)` returns (lines 547-559):
+`ESIMFiniteSlabSolver.solve(H0)` returns (lines 547-559):
 
 | Key | Type | Meaning |
 |---|---|---|
 | `Z` | complex | Effective surface impedance `Z = 2(P' + jQ')/|H_0|²` [Ω] |
 | `P_prime` | float | Active power density `½ Re(Z) |H_0|²` [W/m²] |
 | `Q_prime` | float | Reactive power density `½ Im(Z) |H_0|²` [VAR/m²] |
+| `P_magnetic` | float | Hysteretic / grain-eddy magnetic loss density [W/m²] (only nonzero when `complex_mu` is supplied) |
+| `R_ratio` | float | AC-to-DC resistance ratio `R_ac / R_dc` (used by `peec_bundle` for per-filament Dowell scaling — see § 4.5) |
 | `H_solution` | complex array | H(r) profile, length `n_nodes` |
 | `mu_final` | float | Surface-region mean μ from the converged iteration |
 | `converged` | bool | True if `rel_change < tol` reached |
 | `iterations` | int | Number of Picard iter to convergence |
 | `xi`, `delta` | float | ξ = R/δ and δ for diagnostic logging |
+
+The `R_ratio` is computed by direct numerical integration of the eddy
+current dissipation:
+
+```python
+# Slab (line 706-716):
+R_ratio = a * ∫_0^a |∂_z H|² dz / |H(0) - H(a)|²
+
+# Cylinder (line 680-704):
+R_ratio = ∫_0^R |∂_r H|² · r dr / [R · |H(0)|² / 2]
+```
+
+The closed-form Dowell reference for circular cross-section is at
+[`esim_cell_problem.py:787-813`](../../src/radia/esim_cell_problem.py#L787-L813)
+and matches the numerical `R_ratio` to ~10⁻³ in `1 ≤ ξ ≤ 10`.
 
 ---
 
