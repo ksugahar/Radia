@@ -29,9 +29,20 @@ PEEC_IND_OVERVIEW = """
 
 Given a coil solid STEP file + conductivity + frequency,
 returns:
-  * L_coil_nH  — inductance in nanohenry
-  * R_coil_mOhm — AC resistance including skin effect via SIBC
-  * Z_coil = R + j·ω·L (complex impedance)
+  * L_coil_nH  — inductance in nanohenry (includes internal-inductance
+    drop at high frequency via the Bessel `Z_cyl(ω)` formulation)
+  * R_coil_mOhm — full round-wire **AC resistance** (Bessel
+    `Z_cyl(ω) · L_filament`).  Fixed 2026-05-19: the panel now
+    computes per-filament `Zs_fil_k = n_peri · (Z_cyl(ω) − R_DC/m) ·
+    L_k` and passes it to `solve_loop_bundle`, so R recovers R_DC at
+    low frequency AND the SIBC `(1+j)/(σδ·P)` asymptote at high
+    frequency.  Cross-section radius is read from the topology
+    (`cross_section_radius_m_mean` or derived from cell_wh).  Falls
+    back to R_DC-only with a WARNING if the radius cannot be inferred
+    (e.g. unusual rectangular bars without cross_section_area_m2_mean).
+    See docs/esim/R_MISMATCH_PEEC_VS_BEMA.md.
+  * Z_coil = R + j·ω·L (full complex impedance from the Bessel
+    formulation)
 
 No workpiece, no BEM, no FEM mesh.  The fastest IH panel mode; use
 when the question is "what is the coil's L / R at this freq?" and
@@ -58,8 +69,18 @@ Volume-grid filament schemes (FastHenry nwinc/nhinc) spend DOFs on
 interior cells that carry no current at these frequencies.  Perimeter
 placement spends them all where the current actually flows.
 
-Each filament carries the per-filament SIBC impedance Z_s = (1+j)/(σδ)
-for circular wire; Dowell for rectangular; ESIM for nonlinear steel.
+Per-filament SIBC is now wired (2026-05-19): `_solve_coil_peec`
+computes `Zs_fil_k = n_peri · (cylinder_ac_impedance(a_eq, σ, ω) −
+R_DC_per_m) · L_filament_k` and passes it as the `Zs_fil` argument
+of `solve_loop_bundle`.  The result is the full round-wire Bessel
+AC impedance bundle (R_DC at ω → 0, `(1+j)/(σδ·2πa)` per unit length
+at high ω).
+
+Dowell for rectangular bars and ESIM for nonlinear steel are NOT
+wired into this dispatcher yet — round / quasi-round cross sections
+get the proper Bessel R; high-aspect-ratio ribbons fall back to the
+equivalent-circle approximation (within ~10 % for square-like, errs
+for thin ribbons).
 
 ## Input dispatch
 
