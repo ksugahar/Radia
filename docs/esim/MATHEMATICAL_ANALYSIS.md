@@ -187,11 +187,18 @@ $$
 \qquad \rho = 1/\sigma.
 $$
 
-For a tangential field on a cylindrical surface with radius `R` and the
-conductor at `r ≤ R`, assume the only relevant component of `H` is
-azimuthal `H_φ(r) e^{jωt}` (the canonical IH workpiece geometry).
-Then `∇ × H = -∂_r H_φ ẑ + (1/r) ∂_r(r H_φ) r̂` (in cylindrical
-coordinates), and substituting:
+For an infinite axially-uniform cylindrical conductor (no `z` or `φ`
+dependence) driven by an azimuthal surface field, symmetry requires
+`H = H_φ(r) φ̂`.  The cylindrical curl with this ansatz is
+
+$$
+\nabla \times \mathbf{H} = \frac{1}{r}\,\partial_r\!\bigl[r\,H_\varphi\bigr]\,\hat{z}
+$$
+
+(no `r̂` or `ẑ` components from a purely-`φ̂` field that depends only
+on `r`).  Then `J = σ E = (σ/r) ∂_r[r H_φ] ẑ`, and applying
+`∇ × (∇ × H) = -∇²H` plus `∇ × J = jωμ H` gives, after one more
+cylindrical-curl operation:
 
 $$
 -\frac{1}{r}\,\partial_r\!\left[r\,\rho\,\partial_r H_\varphi\right]
@@ -239,11 +246,9 @@ $$
 + j\omega \int_0^R \mu\,H\,v^*\,r\,dr = 0.
 $$
 
-The boundary term at `r = R` is `ρ R (∂_r H)|_R v^*(R)`.  Since
-`∂_r H|_R = -j ω σ A_φ + j κ H_t` evaluates via Ampère's law to a
-quantity proportional to the surface current density, this term is
-absorbed into the Dirichlet lift and does not appear in the
-homogeneous problem (we test against `v(R) = 0`).
+For the homogeneous Dirichlet problem we test against `v ∈ H¹_0([0,R])`
+with `v(R) = 0`, so the boundary term at `r = R` vanishes
+identically.
 
 The resulting weak form:
 
@@ -269,6 +274,16 @@ $$
 after dividing by `r_i`.  The L'Hôpital limit at `r = 0` produces
 exactly the `4ρ/h²` coefficient documented at
 [`esim_cell_problem.py:609-611`](../../src/radia/esim_cell_problem.py#L609-L611).
+
+*Caveat on the FE↔FD equivalence statement above.*  Strictly, the
+equivalence holds when the stiffness term uses midpoint quadrature
+on each element (which gives the `r_{i±1/2}` weights) AND the mass
+term uses vertex / lumped quadrature (which gives `μ_i r_i`).  Mixing
+two quadrature rules in this way is non-standard but well-defined; a
+pure-Galerkin P1 implementation with consistent (Gauss) quadrature
+gives a structurally identical tridiagonal stencil with slightly
+different coefficients (differ by `O(h)`) and converges to the same
+continuum limit.
 
 ### 1.5.4 Why a finite-difference solver in production
 
@@ -596,11 +611,19 @@ FEM paths.**  The single Z_s ESIM call that consumes this H_t is then
 geometry-aware via cylinder mode but does NOT see the local curvature
 (§ 3.1) — that's a separate, deeper limitation.
 
-### 4.2.5 Telegen reciprocity and the ΔL_telegen φ·B form
+### 4.2.5 Lorentz reciprocity / reaction integral for ΔL (the φ·B form)
 
-This subsection derives the gauge-invariant Telegen formula for the
-workpiece-induced port inductance change `ΔL`, used in
+This subsection derives the gauge-invariant formula for the
+workpiece-induced port impedance change `ΔZ`, implemented in
 `calc_inductance.py` via [`radia.workpiece_surface.delta_L_telegen_phiB`](../../src/radia/workpiece_surface.py).
+
+**Naming note.**  The codebase function name uses "telegen" as lab
+shorthand.  The correct literature term for the integral identity
+below is the **Lorentz reciprocity theorem** in its
+**reaction-integral form** (Rumsey 1954; Harrington 1961, *Time-
+Harmonic Electromagnetic Fields*, §3.8).  Telegen's reciprocity is a
+distinct, network-theoretic result.  IGTE-paper readers should cite
+Harrington / Rumsey.
 
 **Setup.**  Let `Ω_wp` be the workpiece domain with boundary
 `Γ = ∂Ω_wp` and outward unit normal `n`.  The coil drives a port
@@ -613,22 +636,39 @@ When the workpiece is added, an induced surface current `J_s` flows
 on Γ and produces a scattered field.  The total port impedance is
 `Z_port = Z_vacuum + ΔZ`, and we want a closed-form for `ΔZ`.
 
-**Telegen reciprocity** (energy form): the back-reaction at the port
-equals the volume integral of the field interaction:
+**Reaction-integral identity** (Lorentz reciprocity; in the MQS
+limit the field interaction reduces to the magnetic-flux coupling
+form): the back-reaction at the port is
 
 $$
-I_{\mathrm{port}}\,\Delta V_{\mathrm{port}}
-\;=\; \int_{\Omega_{\mathrm{wp}}} \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,d\Omega
-\;=\; \int_\Gamma \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,dS
+\Delta V_{\mathrm{port}}\,I_{\mathrm{port}}^{-1}
+\;=\; \frac{j\omega}{I_{\mathrm{port}}^2}\,
+\int_\Gamma \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,dS
 $$
 
-(the volume integral reduces to a surface integral because, in the
-SIBC limit, `J_s` is confined to a thin skin layer at Γ).  Hence
+(the volume integral collapses to a surface integral because, in the
+SIBC limit, `J_s` is confined to a thin skin layer at Γ).  Defining
+the auxiliary complex quantity
 
 $$
-\Delta Z = \frac{\Delta V_{\mathrm{port}}}{I_{\mathrm{port}}}
-        = \frac{1}{I_{\mathrm{port}}^2}\,\int_\Gamma \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,dS.
+\Lambda \;\equiv\; \frac{1}{I_{\mathrm{port}}^2}\,
+\int_\Gamma \mathbf{J}_s \cdot \mathbf{A}_{\mathrm{inc}}\,dS
+\qquad [\,\mathrm{H}\,]
 $$
+
+(units of henries), we have `ΔZ = jω Λ`, hence:
+
+$$
+\Delta L \;=\; \mathrm{Re}\,\Lambda, \qquad
+\Delta R \;=\; -\omega\,\mathrm{Im}\,\Lambda.
+$$
+
+(Verification: `Λ = ΔL_real + j·(ΔL_imag)`; `ΔZ = jω Λ = -ω·Im(Λ) + jω·Re(Λ)`;
+matching with `ΔZ = ΔR + jωΔL` gives `ΔR = -ω·Im(Λ)` and
+`ΔL = Re(Λ)`.  The code variable named `delta_L_complex` is `Λ`, see
+[`workpiece_surface.py:374-379`](../../src/radia/workpiece_surface.py#L374-L379)
+and the sign convention at
+[`calc_inductance.py:834-835`](../../src/radia/panels/calc_inductance.py#L834-L835).)
 
 This is the **`J_s · A_inc` form** ([`workpiece_surface.py:209-291`](../../src/radia/workpiece_surface.py#L209-L291)).
 It is gauge-dependent in the discrete setting: changing the gauge of
@@ -641,7 +681,9 @@ behave as a weak surface divergence — leading to a ~100× error on
 `Im(ΔL)` compared to energy-balance predictions.
 
 **The fix — `φ · (n · B_inc)` form.**  Use the surface vector-calculus
-identity (closed Γ, MQS limit):
+identity (purely geometric — holds for any divergence-free surface
+current `J_s = n × H_t` with `H_t = -∇_s φ`, regardless of frequency
+or material):
 
 $$
 \int_\Gamma \mathbf{J}_s \cdot \mathbf{A}\,dS
@@ -650,35 +692,44 @@ $$
 $$
 
 where `φ` is the workpiece-side scalar potential from the SIBC BIE
-solve (`H_t = -∇_s φ` on Γ).  Step-by-step:
+solve (`H_t = -∇_s φ` on Γ).  Step-by-step (all quantities applied to
+the smooth Biot–Savart `A_inc`, NOT to a P1-discretised `A_inc`; the
+gauge-failure of the J·A form arises precisely because P1 H_h has
+edge-jumps that violate Step 3's smoothness premise):
 
-1. `J_s = -n × ∇_s φ` on the workpiece surface (definition).
-2. `∫_Γ J_s · A dS = -∫_Γ (n × ∇_s φ) · A dS = ∫_Γ ∇_s φ · (n × A) dS`
-   (using `(a × b) · c = (b × c) · a`).
-3. `∫_Γ ∇_s φ · (n × A) dS = -∫_Γ φ · (∇_s · (n × A)) dS`
-   (surface integration by parts on the closed surface).
-4. `∇_s · (n × A) = -n · curl A` (a standard surface vector-calculus
-   identity), so the result follows: `∫_Γ φ · (n · curl A) dS = ∫_Γ φ · (n · B) dS`.
+1. `J_s = n × H_t = -n × ∇_s φ` on the workpiece surface (definition).
+2. `∫_Γ J_s · A_t dS = -∫_Γ (n × ∇_s φ) · A_t dS = ∫_Γ ∇_s φ · (n × A_t) dS`
+   (using `(a × b) · c = (b × c) · a`).  The normal component
+   `(A · n) n` integrates to zero against `n × ∇_s φ` since
+   `n × (A·n)n = 0`, so we may replace `A` by `A_t` without loss.
+3. `∫_Γ ∇_s φ · (n × A_t) dS = -∫_Γ φ · (∇_s · (n × A_t)) dS`
+   (surface integration by parts on the closed C¹ surface Γ; valid
+   for the smooth Biot–Savart `A_inc` field used here).
+4. `∇_s · (n × A_t) = -n · curl A` (standard surface vector-calculus
+   identity on C¹ closed surfaces), so the result follows:
+   `∫_Γ φ · (n · curl A) dS = ∫_Γ φ · (n · B) dS`.
 
 The right-hand side uses `B = curl A` directly — gauge-invariant.
 This is the formula implemented in
-[`workpiece_surface.py:294-379`](../../src/radia/workpiece_surface.py#L294-L379):
+[`workpiece_surface.py:294-379`](../../src/radia/workpiece_surface.py#L294-L379)
+as the auxiliary quantity `Λ` introduced earlier in this section:
 
 $$
 \boxed{\quad
-\Delta L = \mathrm{Re}\,\frac{1}{I_{\mathrm{port}}^2}
-          \int_\Gamma \varphi(r)\,\bigl(\mathbf{n}(r) \cdot \mathbf{B}_{\mathrm{inc}}(r)\bigr)\,dS,
+\Lambda \;=\; \frac{1}{I_{\mathrm{port}}^2}\int_\Gamma \varphi(r)\,
+              \bigl(\mathbf{n}(r) \cdot \mathbf{B}_{\mathrm{inc}}(r)\bigr)\,dS,
+\quad
+\Delta L = \mathrm{Re}\,\Lambda,
+\quad
+\Delta R = -\omega\,\mathrm{Im}\,\Lambda.
 \quad}
 $$
 
-and the resistive contribution:
-
-$$
-\Delta R = -\omega\,\mathrm{Im}\,\frac{1}{I_{\mathrm{port}}^2}
-           \int_\Gamma \varphi(r)\,\bigl(\mathbf{n}(r) \cdot \mathbf{B}_{\mathrm{inc}}(r)\bigr)\,dS.
-$$
-
-(See [`calc_inductance.py:839-840`](../../src/radia/panels/calc_inductance.py#L839-L840) for the implementation of the sign convention.)
+(The sign-tracking is implemented at
+[`calc_inductance.py:834-835`](../../src/radia/panels/calc_inductance.py#L834-L835):
+`delta_L_nH = delta_L_complex.real * 1e9` and
+`delta_R_mOhm = -delta_L_complex.imag * omega * 1e3`, where
+`delta_L_complex = Λ`.)
 
 **Discrete quadrature.**  Each workpiece triangle `T` contributes:
 
@@ -737,17 +788,41 @@ $$
 In the air domain `Ω_air` (σ = 0): `∇ × (ν ∇ × A) = J_coil`.
 In the workpiece volume `Ω_wp`: replaced by the SIBC on `Γ_wp = ∂Ω_wp`,
 which couples `A_t` to the workpiece scalar surface impedance via the
-Leontovich relation `n × E = Z_s H_t`:
+Leontovich relation `n × E = Z_s H_t`.
+
+**Derivation of the Robin coefficient `jω/Z_s`.**  In the MQS Coulomb
+gauge, `E = -jω A`.  Substitute into Leontovich:
 
 $$
+\mathbf{n} \times \mathbf{E} = Z_s\,\mathbf{H}_t
+\;\Longrightarrow\;
+-j\omega\,(\mathbf{n} \times \mathbf{A}) = Z_s\,\mathbf{H}_t.
+$$
+
+The natural BC for the curl-curl form is `n × (ν ∇×A)`.  Using the
+identity `n × (∇×A) = μ_0 H × n × n` (Ampère on the surface, with
+`n` the outward normal of `Γ_wp`), and the standard surface identity
+`n × A = -n × n × A_t = A_t` (after sign-tracking the orientation),
+we get:
+
+$$
+\mathbf{H}_t = -\frac{j\omega}{Z_s}\,(\mathbf{n} \times \mathbf{A})
+            = +\frac{j\omega}{Z_s}\,\mathbf{A}_t.
+$$
+
+Equivalently, in terms of the curl on the conductor side:
+
+$$
+\boxed{\quad
 \mathbf{n} \times (\nu\,\nabla \times \mathbf{A}) =
 \frac{j\omega}{Z_s}\,\mathbf{A}_t \quad\text{on } \Gamma_{\mathrm{wp}}.
+\quad}
 $$
 
-(Derivation: from `n × E = Z_s H_t`, substitute `E = -jω A` (gauge),
-`H_t = (1/μ_0) (n × A_t) · t / |t|` — and after simplification using
-`n × (curl A) = -μ_0 H_t` on the workpiece surface, the Robin
-coefficient `jω/Z_s` emerges.)
+This is the Robin coefficient that appears in the weak form below.
+The factor `jω/Z_s` is implemented at [`calc_fem_kelvin.py:559`](../../src/radia/panels/calc_fem_kelvin.py#L559)
+(scalar case) and [`calc_fem_kelvin.py:590`](../../src/radia/panels/calc_fem_kelvin.py#L590)
+(per-DOF case).
 
 ### 4.4.2 Weak form (Galerkin H(curl))
 
@@ -794,18 +869,23 @@ at assembly time.  Convergence of the per-DOF Karl loop is on
 
 ### 4.4.4 Compound A-V form (calc_fem_coilmesh)
 
-For volumetric coil, the bilinear form gains:
+For volumetric coil, the bilinear form gains a coil-side conductivity
+term, *active only on the coil sub-domain* `Ω_coil ⊂ Ω`
+(i.e. `σ(r) = σ_coil` on `Ω_coil`, `σ(r) = 0` elsewhere):
 
 $$
 \int_{\Omega_{\mathrm{coil}}} j\omega\,\sigma_{\mathrm{coil}}\,
-(\mathbf{A} + \nabla\varphi) \cdot (\mathbf{v} + \nabla\psi)\,d\Omega
+(\mathbf{A} + \nabla\varphi) \cdot (\mathbf{v} + \nabla\psi)\,d\Omega.
 $$
 
-(see [`calc_fem_coilmesh.py:216-222`](../../src/radia/panels/calc_fem_coilmesh.py#L216-L222)),
-where `(φ, ψ) ∈ H1(Ω_coil)` is the source scalar potential on the
-coil volume with Dirichlet BC `φ = 1` (source face) / `φ = 0` (sink
-face).  The compound FES is `HCurl(A) × H1(φ_coil)` and the linear
-solve is a single block-direct factorisation.
+The trial / test space pair `(φ, ψ) ∈ H¹(Ω_coil)` carries source-port
+Dirichlet BCs `φ = 1` (source face) / `φ = 0` (sink face).  These
+Dirichlet conditions also serve as the gauge fix for the otherwise
+non-unique scalar component (a pure constant added to `φ` is killed
+by the two-face Dirichlet pinning).  The compound FES is
+`HCurl(A) × H¹(φ_coil)` and the linear solve is a single
+block-direct factorisation (see
+[`calc_fem_coilmesh.py:216-222`](../../src/radia/panels/calc_fem_coilmesh.py#L216-L222)).
 
 ---
 
