@@ -1108,7 +1108,7 @@ print(f'phi* 範囲: [{phi_star_fem.min():.5f}, {phi_star_fem.max():.5f}]')
 # 期待: [0.12465, 0.12489] (理想: 0.12500)
 ```
 
-## 確認済み精度 (NGSolve 6.2.2601, maxh=0.2)
+## 確認済み精度 (NGSolve 6.2.2603+, maxh=0.2)
 
 | 検証項目 | 最大相対誤差 | 平均相対誤差 |
 |----------|-------------|-------------|
@@ -1126,9 +1126,9 @@ print(f'phi* 範囲: [{phi_star_fem.min():.5f}, {phi_star_fem.max():.5f}]')
 ## 旧来の TnT() 呼び出し注意
 
 ```python
-# NGSolve 6.2.2601: キーワード引数不可
+# NGSolve 6.2.2603+: キーワード引数不可
 u, v = fes.TnT()           # OK
-u, v = fes.TnT(u_='u', v_='v')  # TypeError: NGSolve 6.2.2601 では不可
+u, v = fes.TnT(u_='u', v_='v')  # TypeError: NGSolve 6.2.2603+ でも不可
 ```
 """
 
@@ -1214,7 +1214,7 @@ print(f'FreeDofs 後: {free_per}  (削減: {free_plain - free_per})')
 | 周期頂点対数 > 0 でも FreeDofs 変化なし | Rotation の方向が逆 | `dphi` の符号を確認 |
 | NrIdentifications = 0 | WorkPlane.Arc で作った扇形 (幾何的に一致しない) | HalfSpace を使用 |
 
-## 確認済み数値 (NGSolve 6.2.2601, 1/6 セクタ, maxh=0.2)
+## 確認済み数値 (NGSolve 6.2.2603+, 1/6 セクタ, maxh=0.2)
 
 | 項目 | 値 |
 |------|----|

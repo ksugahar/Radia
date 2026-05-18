@@ -13,7 +13,7 @@ ngsolve.bem is NGSolve's native boundary element module. It provides:
 Key references:
   - ngsolve.bem documentation: https://docu.ngsolve.org/latest/how_to/ngsbem.html
   - Lucy Weggler's stabilized BEM: https://github.com/Weggler/docu-ngsbem
-  - Netgen PR#232: SetGeomInfo for externally imported meshes
+  - SetGeomInfo for externally imported meshes
 """
 
 NGBEM_OVERVIEW = """
