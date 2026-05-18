@@ -31,7 +31,16 @@ the cell problem is:
 |---|---|---|---|
 | `slab` | `ρ ∂²H/∂z² + jω μ(|H|) H = 0` | `z ∈ [0, a]` | `H(0) = H_t`, `dH/dz(a) = 0` |
 | `cylinder` | `(ρ/r) ∂/∂r[r ∂H/∂r] + jω μ(|H|) H = 0` | `r ∈ [0, R]` | `dH/dr(0) = 0` (regularity), `H(R) = H_t` |
-| `finite_slab` | as `slab` with an extra anti-symmetric BC for 1-sided heating | as `slab` | (reserved; not used by production) |
+| `finite_slab` | as `slab` (`ρ ∂²H/∂z² + jω μ(|H|) H = 0`) | `z ∈ [0, a]` | `H(0) = H_t` (driven face), `dH/dz(a) = 0` (insulated back) |
+
+The `finite_slab` mode is implemented by
+[`ESIMFiniteSlabSolver`](../../src/radia/esim_cell_problem.py#L339)
+(separate class).  It models a finite-thickness plate with one
+heated face — the canonical 2-sided plate problem of
+Lavers–Biringer 1985, restricted to 1-sided drive.  The
+`ESIMCellProblemSolver` class ([`esim_cell_problem.py:816`](../../src/radia/esim_cell_problem.py#L816))
+is the legacy infinite-slab/cylinder solver and is the one called
+by the production Karl loops.
 
 The unknown is the complex H-field profile inside the conductor.  The
 nonlinearity enters through `μ(|H|)` — the BH curve.
@@ -47,8 +56,12 @@ Output of `solve(H0)`:
 - `P' = 0.5 Re(Z) |H_t|² + losses_in_complex_mu` — surface power density [W/m²]
 - `Q' = 0.5 Im(Z) |H_t|²` — surface reactive power density [VAR/m²]
 
-The `2·(P' + jQ') / H0²` identity ([`esim_cell_problem.py` solve return dict, near line 1010](../../src/radia/esim_cell_problem.py))
-ties P' and Z together — both are independent observables in publication tables.
+The `2·(P' + jQ') / H0²` identity ties P' and Z together — both are
+independent observables in publication tables.  Implementations:
+
+- Slab / cylinder solver: [`esim_cell_problem.py:545`](../../src/radia/esim_cell_problem.py#L545).
+- Finite-slab (2-sided heating, `ESIMFiniteSlabSolver`):
+  [`esim_cell_problem.py:1010`](../../src/radia/esim_cell_problem.py#L1010).
 
 ---
 
@@ -278,7 +291,7 @@ each surface panel and get a true per-panel curvature SIBC.  None of
 the production Karl scripts invoke this path; it is reserved for
 research probes (see roadmap § 7).
 
-### 3.4 Why "single Z_s" is still useful in publication
+### 3.6 Why "single Z_s" is still useful in publication
 
 For workpieces where the **operating-point H_t** does not vary by more
 than ~3× across the surface (typical for solenoid + cylindrical bar),
@@ -287,7 +300,8 @@ within ~5 % of a fully resolved per-panel calculation.  This is good
 enough for engineering screening (P_wp, L_eff at ±5 % for design
 iteration).
 
-For accuracy claims sharper than 5 %, per-panel ESIM is required.
+For accuracy claims sharper than 5 %, per-panel ESIM is required
+(see § 3.3 for the BEM path; FEM-path per-panel Z_s is roadmap § 7).
 
 ---
 
@@ -392,7 +406,13 @@ Z_anal = ρ γ · I_1(γR) / I_0(γR)
        = 3.40e-4 + 7.81e-3j  Ω
 ```
 
-Match to 4 significant figures.  A formal pytest is recommended (TBD).
+Match to 4 significant figures.  Formal regression coverage:
+[`tests/test_esim_integration.py`](../../tests/test_esim_integration.py)
+exercises the cell-problem solver, the table interpolator, the
+coupled solver, and VTK export.  Bessel `I_0` parity is implicitly
+covered by the linear-regime convergence assertion.  A dedicated
+test that pins `Z` against `scipy.special.iv(0, γR) / iv(1, γR) ·
+ρ γ` to 5 sig-fig is open work (Phase A § 7).
 
 ### 5.2 Karl iteration consistency across the three production paths
 
@@ -417,8 +437,12 @@ is:
 - Per-iter dZ progression is monotonic (no oscillation) at the default
   `--esim-relax 0.5`.
 
-Formal cross-validation suite: `examples/ih_esim_benchmark/` (TBD; see
-Phase A roadmap below).
+Cross-validation suite:
+[`examples/ih_esim_benchmark/`](../../examples/ih_esim_benchmark/) ships
+`benchmark.py` + `analytical_bessel_baseline.py` + `results.json` +
+`benchmark_plot.pdf`.  This is the runnable counterpart to § 5.1 (linear
+Bessel parity).  Extending it to Stoll-envelope and Lavers–Biringer
+nonlinear cases is roadmap § 7.
 
 ### 5.3 Cross-validation against analytical references
 
@@ -426,16 +450,32 @@ Closed-form references for the SIBC + ESIM combination:
 
 | Geometry | Reference | Status |
 |---|---|---|
-| Cylinder + linear μ | Wakao–Igarashi–Fujiwara Part 5 (Bessel) | matches to ~10⁻⁴ |
-| Slab + linear μ | Dowell (tanh) | matches; Dowell baked in (`mat.dowell_Zs`) |
-| Cylinder + nonlinear μ (BH) | Stoll 1974 (analytical envelope) | TBD |
-| Plate + 2-sided heating | Lavers–Biringer 1985 | TBD |
+| Cylinder + linear μ | Wakao–Igarashi–Fujiwara Part 5 (Bessel) | **VERIFIED** (matches to ~10⁻⁴; benchmark at [`examples/ih_esim_benchmark/`](../../examples/ih_esim_benchmark/)) |
+| Slab + linear μ | Dowell (tanh) | **VERIFIED** (Dowell closed-form baked into `mat.dowell_Zs`) |
+| Cylinder + nonlinear μ (BH) | Stoll 1974 (analytical envelope) | **open** (roadmap § 7) |
+| Plate + 2-sided heating | Lavers–Biringer 1985 | **open** (roadmap § 7; implementation exists at `ESIMFiniteSlabSolver`, no cross-check harness) |
 
-The "TBD" rows are the Phase A benchmark targets.
+The "open" rows are roadmap items in § 7.
 
 ---
 
 ## 6. Karl Iteration (Outer Loop) — Implementation Details
+
+The outer fixed-point loop is named **Karl iteration** in the codebase
+after **Karl Hollaus**, the first author of the canonical ESIM scalar-
+potential formulation paper:
+
+> K. Hollaus, M. Kaltenbacher, J. Schöberl, *"A Nonlinear Effective Surface
+> Impedance in a Magnetic Scalar Potential Formulation,"* **IEEE Trans.
+> Magn.**, 2025.  DOI:
+> [10.1109/TMAG.2025.3613932](https://doi.org/10.1109/TMAG.2025.3613932).
+
+This is the paper the in-tree cell-problem solver implements (see the
+docstring of [`esim_cell_problem.py`](../../src/radia/esim_cell_problem.py)
+lines 1-10).  The outer Picard fixed-point is the loop introduced
+there; "Karl iteration" is lab shorthand.  For external readers /
+reviewers, prefer "Hollaus-type Picard relaxation" or
+"Hollaus iteration".
 
 The outer Karl loop wraps the BEM/FEM solve:
 
@@ -510,11 +550,14 @@ If Karl ever diverges in production, the most likely cause is
 
 ## 8. References
 
-- **Lavers, J. D. and Biringer, P. P.** "An efficient calculation of effective surface impedance for nonlinear ferromagnetic materials." *IEEE Trans. Magn.* **21**(5), 1985.
-- **Stoll, R. L.** *The Analysis of Eddy Currents.* Oxford University Press, 1974.
-- **Krähenbühl, L. and Muller, D.** "Thin layers in electrical engineering — Example of shell models in analysing eddy-currents by boundary and finite element methods." *IEEE Trans. Magn.* **29**(2), 1993.
-- **Bilicz, S., Badics, Z., Pávó, J.** "Nonlocal surface impedance boundary condition for wide-band eddy-current problems." *Studies in Applied Electromagnetics and Mechanics* (ISEM 2023).
-- **Wakao, S., Igarashi, H., Fujiwara, K., Kameari, A.** "Various Verifications of Eddy Current Analysis (Parts 1–9)." *T.IEE Japan* series, 2008–2018.
+- **Hollaus, K., Kaltenbacher, M., Schöberl, J.** "A Nonlinear Effective Surface Impedance in a Magnetic Scalar Potential Formulation." *IEEE Trans. Magn.* (2025).  DOI: [10.1109/TMAG.2025.3613932](https://doi.org/10.1109/TMAG.2025.3613932).  **The canonical reference for the ESIM cell-problem + outer Karl (= Karl Hollaus) Picard iteration** implemented here.
+- **Lavers, J. D. and Biringer, P. P.** "An efficient calculation of effective surface impedance for nonlinear ferromagnetic materials." *IEEE Trans. Magn.* **21**(5), 1985.  Closed-form envelope reference for cylinder + slab nonlinear ESIM.
+- **Stoll, R. L.** *The Analysis of Eddy Currents.* Oxford University Press, 1974.  Reference for analytical Bessel-function comparisons in § 5.1.
+- **Krähenbühl, L. and Muller, D.** "Thin layers in electrical engineering — Example of shell models in analysing eddy-currents by boundary and finite element methods." *IEEE Trans. Magn.* **29**(2), 1993.  Foundational thin-shell SIBC reference.
+- **Dlala, E., Belahcen, A., Arkkio, A.** "Optimal Convergence of the Fixed-Point Method for Nonlinear Eddy-Current Problems." *IEEE Trans. Magn.* **44**(6), 2008, pp. 1318-1321.  Optimal contraction-factor analysis for the same Picard scheme; informs `--esim-relax` default of 0.5.
+- **Yuferev, S. and Ida, N.** *Surface Impedance Boundary Conditions: A Comprehensive Approach.* CRC Press, 2009.  Textbook reference for nonlinear SIBC iteration schemes.
+- **Bilicz, S., Badics, Z., Pávó, J.** "Nonlocal surface impedance boundary condition for wide-band eddy-current problems." *Studies in Applied Electromagnetics and Mechanics* (ISEM 2023).  Wide-band nonlocal extension (deferred to roadmap § 7).
+- **Wakao, S., Igarashi, H., Fujiwara, K., Kameari, A.** "Various Verifications of Eddy Current Analysis (Parts 1–9)." *T.IEE Japan* series, 2008–2018.  Series of linear-μ analytical references; Part 5 used for § 5.1 cylinder benchmark.
 
 ---
 
