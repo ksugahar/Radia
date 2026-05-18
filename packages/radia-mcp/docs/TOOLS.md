@@ -172,7 +172,7 @@ Module: `radia_mcp.ih.server`
 
 | Tool | Description |
 |---|---|
-| `esim_paper` | Get the IGTE Symposium 2026 ESIM paper content (BEM curved per-element |
+| `esim_usage` | How to use the Effective Surface Impedance Method (ESIM) in Radia. |
 | `ih_sibc` | Get IH solver architecture and SIBC documentation. |
 | `induction_heating` | Get induction heating simulation documentation. |
 
