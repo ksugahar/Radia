@@ -2238,6 +2238,127 @@ def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
               "which bypasses spine extraction entirely.")
 
 
+def _peec_cache_path(step_path: str, n_peri, sigma, nwinc, nhinc,
+                       cad_units_per_meter, use_coil_builder):
+    """Disk-cache filename for filaments_from_step output.
+
+    One cache file per (step_path, params) combination so different
+    parameter sets (different n_peri / sigma / units) don't trample
+    each other.
+    """
+    import os
+    base, _ext = os.path.splitext(step_path)
+    if use_coil_builder and n_peri is not None:
+        flavour = f"peri{int(n_peri)}"
+    elif use_coil_builder:
+        flavour = f"grid{int(nwinc)}x{int(nhinc)}"
+    else:
+        flavour = f"legacy{int(nwinc)}x{int(nhinc)}"
+    return f"{base}.peec_{flavour}_sigma{sigma:.2e}_u{cad_units_per_meter:g}.json"
+
+
+def _peec_cache_step_sha256(step_path: str) -> str:
+    """SHA256 of the STEP file's bytes."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(step_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _peec_cache_load(cache_path: str, expected_sha: str, sigma: float):
+    """Return rebuilt topo dict from cache, or None on miss / mismatch.
+
+    The cache JSON stores the lightweight filament topology data
+    (paths + cell_wh + cross-section radii).  The PEECCircuitSolver
+    is rebuilt via build_bundle_solver -- a fast (~0.5 s) call that
+    re-computes mutual L from the cached filament paths.
+    """
+    import json, os
+    if not os.path.isfile(cache_path):
+        return None
+    try:
+        with open(cache_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    if data.get("step_sha256") != expected_sha:
+        return None
+    paths_serial = data.get("filament_paths")
+    cell_wh_serial = data.get("cell_wh")
+    if not paths_serial or not cell_wh_serial:
+        return None
+    # Deserialise filament_paths: list of polyline pieces, each piece is
+    # ((p1, p2), (p2, p3), ...).  JSON lists -> tuples expected by
+    # PEECBuilder.add_connected_segment.
+    filament_paths = [
+        [tuple(tuple(pt) for pt in pair) for pair in fil]
+        for fil in paths_serial
+    ]
+    cell_wh = [
+        [tuple(piece) for piece in fil]
+        for fil in cell_wh_serial
+    ]
+    # Rebuild the solver from cached paths.
+    from radia.peec_bundle import build_bundle_solver
+    solver, seg_of_fil, port_p, port_m = build_bundle_solver(
+        filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
+    topo = dict(data.get("aux", {}))
+    topo.update({
+        "solver": solver,
+        "seg_of_filament": seg_of_fil,
+        "filament_paths": filament_paths,
+        "cell_wh": cell_wh,
+        "port_plus": port_p,
+        "port_minus": port_m,
+        "n_loop": len(filament_paths),
+        "_peec_cache_hit": True,
+    })
+    return topo
+
+
+def _peec_cache_save(cache_path: str, topo: dict, step_sha: str,
+                       params: dict):
+    """Persist topo to disk.  Solver and any non-serialisable fields
+    are dropped; they are rebuilt on load via build_bundle_solver."""
+    import json
+    # JSON-safe copy of filament_paths and cell_wh.
+    fil = []
+    for filk in topo.get("filament_paths") or []:
+        fil.append([[list(pt) for pt in pair] for pair in filk])
+    cwh = []
+    for filk in topo.get("cell_wh") or []:
+        cwh.append([list(piece) for piece in filk])
+    # Keep the small scalar/string aux fields that downstream code
+    # reads (cross_section_radius_m_mean, source, n_path_pts, ...).
+    aux = {}
+    for k, v in topo.items():
+        if k in ("solver", "filament_paths", "cell_wh", "seg_of_filament",
+                 "port_plus", "port_minus", "n_loop", "_peec_cache_hit"):
+            continue
+        try:
+            json.dumps(v)
+        except TypeError:
+            continue  # skip non-serialisable extras
+        aux[k] = v
+    data = {
+        "_format_version": 1,
+        "step_sha256": step_sha,
+        "params": params,
+        "filament_paths": fil,
+        "cell_wh": cwh,
+        "aux": aux,
+    }
+    try:
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        # Cache-write failure is non-fatal -- the next run just
+        # re-computes.  Do not raise here.
+        pass
+
+
 def filaments_from_step(step_path: str,
                         sigma: float = 5.8e7,
                         nwinc: int = 1,
@@ -2246,7 +2367,63 @@ def filaments_from_step(step_path: str,
                         cad_units_per_meter: float = 1.0,
                         n_slices: int = 200,
                         use_coil_builder: bool = True):
-    """End-to-end: STEP solid -> PEEC topology.
+    """End-to-end STEP -> PEEC topology, with on-disk cache.
+
+    Set RADIA_PEEC_CACHE_DISABLE=1 to bypass the cache entirely.
+    The cache file is ``<step>.peec_<flavour>_sigma<S>_u<U>.json``
+    next to the .step.  Keyed by the SHA256 of the .step file's
+    bytes plus the parameter set, so any edit to the CAD invalidates
+    the cache automatically.  Cache hit rebuilds the PEEC solver
+    (~0.5 s) instead of re-running OCC topology analysis (~25 s).
+
+    See ``_filaments_from_step_compute`` for the actual extraction
+    logic and arguments documentation.
+    """
+    import os
+    cache_disabled = os.environ.get("RADIA_PEEC_CACHE_DISABLE", "0") != "0"
+    cache_path = None
+    step_sha = None
+    if not cache_disabled and os.path.isfile(step_path):
+        cache_path = _peec_cache_path(
+            step_path, n_peri, sigma, nwinc, nhinc,
+            cad_units_per_meter, use_coil_builder)
+        step_sha = _peec_cache_step_sha256(step_path)
+        cached = _peec_cache_load(cache_path, step_sha, sigma)
+        if cached is not None:
+            return cached
+
+    topo = _filaments_from_step_compute(
+        step_path,
+        sigma=sigma,
+        nwinc=nwinc,
+        nhinc=nhinc,
+        n_peri=n_peri,
+        cad_units_per_meter=cad_units_per_meter,
+        n_slices=n_slices,
+        use_coil_builder=use_coil_builder,
+    )
+
+    if cache_path is not None and step_sha is not None:
+        _peec_cache_save(cache_path, topo, step_sha, {
+            "n_peri": n_peri,
+            "sigma": sigma,
+            "nwinc": nwinc,
+            "nhinc": nhinc,
+            "cad_units_per_meter": cad_units_per_meter,
+            "use_coil_builder": use_coil_builder,
+        })
+    return topo
+
+
+def _filaments_from_step_compute(step_path: str,
+                                  sigma: float = 5.8e7,
+                                  nwinc: int = 1,
+                                  nhinc: int = 1,
+                                  n_peri: Optional[int] = None,
+                                  cad_units_per_meter: float = 1.0,
+                                  n_slices: int = 200,
+                                  use_coil_builder: bool = True):
+    """End-to-end: STEP solid -> PEEC topology (no cache).
 
     The centerline is ALWAYS auto-detected from the STEP solid via
     ``extract_centerline_from_step`` (dispatches across multiple
