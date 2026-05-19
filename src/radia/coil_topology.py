@@ -97,7 +97,7 @@ def detect_cap_faces(solid, area_ratio_threshold: float = 2.0
         ~1.4e-4 m^2 (~3x larger) -> 2 caps detected
       - ``3turnCoil_work_coil_m.step``: 2 PLANE + 617 BSPLINE -> 2 caps
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
     plane_faces = [f for f in solid.faces() if f.geom_type == GeomType.PLANE]
     if len(plane_faces) < 2:
         return None

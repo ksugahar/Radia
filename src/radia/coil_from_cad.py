@@ -83,7 +83,7 @@ def section_solid_along_path(step_path: str,
     Returns:
         List of dicts with keys: area, w_est, h_est (in build123d units).
     """
-    from build123d import import_step, section, Plane, Vector
+    from radia._b3d_shim import import_step, section, Plane, Vector
 
     solid = import_step(step_path)
     results = []
@@ -189,7 +189,7 @@ def _collect_loft_cross_sections(solid,
     (too few planar faces of clean shape).
     """
     try:
-        from build123d import GeomType
+        from radia._b3d_shim import GeomType
         planar_all = [f for f in solid.faces()
                       if f.geom_type == GeomType.PLANE]
     except Exception:
@@ -271,7 +271,7 @@ def _find_lateral_surface(solid):
     "No Fallbacks -- Fail Fast, Fail Loud", we do NOT try-and-recover
     inside ``filaments_from_step``.
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
     candidates = []
     for f in solid.faces():
         gt = f.geom_type
@@ -474,7 +474,7 @@ def _detect_lead_bars_cad(solid, median_radius_cad: float):
             "cap_b":    other cap center (CAD units)
         Empty list if no qualifying lead bars are present.
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
     from OCP.BRepAdaptor import BRepAdaptor_Surface
 
     cyl_faces = [f for f in solid.faces() if f.geom_type == GeomType.CYLINDER]
@@ -801,7 +801,7 @@ def _filaments_from_circle_edges_per_station(solid,
     circle path) when the solid does not have a clean population of
     consistent-radius circle edges.
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
     from OCP.BRepAdaptor import BRepAdaptor_Curve
 
     circles = [e for e in solid.edges() if e.geom_type == GeomType.CIRCLE]
@@ -1024,7 +1024,7 @@ def _collect_circle_edge_centers(solid):
         centers_cad: list of (3,) np arrays in raw CAD units
         median_radius_cad: float in raw CAD units
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
     from OCP.BRepAdaptor import BRepAdaptor_Curve
 
     circles = [e for e in solid.edges() if e.geom_type == GeomType.CIRCLE]
@@ -1241,7 +1241,7 @@ def _centerline_from_open_spine(solid, n_segments: int,
     the dispatcher's predicate was wrong, not that "the next path
     should be tried" (CLAUDE.md "No Fallbacks").
     """
-    from build123d import section, Plane, Vector
+    from radia._b3d_shim import section, Plane, Vector
     edges = solid.edges()
     if not edges:
         raise RuntimeError("STEP solid has no edges")
@@ -1294,9 +1294,9 @@ def _centerline_from_open_spine(solid, n_segments: int,
     # Wire radius is estimated by a CHEAP midpoint section before the
     # full sampling loop runs.
     spine_length_cad = float(spine.length)
-    from build123d import section as _bd_section
-    from build123d import Plane as _bd_Plane
-    from build123d import Vector as _bd_Vector
+    from radia._b3d_shim import section as _bd_section
+    from radia._b3d_shim import Plane as _bd_Plane
+    from radia._b3d_shim import Vector as _bd_Vector
     mid_p = spine @ 0.5
     mid_tangent = spine @ 0.51 - mid_p
     tn = math.sqrt(mid_tangent.X ** 2 + mid_tangent.Y ** 2
@@ -1504,7 +1504,7 @@ def _centerline_from_revolution_sweep(solid, n_segments: int,
     axis disagreement between revolution surfaces (not a simple
     single-loop sweep).
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
     try:
         from OCP.BRepAdaptor import BRepAdaptor_Surface
         from OCP.GeomAbs import (GeomAbs_Torus, GeomAbs_Cylinder,
@@ -1634,7 +1634,7 @@ def _centerline_from_topology_spine(solid, n_segments: int,
     Cross-section width/height come from a single sectioning at the
     spine midpoint -- equivalent-square side from the section area.
     """
-    from build123d import section, Plane, Vector
+    from radia._b3d_shim import section, Plane, Vector
     try:
         from radia.coil_topology import (
             extract_coil_topology as _extract_topo,
@@ -1733,7 +1733,7 @@ def extract_centerline_from_step(step_path: str,
         widths_m: (N,) per-segment width in meters.
         heights_m: (N,) per-segment height in meters.
     """
-    from build123d import import_step, GeomType, Compound
+    from radia._b3d_shim import import_step, GeomType, Compound
 
     solid = import_step(step_path)
 
@@ -2518,7 +2518,7 @@ def _filaments_from_step_compute(step_path: str,
         #    section AREA + equivalent-circle radius.  Pre-4.14.0
         #    behaviour.
         import numpy as np
-        from build123d import import_step
+        from radia._b3d_shim import import_step
         solid = import_step(step_path)
 
         # Compute the solid bounding box ONCE; reused by the
@@ -2626,7 +2626,7 @@ def _filaments_from_step_compute(step_path: str,
         # -- those are handled by Path 1 / Path 2b at higher accuracy.
         # Without this gate we'd intercept gapped-torus (circular
         # cross-section, TORUS lateral) and degrade its accuracy.
-        from build123d import GeomType
+        from radia._b3d_shim import GeomType
         face_geom_counts = {}
         for f in solid.faces():
             face_geom_counts[f.geom_type] = face_geom_counts.get(f.geom_type, 0) + 1
@@ -3363,7 +3363,7 @@ def _sample_face_perimeter_in_pt_frame(face, centroid_3d: np.ndarray,
         traversal of the boundary starting from the boundary point
         closest to +u_hat.
     """
-    from build123d import PositionMode
+    from radia._b3d_shim import PositionMode
 
     wire = face.outer_wire()
     edges = wire.edges()
@@ -3576,7 +3576,7 @@ def _section_solid_at_plane(solid, point_xyz, normal_xyz):
         from OCP.TopExp import TopExp_Explorer
         from OCP.TopAbs import TopAbs_EDGE
         from OCP.TopoDS import TopoDS
-        from build123d import Face
+        from radia._b3d_shim import Face
     except ImportError:
         return None
 
@@ -3970,7 +3970,7 @@ def _centerline_from_solid_geometry(solid,
     explicit utility but the main dispatch does not chain it as a
     fallback.
     """
-    from build123d import GeomType
+    from radia._b3d_shim import GeomType
 
     if _collect_loft_cross_sections(solid):
         # _centerline_from_cross_sections returns path only.
