@@ -50,7 +50,7 @@ Reference
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 from typing import List, Optional, Tuple
 
 # OCP imports are deferred to function/method bodies so that
@@ -63,30 +63,47 @@ from typing import List, Optional, Tuple
 # GeomType enum (parity with build123d.build_enums.GeomType)
 # ============================================================
 
-class GeomType(IntEnum):
+class GeomType(Enum):
     """Surface / curve geometry type, parity with build123d.
 
-    Integer values are kept stable so callers can compare against
-    the cached integer if they want to.  The underlying OCP
-    ``GeomAbs_*`` enum is mapped via :func:`_surface_geom_type` /
-    :func:`_curve_geom_type`.
+    build123d's ``GeomType`` is a string-valued ``Enum``.  We mirror
+    that and additionally override ``__eq__`` / ``__hash__`` so a
+    shim ``GeomType.X`` compares equal to build123d's ``GeomType.X``
+    by ``.name``.  This is essential because ``coil_topology.py``
+    and ``coil_from_cad.py`` may receive Faces from EITHER the shim
+    or build123d directly (tests typically use ``build123d.import_step``
+    which returns build123d Face objects whose ``.geom_type`` is
+    build123d's GeomType class).
     """
-    PLANE = 0
-    CYLINDER = 1
-    CONE = 2
-    SPHERE = 3
-    TORUS = 4
-    BEZIER = 5
-    BSPLINE = 6
-    REVOLUTION = 7
-    EXTRUSION = 8
-    OFFSET = 9
-    OTHER = 10
-    LINE = 11
-    CIRCLE = 12
-    ELLIPSE = 13
-    HYPERBOLA = 14
-    PARABOLA = 15
+    PLANE = "PLANE"
+    CYLINDER = "CYLINDER"
+    CONE = "CONE"
+    SPHERE = "SPHERE"
+    TORUS = "TORUS"
+    BEZIER = "BEZIER"
+    BSPLINE = "BSPLINE"
+    REVOLUTION = "REVOLUTION"
+    EXTRUSION = "EXTRUSION"
+    OFFSET = "OFFSET"
+    OTHER = "OTHER"
+    LINE = "LINE"
+    CIRCLE = "CIRCLE"
+    ELLIPSE = "ELLIPSE"
+    HYPERBOLA = "HYPERBOLA"
+    PARABOLA = "PARABOLA"
+
+    def __eq__(self, other):
+        # Cross-Enum-class equality by name.  Allows tests that load
+        # via ``build123d.import_step`` (returning build123d Face
+        # whose ``.geom_type`` is build123d's GeomType enum) to
+        # compare against the shim's enum: build123d_GeomType.PLANE
+        # == shim_GeomType.PLANE iff names match.
+        if hasattr(other, "name") and isinstance(other.name, str):
+            return self.name == other.name
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 def _surface_geom_type(face_or_topods) -> GeomType:
@@ -334,18 +351,48 @@ class Edge(_ShapeBase):
         ad = BRepAdaptor_Curve(self.wrapped)
         return _pnt_to_vector(ad.Value(ad.LastParameter()))
 
-    def position_at(self, param: float,
-                    position_mode: PositionMode = PositionMode.LENGTH) -> Vector:
+    def position_at(self, distance: float,
+                    position_mode: PositionMode = PositionMode.PARAMETER) -> Vector:
+        """Position along the curve.
+
+        Parity with build123d.topology.Mixin1D.position_at:
+        * PositionMode.PARAMETER (default) -- distance in (0, 1]
+          is treated as a NORMALISED parameter linearly mapped to
+          [FirstParameter, LastParameter]; other values are passed
+          through as the raw curve parameter.
+        * PositionMode.LENGTH -- distance is treated as arc length
+          from the curve start.
+        """
         from OCP.BRepAdaptor import BRepAdaptor_Curve
         ad = BRepAdaptor_Curve(self.wrapped)
         if position_mode == PositionMode.LENGTH:
             from OCP.GCPnts import GCPnts_AbscissaPoint
             total = GCPnts_AbscissaPoint.Length_s(ad)
-            target = float(param) * total if 0.0 <= float(param) <= 1.0 else float(param)
+            target = (float(distance) * total
+                      if 0.0 <= float(distance) <= 1.0
+                      else float(distance))
             ap = GCPnts_AbscissaPoint(ad, target, ad.FirstParameter())
             return _pnt_to_vector(ad.Value(ap.Parameter()))
-        # PARAMETER mode: param is curve parameter
-        return _pnt_to_vector(ad.Value(float(param)))
+        # PARAMETER mode (default, matches build123d)
+        u_first = ad.FirstParameter()
+        u_last = ad.LastParameter()
+        d = float(distance)
+        if 0.0 < d <= 1.0:
+            u = u_first + (u_last - u_first) * d
+        else:
+            u = u_first + d
+        return _pnt_to_vector(ad.Value(u))
+
+    def __matmul__(self, t: float) -> Vector:
+        """``edge @ t`` -> ``edge.position_at(t)`` (build123d shorthand).
+
+        Default is PositionMode.PARAMETER, normalised t in (0, 1] maps
+        linearly to [FirstParameter, LastParameter].  This is the form
+        used in ``coil_from_cad.py`` for spine sampling:
+        ``spine @ 0.5`` -> midpoint, ``spine @ t`` for t in [0, 1] ->
+        uniform parametric stations along the spine.
+        """
+        return self.position_at(t, PositionMode.PARAMETER)
 
     @property
     def is_closed(self) -> bool:
