@@ -866,6 +866,20 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 phi_inc, Z_s=Z_s_wp, omega=omega,
                 tol=args.wp_gmres_tol, maxiter=500, restart=80)
         t_bie += time.perf_counter() - t0
+        # Compute final per-DOF |H_t| from the converged phi_vec.  Same
+        # variational form as inside the Karl loop -- used by
+        # publications for the Z_s vs H_t scatter / spatial map.
+        if isinstance(Z_s_wp, np.ndarray):
+            phi_vec_final = np.asarray(res_bem["phi_vec"])
+            Kphi_re_f = bem.K @ phi_vec_final.real
+            Kphi_im_f = bem.K @ phi_vec_final.imag
+            Hsq_per_f = (np.abs(phi_vec_final.real * Kphi_re_f)
+                         + np.abs(phi_vec_final.imag * Kphi_im_f))
+            M_lump_f = bem.M @ np.ones(bem.ndof)
+            H_t_per_final = np.sqrt(Hsq_per_f
+                                    / np.maximum(M_lump_f, 1e-30))
+        else:
+            H_t_per_final = None
     info = res_bem.get("gmres_info", 0)
     progress("BEM",
         f"BIE total ({t_bie:.1f}s over {n_iter_done} iter, gmres info={info})")
@@ -998,6 +1012,14 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             "esim_per_panel_Z_s_real": Z_s_wp.real.tolist(),
             "esim_per_panel_Z_s_imag": Z_s_wp.imag.tolist(),
         }
+        # Save final per-DOF |H_t| at convergence (only when per-panel
+        # mode was active and the final re-solve completed).
+        try:
+            if H_t_per_final is not None:
+                per_panel_block["esim_per_panel_H_t"] = (
+                    H_t_per_final.tolist())
+        except NameError:
+            pass
     else:
         Z_s_real_out = float(Z_s_wp.real)
         Z_s_imag_out = float(Z_s_wp.imag)
@@ -1149,11 +1171,13 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["t_bem_assembly_s"] = wp_data["t_bem_assembly_s"]
     out["t_phi_inc_s"] = wp_data["t_phi_inc_s"]
     out["t_bem_solve_s"] = wp_data["t_bem_solve_s"]
-    # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag)
-    # — emitted by _solve_workpiece_weak_coupled when --esim-per-panel is set.
+    # Propagate per-panel block (esim_per_panel, esim_per_panel_Z_s_real/imag,
+    # esim_per_panel_H_t) — emitted by _solve_workpiece_weak_coupled when
+    # --esim-per-panel is set.
     for key in ("esim_per_panel",
                 "esim_per_panel_Z_s_real",
-                "esim_per_panel_Z_s_imag"):
+                "esim_per_panel_Z_s_imag",
+                "esim_per_panel_H_t"):
         if key in wp_data:
             out[key] = wp_data[key]
     return out
