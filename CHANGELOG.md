@@ -3,6 +3,51 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.61.0 — fix rect_united section-plane regression (task #30 close-out)
+
+Released 2026-05-20.
+
+Three independent bugs in ``_filaments_from_section_planes`` that
+the build123d -> OCP shim (v4.56.0) surfaced are all fixed.  The
+build123d era happened to mask them via offsetting effects;
+post-shim the regression appeared as a ValueError or 32% L error
+on the rect_torus_lofted_united test fixture.
+
+* **Bug 1**: ``centroids_attempted`` contract violation.  The caller
+  passed ``path_m[i]`` (spine point at bbox-heuristic R) where
+  ``_filaments_from_per_station_faces`` requires ``face.center()``;
+  ``cad_to_m = span_m / span_cad`` then recovered (R_spine /
+  R_face) ~ 0.928 instead of 1.0, silently shrinking UV samples
+  by ~8%.  Fix: pass ``face_center_m = face.center() /
+  cad_units_per_meter``.
+* **Bug 2**: ``is_open`` dispatch routed swept-cross-section coils
+  to the rim tracer (right for straight LEADS, wrong for gapped-
+  arc geometries with cap_a/cap_b).  Fix: when caps are detected,
+  use ``_gen_spine`` (planar long-arc) instead of the rim tracer.
+* **Bug 3**: ``_parallel_transport_frame`` returns ``v_hat`` aligned
+  with the chord-perpendicular (~9 deg off the true radial
+  direction at n_stations=20), shrinking the rect's radial extent
+  by cos(9 deg).  Fix: detect planar-arc spines and override
+  ``v_hat = radial direction`` at each station (non-planar spines
+  still use parallel transport).
+
+Test: ``tests/panels/test_inductance_golden.py::
+test_inductance_peec_vacuum_rect_united`` now PASSES (was xfail
+2026-05-20).  Golden L updated 145.3 -> 191.5 nH; the pre-fix
+145.3 was a GEOMETRIC COINCIDENCE (filaments inadvertently at
+bbox-spine R=45.9 instead of conductor R=50, but happened to
+land near BEM-A's 153 nH).  Post-fix filaments sit at the loft's
+actual interior face centroids -- the corrected-PEEC result is
+locked, NOT the physically-most-accurate value (PEEC-perimeter
+on rect cross-sections has known gaps vs BEM-A surface RWG
+which captures rect-corner current crowding).
+
+Production round-wire pipeline (3turncoil, ih_peec_inductance,
+gapped_torus) is COMPLETELY UNAFFECTED: those geometries route
+through ``_filaments_from_circle_edges_per_station``, which is
+not touched by this fix.  Verified L_coil unchanged on both
+round-wire fixtures.
+
 ## 4.60.0 — T .sol always saved + IH Summary closes the thermal loop
 
 Released 2026-05-20.
