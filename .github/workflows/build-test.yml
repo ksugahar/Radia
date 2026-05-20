@@ -342,22 +342,31 @@ jobs:
             exit 1
           }
 
-          # Install into a fresh venv so we don't fight with the
-          # self-hosted runner's persistent Python state.  Previous runs'
-          # mcp-server-*.exe in C:\Program Files\Python312\Scripts can be
-          # locked (WinError 32) if any orphan process holds them open,
-          # and those script wrappers are what `pip install --force-
-          # reinstall` tries to overwrite.  A dedicated venv side-steps
-          # the whole class of locking problems.
-          $venv = Join-Path $env:RUNNER_TEMP "radia-mcp-selftest-venv"
-          if (Test-Path $venv) { Remove-Item $venv -Recurse -Force }
-          python -m venv $venv
-          $pyInVenv = Join-Path $venv "Scripts\python.exe"
-          & $pyInVenv -m pip install --upgrade pip --quiet
-          Write-Host "Installing $($whl.Name) into selftest venv..."
-          & $pyInVenv -m pip install "$($whl.FullName)" --quiet
+          # Install into the system Python (NOT a venv).  The earlier
+          # fresh-venv approach hit a runner-side `ensurepip` failure
+          # (see v4.63.0 / v0.58.0 run 26175458337: venv created but
+          # the bundled pip-25.0.1 wheel could not bootstrap pip inside
+          # the venv under NETWORK SERVICE).  System-Python install is
+          # what end users actually use (`pip install --upgrade
+          # radia-mcp`), so testing the same path is more representative
+          # anyway.
+          #
+          # Scripts/mcp-server-*.exe locking (the original reason for
+          # the venv) is handled by Stop-Process for any orphan
+          # mcp-server-*.exe processes before the install.
+          Write-Host "Stopping any orphan mcp-server-*.exe processes..."
+          Get-Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -like 'mcp-server*'
+          } | ForEach-Object {
+            Write-Host "  killing $($_.Name) pid=$($_.Id)"
+            Stop-Process -Id $_.Id -Force
+          }
+          Start-Sleep -Seconds 2
+
+          Write-Host "Installing $($whl.Name) into system Python..."
+          pip install --force-reinstall --no-deps --no-cache-dir "$($whl.FullName)"
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::radia-mcp wheel install failed in venv"
+            Write-Host "::error::radia-mcp wheel install failed"
             exit $LASTEXITCODE
           }
 
@@ -377,7 +386,7 @@ jobs:
           foreach ($s in $servers) {
             Write-Host ""
             Write-Host "=== $($s.name) --selftest ==="
-            & $pyInVenv -m $s.mod --selftest
+            python -m $s.mod --selftest
             if ($LASTEXITCODE -ne 0) {
               Write-Host "::error::$($s.name) --selftest exited $LASTEXITCODE"
               $failed += $s.name

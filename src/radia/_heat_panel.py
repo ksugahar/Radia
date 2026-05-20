@@ -85,7 +85,13 @@ class HeatPanel(ModePanel):
         # This is the routing key: 3D goes to calc_heat.py, axisym
         # goes to calc_heat_axisym.py.  Both consume the same
         # qsurf .sol from the IH solve.
-        self._add_section("Mesh type")
+        #
+        # The "Mesh type" section header takes a key so callers that
+        # hide the mesh_type combo (e.g. IHPanel, where the parent
+        # Method dropdown encodes the choice) can also hide the
+        # section header — otherwise it becomes an orphan that the
+        # panel_qa check flags.
+        self._add_section("Mesh type", key="_sec_mesh_type")
         mesh_t = self.add_combo(
             "mesh_type", "Mesh:",
             [MESH_TYPE_3D, MESH_TYPE_AXISYM], default=0)
@@ -160,11 +166,11 @@ class HeatPanel(ModePanel):
             "values from a property table.")
         ov = self.add_check(
             "override_kcprho",
-            "Override rho/cp/k (use preset values as starting point, "
-            "edit below)", default=False)
+            "Override rho/cp/k", default=False)
         ov.toggled.connect(self._on_override_toggled)
         ov.setToolTip(
-            "When OFF, rho/cp/k are locked to the preset's "
+            "Use preset values as a starting point and edit rho/cp/k "
+            "below.  When OFF, rho/cp/k are locked to the preset's "
             "room-temperature values.  When ON, you can edit any of "
             "the three values directly -- the preset is still emitted "
             "to --material so the JSON output keeps a human-readable "
