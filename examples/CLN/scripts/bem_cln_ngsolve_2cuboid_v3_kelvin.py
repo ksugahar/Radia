@@ -30,27 +30,38 @@ import sys
 
 
 def build_kelvin_2cuboid_geometry(test_freq=1e6, sigma=5.8e7,
-                                   mu0=4*math.pi*1e-7, R_K=0.05, offset=(0, 0, 0)):
+                                   mu0=4*math.pi*1e-7, R_K=0.05):
     """
-    Build 2-cuboid + Kelvin-sphere-pair geometry using Radia helpers.
+    Build 2-cuboid + Kelvin-sphere-pair geometry using the canonical
+    offset-Kelvin convention (cf.
+    examples/kelvin_transformation/AdaptiveMesh/A-formulation/
+    CircularCoil_A_formulation_with_Kelvin.py).
 
     Layout:
-      Cuboids 1, 2 at +/- 7.5 mm along x, each 5x2x1 mm Cu.
-      Inner sphere R_K=50 mm contains cuboids + surrounding air.
-      Outer sphere R_K=50 mm at same offset = Kelvin image of physical
-      exterior (Periodic identification with inner sphere outer face).
+      Cuboids 1, 2 at +/- 7.5 mm along x in inner sphere.
+      Inner sphere R_K=50 mm at origin contains cuboids + air.
+      Outer sphere R_K=50 mm at (offset_x, 0, 0) with offset_x = 2*R_K
+      is the Kelvin image of physical exterior; its CENTER maps to
+      physical infinity (r' = 0 there).
+      Periodic identification: inner sphere outer face <-> outer sphere
+      outer face.
+
+    Returns:
+      geo: OCCGeometry
+      kelvin_center: (offset_x, 0, 0) -- center of outer (Kelvin) sphere
     """
-    from netgen.occ import Box, Pnt, Sphere, OCCGeometry, Glue
-    # Note: radia.kelvin_geometry is in Radia package; for portability
-    # we set up the Kelvin pair manually following its convention.
+    from netgen.occ import (Box, Pnt, Sphere, OCCGeometry, Glue,
+                              IdentificationType, gp_Trsf, gp_Vec)
 
     a, b, c = 5e-3, 2e-3, 1e-3
     D = 15e-3
+    offset_x = 2 * R_K
     omega = 2 * math.pi * test_freq
     delta = math.sqrt(2 / (omega * mu0 * sigma))
     face_maxh = delta / 3
     print(f"At f = {test_freq:.2e} Hz: skin depth = {delta*1e3:.4f} mm, "
           f"face maxh = {face_maxh*1e3:.4f} mm")
+    print(f"Kelvin pair: inner sphere @ (0,0,0), outer sphere @ ({offset_x*1e3:.1f}, 0, 0) mm, R_K = {R_K*1e3:.1f} mm")
 
     cu1 = Box(Pnt(-D/2 - a/2, -b/2, -c/2),
               Pnt(-D/2 + a/2,  b/2,  c/2))
@@ -66,51 +77,72 @@ def build_kelvin_2cuboid_geometry(test_freq=1e6, sigma=5.8e7,
     for f in cu2.faces:
         f.maxh = face_maxh
 
-    # Inner sphere: physical air around cuboids
-    inner_sphere = Sphere(Pnt(*offset), R_K)
+    # Inner sphere at origin: tag the sphere face BEFORE the subtraction
+    # so the name propagates through cu1/cu2 subtraction to inner_air.
+    inner_sphere = Sphere(Pnt(0, 0, 0), R_K)
     inner_sphere.mat("air")
     inner_sphere.maxh = 5e-3
-    for f in inner_sphere.faces:
-        f.name = "kelvin_int"
+    for face in inner_sphere.faces:
+        face.name = "kelvin_int"
     inner_air = inner_sphere - cu1 - cu2
 
-    # Outer sphere: Kelvin image
-    outer_sphere = Sphere(Pnt(*offset), R_K)
+    outer_sphere = Sphere(Pnt(offset_x, 0, 0), R_K)
     outer_sphere.mat("kelvin")
     outer_sphere.maxh = 5e-3
-    for f in outer_sphere.faces:
-        f.name = "kelvin_ext"
+    for face in outer_sphere.faces:
+        face.name = "kelvin_ext"
 
-    # Periodic identification between inner/outer spheres
-    inner_face = None
-    for f in inner_sphere.faces:
-        if f.name == "kelvin_int":
-            inner_face = f; break
-    outer_face = None
-    for f in outer_sphere.faces:
-        if f.name == "kelvin_ext":
-            outer_face = f; break
+    kelvin_int_face = None
+    for face in inner_air.faces:
+        if face.name == "kelvin_int":
+            kelvin_int_face = face; break
+    kelvin_ext_face = None
+    for face in outer_sphere.faces:
+        if face.name == "kelvin_ext":
+            kelvin_ext_face = face; break
 
-    from netgen.occ import IdentificationType
-    inner_face.Identify(outer_face, "kelvin_periodic",
-                        IdentificationType.PERIODIC)
+    if kelvin_int_face is None or kelvin_ext_face is None:
+        raise RuntimeError(f"Failed to identify Kelvin boundary faces: "
+                           f"int={kelvin_int_face}, ext={kelvin_ext_face}")
 
-    return OCCGeometry(Glue([cu1, cu2, inner_air, outer_sphere]))
+    # Closed sphere has no vertex anchor; auto-detect fails (slaved=0).
+    # Pass explicit translation: kelvin_ext (slave) -> kelvin_int (master).
+    trsf = gp_Trsf.Translation(gp_Vec(-offset_x, 0, 0))
+    kelvin_ext_face.Identify(kelvin_int_face, "kelvin_periodic",
+                              IdentificationType.PERIODIC, trsf)
+
+    geo = OCCGeometry(Glue([cu1, cu2, inner_air, outer_sphere]))
+    return geo, (offset_x, 0.0, 0.0)
 
 
-def solve_eddy_kelvin(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
-                       B0_y=1.0, order=2, R_K=0.05):
+def solve_eddy_kelvin(geo, freq, kelvin_center=(0.1, 0, 0),
+                       sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
+                       B0_y=1.0, order=2, R_K=0.05, reg=1e-6):
     """
     Solve eddy current with Kelvin-transformed exterior + BDDC iterative.
 
+    Production pattern (from src/radia/panels/calc_fem_kelvin.py):
+      - HCurl(..., nograds=True): removes pure-gradient basis subspace
+      - Periodic(base_fes): far-field closed by Kelvin identification
+      - Gauge regularization reg * NU_0 * u * v * dx(non_kelvin):
+        nograds removes H1-gradient subspace but residual harmonic
+        cohomology still leaves curl-curl singular.  Restrict mass
+        regularization to non-Kelvin materials because nu_cf -> 0 in
+        Kelvin region would let constant mass term dominate.
+      - bonus_intorder=4 on curl-curl integral for curved boundary
+        accuracy at order >= 2.
+
+    Reference: radia-mcp kelvin_transformation(topic="verified_recipe").
+
     nu in Kelvin region: (R_K / |r - offset|)^2 * (1/mu_0)  (Sugahara 2022)
-    A_ext background: uniform B_y in inner region only; zero (or
-    pull-back) in Kelvin region.
+    A_ext background: uniform B_y in inner region only; zero in Kelvin region.
     """
     from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
                           GridFunction, CoefficientFunction, Integrate,
                           curl, x, y, z, dx, ds, InnerProduct,
                           Preconditioner, CGSolver, IfPos)
+
+    NU_0 = 1.0 / mu0
 
     mesh = Mesh(geo.GenerateMesh(maxh=10e-3))
     print(f"Mesh: {mesh.ne} elements, {mesh.nv} vertices")
@@ -118,37 +150,45 @@ def solve_eddy_kelvin(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
     omega = 2 * math.pi * freq
     print(f"  freq = {freq:.2e} Hz")
 
-    # Kelvin-modulated nu CoefficientFunction
-    r_from_offset = ((x)**2 + (y)**2 + (z)**2)**0.5
-    nu_inner = 1/mu0
-    # In Kelvin region, nu' = (R_K / r')^2 * nu_0 (spherical 3D conformal)
-    nu_kelvin = (R_K / r_from_offset)**2 * (1/mu0)
+    # Kelvin-modulated nu CoefficientFunction.  Distance r' is measured
+    # from the Kelvin sphere CENTER (image of physical infinity).
+    kx, ky, kz = kelvin_center
+    r_prime_sq = (x - kx)**2 + (y - ky)**2 + (z - kz)**2 + 1e-20
+    nu_inner = NU_0
+    # Kelvin-domain nu: nu' = (r'/R_K)^2 * nu_0 (Nagamine CEFC 2026 eq. 9)
+    nu_kelvin = r_prime_sq / R_K**2 * NU_0
 
     # Per-material switch
     materials = mesh.GetMaterials()
+    print(f"  materials = {materials}")
     nu_cf_list = []
     sigma_cf_list = []
     for mat in materials:
         if mat == "cu":
-            nu_cf_list.append(1/mu0)
+            nu_cf_list.append(NU_0)
             sigma_cf_list.append(sigma_cu)
         elif mat == "kelvin":
             nu_cf_list.append(nu_kelvin)
             sigma_cf_list.append(0)
         else:  # air or default
-            nu_cf_list.append(1/mu0)
+            nu_cf_list.append(NU_0)
             sigma_cf_list.append(0)
     nu_cf = CoefficientFunction(nu_cf_list)
     sigma_cf = CoefficientFunction(sigma_cf_list)
 
-    # HCurl with periodic identification on kelvin_int/ext faces
-    fes = Periodic(HCurl(mesh, order=order, complex=True))
-    print(f"  Periodic HCurl order={order} DOF: {fes.ndof}")
+    non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+    print(f"  non_kelvin_mats = {non_kelvin_mats}")
+
+    # HCurl with periodic identification on kelvin_int/ext faces.
+    # nograds=True is REQUIRED for curl-curl gauge fixing.  Without it
+    # BDDC factorization hits ZGETRF::info > 0 and direct solvers
+    # return gradient-polluted results.
+    base_fes = HCurl(mesh, order=order, complex=True, nograds=True)
+    fes = Periodic(base_fes)
+    print(f"  Periodic HCurl order={order} nograds=True DOF: {fes.ndof}")
 
     # Applied A: A_z = -B0 x for uniform B_y (only in physical/Cu region)
     A_ext_inner = CoefficientFunction((0, 0, -B0_y * x))
-    # In Kelvin region, no background field (will be carried by periodic BC)
-    # For simplicity, set to zero in Kelvin region:
     A_ext_kelvin = CoefficientFunction((0, 0, 0))
 
     A_ext_cflist = []
@@ -161,13 +201,16 @@ def solve_eddy_kelvin(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
 
     u, v = fes.TnT()
     a = BilinearForm(fes, symmetric=True)
-    a += nu_cf * InnerProduct(curl(u), curl(v)) * dx
+    a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
     a += 1j * omega * sigma_cf * InnerProduct(u, v) * dx("cu")
+    # Gauge regularization restricted to non-Kelvin materials
+    # (nu_kelvin -> 0 at r=0; constant mass term would dominate there).
+    if reg > 0 and non_kelvin_mats:
+        a += reg * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
 
     f = LinearForm(fes)
     f += -1j * omega * sigma_cf * InnerProduct(A_ext, v) * dx("cu")
 
-    # Use BDDC preconditioner (works at order >= 1)
     prec = Preconditioner(a, "bddc")
 
     a.Assemble()
@@ -175,7 +218,6 @@ def solve_eddy_kelvin(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
 
     gfu = GridFunction(fes)
 
-    # CG solve with BDDC preconditioner (NGSolve API: complex=True, maxsteps, precision)
     inv = CGSolver(a.mat, prec.mat, complex=True, maxsteps=2000, precision=1e-8,
                    printrates=False)
     gfu.vec.data = inv * f.vec
@@ -209,11 +251,12 @@ def main():
         sys.exit(1)
 
     test_freq = 1e5
-    geo = build_kelvin_2cuboid_geometry(test_freq=test_freq)
+    geo, kelvin_center = build_kelvin_2cuboid_geometry(test_freq=test_freq)
 
     print(f"\n=== Solving at f = {test_freq:.2e} Hz ===")
     try:
-        m1, m2 = solve_eddy_kelvin(geo, test_freq, order=2)
+        m1, m2 = solve_eddy_kelvin(geo, test_freq,
+                                    kelvin_center=kelvin_center, order=2)
         print(f"  m1_y = {m1:.4e}")
         print(f"  m2_y = {m2:.4e}")
         print()
