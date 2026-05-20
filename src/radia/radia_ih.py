@@ -545,9 +545,24 @@ class IHPanel(ModePanel):
         # deprecated stub that redirects to ``radia-ih`` (radia 4.59.0+).
         self._add_section("Thermal analysis", key="_sec_thermal")
         from radia._heat_panel import HeatPanel
+        from PySide6.QtWidgets import QScrollArea, QFrame
         self._heat_panel = HeatPanel(parent=self)
-        # Embed as a single full-width row in IHPanel's form layout.
-        self._form.addRow(self._heat_panel)
+        # Wrap HeatPanel in a QScrollArea with a bounded max height so
+        # the parent window stays inside the 2K-monitor budget
+        # (panel_qa MAX_HEIGHT_RED = 1700 px).  The heat panel's
+        # natural sizeHint is ~1100-1200 px which would push the
+        # window past 1800 px; the scroll viewport caps the row at
+        # 700 px and adds a vertical scrollbar when needed.  Width
+        # is unconstrained since labels need to fit.
+        scroll = QScrollArea()
+        scroll.setWidget(self._heat_panel)
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(700)
+        scroll.setFrameShape(QFrame.NoFrame)
+        self._heat_panel_scroll = scroll
+        # Embed the scroll-wrapped heat panel as a single full-width
+        # row in IHPanel's form layout.
+        self._form.addRow(scroll)
         # Track the heat-panel row so _set_row_visible() can collapse
         # it alongside the section header when method != Thermal.
         self._row_indices["_heat_panel_row"] = self._form.rowCount() - 1
@@ -847,6 +862,10 @@ class IHPanel(ModePanel):
         # the parent row hides the whole sub-panel.  Direct setVisible
         # is the safety belt for Qt versions where setRowVisible only
         # collapses the QFormLayout row, not the embedded widget.
+        # The scroll wrapper also needs toggling so its viewport
+        # doesn't contribute to sizeHint when thermal mode is off.
+        if hasattr(self, "_heat_panel_scroll"):
+            self._heat_panel_scroll.setVisible(is_thermal)
         if hasattr(self, "_heat_panel"):
             self._heat_panel.setVisible(is_thermal)
             # Auto-set the embedded HeatPanel's mesh_type +
@@ -866,6 +885,9 @@ class IHPanel(ModePanel):
                     and mesh_w is not None:
                 mesh_w.setCurrentText(MESH_TYPE_3D)
             # Hide the mesh_type row -- method dropdown owns that choice.
+            # Also hide the "Mesh type" section header that sits above it,
+            # otherwise it becomes an orphan (no content under it).
+            self._heat_panel._set_row_visible("_sec_mesh_type", False)
             self._heat_panel._set_row_visible("mesh_type", False)
             # rotation_rpm: hidden + zeroed for static, visible for
             # rotating + axisym.

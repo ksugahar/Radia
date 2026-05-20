@@ -413,7 +413,18 @@ def check_widget_to_cli_coverage(window) -> CheckResult:
 
 def check_visible_rows_have_labels(window) -> CheckResult:
     """Every visible input row must have a non-empty label in the
-    label column.  Empty labels make the form ambiguous."""
+    label column.  Empty labels make the form ambiguous.
+
+    Legitimate exemptions:
+      - Section header QLabels (handled by _is_section_header_label).
+      - Plain-text QLabel fields (status lines, footers).
+      - Sub-panel widgets that carry their own QFormLayout — they
+        label themselves internally via their own form rows
+        (e.g. HeatPanel embedded in IHPanel).
+      - QCheckBox with a non-empty text() — the checkbox text IS
+        the label by Qt convention; a left-column label would be a
+        duplicate (e.g. "Override rho/cp/k").
+    """
     nameless = []
     for lay in _iter_form_layouts(window):
         n = lay.rowCount()
@@ -426,6 +437,26 @@ def check_visible_rows_have_labels(window) -> CheckResult:
                 continue
             # Skip plain-text QLabel fields (status lines, footers)
             if isinstance(fw, QLabel):
+                continue
+            # Skip sub-panel widgets that have their own QFormLayout —
+            # they label themselves internally (e.g. HeatPanel inside
+            # IHPanel).  A parent-side label would be redundant with
+            # the section header that introduces the sub-panel.
+            if isinstance(fw.layout(), QFormLayout):
+                continue
+            # Skip QScrollArea-wrapped sub-panels: the scroll viewport
+            # contains a widget that itself uses QFormLayout for
+            # labels (e.g. IHPanel wraps HeatPanel in QScrollArea to
+            # bound the window height).
+            from PySide6.QtWidgets import QScrollArea
+            if isinstance(fw, QScrollArea):
+                inner = fw.widget()
+                if inner is not None and isinstance(inner.layout(), QFormLayout):
+                    continue
+            # Skip self-labeled QCheckBoxes — the checkbox text is
+            # the label by Qt convention.
+            from PySide6.QtWidgets import QCheckBox
+            if isinstance(fw, QCheckBox) and fw.text().strip():
                 continue
             label_item = lay.itemAt(i, QFormLayout.LabelRole)
             lw = label_item.widget() if label_item else None
