@@ -108,20 +108,30 @@ def _resolve_material(name, rho, cp, k):
 # -----------------------------------------------------------------
 
 def _build_qsurf_cf(wp_mesh, surface_region, args):
-    """Return a CoefficientFunction representing q_surf on the heating
+    """Return ``(q_cf, resample_fn)`` describing q_surf on the heating
     face of the workpiece thermal mesh.
+
+    ``resample_fn(theta_rad)`` is a closure that, when called with a
+    rotation angle ``theta_rad`` (radians), updates the underlying
+    GridFunction backing ``q_cf`` so that q_surf is re-sampled with
+    the workpiece body rotated by ``+theta_rad`` around the z axis
+    relative to the EM frame.  Used by the time loop when
+    ``--rotation-rpm > 0`` on the spatial-qsurf path.
+
+    ``resample_fn`` is ``None`` for the uniform path (rotation
+    has no effect on a constant source).
 
     Three modes, in priority order:
       1. ``--q-uniform`` : constant scalar everywhere on the face.
       2. ``--qsurf-sol`` + ``--em-vol`` : load the EM-mesh GridFunction,
-         project onto wp_mesh's surface vertices.
+         project onto wp_mesh's surface vertices.  Re-projectable.
       3. Both omitted : raise (no heat input).
     """
     from ngsolve import (Mesh, H1, GridFunction, CoefficientFunction)
 
     if args.q_uniform is not None:
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
-        return CoefficientFunction(float(args.q_uniform))
+        return CoefficientFunction(float(args.q_uniform)), None
 
     if not args.qsurf_sol:
         raise ValueError(
@@ -180,20 +190,44 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
         for v in el.vertices:
             surf_vertex_nrs.add(v.nr)
 
-    # Sample em_mesh's GridFunction at each surface vertex.
-    n_ok = 0
-    n_fail = 0
-    for vnr in surf_vertex_nrs:
-        v = wp_mesh.vertices[vnr]
-        p = v.point
-        try:
-            em_mip = em_mesh(float(p[0]), float(p[1]), float(p[2]))
-            val = gf_q_em(em_mip)
-            gf_wp_q.vec.FV()[vnr] = float(getattr(val, "real", val))
-            n_ok += 1
-        except Exception:
-            n_fail += 1
+    # Pre-extract surface-vertex (x,y,z) coordinates once so the
+    # resample closure can apply rotation cheaply (no per-step
+    # ``wp_mesh.vertices[vnr].point`` Python overhead).
+    surf_vnrs_list = sorted(surf_vertex_nrs)
+    surf_xyz = [
+        tuple(float(c) for c in wp_mesh.vertices[vnr].point)
+        for vnr in surf_vnrs_list
+    ]
 
+    def _project(theta_rad: float) -> tuple[int, int]:
+        """In-place re-sampling at body-rotation angle ``theta_rad``.
+
+        Returns (n_ok, n_fail) for the most recent projection.  When
+        theta_rad == 0 this reproduces the original (single-shot)
+        projection used pre-2026-05-20.
+        """
+        c, s = math.cos(theta_rad), math.sin(theta_rad)
+        gf_wp_q.vec[:] = 0
+        n_ok = n_fail = 0
+        fv = gf_wp_q.vec.FV()
+        for vnr, (xb, yb, zb) in zip(surf_vnrs_list, surf_xyz):
+            # Workpiece body rotates +theta_rad around z; the world
+            # coordinate of body point (xb, yb, zb) at this angle is
+            # (xb*c - yb*s, xb*s + yb*c, zb).  Sample q_em there.
+            xw = xb * c - yb * s
+            yw = xb * s + yb * c
+            try:
+                em_mip = em_mesh(xw, yw, zb)
+                val = gf_q_em(em_mip)
+                fv[vnr] = float(getattr(val, "real", val))
+                n_ok += 1
+            except Exception:
+                n_fail += 1
+        return n_ok, n_fail
+
+    # Initial projection at theta=0 (original behaviour) so callers
+    # that ignore the resampler get the same q_cf they had pre-2026-05-20.
+    n_ok, n_fail = _project(0.0)
     _log(f"Q_SURF:projected {n_ok}/{n_ok + n_fail} surface "
          f"vertices ({n_fail} outside EM mesh, set to 0)")
     if n_fail > n_ok:
@@ -201,7 +235,11 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
              "outside the EM mesh -- check that the two .vol files "
              "describe the same physical workpiece geometry.")
 
-    return gf_wp_q
+    def _resample(theta_rad: float) -> None:
+        """Public resampler — updates gf_wp_q.vec in place."""
+        _project(theta_rad)
+
+    return gf_wp_q, _resample
 
 
 # -----------------------------------------------------------------
@@ -248,15 +286,6 @@ def solve_heat(wp_vol,
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
 
-    # Rotation is metadata in 3D mode -- q_surf is held azimuthally
-    # static. Warn if the user passes a non-zero rotation_rpm with the
-    # 3D solver because the result is the "frozen at one azimuthal
-    # configuration" answer, not the "spinning workpiece" answer.
-    if float(rotation_rpm) > 0.0:
-        _log(f"ROTATION:rpm={float(rotation_rpm):g} (3D solver: NOTE "
-             "q_surf held azimuthally static; for a true spinning "
-             "workpiece run the axisym solver with phi-averaging)")
-
     # H1 FES on the workpiece volume.  No Dirichlet BC -- the
     # surface flux + Robin convection give a well-posed problem.
     fes_T = H1(wp_mesh, order=int(fes_order))
@@ -276,7 +305,22 @@ def solve_heat(wp_vol,
     a_local.qsurf_order = qsurf_order
     a_local.surface_label = surface_label
     surface_region = wp_mesh.Boundaries(surface_label)
-    q_cf = _build_qsurf_cf(wp_mesh, surface_region, a_local)
+    q_cf, q_resample = _build_qsurf_cf(wp_mesh, surface_region, a_local)
+
+    # Rotation control: when --rotation-rpm > 0 AND a resampler is
+    # available (spatial qsurf only -- uniform is rotation-invariant),
+    # re-project q_cf at the workpiece body's instantaneous angle each
+    # timestep.  Mesh / FES / stiffness / mass are held fixed; only the
+    # LinearForm RHS depends on q_cf and is re-Assembled per step.
+    omega_mech = (2.0 * math.pi / 60.0) * float(rotation_rpm)
+    rotation_active = (omega_mech > 0.0) and (q_resample is not None)
+    if float(rotation_rpm) > 0.0 and q_resample is None:
+        _log("ROTATION:rpm>0 with --q-uniform has no effect "
+             "(uniform q_surf is rotation-invariant).")
+    elif rotation_active:
+        _log(f"ROTATION:rpm={float(rotation_rpm):g} "
+             f"omega={omega_mech:.4f} rad/s -- "
+             f"resampling qsurf on the body frame each step.")
 
     # ------------------- Bilinear forms -------------------
     K_cf = CF(float(k_v))
@@ -338,6 +382,12 @@ def solve_heat(wp_vol,
 
     for step in range(1, n_steps + 1):
         t = step * float(dt)
+        if rotation_active:
+            # Body has rotated by omega_mech * t around z at the start
+            # of this step.  Re-sample qsurf on the wp surface at that
+            # body orientation.  q_cf (a GridFunction) is updated in
+            # place; q_int (the integrated heat input) tracks below.
+            q_resample(omega_mech * t)
         f_form = LinearForm(fes_T)
         f_form += q_cf * v * ds(surface_label)
         f_form += float(h_conv) * float(t_ext) * v * ds(surface_label)
@@ -345,6 +395,12 @@ def solve_heat(wp_vol,
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
             gfT.vec.data += float(dt) * (inv * res_vec)
+        if rotation_active:
+            # q_int can drift with rotation if the EM-frame hotspot
+            # only partially overlaps the wp surface at some angles.
+            # Re-integrate to keep Q_input_J honest.
+            q_int = float(Integrate(q_cf, wp_mesh, BND,
+                                     definedon=surface_region).real)
         Q_input_J += q_int * float(dt)
         t_arr.append(t)
         if probe_point is not None:
