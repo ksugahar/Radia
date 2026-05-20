@@ -181,16 +181,25 @@ class HeatPanel(ModePanel):
         self.add_line("cp",  "cp [J/(kg.K)]:", "467")
         self.add_line("k",   "k [W/(m.K)]:", "46.6")
 
-        # Workpiece rotation.  Treated as MET ADATA for the 3D solver
-        # (q_surf is held azimuthally static -- a true spinning
-        # workpiece in 3D would need per-timestep coordinate rotation,
-        # not yet implemented).  For the axisym solver the rotation
-        # itself is implicit in the axisymmetric assumption; this
-        # value documents the physical scenario and validates that
-        # cross-mesh phi-averaging is the right model.
-        self.add_line(
+        # Workpiece rotation.  Since v4.58.0 the 3D solver actually
+        # spins the body: q_surf is re-projected each timestep at the
+        # workpiece's instantaneous angle around the z axis (mesh /
+        # FES / mass / stiffness are held fixed, only the LinearForm
+        # RHS reassembles).  For the axisym solver rotation is
+        # implicit in the axisymmetric assumption.  Use 0 for a
+        # stationary "frozen at one azimuthal configuration" answer
+        # (e.g. quick feasibility runs).
+        rrow = self.add_line(
             "rotation_rpm",
             "Rotation [rpm] (0 = stationary):", "0")
+        rrow.setToolTip(
+            "<b>3D solver</b>: positive rpm makes the workpiece body "
+            "spin around the z axis -- q_surf is re-sampled on the "
+            "rotated body each timestep (uniform mode is unaffected; "
+            "only spatial qsurf benefits).<br>"
+            "<b>2D axisym solver</b>: rotation is implicit (the "
+            "workpiece is rotation-symmetric by construction); the "
+            "value is recorded as metadata.")
 
         # Boundary conditions.
         self._add_section("Boundary conditions")
