@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **114 tools** across 8 MCP servers.
+Total: **115 tools** across 8 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 28 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 3 |
@@ -114,6 +114,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
+| `bem_cln` | Get BEM-CLN (per-element multipole CLN with Schur-F termination) |
 | `cln_3d` | Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration |
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
