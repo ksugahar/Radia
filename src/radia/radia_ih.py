@@ -1235,10 +1235,30 @@ class IHWindow(AnalysisWindow):
                     candidate = qsurf[:-len("_qsurf.sol")] + "_fem.vol"
                     if os.path.isfile(candidate):
                         em_vol = candidate
+                # Final fallback: try the wp_vol's directory + the JSON's
+                # ``wp_vol`` (an additional convention some IH methods
+                # emit when the .vol carries the EM mesh directly).
+                if not em_vol:
+                    wp_v = result.get("wp_vol") or result.get("vol") or ""
+                    if wp_v and os.path.isfile(wp_v):
+                        em_vol = wp_v
                 self._heat_qsurf_sol = qsurf
                 self._heat_em_vol = em_vol
                 if self._heat_btn is not None:
                     self._heat_btn.setEnabled(True)
+                if not em_vol:
+                    # v4.58.0+ contract: thermal panel's Run button stays
+                    # disabled until the user fills --em-vol explicitly
+                    # (.sol is a coefficient vector only, NGSolve cannot
+                    # load it without the matching mesh).  Surface a
+                    # hint so the user knows to pick the .vol manually
+                    # in the thermal window after launch.
+                    self._output.appendPlainText(
+                        "\n[hint] EM .vol companion to qsurf.sol was not "
+                        "auto-located.  When the thermal panel opens, "
+                        "you'll need to browse to the EM .vol "
+                        "(usually <stem>_fem.vol next to <stem>_qsurf.sol) "
+                        "before the Run button enables.")
 
             lines = ["", "=== IH Summary ==="]
             method = result.get("method", "")
