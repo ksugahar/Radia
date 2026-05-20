@@ -3,6 +3,80 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.57.0 — proximity-aware iterative PEEC (default ON in calc_inductance panel)
+
+Released 2026-05-20.
+
+New module `radia.peec_proximity.solve_proximity_iterative` wraps the
+existing perimeter PEEC loop-bundle solve with an outer iteration
+that augments per-filament `Zs_fil` with the Leontovich surface
+dissipation `½ Re(Z_s) · |H_t|² · s_k · L_k` evaluated from the
+actual Biot-Savart H field at each filament's wire-surface position.
+The bundle re-solves; `Zs_fil` updates with under-relaxation
+(default relax=0.3) until `‖ΔZ‖/‖Z‖ < tol` (default 1e-3).
+
+Validated against the 2-wire analytical (50.5 / 23.2 / 12.1 A/m at
+three eval positions, exact match).  Critical kernel details
+(debugged 2026-05-19/20):
+
+- Biot-Savart angular sign convention: `l·r1/|r1| - l·r2/|r2|`
+  (cos α₁ - cos α₂ form).
+- r_min clamp must be **1e-12**, NOT 0.1·wire_radius (the latter
+  over-clamps close-range contributions, giving |H_t_self| ~360×
+  too small).
+- Self-exclusion is per-segment only; adjacent segments of the same
+  filament must contribute to |H_t| at the eval surface point.
+
+Production result on the 3-turn pancake (Cu, 150 kHz, n_peri=16):
+
+| Path | R | L |
+|---|---|---|
+| pre-2026-05-19 (R_DC only) | 0.3945 mΩ | 426.30 nH |
+| 2026-05-19 v4.55.4 (Bessel self-skin) | 3.6752 mΩ | 430.14 nH |
+| **v4.57.0 (+ proximity)** | **4.4793 mΩ** | **431.32 nH** |
+
+`proximity_factor = 4.4793 / 3.6763 = 1.218` at 150 kHz; the factor
+is constant ~1.20-1.22 across 1 kHz - 1 MHz on this geometry — the
+**structural ceiling of perimeter PEEC**, which captures
+surface-Leontovich proximity but **not** transverse eddy loops in
+the wire interior.  The remaining gap to the 15 mΩ LCR hi-tester
+measurement is most plausibly lead/contact resistance (5-50 mΩ
+typical for 2-terminal probes at low Ω); 4-terminal Kelvin
+re-measurement is the deciding test.  Volume PEEC (radial filaments
+beyond perimeter) is sketched in `docs/peec/VOLUME_PEEC_DESIGN.md`
+and marked DEFERRED pending that re-measurement.
+
+`calc_inductance.py` exposes the new `--peec-proximity` /
+`--no-peec-proximity` flag (default ON).  The opt-out restores
+v4.55.4 self-only Bessel behaviour (R=3.6763 mΩ on the 3-turn case
+to within numerical noise).
+
+Golden tests updated:
+- `tests/panels/golden/peec_inductance_3turn_150kHz_Cu.json`:
+  L 426.30 -> 431.32 nH, R 0.3945 -> 4.4793 mOhm (both rate-limiters
+  through the two-step lift R_DC -> Bessel -> Bessel+proximity).
+- `tests/panels/golden/peec_inductance_torus_50kHz_Cu.json`:
+  L 85.10 -> 87.08 nH, R 0.118 -> 0.6496 mOhm (this golden was last
+  touched in v4.12.0 and missed the v4.55.4 Bessel fix; sync'd here).
+
+Bundled performance fixes (Option B prerequisites):
+- `_b3d_shim.Solid`: lazy caches for bounding_box / faces / edges /
+  solids.  `BRepBndLib.AddOptimal_s` is ~0.5 s on the 3turncoil
+  sample and was being re-computed 6× by independent validation
+  predicates in `coil_from_cad.filaments_from_step`.
+- `coil_from_cad._filaments_from_circle_edges_per_station`:
+  vectorise the O(N·K) centre-proximity dedup with
+  `numpy.norm(axis=1).min()`.  Drops Python any()/norm() count
+  from ~199k to ~5k on the same sample (~0.9 s recovered on the
+  9.4 s cold run).
+
+Pre-existing unrelated bug (filed as separate task): `_filaments_from_section_planes`
+fails on `tests/panels/golden/rect_torus_lofted_united.step` with
+"spacing between cap_a and the adjacent interior station is
+21.96 mm vs typical 4.60 mm".  Introduced when the OCP shim landed
+in v4.56.0; the PEEC `rect_united` golden has been failing on main
+since then.  Out of scope for v4.57.0; will be fixed separately.
+
 ## 4.55.0 — endpoint anchoring to cap centroids (eliminates rim-end kink at lead caps)
 
 Released 2026-05-16.  Final fix in the keiko viz response chain.
