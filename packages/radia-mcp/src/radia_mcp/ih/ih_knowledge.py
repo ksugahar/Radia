@@ -506,10 +506,14 @@ Workflow (single window):
 4. Set material / convection / time scheme / rotation_rpm.
 5. Click Run.
 
-The pre-4.59.0 standalone ``radia-heat`` (HeatWindow) launcher is
-DEPRECATED.  Its ``main()`` redirects to ``radia-ih`` with the
-Thermal method pre-selected; the deprecated stub will be removed in
-the next minor release.
+The pre-4.59.0 standalone ``radia-heat`` (HeatWindow) launcher was
+REMOVED in radia 4.62.0.  Heat analysis is the Method = "Thermal"
+choice in ``radia-ih`` exclusively.  The HeatPanel sub-widget lives
+at ``radia._heat_panel`` as an internal implementation detail of
+the IH panel; no public CLI replacement for ``radia-heat`` exists
+(launch ``radia-ih`` and pick the Thermal method instead).
+Programmatic imports: replace ``from radia.radia_heat import ...``
+with ``from radia._heat_panel import ...``.
 
 ## ``.sol + .vol`` strict contract (4.58.0+)
 
@@ -794,8 +798,9 @@ python -m radia.panels.calc_heat \\
     --rotation-rpm 12        # <-- workpiece spins around z at 12 rpm
 ```
 
-Equivalent panel knob: the `Rotation [rpm]` field in `radia_heat.py`
-(Layer 3 Cubit panel).  Default 0 (stationary).
+Equivalent panel knob: the `Rotation [rpm]` field in `radia-ih`
+(Layer 3 Cubit panel, Method = "Thermal" section; the field is
+implemented in `radia._heat_panel`).  Default 0 (stationary).
 
 ## How calc_heat.py implements rotation
 

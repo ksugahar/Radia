@@ -505,7 +505,7 @@ class IHPanel(ModePanel):
         # superseded by this integration; kept temporarily as a
         # deprecated stub that redirects to ``radia-ih`` (radia 4.59.0+).
         self._add_section("Thermal analysis", key="_sec_thermal")
-        from radia.radia_heat import HeatPanel
+        from radia._heat_panel import HeatPanel
         self._heat_panel = HeatPanel(parent=self)
         # Embed as a single full-width row in IHPanel's form layout.
         self._form.addRow(self._heat_panel)
@@ -1536,7 +1536,7 @@ class IHWindow(AnalysisWindow):
                 heat._widgets["em_vol"].setText(self._heat_em_vol)
             # Spatial qsurf mode (HEAT_SRC_SPATIAL) by definition --
             # the chain only fires when an EM solve produced .sol.
-            from radia.radia_heat import HEAT_SRC_SPATIAL
+            from radia._heat_panel import HEAT_SRC_SPATIAL
             heat._widgets["heat_source"].setCurrentText(HEAT_SRC_SPATIAL)
         except (KeyError, AttributeError) as e:
             self._output.appendPlainText(
