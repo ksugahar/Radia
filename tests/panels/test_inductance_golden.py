@@ -151,28 +151,6 @@ def test_inductance_peec_vacuum_3turn_loft():
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    reason="Pre-v4.56.0 (build123d era) this test passed with L=145.3 "
-           "nH via the v4.24.0 'cap-aware spine fix' in "
-           "_filaments_from_section_planes.  Post-v4.56.0 the OCP "
-           "shim's section / face / outer_wire APIs return slightly "
-           "different cross-section geometries than build123d did, "
-           "and the resulting filament reconstruction diverges.  A "
-           "2026-05-20 attempt (task #30) to route OPEN swept "
-           "geometries through generate_spine instead of "
-           "_centerline_from_open_spine got status=ok but L=192 nH "
-           "(+32% vs golden 145.3, outside the [130, 160] regression "
-           "guard).  Root cause is in the cross-section reconstruction "
-           "/ UV-sampling chain post-section, not in the spine "
-           "dispatch alone.  Affects only rectangular-cross-section "
-           "test fixtures (the production round-wire pipeline -- "
-           "3turncoil, ih_peec_inductance -- uses the "
-           "circle-edge-centers path and is unaffected).  Real fix "
-           "needs to align _section_solid_at_plane + "
-           "_sample_face_perimeter_in_pt_frame outputs with the "
-           "pre-shim build123d behaviour, ~1 day of geometry work.  "
-           "Marked xfail so CI stays green.  Tracked in task #30.",
-    strict=False)
 def test_inductance_peec_vacuum_rect_united():
     """Phase C-heavy regression: united multi-loft + rect cross-section."""
     g = _load_golden("peec_inductance_rect_united_50kHz_Cu.json")
