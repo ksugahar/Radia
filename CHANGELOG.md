@@ -3,6 +3,76 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.59.0 — heat analysis integrated into radia-ih (radia_heat standalone deprecated)
+
+Released 2026-05-20.
+
+Heat analysis is now a Method choice in the radia-ih panel, alongside
+PEEC-Inductance / PEEC-BEM / FEM-Kelvin / FEM-coilmesh.  The
+HeatPanel sub-widget (from radia_heat.py) is embedded as a section in
+IHPanel and becomes visible only when ``method == "Thermal"`` is
+selected.  One window for the full EM->Thermal chain.
+
+### User-visible changes
+
+* New method entry **"Thermal (heat transfer from saved q_surf .sol)"**
+  in the radia-ih Method dropdown.  Selecting it hides the EM-side
+  sections (Drive, Coil material, Coil geometry, Workpiece material,
+  Workpiece impedance, Linear solver, Advanced) and shows the
+  Thermal sub-panel (mesh type / heat source / qsurf .sol + em .vol
+  inputs / material / convection BC / time scheme / probe /
+  rotation_rpm).
+* The **"Run thermal..."** chain button (active after a successful
+  EM solve produced ``qsurf.sol``) now SWITCHES the method dropdown
+  to Thermal and pre-fills the embedded HeatPanel's qsurf_sol /
+  em_vol fields.  No new window opens; the heat analysis runs in
+  the same IHWindow on the next Run click.
+
+### Deprecation: ``radia_heat`` standalone
+
+``radia_heat.py main()`` is now a deprecation stub.  When invoked it
+emits a ``DeprecationWarning`` and redirects to ``radia-ih`` with the
+Thermal method pre-selected and the CLI flags applied as panel
+pre-fills.  Old shortcuts and shipped CLI integrations keep working
+during the deprecation window.  The standalone HeatWindow class
+remains importable but is **scheduled for removal in the next minor
+release**.
+
+### Architectural notes
+
+* IHPanel.is_runnable, .build_command, .wp_vol_path delegate to the
+  embedded HeatPanel when method == Thermal.  HeatPanel's own
+  build_command picks calc_heat_axisym.py vs calc_heat.py based on
+  the mesh_type combo, enforces the v4.58.0 strict
+  ``.sol + .vol`` contract, and inherits the v4.58.0 rotation
+  feature (``--rotation-rpm > 0`` re-projects q_surf each timestep).
+* Previously-unkeyed sections "Drive", "Coil material", "Linear
+  solver", "Advanced" now have ``_sec_drive`` / ``_sec_coil_mat`` /
+  ``_sec_solver`` / ``_sec_advanced`` keys so they collapse cleanly
+  when method == Thermal.
+
+### Test coverage
+
+* ``tests/panels/test_heat_rotation.py``: 3 unit tests still PASS
+  (rotation projection math validated against synthetic unit cube;
+  unaffected by the integration since it tests calc_heat directly).
+* ``tests/panels/panel_qa.py`` registry: ``heat_3d`` / ``heat_axisym``
+  standalone HeatWindow entries replaced with a single ``ih_thermal``
+  entry that exercises the integrated Thermal method through
+  IHWindow.  Existing panel-rendering / font / layout checks now
+  cover the integrated path.
+* ``tests/panels/test_heat_chain_golden.py``: e2e chain test
+  invokes ``calc_heat`` via subprocess directly -- unchanged
+  contract, still PASSes.
+
+### Breaking changes
+
+* The "Run thermal..." button no longer launches a separate process.
+  Workflows that programmatically detected the radia_heat window are
+  now exercised through IHWindow with method=Thermal.
+* The standalone ``radia-heat`` CLI continues to work but logs a
+  DeprecationWarning at startup.
+
 ## 4.58.0 — 3D thermal workpiece rotation + tightened qsurf/em-vol contract
 
 Released 2026-05-20.
