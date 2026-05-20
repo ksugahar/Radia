@@ -18,6 +18,8 @@ on the reader's goal:
 | ... understand the math / cite the paper | [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) |
 | ... understand the code architecture / Karl loop internals | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) |
 | ... see numerical validation tables | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) |
+| ... understand the honest limits of ESIM validation (and why) | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 1b |
+| ... diagnose a Karl loop that didn't converge | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 + [`plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py) |
 | ... understand WHY this combination of choices (the publication argument) | [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) |
 | ... diagnose the PEEC vs BEM-A coil-R discrepancy | [`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) |
 | ... see the slow STEP-to-filament path analysis | [`PEEC_PERFORMANCE_AND_R_ANALYSIS.md`](PEEC_PERFORMANCE_AND_R_ANALYSIS.md) |
