@@ -23,7 +23,27 @@ The `qsurf_sol` JSON key in the result holds the absolute path to
 
 ## Phase B: Thermal solve
 
-Pick **Method → "Thermal (heat transfer from saved q_surf .sol)"**
+Pick one of the three Thermal Method choices (v4.63.0+):
+
+* **Method = "Thermal: 3D static (no rotation)"** -- 3D solver,
+  rotation_rpm forced to 0.  Use for static one-shot heat-up or
+  feasibility studies.
+* **Method = "Thermal: 3D + rotation (q_surf re-sampled per step)"**
+  -- 3D solver with workpiece rotation; q_surf re-projected on the
+  body frame each timestep.  Use for non-axisymmetric workpieces
+  OR non-axisymmetric coils with rotation.
+* **Method = "Thermal: 2D axisymmetric (rotation implicit)"** --
+  axisym solver (10-100x faster); rotation is implicit in the
+  axisym assumption (rpm recorded as metadata).  Use for
+  rotationally-symmetric workpieces under continuous rotation.
+
+The radia-ih Method dropdown owns the mesh_type + rotation_rpm
+choice; the embedded HeatPanel's individual mesh_type / rotation
+fields are hidden because the parent Method already encodes them.
+
+Pre-v4.63.0 a single "Thermal (heat transfer from saved q_surf
+.sol)" method choice required the user to set Mesh type +
+rotation_rpm separately; that single-entry UX is removed.
 in the same `radia-ih` panel.  The EM-side sections (Drive, Coil
 material, Coil geometry, Workpiece material, Workpiece impedance,
 Linear solver, Advanced) hide; the embedded HeatPanel becomes the
