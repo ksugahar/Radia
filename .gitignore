@@ -392,6 +392,11 @@ src/radia/panels/samples/*_peec_ind.msh.opt
 src/radia/panels/samples/*_peec_ind_*.sol
 src/radia/panels/samples/*_peec_ind_field.vol
 src/radia/panels/samples/*_peec_ind_filaments.msh
+
+# PEEC topology cache (SHA256-keyed JSON written by filaments_from_step
+# next to the source .step when RADIA_PEEC_CACHE_DISABLE is unset).
+src/radia/panels/samples/*.peec_peri*_sigma*_u*.json
+tests/panels/golden/*.peec_peri*_sigma*_u*.json
 src/radia/panels/samples/*_coil_filaments.msh
 src/radia/panels/samples/*_fem_kelvin.json
 src/radia/panels/samples/*_fem_kelvin.msh
