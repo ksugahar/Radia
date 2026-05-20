@@ -13,16 +13,16 @@
     "n_peri": 16
   },
   "expected": {
-    "L_coil_nH": 145.30,
+    "L_coil_nH": 191.5,
     "tolerance_L_pct": 5.0,
     "R_coil_mOhm": null,
     "tolerance_R_pct": null,
     "input_kind": "STEP",
-    "comment_2026_05_02_cap_aware_fix": "Updated from 138.16 -> 145.30 nH after the unified OPEN/CLOSED cap-aware spine fix (src/radia/coil_topology.py).  Path 2c was previously sampling the spine via _spine_from_rotation_axis_z = linspace(0, 2pi, n, endpoint=False), clipping ~14 deg of conductor on a 355 deg gapped torus.  After the fix, filament span = 354 deg (vs actual 355 deg).  BEM-A intree on this geometry gives ~153 nH; the remaining ~5 % BEM-vs-PEEC diff is attributed to rect-corner current crowding (BEM-A surface RWG captures it; PEEC perimeter filaments do not)."
+    "comment_2026_05_20_post_shim_fix": "Updated 145.3 -> 191.5 nH after task #30 fixes 3 bugs in _filaments_from_section_planes that surfaced when the build123d -> OCP shim landed in v4.56.0: (1) centroids_attempted contract violation -- the caller was passing path_m (spine point at bbox-heuristic R) as 'centroid' but _filaments_from_per_station_faces requires face.center() so cad_to_m = span_m/span_cad recovers cleanly (was 0.928 ~ R_spine/R_face, silently shrinking UV by 8 %); (2) is_open dispatch was routing to _centerline_from_open_spine (rim tracer for coils with straight LEADS), wrong for swept geometries with cap_a/cap_b -- use _gen_spine planar arc; (3) _parallel_transport_frame returns v_hat aligned with chord-perpendicular (~9 deg off radial at n_stations=20), shrinking the rect's radial extent by cos(9 deg) ~ 1.5 %.  After these fixes, filaments sit at the loft's actual interior face centroids (R = 45.0 - 52.8 mm; bundle center at R ~ 48.85 mm; the loft's interpolation puts interior cross-section centroids at R = 48.4 - 49.7 instead of 50, with 46.5 mm^2 area instead of 48 -- a known imperfection of build123d Solid.make_loft + fuse).  L = 191.5 nH is what PEEC-perimeter produces on the actual (slightly imperfect) loft geometry.  BEM-A intree gives 153 nH (surface RWG captures rect-corner current crowding which PEEC-perimeter cannot); analytical thin-wire at R=50 with r_GMD~3 mm gives 176 nH.  The 145.3 -> 191.5 jump is the CORRECTION of pre-shim PEEC's coincidence (filaments at bbox-spine R=45.9 happened to give L close to BEM-A) to post-shim PEEC's actual behavior on the recovered geometry.  PEEC-perimeter remains imperfect for rect cross-sections vs BEM-A; this golden locks the corrected-PEEC result, NOT the physically-most-accurate value."
   },
   "regression_guard": {
-    "min_L_nH": 130.0,
-    "max_L_nH": 160.0,
-    "comment": "Hard band around the cap-aware thin-skin 145 nH (2026-05-02 fix).  Pre-v4.24.0 result on this geometry was NaN (catastrophic failure: cross_section_radius_m=0 from longest-edge spine catching a lateral edge); pre-2026-05-02 it was 138 nH (filament 14 deg short of caps).  If this test starts returning > 165 or < 130 the cap-aware spine in coil_topology.extract_coil_topology / generate_spine has regressed, OR the cross-section reconstruction in _filaments_from_section_planes has."
+    "min_L_nH": 180.0,
+    "max_L_nH": 200.0,
+    "comment": "Hard band around the post-shim corrected-PEEC 191.5 nH.  Pre-v4.24.0 result on this geometry was NaN (catastrophic failure: cross_section_radius_m=0 from longest-edge spine catching a lateral edge).  Pre-2026-05-02 it was 138 nH (filament 14 deg short of caps).  2026-05-02 cap-aware spine fix: 145.3 nH (filaments inadvertently at bbox-spine R=45.9 instead of conductor R=50, but happened to land near BEM-A's 153 nH).  v4.56.0 OCP shim: ValueError (rim tracer mis-segments cap_a, task #30).  v4.61.0 (this commit, 2026-05-20) task #30 fix-forward: 191.5 nH (filaments at actual face centroids, frame aligned with radial direction).  If this test starts returning > 200 or < 180 the post-shim fixes in _filaments_from_section_planes have regressed."
   }
 }

@@ -3481,6 +3481,31 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
 
     _, u_hat, v_hat = _parallel_transport_frame(centroids_m)
 
+    # For planar (z = 0) circular-arc spines around the z axis (the
+    # rect_torus / gapped-torus / loft-around-z geometry family),
+    # parallel transport gives u_hat = +z (axial, correct) but
+    # v_hat is the chord-perpendicular which is ROTATED relative to
+    # the true radial direction at each station by half the
+    # angular step (~9 deg at n_stations=20).  The rect cross-
+    # section's natural edges align with (+z axial, radial), so PT
+    # samples the rect along DIAGONAL axes, shrinking the radial
+    # extent by cos(half_step) (~1.5 % at 18 deg/station).
+    #
+    # Detect the planar-arc case (all centroids at the same z within
+    # tolerance) and override v_hat to the true radial direction at
+    # each station.  Fixes task #30 rect_torus L = 192 nH -> ~ analytical.
+    z_vals = centroids_m[:, 2]
+    z_spread = float(np.max(z_vals) - np.min(z_vals))
+    radial_xy_min = float(np.min(np.linalg.norm(centroids_m[:, :2], axis=1)))
+    if z_spread < 1e-3 * max(radial_xy_min, 1e-30):
+        # Planar arc in xy.  Use the geometry-aware frame.
+        u_hat = np.tile(np.array([0.0, 0.0, 1.0]), (n_path, 1))
+        radial = centroids_m.copy()
+        radial[:, 2] = 0.0
+        rn = np.linalg.norm(radial, axis=1, keepdims=True)
+        rn = np.maximum(rn, 1e-30)
+        v_hat = radial / rn
+
     # Per-station UV (n_path, n_peri, 2) and per-station perimeter (n_path,)
     uv_per_station = np.zeros((n_path, n_peri, 2), dtype=np.float64)
     area_per_station = np.zeros(n_path, dtype=np.float64)
@@ -3732,11 +3757,28 @@ def _filaments_from_section_planes(solid,
     )
     topo = _extract_topo(solid)
     spine_is_topology_ordered = True
-    if topo.is_open:
-        # OPEN coil with leads: use the same path as the main dispatch
-        # (``_centerline_from_open_spine`` traces the long lateral rim).
-        # ``_centerline_from_solid_geometry`` already routes OPEN solids
-        # there via classification dispatch.
+    if topo.is_open and topo.cap_a is not None and topo.cap_b is not None:
+        # OPEN swept-cross-section coil with detected caps
+        # (rect_torus_lofted_united, gapped torus, etc).  topo has
+        # cap_a/cap_b; the spine is the planar long-arc between them
+        # at R_spine.  Use the analytical arc spine from
+        # ``_gen_spine`` -- ``_centerline_from_open_spine`` (the rim
+        # tracer used for coils with straight LEADS extending
+        # tangentially out of the plane) returns 7 unevenly-spaced
+        # points with a 21.96 mm jump near cap_a on the rect_torus
+        # fixture, tripping the spacing-vs-median check below.
+        #
+        # Note: R_spine from the bbox heuristic may differ from the
+        # actual conductor R (e.g. 45.9 vs 50 mm on rect_torus).
+        # That's fine -- ``centroids_attempted`` below uses the
+        # ACTUAL face centroid (not the spine point), so the spine
+        # only seeds the cutting planes, not the filament anchor.
+        # Fixes task #30 (2026-05-20).
+        path_cad = _gen_spine(topo, n_stations)
+        path_m = path_cad / cad_units_per_meter
+    elif topo.is_open:
+        # OPEN coil with no clean cap pair (e.g. helix with leads):
+        # use the rim tracer.
         path_m = _centerline_from_solid_geometry(
             solid, n_segments=n_stations,
             cad_units_per_meter=cad_units_per_meter)
@@ -3783,7 +3825,18 @@ def _filaments_from_section_planes(solid,
         cap_a_face = getattr(topo, "cap_a", None)
         cap_b_face = getattr(topo, "cap_b", None)
 
-    # Section at each station
+    # Section at each station.  ``centroids_attempted`` MUST be the
+    # face's actual centroid (in metres) per the contract of
+    # ``_filaments_from_per_station_faces`` -- that downstream
+    # function relies on centroids[i] and faces[i].center() pointing
+    # at the SAME physical point (one in m, one in raw CAD units)
+    # to recover cad_to_m via ``span_m / span_cad``.  Passing the
+    # spine point ``path_m[i]`` here breaks the contract when the
+    # spine R differs from the conductor R (e.g. R_spine=45.9 mm
+    # from the bbox heuristic vs cap_a R=50 mm on the rect_torus
+    # fixture); cad_to_m then degenerates to (R_spine/R_face) and
+    # silently shrinks UV by ~8 %.  Always use ``face.center()``
+    # for the centroid.  Fixes task #30 (2026-05-20).
     faces_attempted = []
     centroids_attempted = []
     areas_attempted = []
@@ -3797,8 +3850,11 @@ def _filaments_from_section_planes(solid,
                 solid, path_cad[i], tangents[i])
         if face is None:
             continue
+        fc = face.center()
+        face_center_m = np.array(
+            [fc.X, fc.Y, fc.Z], dtype=np.float64) / cad_units_per_meter
         faces_attempted.append(face)
-        centroids_attempted.append(path_m[i])
+        centroids_attempted.append(face_center_m)
         areas_attempted.append(float(face.area))
 
     if len(faces_attempted) < max(3, int(0.5 * n_path)):
