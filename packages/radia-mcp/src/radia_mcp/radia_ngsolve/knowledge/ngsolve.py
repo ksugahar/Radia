@@ -1598,6 +1598,100 @@ val = gf(mesh(*mesh.vertices[v.nr].point))
 This bug broke GMSH |B| export in both `calc_fem_kelvin.py` and
 `calc_accel_magnet.py` (fixed 2026-04-09).
 
+## 18c. Surface-Restricted H1 GridFunction (qsurf-Style Save/Load)
+
+Use case: an EM solver computes a surface quantity (q_surf for IH-SIBC,
+B_n on a defect surface, ...) and wants to ship it as a stand-alone
+.sol file to a downstream solver (thermal, post-processing) without
+shipping the mesh inside the .sol.  NGSolve .sol files are raw
+coefficient vectors -- no mesh, no fes-order header.
+
+Save side (Producer; e.g. `calc_fem_kelvin.py` IH):
+
+```python
+fes_q = H1(mesh, order=fes_order)
+gf_q = GridFunction(fes_q)
+gf_q.vec[:] = 0                          # interior DOFs stay 0
+gf_q.Set(q_surf_cf, definedon=wp_region) # only boundary DOFs touched
+gf_q.Save("q.sol")                       # raw coefficient vector
+```
+
+`wp_region = mesh.Boundaries("sibc")` is a Region; passing it to
+`.Set(definedon=...)` triggers a boundary projection -- only the H1
+DOFs that live on that boundary (vertex DOFs on boundary nodes, edge
+DOFs on boundary edges, face DOFs on boundary faces; order >= 2) get
+populated.  Interior bubbles stay 0.
+
+Load side (Consumer; e.g. `calc_heat.py` Phase B):
+
+```python
+em_mesh = Mesh("em.vol")                  # MUST be passed explicitly --
+                                          # .sol is mesh-free.
+fes_q_em = H1(em_mesh, order=fes_order)   # MUST match save-side order.
+gf_q_em = GridFunction(fes_q_em)
+gf_q_em.Load("q.sol")
+```
+
+THREE contracts that must hold:
+
+1. The EM .vol companion MUST be passed alongside the .sol; the .sol
+   has no mesh.  Auto-locating siblings by filename convention is a
+   silent-fallback footgun (`<stem>_fem.vol` next to `<stem>_qsurf.sol`
+   was the convention; tightened to required 2026-05-20 per
+   CLAUDE.md "No Fallbacks").
+2. The FES order MUST match the producer's.  No header in .sol means
+   a mismatch loads garbage silently (no NGSolve error).  Default
+   for radia panel chain is 1 on both sides; for `--fes-order 2` EM
+   solves, pass matching `--qsurf-order 2` to the thermal consumer.
+3. The producer must `gf.vec[:] = 0` BEFORE `Set(definedon=...)`.
+   Otherwise the interior DOFs carry whatever the previous state was;
+   downstream consumers expect interior=0.
+
+Point-evaluating the loaded GF at boundary face vertices:
+
+```python
+# wp_surf_point is a body-frame surface vertex coord.  em_mesh(...)
+# returns a volume MeshPoint inside the element touching the boundary.
+em_mip = em_mesh(*wp_surf_point)
+val = gf_q_em(em_mip)
+```
+
+WHY THIS WORKS WITHOUT `.Trace()`: at a face point on a boundary
+element, the H1 volume basis decomposition is
+``v_total = sum(boundary_DOFs * boundary_shape_fns)
+         + sum(interior_DOFs * interior_bubbles)``.
+The interior bubbles are zero at face points by construction (bubble
+support is the element interior); the interior DOFs themselves are
+also zero (we never wrote them).  So the volume-basis evaluation
+EQUALS the trace evaluation -- no `.Trace()` call needed at point
+sample.
+
+WHEN YOU **DO** NEED `.Trace()`:
+
+* Building a boundary-only CoefficientFunction for symbolic algebra
+  outside `ds(...)`:
+  ``q_trace_cf = gf_q_em.Trace()``  -- valid only on boundaries.
+* Wiring into HDivSurface BEM operators (LaplaceSL / HelmholtzSL --
+  see Section 18 above): ``j_trial.Trace() * ds("conductor")`` etc.
+* Coulomb-gauge coupling: ``Cross(grad(u).Trace(), n) * ds("coupling")``.
+
+For LinearForm assembly with surface integrals, `.Trace()` is implicit
+in `ds(label)`:
+
+```python
+f_form = LinearForm(fes_T)
+f_form += q_cf * v * ds(surface_label)   # NGSolve auto-traces both
+                                         # q_cf and v's volume bases.
+f_form.Assemble()
+```
+
+Diagnostic value of POINT-EVALUATION over `.Trace()`: when wp surface
+vertices fall slightly OUTSIDE the EM mesh (mesh-mismatch, geometry
+drift), `em_mesh(x,y,z)` raises and the consumer can count failures
+and report `Q_SURF:projected N/M surface vertices (M-N outside EM
+mesh, set to 0)`.  Using `gf.Trace()` would not give this diagnostic
+without extra plumbing.
+
 ## 19. Python Krylov Solvers for Nested BlockMatrix (Forum: Thread 3399)
 
 ```python
