@@ -526,15 +526,19 @@ def get_panel_registry():
     Used by the deploy skill and pytest to iterate every supported
     panel × mode combination.
     """
-    import radia_ih, radia_em, radia_pcb, radia_heat
+    import radia_ih, radia_em, radia_pcb
     return [
-        # IH — 3 methods
+        # IH — 4 methods (PEEC-IND / PEEC-BEM / FEM-full / Thermal).
+        # Thermal is the post-4.59.0 home for heat analysis (formerly
+        # the standalone radia_heat HeatWindow).
         ("ih_ind", radia_ih.IHWindow,
          "_method_combo", radia_ih.METHOD_PEEC_IND),
         ("ih_bem", radia_ih.IHWindow,
          "_method_combo", radia_ih.METHOD_PEEC_BEM),
         ("ih_fem", radia_ih.IHWindow,
          "_method_combo", radia_ih.METHOD_FEM_FULL),
+        ("ih_thermal", radia_ih.IHWindow,
+         "_method_combo", radia_ih.METHOD_THERMAL),
         # EM — formulations (Omega / A-Phi / MSC / Kelvin Benchmark).
         # _method_combo is the convention-name attribute exposed by
         # every mode-switching panel (EM, IH, ...).
@@ -545,12 +549,6 @@ def get_panel_registry():
          "_method_combo", "Kelvin Benchmark"),
         # PCB — single layout
         ("pcb", radia_pcb.PCBWindow, None, None),
-        # Heat — 3D volume vs 2D axisymmetric (mesh_type is the routing
-        # key on HeatPanel; switched via _widgets["mesh_type"]).
-        ("heat_3d", radia_heat.HeatWindow,
-         "mesh_type", radia_heat.MESH_TYPE_3D),
-        ("heat_axisym", radia_heat.HeatWindow,
-         "mesh_type", radia_heat.MESH_TYPE_AXISYM),
     ]
 
 
