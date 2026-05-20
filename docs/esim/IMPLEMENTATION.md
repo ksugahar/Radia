@@ -305,6 +305,38 @@ with iteration `k > 0` required to avoid spurious termination at the
 seed (which has `dZ = 1.0` by definition of the relaxation update,
 even if `Z_s` happened to match after the first cell call).
 
+**Per-DOF `dZ` is a harsher criterion than scalar `dZ`.**  For
+per-element Karl (`--esim-per-panel`) the `max_i` in `dZ_max` is
+taken over the **worst** DOF (typically a corner / hot-spot where
+the cell-solver Lipschitz constant is closest to 1).  Per-DOF runs
+routinely hit `max_iter` with `dZ_max` still in the 0.1-0.5 range
+even though scalar-Karl on the same problem converges in <10 iter.
+A `max_iter` cap on `dZ_max` is therefore **not by itself** evidence
+of divergence — but it is **not by itself** evidence of a usable
+result, either.  You must inspect the trajectory.
+
+**Decision rule.**  Plot `esim_history` with
+[`examples/ih_esim_benchmark/plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py),
+which overlays `dZ` (or `dZ_max`), `Z_s_abs` (with min/max band for
+per-panel), and `|H_t|` per iteration.  Read it as:
+
+| Trajectory signature | What it means | Action |
+|---|---|---|
+| `dZ` decays monotonically, crosses `esim_tol` | Karl converged | use the result |
+| `dZ` non-monotone, but mean `Z_s_abs` and `H_t_rms` settle over last 3-5 iter (variation < ~5 %) | per-DOF noise on a useful plateau | accept the `max_iter` cap; report P_wp with the caveat |
+| `dZ` non-monotone AND `Z_s_abs`, `H_t_rms` still drifting at iter N | Karl genuinely under-relaxed or BH knee straddled | lower `--esim-relax` to 0.3, raise `--esim-max-iter`; do NOT publish the iter-N number |
+| `dZ` oscillates / grows | true divergence (`α L > 1` somewhere) | drop `--esim-relax` to 0.2, check BH curve monotonicity |
+
+The headline IGTE per-element v4 benchmark sits in the **second**
+row of this table (dZ_max 0.14-0.41 across iterations 1-14 while
+mean `|Z_s|` drifts 0.027 → 0.020 Ω and `|H_t|_rms` climbs from
+~500 to ~1200 A/m as the per-DOF spread widens to its final 3.3×
+range).  That is the published number — but the per-DOF trajectory
+is not yet a clean plateau, and improving it (Anderson acceleration,
+adaptive `α`, or tighter cell-solver tolerance) is the natural
+follow-up work flagged in
+[`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) § 7.
+
 ---
 
 ## 4. The Robin BC on the Workpiece Surface
@@ -469,6 +501,7 @@ target: `calc_inductance.py` scalar path, ~3 days effort.
 | Karl plateaus at `dZ ≈ 0.5` | non-monotone BH curve | print `μ(H)` from the loaded BH file at sample H values |
 | Karl converges to wrong `Z_s` | wrong sign on Robin BC | compare to scalar SIBC at low-H regime; `Z_s_esim ≈ Z_s_dowell` should hold |
 | Karl 50+ iter without convergence | `α` too small OR BH knee straddled | try `α = 0.7` with `max_iter = 30`; check `H_t_rms` vs the BH knee |
+| Karl hits `max_iter` but `Z_s_abs` / `H_t_rms` look plateaued | per-DOF noise floor on worst DOF, not divergence (see § 3.4) | plot `esim_history` with [`plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py); if integrated quantities are monotone, accept the cap or raise `--esim-tol` to 5e-3 |
 | Cell Picard inner-loop diverges | `tol` too tight for the BH curve smoothness | raise cell `tol` to 1e-4 (currently hard-coded — see [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) § 2.3) |
 | Per-DOF Karl gives wildly different result from scalar | mass-lumping `M_lump` close to zero on some DOFs | check `min(M_lump)` — should be `>10⁻⁶ × max(M_lump)`; coarsen mesh if not |
 
