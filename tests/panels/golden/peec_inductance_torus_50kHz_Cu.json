@@ -19,11 +19,15 @@
     "comment": "Thin-wire self-inductance of a circular loop (Maxwell) adjusted for the 5deg gap.  Analytical assumes uniform current on a 1D filament.  Perimeter-placed PEEC with n_peri=16 underestimates by 3-5% (current redistributes to the outer perimeter, effective loop radius slightly smaller)."
   },
   "expected": {
-    "L_coil_nH": 85.10,
+    "L_coil_nH": 87.08,
     "tolerance_L_pct": 3.0,
-    "R_coil_mOhm": 0.118,
+    "R_coil_mOhm": 0.6496,
     "tolerance_R_pct": 10.0,
-    "input_kind": "STEP"
+    "input_kind": "STEP",
+    "proximity_factor": 1.040,
+    "self_only_bessel_R_coil_mOhm": 0.6245,
+    "self_only_bessel_L_coil_nH": 87.00,
+    "note_2026_05_20": "Updated R/L for: (a) Bessel-skin Zs_fil fix (v4.55.4, 2026-05-19) -- R 0.118 (R_DC) -> 0.6245 mOhm at 50 kHz (a/delta=10.15); (b) proximity-iterative default (v4.57.0, 2026-05-20) -- R 0.6245 -> 0.6496 mOhm, factor 1.040.  Single-turn gapped torus sees small proximity (4%) -- no neighbour-turn coupling, only self-coupling around the loop.  Pre-2026-05-20 the golden's R=0.118 was stale (R_DC) since the v4.12.0 generation."
   },
   "regression_guard": {
     "min_L_nH": 80.0,

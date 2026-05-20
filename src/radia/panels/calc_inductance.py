@@ -218,20 +218,52 @@ def _solve_coil_peec(args):
             f"delta={delta_m * 1e3:.3f} mm, "
             f"a/delta={a_eq / delta_m:.2f}")
 
-    progress("PEEC", f"Loop-bundle solve @ {args.frequency:.0f} Hz")
+    use_prox = bool(getattr(args, "peec_proximity", True)) and a_eq > 0 \
+        and omega > 0
+    progress("PEEC",
+        f"Loop-bundle solve @ {args.frequency:.0f} Hz "
+        f"({'proximity-iterative' if use_prox else 'self-only Bessel'})")
     t0 = time.perf_counter()
     R_f, L_f = build_loop_bundle_impedance(solver, seg_of_fil)
-    I_fil, V_port = solve_loop_bundle(R_f, L_f, args.frequency,
-                                       I_port=args.current,
-                                       Zs_fil=Zs_fil)
+
+    proximity_info = None
+    if use_prox:
+        from radia.peec_proximity import solve_proximity_iterative
+        prox = solve_proximity_iterative(
+            R_f=R_f, L_f=L_f, filament_paths=paths,
+            frequency=args.frequency,
+            sigma=args.coil_sigma, wire_radius_m=a_eq,
+            n_peri=int(args.peec_n_peri),
+            I_port=args.current,
+            max_iter=int(args.peec_proximity_max_iter),
+            tol=float(args.peec_proximity_tol),
+            relax=float(args.peec_proximity_relax),
+        )
+        I_fil = prox["I_fil"]; V_port = prox["V_port"]
+        proximity_info = {
+            "n_iter": int(prox["n_iter"]),
+            "converged": bool(prox["converged"]),
+        }
+    else:
+        I_fil, V_port = solve_loop_bundle(R_f, L_f, args.frequency,
+                                           I_port=args.current,
+                                           Zs_fil=Zs_fil)
     t_peec = time.perf_counter() - t0
     Z_coil = V_port / args.current
     L_coil = Z_coil.imag / omega if omega > 0 else 0.0
     R_coil = Z_coil.real
-    progress("PEEC", f"L_coil={L_coil * 1e9:.3f} nH, "
-                      f"R_coil={R_coil * 1e3:.4f} mΩ ({t_peec:.1f}s)")
+    if use_prox and proximity_info is not None:
+        progress("PEEC",
+            f"L_coil={L_coil * 1e9:.3f} nH, "
+            f"R_coil={R_coil * 1e3:.4f} mΩ "
+            f"(proximity {proximity_info['n_iter']} iter, "
+            f"{'conv' if proximity_info['converged'] else 'NO-conv'}, "
+            f"{t_peec:.1f}s)")
+    else:
+        progress("PEEC", f"L_coil={L_coil * 1e9:.3f} nH, "
+                          f"R_coil={R_coil * 1e3:.4f} mΩ ({t_peec:.1f}s)")
 
-    return {
+    out = {
         "source_type": "filament",
         "L_coil": L_coil, "R_coil": R_coil,
         "paths": paths, "I_fil": I_fil,
@@ -239,6 +271,9 @@ def _solve_coil_peec(args):
         "t_coil_topology_s": t_topo,
         "t_coil_solve_s": t_peec,
     }
+    if proximity_info is not None:
+        out["proximity"] = proximity_info
+    return out
 
 
 # ======================================================================
@@ -1382,6 +1417,27 @@ def main():
     # ----- PEEC-specific args -----
     parser.add_argument("--peec-n-peri", type=int, default=16,
                         help="PEEC perimeter filament count (peec only)")
+    parser.add_argument("--peec-proximity", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help="Use proximity-aware iterative PEEC (default ON; "
+                             "augments the Bessel self-skin Zs_fil with the "
+                             "Leontovich surface dissipation evaluated from "
+                             "the actual Biot-Savart H field at each "
+                             "filament's wire-surface position).  Pass "
+                             "--no-peec-proximity to fall back to the "
+                             "isolated-wire Bessel self-skin only.")
+    parser.add_argument("--peec-proximity-max-iter", type=int, default=60,
+                        help="Maximum proximity outer iterations.  On the "
+                             "3-turn pancake at 150 kHz the iteration "
+                             "exhibits a transient hump near iter 30 then "
+                             "settles by iter 50 (relax=0.3).  Default 60 "
+                             "gives ~10 iter margin.")
+    parser.add_argument("--peec-proximity-tol", type=float, default=1.0e-3,
+                        help="Proximity outer-iteration convergence tolerance "
+                             "on ||dZ|| / ||Z||.")
+    parser.add_argument("--peec-proximity-relax", type=float, default=0.3,
+                        help="Proximity outer-iteration under-relaxation "
+                             "factor (0 < relax <= 1; 0.3 is conservative).")
 
     # ----- BEM-A-specific args -----
     parser.add_argument("--coil-maxh", type=float, default=0.012,
