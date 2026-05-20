@@ -486,6 +486,75 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 INDUCTION_HEATING_THERMAL = """
 # Transient Thermal Analysis for Induction Heating
 
+## Production path (radia 4.59.0+): integrated in radia-ih panel
+
+Heat analysis is a **Method choice** in the `radia-ih` panel,
+alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
+FEM-coilmesh methods.  Pick **Method → "Thermal (heat transfer from
+saved q_surf .sol)"**.
+
+Workflow (single window):
+
+1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
+   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).
+2. Click the **"Run thermal..."** chain button on the action row.
+   This SWITCHES the method dropdown to "Thermal" and pre-fills the
+   embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
+3. Pick the workpiece thermal ``wp.vol`` (a SEPARATE mesh from the
+   EM ``.vol``; the EM mesh treats the workpiece as a hole with a
+   SIBC face, the thermal mesh treats it as a real solid).
+4. Set material / convection / time scheme / rotation_rpm.
+5. Click Run.
+
+The pre-4.59.0 standalone ``radia-heat`` (HeatWindow) launcher is
+DEPRECATED.  Its ``main()`` redirects to ``radia-ih`` with the
+Thermal method pre-selected; the deprecated stub will be removed in
+the next minor release.
+
+## ``.sol + .vol`` strict contract (4.58.0+)
+
+NGSolve ``.sol`` files are coefficient vectors only -- no embedded
+mesh, no FES-order header.  Both files MUST be passed:
+
+```bash
+# Direct CLI (calc_heat.py):
+python -m radia.panels.calc_heat \\
+    --wp-vol workpiece_thermal.vol \\
+    --surface-label sibc \\
+    --qsurf-sol  <stem>_qsurf.sol \\  # REQUIRED for spatial mode
+    --em-vol     <stem>_fem.vol   \\  # REQUIRED (no auto-locate)
+    --qsurf-order 1                \\  # MUST equal EM fes_order
+    --material steel --dt 0.5 --t-end 5.0 \\
+    --rotation-rpm 12                  # see ``rotating`` topic
+```
+
+`--qsurf-order` must match the EM solve's `--fes-order` exactly;
+mismatch reads garbage silently (no NGSolve error).  Defaults: both 1.
+
+The HeatPanel's Run button stays disabled until both .sol AND .vol
+exist on disk.  Auto-locate by filename convention was REMOVED in
+4.58.0 per CLAUDE.md "No Fallbacks" (was a silent footgun when the
+user renamed or moved files).
+
+## ``.sol`` data model: H1 GridFunction with boundary-only DOFs
+
+`calc_fem_kelvin.py` saves q_surf as:
+
+```python
+fes_q = H1(mesh, order=fes_order)        # VOLUME H1 on the EM mesh
+gf_q = GridFunction(fes_q)
+gf_q.vec[:] = 0                          # interior DOFs stay 0
+gf_q.Set(q_surf_cf, definedon=wp_region) # only workpiece-boundary DOFs touched
+gf_q.Save(qsurf_sol_path)
+```
+
+The thermal solver re-projects this onto the wp-mesh surface
+vertices by point evaluation.  When wp-mesh and em-mesh share the
+same physical workpiece geometry, vertices land on the EM boundary
+faces and H1 continuity guarantees the boundary node values are
+recovered exactly.  See ``radia_mcp.radia_ngsolve.ngsolve`` Section
+18c for the broader pattern (surface-restricted H1 GF save/load).
+
 ## Heat Equation with Joule Heat Source
 
 Solves the unsteady heat equation in the workpiece:
