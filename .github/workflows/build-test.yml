@@ -178,7 +178,14 @@ jobs:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           Write-Host "Running pytest (excluding cubit + OCC-dependent tests)..."
+          # --reruns 2: retry transient failures up to 2x.  Commit
+          # a61cecdf added pytest-rerunfailures as a dependency
+          # specifically for test_omega_reduced_omega flakiness but
+          # never enabled the flag.  v4.64.0 main push CI hit the same
+          # test_B_accuracy_inside_iron flake (2026-05-20 02:34 JST)
+          # so the flag is wired up here.
           python -m pytest tests/ -v --tb=short --junitxml=test-results.xml `
+            --reruns 2 --reruns-delay 1 `
             --ignore=tests/cubit `
             --ignore=tests/panels `
             --ignore=tests/test_far_field_accuracy.py `
@@ -194,6 +201,33 @@ jobs:
           }
 
       # ----------------------------------------------------------------
+      # Motor panel tests (Stage-2 calc_motor_transient + lamination).
+      # Requires NGSolve (already provisioned at C:\NGSolve for the
+      # C++ build), no Cubit dependency.  Runs the golden tests:
+      #   tests/panels/test_motor_transient_golden.py (3 tests)
+      #   tests/panels/test_motor_lamination_golden.py (4 tests)
+      # ----------------------------------------------------------------
+      - name: Run motor panel tests
+        if: always()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
+          PYTHONIOENCODING: utf-8
+        run: |
+          Write-Host "Running motor panel golden tests..."
+          # Ensure C:\temp exists for the test fixtures
+          New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
+          python -m pytest tests/panels/test_motor_transient_golden.py `
+                            tests/panels/test_motor_lamination_golden.py `
+            -v --tb=short --junitxml=panel-test-results.xml `
+            --reruns 1 --reruns-delay 1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Motor panel tests failed"
+            exit $LASTEXITCODE
+          }
+
+      # ----------------------------------------------------------------
       # Upload test results for GitHub Actions summary
       # ----------------------------------------------------------------
       - name: Upload test results
@@ -201,7 +235,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: test-results.xml
+          path: |
+            test-results.xml
+            panel-test-results.xml
           retention-days: 30
 
       # ----------------------------------------------------------------
