@@ -537,8 +537,12 @@ def get_panel_registry():
          "_method_combo", radia_ih.METHOD_PEEC_BEM),
         ("ih_fem", radia_ih.IHWindow,
          "_method_combo", radia_ih.METHOD_FEM_FULL),
-        ("ih_thermal", radia_ih.IHWindow,
-         "_method_combo", radia_ih.METHOD_THERMAL),
+        ("ih_thermal_3d_static", radia_ih.IHWindow,
+         "_method_combo", radia_ih.METHOD_THERMAL_3D_STATIC),
+        ("ih_thermal_3d_rotating", radia_ih.IHWindow,
+         "_method_combo", radia_ih.METHOD_THERMAL_3D_ROTATING),
+        ("ih_thermal_axisym", radia_ih.IHWindow,
+         "_method_combo", radia_ih.METHOD_THERMAL_AXISYM),
         # EM — formulations (Omega / A-Phi / MSC / Kelvin Benchmark).
         # _method_combo is the convention-name attribute exposed by
         # every mode-switching panel (EM, IH, ...).

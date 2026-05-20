@@ -490,7 +490,23 @@ INDUCTION_HEATING_THERMAL = """
 
 Heat analysis is a **Method choice** in the `radia-ih` panel,
 alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
-FEM-coilmesh methods.  Pick **Method → "Thermal (heat transfer from
+FEM-coilmesh methods.  Pick one of three Thermal Method choices
+(v4.63.0+):
+
+  - ``Thermal: 3D static (no rotation)`` -- 3D solver with
+    rotation_rpm = 0.  Use for static one-shot heat-up.
+  - ``Thermal: 3D + rotation (q_surf re-sampled per step)`` --
+    3D solver with workpiece rotation (v4.58.0 qsurf re-projection
+    each timestep).  Use for non-axisymmetric workpieces / coils.
+  - ``Thermal: 2D axisymmetric (rotation implicit)`` -- axisym
+    solver (10-100x faster); rotation is implicit in the axisym
+    assumption.  Use for rotationally-symmetric workpieces.
+
+The Method dropdown encodes the (mesh_type, rotation_rpm) pair;
+the embedded HeatPanel's individual fields are hidden.
+
+Pre-v4.63.0 single-entry path (kept for context): pick **Method
+→ "Thermal (heat transfer from
 saved q_surf .sol)"**.
 
 Workflow (single window):

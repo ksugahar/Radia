@@ -3,6 +3,48 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.63.0 — Thermal Method split into 3 explicit choices
+
+Released 2026-05-21.
+
+The single ``Method = "Thermal"`` choice (v4.59.0-v4.62.0) is
+replaced by three explicit Thermal solvers in the radia-ih
+Method dropdown:
+
+* ``Thermal: 3D static (no rotation)`` -- 3D heat equation,
+  rotation_rpm = 0, q_surf held azimuthally fixed.  Use for
+  static one-shot heat-up, feasibility studies, non-rotating IH.
+* ``Thermal: 3D + rotation (q_surf re-sampled per step)`` -- 3D
+  heat equation, workpiece spins around +z axis, q_surf
+  re-projected on the body frame each timestep (v4.58.0+
+  feature).  Use for non-axisymmetric workpieces OR
+  non-axisymmetric coils under rotation.
+* ``Thermal: 2D axisymmetric (rotation implicit)`` -- axisym
+  (r, z) solver, 10-100x faster than equivalent 3D.  Use for
+  rotationally-symmetric workpieces (cylinder, stepped shaft,
+  disk).
+
+The Method dropdown owns the (mesh_type, rotation_rpm) pair;
+the embedded HeatPanel's individual ``Mesh type`` combo and
+``Rotation [rpm]`` line are HIDDEN because the parent Method
+already encodes those.  HeatPanel still exposes the choice
+internally for direct subprocess invocation (``calc_heat.py`` /
+``calc_heat_axisym.py``).
+
+### Breaking changes
+
+* The constant ``radia.radia_ih.METHOD_THERMAL`` is removed.
+  Use one of ``METHOD_THERMAL_3D_STATIC`` /
+  ``METHOD_THERMAL_3D_ROTATING`` / ``METHOD_THERMAL_AXISYM``,
+  or the ``THERMAL_METHODS`` frozenset for membership checks.
+* Old scripts that did ``panel._method_combo.setCurrentText(
+  METHOD_THERMAL)`` fail with ``NameError``.  Pick one of the
+  three explicit methods.
+
+panel_qa.py registry: ``ih_thermal`` replaced by three
+entries: ``ih_thermal_3d_static`` / ``ih_thermal_3d_rotating`` /
+``ih_thermal_axisym``.
+
 ## 4.62.0 — remove radia-heat standalone (HeatPanel moved to _heat_panel)
 
 Released 2026-05-21.
