@@ -127,7 +127,20 @@ theta=0/π/π/2 reads body-(1,0,0) as +1/-1/0).  See
 The 3D solver writes:
 
 * JSON to stdout with `T_max_C`, `T_min_C`, probe history, time
-  history, `Q_input_J`, runtime stats.
+  history, `Q_input_J`, runtime stats, AND the saved file paths
+  (`T_sol_file`, `heat_vol_file`, `msh_file`, `vtu_files`).
+* **T `.sol` + companion `.vol`** -- the final temperature
+  GridFunction is ALWAYS saved as a NGSolve `.sol` next to the
+  workpiece thermal mesh.  Symmetric with the EM side's qsurf.sol
+  contract:
+    - With `--msh-output`: writes `<msh-stem>_T.sol` +
+      `<msh-stem>_heat.vol` (a fresh companion mesh) alongside
+      the GMSH `.msh`.
+    - Without `--msh-output`: writes `<wp-stem>_heat_T.sol` next
+      to `wp.vol` (re-use wp.vol itself as the companion mesh).
+  Both paths are reported in the JSON as `T_sol_file` and
+  `heat_vol_file`; the IH Summary lines them out next to GMSH /
+  VTU paths so the user sees them at a glance.
 * GMSH `.msh v4.1` (per the lab standard) via
   `gmsh_post_export.vol2msh`.  Bundled fields: `T_C` (volume
   scalar, per-vertex), `q_surf` (surface scalar on the heating
@@ -136,6 +149,22 @@ The 3D solver writes:
   (transient animation).
 * Optional `.csv` probe history when `--probe-point x,y,z` +
   `--csv-output` are both set.
+
+### Reloading the T `.sol` for later evaluation
+
+```python
+from ngsolve import Mesh, H1, GridFunction
+wp_mesh = Mesh("workpiece_thermal.vol")    # or <stem>_heat.vol when --msh-output was used
+fes_T   = H1(wp_mesh, order=1)             # MUST match the solve's --fes-order
+gfT     = GridFunction(fes_T)
+gfT.Load("workpiece_thermal_heat_T.sol")   # or <msh-stem>_T.sol
+# Now gfT is the final temperature field on the thermal mesh:
+T_at_point = float(gfT(wp_mesh(0.0, 0.0, 0.005)))   # sample at body point
+```
+
+Same contract as qsurf.sol: the .sol is a coefficient vector only;
+the matching `.vol` + matching FES order are required to reconstruct
+the GridFunction.
 
 ## Trouble shooting
 
