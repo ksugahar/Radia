@@ -349,6 +349,8 @@ def solve_heat_axisym(wp_vol,
     # sees both the input flux and the resulting volume temperature
     # in one GMSH view.
     gmsh_file = ""
+    T_sol_file = ""
+    heat_vol_file = ""
     if msh_output:
         try:
             from gmsh_post_export import save_vol_sol_pair, vol2msh
@@ -357,6 +359,8 @@ def solve_heat_axisym(wp_vol,
             sol_T = os.path.join(base_dir, f"{stem}_T.sol").replace("\\", "/")
             vol_T = os.path.join(base_dir, f"{stem}_heat.vol").replace("\\", "/")
             save_vol_sol_pair(vol_T, sol_T, wp_mesh.ngmesh, gfT)
+            T_sol_file = sol_T
+            heat_vol_file = vol_T
             sol_entries = [
                 {"sol": sol_T, "fes": "H1",
                  "fes_order": int(fes_order),
@@ -385,6 +389,22 @@ def solve_heat_axisym(wp_vol,
                  f"({len(sol_entries)} fields, 2D axisym)")
         except Exception as e:
             _log(f"GMSH_ERROR:{type(e).__name__}: {e}")
+    else:
+        # No --msh-output: still save T.sol alongside wp_vol so a
+        # later evaluation pass can reload it (mirrors qsurf.sol
+        # contract on the EM side).
+        try:
+            base_dir = os.path.dirname(os.path.abspath(wp_vol))
+            stem = os.path.splitext(os.path.basename(wp_vol))[0]
+            sol_T = os.path.join(
+                base_dir, f"{stem}_heat_T.sol").replace("\\", "/")
+            gfT.Save(sol_T)
+            T_sol_file = sol_T
+            _log(f"T_SOL:wrote {os.path.basename(sol_T)} "
+                 f"(no GMSH bundle requested; load with the same "
+                 f"wp_vol + H1 order={fes_order}, axisym 2D)")
+        except Exception as e:
+            _log(f"T_SOL_ERROR:{type(e).__name__}: {e}")
 
     if csv_output and probe_point is not None:
         try:
@@ -432,6 +452,8 @@ def solve_heat_axisym(wp_vol,
                      else "qsurf_sol"),
         "qsurf_sol": qsurf_sol if not q_uniform else "",
         "em_vol": em_vol if not q_uniform else "",
+        "T_sol_file": T_sol_file,
+        "heat_vol_file": heat_vol_file,
         "msh_file": gmsh_file,
         "vtu_files": vtu_files,
         "csv_file": csv_output if (csv_output and probe_point is not None)
