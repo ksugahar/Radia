@@ -3,6 +3,65 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.58.0 — 3D thermal workpiece rotation + tightened qsurf/em-vol contract
+
+Released 2026-05-20.
+
+### feat(heat): 3D workpiece rotation
+
+`calc_heat.py` previously treated `--rotation-rpm` as metadata only;
+q_surf was held azimuthally static so a spinning workpiece would not
+actually see a moving heat source.  This release implements true
+rotation for the spatial-qsurf path:
+
+* New helper closure in `_build_qsurf_cf`: at angle theta_rad it
+  re-samples q_em on the wp surface with the body rotated by
+  theta_rad around the z axis -- world coords
+  `(x*c - y*s, x*s + y*c, z)` at body point `(x, y, z)`.  The
+  GridFunction backing q_cf is updated **in place**; mesh / FES /
+  stiffness / mass remain fixed (LinearForm RHS already reassembles
+  each step for the convection term, so per-step overhead = one
+  re-projection ~10 ms).
+* Time loop calls the resampler at start of each step with
+  theta = omega_mech * t when `rotation_active` (spatial qsurf +
+  positive rpm).  q_int (integrated heat input) is re-computed when
+  rotation is active so Q_input_J accounting stays honest if the
+  hotspot partially leaves the workpiece face at some angles.
+* `--rotation-rpm > 0` with `--q-uniform` is intentionally a no-op
+  (constant in space, nothing to rotate); the panel warns.
+* `radia_heat.py` "Rotation [rpm]" tooltip updated to describe the
+  new behaviour.
+
+Unit tests in `tests/panels/test_heat_rotation.py` validate the
+projection math on a synthetic unit cube with q_em(x,y,z)=x: at
+theta=0 / pi / pi/2 the body point near (+1,0,0) reads q ~ 1 / -1 / 0.
+
+### fix(heat): --em-vol required when --qsurf-sol is supplied
+
+Tighten the .sol + .vol contract per "No Fallbacks" policy.  The
+previous auto-locate of the sibling `<stem>_fem.vol` is removed.
+NGSolve .sol is a raw coefficient vector (no embedded mesh, no
+fes_order header), so requiring the companion .vol explicitly is
+the only safe contract.
+
+Both `calc_heat.py` and `calc_heat_axisym.py` now raise ValueError
+when `--qsurf-sol` is given without `--em-vol`.  Error message
+points the user at the typical `<stem>_fem.vol` companion.
+`radia_heat.py` panel: "EM .vol (auto):" label dropped (now just
+"EM .vol:"), tooltip explains the contract, `is_runnable()`
+requires both paths to exist, `build_command()` raises if either
+is empty (defence in depth).
+
+`radia_ih.py`'s "Run thermal..." launch button still auto-resolves
+the sibling and passes BOTH paths explicitly to `radia_heat.py` --
+unaffected.
+
+### Breaking changes
+
+* `calc_heat.py --qsurf-sol` users who previously omitted
+  `--em-vol` and relied on the `<stem>_fem.vol` auto-locate must
+  now pass `--em-vol` explicitly.
+
 ## 4.57.0 — proximity-aware iterative PEEC (default ON in calc_inductance panel)
 
 Released 2026-05-20.
