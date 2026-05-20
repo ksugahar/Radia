@@ -30,6 +30,64 @@ specific diagnosis (cell discretisation / Karl logic / outer formulation).
 
 ---
 
+## 1b. The honest limits of ESIM validation
+
+ESIM in its nonlinear regime is **structurally hard to validate** —
+not because the method is fragile, but because the alternatives that
+*would* validate it are themselves unavailable.  Be explicit with
+reviewers and end users about which gaps remain:
+
+1. **Volumetric FEM at IH scale is impractical.**  A reference 3-D
+   FEM A-V solve of the steel workpiece that resolves the skin layer
+   (`δ ≈ 0.1 mm` at 50 kHz on hot steel) over a centimetre-scale part
+   would need `(R_wp / δ)³ ≳ 10⁵` 3-D cells in the skin alone, with
+   curved tet/hex and second-order basis to capture the radial decay
+   `exp(-r/δ)`.  This is why the SIBC approximation exists in the
+   first place; using a volumetric reference to validate the SIBC
+   defeats the purpose.
+
+2. **1-D analytical references are the only closed form.**  The
+   Bessel `I_0/I_1` cylinder (Strategy A) is the only nonlinear-µ
+   closed-form result general enough to compare against.  It pins
+   the cell solver but cannot validate the outer (BIE / FEM-Kelvin
+   / FEM-coilmesh) coupling, the per-DOF Z_s scaling, or the
+   spatial variation of `|H_t|` across the workpiece surface.
+
+3. **3-path / dual-source consistency is a modularity check, NOT
+   an ESIM validation.**  Strategy B (§3) and the PEEC ↔ BEM-A
+   coil-source swap both leave the cell solver, Karl loop, and Z_s
+   row-scaling on the BIE matrix **identical**.  Agreement across
+   them rules out coupling-side bugs but cannot rule out a shared
+   error in the cell solver / Karl recursion.  Treat agreement as
+   "the dispatch path didn't introduce a bug", not "ESIM gave the
+   right number".
+
+4. **Measurement validation is real but slow and thermally coupled.**
+   A direct experimental measurement of `P_wp(f, I)` on a steel
+   sample is the only true external validation.  Two structural
+   obstacles:
+   - **Thermal coupling**: hot-steel `σ(T)` drops by ~10× from 20 °C
+     to 800 °C; the BH curve flattens (`B_sat` falls; the Curie
+     point at 770 °C effectively zeroes the magnetic contribution).
+     An IH experiment changes its own material parameters as it
+     heats, so back-extracting `Z_s(|H_t|)` requires a fully
+     coupled electromagnetic-thermal model — which then needs its
+     own validation.
+   - **Infrastructure cost**: a steel-sample B-H meter under
+     calibrated AC drive with thermal control is a labour-year
+     of infrastructure, not a unit test.
+
+This list is the structural reason the validation hierarchy below
+stops where it does, and the reason the publication argument leans
+on **method/discretisation matching** (cell solver pinned by
+Strategy A, scalar BIE basis-order matched to ESIM kernel —
+see [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md))
+rather than on an end-to-end external comparison.  Users planning
+experimental validation should consult § 5 (Strategy D) for the
+roadmap.
+
+---
+
 ## 2. Strategy A: Linear-μ Bessel Baseline (Cell-Problem Validation)
 
 **Goal.**  Pin the 1-D cell-problem solver against a closed-form
@@ -80,6 +138,20 @@ the table above is publication-ready.
 ---
 
 ## 3. Strategy B: Three Independent Radia Paths
+
+> **Caveat (read § 1b first).**  Strategy B is a **modularity check**,
+> NOT an independent validation of ESIM.  The three paths share the
+> same cell solver (`esim_cell_problem.py`), the same Karl iteration
+> driver, and the same per-DOF Z_s row-scaling logic — only the
+> outer coupling (scalar BIE / HCurl FEM with Robin / HCurl A-V)
+> differs.  Agreement therefore rules out **coupling-side** bugs
+> (seed mismatch, wrong damping, wrong Robin sign, wrong `H_t`
+> extraction) but **cannot rule out a shared bug** in the cell
+> solver or Karl recursion that would propagate identically to all
+> three paths.  The same caveat applies to the PEEC ↔ BEM-A
+> coil-source swap (see [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md)).
+> For external ESIM validation, see Strategy A (cell solver) and
+> Strategy D (saturation regime, in development).
 
 **Goal.**  Confirm that the Karl-loop wrapping is implemented
 consistently across the three coupled solvers.  Detects: seed mismatch,
