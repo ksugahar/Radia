@@ -498,6 +498,37 @@ python src/radia/panels/calc_inductance.py \
 
 ---
 
+## 6c. Robustness of headline `P_wp` to Karl-loop knobs
+
+Because per-element ESIM hits `max_iter` on the strict per-DOF
+`dZ_max` criterion (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md)
+§ 3.4), a **robustness cross-check** is needed to confirm that the
+integrated `P_wp` is independent of the damping / iteration-count
+knobs.  Same geometry (`ih_bem_sample_p1.vol`, 50 kHz, 100 A, BH
+curve from `em_sample_bh.txt`), different Karl knobs:
+
+| Run | `--esim-relax` | `--esim-max-iter` | Iters used | `P_wp` [W] | Last-5-iter `<\|Z_s\|>` drift | Per-DOF `\|Z_s\|` range at exit |
+|---|---|---|---|---|---|---|
+| v4 | 0.5 | 15 | 15 (cap) | **45.143** | 4.37 % | 11.6 - 38.1 mΩ (3.3×) |
+| v5 | 0.3 | 30 | 30 (cap) | **45.196** | 0.54 % | 11.2 - 37.4 mΩ (3.3×) |
+
+`P_wp` agrees to **0.12 %** and the per-DOF `|Z_s|` endpoints
+agree to **<0.3 mΩ**.  v5 is the cleaner plateau but takes 2×
+longer; v4 is the publication-grade compromise.  See
+[`examples/ih_esim_benchmark/karl_history_per_panel_relax03.png`](../../examples/ih_esim_benchmark/karl_history_per_panel_relax03.png)
+for the v5 trajectory.
+
+Note that the per-DOF `dZ_max` noise floor (~0.06 - 0.20 across
+both runs) is **insensitive to damping** — confirming it is a
+true noise floor on the hot-spot DOFs and not a damping-knob
+artifact.  Anderson acceleration (planned) is expected to close
+this gap without changing `P_wp`.
+
+This is a **self-consistency** check, not an external validation;
+see § 1b for the structural limits.
+
+---
+
 ## 7. Karl Iteration Lipschitz Estimate (Empirical)
 
 **Goal.**  Quantify the convergence rate of the outer Karl loop and
