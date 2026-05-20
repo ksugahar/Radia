@@ -1425,7 +1425,77 @@ class IHWindow(AnalysisWindow):
             if "t_solve_s" in result:
                 lines.append(f"  solve: {result['t_solve_s']:.1f} s")
 
+            # ------ Thermal-method summary ------
+            # calc_heat / calc_heat_axisym emit T_max_C / T_min_C /
+            # Q_input_J / probe history / msh_file / vtu_files.  No
+            # L/R/P keys (those are EM-side).  Show the temperature
+            # stats so the user does not need to open the .msh just
+            # to see whether the workpiece reached soak temperature.
+            t_max = result.get("T_max_C")
+            t_min = result.get("T_min_C")
+            if t_max is not None or t_min is not None:
+                lines.append("  --- Thermal ---")
+            if t_max is not None:
+                lines.append(f"  T_max: {t_max:.2f} degC")
+            if t_min is not None:
+                lines.append(f"  T_min: {t_min:.2f} degC")
+            t_init = result.get("T_initial_C")
+            if t_init is not None and t_max is not None:
+                rise = t_max - t_init
+                lines.append(f"  Delta T (T_max - T_initial): {rise:+.2f} K")
+            qin = result.get("Q_input_J")
+            if qin is not None:
+                lines.append(f"  Q_input: {qin:.3e} J  ({qin/1e3:.3f} kJ)")
+            t_end = result.get("t_end_s")
+            n_steps = result.get("n_steps")
+            if t_end is not None and n_steps is not None:
+                lines.append(
+                    f"  Time: {t_end:.2f} s in {int(n_steps)} steps")
+            # Rotation status (v4.58.0+).
+            rpm = result.get("rotation_rpm")
+            if rpm is not None and float(rpm) > 0:
+                lines.append(
+                    f"  Rotation: {float(rpm):g} rpm "
+                    f"(spinning workpiece)")
+            # Probe at the user's chosen point (if any) -- show final
+            # value and rise.  The full history is in T_probe_history_C
+            # which is too long for inline display.
+            probe_hist = result.get("T_probe_history_C")
+            if probe_hist and isinstance(probe_hist, list) \
+                    and len(probe_hist) >= 2:
+                t_probe_final = probe_hist[-1]
+                t_probe_initial = probe_hist[0]
+                lines.append(
+                    f"  Probe: {t_probe_initial:.2f} -> "
+                    f"{t_probe_final:.2f} degC "
+                    f"({t_probe_final - t_probe_initial:+.2f} K)")
+            # Output file paths -- so the user can see at a glance
+            # what got written.
+            msh = result.get("msh_file") or ""
+            if msh:
+                lines.append(f"  GMSH .msh: {os.path.basename(msh)}")
+            vtu_files = result.get("vtu_files") or []
+            if vtu_files:
+                lines.append(
+                    f"  VTU files: {len(vtu_files)} steps "
+                    f"({os.path.basename(vtu_files[0])} ... "
+                    f"{os.path.basename(vtu_files[-1])})")
+
             self._output.appendPlainText("\n".join(lines))
+
+            # Auto-fire "Open GMSH" for the Thermal method only.  EM
+            # methods leave the button enabled but do not auto-open,
+            # matching the prior UX (Thermal is the new "closing
+            # step" of the IH pipeline so the T distribution should
+            # appear in front of the user without an extra click).
+            if (result.get("method") == "thermal-3d"
+                    or result.get("method") == "thermal-axisym"
+                    or (t_max is not None and msh)):
+                if self._last_msh and self._gmsh_btn \
+                        and self._gmsh_btn.isEnabled():
+                    self._output.appendPlainText(
+                        "\n(Auto-opening GMSH on the T distribution...)")
+                    self._open_gmsh()
         except Exception as e:
             self._output.appendPlainText(f"(IH summary skipped: {e})")
 
