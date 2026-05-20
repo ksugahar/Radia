@@ -3,6 +3,75 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.60.0 — T .sol always saved + IH Summary closes the thermal loop
+
+Released 2026-05-20.
+
+Two changes that close the radia-ih thermal pipeline so users get
+to the temperature distribution WITHOUT leaving the panel:
+
+### feat(heat): T .sol always saved for later evaluation
+
+calc_heat.py / calc_heat_axisym.py now ALWAYS save the final
+temperature GridFunction as a NGSolve ``.sol`` file, symmetric
+with the qsurf.sol contract on the EM side.  Two file-layout
+branches:
+
+* ``--msh-output FILE.msh`` set: writes ``FILE_T.sol`` +
+  ``FILE_heat.vol`` alongside the GMSH bundle.  (Already the case
+  pre-v4.60; this release just exposes the paths in JSON.)
+* ``--msh-output`` not set: writes ``<wp-stem>_heat_T.sol`` next
+  to the input ``wp.vol`` -- re-use ``wp.vol`` as the companion
+  mesh.  (New in v4.60; previously this branch produced no .sol.)
+
+JSON additions in both solvers:
+
+  "T_sol_file":    absolute path to the saved T .sol
+  "heat_vol_file": absolute path to the companion .vol (empty when
+                   the input wp.vol is the companion)
+
+Reload pattern (same 3-rule contract as qsurf.sol):
+
+```python
+mesh = Mesh("workpiece_thermal.vol")     # or <msh-stem>_heat.vol
+gfT  = GridFunction(H1(mesh, order=1))   # MUST match solve --fes-order
+gfT.Load("workpiece_thermal_heat_T.sol")
+T_at = float(gfT(mesh(x, y, z)))         # sample at body point
+```
+
+Documented in ``docs/IH_THERMAL_WORKFLOW.md`` (new "Reloading the
+T .sol" subsection) and in ``radia_mcp.ih.thermal`` topic (new
+"Output: T .sol re-loadable for later evaluation" section).
+
+### feat(radia-ih thermal): IH Summary + Open GMSH auto-fire
+
+radia_ih._on_finished now pretty-prints a "--- Thermal ---" block
+in the IH Summary when calc_heat / calc_heat_axisym JSON emits
+T_max_C / T_min_C / Q_input_J / probe history / msh_file /
+T_sol_file / heat_vol_file / vtu_files / rotation_rpm.  Block
+includes Delta T from initial, time span + step count, rotation
+status, probe start->end trajectory, and output file paths
+(T .sol, heat .vol, GMSH .msh, VTU sequence).
+
+Auto-launch GMSH on the T-distribution .msh after a successful
+thermal run -- the same call as a manual "Open GMSH" click but
+without the extra user step.  EM methods unchanged (button still
+enables on msh_file present but does NOT auto-open).
+
+Combined with the prior v4.58.0 (rotation, .sol strict contract)
+and v4.59.0 (Method-dropdown integration), the radia-ih workflow
+is now CLOSED for the full IH pipeline:
+
+  1. Pick EM method, click Run -> qsurf.sol + em_vol written.
+  2. "Run thermal..." button -> Method switches to Thermal +
+     qsurf.sol / em_vol pre-filled.
+  3. Set wp.vol + material + dt + t_end + rotation, click Run.
+  4. T_max / Delta T appear in IH Summary; GMSH auto-opens on the
+     T-distribution .msh; T .sol + companion .vol path also
+     shown for downstream re-load.
+
+No external tool invocations beyond the auto-opened GMSH viewer.
+
 ## 4.59.0 — heat analysis integrated into radia-ih (radia_heat standalone deprecated)
 
 Released 2026-05-20.
