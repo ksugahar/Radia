@@ -663,110 +663,111 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 """
 
 INDUCTION_HEATING_ROTATING = """
-# Rotating Workpiece Simulation
+# Rotating Workpiece Simulation (radia 4.58.0+)
 
-## Mesh Deformation for Workpiece Rotation
+## Production path: pass `--rotation-rpm` to `calc_heat.py`
 
-For induction heating with a rotating workpiece, the Joule heat source Q
-rotates with the workpiece. This is implemented by rotating the mesh
-at each thermal time step.
+Since radia v4.58.0 the 3D thermal solver implements workpiece rotation
+natively.  Users do NOT write rotation code by hand; they just supply
+a non-zero `--rotation-rpm`:
 
-```python
-from ngsolve import *
-import numpy as np
-
-# ============================================================
-# Rotation parameters
-# ============================================================
-rpm = 12            # rotations per minute
-omega = 2 * np.pi * rpm / 60  # angular velocity [rad/s]
-
-# ============================================================
-# Rotation matrix as CoefficientFunction
-# ============================================================
-def get_rotation_matrix(angle):
-    \"\"\"3D rotation matrix around Z-axis.\"\"\"
-    return CF((
-        cos(angle), -sin(angle), 0,
-        sin(angle),  cos(angle), 0,
-        0,           0,          1
-    )).Reshape((3, 3))
-
-# ============================================================
-# Mesh deformation field
-# ============================================================
-# Create deformation = rotated_position - original_position
-fes_def = VectorH1(mesh, order=1)
-gf_deform = GridFunction(fes_def)
-
-def apply_rotation(mesh, gf_deform, angle):
-    \"\"\"Apply rotation to work regions via mesh deformation.\"\"\"
-    rotmat = get_rotation_matrix(angle)
-
-    # Deformation = R*x - x  (where x is original position)
-    pos = CF((x, y, z))
-    rotated = rotmat * pos
-    deformation = rotated - pos
-
-    # Only deform work regions (coil stays fixed)
-    # Use definedon to restrict deformation
-    gf_deform.Set(deformation)
-    mesh.SetDeformation(gf_deform)
-
-# ============================================================
-# Time stepping with rotation
-# ============================================================
-dt = 0.5       # time step [s]
-t_end = 5.0    # total time (= 1 full rotation at 12 rpm)
-
-t = 0.0
-step = 0
-
-while t < t_end:
-    # 1. Compute rotation angle
-    angle = omega * t
-
-    # 2. Apply mesh deformation (rotate workpiece)
-    apply_rotation(mesh, gf_deform, angle)
-
-    # 3. Re-project Q onto rotated mesh
-    #    (Q was computed in the original orientation)
-    #    The mesh deformation handles the coordinate transformation.
-
-    # 4. Solve thermal time step (same as non-rotating case)
-    rhs = gfT.vec.CreateVector()
-    rhs.data = m_T.mat * gfT.vec + dt * f_T.vec
-    gfT.vec.data = mstar_inv * rhs
-
-    # 5. Output VTK at this time step
-    vtk = VTKOutput(mesh,
-                    coefs=[gfT, Q_gf],
-                    names=["Temperature", "Q"],
-                    filename=f"rotating_step_{step:03d}",
-                    subdivision=1, legacy=False)
-    vtk.Do()
-
-    # 6. Remove deformation before next step
-    mesh.UnsetDeformation()
-
-    t += dt
-    step += 1
-    print(f"Step {step}: t={t:.1f}s, angle={np.degrees(angle):.1f} deg")
+```bash
+python -m radia.panels.calc_heat \\
+    --wp-vol     workpiece_thermal.vol \\
+    --surface-label sibc \\
+    --qsurf-sol  ih_em_qsurf.sol \\
+    --em-vol     ih_em_fem.vol \\
+    --material   steel \\
+    --dt 0.5 --t-end 5.0 \\
+    --rotation-rpm 12        # <-- workpiece spins around z at 12 rpm
 ```
 
-## Key Considerations for Rotation
+Equivalent panel knob: the `Rotation [rpm]` field in `radia_heat.py`
+(Layer 3 Cubit panel).  Default 0 (stationary).
 
-1. **Mesh deformation vs re-meshing**: `SetDeformation` is much faster
-   than re-meshing at each step. It deforms the existing mesh without
-   changing topology.
+## How calc_heat.py implements rotation
 
-2. **Heat source rotation**: The Joule heat Q is computed once (EM solve)
-   and then the mesh is rotated so Q effectively rotates with the workpiece.
+The implementation is a **per-step re-projection of q_surf on the body
+frame** (NOT mesh deformation).  Cheaper than `mesh.SetDeformation`
+because:
 
-3. **Coil stays fixed**: Only the workpiece rotates. The heat source pattern
-   (fixed in the lab frame) sweeps over the rotating workpiece surface.
+* The thermal mesh / FES / mass matrix / stiffness matrix are held FIXED
+  for the entire simulation -- they're built once outside the time loop
+  and the linear solver factorisation (`mstar = M + theta*dt*K`) is
+  cached.  Only the LinearForm RHS reassembles each step (it already
+  has to, for the convection term).
+* Re-projection cost = N surface vertex point-evaluations of the EM-frame
+  qsurf GridFunction.  Identical to the one-shot projection done at
+  startup, so per-step overhead = O(one initial projection).
 
-4. **VTK output per step**: Each time step produces a separate .vtu file.
+The body-frame projection at angle `theta = omega * t`:
+
+```python
+# At each timestep, sample q_em at the world-frame coord that
+# corresponds to body coord (xb, yb, zb) after rotation by +theta:
+c, s = math.cos(theta), math.sin(theta)
+for vnr, (xb, yb, zb) in zip(surf_vnrs, surf_xyz):
+    xw = xb*c - yb*s
+    yw = xb*s + yb*c
+    em_mip = em_mesh(xw, yw, zb)        # world-frame lookup
+    val = gf_q_em(em_mip)               # q_em evaluated there
+    gf_wp_q.vec.FV()[vnr] = float(val)  # update body-frame GF in place
+```
+
+The rebuilt `gf_wp_q` is the same GridFunction returned by
+`_build_qsurf_cf(...)`; it's updated **in place** so q_cf in the
+LinearForm picks up the new values automatically.
+
+## Why NOT mesh deformation
+
+`mesh.SetDeformation(...)` deforms the FE space at each step, which
+invalidates the cached mass / stiffness / factorisation.  For a 5-second
+simulation with dt=0.5 (10 steps), that's 10x the full assemble + LU
+factor cost (~30s each on a 200k-DOF cylinder mesh = ~5 minutes wasted).
+Re-projection of q_surf is ~10ms per step on the same mesh.
+
+## .sol contract for rotation users
+
+The rotation path consumes the spatial qsurf path (`--qsurf-sol +
+--em-vol`).  Uniform `--q-uniform` is rotation-invariant and the panel
+warns when `--rotation-rpm > 0` is paired with it.
+
+Three CONTRACTS that must hold between the EM solve (calc_fem_kelvin.py)
+and the thermal solve (calc_heat.py):
+
+1. **`.sol` is mesh-free**.  NGSolve's `GridFunction.Save()` writes
+   the raw coefficient vector (no mesh, no header).  The thermal
+   solver MUST be told the EM mesh path via `--em-vol`.  Pass the
+   `*_fem.vol` file that `calc_fem_kelvin.py` saves alongside
+   `*_qsurf.sol`.
+
+2. **`qsurf_order` MUST equal the EM `fes_order`**.  The thermal solver
+   rebuilds `H1(em_mesh, order=qsurf_order)` and loads the .sol into
+   it.  If the orders disagree the coefficient vector lands in a
+   space with a different DOF count and the loaded field is garbage
+   (no NGSolve-level error, silent corruption).  Default for both is
+   1.  When the EM solve uses `--fes-order 2`, pass `--qsurf-order 2`
+   to calc_heat too.
+
+3. **q_surf is a volume H1 GF with non-zero values ONLY on the
+   workpiece boundary**.  calc_fem_kelvin does
+   `gf_q = GridFunction(H1(mesh, order=fes_order));
+    gf_q.Set(q_surf_cf, definedon=wp_region)`.
+   The rest of the volume is 0.  The thermal solver point-samples
+   this GF at workpiece surface vertices -- H1 continuity guarantees
+   the boundary node values are recovered exactly.  Wp surface
+   vertices that fall OUTSIDE the EM mesh (mesh mismatch) are set to
+   0 and a count is reported in the run log.
+
+## Test coverage
+
+* `tests/panels/test_heat_rotation.py` -- unit tests for the rotation
+  projection math on a synthetic unit-cube setup with q_em(x,y,z)=x.
+  At theta=0 / pi / pi/2 the body point near (+1,0,0) reads
+  q ~ 1 / -1 / 0 respectively.
+
+* `tests/panels/test_heat_chain_golden.py` -- end-to-end chain test
+  (EM solve -> qsurf.sol -> thermal solve).  Slow-marked.
    Use ParaView to animate the sequence.
 
 5. **Full rotation**: At 12 rpm, one rotation = 5 seconds. Choose t_end
