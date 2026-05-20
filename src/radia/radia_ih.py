@@ -68,6 +68,7 @@ except ImportError as e:
 
 METHOD_PEEC_IND         = "PEEC inductance (coil only, STEP)"
 METHOD_BEMA_IND         = "BEM-A inductance (coil only, .vol)"
+METHOD_THERMAL          = "Thermal (heat transfer from saved q_surf .sol)"
 METHOD_PEEC_BEM         = "PEEC + BEM weak coupling (workpiece)"
 METHOD_BEMA_BEM         = "BEM-A + BEM weak coupling (workpiece)"
 METHOD_PEEC_FEM_KELVIN  = "PEEC coil + FEM wp (SIBC) + Kelvin"
@@ -141,6 +142,22 @@ METHOD_TOOLTIP = {
         "</ul>"
         "Requires <b>coil</b> material + <b>source</b>/<b>sink</b>/"
         "<b>sibc</b>/<b>kelvin</b> in .vol."
+    ),
+    METHOD_THERMAL: (
+        "<b>Thermal (heat transfer)</b> -- Phase B.<br>"
+        "<ul>"
+        "<li>Reads q_surf .sol from a previous EM solve (calc_fem_kelvin "
+        "or other PEEC+FEM methods)</li>"
+        "<li>NGSolve .sol = coefficient vector only; the matching "
+        "<b>--em-vol</b> must be supplied alongside</li>"
+        "<li>Solves the heat equation on a SEPARATE workpiece thermal "
+        "mesh (with the workpiece as a real solid, NOT a hole)</li>"
+        "<li>3D or 2D-axisymmetric (rotationally symmetric workpiece)</li>"
+        "<li>Backward Euler / Crank-Nicolson, convection BC + workpiece "
+        "rotation (v4.58.0+ -- q_surf re-projected on body frame each "
+        "step when --rotation-rpm > 0)</li>"
+        "</ul>"
+        "Outputs peak T, T(t) probe history, GMSH .msh + .vtu animation."
     ),
 }
 
@@ -304,7 +321,8 @@ class IHPanel(ModePanel):
             "method", "Method:",
             [METHOD_PEEC_IND, METHOD_BEMA_IND,
              METHOD_PEEC_BEM, METHOD_BEMA_BEM,
-             METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL])
+             METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL,
+             METHOD_THERMAL])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
         self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_IND])
 
@@ -314,7 +332,7 @@ class IHPanel(ModePanel):
         self.add_status_label()
 
         # ============ Drive (frequency + current) ============
-        self._add_section("Drive")
+        self._add_section("Drive", key="_sec_drive")
         freq = self.add_line("freq", "Frequency [Hz]:", "7000")
         freq.editingFinished.connect(self._update_status)
         freq.setToolTip("Operating frequency.  Skin depth\n"
@@ -326,7 +344,7 @@ class IHPanel(ModePanel):
             "complex phasors; output P is time-averaged (1/2 Re).")
 
         # ============ Coil material (INDEPENDENT from WP) ============
-        self._add_section("Coil material")
+        self._add_section("Coil material", key="_sec_coil_mat")
         coil_mat = self.add_combo(
             "coil_material", "Preset:",
             list(MATERIAL_PRESETS.keys()), default=0)  # Copper
@@ -427,7 +445,7 @@ class IHPanel(ModePanel):
         self.add_line("esim_tol", "tolerance:", "1e-3")
 
         # ============ Linear solver (method-dependent) ============
-        self._add_section("Linear solver")
+        self._add_section("Linear solver", key="_sec_solver")
         solver = self.add_combo("solver", "Solver:", ["pardiso"])
         solver.setToolTip(
             "<b>Inductance / weak-coupled modes</b> "
@@ -449,7 +467,7 @@ class IHPanel(ModePanel):
             "&nbsp;&nbsp;iccg — generic fallback (Incomplete Cholesky + CG)")
 
         # ============ Advanced (collapsed by default) ============
-        self._add_section("Advanced")
+        self._add_section("Advanced", key="_sec_advanced")
         n_peri_w = self.add_spin("peec_n_peri",
                                   "PEEC n_peri (perimeter):", 16, 4, 128)
         n_peri_w.setToolTip(
@@ -475,6 +493,29 @@ class IHPanel(ModePanel):
         # ``.vol.json``.  A post-load ``mesh.Curve(p)`` silently falls
         # back to flat without a CAD callback, so we never expose it.
         self.add_spin("fes_order", "Basis order:", 1, 1, 3)
+
+        # ============ Thermal sub-panel (method=Thermal only) ============
+        # HeatPanel from radia_heat.py embedded as a single sub-widget;
+        # all heat-side fields (qsurf .sol, em_vol, wp_vol thermal mesh,
+        # material, h_conv / t_ext, time scheme, dt / t_end, probe,
+        # rotation_rpm, mesh type 3D vs axisym) live INSIDE this widget
+        # and become visible only when method=Thermal.  is_runnable /
+        # build_command / wp_vol_path delegate to this sub-panel when
+        # method=Thermal (see below).  Standalone radia_heat.py is
+        # superseded by this integration; kept temporarily as a
+        # deprecated stub that redirects to ``radia-ih`` (radia 4.59.0+).
+        self._add_section("Thermal analysis", key="_sec_thermal")
+        from radia.radia_heat import HeatPanel
+        self._heat_panel = HeatPanel(parent=self)
+        # Embed as a single full-width row in IHPanel's form layout.
+        self._form.addRow(self._heat_panel)
+        # Track the heat-panel row so _set_row_visible() can collapse
+        # it alongside the section header when method != Thermal.
+        self._row_indices["_heat_panel_row"] = self._form.rowCount() - 1
+        # Forward the sub-panel's validation signal so the parent Run
+        # button enables/disables in sync with the sub-panel's
+        # is_runnable() state.
+        self._heat_panel.validationChanged = self._emit_validation
 
         # ============ Initial state ============
         # Apply material presets to refresh coil_sigma / wp_sigma / mu_r
@@ -633,18 +674,25 @@ class IHPanel(ModePanel):
         is_bema_bem = (method == METHOD_BEMA_BEM)
         is_peec_fem_k = (method == METHOD_PEEC_FEM_KELVIN)
         is_fem = (method == METHOD_FEM_FULL)
+        is_thermal = (method == METHOD_THERMAL)
         # Inductance-style (vacuum) vs weak-coupled (workpiece) groupings.
         is_vacuum = is_peec_ind or is_bema_ind
         is_weak = is_peec_bem or is_bema_bem
         is_inductance_path = is_vacuum or is_weak    # any calc_inductance.py mode
         is_bem_a = is_bema_ind or is_bema_bem
         is_peec = is_peec_ind or is_peec_bem
+        # Thermal mode delegates ALL field visibility to the embedded
+        # HeatPanel sub-widget -- the EM-side sections (drive, coil
+        # material, coil geometry, workpiece material, ...) are not
+        # meaningful here and stay hidden.  When method != Thermal the
+        # heat panel section hides.
+        is_em = not is_thermal
         # PEEC + PEEC+FEM+Kelvin take CAD STEP (filament coil); BEM-A
         # variants take a pre-meshed .vol coil.  FEM-full uses a
         # volumetric coil baked into its workpiece .vol.
-        needs_step = is_peec or is_peec_fem_k
-        needs_coil_vol = is_bem_a
-        needs_wp = is_weak or is_peec_fem_k or is_fem
+        needs_step = is_em and (is_peec or is_peec_fem_k)
+        needs_coil_vol = is_em and is_bem_a
+        needs_wp = is_em and (is_weak or is_peec_fem_k or is_fem)
 
         self._method_combo.setToolTip(METHOD_TOOLTIP.get(method, ""))
 
@@ -739,6 +787,25 @@ class IHPanel(ModePanel):
         if is_peec_fem_k:
             self._set_row_visible("esim_tol", False)
 
+        # Thermal mode: hide EVERY EM-side section + row and show the
+        # embedded HeatPanel.  When switching back to an EM method
+        # those sections re-enable themselves through the per-method
+        # branches above (needs_step / needs_wp / ...).
+        for em_sec in ("_sec_drive", "_sec_coil_mat", "_sec_solver",
+                        "_sec_advanced"):
+            self._set_row_visible(em_sec, not is_thermal)
+        for em_row in ("freq", "current", "coil_material", "coil_sigma",
+                        "solver"):
+            self._set_row_visible(em_row, not is_thermal)
+        self._set_row_visible("_sec_thermal", is_thermal)
+        self._set_row_visible("_heat_panel_row", is_thermal)
+        # The HeatPanel's own widgets sit inside a sub-form; toggling
+        # the parent row hides the whole sub-panel.  Direct setVisible
+        # is the safety belt for Qt versions where setRowVisible only
+        # collapses the QFormLayout row, not the embedded widget.
+        if hasattr(self, "_heat_panel"):
+            self._heat_panel.setVisible(is_thermal)
+
         self._update_status()
         self._emit_validation()
 
@@ -793,6 +860,11 @@ class IHPanel(ModePanel):
 
     def is_runnable(self):
         method = self._method_combo.currentText()
+        # Thermal mode delegates to the embedded HeatPanel which has
+        # its own is_runnable() (wp_vol + qsurf .sol + em_vol checks).
+        if method == METHOD_THERMAL:
+            return self._heat_panel.is_runnable() \
+                if hasattr(self, "_heat_panel") else False
         ok, _errors, _warnings = check_method_requirements(
             method, self._vol_mats, self._vol_bnds)
         # Vacuum inductance modes need a coil input only; the workpiece
@@ -810,6 +882,10 @@ class IHPanel(ModePanel):
     # work_dir.  Read from the per-panel wp_vol widget (4.35.0+).  Empty
     # string for vacuum modes that don't have a workpiece.
     def wp_vol_path(self):
+        # Thermal mode reads the wp .vol from the embedded HeatPanel.
+        if self._method_combo.currentText() == METHOD_THERMAL \
+                and hasattr(self, "_heat_panel"):
+            return self._heat_panel.wp_vol_path()
         if "wp_vol" not in self._widgets:
             return ""
         return self.val("wp_vol")
@@ -835,6 +911,13 @@ class IHPanel(ModePanel):
 
     def build_command(self, vol_path):
         method = self.val("method")
+        # Thermal mode: delegate to the embedded HeatPanel's
+        # build_command (calc_heat.py / calc_heat_axisym.py based on
+        # mesh_type).  vol_path here is the HeatPanel's own --wp-vol;
+        # build_command on HeatPanel ignores it and reads its own
+        # ``wp_vol`` widget.
+        if method == METHOD_THERMAL:
+            return self._heat_panel.build_command(vol_path)
         # Vacuum modes (no .vol).  Same builder for PEEC and BEM-A;
         # _coil_solver_cli() picks the --coil-solver flag from the
         # method name.
@@ -1347,37 +1430,53 @@ class IHWindow(AnalysisWindow):
             self._output.appendPlainText(f"(IH summary skipped: {e})")
 
     def _on_run_thermal(self):
-        """Launch radia_heat.py with this run's qsurf .sol pre-filled.
+        """Switch the method dropdown to Thermal and pre-fill the
+        embedded HeatPanel from this run's qsurf .sol + em_vol.
 
-        We start a detached subprocess (CREATE_NEW_PROCESS_GROUP on
-        Windows so closing the IH window doesn't kill the thermal
-        window).  No state is shared with the IH window after launch
-        beyond the CLI arguments below.
+        Replaces the pre-2026-05-20 detached-subprocess design that
+        launched radia_heat.py as an independent window.  Heat
+        analysis now lives in the same IHWindow under the Thermal
+        method choice; this button is the EM->Thermal chain shortcut.
         """
         if not self._heat_qsurf_sol:
             return
-        import subprocess
-        heat_script = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "radia_heat.py")
-        cmd = [_PYTHON, heat_script,
-               "--qsurf-sol", self._heat_qsurf_sol]
-        if self._heat_em_vol:
-            cmd += ["--em-vol", self._heat_em_vol]
-        # CREATE_NEW_PROCESS_GROUP = 0x00000200 lets the child
-        # outlive the IH parent without needing fork().
-        flags = 0x00000200 if sys.platform == "win32" else 0
+        panel = self._panel
+        heat = getattr(panel, "_heat_panel", None)
+        if heat is None:
+            self._output.appendPlainText(
+                "\nThermal sub-panel not available (radia_heat.HeatPanel "
+                "import failed at startup).")
+            return
+        # Pre-fill the HeatPanel fields BEFORE switching the dropdown
+        # so the Run button enables immediately when the user lands
+        # on the Thermal section.
         try:
-            subprocess.Popen(cmd, creationflags=flags)
-            self._output.appendPlainText(
-                f"\nLaunched thermal panel: {os.path.basename(heat_script)}")
-            self._output.appendPlainText(
-                f"  qsurf_sol = {self._heat_qsurf_sol}")
+            heat._widgets["qsurf_sol"].setText(self._heat_qsurf_sol)
             if self._heat_em_vol:
-                self._output.appendPlainText(
-                    f"  em_vol    = {self._heat_em_vol}")
-        except Exception as e:
+                heat._widgets["em_vol"].setText(self._heat_em_vol)
+            # Spatial qsurf mode (HEAT_SRC_SPATIAL) by definition --
+            # the chain only fires when an EM solve produced .sol.
+            from radia.radia_heat import HEAT_SRC_SPATIAL
+            heat._widgets["heat_source"].setCurrentText(HEAT_SRC_SPATIAL)
+        except (KeyError, AttributeError) as e:
             self._output.appendPlainText(
-                f"\nFailed to launch thermal panel: {e}")
+                f"\nCould not pre-fill HeatPanel widgets: {e}")
+            return
+        # Switch the method dropdown -- _on_method_changed fires
+        # automatically and shows the Thermal section.
+        from radia.radia_ih import METHOD_THERMAL
+        panel._method_combo.setCurrentText(METHOD_THERMAL)
+        self._output.appendPlainText(
+            f"\nSwitched to Thermal method.")
+        self._output.appendPlainText(
+            f"  qsurf_sol = {self._heat_qsurf_sol}")
+        if self._heat_em_vol:
+            self._output.appendPlainText(
+                f"  em_vol    = {self._heat_em_vol}")
+        else:
+            self._output.appendPlainText(
+                "  em_vol    = [empty -- pick it manually in the "
+                "Thermal section before Run]")
 
 
 def main():

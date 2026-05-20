@@ -474,51 +474,62 @@ class HeatWindow(AnalysisWindow):
 
 
 def main():
-    """Standalone entry point.
+    """DEPRECATED standalone entry point -- redirects to radia-ih.
 
-    Usage::
+    Heat analysis was integrated into the radia-ih panel (Thermal
+    method) in radia 4.59.0.  ``radia_heat.py`` as a standalone
+    window is kept temporarily as a redirect stub so old shortcuts
+    and the IH chain button (pre-4.59) still function during the
+    deprecation window.  Removal scheduled for the next minor
+    release.
 
-        python radia_heat.py [WP_VOL] [--qsurf-sol PATH]
-                              [--em-vol PATH] [--qsurf-order N]
-
-    The optional flags pre-fill the panel; they are how the IH
-    window's "Run thermal..." chain button passes its EM-side
-    output through.
+    Pre-fills passed through to the radia-ih Thermal method:
+      [WP_VOL] --qsurf-sol PATH --em-vol PATH --qsurf-order N
     """
     import argparse
+    import warnings
+    warnings.warn(
+        "radia_heat is deprecated since radia 4.59.0.  Heat analysis "
+        "is now integrated into radia-ih (Method dropdown -> "
+        "'Thermal').  Launching radia-ih instead -- this shim will "
+        "be removed in the next minor release.",
+        DeprecationWarning, stacklevel=2)
+
     parser = argparse.ArgumentParser(
-        description="Radia thermal analysis panel.",
-        # Don't intercept --help inside the GUI subprocess; let it
-        # fall through to argparse's normal help-and-exit so the
-        # caller can discover the chain-fill flags.
+        description="Radia thermal analysis (DEPRECATED -- redirects "
+                    "to radia-ih).",
     )
     parser.add_argument("wp_vol", nargs="?", default="",
-                        help="Optional workpiece .vol path (pre-fills "
-                             "the wp .vol field).")
-    parser.add_argument("--qsurf-sol", default="",
-                        help="Pre-fill the qsurf .sol field "
-                             "(typically <em-msh stem>_qsurf.sol "
-                             "from a calc_fem_kelvin.py run).")
-    parser.add_argument("--em-vol", default="",
-                        help="Pre-fill the EM .vol field "
-                             "(typically <em-msh stem>_fem.vol).")
-    parser.add_argument("--qsurf-order", type=int, default=None,
-                        help="Pre-fill the qsurf H1 order spinner.")
+                        help="Pre-fill the wp .vol path on the "
+                             "Thermal method's sub-panel.")
+    parser.add_argument("--qsurf-sol", default="")
+    parser.add_argument("--em-vol", default="")
+    parser.add_argument("--qsurf-order", type=int, default=None)
     args = parser.parse_args()
-
-    prefill = {}
-    if args.qsurf_sol:
-        prefill["qsurf_sol"] = args.qsurf_sol
-    if args.em_vol:
-        prefill["em_vol"] = args.em_vol
-    if args.qsurf_order is not None:
-        prefill["qsurf_order"] = args.qsurf_order
 
     from PySide6.QtWidgets import QApplication
     from radia_gui_base import apply_panel_base_font
+    from radia.radia_ih import IHWindow, METHOD_THERMAL
     app = QApplication([sys.argv[0]])
     apply_panel_base_font(app)
-    window = HeatWindow(args.wp_vol, prefill=prefill or None)
+    window = IHWindow()
+    # Switch the method to Thermal so the sub-panel is visible at startup.
+    panel = window._panel
+    panel._method_combo.setCurrentText(METHOD_THERMAL)
+    heat = panel._heat_panel
+    # Apply pre-fills as the old standalone entry would have.
+    if args.wp_vol:
+        heat._widgets["wp_vol"].setText(args.wp_vol)
+    if args.qsurf_sol:
+        heat._widgets["qsurf_sol"].setText(args.qsurf_sol)
+        heat._widgets["heat_source"].setCurrentText(HEAT_SRC_SPATIAL)
+    if args.em_vol:
+        heat._widgets["em_vol"].setText(args.em_vol)
+    if args.qsurf_order is not None:
+        try:
+            heat._widgets["qsurf_order"].setValue(int(args.qsurf_order))
+        except (KeyError, AttributeError, TypeError, ValueError):
+            pass
     window.show()
     sys.exit(app.exec())
 
