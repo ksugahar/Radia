@@ -52,6 +52,7 @@ from .knowledge.cln_3d import (
     get_cln_3d_documentation,
     get_cln_3d_notebook,
 )
+from .knowledge.bem_cln import get_bem_cln_documentation
 from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
@@ -527,6 +528,45 @@ def cln_3d(topic: str = "all") -> str:
         if topic == "formulas":
             return cln_3d.CLN_3D_KEY_FORMULAS
     return full_doc
+
+
+@mcp.tool()
+def bem_cln(topic: str = "all") -> str:
+    """
+    Get BEM-CLN (per-element multipole CLN with Schur-F termination)
+    documentation: multi-conductor extension of single-conductor
+    Schur-F CLN, using polarizability alpha(s) and integral-equation
+    Green's function coupling.
+
+    Backs Sugahara, Nagamine, Hane (2026) IEEE Trans Mag submission,
+    sections V.G (DOF accounting) and V.H (verification).
+
+    Key features:
+      - polarizability alpha(s) = V - Y_cln(s) / sigma (DC = 0, PEC = V built in)
+      - 2D coupling: 1/D^2, 3D coupling: mu_0 / (4 pi D^3)
+      - bounded alpha -> no phenomenological saturation factor needed
+      - per-element DOF = N_Cauer + 1; total = N (N_Cauer + 1)
+
+    Args:
+        topic: Documentation section. Options:
+            "all"           - Complete documentation
+            "overview"      - Framework summary, DOF accounting
+            "2d_rigorous"   - Phase 2.5 canonical 2D rigorous
+            "3d"            - Phase 3 B rigorous 3D cuboid extension
+            "scripts"       - Index of Mathematica verification scripts
+    """
+    if topic == "all":
+        return get_bem_cln_documentation()
+    from .knowledge import bem_cln as bcln
+    if topic == "overview":
+        return bcln.BEM_CLN_OVERVIEW
+    if topic == "2d_rigorous":
+        return bcln.BEM_CLN_2D_RIGOROUS
+    if topic == "3d":
+        return bcln.BEM_CLN_3D
+    if topic == "scripts":
+        return bcln.BEM_CLN_NOTEBOOK_INDEX
+    return get_bem_cln_documentation()
 
 
 @mcp.tool()
