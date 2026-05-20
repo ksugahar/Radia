@@ -309,8 +309,11 @@ class _ShapeBase:
     ``self.wrapped`` is the OCP object — exposed to mimic
     build123d's escape-hatch property of the same name (which the
     caller code uses to bridge into raw OCP operations).
+
+    No __slots__: subclasses (Solid) attach lazy caches
+    (_bb_cache, _faces_cache, ...) dynamically.  __dict__ overhead
+    is negligible compared to the OCP TopoDS_Shape held internally.
     """
-    __slots__ = ("wrapped", "label")
 
     def __init__(self, topods):
         self.wrapped = topods
@@ -589,25 +592,51 @@ class Solid(_ShapeBase):
     ``Compound`` for a multi-solid one — caller code in
     coil_from_cad.py branches via ``isinstance(solid, Compound)``
     to extract member solids.
+
+    Lazy caches on first access (the underlying TopoDS_Shape never
+    changes after import_step / section, so these are safe to cache
+    for the wrapper's lifetime):
+
+    * ``bounding_box()``: optimal-bbox is the dominant ~0.5 s call on
+      large coil solids and was being re-computed 6 × in the original
+      coil_from_cad.py path because multiple validation predicates
+      ask for it independently.  Cached on first call.
+    * ``faces()`` / ``edges()`` / ``solids()``: TopExp deduplication
+      is fast (~0.01 s) but is also called from several predicates.
     """
 
     def faces(self) -> List[Face]:
+        if getattr(self, "_faces_cache", None) is not None:
+            return self._faces_cache
         from OCP.TopAbs import TopAbs_FACE
         from OCP.TopoDS import TopoDS
-        return _unique_subshapes(self.wrapped, TopAbs_FACE, Face, TopoDS.Face_s)
+        self._faces_cache = _unique_subshapes(
+            self.wrapped, TopAbs_FACE, Face, TopoDS.Face_s)
+        return self._faces_cache
 
     def edges(self) -> List[Edge]:
+        if getattr(self, "_edges_cache", None) is not None:
+            return self._edges_cache
         from OCP.TopAbs import TopAbs_EDGE
         from OCP.TopoDS import TopoDS
-        return _unique_subshapes(self.wrapped, TopAbs_EDGE, Edge, TopoDS.Edge_s)
+        self._edges_cache = _unique_subshapes(
+            self.wrapped, TopAbs_EDGE, Edge, TopoDS.Edge_s)
+        return self._edges_cache
 
     def solids(self) -> List["Solid"]:
+        if getattr(self, "_solids_cache", None) is not None:
+            return self._solids_cache
         from OCP.TopAbs import TopAbs_SOLID
         from OCP.TopoDS import TopoDS
-        return _unique_subshapes(self.wrapped, TopAbs_SOLID, Solid, TopoDS.Solid_s)
+        self._solids_cache = _unique_subshapes(
+            self.wrapped, TopAbs_SOLID, Solid, TopoDS.Solid_s)
+        return self._solids_cache
 
     def bounding_box(self) -> BBox:
-        return _bounding_box(self.wrapped)
+        if getattr(self, "_bb_cache", None) is not None:
+            return self._bb_cache
+        self._bb_cache = _bounding_box(self.wrapped)
+        return self._bb_cache
 
 
 class Compound(Solid):
