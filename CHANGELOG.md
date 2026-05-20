@@ -3,6 +3,34 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.62.0 — remove radia-heat standalone (HeatPanel moved to _heat_panel)
+
+Released 2026-05-21.
+
+The pre-4.59.0 standalone ``radia_heat.py`` module and its
+``radia-heat`` console-script entry point are now fully removed.
+Heat analysis lives exclusively as the Method = "Thermal" choice
+in ``radia-ih`` (since v4.59.0).  The HeatPanel sub-widget moved
+to ``src/radia/_heat_panel.py`` as an internal implementation
+detail of the IH panel.
+
+### Breaking changes
+
+* ``from radia.radia_heat import HeatPanel, HEAT_SRC_SPATIAL, ...``
+  fails with ``ModuleNotFoundError`` -- update to
+  ``from radia._heat_panel import HeatPanel, HEAT_SRC_SPATIAL, ...``
+* The ``radia-heat`` console script is removed.  Old shortcuts
+  that launched it must be updated to launch ``radia-ih``
+  instead, then pick Method = "Thermal" (and fill qsurf .sol +
+  em .vol + wp .vol manually, or use the "Run thermal..." chain
+  shortcut after a successful EM run).
+* In 4.59.0-4.61.0 the ``radia-heat`` CLI was a deprecation stub
+  that redirected to ``radia-ih`` automatically; that transitional
+  redirect is gone.
+
+Docs (``docs/IH_THERMAL_WORKFLOW.md``) and the
+``radia_mcp.ih.thermal`` topic both reflect the removal.
+
 ## 4.61.0 — fix rect_united section-plane regression (task #30 close-out)
 
 Released 2026-05-20.
