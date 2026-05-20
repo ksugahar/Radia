@@ -1,9 +1,31 @@
 # R Discrepancy: PEEC inductance vs BEM-A inductance
 
-**Status (2026-05-19, fixed)**: PEEC now injects per-filament Bessel
-skin impedance via `Zs_fil` in `solve_loop_bundle`.  The discrepancy
-analysed below is **historical** (PEEC pre-2026-05-19 returned `R_DC`
-at every frequency); the current behaviour is documented in §3 and §5.
+**Status (2026-05-20, proximity-aware)**: PEEC now (a) injects per-filament
+Bessel self-skin `Zs_fil` (v4.55.4, 2026-05-19), and (b) augments it
+with the Leontovich surface dissipation evaluated from the actual
+Biot-Savart H field at each filament's wire-surface position via
+`solve_proximity_iterative` (v4.57.0, 2026-05-20, default ON).
+
+On the 3-turn pancake (Cu, n_peri=16, 150 kHz):
+
+| Path | R_coil | L_coil | Notes |
+|---|---|---|---|
+| pre-2026-05-19 (R_DC only) | 0.3945 mΩ | 426.30 nH | wrong — DC at all f |
+| 2026-05-19 (Bessel self-skin) | 3.6752 mΩ | 430.14 nH | round-wire AC asymptote |
+| **2026-05-20 (+ proximity)** | **4.4793 mΩ** | **431.32 nH** | **production default** |
+| LCR hi-tester measurement | ~15 mΩ | — | see §6 |
+
+The gap from 4.48 → 15 mΩ on the measurement is most plausibly
+**lead/contact resistance** (5–50 mΩ typical at 2-terminal probes at low
+Ohm); 4-terminal Kelvin re-measurement on the coil terminals is the
+deciding test.  The structural ceiling of perimeter PEEC + proximity
+iteration is ~1.2× the self-skin value (it captures surface-Leontovich
+proximity but **not** transverse eddy loops in the wire interior); see
+[`VOLUME_PEEC_DESIGN.md`](../peec/VOLUME_PEEC_DESIGN.md) for the
+deferred radial-filament path that would close that remaining gap.
+
+To get the self-only Bessel R/L for cross-checks: pass
+`--no-peec-proximity` to `calc_inductance.py`.
 
 ---
 
