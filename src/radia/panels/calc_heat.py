@@ -142,21 +142,25 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
     if not os.path.isfile(qsurf_sol):
         raise FileNotFoundError(f"--qsurf-sol not found: {qsurf_sol}")
 
-    # Locate the EM .vol that the .sol was saved against.
-    em_vol = args.em_vol
-    if not em_vol:
-        # calc_fem_kelvin.py writes the .vol next to the .sol with
-        # the suffix ``_fem.vol`` and the q_surf .sol with
-        # ``_qsurf.sol`` -- swap them.
-        stem = qsurf_sol[:-len("_qsurf.sol")] \
-            if qsurf_sol.endswith("_qsurf.sol") else \
-            os.path.splitext(qsurf_sol)[0]
-        em_vol = stem + "_fem.vol"
-    em_vol = os.path.abspath(em_vol)
+    # The EM .vol that the .sol was saved against MUST be supplied
+    # explicitly.  Pre-2026-05-20 we auto-located a sibling
+    # ``<stem>_fem.vol`` when --em-vol was omitted; that silent fallback
+    # picked the wrong file when the user renamed the .sol or copied
+    # it to a directory without the sibling, and violated CLAUDE.md
+    # "No Fallbacks" / fail-fast policy.  NGSolve's .sol format is a
+    # raw coefficient vector (no embedded mesh / no embedded fes
+    # order), so the only safe contract is: both files explicitly.
+    if not args.em_vol:
+        raise ValueError(
+            "--em-vol is required when --qsurf-sol is supplied.  "
+            "NGSolve .sol files do not contain mesh information, "
+            "so the EM .vol that the .sol was saved against must "
+            "be passed explicitly.  Typically this is the "
+            "``<stem>_fem.vol`` file that calc_fem_kelvin.py writes "
+            "next to the ``<stem>_qsurf.sol`` -- pass that path.")
+    em_vol = os.path.abspath(args.em_vol)
     if not os.path.isfile(em_vol):
-        raise FileNotFoundError(
-            f"--em-vol could not be auto-located ({em_vol}). "
-            f"Pass it explicitly.")
+        raise FileNotFoundError(f"--em-vol not found: {em_vol}")
 
     _log(f"Q_SURF:loading {os.path.basename(qsurf_sol)} on "
          f"{os.path.basename(em_vol)}")
@@ -584,8 +588,12 @@ def main():
                         help="q_surf .sol from calc_fem_kelvin.py "
                              "(spatial distribution).")
     parser.add_argument("--em-vol", default="",
-                        help="EM .vol the qsurf-sol corresponds to "
-                             "(auto-detected from qsurf-sol stem if blank).")
+                        help="EM .vol the qsurf-sol corresponds to.  "
+                             "REQUIRED when --qsurf-sol is supplied; "
+                             "NGSolve .sol is a coefficient vector only "
+                             "(no embedded mesh), so the EM .vol must "
+                             "be passed explicitly.  Auto-detection from "
+                             "the .sol stem was removed 2026-05-20.")
     parser.add_argument("--qsurf-order", type=int, default=1,
                         help="H1 order used when calc_fem_kelvin.py "
                              "saved qsurf.sol (must match).")
