@@ -82,17 +82,18 @@ def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
     if not os.path.isfile(qsurf_sol):
         raise FileNotFoundError(f"--qsurf-sol not found: {qsurf_sol}")
 
-    em_vol = args.em_vol
-    if not em_vol:
-        stem = qsurf_sol[:-len("_qsurf.sol")] \
-            if qsurf_sol.endswith("_qsurf.sol") else \
-            os.path.splitext(qsurf_sol)[0]
-        em_vol = stem + "_fem.vol"
-    em_vol = os.path.abspath(em_vol)
+    # --em-vol must be explicit (NGSolve .sol is a coefficient vector
+    # only -- no embedded mesh); see calc_heat.py for the rationale and
+    # the 2026-05-20 contract tightening.
+    if not args.em_vol:
+        raise ValueError(
+            "--em-vol is required when --qsurf-sol is supplied.  "
+            "NGSolve .sol files do not contain mesh information, "
+            "so the EM .vol that the .sol was saved against must "
+            "be passed explicitly.")
+    em_vol = os.path.abspath(args.em_vol)
     if not os.path.isfile(em_vol):
-        raise FileNotFoundError(
-            f"--em-vol could not be auto-located ({em_vol}). "
-            f"Pass it explicitly.")
+        raise FileNotFoundError(f"--em-vol not found: {em_vol}")
 
     _log(f"Q_SURF:loading {os.path.basename(qsurf_sol)} on "
          f"{os.path.basename(em_vol)}")
@@ -467,7 +468,10 @@ def main():
     parser.add_argument("--qsurf-sol", default="",
                         help="q_surf .sol from calc_fem_kelvin.py.")
     parser.add_argument("--em-vol", default="",
-                        help="EM .vol the qsurf-sol corresponds to.")
+                        help="EM .vol the qsurf-sol corresponds to.  "
+                             "REQUIRED when --qsurf-sol is supplied; "
+                             "auto-detection from the .sol stem was "
+                             "removed 2026-05-20.")
     parser.add_argument("--qsurf-order", type=int, default=1)
     parser.add_argument("--n-phi-samples", type=int, default=8,
                         help="Azimuth samples for phi-averaging the 3D "

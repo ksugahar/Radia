@@ -139,9 +139,17 @@ class HeatPanel(ModePanel):
         self.add_browse(
             "qsurf_sol", "qsurf .sol:",
             filter_str="NGSolve sol (*.sol);;All (*)")
-        self.add_browse(
-            "em_vol", "EM .vol (auto):",
+        em_w = self.add_browse(
+            "em_vol", "EM .vol:",
             filter_str="Netgen volume (*.vol);;All (*)")
+        em_w.setToolTip(
+            "EM .vol that the qsurf .sol was saved against.  "
+            "REQUIRED -- NGSolve .sol is a coefficient vector only "
+            "(no embedded mesh), so the EM .vol must be supplied "
+            "explicitly.  Typically the ``<stem>_fem.vol`` that "
+            "calc_fem_kelvin.py writes next to ``<stem>_qsurf.sol``.  "
+            "Auto-detection was removed 2026-05-20.")
+        em_w.textChanged.connect(self._emit_validation)
         self.add_spin("qsurf_order", "qsurf H1 order:", 1, 1, 5)
 
         # Workpiece thermal mesh.
@@ -322,9 +330,14 @@ class HeatPanel(ModePanel):
                 return True
             except ValueError:
                 return False
-        # Spatial mode: need a .sol; em-vol auto-detects.
+        # Spatial mode: need BOTH a .sol AND its companion .vol -- the
+        # .sol is a coefficient vector only, no embedded mesh.  Both
+        # paths must point at existing files; otherwise the Run button
+        # stays disabled.
         sol = self.val("qsurf_sol")
-        return bool(sol and os.path.isfile(sol))
+        emv = self.val("em_vol")
+        return bool(sol and os.path.isfile(sol)
+                    and emv and os.path.isfile(emv))
 
     def build_command(self, vol_path):
         # vol_path is the Window-level .vol from the launcher; we
@@ -380,11 +393,16 @@ class HeatPanel(ModePanel):
         if self.val("heat_source") == HEAT_SRC_UNIFORM:
             cmd += ["--q-uniform", self.val("q_uniform")]
         else:
-            cmd += ["--qsurf-sol", self.val("qsurf_sol"),
-                    "--qsurf-order", str(self.val("qsurf_order"))]
+            sol = self.val("qsurf_sol")
             em_vol = self.val("em_vol")
-            if em_vol:
-                cmd += ["--em-vol", em_vol]
+            if not (sol and em_vol):
+                raise ValueError(
+                    "Spatial qsurf mode requires BOTH a qsurf .sol AND "
+                    "its companion EM .vol.  .sol files are coefficient "
+                    "vectors only -- the .vol carries the mesh.")
+            cmd += ["--qsurf-sol",  sol,
+                    "--em-vol",     em_vol,
+                    "--qsurf-order", str(self.val("qsurf_order"))]
             if is_axisym:
                 cmd += ["--n-phi-samples", str(self.val("n_phi_samples"))]
 
