@@ -555,6 +555,49 @@ faces and H1 continuity guarantees the boundary node values are
 recovered exactly.  See ``radia_mcp.radia_ngsolve.ngsolve`` Section
 18c for the broader pattern (surface-restricted H1 GF save/load).
 
+## Output: T .sol re-loadable for later evaluation (radia 4.59.0+)
+
+calc_heat / calc_heat_axisym now ALWAYS save the final
+temperature GridFunction as a `.sol` file, symmetric with the
+qsurf.sol contract on the EM side.  This means a thermal run is
+fully re-loadable: you can come back later and sample T at
+arbitrary points, feed T(x) back into a temperature-dependent
+sigma for a second EM solve, or feed it into an in-house
+post-processor without re-running the heat equation.
+
+JSON output keys (calc_heat / calc_heat_axisym):
+
+| key | content |
+|---|---|
+| ``T_sol_file`` | absolute path to the final-T NGSolve `.sol` |
+| ``heat_vol_file`` | absolute path to the companion `.vol`.  Empty when no separate companion was written (then re-use the `--wp-vol` input as the companion). |
+| ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
+| ``vtu_files`` | per-step `.vtu` paths when `--vtu-prefix` was set |
+| ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
+
+Naming convention:
+
+* With `--msh-output FILE.msh`: writes `FILE_T.sol` +
+  `FILE_heat.vol` (fresh companion mesh) alongside `FILE.msh`.
+* Without `--msh-output`: writes `<wp-stem>_heat_T.sol` next to
+  `wp.vol`.  No separate companion mesh; reload directly against
+  the same `wp.vol` the solve consumed.
+
+Reload pattern:
+
+```python
+from ngsolve import Mesh, H1, GridFunction
+wp_mesh = Mesh("workpiece_thermal.vol")  # or <msh-stem>_heat.vol
+fes_T   = H1(wp_mesh, order=1)           # MUST match solve's --fes-order
+gfT     = GridFunction(fes_T)
+gfT.Load("workpiece_thermal_heat_T.sol") # or <msh-stem>_T.sol
+T_at = float(gfT(wp_mesh(x, y, z)))      # sample at body point
+```
+
+Same three contracts as the qsurf side (see "Strict .sol + .vol
+contract" above): the `.sol` is a raw coefficient vector, the
+`.vol` carries the mesh, the FES order must match.
+
 ## Heat Equation with Joule Heat Source
 
 Solves the unsteady heat equation in the workpiece:

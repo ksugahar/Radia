@@ -1471,6 +1471,16 @@ class IHWindow(AnalysisWindow):
                     f"({t_probe_final - t_probe_initial:+.2f} K)")
             # Output file paths -- so the user can see at a glance
             # what got written.
+            t_sol = result.get("T_sol_file") or ""
+            heat_vol = result.get("heat_vol_file") or ""
+            if t_sol:
+                lines.append(
+                    f"  T .sol: {os.path.basename(t_sol)}  "
+                    f"(re-loadable for post-processing)")
+            if heat_vol:
+                lines.append(
+                    f"  heat .vol: {os.path.basename(heat_vol)}  "
+                    f"(companion mesh for T .sol)")
             msh = result.get("msh_file") or ""
             if msh:
                 lines.append(f"  GMSH .msh: {os.path.basename(msh)}")
