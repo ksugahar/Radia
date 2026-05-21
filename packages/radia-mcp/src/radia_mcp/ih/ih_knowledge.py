@@ -514,26 +514,28 @@ Workflow (single window):
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
    BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
    BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**.
-   The path has been hardened across three follow-up releases as
-   each layer's bug was discovered:
+   The path has been hardened across four follow-up releases:
 
      - **4.66.0**: parent-vol_mesh em_vol (was 2D surface mesh -->
-       cross-mesh transfer mirror-flipped) + signed energy fix
-       (np.abs over-counted by 58%).
-     - **4.67.0**: surface-path phi_inc reconstruction via Biot-
-       Savart H integrated along workpiece-surface edges (the
-       legacy axis-ray + horizontal-ray path-integral assumed a
-       simple ring coil centered on z; lead wires + 16-perimeter
-       filament closed loops violated the multivalued-phi branch-
-       cut assumption).  AND per-vertex |H_t|^2 via triangle-wise
-       gradient (NGSolve's grad() returns 0 on a surface-only
-       mesh embedded in 3D; the Galerkin localization
-       "phi_i * (K @ phi)_i" sampled the Laplacian, not the
-       gradient norm).
+       cross-mesh transfer mirror-flipped) + signed energy fix.
+     - **4.67.0**: surface-path phi_inc + triangle-wise gradient.
+       (Energy magnitude regressed to 1.92 W on 3turnCoil_work,
+       below the weak-coupling lower bound 5.26 W -- the BIE was
+       under-coupling when fed a different-gauge phi_inc.)
+     - **4.68.0**: BIE-calibrated direct Biot-Savart for spatial.
+       The qsurf spatial pattern is computed from
+       q(x) = (P_wp / ∫|H_t_inc|² dS) * |H_t_inc(x)|² where
+       H_t_inc is the tangential Biot-Savart field at each wp
+       surface vertex (curl-free, no topological multivalued
+       branch cut).  The BIE provides only P_wp (its trusted
+       global integral).  Result: ∫q dS = P_wp exactly (energy
+       preserved) AND spatial peak matches the true |H_t|² peak.
 
-   Use 4.67.0+ for thermal analysis on BEM-derived qsurf.
-   Symptom of the resolved bugs: q_surf peak at the coil-FAR end
-   of the workpiece instead of directly under the coil.
+   Use 4.68.0+ for thermal analysis on BEM-derived qsurf.
+   Verification on 3turnCoil_work (PEEC-BEM, 150 kHz, 100 A):
+     z of max q   = +11.25 mm (matches Biot-Savart peak exactly)
+     ∫ q dS       = 6.1386 W (= BIE P_wp)
+     peak / end   = 1465x (strong concentration under coil)
 2. Click the **"Run thermal..."** chain button on the action row.
    This SWITCHES the method dropdown to "Thermal" and pre-fills the
    embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
