@@ -42,6 +42,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+
 # Default JSON: re-run the IGTE benchmark to regenerate
 DEFAULT_JSON = Path("C:/temp/igte_bench/I100_per_panel_v4.json")
 DEFAULT_VOL = Path(__file__).resolve().parent.parent.parent / \
@@ -105,30 +107,27 @@ def main():
     z_side = z[side] * 1e3
     theta_deg = np.degrees(theta)
 
-    fig, axes = plt.subplots(1, 3, figsize=(7.4, 2.4),
+    figsize = apply_lab_style(target="paper_double_column", aspect=0.30)
+    fig, axes = plt.subplots(1, 3, figsize=figsize,
                               constrained_layout=True)
     panels = [
-        ("(a) $\\mathrm{Re}\\,Z_s$ [m$\\Omega$]", Zs_re[side]*1e3, "inferno"),
-        ("(b) $\\mathrm{Im}\\,Z_s$ [m$\\Omega$]", Zs_im[side]*1e3, "viridis"),
-        ("(c) $|H_t|$ [A/m]",                      H_t[side],       "magma"),
+        (r"$\mathrm{Re}\,Z_s$ (m$\Omega$)", Zs_re[side]*1e3, "inferno"),
+        (r"$\mathrm{Im}\,Z_s$ (m$\Omega$)", Zs_im[side]*1e3, "viridis"),
+        (r"$|H_t|$ (A/m)",                  H_t[side],       "magma"),
     ]
-    for ax, (title, data, cmap) in zip(axes, panels):
+    panel_tags = ["(a)", "(b)", "(c)"]
+    for ax, tag, (clabel, data, cmap) in zip(axes, panel_tags, panels):
         sc = ax.scatter(theta_deg, z_side, c=data, cmap=cmap,
                         s=6, edgecolors="none")
         cb = plt.colorbar(sc, ax=ax, pad=0.02, fraction=0.05)
-        cb.ax.tick_params(labelsize=7)
-        ax.set_xlabel(r"$\theta$ [deg]", fontsize=8)
+        cb.set_label(clabel)
+        ax.set_xlabel(r"$\theta$ (deg)")
         ax.set_xticks([-180, -90, 0, 90, 180])
-        ax.set_title(title, fontsize=9)
-        ax.tick_params(labelsize=7)
-    axes[0].set_ylabel("z [mm]", fontsize=8)
-    fig.suptitle(
-        rf"Per-DOF $Z_s$ + driver $|H_t|$, side wall unrolled "
-        rf"(contrast: $\mathrm{{Re}}\,Z_s$ {Zs_re.max()/Zs_re.min():.1f}$\times$, "
-        rf"$|H_t|$ {H_t.max()/H_t.min():.1f}$\times$)",
-        fontsize=9
-    )
-    fig.savefig(OUT_PNG, dpi=160, bbox_inches="tight")
+        # Subfigure label below each panel (IEEE convention).
+        ax.text(0.5, -0.32, tag, transform=ax.transAxes,
+                ha="center", va="top")
+    axes[0].set_ylabel(r"$z$ (mm)")
+    lab_savefig(fig, str(OUT_PNG.with_suffix("")))
     print(f"Saved {OUT_PNG}")
 
 

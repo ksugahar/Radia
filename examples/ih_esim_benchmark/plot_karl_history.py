@@ -34,6 +34,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+
 
 def main():
     if len(sys.argv) < 2:
@@ -81,7 +83,8 @@ def main():
     print(f"  |Z_s| start -> end : {Z_abs[0]:.4e} -> {Z_abs[-1]:.4e} Ohm")
     print(f"  H_t_rms start -> end : {H_rms[0]:.2f} -> {H_rms[-1]:.2f} A/m")
 
-    fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.0),
+    figsize = apply_lab_style(target="paper_double_column", aspect=0.42)
+    fig, axes = plt.subplots(1, 3, figsize=figsize,
                               constrained_layout=True)
 
     # Panel (a): log dZ vs iter
@@ -89,55 +92,49 @@ def main():
     # skip iter 0 where dZ is the relaxation seed (== 1.0 by definition)
     mask = iters > 0
     dZ_label = (r"$dZ_{\max}$ (per-DOF)" if per_panel else
-                r"$dZ = \max_i |\Delta Z_s| / \max_i |Z_s|$")
+                r"$dZ$ (scalar Karl)")
     ax.semilogy(iters[mask], dZ_seq[mask], "o-", color="C3",
                 linewidth=1.6, label=dZ_label)
     tol = d.get("esim_tol", 1e-3)
     ax.axhline(tol, color="k", linestyle="--", linewidth=0.8,
-               label=f"esim_tol = {tol:g}")
-    ax.set_xlabel("Karl iteration")
+               label=fr"tol = {tol:g}")
+    ax.set_xlabel(r"Karl iteration")
     ax.set_ylabel(r"$dZ$")
-    ax.set_title("(a) convergence rate", fontsize=10)
-    ax.legend(fontsize=7, loc="best")
+    ax.text(0.5, -0.28, "(a)", transform=ax.transAxes,
+            ha="center", va="top")
+    ax.legend(loc="best", frameon=False)
     ax.grid(which="both", linestyle=":", alpha=0.5)
 
     # Panel (b): |Z_s| trajectory
     ax = axes[1]
     ax.plot(iters, Z_abs * 1e3, "o-", color="C0", linewidth=1.6,
-            label=r"$|Z_s|$ (area-weighted mean)")
+            label=r"mean")
     if per_panel and not np.all(np.isnan(Z_min)):
         ax.fill_between(iters, Z_min * 1e3, Z_max * 1e3,
                          color="C0", alpha=0.18,
-                         label=r"per-DOF $[|Z_s|_{\min}, |Z_s|_{\max}]$")
-    ax.set_xlabel("Karl iteration")
-    ax.set_ylabel(r"$|Z_s|$ [m$\Omega$]")
-    ax.set_title("(b) impedance trajectory", fontsize=10)
-    ax.legend(fontsize=7, loc="best")
+                         label=r"per-DOF $[\min, \max]$")
+    ax.set_xlabel(r"Karl iteration")
+    ax.set_ylabel(r"$|Z_s|$ (m$\Omega$)")
+    ax.text(0.5, -0.28, "(b)", transform=ax.transAxes,
+            ha="center", va="top")
+    ax.legend(loc="lower left", frameon=False)
     ax.grid(linestyle=":", alpha=0.5)
 
     # Panel (c): H_t trajectory
     ax = axes[2]
     ax.plot(iters, H_rms, "o-", color="C2", linewidth=1.6,
-            label=r"$|H_t|_{rms}$")
+            label=r"mean")
     if per_panel and not np.all(np.isnan(H_max)):
-        ax.plot(iters, H_mean, "s--", color="C2", alpha=0.6,
-                label=r"per-DOF mean")
-        ax.plot(iters, H_max, "^--", color="C4", alpha=0.6,
+        ax.plot(iters, H_max, "^--", color="C4", alpha=0.7,
                 label=r"per-DOF max")
-    ax.set_xlabel("Karl iteration")
-    ax.set_ylabel(r"$|H_t|$ [A/m]")
-    ax.set_title("(c) driver field trajectory", fontsize=10)
-    ax.legend(fontsize=7, loc="best")
+    ax.set_xlabel(r"Karl iteration")
+    ax.set_ylabel(r"$|H_t|$ (A/m)")
+    ax.text(0.5, -0.28, "(c)", transform=ax.transAxes,
+            ha="center", va="top")
+    ax.legend(loc="lower right", frameon=False)
     ax.grid(linestyle=":", alpha=0.5)
 
-    status = "converged" if converged else f"max_iter cap ({n_iter})"
-    pwp_str = f"P_wp = {P_wp:.3f} W" if P_wp is not None else "P_wp n/a"
-    fig.suptitle(
-        f"Karl history: {json_path.name}  ({status}, {pwp_str})",
-        fontsize=10,
-    )
-
-    fig.savefig(out_png, dpi=150, bbox_inches="tight")
+    lab_savefig(fig, str(out_png.with_suffix("")))
     print(f"Saved {out_png}")
 
 
