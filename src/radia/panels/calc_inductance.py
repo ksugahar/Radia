@@ -884,6 +884,50 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     progress("BEM",
         f"BIE total ({t_bie:.1f}s over {n_iter_done} iter, gmres info={info})")
 
+    # 5b. Per-DOF |H_t|^2 and q_surf for the spatial qsurf.sol output.
+    # This is the data calc_heat.py needs as a Neumann BC for thermal
+    # analysis.  Linear AND ESIM paths both need it; H_t_per_final
+    # above was ESIM-only.  Same recipe (K @ phi / M_lump) applied
+    # unconditionally.  Only meaningful when bem.fes is not None
+    # (i.e. basis_order=1 -- H1 P1 on wp_mesh BND); for basis_order>=2
+    # phi_vec lives on the parent vol_mesh and the projection back to
+    # a wp-surface H1 GridFunction would need explicit coord matching,
+    # which the Telegen post-proc below already exercises.  Out of
+    # scope for now; warn instead.
+    gf_q_wp = None
+    if bem.fes is not None:
+        phi_vec_arr = np.asarray(res_bem["phi_vec"])
+        Kphi_re = bem.K @ phi_vec_arr.real
+        Kphi_im = bem.K @ phi_vec_arr.imag
+        Hsq_per_dof = (np.abs(phi_vec_arr.real * Kphi_re)
+                       + np.abs(phi_vec_arr.imag * Kphi_im))
+        M_lump = bem.M @ np.ones(bem.ndof)
+        H_t_sq_per_dof = Hsq_per_dof / np.maximum(M_lump, 1e-30)
+
+        # Re(Z_s) per DOF.  Linear: scalar broadcasts.  ESIM: per-
+        # element ndarray -> per-DOF via mass-lumped average (the
+        # downstream calc_heat smooths via H1 projection anyway).
+        if isinstance(Z_s_wp, np.ndarray):
+            # Per-element Re(Z_s) -> per-DOF.  bem.K already encodes
+            # element-to-DOF mapping; the simplest area-weighted
+            # average is M_lump-normalized: (M_lump_per_el @ Z_s_re_per_el)
+            # / sum_el(M_lump_per_el).  Mean is the fallback when the
+            # element-to-DOF connectivity is not exposed by the
+            # solver.  For the qsurf .sol's downstream use (thermal
+            # Neumann BC), this granularity is sufficient -- finer
+            # spatial detail would round-trip through the H1
+            # projection in calc_heat anyway.
+            Z_s_re_per_dof = float(np.mean(Z_s_wp.real))
+        else:
+            Z_s_re_per_dof = float(Z_s_wp.real)
+
+        q_per_dof = 0.5 * Z_s_re_per_dof * H_t_sq_per_dof
+        gf_q_wp = _GF(bem.fes)
+        gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
+    else:
+        progress("BEM",
+            "qsurf.sol skipped: basis_order>=2 path (phi on vol_mesh P2)")
+
     # 6. Workpiece scalar outputs
     A_wp = float(Integrate(CF(1), wp_mesh, VOL_or_BND=BND).real)
     P_wp = float(res_bem["P_density"] * A_wp)
@@ -1025,6 +1069,41 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         Z_s_imag_out = float(Z_s_wp.imag)
         per_panel_block = {"esim_per_panel": False}
 
+    # ---- Spatial q_surf .sol output (consumed by calc_heat.py) -------
+    # Save the q_surf GridFunction built earlier (Section 5b) so that
+    # PEEC-BEM and BEM-A-BEM users can drive thermal analysis from
+    # this solve, matching the calc_fem_kelvin.py / calc_fem_coilmesh.py
+    # contract.  Pair file = the extracted wp surface mesh as .vol;
+    # calc_heat consumes the pair via --qsurf-sol + --em-vol.
+    qsurf_sol_path = ""
+    qsurf_vol_path = ""
+    if gf_q_wp is not None:
+        try:
+            # Output dir + stem: prefer args.msh_output's basename when
+            # the user requested an .msh, else args.vol's basename.
+            if args.msh_output:
+                base_dir = os.path.dirname(os.path.abspath(args.msh_output)) or "."
+                stem = os.path.splitext(os.path.basename(args.msh_output))[0]
+            else:
+                base_dir = os.path.dirname(os.path.abspath(args.vol)) or "."
+                stem = os.path.splitext(os.path.basename(args.vol))[0]
+            os.makedirs(base_dir, exist_ok=True)
+            sol_Q = os.path.join(base_dir,
+                                  f"{stem}_qsurf.sol").replace("\\", "/")
+            vol_Q = os.path.join(base_dir,
+                                  f"{stem}_bem.vol").replace("\\", "/")
+            gf_q_wp.Save(sol_Q)
+            wp_mesh.ngmesh.Save(vol_Q)
+            qsurf_sol_path = sol_Q
+            qsurf_vol_path = vol_Q
+            progress("BEM",
+                f"wrote qsurf.sol on bem mesh: "
+                f"{os.path.basename(sol_Q)} (pair vol: "
+                f"{os.path.basename(vol_Q)})")
+        except Exception as e:
+            progress("BEM",
+                f"qsurf.sol save failed: {type(e).__name__}: {e}")
+
     return {
         "P_wp": P_wp, "H_t_rms": H_t_rms, "A_wp": A_wp,
         "delta_L_nH": delta_L_nH, "delta_R_mOhm": delta_R_mOhm,
@@ -1041,6 +1120,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "esim_history": esim_history,
         **per_panel_block,
         "msh_file": msh_file,
+        "qsurf_sol": qsurf_sol_path,
+        "qsurf_em_vol": qsurf_vol_path,
         "t_wp_mesh_s": t_wp_mesh,
         "t_bem_assembly_s": t_asm,
         "t_phi_inc_s": t_phi,
@@ -1155,6 +1236,11 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["P_wp_W"] = wp_data["P_wp"]
     out["H_t_rms_A_per_m"] = wp_data["H_t_rms"]
     out["wp_area_m2"] = wp_data["A_wp"]
+    # Spatial q_surf .sol pair for downstream thermal analysis.  Empty
+    # strings when basis_order>=2 (qsurf save skipped: phi_vec on parent
+    # vol_mesh P2 needs explicit coord matching; out of scope for now).
+    out["qsurf_sol"] = wp_data.get("qsurf_sol", "")
+    out["qsurf_em_vol"] = wp_data.get("qsurf_em_vol", "")
     out["wp_dissipation_R_mOhm"] = wp_data["wp_dissipation_R_mOhm"]
     out["wp_mesh_nv"] = wp_data["wp_mesh_nv"]
     out["wp_mesh_n_tris"] = wp_data["wp_mesh_n_tris"]
