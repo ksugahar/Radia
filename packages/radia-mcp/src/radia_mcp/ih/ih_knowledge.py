@@ -513,11 +513,14 @@ Workflow (single window):
 
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
    BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
-   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**;
-   prior versions only emitted the scalar ``P_density`` average
-   and no spatial distribution.  Earlier docs that listed these
-   methods as ``qsurf.sol``-producing predicted the design; the
-   2026-05-21 kubota report drove the actual code change.
+   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**
+   (prior versions only emitted the scalar ``P_density`` average);
+   the **radia 4.66.0** follow-up fixed two bugs in that path -- a
+   2D-surface ``em_vol`` that caused cross-mesh transfer to mirror-
+   flip the q distribution (so the original kubota report "コイル
+   遠側で温度が高い" disappears) and a ~58 % over-count from the
+   per-DOF energy localization.  Use 4.66.0+ for thermal analysis
+   on BEM-derived qsurf.
 2. Click the **"Run thermal..."** chain button on the action row.
    This SWITCHES the method dropdown to "Thermal" and pre-fills the
    embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
