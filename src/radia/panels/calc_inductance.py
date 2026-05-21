@@ -741,6 +741,11 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         else:
             Z_s_wp = Z_s_seed
         max_iter = max(int(args.esim_max_iter), 1)
+        # Optional Anderson acceleration on the outer Karl loop.
+        # m = 0 falls back to plain damped Picard.
+        from esim_anderson import AndersonAccelerator
+        anderson = AndersonAccelerator(m=int(args.esim_anderson_m),
+                                        alpha=float(args.esim_relax))
     else:
         # Linear SIBC: Dowell tanh formula closed form.
         rho_wp = 1.0 / args.sigma
@@ -801,8 +806,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 Z_s_new[i] = complex(
                     esim_solver.solve(max(float(H_t_per[i]), 1e-3),
                                        max_iter=20)['Z'])
-            Z_s_wp = (args.esim_relax * Z_s_new
-                      + (1 - args.esim_relax) * Z_s_old)
+            Z_s_wp = anderson.step(Z_s_old, Z_s_new)
             dZ_per_dof = (np.abs(Z_s_wp - Z_s_old)
                           / np.maximum(np.abs(Z_s_old), 1e-30))
             dZ = float(np.max(dZ_per_dof))
@@ -827,7 +831,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         else:
             sol_new = esim_solver.solve(max(H_t_rms_iter, 1e-3))
             Z_s_new = complex(sol_new['Z'])
-            Z_s_wp = args.esim_relax * Z_s_new + (1 - args.esim_relax) * Z_s_old
+            Z_s_wp = anderson.step(Z_s_old, Z_s_new)
             dZ = abs(Z_s_wp - Z_s_old) / max(abs(Z_s_old), 1e-30)
             esim_history.append({
                 "iteration": iteration,
@@ -1618,6 +1622,13 @@ def main():
                              "costs N_DOF extra ESIM calls per Karl "
                              "iter (~5 ms each).  Requires "
                              "--wp-bem-backend intree-dense.")
+    parser.add_argument("--esim-anderson-m", type=int, default=0,
+                        help="Anderson-acceleration memory depth for "
+                             "the outer Karl iteration.  0 (default) = "
+                             "plain damped Picard.  3-5 closes the "
+                             "per-DOF dZ_max noise floor when --esim-"
+                             "per-panel is used.  See "
+                             "src/radia/esim_anderson.py.")
     parser.add_argument("--h1-order", type=int, default=1,
                         choices=[1, 2],
                         help="Workpiece BEM Lagrange basis order "
