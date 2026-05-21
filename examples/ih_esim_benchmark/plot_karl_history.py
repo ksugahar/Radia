@@ -83,14 +83,17 @@ def main():
     print(f"  |Z_s| start -> end : {Z_abs[0]:.4e} -> {Z_abs[-1]:.4e} Ohm")
     print(f"  H_t_rms start -> end : {H_rms[0]:.2f} -> {H_rms[-1]:.2f} A/m")
 
-    figsize = apply_lab_style(target="paper_double_column", aspect=0.42)
-    fig, axes = plt.subplots(1, 3, figsize=figsize,
+    # Use a 3-row stacked layout with a shared x-axis so each quantity
+    # gets the full figure width.  A 3-column layout at 16 pt fonts
+    # leaves no horizontal room for legends; a stacked layout solves
+    # the legend-overlap problem cleanly.
+    figsize = apply_lab_style(target="paper_single_column", aspect=1.25)
+    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True,
                               constrained_layout=True)
 
-    # Panel (a): log dZ vs iter
+    # Row (a): log dZ vs iter
     ax = axes[0]
-    # skip iter 0 where dZ is the relaxation seed (== 1.0 by definition)
-    mask = iters > 0
+    mask = iters > 0  # skip iter 0 (relaxation seed dZ == 1.0)
     dZ_label = (r"$dZ_{\max}$ (per-DOF)" if per_panel else
                 r"$dZ$ (scalar Karl)")
     ax.semilogy(iters[mask], dZ_seq[mask], "o-", color="C3",
@@ -98,29 +101,27 @@ def main():
     tol = d.get("esim_tol", 1e-3)
     ax.axhline(tol, color="k", linestyle="--", linewidth=0.8,
                label=fr"tol = {tol:g}")
-    ax.set_xlabel(r"Karl iteration")
     ax.set_ylabel(r"$dZ$")
-    ax.text(0.5, -0.28, "(a)", transform=ax.transAxes,
-            ha="center", va="top")
-    ax.legend(loc="best", frameon=False)
+    ax.legend(loc="lower left", frameon=False)
     ax.grid(which="both", linestyle=":", alpha=0.5)
+    ax.text(-0.18, 0.5, "(a)", transform=ax.transAxes,
+            ha="right", va="center")
 
-    # Panel (b): |Z_s| trajectory
+    # Row (b): |Z_s| trajectory
     ax = axes[1]
     ax.plot(iters, Z_abs * 1e3, "o-", color="C0", linewidth=1.6,
             label=r"mean")
     if per_panel and not np.all(np.isnan(Z_min)):
         ax.fill_between(iters, Z_min * 1e3, Z_max * 1e3,
                          color="C0", alpha=0.18,
-                         label=r"per-DOF $[\min, \max]$")
-    ax.set_xlabel(r"Karl iteration")
+                         label=r"per-DOF $[\min,\max]$")
     ax.set_ylabel(r"$|Z_s|$ (m$\Omega$)")
-    ax.text(0.5, -0.28, "(b)", transform=ax.transAxes,
-            ha="center", va="top")
-    ax.legend(loc="lower left", frameon=False)
+    ax.legend(loc="upper right", frameon=False, ncol=2)
     ax.grid(linestyle=":", alpha=0.5)
+    ax.text(-0.18, 0.5, "(b)", transform=ax.transAxes,
+            ha="right", va="center")
 
-    # Panel (c): H_t trajectory
+    # Row (c): H_t trajectory
     ax = axes[2]
     ax.plot(iters, H_rms, "o-", color="C2", linewidth=1.6,
             label=r"mean")
@@ -129,10 +130,10 @@ def main():
                 label=r"per-DOF max")
     ax.set_xlabel(r"Karl iteration")
     ax.set_ylabel(r"$|H_t|$ (A/m)")
-    ax.text(0.5, -0.28, "(c)", transform=ax.transAxes,
-            ha="center", va="top")
-    ax.legend(loc="lower right", frameon=False)
+    ax.legend(loc="lower right", frameon=False, ncol=2)
     ax.grid(linestyle=":", alpha=0.5)
+    ax.text(-0.18, 0.5, "(c)", transform=ax.transAxes,
+            ha="right", va="center")
 
     lab_savefig(fig, str(out_png.with_suffix("")))
     print(f"Saved {out_png}")
