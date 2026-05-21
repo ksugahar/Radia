@@ -529,6 +529,54 @@ see § 1b for the structural limits.
 
 ---
 
+## 6d. Operating-regime sweep: where does per-element matter?
+
+A 32-case sweep over `(I_port, f)` ∈ `{1, 10, 100, 300 A} × {10, 50,
+100, 500 kHz}` on the IH benchmark steel cylinder shows where the
+per-element-vs-scalar gap is concentrated.  Runner:
+[`examples/ih_esim_benchmark/sweep_f_I.py`](../../examples/ih_esim_benchmark/sweep_f_I.py).
+Figure: [`sweep_heatmap.png`](../../examples/ih_esim_benchmark/sweep_heatmap.png).
+
+`(P_per_element / P_scalar − 1) × 100 %`:
+
+| `I_port` [A] \\ `f` [kHz] | 10 | 50 | 100 | 500 |
+|---|---|---|---|---|
+| 1   | -3 | -3 | -3 | -2 |
+| 10  | -2 | -1 | 0  | +5 |
+| **100** | **+44** | **+49** | **+129** | 0  |
+| **300** | **+72** | **+40** | **+31**  | **+389** |
+
+Physical interpretation:
+
+- **`I ≤ 10 A`**: linear regime.  `|H_t|` stays well below the BH
+  knee everywhere on the workpiece surface, the scalar mesh-RMS Z_s
+  matches the per-element distribution to within 5 %.  Scalar SIBC
+  is fine.
+
+- **`I = 100 A, mid-frequency`**: the headline IGTE benchmark
+  (50 kHz / 100 A = the +48 % paper case).  `|H_t|` straddles the
+  BH knee with strong spatial contrast; per-element captures the
+  hot-spot integral, scalar collapses it.
+
+- **`I = 100 A, 500 kHz`**: skin depth `δ ≈ 0.04 mm` is small
+  enough that local saturation averages out within the skin layer,
+  AND `|H_t|` magnitudes drop because the workpiece becomes a
+  near-perfect screen.  Per-element and scalar agree.
+
+- **`I = 300 A, 500 kHz`**: the EXTREME case.  Drive is high enough
+  that even the thin skin saturates locally; the spatial pattern
+  re-emerges with extreme contrast (`|H_t|` varying ~50× across
+  the surface).  Per-element reports `P_wp = 2239 W`, scalar `458 W`
+  — a **4.89× gap**.  Engineering implication: high-power IH
+  hardening designs at 100-500 kHz MUST use per-element for
+  accurate power sizing.
+
+**Headline figure for the journal paper**: the heatmap of
+gap % vs (f, I).  Identifies the operating regime where the
+per-element method is essential for IH design accuracy.
+
+---
+
 ## 7. Karl Iteration Lipschitz Estimate (Empirical)
 
 **Goal.**  Quantify the convergence rate of the outer Karl loop and
