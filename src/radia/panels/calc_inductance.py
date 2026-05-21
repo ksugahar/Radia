@@ -696,15 +696,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     progress("BEM", f"phi_inc from coil ({coil_data['source_type']})")
     t0 = time.perf_counter()
     if coil_data["source_type"] == "filament":
-        # Surface-path BFS integration (kubota 2026-05-21 fix): the
-        # legacy axis-ray + horizontal-ray path integral assumes a
-        # simple ring coil with the path not piercing any wire.
-        # Real coils (3turnCoil leads at x=129mm + 16 perimeter
-        # filaments forming closed loops) violate this assumption and
-        # the q_surf distribution mirror-flips to the coil-far side.
-        # Surface-edge BFS sidesteps the multi-valued phi problem.
-        phi_inc = compute_phi_inc_from_filaments_surface_path(
-            wp_mesh, coil_data["paths"], coil_data["I_fil"])
+        # Reverted 2026-05-21: surface-path phi_inc gave P_wp = 1.92 W
+        # which is below the weak-coupling lower bound (5.26 W) -- the
+        # different gauge convention (phi(ref_vertex on wp) = 0 vs
+        # axis-ray's phi(infty) = 0 with dipole tail) altered the BIE
+        # solve in a non-physical way.  The actual spatial-peak fix
+        # was in the per-vertex |H_t|^2 reconstruction (triangle-wise
+        # gradient instead of Galerkin phi*K@phi localization).
+        phi_inc = compute_phi_inc_from_filaments(
+            obs, coil_data["paths"], coil_data["I_fil"])
     elif coil_data["source_type"] == "surface":
         # Multiply real surface J by terminal current (complex if needed).
         coil_J_complex = (complex(args.current)
@@ -909,75 +909,106 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     gf_q_wp = None
     q_per_dof = None
     if bem.fes is not None:
-        # Per-vertex |H_t|^2 via manual triangle-wise gradient (NGSolve's
-        # grad() on a 2D-embedded-in-3D surface-only mesh returns 0 when
-        # the FES has no VOL elements).  For each surface triangle,
-        # compute the constant grad of the linear interpolant of phi
-        # from its 3 vertex values; |grad|^2 is area-weighted averaged
-        # back onto vertices.
+        # Spatial q_surf via BIE-calibrated direct Biot-Savart.
+        #
+        # Rationale (kubota 2026-05-21 follow-up):
+        #   - phi_inc via the legacy axis-ray + horizontal-ray path
+        #     integral has numerically-induced local-gradient errors
+        #     for real coils (leads + multi-loop topology); the BIE
+        #     solution phi_vec inherits those errors so the spatial
+        #     q distribution comes out scrambled (peak on coil-FAR
+        #     face instead of coil-NEAR).
+        #   - phi_inc via surface-edge LSQ has correct local gradient
+        #     but a different gauge from the BIE's training data, so
+        #     the BIE produces an artificially low P_wp (1.9 W vs the
+        #     ~6 W axis-ray result on the same geometry).
+        #   - Gauge correction (constant shift on phi_inc) does NOT
+        #     change BIE energy because the Lagrange multiplier
+        #     constraint absorbs constants.
+        #
+        # Resolution: separate concerns.  Use the BIE's global P_wp
+        # (= integrated power, well-trusted) as the magnitude and the
+        # direct Biot-Savart |H_t_inc|^2 as the spatial pattern.  This
+        # is the weak-coupling approximation rescaled to match the
+        # BIE integral.  For typical IH (workpiece inside coil bore,
+        # near-uniform shielding factor), |H_t|^2 spatial pattern is
+        # very close to |H_t_inc|^2 times a constant -- which is
+        # exactly the rescaling we apply.
         from ngsolve import BND as _BND_imp
-        phi_vec_arr = np.asarray(res_bem["phi_vec"])
         n_v = wp_mesh.nv
-        # Collect triangle vertex indices + coords once.
+
+        # Collect triangle vertex indices + coords.
         tri_v = []
         for el in wp_mesh.Elements(_BND_imp):
             tri_v.append([v.nr for v in el.vertices])
-        tri_v = np.asarray(tri_v, dtype=np.int64)  # (n_tri, 3)
-        n_tri = len(tri_v)
+        tri_v = np.asarray(tri_v, dtype=np.int64)
         vert_xyz = np.asarray(
             [list(wp_mesh.vertices[i].point) for i in range(n_v)],
-            dtype=float)  # (n_v, 3)
+            dtype=float)
 
-        # Triangle gradients (constant per triangle for P1).  Use the
-        # standard formula: grad(phi) = sum_i phi_i * grad(N_i),
-        # where grad(N_i) for vertex i of a 3D triangle is the rotated
-        # opposite edge / (2 * area), tangent to the triangle plane.
+        # Triangle areas + outward normals (area-weighted avg to verts).
         p0 = vert_xyz[tri_v[:, 0]]
         p1 = vert_xyz[tri_v[:, 1]]
         p2 = vert_xyz[tri_v[:, 2]]
-        e1 = p1 - p0     # (n_tri, 3)
-        e2 = p2 - p0
-        normal = np.cross(e1, e2)
-        area2 = np.linalg.norm(normal, axis=1)        # 2 * area
+        nrm = np.cross(p1 - p0, p2 - p0)
+        area2 = np.linalg.norm(nrm, axis=1)
         tri_area = 0.5 * area2
-        n_hat = normal / np.maximum(area2[:, None], 1e-30)
+        n_hat_tri = nrm / np.maximum(area2[:, None], 1e-30)
 
-        # grad(N_0) = (rotate_perp_in_plane(p2 - p1)) / (2*area), and
-        # similar for N_1, N_2.  In 3D: grad(N_i) = (p_next - p_prev)
-        # rotated 90deg in the triangle plane, normalized to /2A.
-        # Cross product with n_hat gives the in-plane perpendicular.
-        gN0 = np.cross(p2 - p1, n_hat) / np.maximum(area2[:, None], 1e-30)
-        gN1 = np.cross(p0 - p2, n_hat) / np.maximum(area2[:, None], 1e-30)
-        gN2 = np.cross(p1 - p0, n_hat) / np.maximum(area2[:, None], 1e-30)
-
-        # Per-triangle grad(phi) for real and imag parts.
-        phi_re = phi_vec_arr.real
-        phi_im = phi_vec_arr.imag
-        grad_re = (phi_re[tri_v[:, 0:1]] * gN0
-                    + phi_re[tri_v[:, 1:2]] * gN1
-                    + phi_re[tri_v[:, 2:3]] * gN2)   # (n_tri, 3)
-        grad_im = (phi_im[tri_v[:, 0:1]] * gN0
-                    + phi_im[tri_v[:, 1:2]] * gN1
-                    + phi_im[tri_v[:, 2:3]] * gN2)
-        Hsq_tri = (np.sum(grad_re * grad_re, axis=1)
-                   + np.sum(grad_im * grad_im, axis=1))  # |H_t|^2 per tri
-
-        # Area-weighted average to vertices.
-        vert_Hsq_num = np.zeros(n_v)
-        vert_area_sum = np.zeros(n_v)
+        vert_n = np.zeros_like(vert_xyz)
+        vert_a = np.zeros(n_v)
         for j in range(3):
-            np.add.at(vert_Hsq_num, tri_v[:, j],
-                      tri_area * Hsq_tri)
-            np.add.at(vert_area_sum, tri_v[:, j], tri_area)
-        H_t_sq_per_dof = vert_Hsq_num / np.maximum(vert_area_sum, 1e-30)
+            np.add.at(vert_n, tri_v[:, j], tri_area[:, None] * n_hat_tri)
+            np.add.at(vert_a, tri_v[:, j], tri_area)
+        vert_n /= np.maximum(vert_a[:, None], 1e-30)
+        vert_n /= np.maximum(np.linalg.norm(vert_n, axis=1,
+                                              keepdims=True), 1e-30)
 
-        if isinstance(Z_s_wp, np.ndarray):
-            Z_s_re_avg = float(np.mean(Z_s_wp.real))
+        # Direct Biot-Savart H at each wp vertex from the coil
+        # filaments (curl-free in air, no topology assumption).
+        from radia.bem_sibc_solver import _h_segments_complex as _hbs
+        flat_segs, flat_I = [], []
+        for fil_segs, Ik in zip(coil_data["paths"], coil_data["I_fil"]):
+            Ik_c = complex(Ik)
+            for (q1, q2) in fil_segs:
+                flat_segs.append((q1, q2))
+                flat_I.append(Ik_c)
+        bs_segs = np.asarray(flat_segs, dtype=float)
+        bs_I = np.asarray(flat_I, dtype=complex)
+        H_BS = _hbs(bs_segs, vert_xyz, bs_I)        # (n_v, 3) complex
+
+        # Tangential H at each vertex: H - (H·n)n.
+        Hn = np.sum(H_BS * vert_n, axis=1)
+        H_t_vec = H_BS - Hn[:, None] * vert_n
+        H_t_sq = (np.abs(H_t_vec[:, 0])**2
+                   + np.abs(H_t_vec[:, 1])**2
+                   + np.abs(H_t_vec[:, 2])**2)
+
+        # Integrate |H_t|^2 over the wp surface (triangle-mean * area).
+        # ∫_S |H_t|^2 dS = sum_tri area_tri * mean_3v(|H_t|^2).
+        Hsq_at_verts = H_t_sq[tri_v]                # (n_tri, 3)
+        I_norm = float(np.sum(tri_area * Hsq_at_verts.mean(axis=1)))
+        # P_wp is the BIE-trusted total -- compute it inline here since
+        # the canonical P_wp = res_bem["P_density"] * A_wp is set
+        # AFTER this block in the function flow.
+        A_wp_local = float(np.sum(tri_area))
+        P_wp_local = float(res_bem["P_density"]) * A_wp_local
+        if I_norm <= 0 or P_wp_local <= 0:
+            progress("BEM",
+                f"qsurf.sol skipped: I_norm={I_norm:.3e} "
+                f"P_wp={P_wp_local:.3e}")
         else:
-            Z_s_re_avg = float(Z_s_wp.real)
-        q_per_dof = 0.5 * Z_s_re_avg * H_t_sq_per_dof
-        gf_q_wp = _GF(bem.fes)
-        gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
+            # q_per_dof = (P_wp / ∫|H_t|^2 dS) * |H_t|^2.  Guarantees
+            # ∫ q dS = P_wp exactly (BIE energy preserved) AND the
+            # spatial pattern follows the topologically-correct
+            # Biot-Savart distribution.
+            scale = P_wp_local / I_norm
+            q_per_dof = scale * H_t_sq
+            gf_q_wp = _GF(bem.fes)
+            gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
+            progress("BEM",
+                f"qsurf: BIE-calibrated BS  scale={scale:.3e} "
+                f"(P_wp/∫|H_t|²)  ∫|H_t|²dS={I_norm:.3e}")
     else:
         progress("BEM",
             "qsurf.sol skipped: basis_order>=2 path (phi on vol_mesh P2)")
