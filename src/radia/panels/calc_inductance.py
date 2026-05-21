@@ -567,6 +567,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     from surface_mesh_extract import _extract_surface_mesh_filtered
     from radia.bem_sibc_solver import (
         ScalarBIESIBCSolver, compute_phi_inc_from_filaments,
+        compute_phi_inc_from_filaments_surface_path,
         compute_phi_inc_from_surface_J)
     from em_material import EMMaterial
     # Hole-extractor for wp-as-hole geometry (closed-torus convention).
@@ -695,8 +696,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     progress("BEM", f"phi_inc from coil ({coil_data['source_type']})")
     t0 = time.perf_counter()
     if coil_data["source_type"] == "filament":
-        phi_inc = compute_phi_inc_from_filaments(
-            obs, coil_data["paths"], coil_data["I_fil"])
+        # Surface-path BFS integration (kubota 2026-05-21 fix): the
+        # legacy axis-ray + horizontal-ray path integral assumes a
+        # simple ring coil with the path not piercing any wire.
+        # Real coils (3turnCoil leads at x=129mm + 16 perimeter
+        # filaments forming closed loops) violate this assumption and
+        # the q_surf distribution mirror-flips to the coil-far side.
+        # Surface-edge BFS sidesteps the multi-valued phi problem.
+        phi_inc = compute_phi_inc_from_filaments_surface_path(
+            wp_mesh, coil_data["paths"], coil_data["I_fil"])
     elif coil_data["source_type"] == "surface":
         # Multiply real surface J by terminal current (complex if needed).
         coil_J_complex = (complex(args.current)
@@ -899,43 +907,75 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # which the Telegen post-proc below already exercises.  Out of
     # scope for now; warn instead.
     gf_q_wp = None
+    q_per_dof = None
     if bem.fes is not None:
+        # Per-vertex |H_t|^2 via manual triangle-wise gradient (NGSolve's
+        # grad() on a 2D-embedded-in-3D surface-only mesh returns 0 when
+        # the FES has no VOL elements).  For each surface triangle,
+        # compute the constant grad of the linear interpolant of phi
+        # from its 3 vertex values; |grad|^2 is area-weighted averaged
+        # back onto vertices.
+        from ngsolve import BND as _BND_imp
         phi_vec_arr = np.asarray(res_bem["phi_vec"])
-        Kphi_re = bem.K @ phi_vec_arr.real
-        Kphi_im = bem.K @ phi_vec_arr.imag
-        # Hsq_per_dof[i] is a localization of the energy quadratic
-        # form phi^T K phi to DOF i.  Use the signed contribution
-        # (NOT np.abs) so the sum over all DOFs equals phi^T K phi
-        # exactly -- enforcing positivity per-DOF via np.abs() over-
-        # counts the off-diagonal contributions of K and inflates
-        # the integral by ~50%, which we saw on 3turnCoil_work
-        # (∫q dS = 9.75 W vs expected P_wp = 6.14 W).
-        Hsq_per_dof = (phi_vec_arr.real * Kphi_re
-                       + phi_vec_arr.imag * Kphi_im)
-        M_lump = bem.M @ np.ones(bem.ndof)
-        H_t_sq_per_dof = Hsq_per_dof / np.maximum(M_lump, 1e-30)
+        n_v = wp_mesh.nv
+        # Collect triangle vertex indices + coords once.
+        tri_v = []
+        for el in wp_mesh.Elements(_BND_imp):
+            tri_v.append([v.nr for v in el.vertices])
+        tri_v = np.asarray(tri_v, dtype=np.int64)  # (n_tri, 3)
+        n_tri = len(tri_v)
+        vert_xyz = np.asarray(
+            [list(wp_mesh.vertices[i].point) for i in range(n_v)],
+            dtype=float)  # (n_v, 3)
 
-        # Re(Z_s) per DOF.  Linear: scalar broadcasts.  ESIM: per-
-        # element ndarray -> per-DOF via mass-lumped average (the
-        # downstream calc_heat smooths via H1 projection anyway).
+        # Triangle gradients (constant per triangle for P1).  Use the
+        # standard formula: grad(phi) = sum_i phi_i * grad(N_i),
+        # where grad(N_i) for vertex i of a 3D triangle is the rotated
+        # opposite edge / (2 * area), tangent to the triangle plane.
+        p0 = vert_xyz[tri_v[:, 0]]
+        p1 = vert_xyz[tri_v[:, 1]]
+        p2 = vert_xyz[tri_v[:, 2]]
+        e1 = p1 - p0     # (n_tri, 3)
+        e2 = p2 - p0
+        normal = np.cross(e1, e2)
+        area2 = np.linalg.norm(normal, axis=1)        # 2 * area
+        tri_area = 0.5 * area2
+        n_hat = normal / np.maximum(area2[:, None], 1e-30)
+
+        # grad(N_0) = (rotate_perp_in_plane(p2 - p1)) / (2*area), and
+        # similar for N_1, N_2.  In 3D: grad(N_i) = (p_next - p_prev)
+        # rotated 90deg in the triangle plane, normalized to /2A.
+        # Cross product with n_hat gives the in-plane perpendicular.
+        gN0 = np.cross(p2 - p1, n_hat) / np.maximum(area2[:, None], 1e-30)
+        gN1 = np.cross(p0 - p2, n_hat) / np.maximum(area2[:, None], 1e-30)
+        gN2 = np.cross(p1 - p0, n_hat) / np.maximum(area2[:, None], 1e-30)
+
+        # Per-triangle grad(phi) for real and imag parts.
+        phi_re = phi_vec_arr.real
+        phi_im = phi_vec_arr.imag
+        grad_re = (phi_re[tri_v[:, 0:1]] * gN0
+                    + phi_re[tri_v[:, 1:2]] * gN1
+                    + phi_re[tri_v[:, 2:3]] * gN2)   # (n_tri, 3)
+        grad_im = (phi_im[tri_v[:, 0:1]] * gN0
+                    + phi_im[tri_v[:, 1:2]] * gN1
+                    + phi_im[tri_v[:, 2:3]] * gN2)
+        Hsq_tri = (np.sum(grad_re * grad_re, axis=1)
+                   + np.sum(grad_im * grad_im, axis=1))  # |H_t|^2 per tri
+
+        # Area-weighted average to vertices.
+        vert_Hsq_num = np.zeros(n_v)
+        vert_area_sum = np.zeros(n_v)
+        for j in range(3):
+            np.add.at(vert_Hsq_num, tri_v[:, j],
+                      tri_area * Hsq_tri)
+            np.add.at(vert_area_sum, tri_v[:, j], tri_area)
+        H_t_sq_per_dof = vert_Hsq_num / np.maximum(vert_area_sum, 1e-30)
+
         if isinstance(Z_s_wp, np.ndarray):
-            Z_s_re_per_dof = float(np.mean(Z_s_wp.real))
+            Z_s_re_avg = float(np.mean(Z_s_wp.real))
         else:
-            Z_s_re_per_dof = float(Z_s_wp.real)
-
-        q_per_dof = 0.5 * Z_s_re_per_dof * H_t_sq_per_dof
-        # Clip negative per-DOF artefacts (off-diagonal K contribution
-        # may push some DOFs below zero; physically |H_t|^2 >= 0).
-        # The signed sum is correct for the global integral; the per-
-        # DOF distribution is well-defined only as the integrand --
-        # so we keep the global integral via post-clip rescaling.
-        q_neg = q_per_dof < 0
-        if np.any(q_neg):
-            S_total_signed = float(np.sum(q_per_dof * M_lump))
-            q_per_dof = np.clip(q_per_dof, 0, None)
-            S_total_clip = float(np.sum(q_per_dof * M_lump))
-            if S_total_clip > 1e-30 and S_total_signed > 0:
-                q_per_dof *= S_total_signed / S_total_clip
+            Z_s_re_avg = float(Z_s_wp.real)
+        q_per_dof = 0.5 * Z_s_re_avg * H_t_sq_per_dof
         gf_q_wp = _GF(bem.fes)
         gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
     else:
