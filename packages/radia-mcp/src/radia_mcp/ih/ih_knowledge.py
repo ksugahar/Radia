@@ -513,14 +513,27 @@ Workflow (single window):
 
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
    BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
-   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**
-   (prior versions only emitted the scalar ``P_density`` average);
-   the **radia 4.66.0** follow-up fixed two bugs in that path -- a
-   2D-surface ``em_vol`` that caused cross-mesh transfer to mirror-
-   flip the q distribution (so the original kubota report "コイル
-   遠側で温度が高い" disappears) and a ~58 % over-count from the
-   per-DOF energy localization.  Use 4.66.0+ for thermal analysis
-   on BEM-derived qsurf.
+   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**.
+   The path has been hardened across three follow-up releases as
+   each layer's bug was discovered:
+
+     - **4.66.0**: parent-vol_mesh em_vol (was 2D surface mesh -->
+       cross-mesh transfer mirror-flipped) + signed energy fix
+       (np.abs over-counted by 58%).
+     - **4.67.0**: surface-path phi_inc reconstruction via Biot-
+       Savart H integrated along workpiece-surface edges (the
+       legacy axis-ray + horizontal-ray path-integral assumed a
+       simple ring coil centered on z; lead wires + 16-perimeter
+       filament closed loops violated the multivalued-phi branch-
+       cut assumption).  AND per-vertex |H_t|^2 via triangle-wise
+       gradient (NGSolve's grad() returns 0 on a surface-only
+       mesh embedded in 3D; the Galerkin localization
+       "phi_i * (K @ phi)_i" sampled the Laplacian, not the
+       gradient norm).
+
+   Use 4.67.0+ for thermal analysis on BEM-derived qsurf.
+   Symptom of the resolved bugs: q_surf peak at the coil-FAR end
+   of the workpiece instead of directly under the coil.
 2. Click the **"Run thermal..."** chain button on the action row.
    This SWITCHES the method dropdown to "Thermal" and pre-fills the
    embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
