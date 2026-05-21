@@ -1198,6 +1198,112 @@ production scripts.
 If Karl ever diverges in production, the most likely cause is
 `max_iter` too small or the BH curve being non-monotone (data error).
 
+### 6.4 Per-DOF Lipschitz and the noise-floor failure mode
+
+When the outer loop is **per-element** (`--esim-per-panel`), the
+fixed-point map becomes vector-valued:
+
+$$
+\mathbf{G} : \mathbb{C}^{n_{\mathrm{DOF}}} \to \mathbb{C}^{n_{\mathrm{DOF}}},
+\qquad
+\mathbf{G}(\mathbf{Z}_s)[i] = \mathcal{E}\bigl(|H_t|_i(\mathbf{Z}_s)\bigr),
+$$
+
+where `|H_t|_i(Z_s)` is the per-DOF extraction (§3.4) applied to
+`phi_vec(Z_s)`.  The damped-Picard contraction condition becomes a
+**componentwise** statement: at iterate `k`, the LOCAL Lipschitz
+constant at DOF `i` is
+
+$$
+L_i^{(k)} \;\approx\; \left| \frac{\partial \mathcal{E}}{\partial |H_t|}
+\right|_{|H_t|_i^{(k)}}
+\cdot
+\left\| \frac{\partial |H_t|_i}{\partial \mathbf{Z}_s} \right\|_{\!\infty}.
+$$
+
+The first factor is the slope of the cell-solver `Z_s` vs `|H_t|`
+envelope; it is **bounded** away from 1 except at the BH knee, where
+`mu_r` drops sharply.  The second factor is the BIE sensitivity at
+DOF `i`; for hot-spot DOFs (where `|H_t|_i` is near `|H_t|_{max}`)
+this can be `2`–`3` in our IH benchmarks.
+
+**Consequence**: the damped-Picard update with a SINGLE `alpha` cannot
+simultaneously satisfy `alpha · L_i < 1` at every DOF.  Picking
+`alpha = 0.3` puts most DOFs deep in contraction but lets the
+hot-spot DOFs sit at `alpha · L_i ≈ 0.6–0.9` — still convergent in
+theory but the iteration "ringing" on those DOFs gives a `dZ_max` noise
+floor of `~5e-2 – 2e-1` that does not fall to `tol = 1e-3` in any
+reasonable number of iterations.  Empirical:
+
+| Damping `alpha` | `--esim-max-iter` | iters used | `dZ_max` last 5 iter | Integrated `P_wp` |
+|---|---|---|---|---|
+| 0.5 | 15 | 15 (cap) | 0.14 – 0.41 | 45.143 W |
+| 0.3 | 30 | 30 (cap) | 0.06 – 0.20 | 45.196 W |
+
+`P_wp` agrees to 0.12 % between the two runs (see
+[`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 6c), but the strict
+per-DOF criterion is missed in both cases.
+
+### 6.5 Anderson acceleration
+
+The natural remedy is **Anderson-type-II acceleration** (Anderson
+1965; Walker-Ni 2011), which augments damped Picard with a
+least-squares combination of the last `m` iterates to suppress the
+slowly-decaying modes that constant-alpha damping cannot reach.
+
+Setup.  Let `f_k = G(x_k) - x_k` be the residual at iteration `k`,
+and `m_k = min(m, k)` the available memory depth.  Define
+
+$$
+\Delta X_k = [\, x_{k-m_k+1} - x_{k-m_k},\; \ldots,\; x_k - x_{k-1}\,], \quad
+\Delta F_k = [\, f_{k-m_k+1} - f_{k-m_k},\; \ldots,\; f_k - f_{k-1}\,].
+$$
+
+Both have shape `(n_DOF, m_k)`.  Solve the unconstrained real
+least-squares
+
+$$
+\gamma_k \;=\; \mathrm{arg\,min}_{\gamma \in \mathbb{R}^{m_k}}
+   \;\bigl\| \Delta F_k \,\gamma - f_k \bigr\|_2,
+$$
+
+with the complex columns of `ΔF_k` and `f_k` stacked as
+`[\Re\,;\, \Im]` to keep `gamma` real (the convention for complex
+fixed-point iterations, Walker-Ni 2011 § 2.2 remark).  The
+damped-Anderson update is
+
+$$
+x_{k+1} \;=\; x_k \;+\; \alpha\, f_k
+   \;-\; \bigl(\Delta X_k + \alpha\, \Delta F_k\bigr)\,\gamma_k.
+$$
+
+`m = 0` recovers plain damped Picard.  `alpha = 1` (no damping) gives
+undamped Anderson.
+
+**Memory depth `m`.**  Empirically `m = 3–5` is sufficient for the IH
+benchmark; `m = 1` is too short to capture the per-DOF "ringing"
+mode; `m > 7` increases LSQ cost without further iteration savings
+on this problem.
+
+**Damping `alpha`.**  Keep `alpha = 0.5–0.7` even with Anderson on
+— the first few iterations have `m_k < m` so the early steps still
+need damping to avoid overshoot.
+
+**Why Anderson succeeds where damped Picard fails.**  Damped Picard
+applies the SAME contraction factor `alpha` to every mode of the
+linearised map `G'(x*)`; Anderson adapts its effective factor
+per-mode via the least-squares combination.  For the IH per-element
+problem the slow modes are localised at hot-spot DOFs; Anderson
+captures these in the `ΔF_k` history and zeros them out in the LSQ.
+
+**Implementation.**  The :class:`AndersonAccelerator` in
+[`src/radia/esim_anderson.py`](../../src/radia/esim_anderson.py) is
+a drop-in replacement for the `alpha * G(x) + (1-alpha) * x` update
+in the Karl loop.  Wired into `calc_inductance.py` behind the CLI
+flag `--esim-anderson-m N` (default `N = 0` = plain damped Picard).
+For typical IH benchmarks set `--esim-anderson-m 5` to drive
+`dZ_max` below `tol = 1e-3` within `~10` iterations.
+
 ---
 
 ## 7. Roadmap
@@ -1208,7 +1314,7 @@ If Karl ever diverges in production, the most likely cause is
 | **Per-element Z_s in `calc_fem_coilmesh`** | 2–3 weeks | Same physics, more complex implementation (Robin BC currently scalar). |
 | **Per-panel R_local from local curvature** | 1 week | Compute `R_local = 2 / (κ_1 + κ_2)` from surface mesh; pass to `esim.solve(H, R_local=…)`.  Closes § 3.1 limitation for moderately curved workpieces (gear roots, fillets). |
 | **Geometric mesh stretch** (`np.linspace` → graded) | 2 days | Closes § 2.1 limitation at ξ > 100. |
-| **Anderson acceleration of Karl outer loop** | 3 days | Replaces Picard relaxation; typical 2–4× iteration reduction at deep saturation. |
+| **Anderson acceleration of Karl outer loop** | ✅ done (radia ≥ 4.55.9) | Implemented in [`src/radia/esim_anderson.py`](../../src/radia/esim_anderson.py); enable with `--esim-anderson-m 5`.  Closes the per-DOF noise floor on the IH benchmark (§ 6.5). |
 | **Formal pytest for linear Bessel match** | 1 day | Locks § 5.1 numerically. |
 | **Stoll 1974 nonlinear-envelope cross-check** | 1 week | Closes § 5.3 third row. |
 | **Lavers–Biringer 2-sided plate cross-check** | 1 week | Closes § 5.3 fourth row. |
@@ -1223,6 +1329,8 @@ If Karl ever diverges in production, the most likely cause is
 - **Stoll, R. L.** *The Analysis of Eddy Currents.* Oxford University Press, 1974.  Reference for analytical Bessel-function comparisons in § 5.1.
 - **Krähenbühl, L. and Muller, D.** "Thin layers in electrical engineering — Example of shell models in analysing eddy-currents by boundary and finite element methods." *IEEE Trans. Magn.* **29**(2), 1993.  Foundational thin-shell SIBC reference.
 - **Dlala, E., Belahcen, A., Arkkio, A.** "Optimal Convergence of the Fixed-Point Method for Nonlinear Eddy-Current Problems." *IEEE Trans. Magn.* **44**(6), 2008, pp. 1318-1321.  Optimal contraction-factor analysis for the same Picard scheme; informs `--esim-relax` default of 0.5.
+- **Anderson, D. G.** "Iterative Procedures for Nonlinear Integral Equations." *J. ACM* **12**(4), 1965, pp. 547-560.  Original Anderson-acceleration paper.
+- **Walker, H. F. and Ni, P.** "Anderson Acceleration for Fixed-Point Iterations." *SIAM J. Numer. Anal.* **49**(4), 2011, pp. 1715-1735.  The modern derivation (Type II, ΔX-ΔF formulation) used in [`src/radia/esim_anderson.py`](../../src/radia/esim_anderson.py).
 - **Yuferev, S. and Ida, N.** *Surface Impedance Boundary Conditions: A Comprehensive Approach.* CRC Press, 2009.  Textbook reference for nonlinear SIBC iteration schemes.
 - **Bilicz, S., Badics, Z., Pávó, J.** "Nonlocal surface impedance boundary condition for wide-band eddy-current problems." *Studies in Applied Electromagnetics and Mechanics* (ISEM 2023).  Wide-band nonlocal extension (deferred to roadmap § 7).
 - **Wakao, S., Igarashi, H., Fujiwara, K., Kameari, A.** "Various Verifications of Eddy Current Analysis (Parts 1–9)." *T.IEE Japan* series, 2008–2018.  Series of linear-μ analytical references; Part 5 used for § 5.1 cylinder benchmark.
