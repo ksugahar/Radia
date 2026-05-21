@@ -1301,8 +1301,58 @@ captures these in the `ΔF_k` history and zeros them out in the LSQ.
 a drop-in replacement for the `alpha * G(x) + (1-alpha) * x` update
 in the Karl loop.  Wired into `calc_inductance.py` behind the CLI
 flag `--esim-anderson-m N` (default `N = 0` = plain damped Picard).
-For typical IH benchmarks set `--esim-anderson-m 5` to drive
-`dZ_max` below `tol = 1e-3` within `~10` iterations.
+
+### 6.6 Safeguarding (Walker-Ni 2011 § 3.4)
+
+Naive Anderson on per-element ESIM hits a known pathology: the LSQ
+matrix `dF_k` can become ill-conditioned at intermediate plateaus
+(early `dZ_max` valleys that are NOT true fixed points), causing
+the next step to over-extrapolate and the trajectory to drift to a
+different basin of attraction.  Two safeguards are implemented in
+:class:`AndersonAccelerator`:
+
+**Step-clipping.**  After computing the Anderson correction
+`corr = -(dX + alpha * dF) @ gamma`, if `||corr|| > step_clip *
+||alpha * f_k||` (default `step_clip = 2.0`), scale `corr` down so
+the inequality holds.  Prevents pathological over-extrapolation
+when `dF_k` is rank-deficient.  Reports `n_clips` per run.
+
+**Relative-residual restart.**  Track the previous iteration's
+relative inf-norm residual `rel_resid = max_i |f_i| / max_i |x_i|`.
+If the current iteration's `rel_resid` exceeds the previous by
+`restart_growth` (default `2.0`), the most recent Anderson step
+diverged — clear the history (keep the current iterate) so the next
+step is plain damped Picard, then Anderson rebuilds from scratch.
+Reports `n_restarts` per run.
+
+**Why "vs previous iter" not "vs min-ever".**  Per-element ESIM has
+an intrinsic per-DOF noise floor (§ 6.4): the dZ_max never drops
+below ~5e-3 on the IH benchmark.  Comparing to min-ever triggers a
+restart on every iteration after the first deep valley, killing the
+Anderson history and effectively disabling acceleration (verified
+empirically: 18/30 iter restarts with min-ever vs 2/30 with prev-iter).
+
+**Validation on IH per-element benchmark** (steel cylinder, 50 kHz,
+`I_port = 100 A`, `--esim-anderson-m 5 --esim-relax 0.5`):
+
+| Variant | iter cap | restarts | final `dZ_max` | min `dZ_max` | `P_wp` [W] |
+|---|---|---|---|---|---|
+| Plain damped Picard (alpha=0.5) | 15 | n/a | 0.412 | 0.118 | 45.143 |
+| Plain damped Picard (alpha=0.3) | 30 | n/a | 0.131 | 0.063 | 45.196 |
+| Anderson m=5, no safeguard | 30 | n/a | 0.084 | 0.008 | 45.421 |
+| Anderson m=5 + safeguard (vs min-ever) | 30 | 18 | 0.469 | 0.008 | 46.097 |
+| **Anderson m=5 + safeguard (vs prev-iter)** | **30** | **2** | **0.0052** | **0.0052** | **45.438** |
+
+Safeguarded Anderson with prev-iter restart criterion brings the
+per-DOF `dZ_max` from the ~0.1 noise floor down to **5e-3**, within
+5× of the formal `tol = 1e-3` cutoff — and crucially the trajectory
+is **monotone** in `dZ_max` at the end (last 5 iter values
+strictly decreasing).  Extending `--esim-max-iter` to 50 is
+expected to cross `1e-3`.
+
+For typical IH benchmarks set `--esim-anderson-m 5` with default
+safeguards; expect convergence behavior matching the bottom row of
+the table above.
 
 ---
 

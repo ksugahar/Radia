@@ -1337,6 +1337,9 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["impedance_model"] = wp_data["impedance_model"]
     out["esim_iterations"] = wp_data["esim_iterations"]
     out["esim_converged"] = wp_data["esim_converged"]
+    out["esim_anderson_m"] = wp_data.get("esim_anderson_m", 0)
+    out["esim_anderson_restarts"] = wp_data.get("esim_anderson_restarts", 0)
+    out["esim_anderson_clips"] = wp_data.get("esim_anderson_clips", 0)
     out["esim_history"] = wp_data["esim_history"]
     out["msh_file"] = wp_data["msh_file"]
     out["t_wp_mesh_s"] = wp_data["t_wp_mesh_s"]

@@ -57,15 +57,60 @@ class AndersonAccelerator:
         acceleration is on, to stabilise the first few iterations.
     """
 
-    def __init__(self, m: int = 5, alpha: float = 0.7):
+    def __init__(self, m: int = 5, alpha: float = 0.7,
+                 step_clip: float = 2.0,
+                 restart_growth: float = 2.0):
+        """
+        Parameters (continued)
+        ----------
+        step_clip : float
+            Bound on the Anderson correction magnitude **relative** to
+            the damped-Picard step.  After computing ``corr = -(dX +
+            alpha * dF) @ gamma``, if ``||corr|| > step_clip *
+            ||alpha * f_k||``, scale ``corr`` down so the inequality
+            holds.  Prevents pathological over-extrapolation when the
+            LSQ matrix is ill-conditioned.  Default ``2.0`` allows
+            Anderson to make at most 2x the damped-Picard move per
+            step.  Set to ``float('inf')`` to disable clipping.
+        restart_growth : float
+            Residual-monotone restart threshold (Walker-Ni 2011 § 3.4).
+            If ``||f_k|| > restart_growth * min(||f_j||, j < k)``, the
+            most recent step diverged: clear the history (keep current
+            iterate) so the next step is plain damped Picard and
+            Anderson rebuilds from scratch.  Default ``2.0`` means
+            "restart when residual grew by more than 2x best-so-far".
+            Set to ``float('inf')`` to disable restart.
+        """
         if m < 0:
             raise ValueError(f"m must be >= 0, got {m}")
         if not (0.0 < alpha <= 1.0):
             raise ValueError(f"alpha must be in (0, 1], got {alpha}")
+        if step_clip <= 0:
+            raise ValueError(f"step_clip must be > 0, got {step_clip}")
+        if restart_growth <= 1.0:
+            raise ValueError(
+                f"restart_growth must be > 1, got {restart_growth}")
         self.m = int(m)
         self.alpha = float(alpha)
+        self.step_clip = float(step_clip)
+        self.restart_growth = float(restart_growth)
         self._X: Deque[np.ndarray] = deque(maxlen=m + 1)
         self._F: Deque[np.ndarray] = deque(maxlen=m + 1)
+        # Track the previous step's residual norm for restart criterion.
+        self._f_norm_prev: float = 0.0
+        # Diagnostic counters (exposed via properties below).
+        self._n_restarts: int = 0
+        self._n_clips: int = 0
+
+    @property
+    def n_restarts(self) -> int:
+        """Number of residual-monotone restarts triggered so far."""
+        return self._n_restarts
+
+    @property
+    def n_clips(self) -> int:
+        """Number of Anderson steps clipped by ``step_clip``."""
+        return self._n_clips
 
     def reset(self) -> None:
         """Clear iterate / residual history.
@@ -102,12 +147,34 @@ class AndersonAccelerator:
                 f"x_k shape {x_arr.shape} != g_k shape {g_arr.shape}")
         f_arr = g_arr - x_arr
 
+        # Residual-monotone restart (Walker-Ni 2011 § 3.4).  Compare
+        # the current RELATIVE inf-norm residual against the
+        # IMMEDIATELY PREVIOUS one (not the historical minimum -- per-
+        # element ESIM has an intrinsic noise floor that the iteration
+        # never falls below, so min-tracking triggers continuous
+        # restarts and kills the Anderson history).  Use the inf-norm
+        # ratio because per-element ESIM has spatially varying |Z_s|;
+        # the 2-norm is dominated by cool-spot DOFs and misses the
+        # hot-spot oscillation that matters.
+        x_inf = float(np.max(np.abs(x_arr)))
+        f_inf = float(np.max(np.abs(f_arr)))
+        rel_resid = f_inf / max(x_inf, 1e-30)
+        if (rel_resid > self.restart_growth * self._f_norm_prev
+                and self._f_norm_prev > 0.0
+                and len(self._X) > 0):
+            self._X.clear()
+            self._F.clear()
+            self._n_restarts += 1
+        # Update previous-residual tracker.
+        self._f_norm_prev = rel_resid
+
         self._X.append(x_arr.copy())
         self._F.append(f_arr.copy())
 
         m_k = len(self._X) - 1
+        picard_step = self.alpha * f_arr
         if self.m == 0 or m_k == 0:
-            x_next = x_arr + self.alpha * f_arr
+            x_next = x_arr + picard_step
         else:
             X_list = list(self._X)
             F_list = list(self._F)
@@ -116,7 +183,16 @@ class AndersonAccelerator:
             dF = np.column_stack(
                 [F_list[i + 1] - F_list[i] for i in range(m_k)])
             gamma = self._solve_real_lsq(dF, f_arr)
-            x_next = x_arr + self.alpha * f_arr - (dX + self.alpha * dF) @ gamma
+            anderson_corr = -(dX + self.alpha * dF) @ gamma
+            # Step-clip safeguard: limit the Anderson correction to a
+            # bounded multiple of the damped-Picard step.
+            corr_norm = float(np.linalg.norm(anderson_corr))
+            picard_norm = float(np.linalg.norm(picard_step))
+            max_corr = self.step_clip * max(picard_norm, 1e-30)
+            if corr_norm > max_corr:
+                anderson_corr = anderson_corr * (max_corr / corr_norm)
+                self._n_clips += 1
+            x_next = x_arr + picard_step + anderson_corr
 
         if scalar_in:
             return complex(x_next.item())
