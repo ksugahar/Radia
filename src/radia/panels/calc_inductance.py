@@ -908,33 +908,39 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     # scope for now; warn instead.
     gf_q_wp = None
     q_per_dof = None
-    if bem.fes is not None:
-        # Spatial q_surf via BIE-calibrated direct Biot-Savart.
-        #
-        # Rationale (kubota 2026-05-21 follow-up):
-        #   - phi_inc via the legacy axis-ray + horizontal-ray path
-        #     integral has numerically-induced local-gradient errors
-        #     for real coils (leads + multi-loop topology); the BIE
-        #     solution phi_vec inherits those errors so the spatial
-        #     q distribution comes out scrambled (peak on coil-FAR
-        #     face instead of coil-NEAR).
-        #   - phi_inc via surface-edge LSQ has correct local gradient
-        #     but a different gauge from the BIE's training data, so
-        #     the BIE produces an artificially low P_wp (1.9 W vs the
-        #     ~6 W axis-ray result on the same geometry).
-        #   - Gauge correction (constant shift on phi_inc) does NOT
-        #     change BIE energy because the Lagrange multiplier
-        #     constraint absorbs constants.
-        #
-        # Resolution: separate concerns.  Use the BIE's global P_wp
-        # (= integrated power, well-trusted) as the magnitude and the
-        # direct Biot-Savart |H_t_inc|^2 as the spatial pattern.  This
-        # is the weak-coupling approximation rescaled to match the
-        # BIE integral.  For typical IH (workpiece inside coil bore,
-        # near-uniform shielding factor), |H_t|^2 spatial pattern is
-        # very close to |H_t_inc|^2 times a constant -- which is
-        # exactly the rescaling we apply.
-        from ngsolve import BND as _BND_imp
+    # Spatial q_surf via BIE-calibrated direct Biot-Savart.
+    #
+    # Rationale (kubota 2026-05-21 follow-up):
+    #   - phi_inc via the legacy axis-ray + horizontal-ray path
+    #     integral has numerically-induced local-gradient errors
+    #     for real coils (leads + multi-loop topology); the BIE
+    #     solution phi_vec inherits those errors so the spatial
+    #     q distribution comes out scrambled (peak on coil-FAR
+    #     face instead of coil-NEAR).
+    #   - phi_inc via surface-edge LSQ has correct local gradient
+    #     but a different gauge from the BIE's training data, so
+    #     the BIE produces an artificially low P_wp (1.9 W vs the
+    #     ~6 W axis-ray result on the same geometry).
+    #   - Gauge correction (constant shift on phi_inc) does NOT
+    #     change BIE energy because the Lagrange multiplier
+    #     constraint absorbs constants.
+    #
+    # Resolution: separate concerns.  Use the BIE's global P_wp
+    # (= integrated power, well-trusted) as the magnitude and the
+    # direct Biot-Savart |H_t_inc|^2 as the spatial pattern.  This
+    # is the weak-coupling approximation rescaled to match the
+    # BIE integral.  For typical IH (workpiece inside coil bore,
+    # near-uniform shielding factor), |H_t|^2 spatial pattern is
+    # very close to |H_t_inc|^2 times a constant -- which is
+    # exactly the rescaling we apply.
+    #
+    # P1 vs P2 (--h1-order): this path is INDEPENDENT of bem.fes
+    # because phi_vec is not used.  We only need wp_mesh (for
+    # vertex positions + element topology) and res_bem["P_density"]
+    # (scalar from the BIE solve).  Both are available regardless
+    # of basis_order.
+    if True:
+        from ngsolve import BND as _BND_imp, H1 as _H1_imp
         n_v = wp_mesh.nv
 
         # Collect triangle vertex indices + coords.
@@ -1004,14 +1010,18 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             # Biot-Savart distribution.
             scale = P_wp_local / I_norm
             q_per_dof = scale * H_t_sq
-            gf_q_wp = _GF(bem.fes)
+            # Build the wp_mesh-side GridFunction.  For basis_order=1
+            # this matches bem.fes; for basis_order>=2 (where bem.fes
+            # is None and the BIE uses Lagrange P2 on parent vol_mesh)
+            # we build a fresh P1 FES on wp_mesh -- the downstream
+            # vol_mesh transfer (via _wp_new_to_old / coord match)
+            # is by vertex anyway, independent of basis_order.
+            fes_q_local = _H1_imp(wp_mesh, order=1)
+            gf_q_wp = _GF(fes_q_local)
             gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
             progress("BEM",
                 f"qsurf: BIE-calibrated BS  scale={scale:.3e} "
                 f"(P_wp/∫|H_t|²)  ∫|H_t|²dS={I_norm:.3e}")
-    else:
-        progress("BEM",
-            "qsurf.sol skipped: basis_order>=2 path (phi on vol_mesh P2)")
 
     # 6. Workpiece scalar outputs
     A_wp = float(Integrate(CF(1), wp_mesh, VOL_or_BND=BND).real)
