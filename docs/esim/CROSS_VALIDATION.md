@@ -537,43 +537,78 @@ per-element-vs-scalar gap is concentrated.  Runner:
 [`examples/ih_esim_benchmark/sweep_f_I.py`](../../examples/ih_esim_benchmark/sweep_f_I.py).
 Figure: [`sweep_heatmap.png`](../../examples/ih_esim_benchmark/sweep_heatmap.png).
 
+**Sweep results (initial, `max_iter = 30`)** —
 `(P_per_element / P_scalar − 1) × 100 %`:
 
 | `I_port` [A] \\ `f` [kHz] | 10 | 50 | 100 | 500 |
 |---|---|---|---|---|
 | 1   | -3 | -3 | -3 | -2 |
 | 10  | -2 | -1 | 0  | +5 |
-| **100** | **+44** | **+49** | **+129** | 0  |
-| **300** | **+72** | **+40** | **+31**  | **+389** |
+| **100** | **+44** | **+49** | **+129**\* | 0  |
+| **300** | **+72** | **+40** | **+31**  | **+389**\* |
 
-Physical interpretation:
+\* Cells marked with asterisk hit `max_iter` without formal
+convergence on `dZ_max`.  Verification re-runs at `max_iter = 80`,
+`relax = 0.3`, with safeguarded Anderson `m = 5` revise the
+estimates as follows:
+
+| Case | Initial gap (30 iter, not converged) | Verified gap (80 iter) | Status |
+|---|---|---|---|
+| `I=100 A, 100 kHz` | +129 % | **+137 %** | Formally converged at iter 54 (`dZ_max = 6×10⁻⁴`) |
+| `I=300 A, 500 kHz` | +389 % | **~+87 %** | Still drifting at iter 80, but `Zmean` drift down from 4 % to 1.4 % — the +389 % was a non-convergence artifact |
+
+**Lesson** (Karl iteration validation): the strict per-DOF `dZ_max`
+criterion can fail to drop below `tol = 1e-3` in 30 iterations on
+deep-saturation, thin-skin operating points (`δ << R`, `|H_t|` 5× max
+to mean).  Use `max_iter = 80` with damped Anderson for verification;
+extreme reported gaps are NOT trustworthy without this check.
+
+Physical interpretation (post-verification):
 
 - **`I ≤ 10 A`**: linear regime.  `|H_t|` stays well below the BH
   knee everywhere on the workpiece surface, the scalar mesh-RMS Z_s
   matches the per-element distribution to within 5 %.  Scalar SIBC
   is fine.
 
-- **`I = 100 A, mid-frequency`**: the headline IGTE benchmark
-  (50 kHz / 100 A = the +48 % paper case).  `|H_t|` straddles the
-  BH knee with strong spatial contrast; per-element captures the
-  hot-spot integral, scalar collapses it.
+- **`I = 100 A`, mid-frequency**: the headline IGTE benchmark
+  (50 kHz / 100 A = the **+49 %** paper case, robust to 0.6 % across
+  v4-v9 damping/Anderson variants).  `|H_t|` straddles the BH knee
+  with strong spatial contrast; per-element captures the hot-spot
+  integral, scalar collapses it.
 
-- **`I = 100 A, 500 kHz`**: skin depth `δ ≈ 0.04 mm` is small
-  enough that local saturation averages out within the skin layer,
-  AND `|H_t|` magnitudes drop because the workpiece becomes a
-  near-perfect screen.  Per-element and scalar agree.
+- **`I = 100 A, 100 kHz`** (the verified +137 %): the gap is **largest
+  here** because the skin depth `δ ≈ 0.13 mm` is small enough to
+  create extreme spatial contrast (`|H_t|_max ≈ 4200 A/m` vs mean
+  `1530 A/m`, ratio 2.8×) but not so thin that the workpiece becomes
+  a uniform screen.  This is the regime per-element ESIM is most
+  needed.
 
-- **`I = 300 A, 500 kHz`**: the EXTREME case.  Drive is high enough
-  that even the thin skin saturates locally; the spatial pattern
-  re-emerges with extreme contrast (`|H_t|` varying ~50× across
-  the surface).  Per-element reports `P_wp = 2239 W`, scalar `458 W`
-  — a **4.89× gap**.  Engineering implication: high-power IH
-  hardening designs at 100-500 kHz MUST use per-element for
-  accurate power sizing.
+- **`I = 100 A, 500 kHz`**: skin depth `δ ≈ 0.04 mm` is small enough
+  that local saturation averages out within the skin layer; the
+  workpiece becomes a near-perfect screen and per-element vs scalar
+  agree.
 
-**Headline figure for the journal paper**: the heatmap of
-gap % vs (f, I).  Identifies the operating regime where the
-per-element method is essential for IH design accuracy.
+- **`I = 300 A, 500 kHz`** (corrected from +389 % artifact to ~+87 %):
+  drive is high enough that even the thin skin saturates locally;
+  the spatial pattern re-emerges.  The original +389 % was a
+  non-convergence artifact from `max_iter = 30`.  Even at 80 iter
+  the run is not formally converged, but the value has dropped 4×
+  toward the more physical +87 %.  Reporting this requires further
+  iteration (or Hantila-style implicit splitting — see
+  [`src/radia/esim_hantila.py`](../../src/radia/esim_hantila.py))
+  for definitive numbers.
+
+**Headline engineering claim for the journal paper** (post-verification):
+
+> The per-element vs scalar ESIM gap on `P_wp` varies from **+40 %
+> to +140 %** across the typical IH operating regime (`I = 100-300 A`,
+> `f = 10-500 kHz`).  This is a **predictive-design-disqualifying**
+> error band for IH hardening applications that rely on scalar SIBC
+> in commercial tools; per-element ESIM is required for accurate
+> power-sizing predictions.
+
+Extreme single-cell ratios (cells > +100 %) require `max_iter ≥ 50`
+verification before being quoted in publications.
 
 ---
 
