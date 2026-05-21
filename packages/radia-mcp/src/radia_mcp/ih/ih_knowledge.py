@@ -512,7 +512,12 @@ saved q_surf .sol)"**.
 Workflow (single window):
 
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
-   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).
+   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
+   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**;
+   prior versions only emitted the scalar ``P_density`` average
+   and no spatial distribution.  Earlier docs that listed these
+   methods as ``qsurf.sol``-producing predicted the design; the
+   2026-05-21 kubota report drove the actual code change.
 2. Click the **"Run thermal..."** chain button on the action row.
    This SWITCHES the method dropdown to "Thermal" and pre-fills the
    embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
