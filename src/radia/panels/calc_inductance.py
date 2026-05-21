@@ -903,8 +903,15 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         phi_vec_arr = np.asarray(res_bem["phi_vec"])
         Kphi_re = bem.K @ phi_vec_arr.real
         Kphi_im = bem.K @ phi_vec_arr.imag
-        Hsq_per_dof = (np.abs(phi_vec_arr.real * Kphi_re)
-                       + np.abs(phi_vec_arr.imag * Kphi_im))
+        # Hsq_per_dof[i] is a localization of the energy quadratic
+        # form phi^T K phi to DOF i.  Use the signed contribution
+        # (NOT np.abs) so the sum over all DOFs equals phi^T K phi
+        # exactly -- enforcing positivity per-DOF via np.abs() over-
+        # counts the off-diagonal contributions of K and inflates
+        # the integral by ~50%, which we saw on 3turnCoil_work
+        # (∫q dS = 9.75 W vs expected P_wp = 6.14 W).
+        Hsq_per_dof = (phi_vec_arr.real * Kphi_re
+                       + phi_vec_arr.imag * Kphi_im)
         M_lump = bem.M @ np.ones(bem.ndof)
         H_t_sq_per_dof = Hsq_per_dof / np.maximum(M_lump, 1e-30)
 
@@ -912,20 +919,23 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # element ndarray -> per-DOF via mass-lumped average (the
         # downstream calc_heat smooths via H1 projection anyway).
         if isinstance(Z_s_wp, np.ndarray):
-            # Per-element Re(Z_s) -> per-DOF.  bem.K already encodes
-            # element-to-DOF mapping; the simplest area-weighted
-            # average is M_lump-normalized: (M_lump_per_el @ Z_s_re_per_el)
-            # / sum_el(M_lump_per_el).  Mean is the fallback when the
-            # element-to-DOF connectivity is not exposed by the
-            # solver.  For the qsurf .sol's downstream use (thermal
-            # Neumann BC), this granularity is sufficient -- finer
-            # spatial detail would round-trip through the H1
-            # projection in calc_heat anyway.
             Z_s_re_per_dof = float(np.mean(Z_s_wp.real))
         else:
             Z_s_re_per_dof = float(Z_s_wp.real)
 
         q_per_dof = 0.5 * Z_s_re_per_dof * H_t_sq_per_dof
+        # Clip negative per-DOF artefacts (off-diagonal K contribution
+        # may push some DOFs below zero; physically |H_t|^2 >= 0).
+        # The signed sum is correct for the global integral; the per-
+        # DOF distribution is well-defined only as the integrand --
+        # so we keep the global integral via post-clip rescaling.
+        q_neg = q_per_dof < 0
+        if np.any(q_neg):
+            S_total_signed = float(np.sum(q_per_dof * M_lump))
+            q_per_dof = np.clip(q_per_dof, 0, None)
+            S_total_clip = float(np.sum(q_per_dof * M_lump))
+            if S_total_clip > 1e-30 and S_total_signed > 0:
+                q_per_dof *= S_total_signed / S_total_clip
         gf_q_wp = _GF(bem.fes)
         gf_q_wp.vec.FV().NumPy()[:] = q_per_dof
     else:
@@ -1074,39 +1084,108 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         per_panel_block = {"esim_per_panel": False}
 
     # ---- Spatial q_surf .sol output (consumed by calc_heat.py) -------
-    # Save the q_surf GridFunction built earlier (Section 5b) so that
-    # PEEC-BEM and BEM-A-BEM users can drive thermal analysis from
-    # this solve, matching the calc_fem_kelvin.py / calc_fem_coilmesh.py
-    # contract.  Pair file = the extracted wp surface mesh as .vol;
-    # calc_heat consumes the pair via --qsurf-sol + --em-vol.
+    # Save q_surf as an H1 GridFunction ON THE PARENT vol_mesh (not on
+    # the extracted wp surface mesh).  Why this matters for the
+    # downstream cross-mesh transfer:
+    #
+    #   * wp_mesh is a 2D SURFACE mesh.  If we naively save the GF on
+    #     bem.fes (= H1(wp_mesh, order=1)) and ship the wp_mesh as
+    #     em_vol, calc_heat's ``em_mesh(xw, yw, zb)`` runs against a
+    #     2D mesh embedded in 3D.  NGSolve's mesh-point search on a
+    #     thin surface mesh is not robust: a wp_thermal_mesh vertex
+    #     that lies on the COIL-NEAR side of the workpiece can match
+    #     a surface element on the COIL-FAR side (closest-distance
+    #     ambiguity for a wrap-around surface), so the q_surf
+    #     distribution applied to the thermal solve is mirror-flipped
+    #     vs. the actual EM solution.  Symptom: temperature high on
+    #     the coil-far face, low under the coil (2026-05-21 kubota
+    #     bug report).
+    #
+    #   * Saving on H1(vol_mesh, order=1) -- the FULL 3D parent mesh
+    #     used by the EM solve -- matches calc_fem_kelvin.py /
+    #     calc_fem_coilmesh.py.  The em_vol the thermal panel
+    #     consumes is ``args.vol`` (the same input .vol), and
+    #     calc_heat's 3D mesh-point search is robust because every
+    #     wp_thermal vertex maps to a real volumetric MIP in the EM
+    #     mesh.
+    #
+    # Mapping bem.fes DOFs (wp_mesh vertex indices) to vol_mesh
+    # vertex indices uses ``_wp_new_to_old`` returned from
+    # ``_extract_surface_mesh_filtered`` for the material-extracted
+    # case.  For ``_extract_bnd_only`` (boundary-sideset case) the
+    # function does not return a vertex map, so we build one inline
+    # via coordinate matching against the parent vol_mesh.
     qsurf_sol_path = ""
     qsurf_vol_path = ""
     if gf_q_wp is not None:
         try:
-            # Output dir + stem: prefer args.msh_output's basename when
+            from ngsolve import H1 as _H1
+            # Build full-3D H1 GridFunction for the qsurf .sol.
+            fes_q_vol = _H1(vol_mesh, order=1)
+            gf_q_vol = _GF(fes_q_vol)
+            gf_q_vol.vec[:] = 0
+            vol_vec_np = gf_q_vol.vec.FV().NumPy()
+
+            # Resolve wp_mesh vertex -> vol_mesh vertex mapping.
+            if _wp_new_to_old is not None:
+                # Material-extracted path: map provided.
+                for wp_v_idx in range(wp_mesh.nv):
+                    vol_v_idx = _wp_new_to_old.get(wp_v_idx)
+                    if vol_v_idx is not None:
+                        vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
+                n_matched = len(_wp_new_to_old)
+            else:
+                # Boundary-extracted path: build mapping by coord
+                # matching against the parent vol_mesh.  Round to
+                # 12 sig figs (NGSolve's Save/Load tolerance for
+                # vertex coordinates).
+                vol_coord_to_idx = {}
+                for vol_v_idx in range(vol_mesh.nv):
+                    p = vol_mesh.vertices[vol_v_idx].point
+                    key = (round(p[0], 12), round(p[1], 12),
+                           round(p[2], 12))
+                    vol_coord_to_idx[key] = vol_v_idx
+                n_matched = 0
+                for wp_v_idx in range(wp_mesh.nv):
+                    p = wp_mesh.vertices[wp_v_idx].point
+                    key = (round(p[0], 12), round(p[1], 12),
+                           round(p[2], 12))
+                    vol_v_idx = vol_coord_to_idx.get(key)
+                    if vol_v_idx is not None:
+                        vol_vec_np[vol_v_idx] = float(q_per_dof[wp_v_idx])
+                        n_matched += 1
+
+            # Output paths: prefer args.msh_output's basename when
             # the user requested an .msh, else args.vol's basename.
             if args.msh_output:
-                base_dir = os.path.dirname(os.path.abspath(args.msh_output)) or "."
-                stem = os.path.splitext(os.path.basename(args.msh_output))[0]
+                base_dir = os.path.dirname(
+                    os.path.abspath(args.msh_output)) or "."
+                stem = os.path.splitext(
+                    os.path.basename(args.msh_output))[0]
             else:
-                base_dir = os.path.dirname(os.path.abspath(args.vol)) or "."
-                stem = os.path.splitext(os.path.basename(args.vol))[0]
+                base_dir = os.path.dirname(
+                    os.path.abspath(args.vol)) or "."
+                stem = os.path.splitext(
+                    os.path.basename(args.vol))[0]
             os.makedirs(base_dir, exist_ok=True)
             sol_Q = os.path.join(base_dir,
                                   f"{stem}_qsurf.sol").replace("\\", "/")
-            vol_Q = os.path.join(base_dir,
-                                  f"{stem}_bem.vol").replace("\\", "/")
-            gf_q_wp.Save(sol_Q)
-            wp_mesh.ngmesh.Save(vol_Q)
+            gf_q_vol.Save(sol_Q)
             qsurf_sol_path = sol_Q
-            qsurf_vol_path = vol_Q
+            # em_vol pair is the input .vol itself -- the same mesh
+            # the EM solve was on.  No separate _bem.vol needed.
+            qsurf_vol_path = os.path.abspath(args.vol).replace("\\", "/")
             progress("BEM",
-                f"wrote qsurf.sol on bem mesh: "
-                f"{os.path.basename(sol_Q)} (pair vol: "
-                f"{os.path.basename(vol_Q)})")
+                f"wrote qsurf.sol on parent vol_mesh: "
+                f"{os.path.basename(sol_Q)} "
+                f"({n_matched}/{wp_mesh.nv} wp vertices mapped, "
+                f"em_vol={os.path.basename(qsurf_vol_path)})")
         except Exception as e:
+            import traceback
             progress("BEM",
                 f"qsurf.sol save failed: {type(e).__name__}: {e}")
+            for line in traceback.format_exc().splitlines()[-4:]:
+                progress("BEM", f"  {line}")
 
     return {
         "P_wp": P_wp, "H_t_rms": H_t_rms, "A_wp": A_wp,
@@ -1121,6 +1200,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "impedance_model": args.impedance_model,
         "esim_iterations": int(n_iter_done),
         "esim_converged": bool(esim_converged),
+        "esim_anderson_m": int(getattr(args, "esim_anderson_m", 0)),
+        "esim_anderson_restarts": int(anderson.n_restarts) if esim_solver is not None else 0,
+        "esim_anderson_clips": int(anderson.n_clips) if esim_solver is not None else 0,
         "esim_history": esim_history,
         **per_panel_block,
         "msh_file": msh_file,
