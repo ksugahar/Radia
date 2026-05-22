@@ -490,26 +490,50 @@ at each DOF.
 For scalar Karl we use the mesh-RMS:
 
     |H_t|_rms² = (phi^T K phi) / area
-              = sum_i [ phi_i · (K phi)_i ] / area
+              = ∫_Γ |∇_s phi|² dS / area
 
-For per-DOF Karl we localise the same form: the i-th summand of
-`phi^T K phi` is `phi_i · (K phi)_i`.  Dividing by the i-th lumped
-mass `M_lump[i] = (M · 1)[i]` (row sum of M, = effective area of
-basis function i) gives a per-DOF density:
+For per-DOF Karl we need a **physically-correct local gradient norm**
+at each vertex.  The current implementation
+([`extract_H_t_per_dof_grad`](../../src/radia/bem_sibc_solver.py)
+since v4.69.x+) uses the manual triangle-wise P1 gradient:
 
-    |H_t at i|² ≈ |phi_i · (K phi)_i| / M_lump[i]
-              + (same for imag(phi))
+For each surface triangle with vertices `(p_0, p_1, p_2)`, the
+linear interpolant of `phi` has constant in-plane gradient:
 
-`abs()` is needed because each term `phi_i · (K phi)_i` can be
-signed; only the total sum is guaranteed nonneg.
+    ∇_S phi |_tri = Σ_{j=0,1,2} phi_j · ∇N_j
 
-This is what
-[`calc_inductance.py`](../../src/radia/panels/calc_inductance.py)
-computes inside the Karl loop.  It is consistent with the scalar
-formula in the limit of a uniform basis-function gradient — when
-all `(K phi)_i / M_lump_i` ratios are equal, the per-DOF and scalar
-mesh-RMS values coincide to floating-point precision (verified by
-the unit-uniform-Z_s smoke test).
+with the P1 basis-function gradients
+
+    ∇N_0 = (p_2 - p_1) × n̂ / (2 area),
+    ∇N_1 = (p_0 - p_2) × n̂ / (2 area),
+    ∇N_2 = (p_1 - p_0) × n̂ / (2 area),
+
+(`n̂` = outward unit normal).  Each `∇N_i` is in-plane perpendicular
+to the opposite edge with magnitude `1/h_i`, the altitude from
+vertex `i`.  Then `|∇phi|²` per triangle is summed area-weighted
+into the three incident vertices, giving the per-vertex value
+`|H_t|_i²`.
+
+**Bug history (v4.66.0 → v4.69.x)**: an earlier implementation used
+a Galerkin localization `|H_t at i|² ≈ |phi_i · (K phi)_i| / M_lump_i`,
+treating each diagonal entry of `phi^T K phi` as the per-DOF density.
+Although this integrates to the correct total `phi^T K phi`, the
+per-DOF distribution **samples the surface Laplacian of `phi`, not
+its gradient norm**.  The Laplacian peaks at edge / corner DOFs
+where the curvature of `phi` is high, not at the saturation
+hot-spots where the field `|H_t|` is large.  Feeding the Laplacian-
+sample into the cell solver returned wrong local `Z_s` values, and
+inflated the per-element vs scalar `P_wp` gap by ~2-3× in the IH
+regime (sign-reversed in some cases).  The fix (commit `630527d4`)
+replaced the Galerkin sample with the triangle-gradient formula
+above and matches the v4.67.0 fix already applied to the
+spatial `q_surf` output.  See
+[`docs/esim/CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 6d for the
+gap-reframing analysis.
+
+In the limit of uniform `|∇phi|` over the mesh (e.g. linear-`mu_r`
+regime with uniform external `H_t`), the per-DOF formula reduces to
+the scalar mesh-RMS to floating-point precision.
 
 ### 3.5 The infrastructure for per-panel curvature exists but is not wired in
 
