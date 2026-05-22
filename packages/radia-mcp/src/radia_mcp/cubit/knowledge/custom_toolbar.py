@@ -4,14 +4,25 @@ Custom Toolbar / In-Cubit PySide6 knowledge base.
 Covers the in-process Cubit Python + PySide6 workflow for building custom
 toolbars, dialogs, and encapsulated multi-step workflows.
 
-Source: Coreform webinar "How to create a custom GUI in Coreform Cubit (Intro)"
-        + Coreform 2025.8 release (PySide6 shipped in distribution).
+Sources:
+  - Coreform webinar "How to create a custom GUI in Coreform Cubit (Intro)"
+    https://www.youtube.com/watch?v=TnZyZHDMOwA  (Carl McKelvey)
+  - Coreform 2025.8 release (PySide6 shipped in distribution).
+  - Coreform examples repo: https://github.com/coreform-llc
+    (DAGMC toolbar, tire cross-section toolbar -- both .tar.gz packaged).
 
-NOTE: This is *different* from the Radia-NGSolve analysis panels described in
-`panel_conventions_knowledge.py`. Those panels are standalone PySide6 apps
-running in Python 3.12 and launching Cubit as a separate process. The
-knowledge here covers PySide6 code that runs *inside* Cubit's embedded
-Python 3.10 interpreter, bound to Cubit's own Qt main window.
+NOTE: This is *different* from two adjacent topics:
+  (a) the Radia-NGSolve analysis panels described in `panel_conventions.py`
+      -- those are standalone PySide6 apps running in Python 3.12 and
+      launching Cubit as a separate process.  The knowledge here covers
+      PySide6 code that runs *inside* Cubit's embedded Python 3.10
+      interpreter, bound to Cubit's own Qt main window.
+  (b) the C++ SDK plugin approach described in `cpp_sdk.py` -- that is for
+      deep customization (new command panels with navigation nodes, new
+      command-line verbs with hotkeys, deep menu surgery) where Python
+      cannot reach.  Use the Python toolbar path here whenever it
+      suffices; reach for the C++ SDK only when a hotkey-bound new
+      command or a fully custom navigation-node command panel is needed.
 """
 
 TOOLBAR_OVERVIEW = """
