@@ -39,7 +39,7 @@ class ScalarBIESIBCSolver:
                   intree_singular_n_q=8, intree_regular_quad_degree=11,
                   use_intree_hacapk=False, hacapk_aca_eps=1e-10,
                   hacapk_leaf=64, hacapk_eta=2.0,
-                  bnd_label=None):
+                  bnd_label=None, log_fn=None):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -62,15 +62,29 @@ class ScalarBIESIBCSolver:
                 with LinearOperator wrappers).  ~50x faster for typical
                 IH wp meshes -- recommended for new code.
             bnd_label: optional NGSolve boundary label name to filter BND
-                elements by.  Required when ``mesh`` is the parent volume
+                element by.  Required when ``mesh`` is the parent volume
                 mesh and only a subset of its boundary belongs to the
                 workpiece (e.g. ``bnd_label="sibc"`` selects the SIBC
                 sideset only).  Only consumed by the in-tree paths
                 (``use_intree_bem=True``); the ngsolve.bem path uses
                 ``ds`` over all BND.
+            log_fn: optional progress callback ``log_fn(tag, msg)`` used
+                to surface assembly-phase boundaries to the panel debug
+                log + console.  When None (default) the solver is silent
+                -- backwards compatible for non-panel callers / tests.
+                Caller should pass ``calc_common.progress`` for the IH
+                panel pipeline.  Phases logged: SLDL assembly (C++ vs
+                Python), mass / stiffness assembly, HACApK compression.
         """
         from ngsolve import (H1, BilinearForm, GridFunction, ds, grad,
                              TaskManager, InnerProduct)
+
+        # Phase log (default no-op so non-panel callers stay silent).
+        if log_fn is None:
+            def _log_phase(_tag, _msg):
+                pass
+        else:
+            _log_phase = log_fn
 
         self.mesh = mesh
         self.order = order
@@ -88,12 +102,18 @@ class ScalarBIESIBCSolver:
             # Skip NGSolve FES creation entirely.
             self.fes = None
             t0 = time.perf_counter()
+            _log_phase("BEM",
+                f"Lagrange-P2 path: bnd_label={bnd_label!r}, "
+                f"geom_order={intree_geom_order}")
             self._init_lagrange_p2_path(
                 mesh, order, intree_geom_order,
                 intree_singular_n_q, intree_regular_quad_degree,
                 use_intree_hacapk, hacapk_aca_eps, hacapk_leaf, hacapk_eta,
-                bnd_label=bnd_label)
+                bnd_label=bnd_label, log_fn=log_fn)
             self.t_assembly = time.perf_counter() - t0
+            _log_phase("BEM",
+                f"Lagrange-P2 path done (ndof={self.ndof}, "
+                f"{self.t_assembly:.1f}s)")
             return
 
         # H1 on surface (P1, or order>=2 with use_intree_bem=False)
@@ -111,14 +131,24 @@ class ScalarBIESIBCSolver:
             # Galerkin) when available -- pure-Python fallback only when
             # the C++ symbol is missing (older wheel without Phase 1.9).
             from radia.bem.sibc_hacapk import extract_surface_curved
+            _t_ext = time.perf_counter()
             verts, tris, v_global, tri_p2 = extract_surface_curved(
                 mesh, geom_order=intree_geom_order)
+            _log_phase("BEM",
+                f"extract_surface_curved: {len(tris)} tris, {len(verts)} verts "
+                f"(geom_order={intree_geom_order}, "
+                f"{time.perf_counter()-_t_ext:.1f}s)")
             try:
                 from radia import _radia_pybind as _rpb
                 _cpp_assemble = _rpb._AssembleSLDL_Galerkin
             except (ImportError, AttributeError):
                 _cpp_assemble = None
+            _t_sldl = time.perf_counter()
             if _cpp_assemble is not None:
+                _log_phase("BEM",
+                    f"SLDL Galerkin assembly: C++ kernel, "
+                    f"{len(tris)} tris, quad_deg={intree_regular_quad_degree}, "
+                    f"sing_n_q={intree_singular_n_q}")
                 v_arr = np.ascontiguousarray(verts, dtype=np.float64)
                 t_arr = np.ascontiguousarray(tris, dtype=np.int64)
                 p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
@@ -128,6 +158,10 @@ class ScalarBIESIBCSolver:
                     intree_singular_n_q,
                     0)   # n_threads=0 -> OpenMP default
             else:
+                _log_phase("BEM",
+                    f"SLDL Galerkin assembly: pure-Python fallback "
+                    f"(C++ _AssembleSLDL_Galerkin not available -- slow!), "
+                    f"{len(tris)} tris")
                 from radia.bem.sibc_hacapk import (
                     assemble_SL_dense_curved, assemble_DL_dense_curved)
                 SL_loc = assemble_SL_dense_curved(
@@ -138,6 +172,9 @@ class ScalarBIESIBCSolver:
                     verts, tris, tri_p2,
                     regular_quad_degree=intree_regular_quad_degree,
                     singular_n_q=intree_singular_n_q)
+            _log_phase("BEM",
+                f"SLDL Galerkin assembly done "
+                f"({time.perf_counter()-_t_sldl:.1f}s)")
             # Lift to full ndof basis (interior vertices contribute zero
             # rows/cols since their hat is 0 on BND).
             self.SL = np.zeros((ndof, ndof))
@@ -159,6 +196,11 @@ class ScalarBIESIBCSolver:
             self._SL_hacapk = None
             self._DL_hacapk = None
             if use_intree_hacapk:
+                _t_hca = time.perf_counter()
+                _log_phase("BEM",
+                    f"HACApK compress: SL + DL, ndof={ndof}, "
+                    f"aca_eps={hacapk_aca_eps}, leaf={int(hacapk_leaf)}, "
+                    f"eta={hacapk_eta}")
                 from radia import _radia_pybind as _rpb_h
                 # Build coordinate array sized for the FULL ndof; for
                 # interior vertices that don't appear in BND we use the
@@ -182,6 +224,9 @@ class ScalarBIESIBCSolver:
                     leaf_size=int(hacapk_leaf),
                     eta=hacapk_eta,
                     max_rank=-1, print_level=0)
+                _log_phase("BEM",
+                    f"HACApK compress done "
+                    f"({time.perf_counter()-_t_hca:.1f}s)")
         else:
             from ngsolve.bem import LaplaceDL, LaplaceSL
             # BEM operators.  Probed 2026-04-29 on N=2477 wp:
@@ -211,6 +256,8 @@ class ScalarBIESIBCSolver:
                 self.SL = None
 
         # Surface mass M
+        _t_mk = time.perf_counter()
+        _log_phase("BEM", f"mass + stiffness assembly (ndof={ndof})")
         mass_bf = BilinearForm(self.fes)
         mass_bf += u.Trace() * v.Trace() * ds
         mass_bf.Assemble()
@@ -228,6 +275,9 @@ class ScalarBIESIBCSolver:
         for r_, c_, val in zip(rows, cols, vals):
             self.K[int(r_), int(c_)] = val
 
+        _log_phase("BEM",
+            f"mass + stiffness done; M_inv "
+            f"({time.perf_counter()-_t_mk:.1f}s)")
         self.M_inv = np.linalg.inv(self.M)
 
         # Gauge vector: <1, v>_S for Lagrange multiplier
@@ -241,7 +291,7 @@ class ScalarBIESIBCSolver:
                                 intree_regular_quad_degree,
                                 use_intree_hacapk,
                                 hacapk_aca_eps, hacapk_leaf, hacapk_eta,
-                                bnd_label=None):
+                                bnd_label=None, log_fn=None):
         """Build SL, DL, M, K, gauge entirely in Lagrange P2 basis.
 
         Bypasses NGSolve's H1 hierarchical FES so that all matrices are
