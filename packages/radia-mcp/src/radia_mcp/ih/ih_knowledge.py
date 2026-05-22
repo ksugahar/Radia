@@ -530,8 +530,22 @@ Workflow (single window):
        branch cut).  The BIE provides only P_wp (its trusted
        global integral).  Result: ∫q dS = P_wp exactly (energy
        preserved) AND spatial peak matches the true |H_t|² peak.
+     - **4.69.0**: P2 BIE outward-orientation guard.  The Lagrange-
+       P2 path (``--h1-order 2``, curved-Tri6 geometry) was
+       producing a ~1500x P_wp discrepancy vs the P1 reference
+       because ``bem/sibc_hacapk.py::extract_surface_p2_lagrange``
+       used the vol_mesh's natural BND triangle orientation -- on
+       a workpiece-as-hole sibc this points INWARD toward the hole,
+       flipping the sign of the Galerkin trace(DL) integral.  Fixed
+       by mirroring the P1 path's outward-flip logic against the wp
+       centroid (commit 57381c78, "Release v4.69.0 / radia-mcp-
+       v0.64.0 -- P2 BIE outward orientation fix").  After the fix,
+       P1 = 6.1386 W vs P2 = 6.1565 W on 3turnCoil_work (0.29%
+       agreement); the curved-P2 path is now production-ready for
+       basis_order=2 BEM workpieces.
 
-   Use 4.68.0+ for thermal analysis on BEM-derived qsurf.
+   Use 4.68.0+ for thermal analysis on BEM-derived qsurf; use
+   4.69.0+ if you want to enable ``--h1-order 2`` curved BEM.
    Verification on 3turnCoil_work (PEEC-BEM, 150 kHz, 100 A):
      z of max q   = +11.25 mm (matches Biot-Savart peak exactly)
      ∫ q dS       = 6.1386 W (= BIE P_wp)

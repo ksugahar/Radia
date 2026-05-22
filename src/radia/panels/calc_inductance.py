@@ -480,6 +480,7 @@ def _solve_coil_bem_a(args):
         fes_order=0,
         solver=saddle,
         Z_s_re=Z_s_coil_re,
+        log_fn=progress,
     )
     t_solve = time.perf_counter() - t0
     if "error" in res:
@@ -487,9 +488,20 @@ def _solve_coil_bem_a(args):
     L_coil = float(res["L"])
     R_coil = float(res["R"])
     residual = float(res["residual"])
+    # DoF breakdown of the BEM-A saddle system (HDivSurface RT0 J + SurfaceL2
+    # divergence multiplier f).  Total saddle size = n_J + n_f - 1 (the -1
+    # comes from the Lagrange constraint reduction inside the solver, where
+    # one row of the divergence multiplier is dropped to fix the gauge).
+    coil_n_J = int(res.get("n_J", 0))
+    coil_n_f = int(res.get("n_f", 0))
+    coil_saddle_ndof = coil_n_J + coil_n_f - 1 if coil_n_J and coil_n_f else 0
     progress("BEMA",
         f"L_coil={L_coil * 1e9:.3f} nH, R_coil(SIBC)={R_coil * 1e3:.4f} mΩ "
         f"residual={residual:.2e} ({t_solve:.1f}s)")
+    progress("BEMA",
+        f"coil DoF: n_J={coil_n_J} (HDivSurface RT0), n_f={coil_n_f} "
+        f"(SurfaceL2 P0), saddle_ndof={coil_saddle_ndof} "
+        f"on {len(coil_tris)} triangles / {coil_mesh.nv} vertices")
 
     # Per-triangle J_s vectors at centroids (workpiece bridge prep).
     # NGSolve element-wise Integrate of gf_J components / element area.
@@ -506,6 +518,9 @@ def _solve_coil_bem_a(args):
         "coil_mesh_n_tris": int(len(coil_tris)),
         "coil_mesh_n_src_tris": int(src_mask.sum()),
         "coil_mesh_n_snk_tris": int(snk_mask.sum()),
+        "coil_n_J": coil_n_J,
+        "coil_n_f": coil_n_f,
+        "coil_saddle_ndof": coil_saddle_ndof,
         "bem_a_residual": residual,
         "t_coil_topology_s": t_mesh,
         "t_coil_solve_s": t_solve,
@@ -670,7 +685,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             bem_input_mesh, order=basis_order, assemble_dense=True,
             use_intree_bem=True, intree_geom_order=vol_curve_order,
             intree_singular_n_q=6, intree_regular_quad_degree=7,
-            bnd_label=bem_bnd_label)
+            bnd_label=bem_bnd_label, log_fn=progress)
     elif args.wp_bem_backend == "hacapk":
         bem = ScalarBIESIBCSolver(
             bem_input_mesh, order=basis_order, assemble_dense=True,
@@ -679,13 +694,42 @@ def _solve_workpiece_weak_coupled(args, coil_data):
             use_intree_hacapk=True,
             hacapk_aca_eps=args.wp_aca_eps,
             hacapk_leaf=64, hacapk_eta=2.0,
-            bnd_label=bem_bnd_label)
+            bnd_label=bem_bnd_label, log_fn=progress)
     else:
         raise ValueError(
             f"unknown --wp-bem-backend {args.wp_bem_backend!r}; "
             f"supported: 'hacapk' (production), 'intree-dense' (debug).")
     t_asm = time.perf_counter() - t0
-    progress("BEM", f"ndof={bem.ndof} ({t_asm:.1f}s)")
+    # wp DoF context: at P1 the in-tree H1 hat assembler uses one DoF per
+    # vertex of the EXTRACTED wp_mesh, at P2 the in-tree Lagrange-P2 path
+    # consumes the parent vol_mesh's curved Tri6 nodes (vertex + edge DoFs
+    # on the wp_label sideset).  Printing the triangle count alongside
+    # ndof makes the basis-vs-mesh density relationship visible in the
+    # log (no need to grep both upstream "wp nv=..." and "ndof=...").
+    wp_ne_bnd = int(wp_mesh.GetNE(BND))
+    progress("BEM",
+        f"ndof={bem.ndof} (P{basis_order} on {wp_ne_bnd} BND triangles, "
+        f"{wp_mesh.nv} wp_mesh vertices) ({t_asm:.1f}s)")
+
+    # Consolidated DoF summary -- one line that shows the full problem
+    # size so users grepping logs after the fact can see coil + wp +
+    # total in one place (instead of stitching together upstream
+    # "BEMA" lines from _solve_coil_bem_a + this "BEM" line).
+    coil_src = coil_data.get("source_type", "?")
+    if coil_src == "filament":
+        coil_dof_str = (f"PEEC filament n={coil_data.get('n_filaments', 0)}")
+        total_dof = int(coil_data.get("n_filaments", 0)) + int(bem.ndof)
+    elif coil_src == "surface":
+        c_saddle = int(coil_data.get("coil_saddle_ndof", 0))
+        c_tris = int(coil_data.get("coil_mesh_n_tris", 0))
+        coil_dof_str = f"BEM-A saddle_ndof={c_saddle} on {c_tris} tri"
+        total_dof = c_saddle + int(bem.ndof)
+    else:
+        coil_dof_str = f"{coil_src}"
+        total_dof = int(bem.ndof)
+    progress("BEM",
+        f"SUMMARY: coil[{coil_dof_str}] + wp[ndof={bem.ndof} "
+        f"P{basis_order} {wp_ne_bnd}tri] => total_DoF={total_dof}")
 
     # 4. phi_inc on workpiece — branch on coil source type
     if getattr(bem, "_intree_lagrange_p2", False):
@@ -1275,6 +1319,9 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_dissipation_R_mOhm": wp_dissipation_R_mOhm,
         "wp_mesh_nv": int(wp_mesh.nv),
         "wp_mesh_n_tris": int(wp_mesh.GetNE(BND)),
+        "wp_ndof": int(bem.ndof),
+        "wp_basis_order": int(basis_order),
+        "wp_vol_curve_order": int(vol_curve_order),
         "wp_gmres_info": int(info),
         "Z_s_wp_real": Z_s_real_out,
         "Z_s_wp_imag": Z_s_imag_out,
@@ -1385,6 +1432,11 @@ def _assemble_vacuum_output(args, coil_data):
         out["coil_mesh_n_tris"] = int(coil_data["coil_mesh_n_tris"])
         out["coil_mesh_n_src_tris"] = int(coil_data["coil_mesh_n_src_tris"])
         out["coil_mesh_n_snk_tris"] = int(coil_data["coil_mesh_n_snk_tris"])
+        # BEM-A saddle DoF breakdown (matched to the "BEMA coil DoF" log
+        # line so users grepping the JSON have the same numbers).
+        out["coil_n_J"] = int(coil_data.get("coil_n_J", 0))
+        out["coil_n_f"] = int(coil_data.get("coil_n_f", 0))
+        out["coil_saddle_ndof"] = int(coil_data.get("coil_saddle_ndof", 0))
         out["bem_a_residual"] = float(coil_data["bem_a_residual"])
     return out
 
@@ -1412,6 +1464,11 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["wp_dissipation_R_mOhm"] = wp_data["wp_dissipation_R_mOhm"]
     out["wp_mesh_nv"] = wp_data["wp_mesh_nv"]
     out["wp_mesh_n_tris"] = wp_data["wp_mesh_n_tris"]
+    # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
+    # so the JSON retains the same numbers users see in the console log.
+    out["wp_ndof"] = int(wp_data.get("wp_ndof", 0))
+    out["wp_basis_order"] = int(wp_data.get("wp_basis_order", 1))
+    out["wp_vol_curve_order"] = int(wp_data.get("wp_vol_curve_order", 1))
     out["wp_gmres_info"] = wp_data["wp_gmres_info"]
     out["Z_s_wp_real"] = wp_data["Z_s_wp_real"]
     out["Z_s_wp_imag"] = wp_data["Z_s_wp_imag"]
