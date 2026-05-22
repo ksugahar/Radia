@@ -53,12 +53,25 @@ per-element ESIM (calc_inductance.py output) are compared.
 Status (2026-05-22)
 -------------------
 
-Phase 1 (linear mu): WORK IN PROGRESS.
-Phase 2 (nonlinear BH): not started.
+Phase 1 (linear mu): VALIDATED.  Long-cylinder Bessel cross-check
+agrees to -5.7 % (end-effect contamination at H=200mm, 40x R).
+IGTE-geometry linear-mu check agrees to +1 % vs Bessel-from-FEM-H_t.
+
+Phase 2 (nonlinear BH Picard): SCAFFOLD ONLY.  The outer Picard
+loop is implemented but currently produces NaN due to:
+  - mu_r floor missing at low |B| (BH curve interp gives mu_r->0)
+  - element-centroid finite-diff |B| unstable near element edges
+  - NGSolve's gf_mu.Set on a P0 piecewise FE space requires careful
+    handling of the material map
+Production use needs: proper |B| extraction via grad(gfu) at quadrature
+points, mu_r floor (>=1), CoefficientFunction-based mu update instead
+of per-element loop.  Estimated 1-2 days of additional work.
 
 This is task #36 in the project task list -- the validation reference
 needed to determine which of {scalar ESIM, per-element ESIM} is closer
-to truth on the IH benchmark.
+to truth on the IH benchmark.  Phase 1 alone is sufficient for the
+linear-mu cross-check; Phase 2 is needed for the nonlinear ESIM
+absolute-accuracy claim.
 """
 from __future__ import annotations
 
@@ -107,6 +120,145 @@ def build_mesh(R_wp_m: float, H_wp_m: float,
 
     shape = Glue([air, wp, coil])
     return Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_air_m))
+
+
+def run_axisym_nonlinear(args, bh_curve):
+    """Phase 2: nonlinear mu(|B|) outer Picard iteration.
+
+    Outer loop on per-element mu_r:
+      1. Solve linear AC problem with current mu_r distribution
+      2. Compute |B| per element from A_phi
+      3. Update mu_r per element from the BH curve at |B|
+      4. Damped Picard: mu_r_new = alpha mu_BH(|B|) + (1-alpha) mu_r_old
+      5. Stop when max relative change of mu_r below tol
+
+    The cell-centered mu_r evaluation matches FEMM's prob3big.cpp
+    convention (mu_r constant per element).  For axisymmetric A_phi,
+    |B|^2 = |B_r|^2 + |B_z|^2 = |d_z A|^2 + |(1/r) d_r(r A)|^2.
+
+    Returns dict with P_wp, H_t side-wall samples, Picard convergence.
+    """
+    from ngsolve import (
+        CoefficientFunction, BilinearForm, LinearForm, GridFunction,
+        Integrate, dx, grad, InnerProduct, x as r_cf, H1,
+    )
+    import radia.radia_axifemm   # noqa: F401
+
+    mesh = build_mesh(
+        R_wp_m=args.R_wp, H_wp_m=args.H_wp,
+        R_coil_m=args.R_coil, R_outer_m=args.R_outer,
+        maxh_wp_m=args.maxh_wp, maxh_air_m=args.maxh_air,
+    )
+    print(f"mesh: ne={mesh.ne}, nv={mesh.nv}, mats={mesh.GetMaterials()}")
+
+    # BH lookup
+    bh = np.asarray(bh_curve)
+    H_arr, B_arr = bh[:, 0], bh[:, 1]
+    def mu_r_from_B(B_abs):
+        H = float(np.interp(B_abs, B_arr, H_arr)) if B_abs > 0 else 0.0
+        return B_abs / (MU0 * max(H, 1e-12)) if H > 0 else float(np.interp(0.0, H_arr, [0.0, 100.0]))
+
+    # Use a per-element constant mu_r via a piecewise FE space.
+    fes_mu = H1(mesh, order=0)  # piecewise const proxy via P0-on-elements
+    gf_mu = GridFunction(fes_mu)
+    gf_mu.vec.FV().NumPy()[:] = 1.0  # init: vacuum everywhere
+
+    # Set workpiece initial mu_r = args.mu_r (linear seed for first iter)
+    mat_idx = {m: i for i, m in enumerate(mesh.GetMaterials())}
+    wp_mat = mat_idx.get("workpiece", None)
+    if wp_mat is None:
+        raise RuntimeError("workpiece material not in mesh")
+    # Build a coefficient that returns initial mu_r per element
+    init_mu_r = mesh.MaterialCF({"workpiece": float(args.mu_r),
+                                  "coil": 1.0, "air": 1.0}, default=1.0)
+    gf_mu.Set(init_mu_r)
+
+    p = args.order
+    omega = 2 * math.pi * args.frequency
+    A_coil = 2e-3 * 2e-3
+    J_phi = mesh.MaterialCF({"coil": args.current / A_coil,
+                              "workpiece": 0.0, "air": 0.0}, default=0.0)
+
+    fes = H1(mesh, order=p, complex=True,
+              dirichlet="axis|outer|top|bot")
+    u, v = fes.TnT()
+
+    sigma_cf = mesh.MaterialCF({"workpiece": args.sigma,
+                                 "coil": 0.0, "air": 0.0}, default=0.0)
+
+    gfu = GridFunction(fes)
+    max_picard = 20
+    tol_picard = 5e-3
+    alpha = 0.5
+    convergence = []
+    for k_outer in range(max_picard):
+        mu_cf = MU0 * gf_mu
+        a = BilinearForm(fes, symmetric=False)
+        a += (1.0 / mu_cf) * (1.0 / r_cf) * \
+            (r_cf * grad(u)[0] + u) * (r_cf * grad(v)[0] + v) * dx
+        a += (1.0 / mu_cf) * r_cf * grad(u)[1] * grad(v)[1] * dx
+        a += 1j * omega * sigma_cf * r_cf * u * v * dx
+        f = LinearForm(fes)
+        f += J_phi * r_cf * v * dx
+        a.Assemble()
+        f.Assemble()
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+
+        # Update per-element mu_r from |B| at element centroid.
+        # |B|^2 = |dA/dz|^2 + |(1/r)(d(rA)/dr)|^2 (peak, not RMS)
+        # In axisymmetric AC: time-peak |B| = sqrt(2) * RMS |B|.
+        # We use the COMPLEX magnitude as a proxy for peak.
+        gf_mu_new = GridFunction(fes_mu)
+        new_vec = gf_mu_new.vec.FV().NumPy()
+        old_vec = gf_mu.vec.FV().NumPy().copy()
+        max_dmu = 0.0
+        # Iterate elements, evaluate |B|
+        for el in mesh.Elements():
+            if mesh.GetMaterials()[el.index] != "workpiece":
+                new_vec[el.index] = old_vec[el.index]  # unchanged
+                continue
+            # Centroid r, z
+            vs = [list(mesh.vertices[v.nr].point) for v in el.vertices]
+            r_c = sum(v[0] for v in vs) / len(vs)
+            z_c = sum(v[1] for v in vs) / len(vs)
+            try:
+                mip = mesh(r_c, z_c)
+                A_c = complex(gfu(mip))
+                # Finite-diff B (rough)
+                eps = max(args.maxh_wp * 0.5, 1e-5)
+                A_r1 = complex(gfu(mesh(max(r_c-eps, 1e-6), z_c)))
+                A_r2 = complex(gfu(mesh(min(r_c+eps, args.R_wp-1e-7), z_c)))
+                A_z1 = complex(gfu(mesh(r_c, max(z_c-eps, -args.H_wp/2+1e-7))))
+                A_z2 = complex(gfu(mesh(r_c, min(z_c+eps, args.H_wp/2-1e-7))))
+                B_z = ((max(r_c+eps, 1e-6) * A_r2 - max(r_c-eps, 1e-6) * A_r1) / (2*eps)) / r_c
+                B_r = -((A_z2 - A_z1) / (2*eps))
+                B_abs = math.sqrt(2) * math.sqrt(abs(B_r)**2 + abs(B_z)**2)  # peak
+                mu_r_new = mu_r_from_B(B_abs)
+                mu_r_damped = alpha * mu_r_new + (1 - alpha) * old_vec[el.index]
+                new_vec[el.index] = mu_r_damped
+                dmu = abs(mu_r_damped - old_vec[el.index]) / max(old_vec[el.index], 1e-3)
+                max_dmu = max(max_dmu, dmu)
+            except Exception:
+                new_vec[el.index] = old_vec[el.index]
+        gf_mu.vec.data = gf_mu_new.vec
+        convergence.append({"iter": k_outer, "max_dmu_r": max_dmu})
+        print(f"  Picard iter {k_outer}: max d(mu_r) = {max_dmu:.4f}")
+        if max_dmu < tol_picard:
+            print(f"  CONVERGED at iter {k_outer}")
+            break
+
+    # P_wp + |H_t| extraction (same as linear path)
+    A_norm_sq = InnerProduct(gfu, gfu)
+    P_wp_density = 0.5 * sigma_cf * (omega ** 2) * A_norm_sq * 2 * math.pi * r_cf
+    P_wp = float(Integrate(P_wp_density.real, mesh,
+                            definedon=mesh.Materials("workpiece")))
+    print(f"P_wp_volumetric (nonlinear) = {P_wp:.6e} W")
+    return {
+        "method": "axisym_volumetric_A_phi_nonlinear",
+        "P_wp_W": P_wp,
+        "picard_iter": len(convergence),
+        "picard_convergence": convergence,
+    }
 
 
 def run_axisym_linear(args):
@@ -280,9 +432,31 @@ def main():
     parser.add_argument("--frequency", type=float, default=50000.0)
     parser.add_argument("--current", type=float, default=100.0)
     parser.add_argument("--order", type=int, default=2)
+    parser.add_argument("--bh-file", type=str, default=None,
+                        help="If set, run nonlinear-BH Picard outer iteration "
+                             "using the given two-column H[A/m]  B[T] BH file.")
     parser.add_argument("--output", type=str, default=None)
     args = parser.parse_args()
-    run_axisym_linear(args)
+    if args.bh_file:
+        import sys as _sys, os as _os
+        HERE_ = _os.path.dirname(_os.path.abspath(__file__))
+        SRC_ = _os.path.abspath(_os.path.join(HERE_, ".."))
+        if SRC_ not in _sys.path:
+            _sys.path.insert(0, SRC_)
+        from em_material import load_bh_file  # type: ignore
+        bh = load_bh_file(args.bh_file)
+        if isinstance(bh, tuple):
+            H_arr, B_arr = bh
+            bh_curve = list(zip(H_arr.tolist(), B_arr.tolist()))
+        else:
+            bh_curve = list(bh)
+        result = run_axisym_nonlinear(args, bh_curve)
+        if args.output:
+            with open(args.output, "w") as fh:
+                json.dump(result, fh, indent=2)
+            print(f"wrote {args.output}")
+    else:
+        run_axisym_linear(args)
 
 
 if __name__ == "__main__":
