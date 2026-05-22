@@ -126,21 +126,22 @@ def run_axisym_nonlinear(args, bh_curve):
     """Phase 2: nonlinear mu(|B|) outer Picard iteration.
 
     Outer loop on per-element mu_r:
-      1. Solve linear AC problem with current mu_r distribution
-      2. Compute |B| per element from A_phi
-      3. Update mu_r per element from the BH curve at |B|
-      4. Damped Picard: mu_r_new = alpha mu_BH(|B|) + (1-alpha) mu_r_old
-      5. Stop when max relative change of mu_r below tol
+      1. Solve AC linear problem with current mu_r distribution.
+      2. Build a |B| CoefficientFunction from grad(gfu) (no finite diff).
+      3. Project |B| onto L2(order=0) -> per-element constant.
+      4. Update mu_r per element via BH inverse: mu_r = B / (mu_0 H(B))
+         with mu_r floor at 1.0 (vacuum minimum).
+      5. Damped Picard: mu_r_new = alpha mu_BH + (1-alpha) mu_r_old.
+      6. Stop when max relative change of mu_r drops below tol.
 
-    The cell-centered mu_r evaluation matches FEMM's prob3big.cpp
-    convention (mu_r constant per element).  For axisymmetric A_phi,
-    |B|^2 = |B_r|^2 + |B_z|^2 = |d_z A|^2 + |(1/r) d_r(r A)|^2.
-
-    Returns dict with P_wp, H_t side-wall samples, Picard convergence.
+    For axisymmetric A_phi:
+        B_z = (1/r) d(r A)/dr = A/r + dA/dr
+        B_r = -dA/dz
+        |B|^2 = |B_r|^2 + |B_z|^2  (complex; peak = sqrt(2) * RMS)
     """
     from ngsolve import (
-        CoefficientFunction, BilinearForm, LinearForm, GridFunction,
-        Integrate, dx, grad, InnerProduct, x as r_cf, H1,
+        BilinearForm, LinearForm, GridFunction, Integrate, dx, grad,
+        Conj, sqrt as ng_sqrt, x as r_cf, H1, L2,
     )
     import radia.radia_axifemm   # noqa: F401
 
@@ -151,27 +152,30 @@ def run_axisym_nonlinear(args, bh_curve):
     )
     print(f"mesh: ne={mesh.ne}, nv={mesh.nv}, mats={mesh.GetMaterials()}")
 
-    # BH lookup
+    # BH lookup -- given |B|, return mu_r = B / (mu_0 H).
     bh = np.asarray(bh_curve)
-    H_arr, B_arr = bh[:, 0], bh[:, 1]
-    def mu_r_from_B(B_abs):
-        H = float(np.interp(B_abs, B_arr, H_arr)) if B_abs > 0 else 0.0
-        return B_abs / (MU0 * max(H, 1e-12)) if H > 0 else float(np.interp(0.0, H_arr, [0.0, 100.0]))
+    H_arr_bh, B_arr_bh = bh[:, 0], bh[:, 1]
+    # Initial-slope mu_r for low |B| (B ~ 0 floor).
+    mu_r_init = float(args.mu_r)
 
-    # Use a per-element constant mu_r via a piecewise FE space.
-    fes_mu = H1(mesh, order=0)  # piecewise const proxy via P0-on-elements
+    def mu_r_from_B_array(B_arr_input):
+        """Vectorised: given per-element |B|, return per-element mu_r."""
+        out = np.full_like(B_arr_input, mu_r_init, dtype=float)
+        # For B above the first BH-curve point: invert BH numerically.
+        mask = B_arr_input > B_arr_bh[1] if len(B_arr_bh) > 1 else B_arr_input > 1e-6
+        if mask.any():
+            H_vals = np.interp(B_arr_input[mask], B_arr_bh, H_arr_bh)
+            mu_r = B_arr_input[mask] / (MU0 * np.maximum(H_vals, 1e-9))
+            out[mask] = mu_r
+        # Floor at 1 (vacuum).
+        return np.maximum(out, 1.0)
+
+    # Per-element mu_r via L2(order=0) (true piecewise-constant per element).
+    fes_mu = L2(mesh, order=0)
     gf_mu = GridFunction(fes_mu)
-    gf_mu.vec.FV().NumPy()[:] = 1.0  # init: vacuum everywhere
-
-    # Set workpiece initial mu_r = args.mu_r (linear seed for first iter)
-    mat_idx = {m: i for i, m in enumerate(mesh.GetMaterials())}
-    wp_mat = mat_idx.get("workpiece", None)
-    if wp_mat is None:
-        raise RuntimeError("workpiece material not in mesh")
-    # Build a coefficient that returns initial mu_r per element
-    init_mu_r = mesh.MaterialCF({"workpiece": float(args.mu_r),
-                                  "coil": 1.0, "air": 1.0}, default=1.0)
-    gf_mu.Set(init_mu_r)
+    init_mu_r_cf = mesh.MaterialCF({"workpiece": float(args.mu_r),
+                                     "coil": 1.0, "air": 1.0}, default=1.0)
+    gf_mu.Set(init_mu_r_cf)
 
     p = args.order
     omega = 2 * math.pi * args.frequency
@@ -187,10 +191,17 @@ def run_axisym_nonlinear(args, bh_curve):
                                  "coil": 0.0, "air": 0.0}, default=0.0)
 
     gfu = GridFunction(fes)
-    max_picard = 20
-    tol_picard = 5e-3
+    max_picard = 25
+    tol_picard = 1e-2
     alpha = 0.5
     convergence = []
+    old_vec = gf_mu.vec.FV().NumPy().copy()
+    # Map workpiece elements: index list
+    wp_elem_idx = np.array(
+        [i for i, el in enumerate(mesh.Elements())
+         if mesh.GetMaterials()[el.index] == "workpiece"],
+        dtype=int,
+    )
     for k_outer in range(max_picard):
         mu_cf = MU0 * gf_mu
         a = BilinearForm(fes, symmetric=False)
@@ -204,58 +215,85 @@ def run_axisym_nonlinear(args, bh_curve):
         f.Assemble()
         gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
 
-        # Update per-element mu_r from |B| at element centroid.
-        # |B|^2 = |dA/dz|^2 + |(1/r)(d(rA)/dr)|^2 (peak, not RMS)
-        # In axisymmetric AC: time-peak |B| = sqrt(2) * RMS |B|.
-        # We use the COMPLEX magnitude as a proxy for peak.
-        gf_mu_new = GridFunction(fes_mu)
-        new_vec = gf_mu_new.vec.FV().NumPy()
-        old_vec = gf_mu.vec.FV().NumPy().copy()
-        max_dmu = 0.0
-        # Iterate elements, evaluate |B|
-        for el in mesh.Elements():
-            if mesh.GetMaterials()[el.index] != "workpiece":
-                new_vec[el.index] = old_vec[el.index]  # unchanged
-                continue
-            # Centroid r, z
-            vs = [list(mesh.vertices[v.nr].point) for v in el.vertices]
-            r_c = sum(v[0] for v in vs) / len(vs)
-            z_c = sum(v[1] for v in vs) / len(vs)
-            try:
-                mip = mesh(r_c, z_c)
-                A_c = complex(gfu(mip))
-                # Finite-diff B (rough)
-                eps = max(args.maxh_wp * 0.5, 1e-5)
-                A_r1 = complex(gfu(mesh(max(r_c-eps, 1e-6), z_c)))
-                A_r2 = complex(gfu(mesh(min(r_c+eps, args.R_wp-1e-7), z_c)))
-                A_z1 = complex(gfu(mesh(r_c, max(z_c-eps, -args.H_wp/2+1e-7))))
-                A_z2 = complex(gfu(mesh(r_c, min(z_c+eps, args.H_wp/2-1e-7))))
-                B_z = ((max(r_c+eps, 1e-6) * A_r2 - max(r_c-eps, 1e-6) * A_r1) / (2*eps)) / r_c
-                B_r = -((A_z2 - A_z1) / (2*eps))
-                B_abs = math.sqrt(2) * math.sqrt(abs(B_r)**2 + abs(B_z)**2)  # peak
-                mu_r_new = mu_r_from_B(B_abs)
-                mu_r_damped = alpha * mu_r_new + (1 - alpha) * old_vec[el.index]
-                new_vec[el.index] = mu_r_damped
-                dmu = abs(mu_r_damped - old_vec[el.index]) / max(old_vec[el.index], 1e-3)
-                max_dmu = max(max_dmu, dmu)
-            except Exception:
-                new_vec[el.index] = old_vec[el.index]
-        gf_mu.vec.data = gf_mu_new.vec
-        convergence.append({"iter": k_outer, "max_dmu_r": max_dmu})
-        print(f"  Picard iter {k_outer}: max d(mu_r) = {max_dmu:.4f}")
-        if max_dmu < tol_picard:
+        # |B| as a CoefficientFunction from grad(gfu).
+        # B_z = grad[0] + A/r,  B_r = -grad[1]
+        # |B|^2 = Re(B_z conj(B_z)) + Re(B_r conj(B_r)) is the COMPLEX
+        # magnitude squared; peak |B| = sqrt(2) * sqrt(|B|^2).
+        B_z_cf = grad(gfu)[0] + gfu / r_cf
+        B_r_cf = -grad(gfu)[1]
+        B_abs_sq_cf = (B_z_cf * Conj(B_z_cf) + B_r_cf * Conj(B_r_cf)).real
+        # peak |B| = sqrt(2) * sqrt(|B|_complex^2)
+        B_peak_cf = ng_sqrt(2.0 * B_abs_sq_cf)
+
+        # Project |B| onto L2(order=0) -> per-element constant.
+        gf_B = GridFunction(fes_mu)
+        gf_B.Set(B_peak_cf)
+        B_per_elem = gf_B.vec.FV().NumPy()
+
+        # Update mu_r only on workpiece elements.
+        new_vec = old_vec.copy()
+        if len(wp_elem_idx) > 0:
+            B_wp = B_per_elem[wp_elem_idx]
+            mu_r_bh = mu_r_from_B_array(B_wp)
+            mu_r_damped = alpha * mu_r_bh + (1.0 - alpha) * old_vec[wp_elem_idx]
+            mu_r_damped = np.maximum(mu_r_damped, 1.0)
+            new_vec[wp_elem_idx] = mu_r_damped
+
+        max_dmu = float(np.max(np.abs(new_vec - old_vec)
+                                / np.maximum(old_vec, 1.0)))
+        gf_mu.vec.FV().NumPy()[:] = new_vec
+        old_vec = new_vec.copy()
+        convergence.append({"iter": k_outer, "max_dmu_r": max_dmu,
+                             "mu_r_wp_mean": float(new_vec[wp_elem_idx].mean()),
+                             "B_wp_max": float(B_per_elem[wp_elem_idx].max()),
+                             "B_wp_mean": float(B_per_elem[wp_elem_idx].mean())})
+        print(f"  Picard iter {k_outer}: max d(mu_r)={max_dmu:.4f}, "
+              f"<mu_r_wp>={float(new_vec[wp_elem_idx].mean()):.1f}, "
+              f"|B|_max={float(B_per_elem[wp_elem_idx].max()):.3f} T")
+        if max_dmu < tol_picard and k_outer > 0:
             print(f"  CONVERGED at iter {k_outer}")
             break
 
-    # P_wp + |H_t| extraction (same as linear path)
+    # P_wp via volumetric integration.
+    from ngsolve import InnerProduct
     A_norm_sq = InnerProduct(gfu, gfu)
     P_wp_density = 0.5 * sigma_cf * (omega ** 2) * A_norm_sq * 2 * math.pi * r_cf
     P_wp = float(Integrate(P_wp_density.real, mesh,
                             definedon=mesh.Materials("workpiece")))
     print(f"P_wp_volumetric (nonlinear) = {P_wp:.6e} W")
+
+    # |H_t| at side wall (same as linear path).
+    n_z = 21
+    z_pts = np.linspace(-args.H_wp / 2 * 0.9, args.H_wp / 2 * 0.9, n_z)
+    eps_R = 1e-5
+    H_t_samples = []
+    for z_val in z_pts:
+        try:
+            r1 = args.R_wp + eps_R
+            r2 = args.R_wp + 2 * eps_R
+            A1 = complex(gfu(mesh(r1, z_val)))
+            A2 = complex(gfu(mesh(r2, z_val)))
+            B_z = ((r2 * A2 - r1 * A1) / (r2 - r1)) / r1
+            H_z = B_z / MU0  # vacuum just outside workpiece
+            H_t_samples.append(abs(H_z))
+        except Exception:
+            H_t_samples.append(0.0)
+    H_t_samples = np.array(H_t_samples)
+
     return {
         "method": "axisym_volumetric_A_phi_nonlinear",
+        "frequency_Hz": args.frequency,
+        "current_A": args.current,
+        "R_wp_m": args.R_wp,
+        "H_wp_m": args.H_wp,
+        "R_coil_m": args.R_coil,
+        "sigma_S_per_m": args.sigma,
+        "mu_r_init": float(args.mu_r),
+        "fes_order": p,
+        "ndof": fes.ndof,
         "P_wp_W": P_wp,
+        "H_t_mean_A_per_m": float(H_t_samples.mean()),
+        "H_t_max_A_per_m": float(H_t_samples.max()),
         "picard_iter": len(convergence),
         "picard_convergence": convergence,
     }
