@@ -45,6 +45,31 @@ jobs:
       - name: Install test dependencies
         shell: pwsh
         run: |
+          # Pre-cleanup: orphan mcp-server-*.exe processes from a
+          # previous CI run hold Scripts/mcp-server-*.exe and block
+          # the editable install with WinError 32 (file in use).
+          # 2026-05-22 v4.72.0 hit this on mcp-server-build123d.exe;
+          # mirror release_triple.py phase 8's force-kill.
+          Write-Host "Stopping any orphan mcp-server-*.exe..."
+          Get-Process -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -like 'mcp-server*'
+          } | ForEach-Object {
+            Write-Host "  killing $($_.Name) pid=$($_.Id)"
+            Stop-Process -Id $_.Id -Force
+          }
+          Start-Sleep -Seconds 2
+
+          # Pre-cleanup: ~adia-mcp orphan dist-info from a botched
+          # uninstall is the second known cause of CI install
+          # failures (pip refuses to install on top of an "invalid
+          # distribution").  Remove any *.dist-info named ~adia*.
+          $sp = python -c "import site, sys; print(site.getsitepackages()[0])"
+          Get-ChildItem -Path $sp -Filter "~adia*" -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object {
+              Write-Host "  removing orphan $($_.Name)"
+              Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            }
+
           python -m pip install mcp pytest-rerunfailures --quiet
           python -m pip install -e packages/radia-mcp --no-deps --quiet
           Write-Host "mcp + pytest-rerunfailures + radia-mcp (editable from this checkout) installed"
