@@ -207,6 +207,35 @@ def run_axisym_linear(args):
                             definedon=mesh.Materials("workpiece")))
     print(f"P_wp_volumetric = {P_wp:.6e} W")
 
+    # Extract |H_t| at the cylinder side wall (r = R_wp, z varies)
+    # H_t in axisymmetric = H_z on the lateral surface (r=R, z) =
+    # (1/r) d(r A_phi)/dr |_{r=R-eps} since B_z = (1/r) d(r A)/dr
+    # and H_z = B_z/mu (in air just outside the conductor).
+    # Sample a sparse z-line just outside R_wp.
+    n_z_samples = 21
+    z_pts = np.linspace(-args.H_wp / 2 * 0.9, args.H_wp / 2 * 0.9, n_z_samples)
+    eps_R = 1e-5  # offset outside workpiece into air (mu_r=1 there)
+    H_t_samples = []
+    for z_val in z_pts:
+        try:
+            mip = mesh(args.R_wp + eps_R, z_val)
+            A_val = complex(gfu(mip))
+            # d(r A_phi)/dr via finite diff
+            mip2 = mesh(args.R_wp + 2 * eps_R, z_val)
+            A_val2 = complex(gfu(mip2))
+            r1 = args.R_wp + eps_R
+            r2 = args.R_wp + 2 * eps_R
+            B_z = ((r2 * A_val2 - r1 * A_val) / (r2 - r1)) / r1
+            H_z = B_z / MU0  # mu_r=1 just outside workpiece
+            H_t_samples.append(abs(H_z))
+        except Exception:
+            H_t_samples.append(0.0)
+    H_t_samples = np.array(H_t_samples)
+    H_t_mean = float(H_t_samples.mean())
+    H_t_max = float(H_t_samples.max())
+    print(f"|H_t| at r=R+eps, z=[-0.9H/2, +0.9H/2], n={n_z_samples}: "
+          f"mean={H_t_mean:.2f}, max={H_t_max:.2f} A/m")
+
     out = {
         "method": "axisym_volumetric_A_phi",
         "frequency_Hz": args.frequency,
@@ -219,6 +248,9 @@ def run_axisym_linear(args):
         "fes_order": p,
         "ndof": fes.ndof,
         "P_wp_W": P_wp,
+        "H_t_mean_A_per_m": H_t_mean,
+        "H_t_max_A_per_m": H_t_max,
+        "H_t_samples_A_per_m": H_t_samples.tolist(),
     }
     if args.output:
         with open(args.output, "w") as fh:
