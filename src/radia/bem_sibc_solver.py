@@ -1641,6 +1641,96 @@ def compute_phi_inc_from_filaments_arbitrary_axis(
     return phi
 
 
+def extract_H_t_per_dof_grad(phi_vec_complex, wp_mesh):
+    """Per-vertex |H_t| via manual triangle-wise P1 gradient of phi.
+
+    H_t = -grad_s(phi) on the workpiece surface.  For each surface
+    triangle build the constant gradient of the linear interpolant
+    of phi from its 3 vertex values, accumulate area-weighted to
+    the 3 vertices, and return ``|H_t|_per_vertex``.
+
+    This is the physically-correct local-gradient extraction.  It
+    REPLACES the legacy Galerkin localization ``phi_i * (K @ phi)_i``,
+    which is a Laplacian sample (samples the LOCAL Laplacian of phi,
+    not the LOCAL gradient norm) and consequently mis-locates the
+    spatial peak.  The v4.67.0 release fixed this for the q_surf
+    spatial output; this helper applies the same fix to the ESIM
+    per-DOF |H_t| extraction (Karl iteration outer loop).
+
+    Parameters
+    ----------
+    phi_vec_complex : (n_v,) complex
+        Magnetic scalar potential on workpiece-surface vertices
+        (P1 DOFs in the BIE basis order=1 path).  For order>=2 the
+        caller should down-project to vertices before invoking this
+        function.
+    wp_mesh : ngsolve.Mesh
+        Workpiece SURFACE mesh (2-D embedded in 3-D).  We read
+        vertices and BND triangle connectivity.
+
+    Returns
+    -------
+    H_t_per_vertex : (n_v,) float
+        |H_t|_i = sqrt(|grad_s phi|^2_real + |grad_s phi|^2_imag)
+        at each surface vertex, area-weighted from the incident
+        triangles.
+
+    Notes
+    -----
+    The 3D triangle-P1 gradient formula:
+        grad N_0 = (p_2 - p_1) x n_hat / (2 area)
+        grad N_1 = (p_0 - p_2) x n_hat / (2 area)
+        grad N_2 = (p_1 - p_0) x n_hat / (2 area)
+    where ``n_hat`` is the outward unit normal.  These are in-plane
+    perpendicular to the opposite edge and have magnitude 1/h_i
+    (h_i = altitude from vertex i to the opposite edge).
+    """
+    import numpy as _np
+    from ngsolve import BND as _BND
+
+    n_v = wp_mesh.nv
+    tri_v = []
+    for el in wp_mesh.Elements(_BND):
+        tri_v.append([v.nr for v in el.vertices])
+    tri_v = _np.asarray(tri_v, dtype=_np.int64)
+    vert_xyz = _np.asarray(
+        [list(wp_mesh.vertices[i].point) for i in range(n_v)],
+        dtype=float)
+
+    p0 = vert_xyz[tri_v[:, 0]]
+    p1 = vert_xyz[tri_v[:, 1]]
+    p2 = vert_xyz[tri_v[:, 2]]
+    normal = _np.cross(p1 - p0, p2 - p0)
+    area2 = _np.linalg.norm(normal, axis=1)
+    tri_area = 0.5 * area2
+    n_hat = normal / _np.maximum(area2[:, None], 1e-30)
+
+    gN0 = _np.cross(p2 - p1, n_hat) / _np.maximum(area2[:, None], 1e-30)
+    gN1 = _np.cross(p0 - p2, n_hat) / _np.maximum(area2[:, None], 1e-30)
+    gN2 = _np.cross(p1 - p0, n_hat) / _np.maximum(area2[:, None], 1e-30)
+
+    phi = _np.asarray(phi_vec_complex)
+    phi_re = phi.real
+    phi_im = phi.imag
+
+    grad_re = (phi_re[tri_v[:, 0:1]] * gN0
+               + phi_re[tri_v[:, 1:2]] * gN1
+               + phi_re[tri_v[:, 2:3]] * gN2)
+    grad_im = (phi_im[tri_v[:, 0:1]] * gN0
+               + phi_im[tri_v[:, 1:2]] * gN1
+               + phi_im[tri_v[:, 2:3]] * gN2)
+    Hsq_tri = (_np.sum(grad_re * grad_re, axis=1)
+               + _np.sum(grad_im * grad_im, axis=1))
+
+    vert_Hsq_num = _np.zeros(n_v)
+    vert_area_sum = _np.zeros(n_v)
+    for j in range(3):
+        _np.add.at(vert_Hsq_num, tri_v[:, j], tri_area * Hsq_tri)
+        _np.add.at(vert_area_sum, tri_v[:, j], tri_area)
+    Hsq_per_vertex = vert_Hsq_num / _np.maximum(vert_area_sum, 1e-30)
+    return _np.sqrt(_np.maximum(Hsq_per_vertex, 0.0))
+
+
 def extract_surface_J_from_phi(mesh, phi_vec_complex, order=1):
     """Extract per-element complex surface current density J_s.
 
