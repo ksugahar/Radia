@@ -1380,6 +1380,67 @@ the table above.
 
 ---
 
+## 6.7 Axisymmetric Volumetric FEM Truth Reference
+
+To evaluate ESIM's *absolute* accuracy (as opposed to scalar-vs-
+per-element internal disagreement) we need a reference solver that
+resolves the volumetric eddy current inside the workpiece — not a
+SIBC Robin BC.  The 2D axisymmetric A_phi formulation
+([`src/radia/panels/calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py))
+provides this.
+
+**Formulation.**  Time-harmonic Maxwell in axisymmetric `(r, z)`,
+single component `A_phi(r, z)` complex-valued.  The system is
+
+    (1/mu) [ d_r(r A) d_r(r v) / r + r d_z A d_z v ] + j w sigma r A v
+        = J_phi_src r v
+
+(NGSolve weak form, complex H1, `dirichlet="axis|outer|top|bot"`).
+The workpiece-side material is `sigma > 0` (eddy current resolved
+volumetrically) and `mu_r` from a BH curve (linear or nonlinear).
+The coil is a current-density source `J_phi_src = I/A_coil` in a
+small ring region.  Workpiece power is
+
+    P_wp = (1/2) Re int_workpiece sigma (omega A_phi)^2 dV_axisym
+
+where `dV_axisym = 2 pi r dr dz`.
+
+**Linear-mu Bessel validation** (see CROSS_VALIDATION.md § 5b for the
+detailed table).  Long cylinder R=5mm H=200mm, mu_r=100, sigma=2e6,
+f=50kHz:
+
+| Method           | P_wp   |
+|------------------|--------|
+| FEM volumetric   | 0.182 W |
+| Bessel I_0/I_1   | 0.193 W |
+| Agreement        | -5.7 % (end-effect) |
+
+**IGTE-geometry linear-mu validation** (R_wp=5mm, H_wp=10mm,
+R_coil=20mm, mu_r=100, sigma=2e6, f=50kHz, I=100A):
+
+| Method           | P_wp    | |H_t|_side  |
+|------------------|---------|------------|
+| FEM volumetric   | 1.01 W  | 1421 A/m   |
+| Bessel-from-FEM  | 0.997 W | (input)    |
+| Agreement        | +1 %    |            |
+
+For the same geometry under nonlinear BH (the IGTE benchmark
+operating point), the comparison requires a nonlinear FEM
+extension (Picard on local mu(|B|)) — open item.
+
+**Why this matters.**  Once nonlinear FEM is operational, the
+scalar-vs-per-element ESIM gap reported in
+[`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 6d can be split into:
+
+  - which side of the gap is closer to the FEM truth, AND
+  - what the absolute error of EACH method is.
+
+This is the only way to determine whether scalar SIBC's
+over-prediction of P_wp by 22-48 % (in our sweep) is the "real"
+error or whether per-element under-shoots equally.
+
+---
+
 ## 7. Roadmap
 
 | Item | Effort | Justification |
