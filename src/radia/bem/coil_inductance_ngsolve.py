@@ -114,7 +114,7 @@ def _to_dense(mat):
 
 def compute_inductance_source_sink(
         mesh, source_label="source", sink_label="sink",
-        fes_order=0, solver="lu", Z_s_re=0.0):
+        fes_order=0, solver="lu", Z_s_re=0.0, log_fn=None):
     """Compute self-inductance + (optional) AC SIBC R via ngsolve.bem saddle EFIE.
 
     Args:
@@ -148,28 +148,42 @@ def compute_inductance_source_sink(
                          BilinearForm, LinearForm, div, GridFunction)
     from ngsolve.bem import LaplaceSL
 
+    # Optional progress log (default no-op).
+    _log = log_fn if log_fn is not None else (lambda _t, _m: None)
+
     t_start = time.perf_counter()
 
     fes_J = HDivSurface(mesh, order=fes_order)
     fes_L2 = SurfaceL2(mesh, order=max(0, fes_order - 1))
     n_J = fes_J.ndof
     n_f = fes_L2.ndof
+    _log("BEMA",
+        f"FES built: n_J={n_J} (HDivSurface RT{fes_order}), "
+        f"n_f={n_f} (SurfaceL2 P{max(0,fes_order-1)})")
 
     # --- Divergence matrix D: n_f x n_J ---
+    _t_D = time.perf_counter()
     u_J = fes_J.TrialFunction()
     q = fes_L2.TestFunction()
     bf_D = BilinearForm(trialspace=fes_J, testspace=fes_L2)
     bf_D += div(u_J.Trace()) * q * ds
     bf_D.Assemble()
     D = _to_dense(bf_D.mat)
+    _log("BEMA",
+        f"div matrix D assembled "
+        f"({n_f}x{n_J}, {time.perf_counter()-_t_D:.1f}s)")
 
     # --- LaplaceSL matrix: n_J x n_J ---
     t0 = time.perf_counter()
+    _log("BEMA",
+        f"LaplaceSL assembly start (dense, n_J={n_J}, "
+        f"memory ~{(n_J*n_J*8)/1e9:.1f} GB)")
     jt, jv = fes_J.TnT()
     with TaskManager():
         V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
     SL = _to_dense(V_op.mat)
     t_assembly = time.perf_counter() - t0
+    _log("BEMA", f"LaplaceSL assembled ({t_assembly:.1f}s)")
 
     # --- Source/sink RHS ---
     f_src = LinearForm(fes_L2)
@@ -200,16 +214,25 @@ def compute_inductance_source_sink(
     n_constraint = n_f - 1
 
     t0 = time.perf_counter()
+    _saddle_n = n_J + n_constraint
+    _log("BEMA",
+        f"saddle assembly start: K is {_saddle_n}x{_saddle_n} "
+        f"(~{(_saddle_n*_saddle_n*8)/1e9:.1f} GB), solver={solver}")
     K = np.block([
         [SL,              D_red.T],
         [D_red, np.zeros((n_constraint, n_constraint))]
     ])
     rhs = np.zeros(n_J + n_constraint)
     rhs[n_J:] = g_red
+    _log("BEMA",
+        f"saddle solve start (method={solver}, ndof={_saddle_n})")
 
     x, solve_info = _solve_saddle(K, rhs, method=solver)
     J = x[:n_J]
     t_lu = time.perf_counter() - t0
+    _log("BEMA",
+        f"saddle solve done ({solver}, iters={solve_info.get('iterations','-')}, "
+        f"residual={solve_info.get('residual',0.0):.2e}, {t_lu:.1f}s)")
 
     # --- Inductance: L = mu_0 * J^T @ SL @ J ---
     L = MU_0 * J @ SL @ J
