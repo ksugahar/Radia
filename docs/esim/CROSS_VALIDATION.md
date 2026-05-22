@@ -532,83 +532,80 @@ see § 1b for the structural limits.
 ## 6d. Operating-regime sweep: where does per-element matter?
 
 A 32-case sweep over `(I_port, f)` ∈ `{1, 10, 100, 300 A} × {10, 50,
-100, 500 kHz}` on the IH benchmark steel cylinder shows where the
-per-element-vs-scalar gap is concentrated.  Runner:
+100, 500 kHz}` on the IH benchmark steel cylinder characterizes the
+scalar-vs-per-element ESIM gap on `P_wp` as a function of operating
+point.  Runner:
 [`examples/ih_esim_benchmark/sweep_f_I.py`](../../examples/ih_esim_benchmark/sweep_f_I.py).
 Figure: [`sweep_heatmap.png`](../../examples/ih_esim_benchmark/sweep_heatmap.png).
 
-**Sweep results (initial, `max_iter = 30`)** —
+**Note on history**: an earlier version of this sweep (`sweep_v1`)
+used a Galerkin-localized per-DOF `|H_t|²` extraction (`phi_i (K φ)_i`)
+that turned out to be a Laplacian sample, not a gradient norm — see
+[`fix(esim)` commit 630527d4](../../) for the bug analysis.  The
+present table is from `sweep_v2` after the fix; gap values changed
+sign and decreased in magnitude (no more +389 % outliers).
+
+**Sweep results (post-fix, all cases formally converged or plateaued):**
+
 `(P_per_element / P_scalar − 1) × 100 %`:
 
-| `I_port` [A] \\ `f` [kHz] | 10 | 50 | 100 | 500 |
+| `I_port` [A] \\ `f` [kHz] | 10  | 50  | 100 | 500 |
 |---|---|---|---|---|
-| 1   | -3 | -3 | -3 | -2 |
-| 10  | -2 | -1 | 0  | +5 |
-| **100** | **+44** | **+49** | **+129**\* | 0  |
-| **300** | **+72** | **+40** | **+31**  | **+389**\* |
+| 1   | +18 | +18 | +21 | +26 |
+| 10  | +13 | +0  | +2  | +0  |
+| **100** | **-22** | **-39** | **-26** | -2  |
+| **300** | **-48** | **-35** | **-39** | -6  |
 
-\* Cells marked with asterisk hit `max_iter` without formal
-convergence on `dZ_max`.  Verification re-runs at `max_iter = 80`,
-`relax = 0.3`, with safeguarded Anderson `m = 5` revise the
-estimates as follows:
+Maximum absolute gap: `-48 %` at `(I = 300 A, f = 10 kHz)`.
 
-| Case | Initial gap (30 iter, not converged) | Verified gap (80 iter) | Status |
-|---|---|---|---|
-| `I=100 A, 100 kHz` | +129 % | **+137 %** | Formally converged at iter 54 (`dZ_max = 6×10⁻⁴`) |
-| `I=300 A, 500 kHz` | +389 % | **~+87 %** | Still drifting at iter 80, but `Zmean` drift down from 4 % to 1.4 % — the +389 % was a non-convergence artifact |
+### Physical interpretation
 
-**Lesson** (Karl iteration validation): the strict per-DOF `dZ_max`
-criterion can fail to drop below `tol = 1e-3` in 30 iterations on
-deep-saturation, thin-skin operating points (`δ << R`, `|H_t|` 5× max
-to mean).  Use `max_iter = 80` with damped Anderson for verification;
-extreme reported gaps are NOT trustworthy without this check.
+The gap signature reflects ESIM's **spatial-averaging assumption**
+across the workpiece surface, modulated by where on the BH curve
+the local `|H_t|` distribution sits:
 
-Physical interpretation (post-verification):
+- **`I ≤ 10 A` (linear regime)**: `|H_t|` is below the BH knee
+  everywhere on the workpiece, but the CEFC 2020 BH curve has a
+  steep initial slope at `H < 13 A/m`.  Per-element captures the
+  local mu_r variation, yielding small **positive** gaps `~+20 %`.
+  Scalar SIBC under-resolves the steep initial slope effect.
 
-- **`I ≤ 10 A`**: linear regime.  `|H_t|` stays well below the BH
-  knee everywhere on the workpiece surface, the scalar mesh-RMS Z_s
-  matches the per-element distribution to within 5 %.  Scalar SIBC
-  is fine.
+- **`I = 100-300 A` (saturated regime)**: mean `|H_t|` lies above
+  the BH knee.  Hot-spot DOFs are deeper in saturation with
+  **lower** local `Z_s` (the BH curve has `dZ_s/d|H_t| < 0` above
+  the knee).  Per-element correctly applies the low local `Z_s` at
+  hot spots; scalar uses an intermediate mean `Z_s` and **over-
+  estimates** `P_wp`.  Result: negative gap, max `-48 %` at
+  `(300 A, 10 kHz)`.
 
-- **`I = 100 A`, mid-frequency**: the headline IGTE benchmark
-  (50 kHz / 100 A = the **+49 %** paper case, robust to 0.6 % across
-  v4-v9 damping/Anderson variants).  `|H_t|` straddles the BH knee
-  with strong spatial contrast; per-element captures the hot-spot
-  integral, scalar collapses it.
+- **`f = 500 kHz` (thin-skin regime)**: `δ ≈ 0.04 mm << R = 5 mm`.
+  Local saturation averages out within the thin skin layer; the
+  workpiece behaves as a near-uniform screen.  Per-element and
+  scalar agree to `~5 %`.
 
-- **`I = 100 A, 100 kHz`** (the verified +137 %): the gap is **largest
-  here** because the skin depth `δ ≈ 0.13 mm` is small enough to
-  create extreme spatial contrast (`|H_t|_max ≈ 4200 A/m` vs mean
-  `1530 A/m`, ratio 2.8×) but not so thin that the workpiece becomes
-  a uniform screen.  This is the regime per-element ESIM is most
-  needed.
+- **Sign transition** between linear and saturated regimes is at
+  `I ≈ 10 A` (BH knee crossing on the mean `|H_t|`).
 
-- **`I = 100 A, 500 kHz`**: skin depth `δ ≈ 0.04 mm` is small enough
-  that local saturation averages out within the skin layer; the
-  workpiece becomes a near-perfect screen and per-element vs scalar
-  agree.
+### Engineering implication
 
-- **`I = 300 A, 500 kHz`** (corrected from +389 % artifact to ~+87 %):
-  drive is high enough that even the thin skin saturates locally;
-  the spatial pattern re-emerges.  The original +389 % was a
-  non-convergence artifact from `max_iter = 30`.  Even at 80 iter
-  the run is not formally converged, but the value has dropped 4×
-  toward the more physical +87 %.  Reporting this requires further
-  iteration (or Hantila-style implicit splitting — see
-  [`src/radia/esim_hantila.py`](../../src/radia/esim_hantila.py))
-  for definitive numbers.
+The (I, f) heatmap is the **method-uncertainty map** of ESIM: a
+designer using scalar SIBC in IH analysis can read the gap value
+at their operating point as a quantitative estimate of the spatial-
+averaging error they are accepting.  In the typical IH surface-
+hardening regime (`I = 100-300 A`, `f = 10-100 kHz`), scalar SIBC
+**over-predicts** `P_wp` by 20-48 % vs the per-element calculation;
+predictive designs without experimental trim must account for this.
 
-**Headline engineering claim for the journal paper** (post-verification):
+### Cautionary observation
 
-> The per-element vs scalar ESIM gap on `P_wp` varies from **+40 %
-> to +140 %** across the typical IH operating regime (`I = 100-300 A`,
-> `f = 10-500 kHz`).  This is a **predictive-design-disqualifying**
-> error band for IH hardening applications that rely on scalar SIBC
-> in commercial tools; per-element ESIM is required for accurate
-> power-sizing predictions.
-
-Extreme single-cell ratios (cells > +100 %) require `max_iter ≥ 50`
-verification before being quoted in publications.
+Both scalar and per-element ESIM are themselves approximations of
+the volumetric Maxwell eddy-current problem in the workpiece.  The
+gap quantifies their **mutual disagreement**, not the absolute
+error of either against the true 3D solution.  An external 2D
+axisymmetric volumetric reference (scaffolded in
+[`src/radia/panels/calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py),
+task #36) is the natural next step to determine which (if either) is
+closer to truth.
 
 ---
 
