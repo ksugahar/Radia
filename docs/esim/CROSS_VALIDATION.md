@@ -602,10 +602,37 @@ Both scalar and per-element ESIM are themselves approximations of
 the volumetric Maxwell eddy-current problem in the workpiece.  The
 gap quantifies their **mutual disagreement**, not the absolute
 error of either against the true 3D solution.  An external 2D
-axisymmetric volumetric reference (scaffolded in
-[`src/radia/panels/calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py),
-task #36) is the natural next step to determine which (if either) is
-closer to truth.
+axisymmetric volumetric reference solver
+([`src/radia/panels/calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py),
+task #36) has been scaffolded and validated against the linear-mu
+Bessel cylinder reference (see § 5b below).
+
+---
+
+## 5b. Axisymmetric volumetric FEM reference (linear-mu Bessel)
+
+The 2D axisymmetric solver
+[`calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py)
+resolves the volumetric eddy current inside the workpiece directly
+via NGSolve complex H1 + axisymmetric weighting, replacing the SIBC
+Robin BC with full Maxwell in the conductor.
+
+**Linear-mu validation** (long cylinder, `mu_r = 100`,
+`sigma = 2×10⁶` S/m, `f = 50` kHz):
+
+| Quantity | Geometry | Value |
+|---|---|---|
+| Workpiece | cylinder | R = 5 mm, H = 200 mm (40× R) |
+| Drive coil | ring | R_coil = 300 mm (60× R, near-uniform external H) |
+| Mesh | quad / triangle | maxh_wp = 0.05 mm ≈ δ/3, ne = 869k, ndof = 1.74M |
+| FEM P_wp | volumetric | **0.182 W** |
+| Bessel P_wp | analytical | **0.193 W** (using FEM-extracted |H_t|=140 A/m) |
+| Agreement | | **−5.7 %** (end-effect contamination + mesh) |
+
+The 6 % gap is consistent with the finite-cylinder end caps the
+Bessel formula does not model.  The FEM machinery is therefore
+**validated as a truth-reference tool** for ESIM evaluation in the
+linear-mu regime; the nonlinear-BH extension is the next step.
 
 ---
 
