@@ -795,19 +795,16 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         # Karl update.
         Z_s_old = Z_s_wp
         if args.esim_per_panel:
-            # Extract per-DOF |H_t|^2 from phi_vec via the same
-            # variational form the scalar path uses, but DOF-localised:
-            #   total Hsq = phi^T K phi = sum_i phi_i * (K phi)_i
-            # → per-DOF contribution to Hsq = phi_i * (K phi)_i.
-            # Per-DOF effective area = M_lump_i = (M @ 1)_i (row sum).
+            # Extract per-DOF |H_t| via the manual triangle-wise P1
+            # gradient of phi (v4.67.0+ formula, matching the q_surf
+            # spatial output).  The legacy Galerkin localization
+            # ``phi_i * (K @ phi)_i`` is a Laplacian sample, not a
+            # gradient-norm sample, and feeds wrong local |H_t| values
+            # into the cell solver -- inflating the per-element vs
+            # scalar gap by mis-placing the saturation hot-spot.
+            from radia.bem_sibc_solver import extract_H_t_per_dof_grad
             phi_vec = np.asarray(res_bem["phi_vec"])
-            Kphi_re = bem.K @ phi_vec.real
-            Kphi_im = bem.K @ phi_vec.imag
-            Hsq_re = phi_vec.real * Kphi_re
-            Hsq_im = phi_vec.imag * Kphi_im
-            Hsq_per = np.abs(Hsq_re) + np.abs(Hsq_im)
-            M_lump = bem.M @ np.ones(bem.ndof)
-            H_t_per = np.sqrt(Hsq_per / np.maximum(M_lump, 1e-30))
+            H_t_per = extract_H_t_per_dof_grad(phi_vec, wp_mesh)
             # Per-DOF ESIM
             Z_s_new = np.empty(bem.ndof, dtype=complex)
             for i in range(bem.ndof):
@@ -878,18 +875,13 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                 phi_inc, Z_s=Z_s_wp, omega=omega,
                 tol=args.wp_gmres_tol, maxiter=500, restart=80)
         t_bie += time.perf_counter() - t0
-        # Compute final per-DOF |H_t| from the converged phi_vec.  Same
-        # variational form as inside the Karl loop -- used by
-        # publications for the Z_s vs H_t scatter / spatial map.
+        # Final per-DOF |H_t| via triangle-gradient (matches Karl loop
+        # interior; see extract_H_t_per_dof_grad in bem_sibc_solver.py).
+        # Used for the Z_s vs H_t scatter / spatial map in publications.
         if isinstance(Z_s_wp, np.ndarray):
+            from radia.bem_sibc_solver import extract_H_t_per_dof_grad
             phi_vec_final = np.asarray(res_bem["phi_vec"])
-            Kphi_re_f = bem.K @ phi_vec_final.real
-            Kphi_im_f = bem.K @ phi_vec_final.imag
-            Hsq_per_f = (np.abs(phi_vec_final.real * Kphi_re_f)
-                         + np.abs(phi_vec_final.imag * Kphi_im_f))
-            M_lump_f = bem.M @ np.ones(bem.ndof)
-            H_t_per_final = np.sqrt(Hsq_per_f
-                                    / np.maximum(M_lump_f, 1e-30))
+            H_t_per_final = extract_H_t_per_dof_grad(phi_vec_final, wp_mesh)
         else:
             H_t_per_final = None
     info = res_bem.get("gmres_info", 0)
