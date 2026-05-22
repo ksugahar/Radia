@@ -971,17 +971,26 @@ def _solve_workpiece_weak_coupled(args, coil_data):
                                               keepdims=True), 1e-30)
 
         # Direct Biot-Savart H at each wp vertex from the coil
-        # filaments (curl-free in air, no topology assumption).
-        from radia.bem_sibc_solver import _h_segments_complex as _hbs
-        flat_segs, flat_I = [], []
-        for fil_segs, Ik in zip(coil_data["paths"], coil_data["I_fil"]):
-            Ik_c = complex(Ik)
-            for (q1, q2) in fil_segs:
-                flat_segs.append((q1, q2))
-                flat_I.append(Ik_c)
-        bs_segs = np.asarray(flat_segs, dtype=float)
-        bs_I = np.asarray(flat_I, dtype=complex)
-        H_BS = _hbs(bs_segs, vert_xyz, bs_I)        # (n_v, 3) complex
+        # (curl-free in air, no topology assumption).  Branch on the
+        # coil representation, mirroring the phi_inc bridge above:
+        # PEEC returns line filaments, BEM-A returns a surface current.
+        if coil_data["source_type"] == "filament":
+            from radia.bem_sibc_solver import _h_segments_complex as _hbs
+            flat_segs, flat_I = [], []
+            for fil_segs, Ik in zip(coil_data["paths"], coil_data["I_fil"]):
+                Ik_c = complex(Ik)
+                for (q1, q2) in fil_segs:
+                    flat_segs.append((q1, q2))
+                    flat_I.append(Ik_c)
+            bs_segs = np.asarray(flat_segs, dtype=float)
+            bs_I = np.asarray(flat_I, dtype=complex)
+            H_BS = _hbs(bs_segs, vert_xyz, bs_I)        # (n_v, 3) complex
+        else:  # "surface" -- BEM-A coil
+            coil_J_complex = (complex(args.current)
+                              * coil_data["coil_J_per_tri"]).astype(complex)
+            H_BS = _H_from_surface_J_complex(
+                vert_xyz, coil_data["coil_centroids"],
+                coil_data["coil_areas"], coil_J_complex)   # (n_v, 3) complex
 
         # Tangential H at each vertex: H - (H·n)n.
         Hn = np.sum(H_BS * vert_n, axis=1)
