@@ -577,12 +577,17 @@ mesh, no FES-order header.  Both files MUST be passed:
 # Direct CLI (calc_heat.py):
 python -m radia.panels.calc_heat \\
     --wp-vol workpiece_thermal.vol \\
-    --surface-label sibc \\
     --qsurf-sol  <stem>_qsurf.sol \\  # REQUIRED for spatial mode
     --em-vol     <stem>_fem.vol   \\  # REQUIRED (no auto-locate)
     --qsurf-order 1                \\  # MUST equal EM fes_order
     --material steel --dt 0.5 --t-end 5.0 \\
     --rotation-rpm 12                  # see ``rotating`` topic
+    # --surface-label is OPTIONAL since v4.74.0: empty = all BND.
+    # Pass a specific name only when the workpiece has MULTIPLE BND
+    # sidesets and heating + convection should be restricted to a
+    # subset.  The panel auto-fills the sole BND label when the .vol
+    # has exactly one (e.g. 'sibc'), so users typically don't need
+    # to type it.
 ```
 
 `--qsurf-order` must match the EM solve's `--fes-order` exactly;

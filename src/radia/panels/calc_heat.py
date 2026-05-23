@@ -253,7 +253,7 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
 def solve_heat(wp_vol,
                material="steel", rho=None, cp=None, k=None,
                h_conv=10.0, t_ext=20.0, t_initial=20.0,
-               surface_label="outer", material_label=".*",
+               surface_label="", material_label=".*",
                q_uniform=None, qsurf_sol="", em_vol="",
                qsurf_order=1,
                dt=0.5, t_end=5.0,
@@ -282,10 +282,24 @@ def solve_heat(wp_vol,
          f"materials={list(wp_mesh.GetMaterials())} "
          f"boundaries={list(wp_mesh.GetBoundaries())}")
 
-    if surface_label not in wp_mesh.GetBoundaries():
-        return {"error":
-                f"--surface-label {surface_label!r} not found in "
-                f"{wp_vol} boundaries={list(wp_mesh.GetBoundaries())}"}
+    # Resolve the BND filter.  Empty surface_label means "apply qsurf
+    # + convection to ALL boundary elements" -- the common case for a
+    # single-workpiece .vol where there is exactly one BND label (e.g.
+    # 'sibc' for IH workpieces) and asking the user to retype it just
+    # to match the panel default 'outer' is friction.  Pass ".*" to
+    # NGSolve's regex-based Boundaries() / ds() to match every BND.
+    if surface_label:
+        if surface_label not in wp_mesh.GetBoundaries():
+            return {"error":
+                    f"--surface-label {surface_label!r} not found in "
+                    f"{wp_vol} boundaries={list(wp_mesh.GetBoundaries())}"}
+        surface_label_eff = surface_label
+        _log(f"BND:filter={surface_label!r}")
+    else:
+        surface_label_eff = ".*"
+        _log(f"BND:filter=ALL (surface_label empty -- all "
+             f"{len(set(wp_mesh.GetBoundaries()))} BND labels: "
+             f"{sorted(set(wp_mesh.GetBoundaries()))})")
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
@@ -307,8 +321,8 @@ def solve_heat(wp_vol,
     a_local.qsurf_sol = qsurf_sol
     a_local.em_vol = em_vol
     a_local.qsurf_order = qsurf_order
-    a_local.surface_label = surface_label
-    surface_region = wp_mesh.Boundaries(surface_label)
+    a_local.surface_label = surface_label_eff
+    surface_region = wp_mesh.Boundaries(surface_label_eff)
     q_cf, q_resample = _build_qsurf_cf(wp_mesh, surface_region, a_local)
 
     # Rotation control: when --rotation-rpm > 0 AND a resampler is
@@ -332,7 +346,7 @@ def solve_heat(wp_vol,
 
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * grad_dot(u, v) * dx
-    a_form += float(h_conv) * v * u * ds(surface_label)
+    a_form += float(h_conv) * v * u * ds(surface_label_eff)
     a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
@@ -393,8 +407,8 @@ def solve_heat(wp_vol,
             # place; q_int (the integrated heat input) tracks below.
             q_resample(omega_mech * t)
         f_form = LinearForm(fes_T)
-        f_form += q_cf * v * ds(surface_label)
-        f_form += float(h_conv) * float(t_ext) * v * ds(surface_label)
+        f_form += q_cf * v * ds(surface_label_eff)
+        f_form += float(h_conv) * float(t_ext) * v * ds(surface_label_eff)
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
@@ -468,7 +482,7 @@ def solve_heat(wp_vol,
                 gf_qg = GridFunction(fes_qg)
                 gf_qg.vec[:] = 0
                 gf_qg.Set(q_cf,
-                           definedon=wp_mesh.Boundaries(surface_label))
+                           definedon=wp_mesh.Boundaries(surface_label_eff))
                 sol_q = os.path.join(base_dir,
                                      f"{stem}_qsurf.sol").replace("\\", "/")
                 gf_qg.Save(sol_q)
@@ -583,9 +597,17 @@ def main():
         description="Transient heat-transfer solver for IH workpieces.")
     parser.add_argument("--wp-vol", required=True,
                         help="Workpiece volume mesh (.vol).")
-    parser.add_argument("--surface-label", default="outer",
+    parser.add_argument("--surface-label", default="",
                         help="Boundary label where q_surf and Newton "
-                             "convection are applied (default: outer).")
+                             "convection are applied.  Leave empty "
+                             "(default) to apply to ALL BND -- the "
+                             "single-workpiece common case where "
+                             "explicitly naming the sole BND label is "
+                             "pure friction.  Pass a specific name "
+                             "(e.g. 'top' / 'sides') only when the "
+                             "workpiece has multiple BND sidesets and "
+                             "heating + convection should be restricted "
+                             "to a subset.")
     parser.add_argument("--material-label", default=".*",
                         help="Volume material regex for the workpiece "
                              "(default: .* -- all materials).")

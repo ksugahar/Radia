@@ -159,7 +159,7 @@ def _build_axisym_qsurf_gf(wp_mesh, surface_label, args):
 def solve_heat_axisym(wp_vol,
                       material="steel", rho=None, cp=None, k=None,
                       h_conv=10.0, t_ext=20.0, t_initial=20.0,
-                      surface_label="outer",
+                      surface_label="",
                       q_uniform=None, qsurf_sol="", em_vol="",
                       qsurf_order=1, n_phi_samples=8,
                       dt=0.5, t_end=5.0,
@@ -191,10 +191,19 @@ def solve_heat_axisym(wp_vol,
          f"materials={list(wp_mesh.GetMaterials())} "
          f"boundaries={list(wp_mesh.GetBoundaries())}")
 
-    if surface_label not in wp_mesh.GetBoundaries():
-        return {"error":
-                f"--surface-label {surface_label!r} not in "
-                f"{list(wp_mesh.GetBoundaries())}"}
+    # Empty surface_label means apply qsurf + convection to ALL BND;
+    # see calc_heat.py's same block for the rationale (single-workpiece
+    # IH case where naming the sole BND is pure friction).
+    if surface_label:
+        if surface_label not in wp_mesh.GetBoundaries():
+            return {"error":
+                    f"--surface-label {surface_label!r} not in "
+                    f"{list(wp_mesh.GetBoundaries())}"}
+        surface_label_eff = surface_label
+        _log(f"BND:filter={surface_label!r}")
+    else:
+        surface_label_eff = ".*"
+        _log(f"BND:filter=ALL ({sorted(set(wp_mesh.GetBoundaries()))})")
 
     rho_v, cp_v, k_v = _resolve_material(material, rho, cp, k)
     _log(f"MATERIAL:{material} rho={rho_v} cp={cp_v} k={k_v}")
@@ -244,7 +253,7 @@ def solve_heat_axisym(wp_vol,
     a_local.em_vol = em_vol
     a_local.qsurf_order = qsurf_order
     a_local.n_phi_samples = n_phi_samples
-    gf_q, q_cf = _build_axisym_qsurf_gf(wp_mesh, surface_label, a_local)
+    gf_q, q_cf = _build_axisym_qsurf_gf(wp_mesh, surface_label_eff, a_local)
 
     # ------- Bilinear forms (axisym weight = 2*pi*r) -------
     # ``r_coord`` is NGSolve's x global coordinate (= radial coord).
@@ -254,7 +263,7 @@ def solve_heat_axisym(wp_vol,
 
     a_form = BilinearForm(fes_T, symmetric=True)
     a_form += K_cf * InnerProduct(grad(u), grad(v)) * weight * dx
-    a_form += float(h_conv) * v * u * weight * ds(surface_label)
+    a_form += float(h_conv) * v * u * weight * ds(surface_label_eff)
     a_form.Assemble()
 
     m_form = BilinearForm(fes_T, symmetric=True)
@@ -286,7 +295,7 @@ def solve_heat_axisym(wp_vol,
 
     n_steps = int(math.ceil(t_end / dt))
 
-    surface_region = wp_mesh.Boundaries(surface_label)
+    surface_region = wp_mesh.Boundaries(surface_label_eff)
     A_surf_axisym = float(
         Integrate(weight, wp_mesh, BND, definedon=surface_region).real)
     q_int = float(
@@ -310,9 +319,9 @@ def solve_heat_axisym(wp_vol,
     for step in range(1, n_steps + 1):
         t = step * float(dt)
         f_form = LinearForm(fes_T)
-        f_form += q_cf * v * weight * ds(surface_label)
+        f_form += q_cf * v * weight * ds(surface_label_eff)
         f_form += float(h_conv) * float(t_ext) * v * weight \
-            * ds(surface_label)
+            * ds(surface_label_eff)
         f_form.Assemble()
         with TaskManager():
             res_vec.data = f_form.vec - a_form.mat * gfT.vec
@@ -470,9 +479,11 @@ def main():
     parser.add_argument("--wp-vol", required=True,
                         help="2D axisymmetric workpiece mesh (.vol) in "
                              "the (r, z) plane.  r >= 0 required.")
-    parser.add_argument("--surface-label", default="outer",
+    parser.add_argument("--surface-label", default="",
                         help="Boundary curve where q_surf and Newton "
-                             "convection are applied (default: outer).")
+                             "convection are applied.  Leave empty "
+                             "(default) to apply to ALL BND -- see "
+                             "calc_heat.py for the rationale.")
     parser.add_argument("--material", default="steel",
                         choices=list(THERMAL_PRESETS) + ["custom"],
                         help="Thermal material preset.")
