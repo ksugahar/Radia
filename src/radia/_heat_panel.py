@@ -32,6 +32,48 @@ from radia_gui_base import (
 
 
 # ============================================================
+# Helpers
+# ============================================================
+
+def _parse_vol_bcnames(vol_path):
+    """Return the list of boundary-condition names in a Netgen .vol.
+
+    Parses the ``bcnames`` section from a Netgen .vol text file.  Used
+    by the heat panel's surface_label auto-detect (avoids importing
+    ngsolve just for metadata, saves ~1-2 s of import latency on every
+    Browse-keystroke).
+
+    Format (Netgen .vol):
+
+        bcnames
+        <count>
+        1 first_label
+        2 second_label
+        ...
+
+    Returns an empty list on any parse failure or when the file has no
+    ``bcnames`` section.
+    """
+    names = []
+    with open(vol_path, encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "bcnames":
+            try:
+                count = int(lines[i + 1].strip())
+            except (ValueError, IndexError):
+                return []
+            for j in range(count):
+                parts = lines[i + 2 + j].strip().split(None, 1)
+                if len(parts) == 2:
+                    names.append(parts[1])
+            return names
+        i += 1
+    return names
+
+
+# ============================================================
 # Constants
 # ============================================================
 
@@ -149,9 +191,26 @@ class HeatPanel(ModePanel):
             "wp_vol", "wp .vol:",
             filter_str="Netgen volume (*.vol);;All (*)")
         wp_w.textChanged.connect(self._emit_validation)
-        # Surface label entry: a .vol-derived combo would be nicer
-        # but parity with the calc CLI argument is the priority.
-        self.add_line("surface_label", "Heating surface label:", "outer")
+        wp_w.textChanged.connect(self._on_wp_vol_changed_for_bnd)
+        # Surface label: editable combo populated from the wp .vol's
+        # bcnames when Browse-selected (P1, v4.74.0).  Empty entry
+        # means "apply to ALL BND" (P2, calc_heat.py treats empty as
+        # the ".*" regex match).  This unifies two friction points:
+        # the old default "outer" mismatched keiko/kubota's "sibc"
+        # workpieces (they had to retype), and a single-BND workpiece
+        # shouldn't need any label at all.
+        sl = self.add_combo(
+            "surface_label", "Heating surface label:", [""], default=0)
+        sl.setEditable(True)
+        sl.setToolTip(
+            "Boundary label where qsurf and Newton convection are "
+            "applied.<br><br>"
+            "<b>Leave empty</b> to apply to ALL BND (the common case "
+            "for a single-workpiece .vol -- the panel auto-fills the "
+            "sole BND label when the .vol has exactly one).<br><br>"
+            "Pick a specific label only when the workpiece has "
+            "multiple BND sidesets and heating + convection should be "
+            "restricted to a subset.")
 
         # Material.
         self._add_section("Material (workpiece thermal)")
@@ -261,6 +320,73 @@ class HeatPanel(ModePanel):
         cb = getattr(self, "validationChanged", None)
         if callable(cb):
             cb()
+
+    def _on_wp_vol_changed_for_bnd(self, _path):
+        """Auto-populate the surface_label combo from the wp .vol BNDs.
+
+        P1 of the v4.74.0 thermal-panel UX improvement: when the user
+        Browse-selects a workpiece .vol, read its bcnames and either
+        (a) auto-fill ``surface_label`` if there is exactly one BND
+        label, or (b) populate the combo dropdown with the available
+        labels (still editable so the user can type a regex).
+
+        The auto-fill case fixes the historical friction where the
+        panel default ``'outer'`` didn't match keiko/kubota's actual
+        BND name (``'sibc'``) -- they had to manually retype to match
+        the .vol.
+
+        On any failure (file missing, parse error, ngsolve not yet
+        loaded), this is silent: the combo keeps its current state
+        and the calc_heat.py-side validation will surface a clear
+        error at Run time.  Empty entry (the first item) always
+        remains so the user can intentionally select "all BND" -- P2
+        in calc_heat.py interprets that as ``.*``.
+        """
+        # Resolve the absolute path via the AnalysisWindow's helper
+        # (same one ``val()`` uses) so display-relative paths work.
+        try:
+            vol_path = self.val("wp_vol")
+        except Exception:
+            return
+        if not vol_path or not os.path.isfile(vol_path):
+            return
+        try:
+            # Parse .vol text directly so we don't pay the ngsolve
+            # import cost (~1-2s) on every keystroke -- the bcnames
+            # section is a small, well-defined block near the top
+            # of the file.
+            bnds = _parse_vol_bcnames(vol_path)
+        except Exception:
+            return
+        if not bnds:
+            return
+        # Capture current selection so we can preserve user intent
+        # (e.g. they already typed "top" before pasting the .vol path).
+        combo = self._widgets["surface_label"]
+        prior = combo.currentText().strip()
+        # Repopulate: empty first ("apply to ALL BND"), then the
+        # sorted unique BND names.
+        items = [""] + sorted(set(bnds))
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItems(items)
+            if prior and prior in items:
+                # User typed a valid label before -- keep it.
+                combo.setCurrentIndex(items.index(prior))
+            elif len(items) == 2:
+                # Exactly one BND label (items = ["", name]); auto-
+                # fill it.  This is the keiko/kubota single-workpiece
+                # case where naming the sole BND is friction.
+                combo.setCurrentIndex(1)
+            else:
+                # Multiple BNDs -- leave empty (apply to ALL by P2).
+                combo.setCurrentIndex(0)
+        finally:
+            combo.blockSignals(False)
+        # Re-emit validation in case the new selection changes the
+        # is_runnable state (unlikely but free).
+        self._emit_validation()
 
     def _on_heat_source_changed(self, name):
         is_uniform = (name == HEAT_SRC_UNIFORM)
