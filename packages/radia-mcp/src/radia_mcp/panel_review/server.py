@@ -26,6 +26,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from ..common import register_status_tool, register_topics_tool
 from .panel_review_knowledge import (
     get_panel_review_documentation,
     TOPICS,
@@ -105,6 +106,28 @@ def review_a_panel(panel_path: str = "src/radia/radia_ih.py") -> str:
 # ============================================================
 # Entry point
 # ============================================================
+
+# ============================================================
+# Self-introspection (uniform with other radia_mcp servers)
+# ============================================================
+
+register_status_tool(
+    mcp,
+    server_name="mcp-server-panel-review",
+    description="Radia GUI panel review skill-chain + bug catalogue "
+                "(panel-cli-diff / panel-review / panel-qt-test / "
+                "panel-preview / panel-smoke)",
+    subpackage="radia_mcp.panel_review",
+    related_servers=["meta"],
+    optional_deps=[],
+)
+
+register_topics_tool(
+    mcp,
+    server_name="mcp-server-panel-review",
+    topics=TOPICS,
+)
+
 
 def main():
     if "--selftest" in sys.argv:

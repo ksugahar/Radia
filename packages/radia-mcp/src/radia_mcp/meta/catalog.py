@@ -1,4 +1,4 @@
-"""Authoritative catalog of all 36 radia_mcp servers.
+"""Authoritative catalog of all 37 radia_mcp servers.
 
 Source of truth: this dict. .mcp.json (in the Radia monorepo root)
 should mirror it.
@@ -380,6 +380,22 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "radia_mcp_health"],
         "related": ["literature-index"],
         "tags": ["meta", "discovery", "catalog"],
+    },
+
+    # ============================================================
+    # Panel review (Radia GUI panel skill chain)
+    # ============================================================
+    "panel-review": {
+        "subpackage": "radia_mcp.panel_review",
+        "entry_point": "mcp-server-panel-review",
+        "description": "Radia GUI panel review skill chain "
+                       "(panel-cli-diff / panel-review / panel-qt-test / "
+                       "panel-preview / panel-smoke) + bug catalogue. "
+                       "Surfaces the 13-check list and known panel bug "
+                       "patterns through one queryable tool.",
+        "primary_tools": ["panel_review"],
+        "related": ["electromagnet", "ih", "motor"],
+        "tags": ["meta", "panel", "qa", "review"],
     },
 }
 

@@ -5,8 +5,10 @@ Pattern adopted 2026-05-24 from wjc9011/COMSOL_Multiphysics_MCP
 gives a clear "what can I do, am I healthy" snapshot).
 
 Why this helps LLMs (and humans):
-  - 29 radia_mcp servers + 1 standalone elf — picking the right
-    one is a discovery problem
+  - 37 radia_mcp servers (incl. meta + panel_review) — picking the
+    right one is a discovery problem. mcp-server-elf is a separate
+    PyPI package (`pip install mcp-server-elf`) and not in this
+    catalog.
   - Each server's `<name>_status()` tool returns:
       - server name + module path
       - tool list (auto-introspected from FastMCP)
