@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.56.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.36.0 (2026-05-01): analytical_formulas Group D extensions (Part 6/8/9): plate dissipation, AC thin-shell shielding, conductor impedance, Patterson quadrature, cuboid average B. 0.35.x: analytical_formulas tool (Wakao Part 1-5). 0.34.2: peec_inductance filament_dispatch."
+version = "0.68.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.68.0 (2026-05-23): NEW fem subpackage - FEM formulations theory layer (A-Omega/T-Omega/H/Reduced/Darwin potential, edge/HO/XFEM/IGA/DG elements, gauging+Kelvin transform, axisym Henrotte basis, TD-FEM/harmonic balance, Hollaus MSFEM multi-scale). 0.67.0: bem subpackage. 0.66.0: matrix_solvers subpackage. 0.36.0: analytical_formulas Group D extensions. 0.35.x: analytical_formulas tool (Wakao Part 1-5)."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
@@ -49,9 +49,19 @@ youtube = [
 radia = [
     "radia>=4.6.1",
 ]
+# ChromaDB + sentence-transformers RAG for literature_index
+# semantic search. Pattern adopted from wjc9011/COMSOL_Multiphysics_MCP
+# (2026-05-24). Adds ~500 MB (sentence-transformers model + chromadb +
+# pymupdf). Optional — keyword search still works without it.
+#   pip install radia-mcp[rag]
+rag = [
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+    "pymupdf>=1.24.0",
+]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[build123d,cadquery,gmsh,youtube,radia]",
+    "radia-mcp[build123d,cadquery,gmsh,youtube,radia,rag]",
 ]
 
 [project.urls]
@@ -72,6 +82,34 @@ mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
 mcp-server-ih = "radia_mcp.ih.server:main"
 mcp-server-peec = "radia_mcp.peec.server:main"
 mcp-server-electromagnet = "radia_mcp.electromagnet.server:main"
+mcp-server-differential-forms = "radia_mcp.differential_forms.server:main"
+mcp-server-mathematica = "radia_mcp.mathematica.server:main"
+mcp-server-topology-optimization = "radia_mcp.topology_optimization.server:main"
+mcp-server-optuna = "radia_mcp.optuna.server:main"
+mcp-server-mcmc = "radia_mcp.mcmc.server:main"
+mcp-server-bayesian-opt = "radia_mcp.bayesian_opt.server:main"
+mcp-server-evolutionary = "radia_mcp.evolutionary.server:main"
+mcp-server-gnn = "radia_mcp.gnn.server:main"
+mcp-server-data-assimilation = "radia_mcp.data_assimilation.server:main"
+mcp-server-radia-meta = "radia_mcp.meta.server:main"
+mcp-server-mor = "radia_mcp.mor.server:main"
+mcp-server-pinn = "radia_mcp.pinn.server:main"
+mcp-server-accelerator = "radia_mcp.accelerator.server:main"
+mcp-server-ndt = "radia_mcp.ndt.server:main"
+mcp-server-metamaterial = "radia_mcp.metamaterial.server:main"
+mcp-server-nmr-mri = "radia_mcp.nmr_mri.server:main"
+mcp-server-motor = "radia_mcp.motor.server:main"
+mcp-server-magnetic-materials = "radia_mcp.magnetic_materials.server:main"
+mcp-server-matrix-solvers = "radia_mcp.matrix_solvers.server:main"
+mcp-server-bem = "radia_mcp.bem.server:main"
+mcp-server-fem = "radia_mcp.fem.server:main"
+mcp-server-wpt = "radia_mcp.wpt.server:main"
+mcp-server-team-benchmark = "radia_mcp.team_benchmark.server:main"
+mcp-server-litz-transmission = "radia_mcp.litz_transmission.server:main"
+mcp-server-maglev-linear = "radia_mcp.maglev_linear.server:main"
+mcp-server-fusion = "radia_mcp.fusion.server:main"
+mcp-server-rna-mec = "radia_mcp.rna_mec.server:main"
+mcp-server-literature-index = "radia_mcp.literature_index.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -17,6 +17,41 @@ Layout:
                             B-input Play/Energy hysteresis, IMA sign selection,
                             multipole harmonics) — promoted from
                             s:/mcp-server/mcp-server-electromagnet/ on 2026-04-24
+  radia_mcp.differential_forms — Differential geometry for computational EM:
+                            tangent spaces, k-forms, wedge product, exterior
+                            derivative, Hodge star, Whitney elements, de Rham
+                            complex, Maxwell's house, tree-cotree gauging,
+                            FEEC (Arnold-Falk-Winther 2006). Distilled from
+                            Bossavit 1998 + FEEC 2006 + Kameari 2011 + 微分形式
+                            lecture notes.
+  radia_mcp.mathematica   — Wolfram Mathematica subprocess bridge: evaluate /
+                            status / simplify / to_tex / check_identity /
+                            vector_calc / unit_convert / solve / integrate /
+                            differentiate via wolframscript. Promoted from
+                            s:/mcp-server/src/mcp_server_document/mathematica/
+                            on 2026-05-20. Pairs with differential_forms for
+                            symbolic verification of Maxwell identities.
+  radia_mcp.topology_optimization — Shape and topology optimization for nonlinear
+                            magnetostatics. Gangl-Sturm 2015 Lagrangian method
+                            for nonlinear PDE shape derivatives; Sokolowski-
+                            Zochowski topological derivative; IPM motor cogging-
+                            torque minimization case study. Distilled from
+                            arXiv:1501.04752 + Gangl PhD thesis Part I/II.
+  radia_mcp.mor           — Model Order Reduction, centered on **Cauer Ladder
+                            Network (CLN)** — a LAB SPECIALTY where Sugahara is
+                            co-author on the canonical papers (Kameari-Ebrahimi-
+                            Sugahara-Shindo-Matsuo 2018 et seq). General MOR +
+                            CLN basic + multi-expansion + nonlinear + applications.
+  radia_mcp.pinn          — Physics-Informed Neural Networks (Raissi 2019) and
+                            Gaussian Processes (Raissi 2017, Pförtner 2023) for
+                            Maxwell's equations. Inverse problems, multi-fidelity,
+                            high-dim PDE. Pairs with mathematica for symbolic
+                            verification of kernel transformations.
+  radia_mcp.accelerator   — Accelerator magnet design with Radia: analytical
+                            end-pole chamfer (Delferriere SOLEIL), Kolkata
+                            superconducting cyclotron Radia+TOSCA validation
+                            (Pradhan 2007), rotating-coil multipole measurement
+                            and 3D field reconstruction.
 
 The radia_ngsolve / ih / peec / electromagnet servers reference radia
 from inside example snippets in their knowledge modules, but importing
