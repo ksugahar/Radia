@@ -5,6 +5,83 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.69.0 — meta server + uniform tooling + 5 thin-server PDF enrichments
+
+Released 2026-05-24.
+
+**Discovery infrastructure** (the headline change):
+- NEW `radia_mcp.meta` subpackage — 36-server cross-server catalog
+  (★ recommended first call). Tools: `radia_mcp_overview`,
+  `radia_mcp_get(name)`, `radia_mcp_by_tag(tag)`,
+  `radia_mcp_related(name)`, `radia_mcp_health`. Entry point
+  `mcp-server-radia-meta`. Solves the "which server has knowledge X"
+  discovery problem with 3-call lookup instead of guess-and-error.
+- NEW `radia_mcp.common.register_status_tool` factory — uniform
+  `<server>_status()` introspection (tool list + dep probe + related
+  servers). Wired into all 36 servers.
+- NEW `radia_mcp.common.register_topics_tool` factory — uniform
+  `<short>_topics()` enum for dispatcher-style servers. Wired into 11
+  dispatchers (accelerator/bayesian-opt/data-assimilation/electromagnet/
+  evolutionary/fusion/gnn/litz-transmission/maglev-linear/pinn/rna-mec).
+- NEW `radia_mcp.common` modules: `prompts_loader` (.md knowledge
+  loading), `async_runner` (long-running command wrapper),
+  `chroma_retriever` (optional ChromaDB+sentence-transformers RAG).
+
+**New subpackages from W:/04_機械学習と最適化 + 99_アプリケーション**:
+- 8 ML/optimization: `bayesian_opt`, `evolutionary`, `gnn`,
+  `data_assimilation`, `mcmc` (Hokkaido Sato/Yin MCTS lineage +
+  Saotome SPM), `optuna` (Sano-Akiba-Imamura textbook), `pinn`,
+  `topology_optimization`.
+- 19 application + theory: `motor` (ONELAB + Liu Xinyao + Hollaus +
+  Wakao + Hane Cauer), `accelerator`, `fusion`, `maglev_linear`,
+  `nmr_mri`, `ndt`, `wpt`, `metamaterial`, `magnetic_materials`,
+  `litz_transmission`, `rna_mec`, `team_benchmark`, `mor`,
+  `matrix_solvers`, `fem`, `bem`, `differential_forms`,
+  `mathematica`, `literature_index`.
+
+**Thin-server enrichments** (5 of 6 batch-promoted servers got
+substantive PDF-sourced content; +7400 lines total):
+- `fusion`: 142→1380 lines, 12 topics (ITER coil system, W7-X
+  modular, LHD helical, NbTi/Nb3Sn/HTS CICC, NESCOIL→FOCUS coil
+  design, error field, transient eddy, RMP for ELM control).
+- `ndt`: 207→1642 lines, 14 topics + 36 aliases (probe types,
+  defect models, FEM A-V/T-Omega, MFL pipeline PIG, JSAEM
+  benchmarks, ML for NDT).
+- `litz_transmission`: 165→1551 lines, 14 topics (Dowell/Wojda/
+  Ferreira/Bartoli/Tourkhani M1-M4 taxonomy, Umetani multi-level
+  twisting, Igarashi homogenization, Rosskopf FEM+PEEC coupling,
+  multiconductor TL).
+- `rna_mec`: 177→1591 lines, 12 topics (Derbas 2009 nodal-vs-mesh,
+  Lee 2005 TEAM-28 reduced model, Kameari-Ebrahimi-Sugahara-Shindo-
+  Matsuo 2018 canonical 3D-FEM CLN, Hane 2020 dynamic hysteresis +
+  Cauer MEC, Janet 2004-2005 RNA-MMM mixed method).
+- `metamaterial`: 90→1244 lines, 12 topics (Veselago/Pendry/Smith
+  LH materials, SRR Pendry LC model, transformation optics with
+  explicit Kelvin-inversion cross-link to electromagnet subpackage,
+  Sadatgol Bi:YIG+Au 9x Faraday enhancement, Toyota CRLH).
+- `maglev_linear`: deferred to next release (parallel-agent task
+  failed with 32MB request size; original 173-line skeleton retained).
+
+**README** (`packages/radia-mcp/README.md`):
+- New "## ★ Discovery — start here" section
+- Added meta + literature-index rows to the Standalone server table
+- Updated JSON config example
+
+**CI**:
+- NEW `.github/workflows/radia-mcp-matrix.yml` — Python 3.10/3.11/3.12
+  matrix on ubuntu-latest, runs in minutes. Complements existing
+  self-hosted Windows `build-test.yml` (45-min full integration).
+  Steps: compileall + meta_health + pytest + 36-server --selftest.
+
+**Tests**:
+- NEW `packages/radia-mcp/tests/test_meta_health.py` (6 cases):
+  importability of all 36 subpackages, catalog floor (≥30),
+  status-tool-policy gate (every server must wire
+  `register_status_tool`), overview shape, by_tag('optimization')
+  finds ≥4, related('mcmc') includes 'optuna'.
+- NEW `tests/conftest.py` — resolves `radia_mcp` from this checkout's
+  src/ regardless of editable install state.
+
 ## 0.55.0 — coordinated bump for radia 4.55.0 (cap-centroid endpoint anchoring)
 
 Released 2026-05-16.  No knowledge changes; coordinated version
