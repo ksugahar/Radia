@@ -22,17 +22,19 @@ from pathlib import Path
 PKG_ROOT = Path(__file__).resolve().parent.parent
 DOC_PATH = PKG_ROOT / "docs" / "TOOLS.md"
 
+# Auto-derive the server list from radia_mcp.meta.catalog so this
+# script stays in sync with the canonical catalog. Previously this
+# was a hardcoded list of 9 entries and silently fell behind the
+# 27-subpackage batch additions (caught by the 2026-05-24 review).
+sys.path.insert(0, str(PKG_ROOT / "src"))
+from radia_mcp.meta.catalog import CATALOG  # noqa: E402
+
 # (subpackage_name, console_script, header_blurb)
 SERVERS = [
-    ("cubit",          "mcp-server-cubit",          "Cubit hex-mesh export, Netgen/NGSolve curving, scripting + API reference"),
-    ("build123d",      "mcp-server-build123d",      "build123d (Pythonic OCCT) + STEP/XCAF labels + Cubit pipeline interop"),
-    ("radia_ngsolve",  "mcp-server-radia-ngsolve",  "Radia + NGSolve coupled magnetostatics, Kelvin transformation, sparse solver"),
-    ("gmsh",           "mcp-server-gmsh",           "Gmsh script linting + post-processing spec helpers"),
-    ("electromagnet",  "mcp-server-electromagnet",  "Electromagnet design (symmetry reductions, BC choices)"),
-    ("ih",             "mcp-server-ih",             "IH (induction-heating) coil + load workflow"),
-    ("peec",           "mcp-server-peec",           "PEEC (partial element equivalent circuit) inductance modeling"),
-    ("interop",        "mcp-server-radia-interop",  "Cross-tool interop (CadQuery / build123d / Cubit STEP boundary)"),
-    ("panel_review",   "mcp-server-panel-review",   "Radia GUI panel review skill-chain + bug catalogue (panel-cli-diff / panel-review / panel-qt-test / panel-preview / panel-smoke)"),
+    (info["subpackage"].replace("radia_mcp.", ""),
+     info["entry_point"],
+     info["description"])
+    for _name, info in CATALOG.items()
 ]
 
 
