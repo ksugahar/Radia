@@ -32,6 +32,7 @@ from .gauge_open_boundary_knowledge import get_gauge_open_boundary_knowledge
 from .time_domain_axisym_knowledge import get_time_domain_axisym_knowledge
 from .large_scale_special_knowledge import get_large_scale_special_knowledge
 from .ngsolve_hierarchy_knowledge import get_ngsolve_hierarchy_knowledge
+from .xfem_comsol_knowledge import get_xfem_knowledge
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -138,6 +139,31 @@ def fem_ngsolve_hierarchy(topic: str = "decision_tree") -> str:
             "all"                      - Everything
     """
     return get_ngsolve_hierarchy_knowledge(topic)
+
+
+@mcp.tool()
+def fem_xfem_comsol(topic: str = "overview") -> str:
+    """
+    XFEM in COMSOL Multiphysics (Jafari-Broumand-Vahab-Khalili 2021).
+
+    Reference paper:
+        S:/COMSOL/2022_05_12_XFEM/An eXtended Finite Element Method
+        Implementation in COMSOL Multiphysics Solid Mechanics.pdf
+        (arXiv:2109.03153v1 [cs.CE], Sep 2021)
+
+    Args:
+        topic: One of:
+            "overview"          - High-level summary + paper context (DEFAULT)
+            "theory"            - PU enrichment, shifted Heaviside, asymptotic tip
+            "comsol_workflow"   - Six Solid Mechanics modules + LiveLink pattern
+            "worked_examples"   - 5 paper benchmarks (2D/3D)
+            "crack_propagation" - SIF -> theta_c (MTS) -> K_eq vs K_IC
+            "lab_integration"   - Where this fits in radia-mcp + reproducer
+            "glossary"          - Notation and symbols
+            "lab_files"         - Absolute paths to PDF / .mph / .m bundle
+            "all"               - Everything (concatenated)
+    """
+    return get_xfem_knowledge(topic)
 
 
 @mcp.tool()
@@ -263,6 +289,7 @@ def main():
         print(f"  time_domain_axisym: {len(get_time_domain_axisym_knowledge('all'))} chars")
         print(f"  large_scale_special: {len(get_large_scale_special_knowledge('all'))} chars")
         print(f"  ngsolve_hierarchy: {len(get_ngsolve_hierarchy_knowledge('all'))} chars")
+        print(f"  xfem_comsol: {len(get_xfem_knowledge('all'))} chars")
         print("OK")
         return
     mcp.run()
