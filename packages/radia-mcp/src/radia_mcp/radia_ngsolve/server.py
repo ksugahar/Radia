@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from ..common import register_status_tool
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -54,6 +55,7 @@ from .knowledge.cln_3d import (
 )
 from .knowledge.bem_cln import get_bem_cln_documentation
 from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
+from .knowledge.mmm_core import get_mmm_core_documentation
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -431,6 +433,13 @@ def sparsesolv(topic: str = "all") -> str:
 
     Source: src/ext/sparsesolv/ in the Radia monorepo.
 
+    See also (theory + decision tree, not code-usage):
+        - radia_mcp.matrix_solvers — solver theory + genealogy + which-to-pick
+            * matrix_solvers_overview('decision_tree')
+            * matrix_solvers_preconditioners('ams_hiptmair_xu') — CompactAMS theory
+            * matrix_solvers_krylov('cocg_cocr') — COCR Sogabe-Zhang 2007 origin
+            * matrix_solvers_em_specific('eddy_current_stab') — shifted-prec rationale
+
     Args:
         topic: Documentation topic. Options:
             "all"              - Complete documentation
@@ -679,6 +688,32 @@ def cln_sphere_dd_pipeline() -> str:
         Sugahara TEAM 28.
     """
     return get_cln_sphere_dd_documentation()
+
+
+@mcp.tool()
+def mmm_core(topic: str = "chubar_1998") -> str:
+    """
+    MMM (Magnetic Moment Method) core theory + Radia heritage.
+
+    Captures the 1998 Chubar-Elleaume-Chavanne original Radia paper
+    through Wakao group's 2007 MMM + ACA H-matrix (Sugahara lineage)
+    through modern coupling: MMM+RNM (Janet 2005), PEEC+MMM (Le-Duc),
+    FEM-BEM hybrid (Weddemann).
+
+    Args:
+        topic: One of:
+            "chubar_1998"        - Original Radia paper (ESRF 1998)
+            "takahashi_2007_aca" - Wakao group MMM + ACA H-matrix
+                                   (Sugahara lab heritage)
+            "pradhan_2007"       - Kolkata cyclotron Radia/TOSCA validation
+            "janet_2005_mmm_rnm" - MMM + Reluctance Network mixed (Schneider)
+            "le_duc_peec_mmm"    - PEEC + MMM coupling (G2Elab)
+            "weddemann_fembem"   - FEM-BEM hybrid alternative
+            "mmm_vs_other"       - Decision matrix: when to use MMM vs FEM
+                                   vs PEEC vs BEM
+            "all"                - Everything
+    """
+    return get_mmm_core_documentation(topic)
 
 
 @mcp.tool()
@@ -1557,6 +1592,18 @@ def _selftest():
         print("Self-test PASSED")
     else:
         print("SKIP: No fixtures found.")
+
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-radia-ngsolve',
+    description='Radia + NGSolve: Kelvin / sparsesolv / CLN / PEEC / analytical formulas / lint',
+    subpackage='radia_mcp.radia_ngsolve',
+    related_servers=["fem", "bem", "matrix-solvers"],
+    optional_deps=["radia", "ngsolve"],
+)
 
 
 def main():

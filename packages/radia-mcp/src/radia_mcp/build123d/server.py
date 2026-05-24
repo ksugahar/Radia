@@ -42,7 +42,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .build123d_knowledge import get_build123d_documentation
 from .rules import ALL_RULES as _B3D_LINT_RULES
-from ..common import failure_log as _fl
+from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
 
@@ -2935,6 +2935,18 @@ def build123d_heal(step_in: str, step_out: str = "",
 # ============================================================
 # Entry point
 # ============================================================
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-build123d',
+    description='build123d STEP authoring (CAD-as-code) + Cubit interop',
+    subpackage='radia_mcp.build123d',
+    related_servers=["cubit", "interop"],
+    optional_deps=["build123d"],
+)
+
 
 def main():
     if "--selftest" in sys.argv:
