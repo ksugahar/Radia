@@ -5,8 +5,29 @@
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
 > **First-and-only public Model Context Protocol (MCP) server suite for
-> Coreform Cubit, Gmsh, build123d, and the Radia CAE ecosystem.**
+> Coreform Cubit, Gmsh, build123d, and the Radia CAE ecosystem —
+> including differential geometry and Mathematica integration.**
 > Pioneering MCP territory for mesh generators worldwide.
+
+**Killer demo (30 seconds)**: ask Claude to derive the Kelvin transform
+factor by hand — it gets stuck on a 3×3 Jacobian + 27-term Laplacian.
+Then ask it to use `differential-forms` + `mathematica` together:
+
+```
+> verify_with_mathematica(identity="kelvin")
+```
+
+Claude pulls the recipe, sends it to Wolfram, reports back
+
+```
+k=1:  Laplacian(psi) = 0          [harmonic — factor R/|y| is correct]
+k=2:  Laplacian(psi) ≠ 0          [factor wrong]
+k=3:  Laplacian(psi) ≠ 0          [factor wrong]
+```
+
+— in 8 seconds.  The `kelvin_factor = R/|y|` that takes half a day
+in vector calculus appears as the conformal weight λ^((n−2k)/2) of a
+k-form, and Mathematica verifies it symbolically.
 
 Authored by the **Sugawara Lab (菅原研究室)**, Kindai University —
 where the lab-standard primary pair is **build123d (CAD authoring) +
@@ -45,6 +66,18 @@ Blender):
   + 15 bd_warehouse + GitHub issues + GitLab issues + StackOverflow +
   YouTube tutorial transcripts + Coreform training pack), all
   searchable via tf-idf with heading boost.
+- **Symbolic verification of FEM formulations** (no other MCP server
+  does this).  Pair `differential-forms` (theory: Bossavit Whitney
+  complex, Arnold-Falk-Winther FEEC, Kameari edge elements) with
+  `mathematica` (Wolfram subprocess bridge) to:
+  - Verify d² = 0 on any specific function
+  - Compute element mass / stiffness matrices on a unit tetrahedron
+    in closed form
+  - Derive `kelvin_factor = R/|y|` for the Kelvin transformation from
+    the conformal-weight formula
+  - Output paper-quality TeX for hand-tuned identities
+  Backed by 21-PDF cohomology bibliography (Bossavit 1998, FEEC 2006,
+  Whitney 1957, Kameari 2011, Codecasa 2010, 新しい計算電磁気学 2003 ...).
 
 ---
 
@@ -87,18 +120,27 @@ non-standard.
 
 ---
 
-## The four MCP servers
+## MCP servers
+
+### Standalone (no Radia core dependency — `pip install radia-mcp`)
 
 | Server | Entry point | Tools | Highlights |
 |---|---|---|---|
 | **Cubit** | `mcp-server-cubit` | 52 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
-| **build123d** | `mcp-server-build123d` | 37 | `build123d_to_cubit_hex`, `lint_build123d_script` (7 rules), `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, 13 Radia/general templates (`magnet_ring`, `c_core`, `racetrack_coil`, …), CadQuery + bd_warehouse interop |
-| **gmsh-post** | `mcp-server-gmsh-post` | 21 | `gmsh_post_inspect/validate/convert` (MSH v4.1 only), `gmsh_post_quality`, `gmsh_post_extract_physical`, `gmsh_post_boundary`, `gmsh_post_add_view_from_csv`, scrape over GitLab issues + StackOverflow + YouTube |
-| **radia-interop** | `mcp-server-radia-interop` | 4 | `any_step_to_cubit_hex` (any source) + `freecad_to_cubit_hex` (FreeCADCmd subprocess) + `openscad_to_cubit_hex` (OpenSCAD CLI) + `list_cad_mcp_interop` |
+| **build123d** | `mcp-server-build123d` | 37 | `build123d_to_cubit_hex`, `lint_build123d_script` (7 rules), `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, 13 Radia/general templates, CadQuery + bd_warehouse interop |
+| **gmsh-post** | `mcp-server-gmsh-post` | 21 | `gmsh_post_inspect/validate/convert` (MSH v4.1 only), `gmsh_post_quality`, scrape over GitLab issues + StackOverflow + YouTube |
+| **radia-interop** | `mcp-server-radia-interop` | 4 | `any_step_to_cubit_hex` + `freecad_to_cubit_hex` + `openscad_to_cubit_hex` + `list_cad_mcp_interop` |
+| **differential-forms** | `mcp-server-differential-forms` | 8 | Differential geometry for computational EM: tangent spaces, k-forms, wedge product, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC (Arnold-Falk-Winther 2006)**, Mathematica recipes for symbolic verification. Distilled from Bossavit 1998 + Whitney 1957 + Kameari 2011 + 新しい計算電磁気学 2003 + Codecasa 2010. |
+| **mathematica** | `mcp-server-mathematica` | 10 | Wolfram Mathematica subprocess bridge: `mathematica_evaluate` + 9 high-level helpers (simplify, to_tex, vector_calc, unit_convert, solve, integrate, differentiate, check_identity, status). Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
 
-`pip install radia-mcp[radia]` additionally enables the radia-coupled
-servers (radia-ngsolve / ih / electromagnet / peec / gmsh authoring /
-elf), which depend on the Radia core.
+### Radia-coupled (`pip install radia-mcp[radia]`)
+
+| Server | Entry point | Highlights |
+|---|---|---|
+| **radia-ngsolve** | `mcp-server-radia-ngsolve` | NGSolve FEM/BEM, Whitney elements via H1/HCurl/HDiv, PEEC inductance, **closed-form formulas** (Wakao-Igarashi Part 1-9, cuboid average B, Bessel impedance, etc.) |
+| **ih** | `mcp-server-ih` | Induction heating workflow: workpiece SIBC, ESIM nonlinear cell problem, Karl iteration, screening physics |
+| **peec** | `mcp-server-peec` | PEEC: Loop-Star, FastHenry, PyPEECBuilder, Bessel/Dowell/ESIM SIBC, PRIMA model-order reduction, SPICE extraction |
+| **electromagnet** | `mcp-server-electromagnet` | Accelerator magnet: CoilBuilder, Hantila polarization, B-input Play/Energy hysteresis, IMA sign selection, multipole harmonics |
 
 ---
 
@@ -110,10 +152,12 @@ Continue, …):
 ```json
 {
   "mcpServers": {
-    "cubit":         {"command": "mcp-server-cubit"},
-    "build123d":     {"command": "mcp-server-build123d"},
-    "gmsh-post":     {"command": "mcp-server-gmsh-post"},
-    "radia-interop": {"command": "mcp-server-radia-interop"}
+    "cubit":               {"command": "mcp-server-cubit"},
+    "build123d":           {"command": "mcp-server-build123d"},
+    "gmsh-post":           {"command": "mcp-server-gmsh-post"},
+    "radia-interop":       {"command": "mcp-server-radia-interop"},
+    "differential-forms":  {"command": "mcp-server-differential-forms"},
+    "mathematica":         {"command": "mcp-server-mathematica"}
   }
 }
 ```
