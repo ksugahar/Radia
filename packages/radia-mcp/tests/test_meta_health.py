@@ -112,6 +112,102 @@ def test_all_related_links_are_bidirectional():
     )
 
 
+def test_topics_dispatcher_sync_for_dispatcher_servers():
+    """For every dispatcher-style server (one tool with `topic` param +
+    TOPICS dict in knowledge), verify that calling the dispatcher with
+    each declared TOPICS key returns substantial content (not the
+    "Unknown topic" error message).
+
+    Catches drift where a topic gets renamed in the dispatcher's if-chain
+    but the TOPICS dict in knowledge.py is not updated, or vice versa.
+    The 2026-05-24 review identified this as a high-value safety net.
+    """
+    import asyncio
+    import importlib
+    import inspect
+    from radia_mcp.meta import catalog
+
+    drift = []
+    skipped = []
+    for name, info in catalog.CATALOG.items():
+        subpkg = info["subpackage"]
+        try:
+            mod = importlib.import_module(f"{subpkg}.server")
+        except Exception as e:
+            skipped.append(f"{name}: server import failed ({type(e).__name__})")
+            continue
+        mcp = getattr(mod, "mcp", None)
+        if mcp is None:
+            continue
+        # Find the dispatcher tool: a tool with a `topic` parameter,
+        # excluding the auto-wired *_topics and *_status helpers.
+        tools = list(mcp._tool_manager._tools.items())
+        dispatchers = []
+        for tname, tool in tools:
+            if tname.endswith("_topics") or tname.endswith("_status"):
+                continue
+            fn = getattr(tool, "fn", None)
+            if fn is None:
+                continue
+            try:
+                sig = inspect.signature(fn)
+            except (TypeError, ValueError):
+                continue
+            if "topic" in sig.parameters:
+                dispatchers.append((tname, fn))
+        if not dispatchers:
+            continue  # multi-tool server with no `topic`-arg dispatcher
+        if len(dispatchers) > 1:
+            # Multiple dispatchers — accept (e.g. magnetic_materials),
+            # check each.
+            pass
+
+        # Find the TOPICS dict in the same subpackage's knowledge module
+        topics_dict = None
+        for kn_mod_name in (subpkg + ".knowledge",
+                            subpkg + "." + name.replace("-", "_") + "_knowledge",
+                            subpkg + ".em_knowledge"):  # electromagnet
+            try:
+                kn = importlib.import_module(kn_mod_name)
+            except ImportError:
+                continue
+            for attr in ("TOPICS",):
+                t = getattr(kn, attr, None)
+                if isinstance(t, dict) and t:
+                    topics_dict = t
+                    break
+            if topics_dict:
+                break
+        if topics_dict is None:
+            continue  # no TOPICS exposed (multi-tool / multi-knowledge-file server)
+
+        # Call the dispatcher for each TOPICS key and verify
+        for dname, dfn in dispatchers:
+            for tk in topics_dict:
+                try:
+                    result = dfn(topic=tk)
+                except Exception as e:
+                    drift.append(f"{name}::{dname}(topic={tk!r}) raised "
+                                  f"{type(e).__name__}: {str(e)[:80]}")
+                    continue
+                if not isinstance(result, str):
+                    continue  # non-text response, skip
+                head = result[:80].lower()
+                if "unknown topic" in head or "not found" in head:
+                    drift.append(
+                        f"{name}::{dname}(topic={tk!r}) returned "
+                        f"unknown-topic error although TOPICS lists it"
+                    )
+
+    if skipped:
+        import warnings
+        warnings.warn(f"Servers skipped: {skipped[:3]}")
+    assert not drift, (
+        "TOPICS / dispatcher chain out of sync:\n  " +
+        "\n  ".join(drift)
+    )
+
+
 def test_all_tags_in_canonical_keep_set():
     """Tags must come from the 9-tag canonical set.
 
