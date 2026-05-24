@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """Static cross-checker between Radia GUI panels and their `calc_*.py`.
 
-Catches three silent-bug classes at the panel/CLI boundary:
+Catches four silent-bug classes at the panel/CLI boundary:
 
     (1) Panel emits `--foo` but no calc_*.py declares it  ->  argparse reject
     (2) calc_*.py declares `--bar` but no panel emits it  ->  silent default
     (3) Panel defines widget `X` that no `build_command` ever reads
                                                         ->  orphan widget
+    (4) Panel `_XXX_MAP` dict has a leaf value (CLI-flag-value-shaped
+        string like "ams" / "dense-lu") that no calc_*.py argparse
+        `choices=[]` accepts                            ->  map-value reject
+
+Class (4) was added 2026-05-24 after the AMG->AMS typo (radia_em.py
+mapped "AMG (Compact)" -> "amg" but calc_accel_magnet.py
+choices=["auto", "pardiso", "bddc", "iccg", "ams"] rejected it,
+producing a subprocess exit 2 every time a user clicked through Omega
+formulation with AMG).  Class (1) couldn't catch this because the
+panel emits the flag "--solver" itself (which IS accepted) -- the
+bug is in the VALUE the panel sent, not the flag name.
 
 Run:
 
@@ -16,7 +27,7 @@ Run:
 
 Exit code:
     0  clean (or only waived issues)
-    1  REJECT (panel emits unknown flag)
+    1  REJECT (panel emits unknown flag, or map-value not in choices)
     2  orphan widget or silent-default (when --strict)
 
 Waivers:
@@ -25,6 +36,13 @@ Waivers:
         # CLI-DIFF: ignore --reg --shift-eps -- advanced solver knobs
 
     Listed flags are not counted as silent-default failures.
+
+    For map-value waivers (e.g. a map value is consumed internally,
+    not as a CLI flag argument), add::
+
+        # CLI-DIFF: ignore-map-value some-literal-value -- reason
+
+    Listed values are not counted as map-value-reject failures.
 """
 
 from __future__ import annotations
@@ -87,6 +105,30 @@ def scan_calc_cli(path: Path) -> Set[str]:
                         and kw.value.value is True):
                     flags.add("--hys-file")
     return flags
+
+
+def scan_calc_choices(path: Path) -> Set[str]:
+    """Return the union of every `choices=[...]` literal across all
+    `add_argument(...)` calls in *path*.  Used by Check (4) to verify
+    panel `_XXX_MAP` leaf values are accepted by at least one CLI flag.
+
+    Each element must be a string Constant; non-string choices (int,
+    enum) are skipped silently.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    choices: Set[str] = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_argument"):
+            for kw in node.keywords:
+                if (kw.arg == "choices"
+                        and isinstance(kw.value, (ast.List, ast.Tuple))):
+                    for elt in kw.value.elts:
+                        s = _str_const(elt)
+                        if s is not None:
+                            choices.add(s)
+    return choices
 
 
 # ----------------------------------------------------------------------
@@ -236,11 +278,58 @@ def scan_panel(path: Path) -> Dict:
                 if tok.startswith("--"):
                     waivers.add(tok)
 
+    # Check (4) input: panel class-level _XXX_MAP dicts (any class attr
+    # whose RHS is a Dict literal).  Recursively extract every string
+    # leaf value -- these are CLI-flag-value candidates that must appear
+    # in at least one calc_*.py argparse choices=[] (with the exception
+    # of waived values via the ignore-map-value comment).
+    map_leaf_values: Dict[str, Set[str]] = {}  # map_name -> {leaf strs}
+    for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+        for stmt in cls.body:
+            # Class-level assignment: `_XXX_MAP = {...}` or annotated
+            # form `_XXX_MAP: dict = {...}`.
+            if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+                tgt, val = stmt.targets[0], stmt.value
+            elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
+                tgt, val = stmt.target, stmt.value
+            else:
+                continue
+            if not (isinstance(tgt, ast.Name)
+                    and tgt.id.endswith("_MAP")
+                    and isinstance(val, ast.Dict)):
+                continue
+            leaves: Set[str] = set()
+
+            def _collect(d: ast.Dict) -> None:
+                for v in d.values:
+                    if isinstance(v, ast.Constant) and isinstance(v.value, str):
+                        leaves.add(v.value)
+                    elif isinstance(v, ast.Dict):
+                        _collect(v)
+
+            _collect(val)
+            if leaves:
+                map_leaf_values[tgt.id] = leaves
+
+    # Extract map-value waivers: # CLI-DIFF: ignore-map-value foo bar -- reason
+    map_value_waivers: Set[str] = set()
+    mv_waiver_re = re.compile(
+        r"CLI-DIFF:\s*ignore-map-value\s+(\S+(?:\s+\S+)*?)(?:\s*--\s.*)?$",
+        re.M)
+    for line in text.splitlines():
+        m = mv_waiver_re.search(line)
+        if m:
+            for tok in m.group(1).split():
+                if tok and not tok.startswith("--"):
+                    map_value_waivers.add(tok)
+
     return {
         "methods": methods,
         "widgets_defined": widgets_defined,
         "widgets_read": widgets_read,
         "waivers": waivers,
+        "map_leaf_values": map_leaf_values,
+        "map_value_waivers": map_value_waivers,
     }
 
 
@@ -250,8 +339,10 @@ def scan_panel(path: Path) -> Dict:
 def check(panels: List[Path], strict: bool = False) -> int:
     # Scan all calc_*.py first
     calc_index: Dict[str, Set[str]] = {}
+    calc_choices_union: Set[str] = set()
     for p in sorted(PANELS_DIR.glob("calc_*.py")):
         calc_index[p.name] = scan_calc_cli(p)
+        calc_choices_union |= scan_calc_choices(p)
 
     rc = 0
     for panel in panels:
@@ -292,6 +383,33 @@ def check(panels: List[Path], strict: bool = False) -> int:
             print(f"  ORPHAN WIDGETS ({len(orphans)}): "
                   + " ".join(sorted(orphans)))
             rc = max(rc, 2)
+
+        # Check (4): map-value reject — leaf string values in any
+        # _XXX_MAP dict that are NOT in any calc argparse choices=[].
+        # Heuristic filter: only flag values that look CLI-flag-shaped
+        # (lowercase letters / digits / hyphens, no spaces, len 2..20).
+        # This skips human-readable labels (e.g. "Direct (PARDISO)" as a
+        # key is unaffected; we only inspect VALUES).
+        def _cli_value_shaped(s: str) -> bool:
+            return (2 <= len(s) <= 20
+                    and " " not in s and "(" not in s
+                    and any(c.isalpha() for c in s)
+                    and all(c.isalnum() or c in "-_." for c in s))
+
+        for map_name, leaves in pinfo["map_leaf_values"].items():
+            rejects: List[Tuple[str, str]] = []
+            for v in sorted(leaves):
+                if not _cli_value_shaped(v):
+                    continue
+                if v in calc_choices_union:
+                    continue
+                if v in pinfo["map_value_waivers"]:
+                    continue
+                rejects.append((map_name, v))
+            if rejects:
+                print(f"  MAP-VALUE REJECT ({len(rejects):2d}) : "
+                      + ", ".join(f"{m}[{v!r}]" for m, v in rejects))
+                rc = max(rc, 1)
 
     print("\n---")
     if rc == 0:
