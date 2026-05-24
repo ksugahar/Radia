@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from ..common import register_status_tool
 
 from .rules import ALL_RULES
 from .gmsh_knowledge import get_gmsh_documentation
@@ -276,6 +277,18 @@ def _selftest():
     print()
     print(f"Scanned: {total} files")
     print(f"GMSH issues: {issues}")
+
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-gmsh',
+    description='GMSH MSH v4.1 inspect/validate/convert/write_node_data',
+    subpackage='radia_mcp.gmsh',
+    related_servers=["cubit"],
+    optional_deps=["gmsh"],
+)
 
 
 def main():

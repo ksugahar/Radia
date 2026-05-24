@@ -25,6 +25,7 @@ field-harmonics / multipole analysis).
 import sys
 
 from mcp.server.fastmcp import FastMCP
+from ..common import register_status_tool
 
 from .em_knowledge import get_electromagnet_documentation
 
@@ -124,6 +125,18 @@ def new_electromagnet_simulation(magnet_type: str = "dipole") -> str:
 # ============================================================
 # Entry point
 # ============================================================
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-electromagnet',
+    description='Accelerator electromagnet: CoilBuilder, Hantila, Play/Energy hysteresis',
+    subpackage='radia_mcp.electromagnet',
+    related_servers=["motor", "accelerator", "magnetic-materials"],
+    optional_deps=["radia", "ngsolve"],
+)
+
 
 def main():
     if "--selftest" in sys.argv:
