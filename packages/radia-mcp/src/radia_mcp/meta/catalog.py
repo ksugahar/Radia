@@ -1,7 +1,11 @@
-"""Authoritative catalog of all 29 radia_mcp servers.
+"""Authoritative catalog of all 36 radia_mcp servers.
 
 Source of truth: this dict. .mcp.json (in the Radia monorepo root)
 should mirror it.
+
+The catalog includes the `meta` server itself (self-referential entry)
+so that `radia_mcp_overview` reports a complete picture and
+`radia_mcp_by_tag("meta")` finds the entry-point.
 
 Each entry:
     "<short_name>": {
@@ -358,8 +362,24 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
-        "related": [],
+        "related": ["meta"],
         "tags": ["meta", "knowledge"],
+    },
+
+    # ============================================================
+    # Meta (the catalog itself — recommended first call)
+    # ============================================================
+    "meta": {
+        "subpackage": "radia_mcp.meta",
+        "entry_point": "mcp-server-radia-meta",
+        "description": "★ RECOMMENDED FIRST CALL. Cross-server catalog "
+                       "of all radia_mcp.* servers — answers \"which "
+                       "tool covers concept X?\" without trial-and-error.",
+        "primary_tools": ["radia_mcp_overview", "radia_mcp_get",
+                            "radia_mcp_by_tag", "radia_mcp_related",
+                            "radia_mcp_health"],
+        "related": ["literature-index"],
+        "tags": ["meta", "discovery", "catalog"],
     },
 }
 
