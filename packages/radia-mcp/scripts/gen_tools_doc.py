@@ -32,6 +32,7 @@ SERVERS = [
     ("ih",             "mcp-server-ih",             "IH (induction-heating) coil + load workflow"),
     ("peec",           "mcp-server-peec",           "PEEC (partial element equivalent circuit) inductance modeling"),
     ("interop",        "mcp-server-radia-interop",  "Cross-tool interop (CadQuery / build123d / Cubit STEP boundary)"),
+    ("panel_review",   "mcp-server-panel-review",   "Radia GUI panel review skill-chain + bug catalogue (panel-cli-diff / panel-review / panel-qt-test / panel-preview / panel-smoke)"),
 ]
 
 

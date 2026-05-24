@@ -383,45 +383,58 @@ done
 
 ## 6b. Per-Element vs Scalar Z_s (the headline contribution)
 
-**Test setup** (2026-05-18, LAB benchmark): Same Cu workpiece mesh
-(`ih_bem_sample_p1.vol`, 2150 BND tris) but **driven as steel** via
-the BH-curve ESIM path:
-σ = 2 × 10⁶ S/m, μ_r(linear) = 100, BH curve
+**Status (2026-05-24)**: numbers below correspond to **sweep_v2** data
+(`C:/temp/igte_bench/sweep_v2/`), the source of the IGTE 2026 digest
+Fig. 1 heatmap.  The pre-2026-05-24 version of this section quoted
+"+48 % under-estimate by scalar" / `P_per = 45.4 W`; those values
+were the output of an **early prototype** that used a Galerkin
+localization `|H_t|_i² ∝ φ_i (Kφ)_i` for the per-DOF gradient
+extraction.  That formula samples the **surface Laplacian**, not the
+gradient norm, and mis-places the saturation hot-spot — flipping the
+sign of the per-vs-scalar disagreement.  The current production
+code (v4.67.0+, `calc_inductance.py:849-851`) uses a triangle-wise
+P1 gradient instead and gives the values below.
+
+**Test setup** (2026-05-22, LAB sweep_v2): same Cu workpiece mesh
+(`ih_bem_sample_p1.vol`, 2150 BND tris), driven as steel via the
+BH-curve ESIM path: σ = 2 × 10⁶ S/m, μ_r(linear) = 100, BH curve
 [`em_sample_bh.txt`](../../src/radia/panels/samples/em_sample_bh.txt),
 half_thickness = 5 mm.  Coil: PEEC filament from
 [`ih_fem_kelvin_demo_coil.step`](../../src/radia/panels/samples/ih_fem_kelvin_demo_coil.step).
 Frequency: 50 kHz.  **I_port = 100 A** (chosen to push surface H_t
-through the BH knee at ~1000 A/m).
+through the BH knee at ~1000 A/m).  Both modes:
+`--esim-max-iter 30 --esim-anderson-m 5 --esim-relax 0.5`.
 
 | Quantity | Scalar Karl (mesh-RMS) | Per-element Karl (per-DOF) | Δ |
 |---|---|---|---|
-| Convergence | converged @ iter 15 (`dZ = 1e-3`) | NOT converged at iter 15 (`dZ_max = 0.34`) | qualitative |
-| P_wp [W] | 30.60 | 45.36 | **+48 %** |
-| L_total [nH] | 87.96 | 84.76 | -3.6 % |
-| ΔL [nH] | −10.01 | −13.21 | +32 % more negative |
-| H_t_rms [A/m] | 680.7 (single value) | 1192.9 mean, 2951.4 max | — |
-| \|Z_s\| | 2.25e-2 (scalar) | min 1.13e-2, max 3.74e-2 | **3.30× spatial ratio** |
+| Convergence | converged @ iter 6 (Anderson m=5) | converged @ iter 7 (Anderson m=5) | both OK |
+| P_wp [W] | **30.51** | **18.75** | `P_per/P_scalar = 0.615` (= −38.5 %) |
+| L_total [nH] | 90.70 | 92.88 | +2.4 % |
+| ΔL [nH] | −9.97 | −7.79 | −22 % (less negative) |
+| H_t_rms [A/m] | 680 (single value) | 518 mean (per-DOF integral) | — |
+| `mean⟨|Z_s|⟩` | 2.25e−2 (scalar) | 2.97e−2 (Re part 1.78e−2, Im 2.38e−2) | per-element raises mean |Z_s| (saturation drop is local) |
 
-(From `C:/temp/igte_bench/I100_{scalar,per_panel}.json`.)
+(From `C:/temp/igte_bench/sweep_v2/I100_f50k_{scalar,per_panel}.json`.)
 
-**The headline result**: at I_port = 100 A, the per-element Karl
-reports `P_wp = 45.4 W` vs scalar Karl's `30.6 W` — a **48 %
-under-estimate by the scalar method** on this geometry.
+**The headline result (corrected sign)**: at I_port = 100 A,
+f = 50 kHz, the per-element Karl reports `P_wp = 18.75 W` vs
+scalar Karl's `30.51 W` — scalar **over-estimates by a factor 1.63**
+(equivalently per-element predicts 38.5 % LESS dissipation than
+scalar).  The IGTE 2026 paper's Fig. 1 heatmap shows this is the
+representative behaviour across the whole BH-knee operating region
+(I = 100-300 A, f = 10-100 kHz): per/scalar ratio 0.52-0.78.
 
 ### 6b.1 Physical interpretation
 
-The workpiece surface has strong **spatial saturation contrast** at
-this drive level:
-
-- `H_t_min ≈ 250 A/m` on the far face of the cylinder (linear high-μ
-  regime, μ_r ≈ 100, Z_s ≈ 0.037 Ω).
-- `H_t_max ≈ 2950 A/m` on the face closest to the gapped torus's
-  current concentration (saturated, μ_r ≈ 5, Z_s ≈ 0.011 Ω).
-- Mesh-RMS `H_t_rms = 1193 A/m` lies between these and gives
-  Z_s_scalar ≈ 0.022 Ω.
+At this drive level, hot-spot DOFs sit **past** the BH knee and have
+**lower** local Z_s (because μ_r drops sharply on the falling side of
+the BH curve).  Scalar mesh-RMS doesn't see this — it picks an
+intermediate Z_s that doesn't account for the local saturation drop —
+so it over-estimates the dissipation that the (locally less lossy)
+hot-spot DOFs contribute.
 
 Because `P_wp ∝ Re(Z_s) · |H_t|²` is nonlinear in H_t, the scalar
-mesh-RMS average under-estimates the integral:
+mesh-RMS average is biased relative to the per-DOF integral:
 
 $$
 \int_\Gamma \tfrac{1}{2}\,\mathrm{Re}\bigl[Z_s(|H_t|)\bigr]\,|H_t|^2\,dS
@@ -434,31 +447,27 @@ The per-element formulation samples `Z_s(|H_t|[i])` at every DOF and
 integrates exactly — this is the BEM analogue of the FEM
 "per-element nonlinear material" approach.
 
-### 6b.2 Convergence observation (action item)
+### 6b.2 Convergence observation (resolved 2026-05-24)
 
-At the default `--esim-relax 0.5`, the per-element Karl iteration does
-NOT converge within 15 iterations: `dZ_max` stays around **0.34**
-through iter 14.  This is qualitatively different from the scalar
-Karl, which converges cleanly to `dZ < 1e-3` in 15 iter.
+With **Anderson Type-II acceleration** (m=5) wrapped around the
+damped Karl iteration (`--esim-anderson-m 5 --esim-relax 0.5`),
+per-DOF Karl converges in **7-30 iterations** across the full
+32-case sweep (31 of 32 converged to `dZ_max < 1e-3`; the lone
+hold-out is I=300 A, f=500 kHz which caps at 30 iter with
+`dZ_max ≈ 0.04`).  Without Anderson (m=0), the deep-saturation
+cases stay at `dZ_max ≈ 0.1-0.4` even at 60 iterations — the prior
+observation in this section.
 
-Root cause: at DOFs where `|H_t|` straddles the BH knee (μ_r drops
-from 100 to ~5 across a small H range), the local Lipschitz
-constant `L_i ≈ 2-3`, exceeding the contraction condition `α·L < 1`
-at `α = 0.5`.
+Root cause of the per-DOF stiffness: at DOFs where `|H_t|` straddles
+the BH knee (μ_r drops from 100 to ~5 across a small H range), the
+local Lipschitz constant `L_i ≈ 2-3`, exceeding the contraction
+condition `α·L < 1` at `α = 0.5`.  Anderson's history-based mixing
+side-steps the per-DOF Lipschitz bound by working in the residual
+space of the full vector update.
 
-**Workarounds — measured**:
-- Lower relaxation (`--esim-relax 0.3 --esim-max-iter 60`):
-  P_wp converges to **45.76 W** (vs 45.36 W at α=0.5/15 iter — only
-  0.9 % drift), but `dZ_max` still oscillates between 0.07 and 0.22
-  in iterations 50-60 (`dZ_max[59] = 0.093`).  **Even at α=0.3 with
-  60 iterations, scalar tolerance `1e-3` is not reached.** P_wp is
-  stable to ~1 %; ΔL stable to ~1 %.
-- This confirms that **simple damped Picard is insufficient** for
-  per-element Karl in the deep-saturation regime.
-- **Anderson acceleration** on the Z_s vector (planned, see § 8 below)
-  is needed for tight convergence.
-- Per-DOF adaptive relaxation `α_i = min(0.5, 0.7 / L_i)` is an
-  alternative; not implemented.
+**Production recommendation**: always pass `--esim-anderson-m 5` for
+per-element runs; the per-iter overhead is negligible vs the cell-
+solve cost, and the convergence gain is decisive.
 
 ### 6b.3 What this means for the IGTE paper
 
@@ -466,16 +475,17 @@ This IS the paper's headline numerical result:
 
 > **For steel induction-heating workpieces driven through the BH knee,
 > the per-element BEM ESIM formulation reports a workpiece dissipation
-> ~50 % higher than the scalar mesh-RMS formulation, because it
-> captures the spatial saturation contrast (Z_s varying by 3.3×
-> across the surface).**
+> 22-48 % LOWER (per/scalar = 0.52-0.78) than the scalar mesh-RMS
+> formulation.  Hot-spot DOFs sit past the BH knee where the curve
+> gives lower local Z_s; per-element resolves this, scalar averages
+> it away.**
 
 For the digest figure: plot `Z_s(s)` along a 1-D arc on the workpiece
 surface, side-by-side for scalar vs per-element.  The scalar curve
 is flat; the per-element curve shows a clear saturation pattern with
 ~3× variation.
 
-**Reproducibility**:
+**Reproducibility (sweep_v2 parameters)**:
 
 ```bash
 # Scalar
@@ -486,7 +496,7 @@ python src/radia/panels/calc_inductance.py \
   --sigma 2e6 --mu-r 100 --half-thickness 0.005 \
   --frequency 50000 --current 100.0 --coil-sigma 5.8e7 \
   --impedance-model esim --bh-file src/radia/panels/samples/em_sample_bh.txt \
-  --esim-max-iter 15 --esim-tol 1e-3 --esim-relax 0.5 \
+  --esim-max-iter 30 --esim-tol 1e-3 --esim-relax 0.5 --esim-anderson-m 5 \
   --h1-order 1 --wp-bem-backend intree-dense \
   --output scalar.json
 
@@ -495,6 +505,12 @@ python src/radia/panels/calc_inductance.py \
   ... [same flags] ... --esim-per-panel \
   --output per_panel.json
 ```
+
+The full 32-case heatmap that ships with the IGTE 2026 paper is
+generated by `examples/ih_esim_benchmark/sweep_f_I.py` + matching
+`plot_sweep_heatmap.py`; see that example's
+[`README.md` "Phase B" section](../../examples/ih_esim_benchmark/README.md#phase-b-per-element-vs-scalar-disagreement-sweep-sweep_f_ipy)
+for the per-cell numerical values and the convergence summary.
 
 ---
 

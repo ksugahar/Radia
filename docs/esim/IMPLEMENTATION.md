@@ -268,21 +268,34 @@ potential; the HCurl formulas use the Robin BC inversion
 
 For workpieces with strong spatial variation of `|H_t|` (saturation
 pattern), a single mesh-RMS `H_t_rms` is too coarse.  The per-DOF
-variant ships in all three paths (BIE: v4.47.2+; FEM: v4.55+):
+variant ships in all three paths (BIE: v4.47.2+; FEM: v4.55+).
+
+**Per-DOF `|H_t|` extraction (v4.67.0+)**: triangle-wise P1 gradient
+`∇_s φ = Σ_j φ_j ∇N_j` per triangle, area-weighted average to
+vertices.  See `radia.bem_sibc_solver.extract_H_t_per_dof_grad`:
 
 ```python
-# Per-DOF |H_t|^2 from variational form (BIE example, calc_inductance.py:652-670):
+# calc_inductance.py:849-851 (v4.67.0+):
+from radia.bem_sibc_solver import extract_H_t_per_dof_grad
 phi_vec = np.asarray(res_bem["phi_vec"])
-K_phi = bem.K @ phi_vec                          # K @ phi
-Hsq_per = phi_vec.real * K_phi.real + phi_vec.imag * K_phi.imag
-M_lump = bem.M @ np.ones(bem.ndof)               # row sums = lumped areas
-H_t_per = np.sqrt(np.abs(Hsq_per) / np.maximum(M_lump, 1e-30))
+H_t_per = extract_H_t_per_dof_grad(phi_vec, wp_mesh)
 
 # Per-DOF ESIM call
 Z_s_new = np.array([esim_solver.solve(H_t_per[i])['Z']
                     for i in range(bem.ndof)])
-Z_s = relax * Z_s_new + (1 - relax) * Z_s_old    # ndarray update
+Z_s = anderson.step(Z_s_old, Z_s_new)            # ndarray update
 ```
+
+> **DO NOT** use the Galerkin localization
+> `|H_t|_i² ∝ φ_i (Kφ)_i` (which we shipped in v4.47.2 - v4.66.x).
+> It samples the **surface Laplacian**, not the gradient norm.  On
+> the steel cylinder benchmark (I=100 A, f=50 kHz) it mis-places
+> the saturation hot-spot and gave `P_per = 45.4 W` vs the correct
+> `P_per = 18.75 W` — i.e. it **flipped the sign of the per-vs-scalar
+> disagreement** (we initially reported +48 % "scalar
+> under-estimates"; the correct sign is −38.5 %, scalar
+> over-estimates).  The inline comment at
+> `calc_inductance.py:842-848` warns about this in the source.
 
 `Z_s` becomes an `ndarray[ndof]`; the BIE solver accepts this via row-
 scaling: `A[i, :] = 0.5 M - DL + γ[i] · SL · M⁻¹ · K[i, :]` where
@@ -327,30 +340,38 @@ per-panel), and `|H_t|` per iteration.  Read it as:
 | `dZ` non-monotone AND `Z_s_abs`, `H_t_rms` still drifting at iter N | Karl genuinely under-relaxed or BH knee straddled | lower `--esim-relax` to 0.3, raise `--esim-max-iter`; do NOT publish the iter-N number |
 | `dZ` oscillates / grows | true divergence (`α L > 1` somewhere) | drop `--esim-relax` to 0.2, check BH curve monotonicity |
 
-**P_wp robustness vs damping / iteration count.**  The headline
-IGTE per-element benchmark (steel cylinder, 50 kHz, I_port = 100 A)
-was run twice to cross-check the plateau:
+**P_wp robustness vs damping / iteration count (pre-2026-05-24, with
+Galerkin localization).**  Two v4.47.2-era runs at the headline
+benchmark (steel cylinder, 50 kHz, I_port = 100 A) gave:
 
 | Run | `--esim-relax` | `--esim-max-iter` | Iters used | `P_wp` [W] | Last-5-iter drift, `<\|Z_s\|>` | Last-5-iter drift, `<\|H_t\|>` |
 |---|---|---|---|---|---|---|
 | v4 | 0.5 | 15 | 15 (capped) | 45.143 | 4.37 % | 8.44 % |
 | v5 | 0.3 | 30 | 30 (capped) | 45.196 | 0.54 % | 0.88 % |
 
-The two runs agree on `P_wp` to **0.12 %** despite using different
-damping and iteration counts.  v5's last-5-iter drift confirms a
-clean plateau (sub-1 % on both mean `|Z_s|` and mean `|H_t|`); v4
-was at the edge of the plateau (last-5-iter drift 4-8 %) but
-already gave the same integrated `P_wp` — showing that the per-DOF
-trajectory and the integrated quantity decouple, as the decision
-table above predicts.
+> **Note (2026-05-24)**: the `P_wp ≈ 45 W` values in this table are
+> from the Galerkin localization `|H_t|² ∝ φ_i(Kφ)_i` (which we
+> shipped until v4.66.x).  After switching the per-DOF extractor to
+> the triangle-wise P1 gradient in v4.67.0 (§ 3.3 above), the same
+> benchmark gives **P_per = 18.75 W** (sweep_v2; see
+> [`CROSS_VALIDATION.md` § 6b](CROSS_VALIDATION.md#6b-per-element-vs-scalar-z_s-the-headline-contribution)).
+> The convergence behaviour also changes: with
+> `--esim-anderson-m 5` (production default, v4.68+) per-DOF Karl
+> reaches `dZ_max < 1e-3` in **7-30 iter** across the IGTE 32-case
+> sweep, no longer hitting the `~5e-2` per-DOF noise floor that was
+> typical with plain damped Picard.
+
+The two-run `P_wp` agreement to 0.12 % across damping settings is
+still informative — it shows the **integrated quantity is robust
+even when per-DOF `dZ` has not converged** — but the absolute value
+has shifted with the gradient-extraction fix.
 
 The per-DOF `dZ_max` remained in the 0.06-0.20 range across both
-runs — this is the per-element ESIM noise floor on the hot-spot
-DOFs and **cannot** be driven below `~5e-2` by damping alone.
-Anderson acceleration or adaptive `α` (roadmap, see
-[`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) § 7) are
-expected to address the per-DOF criterion without affecting the
-P_wp result.
+runs under damped Picard alone — this is the per-element ESIM noise
+floor on the hot-spot DOFs and **cannot** be driven below `~5e-2` by
+damping alone.  Anderson Type-II acceleration (m=5, v4.68+) is what
+breaks past it; see § 6b.2 in `CROSS_VALIDATION.md` for the
+production convergence numbers.
 
 ---
 
