@@ -490,13 +490,66 @@ INDUCTION_HEATING_THERMAL = """
 
 Heat analysis is a **Method choice** in the `radia-ih` panel,
 alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
-FEM-coilmesh methods.  Pick **Method → "Thermal (heat transfer from
+FEM-coilmesh methods.  Pick one of three Thermal Method choices
+(v4.63.0+):
+
+  - ``Thermal: 3D static (no rotation)`` -- 3D solver with
+    rotation_rpm = 0.  Use for static one-shot heat-up.
+  - ``Thermal: 3D + rotation (q_surf re-sampled per step)`` --
+    3D solver with workpiece rotation (v4.58.0 qsurf re-projection
+    each timestep).  Use for non-axisymmetric workpieces / coils.
+  - ``Thermal: 2D axisymmetric (rotation implicit)`` -- axisym
+    solver (10-100x faster); rotation is implicit in the axisym
+    assumption.  Use for rotationally-symmetric workpieces.
+
+The Method dropdown encodes the (mesh_type, rotation_rpm) pair;
+the embedded HeatPanel's individual fields are hidden.
+
+Pre-v4.63.0 single-entry path (kept for context): pick **Method
+→ "Thermal (heat transfer from
 saved q_surf .sol)"**.
 
 Workflow (single window):
 
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
-   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).
+   BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
+   BEM-A+BEM gained the ``qsurf.sol`` output in **radia 4.65.0**.
+   The path has been hardened across four follow-up releases:
+
+     - **4.66.0**: parent-vol_mesh em_vol (was 2D surface mesh -->
+       cross-mesh transfer mirror-flipped) + signed energy fix.
+     - **4.67.0**: surface-path phi_inc + triangle-wise gradient.
+       (Energy magnitude regressed to 1.92 W on 3turnCoil_work,
+       below the weak-coupling lower bound 5.26 W -- the BIE was
+       under-coupling when fed a different-gauge phi_inc.)
+     - **4.68.0**: BIE-calibrated direct Biot-Savart for spatial.
+       The qsurf spatial pattern is computed from
+       q(x) = (P_wp / ∫|H_t_inc|² dS) * |H_t_inc(x)|² where
+       H_t_inc is the tangential Biot-Savart field at each wp
+       surface vertex (curl-free, no topological multivalued
+       branch cut).  The BIE provides only P_wp (its trusted
+       global integral).  Result: ∫q dS = P_wp exactly (energy
+       preserved) AND spatial peak matches the true |H_t|² peak.
+     - **4.69.0**: P2 BIE outward-orientation guard.  The Lagrange-
+       P2 path (``--h1-order 2``, curved-Tri6 geometry) was
+       producing a ~1500x P_wp discrepancy vs the P1 reference
+       because ``bem/sibc_hacapk.py::extract_surface_p2_lagrange``
+       used the vol_mesh's natural BND triangle orientation -- on
+       a workpiece-as-hole sibc this points INWARD toward the hole,
+       flipping the sign of the Galerkin trace(DL) integral.  Fixed
+       by mirroring the P1 path's outward-flip logic against the wp
+       centroid (commit 57381c78, "Release v4.69.0 / radia-mcp-
+       v0.64.0 -- P2 BIE outward orientation fix").  After the fix,
+       P1 = 6.1386 W vs P2 = 6.1565 W on 3turnCoil_work (0.29%
+       agreement); the curved-P2 path is now production-ready for
+       basis_order=2 BEM workpieces.
+
+   Use 4.68.0+ for thermal analysis on BEM-derived qsurf; use
+   4.69.0+ if you want to enable ``--h1-order 2`` curved BEM.
+   Verification on 3turnCoil_work (PEEC-BEM, 150 kHz, 100 A):
+     z of max q   = +11.25 mm (matches Biot-Savart peak exactly)
+     ∫ q dS       = 6.1386 W (= BIE P_wp)
+     peak / end   = 1465x (strong concentration under coil)
 2. Click the **"Run thermal..."** chain button on the action row.
    This SWITCHES the method dropdown to "Thermal" and pre-fills the
    embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
@@ -506,10 +559,14 @@ Workflow (single window):
 4. Set material / convection / time scheme / rotation_rpm.
 5. Click Run.
 
-The pre-4.59.0 standalone ``radia-heat`` (HeatWindow) launcher is
-DEPRECATED.  Its ``main()`` redirects to ``radia-ih`` with the
-Thermal method pre-selected; the deprecated stub will be removed in
-the next minor release.
+The pre-4.59.0 standalone ``radia-heat`` (HeatWindow) launcher was
+REMOVED in radia 4.62.0.  Heat analysis is the Method = "Thermal"
+choice in ``radia-ih`` exclusively.  The HeatPanel sub-widget lives
+at ``radia._heat_panel`` as an internal implementation detail of
+the IH panel; no public CLI replacement for ``radia-heat`` exists
+(launch ``radia-ih`` and pick the Thermal method instead).
+Programmatic imports: replace ``from radia.radia_heat import ...``
+with ``from radia._heat_panel import ...``.
 
 ## ``.sol + .vol`` strict contract (4.58.0+)
 
@@ -520,12 +577,17 @@ mesh, no FES-order header.  Both files MUST be passed:
 # Direct CLI (calc_heat.py):
 python -m radia.panels.calc_heat \\
     --wp-vol workpiece_thermal.vol \\
-    --surface-label sibc \\
     --qsurf-sol  <stem>_qsurf.sol \\  # REQUIRED for spatial mode
     --em-vol     <stem>_fem.vol   \\  # REQUIRED (no auto-locate)
     --qsurf-order 1                \\  # MUST equal EM fes_order
     --material steel --dt 0.5 --t-end 5.0 \\
     --rotation-rpm 12                  # see ``rotating`` topic
+    # --surface-label is OPTIONAL since v4.74.0: empty = all BND.
+    # Pass a specific name only when the workpiece has MULTIPLE BND
+    # sidesets and heating + convection should be restricted to a
+    # subset.  The panel auto-fills the sole BND label when the .vol
+    # has exactly one (e.g. 'sibc'), so users typically don't need
+    # to type it.
 ```
 
 `--qsurf-order` must match the EM solve's `--fes-order` exactly;
@@ -794,8 +856,9 @@ python -m radia.panels.calc_heat \\
     --rotation-rpm 12        # <-- workpiece spins around z at 12 rpm
 ```
 
-Equivalent panel knob: the `Rotation [rpm]` field in `radia_heat.py`
-(Layer 3 Cubit panel).  Default 0 (stationary).
+Equivalent panel knob: the `Rotation [rpm]` field in `radia-ih`
+(Layer 3 Cubit panel, Method = "Thermal" section; the field is
+implemented in `radia._heat_panel`).  Default 0 (stationary).
 
 ## How calc_heat.py implements rotation
 

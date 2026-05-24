@@ -3,6 +3,121 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.63.0 — Thermal Method split into 3 explicit choices
+
+Released 2026-05-21.
+
+The single ``Method = "Thermal"`` choice (v4.59.0-v4.62.0) is
+replaced by three explicit Thermal solvers in the radia-ih
+Method dropdown:
+
+* ``Thermal: 3D static (no rotation)`` -- 3D heat equation,
+  rotation_rpm = 0, q_surf held azimuthally fixed.  Use for
+  static one-shot heat-up, feasibility studies, non-rotating IH.
+* ``Thermal: 3D + rotation (q_surf re-sampled per step)`` -- 3D
+  heat equation, workpiece spins around +z axis, q_surf
+  re-projected on the body frame each timestep (v4.58.0+
+  feature).  Use for non-axisymmetric workpieces OR
+  non-axisymmetric coils under rotation.
+* ``Thermal: 2D axisymmetric (rotation implicit)`` -- axisym
+  (r, z) solver, 10-100x faster than equivalent 3D.  Use for
+  rotationally-symmetric workpieces (cylinder, stepped shaft,
+  disk).
+
+The Method dropdown owns the (mesh_type, rotation_rpm) pair;
+the embedded HeatPanel's individual ``Mesh type`` combo and
+``Rotation [rpm]`` line are HIDDEN because the parent Method
+already encodes those.  HeatPanel still exposes the choice
+internally for direct subprocess invocation (``calc_heat.py`` /
+``calc_heat_axisym.py``).
+
+### Breaking changes
+
+* The constant ``radia.radia_ih.METHOD_THERMAL`` is removed.
+  Use one of ``METHOD_THERMAL_3D_STATIC`` /
+  ``METHOD_THERMAL_3D_ROTATING`` / ``METHOD_THERMAL_AXISYM``,
+  or the ``THERMAL_METHODS`` frozenset for membership checks.
+* Old scripts that did ``panel._method_combo.setCurrentText(
+  METHOD_THERMAL)`` fail with ``NameError``.  Pick one of the
+  three explicit methods.
+
+panel_qa.py registry: ``ih_thermal`` replaced by three
+entries: ``ih_thermal_3d_static`` / ``ih_thermal_3d_rotating`` /
+``ih_thermal_axisym``.
+
+## 4.62.0 — remove radia-heat standalone (HeatPanel moved to _heat_panel)
+
+Released 2026-05-21.
+
+The pre-4.59.0 standalone ``radia_heat.py`` module and its
+``radia-heat`` console-script entry point are now fully removed.
+Heat analysis lives exclusively as the Method = "Thermal" choice
+in ``radia-ih`` (since v4.59.0).  The HeatPanel sub-widget moved
+to ``src/radia/_heat_panel.py`` as an internal implementation
+detail of the IH panel.
+
+### Breaking changes
+
+* ``from radia.radia_heat import HeatPanel, HEAT_SRC_SPATIAL, ...``
+  fails with ``ModuleNotFoundError`` -- update to
+  ``from radia._heat_panel import HeatPanel, HEAT_SRC_SPATIAL, ...``
+* The ``radia-heat`` console script is removed.  Old shortcuts
+  that launched it must be updated to launch ``radia-ih``
+  instead, then pick Method = "Thermal" (and fill qsurf .sol +
+  em .vol + wp .vol manually, or use the "Run thermal..." chain
+  shortcut after a successful EM run).
+* In 4.59.0-4.61.0 the ``radia-heat`` CLI was a deprecation stub
+  that redirected to ``radia-ih`` automatically; that transitional
+  redirect is gone.
+
+Docs (``docs/IH_THERMAL_WORKFLOW.md``) and the
+``radia_mcp.ih.thermal`` topic both reflect the removal.
+
+## 4.61.0 — fix rect_united section-plane regression (task #30 close-out)
+
+Released 2026-05-20.
+
+Three independent bugs in ``_filaments_from_section_planes`` that
+the build123d -> OCP shim (v4.56.0) surfaced are all fixed.  The
+build123d era happened to mask them via offsetting effects;
+post-shim the regression appeared as a ValueError or 32% L error
+on the rect_torus_lofted_united test fixture.
+
+* **Bug 1**: ``centroids_attempted`` contract violation.  The caller
+  passed ``path_m[i]`` (spine point at bbox-heuristic R) where
+  ``_filaments_from_per_station_faces`` requires ``face.center()``;
+  ``cad_to_m = span_m / span_cad`` then recovered (R_spine /
+  R_face) ~ 0.928 instead of 1.0, silently shrinking UV samples
+  by ~8%.  Fix: pass ``face_center_m = face.center() /
+  cad_units_per_meter``.
+* **Bug 2**: ``is_open`` dispatch routed swept-cross-section coils
+  to the rim tracer (right for straight LEADS, wrong for gapped-
+  arc geometries with cap_a/cap_b).  Fix: when caps are detected,
+  use ``_gen_spine`` (planar long-arc) instead of the rim tracer.
+* **Bug 3**: ``_parallel_transport_frame`` returns ``v_hat`` aligned
+  with the chord-perpendicular (~9 deg off the true radial
+  direction at n_stations=20), shrinking the rect's radial extent
+  by cos(9 deg).  Fix: detect planar-arc spines and override
+  ``v_hat = radial direction`` at each station (non-planar spines
+  still use parallel transport).
+
+Test: ``tests/panels/test_inductance_golden.py::
+test_inductance_peec_vacuum_rect_united`` now PASSES (was xfail
+2026-05-20).  Golden L updated 145.3 -> 191.5 nH; the pre-fix
+145.3 was a GEOMETRIC COINCIDENCE (filaments inadvertently at
+bbox-spine R=45.9 instead of conductor R=50, but happened to
+land near BEM-A's 153 nH).  Post-fix filaments sit at the loft's
+actual interior face centroids -- the corrected-PEEC result is
+locked, NOT the physically-most-accurate value (PEEC-perimeter
+on rect cross-sections has known gaps vs BEM-A surface RWG
+which captures rect-corner current crowding).
+
+Production round-wire pipeline (3turncoil, ih_peec_inductance,
+gapped_torus) is COMPLETELY UNAFFECTED: those geometries route
+through ``_filaments_from_circle_edges_per_station``, which is
+not touched by this fix.  Verified L_coil unchanged on both
+round-wire fixtures.
+
 ## 4.60.0 — T .sol always saved + IH Summary closes the thermal loop
 
 Released 2026-05-20.

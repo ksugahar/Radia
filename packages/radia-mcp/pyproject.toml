@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "radia-mcp"
 version = "0.69.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.69.0 (2026-05-24): META server (36-server catalog) + register_status_tool/register_topics_tool factories + 8 ML/optimization subpackages (bayesian_opt/evolutionary/gnn/data_assimilation/mcmc/optuna/pinn/topology_optimization) + 19 application+theory subpackages (motor/accelerator/fusion/wpt/team_benchmark/...) + 5 thin-server PDF enrichments (fusion/ndt/litz_transmission/rna_mec/metamaterial: +7400 lines). 0.68.0: fem subpackage. 0.67.0: bem subpackage. 0.66.0: matrix_solvers subpackage."
+description = "MCP servers for the Radia CAE ecosystem. 0.69.0 (2026-05-24): META server (36-server catalog) + register_status_tool/register_topics_tool factories + 8 ML/optimization subpackages (bayesian_opt/evolutionary/gnn/data_assimilation/mcmc/optuna/pinn/topology_optimization) + 19 application+theory subpackages (motor/accelerator/fusion/wpt/team_benchmark/...) + 6 thin-server PDF enrichments (fusion/ndt/litz_transmission/rna_mec/metamaterial/maglev_linear: +8300 lines). 0.68.0: fem subpackage. 0.67.0: bem subpackage. 0.66.0: matrix_solvers subpackage."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"

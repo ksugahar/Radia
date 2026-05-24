@@ -68,7 +68,14 @@ except ImportError as e:
 
 METHOD_PEEC_IND         = "PEEC inductance (coil only, STEP)"
 METHOD_BEMA_IND         = "BEM-A inductance (coil only, .vol)"
-METHOD_THERMAL          = "Thermal (heat transfer from saved q_surf .sol)"
+METHOD_THERMAL_3D_STATIC    = "Thermal: 3D static (no rotation)"
+METHOD_THERMAL_3D_ROTATING  = "Thermal: 3D + rotation (q_surf re-sampled per step)"
+METHOD_THERMAL_AXISYM       = "Thermal: 2D axisymmetric (rotation implicit)"
+THERMAL_METHODS = frozenset({
+    METHOD_THERMAL_3D_STATIC,
+    METHOD_THERMAL_3D_ROTATING,
+    METHOD_THERMAL_AXISYM,
+})
 METHOD_PEEC_BEM         = "PEEC + BEM weak coupling (workpiece)"
 METHOD_BEMA_BEM         = "BEM-A + BEM weak coupling (workpiece)"
 METHOD_PEEC_FEM_KELVIN  = "PEEC coil + FEM wp (SIBC) + Kelvin"
@@ -143,21 +150,51 @@ METHOD_TOOLTIP = {
         "Requires <b>coil</b> material + <b>source</b>/<b>sink</b>/"
         "<b>sibc</b>/<b>kelvin</b> in .vol."
     ),
-    METHOD_THERMAL: (
-        "<b>Thermal (heat transfer)</b> -- Phase B.<br>"
+    METHOD_THERMAL_3D_STATIC: (
+        "<b>Thermal: 3D static</b> -- Phase B, no rotation.<br>"
         "<ul>"
-        "<li>Reads q_surf .sol from a previous EM solve (calc_fem_kelvin "
-        "or other PEEC+FEM methods)</li>"
-        "<li>NGSolve .sol = coefficient vector only; the matching "
-        "<b>--em-vol</b> must be supplied alongside</li>"
-        "<li>Solves the heat equation on a SEPARATE workpiece thermal "
-        "mesh (with the workpiece as a real solid, NOT a hole)</li>"
-        "<li>3D or 2D-axisymmetric (rotationally symmetric workpiece)</li>"
-        "<li>Backward Euler / Crank-Nicolson, convection BC + workpiece "
-        "rotation (v4.58.0+ -- q_surf re-projected on body frame each "
-        "step when --rotation-rpm > 0)</li>"
+        "<li>Reads q_surf .sol from a previous EM solve "
+        "(calc_fem_kelvin or other PEEC+FEM methods)</li>"
+        "<li>3D volumetric heat equation on a SEPARATE workpiece "
+        "thermal mesh (workpiece as a real solid, not a hole)</li>"
+        "<li>q_surf held azimuthally fixed; workpiece stationary "
+        "(rotation_rpm = 0)</li>"
+        "<li>Use for: static one-shot heat-up, feasibility study, "
+        "non-rotating IH (induction welding, brazing)</li>"
         "</ul>"
-        "Outputs peak T, T(t) probe history, GMSH .msh + .vtu animation."
+        "Drives calc_heat.py."
+    ),
+    METHOD_THERMAL_3D_ROTATING: (
+        "<b>Thermal: 3D + rotation</b> -- Phase B, true rotation.<br>"
+        "<ul>"
+        "<li>3D volumetric heat equation + workpiece body spinning "
+        "around +z axis</li>"
+        "<li>q_surf re-projected on the body frame at each timestep "
+        "(v4.58.0+: ``(x*cosθ - y*sinθ, x*sinθ + y*cosθ, z)``); "
+        "mesh / FES / mass / stiffness held fixed, only LinearForm "
+        "RHS reassembles per step</li>"
+        "<li>Per-step overhead ~10 ms on typical meshes</li>"
+        "<li>Use for: non-axisymmetric workpiece OR non-axisymmetric "
+        "coil with rotation (general spinning case)</li>"
+        "</ul>"
+        "Drives calc_heat.py with rotation_rpm > 0."
+    ),
+    METHOD_THERMAL_AXISYM: (
+        "<b>Thermal: 2D axisymmetric</b> -- Phase B, axisym shortcut."
+        "<br>"
+        "<ul>"
+        "<li>Rotationally-symmetric workpiece (cylinder, stepped "
+        "shaft, disk) meshed in the (r, z) plane</li>"
+        "<li>10-100× faster than equivalent 3D mesh</li>"
+        "<li>Cross-mesh q_surf transfer is φ-averaged so a "
+        "slightly non-axisymmetric coil (gapped torus) still "
+        "produces a physically sensible q</li>"
+        "<li>rotation_rpm is recorded as metadata (rotation is "
+        "implicit in the axisym assumption)</li>"
+        "<li>Use for: continuous rotating IH of cylindrical "
+        "workpieces (the common Kubota / Kameari workflow)</li>"
+        "</ul>"
+        "Drives calc_heat_axisym.py."
     ),
 }
 
@@ -322,7 +359,9 @@ class IHPanel(ModePanel):
             [METHOD_PEEC_IND, METHOD_BEMA_IND,
              METHOD_PEEC_BEM, METHOD_BEMA_BEM,
              METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL,
-             METHOD_THERMAL])
+             METHOD_THERMAL_3D_STATIC,
+             METHOD_THERMAL_3D_ROTATING,
+             METHOD_THERMAL_AXISYM])
         self._method_combo.currentTextChanged.connect(self._on_method_changed)
         self._method_combo.setToolTip(METHOD_TOOLTIP[METHOD_PEEC_IND])
 
@@ -505,10 +544,25 @@ class IHPanel(ModePanel):
         # superseded by this integration; kept temporarily as a
         # deprecated stub that redirects to ``radia-ih`` (radia 4.59.0+).
         self._add_section("Thermal analysis", key="_sec_thermal")
-        from radia.radia_heat import HeatPanel
+        from radia._heat_panel import HeatPanel
+        from PySide6.QtWidgets import QScrollArea, QFrame
         self._heat_panel = HeatPanel(parent=self)
-        # Embed as a single full-width row in IHPanel's form layout.
-        self._form.addRow(self._heat_panel)
+        # Wrap HeatPanel in a QScrollArea with a bounded max height so
+        # the parent window stays inside the 2K-monitor budget
+        # (panel_qa MAX_HEIGHT_RED = 1700 px).  The heat panel's
+        # natural sizeHint is ~1100-1200 px which would push the
+        # window past 1800 px; the scroll viewport caps the row at
+        # 700 px and adds a vertical scrollbar when needed.  Width
+        # is unconstrained since labels need to fit.
+        scroll = QScrollArea()
+        scroll.setWidget(self._heat_panel)
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(700)
+        scroll.setFrameShape(QFrame.NoFrame)
+        self._heat_panel_scroll = scroll
+        # Embed the scroll-wrapped heat panel as a single full-width
+        # row in IHPanel's form layout.
+        self._form.addRow(scroll)
         # Track the heat-panel row so _set_row_visible() can collapse
         # it alongside the section header when method != Thermal.
         self._row_indices["_heat_panel_row"] = self._form.rowCount() - 1
@@ -674,7 +728,12 @@ class IHPanel(ModePanel):
         is_bema_bem = (method == METHOD_BEMA_BEM)
         is_peec_fem_k = (method == METHOD_PEEC_FEM_KELVIN)
         is_fem = (method == METHOD_FEM_FULL)
-        is_thermal = (method == METHOD_THERMAL)
+        is_thermal_3d_static   = (method == METHOD_THERMAL_3D_STATIC)
+        is_thermal_3d_rotating = (method == METHOD_THERMAL_3D_ROTATING)
+        is_thermal_axisym      = (method == METHOD_THERMAL_AXISYM)
+        is_thermal = (is_thermal_3d_static
+                       or is_thermal_3d_rotating
+                       or is_thermal_axisym)
         # Inductance-style (vacuum) vs weak-coupled (workpiece) groupings.
         is_vacuum = is_peec_ind or is_bema_ind
         is_weak = is_peec_bem or is_bema_bem
@@ -803,8 +862,45 @@ class IHPanel(ModePanel):
         # the parent row hides the whole sub-panel.  Direct setVisible
         # is the safety belt for Qt versions where setRowVisible only
         # collapses the QFormLayout row, not the embedded widget.
+        # The scroll wrapper also needs toggling so its viewport
+        # doesn't contribute to sizeHint when thermal mode is off.
+        if hasattr(self, "_heat_panel_scroll"):
+            self._heat_panel_scroll.setVisible(is_thermal)
         if hasattr(self, "_heat_panel"):
             self._heat_panel.setVisible(is_thermal)
+            # Auto-set the embedded HeatPanel's mesh_type +
+            # rotation_rpm visibility based on which Thermal method
+            # is active.  The mesh_type combo is HIDDEN (the parent
+            # Method dropdown encodes that choice); rotation_rpm is
+            # also hidden + reset to 0 for the 3D-static method.
+            from radia._heat_panel import (
+                MESH_TYPE_3D, MESH_TYPE_AXISYM,
+            )
+            mesh_w = self._heat_panel._widgets.get("mesh_type")
+            rpm_w = self._heat_panel._widgets.get("rotation_rpm")
+            n_phi_w = self._heat_panel._widgets.get("n_phi_samples")
+            if is_thermal_axisym and mesh_w is not None:
+                mesh_w.setCurrentText(MESH_TYPE_AXISYM)
+            elif (is_thermal_3d_static or is_thermal_3d_rotating) \
+                    and mesh_w is not None:
+                mesh_w.setCurrentText(MESH_TYPE_3D)
+            # Hide the mesh_type row -- method dropdown owns that choice.
+            # Also hide the "Mesh type" section header that sits above it,
+            # otherwise it becomes an orphan (no content under it).
+            self._heat_panel._set_row_visible("_sec_mesh_type", False)
+            self._heat_panel._set_row_visible("mesh_type", False)
+            # rotation_rpm: hidden + zeroed for static, visible for
+            # rotating + axisym.
+            if is_thermal_3d_static and rpm_w is not None:
+                rpm_w.setText("0")
+                self._heat_panel._set_row_visible("rotation_rpm", False)
+            else:
+                self._heat_panel._set_row_visible(
+                    "rotation_rpm", is_thermal_3d_rotating
+                                     or is_thermal_axisym)
+            # n_phi_samples (axisym only) -- HeatPanel's own
+            # _on_mesh_type_changed handler already toggles this
+            # based on mesh_type; nothing extra needed here.
 
         self._update_status()
         self._emit_validation()
@@ -862,7 +958,7 @@ class IHPanel(ModePanel):
         method = self._method_combo.currentText()
         # Thermal mode delegates to the embedded HeatPanel which has
         # its own is_runnable() (wp_vol + qsurf .sol + em_vol checks).
-        if method == METHOD_THERMAL:
+        if method in THERMAL_METHODS:
             return self._heat_panel.is_runnable() \
                 if hasattr(self, "_heat_panel") else False
         ok, _errors, _warnings = check_method_requirements(
@@ -883,7 +979,7 @@ class IHPanel(ModePanel):
     # string for vacuum modes that don't have a workpiece.
     def wp_vol_path(self):
         # Thermal mode reads the wp .vol from the embedded HeatPanel.
-        if self._method_combo.currentText() == METHOD_THERMAL \
+        if self._method_combo.currentText() in THERMAL_METHODS \
                 and hasattr(self, "_heat_panel"):
             return self._heat_panel.wp_vol_path()
         if "wp_vol" not in self._widgets:
@@ -913,10 +1009,11 @@ class IHPanel(ModePanel):
         method = self.val("method")
         # Thermal mode: delegate to the embedded HeatPanel's
         # build_command (calc_heat.py / calc_heat_axisym.py based on
-        # mesh_type).  vol_path here is the HeatPanel's own --wp-vol;
-        # build_command on HeatPanel ignores it and reads its own
-        # ``wp_vol`` widget.
-        if method == METHOD_THERMAL:
+        # mesh_type which the parent _on_method_changed has already
+        # set from the Method dropdown choice).  vol_path here is
+        # the HeatPanel's own --wp-vol; build_command on HeatPanel
+        # ignores it and reads its own ``wp_vol`` widget.
+        if method in THERMAL_METHODS:
             return self._heat_panel.build_command(vol_path)
         # Vacuum modes (no .vol).  Same builder for PEEC and BEM-A;
         # _coil_solver_cli() picks the --coil-solver flag from the
@@ -1536,18 +1633,21 @@ class IHWindow(AnalysisWindow):
                 heat._widgets["em_vol"].setText(self._heat_em_vol)
             # Spatial qsurf mode (HEAT_SRC_SPATIAL) by definition --
             # the chain only fires when an EM solve produced .sol.
-            from radia.radia_heat import HEAT_SRC_SPATIAL
+            from radia._heat_panel import HEAT_SRC_SPATIAL
             heat._widgets["heat_source"].setCurrentText(HEAT_SRC_SPATIAL)
         except (KeyError, AttributeError) as e:
             self._output.appendPlainText(
                 f"\nCould not pre-fill HeatPanel widgets: {e}")
             return
-        # Switch the method dropdown -- _on_method_changed fires
-        # automatically and shows the Thermal section.
-        from radia.radia_ih import METHOD_THERMAL
-        panel._method_combo.setCurrentText(METHOD_THERMAL)
+        # Switch the method dropdown to the most general Thermal
+        # entry (3D + rotation -- handles both rotating and static
+        # cases since rotation_rpm=0 yields the static behaviour).
+        # The user can pick a different Thermal method (axisym /
+        # 3D static) afterwards if they prefer.
+        from radia.radia_ih import METHOD_THERMAL_3D_ROTATING
+        panel._method_combo.setCurrentText(METHOD_THERMAL_3D_ROTATING)
         self._output.appendPlainText(
-            f"\nSwitched to Thermal method.")
+            f"\nSwitched to '{METHOD_THERMAL_3D_ROTATING}'.")
         self._output.appendPlainText(
             f"  qsurf_sol = {self._heat_qsurf_sol}")
         if self._heat_em_vol:

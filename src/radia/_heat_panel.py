@@ -1,29 +1,24 @@
-"""Radia thermal analysis window (Phase B of the IH pipeline).
+"""HeatPanel sub-widget for the radia-ih Thermal method.
 
-Two-stage workflow with the IH window:
+Internal implementation detail of ``radia.radia_ih.IHWindow``.  This
+panel is embedded as a section that becomes visible when the user
+selects ``Method = "Thermal"`` in the IH window.
 
-  1. Run an IH method (PEEC+BEM / PEEC+FEM Kelvin) in radia_ih.py
-     against the EM .vol.  This writes <stem>_qsurf.sol, the surface
-     heat flux distribution.
-  2. Run radia_heat.py against a SEPARATE workpiece-volume .vol
-     (the IH SIBC mesh treats the workpiece as a hole; the thermal
-     mesh has it as a real solid).  Provide the qsurf .sol from
-     step 1 to pick up the spatial distribution.
+Promoted from the (now-removed) ``radia.radia_heat`` module in
+v4.62.0; the pre-v4.59.0 standalone ``radia-heat`` window has been
+retired in favour of the integrated Method-dropdown UX.
 
-The panel exposes a "Heat source" selector with two values:
+This module owns the UI surface of the Thermal method:
+  - Mesh type (3D volume vs 2D axisymmetric) -> calc_heat[_axisym].py
+  - Heat source (Uniform vs Spatial qsurf .sol)
+  - Workpiece thermal mesh / material / convection BC
+  - Time integration scheme + dt / t_end
+  - Workpiece rotation (v4.58.0+)
+  - Probe / CSV / VTU outputs
 
-  - "Uniform q_surf [W/m^2]" : single scalar applied across the whole
-    heating face.  Cheap.  Useful for first-cut feasibility runs and
-    smoke testing the thermal pipeline without paying for an EM solve.
-  - "Spatial q_surf .sol (from IH)" : load the .sol that
-    calc_fem_kelvin.py emits.  Preserves the spatial distribution
-    (hotspot under the coil, cold zones away from it).
-
-Time integration: backward Euler (default) or Crank-Nicolson.
-
-Standalone launchable -- this module wires up an
-:class:`AnalysisWindow` exactly like radia_ih.py, so the
-"radia-heat" entry-point script can spawn it without Cubit.
+It does NOT own the actual computation -- that's calc_heat.py /
+calc_heat_axisym.py (Layer 4 headless subprocess), invoked via
+``build_command()``.
 """
 
 import os
@@ -32,23 +27,55 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from radia_gui_base import (
-    ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
-    run_app, _PYTHON,
+    ModePanel, calc_script, msh_output, json_output, _PYTHON,
 )
-from PySide6.QtWidgets import QFileDialog
+
+
+# ============================================================
+# Helpers
+# ============================================================
+
+def _parse_vol_bcnames(vol_path):
+    """Return the list of boundary-condition names in a Netgen .vol.
+
+    Parses the ``bcnames`` section from a Netgen .vol text file.  Used
+    by the heat panel's surface_label auto-detect (avoids importing
+    ngsolve just for metadata, saves ~1-2 s of import latency on every
+    Browse-keystroke).
+
+    Format (Netgen .vol):
+
+        bcnames
+        <count>
+        1 first_label
+        2 second_label
+        ...
+
+    Returns an empty list on any parse failure or when the file has no
+    ``bcnames`` section.
+    """
+    names = []
+    with open(vol_path, encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "bcnames":
+            try:
+                count = int(lines[i + 1].strip())
+            except (ValueError, IndexError):
+                return []
+            for j in range(count):
+                parts = lines[i + 2 + j].strip().split(None, 1)
+                if len(parts) == 2:
+                    names.append(parts[1])
+            return names
+        i += 1
+    return names
 
 
 # ============================================================
 # Constants
 # ============================================================
-
-TITLE = "Thermal"
-# We do not require any specific .vol label set here -- the user
-# picks --surface-label in the panel.  Just hint the common ones.
-REQUIRED_LABELS = []
-OPTIONAL_LABELS = ["work_main", "work_skin", "outer", "sibc"]
-OPTIONAL_FILES = {}
-
 
 HEAT_SRC_UNIFORM = "Uniform q_surf [W/m^2]"
 HEAT_SRC_SPATIAL = "Spatial q_surf .sol (from IH)"
@@ -100,7 +127,13 @@ class HeatPanel(ModePanel):
         # This is the routing key: 3D goes to calc_heat.py, axisym
         # goes to calc_heat_axisym.py.  Both consume the same
         # qsurf .sol from the IH solve.
-        self._add_section("Mesh type")
+        #
+        # The "Mesh type" section header takes a key so callers that
+        # hide the mesh_type combo (e.g. IHPanel, where the parent
+        # Method dropdown encodes the choice) can also hide the
+        # section header — otherwise it becomes an orphan that the
+        # panel_qa check flags.
+        self._add_section("Mesh type", key="_sec_mesh_type")
         mesh_t = self.add_combo(
             "mesh_type", "Mesh:",
             [MESH_TYPE_3D, MESH_TYPE_AXISYM], default=0)
@@ -158,9 +191,26 @@ class HeatPanel(ModePanel):
             "wp_vol", "wp .vol:",
             filter_str="Netgen volume (*.vol);;All (*)")
         wp_w.textChanged.connect(self._emit_validation)
-        # Surface label entry: a .vol-derived combo would be nicer
-        # but parity with the calc CLI argument is the priority.
-        self.add_line("surface_label", "Heating surface label:", "outer")
+        wp_w.textChanged.connect(self._on_wp_vol_changed_for_bnd)
+        # Surface label: editable combo populated from the wp .vol's
+        # bcnames when Browse-selected (P1, v4.74.0).  Empty entry
+        # means "apply to ALL BND" (P2, calc_heat.py treats empty as
+        # the ".*" regex match).  This unifies two friction points:
+        # the old default "outer" mismatched keiko/kubota's "sibc"
+        # workpieces (they had to retype), and a single-BND workpiece
+        # shouldn't need any label at all.
+        sl = self.add_combo(
+            "surface_label", "Heating surface label:", [""], default=0)
+        sl.setEditable(True)
+        sl.setToolTip(
+            "Boundary label where qsurf and Newton convection are "
+            "applied.<br><br>"
+            "<b>Leave empty</b> to apply to ALL BND (the common case "
+            "for a single-workpiece .vol -- the panel auto-fills the "
+            "sole BND label when the .vol has exactly one).<br><br>"
+            "Pick a specific label only when the workpiece has "
+            "multiple BND sidesets and heating + convection should be "
+            "restricted to a subset.")
 
         # Material.
         self._add_section("Material (workpiece thermal)")
@@ -175,11 +225,11 @@ class HeatPanel(ModePanel):
             "values from a property table.")
         ov = self.add_check(
             "override_kcprho",
-            "Override rho/cp/k (use preset values as starting point, "
-            "edit below)", default=False)
+            "Override rho/cp/k", default=False)
         ov.toggled.connect(self._on_override_toggled)
         ov.setToolTip(
-            "When OFF, rho/cp/k are locked to the preset's "
+            "Use preset values as a starting point and edit rho/cp/k "
+            "below.  When OFF, rho/cp/k are locked to the preset's "
             "room-temperature values.  When ON, you can edit any of "
             "the three values directly -- the preset is still emitted "
             "to --material so the JSON output keeps a human-readable "
@@ -270,6 +320,73 @@ class HeatPanel(ModePanel):
         cb = getattr(self, "validationChanged", None)
         if callable(cb):
             cb()
+
+    def _on_wp_vol_changed_for_bnd(self, _path):
+        """Auto-populate the surface_label combo from the wp .vol BNDs.
+
+        P1 of the v4.74.0 thermal-panel UX improvement: when the user
+        Browse-selects a workpiece .vol, read its bcnames and either
+        (a) auto-fill ``surface_label`` if there is exactly one BND
+        label, or (b) populate the combo dropdown with the available
+        labels (still editable so the user can type a regex).
+
+        The auto-fill case fixes the historical friction where the
+        panel default ``'outer'`` didn't match keiko/kubota's actual
+        BND name (``'sibc'``) -- they had to manually retype to match
+        the .vol.
+
+        On any failure (file missing, parse error, ngsolve not yet
+        loaded), this is silent: the combo keeps its current state
+        and the calc_heat.py-side validation will surface a clear
+        error at Run time.  Empty entry (the first item) always
+        remains so the user can intentionally select "all BND" -- P2
+        in calc_heat.py interprets that as ``.*``.
+        """
+        # Resolve the absolute path via the AnalysisWindow's helper
+        # (same one ``val()`` uses) so display-relative paths work.
+        try:
+            vol_path = self.val("wp_vol")
+        except Exception:
+            return
+        if not vol_path or not os.path.isfile(vol_path):
+            return
+        try:
+            # Parse .vol text directly so we don't pay the ngsolve
+            # import cost (~1-2s) on every keystroke -- the bcnames
+            # section is a small, well-defined block near the top
+            # of the file.
+            bnds = _parse_vol_bcnames(vol_path)
+        except Exception:
+            return
+        if not bnds:
+            return
+        # Capture current selection so we can preserve user intent
+        # (e.g. they already typed "top" before pasting the .vol path).
+        combo = self._widgets["surface_label"]
+        prior = combo.currentText().strip()
+        # Repopulate: empty first ("apply to ALL BND"), then the
+        # sorted unique BND names.
+        items = [""] + sorted(set(bnds))
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItems(items)
+            if prior and prior in items:
+                # User typed a valid label before -- keep it.
+                combo.setCurrentIndex(items.index(prior))
+            elif len(items) == 2:
+                # Exactly one BND label (items = ["", name]); auto-
+                # fill it.  This is the keiko/kubota single-workpiece
+                # case where naming the sole BND is friction.
+                combo.setCurrentIndex(1)
+            else:
+                # Multiple BNDs -- leave empty (apply to ALL by P2).
+                combo.setCurrentIndex(0)
+        finally:
+            combo.blockSignals(False)
+        # Re-emit validation in case the new selection changes the
+        # is_runnable state (unlikely but free).
+        self._emit_validation()
 
     def _on_heat_source_changed(self, name):
         is_uniform = (name == HEAT_SRC_UNIFORM)
@@ -418,121 +535,3 @@ class HeatPanel(ModePanel):
             cmd += ["--vtu-prefix", vtu]
 
         return cmd
-
-
-# ============================================================
-# Heat window
-# ============================================================
-
-class HeatWindow(AnalysisWindow):
-    def __init__(self, vol_path="", *, prefill=None):
-        super().__init__("Radia - Thermal", vol_path,
-                         settings_key="heat")
-        panel = HeatPanel()
-        self._set_panel(panel)
-        self._restore_settings()
-        # If the launcher passed a .vol, treat it as the wp .vol
-        # (the most common chain-from-IH case).  Display the path
-        # relative to the working folder if it lives inside it.
-        if vol_path and "wp_vol" in panel._widgets and \
-                not panel.val("wp_vol"):
-            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
-        # Apply chain-launch pre-fill (qsurf_sol, em_vol, ...).  The
-        # IH window passes these via the CLI when the user clicks
-        # "Run thermal..." after a successful IH solve so the user
-        # does not have to type the paths in twice.
-        if prefill:
-            self._apply_prefill(panel, prefill)
-        self._update_run_state()
-
-    @staticmethod
-    def _apply_prefill(panel, prefill):
-        """Set widget values from a dict of {key: value}.
-
-        Auto-flips ``heat_source`` to spatial mode when a qsurf-sol
-        is present so the user lands directly on a runnable panel.
-        """
-        for key, value in prefill.items():
-            if not value:
-                continue
-            w = panel._widgets.get(key)
-            if w is None:
-                continue
-            if hasattr(w, "setText"):
-                w.setText(str(value))
-            elif hasattr(w, "setCurrentText"):
-                w.setCurrentText(str(value))
-            elif hasattr(w, "setValue"):
-                try:
-                    w.setValue(int(value))
-                except (TypeError, ValueError):
-                    pass
-        if prefill.get("qsurf_sol"):
-            src = panel._widgets.get("heat_source")
-            if src is not None and hasattr(src, "setCurrentText"):
-                src.setCurrentText(HEAT_SRC_SPATIAL)
-
-
-def main():
-    """DEPRECATED standalone entry point -- redirects to radia-ih.
-
-    Heat analysis was integrated into the radia-ih panel (Thermal
-    method) in radia 4.59.0.  ``radia_heat.py`` as a standalone
-    window is kept temporarily as a redirect stub so old shortcuts
-    and the IH chain button (pre-4.59) still function during the
-    deprecation window.  Removal scheduled for the next minor
-    release.
-
-    Pre-fills passed through to the radia-ih Thermal method:
-      [WP_VOL] --qsurf-sol PATH --em-vol PATH --qsurf-order N
-    """
-    import argparse
-    import warnings
-    warnings.warn(
-        "radia_heat is deprecated since radia 4.59.0.  Heat analysis "
-        "is now integrated into radia-ih (Method dropdown -> "
-        "'Thermal').  Launching radia-ih instead -- this shim will "
-        "be removed in the next minor release.",
-        DeprecationWarning, stacklevel=2)
-
-    parser = argparse.ArgumentParser(
-        description="Radia thermal analysis (DEPRECATED -- redirects "
-                    "to radia-ih).",
-    )
-    parser.add_argument("wp_vol", nargs="?", default="",
-                        help="Pre-fill the wp .vol path on the "
-                             "Thermal method's sub-panel.")
-    parser.add_argument("--qsurf-sol", default="")
-    parser.add_argument("--em-vol", default="")
-    parser.add_argument("--qsurf-order", type=int, default=None)
-    args = parser.parse_args()
-
-    from PySide6.QtWidgets import QApplication
-    from radia_gui_base import apply_panel_base_font
-    from radia.radia_ih import IHWindow, METHOD_THERMAL
-    app = QApplication([sys.argv[0]])
-    apply_panel_base_font(app)
-    window = IHWindow()
-    # Switch the method to Thermal so the sub-panel is visible at startup.
-    panel = window._panel
-    panel._method_combo.setCurrentText(METHOD_THERMAL)
-    heat = panel._heat_panel
-    # Apply pre-fills as the old standalone entry would have.
-    if args.wp_vol:
-        heat._widgets["wp_vol"].setText(args.wp_vol)
-    if args.qsurf_sol:
-        heat._widgets["qsurf_sol"].setText(args.qsurf_sol)
-        heat._widgets["heat_source"].setCurrentText(HEAT_SRC_SPATIAL)
-    if args.em_vol:
-        heat._widgets["em_vol"].setText(args.em_vol)
-    if args.qsurf_order is not None:
-        try:
-            heat._widgets["qsurf_order"].setValue(int(args.qsurf_order))
-        except (KeyError, AttributeError, TypeError, ValueError):
-            pass
-    window.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

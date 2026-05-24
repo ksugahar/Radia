@@ -35,6 +35,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.special import iv as bessel_iv
 
+from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+
 # Add radia src to path so this works without `pip install`
 HERE = Path(__file__).parent.resolve()
 SRC = HERE.parent.parent / "src" / "radia"
@@ -104,23 +106,21 @@ def main():
     # IH headline operating range markers (paper Fig. 1 orange band)
     H_t_min, H_t_max = 32.0, 2991.0
 
-    fig, ax = plt.subplots(figsize=(4.5, 3.0), constrained_layout=True)
+    figsize = apply_lab_style(target="paper_single_column", aspect=0.65)
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     ax.loglog(H_sweep, Z_abs * 1e3, "-", color="C3", linewidth=1.8,
-              label="cell solver $|Z_s|$")
+              label=r"cell solver $|Z_s|$")
     ax.axhline(abs(Z_low) * 1e3, color="C0", linestyle="--", linewidth=1.2,
                label=fr"low-$H$ Bessel ($\mu_r={mu_r_linear:.0f}$)")
     ax.axhline(abs(Z_high) * 1e3, color="k", linestyle=":", linewidth=1.2,
                label=r"saturated thin-skin asymptote")
     ax.axvspan(H_t_min, H_t_max, alpha=0.15, color="C1",
-               label="IH headline $|H_t|$ range")
-    ax.set_xlabel(r"$|H_t|$ [A/m]")
-    ax.set_ylabel(r"$|Z_s|$ [m$\Omega$]")
-    ax.legend(fontsize=7, loc="lower left")
+               label=r"IH headline $|H_t|$ range")
+    ax.set_xlabel(r"$|H_t|$ (A/m)")
+    ax.set_ylabel(r"$|Z_s|$ (m$\Omega$)")
+    ax.legend(loc="lower left", frameon=False)
     ax.grid(which="both", linestyle=":", alpha=0.5)
-    ax.set_title(rf"Cell-solver envelope, {FREQ/1e3:.0f} kHz, "
-                 rf"$\sigma{{=}}{SIGMA:.0e}$ S/m, $R{{=}}{HALF_THICK*1e3:.0f}$ mm",
-                 fontsize=9)
-    fig.savefig(OUT_PNG, dpi=150, bbox_inches="tight")
+    lab_savefig(fig, str(OUT_PNG.with_suffix("")))
     print(f"Saved {OUT_PNG}")
 
     data = {

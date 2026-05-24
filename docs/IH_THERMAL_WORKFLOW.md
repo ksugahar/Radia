@@ -23,7 +23,27 @@ The `qsurf_sol` JSON key in the result holds the absolute path to
 
 ## Phase B: Thermal solve
 
-Pick **Method → "Thermal (heat transfer from saved q_surf .sol)"**
+Pick one of the three Thermal Method choices (v4.63.0+):
+
+* **Method = "Thermal: 3D static (no rotation)"** -- 3D solver,
+  rotation_rpm forced to 0.  Use for static one-shot heat-up or
+  feasibility studies.
+* **Method = "Thermal: 3D + rotation (q_surf re-sampled per step)"**
+  -- 3D solver with workpiece rotation; q_surf re-projected on the
+  body frame each timestep.  Use for non-axisymmetric workpieces
+  OR non-axisymmetric coils with rotation.
+* **Method = "Thermal: 2D axisymmetric (rotation implicit)"** --
+  axisym solver (10-100x faster); rotation is implicit in the
+  axisym assumption (rpm recorded as metadata).  Use for
+  rotationally-symmetric workpieces under continuous rotation.
+
+The radia-ih Method dropdown owns the mesh_type + rotation_rpm
+choice; the embedded HeatPanel's individual mesh_type / rotation
+fields are hidden because the parent Method already encodes them.
+
+Pre-v4.63.0 a single "Thermal (heat transfer from saved q_surf
+.sol)" method choice required the user to set Mesh type +
+rotation_rpm separately; that single-entry UX is removed.
 in the same `radia-ih` panel.  The EM-side sections (Drive, Coil
 material, Coil geometry, Workpiece material, Workpiece impedance,
 Linear solver, Advanced) hide; the embedded HeatPanel becomes the
@@ -61,7 +81,7 @@ How the contract is enforced:
 | Layer | Behavior |
 |---|---|
 | `calc_heat.py --qsurf-sol PATH` without `--em-vol` | Raises `ValueError` with a hint at the typical sibling .vol path |
-| `radia_heat.HeatPanel.is_runnable()` | Returns False unless both .sol AND .vol exist on disk |
+| `radia._heat_panel.HeatPanel.is_runnable()` | Returns False unless both .sol AND .vol exist on disk |
 | `radia_ih._on_run_thermal` chain helper | Tries 3 strategies (msh_file stem, qsurf stem `_qsurf.sol`→`_fem.vol` swap, JSON `wp_vol`) to auto-locate the EM .vol; emits a hint line when all 3 fail |
 
 Auto-locate from the .sol stem was **removed in v4.58.0** per the
@@ -176,16 +196,26 @@ the GridFunction.
 | `T_max` jumps when switching `fes_order` to 2 | `qsurf_order` was not updated to match | Set `qsurf_order = 2` in the Thermal sub-panel to match the EM solve's basis order |
 | Rotation has no effect on `T(t)` | Heat source = Uniform (constant in space) OR `rotation_rpm` left at 0 | Set heat source = Spatial AND `rotation_rpm > 0` |
 
-## Deprecated: `radia_heat` standalone (4.59.0+)
+## Removed: `radia_heat` standalone (4.62.0+)
 
-`radia_heat.py main()` is now a deprecation stub that redirects to
-`radia-ih` with the Thermal method pre-selected.  Old shortcuts and
-shipped CLI integrations keep working through the deprecation
-window, but the standalone HeatWindow is **scheduled for removal in
-the next minor release**.
+The standalone `radia_heat.py` module and the `radia-heat` console
+script were removed in radia 4.62.0.  Heat analysis is the
+"Thermal" Method choice in `radia-ih`; the HeatPanel sub-widget
+now lives at `radia._heat_panel` as an internal implementation
+detail of the IH panel.  The pre-4.59 standalone window is gone
+and there is no public CLI replacement for `radia-heat` -- launch
+`radia-ih` instead, then pick Method = "Thermal".
 
-`radia_heat.HeatPanel` (the sub-widget) remains an internal
-implementation detail of the IH panel's Thermal method.
+Pre-4.59.0 shortcut behavior: in 4.59.0-4.61.0 ``radia_heat.py
+main()`` was a deprecation stub that redirected to ``radia-ih``.
+That stub is gone in 4.62.0; calls to `radia-heat` from old
+scripts will fail with "No module named 'radia.radia_heat'"
+(import) or "command not found" (CLI).  Update shortcuts to
+launch ``radia-ih``.
+
+Programmatic imports: replace
+``from radia.radia_heat import HeatPanel, HEAT_SRC_SPATIAL`` with
+``from radia._heat_panel import HeatPanel, HEAT_SRC_SPATIAL``.
 
 ## Test coverage
 
