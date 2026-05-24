@@ -1,0 +1,113 @@
+name: radia-mcp matrix (lightweight selftest)
+
+# Complements `build-test.yml` (self-hosted Windows, full integration).
+# This workflow:
+#   - Runs on the FREE GitHub-hosted ubuntu-latest
+#   - Across Python 3.10 / 3.11 / 3.12
+#   - With minimal deps (no radia C++ ext, no ngsolve, no Cubit)
+#   - Checks: (a) all 35 subpackages import (b) every server has
+#     register_status_tool wired (c) per-server --selftest runs
+#
+# Why a separate workflow:
+#   - Catches MCP-only regressions in MINUTES vs 45-min self-hosted build
+#   - Validates the lightweight install path (the one new external
+#     users will hit when they `pip install radia-mcp` and try a tool)
+#   - Independent of the self-hosted runner availability
+
+on:
+  push:
+    branches: [main, "claude/**", "feature/**"]
+    paths:
+      - "packages/radia-mcp/**"
+      - ".github/workflows/radia-mcp-matrix.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/radia-mcp/**"
+      - ".github/workflows/radia-mcp-matrix.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: radia-mcp-matrix-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Minimal install: just mcp + radia-mcp itself.
+      # NO radia (heavy MKL+MSVC build), NO ngsolve, NO cubit binaries.
+      # MCP servers must import cleanly without these heavy deps
+      # (they are knowledge servers; runtime deps are optional).
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest "mcp>=1.0"
+          python -m pip install -e packages/radia-mcp --no-deps
+
+      - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
+        run: |
+          python -m compileall -q packages/radia-mcp/src
+
+      - name: Meta health (all 35 subpackages must import)
+        run: |
+          python -c "
+          from radia_mcp.meta.server import radia_mcp_health
+          h = radia_mcp_health()
+          print(f'healthy: {h[\"n_servers_healthy\"]}/{h[\"n_servers_total\"]}')
+          if not h['all_healthy']:
+              for r in h['results']:
+                  if not r['import_ok']:
+                      print(f'  - {r[\"name\"]}: {r.get(\"error\", \"?\")[:120]}')
+              raise SystemExit(1)
+          "
+
+      - name: Pytest (meta health + language features + versioning)
+        run: |
+          cd packages/radia-mcp
+          python -m pytest -v tests/
+
+      # Run --selftest for every cataloged server (catches runtime issues
+      # the static checks miss).
+      - name: Per-server --selftest
+        shell: bash
+        run: |
+          cd packages/radia-mcp
+          python - <<'PY'
+          import subprocess, sys
+          sys.path.insert(0, "src")
+          from radia_mcp.meta import catalog
+
+          failed = []
+          for short, info in catalog.CATALOG.items():
+              cmd = [sys.executable, "-c",
+                     f"import sys; sys.path.insert(0, 'src'); "
+                     f"from {info['subpackage']}.server import main; "
+                     f"sys.argv = ['{info['entry_point']}', '--selftest']; "
+                     f"main()"]
+              r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+              ok = (r.returncode == 0)
+              tag = "OK  " if ok else "FAIL"
+              print(f"  {tag}  {short}")
+              if not ok:
+                  failed.append((short, r.stderr[-300:].strip()))
+
+          print(f"\nTotal: {len(catalog.CATALOG)}, failed: {len(failed)}")
+          for n, err in failed:
+              print(f"\n--- {n} ---")
+              print(err)
+          if failed:
+              sys.exit(1)
+          PY
