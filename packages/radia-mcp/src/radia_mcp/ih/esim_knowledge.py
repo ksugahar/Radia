@@ -251,10 +251,19 @@ H_t than the far face).  Order-of-magnitude estimate:
 - 2 <= ratio < 5: per-element improves P_wp by 5-20 %
 - ratio >= 5 AND ratio spans BH knee: scalar can under-estimate by 30-50 %
 
-Headline benchmark (steel cylinder, 50 kHz, I = 100 A):
-- |H_t| range: 250 - 2951 A/m (12x ratio, straddles BH knee at ~1 kA/m)
-- Scalar P_wp = 30.6 W (converged in 15 iter)
-- Per-element P_wp = 45.8 W (+48 %, NOT converged at 60 iter / alpha=0.3)
+Headline benchmark (steel cylinder, 50 kHz, I = 100 A; sweep_v2,
+v4.67.0+ with triangle-P1-gradient extractor + Anderson m=5):
+- |H_t| range: ~250 - ~2900 A/m (10x+ ratio, straddles BH knee at ~1 kA/m)
+- Scalar P_wp     = 30.51 W (converged in 6 iter)
+- Per-element P_wp = 18.75 W (converged in 7 iter)
+- per/scalar = 0.615 ==> per-element predicts 38.5 % LESS than scalar
+- Equivalently: scalar OVER-estimates by a factor 1.63
+
+Earlier v4.47.2 - v4.66.x values (P_per = 45.4 W, +48 % "scalar
+under-estimate") came from a Galerkin localization gradient
+extractor that mis-placed the saturation hot-spot.  The sign of the
+disagreement FLIPPED with the v4.67.0 fix.  Always cite the
+v4.67.0+ sweep_v2 numbers, never the older Galerkin-era headline.
 
 ## When per-element doesn't converge
 
@@ -538,32 +547,45 @@ the historical Sauter-Schwab / Calderon-calculus reference list.
 ESIM_USAGE_HEADLINE_NUMBERS = """
 # Headline numerical results -- for paper-style citation
 
-The IGTE 2026 paper's primary numerical claim is locked at:
+The IGTE 2026 paper's primary numerical claim (sweep_v2, v4.67.0+,
+2026-05-22 LAB benchmark):
 
 ## Per-element vs scalar Z_s (steel cylinder, BH knee)
 
 Inputs:
-  - Workpiece: cylindrical steel, sigma = 2e6 S/m, mu_r(linear) = 100,
-                BH curve src/radia/panels/samples/em_sample_bh.txt,
+  - Workpiece: cylindrical steel, R=5 mm, H=10 mm, sigma = 2e6 S/m,
+                mu_r(linear) = 100, BH curve
+                src/radia/panels/samples/em_sample_bh.txt (CEFC 2020),
                 half_thickness = 5 mm
   - Coil: PEEC filament (16 perimeter), src/radia/panels/samples/
           ih_fem_kelvin_demo_coil.step
   - Frequency: 50 kHz
-  - I_port: 100 A (chosen to push surface H_t through ~1 kA/m BH knee)
+  - I_port: 100 A (chosen to push surface H_t past the BH knee)
   - Mesh: src/radia/panels/samples/ih_bem_sample_p1.vol
           (2150 BND tris, 1077 vertices)
+  - Karl: --esim-max-iter 30 --esim-anderson-m 5 --esim-relax 0.5
 
-Results:
+Results (sweep_v2 = IGTE Fig. 1 source data):
   Quantity                  | Scalar Karl     | Per-element Karl       | Delta
-  --------------------------|-----------------|------------------------|---------
-  Convergence (alpha=0.5)   | yes @ 15 iter   | NO @ 15 iter           | qual
-  P_wp [W]                  | 30.60           | 45.36 (45.76 @ 60 iter)| +48 %
-  L_total [nH]              | 87.96           | 84.76                  | -3.6 %
-  delta_L [nH]              | -10.01          | -13.21                 | +32 %
-  H_t_rms [A/m]             | 680.7 (scalar)  | 1192.9 mean, 2951.4 max| spatial
-  |Z_s| ratio across surface| -- (single val) | 3.30x                  | spatial
+  --------------------------|-----------------|------------------------|----------------
+  Convergence (Anderson m=5)| yes @ iter 6    | yes @ iter 7           | both OK
+  P_wp [W]                  | 30.51           | 18.75                  | per/scalar=0.615
+                            |                 |                        | (= -38.5 %)
+  L_total [nH]              | 90.70           | 92.88                  | +2.4 %
+  delta_L [nH]              | -9.97           | -7.79                  | -22 % (less neg.)
+  H_t_rms [A/m]             | 680 (scalar)    | 518 mean (per-DOF int) | --
+  mean|Z_s|                 | 2.25e-2         | 2.97e-2                | per-elem > scalar
 
-Reproduction (from any machine with radia >= 4.55.3 installed):
+Engineering interpretation: at this drive level, hot-spot DOFs sit
+past the BH knee, where the curve gives LOWER local Z_s (mu_r drops
+sharply on the falling side).  Per-element resolves this; scalar
+averages it away and over-estimates dissipation.  This is opposite
+to what the older Galerkin-localization extractor (v4.47.2 - v4.66.x)
+reported as +48 %; that result was the artifact of
+|H_t|^2 ~ phi_i (K phi)_i sampling the surface Laplacian instead of
+the gradient norm.  Always cite v4.67.0+ sweep_v2 numbers above.
+
+Reproduction (from any machine with radia >= 4.67.0 installed):
 
   python src/radia/panels/calc_inductance.py \\
     --coil-step src/radia/panels/samples/ih_fem_kelvin_demo_coil.step \\
@@ -572,13 +594,15 @@ Reproduction (from any machine with radia >= 4.55.3 installed):
     --sigma 2e6 --mu-r 100 --half-thickness 0.005 \\
     --frequency 50000 --current 100.0 --coil-sigma 5.8e7 \\
     --impedance-model esim --bh-file src/radia/panels/samples/em_sample_bh.txt \\
-    --esim-max-iter 15 --esim-tol 1e-3 --esim-relax 0.5 \\
+    --esim-max-iter 30 --esim-tol 1e-3 --esim-relax 0.5 --esim-anderson-m 5 \\
     [--esim-per-panel] \\
     --h1-order 1 --wp-bem-backend intree-dense \\
     --output {scalar,per_panel}.json
 
-Frozen artifacts: C:/temp/igte_bench/I100_{scalar,per_panel}.json
-(LAB, 2026-05-18, radia 4.55.3).
+For the full 32-case heatmap (Fig. 1a) use
+examples/ih_esim_benchmark/sweep_f_I.py.
+
+Frozen artifacts: C:/temp/igte_bench/sweep_v2/* (LAB, 2026-05-22).
 
 ## Three-path consistency (linear-mu screening)
 

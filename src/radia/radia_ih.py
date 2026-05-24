@@ -480,8 +480,47 @@ class IHPanel(ModePanel):
         # ESIM-only widgets
         self.add_browse("bh_file", "BH file:", default="",
                          filter_str="BH tables (*.txt *.csv);;All (*)")
-        self.add_spin("esim_max_iter", "max iter:", 15, 1, 200)
+        self.add_spin("esim_max_iter", "max iter:", 30, 1, 200)
         self.add_line("esim_tol", "tolerance:", "1e-3")
+        # Per-DOF + Anderson: IGTE 2026 paper headline (v4.67+/v4.68+).
+        # Defaults match the sweep_v2 production setting that the paper
+        # reports (per-panel=True, anderson_m=5, relax=0.5).  Default
+        # per-panel is OFF for backward compatibility, but kubota-kun
+        # workflow flips it on.
+        per_panel_check = self.add_check("esim_per_panel",
+                        "Per-DOF ESIM (resolves saturation hot-spots; "
+                        "IGTE 2026 paper headline)",
+                        default=False)
+        per_panel_check.setToolTip(
+            "When checked: each surface DOF gets its own Z_s computed "
+            "from the locally-extracted |H_t|.  Reproduces the IGTE "
+            "2026 paper's Fig. 1 heatmap (-22 to -48% disagreement "
+            "vs scalar in the BH-knee regime; P_per/P_scalar ~ 0.62 "
+            "at I=100 A / f=50 kHz).  Forces Basis order=1 because "
+            "calc_inductance's per-DOF |H_t| extractor "
+            "(bem_sibc_solver.extract_H_t_per_dof_grad) currently only "
+            "supports P1 BIE basis -- selecting p>=2 with per-panel "
+            "raises IndexError in v4.67-v4.72.")
+        # When per-panel toggles, re-apply visibility hide for FEM-Kelvin /
+        # FEM-Full advanced-knob exclusions AND clamp fes_order to 1.
+        per_panel_check.stateChanged.connect(
+            lambda _: self._on_impedance_changed(
+                self.val("impedance_model")))
+        anderson_spin = self.add_spin(
+            "esim_anderson_m", "Anderson memory m:", 5, 0, 20)
+        anderson_spin.setToolTip(
+            "Anderson Type-II acceleration history depth.  Production "
+            "value m=5 closes the per-DOF dZ noise floor that plain "
+            "damped Picard cannot.  Required (not optional) when "
+            "Per-DOF ESIM is on AND the workpiece straddles the BH "
+            "knee (typical IH surface hardening, I=100-300 A).  "
+            "Not used by PEEC+FEM+Kelvin (calc_fem_kelvin.py has no "
+            "--esim-anderson-m flag).")
+        relax_line = self.add_line("esim_relax", "Karl relax alpha:", "0.5")
+        relax_line.setToolTip(
+            "Damped Picard relaxation alpha (0..1).  0.5 is the production "
+            "default; lower (0.2-0.3) for deep saturation if Anderson "
+            "history is also short.  Not used by PEEC+FEM+Kelvin.")
 
         # ============ Linear solver (method-dependent) ============
         self._add_section("Linear solver", key="_sec_solver")
@@ -676,14 +715,47 @@ class IHPanel(ModePanel):
 
     def _on_impedance_changed(self, name):
         is_esim = name.startswith("Nonlinear ESIM")
-        for key in ("bh_file", "esim_max_iter", "esim_tol"):
+        for key in ("bh_file", "esim_max_iter", "esim_tol",
+                    "esim_per_panel", "esim_anderson_m", "esim_relax"):
             self._set_row_visible(key, is_esim)
         # Re-apply the PEEC_FEM_KELVIN esim_tol hide (it's the one
         # ESIM mode that has no --esim-tol equivalent on the calc
         # side, so we must keep that row invisible even when ESIM is
-        # selected).
+        # selected).  Same applies to anderson-m and relax which
+        # calc_fem_kelvin.py also does not accept (verified
+        # 2026-05-24 by panel-cli-diff against calc_fem_kelvin.py).
         if is_esim and self.val("method") == METHOD_PEEC_FEM_KELVIN:
             self._set_row_visible("esim_tol", False)
+            self._set_row_visible("esim_anderson_m", False)
+            self._set_row_visible("esim_relax", False)
+        # Full-FEM (calc_fem_coilmesh.py) accepts per-panel + relax
+        # but NOT anderson-m (verified same audit).
+        if is_esim and self.val("method") == METHOD_FEM_FULL:
+            self._set_row_visible("esim_anderson_m", False)
+        # Per-DOF ESIM only works at h1-order=1 in v4.67-v4.72:
+        # extract_H_t_per_dof_grad in bem_sibc_solver.py assumes phi_vec
+        # is the P1 vertex-DOF vector and IndexErrors at p>=2.  Clamp
+        # fes_order max to 1 when per-panel is checked.  When unchecked,
+        # restore the method-dependent max directly (mirrors the logic
+        # in _on_method_changed lines 875-878 -- do NOT call
+        # _on_method_changed recursively because it would re-fire
+        # _on_impedance_changed and loop).
+        fes_spin = self._widgets.get("fes_order")
+        per_on = (is_esim and self._widgets["esim_per_panel"].isChecked())
+        if fes_spin is not None:
+            if per_on and fes_spin.maximum() != 1:
+                fes_spin.setMaximum(1)
+                self._fes_clamp_msg = (
+                    "fes_order clamped to 1 because Per-DOF ESIM "
+                    "requires P1 BIE basis (extract_H_t_per_dof_grad "
+                    "P2+ support is open).")
+            elif not per_on:
+                method = self._method_combo.currentText()
+                is_weak_now = method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM)
+                is_fem_now = method in (METHOD_PEEC_FEM_KELVIN,
+                                          METHOD_FEM_FULL)
+                if is_weak_now or is_fem_now:
+                    fes_spin.setMaximum(2 if is_weak_now else 3)
         self._update_status()
 
     def restore_state(self, state):
@@ -829,7 +901,8 @@ class IHPanel(ModePanel):
         # Workpiece widgets are meaningless for vacuum-only modes.
         for key in ("wp_material", "wp_sigma", "mu_r", "half_thickness",
                     "impedance_model", "bh_file",
-                    "esim_max_iter", "esim_tol"):
+                    "esim_max_iter", "esim_tol",
+                    "esim_per_panel", "esim_anderson_m", "esim_relax"):
             self._set_row_visible(key, needs_wp)
 
         # ESIM sub-widgets re-evaluated by _on_impedance_changed when
@@ -1178,7 +1251,11 @@ class IHPanel(ModePanel):
                     "field, or switch to Linear SIBC.")
             cmd += ["--bh-file", bh,
                     "--esim-max-iter", str(self.val("esim_max_iter")),
-                    "--esim-tol", self.val("esim_tol")]
+                    "--esim-tol", self.val("esim_tol"),
+                    "--esim-anderson-m", str(self.val("esim_anderson_m")),
+                    "--esim-relax", self.val("esim_relax")]
+            if self._widgets["esim_per_panel"].isChecked():
+                cmd.append("--esim-per-panel")
         return cmd
 
     def _build_fem_kelvin_command(self, vol_path):
@@ -1237,8 +1314,13 @@ class IHPanel(ModePanel):
                     "field, or switch to Linear SIBC.")
             cmd += ["--bh-file", bh,
                     "--max-iter", str(self.val("esim_max_iter"))]
-            # calc_fem_kelvin uses --max-iter, not --esim-max-iter
-            # --esim-tol has no equivalent; ESIM tolerance is hardcoded
+            # calc_fem_kelvin uses --max-iter, not --esim-max-iter.
+            # --esim-tol / --esim-relax / --esim-anderson-m have no
+            # equivalent (verified 2026-05-24 vs calc_fem_kelvin.py
+            # argparse).  Per-DOF ESIM IS supported via
+            # --esim-per-panel.
+            if self._widgets["esim_per_panel"].isChecked():
+                cmd.append("--esim-per-panel")
         return cmd
 
     def _build_fem_coilmesh_command(self, vol_path):
@@ -1273,7 +1355,12 @@ class IHPanel(ModePanel):
                     "field, or switch to Linear SIBC.")
             cmd += ["--bh-file", bh,
                     "--esim-max-iter", str(self.val("esim_max_iter")),
-                    "--esim-tol", self.val("esim_tol")]
+                    "--esim-tol", self.val("esim_tol"),
+                    "--esim-relax", self.val("esim_relax")]
+            # calc_fem_coilmesh.py accepts --esim-per-panel + --esim-relax
+            # but NOT --esim-anderson-m (verified 2026-05-24 vs argparse).
+            if self._widgets["esim_per_panel"].isChecked():
+                cmd.append("--esim-per-panel")
         return cmd
 
 

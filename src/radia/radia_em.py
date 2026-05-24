@@ -92,13 +92,12 @@ class EMPanel(ModePanel):
     `memory/feedback_kelvin_1_8_blocker.md`.
     """
 
-    _OMEGA_SOLVERS = ["Direct (PARDISO)", "AMG (Compact)", "BDDC"]
+    _OMEGA_SOLVERS = ["Direct (PARDISO)", "AMS (Compact)", "BDDC"]
     _A_SOLVERS = ["Direct (PARDISO)", "AMS (Compact)", "BDDC"]
     _MSC_SOLVERS = ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"]
     _KELVIN_SOLVERS = ["Direct (PARDISO)"]
     _SOLVER_MAP = {
         "Direct (PARDISO)": "pardiso",
-        "AMG (Compact)": "amg",
         "AMS (Compact)": "ams",
         "BDDC": "bddc",
     }
