@@ -3,6 +3,65 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.76.0 — .vol / .sol double-click viewer (`radia-vol-viewer`)
+
+Released 2026-05-24.
+
+User-side replacement for the upstream NGSolve PR
+[#242](https://github.com/NGSolve/netgen/pull/242) that adds
+auto-load-on-launch for `.vol` files.  PR #242 was closed by the
+author (head repo deleted), NOT rejected by maintainers; the upstream
+behavior remains "open Netgen GUI with a blank viewport when invoked
+on a `.vol`".  This release ships the workaround inside the wheel:
+
+* New module `radia.tools.vol_sol_viewer` and two console scripts:
+  - `radia-vol-viewer` — CLI (use for `--register` / `--unregister`
+    and standalone invocations).
+  - `radia-vol-viewer-gui` — `gui_scripts` variant launched via
+    pythonw.exe (no console flash on double-click).  This is what
+    `--register` writes into the Windows `.vol` / `.sol` registry
+    associations.
+
+* The viewer replicates upstream PR #242's `_vol_handler` verbatim:
+
+  ```python
+  win.tk.eval(f'Ng_LoadMesh "{path}"')   # native loader
+  win.tk.eval('set selectvisual mesh')   # *** required ***
+  win.tk.eval('Ng_SetVisParameters')
+  win.tk.eval('redraw')
+  win.tk.eval('Ng_ReadStatus')
+  ```
+  inside `win.after(100, _load)` and blocks the main thread on
+  `win.mainloop()`.  Two earlier wrapper drafts failed:
+  `ngsolve.Mesh()`+`Draw()` (NGSolve's Tk-side draw is webgui-only,
+  per PR #241 author note) and bare `Ng_LoadMesh` without
+  `selectvisual mesh` (mesh loads into global scene but viewer panel
+  stays in geometry mode).
+
+* `.sol` support: NGSolve `gfu.Save()` writes a raw float64
+  coefficient dump, NOT Netgen's text "solution" format -- so
+  `Ng_ImportSolution` cannot read it.  The viewer instead reconstructs
+  the FES by matching ndof against `sol_size/8` (real) or `/16`
+  (complex), in order: HDiv o=1/2, HCurl o=1/2, H1 scalar o=1/2,
+  H1 dim=3 o=1/2.  `gfu.Load(sol)` + `Draw(gfu, mesh, name)` +
+  `set selectvisual solution` overlays the field on the mesh.
+
+* Companion `.vol` discovery for `.sol`: peels trailing `_<word>`
+  segments from the stem and tries both `<stem>.vol` and
+  `<stem>_fem.vol` at each level (Radia panel-output convention:
+  `<base>_<solver>_fem.vol` mesh paired with
+  `<base>_<solver>_B.sol` / `_Jsurf.sol` / `_qsurf.sol` / `_Jvec.sol`).
+
+Usage:
+```
+radia-vol-viewer --register      # install .vol/.sol file associations
+radia-vol-viewer model.vol       # CLI invocation (stdout)
+radia-vol-viewer field.sol       # auto-detects companion .vol + FES
+```
+
+The pre-existing top-level `tools/vol_sol_viewer.py` becomes a thin
+backwards-compat shim that delegates to `radia.tools.vol_sol_viewer`.
+
 ## 4.63.0 — Thermal Method split into 3 explicit choices
 
 Released 2026-05-21.
