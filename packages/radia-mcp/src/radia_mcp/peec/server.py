@@ -26,8 +26,11 @@ impedance, PRIMA MOR, SPICE extraction).
 import sys
 
 from mcp.server.fastmcp import FastMCP
+from ..common import register_status_tool
 
 from .peec_knowledge import get_peec_documentation
+from .carstensen_ac_copper_loss_knowledge import get_carstensen_knowledge
+from .hoibc_knowledge import get_hoibc_documentation
 
 mcp = FastMCP("mcp-server-peec")
 
@@ -35,6 +38,33 @@ mcp = FastMCP("mcp-server-peec")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def peec_carstensen_ac_loss(topic: str = "motivation") -> str:
+    """
+    Carstensen-Dowell analytical AC copper-loss formulas for stranded
+    slot windings.  Avoids meshing individual strands by using
+    Kelvin-function-based skin + proximity factors per layer.
+
+    Reference: C. Carstensen, "Eddy Currents in Windings of Switched
+    Reluctance Machines", PhD diss., RWTH Aachen ISEA, 2007 (187p).
+    Lab library: W:/03_文献・論文/00_電磁界解析/MOR_モデル縮約/Eddy_Currents/
+
+    Args:
+        topic: One of:
+            "motivation"        - Why analytic AC loss matters for slot windings
+            "skin_round"        - Bessel-function skin effect in round wire
+            "proximity_round"   - Proximity effect from external H
+            "dowell_layered"    - Classical Dowell formula for layered slot
+            "combined_skin_prox"- Carstensen per-layer breakdown
+            "field_mapping"     - FE -> per-layer H_slot extraction
+            "python_recipe"     - Drop-in Python post-processor
+            "validation_cases"  - Reference cases for verification
+            "motor_application" - End-to-end recipe with calc_motor_transient.py
+            "all"               - Everything
+    """
+    return get_carstensen_knowledge(topic)
+
 
 @mcp.tool()
 def peec_usage(topic: str = "all") -> str:
@@ -62,6 +92,65 @@ def peec_usage(topic: str = "all") -> str:
             "pitfalls"       - Common mistakes and gotchas
     """
     return get_peec_documentation(topic)
+
+
+@mcp.tool()
+def peec_hoibc(topic: str = "vs_sibc_decision") -> str:
+    """
+    HOIBC (Higher Order Impedance Boundary Conditions) — extension of
+    the 1st-order Leontovich SIBC to capture surface curvature and
+    remain accurate when skin depth becomes comparable to the radius
+    of curvature.
+
+    The standard SIBC in `peec_usage(topic='sibc')` is the 1st-order
+    Leontovich approximation.  For:
+      - Thin wires at low freq (delta ~ wire radius)
+      - High-mu_r magnetic conductors (effective delta = mu_r * delta)
+      - Coil end-regions with sharp curvature
+    you need HIGHER ORDER (Mitzner correction or beyond).
+
+    Reference papers (W:/03_文献・論文/00_電磁界解析/SIBC/03_HOIBC/):
+      - Course G2ELab 2018 lesson 2 (derivation)
+      - Dong-Di Rienzo 2020 IEEE Access 8:186496 (3D FEM/BEM)
+      - Bilicz-Badics-Pavo 2023 ISEM (wide-band nonlocal)
+
+    Args:
+        topic: One of:
+            "derivation"            - Perturbation theory (Rytov-Senior-
+                                       Mitzner, small parameter p̃ =
+                                       mu_r * delta / D)
+            "dong_di_rienzo_2020"   - 3-Laplace-BVP algorithm (PEC →
+                                       Leontovich → Mitzner); multi-freq
+                                       advantage; numerical validation
+                                       table
+            "bilicz_2023_nonlocal"  - Wide-band alternative: 2D cross-
+                                       section eddy-current BVP per
+                                       frequency (works at any delta)
+            "vs_sibc_decision"      - Decision tree: when SIBC suffices,
+                                       when HOIBC needed, when nonlocal
+                                       IBC needed
+            "radia_application"     - How to extend calc_fem_kelvin.py
+                                       with --ibc-order N flag
+            "sibc_family"           - Variant landscape: XFEM SIBC,
+                                       FDTD SIBC, Nonlinear SIBC,
+                                       Multi-layer / coated conductor,
+                                       WPT wide-band (lab W:/SIBC/04-07/)
+            "mathematica_derivation"- Wolfram Language recipes: small-
+                                       parameter p_tilde, BVP_0/1/2
+                                       Neumann RHS symbolic, Mitzner
+                                       sphere closed form, prolate-
+                                       ellipsoid principal radii, freq-
+                                       domain switch (s -> j*omega).
+            "ngsolve_recipes"       - Production NGSolve code patterns:
+                                       BVP_0 (PEC), BVP_1 (Leontovich),
+                                       BVP_2 (Mitzner) Laplace cascade;
+                                       multi-frequency zero-cost sweep;
+                                       per-panel curvature via _compute_
+                                       panel_local_radii; prolate-
+                                       ellipsoid golden test.
+            "all"                   - Everything
+    """
+    return get_hoibc_documentation(topic)
 
 
 # ============================================================
@@ -129,6 +218,18 @@ def new_peec_simulation(conductor_type: str) -> str:
 # ============================================================
 # Entry point
 # ============================================================
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-peec',
+    description='PEEC filament/panel, FastHenry parser, HOIBC, Carstensen AC copper loss',
+    subpackage='radia_mcp.peec',
+    related_servers=["radia-ngsolve", "ih", "litz-transmission"],
+    optional_deps=["radia", "scipy"],
+)
+
 
 def main():
     if "--selftest" in sys.argv:

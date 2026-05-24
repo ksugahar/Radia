@@ -28,6 +28,7 @@ import tempfile
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-radia-interop")
 
@@ -592,6 +593,17 @@ def _try_import(module: str) -> bool:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-radia-interop',
+    description='Cross-CAD interop (STEP/IGES/CadQuery <-> Cubit/Netgen)',
+    subpackage='radia_mcp.interop',
+    related_servers=["cubit", "build123d"],
+)
+
 
 def main():
 	if "--selftest" in sys.argv:
