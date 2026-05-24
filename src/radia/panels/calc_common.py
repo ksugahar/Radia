@@ -973,11 +973,24 @@ def _is_section_header(s):
 # ============================================================
 
 def progress(tag, msg):
-    """Write progress message to stderr for panel GUI consumption.
+    """Write progress message to stderr AND the panel debug log file.
 
     Protocol: stderr lines matching ``TAG:detail`` are parsed by
     register_toolbar.py ``_on_stderr`` handlers.  Tags should be
     short uppercase identifiers.
+
+    History (2026-05-23): historically this only wrote to stderr.
+    Keiko's 27-minute BEM-A + BEM run on mdx finished cleanly but the
+    panel log file had ZERO intermediate progress lines between start
+    and end -- ``radia_gui_base.py::_read_stderr`` only echoes
+    subprocess stderr to the GUI text widget, not to the file.  For
+    long runs the user had no post-hoc record of WHERE the time was
+    spent.  Mirror every ``progress()`` call to ``panel_log`` so
+    successful long runs leave the same timeline in the file that the
+    GUI shows live.  panel_log gates the file write through its own
+    handle (only opens once per process), so the cost is one
+    formatted write per progress line -- negligible vs the work
+    those lines are summarising.
 
     Examples::
 
@@ -987,6 +1000,33 @@ def progress(tag, msg):
     """
     sys.stderr.write(f"{tag}:{msg}\n")
     sys.stderr.flush()
+    _progress_to_panel_log(f"{tag}:{msg}")
+
+
+# Cached panel_log function -- resolved lazily on first progress() call
+# so we don't pay the import cost on every line, and so calc_*.py
+# modules that import this file BEFORE calc_main() runs still work
+# (panel_log's init_panel_log is called from calc_main).  When
+# panel_log is unavailable (e.g. pytest direct import without going
+# through calc_main), the no-op shim keeps progress() side-effect-free.
+_progress_panel_log_fn = None
+
+
+def _progress_to_panel_log(line):
+    """Mirror a single progress line to the shared panel debug log."""
+    global _progress_panel_log_fn
+    if _progress_panel_log_fn is None:
+        try:
+            from panel_log import panel_log as _pl
+            _progress_panel_log_fn = _pl
+        except Exception:
+            # No-op shim: panel_log unreachable from this subprocess.
+            _progress_panel_log_fn = lambda _msg: None  # noqa: E731
+    try:
+        _progress_panel_log_fn(line)
+    except Exception:
+        # Log writes must never break the actual computation.
+        pass
 
 
 def calc_main(solve_func, parser):

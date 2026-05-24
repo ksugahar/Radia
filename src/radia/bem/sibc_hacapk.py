@@ -207,6 +207,47 @@ def extract_surface_p2_lagrange(mesh, bnd_label=None, geom_order=2):
     n_v = len(verts)
     n_t = len(tris)
 
+    # Force outward orientation -- triangles whose natural cross-product
+    # normal points INWARD (toward the surface centroid) get flipped.
+    # This is the same logic ``_extract_bnd_only_inline`` applies to the
+    # P1 wp_mesh extraction in calc_inductance.py.  Without it, the P2
+    # path inherits NGSolve's natural BND orientation (which on a
+    # workpiece-as-hole sibc face points FROM AIR INTO HOLE, i.e.,
+    # OPPOSITE to "outward from workpiece"), and DL gets sign-flipped
+    # globally -- caught 2026-05-22 when P2 BIE produced P_wp ~1500x
+    # the P1 value on 3turnCoil_work.
+    #
+    # Reorder the 6 P2 Lagrange nodes consistently with the corner flip
+    # [c0, c1, c2] -> [c0, c2, c1]:
+    #   new corner 0 = c0, new corner 1 = c2, new corner 2 = c1
+    #   new edge 01 = old edge 20 (between c0,c2)
+    #   new edge 12 = old edge 12 (between c2,c1) -- but corner order
+    #     reversed -> same physical edge
+    #   new edge 20 = old edge 01 (between c1,c0)
+    centroid = verts.mean(axis=0)
+    n_flipped = 0
+    for t in range(n_t):
+        c0, c1, c2 = tris[t, 0], tris[t, 1], tris[t, 2]
+        p0, p1, p2 = verts[c0], verts[c1], verts[c2]
+        nrm = np.cross(p1 - p0, p2 - p0)
+        tri_center = (p0 + p1 + p2) / 3.0
+        if np.dot(nrm, tri_center - centroid) < 0:
+            # Flip corner order
+            tris[t, 1], tris[t, 2] = c2, c1
+            # Reorder the 6 P2 nodes accordingly.
+            old = tri_p2_nodes[t].copy()
+            tri_p2_nodes[t, 0] = old[0]   # c0
+            tri_p2_nodes[t, 1] = old[2]   # c2
+            tri_p2_nodes[t, 2] = old[1]   # c1
+            tri_p2_nodes[t, 3] = old[5]   # edge 20 (between c0, c2) -> new e01
+            tri_p2_nodes[t, 4] = old[4]   # edge 12 -> new e12 (same edge)
+            tri_p2_nodes[t, 5] = old[3]   # edge 01 -> new e20
+            n_flipped += 1
+    if n_flipped > 0:
+        import sys
+        print(f"extract_surface_p2_lagrange: flipped {n_flipped}/{n_t} "
+              f"triangles to outward orientation", file=sys.stderr)
+
     # Enumerate unique edges across all tris.  Each tri has 3 edges:
     #   local edge k (k=0,1,2) goes between corners (k, (k+1) % 3)
     edge_dof = {}        # (lo, hi) -> global edge DOF (offset by n_v)
