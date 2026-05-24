@@ -2,16 +2,16 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **281 tools** across 37 MCP servers.
+Total: **285 tools** across 37 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 44 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
-| [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 6 |
+| [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 31 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 8 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 9 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 4 |
@@ -38,7 +38,7 @@ Total: **281 tools** across 37 MCP servers.
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
 | [`mcp-server-maglev-linear`](#mcp-server-maglev-linear) | `radia_mcp.maglev_linear` | 3 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
-| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 12 |
+| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 6 |
@@ -146,6 +146,8 @@ Module: `radia_mcp.interop.server`
 | `any_step_to_cubit_hex` | Universal CAD-MCP mesh backend: accept ANY STEP file and run it |
 | `freecad_exec_safely` | Cubit-style safety pattern for FreeCAD: snapshot → batch dry-run |
 | `freecad_to_cubit_hex` | Execute a FreeCAD script in a FreeCADCmd subprocess, export the |
+| `interop_comsol_lab_tips` | Sugahara Lab (Kindai University) COMSOL practical tips compendium. |
+| `interop_comsol_livelink` | COMSOL LiveLink (Java + MATLAB + MPh Python) knowledge. |
 | `list_cad_mcp_interop` | List registered CAD-MCP interop adapters + their availability. |
 | `openscad_to_cubit_hex` | Execute OpenSCAD code, export STEP, run through `cubit_mesh_auto`. |
 | `radia_interop_status` | (no description) |
@@ -222,6 +224,7 @@ Module: `radia_mcp.fem.server`
 | `fem_potential_formulations` | Potential formulations: A-Omega, T-Omega, H, Reduced, Darwin. |
 | `fem_status` | (no description) |
 | `fem_time_domain_axisym` | Time-domain, axisymmetric (Henrotte), harmonic balance, HF, circuit coupling. |
+| `fem_xfem_comsol` | XFEM in COMSOL Multiphysics (Jafari-Broumand-Vahab-Khalili 2021). |
 
 ## `mcp-server-bem`
 
@@ -588,6 +591,7 @@ Module: `radia_mcp.differential_forms.server`
 | `differential_forms_feec` | Finite Element Exterior Calculus (Arnold-Falk-Winther 2006). |
 | `differential_forms_forces` | Electromagnetic forces in differential-form language. |
 | `differential_forms_homology` | Chain complex, homology, Betti numbers, tree-cotree gauge. |
+| `differential_forms_kelvin_lab_studies` | Sugahara Lab practical Kelvin-transform case studies (2020-2023). |
 | `differential_forms_mathematica_recipes` | Wolfram Language recipes for symbolic verification, pairing |
 | `differential_forms_maxwell` | Maxwell's equations in differential-form language. |
 | `differential_forms_status` | (no description) |
