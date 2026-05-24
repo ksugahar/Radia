@@ -47,7 +47,17 @@ def _first_line(description: str | None) -> str:
 
 
 def _list_tools_for(subpkg: str) -> list:
+    """Import the server module and enumerate its tools.
+
+    Calls `mcp.list_tools()` TWICE and returns the second result.  The
+    first call has a lazy-registration side effect in some FastMCP
+    versions (some servers register meta tools only on the first
+    list_tools() invocation), which would otherwise make the output
+    non-deterministic between cold and warm runs.  Calling twice
+    guarantees the warm-cache result every time.
+    """
     module = importlib.import_module(f"radia_mcp.{subpkg}.server")
+    asyncio.run(module.mcp.list_tools())   # warm-up; discard
     return asyncio.run(module.mcp.list_tools())
 
 
