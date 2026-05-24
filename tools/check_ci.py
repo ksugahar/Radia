@@ -42,7 +42,7 @@ def fetch_runs(branch: str | None = None, sha: str | None = None,
 
 
 def fmt_run(r: dict) -> str:
-    conclusion = r.get("conclusion") or "—"
+    conclusion = r.get("conclusion") or "-"
     status     = r.get("status", "?")
     marker = {
         "success":   "OK ",
