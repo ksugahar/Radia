@@ -99,17 +99,20 @@ def _infer_fes(mesh, sol_path):
     n_real = sol_size // 8       # float64
     n_complex = sol_size // 16   # complex float64
 
+    # Each tuple: (label, builder, is_vector).  is_vector tells the viewer
+    # whether to use scalfunction="<name>:0" + vecfunction="<name>" (vector
+    # field) or scalfunction="<name>" alone (scalar field).
     candidates = [
-        ("HDiv order=1",        lambda: HDiv (mesh, order=1)),
-        ("HDiv order=2",        lambda: HDiv (mesh, order=2)),
-        ("HCurl order=1",       lambda: HCurl(mesh, order=1)),
-        ("HCurl order=2",       lambda: HCurl(mesh, order=2)),
-        ("H1 order=1 scalar",   lambda: H1   (mesh, order=1)),
-        ("H1 order=2 scalar",   lambda: H1   (mesh, order=2)),
-        ("H1 order=1 dim=3",    lambda: H1   (mesh, order=1, dim=3)),
-        ("H1 order=2 dim=3",    lambda: H1   (mesh, order=2, dim=3)),
+        ("HDiv order=1",        lambda: HDiv (mesh, order=1),         True),
+        ("HDiv order=2",        lambda: HDiv (mesh, order=2),         True),
+        ("HCurl order=1",       lambda: HCurl(mesh, order=1),         True),
+        ("HCurl order=2",       lambda: HCurl(mesh, order=2),         True),
+        ("H1 order=1 scalar",   lambda: H1   (mesh, order=1),         False),
+        ("H1 order=2 scalar",   lambda: H1   (mesh, order=2),         False),
+        ("H1 order=1 dim=3",    lambda: H1   (mesh, order=1, dim=3),  True),
+        ("H1 order=2 dim=3",    lambda: H1   (mesh, order=2, dim=3),  True),
     ]
-    for label, mk in candidates:
+    for label, mk, is_vector in candidates:
         try:
             fes = mk()
         except Exception as e:
@@ -118,13 +121,11 @@ def _infer_fes(mesh, sol_path):
         if fes.ndof == n_real:
             print(f"  {label}: ndof={fes.ndof} MATCHES real (sol_size/8)",
                   flush=True)
-            return fes, label
+            return fes, label, is_vector
         if fes.ndof == n_complex:
             print(f"  {label}: ndof={fes.ndof} MATCHES complex (sol_size/16) — trying complex FES",
                   flush=True)
-            # Re-build complex variant
             try:
-                # Strip "(...)" if any; just try common complex flag
                 if "HCurl" in label:
                     fes_c = HCurl(mesh, order=fes.order, complex=True)
                 elif "HDiv" in label:
@@ -133,14 +134,13 @@ def _infer_fes(mesh, sol_path):
                     fes_c = H1(mesh, order=fes.order, dim=3, complex=True)
                 else:
                     fes_c = H1(mesh, order=fes.order, complex=True)
-                return fes_c, label + " complex"
+                return fes_c, label + " complex", is_vector
             except Exception:
-                return fes, label
+                return fes, label, is_vector
 
-    # Nothing matched
     print(f"  WARNING: no FES candidate matched (sol={sol_size} B = "
           f"{n_real} doubles or {n_complex} complex)", flush=True)
-    return None, None
+    return None, None, False
 
 
 # -------------------------------------------------------------------------
@@ -201,7 +201,7 @@ def view_sol(sol_path, vol_override=None):
           f"materials={mesh.GetMaterials()[:3]}{'...' if len(mesh.GetMaterials())>3 else ''}",
           flush=True)
 
-    fes, label = _infer_fes(mesh, sol_abs)
+    fes, label, is_vector = _infer_fes(mesh, sol_abs)
     field_name = Path(sol_abs).stem.rsplit("_", 1)[-1]   # _B -> "B", _Jsurf -> "Jsurf"
 
     if fes is None:
@@ -211,16 +211,42 @@ def view_sol(sol_path, vol_override=None):
     else:
         gfu = GridFunction(fes)
         gfu.Load(sol_abs)
-        print(f"  loaded {label}: ndof={fes.ndof}", flush=True)
+        print(f"  loaded {label}: ndof={fes.ndof} {'(vector)' if is_vector else '(scalar)'}",
+              flush=True)
         Draw(gfu, mesh, field_name)
         print(f"  Draw(gfu, mesh, '{field_name}') registered", flush=True)
 
     def _show():
-        if gfu is not None:
-            g.win.tk.eval("set selectvisual solution")
-        else:
+        if gfu is None:
+            # Mesh-only fallback
             g.win.tk.eval("set selectvisual mesh")
-        g.win.tk.eval("Ng_SetVisParameters")
+            g.win.tk.eval("Ng_SetVisParameters")
+            g.win.tk.eval("redraw")
+            g.win.tk.eval("Ng_ReadStatus")
+            return
+
+        # Switch the viewer to "Solution" mode AND bind which functions
+        # to use for the colour-mapped scalar and the vector overlay.
+        # Without scalfunction the togl viewer renders uniform-coloured
+        # surfaces (the 2026-05-24 "色がついていない" symptom).
+        g.win.tk.eval("set selectvisual solution")
+        if is_vector:
+            # Vector field (HDiv / HCurl / H1 dim=3): colour by magnitude
+            # (NGSolve registers scalar component slots :0 :1 :2 + a
+            # synthetic "abs" component reached via visoptions.evaluate).
+            g.win.tk.eval(f'set visoptions.scalfunction "{field_name}:0"')
+            g.win.tk.eval(f'set visoptions.vecfunction "{field_name}"')
+            g.win.tk.eval('set visoptions.evaluate "abs"')
+        else:
+            # Scalar field (H1 order=p): colour by value directly.
+            g.win.tk.eval(f'set visoptions.scalfunction "{field_name}"')
+            g.win.tk.eval('set visoptions.vecfunction "none"')
+        # Surface projection is required on volume meshes -- otherwise
+        # the togl viewer has no surface to paint the field on (it does
+        # not slice into the volume by default).
+        g.win.tk.eval("set visoptions.showsurfacesolution 1")
+        g.win.tk.eval("set visoptions.subdivision 1")
+        g.win.tk.eval("Ng_Vis_Set parameters")
         g.win.tk.eval("redraw")
         g.win.tk.eval("Ng_ReadStatus")
 

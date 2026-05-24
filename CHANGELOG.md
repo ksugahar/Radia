@@ -3,6 +3,38 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.76.1 — .sol viewer: colour-mapped field (scalfunction/vecfunction)
+
+Released 2026-05-24.
+
+Fixes the v4.76.0 .sol display path which loaded the GridFunction and
+called `Draw(gfu, mesh, name)` but left the togl viewer in
+`visoptions.scalfunction = 'none'` -- the mesh appeared but with no
+field colour overlay (the surfaces stayed uniform-green).  The fix
+adds the missing Tcl bindings inside `view_sol._show()`:
+
+```python
+if is_vector:
+    g.win.tk.eval(f'set visoptions.scalfunction "{name}:0"')
+    g.win.tk.eval(f'set visoptions.vecfunction "{name}"')
+    g.win.tk.eval('set visoptions.evaluate "abs"')
+else:
+    g.win.tk.eval(f'set visoptions.scalfunction "{name}"')
+    g.win.tk.eval('set visoptions.vecfunction "none"')
+g.win.tk.eval('set visoptions.showsurfacesolution 1')
+g.win.tk.eval('Ng_Vis_Set parameters')
+g.win.tk.eval('redraw')
+```
+
+The `_infer_fes()` helper now returns `(fes, label, is_vector)` so
+the show callback can pick the right Tcl bindings.  HDiv / HCurl /
+H1 dim=3 are flagged vector (colour = |F|, with arrow overlay), H1
+scalar is flagged scalar (colour = value directly).
+
+Probed via inspection of `visoptions.*` Tcl globals -- both
+`scalfunction` and `vecfunction` start at `'none'` until set
+explicitly, even after `Draw()` registers the scene.
+
 ## 4.76.0 — .vol / .sol double-click viewer (`radia-vol-viewer`)
 
 Released 2026-05-24.
