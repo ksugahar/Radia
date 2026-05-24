@@ -3,6 +3,16 @@ Accelerator magnet design — end-pole chamfer analytical theory,
 multipole analysis, rotating coil measurement, Radia case studies.
 """
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "end_pole": "Analytical chamfer design (Delferriere)",
+    "kolkata": "Radia + TOSCA validation case study",
+    "rotating_coil": "Multipole measurement + field reconstruction",
+    "all": "return \"\n\n\".join([",
+}
+
 END_POLE_DESIGN = """
 # Analytical end-pole chamfer for accelerator magnets
 (Delferriere-de Menezes-Duperrier, CEA Saclay, SOLEIL design context)

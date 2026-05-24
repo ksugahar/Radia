@@ -1,5 +1,18 @@
 """Evolutionary computation algorithms for EM optimization."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "(see knowledge file for details)",
+    "ga_de": "(see knowledge file for details)",
+    "pso": "(see knowledge file for details)",
+    "cma_es": "(see knowledge file for details)",
+    "immune_nsga": "(see knowledge file for details)",
+    "libraries": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([OVERVIEW, GA_DE, PSO, CMA_ES, IMMUNE_NSGA,",
+}
+
 OVERVIEW = r"""
 # Evolutionary Computation Overview
 

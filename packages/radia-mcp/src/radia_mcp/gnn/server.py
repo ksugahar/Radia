@@ -12,9 +12,9 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from ..common import register_status_tool, register_topics_tool
 
-from .knowledge import get_gnn_documentation
+from .knowledge import get_gnn_documentation, TOPICS
 
 mcp = FastMCP("mcp-server-gnn")
 
@@ -43,6 +43,13 @@ register_status_tool(
     subpackage='radia_mcp.gnn',
     related_servers=["pinn", "fem"],
     optional_deps=["torch", "torch_geometric"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-gnn',
+    topics=TOPICS,
 )
 
 

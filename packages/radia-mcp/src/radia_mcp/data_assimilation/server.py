@@ -11,9 +11,9 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from ..common import register_status_tool, register_topics_tool
 
-from .knowledge import get_data_assimilation_documentation
+from .knowledge import get_data_assimilation_documentation, TOPICS
 
 mcp = FastMCP("mcp-server-data-assimilation")
 
@@ -42,6 +42,13 @@ register_status_tool(
     subpackage='radia_mcp.data_assimilation',
     related_servers=["mcmc", "mor", "fusion"],
     optional_deps=["filterpy"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-data-assimilation',
+    topics=TOPICS,
 )
 
 

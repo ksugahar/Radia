@@ -2,6 +2,17 @@
 Physics-Informed Neural Networks (PINN) and Gaussian Processes (PI-GP).
 """
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "PI-AI vs FEM, PINN vs PI-GP comparison",
+    "pi_gp": "Physics-Informed Gaussian Process foundation (Raissi 2017)",
+    "pi_gp_solvers": "PI-GP generalizes classical PDE solvers (Pförtner 2023)",
+    "pinn": "PINN formulation, Maxwell applications, state of the art",
+    "all": "return \"\n\n\".join([",
+}
+
 PINN_OVERVIEW = """
 # Physics-Informed AI for PDEs — overview
 

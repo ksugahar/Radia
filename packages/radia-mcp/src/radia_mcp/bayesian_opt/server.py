@@ -13,9 +13,9 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from ..common import register_status_tool, register_topics_tool
 
-from .knowledge import get_bayesian_opt_documentation
+from .knowledge import get_bayesian_opt_documentation, TOPICS
 
 mcp = FastMCP("mcp-server-bayesian-opt")
 
@@ -57,6 +57,13 @@ register_status_tool(
     subpackage='radia_mcp.bayesian_opt',
     related_servers=["optuna", "mcmc", "pinn"],
     optional_deps=["botorch", "gpytorch", "GPy"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-bayesian-opt',
+    topics=TOPICS,
 )
 
 
