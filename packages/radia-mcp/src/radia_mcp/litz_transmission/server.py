@@ -15,8 +15,8 @@ Usage:
 """
 import sys
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
-from .knowledge import get_knowledge
+from ..common import register_status_tool, register_topics_tool
+from .knowledge import get_knowledge, TOPICS
 
 mcp = FastMCP("mcp-server-litz-transmission")
 
@@ -44,6 +44,13 @@ register_status_tool(
     description='Litz wire AC loss (Dowell, homogenization, magnetic-plated wire) + multiconductor transmission line theory',
     subpackage='radia_mcp.litz_transmission',
     related_servers=["peec", "ih", "wpt"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-litz-transmission',
+    topics=TOPICS,
 )
 
 

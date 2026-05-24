@@ -17,6 +17,32 @@ Sources:
 # ============================================================
 # Topic: Overview
 # ============================================================
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview":             "Accelerator electromagnet analysis pipeline architecture",
+    "coilbuilder":          "CoilBuilder API: add_straight/add_arc + close optimization, "
+                             "mirror/rotate_copies for symmetry, to_radia for Biot-Savart Hs",
+    "kelvin_workflow":      "Kelvin transform open-boundary workflow: Cubit hex mesh + "
+                             "ACIS callbackgeometry curving + NGSolve Omega-reduced",
+    "hantila":              "Hantila polarization method: B = mu_0(1+alpha)H + mu_0*R, "
+                             "LU factored ONCE, back-substitution iteration",
+    "hysteresis":           "Energy-based / Play B-input hysteresis: convex U_k, "
+                             "reversible + irreversible separation, fast Picard inverse",
+    "ima":                  "Image Method of Analysis: parallel-to-mirror (+), "
+                             "perp-to-mirror (-), boundary element on-plane limitation",
+    "harmonics":            "Magnetic field harmonic analysis on circular bore "
+                             "(dipole/quad/sext quality, multipole expansion)",
+    "symmetry_reductions":  "1/2, 1/4, 1/8 sector reductions: identify pairing + "
+                             "anti-pairing planes, periodic master/slave BC setup",
+    "1_8":                  "(alias) 1/8 sector reduction",
+    "eighth":               "(alias) 1/8 sector reduction",
+    "c_yoke_symmetry":      "(alias) C-yoke symmetry reduction",
+    "kelvin_benchmark_vs_em": "(alias) Kelvin benchmark vs accelerator EM",
+    "all":                  "Concatenated dump of all topics above",
+}
+
 OVERVIEW = """
 # Accelerator Electromagnet Analysis Pipeline
 

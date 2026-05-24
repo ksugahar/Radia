@@ -25,9 +25,9 @@ field-harmonics / multipole analysis).
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from ..common import register_status_tool, register_topics_tool
 
-from .em_knowledge import get_electromagnet_documentation
+from .em_knowledge import get_electromagnet_documentation, TOPICS
 
 mcp = FastMCP("mcp-server-electromagnet")
 
@@ -135,6 +135,13 @@ register_status_tool(
     subpackage='radia_mcp.electromagnet',
     related_servers=["motor", "accelerator", "magnetic-materials"],
     optional_deps=["radia", "ngsolve"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-electromagnet',
+    topics=TOPICS,
 )
 
 

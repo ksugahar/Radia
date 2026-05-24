@@ -6,9 +6,9 @@ design, end-pole analytical chamfers, Radia validation case studies.
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from ..common import register_status_tool, register_topics_tool
 
-from .knowledge import get_accelerator_documentation
+from .knowledge import get_accelerator_documentation, TOPICS
 
 mcp = FastMCP("mcp-server-accelerator")
 
@@ -37,6 +37,13 @@ register_status_tool(
     subpackage='radia_mcp.accelerator',
     related_servers=["electromagnet", "fusion"],
     optional_deps=["radia"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-accelerator',
+    topics=TOPICS,
 )
 
 
