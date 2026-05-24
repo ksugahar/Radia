@@ -84,3 +84,61 @@ def test_meta_related_to_mcmc_includes_optuna():
     result = radia_mcp_related("mcmc")
     names = [r["name"] for r in result["related"]]
     assert "optuna" in names, f"mcmc related: {names}"
+
+
+def test_all_related_links_are_bidirectional():
+    """If A's related list contains B, then B's must contain A.
+
+    LLMs navigating the catalog expect cross-server links to work in
+    both directions. The 2026-05-24 thorough review found 33 one-way
+    edges that silently broke navigation (e.g. `fem` -> `bem` but
+    `bem` had no `fem` back-link). This test pins the invariant.
+    """
+    from radia_mcp.meta import catalog
+    adj = {n: set(info.get("related", []))
+           for n, info in catalog.CATALOG.items()}
+    asymmetric = []
+    for a, bs in adj.items():
+        for b in bs:
+            if b not in catalog.CATALOG:
+                asymmetric.append(f"{a} -> {b} (target missing from catalog)")
+            elif a not in adj.get(b, set()):
+                asymmetric.append(
+                    f"{a} -> {b}, but {b}'s related = "
+                    f"{sorted(adj.get(b, []))} (missing reverse '{a}')"
+                )
+    assert not asymmetric, (
+        "Found one-way related edges:\n  " + "\n  ".join(asymmetric)
+    )
+
+
+def test_all_tags_in_canonical_keep_set():
+    """Tags must come from the 9-tag canonical set.
+
+    The 2026-05-24 review found 48 distinct tags, 36 of which were
+    1-server-limited (zero filter value). Consolidation drops the
+    long tail and pins the keep-set so `radia_mcp_by_tag(...)` returns
+    meaningful buckets.
+    """
+    from radia_mcp.meta import catalog
+    KEEP = {"application", "optimization", "theory",
+            "cad", "mesh", "fem", "solver", "ml", "meta"}
+    seen = set()
+    bad = []
+    for n, info in catalog.CATALOG.items():
+        for t in info.get("tags", []):
+            seen.add(t)
+            if t not in KEEP:
+                bad.append(f"{n}: tag '{t}' outside keep-set")
+    assert not bad, (
+        f"Non-canonical tags present ({len(bad)}):\n  " +
+        "\n  ".join(bad) +
+        f"\nKeep-set: {sorted(KEEP)}"
+    )
+    # Also report tags that exist in keep-set but are NEVER used —
+    # useful signal that the keep-set itself should shrink.
+    unused = KEEP - seen
+    if unused:
+        # Not a hard failure, just a warning surfaced in pytest -v.
+        import warnings
+        warnings.warn(f"Keep-set tags never used: {sorted(unused)}")
