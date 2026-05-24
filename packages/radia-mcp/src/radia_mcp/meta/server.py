@@ -39,15 +39,20 @@ def radia_mcp_overview() -> dict:
     with `radia_mcp_get`.
     """
     servers = catalog.list_all()
+    external = catalog.list_external()
     return {
         "n_servers": len(servers),
         "servers": servers,
         "tags_available": sorted({
             t for s in servers for t in s.get("tags", [])
         }),
+        "external_packages": external,
+        "n_external_packages": len(external),
         "next_step_hint":
             "Call <server>_status() on a specific server for full "
-            "introspection + dependency probe.",
+            "introspection + dependency probe. External packages "
+            "(elf / comsol / mcp-server-document) ship from their own "
+            "repos — see entries in `external_packages` for install paths.",
     }
 
 
