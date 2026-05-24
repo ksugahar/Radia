@@ -1,0 +1,249 @@
+"""SynRM topology optimization knowledge for radia_mcp.motor.
+
+Distilled from:
+
+- Kishi-Wakao-Murata-Makino-Takeuchi-Matsushita, "Multi-Objective
+  Topology Optimization of Synchronous Reluctance Motors Using
+  Autoencoder-Estimated Flux Barrier Shapes", IEEJ Trans. PE, 2025.
+- Liu Xinyao 2025 thesis (W:/04_卒論論文関係/2025年度/136_劉馨遙)
+  applying the Wakao method end-to-end on a 4-pole SynRM with
+  ONELAB cross-validation.
+
+Cross-references the general framework in radia_mcp.topology_optimization
+(shape derivative, topology derivative) and adds the **SynRM-specific
+auto-encoder bootstrap** technique that bypasses the slow LS-method
+warm-up.
+"""
+
+from __future__ import annotations
+
+
+WAKAO_AUTOENCODER_LS = """\
+## Wakao 2025 — Autoencoder + Level-Set hybrid for SynRM
+
+Reference: Kishi-Wakao-Murata-Makino-Takeuchi-Matsushita, IEEJ Trans.
+on Power and Energy 2025.
+
+### The problem
+
+Synchronous reluctance motors (SynRM) achieve torque by reluctance
+variation between d-axis (low-reluctance) and q-axis (high-reluctance)
+paths.  The **flux barriers** (air slots) inside the rotor shape this
+reluctance distribution.  Multi-objective design targets:
+
+- maximize average torque  T_ave(shape)
+- minimize torque ripple   T_rip(shape) = (T_max - T_min) / T_ave
+
+with binary material distribution (iron vs air per element).
+
+Standard approach: **level-set (LS) method** (Allaire-Jouve-Toader
+2004) — represent the iron/air boundary by the zero level-set of a
+scalar field φ(x), evolve φ by `∂φ/∂t = -V_n |∇φ|` with shape gradient
+V_n.  Robust but **slow to converge** from a uniform initial guess
+because the level-set has to nucleate many disconnected flux barriers
+from scratch.
+
+### The Wakao idea
+
+Use a **convolutional autoencoder (AE)** trained on a library of
+already-good SynRM rotor shapes to suggest a near-feasible initial
+shape, then refine with LS.  The autoencoder is bottlenecked through
+a 2D latent space (`z_1`, `z_2`) which the authors discovered to
+naturally align with the two Pareto objectives:
+
+| Latent axis | Encoded objective |
+|-------------|-------------------|
+| `z_1`       | Average torque T_ave (negative correlation) |
+| `z_2`       | Torque ripple T_rip (positive correlation) |
+
+So the entire Pareto frontier in (T_ave, T_rip) space is parameterized
+by a continuous 2D walk in latent space.
+
+### Training data
+
+- 543 SynRM rotor shapes (4-pole, 36 stator slots)
+- Each shape: 100×100 binary bitmap (1 = iron, 0 = air)
+- Pre-computed via JMAG / ONELAB → (T_ave, T_rip) labels per shape
+
+### Architecture
+
+```
+Encoder:  100×100 binary → Conv(32) → Conv(64) → Conv(128) → Dense(2)
+Latent:   z = (z_1, z_2) ∈ ℝ²
+Decoder:  Dense(2) → ConvT(128) → ConvT(64) → ConvT(32) → 100×100 sigmoid
+Loss:     binary cross-entropy + λ |z|² (regularization)
+```
+
+The **clean** correlation between latent axes and (T_ave, T_rip) is
+not enforced explicitly during training — it emerges from the dataset
+distribution and the bottleneck.  Tested by Kishi-Wakao by walking a
+grid in z-space and labeling decoded shapes with JMAG-computed T_ave,
+T_rip.
+
+### Optimization workflow
+
+1. **Pick** target Pareto point `(T_ave*, T_rip*)`.
+2. **Decode** initial shape from `z = (z_1*, z_2*)` matched by the
+   latent-to-objective regression.
+3. **Refine** with level-set method (Allaire-Jouve-Toader) — only
+   needs ~10-30 iterations vs ~200 for cold start.
+4. **Evaluate** with high-fidelity FEA (ONELAB/JMAG/NGSolve).
+5. **Loop** over Pareto front.
+
+### Reported results
+
+For the test case (4-pole 36-slot SynRM, 8.5 kW), the AE-LS hybrid
+achieves the same Pareto front as cold-start LS in **~15% of the
+compute time**.  Notably, the **shape diversity** is greater — the
+LS warm-start from AE produces multiple basins (3-, 4-, 5-barrier
+designs) that pure LS misses because of the fixed nucleation pattern.
+
+### Implementation in radia_mcp.motor
+
+The MCP-server tool `motor_topology_optimization(topic="wakao_ae_ls")`
+exposes:
+
+1. AE architecture template (PyTorch)
+2. Training-set generation script using `onelab_knowledge`
+3. Latent-to-objective regression recipe
+4. LS-method refinement using `radia_mcp.topology_optimization.
+   shape_optimization_knowledge` (gradient via adjoint)
+
+The training-set generation is itself an MCP-orchestrated workflow:
+write 543 `pmsm.geo` variants → run ONELAB driver → collect torque
+waveforms → label (T_ave, T_rip) → train AE.
+"""
+
+LIU_THESIS_APPLICATION = """\
+## Liu Xinyao 2025 — Wakao method applied end-to-end
+
+Location: `W:/04_卒論論文関係/2025年度/136_劉馨遙`.
+
+### Contribution
+
+Liu Xinyao's senior thesis re-applied the Wakao 2025 autoencoder + LS
+method to a different SynRM geometry (Kindai University spec) and
+verified the **cross-tool reproducibility**:
+
+1. Train the AE on JMAG-labeled shapes.
+2. Decode candidate Pareto points from latent space.
+3. Cross-check decoded shapes' (T_ave, T_rip) with **ONELAB** instead
+   of JMAG.
+4. Verify ONELAB and JMAG agree on the Pareto front position.
+
+### Key finding
+
+JMAG and ONELAB produce **the same Pareto front** (within ~1%
+T_ave, ~5% T_rip).  This is non-trivial because:
+
+- JMAG uses Galerkin-type edge-element FEA (proprietary mesh).
+- ONELAB uses the Whitney 1-form A-formulation with sliding
+  air-gap moving-band.
+
+The agreement validates that the discretization choice does not
+contaminate the optimization landscape.  The **shape sensitivity
+curve** (∂T_ave/∂shape, ∂T_rip/∂shape) is therefore topology-method-
+agnostic and can be computed with NGSolve (open source, BSD license)
+without losing fidelity vs proprietary tools.
+
+### Recipe for replication in NGSolve
+
+1. Generate 200-500 random SynRM rotor shapes via the AE-decoder
+   (using a fixed seed grid in z-space).
+2. For each shape: write Netgen OCC geometry script that subtracts
+   the binary-bitmap air pockets from a solid rotor disk.
+3. Mesh with Netgen, label per ONELAB convention
+   (`rotor_iron`, `air_gap`, `stator_iron`, `stator_ind_*`).
+4. Run NGSolve time-stepped magnetodynamic A-formulation
+   (see `onelab_knowledge.ngsolve_xlate`).
+5. Post-process torque waveform → (T_ave, T_rip).
+6. Compare with the JMAG / ONELAB labels — agreement < 5%?  Good.
+7. Train a per-NGSolve regressor mapping z → (T_ave, T_rip) and
+   re-do step 2 of the AE workflow with the NGSolve labels.
+
+### Open question
+
+What is the **adjoint-mode shape derivative** for T_rip?  The standard
+result for T_ave uses the magnetostatic adjoint (one extra solve per
+shape).  T_rip is a **functional of the full time history** of T(t)
+and requires an unrolled time-adjoint (memory cost = #timesteps ·
+#DOF).  Liu Xinyao avoids this by using the AE for the dominant
+contribution and only LS for the local refinement (where T_rip
+sensitivity is well-approximated by finite differences).
+
+This open question is what makes the AE warm-start so valuable for
+T_rip: the AE encodes T_rip dependence directly without needing an
+adjoint.
+"""
+
+PARETO_NAVIGATION = """\
+## Pareto navigation in latent space
+
+Once the autoencoder is trained, the entire Pareto front is just a
+1D curve in 2D latent space.  Practical navigation:
+
+### Step 1 — Calibrate
+
+Walk a coarse grid (5×5) in z-space, decode each, evaluate with FEA,
+fit:
+
+  T_ave  =  a + b·z_1 + c·z_2  + ...
+  T_rip  =  d + e·z_1 + f·z_2  + ...
+
+Quadratic terms catch the local Pareto curvature.
+
+### Step 2 — Pareto-front sampling
+
+The Pareto front is the set of z* satisfying:
+
+  ∂T_ave/∂z₁ · ∂T_rip/∂z₂  -  ∂T_ave/∂z₂ · ∂T_rip/∂z₁  = 0
+
+(the Jacobian-determinant zero condition for trade-off optimality).
+Solve numerically — typically a 1D root-finding along a parametric
+curve.
+
+### Step 3 — Refine with LS
+
+Each Pareto-optimal z* gives a decoded shape; refine with LS for
+local optimality (corrects for AE reconstruction error).
+
+### Step 4 — Validate
+
+Run a high-fidelity NGSolve time-stepped solve with **fine mesh**
+(>200k elements) to confirm T_ave and T_rip on the refined shape.
+
+### Code stub (planned)
+
+```python
+import torch
+from radia_mcp.motor.topology_opt_knowledge import load_synrm_ae
+
+ae = load_synrm_ae("models/synrm_4pole_36slot.pt")
+z_grid = torch.linspace(-3, 3, 21).reshape(-1, 1)
+z = torch.cat([z_grid.repeat_interleave(21, dim=0),
+               z_grid.repeat(21, 1)], dim=1)
+shapes = ae.decode(z)                # 441 × 100 × 100
+# Then drive NGSolve / ONELAB on each shape...
+```
+"""
+
+SECTIONS = {
+    "wakao_ae_ls": WAKAO_AUTOENCODER_LS,
+    "liu_thesis_application": LIU_THESIS_APPLICATION,
+    "pareto_navigation": PARETO_NAVIGATION,
+}
+
+
+def get_topology_opt_knowledge(topic: str = "wakao_ae_ls") -> str:
+    """Return SynRM topology-optimization knowledge.
+
+    Args:
+        topic: section name; "all" returns everything.
+    """
+    t = topic.strip().lower()
+    if t == "all":
+        return "\n\n---\n\n".join(SECTIONS[k] for k in SECTIONS)
+    if t not in SECTIONS:
+        valid = ", ".join(sorted(SECTIONS))
+        return f"Unknown topic {t!r}. Valid topics: {valid}\n"
+    return SECTIONS[t]
