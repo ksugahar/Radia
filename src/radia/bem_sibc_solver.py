@@ -39,7 +39,7 @@ class ScalarBIESIBCSolver:
                   intree_singular_n_q=8, intree_regular_quad_degree=11,
                   use_intree_hacapk=False, hacapk_aca_eps=1e-10,
                   hacapk_leaf=64, hacapk_eta=2.0,
-                  bnd_label=None):
+                  bnd_label=None, log_fn=None):
         """Initialize solver and assemble BEM operators.
 
         Args:
@@ -62,15 +62,29 @@ class ScalarBIESIBCSolver:
                 with LinearOperator wrappers).  ~50x faster for typical
                 IH wp meshes -- recommended for new code.
             bnd_label: optional NGSolve boundary label name to filter BND
-                elements by.  Required when ``mesh`` is the parent volume
+                element by.  Required when ``mesh`` is the parent volume
                 mesh and only a subset of its boundary belongs to the
                 workpiece (e.g. ``bnd_label="sibc"`` selects the SIBC
                 sideset only).  Only consumed by the in-tree paths
                 (``use_intree_bem=True``); the ngsolve.bem path uses
                 ``ds`` over all BND.
+            log_fn: optional progress callback ``log_fn(tag, msg)`` used
+                to surface assembly-phase boundaries to the panel debug
+                log + console.  When None (default) the solver is silent
+                -- backwards compatible for non-panel callers / tests.
+                Caller should pass ``calc_common.progress`` for the IH
+                panel pipeline.  Phases logged: SLDL assembly (C++ vs
+                Python), mass / stiffness assembly, HACApK compression.
         """
         from ngsolve import (H1, BilinearForm, GridFunction, ds, grad,
                              TaskManager, InnerProduct)
+
+        # Phase log (default no-op so non-panel callers stay silent).
+        if log_fn is None:
+            def _log_phase(_tag, _msg):
+                pass
+        else:
+            _log_phase = log_fn
 
         self.mesh = mesh
         self.order = order
@@ -88,12 +102,18 @@ class ScalarBIESIBCSolver:
             # Skip NGSolve FES creation entirely.
             self.fes = None
             t0 = time.perf_counter()
+            _log_phase("BEM",
+                f"Lagrange-P2 path: bnd_label={bnd_label!r}, "
+                f"geom_order={intree_geom_order}")
             self._init_lagrange_p2_path(
                 mesh, order, intree_geom_order,
                 intree_singular_n_q, intree_regular_quad_degree,
                 use_intree_hacapk, hacapk_aca_eps, hacapk_leaf, hacapk_eta,
-                bnd_label=bnd_label)
+                bnd_label=bnd_label, log_fn=log_fn)
             self.t_assembly = time.perf_counter() - t0
+            _log_phase("BEM",
+                f"Lagrange-P2 path done (ndof={self.ndof}, "
+                f"{self.t_assembly:.1f}s)")
             return
 
         # H1 on surface (P1, or order>=2 with use_intree_bem=False)
@@ -111,14 +131,24 @@ class ScalarBIESIBCSolver:
             # Galerkin) when available -- pure-Python fallback only when
             # the C++ symbol is missing (older wheel without Phase 1.9).
             from radia.bem.sibc_hacapk import extract_surface_curved
+            _t_ext = time.perf_counter()
             verts, tris, v_global, tri_p2 = extract_surface_curved(
                 mesh, geom_order=intree_geom_order)
+            _log_phase("BEM",
+                f"extract_surface_curved: {len(tris)} tris, {len(verts)} verts "
+                f"(geom_order={intree_geom_order}, "
+                f"{time.perf_counter()-_t_ext:.1f}s)")
             try:
                 from radia import _radia_pybind as _rpb
                 _cpp_assemble = _rpb._AssembleSLDL_Galerkin
             except (ImportError, AttributeError):
                 _cpp_assemble = None
+            _t_sldl = time.perf_counter()
             if _cpp_assemble is not None:
+                _log_phase("BEM",
+                    f"SLDL Galerkin assembly: C++ kernel, "
+                    f"{len(tris)} tris, quad_deg={intree_regular_quad_degree}, "
+                    f"sing_n_q={intree_singular_n_q}")
                 v_arr = np.ascontiguousarray(verts, dtype=np.float64)
                 t_arr = np.ascontiguousarray(tris, dtype=np.int64)
                 p_arr = np.ascontiguousarray(tri_p2, dtype=np.float64)
@@ -128,6 +158,10 @@ class ScalarBIESIBCSolver:
                     intree_singular_n_q,
                     0)   # n_threads=0 -> OpenMP default
             else:
+                _log_phase("BEM",
+                    f"SLDL Galerkin assembly: pure-Python fallback "
+                    f"(C++ _AssembleSLDL_Galerkin not available -- slow!), "
+                    f"{len(tris)} tris")
                 from radia.bem.sibc_hacapk import (
                     assemble_SL_dense_curved, assemble_DL_dense_curved)
                 SL_loc = assemble_SL_dense_curved(
@@ -138,6 +172,9 @@ class ScalarBIESIBCSolver:
                     verts, tris, tri_p2,
                     regular_quad_degree=intree_regular_quad_degree,
                     singular_n_q=intree_singular_n_q)
+            _log_phase("BEM",
+                f"SLDL Galerkin assembly done "
+                f"({time.perf_counter()-_t_sldl:.1f}s)")
             # Lift to full ndof basis (interior vertices contribute zero
             # rows/cols since their hat is 0 on BND).
             self.SL = np.zeros((ndof, ndof))
@@ -159,6 +196,11 @@ class ScalarBIESIBCSolver:
             self._SL_hacapk = None
             self._DL_hacapk = None
             if use_intree_hacapk:
+                _t_hca = time.perf_counter()
+                _log_phase("BEM",
+                    f"HACApK compress: SL + DL, ndof={ndof}, "
+                    f"aca_eps={hacapk_aca_eps}, leaf={int(hacapk_leaf)}, "
+                    f"eta={hacapk_eta}")
                 from radia import _radia_pybind as _rpb_h
                 # Build coordinate array sized for the FULL ndof; for
                 # interior vertices that don't appear in BND we use the
@@ -182,6 +224,9 @@ class ScalarBIESIBCSolver:
                     leaf_size=int(hacapk_leaf),
                     eta=hacapk_eta,
                     max_rank=-1, print_level=0)
+                _log_phase("BEM",
+                    f"HACApK compress done "
+                    f"({time.perf_counter()-_t_hca:.1f}s)")
         else:
             from ngsolve.bem import LaplaceDL, LaplaceSL
             # BEM operators.  Probed 2026-04-29 on N=2477 wp:
@@ -211,6 +256,8 @@ class ScalarBIESIBCSolver:
                 self.SL = None
 
         # Surface mass M
+        _t_mk = time.perf_counter()
+        _log_phase("BEM", f"mass + stiffness assembly (ndof={ndof})")
         mass_bf = BilinearForm(self.fes)
         mass_bf += u.Trace() * v.Trace() * ds
         mass_bf.Assemble()
@@ -228,6 +275,9 @@ class ScalarBIESIBCSolver:
         for r_, c_, val in zip(rows, cols, vals):
             self.K[int(r_), int(c_)] = val
 
+        _log_phase("BEM",
+            f"mass + stiffness done; M_inv "
+            f"({time.perf_counter()-_t_mk:.1f}s)")
         self.M_inv = np.linalg.inv(self.M)
 
         # Gauge vector: <1, v>_S for Lagrange multiplier
@@ -241,7 +291,7 @@ class ScalarBIESIBCSolver:
                                 intree_regular_quad_degree,
                                 use_intree_hacapk,
                                 hacapk_aca_eps, hacapk_leaf, hacapk_eta,
-                                bnd_label=None):
+                                bnd_label=None, log_fn=None):
         """Build SL, DL, M, K, gauge entirely in Lagrange P2 basis.
 
         Bypasses NGSolve's H1 hierarchical FES so that all matrices are
@@ -1362,6 +1412,144 @@ def compute_phi_inc_from_filaments(obs_points, filament_paths, currents,
     return phi
 
 
+def compute_phi_inc_from_filaments_surface_path(
+        wp_mesh, filament_paths, currents, *,
+        ref_vertex_idx=0):
+    """Reconstruct phi_inc on a closed workpiece surface mesh by
+    integrating -H_BS·dl along surface edges, where H_BS is the
+    Biot-Savart field of the filament bundle.
+
+    Motivation (kubota report, 2026-05-21): the legacy two-stage
+    ``compute_phi_inc_from_filaments`` assumes the axis ray
+    (0,0,z_far)->(0,0,z_obs) and the horizontal ray
+    (0,0,z_obs)->(x_obs,y_obs,z_obs) do not pierce any wire.  For a
+    real coil with lead wires (x=129mm on 3turnCoil_work) plus 16
+    perimeter filaments forming closed loops, this assumption fails:
+    the path integrates through wire crossings and picks up
+    spurious branch-cut jumps from the multivalued scalar
+    potential.  Symptom: q_surf spatial peak appears on the
+    coil-FAR face instead of coil-NEAR.
+
+    This implementation avoids the problem entirely by:
+      1. Evaluating H_BS exactly at each surface vertex via
+         ``_h_segments_complex`` (the proven-correct primitive).
+      2. Building surface-edge adjacency from wp_mesh's boundary
+         elements (each triangle/quad contributes its edges).
+      3. BFS from ``ref_vertex_idx`` along a spanning tree of the
+         surface graph; at each new vertex v reached from parent u,
+         set ``phi(v) = phi(u) - 0.5*(H(u)+H(v))·(x_v - x_u)``
+         (trapezoidal rule along the edge).
+
+    Why this works topologically: the workpiece outer surface is a
+    closed simply-connected surface (sphere topology -- the
+    workpiece is a solid cylinder / blob, not a torus).  Any loop
+    on the surface bounds a disk on the surface; the disk does NOT
+    enclose the exterior coil currents, so ∮H·dl = 0 around any
+    such loop and phi is single-valued on the surface.  The BFS
+    spanning tree yields one consistent assignment; discretisation
+    error from trapezoidal integration is O(h^2) per edge.
+
+    Args:
+        wp_mesh: NGSolve Mesh of the workpiece outer surface (the
+            extracted 2D mesh that ScalarBIESIBCSolver consumes).
+        filament_paths: list of K filaments; each filament is a
+            list of ``(p1, p2)`` endpoint tuples.
+        currents: length-K array of per-filament currents, real or
+            complex [A].
+        ref_vertex_idx: vertex used as the gauge (phi=0).  Any
+            vertex on the surface is valid; the global gauge is
+            absorbed by the BIE's grad-of-phi operator anyway.
+
+    Returns:
+        (n_surface_vertices,) complex phi_inc.
+    """
+    from ngsolve import BND
+
+    n_v = wp_mesh.nv
+
+    # 1. Pre-flatten filament segments + currents (shared with the
+    #    legacy two-stage routine).
+    flat_segs = []
+    flat_I = []
+    for fil_segs, Ik in zip(filament_paths, currents):
+        Ik_c = complex(Ik)
+        for (p1, p2) in fil_segs:
+            flat_segs.append((p1, p2))
+            flat_I.append(Ik_c)
+    if not flat_segs:
+        return np.zeros(n_v, dtype=complex)
+    segs = np.asarray(flat_segs, dtype=float)
+    Iseg = np.asarray(flat_I, dtype=complex)
+
+    # 2. H_BS at every surface vertex (vectorised; single call).
+    coords = np.empty((n_v, 3), dtype=float)
+    for vi in range(n_v):
+        p = wp_mesh.vertices[vi].point
+        coords[vi, 0] = p[0]
+        coords[vi, 1] = p[1]
+        coords[vi, 2] = p[2]
+    H_vert = _h_segments_complex(segs, coords, Iseg)  # (n_v, 3) complex
+
+    # 3. Surface adjacency from the mesh's BND elements.  Each
+    #    triangle (3 verts) contributes 3 edges; each quad (4)
+    #    contributes 4 edges.  Build an EDGE LIST (not just sets)
+    #    so the LSQ in step 4 can use each edge as a separate
+    #    constraint.  De-duplicate by canonical ordering (u < v).
+    edge_set = set()
+    for el in wp_mesh.Elements(BND):
+        verts = [v.nr for v in el.vertices]
+        k = len(verts)
+        for i in range(k):
+            a, b = verts[i], verts[(i + 1) % k]
+            edge_set.add((min(a, b), max(a, b)))
+    edges = np.array(sorted(edge_set), dtype=int)
+    n_e = len(edges)
+
+    # 4. Least-squares solve for single-valued phi consistent with
+    #    the discretised -H·dl integrand along every edge.
+    #    System: for each edge (u, v), phi(v) - phi(u) = b_e where
+    #    b_e = -0.5*(H(u)+H(v))·(x_v - x_u).
+    #    BFS spanning tree gave path-dependent accumulation of the
+    #    trapezoidal-rule error and put the q_surf peak at the wp
+    #    end caps instead of under the coil.  LSQ over ALL edges
+    #    averages the noise out and matches the true |H|^2 peak.
+    #
+    #    Sparse incidence matrix A (n_e, n_v): A[e, u] = -1,
+    #    A[e, v] = +1.  Gauge: drop column ref_vertex_idx (and
+    #    enforce phi(ref) = 0).  scipy.sparse.linalg.lsmr solves
+    #    A_reduced @ phi_reduced = b efficiently.
+    from scipy import sparse
+    from scipy.sparse.linalg import lsmr
+
+    rows = np.repeat(np.arange(n_e), 2)
+    cols = edges.reshape(-1)
+    data = np.tile(np.array([-1.0, 1.0]), n_e)
+    A = sparse.csr_matrix((data, (rows, cols)),
+                          shape=(n_e, n_v))
+
+    # Trapezoidal -H·dl for each edge (separately for re/im).
+    u_idx = edges[:, 0]
+    v_idx = edges[:, 1]
+    Hmid = 0.5 * (H_vert[u_idx] + H_vert[v_idx])
+    dl = coords[v_idx] - coords[u_idx]
+    b_full = -(Hmid[:, 0] * dl[:, 0]
+               + Hmid[:, 1] * dl[:, 1]
+               + Hmid[:, 2] * dl[:, 2])  # complex (n_e,)
+
+    # Drop the gauge column and solve for the remaining DOFs
+    keep_cols = np.array([i for i in range(n_v) if i != ref_vertex_idx])
+    A_red = A[:, keep_cols]
+
+    # Solve real and imag parts separately (lsmr is real-only).
+    phi = np.zeros(n_v, dtype=complex)
+    phi_re = lsmr(A_red, b_full.real, atol=1e-10, btol=1e-10)[0]
+    phi_im = lsmr(A_red, b_full.imag, atol=1e-10, btol=1e-10)[0]
+    phi[keep_cols] = phi_re + 1j * phi_im
+    # phi[ref_vertex_idx] stays 0 (gauge)
+
+    return phi
+
+
 def compute_phi_inc_from_filaments_arbitrary_axis(
         obs_points, filament_paths, currents, *,
         n_quad=20, chunk_size=512,
@@ -1501,6 +1689,96 @@ def compute_phi_inc_from_filaments_arbitrary_axis(
     phi = phi_mid - np.sum(w_01[None, :] * integrand_s2, axis=1)
 
     return phi
+
+
+def extract_H_t_per_dof_grad(phi_vec_complex, wp_mesh):
+    """Per-vertex |H_t| via manual triangle-wise P1 gradient of phi.
+
+    H_t = -grad_s(phi) on the workpiece surface.  For each surface
+    triangle build the constant gradient of the linear interpolant
+    of phi from its 3 vertex values, accumulate area-weighted to
+    the 3 vertices, and return ``|H_t|_per_vertex``.
+
+    This is the physically-correct local-gradient extraction.  It
+    REPLACES the legacy Galerkin localization ``phi_i * (K @ phi)_i``,
+    which is a Laplacian sample (samples the LOCAL Laplacian of phi,
+    not the LOCAL gradient norm) and consequently mis-locates the
+    spatial peak.  The v4.67.0 release fixed this for the q_surf
+    spatial output; this helper applies the same fix to the ESIM
+    per-DOF |H_t| extraction (Karl iteration outer loop).
+
+    Parameters
+    ----------
+    phi_vec_complex : (n_v,) complex
+        Magnetic scalar potential on workpiece-surface vertices
+        (P1 DOFs in the BIE basis order=1 path).  For order>=2 the
+        caller should down-project to vertices before invoking this
+        function.
+    wp_mesh : ngsolve.Mesh
+        Workpiece SURFACE mesh (2-D embedded in 3-D).  We read
+        vertices and BND triangle connectivity.
+
+    Returns
+    -------
+    H_t_per_vertex : (n_v,) float
+        |H_t|_i = sqrt(|grad_s phi|^2_real + |grad_s phi|^2_imag)
+        at each surface vertex, area-weighted from the incident
+        triangles.
+
+    Notes
+    -----
+    The 3D triangle-P1 gradient formula:
+        grad N_0 = (p_2 - p_1) x n_hat / (2 area)
+        grad N_1 = (p_0 - p_2) x n_hat / (2 area)
+        grad N_2 = (p_1 - p_0) x n_hat / (2 area)
+    where ``n_hat`` is the outward unit normal.  These are in-plane
+    perpendicular to the opposite edge and have magnitude 1/h_i
+    (h_i = altitude from vertex i to the opposite edge).
+    """
+    import numpy as _np
+    from ngsolve import BND as _BND
+
+    n_v = wp_mesh.nv
+    tri_v = []
+    for el in wp_mesh.Elements(_BND):
+        tri_v.append([v.nr for v in el.vertices])
+    tri_v = _np.asarray(tri_v, dtype=_np.int64)
+    vert_xyz = _np.asarray(
+        [list(wp_mesh.vertices[i].point) for i in range(n_v)],
+        dtype=float)
+
+    p0 = vert_xyz[tri_v[:, 0]]
+    p1 = vert_xyz[tri_v[:, 1]]
+    p2 = vert_xyz[tri_v[:, 2]]
+    normal = _np.cross(p1 - p0, p2 - p0)
+    area2 = _np.linalg.norm(normal, axis=1)
+    tri_area = 0.5 * area2
+    n_hat = normal / _np.maximum(area2[:, None], 1e-30)
+
+    gN0 = _np.cross(p2 - p1, n_hat) / _np.maximum(area2[:, None], 1e-30)
+    gN1 = _np.cross(p0 - p2, n_hat) / _np.maximum(area2[:, None], 1e-30)
+    gN2 = _np.cross(p1 - p0, n_hat) / _np.maximum(area2[:, None], 1e-30)
+
+    phi = _np.asarray(phi_vec_complex)
+    phi_re = phi.real
+    phi_im = phi.imag
+
+    grad_re = (phi_re[tri_v[:, 0:1]] * gN0
+               + phi_re[tri_v[:, 1:2]] * gN1
+               + phi_re[tri_v[:, 2:3]] * gN2)
+    grad_im = (phi_im[tri_v[:, 0:1]] * gN0
+               + phi_im[tri_v[:, 1:2]] * gN1
+               + phi_im[tri_v[:, 2:3]] * gN2)
+    Hsq_tri = (_np.sum(grad_re * grad_re, axis=1)
+               + _np.sum(grad_im * grad_im, axis=1))
+
+    vert_Hsq_num = _np.zeros(n_v)
+    vert_area_sum = _np.zeros(n_v)
+    for j in range(3):
+        _np.add.at(vert_Hsq_num, tri_v[:, j], tri_area * Hsq_tri)
+        _np.add.at(vert_area_sum, tri_v[:, j], tri_area)
+    Hsq_per_vertex = vert_Hsq_num / _np.maximum(vert_area_sum, 1e-30)
+    return _np.sqrt(_np.maximum(Hsq_per_vertex, 0.0))
 
 
 def extract_surface_J_from_phi(mesh, phi_vec_complex, order=1):

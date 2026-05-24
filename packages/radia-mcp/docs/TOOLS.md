@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **114 tools** across 8 MCP servers.
+Total: **116 tools** across 8 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 42 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 43 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 28 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 3 |
@@ -26,6 +26,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_ask` | One-shot search across every Cubit knowledge surface we have. |
 | `cubit_batch_try` | Dry-run a recipe in a fresh headless Cubit subprocess. |
 | `cubit_checkpoint` | Save the current Cubit session state as a named checkpoint. |
+| `cubit_cpp_sdk_guide` | Get documentation on building Cubit C++ SDK plugins. |
 | `cubit_curate_learned_recipes` | **Lab maintainer tool**: read accumulated `learned_recipes.jsonl`, |
 | `cubit_diagnostics_guide` | Get the foundational mesh-diagnostics + cleanup + quality playbook. |
 | `cubit_docs` | Get Cubit documentation: export formats, scripting guide, and API reference. |
@@ -114,6 +115,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
+| `bem_cln` | Get BEM-CLN (per-element multipole CLN with Schur-F termination) |
 | `cln_3d` | Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration |
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |

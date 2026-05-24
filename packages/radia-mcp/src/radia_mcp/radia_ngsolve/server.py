@@ -804,6 +804,12 @@ def kelvin_transformation(topic: str = "all") -> str:
             "a_formulation"  - Vector potential formulation (coils)
             "3d"             - 3D sphere/solid examples (H1)
             "hcurl_3d"       - 3D HCurl A-formulation (calc_fem_kelvin.py)
+            "verified_recipe" - Verified A-formulation + Periodic Kelvin
+                                + BDDC cookbook (5 mandatory elements,
+                                failure-mode -> root-cause table).
+                                **Read this FIRST when debugging an
+                                HCurl eddy-current script that is off
+                                by O(10x) from analytical reference.**
             "adaptive"       - Adaptive mesh refinement with Kelvin
             "identify"       - Periodic boundary Identify() best practices
             "tips"           - Common mistakes and performance tips

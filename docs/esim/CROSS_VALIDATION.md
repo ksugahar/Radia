@@ -529,6 +529,113 @@ see § 1b for the structural limits.
 
 ---
 
+## 6d. Operating-regime sweep: where does per-element matter?
+
+A 32-case sweep over `(I_port, f)` ∈ `{1, 10, 100, 300 A} × {10, 50,
+100, 500 kHz}` on the IH benchmark steel cylinder characterizes the
+scalar-vs-per-element ESIM gap on `P_wp` as a function of operating
+point.  Runner:
+[`examples/ih_esim_benchmark/sweep_f_I.py`](../../examples/ih_esim_benchmark/sweep_f_I.py).
+Figure: [`sweep_heatmap.png`](../../examples/ih_esim_benchmark/sweep_heatmap.png).
+
+**Note on history**: an earlier version of this sweep (`sweep_v1`)
+used a Galerkin-localized per-DOF `|H_t|²` extraction (`phi_i (K φ)_i`)
+that turned out to be a Laplacian sample, not a gradient norm — see
+[`fix(esim)` commit 630527d4](../../) for the bug analysis.  The
+present table is from `sweep_v2` after the fix; gap values changed
+sign and decreased in magnitude (no more +389 % outliers).
+
+**Sweep results (post-fix, all cases formally converged or plateaued):**
+
+`(P_per_element / P_scalar − 1) × 100 %`:
+
+| `I_port` [A] \\ `f` [kHz] | 10  | 50  | 100 | 500 |
+|---|---|---|---|---|
+| 1   | +18 | +18 | +21 | +26 |
+| 10  | +13 | +0  | +2  | +0  |
+| **100** | **-22** | **-39** | **-26** | -2  |
+| **300** | **-48** | **-35** | **-39** | -6  |
+
+Maximum absolute gap: `-48 %` at `(I = 300 A, f = 10 kHz)`.
+
+### Physical interpretation
+
+The gap signature reflects ESIM's **spatial-averaging assumption**
+across the workpiece surface, modulated by where on the BH curve
+the local `|H_t|` distribution sits:
+
+- **`I ≤ 10 A` (linear regime)**: `|H_t|` is below the BH knee
+  everywhere on the workpiece, but the CEFC 2020 BH curve has a
+  steep initial slope at `H < 13 A/m`.  Per-element captures the
+  local mu_r variation, yielding small **positive** gaps `~+20 %`.
+  Scalar SIBC under-resolves the steep initial slope effect.
+
+- **`I = 100-300 A` (saturated regime)**: mean `|H_t|` lies above
+  the BH knee.  Hot-spot DOFs are deeper in saturation with
+  **lower** local `Z_s` (the BH curve has `dZ_s/d|H_t| < 0` above
+  the knee).  Per-element correctly applies the low local `Z_s` at
+  hot spots; scalar uses an intermediate mean `Z_s` and **over-
+  estimates** `P_wp`.  Result: negative gap, max `-48 %` at
+  `(300 A, 10 kHz)`.
+
+- **`f = 500 kHz` (thin-skin regime)**: `δ ≈ 0.04 mm << R = 5 mm`.
+  Local saturation averages out within the thin skin layer; the
+  workpiece behaves as a near-uniform screen.  Per-element and
+  scalar agree to `~5 %`.
+
+- **Sign transition** between linear and saturated regimes is at
+  `I ≈ 10 A` (BH knee crossing on the mean `|H_t|`).
+
+### Engineering implication
+
+The (I, f) heatmap is the **method-uncertainty map** of ESIM: a
+designer using scalar SIBC in IH analysis can read the gap value
+at their operating point as a quantitative estimate of the spatial-
+averaging error they are accepting.  In the typical IH surface-
+hardening regime (`I = 100-300 A`, `f = 10-100 kHz`), scalar SIBC
+**over-predicts** `P_wp` by 20-48 % vs the per-element calculation;
+predictive designs without experimental trim must account for this.
+
+### Cautionary observation
+
+Both scalar and per-element ESIM are themselves approximations of
+the volumetric Maxwell eddy-current problem in the workpiece.  The
+gap quantifies their **mutual disagreement**, not the absolute
+error of either against the true 3D solution.  An external 2D
+axisymmetric volumetric reference solver
+([`src/radia/panels/calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py),
+task #36) has been scaffolded and validated against the linear-mu
+Bessel cylinder reference (see § 5b below).
+
+---
+
+## 5b. Axisymmetric volumetric FEM reference (linear-mu Bessel)
+
+The 2D axisymmetric solver
+[`calc_axisym_volumetric.py`](../../src/radia/panels/calc_axisym_volumetric.py)
+resolves the volumetric eddy current inside the workpiece directly
+via NGSolve complex H1 + axisymmetric weighting, replacing the SIBC
+Robin BC with full Maxwell in the conductor.
+
+**Linear-mu validation** (long cylinder, `mu_r = 100`,
+`sigma = 2×10⁶` S/m, `f = 50` kHz):
+
+| Quantity | Geometry | Value |
+|---|---|---|
+| Workpiece | cylinder | R = 5 mm, H = 200 mm (40× R) |
+| Drive coil | ring | R_coil = 300 mm (60× R, near-uniform external H) |
+| Mesh | quad / triangle | maxh_wp = 0.05 mm ≈ δ/3, ne = 869k, ndof = 1.74M |
+| FEM P_wp | volumetric | **0.182 W** |
+| Bessel P_wp | analytical | **0.193 W** (using FEM-extracted |H_t|=140 A/m) |
+| Agreement | | **−5.7 %** (end-effect contamination + mesh) |
+
+The 6 % gap is consistent with the finite-cylinder end caps the
+Bessel formula does not model.  The FEM machinery is therefore
+**validated as a truth-reference tool** for ESIM evaluation in the
+linear-mu regime; the nonlinear-BH extension is the next step.
+
+---
+
 ## 7. Karl Iteration Lipschitz Estimate (Empirical)
 
 **Goal.**  Quantify the convergence rate of the outer Karl loop and

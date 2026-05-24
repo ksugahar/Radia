@@ -164,10 +164,14 @@ HCurl A with Robin SIBC + Kelvin transformation for open boundary.
 | --bh-file                    | (same)                        | none    |
 | --max-iter                   | --esim-max-iter               | 15      |
 | (no --esim-tol equivalent)   | --esim-tol                    | hard-coded 1e-3 |
-| (per-DOF not in CLI yet)     | --esim-per-panel              | -- |
+| (no per-DOF equivalent)      | --esim-per-panel              | off     |
+| (no Anderson equivalent)     | --esim-anderson-m <depth>     | 0 (off) |
 
 The flag-name inconsistency is a known wart -- both CLIs accept
-their respective spellings unchanged.
+their respective spellings unchanged.  `--esim-per-panel` and
+`--esim-anderson-m` are calc_inductance.py-only because they were
+added during the BEM+SIBC convergence work (v4.66.0+) and have no
+calc_fem_kelvin.py analogue.
 
 ## Solver choice
 
@@ -256,20 +260,38 @@ Headline benchmark (steel cylinder, 50 kHz, I = 100 A):
 
 Per-element Karl with default --esim-relax 0.5 can fail to converge
 to dZ < 1e-3 in 15 iter when surface DOFs straddle the BH knee.
-Workarounds:
+Workarounds (in order of escalating cost):
 
 1. Lower --esim-relax (try 0.3 or 0.2) + raise --esim-max-iter (30-60)
 2. Even at lower relax, may oscillate around 0.07-0.2 dZ_max.  P_wp
    typically stable to ~1 % despite dZ not reaching tol.
-3. Anderson acceleration (planned, not yet implemented) is the
-   intended fix for tight convergence.
+3. **Anderson-type-II acceleration (v4.66.0+)**: enable with
+   ``--esim-anderson-m <depth>`` where depth is the history length
+   (typical 3-5).  Safeguarded against step-clip violations via
+   ``esim_anderson.py::AndersonAccelerator`` (records ``n_clips``
+   and ``n_restarts`` to the JSON output).  Hits dZ < 1e-3 on
+   problems that Picard couldn't close even at relax=0.2.
+
+### Per-DOF |H_t| extraction (v4.67.0+)
+
+Per-element Karl needs the tangential H field SAMPLED PER DOF, not
+just an L²-projected scalar.  The current extractor uses a
+triangle-gradient of phi at each DOF:
+
+  H_t_per_dof[k] = -grad_S(phi)|_{vertex k}
+
+implemented in ``bem_sibc_solver.py::extract_H_t_per_dof_grad`` and
+wired into the calc_inductance.py scalar + per-panel Karl paths
+(lines ~805, ~882).  This replaced the earlier "Laplacian sample"
+(which suffered from corner-vertex bias on the closed surface; see
+commit 630527d4 for the symptom).
 
 ## Backend restriction
 
 --esim-per-panel requires --wp-bem-backend intree-dense (dense LU
 on the BIE system matrix).  The HACApK ACA + GMRES backend does
 NOT yet support per-DOF Z_s -- scalar only.  Adding HACApK per-DOF
-is roadmap (v4.56+).
+is roadmap.
 """
 
 
@@ -297,7 +319,7 @@ IH cases.
 | dZ oscillates after iter 1-2           | --esim-relax 0.3 |
 | dZ slowly decreasing, > 15 iter needed | --esim-max-iter 30 |
 | Deep saturation, dZ stalls > 0.1       | --esim-relax 0.2 + --esim-max-iter 60 |
-| Even at low relax, oscillates          | Anderson accel (planned, not yet) |
+| Even at low relax, oscillates          | --esim-anderson-m 3-5 (safeguarded Anderson-II, v4.66.0+) |
 
 ## Reading the esim_history in JSON output
 
