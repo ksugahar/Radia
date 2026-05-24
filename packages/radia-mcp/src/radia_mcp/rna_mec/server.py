@@ -28,10 +28,19 @@ def rna_mec(topic: str = "overview") -> str:
 
     Args:
         topic: One of:
-            "overview"            - RNA / MEC landscape + lab lineage (DEFAULT)
-            "rna_mmm_coupling"    - RNA + MMM for transformer
-            "dynamic_hysteresis"  - ★ Dynamic hysteresis MEC (Play + Cauer)
-            "all"                 - Everything
+            "overview"                       - RNA / MEC landscape + lab lineage (DEFAULT)
+            "mec_basics"                     - Reluctance, permeance, MMF, Hopkinson law
+            "nodal_vs_mesh_analysis"         - Derbas 2009: KCL vs KVL, Jacobian
+            "reluctance_network_construction" - flux tube, claw-pole example
+            "lumped_extraction_fea"          - L, M from FEA (Lee 2005 TEAM-28)
+            "cauer_ladder_rna"               - CLN for eddy-current MOR (Kameari 2018)
+            "rna_mmm_coupling"               - Janet 2004-2005 mixed method, CT
+            "electromechanical_coupling"     - State-space RNA + ODE (RK4)
+            "team28_reduced_model"           - TEAM-28 in depth, 85h -> 1h speedup
+            "topology_optimization"          - Yin 2023 grid RNA + AVM
+            "dynamic_hysteresis"             - Lab Play + Cauer dynamic MEC
+            "vs_pec_peec"                    - Acronym map: RNA/MEC/MMM/MSC/PEEC
+            "all"                            - Everything
     """
     return get_knowledge(topic)
 
