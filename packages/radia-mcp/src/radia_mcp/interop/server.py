@@ -30,6 +30,15 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
 
+from .comsol_livelink_knowledge import (
+	get_comsol_livelink,
+	TOPICS as _COMSOL_LIVELINK_TOPICS,
+)
+from .comsol_lab_tips_knowledge import (
+	get_comsol_lab_tips_documentation,
+	TOPICS as _COMSOL_LAB_TIPS_TOPICS,
+)
+
 mcp = FastMCP("mcp-server-radia-interop")
 
 
@@ -503,6 +512,89 @@ def freecad_exec_safely(commands: str,
 	payload["note"] = (f"Batch passed and committed to {dest}. "
 	                   f"Rollback by copying {checkpoint} back over it.")
 	return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# COMSOL LiveLink knowledge (Java + MATLAB + MPh Python)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def interop_comsol_livelink(topic: str = "overview") -> str:
+	"""COMSOL LiveLink (Java + MATLAB + MPh Python) knowledge.
+
+	The lab uses COMSOL as a reference comparison code; .java exports
+	from the GUI are the canonical scripting artifact. This tool returns
+	distilled knowledge drawn from S:/COMSOL/ -- the lab's model1.java,
+	model2.java, ForJavaScript.java practice files, the COMSOL_compile.ps1
+	helper, and the symmetry / cheat-sheet notes in Comsol_Tips.docx.
+
+	Args:
+	    topic: one of
+	      "overview"          -- when to use Java vs MATLAB vs MPh Python
+	      "java_api"          -- com.comsol.model class hierarchy + idioms
+	      "matlab_livelink"   -- mli usage from MATLAB
+	      "mph_python"        -- MPh Python (lab default for sweeps)
+	      "lab_examples"      -- S:/COMSOL/ lab files walk-through
+	      "compile_workflow"  -- comsolcompile + COMSOL_compile.ps1 recipe
+	      "when_to_use_which" -- decision table + perf / license notes
+	      "pitfalls"          -- license, encoding, escaping, version drift
+	      "servers"           -- comsolserver / comsolmphserver / comsolbatch
+	      "references"        -- lab file paths + COMSOL doc paths
+	      "all"               -- everything (concatenated)
+	"""
+	return get_comsol_livelink(topic)
+
+
+# ---------------------------------------------------------------------------
+# Sugahara Lab COMSOL practical tips (5 yrs of NAS-stashed notes)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def interop_comsol_lab_tips(topic: str = "overview") -> str:
+	"""Sugahara Lab (Kindai University) COMSOL practical tips compendium.
+
+	Five years (2020-2025) of lab-discovered COMSOL Multiphysics
+	know-how distilled into ~20 topics. Sources are NAS-stashed plain
+	text seed notes, vendor (KESCO Japan) inquiry transcripts,
+	bilingual .docx Q&A, .pptx accelerator-magnet setup decks, and a
+	2024-03 mesh-type investigation folder.
+
+	Pairs with the COMSOL fork's `docs/LAB_TIPS.md` (kept in sync
+	intentionally) -- this MCP surface ships with radia-mcp on PyPI
+	so the tips show up in any Sugahara Lab MCP client without
+	requiring the COMSOL fork to be installed.
+
+	The biggest single trip-wire covered here: symmetry-plane current
+	scaling (topic "coil_current_scaling"). A 1/8 model with three
+	symmetry planes can need an 8x scaling on the post-processed
+	quantity -- COMSOL does NOT warn -- and the wrong answer looks
+	"almost right".
+
+	Args:
+		topic: One of (call with "overview" first if unsure):
+			"overview"                    -- topic index + meta-stance
+			"solver_choice"               -- MUMPS up to 1M DOF
+			"iteration_limit"             -- Fully Coupled 25 -> 250 bump
+			"acdc_iterative_solvers"      -- GMRES OK, BiCGStab/CG erratic
+			"convergence_curve"           -- residual plot reading
+			"symmetry_plane_bc"           -- Mag Insul vs PMC decision
+			"version_55_unsupported"      -- 5.5 sunset; re-validate old
+			"dof_count_check"             -- numberofdofs Help shortcut
+			"tokyo_tech_hpc"              -- FNL license + Batch Run
+			"coil_current_scaling"        -- CRITICAL symmetry scaling
+			"homogenized_multiturn_coil"  -- N*I setup; (3)x(4) trap
+			"coil_geometry_analysis"      -- when the analysis step pays
+			"infinite_element_domain"     -- accelerator open-bdy recipe
+			"element_order"               -- 1/2/3-ji yousou cost vs acc
+			"mesh_statistics"             -- Free Tetrahedral Info 1/2
+			"stripping_mph_for_support"   -- Save Solutions=OFF for KESCO
+			"heat_transfer_bc_dimcheck"   -- ht BC dimensional bug
+			"square_coil_mesh_study"      -- 2024-03 ObjectLayer vs hex
+			"cubit_to_comsol_handoff"     -- Nastran .bdf gotchas
+			"lab_file_index"              -- every source path on S:/COMSOL/
+			"all"                         -- everything concatenated
+	"""
+	return get_comsol_lab_tips_documentation(topic)
 
 
 # ---------------------------------------------------------------------------
