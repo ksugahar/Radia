@@ -1,5 +1,19 @@
 """Fusion magnet knowledge."""
 
+# Single source of truth for the dispatcher's accepted topic enum.
+# Wired into the `fusion_topics()` MCP tool via
+# common.register_topics_tool — see server.py.
+TOPICS: dict[str, str] = {
+    "overview": "Confinement landscape (tokamak/stellarator/FRC/inertial), "
+                "operating regime (5-13 T, DC + disruption transients)",
+    "tokamak": "ITER TF/PF/CS coil system, Nb3Sn cable-in-conduit, "
+                "disruption forces, halo currents",
+    "stellarator": "Modular vs helical (LHD, W7-X, Mitsubishi heliotron "
+                    "lineage), 3D twisted toroidal confinement",
+    "all": "Concatenated dump of all topics above",
+}
+
+
 OVERVIEW = r"""
 # Fusion reactor magnet systems
 

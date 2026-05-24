@@ -15,6 +15,7 @@ New (2026-05-24, learned from COMSOL MCP analysis):
 from .prompts_loader import load_prompt, list_prompts
 from .async_runner import AsyncRunner, RunStatus
 from .status import register_status_tool, build_status_payload
+from .topics import register_topics_tool
 
 __all__ = [
     "load_prompt",
@@ -23,4 +24,5 @@ __all__ = [
     "RunStatus",
     "register_status_tool",
     "build_status_payload",
+    "register_topics_tool",
 ]

@@ -1,5 +1,15 @@
 """Graph Neural Networks for PDE / EM problems."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "(see knowledge file for details)",
+    "physics_embedded": "(see knowledge file for details)",
+    "equivariant_gnn": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([OVERVIEW, PHYSICS_EMBEDDED, EQUIVARIANT_GNN])",
+}
+
 OVERVIEW = r"""
 # Graph Neural Networks (GNN) Overview
 

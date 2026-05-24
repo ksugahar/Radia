@@ -15,8 +15,8 @@ Usage:
 """
 import sys
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
-from .knowledge import get_knowledge
+from ..common import register_status_tool, register_topics_tool
+from .knowledge import get_knowledge, TOPICS
 
 mcp = FastMCP("mcp-server-rna-mec")
 
@@ -44,6 +44,13 @@ register_status_tool(
     description='RNA / Magnetic Equivalent Circuit. ★ Lab specialty: dynamic hysteresis MEC (Play + Cauer)',
     subpackage='radia_mcp.rna_mec',
     related_servers=["magnetic-materials", "mor", "ih"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-rna-mec',
+    topics=TOPICS,
 )
 
 

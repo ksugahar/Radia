@@ -1,5 +1,15 @@
 """Litz wire + transmission line knowledge."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "(see knowledge file for details)",
+    "litz": "(see knowledge file for details)",
+    "transmission": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([OVERVIEW, LITZ, TRANSMISSION_LINE])",
+}
+
 OVERVIEW = r"""
 # Litz wire + transmission line analysis
 
