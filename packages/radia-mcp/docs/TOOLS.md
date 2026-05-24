@@ -2,18 +2,18 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **121 tools** across 9 MCP servers.
+Total: **129 tools** across 9 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 47 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 29 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
-| [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 1 |
-| [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 3 |
-| [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 1 |
-| [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 5 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 44 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 31 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
+| [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
+| [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
+| [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
+| [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 6 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 1 |
 
 ## `mcp-server-cubit`
@@ -57,20 +57,17 @@ Module: `radia_mcp.cubit.server`
 | `cubit_session_status` | Return diagnostic info about the Cubit session (pid, alive, bin_dir). |
 | `cubit_show` | Load a file into the **persistent Cubit viewer** and optionally run |
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
+| `cubit_status` | (no description) |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
 | `generate_cubit_script` | Generate a template Cubit Python script for common workflows. |
 | `get_lint_rules` | List all available Cubit export lint rules with descriptions. |
-| `launch_vol_sol_viewer` | Launch the tools/vol_sol_viewer.py wrapper on a .vol or .sol file. |
 | `lint_cubit_directory` | Lint all Python scripts in a directory for Cubit export convention violations. |
 | `lint_cubit_script` | Lint a Python script for Cubit mesh export convention violations. |
 | `netgen_code_example` | Get a ready-to-run Netgen export code example. |
 | `netgen_workflow_guide` | Get step-by-step Netgen/NGSolve workflow documentation. |
 | `open_in_cubit` | Open a file, or execute a list of commands, in **Cubit GUI**. |
-| `verify_sol_file` | Verify that a .sol file can be loaded as an NGSolve GridFunction. |
-| `verify_vol_file` | Verify that a .vol file loads correctly via NGSolve. |
-| `vol_sol_viewer_status` | Report current state of the .vol / .sol double-click viewer. |
 
 ## `mcp-server-build123d`
 
@@ -89,6 +86,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
+| `build123d_status` | (no description) |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
@@ -134,6 +132,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
+| `mmm_core` | MMM (Magnetic Moment Method) core theory + Radia heritage. |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
 | `panel_add_param` | Plan where to add a new parameter to a Radia-NGSolve panel. |
@@ -142,6 +141,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `panel_schema` | Show Radia-NGSolve panel definitions with Japanese labels and physics. |
 | `panel_widget_locations` | Return file:line locations for everything that touches a widget. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
+| `radia_ngsolve_status` | (no description) |
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | Triple-package release workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
@@ -158,6 +158,7 @@ Module: `radia_mcp.gmsh.server`
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
+| `gmsh_status` | (no description) |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
 | `lint_gmsh_directory` | Lint all Python scripts in a directory for GMSH policy violations. |
 | `lint_gmsh_script` | Lint a single Python script for GMSH policy violations. |
@@ -170,6 +171,8 @@ Module: `radia_mcp.electromagnet.server`
 
 | Tool | Description |
 |---|---|
+| `electromagnet_status` | (no description) |
+| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
 | `electromagnet_usage` | Get accelerator electromagnet analysis documentation. |
 
 ## `mcp-server-ih`
@@ -182,6 +185,7 @@ Module: `radia_mcp.ih.server`
 |---|---|
 | `ih_esim` | Induction-heating ESIM (Effective Surface Impedance Method) usage. |
 | `ih_sibc` | Get IH solver architecture and SIBC documentation. |
+| `ih_status` | (no description) |
 | `induction_heating` | Get induction heating simulation documentation. |
 
 ## `mcp-server-peec`
@@ -192,6 +196,9 @@ Module: `radia_mcp.peec.server`
 
 | Tool | Description |
 |---|---|
+| `peec_carstensen_ac_loss` | Carstensen-Dowell analytical AC copper-loss formulas for stranded |
+| `peec_hoibc` | HOIBC (Higher Order Impedance Boundary Conditions) — extension of |
+| `peec_status` | (no description) |
 | `peec_usage` | Get PEEC (Partial Element Equivalent Circuit) documentation. |
 
 ## `mcp-server-radia-interop`
@@ -207,6 +214,7 @@ Module: `radia_mcp.interop.server`
 | `freecad_to_cubit_hex` | Execute a FreeCAD script in a FreeCADCmd subprocess, export the |
 | `list_cad_mcp_interop` | List registered CAD-MCP interop adapters + their availability. |
 | `openscad_to_cubit_hex` | Execute OpenSCAD code, export STEP, run through `cubit_mesh_auto`. |
+| `radia_interop_status` | (no description) |
 
 ## `mcp-server-panel-review`
 
