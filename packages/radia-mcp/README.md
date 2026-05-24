@@ -120,12 +120,50 @@ non-standard.
 
 ---
 
+## ★ Discovery — start here
+
+Before calling any specific server, ask **`mcp-server-radia-meta`** which
+server has the knowledge you need. It is the authoritative cross-server
+catalog of all 36 radia-mcp servers and answers "which tool covers
+concept X?" without trial-and-error.
+
+```python
+# 4 catalog tools + 1 health probe
+radia_mcp_overview()                  # all 36 servers + 43 tags
+radia_mcp_get("mcmc")                 # full info for one server
+radia_mcp_by_tag("optimization")      # filter (returns 6 matches)
+radia_mcp_related("mcmc")             # cross-link map (mcmc → optuna, ...)
+radia_mcp_health()                    # importability probe of all 36
+```
+
+Then drill into a specific server with its `<short>_status()` (auto-
+introspected tool list + dep probe) and `<short>_topics()` (for
+dispatcher-style servers: the topic enum) tools.
+
+**Pattern**: 3-call discovery instead of guess-and-error —
+
+```
+radia_mcp_by_tag("optimization")
+  → [optuna, bayesian-opt, evolutionary, mcmc, topology-optimization,
+     data-assimilation, gnn, pinn]
+  → optuna_status()              # confirm tools available
+  → optuna_topics()              # ['usage', 'algorithm',
+                                  'lab_applications', 'all']
+  → optuna(topic='algorithm')    # get the content
+```
+
 ## MCP servers
+
+The catalog is the **source of truth** — call `radia_mcp_overview()` for
+the full 36-server live list. The historically primary servers are
+shown below for reference; everything else is discoverable via meta.
 
 ### Standalone (no Radia core dependency — `pip install radia-mcp`)
 
 | Server | Entry point | Tools | Highlights |
 |---|---|---|---|
+| **★ meta** | `mcp-server-radia-meta` | 6 | Cross-server catalog + health probe — RECOMMENDED FIRST CALL |
+| **literature-index** | `mcp-server-literature-index` | 9 | Full-text search across 2,339 lab literature files in W:/03_文献・論文 (ChromaDB + semantic search) |
 | **Cubit** | `mcp-server-cubit` | 52 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
 | **build123d** | `mcp-server-build123d` | 37 | `build123d_to_cubit_hex`, `lint_build123d_script` (7 rules), `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, 13 Radia/general templates, CadQuery + bd_warehouse interop |
 | **gmsh-post** | `mcp-server-gmsh-post` | 21 | `gmsh_post_inspect/validate/convert` (MSH v4.1 only), `gmsh_post_quality`, scrape over GitLab issues + StackOverflow + YouTube |
@@ -152,6 +190,8 @@ Continue, …):
 ```json
 {
   "mcpServers": {
+    "radia-meta":          {"command": "mcp-server-radia-meta"},
+    "literature-index":    {"command": "mcp-server-literature-index"},
     "cubit":               {"command": "mcp-server-cubit"},
     "build123d":           {"command": "mcp-server-build123d"},
     "gmsh-post":           {"command": "mcp-server-gmsh-post"},
@@ -161,6 +201,12 @@ Continue, …):
   }
 }
 ```
+
+Registering more than the 8 above is rarely necessary — once you have
+**meta**, `radia_mcp_get(name)` returns the entry point for any of the
+36 servers and you can register them on demand. The full list of
+catalog-driven server names is in
+`radia_mcp.meta.catalog.CATALOG`.
 
 For local development from a checkout (no install needed):
 
