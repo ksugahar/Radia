@@ -718,7 +718,14 @@ u, v = fes.TnT()
 # Bilinear form: curl-curl with Kelvin-modulated nu
 a = BilinearForm(fes)
 a += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=4)
-a += reg * NU_0 * u * v * dx  # gauge regularization (HCurl uniqueness)
+# Gauge regularization: nograds=True removes H1 gradient subspace,
+# but residual harmonic cohomology can still leave curl-curl singular.
+# Restrict to non-kelvin materials because nu_kelvin = (r'/R)^2 * nu0
+# vanishes at r'=0 and a constant NU_0 mass term would dominate there
+# and corrupt the magnetic energy integral.
+non_kelvin_mats = [m for m in mesh.GetMaterials() if "kelvin" not in m.lower()]
+if reg > 0 and non_kelvin_mats:
+    a += reg * NU_0 * u * v * dx("|".join(non_kelvin_mats))
 
 # SIBC = Robin BC on hole boundary (conductor NOT meshed, NOT solved)
 # Validated 2026-04-14: 2D axisym Kelvin + SIBC (3D HCurl, hole approach)
@@ -2292,6 +2299,175 @@ See docs/kelvin/KELVIN_TRANSFORMATION.md §7.4.1 for full derivation.
 See docs/cln/CAUER_LADDER_NETWORK.md §6.4.1 for CLN + Kelvin specifics.
 """
 
+KELVIN_VERIFIED_RECIPE = """
+# Verified Production Recipe: A-formulation + Periodic Kelvin + BDDC
+
+This section consolidates the recipe that production code in
+`src/radia/panels/calc_fem_kelvin.py` has used since 2026-04 for the
+combined "HCurl + Periodic Kelvin + iterative solver" problem.  If
+you are debugging a new HCurl eddy-current script and the result is
+off by O(10x) from the analytical / BEM reference, you are almost
+certainly missing one of the five elements below.
+
+## The five mandatory elements
+
+1. **`nograds=True`** on the HCurl FE space.
+   - HCurl basis includes gradients of H1 basis (curl(grad phi) = 0).
+   - These form the curl-curl kernel = gauge freedom.
+   - Without `nograds=True`, BDDC factorization hits singular blocks
+     (`ZGETRF::info = k` for some k > 0) and a direct solver returns
+     an arbitrary gradient-polluted solution.
+   - Required at ANY polynomial order (including p=1).
+
+2. **`Periodic(base_fes)` after `nograds=True`**, not before.
+   - The order is: `HCurl(..., nograds=True, ...)` THEN `Periodic(...)`.
+   - Periodic identification couples slave DOFs to master DOFs; you
+     want the master/slave pairing on the already-gradient-stripped
+     basis.
+
+3. **Gauge regularization restricted to non-Kelvin materials**.
+   - `nograds=True` removes the H1 gradient subspace, but the
+     residual harmonic cohomology (nontrivial topology, in particular
+     the period gluing) can still leave curl-curl singular.
+   - Add `reg * NU_0 * u * v * dx(non_kelvin_mats)` to fix the kernel.
+   - **DO NOT** apply this term in the Kelvin domain: `nu_kelvin =
+     (r'/R)^2 * nu0` vanishes near r'=0, so a constant `NU_0` mass
+     term would dominate there and corrupt the magnetic-energy
+     integral.
+   - Typical magnitude: `reg = 1e-6`.
+
+4. **`bonus_intorder=4` on the curl-curl integral**.
+   - The Kelvin-modulated `nu_cf = (r'/R)^2 * nu_0` is a rational
+     function of coordinates; standard quadrature undertcounts the
+     energy in the exterior shell by several percent.
+   - `dx(bonus_intorder=4)` raises the quadrature order to handle the
+     rational integrand cleanly.
+
+5. **BDDC preconditioner for order >= 2; CompactAMS only at order=1**.
+   - `Preconditioner(a, "bddc")` works at any order with `nograds=True`.
+   - `radia.sparsesolv_ngsolve.ComplexCompactAMSPreconditioner` is
+     order-1-only AND incompatible with Periodic Kelvin (DOF
+     dimensions don't match the auxiliary H1 space).
+   - At p=1 without Periodic: prefer CompactAMS (cheaper).
+   - At p>=2 OR with Periodic Kelvin: BDDC.
+
+## Copy-paste skeleton
+
+```python
+from ngsolve import (Mesh, HCurl, Periodic, BilinearForm, LinearForm,
+                     GridFunction, CoefficientFunction, Integrate,
+                     curl, x, y, z, dx, ds, InnerProduct,
+                     Preconditioner, CGSolver)
+
+MU_0 = 4e-7 * 3.141592653589793
+NU_0 = 1.0 / MU_0
+
+mesh = Mesh("model.vol")
+omega = 2 * 3.141592653589793 * freq
+
+# 1. Material-dependent nu_cf with Kelvin modulation
+materials = mesh.GetMaterials()
+non_kelvin_mats = [m for m in materials if "kelvin" not in m.lower()]
+nu_list = []
+sigma_list = []
+for m in materials:
+    if "kelvin" in m.lower():
+        # Sugahara 2022 canonical: nu' = (r'/R)^2 * nu_0
+        nu_list.append((x*x + y*y + z*z) / R_K**2 * NU_0)
+        sigma_list.append(0.0)
+    elif m == "conductor_name":
+        nu_list.append(NU_0)
+        sigma_list.append(sigma_cond)
+    else:  # air
+        nu_list.append(NU_0)
+        sigma_list.append(0.0)
+nu_cf    = CoefficientFunction(nu_list)
+sigma_cf = CoefficientFunction(sigma_list)
+
+# 2. HCurl FE space with nograds=True, then Periodic wrap
+base_fes = HCurl(mesh, order=p, complex=True, nograds=True)
+fes      = Periodic(base_fes)
+u, v     = fes.TnT()
+
+# 3. Bilinear form: curl-curl + AC mass (conductors only) + gauge reg
+a = BilinearForm(fes, symmetric=True)
+a += nu_cf * InnerProduct(curl(u), curl(v)) * dx(bonus_intorder=4)
+a += 1j * omega * sigma_cf * InnerProduct(u, v) * dx("conductor_name")
+if non_kelvin_mats:
+    a += 1e-6 * NU_0 * InnerProduct(u, v) * dx("|".join(non_kelvin_mats))
+
+# 4. RHS (your applied source / Biot-Savart background)
+f = LinearForm(fes)
+# ... f += -1j * omega * sigma_cf * InnerProduct(A_ext, v) * dx("conductor_name")
+
+# 5. BDDC + CG
+prec = Preconditioner(a, "bddc")
+a.Assemble(); f.Assemble()
+gfu = GridFunction(fes)
+inv = CGSolver(a.mat, prec.mat, complex=True, maxsteps=2000,
+               precision=1e-8, printrates=False)
+gfu.vec.data = inv * f.vec
+```
+
+## Verify-First diagnostic (BEFORE you run a physics solve)
+
+Per CLAUDE.md "Verify-First Policy", run these checks first.  If any
+of them fails, the issue is in geometry / Identify / labels --
+debugging at the physics-solve layer is wasted effort.
+
+```python
+# (a) Materials / boundaries spelled as expected
+print(mesh.GetMaterials(), mesh.GetBoundaries())
+
+# (b) Periodic actually constrains DOFs
+fb = HCurl(mesh, order=p, complex=True, nograds=True)
+fp = Periodic(fb)
+print("slaved:", sum(fb.FreeDofs()) - sum(fp.FreeDofs()))  # must be > 0
+
+# (c) Functional boundary test for Periodic
+gfu_test = GridFunction(fp); gfu_test.vec[:] = 0
+gfu_test.Set(1.0, definedon=mesh.Boundaries("kelvin_int"))
+r = Integrate(gfu_test * gfu_test, mesh, definedon=mesh.Boundaries("kelvin_ext")) \\
+  / Integrate(gfu_test * gfu_test, mesh, definedon=mesh.Boundaries("kelvin_int"))
+print("ratio:", r)  # must be 1.0
+```
+
+## Failure-mode -> root-cause table
+
+| Symptom                                          | Most likely cause           |
+|--------------------------------------------------|-----------------------------|
+| BDDC: `ZGETRF::info > 0`                         | Missing `nograds=True`      |
+| CG diverges / stalls at iter ~ few               | Missing `nograds=True` OR missing gauge reg |
+| Result O(10x) too small in magnitude             | `reg * NU_0 * u * v * dx` applied in Kelvin domain (`nu->0` there + constant mass = corrupted energy) |
+| Inductance/energy off ~5%, mesh-independent      | Missing `bonus_intorder=4`  |
+| `Periodic` ratio test fails (not 1.0)            | Identify() missing or wrong tolerance; fix the .vol, not the solver |
+| Inductance grows as you refine the mesh          | Pure-gradient pollution surviving in solution; `nograds=True` + reg both required |
+
+## Common AI-debugging mistake (recorded 2026-05-20)
+
+Symptom: re-run the script with progressively finer mesh / higher
+order / Kelvin-on / iterative solver, and the discrepancy gets
+*worse*, not better.  The instinct is "more refinement should be
+better"; but each refinement amplifies the gauge null-space
+pollution if `nograds=True` is missing.  A naive HCurl direct-solve
+on a coarse mesh can be accidentally close to the truth because the
+pseudo-inverse picks a small-norm gradient pollution; refining the
+mesh enlarges the kernel and the pollution.
+
+**Fix order**: (1) `nograds=True`, (2) gauge reg restricted to
+non-Kelvin, (3) bonus_intorder=4, (4) THEN refine mesh / raise order.
+
+## References
+
+- `src/radia/panels/calc_fem_kelvin.py` (production reference for IH)
+- `src/radia/panels/calc_fem_coilmesh.py` (production reference for
+  volumetric coil + workpiece SIBC + Kelvin)
+- CLAUDE.md "Verify-First Policy" (2026-04-25): FES inspection
+  before physics solve.
+- NGSolve Maxwell tutorial unit-2.4: `HCurl(..., nograds=True)` is
+  the documented gauge-fixing recipe at ANY polynomial order.
+"""
+
 
 def get_kelvin_documentation(topic: str = "all") -> str:
     """Return Kelvin transformation documentation by topic."""
@@ -2301,6 +2477,7 @@ def get_kelvin_documentation(topic: str = "all") -> str:
         "a_formulation": KELVIN_A_FORMULATION,
         "3d": KELVIN_3D,
         "hcurl_3d": KELVIN_HCURL_3D,
+        "verified_recipe": KELVIN_VERIFIED_RECIPE,
         "adaptive": KELVIN_ADAPTIVE,
         "identify": KELVIN_IDENTIFY,
         "tips": KELVIN_TIPS,

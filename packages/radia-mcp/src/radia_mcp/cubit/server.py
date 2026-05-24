@@ -34,6 +34,7 @@ from .knowledge.custom_toolbar import (
 	generate_toolbar_skeleton,
 	generate_dialog_skeleton,
 )
+from .knowledge.cpp_sdk import get_cpp_sdk_documentation
 from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from .knowledge.license import get_license_documentation
 from .knowledge.format_routing import get_format_routing_documentation
@@ -418,6 +419,13 @@ def cubit_docs(topic: str = "all") -> str:
 	        --- Radia-NGSolve panels ---
 	        "panel_conventions"      - Analysis window conventions (TITLE, LABELS, etc.)
 	        "panel_labels"           - Label guide (blocks/sidesets -> .vol -> NGSolve)
+	        --- Custom GUI extension paths (Python vs C++) ---
+	        "cpp_sdk_*"              - C++ SDK plugin path (advanced).
+	                                   Subtopics: overview, prerequisites,
+	                                   install_and_load, components_example,
+	                                   custom_commands, troubleshooting.
+	                                   For the Python path see the dedicated
+	                                   `cubit_toolbar_guide` tool.
 	        --- Cubit license (multi-user lab) ---
 	        "license_per_user"       - Each user activates Cubit license in their OWN
 	                                   account (renewals cache is bound to the user's
@@ -462,6 +470,14 @@ def cubit_docs(topic: str = "all") -> str:
 		return PANEL_CONVENTIONS
 	if topic == "panel_labels":
 		return LABEL_GUIDE
+
+	# C++ SDK plugin topics: strip prefix and dispatch to cpp_sdk
+	# knowledge module.  Browsing aliases included via
+	# get_cpp_sdk_documentation's own alias map.
+	if topic.startswith("cpp_sdk_"):
+		return get_cpp_sdk_documentation(topic[len("cpp_sdk_"):])
+	if topic in ("cpp_sdk", "sdk"):
+		return get_cpp_sdk_documentation("overview")
 
 	# License topics: each user activates their own license in their
 	# own session.  Admin cannot bootstrap it (the renewals cache is
@@ -4475,6 +4491,48 @@ def cubit_toolbar_guide(topic: str = "overview") -> str:
 	         tire_example, auto_refine, debug.
 	"""
 	return get_toolbar_documentation(topic)
+
+
+@mcp.tool()
+def cubit_cpp_sdk_guide(topic: str = "overview") -> str:
+	"""
+	Get documentation on building Cubit C++ SDK plugins.
+
+	Covers the Coreform 2026 "Advanced customization" webinar workflow:
+	when to reach for the C++ SDK instead of the Python toolbar path,
+	CMake + Qt6 + MSVC/GCC prerequisites, the SDK ``components`` example
+	(Claro main-window handle, menu_manager, toolbar_manager, panel
+	factory, navigation-node tree), how to register new command-line
+	verbs that integrate with Cubit's command parser, and Tools->Plugins
+	loading semantics (folder-not-DLL + mandatory restart).
+
+	This is DIFFERENT from two adjacent topics:
+	  * `cubit_toolbar_guide` -- the in-process Python / PySide6 path.
+	    Prefer that whenever it suffices.
+	  * `cubit_docs topic=panel_conventions` -- the Radia-NGSolve
+	    external Python 3.12 launcher panels (unrelated to the SDK).
+
+	Args:
+		topic: Topic to document.  Options:
+			"all"               - All sections
+			"overview"          - When the SDK is the right choice
+			"prerequisites"     - CMake / Qt6 / MSVC / GCC versions
+			"install_and_load"  - Tools->Plugins folder + restart
+			"components_example"- SDK components/ anatomy, Claro, menu/
+			                      toolbar/panel managers, factory pattern
+			"custom_commands"   - Register new command verbs + hotkeys
+			"troubleshooting"   - Debug/Release mismatch, MOC/UIC,
+			                      hotkey gotchas
+
+	Aliases: cmake, qt6, build, load, restart, claro, menu, toolbar,
+	         panel, navigation_nodes, hotkey, shortcut, moc, uic,
+	         crash, debug.
+
+	Source: https://www.youtube.com/watch?v=u7GIqTKId98
+	        ("Advanced customization in Coreform Cubit using the C++
+	        SDK", Carl McKelvey).
+	"""
+	return get_cpp_sdk_documentation(topic)
 
 
 @mcp.tool()
