@@ -1418,14 +1418,19 @@ class IHWindow(AnalysisWindow):
             return None
         style = self.style()
         btn = QPushButton(
-            style.standardIcon(QStyle.SP_ArrowRight), " Run thermal...")
+            style.standardIcon(QStyle.SP_ArrowRight), " Switch to Thermal")
         btn.setFixedHeight(32)
         btn.setEnabled(False)
         btn.setToolTip(
-            "Launch the thermal panel (radia_heat) with this run's "
-            "q_surf .sol pre-filled.  Pick a workpiece-volume .vol "
-            "in the new window; the EM-side q_surf is projected "
-            "onto its heating surface automatically.")
+            "Switch the Method dropdown to 'Thermal: 3D + rotation' so "
+            "you can configure a heat-transfer run.<br><br>"
+            "<b>Does NOT auto-fill</b> any fields -- the .sol + .vol "
+            "from the just-completed EM run are PRINTED to the output "
+            "box so you can copy-paste them into the Thermal section's "
+            "<i>qsurf .sol</i> and <i>EM .vol</i> Browse pickers (or "
+            "pick different files entirely).  Explicit-input is by "
+            "design (2026-05-24) -- pre-2026-05-24 magic auto-fill "
+            "led to silent wrong-pair selection.")
         btn.clicked.connect(self._on_run_thermal)
         gmsh_idx = btn_row.indexOf(self._gmsh_btn)
         btn_row.insertWidget(gmsh_idx + 1, btn)
@@ -1694,37 +1699,34 @@ class IHWindow(AnalysisWindow):
             self._output.appendPlainText(f"(IH summary skipped: {e})")
 
     def _on_run_thermal(self):
-        """Switch the method dropdown to Thermal and pre-fill the
-        embedded HeatPanel from this run's qsurf .sol + em_vol.
+        """Switch the method dropdown to Thermal -- explicit-input UX.
 
-        Replaces the pre-2026-05-20 detached-subprocess design that
-        launched radia_heat.py as an independent window.  Heat
-        analysis now lives in the same IHWindow under the Thermal
-        method choice; this button is the EM->Thermal chain shortcut.
+        Pre-2026-05-24 this button auto-filled ``qsurf_sol`` and
+        ``em_vol`` from the just-completed EM solve.  The auto-fill
+        was confusing in practice: users landed on the Thermal panel
+        with pre-populated fields and could not tell whether the
+        values were from this session's EM run, a QSettings restore,
+        or something else.  Two adjacent EM runs that wrote different
+        ``.sol`` files would silently inherit the wrong pair if the
+        user didn't notice the field contents.
+
+        Per user feedback 2026-05-24 ("Auto-Fillはわかりにくいので陽に
+        指定する形に変更しよう"), the button now does ONLY the method
+        switch.  Browse-selecting the .sol + .vol is the user's
+        responsibility and the file paths are visible in the Browse
+        widgets, so no surprise inheritance is possible.
+
+        Heat analysis still lives in the same IHWindow under the
+        Thermal method choice; this button is just a shortcut for
+        the method dropdown change (one click vs digging through the
+        list).
         """
-        if not self._heat_qsurf_sol:
-            return
         panel = self._panel
         heat = getattr(panel, "_heat_panel", None)
         if heat is None:
             self._output.appendPlainText(
                 "\nThermal sub-panel not available (radia_heat.HeatPanel "
                 "import failed at startup).")
-            return
-        # Pre-fill the HeatPanel fields BEFORE switching the dropdown
-        # so the Run button enables immediately when the user lands
-        # on the Thermal section.
-        try:
-            heat._widgets["qsurf_sol"].setText(self._heat_qsurf_sol)
-            if self._heat_em_vol:
-                heat._widgets["em_vol"].setText(self._heat_em_vol)
-            # Spatial qsurf mode (HEAT_SRC_SPATIAL) by definition --
-            # the chain only fires when an EM solve produced .sol.
-            from radia._heat_panel import HEAT_SRC_SPATIAL
-            heat._widgets["heat_source"].setCurrentText(HEAT_SRC_SPATIAL)
-        except (KeyError, AttributeError) as e:
-            self._output.appendPlainText(
-                f"\nCould not pre-fill HeatPanel widgets: {e}")
             return
         # Switch the method dropdown to the most general Thermal
         # entry (3D + rotation -- handles both rotating and static
@@ -1735,15 +1737,24 @@ class IHWindow(AnalysisWindow):
         panel._method_combo.setCurrentText(METHOD_THERMAL_3D_ROTATING)
         self._output.appendPlainText(
             f"\nSwitched to '{METHOD_THERMAL_3D_ROTATING}'.")
-        self._output.appendPlainText(
-            f"  qsurf_sol = {self._heat_qsurf_sol}")
-        if self._heat_em_vol:
+        # Surface the .sol / .vol paths from the EM run as TEXT ONLY
+        # (not auto-populated into the Browse fields).  User copies
+        # them into the Browse pickers if they want this pair, OR
+        # picks a different qsurf .sol from elsewhere.  This keeps
+        # provenance visible without silently inheriting state.
+        if self._heat_qsurf_sol:
             self._output.appendPlainText(
-                f"  em_vol    = {self._heat_em_vol}")
+                f"  Last EM run wrote: {self._heat_qsurf_sol}")
+            if self._heat_em_vol:
+                self._output.appendPlainText(
+                    f"                  +  {self._heat_em_vol}")
+            self._output.appendPlainText(
+                "  Browse qsurf_sol + em_vol in the Thermal section "
+                "to use these (the panel does NOT auto-fill them).")
         else:
             self._output.appendPlainText(
-                "  em_vol    = [empty -- pick it manually in the "
-                "Thermal section before Run]")
+                "  No qsurf .sol from this session -- Browse manually "
+                "in the Thermal section.")
 
 
 def main():
