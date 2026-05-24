@@ -28,10 +28,10 @@ ever computing its normalization.
 | Bayesian UQ | Want credible intervals on L / P / B given measured data |
 
 When NOT to use MCMC:
-- Single deterministic optimization → use Optuna (`radia_mcp.optuna`)
+- Single deterministic optimization -> use Optuna (`radia_mcp.optuna`)
   or gradient (`radia_mcp.topology_optimization`)
-- Smooth convex objective → use scipy.optimize / CG / BFGS
-- Need posterior in < seconds → use variational inference instead
+- Smooth convex objective -> use scipy.optimize / CG / BFGS
+- Need posterior in < seconds -> use variational inference instead
 
 ## Detailed balance (the heart of MCMC)
 
@@ -48,29 +48,29 @@ computable (cancels normalization).
 
 ```
 MCMC
-├── Metropolis-Hastings (1953/1970)         ← universal, simple, slow
-│   ├── Random walk MH                       ← isotropic Gaussian proposal
-│   ├── Independence MH                      ← proposal independent of x
-│   ├── Adaptive MH (Haario 2001)            ← auto-tune proposal scale
-│   └── pCN (preconditioned Crank-Nicolson)  ← for function-space priors
-│
-├── Gibbs sampling (Geman-Geman 1984)        ← cycle conditional updates
-│   ├── Block Gibbs                          ← update groups jointly
-│   └── Collapsed Gibbs                      ← integrate out nuisance vars
-│
-├── Hamiltonian Monte Carlo (Duane 1987)     ← exploit gradient ∇log pi
-│   ├── HMC (fixed step + step count)
-│   ├── NUTS (Hoffman-Gelman 2014)           ← auto-tune trajectory
-│   └── Riemannian HMC (Girolami-Calderhead) ← metric-aware
-│
-├── Replica methods
-│   ├── Parallel tempering (Geyer 1991)      ← chains at different temperatures
-│   └── Simulated tempering                  ← single chain, jumps T
-│
-├── Sequential Monte Carlo (SMC)              ← annealed importance sampling
-│   └── Particle filters                     ← for state-space models
-│
-└── Slice sampling (Neal 2003)               ← rarely beats HMC/NUTS now
++-- Metropolis-Hastings (1953/1970)         <- universal, simple, slow
+|   +-- Random walk MH                       <- isotropic Gaussian proposal
+|   +-- Independence MH                      <- proposal independent of x
+|   +-- Adaptive MH (Haario 2001)            <- auto-tune proposal scale
+|   +-- pCN (preconditioned Crank-Nicolson)  <- for function-space priors
+|
++-- Gibbs sampling (Geman-Geman 1984)        <- cycle conditional updates
+|   +-- Block Gibbs                          <- update groups jointly
+|   +-- Collapsed Gibbs                      <- integrate out nuisance vars
+|
++-- Hamiltonian Monte Carlo (Duane 1987)     <- exploit gradient gradlog pi
+|   +-- HMC (fixed step + step count)
+|   +-- NUTS (Hoffman-Gelman 2014)           <- auto-tune trajectory
+|   +-- Riemannian HMC (Girolami-Calderhead) <- metric-aware
+|
++-- Replica methods
+|   +-- Parallel tempering (Geyer 1991)      <- chains at different temperatures
+|   +-- Simulated tempering                  <- single chain, jumps T
+|
++-- Sequential Monte Carlo (SMC)              <- annealed importance sampling
+|   +-- Particle filters                     <- for state-space models
+|
++-- Slice sampling (Neal 2003)               <- rarely beats HMC/NUTS now
 ```
 
 ## Choosing an algorithm
@@ -138,8 +138,8 @@ Acceptance rate target rules of thumb (Roberts-Gelman-Gilks 1997):
 | 2 | 0.35 |
 | > 5 | 0.234 (asymptotic) |
 
-If your acceptance is 0.95 → proposal too small, chain crawls.
-If 0.05 → proposal too big, chain rejects everything.
+If your acceptance is 0.95 -> proposal too small, chain crawls.
+If 0.05 -> proposal too big, chain rejects everything.
 
 Tune by adaptive MH (Haario-Saksman-Tamminen 2001):
 - Estimate empirical covariance `Sigma_t` from samples so far
@@ -161,7 +161,7 @@ Tune by adaptive MH (Haario-Saksman-Tamminen 2001):
 ## EM-flavored MH example
 
 Inverse problem: find permeability `mu_r` and conductivity `sigma`
-such that simulated `L_uH` matches measured 100.3 ± 0.5 uH.
+such that simulated `L_uH` matches measured 100.3 +/- 0.5 uH.
 
 ```python
 import numpy as np
@@ -186,7 +186,7 @@ mu_r_post = np.exp(samples[5000:, 0])
 print(f"Posterior mu_r: {mu_r_post.mean():.0f} +/- {mu_r_post.std():.0f}")
 ```
 
-Each MH step calls one FEM solve → ~1000 trials = ~hours. For
+Each MH step calls one FEM solve -> ~1000 trials = ~hours. For
 expensive forward models, use surrogate (`radia_mcp.pinn`) inside
 the inner log_posterior.
 """
@@ -195,7 +195,7 @@ the inner log_posterior.
 HAMILTONIAN_MC = r"""
 # Hamiltonian Monte Carlo (HMC) and NUTS
 
-Exploit the gradient `∇ log pi(x)` to take large, informed steps
+Exploit the gradient `grad log pi(x)` to take large, informed steps
 through high-dimensional space. The state-of-the-art MCMC for smooth,
 differentiable posteriors (PyMC default, Stan default).
 
@@ -207,9 +207,9 @@ Augment state `x` (position) with momentum `p`. Define Hamiltonian:
 
 The leapfrog integrator simulates Hamilton's equations:
 
-    p(t + dt/2) = p(t) + (dt/2) * ∇ log pi(x(t))
+    p(t + dt/2) = p(t) + (dt/2) * grad log pi(x(t))
     x(t + dt)   = x(t) + dt * M^-1 * p(t + dt/2)
-    p(t + dt)   = p(t + dt/2) + (dt/2) * ∇ log pi(x(t + dt))
+    p(t + dt)   = p(t + dt/2) + (dt/2) * grad log pi(x(t + dt))
 
 After L leapfrog steps, accept the new state with MH probability
 using `H` change as the energy.
@@ -225,8 +225,8 @@ using `H` change as the energy.
 ## NUTS (No-U-Turn Sampler)
 
 NUTS auto-tunes:
-1. **Step size `dt`** — via dual averaging during warmup
-2. **Trajectory length `L`** — by doubling until the trajectory
+1. **Step size `dt`** -- via dual averaging during warmup
+2. **Trajectory length `L`** -- by doubling until the trajectory
    makes a U-turn (i.e. starts coming back)
 
 Result: zero user-tunable parameters. The reason PyMC / Stan default
@@ -240,11 +240,11 @@ to NUTS.
 
 ## When HMC fails
 
-- Discrete params → cannot diff, need Gibbs for those
-- Discontinuous posterior (e.g. hard constraints) → use reflective HMC
-- Severe funnel geometry (hierarchical models) → use non-centered
+- Discrete params -> cannot diff, need Gibbs for those
+- Discontinuous posterior (e.g. hard constraints) -> use reflective HMC
+- Severe funnel geometry (hierarchical models) -> use non-centered
   parameterization
-- Multi-modal posterior → still gets stuck → use parallel tempering
+- Multi-modal posterior -> still gets stuck -> use parallel tempering
 
 ## PyMC example
 
@@ -273,7 +273,7 @@ pm.summary(trace)  # R-hat, ESS per param
 
 ## For non-differentiable FEM forward model
 
-You CANNOT use NUTS directly on a Cubit → NGSolve forward (no autograd
+You CANNOT use NUTS directly on a Cubit -> NGSolve forward (no autograd
 through subprocess). Options:
 
 1. **Surrogate replacement**: train a PINN / GP on FEM samples, then
@@ -309,10 +309,10 @@ This is a special case of MH with proposal = conditional.
 
 ## When Gibbs fails
 
-- Correlated parameters → slow mixing (chain crawls along ridges)
-  → use **block Gibbs** (joint update of correlated groups) or HMC
-- No conjugate conditionals → falls back to MH within Gibbs
-- Continuous PDE-constrained → HMC/NUTS usually faster
+- Correlated parameters -> slow mixing (chain crawls along ridges)
+  -> use **block Gibbs** (joint update of correlated groups) or HMC
+- No conjugate conditionals -> falls back to MH within Gibbs
+- Continuous PDE-constrained -> HMC/NUTS usually faster
 
 ## EM-flavored Gibbs example
 
@@ -375,7 +375,7 @@ sampling, often beats PT for moderate dim).
 
 Inverse problem: find magnet pole geometry that produces a target B
 field. Many geometries can produce the same field (gauge / shape
-non-uniqueness) → multi-modal posterior. Parallel tempering finds
+non-uniqueness) -> multi-modal posterior. Parallel tempering finds
 all modes; single-chain MH finds one and reports it as "the answer".
 """
 
@@ -388,12 +388,12 @@ reached stationarity. Always inspect:
 
 ## R-hat (Gelman-Rubin)
 
-Run M ≥ 2 chains. Compute between-chain variance B and within-chain
+Run M >= 2 chains. Compute between-chain variance B and within-chain
 variance W:
 
     R-hat = sqrt((W + B/n) / W)
 
-R-hat → 1 as chains converge. Rules of thumb:
+R-hat -> 1 as chains converge. Rules of thumb:
 - R-hat < 1.01: converged
 - R-hat < 1.05: probably OK
 - R-hat > 1.1: NOT converged; run longer or fix model
@@ -405,7 +405,7 @@ az.rhat(trace)  # per-variable R-hat
 
 ## Effective Sample Size (ESS)
 
-Due to autocorrelation, N samples ≠ N independent samples. ESS
+Due to autocorrelation, N samples != N independent samples. ESS
 estimates the "effective" count:
 
     ESS = N / (1 + 2 * sum(rho_k))
@@ -418,7 +418,7 @@ where rho_k is lag-k autocorrelation. Targets:
 az.ess(trace)
 ```
 
-If ESS << N, chain is sticky → tune proposal, switch to HMC, or
+If ESS << N, chain is sticky -> tune proposal, switch to HMC, or
 just run longer.
 
 ## Trace plots
@@ -429,11 +429,11 @@ az.plot_trace(trace, var_names=["mu_r", "sigma"])
 ```
 
 What to look for:
-- Chains overlap (well-mixed) ✓
-- No drift / trend (stationary) ✓
-- Looks like white noise around a constant ✓
-- Two chains visit different regions ✗ (NOT converged)
-- Slow oscillation visible ✗ (under-mixed)
+- Chains overlap (well-mixed) [OK]
+- No drift / trend (stationary) [OK]
+- Looks like white noise around a constant [OK]
+- Two chains visit different regions [X] (NOT converged)
+- Slow oscillation visible [X] (under-mixed)
 
 ## Autocorrelation Function (ACF)
 
@@ -470,7 +470,7 @@ divergences = misspecified model or pathological geometry. Try:
 3. If happy, run full chain (2000-10000 samples)
 4. Re-check diagnostics
 5. Posterior predictive check
-6. Report mean ± SD AND 95% credible interval
+6. Report mean +/- SD AND 95% credible interval
 """
 
 
