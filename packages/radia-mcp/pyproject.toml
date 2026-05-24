@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.69.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.69.0 (2026-05-24): META server (36-server catalog) + register_status_tool/register_topics_tool factories + 8 ML/optimization subpackages (bayesian_opt/evolutionary/gnn/data_assimilation/mcmc/optuna/pinn/topology_optimization) + 19 application+theory subpackages (motor/accelerator/fusion/wpt/team_benchmark/...) + 6 thin-server PDF enrichments (fusion/ndt/litz_transmission/rna_mec/metamaterial/maglev_linear: +8300 lines). 0.68.0: fem subpackage. 0.67.0: bem subpackage. 0.66.0: matrix_solvers subpackage."
+version = "0.70.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.70.0 (2026-05-24 evening): panel_review subpackage -- 10-topic GUI bug catalogue + 5-skill chain (panel-cli-diff/review/qt-test/preview/smoke) -- triggered by IGTE 2026 ESIM digest GUI reproducibility audit. 0.69.0 (2026-05-24): META server (36-server catalog) + 8 ML/optimization subpackages + 19 application+theory subpackages + 6 thin-server PDF enrichments. 0.68.0: fem subpackage."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
@@ -110,6 +110,13 @@ mcp-server-maglev-linear = "radia_mcp.maglev_linear.server:main"
 mcp-server-fusion = "radia_mcp.fusion.server:main"
 mcp-server-rna-mec = "radia_mcp.rna_mec.server:main"
 mcp-server-literature-index = "radia_mcp.literature_index.server:main"
+# 2026-05-24 evening (radia-mcp 0.70.0): GUI panel review skill-chain.
+# Surfaces panel-cli-diff / panel-review / panel-qt-test / panel-preview /
+# panel-smoke + known bug catalogue (val()-checkbox-truthy, AMG-class
+# map-value typos, widget-vs-calc Stage-1 gap, etc.) via single
+# panel_review(topic=...) query.  Triggered by IGTE 2026 ESIM digest
+# GUI reproducibility audit (kubota's per-element headline).
+mcp-server-panel-review = "radia_mcp.panel_review.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

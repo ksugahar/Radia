@@ -100,7 +100,8 @@ def main():
                     label=fr"{f_Hz/1e3:.0f} kHz (per-element)")
     ax2.set_xlabel(r"$I_{\mathrm{port}}$ (A)")
     ax2.set_ylabel(r"$P_{\mathrm{wp}}$ (W)")
-    ax2.legend(fontsize=6, frameon=False, loc="lower right", ncol=2)
+    ax2.legend(fontsize=8, frameon=False, loc="lower right", ncol=2,
+                handlelength=1.5, columnspacing=0.8, labelspacing=0.2)
     ax2.grid(linestyle=":", alpha=0.5)
     ax2.text(0.5, -0.27, "(b)", transform=ax2.transAxes,
               ha="center", va="top")

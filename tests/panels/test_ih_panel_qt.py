@@ -45,16 +45,24 @@ class TestMethodCombo:
         from radia_ih import METHOD_PEEC_IND
         assert ih_panel._method_combo.currentText() == METHOD_PEEC_IND
 
-    def test_six_methods_present(self, ih_panel):
-        """6-method dropdown after 2026-05-02 BEM-A addition."""
+    def test_nine_methods_present(self, ih_panel):
+        """9-method dropdown after thermal split into 3 modes (v4.63.0,
+        commit de1d6271).  6 EM-side + 3 thermal-side.  Updated 2026-05-24
+        from the original 6-method assertion."""
         from radia_ih import (METHOD_PEEC_IND, METHOD_BEMA_IND,
                               METHOD_PEEC_BEM, METHOD_BEMA_BEM,
-                              METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL)
+                              METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL,
+                              METHOD_THERMAL_3D_STATIC,
+                              METHOD_THERMAL_3D_ROTATING,
+                              METHOD_THERMAL_AXISYM)
         items = [ih_panel._method_combo.itemText(i)
                  for i in range(ih_panel._method_combo.count())]
         assert items == [METHOD_PEEC_IND, METHOD_BEMA_IND,
                          METHOD_PEEC_BEM, METHOD_BEMA_BEM,
-                         METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL]
+                         METHOD_PEEC_FEM_KELVIN, METHOD_FEM_FULL,
+                         METHOD_THERMAL_3D_STATIC,
+                         METHOD_THERMAL_3D_ROTATING,
+                         METHOD_THERMAL_AXISYM]
 
     def test_no_legacy_methods(self, ih_panel):
         """Catch creep-back of retired method strings."""
@@ -147,7 +155,11 @@ class TestSolverItems:
         assert items == ["Dense LU (small)", "HACApK (large)"]
 
     def test_FEM_solver_items(self, ih_panel):
-        """FEM side has 5 solvers (pardiso / AMS / shifted AMS / BDDC / iccg)."""
+        """FEM side has 4 solvers (pardiso / AMS / BDDC / iccg).  The
+        'shifted AMS' entry was removed as a UI-duplicate map - it
+        targeted the same 'ams' backend that AMS itself uses (caught
+        by panel-review skill 2026-05-12, see _FEM_SOLVER_MAP).
+        Updated 2026-05-24 from the original 5-solver assertion."""
         from radia_ih import METHOD_FEM_FULL
         ih_panel._method_combo.setCurrentText(METHOD_FEM_FULL)
         items = [ih_panel._widgets["solver"].itemText(i)
@@ -155,7 +167,6 @@ class TestSolverItems:
         assert items == [
             "pardiso (direct)",
             "AMS (iterative, p=1)",
-            "shifted AMS (iterative, p=1)",
             "BDDC (iterative, p>=2)",
             "iccg (fallback)",
         ]
