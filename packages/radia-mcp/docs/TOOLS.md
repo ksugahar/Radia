@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **116 tools** across 8 MCP servers.
+Total: **121 tools** across 9 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 43 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 47 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 28 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 6 |
@@ -14,6 +14,7 @@ Total: **116 tools** across 8 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 3 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 1 |
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 5 |
+| [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 1 |
 
 ## `mcp-server-cubit`
 
@@ -61,11 +62,15 @@ Module: `radia_mcp.cubit.server`
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
 | `generate_cubit_script` | Generate a template Cubit Python script for common workflows. |
 | `get_lint_rules` | List all available Cubit export lint rules with descriptions. |
+| `launch_vol_sol_viewer` | Launch the tools/vol_sol_viewer.py wrapper on a .vol or .sol file. |
 | `lint_cubit_directory` | Lint all Python scripts in a directory for Cubit export convention violations. |
 | `lint_cubit_script` | Lint a Python script for Cubit mesh export convention violations. |
 | `netgen_code_example` | Get a ready-to-run Netgen export code example. |
 | `netgen_workflow_guide` | Get step-by-step Netgen/NGSolve workflow documentation. |
 | `open_in_cubit` | Open a file, or execute a list of commands, in **Cubit GUI**. |
+| `verify_sol_file` | Verify that a .sol file can be loaded as an NGSolve GridFunction. |
+| `verify_vol_file` | Verify that a .vol file loads correctly via NGSolve. |
+| `vol_sol_viewer_status` | Report current state of the .vol / .sol double-click viewer. |
 
 ## `mcp-server-build123d`
 
@@ -202,4 +207,14 @@ Module: `radia_mcp.interop.server`
 | `freecad_to_cubit_hex` | Execute a FreeCAD script in a FreeCADCmd subprocess, export the |
 | `list_cad_mcp_interop` | List registered CAD-MCP interop adapters + their availability. |
 | `openscad_to_cubit_hex` | Execute OpenSCAD code, export STEP, run through `cubit_mesh_auto`. |
+
+## `mcp-server-panel-review`
+
+_Radia GUI panel review skill-chain + bug catalogue (panel-cli-diff / panel-review / panel-qt-test / panel-preview / panel-smoke)_
+
+Module: `radia_mcp.panel_review.server`
+
+| Tool | Description |
+|---|---|
+| `panel_review` | Get Radia GUI panel review skill-chain documentation and bug catalogue. |
 
