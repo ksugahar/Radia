@@ -59,8 +59,21 @@ substantive PDF-sourced content; +7400 lines total):
   LH materials, SRR Pendry LC model, transformation optics with
   explicit Kelvin-inversion cross-link to electromagnet subpackage,
   Sadatgol Bi:YIG+Au 9x Faraday enhancement, Toyota CRLH).
-- `maglev_linear`: deferred to next release (parallel-agent task
-  failed with 32MB request size; original 173-line skeleton retained).
+- `maglev_linear`: 173→937 lines, 10 topics, 32k chars
+  sources (4 small PDFs only, under 25MB budget per the agent's
+  per-request limit): Murata eddy-current demo, Sumitomo Heavy
+  patents JP 7-327337 + JP 2007-215264 (PM bearing + planar mover),
+  Saiki 2021 Kansai Univ PM maglev thesis. Topics:
+  pm_maglev_zero_power (Earnshaw workaround), eddy_current_maglev
+  (Hsu-Hill), sumitomo_heavy_industrial, kansai_research,
+  lim_lsm_propulsion (Yamamura 1972), scmaglev_eds (Post-Ryutov
+  2000), halbach_arrays, end_effects. The 4 open-literature topics
+  flag "(open literature, not lab PDF)" — cross-check available
+  once the 10-44MB 09_リニアドライブ year-PDFs become accessible.
+
+**Now 6/6 of the originally thin servers got real enrichment**:
+total +8300 lines across fusion / ndt / litz_transmission / rna_mec
+/ metamaterial / maglev_linear.
 
 **README** (`packages/radia-mcp/README.md`):
 - New "## ★ Discovery — start here" section
