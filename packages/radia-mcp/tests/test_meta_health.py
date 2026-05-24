@@ -1,4 +1,4 @@
-"""Test that all 35 radia_mcp.* subpackages import + have status_tool wired.
+"""Test that all 36 radia_mcp.* subpackages import + have status_tool wired.
 
 This is the canonical "is the package healthy" test — run on every PR
 + release. Catches:
@@ -33,7 +33,8 @@ def test_meta_catalog_has_at_least_30_servers():
 def test_every_cataloged_server_has_register_status_tool():
     """Policy: every server.py in catalog must wire register_status_tool.
 
-    Exception: the meta server itself (it IS the catalog, no self-status).
+    Applies uniformly to all servers including `meta` itself — meta has its
+    own status tool reporting on the catalog server's runtime state.
     """
     from radia_mcp.meta import catalog
     repo_root = Path(__file__).resolve().parent.parent
