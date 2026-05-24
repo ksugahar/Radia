@@ -135,63 +135,18 @@ jobs:
       - name: Fetch radia_cubit_mesh.pyd from binaries release
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $pyd = "${{ github.workspace }}\src\radia\radia_cubit_mesh.pyd"
-          $needFetch = $true
-          if (Test-Path $pyd) {
-            $sz = (Get-Item $pyd).Length
-            if ($sz -gt 100000) {
-              Write-Host "  radia_cubit_mesh.pyd already built locally: $sz bytes (skip download)"
-              $needFetch = $false
-            } else {
-              Write-Host "  radia_cubit_mesh.pyd present but suspicious size ($sz bytes), re-fetching"
-            }
-          }
-          if ($needFetch) {
-            # Retry loop: when a tag is pushed, the binary upload from
-            # the pre-push hook on the main branch can race against the
-            # tag-triggered CI start.  The asset re-uploads with --clobber
-            # are not atomic on GitHub's side -- there is a brief window
-            # (~few seconds) where `gh release download -p <name>` reports
-            # "no assets match the file pattern" even though the asset
-            # exists (or is about to exist).  Retry up to 6 times with
-            # exponential-ish backoff so a transient race does not fail
-            # the entire CI run.  This reproduced 2026-05-02 on
-            # v4.25.1 + radia-mcp-v0.37.0 + radia-mcp-v0.37.1 tag CIs.
-            $maxAttempts = 6
-            $delays = @(0, 5, 10, 20, 40, 60)   # seconds before each attempt
-            $ok = $false
-            for ($i = 0; $i -lt $maxAttempts; $i++) {
-              if ($i -gt 0) {
-                Write-Host "  Retry $i/$($maxAttempts-1) after $($delays[$i])s ..."
-                Start-Sleep -Seconds $delays[$i]
-              }
-              Write-Host "  Downloading radia_cubit_mesh.pyd from binaries release tag (attempt $($i+1)) ..."
-              # --repo bypasses gh's git-based repo detection (which fails on
-              # the self-hosted runner with "dubious ownership" because the
-              # workspace is owned by NETWORK SERVICE but gh runs as SYSTEM).
-              gh release download binaries --repo ${{ github.repository }} `
-                -p "radia_cubit_mesh.pyd" -D "${{ github.workspace }}\src\radia" --clobber 2>&1 | Write-Host
-              if ($LASTEXITCODE -eq 0 -and (Test-Path $pyd)) {
-                $sz = (Get-Item $pyd).Length
-                if ($sz -gt 100000) {
-                  $ok = $true
-                  Write-Host "  Downloaded radia_cubit_mesh.pyd: $sz bytes"
-                  break
-                } else {
-                  Write-Host "  Downloaded but suspicious size ($sz bytes), retrying..."
-                }
-              }
-            }
-            if (-not $ok) {
-              Write-Host "::error::Failed to download radia_cubit_mesh.pyd from binaries release after $maxAttempts attempts."
-              Write-Host "         The pre-push hook on LAB uploads this file on every push;"
-              Write-Host "         if it is missing, run on LAB:"
-              Write-Host "           gh release upload binaries src/radia/radia_cubit_mesh.pyd --clobber"
-              exit 1
-            }
-          }
+          # gh CLI was retired from the LAB self-hosted runner on
+          # 2026-05-24. tools/download_release_asset.py is a stdlib-only
+          # (urllib + json) replacement that uses the GitHub REST API
+          # directly. Identical retry semantics as before (6 attempts,
+          # exponential backoff for the post-push asset-upload race).
+          python tools\download_release_asset.py `
+            --repo ${{ github.repository }} `
+            --tag binaries `
+            --name radia_cubit_mesh.pyd `
+            --dest "${{ github.workspace }}\src\radia"
 
       # ----------------------------------------------------------------
       # Test: Run basic pytest tests (~2 sec)
