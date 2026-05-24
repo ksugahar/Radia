@@ -1,7 +1,7 @@
 """
 MCP Server: radia_mcp.meta
 
-Cross-server catalog + health check for the 29-server radia_mcp
+Cross-server catalog + health check for the 36-server radia_mcp
 ecosystem. Use this server as the FIRST stop when you don't know
 which other server to call.
 
@@ -16,6 +16,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from . import catalog
+from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-radia-meta")
 
@@ -125,6 +126,21 @@ def radia_mcp_health() -> dict:
                             f"{sys.version_info.minor}."
                             f"{sys.version_info.micro}"),
     }
+
+
+# ============================================================
+# Self-introspection (uniform with other radia_mcp servers)
+# ============================================================
+
+register_status_tool(
+    mcp,
+    server_name="mcp-server-radia-meta",
+    description="Cross-server catalog of all radia_mcp.* servers "
+                "(★ recommended first call when picking a tool)",
+    subpackage="radia_mcp.meta",
+    related_servers=["literature-index"],
+    optional_deps=[],
+)
 
 
 # ============================================================
