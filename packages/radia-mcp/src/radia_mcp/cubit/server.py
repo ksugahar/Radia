@@ -37,7 +37,7 @@ from .knowledge.custom_toolbar import (
 from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from .knowledge.license import get_license_documentation
 from .knowledge.format_routing import get_format_routing_documentation
-from ..common import failure_log as _fl
+from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
 
@@ -4692,6 +4692,17 @@ def _selftest():
 
 	result = lint_cubit_directory("examples")
 	print(result)
+
+
+
+
+register_status_tool(
+    mcp,
+    server_name='mcp-server-cubit',
+    description='Cubit mesh scripting, hex/tet workflow, export formats',
+    subpackage='radia_mcp.cubit',
+    related_servers=["build123d", "interop"],
+)
 
 
 def main():

@@ -29,6 +29,7 @@ from mcp.server.fastmcp import FastMCP
 from .ih_knowledge import get_induction_heating_documentation
 from .sibc_knowledge import get_ih_sibc_documentation
 from .esim_knowledge import get_ih_esim_documentation
+from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-ih")
 
@@ -79,12 +80,20 @@ def ih_sibc(topic: str = "all") -> str:
 
     Args:
         topic: Options:
-            "all"         - Complete documentation
-            "peec_fem"    - (historical, see ih_knowledge AV_COIL_SIGMA)
-            "overview"    - SIBC method selection table
-            "esim"        - ESIM cell problem, Karl iteration
-            "biot_savart" - Coil field computation (phi_inc, A_inc, H_inc)
-            "screening"   - Screening physics, dimensionless parameter
+            "all"                       - Complete documentation
+            "peec_fem"                  - (historical, see ih_knowledge AV_COIL_SIGMA)
+            "esim"                      - ESIM cell problem, Karl iteration
+            "screening"                 - Screening physics, dimensionless parameter
+            "mathematica_verification"  - Wolfram Language recipes
+                                          (Leontovich Z_s derivation, Smythe
+                                          sphere reference, per-panel Mitzner
+                                          check) for symbolic side-by-side
+                                          validation of BEM/FEM SIBC results.
+            "ngsolve_recipes"           - Production NGSolve code patterns:
+                                          Scalar BIE+SIBC with COCR+ComplexCompactAMS,
+                                          per-node Z_s from per-panel curvature,
+                                          FEM+Kelvin+Robin hole approach,
+                                          Verify-First Policy FES checks.
     """
     return get_ih_sibc_documentation(topic)
 
@@ -163,6 +172,19 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
 # ============================================================
 # Entry point
 # ============================================================
+
+register_status_tool(
+    mcp,
+    server_name="mcp-server-ih",
+    description=("Induction heating: SIBC + ESIM + Karl iteration "
+                  "+ workpiece coupling. Production calc scripts: "
+                  "calc_inductance.py / calc_fem_kelvin.py / calc_fem_coilmesh.py."),
+    subpackage="radia_mcp.ih",
+    related_servers=["radia-peec", "radia-magnetic-materials",
+                      "radia-radia-ngsolve", "radia-litz-transmission"],
+    optional_deps=["radia", "ngsolve"],
+)
+
 
 def main():
     if "--selftest" in sys.argv:
