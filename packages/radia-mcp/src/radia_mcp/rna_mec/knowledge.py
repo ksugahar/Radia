@@ -1,5 +1,15 @@
 """Reluctance Network Analysis (RNA) / Magnetic Equivalent Circuit (MEC)."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "(see knowledge file for details)",
+    "rna_mmm_coupling": "(see knowledge file for details)",
+    "dynamic_hysteresis": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([OVERVIEW, RNA_MMM_COUPLING, DYNAMIC_HYSTERESIS])",
+}
+
 OVERVIEW = r"""
 # Reluctance Network Analysis (RNA) / Magnetic Equivalent Circuit (MEC)
 

@@ -1,5 +1,19 @@
 """Bayesian optimization, GP regression, FMQA, surrogate model knowledge."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "gp_fundamentals": "(see knowledge file for details)",
+    "bayesian_optimization": "(see knowledge file for details)",
+    "fmqa": "(see knowledge file for details)",
+    "physics_informed_gp": "(see knowledge file for details)",
+    "surrogate_models": "(see knowledge file for details)",
+    "gp_libraries": "(see knowledge file for details)",
+    "llm_bo": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([GP_FUNDAMENTALS, BAYESIAN_OPTIMIZATION, FMQA,",
+}
+
 GP_FUNDAMENTALS = r"""
 # Gaussian Process Regression Fundamentals
 

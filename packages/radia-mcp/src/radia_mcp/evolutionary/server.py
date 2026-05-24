@@ -12,9 +12,9 @@ Usage:
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
+from ..common import register_status_tool, register_topics_tool
 
-from .knowledge import get_evolutionary_documentation
+from .knowledge import get_evolutionary_documentation, TOPICS
 
 mcp = FastMCP("mcp-server-evolutionary")
 
@@ -47,6 +47,13 @@ register_status_tool(
     subpackage='radia_mcp.evolutionary',
     related_servers=["optuna", "mcmc", "topology-optimization"],
     optional_deps=["deap", "pymoo", "cma"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-evolutionary',
+    topics=TOPICS,
 )
 
 

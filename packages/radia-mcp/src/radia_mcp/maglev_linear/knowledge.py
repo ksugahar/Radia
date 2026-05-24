@@ -1,5 +1,15 @@
 """Maglev + linear drive knowledge."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "(see knowledge file for details)",
+    "maglev": "(see knowledge file for details)",
+    "linear": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([OVERVIEW, MAGLEV, LINEAR])",
+}
+
 OVERVIEW = r"""
 # Magnetic levitation + linear drive landscape
 

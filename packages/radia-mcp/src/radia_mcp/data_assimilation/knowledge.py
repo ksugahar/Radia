@@ -1,5 +1,15 @@
 """Data assimilation methods for EM state estimation + sensor fusion."""
 
+
+# Authoritative topic enum for the dispatcher tool (wired into
+# `<short>_topics()` via common.register_topics_tool).
+TOPICS: dict[str, str] = {
+    "overview": "(see knowledge file for details)",
+    "kalman_family": "(see knowledge file for details)",
+    "four_dvar": "(see knowledge file for details)",
+    "all": "return \"\n\n\".join([OVERVIEW, KALMAN_FAMILY, FOUR_DVAR])",
+}
+
 OVERVIEW = r"""
 # Data Assimilation Overview
 

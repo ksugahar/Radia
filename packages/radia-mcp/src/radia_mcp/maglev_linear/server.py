@@ -15,8 +15,8 @@ Usage:
 """
 import sys
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
-from .knowledge import get_knowledge
+from ..common import register_status_tool, register_topics_tool
+from .knowledge import get_knowledge, TOPICS
 
 mcp = FastMCP("mcp-server-maglev-linear")
 
@@ -44,6 +44,13 @@ register_status_tool(
     description='Maglev (EMS/EDS/SCMaglev/Halbach/bearingless ★) + linear drives (LIM/LSM). Lab specialty: bearingless + WPT',
     subpackage='radia_mcp.maglev_linear',
     related_servers=["motor", "wpt"],
+)
+
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-maglev-linear',
+    topics=TOPICS,
 )
 
 

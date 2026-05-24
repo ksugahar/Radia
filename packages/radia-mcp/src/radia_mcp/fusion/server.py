@@ -15,8 +15,8 @@ Usage:
 """
 import sys
 from mcp.server.fastmcp import FastMCP
-from ..common import register_status_tool
-from .knowledge import get_knowledge
+from ..common import register_status_tool, register_topics_tool
+from .knowledge import get_knowledge, TOPICS
 
 mcp = FastMCP("mcp-server-fusion")
 
@@ -44,6 +44,12 @@ register_status_tool(
     description='Fusion reactor magnets: tokamak ITER + stellarator LHD/W7-X/heliotron lineage',
     subpackage='radia_mcp.fusion',
     related_servers=["accelerator", "electromagnet"],
+)
+
+register_topics_tool(
+    mcp,
+    server_name='mcp-server-fusion',
+    topics=TOPICS,
 )
 
 
