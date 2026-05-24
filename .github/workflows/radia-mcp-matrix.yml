@@ -79,6 +79,22 @@ jobs:
           cd packages/radia-mcp
           python -m pytest -v tests/
 
+      # TOOLS.md drift gate — regenerate the auto-generated inventory
+      # and fail if it differs from the committed copy. Catches the
+      # 2026-05-24 release-time regression where TOOLS.md silently
+      # carried a 9-server / 129-tool snapshot while the catalog had
+      # grown to 37 / 281.
+      - name: TOOLS.md drift gate
+        shell: bash
+        run: |
+          python packages/radia-mcp/scripts/gen_tools_doc.py
+          if ! git diff --exit-code -- packages/radia-mcp/docs/TOOLS.md; then
+            echo "::error::packages/radia-mcp/docs/TOOLS.md is stale."
+            echo "::error::Run locally: python packages/radia-mcp/scripts/gen_tools_doc.py"
+            echo "::error::then commit the resulting docs/TOOLS.md change."
+            exit 1
+          fi
+
       # Run --selftest for every cataloged server (catches runtime issues
       # the static checks miss).
       - name: Per-server --selftest
