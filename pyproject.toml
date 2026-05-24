@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.75.0"
+version = "4.76.0"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -100,11 +100,23 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 radia-ih = "radia.radia_ih:main"
 radia-em = "radia.radia_em:main"
 radia-pcb = "radia.radia_pcb:main"
+# CLI for .vol/.sol viewer (also exposed as a gui-script below).
+# Use the CLI form when you want stdout (e.g. --register / probing);
+# use the gui-script (radia-vol-viewer-gui.exe) for the Windows file
+# association so no console window flashes on double-click.
+radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
 # radia-heat: removed in v4.62.0; heat analysis is now Method =
 # "Thermal" in radia-ih (v4.59.0).  The HeatPanel sub-widget lives
 # in src/radia/_heat_panel.py.
 # Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
 # MCP servers: radia-mcp package (pip install radia-mcp)
+
+[project.gui-scripts]
+# Windowless launcher used by the Windows .vol / .sol file
+# association (`radia-vol-viewer --register` writes this path into
+# the registry).  Linked through pythonw.exe so no console flashes
+# on double-click.
+radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 
 [tool.setuptools.package-data]
 radia = [
