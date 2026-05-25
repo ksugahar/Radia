@@ -5,6 +5,34 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.83.0 — catalog cleanup: graph shim + mcmc removal
+
+Released 2026-05-26.
+
+Bookkeeping release — no new MCP servers, just hygiene around the
+catalog after the v0.82.0 mass-migration batch.
+
+What shipped:
+
+- `mcmc` removed from catalog + entry-points + pyproject scripts
+  (subpackage source dir was deleted upstream by the user).
+- `tests/test_meta_health.py::test_meta_related_to_mcmc_includes_optuna`
+  renamed to `test_meta_related_to_chart2d_includes_graph` to use a
+  stable cross-link pair (both chart2d and graph shipped 2026-05 and
+  are not at risk of removal).
+- Companion cleanup at `s:/mcp-server/`:
+    - `mcp_server_document/graph/` directory **deleted** (959 LOC
+      backward-compat shim).  `mcp-server-graph` is canonical at
+      `radia_mcp.graph` since v0.77.0; the shim was no longer needed.
+    - `mcp_server_document/server.py::_build_mcp()` no longer
+      imports/registers `graph` (was 12 subpackages → 11; 326 → 324
+      tools).
+    - `mcp-server-document` bumped to v3.2.0.
+
+Catalog: **40 → 39 servers** (mcmc removal).
+
+Suite: **174/174 pytest pass**.
+
 ## 0.82.0 — md2html migration + mcp-server-document cleanup
 
 Released 2026-05-26.
