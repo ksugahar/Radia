@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **290 tools** across 37 MCP servers.
+Total: **291 tools** across 37 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -25,7 +25,7 @@ Total: **290 tools** across 37 MCP servers.
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
 | [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 4 |
-| [`mcp-server-optuna`](#mcp-server-optuna) | `radia_mcp.optuna` | 4 |
+| [`mcp-server-optuna`](#mcp-server-optuna) | `radia_mcp.optuna` | 5 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
 | [`mcp-server-mcmc`](#mcp-server-mcmc) | `radia_mcp.mcmc` | 6 |
@@ -421,6 +421,7 @@ Module: `radia_mcp.optuna.server`
 |---|---|
 | `optuna_algorithm` | Optuna algorithm internals: samplers, MO, constraints, pruning. |
 | `optuna_lab_applications` | Lab applications: how Optuna plugs into Radia / NGSolve work. |
+| `optuna_recipes_advanced` | Advanced lab BBO recipes that wire Optuna onto a Stage-2 calc_*.py. |
 | `optuna_status` | (no description) |
 | `optuna_usage` | Optuna usage: basics, storage, visualization. |
 
