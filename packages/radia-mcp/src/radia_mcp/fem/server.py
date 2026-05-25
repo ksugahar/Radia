@@ -40,6 +40,13 @@ from .xfem_em_hiruma_knowledge import get_em_xfem_knowledge
 from .nonconforming_mesh_coupling_knowledge import (
     get_nonconforming_mesh_coupling_documentation,
 )
+# Equivalence-theorem near-field source (CST NFS equivalent).
+# 2026-05-26: distilled from S:\FEMM\等価定理の基礎原理\, S:\FEMM\2015_05_21_等価定理\,
+# S:\99_調査済\Femtet\2015_04_12_IABC_recnstruct\.  IABC / SDI content
+# intentionally excluded -- Kelvin transformation is the lab BC.
+from .equivalence_source_knowledge import (
+    get_equivalence_source_knowledge,
+)
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -282,6 +289,49 @@ def fem_nonconforming_mesh_coupling(topic: str = "overview") -> str:
     return get_nonconforming_mesh_coupling_documentation(topic)
 
 
+@mcp.tool()
+def fem_equivalence_source(topic: str = "overview") -> str:
+    """
+    Equivalence-theorem near-field source (CST Near-Field Source equivalent).
+
+    Solve an FEM problem with whatever BC is convenient (typically
+    Kelvin), then "record" E, H on a closed surface around the source
+    and "replay" it via the Stratton-Chu surface integral to
+        (a) probe the exterior field at any external point, or
+        (b) re-radiate as a source in a downstream simulation
+            (ngsolve.bem, Radia rad.Fld, external MoM via Nastran
+            Near_Field_Area_*.dat).
+
+    Distilled from three Sugahara Lab dirs:
+        S:\\FEMM\\等価定理の基礎原理\\軸対称\\        (2007-2008 axisym basics)
+        S:\\FEMM\\2015_05_21_等価定理\\                (2015 generalization)
+        S:\\99_調査済\\Femtet\\2015_04_12_IABC_recnstruct\\  (Femtet WPT)
+
+    IABC / SDI content intentionally excluded -- Radia's Kelvin
+    transformation is the canonical inner BC, and the 2015 lab work
+    proved the equivalence reconstruction OUTSIDE is insensitive to
+    the inner BC anyway.
+
+    Args:
+        topic: One of:
+            "overview"               - CST NFS equivalent + scope (DEFAULT)
+            "schelkunoff_love"       - Stratton-Chu math + static reduction
+                                       (the rho_m = mu_0 n.H trap explained)
+            "ngsolve_recipe"         - NGSolve extraction pattern
+                                       (mesh.Boundaries + per-face sampling)
+            "radia_recipe"           - Radia extract from rad.Fld + how to
+                                       re-radiate via rad.ObjCnt
+            "validation_use_cases"   - Golden tests + reference datasets
+            "all"                    - Everything concatenated
+
+    Aliases: schelkunoff/love/stratton_chu/math -> schelkunoff_love;
+             ngsolve/extract -> ngsolve_recipe;
+             radia/rad_fld/reradiate -> radia_recipe;
+             validation/use_cases/tests -> validation_use_cases.
+    """
+    return get_equivalence_source_knowledge(topic)
+
+
 # ============================================================
 # MCP Prompts
 # ============================================================
@@ -390,6 +440,9 @@ def main():
         print(f"  large_scale_special: {len(get_large_scale_special_knowledge('all'))} chars")
         print(f"  ngsolve_hierarchy: {len(get_ngsolve_hierarchy_knowledge('all'))} chars")
         print(f"  xfem_comsol: {len(get_xfem_knowledge('all'))} chars")
+        print(f"  xfem_em_hiruma: {len(get_em_xfem_knowledge('all'))} chars")
+        print(f"  nonconforming_mesh_coupling: {len(get_nonconforming_mesh_coupling_documentation('all'))} chars")
+        print(f"  equivalence_source: {len(get_equivalence_source_knowledge('all'))} chars")
         print("OK")
         return
     mcp.run()
