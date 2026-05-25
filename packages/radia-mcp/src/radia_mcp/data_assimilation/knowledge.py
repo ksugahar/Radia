@@ -36,7 +36,6 @@ DA methods differ in:
 | Large state (FEM with > 1000 DOF) | **Ensemble Kalman Filter (EnKF)** |
 | Strongly non-Gaussian / multi-modal | **Particle filter** |
 | Smooth over a fixed time window | **4D-Var** |
-| Offline parameter ID | **MCMC** (cross-link: `radia_mcp.mcmc`) |
 
 ## DA method family
 
@@ -55,7 +54,6 @@ Data Assimilation
 └── Parameter estimation
     ├── Joint state-param filter (augment state)
     ├── Iterative-EnKF
-    └── MCMC for offline ID
 ```
 
 ## EM applications
@@ -202,7 +200,6 @@ def enkf_step(ensemble, y_obs, H, R, forward_model):
 
 ## Cross-references
 
-- `radia_mcp.mcmc(topic="bayesian_inverse")` — offline alternative
 - `radia_mcp.mor` — model order reduction for filter state
 - `radia_mcp.fusion` — plasma equilibrium reconstruction
 """
@@ -296,7 +293,6 @@ result = minimize(cost, x_0_initial, method='l-bfgs-b',
 
 ## Cross-links
 
-- `radia_mcp.mcmc(topic="bayesian_inverse")` — full posterior alt
 - `radia_mcp.pinn` — neural surrogate for TLM/adjoint
 - `radia_mcp.mor` — reduce state dim before 4D-Var
 """

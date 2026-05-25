@@ -268,7 +268,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["topology_optimization_usage"],
         "related": [
             "evolutionary",
-            "mcmc",
             "motor",
             "optuna",
         ],
@@ -284,7 +283,6 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": [
             "bayesian-opt",
             "evolutionary",
-            "mcmc",
             "topology-optimization",
         ],
         "tags": ["optimization"],
@@ -295,7 +293,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "BO + GP regression + FMQA + surrogate models (57 lab "
                        "files; ARD kernel, PI-GP, multi-fidelity)",
         "primary_tools": ["bayesian_opt"],
-        "related": ["optuna", "mcmc", "pinn"],
+        "related": ["optuna", "pinn"],
         "tags": ["optimization"],
     },
     "evolutionary": {
@@ -303,23 +301,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-evolutionary",
         "description": "GA / DE / PSO / CMA-ES / Immune / NSGA-II for EM",
         "primary_tools": ["evolutionary"],
-        "related": ["optuna", "mcmc", "topology-optimization"],
-        "tags": ["optimization"],
-    },
-    "mcmc": {
-        "subpackage": "radia_mcp.mcmc",
-        "entry_point": "mcp-server-mcmc",
-        "description": "MCMC + MCTS + SPM for EM. ★ Hokkaido Sato 2023 MCTS "
-                       "PM motor + Yin 2024 inductor + Saotome 1995 SPM",
-        "primary_tools": ["mcmc_algorithms", "mcmc_libraries",
-                            "mcmc_em_applications", "mcmc_mcts_lab", "mcmc_spm"],
-        "related": [
-            "bayesian-opt",
-            "data-assimilation",
-            "evolutionary",
-            "optuna",
-            "topology-optimization",
-        ],
+        "related": ["optuna", "topology-optimization"],
         "tags": ["optimization"],
     },
     "data-assimilation": {
@@ -328,7 +310,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Kalman / EnKF / 4D-Var for EM state estimation + "
                        "sensor fusion",
         "primary_tools": ["data_assimilation"],
-        "related": ["mcmc", "mor", "fusion"],
+        "related": ["mor", "fusion"],
         "tags": ["optimization"],
     },
     "gnn": {
@@ -430,8 +412,21 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Mathematica recipes: vector calc, Kelvin transform, "
                        "symbolic Maxwell, evaluation pipeline",
         "primary_tools": ["mathematica_recipes", "mathematica_status"],
-        "related": ["differential-forms", "radia-ngsolve", "graph"],
+        "related": ["differential-forms", "radia-ngsolve", "graph",
+                      "md2html"],
         "tags": ["theory"],
+    },
+    "md2html": {
+        "subpackage": "radia_mcp.md2html",
+        "entry_point": "mcp-server-md2html",
+        "description": "Markdown -> self-contained HTML with MathJax v3 + "
+                       "tables + fenced code + codehilite + base64 image "
+                       "embed + [N] reference linking + UTF-8 / cp932 "
+                       "fallback for legacy Japanese files.  Promoted "
+                       "from mcp-server-document.",
+        "primary_tools": ["md2html_convert"],
+        "related": ["mathematica", "graph", "literature-index"],
+        "tags": ["meta"],
     },
     "graph": {
         "subpackage": "radia_mcp.graph",
@@ -444,9 +439,27 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["graph_style_guide", "graph_size_for_target",
                             "paper_figure_profiles", "paper_figure_recipe",
                             "paper_figure_quality_rules"],
-        "related": ["mathematica", "literature-index"],
+        "related": ["mathematica", "literature-index", "chart2d",
+                      "md2html"],
         # 'meta' tag = cross-cutting utility usable by any paper /
         # digest, not bound to a single solver domain.
+        "tags": ["meta"],
+    },
+    "chart2d": {
+        "subpackage": "radia_mcp.chart2d",
+        "entry_point": "mcp-server-chart2d",
+        "description": "22 paper-quality 2D charts as MCP tools: line / "
+                       "loglog / semilog / step / errorbar / fill_between"
+                       " / bode / histogram / bar / box / violin / ecdf /"
+                       " contour / contourf / pcolormesh / quiver / "
+                       "streamplot / imshow / polar / scatter / phase "
+                       "(Nyquist).  Each accepts return_mode='recipe' "
+                       "(Python text) | 'image' (MCP Image inline) | "
+                       "'both'.  Inherits radia_mcp.graph profile + "
+                       "gate stack.",
+        "primary_tools": ["chart2d_catalog", "chart2d_line", "chart2d_bode",
+                            "chart2d_scatter", "chart2d_contourf"],
+        "related": ["graph"],
         "tags": ["meta"],
     },
     "literature-index": {
@@ -457,7 +470,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
-        "related": ["meta", "graph"],
+        "related": ["meta", "graph", "md2html"],
         "tags": ["meta"],
     },
 

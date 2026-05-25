@@ -11,6 +11,5 @@ Distilled from W:/.../02_最適化_進化計算/ (6 papers):
 
 Cross-links:
   - `radia_mcp.optuna` — TPE / CMA-ES / NSGA-II as practical interface
-  - `radia_mcp.mcmc` — MCMC + MCTS alternative
   - `radia_mcp.topology_optimization` — gradient alternative
 """

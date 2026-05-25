@@ -468,7 +468,7 @@ modeling, June-October 2024.
 ## When you need a surrogate
 
 A surrogate model replaces the FEM solve in:
-- Inner loop of an optimization (BBO, MCMC)
+- Inner loop of an optimization (BBO, variational inference)
 - Real-time control / digital twin
 - Design sweep (parametric study)
 - Uncertainty quantification (Monte Carlo)
@@ -677,7 +677,6 @@ candidate, _ = optimize_acqf(acqf, bounds=bounds, q=1, num_restarts=10,
 ## Cross-references
 
 - `radia_mcp.optuna(topic="samplers")` — Optuna integration
-- `radia_mcp.mcmc(topic="libraries")` — Bayesian framework alternatives
 - `radia_mcp.pinn` — NN-based alternatives for high-dim / nonlinear
 """
 

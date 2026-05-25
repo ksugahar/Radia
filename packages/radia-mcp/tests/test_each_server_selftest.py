@@ -42,7 +42,7 @@ from radia_mcp.meta import catalog
 
 
 # Map catalog short-name -> CLI script name.  Most are 1:1 (catalog
-# 'mcmc' -> CLI 'mcp-server-mcmc'), but two get the 'radia-' prefix
+# 'optuna' -> CLI 'mcp-server-optuna'), but two get the 'radia-' prefix
 # from the CLI script (see catalog alias logic in catalog.py):
 #   catalog 'meta'    -> CLI 'mcp-server-radia-meta'
 #   catalog 'interop' -> CLI 'mcp-server-radia-interop'

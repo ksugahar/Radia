@@ -9,7 +9,6 @@ a few points, infer field everywhere; track moving conductor under
 noise; combine FEM forward + measurement update.
 
 Cross-links:
-  - `radia_mcp.mcmc` — Bayesian inverse problem alternative (offline)
   - `radia_mcp.pinn` — physics-aware filter via neural surrogate
   - `radia_mcp.mor` — reduced-order model in the filter's state space
 """
