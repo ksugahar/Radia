@@ -348,7 +348,20 @@ jobs:
       # the *installed* wheel behaves the same.
       # ----------------------------------------------------------------
       - name: Post-install MCP selftest (all 6 public servers)
-        if: success()
+        # Gated to main-only (2026-05-25) to avoid the concurrency
+        # race that bit radia-mcp-v0.73.0 + v0.74.0 tag CIs:
+        # main + tag CI fire simultaneously on the same self-hosted
+        # LAB runner, both run `pip install --force-reinstall
+        # packages/radia-mcp/dist/*.whl`, and one loses the race for
+        # Scripts/mcp-server-*.exe -> WinError 32 file-in-use ->
+        # job FAIL -> workflow_run.conclusion != 'success' ->
+        # publish-pypi skipped silently.  The Post-install selftest's
+        # job is "did we break server import in this commit", which
+        # main CI catches just fine; tag CI doesn't need to repeat it.
+        # The "MCP response regression tests" pytest step below still
+        # runs on tag CI and validates the same surface area without
+        # touching Scripts/mcp-server-*.exe.
+        if: success() && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           $whl = Get-ChildItem "${{ github.workspace }}\packages\radia-mcp\dist\*.whl" `
