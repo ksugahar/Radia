@@ -203,25 +203,53 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
         for vnr in surf_vnrs_list
     ]
 
+    # Rotation axis selection (v4.78.0+): allow the workpiece to spin
+    # around x / y / z instead of the hardcoded +z that pre-2026-05-25
+    # silently assumed.  Workpieces exported with a horizontal axis
+    # (e.g. billet along x) would silently get the wrong physics under
+    # the previous "spin around z" assumption.
+    axis_str = getattr(args, "rotation_axis", "z") or "z"
+    axis_str = str(axis_str).lower().strip()
+    if axis_str not in ("x", "y", "z"):
+        raise ValueError(
+            f"--rotation-axis must be one of x / y / z (got "
+            f"{axis_str!r}).  Workpiece spin around an arbitrary axis "
+            f"is not yet supported.")
+
     def _project(theta_rad: float) -> tuple[int, int]:
         """In-place re-sampling at body-rotation angle ``theta_rad``.
 
         Returns (n_ok, n_fail) for the most recent projection.  When
         theta_rad == 0 this reproduces the original (single-shot)
         projection used pre-2026-05-20.
+
+        Rotation axis is selected by ``args.rotation_axis`` (x / y / z,
+        default z) -- positive ``theta_rad`` is CCW viewed from the
+        positive end of the axis (right-hand rule).
         """
         c, s = math.cos(theta_rad), math.sin(theta_rad)
         gf_wp_q.vec[:] = 0
         n_ok = n_fail = 0
         fv = gf_wp_q.vec.FV()
         for vnr, (xb, yb, zb) in zip(surf_vnrs_list, surf_xyz):
-            # Workpiece body rotates +theta_rad around z; the world
-            # coordinate of body point (xb, yb, zb) at this angle is
-            # (xb*c - yb*s, xb*s + yb*c, zb).  Sample q_em there.
-            xw = xb * c - yb * s
-            yw = xb * s + yb * c
+            # Workpiece body rotates +theta_rad around the chosen axis;
+            # compute the world coordinate of body point (xb, yb, zb).
+            if axis_str == "z":
+                xw = xb * c - yb * s
+                yw = xb * s + yb * c
+                zw = zb
+            elif axis_str == "y":
+                # Rotation around y: x'=c*x+s*z, y'=y, z'=-s*x+c*z
+                xw = xb * c + zb * s
+                yw = yb
+                zw = -xb * s + zb * c
+            else:  # axis_str == "x"
+                # Rotation around x: x'=x, y'=c*y-s*z, z'=s*y+c*z
+                xw = xb
+                yw = yb * c - zb * s
+                zw = yb * s + zb * c
             try:
-                em_mip = em_mesh(xw, yw, zb)
+                em_mip = em_mesh(xw, yw, zw)
                 val = gf_q_em(em_mip)
                 fv[vnr] = float(getattr(val, "real", val))
                 n_ok += 1
@@ -261,6 +289,7 @@ def solve_heat(wp_vol,
                linear_solver="sparsecholesky",
                fes_order=1,
                rotation_rpm=0.0,
+               rotation_axis="z",
                probe_point=None,
                msh_output="",
                vtu_prefix="",
@@ -322,6 +351,7 @@ def solve_heat(wp_vol,
     a_local.em_vol = em_vol
     a_local.qsurf_order = qsurf_order
     a_local.surface_label = surface_label_eff
+    a_local.rotation_axis = rotation_axis
     surface_region = wp_mesh.Boundaries(surface_label_eff)
     q_cf, q_resample = _build_qsurf_cf(wp_mesh, surface_region, a_local)
 
@@ -674,6 +704,15 @@ def main():
                         help="Workpiece rotation speed [rpm] "
                              "(default 0 = stationary).  3D solver "
                              "treats this as metadata.")
+    parser.add_argument("--rotation-axis", default="z",
+                        choices=["x", "y", "z"],
+                        help="Workpiece rotation axis (default z).  "
+                             "Positive --rotation-rpm gives CCW "
+                             "rotation viewed from the positive end of "
+                             "this axis (right-hand rule).  Pre-v4.78.0 "
+                             "this was hardcoded to z; horizontal-axis "
+                             "workpieces (billet along x) silently got "
+                             "the wrong physics.")
 
     # Observation / output.
     parser.add_argument("--probe-point", default="",
@@ -717,6 +756,7 @@ def main():
             linear_solver=args.linear_solver,
             fes_order=args.fes_order,
             rotation_rpm=args.rotation_rpm,
+            rotation_axis=args.rotation_axis,
             probe_point=probe_point,
             msh_output=args.msh_output,
             vtu_prefix=args.vtu_prefix,
