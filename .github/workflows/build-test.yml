@@ -7,11 +7,27 @@ on:
   pull_request:
     branches: [main]
 
+# Concurrency: serialize per-SHA, NOT per-ref.
+#
+# Why: a release pushes BOTH main and a tag (e.g. main + v4.78.1 +
+# radia-mcp-v0.72.0) for the SAME commit SHA.  Per-ref grouping put
+# main and each tag in separate concurrency groups, so they raced
+# on the shared self-hosted [windows-radia] runner.  Build.ps1
+# writes to S:\...\src\radia\*.pyd (NAS-shared editable path on
+# LAB); two concurrent builds linking the same .pyd produced
+# linker-side file-lock failures that surfaced as non-timeout
+# Build step failures (verified 2026-05-25: sha 0c0ef5d had main
+# CI FAIL + radia-mcp-v0.75.0 tag CI OK, only 5 s apart -- same
+# SHA, two runs, different outcomes).
+#
+# Grouping by SHA forces serial execution per commit so the
+# linker only ever has one writer at a time.
+#
 # On main: never cancel a running build (only pending ones get replaced).
 # On PRs:    cancel the previous run to save runner time.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ci-${{ github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-test:
@@ -29,7 +45,12 @@ jobs:
       NGSOLVE_ROOT: 'C:\Program Files\Python312\Lib\site-packages\ngsolve'
       NGSOLVE_DIR: 'C:\Program Files\Python312\Lib\site-packages\ngsolve\cmake'
       Netgen_DIR: 'C:\Program Files\Python312\Lib\site-packages\netgen\cmake'
-      CUBIT_PATH: 'C:\Program Files\Coreform Cubit 2025.3\bin'
+      # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25; LAB now has
+      # 2025.12 only. Build.ps1 + cubit_plugin scripts now auto-discover
+      # via tools/find_cubit.ps1, so this env var is informational. Set
+      # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
+      # runner if needed.
+      CUBIT_PATH: ''
 
     steps:
       - uses: actions/checkout@v4

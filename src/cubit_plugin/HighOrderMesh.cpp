@@ -6,8 +6,12 @@
 // ACIS geometry access for direct projection
 #include "RefFace.hpp"
 #include "RefEdge.hpp"
-#include "GeometryQueryTool.hpp"
 #include "CubitVector.hpp"
+// 2026-05-25: Cubit 2025.12 removed GeometryQueryTool::instance() static
+// accessor; CubitRefAccessor wraps
+//   CubitCoreModel::instance()->cgmapp()->factory()->get_ref_{face,edge}()
+// so the 2 lookup sites below stay one-liners.
+#include "CubitRefAccessor.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -49,7 +53,7 @@ bool HighOrderMesh::build(MeshExportInterface *iface)
   // CubitInterface geometry queries on mesh nodes.
   // -------------------------------------------------------
   // Suppress "Only bodies currently accepted" errors from geometry queries
-  CubitMessage::set_error_flag(false);
+  CubitMessage::instance()->set_error_flag(false);
   classify_nodes();
 
   // -------------------------------------------------------
@@ -114,7 +118,7 @@ bool HighOrderMesh::build(MeshExportInterface *iface)
     }
   }
 
-  CubitMessage::set_error_flag(true);
+  CubitMessage::instance()->set_error_flag(true);
 
   PRINT_INFO("High-order mesh: %d original nodes + %d mid-nodes = %d total\n",
              num_nodes, total_nodes_ - num_nodes, total_nodes_);
@@ -131,11 +135,11 @@ void HighOrderMesh::classify_nodes()
   std::vector<int> curve_ids  = CubitInterface::get_entities("curve");
   std::vector<int> surface_ids = CubitInterface::get_entities("surface");
 
-  CubitMessage::set_error_flag(true);  // temporarily restore for debug
+  CubitMessage::instance()->set_error_flag(true);  // temporarily restore for debug
   PRINT_INFO("classify_nodes: %d vertices, %d curves, %d surfaces\n",
              (int)vertex_ids.size(), (int)curve_ids.size(),
              (int)surface_ids.size());
-  CubitMessage::set_error_flag(false);  // re-suppress
+  CubitMessage::instance()->set_error_flag(false);  // re-suppress
 
   // Vertex nodes
   for (int vid : vertex_ids) {
@@ -178,11 +182,11 @@ void HighOrderMesh::classify_nodes()
   }
 
   // Any node not in the map is a volume-interior node
-  CubitMessage::set_error_flag(true);
+  CubitMessage::instance()->set_error_flag(true);
   PRINT_INFO("classify_nodes: %d nodes classified (curve: %d, surface: %d)\n",
              (int)node_owner_.size(), (int)node_curves_.size(),
              (int)node_surfaces_.size());
-  CubitMessage::set_error_flag(false);
+  CubitMessage::instance()->set_error_flag(false);
 }
 
 // ============================================================
@@ -216,7 +220,7 @@ int HighOrderMesh::get_or_create_midnode(int n0, int n1)
       for (int d : ci1->second) {
         if (c == d) {
           // Both on same curve → project to curve via RefEdge
-          RefEdge *re = GeometryQueryTool::instance()->get_ref_edge(c);
+          RefEdge *re = radia::cubit_get_ref_edge(c);
           if (re) {
             CubitVector input_pt(mx, my, mz);
             CubitVector closest_pt;
@@ -241,7 +245,7 @@ int HighOrderMesh::get_or_create_midnode(int n0, int n1)
         for (int t : si1->second) {
           if (s == t) {
             // Both on same surface → project to surface via RefFace
-            RefFace *rf = GeometryQueryTool::instance()->get_ref_face(s);
+            RefFace *rf = radia::cubit_get_ref_face(s);
             if (rf) {
               CubitVector input_pt(mx, my, mz);
               CubitVector closest_pt;

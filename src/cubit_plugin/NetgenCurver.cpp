@@ -21,8 +21,12 @@ namespace ng = netgen;
 #include "RefEdge.hpp"
 #include "Surface.hpp"
 #include "Curve.hpp"
-#include "GeometryQueryTool.hpp"
 #include "CubitVector.hpp"
+// 2026-05-25: Cubit 2025.12 removed GeometryQueryTool::instance() static
+// accessor.  CubitRefAccessor wraps the new path
+//   CubitCoreModel::instance()->cgmapp()->factory()->get_ref_{face,edge,volume}()
+// so the 6 lookup sites below stay one-liners.
+#include "CubitRefAccessor.hpp"
 
 // Use explicit namespace prefixes to disambiguate
 // Cubit ElementType enums: ::TETRA4, ::TETRA, ::HEX8, ::HEX, etc.
@@ -207,7 +211,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
     // Cache RefFace pointers per surface
     std::unordered_map<int, RefFace*> rf_cache;
     for (int sid : surface_ids)
-      rf_cache[sid] = GeometryQueryTool::instance()->get_ref_face(sid);
+      rf_cache[sid] = radia::cubit_get_ref_face(sid);
 
     // Cache per-surface periodicity. Seam shift (below) is applied only to
     // surfaces that ACIS flags as actually periodic in that parameter
@@ -483,7 +487,7 @@ bool NetgenCurver::build_netgen_mesh(const MeshData &md)
           "edge", "in curve " + std::to_string(cid));
 
       // Get curve length for dist normalization
-      RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(cid);
+      RefEdge* re = radia::cubit_get_ref_edge(cid);
       double crv_length = re ? re->measure() : 1.0;
       double u_start = re ? re->start_param() : 0.0;
 
@@ -685,7 +689,7 @@ bool NetgenCurver::attach_callback_geometry()
       return {x, y, z, u_hint, v_hint};
     }
 
-    RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_sid);
+    RefFace* rf = radia::cubit_get_ref_face(cubit_sid);
     if (!rf) return {x, y, z, u_hint, v_hint};
 
     // Early reject: if the query point lies noticeably outside this
@@ -889,7 +893,7 @@ bool NetgenCurver::attach_callback_geometry()
       return {0.0, 0.0, 1.0};
 
     int cubit_sid = it->second;
-    RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_sid);
+    RefFace* rf = radia::cubit_get_ref_face(cubit_sid);
     if (!rf) return {0.0, 0.0, 1.0};
 
     CubitVector loc(x, y, z);
@@ -929,7 +933,7 @@ bool NetgenCurver::attach_callback_geometry()
     int64_t key = ((int64_t)surfnr1 << 32) | surfnr2;
     auto it = surfpair_to_curve.find(key);
     if (it != surfpair_to_curve.end()) {
-      RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(it->second);
+      RefEdge* re = radia::cubit_get_ref_edge(it->second);
       if (re) {
         CubitVector loc(x, y, z);
         CubitVector closest;
@@ -975,7 +979,7 @@ bool NetgenCurver::attach_callback_geometry()
     auto it = surfpair_to_curve.find(key);
     if (it == surfpair_to_curve.end()) return linear_mid();
 
-    RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(it->second);
+    RefEdge* re = radia::cubit_get_ref_edge(it->second);
     if (!re) return linear_mid();
 
     double crv_length = re->measure();

@@ -12,10 +12,38 @@
 
 $ErrorActionPreference = "Stop"
 
-$vcvarsBat = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat'
-$env:CUBIT_DIR = 'C:\Program Files\Coreform Cubit 2025.3\cmake'
+# Visual Studio + CMake discovery via vswhere (matches Build.ps1's
+# pattern).  Was hardcoded `Microsoft Visual Studio\2022\BuildTools\...`
+# until 2026-05-25; that broke on LAB whose VS BuildTools installs as
+# `Microsoft Visual Studio\18\BuildTools\...` (VS uses the major-version
+# directory name "18", not the marketing year "2022").  Auto-discover so
+# the next VS upgrade does not re-break this.
+$VSWHERE = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path $VSWHERE)) {
+    throw "vswhere.exe not found at $VSWHERE -- install Visual Studio Installer."
+}
+$vsPath = & $VSWHERE -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+if (-not $vsPath) {
+    throw "Visual Studio with VC x86/x64 tools not found via vswhere."
+}
+$vcvarsBat = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+$cmake     = "$vsPath\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+if (-not (Test-Path $vcvarsBat)) { throw "vcvars64.bat not found at $vcvarsBat" }
+if (-not (Test-Path $cmake)) {
+    # Fallback: pip-installed cmake
+    $pipCmake = & python -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
+    if ($pipCmake -and (Test-Path $pipCmake)) { $cmake = $pipCmake }
+    else { throw "cmake.exe not found in VS install or on PATH" }
+}
+
+# Auto-discover Cubit (was 2025.3, LAB now has 2025.12). Honors
+# CUBIT_INSTALL_DIR env override.
+. "$PSScriptRoot\find_cubit.ps1"
+if (-not $CubitCmakeDir) {
+    throw "Cubit not found under C:\Program Files. Set CUBIT_INSTALL_DIR to override."
+}
+$env:CUBIT_DIR = $CubitCmakeDir
 $env:NETGEN_DIR = 'C:\Program Files\Python312\Lib\site-packages\netgen'
-$cmake = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 
 # Resolve the cubit plugin source dir relative to this script.
 #
