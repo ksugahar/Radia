@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.73.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.72.0 (2026-05-25): COMSOL fork multilingual RAG absorption -- detect_filename_language() CJK heuristic + JA/ZH chapter regex (第N章, 第N節, kanji numerals) + language_filter on ChromaRetriever.search + auto_detect_language flag in extract_pdf_chunks; literature_semantic_search now supports language_filter for the bilingual W:/03_文献・論文 lab corpus. 0.71.0: 4 COMSOL knowledge modules (XFEM/LiveLink/Kelvin/LabTips, +4727 lines). 0.70.0 (2026-05-24 evening): panel_review subpackage -- 10-topic GUI bug catalogue + 5-skill chain (panel-cli-diff/review/qt-test/preview/smoke). 0.69.0 (2026-05-24): META server (36-server catalog) + 8 ML/optimization subpackages + 19 application+theory subpackages + 6 thin-server PDF enrichments. 0.68.0: fem subpackage."
+version = "0.74.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.74.0 (2026-05-25): full absorption of W:\\30_CauerLadderNetwork (~500 .m/.mph/.docx/.pdf across 16 topic folders + 6 root references) into 5 new mor.cln_* knowledge modules (5238 lines / 57 topics). New tools: mor_cln_practice (CLN.m + COMSOL withsol idiom + Robin/Infinite/Kelvin BC + Legendre n=9 analytical), mor_cln_multiport (Kuriyama 2019 multi-expansion + 3D Gridap.jl HCurl), mor_cln_advanced (FP-CLN Sugahara-Tobita-Matsuo-Takahashi CEFC 2024 + nonlinear 4-gen lineage), mor_cln_specialty (Hiruma non-symmetric Lanczos + Nagamine error theory + BEM+FEM TSVD coupling), mor_cln_collab (CauerI<->II form conversion + Endo/Matsumoto Hosei). 213k chars of lab-specialty CLN knowledge. 0.73.0/0.72.0: COMSOL multilingual RAG absorption. 0.71.0: 4 COMSOL knowledge modules. 0.70.0: panel_review."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"

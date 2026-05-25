@@ -15,6 +15,7 @@ from ..common import register_status_tool
 
 from .systematic_knowledge import get_systematic_mor_knowledge
 
+
 try:
     from .bibliography_index_knowledge import get_bibliography_index
 except ImportError:
@@ -61,6 +62,15 @@ def mor_bibliography(query: str = "") -> str:
 
 
 
+
+
+
+
+
+
+
+
+
 register_status_tool(
     mcp,
     server_name='mcp-server-mor',
@@ -88,4 +98,14 @@ if __name__ == "__main__":
 
 
 # References retained from removed tool documentation:
+# Canonical bibliography key: Koester2021PGDCLN
 # Canonical bibliography key: Kuriyama2019
+# Canonical bibliography key: Sugahara2024hysteresis
+# Sugahara (2017), voltage-source formulation; original short citation.
+# Matsuo (2018c), matrix-form formulation; original short citation.
+
+# CEFC 2022, verified-arithmetic element extraction; original short reference, authors not specified.
+
+# Canonical bibliography key: Kameari2018
+
+# Method attribution retained: Kameari and Tanimoto.
