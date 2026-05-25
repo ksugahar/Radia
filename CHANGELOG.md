@@ -3,6 +3,29 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.78.1 — vol/sol viewer: register via winreg (quote-mangling fix)
+
+Released 2026-05-25.
+
+Fixes `radia-vol-viewer --register` silently failing to install the
+ftype handler on Windows.  The previous implementation passed an
+`ftype` argument with embedded quotes through `subprocess.run(["cmd",
+"/c", "ftype", 'Radia.VolViewer="C:\\...\\app.exe" "%1"'])`; the argv
+→ Windows-command-line round-trip mangled the quotes so cmd.exe
+received `ftype Radia.VolViewer=\C:\...\app.exe\ \%1\` and discarded
+the registration.  Symptom: `--register` prints "Done", `.vol=Radia
+.VolViewer` is set, but `cmd /c "ftype Radia.VolViewer"` returns
+"file type not found" so double-click does nothing.
+
+The fix replaces both `register_associations()` and
+`unregister_associations()` with direct `winreg` writes to
+`HKLM\SOFTWARE\Classes` (same scope as the original `assoc`/`ftype`,
+no cmd.exe involvement, no quoting ambiguity).  `winreg` is stdlib;
+no new dependency.
+
+Discovered 2026-05-24 during the Stage 2 deploy to 100号機 + mdx,
+worked around at the time with a manual `reg add` per-machine.
+
 ## 4.76.1 — .sol viewer: colour-mapped field (scalfunction/vecfunction)
 
 Released 2026-05-24.
