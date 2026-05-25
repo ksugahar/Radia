@@ -1425,7 +1425,9 @@ if __name__ == '__main__':
 
 
 # References retained from removed tool documentation:
+# Canonical bibliography key: Kuriyama2019
 # Canonical bibliography key: Nagamine2026
+# Canonical bibliography key: HirumaXFEM2023
 # Sugahara, Nagamine, Hane (2026), IEEE Transactions on Magnetics submission; original short citation.
 
 # Sugahara, IGTE 2026, expansion-point/SIBC theory; original short attribution, publication details unverified.
