@@ -30,6 +30,12 @@ from .lab_applications_knowledge import get_lab_applications_documentation
 # calc_*.py scripts for PMSM cogging / WPT misalignment robustness /
 # shielding placement / litz strand AC R / Karl multi-fidelity pruning.
 from .recipes_advanced_knowledge import get_recipes_advanced_documentation
+# Kanamori et al. (2016) continuous-optimization textbook companion
+# (2026-05-26): chapter-by-chapter knowledge for gradient / 2nd-order /
+# duality / KKT / SVM / sparse / matrix optimization.  The THEORETICAL
+# foundation for "when gradient methods apply" (and therefore when BBO
+# is NOT the right choice).
+from .kanamori2016_textbook_knowledge import get_kanamori2016_documentation
 
 mcp = FastMCP("mcp-server-optuna")
 
@@ -156,6 +162,52 @@ def optuna_recipes_advanced(topic: str = "all") -> str:
     deep dive.
     """
     return get_recipes_advanced_documentation(topic)
+
+
+@mcp.tool()
+def optuna_kanamori2016_textbook(topic: str = "overview") -> str:
+    """Kanamori et al. (2016) continuous-optimization textbook companion.
+
+    Curated chapter-by-chapter summary of "機械学習のための連続最適化"
+    (Kanamori-Suzuki-Takeuchi-Sato, 講談社サイエンティフィク MLP Series,
+    2016, ISBN 978-4-06-152920-8).  Source PDF EasyOCR'd at 300 dpi
+    (354 pages); knowledge module is hand-curated, not raw OCR.
+
+    The textbook covers gradient / 2nd-order / duality / KKT / SVM /
+    sparse / matrix optimization -- the THEORETICAL FOUNDATION for
+    "when gradient methods apply" (and therefore when BBO is NOT the
+    right choice).  Use this companion to decide between Optuna
+    (this server's other tools) vs scipy gradient methods vs CVXPY
+    convex solvers vs IPOPT.
+
+    Topics:
+        "overview"     - Chapter index + how to use the topic aliases
+        "lab"          - Lab tie-ins table (textbook chapter ->
+                         radia / NGSolve workflow + cross-ref MCP server)
+        "all"          - Everything (~25-30 KB)
+        "chapter01"    - Optimization-problem taxonomy + convergence vocab
+        "chapter02"    - Math preliminaries: Taylor, convex, subdifferential
+        "chapter03"    - Optimality conditions + termination criteria
+        "chapter04"    - Gradient descent + Armijo/Wolfe line search
+        "chapter05"    - Newton + Levenberg-Marquardt (inverse fit)
+        "chapter06"    - Conjugate gradient (FR / PR / PR+)
+        "chapter07"    - BFGS / L-BFGS / DFP (the lab default ~1e3-1e4 dim)
+        "chapter08"    - Trust region (Cauchy / dogleg / Steihaug)
+        "chapter09"    - Equality-constrained KKT + sensitivity = lambda
+        "chapter10"    - Inequality KKT + constraint qualifications
+        "chapter11"    - Barrier / interior-point (IPOPT, CVXPY)
+        "chapter12"    - Lagrange duality + augmented-Lagrangian + ADMM
+        "chapter13"    - MM / EM / IRLS (Karl iteration, hysteresis Newton)
+        "chapter14"    - SVM (linear + kernel, dual problem, SMO)
+        "chapter15"    - LASSO / ISTA / FISTA / ADMM (sparse learning)
+        "chapter16"    - Nuclear-norm / SDP / matrix completion (MOR)
+
+    Aliases: newton/lm/levenberg -> ch05, cg -> ch06, bfgs/lbfgs -> ch07,
+    trust -> ch08, kkt/inequality -> ch10, barrier/ipm -> ch11,
+    duality/lagrangian -> ch12, mm/em -> ch13, svm/smo -> ch14,
+    lasso/sparse/proximal/fista -> ch15, matrix/nuclear/sdp -> ch16.
+    """
+    return get_kanamori2016_documentation(topic)
 
 
 # ============================================================
