@@ -5,6 +5,281 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.80.0 — graph: GitHub-MCP/tueplots/Wong-2011 absorption batch
+
+Released 2026-05-26.
+
+After v0.79.0 user prompted to survey existing GitHub MCP plotting
+servers + scientific-figure libraries.  Two parallel general-purpose
+agents scanned:
+
+  PYTHON MCP:
+    StacklokLabs/plotting-mcp, newsbubbles/matplotlib_mcp,
+    xlisp/visualization-mcp-server, LindseyyyLi/MCP-Server,
+    arshlibruh/plotly-mcp-cursor, antvis/mcp-server-chart (4.1k★),
+    isaacwasserman/mcp-vegalite-server (97★),
+    stephaneberle9/mcp-server-vegalite-viewer,
+    jjsantos01/jupyter-notebook-mcp (130★), Vizro MCP
+
+  MATLAB / scientific-figure libraries:
+    matlab/matlab-mcp-core-server (official, 771★),
+    Tsuchijo/matlab-mcp, garrettj403/SciencePlots,
+    pnkraemer/tueplots, proplot/Ultraplot, BayesWatch/mpl_sizes,
+    masumhabib/PlotPub, altmany/export_fig
+
+Distilled 5 high-value patterns this lab DIDN'T already have and
+absorbed them this release.  Bigger-picture finding: no existing MCP
+server treats figures as first-class publication artifacts; our
+emit_paper_figure(...) gate-stack remains genuinely novel.
+
+What shipped:
+
+1. **NEW: Okabe-Ito CVD-safe color palette as default for every
+   profile** (Wong 2011 Nature Methods 8:441 = SciencePlots `bright`).
+     OKABE_ITO = ['#000000', '#E69F00', '#56B4E9', '#009E73',
+                  '#F0E442', '#0072B2', '#D55E00', '#CC79A7']
+   - PaperProfile.color_cycle field (default = OKABE_ITO)
+   - paper_figure() sets rcParams['axes.prop_cycle'] from the cycle
+   - emit_paper_figure() lints every Line2D color via
+     _check_colors_are_cvd_safe (Okabe-Ito + greyscale exception),
+     raises on violation.  Matplotlib's default tab10 (red+orange
+     confusable in deuteranopia) no longer leaks into lab figures.
+
+2. **NEW: PaperProfile.from_base() tueplots-style derivation** —
+   declare ONE `base_pt` font; legend_pt = base_pt, tick_pt =
+   base_pt - small_offset auto-computed.  Pins the IEEE/IEEJ
+   "tick 1 pt below body" convention so future profile edits
+   cannot desync.
+
+3. **NEW: paper_figure(rel_width=1.0)** — fraction of profile width
+   (tueplots `rel_width` pattern).  rel_width=0.5 of double-column
+   gives a half-column inset; rel_width=1.5 of single-column gives
+   a 1.5-column figure.  Custom column widths without forking a
+   profile.
+
+4. **NEW: paper_figure(panel_labels='auto')** — default is now
+   "auto", which applies (a)(b)(c) iff nrows*ncols > 1.  Mirrors
+   ultraplot `abc=True` ergonomics.  panel_labels=True forces even
+   for 1x1; False suppresses.
+
+5. **NEW: Post-save PDF font-embedding verifier**
+   (_check_pdf_fonts_embedded).  Scans the output PDF binary for
+   /Subtype /Type3 (raster glyph, IEEE/Elsevier reject) and reports
+   Type-1-only embeds.  Catches the case where rcParams['pdf.fonttype']
+   got reset to 3 between paper_figure() and savefig().  Returned
+   in emit_paper_figure result as `font_violations: list`.
+
+emit_paper_figure() gate stack now (in order):
+  pre-flight 1:  no in-figure titles
+  pre-flight 1b: NEW colorblind-safe palette (raise on violation)
+  pre-flight 2:  no legend overlapping data lines
+  pre-flight 3:  resize to profile width
+  measure:       axes_area_fraction >= min_axes_fraction (auto_tighten optional)
+  post-save:     NEW PDF Type-42 font embedding (raise on Type-3 found)
+
+`paper_figure_quality_rules` (MCP tool) gains 2 new topics:
+  `colorblind_safe` -- Okabe-Ito palette + why tab10 is harmful
+  `font_embedding`  -- Type-42 requirement + pdffonts verification
+
+tests/test_graph_paper_figure.py: 37 -> 53 tests
+  + test_default_color_cycle_is_okabe_ito
+  + test_paper_figure_sets_okabe_ito_rcparams
+  + test_emit_raises_on_non_cvd_safe_color
+  + test_emit_greyscale_passes
+  + test_emit_cvd_check_can_be_disabled
+  + test_from_base_derives_font_sizes_correctly
+  + test_from_base_with_different_base
+  + test_rel_width_scales_figure
+  + test_rel_width_1_5_for_1_5_column_figure
+  + test_panel_labels_auto_applied_on_multipanel
+  + test_panel_labels_not_applied_on_single_panel
+  + test_panel_labels_can_be_forced_on_single_panel
+  + test_panel_labels_false_suppresses_on_multipanel
+  + test_emit_pdf_has_no_type3_fonts
+  + test_emit_pdf_check_can_be_disabled
+  + test_emit_raises_on_type3_fonts
+
+Suite: **124/124 pytest pass** (was 108 after 0.79.0; +16 new).
+
+Patterns surveyed but DEFERRED (not absorbed, with reasons):
+  - MCP `Image` content type return (LindseyyyLi, isaacwasserman):
+    radia_mcp.graph returns RECIPES (text), not rendered images --
+    keeps the server purely informational and lets the user execute
+    locally.  Image-return is wrong for our model.
+  - `usetex=True` switch (tueplots): adds LaTeX dependency to CI,
+    cm/stix mathtext is good enough for IEEE compliance already.
+  - Pydantic-typed request models: overkill for our flat kwargs.
+  - Out-of-process rendering (antvis): added complexity not justified
+    for a local-dev MCP server.
+  - generate_sample_data tool (arshlibruh): nice-to-have but
+    overlaps with mcp-server-mathematica + Python REPL.
+  - DISABLED_TOOLS filter (antvis): catalog is small (5 tools), no
+    pruning needed.
+  - export_fig CMYK conversion (MATLAB): RGB-output is the dominant
+    publisher requirement now (IEEE since 2020); CMYK is print-only.
+
+These can be revisited in v0.81+ if user demand surfaces.
+
+## 0.79.0 — graph: 10pt-at-8cm absolute rule + title/legend gates
+
+Released 2026-05-26.
+
+User corrections to v0.78.0 design:
+
+  1. **Font is ABSOLUTE 10 pt @ 8 cm**, not 8 pt and not relative to
+     column width.  Wider columns keep the same 10 pt -- the axes box
+     grows, the text doesn't.
+  2. **"余白" (waste) = white space between AXES OUTER EDGE and
+     FIGURE BOUNDING BOX**, not inside-axes whitespace.  Principle:
+     "情報がなく無駄はやめる" -- every mm of figure bbox should be
+     axes interior, axis label, tick label, tick mark, or legend.
+  3. **Titles go in the LaTeX `\caption{}`, NEVER in the figure.**
+     gate raises ValueError on `ax.set_title()` or `fig.suptitle()`.
+  4. **Legends MUST NOT overlap data lines.**  gate raises on detected
+     overlap.
+
+What shipped:
+
+- **6 PaperProfiles updated**: font_pt 8 → 10, legend_pt 7 → 10,
+  tick_pt 7 → 9 (1pt below body per IEEE/IEEJ convention) for every
+  profile.  Margins recomputed for the wider labels:
+    IEEE_SINGLE_COLUMN: margin_left 0.155 → 0.165, margin_bottom 0.180 → 0.200
+    IGTE_DIGEST_SINGLE: margin_left 0.165 → 0.175, margin_bottom 0.190 → 0.210
+    (double-column profiles tightened slightly: 8.5% left → 8% etc.,
+     since 10 pt absolute on 18 cm = 0.019 of width vs 0.038 on 8 cm,
+     so labels eat proportionally less of the figure)
+
+- **NEW `_check_no_in_figure_title(fig)`** -- walks every `ax.title`
+  and the figure-level `_suptitle`, returns the list of non-empty
+  titles found.
+
+- **NEW `_check_legend_no_overlap(fig)`** -- for every axis-legend
+  pair, samples 200 points along every Line2D and reports any line
+  with >= 1 sample inside the legend bbox.
+
+- **`emit_paper_figure(...)` extended**:
+    new arg `check_title_in_figure=True` (raises if titles present)
+    new arg `check_legend_overlap=True` (raises if legend overlaps)
+    Both checks run BEFORE the efficiency gate so the user gets the
+    actionable single-line fix first (delete `set_title`, move the
+    legend) before being told to also tighten margins.
+
+- **`paper_figure_quality_rules` extended**: 3 new topics
+    `font_rule`         -- the 10pt-at-8cm absolute rule + why wider
+                            columns don't scale the font
+    `no_title_in_figure` -- titles → LaTeX caption, why, override
+    `no_legend_overlap`  -- detection + 3 fix recipes ranked by lab
+                            preference (direct labels > best_loc >
+                            outside-axes)
+  `efficiency` topic now defines 余白 = white between axes outer edge
+  and figure bbox (was previously fuzzy).
+
+- **`tests/test_graph_paper_figure.py` extended**: 23 → 37 tests
+    + test_profile_uses_10pt_body_font (parameterized over 6 profiles)
+    + test_paper_figure_rcparams_have_10pt_body_font
+    + test_emit_raises_on_ax_set_title
+    + test_emit_raises_on_fig_suptitle
+    + test_emit_allows_empty_title
+    + test_emit_title_check_can_be_disabled
+    + test_emit_raises_on_legend_overlap
+    + test_emit_passes_when_legend_in_safe_corner
+    + test_emit_legend_check_can_be_disabled
+
+Suite: **108/108 pytest pass** (was 94 after 0.78.0 -- +14 new tests).
+
+Why this matters: a default-matplotlib figure exported by an
+inexperienced author typically has (a) 8-pt-or-smaller text that the
+reviewer can't read at print scale, (b) a title duplicating the
+caption, and (c) a legend covering the most interesting curve.  The
+three gates now refuse-to-ship each of these.
+
+## 0.78.0 — graph: paper-grade figure scaffolds + efficiency gate
+
+Released 2026-05-26.
+
+The graph subpackage gains a serious paper-quality figure pipeline:
+profile-based scaffolds at the journal's EXACT column width, a
+measurement gate that refuses to ship wasteful figures, and an
+iterative auto-tighten loop that shrinks margins until labels would
+clip.
+
+What shipped:
+
+- **NEW: `radia_mcp.graph.paper_figure(profile, nrows, ncols, ...)`**
+  -- one-shot scaffold that returns `(fig, axes_2d)` at the journal's
+  exact width in mm with pre-tuned subplots_adjust per (R, C) layout
+  delta.  Always returns axes as a 2D ndarray so the same loop
+  works for any layout.
+
+- **NEW: 6 `PaperProfile`s** (`dataclass(frozen=True)`):
+  | Profile | Width | Note |
+  |---|---|---|
+  | `ieee_single_column` | 88.9 mm | 3.5 in IEEE Transactions single |
+  | `ieee_double_column` | 181 mm | 7.16 in IEEE Transactions \figure* |
+  | `ieej_single_column` | 88 mm  | IEEJ-D / IEEJ-B 単欄 |
+  | `ieej_double_column` | 180 mm | IEEJ-D / IEEJ-B 両欄 |
+  | `igte_digest_double` | 170 mm | IGTE / Compumag digest A4 2-col |
+  | `igte_digest_single` | 82 mm  | IGTE / Compumag digest single |
+
+  All use 8 pt body font (IEEE-recommended figure-text minimum) +
+  Times New Roman serif + Type-42 (TrueType) PDF embedding +
+  `xtick.direction='in'` + `units (in parentheses)` lab convention.
+
+- **NEW: `measure_figure_efficiency(fig)`** -- returns the
+  axes_area/total_area fraction + per-margin (L/R/T/B) breakdown +
+  estimated wspace/hspace.  The metric for the gate.
+
+- **NEW: `auto_tighten(fig, target_axes_fraction=0.80)`** -- iterative
+  per-side subplots_adjust shrinker.  Snapshots baseline per-side
+  overhang of text artists past `fig.bbox`, then shrinks each side
+  by 0.005-step increments and rejects only when overhang grows past
+  baseline + (2% width / 3% height) tolerance.  Multi-side per
+  iteration (not first-success-only) so a single iter can tighten
+  L + B + wspace + hspace together.  Empirically: IEEE 2-col 1x2
+  baseline 0.687 → 0.776 (+8.9 pts) without label clipping.
+
+- **NEW: `add_panel_labels(axes, ...)`** -- places (a), (b), (c)...
+  at consistent in-axes positions for multi-panel figures.  Bold,
+  IEEE convention, with optional bbox.
+
+- **NEW: `emit_paper_figure(fig, path, profile, ...)`** -- the
+  validation gate.  Resizes to profile width if needed, measures
+  efficiency, then per `on_fail`:
+    `'raise'` (default): ValueError + per-margin suggestion of which
+                        margin is the biggest waste
+    `'warn'`: warnings.warn() and save anyway
+    `'auto_tighten'`: run auto_tighten once, re-measure, save
+  Saves PDF + PNG at 600 DPI at the profile's exact width.
+
+- **NEW: 3 MCP tools** on `mcp-server-graph`:
+    `paper_figure_profiles(query)` -- list profiles with exact mm specs
+    `paper_figure_recipe(profile, nrows, ncols, panel_labels)` --
+      returns a ready-to-paste Python recipe ending in the
+      `emit_paper_figure(..., on_fail='raise')` gate
+    `paper_figure_quality_rules(query)` -- the WHY: efficiency,
+      margins, units, font_embedding, multipanel
+  Total `mcp-server-graph` tool count: 2 -> 5.
+
+- **NEW: `tests/test_graph_paper_figure.py`** (23 tests, ~24s):
+  per-profile baseline-in-band locks, auto_tighten gains >= 5 pt on
+  IEEE 1x2, no-new-clipping invariant, gate raise/warn/auto-tighten
+  behaviour, panel-label placement, profile-width enforcement,
+  Type-42 font verification.
+
+- Catalog: `graph` primary_tools extended to 5; meta_health remains
+  9/9 PASS, per-server selftest now hits the extended graph
+  `--selftest` (paper-quality profiles + recipes + quality_rules +
+  runtime smoke of paper_figure / measure_figure_efficiency).
+
+Suite: **94/94 pytest pass** (was 71 after 0.77.0 — +23 new
+paper-figure tests).
+
+Why this matters: a typical default-matplotlib figure exported
+straight to PDF wastes 30-40% of its area on default outer margins.
+For an 8 cm IEEE single-column figure that's ~12 mm of lost axes
+width — visible to reviewers as "the curves are tiny".  The gate
+makes the wastage refuse-to-ship.
+
 ## 0.77.0 — graph subpackage + 4 housekeeping items from review
 
 Released 2026-05-26.
