@@ -5,6 +5,48 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.72.0 — COMSOL fork multilingual RAG absorption
+
+Released 2026-05-25.
+
+Cross-pollination from the upstream wjc9011/COMSOL_Multiphysics_MCP fork
+this lab maintains (`ksugahar/COMSOL_Multiphysics_MCP`). The fork added
+Japanese / Chinese support to its ChromaDB RAG layer for the COMSOL PDF
+manual corpus; radia-mcp's lab corpus at W:/03_文献・論文/00_電磁界解析
+is **more multilingual** (roughly 50/50 Japanese textbooks + English IEEE
+papers), so the same infrastructure pays off bigger here.
+
+**What shipped**:
+
+- `radia_mcp.common.chroma_retriever.detect_filename_language()` —
+  CJK Unicode-range heuristic (cheap, no langdetect / fasttext
+  dependency). Returns "ja" / "zh" / "en" / None.
+- `radia_mcp.common.chroma_retriever.find_chapters()` +
+  `CHAPTER_PATTERNS` constant — multilingual chapter detection:
+  English (`Chapter N`, `N.M`), Japanese (`第N章`, `N章`, `第N節`),
+  Chinese kanji-numeral (`第一章`, `第十二章`).
+- `ChromaRetriever.search(..., language_filter="ja")` — restrict
+  semantic hits to chunks tagged with the given language.
+- `extract_pdf_chunks(..., default_language=, auto_detect_language=)`
+  — tag every chunk's metadata with a language code at index time.
+- `literature_index.literature_semantic_search(..., language_filter=)`
+  — exposes the filter to LLM clients.
+- `literature_index.literature_build_vector_index(...,
+  default_language=, auto_detect_language=True)` — defaults to
+  filename-based auto-detect for the bilingual lab corpus.
+- 22 new tests in `tests/test_chroma_multilingual.py` (filename
+  heuristic edge cases + JA/ZH chapter regex + re-export sanity).
+
+**Why this matters**: previously a query like "ヒステリシス測定"
+against the full index returned mostly English IEEE papers (more
+numerous so they dominate the top-K hits). Adding
+`language_filter="ja"` lets a Japanese-language search hit the lab's
+Japanese textbook content directly. No re-indexing required for
+existing chunks; new builds with `auto_detect_language=True`
+(default) populate the metadata tag.
+
+**Total tests**: 31/31 PASS (22 new + 9 existing meta_health).
+
 ## 0.69.0 — meta server + uniform tooling + 5 thin-server PDF enrichments
 
 Released 2026-05-24.
