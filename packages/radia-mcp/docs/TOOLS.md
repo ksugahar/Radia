@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **285 tools** across 37 MCP servers.
+Total: **290 tools** across 37 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -14,7 +14,7 @@ Total: **285 tools** across 37 MCP servers.
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 9 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
-| [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 4 |
+| [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
@@ -268,6 +268,11 @@ Module: `radia_mcp.mor.server`
 |---|---|
 | `mor_bibliography` | Search the MOR bibliography catalog (87 papers in lab library). |
 | `mor_cln` | Cauer Ladder Network (CLN) -- the lab-specialty MOR for eddy-current FEM. |
+| `mor_cln_advanced` | CLN advanced physics extensions -- HF, nonlinear, circuit, |
+| `mor_cln_collab` | CLN external-collaborator work + Cauer-form conversion + |
+| `mor_cln_multiport` | CLN multi-port + multi-expansion-point + 3D extensions. |
+| `mor_cln_practice` | CLN MATLAB+COMSOL practice corpus -- foundations + 2020_11_04 lab |
+| `mor_cln_specialty` | CLN lab-signature techniques -- termination, Hiruma method, |
 | `mor_status` | (no description) |
 | `mor_systematic` | Systematic MOR knowledge -- distilled from the deGruyter 3-volume |
 

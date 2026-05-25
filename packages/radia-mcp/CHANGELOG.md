@@ -5,6 +5,41 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.74.0 — Full CLN corpus absorption (W:\30_CauerLadderNetwork)
+
+Released 2026-05-25.
+
+Complete absorption of the Sugahara lab's **Cauer Ladder Network**
+practice corpus at `W:\30_CauerLadderNetwork\` -- ~500 .m / .mph /
+.docx / .pdf files across 16 topic folders + 6 root references -- into
+the `radia_mcp.mor` subpackage. CLN is the lab's signature MOR
+method; Sugahara is co-author on the canonical Kameari-Ebrahimi-
+Sugahara-Shindo-Matsuo 2018 IEEE TMAG paper. The corpus was
+previously only accessible via direct filesystem inspection; this
+release makes it queryable via 5 grouped MCP tools.
+
+**Total new content**: **5238 lines / 57 topics across 5 modules /
+213,065 chars of CLN-specific knowledge** -- 5 parallel agents, one
+per theme group.
+
+**New MCP tools** (all on `mcp-server-mor`):
+
+| Tool | Source folders | Lines | Topics | Headline content |
+|---|---|---:|---:|---|
+| `mor_cln_practice` | 01, 02, 09, 2020_11_04 + A-phi.pdf + 2D-rethink + Bessel | 1263 | 12 | Full 71-line `CLN.m` MATLAB class verbatim; COMSOL `HelmholtzEquation(c=0)+withsol('sol2',...)` recursion idiom; Legendre analytical formulas to n=9; Robin/Infinite/Kelvin BC comparison incl. the `Kelvin_NG.m` documented failure mode |
+| `mor_cln_multiport` | 03, 04, 10, 11 | 801 | 10 | Kuriyama 2019 multi-expansion `K = C^T nu C + s_0 sigma` with 4 variants (A/T/3D/AK); FreeFEM++ `Multi-turnLadderSeries.edp` quoted; 3D HCurl/H1 saddle-point via `A_phi_Gridap.jl` |
+| `mor_cln_advanced` | 05, 06, 07, 14, 16, 2020_12_07 | 1172 | 12 | **FP-CLN** (Fixed-Point CLN; CEFC 2024 Sugahara-Tobita-Matsuo-Takahashi); 4-generation nonlinear lineage 2017-2023 culminating in Tobita's jw method; CLN-as-SPICE-block via Shindo electromagnet 437-line FreeFEM++ driver |
+| `mor_cln_specialty` | 08, 12, 13, 15 | 1148 | 11 | **Hiruma method** (Shingo Hiruma, Hokkaido Igarashi -> Kyoto Matsuo): non-symmetric Lanczos producing Cauer ladder from algebraic `(G+sC)x=b`, unifying CLN with PVL/SyPVL/PRIMA; **Nagamine error theory** (Hideaki Nagamine, Kyoto Matsuo): mesh-adequacy rule `delta_n >= 10*Delta_x` from Foster cut-off; BEM+FEM TSVD coupling reducing `O(M*N_m)` to `K=5-15` ports |
+| `mor_cln_collab` | 2021_CauerI_to_II, 2022_遠藤, 2023_松本, 2026_長方形, 2017_inverter | 854 | 10 | CauerI vs CauerII (continued-fraction expansion of Z(s) around s=0 vs s=infty); two-matrix Lanczos in K-inner-product (N<=7 stability); Endo @ Hosei 4-square+1-cylinder COMSOL LiveLink sweep; CLN-as-inverter-subcircuit 2017 design memo |
+
+**Wired through**:
+- `mor/server.py` -- 5 new `@mcp.tool()` entries + `--selftest`
+  exercises each (all 213k chars produced + each `overview` > 200 chars).
+- `docs/TOOLS.md` regenerated -- mcp-server-mor now lists 9 tools
+  (3 original + 5 CLN deep-dive + 1 status).
+
+**Suite**: 31/31 pytest pass + `mor --selftest` PASSED.
+
 ## 0.72.0 — COMSOL fork multilingual RAG absorption
 
 Released 2026-05-25.
