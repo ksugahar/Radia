@@ -23,6 +23,12 @@ N-stage Cauer extraction for a 2D square prism with affine arithmetic;
 together they form a precision-frontier-aware framework: Nagamine = verified
 high-stage extraction with intervals, this theory = small-N + asymptotic
 SIBC tail to skip the high-stage frontier entirely.
+
+Also includes the "xfem_vs_sibc" decision framework (2026-05-25 β-1 Phase
+1-3 benchmark): when to use Hiruma 2023 XFEM at the FE level vs the
+augmented CLN at the ROM level vs classical SIBC at the boundary, and
+the port-driven scope condition that makes augmented CLN inapplicable
+to volume-source problems without XFEM stacking.
 """
 
 
@@ -512,6 +518,140 @@ complete enough for IGTE 2026 + the eventual journal paper."
 """
 
 
+CLN_SIBC_ORTHOGONAL_XFEM_COMPARISON = """
+# XFEM vs SIBC vs augmented CLN: three abstraction layers of the same
+# SIBC asymptote — when to use which
+
+Three methods produce the high-frequency K_SIBC/√s asymptote of an
+eddy-current admittance Y(s); they are **complementary, not competing**,
+because each operates at a different abstraction layer of the same
+physics.  The decision is governed by the *use case* (single-frequency
+3D field solve vs frequency-sweep / time-domain / SPICE export) and
+the *source structure* (port-driven vs volume-source).
+
+## The three methods
+
+| Method | Abstraction layer | What it modifies |
+|--------|-------------------|------------------|
+| Classical SIBC | FE boundary condition | Replaces interior with surface Robin BC Z_s = √(jωμ/σ) |
+| XFEM (Hiruma 2023) | FE trial space | Enriches V_h with ψ(x) = exp(-γξ), γ = √(jωμσ) |
+| Augmented CLN (Sugahara 2026) | Reduced matrix (ROM) | Adds 1×1 Schur block z(s) = (s+d)/(K_SIBC √s) to K_r(s) |
+
+## Axis-by-axis comparison
+
+| Axis | classical SIBC | XFEM | Augmented CLN |
+|------|----------------|------|---------------|
+| Conductor interior mesh | NO (boundary only) | YES coarse (δ not resolved) | NO (after ROM extraction) |
+| DC limit | BROKEN (Z_s → 0) | exact (ψ → 1) | exact (z(0) = ∞) |
+| K_SIBC/√s asymptote | exact | exact | exact (structural) |
+| Wall band r/δ ~ 1 | leading-order, O(δ/L) | excellent | depends on base ROM basis |
+| Sharp edges / corners | BROKEN — needs HOIBC | OK (Hiruma demonstrated) | absorbed in Foster modes |
+| Curvature corrections | Senior/Mitzner HOIBC (c1=-H, c2=(K_g-H^2)/2, ...) | local ξ absorbs curvature | scalar K_SIBC = S √(σ/μ) |
+| Volume-source (uniform J_0 = σ) | OK | OK | **BROKEN** — FE residual σ(|Ω| - b_r^T M_r^{-1} b_r) does not vanish |
+| Port-driven (boundary excitation) | OK | OK | OK (Y_CLN(∞) → 0 naturally) |
+| Frequency sweep | Z_s(ω) refactor per ω | γ(ω) re-enrich + refactor per ω | single ROM, s → jω is one eval |
+| Time-domain / SPICE export | hard (Fourier round-trip) | hard (φ depends on ω) | natural (Schur 1-element → Foster-of-Cauers) |
+| DOF count | smallest (∂Ω only) | mid (88 DOF reached 0.14% at r/δ=15 on Hiruma cyl.) | smallest ROM (4-5 DOF) |
+| Implementation | trivial — every FE library | compound H1×H1 space + product-rule grad + bonus_intorder | one Schur row appended |
+| Nonlinear σ(B), μ(B) | needs ESIM extension | XFEM can carry it inside | σ(T) bilinear coupling breaks (ω·τ_thermal ≫ 1) — use table |
+
+## Decision tree
+
+```
+Q1.  Are you solving for spatial field distribution at one frequency?
+     YES → XFEM (best 3D field, handles volume-source AND corners)
+     NO  → continue.
+
+Q2.  Do you need a frequency sweep, time-domain, or SPICE export?
+     YES → Augmented CLN (single ROM, all-s validity)
+     NO  → continue.
+
+Q3.  Is the conductor body driven from a boundary port, or by an
+     interior volume source?
+     port-driven → Augmented CLN works (Y_CLN(∞) → 0).
+     volume-source (e.g. uniform J_0 = σ, Hiruma 2023 cylinder, IH
+                    workpiece in uniform inducing field) →
+                    XFEM at FE level, OR re-formulate as port-driven.
+
+Q4.  Pure industrial high-f only (DC accuracy not needed)?
+     YES → classical SIBC is the simplest, cheapest option.
+```
+
+## Use-case routing (matches Paper 1 §VIII table)
+
+| Application | Recommended |
+|-------------|-------------|
+| Single-frequency 3D, volume source, corner detail (Hiruma cyl., IH workpiece) | **XFEM** at FE level |
+| Single-frequency 3D, port-driven, corner detail | **XFEM** |
+| Frequency sweep + port-driven (R, L, port impedance vs f) | **Augmented CLN** (compact, fast) |
+| Time-domain transient + port-driven (PWM, dead-time, pulse) | **Augmented CLN → SPICE** export |
+| Multi-conductor BEM (5-turn coil cross-section, multi-strand) | **Augmented CLN** per element + BEM coupling |
+| Pure industrial high-f, no DC | **classical SIBC** (lowest cost) |
+| Volume-source workpiece that needs SPICE | **XFEM at FE → CLN extraction** (stack) OR re-formulate port-driven |
+
+## Stacking: XFEM ∘ Augmented CLN (Paper 1 open direction iii)
+
+For volume-source problems where SPICE export IS needed, the natural
+hybrid is
+
+```
+                     XFEM      base CLN      Schur block
+   continuous FEM → enriched → reduced  →  + (s+d)/(K_SIBC √s)
+   ────────────    ────────   ────────     ───────────────
+   physics solve   FE level   ROM         ROM tail
+                   cures      reduction   cures rational
+                   volume-                tail at high f
+                   source FE
+                   residual
+```
+
+Phase 3 of the β-1 benchmark (`examples/hiruma_xfem_comparison/`)
+verified that:
+  - Hiruma XFEM at 88 DOF gives 0.14% error at r/δ=15 on the
+    volume-source cylinder — confirms FE-level cure of the high-f
+    asymptote in volume-source.
+  - Augmented CLN alone gives Y_CLN(∞) = 53 (44 DOF mesh) → 13 (3558
+    DOF mesh), algebraic decay only — fails the C-axis ratio
+    r(f) → 1 in volume-source.
+Stacking (XFEM-enriched FE → ROM extraction → +Schur block) is the
+correct route when the problem mixes volume-source physics AND
+SPICE-export ambitions.
+
+## Reproduction status
+
+| Method | Implementation | Status |
+|--------|----------------|--------|
+| Hiruma XFEM ψ = exp(-γξ) on cylinder | `examples/hiruma_xfem_comparison/phase2_xfem_hiruma_enrichment.py` (NGSolve compound H1×H1 + manual product-rule grad + bonus_intorder=10) | ✓ 0.14% at r/δ=15, 88 DOF |
+| Augmented CLN Galerkin-Krylov | `examples/hiruma_xfem_comparison/phase3b_krylov_galerkin.py` | ✓ d = 4.78×10⁴ rad/s (4% from analytical wall band); ✗ r(f) → 1 fails for volume-source |
+| Classical SIBC Robin BC | `src/radia/panels/calc_fem_kelvin.py` | production-grade for port-driven |
+
+## Key lesson (port-driven scope)
+
+Theorem 1 of Paper 1 (single-DOF asymptote-preserving augmentation)
+provides Y_R = Y_CLN + K_SIBC √s / (s+d) which preserves the SIBC
+asymptote ONLY when Y_CLN(s → ∞) → 0.  This holds automatically when
+the source vector b is supported on a boundary port (b_r^T M_r^{-1} b_r
+= |∂Ω_port| in the discrete limit) but NOT when the source is a
+volume body (J_0 = σ over Ω) — then Y_CLN(∞) = σ(|Ω| - b_r^T M_r^{-1} b_r)
+is a FE-discretization residual that decays algebraically with mesh,
+not exponentially.  Paper 1 §III now states this as a Remark
+after Theorem 1; Paper 1 §VIII routes volume-source problems to XFEM.
+
+## References
+
+  - Hiruma, IEEE TMag 59(5), 2023 — XFEM ψ = exp(-γξ) on 2D cylinder.
+  - Hiruma, 2024 — XFEM extension / corner handling.
+  - Senior, IRE Trans. AP, 1962 — original HOIBC (c1 curvature term).
+  - Mitzner, 1967 — Mitzner SIBC (c2, c3 terms).
+  - Stoll, "Surface Impedance Concept" — classical SIBC reference.
+  - Sugahara 2026 Paper I, Theorem 1 — uniqueness of single-DOF Schur
+    augmentation, port-driven scope.
+  - β-1 Phase 1-3 benchmark (2026-05-25):
+      examples/hiruma_xfem_comparison/STATUS.md
+      memory/project_augmented_cln_scope_port_driven.md
+"""
+
+
 def get_cln_sibc_orthogonal_documentation() -> str:
     """Return full markdown documentation for the CLN+SIBC orthogonal theory."""
     return "\n\n".join([
@@ -522,6 +662,7 @@ def get_cln_sibc_orthogonal_documentation() -> str:
         CLN_SIBC_ORTHOGONAL_VERIFICATION,
         CLN_SIBC_ORTHOGONAL_NAGAMINE_LINK,
         CLN_SIBC_ORTHOGONAL_OUTLOOK,
+        CLN_SIBC_ORTHOGONAL_XFEM_COMPARISON,
     ])
 
 
@@ -529,15 +670,17 @@ def get_cln_sibc_orthogonal_section(name: str = "list") -> str:
     """Retrieve a specific section of the CLN+SIBC orthogonal documentation.
 
     Sections:
-        "list"          - list available section names
-        "overview"      - one-page summary of the construction
-        "matsuo"        - relation to Matsuo expansion-point theory
-        "kuriyama"      - Kuriyama 2019 multi-expansion canonical method
-        "math"          - derivation, orthogonality, asymptote
-        "verification"  - Mathematica results for 1D / 2D + sphere c_basis
-        "nagamine"      - link to Nagamine 2026 verified extraction
-        "outlook"       - 2D Nagamine square + 3D cuboid completion path
-        "all"           - full documentation
+        "list"           - list available section names
+        "overview"       - one-page summary of the construction
+        "matsuo"         - relation to Matsuo expansion-point theory
+        "kuriyama"       - Kuriyama 2019 multi-expansion canonical method
+        "math"           - derivation, orthogonality, asymptote
+        "verification"   - Mathematica results for 1D / 2D + sphere c_basis
+        "nagamine"       - link to Nagamine 2026 verified extraction
+        "outlook"        - 2D Nagamine square + 3D cuboid completion path
+        "xfem_vs_sibc"   - XFEM / classical SIBC / augmented CLN decision
+                           framework, port-driven scope, stacking strategy
+        "all"            - full documentation
     """
     table = {
         "overview":     CLN_SIBC_ORTHOGONAL_OVERVIEW,
@@ -547,12 +690,13 @@ def get_cln_sibc_orthogonal_section(name: str = "list") -> str:
         "verification": CLN_SIBC_ORTHOGONAL_VERIFICATION,
         "nagamine":     CLN_SIBC_ORTHOGONAL_NAGAMINE_LINK,
         "outlook":      CLN_SIBC_ORTHOGONAL_OUTLOOK,
+        "xfem_vs_sibc": CLN_SIBC_ORTHOGONAL_XFEM_COMPARISON,
         "all":          get_cln_sibc_orthogonal_documentation(),
     }
     if name == "list":
         return "Available sections: " + ", ".join(
             ["overview", "matsuo", "kuriyama", "math", "verification",
-             "nagamine", "outlook", "all"])
+             "nagamine", "outlook", "xfem_vs_sibc", "all"])
     if name not in table:
         return (f"Unknown section '{name}'. "
                 f"Use 'list' to see available sections.")

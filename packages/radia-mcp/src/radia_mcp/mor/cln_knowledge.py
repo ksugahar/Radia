@@ -286,6 +286,122 @@ combining PEEC-coil + CLN-workpiece can give the best of both.
 """
 
 
+CLN_PGD_POSITIONING = """
+# CLN's positioning within the broader MOR family: CLN as PGD
+
+## One-line claim (Köster-König-Bíró 2021, IEEE TMag 57(6))
+
+The Cauer Ladder Network method is a **specific instance of Proper
+Generalized Decomposition (PGD)** — a separated-variable a-priori
+model order reduction family — in which the temporal-factor recursion
+is replaced by the Cauer ladder network equations.
+
+## Why this matters
+
+When discussing CLN in cross-community settings (MOR theorists,
+POD / Reduced Basis / PGD community), the natural question is:
+"How does CLN relate to the established MOR families?"  Köster et
+al. 2021 answer this explicitly: CLN ⊂ PGD.  This is not a weakening
+of CLN — it is a **proper positioning** that grants CLN the
+generality theorems of PGD (a-priori convergence, separated-variable
+structure, enrichment-based extension) while preserving its
+distinctive Cauer-circuit realization.
+
+## The exact mathematical statement (Köster 2021 §III.A)
+
+PGD-class MOR methods are defined by separated representations
+    u(x_1, ..., x_M) ≈ Σ_{i=1}^{Q} F_i^1(x_1) ··· F_i^M(x_M),
+with orthogonal function sets {F_i^k} and recursions for each
+factor F_i^k (the factor recursions may be coupled).
+
+CLN realizes this with M=2, variables (t, x), as
+    u(t, x) ≈ Σ_{i=1}^{N} T_i(t) X_i(x),
+where:
+  - X_i(x) are the static FE basis fields (recursively computed
+    from K_0 + sources)
+  - T_i(t) are the temporal factors
+
+The crucial CLN-specific twist: instead of solving a recursion for
+T_i(t) in the time domain directly, the network of coupled ODEs for
+{T_i} is **realized as a Cauer ladder circuit** whose passive
+elements {L_n, R_n} are the integrals of X_i against the basis
+field operators.
+
+The X_i recursion remains classical PGD enrichment (greedy in
+modal hierarchy); the T_i "recursion" is the Cauer circuit, which
+is therefore reading position #i in a longer (in principle infinite)
+ladder.  This **PGD-in-space + Cauer-circuit-in-time** split is
+what makes CLN distinctive in the PGD family.
+
+## Implications for the Sugahara Lab Schur-augmentation work
+
+1. **Theorem 1 (single-DOF √s Schur augmentation) is base-agnostic.**
+   The proof of uniqueness depends only on the rational nature of
+   the base ROM (its $Y_R \\in \\mathbb{Q}(s)$ tail), not on whether
+   the base was constructed as canonical Cauer recursion (single
+   expansion point at $s\\!=\\!0$), Kuriyama multi-expansion-point
+   Krylov, or general PGD.  The Schur block z(s) = (s+d)/(K_SIBC √s)
+   is the structurally minimal asymptote-preserving augmentation
+   regardless of which rational base sits above.
+
+2. **The PGD framing legitimises the multi-expansion-point and
+   POD-style extensions.**  Kuriyama's 2019 Multi-K is in PGD
+   language a *multi-snapshot* PGD with snapshots at multiple
+   expansion frequencies, $K_0$-MGS orthogonalised.  General POD
+   (Sirovich-Berkooz-Holmes-Lumley snapshots) is a sibling.  All
+   three (canonical CLN, Multi-K, POD) are PGD instances at
+   different levels of basis enrichment, and Theorem 1 applies to
+   all of them.
+
+3. **Cauer-CLN naming convention is retained for continuity with the
+   eddy-current literature.**  Köster's PGD positioning does NOT
+   require us to rename CLN to "PGD-with-Cauer".  The lineage
+   Kameari 2018 → Hiruma 2020 → Kuriyama 2019 → Matsuo 2026 →
+   Sugahara 2026 all use the CLN/Cauer terminology and this paper
+   1 honors that convention.  The PGD relation is acknowledged
+   once in §I introduction with one sentence + citation.
+
+## Citation (canonical bibtex)
+
+    @article{Koester2021PGDCLN,
+      author={K{\\"o}ster, Niels and K{\\"o}nig, Oliver and
+              B{\\'i}r{\\'o}, Oszk{\\'a}r},
+      journal={IEEE Trans. Magn.},
+      title={Proper Generalized Decomposition With {Cauer} Ladder
+             Network Applied to Eddy Current Problems},
+      year={2021},
+      volume={57},
+      number={6},
+      pages={Art.\\\\ no.\\\\ 6300904},
+      doi={10.1109/TMAG.2021.3059800}
+    }
+
+## PDF location (Sugahara Lab archive)
+
+    W:\\03_文献・論文\\00_電磁界解析\\18_MOR_モデル縮約\\
+        10_CLN_Cauer_Ladder\\02_Niels\\
+        Proper_Generalized_Decomposition_With_Cauer_Ladder_Network_
+        Applied_to_Eddy_Current_Problems.pdf
+
+Same author group (Köster, König, Bíró / VVR Graz + Graz TU)
+has three additional CLN-extension papers in the same folder:
+"Generating CLN from Scalar Potentials" (2023), "Stranded wires
+via homogenization + CLN" (2023), and "FE Implementation of
+Iterative Scalar Potential Method" (2024).  All four cite
+Köster 2021 as the methodological backbone.
+
+## Rule of thumb for AI sessions
+
+When discussing CLN in the MOR / POD / PGD community context, cite
+Köster 2021 once to position CLN ⊂ PGD.  Do not over-cite — the
+PGD positioning is well-established and a single reference suffices.
+For CLN's distinctive Cauer-circuit realization, cite Kameari 2018.
+For multi-expansion-point variants, cite Kuriyama 2019.  For the
+non-rational asymptote bridge, cite the present Schur-augmentation
+result (Sugahara 2026, Theorem 1).
+"""
+
+
 def get_cln_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -296,6 +412,8 @@ def get_cln_documentation(topic: str = "all") -> str:
       "multiple"         - Multiple expansion points (Kuriyama 2019)
       "nonlinear"        - Extension to nonlinear ferromagnetic materials
       "applications"     - Industrial inductors, WPT, hybrid twin
+      "pgd_positioning"  - CLN as a PGD instance (Köster 2021), and
+                           implications for base-agnostic Theorem 1
     """
     topic = topic.lower().strip()
     if topic in ("overview", "intro"):
@@ -308,12 +426,16 @@ def get_cln_documentation(topic: str = "all") -> str:
         return CLN_NONLINEAR
     if topic in ("applications", "examples", "inductor", "wpt"):
         return CLN_APPLICATIONS
+    if topic in ("pgd_positioning", "pgd", "koester", "köster",
+                 "positioning", "mor_family"):
+        return CLN_PGD_POSITIONING
     if topic == "all":
         return "\n\n".join([
             CLN_OVERVIEW, CLN_BASIC_RECURSION, CLN_MULTIPLE_EXPANSION,
-            CLN_NONLINEAR, CLN_APPLICATIONS,
+            CLN_NONLINEAR, CLN_APPLICATIONS, CLN_PGD_POSITIONING,
         ])
     return (
         f"Unknown topic '{topic}'. Available: "
-        "all, overview, recursion, multiple, nonlinear, applications."
+        "all, overview, recursion, multiple, nonlinear, applications, "
+        "pgd_positioning."
     )
