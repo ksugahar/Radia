@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **319 tools** across 39 MCP servers.
+Total: **320 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -11,7 +11,7 @@ Total: **319 tools** across 39 MCP servers.
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 31 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 10 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
@@ -222,6 +222,7 @@ Module: `radia_mcp.fem.server`
 | `fem_gauge_open_boundary` | Gauging + open boundary techniques. |
 | `fem_large_scale_special` | Large-scale, error theory, multi-scale (Hollaus MSFEM), misc techniques. |
 | `fem_ngsolve_hierarchy` | NGSolve hierarchical H(curl) bases - Zaglmayr / nograds / tree-cotree. |
+| `fem_nonconforming_mesh_coupling` | Non-conforming mesh coupling: mortar / Nitsche / FETI-DP / BDDC / DG / |
 | `fem_overview` | FEM landscape: lab stack, decision tree, genealogy. |
 | `fem_potential_formulations` | Potential formulations: A-Omega, T-Omega, H, Reduced, Darwin. |
 | `fem_status` | (no description) |
