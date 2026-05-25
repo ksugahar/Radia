@@ -430,8 +430,22 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "Mathematica recipes: vector calc, Kelvin transform, "
                        "symbolic Maxwell, evaluation pipeline",
         "primary_tools": ["mathematica_recipes", "mathematica_status"],
-        "related": ["differential-forms", "radia-ngsolve"],
+        "related": ["differential-forms", "radia-ngsolve", "graph"],
         "tags": ["theory"],
+    },
+    "graph": {
+        "subpackage": "radia_mcp.graph",
+        "entry_point": "mcp-server-graph",
+        "description": "Sugahara Lab publication-figure style guide: "
+                       "IEEE / IEEJ font/size profiles, MATLAB + "
+                       "Matplotlib snippets, lab style rules (units in "
+                       "parentheses, no in-figure title, Times New Roman "
+                       "serif).  Promoted from mcp-server-document.",
+        "primary_tools": ["graph_style_guide", "graph_size_for_target"],
+        "related": ["mathematica", "literature-index"],
+        # 'meta' tag = cross-cutting utility usable by any paper /
+        # digest, not bound to a single solver domain.
+        "tags": ["meta"],
     },
     "literature-index": {
         "subpackage": "radia_mcp.literature_index",
@@ -441,7 +455,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
-        "related": ["meta"],
+        "related": ["meta", "graph"],
         "tags": ["meta"],
     },
 
@@ -524,6 +538,53 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
 }
 
 
+# Aliases: CLI script names (mcp-server-<X>) and underscore / hyphen
+# variants resolve to the catalog short name.  Without these, a user
+# who remembered the CLI binary name ('mcp-server-radia-meta') would
+# call `radia_mcp_get('radia-meta')` and get "Unknown server", because
+# the catalog uses short names like 'meta' (the 'radia-' prefix is only
+# in the CLI script name, not the catalog key).
+#
+# Rule of thumb: any string a user might reasonably type to refer to a
+# server -- the CLI suffix, the underscore subpackage name, the
+# hyphen short name -- should resolve to the same CATALOG entry.
+_ALIASES = {
+    # CLI-name -> catalog key
+    "radia-meta": "meta",
+    "radia-interop": "interop",
+    "radia_meta": "meta",
+    "radia_interop": "interop",
+}
+# Auto-generate underscore variants for every hyphenated catalog key
+# (e.g. 'magnetic-materials' resolves from both 'magnetic-materials' and
+# 'magnetic_materials').  Done once at module import to keep `get()` O(1).
+for _k in list(CATALOG.keys()):
+    if "-" in _k:
+        _ALIASES.setdefault(_k.replace("-", "_"), _k)
+del _k  # don't leak the loop variable
+
+
+def _resolve(name: str) -> str | None:
+    """Resolve a user-typed name to a canonical CATALOG key.
+
+    Accepts: catalog short names ('meta'), CLI-script suffixes
+    ('radia-meta'), and underscore variants ('radia_meta',
+    'magnetic_materials').  Returns None if no match.
+    """
+    if name in CATALOG:
+        return name
+    if name in _ALIASES:
+        return _ALIASES[name]
+    # Last-ditch: try the mcp-server-<name> prefix-stripped form
+    if name.startswith("mcp-server-"):
+        stripped = name[len("mcp-server-"):]
+        if stripped in CATALOG:
+            return stripped
+        if stripped in _ALIASES:
+            return _ALIASES[stripped]
+    return None
+
+
 def list_all() -> list[dict]:
     """Return catalog entries as a flat list."""
     return [{"name": n, **info} for n, info in CATALOG.items()]
@@ -535,8 +596,16 @@ def list_external() -> list[dict]:
 
 
 def get(name: str) -> dict | None:
-    """Look up a single server by short name."""
-    return CATALOG.get(name)
+    """Look up a single server by short name, CLI-name, or alias.
+
+    Resolves aliases first so callers can pass any of:
+        'meta'           - catalog short name
+        'radia-meta'     - CLI script suffix (mcp-server-radia-meta)
+        'radia_meta'     - underscore-variant
+        'mcp-server-meta' - full CLI name
+    """
+    key = _resolve(name)
+    return CATALOG.get(key) if key else None
 
 
 def find_by_tag(tag: str) -> list[dict]:
@@ -549,8 +618,11 @@ def find_by_tag(tag: str) -> list[dict]:
 
 
 def find_related(name: str) -> list[dict]:
-    """Servers listed as `related` of `name`."""
-    info = CATALOG.get(name)
+    """Servers listed as `related` of `name` (alias-aware)."""
+    key = _resolve(name)
+    if key is None:
+        return []
+    info = CATALOG.get(key)
     if not info:
         return []
     return [
