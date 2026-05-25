@@ -24,7 +24,12 @@ import mimetypes
 import os
 import re
 
-import markdown
+# `markdown` is lazy-imported inside md_to_html(); it's the only
+# consumer.  Keeping it out of the module-level import-chain lets
+# `import radia_mcp.md2html.server` succeed even when the optional
+# `markdown` package isn't installed (the [md2html] extra), which
+# matters for the radia-mcp meta-health selftest (CI).  Mirrors the
+# build123d/server.py pattern for optional heavy deps.
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +268,11 @@ def md_to_html(md_file: str, output_file: str | None = None,
     dict with keys ``output_file``, ``math_blocks``, ``images_embedded``,
     and ``log`` (string with embedding warnings / per-image notes).
     """
+    # Lazy import: the `markdown` package is an optional dep of
+    # radia-mcp ([md2html] extra).  Importing at module-top would
+    # break the meta-health selftest that runs without optional deps.
+    import markdown
+
     if output_file is None:
         output_file = md_file.replace('.md', '.html')
 
