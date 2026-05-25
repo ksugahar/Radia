@@ -281,14 +281,27 @@ def _find_gui_script():
 
 
 def register_associations():
-    """Register .vol / .sol -> radia-vol-viewer-gui.exe (preferred) or
-    pythonw + this_script.py (fallback for standalone tools/ checkout)."""
-    import subprocess
+    r"""Register .vol / .sol -> radia-vol-viewer-gui.exe (preferred) or
+    pythonw + this_script.py (fallback for standalone tools/ checkout).
+
+    Writes the association entries directly via the `winreg` stdlib
+    module instead of cmd.exe `assoc` + `ftype`.  The latter mangles
+    embedded quotes in the argv -> command-line round-trip: argv
+    `['cmd','/c','ftype', 'Radia.VolViewer="C:\\path\\app.exe" "%1"']`
+    reaches cmd.exe as `ftype Radia.VolViewer=\C:\path\app.exe\ \%1\`,
+    which silently fails to register the ftype handler (assoc is set
+    but ftype is empty).  Symptom seen 2026-05-24 deploying to 100号機
+    + mdx: `radia-vol-viewer --register` prints "Done" but
+    `ftype Radia.VolViewer` then returns "file type not found".
+
+    Writes to HKLM\SOFTWARE\Classes (machine-wide), which is what the
+    original `assoc`/`ftype` already targeted.  Requires admin.
+    """
+    import winreg
 
     gui_exe = _find_gui_script()
     if gui_exe:
-        cmd_vol = f'Radia.VolViewer="{gui_exe}" "%1"'
-        cmd_sol = f'Radia.SolViewer="{gui_exe}" "%1"'
+        command_str = f'"{gui_exe}" "%1"'
         print("Registering file associations (console-less gui-script):")
         print(f"  Launcher: {gui_exe}")
     else:
@@ -297,38 +310,84 @@ def register_associations():
         if not os.path.exists(pyw):
             pyw = py_exe
         this_script = os.path.abspath(__file__)
-        cmd_vol = f'Radia.VolViewer="{pyw}" "{this_script}" "%1"'
-        cmd_sol = f'Radia.SolViewer="{pyw}" "{this_script}" "%1"'
+        command_str = f'"{pyw}" "{this_script}" "%1"'
         print("Registering file associations (pythonw fallback -- "
               "radia-vol-viewer-gui.exe not found):")
         print(f"  Python (windowless): {pyw}")
         print(f"  Script:              {this_script}")
 
-    subprocess.run(["cmd", "/c", "assoc", ".vol=Radia.VolViewer"], check=False)
-    subprocess.run(["cmd", "/c", "ftype", cmd_vol], check=False)
-    subprocess.run(["cmd", "/c", "assoc", ".sol=Radia.SolViewer"], check=False)
-    subprocess.run(["cmd", "/c", "ftype", cmd_sol], check=False)
+    try:
+        # .vol -> Radia.VolViewer
+        winreg.SetValue(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Classes\.vol",
+            winreg.REG_SZ, "Radia.VolViewer",
+        )
+        winreg.SetValue(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Classes\Radia.VolViewer\shell\open\command",
+            winreg.REG_SZ, command_str,
+        )
+        # .sol -> Radia.SolViewer
+        winreg.SetValue(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Classes\.sol",
+            winreg.REG_SZ, "Radia.SolViewer",
+        )
+        winreg.SetValue(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Classes\Radia.SolViewer\shell\open\command",
+            winreg.REG_SZ, command_str,
+        )
+    except PermissionError as e:
+        print(f"ERROR: cannot write to HKLM\\SOFTWARE\\Classes ({e})",
+              flush=True)
+        print("  Re-run from an elevated (admin) shell.", flush=True)
+        sys.exit(1)
+
     print()
     print("Done.  Double-click any .vol or .sol to view.")
     print()
     print("Verification:")
     print('  cmd /c "assoc .vol"            -> .vol=Radia.VolViewer')
-    print('  cmd /c "ftype Radia.VolViewer" -> launcher path')
+    print('  cmd /c "ftype Radia.VolViewer" -> "<launcher>" "%1"')
 
 
 def unregister_associations():
-    """Restore default Netgen.VolFile association."""
-    import subprocess
+    """Restore default Netgen.VolFile association and drop .sol mapping.
+
+    Uses winreg for the same quote-mangling reason as register_associations.
+    """
+    import winreg
 
     print("Restoring default Netgen.VolFile association...")
     py_exe = sys.executable
-    subprocess.run(["cmd", "/c", "assoc", ".vol=Netgen.VolFile"], check=False)
-    subprocess.run(
-        ["cmd", "/c", "ftype",
-         f'Netgen.VolFile="{py_exe}" -m netgen "%1"'],
-        check=False,
-    )
-    subprocess.run(["cmd", "/c", "assoc", ".sol="], check=False)
+    netgen_command = f'"{py_exe}" -m netgen "%1"'
+    try:
+        winreg.SetValue(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Classes\.vol",
+            winreg.REG_SZ, "Netgen.VolFile",
+        )
+        winreg.SetValue(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Classes\Netgen.VolFile\shell\open\command",
+            winreg.REG_SZ, netgen_command,
+        )
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Classes",
+                0, winreg.KEY_WRITE,
+            ) as classes:
+                winreg.DeleteKey(classes, ".sol")
+        except FileNotFoundError:
+            pass
+    except PermissionError as e:
+        print(f"ERROR: cannot write to HKLM\\SOFTWARE\\Classes ({e})",
+              flush=True)
+        print("  Re-run from an elevated (admin) shell.", flush=True)
+        sys.exit(1)
     print("Done.")
 
 

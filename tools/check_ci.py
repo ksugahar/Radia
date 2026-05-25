@@ -12,9 +12,9 @@ Usage:
     python tools/check_ci.py --sha 1234567      # check a specific sha
 
 Exit code:
-    0 — all checked runs are SUCCESS (or no runs found)
-    1 — at least one FAILURE / CANCELLED in the checked set
-    2 — at least one still IN_PROGRESS (when --watch off)
+    0 -- all checked runs are SUCCESS (or no runs found)
+    1 -- at least one FAILURE / CANCELLED in the checked set
+    2 -- at least one still IN_PROGRESS (when --watch off)
 """
 from __future__ import annotations
 import argparse
@@ -97,7 +97,7 @@ def main() -> int:
             return rc
         if rc != 2:  # no in_progress / queued left
             return rc
-        print("(still running — re-checking in 30s)\n")
+        print("(still running -- re-checking in 30s)\n")
         time.sleep(30)
 
 

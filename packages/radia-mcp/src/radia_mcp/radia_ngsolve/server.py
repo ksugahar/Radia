@@ -612,14 +612,19 @@ def cln_sibc_orthogonal(section: str = "all") -> str:
 
     Args:
         section: Documentation section to return:
-            "list"          - list available sections
-            "overview"      - one-page summary of the construction
-            "matsuo"        - relation to Matsuo SA-26-014 expansion point
-            "math"          - derivation, orthogonality, asymptote
-            "verification"  - Mathematica results (1D slab + 2D rectangle)
-            "nagamine"      - link to Nagamine 2026 verified extraction
-            "outlook"       - 2D Nagamine square + 3D cuboid completion path
-            "all"           - full documentation (default)
+            "list"           - list available sections
+            "overview"       - one-page summary of the construction
+            "matsuo"         - relation to Matsuo SA-26-014 expansion point
+            "kuriyama"       - Kuriyama 2019 multi-expansion canonical method
+            "math"           - derivation, orthogonality, asymptote
+            "verification"   - Mathematica results (1D slab + 2D rectangle)
+            "nagamine"       - link to Nagamine 2026 verified extraction
+            "outlook"        - 2D Nagamine square + 3D cuboid completion path
+            "xfem_vs_sibc"   - XFEM (Hiruma 2023) / classical SIBC /
+                               augmented CLN decision framework, with
+                               port-driven scope and stacking strategy
+                               for volume-source problems
+            "all"            - full documentation (default)
 
     Returns:
         Markdown text of the requested section.
