@@ -34,6 +34,12 @@ from .large_scale_special_knowledge import get_large_scale_special_knowledge
 from .ngsolve_hierarchy_knowledge import get_ngsolve_hierarchy_knowledge
 from .xfem_comsol_knowledge import get_xfem_knowledge
 from .xfem_em_hiruma_knowledge import get_em_xfem_knowledge
+# Non-conforming mesh coupling (mortar / Nitsche / FETI-DP / DG /
+# HFSS Mesh Fusion analogs).  2026-05-26: distilled from
+# W:/03_文献・論文/00_電磁界解析/15_非接合/ (33 PDFs across 6 subfolders).
+from .nonconforming_mesh_coupling_knowledge import (
+    get_nonconforming_mesh_coupling_documentation,
+)
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -222,6 +228,58 @@ def fem_large_scale_special(topic: str = "large_scale") -> str:
             "all"               - Everything
     """
     return get_large_scale_special_knowledge(topic)
+
+
+@mcp.tool()
+def fem_nonconforming_mesh_coupling(topic: str = "overview") -> str:
+    """
+    Non-conforming mesh coupling: mortar / Nitsche / FETI-DP / BDDC / DG /
+    HFSS Mesh Fusion analogs in NGSolve.
+
+    Distilled from 33 PDFs across 6 subfolders at
+    W:/03_文献・論文/00_電磁界解析/15_非接合/ (Sugahara Lab curated).
+
+    Independent meshing of multiple regions coupled weakly at the
+    interface -- the academic foundation for Ansys HFSS Mesh Fusion.
+    Distinct from XFEM (single mesh + trial enrichment, see
+    fem_xfem_em_hiruma).
+
+    Args:
+        topic: One of:
+            "overview"          - When to use; decision matrix vs
+                                  XFEM/PML/Kelvin (DEFAULT)
+            "mortar"            - Lagrange-multiplier coupling
+                                  (Bernardi-Maday-Patera 1994 +
+                                  Buffa-Maday-Rapetti 2001 EM lineage)
+            "nitsche"           - Penalty-based, no LM space
+                                  (Nitsche 1971, Becker-Hansbo-
+                                  Stenberg 2003)
+            "feti_bddc"         - Iterative substructuring for HPC
+                                  (Farhat 1991, Dohrmann 2003,
+                                  Hofer-Langer IETI-DP for IGA)
+            "dg"                - Discontinuous Galerkin as mesh-
+                                  coupling (Arnold-Brezzi-Cockburn-
+                                  Marini 2002)
+            "hfss_mesh_fusion"  - Ansys product + academic analogs
+                                  (Zhang-Liang 2015/2020 transfinite
+                                  mortar)
+            "ngsolve_recipe"    - Concrete NGSolve code: H1 mortar /
+                                  Nitsche / HCurl Maxwell mortar
+            "em_applications"   - EM-specific: rotor-stator, harmonic
+                                  mortar (Egger 2020/2021), magnetic
+                                  brake
+            "lab_scenarios"     - Sugahara Lab adoption priority
+                                  (rotor-stator > accelerator shim >
+                                  IH coil > BEM-CLN)
+            "bibliography"      - 33-PDF catalog organized by subfolder
+            "all"               - Everything (~30 KB)
+
+    Aliases: feti_dp/bddc -> feti_bddc, hfss/mesh_fusion ->
+             hfss_mesh_fusion, ngsolve/recipe -> ngsolve_recipe,
+             em/applications -> em_applications, lab/scenarios ->
+             lab_scenarios, bib/papers -> bibliography.
+    """
+    return get_nonconforming_mesh_coupling_documentation(topic)
 
 
 # ============================================================

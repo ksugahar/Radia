@@ -1,0 +1,38 @@
+{
+  "phase": 1,
+  "description": "Nitsche/heterogeneous-mesh-density Poisson baseline",
+  "ngsolve_version": "6.2.2603+",
+  "order": 2,
+  "mu": 1.0,
+  "exact_solution": "u = sin(pi x) sin(pi y) / (2 pi^2)",
+  "results": [
+    {
+      "maxh_left": 0.2,
+      "maxh_right": 0.30000000000000004,
+      "n_dof": 59,
+      "l2_err": 0.0004062010984030775,
+      "t_solve_sec": 0.01695394515991211
+    },
+    {
+      "maxh_left": 0.1,
+      "maxh_right": 0.15000000000000002,
+      "n_dof": 227,
+      "l2_err": 3.781143293716339e-05,
+      "t_solve_sec": 0.009006261825561523
+    },
+    {
+      "maxh_left": 0.05,
+      "maxh_right": 0.07500000000000001,
+      "n_dof": 859,
+      "l2_err": 3.936379268935066e-06,
+      "t_solve_sec": 0.01991724967956543
+    },
+    {
+      "maxh_left": 0.025,
+      "maxh_right": 0.037500000000000006,
+      "n_dof": 3391,
+      "l2_err": 4.564481655857531e-07,
+      "t_solve_sec": 0.07579612731933594
+    }
+  ]
+}
