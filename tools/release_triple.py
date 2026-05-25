@@ -248,9 +248,60 @@ def _deploy_lab():
     ok("Phase 8 complete on LAB")
 
 
-def _deploy_100():
-    step("Phase 8 (100号機): kill + install + plugin install + verify + smoke (over SSH)")
-    repo = NAS_REPO_100
+def _check_pypi_propagation(versions):
+    """Refuse to deploy if PyPI hasn't propagated to repo's current versions.
+
+    Returns 0 on success, 2 if any package is stale.  Used by every PyPI
+    install target (100号機 + mdx) to prevent installing the OLD version
+    while CI is still publishing the new one.
+    """
+    info("checking PyPI propagation...")
+    for pkg, want in [("radia", versions["radia"]),
+                       ("cubit-mesh-export", versions["cubit-mesh-export"]),
+                       ("radia-mcp", versions["radia-mcp"])]:
+        p = run(["python", "-m", "pip", "index", "versions", pkg],
+                capture=True, check=False)
+        first = p.stdout.splitlines()[0] if p.stdout else ""
+        if want and want in first:
+            ok(f"PyPI {pkg} live at {want}")
+        else:
+            fail(f"PyPI {pkg} not yet at {want} (got {first!r}). "
+                 "Wait for CI / PyPI propagation, then retry.")
+            return 2
+    return 0
+
+
+def _deploy_pypi(ssh_host, label):
+    """PyPI-install recipe for downstream Cubit-equipped machines.
+
+    Used identically for 100号機 and mdx per the 2-tier distribution
+    policy (CLAUDE.md: "LAB = NAS editable, 100号機 + mdx = PyPI").
+    Before this refactor, _deploy_100 used `pip install <NAS path>` which
+    SHIPPED LAB WORKTREE BITS (including unreleased dev bumps) onto the
+    21-user shared lab box -- a quiet policy violation that defeated the
+    point of the "PyPI is the verified release channel" gate.
+
+    Recipe:
+      1. PyPI propagation check (refuse if stale)
+      2. force-kill Cubit + mcp-server-*.exe (otherwise pip install blocks
+         on locked Scripts/mcp-server-*.exe)
+      3. pip install --upgrade --no-cache-dir from PyPI, pinned to the
+         repo's current versions
+      4. cubit-plugin-install --all-users (regular-file deploy of the
+         freshly-installed wheel's plugin)
+      5. cubit-plugin-install --verify-only (sha256 sanity)
+      6. cubit-smoke-test (Cubit 2025.3 -batch run on ih_bem_sample.jou)
+    """
+    step(f"Phase 8 ({label}): kill + PyPI install + plugin install + verify + smoke (over SSH)")
+    v = _read_repo_versions()
+    rc = _check_pypi_propagation(v)
+    if rc != 0:
+        return rc
+
+    v_radia = v["radia"]
+    v_cme   = v["cubit-mesh-export"]
+    v_mcp   = v["radia-mcp"]
+
     ps_block = (
         "$ErrorActionPreference = 'Continue'; "
         "Get-Process -ErrorAction SilentlyContinue | Where-Object { "
@@ -260,16 +311,30 @@ def _deploy_100():
         "$_.Name -like 'mcp-server*' "
         "} | ForEach-Object { Stop-Process -Id $_.Id -Force }; "
         "Start-Sleep -Seconds 2; "
-        f"pip install --force-reinstall --no-deps --no-cache-dir '{repo}'; "
-        f"pip install --force-reinstall --no-deps --no-cache-dir '{repo}/packages/cubit-mesh-export'; "
-        f"pip install --force-reinstall --no-deps --no-cache-dir '{repo}/packages/radia-mcp'; "
+        # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
+        # machine already at X==Y is a NO-OP and leaves the on-disk files
+        # untouched. That bit us 2026-05-26: 100号機 was already at
+        # cubit-mesh-export==0.10.1 from a prior NAS-source install, so
+        # `--upgrade 0.10.1` did nothing and the worktree binary
+        # (1fd45675...) stayed on 100号機 even though PyPI 0.10.1 had a
+        # different binary (ef49da18...). Force-reinstall guarantees the
+        # PyPI wheel's bytes overwrite whatever is on disk, which is the
+        # whole point of "PyPI is the canonical channel" in the 2-tier policy.
+        f"pip install --upgrade --force-reinstall --no-deps --no-cache-dir "
+        f"'radia[cubit,gui]=={v_radia}' "
+        f"'radia-mcp=={v_mcp}' 'cubit-mesh-export=={v_cme}'; "
         "cubit-plugin-install --all-users; "
         "cubit-plugin-install --verify-only; "
         "cubit-smoke-test"
     )
-    run(["ssh", SSH_100, "pwsh", "-ExecutionPolicy", "Bypass",
+    run(["ssh", ssh_host, "pwsh", "-ExecutionPolicy", "Bypass",
          "-Command", ps_block])
-    ok("Phase 8 complete on 100号機")
+    ok(f"Phase 8 complete on {label}")
+    return 0
+
+
+def _deploy_100():
+    return _deploy_pypi(SSH_100, "100号機")
 
 
 def cmd_phase8(args):
@@ -283,9 +348,17 @@ def cmd_phase8(args):
     targets = args.target.split(",") if args.target else ["lab", "100"]
     for t in targets:
         t = t.strip().lower()
-        if t == "lab":  _deploy_lab()
-        elif t in ("100", "100号機", "100goki"): _deploy_100()
-        elif t == "all": _deploy_lab(); _deploy_100()
+        if t == "lab":
+            _deploy_lab()
+        elif t in ("100", "100号機", "100goki"):
+            rc = _deploy_100()
+            if rc != 0:
+                return rc
+        elif t == "all":
+            _deploy_lab()
+            rc = _deploy_100()
+            if rc != 0:
+                return rc
         else:
             fail(f"unknown target: {t!r}")
             return 2
@@ -293,28 +366,10 @@ def cmd_phase8(args):
 
 
 def cmd_phase8e(args):
-    """Upgrade mdx from PyPI (only after PyPI propagation)."""
-    step("Phase 8e: mdx PyPI install")
-    # check repo vs PyPI versions match — refuse if PyPI hasn't caught up
-    v = _read_repo_versions()
-    info("checking PyPI propagation...")
-    for pkg, want in [("radia", v["radia"]),
-                       ("cubit-mesh-export", v["cubit-mesh-export"]),
-                       ("radia-mcp", v["radia-mcp"])]:
-        p = run(["python", "-m", "pip", "index", "versions", pkg],
-                capture=True, check=False)
-        first = p.stdout.splitlines()[0] if p.stdout else ""
-        if want and want in first:
-            ok(f"PyPI {pkg} live at {want}")
-        else:
-            fail(f"PyPI {pkg} not yet at {want} (got {first!r}). "
-                 "Wait for CI / PyPI propagation, then retry.")
-            return 2
-
-    run(["ssh", SSH_MDX, "pwsh", "-Command",
-         "pip install --upgrade --no-deps radia cubit-mesh-export radia-mcp"])
-    ok("Phase 8e complete on mdx")
-    return 0
+    """Upgrade mdx from PyPI (only after PyPI propagation).  Same recipe
+    as Phase 8 for 100号機; the only difference is the SSH host.  Both
+    are PyPI verification points per CLAUDE.md 2-tier policy."""
+    return _deploy_pypi(SSH_MDX, "mdx")
 
 
 CROSS_MACHINE_PROBE = '''import hashlib, os
