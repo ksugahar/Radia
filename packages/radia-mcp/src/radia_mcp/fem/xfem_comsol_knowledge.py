@@ -128,9 +128,33 @@ when a future user asks "how do I model a magnetic core with a propagating
 fracture in COMSOL?" or "can I avoid remeshing my IH workpiece if it cracks
 during heating?".
 
+## Solid-mechanics XFEM vs Electromagnetic XFEM (Hiruma 2023)
+
+THIS module covers **solid-mechanics XFEM** (Jafari et al. 2021, in
+COMSOL Multiphysics):  Heaviside + asymptotic crack-tip enrichment,
+level-set crack tracking, mixed-mode SIF extraction.
+
+A **structurally distinct** electromagnetic XFEM exists, covered by the
+sibling tool ``fem_xfem_em_hiruma``:
+
+| Aspect          | Solid-mech XFEM (this) | EM-XFEM (Hiruma 2023)  |
+|-----------------|------------------------|------------------------|
+| Reference       | Jafari et al. 2021     | Hiruma et al. IEEE TMag 59(5), 2023 |
+| Implementation  | COMSOL + LiveLink/MATLAB | NGSolve compound H1 x H1 |
+| Enrichment      | Heaviside + 4 asymptotic | exp(-gamma * xi) (one) |
+| Goal            | Stress singularities     | Skin-depth resolution  |
+| Domain          | Cracked solid            | Conductor with eddy current |
+| Mesh treatment  | Cut by crack             | Conforms to boundary   |
+| Lab artifact    | examples/cracked_iron/   | examples/hiruma_xfem_comparison/ |
+
+If the user's question is about eddy currents / induction heating /
+high-frequency EM (rather than fracture mechanics), route them to
+``fem_xfem_em_hiruma`` instead.
+
 See also:
     - fem_elements('xfem')   - quick XFEM section in the elements catalog
     - fem_potential_formulations('catalog')
+    - fem_xfem_em_hiruma     - electromagnetic XFEM sibling
     - radia_mcp.electromagnet (no XFEM yet; possible multi-physics coupling)
 """
 
