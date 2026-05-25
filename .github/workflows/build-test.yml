@@ -16,7 +16,18 @@ concurrency:
 jobs:
   build-test:
     runs-on: [self-hosted, windows-radia]
-    timeout-minutes: 45
+    # Was 45 min; bumped to 70 on 2026-05-25 after sha 357da370 ran
+    # past the 45-min job cap during "Build wheel" step. Actual step
+    # timing observed:
+    #   Setup + checkout + env:  ~4 min
+    #   Build with MSVC + MKL:   26 min (30-min step timeout)
+    #   Verify + fetch:          <1 min
+    #   Run basic tests:          7 min
+    #   Run motor panel tests:   <1 min
+    #   Build wheel:              6 min (was cancelled at 6:15)
+    #   + remaining upload/MCP steps: ~5-10 min
+    # Total ~50-60 min, so 70 leaves ~10-15 min slack.
+    timeout-minutes: 70
 
     # NGSolve + Netgen from pip install (6.2.2602)
     env:
