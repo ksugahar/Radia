@@ -33,6 +33,7 @@ from .time_domain_axisym_knowledge import get_time_domain_axisym_knowledge
 from .large_scale_special_knowledge import get_large_scale_special_knowledge
 from .ngsolve_hierarchy_knowledge import get_ngsolve_hierarchy_knowledge
 from .xfem_comsol_knowledge import get_xfem_knowledge
+from .xfem_em_hiruma_knowledge import get_em_xfem_knowledge
 
 
 mcp = FastMCP("mcp-server-fem")
@@ -164,6 +165,47 @@ def fem_xfem_comsol(topic: str = "overview") -> str:
             "all"               - Everything (concatenated)
     """
     return get_xfem_knowledge(topic)
+
+
+@mcp.tool()
+def fem_xfem_em_hiruma(topic: str = "overview") -> str:
+    """
+    EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current
+    skin-depth resolution.  Distinct from solid-mechanics XFEM
+    (fem_xfem_comsol).  Lab-verified implementation in
+    examples/hiruma_xfem_comparison/ (beta-1 Phase 1-4, 2026-05-25).
+
+    Reference:
+        Hiruma et al., "Extended Finite Element Method for Eddy-Current
+        Problems with Surface Skin Effect", IEEE Trans. Magn. 59(5), 2023.
+
+    Independent NGSolve reproduction:
+        88-DOF compound H1 x H1 + manual product-rule gradient gives
+        0.14% error at r/delta = 15 on the Hiruma cylinder (Phase 2).
+
+    Args:
+        topic: One of:
+            "overview"               - High-level summary, vs solid-mech XFEM (DEFAULT)
+            "enrichment_function"    - psi = exp(-gamma*xi); frequency dependence;
+                                       freezing strategy for ROM use
+            "ngsolve_implementation" - NGSolve compound H1 x H1 pattern,
+                                       three pitfalls (bonus_intorder,
+                                       product-rule, enrichment scope)
+            "cylinder_validation"    - Phase 2: 0.14% at r/delta=15, 88 DOFs
+            "volume_source_scope"    - Phase 3: cures FE residual that breaks
+                                       augmented CLN on volume-source
+            "cln_stacking_negative"  - Phase 4: XFEM does NOT extend canonical
+                                       CLN Hankel-QD stability (rejected)
+            "decision_table"         - When to use EM-XFEM: layer + use case
+            "ngsxfem_relation"       - vs the ngsxfem library (cut-FEM XFEM,
+                                       Lehrenfeld et al.); when ngsxfem WOULD
+                                       be appropriate (it is NOT for Hiruma
+                                       PUFEM)
+            "reproduction"           - Run order for Phase 1-4 benchmarks
+            "lab_files"              - Paths to scripts and figures
+            "all"                    - Everything (concatenated)
+    """
+    return get_em_xfem_knowledge(topic)
 
 
 @mcp.tool()
