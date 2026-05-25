@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **291 tools** across 37 MCP servers.
+Total: **297 tools** across 38 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -40,6 +40,7 @@ Total: **291 tools** across 37 MCP servers.
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
+| [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 6 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 6 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
@@ -622,6 +623,21 @@ Module: `radia_mcp.mathematica.server`
 | `mathematica_to_tex` | Wolfram の TeXForm を文字列で取得 (paper / 数式 DB 登録用)。 |
 | `mathematica_unit_convert` | 物理単位変換 (Wolfram Quantity / UnitConvert)。 |
 | `mathematica_vector_calc` | ベクトル解析: Curl / Div / Grad / Laplacian / Cross / Dot。 |
+
+## `mcp-server-graph`
+
+_Sugahara Lab publication-figure style guide: IEEE / IEEJ font/size profiles, MATLAB + Matplotlib snippets, lab style rules (units in parentheses, no in-figure title, Times New Roman serif).  Promoted from mcp-server-document._
+
+Module: `radia_mcp.graph.server`
+
+| Tool | Description |
+|---|---|
+| `graph_size_for_target` | Recommend output figure size + font settings for a target embedding. |
+| `graph_status` | (no description) |
+| `graph_style_guide` | Return the lab-standard graph style guide. |
+| `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
+| `paper_figure_quality_rules` | Why paper-quality figures need a margin-efficiency gate. |
+| `paper_figure_recipe` | Generate a self-contained Python recipe for a paper-quality figure. |
 
 ## `mcp-server-literature-index`
 
