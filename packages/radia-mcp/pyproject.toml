@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.76.0"
+version = "0.77.0"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
@@ -114,6 +114,12 @@ mcp-server-maglev-linear = "radia_mcp.maglev_linear.server:main"
 mcp-server-fusion = "radia_mcp.fusion.server:main"
 mcp-server-rna-mec = "radia_mcp.rna_mec.server:main"
 mcp-server-literature-index = "radia_mcp.literature_index.server:main"
+# 2026-05-26: graph -- Sugahara Lab publication-figure style guide.
+# Promoted from s:/mcp-server/src/mcp_server_document/graph/ into
+# radia-mcp as a standalone subpackage.  Surfaces IEEE/IEEJ font/size
+# profiles + MATLAB/Matplotlib snippets via graph_style_guide /
+# graph_size_for_target tools.
+mcp-server-graph = "radia_mcp.graph.server:main"
 # 2026-05-24 evening (radia-mcp 0.70.0): GUI panel review skill-chain.
 # Surfaces panel-cli-diff / panel-review / panel-qt-test / panel-preview /
 # panel-smoke + known bug catalogue (val()-checkbox-truthy, AMG-class
