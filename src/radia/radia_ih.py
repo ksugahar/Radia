@@ -963,14 +963,89 @@ class IHPanel(ModePanel):
             self._heat_panel._set_row_visible("_sec_mesh_type", False)
             self._heat_panel._set_row_visible("mesh_type", False)
             # rotation_rpm: hidden + zeroed for static, visible for
-            # rotating + axisym.
-            if is_thermal_3d_static and rpm_w is not None:
-                rpm_w.setText("0")
-                self._heat_panel._set_row_visible("rotation_rpm", False)
+            # rotating + axisym.  Cache the user-entered value before
+            # zeroing so a 3D-rotating(1200) -> 3D-static -> 3D-rotating
+            # round-trip restores 1200 instead of leaving the user to
+            # retype.  Bug 2026-05-25: the previous code unconditionally
+            # wrote "0" into rpm_w on every static-method visit and lost
+            # whatever the user had typed before.
+            #
+            # rotation_rpm is a QDoubleSpinBox since v4.78.0 (was
+            # QLineEdit pre-v4.78.0); use .value() / .setValue() on it.
+            from PySide6.QtWidgets import QDoubleSpinBox, QLineEdit
+            def _rpm_get():
+                if isinstance(rpm_w, QDoubleSpinBox):
+                    return float(rpm_w.value())
+                if isinstance(rpm_w, QLineEdit):
+                    txt = rpm_w.text().strip()
+                    return float(txt) if txt else 0.0
+                return 0.0
+            def _rpm_set(v):
+                if isinstance(rpm_w, QDoubleSpinBox):
+                    rpm_w.setValue(float(v))
+                elif isinstance(rpm_w, QLineEdit):
+                    rpm_w.setText(str(v))
+            if rpm_w is not None:
+                if is_thermal_3d_static:
+                    current = _rpm_get()
+                    if current > 0.0:
+                        # User had a non-zero rpm before switching to
+                        # static -- remember it so we can restore on
+                        # return to a rotating-capable mode.
+                        self._heat_panel.setProperty(
+                            "_last_rotation_rpm", current)
+                    _rpm_set(0.0)
+                    self._heat_panel._set_row_visible(
+                        "rotation_rpm", False)
+                else:
+                    self._heat_panel._set_row_visible(
+                        "rotation_rpm", is_thermal_3d_rotating
+                                         or is_thermal_axisym)
+                    # Restore cached value when returning from static
+                    # (only if the user hasn't already typed something).
+                    if _rpm_get() == 0.0:
+                        cached = self._heat_panel.property(
+                            "_last_rotation_rpm")
+                        if cached is not None:
+                            try:
+                                _rpm_set(float(cached))
+                            except (TypeError, ValueError):
+                                pass
+            # axisym: rotation_rpm is metadata-only -- the answer does
+            # NOT depend on rpm in the axisym solver (rotation is
+            # implicit in the axisymmetric assumption).  Grey out the
+            # widget so the user sees that typing a value won't change
+            # the result.  Also grey rotation_axis (rotation is around
+            # the implicit symmetry axis, which the .vol's r/z plane
+            # encodes -- no axis choice to make).
+            axis_w = self._heat_panel._widgets.get("rotation_axis")
+            if is_thermal_axisym:
+                if rpm_w is not None:
+                    rpm_w.setEnabled(False)
+                    rpm_w.setToolTip(
+                        "Axisym: rotation is implicit (workpiece is "
+                        "rotation-symmetric by construction); the "
+                        "value is recorded as metadata only and does "
+                        "NOT affect the solve.  Pick a 3D Thermal "
+                        "method if you want rpm to drive the physics.")
+                if axis_w is not None:
+                    axis_w.setEnabled(False)
+                    self._heat_panel._set_row_visible(
+                        "rotation_axis", False)
             else:
-                self._heat_panel._set_row_visible(
-                    "rotation_rpm", is_thermal_3d_rotating
-                                     or is_thermal_axisym)
+                # Non-axisym thermal methods restore the rotation_axis
+                # row + re-enable both widgets (unless Source=Uniform
+                # has already disabled them via _on_heat_source_changed).
+                if axis_w is not None:
+                    self._heat_panel._set_row_visible(
+                        "rotation_axis",
+                        is_thermal_3d_rotating)
+                # Re-trigger source change to refresh Uniform/Spatial
+                # enable state (Uniform also greys these widgets).
+                src_w = self._heat_panel._widgets.get("heat_source")
+                if src_w is not None:
+                    self._heat_panel._on_heat_source_changed(
+                        src_w.currentText())
             # n_phi_samples (axisym only) -- HeatPanel's own
             # _on_mesh_type_changed handler already toggles this
             # based on mesh_type; nothing extra needed here.
