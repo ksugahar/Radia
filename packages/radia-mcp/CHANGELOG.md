@@ -5,6 +5,66 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.77.0 — graph subpackage + 4 housekeeping items from review
+
+Released 2026-05-26.
+
+Outcome of an in-conversation `radia-mcp` review (2026-05-26).  The
+review found the package healthy (37/37 servers import OK, meta_health
+9/9 PASS) and surfaced 4 small housekeeping gaps; all four are
+addressed in this release plus the `graph` subpackage migration that
+follows.
+
+What shipped:
+
+1. **NEW: `radia_mcp.graph` subpackage** — promoted from
+   `s:/mcp-server/src/mcp_server_document/graph/`.  Sugahara Lab
+   publication-figure style guide: IEEE / IEEJ font/size profiles,
+   MATLAB + Matplotlib snippets, lab style rules (units in parentheses,
+   no in-figure title, Times New Roman serif).  Two MCP tools
+   (`graph_style_guide`, `graph_size_for_target`) + 10 Python helpers
+   (apply_lab_style / lab_figsize / lab_savefig / tighten_margins /
+   label_curve_endpoints / add_slope_guide / check_legend_overlap /
+   find_best_legend_loc / plot_asymptote_ratio_sweep /
+   plot_basis_size_convergence) for direct import.  938-line tools.py
+   carried over verbatim with `mcp_server_document` → `radia_mcp` path
+   updates in 2 docstring examples.  Catalog count: **37 → 38**.
+
+2. **NEW: LICENSE file (BSD-3-Clause)**.  Closes the SPDX-compliance
+   gap where pyproject.toml declared the license but no LICENSE file
+   was on disk.  PyPI Warehouse / pip-licenses now see the full text.
+
+3. **NEW: `tests/test_each_server_selftest.py`** (40 tests, ~95s).
+   Subprocess-launches every `mcp-server-<x> --selftest` script,
+   complementing `test_meta_health.py` which only import-tests.
+   Catches: broken `pyproject.toml [project.scripts]`, stale editable
+   install after rename, `if __name__ == "__main__"` bugs, cp932
+   decode failures in selftest output (decode as UTF-8 with
+   errors='replace' on the harness side).  Auto-parameterized from
+   the meta catalog so new servers are tested automatically.
+   Includes a floor invariant (`test_at_least_30_servers_runnable`)
+   that detects the LAB editable-install drift incident pattern from
+   CLAUDE.md 2026-05-19.
+
+4. **Catalog alias resolution** (`radia_mcp.meta.catalog`).
+   `catalog.get('radia-meta')`, `('radia_meta')`, `('mcp-server-radia-meta')`,
+   `('magnetic_materials')`, etc. now all resolve.  Eliminates the trap
+   where a user typing the CLI script name into `radia_mcp_get(...)`
+   would see "Unknown server".  Adds `_ALIASES` map (auto-populated
+   with underscore variants of every hyphenated key) + `_resolve()`
+   helper.  `find_related()` is also alias-aware.
+
+5. **Review finding: `panel_review.review_a_panel` is NOT a missing
+   `@mcp.tool()`** — it is correctly declared as `@mcp.prompt()`.
+   MCP Prompts are a distinct protocol surface from MCP Tools and
+   don't show up in a `@mcp.tool` grep.  No change needed; documented
+   for future audits.
+
+Suite: 71/71 pytest pass (9 meta_health + 22 chroma_multilingual +
+38 server selftests + 2 selftest-harness invariants).
+mcp-server-graph --selftest verifies all 7 figure profiles (digest /
+paper / presentation / matlab-oversized).
+
 ## 0.76.0 — optuna: 5 advanced lab BBO recipes (no Gurobi spinoff)
 
 Released 2026-05-25.

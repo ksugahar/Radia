@@ -48,11 +48,33 @@ _REAL_STDOUT_FD = os.dup(1)
 os.dup2(2, 1)    # fd 1 -> fd 2: any C-level print to stdout now hits stderr
 
 # Find Cubit binding directory (sibling of bin/python3/).
+# Was hardcoded "Cubit 2025.3" until 2026-05-25; now auto-discovers the
+# highest-version "Coreform Cubit *" under C:\Program Files. Honors
+# CUBIT_BIN_DIR (legacy var) and CUBIT_INSTALL_DIR (preferred) overrides.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_CUBIT_BIN = os.environ.get(
-    "CUBIT_BIN_DIR",
-    r"C:\Program Files\Coreform Cubit 2025.3\bin",
-)
+
+
+def _discover_cubit_bin():
+    """Mirror of tools/find_cubit.py logic, inlined to avoid a
+    sys.path bootstrap dependency in this daemon's import order."""
+    if (override := os.environ.get("CUBIT_BIN_DIR")):
+        return override
+    if (inst := os.environ.get("CUBIT_INSTALL_DIR")):
+        return os.path.join(inst, "bin")
+    import glob as _g
+    cands = _g.glob(r"C:\Program Files\Coreform Cubit *")
+    if not cands:
+        return r"C:\Program Files\Coreform Cubit 2025.12\bin"  # last-resort
+    def _ver(p):
+        name = os.path.basename(p).replace("Coreform Cubit", "", 1).strip()
+        try:
+            return tuple(int(x) for x in name.split("."))
+        except ValueError:
+            return (0,)
+    return os.path.join(max(cands, key=_ver), "bin")
+
+
+_CUBIT_BIN = _discover_cubit_bin()
 if _CUBIT_BIN not in sys.path:
     sys.path.insert(0, _CUBIT_BIN)
 
