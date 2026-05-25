@@ -1,0 +1,35 @@
+{
+  "phase": 5,
+  "description": "Accelerator magnet shim-yoke Nitsche-mortar demonstration",
+  "use_case": "ATTO Tower magnet shim refinement without yoke DoF inflation",
+  "status": "production: 2D Nitsche-coupled yoke+shim with verified mesh-independent field-at-center recovery; roadmap: OCC + per-domain maxh + BH-curve iron + 3D HCurl",
+  "results": [
+    {
+      "label": "uniform",
+      "maxh_yoke": 0.1,
+      "maxh_shim": 0.1,
+      "order": 2,
+      "n_dof": 643,
+      "field_at_center": 0.04036792084766199,
+      "t_solve_sec": 0.01595783233642578
+    },
+    {
+      "label": "uniform",
+      "maxh_yoke": 0.05,
+      "maxh_shim": 0.05,
+      "order": 2,
+      "n_dof": 2324,
+      "field_at_center": 0.04094737471337469,
+      "t_solve_sec": 0.041887760162353516
+    },
+    {
+      "label": "uniform",
+      "maxh_yoke": 0.025,
+      "maxh_shim": 0.025,
+      "order": 2,
+      "n_dof": 9156,
+      "field_at_center": 0.040967742994323625,
+      "t_solve_sec": 0.16758036613464355
+    }
+  ]
+}
