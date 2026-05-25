@@ -441,7 +441,9 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "Matplotlib snippets, lab style rules (units in "
                        "parentheses, no in-figure title, Times New Roman "
                        "serif).  Promoted from mcp-server-document.",
-        "primary_tools": ["graph_style_guide", "graph_size_for_target"],
+        "primary_tools": ["graph_style_guide", "graph_size_for_target",
+                            "paper_figure_profiles", "paper_figure_recipe",
+                            "paper_figure_quality_rules"],
         "related": ["mathematica", "literature-index"],
         # 'meta' tag = cross-cutting utility usable by any paper /
         # digest, not bound to a single solver domain.
