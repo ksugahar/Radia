@@ -273,19 +273,29 @@ class NearFieldSource:
             if n_hat is None:
                 continue
 
-            # Sample E, H at face centroid via NGSolve point evaluation
+            # Sample E, H at face centroid via NGSolve point evaluation.
+            # For a vector-valued GridFunction / CoefficientFunction,
+            # `gf(mp)` returns the FULL vector as a tuple/np.array;
+            # individual components are then ` ...[i] `.
             mp = mesh(*c)
+            val = gf_H(mp)
             try:
-                H_at = np.asarray([complex(gf_H[i](mp)) for i in range(3)],
-                                   dtype=np.complex128)
-            except (TypeError, IndexError):
-                # gf_H may be a scalar CF (rare); not expected here
-                H_at = np.asarray([complex(gf_H(mp)), 0.0j, 0.0j])
+                vec = np.asarray(val, dtype=np.complex128).reshape(-1)
+            except Exception:
+                # Scalar CF fallback (very rare)
+                vec = np.asarray([complex(val), 0.0j, 0.0j])
+            if vec.shape[0] < 3:
+                vec = np.concatenate([vec, np.zeros(3 - vec.shape[0],
+                                                       dtype=np.complex128)])
+            H_at = vec[:3]
 
             if gf_E is not None:
-                E_at = np.asarray([complex(gf_E[i](mp)) for i in range(3)],
-                                   dtype=np.complex128)
-                E_list.append(E_at)
+                val_e = gf_E(mp)
+                ve = np.asarray(val_e, dtype=np.complex128).reshape(-1)
+                if ve.shape[0] < 3:
+                    ve = np.concatenate([ve, np.zeros(3 - ve.shape[0],
+                                                         dtype=np.complex128)])
+                E_list.append(ve[:3])
 
             centroids.append(c)
             normals.append(n_hat)
@@ -655,6 +665,98 @@ class NearFieldSource:
             nodes.extend([v0, v1, v2])
             tris.append((base_idx, base_idx + 1, base_idx + 2))
         return nodes, tris
+
+    # -----------------------------------------------------------------
+    # Projection onto an NGSolve GridFunction (the CF -> .sol path)
+    # -----------------------------------------------------------------
+
+    def project_to_h1_vector(self, mesh, order: int = 1, definedon=None,
+                              save_path=None):
+        """Project the static-H reconstruction onto a VectorH1 GridFunction.
+
+        Builds a `VectorH1(mesh, order=order)` GridFunction and fills it
+        by sampling `evaluate_static_H()` at each free vertex /  DOF
+        coordinate.  Optionally restrict to a sub-region via `definedon`
+        (e.g. `mesh.Materials("outer")`).
+
+        For order=1 H1 the DOFs are vertices, so this gives the
+        canonical nodal interpolant of the NFS reconstruction.  For
+        order>1 it's a sub-optimal interpolation (vertices only); a
+        proper L2 projection via `gfu.Set(cf)` would need a true
+        CoefficientFunction wrapper, which is a planned roadmap item.
+
+        Args:
+            mesh: NGSolve Mesh (different mesh than the one used for
+                  extraction is fine; the recon. is a free-space field).
+            order: VectorH1 polynomial order (1 recommended for this
+                   sampling-based path).
+            definedon: Optional `mesh.Materials(...)` to restrict to a
+                       sub-region.  Important: must be OUTSIDE the NFS
+                       extraction surface, else the reconstruction is
+                       not physically meaningful (will give 0 inside,
+                       by the equivalence theorem null-field property).
+            save_path: If set, also call `gfu.Save(save_path)`.
+
+        Returns:
+            (gfu, n_dofs) -- the populated GridFunction + number of
+            non-zero DOFs filled.
+        """
+        try:
+            from ngsolve import VectorH1, GridFunction
+        except ImportError as e:
+            raise ImportError(
+                "project_to_h1_vector requires NGSolve") from e
+
+        # NGSolve VectorH1 doesn't accept definedon=None; only pass the
+        # kwarg when we actually want a sub-region restriction.
+        kw = {"order": order}
+        if definedon is not None:
+            kw["definedon"] = definedon
+        fes = VectorH1(mesh, **kw)
+        gfu = GridFunction(fes)
+        gfu.vec[:] = 0.0
+
+        # Collect vertex coordinates from the mesh.  For order=1, the
+        # H1 DOFs are EXACTLY the mesh vertices, so sampling at vertices
+        # IS the nodal interpolation.
+        ngmesh = mesh.ngmesh
+        pts = np.asarray([(p[0], p[1], p[2])
+                            for p in ngmesh.Points()],
+                          dtype=np.float64)
+        # NGSolve uses 1-indexed vertex ids; pts[i] corresponds to
+        # vertex id i+1 in NGSolve's MeshElement.vertices interface.
+
+        # Vectorised evaluation
+        H_at_vertices = self.evaluate_static_H(pts).real  # (Nv, 3)
+
+        # Assign to the VectorH1 GridFunction.  For each vertex, the
+        # vertex-coupled DOFs hold the (Hx, Hy, Hz) value.  VectorH1
+        # stores them interleaved per-vertex.
+        free_dofs = fes.FreeDofs()
+        # Use Set() with the analytic CF would be cleaner but requires
+        # an NGSolve-native CF wrapper.  Sampling-based fallback:
+        n_filled = 0
+        for v_id in range(pts.shape[0]):
+            try:
+                # GetDofNrs returns the DOF indices for a vertex node
+                dofs = fes.GetDofNrs(__import__("ngsolve").NodeId(
+                    __import__("ngsolve").VERTEX, v_id))
+            except Exception:
+                # Fallback for VectorH1 layout: order=1 has dim_per_node
+                # consecutive DOFs starting at v_id * 3.
+                dofs = [v_id * 3, v_id * 3 + 1, v_id * 3 + 2]
+            if len(dofs) != 3:
+                continue
+            for i, d in enumerate(dofs):
+                if d >= 0 and (free_dofs is None or free_dofs[d]):
+                    gfu.vec[d] = float(H_at_vertices[v_id, i])
+                    n_filled += 1
+        n_filled //= 3  # convert back to vertex count
+
+        if save_path is not None:
+            gfu.Save(str(save_path))
+
+        return gfu, n_filled
 
     # -----------------------------------------------------------------
     # Re-radiation as Radia source (static only, planned)
