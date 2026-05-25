@@ -25,14 +25,23 @@ MCP server itself loads without matplotlib so `mcp-server-graph
 --selftest` can run on machines without a plotting stack.
 """
 
-from . import tools          # noqa: F401
 # `_paper_figure` is the private module that owns the PROFILES + helpers;
 # we re-export the public symbols below.  The module is intentionally
 # underscore-prefixed so that `from radia_mcp.graph import paper_figure`
 # unambiguously gives the FUNCTION (the user's main entry point), not
 # the module (which would shadow it under a flat `from .x import x`
 # pattern).
-from . import _paper_figure   # noqa: F401
+#
+# 2026-05-26: removed redundant `from . import tools` (line 28) and
+# `from . import _paper_figure` (line 35) statements that registered
+# the submodules as attributes early.  Under certain .pyc-cache states
+# on the self-hosted Windows CI runner, those bare `from . import X`
+# lines fired before the submodule was attribute-resolvable in the
+# partially-initialized package, producing a spurious "circular import"
+# even though the actual import graph is acyclic.  The `from .X import
+# symbol` lines below register the submodules as a side effect of
+# Python's submodule-resolution logic, so removing the explicit lines
+# loses nothing and avoids the race.
 
 # Public helper functions for direct import:
 #   from radia_mcp.graph import lab_figsize, apply_lab_style
