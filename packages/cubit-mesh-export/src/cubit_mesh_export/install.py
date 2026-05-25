@@ -69,8 +69,25 @@ def _find_cubit_dir():
         for base in [os.environ.get("ProgramFiles", "")]:
             if not base:
                 continue
-            candidates = sorted(glob.glob(os.path.join(base, "Coreform Cubit *")),
-                                reverse=True)
+            # Numeric-aware version sort.  Was `sorted(..., reverse=True)`
+            # (string compare) until 2026-05-26; Coreform releases as
+            # "2025.3", "2025.6", "2025.12" et seq, where string sort puts
+            # "2025.6" > "2025.12" because '6' > '1' character-wise.  Parse
+            # the trailing "2025.X" as a Version tuple instead so 2025.12
+            # correctly outranks 2025.6 / 2025.3.  Mirrors the same fix in
+            # tools/find_cubit.ps1 and S:\CoreformCubit\CoreformCubit.ps1.
+            def _cubit_version_key(p):
+                name = os.path.basename(p)
+                v = name.replace("Coreform Cubit ", "", 1).strip()
+                try:
+                    return tuple(int(x) for x in v.split("."))
+                except (ValueError, AttributeError):
+                    return (0,)
+            candidates = sorted(
+                glob.glob(os.path.join(base, "Coreform Cubit *")),
+                key=_cubit_version_key,
+                reverse=True,
+            )
             for c in candidates:
                 if os.path.isdir(os.path.join(c, "bin", "plugins")):
                     return Path(c)
