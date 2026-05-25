@@ -25,7 +25,14 @@ MCP server itself loads without matplotlib so `mcp-server-graph
 --selftest` can run on machines without a plotting stack.
 """
 
-from . import tools  # noqa: F401  -- public re-export for `from radia_mcp.graph import tools`
+from . import tools          # noqa: F401
+# `_paper_figure` is the private module that owns the PROFILES + helpers;
+# we re-export the public symbols below.  The module is intentionally
+# underscore-prefixed so that `from radia_mcp.graph import paper_figure`
+# unambiguously gives the FUNCTION (the user's main entry point), not
+# the module (which would shadow it under a flat `from .x import x`
+# pattern).
+from . import _paper_figure   # noqa: F401
 
 # Public helper functions for direct import:
 #   from radia_mcp.graph import lab_figsize, apply_lab_style
@@ -40,4 +47,25 @@ from .tools import (  # noqa: F401
     find_best_legend_loc,
     plot_asymptote_ratio_sweep,
     plot_basis_size_convergence,
+)
+
+# Paper-quality figure scaffolds (2026-05-26, v0.78.0):
+#   from radia_mcp.graph import paper_figure, emit_paper_figure
+from ._paper_figure import (  # noqa: F401
+    PaperProfile,
+    PROFILES,
+    get_profile,
+    IEEE_SINGLE_COLUMN,
+    IEEE_DOUBLE_COLUMN,
+    IEEJ_SINGLE_COLUMN,
+    IEEJ_DOUBLE_COLUMN,
+    IGTE_DIGEST_DOUBLE,
+    IGTE_DIGEST_SINGLE,
+    paper_figure,
+    measure_figure_efficiency,
+    auto_tighten,
+    add_panel_labels,
+    emit_paper_figure,
+    # v0.80.0 additions (GitHub MCP plotting servers + tueplots + Wong 2011):
+    OKABE_ITO,                       # CVD-safe palette
 )
