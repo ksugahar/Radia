@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **325 tools** across 40 MCP servers.
+Total: **319 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -28,7 +28,6 @@ Total: **325 tools** across 40 MCP servers.
 | [`mcp-server-optuna`](#mcp-server-optuna) | `radia_mcp.optuna` | 6 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
-| [`mcp-server-mcmc`](#mcp-server-mcmc) | `radia_mcp.mcmc` | 6 |
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 3 |
 | [`mcp-server-gnn`](#mcp-server-gnn) | `radia_mcp.gnn` | 3 |
 | [`mcp-server-pinn`](#mcp-server-pinn) | `radia_mcp.pinn` | 3 |
@@ -454,21 +453,6 @@ Module: `radia_mcp.evolutionary.server`
 | `evolutionary_status` | (no description) |
 | `evolutionary_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 7 topics. |
 
-## `mcp-server-mcmc`
-
-_MCMC + MCTS + SPM for EM. ★ Hokkaido Sato 2023 MCTS PM motor + Yin 2024 inductor + Saotome 1995 SPM_
-
-Module: `radia_mcp.mcmc.server`
-
-| Tool | Description |
-|---|---|
-| `mcmc_algorithms` | MCMC algorithm theory: MH / Gibbs / HMC / NUTS / PT, diagnostics. |
-| `mcmc_em_applications` | MCMC applied to EM engineering problems. |
-| `mcmc_libraries` | MCMC libraries: PyMC / Stan / emcee / NumPyro / BlackJAX. |
-| `mcmc_mcts_lab` | Monte Carlo Tree Search for EM design -- lab lineage. |
-| `mcmc_spm` | Sampled Pattern Matching (Saotome 1995) -- cosine-similarity |
-| `mcmc_status` | (no description) |
-
 ## `mcp-server-data-assimilation`
 
 _Kalman / EnKF / 4D-Var for EM state estimation + sensor fusion_
@@ -714,10 +698,10 @@ Module: `radia_mcp.meta.server`
 | Tool | Description |
 |---|---|
 | `radia_mcp_by_tag` | Servers tagged with `tag`. |
-| `radia_mcp_get` | Look up one server by short name (e.g. 'mcmc', 'ih', 'kelvin'). |
+| `radia_mcp_get` | Look up one server by short name (e.g. 'optuna', 'ih', 'kelvin'). |
 | `radia_mcp_health` | Probe importability of every radia_mcp.* subpackage. |
 | `radia_mcp_overview` | Authoritative catalog of all radia_mcp.* servers. |
-| `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('mcmc') |
+| `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('optuna') |
 | `radia_meta_status` | (no description) |
 
 ## `mcp-server-panel-review`

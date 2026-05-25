@@ -15,7 +15,6 @@ Distilled from W:/.../04_最適化_ベイズ_BBO/ (57 lab files), including:
 Cross-links:
   - `radia_mcp.optuna` — Optuna's BO sampler (BoTorchSampler) is the
     main practical BO entry point in the lab pipeline
-  - `radia_mcp.mcmc` — MCMC as the alternative when posterior is
     needed (not just point estimate)
   - `radia_mcp.pinn` — Physics-Informed Neural Networks (sister to
     Physics-Informed Gaussian Processes covered here)

@@ -322,7 +322,7 @@ register_status_tool(
     description=("Meta-MCP: keyword + semantic search across 3,889 lab "
                   "literature files (W:/03_文献・論文/00_電磁界解析)."),
     subpackage="radia_mcp.literature_index",
-    related_servers=["radia-meta", "radia-mcmc", "radia-team-benchmark"],
+    related_servers=["radia-meta", "radia-team-benchmark"],
     optional_deps=["chromadb", "sentence_transformers", "fitz"],
 )
 

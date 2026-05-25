@@ -299,7 +299,7 @@ register_status_tool(
     server_name='mcp-server-optuna',
     description='Optuna black-box optimization (Sano-Akiba-Imamura 2023 textbook)',
     subpackage='radia_mcp.optuna',
-    related_servers=["bayesian-opt", "evolutionary", "mcmc"],
+    related_servers=["bayesian-opt", "evolutionary"],
     optional_deps=["optuna"],
 )
 
