@@ -79,7 +79,6 @@ Decision rule for lab usage:
 - Gradient available + convex/smooth          -> Ch 4-8 (gradient methods)
 - Gradient unavailable / FEM black-box        -> radia_mcp.optuna (BBO)
 - Discrete combinatorial                      -> radia_mcp.evolutionary
-- Posterior sampling                          -> radia_mcp.mcmc
 """,
 
 "chapter02": r"""

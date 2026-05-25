@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.80.0"
+version = "0.82.0"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
@@ -63,9 +63,13 @@ rag = [
     "sentence-transformers>=2.2.0",
     "pymupdf>=1.24.0",
 ]
+# md2html: Markdown -> HTML conversion requires Python-Markdown.
+md2html = [
+    "markdown>=3.0",
+]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
-    "radia-mcp[build123d,cadquery,gmsh,youtube,radia,rag]",
+    "radia-mcp[build123d,cadquery,gmsh,youtube,radia,rag,md2html]",
 ]
 
 [project.urls]
@@ -90,7 +94,6 @@ mcp-server-differential-forms = "radia_mcp.differential_forms.server:main"
 mcp-server-mathematica = "radia_mcp.mathematica.server:main"
 mcp-server-topology-optimization = "radia_mcp.topology_optimization.server:main"
 mcp-server-optuna = "radia_mcp.optuna.server:main"
-mcp-server-mcmc = "radia_mcp.mcmc.server:main"
 mcp-server-bayesian-opt = "radia_mcp.bayesian_opt.server:main"
 mcp-server-evolutionary = "radia_mcp.evolutionary.server:main"
 mcp-server-gnn = "radia_mcp.gnn.server:main"
@@ -114,6 +117,18 @@ mcp-server-maglev-linear = "radia_mcp.maglev_linear.server:main"
 mcp-server-fusion = "radia_mcp.fusion.server:main"
 mcp-server-rna-mec = "radia_mcp.rna_mec.server:main"
 mcp-server-literature-index = "radia_mcp.literature_index.server:main"
+# 2026-05-26 v0.82.0: md2html -- Markdown -> self-contained HTML
+# with MathJax + tables + fenced code + base64 image embed +
+# [N] reference linking.  Promoted from
+# s:/mcp-server/src/mcp_server_document/md2html/ (source deleted).
+mcp-server-md2html = "radia_mcp.md2html.server:main"
+# 2026-05-26 v0.81.0: chart2d -- 22 paper-quality 2D charts as MCP
+# tools (line / loglog / semilog / step / errorbar / fill_between /
+# bode / histogram / bar / box / violin / ecdf / contour / contourf /
+# pcolormesh / quiver / streamplot / imshow / polar / scatter / phase).
+# Companion to mcp-server-graph; inherits its profiles + gate stack.
+# Recipe (text) + MCP-Image (inline) dual return.
+mcp-server-chart2d = "radia_mcp.chart2d.server:main"
 # 2026-05-26: graph -- Sugahara Lab publication-figure style guide.
 # Promoted from s:/mcp-server/src/mcp_server_document/graph/ into
 # radia-mcp as a standalone subpackage.  Surfaces IEEE/IEEJ font/size

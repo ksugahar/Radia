@@ -46,7 +46,7 @@ Variants differ in:
 
 - Continuous + smooth + low-dim → CMA-ES / BO faster
 - Differentiable → gradient descent O(d) vs EA O(d²)
-- Bayesian framework available → MCMC / variational
+- Bayesian framework available → variational inference
 
 ## EA family tree
 
@@ -358,7 +358,6 @@ study.optimize(my_objective, n_trials=5000)
 ## Cross-links
 
 - `radia_mcp.optuna(topic="samplers")` — Optuna CmaEsSampler config
-- `radia_mcp.mcmc(topic="mcts_lab.yin_inductor")` — uses CMA-ES at
   MCTS leaves for inductor geometry optimization
 """
 
@@ -444,7 +443,6 @@ For Pareto fronts that need smooth coverage, UNDX > SBX > Uniform.
 ## Cross-links
 
 - `radia_mcp.optuna(topic="samplers")` — NSGA-II / NSGA-III in Optuna
-- `radia_mcp.mcmc(topic="mcts_lab")` — Hayaho MCTS+NSGA-II for PM motor
 """
 
 
@@ -525,7 +523,6 @@ study = optuna.create_study(
 ## Cross-references
 
 - `radia_mcp.optuna` — full Optuna documentation
-- `radia_mcp.mcmc(topic="mcts_lab")` — MCTS uses NSGA-II / CMA-ES
   at leaves
 """
 
