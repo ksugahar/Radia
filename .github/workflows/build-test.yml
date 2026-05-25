@@ -100,12 +100,33 @@ jobs:
         timeout-minutes: 30
         run: |
           Write-Host "Starting Radia build..."
-          & "${{ github.workspace }}\Build.ps1"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Build failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
+          # 2026-05-25: capture full stdout+stderr to file so we can upload
+          # as artifact on failure. Tee-Object keeps the live console log
+          # too. The embedded batch file's cmd.exe child output goes through
+          # PowerShell stdout because we pipe via the *>&1 merge.
+          $buildLog = "$env:GITHUB_WORKSPACE\build-msvc-stdout.log"
+          & "${{ github.workspace }}\Build.ps1" *>&1 | Tee-Object -FilePath $buildLog
+          $rc = $LASTEXITCODE
+          Write-Host "Build.ps1 exit=$rc"
+          Write-Host "Captured log size: $((Get-Item $buildLog -EA SilentlyContinue).Length) bytes"
+          if ($rc -ne 0) {
+            Write-Host "::error::Build failed with exit code $rc"
+            Write-Host "=== first 5 error/Error/FAILED lines in build log ==="
+            Select-String -Path $buildLog -Pattern 'error|Error|FAILED|fatal' -EA SilentlyContinue |
+              Select-Object -First 5 |
+              ForEach-Object { Write-Host "  $($_.LineNumber): $($_.Line)" }
+            exit $rc
           }
           Write-Host "Build completed successfully."
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.sha }}
+          path: build-msvc-stdout.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       # ----------------------------------------------------------------
       # Verify: Check that .pyd was produced
