@@ -247,17 +247,50 @@ class HeatPanel(ModePanel):
         # implicit in the axisymmetric assumption.  Use 0 for a
         # stationary "frozen at one azimuthal configuration" answer
         # (e.g. quick feasibility runs).
-        rrow = self.add_line(
-            "rotation_rpm",
-            "Rotation [rpm] (0 = stationary):", "0")
+        #
+        # v4.78.0: QDoubleSpinBox replaces QLineEdit so the user can't
+        # type non-numeric or accidentally negative values; suffix " rpm"
+        # makes the unit unmistakable.  Sign convention: positive =
+        # CCW viewed from the +axis end (right-hand rule), enforced by
+        # the spinbox lower bound 0.0 (a negative rpm is physically the
+        # same as positive rpm around the OPPOSITE axis, so we narrow
+        # the input space to one canonical form).
+        from PySide6.QtWidgets import QDoubleSpinBox
+        rrow = QDoubleSpinBox()
+        rrow.setRange(0.0, 1e6)
+        rrow.setDecimals(2)
+        rrow.setSingleStep(10.0)
+        rrow.setSuffix(" rpm")
+        rrow.setValue(0.0)
+        self._form.addRow("Rotation (0 = stationary):", rrow)
+        self._widgets["rotation_rpm"] = rrow
+        self._row_indices["rotation_rpm"] = self._form.rowCount() - 1
         rrow.setToolTip(
             "<b>3D solver</b>: positive rpm makes the workpiece body "
-            "spin around the z axis -- q_surf is re-sampled on the "
-            "rotated body each timestep (uniform mode is unaffected; "
-            "only spatial qsurf benefits).<br>"
+            "spin around the chosen axis -- q_surf is re-sampled on "
+            "the rotated body each timestep.<br>"
             "<b>2D axisym solver</b>: rotation is implicit (the "
             "workpiece is rotation-symmetric by construction); the "
-            "value is recorded as metadata.")
+            "value is recorded as metadata only -- the answer does "
+            "NOT depend on rpm in axisym mode.<br>"
+            "<b>Uniform source</b>: rotation has no effect (q_surf is "
+            "constant); the field stays editable but is ignored.")
+
+        # Rotation axis -- v4.78.0 (was hardcoded to z pre-v4.78.0).
+        # Horizontal-axis workpieces (billet along x) silently got the
+        # wrong physics under the old z-only assumption.
+        axis_combo = self.add_combo(
+            "rotation_axis", "Rotation axis:",
+            ["z", "x", "y"], default=0)
+        axis_combo.setToolTip(
+            "Workpiece rotation axis (default z).  Positive rpm = CCW "
+            "viewed from the positive end of this axis (right-hand "
+            "rule).<br><br>"
+            "Verify the axis matches your wp_vol's geometry: print "
+            "the bounding-box extents in the BND log and pick the axis "
+            "the workpiece is symmetric around.<br><br>"
+            "Pre-v4.78.0 the axis was hardcoded to z; horizontal-axis "
+            "workpieces silently rotated around the wrong axis.")
 
         # Boundary conditions.
         self._add_section("Boundary conditions")
@@ -397,6 +430,21 @@ class HeatPanel(ModePanel):
         self._set_row_visible("_sec_spatial", not is_uniform)
         for key in ("qsurf_sol", "em_vol", "qsurf_order"):
             self._set_row_visible(key, not is_uniform)
+        # v4.78.0: rotation_rpm / rotation_axis are no-ops when source
+        # is Uniform (a constant q_surf is rotation-invariant -- the
+        # 3D solver's q_resample callback is None on that path).  Grey
+        # out the widgets so the user sees that typing a value will be
+        # ignored, instead of finding out only by reading the log.
+        rpm_w = self._widgets.get("rotation_rpm")
+        axis_w = self._widgets.get("rotation_axis")
+        if rpm_w is not None:
+            rpm_w.setEnabled(not is_uniform)
+            if is_uniform:
+                rpm_w.setToolTip(
+                    "Disabled: Uniform q_surf is rotation-invariant. "
+                    "Pick Source = 'Spatial q_surf .sol' to use rotation.")
+        if axis_w is not None:
+            axis_w.setEnabled(not is_uniform)
 
     def _on_thermal_material_changed(self, name):
         cli = THERMAL_PRESET_TO_CLI.get(name, "custom")
@@ -490,7 +538,8 @@ class HeatPanel(ModePanel):
                "--time-scheme", scheme_cli,
                "--linear-solver", self.val("linear_solver"),
                "--fes-order", str(self.val("fes_order")),
-               "--rotation-rpm", self.val("rotation_rpm"),
+               "--rotation-rpm", str(self.val("rotation_rpm")),
+               "--rotation-axis", str(self.val("rotation_axis")),
                "--msh-output", msh_output(wp, "_heat"),
                "--output", json_output(wp, "_heat")]
 

@@ -15,7 +15,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QComboBox, QSpinBox, QCheckBox,
+    QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QPushButton, QPlainTextEdit, QFileDialog,
     QMessageBox, QSplitter, QGroupBox, QStyle,
 )
@@ -469,6 +469,13 @@ class ModePanel(QWidget):
             return txt
         elif isinstance(w, QComboBox):
             return w.currentText()
+        elif isinstance(w, QDoubleSpinBox):
+            # QDoubleSpinBox must precede QSpinBox in this dispatch
+            # because QDoubleSpinBox inherits from QAbstractSpinBox,
+            # not QSpinBox; isinstance ordering is safe but explicit
+            # so the intent is obvious.  Return formatted with the
+            # spinbox's decimals so str() round-trip is stable.
+            return f"{w.value():.{w.decimals()}f}"
         elif isinstance(w, QSpinBox):
             return str(w.value())
         elif isinstance(w, QCheckBox):
@@ -487,6 +494,11 @@ class ModePanel(QWidget):
                 # a stale index would silently jump to the wrong item or
                 # land out-of-range and leave the combo blank.
                 state[key] = w.currentText()
+            elif isinstance(w, QDoubleSpinBox):
+                # Must precede QSpinBox check -- QDoubleSpinBox is not
+                # a QSpinBox subclass but we want explicit ordering for
+                # clarity.  Store as float; round-trip via setValue.
+                state[key] = float(w.value())
             elif isinstance(w, QSpinBox):
                 state[key] = w.value()
             elif isinstance(w, QCheckBox):
@@ -519,6 +531,8 @@ class ModePanel(QWidget):
                         ival = int(val)
                         if 0 <= ival < w.count():
                             w.setCurrentIndex(ival)
+                elif isinstance(w, QDoubleSpinBox):
+                    w.setValue(float(val))
                 elif isinstance(w, QSpinBox):
                     w.setValue(int(val))
                 elif isinstance(w, QCheckBox):
