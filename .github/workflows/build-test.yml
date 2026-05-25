@@ -92,7 +92,12 @@ jobs:
       # ----------------------------------------------------------------
       - name: Build with MSVC + MKL
         shell: pwsh
-        timeout-minutes: 20
+        # Was 20 min; bumped to 30 on 2026-05-25 after sha 0c0ef5d /
+        # ea0b8dca both hit the 20:04 cliff. NGSolve install / MKL
+        # init / NAS access on the self-hosted runner sometimes pushes
+        # Build.ps1 above 20 min. Job timeout is 45 min so 30 leaves
+        # 15-min headroom for the rest of the pipeline.
+        timeout-minutes: 30
         run: |
           Write-Host "Starting Radia build..."
           & "${{ github.workspace }}\Build.ps1"
