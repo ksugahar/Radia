@@ -111,26 +111,37 @@ def literature_semantic_search(
     query: str,
     n_results: int = 5,
     source_filter: str = "",
+    language_filter: str = "",
 ) -> str:
     """Semantic search over indexed PDF text via ChromaDB + sentence-
     transformers (all-MiniLM-L6-v2).
 
     Returns markdown-formatted hits with source, page, similarity score,
-    and the matching text chunk.
+    language tag (if any), and the matching text chunk.
 
     First-time use: call `literature_build_vector_index` to populate
     the vector store from W:/.../00_電磁界解析/ PDFs. Without an index,
     this returns an empty result + hint.
 
     Args:
-        query: free-text query (Japanese or English; multilingual model)
-        n_results: top N hits to return (default 5)
+        query: free-text query (Japanese or English; the embedding model
+               is multilingual-friendly).
+        n_results: top N hits to return (default 5).
         source_filter: optional filename substring filter (exact match
-                       on source filename)
+                       on source filename).
+        language_filter: optional ISO 639-1 tag (e.g. "ja", "en", "zh")
+                       to restrict hits to one language. Only effective
+                       when the index was built with
+                       ``auto_detect_language=True`` (the default for
+                       ``literature_build_vector_index``) or with an
+                       explicit ``default_language=...``.
+                       Use "ja" to filter the lab's Japanese textbooks,
+                       "en" to filter the IEEE / Elsevier paper subset.
 
     Examples:
         literature_semantic_search("rotational core loss measurement")
         literature_semantic_search("Hayaho MCTS PM motor", n_results=10)
+        literature_semantic_search("ヒステリシス", language_filter="ja")
     """
     rag = _get_retriever()
     stats = rag.stats()
@@ -143,15 +154,28 @@ def literature_semantic_search(
         )
 
     where = {"source": {"$eq": source_filter}} if source_filter else None
-    hits = rag.search(query, n_results=n_results, where=where)
+    hits = rag.search(
+        query,
+        n_results=n_results,
+        where=where,
+        language_filter=language_filter or None,
+    )
     if not hits:
-        return f"No semantic hits for `{query}`."
+        suffix = ""
+        if language_filter:
+            suffix = (f" (language='{language_filter}' -- did you index "
+                      f"with `auto_detect_language=True`?)")
+        return f"No semantic hits for `{query}`{suffix}."
 
-    out = [f"# Semantic search: `{query}` ({len(hits)} hits)\n"]
+    title = f"Semantic search: `{query}`"
+    if language_filter:
+        title += f" [lang={language_filter}]"
+    out = [f"# {title} ({len(hits)} hits)\n"]
     for i, hit in enumerate(hits, 1):
         meta = hit.get("metadata", {})
+        lang_tag = f" [{meta['language']}]" if meta.get("language") else ""
         out.append(f"## {i}. score={hit['score']:.3f}  "
-                   f"`{meta.get('source', '?')}` p.{meta.get('page', '?')}")
+                   f"`{meta.get('source', '?')}` p.{meta.get('page', '?')}{lang_tag}")
         text = hit["text"].strip()
         snippet = (text[:600] + "...") if len(text) > 600 else text
         out.append(f"\n{snippet}\n")
@@ -164,6 +188,8 @@ def literature_build_vector_index(
     max_pdfs: int = 50,
     chunk_size: int = 1000,
     overlap: int = 100,
+    default_language: str = "",
+    auto_detect_language: bool = True,
 ) -> str:
     """Build / extend the ChromaDB vector index from PDFs.
 
@@ -173,11 +199,20 @@ def literature_build_vector_index(
     Args:
         folder: subfolder of W:/.../00_電磁界解析/ to ingest
                 (e.g. "30_磁気特性", "11_BEM_モーメント法",
-                or "" for ENTIRE corpus — multi-hour build)
+                or "" for ENTIRE corpus -- multi-hour build).
         max_pdfs: cap for this run (default 50; safety against
-                  accidental full-corpus runs)
-        chunk_size: characters per chunk (default 1000)
-        overlap: chunk overlap (default 100)
+                  accidental full-corpus runs).
+        chunk_size: characters per chunk (default 1000).
+        overlap: chunk overlap (default 100).
+        default_language: ISO 639-1 tag attached to EVERY chunk in this
+                  run (e.g. "ja" for an entirely-Japanese folder,
+                  "en" for an English papers folder). Overrides
+                  auto-detect. "" = unset (use auto-detect if enabled).
+        auto_detect_language: when True (default), guess each PDF's
+                  language from its filename via CJK Unicode heuristic
+                  (radia_mcp.common.detect_filename_language). Enables
+                  ``literature_semantic_search(..., language_filter=)``
+                  filtering on the bilingual lab corpus.
 
     Returns:
         Job status message.
@@ -192,6 +227,8 @@ def literature_build_vector_index(
     target = base / folder if folder else base
     if not target.exists():
         return f"Target folder does not exist: {target}"
+
+    lang_default = default_language or None
 
     def _build(_progress_cb=None, _cancel_check=None):
         pdfs = list(target.rglob("*.pdf"))
@@ -208,8 +245,13 @@ def literature_build_vector_index(
             if _progress_cb:
                 _progress_cb(i / len(pdfs), f"Processing {p.name}")
             try:
-                chunks = extract_pdf_chunks(p, chunk_size=chunk_size,
-                                              overlap=overlap)
+                chunks = extract_pdf_chunks(
+                    p,
+                    chunk_size=chunk_size,
+                    overlap=overlap,
+                    default_language=lang_default,
+                    auto_detect_language=auto_detect_language,
+                )
                 if chunks:
                     total_added += rag.add_chunks(chunks)
             except Exception as e:
@@ -223,12 +265,14 @@ def literature_build_vector_index(
 
     started = _index_runner.start(
         target=_build,
-        label=f"build_index({folder or 'ALL'},max={max_pdfs})",
+        label=f"build_index({folder or 'ALL'},max={max_pdfs},"
+              f"lang={lang_default or ('auto' if auto_detect_language else 'none')})",
     )
     if started:
         return (f"Started indexing: folder={folder or 'ALL'}, "
-                f"max_pdfs={max_pdfs}. Poll with "
-                f"`literature_index_job_status`.")
+                f"max_pdfs={max_pdfs}, language="
+                f"{lang_default or ('auto-detect' if auto_detect_language else 'none')}. "
+                f"Poll with `literature_index_job_status`.")
     return "Failed to start (another job running?)."
 
 

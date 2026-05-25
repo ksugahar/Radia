@@ -9,7 +9,9 @@ For radia_mcp the target corpus is W:/03_文献・論文/00_電磁界解析/
 
 Optional dependencies (graceful degradation if missing):
   - chromadb
-  - sentence-transformers (defaults to all-MiniLM-L6-v2, ~80 MB)
+  - sentence-transformers (defaults to all-MiniLM-L6-v2, ~80 MB;
+    pass ``embedding_model="paraphrase-multilingual-MiniLM-L12-v2"``
+    for better Japanese / Chinese retrieval on bilingual lab corpus)
   - pymupdf (for PDF text extraction)
 
 Install:
@@ -28,27 +30,129 @@ Usage:
     # 'id', 'text', and a metadata dict).
     rag.add_chunks([
         {"id": "doc1_p1", "text": "Maxwell equations ...",
-         "metadata": {"source": "MaxwellBook.pdf", "page": 1}},
+         "metadata": {"source": "MaxwellBook.pdf", "page": 1,
+                       "language": "en"}},
         ...
     ])
 
     # Semantic search.
     hits = rag.search("rotational core loss tester", n_results=5)
-    # → [{"text": ..., "metadata": {...}, "score": 0.87}, ...]
+    # -> [{"text": ..., "metadata": {...}, "score": 0.87}, ...]
+
+    # Restrict to Japanese-language hits only (requires chunks to
+    # have been tagged with language= at indexing time).
+    hits = rag.search("ヒステリシス", n_results=5, language_filter="ja")
 
 Design choice: this module does NOT depend on radia_mcp.literature_index
-— it is a generic utility usable by any subpackage. literature_index
+-- it is a generic utility usable by any subpackage. literature_index
 adopts it as the engine for `literature_semantic_search`.
+
+Multilingual support (2026-05-25, ported from wjc9011 COMSOL fork):
+  - ``detect_filename_language(filename)`` -- CJK Unicode-range heuristic
+  - ``extract_pdf_chunks(..., default_language=, auto_detect_language=)``
+  - ``ChromaRetriever.search(..., language_filter="ja")`` filter
+  - Multilingual chapter regex (JA: 第N章, 第N節; ZH: kanji numerals)
 """
 
 from __future__ import annotations
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
+# Multilingual chapter detection patterns -- callers that want chapter-
+# aware splitting can run `find_chapters(text)` from this module.
+# Patterns ordered: English (most common in lab PDFs) -> Japanese -> Chinese.
+CHAPTER_PATTERNS: list[str] = [
+    # English
+    r"^Chapter\s+(\d+)[:\s]+(.+)$",
+    r"^(\d+(?:\.\d+)*)\s+(.+)$",
+    r"^([A-Z][A-Za-z\s]+)$",
+    # Japanese: 第1章, 第10章
+    r"^第\s*(\d+)\s*章[:：\s]*(.*)$",
+    # Japanese: 1章, 2章 (章 prefix omitted)
+    r"^(\d+)\s*章[:：\s]*(.*)$",
+    # Japanese: 第1節, 1.1節
+    r"^第\s*(\d+(?:\.\d+)*)\s*節[:：\s]*(.*)$",
+    # Chinese: 第一章, 第二章 (kanji number)
+    r"^第([一二三四五六七八九十百千]+)章[:：\s]*(.*)$",
+]
+
+
+def detect_filename_language(filename: str) -> Optional[str]:
+    """Heuristic: guess language from PDF filename characters.
+
+    Returns "ja" if hiragana / katakana present (definitively Japanese),
+    "zh" if only CJK ideographs are present (likely Chinese -- no kana),
+    "en" if only ASCII letters / digits / common punctuation,
+    None if undetermined (mixed or empty).
+
+    Cheap heuristic for auto-tagging at index-build time when the
+    user has not passed an explicit ``default_language`` flag. For
+    accurate detection on document BODY text use langdetect or
+    fasttext (heavier dependencies).
+
+    Ported from wjc9011/COMSOL_Multiphysics_MCP fork
+    (src/knowledge/pdf_processor.py::detect_filename_language).
+    """
+    if not filename:
+        return None
+    name = Path(filename).stem
+    has_hiragana_or_katakana = False
+    has_cjk_ideograph = False
+    has_ascii_letter = False
+    for ch in name:
+        cp = ord(ch)
+        if 0x3040 <= cp <= 0x30FF:
+            has_hiragana_or_katakana = True
+        elif 0x4E00 <= cp <= 0x9FFF:
+            has_cjk_ideograph = True
+        elif ch.isascii() and ch.isalpha():
+            has_ascii_letter = True
+    if has_hiragana_or_katakana:
+        return "ja"
+    if has_cjk_ideograph:
+        return "zh"  # ideograph-only filename more likely Chinese
+    if has_ascii_letter:
+        return "en"
+    return None
+
+
+def find_chapters(text: str) -> list[tuple[str, int, int]]:
+    """Detect chapter boundaries in text (multilingual).
+
+    Returns list of (chapter_title, line_start, line_end). Useful when
+    a caller wants to attach a per-chunk ``chapter`` metadata field.
+
+    Recognizes English, Japanese (第N章, 第N節, N章), and Chinese
+    (kanji-numeral chapters) headings via CHAPTER_PATTERNS.
+    """
+    chapters: list[tuple[str, int, int]] = []
+    lines = text.split("\n")
+    current_chapter = "Introduction"
+    chapter_start = 0
+    for i, raw in enumerate(lines):
+        line = raw.strip()
+        if not line:
+            continue
+        for pattern in CHAPTER_PATTERNS:
+            match = re.match(pattern, line)
+            if match:
+                if chapter_start < i:
+                    chapters.append((current_chapter, chapter_start, i))
+                if len(match.groups()) >= 2:
+                    current_chapter = match.group(2).strip() or current_chapter
+                else:
+                    current_chapter = match.group(1).strip()
+                chapter_start = i
+                break
+    if chapter_start < len(lines):
+        chapters.append((current_chapter, chapter_start, len(lines)))
+    return chapters
 
 
 def _import_chromadb():
@@ -183,6 +287,7 @@ class ChromaRetriever:
         query: str,
         n_results: int = 5,
         where: Optional[dict] = None,
+        language_filter: Optional[str] = None,
     ) -> list[dict]:
         """Semantic search.
 
@@ -191,18 +296,35 @@ class ChromaRetriever:
             n_results: number of top hits to return
             where: optional ChromaDB metadata filter, e.g.
                    {"source": {"$eq": "MaxwellBook.pdf"}}
+            language_filter: optional ISO 639-1 language tag (e.g.
+                   "en", "ja", "zh"). ANDed with ``where`` if both are
+                   given. Only effective when chunks were tagged with
+                   ``language`` at index-build time -- see
+                   ``extract_pdf_chunks(default_language=, auto_detect_language=)``.
 
         Returns:
             List of dicts: [{"id", "text", "metadata", "score"}, ...]
-            (score in [0, 1] — higher is more similar)
+            (score in [0, 1] -- higher is more similar)
         """
         if not self.is_initialized and not self.initialize():
             return []
+
+        # Build effective `where` filter combining caller-supplied where
+        # with language_filter. ChromaDB requires multi-clause filters
+        # to be wrapped in `$and`.
+        eff_where: Optional[dict] = None
+        if where and language_filter:
+            eff_where = {"$and": [where, {"language": language_filter}]}
+        elif where:
+            eff_where = where
+        elif language_filter:
+            eff_where = {"language": language_filter}
+
         try:
             res = self._collection.query(
                 query_texts=[query],
                 n_results=n_results,
-                where=where,
+                where=eff_where,
                 include=["documents", "metadatas", "distances"],
             )
         except Exception as e:
@@ -273,15 +395,34 @@ def extract_pdf_chunks(
     pdf_path: str | Path,
     chunk_size: int = 1000,
     overlap: int = 100,
+    default_language: Optional[str] = None,
+    auto_detect_language: bool = False,
 ) -> list[dict]:
     """Extract text chunks from a PDF, ready to feed `add_chunks`.
 
     Simple page-based chunking with overlap. Returns chunks with:
-        - id = <stem>__p<page>__<chunk_in_page>
-        - text = the chunk content
-        - metadata = {"source": filename, "page": int, "stem": stem}
+        - id       = <stem>__p<page>__<chunk_in_page>
+        - text     = the chunk content
+        - metadata = {"source", "stem", "page",
+                       "language" (optional)}
+
+    Args:
+        pdf_path: PDF file path
+        chunk_size: characters per chunk (default 1000)
+        overlap: chunk overlap (default 100)
+        default_language: ISO 639-1 tag attached to every chunk
+            (e.g. "en", "ja"). Use when an entire directory is known
+            to be one language. None = no language metadata written.
+        auto_detect_language: when True AND default_language is None,
+            fall back to ``detect_filename_language(pdf_path.name)``.
+            Useful for mixed-language collections (the radia-mcp lab
+            corpus is roughly 50/50 English papers + Japanese
+            textbooks side by side under W:/03_文献・論文).
 
     Requires `pymupdf` (a.k.a. `fitz`).
+
+    Ported from wjc9011/COMSOL_Multiphysics_MCP fork
+    (src/knowledge/pdf_processor.py::PDFProcessor.process_pdf).
     """
     try:
         import fitz  # pymupdf
@@ -289,6 +430,15 @@ def extract_pdf_chunks(
         raise ImportError(
             "PDF extraction requires pymupdf: pip install pymupdf")
     pdf_path = Path(pdf_path)
+
+    # Resolve per-file language tag.
+    if default_language:
+        per_file_language: Optional[str] = default_language
+    elif auto_detect_language:
+        per_file_language = detect_filename_language(pdf_path.name)
+    else:
+        per_file_language = None
+
     chunks: list[dict] = []
     doc = fitz.open(str(pdf_path))
     stem = pdf_path.stem
@@ -304,14 +454,17 @@ def extract_pdf_chunks(
             end = min(start + chunk_size, len(text))
             chunk_text = text[start:end].strip()
             if len(chunk_text) > 50:   # skip near-empty chunks
+                meta: dict = {
+                    "source": pdf_path.name,
+                    "stem": stem,
+                    "page": page_idx + 1,
+                }
+                if per_file_language:
+                    meta["language"] = per_file_language
                 chunks.append({
                     "id": f"{stem}__p{page_idx + 1}__{chunk_in_page}",
                     "text": chunk_text,
-                    "metadata": {
-                        "source": pdf_path.name,
-                        "stem": stem,
-                        "page": page_idx + 1,
-                    },
+                    "metadata": meta,
                 })
                 chunk_in_page += 1
             if end >= len(text):

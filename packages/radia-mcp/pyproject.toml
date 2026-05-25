@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.71.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.70.0 (2026-05-24 evening): panel_review subpackage -- 10-topic GUI bug catalogue + 5-skill chain (panel-cli-diff/review/qt-test/preview/smoke) -- triggered by IGTE 2026 ESIM digest GUI reproducibility audit. 0.69.0 (2026-05-24): META server (36-server catalog) + 8 ML/optimization subpackages + 19 application+theory subpackages + 6 thin-server PDF enrichments. 0.68.0: fem subpackage."
+version = "0.72.0"
+description = "MCP servers for the Radia CAE ecosystem. 0.72.0 (2026-05-25): COMSOL fork multilingual RAG absorption -- detect_filename_language() CJK heuristic + JA/ZH chapter regex (第N章, 第N節, kanji numerals) + language_filter on ChromaRetriever.search + auto_detect_language flag in extract_pdf_chunks; literature_semantic_search now supports language_filter for the bilingual W:/03_文献・論文 lab corpus. 0.71.0: 4 COMSOL knowledge modules (XFEM/LiveLink/Kelvin/LabTips, +4727 lines). 0.70.0 (2026-05-24 evening): panel_review subpackage -- 10-topic GUI bug catalogue + 5-skill chain (panel-cli-diff/review/qt-test/preview/smoke). 0.69.0 (2026-05-24): META server (36-server catalog) + 8 ML/optimization subpackages + 19 application+theory subpackages + 6 thin-server PDF enrichments. 0.68.0: fem subpackage."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
