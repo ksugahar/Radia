@@ -27,6 +27,41 @@ discretisation error (decreases as 1/N).
 
 Reproduces the Sugahara Lab 2008 axi slide 5-6 verification.
 
+### Phase 3 -- `phase3_e2e_cubit_to_sol.py` (END-TO-END, PASS)
+
+Full production pipeline test: Cubit `.jou` -> `.vol` -> CLI -> NFS
+-> CoefficientFunction -> projected GridFunction (`.sol`).
+
+Workflow:
+1. Cubit headless: create sphere R=0.5, sideset `nfs_surface`,
+   `radia_export netgen` -> `inner_mesh.vol`.
+   (Falls back to NGSolve OCC if Cubit 2025.12 plugin isn't
+   registered; the plugin needs rebuild against the new Cubit SDK
+   but the rest of the pipeline is independent of Cubit.)
+2. NGSolve: sample analytic dipole H on VectorH1 inner mesh -> `H_inner.sol`.
+3. Subprocess: `calc_equivalence_source.py --vol --sol --surface
+   nfs_surface --output nfs.json` -> NFS artifact (~240 KB).
+4. Load NFS; build outer mesh (OCC shell R=0.6 to R=3.0);
+   `NearFieldSource.project_to_h1_vector(outer_mesh)` -> projects the
+   Stratton-Chu reconstruction onto a VectorH1 GridFunction ->
+   `H_outer_reconstructed.sol` (~350 KB).
+5. Verify: load `H_outer_reconstructed.sol`, evaluate at 8 obs
+   points spanning R = 0.7 m to R = 2.5 m, compare to analytic
+   dipole.
+
+Result:  max relative error 8.34 %  (threshold 20 %)  --  **PASS**.
+
+Error budget (per stage):
+- ~2-3% inner-mesh FEM interpolation of analytic dipole
+- ~1-5% Stratton-Chu integral with 1106 surface panels
+- ~5-15% outer-mesh order=1 nodal projection (Set is sub-optimal
+  for L2; finer mesh or higher order would tighten)
+
+This is the canonical demonstration of "CST Near-Field Source" in
+the Radia stack: a closed-surface FEM solution (.sol) becomes a
+reusable equivalent source artifact that can be replayed onto an
+ARBITRARY second mesh as a coefficient function / GridFunction.
+
 ### Phase 2 -- `phase2_wpt_harmonic.py` (time-harmonic, KNOWN LIMITATION)
 
 Time-harmonic Hertzian-dipole demonstration.  **This test EXPECTEDLY
