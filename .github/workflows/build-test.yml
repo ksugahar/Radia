@@ -16,18 +16,13 @@ concurrency:
 jobs:
   build-test:
     runs-on: [self-hosted, windows-radia]
-    # Was 45 min; bumped to 70 on 2026-05-25 after sha 357da370 ran
-    # past the 45-min job cap during "Build wheel" step. Actual step
-    # timing observed:
-    #   Setup + checkout + env:  ~4 min
-    #   Build with MSVC + MKL:   26 min (30-min step timeout)
-    #   Verify + fetch:          <1 min
-    #   Run basic tests:          7 min
-    #   Run motor panel tests:   <1 min
-    #   Build wheel:              6 min (was cancelled at 6:15)
-    #   + remaining upload/MCP steps: ~5-10 min
-    # Total ~50-60 min, so 70 leaves ~10-15 min slack.
-    timeout-minutes: 70
+    # No timeout-minutes -- per 2026-05-25 user decision after
+    # 45-min cap (sha 357da370 cancelled) and 70-min cap (sha
+    # c1ed3dc9 in flight) kept slicing different steps. Self-
+    # hosted runner has no hard limit; GitHub Actions default
+    # is 6h, far more than needed. Letting every step complete
+    # to its natural end is the only way to capture full stderr
+    # for diagnosis without chasing the next cliff.
 
     # NGSolve + Netgen from pip install (6.2.2602)
     env:
@@ -103,12 +98,10 @@ jobs:
       # ----------------------------------------------------------------
       - name: Build with MSVC + MKL
         shell: pwsh
-        # Was 20 min; bumped to 30 on 2026-05-25 after sha 0c0ef5d /
-        # ea0b8dca both hit the 20:04 cliff. NGSolve install / MKL
-        # init / NAS access on the self-hosted runner sometimes pushes
-        # Build.ps1 above 20 min. Job timeout is 45 min so 30 leaves
-        # 15-min headroom for the rest of the pipeline.
-        timeout-minutes: 30
+        # No step-level timeout-minutes -- see job-level note above.
+        # Build.ps1 cold-cache on the self-hosted runner has been
+        # observed at 20:04 (sha 0c0ef5d), 26 min (sha 357da370),
+        # and the natural full-rebuild on LAB is ~25-35 min.
         run: |
           Write-Host "Starting Radia build..."
           # 2026-05-25: capture full stdout+stderr to file so we can upload
