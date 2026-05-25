@@ -13,10 +13,10 @@ Convention adopted for radia_mcp:
 
 Usage:
     from radia_mcp.common import load_prompt
-    text = load_prompt(\"mcmc\", \"hayaho_pm_motor\")   # → str
+    text = load_prompt(\"ih\", \"karl_overview\")   # → str
 
 Migration order recommended (highest pain first):
-  1. mcmc — already hit r-string bug twice
+  1. ih  — historical r-string bug example
   2. ih.sibc — also hit
   3. peec.hoibc — also hit
   4. optuna / bayesian_opt — preventive
@@ -37,7 +37,7 @@ def load_prompt(subpackage: str, name: str) -> str:
     """Load a markdown prompt from radia_mcp.<subpackage>.prompts.
 
     Args:
-        subpackage: subpackage name (e.g. "mcmc", "ih", "peec.hoibc"
+        subpackage: subpackage name (e.g. "ih", "peec.hoibc"
                     — dots OK for nested).
         name: prompt file basename WITHOUT the .md extension
               (e.g. "hayaho_pm_motor" → loads hayaho_pm_motor.md).

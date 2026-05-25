@@ -23,15 +23,15 @@ Usage in a server's server.py:
     from mcp.server.fastmcp import FastMCP
     from radia_mcp.common.status import register_status_tool
 
-    mcp = FastMCP("mcp-server-mcmc")
+    mcp = FastMCP("mcp-server-optuna")
 
     # ... register your @mcp.tool() decorators here ...
 
     register_status_tool(
         mcp,
-        server_name="mcp-server-mcmc",
-        description="MCMC + MCTS + SPM for EM engineering",
-        subpackage="radia_mcp.mcmc",
+        server_name="mcp-server-optuna",
+        description="Optuna BBO for EM engineering",
+        subpackage="radia_mcp.optuna",
         related_servers=["radia-optuna", "radia-bayesian-opt"],
         optional_deps=["pymc", "emcee", "numpyro"],
     )
@@ -124,9 +124,9 @@ def register_status_tool(
 
     Args:
         mcp: FastMCP instance (already created in the server module)
-        server_name: e.g. "mcp-server-mcmc"
+        server_name: e.g. "mcp-server-optuna"
         description: one-line "what am I for"
-        subpackage: e.g. "radia_mcp.mcmc"
+        subpackage: e.g. "radia_mcp.optuna"
         related_servers: list of MCP server short names that pair well
                           (e.g. ["radia-optuna", "radia-bayesian-opt"])
         optional_deps: pip package names to probe (chromadb, pymc, etc.)

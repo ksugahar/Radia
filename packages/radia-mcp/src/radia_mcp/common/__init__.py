@@ -5,7 +5,7 @@ Existing utilities:
 
 New (2026-05-24, learned from COMSOL MCP analysis):
   - `prompts_loader` — load knowledge as .md files (avoids docstring
-    inside r-string parser errors hit in mcmc/sibc/hoibc)
+    inside r-string parser errors hit in sibc/hoibc)
   - `async_runner` — threading-based long-running command wrapper
     with progress + cancellation
   - `chroma_retriever` — ChromaDB + sentence-transformers RAG

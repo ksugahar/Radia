@@ -5,6 +5,174 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.82.0 — md2html migration + mcp-server-document cleanup
+
+Released 2026-05-26.
+
+User decision (after s:\mcp-server enumeration):
+  - DISCARD: `mcp_server_document/diagram/` (raster → Excalidraw
+             pipeline) + sibling `s:/mcp-server/excalidraw/` Node.js
+             tree.  Not LAB-aligned; bulky deps; better third-party
+             options exist.
+  - COMPLETE MIGRATION: `mathematica/` → `radia_mcp.mathematica`
+             (already done in v0.69; this release removes the stale
+             source copy from `mcp-server-document`).
+  - COMPLETE MIGRATION: `md2html/` → `radia_mcp.md2html` (NEW this
+             release).
+
+What shipped:
+
+- **NEW subpackage `radia_mcp.md2html`** (393 LOC, verbatim from
+  `s:/mcp-server/src/mcp_server_document/md2html/`):
+    converter.py (302 LOC) + tools.py (69 LOC) carried over
+    byte-identical; only the registration layer (server.py, 95 LOC) is
+    new and follows the standard radia_mcp.<topic>.server pattern
+    (--selftest, status_tool wired, FastMCP).
+  - Tool: `md2html_convert(md_file, output_file=None, title=None)`
+  - Features (preserved): MathJax v3 CDN, $..$/$$..$$/```math```
+    blocks, ||x|| → \\Vert x \\Vert, [N] reference linking +
+    auto <li id="refN"> under References / 参考文献, base64 image embed,
+    UTF-8 + cp932 legacy fallback.
+  - Optional dep: `pip install radia-mcp[md2html]` brings `markdown>=3.0`.
+
+- **NEW catalog entry** `md2html` (tags=['meta']).  Catalog grows
+  **39 → 40 servers**.  Related: mathematica, graph, literature-index
+  (all bidirectionally cross-linked).
+
+- **NEW `mcp-server-md2html`** entry point in pyproject.toml.
+
+- **NEW tests/test_md2html.py** -- 12 golden tests covering:
+    basic .md → .html round-trip; MathJax script emission; $$..$$
+    block preservation; ||v|| normalisation; [N] linking; Japanese
+    参考文献 section; base64 image embed; cp932 fallback; missing
+    file rejection; non-.md rejection; lower-level md_to_html dict
+    shape; explicit title override.
+
+- **mcp-server-document v3.0.0 → v3.1.0** (LAB-private):
+    Removed `diagram`, `mathematica`, `md2html` from
+    `server.py::_build_mcp()` (12 subpackages, 326 tools remain).
+    Removed `diagram` keyword + extras + `diagram/skill.md`
+    package-data + `md2html` extras from pyproject.toml.
+    Description string updated to drop "Excalidraw diagram pipeline".
+
+Suite: **175/175 pytest pass** (was 162 after 0.81.0; +12 md2html
++1 bidirectional-link fix for md2html cross-links).
+
+Catalog evolution:
+  v0.76.0   37 servers
+  v0.77.0   38 (+ graph)
+  v0.80.0   38 (graph upgrades)
+  v0.81.0   39 (+ chart2d)
+  v0.82.0  *40* (+ md2html)  ← this release
+
+Survey verdict (4 candidates from s:\mcp-server, 2 chosen):
+  ✅ MOVED: md2html (393 LOC, generic utility, low dep)
+  ✅ STALE COPY DELETED: mathematica (already in radia-mcp)
+  ⏸  DEFERRED: pdf (1055 LOC PDF toolkit) -- still recommended for
+                v0.83+, would absorb the Type-42 verifier we built
+                in v0.80.0 into a richer toolkit
+  ❌ KEPT IN mcp-server-document (LAB-private, scope mismatch):
+     grant_writing, paper_writing, presentation, poster, circuit,
+     bibliography, doc_convert, ocr, document_meta, research_project,
+     graph (already migrated, OLD source intentionally kept as
+     backward-compat shim for now), eqnedt32, eqnedt32_native
+  ❌ DELETED outright (per user "捨てよう"):
+     mcp_server_document/diagram/ + sibling excalidraw/ Node.js tree
+
+## 0.81.0 — chart2d: 22 paper-quality 2D chart MCP tools
+
+Released 2026-05-26.
+
+After v0.80.0 user requested a dedicated MCP server for 2D chart
+rendering, citing the GitHub survey results (StacklokLabs/plotting-mcp,
+xlisp/visualization-mcp-server, LindseyyyLi/MCP-Server,
+antvis/mcp-server-chart 4.1k★, isaacwasserman/mcp-vegalite-server,
+arshlibruh/plotly-mcp-cursor) as prior art.  The architectural
+finding: no existing MCP server combines (a) paper-quality styling
+with (b) recipe + image dual return, so chart2d fills both gaps.
+
+What shipped:
+
+- **NEW subpackage `radia_mcp.chart2d`** -- companion to
+  radia_mcp.graph.  graph = styling / profiles / gates.
+  chart2d = data → rendered 2D chart.  Catalog: **38 → 39 servers**.
+
+- **NEW `mcp-server-chart2d`** with **22 chart-type tools**:
+
+    LINE / TIME-SERIES (8):
+      chart2d_line, chart2d_loglog, chart2d_semilogx, chart2d_semilogy,
+      chart2d_step, chart2d_errorbar, chart2d_fill_between, chart2d_bode
+
+    DISTRIBUTION / STATS (5):
+      chart2d_histogram, chart2d_bar, chart2d_box, chart2d_violin,
+      chart2d_ecdf
+
+    SCIENTIFIC 2D FIELDS (7):
+      chart2d_contour, chart2d_contourf, chart2d_pcolormesh,
+      chart2d_quiver, chart2d_streamplot, chart2d_imshow, chart2d_polar
+
+    POINT (2):
+      chart2d_scatter, chart2d_phase  (Nyquist / impedance locus,
+        aliases nyquist / complex_plane / argand / smith_like)
+
+  + `chart2d_catalog(group)` introspection tool (23 total).
+
+- **DUAL RETURN MODE** -- every chart tool accepts
+  `return_mode='recipe'|'image'|'both'`:
+
+    'recipe' (default):  returns Python code string ending in
+                          emit_paper_figure().  User pastes into a
+                          script and runs locally.  No matplotlib
+                          dependency on the server.
+    'image':             server-side render via matplotlib + paper_figure
+                          profile, returns PNG bytes as MCP Image
+                          content type (LindseyyyLi/MCP-Server +
+                          isaacwasserman/mcp-vegalite-server pattern)
+                          -- inline preview in Claude Desktop /
+                          claude.ai.
+    'both':              returns {'recipe': str, 'image': Image}.
+
+- **PROFILE INHERITANCE** -- every render path calls
+  radia_mcp.graph.paper_figure() so the chart inherits 10 pt @ 8 cm
+  font, Okabe-Ito CVD-safe palette, Type-42 PDF embed, and IEEE/IEEJ
+  margins automatically.
+
+- **SPECIAL-CASE RENDERERS**:
+    `_render_bode`  -- 2x1 panel pair (magnitude/phase) with sharex,
+                       top panel's x-tick labels hidden, lab-style
+                       labels (|H| (dB), arg(H) (deg)) by default.
+    `_render_polar` -- handles projection='polar' axes (which
+                       paper_figure() does not directly expose).
+
+- **`tests/test_chart2d.py`** -- 37 tests, ~3 s:
+    pin: catalog has exactly 22 types in 4 groups; aliases resolve;
+         every type has a non-empty paper-figure-gated recipe (5×22
+         parameterised tests); 6 representative types render to
+         valid PNG; Bode produces (2,1) layout; phase plot has
+         equal aspect; polar has projection='polar'; first-line color
+         is OKABE_ITO[0] (palette inheritance lock); unknown type
+         raises with hint; chart2d_catalog tool shape.
+
+Suite: **162/162 pytest pass** (was 124 after 0.80.0; +38 new).
+
+Survey patterns DEFERRED (with reasons):
+  - Vega-Lite spec return (isaacwasserman): consider for chart2d v2
+    if a user requests inline-renderable specs that don't require
+    matplotlib server-side; current MCP Image path is good enough.
+  - 26-chart antvis catalog: their counts include flow / sankey /
+    treemap which are out-of-scope for 2D scientific charting; our
+    22 covers every chart we've used in lab papers since 2019.
+  - generate_sample_data tool (arshlibruh): the recipe-mode default
+    already gives the AI a working sample script with synthetic data
+    -- the inline `data = np.random.normal(...)` lines serve the
+    same purpose.
+
+Catalog evolution:
+  v0.76.0   37 servers
+  v0.77.0   38 (+ graph)
+  v0.80.0   38 (graph upgrades)
+  v0.81.0  *39* (+ chart2d)  ← this release
+
 ## 0.80.0 — graph: GitHub-MCP/tueplots/Wong-2011 absorption batch
 
 Released 2026-05-26.
@@ -340,15 +508,12 @@ Suite: 71/71 pytest pass (9 meta_health + 22 chroma_multilingual +
 mcp-server-graph --selftest verifies all 7 figure profiles (digest /
 paper / presentation / matlab-oversized).
 
-## 0.76.0 — optuna: 5 advanced lab BBO recipes (no Gurobi spinoff)
+## 0.76.0 — optuna: 5 advanced lab BBO recipes
 
 Released 2026-05-25.
 
-User decision: Gurobi (white-box LP/MIP/QP) is structurally
-inappropriate for the lab's black-box FEM-as-objective EM design
-problems. `radia_mcp.optuna` stays as the canonical optimization
-MCP. Reinforces the locked decision recorded at
-`memory/decision_gurobi_dropped_optuna_only.md`.
+`radia_mcp.optuna` stays as the canonical optimization MCP for the
+lab's black-box FEM-as-objective EM design problems.
 
 What shipped:
 
@@ -478,9 +643,8 @@ Released 2026-05-24.
   `chroma_retriever` (optional ChromaDB+sentence-transformers RAG).
 
 **New subpackages from W:/04_機械学習と最適化 + 99_アプリケーション**:
-- 8 ML/optimization: `bayesian_opt`, `evolutionary`, `gnn`,
-  `data_assimilation`, `mcmc` (Hokkaido Sato/Yin MCTS lineage +
-  Saotome SPM), `optuna` (Sano-Akiba-Imamura textbook), `pinn`,
+- 7 ML/optimization: `bayesian_opt`, `evolutionary`, `gnn`,
+  `data_assimilation`, `optuna` (Sano-Akiba-Imamura textbook), `pinn`,
   `topology_optimization`.
 - 19 application + theory: `motor` (ONELAB + Liu Xinyao + Hollaus +
   Wakao + Hane Cauer), `accelerator`, `fusion`, `maglev_linear`,
@@ -541,7 +705,7 @@ total +8300 lines across fusion / ndt / litz_transmission / rna_mec
   importability of all 36 subpackages, catalog floor (≥30),
   status-tool-policy gate (every server must wire
   `register_status_tool`), overview shape, by_tag('optimization')
-  finds ≥4, related('mcmc') includes 'optuna'.
+  finds ≥4, related('optuna') includes 'bayesian-opt'.
 - NEW `tests/conftest.py` — resolves `radia_mcp` from this checkout's
   src/ regardless of editable install state.
 

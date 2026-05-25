@@ -3,7 +3,7 @@
 Adapted from wjc9011/COMSOL_Multiphysics_MCP src/async_handler/solver.py
 (which wraps long COMSOL solves). Generalized here for arbitrary
 long-running commands (Cubit mesh + NGSolve solve + Radia C++ Solve
-+ Optuna sweep + MCMC chain, etc.).
++ Optuna sweep, etc.).
 
 Why bother:
   - calc_motor_transient.py / calc_fem_kelvin.py / calc_motor_lamination.py

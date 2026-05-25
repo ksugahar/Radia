@@ -130,9 +130,9 @@ concept X?" without trial-and-error.
 ```python
 # 4 catalog tools + 1 health probe
 radia_mcp_overview()                  # all 36 servers + 43 tags
-radia_mcp_get("mcmc")                 # full info for one server
+radia_mcp_get("optuna")               # full info for one server
 radia_mcp_by_tag("optimization")      # filter (returns 6 matches)
-radia_mcp_related("mcmc")             # cross-link map (mcmc → optuna, ...)
+radia_mcp_related("optuna")           # cross-link map (optuna → bayesian-opt, ...)
 radia_mcp_health()                    # importability probe of all 36
 ```
 
@@ -144,7 +144,7 @@ dispatcher-style servers: the topic enum) tools.
 
 ```
 radia_mcp_by_tag("optimization")
-  → [optuna, bayesian-opt, evolutionary, mcmc, topology-optimization,
+  → [optuna, bayesian-opt, evolutionary, topology-optimization,
      data-assimilation, gnn, pinn]
   → optuna_status()              # confirm tools available
   → optuna_topics()              # ['usage', 'algorithm',

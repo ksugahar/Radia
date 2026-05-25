@@ -58,7 +58,7 @@ def radia_mcp_overview() -> dict:
 
 @mcp.tool()
 def radia_mcp_get(name: str) -> dict:
-    """Look up one server by short name (e.g. 'mcmc', 'ih', 'kelvin')."""
+    """Look up one server by short name (e.g. 'optuna', 'ih', 'kelvin')."""
     info = catalog.get(name)
     if info is None:
         return {
@@ -85,7 +85,7 @@ def radia_mcp_by_tag(tag: str) -> dict:
 
 @mcp.tool()
 def radia_mcp_related(name: str) -> dict:
-    """Servers that pair well with `name` (e.g. radia_mcp_related('mcmc')
+    """Servers that pair well with `name` (e.g. radia_mcp_related('optuna')
     returns optuna + bayesian-opt + topology-optimization)."""
     related = catalog.find_related(name)
     return {
@@ -173,8 +173,8 @@ def main():
         opt = radia_mcp_by_tag("optimization")
         print(f"  servers tagged 'optimization': {opt['n_matches']}")
         # Related query
-        rel = radia_mcp_related("mcmc")
-        print(f"  related to mcmc: {[r['name'] for r in rel['related']]}")
+        rel = radia_mcp_related("optuna")
+        print(f"  related to optuna: {[r['name'] for r in rel['related']]}")
         print("  PASSED")
         return
 
