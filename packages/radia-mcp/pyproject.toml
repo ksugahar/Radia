@@ -4,8 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.74.0"
-description = "MCP servers for the Radia CAE ecosystem. 0.74.0 (2026-05-25): full absorption of W:\\30_CauerLadderNetwork (~500 .m/.mph/.docx/.pdf across 16 topic folders + 6 root references) into 5 new mor.cln_* knowledge modules (5238 lines / 57 topics). New tools: mor_cln_practice (CLN.m + COMSOL withsol idiom + Robin/Infinite/Kelvin BC + Legendre n=9 analytical), mor_cln_multiport (Kuriyama 2019 multi-expansion + 3D Gridap.jl HCurl), mor_cln_advanced (FP-CLN Sugahara-Tobita-Matsuo-Takahashi CEFC 2024 + nonlinear 4-gen lineage), mor_cln_specialty (Hiruma non-symmetric Lanczos + Nagamine error theory + BEM+FEM TSVD coupling), mor_cln_collab (CauerI<->II form conversion + Endo/Matsumoto Hosei). 213k chars of lab-specialty CLN knowledge. 0.73.0/0.72.0: COMSOL multilingual RAG absorption. 0.71.0: 4 COMSOL knowledge modules. 0.70.0: panel_review."
+version = "0.75.0"
+# IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
+# 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
+# the per-release changelog accumulated >512 chars here.  Keep this
+# short and stable; release-specific notes go in CHANGELOG.md.
+description = "MCP servers for the Radia CAE ecosystem -- Cubit / build123d / gmsh / NGSolve / PEEC / IH + 30+ specialized knowledge subpackages (panel-review, CLN MOR, COMSOL multilingual RAG, electromagnet, magnetic-materials, motor, accelerator, NMR/MRI, NDT, metamaterial, WPT, TEAM benchmark, etc.).  See README.md + CHANGELOG.md for per-release notes."
 readme = "README.md"
 license = {text = "BSD-3-Clause"}
 requires-python = ">=3.10"
