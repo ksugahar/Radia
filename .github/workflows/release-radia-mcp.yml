@@ -67,6 +67,24 @@ jobs:
                     f"in lockstep, not just one.")
               sys.exit(1)
           print(f"OK version consistency: {pkg_ver}")
+
+          # PyPI Warehouse Summary length limit is 512 chars.  v0.72.0
+          # / v0.73.0 / v0.74.0 silently failed publish-pypi (twine
+          # reject) because pyproject.toml description grew past 512
+          # when each release dumped its changelog there.  Fail fast
+          # in CI so the next attempt doesn't burn another version
+          # number on a Warehouse-side rejection.
+          summary = next((l[len("Summary: "):] for l in
+              zf.read(next(n for n in names
+                  if n.endswith(".dist-info/METADATA"))).decode().splitlines()
+              if l.startswith("Summary: ")), "")
+          if len(summary) > 512:
+              print(f"::error::Summary too long: {len(summary)} chars "
+                    f"(PyPI Warehouse hard limit: 512).  Shorten "
+                    f"pyproject.toml `description = ...` to <=512 chars; "
+                    f"per-release notes go in CHANGELOG.md / README.md.")
+              sys.exit(1)
+          print(f"OK Summary length: {len(summary)} chars (<= 512)")
           PY
 
       - name: Publish to PyPI
