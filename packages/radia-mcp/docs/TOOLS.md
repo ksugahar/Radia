@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **297 tools** across 38 MCP servers.
+Total: **325 tools** across 40 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -11,7 +11,7 @@ Total: **297 tools** across 38 MCP servers.
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 31 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 9 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 10 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
@@ -25,7 +25,7 @@ Total: **297 tools** across 38 MCP servers.
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
 | [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 4 |
-| [`mcp-server-optuna`](#mcp-server-optuna) | `radia_mcp.optuna` | 5 |
+| [`mcp-server-optuna`](#mcp-server-optuna) | `radia_mcp.optuna` | 6 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
 | [`mcp-server-mcmc`](#mcp-server-mcmc) | `radia_mcp.mcmc` | 6 |
@@ -40,7 +40,9 @@ Total: **297 tools** across 38 MCP servers.
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
+| [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 6 |
+| [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 6 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
@@ -226,6 +228,7 @@ Module: `radia_mcp.fem.server`
 | `fem_status` | (no description) |
 | `fem_time_domain_axisym` | Time-domain, axisymmetric (Henrotte), harmonic balance, HF, circuit coupling. |
 | `fem_xfem_comsol` | XFEM in COMSOL Multiphysics (Jafari-Broumand-Vahab-Khalili 2021). |
+| `fem_xfem_em_hiruma` | EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current |
 
 ## `mcp-server-bem`
 
@@ -421,6 +424,7 @@ Module: `radia_mcp.optuna.server`
 | Tool | Description |
 |---|---|
 | `optuna_algorithm` | Optuna algorithm internals: samplers, MO, constraints, pruning. |
+| `optuna_kanamori2016_textbook` | Kanamori et al. (2016) continuous-optimization textbook companion. |
 | `optuna_lab_applications` | Lab applications: how Optuna plugs into Radia / NGSolve work. |
 | `optuna_recipes_advanced` | Advanced lab BBO recipes that wire Optuna onto a Stage-2 calc_*.py. |
 | `optuna_status` | (no description) |
@@ -624,6 +628,17 @@ Module: `radia_mcp.mathematica.server`
 | `mathematica_unit_convert` | 物理単位変換 (Wolfram Quantity / UnitConvert)。 |
 | `mathematica_vector_calc` | ベクトル解析: Curl / Div / Grad / Laplacian / Cross / Dot。 |
 
+## `mcp-server-md2html`
+
+_Markdown -> self-contained HTML with MathJax v3 + tables + fenced code + codehilite + base64 image embed + [N] reference linking + UTF-8 / cp932 fallback for legacy Japanese files.  Promoted from mcp-server-document._
+
+Module: `radia_mcp.md2html.server`
+
+| Tool | Description |
+|---|---|
+| `md2html_convert` | Convert a Markdown file to a self-contained HTML file. |
+| `md2html_status` | (no description) |
+
 ## `mcp-server-graph`
 
 _Sugahara Lab publication-figure style guide: IEEE / IEEJ font/size profiles, MATLAB + Matplotlib snippets, lab style rules (units in parentheses, no in-figure title, Times New Roman serif).  Promoted from mcp-server-document._
@@ -638,6 +653,39 @@ Module: `radia_mcp.graph.server`
 | `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
 | `paper_figure_quality_rules` | Why paper-quality figures need a margin-efficiency gate. |
 | `paper_figure_recipe` | Generate a self-contained Python recipe for a paper-quality figure. |
+
+## `mcp-server-chart2d`
+
+_22 paper-quality 2D charts as MCP tools: line / loglog / semilog / step / errorbar / fill_between / bode / histogram / bar / box / violin / ecdf / contour / contourf / pcolormesh / quiver / streamplot / imshow / polar / scatter / phase (Nyquist).  Each accepts return_mode='recipe' (Python text) | 'image' (MCP Image inline) | 'both'.  Inherits radia_mcp.graph profile + gate stack._
+
+Module: `radia_mcp.chart2d.server`
+
+| Tool | Description |
+|---|---|
+| `chart2d_bar` | Vertical bar chart. |
+| `chart2d_bode` | Bode pair: magnitude (top) + phase (bottom), shared frequency axis. |
+| `chart2d_box` | Box-and-whisker plot. |
+| `chart2d_catalog` | List the 22 2D chart types and their groupings. |
+| `chart2d_contour` | Contour lines of Z(X, Y). |
+| `chart2d_contourf` | Filled contours.  Default viridis = perceptually uniform + CVD safe. |
+| `chart2d_ecdf` | Empirical cumulative distribution. |
+| `chart2d_errorbar` | Line + error bars for measured data with uncertainty. |
+| `chart2d_fill_between` | Filled band between y and y2 (defaults to 0).  Confidence / hysteresis. |
+| `chart2d_histogram` | 1D histogram. |
+| `chart2d_imshow` | 2D array as image / heatmap. |
+| `chart2d_line` | Standard line plot. y can be 1D or 2D (multiple traces). |
+| `chart2d_loglog` | Log-log plot.  Straight line of slope alpha = power-law y=k*x^alpha. |
+| `chart2d_pcolormesh` | Irregular-grid heatmap. |
+| `chart2d_phase` | Complex-plane (Re vs Im) -- Nyquist / impedance locus / root locus. |
+| `chart2d_polar` | Polar / radial plot. |
+| `chart2d_quiver` | 2D vector field as arrows. |
+| `chart2d_scatter` | Scatter plot of (x, y) points. |
+| `chart2d_semilogx` | Linear y, log10 x.  Bode-magnitude / frequency-domain default. |
+| `chart2d_semilogy` | Log10 y.  Decaying / growing quantities (relaxation, noise tails). |
+| `chart2d_status` | (no description) |
+| `chart2d_step` | Stair-step plot.  PWM / discrete-time / step histogram. |
+| `chart2d_streamplot` | Field lines of a 2D vector field on a REGULAR grid. |
+| `chart2d_violin` | Violin plot (KDE-as-fill). |
 
 ## `mcp-server-literature-index`
 
