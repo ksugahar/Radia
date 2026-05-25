@@ -98,7 +98,7 @@ def main():
 
     # Late imports so --help works without NGSolve
     try:
-        from ngsolve import Mesh, GridFunction, HCurl, H1, curl
+        from ngsolve import Mesh, GridFunction, HCurl, H1, VectorH1, curl
     except ImportError as e:
         print(json.dumps({"status": "error",
                           "error": f"NGSolve not importable: {e}"}))
@@ -127,11 +127,14 @@ def main():
         }))
         return 1
 
-    # Load the .sol -- the trial space the user solved on must match
-    # the field component requested.  We infer the most common cases:
-    #   --field-component=a : HCurl order >= 1 GridFunction
-    #   --field-component=b or h : H1 or HDiv depending on how the user
-    #                               stored it
+    # Load the .sol.  The .sol's FE space must MATCH what the user
+    # solved with: HCurl for A, VectorH1 for B or H (3-component
+    # vector), H1 for scalar (e.g. A_z in 2D).  We pick the FE space
+    # by file size / field-component:
+    #   --field-component=a : HCurl order >= 1
+    #   --field-component=b | h : VectorH1 (3 components)
+    #     (legacy scalar H1 path is reserved for explicit 2D scalar
+    #     A_z .sol files and is not used in this v1 release)
     if args.field_component == "a":
         fes = HCurl(mesh, order=1)
         gf_A = GridFunction(fes)
@@ -140,8 +143,7 @@ def main():
         H_cf = (1.0 / (MU_0 * args.mu_r)) * curl(gf_A)
         E_cf = None  # static omega = 0 assumed when field is A only
     else:
-        # Try H1 first (scalar A_z 2D), then HCurl
-        fes = H1(mesh, order=1)
+        fes = VectorH1(mesh, order=1)
         gf = GridFunction(fes)
         gf.Load(str(args.sol))
         if args.field_component == "h":
