@@ -872,8 +872,11 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         std::vector<int> vols_in_block = CubitInterface::parse_cubit_list(
             "volume", "in block " + std::to_string(bid));
         for (int vid : vols_in_block) {
-          RefVolume* rv = GeometryQueryTool::instance()->get_ref_volume(vid);
-          if (rv) total_vol += rv->measure();
+          // 2026-05-25: Cubit 2025.12 removed GeometryQueryTool::instance().
+          // Use CubitInterface::get_volume_volume() instead -- returns the
+          // same CAD volume measure RefVolume::measure() does, and works
+          // identically on a missing vid (returns 0).
+          total_vol += CubitInterface::get_volume_volume(vid);
         }
         if (!first) jf << ",";
         jf << "\n    \"" << bname << "\": " << std::scientific << total_vol;
@@ -892,8 +895,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       for (int fi = 1; fi <= nfd_json; fi++) {
         int cubit_surf_id = orig_surf_ids[fi - 1];
         std::string bname = ng_mesh->GetBCName(fi - 1);
-        RefFace* rf = GeometryQueryTool::instance()->get_ref_face(cubit_surf_id);
-        double cad_area = rf ? rf->area() : 0.0;
+        // 2026-05-25 Cubit 2025.12: GeometryQueryTool::instance() removed.
+        double cad_area = CubitInterface::get_surface_area(cubit_surf_id);
         bname_to_area[bname] += cad_area;
       }
       first = true;
@@ -912,8 +915,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
         std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(
             "surface", "in curve " + std::to_string(cid));
         if (parent_surfs.size() < 2) continue;
-        RefEdge* re = GeometryQueryTool::instance()->get_ref_edge(cid);
-        double cad_len = re ? re->measure() : 0.0;
+        // 2026-05-25 Cubit 2025.12: GeometryQueryTool::instance() removed.
+        double cad_len = CubitInterface::get_curve_length(cid);
         std::string ename = "curve_" + std::to_string(cid);
         if (!first) jf << ",";
         jf << "\n    \"" << ename << "\": " << std::scientific << cad_len;

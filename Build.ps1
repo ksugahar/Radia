@@ -37,6 +37,19 @@ $ErrorActionPreference = "Stop"
 $PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$PROJECT_DIR\build-msvc"
 
+# ---- Cubit install discovery ------------------------------------------------
+# Was: hardcoded 'Coreform Cubit 2025.3'. Now: dot-source tools/find_cubit.ps1
+# which picks the highest-version 'Coreform Cubit *' under Program Files
+# (or honors $env:CUBIT_INSTALL_DIR). Sets $CubitInstallDir / $CubitBinDir /
+# $CubitCmakeDir / $CubitVersion. Cubit-plugin build is SKIPPED (not an
+# error) when discovery returns $null -- radia core still builds.
+. "$PROJECT_DIR\tools\find_cubit.ps1"
+if ($CubitInstallDir) {
+    Write-Host "Cubit: $CubitVersion at $CubitInstallDir"
+} else {
+    Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
+}
+
 # Intel MKL (required for BLAS/LAPACK)
 if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
     $INTEL_MKL = $env:MKLROOT
@@ -194,7 +207,12 @@ echo   Building radia_cubit_mesh (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
 set "CUBIT_PLUGIN_BUILD=$PROJECT_DIR\src\cubit_plugin\build-pyd"
-set "CUBIT_DIR=C:\Program Files\Coreform Cubit 2025.3\cmake"
+rem CUBIT_DIR is auto-discovered via tools/find_cubit.ps1 (highest-version
+rem 'Coreform Cubit *' under C:\Program Files). Override with env var
+rem CUBIT_INSTALL_DIR (the helper appends \cmake automatically). The
+rem outer PowerShell wrapper passes $CubitCmakeDir into the batch via
+rem this set; if discovery failed the wrapper exited before us.
+set "CUBIT_DIR=$CubitCmakeDir"
 set "NETGEN_DIR=C:\Program Files\Python312\Lib\site-packages\netgen"
 rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
 rem No external NETGEN_SRC_DIR needed.
