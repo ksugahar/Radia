@@ -25,13 +25,24 @@
 #include "CubitMessageHandler.hpp"
 #include <algorithm>
 #include <cstring>
+#include <memory>   // 2026-05-25: Cubit 2025.12 (CUBIT_VERSION_ALLINT 17040+)
+                    // switched CubitMessage::{get,set}_message_handler to
+                    // std::shared_ptr<CubitMessageHandler> and made them
+                    // non-static. See ScopedLearnEditionFilter below.
 
 namespace radia {
 
 class LearnEditionFilter : public CubitMessageHandler {
  public:
-  explicit LearnEditionFilter(CubitMessageHandler* previous)
-      : previous_(previous) {}
+  // 2026-05-25: 'previous' is now a shared_ptr because Cubit 2025.12's
+  // get_message_handler() returns shared_ptr. We retain the same RAII
+  // ownership semantics (filter holds a non-owning reference; the
+  // ScopedLearnEditionFilter destructor restores `previous` to the
+  // active slot). Storing the shared_ptr also keeps the previous
+  // handler alive for the lifetime of the filter, which is safer
+  // than the raw-pointer pattern.
+  explicit LearnEditionFilter(std::shared_ptr<CubitMessageHandler> previous)
+      : previous_(std::move(previous)) {}
 
   void print_message(const char* message) override {
     if (!message) {
@@ -77,7 +88,7 @@ class LearnEditionFilter : public CubitMessageHandler {
   int swallow_count() const { return swallow_count_; }
 
  private:
-  CubitMessageHandler* previous_;
+  std::shared_ptr<CubitMessageHandler> previous_;
   int swallow_count_ = 0;
 };
 
@@ -91,31 +102,38 @@ class LearnEditionFilter : public CubitMessageHandler {
 class ScopedLearnEditionFilter {
  public:
   ScopedLearnEditionFilter() {
-    previous_ = CubitMessage::get_message_handler();
-    filter_ = new LearnEditionFilter(previous_);
-    CubitMessage::set_message_handler(filter_);
-    saved_error_count_ = CubitMessage::instance()->get_error_count();
+    // 2026-05-25 (Cubit 2025.12 / CUBIT_VERSION_ALLINT 17040+):
+    // get/set_message_handler are now non-static AND shared_ptr-based.
+    // The shared_ptr's lifetime semantics also remove the need for the
+    // raw `delete filter_;` in our destructor.
+    auto* msg = CubitMessage::instance();
+    previous_ = msg->get_message_handler();
+    filter_ = std::make_shared<LearnEditionFilter>(previous_);
+    msg->set_message_handler(filter_);
+    saved_error_count_ = msg->get_error_count();
   }
 
   ~ScopedLearnEditionFilter() {
+    auto* msg = CubitMessage::instance();
     // Subtract the number of spurious messages we swallowed from the
     // error counter, but never go below the pre-filter baseline.
     // That preserves legitimate errors logged during our execute()
     // while cancelling the Cubit-internal 50k-trap side effects.
-    const int current = CubitMessage::instance()->get_error_count();
+    const int current = msg->get_error_count();
     const int target = std::max(saved_error_count_,
                                  current - filter_->swallow_count());
-    CubitMessage::instance()->reset_error_count(target);
-    CubitMessage::set_message_handler(previous_);
-    delete filter_;
+    msg->reset_error_count(target);
+    msg->set_message_handler(previous_);
+    // No `delete filter_;` -- shared_ptr handles cleanup when both
+    // `filter_` and the Cubit-side handler-slot copy go out of scope.
   }
 
   ScopedLearnEditionFilter(const ScopedLearnEditionFilter&) = delete;
   ScopedLearnEditionFilter& operator=(const ScopedLearnEditionFilter&) = delete;
 
  private:
-  CubitMessageHandler* previous_ = nullptr;
-  LearnEditionFilter* filter_ = nullptr;
+  std::shared_ptr<CubitMessageHandler> previous_;
+  std::shared_ptr<LearnEditionFilter> filter_;
   int saved_error_count_ = 0;
 };
 
