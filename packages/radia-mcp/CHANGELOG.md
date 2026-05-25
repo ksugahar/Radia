@@ -5,6 +5,44 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.76.0 — optuna: 5 advanced lab BBO recipes (no Gurobi spinoff)
+
+Released 2026-05-25.
+
+User decision: Gurobi (white-box LP/MIP/QP) is structurally
+inappropriate for the lab's black-box FEM-as-objective EM design
+problems. `radia_mcp.optuna` stays as the canonical optimization
+MCP. Reinforces the locked decision recorded at
+`memory/decision_gurobi_dropped_optuna_only.md`.
+
+What shipped:
+
+- NEW `radia_mcp.optuna.recipes_advanced_knowledge` (~625 lines /
+  5 topics / ~25k chars) -- complements the existing 5 pattern-level
+  recipes in `lab_applications_knowledge` with production-grade
+  deep dives that wire Optuna onto an existing Stage-2 calc_*.py
+  script.
+
+  | Recipe | Drives | Headline |
+  |---|---|---|
+  | `pmsm_cogging` | calc_motor_transient.py | NSGA-II multi-obj cogging T_pp + T_avg over magnet alpha_p + slot b_s + skew |
+  | `wpt_misalignment` | calc_inductance.py --coil-solver peec | Worst-case eta across 5x3 lateral/vertical offset grid; MedianPruner intermediate reporting |
+  | `shielding_layout` | calc_shielding.py | mu-metal / Cu sheet 1-4 placement; Pareto |B| at sensor vs shield mass |
+  | `litz_strand_design` | calc_inductance.py --coil-solver peec | n_strands x strand_d x twist_pitch with cost+DC_R pre-filter |
+  | `karl_multifidelity` | calc_fem_kelvin.py | Karl iter intermediate_value reporting kills bad geometry in seconds |
+
+- NEW `@mcp.tool() optuna_recipes_advanced(topic)` in
+  `optuna/server.py`. Wired into --selftest (6 explicit topics
+  + "all" verified > 500 chars each).
+- TOOLS.md regenerated: mcp-server-optuna now lists 5 tools
+  (was 4: usage / algorithm / lab_applications / status).
+- Aliases supported: pmsm, cogging, wpt, misalignment, robustness,
+  shielding, shield, litz, strand, karl, pruning_recipe,
+  multifidelity, multi_fidelity.
+
+Suite: 9/9 meta_health pytest pass, optuna --selftest PASSED
+(27 topics x 4 tools, 25k+ chars on the new tool).
+
 ## 0.74.0 — Full CLN corpus absorption (W:\30_CauerLadderNetwork)
 
 Released 2026-05-25.

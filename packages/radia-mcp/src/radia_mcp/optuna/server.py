@@ -26,6 +26,10 @@ from ..common import register_status_tool
 from .usage_knowledge import get_usage_documentation
 from .algorithm_knowledge import get_algorithm_documentation
 from .lab_applications_knowledge import get_lab_applications_documentation
+# Advanced lab BBO recipes (2026-05-25): wire Optuna onto Stage-2
+# calc_*.py scripts for PMSM cogging / WPT misalignment robustness /
+# shielding placement / litz strand AC R / Karl multi-fidelity pruning.
+from .recipes_advanced_knowledge import get_recipes_advanced_documentation
 
 mcp = FastMCP("mcp-server-optuna")
 
@@ -110,6 +114,48 @@ def optuna_lab_applications(topic: str = "all") -> str:
                            corpus via mcp-server-literature-index
     """
     return get_lab_applications_documentation(topic)
+
+
+@mcp.tool()
+def optuna_recipes_advanced(topic: str = "all") -> str:
+    """Advanced lab BBO recipes that wire Optuna onto a Stage-2 calc_*.py.
+
+    Five lab-specific recipes (~4-6k chars each) with runnable code
+    that drives an existing Stage-2 CLI in src/radia/panels/:
+
+    Topics:
+        "all"                - Everything (~25k chars)
+        "overview"           - Recipe index + when to pick which
+        "pmsm_cogging"       - Magnet alpha_p + slot b_s + skew angle:
+                               cogging torque + ripple multi-objective
+                               (NSGA-II), drives calc_motor_transient.py
+        "wpt_misalignment"   - Compensation topology + L/C tuning;
+                               objective = worst-case eta across a
+                               5x3 lateral/vertical offset grid;
+                               MedianPruner kills bad trials early.
+                               Drives calc_inductance.py --coil-solver peec.
+        "shielding_layout"   - mu-metal / Cu sheet placement (1-4 sheets)
+                               with conditional dim search space;
+                               Pareto: |B| at sensor zone vs shield mass.
+        "litz_strand_design" - n_strands x strand_d x twist_pitch with
+                               industry-standard discrete n_strands,
+                               cost + DC_R pre-filter to skip expensive
+                               PEEC on infeasible trials. Drives
+                               calc_inductance.py --coil-solver peec.
+        "karl_multifidelity" - IH sweep with Karl iter intermediate_value
+                               reporting + MedianPruner; bad geometries
+                               die in seconds. Drives calc_fem_kelvin.py.
+
+    Aliases: pmsm/cogging, wpt/misalignment/robustness,
+    shielding/shield, litz/strand, karl/pruning_recipe/multifidelity.
+
+    Each recipe lists: variables + search space, objective + sampler,
+    paste-runnable code, trial budget, expected outcome, lab tips,
+    cross-references. Complements lab_applications_knowledge.py's
+    5 pattern-level recipes; this module is the production-grade
+    deep dive.
+    """
+    return get_recipes_advanced_documentation(topic)
 
 
 # ============================================================
@@ -218,6 +264,10 @@ def main():
             ("optuna_lab_applications", optuna_lab_applications,
              ["overview", "coil_design", "motor_topology",
               "inverse", "wpt", "literature"]),
+            ("optuna_recipes_advanced", optuna_recipes_advanced,
+             ["overview", "pmsm_cogging", "wpt_misalignment",
+              "shielding_layout", "litz_strand_design",
+              "karl_multifidelity"]),
         ]:
             for t in topics:
                 doc = fn(t)
