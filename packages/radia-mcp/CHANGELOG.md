@@ -5,6 +5,923 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.93.0 — multi-file .tex resolver + abstract auto-extract + E2E real-paper validation
+
+Released 2026-05-26.
+
+User directive: "残課題をクリアしてからpypi公開＋100号機とmdxにデプロイ
+だね。" (clear the 3 residual paper-writing gaps then PyPI publish +
+deploy to 100号機/mdx).
+
+Closes 3 known gaps that surfaced during v0.92.0 selftest review:
+
+  1. `em_submission_gate` could only see a SINGLE .tex file -- any
+     paper that used `\input{chapter1}` style modular structure had
+     half its checks running on an essentially-empty main file.
+  2. The gate forced the caller to pass `abstract_text=...` manually
+     because there was no way to extract the abstract body from a
+     .tex source.  Real submissions have the abstract in the source
+     already; manual re-typing was pure friction.
+  3. The strengthening passes (v0.88-0.92) never ran end-to-end on
+     an accepted real lab paper -- only on synthetic test fixtures.
+
+### NEW module `_tex_resolver.py` (~340 LOC) -- 2 tools, 2 helpers
+
+  1. `resolve_input_chain(main_tex_path, max_depth=8, encoding="utf-8")`
+        - Recursively inlines `\input{X}` and `\include{X}` into a
+          single merged string.
+        - Walks the LaTeX-canonical search semantics (relative paths
+          resolved against INCLUDING file's directory, not main file's).
+        - max_depth=8 cap prevents pathological cyclic includes from
+          blowing the stack.
+        - Detects + skips duplicates (LaTeX would re-typeset; for
+          static analysis a single pass is correct).
+        - Detects + skips `% \input{X}` commented lines.
+        - Returns metadata: files_resolved, files_missing,
+          files_duplicate, total_chars.
+
+  2. `extract_abstract_from_tex(tex_source)` -- 4-pattern extraction:
+        - `\begin{abstract}...\end{abstract}` (most common)
+        - `\begin{IEEEabstract}...\end{IEEEabstract}` (IEEE conf)
+        - `\abstract{...}` (IEEEtran legacy)
+        - `\textbf{Abstract}\\\\ ... \end{quote}` (AAAI-style)
+
+  3. `paper_writing_resolve_input_chain(main_tex_path, max_depth=8,
+      return_merged_text=False, encoding="utf-8")` -- MCP tool.
+
+  4. `paper_writing_extract_abstract(tex_path, encoding="utf-8",
+      auto_resolve_inputs=True)` -- MCP tool.  Falls back to
+      `resolve_input_chain` if abstract not found in main file --
+      handles the case where the abstract is in a separate
+      `\input{abstract}` subfile.
+
+### `em_submission_gate` extended (transparent automation)
+
+  Two new parameters (both default True, fully backward-compatible):
+  - `auto_extract_abstract=True`: if `abstract_text` is empty AND
+    `tex_path` is supplied, automatically extract via the 4-pattern
+    matcher and run the abstract-only checks on it.
+  - `auto_resolve_inputs=True`: if `tex_path` is supplied, run
+    `resolve_input_chain` first.  When `\input` subfiles are found,
+    write a merged temp file and route the 4 tex-based checks
+    (forward_reference / equation_numbering / count_underlines /
+    undefined_variables) through the MERGED text.
+
+  Two new check categories appear in the gate report:
+  - `multifile_resolved`: pass + "resolved N \input subfiles" OR
+    skip + reason.
+  - `abstract_extracted`: pass + character count + source file OR
+    skip + reason.
+
+### Real-paper E2E validation
+
+  Ran the full gate on a real 18-year-old Japanese lab thesis
+  (cp932 encoding, 7 chapter subfiles, 71KB merged):
+  - multifile_resolved: pass (7 \input chains inlined, 0 missing)
+  - figure_forward_reference: pass
+  - equation_numbering: pass
+  - count_underlines: pass
+  - undefined_variables: caught 40 real undefined math symbols
+  - text_image_overlap: caught 4 real text-on-figure overlaps
+  - page_whitespace_anomalies: warned about 80 mostly-blank pages
+  All checks ran cross-file, the resolver+extract architecture works
+  on a real (not toy) document.
+
+### Tool count
+
+  v0.92.0: 89 paper_writing_* tools + 1 prompt
+  v0.93.0: 89 + 2 = **91 paper_writing_* tools** + 1 prompt
+
+### Tests
+
+  +10 tests covering:
+  - resolve_input_chain: inlining, missing-subfile graceful,
+    commented \input skipped
+  - extract_abstract: standard env, IEEEabstract env, not-found
+  - paper_writing_extract_abstract: direct path, via input-resolution
+  - em_submission_gate: auto-extracts abstract, resolves multifile tex
+
+### Verification
+
+  - Full in-process pytest: 258 + 10 = **268 tests pass**
+  - mcp-server-paper-writing --selftest: all sections OK
+  - Real-paper E2E: gate ran 12 checks on cp932 7-chapter thesis
+
+## 0.92.0 — pixel-accurate overlap/overflow detection + undefined-variable check
+
+Released 2026-05-26.
+
+User directives:
+  1. "web 検索で、agentic paper writing の場合に、画像出力 or PDF 出力
+     の品質チェック（重なりやはみだし）をどうやって検出しているかを
+     調べて。"
+  2. "未定義の変数をチェックすることも追加してください。"
+
+Web-research basis (2026-05-26):
+  * arXiv:2106.00676 -- VILA (Shen-Lo-Wang) visual layout groups
+  * arXiv:2604.05018 -- PaperOrchestra multi-agent paper writing
+  * arXiv:2512.02589 -- PaperDebugger plugin in-editor checker
+  * arXiv:2604.01128 -- Paper Reconstruction Evaluation (Presentation
+    + Hallucination axes)
+  * pymupdf Rect.intersects() + Rect.intersect() bbox primitives
+  * pdfminer.six char_margin / line_overlap grouping algorithm
+  * misc0110/paper-linter -- generic LaTeX lint (for symbol-check
+    comparison)
+
+### NEW module `_pdf_overlap_detection.py` (~450 LOC) -- 4 tools
+
+  1. `paper_writing_detect_text_image_overlap(pdf, iou_threshold=0.02,
+      min_intersection_area_pt2=50.0, ignore_full_page_images=True)`
+        - Walks every text block bbox vs every image bbox via
+          pymupdf.get_image_info + get_text("dict").
+        - Flags IoU + intersection-area dual threshold.
+        - Ignores full-page journal-template images by default.
+        - Catches: caption-on-figure, full-image-reappearing-under-text
+          (clip+viewport trap), page-number-on-header-logo.
+
+  2. `paper_writing_detect_text_overflow_page(pdf, use_cropbox=True,
+      overflow_tolerance_pt=1.0)`
+        - Compares every text bbox to CropBox (or MediaBox).
+        - Flags > 1pt past any side.
+        - Catches: wide \\verbatim, wide table, full-width
+          \\includegraphics in single-column figure, long inline eq.
+        - Complements paper_writing_check_overfull_hbox (reads .log) --
+          this catches OVERFLOW that LaTeX itself didn't warn about.
+
+  3. `paper_writing_detect_overlapping_text_blocks(pdf, iou_threshold=0.05)`
+        - Pairwise text-text IoU on every page.
+        - Catches: caption straddling page break, two-column
+          collision, negative \\vspace pushing paragraphs together.
+
+  4. `paper_writing_pdf_overlap_recipe()` -- 4-step decision tree +
+     web-research citations.
+
+### NEW module `_undefined_variables.py` (~350 LOC) -- 1 tool
+
+  `paper_writing_check_undefined_variables(tex_path, extra_whitelist,
+   report_first_use=True, max_reported=50)`
+
+  Detection algorithm (3-stage regex):
+    1. EXTRACT symbols from 8 math environments (equation / align /
+       eqnarray / gather / $...$ / \\(...\\) / $$...$$ / \\[...\\])
+    2. BUILD defined-set from:
+       * Nomenclature blocks (\\begin{nomenclature} /
+         \\begin{IEEEdescription} / \\section{Notation|Symbols})
+       * "where ..." clauses after equations
+       * Inline definitions ("Let $X$ denote ..." / "$X$ is the ...")
+    3. SUBTRACT a UNIVERSAL_WHITELIST of 80+ universally-recognized
+       symbols (\\pi, \\omega, \\mu_0, t, f, x, y, z, E, B, H, ...)
+
+  Returns ranked list of symbols never defined, with first-occurrence
+  source context (~100 chars).
+
+  Lab POLICY (matches em_paper_style 'reviewer_patterns' #11):
+  every math symbol used MUST be defined in Nomenclature OR "where"
+  OR inline.  Universal whitelist exempts conventional symbols.
+  extra_whitelist parameter for project-specific generic indices.
+
+### em_submission_gate extended with 3 new checks
+
+  `paper_writing_em_submission_gate()` now runs (when respective
+  inputs supplied):
+  - `undefined_variables` (tex_path): FAIL if any math symbol undefined.
+  - `text_image_overlap` (pdf_path): FAIL if any overlap.
+  - `text_overflow_page` (pdf_path): FAIL if any text past page edge.
+
+  All three default to status="fail" since these are reviewer-visible
+  defects.
+
+### Tool count
+
+  v0.91.0: 84 paper_writing_* tools + 1 prompt
+  v0.92.0: 84 + 5 = **89 paper_writing_* tools** + 1 prompt
+
+### Tests
+
+  +17 tests covering:
+  - PDF overlap: text-on-image flagged (synthetic PDF), clean-PDF
+    case, text-overflow flagged (text past right edge), clean case,
+    text-text overlap clean, recipe content, IoU math (4 corner cases)
+  - Undefined variables: clean paper with where-clauses (0 undefined),
+    \\eta_s undefined flagged, IEEEdescription nomenclature exempts
+    defined symbols, universal whitelist exempts \\pi/\\omega/\\sigma/f,
+    extra_whitelist runtime arg, missing tex returns error,
+    first-occurrence context retrieved
+
+### Verification
+
+  - mcp-server-paper-writing --selftest: 14 sections OK
+  - Full in-process pytest: 244 + 14 = **258 tests pass**
+
+## 0.91.0 — citation-verification policy: reference.bib + search-and-verify enforcement
+
+Released 2026-05-26.
+
+User directive: "paper-writing では、reference.bib を使うことと検索
+して裏を取ることを忘れずに。"
+
+The #1 AI-assisted-paper failure mode is **citation hallucination** --
+a plausible-looking DOI / author / year that does NOT correspond to
+any real paper.  Reviewers catch every single one; one hallucinated
+cite taints the whole submission.  This release ENFORCES the lab
+policy at three levels:
+
+### Level 1: NEW behavioral recipe
+
+  `paper_writing_citation_workflow_recipe()` -- 6-step mandatory
+  workflow with strong language ("NEVER invent", "ALWAYS verify").
+  Read this BEFORE generating ANY \\cite{} or BibTeX entry.
+
+  The 6 steps:
+  1. READ the user's reference.bib first (single source of truth).
+  2. SEARCH for grounding via Crossref / Semantic Scholar / arXiv.
+  3. MATCH candidates against reference.bib (already-cited? skip).
+  4. VERIFY the DOI resolves (defensive double-check).
+  5. INSERT into reference.bib only if "ready_to_insert" verdict.
+  6. LINT after insertion (paper_writing_lint_reference_format).
+
+  Plus explicit "when verification cannot complete" guidance:
+  emit \\cite{TODO: verify -- ...} marker, ask the user; do NOT
+  fabricate a placeholder DOI / author / year.
+
+### Level 2: NEW composite verification tool
+
+  `paper_writing_verify_citation(claim, bib_path, candidate_doi,
+  candidate_arxiv_id, candidate_title, search_arxiv_if_no_doi=True)`
+
+  Returns dict with verdict one of:
+  - **`"found_in_bib"`** -- already cited; reuse `matching_key`.
+    DOI matching is case-insensitive + handles `https://doi.org/`
+    prefix.  Title matching is whitespace-normalised + first 80
+    chars substring (~90% precision in practice).
+  - **`"ready_to_insert"`** -- DOI resolved via Crossref;
+    `suggested_bibtex` is the ready-to-paste entry.
+  - **`"needs_disambiguation"`** -- arXiv search returned multiple
+    candidates; user picks.
+  - **`"no_candidate_found"`** -- DOI did not resolve OR arXiv
+    search empty.  Emits TODO advice; does NOT fabricate.
+  - **`"error"`** -- bib read failed / bib_path missing.
+
+  Composes the existing tools (resolve_doi + doi_to_bibtex +
+  semantic_scholar_lookup + arxiv_search) into a single check.
+  Lightweight bib parser (regex; no pybtex dep) reads existing
+  citations.
+
+### Level 3: submission_gate enforcement
+
+  `paper_writing_em_submission_gate()` now FAILS when bib_path is
+  not supplied -- previously this was a soft skip.  The new
+  `bib_policy` check status="fail" message:
+
+    "reference.bib was not supplied.  Lab POLICY: every citation
+     must come from the user's actual .bib and be verified via
+     paper_writing_verify_citation BEFORE insertion.  Re-call
+     with bib_path=/path/to/reference.bib OR explicitly justify
+     why no .bib check applies."
+
+### NEW MCP prompt
+
+  `cite_a_claim(claim, bib_path="reference.bib")` -- surfaces the
+  policy as a prompt the AI sees when asked to insert a citation.
+
+### Tests
+
+  +8 tests covering:
+  - recipe contains the 8 policy keywords (NEVER invent, ALWAYS,
+    reference.bib, Crossref, Semantic Scholar, arXiv, verify, TODO)
+  - verify_citation no bib_path → error verdict
+  - verify_citation missing bib file → error verdict
+  - DOI already in bib → found_in_bib verdict (case + URL handling)
+  - Title already in bib → found_in_bib verdict
+  - Insufficient info → no_candidate_found verdict
+  - DOI resolve failure → no_candidate_found (does NOT fabricate)
+  - arXiv search fallback (mocked) → needs_disambiguation verdict
+
+### Tool count
+
+  v0.90.0: 82 paper_writing_* tools + 0 prompts
+  v0.91.0: 82 + 2 = **84 paper_writing_* tools + 1 prompt**
+
+### Selftest update
+
+  mcp-server-paper-writing --selftest now exercises:
+  - citation_workflow_recipe size + key-strings
+  - verify_citation no-bib refusal (offline)
+  - em_submission_gate FAILS on missing bib_path (enforces policy)
+
+## 0.90.0 — paper_writing production hardening (test suite + EM style + submission gate)
+
+Released 2026-05-26.
+
+User directive: "paper-writing の mcp-server は徹底的に鍛えないと。"
+(thoroughly strengthen paper-writing to production grade).
+
+**3-pass hardening**:
+
+### Pass 1: Comprehensive test suite
+
+  Until v0.89.0 there was ZERO dedicated test coverage of the 80
+  paper_writing_* tools (only the server's --selftest smoke check).
+  **NEW `tests/test_paper_writing.py`** locks 65+ test cases across:
+
+  * Text-style (count_weak_expressions, analyze_sentences,
+    paragraph_opener / paragraph_length / sentence_ending_variety,
+    word_repetition, tense_consistency, prose_density, passive_voice)
+  * Abstract / IMRaD (validate_abstract_length, background_ratio,
+    imrad_balance, abstract_strength)
+  * Figure / equation (forward_reference, equation_numbering,
+    figure_caption_showing on minimal IEEEtran .tex)
+  * Citation / bibliography (lint_reference_format,
+    check_citation_usage, self_citation_ratio with mini .bib)
+  * JA-lint (kanji_ratio, notation_variants, find_undefined_acronyms,
+    acronym_usage_audit, lint_bedrock, misuse_japanese,
+    suggest_redundancy_fixes, subject_predicate_distance)
+  * PDF (validate_pdf_pages + check_pdf_edge_overflow with a
+    pymupdf-generated minimal valid PDF)
+  * v0.88.0 layout (tex_figure_placement aliases, layout_visual_recipe)
+  * v0.89.0 external sources (normalize_arxiv_id round-trip,
+    extract_equations on synthetic 6-env input, mocked
+    arxiv_fetch_latex_source + arxiv_search + semantic_scholar_lookup
+    + references + citations via monkeypatched requests.get)
+  * Health / orchestrator (health_report, adaptive_health_report,
+    run_full_workflow, root_cause_diagnosis, next_5_actions,
+    rewrite_suggest)
+  * Reviewer (classify_reviewer_comment, generate_response_letter,
+    generate_cover_letter, reviewer_2_trigger_summary)
+  * Plan-B tier scores (contribution_clarity, claim_quantification,
+    limitation_statement, related_work_density,
+    figure_referencing_coverage, journal_fit_assessment)
+
+### Pass 1 bonus: real bug uncovered + fixed
+
+  `_ja_lint.py::grant_writing_lint_bedrock` referenced `_scan_hedges`
+  but the import was stripped during the v0.88.0 AST-extraction
+  inline-copy from grant_writing.tools.  Restored
+  `from ._shared.hedges import scan_hedges as _scan_hedges` --
+  lint_bedrock now works.
+
+### Pass 2: NEW `_em_paper_style.py` (~700 LOC) -- EM-domain knowledge
+
+  Generic text/lint is journal-agnostic; this module captures the
+  conventions EM reviewers (IEEE TAP/TMag/TMTT, IEEJ Trans D/B, IGTE)
+  actually enforce.  6 topic sections + index:
+
+  * `sign_conventions` -- engineering exp(+jwt) vs physics exp(-iwt)
+    + conjugation rule for porting between conventions.
+  * `vector_tensor_notation` -- bold-italic E vs arrow vs underline;
+    tensor styles; operators upright vs italic; differential-forms
+    cross-link.
+  * `b_vs_h` -- "magnetic flux density B" vs "magnetic field
+    intensity H" terminology; M (A/m) vs J (T).
+  * `si_units` -- 4 ironclad rules; EM-specific unit checklist;
+    siunitx package recommendation.
+  * `equation_typesetting` -- equation vs equation*, align (NOT
+    eqnarray), `\\ref{eq:foo}~(5)` with tilde, where-clause rule.
+  * `reviewer_patterns` -- **12 common EM-paper reviewer comments**
+    from lab 2019-2025 paper-review history + the pre-check tool
+    for each (sign inconsistency, B-vs-H, mesh independence,
+    CPU/memory cost, contribution clarity, missing recent
+    citations, error bars, eq-symbol collision, ...).
+
+  **NEW tool** `paper_writing_em_paper_style(topic)` with 17 topic
+  keys + aliases.
+
+### Pass 3: NEW pre-submission gate orchestrator
+
+  **NEW tool** `paper_writing_em_submission_gate(tex, pdf, bib,
+  abstract, author_last_names, page_limit, ...)` runs ALL relevant
+  checks in one pass and returns a single verdict:
+
+  * `"verdict"`: "pass" | "warn" | "fail"
+  * `"checks"`: per-check status (pass / warn / fail / skip)
+  * `"advice"`: actionable next step
+
+  Chains: figure_forward_reference + equation_numbering +
+  count_underlines (tex) + lint_reference_format +
+  check_citation_usage + self_citation_ratio (bib) +
+  validate_abstract_length + abstract_background_ratio +
+  abstract_weak_expressions (abstract) + validate_pdf_pages +
+  detect_page_whitespace_anomalies + check_floats_far_from_reference
+  (pdf).  Skips gracefully on missing inputs.
+
+### Tool count
+
+  v0.89.0: 80 tools
+  v0.90.0: 80 + 2 = **82 paper_writing_* tools total**
+
+### Verification
+
+  - mcp-server-paper-writing --selftest -- 10 sections OK
+  - tests/test_paper_writing.py -- 75 tests pass (65 from Pass 1 +
+    10 from Pass 2/3)
+  - Full in-process pytest suite -- 162 + 75 = **237 tests pass**
+
+## 0.89.0 — GitHub survey absorption: arXiv LaTeX source + Semantic Scholar graph
+
+Released 2026-05-26.
+
+User directives (2 of them):
+
+  1. "mcp-server-document には、paper-writing は残さない。世界に公開
+     する以上。"  (the LAB-private copy at
+     mcp-server-document.paper_writing was deleted in the
+     accompanying mcp-server-document v3.3.0 release.)
+  2. "世の中の github を探し電磁場にとってよいものがあれば吸収して
+     進化させる。"
+
+Surveyed 2026-05-26 (3 web searches, 20+ projects):
+
+  * takashiishida/arxiv-latex-mcp  -- arXiv .tex source fetch
+  * blazickjp/arxiv-mcp-server     -- Semantic Scholar ref/citation graph
+  * openags/paper-search-mcp        -- multi-source arXiv search
+  * Tejas242/arxiv-mcp             -- arXiv ID-based search
+  * ScienceAIHub/PaperMCP           -- 32 unified tools (over-scope)
+  * PaperDebugger/PaperDebugger    -- Research->Critique->Revision (already
+                                       covered by run_full_workflow)
+  * citecheck (arXiv:2603.17339)    -- workspace-aware bib repair (already
+                                       partially in lint_reference_format)
+
+Absorbed the 2 most useful patterns for EM papers (math-heavy,
+single-author-LaTeX-source matters):
+
+### NEW module `_arxiv_source.py` (~600 LOC) + 7 NEW MCP tools
+
+  * `paper_writing_arxiv_fetch_latex_source(arxiv_id)` -- download the
+    e-print tarball + extract all .tex files.  Identifies main .tex
+    by \\documentclass.  Returns up to N files capped to M chars
+    each (defaults 5 / 200k).  Accepts any common arXiv ID form
+    (DOI-style, arXiv:, URL, old physics/0501123, with or without
+    vN suffix).  Inspired by takashiishida/arxiv-latex-mcp.
+
+  * `paper_writing_arxiv_extract_equations(latex_source)` -- regex-
+    scan 6 displayed-math environments (equation / align / eqnarray
+    / gather / $$..$$ / \\[...\\]) and return all eqs with body +
+    char offset.  Truncates per-eq at 600 chars by default.
+
+  * `paper_writing_arxiv_search(query, categories="", sort=)` -- arXiv
+    Atom XML API search.  EM-tuned default `categories` filter
+    (eess.SP, physics.class-ph, physics.app-ph, physics.comp-ph,
+    physics.plasm-ph, physics.space-ph, cs.CE, math.NA).  Pass
+    `categories="all"` to disable the filter.  Inspired by
+    openags/paper-search-mcp.
+
+  * `paper_writing_semantic_scholar_lookup(paper_id, fields=)` --
+    Semantic Scholar API metadata lookup.  Accepts DOI, arXiv ID,
+    Corpus ID, PubMed ID, ACL ID, or S2 URL.
+
+  * `paper_writing_semantic_scholar_references(paper_id, limit=50)`
+    -- list of papers CITED BY the given paper.
+
+  * `paper_writing_semantic_scholar_citations(paper_id, limit=50)`
+    -- list of papers CITING the given paper.  Useful for finding
+    follow-up work to a foundational paper.
+
+  * `paper_writing_external_sources_recipe()` -- knowledge module
+    with the 7-project survey writeup + decision tree (which tool
+    when) + EM-default category list + credits.
+
+### Lazy import
+
+`requests` is imported only when an arXiv/S2 tool is called.  Users
+without `requests` see a clear ImportError pointing at pip install.
+
+### Selftest
+
+mcp-server-paper-writing --selftest now exercises:
+  - external_sources_recipe size + key strings
+  - _normalize_arxiv_id() on 3 input forms (offline)
+  - arxiv_extract_equations() on synthetic 2-equation LaTeX (offline)
+
+### Tool count
+
+  67 (v0.88.0) + 5 (layout-visual) + 1 (tex-figure-placement) +
+  7 (arxiv-source) = **80 paper_writing_* tools total**.
+
+### Companion release (mcp-server-document)
+
+mcp-server-document v3.3.0 (LAB-private) deleted the now-redundant
+`mcp_server_document/paper_writing/` directory.  The public PyPI
+`radia-mcp.paper_writing` is the canonical implementation going
+forward.
+
+## 0.88.0 — paper_writing migration + image-based layout + LaTeX figure-placement
+
+Released 2026-05-26.
+
+User directive: "S:\\mcp-server の paper writing は、radia に完全移植
+しよう。paper-writing では、ちゃんと画像でレイアウトを確認するスキル
+もつけよう。 どうやって確認するかは、web 検索でノウハウを吸収しよう。
+TeX の figure の配置スキルを paper writing に反映してほしい"
+
+3-part release:
+
+### Part 1: complete migration
+
+- **NEW subpackage** `radia_mcp.paper_writing` (~5000 LOC, 67 tools)
+  promoted from `s:/mcp-server/src/mcp_server_document/paper_writing/`:
+    * tools.py (33 paper_writing_* tools + 20 Plan-B helpers from
+      plans/T1-T20)  -- byte-identical migration
+    * cross_lint.py + _ja_lint.py (8 JA-lint wrappers; original
+      cross-package import to ..grant_writing.tools replaced by
+      inline-copy in _ja_lint.py so radia-mcp is self-contained;
+      30 KB extracted via AST from grant_writing/tools.py)
+    * _shared/{hedges,language,sentence}.py (3 small shared
+      modules inline-copied so the cross-package _shared dep is
+      severed)
+    * paper_download.py (IEEE Xplore / ScienceDirect / Emerald
+      cookie-seeded PDF download + paper_writing_fetch_and_cite
+      orchestration -- byte-identical)
+    * skill.md (712-line writing-skill knowledge)
+    * plans/T1-T20 (20 Plan-B composite-score helpers --
+      byte-identical)
+
+- **NEW entry point** `mcp-server-paper-writing`.
+- **NEW catalog entry** `paper-writing` (tag=`meta`), cross-linked
+  bidirectionally with literature-index, graph, chart2d, md2html.
+
+### Part 2: image-based PDF layout verification (NEW skill)
+
+User directive: "画像でレイアウトを確認するスキル ... web 検索で
+ノウハウを吸収しよう".  Researched 2026-05-26:
+  * pymupdf get_pixmap(dpi=N) for per-page PNG render
+  * hgustafsson/skillnad (SyncTeX visual-diff inspiration)
+  * Overleaf "Understanding underfull and overfull box warnings"
+    -- the text-only checks are insufficient
+
+- **NEW module** `_pdf_layout_visual.py` (~400 LOC) +
+  **5 new MCP tools**:
+    * `paper_writing_render_pages_to_png(pdf, out_dir, dpi,
+      page_range)` -- per-page PNG dump for vision-agent
+      inspection
+    * `paper_writing_detect_page_whitespace_anomalies(pdf,
+      whitespace_threshold=0.75, dpi=100)` -- algorithmically
+      flag mostly-white pages (sign of bad [!h] / [H] float
+      placement forcing figure to own page)
+    * `paper_writing_layout_thumbnail_strip(pdf, out_path,
+      dpi=80, cols=4)` -- composite PNG of ALL pages as tiles
+      for one-glance visual scan
+    * `paper_writing_check_floats_far_from_reference(tex, pdf,
+      max_pages_apart=1)` -- heuristic detection of figures
+      whose \\ref{} appears > 1 page from the float
+    * `paper_writing_layout_visual_recipe()` -- 4-step lab
+      workflow combining algorithmic + vision-agent inspection
+
+- Lazy imports of pymupdf + PIL with clear ImportError hints
+  (radia-mcp ships without these by default; users install via
+  pip install pymupdf Pillow).
+
+### Part 3: LaTeX figure-placement knowledge (NEW skill)
+
+User directive: "TeX の figure の配置スキルを paper writing に
+反映してほしい".  Web-researched 2026-05-26:
+  * LaTeX/Floats, Figures and Captions (Wikibooks canonical ref)
+  * Hyndman blog "Controlling figure and table placement"
+  * Overleaf "!h float specifier changed to !ht" (silent rewrite)
+  * IEEE / IEEJ / IGTE journal LaTeX templates
+
+- **NEW module** `_tex_figure_placement.py` (~600 LOC, 20 topic
+  keys + aliases) +
+  **1 new MCP tool** `paper_writing_tex_figure_placement(topic)`:
+    * OVERVIEW: TL;DR + lab reviewer-pattern
+    * FLOAT_SPECIFIERS: h/t/b/p/H + ! semantics; why [H] is
+      usually wrong; why [h!] silently becomes [!ht]
+    * PLACEINS_FLOATBARRIER: placeins.sty + [section] option as
+      lab default
+    * WIDTH_FRACTIONS: \\columnwidth vs \\textwidth, figure vs
+      figure*, subcaption/subfigure widths
+    * ANTIPATTERNS: 8 common mistakes (h! trap, center vs
+      centering, blank line in figure body, missing \\label
+      after \\caption, mixing absolute and relative widths, ...)
+    * JOURNAL_PROFILES: IEEEtran / jiee / igte_digest / scrbook
+      defaults
+    * CROSS_REFERENCES: which paper_writing_check_* tool maps
+      to which placement defect + write-compile-check-fix loop
+
+### Tests + release verification
+
+- mcp-server-paper-writing --selftest: clean (67 tools + 6 new)
+- meta-health: 9/9 (bidirectional related-edge invariant
+  maintained: 4 reverse edges added to literature-index, graph,
+  chart2d, md2html, all pointing back to paper-writing)
+- LAB editable install at `S:\\Radia\\01_GitHub\\packages\\radia-mcp`
+  refreshed to 0.88.0
+- pyproject.toml + __init__.py bumped to 0.88.0
+
+Catalog: **39 → 40 servers**.
+
+NOTE: mcp-server-document.paper_writing source remains for now
+(unlike md2html / graph / mathematica which were deleted during
+their migrations).  Per migration-policy convention, the LAB-private
+copy can be retired in a follow-up commit once the user confirms the
+public version is the canonical one.
+
+## 0.87.0 — Sommerfeld layered-medium Green's function knowledge
+
+Released 2026-05-26.
+
+User directive: "W:\\03_文献・論文\\00_電磁界解析\\11_BEM_モーメント法\\
+10_sommerfeld_layered ここを学ばせてください" — absorb 3 Sommerfeld
+integral PDFs into the BEM subpackage.
+
+Sources absorbed:
+
+  1. **Chew Lecture 35** ("Sommerfeld Integral, Weyl Identity", from
+     "Lectures on Electromagnetic Field Theory", Purdue ECE 604/618
+     post-2018 revisions, 22 pages).  Pedagogical derivation: scalar
+     Helmholtz -> 3D Fourier -> contour deformation -> Weyl identity
+     (35.1.11) -> polar reduction -> Sommerfeld identity (35.1.14) ->
+     layered-medium dipoles (VED 35.2.6, HED 35.2.12-13) + branch
+     cuts / Riemann sheets / Sommerfeld Integration Path.
+
+  2. **Koh & Yook 2006**, IEEE Trans. Antennas Propagat. 54(9),
+     2568-2576, DOI 10.1109/TAP.2006.880747.  EXACT closed-form
+     Sommerfeld integral for a dipole over an impedance half-plane
+     via incomplete Weber integrals / incomplete Lipschitz-Hankel
+     integrals / Lommel functions.  Three-layer construction:
+     exponential-integral series (eq. 8), Lommel series (eq. 10),
+     exact closed form (eq. 17).  Valid for ANY complex eta_s and
+     ANY (rho, z+z'), no patchwork like Banos / Wait / Norton.
+
+  3. **Spectral Expansions of Source Fields** (same Chew lecture 35
+     from a different revision, 16 pages).  Same derivation +
+     stationary-phase asymptotic.
+
+What shipped:
+
+- **NEW knowledge module**
+  `radia_mcp/bem/sommerfeld_layered_knowledge.py` (~600 LOC, 22
+  topic keys + aliases).  9 main sections:
+    * OVERVIEW (when to use, identity summary, exp(-i omega t) vs
+      exp(+j omega t) conversion warning)
+    * WEYL_DERIVATION (3D Fourier + contour-deformation construction)
+    * SOMMERFELD_DERIVATION (polar -> Bessel J_0 -> Hankel form)
+    * LAYERED_MEDIUM_DIPOLES (VED TM-only, HED TM+TE,
+      tilde R^{TM/TE} recursion as black box, sanity-check recipe)
+    * BRANCH_CUTS_AND_SIP (log branch at origin, algebraic branches
+      at +/- k_0, surface-wave poles, lossless regularisation)
+    * KOH_YOOK_2006_CLOSED_FORM (the headline result + all 3 layers
+      + special-function inventory + validation Figs. 2-8)
+    * NUMERICAL_EVALUATION (gap-filler since the absorbed PDFs do
+      NOT cover this: DCIM Chow 1991 / Aksun two-level 1996 / MPIE
+      Michalski-Mosig 1997 / GPOF Hua-Sarkar 1989 / VECTFIT
+      Gustavsen-Semlyen 1999 + open-source impl pointers)
+    * LAB_USAGE_NOTES (where lab DOES and DOES NOT need Sommerfeld;
+      cross-references to bem_low_freq, bem_mmm_msc, bem_h_matrix,
+      analytical_formulas, matrix_solvers, ndt, litz_transmission)
+    * REFERENCES (the absorbed bundle + Chew 1995 + Kong 1972 +
+      Brekhovskikh + Felsen-Marcuvitz + Banos + acceleration refs)
+
+- **NEW `@mcp.tool() bem_sommerfeld_layered(topic)`** in
+  `mcp-server-bem`.  22 topic keys with aliases:
+    overview / weyl / weyl_derivation / sommerfeld / layered /
+    ved_hed / branch_cuts / sip / riemann / koh_yook /
+    impedance_plane / closed_form / numerical / dcim / gpof /
+    acceleration / lab_usage / lab_notes / references / bibliography.
+
+- **NEW prompt entry** `pick_a_bem_method("dipole_over_layered_medium")`
+  with 4-step guidance (overview -> Koh-Yook closed form for single
+  interface -> DCIM for multi-layer -> SIP contour theory).
+
+- **bem `--selftest` extended** to exercise the new tool with
+  size + unknown-topic assertions.
+
+POLICY: Radia core (MMM/MSC) is Laplace-kernel only.  This module
+is the THEORY POINTER for users who need a full layered-medium
+Green's function — production answer is usually either Koh-Yook
+2006 closed form (single interface) or ngsolve.bem + DCIM
+(multi-layer).  The knowledge module documents the path; it does
+not ship runnable code, because lab production rarely needs it.
+
+Catalog: **39 servers** unchanged (new tool inside existing
+mcp-server-bem).
+
+## 0.86.0 — FEM flux-line tracing + 3 lab-canonical post-processing plots
+
+Released 2026-05-26.
+
+User directive: "S:\\FEMM\\2020_01_06_磁束線 ここもradia-mcpのgraphに
+反映" — reflect the 2020-01-06 lab MATLAB/FEMM workflow for tracing
+magnetic flux lines and visualising the field along them into the
+graph subpackage.
+
+Source absorbed:
+
+- `S:\\FEMM\\2020_01_06_磁束線\\main.m`         (MATLAB driver)
+- `S:\\FEMM\\2020_01_06_磁束線\\plot_trajectory.m`
+- `S:\\FEMM\\2020_01_06_磁束線\\velocity.m`     (rhs for ode45)
+- `S:\\FEMM\\2020_01_06_磁束線\\磁束線の方程式.docx` (dx/ds = B equations)
+- `S:\\FEMM\\2020_01_06_磁束線\\陽的_陰的シンプレクティック.jpg`
+                                                 (symplectic Euler note)
+- 4 reference PNGs: flux_line, B_in_elements, s-B, s-Az
+
+What shipped:
+
+- **NEW module `radia_mcp/graph/_fem_postprocess.py`** (~470 LOC, 4
+  public functions + knowledge text):
+
+    * `trace_flux_line(B_func, x0, s_span, method='RK45', max_step,
+      n_eval, ...)` — scipy.integrate.solve_ivp wrapper that
+      integrates `dx/ds = B_x(x, y)`, `dy/ds = B_y(x, y)` from a seed
+      point.  Replaces MATLAB `ode45(@velocity, [0,10000], [5,0])`.
+      Returns `(s, xy)` where `xy.shape == (N, 2)`.  Lazy scipy
+      import so module loads without scipy.
+
+    * `plot_flux_line_trajectory(ax, traj_x, traj_y, mesh_nodes,
+      mesh_elements, source_xy, ...)` — reproduces `flux_line.png`:
+      thin blue FEM-mesh wireframe + black trajectory + red filled
+      source marker, equal-aspect axes.
+
+    * `plot_field_probe_line(ax, y, Bx, By, element_change_indices,
+      ...)` — reproduces `B_in_elements.png`: Bx (vermillion) +
+      By (blue) along a probe line with **vertical dotted lines
+      at element-boundary crossings**.  Makes the piecewise-linear
+      FEM honest in the figure.
+
+    * `plot_field_vs_arclength(ax, s, Bx, By, Az, ...)` — reproduces
+      `s-B.png` (Bx, By vs s in m/T) and `s-Az.png` (A_z drift
+      diagnostic).  Automatic twin-y when Az is provided alongside
+      Bx/By.
+
+    * `get_flux_line_knowledge()` — full recipe text (equations,
+      symplectic-integrator note, units gotchas, complete example
+      pipeline using `paper_figure_8cm(panels=2)`).
+
+- **NEW `@mcp.tool() flux_line_recipe(query='knowledge'|'recipe'|'api')`**
+  in `mcp-server-graph`:
+    * `'knowledge'` — full recipe + equations + symplectic note
+    * `'recipe'` — ready-to-paste Python (uses paper_figure_8cm panels=2)
+    * `'api'` — function signatures
+
+- Lab colour convention upgraded from MATLAB pure red/blue to the
+  CVD-safe Okabe-Ito pair:
+    * Bx = `#D55E00` vermillion
+    * By = `#0072B2` blue
+  Distinguishable in greyscale + passes the lab colorblind-safe gate.
+
+- Knowledge captures the SYMPLECTIC INTEGRATOR note (陽的/陰的) for
+  Hamiltonian charged-particle tracking, distinguishing the flux-line
+  ODE (NOT Hamiltonian, RK45 is fine) from particle tracking
+  (Hamiltonian, needs symplectic).
+
+- **NEW tests** (16 in `tests/test_graph_paper_figure.py`):
+    * uniform B → straight trajectory; circular B → orbit closes to <1e-4
+    * scipy absent → clean ImportError with pip-install hint
+    * trajectory draws mesh + traj + source artists; skips mesh when None
+    * sets equal aspect (circular orbit looks circular)
+    * field-probe draws bx_line + by_line + N boundary verticals
+    * field-probe shape validation
+    * arclength: B-only / Az-only / B+Az creates twin y-axis
+    * arclength shape validation
+    * recipe tool: knowledge / recipe / api / unknown query
+
+**Suite total: 187 → 203 pytest pass.**
+
+Catalog: **39 servers** unchanged (new tool lives inside the existing
+mcp-server-graph).
+
+## 0.85.0 — paper_figure_8cm: lab 8-cm-column anchor (1 vs 2 panels)
+
+Released 2026-05-26.
+
+User directive: "8cmに2横に並べて2枚置く場合には極力axesオブジェクトを
+大きくして、情報量を増やす。8cmで1枚の場合にはaxesは5cm程度にして
+場所を取りすぎないようにする" — the 8 cm column has TWO opposite
+sizing regimes depending on whether one or two panels share it.
+
+What shipped:
+
+- **NEW `paper_figure_8cm(panels=1|2, profile, target_axes_cm=5.0)`**
+  in `radia_mcp.graph._paper_figure`, exported from
+  `radia_mcp.graph`.  Single helper covers both regimes:
+
+  | panels | Figure width | Axes box (each) | Strategy |
+  |--------|------------|-----------------|----------|
+  | 1 | ~6.5 cm (rel_width derived from target) | **~5.0 × 3.3 cm** | Leave whitespace on the column; figure does NOT dominate |
+  | 2 | full 8.89 cm | **~3.6 × 5.3 cm** | `sharey=True` drops inner ylabel + ticks; `wspace=0.10` (~3 mm inner gap); each panel claims every mm |
+
+  Both keep the LAB FONT RULE (10 pt absolute @ 8 cm; text size
+  identical between regimes — only axes box scales).
+
+- **NEW `paper_figure_8cm_recipe(panels, profile, target_axes_cm,
+  panel_labels)`** MCP tool in `radia_mcp.graph.server`.  Emits
+  self-contained Python with the derived geometry comment block
+  (figure width, margins, per-panel axes dimensions).
+
+- Default profile is `ieee_single_column` (88.9 mm); also accepts
+  `ieej_single_column` (88 mm) and `igte_digest_single` (82 mm).
+  Other profiles raise with the allowed list.
+
+- `panels` must be 1 or 2 — for 1x3 / 2x2 / etc., users keep using
+  `paper_figure()` directly with its per-(R,C) margin deltas.
+
+- `target_axes_cm` for panels=1 derives `rel_width` from the user's
+  target axes width; validates the derived `rel_width` is in
+  [0.50, 1.00] and raises with an actionable range hint otherwise.
+
+- **NEW pytest coverage** (13 tests in `tests/test_graph_paper_figure.py`):
+    * panels=1 axes width ~5 cm (±0.3); figure < 7.5 cm (doesn't dominate)
+    * panels=2 figure = full 8.89 cm; each panel axes 3.3-3.9 cm
+    * panels=2 default `sharey=True`; explicit `sharey=False` works
+    * `target_axes_cm` scales axes width linearly (±0.4 cm at 4/5/6 cm)
+    * font is 10 pt in BOTH regimes (lab font rule unbroken)
+    * panels=1 figure < panels=2 × 0.85 (regression guard against
+      rel_width drift to 1.0)
+    * panels=2 total axes area > panels=1 × 1.5 (max info density check)
+    * `panels` invalid (0, 3, 4, -1) → raises with policy hint
+    * profile not 8 cm column → raises with allowed list
+    * `target_axes_cm` outside derivable range → raises with hint
+    * recipe tool returns runnable Python with correct
+      `min_axes_fraction` (0.55 for panels=1, 0.72 for panels=2)
+    * recipe tool rejects bad panels / profile
+
+**Suite total: 174 → 187 pytest pass.**
+
+Catalog: **39 servers** unchanged (new tool lives inside the existing
+mcp-server-graph).
+
+Quick-start:
+```python
+from radia_mcp.graph import paper_figure_8cm, emit_paper_figure
+
+# Single figure on a column — don't dominate
+fig, axes = paper_figure_8cm(panels=1)            # axes ~ 5 × 3.3 cm
+axes[0, 0].plot(x, y)
+emit_paper_figure(fig, 'single', 'ieee_single_column',
+                  min_axes_fraction=0.55)
+
+# Two figures sharing a column — max info density
+fig, axes = paper_figure_8cm(panels=2)            # each panel ~ 3.6 × 5.3 cm
+for ax in axes.flat:
+    ax.plot(...)
+axes[0, 0].set_ylabel('|Z| (Ω)')                   # only LEFT panel
+emit_paper_figure(fig, 'pair', 'ieee_single_column')
+```
+
+## 0.84.0 — NGSolve mirror of COMSOL topology-optimization knowledge
+
+Released 2026-05-26.
+
+User directive: "COMSOLのmcp-serverの知見は、radia-mcpにはNGSolveにも
+反映させた上で継続学習。S:\\NGSolve\\03_TolologyOptimization にあるPDF
+も追加学習" — i.e. the topology-optimization knowledge that lives in
+COMSOL MCP (`docs/TOPOLOGY_OPTIMIZATION.md` + RAG prompt) must also
+be reflected in the radia-mcp NGSolve subpackage as the
+implementation-flavoured mirror, plus the 3 Gangl PDFs from
+`S:\NGSolve\03_TolologyOptimization` should be absorbed.
+
+What shipped:
+
+- **NEW knowledge module**
+  `radia_mcp/radia_ngsolve/knowledge/topology_optimization.py`
+  (~1900 LOC, 13 super-topics with primary keys + aliases). Mirrors
+  the COMSOL MCP long-form tutorial in an NGSolve-implementation
+  flavour: weak forms, HCurl + eps*mass regulariser pattern,
+  Newton-Raphson tangent reluctivity assembly, periodic / Kelvin BC
+  interplay, Amstutz-Andra fixed-point recipe.
+
+- **NEW `@mcp.tool() topology_optimization(topic)`** wired into
+  `radia_mcp.radia_ngsolve.server`.  Canonical topics + aliases:
+  `overview/framework`, `ch1_2/foundations`, `ch3/evolution_equation`,
+  `ch4_5/heat_elasticity`, `ch6_8/fluid`, `ch9/lbm`,
+  `appendix_a/objectives`, `appendix_c/helmholtz_filter`,
+  `appendix_d/kkt`, `gangl_part1/gangl_sensitivity/averaged_adjoint`,
+  `gangl_part2/ngsolve_implementation`, `gangl_motor/ipm_motor`,
+  `ngsolve_recipes/recipes`.
+
+- Source bundles absorbed (continuous-learning batch, 2026-05):
+    * **Nishiwaki-Kondoh-Yachi "Foundations of Topology Optimization"**
+      (Corona Publishing 2024, 267 pages, lab's canonical
+      Japanese-language reference): ch.1 history; ch.2 4-method-family
+      + OC/SCP; ch.3 unified reaction-diffusion engine;
+      ch.4 heat conduction; ch.5 elasticity; ch.6 Stokes; ch.7 laminar
+      NS; ch.8 conjugate HT; ch.9 LBM; App A objective cookbook;
+      App C Helmholtz filter; App D KKT dual evolution.
+    * **Gangl-Sturm 3-paper bundle** (TU Graz + TU Wien, 2015-2019,
+      `S:\NGSolve\03_TolologyOptimization` 3 PDFs):
+        - Part I = sensitivity analysis for nonlinear curl-curl
+        - Part II = NGSolve implementation pattern
+        - IPM motor case study (27% cogging-torque-surrogate
+          reduction; **corrected** from the previously-cited 87% --
+          captured in `GANGL_IPM_MOTOR_CASE` knowledge).
+
+- Pairs with the existing standalone `radia_mcp.topology_optimization`
+  server (Gangl theory: shape_optimization / topology_derivative /
+  applications) -- the new NGSolve tool is the implementation-side
+  reflection, not a replacement.
+
+- `radia_ngsolve._selftest()` extended to exercise the new tool:
+  asserts `topology_optimization("all")` > 10k chars,
+  `topology_optimization("overview")` > 500 chars, unknown-topic
+  raises with `"Unknown topic"` substring.
+
+Cross-reference:
+  - COMSOL MCP: `docs/TOPOLOGY_OPTIMIZATION.md` (long-form tutorial)
+  - COMSOL MCP: `src/knowledge/prompts/topology_optimization.md`
+    (RAG-indexed prompt for retrieval)
+
+Catalog: **39 servers** unchanged (no new entry point -- the new
+tool lives inside an existing server).
+
 ## 0.83.0 — catalog cleanup: graph shim + mcmc removal
 
 Released 2026-05-26.

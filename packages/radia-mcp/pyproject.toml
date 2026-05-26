@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "0.83.0"
+version = "0.93.0"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this
@@ -122,6 +122,11 @@ mcp-server-literature-index = "radia_mcp.literature_index.server:main"
 # [N] reference linking.  Promoted from
 # s:/mcp-server/src/mcp_server_document/md2html/ (source deleted).
 mcp-server-md2html = "radia_mcp.md2html.server:main"
+# 2026-05-26 v0.88.0: paper_writing -- 67 paper_writing_* tools +
+# 5 new image-based PDF layout tools (pymupdf-based, vision-agent
+# friendly) + 1 LaTeX figure-placement knowledge tool.
+# Promoted from s:/mcp-server/src/mcp_server_document/paper_writing/.
+mcp-server-paper-writing = "radia_mcp.paper_writing.server:main"
 # 2026-05-26 v0.81.0: chart2d -- 22 paper-quality 2D charts as MCP
 # tools (line / loglog / semilog / step / errorbar / fill_between /
 # bode / histogram / bar / box / violin / ecdf / contour / contourf /

@@ -85,7 +85,7 @@ def main():
             print(f"  Mathematica version: {st['version']}")
         else:
             print(f"  wolframscript: NOT AVAILABLE ({st.get('license_msg', 'n/a')})")
-            print("  (this is fine; server still loads — tools just return ok=False)")
+            print("  (this is fine; server still loads -- tools just return ok=False)")
         print("  PASSED")
         return
 
