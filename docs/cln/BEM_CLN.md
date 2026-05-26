@@ -1,32 +1,36 @@
-# BEM-CLN: Per-Element Multipole CLN with Schur-F Termination
+# BEM-CLN: Per-Element Multipole CLN with Warburg–Schur Termination
 
-A multi-element extension of the single-conductor Schur-F augmented
-Cauer Ladder Network (CLN) representation, suitable for assembling
-fast eddy-current ROMs of small clusters of conductors using natural
-open-boundary integral-equation coupling.
+A multi-element extension of the single-conductor hierarchical Cauer
+(Warburg–Schur terminated) Cauer Ladder Network (CLN) representation,
+suitable for assembling fast eddy-current ROMs of small clusters of
+conductors using natural open-boundary integral-equation coupling.
+
+Companion to [HIERARCHICAL_CAUER_SIBC.md](HIERARCHICAL_CAUER_SIBC.md)
+(single-conductor Paper 1 academic reference).
 
 This document collects the polarizability-based assembly framework
-that backs the IEEE Transactions on Magnetics submission "Universal
-Cauer-SIBC Composition via Schur Complement" (Sugahara, Nagamine,
-Hane, 2026), §V.G and §V.H.
+that backs the Paper 2 manuscript on multi-conductor BEM-CLN
+(Sugahara, Nagamine, Hane, 2026), with engineering applications to
+induction-heating workpieces and accelerator-magnet conductor
+clusters.
 
 ## 1. Motivation
 
-The single-conductor Schur-F augmentation
+The single-conductor Warburg–Schur augmentation
 ```
 Y_R(s) = Y_CLN(s) + K_SIBC sqrt(s) / (s + d)
 K_SIBC  = S sqrt(sigma / mu)
 ```
-preserves the DC value, the canonical Cauer Taylor structure at
-`s = 0`, and the non-rational SIBC asymptote `Y -> K_SIBC / sqrt(s)`
-at `s -> infinity` for any single conductor.  The surface-area-only
-scaling makes the augmentation parameter readable directly from CAD
-metadata (Theorem 1 of the cited manuscript).
+preserves $Y(0)$, the bulk Taylor structure at $s\!=\!0$, and the
+non-rational SIBC asymptote $Y\!\to\!K_{\rm SIBC}/\sqrt{s}$ as
+$s\!\to\!\infty$ for any single conductor (Theorem 1, Paper 1).  The
+surface-area-only scaling makes the augmentation parameter readable
+directly from CAD metadata.
 
 For systems with multiple conductors --- induction-heating workpieces
 + coils, paired transformer windings, accelerator-magnet yokes near
 conductors --- the natural extension is BEM-style assembly: each
-conductor is a CLN-Schur-F element, with inter-element coupling
+conductor is a hierarchical-Cauer element, with inter-element coupling
 delivered by integral-equation kernels.  This file documents that
 extension.
 
@@ -61,7 +65,7 @@ alpha_3D(infinity) = V
 where `Y_cuboid(s)` is the scalar-diffusion admittance of §V.B of the
 manuscript.
 
-The Schur-F-augmented per-element building block uses
+The Warburg–Schur augmented per-element building block uses
 `Y_cuboid_S(s) = Y_CLN_N(s) + K_SIBC^(cuboid) sqrt(s) / (s + d)` and
 gives `alpha_S(s) = V - Y_cuboid_S(s) / sigma` automatically.
 
@@ -101,7 +105,7 @@ conductor size, both conditions hold automatically.
 
 Per element (one cylinder or cuboid):
 ```
-DOF = N_Cauer + 1     (Cauer rungs + 1 Schur-F sqrt(s) block)
+DOF = N_Cauer + 1     (Cauer rungs + 1 Warburg sqrt(s) block)
 ```
 For N elements:
 ```
@@ -116,7 +120,7 @@ Comparison with alternative methods:
 | MMM tetrahedron         | 3             | steady-state only      |
 | MSC hexahedron          | 6             | steady-state only      |
 | FEM-element CLN         | ~60 N_Cauer   | transient, bounded     |
-| **BEM-CLN dipole+quad+Schur-F** | **8 (N_Cauer + 1)** | **transient, inhomogeneous + SIBC** |
+| **BEM-CLN dipole + Warburg–Schur**  | **8 (N_Cauer + 1)** | **transient, inhomogeneous + SIBC** |
 | High-order curved tet (p=3) | ~60 + PML/Kelvin | transient, all regimes |
 
 ## 5. Verification status (Phase 1, 2, 2.5, 3 — May 2026)
@@ -136,8 +140,10 @@ with N >= 5 elements is the next step.
 
 ## 6. Reference scripts
 
-All Mathematica verification scripts live in
-`examples/CLN/scripts/`:
+All Mathematica verification scripts live in the digest supplement
+`digest/supplement/2026_05_18_3axis_cauer_sibc/scripts/`; canonical
+Python implementations are in
+`examples/hierarchical_cauer_sibc/multi_conductor/`:
 
 | Script | Phase | What it verifies |
 |--------|-------|------------------|
@@ -150,8 +156,12 @@ All Mathematica verification scripts live in
 
 ## 7. References
 
-- Sugahara, Nagamine, Hane, "Universal Cauer-SIBC Composition via
-  Schur Complement," IEEE Trans. Magn. (submitted), 2026.
+- Sugahara, Nagamine, Hane, "Hierarchical Cauer: Warburg–Schur
+  Termination of CLN for SIBC," IGTE 2026 1-page digest; Paper 1
+  manuscript in preparation.
+- Sugahara, Nagamine, Hane, "Multi-Conductor BEM-CLN with
+  Warburg–Schur Termination for Induction-Heating Applications,"
+  Paper 2 manuscript in preparation.
 - Takahashi, Hiruma, Fujiwara, Imamori, "Time-Domain Homogenization
   of Windings Using B-Input Cauer Ladder Network Method," IEEE Trans.
   Magn. 60(12), 2024.  IEEE Xplore document 10684727.
