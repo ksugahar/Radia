@@ -194,7 +194,7 @@ floor demonstration).
 
 [1] D. Givoli, J. B. Keller, "A Finite Element Method for Large Domains," Comput. Methods Appl. Mech. Engrg. 76(1), 41–66, 1989.
 [2] A. Kameari et al., "Cauer Ladder Network Representation of Eddy-Current Fields for Model Order Reduction Using FEM," IEEE Trans. Magn. 54(11), 7202804, 2018.
-[3] T. Matsuo, "Fractional-Power-Law Frequency Dependence in Magnetic Properties via Cauer Circuit," J. Magn. Magn. Mater. Art. 174229, 2026.
+[3] T. Matsuo, "Representation of fractional-power-law frequency dependence in magnetic properties using a Cauer circuit," J. Magn. Magn. Mater. Art. 174229, 2026.
 [4] J. E. B. Randles, "Kinetics of Rapid Electrode Reactions," Discuss. Faraday Soc. 1, 11–19, 1947.
 [5] H. Köster, A. König, O. Bíró, "Cauer Ladder Network as Proper Generalised Decomposition Realisation," IEEE Trans. Magn. 57(6), 7401204, 2021.
 [6] R. Kuriyama et al., "Multi-expansion-point Krylov for Eddy-Current ROMs," IEEJ Trans. PE 139(7), 555–562, 2019.
