@@ -7,7 +7,7 @@ toolbars, dialogs, and encapsulated multi-step workflows.
 Sources:
   - Coreform webinar "How to create a custom GUI in Coreform Cubit (Intro)"
     https://www.youtube.com/watch?v=TnZyZHDMOwA  (Carl McKelvey)
-  - Coreform 2025.8 release (PySide6 shipped in distribution).
+  - Coreform 2025.8 (verified through 2025.12 / LAB) release (PySide6 shipped in distribution).
   - Coreform examples repo: https://github.com/coreform-llc
     (DAGMC toolbar, tire cross-section toolbar -- both .tar.gz packaged).
 
@@ -26,10 +26,10 @@ NOTE: This is *different* from two adjacent topics:
 """
 
 TOOLBAR_OVERVIEW = """
-# In-Cubit Custom Toolbar Overview (Coreform Cubit 2025.8+)
+# In-Cubit Custom Toolbar Overview (Coreform Cubit 2025.8 (verified through 2025.12 / LAB)+)
 
 Coreform Cubit ships PySide6 as part of its distribution starting with
-2025.8. You can extend the Cubit GUI with custom toolbars that trigger
+2025.8 (verified through 2025.12 / LAB). You can extend the Cubit GUI with custom toolbars that trigger
 Cubit command-language scripts, Python scripts, or nested command panels.
 
 ## When to use this
@@ -92,7 +92,7 @@ TOOLBAR_PYTHON_SCRIPT_CONVENTIONS = """
 # Cubit In-Process Python Script Conventions (CRITICAL)
 
 Scripts executed from a custom toolbar run inside Cubit's embedded Python
-interpreter (currently Python 3.10 for Cubit 2025.8). This interpreter has
+interpreter (currently Python 3.10 for Cubit 2025.8 (verified through 2025.12 / LAB)). This interpreter has
 subtle differences from standard CPython that break naive scripts.
 
 ## Required script header
@@ -600,7 +600,7 @@ TOOLBAR_TROUBLESHOOTING = """
 
 - Parenthesized multi-line imports break Cubit's importer. Switch to
   backslash continuations or single-line imports.
-- Cubit ships PySide6 only from 2025.8 onward. On older versions,
+- Cubit ships PySide6 only from 2025.8 (verified through 2025.12 / LAB) onward. On older versions,
   PySide6 / PyQt5 has to be installed manually into Cubit's embedded
   Python.
 
