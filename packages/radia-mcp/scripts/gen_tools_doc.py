@@ -123,14 +123,23 @@ def render() -> str:
 
 def write() -> Path:
     DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DOC_PATH.write_text(render(), encoding="utf-8")
+    # newline="" + manual \n preserves LF endings on Windows.  Without
+    # this, Windows write_text translates \n -> \r\n on disk, then CI
+    # (Ubuntu) reads \r\n literally and compares against render() (\n),
+    # causing a spurious drift-gate failure that only fires on CI.
+    with open(DOC_PATH, "w", encoding="utf-8", newline="") as fh:
+        fh.write(render())
     return DOC_PATH
 
 
 def check() -> bool:
     if not DOC_PATH.exists():
         return False
-    return DOC_PATH.read_text(encoding="utf-8") == render()
+    # Read raw bytes, then decode -- matches what write() puts on disk
+    # (LF-only). Avoids platform-dependent newline translation.
+    with open(DOC_PATH, encoding="utf-8", newline="") as fh:
+        on_disk = fh.read()
+    return on_disk == render()
 
 
 def main(argv: list[str]) -> int:
