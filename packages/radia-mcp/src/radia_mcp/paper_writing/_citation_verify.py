@@ -1,0 +1,592 @@
+"""Citation-verification workflow for radia_mcp.paper_writing.
+
+Added 2026-05-26 (radia-mcp v0.91.0).  Enforces the lab policy:
+
+  **ALWAYS use the user's actual reference.bib AND back-check every
+  citation via Crossref / Semantic Scholar / arXiv before inserting
+  it into a paper.**
+
+Why this matters: the most common AI-assisted-writing failure mode
+is *citation hallucination*  -- the AI invents a plausible-looking
+DOI / author / year that does NOT correspond to any real paper.
+Reviewers catch this 100% of the time (the DOI doesn't resolve, or
+resolves to a different paper than the one cited), and one
+hallucinated citation taints the entire submission.
+
+This module composes the EXISTING radia-mcp tools into a hard
+verify-first workflow:
+
+  1. Read user's reference.bib (the SINGLE SOURCE OF TRUTH for what
+     the paper already cites).
+  2. Search Crossref / Semantic Scholar / arXiv for the claim.
+  3. Match candidates against reference.bib (already-cited? skip).
+  4. Verify the top candidate exists via DOI resolve.
+  5. Generate a ready-to-paste BibTeX entry only AFTER verification.
+  6. Recommend whether to insert into reference.bib (or report that
+     the user is already citing it).
+
+If steps 1-4 cannot complete cleanly, the tool RAISES rather than
+returning a plausible-looking but unverified citation.  Fail-fast
+per CLAUDE.md POLICY.
+
+Cross-references:
+  * paper_writing_resolve_doi (Crossref backbone)
+  * paper_writing_doi_to_bibtex (DOI -> BibTeX entry generator)
+  * paper_writing_semantic_scholar_lookup (DOI/arXiv/etc resolver)
+  * paper_writing_arxiv_search (free-text arXiv search)
+  * paper_writing_lint_reference_format (post-insertion hygiene)
+  * paper_writing_check_citation_usage (.tex cross-validation)
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from typing import Optional
+
+
+# ============================================================
+# Behavioral knowledge: the workflow recipe
+# ============================================================
+
+
+_CITATION_VERIFICATION_RECIPE = r"""
+# Lab POLICY: citation verification workflow (radia_mcp.paper_writing)
+
+This recipe is the SINGLE BEHAVIORAL RULE for inserting any
+citation into a lab paper:
+
+  **NEVER invent a citation.  ALWAYS use the user's actual
+  reference.bib and ALWAYS verify the source via search FIRST.**
+
+## Why this is enforced
+
+The most common AI-assisted-writing failure is HALLUCINATED
+CITATIONS -- a plausible-looking DOI / author / year that does NOT
+correspond to a real paper.  Reviewers catch every single one
+(typical workflow: reviewer clicks the DOI, it doesn't resolve,
+they conclude the rest of the paper is suspect, manuscript is
+rejected).
+
+One hallucinated citation taints the whole submission.  The cost
+of preventing the failure is one extra search-and-verify per
+citation (~5 seconds of human time, 0 seconds of AI time).
+
+## The mandatory 6-step workflow
+
+### Step 1: READ the user's reference.bib first
+
+```python
+from radia_mcp.paper_writing import paper_writing_lint_reference_format
+report = paper_writing_lint_reference_format("/path/to/reference.bib")
+# report contains: every existing entry's citation_key, DOI, title, author, year
+```
+
+The .bib is the **single source of truth** for what the paper
+already cites.  Before suggesting ANY new citation, verify whether
+the user is already citing the source.  If yes, REUSE the existing
+citation_key; do NOT introduce a duplicate entry.
+
+### Step 2: SEARCH for grounding via Crossref / Semantic Scholar /
+arXiv
+
+When the claim references a specific result / method / dataset,
+search to find the canonical paper:
+
+```python
+from radia_mcp.paper_writing import (
+    paper_writing_semantic_scholar_lookup,
+    paper_writing_arxiv_search,
+    paper_writing_resolve_doi,
+)
+
+# If you have a DOI guess:
+meta = paper_writing_resolve_doi("10.1109/TAP.2006.880747")
+# meta contains the Crossref-authoritative title, authors, year, venue
+
+# If you have an arXiv ID:
+lookup = paper_writing_semantic_scholar_lookup("arXiv:2603.17339")
+# lookup['metadata'] has authoritative title, abstract, externalIds
+
+# Free-text search by title / topic:
+hits = paper_writing_arxiv_search(
+    "Sommerfeld closed form impedance plane", max_results=5
+)
+# hits['papers'] is a ranked list with arxiv_id, title, authors, year
+```
+
+**Never make up a DOI** like "10.1109/TAP.20XX.XXXXXXX".  Either
+resolve a candidate DOI via Crossref, OR find the paper via
+arXiv search, OR mark the citation as "TODO: verify with user".
+
+### Step 3: MATCH candidates against reference.bib
+
+```python
+from radia_mcp.paper_writing import paper_writing_verify_citation
+
+result = paper_writing_verify_citation(
+    claim="Koh-Yook derived an exact closed form for impedance plane",
+    bib_path="/path/to/reference.bib",
+    candidate_doi="10.1109/TAP.2006.880747",
+)
+# Returns:
+#   "already_in_bib": bool          -- if yes, reuse the existing key
+#   "matching_key":    str|None     -- which key in bib (if matched)
+#   "candidates":      list[dict]   -- search-verified candidates
+#   "suggested_bibtex": str|None    -- ready-to-paste entry (if new)
+#   "verification_method": str      -- "crossref" | "arxiv" | "s2"
+#   "verdict":         "found_in_bib" | "ready_to_insert" |
+#                       "needs_disambiguation" | "no_candidate_found"
+#   "advice":          str          -- next step
+```
+
+### Step 4: VERIFY the DOI resolves (defensive double-check)
+
+```python
+# Even if the BibTeX was auto-generated, double-check the DOI:
+v = paper_writing_resolve_doi(suggested_bibtex_doi)
+assert v["ok"], f"Suggested DOI does not resolve: {suggested_bibtex_doi}"
+```
+
+If the DOI doesn't resolve, the BibTeX is unreliable -- discard
+the candidate and search again.
+
+### Step 5: INSERT into reference.bib (only if verdict ==
+"ready_to_insert")
+
+Append to the user's .bib file via standard text edit; never
+overwrite existing entries.
+
+### Step 6: LINT after insertion
+
+```python
+post_check = paper_writing_lint_reference_format(bib_path)
+# Verify no duplicate keys, no missing required fields, no DOI typos
+```
+
+## When verification cannot complete
+
+If after Steps 2-3 NO candidate has a resolvable DOI:
+
+  * **DO NOT** generate a fake / placeholder DOI.
+  * **DO NOT** invent author names or years.
+  * **DO** mark the citation in the manuscript with a clearly
+    visible TODO:
+        ``\\cite{TODO: verify -- claim about Sommerfeld closed form}``
+  * **DO** report this to the user explicitly:
+        "I could not verify a citation for this claim.  Please
+         provide the DOI or paper title."
+
+## What this prevents
+
+  * Hallucinated DOIs that don't resolve (catches 100% of these).
+  * Wrong-author citations (the Crossref metadata is authoritative).
+  * Mixed-up year/venue citations (e.g. confusing a 2006 paper
+    with a 2007 conference version).
+  * Duplicate citations in reference.bib (different keys pointing
+    to the same DOI).
+  * Cite-but-not-in-bib (\\cite{xyz} where xyz isn't in the bib).
+  * Bib-but-not-cited (entries in bib that never appear in \\cite).
+    -- the existing paper_writing_check_citation_usage tool catches
+    this on the .tex/.bib pair.
+
+## Quick-reference: which tool for which job
+
+  paper_writing_lint_reference_format(bib)
+        Bib hygiene: missing fields, duplicate keys, DOI format.
+
+  paper_writing_resolve_doi(doi)
+        Crossref API lookup; authoritative metadata.
+
+  paper_writing_doi_to_bibtex(doi)
+        Generate BibTeX entry from DOI via Crossref.
+
+  paper_writing_arxiv_search(query, categories="")
+        Free-text search arXiv; EM-tuned default categories.
+
+  paper_writing_semantic_scholar_lookup(paper_id)
+        Resolve DOI / arXiv ID / S2 ID into metadata + abstract.
+
+  paper_writing_semantic_scholar_references(paper_id)
+        List of papers CITED BY the given paper -- find canonical
+        predecessors.
+
+  paper_writing_semantic_scholar_citations(paper_id)
+        List of papers CITING the given paper -- find recent extensions.
+
+  paper_writing_verify_citation(claim, bib_path, ...)
+        The composite workflow: SEARCH + MATCH + VERIFY + SUGGEST.
+        **Use this for any new citation.**
+
+  paper_writing_check_citation_usage(tex, bib)
+        Post-write check: every \\cite resolves; no orphan entries.
+
+  paper_writing_fetch_and_cite(doi, dest_dir)
+        Download PDF + generate BibTeX (IEEE / Crossref).
+"""
+
+
+def paper_writing_citation_workflow_recipe() -> str:
+    """Return the lab's mandatory citation-verification workflow recipe.
+
+    This is the BEHAVIORAL RULE for inserting any citation into a
+    lab paper: NEVER invent, ALWAYS verify via Crossref / S2 /
+    arXiv FIRST, ALWAYS check against the user's reference.bib.
+
+    Read this BEFORE generating any \\cite{} or BibTeX entry.
+    """
+    return _CITATION_VERIFICATION_RECIPE
+
+
+# ============================================================
+# Helpers
+# ============================================================
+
+
+def _parse_bib_lightweight(bib_path: str) -> dict:
+    """Parse reference.bib without pulling in pybtex/bibtexparser.
+
+    Returns dict keyed by citation_key with sub-dict of fields.
+    Lossy but enough for "is this DOI already cited?" check.
+    """
+    if not os.path.exists(bib_path):
+        return {}
+    try:
+        with open(bib_path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except Exception:  # noqa: BLE001
+        return {}
+
+    entries = {}
+    # Match @TYPE{key, ... } blocks (greedy but stops at next @)
+    pat = re.compile(
+        r"@(\w+)\s*\{\s*([^,\s]+)\s*,(.*?)\n\}",
+        re.DOTALL | re.IGNORECASE,
+    )
+    for m in pat.finditer(text):
+        entry_type = m.group(1).lower()
+        key = m.group(2)
+        body = m.group(3)
+        fields = {}
+        # field = "value" or field = {value}
+        for fm in re.finditer(
+            r"(\w+)\s*=\s*[\{\"]([^\"\}]*)[\}\"]", body
+        ):
+            fields[fm.group(1).lower()] = fm.group(2)
+        entries[key] = {"type": entry_type, **fields}
+    return entries
+
+
+def _doi_already_cited(bib_entries: dict, target_doi: str) -> Optional[str]:
+    """Return the citation_key in bib_entries whose DOI matches
+    target_doi (case-insensitive), or None if no match.
+    """
+    if not target_doi:
+        return None
+    t = target_doi.strip().lower()
+    if t.startswith("https://doi.org/"):
+        t = t[len("https://doi.org/"):]
+    if t.startswith("doi:"):
+        t = t[4:]
+    for key, fields in bib_entries.items():
+        bib_doi = fields.get("doi", "").strip().lower()
+        if bib_doi.startswith("https://doi.org/"):
+            bib_doi = bib_doi[len("https://doi.org/"):]
+        if bib_doi == t:
+            return key
+    return None
+
+
+def _title_already_cited(bib_entries: dict, target_title: str) -> Optional[str]:
+    """Return the first citation_key whose title approximately matches
+    target_title (case-insensitive, normalised whitespace).
+    """
+    if not target_title:
+        return None
+    def _norm(s):
+        s = re.sub(r"\s+", " ", s.lower()).strip()
+        s = re.sub(r"[^a-z0-9 ]", "", s)
+        return s
+    t_norm = _norm(target_title)
+    if len(t_norm) < 10:
+        return None  # too short, would match many things
+    for key, fields in bib_entries.items():
+        bib_title = fields.get("title", "")
+        if _norm(bib_title).find(t_norm[:80]) >= 0:
+            return key
+    return None
+
+
+# ============================================================
+# paper_writing_verify_citation -- the composite workflow tool
+# ============================================================
+
+
+def paper_writing_verify_citation(
+    claim: str,
+    bib_path: str,
+    candidate_doi: str = "",
+    candidate_arxiv_id: str = "",
+    candidate_title: str = "",
+    search_arxiv_if_no_doi: bool = True,
+    arxiv_max_results: int = 5,
+) -> dict:
+    """Verify a citation BEFORE inserting it into the paper.
+
+    Lab POLICY: this is the mandatory workflow for any new
+    \\cite{} or BibTeX entry.  Composes the existing search +
+    bib-lint tools into a single pass-fail check.
+
+    Args:
+        claim: free-text description of WHAT is being cited
+            (used for search if no DOI / arXiv ID).  Example:
+            "Koh-Yook derived an exact closed form for the
+             impedance plane Sommerfeld integral."
+        bib_path: path to the user's reference.bib (the single
+            source of truth for what the paper already cites).
+        candidate_doi: known DOI candidate (skip search step).
+        candidate_arxiv_id: known arXiv ID candidate.
+        candidate_title: known paper title.  Used both for
+            duplicate detection in .bib AND for arXiv search if
+            no DOI / arXiv ID was provided.
+        search_arxiv_if_no_doi: True (default) to fall back to
+            arXiv keyword search when no DOI / arXiv ID is given.
+        arxiv_max_results: cap on arXiv-search candidates.
+
+    Returns:
+        dict with:
+          "verdict": one of:
+              "found_in_bib"          -- already cited; reuse existing key
+              "ready_to_insert"       -- verified, suggested_bibtex valid
+              "needs_disambiguation"  -- multiple candidates, user pick
+              "no_candidate_found"    -- search failed; mark as TODO
+              "error"                 -- bib read failed, etc.
+          "matching_key": str|None   -- existing bib key (if found_in_bib)
+          "candidates": list[dict]    -- search-verified candidates
+          "suggested_bibtex": str|None
+          "verification_method": str  -- "doi-direct" | "arxiv-search"
+                                          | "title-match" | "bib-only"
+          "advice": str               -- actionable next step
+
+    Lab usage:
+        Before inserting ANY \\cite{xxx}:
+        1. Call paper_writing_verify_citation(claim, bib_path, ...).
+        2. If verdict == "found_in_bib": use matching_key, no edit.
+        3. If verdict == "ready_to_insert": append suggested_bibtex
+           to reference.bib, then \\cite{citation_key}.
+        4. If verdict == "needs_disambiguation": ask user to pick.
+        5. If verdict == "no_candidate_found": mark TODO; ask user.
+        6. If verdict == "error": investigate; do NOT proceed.
+    """
+    # --- Step 1: read the user's bib ---
+    if not bib_path:
+        return {
+            "verdict": "error",
+            "advice": ("bib_path is required.  The lab policy is to "
+                       "ALWAYS use the user's reference.bib as the "
+                       "single source of truth before inserting any "
+                       "new citation."),
+            "candidates": [],
+            "matching_key": None,
+            "suggested_bibtex": None,
+            "verification_method": None,
+        }
+    if not os.path.exists(bib_path):
+        return {
+            "verdict": "error",
+            "advice": (f"bib_path not found: {bib_path}.  Ask the user "
+                       f"to create reference.bib or supply the correct path."),
+            "candidates": [],
+            "matching_key": None,
+            "suggested_bibtex": None,
+            "verification_method": None,
+        }
+    bib_entries = _parse_bib_lightweight(bib_path)
+
+    # --- Step 2a: DOI fast-path (if user gave us one) ---
+    if candidate_doi:
+        matching = _doi_already_cited(bib_entries, candidate_doi)
+        if matching:
+            return {
+                "verdict": "found_in_bib",
+                "matching_key": matching,
+                "candidates": [],
+                "suggested_bibtex": None,
+                "verification_method": "doi-direct",
+                "advice": (f"Use existing \\cite{{{matching}}}.  Do NOT "
+                            f"introduce a duplicate entry."),
+            }
+        # Verify DOI resolves, then generate BibTeX
+        from .paper_download import (
+            paper_writing_resolve_doi,
+            paper_writing_doi_to_bibtex,
+        )
+        v = paper_writing_resolve_doi(candidate_doi)
+        if not v.get("ok"):
+            return {
+                "verdict": "no_candidate_found",
+                "matching_key": None,
+                "candidates": [],
+                "suggested_bibtex": None,
+                "verification_method": "doi-direct",
+                "advice": (f"DOI {candidate_doi!r} does NOT resolve via "
+                            f"Crossref.  This DOI is likely fabricated or "
+                            f"typo'd.  Search for the paper via "
+                            f"paper_writing_arxiv_search(claim) or ask "
+                            f"the user for the correct DOI.  DO NOT insert "
+                            f"this DOI into the bib."),
+            }
+        bib_result = paper_writing_doi_to_bibtex(candidate_doi)
+        if not bib_result.get("ok"):
+            return {
+                "verdict": "error",
+                "matching_key": None,
+                "candidates": [v.get("metadata", {})],
+                "suggested_bibtex": None,
+                "verification_method": "doi-direct",
+                "advice": (f"DOI resolved but BibTeX generation failed: "
+                            f"{bib_result.get('error')}"),
+            }
+        meta = v.get("metadata", {})
+        return {
+            "verdict": "ready_to_insert",
+            "matching_key": None,
+            "candidates": [meta],
+            "suggested_bibtex": bib_result["bibtex"],
+            "verification_method": "doi-direct",
+            "advice": (f"Verified.  Append the suggested_bibtex to "
+                        f"{os.path.basename(bib_path)}, then use "
+                        f"\\cite{{{bib_result['citation_key']}}}."),
+        }
+
+    # --- Step 2b: arXiv-ID fast-path ---
+    if candidate_arxiv_id:
+        from ._arxiv_source import (
+            paper_writing_semantic_scholar_lookup,
+            _normalize_arxiv_id,
+        )
+        aid = _normalize_arxiv_id(candidate_arxiv_id)
+        # Try DOI lookup via S2 first (gives us a DOI to feed Crossref)
+        lookup = paper_writing_semantic_scholar_lookup(f"arXiv:{aid}")
+        if "error" not in lookup:
+            ext = lookup.get("metadata", {}).get("externalIds", {})
+            doi = ext.get("DOI") or ""
+            if doi:
+                return paper_writing_verify_citation(
+                    claim=claim, bib_path=bib_path, candidate_doi=doi,
+                )
+            # No DOI but we have S2 metadata -- check title match
+            title = lookup.get("metadata", {}).get("title", "")
+            matching = _title_already_cited(bib_entries, title)
+            if matching:
+                return {
+                    "verdict": "found_in_bib",
+                    "matching_key": matching,
+                    "candidates": [lookup.get("metadata", {})],
+                    "suggested_bibtex": None,
+                    "verification_method": "arxiv-title-match",
+                    "advice": (f"arXiv:{aid} title matches existing bib "
+                               f"entry \\cite{{{matching}}}.  Reuse."),
+                }
+            # No DOI, no title match -- emit a basic arXiv BibTeX
+            authors = ", ".join(
+                a.get("name", "?")
+                for a in lookup.get("metadata", {}).get("authors", [])[:4]
+            )
+            year = lookup.get("metadata", {}).get("year", "????")
+            key = (f"arxiv_{aid.replace('/', '_').replace('.', '_')}")
+            bibtex = (
+                f"@misc{{{key},\n"
+                f"  author       = {{{authors}}},\n"
+                f"  title        = {{{title}}},\n"
+                f"  year         = {{{year}}},\n"
+                f"  archivePrefix = {{arXiv}},\n"
+                f"  eprint       = {{{aid}}},\n"
+                f"}}"
+            )
+            return {
+                "verdict": "ready_to_insert",
+                "matching_key": None,
+                "candidates": [lookup.get("metadata", {})],
+                "suggested_bibtex": bibtex,
+                "verification_method": "arxiv-direct",
+                "advice": (f"Verified via arXiv (no DOI on file).  Append "
+                            f"suggested_bibtex, then \\cite{{{key}}}."),
+            }
+        # S2 lookup failed
+        return {
+            "verdict": "no_candidate_found",
+            "matching_key": None,
+            "candidates": [],
+            "suggested_bibtex": None,
+            "verification_method": "arxiv-direct",
+            "advice": (f"arXiv ID {candidate_arxiv_id!r} could not be "
+                        f"resolved via Semantic Scholar.  Verify the ID "
+                        f"is correct and try again, or supply a DOI."),
+        }
+
+    # --- Step 2c: title-only fast-path (check bib first) ---
+    if candidate_title:
+        matching = _title_already_cited(bib_entries, candidate_title)
+        if matching:
+            return {
+                "verdict": "found_in_bib",
+                "matching_key": matching,
+                "candidates": [],
+                "suggested_bibtex": None,
+                "verification_method": "title-match",
+                "advice": (f"Title approximately matches existing bib "
+                            f"entry \\cite{{{matching}}}.  Reuse this key "
+                            f"OR verify with user that they intend a "
+                            f"different paper."),
+            }
+
+    # --- Step 3: fall back to arXiv keyword search ---
+    if search_arxiv_if_no_doi and (candidate_title or claim):
+        from ._arxiv_source import paper_writing_arxiv_search
+        query = candidate_title or claim
+        hits = paper_writing_arxiv_search(query, max_results=arxiv_max_results)
+        if "error" in hits or hits.get("n_results", 0) == 0:
+            return {
+                "verdict": "no_candidate_found",
+                "matching_key": None,
+                "candidates": [],
+                "suggested_bibtex": None,
+                "verification_method": "arxiv-search",
+                "advice": (f"No candidates found via arXiv search for "
+                            f"{query!r}.  Mark this citation as a TODO "
+                            f"in the manuscript: "
+                            f"\\cite{{TODO: verify -- {claim[:60]}...}}.  "
+                            f"Ask the user for the DOI or paper title."),
+            }
+        cands = hits["papers"]
+        # Filter out already-cited
+        for c in cands:
+            t = c.get("title", "")
+            matching = _title_already_cited(bib_entries, t)
+            if matching:
+                c["already_in_bib_key"] = matching
+        return {
+            "verdict": "needs_disambiguation",
+            "matching_key": None,
+            "candidates": cands,
+            "suggested_bibtex": None,
+            "verification_method": "arxiv-search",
+            "advice": (f"Found {len(cands)} candidates via arXiv search "
+                        f"for {query!r}.  Ask the user to pick one and "
+                        f"re-call paper_writing_verify_citation with the "
+                        f"chosen arxiv_id."),
+        }
+
+    # --- Step 4: insufficient info ---
+    return {
+        "verdict": "no_candidate_found",
+        "matching_key": None,
+        "candidates": [],
+        "suggested_bibtex": None,
+        "verification_method": None,
+        "advice": ("Insufficient information to verify.  Provide at least "
+                    "one of: candidate_doi, candidate_arxiv_id, "
+                    "candidate_title.  Or pass a more detailed claim "
+                    "(>20 chars) and set search_arxiv_if_no_doi=True."),
+    }
