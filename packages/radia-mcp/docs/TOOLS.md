@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **417 tools** across 40 MCP servers.
+Total: **321 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,9 +10,9 @@ Total: **417 tools** across 40 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 32 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 31 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 12 |
-| [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 9 |
+| [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
@@ -40,8 +40,7 @@ Total: **417 tools** across 40 MCP servers.
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 92 |
-| [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 8 |
+| [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 6 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 6 |
@@ -210,7 +209,6 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `release_workflow` | Triple-package release workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
-| `topology_optimization` | Topology optimization knowledge mirror for NGSolve users. |
 
 ## `mcp-server-fem`
 
@@ -247,7 +245,6 @@ Module: `radia_mcp.bem.server`
 | `bem_mmm_msc` | Magnetic Moment Method (MMM) and Surface Charge (MSC) -- Radia's core. |
 | `bem_mom_foundations` | MoM foundations: Harrington 1968, RWG 1982, wire-grid (NEC). |
 | `bem_overview` | BEM/MoM landscape: lab stack, decision tree, genealogy. |
-| `bem_sommerfeld_layered` | Sommerfeld integrals / layered-medium Green's function theory. |
 | `bem_status` | (no description) |
 | `bem_surface_ie` | Surface Integral Equations: EFIE, MFIE, CFIE, PMCHWT. |
 
@@ -628,107 +625,6 @@ Module: `radia_mcp.md2html.server`
 | `md2html_convert` | Convert a Markdown file to a self-contained HTML file. |
 | `md2html_status` | (no description) |
 
-## `mcp-server-paper-writing`
-
-_Journal paper writing skill suite: 67 IMRaD / abstract / citation / figure / equation / hedge-counting / passive-voice / paragraph / PDF-edge-overflow / page-limit lint tools + PDF download (IEEE Xplore / ScienceDirect / Emerald with cookies) + Plan-B composite-score modules (reproducibility, statistical reporting, IMRaD discussion, journal fit).  v0.88.0 adds 5 image-based PDF layout verification tools (pymupdf-render thumbnail strip + whitespace anomaly detection + per-page PNG + float-far-from-reference check) and the tex_figure_placement knowledge module (htbp / placeins / widths / anti-patterns / per-journal profiles).  Promoted from mcp-server-document._
-
-Module: `radia_mcp.paper_writing.server`
-
-| Tool | Description |
-|---|---|
-| `paper_writing_abstract_strength` | Abstract の強度を 4 要素 (problem / method / result-with-number / impact) |
-| `paper_writing_acronym_usage_audit` | 略語の使用頻度監査 (grant_writing 実装の re-export)。 |
-| `paper_writing_adaptive_health_report` | paper T8 health_report の severity 判定を context で adjust。 |
-| `paper_writing_analyze_sentences` | 文長分析 (和文)。journal では長文を避けて読みやすさ重視。 |
-| `paper_writing_arxiv_extract_equations` | Extract all displayed equations from a LaTeX source. |
-| `paper_writing_arxiv_fetch_latex_source` | Fetch the LaTeX source of an arXiv preprint. |
-| `paper_writing_arxiv_search` | Search arXiv via the official Atom XML API. |
-| `paper_writing_check_abstract_background_ratio` | Abstract 内で background (導入文) が占める割合を推定。 |
-| `paper_writing_check_citation_usage` | TeX 本文中の \cite{} キーと bib file の entries を突合。 |
-| `paper_writing_check_english_redflags` | 英文論文の典型的 red flag を検出 (冠詞、時制、自動詞/他動詞 の混同)。 |
-| `paper_writing_check_equation_numbering` | 方程式番号 (1), (2), ... の連番欠落 / 重複をチェック。 |
-| `paper_writing_check_figure_caption_showing` | Figure caption が showing (describe) 形か telling (claim) 形か判定。 |
-| `paper_writing_check_figure_forward_reference` | 図/表の \label と \ref の整合チェック (孤立ラベル / 未解決参照)。 |
-| `paper_writing_check_floats_far_from_reference` | Detect figures whose \ref{} appears far from the actual float. |
-| `paper_writing_check_imrad_balance` | IMRAD 各セクションの字数バランスを検証する。 |
-| `paper_writing_check_kanji_ratio` | 漢字比率 check (本多『日本語の作文技術』第四章 re-export)。 |
-| `paper_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用検出 (re-export)。 |
-| `paper_writing_check_notation_variants` | 和文表記ゆれ検出 (grant_writing 実装の re-export)。 |
-| `paper_writing_check_overfull_hbox` | LaTeX ログ中の Overfull \hbox 警告をカウント。journal では許容ゼロ。 |
-| `paper_writing_check_paragraph_length` | 段落の字数/語数が適正範囲内か検出。 |
-| `paper_writing_check_paragraph_opener` | Introduction/Abstract の段落冒頭が禁断フレーズで始まるか検出。 |
-| `paper_writing_check_passive_voice_ratio` | 英文の受動態比率を推定。Wallwork §8: Methods は passive 可、 |
-| `paper_writing_check_pdf_advanced_anomalies` | 論文 PDF を実際に読んで、reviewer-2 が刺してくる高頻度の体裁 |
-| `paper_writing_check_pdf_edge_overflow` | 論文 PDF を実際に読んで、本文/数式/図表が紙面の端からはみ出して |
-| `paper_writing_check_pdf_obvious_errors` | 論文 PDF を実際に開いて「明らかな体裁エラー」を 6 種類スキャン。 |
-| `paper_writing_check_prose_density` | Detect compression-induced prose-density anti-patterns. |
-| `paper_writing_check_self_citation_ratio` | 自己引用率を算出。Wallwork: <20% 推奨。 |
-| `paper_writing_check_sentence_ending_variety` | 文末表現の単調さ / 連続を検出 (中島・塚本 §1.3.2)。 |
-| `paper_writing_check_strong_adjective_budget` | 強調副詞/形容詞の過剰使用を検出。 |
-| `paper_writing_check_subject_predicate_distance` | 主述直結原則 (本多 p.22) — 「は、」「が、」 主題マーカーの |
-| `paper_writing_check_tense_consistency` | Discussion の 3-part tense (hypothesis=現在, result=過去, background=現在完了) 混在検出。 |
-| `paper_writing_check_typography_hacks` | Detect typography hacks used to cram content past a page limit. |
-| `paper_writing_check_undefined_variables` | Detect math symbols that are used but never defined. |
-| `paper_writing_check_word_repetition` | 同一単語の近接障害を検出する (中島・塚本『知的な科学・技術文章の書き方』§1.3.5)。 |
-| `paper_writing_citation_health_4_axes` | 論文 reference の 4 軸 health 診断。 |
-| `paper_writing_citation_workflow_recipe` | Return the lab's mandatory citation-verification workflow recipe. |
-| `paper_writing_claim_quantification` | Unquantified hype claims を検出。 |
-| `paper_writing_classify_reviewer_comment` | Reviewer コメントを佐藤 Q40 の 4-tier に自動分類。 |
-| `paper_writing_contribution_clarity_score` | Introduction 末尾の Contribution リスト/段落の明確度診断。 |
-| `paper_writing_count_underlines` | TeX/LaTeX 内の下線コマンドを実測。論文では原則ゼロを目指す。 |
-| `paper_writing_count_weak_expressions` | 弱気修飾語の出現数。journal 論文では conclusion / contribution で |
-| `paper_writing_detect_overlapping_text_blocks` | Detect text-on-text overlap (block-vs-block IoU on every page). |
-| `paper_writing_detect_page_whitespace_anomalies` | Flag pages that are mostly whitespace (sign of bad float placement). |
-| `paper_writing_detect_text_image_overlap` | Detect text blocks overlapping with images on every page. |
-| `paper_writing_detect_text_overflow_page` | Detect text blocks extending past the page CropBox / MediaBox. |
-| `paper_writing_discussion_structure_4_elements` | Discussion section の 4 要素 (interpretation / limitations / |
-| `paper_writing_doi_to_bibtex` | Generate a BibTeX entry for a DOI via Crossref metadata. |
-| `paper_writing_em_paper_style` | EM-domain-specific style/notation/convention knowledge. |
-| `paper_writing_em_submission_gate` | One-shot EM-paper pre-submission gate. |
-| `paper_writing_emerald_download_pdf` | Download an Emerald Publishing PDF (e.g. COMPEL journal). |
-| `paper_writing_external_sources_recipe` | Return the GitHub-survey writeup + decision tree + credits. |
-| `paper_writing_extract_abstract` | Extract the abstract body from a .tex file. |
-| `paper_writing_fetch_and_cite` | One-shot: download IEEE PDF + generate BibTeX entry from a DOI. |
-| `paper_writing_figure_referencing_coverage` | Every \label{fig:X}/\label{tab:X} が本文で \ref される回数を集計。 |
-| `paper_writing_find_undefined_acronyms` | Latin 略語の初出定義 check (grant_writing 実装の re-export)。 |
-| `paper_writing_generate_cover_letter` | 投稿 cover letter の skeleton を生成。 |
-| `paper_writing_generate_response_letter` | Reviewer コメントへの応答文テンプレ (佐藤 Q40 "agree first, pivot")。 |
-| `paper_writing_given_new_ordering` | Wallwork §3.4-3.6: Given-New 情報配置ルールの heuristic 評価。 |
-| `paper_writing_health_report` | paper_writing Plan B の全 T1-T7 を束ねた統合レポート。 |
-| `paper_writing_ieee_doi_to_arnumber` | Resolve an IEEE DOI to its IEEE Xplore arnumber. |
-| `paper_writing_ieee_download_pdf` | Download an IEEE Xplore PDF via cookie-seeded curl-like session. |
-| `paper_writing_journal_fit_assessment` | target journal の aims & scope と論文の fit を診断。 |
-| `paper_writing_layout_thumbnail_strip` | Render every page as a thumbnail tile into ONE composite PNG. |
-| `paper_writing_layout_visual_recipe` | Return the lab recipe for image-based PDF layout verification. |
-| `paper_writing_limitation_statement_presence` | Discussion 内で limitation/caveat 段落の有無・位置・充実度を検査。 |
-| `paper_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 の bedrock 診断 (re-export)。 |
-| `paper_writing_lint_reference_format` | .bib の reference エントリーの完全性と形式を検証。 |
-| `paper_writing_next_5_actions` | paper health_report の priority_issues を impact / effort で再 sort、 |
-| `paper_writing_pdf_overlap_recipe` | Return the recipe for PDF overlap/overflow detection. |
-| `paper_writing_related_work_density` | Introduction 内の \cite 密度・自己引用比率・年度分布を診断。 |
-| `paper_writing_render_pages_to_png` | Render PDF pages to PNG files for visual inspection. |
-| `paper_writing_reproducibility_open_science_check` | Reproducibility & Open Science の 6 軸を一括診断。 |
-| `paper_writing_resolve_doi` | Look up a DOI's metadata via the Crossref public API. |
-| `paper_writing_resolve_input_chain` | MCP tool wrapper for resolve_input_chain(). |
-| `paper_writing_reviewer_2_trigger_summary` | 悪意ある reviewer-2 が最も突いてくるポイントを weighted union で列挙。 |
-| `paper_writing_rewrite_suggest` | paper 用 rewrite candidate 生成 (11 target × 3-5 candidate)。 |
-| `paper_writing_root_cause_diagnosis` | health_report 結果を横断 pattern matching し、論文の根本原因を診断。 |
-| `paper_writing_run_full_workflow` | paper 用 Phase 1-5 を 1 コール chain 実行。 |
-| `paper_writing_sciencedirect_download_pdf` | Download an Elsevier ScienceDirect PDF. |
-| `paper_writing_semantic_scholar_citations` | List the papers CITING a given paper. |
-| `paper_writing_semantic_scholar_lookup` | Look up a paper via Semantic Scholar API. |
-| `paper_writing_semantic_scholar_references` | List the references CITED BY a given paper. |
-| `paper_writing_statistical_reporting_compliance` | 各 p 値の周辺で effect size / CI / sample size の有無を診断。 |
-| `paper_writing_status` | (no description) |
-| `paper_writing_suggest_concept_drops` | Suggest specific concepts to drop when prose is over the |
-| `paper_writing_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補提示 (re-export)。 |
-| `paper_writing_tex_figure_placement` | LaTeX figure placement knowledge: float specifiers, placeins, |
-| `paper_writing_title_abstract_conclusion_triangle` | Title / Abstract / Conclusion の三角形整合性を診断。 |
-| `paper_writing_usage` | Journal 論文 (IEEE / IEEJ / APS / Elsevier 等) の作文技術ガイド全体。 |
-| `paper_writing_validate_abstract_length` | Abstract 字数 / 語数が制限内か検証。言語を自動判定。 |
-| `paper_writing_validate_pdf_pages` | PDF のページ数が投稿制限内か検証。pymupdf が必要。 |
-| `paper_writing_verify_citation` | Verify a citation BEFORE inserting it into the paper. |
-
 ## `mcp-server-graph`
 
 _Sugahara Lab publication-figure style guide: IEEE / IEEJ font/size profiles, MATLAB + Matplotlib snippets, lab style rules (units in parentheses, no in-figure title, Times New Roman serif).  Promoted from mcp-server-document._
@@ -737,11 +633,9 @@ Module: `radia_mcp.graph.server`
 
 | Tool | Description |
 |---|---|
-| `flux_line_recipe` | Lab flux-line tracing + visualization recipes (FEM post-processing). |
 | `graph_size_for_target` | Recommend output figure size + font settings for a target embedding. |
 | `graph_status` | (no description) |
 | `graph_style_guide` | Return the lab-standard graph style guide. |
-| `paper_figure_8cm_recipe` | Generate a Python recipe for the 8-cm-column lab anchor (1 or 2 panels). |
 | `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
 | `paper_figure_quality_rules` | Why paper-quality figures need a margin-efficiency gate. |
 | `paper_figure_recipe` | Generate a self-contained Python recipe for a paper-quality figure. |
