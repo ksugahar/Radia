@@ -136,10 +136,17 @@ def check() -> bool:
     if not DOC_PATH.exists():
         return False
     # Read raw bytes, then decode -- matches what write() puts on disk
-    # (LF-only). Avoids platform-dependent newline translation.
+    # (LF-only). Avoids platform-dependent newline translation at READ
+    # time. But the file on disk MAY have CRLF anyway because of:
+    #   (a) Windows `core.autocrlf=true` (LAB + self-hosted runner default)
+    #   (b) `actions/checkout@v4` on persistent runners doesn't re-write
+    #       files that git considers "clean" via autocrlf, even after
+    #       `.gitattributes` adds `text eol=lf` rule.
+    # So normalize CRLF -> LF on BOTH sides before comparing -- the
+    # drift check is about CONTENT, not about line-ending bytes.
     with open(DOC_PATH, encoding="utf-8", newline="") as fh:
         on_disk = fh.read()
-    return on_disk == render()
+    return on_disk.replace("\r\n", "\n") == render().replace("\r\n", "\n")
 
 
 def main(argv: list[str]) -> int:
