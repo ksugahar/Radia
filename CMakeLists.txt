@@ -182,6 +182,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_bem_galerkin.cpp          # Fast Galerkin SL/DL assembler (Sauter-Schwab + OpenMP)
 	${CORE_DIR}/rad_biot_savart_filaments.cpp # Fast Biot-Savart H/A from finite-segment filaments (complex I)
 	${CORE_DIR}/rad_biot_savart_surface.cpp   # Fast Biot-Savart B/A from triangulated surface (complex J_s)
+	${CORE_DIR}/rad_equivalence_source.cpp    # Equivalence-theorem near-field source (Schelkunoff/Love static H, Phase A)
 	${CORE_DIR}/rad_average_field.cpp         # Closed-form average B over a target box (Wakao Part 6 §7)
 )
 

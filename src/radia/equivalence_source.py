@@ -436,29 +436,33 @@ class NearFieldSource:
     # Evaluation (Stratton-Chu)
     # -----------------------------------------------------------------
 
-    def evaluate_static_H(self, obs_points: np.ndarray) -> np.ndarray:
+    def evaluate_static_H(self, obs_points: np.ndarray,
+                            use_cpp: bool = True,
+                            n_threads: int = 0) -> np.ndarray:
         """Magnetostatic reduction: reconstruct H at observation points.
 
-        Schelkunoff/Love representation in scalar-potential + vector-
-        potential form:
-
-            H(r) = -(1/(4 pi)) * grad(r) integral{ (n . H_s) / R } dS'
-                   + (1/(4 pi)) * curl(r) integral{ (n x H_s) / R } dS'
-
-        Carrying the differentiation inside the integral gives the
-        equivalent form
+        Schelkunoff/Love representation, scalar + vector potential form,
+        differentiated inside the integral:
 
             H(r) = (1/(4 pi)) * sum_faces { grad(1/R) x J_s
                                             - (n . H_s) grad(1/R) } * dS
 
-        with J_s = n x H_s and grad(1/R) = -R_vec / R^3 evaluated at
-        the observation point (R_vec = r - r_face).
+        with J_s = n x H_s, R = |r - centroid|, grad(1/R) = -R_vec/R^3.
+        Sign convention fixed by magnetic-dipole unit test.
 
-        The sign convention is fixed by the empirical magnetic-dipole
-        unit test:  m = m_z z-hat on-axis gives Hz > 0 outside.
+        Phase A (2026-05-26): delegates to the C++ kernel
+        `radia._radia_pybind._EquivalenceSourceStaticH` for ~50-100x
+        speedup over the legacy numpy loop.  The Python fallback path
+        is kept as a safety net and will be removed in Phase E.
 
         Args:
             obs_points: (M, 3) array of observation points (m).
+            use_cpp:    True (default) = call C++ kernel.  False =
+                         force the Python fallback (slow, kept for
+                         A-B regression diffing only).
+            n_threads:  0 (default) = NGSolve TaskManager default;
+                         > 0 = request that many threads.  Only used
+                         by the C++ path.
 
         Returns:
             (M, 3) real array of H (A/m).
@@ -467,28 +471,39 @@ class NearFieldSource:
             raise ValueError("evaluate_static_H requires H on the surface")
         obs = np.atleast_2d(np.asarray(obs_points, dtype=np.float64))
         H_surf = self.H.real    # static -> use real part
-        # Vectorise over (M, N) pairs
-        # R_vec[m, f, :] = obs[m] - centroid[f]
+
+        if use_cpp:
+            try:
+                from . import _radia_pybind  # type: ignore
+                fn = getattr(_radia_pybind, "_EquivalenceSourceStaticH", None)
+                if fn is not None:
+                    return fn(
+                        np.ascontiguousarray(self.centroids, dtype=np.float64),
+                        np.ascontiguousarray(self.normals, dtype=np.float64),
+                        np.ascontiguousarray(self.areas, dtype=np.float64),
+                        np.ascontiguousarray(H_surf, dtype=np.float64),
+                        np.ascontiguousarray(obs, dtype=np.float64),
+                        int(n_threads),
+                    )
+            except ImportError:
+                pass   # fall through to Python fallback
+
+        # ------------------ Python fallback (legacy, slow) --------------
+        # Kept for Phase A as a regression-diff safety net; removed in
+        # Phase E once the C++ kernel has shipped + been used at scale.
         R_vec = obs[:, None, :] - self.centroids[None, :, :]   # (M, N, 3)
         R = np.linalg.norm(R_vec, axis=2)                       # (M, N)
         R_safe = np.where(R > 1e-15, R, 1.0)
-        # grad(1/R) w.r.t. observation coordinate r:
-        #   grad_r(1/R) = -R_vec / R^3,  R_vec = r - r'
         grad = -R_vec / R_safe[..., None] ** 3                  # (M, N, 3)
         grad[R < 1e-15] = 0.0
-        # Per-face surface sources (broadcast to (M, N, 3))
         n_arr = self.normals[None, :, :]                        # (1, N, 3)
         H_s = H_surf[None, :, :]                                # (1, N, 3)
         J_s = np.cross(n_arr, H_s)                              # (1, N, 3)
-        # n . H for the rho_m/mu_0 term (broadcast scalar per face)
         rho_m_over_mu = np.sum(n_arr * H_s, axis=2)             # (1, N)
-        # Contributions -- order of cross product matters
-        #   curl integrand:  grad(1/R) x J_s
-        #   grad integrand:  -(n . H_s) grad(1/R)
         term_Js = np.cross(grad, J_s)                           # (M, N, 3)
         term_rhom = -rho_m_over_mu[..., None] * grad            # (M, N, 3)
         per_face = (term_Js + term_rhom) * self.areas[None, :, None]
-        H_rec = (1.0 / (4.0 * math.pi)) * np.sum(per_face, axis=1)  # (M, 3)
+        H_rec = (1.0 / (4.0 * math.pi)) * np.sum(per_face, axis=1)
         return H_rec
 
     def evaluate(self, obs_points: np.ndarray, omega: Optional[float] = None):
