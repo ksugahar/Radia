@@ -53,6 +53,13 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 > The MCP knowledge is the runnable layer; `PEEC_CONDUCTOR_MODELING_GUIDE.md`
 > is the architectural / theoretical overview.
 
+## Cauer Ladder Network (CLN)
+
+- [CAUER_LADDER_NETWORK.md](cln/CAUER_LADDER_NETWORK.md) - Foundational CLN (Tanimoto-Kameari method): iterative orthogonalization, Cauer-II ladder synthesis, three formulations (A-T, T-Ω, A-Φ), 2D / 3D variants, gauge / constraint options, Kelvin transformation coupling
+- [HIERARCHICAL_CAUER_SIBC.md](cln/HIERARCHICAL_CAUER_SIBC.md) - **Hierarchical Cauer with Warburg-Schur termination for SIBC** (Paper 1): bulk CLN + single Warburg DOF closure that recovers the non-rational $f^{-1/2}$ SIBC asymptote while preserving DC. Single-conductor theory, Theorem 1 (minimality), cylinder + sphere + cuboid verification, time-domain via diffusive Foster (50-pt) + closed-form Dawson, field reconstruction
+- [BEM_CLN.md](cln/BEM_CLN.md) - Multi-conductor BEM-CLN: per-element polarizability + integral-equation coupling for N-conductor clusters (Paper 2, IH workpiece + coils, paired transformer windings)
+- [CLN_3D_CUBOID.md](cln/CLN_3D_CUBOID.md) - 3D Cu cuboid benchmark: HCurl FEM + BEM Cauer 3-way validation
+
 ## Analytical Reference Formulas
 
 - [analytical_formulas.md](analytical_formulas.md) - Closed-form formulas covering Wakao-Igarashi-Fujiwara-Kameari Part 1-9 (IEE Japan SA / RM technical meetings, 2002-2007). Group B + C: ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular magnet, thin-plate eddy current, Fabri solenoid axial field, three-phase line (triangle / planar / helical), K(k) / E(k) Hastings approximations, Gauss-Legendre. Group D (Part 6/8/9 extensions): plate Joule dissipation, AC thin-shell shielding, magnetic-shell interior fields, planar surface impedance, full Bessel cylindrical-conductor AC impedance, Gauss-Patterson nested quadrature, cuboid average B. Source: [src/radia/analytical_formulas/](../src/radia/analytical_formulas/), tests: [tests/analytical_formulas/](../tests/analytical_formulas/), examples: [examples/analytical_formulas/](../examples/analytical_formulas/).
