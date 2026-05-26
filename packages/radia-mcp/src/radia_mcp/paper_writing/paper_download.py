@@ -28,8 +28,21 @@ import re
 import pathlib
 from typing import Optional
 
-# requests is in mcp-server-document's stdlib (already used elsewhere)
-import requests
+# requests is optional (lazy-imported via _require_requests below) --
+# this module only runs when the user invokes a download tool. Keeping
+# it lazy means the rest of radia_mcp.paper_writing imports cleanly on
+# the lightweight CI matrix install (`pip install radia-mcp --no-deps`)
+# without dragging in requests / urllib3 / charset-normalizer.
+def _require_requests():
+    """Import requests lazily with a clear install hint."""
+    try:
+        import requests  # type: ignore
+        return requests
+    except ImportError as e:
+        raise ImportError(
+            "paper_writing download tools require requests: "
+            "pip install requests  (or pip install radia-mcp[rag])."
+        ) from e
 
 
 _CHROME_UA = (
@@ -113,6 +126,7 @@ def paper_writing_resolve_doi(doi: str) -> dict:
     """
     doi = doi.strip().removeprefix("https://doi.org/").removeprefix("doi.org/")
     url = f"https://api.crossref.org/works/{doi}"
+    requests = _require_requests()
     try:
         r = requests.get(url, headers={"User-Agent": _CHROME_UA},
                          timeout=20)
@@ -165,6 +179,7 @@ def paper_writing_ieee_doi_to_arnumber(doi: str) -> dict:
     if not doi.lower().startswith("10.1109/"):
         return {"ok": False, "error": f"not an IEEE DOI: {doi}"}
 
+    requests = _require_requests()
     session = requests.Session()
     try:
         r = session.get(f"https://doi.org/{doi}",
@@ -247,6 +262,7 @@ def paper_writing_ieee_download_pdf(
         return {"ok": False,
                 "error": f"parent directory does not exist: {parent}"}
 
+    requests = _require_requests()
     session = requests.Session()
     abstract_url = f"https://ieeexplore.ieee.org/document/{arn}/"
     pdf_url = (f"https://ieeexplore.ieee.org/stampPDF/getPDF.jsp"
@@ -356,6 +372,7 @@ def paper_writing_sciencedirect_download_pdf(
         else:
             article_landing_url = article_pdf_url  # fallback
 
+    requests = _require_requests()
     session = requests.Session()
     try:
         r1 = session.get(article_landing_url, headers=_HTML_HEADERS,
@@ -606,6 +623,7 @@ def paper_writing_emerald_download_pdf(
         # Trim the trailing .pdf and filename portion
         article_landing_url = re.sub(r"/[^/]+\.pdf$", "", article_landing_url)
 
+    requests = _require_requests()
     session = requests.Session()
     try:
         r1 = session.get(article_landing_url, headers=_HTML_HEADERS,
