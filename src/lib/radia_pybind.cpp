@@ -49,6 +49,7 @@
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
 #include "rad_biot_savart_filaments.h" // Fast Biot-Savart H/A from finite-segment filaments
 #include "rad_biot_savart_surface.h"   // Fast Biot-Savart B/A from triangulated surface
+#include "rad_equivalence_source.h"    // Stratton-Chu equivalence-theorem reconstruction
 #include "rad_average_field.h" // Closed-form cuboid average B (Wakao Part 6 §7)
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
@@ -4576,6 +4577,86 @@ PYBIND11_MODULE(_radia_pybind, m) {
                              B = B_re + 1j*B_im is the complex B [T].
 
             3-point Gauss quadrature; non-singular evaluation only.
+        )pbdoc");
+
+    // ========================================================================
+    // Equivalence-theorem near-field source -- Phase A static H reconstruction
+    // (Schelkunoff/Love).  See docs/equivalence_source/CPP_DESIGN.md.
+    // Replaces the Python Stratton-Chu inner loop in
+    // src/radia/equivalence_source.py:evaluate_static_H().
+    // ========================================================================
+    m.def("_EquivalenceSourceStaticH",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> centroids,
+           py::array_t<double, py::array::c_style | py::array::forcecast> normals,
+           py::array_t<double, py::array::c_style | py::array::forcecast> areas,
+           py::array_t<double, py::array::c_style | py::array::forcecast> H_surf,
+           py::array_t<double, py::array::c_style | py::array::forcecast> obs,
+           int n_threads)
+        {
+            auto cb = centroids.unchecked<2>();
+            auto nb = normals.unchecked<2>();
+            auto ab = areas.unchecked<1>();
+            auto hb = H_surf.unchecked<2>();
+            auto ob = obs.unchecked<2>();
+            const int n_faces = static_cast<int>(cb.shape(0));
+            const int n_obs   = static_cast<int>(ob.shape(0));
+            if (cb.shape(1) != 3 || nb.shape(1) != 3 || hb.shape(1) != 3)
+                throw std::invalid_argument("centroids/normals/H_surf must be (N, 3)");
+            if ((int)nb.shape(0) != n_faces || (int)ab.shape(0) != n_faces
+                || (int)hb.shape(0) != n_faces)
+                throw std::invalid_argument(
+                    "centroids/normals/areas/H_surf must have matching N_faces");
+            if (ob.shape(1) != 3)
+                throw std::invalid_argument("obs must be (N_obs, 3)");
+
+            py::array_t<double> H_out({n_obs, 3});
+
+            const double* c_ptr = static_cast<const double*>(centroids.data());
+            const double* n_ptr = static_cast<const double*>(normals.data());
+            const double* a_ptr = static_cast<const double*>(areas.data());
+            const double* h_ptr = static_cast<const double*>(H_surf.data());
+            const double* o_ptr = static_cast<const double*>(obs.data());
+            double* out_ptr = static_cast<double*>(H_out.mutable_data());
+
+            {
+                py::gil_scoped_release rel;
+                radia::eqsrc::EvaluateStaticH(
+                    c_ptr, n_ptr, a_ptr, h_ptr, n_faces,
+                    o_ptr, n_obs, out_ptr, n_threads);
+            }
+            return H_out;
+        },
+        py::arg("centroids"), py::arg("normals"), py::arg("areas"),
+        py::arg("H_surf"), py::arg("obs"), py::arg("n_threads") = 0,
+        R"pbdoc(
+            Equivalence-theorem magnetostatic H reconstruction at obs
+            points from per-face surface sources on a closed
+            triangulated surface.
+
+            Stratton-Chu static reduction:
+                H(r) = (1/(4 pi)) * sum_faces
+                        { grad(1/R) x J_s  -  (n . H_s) grad(1/R) } * dS
+            with J_s = n x H_s, R = |r - centroid|,
+                 grad(1/R) = -R_vec / R^3.
+
+            Args:
+                centroids: (N_faces, 3) face centroids [m]
+                normals:   (N_faces, 3) OUTWARD unit normals
+                areas:     (N_faces,)   face areas [m^2]
+                H_surf:    (N_faces, 3) H phasor REAL part at centroid
+                                         [A/m].  Static reduction; the
+                                         imaginary part is zero by
+                                         definition for omega = 0.
+                obs:       (N_obs, 3)   observation points [m].  MUST be
+                                         outside the closed surface.
+                n_threads: 0 = NGSolve TaskManager default;
+                           > 0 = request that many.
+
+            Returns:
+                H_out: (N_obs, 3) float64 reconstructed H [A/m].
+
+            Phase A (omega = 0 only); Phase B will add
+            _EquivalenceSourceHarmonic for full dyadic GF.
         )pbdoc");
 
     // ========================================================================
