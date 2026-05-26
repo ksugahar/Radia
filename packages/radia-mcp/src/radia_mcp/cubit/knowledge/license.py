@@ -1,8 +1,8 @@
 """Cubit license activation must happen per-user, in the user's session.
 
 Coreform Cubit's RLM license stack stores per-user state in
-``%LOCALAPPDATA%\\Coreform\\Cubit\\Coreform\\licenses\\renewals``.
-The headline rule is:
+``%LOCALAPPDATA%\\Coreform\\`` (LAYOUT CHANGED in 2025.12 -- see
+LICENSE_2025_12_TOKEN_AUTH below).  The headline rule is:
 
     Each user activates their own license, in their own Windows
     session.  Admin cannot do it for them.  Admin trying to "help"
@@ -10,9 +10,15 @@ The headline rule is:
     leaves no obvious symptom -- Cubit silently falls through to
     a slow / failing cold checkout.
 
-This module documents the rule, the failure mode that motivates it,
-and the diagnostic checklist for verifying user state from an admin
-session WITHOUT writing.
+This module documents:
+
+    LICENSE_PER_USER_RULE          -- the headline rule (still applies
+                                       across all versions).
+    LICENSE_2025_12_TOKEN_AUTH     -- 2025.12 cache-layout change,
+                                       token-based auth, 2026-06-05
+                                       old-portal retirement, and the
+                                       "cached-license + login -> HTTP
+                                       500" twin-issue hypothesis.
 """
 
 LICENSE_PER_USER_RULE = """
@@ -185,17 +191,149 @@ just repeats the original mistake.
 """
 
 
+LICENSE_2025_12_TOKEN_AUTH = """
+# Cubit 2025.12 license cache layout + token-based auth
+
+**Coreform Cubit 2025.12 changed the license cache layout.**  The old
+file paths and the `rlm_activate --login` server contract are still
+visible in the binary but the supporting files have moved and the
+server-side validation now rejects re-login while a valid token
+exists.  This section documents what changed, the LAB's adapted
+launcher behaviour, and the 2026-06-05 portal retirement.
+
+## File layout migration
+
+| Era | Path (under `%LOCALAPPDATA%\\Coreform\\`) | Contents |
+|---|---|---|
+| ~ 2025.3 (legacy) | `Cubit\\Coreform\\licenses\\renewals` | JSON cache with `{"Valid": {"today": ..., "licenses": [...]}}`. ~200 bytes. |
+| **2025.12+** | `login_tokens.json` (TOP LEVEL) | `{"Cubit":"<UUID>"}` -- 48 bytes, opaque refresh token. |
+| 2025.12+ | `cubit_creds` (TOP LEVEL) | Encrypted credentials, ~114 bytes. |
+| 2025.12+ | `licenses\\rlm_diagnostics.txt` | Plain-text RLM diagnostic dump (host id, env, ISV csimsoft, etc.) |
+
+The deep `Cubit\\Coreform\\licenses\\` tree is **dead** in 2025.12 and
+the old portal that wrote `renewals` JSONs **retires on 2026-06-05**.
+LAB has already deleted the legacy tree (`Remove-Item -Recurse -Force
+$LOCALAPPDATA\\Coreform\\Cubit`); see 2026-05-26 working session.
+
+## Twin issue: cached-token + --login -> HTTP 500
+
+When a user's `login_tokens.json` is still fresh, running
+`rlm_activate.exe --login <email> <password>` reproducibly returns
+
+    HTTP error: http status: 500
+    License error: HTTP connection error
+
+This is hypothesised to be one of two server-side changes (LAB
+investigation 2026-05-26):
+
+  (iii) **二重発行防止** -- the Coreform RLM server refuses to issue
+        a new token while an existing valid token is on record for the
+        same account.  A 500 rather than a 401 is used, perhaps to
+        confuse scrapers.  Workaround: `rlm_activate --logout` first,
+        which releases the server-side seat, then `--login` succeeds.
+
+  (ii)  **Server-side --login deprecation in progress** -- the API
+        contract may have changed (added required headers / MFA / OAuth)
+        and the older `rlm_activate.exe` client doesn't speak the new
+        protocol.  500 is the server's "I don't know how to respond
+        to this request" fallback.
+
+The two hypotheses are observationally indistinguishable from a
+client.  Either way: **don't try to re-login while a valid cached
+token exists** -- the request will fail, possibly using up a rate-limit
+quota.  Wait for the cached token to naturally expire (~10-14 days),
+OR run `--logout` first.
+
+## Recommended launcher behaviour (CoreformCubit.ps1 2026-05-26)
+
+The LAB launcher at `S:\\CoreformCubit\\CoreformCubit.ps1` (and the
+identical `W:/00_CAE/CoreformCubit/CoreformCubit.ps1` on 100号機)
+implements the following adapted policy:
+
+  1. Probe `$LOCALAPPDATA\\Coreform\\login_tokens.json`.  If present
+     and `(now - mtime) < 7 days`, skip `--login` entirely (`$needLogin
+     = $false`).  This avoids the 500 -> hypothesis-(iii) trap.
+  2. If token is missing OR > 7 days old, run `rlm_activate --login`
+     with **retry + exponential backoff** (1s / 3s / 10s, 4 attempts
+     total) for transient `HTTP 5xx` failures.  Credentials failures
+     (`HTTP 4xx`, "unauthorized", "invalid email/password") do NOT
+     retry -- they won't fix themselves.
+  3. If all retries fail AND the cached license is < 2 days from
+     expiring, emit a `Write-Warning`.  Otherwise (cache fresh) emit
+     a calm yellow `Write-Host` saying "using cached seat".
+  4. Launch Cubit either way -- the cached token / seat is still
+     valid as long as RLM hasn't actively revoked it.
+
+## Force-refresh path (-ForceLogin)
+
+If a user needs a fresh token before the natural expiry (e.g. they
+switched machines, or suspect token corruption), invoke the launcher
+with `-ForceLogin`.  That runs `rlm_activate --logout` (releases the
+server-side seat) and THEN `--login`.  Because the seat is now free,
+hypothesis (iii) doesn't apply and the login should succeed.
+
+## Failure-mode cheatsheet (updated for 2025.12)
+
+| Symptom | Likely cause (2025.12 era) | Fix |
+|---|---|---|
+| Launcher prints "License token cached (X d old)" then Cubit launches | Normal -- token < 7 d, login skipped | None |
+| Launcher prints retry sequence then "RLM server unreachable" then Cubit launches | Server 500'd, fail-safe to cached seat | None; will retry next time |
+| Launcher cycles retry attempts on every invocation despite fresh token | `login_tokens.json` missing or > 7 d | Run with `-ForceLogin` once; or wait 1 day |
+| Cubit refuses to launch ("No license") and cached token > 14 d | Genuinely expired token | `-ForceLogin` to refresh (logout + login) |
+| `rlm_activate --login` returns 401 (NOT 500) | Account / credentials problem | Verify email/password in CoreformCubit.ps1 |
+| `rlm_activate --login` keeps returning 500 even after `--logout` | Possibly hypothesis (ii) -- server protocol change | Wait for Coreform fix; report to support; cached seat still works |
+
+## 2026-06-05 portal retirement
+
+The legacy portal (the one that wrote the old `Cubit\\Coreform\\licenses\\
+renewals` JSON cache) is announced for retirement on 2026-06-05.
+After that date the legacy `renewals` mechanism stops being a
+fallback; only the 2025.12+ `login_tokens.json` flow remains.  LAB
+has pre-emptively deleted the legacy `Cubit\\` subtree to avoid
+relying on it.
+
+## References
+
+- LAB session 2026-05-26 -- diagnosis of 500 retry trap +
+  `CoreformCubit.ps1` adaptation.
+- Coreform Cubit 2025.12 install at
+  `C:\\Program Files\\Coreform Cubit 2025.12\\bin\\rlm_activate.exe`
+  (`--help` shows `--login` still documented as "Currently only valid
+  for Cubit Learn users").
+- LAB tasks #74 (uninstall 2025.3), #75 (config cleanup) for the
+  2025.3 -> 2025.12 migration arc.
+"""
+
+
 def get_license_documentation(topic: str = "per_user_rule") -> str:
     """Return Cubit license documentation by topic.
 
     Topics:
-        "per_user_rule"     -- (default) headline rule: each user must
-                               activate Cubit's license in their own
-                               session; admin cannot do it for them.
-        "admin_overwrite"   -- alias for the same warning, framed as
-                               "do NOT overwrite from admin".
+        "per_user_rule"      -- (default) headline rule: each user must
+                                activate Cubit's license in their own
+                                session; admin cannot do it for them.
+        "admin_overwrite"    -- alias for the same warning, framed as
+                                "do NOT overwrite from admin".
+        "token_auth_2025_12" -- 2025.12 cache-layout change + token-
+                                based auth + HTTP 500 二重発行防止
+                                hypothesis + 2026-06-05 portal
+                                retirement.
+        "all"                -- concatenate both sections.
     """
     topic = (topic or "").lower().strip()
+    if topic == "all":
+        return (
+            f"# ===== Per-user activation rule =====\n\n"
+            f"{LICENSE_PER_USER_RULE}\n\n"
+            f"# ===== 2025.12 token-based auth =====\n\n"
+            f"{LICENSE_2025_12_TOKEN_AUTH}"
+        )
+    if topic in (
+        "token_auth_2025_12", "token_auth", "token", "2025_12",
+        "2025.12", "twin_issue", "retry_backoff", "force_login",
+        "portal_retirement", "login_tokens", "login_tokens_json",
+    ):
+        return LICENSE_2025_12_TOKEN_AUTH
     if topic in (
         "",
         "per_user_rule", "per_user", "user_rule",
@@ -204,5 +342,5 @@ def get_license_documentation(topic: str = "per_user_rule") -> str:
         return LICENSE_PER_USER_RULE
     return (
         f"Unknown license topic '{topic}'.  Available: per_user_rule, "
-        f"admin_overwrite (alias)."
+        f"admin_overwrite (alias), token_auth_2025_12, all."
     )
