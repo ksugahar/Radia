@@ -519,7 +519,7 @@ def test_arxiv_fetch_latex_source_mocked(monkeypatch, tmp_path):
         assert "/e-print/" in url
         return _FakeResponse(200, content=blob)
 
-    import requests as real_req
+    real_req = pytest.importorskip("requests")
     monkeypatch.setattr(real_req, "get", fake_get)
 
     r = mod.paper_writing_arxiv_fetch_latex_source("2603.17339")
@@ -554,7 +554,7 @@ def test_arxiv_search_mocked(monkeypatch):
     def fake_get(url, timeout=None):
         return _FakeResponse(200, text=xml)
 
-    import requests as real_req
+    real_req = pytest.importorskip("requests")
     monkeypatch.setattr(real_req, "get", fake_get)
 
     r = mod.paper_writing_arxiv_search("finite element", max_results=5)
@@ -583,7 +583,7 @@ def test_semantic_scholar_lookup_mocked(monkeypatch):
     def fake_get(url, params=None, timeout=None):
         return _FakeResponse(200, json_data=payload)
 
-    import requests as real_req
+    real_req = pytest.importorskip("requests")
     monkeypatch.setattr(real_req, "get", fake_get)
 
     r = mod.paper_writing_semantic_scholar_lookup("10.1109/TAP.2006.880747")
@@ -598,7 +598,7 @@ def test_semantic_scholar_lookup_404_returns_error(monkeypatch):
     def fake_get(url, params=None, timeout=None):
         return _FakeResponse(404)
 
-    import requests as real_req
+    real_req = pytest.importorskip("requests")
     monkeypatch.setattr(real_req, "get", fake_get)
 
     r = mod.paper_writing_semantic_scholar_lookup("10.9999/nonexistent")
@@ -617,7 +617,7 @@ def test_semantic_scholar_references_mocked(monkeypatch):
         assert "/references" in url
         return _FakeResponse(200, json_data=payload)
 
-    import requests as real_req
+    real_req = pytest.importorskip("requests")
     monkeypatch.setattr(real_req, "get", fake_get)
 
     r = mod.paper_writing_semantic_scholar_references("abc123")
@@ -636,7 +636,7 @@ def test_semantic_scholar_citations_mocked(monkeypatch):
         assert "/citations" in url
         return _FakeResponse(200, json_data=payload)
 
-    import requests as real_req
+    real_req = pytest.importorskip("requests")
     monkeypatch.setattr(real_req, "get", fake_get)
 
     r = mod.paper_writing_semantic_scholar_citations("abc123")
