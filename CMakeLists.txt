@@ -633,6 +633,10 @@ target_include_directories(sparsesolv_ngsolve PRIVATE
 	${SPARSESOLV_DIR}/include
 )
 
+# pybind11 ABI fix (same rationale as _radia_pybind line ~575): force
+# ngsolve's bundled pybind11 headers ahead of system pybind11.
+target_include_directories(sparsesolv_ngsolve BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC})
+
 target_compile_definitions(sparsesolv_ngsolve PRIVATE
 	SPARSESOLV_USE_NGSOLVE_TASKMANAGER
 	SPARSESOLV_USE_MKL
@@ -700,6 +704,15 @@ add_ngsolve_python_module(radia_axifemm
 target_include_directories(radia_axifemm PRIVATE
 	${AXIFEMM_DIR}
 )
+
+# pybind11 ABI fix (same rationale as _radia_pybind line ~575): force
+# ngsolve's bundled pybind11 headers ahead of system pybind11.  Without
+# this, radia_axifemm.pyd is built against system pybind11 3.0.2 and
+# fails at import with `ImportError: generic_type: ... referenced unknown
+# base type "ngfem::FiniteElement"` when ngsolve 2604 uses bundled
+# 3.1.0a0 at runtime.  (Caught by v4.80.2 CI 2026-05-28 in
+# test_heat_henrotte_smoke.)
+target_include_directories(radia_axifemm BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC})
 
 target_compile_definitions(radia_axifemm PRIVATE
 	RADIA_AXIFEMM_PHASE_2B
