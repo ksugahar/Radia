@@ -97,6 +97,28 @@ message(STATUS "Netgen_DIR: ${Netgen_DIR}")
 # Find NGSolve (required for TaskManager parallelization in all targets)
 find_package(NGSolve CONFIG REQUIRED)
 
+# Compute the netgen include dir explicitly.  ngsolve 2604 ships a
+# bundled pybind11 (e.g. 3.1.0a0 alpha) under
+# `<site-packages>/netgen/include/pybind11/`; the system pybind11 from
+# PyPI is 3.0.2 stable — their internals layouts differ.  Building
+# `_radia_pybind.pyd` against system pybind11 then loading under
+# ngsolve 2604 produces `unknown base type "ngfem::CoefficientFunction"`
+# because the type registries are not shared across pybind11 versions.
+# We need to put the netgen include dir AHEAD of pybind11's system
+# include so `#include <pybind11/pybind11.h>` resolves to ngsolve's
+# bundled headers.
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c "import netgen, os; print(os.path.dirname(netgen.__file__))"
+    OUTPUT_VARIABLE _NETGEN_PKG_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+set(NGSOLVE_BUNDLED_INC "${_NETGEN_PKG_DIR}/include")
+if(EXISTS "${NGSOLVE_BUNDLED_INC}/pybind11/pybind11.h")
+    message(STATUS "ngsolve bundled pybind11: ${NGSOLVE_BUNDLED_INC}/pybind11")
+else()
+    message(WARNING "ngsolve bundled pybind11 NOT FOUND at ${NGSOLVE_BUNDLED_INC}/pybind11 -- ABI mismatch with system pybind11 likely")
+endif()
+
 # Radia source directories
 set(CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/core")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/lib")
@@ -354,7 +376,7 @@ endif()
 
 # Parallelization: NGSolve TaskManager (via ngstd)
 target_link_libraries(peec_matrices PRIVATE ngstd)
-target_include_directories(peec_matrices PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
+target_include_directories(peec_matrices BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC} ${Netgen_INCLUDE_DIRS} ${NGSolve_INCLUDE_DIRS})
 
 # Compiler-specific flags
 if(MSVC)
@@ -438,7 +460,7 @@ endif()
 
 # Parallelization: NGSolve TaskManager (via ngstd)
 target_link_libraries(cln_core PRIVATE ngstd)
-target_include_directories(cln_core PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
+target_include_directories(cln_core BEFORE PRIVATE ${NGSOLVE_BUNDLED_INC} ${Netgen_INCLUDE_DIRS} ${NGSolve_INCLUDE_DIRS})
 
 # Compiler-specific flags
 if(MSVC)
@@ -540,7 +562,21 @@ endif()
 
 # NGSolve integration: TaskManager (ngstd) + CoefficientFunction (ngfem, ngcomp)
 target_link_libraries(_radia_pybind PRIVATE ngstd ngfem ngcomp ngbla)
-target_include_directories(_radia_pybind PRIVATE ${NGSolve_INCLUDE_DIRS} ${Netgen_INCLUDE_DIRS})
+# Use BEFORE so the bundled pybind11 (in netgen/include/pybind11/) is
+# found ahead of the system pybind11.  ngsolve 2604 ships pybind11
+# 3.1.0a0 (not on PyPI; only 3.0.x is) and pybind11's `internals` type
+# registry has a different layout between 3.0.x and 3.1.0a0 — building
+# `_radia_pybind` against system pybind11 3.0.2 then loading under
+# ngsolve 2604 fails with `generic_type: type "RadiaField" referenced
+# unknown base type "ngfem::CoefficientFunction"`.  Putting the netgen
+# include dir BEFORE the system pybind11 path makes
+# `#include <pybind11/pybind11.h>` resolve to ngsolve's bundled
+# 3.1.0a0 headers, which matches ngsolve's compiled-in pybind11.
+target_include_directories(_radia_pybind BEFORE PRIVATE
+    ${NGSOLVE_BUNDLED_INC}
+    ${Netgen_INCLUDE_DIRS}
+    ${NGSolve_INCLUDE_DIRS}
+)
 
 # Compiler-specific flags
 if(MSVC)
