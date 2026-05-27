@@ -12,10 +12,11 @@ Consistency checking (does NOT require Cubit):
 cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-__version__ = "0.10.2"
+__version__ = "0.10.3"
 
 # Compatibility window with the main radia package. The Cubit plugin
-# binaries bundled here (.ccm/.ccl/.pyd) are rebuilt alongside radia's
+# binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)
+# are rebuilt alongside radia's
 # register_toolbar.py and calc_*.py at each release; the Python side
 # expects a matching minor series on the plugin. A mismatch triggers a
 # loud warning from radia's _check_plugin_freshness at Cubit startup.

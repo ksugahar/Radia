@@ -117,46 +117,12 @@ else()
 endif()
 
 # --------------------------------------------------------
-# Qt5 (for GUI Component in .ccl)
+# Qt5 removed (radia 4.80.0).
 # --------------------------------------------------------
-# Use minimal Qt5 SDK bundled in repo (headers + .lib only).
-# Runtime DLLs come from the Cubit installation.
-# This avoids requiring a full Qt5 installation or C:\Qt.
-set(QT5_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/qt5_sdk")
-
-# Qt5::Core
-add_library(Qt5::Core SHARED IMPORTED)
-set_target_properties(Qt5::Core PROPERTIES
-    IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/Qt5Core.dll"
-    IMPORTED_IMPLIB   "${QT5_SDK_DIR}/lib/Qt5Core.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${QT5_SDK_DIR}/include;${QT5_SDK_DIR}/include/QtCore"
-)
-# Qt5::Gui (transitive dependency of Widgets)
-add_library(Qt5::Gui SHARED IMPORTED)
-set_target_properties(Qt5::Gui PROPERTIES
-    IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/Qt5Gui.dll"
-    IMPORTED_IMPLIB   "${QT5_SDK_DIR}/lib/Qt5Gui.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${QT5_SDK_DIR}/include;${QT5_SDK_DIR}/include/QtGui"
-)
-# Qt5::Widgets
-add_library(Qt5::Widgets SHARED IMPORTED)
-set_target_properties(Qt5::Widgets PROPERTIES
-    IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/Qt5Widgets.dll"
-    IMPORTED_IMPLIB   "${QT5_SDK_DIR}/lib/Qt5Widgets.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${QT5_SDK_DIR}/include;${QT5_SDK_DIR}/include/QtWidgets"
-    INTERFACE_LINK_LIBRARIES "Qt5::Core;Qt5::Gui"
-)
-# moc for AUTOMOC
-set(CMAKE_AUTOMOC ON)
-set(QT_VERSION_MAJOR 5)
-set(Qt5Core_VERSION_MAJOR 5)
-set(Qt5Core_VERSION_MINOR 15)
-set(Qt5Core_VERSION "5.15.2")
-set(QT_MOC_EXECUTABLE "${QT5_SDK_DIR}/bin/moc.exe")
-if(NOT TARGET Qt5::moc)
-    add_executable(Qt5::moc IMPORTED)
-    set_target_properties(Qt5::moc PROPERTIES IMPORTED_LOCATION "${QT5_SDK_DIR}/bin/moc.exe")
-endif()
+# The Qt5 .ccl GUI component (RadiaComp.cpp) was deleted in radia
+# 4.80.0; all GUI work is now in src/radia/panels/radia_export_menu.py
+# (PySide6).  The .ccm (APREPRO commands) and .pyd (radia_cubit_mesh)
+# below have no Qt dependency.
 
 # --------------------------------------------------------
 # Target 1: radia_cubit.ccm (command plugin, goes to plugins/)
@@ -244,82 +210,11 @@ if(HAVE_NETGEN)
 endif()
 
 # --------------------------------------------------------
-# Target 2: radia_cubit.ccl (GUI component + export, goes to bin/)
-#
-# Claro Component with Export Mesh menu + all export logic.
-# Loaded by clarofw GUI scanner on startup. No -commandplugindir needed.
+# Target 2 (radia_cubit.ccl) removed in radia 4.80.0.
 # --------------------------------------------------------
-set(CCL_SOURCES
-    RadiaComp.cpp
-    RadiaComp.hpp
-    MeshData.cpp
-    MeshData.hpp
-    HighOrderMesh.cpp
-    HighOrderMesh.hpp
-    ExportNetgenCommand.cpp
-    ExportNetgenCommand.hpp
-    ExportGmshCommand.cpp
-    ExportGmshCommand.hpp
-    ExportNastranCommand.cpp
-    ExportNastranCommand.hpp
-    ExportVtkCommand.cpp
-    ExportVtkCommand.hpp
-    ExportFemeemCommand.cpp
-    ExportFemeemCommand.hpp
-    ExportMegCommand.cpp
-    ExportMegCommand.hpp
-)
-
-if(HAVE_NETGEN)
-  list(APPEND CCL_SOURCES
-    NetgenCurver.cpp
-    NetgenCurver.hpp
-    callbackgeom.cpp
-    callbackgeom.hpp
-  )
-  if(USE_COMPACT_NETGEN)
-    list(APPEND CCL_SOURCES ${COMPACT_NETGEN_SOURCES})
-  endif()
-endif()
-
-add_library(radia_cubit_ccl MODULE ${CCL_SOURCES})
-set_target_properties(radia_cubit_ccl PROPERTIES
-    OUTPUT_NAME "radia_cubit"
-    SUFFIX ".ccl"
-    CXX_STANDARD 17
-    AUTOMOC ON
-    # Separate PDB per target so .ccm and .ccl don't clobber each other.
-    PDB_NAME "radia_cubit_ccl"
-    COMPILE_PDB_NAME "radia_cubit_ccl"
-)
-target_link_libraries(radia_cubit_ccl cubiti cubit_util cubit_geom clarofw clarogui Qt5::Core Qt5::Widgets)
-
-if(MSVC)
-  set_target_properties(radia_cubit_ccl PROPERTIES
-    LINK_FLAGS "/DELAYLOAD:cubit_geom.dll"
-  )
-  target_link_libraries(radia_cubit_ccl delayimp)
-endif()
-
-if(HAVE_NETGEN)
-  target_compile_definitions(radia_cubit_ccl PRIVATE HAVE_NETGEN)
-  if(USE_COMPACT_NETGEN)
-    target_include_directories(radia_cubit_ccl PRIVATE ${COMPACT_NETGEN_INCLUDES})
-    target_compile_definitions(radia_cubit_ccl PRIVATE ${COMPACT_NETGEN_DEFS})
-    if(MSVC)
-      target_compile_options(radia_cubit_ccl PRIVATE /bigobj)
-    endif()
-  else()
-    target_include_directories(radia_cubit_ccl PRIVATE
-      "${NETGEN_DIR}/include"
-      "${NETGEN_DIR}/include/include"
-    )
-    target_link_libraries(radia_cubit_ccl netgen::nglib netgen::ngcore)
-    # No DELAYLOAD for nglib/ngcore: data symbols (netgen::Mesh::default_bc)
-    # cannot be delay-loaded. ensure_netgen_dll_path() sets SetDllDirectoryA
-    # to plugins/ at startup, so the DLLs are found via normal load.
-  endif()
-endif()
+# The Qt5 GUI Claro Component is replaced by the PySide6 toolbar at
+# src/radia/panels/radia_export_menu.py.  See CLAUDE.md "Cubit Panel
+# Architecture" Layer 2 (Cubit Python).
 
 # --------------------------------------------------------
 # pybind11 module: radia_cubit_mesh (.pyd) — Cubit-free
@@ -366,9 +261,8 @@ endif()
 install(TARGETS radia_cubit_ccm
     LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins"
 )
-install(TARGETS radia_cubit_ccl
-    LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/bin"
-)
+# radia_cubit_ccl install removed in radia 4.80.0 (Qt5 .ccl deleted;
+# replaced by PySide6 src/radia/panels/radia_export_menu.py).
 
 if(HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
   install(FILES

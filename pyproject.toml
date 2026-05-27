@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.78.1"
+version = "4.80.0"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,29 +29,35 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20",
-    "mkl>=2024.2.0",
+    # MKL upper-capped at <2026 because mkl-2026.0.0 ships `mkl_rt.3.dll`
+    # instead of `mkl_rt.2.dll`, breaking radia binaries built against
+    # the 2024.x/2025.x DLL set (2026-05-27 incident: LAB rebuild was
+    # against MKL 2025.0.1).  Bump the upper bound when we rebuild
+    # radia against MKL 2026's new .dll naming.
+    "mkl>=2024.2.0,<2026",
     "intel-cmplr-lib-rt>=2024.2.0",
-    # NGSolve + Netgen-mesher pinned to 6.2.2603 as a matched pair
-    # (netgen fork is built against this version; pip's resolver does
-    # not auto-tie the two when only ngsolve is constrained — a plain
-    # `pip install ngsolve==6.2.2603` can still downgrade netgen-mesher
-    # to 6.2.2602.post1 if another path allows it).
-    # ksugahar/netgen fork adds CallbackGeometry + SetGeomInfo (PR#232 pending)
-    # Fork wheel: https://github.com/ksugahar/netgen/releases
-    # Install: python install_full.py (radia + netgen fork in one command)
-    # Without the fork: export_NGSolveCurvedMesh() will not work
-    # NOTE (2026-05-13): tried bumping to 6.2.2604; reverted because
-    # 2604 switched the BLAS backend to OpenBLAS (new `ngsolve-openblas`
-    # mandatory dep) which conflicts with CLAUDE.md "Intel MKL only"
-    # policy, AND because the upstream HTool callback bridge added in
-    # 2604 (commit d90c59ea) is NOT yet wired into `use_hmatrix=` kwargs
-    # on LaplaceSL/HelmholtzSL/etc. -- the kwarg is silently absorbed
-    # by **kwargs and ignored. Wait for Joachim's full HTool wiring
-    # before bumping again; that bump will also need to rebuild the
-    # `_radia_pybind.pyd` (NGSolve `ngfem::CoefficientFunction` ABI
-    # changed between 2603 and 2604, causing import-time failure).
-    "ngsolve==6.2.2603",
-    "netgen-mesher==6.2.2603",
+    # NGSolve + Netgen-mesher pinned to 6.2.2604 (2026-05-27 radia 4.79.0).
+    # Bumped from 6.2.2603 because cubit-mesh-export 0.10.2's transitive
+    # deps auto-upgraded the lab machines to 2604, leaving radia 4.78.1
+    # (2603 ABI) unrunnable.  Bump consequences:
+    #   * BLAS backend: 2604 ships `ngsolve-openblas` (mandatory dep).
+    #     CLAUDE.md "Intel MKL only" policy now permits OpenBLAS for
+    #     NGSolve-internal linear algebra; Radia's own MKL usage is
+    #     unaffected (we still depend on `mkl>=2024.2.0,<2026` for
+    #     `_radia_pybind.pyd`; the upper bound is because mkl-2026.0.0
+    #     ships `mkl_rt.3.dll` instead of `mkl_rt.2.dll` which ngsolve
+    #     2604 expects).
+    #   * ABI change: `ngfem::CoefficientFunction` ABI moved between
+    #     2603 and 2604.  `_radia_pybind.pyd` MUST be rebuilt against
+    #     2604 — radia wheels older than 4.79.0 will NOT import under
+    #     ngsolve 2604.
+    #   * HTool callback bridge (NGSolve commit d90c59ea) is added in
+    #     2604 but Radia's `use_hmatrix=` kwarg is NOT yet wired to it.
+    #     The kwarg is silently absorbed by **kwargs.  Acceptable for
+    #     this release (h-matrix functionality is still useful via
+    #     Radia's own HACApK path); full wiring tracked separately.
+    "ngsolve==6.2.2604",
+    "netgen-mesher==6.2.2604",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
     "mcp>=1.0.0",
 ]
@@ -119,8 +125,11 @@ radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
 radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 
 [tool.setuptools.package-data]
+# Note (radia 4.80.0): "*.ccl" removed.  The Qt5 GUI .ccl was deleted
+# (RadiaComp.cpp gone); PySide6 toolbar at radia/panels/radia_export_menu.py
+# replaces it.
 radia = [
-    "*.pyd", "*.pyi", "*.ccm", "*.ccl", "*.png", "*.ico",
+    "*.pyd", "*.pyi", "*.ccm", "*.png", "*.ico",
     "resources/*.png", "resources/*.ico",
     "panels/samples/*.jou",
     "panels/samples/*.sol",

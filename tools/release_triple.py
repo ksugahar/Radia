@@ -129,10 +129,15 @@ def _newest_mtime(root: Path, suffixes):
 
 
 def _bundled_plugin_mtime():
-    """Newest mtime of bundled .ccm/.ccl in cubit-mesh-export package."""
+    """Newest mtime of bundled .ccm in cubit-mesh-export package.
+
+    Note (radia 4.80.0): the .ccl was removed (Qt5 GUI deleted; PySide6
+    toolbar at src/radia/panels/radia_export_menu.py replaces it).  The
+    freshness gate now tracks only the .ccm.
+    """
     pkg = REPO / "packages/cubit-mesh-export/src/cubit_mesh_export"
     times = []
-    for name in ("radia_cubit.ccm", "radia_cubit.ccl"):
+    for name in ("radia_cubit.ccm",):
         p = pkg / name
         if p.is_file():
             times.append(p.stat().st_mtime)
@@ -169,22 +174,27 @@ def cmd_preflight(args):
     if src_mtime == 0:
         warn("could not measure src/cubit_plugin/ mtime")
     elif bin_mtime == 0:
-        fail("bundled .ccm/.ccl missing — Phase 0 not done")
+        fail("bundled .ccm missing — Phase 0 not done")
     elif bin_mtime + 1 < src_mtime:
         from datetime import datetime
-        fail(f"bundled .ccm/.ccl ({datetime.fromtimestamp(bin_mtime)}) older than "
+        fail(f"bundled .ccm ({datetime.fromtimestamp(bin_mtime)}) older than "
               f"src/cubit_plugin/ ({datetime.fromtimestamp(src_mtime)}). "
               "Run `python tools/release_triple.py phase0`.")
         return 2
     else:
-        ok("bundled plugin .ccm/.ccl >= src/cubit_plugin/ mtime")
+        ok("bundled plugin .ccm >= src/cubit_plugin/ mtime")
 
     return 0
 
 
 def cmd_phase0(args):
-    """Clean rebuild of Cubit plugin (.ccm + .ccl)."""
-    step("Phase 0: clean rebuild of Cubit plugin (~3-4 min)")
+    """Clean rebuild of Cubit plugin (.ccm + .pyd).
+
+    Note (radia 4.80.0): the .ccl target was removed (Qt5 GUI deleted;
+    PySide6 toolbar at src/radia/panels/radia_export_menu.py replaces
+    it).  Phase 0 now builds only the Qt-independent .ccm + .pyd.
+    """
+    step("Phase 0: clean rebuild of Cubit plugin (~2-3 min)")
     build_pyd = REPO / "src/cubit_plugin/build-pyd"
     build_ccm = REPO / "src/cubit_plugin/build-ccm"
     if build_pyd.exists():
@@ -199,10 +209,10 @@ def cmd_phase0(args):
         return 3
     run(["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)])
 
-    # Propagate to both source-of-truth dirs.
+    # Propagate to both source-of-truth dirs.  Only .ccm now (the .ccl
+    # target was removed in radia 4.80.0 along with RadiaComp.cpp).
     for src_name, dst_dirs in [
         ("build-ccm/radia_cubit.ccm", ["src/radia", "packages/cubit-mesh-export/src/cubit_mesh_export"]),
-        ("build-ccm/radia_cubit.ccl", ["src/radia", "packages/cubit-mesh-export/src/cubit_mesh_export"]),
     ]:
         src = REPO / "src/cubit_plugin" / src_name
         if not src.is_file():
@@ -212,7 +222,7 @@ def cmd_phase0(args):
             dst = REPO / d / src.name
             run(["cp", str(src), str(dst)])
 
-    ok("Phase 0 complete; .ccm + .ccl propagated to src/radia + cubit-mesh-export pkg")
+    ok("Phase 0 complete; .ccm propagated to src/radia + cubit-mesh-export pkg")
     return 0
 
 
@@ -408,7 +418,7 @@ for r in ["panels/register_toolbar.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
-for r in ["radia_cubit.ccm","radia_cubit.ccl"]:
+for r in ["radia_cubit.ccm"]:
     print(f"SHA cme/{r:35s} = {hsh_bin(os.path.join(cme,r))}")
 '''
 
@@ -484,24 +494,160 @@ def cmd_all(args):
     return cmd_phase9(args)
 
 
+# ============================================================
+# LAB editable-install verifier (POLICY 2026-05-27, CLAUDE.md
+# "release 後の LAB editable 再確認")
+# ============================================================
+
+# (package name, expected Editable project location prefix on LAB)
+# Path-prefix match (case-insensitive, slash-normalised) so a UNC vs
+# drive-letter representation of the same NAS path is accepted.
+LAB_EDITABLE_PKGS = [
+    ("radia",               "S:/Radia/01_GitHub"),
+    ("cubit-mesh-export",   "S:/Radia/01_GitHub/packages/cubit-mesh-export"),
+    ("radia-mcp",           "S:/Radia/01_GitHub/packages/radia-mcp"),
+    # LAB-private; tolerated as missing if pip show says not installed.
+    ("mcp-server-document", "S:/mcp-server"),
+]
+
+
+def _norm_path(p):
+    """Lower-case + forward-slashes + strip trailing slash so a UNC and
+    a drive-letter form of the same NAS path compare equal."""
+    p = (p or "").replace("\\", "/").rstrip("/").lower()
+    # Treat the NAS UNC (//192.168.11.100/work/00_cae/radia/01_github) as
+    # equivalent to S:/radia/01_github -- both resolve to the same files.
+    return p.replace("//192.168.11.100/work/00_cae/radia/01_github",
+                     "s:/radia/01_github")
+
+
+def _pip_show(pkg):
+    """Return parsed dict from `pip show <pkg>`, or None if not
+    installed.  Keys are lower-cased; values are stripped strings."""
+    p = run(["pip", "show", pkg], check=False, capture=True)
+    if p.returncode != 0:
+        return None
+    d = {}
+    for line in (p.stdout or "").splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            d[k.strip().lower()] = v.strip()
+    return d
+
+
+def _verify_lab_editable():
+    """Check the 4 LAB-editable packages still point at NAS source.
+
+    Returns (n_ok, n_drift, n_missing, details) tuple.  Drift is the
+    one we care about for the "release-done" gate -- it means LAB
+    cannot dev-loop on that package because edits won't reflect.
+
+    Missing for `mcp-server-document` is OK (LAB-private, may not be
+    installed on every developer's box).  Missing for `radia` /
+    `cubit-mesh-export` / `radia-mcp` is itself a drift state (LAB
+    should always have these editable).
+    """
+    step("LAB editable verify (POLICY 2026-05-27)")
+    n_ok = n_drift = n_missing = 0
+    details = []
+
+    for pkg, want_prefix in LAB_EDITABLE_PKGS:
+        d = _pip_show(pkg)
+        if d is None:
+            if pkg == "mcp-server-document":
+                info(f"{pkg:25s}  not installed  (LAB-private; tolerated)")
+                n_missing += 1
+            else:
+                fail(f"{pkg:25s}  NOT INSTALLED  -- expected editable @ "
+                     f"{want_prefix}")
+                n_drift += 1
+                details.append((pkg, "not_installed", want_prefix))
+            continue
+
+        version = d.get("version", "?")
+        editable = d.get("editable project location") \
+                   or d.get("editable-project-location") \
+                   or d.get("location")
+        if not editable:
+            fail(f"{pkg:25s}  v{version}  -- no Location field in "
+                 f"pip show output")
+            n_drift += 1
+            details.append((pkg, "no_location", "?"))
+            continue
+
+        if d.get("editable project location"):
+            kind = "editable"
+        else:
+            kind = "non-editable (Location only)"
+
+        got_norm = _norm_path(editable)
+        want_norm = _norm_path(want_prefix)
+        if got_norm == want_norm:
+            ok(f"{pkg:25s}  v{version}  {kind}  -> {editable}")
+            n_ok += 1
+        else:
+            fail(f"{pkg:25s}  v{version}  DRIFT  {kind}\n"
+                 f"        got:      {editable}\n"
+                 f"        expected: {want_prefix}")
+            n_drift += 1
+            details.append((pkg, "drift", editable))
+
+    print("")
+    if n_drift == 0:
+        ok(f"All {n_ok} LAB-editable package(s) point at LAB source"
+           + (f" ({n_missing} LAB-private skipped)" if n_missing else ""))
+    else:
+        fail(f"{n_drift} LAB-editable package(s) DRIFTED.  Fix:")
+        for pkg, why, _got in details:
+            print(f"        # {pkg} ({why})")
+            print(f"        Get-Process | Where-Object {{ $_.Name -like "
+                  f"'mcp-server*' }} | Stop-Process -Force")
+            print(f"        pip uninstall -y {pkg}")
+            print(f"        pip install -e {dict(LAB_EDITABLE_PKGS)[pkg]} "
+                  f"--no-deps --no-cache-dir")
+        print("")
+        print("        See CLAUDE.md \"POLICY (2026-05-27): release 後の "
+              "LAB editable 再確認\" for the full recovery procedure.")
+    return n_drift
+
+
+def cmd_verify_editable(args):
+    """Standalone editable verifier (no preflight, no phase9).
+
+    Use this between deploys, or any time pip operations have run on
+    LAB and you want to confirm dev-loop integrity is intact.
+    """
+    return _verify_lab_editable()
+
+
 def cmd_done(args):
-    """Definition-of-done check: preflight (repo) + phase9 (3 machines).
+    """Definition-of-done check: preflight + LAB-editable verify + phase9.
 
     Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
-    mdx and the repo is in a clean release-ready state. Exit non-zero
-    means do NOT tell the user "release done" yet.
+    mdx, the repo is release-ready, AND the LAB dev loop is intact.
+    Exit non-zero means do NOT tell the user "release done" yet.
     """
-    step("Definition-of-done check (preflight + phase9)")
+    step("Definition-of-done check "
+         "(preflight + LAB editable + phase9)")
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed — repo state not release-ready.")
         return rc
+
+    drift = _verify_lab_editable()
+    if drift > 0:
+        fail(f"{drift} LAB-editable package(s) drifted.  "
+             "Run the printed recovery commands, then re-run "
+             "`release_triple done`.")
+        return 1
+
     rc = cmd_phase9(args)
     if rc != 0:
         fail("phase9 drift detected — at least one machine is out of sync.")
         return rc
     print("")
-    ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / mdx.")
+    ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
+       "mdx, and LAB dev loop is intact.")
     return 0
 
 
@@ -528,18 +674,22 @@ def main():
                     help="cross-machine consistency probe")
     sub.add_parser("all",
                     help="phase8 -> phase8e -> phase9 in one shot")
+    sub.add_parser("verify-editable",
+                    help="LAB editable-install pointers check (read-only)")
     sub.add_parser("done",
-                    help="definition-of-done: preflight + phase9 (read-only)")
+                    help="definition-of-done: preflight + LAB editable + "
+                         "phase9 (read-only)")
 
     args = p.parse_args()
     handler = {
-        "preflight": cmd_preflight,
-        "phase0":    cmd_phase0,
-        "phase8":    cmd_phase8,
-        "phase8e":   cmd_phase8e,
-        "phase9":    cmd_phase9,
-        "all":       cmd_all,
-        "done":      cmd_done,
+        "preflight":        cmd_preflight,
+        "phase0":           cmd_phase0,
+        "phase8":           cmd_phase8,
+        "phase8e":          cmd_phase8e,
+        "phase9":           cmd_phase9,
+        "all":              cmd_all,
+        "verify-editable":  cmd_verify_editable,
+        "done":             cmd_done,
     }[args.cmd]
     raise SystemExit(handler(args))
 
