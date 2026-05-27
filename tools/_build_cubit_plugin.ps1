@@ -93,7 +93,7 @@ if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
 & $cmake --build . --config Release --target radia_cubit_ccm -j
 if ($LASTEXITCODE -ne 0) { throw "radia_cubit_ccm build failed" }
 
-& $cmake --build . --config Release --target radia_cubit_ccl -j
-if ($LASTEXITCODE -ne 0) { throw "radia_cubit_ccl build failed" }
+# radia_cubit_ccl removed in radia 4.80.0 (Qt5 GUI deleted; PySide6 toolbar at
+# src/radia/panels/radia_export_menu.py replaces it).
 
 Write-Host "BUILD OK"

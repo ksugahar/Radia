@@ -18,5 +18,7 @@ cd /d "%SRC%\build-pyd"
 "%CMAKE_EXE%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%SRC%" && "%CMAKE_EXE%" --build . --config Release --target radia_cubit_mesh -j || exit /b 1
 mkdir "%SRC%\build-ccm" 2>/dev/null
 cd /d "%SRC%\build-ccm"
-"%CMAKE_EXE%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%SRC%" && "%CMAKE_EXE%" --build . --config Release --target radia_cubit_ccm -j && "%CMAKE_EXE%" --build . --config Release --target radia_cubit_ccl -j || exit /b 1
+REM radia_cubit_ccl removed in radia 4.80.0 (Qt5 .ccl deleted; PySide6
+REM toolbar at src/radia/panels/radia_export_menu.py replaces it).
+"%CMAKE_EXE%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%SRC%" && "%CMAKE_EXE%" --build . --config Release --target radia_cubit_ccm -j || exit /b 1
 exit /b 0

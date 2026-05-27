@@ -3,14 +3,18 @@
 pyproject.toml drives metadata and package-data; this file exists only
 to gate wheel/sdist creation on a freshness invariant:
 
-    No bundled Cubit plugin binary (.ccm / .ccl / .pyd) may be older
+    No bundled Cubit plugin binary (.ccm / .pyd) may be older
     than any source file under src/cubit_plugin/.
 
 If the invariant is violated, the build aborts BEFORE setuptools bundles
 the stale file into a wheel. Without this guard, ``pip install`` or
 ``pip wheel`` would happily package the latest .cpp changes' *non-built*
 binaries, which is how 100号機 got a post-6a8d2e5 Python package with a
-pre-6a8d2e5 .ccl on 2026-04-14.
+pre-6a8d2e5 .ccm on 2026-04-14.
+
+Note (radia 4.80.0): the .ccl was removed (Qt5 GUI deleted; PySide6
+toolbar at src/radia/panels/radia_export_menu.py replaces it).  Only
+.ccm is now in the freshness gate.
 
 Override with ``CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK=1`` only as a
 last resort (e.g. emergency release when the build box is offline).
@@ -45,14 +49,18 @@ def _check_binary_freshness():
         # with the guard upstream.
         return
 
-    # Only .ccm and .ccl are in this freshness gate — these are what Cubit
-    # loads directly and are rebuilt by every Build.ps1 run. The .pyd
-    # (Cubit-less HO-mesh module) is compiled only when the build machine
-    # has pybind11 + full Netgen (non-compact), which is not the CI path;
+    # Only .ccm is in this freshness gate — what Cubit loads directly
+    # and is rebuilt by every Build.ps1 run. The .pyd (Cubit-less
+    # HO-mesh module) is compiled only when the build machine has
+    # pybind11 + full Netgen (non-compact), which is not the CI path;
     # its freshness is tracked separately by its own CMake target.
+    #
+    # Note (radia 4.80.0): the .ccl was removed from this gate (and
+    # from the wheel package_data) because the Qt5 GUI .ccl was
+    # deleted; PySide6 toolbar at radia/panels/radia_export_menu.py
+    # replaces it.
     bundled = [
         pkg_dir / "radia_cubit.ccm",
-        pkg_dir / "radia_cubit.ccl",
     ]
     present = [p for p in bundled if p.is_file()]
     missing = [p for p in bundled if not p.is_file()]
@@ -65,7 +73,7 @@ def _check_binary_freshness():
             "in package source dir.\n")
         sys.stderr.write(
             "  Building sdist or a Python-only wheel. Wheel will lack "
-            "radia_cubit.ccm / .ccl and cubit-plugin-install will refuse "
+            "radia_cubit.ccm and cubit-plugin-install will refuse "
             "to deploy from it.\n")
         return
     if missing:
@@ -77,8 +85,8 @@ def _check_binary_freshness():
             sys.stderr.write(f"  [MISSING] {p}\n")
         sys.stderr.write(
             "\n  All-or-nothing: either ship every binary or none. Rebuild "
-            "and re-propagate (radia_cubit.ccm + radia_cubit.ccl are built\n"
-            "  together by Build.ps1 -Rebuild) before retrying.\n\n")
+            "and re-propagate (radia_cubit.ccm is built by Build.ps1; the\n"
+            "  .ccl was removed in radia 4.80.0) before retrying.\n\n")
         sys.exit(1)
     bundled = present  # only freshness-check the binaries we will ship
 
