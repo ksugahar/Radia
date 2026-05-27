@@ -228,42 +228,22 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     if errorlevel 1 ( echo WARNING: radia_cubit_mesh build failed )
 
     rem ========================================
-    rem   Building radia_cubit.ccm + .ccl (Qt5 SDK required)
+    rem   Building radia_cubit.ccm (APREPRO commands; no Qt deps)
     rem ========================================
-    rem qt5_sdk is gitignored (repo-local on LAB only).  CI runners do
-    rem not have it -- the .ccm/.ccl are pre-built on LAB and uploaded
-    rem to the `binaries` GitHub Release tag by the pre-push hook;
-    rem CI / mdx fetch them from there.  Skip the build cleanly when
-    rem qt5_sdk is missing rather than letting cmake fail with
-    rem "moc.exe does not exist" (the 2026-04-28 v4.12.0 CI failure).
-    if exist "%CUBIT_PLUGIN_SRC%\qt5_sdk\bin\moc.exe" (
-        echo.
-        echo ========================================
-        echo   Building radia_cubit.ccm (APREPRO commands)
-        echo ========================================
-        set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
-        if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
-        cd /d "!CUBIT_CCM_BUILD!"
-        "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
-        "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
-        if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
-
-        echo.
-        echo ========================================
-        echo   Building radia_cubit.ccl (GUI component)
-        echo ========================================
-        "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccl -j
-        if errorlevel 1 ( echo WARNING: radia_cubit_ccl build failed )
-
-        rem Copy ccl to src/radia/ so radia-setup deploys the latest version
-        if exist "!CUBIT_CCM_BUILD!\radia_cubit.ccl" (
-            copy /Y "!CUBIT_CCM_BUILD!\radia_cubit.ccl" "$PROJECT_DIR\src\radia\radia_cubit.ccl" >nul
-            echo   radia_cubit.ccl: copied to src/radia/
-        )
-    ) else (
-        echo SKIP: Qt5 SDK not found at %CUBIT_PLUGIN_SRC%\qt5_sdk\bin\moc.exe -- ccm / ccl are not built here
-        echo       LAB Build.ps1 builds them; CI fetches from binaries Release tag.
-    )
+    rem radia 4.80.0 removed the Qt5 .ccl GUI component (RadiaComp.cpp);
+    rem all GUI work is now in src/radia/panels/radia_export_menu.py
+    rem (PySide6).  The .ccm has no Qt dependency and builds unconditionally
+    rem when the Cubit SDK is present.
+    echo.
+    echo ========================================
+    echo   Building radia_cubit.ccm (APREPRO commands)
+    echo ========================================
+    set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
+    if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
+    cd /d "!CUBIT_CCM_BUILD!"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" --build . --config Release --target radia_cubit_ccm -j
+    if errorlevel 1 ( echo WARNING: radia_cubit_ccm build failed )
 
     cd /d "$BUILD_DIR"
 ) else (
@@ -375,13 +355,13 @@ try {
     # `get_requires_for_build_wheel` that compares mtime of every file
     # in src/cubit_plugin/ vs every bundled binary.  Ninja's incremental
     # build only rebuilds targets whose transitive source changed, so
-    # editing RadiaComp.cpp (.ccl source) leaves radia_cubit.ccm
-    # (built from RadiaPlugin.cpp) untouched.  The freshness check then
-    # FALSE-alarms: "radia_cubit.ccm is 16 h older than RadiaComp.cpp"
-    # even though the CONTENT of .ccm is correct.
-    # Fix: after all copies, force-touch every bundled binary mtime so
-    # it >= newest source mtime.  Build.ps1 has already ensured the
-    # CONTENTS are up-to-date; this only corrects mtime for the gate.
+    # editing a .cpp file that only feeds the .ccm leaves the .pyd
+    # (or vice-versa) untouched, which the freshness gate then FALSE-
+    # alarms on.  Fix: after all copies, force-touch every bundled
+    # binary mtime so it >= newest source mtime.  Build.ps1 has already
+    # ensured the CONTENTS are up-to-date; this only corrects mtime.
+    #
+    # As of radia 4.80.0 the .ccl is gone — only .ccm + .pyd remain.
     $pluginSrcFiles = Get-ChildItem "$PROJECT_DIR\src\cubit_plugin" `
         -Include "*.cpp","*.hpp","*.h","*.c" -File -Recurse `
         -ErrorAction SilentlyContinue
@@ -397,7 +377,7 @@ try {
         }
         # Also touch the src/radia/ copies so install_full.py /
         # verify-deploy freshness checks see consistent mtimes.
-        foreach ($name in @("radia_cubit_mesh.pyd", "radia_cubit.ccm", "radia_cubit.ccl")) {
+        foreach ($name in @("radia_cubit_mesh.pyd", "radia_cubit.ccm")) {
             $p = "$PROJECT_DIR\src\radia\$name"
             if (Test-Path $p) { (Get-Item -LiteralPath $p).LastWriteTime = $touchTime }
         }
