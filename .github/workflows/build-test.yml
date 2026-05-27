@@ -130,7 +130,25 @@ jobs:
           # too. The embedded batch file's cmd.exe child output goes through
           # PowerShell stdout because we pipe via the *>&1 merge.
           $buildLog = "$env:GITHUB_WORKSPACE\build-msvc-stdout.log"
-          & "${{ github.workspace }}\Build.ps1" *>&1 | Tee-Object -FilePath $buildLog
+
+          # 2026-05-28: tag pushes get -Rebuild to force clean build.
+          # Reason: Build.ps1 line 140-141 documents that ninja "records
+          # #deps 0 for all .obj files and misses header changes".  On
+          # the persistent self-hosted runner, CMakeLists.txt edits (e.g.
+          # the v4.80.0 `BEFORE PRIVATE NGSOLVE_BUNDLED_INC` pybind11 ABI
+          # override) do NOT trigger _radia_pybind.pyd rebuild because
+          # ninja's cached .obj commands look unchanged.  Result: the
+          # stale pre-fix .pyd is shipped and tests fail with
+          # `ImportError: generic_type: type "RadiaField" referenced
+          # unknown base type "ngfem::CoefficientFunction"` (the v4.80.0
+          # CI failure that motivated this gate).
+          $isTag = $env:GITHUB_REF -like 'refs/tags/*'
+          $rebuildFlag = @()
+          if ($isTag) {
+              Write-Host "Tag push detected ($env:GITHUB_REF) -- adding -Rebuild for clean build"
+              $rebuildFlag = @('-Rebuild')
+          }
+          & "${{ github.workspace }}\Build.ps1" @rebuildFlag *>&1 | Tee-Object -FilePath $buildLog
           $rc = $LASTEXITCODE
           Write-Host "Build.ps1 exit=$rc"
           Write-Host "Captured log size: $((Get-Item $buildLog -EA SilentlyContinue).Length) bytes"
