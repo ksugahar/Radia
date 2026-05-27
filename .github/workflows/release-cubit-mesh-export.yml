@@ -45,12 +45,14 @@ jobs:
           names = [f.filename for f in zf.infolist()]
 
           # Plugin binaries that MUST ship in every wheel. The Cubit plugin is
-          # useless without any of these: .ccm (APREPRO commands), .ccl (Qt GUI
-          # slot), or .pyd (cubit-mesh-export pybind11 module).  We refuse to
-          # publish a partial wheel (2026-04-14 hardening; 2026-04-24 strengthened
-          # to include .pyd after PyPI 0.6.0 shipped without it and left mdx in a
-          # half-deployed state).
-          required = ["radia_cubit.ccm", "radia_cubit.ccl", "radia_cubit_mesh.pyd"]
+          # useless without any of these: .ccm (APREPRO commands) or .pyd
+          # (cubit-mesh-export pybind11 module).  We refuse to publish a
+          # partial wheel (2026-04-14 hardening; 2026-04-24 strengthened
+          # to include .pyd after PyPI 0.6.0 shipped without it and left mdx
+          # in a half-deployed state).
+          # Note (radia 4.80.0): .ccl removed — Qt5 GUI deleted, replaced
+          # by PySide6 toolbar src/radia/panels/radia_export_menu.py.
+          required = ["radia_cubit.ccm", "radia_cubit_mesh.pyd"]
           missing = [r for r in required if not any(n.endswith(r) for n in names)]
           if missing:
               print(f"::error::Wheel missing mandatory plugin binaries: {missing}")
