@@ -49,7 +49,7 @@ Set-Location $buildCcm
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
 & $cmake --build . --config Release --target radia_cubit_ccm -j
 if ($LASTEXITCODE -ne 0) { throw "cmake build radia_cubit_ccm failed" }
-& $cmake --build . --config Release --target radia_cubit_ccl -j
-if ($LASTEXITCODE -ne 0) { throw "cmake build radia_cubit_ccl failed" }
+# radia_cubit_ccl removed in radia 4.80.0 (Qt5 .ccl deleted; PySide6
+# toolbar at src/radia/panels/radia_export_menu.py replaces it).
 
 Write-Host "BUILD OK"

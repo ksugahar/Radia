@@ -3,13 +3,17 @@ Radia Cubit panel startup hook.
 
 Runs inside Cubit on startup (via ~/.cubit -> startup.py) and performs:
   1. Panel-log initialization (shared across all radia subprocesses)
-  2. Export-dialog default-directory seeding for the C++ .ccl component
-  3. Cleanup of any legacy Python-side "Solve" / "Radia-NGSolve" /
-     "Generate Coil" / "Reload Panels" menus left behind by older installs
+  2. Export-dialog default-directory seeding (export_settings.json)
+  3. Cleanup of any legacy menus left behind by older installs
+     (including the C++ Qt5 .ccl "Export Mesh" menu, which is now
+     removed -- see radia 4.80.0 / src/radia/panels/radia_export_menu.py)
+  4. Installation of the PySide6 "Radia Export" menu via
+     radia_export_menu.install_menu()
 
-All user-facing menus (Export Mesh + Radia-NGSolve analysis launcher) now
-live in the C++ .ccl component (src/cubit_plugin/RadiaComp.cpp). This file
-no longer creates any menus.
+The Qt5 C++ Claro component (src/cubit_plugin/RadiaComp.cpp) was
+deleted in radia 4.80.0; all GUI work is now PySide6.  The .ccm
+(APREPRO commands `radia_export gmsh / netgen / nastran / vtk /
+femeem / meg`) is unchanged and remains the backend.
 """
 
 import json
@@ -69,13 +73,12 @@ except NameError:
         else:
             _this_dir = os.getcwd()
 
-# Qt bindings: prefer PySide6, fall back to PyQt5 (Cubit ships PyQt5)
-try:
-    from PySide6.QtWidgets import QApplication, QToolBar
-    _QT = "PySide6"
-except ImportError:
-    from PyQt5.QtWidgets import QApplication, QToolBar  # noqa: F401
-    _QT = "PyQt5"
+# Qt binding: PySide6 only (radia 4.80.0).  Target is Cubit 2025.12 which
+# ships PySide6.  Per CLAUDE.md "No Fallbacks — Fail Fast, Fail Loud":
+# if PySide6 is not importable, this script raises ImportError loudly so
+# the operator sees the real issue (old Cubit, broken PySide6 install,
+# wrong Python env) instead of a silent PyQt5 fallback that masks it.
+from PySide6.QtWidgets import QApplication, QToolBar, QMainWindow
 
 
 def _find_main_window():
@@ -89,10 +92,6 @@ def _find_main_window():
     app = QApplication.instance()
     if app is None or not hasattr(app, "topLevelWidgets"):
         return None  # no GUI app yet, nothing to clean up
-    if _QT == "PySide6":
-        from PySide6.QtWidgets import QMainWindow
-    else:
-        from PyQt5.QtWidgets import QMainWindow
     for w in app.topLevelWidgets():
         if isinstance(w, QMainWindow):
             return w
@@ -124,11 +123,13 @@ def _samples_dir():
 
 
 def _init_export_default_dir():
-    """Write default_dir to C++ export_settings.json.
+    """Write default_dir to export_settings.json.
 
-    The C++ ExportDialog reads default_dir as fallback when no
-    journal path and no saved dir exist. Without this, it falls
-    back to _getcwd() which may be OneDrive.
+    Both the (deleted) C++ ExportDialog and the new PySide6
+    radia_export_menu read `default_dir` from this file as the
+    initial directory for the file dialog when no .jou is loaded.
+    Without it, the dialog falls back to _getcwd() which may be
+    OneDrive on Windows.
     """
     appdata = os.path.join(os.path.expanduser("~"),
                            "AppData", "Roaming", "Radia")
@@ -148,12 +149,15 @@ def _init_export_default_dir():
 
 
 def _check_plugin_freshness():
-    """Warn if Cubit C++ plugin (.ccl/.ccm) is older than this Python file.
+    """Warn if Cubit C++ plugin (.ccm / .pyd) is older than this Python file.
 
     Silent mismatch between site-packages/radia and the Cubit plugin dir
     has caused hard-to-diagnose bugs (e.g., 2026-04-14: IH BEM failed to
-    read source/sink sidesets because an outdated .ccl shipped without
-    the FaceDescriptor DomainIn/Out fix). Fail loudly.
+    read source/sink sidesets because an outdated .ccm shipped without
+    the FaceDescriptor DomainIn/Out fix).  Fail loudly.
+
+    Note: the Qt5 .ccl is gone (radia 4.80.0).  Only .ccm (APREPRO
+    commands) and the .pyd (radia_cubit_mesh) are deployed now.
     """
     try:
         from install_panels import find_cubit_bin
@@ -175,7 +179,7 @@ def _check_plugin_freshness():
         return
     tol_sec = 3600  # 1 h tolerance (one pip install batches within a minute)
     stale = []
-    for name in ("radia_cubit.ccl", "radia_cubit.ccm"):
+    for name in ("radia_cubit.ccm", "radia_cubit_mesh.cp312-win_amd64.pyd"):
         p = os.path.join(plugin_dir, name)
         if not os.path.isfile(p):
             continue
@@ -219,9 +223,21 @@ def _check_plugin_freshness():
 
 
 def _cleanup_legacy_menus():
-    """Remove legacy Python-side menus left behind by older installs.
+    """Remove legacy menus left behind by older installs.
 
-    Menus owned by the C++ .ccl component (Export Mesh) are NOT removed.
+    Targets:
+      - Python-side "Solve" / "Radia-NGSolve" / "Generate Coil" /
+        "Reload Panels" menus from very old radia (pre-4.x panel
+        registry refactor)
+      - The Qt5 C++ "Export Mesh" menu from radia <= 4.79.0
+        (RadiaComp.cpp was deleted in 4.80.0; the menu may linger
+        if an old .ccl is still loaded by Cubit)
+      - The transient PySide6 fallback "Export Mesh" menu from
+        radia 4.79.0 (replaced by "Radia Export" in 4.80.0)
+      - "RadiaToolBar" QToolBar from older toolbar prototypes
+
+    The new "Radia Export" menu (PySide6, radia_export_menu.py) is
+    NOT removed -- install_menu() handles its own idempotent reload.
     """
     main_window = _find_main_window()
     if main_window is None:
@@ -229,8 +245,11 @@ def _cleanup_legacy_menus():
         return
     menu_bar = main_window.menuBar()
     removed = []
-    for name in ("Solve", "Radia-NGSolve", "Generate Coil",
-                 "Reload Panels"):
+    legacy_names = (
+        "Solve", "Radia-NGSolve", "Generate Coil", "Reload Panels",
+        "Export Mesh",  # both the old C++ .ccl menu and the 4.79.0 fallback
+    )
+    for name in legacy_names:
         for action in list(menu_bar.actions()):
             if action.text().replace("&", "") == name:
                 sub = action.menu()
@@ -249,23 +268,41 @@ def _cleanup_legacy_menus():
         _panel_log(f"_cleanup_legacy_menus: removed {removed}")
 
 
-def register_menu():
-    """Initialize export defaults + cleanup any legacy Solve menus.
+def _install_radia_export_menu():
+    """Install the PySide6 'Radia Export' menu.
 
-    Despite the name, this function no longer registers any Python menus.
-    All user-facing menus are in the C++ .ccl component. The name is
-    kept for compatibility with startup.py which calls register_menu().
+    Delegates to radia_export_menu.install_menu() which provides all
+    7 actions: Netgen / GMSH / Nastran / VTK / FEMEEM / MEG +
+    Mesh Evaluation.  See src/radia/panels/radia_export_menu.py.
+
+    No import fallback: Cubit's startup hook puts `panels/` on sys.path
+    (see lines 24-27 above), so `import radia_export_menu` is the
+    canonical and only import path.  Per CLAUDE.md "No Fallbacks —
+    Fail Fast, Fail Loud" any ImportError is propagated unmodified.
     """
-    _panel_log("register_menu: ENTER (C++-only mode)")
-    # Each step is independent — a failure in legacy-menu cleanup must
-    # not block export-dir seeding or the plugin-freshness check.
+    import radia_export_menu
+    radia_export_menu.install_menu()
+    _panel_log("_install_radia_export_menu: installed via "
+               "radia_export_menu.install_menu()")
+
+
+def register_menu():
+    """Initialize export defaults, clean up legacy menus, install
+    the PySide6 'Radia Export' menu.
+
+    The Qt5 C++ .ccl menu (RadiaComp.cpp) was removed in radia
+    4.80.0.  All Export Mesh functionality is now in
+    src/radia/panels/radia_export_menu.py (PySide6).
+    """
+    _panel_log("register_menu: ENTER (PySide6-only, Qt5 .ccl removed)")
     for step in (_cleanup_legacy_menus, _init_export_default_dir,
-                 _check_plugin_freshness):
+                 _check_plugin_freshness,
+                 _install_radia_export_menu):
         try:
             step()
         except Exception:
             _panel_log_exception(f"register_menu: {step.__name__} FAILED")
-    _panel_log("register_menu: EXIT (export defaults seeded)")
+    _panel_log("register_menu: EXIT")
 
 
 # Auto-register when this script is executed
