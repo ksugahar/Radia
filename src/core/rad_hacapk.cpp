@@ -157,7 +157,22 @@ double ComputeEntry(int i, int j) {
 
 extern "C" {
 
+// Optional per-call entry-function override (implements the HACApK_set_entry_func
+// API declared in cHACApK_cpp.h, previously unimplemented).  When non-null,
+// cHACApK_acaplus / fill routines fetch matrix entries from this kernel instead
+// of the default MMM/MSC system matrix.  This lets callers (e.g. the
+// stream-function (ACA+)+TSVD solver) factor an arbitrary rectangular kernel
+// block with HACApK's ACA+ -- keeping ACA+ a single source of truth instead of
+// re-porting it.  Default null => unchanged MMM behaviour.  Set/cleared
+// synchronously around one factorization (GIL-serialized; no concurrent MMM
+// build), so a plain (non-thread_local) pointer is sufficient.
+static HACApK_entry_func g_entry_override = NULL;
+
+void HACApK_set_entry_func(HACApK_entry_func func) { g_entry_override = func; }
+void HACApK_clear_entry_func(void) { g_entry_override = NULL; }
+
 double cHACApK_entry_ij(int i, int j, int i_bemv) {
+    if (g_entry_override != NULL) return g_entry_override(i, j, i_bemv);
     (void)i_bemv;  // Unused in Radia
     return RadHACApKCallback::ComputeEntry(i, j);
 }
