@@ -392,21 +392,12 @@ def hsh_text(p):
         h.update(d); return h.hexdigest()[:12]
     except Exception: return "MISSING"
 
-def hsh_bin(p):
-    h = hashlib.sha256()
-    try:
-        with open(p, "rb") as f:
-            for c in iter(lambda: f.read(65536), b""): h.update(c)
-        return h.hexdigest()[:12]
-    except Exception: return "MISSING"
-
 def ver(n):
     try: return md.version(n)
     except Exception: return "MISSING"
 
 import radia, cubit_mesh_export
 rad = os.path.dirname(radia.__file__)
-cme = os.path.dirname(cubit_mesh_export.__file__)
 print(f"VER radia              = {radia.__version__}")
 print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
 print(f"VER radia-mcp          = {ver('radia-mcp')}")
@@ -418,14 +409,62 @@ for r in ["panels/register_toolbar.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
-for r in ["radia_cubit.ccm"]:
-    print(f"SHA cme/{r:35s} = {hsh_bin(os.path.join(cme,r))}")
 '''
 
 
-def _probe(host_label, cmd_prefix):
-    """Run the probe on a target (cmd_prefix is the python invocation)."""
-    p = subprocess.run(cmd_prefix, input=CROSS_MACHINE_PROBE,
+# LAB probe (2026-05-28 fix).  LAB is the editable DEV checkout, so
+# os.path.dirname(radia.__file__) is the *working tree* -- full of
+# uncommitted dev WIP that has nothing to do with the released wheel.
+# Hashing that guaranteed perpetual false-positive drift (the whole reason
+# this variant exists).  Instead, hash each tracked panel file as it exists
+# at the RELEASE TAG (v{radia.__version__}) via `git show`: byte-identical to
+# what the consumers' wheel was built from, immune to (a) uncommitted WIP and
+# (b) post-release commits on main.  Versions/COMPAT come from installed
+# metadata (re-synced to the release in Phase 8), identical to the consumer
+# probe so the 10 rows line up 1:1 for the row-by-row comparison.
+CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, subprocess
+import importlib.metadata as md
+
+def ver(n):
+    try: return md.version(n)
+    except Exception: return "MISSING"
+
+import radia, cubit_mesh_export
+root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(radia.__file__))))
+tag = "v" + radia.__version__
+
+def hsh_git(relpath):
+    try:
+        d = subprocess.run(["git", "-C", root, "show", tag + ":" + relpath],
+                           capture_output=True).stdout
+        NL = bytes([10]); CR = bytes([13])
+        d = d.replace(CR + NL, NL).replace(CR, NL)
+        if not d: return "MISSING"
+        h = hashlib.sha256(); h.update(d); return h.hexdigest()[:12]
+    except Exception: return "MISSING"
+
+print(f"VER radia              = {radia.__version__}")
+print(f"VER cubit-mesh-export  = {cubit_mesh_export.__version__}")
+print(f"VER radia-mcp          = {ver('radia-mcp')}")
+print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
+print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
+for r in ["panels/register_toolbar.py",
+          "panels/calc_peec_bem.py",
+          "panels/calc_peec_inductance.py",
+          "panels/calc_fem_kelvin.py",
+          "panels/calc_fem_coilmesh.py"]:
+    print(f"SHA radia/{r:35s} = {hsh_git('src/radia/' + r)}")
+'''
+
+
+def _probe(host_label, cmd_prefix, probe_src=CROSS_MACHINE_PROBE):
+    """Run the probe on a target (cmd_prefix is the python invocation).
+
+    probe_src defaults to the consumer probe (hashes the installed wheel
+    files).  LAB passes CROSS_MACHINE_PROBE_LAB (hashes tracked files at the
+    release tag via git) -- see those probe strings for the rationale.
+    """
+    p = subprocess.run(cmd_prefix, input=probe_src,
                         capture_output=True, text=True, shell=False)
     if p.returncode != 0:
         fail(f"probe failed on {host_label}: {p.stderr.strip()}")
@@ -436,7 +475,7 @@ def _probe(host_label, cmd_prefix):
 def cmd_phase9(args):
     """Cross-machine consistency probe."""
     step("Phase 9: cross-machine consistency (LAB / 100号機 / mdx)")
-    out_lab = _probe("LAB", ["python", "-"])
+    out_lab = _probe("LAB", ["python", "-"], CROSS_MACHINE_PROBE_LAB)
     out_100 = _probe("100号機", ["ssh", SSH_100, "python", "-"])
     out_mdx = _probe("mdx", ["ssh", SSH_MDX, "python", "-"])
     if not (out_lab and out_100 and out_mdx):
