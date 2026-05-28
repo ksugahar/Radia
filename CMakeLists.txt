@@ -206,6 +206,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_biot_savart_surface.cpp   # Fast Biot-Savart B/A from triangulated surface (complex J_s)
 	${CORE_DIR}/rad_equivalence_source.cpp    # Equivalence-theorem near-field source (Schelkunoff/Love static H, Phase A)
 	${CORE_DIR}/rad_average_field.cpp         # Closed-form average B over a target box (Wakao Part 6 §7)
+	${CORE_DIR}/rad_stream_function.cpp       # (ACA+)+TSVD stream-function solver (HACApK ACA+ + TSVD recompression)
 )
 
 # Radia ext sources

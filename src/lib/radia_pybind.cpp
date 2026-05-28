@@ -51,6 +51,7 @@
 #include "rad_biot_savart_surface.h"   // Fast Biot-Savart B/A from triangulated surface
 #include "rad_equivalence_source.h"    // Stratton-Chu equivalence-theorem reconstruction
 #include "rad_average_field.h" // Closed-form cuboid average B (Wakao Part 6 §7)
+#include "rad_stream_function.h" // (ACA+)+TSVD stream-function coil solver
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 
 namespace py = pybind11;
@@ -4733,5 +4734,55 @@ PYBIND11_MODULE(_radia_pybind, m) {
             3x3 average demag tensor A_T such that
                 <B>_T = mu_0 * (A_T @ M + M * V_overlap / V_T)
             for source/target axis-aligned cuboids.
+        )pbdoc");
+
+    // ========================================================================
+    // (ACA+)+TSVD generic least-norm solver (kernel-agnostic).
+    // The matrix entry A(i,j) is supplied by a Python callable entry(i,j),
+    // so the same machinery serves any Radia source family (coil Biot-Savart,
+    // MMM/MSC magnetic-material field, ...).  ACA+ is HACApK's cHACApK_acaplus.
+    // ========================================================================
+    m.def("_stream_aca_tsvd",
+        [](int M, int N, std::function<double(int, int)> entry,
+           int modes, int kmax, double aca_eps, int method)
+        {
+            if (M <= 0 || N <= 0)
+                throw std::invalid_argument("M and N must be positive");
+            if (!entry)
+                throw std::invalid_argument("entry callback must be callable");
+            const radia::stream_function::Method mth =
+                (method == 2) ? radia::stream_function::Method::Method2
+                              : radia::stream_function::Method::Method3;
+            radia::stream_function::TSVDResult r =
+                radia::stream_function::ACATSVD(
+                    M, N, entry, modes, kmax, aca_eps, mth);
+
+            py::array_t<double> U({r.M, r.modes});
+            py::array_t<double> S(r.modes);
+            py::array_t<double> V({r.N, r.modes});
+            double* pU = static_cast<double*>(U.mutable_data());
+            double* pS = static_cast<double*>(S.mutable_data());
+            double* pV = static_cast<double*>(V.mutable_data());
+            for (size_t i = 0; i < r.U.size(); ++i) pU[i] = r.U[i];
+            for (size_t i = 0; i < r.S.size(); ++i) pS[i] = r.S[i];
+            for (size_t i = 0; i < r.V.size(); ++i) pV[i] = r.V[i];
+            return py::make_tuple(U, S, V, r.k_aca);
+        },
+        py::arg("M"), py::arg("N"), py::arg("entry"),
+        py::arg("modes"), py::arg("kmax"),
+        py::arg("aca_eps") = 1.0e-4, py::arg("method") = 3,
+        R"pbdoc(
+            (ACA+)+TSVD recompressed truncated SVD of an M x N matrix A whose
+            entries are supplied on demand by the callback entry(i, j) ->
+            A(i,j) (0-based row i in [0,M), col j in [0,N)).  Kernel-agnostic:
+            the callback may use any Radia field computation (coil Biot-Savart,
+            MMM/MSC magnetic material field, ...).  ACA+ is delegated to HACApK
+            (cHACApK_acaplus).  Returns (U, S, V, k_aca):
+              U:     (M, modes) row-major
+              S:     (modes,)
+              V:     (N, modes) row-major
+              k_aca: ACA+ rank found before truncation
+            method=3 (default) is the improved 2-SVD path (f90 method_aca_tsvd_2);
+            method=2 is the full re-SVD of both factors (f90 method_aca_tsvd_1).
         )pbdoc");
 }
