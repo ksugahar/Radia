@@ -28,6 +28,11 @@ def _run(extra_args, output_json):
     cmd = [
         sys.executable,
         os.path.join(PANELS, "calc_motor_lamination.py"),
+        # sparsecholesky (ngsolve built-in, no MKL) -> same solution as the
+        # production pardiso default, but immune to the MKL PARDISO threading-
+        # layer load that is flaky under the pytest subprocess (see the motor
+        # transient golden test for the full explanation).
+        "--linear-solver", "sparsecholesky",
         "--output", output_json,
     ] + extra_args
     env = os.environ.copy()

@@ -46,6 +46,14 @@ def _run(extra_args):
         os.path.join(PANELS, "calc_motor_transient.py"),
         "--vol", MESH_VOL,
         "--method", "linearization",
+        # Tests use sparsecholesky (ngsolve built-in, no MKL): a direct solver
+        # gives the SAME solution as the production pardiso default (golden
+        # bands unchanged), but avoids the MKL PARDISO threading-layer load,
+        # which is flaky under the pytest subprocess -- the pytest process
+        # pre-initialises MKL when it builds the mesh fixture in-process, and
+        # the spawned child inherits a broken MKL state ("Cannot load
+        # mkl_intel_thread.dll").  Production keeps pardiso (MKL + TaskManager).
+        "--linear-solver", "sparsecholesky",
         "--output", OUTPUT_JSON,
     ] + extra_args
     env = os.environ.copy()

@@ -71,6 +71,14 @@ import time
 
 import numpy as np
 
+# Direct solver for the FE Inverse().  Default "pardiso" (MKL, fastest for the
+# repeated transient factorizations) is overridden by --linear-solver in
+# main().  The golden tests pass "sparsecholesky" (ngsolve built-in, no MKL)
+# so they run on machines whose PATH carries another product's OLD unversioned
+# MKL (e.g. CST Studio Suite on the CI runner), which otherwise breaks MKL
+# PARDISO at solve time with "Cannot load mkl_intel_thread.dll".
+_LINEAR_SOLVER = "pardiso"
+
 # --- panel-common boilerplate ---
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
@@ -145,7 +153,7 @@ def _solve_nonlinear_op_point(mesh, fes, A, nu_cf, f_assembled,
     for k in range(max_iter):
         A_prev.data = A.vec
         a.Assemble()
-        inv = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+        inv = a.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
         A.vec.data = inv * f_assembled.vec
         diff = (A.vec - A_prev).Norm() / max(A.vec.Norm(), 1e-30)
         if diff < tol:
@@ -165,38 +173,39 @@ def _extract_L_inc(mesh, fes, A, nu_cf, phase_regions, n_turns, slot_area,
       * Flux linkage psi_kj = N_turns/A_slot . stack_length . int_{slot_k} A_j dx
     """
     from ngsolve import (BilinearForm, LinearForm, GridFunction,
-                         grad, dx, Integrate, InnerProduct)
+                         grad, dx, Integrate, InnerProduct, TaskManager)
 
     u, v = fes.TrialFunction(), fes.TestFunction()
     a_lin = BilinearForm(fes, symmetric=True)
     a_lin += nu_cf * InnerProduct(grad(u), grad(v)) * dx
-    a_lin.Assemble()
-    inv = a_lin.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+    with TaskManager():
+        a_lin.Assemble()
+        inv = a_lin.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
 
-    N = len(phase_regions)
-    L_inc = np.zeros((N, N))
-    gfu_phases = []
-    J_density = n_turns / slot_area
-    for j, (pos_mat, neg_mat) in enumerate(phase_regions):
-        f = LinearForm(fes)
-        # +1 A through positive turns, -1 A through negative turns
-        f += +J_density * v * dx(definedon=mesh.Materials(pos_mat))
-        f += -J_density * v * dx(definedon=mesh.Materials(neg_mat))
-        f.Assemble()
-        gfu_j = GridFunction(fes)
-        gfu_j.vec.data = inv * f.vec
-        gfu_phases.append(gfu_j)
+        N = len(phase_regions)
+        L_inc = np.zeros((N, N))
+        gfu_phases = []
+        J_density = n_turns / slot_area
+        for j, (pos_mat, neg_mat) in enumerate(phase_regions):
+            f = LinearForm(fes)
+            # +1 A through positive turns, -1 A through negative turns
+            f += +J_density * v * dx(definedon=mesh.Materials(pos_mat))
+            f += -J_density * v * dx(definedon=mesh.Materials(neg_mat))
+            f.Assemble()
+            gfu_j = GridFunction(fes)
+            gfu_j.vec.data = inv * f.vec
+            gfu_phases.append(gfu_j)
 
-    # Flux linkage: psi_kj = stack_length * N_turns/A_slot *
-    #               (int_{slot_k_pos} A_j - int_{slot_k_neg} A_j)
-    for k, (kp, kn) in enumerate(phase_regions):
-        for j, gfu_j in enumerate(gfu_phases):
-            psi_p = Integrate(gfu_j, mesh, definedon=mesh.Materials(kp))
-            psi_n = Integrate(gfu_j, mesh, definedon=mesh.Materials(kn))
-            psi = stack_length * n_turns / slot_area * (psi_p - psi_n)
-            L_inc[k, j] = psi
+        # Flux linkage: psi_kj = stack_length * N_turns/A_slot *
+        #               (int_{slot_k_pos} A_j - int_{slot_k_neg} A_j)
+        for k, (kp, kn) in enumerate(phase_regions):
+            for j, gfu_j in enumerate(gfu_phases):
+                psi_p = Integrate(gfu_j, mesh, definedon=mesh.Materials(kp))
+                psi_n = Integrate(gfu_j, mesh, definedon=mesh.Materials(kn))
+                psi = stack_length * n_turns / slot_area * (psi_p - psi_n)
+                L_inc[k, j] = psi
 
-    return L_inc, gfu_phases
+        return L_inc, gfu_phases
 
 
 def _compute_torque_arkkio(mesh, A_op, r_mid, stack_length):
@@ -414,6 +423,7 @@ def solve_motor_transient(
     # a fresh GridFunction (used by back-EMF FD)
     def _pm_only_solve(theta_r):
         from ngsolve import GridFunction
+        from ngsolve import TaskManager
         f_pm = _assemble_source(np.zeros(nbr_phases), theta_r)
         A_pm = GridFunction(fes)
         _solve_nonlinear_op_point(mesh, fes, A_pm, nu_cf, f_pm,
@@ -535,6 +545,11 @@ def main():
                         help="linearization=Lange-HH (default), "
                              "coupled=fully-coupled ONELAB-style (not yet)")
     parser.add_argument("--fes-order", type=int, default=1)
+    parser.add_argument("--linear-solver", default="pardiso",
+                        choices=["pardiso", "sparsecholesky", "umfpack"],
+                        help="FE direct solver. pardiso=MKL (fastest, default); "
+                             "sparsecholesky=ngsolve built-in (no MKL) -- use on "
+                             "machines with a conflicting MKL on PATH (e.g. CST).")
     parser.add_argument("--nbr-phases", type=int, default=3)
     parser.add_argument("--n-turns-per-slot", type=int, default=100)
     parser.add_argument("--slot-area", type=float, default=1e-4,
@@ -572,6 +587,8 @@ def main():
     parser.add_argument("--n-steps-per-FE", type=int, default=10)
 
     def run(args):
+        global _LINEAR_SOLVER
+        _LINEAR_SOLVER = args.linear_solver
         return solve_motor_transient(
             vol_file=args.vol,
             method=args.method,
