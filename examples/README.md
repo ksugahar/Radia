@@ -59,6 +59,12 @@ python arc_current_with_magnet.py
 | [induction_heating/](induction_heating/) | 6 | ESIM induction heating, RWG-EFIE 3D, WPT coupling |
 | [ngbem_diagnostics/](ngbem_diagnostics/) | 14 | Eddy current solver validation and diagnostics |
 
+### Coil Design / Inverse Source
+
+| Directory | Scripts | Description |
+|-----------|---------|-------------|
+| [stream_function/](stream_function/) | 4 | (ACA+)+TSVD least-norm solver (stream function method, generalised): coil field synthesis (`ObjFlmCur`) + permanent-magnet array (same solver, MMM/MSC field) + ACA-vs-naive-TSVD benchmark + CMA-ES (Optuna) magnetization-angle design. Kernel-agnostic; ACA+ from HACApK. See [docs/stream_function.md](../docs/stream_function.md). |
+
 ### Machine Learning
 
 | Directory | Scripts | Description |
