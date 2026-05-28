@@ -257,6 +257,8 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'units'           - units in parentheses convention (IEEE/IEEJ)
         'font_embedding'  - Type 42 requirement
         'multipanel'      - 1x2 / 2x1 / 2x2 layout tactics
+        'side_by_side'    - two figures in 8 cm -> each <= 4 cm,
+                            font 10 pt, legend 8-9 pt, no overlap
     """
     rules = {
         "efficiency": """\
@@ -316,6 +318,16 @@ This rule pins every paper_figure profile's font_pt to 10.0 regardless
 of column width.  If you find yourself wanting smaller text "to make
 the axes fit", the answer is to use a wider column or simplify the
 plot -- never to shrink font below 10 pt.
+
+EXCEPTION -- two panels side-by-side in 8 cm (each ~4 cm wide):
+  When you place TWO graphs in an 8 cm width (1 row x 2 cols, each
+  sub-panel <= 4 cm), the BODY / AXIS font stays 10 pt, but the
+  LEGEND drops to 8-9 pt.  A 10 pt legend physically crowds a 4 cm
+  panel; 8-9 pt keeps it readable without stealing data area.  This
+  is the ONE sanctioned place to shrink the legend below body size.
+  The legend must still NOT overlap the graph (see no_legend_overlap).
+  See the `side_by_side` topic and the
+  'digest_double_column_side_by_side' profile.
 """,
         "no_title_in_figure": """\
 [no_title_in_figure]
@@ -496,6 +508,49 @@ Direct labeling pattern for 1xC layouts:
   fig, axes = paper_figure('ieee_double_column', nrows=1, ncols=2,
                             panel_labels=True)
   # places (a), (b) in top-left of each panel automatically
+""",
+        "side_by_side": """\
+[side_by_side]
+
+TWO FIGURES IN 8 cm -> SIDE BY SIDE, each <= 4 cm.
+
+When two graphs must share an 8 cm width, lay them out HORIZONTALLY
+(1 row x 2 columns).  Do NOT stack them or shrink one; split the width.
+
+GEOMETRY:
+  - total embed width      : 8 cm
+  - each sub-panel width    : <= 4 cm  (8 / 2; leave a small inter-panel
+                              gap so each lands ~3.5-4 cm)
+  - layout                  : 1 row x 2 cols (横並び, horizontal)
+
+FONTS:
+  - body / axis label / tick: 10 pt  (the absolute lab font rule -- do
+                              NOT shrink it for the narrow 4 cm panel)
+  - legend                  : 8-9 pt (REDUCED from 10 pt; a 10 pt
+                              legend crowds a 4 cm panel).  This is the
+                              ONE sanctioned exception to "legend = body".
+
+LEGEND PLACEMENT:
+  - the legend MUST NOT overlap the graph (curves / markers).
+  - put it in an empty corner with frameon=False, OR use direct
+    endpoint labels (label_curve_endpoints).
+  - emit_paper_figure() rejects an overlapping legend (see
+    no_legend_overlap topic).
+
+TICKS:
+  - keep sparse (~4-5 per axis); a 4 cm panel crowds easily.
+
+HOW TO BUILD IT:
+  fig, axes = paper_figure('ieee_double_column', nrows=1, ncols=2,
+                            panel_labels=True)
+  for ax in axes.ravel():
+      ax.legend(loc=find_best_legend_loc(ax)[0], frameon=False,
+                fontsize=8)            # 8-9 pt, not 10
+  emit_paper_figure(fig, 'out', 'ieee_double_column', on_fail='raise')
+
+Or use the size/font recipe directly:
+  graph_size_for_target('digest_double_column_side_by_side')
+  # -> 8 cm wide, font 10 pt, legend 8-9 pt
 """,
     }
     q = (query or "all").strip().lower()
