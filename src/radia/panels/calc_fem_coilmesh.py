@@ -136,10 +136,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
         if el.mat == coil_mat:
             pts = np.array([mesh.vertices[v.nr].point for v in el.vertices])
             # max pairwise distance
-            d = 0.0
-            for i in range(len(pts)):
-                for j in range(i + 1, len(pts)):
-                    d = max(d, float(np.linalg.norm(pts[i] - pts[j])))
+            d = float(np.linalg.norm(pts[None] - pts[:, None], axis=-1).max())
             coil_h_max = max(coil_h_max, d)
             n_coil += 1
             if n_coil >= 200:
