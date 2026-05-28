@@ -56,7 +56,12 @@ def test_calc_heat_axisym_temperature_band(regenerate_fixture):
            "--t-initial", "25",
            "--t-ext", "25",
            "--h-conv", "0",
-           "--linear-solver", "pardiso",
+           # sparsecholesky (ngsolve built-in, no MKL): identical direct-solver
+           # solution to pardiso (temperature band unchanged), but immune to the
+           # MKL PARDISO threading-layer load that FATALs under the pytest
+           # subprocess on this machine.  Verified standalone: pardiso gives the
+           # same T_max=59.8 C / T_min=34.6 C.  Production keeps pardiso default.
+           "--linear-solver", "sparsecholesky",
            "--fes-order", "1"]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, (

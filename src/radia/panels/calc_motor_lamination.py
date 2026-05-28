@@ -66,6 +66,12 @@ import sys
 
 import numpy as np
 
+# Direct solver for the FE Inverse(); default "pardiso" (MKL, fastest) is
+# overridden by --linear-solver in main().  Golden tests pass "sparsecholesky"
+# (ngsolve built-in, no MKL) -- same solution, but immune to the MKL PARDISO
+# threading-layer load that is flaky under the pytest subprocess.
+_LINEAR_SOLVER = "pardiso"
+
 # Panel-common boilerplate
 _this_dir = os.path.dirname(os.path.abspath(__file__))
 if _this_dir not in sys.path:
@@ -124,7 +130,7 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
     """
     setup_paths()
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
-                         CoefficientFunction, grad, x, y, dx, ds, Integrate, Conj)
+                         CoefficientFunction, grad, x, y, dx, ds, Integrate, Conj, TaskManager)
 
     # Build a thin 2D strip mesh as a 1D-in-z proxy.
     from netgen.geom2d import SplineGeometry
@@ -199,77 +205,78 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
     # null vector).  A tiny mass term anchors the gauge.
     if drive == "current":
         a += 1e-12 * u * v * dx
-    a.Assemble()
+    with TaskManager():
+        a.Assemble()
 
-    f = LinearForm(fes)
-    if drive == "current":
-        # Apply uniform J_s in iron: integrand = J_s * v
-        f += complex(J_s_iron, 0.0) * v * dx(definedon=mesh.Materials("iron"))
-    f.Assemble()
+        f = LinearForm(fes)
+        if drive == "current":
+            # Apply uniform J_s in iron: integrand = J_s * v
+            f += complex(J_s_iron, 0.0) * v * dx(definedon=mesh.Materials("iron"))
+        f.Assemble()
 
-    inv = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
-    res = f.vec - a.mat * A_sol.vec
-    A_sol.vec.data = A_sol.vec + inv * res
+        inv = a.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
+        res = f.vec - a.mat * A_sol.vec
+        A_sol.vec.data = A_sol.vec + inv * res
 
-    V_iron = Integrate(CoefficientFunction(1.0), mesh,
-                        definedon=mesh.Materials("iron"))
-    V_total = Integrate(CoefficientFunction(1.0), mesh)
+        V_iron = Integrate(CoefficientFunction(1.0), mesh,
+                            definedon=mesh.Materials("iron"))
+        V_total = Integrate(CoefficientFunction(1.0), mesh)
 
-    # GAUGE FIX (v2.1): subtract the iron-region mean of A so that
-    # <A>_iron = 0.  This corresponds to placing the zero-EMF reference
-    # at the sheet center, matching the classical Bertotti derivation
-    # (where the induced E field circulates around the sheet midplane).
-    # Without this gauge fix, ECL gets a constant offset that makes the
-    # absolute magnitudes wrong even though the d-dependence is correct.
-    A_mean_iron_complex = (
-        Integrate(A_sol, mesh, definedon=mesh.Materials("iron"))
-        / float(V_iron)
-    )
+        # GAUGE FIX (v2.1): subtract the iron-region mean of A so that
+        # <A>_iron = 0.  This corresponds to placing the zero-EMF reference
+        # at the sheet center, matching the classical Bertotti derivation
+        # (where the induced E field circulates around the sheet midplane).
+        # Without this gauge fix, ECL gets a constant offset that makes the
+        # absolute magnitudes wrong even though the d-dependence is correct.
+        A_mean_iron_complex = (
+            Integrate(A_sol, mesh, definedon=mesh.Materials("iron"))
+            / float(V_iron)
+        )
 
-    # Build a gauge-shifted CF: A_shifted = A_sol - <A>_iron (complex constant)
-    A_shifted = A_sol - CoefficientFunction(A_mean_iron_complex)
-    A_shifted_conj = Conj(A_shifted)
-    A_sq = (A_shifted * A_shifted_conj).real
+        # Build a gauge-shifted CF: A_shifted = A_sol - <A>_iron (complex constant)
+        A_shifted = A_sol - CoefficientFunction(A_mean_iron_complex)
+        A_shifted_conj = Conj(A_shifted)
+        A_sq = (A_shifted * A_shifted_conj).real
 
-    grad_A = grad(A_sol)
-    Bx_real = -grad_A[1].real
-    Bx_imag = -grad_A[1].imag
-    B_sq = Bx_real * Bx_real + Bx_imag * Bx_imag
+        grad_A = grad(A_sol)
+        Bx_real = -grad_A[1].real
+        Bx_imag = -grad_A[1].imag
+        B_sq = Bx_real * Bx_real + Bx_imag * Bx_imag
 
-    # ECL = (1/2) * sigma * omega^2 * integral |A_shifted|^2 in iron
-    int_A_sq_iron = Integrate(A_sq, mesh,
-                               definedon=mesh.Materials("iron")).real
-    ECL_iron = 0.5 * sigma * omega * omega * int_A_sq_iron
-    ECL_density = float(ECL_iron / V_total)
+        # ECL = (1/2) * sigma * omega^2 * integral |A_shifted|^2 in iron
+        int_A_sq_iron = Integrate(A_sq, mesh,
+                                   definedon=mesh.Materials("iron")).real
+        ECL_iron = 0.5 * sigma * omega * omega * int_A_sq_iron
+        ECL_density = float(ECL_iron / V_total)
 
-    # Reactive power: omega * (1/(2mu)) * integral |B|^2 dV averaged
-    int_B_sq_iron = Integrate(B_sq, mesh,
-                               definedon=mesh.Materials("iron")).real
-    mu_iron = mu_r_iron * MU_0
-    RP_iron = 0.5 * omega * (1.0 / mu_iron) * int_B_sq_iron
-    int_B_sq_ins = Integrate(B_sq, mesh,
-                              definedon=mesh.Materials("insulation")).real
-    RP_ins = 0.5 * omega * NU_0 * int_B_sq_ins
-    RP_density = float((RP_iron + RP_ins) / V_total)
+        # Reactive power: omega * (1/(2mu)) * integral |B|^2 dV averaged
+        int_B_sq_iron = Integrate(B_sq, mesh,
+                                   definedon=mesh.Materials("iron")).real
+        mu_iron = mu_r_iron * MU_0
+        RP_iron = 0.5 * omega * (1.0 / mu_iron) * int_B_sq_iron
+        int_B_sq_ins = Integrate(B_sq, mesh,
+                                  definedon=mesh.Materials("insulation")).real
+        RP_ins = 0.5 * omega * NU_0 * int_B_sq_ins
+        RP_density = float((RP_iron + RP_ins) / V_total)
 
-    # Effective mu: volume-average B / volume-average H reasoning.
-    # In iron H = nu * B; in insulation H = nu_0 * B.
-    # mu_eff * <H> = <B> -> mu_eff = <B>/<H>.
-    # As a simple proxy, weighted-volume average:
-    mu_eff_real = (mu_iron * float(V_iron) + MU_0 * float(V_total - V_iron)) / float(V_total)
-    sigma_eff = float((V_iron / V_total) * sigma)
+        # Effective mu: volume-average B / volume-average H reasoning.
+        # In iron H = nu * B; in insulation H = nu_0 * B.
+        # mu_eff * <H> = <B> -> mu_eff = <B>/<H>.
+        # As a simple proxy, weighted-volume average:
+        mu_eff_real = (mu_iron * float(V_iron) + MU_0 * float(V_total - V_iron)) / float(V_total)
+        sigma_eff = float((V_iron / V_total) * sigma)
 
-    return {
-        "B_avg": B_avg,
-        "freq": freq,
-        "mu_eff_real": mu_eff_real,
-        "mu_eff_imag": 0.0,         # imag part needs nonlinear solver
-        "sigma_eff": sigma_eff,
-        "ECL_density_W_per_m3": ECL_density,
-        "RP_density_VAR_per_m3": RP_density,
-        "V_iron_fraction": float(V_iron / V_total),
-        "n_dof": fes.ndof,
-    }
+        return {
+            "B_avg": B_avg,
+            "freq": freq,
+            "mu_eff_real": mu_eff_real,
+            "mu_eff_imag": 0.0,         # imag part needs nonlinear solver
+            "sigma_eff": sigma_eff,
+            "ECL_density_W_per_m3": ECL_density,
+            "RP_density_VAR_per_m3": RP_density,
+            "V_iron_fraction": float(V_iron / V_total),
+            "n_dof": fes.ndof,
+        }
 
 
 def build_em_table(d_iron, d_ins, sigma, mu_r_iron,
@@ -313,6 +320,7 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                          CoefficientFunction, grad, x, y, dx, ds, Integrate,
                          InnerProduct)
+    from ngsolve import TaskManager
     if not os.path.exists(vol_file):
         return {"error": f"vol_file not found: {vol_file}"}
 
@@ -365,7 +373,7 @@ def solve_global_fe_with_em(vol_file, em_table, H_amplitude, freq,
                 f += 1.0 * v * dx(definedon=mesh.Materials(cm))
             f.Assemble()
 
-    inv = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso")
+    inv = a.mat.Inverse(fes.FreeDofs(), inverse=_LINEAR_SOLVER)
     A.vec.data = inv * f.vec
 
     # Post-process: average |B|^2 in stator_iron, multiply by ECL density
@@ -438,8 +446,15 @@ def main():
                         help="Hz, operating frequency for global FE")
     parser.add_argument("--fes-order", type=int, default=2,
                         help="HCurl order")
+    parser.add_argument("--linear-solver", default="pardiso",
+                        choices=["pardiso", "sparsecholesky", "umfpack"],
+                        help="FE direct solver. pardiso=MKL (fastest, default); "
+                             "sparsecholesky=ngsolve built-in (no MKL) -- use on "
+                             "machines with a conflicting MKL on PATH (e.g. CST).")
 
     def run(args):
+        global _LINEAR_SOLVER
+        _LINEAR_SOLVER = args.linear_solver
         B_list = [float(x) for x in args.B_list.split(",")]
         freq_list = [float(x) for x in args.freq_list.split(",")]
 

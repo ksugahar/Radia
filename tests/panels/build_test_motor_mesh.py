@@ -121,25 +121,26 @@ def build_pmsm_mesh(out_vol="test_pmsm.vol",
         add_circle(cx, cy, slot_radius, left=slot_dom, right=11, bc="", n=24)
         geo.SetMaterial(slot_dom, ph)
 
-    ngmesh = geo.GenerateMesh(maxh=maxh)
-    ngmesh.Save(out_vol)
-    print(f"saved {out_vol}")
+    from ngsolve import Mesh, TaskManager
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
+        ngmesh.Save(out_vol)
+        print(f"saved {out_vol}")
 
-    from ngsolve import Mesh
-    m = Mesh(out_vol)
-    mats = set(m.GetMaterials())
-    bnds = set(m.GetBoundaries())
-    print(f"  ne={m.ne} nv={m.nv}")
-    print(f"  materials: {sorted(mats)}")
-    print(f"  boundaries: {sorted(bnds)}")
-    # Sanity
-    required_mats = {"rotor_iron", "rotor_pm", "air", "stator_iron"} | set(phase_names)
-    missing = required_mats - mats
-    assert not missing, f"missing materials: {missing}"
-    assert "airgap_mid" in bnds, "missing airgap_mid boundary"
-    assert "outer" in bnds, "missing outer boundary"
-    print("  PASS")
-    return m
+        m = Mesh(out_vol)
+        mats = set(m.GetMaterials())
+        bnds = set(m.GetBoundaries())
+        print(f"  ne={m.ne} nv={m.nv}")
+        print(f"  materials: {sorted(mats)}")
+        print(f"  boundaries: {sorted(bnds)}")
+        # Sanity
+        required_mats = {"rotor_iron", "rotor_pm", "air", "stator_iron"} | set(phase_names)
+        missing = required_mats - mats
+        assert not missing, f"missing materials: {missing}"
+        assert "airgap_mid" in bnds, "missing airgap_mid boundary"
+        assert "outer" in bnds, "missing outer boundary"
+        print("  PASS")
+        return m
 
 
 if __name__ == "__main__":
