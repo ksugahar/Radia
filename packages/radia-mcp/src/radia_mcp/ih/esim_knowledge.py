@@ -41,6 +41,15 @@ the BH knee.
 
 Rule of thumb: P_wp can change by up to 50 % moving from scalar to
 per-element when surface H_t spans the BH knee.
+
+## Primary reference (method origin)
+
+ESIM is from K. Hollaus, V. Hanser, and M. Schoebinger, "A Nonlinear
+Effective Surface Impedance in a Magnetic Scalar Potential Formulation,"
+IEEE Trans. Magn., 2025, doi:10.1109/TMAG.2025.3613932 (bib key Hollaus2025;
+official bibtex author field: "Hollaus, Karl and Hanser, Valentin and
+Sch\\"{o}binger, Markus").  The Sugahara-lab IGTE 2026 paper re-casts this
+method into a scalar BIE-SIBC; Karl Hollaus (TU Wien) is a co-author.
 """
 
 

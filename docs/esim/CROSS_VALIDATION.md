@@ -13,6 +13,22 @@ implementation and its three coupled-solver dispatch paths.
 
 ---
 
+## Primary reference & co-authorship
+
+The method this work re-casts is the nonlinear Effective Surface Impedance
+Method of **K. Hollaus, V. Hanser, and M. Schöbinger**, "A Nonlinear Effective
+Surface Impedance in a Magnetic Scalar Potential Formulation," *IEEE Trans.
+Magn.*, 2025, doi:10.1109/TMAG.2025.3613932 (bib key `Hollaus2025`). **Karl
+Hollaus (TU Wien) is a co-author** of the present IGTE 2026 paper. Use the
+official IEEE author field exactly:
+`Hollaus, Karl and Hanser, Valentin and Sch\"{o}binger, Markus` (braced umlaut).
+The digest abstract cites this as reference [1] and **retains
+`\cite{Hollaus2025}` in the abstract** — a deliberate exception to the
+no-citations-in-abstract rule, justified because the paper's premise is
+re-casting that method (do not "fix" it by removing the citation).
+
+---
+
 ## 1. Validation Matrix Overview
 
 Three orthogonal cross-validation strategies are used:
