@@ -56,6 +56,17 @@ jobs:
       - uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
+      # Guard (2026-05-28): a self-hosted job must NOT pip-install a lab
+      # package into LAB's shared system Python -- it rewrites LAB's editable
+      # pointer and breaks the dev loop on every run (the recurring radia-mcp
+      # drift).  This static audit fails the build if a workflow reintroduces
+      # such an install; the repo is imported via PYTHONPATH instead.
+      # ----------------------------------------------------------------
+      - name: Audit -- no lab installs into LAB's shared Python
+        shell: pwsh
+        run: python tools/audit_ci_no_system_install.py
+
+      # ----------------------------------------------------------------
       # Install test dependencies (MCP server tests need the mcp package).
       #
       # radia_mcp itself is NOT pip-installed.  The self-hosted runner
@@ -243,8 +254,7 @@ jobs:
             --ignore=tests/test_batch_evaluation.py `
             --ignore=tests/test_curlA_equals_B.py `
             --ignore=tests/test_mesh_import.py `
-            --ignore=tests/test_scalar_bie_sibc.py `
-            --ignore=tests/axifemm/test_heat_axisym_e2e.py
+            --ignore=tests/test_scalar_bie_sibc.py
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Basic tests failed"
             exit $LASTEXITCODE
@@ -258,24 +268,14 @@ jobs:
       #   tests/panels/test_motor_lamination_golden.py (4 tests)
       # ----------------------------------------------------------------
       - name: Run motor panel tests
-        # 2026-05-28: temporarily disabled in radia 4.80.4 to unblock
-        # the pybind11 ABI fix release.  Root cause: calc_motor_*.py
-        # subprocess hits `Intel MKL FATAL ERROR: Cannot load
-        # mkl_intel_thread.dll` (unversioned name) because the CI
-        # runner's PATH contains
-        # `C:\Program Files\CST Studio Suite 2026\AMD64\` which has
-        # an older unversioned mkl_intel_thread.dll that shadows
-        # the new `mkl_intel_thread.2.dll` in pip-installed MKL
-        # 2025.x.  v4.78.1 CI passed these tests; the CST install
-        # post-dates that release.
-        #
-        # Fix path (separate release): either sanitize PATH inside
-        # calc_motor_*.py (strip CST paths before NGSolve/MKL imports)
-        # or set `MKL_THREADING_LAYER=INTEL` env in the workflow so
-        # MKL picks the right backend by name.
-        #
-        # Re-enable by removing the `if: false` line.
-        if: false
+        # Motor golden tests (transient + lamination); NGSolve, no Cubit.
+        # Re-enabled 2026-05-28: the tests pass `--linear-solver sparsecholesky`
+        # (ngsolve built-in, no MKL) -- identical direct-solver solution to the
+        # production pardiso default, but immune to the MKL PARDISO threading-
+        # layer load that FATALs under the pytest subprocess.  (The CST Studio
+        # Suite unversioned-MKL-DLL shadow that originally broke these in
+        # v4.80.4 was also removed from the runner.)  The 3 TaskManager-import
+        # NameErrors the disabled period hid were fixed in the same change.
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
