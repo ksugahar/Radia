@@ -426,31 +426,37 @@ BILINGUAL_WORKFLOW = r"""
 
 ## The rule (Sugahara Lab)
 
-When writing an **English** paper, ALSO produce a **Japanese
-translation** of the manuscript.  The Japanese version is a lab
-deliverable (for internal review, co-author readability, and archival),
-maintained alongside the English submission.
+When writing an **English** paper, ALSO produce a **Japanese version**.
+The Japanese version is **generated AS the translation of the English
+manuscript** (English is the master; Japanese is derived from it), and
+serves as a lab deliverable (internal review, co-author readability,
+archival).
 
-**HOWEVER**: the **page limit applies ONLY to the English submission**,
-NOT to the Japanese translation.  Do not try to compress the Japanese
-version to the venue's page count — Japanese text + the same figures
-will naturally run a different length, and that is fine.  The page
-limit is a property of the TARGET VENUE (IEEE TMag 8 pp, IGTE digest
-2 pp, etc.), which only the English manuscript is submitted to.
+**Key point — the Japanese version is INDIFFERENT to the page limit.**
+The page limit is a property of the TARGET VENUE (IEEE TMag 8 pp, IGTE
+digest 2 pp, etc.) and applies ONLY to the English submission.  For the
+Japanese translation you simply **do not care about page count at all**
+— do not measure it, do not enforce it, do not adjust the Japanese to
+hit any page number.  It runs to whatever length the translation
+naturally takes.
+
+This is NOT a rule "make the Japanese fit / not fit one page".  Page
+count is just not a concern for the Japanese version, in either
+direction.
 
 ## What this means in practice
 
 | Artifact | Page limit? | Purpose |
 |----------|-------------|---------|
 | English manuscript (submitted) | **YES** — venue page limit enforced | the actual submission |
-| Japanese translation (internal) | **NO** — any length | lab review, co-author readability, archive |
+| Japanese translation (derived) | **N/A — indifferent** — any length | lab review, co-author readability, archive |
 
 - Run the page-limit check (`paper_writing_validate_pdf_pages`,
   `paper_writing_em_submission_gate(page_limit=...)`) **only on the
   English PDF**.
-- Do NOT pass `page_limit` when gating / validating the Japanese
-  translation — it is expected to exceed the English page count and
-  that is not a defect.
+- For the Japanese translation, simply **do not pass `page_limit`** —
+  page count is not evaluated for it at all (its length is whatever the
+  translation produces; that is neither good nor bad).
 - Figures, equations, and tables are SHARED between the two versions
   (same .pdf figure files); only the prose is translated.  This keeps
   the two in sync and means the figure-format rule
@@ -466,13 +472,16 @@ limit is a property of the TARGET VENUE (IEEE TMag 8 pp, IGTE digest
 
 ## How to apply
 
-  1. Draft + finalize the English manuscript to the venue page limit.
-  2. Produce the Japanese translation from the FINAL English text
-     (translate prose; reuse the identical figure .pdf files and
-     equations verbatim).
+  1. Draft + finalize the English manuscript to the venue page limit
+     (English is the master document).
+  2. Generate the Japanese version AS a translation of the FINAL
+     English text (translate the prose; reuse the identical figure
+     .pdf files and equations verbatim).  Let it run to whatever
+     length results — do not trim or pad it toward any page count.
   3. Gate the English PDF WITH `page_limit`; gate the Japanese PDF
-     WITHOUT `page_limit` (all other checks — undefined variables,
-     ref/label consistency, figure format — still apply to both).
+     WITHOUT `page_limit` (page count is simply not checked for the
+     Japanese version).  All OTHER checks — undefined variables,
+     ref/label consistency, figure format — still apply to both.
 
 ## Cross-reference
 
