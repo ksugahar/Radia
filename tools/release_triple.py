@@ -659,6 +659,107 @@ def cmd_verify_editable(args):
     return _verify_lab_editable()
 
 
+# ============================================================
+# Phase 5.5 gate: CI-green BEFORE tagging (gh-free)
+# ============================================================
+# The self-hosted [windows-radia] runner runs ON LAB, so we read CI
+# state from the local runner workspace instead of `gh` (abandoned on
+# LAB 2026-05-28; not on PATH).  This is the enforcement behind the
+# "push main -> confirm CI green -> THEN tag" policy that stops the
+# v4.80.0 -> v4.80.5 version-burning (tag CI failing on a broken commit).
+CI_WORKSPACE = r"C:\actions-runner\_work\Radia\Radia"
+
+
+def _ci_worker_running():
+    """True iff the GitHub Actions Runner.Worker (a running CI job) exists."""
+    p = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq Runner.Worker.exe", "/NH"],
+        capture_output=True, text=True)
+    return "Runner.Worker" in (p.stdout or "")
+
+
+def cmd_ci_verify(args):
+    """gh-free CI-green gate.  Run AFTER `git push origin main`, BEFORE tags.
+
+    1. Wait for the self-hosted runner job (Runner.Worker) to appear, then
+       finish.  If no run starts within 10 min, fail (did the push trigger
+       CI?) -- do NOT tag on an unverified commit.
+    2. Assert every junit XML in the CI workspace is FRESH (written by THIS
+       run, not a stale prior one) AND failures=errors=0.
+
+    Exit 0 = green (safe to create + push the release tags).  Non-zero =
+    red / unverified (fix-forward on main, re-run, do NOT tag).
+
+    CAVEAT (documented, not authoritative): this covers the build + test
+    steps -- a build failure leaves the XMLs stale/absent (reads as
+    not-green), but a failure in a post-test step is not caught.  gh's
+    check-runs API would be authoritative; gh is unavailable on LAB.
+    """
+    import time
+    import datetime as _dt
+    from xml.etree import ElementTree as ET
+
+    step("Phase 5.5: CI verify (gh-free) -- wait for runner, then check test XMLs")
+    t0 = time.time()
+    saw = False
+    while True:
+        now = time.time()
+        if _ci_worker_running():
+            if not saw:
+                print("  Runner.Worker active -- CI job running; waiting for it to finish...")
+            saw = True
+        elif saw:
+            print("  Runner.Worker exited -- CI job complete.")
+            break
+        elif now - t0 > 600:
+            fail("no CI run started within 10 min -- did `git push origin main` "
+                 "trigger a run? Not verified; do NOT tag.")
+            return 4
+        if now - t0 > 40 * 60:
+            fail("CI run did not finish within 40 min; not verified.")
+            return 4
+        time.sleep(20)
+
+    import glob
+    xmls = sorted(glob.glob(os.path.join(CI_WORKSPACE, "*results*.xml")))
+    if not xmls:
+        fail(f"no *results*.xml in {CI_WORKSPACE} -- CI produced no test output "
+             "(the build step likely failed). NOT green.")
+        return 4
+
+    bad = 0
+    print(f"\n  {'xml':<30} | {'tests':>6} | {'fail':>4} | {'err':>4} | mtime")
+    print("  " + "-" * 72)
+    for x in xmls:
+        try:
+            root = ET.parse(x).getroot()
+            suites = root.findall("testsuite") or [root]
+            tests = sum(int(s.get("tests", 0) or 0) for s in suites)
+            fails = sum(int(s.get("failures", 0) or 0) for s in suites)
+            errs = sum(int(s.get("errors", 0) or 0) for s in suites)
+        except Exception as e:
+            fail(f"could not parse {os.path.basename(x)}: {e}")
+            bad += 1
+            continue
+        mt = os.path.getmtime(x)
+        fresh = mt >= (t0 - 180)   # written by this run (allow 3 min pre-slack)
+        mts = _dt.datetime.fromtimestamp(mt).strftime("%H:%M:%S")
+        is_ok = (fails == 0 and errs == 0 and fresh)
+        if not is_ok:
+            bad += 1
+        print(f"  {os.path.basename(x):<30} | {tests:>6} | {fails:>4} | {errs:>4} | "
+              f"{mts}{'  STALE' if not fresh else ''}")
+    if bad:
+        print("")
+        fail(f"{bad} test XML(s) failing or stale -- CI NOT green. "
+             "Fix-forward on main and re-run; do NOT tag.")
+        return 4
+    print("")
+    ok("CI is GREEN (all test XMLs fresh, failures=errors=0). "
+       "Safe to create + push the release tags (Phase 6).")
+    return 0
+
+
 def cmd_done(args):
     """Definition-of-done check: preflight + LAB-editable verify + phase9.
 
@@ -715,6 +816,8 @@ def main():
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
                     help="LAB editable-install pointers check (read-only)")
+    sub.add_parser("ci-verify",
+                    help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
     sub.add_parser("done",
                     help="definition-of-done: preflight + LAB editable + "
                          "phase9 (read-only)")
@@ -728,6 +831,7 @@ def main():
         "phase9":           cmd_phase9,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
+        "ci-verify":        cmd_ci_verify,
         "done":             cmd_done,
     }[args.cmd]
     raise SystemExit(handler(args))
