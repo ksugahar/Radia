@@ -40,13 +40,23 @@ _PROFILES = {
         "embed_width_cm": 8.0,
         "font_pt": 10,
         "legend_pt_min": 8,
+        "legend_pt_max": 9,
         "linewidth_pt": 1.0,
         "axes_linewidth_pt": 0.8,
         "marker_size_pt": 6,
         "notes": (
-            "Two panels (a) and (b) placed side-by-side inside a single "
-            "double-column digest figure of width 8 cm. Each sub-panel is "
-            "~3.5-4 cm wide. Tight on labels; keep ticks sparse."
+            "TWO panels placed SIDE-BY-SIDE (1 row x 2 cols, horizontal) "
+            "inside a single 8 cm-wide figure. RULE: each sub-panel must "
+            "be <= 4 cm wide (8 cm / 2 = 4 cm; account for the inter-panel "
+            "gap so each is slightly under 4 cm, ~3.5-4 cm). Body/axis "
+            "font stays 10 pt (the lab absolute font rule -- do NOT shrink "
+            "it for the narrow panel). Legend is REDUCED to 8-9 pt (not "
+            "10 pt) because a 10 pt legend eats too much of a 4 cm panel; "
+            "8-9 pt keeps it readable without crowding. The legend MUST "
+            "NOT overlap the graph (curves/markers) -- use "
+            "find_best_legend_loc() or label_curve_endpoints(), and "
+            "emit_paper_figure() will reject an overlapping legend. Keep "
+            "ticks sparse (~4-5 per axis) so the 4 cm panel doesn't crowd."
         ),
     },
     "digest_single_column": {
@@ -158,6 +168,19 @@ Lab style — graph rules (Sugahara Lab):
     Per IEEE Editorial Style Manual ('Magnetization (kA/m)',
     'Temperature (K)') and IEEJ practice.  ISO 80000 'f / Hz' is a
     distinct convention NOT used in IEEE/IEEJ engineering papers.
+10. *** TWO FIGURES IN 8 cm -> SIDE BY SIDE, each <= 4 cm ***:
+    When you must place 2 graphs within an 8 cm width, lay them out
+    HORIZONTALLY (1 row x 2 columns), each sub-panel <= 4 cm wide
+    (8 cm / 2; leave a small inter-panel gap so each is ~3.5-4 cm).
+    - Body / axis-label font: 10 pt (the absolute lab rule -- do NOT
+      shrink it just because the panel is narrow).
+    - Legend font: 8-9 pt (REDUCED from 10 pt; a 10 pt legend crowds a
+      4 cm panel).  This is the ONE sanctioned exception to the
+      "legend matches body" rule.
+    - Legend MUST NOT overlap the graph -- place it in an empty corner
+      ('Box','off') or use direct endpoint labels; verify with
+      find_best_legend_loc() / emit_paper_figure()'s overlap gate.
+    Use profile 'digest_double_column_side_by_side'.
 """
 
 
@@ -229,6 +252,8 @@ def graph_size_for_target(target: str = "digest_double_column_side_by_side",
 
     font = prof["font_pt"]
     legend = prof["legend_pt_min"]
+    legend_max = prof.get("legend_pt_max")
+    legend_str = (f"{legend}-{legend_max}" if legend_max else f">= {legend}")
     lw = prof["linewidth_pt"]
     aw = prof["axes_linewidth_pt"]
     ms = prof["marker_size_pt"]
@@ -271,7 +296,7 @@ def graph_size_for_target(target: str = "digest_double_column_side_by_side",
         f"  embed width      : {w_cm:.1f} cm\n"
         f"  recommended size : {w_cm:.1f} cm x {h_cm:.1f} cm "
         f"({pixels_300dpi} px wide @ 300 DPI)\n"
-        f"  font / legend    : {font} pt / >= {legend} pt\n"
+        f"  font / legend    : {font} pt / {legend_str} pt\n"
         f"  line / axis      : {lw} / {aw} pt\n"
         f"  marker           : {ms} pt\n"
         f"  notes            : {prof['notes']}\n"
@@ -435,7 +460,7 @@ def lab_savefig(fig, path: str, dpi: int = 300, **kwargs) -> None:
         **kwargs: Forwarded to fig.savefig.
 
     Example:
-        >>> lab_savefig(fig, "circle_cpe_schur")   # saves both .pdf and .png
+        >>> lab_savefig(fig, "circle_warburg")     # saves both .pdf and .png
         >>> lab_savefig(fig, "out.png", dpi=600)   # saves only the .png
     """
     from pathlib import Path
