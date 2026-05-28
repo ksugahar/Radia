@@ -356,6 +356,291 @@ EQUATION_TYPESETTING = r"""
 """
 
 
+FIGURE_FORMAT = r"""
+# Figure file format: import via PDF (vector), NOT PNG (raster)
+
+## The rule
+
+When including a generated graph / plot in the LaTeX manuscript, use
+the **PDF (vector)** output, NOT the PNG (raster) output:
+
+```latex
+% CORRECT — vector PDF, scales losslessly, sharp at any zoom
+\\includegraphics[width=\\columnwidth]{fig/result.pdf}
+
+% WRONG — raster PNG, blurs when the typesetter scales it, fails
+%         publisher 600/1200-dpi pre-flight on line art
+\\includegraphics[width=\\columnwidth]{fig/result.png}
+```
+
+The lab figure pipeline (`mcp-server-graph` `emit_paper_figure`) emits
+BOTH `<name>.pdf` and `<name>.png` at the journal's exact width.  The
+`.png` is for quick preview / slides / GitHub README ONLY.  The `.pdf`
+is the one that goes into the paper.
+
+## Why PDF, not PNG, for line-art figures
+
+| Aspect | PDF (vector) | PNG (raster) |
+|--------|--------------|--------------|
+| Scaling | lossless at any size | blurs / pixelates when scaled |
+| Text in figure | stays selectable + sharp | fixed pixel grid, fuzzy |
+| Thin strokes (0.7 pt axes) | crisp at print | alias / disappear |
+| Publisher pre-flight | passes (Type-42 fonts embed) | flagged "low-res raster" on line art |
+| File size (line art) | small | large at 600+ dpi |
+
+## The ONE exception: inherently raster content
+
+Use PNG / TIFF only for content that IS a pixel image:
+- field maps / contour heatmaps rendered as a bitmap
+- photographs of the experimental rig
+- microscopy / camera images
+
+For those, embed at >= 300 dpi (>= 600 dpi for mixed line+image) and
+still prefer wrapping them so the AXES / LABELS are vector (matplotlib:
+keep the colormesh raster but let the axis frame + ticks + labels be
+vector by saving the whole figure as PDF — `rasterized=True` on just
+the `pcolormesh`/`imshow` artist gives a small vector-frame + raster-
+data hybrid PDF, the best of both).
+
+## How to verify in your manuscript
+
+  1. Grep the .tex for ``\\includegraphics`` and check every path ends
+     in ``.pdf`` (or ``.eps``), not ``.png`` / ``.jpg`` — except the
+     deliberate raster exceptions above.
+  2. If a figure looks fuzzy in the compiled PDF, it is almost always
+     a PNG that should have been the PDF sibling.
+  3. The lab `emit_paper_figure(...)` already produced the `.pdf`; just
+     point `\\includegraphics` at it.
+
+## Cross-reference
+
+- `mcp-server-graph` `emit_paper_figure` — emits .pdf + .png at exact
+  journal width; the .pdf is the manuscript figure.
+- The companion `lab-graph-style` skill documents the full figure
+  pipeline.
+"""
+
+
+BILINGUAL_WORKFLOW = r"""
+# Bilingual workflow: English paper + Japanese translation
+
+## The rule (Sugahara Lab)
+
+When writing an **English** paper, ALSO produce a **Japanese
+translation** of the manuscript.  The Japanese version is a lab
+deliverable (for internal review, co-author readability, and archival),
+maintained alongside the English submission.
+
+**HOWEVER**: the **page limit applies ONLY to the English submission**,
+NOT to the Japanese translation.  Do not try to compress the Japanese
+version to the venue's page count — Japanese text + the same figures
+will naturally run a different length, and that is fine.  The page
+limit is a property of the TARGET VENUE (IEEE TMag 8 pp, IGTE digest
+2 pp, etc.), which only the English manuscript is submitted to.
+
+## What this means in practice
+
+| Artifact | Page limit? | Purpose |
+|----------|-------------|---------|
+| English manuscript (submitted) | **YES** — venue page limit enforced | the actual submission |
+| Japanese translation (internal) | **NO** — any length | lab review, co-author readability, archive |
+
+- Run the page-limit check (`paper_writing_validate_pdf_pages`,
+  `paper_writing_em_submission_gate(page_limit=...)`) **only on the
+  English PDF**.
+- Do NOT pass `page_limit` when gating / validating the Japanese
+  translation — it is expected to exceed the English page count and
+  that is not a defect.
+- Figures, equations, and tables are SHARED between the two versions
+  (same .pdf figure files); only the prose is translated.  This keeps
+  the two in sync and means the figure-format rule
+  (`figure_format` topic) applies identically to both.
+
+## Why keep a Japanese translation at all
+
+- Co-authors / students who read Japanese faster catch logic errors
+  the English draft hides.
+- The Japanese version is reusable for a domestic-conference
+  (IEEJ 全国大会 / 研究会) submission later.
+- Archival: the lab keeps both language versions of every paper.
+
+## How to apply
+
+  1. Draft + finalize the English manuscript to the venue page limit.
+  2. Produce the Japanese translation from the FINAL English text
+     (translate prose; reuse the identical figure .pdf files and
+     equations verbatim).
+  3. Gate the English PDF WITH `page_limit`; gate the Japanese PDF
+     WITHOUT `page_limit` (all other checks — undefined variables,
+     ref/label consistency, figure format — still apply to both).
+
+## Cross-reference
+
+- `paper_writing_em_submission_gate(pdf_path=..., page_limit=N)` —
+  pass page_limit ONLY for the English PDF.
+- `figure_format` topic — figures are shared; both versions import
+  the same vector .pdf figures.
+"""
+
+
+ABSTRACT_AND_CONCISENESS = r"""
+# Abstract content rules + page-fitting conciseness philosophy
+
+## Abstract rules (Sugahara Lab / IEEE / IEEJ)
+
+1. **NO equations / math in the abstract.**
+   The abstract is plain prose.  Do NOT put displayed equations,
+   inline math (`$...$`), or symbol-heavy expressions in it.  State
+   results in words ("the eddy-current loss is reduced by 18 %"), not
+   formulas.  Reason: the abstract is indexed / displayed by databases
+   (IEEE Xplore, Scopus, Google Scholar) as plain text; math renders as
+   garbage there, and reviewers expect a math-free abstract.
+
+2. **NO citations in the abstract.**
+   Do NOT put `\cite{}` / `[1]` reference markers in the abstract.
+   The abstract must stand alone; a reference number is meaningless to
+   a reader who hasn't reached the bibliography.  If prior work must be
+   acknowledged, name it in words ("unlike conventional Preisach
+   models") without a citation marker.
+
+These two rules are enforced by
+`paper_writing_check_abstract_no_math_no_citation` (and the
+`em_submission_gate` runs it automatically).  Violations are a
+reviewer-visible, database-visible defect.
+
+## Page-fitting philosophy: don't OVER-compress
+
+When fitting a hard page limit (IGTE / Compumag 2-page digest, a
+1-page extended abstract, IEEE TMag 8-page full paper), there are two
+ways to make content fit:
+
+| Approach | Verdict |
+|----------|---------|
+| **Cram**: shrink fonts below the 10 pt rule, squeeze margins, kill whitespace, pack every sentence | ✗ AVOID — hurts readability, breaks the 10 pt-at-8 cm figure font rule, reviewers complain |
+| **Select**: reduce SCOPE — cut secondary results, move detail to a future full paper, keep fewer points but keep them readable | ✓ PREFERRED |
+
+**Rule**: to fit one page (or any page limit), you do NOT have to
+over-compress the information.  It is equally valid — and usually
+better — to **reduce the amount of content** (be selective) rather than
+cram everything in at the cost of readability.  Keep the surviving
+content at full readability (10 pt fonts, adequate whitespace, figures
+at proper size); drop or defer the rest.
+
+Why this matters:
+- A digest is a TEASER, not a compressed full paper.  It should leave
+  the reader wanting the full paper, not exhaust every detail.
+- Over-compression triggers the reviewer comment "the figures/text are
+  too small to read at print scale" (see `reviewer_patterns` #7).
+- The 10 pt-at-8 cm figure font rule (graph pipeline) is a HARD floor;
+  if content won't fit at 10 pt, cut content, do not shrink the font.
+
+## How to apply
+
+  1. Draft the abstract in plain prose; remove every `$...$` and
+     every `\cite{}` — verify with
+     `paper_writing_check_abstract_no_math_no_citation`.
+  2. If over the page limit, FIRST cut scope (secondary results,
+     redundant figures), THEN check fit — do not reach for smaller
+     fonts / tighter margins as the primary tool.
+  3. Re-gate; the figure font rule and whitespace checks confirm you
+     did not over-compress.
+
+## Cross-reference
+
+- `paper_writing_check_abstract_no_math_no_citation` — enforces rules 1-2.
+- `paper_writing_validate_abstract_length` — abstract length.
+- `bilingual` topic — page limit applies to the EN submission only.
+- `reviewer_patterns` #7 — "figure font too small" over-compression flag.
+"""
+
+
+REFERENCE_BIB_POLICY = r"""
+# reference.bib policy: shared across digest + full paper, web-verified
+
+## The two rules (Sugahara Lab)
+
+1. **ONE shared `reference.bib`** for BOTH the digest (IGTE / Compumag
+   2-page) AND the full paper (IEEE TMag / IEEJ Trans).  Do NOT keep a
+   separate `.bib` per document.  The digest and the full paper of the
+   same research cite the same literature; a single `reference.bib` is
+   the single source of truth, kept in the shared project folder and
+   `\bibliography{reference}`-d from both `.tex` files.
+
+2. **EVERY entry MUST be web-verified** before it goes into the paper.
+   No citation is inserted from memory / a hand-typed guess.  Each
+   entry is confirmed against an authoritative web source (Crossref
+   DOI, IEEE Xplore, Semantic Scholar, arXiv) so the authors, title,
+   venue, year, volume, pages, and DOI are EXACT.
+
+## Why one shared .bib
+
+| Benefit | Detail |
+|---------|--------|
+| No drift | digest + full paper can't disagree on a reference's year/pages |
+| Less work | verify once, cite in both documents |
+| Promotion path | a digest grows into a full paper; the .bib carries over verbatim |
+| Audit | one file to lint (`paper_writing_lint_reference_format`) |
+
+Layout:
+```
+project/
+  reference.bib          <- THE shared bibliography (single source)
+  digest/igte_digest.tex     \bibliography{../reference}
+  full/ieee_tmag.tex         \bibliography{../reference}
+```
+
+## Why web-verification is mandatory
+
+Fabricated or misremembered citations are a top reviewer-trust killer
+(wrong year, wrong volume, author initials swapped, a DOI that resolves
+to a different paper, or an entirely hallucinated entry).  The lab rule
+is **strict-in, no fabrication**: if a reference cannot be confirmed on
+the web, it does NOT go in the .bib.
+
+Verification workflow (per entry):
+1. Search the web for the exact title.
+2. Resolve the DOI via Crossref (`paper_writing_verify_citation` /
+   `paper_writing_resolve_doi` / `paper_writing_doi_to_bibtex`).
+3. Confirm authors / venue / year / volume / pages match the
+   authoritative record (IEEE Xplore, publisher page, Semantic
+   Scholar, arXiv).
+4. Only THEN add the verified BibTeX entry to the shared
+   `reference.bib`.
+
+The `paper_writing_verify_citation` tool **refuses to fabricate** — if
+given no bib / no resolvable source it returns `verdict=error` rather
+than inventing an entry.  This is by design.
+
+## Enforcement in the submission gate
+
+`paper_writing_em_submission_gate` already has a **bib policy gate**:
+calling it WITHOUT `bib_path` returns `verdict=fail` with the message
+that every citation must trace back to the real `reference.bib` and be
+verified.  Pass the SAME shared `reference.bib` when gating BOTH the
+digest and the full paper.
+
+## How to apply
+
+  1. Keep one `reference.bib` at the project root; both `.tex` point to it.
+  2. For every new reference: web-search -> verify DOI -> add entry.
+     Never paste an unverified entry.
+  3. Gate digest AND full paper with the SAME `bib_path=reference.bib`.
+  4. Lint with `paper_writing_lint_reference_format(reference.bib)` and
+     `paper_writing_check_citation_keys_exist(tex, reference.bib)` for
+     each document — every `\cite{}` key must exist in the shared bib.
+
+## Cross-reference
+
+- `paper_writing_verify_citation` — web/DOI verification (refuses to
+  fabricate).
+- `paper_writing_citation_workflow_recipe` — full per-entry recipe.
+- `paper_writing_check_citation_keys_exist` — every \cite resolves in
+  the shared bib.
+- `bilingual` topic — the Japanese translation reuses the SAME shared
+  `reference.bib` too (references are language-independent).
+"""
+
+
 EM_REVIEWER_PATTERNS = r"""
 # Common EM-reviewer comments (and how to preempt them)
 
@@ -477,6 +762,25 @@ TOPICS = {
     "equations":                 EQUATION_TYPESETTING,
     "equation_typesetting":      EQUATION_TYPESETTING,
     "displayed_math":            EQUATION_TYPESETTING,
+    "figure_format":             FIGURE_FORMAT,
+    "figures":                   FIGURE_FORMAT,
+    "pdf_not_png":               FIGURE_FORMAT,
+    "includegraphics":           FIGURE_FORMAT,
+    "abstract":                  ABSTRACT_AND_CONCISENESS,
+    "abstract_rules":            ABSTRACT_AND_CONCISENESS,
+    "conciseness":               ABSTRACT_AND_CONCISENESS,
+    "page_fitting":              ABSTRACT_AND_CONCISENESS,
+    "no_math_abstract":          ABSTRACT_AND_CONCISENESS,
+    "bilingual":                 BILINGUAL_WORKFLOW,
+    "bilingual_workflow":        BILINGUAL_WORKFLOW,
+    "japanese_translation":      BILINGUAL_WORKFLOW,
+    "translation":               BILINGUAL_WORKFLOW,
+    "page_limit":                BILINGUAL_WORKFLOW,
+    "reference_bib":             REFERENCE_BIB_POLICY,
+    "bib":                       REFERENCE_BIB_POLICY,
+    "bib_policy":                REFERENCE_BIB_POLICY,
+    "shared_bib":                REFERENCE_BIB_POLICY,
+    "citation_verification":     REFERENCE_BIB_POLICY,
     "reviewer_patterns":         EM_REVIEWER_PATTERNS,
     "common_reviewer_comments":  EM_REVIEWER_PATTERNS,
     "reviewer_comments":         EM_REVIEWER_PATTERNS,
@@ -512,6 +816,26 @@ etc.) are journal-agnostic.  THIS module is EM-paper-specific:
         equation vs equation*, align (NOT eqnarray), \\ref{eq:foo}
         with tilde, variable-definition-after-equation rule.
 
+  figure_format / figures / pdf_not_png / includegraphics
+        Import figures via PDF (vector), NOT PNG (raster).  The lab
+        graph pipeline emits both; the .pdf is the manuscript figure.
+        PNG only for inherently-raster content (field maps, photos).
+
+  abstract / abstract_rules / conciseness / page_fitting
+        Abstract carries NO math and NO citations.  To fit a page
+        limit, reduce SCOPE rather than over-compressing (don't shrink
+        fonts / cram); keep surviving content fully readable.
+
+  bilingual / japanese_translation / translation / page_limit
+        English paper + Japanese translation lab workflow.  The page
+        limit applies ONLY to the English submission, NOT the Japanese
+        translation (figures/equations shared between the two).
+
+  reference_bib / bib / bib_policy / shared_bib / citation_verification
+        ONE shared reference.bib for digest + full paper; EVERY entry
+        web-verified (Crossref / IEEE Xplore / S2 / arXiv) before
+        insertion -- no fabricated citations.
+
   reviewer_patterns / reviewer_comments
         12 common EM-paper reviewer-comment patterns (sign
         inconsistency, B-vs-H, mesh independence, CPU/memory,
@@ -544,6 +868,13 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
         b_vs_h / magnetic_field_terminology   -- B "flux density" vs H
         units / si_units / siunitx            -- SI unit notation
         equations / equation_typesetting      -- align, \\ref, units
+        figure_format / pdf_not_png           -- import figures as PDF
+        abstract / conciseness / page_fitting -- no math/cite in abstract;
+                                                 cut scope, don't over-compress
+        bilingual / japanese_translation      -- EN paper + JA translation,
+                                                 page limit EN-only
+        reference_bib / bib_policy            -- shared reference.bib for
+                                                 digest+full, web-verified
         reviewer_patterns / reviewer_comments -- 12-pattern catalogue
         all                                    -- concatenate everything
     """
@@ -558,6 +889,10 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
             B_VS_H_USAGE,
             SI_UNITS_NOTATION,
             EQUATION_TYPESETTING,
+            FIGURE_FORMAT,
+            ABSTRACT_AND_CONCISENESS,
+            BILINGUAL_WORKFLOW,
+            REFERENCE_BIB_POLICY,
             EM_REVIEWER_PATTERNS,
         ])
     if key not in TOPICS or TOPICS[key] is None:
@@ -630,6 +965,19 @@ def paper_writing_em_submission_gate(
     from ._tex_resolver import (
         resolve_input_chain,
         extract_abstract_from_tex,
+    )
+    # 2026-05-27: digest-review additions (acronym + citation key existence
+    # + ref/label + IEEE keywords + PDF unresolved markers + abstract math/cite)
+    from ._undefined_acronyms import (
+        paper_writing_check_undefined_acronyms,
+    )
+    from ._citation_verify import (
+        paper_writing_check_citation_keys_exist,
+    )
+    from ._digest_lints import (
+        paper_writing_check_ref_label_consistency,
+        paper_writing_check_ieee_keywords,
+        paper_writing_check_pdf_unresolved_markers,
     )
 
     checks: list[dict] = []
@@ -737,6 +1085,47 @@ def paper_writing_em_submission_gate(
                  r)
         except Exception as e:  # noqa: BLE001
             _add("undefined_variables", "skip", f"tool error: {e}")
+
+        # 2026-05-27: undefined acronyms (IH/MQS/FEM not spelled out)
+        try:
+            r = paper_writing_check_undefined_acronyms(_scan_tex)
+            n_und = r.get("n_undefined", 0)
+            status = "fail" if n_und > 0 else "pass"
+            _add("undefined_acronyms",
+                 status,
+                 f"{n_und} acronyms not spelled out on first use" if n_und
+                 else "all acronyms spelled out / in nomenclature",
+                 r)
+        except Exception as e:  # noqa: BLE001
+            _add("undefined_acronyms", "skip", f"tool error: {e}")
+
+        # 2026-05-27: \ref{} ↔ \label{} consistency (catches "[??]")
+        try:
+            r = paper_writing_check_ref_label_consistency(_scan_tex)
+            st = r.get("status", "skip")
+            status = "fail" if st == "fail" else ("warn" if st == "warning" else "pass")
+            _add("ref_label_consistency",
+                 status,
+                 (f"{r.get('n_dangling_refs', 0)} dangling refs, "
+                  f"{r.get('n_orphan_labels', 0)} orphan labels"),
+                 r)
+        except Exception as e:  # noqa: BLE001
+            _add("ref_label_consistency", "skip", f"tool error: {e}")
+
+        # 2026-05-27: IEEE Index Terms / Keywords block
+        try:
+            r = paper_writing_check_ieee_keywords(_scan_tex)
+            st = r.get("status", "skip")
+            status = ("fail" if st == "missing"
+                      else "warn" if st == "warning"
+                      else "pass")
+            _add("ieee_keywords",
+                 status,
+                 (f"{r.get('n_keywords', 0)} keywords found "
+                  f"(block: {r.get('found_block')})"),
+                 r)
+        except Exception as e:  # noqa: BLE001
+            _add("ieee_keywords", "skip", f"tool error: {e}")
     else:
         _add("tex_checks", "skip", "no tex_path supplied")
 
@@ -784,6 +1173,22 @@ def paper_writing_em_submission_gate(
                 except Exception as e:  # noqa: BLE001
                     _add("self_citation_ratio", "skip",
                          f"tool error: {e}")
+
+            # 2026-05-27: \cite{} key ↔ .bib entry existence
+            try:
+                r = paper_writing_check_citation_keys_exist(
+                    tex_path, bib_path)
+                st = r.get("status", "skip")
+                status = ("fail" if st == "fail"
+                          else "warn" if st == "warning"
+                          else "pass")
+                _add("citation_keys_exist",
+                     status,
+                     (f"{r.get('n_missing_in_bib', 0)} cite keys missing in bib, "
+                      f"{r.get('n_unused_in_tex', 0)} bib entries unused"),
+                     r)
+            except Exception as e:  # noqa: BLE001
+                _add("citation_keys_exist", "skip", f"tool error: {e}")
     else:
         _add("bib_checks", "skip", "no bib_path supplied")
 
@@ -815,6 +1220,24 @@ def paper_writing_em_submission_gate(
                  r)
         except Exception as e:  # noqa: BLE001
             _add("abstract_weak_expressions", "skip",
+                 f"tool error: {e}")
+
+        # 2026-05-27: abstract must not contain math or \cite{}
+        try:
+            r = _t.paper_writing_check_abstract_no_math_no_citation(
+                abstract_text)
+            st = r.get("status", "skip")
+            status = ("fail" if st == "fail"
+                      else "warn" if st == "warning"
+                      else "pass")
+            _add("abstract_no_math_no_citation",
+                 status,
+                 (f"display_math={r.get('n_math_display', 0)}, "
+                  f"inline_math={r.get('n_math_inline', 0)}, "
+                  f"citations={r.get('n_citations', 0)}"),
+                 r)
+        except Exception as e:  # noqa: BLE001
+            _add("abstract_no_math_no_citation", "skip",
                  f"tool error: {e}")
     else:
         _add("abstract_checks", "skip", "no abstract_text supplied")
@@ -887,6 +1310,19 @@ def paper_writing_em_submission_gate(
                  r)
         except Exception as e:  # noqa: BLE001
             _add("text_overflow_page", "skip", f"tool error: {e}")
+
+        # 2026-05-27: post-compile [?] / [??] marker scan
+        try:
+            r = paper_writing_check_pdf_unresolved_markers(pdf_path)
+            st = r.get("status", "skip")
+            status = "fail" if st == "fail" else "pass"
+            _add("pdf_unresolved_markers",
+                 status,
+                 (f"{r.get('n_markers_total', 0)} '[?]'/'[??]' markers "
+                  f"in rendered PDF"),
+                 r)
+        except Exception as e:  # noqa: BLE001
+            _add("pdf_unresolved_markers", "skip", f"tool error: {e}")
     else:
         _add("pdf_checks", "skip", "no pdf_path supplied")
 

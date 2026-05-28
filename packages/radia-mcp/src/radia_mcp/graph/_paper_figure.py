@@ -1120,6 +1120,130 @@ def _check_pdf_fonts_embedded(pdf_path) -> list[str]:
     return violations
 
 
+def _contains_cjk(s: str) -> bool:
+    """True if the string contains any Japanese / CJK character.
+
+    Covers Hiragana, Katakana (incl. halfwidth), CJK Unified Ideographs
+    (+ Extension A), CJK symbols/punctuation, and fullwidth forms.  Used
+    to detect Japanese text in figure labels — a paper-figure must use
+    ENGLISH labels only (Japanese text forces the PDF to embed a CJK
+    font, which English-language publishers reject / cannot render).
+    """
+    for ch in s:
+        cp = ord(ch)
+        if (0x3040 <= cp <= 0x30FF        # Hiragana + Katakana
+                or 0x3400 <= cp <= 0x4DBF  # CJK Ext A
+                or 0x4E00 <= cp <= 0x9FFF  # CJK Unified Ideographs
+                or 0x3000 <= cp <= 0x303F  # CJK symbols & punctuation
+                or 0xFF00 <= cp <= 0xFFEF):  # fullwidth/halfwidth forms
+            return True
+    return False
+
+
+def _check_no_japanese_text(fig) -> list[dict]:
+    """Lab rule: paper figures carry NO Japanese text.
+
+    Scans every text artist (axis labels, tick labels, titles, legend
+    entries, annotations / ax.text) for CJK characters.  Any hit is a
+    violation: the figure must be re-labelled in English BEFORE it goes
+    into an IEEE / IEEJ-English / IGTE / Compumag paper.
+
+    Why this is enforced on the GRAPH side (not just paper-writing):
+      - The root cause is the matplotlib figure having Japanese labels.
+      - If we let it through to savefig, the PDF embeds a Japanese font
+        (MS Gothic / Yu Gothic / IPAex / Noto CJK), bloating the file
+        and failing the publisher's font pre-flight.
+      - Catching it at emit time (before the PDF exists) gives a 1-line
+        fix: re-label the axis in English.
+
+    Returns a list of {kind, index, text} dicts; empty = clean.
+    """
+    out = []
+    for i, ax in enumerate(fig.get_axes()):
+        # axis labels
+        for kind, getter in (("xlabel", ax.get_xlabel),
+                              ("ylabel", ax.get_ylabel),
+                              ("title", ax.get_title)):
+            txt = getter()
+            if txt and _contains_cjk(txt):
+                out.append({"kind": kind, "axis": i, "text": txt})
+        # tick labels (only those explicitly set with text; auto numeric
+        # ticks have no CJK)
+        for kind, ticks in (("xticklabel", ax.get_xticklabels()),
+                            ("yticklabel", ax.get_yticklabels())):
+            for t in ticks:
+                s = t.get_text()
+                if s and _contains_cjk(s):
+                    out.append({"kind": kind, "axis": i, "text": s})
+        # legend entries
+        leg = ax.get_legend()
+        if leg is not None:
+            for t in leg.get_texts():
+                s = t.get_text()
+                if s and _contains_cjk(s):
+                    out.append({"kind": "legend", "axis": i, "text": s})
+        # free-standing ax.text / annotate
+        for t in ax.texts:
+            s = t.get_text()
+            if s and _contains_cjk(s):
+                out.append({"kind": "text", "axis": i, "text": s})
+    # figure-level suptitle
+    sup = getattr(fig, "_suptitle", None)
+    if sup is not None and _contains_cjk(sup.get_text()):
+        out.append({"kind": "suptitle", "axis": -1, "text": sup.get_text()})
+    return out
+
+
+# Japanese / CJK font-name fragments that, if present in a saved PDF's
+# font dictionary, mean a CJK glyph set got embedded.  Curated to avoid
+# false positives on Latin families (e.g. "Century Gothic" is NOT here;
+# we match the Japanese-specific families only).
+_JAPANESE_FONT_FRAGMENTS = (
+    b"MS-Gothic", b"MSGothic", b"MS Gothic",
+    b"MS-Mincho", b"MSMincho", b"MS Mincho",
+    b"MS-PGothic", b"MS-PMincho",
+    b"Meiryo", b"YuGothic", b"Yu Gothic", b"YuMincho", b"Yu Mincho",
+    b"IPAGothic", b"IPAMincho", b"IPAexGothic", b"IPAexMincho", b"IPAex",
+    b"NotoSansCJK", b"NotoSerifCJK", b"Noto Sans CJK", b"Noto Serif CJK",
+    b"NotoSansJP", b"NotoSerifJP",
+    b"Hiragino", b"HiraKaku", b"HiraMin", b"HiraginoSans",
+    b"TakaoGothic", b"TakaoMincho", b"TakaoPGothic",
+    b"Osaka", b"Kozuka", b"KozGoPr", b"KozMinPr",
+    b"SourceHanSans", b"SourceHanSerif", b"Source Han",
+    b"GenShinGothic", b"Migu", b"Sazanami",
+)
+
+
+def _check_no_japanese_font_in_pdf(pdf_path) -> list[str]:
+    """Belt-and-suspenders: scan a saved PDF for embedded Japanese fonts.
+
+    Complements ``_check_no_japanese_text`` (which scans the live matplotlib
+    text artists).  Even when artists look clean, a stray glyph or a
+    mathtext fallback could pull a CJK font; this confirms the FINAL
+    bytes carry no Japanese family.  Returns violation strings; empty =
+    clean.
+    """
+    from pathlib import Path
+    p = Path(pdf_path)
+    if not p.exists() or p.suffix.lower() != ".pdf":
+        return []
+    try:
+        with open(p, "rb") as f:
+            blob = f.read()
+    except OSError as e:
+        return [f"could not read {p}: {e}"]
+    hits = sorted({frag.decode("ascii", "replace")
+                   for frag in _JAPANESE_FONT_FRAGMENTS if frag in blob})
+    if hits:
+        return [
+            f"{p.name} embeds Japanese font(s): {', '.join(hits)}. "
+            f"Paper figures must use English labels only — a CJK font in "
+            f"the figure indicates Japanese axis/legend/annotation text. "
+            f"Re-label in English and re-save."
+        ]
+    return []
+
+
 def _check_no_in_figure_title(fig) -> list[str]:
     """Lab rule: titles go in the LaTeX \\caption{}, NEVER in the figure.
 
@@ -1205,6 +1329,7 @@ def emit_paper_figure(
     check_legend_overlap: bool = True,
     check_colorblind_safe: bool = True,
     check_font_embedding: bool = True,
+    check_no_japanese: bool = True,
     dpi: int = 600,
     save_pdf: bool = True,
     save_png: bool = True,
@@ -1238,6 +1363,12 @@ def emit_paper_figure(
             ~13-18% of figure for axis frame, so 0.80+ is reachable
             only for layouts with shared axes (e.g. 1x2 with sharey).
         on_fail: gate behaviour (see above).
+        check_no_japanese: when True (default), reject figures that
+            contain Japanese (CJK) text in any artist (axis labels,
+            ticks, legend, annotations, title) AND reject saved PDFs
+            that embed a Japanese font.  Paper figures must use English
+            labels only.  Set False only for a figure deliberately
+            targeting a Japanese-language venue.
         dpi: PNG/JPEG resolution.  600 for line-art with thin strokes,
             300 for general use, 1200 for IEEE camera-ready.
         save_pdf, save_png: which formats to emit.
@@ -1310,6 +1441,39 @@ def emit_paper_figure(
                 import warnings
                 warnings.warn(msg)
             elif on_fail in ("raise", "auto_tighten"):
+                raise ValueError(msg)
+
+    # --- Pre-flight (1c): no Japanese text in the figure ---
+    # Lab rule: paper figures use ENGLISH labels only.  Japanese text
+    # forces a CJK font into the PDF, which English-language publishers
+    # (IEEE / Elsevier) reject in pre-flight and which bloats the file.
+    # Caught BEFORE savefig so the fix is a 1-line re-label.
+    if check_no_japanese:
+        jp_violations = _check_no_japanese_text(fig)
+        if jp_violations:
+            lines = [
+                f"  axis {v['axis']} {v['kind']}: {v['text']!r}"
+                for v in jp_violations
+            ]
+            msg = (
+                "emit_paper_figure: Japanese (CJK) text detected in the "
+                "figure.\n"
+                + "\n".join(lines) + "\n"
+                "Lab rule: paper figures carry ENGLISH labels only.\n"
+                "Fix:\n"
+                "  - Re-label axes / legend / annotations in English.\n"
+                "  - Keep the Japanese version (if any) as a SEPARATE\n"
+                "    figure for Japanese-language venues; the IEEE / IEEJ-\n"
+                "    English / IGTE / Compumag figure must be English.\n"
+                "Why: Japanese text embeds a CJK font (MS Gothic / Yu\n"
+                "Gothic / IPAex / Noto CJK) in the PDF — publishers reject\n"
+                "it in font pre-flight and it bloats the file."
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                # auto_tighten cannot fix Japanese text, so escalate.
                 raise ValueError(msg)
 
     # --- Pre-flight (2): no legend overlapping data lines ---
@@ -1427,12 +1591,35 @@ def emit_paper_figure(
                 # can still inspect what was produced.
                 raise ValueError(msg)
 
+    # --- Post-save: verify NO Japanese font embedded in the PDF ---
+    # The live-artist scan above (_check_no_japanese_text) catches the
+    # common case; this confirms the FINAL bytes also carry no CJK font
+    # (e.g. caught a mathtext fallback or a stray glyph the artist scan
+    # missed).
+    japanese_font_violations = []
+    if check_no_japanese and save_pdf:
+        pdf_path = p.with_suffix(".pdf")
+        japanese_font_violations = _check_no_japanese_font_in_pdf(pdf_path)
+        if japanese_font_violations:
+            msg = (
+                "emit_paper_figure: saved PDF embeds a Japanese font:\n  "
+                + "\n  ".join(japanese_font_violations) + "\n"
+                "Fix: re-label all figure text in English (the figure\n"
+                "must contain no Japanese characters), then re-save."
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                raise ValueError(msg)
+
     final = measure_figure_efficiency(fig)
     final["wrote"] = wrote
     final["gate_passed"] = final["axes_area_fraction"] >= min_axes_fraction
     final["auto_tightened"] = auto_tightened
     final["profile"] = prof.name
     final["font_violations"] = font_violations
+    final["japanese_font_violations"] = japanese_font_violations
 
     if verbose:
         print(f"[emit_paper_figure] wrote {len(wrote)} file(s): "
