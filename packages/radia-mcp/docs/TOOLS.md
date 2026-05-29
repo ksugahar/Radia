@@ -221,7 +221,7 @@ Module: `radia_mcp.fem.server`
 | Tool | Description |
 |---|---|
 | `fem_elements` | Element technology: edge (Nedelec), high-order, XFEM, isogeometric, DG. |
-| `fem_equivalence_source` | Equivalence-theorem near-field source (Schelkunoff/Love -- Stratton-Chu). |
+| `fem_equivalence_source` | Equivalence-theorem near-field source (CST Near-Field Source equivalent). |
 | `fem_gauge_open_boundary` | Gauging + open boundary techniques. |
 | `fem_large_scale_special` | Large-scale, error theory, multi-scale (Hollaus MSFEM), misc techniques. |
 | `fem_ngsolve_hierarchy` | NGSolve hierarchical H(curl) bases - Zaglmayr / nograds / tree-cotree. |
