@@ -871,7 +871,7 @@ This same logic is what Radia's C++ Cubit plugin does internally for
 Kelvin face identification: the plugin's NetgenCurver-based code
 extracts each inner Kelvin face, computes its Kelvin image, and writes
 the resulting outer-face pair into the .vol file's Identifications
-section.  See ``src/cubit_plugin/RadiaComp.cpp`` for the C++
+section.  See ``src/cubit_plugin/ExportNetgenCommand.cpp`` for the C++
 implementation.
 
 ## Why "Periodic" and not "Kelvin"
@@ -1252,7 +1252,7 @@ CROSS_REFERENCE = r"""
 ## Case #3 (forced periodic BC script, 2021-09)
    -> Radia analog: the C++ Cubit plugin's auto-pairing of Kelvin faces
                     during ``radia_export netgen`` (see
-                    ``src/cubit_plugin/RadiaComp.cpp`` and the
+                    ``src/cubit_plugin/ExportNetgenCommand.cpp`` and the
                     Identifications block written into the .vol).
                     The MATLAB script is the algorithmic blueprint.
 

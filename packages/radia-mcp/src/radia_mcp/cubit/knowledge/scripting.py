@@ -1945,7 +1945,7 @@ subprocess**. The `.vol` file is the **sole interface** between Cubit and
 NGSolve. `calc_*.py` scripts do NOT import cubit.
 
 ```
-Cubit GUI (bundled Python 3.10, has PyQt5)
+Cubit GUI (bundled Python 3.10, ships PySide6)
   register_toolbar.py
     1. Qt dialog (modeless, non-blocking)
     2. cubit.cmd('radia_export netgen "model.vol" order 2 overwrite')

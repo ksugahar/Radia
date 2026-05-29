@@ -15,7 +15,7 @@ Solve (Python, register_toolbar.py):
 ## Important Rules
 
 - **ASCII only** in all .py files loaded by Cubit (cp932 Japanese Windows)
-- **Import QMenu** if using submenus (PySide6.QtWidgets / PyQt5.QtWidgets)
+- **Import QMenu** if using submenus (PySide6.QtWidgets; Cubit 2025.12 ships PySide6)
 - **No Qt in calc_*.py** -- subprocess scripts must not import PySide6/PyQt5
 - **No cubit import in calc_*.py** -- .vol file is the sole interface
 - startup.py uses `encoding='utf-8'` for reading register_toolbar.py
