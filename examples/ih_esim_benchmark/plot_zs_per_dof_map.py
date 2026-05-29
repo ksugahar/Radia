@@ -49,7 +49,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+from mcp_server_document.graph.tools import (
+    apply_lab_style, lab_savefig, check_min_font,
+)
 
 # Data Persistence Policy: default to the committed sweep_data case,
 # not a transient C:/temp snapshot.
@@ -137,6 +139,12 @@ def main():
             ax.text(0.5, -0.32, tag, transform=ax.transAxes,
                     ha="center", va="top")
         axes[0].set_ylabel(r"$z$ (mm)")
+        # Full-paper embed is figure* at 0.85\textwidth (scale ~0.85).
+        fig.canvas.draw()
+        bad = check_min_font(fig, min_pt=9.0, embed_scale=0.85)
+        print("min-font (figure*, 0.85 textwidth):",
+              "CLEAN" if not bad else
+              [(b["kind"], b["visible_pt"]) for b in bad])
         lab_savefig(fig, str(OUT_PNG.with_suffix("")))
         print(f"Saved {OUT_PNG}")
 
