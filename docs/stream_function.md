@@ -148,6 +148,29 @@ res   = aca_tsvd(len(obs), len(loops), entry, modes=20)
 phi   = pseudo_inverse_solve(res, B_target, k_mode=10)          # loop currents
 ```
 
+### Panel CLI (Stage 2): `calc_stream_coil.py`
+
+The cylindrical Gz gradient-coil design (`examples/.../demo_coil_design_gz.py`)
+is also packaged as a headless Stage-2 panel script,
+[`src/radia/panels/calc_stream_coil.py`](../src/radia/panels/calc_stream_coil.py)
+(Layer 4 of the Cubit panel architecture: argparse in, JSON on stdout, no GUI
+and no `import cubit`).  It exposes every design knob as a CLI flag
+(`--radius --length --gradient --dsv --n-rings --n-wires --modes --aca-eps
+--method`) and prints `{k_aca, modes, n_wires, fitted_dBdz,
+gradient_nonlinearity, continuous_residual, wire_z, wire_I}`.
+
+```bash
+python src/radia/panels/calc_stream_coil.py --radius 0.15 --length 0.5 --gradient 1.0
+```
+
+It is locked by a golden test,
+[`tests/panels/test_stream_coil_golden.py`](../tests/panels/test_stream_coil_golden.py),
+which runs the CLI with defaults and asserts the discrete wire coil reproduces
+the unit gradient (`fitted_dBdz` in `[0.9, 1.1]`) with on-axis
+`gradient_nonlinearity < 0.05`.  This is a Stage-2 deliverable (validated CLI +
+golden band); a Stage-3 PySide6 panel wrapper is future work, so it is not yet
+registered in `panel_registry.json`.
+
 ## 5. Validation
 
 - **vs the true dense matrix**: reconstruction `||A - U S V^T|| / ||A||` reaches
