@@ -35,6 +35,7 @@ from mcp_server_document.graph.tools import (
 
 HERE = Path(__file__).resolve().parent
 SWEEP = HERE / "sweep_data"
+SWEEP_DENSE = HERE / "sweep_data_dense"
 VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
        / "ih_bem_sample_p1.vol")
 # Committed, self-contained side-wall field (theta, z, |H_t|, R) for the
@@ -127,10 +128,33 @@ def main():
     if "--regen-field" in sys.argv:
         save_side_field()
         return
-    res = SWEEP / "sweep_results.json"
-    if not res.exists():
-        print(f"ERROR: {res} not found.")
+    # Prefer the dense sweep if available (renders as a log-log contour);
+    # otherwise fall back to the original 4x4 grid (rendered as annotated
+    # heatmap cells).
+    dense = SWEEP_DENSE / "sweep_results.json"
+    legacy = SWEEP / "sweep_results.json"
+    # Prefer the dense sweep only when fully complete (108 runs for the
+    # 9 currents x 6 frequencies x 2 methods grid); otherwise fall back
+    # to the legacy 4x4 heatmap so the figure stays sensible while the
+    # dense sweep is in progress.
+    use_dense = False
+    if dense.exists():
+        try:
+            n_runs = len(json.load(open(dense))["runs"])
+            if n_runs >= 108:
+                use_dense = True
+        except Exception:
+            pass
+    if use_dense:
+        res = dense
+        gap_mode = "contour"
+    elif legacy.exists():
+        res = legacy
+        gap_mode = "heatmap"
+    else:
+        print(f"ERROR: neither {dense} nor {legacy} found.")
         sys.exit(1)
+    print(f"Using {res} (mode={gap_mode})")
     currents, freqs, gap = load_gap(res)
     # Panel (b) reads the committed side-wall field -- no mesh, no re-solve.
     th, zs, Ht, R = load_side_field()
@@ -151,24 +175,45 @@ def main():
     ax2 = fig.add_subplot(gs[0, 1], projection="3d")
     tick_pt = plt.rcParams["ytick.labelsize"]
 
-    # ----- (a) gap heatmap (narrower), annotated cells -----
-    im = ax1.imshow(gap, aspect="auto", origin="lower", cmap="RdYlGn_r",
-                    extent=[0.5, len(freqs)+0.5, 0.5, len(currents)+0.5])
-    ax1.set_xticks(range(1, len(freqs)+1))
-    ax1.set_xticklabels([f"{f/1e3:.0f}" for f in freqs])
-    ax1.set_yticks(range(1, len(currents)+1))
-    ax1.set_yticklabels([f"{I:.0f}" for I in currents])
+    # ----- (a) gap: contour on log-log (I, f) for the dense sweep,
+    # or annotated heatmap cells for the legacy 4x4.
+    if gap_mode == "contour":
+        from matplotlib.colors import TwoSlopeNorm
+        Fg, Ig = np.meshgrid(np.asarray(freqs) / 1e3, np.asarray(currents))
+        mask = ~np.isnan(gap)
+        vmin = min(np.nanmin(gap), -1.0)
+        vmax = max(np.nanmax(gap), 1.0)
+        norm = TwoSlopeNorm(vmin=vmin, vcenter=0.0, vmax=vmax)
+        cs = ax1.contourf(Fg, Ig, gap, levels=np.arange(-50, 31, 5),
+                          cmap="RdYlGn_r", norm=norm, extend="both")
+        cl = ax1.contour(Fg, Ig, gap, levels=[-40, -20, 0, 20], colors="k",
+                         linewidths=0.6)
+        ax1.clabel(cl, fmt="%d", fontsize=tick_pt - 1)
+        ax1.scatter(Fg[mask], Ig[mask], c="k", s=4, zorder=5)
+        ax1.set_xscale("log"); ax1.set_yscale("log")
+        ax1.set_xticks([10, 50, 100, 500])
+        ax1.set_xticklabels(["10", "50", "100", "500"])
+        ax1.set_yticks([1, 10, 100, 500])
+        ax1.set_yticklabels(["1", "10", "100", "500"])
+        cb1 = fig.colorbar(cs, ax=ax1)
+    else:
+        im = ax1.imshow(gap, aspect="auto", origin="lower", cmap="RdYlGn_r",
+                        extent=[0.5, len(freqs)+0.5, 0.5, len(currents)+0.5])
+        ax1.set_xticks(range(1, len(freqs)+1))
+        ax1.set_xticklabels([f"{f/1e3:.0f}" for f in freqs])
+        ax1.set_yticks(range(1, len(currents)+1))
+        ax1.set_yticklabels([f"{I:.0f}" for I in currents])
+        cb1 = fig.colorbar(im, ax=ax1)
+        for i in range(len(currents)):
+            for j in range(len(freqs)):
+                if not np.isnan(gap[i, j]):
+                    ax1.text(j+1, i+1, f"{gap[i, j]:+.0f}", ha="center",
+                             va="center", fontsize=tick_pt,
+                             color="white" if abs(gap[i, j]) > 25 else "black")
     ax1.set_xlabel(r"frequency (kHz)")
     ax1.set_ylabel(r"$I_{\mathrm{port}}$ (A)")
-    cb1 = fig.colorbar(im, ax=ax1)
     cb1.set_label(r"gap (\%)")
     cb1.ax.tick_params(labelsize=tick_pt)
-    for i in range(len(currents)):
-        for j in range(len(freqs)):
-            if not np.isnan(gap[i, j]):
-                ax1.text(j+1, i+1, f"{gap[i, j]:+.0f}", ha="center",
-                         va="center", fontsize=tick_pt,
-                         color="white" if abs(gap[i, j]) > 25 else "black")
     ax1.text(0.5, -0.30, "(a)", transform=ax1.transAxes, ha="center", va="top")
 
     # ----- (b) |H_t| painted on the 3D cylinder side wall -----
