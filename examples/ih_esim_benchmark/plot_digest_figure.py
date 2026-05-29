@@ -1,5 +1,5 @@
-"""Digest 2-panel figure: (a) per-element-vs-uniform P_wp gap CONTOUR
-map (narrower) + (b) |H_t| spatial map on the workpiece side wall.
+"""Digest 2-panel figure: (a) per-element-vs-uniform P_wp gap heatmap
+(narrower) + (b) |H_t| filled-contour map on the workpiece side wall.
 
 Rendered wide (paper_double_column) and embedded IN-COLUMN at
 0.92\\columnwidth of the 1-page digest -- the same footprint as the
@@ -22,7 +22,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import TwoSlopeNorm
 
 from mcp_server_document.graph.tools import (
     apply_lab_style, lab_savefig, check_min_font,
@@ -85,7 +84,7 @@ def main():
     # Render with inflated fonts so that, after the ~0.44 in-column
     # downscale (0.92\columnwidth of an 18.2 cm render), every glyph
     # still lands >= 9 pt on the page (21 x 0.44 ~= 9.2 pt).  The heatmap
-    # (4 labelled columns) gets the wider slot; the |H_t| scatter (3 theta
+    # (4 labelled columns) gets the wider slot; the |H_t| contour (3 theta
     # ticks) is happy narrow.
     plt.rcParams.update({
         "font.size": 21, "axes.labelsize": 21,
@@ -96,37 +95,32 @@ def main():
         gridspec_kw={"width_ratios": [1.45, 1.0]})
     tick_pt = plt.rcParams["ytick.labelsize"]
 
-    # ----- (a) gap CONTOUR map on log-log (I, f) -----
-    # 16 sampled (I, f) points; contourf interpolates between them and the
-    # actual sampled values are overlaid so the 4x4 sampling stays honest.
-    # Evenly-spaced index axes (the sweep points are categorical / unevenly
-    # log-spaced -- 100 and 300 A nearly coincide in log), tick-labelled with
-    # the actual values; contourf interpolates uniformly between them.
-    xf = np.arange(1, len(freqs) + 1, dtype=float)
-    yi = np.arange(1, len(currents) + 1, dtype=float)
-    Xf, Yi = np.meshgrid(xf, yi)
-    norm = TwoSlopeNorm(vmin=min(gap.min(), -1.0), vcenter=0.0,
-                        vmax=max(gap.max(), 1.0))
-    cf = ax1.contourf(Xf, Yi, gap, levels=np.arange(-50, 31, 5),
-                      cmap="RdYlGn_r", norm=norm, extend="both")
-    ax1.set_xticks(xf)
+    # ----- (a) gap heatmap (narrower), annotated cells -----
+    im = ax1.imshow(gap, aspect="auto", origin="lower", cmap="RdYlGn_r",
+                    extent=[0.5, len(freqs)+0.5, 0.5, len(currents)+0.5])
+    ax1.set_xticks(range(1, len(freqs)+1))
     ax1.set_xticklabels([f"{f/1e3:.0f}" for f in freqs])
-    ax1.set_yticks(yi)
+    ax1.set_yticks(range(1, len(currents)+1))
     ax1.set_yticklabels([f"{I:.0f}" for I in currents])
     ax1.set_xlabel(r"frequency (kHz)")
     ax1.set_ylabel(r"$I_{\mathrm{port}}$ (A)")
-    cl = ax1.contour(Xf, Yi, gap, levels=[-40, -20, 0, 20], colors="k",
-                     linewidths=0.6)
-    ax1.clabel(cl, fmt="%d", fontsize=tick_pt-1)  # >=9 pt after 0.46 downscale
-    ax1.scatter(Xf, Yi, c="k", s=6, zorder=5)   # the 16 sampled (I,f) points
-    cb1 = fig.colorbar(cf, ax=ax1)
+    cb1 = fig.colorbar(im, ax=ax1)
     cb1.set_label(r"gap (\%)")
     cb1.ax.tick_params(labelsize=tick_pt)
+    for i in range(len(currents)):
+        for j in range(len(freqs)):
+            if not np.isnan(gap[i, j]):
+                ax1.text(j+1, i+1, f"{gap[i, j]:+.0f}", ha="center",
+                         va="center", fontsize=tick_pt,
+                         color="white" if abs(gap[i, j]) > 25 else "black")
     ax1.text(0.5, -0.30, "(a)", transform=ax1.transAxes, ha="center", va="top")
 
-    # ----- (b) |H_t| spatial map on the cylinder side wall -----
-    sc = ax2.scatter(th, zs, c=Ht, cmap="magma", s=6, edgecolors="none")
-    cb2 = fig.colorbar(sc, ax=ax2)
+    # ----- (b) |H_t| filled-contour map on the cylinder side wall -----
+    # Side-wall DOFs are scattered (theta, z) points, not a grid, so use
+    # Delaunay-triangulated filled contours (tricontourf).  The field is
+    # banded with the coil turns -> roughly horizontal contour bands.
+    tcf = ax2.tricontourf(th, zs, Ht, levels=12, cmap="magma")
+    cb2 = fig.colorbar(tcf, ax=ax2)
     cb2.set_label(r"$|H_t|$ (A/m)")
     cb2.ax.tick_params(labelsize=tick_pt)
     ax2.set_xlabel(r"$\theta$ (deg)")
