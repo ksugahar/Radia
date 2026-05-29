@@ -253,7 +253,9 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
     }
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator
+    (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
         description="Kelvin Benchmark: verify Cubit-Kelvin pipeline "
                     "against analytical magnetic-sphere-in-uniform-field.")
@@ -277,6 +279,11 @@ def main():
     parser.add_argument("--probe-z", type=float, default=1e-10)
     parser.add_argument("--msh-output", default=None,
                         help="Optional GMSH .msh post-export path")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         return solve_kelvin_benchmark(

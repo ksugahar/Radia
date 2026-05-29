@@ -401,6 +401,7 @@ def _write_msc_vol_sol_msh(msh_path, elements, model, rad):
       <base>.msh      GMSH v4.1 with $ElementData views (via vol2msh)
     """
     from ngsolve import Mesh as NMesh, L2, GridFunction
+    from ngsolve import TaskManager
 
     base, _ = os.path.splitext(msh_path)
     vol_path = base + ".vol"
@@ -417,43 +418,46 @@ def _write_msc_vol_sol_msh(msh_path, elements, model, rad):
     ng2.Load(vol_path)
     nsm = NMesh(ng2)
 
-    fes_v = L2(nsm, order=0, dim=3)
-    gf_b = GridFunction(fes_v)
-    fes_s = L2(nsm, order=0)
-    gf_bm = GridFunction(fes_s)
+    with TaskManager():
+        fes_v = L2(nsm, order=0, dim=3)
+        gf_b = GridFunction(fes_v)
+        fes_s = L2(nsm, order=0)
+        gf_bm = GridFunction(fes_s)
 
-    # Compute B at NGSolve element centroids directly — same centroids
-    # the source element list used, since we built the mesh from them.
-    for ngs_idx, el in enumerate(nsm.Elements()):
-        pts = [nsm[v].point for v in el.vertices]
-        n = len(pts)
-        cx = sum(p[0] for p in pts) / n
-        cy = sum(p[1] for p in pts) / n
-        cz = sum(p[2] for p in pts) / n
-        B = rad.Fld(model, 'b', [cx, cy, cz])
-        gf_b.vec.FV()[ngs_idx * 3 + 0] = float(B[0])
-        gf_b.vec.FV()[ngs_idx * 3 + 1] = float(B[1])
-        gf_b.vec.FV()[ngs_idx * 3 + 2] = float(B[2])
-        gf_bm.vec.FV()[ngs_idx] = math.sqrt(
-            float(B[0]) ** 2 + float(B[1]) ** 2 + float(B[2]) ** 2)
+        # Compute B at NGSolve element centroids directly — same centroids
+        # the source element list used, since we built the mesh from them.
+        for ngs_idx, el in enumerate(nsm.Elements()):
+            pts = [nsm[v].point for v in el.vertices]
+            n = len(pts)
+            cx = sum(p[0] for p in pts) / n
+            cy = sum(p[1] for p in pts) / n
+            cz = sum(p[2] for p in pts) / n
+            B = rad.Fld(model, 'b', [cx, cy, cz])
+            gf_b.vec.FV()[ngs_idx * 3 + 0] = float(B[0])
+            gf_b.vec.FV()[ngs_idx * 3 + 1] = float(B[1])
+            gf_b.vec.FV()[ngs_idx * 3 + 2] = float(B[2])
+            gf_bm.vec.FV()[ngs_idx] = math.sqrt(
+                float(B[0]) ** 2 + float(B[1]) ** 2 + float(B[2]) ** 2)
 
-    gf_b.Save(b_sol)
-    gf_bm.Save(bmag_sol)
+        gf_b.Save(b_sol)
+        gf_bm.Save(bmag_sol)
 
-    from gmsh_post_export import vol2msh
-    vol2msh(
-        msh_path, vol_path,
-        [
-            {"name": "B [T]", "sol": b_sol, "fes": "L2",
-             "fes_order": 0, "fes_dim": 3, "ncomp": 3, "cell_data": True},
-            {"name": "|B| [T]", "sol": bmag_sol, "fes": "L2",
-             "fes_order": 0, "ncomp": 1, "cell_data": True},
-        ],
-    )
-    return msh_path
+        from gmsh_post_export import vol2msh
+        vol2msh(
+            msh_path, vol_path,
+            [
+                {"name": "B [T]", "sol": b_sol, "fes": "L2",
+                 "fes_order": 0, "fes_dim": 3, "ncomp": 3, "cell_data": True},
+                {"name": "|B| [T]", "sol": bmag_sol, "fes": "L2",
+                 "fes_order": 0, "ncomp": 1, "cell_data": True},
+            ],
+        )
+        return msh_path
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator
+    (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
         description="Accelerator magnet MSC solver (Radia hex)")
     parser.add_argument("--coil-script", required=True,
@@ -486,6 +490,11 @@ def main():
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
                         help="JSON output file")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         return solve_msc(
