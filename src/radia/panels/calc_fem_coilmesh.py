@@ -700,7 +700,9 @@ def solve_fem_coilmesh(vol, frequency, I_target,
     return result
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator
+    (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
         description="FEM A-V coil + wp SIBC + Kelvin (gapped torus, "
                     "source/sink ports)")
@@ -758,6 +760,11 @@ def main():
                              "kelvin block name would silently demote "
                              "the open BC to reg-only gauge truncation. "
                              "Per CLAUDE.md 'No Fallbacks'.")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         if args.require_kelvin:
