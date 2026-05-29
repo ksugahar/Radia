@@ -195,11 +195,11 @@ def main():
     ax2.grid(False)
     for axp in (ax2.xaxis, ax2.yaxis, ax2.zaxis):
         axp.pane.set_visible(False)
+    # No axis tick labels: the cylinder is shown axis-equal, and its
+    # diameter / height are given in the text + caption instead.
     ax2.set_xticks([])
     ax2.set_yticks([])
-    ax2.set_zticks([-10, 0, 10])
-    ax2.tick_params(axis="z", pad=-1)
-    ax2.set_zlabel(r"$z$ (mm)", labelpad=-7)
+    ax2.set_zticks([])
     sm = cm.ScalarMappable(norm=nrm, cmap="magma")
     sm.set_array([])
     cb2 = fig.colorbar(sm, ax=ax2, shrink=0.6, pad=0.04)
