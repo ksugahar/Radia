@@ -678,6 +678,96 @@ def _ci_worker_running():
     return "Runner.Worker" in (p.stdout or "")
 
 
+def _git_repo_owner_name():
+    """Extract 'owner/name' from `git config remote.origin.url`."""
+    import re
+    url = subprocess.check_output(
+        ["git", "config", "--get", "remote.origin.url"],
+        cwd=str(REPO), text=True).strip()
+    m = re.search(r"github\.com[:/]([^/\s]+)/([^/\s.]+?)(?:\.git)?$", url)
+    if not m:
+        raise RuntimeError(f"cannot parse GitHub repo from origin {url!r}")
+    return f"{m.group(1)}/{m.group(2)}"
+
+
+def _check_github_hosted_workflows(sha, *, timeout_sec=1800, poll_sec=20):
+    """Poll the GitHub check-runs API for `sha` until all complete, then
+    verify every conclusion is green.
+
+    Closes the documented cmd_ci_verify caveat: this catches
+    policy-lint.yml and radia-mcp-matrix.yml which run on
+    github-hosted ubuntu-latest and leave nothing in CI_WORKSPACE.
+    Public-repo check-runs endpoint does not require authentication.
+
+    Historical incident (2026-05-30): policy-lint Policy 4 was silently
+    red since commit 6c50c4cc (rad_stream_function.cpp added without
+    updating the CblasColMajor exception list).  cmd_ci_verify reported
+    GREEN because the junit XMLs from self-hosted Windows CI were fine.
+    The user saw RED in the GitHub UI for weeks.  This helper closes
+    that blind spot.
+
+    Returns (ok: bool, message: str).
+    """
+    import urllib.request, urllib.error, json, time as _time
+
+    repo = _git_repo_owner_name()
+    url = (f"https://api.github.com/repos/{repo}/commits/{sha}/check-runs"
+           "?per_page=100")
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "radia-release_triple",
+    }
+
+    def _fetch():
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())
+
+    started = _time.time()
+    deadline = started + timeout_sec
+    last_pending = []
+    while True:
+        try:
+            data = _fetch()
+        except urllib.error.HTTPError as e:
+            return False, f"GitHub API HTTPError {e.code}: {e.reason}"
+        except urllib.error.URLError as e:
+            return False, f"GitHub API network error: {e.reason}"
+        except Exception as e:
+            return False, f"GitHub API error: {type(e).__name__}: {e}"
+
+        runs = data.get("check_runs", [])
+        # Push-triggered workflows may take ~30 s to register; allow up
+        # to 90 s before declaring "no runs found" (the push never
+        # triggered any github-hosted workflow, e.g. paths filter
+        # excluded them, or workflows are disabled).
+        if not runs:
+            if _time.time() - started > 90:
+                return False, ("no check-runs registered for "
+                               f"{sha[:8]} after 90 s (paths filter?)")
+            _time.sleep(poll_sec)
+            continue
+
+        pending = [r for r in runs if r["status"] != "completed"]
+        if not pending:
+            break
+        last_pending = pending
+        if _time.time() > deadline:
+            return False, ("timeout: github-hosted runs still pending: "
+                           + ", ".join(r["name"] for r in last_pending))
+        _time.sleep(poll_sec)
+
+    # Every run completed. Green conclusions: success / skipped / neutral.
+    failures = [r for r in runs
+                if r["conclusion"] not in ("success", "skipped", "neutral")]
+    if failures:
+        msg = "; ".join(f"{r['name']}: {r['conclusion']}" for r in failures)
+        return False, "github-hosted CI RED -- " + msg
+    names = sorted(set(r["name"] for r in runs))
+    return True, (f"all {len(runs)} github-hosted check-runs GREEN "
+                  f"({', '.join(names)})")
+
+
 def cmd_ci_verify(args):
     """gh-free CI-green gate.  Run AFTER `git push origin main`, BEFORE tags.
 
@@ -755,7 +845,24 @@ def cmd_ci_verify(args):
              "Fix-forward on main and re-run; do NOT tag.")
         return 4
     print("")
-    ok("CI is GREEN (all test XMLs fresh, failures=errors=0). "
+    ok("self-hosted (build-test) CI GREEN "
+       "(all test XMLs fresh, failures=errors=0).")
+
+    # ALSO verify github-hosted workflows (policy-lint, radia-mcp-matrix).
+    # See _check_github_hosted_workflows for the why (2026-05-30 incident).
+    step("CI verify (github-hosted): policy-lint / radia-mcp-matrix")
+    head_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
+    print(f"  HEAD = {head_sha[:8]}")
+    gh_ok, gh_msg = _check_github_hosted_workflows(head_sha)
+    print("  " + gh_msg)
+    if not gh_ok:
+        fail("github-hosted CI is RED -- inspect at "
+             f"github.com/{_git_repo_owner_name()}/actions, fix-forward.")
+        return 5
+
+    print("")
+    ok("CI is fully GREEN (self-hosted + github-hosted). "
        "Safe to create + push the release tags (Phase 6).")
     return 0
 
