@@ -888,6 +888,56 @@ result = rad.Solve(grp, 0.001, 1000, 1)
 - Do NOT evaluate ON element surfaces (singularity)
 - Offset evaluation points slightly from boundaries
 - Use rad.FldLst for systematic field profiles
+
+## 11. Numerical experiment results: store as JSON, delete by folder
+
+**RULE**: every numerical experiment / sweep / benchmark stores its
+results in a **JSON file** so the run can be REPRODUCED and re-analysed
+later WITHOUT re-running the (possibly expensive) computation.  When a
+campaign's results are no longer needed, delete the **whole folder at
+once** (一括でフォルダごと削除) -- never leave scattered orphan output
+files behind.
+
+Why JSON:
+- Human-readable + diff-able + version-control-friendly.
+- Self-contained: params + results + metadata in one file, so a plot or
+  comparison can be regenerated months later from the JSON alone.
+- Language-agnostic (re-load in Python / MATLAB / a notebook).
+
+What each result JSON should contain (mirrors the lab Benchmark Policy):
+```python
+import json, os, platform
+from datetime import datetime
+
+def save_results(path, name, problem, results):
+    data = {
+        "timestamp": datetime.now().isoformat(),   # when
+        "hostname":  platform.node(),               # which machine
+        "experiment": name,                         # what
+        "problem":   problem,   # input params (mesh h, freq, material, ...)
+        "results":   results,   # list of per-case dicts (the numbers)
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+```
+Each per-case dict records the scalars you would otherwise have to
+re-run to recover (e.g. ``{"ndof": ..., "t_solve": ..., "iterations":
+..., "converged": ..., "L_total": ...}``).
+
+Folder hygiene (the cleanup half of the rule):
+- Put ALL artifacts of one experiment campaign under ONE dedicated
+  folder, e.g. ``examples/<topic>/sweep_2026_05_29/`` (the result
+  ``.json``, any ``.png`` plots, logs, generated meshes).
+- Keep the campaign folder SELF-CONTAINED so that, when the results are
+  no longer needed, you can ``rm -rf <folder>`` (delete the folder
+  whole) and leave NOTHING orphaned elsewhere.
+- Do NOT scatter ``results_*.json`` / ``*.png`` across the repo root or
+  shared dirs -- that defeats the one-shot folder delete and accumulates
+  cruft.
+
+Reference: the lab Benchmark Policy (CLAUDE.md) pins the exact required
+JSON fields (peak_memory_mb, t_setup, t_solve, iterations, converged +
+top-level timestamp / hostname / benchmark / problem / results).
 """
 
 
