@@ -68,6 +68,12 @@ INDIRECT_HELPERS: Dict[str, List[str]] = {
         # optional include_hys=True adds --hys-file; we pick it up from
         # the call's keyword args below.
     ],
+    # calc_common.calc_main(run, parser) auto-injects --output (the JSON
+    # dump path) into EVERY calc_*.py that uses it -- see
+    # calc_common.py (`if "output" not in known_dests: add --output`).
+    # Without this entry the checker reports a spurious REJECT for every
+    # panel that emits --output to a calc_main-based calc.
+    "calc_main": ["--output"],
 }
 
 
