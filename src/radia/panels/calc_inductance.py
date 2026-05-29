@@ -1538,7 +1538,8 @@ def _build_coil_bbox_mesh(filament_paths, expand=2.5, n_cells=18):
     box.solids.name = "field_domain"
     geo = OCCGeometry(box)
     maxh = float(np.max(p_hi - p_lo)) / max(n_cells, 4)
-    return Mesh(geo.GenerateMesh(maxh=maxh))
+    with TaskManager():
+        return Mesh(geo.GenerateMesh(maxh=maxh))
 
 
 def _biot_savart_B_on_vertices(mesh, filament_paths, fil_currents):
@@ -1622,6 +1623,7 @@ def _export_coil_msh_viz(args, coil_data):
     field_n_vertices = 0
     try:
         from ngsolve import H1, GridFunction
+        from ngsolve import TaskManager
         from gmsh_post_export import save_vol_sol_pair, vol2msh
 
         t0 = time.perf_counter()
@@ -1673,6 +1675,7 @@ def _export_coil_msh_viz(args, coil_data):
 def run_inductance(args):
     """Top-level orchestrator.  Returns dict; calc_main wraps to JSON."""
     import radia  # noqa: F401  (DLL path setup for subprocess context)
+    from ngsolve import TaskManager
 
     # Validate workpiece args if --vol given
     if args.vol:
@@ -1692,14 +1695,20 @@ def run_inductance(args):
         return {"status": "error",
                 "error": "--coil-vol is required for --coil-solver bem-a"}
 
-    # Coil layer
-    if args.coil_solver == "peec":
-        coil_data = _solve_coil_peec(args)
-    elif args.coil_solver == "bem-a":
-        coil_data = _solve_coil_bem_a(args)
-    else:
-        return {"status": "error",
-                "error": f"unknown --coil-solver {args.coil_solver!r}"}
+    # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
+    # / PEEC) in TaskManager so it runs in parallel: the helpers were
+    # de-wrapped under the "caller wraps, helper does NOT" policy
+    # (2026-05-27) and this orchestrator is the caller.  Missing this
+    # wrap left BEM-A's LaplaceSL single-threaded (kubota 2026-05-29:
+    # "BEM-A BEM is slower than before").
+    with TaskManager():
+        if args.coil_solver == "peec":
+            coil_data = _solve_coil_peec(args)
+        elif args.coil_solver == "bem-a":
+            coil_data = _solve_coil_bem_a(args)
+        else:
+            return {"status": "error",
+                    "error": f"unknown --coil-solver {args.coil_solver!r}"}
 
     # Coil viz (filament .msh + bbox B .msh).  PEEC only; BEM-A surface
     # current viz is TODO.  Failures here are non-fatal.
@@ -1716,8 +1725,9 @@ def run_inductance(args):
             out["filament_msh"] = viz["filament_msh"]
         return out
 
-    # Weak-coupled branch
-    wp_data = _solve_workpiece_weak_coupled(args, coil_data)
+    # Weak-coupled branch (workpiece BEM-SIBC; parallel under TaskManager)
+    with TaskManager():
+        wp_data = _solve_workpiece_weak_coupled(args, coil_data)
     out = _assemble_full_output(args, coil_data, wp_data)
     if viz.get("coil_field_msh"):
         # Promote bbox B msh to gmsh_file -- it has volumetric B vectors
