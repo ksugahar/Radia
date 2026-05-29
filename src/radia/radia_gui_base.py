@@ -672,7 +672,7 @@ class ModePanel(QWidget):
                               lo=-(1 << 31), hi=(1 << 31) - 1)
             else:
                 # float / str / default
-                default_str = "" if action.default is None else str(action.default)
+                default_str = self._format_arg_default(action.default)
                 self.add_line(key, label, default_str)
 
             if action.help and key in self._widgets:
@@ -743,6 +743,20 @@ class ModePanel(QWidget):
     def _auto_label_for(self, action):
         """Derive a Display Label from action.dest (override via labels=)."""
         return action.dest.replace("_", " ").capitalize() + ":"
+
+    def _format_arg_default(self, x):
+        """Compact human-friendly default for QLineEdit text.
+
+        str(1e9) is "1000000000.0" -- ugly default for a freq field.
+        Python's 'g' format gives "1e+09" which is much closer to the
+        source literal "1e9" the calc author actually wrote.  None
+        becomes an empty string (no pre-filled text).
+        """
+        if x is None:
+            return ""
+        if isinstance(x, float):
+            return f"{x:g}"
+        return str(x)
 
     def build_command(self, vol_path):
         raise NotImplementedError
