@@ -838,6 +838,142 @@ def paper_writing_check_abstract_background_ratio(abstract: str) -> dict:
     }
 
 
+def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
+    """Abstract 内に数式 (math) または citation が混入していないか検出。
+
+    Editorial convention (IEEE, Elsevier, Springer, APA, ACS, RSC, AIP, AAAS,
+    Nature, Science, ほぼ全ての主要 journal):
+
+      - **数式は abstract に入れない**.  検索エンジンと indexing service が
+        TeX 数式を扱えず、abstract scrape 時に化けるか欠落する.  数値結果
+        (e.g. ``5.3% improvement``) は OK、TeX 数式 (``$E = mc^2$`` や
+        ``\\begin{equation}``) は NG.
+      - **citation は abstract に入れない**.  abstract は self-contained
+        であるべきで、引用は本文で文脈付きで導入する.  例外: critical な
+        先行研究を必ず指摘する必要のある一部 conference (たとえば一部の
+        ML conf) — そういう場では本 lint は warning として受け取る.
+
+    Detects:
+      - Inline math: ``$...$``, ``\\(...\\)`` (但し escape `\\$` は除く)
+      - Display math: ``\\[...\\]``, ``\\begin{equation}``, ``\\begin{align}``,
+        ``\\begin{equation*}``, ``\\begin{align*}``, ``\\begin{eqnarray}``,
+        ``\\begin{gather}``, ``\\begin{multline}``
+      - Citations: ``\\cite{...}``, ``\\citet{...}``, ``\\citep{...}``,
+        ``\\citeyear{...}``, ``\\citealt{...}``, ``\\citeauthor{...}``,
+        ``\\nocite{...}``, ``\\fullcite{...}``, ``\\textcite{...}``,
+        ``\\parencite{...}``
+
+    Args:
+        abstract: Abstract 本文のみ (``\\begin{abstract}`` ... ``\\end{abstract}``
+            の中身).  ``paper_writing_extract_abstract`` で抽出した
+            ``["abstract"]`` をそのまま渡す.
+
+    Returns:
+        dict with:
+
+          - ``n_math_inline``: int
+          - ``n_math_display``: int
+          - ``n_citations``: int
+          - ``math_snippets``: list of up to 5 offending math snippets (truncated)
+          - ``citation_snippets``: list of up to 5 offending citation snippets
+          - ``status``: ``"clean"`` | ``"warning"`` | ``"fail"``
+          - ``advice``: str, what to do about each finding
+    """
+    if not abstract or not abstract.strip():
+        return {"error": "abstract is empty"}
+
+    # ---- Math detection -------------------------------------------------
+    # Inline $...$ (single dollar): NOT preceded by backslash (escaped \$).
+    # The lazy match catches single inline math; we count occurrences.
+    inline_math_re = re.compile(r"(?<!\\)\$[^\$\n]+?(?<!\\)\$")
+    # Inline \(...\) — pair-based
+    inline_paren_re = re.compile(r"\\\(.+?\\\)", flags=re.DOTALL)
+    # Display math: \[...\] and the equation/align/eqnarray/gather/multline
+    # environments (and their starred variants).
+    display_bracket_re = re.compile(r"\\\[.+?\\\]", flags=re.DOTALL)
+    display_env_re = re.compile(
+        r"\\begin\{(equation\*?|align\*?|eqnarray\*?|gather\*?|multline\*?|"
+        r"flalign\*?|alignat\*?)\}.+?\\end\{\1\}",
+        flags=re.DOTALL,
+    )
+
+    inline_matches = inline_math_re.findall(abstract) + inline_paren_re.findall(abstract)
+    # finditer + .group(0) so display_env returns the FULL match (the
+    # findall above on env_re only returns the env-name group, not the
+    # whole equation block).
+    display_matches = (
+        display_bracket_re.findall(abstract)
+        + [m.group(0) for m in display_env_re.finditer(abstract)]
+    )
+
+    n_math_inline = len(inline_matches)
+    n_math_display = len(display_matches)
+    math_snippets = [s[:80] + ("..." if len(s) > 80 else "")
+                     for s in (inline_matches + display_matches)[:5]]
+
+    # ---- Citation detection ---------------------------------------------
+    citation_re = re.compile(
+        r"\\(cite|citet|citep|citeyear|citealt|citealp|citeauthor|"
+        r"nocite|fullcite|textcite|parencite|footcite|autocite)"
+        r"(?:\[[^\]]*\])?\{[^\}]+\}"
+    )
+    citation_matches = citation_re.findall(abstract)
+    # findall returns the cite-command name only (group 1); re-find spans
+    # for snippets.
+    citation_spans = [m.group(0) for m in citation_re.finditer(abstract)]
+    n_citations = len(citation_spans)
+    citation_snippets = [s[:80] + ("..." if len(s) > 80 else "")
+                         for s in citation_spans[:5]]
+
+    # ---- Status + advice ------------------------------------------------
+    n_total = n_math_inline + n_math_display + n_citations
+    if n_total == 0:
+        status = "clean"
+        advice = "Abstract is free of math and citations — matches convention."
+    elif n_math_display > 0 or n_citations > 0:
+        status = "fail"
+        parts = []
+        if n_math_display > 0:
+            parts.append(
+                f"{n_math_display} display-math block(s) found "
+                "(\\[...\\] or equation/align environment).  Move to the body; "
+                "describe the equation in prose in the abstract."
+            )
+        if n_citations > 0:
+            parts.append(
+                f"{n_citations} citation(s) found.  Remove from abstract; "
+                "introduce the prior work in the Introduction / Related Work, "
+                "then the abstract can just say e.g. 'building on recent work'."
+            )
+        if n_math_inline > 0:
+            parts.append(
+                f"{n_math_inline} inline-math span(s) ($...$) found.  "
+                "Replace with plain text (e.g. '$E_x$' → 'the x-component "
+                "of E', '$\\sigma$' → 'sigma' or 'electrical conductivity')."
+            )
+        advice = "  ".join(parts)
+    else:
+        # only inline math, no display/citation
+        status = "warning"
+        advice = (
+            f"{n_math_inline} inline-math span(s) ($...$) found.  Editors at "
+            "most journals will ask you to replace these with plain text.  "
+            "Replace e.g. '$E_x$' with 'the x-component of E'."
+        )
+
+    return {
+        "n_math_inline": n_math_inline,
+        "n_math_display": n_math_display,
+        "n_citations": n_citations,
+        "math_snippets": math_snippets,
+        "citation_snippets": citation_snippets,
+        "status": status,
+        "advice": advice,
+        "rule": ("abstract must be self-contained: no TeX math, no \\cite{} "
+                 "(IEEE / Elsevier / Springer / Nature / Science convention)"),
+    }
+
+
 def paper_writing_check_figure_caption_showing(caption: str) -> dict:
     """Figure caption が showing (describe) 形か telling (claim) 形か判定。
 
@@ -1226,6 +1362,79 @@ def paper_writing_check_figure_forward_reference(tex_path: str) -> dict:
             "ここでは orphan ラベル (定義したが参照なし) と "
             "dangling 参照 (未定義ラベルへの \\ref) のみ検出する。"
         ),
+    }
+
+
+def paper_writing_check_figure_uses_pdf(tex_path: str) -> dict:
+    """`\\includegraphics` paths must be vector (.pdf / .eps), not raster.
+
+    Enforces the "Figure file format: import via PDF, NOT PNG" rule
+    documented in ``_em_paper_style.py`` (key ``em_paper_style`` /
+    ``figure_format``).  IEEE / IEEJ Transactions, IGTE / Compumag /
+    CEFC digests all expect vector line-art; embedding ``.png`` /
+    ``.jpg`` causes blurry rescaling and triggers publisher pre-flight
+    warnings.
+
+    Flagged extensions: ``.png``, ``.jpg``, ``.jpeg``, ``.bmp``,
+    ``.tif``, ``.tiff``.  Allowed: ``.pdf``, ``.eps``, no extension
+    (lets pdflatex pick the vector copy).
+
+    The intended pattern is ``lab_savefig(fig, "name")`` (emits both
+    ``name.pdf`` and ``name.png``) plus
+    ``\\includegraphics{name.pdf}`` -- the PNG is the
+    quick-preview / GitHub-README copy, the PDF is what the typesetter
+    consumes.
+
+    Args:
+        tex_path: .tex file to scan.
+
+    Returns:
+        dict with ``includegraphics`` list (one entry per \\includegraphics
+        invocation: ``path``, ``extension``, ``line``, ``ok``),
+        ``violations`` (the ones using a raster extension), and a
+        ``verdict`` of "OK" / "FAIL".
+    """
+    p = pathlib.Path(tex_path)
+    if not p.exists():
+        return {"error": f"tex file not found: {tex_path}"}
+    tex = p.read_text(encoding="utf-8", errors="replace")
+
+    raster_exts = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
+    vector_exts = {".pdf", ".eps", ""}  # "" = no extension is OK
+    rx = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}")
+
+    # Build (line, path) list.
+    lines = tex.splitlines()
+    entries = []
+    line_no = 0
+    pos = 0
+    for line_no, line in enumerate(lines, 1):
+        for m in rx.finditer(line):
+            path = m.group(1).strip()
+            ext = pathlib.PurePosixPath(path).suffix.lower()
+            ok = ext in vector_exts and ext not in raster_exts
+            entries.append({
+                "path": path,
+                "extension": ext or "<none>",
+                "line": line_no,
+                "ok": ok,
+            })
+
+    violations = [e for e in entries if not e["ok"]]
+    verdict = "OK" if not violations else "FAIL"
+    return {
+        "includegraphics": entries,
+        "n_includegraphics": len(entries),
+        "violations": violations,
+        "n_violations": len(violations),
+        "verdict": verdict,
+        "rule": ("\\includegraphics paths must be vector (.pdf / .eps) or "
+                 "extension-less; .png / .jpg / .jpeg / .bmp / .tif / .tiff "
+                 "are raster and rescale poorly."),
+        "advice": ("Use \\includegraphics{name.pdf} (or {name} without "
+                   "extension).  lab_savefig writes both name.pdf and "
+                   "name.png; reference the .pdf for typesetting and keep "
+                   "the .png for quick preview / GitHub README only."),
     }
 
 
