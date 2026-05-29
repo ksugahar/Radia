@@ -2274,8 +2274,12 @@ the minor-loop vertical chord Delta_h(a, B0) is bias-independent to
 Equal vertical chords is removed ONLY by (a) an input-DEPENDENT shape
 w(B)*g_0 -- which makes the per-hysteron coenergy B-dependent,
 U_k(s_k,B)=w(B) integral g_0, breaking the *simple* fixed-domain
-potential (a generalised B-dependent energy MAY still be
-thermodynamically consistent -- open question), or (b) a Henrotte
+potential. RESOLVED (route i, 2026-05-29): a generalised B-dependent
+energy IS thermodynamically consistent if H is taken as the free-energy
+gradient H=d/dB[w(B)U0]=w*H0+w'*U0 -> D=w*sum_clipped g0(+-eta)*Bdot>=0
+(the w' terms cancel; the bare Matsuo H=w*H0 drops w'U0 and is NOT a
+gradient). See the `bergqvist_binput_stop` route-(i) section and docs
+HYSTERESIS_THEORY.md §7.5.9. Or (b) a Henrotte
 H-friction model with a nonlinear reversible spring (kappa in H, NOT a
 B-clip). The earlier "spring+friction naturally handles asymmetric
 loading without the equal-vertical-chord limitation" applied to (b) and
@@ -4050,6 +4054,56 @@ cosine-spaced thresholds eta_k in [0.045, 2.10] T.
 (Potter is a synthetic test bench, not a target material; measured
 silicon-steel validation against Hane data is reserved for the long paper.)
 
+## Route (i): input-dependent shape keeps energy-consistency AND breaks EVC (2026-05-29)
+
+The v5 digest's stop uses an input-INDEPENDENT g_k. Congruency follows
+the INPUT axis, so the B-input stop has H-axis congruency just like
+B-input play (loops within the same B-range are congruent for both --
+hysteron states follow the same history within the range). What
+DISTINGUISHES the stop (Matsuo-Shimasaki 2005 N&S: input-indep stop <=>
+wiping-out + equal vertical chords) is the ADDITIONAL equal-vertical-
+chords constraint: same B-amplitude at any dc bias => same H-chord.
+Silicon steel HAS H-axis congruency but LACKS EVC (Matsuo 2003:
+asymmetric loops are wider in H). So the digest's stop, as-is, cannot
+represent dc-biased
+silicon steel -- and the symmetric Potter/loop validation CANNOT expose
+this (all loops at the same bias). The energy/variational wrapper does
+NOT remove EVC (the B-clip box is bias-independent): verified, chord
+bias-independent to 0.0-0.1% (demo_equal_vertical_chords.py).
+
+FIX (route i): scale the coenergy by a weighting on the FIXED box,
+Psi(s,B)=w(B)U0(s), and take H as its B-gradient:
+    H = dPsi/dB = w(B)H0(s) + w'(B)U0(s)         (NOT Matsuo's bare w*H0)
+    D = H Bdot - Psidot = w(B) sum_{k clipped} g0(+-eta) Bdot >= 0
+The w' terms cancel => D = w*D0 >= 0 (w>=0): thermodynamic consistency
+preserved. The box [-eta_k,+eta_k] stays B-independent => the domain
+argument (why STOP, not B-input PLAY, can be energy-based) SURVIVES; only
+the energy magnitude scales with w(B). The chord becomes bias-dependent
+Delta_h = w(B0)Delta_h0 + w'(B0)Delta_U0 => EVC broken => matches the
+material. (The bare Matsuo H=w*H0 drops w'U0, is not a free-energy
+gradient, and is not guaranteed D>=0.)
+
+KAN usage: parametrise Psi (monotone g0 + positive w(B), e.g. RBF +
+softplus) and derive H = dPsi/dB by autograd; do NOT free-fit H or D>=0
+is lost. URN (KAN-inspired) is NOT applicable -- it is linear
+frequency-domain relaxation (impedance), not rate-independent hysteresis;
+only its KAN edge-function machinery is reused for w(B).
+
+Validation (2026-05-29):
+- synthetic strong-EVC recovery on real-data g0: w_KAN ~ w_true to ~1%,
+  fit 100.95 -> 7.83 A/m (92%), chord 61->101 A/m vs flat 61 for w=1
+  (demo_kan_w_recovery.py);
+- real symmetric loops (35A360-class B-input set, 30 amplitudes
+  0.05-1.5 T): energy-consistent monotone g0 fits 3.1% rel RMS
+  (fit_binput_symmetric.py) -- energy-consistency costs ~nothing on
+  symmetric data;
+- SPCC real EVC violation: pure stop mid-B relative error sym 16% vs
+  asym 42% (fit_spcc_stop.py).
+OPEN: a scalar w(B) is insufficient on messy real data (trades symmetric
+for asymmetric fidelity); the full input-dependent SHAPE g_eta(s,B) =
+w(B) g0(s) / a 2-D KAN on (s,B) is the next step. Full write-up: docs
+HYSTERESIS_THEORY.md §7.5.9.
+
 ## Two digest framings on record (do not confuse / do not blend)
 
 | Version | Title | Mechanism | Identification |
@@ -4087,6 +4141,212 @@ CHANGES.md lesson 3).
   Magnetic Recording Media", IEEE Trans. Magn. 7(4), 1971.
 - Y. Hane, K. Sugahara, "Experimental Verification of Congruency Property
   ... B-Input Play Model", IEEE Trans. Magn. (accepted), 2026.
+"""
+
+
+PEELING_IDENTIFICATION = r"""
+# Peeling identification of play / stop shape functions
+# (Sugahara Lab / Ahagon -- analytic, NON-least-squares calibration)
+# Code: W:/999_菅原賢悟/19_磁気ヒステリシス/2024_IGTE_共同研究/
+#       VectorPlayModel/supplement/playmodel.py  (shapeFunction)
+#       + ...VectorPlayModel/supplement/阿波根@形状関数同定.py
+
+## What it is
+
+"Peeling" (剥ぎ取り) identification recovers the PER-HYSTERON shape
+functions of a B-input play (or stop) model DIRECTLY from measured
+first-order reversal curves -- the descending branches of symmetric
+B-input loops measured at an equidistant ladder of amplitudes
+B_max = dB, 2dB, ..., N*dB.  It is a closed-form difference scheme:
+NO least-squares, NO matrix inversion, NO iteration.
+
+It is the play/stop analogue of the Preisach Everett-function
+identification (mixed second differences of FORC data): the difference
+array `mu` plays the role of the Preisach density.
+
+## Why "peeling"
+
+The nested descending curves form a triangular structure: the loop of
+amplitude k*dB activates exactly k hysterons (radii dB ... k*dB).
+Going from amplitude k*dB to (k+1)*dB adds exactly ONE more active
+hysteron.  Differencing successive-amplitude curves therefore "peels
+off" one hysteron's contribution at a time, isolating each shape
+function.
+
+## Algorithm (playmodel.py `shapeFunction(Hdata)`)
+
+Input `Hdata` = descending-curve look-up table (HdataLUT), shape
+(2N+1, N): column j is the descending branch of the symmetric loop of
+amplitude B_max,j sampled at equidistant B from +B_max to -B_max
+(step dB).  Lab column order: col 1 = 1.5 T ... col 30 = 0.05 T.
+
+1. First / cross differences -> "density" mu:
+     mu[i,0]   = Hdata[0,i] - Hdata[1,i]
+     mu[i,j+1] = (Hdata[j+1,i]   - Hdata[j+2,i])
+               - (Hdata[j,i+1]   - Hdata[j+1,i+1])      (recursive)
+   plus a closing term so each hysteron row sums consistently.
+2. Expand mu into the staircase (each entry halved), flip, and
+   cumulatively sum: descending shape Hdown = -cumsum(mu2),
+   ascending shape Hup = -flip(Hdown), assemble the full ODD shape
+   function  Hfunc = [ Hup ; 0 ; Hdown ].
+3. Hfunc[:,i] is the shape function of hysteron i, tabulated on the
+   Bplay axis (consumed by playHysteron -- see `vector_play_model`).
+
+## Why NOT least squares  (verified 2026-05)
+
+Per-hysteron LEAST-SQUARES fitting of the play model on the play
+variable p_k = B - s_k is ILL-CONDITIONED: every p_k shares the common
+input B, so the design columns are strongly collinear.  Naive ridge
+LSQ therefore mis-attributes the fit and can under-perform even the
+stop model -- a pure CONDITIONING ARTEFACT, NOT a statement that "play
+is worse than stop".  The peeling difference scheme sidesteps the
+collinearity entirely (it reads each hysteron off the FORC ladder), so
+it is the CORRECT way to calibrate a play model.  (Empirically: a crude
+per-hysteron I-spline LSQ play landed ~30% while the well-conditioned
+stop fit was ~21% on the same SPCC data -- the gap was the method, not
+the operator.  Use peeling, not LSQ, for play.)
+
+## Requirements / caveats
+
+- EQUIDISTANT thresholds (dB ladder) are mandatory -- the difference
+  scheme assumes uniform amplitude spacing.
+- The descending curves must be clean (monotone, de-noised).  The lab
+  pipeline smooths each measured loop and re-parametrises the shape as
+  a constrained polynomial before tabulating (pipeline below).
+- Reproduces the identification curves EXACTLY by construction; minor /
+  biased loops are then PREDICTED via the play operator (congruency).
+
+## Full lab calibration pipeline
+## (W:/.../2024_10_16_B入力用ループ/prototype_step0-4.m)
+
+step0: load measured symmetric loops data_XXXXmT.mat (B_max =
+       0.05:0.05:1.5 T; raw 5 Hz columns: t, V_exc, I_exc, V_search,
+       H, B); split ascending / descending, polyfit each, average ->
+       smoothed symmetric loop Hm(Bm); store tip values (B_max, H_max).
+step1: fit the loop-TIP locus H0(B0) by a rational (Pade) function
+       B2H(b) = polyval(p,b)/polyval(q,b) (anhysteretic-like backbone
+       through the loop tips).
+step2: normalise each loop x = B/B_max, y = H/H_max and fit a degree-17
+       polynomial shape p(x) with p(+-1)=+-1 and a MONOTONICITY
+       constraint (no p' roots in [-1,1]); build p_interp = the loop
+       shape INTERPOLATED across amplitude.  NB: the play model DOES
+       interpolate its normalised loop shape across amplitude here --
+       a nuance vs the loose claim "play cannot interpolate shape".
+step3/4: tabulate descending curves h(b) = B2H(B_max)*polyval(p_interp,
+       b/B_max) into HdataLUT (and the dual BdataLUT for H-input).
+playmodel.py: shapeFunction(HdataLUT) -> Hfunc (peeling); then forward
+       via playHysteron (see `vector_play_model`).
+
+## Cross-reference
+
+- `vector_play_model`  - the forward model that consumes Hfunc
+- `play`               - general play-model theory
+- `preisach`           - Everett-function (FORC 2nd-difference) analogue
+- `input_dependent_shape`, `stop_vs_play_silicon_steel` - why silicon
+  steel needs congruency (play) not equal-vertical-chords (stop)
+- `bergqvist_binput_stop` - the lab energy STOP (EVC + thermo + Egger
+  inverse); play and stop are complementary (p = B - s)
+"""
+
+
+VECTOR_PLAY_MODEL = r"""
+# Canonical B-input vector play model (Sugahara Lab / Ahagon)
+# Code: W:/999_菅原賢悟/19_磁気ヒステリシス/2024_IGTE_共同研究/
+#       VectorPlayModel/  (+ supplement/playmodel.py)
+#       and .../2024_10_16_B入力用ループ/  (data + calibration pipeline)
+
+## Constitutive form (scalar, B-input)
+
+  H(B, history) = sum_{i=1}^{Np} Hfunc_i( p_i )
+
+with the per-hysteron PLAY (backlash) operator
+  p_i = clip( p_i^prev , B - zeta_i , B + zeta_i )
+      = max( min( p_i^prev, B + zeta_i ), B - zeta_i ).
+
+- zeta_i = play radius of hysteron i, EQUIDISTANT: zeta = 0, dB, 2dB,
+  ... up to ~B_max  (lab: np.arange(0, B_max, dB)).
+- Hfunc_i = per-hysteron shape function, identified by PEELING from the
+  descending-curve LUT (see `peeling_identification`); tabulated on a
+  Bplay axis, evaluated by 1-D interpolation at p_i.
+- Saturation: B is clipped to +-B_max (Blimit); for |B| > B_max a
+  linear extrapolation term is added to hysteron 0.
+
+Forward cost: O(Np) per step (one clip + one table interp per
+hysteron).  Reference: VectorPlayModel/supplement/playmodel.py
+(`playHysteron`).
+
+## Key property: CONGRUENCY
+
+The play operator yields the CONGRUENCY property: dc-biased minor loops
+of a given B-excursion have the SAME shape regardless of bias.  This
+MATCHES H-axis-congruent silicon steel (Hane 2026, NOES 35A360), so the
+B-input play model reproduces dc-biased minor loops well -- the regime
+where the input-independent STOP model (equal vertical chords) fails.
+
+## Vector / rotational extension
+
+The isotropic vector play model superposes scalar play operators over
+directions (rotational hysteresis, elliptical / circular B traject-
+ories).  Lab reference implementations: VectorPlayModel/prototype4*.m
+(vector), VectorPlayModel/BQM1, BQM2 (Alex "BQM" circular / ellipsoid /
+minor-loops-with-bias), Evaluate_Rotation_Hys_Loss.m; Jiles-Atherton
+cross-check in JilesAtherton.m.
+
+## Calibration (two-stage; see `peeling_identification`)
+
+1. Build HdataLUT from measured symmetric loops (prototype_step0-4.m:
+   smooth -> tip rational fit B2H -> normalised constrained-poly shape
+   p_interp -> descending-curve table).
+2. Peeling difference scheme -> Hfunc (shapeFunction in playmodel.py).
+NO least-squares (ill-conditioned for play -- see
+`peeling_identification` "Why NOT least squares").
+
+## Data (W:/.../2024_10_16_B入力用ループ/)
+
+- data_XXXXmT.mat : measured symmetric loops, B_max = 50 ... 1500 mT in
+  50 mT steps (cols: t, V_exc, I_exc, V_search, H, B; raw 5 Hz).
+- BmHm.mat, B0H0.mat : loop tips + tip-locus rational fit.
+- p_interp.mat : normalised loop shape interpolated across amplitude.
+- HdataLUT.mat / BdataLUT.mat : descending-curve LUTs (B-input/H-input).
+
+## Relation to the lab energy STOP (IGTE digest model) + inverse trichotomy
+
+Play and stop are complementary (p_i = B - s_i), so the play model is
+EXACTLY an input-dependent stop:
+   H = sum f_k(p_k) = sum f_k(B - s_k) =: sum g_k(s_k;B), g_k(s;B)=f_k(B-s).
+But g_k is non-monotone in s (~83% of hysterons), so the coenergy
+U_k = int g_k is NON-convex.  The clean Egger-Schur (vector-FE) inverse
+needs CONVEX U_k (monotone g).  Hence the trichotomy (2026-05 study,
+"does the STOP reproduce the canonical PLAY?", oracle = peeling play
+validated to 0.01-0.60% on the symmetric loops):
+
+  | construction                       | play-equiv. | inverse              |
+  | input-dependent stop g=f(B-s)      | EXACT       | non-convex -> Newton |
+  | monotone Bergqvist stop            | ~9.6%       | convex -> Egger Schur|
+  | route-(i) input-dependent convex   | shrinks 9.6%| convex (open)        |
+
+=> EXACT play-equivalence and the clean convex inverse CANNOT both hold;
+   the ~9.6% is the *cost of the easy (convex) inverse*.  Concretely, a
+   per-hysteron stop calibrated on SYMMETRIC play loops and tested on
+   dc-biased minor loops reproduces the canonical play to: non-monotone
+   stop 7.6%, monotone Bergqvist stop 9.6% (mean biased; denser-high-eta
+   K=60 best config; hardest small loops amp=0.1T: 7.4% / 9.9%).  The
+   monotone (digest) model thus buys thermo-consistency (D>=0) + Egger
+   O(K) inverse for ~+2pt vs the free stop.  CAVEAT: the SCALAR B<->H
+   inverse (1 point) is easy for ANY model with H monotone in B (total
+   dH/dB>0 even if individual f_k'<0), so convexity is required only for
+   the vector-FE convex-Schur inverse.  An earlier SYNTHETIC PI-oracle
+   gave a spurious "50% wall" -- artefact of an adversarial anhysteretic-
+   heavy mu(eta); real silicon steel is far milder (~10%).
+   (Lab scripts: port_canonical_play.py, does_stop_reproduce_play.py,
+   refine_and_plot.py, distinguish_mono_vs_nonmono.py.)
+
+## Cross-reference
+
+- `peeling_identification` - how Hfunc is calibrated (the companion topic)
+- `play` - general play theory;  `vector` - E&S / vector Preisach
+- `congruency_selection`, `bergqvist_binput_stop` - the lab play-vs-stop
+  selection logic and the energy STOP digest
 """
 
 
@@ -4170,6 +4430,23 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
                                 benchmark rms 13.7 A/m.  Sharpens
                                 congruency_selection Step 2; notes the v4
                                 (adaptive-eta) vs v5 (Bergqvist) digest split.
+        peeling_identification - Analytic (剥ぎ取り) shape-function
+                                identification of a B-input play/stop
+                                model from descending FORC ladder via a
+                                difference scheme (Everett-density mu),
+                                NO least-squares.  Why per-hysteron LSQ
+                                on the play variable is ill-conditioned
+                                (p_k share B -> collinear).  Full lab
+                                pipeline prototype_step0-4 + playmodel.py
+                                shapeFunction.  Sugahara/Ahagon code.
+        vector_play_model    - Canonical Sugahara/Ahagon B-input vector
+                                play model: H=sum Hfunc_i(p_i), play
+                                operator p_i=clip(p_i,B-zeta_i,B+zeta_i),
+                                equidistant zeta, Hfunc by peeling.
+                                Congruency (matches H-axis-congruent
+                                silicon steel); vector/rotational BQM
+                                variants; complementary to the energy
+                                STOP (p=B-s).  VectorPlayModel/ code.
         all                  - Everything
     """
     topic = topic.lower().strip()
@@ -4197,6 +4474,15 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
                   "dry_friction_pinning", "fixed_domain",
                   "play_domain_translates", "domain_argument"):
         return BERGQVIST_BINPUT_STOP
+    if topic in ("peeling_identification", "peeling", "shape_function_id",
+                  "shape_identification", "shapefunction", "ahagon",
+                  "forc_difference", "everett_difference",
+                  "play_calibration", "hagitori"):
+        return PEELING_IDENTIFICATION
+    if topic in ("vector_play_model", "vector_play", "canonical_play",
+                  "playmodel", "play_hysteron", "playhysteron",
+                  "ahagon_play", "binput_play", "b_input_play"):
+        return VECTOR_PLAY_MODEL
     if topic in ("forward_inverse_variational", "forward_inverse",
                   "egger_2025", "co_energy", "energy_density",
                   "convex_duality", "team_32", "scalar_potential_hyst",
@@ -4278,7 +4564,8 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
             H_INPUT_B_INPUT_COMBINATION, BOBBIO_1997_UNIFICATION,
             ASP_MODEL, ZIRKA_HDHM, CHUA_MODEL, OTHER_MODELS,
             JACQUES_MONOGRAPH, CONGRUENCY_BINPUT_SELECTION,
-            BERGQVIST_BINPUT_STOP,
+            BERGQVIST_BINPUT_STOP, PEELING_IDENTIFICATION,
+            VECTOR_PLAY_MODEL,
         ])
     return (f"Unknown topic '{topic}'. Available: lab_core, "
             "lab_core_production, catalog, decision_tree, "
@@ -4290,4 +4577,5 @@ def get_hysteresis_models_knowledge(topic: str = "lab_core") -> str:
             "tp_eec_steady_state, h_input_b_input_combination, "
             "bobbio_1997_unification, asp_model, zirka_hdhm, "
             "chua_model, other_models, jacques_monograph, "
-            "congruency_selection, bergqvist_binput_stop, all.")
+            "congruency_selection, bergqvist_binput_stop, "
+            "peeling_identification, vector_play_model, all.")
