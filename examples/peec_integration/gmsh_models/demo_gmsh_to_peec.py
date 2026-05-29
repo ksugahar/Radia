@@ -46,7 +46,7 @@ if not mesh_file.exists():
     print(f"\nERROR: Mesh file not found: {mesh_file}")
     print("\nGenerate with:")
     print("  cd gmsh_models")
-    print('  "C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" generate_coil_cubit.py')
+    print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_coil_cubit.py')
     sys.exit(1)
 
 print(f"\n[1] Loading GMSH mesh: {mesh_file.name}")

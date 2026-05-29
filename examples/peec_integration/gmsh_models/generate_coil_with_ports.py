@@ -10,7 +10,7 @@ Output:
     circular_coil_with_ports.msh - Surface mesh with port physical groups
 
 Requirements:
-    - Coreform Cubit 2025.3+
+    - Coreform Cubit 2025.8+
     - cubit_mesh_export module (via radia package)
 """
 
