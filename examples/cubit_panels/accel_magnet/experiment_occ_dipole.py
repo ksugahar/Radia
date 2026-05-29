@@ -13,7 +13,7 @@ FEM:  NGSolve Omega-reduced + Kelvin (1/4 sphere)
 Reference (20000 AT, 6x6x6 quarter + IMA '+x-z'):
   Bz at origin ~ -961 mT
 
-Requirements: Cubit 2025.3+, NGSolve, Radia
+Requirements: Cubit 2025.8+, NGSolve, Radia
 Usage:
     python test_occ_dipole.py msc [coarse|medium]
     python test_occ_dipole.py fem [coarse]

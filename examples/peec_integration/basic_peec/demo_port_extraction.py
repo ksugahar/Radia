@@ -36,7 +36,7 @@ if not mesh_file.exists():
     print("\nStep 1: Navigate to gmsh_models directory")
     print("  cd gmsh_models")
     print("\nStep 2: Run Cubit mesh generation with ports")
-    print('  "C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" generate_coil_with_ports.py')
+    print('  "<Coreform Cubit 2025.8+>/bin/python3/python.exe" generate_coil_with_ports.py')
     print("\nStep 3: Come back and run this script")
     print("  cd ..")
     print("  python demo_port_extraction.py")

@@ -205,7 +205,7 @@ Gap center Bz field [T] for different mesh densities and permeabilities:
 
 ## Requirements
 
-- **Coreform Cubit 2025.3+** (for mesh generation only)
+- **Coreform Cubit 2025.8+** (for mesh generation only)
 - **cubit_mesh_export**: `S:\CoreformCubit\01_GitHub`
 - **NGSolve / Netgen**
 - **Radia**
