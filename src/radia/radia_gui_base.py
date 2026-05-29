@@ -736,7 +736,11 @@ class ModePanel(QWidget):
             # else: unsupported widget type; skip silently
 
         if output_path:
-            cmd += ["--output", output_path]
+            # Only emit --output if the parser actually declares it.
+            # (calc_main auto-adds at runtime, but a factory may omit;
+            # emitting --output blind would fail argparse for those.)
+            if any(a.dest == "output" for a in parser._actions):
+                cmd += ["--output", output_path]
         cmd += list(extra)
         return cmd
 

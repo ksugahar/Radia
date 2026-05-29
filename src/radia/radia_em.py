@@ -1,13 +1,25 @@
 """
-Radia EM (Electromagnet) analysis window.
+Radia EM (Electromagnet) analysis window -- generator-driven (POLICY
+2026-05-30 in radia_gui_base.py).
 
-Formulations (one panel, switched via combo):
-  Omega          FEM scalar potential.  Coil-script driven.
-  A-Phi          FEM vector potential.  Coil-script driven.
-  MSC            Radia magnetic-surface-charge.  Coil-script driven.
-  Kelvin Benchmark   Verify Cubit-Kelvin pipeline against analytical
-                     magnetic-sphere-in-uniform-field.  Uniform external
-                     field input (no coil-script).
+Architecture:
+    EMPanel = wp_vol + Method combo + QStackedWidget over 4 sub-panels.
+    Each sub-panel is a ModePanel that calls bind_argparser() with the
+    matching calc_*.py.  Method switch reveals the corresponding
+    sub-panel; per-method widget state survives across switches via
+    save_state's method-prefixed namespace.
+
+    Omega / A-Phi   -> _AccelMagnetPanel(calc_accel_magnet.py)
+    MSC             -> _MSCPanel       (calc_accel_msc.py)
+    Kelvin Benchmark-> _KelvinBenchPanel(calc_kelvin_benchmark.py)
+
+The old union-of-widgets EMPanel with method-driven visibility toggles
+(437 lines as of 2026-05-30) was replaced by this composite design.
+Each sub-panel only knows its own argparse + its own dispatch, so:
+  - adding `--new-arg` to one calc surfaces a widget only in THAT
+    sub-panel (no other panel touched)
+  - cross-method widget leakage is impossible by construction
+  - panel-cli-diff drift surface is zero per sub-panel
 
 Usage:
     python -m radia.radia_em model.vol
@@ -17,261 +29,55 @@ Usage:
 import sys
 import os
 
-from PySide6.QtWidgets import QLabel
-
 TITLE = "Electromagnet"
 REQUIRED_LABELS = []
 OPTIONAL_LABELS = ["iron", "magnetic", "air", "kelvin", "sphere",
                    "kelvin_int", "kelvin_ext"]
-OPTIONAL_FILES = {"Coil script": "Python (*.py)", "Hysteresis file": "HYS (*.hys)"}
+OPTIONAL_FILES = {"Coil script": "Python (*.py)",
+                  "Hysteresis file": "HYS (*.hys)"}
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from PySide6.QtWidgets import QStackedWidget, QFileDialog, QMessageBox
+
 from radia_gui_base import (
     ModePanel, AnalysisWindow, calc_script, msh_output, json_output,
-    run_app, _PYTHON,
+    run_app, COIL_TEMPLATE,
 )
 
 
-# ---- Formulation labels (combo entries) -----------------------------------
-FORM_OMEGA = "Omega"
-FORM_APHI = "A-Phi"
-FORM_MSC = "MSC"
-FORM_KELVIN_BENCH = "Kelvin Benchmark"
-FORMULATIONS = [FORM_OMEGA, FORM_APHI, FORM_MSC, FORM_KELVIN_BENCH]
+# ============================================================
+# Solver display <-> CLI value mappings
+# ============================================================
+# Consolidated from the old panel's _OMEGA_SOLVERS / _A_SOLVERS /
+# _MSC_SOLVERS / _KELVIN_SOLVERS scattered constants.
 
-# Panel label -> calc_accel_magnet.py --formulation CLI value.
-# The calc only accepts {"omega", "a"}; "A-Phi" is the GUI label for
-# the A-vector formulation (the "Phi" alludes to the optional phi
-# gauge handled internally by the solver).  Bare lowercase doesn't
-# work: "A-Phi".lower() = "a-phi" which the calc rejects.
-_FEM_FORMULATION_CLI = {
-    FORM_OMEGA: "omega",
-    FORM_APHI:  "a",
-}
-
-
-# COIL_TEMPLATE moved to radia_gui_base.py 2026-04-26 so the IH
-# panel's "New..." wizard can share the same starter.  Re-exported
-# here so the EM-side button wiring stays unchanged.
-from radia_gui_base import COIL_TEMPLATE  # noqa: F401
+_FEM_SOLVER_MAP = [
+    ("Auto",              "auto"),
+    ("Direct (PARDISO)",  "pardiso"),
+    ("AMS (Compact)",     "ams"),
+    ("BDDC",              "bddc"),
+    ("ICCG",              "iccg"),
+]
+_MSC_SOLVER_MAP = [
+    ("LU",       0),
+    ("BiCGSTAB", 1),
+    ("HACApK",   2),
+]
 
 
-class EMPanel(ModePanel):
-    """EM analysis panel.
+# ============================================================
+# Coil-script mixin: "New..." wizard preserved from old panel
+# ============================================================
 
-    Layout (sections):
-        Formulation         choose Omega / A-Phi / MSC / Kelvin Benchmark
-        Source              coil_script (FEM/MSC) OR uniform H0 (Kelvin)
-        Material            mu_r / BH curve / hysteresis file
-        Mesh                FES order, Kelvin sphere radius
-        Solver              direct / iterative + tolerance
-        Iteration           max_iter, relax, n_steps, Picard / Newton
-        Symmetry            IMA string (MSC only)
-
-    Sections collapse via `_set_row_visible` when not relevant for the
-    current Formulation -- e.g. coil_script is hidden in Kelvin
-    Benchmark mode, n_steps is hidden in MSC mode, etc.
-
-    NOTE: FES order >= 2 is supported and Kelvin BC is correctly
-    enforced at any order.  See `memory/feedback_kelvin_p2_works.md`
-    + `memory/feedback_cubit_kelvin_p_convergence.md`.  Default
-    fes_order=1 is kept for the coil-driven Omega path because the
-    Periodic-Omega-reduced single-space formulation in
-    `calc_accel_magnet.py` shows non-monotonic p-convergence on the
-    em_elf_quarter geometry (a separate formulation issue, NOT a
-    Kelvin issue).  Kelvin Benchmark mode defaults fes_order=2 since
-    its Dirichlet-lift formulation is verified at p>=2.
-
-    Bundled Kelvin Benchmark samples (verified 2026-04-26 at p=2):
-        kelvin_benchmark_sphere_1_2.vol   1/2 model, error +1.07%
-        kelvin_benchmark_sphere_1_4.vol   1/4 model, error +0.71%
-    The 1/8 build script ships
-    (`kelvin_benchmark_sphere_1_8_build.py`) but the .vol does NOT
-    -- the corner-GND geometry currently produces Hz~0; see
-    `memory/feedback_kelvin_1_8_blocker.md`.
+class _CoilTemplateMixin:
+    """Adds a coil-template-save wizard button next to the coil_script
+    Browse.  Inherited by sub-panels that drive a coil-script-based calc.
     """
-
-    _OMEGA_SOLVERS = ["Direct (PARDISO)", "AMS (Compact)", "BDDC"]
-    _A_SOLVERS = ["Direct (PARDISO)", "AMS (Compact)", "BDDC"]
-    _MSC_SOLVERS = ["0 (LU)", "1 (BiCGSTAB)", "2 (HACApK)"]
-    _KELVIN_SOLVERS = ["Direct (PARDISO)"]
-    _SOLVER_MAP = {
-        "Direct (PARDISO)": "pardiso",
-        "AMS (Compact)": "ams",
-        "BDDC": "bddc",
-    }
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._build_ui()
-
-    # ------------------------------------------------------------------
-    # ------------------------------------------------------------------
-    # _add_section is inherited from ModePanel (hoisted 2026-04-26).
-    # ------------------------------------------------------------------
-    # UI build
-    # ------------------------------------------------------------------
-    def _build_ui(self):
-        # ---- Formulation ----
-        self._add_section("Formulation")
-        # Convention: every panel that switches solver modes exposes
-        # the combo as `self._method_combo` (used by panel_qa and
-        # generic mode-switch code).  The widget key stays the
-        # domain-meaningful "formulation" for build_command lookups.
-        self._method_combo = self.add_combo(
-            "formulation", "Formulation:", FORMULATIONS)
-        self._method_combo.currentTextChanged.connect(
-            self._on_formulation_changed)
-
-        # ---- Source ----
-        self._add_section("Source", key="_sec_source")
-        # FEM / MSC use a coil script.
-        self.add_browse("coil_script", "Coil script:",
-                        filter_str="Python (*.py);;All (*)")
-        # "New..." button: write a CoilBuilder racetrack template that
-        # the user can immediately edit (set_start / add_straight /
-        # add_arc lines pre-filled with sensible defaults).
-        self.add_browse_action(
-            "coil_script", "New...", self._on_new_coil_template,
-            fixed_width=60)
-        # Kelvin Benchmark uses a uniform external field instead.
-        self.add_line("H0", "H0 [A/m]:", "1.0")
-        self.add_combo("field_axis", "Field axis:", ["x", "y", "z"])
-        # Default field axis = z
-        self._widgets["field_axis"].setCurrentIndex(2)
-
-        # ---- Material ----
-        self._add_section("Material", key="_sec_material")
-        mat_combo = self.add_combo(
-            "material", "Material:",
-            ["mu_r (Linear)", "BH Curve", "Hysteresis (.hys)"])
-        self.add_line("mu_r", "mu_r:", "1000")
-        self.add_browse("bh_file", "BH file:",
-                        filter_str="Text files (*.txt *.csv);;All (*)")
-        self.add_browse("hys_file", "Hysteresis file:",
-                        filter_str="HYS files (*.hys);;All (*)")
-        mat_combo.currentIndexChanged.connect(self._on_material_changed)
-
-        # ---- Mesh ----
-        # 4.35.0+: per-panel wp .vol replaces the legacy top-level Model
-        # row in AnalysisWindow.  Optional for FEM/MSC (coil-only
-        # simulation works without it), required for Kelvin Benchmark.
-        self._add_section("Mesh", key="_sec_mesh")
-        self.add_browse(
-            "wp_vol", "Mesh .vol:",
-            filter_str="Netgen Vol (*.vol);;All (*)")
-        self.add_spin("fes_order", "FES order:", 1, 1, 5)
-        # Kelvin Benchmark only -- declared here so panel layout stays
-        # consistent across modes.  Hidden when not Kelvin Benchmark.
-        self.add_line("R_kelvin", "Kelvin sphere R [m]:", "0.20")
-
-        # ---- Solver ----
-        self._add_section("Solver", key="_sec_solver")
-        self.add_combo("solver", "Solver:", self._OMEGA_SOLVERS)
-        self.add_line("tol", "Tolerance:", "1e-3")
-
-        # ---- Iteration ----
-        self._add_section("Iteration", key="_sec_iter")
-        self.add_spin("max_iter", "Max iterations:", 100, 1, 9999)
-        self.add_line("relax", "Relaxation:", "0.0")
-        # FEM-specific: nonlinear time stepping.
-        self.add_spin("n_steps", "N steps (FEM):", 1, 1, 100)
-        self.add_combo("method", "Method (FEM):", ["Picard", "Newton"])
-
-        # ---- Symmetry (MSC only) ----
-        self._add_section("Symmetry (MSC)", key="_sec_sym")
-        self.add_line("ima", "IMA symmetry:", "",
-                      placeholder="auto from sym_*_* (blank) / e.g. +x-z")
-
-        # Initial state: pick Omega defaults.
-        self._on_formulation_changed(FORM_OMEGA)
-        self._on_material_changed(0)
-
-    # ------------------------------------------------------------------
-    # Mode visibility logic
-    # ------------------------------------------------------------------
-    def _on_formulation_changed(self, text):
-        is_msc = (text == FORM_MSC)
-        is_kelvin = (text == FORM_KELVIN_BENCH)
-        is_fem = not (is_msc or is_kelvin)
-
-        # Source row visibility:
-        #   coil_script  -- FEM, MSC (NOT Kelvin Benchmark)
-        #   H0, axis     -- Kelvin Benchmark only
-        self._set_row_visible("coil_script", is_fem or is_msc)
-        self._set_row_visible("H0", is_kelvin)
-        self._set_row_visible("field_axis", is_kelvin)
-
-        # Mesh: R_kelvin is Kelvin Benchmark only.
-        self._set_row_visible("R_kelvin", is_kelvin)
-
-        # FEM-only knobs.
-        self._set_row_visible("fes_order", is_fem or is_kelvin)
-        self._set_row_visible("n_steps", is_fem)
-        self._set_row_visible("method", is_fem)
-
-        # Iteration: tol/max_iter/relax used by FEM nonlinear and MSC.
-        # Kelvin Benchmark is a single linear solve -- hide them.
-        self._set_row_visible("tol", not is_kelvin)
-        self._set_row_visible("max_iter", not is_kelvin)
-        self._set_row_visible("relax", not is_kelvin)
-
-        # Symmetry section: MSC only.
-        self._set_row_visible("ima", is_msc)
-        self._set_row_visible("_sec_sym", is_msc)
-
-        # Mesh section: hide for MSC (no fes_order, no Kelvin radius).
-        self._set_row_visible("_sec_mesh", not is_msc)
-
-        # Iteration section: hide for Kelvin Benchmark (single linear solve).
-        self._set_row_visible("_sec_iter", not is_kelvin)
-
-        # Solver list per formulation.
-        combo = self._widgets["solver"]
-        prev = combo.currentText()
-        combo.clear()
-        if is_msc:
-            combo.addItems(self._MSC_SOLVERS)
-        elif text == FORM_APHI:
-            combo.addItems(self._A_SOLVERS)
-        elif is_kelvin:
-            combo.addItems(self._KELVIN_SOLVERS)
-        else:
-            combo.addItems(self._OMEGA_SOLVERS)
-        idx = combo.findText(prev)
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
-
-        # Default fes_order: 2 for Kelvin Benchmark (verified at p>=2).
-        if is_kelvin:
-            self._widgets["fes_order"].setValue(2)
-
-        cb = getattr(self, 'validationChanged', None)
-        if callable(cb):
-            cb()
-
-    def _on_material_changed(self, idx):
-        self._set_row_visible("mu_r", idx == 0)
-        self._set_row_visible("bh_file", idx == 1)
-        self._set_row_visible("hys_file", idx == 2)
-
-    # ------------------------------------------------------------------
-    # CoilBuilder template wizard
-    # ------------------------------------------------------------------
     def _on_new_coil_template(self, line_edit):
-        """Save COIL_TEMPLATE to a user-chosen .py and load it into the
-        coil_script field.  Pre-suggests a filename based on the .vol
-        path (if any) or ``coil_dipole.py`` in cwd as a fallback so the
-        QFileDialog opens at a sensible location."""
-        from PySide6.QtWidgets import QFileDialog, QMessageBox
-        # Suggest a destination next to the existing coil_script (so
-        # the user can iterate on variants), or alongside the .vol the
-        # window was opened on, or just cwd.
         existing = line_edit.text().strip()
         if existing and os.path.isdir(os.path.dirname(existing)):
-            suggested = os.path.join(
-                os.path.dirname(existing), "coil_new.py")
+            suggested = os.path.join(os.path.dirname(existing), "coil_new.py")
         else:
             suggested = os.path.abspath("coil_dipole.py")
         path, _ = QFileDialog.getSaveFileName(
@@ -289,130 +95,247 @@ class EMPanel(ModePanel):
             return
         line_edit.setText(path)
 
-    # ------------------------------------------------------------------
-    # Run gating
-    # ------------------------------------------------------------------
-    def is_runnable(self):
-        formulation = self.val("formulation")
-        if formulation == FORM_KELVIN_BENCH:
-            # Kelvin Benchmark needs only a .vol with sphere/kelvin_int/
-            # kelvin_ext sidesets.  No coil script.
-            return True
-        return bool(self._widgets["coil_script"].text().strip())
 
-    # ------------------------------------------------------------------
-    # Command builders (one per formulation)
-    # ------------------------------------------------------------------
-    def wp_vol_path(self):
-        """Used by AnalysisWindow._on_run() to source the mesh .vol from
-        the panel's own wp_vol widget (4.35.0+).  Empty for coil-only
-        runs that don't need a workpiece mesh."""
-        return self.val("wp_vol") if "wp_vol" in self._widgets else ""
+# ============================================================
+# Sub-panels: one per Formulation, each generator-driven
+# ============================================================
+
+class _AccelMagnetPanel(_CoilTemplateMixin, ModePanel):
+    """Omega (default) and A-Phi share calc_accel_magnet.py but pass
+    --formulation omega/a.  We hide the formulation widget itself since
+    the outer Method combo selects it.
+    """
+    def __init__(self, formulation_cli="omega", parent=None):
+        super().__init__(parent)
+        from radia.panels.calc_accel_magnet import build_argparser
+        self._formulation_cli = formulation_cli
+        self.bind_argparser(
+            build_argparser(),
+            skip=("vol", "output", "formulation", "msh_output"),
+            file_browse={
+                "coil_script": ("Coil script:", "Python (*.py);;All (*)"),
+                "bh_file":     ("BH file:",     "Text files (*.txt *.csv);;All (*)"),
+                "hys_file":    ("Hysteresis file:", "HYS files (*.hys);;All (*)"),
+            },
+            choice_map={"solver": _FEM_SOLVER_MAP},
+            labels={
+                "fes_order": "FES order:",
+                "tol":       "Tolerance:",
+                "max_iter":  "Max iterations:",
+                "n_steps":   "N steps (FEM):",
+                "relax":     "Relaxation:",
+            },
+        )
+        # Preserve the "New..." coil-template wizard button.
+        self.add_browse_action(
+            "coil_script", "New...", self._on_new_coil_template,
+            fixed_width=60)
+
+    def is_runnable(self):
+        w = self._widgets.get("coil_script")
+        return bool(w and w.text().strip())
 
     def build_command(self, vol_path):
-        formulation = self.val("formulation")
-        if formulation == FORM_MSC:
-            return self._build_msc_command(vol_path)
-        if formulation == FORM_KELVIN_BENCH:
-            return self._build_kelvin_command(vol_path)
-        return self._build_fem_command(vol_path, formulation)
-
-    def _material_args(self, mat_keyword_for_linear="linear"):
-        """Shared --material/--mu-r/--bh-file/--hys-file argument block."""
-        idx = self._widgets["material"].currentIndex()
-        if idx == 0:
-            return ["--material", mat_keyword_for_linear,
-                    "--mu-r", self.val("mu_r")]
-        if idx == 1:
-            args = ["--material", "steel"]
-            bh = self.val("bh_file")
-            if bh:
-                args += ["--bh-file", bh]
-            return args
-        args = ["--material", "hysteresis"]
-        hys = self.val("hys_file")
-        if hys:
-            args += ["--hys-file", hys]
-        return args
-
-    # CLI-DIFF: ignore --output --sigma -- output auto-generated by panel; sigma defaulted from --material preset
-    def _build_fem_command(self, vol_path, formulation):
         coil = self.val("coil_script")
         if not coil:
             raise ValueError("No coil script specified.")
-        solver_key = self._SOLVER_MAP.get(self.val("solver"), "pardiso")
-        try:
-            formulation_cli = _FEM_FORMULATION_CLI[formulation]
-        except KeyError:
-            raise ValueError(
-                f"_build_fem_command got formulation={formulation!r}; "
-                f"calc_accel_magnet.py accepts only "
-                f"{list(_FEM_FORMULATION_CLI.values())}.")
+        stem = vol_path or coil
+        return self.build_command_from_parser(
+            vol_path=vol_path,
+            vol_flag="--vol",
+            script_path=calc_script("calc_accel_magnet.py"),
+            output_path=json_output(stem, "_emfem"),
+            extra=["--formulation", self._formulation_cli,
+                   "--msh-output", msh_output(stem, "_emfem")],
+        )
 
-        cmd = [_PYTHON, calc_script("calc_accel_magnet.py"),
-               "--formulation", formulation_cli,
-               "--fes-order", self.val("fes_order"),
-               "--coil-script", coil,
-               "--solver", solver_key,
-               "--tol", self.val("tol"),
-               "--max-iter", self.val("max_iter"),
-               "--n-steps", self.val("n_steps"),
-               "--relax", self.val("relax")]
-        cmd += self._material_args("linear")
-        if vol_path:
-            cmd += ["--vol", vol_path]
-        # Note: --ima is MSC-only (Radia image-method symmetry).  The
-        # FEM formulation in calc_accel_magnet.py uses standard FEM
-        # BC (sym_tangential / sym_normal sidesets) instead and does
-        # not declare --ima, so do not emit it here.
-        if self.val("method") == "Newton":
-            cmd += ["--newton"]
-        cmd += ["--msh-output", msh_output(vol_path or coil, "_emfem"),
-                "--output", json_output(vol_path or coil, "_emfem")]
-        return cmd
 
-    def _build_msc_command(self, vol_path):
+class _MSCPanel(_CoilTemplateMixin, ModePanel):
+    """MSC (Radia hex via calc_accel_msc.py)."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from radia.panels.calc_accel_msc import build_argparser
+        self.bind_argparser(
+            build_argparser(),
+            skip=("vol", "output", "msh_output"),
+            file_browse={
+                "coil_script": ("Coil script:", "Python (*.py);;All (*)"),
+                "bh_file":     ("BH file:",     "Text files (*.txt *.csv);;All (*)"),
+                "hys_file":    ("Hysteresis file:", "HYS files (*.hys);;All (*)"),
+            },
+            choice_map={"solver": _MSC_SOLVER_MAP},
+            labels={
+                "ima":      "IMA symmetry:",
+                "tol":      "Tolerance:",
+                "max_iter": "Max iterations:",
+                "relax":    "Relaxation:",
+            },
+        )
+        self.add_browse_action(
+            "coil_script", "New...", self._on_new_coil_template,
+            fixed_width=60)
+
+    def is_runnable(self):
+        w = self._widgets.get("coil_script")
+        return bool(w and w.text().strip())
+
+    def build_command(self, vol_path):
         coil = self.val("coil_script")
         if not coil:
             raise ValueError("No coil script specified.")
-        solver_id = self.val("solver").split()[0]
+        stem = vol_path or coil
+        return self.build_command_from_parser(
+            vol_path=vol_path,
+            vol_flag="--vol",
+            script_path=calc_script("calc_accel_msc.py"),
+            output_path=json_output(stem, "_msc"),
+            extra=["--msh-output", msh_output(stem, "_msc")],
+        )
 
-        cmd = [_PYTHON, calc_script("calc_accel_msc.py"),
-               "--coil-script", coil,
-               "--solver", solver_id,
-               "--tol", self.val("tol"),
-               "--max-iter", self.val("max_iter"),
-               "--relax", self.val("relax")]
-        cmd += self._material_args("custom")
-        if vol_path:
-            cmd += ["--vol", vol_path]
-        ima = self.val("ima")
-        if ima:
-            cmd += ["--ima", ima]
-        cmd += ["--msh-output", msh_output(vol_path or coil, "_msc"),
-                "--output", json_output(vol_path or coil, "_msc")]
-        return cmd
 
-    # CLI-DIFF: ignore --probe-x --probe-y --probe-z -- panel always probes the origin (verification default)
-    def _build_kelvin_command(self, vol_path):
+class _KelvinBenchPanel(ModePanel):
+    """Kelvin Benchmark verifies the Cubit-Kelvin pipeline against the
+    analytical magnetic-sphere-in-uniform-field solution.  No coil
+    script; uniform external field is the source."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from radia.panels.calc_kelvin_benchmark import build_argparser
+        self.bind_argparser(
+            build_argparser(),
+            skip=("vol", "msh_output",
+                  "probe_x", "probe_y", "probe_z"),
+            labels={
+                "fes_order": "FES order:",
+                "mu_r":      "mu_r:",
+                "H0":        "H0 [A/m]:",
+                "field_axis": "Field axis:",
+                "R_kelvin":  "Kelvin sphere R [m]:",
+            },
+        )
+
+    def is_runnable(self):
+        return True   # vol_path is required; checked at build_command time
+
+    def build_command(self, vol_path):
         if not vol_path:
             raise ValueError(
                 "Kelvin Benchmark requires a .vol mesh with sphere / "
                 "kelvin_int / kelvin_ext sidesets.")
-        # Kelvin Benchmark always uses the linear material (mu_r),
-        # since the analytical reference assumes a linear sphere.
-        mu_r = self.val("mu_r") or "100"
-        cmd = [_PYTHON, calc_script("calc_kelvin_benchmark.py"),
-               "--vol", vol_path,
-               "--fes-order", self.val("fes_order"),
-               "--mu-r", mu_r,
-               "--H0", self.val("H0"),
-               "--field-axis", self.val("field_axis"),
-               "--R-kelvin", self.val("R_kelvin")]
-        cmd += ["--msh-output", msh_output(vol_path, "_kelvin_bench"),
-                "--output", json_output(vol_path, "_kelvin_bench")]
-        return cmd
+        return self.build_command_from_parser(
+            vol_path=vol_path,
+            vol_flag="--vol",
+            script_path=calc_script("calc_kelvin_benchmark.py"),
+            output_path=json_output(vol_path, "_kelvin_bench"),
+            extra=["--msh-output", msh_output(vol_path, "_kelvin_bench")],
+        )
 
+
+# ============================================================
+# Top-level EMPanel: wp_vol + Method combo + QStackedWidget
+# ============================================================
+
+# Method label -> sub-panel factory (eager construction preserves
+# per-method widget state across switches).
+FORM_OMEGA = "Omega"
+FORM_APHI  = "A-Phi"
+FORM_MSC   = "MSC"
+FORM_KELVIN_BENCH = "Kelvin Benchmark"
+
+_METHOD_FACTORIES = [
+    (FORM_OMEGA,        lambda: _AccelMagnetPanel("omega")),
+    (FORM_APHI,         lambda: _AccelMagnetPanel("a")),
+    (FORM_MSC,          lambda: _MSCPanel()),
+    (FORM_KELVIN_BENCH, lambda: _KelvinBenchPanel()),
+]
+
+
+class EMPanel(ModePanel):
+    """Composite top-level panel.
+
+    Owns: wp_vol Browse (per-panel .vol, 4.35.0+ legacy mechanism) +
+    Method combo + QStackedWidget hosting the 4 sub-panels.
+
+    Per-method state is namespaced as "<method>/<key>" in save_state /
+    restore_state, so switching methods preserves what the user typed
+    under each.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # 1. Per-panel mesh .vol Browse (legacy contract for AnalysisWindow.wp_vol_path).
+        self.add_browse(
+            "wp_vol", "Mesh .vol:",
+            filter_str="Netgen Vol (*.vol);;All (*)")
+
+        # 2. Method combo.
+        self._method_combo = self.add_combo(
+            "method", "Method:",
+            [name for name, _ in _METHOD_FACTORIES])
+
+        # 3. QStackedWidget hosting the 4 sub-panels.
+        self._sub_panels = {name: factory()
+                            for name, factory in _METHOD_FACTORIES}
+        self._stack = QStackedWidget()
+        for name, _ in _METHOD_FACTORIES:
+            self._stack.addWidget(self._sub_panels[name])
+        # Add the stack as a single full-width row.
+        self._form.addRow(self._stack)
+
+        self._method_combo.currentTextChanged.connect(self._on_method_changed)
+        self._on_method_changed(FORM_OMEGA)
+
+    # ---- delegation to current sub-panel ------------------------
+
+    def _current_sub(self):
+        return self._sub_panels[self._method_combo.currentText()]
+
+    def _on_method_changed(self, text):
+        if text in self._sub_panels:
+            self._stack.setCurrentWidget(self._sub_panels[text])
+        cb = getattr(self, "validationChanged", None)
+        if callable(cb):
+            cb()
+
+    def is_runnable(self):
+        return self._current_sub().is_runnable()
+
+    def build_command(self, vol_path):
+        return self._current_sub().build_command(vol_path)
+
+    def wp_vol_path(self):
+        """Source the mesh .vol from the panel's own Browse field (legacy
+        4.35.0+ contract honoured by AnalysisWindow._on_run)."""
+        return self.val("wp_vol") if "wp_vol" in self._widgets else ""
+
+    # ---- save / restore: per-method namespace -------------------
+
+    def save_state(self):
+        # Top-level widgets (wp_vol + method).
+        state = super().save_state()
+        # Each sub-panel under its method prefix.
+        for name, sub in self._sub_panels.items():
+            for k, v in sub.save_state().items():
+                state[f"{name}/{k}"] = v
+        return state
+
+    def restore_state(self, state):
+        if not state:
+            return
+        # Top-level (un-prefixed) keys first.
+        top = {k: v for k, v in state.items() if "/" not in k}
+        super().restore_state(top)
+        # Per-method dispatch.
+        for name, sub in self._sub_panels.items():
+            prefix = f"{name}/"
+            sub.restore_state({k[len(prefix):]: v
+                               for k, v in state.items()
+                               if k.startswith(prefix)})
+        # Update visibility after method combo has been restored.
+        self._on_method_changed(self._method_combo.currentText())
+
+
+# ============================================================
+# Window
+# ============================================================
 
 class EMWindow(AnalysisWindow):
     def __init__(self, vol_path=""):
@@ -420,10 +343,11 @@ class EMWindow(AnalysisWindow):
                          settings_key="em")
         panel = EMPanel()
         self._set_panel(panel)
-        # Pre-fill the panel's wp_vol field from the constructor arg
-        # (display path = relative when inside the working folder).
-        if vol_path and "wp_vol" in panel._widgets and \
-                not panel.val("wp_vol"):
+        # Pre-fill the per-panel wp_vol from the constructor arg if the
+        # user opened the window with a .vol path (and didn't already
+        # save one in QSettings).
+        if vol_path and "wp_vol" in panel._widgets \
+                and not panel.val("wp_vol"):
             panel._widgets["wp_vol"].setText(self.display_path(vol_path))
         self._restore_settings()
         self._update_run_state()
