@@ -1125,6 +1125,180 @@ for (int i = 0; i < n; i++) { ... }
 - MKL internal threading (controlled by `mkl_set_num_threads`)
 - Legacy code not yet migrated
 
+### TaskManager Wrap Policy: Caller Wraps, Helper Does NOT (2026-05-27)
+
+**POLICY**: The TaskManager wrap is the **caller's responsibility**.
+Helper functions / solver classes / library modules that perform
+NGSolve operations (`.Assemble()`, `.Inverse(...)`, `mesh.Curve(p)`,
+`Integrate()`, `GridFunction.Set(...)`) MUST NOT include `with
+TaskManager():` internally.  The **caller** (a `calc_*.py` panel
+script, an `examples/**.py` driver, a test, or a notebook cell) is
+the one that opens the `with TaskManager():` context once and lets
+all helper calls inside the region run in parallel.
+
+**Rationale**:
+
+1. **Composability**: a caller that runs `helper_a()` then
+   `helper_b()` then `helper_c()` in sequence should open ONE
+   `TaskManager` region for the whole batch, not pay the
+   start/stop overhead three times.  When helpers wrap internally,
+   the caller cannot achieve this.
+2. **Predictability**: a reader of `calc_*.py` can see the
+   parallelism intent at the call site, not buried inside a helper
+   they have to chase.
+3. **Single audit point**: the parallel-correctness audit becomes
+   "grep `with TaskManager():` in `calc_*.py` and `examples/**.py`".
+   No need to chase helper modules.
+4. **Removes silent double-wrap noise**: `with TaskManager(): with
+   TaskManager(): ...` is a no-op for the inner context (NGSolve
+   detects + reuses), but it is visual noise that obscures the
+   actual intent.
+
+**Concrete rules**:
+
+- Helper modules under `src/radia/**.py` (NOT `panels/calc_*.py`)
+  MUST NOT contain `with TaskManager():`.  If they need to assert
+  the caller has wrapped, use the diagnostic at the top of the
+  helper (see "Helper diagnostic" below).
+- Caller modules MUST wrap.  `tools/audit_taskmanager.py` enforces
+  this check repo-wide; a violation = parallelism bug.
+- Custom C++ kernels using `ngcore::ParallelFor` (e.g.
+  `rad_equivalence_source.cpp`) are NOT helpers in this sense —
+  they are leaf parallel kernels and naturally honour the caller's
+  TaskManager context via the runtime.
+- `examples/**.py` follow the same rule as callers: every script
+  that does `.Assemble()` / `.Inverse(inverse=...)` / `mesh.Curve(p)`
+  MUST wrap in `with TaskManager():`.
+
+**Helper diagnostic** (optional belt-and-suspenders pattern that
+some helpers may use to fail loudly when the caller forgot to
+wrap):
+
+```python
+def _check_task_manager_active():
+    """Yell if the caller forgot to open a TaskManager context.
+    NGSolve's actual API does not expose an "am I in TM" flag, so
+    this is a best-effort timing/affinity check; helpers can SKIP
+    this if benchmarking the helper itself never runs serial."""
+    import ngsolve
+    # If global threads is 1 (serial), the caller may have set
+    # SetNumThreads(1) for debug -- DO NOT raise.  Only raise if
+    # threads >1 but the user is clearly running outside a TM block
+    # (heuristic: ngsolve.ngsglobals.task_manager is None).
+    ...  # implementation-specific
+```
+
+**Audit tool**:
+
+```bash
+python tools/audit_taskmanager.py
+# Exit 0 = clean; exit non-zero = list of violations.
+```
+
+The audit checks:
+1. Helper modules (anything in `src/radia/` except `panels/calc_*.py`)
+   have ZERO `with TaskManager():`.
+2. Caller modules (`panels/calc_*.py`, `examples/**.py`) that
+   contain `.Assemble()` / `.Inverse(.*inverse=` / `mesh.Curve(`
+   DO have `with TaskManager():` at the top of the containing
+   function.
+
+Run after editing any solver helper or example.  The check is
+fast (~1 s repo-wide); add to pre-commit if desired.
+
+**Migration note (2026-05-27)**: The 7 helpers under `src/radia/`
+that originally had internal `with TaskManager():` were converted
+to no-internal-wrap.  `examples/**.py` callers were swept to add
+the caller-side wrap.  See `taskmanager('helper_vs_caller')` in
+the radia-mcp MCP knowledge for the full policy + audit history.
+
+### TaskManager-Only Policy: Align with NGSolve, No Alternatives (2026-05-27)
+
+**POLICY**: TaskManager is an **NGSolve-side mechanism**; Radia
+aligns with it as the **sole** parallelization path for
+NGSolve-driven computation.  Do NOT introduce any other
+parallelization mechanism for code that touches NGSolve --
+no raw `#pragma omp parallel`, no `threading.Thread`, no
+`multiprocessing.Pool`, no `concurrent.futures` for numerics.
+NGSolve's `with TaskManager():` is the canonical entry point;
+Radia C++ kernels reach the same threadpool via `ngcore::ParallelFor`
+(which honours the active TaskManager context).
+
+**Even ops NGSolve has not yet internally parallelized go through
+TaskManager.**  Examples: `BilinearForm(...)`, `LinearForm(...)`,
+`H1(mesh, ...)`, `HCurl(...)`, `HDiv(...)`, `Periodic(...)`,
+`GridFunction(fes)`, `Mesh(geo.GenerateMesh(...))`, `Integrate(...)`.
+Some of these are mostly serial today; future NGSolve releases that
+add parallelism to FES construction, mesh generation, or quadrature
+will benefit automatically without code changes on Radia's side.
+
+**Why this expansion (beyond just `.Assemble()` / `.Inverse()` /
+`mesh.Curve()` / `gf.Set(cf)`)**:
+
+1. **One coherent computation block** — readers see one
+   `with TaskManager():` that brackets "the NGSolve work", not a
+   patchwork of micro-wraps around isolated parallel calls.
+2. **Future-proof** — when NGSolve internally parallelizes a new
+   op, callers get the speed-up the day they `pip install --upgrade
+   ngsolve`, without a Radia-side audit pass.
+3. **No "is this op parallel?" gotcha** — contributors do not need
+   to memorize which NGSolve calls happen to be parallel today.
+4. **Aligns with NGSolve's own docs/examples** — the canonical
+   NGSolve tutorial pattern wraps the whole solve block, not
+   individual lines.
+
+**Concrete shape** (the canonical script template):
+
+```python
+from ngsolve import *
+ngsolve.SetNumThreads(args.nthreads)   # process-wide thread cap
+with TaskManager():
+    # ----- mesh -----
+    mesh = Mesh(geo.GenerateMesh(maxh=h))
+    mesh.Curve(p)
+
+    # ----- FES + forms -----
+    fes  = H1(mesh, order=p, dirichlet="outer")
+    u, v = fes.TnT()
+    a    = BilinearForm(fes); a += grad(u)*grad(v)*dx; a.Assemble()
+    f    = LinearForm(fes);   f += rhs*v*dx;           f.Assemble()
+
+    # ----- solve -----
+    gfu = GridFunction(fes)
+    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+
+    # ----- post -----
+    err = Integrate(InnerProduct(grad(gfu)-grad_u_exact,
+                                 grad(gfu)-grad_u_exact), mesh)
+    print(f"H1 error = {sqrt(err):.3e}")
+```
+
+The wrap covers FES construction and post-processing too, even
+though those are not currently parallel-hot.  This is intentional
+per the "future-proof" rationale above.
+
+**Audit expansion**: `tools/audit_taskmanager.py` now also flags
+`Integrate(`, `BilinearForm(`, `LinearForm(`, FES constructors
+(`H1`, `HCurl`, `HDiv`, `L2`, `VectorH1`, `Periodic`), and
+`Mesh(geo.GenerateMesh(...))` outside a TaskManager region.
+
+**Not affected** (these are NOT NGSolve calls and do NOT need
+wrapping):
+
+- Pure numpy / scipy operations
+- `radia.*` functions (Radia's own C++ kernels honour the active
+  TaskManager context via `ngcore::ParallelFor`; you still wrap
+  them, but they are not what triggers the audit)
+- Pure I/O (file read/write, json, ...)
+- argparse, logging, print
+
+**Forbidden** (use TaskManager instead):
+
+- `import threading` in any numeric loop
+- `import multiprocessing` for solving / assembly
+- `concurrent.futures.ThreadPoolExecutor` for NGSolve work
+- `#pragma omp parallel` in new C++ that calls NGSolve
+
 ### PyPI Release Workflow (Automated via GitHub Actions)
 
 **POLICY**: PyPI publishing is automatic. Push a version tag (`v*`) and CI/CD handles the rest.
@@ -1136,13 +1310,21 @@ for (int i = 0; i < n; i++) { ... }
 4. `/deploy` — build wheel, deploy to 100号機 (WinRM) & mdx (SSH)
 5. Test on remote machines (Cubit panels, Mesh Evaluation, etc.)
 6. If tests pass: `git push origin main`
-7. Wait for CI to pass: `gh run list --limit 3`
-8. Tag and push (triggers PyPI publish):
+7. **Confirm main CI is GREEN before tagging** (gh-free; `gh` is not on LAB):
+   `python tools/release_triple.py ci-verify` — waits for the self-hosted
+   runner job to finish, then checks the workspace junit XMLs
+   (failures=errors=0). Tag CI = the same `build-test.yml` on the same commit,
+   so a green main CI guarantees a green tag CI — and avoids burning a version
+   number on a broken commit (the v4.80.0→v4.80.5 saga). If RED, fix-forward
+   on main and re-run.
+8. Tag and push **only after step 7 is green** (triggers PyPI publish):
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-9. Monitor: `gh run list --workflow release.yml --limit 3`
+9. Monitor PyPI propagation (gh-free): `pip index versions radia` (and
+   `radia-mcp`, `cubit-mesh-export`). The tag CI just re-runs the
+   already-green main commit, so it is expected green.
 
 **General User Install** (after PyPI publish):
 ```bash
@@ -1207,6 +1389,70 @@ loop)、100号機 と mdx は両方 PyPI install (`pip install radia[cubit] radi
 - `mcp-server-document` (LAB: `S:\mcp-server`) -- LAB-private (PyPI 配布なし)
 
 LAB で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意 (2026-04-28 incident)。release 後の LAB 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **100号機 / mdx 用** (PyPI から通常通り upgrade).
+
+**POLICY (2026-05-27 追加): release 後の LAB editable 再確認**
+
+PyPI release (tag push → CI publish) 後、**LAB の editable pointer
+が drift していないか必ず確認する**。これは `release-triple` skill
+の Definition of Done の暗黙の前提条件であり、CLAUDE.md「LAB editable
+default」原則を実運用で守るチェック。
+
+**いつ実施するか** (再発した historical incidents):
+
+| 日付 | 何が起きたか | 検出経緯 |
+|---|---|---|
+| 2026-04-28 | `pip install --upgrade` で 3 パッケージ全部の editable が上書き | dev loop が機能しないことで発覚 |
+| 2026-05-19 | 同じ pattern 再発 | LAB から「source 編集が反映されない」報告で発覚 |
+| 2026-05-26 | release 直後の CI runner clone (`C:\actions-runner\_work\...`) に `radia-mcp` editable が drift | LAB 側で knowledge file の編集が radia-mcp 経由で見えないことで発覚 |
+| 2026-05-27 | 同上、再発 | MCP tool 経由で新規 topic が dispatch されない (Unknown topic) で発覚 |
+
+**再発するため、release 後の確認を policy 化**。
+
+**チェック手順** (release-triple Phase 8 / Phase 9 の直後に流す):
+
+```powershell
+# 4 パッケージ全部の editable pointer が LAB source を指しているか確認
+pip show radia cubit-mesh-export radia-mcp mcp-server-document |
+  Select-String -Pattern "^(Name|Version|Editable)"
+
+# 期待:
+#   radia               -> S:\Radia\01_GitHub
+#   cubit-mesh-export   -> S:\Radia\01_GitHub\packages\cubit-mesh-export
+#   radia-mcp           -> S:\Radia\01_GitHub\packages\radia-mcp
+#   mcp-server-document -> S:\mcp-server
+```
+
+**Drift 検出時の修復手順**:
+
+```powershell
+# 1. mcp-server-* プロセスを止める (editable uninstall の file lock を解放)
+Get-Process | Where-Object { $_.Name -like "mcp-server*" } |
+  Stop-Process -Force
+Start-Sleep -Seconds 3
+
+# 2. drift しているパッケージを uninstall + LAB source で再 editable 化
+pip uninstall -y <pkg>
+pip install -e S:\Radia\01_GitHub\packages\<pkg> --no-deps --no-cache-dir
+
+# 3. 確認
+pip show <pkg> | Select-String "Editable project location"
+```
+
+**自動化候補** (TODO): `tools/verify_lab_editable.py` を作って
+`release-triple done` から呼び出し、drift があれば exit non-zero。
+今は手動チェックで運用。
+
+**Drift する原因** (analysis):
+
+1. **CI runner と LAB が同じ NAS source を共有**: `\\192.168.11.100\work\00_CAE\Radia\01_GitHub` を `S:\` で参照 (LAB) または UNC で参照 (CI runner)。CI が editable install を走らせると、CI 側の pip metadata が LAB の Python の site-packages にも書き戻されるケースがある (NAS-mounted Python env でない限り通常起こらないが、`pip install -e .` を CI で実行すると `.egg-info` 等が source tree に書かれ、その後の `pip show` 解決順序を狂わせる)。
+2. **`pip install --upgrade <lab-pkg>` を LAB で実行**: editable 上書き。**禁止**。
+3. **release-triple Phase 8 の `pip install --force-reinstall`**: 100号機 / mdx で実行されるべきコマンドを誤って LAB shell で実行。
+
+**予防策**:
+
+- LAB shell では決して `pip install <lab-pkg>` (non-editable) / `pip install --upgrade <lab-pkg>` を打たない
+- release-triple skill の deploy commands は SSH で 100号機 / mdx の shell で実行する (LAB shell では実行しない)
+- 不安な場合は release 直後に上記チェック手順を流す
 
 **100号機 / mdx 全ユーザー PyPI install**: `C:\Program Files\Python312`
 の machine-wide site-packages に PyPI install。リリース毎に admin が
@@ -2013,6 +2259,31 @@ Use **snake_case** with functional prefixes:
 **POLICY**: Volume error and area error MUST use **scientific notation** (e.g., `-8.24e-02%`, `+2.35e-04%`). Do NOT use fixed-point notation like `-0.08%` or `+0.0002%` — this hides significant digits at small values and makes p-convergence trends unreadable.
 
 Apply this to: Mesh Evaluation tables, Joachim correspondence, benchmark results, test output.
+
+### Data Persistence Policy: Always Save Data to Committed JSON
+
+**POLICY**: 計算で得たデータは**常に `.json` に保存せよ**。とくに
+**図・表・公表結果の裏付けとなるデータ**は、`.json` として保存し、その
+`.json` を**版管理された永続的な場所**（図・スクリプトと同じディレクトリ、
+commit 済み）に置くこと。そのデータを **`C:/temp/...` や `%TEMP%`、未コミット
+の sweep ディレクトリにのみ置いてはならない**（transient で消える）。
+
+**Why**: commit 済みの図の元データが `C:/temp` にしか無いと、temp が
+クリアされた瞬間に**図が再生成不能**になる。実例 (2026-05, IGTE ESIM
+digest): `sweep_heatmap.png` は commit されていたが、その
+`sweep_results.json` は `C:/temp/igte_bench/` にしか無く消失 — ~2 時間の
+32 ケース sweep を再走しない限り図を再生成できなくなった。
+
+**Rules**:
+- commit 済みの図 (`.png`/`.pdf`) は、その元データ `.json` を**同じ
+  ディレクトリに commit** すること。「図は git、データは temp」は禁止。
+- プロット/解析スクリプトの**入力**データパスは、既定で commit 済みの場所
+  （スクリプト隣）を指す。`--out-dir` 等で scratch を指すのは使い捨て実行の
+  時だけで、正式な run は `.json` をリポジトリ内に書く。
+- これは下記 **Benchmark Policy** と上記 **File Placement Policy** の拡張：
+  `.json` は「`.py`／図の隣に置くデータ」であり、`.png` と同じ扱い。
+- 対象: sweep (`sweep_*.py`)、benchmark (`bench_*.py`)、出力がプロット/
+  公表される全ての `calc_*.py`。
 
 ### Benchmark Policy
 
