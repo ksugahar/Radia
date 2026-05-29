@@ -31,8 +31,8 @@ REPO = HERE.parent.parent
 CALC = REPO / "src" / "radia" / "panels" / "calc_inductance.py"
 SAMPLES = REPO / "src" / "radia" / "panels" / "samples"
 
-FREQS_HZ = [10000, 50000, 100000, 500000]
-CURRENTS_A = [1.0, 10.0, 100.0, 300.0]
+FREQS_HZ = [10000, 20000, 50000, 100000, 200000, 500000]
+CURRENTS_A = [1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0]
 
 CMD_BASE = [
     sys.executable, str(CALC),
