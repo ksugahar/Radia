@@ -2458,6 +2458,55 @@ PyQt5, or the old C++ Qt5 `.ccl` Claro component anywhere.
   `<Cubit>/bin/radia_cubit.ccl` is a stale artifact (Cubit 2025.12 ignores
   it; remove on redeploy).
 
+### Panel Layout Policy: 10pt + Vertical Scrollbar, Never Compress (2026-05-29)
+
+**POLICY**: PySide6 panels use a **10pt** base font
+(`PANEL_BASE_FONT_POINT_SIZE = 10` in `radia_gui_base.py`).  When the
+window is too short to show every form row at its natural height, the
+panel MUST present a **vertical scrollbar** -- it must NEVER compress
+rows below their natural height to "fit".  Compression clips the field
+text vertically (the entered values become unreadable / unconfirmable),
+which is worse than scrolling (kubota 2026-05-29: "行が細くなりすぎて
+文字潰れ … 確認が困難").
+
+**How it is enforced**:
+- The parameter form (`ModePanel` / `QFormLayout`) is wrapped in a
+  `QScrollArea` in `AnalysisWindow._build_ui`:
+  `setWidgetResizable(True)`, `setFrameShape(QFrame.NoFrame)`,
+  `setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)`.  The form keeps
+  each row at its `sizeHint` height; the scroll area supplies the
+  vertical scrollbar when the pane is shorter than the content.
+- Do NOT remove the scroll-area wrap, and do NOT clamp a row/field to a
+  fixed height below the font's natural line height (`_add_section`'s
+  `setFixedHeight(fm_h + 10)` is computed FROM font metrics -- keep that
+  pattern; never hardcode a smaller pixel height).
+- Combos / spinboxes are **wheel-guarded** (`_NoWheelComboBox` etc.; see
+  the `panel-wheel-guard` skill) so the mouse wheel scrolls the form via
+  the scroll area instead of silently changing a selection.
+
+### Result Output Policy: ne / DoF / time + analysis integral quantities (2026-05-29)
+
+**POLICY**: Every panel's OUTPUT (and the `--output` JSON) MUST surface
+the analysis's key reporting quantities: **element count, DoF, and a
+breakdown of compute time** (every `t_*_s`), plus the **important
+integral quantities of that analysis**.  For induction-heating (radia-ih)
+this includes **heat (P_wp, the workpiece power dissipation)** and, for
+the thermal step, **temperature reported as mean (volume-averaged
+`∫T dV / ∫dV`), max, and min** -- not a single peak value.
+
+**How it is enforced**:
+- `AnalysisWindow._append_standard_summary(result)` renders ne / DoF /
+  all `t_*_s` timings / heat `P_*` / temperature mean-max-min for EVERY
+  result, keyed on the ACTUAL emitted names (`wp_ndof`/`ndof`,
+  `t_bem_solve_s`/`t_solve_s`, `P_wp_W`, `T_mean_C`/`T_max_C`/`T_min_C`).
+  Do NOT regress to a fixed-spelling per-solver cascade -- it silently
+  showed nothing when a calc script used a different key.
+- `calc_*.py` emit the integral quantities in the result dict;
+  `calc_common.calc_main` writes the full dict to the `--output` JSON.
+  A new analysis MUST add its element count, DoF, timing breakdown and
+  the physically meaningful integral quantities (total power, total
+  energy, mean/max/min of the primary field) to its result dict.
+
 ### 4-Layer Architecture
 
 **POLICY**: Cubit, Radia-NGSolve, and computation are **3 separate processes**. No layer imports another layer's libraries.
