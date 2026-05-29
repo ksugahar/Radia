@@ -313,7 +313,7 @@ def main():
 
     test_cases = [
         ("GMSH v4.1", ".msh",
-         'radia_export gmsh "{f}" order {o} version 4 dimension 2 overwrite',
+         'radia_export gmsh "{f}" order {o} dimension 2 overwrite',
          parse_gmsh_area),
         ("Nastran", ".bdf",
          'radia_export nastran "{f}" order {o} dimension 2 overwrite',
