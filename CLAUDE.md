@@ -503,7 +503,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ### No Fallbacks — Fail Fast, Fail Loud
 
-**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.3, NGSolve 6.2.2603+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
+**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2603+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
 
 **Design philosophy**: this is the **fail-fast** principle (Jim Shore, 2004) combined with **"errors should never pass silently"** (PEP 20, Zen of Python) and **"explicit is better than implicit"**. The deeper rationale is *user agency*: a fallback path performs a computation the user did not ask for and cannot inspect. Silent fallback violates the **Principle of Least Astonishment** — the user gets a number, has no way to know which code path produced it, and trusts it. That trust is unrecoverable when the result turns out to be from the wrong path.
 
@@ -1073,7 +1073,7 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 | Component | Version | Notes |
 |-----------|---------|-------|
 | **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit panels call via subprocess. |
-| **Coreform Cubit** | 2025.3 | Embedded Python 3.10 + PySide6. Cannot import NGSolve/Radia directly. |
+| **Coreform Cubit** | 2025.12 | Embedded Python 3.10 + PySide6 (Qt6). No Qt5/PyQt5. Cannot import NGSolve/Radia directly. |
 | **NGSolve** | 6.2.2603+ | curvedelements Load, hex/prism curving, Periodic BC fix |
 
 **Cubit panel subprocess constraint**: Cubit embeds Python 3.10; Radia/NGSolve require 3.12. Same-process import is impossible. All computation runs via `subprocess.run([python3.12, calc_*.py])` with JSON output.
@@ -1460,8 +1460,7 @@ pip show <pkg> | Select-String "Editable project location"
 + `cubit-plugin-install --all-users` を実行。
 
 **100号機 / mdx Cubit plugin (regular file)**:
-- `<Cubit>\bin\radia_cubit.ccl` (regular file from PyPI wheel)
-- `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel; the Qt5 `.ccl` was removed in radia 4.80.0)
 - `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` (regular file from PyPI wheel)
 
 LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるが、100号機 / mdx の
@@ -2341,7 +2340,7 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 ### File Management: .jou and .vol Only
 
-**POLICY**: `ensure_jou_path()` (C++ .ccl) saves `.jou` before any export or evaluation. `.jou` basename determines all output filenames. `.cub5` is NOT saved by the pipeline.
+**POLICY**: `ensure_jou_path()` (Layer 2, PySide6 `radia_export_menu.py`) saves `.jou` before any export or evaluation. `.jou` basename determines all output filenames. `.cub5` is NOT saved by the pipeline.
 
 | File | Role |
 |------|------|
@@ -2424,13 +2423,40 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 
 ## Cubit Panel Architecture
 
+### Cubit GUI: PySide6-Only -- No Qt5 / PyQt5 (radia 4.80.0+)
+
+**POLICY**: The Cubit panel GUI is **PySide6 (Qt6) only**.  Do NOT use Qt5,
+PyQt5, or the old C++ Qt5 `.ccl` Claro component anywhere.
+
+- **Target**: Coreform Cubit **2025.12**, which bundles **PySide6** in its
+  embedded Python 3.10.  It does NOT ship PyQt5, and cannot load the old Qt5
+  `.ccl` (missing Qt5 DLLs) -- which is why the GUI is now PySide6.
+- **GUI = Python PySide6**, not C++ Qt:
+  - Layer 2 (in-Cubit, Python 3.10): `panels/register_toolbar.py` (Solve
+    menu) + `panels/radia_export_menu.py` (Export Mesh menu + dialogs +
+    Mesh Evaluation).  `from PySide6.QtWidgets import ...`; note `QAction`
+    is in `PySide6.QtGui` (was `QtWidgets` in Qt5).
+  - Layer 3 (standalone, Python 3.12): `radia_*.py` + `radia_gui_base.py`
+    import PySide6; declared `PySide6>=6.5` in radia `pyproject.toml`.
+- **No fallback** (per "No Fallbacks -- Fail Fast"): never
+  `try PySide6 except PyQt5`.  An old Cubit without PySide6 must raise the
+  ImportError loudly so the operator fixes the environment.
+- **C++ plugin is Qt-free**: `radia_cubit.ccm` (APREPRO `radia_export`
+  commands) + `radia_cubit_mesh.pyd` link only the Cubit C++ API +
+  statically-linked netgen -- NO Qt (verified: 0 Qt5 imports).  No Qt SDK
+  is needed to build the plugin.
+- **Removed in radia 4.80.0**: the Qt5 `.ccl` GUI (`RadiaComp.cpp`,
+  `HighOrderMesh.cpp`) and the `radia_cubit_ccl` build target.  A leftover
+  `<Cubit>/bin/radia_cubit.ccl` is a stale artifact (Cubit 2025.12 ignores
+  it; remove on redeploy).
+
 ### 4-Layer Architecture
 
 **POLICY**: Cubit, Radia-NGSolve, and computation are **3 separate processes**. No layer imports another layer's libraries.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 1: C++ Qt5 (.ccl)                                        │
+│  Layer 1: C++ .ccm APREPRO backend (no Qt)                      │
 │  ─────────────────────────────────────────────────────────────  │
 │  Export Mesh menu (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)      │
 │  Mesh Evaluation (_p1.vol ... _p5.vol + format QA exports)      │
@@ -2438,7 +2464,7 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 │  radia_export netgen/gmsh/nastran/vtk (APREPRO commands)        │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 2: Cubit GUI Python (Python 3.10 + PySide6/Qt5)          │
+│  Layer 2: Cubit GUI Python (Python 3.10 + PySide6, Cubit 2025.12)│
 │  ─────────────────────────────────────────────────────────────  │
 │  register_toolbar.py -> Solve menu management                   │
 │    Radia-NGSolve / Generate Coil / Kelvin / Reload / Verify     │
@@ -2464,7 +2490,7 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 
 **Interface between layers**: `.vol` file (text format, no ABI dependency)
 
-**Filename convention**: `ensure_jou_path()` (Layer 1, C++) saves `.jou` first. All output files derive basename from `.jou`: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, `{base}_q.sol`, etc.
+**Filename convention**: `ensure_jou_path()` (Layer 2, PySide6 `radia_export_menu.py`) saves `.jou` first. All output files derive basename from `.jou`: `{base}.vol`, `{base}.msh`, `{base}_J.sol`, `{base}_q.sol`, etc.
 
 ### Layer Isolation Rules
 
@@ -2474,13 +2500,13 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 | Layer 4 must NOT import PySide6/PyQt5 | Headless computation. JSON stdout only. |
 | Layer 3 must NOT `import cubit` | Separate process. Cubit embeds Python 3.10; Layer 3 is Python 3.12. |
 | Layer 2 must NOT `import radia` or `import ngsolve` | DLL conflicts (Cubit bundles its own numpy/scipy). |
-| Layer 1 (C++) has no Python dependency | `.ccm`/`.ccl` link Cubit C++ API directly. |
+| Layer 1 (C++) has no Python/Qt dependency | `.ccm` links the Cubit C++ API directly. The Qt5 `.ccl` was removed in radia 4.80.0. |
 
 ### Panel Files
 
 | File | Layer | Purpose |
 |------|-------|---------|
-| `RadiaComp.cpp` (.ccl) | 1 (C++ Qt5) | Export Mesh menu + Mesh Evaluation |
+| `panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs + Mesh Evaluation |
 | `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
 | `radia_ih.py` | 3 (PySide6) | IH analysis window (PEEC+FEM / FEM) |
 | `panels/calc_peec.py` | 4 (no GUI) | PEEC filament coil inductance |
@@ -2491,11 +2517,11 @@ for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_i
 
 **POLICY**: Cubit plugin functionality MUST be implemented in C++ to avoid Python ABI mismatch. Cubit embeds Python 3.10; NGSolve/Radia use Python 3.12. Sharing Python objects between them causes segfaults and DLL conflicts.
 
-- `.ccm`/`.ccl`: Link Cubit C++ API (cubiti, cubit_util) directly -- no Python dependency
+- `.ccm`: Link Cubit C++ API (cubiti, cubit_util) directly -- no Python, no Qt (the Qt5 `.ccl` GUI was removed in radia 4.80.0; the GUI is the PySide6 toolbar in Layer 2)
 - `radia_cubit_mesh.pyd`: pybind11 for Python 3.12 -- does NOT link Cubit C++ libraries
 - Netgen `SetNCD2Names()` is not exposed to Python -- call from C++ side in `NetgenCurverPure`
 - Interface between Cubit and NGSolve: **.vol file** (text format, no ABI dependency)
-- Export Mesh is C++ only (see Cubit Mesh Export Module section below). Do NOT add Python export dialogs or panels.
+- Export Mesh BACKEND (`radia_export` APREPRO commands) is C++ only (see Cubit Mesh Export Module below). The Export Mesh GUI menu IS Python/PySide6 (Layer 2, `radia_export_menu.py`) -- that is the supported GUI since radia 4.80.0, not a forbidden one.
 
 ---
 
@@ -2636,14 +2662,14 @@ All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
 
 ## Cubit Mesh Export Module
 
-**POLICY**: Export Mesh is **C++ only**. All mesh export functionality is in the C++ plugin (`radia_cubit.ccm` + `radia_cubit.ccl`). Do NOT add Python export dialogs, panels, or scripts.
+**POLICY**: The Export Mesh **backend** is **C++ only** -- all mesh extraction / curving / file writing lives in the `radia_cubit.ccm` APREPRO commands (`radia_export ...`).  The Export Mesh **GUI** is the PySide6 toolbar (`panels/radia_export_menu.py`, Layer 2), which only collects options and calls the C++ `radia_export` command via `cubit.cmd`.  Do NOT re-implement export logic in Python, and do NOT add a second GUI.  (The Qt5 `.ccl` GUI was removed in radia 4.80.0.)
 
 ### C++ Plugin Architecture
 
 | Component | File | Purpose |
 |-----------|------|---------|
 | `.ccm` (plugins/) | `radia_cubit.ccm` | APREPRO commands: `radia_export gmsh/nastran/vtk/netgen` |
-| `.ccl` (bin/) | `radia_cubit.ccl` | Qt5 GUI: Export Mesh menu + dialog |
+| GUI (Layer 2) | `panels/radia_export_menu.py` | PySide6 Export Mesh menu + dialogs (replaced the Qt5 `.ccl`, removed in radia 4.80.0) |
 | `.pyd` (plugins/) | `radia_cubit_mesh.pyd` | pybind11: Cubit-free mesh curving |
 
 **Export formats** (all in C++, ACIS geometry projection for curving):
@@ -2700,7 +2726,7 @@ negative Jacobians in GMSH). Use `radia_export netgen` for order 4-5.
 | `src/cubit_plugin/MeshData.cpp` | Shared mesh extraction from Cubit |
 | `src/cubit_plugin/NetgenCurver.cpp` | Order 1-5 curving via compact_netgen |
 | `src/cubit_plugin/callbackgeom.cpp` | ACIS projection callbacks for CallbackGeometry |
-| `src/cubit_plugin/RadiaComp.cpp` | Qt5 GUI component (.ccl) |
+| `src/radia/panels/radia_export_menu.py` | PySide6 Export Mesh GUI (replaced RadiaComp.cpp `.ccl`, removed in radia 4.80.0) |
 | `src/cubit_plugin/RadiaPlugin.cpp` | Command plugin registration (.ccm) |
 | `src/cubit_plugin/radia_cubit_pybind.cpp` | pybind11 module (.pyd) |
 
