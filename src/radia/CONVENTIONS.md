@@ -97,4 +97,4 @@ if __name__ == "__main__":
 
 Analysis windows use PySide6 (system Python 3.12).
 They do NOT run inside Cubit's process.
-The launcher (`register_toolbar.py`) runs inside Cubit and uses PySide6 or PyQt5.
+The launcher (`register_toolbar.py`) runs inside Cubit and uses PySide6 (Cubit 2025.12 ships PySide6; the Qt5/PyQt5 path was removed in radia 4.80.0).
