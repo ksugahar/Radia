@@ -79,3 +79,56 @@ def test_output_summary_temperature_mean_max_min(ih_window):
     txt = ih_window._output.toPlainText()
     assert "Temperature [C]" in txt, txt
     assert "mean 85.3" in txt and "max 142.7" in txt and "min 23.9" in txt, txt
+
+
+# ---- Panel Layout Policy (functional): short window scrolls, never compress ----
+
+def test_short_window_engages_scrollbar_no_compression(ih_window):
+    """At a deliberately short window height, the QScrollArea MUST engage
+    its vertical scrollbar (``maximum() > 0``) rather than compress the
+    form into the viewport.  A compressed form (``maximum() == 0`` with
+    the inner widget shrunk below its sizeHint) is the structural cause
+    of the vertical text clipping bug (kubota 2026-05-29).
+
+    Functional replacement for a brittle screenshot regression: image
+    diff would catch the clipping visually but depends on fonts / DPI /
+    OS.  Here we assert the scroll-area invariant directly."""
+    from PySide6.QtCore import QCoreApplication
+
+    scrolls = [s for s in ih_window.findChildren(QScrollArea)
+               if s.widgetResizable()]
+    assert scrolls, "expected at least one widgetResizable QScrollArea"
+    panel_scroll = scrolls[0]
+    inner = panel_scroll.widget()
+    assert inner is not None, "panel scroll area has no inner widget"
+
+    # Resize to a deliberately short height (any IH panel form's natural
+    # sizeHint exceeds this).
+    ih_window.resize(820, 260)
+    ih_window.show()
+    QCoreApplication.processEvents()
+    QCoreApplication.processEvents()
+
+    inner_hint = inner.sizeHint().height()
+    viewport_h = panel_scroll.viewport().height()
+    vbar = panel_scroll.verticalScrollBar()
+
+    # Sanity: the test must actually exercise the "form too tall" case.
+    assert inner_hint > viewport_h, (
+        f"form sizeHint h={inner_hint} does not exceed viewport "
+        f"h={viewport_h}; resize did not take effect, test is trivial")
+
+    # Core invariant: vertical scrollbar has scroll range (maximum > 0)
+    # <=> the inner widget is taller than the viewport <=> rows kept
+    # their natural height <=> NOT compressed.
+    assert vbar.maximum() > 0, (
+        f"vertical scrollbar maximum == 0: the form was COMPRESSED "
+        f"into the viewport (inner.height={inner.height()}, "
+        f"sizeHint={inner_hint}, viewport={viewport_h}). Field text "
+        f"would clip vertically.")
+    # And the inner widget must keep at least its sizeHint height
+    # (widgetResizable grows it to sizeHint when viewport is shorter --
+    # the "never compress" invariant from CLAUDE.md Panel Layout Policy).
+    assert inner.height() >= inner_hint, (
+        f"inner widget compressed: height={inner.height()} < "
+        f"sizeHint={inner_hint}")
