@@ -349,9 +349,13 @@ def generate_test_cases():
     """Generate all format x option combinations."""
     cases = []
 
-    # --- GMSH: order(1-5) x dim(2D,3D) (v4.1 only) ---
+    # --- GMSH: order(1-3) x dim(2D,3D) (v4.1 only) ---
+    # GMSH max order is 3; order 4-5 is a documented error (NetgenCurver
+    # face/volume interior nodes are unreliable at p>=4 -> negative
+    # Jacobians).  Use `radia_export netgen` for order 4-5.  See CLAUDE.md
+    # "GMSH order limit".
     for model in ['3d', '2d']:
-        for order in [1, 2, 3, 4, 5]:
+        for order in [1, 2, 3]:
             for dim in [3, 2]:
                 vstr = '4.1'
                 name = f"gmsh_{model}_order{order}_v{vstr}_dim{dim}"
