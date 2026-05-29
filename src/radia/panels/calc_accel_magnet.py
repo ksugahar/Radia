@@ -898,7 +898,9 @@ def solve_accel(coil_script="", vol_file="", formulation="omega",
     return result
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator
+    (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
         description="Accelerator magnet solver (Omega-reduced or A-formulation)")
     parser.add_argument("--coil-script", required=True,
@@ -932,6 +934,11 @@ def main():
                         help="GMSH .msh output path")
     parser.add_argument("--output", default="",
                         help="JSON output file")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         return solve_accel(
