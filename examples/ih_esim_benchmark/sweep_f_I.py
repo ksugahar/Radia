@@ -82,7 +82,9 @@ def run_one(freq_hz: float, current_A: float, per_panel: bool,
 
 
 def main():
-    out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("C:/temp/igte_bench/sweep_v1")
+    # Data Persistence Policy: canonical run writes JSON into the repo
+    # (committed alongside the figure), NOT into transient C:/temp.
+    out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "sweep_data"
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Sweep output dir: {out_dir}")
     print(f"Cases: {len(FREQS_HZ) * len(CURRENTS_A) * 2}")
