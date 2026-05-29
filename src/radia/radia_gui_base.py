@@ -573,6 +573,177 @@ class ModePanel(QWidget):
     def is_runnable(self):
         return True
 
+    # ====================================================================
+    # argparse-driven panel generator (POLICY 2026-05-30)
+    # ====================================================================
+    # Most calc_*.py panels are a thin wrapper around an argparse CLI:
+    # every widget is mechanically derivable from action.dest /
+    # action.choices / action.type / action.help.  The pair below
+    # generates widgets from a parser AND inverse-generates the CLI from
+    # the same parser, so adding `parser.add_argument('--new-arg', ...)`
+    # to a calc script ALSO makes the widget appear in the panel without
+    # touching panel code.  Eliminates the panel-cli-diff drift surface
+    # by construction.
+    #
+    # Each calc_*.py exposes a `build_argparser() -> ArgumentParser`
+    # factory (the same parser its main() uses for parse_args).  The
+    # panel's __init__ then does:
+    #     self.bind_argparser(build_argparser(),
+    #         file_browse={"inp": ("FastHenry .inp:", "*.inp")},
+    #         choice_map={"solver_method": [("LU", 0), ("BiCGSTAB", 1)]},
+    #         labels={"freq_min": "Freq min [Hz]:"})
+    # and build_command becomes:
+    #     return self.build_command_from_parser(
+    #         vol_path=vol_path,
+    #         script_path=calc_script("calc_foo.py"),
+    #         vol_flag="--vol",     # or None for panels that don't use --vol
+    #         output_path=json_output(...))
+
+    def bind_argparser(self, parser, *,
+                       skip=("vol", "output"),
+                       file_browse=None,
+                       choice_map=None,
+                       labels=None):
+        """Auto-generate widgets from an argparse ArgumentParser.
+
+        Dispatch (priority order):
+          file_browse[arg] given  -> add_browse (Browse button + path)
+          choice_map[arg] given   -> add_combo with display↔cli-value pairs
+          action.choices=[...]    -> add_combo (display = value)
+          store_true/store_false  -> add_check
+          type=int                -> add_spin
+          everything else         -> add_line (float/str/None)
+
+        Tooltips come from action.help.  Records the parser so
+        build_command_from_parser() can do the inverse generation.
+
+        Args:
+            parser: argparse.ArgumentParser (factory from calc_*.py).
+            skip: arg dest names NOT to create widgets for -- the
+                AnalysisWindow handles vol / output separately.
+            file_browse: {arg_dest: (label, "Filter (*.ext)")}.
+            choice_map: {arg_dest: [(display_text, cli_value), ...]}
+                for display-name ↔ argparse-value bridging (e.g. show
+                "LU" / "BiCGSTAB" but emit --solver-method 0 / 1).
+            labels: {arg_dest: "Display label:"} overrides; otherwise
+                the dest is auto-cased ("freq_min" -> "Freq min:").
+        """
+        import argparse
+        self._bound_parser = parser
+        self._bound_skip = set(skip)
+        self._bound_choice_map = dict(choice_map or {})
+        file_browse = file_browse or {}
+        labels = labels or {}
+
+        for action in parser._actions:
+            key = action.dest
+            if key == "help" or key in self._bound_skip:
+                continue
+            label = labels.get(key) or self._auto_label_for(action)
+
+            if key in file_browse:
+                f_label, f_filter = file_browse[key]
+                self.add_browse(key, f_label,
+                                default=str(action.default or ""),
+                                filter_str=f_filter)
+            elif key in self._bound_choice_map:
+                pairs = self._bound_choice_map[key]
+                displays = [p[0] for p in pairs]
+                default_idx = 0
+                if action.default is not None:
+                    for i, (_, v) in enumerate(pairs):
+                        if v == action.default:
+                            default_idx = i
+                            break
+                w = self.add_combo(key, label, displays, default=default_idx)
+                w._radia_choice_pairs = pairs
+            elif action.choices:
+                items = [str(c) for c in action.choices]
+                default_idx = 0
+                if action.default is not None and action.default in action.choices:
+                    default_idx = items.index(str(action.default))
+                self.add_combo(key, label, items, default=default_idx)
+            elif isinstance(action, (argparse._StoreTrueAction,
+                                      argparse._StoreFalseAction)):
+                self.add_check(key, label, default=bool(action.default))
+            elif action.type is int:
+                default_val = int(action.default) if action.default is not None else 0
+                self.add_spin(key, label, value=default_val,
+                              lo=-(1 << 31), hi=(1 << 31) - 1)
+            else:
+                # float / str / default
+                default_str = "" if action.default is None else str(action.default)
+                self.add_line(key, label, default_str)
+
+            if action.help and key in self._widgets:
+                self._widgets[key].setToolTip(action.help)
+        return self
+
+    def build_command_from_parser(self, *, vol_path="", script_path,
+                                  vol_flag="--vol", output_path=None,
+                                  extra=()):
+        """Inverse of bind_argparser: read bound widgets, emit CLI argv.
+
+        Args:
+            vol_path: AnalysisWindow's vol input (routed separately, not
+                from a widget).
+            script_path: full path to the calc_*.py to run.
+            vol_flag: flag name AnalysisWindow's vol maps to (e.g.
+                "--vol"). Pass None for panels that don't use --vol
+                (PCB uses --inp instead).
+            output_path: appended as --output <path> when set.
+            extra: additional argv tokens at the end (rare).
+        """
+        if not hasattr(self, "_bound_parser"):
+            raise RuntimeError("bind_argparser() not called -- "
+                               "nothing to emit")
+        parser = self._bound_parser
+
+        cmd = [_PYTHON, script_path]
+        for action in parser._actions:
+            key = action.dest
+            if key == "help":
+                continue
+            flag = action.option_strings[0] if action.option_strings else None
+            if not flag:
+                continue
+            if vol_flag and flag == vol_flag:
+                if vol_path:
+                    cmd += [vol_flag, vol_path]
+                continue
+            if key in self._bound_skip:
+                continue
+            if key not in self._widgets:
+                continue
+            w = self._widgets[key]
+
+            if hasattr(w, "_radia_choice_pairs"):
+                idx = w.currentIndex()
+                cmd += [flag, str(w._radia_choice_pairs[idx][1])]
+            elif isinstance(w, QCheckBox):
+                if w.isChecked():
+                    cmd += [flag]
+            elif isinstance(w, QComboBox):
+                cmd += [flag, w.currentText()]
+            elif isinstance(w, (QSpinBox, QDoubleSpinBox)):
+                cmd += [flag, str(w.value())]
+            elif isinstance(w, QLineEdit):
+                text = w.text().strip()
+                if text:
+                    cmd += [flag, text]
+                elif getattr(action, "required", False):
+                    raise ValueError(f"Required argument {flag} is empty")
+            # else: unsupported widget type; skip silently
+
+        if output_path:
+            cmd += ["--output", output_path]
+        cmd += list(extra)
+        return cmd
+
+    def _auto_label_for(self, action):
+        """Derive a Display Label from action.dest (override via labels=)."""
+        return action.dest.replace("_", " ").capitalize() + ":"
+
     def build_command(self, vol_path):
         raise NotImplementedError
 
