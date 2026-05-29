@@ -674,9 +674,13 @@ netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロ�
 - Cubit → NGSolve: `.vol` only (never `.msh`).  No `ReadGmsh` path.
 - NGSolve → GMSH view: `.vol` + `.sol` → `vol2msh()` → `.msh v4.1`.
 - `.msh v2.2` support has been removed from `GmshPostExport` and
-  `ExportGmshCommand`.  The `version` keyword on `radia_export gmsh` is
-  accepted for back-compat with old `.jou` files but is ignored
-  (always emits v4.1 with a warning if `version 2` is passed).
+  `ExportGmshCommand`.  The `version` keyword on `radia_export gmsh` was
+  also removed (radia 4.80.0); the current syntax is
+  `radia_export gmsh "f" order N [dimension D]` and always emits v4.1.
+  An old `.jou` (or test) that still passes `version N` now ERRORS
+  ("Unrecognized Identifier: 'version'") -- drop the keyword.  (Verified
+  2026-05-29: the back-compat accept-and-ignore promised by the earlier
+  policy is NOT in the shipped plugin; restoring it would be a C++ change.)
 
 ### Mesh Export Consistency Check Policy
 
