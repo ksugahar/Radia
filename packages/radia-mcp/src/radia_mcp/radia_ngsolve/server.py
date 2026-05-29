@@ -448,6 +448,16 @@ def aca_tsvd(topic: str = "overview") -> str:
                                 (alias: "optuna", "cma-es")
             "validation"      - vs coil_solver.f90 (1e-15) + magnet path
                                 (alias: "f90", "validate")
+            "literature"      - stream function method theory + lineage
+                                (Turner target-field, Peeren, Abe DUCAS=CP+TSVD,
+                                NESCOIL, Tomasi); alias "sfm", "lineage", "abe"
+            "workflow"        - end-to-end SF design -> CAD(STEP) -> PEEC ->
+                                field demos (Gz rings, Gx fingerprint,
+                                sf_to_peec); alias "cad", "peec", "gz", "gx"
+            "single_stroke"   - one-continuous-wire connection: Kuijpers/Lomonova
+                                (Compumag 2023) B-spline+blending prior art +
+                                our crossover-compensation/branch-cut research
+                                idea; alias "kuijpers", "crossover", "winding"
             "all"             - Everything concatenated
     """
     return get_aca_tsvd_knowledge(topic)
