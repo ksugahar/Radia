@@ -1274,7 +1274,9 @@ def solve_fem(vol_file="", fes_order=1,
     return result
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator
+    (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
         description="3D FEM-SIBC with PEEC filament source + optional Kelvin")
     parser.add_argument("--vol", required=True, help="Netgen .vol file")
@@ -1347,6 +1349,11 @@ def main():
                              "produces a physically wrong open-BC "
                              "result that looks like a successful "
                              "solve).  Per CLAUDE.md 'No Fallbacks'.")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         if not args.peec_step:
