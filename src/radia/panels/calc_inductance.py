@@ -1741,7 +1741,9 @@ def run_inductance(args):
     return out
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator
+    (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
         description="Coil inductance (vacuum + weak-coupled BEM-SIBC). "
                     "Replaces calc_peec_inductance / calc_peec_bem / "
@@ -1910,7 +1912,11 @@ def main():
     # ----- Performance -----
     parser.add_argument("--n-threads", type=int, default=0,
                         help="0 = auto (TaskManager)")
+    return parser
 
+
+def main():
+    parser = build_argparser()
     return calc_main(run_inductance, parser)
 
 
