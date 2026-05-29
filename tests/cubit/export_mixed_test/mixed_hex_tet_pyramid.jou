@@ -40,11 +40,11 @@ block 5 name "boundary_face"
 Volume all scale 0.001
 
 # Order 1 exports
-radia_export gmsh "{DIR}/mixed_o1.msh" order 1 version 2 dimension 3 overwrite
+radia_export gmsh "{DIR}/mixed_o1.msh" order 1 dimension 3 overwrite
 radia_export nastran "{DIR}/mixed_o1.bdf" order 1 dimension 3 overwrite
 radia_export netgen "{DIR}/mixed_o1.vol" order 1 overwrite
 
 # Order 2 exports (NetgenCurver)
-radia_export gmsh "{DIR}/mixed_o2.msh" order 2 version 2 dimension 3 overwrite
+radia_export gmsh "{DIR}/mixed_o2.msh" order 2 dimension 3 overwrite
 radia_export nastran "{DIR}/mixed_o2.bdf" order 2 dimension 3 overwrite
 radia_export netgen "{DIR}/mixed_o2.vol" order 2 overwrite

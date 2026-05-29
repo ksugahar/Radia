@@ -678,9 +678,13 @@ netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロ�
   also removed (radia 4.80.0); the current syntax is
   `radia_export gmsh "f" order N [dimension D]` and always emits v4.1.
   An old `.jou` (or test) that still passes `version N` now ERRORS
-  ("Unrecognized Identifier: 'version'") -- drop the keyword.  (Verified
-  2026-05-29: the back-compat accept-and-ignore promised by the earlier
-  policy is NOT in the shipped plugin; restoring it would be a C++ change.)
+  ("Unrecognized Identifier: 'version'") -- drop the keyword.  **DECISION
+  (2026-05-29): the `version` keyword is ABOLISHED and v2.2-route NGSolve
+  loading is NOT supported.**  Do NOT restore accept-and-ignore; v4.1 is the
+  only emitted `.msh` format and NGSolve interchange is `.vol`-only (no
+  `ReadGmsh`).  (`cohomology_cut.py` still writes a temporary v2.2 mesh for
+  GMSH's own cohomology-cut computation -- that is a GMSH-internal use, not
+  an NGSolve-load path, and is unaffected.)
 
 ### Mesh Export Consistency Check Policy
 
