@@ -9,11 +9,11 @@ Tests should be run using **system Python** with the `CUBIT_PATH` environment va
 Either add Cubit's `bin` directory to your system PATH, or set the `CUBIT_PATH` environment variable:
 
 ```bash
-# Windows (PowerShell)
-$env:CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.3/bin"
+# Windows (PowerShell) — Cubit 2025.8+ (Qt5-free PySide6 plugin)
+$env:CUBIT_PATH = "C:/Program Files/Coreform Cubit 2025.12/bin"
 
 # Windows (cmd)
-set CUBIT_PATH=C:/Program Files/Coreform Cubit 2025.3/bin
+set CUBIT_PATH=C:/Program Files/Coreform Cubit 2025.12/bin
 
 # Linux/Mac
 export CUBIT_PATH=/path/to/cubit/bin
@@ -37,8 +37,7 @@ python tests/cubit/test_vtk_auto_order.py
 | File | Description |
 |------|-------------|
 | `test_basic.py` | Module import and function signature tests |
-| `test_gmsh_export.py` | Gmsh v4.1 export tests |
-| `test_gmsh_v4_export.py` | Gmsh v4.1 export tests |
+| `test_gmsh_export.py` | Gmsh v4.1 export tests (format, 1st/2nd order, mixed, $Entities, $PhysicalNames) |
 | `test_nastran_export.py` | Nastran BDF export tests |
 | `test_meg_export.py` | MEG format export tests |
 | `test_vtk_auto_order.py` | VTK auto element order detection tests |
