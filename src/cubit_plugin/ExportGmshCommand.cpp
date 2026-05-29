@@ -3,6 +3,7 @@
 #include "NetgenCurver.hpp"
 #include "RadiaMessageFilter.hpp"
 #include "CubitMessage.hpp"
+#include "CubitInterface.hpp"
 #include "utf8_path.hpp"
 
 #include <fstream>
@@ -371,8 +372,14 @@ bool ExportGmshCommand::write_gmsh_v41(const std::string &filename,
               + (int)nodeset_info.size();
   if (nphys > 0) {
     fid << "$PhysicalNames\n" << nphys << "\n";
-    for (auto &[bid, bi] : block_info)
-      fid << bi.dim << " " << bid << " \"block_" << bid << "\"\n";
+    for (auto &[bid, bi] : block_info) {
+      // Use the Cubit block name (material label) when present, matching
+      // the netgen exporter; fall back to "block_<id>" only if unnamed.
+      std::string bname = CubitInterface::get_block_name(bid);
+      if (bname.empty())
+        bname = "block_" + std::to_string(bid);
+      fid << bi.dim << " " << bid << " \"" << bname << "\"\n";
+    }
     for (auto &sg : mesh.sidesets) {
       fid << "2 " << sg.id << " \"";
       fid << (sg.name.empty() ? "sideset_" + std::to_string(sg.id) : sg.name);
