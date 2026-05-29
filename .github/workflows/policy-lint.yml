@@ -50,17 +50,23 @@ jobs:
 
       # ----------------------------------------------------------------
       # Policy 4: Matrix Storage (Row-Major)
-      #   No CblasColMajor in core source
-      #   Exceptions: rad_mmm_matrices.cpp, rad_relaxation_methods.cpp
-      #   (both use LAPACK dgetrf/dgetri which output col-major)
+      #   No CblasColMajor in core source.
+      #   Exceptions (all genuine LAPACK / Fortran-library interop where
+      #   the storage layout is dictated by the upstream library):
+      #     rad_mmm_matrices.cpp        -- LAPACK dgetrf / dgetri
+      #     rad_relaxation_methods.cpp  -- LAPACK dgetrf / dgetri
+      #     rad_hacapk.cpp              -- HACApK (Fortran, column-major)
+      #     rad_stream_function.cpp     -- LAPACK SVD output (column-major)
       # ----------------------------------------------------------------
-      - name: "Policy 4: No CblasColMajor in core (except LAPACK users)"
+      - name: "Policy 4: No CblasColMajor in core (except LAPACK / HACApK users)"
         run: |
           HITS=$(grep -rn 'CblasColMajor' src/core/ --include='*.cpp' --include='*.h' 2>/dev/null \
                  | grep -v 'rad_mmm_matrices.cpp' \
-                 | grep -v 'rad_relaxation_methods.cpp' || true)
+                 | grep -v 'rad_relaxation_methods.cpp' \
+                 | grep -v 'rad_hacapk.cpp' \
+                 | grep -v 'rad_stream_function.cpp' || true)
           [ -z "$HITS" ] || { echo "$HITS"; echo "::error::Policy 4 failed: use CblasRowMajor in core"; exit 1; }
-          echo "PASS: No CblasColMajor in core (MMM/LAPACK excepted)"
+          echo "PASS: No CblasColMajor in core (MMM / LAPACK / HACApK excepted)"
 
       # ----------------------------------------------------------------
       # Policy 5: File Placement
