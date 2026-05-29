@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(_repo_root, 'src', 'radia'))
 from install_panels import find_cubit_bin
 _cubit_path = find_cubit_bin()
 if _cubit_path: sys.path.append(_cubit_path)
-os.environ['CUBIT_PLUGIN_DIR'] = r'C:\Program Files\Coreform Cubit 2025.3\bin\plugins'
+os.environ['CUBIT_PLUGIN_DIR'] = os.path.join(_cubit_path, 'plugins') if _cubit_path else ''
 
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF, BND
