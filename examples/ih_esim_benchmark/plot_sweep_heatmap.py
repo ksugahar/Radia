@@ -73,7 +73,7 @@ def load_grid(res_path):
 
 
 def _draw_heatmap(ax, fig, currents, freqs, gap_pct, *, ann_pt, tick_pt,
-                  cb_label=r"$(P_{\mathrm{per}}/P_{\mathrm{scalar}} - 1)"
+                  cb_label=r"$(P_{\mathrm{per}}/P_{\mathrm{uni}} - 1)"
                            r" \times 100$ (\%)"):
     """Gap-% heatmap with annotated cells and a colorbar."""
     im = ax.imshow(gap_pct, aspect="auto", origin="lower", cmap="RdYlGn_r",
@@ -117,7 +117,7 @@ def _draw_curves(ax, fig, currents, freqs, P_scalar, P_per, *, tick_pt):
     cbf.ax.tick_params(labelsize=tick_pt)
     method_handles = [
         Line2D([0], [0], color="0.35", ls="--", marker="o", mfc="none",
-               label="scalar"),
+               label="uniform"),
         Line2D([0], [0], color="0.35", ls="-", marker="s",
                label="per-element"),
     ]
