@@ -63,7 +63,7 @@ python arc_current_with_magnet.py
 
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
-| [stream_function/](stream_function/) | 4 | (ACA+)+TSVD least-norm solver (stream function method, generalised): coil field synthesis (`ObjFlmCur`) + permanent-magnet array (same solver, MMM/MSC field) + ACA-vs-naive-TSVD benchmark + CMA-ES (Optuna) magnetization-angle design. Kernel-agnostic; ACA+ from HACApK. See [docs/stream_function.md](../docs/stream_function.md). |
+| [stream_function/](stream_function/) | 6 | (ACA+)+TSVD least-norm solver (stream function method, generalised): coil field synthesis + permanent-magnet array (MMM/MSC) + ACA-vs-naive-TSVD benchmark + CMA-ES (Optuna) magnetization-angle design + cylindrical Gz gradient coil design + full SF->single-stroke CAD(STEP)->PEEC->field workflow. Kernel-agnostic; ACA+ from HACApK. See [docs/stream_function.md](../docs/stream_function.md). |
 
 ### Machine Learning
 
