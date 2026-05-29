@@ -6,17 +6,18 @@ the cylindrical side wall.  Three panels:
 
     (a) Re Z_s [mOhm]        loss component (drives P_wp_local)
     (b) Im Z_s [mOhm]        reactive (tracks mu(|H|) more strongly)
-    (c) |H_t| [A/m]          driver field (66x max/min contrast)
+    (c) |H_t| [A/m]          driver field (side wall, 4.8x contrast)
 
 For the IH headline benchmark (steel cylinder, 50 kHz,
 I_port = 100 A) this figure visually explains the per-element
-ESIM contribution: |H_t| spans 16-1084 A/m (66x max/min, 2.86x
-max/mean), so the surface is strongly non-uniform; where |H_t| is
+ESIM contribution: on the side wall |H_t| spans 226-1084 A/m
+(4.8x max/min, 1.7x about the mean; the cooler end caps fall to
+~16 A/m), so the surface is strongly non-uniform; where |H_t| is
 largest the BH curve drives the steel deeper into saturation,
-lowering the local Re Z_s (13.4-19.1 mOhm, min/mean 0.75x).  The
+lowering the local Re Z_s to 13.4-19.0 mOhm (min/mean 0.80x).  The
 local loss density ~ Re(Z_s) * |H_t|^2 is dominated by the |H_t|^2
-spread.  Scalar mesh-RMS Karl collapses this map to ONE Z_s; per-
-element Karl preserves it, giving P_wp = 18.75 W vs scalar 30.51 W
+spread.  Uniform mesh-RMS Karl collapses this map to ONE Z_s; per-
+element Karl preserves it, giving P_wp = 18.75 W vs uniform 30.51 W
 (-38.5%).  (The earlier "94x / 2.1x" figures were a Galerkin-
 localisation artifact, corrected to the triangle-gradient |H_t|.)
 
@@ -118,6 +119,16 @@ def main():
         theta = np.arctan2(y[side], x[side])
         z_side = z[side] * 1e3
         theta_deg = np.degrees(theta)
+        # Side wall is what the (theta,z) map shows; report its ranges
+        # (the full-array prints above include the cooler end caps).
+        Hs = H_t[side]
+        Rs = Zs_re[side]
+        print(f"side wall ({int(side.sum())} DOFs, plotted): "
+              f"|H_t| {Hs.min():.0f}-{Hs.max():.0f} A/m "
+              f"({Hs.max()/Hs.min():.1f}x max/min, "
+              f"{Hs.max()/Hs.mean():.2f}x max/mean); Re Z_s "
+              f"{Rs.min()*1e3:.1f}-{Rs.max()*1e3:.1f} mOhm "
+              f"(min/mean {Rs.min()/Rs.mean():.2f}x)")
 
         figsize = apply_lab_style(target="paper_double_column", aspect=0.30)
         fig, axes = plt.subplots(1, 3, figsize=figsize,
