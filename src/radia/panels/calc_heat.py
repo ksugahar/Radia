@@ -474,6 +474,11 @@ def solve_heat(wp_vol,
     T_arr = np.asarray(gfT.vec.FV().NumPy())
     T_max = float(np.max(T_arr))
     T_min = float(np.min(T_arr))
+    # Volume-averaged mean temperature -- the integral quantity
+    # (int T dV / int dV), the physically meaningful "average" rather
+    # than a nodal mean (kubota 2026-05-29: report mean/max/min).
+    _vol = float(Integrate(CF(1), wp_mesh))
+    T_mean = float(Integrate(gfT, wp_mesh)) / _vol if _vol > 0 else T_max
 
     # GMSH .msh export of the final temperature field (Open GMSH).
     # Bundled fields:
@@ -574,6 +579,7 @@ def solve_heat(wp_vol,
     return {
         "T_max_C": T_max,
         "T_min_C": T_min,
+        "T_mean_C": T_mean,
         "T_initial_C": float(t_initial),
         "T_probe_history_C": T_probe if probe_point is not None else None,
         "t_history_s": t_arr,

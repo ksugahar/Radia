@@ -12,7 +12,8 @@ Each entry is structured as:
 
 The MCP server exposes this via panel_gui_pitfalls(topic=...). Topics
 are stable keywords (combo_state, mode_switch, gmsh_viz, subprocess_args,
-cubit_jou) so they can be referenced from prompts.
+cubit_jou, wheel_guard, panel_layout, result_output) so they can be
+referenced from prompts.
 """
 
 PANEL_GUI_PITFALLS = """\
@@ -23,7 +24,8 @@ the Radia panels and the calc_*.py subprocess scripts. Each section
 ends with a **rule** to prevent the same bug from coming back.
 
 Topics: combo_state, mode_switch, gmsh_viz, subprocess_args, cubit_jou,
-        sample_jou, layout_unification, learn_edition_cap
+        sample_jou, layout_unification, learn_edition_cap,
+        wheel_guard, panel_layout, result_output
 
 ============================================================
 ## combo_state — Combo box save/restore by INDEX is fragile
@@ -762,6 +764,179 @@ run Cubit Pro and never see the warning.
 
 **Reference**: ``CLAUDE.md`` § "Cubit Learn Edition 50k Element Cap",
 commit ``334d84f``.
+
+============================================================
+## wheel_guard — Mouse wheel silently changes combo/spin values
+============================================================
+
+**Symptom**: The user scrolls the panel with the mouse wheel to reach
+a field further down. As the cursor passes OVER a combo box (e.g. the
+one just below "Workpiece impedance model") or a spin box, that widget
+**eats the wheel event and changes its own selection** instead of
+scrolling the page. The user does not notice — they ran the solve
+with ``esim`` selected when they had carefully picked ``sibc`` a
+moment earlier. The wrong value is invisible because the combo looks
+identical; only the result comes out wrong.
+
+**Root cause**: Qt's default ``QComboBox`` / ``QAbstractSpinBox``
+``wheelEvent`` steps the value whenever the pointer is over the widget
+(no focus required). In a tall scrolling form this is almost always
+the WRONG behaviour — the user means to scroll the form, not to nudge
+a parameter. Because the change is a single step (one combo item, one
+spin increment) it produces a plausible-looking value, so it is the
+worst kind of silent UI bug: the same class as a silent fallback (a
+plausible wrong number the user cannot audit — see "No Fallbacks").
+
+**Rule**: Every value-bearing widget in a scrollable panel MUST
+swallow wheel events. Use the ``_NoWheel*`` subclasses in
+``radia_gui_base.py``:
+
+```python
+class _NoWheelComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()          # let the QScrollArea scroll instead
+
+class _NoWheelSpinBox(QSpinBox): ...
+class _NoWheelDoubleSpinBox(QDoubleSpinBox): ...
+```
+
+``ModePanel.add_combo`` builds ``_NoWheelComboBox`` and ``add_spin``
+builds ``_NoWheelSpinBox``, so every panel field declared through the
+base class gets the guard for free. Any panel that constructs a raw
+``QComboBox`` / ``QSpinBox`` / ``QDoubleSpinBox`` directly (e.g.
+``radia_motor.py``, ``_heat_panel.py``) MUST import the ``_NoWheel*``
+alias instead of the bare Qt class:
+
+```python
+from radia_gui_base import (_NoWheelComboBox as QComboBox,
+                            _NoWheelSpinBox as QSpinBox,
+                            _NoWheelDoubleSpinBox as QDoubleSpinBox)
+```
+
+**Test**: ``tests/panels/test_combo_wheel_guard.py`` synthesises a
+``QWheelEvent`` over every combo / spin found via ``findChildren`` in
+each panel window and asserts the value did NOT change. This is a
+FUNCTIONAL test (it dispatches the real event), not a string grep —
+a panel that forgets the guard fails it.
+
+**Reference**: ``radia_gui_base.py`` ``_NoWheel*`` classes +
+``add_combo`` / ``add_spin``; ``CLAUDE.md`` "Panel Layout Policy"
+(2026-05-29); the ``panel-wheel-guard`` skill.
+
+============================================================
+## panel_layout — 10pt font + vertical scrollbar, never compress rows
+============================================================
+
+**Symptom**: On a short window (laptop screen, or the user dragged the
+panel small) the parameter rows get squeezed vertically until the
+field text is **clipped** — the entered numbers are half-cut and
+unconfirmable. The user reports "行が細くなりすぎてて、文字潰れ"
+(rows too thin, text crushed).
+
+**Root cause**: A bare ``QFormLayout`` / ``QVBoxLayout`` packed
+straight into the window will compress its rows below their natural
+``sizeHint`` height when the window is shorter than the content. Qt
+shrinks every row proportionally rather than introducing a scrollbar,
+so a 20-row form in a 400px window clips every row.
+
+**Rule (Panel Layout Policy, 2026-05-29)**:
+
+  1. Base panel font is **10pt** — ``PANEL_BASE_FONT_POINT_SIZE = 10``
+     in ``radia_gui_base.py``, applied to the panel widget. Do NOT
+     shrink below 10pt to "make it fit".
+  2. The parameter form is wrapped in a **``QScrollArea`` with
+     ``setWidgetResizable(True)``**. When the window is too short the
+     area shows a **vertical scrollbar** and every row keeps its
+     natural (uncompressed) ``sizeHint`` height. NEVER let rows
+     compress.
+  3. The horizontal scrollbar is disabled
+     (``setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)``) and the
+     frame is ``QFrame.NoFrame`` so the scroll area is visually
+     transparent.
+
+```python
+scroll = QScrollArea()
+scroll.setWidgetResizable(True)              # rows keep sizeHint height
+scroll.setFrameShape(QFrame.NoFrame)
+scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+scroll.setWidget(form_container)
+```
+
+This pairs with ``wheel_guard``: once the form scrolls, the
+``_NoWheel*`` widgets ensure the wheel scrolls the area instead of
+nudging whatever combo the cursor happens to be over.
+
+**Test**: ``tests/panels/test_panel_output_health.py``
+``test_panel_base_font_is_10pt`` (asserts the constant) and
+``test_form_is_in_resizable_scrollarea`` (asserts a
+``widgetResizable`` ``QScrollArea`` exists in the window).
+
+**Reference**: ``radia_gui_base.py`` ``PANEL_BASE_FONT_POINT_SIZE`` +
+``_build_ui`` QScrollArea wrap; ``CLAUDE.md`` "Panel Layout Policy:
+10pt + Vertical Scrollbar, Never Compress" (2026-05-29).
+
+============================================================
+## result_output — OUTPUT/JSON must surface ne / DoF / time + integral quantities
+============================================================
+
+**Symptom**: A solve finishes, the result panel shows the headline
+number (inductance, say) but **no element count, no DoF, no
+compute-time breakdown, no heat, no temperature**. The user cannot
+tell how big the model was or how long each phase took. For an IH run
+the heat (P) and the workpiece temperature — the whole point of the
+analysis — are missing from both the OUTPUT text and the saved JSON.
+
+**Root cause (two distinct bugs)**:
+
+  1. ``_on_finished``'s summary block checked a FIXED cascade of key
+     names (``n_dofs`` / ``t_solve`` / ``P_total_W``) while the
+     calc_*.py scripts actually emit ``wp_ndof`` / ``t_bem_solve_s`` /
+     ``P_wp_W``. The names never matched, so the summary rendered
+     nothing — the data was IN the result dict, just never displayed.
+  2. The thermal script reported a single peak temperature, not the
+     mean / max / min triple the user needs to judge a heat-treat
+     result.
+
+**Rule (Result Output Policy, 2026-05-29)**:
+
+  1. The OUTPUT text AND the ``--output`` JSON MUST record, for every
+     analysis: **element count, DoF, and a per-phase compute-time
+     breakdown**. ``calc_common.calc_main`` already writes the full
+     result dict to the JSON; the GUI must surface the same keys.
+  2. ``_append_standard_summary(result)`` (in ``radia_gui_base.py``)
+     renders these **generically from whatever keys are present** — it
+     does NOT hard-code a key cascade. It surfaces element / triangle
+     counts (``ne`` / ``wp_mesh_n_tris``), DoF (``ndof`` / ``wp_ndof``),
+     every ``t_*_s`` timing, heat ``P_*_W``, and temperature.
+  3. For IH specifically, **heat and temperature are mandatory**.
+     Temperature is reported as **mean (volume-averaged) / max / min**,
+     not a single peak — the calc emits ``T_mean_C`` (=
+     ``Integrate(gfT, wp_mesh) / volume``), ``T_max_C``, ``T_min_C``.
+  4. When you add a new integral quantity to a calc script it appears
+     in the OUTPUT automatically IF you name it with a recognised
+     convention (``t_*_s`` for time, ``P_*_W`` for power, ``*_C`` for
+     temperature, ``ndof`` / ``ne`` for sizes). Extend
+     ``_append_standard_summary`` rather than re-implementing the
+     summary per panel.
+
+**Why generic, not a key cascade**: a fixed list of key names is
+exactly the bug above — every new calc script that picks a slightly
+different name silently falls out of the summary (same failure mode
+as ``result_keys`` for the Open GMSH button). Rendering from the keys
+that are present means a new ``t_assembly_s`` or ``P_coil_W`` shows up
+with zero GUI changes.
+
+**Test**: ``tests/panels/test_panel_output_health.py``
+``test_output_summary_surfaces_ne_dof_time_heat`` (BEM-shaped mock:
+asserts Elements / DoF / Heat (P) / Compute time + the actual key name
+``t_bem_solve_s`` all appear) and
+``test_output_summary_temperature_mean_max_min`` (thermal mock:
+asserts "Temperature [C]" with mean / max / min values).
+
+**Reference**: ``radia_gui_base.py::_append_standard_summary`` +
+``_on_finished``; ``calc_heat.py`` ``T_mean_C`` / ``T_max_C`` /
+``T_min_C``; ``CLAUDE.md`` "Result Output Policy: ne / DoF / time +
+analysis integral quantities" (2026-05-29).
 """
 
 
@@ -780,6 +955,9 @@ _TOPICS = (
     "regression_blast_radius",
     "panel_qt_testing",
     "learn_edition_cap",
+    "wheel_guard",
+    "panel_layout",
+    "result_output",
 )
 
 

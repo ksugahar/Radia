@@ -255,7 +255,7 @@ class HeatPanel(ModePanel):
         # the spinbox lower bound 0.0 (a negative rpm is physically the
         # same as positive rpm around the OPPOSITE axis, so we narrow
         # the input space to one canonical form).
-        from PySide6.QtWidgets import QDoubleSpinBox
+        from radia_gui_base import _NoWheelDoubleSpinBox as QDoubleSpinBox
         rrow = QDoubleSpinBox()
         rrow.setRange(0.0, 1e6)
         rrow.setDecimals(2)
