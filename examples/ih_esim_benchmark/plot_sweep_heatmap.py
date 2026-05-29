@@ -43,8 +43,8 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_DIR = HERE / "sweep_data"
 
 MIN_PT = 9.0
-# Binding embed scales = LaTeX \includegraphics width / figure render width.
-SCALE_DIGEST = 0.90   # ~\columnwidth (8.0 cm) of an 8.89 cm render.
+# Binding embed scale = LaTeX \includegraphics width / figure render width.
+# (The digest's combined 2-panel figure is produced by plot_digest_figure.py.)
 SCALE_FULL = 0.85     # 0.85\textwidth (15.5 cm) of an 18.2 cm render.
 
 
@@ -145,27 +145,6 @@ def _report(tag, fig, embed_scale, ax_with_legend=None):
               f"embed_scale={embed_scale} (CLEAN)")
 
 
-def render_digest(out_stem, currents, freqs, gap_pct):
-    """Single heatmap panel for the 1-page digest (single column)."""
-    aspect = 0.42   # short, so the in-column figure leaves room for text.
-    apply_lab_style(target="paper_single_column", aspect=aspect)
-    # Bump fonts so that, after the ~0.90 \columnwidth downscale, axis
-    # labels / ticks / cell numbers / colorbar all land >= 9 pt.
-    plt.rcParams.update({
-        "font.size": 11, "axes.labelsize": 11,
-        "xtick.labelsize": 10.5, "ytick.labelsize": 10.5,
-    })
-    figsize = (8.89 / 2.54, 8.89 * aspect / 2.54)
-    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
-    # Short colorbar label in the narrow single column; the caption gives
-    # the full definition of the gap.
-    _draw_heatmap(ax, fig, currents, freqs, gap_pct, ann_pt=10.5, tick_pt=10.5,
-                  cb_label=r"gap (\%)")
-    _report("digest heatmap", fig, SCALE_DIGEST)
-    lab_savefig(fig, out_stem)
-    plt.close(fig)
-
-
 def render_full(out_stem, currents, freqs, P_scalar, P_per, gap_pct):
     """Two-panel (a) heatmap + (b) P_wp curves for the full paper."""
     figsize = apply_lab_style(target="paper_double_column", aspect=0.40)
@@ -197,13 +176,11 @@ def main():
         print(f"    I={I:6.1f}A: ",
               " ".join(f"{ratio[i,j]:.3f}" for j in range(len(freqs))))
 
-    print("Rendering digest heatmap (single column)...")
-    render_digest(str(HERE / "sweep_heatmap_digest"), currents, freqs, gap_pct)
     print("Rendering full 2-panel (full paper, figure*)...")
     render_full(str(HERE / "sweep_heatmap"), currents, freqs,
                 P_scalar, P_per, gap_pct)
-    print(f"\nSaved {HERE/'sweep_heatmap_digest.png'} (digest, heatmap only) "
-          f"and {HERE/'sweep_heatmap.png'} (full paper, 2-panel)")
+    print(f"\nSaved {HERE/'sweep_heatmap.png'} (full paper, 2-panel). "
+          f"Digest combined figure: see plot_digest_figure.py.")
 
 
 if __name__ == "__main__":
