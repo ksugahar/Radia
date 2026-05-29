@@ -15,7 +15,11 @@ HACApK C library (cHACApK_acaplus).  Docs: docs/stream_function.md.  Examples:
 examples/stream_function/.  Tests: tests/test_stream_function.py.
 
 The MCP server exposes this via ``aca_tsvd(topic=...)``.  Topics: overview,
-method, api, kernel_agnostic, performance, cmaes, validation, all.
+method, api, kernel_agnostic, performance, cmaes, validation, literature
+(stream function method theory + Turner/Peeren/Abe-DUCAS lineage), workflow
+(SF -> CAD/STEP -> PEEC -> field demos), single_stroke (one-continuous-wire
+connection: Kuijpers/Lomonova prior art + our crossover-compensation research),
+all.
 """
 
 
@@ -236,6 +240,210 @@ f2py reference (LAB): W:\04_..\046_伊藤海人\2026_01_06_f2py_matlab比較\f2p
 """
 
 
+ACA_TSVD_LITERATURE = r"""
+# Stream function method (SFM) -- theory and literature lineage
+
+Our solver is the numerical core of the STREAM FUNCTION METHOD (a.k.a. CURRENT
+POTENTIAL method) of coil / surface-current design.  The lineage below is the
+citation backbone for any paper built on radia.stream_function.
+
+## The method in one paragraph
+
+A divergence-free surface current K on a meshed source surface S is written from
+a single scalar STREAM FUNCTION (current potential) psi:
+    K = grad(psi) x n            (n = surface normal)
+Equal-spaced iso-contours of psi ARE the wires: between levels psi=(n-1)*dI and
+psi=n*dI flows current dI, so placing one conductor at psi=(n-0.5)*dI per band
+reproduces the continuous K.  The field is linear in psi:  B = A psi  (A from
+Biot-Savart on each FE / node basis).  Designing a coil = solving the
+underdetermined inverse for psi given a target B over a region (FOV / DSV).
+Regularise by truncated SVD (TSVD).  radia.stream_function = an accelerated,
+kernel-agnostic re-implementation of exactly this CP+TSVD solve.
+
+## Lineage (chronological, with roles)
+
+- TARGET FIELD METHOD -- R. Turner, J. Phys. D 19 (1986) L147 (+ review Magn.
+  Reson. Imaging 11 (1993) 903).  Cylinder, Fourier-Bessel inversion of B_target
+  -> surface current j(phi,z); continuity div j = 0; convergence needs apodising
+  (Gaussian) the target.  Discretisation = "integrated-current contour lines at
+  equal-current intervals" -- the contour==wire principle we use.  m=0 target ->
+  axisymmetric (Gz, azimuthal rings); m=+-1 -> transverse Golay double-saddle
+  (Gx).  This is the origin of cylindrical gradient/shim coil design.
+
+- CURRENT POTENTIAL IN FUSION -- A. Kameari, J. Comput. Phys. 42 (1981) 124
+  (thin-conductor current potential; CP==SF identity).  P. Merkel, Nucl. Fusion
+  27 (1987) 867 (NESCOIL: stellarator modular coils from a CP on a winding
+  surface).  A.H. Boozer, Phys. Plasmas 7 (2000) 629.  Same math as MRI SFM but
+  on a toroidal winding surface -- the "arbitrary surface" generalisation.
+
+- STREAM FUNCTION MODELLED DIRECTLY -- G.N. Peeren, J. Comput. Phys. 191 (2003)
+  305 (TU/e / Philips).  Argues to optimise psi DIRECTLY (not current density
+  then reconstruct psi); casts shape/field-synthesis as quadratic programming
+  with linear constraints.  Foundational TU/e line that leads to Lomonova /
+  Kuijpers single-stroke work (see topic "single_stroke").
+
+- SFM FOR GRADIENT COILS -- A.L. Lemdiasov & R. Ludwig, Concepts Magn. Reson. B
+  26 (2005) 67.  Poole / Crozier / Lopez et al. (equivalent magnetization
+  current; the "fingerprint" transverse patterns), e.g. IEEE TM 45 (2009) 767;
+  minimax current density, J. Phys. D 43 (2010) 095001.  Z. Liu, J. Hennig,
+  J.G. Korvink, IEEE TM 48 (2012) 1179 (discretised SF with HIGH-ORDER
+  SMOOTHNESS -- directly relevant to smooth single-stroke wiring).
+
+- CP + TSVD = OUR EXACT METHOD (DUCAS) -- M. Abe et al.:
+  * Phys. Plasmas 10 (2003) 1022 -- DUCAS ("Design tool Using Current potential
+    And SVD") for stellarator modular coils.
+  * IEEE TM 49 (2013) 5645 -- DUCAS for MRI gradient coils (weighted nodes,
+    initial CP).
+  * IEEE TM 50 (2014) 5100911 -- active-shield gradient coil (two current
+    surfaces solved iteratively).
+  DUCAS formulation (== radia.stream_function):
+    B = A T        T = node CP (== psi) vector,  A = Biot-Savart response matrix
+    j = grad(T) x n                              (current between nodes i,j = Ti-Tj)
+    TSVD pseudo-inverse truncated to MD eigenmodes (MD == our `modes`/k):
+        (W_B A R W_I^-1)* = sum_i v_i u_i^T / lambda_i  (i=1..MD)
+    node weights W_I suppress peaked currents; eigenmode strength
+    D_i = u_i^T W_B B_TG; pick MD so residual peak-to-peak < eps.
+  Mapping to us: Abe MD <-> our truncation `k_mode`; Abe A response matrix <->
+  our radia_field_kernel; Abe node weights <-> optional W in the solve.  We ADD
+  ACA+ acceleration (Abe forms A densely) and make A a generic callback so the
+  same code drives coils AND magnets/iron.  The lab f90 coil_solver.f90
+  (method_aca_tsvd_1/2) we validate against is a DUCAS-lineage code.
+
+- NONLINEAR OUTER LOOP -- D. Tomasi, Magn. Reson. Med. 45 (2001) 505 (SF +
+  simulated annealing to optimise short self-shielded gradient coils).  The
+  modern analogue is our CMA-ES outer loop (topic "cmaes"): SA/CMA-ES handles the
+  nonlinear DOF, TSVD owns the linear amplitude solve.
+
+## Source folder (LAB, owner-password PDFs; decrypt with pikepdf)
+W:\03_文献..\..\流れ関数法 (Turner target-field subfolder; Truncated Singular
+Value Decomposition subfolder = the Abe / NESCOIL / TSVD line).
+"""
+
+
+ACA_TSVD_WORKFLOW = r"""
+# End-to-end workflow: SF design -> CAD(STEP) -> PEEC -> field
+
+The stream function solve is only the first stage.  examples/stream_function/
+carries it all the way to a manufacturable, field-verified conductor:
+
+## 1D axisymmetric -- demo_coil_design_gz.py (cylindrical Gz gradient)
+Target Bz = Gz*z is axisymmetric -> surface current is purely azimuthal -> psi
+reduces to psi(z) and the basis is FULL azimuthal RINGS at z_1..z_N (the correct
+reduced model; also keeps every field eval on Radia's reliable full-ring path).
+On-axis + OFF-AXIS volume target (rho in {0, 0.4a, 0.7a} at a single azimuth --
+safe because full rings are axisymmetric) -> (ACA+)+TSVD ring currents I(z) ->
+psi(z) = cumulative integral -> equal-current contour -> wire rings (generalised
+Maxwell pair).  Verifies on-axis dBz/dz + DSV volume nonuniformity.
+
+## 2D transverse -- demo_coil_design_gx.py (cylindrical Gx gradient)
+Target Bz = Gx*x is NOT axisymmetric -> genuine 2D surface psi(phi,z) fingerprint.
+Per-node quad loops on the cylinder; A(i,j)=Bz via an EXACT numpy Biot-Savart
+segment kernel (NOT rad.ObjFlmCur -- it has a ~10x-wrong-Bz bug for small TILTED
+loops at phi=90 deg; full rings are unaffected).  marching-squares contour ->
+~68 saddle loops; reconstructed Bz matches Gx*x to ~0.8% RMS.  k_aca reaches
+min(M,N) here (the transverse target is full-rank, unlike the low-rank Gz case).
+Single-stroke connection of the nested fingerprint loops = future work
+(topic "single_stroke").
+
+## Full chain -- demo_sf_to_peec_gz.py (--with-peec)
+SF design -> SINGLE-STROKE smooth helix (coaxial equal-current rings joined into
+one continuous wire; cosine-blended axial-ramp crossovers; handedness flips at
+current-sign changes) -> CAD STEP (build123d Spline centerline + Frenet swept
+solid; wire radius auto < half the min turn spacing so the tube cannot
+self-intersect) -> PEEC (peec_matrices.PEECBuilder -> PEECCircuitSolver ->
+port impedance; L = Im(Z)/(2 pi f), R = Re(Z)) -> exact Biot-Savart field ->
+verify dBz/dz vs the design Gz*z.  ~16-turn run: ~15 m single wire,
+dBz/dz ~ 0.99, ~2.6% nonlinearity, L ~ 38 uH, R ~ 16 mOhm @ 1 kHz.  Confirms the
+SF design survives the single-stroke manufacturing constraint.
+
+## Helper APIs used
+radia.biot_savart.h_segments_batch(segments, obs, current) -- exact segment
+Biot-Savart (B = MU0 * H), the trustworthy kernel.  radia.coil_from_cad (STEP
+centerline).  peec_matrices.PEECBuilder / peec_topology.PEECCircuitSolver.
+CoilBuilder is for PLANAR racetrack/saddle coils; a solenoidal helix uses the
+smooth-helix + Spline path, not CoilBuilder arcs.
+
+## Stage-2 panel CLI
+src/radia/panels/calc_stream_coil.py wraps the Gz design as a headless Layer-4
+script (argparse in, JSON out, no Cubit/PySide6); locked by
+tests/panels/test_stream_coil_golden.py (fitted_dBdz in [0.9,1.1],
+gradient_nonlinearity < 0.05).  Stage-3 PySide6 panel = future work.
+"""
+
+
+ACA_TSVD_SINGLE_STROKE = r"""
+# Single-stroke (one continuous wire) coil design
+
+## The problem
+SFM iso-contours are SEPARATE closed loops (Gz: rings; Gx: nested fingerprint
+loops).  A real wound coil must be ONE continuous conductor driven by one current
+source.  Connecting the loops adds CROSSOVER / connection segments that carry the
+full current and produce a PARASITIC field that was not part of the design ->
+degrades the target-region field.  How to connect with minimal damage is the
+single-stroke problem.
+
+## Prior art -- Kuijpers, Jansen, Lomonova (TU/e EPE), Compumag 2023 (Kyoto)
+Poster [525] "Comparison of Discretization Methods for Continuous Stream-Function
+Distributions" (TU/e Electromechanics & Power Electronics; the Peeren SFM line).
+Approach: fit a B-SPLINE SURFACE to the stream-function distribution (SFD) ->
+psi value AND gradient at any (x,y) on the source surface.  Three connection
+algorithms producing a CONNECTED (single-stroke) coil:
+  - Method 1: cut-and-couple iso-contours over segments of LINEAR psi-decrease,
+    using a 4th-ORDER POLYNOMIAL BLENDING FUNCTION to interpolate the joins.
+  - Method 2: descend the fitted B-spline SFD surface point-to-point with a
+    different constant gradient per step; user chooses start/end points.
+  - Method 3: user-defined start/end + blending function over the NON-linear SFD
+    (combines 1 and 2; most flexible).
+Reported (planar coil, target at z=6 mm): Bx/By/Bz rms errors ~5-13%; methods 1
+and 3 beat method 2 by >= 0.8 / 4.9 / 1.9 % in x/y/z.
+KEY FINDING (the opening for us): "the area where the connected curve DEVIATES
+from the iso-contour lines is coupled to the area in the target region with the
+ERROR in the flux density."  They OBSERVE the connection -> field-error coupling
+and SELECT the least-bad connection; they do NOT compensate it in the solve.
+Related smoothness prior art: Liu/Hennig/Korvink, IEEE TM 48 (2012) 1179
+(high-order-smooth discretised SF).
+
+## Our research direction (paper idea, 2026-05-29)
+CORE CLAIM: make the single-stroke connection PART of the field design, not a
+post-processing step -- enabled by the ACA+-accelerated, kernel-agnostic solve
+(cheap re-solve; works with magnetic materials / arbitrary surfaces that
+free-space methods cannot treat).  Why ACA+ is essential: for material/expensive
+kernels it cuts entry evaluations O(MN)->O(k(M+N)), making an outer
+connection-optimisation loop tractable.
+
+  A (backbone) -- CROSSOVER-COMPENSATED ITERATED LEAST-NORM.  Fix a connection
+    topology tau -> its crossover field B_c(tau) is known; solve
+    A psi = B_target - B_c(tau) and iterate (fixed point).  The parasitic
+    connection field is designed away in the pattern.  Each iteration = one fast
+    (ACA+)+TSVD solve.  Goal: single-stroke field == idealised disconnected-loop
+    field.
+  D (theory) -- MULTIVALUED POTENTIAL / BRANCH CUT.  Single-stroke == psi with a
+    dI jump across a branch cut: psi~ = psi + (dI/2pi)*theta_tau.  Connection
+    topology = choice of branch cut; the spiral-ramp join (psi - alpha*u) is the
+    special case.  "Minimal multivalued correction making the contour a single
+    connected curve with minimal field perturbation."
+  B/C (search) -- field-cost combinatorial routing (min-cost Eulerian / TSP over
+    crossovers, cost = parasitic DSV field / length / inductance) + BILEVEL
+    (inner = ACA+TSVD amplitude, outer = CMA-ES/combinatorial connection).  This
+    is the natural sequel to SA-25-020 "ACA stream function + CMA-ES".
+  E (differentiator) -- KERNEL-AGNOSTIC generality: single-stroke design WITH
+    magnetic materials (iron yoke / active shield) and on NON-cylindrical /
+    conformal surfaces, using radia_field_kernel (MMM/MSC).  Free-space
+    Biot-Savart SFM tools (Turner/Peeren/Kuijpers) cannot do this.
+
+Positioning (honest): SFM, spiral/blending connection, and the
+connection->error observation are PRIOR ART (Kuijpers et al.).  Novelty = folding
+the connection field INTO the solve x ACA+ acceleration x materials/arbitrary
+surfaces.  Confirm against literature before claiming.
+
+## Status
+Gz single-stroke = DONE (smooth helix, demo_sf_to_peec_gz.py).  Gx fingerprint
+single-stroke = OPEN (future work).  Proposed demonstrators: Gx (compensated vs
+naive vs ideal), shielded (iron / active shield), biplanar/saddle (surface
+generality).
+"""
+
+
 def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
     """Return (ACA+)+TSVD knowledge for the requested topic."""
     t = (topic or "overview").strip().lower()
@@ -247,21 +455,38 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "performance": ACA_TSVD_PERFORMANCE,
         "cmaes": ACA_TSVD_CMAES,
         "validation": ACA_TSVD_VALIDATION,
+        "literature": ACA_TSVD_LITERATURE,
+        "workflow": ACA_TSVD_WORKFLOW,
+        "single_stroke": ACA_TSVD_SINGLE_STROKE,
     }
     aliases = {
         "kernel": "kernel_agnostic", "generic": "kernel_agnostic",
         "speed": "performance", "speedup": "performance", "benchmark": "performance",
         "optuna": "cmaes", "cma-es": "cmaes", "cma_es": "cmaes",
-        "stream_function": "overview", "stream": "overview", "tsvd": "method",
-        "aca": "method", "validate": "validation", "f90": "validation",
+        "stream_function": "literature", "stream": "literature",
+        "sfm": "literature", "lineage": "literature", "lit": "literature",
+        "turner": "literature", "abe": "literature", "ducas": "literature",
+        "peeren": "literature", "current_potential": "literature",
+        "tsvd": "method", "aca": "method",
+        "validate": "validation", "f90": "validation",
+        "cad": "workflow", "peec": "workflow", "gz": "workflow", "gx": "workflow",
+        "demo": "workflow", "pipeline": "workflow",
+        "single-stroke": "single_stroke", "one_stroke": "single_stroke",
+        "onestroke": "single_stroke", "winding": "single_stroke",
+        "crossover": "single_stroke", "connect": "single_stroke",
+        "kuijpers": "single_stroke", "fingerprint": "single_stroke",
+        "spiral": "single_stroke", "manufacturable": "single_stroke",
     }
     t = aliases.get(t, t)
     if t == "all":
         return "\n\n".join([ACA_TSVD_OVERVIEW, ACA_TSVD_METHOD, ACA_TSVD_API,
                             ACA_TSVD_KERNEL_AGNOSTIC, ACA_TSVD_PERFORMANCE,
-                            ACA_TSVD_CMAES, ACA_TSVD_VALIDATION])
+                            ACA_TSVD_CMAES, ACA_TSVD_VALIDATION,
+                            ACA_TSVD_LITERATURE, ACA_TSVD_WORKFLOW,
+                            ACA_TSVD_SINGLE_STROKE])
     if t in table:
         return table[t]
     return (f"Unknown topic '{topic}'.  Available: overview, method, api, "
-            "kernel_agnostic, performance, cmaes, validation, all.\n\n"
+            "kernel_agnostic, performance, cmaes, validation, literature, "
+            "workflow, single_stroke, all.\n\n"
             + ACA_TSVD_OVERVIEW)
