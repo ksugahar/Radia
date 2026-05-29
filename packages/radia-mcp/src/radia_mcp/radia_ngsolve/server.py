@@ -45,6 +45,8 @@ from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
+from .knowledge.taskmanager import get_taskmanager_knowledge
+from .knowledge.aca_tsvd import get_aca_tsvd_knowledge
 from .knowledge.cln_sibc_orthogonal import (
     get_cln_sibc_orthogonal_documentation,
     get_cln_sibc_orthogonal_section,
@@ -381,6 +383,77 @@ def get_radia_lint_rules() -> str:
 
 
 @mcp.tool()
+def taskmanager(topic: str = "overview") -> str:
+    """
+    NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++.
+
+    ★ CLAUDE.md policy: use NGSolve TaskManager for thread-level
+    parallelisation (NOT raw OpenMP).  This tool documents the
+    `with TaskManager():` pattern, `SetNumThreads()` + `--nthreads`
+    CLI convention, MKL nesting trap, and the C++ `ngcore::ParallelFor`
+    equivalent.  Includes a 2026-05-27 audit of the IH panel solver
+    scripts (`calc_inductance.py` / `calc_fem_kelvin.py` /
+    `calc_fem_coilmesh.py` / `calc_heat*.py`) — all PASS.
+
+    Args:
+        topic: One of:
+            "overview"          - Policy + what TaskManager does (DEFAULT)
+            "usage"             - `with TaskManager():` pattern, when to wrap
+            "set_num_threads"   - `SetNumThreads()` + `--nthreads` CLI convention
+            "mkl_interaction"   - TaskManager vs MKL thread pool nesting
+                                  (alias: "mkl", "pardiso")
+            "cpp_kernels"       - `ngcore::ParallelFor` in custom C++ TUs
+                                  (alias: "cpp", "parallel_for")
+            "audit_radia_ih"    - 2026-05-27 IH panel solver audit
+                                  (alias: "audit", "radia_ih")
+            "common_mistakes"   - Wrap-outside-Assemble, missing
+                                  --nthreads, OMP_NUM_THREADS inherited
+                                  from Cubit, etc.
+                                  (alias: "mistakes", "pitfalls")
+            "all"               - Everything concatenated
+    """
+    return get_taskmanager_knowledge(topic)
+
+
+@mcp.tool()
+def aca_tsvd(topic: str = "overview") -> str:
+    """
+    (ACA+)+TSVD accelerated kernel-agnostic least-norm solver.
+
+    Solves underdetermined field-synthesis / inverse-source problems
+    ``A phi = B`` (M field points x N basis sources, M < N) via a
+    TSVD-regularised pseudo-inverse, accelerated by ACA+ low-rank
+    recompression.  ACA+ is delegated to HACApK (cHACApK_acaplus, the single
+    source of truth); the matrix entry ``A(i,j)`` is a caller callback built
+    from Radia's existing field (Biot-Savart for coils, MMM/MSC for magnets)
+    via ``radia_field_kernel``.  This is the numerical core of the stream
+    function method of coil design (IEEJ SA-25-020), generalised to any source.
+
+    Production module: ``radia.stream_function``.  Measured ~10x speedup vs
+    naive dense TSVD at N=2048 (grows with N).  Pair with CMA-ES (Optuna) for
+    the nonlinear outer design loop.
+
+    Args:
+        topic: One of:
+            "overview"        - Problem, why ACA+TSVD, HACApK delegation (DEFAULT)
+            "method"          - ACA+ params + TSVD recompression Method 2/3
+                                (alias: "tsvd", "aca")
+            "api"             - radia.stream_function API (aca_tsvd,
+                                pseudo_inverse_solve, solve, radia_field_kernel)
+            "kernel_agnostic" - generic A(i,j) callback design; reuse Radia
+                                field for coils + magnets (alias: "kernel", "generic")
+            "performance"     - measured speedup table + (M/k)^2 scaling
+                                (alias: "speedup", "benchmark")
+            "cmaes"           - linear (TSVD) vs nonlinear (CMA-ES/Optuna) split
+                                (alias: "optuna", "cma-es")
+            "validation"      - vs coil_solver.f90 (1e-15) + magnet path
+                                (alias: "f90", "validate")
+            "all"             - Everything concatenated
+    """
+    return get_aca_tsvd_knowledge(topic)
+
+
+@mcp.tool()
 def ngsolve_usage(topic: str = "all") -> str:
     """
     Get NGSolve finite element library usage documentation.
@@ -698,15 +771,26 @@ def cln_sphere_dd_pipeline() -> str:
 @mcp.tool()
 def mmm_core(topic: str = "chubar_1998") -> str:
     """
-    MMM (Magnetic Moment Method) core theory + Radia heritage.
+    MMM/MSC (Magnetic Moment Method / Magnetic Surface Charge) -- how
+    to BUILD models, the interaction-matrix structure, the near-null
+    eigenvalue behavior, plus Radia heritage.
 
-    Captures the 1998 Chubar-Elleaume-Chavanne original Radia paper
-    through Wakao group's 2007 MMM + ACA H-matrix (Sugahara lineage)
-    through modern coupling: MMM+RNM (Janet 2005), PEEC+MMM (Le-Duc),
-    FEM-BEM hybrid (Weddemann).
+    Practical "how to make an MMM/MSC model" recipes: topic
+    "build_msc_mmm". Interaction-matrix internals (BuildMatrix /
+    GetInteractMatrix gotchas): "matrix_structure". Near-null "loop"
+    modes / conditioning / beautiful->ugly BiCGSTAB (CEFC 2026 study):
+    "eigenvalue_nullspace". Heritage (Chubar 1998, Wakao 2007 ACA,
+    Janet MMM+RNM, Le-Duc PEEC+MMM, Weddemann FEM-BEM): remaining
+    topics.
 
     Args:
         topic: One of:
+            "build_msc_mmm"      - HOW TO BUILD an MMM/MSC model
+                                   (elements, materials, solve, results)
+            "matrix_structure"   - Interaction matrix: BuildMatrix /
+                                   GetInteractMatrix returns mu_r-independent N
+            "eigenvalue_nullspace" - Near-null loop modes, cond ~ mu_r,
+                                   beautiful->ugly BiCGSTAB (CEFC 2026)
             "chubar_1998"        - Original Radia paper (ESRF 1998)
             "takahashi_2007_aca" - Wakao group MMM + ACA H-matrix
                                    (Sugahara lab heritage)
@@ -879,6 +963,9 @@ def radia_usage(topic: str = "all") -> str:
             "ngsolve"        - RadiaField CF, netgen_mesh_to_radia
             "background"     - ObjBckg, Biot-Savart source
             "ima"            - Image Method of Analysis
+            "best_practices" - lab best practices, incl. #11 storing
+                               numerical-experiment results as JSON
+                               (reproducible) + delete-by-folder cleanup
     """
     return get_radia_documentation(topic)
 
