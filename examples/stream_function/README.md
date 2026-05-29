@@ -50,6 +50,8 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 | `demo_magnet_array.py` | Same solver on a permanent-magnet array (MMM/MSC field) -- proves kernel-agnosticism. |
 | `bench_aca_vs_dense.py` | `(ACA+)+TSVD` vs naive dense `numpy.linalg.svd`: time / memory / rank, written to `results_aca_vs_dense.json`. |
 | `demo_cmaes_magnet_design.py` | The **nonlinear counterpart**: CMA-ES (Optuna `CmaEsSampler`) optimises the magnetization *directions* (angles) of a magnet array for a uniform transverse field. Linear amplitude design -> (ACA+)+TSVD; nonlinear direction design -> CMA-ES (the "+ CMA-ES" half of SA-25-020). Needs `optuna` (optional). |
+| `demo_coil_design_gz.py` | **End-to-end coil design**: cylindrical z-gradient (Gz) coil via the stream function method. Target `Bz=Gz*z` -> azimuthal ring currents (ACA+TSVD) -> stream function `psi(z)` -> equal-current wire rings -> verified on-axis gradient linearity. The axisymmetric Gz problem reduces to a full-ring (1D `psi(z)`) basis. |
+| `demo_sf_to_peec_gz.py` | **Full workflow, loop closed**: SF design -> **single-stroke** (one continuous wire) smooth helix with blended crossovers -> CAD STEP (build123d Spline + Frenet swept solid) -> PEEC (`L`, `R`) -> exact Biot-Savart field -> verify `Bz` vs the design `Gz*z`. `--with-peec` adds the STEP + PEEC stages (needs build123d, in `radia`). |
 
 ## Running
 
@@ -58,6 +60,8 @@ python demo_coil_field_synthesis.py
 python demo_magnet_array.py
 python bench_aca_vs_dense.py
 python demo_cmaes_magnet_design.py        # needs optuna (pip install optuna)
+python demo_coil_design_gz.py             # end-to-end Gz gradient coil design
+python demo_sf_to_peec_gz.py --with-peec  # full SF -> CAD(STEP) -> PEEC -> field
 ```
 
 Each script is standalone (no Cubit, no panel UI).  `matplotlib` is optional:
@@ -83,6 +87,18 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
   objective down by ~3x from its first trial, producing an approximately uniform
   transverse field with small cross-components.  The residual is set by the
   finite array (physical limit), not the optimiser.
+- **`demo_coil_design_gz.py`**: ACA+ compresses the on-axis ring operator to
+  `k_aca ~ 7`; the continuous ring-current solution reproduces `Bz=Gz*z` to
+  `~4e-4`; the contoured ~32-wire coil achieves `dBz/dz` within ~0.5% of target
+  with ~1.4% on-axis nonlinearity over the DSV -- a textbook generalised
+  Maxwell-pair gradient coil.
+- **`demo_sf_to_peec_gz.py`** (`--with-peec`, ~16 turns): the single-stroke
+  conductor (~15 m, one continuous wire) reproduces the design gradient
+  (`dBz/dz ~ 0.99`, ~2.6% nonlinearity); the helix sweeps to a clean STEP solid
+  (Frenet frame + auto wire radius so turns don't self-intersect); PEEC returns
+  `L ~ 38 uH`, `R ~ 16 mOhm` at 1 kHz.  Confirms the SF design survives the
+  single-stroke manufacturing constraint.  (CoilBuilder is for planar
+  racetrack/saddle coils; a solenoidal helix uses the smooth-helix + Spline path.)
 
 ## References
 
