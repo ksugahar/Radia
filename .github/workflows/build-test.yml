@@ -261,14 +261,19 @@ jobs:
           }
 
       # ----------------------------------------------------------------
-      # Motor panel tests (Stage-2 calc_motor_transient + lamination).
-      # Requires NGSolve (already provisioned at C:\NGSolve for the
-      # C++ build), no Cubit dependency.  Runs the golden tests:
-      #   tests/panels/test_motor_transient_golden.py (3 tests)
-      #   tests/panels/test_motor_lamination_golden.py (4 tests)
+      # Panel tests (NGSolve + PySide6, no Cubit).  Runs:
+      #   tests/panels/test_motor_transient_golden.py     (3 tests)
+      #   tests/panels/test_motor_lamination_golden.py    (4 tests)
+      #   tests/panels/test_panel_output_health.py        (5 tests)
+      #   tests/panels/test_combo_wheel_guard.py          (6 tests, parametrized)
+      # PySide6 tests added 2026-05-30 once the Qt6 DLL preload in
+      # tests/conftest.py made `from PySide6.QtCore import ...` survive
+      # the MKL bin add_dll_directory (was 0xc0000139 on LAB pytest).
       # ----------------------------------------------------------------
-      - name: Run motor panel tests
-        # Motor golden tests (transient + lamination); NGSolve, no Cubit.
+      - name: Run panel tests
+        # Panel tests: motor golden (transient + lamination) + UX
+        # (output health + combo/spin wheel-guard).  NGSolve + PySide6,
+        # no Cubit.
         # Re-enabled 2026-05-28: the tests pass `--linear-solver sparsecholesky`
         # (ngsolve built-in, no MKL) -- identical direct-solver solution to the
         # production pardiso default, but immune to the MKL PARDISO threading-
@@ -287,6 +292,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
           python -m pytest tests/panels/test_motor_transient_golden.py `
                             tests/panels/test_motor_lamination_golden.py `
+                            tests/panels/test_panel_output_health.py `
+                            tests/panels/test_combo_wheel_guard.py `
             -v --tb=short --junitxml=panel-test-results.xml `
             --reruns 1 --reruns-delay 1
           if ($LASTEXITCODE -ne 0) {
