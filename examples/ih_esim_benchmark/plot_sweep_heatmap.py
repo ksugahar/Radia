@@ -21,10 +21,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+from matplotlib.lines import Line2D
+from mcp_server_document.graph.tools import (
+    apply_lab_style, lab_savefig, check_legend_overlap,
+)
 
 HERE = Path(__file__).resolve().parent
-DEFAULT_DIR = Path("C:/temp/igte_bench/sweep_v1")
+# Data Persistence Policy: read the committed sweep data next to this
+# script by default, not a transient C:/temp dir.
+DEFAULT_DIR = HERE / "sweep_data"
 
 
 def main():
@@ -91,17 +96,32 @@ def main():
     ax1.text(0.5, -0.27, "(a)", transform=ax1.transAxes,
               ha="center", va="top")
 
-    # Panel (b): absolute P_wp curves vs I, one line per frequency
+    # Panel (b): absolute P_wp curves vs I, one line per frequency.
+    # Frequency is encoded by viridis colour (named in the caption); the
+    # in-figure legend distinguishes only the two METHODS so it stays
+    # small enough not to cover the curves at 8 cm embed width.
     for j, f_Hz in enumerate(freqs):
         col = plt.cm.viridis(j / max(len(freqs)-1, 1))
-        ax2.loglog(currents, P_scalar[:, j], "o--", color=col, alpha=0.6,
-                    label=fr"{f_Hz/1e3:.0f} kHz (scalar)")
-        ax2.loglog(currents, P_per[:, j], "s-", color=col,
-                    label=fr"{f_Hz/1e3:.0f} kHz (per-element)")
+        ax2.loglog(currents, P_scalar[:, j], "o--", color=col, alpha=0.6)
+        ax2.loglog(currents, P_per[:, j], "s-", color=col)
     ax2.set_xlabel(r"$I_{\mathrm{port}}$ (A)")
     ax2.set_ylabel(r"$P_{\mathrm{wp}}$ (W)")
-    ax2.legend(fontsize=8, frameon=False, loc="lower right", ncol=2,
-                handlelength=1.5, columnspacing=0.8, labelspacing=0.2)
+    # Compact 2-entry method legend (neutral grey). Rising log-log curves
+    # leave the upper-left corner empty; verify with the lab-graph-style
+    # overlap checker and report.
+    method_handles = [
+        Line2D([0], [0], color="0.35", ls="--", marker="o", mfc="none",
+               label="scalar"),
+        Line2D([0], [0], color="0.35", ls="-", marker="s",
+               label="per-element"),
+    ]
+    ax2.legend(handles=method_handles, fontsize=8, frameon=False,
+               loc="upper left", handlelength=2.0, labelspacing=0.2)
+    fig.canvas.draw()
+    _ov = check_legend_overlap(ax2)
+    print("panel (b) legend overlap:",
+          "CLEAN" if not _ov else
+          [(o["label"], f"{o['fraction']*100:.0f}%") for o in _ov])
     ax2.grid(linestyle=":", alpha=0.5)
     ax2.text(0.5, -0.27, "(b)", transform=ax2.transAxes,
               ha="center", va="top")
