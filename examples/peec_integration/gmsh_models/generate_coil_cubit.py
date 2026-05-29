@@ -14,7 +14,7 @@ Output:
     circular_coil.msh - Surface mesh in GMSH v4.1 format
 
 Requirements:
-    - Coreform Cubit 2025.3+
+    - Coreform Cubit 2025.8+
     - cubit_mesh_export module (via radia package)
 """
 

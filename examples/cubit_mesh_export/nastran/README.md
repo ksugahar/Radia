@@ -69,7 +69,7 @@ cubit.cmd('radia_export nastran "mesh_jmag.bdf" nopyramid overwrite')
 ## Regenerate Samples
 
 ```bash
-"${CUBIT_PATH:-C:/Program Files/Coreform Cubit 2025.3/bin}/python3/python.exe" nastran_export_example.py
+"${CUBIT_PATH:-<Coreform Cubit 2025.8+>/bin}/python3/python.exe" nastran_export_example.py
 ```
 
 ## See Also

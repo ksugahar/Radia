@@ -23,7 +23,7 @@ Output:
 Run: python generate_mesh.py
 
 Requirements:
-- Coreform Cubit 2025.3+
+- Coreform Cubit 2025.8+
 - cubit_mesh_export module (via radia package)
 - NGSolve / Netgen
 

@@ -17,7 +17,7 @@ Note: Netgen alone cannot create 3D hexahedral meshes.
       Use cubit_mesh_export.extract_curved_mesh() for direct Cubit -> NGSolve conversion.
 
 Requirements:
-    - Coreform Cubit 2025.3+
+    - Coreform Cubit 2025.8+
     - cubit_mesh_export module (via radia package)
 
 Author: Radia Development Team
@@ -242,7 +242,7 @@ def analyze_wpt_system():
         print("\nError: Cubit not available")
         print("This example requires Coreform Cubit for hex mesh generation.")
         print("\nTo run this example:")
-        print("  1. Install Coreform Cubit 2025.3+")
+        print("  1. Install Coreform Cubit 2025.8+")
         print("  2. Ensure cubit_mesh_export module is available")
         return
 
@@ -308,7 +308,7 @@ def main():
     else:
         print("\nCubit not available. Cannot generate hex meshes.")
         print("To generate meshes:")
-        print("  1. Install Coreform Cubit 2025.3")
+        print("  1. Install Coreform Cubit 2025.8+")
         print("  2. Ensure cubit_mesh_export module is available")
         print("\nNote: Netgen alone cannot create 3D hexahedral meshes.")
 
