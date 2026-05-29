@@ -1,5 +1,5 @@
 """Digest 2-panel figure: (a) per-element-vs-uniform P_wp gap heatmap
-(narrower) + (b) |H_t| filled-contour map on the workpiece side wall.
+(narrower) + (b) |H_t| painted on the 3D workpiece cylinder (axis-equal).
 
 Rendered wide (paper_double_column) and embedded IN-COLUMN at
 0.92\\columnwidth of the 1-page digest -- the same footprint as the
@@ -8,10 +8,13 @@ narrower (width_ratios) to leave room for (b).  NOTE: an in-column
 2-panel is scaled down by LaTeX, so on-page fonts are ~font_pt x 0.44;
 check_min_font reports the actual visible size.
 
-Inputs (committed; Data Persistence Policy):
+Inputs (committed; Data Persistence Policy) -- the figure draws ONLY
+from these committed files: no .vol mesh, no NGSolve, no ESIM re-solve.
   sweep_data/sweep_results.json        -- gap heatmap (32-case sweep)
-  sweep_data/I100_f50k_per_panel.json  -- per-DOF |H_t| (100 A, 50 kHz)
-  ../../src/radia/panels/samples/ih_bem_sample_p1.vol -- mesh (theta,z)
+  sweep_data/I100_f50k_side_field.json -- self-contained side-wall field
+        (theta, z, |H_t|, R) for the 100 A / 50 kHz per-panel case.
+        Regenerate from the per-DOF JSON + the (gitignored) .vol mesh
+        with:  python plot_digest_figure.py --regen-field
 
 Output: sweep_heatmap_digest.png  (the digest figure).
 """
@@ -34,6 +37,12 @@ HERE = Path(__file__).resolve().parent
 SWEEP = HERE / "sweep_data"
 VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
        / "ih_bem_sample_p1.vol")
+# Committed, self-contained side-wall field (theta, z, |H_t|, R) for the
+# 100 A / 50 kHz per-panel case.  The figure draws from THIS file, so it
+# needs neither the (gitignored) .vol mesh nor an ESIM re-solve -- it is
+# the persisted "solution" the figure is reproduced from (Data
+# Persistence Policy).  Regenerate with: python plot_digest_figure.py --regen-field
+SIDE_FIELD = SWEEP / "I100_f50k_side_field.json"
 OUT = HERE / "sweep_heatmap_digest"
 MIN_PT = 9.0
 EMBED_SCALE = 0.46   # \columnwidth (~8.4 cm) of an 18.2 cm render.
@@ -56,7 +65,13 @@ def load_gap(res_path):
     return currents, freqs, gap
 
 
-def load_ht_map(json_path, vol_path):
+def extract_side_field_from_mesh(json_path, vol_path):
+    """Recover side-wall (theta, z, |H_t|, R) from the per-DOF JSON + mesh.
+
+    Needs NGSolve and the (gitignored) .vol mesh -- used ONLY by the
+    --regen-field step that writes the committed SIDE_FIELD; the figure
+    itself never calls this.
+    """
     from ngsolve import Mesh, BND, TaskManager
     d = json.load(open(json_path))
     H = np.asarray(d["esim_per_panel_H_t"])
@@ -75,15 +90,50 @@ def load_ht_map(json_path, vol_path):
             H[side], R_mm)
 
 
-def main():
-    res = SWEEP / "sweep_results.json"
+def save_side_field(out_path=SIDE_FIELD):
+    """One-time: extract the side-wall field and persist it (committed)."""
     perp = SWEEP / "I100_f50k_per_panel.json"
-    for p in (res, perp, VOL):
-        if not p.exists():
-            print(f"ERROR: {p} not found.")
-            sys.exit(1)
+    if not perp.exists() or not VOL.exists():
+        print(f"ERROR: need {perp} and {VOL} to regenerate the side field.")
+        sys.exit(1)
+    th, zs, Ht, R = extract_side_field_from_mesh(perp, VOL)
+    json.dump({
+        "case": "100 A, 50 kHz, per-panel ESIM",
+        "source_mesh": VOL.name,
+        "note": ("workpiece side wall (r > 0.95 R_max); theta in deg, "
+                 "z in mm, |H_t| in A/m, R in mm.  Self-contained so the "
+                 "digest figure draws without the .vol mesh or a re-solve."),
+        "R_mm": R,
+        "theta_deg": th.tolist(),
+        "z_mm": zs.tolist(),
+        "H_t": Ht.tolist(),
+    }, open(out_path, "w"), indent=1)
+    print(f"Saved {out_path}  ({len(th)} side-wall points, R={R:.1f} mm, "
+          f"z span={zs.max()-zs.min():.1f} mm)")
+
+
+def load_side_field(path=SIDE_FIELD):
+    """Read the committed side-wall field -- no NGSolve, no mesh, no re-solve."""
+    if not path.exists():
+        print(f"ERROR: {path} not found.  Regenerate it once with:\n"
+              f"  python {Path(__file__).name} --regen-field")
+        sys.exit(1)
+    d = json.load(open(path))
+    return (np.asarray(d["theta_deg"]), np.asarray(d["z_mm"]),
+            np.asarray(d["H_t"]), float(d["R_mm"]))
+
+
+def main():
+    if "--regen-field" in sys.argv:
+        save_side_field()
+        return
+    res = SWEEP / "sweep_results.json"
+    if not res.exists():
+        print(f"ERROR: {res} not found.")
+        sys.exit(1)
     currents, freqs, gap = load_gap(res)
-    th, zs, Ht, R = load_ht_map(perp, VOL)
+    # Panel (b) reads the committed side-wall field -- no mesh, no re-solve.
+    th, zs, Ht, R = load_side_field()
 
     figsize = apply_lab_style(target="paper_double_column", aspect=0.40)
     # Render with inflated fonts so that, after the ~0.44 in-column
@@ -134,29 +184,28 @@ def main():
     Hg = np.where(np.isnan(Hg),
                   griddata((th_a, z_a), H_a, (TH, ZZ), method="nearest"), Hg)
     nrm = Normalize(vmin=Ht.min(), vmax=Ht.max())
-    # Lay the cylinder axis along x (horizontal) so it fills the wide,
-    # short in-column panel; the hot coil band reads as a bright ring.
-    ax2.plot_surface(ZZ, R * np.cos(np.radians(TH)), R * np.sin(np.radians(TH)),
+    # Cylinder axis along z (upright); TRUE axis-equal box so the
+    # workpiece keeps its physical proportions (box aspect = data ranges
+    # 2R : 2R : axial-span).  The hot coil band reads as a bright ring.
+    ax2.plot_surface(R * np.cos(np.radians(TH)), R * np.sin(np.radians(TH)), ZZ,
                      facecolors=cm.magma(nrm(Hg)), rstride=1, cstride=1,
                      linewidth=0, antialiased=False, shade=False)
-    # Physically-exact proportions (axial span : diameter : diameter);
-    # zoom fills the small panel without distorting the cylinder.
-    ax2.set_box_aspect((zs.max() - zs.min(), 2 * R, 2 * R), zoom=1.5)
-    ax2.view_init(elev=20, azim=-74)
+    ax2.set_box_aspect((2 * R, 2 * R, zs.max() - zs.min()), zoom=1.35)
+    ax2.view_init(elev=18, azim=-60)
     ax2.grid(False)
     for axp in (ax2.xaxis, ax2.yaxis, ax2.zaxis):
         axp.pane.set_visible(False)
+    ax2.set_xticks([])
     ax2.set_yticks([])
-    ax2.set_zticks([])
-    ax2.set_xticks([-10, 0, 10])
-    ax2.tick_params(axis="x", pad=-4)
-    ax2.set_xlabel(r"$z$ (mm)", labelpad=-9)
+    ax2.set_zticks([-10, 0, 10])
+    ax2.tick_params(axis="z", pad=-1)
+    ax2.set_zlabel(r"$z$ (mm)", labelpad=-7)
     sm = cm.ScalarMappable(norm=nrm, cmap="magma")
     sm.set_array([])
-    cb2 = fig.colorbar(sm, ax=ax2, shrink=0.55, pad=0.02)
+    cb2 = fig.colorbar(sm, ax=ax2, shrink=0.6, pad=0.04)
     cb2.set_label(r"$|H_t|$ (A/m)")
     cb2.ax.tick_params(labelsize=tick_pt)
-    ax2.text2D(0.5, -0.12, "(b)", transform=ax2.transAxes, ha="center",
+    ax2.text2D(0.5, -0.08, "(b)", transform=ax2.transAxes, ha="center",
                va="top")
 
     fig.canvas.draw()
