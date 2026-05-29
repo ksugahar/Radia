@@ -5,8 +5,9 @@ Launched by `coreform_cubit.exe -nojournal bootstrap.py`. Cubit's
 embedded Python executes this script, at which point:
 
     - Cubit's Qt event loop is already running (GUI is up)
-    - PyQt5 5.15.10 is available via Cubit's bundled site-packages
-      (linked against the SAME Qt5Core.dll Cubit uses → no ABI split)
+    - PySide6 is available via Cubit's bundled site-packages
+      (Cubit 2025.12 ships PySide6 / Qt6; linked against the SAME QtCore
+      Cubit uses -> no ABI split.  Earlier Cubit shipped PyQt5/Qt5.)
     - `cubit` module is already loaded / initialized
 
 We install a QTimer (200 ms) that polls a drop directory for JSON-RPC
@@ -42,7 +43,7 @@ import os
 import pathlib
 import traceback
 
-from PyQt5.QtCore import QTimer
+from PySide6.QtCore import QTimer
 
 import cubit  # Cubit-bundled module; present in the GUI's Python
 
