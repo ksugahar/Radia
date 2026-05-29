@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox,
     QPushButton, QPlainTextEdit, QFileDialog,
     QMessageBox, QSplitter, QGroupBox, QStyle,
+    QScrollArea, QFrame,
 )
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -128,7 +129,7 @@ if __name__ == "__main__":
 # Family is intentionally NOT hardcoded -- apply_panel_base_font
 # inherits the OS default family (Segoe UI on Windows, system
 # sans-serif on Linux/macOS) and bumps only the point size.
-PANEL_BASE_FONT_POINT_SIZE = 11
+PANEL_BASE_FONT_POINT_SIZE = 10  # 2026-05-29: 11 -> 10 per kubota readability request
 PANEL_OUTPUT_FONT_POINT_SIZE = 10  # smaller for the log/output text box
 
 # Shared panel debug log (C:/radia_panel_log.txt on Windows). Append-only
@@ -211,6 +212,35 @@ def json_output(base_path, suffix):
 # ============================================================
 # ModePanel: form layout base
 # ============================================================
+
+# ----------------------------------------------------------------------
+# Wheel-guarded input widgets.
+#
+# A bare QComboBox / QSpinBox grabs mouse-wheel events and changes its
+# value -- even when the user only meant to SCROLL THE FORM.  In a tall
+# parameter panel this silently mutates a selection the user already
+# set and believes is fixed (kubota 2026-05-29: after clicking a combo
+# to inspect it, scrolling the form kept changing the selection
+# unnoticed -> wrong run input, hard to confirm).  These subclasses
+# ignore the wheel event so it propagates to the parent scroll area
+# (the form scrolls); the value changes ONLY via click+dropdown /
+# arrows / keyboard.  Enforced by tests/panels/test_combo_wheel_guard.py
+# (panel-wheel-guard skill).
+# ----------------------------------------------------------------------
+class _NoWheelComboBox(QComboBox):
+    def wheelEvent(self, event):  # noqa: N802 (Qt override)
+        event.ignore()
+
+
+class _NoWheelSpinBox(QSpinBox):
+    def wheelEvent(self, event):  # noqa: N802
+        event.ignore()
+
+
+class _NoWheelDoubleSpinBox(QDoubleSpinBox):
+    def wheelEvent(self, event):  # noqa: N802
+        event.ignore()
+
 
 class ModePanel(QWidget):
     """Base class for analysis parameter panels."""
@@ -335,7 +365,7 @@ class ModePanel(QWidget):
         return w
 
     def add_combo(self, key, label, items, default=0):
-        w = QComboBox()
+        w = _NoWheelComboBox()
         w.addItems(items)
         w.setCurrentIndex(default)
         self._form.addRow(label, w)
@@ -344,7 +374,7 @@ class ModePanel(QWidget):
         return w
 
     def add_spin(self, key, label, value=1, lo=1, hi=999):
-        w = QSpinBox()
+        w = _NoWheelSpinBox()
         w.setRange(lo, hi)
         w.setValue(value)
         self._form.addRow(label, w)
@@ -642,11 +672,22 @@ class AnalysisWindow(QMainWindow):
         splitter = QSplitter(Qt.Vertical)
         root.addWidget(splitter, 1)
 
-        # Panel area (subclass inserts panel here)
+        # Panel area (subclass inserts panel here).  Wrapped in a
+        # QScrollArea so a tall form keeps every row at its natural
+        # height -- no QFormLayout compression, hence no vertical text
+        # clipping when the window is short (kubota 2026-05-29) -- and
+        # the mouse wheel scrolls the FORM.  Combos/spins are
+        # wheel-guarded (_NoWheel* above) so the wheel reaches this
+        # scroll area instead of silently changing a selection.
         self._panel_container = QWidget()
         self._panel_area = QVBoxLayout(self._panel_container)
         self._panel_area.setContentsMargins(0, 0, 0, 0)
-        splitter.addWidget(self._panel_container)
+        self._panel_scroll = QScrollArea()
+        self._panel_scroll.setWidget(self._panel_container)
+        self._panel_scroll.setWidgetResizable(True)
+        self._panel_scroll.setFrameShape(QFrame.NoFrame)
+        self._panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        splitter.addWidget(self._panel_scroll)
 
         # Output
         out_group = QGroupBox("Output")
@@ -959,6 +1000,57 @@ class AnalysisWindow(QMainWindow):
         if text:
             self._output.appendPlainText(text)
 
+    def _append_standard_summary(self, result):
+        """Surface element count / DoF / detailed compute time / power /
+        temperature for EVERY result, regardless of which calc_*.py
+        produced it.
+
+        calc_*.py emit these under several spellings (ndof vs wp_ndof,
+        t_solve_s vs t_bem_solve_s, P_wp_W vs P_total_W, ...).  The older
+        per-solver render cascade checked a single fixed spelling and
+        silently showed nothing for the BEM-A path -- the data was in the
+        JSON but never displayed (kubota 2026-05-29: "OUTPUT/JSON must
+        record element count, DoF, compute-time detail; IH: heat + temp").
+        This block uses the real keys so OUTPUT always shows ne / DoF /
+        time, plus heat + temperature for the IH paths.
+        """
+        o = self._output.appendPlainText
+        ne = (result.get("ne") or result.get("n_elements")
+              or result.get("wp_mesh_n_tris"))
+        if ne is not None:
+            nv = result.get("wp_mesh_nv") or result.get("nv")
+            o(f"  Elements = {ne}" + (f", nodes = {nv}" if nv else ""))
+        dof = (result.get("ndof") or result.get("wp_ndof")
+               or result.get("n_dofs"))
+        if dof:
+            o(f"  DoF = {dof}")
+        for k in ("P_wp_W", "P_total_W", "P_total", "P_wp", "wp_P_total"):
+            v = result.get(k)
+            if isinstance(v, (int, float)):
+                o(f"  Heat (P) = {v:.4e} W   [{k}]")
+                break
+        # Temperature integral quantities (thermal analysis):
+        # volume-averaged mean, plus max / min (kubota 2026-05-29).
+        t_mean = result.get("T_mean_C")
+        t_max = result.get("T_max_C", result.get("T_max"))
+        t_min = result.get("T_min_C", result.get("T_min"))
+        _tp = []
+        if isinstance(t_mean, (int, float)):
+            _tp.append(f"mean {t_mean:.1f}")
+        if isinstance(t_max, (int, float)):
+            _tp.append(f"max {t_max:.1f}")
+        if isinstance(t_min, (int, float)):
+            _tp.append(f"min {t_min:.1f}")
+        if _tp:
+            o("  Temperature [C] = " + ", ".join(_tp))
+        times = {k: v for k, v in result.items()
+                 if k.startswith("t_") and isinstance(v, (int, float))}
+        if times:
+            o("  Compute time (s):")
+            for k in sorted(times):
+                o(f"    {k:<24}{times[k]:9.2f}")
+            o(f"    {'(sum)':<24}{sum(times.values()):9.2f}")
+
     def _on_finished(self, exit_code, exit_status):
         remaining = self._process.readAllStandardOutput().data()
         if remaining:
@@ -1035,6 +1127,7 @@ class AnalysisWindow(QMainWindow):
         # Display result summary in output window
         if result and "error" not in result:
             self._output.appendPlainText("\n--- Result ---")
+            self._append_standard_summary(result)
             if "inductance_H" in result:
                 L_nH = result["inductance_H"] * 1e9
                 self._output.appendPlainText(f"  L = {L_nH:.2f} nH")
