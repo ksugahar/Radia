@@ -22,6 +22,9 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.colors import Normalize
+from scipy.interpolate import griddata
 
 from mcp_server_document.graph.tools import (
     apply_lab_style, lab_savefig, check_min_font,
@@ -67,7 +70,9 @@ def load_ht_map(json_path, vol_path):
     x, y, z = pts.T
     r = np.sqrt(x**2 + y**2)
     side = r > 0.95 * r.max()
-    return np.degrees(np.arctan2(y[side], x[side])), z[side] * 1e3, H[side]
+    R_mm = float(r[side].mean()) * 1e3
+    return (np.degrees(np.arctan2(y[side], x[side])), z[side] * 1e3,
+            H[side], R_mm)
 
 
 def main():
@@ -78,7 +83,7 @@ def main():
             print(f"ERROR: {p} not found.")
             sys.exit(1)
     currents, freqs, gap = load_gap(res)
-    th, zs, Ht = load_ht_map(perp, VOL)
+    th, zs, Ht, R = load_ht_map(perp, VOL)
 
     figsize = apply_lab_style(target="paper_double_column", aspect=0.40)
     # Render with inflated fonts so that, after the ~0.44 in-column
@@ -90,9 +95,10 @@ def main():
         "font.size": 21, "axes.labelsize": 21,
         "xtick.labelsize": 21, "ytick.labelsize": 21,
     })
-    fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=figsize, constrained_layout=True,
-        gridspec_kw={"width_ratios": [1.45, 1.0]})
+    fig = plt.figure(figsize=figsize, constrained_layout=True)
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 1.0])
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1], projection="3d")
     tick_pt = plt.rcParams["ytick.labelsize"]
 
     # ----- (a) gap heatmap (narrower), annotated cells -----
@@ -115,18 +121,43 @@ def main():
                          color="white" if abs(gap[i, j]) > 25 else "black")
     ax1.text(0.5, -0.30, "(a)", transform=ax1.transAxes, ha="center", va="top")
 
-    # ----- (b) |H_t| filled-contour map on the cylinder side wall -----
-    # Side-wall DOFs are scattered (theta, z) points, not a grid, so use
-    # Delaunay-triangulated filled contours (tricontourf).  The field is
-    # banded with the coil turns -> roughly horizontal contour bands.
-    tcf = ax2.tricontourf(th, zs, Ht, levels=12, cmap="magma")
-    cb2 = fig.colorbar(tcf, ax=ax2)
+    # ----- (b) |H_t| painted on the 3D cylinder side wall -----
+    # Interpolate the scattered (theta, z) side-wall DOFs onto a regular
+    # grid (theta tiled +-360 so the wrap is seamless), map to the
+    # cylinder (x, y, z) and paint |H_t| via plot_surface facecolors.
+    th_a = np.concatenate([th - 360, th, th + 360])
+    z_a = np.concatenate([zs, zs, zs])
+    H_a = np.concatenate([Ht, Ht, Ht])
+    TH, ZZ = np.meshgrid(np.linspace(-180, 180, 160),
+                         np.linspace(zs.min(), zs.max(), 80))
+    Hg = griddata((th_a, z_a), H_a, (TH, ZZ), method="linear")
+    Hg = np.where(np.isnan(Hg),
+                  griddata((th_a, z_a), H_a, (TH, ZZ), method="nearest"), Hg)
+    nrm = Normalize(vmin=Ht.min(), vmax=Ht.max())
+    # Lay the cylinder axis along x (horizontal) so it fills the wide,
+    # short in-column panel; the hot coil band reads as a bright ring.
+    ax2.plot_surface(ZZ, R * np.cos(np.radians(TH)), R * np.sin(np.radians(TH)),
+                     facecolors=cm.magma(nrm(Hg)), rstride=1, cstride=1,
+                     linewidth=0, antialiased=False, shade=False)
+    # Physically-exact proportions (axial span : diameter : diameter);
+    # zoom fills the small panel without distorting the cylinder.
+    ax2.set_box_aspect((zs.max() - zs.min(), 2 * R, 2 * R), zoom=1.5)
+    ax2.view_init(elev=20, azim=-74)
+    ax2.grid(False)
+    for axp in (ax2.xaxis, ax2.yaxis, ax2.zaxis):
+        axp.pane.set_visible(False)
+    ax2.set_yticks([])
+    ax2.set_zticks([])
+    ax2.set_xticks([-10, 0, 10])
+    ax2.tick_params(axis="x", pad=-4)
+    ax2.set_xlabel(r"$z$ (mm)", labelpad=-9)
+    sm = cm.ScalarMappable(norm=nrm, cmap="magma")
+    sm.set_array([])
+    cb2 = fig.colorbar(sm, ax=ax2, shrink=0.55, pad=0.02)
     cb2.set_label(r"$|H_t|$ (A/m)")
     cb2.ax.tick_params(labelsize=tick_pt)
-    ax2.set_xlabel(r"$\theta$ (deg)")
-    ax2.set_ylabel(r"$z$ (mm)")
-    ax2.set_xticks([-180, 0, 180])
-    ax2.text(0.5, -0.30, "(b)", transform=ax2.transAxes, ha="center", va="top")
+    ax2.text2D(0.5, -0.12, "(b)", transform=ax2.transAxes, ha="center",
+               va="top")
 
     fig.canvas.draw()
     bad = check_min_font(fig, min_pt=MIN_PT, embed_scale=EMBED_SCALE)
