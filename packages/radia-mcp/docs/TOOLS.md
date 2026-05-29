@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **321 tools** across 39 MCP servers.
+Total: **323 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,7 +10,7 @@ Total: **321 tools** across 39 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-radia-interop`](#mcp-server-radia-interop) | `radia_mcp.interop` | 8 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 7 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 31 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 33 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 12 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
@@ -178,6 +178,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
+| `aca_tsvd` | (ACA+)+TSVD accelerated kernel-agnostic least-norm solver. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifemm_documentation` | Get radia-axifemm documentation: Henrotte axisymmetric Q-element FE |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
@@ -195,7 +196,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
-| `mmm_core` | MMM (Magnetic Moment Method) core theory + Radia heritage. |
+| `mmm_core` | MMM/MSC (Magnetic Moment Method / Magnetic Surface Charge) -- how |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
 | `panel_add_param` | Plan where to add a new parameter to a Radia-NGSolve panel. |
@@ -209,6 +210,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `release_workflow` | Triple-package release workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
+| `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
 
 ## `mcp-server-fem`
 
@@ -219,7 +221,7 @@ Module: `radia_mcp.fem.server`
 | Tool | Description |
 |---|---|
 | `fem_elements` | Element technology: edge (Nedelec), high-order, XFEM, isogeometric, DG. |
-| `fem_equivalence_source` | Equivalence-theorem near-field source (CST Near-Field Source equivalent). |
+| `fem_equivalence_source` | Equivalence-theorem near-field source (Schelkunoff/Love -- Stratton-Chu). |
 | `fem_gauge_open_boundary` | Gauging + open boundary techniques. |
 | `fem_large_scale_special` | Large-scale, error theory, multi-scale (Hollaus MSFEM), misc techniques. |
 | `fem_ngsolve_hierarchy` | NGSolve hierarchical H(curl) bases - Zaglmayr / nograds / tree-cotree. |
