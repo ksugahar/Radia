@@ -760,15 +760,48 @@ def cmd_ci_verify(args):
     return 0
 
 
+def _run_pyside6_health_audit():
+    """Layer A pyside6-health audit (gated in `done` since 2026-05-30).
+
+    Runs tools/audit_pyside6_only.py which checks:
+      1. zero real PyQt5 / PySide2 / PyQt6 imports in tracked *.py
+      2. core GUI modules import PySide6
+      3. radia pyproject declares PySide6, no PyQt5 dependency
+      4. radia_cubit.ccm has no Qt5 DLL dependency
+      5. headless panel smoke (IH/EM/PCB construct + ExportDialog
+         builds all 6 formats) in an isolated offscreen subprocess
+
+    Returns the audit script's exit code (0 = CLEAN).
+    """
+    step("pyside6-health audit (Layer A: static + headless smoke)")
+    audit = REPO / "tools" / "audit_pyside6_only.py"
+    if not audit.exists():
+        fail(f"audit script missing: {audit}")
+        return 1
+    result = subprocess.run(
+        [sys.executable, str(audit)],
+        cwd=str(REPO),
+        capture_output=True, text=True,
+    )
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip())
+    if result.returncode == 0:
+        ok("pyside6-health: CLEAN (PySide6-only + panels construct).")
+    return result.returncode
+
+
 def cmd_done(args):
-    """Definition-of-done check: preflight + LAB-editable verify + phase9.
+    """Definition-of-done check: preflight + LAB-editable verify + phase9 + pyside6-health.
 
     Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
-    mdx, the repo is release-ready, AND the LAB dev loop is intact.
-    Exit non-zero means do NOT tell the user "release done" yet.
+    mdx, the repo is release-ready, the LAB dev loop is intact, AND the
+    panel GUI is PySide6-only with every panel window constructible
+    headlessly. Exit non-zero means do NOT tell the user "release done" yet.
     """
     step("Definition-of-done check "
-         "(preflight + LAB editable + phase9)")
+         "(preflight + LAB editable + phase9 + pyside6-health)")
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed — repo state not release-ready.")
@@ -785,9 +818,17 @@ def cmd_done(args):
     if rc != 0:
         fail("phase9 drift detected — at least one machine is out of sync.")
         return rc
+
+    rc = _run_pyside6_health_audit()
+    if rc != 0:
+        fail("pyside6-health audit failed -- a Qt5/PyQt5 reference or "
+             "panel construction regression slipped in. Fix per the audit "
+             "output, then re-run `release_triple done`.")
+        return rc
+
     print("")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx, and LAB dev loop is intact.")
+       "mdx, LAB dev loop is intact, and the panel GUI is PySide6-only.")
     return 0
 
 
