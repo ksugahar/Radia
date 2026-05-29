@@ -279,6 +279,11 @@ def build_argparser():
     parser.add_argument("--probe-z", type=float, default=1e-10)
     parser.add_argument("--msh-output", default=None,
                         help="Optional GMSH .msh post-export path")
+    # calc_main auto-adds --output at runtime when missing; declare it
+    # here too so the panel generator (which only sees this factory)
+    # knows the calc accepts it (kubota 2026-05-30).
+    parser.add_argument("--output", default="",
+                        help="JSON output file (optional)")
     return parser
 
 
