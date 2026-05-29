@@ -510,7 +510,20 @@ ABSTRACT_AND_CONCISENESS = r"""
    The abstract must stand alone; a reference number is meaningless to
    a reader who hasn't reached the bibliography.  If prior work must be
    acknowledged, name it in words ("unlike conventional Preisach
-   models") without a citation marker.
+   models", "the Hollaus et al. method") without a citation marker.
+
+   **No exception — not even for the foundational paper the work
+   re-casts, nor for a co-author's paper.**  The tempting loophole is
+   "keep `... of X et al.~\cite{X}` so the foundational reference is
+   numbered [1]".  Resist it: name X et al. in words in the abstract
+   and move the `\cite{}` to the first body mention (Introduction /
+   Method).  The reference still renders — it is simply numbered by its
+   body order of appearance (so it may become [4] rather than [1], which
+   is correct and fine).  Do NOT carve out a "keep [1] in the abstract"
+   exception.  (Real 2026 IGTE-digest slip: a co-author's foundational
+   ref was left as `\cite{}`/[1] in the abstract "as a deliberate
+   exception" and had to be stripped on review — the renumbering to a
+   body-order number is the intended outcome, not a problem to avoid.)
 
 These two rules are enforced by
 `paper_writing_check_abstract_no_math_no_citation` (and the
