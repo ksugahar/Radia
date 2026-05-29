@@ -222,7 +222,13 @@ def solve_peec(inp_file="", inp_text="",
     return result_dict
 
 
-def main():
+def build_argparser():
+    """argparse factory shared by main() and the panel generator.
+
+    The panel (PCBPanel.__init__) calls this to auto-generate widgets
+    via ModePanel.bind_argparser, so adding/removing/renaming an option
+    here propagates to the GUI without any panel-side edit.
+    """
     parser = argparse.ArgumentParser(
         description="PCB impedance extraction via PEEC")
     parser.add_argument("--inp", default="",
@@ -240,6 +246,11 @@ def main():
                         help="SPICE netlist output path")
     parser.add_argument("--output", default="",
                         help="JSON output file")
+    return parser
+
+
+def main():
+    parser = build_argparser()
 
     def run(args):
         return solve_peec(
