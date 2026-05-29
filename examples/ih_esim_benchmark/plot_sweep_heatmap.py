@@ -106,20 +106,32 @@ def main():
         ax2.loglog(currents, P_per[:, j], "s-", color=col)
     ax2.set_xlabel(r"$I_{\mathrm{port}}$ (A)")
     ax2.set_ylabel(r"$P_{\mathrm{wp}}$ (W)")
-    # Compact 2-entry method legend (neutral grey). Rising log-log curves
-    # leave the upper-left corner empty; verify with the lab-graph-style
-    # overlap checker and report.
+    # Two compact legends so all FOUR frequency curves AND both methods are
+    # identified without covering the data: rising log-log curves leave the
+    # upper-left and lower-right corners empty.
+    #  (1) frequency -> viridis colour (4 entries), lower-right.
+    freq_handles = [
+        Line2D([0], [0], color=plt.cm.viridis(j / max(len(freqs)-1, 1)),
+               ls="-", label=fr"{f_Hz/1e3:.0f} kHz")
+        for j, f_Hz in enumerate(freqs)
+    ]
+    leg_freq = ax2.legend(handles=freq_handles, fontsize=7, frameon=False,
+                          loc="lower right", handlelength=1.4,
+                          labelspacing=0.2, borderaxespad=0.4)
+    ax2.add_artist(leg_freq)
+    #  (2) method -> line style (2 entries, neutral grey), upper-left.
     method_handles = [
         Line2D([0], [0], color="0.35", ls="--", marker="o", mfc="none",
                label="scalar"),
         Line2D([0], [0], color="0.35", ls="-", marker="s",
                label="per-element"),
     ]
-    ax2.legend(handles=method_handles, fontsize=8, frameon=False,
-               loc="upper left", handlelength=2.0, labelspacing=0.2)
+    ax2.legend(handles=method_handles, fontsize=7, frameon=False,
+               loc="upper left", handlelength=1.8, labelspacing=0.2)
     fig.canvas.draw()
+    # Verify neither legend covers a curve (check both placements).
     _ov = check_legend_overlap(ax2)
-    print("panel (b) legend overlap:",
+    print("panel (b) freq(LR)+method(UL) legends; overlap:",
           "CLEAN" if not _ov else
           [(o["label"], f"{o['fraction']*100:.0f}%") for o in _ov])
     ax2.grid(linestyle=":", alpha=0.5)
