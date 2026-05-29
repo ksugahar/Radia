@@ -164,7 +164,23 @@ def magnetic_materials_hysteresis(topic: str = "lab_core") -> str:
                                     numerical pitfalls; Newton-Raphson
                                     inversion w/ analytical permeability
                                     tensor.  The WHY behind lab_core.
-            "all"            - Everything (now 25 topics)
+            "peeling_identification" - Analytic 剥ぎ取り shape-function
+                                    identification of a B-input play/stop
+                                    model from the descending FORC ladder
+                                    by a difference scheme (Everett-density
+                                    mu); NO least-squares (per-hysteron LSQ
+                                    on the play variable is ill-conditioned
+                                    because all p_k share B).  Sugahara/
+                                    Ahagon playmodel.py shapeFunction +
+                                    prototype_step0-4 calibration pipeline.
+            "vector_play_model" - Canonical Sugahara/Ahagon B-input vector
+                                    play model H=sum Hfunc_i(p_i) with play
+                                    operator p_i=clip(p_i,B-zeta_i,B+zeta_i),
+                                    equidistant zeta, Hfunc via peeling.
+                                    Congruency (matches H-axis-congruent
+                                    silicon steel); rotational BQM variants;
+                                    complementary to the energy STOP (p=B-s).
+            "all"            - Everything (27 topics)
     """
     return get_hysteresis_models_knowledge(topic)
 
