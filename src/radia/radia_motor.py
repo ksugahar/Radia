@@ -33,7 +33,14 @@ from PySide6.QtCore import QProcess, Qt
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QFormLayout, QTabWidget, QPushButton, QLineEdit, QFileDialog,
-    QDoubleSpinBox, QSpinBox, QComboBox, QLabel, QTextEdit, QGroupBox,
+    QLabel, QTextEdit, QGroupBox,
+)
+# Wheel-guarded combos/spins: ignore mouse-wheel so scrolling the form
+# does not silently change a value (see radia_gui_base, kubota 2026-05-29).
+from radia_gui_base import (
+    _NoWheelDoubleSpinBox as QDoubleSpinBox,
+    _NoWheelSpinBox as QSpinBox,
+    _NoWheelComboBox as QComboBox,
 )
 
 

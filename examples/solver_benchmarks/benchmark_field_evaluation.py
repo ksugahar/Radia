@@ -184,6 +184,7 @@ def main():
 	"""
 	Main benchmark routine.
 	"""
+	from ngsolve import TaskManager
 	print("="*80)
 	print("FIELD EVALUATION BENCHMARK")
 	print("="*80)
@@ -209,11 +210,12 @@ def main():
 		points = generate_evaluation_points(n_points)
 		print(f"\nGenerated {len(points)} evaluation points")
 
-		# Single-point evaluation
-		single_results = benchmark_single_point_evaluation(magnet, points, 'b')
-
-		# Batch evaluation
-		batch_results = benchmark_batch_evaluation(magnet, points, 'b')
+		# rad.Fld batch eval is TaskManager-parallel (radia C++ honours
+		# the active context); wrap so the batch benchmark reflects the
+		# realistic parallel performance (kubota 2026-05-29 sweep).
+		with TaskManager():
+			single_results = benchmark_single_point_evaluation(magnet, points, 'b')
+			batch_results = benchmark_batch_evaluation(magnet, points, 'b')
 
 		# Verify results
 		verify_results(single_results, batch_results)
