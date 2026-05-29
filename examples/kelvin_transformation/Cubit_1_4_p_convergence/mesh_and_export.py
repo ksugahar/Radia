@@ -73,7 +73,7 @@ def build_and_export(out_dir, orders=(1, 2, 3),
     # === Step 1: build magnetic + air spheres, subtract -> mag + air-shell ===
     # Create air sphere FIRST, then mag.  Use `subtract ... keep` then
     # explicitly create a fresh mag sphere that occupies the cavity --
-    # because `subtract ... keep` in Cubit 2025.3 leaves the subtrahend
+    # because `subtract ... keep` in Cubit leaves the subtrahend
     # (mag) but does NOT actually carve a cavity in the minuend (air).
     # Workaround: subtract WITHOUT keep, then re-create mag at the cavity.
     cubit.cmd(f"create sphere radius {R_air}")

@@ -8,7 +8,7 @@ Demonstrates:
 
 Requirements:
   pip install radia   (includes radia_cubit_mesh.pyd + ngsolve + cubit_mesh_export)
-  Coreform Cubit 2025.3 installed
+  Coreform Cubit 2025.8+ installed
 
 Usage:
   python demo_volume_area_convergence.py

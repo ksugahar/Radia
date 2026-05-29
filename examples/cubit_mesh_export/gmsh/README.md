@@ -81,7 +81,7 @@ cubit.cmd('radia_export gmsh "solid.msh" dimension 3 overwrite')
 ## Regenerate Samples
 
 ```bash
-"${CUBIT_PATH:-C:/Program Files/Coreform Cubit 2025.3/bin}/python3/python.exe" gmsh_export_example.py
+"${CUBIT_PATH:-<Coreform Cubit 2025.8+>/bin}/python3/python.exe" gmsh_export_example.py
 ```
 
 ## See Also

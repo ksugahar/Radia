@@ -33,7 +33,7 @@ iterations because each issue was silent (no exception, just a wrong
 number that converges to a wrong answer).  Both lessons apply to ANY
 Cubit-meshed Kelvin / Omega-Reduced setup.
 
-### 1. `subtract A from B keep` does NOT carve in Cubit 2025.3
+### 1. `subtract A from B keep` does NOT carve in Cubit
 
 Verified by post-merge probe (`get_relatives("surface", sid, "volume")`)
 showing only ONE parent volume per shared surface.  The `keep` flag
