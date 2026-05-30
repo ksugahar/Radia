@@ -2507,6 +2507,56 @@ the thermal step, **temperature reported as mean (volume-averaged
   the physically meaningful integral quantities (total power, total
   energy, mean/max/min of the primary field) to its result dict.
 
+### Result Output Persistence Policy (2026-05-30)
+
+**POLICY**: Every panel Run produces a **persistent artifact pair**
+next to the input `.vol` (or `.step`), sharing a basename and a
+mode-suffix:
+
+| File | Content | Producer |
+|---|---|---|
+| `<base><suffix>.json` | Structured result dict (per [Result Output Policy 2026-05-29](#result-output-policy-ne--dof--time--analysis-integral-quantities-2026-05-29)) | `calc_*.py --output` |
+| `<base><suffix>.log` | **Verbatim copy of the Output window** (Launching banner + subprocess stdout/stderr + panel-rendered summary + error messages + exit code line) | `AnalysisWindow._persist_output_log` (Layer 3) |
+
+- **Naming**: `<base>` from input path basename (`json_output()` /
+  `msh_output()` convention), `<suffix>` from the panel-mode suffix
+  (e.g. `_peec_bem`, `_fem_kelvin`, `_omega_reduced`, `_peec_ind`).
+  The `.log` path is derived as `os.path.splitext(json_path)[0] + ".log"`.
+- **Overwrite**: `.log` is **overwritten** on each Run (user-confirmed
+  2026-05-30). Older artifacts do NOT accumulate -- one Run = one
+  artifact pair. To preserve a history, copy the `.log` out before
+  re-running.
+- **Write timing**: At Run end, regardless of exit code -- a failed Run
+  also leaves a `.log` capturing the failure tail. This is required
+  for triage of incident reports ("panel crashed" / "wrong number")
+  without asking the user to copy-paste from the Output box.
+- **Scope**: All panels uniformly. Implementation lives in
+  `AnalysisWindow._persist_output_log` (called from `_on_finished` at
+  both the error-return path and the success-return path); per-panel
+  subclasses do not need to opt in. If a panel mode legitimately does
+  not pass `--output` (some debug paths), the helper is a no-op (no
+  log, no exception).
+
+**How it is enforced**:
+- `AnalysisWindow._on_run` captures the `--output` argv value into
+  `self._last_output_json` at launch time.
+- `AnalysisWindow._persist_output_log` writes
+  `self._output.toPlainText()` to `<base><suffix>.log`.
+- `tests/panels/test_panel_output_health.py::test_persist_output_log_*`
+  locks the contract: writes-next-to-json, overwrite-on-rerun,
+  silent-when-no-json, captures-failed-run.
+
+**Why**:
+- 1 Run = 1 artifact pair beside the geometry → audit / reproducibility
+  / paper figures all flow from this convention without per-panel
+  custom code.
+- A user incident report can be reduced to "attach the `.log`" and
+  the diagnostic is complete (no copy-paste, no truncation, no
+  encoding loss).
+- This complements `C:/radia_panel_log.txt` (Cubit session-wide
+  Claude debug log) which is per-session rather than per-Run; the
+  `.log` is the per-Run audit artifact.
+
 ### 4-Layer Architecture
 
 **POLICY**: Cubit, Radia-NGSolve, and computation are **3 separate processes**. No layer imports another layer's libraries.
