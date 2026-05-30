@@ -17,8 +17,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 def find_cubit():
     """Find Cubit executable."""
     candidates = [
-        r"C:\Program Files\Coreform Cubit 2025.3\bin\coreform_cubit.exe",
-        r"C:\Program Files\Coreform Cubit 2025.3\coreform_cubit.exe",
+        r"C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe",
+        r"C:\Program Files\Coreform Cubit 2025.12\coreform_cubit.exe",
     ]
     for c in candidates:
         if os.path.isfile(c):

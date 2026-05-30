@@ -2,7 +2,7 @@
 Test the warning for mixed element types in blocks.
 
 Run with Cubit Python:
-    "C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" tests/test_mixed_element_warning.py
+    "C:/Program Files/Coreform Cubit 2025.12/bin/python3/python.exe" tests/test_mixed_element_warning.py
 """
 
 import sys

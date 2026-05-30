@@ -43,7 +43,7 @@ ENTRY_SCRIPT = CUBIT_HELPERS / "auto_kelvin_entry.py"
 
 
 def _find_cubit() -> Path | None:
-    p = Path(r"C:\Program Files\Coreform Cubit 2025.3\bin\coreform_cubit.exe")
+    p = Path(r"C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe")
     return p if p.is_file() else None
 
 
