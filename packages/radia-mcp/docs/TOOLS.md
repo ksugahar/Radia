@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **323 tools** across 39 MCP servers.
+Total: **324 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -40,7 +40,7 @@ Total: **323 tools** across 39 MCP servers.
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
-| [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 6 |
+| [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 7 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 6 |
@@ -635,6 +635,7 @@ Module: `radia_mcp.graph.server`
 
 | Tool | Description |
 |---|---|
+| `graph_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
 | `graph_size_for_target` | Recommend output figure size + font settings for a target embedding. |
 | `graph_status` | (no description) |
 | `graph_style_guide` | Return the lab-standard graph style guide. |
