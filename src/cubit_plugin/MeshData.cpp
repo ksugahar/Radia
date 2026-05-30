@@ -189,12 +189,32 @@ void MeshData::extract_elements(MeshExportInterface *iface)
 // ================================================================
 void MeshData::extract_sidesets(MeshExportInterface *iface)
 {
+  // SNAPSHOT user-defined sidesets BEFORE calling iface->get_sideset_list.
+  // Same side-effect pattern as the block phantom-bug fix above:
+  // iface->get_sideset_list returns a "default sideset" handle for faces
+  // not assigned to any user-defined sideset; calling
+  // iface->id_from_handle() on that handle MATERIALISES a phantom
+  // sideset in Cubit's database (id ~ N+1).  Without this skip, the
+  // phantom sideset leaks into downstream consumers (GMSH
+  // $PhysicalNames as a junk entry, Netgen .vol as an extra bcname
+  // with the fallback "Surface_K" name).  Pre-snapshot of
+  // parse_cubit_list("sideset", "all") gives us the set of
+  // user-defined sideset IDs; the phantom is skipped per the same
+  // user_block_set pattern.  Bugs of this class were fixed for
+  // blocks 2026-05-30 (keiko 100号機 6-turn loft); sidesets +
+  // nodesets fixed 2026-05-31.
+  std::vector<int> user_sideset_ids = CubitInterface::parse_cubit_list("sideset", "all");
+  std::set<int> user_sideset_set(user_sideset_ids.begin(), user_sideset_ids.end());
+
   std::vector<SidesetHandle> ss_handles;
   iface->get_sideset_list(ss_handles);
 
   for (auto &ssh : ss_handles) {
     SidesetGroup sg;
     sg.id = iface->id_from_handle(ssh);
+    // Skip phantom default-sideset materialised by iface->get_sideset_list.
+    if (user_sideset_set.find(sg.id) == user_sideset_set.end())
+      continue;
     sg.name = iface->get_sideset_name(ssh);
 
     // Get surfaces in this sideset
@@ -240,6 +260,14 @@ void MeshData::extract_sidesets(MeshExportInterface *iface)
 // ================================================================
 void MeshData::extract_nodesets(MeshExportInterface *iface)
 {
+  // SNAPSHOT user-defined nodesets BEFORE calling iface->get_nodeset_list.
+  // Same side-effect pattern as block + sideset above -- phantom
+  // default-nodeset gets materialised by iface->id_from_handle() and
+  // would pollute the Cubit session if not skipped here.  See full
+  // diagnosis at extract_elements.
+  std::vector<int> user_nodeset_ids = CubitInterface::parse_cubit_list("nodeset", "all");
+  std::set<int> user_nodeset_set(user_nodeset_ids.begin(), user_nodeset_ids.end());
+
   std::vector<NodesetHandle> ns_handles;
   iface->get_nodeset_list(ns_handles);
 
@@ -249,6 +277,9 @@ void MeshData::extract_nodesets(MeshExportInterface *iface)
   for (auto &nsh : ns_handles) {
     NodesetGroup ng;
     ng.id = iface->id_from_handle(nsh);
+    // Skip phantom default-nodeset materialised by iface->get_nodeset_list.
+    if (user_nodeset_set.find(ng.id) == user_nodeset_set.end())
+      continue;
     ng.name = iface->get_nodeset_name(nsh);
 
     int nstart = 0, ncount = 0;
