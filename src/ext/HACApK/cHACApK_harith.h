@@ -107,6 +107,13 @@ double cHACApK_harith_self_test(int depth, int n_per_block);
  * precision for a well-conditioned diag-dominant matrix). */
 double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
 
+/* Phase 3.5 unit test: h_addmul rk(A) * rk(B) -> rk(C) with recompression.
+ * Builds 3 random rk leaves, computes the dense ground truth + alpha A B,
+ * then calls h_addmul and verifies the result. Returns max element-wise
+ * relative error. */
+double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
+                                              int kA, int kB, int kC);
+
 #ifdef __cplusplus
 }
 #endif
