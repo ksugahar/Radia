@@ -87,6 +87,12 @@ static st_cHACApK_block_node_t *build_rec(
     int rc_dof_size  = rc->nsize * nffc;
     int cc_dof_size  = cc->nsize * nffc;
 
+    /* Cache DOF-grain dimensions on the node for Phase 3.6 helpers. */
+    node->dof_nrows     = rc_dof_size;
+    node->dof_ncols     = cc_dof_size;
+    node->dof_row_start = rc_dof_start - 1;  /* 0-based */
+    node->dof_col_start = cc_dof_start - 1;
+
     /* Probe for a leaf at this exact DOF-position (rc, cc). */
     st_cHACApK_leafmtx_t *leaf =
         find_leaf_sorted(sorted, n_sorted, rc_dof_start, cc_dof_start);

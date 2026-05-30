@@ -421,8 +421,8 @@ static int dense_to_rk_truncate(
 static double *materialize_node_as_dense(const st_cHACApK_block_node_t *node)
 {
     if (!node) return NULL;
-    int m = node->row_cluster->nsize;
-    int n = node->col_cluster->nsize;
+    int m = node->dof_nrows;
+    int n = node->dof_ncols;
     double *out = (double*)calloc((size_t)m * (size_t)n, sizeof(double));
     if (!out) return NULL;
 
@@ -443,15 +443,15 @@ static double *materialize_node_as_dense(const st_cHACApK_block_node_t *node)
     }
     /* Internal: recurse on children, copy each into its slot in out. */
     int nr = node->nrsons, nc = node->ncsons;
-    int row_base = node->row_cluster->nstrt;
-    int col_base = node->col_cluster->nstrt;
+    int row_base = node->dof_row_start;
+    int col_base = node->dof_col_start;
     for (int j_s = 0; j_s < nc; j_s++) {
         for (int i_s = 0; i_s < nr; i_s++) {
             const st_cHACApK_block_node_t *child = node->sons[i_s + j_s * nr];
-            int cm = child->row_cluster->nsize;
-            int cn = child->col_cluster->nsize;
-            int row_off = child->row_cluster->nstrt - row_base;
-            int col_off = child->col_cluster->nstrt - col_base;
+            int cm = child->dof_nrows;
+            int cn = child->dof_ncols;
+            int row_off = child->dof_row_start - row_base;
+            int col_off = child->dof_col_start - col_base;
             double *cd = materialize_node_as_dense(child);
             if (!cd) { free(out); return NULL; }
             for (int jj = 0; jj < cn; jj++) {
@@ -517,15 +517,15 @@ static int add_dense_to_node(
     }
     /* Internal: recurse on children with sub-views of D. */
     int nr = C->nrsons, nc = C->ncsons;
-    int row_base = C->row_cluster->nstrt;
-    int col_base = C->col_cluster->nstrt;
+    int row_base = C->dof_row_start;
+    int col_base = C->dof_col_start;
     for (int j_s = 0; j_s < nc; j_s++) {
         for (int i_s = 0; i_s < nr; i_s++) {
             st_cHACApK_block_node_t *child = C->sons[i_s + j_s * nr];
-            int cm = child->row_cluster->nsize;
-            int cn = child->col_cluster->nsize;
-            int row_off = child->row_cluster->nstrt - row_base;
-            int col_off = child->col_cluster->nstrt - col_base;
+            int cm = child->dof_nrows;
+            int cn = child->dof_ncols;
+            int row_off = child->dof_row_start - row_base;
+            int col_off = child->dof_col_start - col_base;
             const double *D_sub = D + row_off + (size_t)col_off * (size_t)D_ld;
             int rc = add_dense_to_node(D_sub, D_ld, cm, cn, child);
             if (rc != CHACAPK_HARITH_OK) return rc;
@@ -581,15 +581,15 @@ static int set_node_from_dense(
     }
     /* Internal: recurse on children with sub-views of D. */
     int nr = C->nrsons, nc = C->ncsons;
-    int row_base = C->row_cluster->nstrt;
-    int col_base = C->col_cluster->nstrt;
+    int row_base = C->dof_row_start;
+    int col_base = C->dof_col_start;
     for (int j_s = 0; j_s < nc; j_s++) {
         for (int i_s = 0; i_s < nr; i_s++) {
             st_cHACApK_block_node_t *child = C->sons[i_s + j_s * nr];
-            int cm = child->row_cluster->nsize;
-            int cn = child->col_cluster->nsize;
-            int row_off = child->row_cluster->nstrt - row_base;
-            int col_off = child->col_cluster->nstrt - col_base;
+            int cm = child->dof_nrows;
+            int cn = child->dof_ncols;
+            int row_off = child->dof_row_start - row_base;
+            int col_off = child->dof_col_start - col_base;
             const double *D_sub = D + row_off + (size_t)col_off * (size_t)D_ld;
             int rc = set_node_from_dense(D_sub, D_ld, cm, cn, child);
             if (rc != CHACAPK_HARITH_OK) return rc;
@@ -903,9 +903,9 @@ static int h_addmul(double alpha,
                     (A_is_leaf  ||  B_is_leaf ||  C_is_leaf);
         int dense_dense_rk = leaf_is_dense(A) && leaf_is_dense(B) && leaf_is_rk(C);
         if (mixed || dense_dense_rk) {
-            int m = C->row_cluster->nsize;
-            int n = C->col_cluster->nsize;
-            int inner = A->col_cluster->nsize;  /* == B->row_cluster->nsize */
+            int m = C->dof_nrows;
+            int n = C->dof_ncols;
+            int inner = A->dof_ncols;  /* == B->dof_nrows */
 
             double *A_dense = materialize_node_as_dense(A);
             double *B_dense = materialize_node_as_dense(B);
@@ -993,8 +993,8 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
         int X_is_leaf = leaf_is_dense(X) || leaf_is_rk(X);
         int mixed = (!L_is_leaf || !X_is_leaf) && (L_is_leaf || X_is_leaf);
         if (mixed) {
-            int m = L->row_cluster->nsize;  /* == L->col_cluster->nsize (square) */
-            int n = X->col_cluster->nsize;
+            int m = L->dof_nrows;  /* == L->dof_ncols (square) */
+            int n = X->dof_ncols;
             double *L_dense = materialize_node_as_dense(L);
             double *X_dense = materialize_node_as_dense(X);
             if (!L_dense || !X_dense) {
@@ -1078,8 +1078,8 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
         int X_is_leaf = leaf_is_dense(X) || leaf_is_rk(X);
         int mixed = (!U_is_leaf || !X_is_leaf) && (U_is_leaf || X_is_leaf);
         if (mixed) {
-            int n_u = U->row_cluster->nsize;  /* U is square: ndl == ndt */
-            int m_x = X->row_cluster->nsize;
+            int n_u = U->dof_nrows;  /* U is square */
+            int m_x = X->dof_nrows;
             double *U_dense = materialize_node_as_dense(U);
             double *X_dense = materialize_node_as_dense(X);
             if (!U_dense || !X_dense) {
@@ -1133,8 +1133,8 @@ static int hmatvec_subtract(
 
     if (leaf_is_dense(node)) {
         int m = leaf_rows(node), n = leaf_cols(node);
-        int r0 = node->row_cluster->nstrt - 1;  /* 1-based -> 0-based */
-        int c0 = node->col_cluster->nstrt - 1;
+        int r0 = node->dof_row_start;  /* 0-based DOF start */
+        int c0 = node->dof_col_start;
         cblas_dgemv(CblasColMajor, CblasNoTrans, m, n,
                     -1.0, leaf_dense_data(node), m,
                     &x[c0], 1, 1.0, &y[r0], 1);
@@ -1145,8 +1145,8 @@ static int hmatvec_subtract(
     if (leaf_is_rk(node)) {
         int m = leaf_rows(node), n = leaf_cols(node);
         int kt = leaf_rk_rank(node);
-        int r0 = node->row_cluster->nstrt - 1;
-        int c0 = node->col_cluster->nstrt - 1;
+        int r0 = node->dof_row_start;
+        int c0 = node->dof_col_start;
         /* Stack allocation: kt is small (typically < 50 for ACA tol 1e-4). */
         double w_stack[256];
         double *w = (kt <= (int)(sizeof(w_stack)/sizeof(w_stack[0])))
@@ -1400,6 +1400,11 @@ static st_cHACApK_block_node_t *build_deep_tree(
     log_bn(s, bn);
     bn->row_cluster = row_clt;
     bn->col_cluster = col_clt;
+    /* Synthetic test uses cluster nstrt/nsize as DOF (nffc=1). */
+    bn->dof_nrows     = row_clt->nsize;
+    bn->dof_ncols     = col_clt->nsize;
+    bn->dof_row_start = row_clt->nstrt - 1;
+    bn->dof_col_start = col_clt->nstrt - 1;
 
     if (depth == 0) {
         int m = row_clt->nsize, n = col_clt->nsize;
@@ -1624,8 +1629,11 @@ double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
 
     st_cHACApK_block_node_t bn_A = {0}, bn_B = {0}, bn_C = {0};
     bn_A.row_cluster = clt_m;  bn_A.col_cluster = clt_in; bn_A.leaf_mtx = &lf_A; bn_A.leaf_kind = 1;
+    bn_A.dof_nrows = m; bn_A.dof_ncols = inner;
     bn_B.row_cluster = clt_in; bn_B.col_cluster = clt_n;  bn_B.leaf_mtx = &lf_B; bn_B.leaf_kind = 1;
+    bn_B.dof_nrows = inner; bn_B.dof_ncols = n;
     bn_C.row_cluster = clt_m;  bn_C.col_cluster = clt_n;  bn_C.leaf_mtx = &lf_C; bn_C.leaf_kind = 1;
+    bn_C.dof_nrows = m; bn_C.dof_ncols = n;
 
     /* Run the test. */
     int rc = h_addmul(alpha, &bn_A, &bn_B, &bn_C);
@@ -1782,6 +1790,8 @@ double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank)
     root->col_cluster = clt_root;
     root->nrsons = 2; root->ncsons = 2;
     root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
 
     /* Leaf at (i_son, j_son), i,j in {0,1}. row_cluster = clt0 if i==0 else clt1, etc. */
     st_cHACApK_block_node_t *nodes[4];
@@ -1794,6 +1804,9 @@ double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank)
             st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn));
             bn->row_cluster = rclt[i_son];
             bn->col_cluster = cclt[j_son];
+            bn->dof_nrows = nb; bn->dof_ncols = nb;
+            bn->dof_row_start = rclt[i_son]->nstrt - 1;
+            bn->dof_col_start = cclt[j_son]->nstrt - 1;
             st_cHACApK_leafmtx_t *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));
             lf->ndl = nb; lf->ndt = nb;
             lf->nstrtl = bn->row_cluster->nstrt;
@@ -2079,6 +2092,9 @@ double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank)
             bn1->col_cluster = clt_lvl1[j_root];
             bn1->nrsons = 2; bn1->ncsons = 2;
             bn1->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*bn1->sons));
+            bn1->dof_nrows = 2*nb; bn1->dof_ncols = 2*nb;
+            bn1->dof_row_start = clt_lvl1[i_root]->nstrt - 1;
+            bn1->dof_col_start = clt_lvl1[j_root]->nstrt - 1;
             all_bn[n_bn++] = bn1;
 
             for (int j_sub = 0; j_sub < 2; j_sub++) {
@@ -2088,6 +2104,9 @@ double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank)
                     st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn));
                     bn->row_cluster = clt_lvl2[i_grid];
                     bn->col_cluster = clt_lvl2[j_grid];
+                    bn->dof_nrows = nb; bn->dof_ncols = nb;
+                    bn->dof_row_start = clt_lvl2[i_grid]->nstrt - 1;
+                    bn->dof_col_start = clt_lvl2[j_grid]->nstrt - 1;
                     st_cHACApK_leafmtx_t *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));
                     lf->ndl = nb; lf->ndt = nb;
                     lf->nstrtl = bn->row_cluster->nstrt;
@@ -2130,6 +2149,8 @@ double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank)
     root->col_cluster = clt_root;
     root->nrsons = 2; root->ncsons = 2;
     root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
     for (int idx = 0; idx < 4; idx++) root->sons[idx] = lvl1_nodes[idx];
     all_bn[n_bn++] = root;
 
