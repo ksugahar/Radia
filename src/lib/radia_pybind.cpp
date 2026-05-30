@@ -51,6 +51,7 @@
 extern "C" {
     void cHACApK_set_cluster_strategy(int strategy);
     int  cHACApK_get_cluster_strategy(void);
+    double cHACApK_harith_self_test(int n_per_block);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2852,6 +2853,19 @@ PYBIND11_MODULE(_radia_pybind, m) {
         return cHACApK_get_cluster_strategy();
     },
     "Return the current HACApK cluster strategy (0=BBOX, 1=PCA).");
+
+    // -- H-LU self-test (Phase 1/2 minimal, dense-leaf only) --
+    m.def("HLUSelfTest", [](int n_per_block) -> double {
+        return cHACApK_harith_self_test(n_per_block);
+    },
+    py::arg("n_per_block") = 100,
+    R"pbdoc(
+        Self-test the H-LU dense-leaf implementation on a synthetic 2x2
+        block-tree of dense leaves. Returns the max relative error between
+        the H-LU solve and a reference LAPACK dgesv solve on the same matrix.
+        Expected < 1e-10 for n_per_block = 100 (well-conditioned random).
+        Negative return = setup / decomp / solve error (see source for codes).
+    )pbdoc");
 
     m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,
           py::arg("enable"),
