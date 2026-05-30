@@ -387,19 +387,20 @@ class CoupledPEECMMM:
         Hz_inc = B_ext[2] / MU_0
 
         # Volume average: <Hz> = Integrate(Hz, mesh) / Volume
-        volume = Integrate(CF(1), self.core_mesh).real
-        Hz_avg = Integrate(Hz_total, self.core_mesh) / volume
+        with TaskManager():
+            volume = Integrate(CF(1), self.core_mesh).real
+            Hz_avg = Integrate(Hz_total, self.core_mesh) / volume
 
-        # Effective permeability
-        mu_eff = self.mu_r * Hz_avg / Hz_inc
+            # Effective permeability
+            mu_eff = self.mu_r * Hz_avg / Hz_inc
 
-        # Store eddy solver for diagnostics
-        self._last_eddy_solver = eddy
+            # Store eddy solver for diagnostics
+            self._last_eddy_solver = eddy
 
-        # Cache result
-        self._mu_eff_cache[cache_key] = mu_eff
+            # Cache result
+            self._mu_eff_cache[cache_key] = mu_eff
 
-        return mu_eff
+            return mu_eff
 
     def _compute_mu_eff_radia(self, omega):
         """Compute mu_eff from Radia MMM/MSC solution.
@@ -434,6 +435,7 @@ class CoupledPEECMMM:
         """
         from ngbem_eddy import VectorEddyCurrentFEMBEM
         from ngsolve import Integrate, CF
+        from ngsolve import TaskManager
 
         freq = omega / (2.0 * np.pi)
 

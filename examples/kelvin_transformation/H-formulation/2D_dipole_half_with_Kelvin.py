@@ -11,6 +11,7 @@ import os, sys
 from numpy import *
 from ngsolve import *
 import ngsolve
+from ngsolve import TaskManager
 
 # Import OCC geometry
 from netgen.occ import *
@@ -214,80 +215,81 @@ a += mu*grad(u)*grad(v)*dx
 f = LinearForm(fes)
 f += mu*InnerProduct(grad(v), Hs)*dx
 
-a.Assemble()
-f.Assemble()
+with TaskManager():
+    a.Assemble()
+    f.Assemble()
 
-print("  System assembled")
+    print("  System assembled")
 
-# ============================================================
-# Solve
-# ============================================================
-print("\nSolving system...")
+    # ============================================================
+    # Solve
+    # ============================================================
+    print("\nSolving system...")
 
-gfu = GridFunction(fes)
+    gfu = GridFunction(fes)
 
-# Use direct solver for stability
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    # Use direct solver for stability
+    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-print("  Solution converged")
+    print("  Solution converged")
 
-# ============================================================
-# Post-processing
-# ============================================================
-print("\nPost-processing...")
+    # ============================================================
+    # Post-processing
+    # ============================================================
+    print("\nPost-processing...")
 
-# Compute perturbation field: H_pert = -grad(phi)
-H = -grad(gfu)
+    # Compute perturbation field: H_pert = -grad(phi)
+    H = -grad(gfu)
 
-# Analytical solution (2D)
-Hy_analytical = -1.0 + 2.0/(mu_r + 1)
+    # Analytical solution (2D)
+    Hy_analytical = -1.0 + 2.0/(mu_r + 1)
 
-print("\n" + "="*60)
-print("RESULTS COMPARISON (HALF-CIRCLE vs ANALYTICAL)")
-print("="*60)
-print(f"  Analytical interior: Hy = {Hy_analytical:.6f} A/m")
-print()
+    print("\n" + "="*60)
+    print("RESULTS COMPARISON (HALF-CIRCLE vs ANALYTICAL)")
+    print("="*60)
+    print(f"  Analytical interior: Hy = {Hy_analytical:.6f} A/m")
+    print()
 
-# Evaluate at multiple points
-for x_val in [0.1, 0.2, 0.3, 0.4]:
-    try:
-        Hy_val = H[1](mesh(x_val, 0))
-        err = abs(Hy_val - Hy_analytical)/abs(Hy_analytical)*100
-        print(f"  x={x_val}: Hy = {Hy_val:.6f} A/m, error = {err:.4f}%")
-    except Exception as e:
-        print(f"  x={x_val}: Error - {e}")
+    # Evaluate at multiple points
+    for x_val in [0.1, 0.2, 0.3, 0.4]:
+        try:
+            Hy_val = H[1](mesh(x_val, 0))
+            err = abs(Hy_val - Hy_analytical)/abs(Hy_analytical)*100
+            print(f"  x={x_val}: Hy = {Hy_val:.6f} A/m, error = {err:.4f}%")
+        except Exception as e:
+            print(f"  x={x_val}: Error - {e}")
 
-print()
-print("="*60)
-print("EXTERIOR:")
-print("="*60)
+    print()
+    print("="*60)
+    print("EXTERIOR:")
+    print("="*60)
 
-for x_val in [0.6, 0.7, 0.8, 0.9]:
-    # Analytical exterior (on x-axis, y=0)
-    Hy_ext_analytical = -(mu_r - 1)/(mu_r + 1) * (circle_radius/x_val)**2
-    try:
-        Hy_val = H[1](mesh(x_val, 0))
-        err = abs(Hy_val - Hy_ext_analytical)/abs(Hy_ext_analytical)*100
-        print(f"  x={x_val}: Hy = {Hy_val:.6f} A/m (analytical: {Hy_ext_analytical:.6f}), error = {err:.4f}%")
-    except Exception as e:
-        print(f"  x={x_val}: Error - {e}")
+    for x_val in [0.6, 0.7, 0.8, 0.9]:
+        # Analytical exterior (on x-axis, y=0)
+        Hy_ext_analytical = -(mu_r - 1)/(mu_r + 1) * (circle_radius/x_val)**2
+        try:
+            Hy_val = H[1](mesh(x_val, 0))
+            err = abs(Hy_val - Hy_ext_analytical)/abs(Hy_ext_analytical)*100
+            print(f"  x={x_val}: Hy = {Hy_val:.6f} A/m (analytical: {Hy_ext_analytical:.6f}), error = {err:.4f}%")
+        except Exception as e:
+            print(f"  x={x_val}: Error - {e}")
 
-# ============================================================
-# Compare with full circle result
-# ============================================================
-print("\n" + "="*60)
-print("CONCLUSION")
-print("="*60)
-if freedof_before == freedof_after:
-    print("  Periodic BC is NOT working with half-circle geometry!")
-    print("  This confirms that:")
-    print("    - Half-circle creates multiple edge segments")
-    print("    - Identify() only connects one segment pair")
-    print("    - Full circle is REQUIRED for Periodic BC to work")
-else:
-    print("  Periodic BC IS working with half-circle geometry.")
-    print("  (This would be unexpected based on previous findings)")
+    # ============================================================
+    # Compare with full circle result
+    # ============================================================
+    print("\n" + "="*60)
+    print("CONCLUSION")
+    print("="*60)
+    if freedof_before == freedof_after:
+        print("  Periodic BC is NOT working with half-circle geometry!")
+        print("  This confirms that:")
+        print("    - Half-circle creates multiple edge segments")
+        print("    - Identify() only connects one segment pair")
+        print("    - Full circle is REQUIRED for Periodic BC to work")
+    else:
+        print("  Periodic BC IS working with half-circle geometry.")
+        print("  (This would be unexpected based on previous findings)")
 
-print("\n" + "="*60)
-print("Computation completed")
-print("="*60)
+    print("\n" + "="*60)
+    print("Computation completed")
+    print("="*60)

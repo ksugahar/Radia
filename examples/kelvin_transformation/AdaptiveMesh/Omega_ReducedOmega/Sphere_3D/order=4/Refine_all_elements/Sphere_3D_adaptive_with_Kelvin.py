@@ -46,6 +46,7 @@ print(f"Deleted {deleted_count} files.")
 
 from numpy import pi, sqrt, linspace, zeros, nan, isnan, meshgrid, array, log, log10, sin, cos
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
 import scipy.io as sio
@@ -916,141 +917,214 @@ print("=" * 60)
 
 iteration = 0
 prev_ndof = 0  # Track DOF from previous iteration
-while True:
-	# Check DOF limit at loop start (stop if previous DOF >= 5e5)
-	if prev_ndof >= 1e5:
-		print(f"\n  DOF limit reached ({prev_ndof} >= 1e5), stopping without computing.")
-		break
+with TaskManager():
+	while True:
+		# Check DOF limit at loop start (stop if previous DOF >= 5e5)
+		if prev_ndof >= 1e5:
+			print(f"\n  DOF limit reached ({prev_ndof} >= 1e5), stopping without computing.")
+			break
 
-	print(f"\n{'=' * 60}")
-	print(f"Iteration {iteration + 1}")
+		print(f"\n{'=' * 60}")
+		print(f"Iteration {iteration + 1}")
+		print("=" * 60)
+
+		# Solve - returns fes, gfu, Mu, and fields dictionary
+		fes, gfu, Mu, fields = solve_omega_formulation(mesh, order)
+
+		# Extract fields from dictionary
+		H_pert_cf = fields['H_pert_cf']
+		B_pert_cf = fields['B_pert_cf']
+		H_total_cf = fields['H_total_cf']
+		B_total_cf = fields['B_total_cf']
+		Hs_cf = fields['Hs_cf']
+		Bs_cf = fields['Bs_cf']
+		mu_kelvin = fields['mu_kelvin']
+
+		# Compute error estimator using H_pert (avoids mu_kelvin singularity)
+		element_errors = compute_error_estimator(mesh, fes, H_pert_cf, mu0, mu_r)
+		total_error = sqrt(sum(element_errors))
+
+		# ===== Perturbation Energy Calculation (4-region structure) =====
+		# Total region (magnetic + air_total): H_pert = grad(Omega) - Hs
+		# Reduced region (air_inner + air_outer): H_pert = grad(Omega)
+
+		# Source field and potential
+		Hs = CoefficientFunction((0.0, 0.0, H0))
+		Omega_s = H0 * z
+
+		# --- Total region (magnetic) ---
+		H_pert_total = grad(gfu) - Hs
+		energy_magnetic = Integrate(0.5 * (mu_r * mu0) * InnerProduct(H_pert_total, H_pert_total) * dx("magnetic"), mesh)
+
+		# --- Total region (air_total) ---
+		energy_air_total = Integrate(0.5 * mu0 * InnerProduct(H_pert_total, H_pert_total) * dx("air_total"), mesh)
+
+		# --- Reduced region (air_inner) ---
+		# Use separate GridFunctions to compute H_pert = grad(Omega) - grad(Omega_s)
+		fesOr = H1(mesh, order=order, definedon="air_inner|air_outer")
+		Orr = GridFunction(fesOr)
+		Oxr = GridFunction(fesOr)
+		Orr.Set(gfu, VOL, definedon="air_inner|air_outer")
+		Oxr.Set(Omega_s, BND, mesh.Boundaries("total_reduced"))
+		H_pert_reduced = grad(Orr) - grad(Oxr)
+		energy_air_inner = Integrate(0.5 * mu0 * InnerProduct(H_pert_reduced, H_pert_reduced) * dx("air_inner"), mesh)
+
+		# --- Kelvin region (air_outer) ---
+		H_pert_kelvin = grad(Orr)
+		energy_air_outer = Integrate(0.5 * mu_kelvin * InnerProduct(H_pert_kelvin, H_pert_kelvin) * dx("air_outer"), mesh)
+
+		# Per-region energy (8x for full model from 1/8)
+		energy_magnetic_full = 8 * energy_magnetic
+		energy_air_total_full = 8 * energy_air_total
+		energy_air_inner_full = 8 * energy_air_inner
+		energy_air_outer_full = 8 * energy_air_outer
+
+		# Total perturbation energy (1/8 model -> full = 8x)
+		energy_1_8 = energy_magnetic + energy_air_total + energy_air_inner + energy_air_outer
+		energy_full = 8 * energy_1_8
+
+		# Total/Reduced region energy (1/8 -> full = 8x)
+		# Total region = magnetic + air_total (Total potential)
+		# Reduced region = air_inner + air_outer (Reduced potential)
+		energy_total_region_full = energy_magnetic_full + energy_air_total_full
+		energy_reduced_region_full = energy_air_inner_full + energy_air_outer_full
+
+		# Count elements by region
+		region_counts = count_elements_by_region(mesh)
+		ne_magnetic = region_counts.get('magnetic', 0)
+		ne_air_total = region_counts.get('air_total', 0)
+		ne_air_inner = region_counts.get('air_inner', 0)
+		ne_air_outer = region_counts.get('air_outer', 0)
+		ne_total = ne_magnetic + ne_air_total      # Total potential region
+		ne_reduced = ne_air_inner + ne_air_outer   # Reduced potential region
+
+		# Record history
+		history['ndof'].append(fes.ndof)
+		history['elements'].append(mesh.ne)
+		history['elements_total'].append(ne_total)
+		history['elements_reduced'].append(ne_reduced)
+		history['elements_magnetic'].append(ne_magnetic)
+		history['elements_air_total'].append(ne_air_total)
+		history['elements_air_inner'].append(ne_air_inner)
+		history['elements_air_outer'].append(ne_air_outer)
+		history['error'].append(total_error)
+		history['energy'].append(energy_full)
+		history['energy_total_region'].append(energy_total_region_full)
+		history['energy_reduced_region'].append(energy_reduced_region_full)
+		history['energy_magnetic'].append(energy_magnetic_full)
+		history['energy_air_total'].append(energy_air_total_full)
+		history['energy_air_inner'].append(energy_air_inner_full)
+		history['energy_air_outer'].append(energy_air_outer_full)
+
+		print(f"  Elements: {mesh.ne} (Total: {ne_total}, Reduced: {ne_reduced})")
+		print(f"    magnetic: {ne_magnetic}, air_total: {ne_air_total}, air_inner: {ne_air_inner}, air_outer: {ne_air_outer}")
+		print(f"  Vertices: {mesh.nv}")
+		print(f"  DOFs: {fes.ndof}")
+		print(f"  Error estimator: {total_error:.6e}")
+		print(f"  Energy (8x1/8): {energy_full:.6e} J")
+		print(f"    Total region (mag+air_total): {energy_total_region_full:.6e} J")
+		print(f"    Reduced region (air_in+air_out): {energy_reduced_region_full:.6e} J")
+		print(f"    Per-region: magnetic={energy_magnetic_full:.6e}, air_total={energy_air_total_full:.6e}")
+		print(f"                air_inner={energy_air_inner_full:.6e}, air_outer={energy_air_outer_full:.6e} J")
+
+		# ===== Build output_data dictionary (shared by VTK and PNG) =====
+		output_data = {
+			'mesh': mesh,
+			'gfu': gfu,
+			# Perturbation fields (region-wise CoefficientFunctions)
+			'B_pert_cf': B_pert_cf,
+			'H_pert_cf': H_pert_cf,
+			# Total fields (region-wise CoefficientFunctions)
+			'B_total_cf': B_total_cf,
+			'H_total_cf': H_total_cf,
+			# Source fields (region-wise CoefficientFunctions)
+			'Bs_cf': Bs_cf,
+			'Hs_cf': Hs_cf,
+			# Error estimator
+			'element_errors': element_errors,
+		}
+
+		# Output VTK with all field quantities
+		vtk_file = output_vtk(mesh, iteration, output_data)
+		if vtk_file is not None:
+			print(f"  VTK saved: {vtk_file}")
+
+		# Save MAT file for this iteration
+		save_iteration_mat(iteration + 1, history, mesh.ne, mesh.nv)
+
+		# Save main MAT file (updated every step for resumability)
+		mat_filename = os.path.join(script_dir, os.path.splitext(os.path.basename(__file__))[0] + ".mat")
+		mat_data = {
+			'ndof': array(history['ndof']),
+			'elements': array(history['elements']),
+			'elements_total': array(history['elements_total']),
+			'elements_reduced': array(history['elements_reduced']),
+			'elements_magnetic': array(history['elements_magnetic']),
+			'elements_air_total': array(history['elements_air_total']),
+			'elements_air_inner': array(history['elements_air_inner']),
+			'elements_air_outer': array(history['elements_air_outer']),
+			'error': array(history['error']),
+			'energy': array(history['energy']),
+			'energy_total_region': array(history['energy_total_region']),
+			'energy_reduced_region': array(history['energy_reduced_region']),
+			'energy_magnetic': array(history['energy_magnetic']),
+			'energy_air_total': array(history['energy_air_total']),
+			'energy_air_inner': array(history['energy_air_inner']),
+			'energy_air_outer': array(history['energy_air_outer']),
+			'order': order,
+			'dimension': 3,
+			'method': 'refine_all',
+			'model_type': '1/8',
+			'geometry': 'sphere'
+		}
+		sio.savemat(mat_filename, mat_data)
+		print(f"  Main MAT saved: {mat_filename}")
+
+		# Generate convergence plot with mesh and error distribution
+		generate_convergence_plot(iteration + 1, history, output_data)
+
+		# Check iteration limit
+		if iteration + 1 >= max_iterations:
+			print(f"\n  Iteration limit reached ({iteration + 1} >= {max_iterations}), stopping.")
+			break
+
+		# Update prev_ndof for next iteration's DOF check
+		prev_ndof = fes.ndof
+
+		# Mark ALL elements for uniform refinement
+		print(f"  Marking ALL elements for uniform refinement: {mesh.ne}")
+
+		for el in mesh.Elements():
+			mesh.SetRefinementFlag(el, True)
+
+		mesh.Refine()
+		mesh.Curve(order)  # Re-curve mesh after refinement
+
+		iteration += 1
+
+
+	# ============================================================
+	# Final Statistics (4-region structure)
+	# ============================================================
+	print("\n" + "=" * 60)
+	print("Convergence History")
 	print("=" * 60)
 
-	# Solve - returns fes, gfu, Mu, and fields dictionary
-	fes, gfu, Mu, fields = solve_omega_formulation(mesh, order)
+	print(f"\n{'Iter':<6} {'Elements':<10} {'DOFs':<10} {'Error Est':<12} {'E_total(J)':<12} {'E_reduced(J)':<12} {'E_sum(J)':<12}")
+	print("-" * 90)
+	for i in range(len(history['ndof'])):
+		print(f"{i+1:<6} {history['elements'][i]:<10} {history['ndof'][i]:<10} "
+		      f"{history['error'][i]:<12.4e} {history['energy_total_region'][i]:<12.4e} "
+		      f"{history['energy_reduced_region'][i]:<12.4e} {history['energy'][i]:<12.4e}")
 
-	# Extract fields from dictionary
-	H_pert_cf = fields['H_pert_cf']
-	B_pert_cf = fields['B_pert_cf']
-	H_total_cf = fields['H_total_cf']
-	B_total_cf = fields['B_total_cf']
-	Hs_cf = fields['Hs_cf']
-	Bs_cf = fields['Bs_cf']
-	mu_kelvin = fields['mu_kelvin']
+	print(f"\nInitial -> Final:")
+	print(f"  Elements: {history['elements'][0]} -> {history['elements'][-1]}")
+	print(f"  DOFs: {history['ndof'][0]} -> {history['ndof'][-1]}")
+	if history['error'][-1] > 0:
+		print(f"  Error: {history['error'][0]:.4e} -> {history['error'][-1]:.4e} "
+		      f"({history['error'][0]/history['error'][-1]:.1f}x reduction)")
 
-	# Compute error estimator using H_pert (avoids mu_kelvin singularity)
-	element_errors = compute_error_estimator(mesh, fes, H_pert_cf, mu0, mu_r)
-	total_error = sqrt(sum(element_errors))
-
-	# ===== Perturbation Energy Calculation (4-region structure) =====
-	# Total region (magnetic + air_total): H_pert = grad(Omega) - Hs
-	# Reduced region (air_inner + air_outer): H_pert = grad(Omega)
-
-	# Source field and potential
-	Hs = CoefficientFunction((0.0, 0.0, H0))
-	Omega_s = H0 * z
-
-	# --- Total region (magnetic) ---
-	H_pert_total = grad(gfu) - Hs
-	energy_magnetic = Integrate(0.5 * (mu_r * mu0) * InnerProduct(H_pert_total, H_pert_total) * dx("magnetic"), mesh)
-
-	# --- Total region (air_total) ---
-	energy_air_total = Integrate(0.5 * mu0 * InnerProduct(H_pert_total, H_pert_total) * dx("air_total"), mesh)
-
-	# --- Reduced region (air_inner) ---
-	# Use separate GridFunctions to compute H_pert = grad(Omega) - grad(Omega_s)
-	fesOr = H1(mesh, order=order, definedon="air_inner|air_outer")
-	Orr = GridFunction(fesOr)
-	Oxr = GridFunction(fesOr)
-	Orr.Set(gfu, VOL, definedon="air_inner|air_outer")
-	Oxr.Set(Omega_s, BND, mesh.Boundaries("total_reduced"))
-	H_pert_reduced = grad(Orr) - grad(Oxr)
-	energy_air_inner = Integrate(0.5 * mu0 * InnerProduct(H_pert_reduced, H_pert_reduced) * dx("air_inner"), mesh)
-
-	# --- Kelvin region (air_outer) ---
-	H_pert_kelvin = grad(Orr)
-	energy_air_outer = Integrate(0.5 * mu_kelvin * InnerProduct(H_pert_kelvin, H_pert_kelvin) * dx("air_outer"), mesh)
-
-	# Per-region energy (8x for full model from 1/8)
-	energy_magnetic_full = 8 * energy_magnetic
-	energy_air_total_full = 8 * energy_air_total
-	energy_air_inner_full = 8 * energy_air_inner
-	energy_air_outer_full = 8 * energy_air_outer
-
-	# Total perturbation energy (1/8 model -> full = 8x)
-	energy_1_8 = energy_magnetic + energy_air_total + energy_air_inner + energy_air_outer
-	energy_full = 8 * energy_1_8
-
-	# Total/Reduced region energy (1/8 -> full = 8x)
-	# Total region = magnetic + air_total (Total potential)
-	# Reduced region = air_inner + air_outer (Reduced potential)
-	energy_total_region_full = energy_magnetic_full + energy_air_total_full
-	energy_reduced_region_full = energy_air_inner_full + energy_air_outer_full
-
-	# Count elements by region
-	region_counts = count_elements_by_region(mesh)
-	ne_magnetic = region_counts.get('magnetic', 0)
-	ne_air_total = region_counts.get('air_total', 0)
-	ne_air_inner = region_counts.get('air_inner', 0)
-	ne_air_outer = region_counts.get('air_outer', 0)
-	ne_total = ne_magnetic + ne_air_total      # Total potential region
-	ne_reduced = ne_air_inner + ne_air_outer   # Reduced potential region
-
-	# Record history
-	history['ndof'].append(fes.ndof)
-	history['elements'].append(mesh.ne)
-	history['elements_total'].append(ne_total)
-	history['elements_reduced'].append(ne_reduced)
-	history['elements_magnetic'].append(ne_magnetic)
-	history['elements_air_total'].append(ne_air_total)
-	history['elements_air_inner'].append(ne_air_inner)
-	history['elements_air_outer'].append(ne_air_outer)
-	history['error'].append(total_error)
-	history['energy'].append(energy_full)
-	history['energy_total_region'].append(energy_total_region_full)
-	history['energy_reduced_region'].append(energy_reduced_region_full)
-	history['energy_magnetic'].append(energy_magnetic_full)
-	history['energy_air_total'].append(energy_air_total_full)
-	history['energy_air_inner'].append(energy_air_inner_full)
-	history['energy_air_outer'].append(energy_air_outer_full)
-
-	print(f"  Elements: {mesh.ne} (Total: {ne_total}, Reduced: {ne_reduced})")
-	print(f"    magnetic: {ne_magnetic}, air_total: {ne_air_total}, air_inner: {ne_air_inner}, air_outer: {ne_air_outer}")
-	print(f"  Vertices: {mesh.nv}")
-	print(f"  DOFs: {fes.ndof}")
-	print(f"  Error estimator: {total_error:.6e}")
-	print(f"  Energy (8x1/8): {energy_full:.6e} J")
-	print(f"    Total region (mag+air_total): {energy_total_region_full:.6e} J")
-	print(f"    Reduced region (air_in+air_out): {energy_reduced_region_full:.6e} J")
-	print(f"    Per-region: magnetic={energy_magnetic_full:.6e}, air_total={energy_air_total_full:.6e}")
-	print(f"                air_inner={energy_air_inner_full:.6e}, air_outer={energy_air_outer_full:.6e} J")
-
-	# ===== Build output_data dictionary (shared by VTK and PNG) =====
-	output_data = {
-		'mesh': mesh,
-		'gfu': gfu,
-		# Perturbation fields (region-wise CoefficientFunctions)
-		'B_pert_cf': B_pert_cf,
-		'H_pert_cf': H_pert_cf,
-		# Total fields (region-wise CoefficientFunctions)
-		'B_total_cf': B_total_cf,
-		'H_total_cf': H_total_cf,
-		# Source fields (region-wise CoefficientFunctions)
-		'Bs_cf': Bs_cf,
-		'Hs_cf': Hs_cf,
-		# Error estimator
-		'element_errors': element_errors,
-	}
-
-	# Output VTK with all field quantities
-	vtk_file = output_vtk(mesh, iteration, output_data)
-	if vtk_file is not None:
-		print(f"  VTK saved: {vtk_file}")
-
-	# Save MAT file for this iteration
-	save_iteration_mat(iteration + 1, history, mesh.ne, mesh.nv)
-
-	# Save main MAT file (updated every step for resumability)
+	# Save history to .mat file
 	mat_filename = os.path.join(script_dir, os.path.splitext(os.path.basename(__file__))[0] + ".mat")
 	mat_data = {
 		'ndof': array(history['ndof']),
@@ -1076,89 +1150,17 @@ while True:
 		'geometry': 'sphere'
 	}
 	sio.savemat(mat_filename, mat_data)
-	print(f"  Main MAT saved: {mat_filename}")
+	print(f"\nData saved to: {mat_filename}")
+	print(f"\nFinal Energy Values:")
+	print(f"  Total region (magnetic+air_total): {history['energy_total_region'][-1]:.4e} J")
+	print(f"  Reduced region (air_inner+air_outer): {history['energy_reduced_region'][-1]:.4e} J")
+	print(f"  Sum: {history['energy'][-1]:.4e} J")
+	print(f"  Per-region:")
+	print(f"    magnetic:   {history['energy_magnetic'][-1]:.4e} J")
+	print(f"    air_total:  {history['energy_air_total'][-1]:.4e} J")
+	print(f"    air_inner:  {history['energy_air_inner'][-1]:.4e} J")
+	print(f"    air_outer:  {history['energy_air_outer'][-1]:.4e} J")
 
-	# Generate convergence plot with mesh and error distribution
-	generate_convergence_plot(iteration + 1, history, output_data)
-
-	# Check iteration limit
-	if iteration + 1 >= max_iterations:
-		print(f"\n  Iteration limit reached ({iteration + 1} >= {max_iterations}), stopping.")
-		break
-
-	# Update prev_ndof for next iteration's DOF check
-	prev_ndof = fes.ndof
-
-	# Mark ALL elements for uniform refinement
-	print(f"  Marking ALL elements for uniform refinement: {mesh.ne}")
-
-	for el in mesh.Elements():
-		mesh.SetRefinementFlag(el, True)
-
-	mesh.Refine()
-	mesh.Curve(order)  # Re-curve mesh after refinement
-
-	iteration += 1
-
-
-# ============================================================
-# Final Statistics (4-region structure)
-# ============================================================
-print("\n" + "=" * 60)
-print("Convergence History")
-print("=" * 60)
-
-print(f"\n{'Iter':<6} {'Elements':<10} {'DOFs':<10} {'Error Est':<12} {'E_total(J)':<12} {'E_reduced(J)':<12} {'E_sum(J)':<12}")
-print("-" * 90)
-for i in range(len(history['ndof'])):
-	print(f"{i+1:<6} {history['elements'][i]:<10} {history['ndof'][i]:<10} "
-	      f"{history['error'][i]:<12.4e} {history['energy_total_region'][i]:<12.4e} "
-	      f"{history['energy_reduced_region'][i]:<12.4e} {history['energy'][i]:<12.4e}")
-
-print(f"\nInitial -> Final:")
-print(f"  Elements: {history['elements'][0]} -> {history['elements'][-1]}")
-print(f"  DOFs: {history['ndof'][0]} -> {history['ndof'][-1]}")
-if history['error'][-1] > 0:
-	print(f"  Error: {history['error'][0]:.4e} -> {history['error'][-1]:.4e} "
-	      f"({history['error'][0]/history['error'][-1]:.1f}x reduction)")
-
-# Save history to .mat file
-mat_filename = os.path.join(script_dir, os.path.splitext(os.path.basename(__file__))[0] + ".mat")
-mat_data = {
-	'ndof': array(history['ndof']),
-	'elements': array(history['elements']),
-	'elements_total': array(history['elements_total']),
-	'elements_reduced': array(history['elements_reduced']),
-	'elements_magnetic': array(history['elements_magnetic']),
-	'elements_air_total': array(history['elements_air_total']),
-	'elements_air_inner': array(history['elements_air_inner']),
-	'elements_air_outer': array(history['elements_air_outer']),
-	'error': array(history['error']),
-	'energy': array(history['energy']),
-	'energy_total_region': array(history['energy_total_region']),
-	'energy_reduced_region': array(history['energy_reduced_region']),
-	'energy_magnetic': array(history['energy_magnetic']),
-	'energy_air_total': array(history['energy_air_total']),
-	'energy_air_inner': array(history['energy_air_inner']),
-	'energy_air_outer': array(history['energy_air_outer']),
-	'order': order,
-	'dimension': 3,
-	'method': 'refine_all',
-	'model_type': '1/8',
-	'geometry': 'sphere'
-}
-sio.savemat(mat_filename, mat_data)
-print(f"\nData saved to: {mat_filename}")
-print(f"\nFinal Energy Values:")
-print(f"  Total region (magnetic+air_total): {history['energy_total_region'][-1]:.4e} J")
-print(f"  Reduced region (air_inner+air_outer): {history['energy_reduced_region'][-1]:.4e} J")
-print(f"  Sum: {history['energy'][-1]:.4e} J")
-print(f"  Per-region:")
-print(f"    magnetic:   {history['energy_magnetic'][-1]:.4e} J")
-print(f"    air_total:  {history['energy_air_total'][-1]:.4e} J")
-print(f"    air_inner:  {history['energy_air_inner'][-1]:.4e} J")
-print(f"    air_outer:  {history['energy_air_outer'][-1]:.4e} J")
-
-print("\n" + "=" * 60)
-print("Computation completed successfully")
-print("=" * 60)
+	print("\n" + "=" * 60)
+	print("Computation completed successfully")
+	print("=" * 60)

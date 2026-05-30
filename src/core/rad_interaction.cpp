@@ -2346,13 +2346,15 @@ void radTInteraction::PrecomputeHexaGeometry()
 {
 	if(m_hexaGeomReady || AmOfMainElem == 0) return;
 
-	// Count hexahedra and build index map
+	// Count hexahedra and build index map (forward + reverse)
 	int nHex = 0;
 	m_hexaElemIndices.clear();
+	m_globalToHexIdx.assign(AmOfMainElem, -1);
 	for(int e = 0; e < AmOfMainElem; e++)
 	{
 		if(m_elemDOF[e] == 6)
 		{
+			m_globalToHexIdx[e] = nHex;
 			m_hexaElemIndices.push_back(e);
 			nHex++;
 		}
@@ -2689,10 +2691,12 @@ void radTInteraction::PrecomputeWedgeGeometry()
 
 	int nWedge = 0;
 	m_wedgeElemIndices.clear();
+	m_globalToWedgeIdx.assign(AmOfMainElem, -1);
 	for(int e = 0; e < AmOfMainElem; e++)
 	{
 		if(m_elemDOF[e] == 5)
 		{
+			m_globalToWedgeIdx[e] = nWedge;
 			m_wedgeElemIndices.push_back(e);
 			nWedge++;
 		}
@@ -3133,17 +3137,16 @@ void radTInteraction::ComputeMixedBlockFast(
 	std::memset(block_out, 0, dof_row * dof_col * sizeof(double));
 
 	// Helper: convert global element index to type-specific index
+	// O(1) reverse lookup via m_globalToHexIdx / m_globalToWedgeIdx / m_globalToTetraIdx
+	// (built in PrecomputeHexaGeometry / PrecomputeWedgeGeometry / PrecomputeTetraGeometry).
 	auto globalToHexIdx = [&](int globalIdx) -> int {
-		for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
-			if(m_hexaElemIndices[h] == globalIdx) return h;
-		return -1;
+		if(globalIdx < 0 || globalIdx >= (int)m_globalToHexIdx.size()) return -1;
+		return m_globalToHexIdx[globalIdx];
 	};
 	auto globalToWedgeIdx = [&](int globalIdx) -> int {
-		for(int w = 0; w < (int)m_wedgeElemIndices.size(); w++)
-			if(m_wedgeElemIndices[w] == globalIdx) return w;
-		return -1;
+		if(globalIdx < 0 || globalIdx >= (int)m_globalToWedgeIdx.size()) return -1;
+		return m_globalToWedgeIdx[globalIdx];
 	};
-	// Tet: O(1) reverse lookup via m_globalToTetraIdx (built in PrecomputeTetraGeometry)
 	auto globalToTetIdx = [&](int globalIdx) -> int {
 		if(globalIdx < 0 || globalIdx >= (int)m_globalToTetraIdx.size()) return -1;
 		return m_globalToTetraIdx[globalIdx];
@@ -3627,13 +3630,10 @@ void radTInteraction::Compute6x6BlockIMA(int ima_i, int ima_j, double* K_ima) co
 	int full_i = m_imaToFull[ima_i];
 	int full_j = m_imaToFull[ima_j];
 
-	// Find hex indices in precomputed arrays
+	// Find hex indices in precomputed arrays via O(1) reverse lookup
 	int hex_i = -1, hex_j = -1;
-	for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
-	{
-		if(m_hexaElemIndices[h] == full_i) hex_i = h;
-		if(m_hexaElemIndices[h] == full_j) hex_j = h;
-	}
+	if(full_i >= 0 && full_i < (int)m_globalToHexIdx.size()) hex_i = m_globalToHexIdx[full_i];
+	if(full_j >= 0 && full_j < (int)m_globalToHexIdx.size()) hex_j = m_globalToHexIdx[full_j];
 
 	if(hex_i < 0 || hex_j < 0)
 	{
@@ -4116,14 +4116,9 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		{
 			if(m_elemDOF[ima_i] != 6) continue;
 			int full_i = m_imaToFull[ima_i];
-			for(int h = 0; h < (int)m_hexaElemIndices.size(); h++)
-			{
-				if(m_hexaElemIndices[h] == full_i)
-				{
-					imaToHex[ima_i] = h;
-					break;
-				}
-			}
+			// O(1) reverse lookup via m_globalToHexIdx
+			if(full_i >= 0 && full_i < (int)m_globalToHexIdx.size())
+				imaToHex[ima_i] = m_globalToHexIdx[full_i];
 		}
 	}
 
@@ -4134,14 +4129,9 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		{
 			if(m_elemDOF[ima_i] != 5) continue;
 			int full_i = m_imaToFull[ima_i];
-			for(int w = 0; w < (int)m_wedgeElemIndices.size(); w++)
-			{
-				if(m_wedgeElemIndices[w] == full_i)
-				{
-					imaToWedge[ima_i] = w;
-					break;
-				}
-			}
+			// O(1) reverse lookup via m_globalToWedgeIdx
+			if(full_i >= 0 && full_i < (int)m_globalToWedgeIdx.size())
+				imaToWedge[ima_i] = m_globalToWedgeIdx[full_i];
 		}
 	}
 

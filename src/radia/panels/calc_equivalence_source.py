@@ -99,6 +99,7 @@ def main():
     # Late imports so --help works without NGSolve
     try:
         from ngsolve import Mesh, GridFunction, HCurl, H1, VectorH1, curl
+        from ngsolve import TaskManager
     except ImportError as e:
         print(json.dumps({"status": "error",
                           "error": f"NGSolve not importable: {e}"}))
@@ -116,107 +117,108 @@ def main():
                           "error": f"sol file not found: {args.sol}"}))
         return 1
 
-    mesh = Mesh(str(args.vol))
-    # Validate surface label exists
-    bnds = list(mesh.GetBoundaries())
-    if args.surface not in bnds:
-        print(json.dumps({
-            "status": "error",
-            "error": f"surface label '{args.surface}' not found",
-            "available_boundaries": bnds,
-        }))
-        return 1
+    with TaskManager():
+        mesh = Mesh(str(args.vol))
+        # Validate surface label exists
+        bnds = list(mesh.GetBoundaries())
+        if args.surface not in bnds:
+            print(json.dumps({
+                "status": "error",
+                "error": f"surface label '{args.surface}' not found",
+                "available_boundaries": bnds,
+            }))
+            return 1
 
-    # Load the .sol.  The .sol's FE space must MATCH what the user
-    # solved with: HCurl for A, VectorH1 for B or H (3-component
-    # vector), H1 for scalar (e.g. A_z in 2D).  We pick the FE space
-    # by file size / field-component:
-    #   --field-component=a : HCurl order >= 1
-    #   --field-component=b | h : VectorH1 (3 components)
-    #     (legacy scalar H1 path is reserved for explicit 2D scalar
-    #     A_z .sol files and is not used in this v1 release)
-    if args.field_component == "a":
-        fes = HCurl(mesh, order=1)
-        gf_A = GridFunction(fes)
-        gf_A.Load(str(args.sol))
-        # H = (1/(mu_0 mu_r)) curl(A)
-        H_cf = (1.0 / (MU_0 * args.mu_r)) * curl(gf_A)
-        E_cf = None  # static omega = 0 assumed when field is A only
-    else:
-        fes = VectorH1(mesh, order=1)
-        gf = GridFunction(fes)
-        gf.Load(str(args.sol))
-        if args.field_component == "h":
-            H_cf = gf
+        # Load the .sol.  The .sol's FE space must MATCH what the user
+        # solved with: HCurl for A, VectorH1 for B or H (3-component
+        # vector), H1 for scalar (e.g. A_z in 2D).  We pick the FE space
+        # by file size / field-component:
+        #   --field-component=a : HCurl order >= 1
+        #   --field-component=b | h : VectorH1 (3 components)
+        #     (legacy scalar H1 path is reserved for explicit 2D scalar
+        #     A_z .sol files and is not used in this v1 release)
+        if args.field_component == "a":
+            fes = HCurl(mesh, order=1)
+            gf_A = GridFunction(fes)
+            gf_A.Load(str(args.sol))
+            # H = (1/(mu_0 mu_r)) curl(A)
+            H_cf = (1.0 / (MU_0 * args.mu_r)) * curl(gf_A)
+            E_cf = None  # static omega = 0 assumed when field is A only
         else:
-            # B / (mu_0 mu_r) = H
-            H_cf = gf * (1.0 / (MU_0 * args.mu_r))
-        E_cf = None
+            fes = VectorH1(mesh, order=1)
+            gf = GridFunction(fes)
+            gf.Load(str(args.sol))
+            if args.field_component == "h":
+                H_cf = gf
+            else:
+                # B / (mu_0 mu_r) = H
+                H_cf = gf * (1.0 / (MU_0 * args.mu_r))
+            E_cf = None
 
-    # Extract NFS
-    nfs = NearFieldSource.extract_ngsolve(
-        mesh, gf_E=E_cf, gf_H=H_cf,
-        surface_label=args.surface,
-        omega=args.omega,
-    )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    nfs.save(args.output)
+        # Extract NFS
+        nfs = NearFieldSource.extract_ngsolve(
+            mesh, gf_E=E_cf, gf_H=H_cf,
+            surface_label=args.surface,
+            omega=args.omega,
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        nfs.save(args.output)
 
-    out = {
-        "status": "OK",
-        "vol": str(args.vol),
-        "sol": str(args.sol),
-        "surface_label": args.surface,
-        "n_faces": int(nfs.n_faces),
-        "omega": float(args.omega),
-        "artifact": str(args.output),
-        "artifact_bytes": int(args.output.stat().st_size),
-    }
+        out = {
+            "status": "OK",
+            "vol": str(args.vol),
+            "sol": str(args.sol),
+            "surface_label": args.surface,
+            "n_faces": int(nfs.n_faces),
+            "omega": float(args.omega),
+            "artifact": str(args.output),
+            "artifact_bytes": int(args.output.stat().st_size),
+        }
 
-    # Optional: probe at observation points
-    if args.obs_csv is not None:
-        if not args.obs_csv.exists():
-            print(json.dumps({"status": "error",
-                              "error": f"obs-csv not found: {args.obs_csv}"}))
-            return 1
-        obs = []
-        with args.obs_csv.open("r") as fh:
-            reader = csv.reader(fh)
-            for row in reader:
-                if not row or row[0].startswith("#"):
-                    continue
-                try:
-                    obs.append([float(row[0]), float(row[1]), float(row[2])])
-                except (ValueError, IndexError):
-                    continue
-        obs = np.asarray(obs, dtype=np.float64)
-        if obs.size == 0:
-            print(json.dumps({"status": "error",
-                              "error": "obs-csv has no numeric rows"}))
-            return 1
+        # Optional: probe at observation points
+        if args.obs_csv is not None:
+            if not args.obs_csv.exists():
+                print(json.dumps({"status": "error",
+                                  "error": f"obs-csv not found: {args.obs_csv}"}))
+                return 1
+            obs = []
+            with args.obs_csv.open("r") as fh:
+                reader = csv.reader(fh)
+                for row in reader:
+                    if not row or row[0].startswith("#"):
+                        continue
+                    try:
+                        obs.append([float(row[0]), float(row[1]), float(row[2])])
+                    except (ValueError, IndexError):
+                        continue
+            obs = np.asarray(obs, dtype=np.float64)
+            if obs.size == 0:
+                print(json.dumps({"status": "error",
+                                  "error": "obs-csv has no numeric rows"}))
+                return 1
 
-        E_rec, H_rec = nfs.evaluate(obs)
+            E_rec, H_rec = nfs.evaluate(obs)
 
-        out["probe_points"] = int(obs.shape[0])
-        if args.probe_out is not None:
-            args.probe_out.parent.mkdir(parents=True, exist_ok=True)
-            with args.probe_out.open("w", newline="") as fh:
-                w = csv.writer(fh)
-                w.writerow(["x", "y", "z",
-                              "Hx_re", "Hx_im", "Hy_re", "Hy_im", "Hz_re", "Hz_im",
-                              "Ex_re", "Ex_im", "Ey_re", "Ey_im", "Ez_re", "Ez_im"])
-                for p, e_row, h_row in zip(obs, E_rec, H_rec):
-                    w.writerow([p[0], p[1], p[2],
-                                  h_row[0].real, h_row[0].imag,
-                                  h_row[1].real, h_row[1].imag,
-                                  h_row[2].real, h_row[2].imag,
-                                  e_row[0].real, e_row[0].imag,
-                                  e_row[1].real, e_row[1].imag,
-                                  e_row[2].real, e_row[2].imag])
-            out["probe_out"] = str(args.probe_out)
+            out["probe_points"] = int(obs.shape[0])
+            if args.probe_out is not None:
+                args.probe_out.parent.mkdir(parents=True, exist_ok=True)
+                with args.probe_out.open("w", newline="") as fh:
+                    w = csv.writer(fh)
+                    w.writerow(["x", "y", "z",
+                                  "Hx_re", "Hx_im", "Hy_re", "Hy_im", "Hz_re", "Hz_im",
+                                  "Ex_re", "Ex_im", "Ey_re", "Ey_im", "Ez_re", "Ez_im"])
+                    for p, e_row, h_row in zip(obs, E_rec, H_rec):
+                        w.writerow([p[0], p[1], p[2],
+                                      h_row[0].real, h_row[0].imag,
+                                      h_row[1].real, h_row[1].imag,
+                                      h_row[2].real, h_row[2].imag,
+                                      e_row[0].real, e_row[0].imag,
+                                      e_row[1].real, e_row[1].imag,
+                                      e_row[2].real, e_row[2].imag])
+                out["probe_out"] = str(args.probe_out)
 
-    print(json.dumps(out))
-    return 0
+        print(json.dumps(out))
+        return 0
 
 
 if __name__ == "__main__":

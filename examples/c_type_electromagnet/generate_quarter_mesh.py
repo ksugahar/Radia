@@ -29,6 +29,7 @@ if _cubit_path and _cubit_path not in sys.path:
     sys.path.insert(0, _cubit_path)
 
 from ngsolve import Mesh, VTKOutput, Draw
+from ngsolve import TaskManager
 import netgen.gui
 import cubit
 from cubit_mesh_export import extract_curved_mesh
@@ -141,79 +142,80 @@ print(f"  Transformation applied (moved and rotated)")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen")
 
-mesh = Mesh(extract_curved_mesh(cubit, order=1))
+with TaskManager():
+    mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
-# Scale to meters via ngmesh
-ngmesh = mesh.ngmesh
-ngmesh.Scale(0.001)
-mesh = Mesh(ngmesh)
+    # Scale to meters via ngmesh
+    ngmesh = mesh.ngmesh
+    ngmesh.Scale(0.001)
+    mesh = Mesh(ngmesh)
 
-print(f"  Hex elements: {mesh.ne}")
-print(f"  Vertices: {mesh.nv}")
-print(f"  Materials: {mesh.GetMaterials()}")
+    print(f"  Hex elements: {mesh.ne}")
+    print(f"  Vertices: {mesh.nv}")
+    print(f"  Materials: {mesh.GetMaterials()}")
 
-# Save mesh
-vol_file = os.path.join(work_dir, 'yoke_quarter.vol')
-ngmesh.Save(vol_file)
-print(f"  Saved: {vol_file}")
+    # Save mesh
+    vol_file = os.path.join(work_dir, 'yoke_quarter.vol')
+    ngmesh.Save(vol_file)
+    print(f"  Saved: {vol_file}")
 
-# Save VTK
-vtk_file = os.path.join(work_dir, 'yoke_quarter')
-vtk = VTKOutput(mesh, coefs=[], names=[], filename=vtk_file)
-vtk.Do()
-print(f"  Saved: {vtk_file}.vtk")
+    # Save VTK
+    vtk_file = os.path.join(work_dir, 'yoke_quarter')
+    vtk = VTKOutput(mesh, coefs=[], names=[], filename=vtk_file)
+    vtk.Do()
+    print(f"  Saved: {vtk_file}.vtk")
 
-# ============================================================
-# Step 5: Bounding box
-# ============================================================
-print("\nStep 5: Bounding box (mm)")
+    # ============================================================
+    # Step 5: Bounding box
+    # ============================================================
+    print("\nStep 5: Bounding box (mm)")
 
-import numpy as np
-vertices = []
-for v in mesh.vertices:
-    pt = v.point
-    vertices.append([pt[0], pt[1], pt[2]])
+    import numpy as np
+    vertices = []
+    for v in mesh.vertices:
+        pt = v.point
+        vertices.append([pt[0], pt[1], pt[2]])
 
-vertices = np.array(vertices)
+    vertices = np.array(vertices)
 
-x_min, x_max = vertices[:, 0].min(), vertices[:, 0].max()
-y_min, y_max = vertices[:, 1].min(), vertices[:, 1].max()
-z_min, z_max = vertices[:, 2].min(), vertices[:, 2].max()
+    x_min, x_max = vertices[:, 0].min(), vertices[:, 0].max()
+    y_min, y_max = vertices[:, 1].min(), vertices[:, 1].max()
+    z_min, z_max = vertices[:, 2].min(), vertices[:, 2].max()
 
-print(f"  X: [{x_min*1000:.1f}, {x_max*1000:.1f}] (size: {(x_max-x_min)*1000:.1f})")
-print(f"  Y: [{y_min*1000:.1f}, {y_max*1000:.1f}] (size: {(y_max-y_min)*1000:.1f})")
-print(f"  Z: [{z_min*1000:.1f}, {z_max*1000:.1f}] (size: {(z_max-z_min)*1000:.1f})")
+    print(f"  X: [{x_min*1000:.1f}, {x_max*1000:.1f}] (size: {(x_max-x_min)*1000:.1f})")
+    print(f"  Y: [{y_min*1000:.1f}, {y_max*1000:.1f}] (size: {(y_max-y_min)*1000:.1f})")
+    print(f"  Z: [{z_min*1000:.1f}, {z_max*1000:.1f}] (size: {(z_max-z_min)*1000:.1f})")
 
-# ============================================================
-# Step 6: Visualize in Netgen GUI
-# ============================================================
-print("\nStep 6: Visualize in Netgen GUI")
+    # ============================================================
+    # Step 6: Visualize in Netgen GUI
+    # ============================================================
+    print("\nStep 6: Visualize in Netgen GUI")
 
-Draw(mesh)
-print("  GUI opened - showing 1/4 mesh (R3856 style)")
+    Draw(mesh)
+    print("  GUI opened - showing 1/4 mesh (R3856 style)")
 
-# ============================================================
-# Summary
-# ============================================================
-print()
-print("=" * 60)
-print("QUARTER MODEL MESH COMPLETE (6x6x6 Style)")
-print("=" * 60)
-print()
-print(f"Quarter model: {mesh.ne} hex elements")
-print(f"Full model would have: ~{mesh.ne * 4} hex elements")
-print()
-print("Mesh intervals (6x6x6 style):")
-print("  - Primary curves: 12 intervals")
-print("  - Secondary curves: 8 intervals")
-print("  - Tertiary curves: 4 intervals")
-print("  - Auto factor: 10 (pole), 7 (body)")
-print()
-print("Symmetry planes:")
-print("  X=0: TrfPlSym([0,0,0], [1,0,0])")
-print("  Z=0: TrfPlSym([0,0,0], [0,0,1])")
-print()
-print("Output files:")
-print(f"  - yoke_quarter.vol : Netgen hex mesh")
-print(f"  - yoke_quarter.vtk : VTK mesh")
-print("=" * 60)
+    # ============================================================
+    # Summary
+    # ============================================================
+    print()
+    print("=" * 60)
+    print("QUARTER MODEL MESH COMPLETE (6x6x6 Style)")
+    print("=" * 60)
+    print()
+    print(f"Quarter model: {mesh.ne} hex elements")
+    print(f"Full model would have: ~{mesh.ne * 4} hex elements")
+    print()
+    print("Mesh intervals (6x6x6 style):")
+    print("  - Primary curves: 12 intervals")
+    print("  - Secondary curves: 8 intervals")
+    print("  - Tertiary curves: 4 intervals")
+    print("  - Auto factor: 10 (pole), 7 (body)")
+    print()
+    print("Symmetry planes:")
+    print("  X=0: TrfPlSym([0,0,0], [1,0,0])")
+    print("  Z=0: TrfPlSym([0,0,0], [0,0,1])")
+    print()
+    print("Output files:")
+    print(f"  - yoke_quarter.vol : Netgen hex mesh")
+    print(f"  - yoke_quarter.vtk : VTK mesh")
+    print("=" * 60)

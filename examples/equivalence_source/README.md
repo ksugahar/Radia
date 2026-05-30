@@ -1,13 +1,17 @@
 # Equivalence-theorem near-field source -- examples
 
-CST Microwave Studio "Near-Field Source" equivalent for the Radia +
-NGSolve stack.  Record EM field on a closed surface around a source
-region, then re-evaluate the exterior field at any external point via
-the Stratton-Chu surface integral (or hand off to an external MoM
-tool via Nastran format).
+Schelkunoff / Love equivalence theorem (Stratton-Chu surface integral)
+for the Radia + NGSolve stack.  Record EM field on a closed surface
+around a source region, then re-evaluate the exterior field at any
+external point (or hand off to an external MoM tool via Nastran
+format).
 
 Production module: `src/radia/equivalence_source.py` (NearFieldSource
-class).  Knowledge reference: MCP tool `fem_equivalence_source`.
+class).  See:
+- [`../../docs/equivalence_source/USER_GUIDE.md`](../../docs/equivalence_source/USER_GUIDE.md) — API usage, workflows
+- [`../../docs/equivalence_source/CPP_DESIGN.md`](../../docs/equivalence_source/CPP_DESIGN.md) — C++ kernel design
+- [`../../docs/equivalence_source/FMM_DESIGN.md`](../../docs/equivalence_source/FMM_DESIGN.md) — Phase D acceleration plan
+- MCP tool `fem_equivalence_source` — knowledge base
 
 ## Phases
 
@@ -57,45 +61,60 @@ Error budget (per stage):
 - ~5-15% outer-mesh order=1 nodal projection (Set is sub-optimal
   for L2; finer mesh or higher order would tighten)
 
-This is the canonical demonstration of "CST Near-Field Source" in
-the Radia stack: a closed-surface FEM solution (.sol) becomes a
-reusable equivalent source artifact that can be replayed onto an
-ARBITRARY second mesh as a coefficient function / GridFunction.
+This is the canonical demonstration of the equivalence-theorem
+source in the Radia stack: a closed-surface FEM solution (.sol)
+becomes a reusable equivalent source artifact that can be replayed
+onto an ARBITRARY second mesh as a coefficient function /
+GridFunction.
 
-### Phase 2 -- `phase2_wpt_harmonic.py` (time-harmonic, KNOWN LIMITATION)
+### Phase 2 -- `phase2_wpt_harmonic.py` (time-harmonic)
 
-Time-harmonic Hertzian-dipole demonstration.  **This test EXPECTEDLY
-fails the 2% threshold by ~3x in deep near-field**: the current
-`evaluate()` uses the SCALAR Green's-function Stratton-Chu form
-which is FAR-FIELD ACCURATE but misses the (1/k^2) grad-grad psi
-correction term of the full DYADIC Green's function.  In the deep
-near-field of a 1 MHz Hertzian dipole (R_sphere = 1 m << lambda
-~ 300 m, R_obs = 10 m = lambda/30), the undershoot is ~factor 3.
+Time-harmonic Hertzian-dipole demonstration.
 
 Setup:
 - Source: small electric dipole at origin, I*l = 1 A*m, omega = 2 pi * 1 MHz.
 - Extraction surface: sphere R = 1 m.
-- Workflow: analytic (E, H) on sphere -> NearFieldSource -> evaluate()
-  at 10 m on z-axis.
+- Workflow: analytic (E, H) on sphere -> NearFieldSource ->
+  `evaluate()` at exterior obs points.
 
-**Roadmap**: implement `evaluate_dyadic()` with the full
-(I + grad grad / k^2) dyadic Green's function kernel for accurate
-near-field harmonic reconstruction.  Until then, the harmonic path
-is suitable for FAR-FIELD reconstruction (R_obs >> lambda), not
-deep near-field.
+Since 2026-05-26 (Phase B C++ kernel), `evaluate()` defaults to the
+**full dyadic Green's function** `(I + grad-grad / k^2) psi`, which
+correctly reproduces the deep-near-field — the historical
+~3× undershoot of the scalar-form Stratton-Chu in this regime is
+gone.  The static path (`evaluate_static_H`) and the harmonic path
+(`evaluate`) agree to machine precision at omega -> 0.
 
-The static path (Phase 1, Radia's primary use case) works correctly
-out of the box.
+### `null_field_property.py` — equivalence-theorem physics check
+
+The defining property of the equivalence theorem: when the source is
+captured on a closed surface, the exterior reconstruction matches
+the true field, and the interior reconstruction is ~zero (the
+"null-field" property — the equivalent surface sources cancel the
+real source contribution everywhere inside).
+
+Setup: magnetic dipole at origin, sphere R = 0.30 m extraction
+surface, 6 240 panels.
+
+Result (typical run, see `results_null_field.json`):
+- Exterior (|r| from 0.6 m to 1.5 m): max rel err = 0.08 % (threshold 1.5 %)
+- Interior (|r| from 0.10 m to 0.20 m): |H_reconstructed| / |H_dipole_true|
+  = 0.035 % (threshold 1 %)
+
+The 1 000× contrast between exterior reconstruction and interior
+null is the WHOLE POINT of the equivalence theorem.
 
 ## Running
 
 ```bash
 cd S:/Radia/01_GitHub/examples/equivalence_source
-python phase1_static_coil.py      # ~5 s
-python phase2_wpt_harmonic.py     # ~3 s
+python phase1_static_coil.py      # ~5 s   (static, analytical coil)
+python phase2_wpt_harmonic.py     # ~3 s   (harmonic, Hertzian dipole)
+python null_field_property.py     # ~2 s   (interior null / exterior real)
+python phase3_e2e_cubit_to_sol.py # ~60 s  (full Cubit -> NGSolve e2e)
+python bench_static.py            # ~30 s  (Phase A C++ speedup bench)
 ```
 
-Each writes `results_phaseN.json` next to the script.
+Each writes `results_<name>.json` next to the script.
 
 Requirements: numpy, scipy (for elliptic integrals in phase 1).
 NGSolve is NOT required for these phases (they validate the

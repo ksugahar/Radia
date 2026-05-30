@@ -114,42 +114,44 @@ def test_fembem_vs_fem():
         eddy_fem.solve(B_ext=[0, 0, 1.0], mode='fem')
 
         from ngsolve import Integrate, CF
+        from ngsolve import TaskManager
         Hz_total_fem = eddy_fem.get_total_field()
         Hz_inc = 1.0 / MU_0
-        volume = Integrate(CF(1), core_mesh).real
-        Hz_avg_fem = Integrate(Hz_total_fem, core_mesh) / volume
-        mu_eff_fem = mu_r * Hz_avg_fem / Hz_inc
+        with TaskManager():
+            volume = Integrate(CF(1), core_mesh).real
+            Hz_avg_fem = Integrate(Hz_total_fem, core_mesh) / volume
+            mu_eff_fem = mu_r * Hz_avg_fem / Hz_inc
 
-        # --- FEMBEM mode (Calderon coupling) ---
-        eddy_bem = EddyCurrentFEMBEM(core_mesh, sigma=sigma, mu_r=mu_r,
-                                      order=2,
-                                      conductor_label="conductor",
-                                      surface_label="surface")
-        eddy_bem.assemble_fembem(freq)
-        eddy_bem.solve(B_ext=[0, 0, 1.0], mode='fembem')
+            # --- FEMBEM mode (Calderon coupling) ---
+            eddy_bem = EddyCurrentFEMBEM(core_mesh, sigma=sigma, mu_r=mu_r,
+                                          order=2,
+                                          conductor_label="conductor",
+                                          surface_label="surface")
+            eddy_bem.assemble_fembem(freq)
+            eddy_bem.solve(B_ext=[0, 0, 1.0], mode='fembem')
 
-        Hz_total_bem = eddy_bem.get_total_field()
-        Hz_avg_bem = Integrate(Hz_total_bem, core_mesh) / volume
-        mu_eff_bem = mu_r * Hz_avg_bem / Hz_inc
+            Hz_total_bem = eddy_bem.get_total_field()
+            Hz_avg_bem = Integrate(Hz_total_bem, core_mesh) / volume
+            mu_eff_bem = mu_r * Hz_avg_bem / Hz_inc
 
-        # --- Analytical reference ---
-        mu_eff_ana = analytical_mu_eff(omega, mu_r, sigma, depth)
+            # --- Analytical reference ---
+            mu_eff_ana = analytical_mu_eff(omega, mu_r, sigma, depth)
 
-        # Compute difference
-        if abs(mu_eff_fem.real) > 1e-10:
-            diff = abs(mu_eff_fem.real - mu_eff_bem.real) / abs(mu_eff_fem.real)
-        else:
-            diff = abs(mu_eff_fem.real - mu_eff_bem.real)
-        max_diff = max(max_diff, diff)
+            # Compute difference
+            if abs(mu_eff_fem.real) > 1e-10:
+                diff = abs(mu_eff_fem.real - mu_eff_bem.real) / abs(mu_eff_fem.real)
+            else:
+                diff = abs(mu_eff_fem.real - mu_eff_bem.real)
+            max_diff = max(max_diff, diff)
 
-        if freq < 1e3:
-            f_str = f"{freq:.0f} Hz"
-        else:
-            f_str = f"{freq/1e3:.0f} kHz"
+            if freq < 1e3:
+                f_str = f"{freq:.0f} Hz"
+            else:
+                f_str = f"{freq/1e3:.0f} kHz"
 
-        print(f"  {f_str:>10s}  {depth/delta:>8.2f}  "
-              f"{mu_eff_fem.real:>10.4f}  {mu_eff_bem.real:>10.4f}  "
-              f"{diff*100:>7.1f}%  {mu_eff_ana.real:>10.4f}")
+            print(f"  {f_str:>10s}  {depth/delta:>8.2f}  "
+                  f"{mu_eff_fem.real:>10.4f}  {mu_eff_bem.real:>10.4f}  "
+                  f"{diff*100:>7.1f}%  {mu_eff_ana.real:>10.4f}")
 
     print(f"\n  Max FEM-BEM vs FEM difference: {max_diff*100:.1f}%")
     if max_diff < 0.20:

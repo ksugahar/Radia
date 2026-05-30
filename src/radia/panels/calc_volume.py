@@ -29,30 +29,31 @@ def calculate_volume_vol(vol_file):
     from ngsolve import Mesh, Integrate, CF, BND
 
     mesh = Mesh(vol_file)
-    total_vol = Integrate(CF(1), mesh)
-    total_area = Integrate(CF(1), mesh, BND)
+    with TaskManager():
+        total_vol = Integrate(CF(1), mesh)
+        total_area = Integrate(CF(1), mesh, BND)
 
-    results = []
-    for mat in mesh.GetMaterials():
-        vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
-        results.append({"name": mat, "ngsolve_volume": vol})
+        results = []
+        for mat in mesh.GetMaterials():
+            vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
+            results.append({"name": mat, "ngsolve_volume": vol})
 
-    bnd_results = []
-    checked = set()
-    for bnd in mesh.GetBoundaries():
-        if bnd in checked:
-            continue
-        checked.add(bnd)
-        area = Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries(bnd))
-        bnd_results.append({"name": bnd, "ngsolve_area": area})
+        bnd_results = []
+        checked = set()
+        for bnd in mesh.GetBoundaries():
+            if bnd in checked:
+                continue
+            checked.add(bnd)
+            area = Integrate(CF(1), mesh, BND, definedon=mesh.Boundaries(bnd))
+            bnd_results.append({"name": bnd, "ngsolve_area": area})
 
-    return {
-        "volumes": results,
-        "boundaries": bnd_results,
-        "ngsolve_total": total_vol,
-        "ngsolve_area": total_area,
-        "source": vol_file,
-    }
+        return {
+            "volumes": results,
+            "boundaries": bnd_results,
+            "ngsolve_total": total_vol,
+            "ngsolve_area": total_area,
+            "source": vol_file,
+        }
 
 
 def calculate_volume(cub5_file, order):
@@ -132,6 +133,7 @@ def calculate_volume(cub5_file, order):
 def calculate_volume_step(step_file, order, maxh=0.01):
     """Calculate volume from STEP file using OCC + Netgen."""
     from ngsolve import Mesh as NGMesh, Integrate, CF, BND
+    from ngsolve import TaskManager
     from netgen.occ import OCCGeometry
 
     geo = OCCGeometry(step_file)

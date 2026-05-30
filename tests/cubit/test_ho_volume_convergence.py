@@ -37,6 +37,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 # Import NGSolve FIRST (DLL conflict avoidance)
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF, BND, BBND
+from ngsolve import TaskManager
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
@@ -420,8 +421,9 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
         try:
             cubit.cmd(cmd)
             mesh = Mesh(vol_path)
-            vol = Integrate(CF(1), mesh)
-            area = Integrate(CF(1), mesh, BND)
+            with TaskManager():
+                vol = Integrate(CF(1), mesh)
+                area = Integrate(CF(1), mesh, BND)
         except Exception as e:
             print(f"  {order:>5} FAILED: {e}")
             v_errors.append(None)

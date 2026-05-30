@@ -1004,6 +1004,63 @@ int radTApplication::GetInteractMatrix(int InteractElemKey, double* pMatrix, int
 
 //-------------------------------------------------------------------------
 
+int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
+{
+#ifdef RADIA_USE_HACAPK
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
+
+		int totalDOF = InteractPtr->GetTotalDOF();
+		*pDOF = totalDOF;
+
+		if(pMatrix != nullptr && totalDOF > 0)
+		{
+			// Build the actual HACApK (ACA+) operator and densify it column-by-
+			// column via MatVec on unit vectors. The result is the system matrix
+			// A = -N + diag(1/chi) WITH the ACA approximation, in the original
+			// (user) DOF ordering -- same ordering as GetInteractMatrix, so it is
+			// directly comparable / usable for deflation.
+			RadHACApKMSCManager mgr(InteractPtr);
+			RadHACApKParams params;
+			params.aca_eps = m_hacapk_eps;
+			params.leaf_size = m_hacapk_leaf_size;
+			params.eta = m_hacapk_eta;
+			params.print_level = 0;
+			if(!mgr.BuildHMatrix(params))
+			{
+				long matrixSize = (long)totalDOF * (long)totalDOF;
+				std::memset(pMatrix, 0, matrixSize * sizeof(double));
+				return 0;
+			}
+			std::vector<double> x((size_t)totalDOF, 0.0), y((size_t)totalDOF, 0.0);
+			for(int j = 0; j < totalDOF; j++)
+			{
+				x[j] = 1.0;
+				mgr.MatVec(x, y);
+				for(int i = 0; i < totalDOF; i++)
+					pMatrix[(long)i * totalDOF + j] = y[i];  // row-major A[i][j]
+				x[j] = 0.0;
+			}
+		}
+		return 1;
+	}
+	catch (...)
+	{
+		Initialize(); return 0;
+	}
+#else
+	(void)InteractElemKey; (void)pMatrix;
+	if(pDOF) *pDOF = 0;
+	return 0;
+#endif
+}
+
+//-------------------------------------------------------------------------
+
 void radTApplication::ShowInteractVector(int InteractElemKey, char* FieldVectID)
 {
 	radThg hg;
@@ -2178,7 +2235,9 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 #ifdef RADIA_USE_HACAPK
 	// H-matrix timing (Method 2 only) - ELF-compatible
 	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
-	*nOut = 8;
+	dOut[8] = (double)m_solve_defl_nplaq;  // loop-deflation cycles installed
+	dOut[9] = m_solve_defl_alpha;          // loop-deflation shift alpha (auto-scaled)
+	*nOut = 10;
 #else
 	*nOut = 7;
 #endif

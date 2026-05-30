@@ -220,9 +220,10 @@ def main():
     from ngsolve import Integrate, InnerProduct, curl, dx
     h_basis = solver.get_cohomology_basis()
     for k, h_gf in enumerate(h_basis):
-        curl_norm = Integrate(InnerProduct(curl(h_gf), curl(h_gf)) * dx, mesh)
-        h_norm = Integrate(InnerProduct(h_gf, h_gf) * dx, mesh)
-        print(f"   h_{k}: ||curl||^2 = {curl_norm:.2e}, ||h||^2 = {h_norm:.4e}")
+        with TaskManager():
+            curl_norm = Integrate(InnerProduct(curl(h_gf), curl(h_gf)) * dx, mesh)
+            h_norm = Integrate(InnerProduct(h_gf, h_gf) * dx, mesh)
+            print(f"   h_{k}: ||curl||^2 = {curl_norm:.2e}, ||h||^2 = {h_norm:.4e}")
 
     # Step 3: Build Radia reference
     print()
@@ -275,6 +276,7 @@ def main():
     print()
     print("6. Exporting to VTK...")
     from ngsolve import VTKOutput
+    from ngsolve import TaskManager
     vtk_file = os.path.join(os.path.dirname(__file__),
                             'demo_coil_cohomology_cut')
     try:

@@ -112,6 +112,7 @@ def _extract_workpiece_vol(full_vol, wp_vol):
     # For BEM, we just need the workpiece surface.
     # Load the full mesh, extract workpiece boundary elements.
     from ngsolve import Mesh, BND
+    from ngsolve import TaskManager
     import netgen.meshing as ngm
 
     mesh = Mesh(full_vol)
@@ -142,10 +143,11 @@ def _extract_workpiece_vol(full_vol, wp_vol):
         ngmesh_new.Add(se)
 
     wp_mesh = Mesh(ngmesh_new)
-    wp_mesh.Curve(2)
-    wp_mesh.ngmesh.Save(wp_vol)
-    print(f"Extracted workpiece: {wp_mesh.GetNE(BND)} elements, "
-          f"{wp_mesh.nv} vertices")
+    with TaskManager():
+        wp_mesh.Curve(2)
+        wp_mesh.ngmesh.Save(wp_vol)
+        print(f"Extracted workpiece: {wp_mesh.GetNE(BND)} elements, "
+              f"{wp_mesh.nv} vertices")
 
 
 def run_fem(vol_path, frequency, sigma, material, mu_r, R_wp, tmpdir):

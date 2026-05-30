@@ -232,9 +232,10 @@ class ScalarBIESIBCSolver:
             # BEM operators.  Probed 2026-04-29 on N=2477 wp:
             # use_fmm=True/False both run at ~1.67 s/matvec; default
             # H-matrix used.
-            with TaskManager():
-                DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
-                SL_bf = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
+            # NOTE: Caller MUST be inside `with TaskManager():` per
+            # CLAUDE.md "Caller Wraps, Helper Does NOT" (2026-05-27).
+            DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
+            SL_bf = LaplaceSL(u.Trace() * ds) * v.Trace() * ds
             self._DL_bf = DL_bf
             self._SL_bf = SL_bf
 

@@ -162,7 +162,8 @@ print(f"  Exterior: full circle centered at (0, {y_offset})")
 # Mesh
 # ============================================================
 print("\nGenerating mesh...")
-mesh = Mesh(geo.GenerateMesh(maxh=maxh, grading=0.4)).Curve(2)
+with TaskManager():
+    mesh = Mesh(geo.GenerateMesh(maxh=maxh, grading=0.4)).Curve(2)
 
 print(f"  Number of elements: {mesh.ne}")
 print(f"  Materials: {mesh.GetMaterials()}")
@@ -267,17 +268,18 @@ f += J0 * v * dx("wire_plus")
 f += (-J0) * v * dx("wire_minus")
 
 print("\nAssembling system...")
-a_form.Assemble()
-f.Assemble()
-print("  System assembled")
+with TaskManager():
+    a_form.Assemble()
+    f.Assemble()
+    print("  System assembled")
 
-# ============================================================
-# Solve
-# ============================================================
-print("\nSolving system...")
-gfu = GridFunction(fes)
-gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-print("  Solution converged")
+    # ============================================================
+    # Solve
+    # ============================================================
+    print("\nSolving system...")
+    gfu = GridFunction(fes)
+    gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    print("  Solution converged")
 
 # ============================================================
 # Analytical solution

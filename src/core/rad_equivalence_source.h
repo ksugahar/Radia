@@ -89,6 +89,62 @@ void EvaluateStaticH(
     double* H_out,
     int n_threads);
 
+/**
+ * Time-harmonic (E, H) reconstruction at observation points from per-face
+ * complex (E_s, H_s) on a closed triangulated surface.  Full Stratton-Chu
+ * with the DYADIC Green's function (I + grad-grad/k^2) psi -- correctly
+ * reproduces deep-near-field behaviour where the scalar form undershoots
+ * by up to a factor of 3.
+ *
+ * Formula (per docs/equivalence_source/CPP_DESIGN.md sec 3.2):
+ *
+ *   psi(r,r')  = exp(-jkR) / (4 pi R),  k = omega sqrt(mu_0 eps_0)
+ *   h          = jkR (complex)
+ *   G_bar . v  = psi {(h^2+h+1)/h^2 v  -  (h^2+3h+3)/h^2 (v.R_hat) R_hat}
+ *   grad_psi   = -(jk + 1/R) psi (r - r') / R
+ *
+ *   E(r) = integral { -jw mu_0 G_bar . J_s  +  grad_psi x M_s
+ *                     - (n . E_s) grad_psi } dS'
+ *   H(r) = integral {  jw eps_0 G_bar . M_s  +  grad_psi x J_s
+ *                     - (n . H_s) grad_psi } dS'
+ *
+ *   J_s = n x H_s,  M_s = E_s x n,  (n.E_s) = rho_e/eps_0,
+ *   (n.H_s) = rho_m/mu_0.
+ *
+ * Sign convention: same as EvaluateStaticH (verified against analytic
+ * magnetic dipole + Hertzian dipole far field).
+ *
+ * Memory layout: all arrays C-contiguous row-major.
+ * Parallel: NGSolve TaskManager over obs points.
+ *
+ * @param centroids  (n_faces, 3) row-major  -- face centroids [m]
+ * @param normals    (n_faces, 3) row-major  -- OUTWARD unit normals
+ * @param areas      (n_faces,)   row-major  -- face areas [m^2]
+ * @param E_re,E_im  (n_faces, 3) row-major  -- E phasor at centroid [V/m]
+ * @param H_re,H_im  (n_faces, 3) row-major  -- H phasor at centroid [A/m]
+ * @param n_faces    number of surface panels
+ * @param obs        (n_obs, 3) row-major    -- observation points [m]
+ * @param n_obs      number of obs points
+ * @param omega      angular frequency [rad/s]  (must be > 0; for static
+ *                   problems use EvaluateStaticH instead)
+ * @param E_re_out, E_im_out  (n_obs, 3) row-major -- reconstructed E
+ * @param H_re_out, H_im_out  (n_obs, 3) row-major -- reconstructed H
+ * @param n_threads  0 = TaskManager default; > 0 = request that many
+ */
+void EvaluateHarmonic(
+    const double* centroids,
+    const double* normals,
+    const double* areas,
+    const double* E_re, const double* E_im,
+    const double* H_re, const double* H_im,
+    int n_faces,
+    const double* obs,
+    int n_obs,
+    double omega,
+    double* E_re_out, double* E_im_out,
+    double* H_re_out, double* H_im_out,
+    int n_threads);
+
 }}  // namespace radia::eqsrc
 
 #endif  // __RAD_EQUIVALENCE_SOURCE_H

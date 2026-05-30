@@ -225,6 +225,7 @@ def test_ngsolve_readback():
         return
 
     from ngsolve import H1, GridFunction, BilinearForm, LinearForm, grad, dx
+    from ngsolve import TaskManager
 
     cubit.cmd("reset")
     cubit.cmd("create brick x 0.1 y 0.1 z 0.1")
@@ -246,15 +247,16 @@ def test_ngsolve_readback():
     u, v = fes.TnT()
     a = BilinearForm(fes)
     a += grad(u) * grad(v) * dx
-    a.Assemble()
+    with TaskManager():
+        a.Assemble()
 
-    f = LinearForm(fes)
-    f += 1 * v * dx
-    f.Assemble()
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
-    print(f"  Poisson solve OK, max(u) = {max(gfu.vec):.6e}")
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+        print(f"  Poisson solve OK, max(u) = {max(gfu.vec):.6e}")
 
 
 # ================================================================

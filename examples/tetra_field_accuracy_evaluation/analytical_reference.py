@@ -37,6 +37,7 @@ print('=' * 70)
 try:
     from netgen.occ import Box, Pnt, OCCGeometry
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
     print('NGSolve not available: %s' % e)
@@ -157,36 +158,37 @@ def compute_tetra_solution(test_points):
                      Pnt(CUBE_HALF, CUBE_HALF, CUBE_HALF))
     cube_solid.mat('magnetic')
     geo = OCCGeometry(cube_solid)
-    ngmesh = geo.GenerateMesh(maxh=TETRA_MAXH)
-    mesh = Mesh(ngmesh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=TETRA_MAXH)
+        mesh = Mesh(ngmesh)
 
-    n_elements = mesh.ne
+        n_elements = mesh.ne
 
-    # Create Radia tetrahedra with UNIFORM magnetization
-    mag_obj = netgen_mesh_to_radia(
-        mesh,
-        material={'magnetization': MAGNETIZATION},
-        units='m',
-        material_filter='magnetic',
-        verbose=False
-    )
+        # Create Radia tetrahedra with UNIFORM magnetization
+        mag_obj = netgen_mesh_to_radia(
+            mesh,
+            material={'magnetization': MAGNETIZATION},
+            units='m',
+            material_filter='magnetic',
+            verbose=False
+        )
 
-    # Evaluate field at test points
-    B_values = []
-    for pt in test_points:
-        try:
-            B = rad.Fld(mag_obj, 'b', pt)
-            B_values.append(list(B))
-        except Exception as e:
-            print('  Error at point %s: %s' % (pt, e))
-            B_values.append([np.nan, np.nan, np.nan])
+        # Evaluate field at test points
+        B_values = []
+        for pt in test_points:
+            try:
+                B = rad.Fld(mag_obj, 'b', pt)
+                B_values.append(list(B))
+            except Exception as e:
+                print('  Error at point %s: %s' % (pt, e))
+                B_values.append([np.nan, np.nan, np.nan])
 
-    return {
-        'method': 'tetrahedral (ObjTetrahedron MSC)',
-        'n_elements': n_elements,
-        'maxh': TETRA_MAXH,
-        'B_values': B_values
-    }
+        return {
+            'method': 'tetrahedral (ObjTetrahedron MSC)',
+            'n_elements': n_elements,
+            'maxh': TETRA_MAXH,
+            'B_values': B_values
+        }
 
 
 def main():

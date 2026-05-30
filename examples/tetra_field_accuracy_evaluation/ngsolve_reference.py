@@ -29,6 +29,7 @@ print('=' * 70)
 
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.occ import Box, Pnt, OCCGeometry, Glue
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
@@ -157,56 +158,57 @@ def compute_ngsolve_solution(test_points):
     f += MU_0 * M_cf * curl(v) * dx
 
     print('Assembling...')
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    print('Solving...')
-    gfA = GridFunction(fes)
+        print('Solving...')
+        gfA = GridFunction(fes)
 
-    # Use direct solver for robustness
-    gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse='sparsecholesky') * f.vec
+        # Use direct solver for robustness
+        gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse='sparsecholesky') * f.vec
 
-    print('Computing B = curl(A)...')
-    # B = curl(A) as a CoefficientFunction
-    B_cf = curl(gfA)
+        print('Computing B = curl(A)...')
+        # B = curl(A) as a CoefficientFunction
+        B_cf = curl(gfA)
 
-    # Project B onto HDiv space for better evaluation
-    print('Projecting B onto HDiv space...')
-    fes_hdiv = HDiv(mesh, order=2)
-    gfB = GridFunction(fes_hdiv)
-    gfB.Set(B_cf)
+        # Project B onto HDiv space for better evaluation
+        print('Projecting B onto HDiv space...')
+        fes_hdiv = HDiv(mesh, order=2)
+        gfB = GridFunction(fes_hdiv)
+        gfB.Set(B_cf)
 
-    # ==========================================================================
-    # Evaluate at Test Points
-    # ==========================================================================
-    print()
-    print('Evaluating field at test points...')
+        # ==========================================================================
+        # Evaluate at Test Points
+        # ==========================================================================
+        print()
+        print('Evaluating field at test points...')
 
-    B_values = []
-    for pt in test_points:
-        try:
-            mip = mesh(pt[0], pt[1], pt[2])
-            # Use HDiv GridFunction for evaluation
-            Bx = gfB[0](mip)
-            By = gfB[1](mip)
-            Bz = gfB[2](mip)
-            B_values.append([float(Bx), float(By), float(Bz)])
-            B_mag = np.sqrt(Bx**2 + By**2 + Bz**2)
-            print('  [%.2f, %.2f, %.2f]: |B| = %.6e T' %
-                  (pt[0], pt[1], pt[2], B_mag))
-        except Exception as e:
-            print('  Error at [%.2f, %.2f, %.2f]: %s' % (pt[0], pt[1], pt[2], e))
-            B_values.append([np.nan, np.nan, np.nan])
+        B_values = []
+        for pt in test_points:
+            try:
+                mip = mesh(pt[0], pt[1], pt[2])
+                # Use HDiv GridFunction for evaluation
+                Bx = gfB[0](mip)
+                By = gfB[1](mip)
+                Bz = gfB[2](mip)
+                B_values.append([float(Bx), float(By), float(Bz)])
+                B_mag = np.sqrt(Bx**2 + By**2 + Bz**2)
+                print('  [%.2f, %.2f, %.2f]: |B| = %.6e T' %
+                      (pt[0], pt[1], pt[2], B_mag))
+            except Exception as e:
+                print('  Error at [%.2f, %.2f, %.2f]: %s' % (pt[0], pt[1], pt[2], e))
+                B_values.append([np.nan, np.nan, np.nan])
 
-    return {
-        'method': 'NGSolve A-formulation (HCurl->HDiv)',
-        'mesh_ne': mesh.ne,
-        'mesh_nv': mesh.nv,
-        'ndof': fes.ndof,
-        'maxh_cube': MAXH_CUBE,
-        'maxh_air': MAXH_AIR,
-        'B_values': B_values
-    }
+        return {
+            'method': 'NGSolve A-formulation (HCurl->HDiv)',
+            'mesh_ne': mesh.ne,
+            'mesh_nv': mesh.nv,
+            'ndof': fes.ndof,
+            'maxh_cube': MAXH_CUBE,
+            'maxh_air': MAXH_AIR,
+            'B_values': B_values
+        }
 
 
 def main():

@@ -94,7 +94,7 @@ def build_mesh(R_wp_m: float, H_wp_m: float,
     surrounding air box.  Materials are tagged so a downstream CF can
     distinguish wp vs air vs coil_ring.
     """
-    from ngsolve import Mesh
+    from ngsolve import Mesh, TaskManager
     from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
 
     # Workpiece: r in [0, R_wp], z in [-H_wp/2, H_wp/2]
@@ -175,128 +175,129 @@ def run_axisym_nonlinear(args, bh_curve):
     gf_mu = GridFunction(fes_mu)
     init_mu_r_cf = mesh.MaterialCF({"workpiece": float(args.mu_r),
                                      "coil": 1.0, "air": 1.0}, default=1.0)
-    gf_mu.Set(init_mu_r_cf)
+    with TaskManager():
+        gf_mu.Set(init_mu_r_cf)
 
-    p = args.order
-    omega = 2 * math.pi * args.frequency
-    A_coil = 2e-3 * 2e-3
-    J_phi = mesh.MaterialCF({"coil": args.current / A_coil,
-                              "workpiece": 0.0, "air": 0.0}, default=0.0)
+        p = args.order
+        omega = 2 * math.pi * args.frequency
+        A_coil = 2e-3 * 2e-3
+        J_phi = mesh.MaterialCF({"coil": args.current / A_coil,
+                                  "workpiece": 0.0, "air": 0.0}, default=0.0)
 
-    fes = H1(mesh, order=p, complex=True,
-              dirichlet="axis|outer|top|bot")
-    u, v = fes.TnT()
+        fes = H1(mesh, order=p, complex=True,
+                  dirichlet="axis|outer|top|bot")
+        u, v = fes.TnT()
 
-    sigma_cf = mesh.MaterialCF({"workpiece": args.sigma,
-                                 "coil": 0.0, "air": 0.0}, default=0.0)
+        sigma_cf = mesh.MaterialCF({"workpiece": args.sigma,
+                                     "coil": 0.0, "air": 0.0}, default=0.0)
 
-    gfu = GridFunction(fes)
-    max_picard = 25
-    tol_picard = 1e-2
-    alpha = 0.5
-    convergence = []
-    old_vec = gf_mu.vec.FV().NumPy().copy()
-    # Map workpiece elements: index list
-    wp_elem_idx = np.array(
-        [i for i, el in enumerate(mesh.Elements())
-         if mesh.GetMaterials()[el.index] == "workpiece"],
-        dtype=int,
-    )
-    for k_outer in range(max_picard):
-        mu_cf = MU0 * gf_mu
-        a = BilinearForm(fes, symmetric=False)
-        a += (1.0 / mu_cf) * (1.0 / r_cf) * \
-            (r_cf * grad(u)[0] + u) * (r_cf * grad(v)[0] + v) * dx
-        a += (1.0 / mu_cf) * r_cf * grad(u)[1] * grad(v)[1] * dx
-        a += 1j * omega * sigma_cf * r_cf * u * v * dx
-        f = LinearForm(fes)
-        f += J_phi * r_cf * v * dx
-        a.Assemble()
-        f.Assemble()
-        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        gfu = GridFunction(fes)
+        max_picard = 25
+        tol_picard = 1e-2
+        alpha = 0.5
+        convergence = []
+        old_vec = gf_mu.vec.FV().NumPy().copy()
+        # Map workpiece elements: index list
+        wp_elem_idx = np.array(
+            [i for i, el in enumerate(mesh.Elements())
+             if mesh.GetMaterials()[el.index] == "workpiece"],
+            dtype=int,
+        )
+        for k_outer in range(max_picard):
+            mu_cf = MU0 * gf_mu
+            a = BilinearForm(fes, symmetric=False)
+            a += (1.0 / mu_cf) * (1.0 / r_cf) * \
+                (r_cf * grad(u)[0] + u) * (r_cf * grad(v)[0] + v) * dx
+            a += (1.0 / mu_cf) * r_cf * grad(u)[1] * grad(v)[1] * dx
+            a += 1j * omega * sigma_cf * r_cf * u * v * dx
+            f = LinearForm(fes)
+            f += J_phi * r_cf * v * dx
+            a.Assemble()
+            f.Assemble()
+            gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
 
-        # |B| as a CoefficientFunction from grad(gfu).
-        # B_z = grad[0] + A/r,  B_r = -grad[1]
-        # |B|^2 = Re(B_z conj(B_z)) + Re(B_r conj(B_r)) is the COMPLEX
-        # magnitude squared; peak |B| = sqrt(2) * sqrt(|B|^2).
-        B_z_cf = grad(gfu)[0] + gfu / r_cf
-        B_r_cf = -grad(gfu)[1]
-        B_abs_sq_cf = (B_z_cf * Conj(B_z_cf) + B_r_cf * Conj(B_r_cf)).real
-        # peak |B| = sqrt(2) * sqrt(|B|_complex^2)
-        B_peak_cf = ng_sqrt(2.0 * B_abs_sq_cf)
+            # |B| as a CoefficientFunction from grad(gfu).
+            # B_z = grad[0] + A/r,  B_r = -grad[1]
+            # |B|^2 = Re(B_z conj(B_z)) + Re(B_r conj(B_r)) is the COMPLEX
+            # magnitude squared; peak |B| = sqrt(2) * sqrt(|B|^2).
+            B_z_cf = grad(gfu)[0] + gfu / r_cf
+            B_r_cf = -grad(gfu)[1]
+            B_abs_sq_cf = (B_z_cf * Conj(B_z_cf) + B_r_cf * Conj(B_r_cf)).real
+            # peak |B| = sqrt(2) * sqrt(|B|_complex^2)
+            B_peak_cf = ng_sqrt(2.0 * B_abs_sq_cf)
 
-        # Project |B| onto L2(order=0) -> per-element constant.
-        gf_B = GridFunction(fes_mu)
-        gf_B.Set(B_peak_cf)
-        B_per_elem = gf_B.vec.FV().NumPy()
+            # Project |B| onto L2(order=0) -> per-element constant.
+            gf_B = GridFunction(fes_mu)
+            gf_B.Set(B_peak_cf)
+            B_per_elem = gf_B.vec.FV().NumPy()
 
-        # Update mu_r only on workpiece elements.
-        new_vec = old_vec.copy()
-        if len(wp_elem_idx) > 0:
-            B_wp = B_per_elem[wp_elem_idx]
-            mu_r_bh = mu_r_from_B_array(B_wp)
-            mu_r_damped = alpha * mu_r_bh + (1.0 - alpha) * old_vec[wp_elem_idx]
-            mu_r_damped = np.maximum(mu_r_damped, 1.0)
-            new_vec[wp_elem_idx] = mu_r_damped
+            # Update mu_r only on workpiece elements.
+            new_vec = old_vec.copy()
+            if len(wp_elem_idx) > 0:
+                B_wp = B_per_elem[wp_elem_idx]
+                mu_r_bh = mu_r_from_B_array(B_wp)
+                mu_r_damped = alpha * mu_r_bh + (1.0 - alpha) * old_vec[wp_elem_idx]
+                mu_r_damped = np.maximum(mu_r_damped, 1.0)
+                new_vec[wp_elem_idx] = mu_r_damped
 
-        max_dmu = float(np.max(np.abs(new_vec - old_vec)
-                                / np.maximum(old_vec, 1.0)))
-        gf_mu.vec.FV().NumPy()[:] = new_vec
-        old_vec = new_vec.copy()
-        convergence.append({"iter": k_outer, "max_dmu_r": max_dmu,
-                             "mu_r_wp_mean": float(new_vec[wp_elem_idx].mean()),
-                             "B_wp_max": float(B_per_elem[wp_elem_idx].max()),
-                             "B_wp_mean": float(B_per_elem[wp_elem_idx].mean())})
-        print(f"  Picard iter {k_outer}: max d(mu_r)={max_dmu:.4f}, "
-              f"<mu_r_wp>={float(new_vec[wp_elem_idx].mean()):.1f}, "
-              f"|B|_max={float(B_per_elem[wp_elem_idx].max()):.3f} T")
-        if max_dmu < tol_picard and k_outer > 0:
-            print(f"  CONVERGED at iter {k_outer}")
-            break
+            max_dmu = float(np.max(np.abs(new_vec - old_vec)
+                                    / np.maximum(old_vec, 1.0)))
+            gf_mu.vec.FV().NumPy()[:] = new_vec
+            old_vec = new_vec.copy()
+            convergence.append({"iter": k_outer, "max_dmu_r": max_dmu,
+                                 "mu_r_wp_mean": float(new_vec[wp_elem_idx].mean()),
+                                 "B_wp_max": float(B_per_elem[wp_elem_idx].max()),
+                                 "B_wp_mean": float(B_per_elem[wp_elem_idx].mean())})
+            print(f"  Picard iter {k_outer}: max d(mu_r)={max_dmu:.4f}, "
+                  f"<mu_r_wp>={float(new_vec[wp_elem_idx].mean()):.1f}, "
+                  f"|B|_max={float(B_per_elem[wp_elem_idx].max()):.3f} T")
+            if max_dmu < tol_picard and k_outer > 0:
+                print(f"  CONVERGED at iter {k_outer}")
+                break
 
-    # P_wp via volumetric integration.
-    from ngsolve import InnerProduct
-    A_norm_sq = InnerProduct(gfu, gfu)
-    P_wp_density = 0.5 * sigma_cf * (omega ** 2) * A_norm_sq * 2 * math.pi * r_cf
-    P_wp = float(Integrate(P_wp_density.real, mesh,
-                            definedon=mesh.Materials("workpiece")))
-    print(f"P_wp_volumetric (nonlinear) = {P_wp:.6e} W")
+        # P_wp via volumetric integration.
+        from ngsolve import InnerProduct
+        A_norm_sq = InnerProduct(gfu, gfu)
+        P_wp_density = 0.5 * sigma_cf * (omega ** 2) * A_norm_sq * 2 * math.pi * r_cf
+        P_wp = float(Integrate(P_wp_density.real, mesh,
+                                definedon=mesh.Materials("workpiece")))
+        print(f"P_wp_volumetric (nonlinear) = {P_wp:.6e} W")
 
-    # |H_t| at side wall (same as linear path).
-    n_z = 21
-    z_pts = np.linspace(-args.H_wp / 2 * 0.9, args.H_wp / 2 * 0.9, n_z)
-    eps_R = 1e-5
-    H_t_samples = []
-    for z_val in z_pts:
-        try:
-            r1 = args.R_wp + eps_R
-            r2 = args.R_wp + 2 * eps_R
-            A1 = complex(gfu(mesh(r1, z_val)))
-            A2 = complex(gfu(mesh(r2, z_val)))
-            B_z = ((r2 * A2 - r1 * A1) / (r2 - r1)) / r1
-            H_z = B_z / MU0  # vacuum just outside workpiece
-            H_t_samples.append(abs(H_z))
-        except Exception:
-            H_t_samples.append(0.0)
-    H_t_samples = np.array(H_t_samples)
+        # |H_t| at side wall (same as linear path).
+        n_z = 21
+        z_pts = np.linspace(-args.H_wp / 2 * 0.9, args.H_wp / 2 * 0.9, n_z)
+        eps_R = 1e-5
+        H_t_samples = []
+        for z_val in z_pts:
+            try:
+                r1 = args.R_wp + eps_R
+                r2 = args.R_wp + 2 * eps_R
+                A1 = complex(gfu(mesh(r1, z_val)))
+                A2 = complex(gfu(mesh(r2, z_val)))
+                B_z = ((r2 * A2 - r1 * A1) / (r2 - r1)) / r1
+                H_z = B_z / MU0  # vacuum just outside workpiece
+                H_t_samples.append(abs(H_z))
+            except Exception:
+                H_t_samples.append(0.0)
+        H_t_samples = np.array(H_t_samples)
 
-    return {
-        "method": "axisym_volumetric_A_phi_nonlinear",
-        "frequency_Hz": args.frequency,
-        "current_A": args.current,
-        "R_wp_m": args.R_wp,
-        "H_wp_m": args.H_wp,
-        "R_coil_m": args.R_coil,
-        "sigma_S_per_m": args.sigma,
-        "mu_r_init": float(args.mu_r),
-        "fes_order": p,
-        "ndof": fes.ndof,
-        "P_wp_W": P_wp,
-        "H_t_mean_A_per_m": float(H_t_samples.mean()),
-        "H_t_max_A_per_m": float(H_t_samples.max()),
-        "picard_iter": len(convergence),
-        "picard_convergence": convergence,
-    }
+        return {
+            "method": "axisym_volumetric_A_phi_nonlinear",
+            "frequency_Hz": args.frequency,
+            "current_A": args.current,
+            "R_wp_m": args.R_wp,
+            "H_wp_m": args.H_wp,
+            "R_coil_m": args.R_coil,
+            "sigma_S_per_m": args.sigma,
+            "mu_r_init": float(args.mu_r),
+            "fes_order": p,
+            "ndof": fes.ndof,
+            "P_wp_W": P_wp,
+            "H_t_mean_A_per_m": float(H_t_samples.mean()),
+            "H_t_max_A_per_m": float(H_t_samples.max()),
+            "picard_iter": len(convergence),
+            "picard_convergence": convergence,
+        }
 
 
 def run_axisym_linear(args):

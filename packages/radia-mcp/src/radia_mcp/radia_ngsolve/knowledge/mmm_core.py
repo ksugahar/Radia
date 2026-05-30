@@ -12,6 +12,13 @@ the 6 most-relevant for understanding Radia core + its modern
 extensions.
 
 Coverage:
+  build_msc_mmm       — How to BUILD an MMM/MSC model: elements, materials,
+                        external field, solve, read results (practical recipe)
+  matrix_structure    — Interaction matrix extraction; BuildMatrix /
+                        GetInteractMatrix returns the mu_r-independent
+                        geometric N, NOT the system matrix A
+  eigenvalue_nullspace— Near-null "loop" modes, conditioning ~ mu_r, and the
+                        beautiful->ugly BiCGSTAB behavior (CEFC 2026 study)
   chubar_1998         — The original Radia paper (Chubar-Elleaume-Chavanne)
   takahashi_2007_aca  — Large-scale MMM + ACA H-matrix (Wakao group,
                         Sugahara lineage — see also CLAUDE.md HACApK)
@@ -493,7 +500,295 @@ Modern problems often need >1 method:
   force-method selection (orthogonal axis)
 """
 
+BUILD_MSC_MMM = """\
+## How to build an MMM / MSC model in Radia (practical recipe)
+
+MMM (tetrahedra, 3 DOF) and MSC (hexahedra 6 DOF / wedges 5 DOF) are
+built from the SAME pipeline; only the element constructor differs.
+Units are SI: coordinates in METERS, magnetization M in A/m (NOT
+Tesla; M = Br/mu_0, e.g. Br=1.2 T -> M=954930 A/m).
+
+### Element constructors (per-element magnetization is the unknown)
+
+| Constructor | Vertices | DOF | Method |
+|-------------|----------|-----|--------|
+| `rad.ObjTetrahedron(verts, M)` | 4 | 3 (Mx,My,Mz) | MMM |
+| `rad.ObjWedge(verts, M)` | 6 | 5 (face charges) | MSC |
+| `rad.ObjHexahedron(verts, M)` | 8 | 6 (face charges) | MSC |
+| `rad.ObjRecMag(center, dims, M)` | - | 3 | surface-current brick |
+
+`M = [Mx, My, Mz]` in A/m. Use `[0, 0, 0]` for soft iron whose
+magnetization will be SOLVED; give a fixed non-zero M for a permanent
+magnet (no Solve needed unless soft iron also present).
+
+Hexahedron vertex order (verified): bottom face z=z0 then top face
+z=z0+dz, each CCW:
+```python
+verts = [[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],
+         [x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]]
+```
+NOTE: ObjHexahedron AUTO-GENERATES its 6 faces internally, so the
+face/DOF order is NOT the netgen HEX_FACES order -- do not assume a
+fixed face-to-DOF mapping (see the "matrix_structure" topic).
+
+### Minimal soft-iron block in a uniform field
+
+```python
+import radia as rad
+rad.UtiDelAll()
+
+mat = rad.MatLin(5000.0)              # isotropic soft iron, mu_r=5000
+objs = []
+for (x0, y0, z0) in cell_origins:     # your hexa grid (meters)
+    v = [[x0,y0,z0],[x0+d,y0,z0],[x0+d,y0+d,z0],[x0,y0+d,z0],
+         [x0,y0,z0+d],[x0+d,y0,z0+d],[x0+d,y0+d,z0+d],[x0,y0+d,z0+d]]
+    o = rad.ObjHexahedron(v, [0, 0, 0])
+    rad.MatApl(o, mat)                # attach material to each element
+    objs.append(o)
+body = rad.ObjCnt(objs)
+
+ext  = rad.ObjBckg(lambda p: [0.0, 0.0, 0.1])   # uniform 0.1 T in z
+grp  = rad.ObjCnt([body, ext])                  # body + source
+
+rad.Solve(grp, 0.001, 100, 0)        # prec, max_iter, method(0=LU)
+M = rad.ObjM(body)                   # [[center,[Mx,My,Mz]], ...] per elem
+rad.UtiDelAll()
+```
+
+### Materials
+
+- `rad.MatLin(mu_r)` -- isotropic linear soft iron (preferred single-arg form)
+- `rad.MatLin([mu_par,mu_perp],[ex,ey,ez])` -- anisotropic
+- `rad.MatSatIsoTab([[H,B],...])` -- nonlinear isotropic B-H curve (H A/m, B T)
+- permanent magnet: pass M directly in the constructor; skip MatApl/Solve
+  (Solve is only needed when soft iron coexists with the PM).
+
+### Source / external field
+
+`rad.ObjBckg(callable)` ONLY -- callable takes [x,y,z] (meters) and
+returns [Bx,By,Bz] (Tesla). The legacy array form
+`ObjBckg([Bx,By,Bz])` is NOT supported.
+
+### Solve
+
+`rad.Solve(obj, prec, max_iter, method)`:
+- method 0 = LU         (N < 500, guaranteed convergence)
+- method 1 = BiCGSTAB   (500 < N < 2000, fastest dense)
+- method 2 = HACApK     (N > 2000, O(N log N) memory)
+- `image='+x-z'` etc. applies mirror symmetry (IMA) in the SAME call.
+
+`rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0,
+bicgstab_tol=1e-4, relax_param=0.0, newton_method=False)` tunes the
+solver; `rad.GetSolveStats()` returns timing / iteration counts.
+
+### Read results
+
+- `rad.ObjM(container)` -> per-element [center, [Mx,My,Mz]] (A/m)
+- `rad.Fld(obj, 'b', pts)` -> B (Tesla) at one or many external points
+- `rad.UtiDelAll()` at the end of every script.
+
+Full element/material/field API: see the `radia_usage` topic.
+Interaction-matrix internals: "matrix_structure". Solver near-null
+behavior: "eigenvalue_nullspace".
+"""
+
+MATRIX_STRUCTURE = """\
+## The MMM/MSC interaction matrix -- extraction and structure
+
+Inspect the dense interaction matrix WITHOUT solving:
+```python
+handle = rad.BuildMatrix(obj, image="")    # builds, does not solve
+N, dof = rad.GetInteractMatrix(handle)     # (dof x dof) row-major numpy
+```
+
+### Critical gotcha: what GetInteractMatrix returns
+
+It returns the GEOMETRIC interaction matrix N (stored +N, the
+demagnetization tensor), which is INDEPENDENT of permeability --
+building it at mu_r=10 vs mu_r=5000 gives the identical matrix
+(verified). It is NOT the system matrix the solver factorizes.
+
+Form the SYSTEM matrix yourself (sign per Radia's ComputeEntry,
+A = -N + diag(1/chi)):
+```python
+chi = mu_r - 1.0                 # linear; per-element for a B-H curve
+A   = np.diag(np.full(dof, 1.0/chi)) - N
+```
+In the digest/paper notation A_ij = delta_ij/(mu_r-1) + G_ij, that
+"G" equals -N (the returned matrix); the +N/-N flip is a storage
+convention, not physics.
+
+### Properties (verified)
+
+- dof = sum of per-element DOF (tet 3, wedge 5, hex 6). A 32-hex block
+  -> 192 dof.
+- N is NON-symmetric (MSC collocation evaluates the normal field at
+  face centers; relative asymmetry ~ a few %).
+- Row-major [target][source]: `N[i,j]` = effect ON dof i FROM dof j.
+- Element-major ordering: element e owns dof [k*e, k*e+k) with k its
+  per-element DOF count.
+
+### Densifying the ACTUAL HACApK (ACA+) operator
+
+`rad.GetInteractMatrix` always returns the EXACT geometric N (never the
+ACA-compressed one). To obtain the actual ACA-approximated SYSTEM matrix
+A = -N + diag(1/chi):
+```python
+A_haca, dof = rad.HMatrixDensify(handle)   # MatVec on unit vectors
+```
+It builds the MSC H-matrix and applies its `MatVec` to unit vectors,
+returning the dense A in the ORIGINAL DOF ordering (directly comparable to
+`diag(1/chi) - N`, and usable with a loop basis). Use it to check whether
+the real ACA+ shifts the near-zero eigenvalues (it does not materially --
+see "eigenvalue_nullspace"). C++ path: `RadHACApKMSCManager::MatVec`
+exposed via `radTApplication::HMatrixDensify`.
+
+See "eigenvalue_nullspace" for why the spectrum of A matters, and
+`docs/solver/MSC_NULLSPACE_DEFLATION.md` for the full treatment.
+"""
+
+EIGENVALUE_NULLSPACE = """\
+## Near-null "loop" modes of the MSC operator (conditioning + solver behavior)
+
+(CEFC 2026 full-paper study; reproducible scripts in
+`examples/mmm_eigenvalue_study/`.)
+
+### The null space = cycle space of the element graph
+
+N has an EXACT null space: surface-charge distributions producing zero
+normal field at every collocation point. Its dimension equals the CYCLE
+RANK (first Betti number) of the element-adjacency graph (nodes =
+elements, edges = shared internal faces):
+
+    null_dim = F_internal - N_elem + 1
+
+verified to machine precision:
+
+| block | 1x1x1 | 2x1x1 | 2x2x1 | 2x2x2 | 3x3x3 | 4x4x2 | 4x4x4 | 5x5x5 |
+|-------|-------|-------|-------|-------|-------|-------|-------|-------|
+| elem  | 1 | 2 | 4 | 8 | 27 | 32 | 64 | 125 |
+| nulls | 0 | 0 | 1 | 5 | 28 | 33 | 81 | 176 |
+
+A single element and a 1-D chain have NO null space; it first appears at a
+2x2 arrangement (the minimal circulating "loop" of four elements).
+
+Physical derivation: a null mode puts OPPOSITE charges on the two sides of
+each shared internal face (field cancels) AND zero net charge per element
+(so the compensating centroid point charge vanishes). With one "flux" per
+shared face, "zero net charge per element" is a discrete divergence-free
+condition -> the solution space is the cycle (circulation) space. Minimal
+cycle = 2x2 plaquette.
+
+### Explicit local basis (SVD-free)
+
+Each 2x2 plaquette circulation (sigma=+1/-1 around the loop) is an EXACT
+null mode (||N*loop||/||loop|| ~ 1e-15), and the plaquette set spans the
+null space (rank == null_dim). Each touches only 4 elements (8 shared-face
+DOF) -> O(1) local support, built directly from mesh topology with NO SVD
+(`nullmode_cycle_basis.py`). The null projector P=VV^T is local (decays
+~2x per cell), so a local basis exists; SCDM (selected columns of P) gives
+one too (`nullmode_local_deflation.py`).
+
+### These modes set the conditioning at high mu_r
+
+A = diag(1/(mu_r-1)) - N maps each null mode to an eigenvalue exactly
+at 1/(mu_r-1). So the smallest eigenvalues of A are ~1/(mu_r-1) and
+the condition number scales like mu_r. mu_r -> infinity makes A
+singular: HIGH PERMEABILITY IS THE WORST CASE. The null eigenvectors
+are circulating magnetization patterns that radiate ~no external field.
+
+### "Beautiful -> ugly" iterative behavior (Yano observation)
+
+For a high-mu_r block in a uniform field, BiCGSTAB from a zero initial
+guess passes a PHYSICAL aligned solution at few iterations ("beautiful")
+and then drifts to a loop-dominated converged/LU solution ("ugly"),
+because Krylov resolves large-eigenvalue (physical) components first
+and near-null (loop) components last. Dramatic at high mu_r: mean
+alignment of M with the applied field falls from 0.94 (few iter) to
+0.14 (converged) at mu_r=1e5 on a 6x6 block. Reproduce with Radia
+APIs only (Solve + ObjM + SolverConfig, bicgstab_tol as the iteration
+knob) -- no matrix extraction needed (see `beautiful_ugly_viz.py`).
+
+### Does the H-matrix remove the bad modes? (Phase A: no)
+
+A controlled SVD low-rank truncation of the far-field blocks does NOT
+regularize the near-null spectrum: at the HACApK working tolerance
+eps=1e-4 the smallest eigenvalues / condition number are essentially
+unchanged (3.9e4 -> 4.0e4 on a 6x6x6 block); more aggressive truncation
+moves them CLOSER to zero. The REAL ACA+ operator (via
+`rad.HMatrixDensify`, see "matrix_structure") CONFIRMS this: on
+8x8x8 / mu_r=1e5 it spreads the exact-zero cluster into near-zero
+eigenvalues BELOW 1/(mu_r-1), worsening cond 7.7e5 -> 1.08e6 at eps=1e-4
+(-> 8.9e6 at eps=1e-2). So the data-sparse representation buys memory/time,
+NOT spectral regularization -- the "H-matrix suppresses the bad modes"
+hypothesis is refuted by both the SVD proxy and the real ACA+.
+
+### Removing the loop modes (deflation)
+
+1. Projection: sigma_clean = sigma - V(V^T sigma) removes the loops; since
+   N V = 0 the collocation field N*sigma is preserved exactly.
+2. Eigenvalue shift (recommended): A_s = A + alpha V (W^T V)^-1 W^T moves
+   the near-zero cluster from 1/(mu_r-1) to 1/(mu_r-1)+alpha; alpha~O(1)
+   drops cond from 7.7e5 to 46 and makes a converged solve loop-free
+   (`nullmode_removal.py`).
+
+V/W = right/left null spaces. A dense full basis is ~17-21% of DOF
+(O(N^2)), BUT the local plaquette / SCDM basis above makes a matrix-free
+deflated/shifted BiCGSTAB feasible inside HACApK (O(N)). HACApK's ACA does
+NOT regularize by itself -- deflation must be added explicitly.
+
+SHIPPED (C++): `rad.SetHACApKDeflation(offsets, dofs, signs, alpha)` passes
+the sparse plaquette basis L; the HACApK MatVec then applies the matrix-free
+symmetric shift `A x + alpha L(L^T x)` (RAW L, no SVD / no inverse / no
+orthonormalization; L L^T hits only span(L)=null space, O(N)). Validated:
+converged-solution alignment 0.22 -> 0.94 (4x4x2, mu_r=1e5); alpha=0 (default)
+= no change.
+
+GENERAL (C++): `rad.SetDeflateNullspace(True, alpha)` auto-builds the cycle
+basis IN C++ from the mesh (RadHACApKMSCManager::BuildLoopBasis: adjacency +
+shared-face DOF from coincident FaceCenter[f], short 3-/4-cycles), so the
+HACApK solve self-deflates for ANY conforming mesh -- validated on SHEARED
+blocks (align 0.07->0.88) where Python column-cosine fails. The installed
+cycle count is reported in `rad.GetSolveStats()['deflation_cycles']`.
+
+MULTIPLY-CONNECTED (C++, belted tree -- SHIPPED): BuildLoopBasis completes the
+short cycles with the b1 global "belt" loops for closed cores / rings (b1 =
+first Betti number). A BFS spanning forest gives the graph cycle rank
+b1_graph = E - V + C; a sparse GF(2) basis seeded with the short cycles finds
+the deficit, and the GF(2)-independent cotree fundamental cycles supply exactly
+b1 belt loops (each an exact divergence-free null mode). Simply-connected
+bodies hit an early exit (rankShort==b1_graph) so the installed vectors and
+timings are UNCHANGED (zero regression). Verified
+(`belt_loop_validation.py`): a thin 1-element ring (single C_N graph cycle,
+ZERO short cycles) installs deflation_cycles==1==null_dim -- the belt loop is
+the sole cycle, proving the completion is active; a tube installs 9==null_dim
+(align 0.19->0.89); cube controls unchanged.
+
+THEORY: the null space is the div-side tree-cotree gauge (dual of FEM-A's
+gradient gauge): Helmholtz curl(T) = solenoidal "loop" magnetization, invisible
+to the field; cotree faces of the element-adjacency graph = the loop basis.
+A=diag(1/(mu_r-1))-N lifts it to 1/(mu_r-1) -> high-mu_r = low-frequency
+(loop-star) breakdown; deflation = loop-star/tree-cotree gauge removal. For
+multiply-connected bodies the local short cycles are completed by b1 belt loops
+(belted tree, now implemented -- see above). See
+`docs/solver/MSC_NULLSPACE_DEFLATION.md`, tests `test_deflated_hacapk.py` /
+`test_deflate_auto.py` / `belt_loop_validation.py`.
+
+### Practical guidance
+
+- At very high mu_r the converged discrete solution can be contaminated
+  by spurious loops; this is a formulation/conditioning property, NOT a
+  solver bug (LU shows it too).
+- For trustworthy high-mu_r results watch the condition number, prefer
+  a deflated / eigenvalue-shifted iteration, or keep mu_r physical.
+
+Full treatment: `docs/solver/MSC_NULLSPACE_DEFLATION.md`.
+"""
+
 SECTIONS = {
+    "build_msc_mmm": BUILD_MSC_MMM,
+    "matrix_structure": MATRIX_STRUCTURE,
+    "eigenvalue_nullspace": EIGENVALUE_NULLSPACE,
     "chubar_1998": CHUBAR_1998,
     "takahashi_2007_aca": TAKAHASHI_2007_ACA,
     "pradhan_2007": PRADHAN_2007,

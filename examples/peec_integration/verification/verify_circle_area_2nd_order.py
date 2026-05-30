@@ -201,7 +201,8 @@ def netgen_circle_area(radius, mesh_size, curve_order=2):
 
     # Apply curving
     if curve_order > 1:
-        mesh.Curve(curve_order)
+        with TaskManager():
+            mesh.Curve(curve_order)
 
     # Compute area using NGSolve integration
     area = Integrate(CoefficientFunction(1.0), mesh)
@@ -258,6 +259,7 @@ def main():
 
     try:
         from ngsolve import Mesh
+        from ngsolve import TaskManager
         has_netgen = True
     except ImportError:
         print("  WARNING: ngsolve not available, skipping Netgen tests")

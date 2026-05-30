@@ -23,7 +23,7 @@ if _cubit_path: sys.path.append(_cubit_path)
 os.environ['CUBIT_PLUGIN_DIR'] = os.path.join(_cubit_path, 'plugins') if _cubit_path else ''
 
 import netgen.meshing
-from ngsolve import Mesh, Integrate, CF, BND
+from ngsolve import Mesh, Integrate, CF, BND, TaskManager
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
             '-commandplugindir', os.environ['CUBIT_PLUGIN_DIR']])
@@ -183,9 +183,10 @@ for name, cmds, v_exact, a_exact in test_cases:
     # --- Export netgen ---
     vol_path = os.path.join(OUT_DIR, f"multi_{name}.vol")
     cubit.cmd(f'radia_export netgen "{vol_path}" order {ORDER} overwrite')
-    mesh = Mesh(vol_path)
-    vol = Integrate(CF(1), mesh)
-    area = Integrate(CF(1), mesh, BND)
+    with TaskManager():
+        mesh = Mesh(vol_path)
+        vol = Integrate(CF(1), mesh)
+        area = Integrate(CF(1), mesh, BND)
     verr = (vol - v_exact) / v_exact * 100 if v_exact else float('nan')
     aerr = (area - a_exact) / a_exact * 100 if a_exact else float('nan')
 

@@ -31,6 +31,7 @@ except AttributeError:
 
 from ngsolve import *
 from ngsolve.webgui import Draw
+from ngsolve import TaskManager
 from netgen.occ import Box, Cylinder, Sphere, Pnt, OCCGeometry
 
 
@@ -100,21 +101,22 @@ def main():
     print("\n[6] Projecting to GridFunction...")
     fes = HDiv(mesh, order=2)
     B_gf = GridFunction(fes)
-    B_gf.Set(B_cf)
+    with TaskManager():
+        B_gf.Set(B_cf)
 
-    # Display field
-    print("\n[7] Displaying field in webgui...")
-    print("    Opening browser...")
-    B_mag = sqrt(InnerProduct(B_gf, B_gf))
-    Draw(B_mag, mesh, 'B_magnitude')
-    Draw(B_gf, mesh, 'B_field', vectors={'grid_size': 10})
+        # Display field
+        print("\n[7] Displaying field in webgui...")
+        print("    Opening browser...")
+        B_mag = sqrt(InnerProduct(B_gf, B_gf))
+        Draw(B_mag, mesh, 'B_magnitude')
+        Draw(B_gf, mesh, 'B_field', vectors={'grid_size': 10})
 
-    print("\n[OK] Visualization complete")
-    print("\nAdvantages:")
-    print("  - Magnet geometry: exact OCC Box (no approximation)")
-    print("  - Field: accurate GridFunction projection")
-    print("  - Browser-based: no ParaView needed")
-    print("  - Script-based: no manual GUI operation")
+        print("\n[OK] Visualization complete")
+        print("\nAdvantages:")
+        print("  - Magnet geometry: exact OCC Box (no approximation)")
+        print("  - Field: accurate GridFunction projection")
+        print("  - Browser-based: no ParaView needed")
+        print("  - Script-based: no manual GUI operation")
 
 
 if __name__ == '__main__':

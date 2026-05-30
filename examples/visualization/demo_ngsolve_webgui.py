@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 import radia as rad
 from ngsolve import *
 from ngsolve.webgui import Draw
+from ngsolve import TaskManager
 from netgen.occ import Box, Pnt, OCCGeometry
 
 # Check if rad.RadiaField is available
@@ -70,28 +71,29 @@ def main():
     print("\n[4] Projecting to GridFunction...")
     fes = HDiv(mesh, order=2)
     B_gf = GridFunction(fes)
-    B_gf.Set(B_cf)
-    print("    GridFunction projection complete")
+    with TaskManager():
+        B_gf.Set(B_cf)
+        print("    GridFunction projection complete")
 
-    # Visualization 1: Field magnitude
-    print("\n[5] Visualization 1: B field magnitude")
-    print("    Opening browser...")
-    B_mag = sqrt(InnerProduct(B_gf, B_gf))
-    Draw(B_mag, mesh, 'B_magnitude')
+        # Visualization 1: Field magnitude
+        print("\n[5] Visualization 1: B field magnitude")
+        print("    Opening browser...")
+        B_mag = sqrt(InnerProduct(B_gf, B_gf))
+        Draw(B_mag, mesh, 'B_magnitude')
 
-    # Visualization 2: Vector field
-    print("\n[6] Visualization 2: B field vectors")
-    print("    Opening browser...")
-    Draw(B_gf, mesh, 'B_field', vectors={'grid_size': 10})
+        # Visualization 2: Vector field
+        print("\n[6] Visualization 2: B field vectors")
+        print("    Opening browser...")
+        Draw(B_gf, mesh, 'B_field', vectors={'grid_size': 10})
 
-    # Visualization 3: Mesh only
-    print("\n[7] Visualization 3: Mesh structure")
-    print("    Opening browser...")
-    Draw(mesh)
+        # Visualization 3: Mesh only
+        print("\n[7] Visualization 3: Mesh structure")
+        print("    Opening browser...")
+        Draw(mesh)
 
-    print("\n[OK] Demo complete")
-    print("\nNote: webgui opens in browser")
-    print("      Close browser tabs to exit")
+        print("\n[OK] Demo complete")
+        print("\nNote: webgui opens in browser")
+        print("      Close browser tabs to exit")
 
 
 if __name__ == '__main__':

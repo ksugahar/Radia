@@ -21,6 +21,7 @@ def main():
     from ngsolve import (Mesh, HDivSurface, GridFunction, BND,
                          BilinearForm, InnerProduct, ds)
     from ngsolve.bem import MaxwellSingleLayerPotentialOperator
+    from ngsolve import TaskManager
 
     print("=" * 70)
     print("Diagnostic: Direct RT0 basis function evaluation")
@@ -166,30 +167,221 @@ def main():
     u, v = fes.TnT()
     M_bf = BilinearForm(fes)
     M_bf += InnerProduct(u.Trace(), v.Trace()) * ds(bonus_intorder=2)
-    M_bf.Assemble()
+    with TaskManager():
+        M_bf.Assemble()
 
-    for test_dof in active_dofs[:3]:
-        gf.vec[:] = 0
-        gf.vec[test_dof] = 1.0
+        for test_dof in active_dofs[:3]:
+            gf.vec[:] = 0
+            gf.vec[test_dof] = 1.0
 
-        # M[i,i] from assembled bilinear form
-        xv = M_bf.mat.CreateColVector()
-        yv = M_bf.mat.CreateColVector()
-        xv[:] = 0
-        xv[test_dof] = 1.0
-        M_bf.mat.Mult(xv, yv)
-        M_diag_assembled = yv[test_dof].real
+            # M[i,i] from assembled bilinear form
+            xv = M_bf.mat.CreateColVector()
+            yv = M_bf.mat.CreateColVector()
+            xv[:] = 0
+            xv[test_dof] = 1.0
+            M_bf.mat.Mult(xv, yv)
+            M_diag_assembled = yv[test_dof].real
 
-        # M[i,i] by manual integration
-        M_diag_manual = 0.0
-        for el in bnd_elements:
+            # M[i,i] by manual integration
+            M_diag_manual = 0.0
+            for el in bnd_elements:
+                dofs_raw = fes.GetDofNrs(el)
+                dof_nrs = [d if d >= 0 else ~d for d in dofs_raw]
+                signs = [+1.0 if d >= 0 else -1.0 for d in dofs_raw]
+
+                if test_dof not in dof_nrs:
+                    continue
+
+                coords = [np.array([mesh.vertices[v.nr].point[0],
+                                    mesh.vertices[v.nr].point[1],
+                                    mesh.vertices[v.nr].point[2]])
+                          for v in el.vertices]
+                vnrs = [v.nr for v in el.vertices]
+                if len(coords) != 3:
+                    continue
+
+                area = 0.5 * np.linalg.norm(np.cross(coords[1]-coords[0], coords[2]-coords[0]))
+                local_idx = dof_nrs.index(test_dof)
+                local_sign = signs[local_idx]
+
+                evnrs = edge_vnrs_map.get(test_dof, set())
+                p_opp = None
+                for k, vnr in enumerate(vnrs):
+                    if vnr not in evnrs:
+                        p_opp = coords[k]
+                        break
+
+                if p_opp is None:
+                    continue
+
+                # int_T |f|^2 dS using centroid rule
+                centroid = sum(coords) / 3
+                f_at_c = local_sign * (centroid - p_opp) / (2 * area)
+                M_contribution = np.dot(f_at_c, f_at_c) * area
+                M_diag_manual += M_contribution
+
+            print(f"  DOF {test_dof}: M_assembled={M_diag_assembled:.6f}, "
+                  f"M_manual={M_diag_manual:.6f}, "
+                  f"ratio={M_diag_assembled/M_diag_manual:.4f}" if abs(M_diag_manual) > 1e-20 else "")
+
+        # Now do the CORRECT V_vec computation using GF evaluation
+        # For each pair, set DOF_i = 1, evaluate GF_i at quadrature points,
+        # compute ∫∫ G * GF_i · GF_j
+        print("\n" + "=" * 70)
+        print("V_vec via GF evaluation (using ngsolve's own basis functions)")
+        print("=" * 70)
+
+        # This is too expensive for full matrix. Just do one pair.
+        # Pick two DOFs that share a triangle (adjacent)
+        test_pairs = []
+        for el in bnd_elements[:10]:
             dofs_raw = fes.GetDofNrs(el)
             dof_nrs = [d if d >= 0 else ~d for d in dofs_raw]
-            signs = [+1.0 if d >= 0 else -1.0 for d in dofs_raw]
+            dof_nrs_active = [d for d in dof_nrs if d in set(active_dofs)]
+            if len(dof_nrs_active) >= 2:
+                test_pairs.append((dof_nrs_active[0], dof_nrs_active[1]))
+                if len(test_pairs) >= 2:
+                    break
 
-            if test_dof not in dof_nrs:
-                continue
+        # Also add a distant pair
+        di_far = active_dofs[0]
+        dj_far = active_dofs[n_active//2]
+        test_pairs.append((di_far, dj_far))
 
+        # Assemble V_full for comparison
+        V_op = MaxwellSingleLayerPotentialOperator(fes, kappa=1.0, intorder=4)
+        V_ngmat = V_op.mat
+        dof_to_idx = {d: i for i, d in enumerate(active_dofs)}
+
+        V_full = np.zeros((n_active, n_active), dtype=complex)
+        xv = V_ngmat.CreateColVector()
+        yv = V_ngmat.CreateColVector()
+        for i, di in enumerate(active_dofs):
+            xv[:] = 0
+            xv[di] = 1.0
+            V_ngmat.Mult(xv, yv)
+            for j, dj in enumerate(active_dofs):
+                V_full[j, i] = yv[dj]
+
+        # For the kappa extraction, also get V at kappa=0.01
+        V_op2 = MaxwellSingleLayerPotentialOperator(fes, kappa=0.01, intorder=4)
+        V_ngmat2 = V_op2.mat
+        V_full2 = np.zeros((n_active, n_active), dtype=complex)
+        xv2 = V_ngmat2.CreateColVector()
+        yv2 = V_ngmat2.CreateColVector()
+        for i, di in enumerate(active_dofs):
+            xv2[:] = 0
+            xv2[di] = 1.0
+            V_ngmat2.Mult(xv2, yv2)
+            for j, dj in enumerate(active_dofs):
+                V_full2[j, i] = yv2[dj]
+
+        # Extract V_vec using: V(k) = -(1/k)*Vv - k*Vd
+        # At k1=0.01: V1 = -100*Vv - 0.01*Vd
+        # At k2=1.0:  V2 = -Vv - Vd
+        # Vv = (V1 - 100*V2) / (-100 + 100) ... hmm det=0 for this form
+        # Actually: a1=-100, b1=-0.01, a2=-1, b2=-1
+        # det = a1*b2 - a2*b1 = (-100)(-1) - (-1)(-0.01) = 100 - 0.01 = 99.99
+        # Vv = (b2*V1 - b1*V2)/det = (-V1 + 0.01*V2)/99.99
+        # Vd = (a1*V2 - a2*V1)/det = (-100*V2 + V1)/99.99
+
+        k1, k2 = 0.01, 1.0
+        a1, b1 = -1.0/k1, -k1  # -100, -0.01
+        a2, b2 = -1.0/k2, -k2  # -1, -1
+        det = a1*b2 - a2*b1  # 100 - 0.01 = 99.99
+        Vv_ng = (b2 * V_full2 - b1 * V_full) / det
+        Vd_ng = (a1 * V_full - a2 * V_full2) / det
+
+        print(f"\nExtracted V_vec from kappa variation:")
+        print(f"  Vv_ng diag: real [{Vv_ng.diagonal().real.min():.4f}, {Vv_ng.diagonal().real.max():.4f}]")
+        print(f"  Vd_ng diag: real [{Vd_ng.diagonal().real.min():.6f}, {Vd_ng.diagonal().real.max():.6f}]")
+
+        # Check Vv eigenvalues
+        Vv_real = Vv_ng.real
+        Vv_sym = 0.5 * (Vv_real + Vv_real.T)
+        eigvals_vv = np.linalg.eigvalsh(Vv_sym)
+        print(f"  Vv eigenvalues: min={eigvals_vv.min():.6f}, max={eigvals_vv.max():.6f}")
+        print(f"  Vv positive definite: {eigvals_vv.min() > 0}")
+
+        # The PHYSICAL inductance matrix is L = mu_0 * Vv_ng (in full space)
+        # Let's check if this makes sense
+        print(f"\n  mu_0 * Vv eigenvalues (H): [{MU_0*eigvals_vv.min():.4e}, {MU_0*eigvals_vv.max():.4e}]")
+
+        # Build loop basis and project
+        from scipy.linalg import null_space
+
+        # Build divergence matrix D
+        D = np.zeros((len(bnd_elements), n_active))
+        for face_idx, el in enumerate(bnd_elements):
+            for d_raw in fes.GetDofNrs(el):
+                d = d_raw if d_raw >= 0 else ~d_raw
+                sign = +1.0 if d_raw >= 0 else -1.0
+                if d in dof_to_idx:
+                    D[face_idx, dof_to_idx[d]] = sign
+
+        T_loop = null_space(D)
+        n_loops = T_loop.shape[1]
+        print(f"\n  Loop basis: {n_loops} loops from {n_active} edges, {len(bnd_elements)} faces")
+
+        # Since ALL signs are +1, D has all +1 entries. Let me check.
+        print(f"  D non-zero values: min={D[D!=0].min():.0f}, max={D[D!=0].max():.0f}")
+        print(f"  D entries per row: {[int(np.sum(D[i]!=0)) for i in range(min(5, len(bnd_elements)))]}")
+
+        # Project Vv to loop space
+        Vv_LL = T_loop.T @ Vv_real @ T_loop
+        eigvals_vv_LL = np.linalg.eigvalsh(0.5*(Vv_LL + Vv_LL.T))
+        print(f"\n  Vv_LL eigenvalues: min={eigvals_vv_LL.min():.6f}, max={eigvals_vv_LL.max():.6f}")
+        print(f"  mu_0 * Vv_LL eigenvalues (H): [{MU_0*eigvals_vv_LL.min():.4e}, {MU_0*eigvals_vv_LL.max():.4e}]")
+
+        # CHECK: Is the divergence matrix wrong because all signs are +1?
+        # On a closed surface, the correct divergence matrix should have
+        # opposite signs for the two triangles sharing an edge.
+        # If GetDofNrs gives +1 for both, then D*x gives the WRONG divergence.
+        #
+        # The CORRECT divergence needs the orientation flip from the
+        # outward normal convention. Let me build the correct D.
+
+        print("\n" + "=" * 70)
+        print("Building CORRECT divergence matrix with proper orientation")
+        print("=" * 70)
+
+        # For each triangle T with vertices (v0, v1, v2), the edges are:
+        #   e0 = (v1, v2) opposite v0
+        #   e1 = (v0, v2) opposite v1
+        #   e2 = (v0, v1) opposite v2
+        #
+        # The RT0 divergence on T for each local edge basis function is +1/area.
+        # But the SURFACE divergence of the GLOBAL basis function needs signs
+        # that account for edge orientation relative to the triangle.
+        #
+        # Key: for edge e shared by T1 and T2, the outward edge normal from T1
+        # points OPPOSITE to the outward edge normal from T2.
+        # So if the global direction is "from T1 to T2", then:
+        #   T1: outward = +global -> div contribution = +1
+        #   T2: outward = -global -> div contribution = -1
+        #
+        # The actual sign can be determined by the cross product of the
+        # triangle normal and the edge direction.
+
+        # Build face normals
+        face_normals = []
+        for el in bnd_elements:
+            coords = [np.array([mesh.vertices[v.nr].point[0],
+                                mesh.vertices[v.nr].point[1],
+                                mesh.vertices[v.nr].point[2]])
+                      for v in el.vertices]
+            if len(coords) == 3:
+                normal = np.cross(coords[1] - coords[0], coords[2] - coords[0])
+                normal = normal / np.linalg.norm(normal)
+            else:
+                normal = np.array([0, 0, 0])
+            face_normals.append(normal)
+
+        # For each edge, determine orientation relative to each triangle
+        # Edge direction: from vertex with smaller nr to larger nr (convention)
+        D_correct = np.zeros((len(bnd_elements), n_active))
+
+        for face_idx, el in enumerate(bnd_elements):
             coords = [np.array([mesh.vertices[v.nr].point[0],
                                 mesh.vertices[v.nr].point[1],
                                 mesh.vertices[v.nr].point[2]])
@@ -198,289 +390,99 @@ def main():
             if len(coords) != 3:
                 continue
 
-            area = 0.5 * np.linalg.norm(np.cross(coords[1]-coords[0], coords[2]-coords[0]))
-            local_idx = dof_nrs.index(test_dof)
-            local_sign = signs[local_idx]
+            n_face = face_normals[face_idx]
+            dofs_raw = fes.GetDofNrs(el)
 
-            evnrs = edge_vnrs_map.get(test_dof, set())
-            p_opp = None
-            for k, vnr in enumerate(vnrs):
-                if vnr not in evnrs:
-                    p_opp = coords[k]
-                    break
+            for d_raw in dofs_raw:
+                d = d_raw if d_raw >= 0 else ~d_raw
+                dof_sign = +1.0 if d_raw >= 0 else -1.0
 
-            if p_opp is None:
-                continue
+                if d not in dof_to_idx:
+                    continue
 
-            # int_T |f|^2 dS using centroid rule
-            centroid = sum(coords) / 3
-            f_at_c = local_sign * (centroid - p_opp) / (2 * area)
-            M_contribution = np.dot(f_at_c, f_at_c) * area
-            M_diag_manual += M_contribution
+                idx = dof_to_idx[d]
+                evnrs = edge_vnrs_map.get(d, set())
 
-        print(f"  DOF {test_dof}: M_assembled={M_diag_assembled:.6f}, "
-              f"M_manual={M_diag_manual:.6f}, "
-              f"ratio={M_diag_assembled/M_diag_manual:.4f}" if abs(M_diag_manual) > 1e-20 else "")
+                # Find the two edge vertices on this face
+                edge_verts_on_face = [k for k in range(3) if vnrs[k] in evnrs]
+                if len(edge_verts_on_face) != 2:
+                    continue
 
-    # Now do the CORRECT V_vec computation using GF evaluation
-    # For each pair, set DOF_i = 1, evaluate GF_i at quadrature points,
-    # compute ∫∫ G * GF_i · GF_j
-    print("\n" + "=" * 70)
-    print("V_vec via GF evaluation (using ngsolve's own basis functions)")
-    print("=" * 70)
+                k0, k1_idx = edge_verts_on_face
+                # Edge direction within this triangle: from v[k0] to v[k1]
+                edge_dir = coords[k1_idx] - coords[k0]
 
-    # This is too expensive for full matrix. Just do one pair.
-    # Pick two DOFs that share a triangle (adjacent)
-    test_pairs = []
-    for el in bnd_elements[:10]:
-        dofs_raw = fes.GetDofNrs(el)
-        dof_nrs = [d if d >= 0 else ~d for d in dofs_raw]
-        dof_nrs_active = [d for d in dof_nrs if d in set(active_dofs)]
-        if len(dof_nrs_active) >= 2:
-            test_pairs.append((dof_nrs_active[0], dof_nrs_active[1]))
-            if len(test_pairs) >= 2:
-                break
+                # Outward edge normal (in the surface plane, pointing away from face)
+                # = cross(face_normal, edge_direction), then choose sign
+                # so it points AWAY from the triangle (toward the opposite vertex)
+                n_edge_outward = np.cross(n_face, edge_dir)
+                n_edge_outward /= (np.linalg.norm(n_edge_outward) + 1e-30)
 
-    # Also add a distant pair
-    di_far = active_dofs[0]
-    dj_far = active_dofs[n_active//2]
-    test_pairs.append((di_far, dj_far))
+                # Check direction: should point toward the opposite vertex
+                opp_idx = 3 - k0 - k1_idx  # the remaining vertex
+                to_opp = coords[opp_idx] - 0.5 * (coords[k0] + coords[k1_idx])
+                # Project to surface plane
+                to_opp_surf = to_opp - np.dot(to_opp, n_face) * n_face
 
-    # Assemble V_full for comparison
-    V_op = MaxwellSingleLayerPotentialOperator(fes, kappa=1.0, intorder=4)
-    V_ngmat = V_op.mat
-    dof_to_idx = {d: i for i, d in enumerate(active_dofs)}
+                # n_edge_outward should point AWAY from triangle = away from opposite vertex
+                if np.dot(n_edge_outward, to_opp_surf) > 0:
+                    # Points toward opp vertex, need to flip
+                    n_edge_outward = -n_edge_outward
 
-    V_full = np.zeros((n_active, n_active), dtype=complex)
-    xv = V_ngmat.CreateColVector()
-    yv = V_ngmat.CreateColVector()
-    for i, di in enumerate(active_dofs):
-        xv[:] = 0
-        xv[di] = 1.0
-        V_ngmat.Mult(xv, yv)
-        for j, dj in enumerate(active_dofs):
-            V_full[j, i] = yv[dj]
+                # Global edge direction: from smaller to larger vertex nr
+                vnr_list = sorted(evnrs)
+                p_small = np.array(mesh.vertices[vnr_list[0]].point)
+                p_large = np.array(mesh.vertices[vnr_list[1]].point)
+                edge_global_dir = p_large - p_small
+                edge_global_dir /= (np.linalg.norm(edge_global_dir) + 1e-30)
 
-    # For the kappa extraction, also get V at kappa=0.01
-    V_op2 = MaxwellSingleLayerPotentialOperator(fes, kappa=0.01, intorder=4)
-    V_ngmat2 = V_op2.mat
-    V_full2 = np.zeros((n_active, n_active), dtype=complex)
-    xv2 = V_ngmat2.CreateColVector()
-    yv2 = V_ngmat2.CreateColVector()
-    for i, di in enumerate(active_dofs):
-        xv2[:] = 0
-        xv2[di] = 1.0
-        V_ngmat2.Mult(xv2, yv2)
-        for j, dj in enumerate(active_dofs):
-            V_full2[j, i] = yv2[dj]
+                # Global edge normal: cross(face_normal, global_edge_dir)
+                n_edge_global = np.cross(n_face, edge_global_dir)
+                n_edge_global /= (np.linalg.norm(n_edge_global) + 1e-30)
 
-    # Extract V_vec using: V(k) = -(1/k)*Vv - k*Vd
-    # At k1=0.01: V1 = -100*Vv - 0.01*Vd
-    # At k2=1.0:  V2 = -Vv - Vd
-    # Vv = (V1 - 100*V2) / (-100 + 100) ... hmm det=0 for this form
-    # Actually: a1=-100, b1=-0.01, a2=-1, b2=-1
-    # det = a1*b2 - a2*b1 = (-100)(-1) - (-1)(-0.01) = 100 - 0.01 = 99.99
-    # Vv = (b2*V1 - b1*V2)/det = (-V1 + 0.01*V2)/99.99
-    # Vd = (a1*V2 - a2*V1)/det = (-100*V2 + V1)/99.99
+                # Sign: +1 if outward aligns with global normal, -1 otherwise
+                orientation_sign = np.sign(np.dot(n_edge_outward, n_edge_global))
 
-    k1, k2 = 0.01, 1.0
-    a1, b1 = -1.0/k1, -k1  # -100, -0.01
-    a2, b2 = -1.0/k2, -k2  # -1, -1
-    det = a1*b2 - a2*b1  # 100 - 0.01 = 99.99
-    Vv_ng = (b2 * V_full2 - b1 * V_full) / det
-    Vd_ng = (a1 * V_full - a2 * V_full2) / det
+                D_correct[face_idx, idx] = orientation_sign
 
-    print(f"\nExtracted V_vec from kappa variation:")
-    print(f"  Vv_ng diag: real [{Vv_ng.diagonal().real.min():.4f}, {Vv_ng.diagonal().real.max():.4f}]")
-    print(f"  Vd_ng diag: real [{Vd_ng.diagonal().real.min():.6f}, {Vd_ng.diagonal().real.max():.6f}]")
+        # Check sign cancellation
+        sign_sums_correct = []
+        for idx in range(n_active):
+            col = D_correct[:, idx]
+            nz = col[col != 0]
+            sign_sums_correct.append(np.sum(nz))
 
-    # Check Vv eigenvalues
-    Vv_real = Vv_ng.real
-    Vv_sym = 0.5 * (Vv_real + Vv_real.T)
-    eigvals_vv = np.linalg.eigvalsh(Vv_sym)
-    print(f"  Vv eigenvalues: min={eigvals_vv.min():.6f}, max={eigvals_vv.max():.6f}")
-    print(f"  Vv positive definite: {eigvals_vv.min() > 0}")
+        print(f"D_correct sign sums: min={min(sign_sums_correct):.0f}, "
+              f"max={max(sign_sums_correct):.0f}, "
+              f"#zero={sum(1 for s in sign_sums_correct if abs(s) < 0.01)}/{n_active}")
 
-    # The PHYSICAL inductance matrix is L = mu_0 * Vv_ng (in full space)
-    # Let's check if this makes sense
-    print(f"\n  mu_0 * Vv eigenvalues (H): [{MU_0*eigvals_vv.min():.4e}, {MU_0*eigvals_vv.max():.4e}]")
+        # Build corrected loop basis
+        T_loop_correct = null_space(D_correct)
+        n_loops_correct = T_loop_correct.shape[1]
+        print(f"Corrected loop basis: {n_loops_correct} loops")
 
-    # Build loop basis and project
-    from scipy.linalg import null_space
+        # Verify div-free
+        res = np.linalg.norm(D_correct @ T_loop_correct)
+        print(f"||D_correct * T_loop_correct|| = {res:.2e}")
 
-    # Build divergence matrix D
-    D = np.zeros((len(bnd_elements), n_active))
-    for face_idx, el in enumerate(bnd_elements):
-        for d_raw in fes.GetDofNrs(el):
-            d = d_raw if d_raw >= 0 else ~d_raw
-            sign = +1.0 if d_raw >= 0 else -1.0
-            if d in dof_to_idx:
-                D[face_idx, dof_to_idx[d]] = sign
+        # Project Vv to corrected loop space
+        Vv_LL_correct = T_loop_correct.T @ Vv_real @ T_loop_correct
+        eigvals_correct = np.linalg.eigvalsh(0.5*(Vv_LL_correct + Vv_LL_correct.T))
+        print(f"\nVv_LL_correct eigenvalues: min={eigvals_correct.min():.6f}, max={eigvals_correct.max():.6f}")
+        print(f"mu_0 * Vv_LL_correct eigenvalues (H): "
+              f"[{MU_0*eigvals_correct.min():.4e}, {MU_0*eigvals_correct.max():.4e}]")
 
-    T_loop = null_space(D)
-    n_loops = T_loop.shape[1]
-    print(f"\n  Loop basis: {n_loops} loops from {n_active} edges, {len(bnd_elements)} faces")
+        # Also project V_full (Maxwell SLP at kappa=1)
+        V_LL_correct = T_loop_correct.T @ V_full.real @ T_loop_correct
+        eigvals_V_correct = np.linalg.eigvalsh(0.5*(V_LL_correct + V_LL_correct.T))
+        print(f"\nV_LL_correct (Maxwell SLP) eigenvalues: "
+              f"min={eigvals_V_correct.min():.6f}, max={eigvals_V_correct.max():.6f}")
 
-    # Since ALL signs are +1, D has all +1 entries. Let me check.
-    print(f"  D non-zero values: min={D[D!=0].min():.0f}, max={D[D!=0].max():.0f}")
-    print(f"  D entries per row: {[int(np.sum(D[i]!=0)) for i in range(min(5, len(bnd_elements)))]}")
-
-    # Project Vv to loop space
-    Vv_LL = T_loop.T @ Vv_real @ T_loop
-    eigvals_vv_LL = np.linalg.eigvalsh(0.5*(Vv_LL + Vv_LL.T))
-    print(f"\n  Vv_LL eigenvalues: min={eigvals_vv_LL.min():.6f}, max={eigvals_vv_LL.max():.6f}")
-    print(f"  mu_0 * Vv_LL eigenvalues (H): [{MU_0*eigvals_vv_LL.min():.4e}, {MU_0*eigvals_vv_LL.max():.4e}]")
-
-    # CHECK: Is the divergence matrix wrong because all signs are +1?
-    # On a closed surface, the correct divergence matrix should have
-    # opposite signs for the two triangles sharing an edge.
-    # If GetDofNrs gives +1 for both, then D*x gives the WRONG divergence.
-    #
-    # The CORRECT divergence needs the orientation flip from the
-    # outward normal convention. Let me build the correct D.
-
-    print("\n" + "=" * 70)
-    print("Building CORRECT divergence matrix with proper orientation")
-    print("=" * 70)
-
-    # For each triangle T with vertices (v0, v1, v2), the edges are:
-    #   e0 = (v1, v2) opposite v0
-    #   e1 = (v0, v2) opposite v1
-    #   e2 = (v0, v1) opposite v2
-    #
-    # The RT0 divergence on T for each local edge basis function is +1/area.
-    # But the SURFACE divergence of the GLOBAL basis function needs signs
-    # that account for edge orientation relative to the triangle.
-    #
-    # Key: for edge e shared by T1 and T2, the outward edge normal from T1
-    # points OPPOSITE to the outward edge normal from T2.
-    # So if the global direction is "from T1 to T2", then:
-    #   T1: outward = +global -> div contribution = +1
-    #   T2: outward = -global -> div contribution = -1
-    #
-    # The actual sign can be determined by the cross product of the
-    # triangle normal and the edge direction.
-
-    # Build face normals
-    face_normals = []
-    for el in bnd_elements:
-        coords = [np.array([mesh.vertices[v.nr].point[0],
-                            mesh.vertices[v.nr].point[1],
-                            mesh.vertices[v.nr].point[2]])
-                  for v in el.vertices]
-        if len(coords) == 3:
-            normal = np.cross(coords[1] - coords[0], coords[2] - coords[0])
-            normal = normal / np.linalg.norm(normal)
-        else:
-            normal = np.array([0, 0, 0])
-        face_normals.append(normal)
-
-    # For each edge, determine orientation relative to each triangle
-    # Edge direction: from vertex with smaller nr to larger nr (convention)
-    D_correct = np.zeros((len(bnd_elements), n_active))
-
-    for face_idx, el in enumerate(bnd_elements):
-        coords = [np.array([mesh.vertices[v.nr].point[0],
-                            mesh.vertices[v.nr].point[1],
-                            mesh.vertices[v.nr].point[2]])
-                  for v in el.vertices]
-        vnrs = [v.nr for v in el.vertices]
-        if len(coords) != 3:
-            continue
-
-        n_face = face_normals[face_idx]
-        dofs_raw = fes.GetDofNrs(el)
-
-        for d_raw in dofs_raw:
-            d = d_raw if d_raw >= 0 else ~d_raw
-            dof_sign = +1.0 if d_raw >= 0 else -1.0
-
-            if d not in dof_to_idx:
-                continue
-
-            idx = dof_to_idx[d]
-            evnrs = edge_vnrs_map.get(d, set())
-
-            # Find the two edge vertices on this face
-            edge_verts_on_face = [k for k in range(3) if vnrs[k] in evnrs]
-            if len(edge_verts_on_face) != 2:
-                continue
-
-            k0, k1_idx = edge_verts_on_face
-            # Edge direction within this triangle: from v[k0] to v[k1]
-            edge_dir = coords[k1_idx] - coords[k0]
-
-            # Outward edge normal (in the surface plane, pointing away from face)
-            # = cross(face_normal, edge_direction), then choose sign
-            # so it points AWAY from the triangle (toward the opposite vertex)
-            n_edge_outward = np.cross(n_face, edge_dir)
-            n_edge_outward /= (np.linalg.norm(n_edge_outward) + 1e-30)
-
-            # Check direction: should point toward the opposite vertex
-            opp_idx = 3 - k0 - k1_idx  # the remaining vertex
-            to_opp = coords[opp_idx] - 0.5 * (coords[k0] + coords[k1_idx])
-            # Project to surface plane
-            to_opp_surf = to_opp - np.dot(to_opp, n_face) * n_face
-
-            # n_edge_outward should point AWAY from triangle = away from opposite vertex
-            if np.dot(n_edge_outward, to_opp_surf) > 0:
-                # Points toward opp vertex, need to flip
-                n_edge_outward = -n_edge_outward
-
-            # Global edge direction: from smaller to larger vertex nr
-            vnr_list = sorted(evnrs)
-            p_small = np.array(mesh.vertices[vnr_list[0]].point)
-            p_large = np.array(mesh.vertices[vnr_list[1]].point)
-            edge_global_dir = p_large - p_small
-            edge_global_dir /= (np.linalg.norm(edge_global_dir) + 1e-30)
-
-            # Global edge normal: cross(face_normal, global_edge_dir)
-            n_edge_global = np.cross(n_face, edge_global_dir)
-            n_edge_global /= (np.linalg.norm(n_edge_global) + 1e-30)
-
-            # Sign: +1 if outward aligns with global normal, -1 otherwise
-            orientation_sign = np.sign(np.dot(n_edge_outward, n_edge_global))
-
-            D_correct[face_idx, idx] = orientation_sign
-
-    # Check sign cancellation
-    sign_sums_correct = []
-    for idx in range(n_active):
-        col = D_correct[:, idx]
-        nz = col[col != 0]
-        sign_sums_correct.append(np.sum(nz))
-
-    print(f"D_correct sign sums: min={min(sign_sums_correct):.0f}, "
-          f"max={max(sign_sums_correct):.0f}, "
-          f"#zero={sum(1 for s in sign_sums_correct if abs(s) < 0.01)}/{n_active}")
-
-    # Build corrected loop basis
-    T_loop_correct = null_space(D_correct)
-    n_loops_correct = T_loop_correct.shape[1]
-    print(f"Corrected loop basis: {n_loops_correct} loops")
-
-    # Verify div-free
-    res = np.linalg.norm(D_correct @ T_loop_correct)
-    print(f"||D_correct * T_loop_correct|| = {res:.2e}")
-
-    # Project Vv to corrected loop space
-    Vv_LL_correct = T_loop_correct.T @ Vv_real @ T_loop_correct
-    eigvals_correct = np.linalg.eigvalsh(0.5*(Vv_LL_correct + Vv_LL_correct.T))
-    print(f"\nVv_LL_correct eigenvalues: min={eigvals_correct.min():.6f}, max={eigvals_correct.max():.6f}")
-    print(f"mu_0 * Vv_LL_correct eigenvalues (H): "
-          f"[{MU_0*eigvals_correct.min():.4e}, {MU_0*eigvals_correct.max():.4e}]")
-
-    # Also project V_full (Maxwell SLP at kappa=1)
-    V_LL_correct = T_loop_correct.T @ V_full.real @ T_loop_correct
-    eigvals_V_correct = np.linalg.eigvalsh(0.5*(V_LL_correct + V_LL_correct.T))
-    print(f"\nV_LL_correct (Maxwell SLP) eigenvalues: "
-          f"min={eigvals_V_correct.min():.6f}, max={eigvals_V_correct.max():.6f}")
-
-    # Compare with old (wrong) loop basis
-    V_LL_old = T_loop.T @ V_full.real @ T_loop
-    eigvals_V_old = np.linalg.eigvalsh(0.5*(V_LL_old + V_LL_old.T))
-    print(f"V_LL_old (wrong D) eigenvalues: "
-          f"min={eigvals_V_old.min():.6f}, max={eigvals_V_old.max():.6f}")
+        # Compare with old (wrong) loop basis
+        V_LL_old = T_loop.T @ V_full.real @ T_loop
+        eigvals_V_old = np.linalg.eigvalsh(0.5*(V_LL_old + V_LL_old.T))
+        print(f"V_LL_old (wrong D) eigenvalues: "
+              f"min={eigvals_V_old.min():.6f}, max={eigvals_V_old.max():.6f}")
 
 
 MU_0 = 4.0 * np.pi * 1e-7

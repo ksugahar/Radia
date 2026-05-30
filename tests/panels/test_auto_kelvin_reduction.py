@@ -172,37 +172,38 @@ def test_reduction_quarter_xz_emits_sym_labels(tmp_path):
     # failure mode from the original 2026-04-25 C++ auto-detect bug
     # (kelvin_ext overwrote sym_*_* names, causing periodic-pair mismatch).
     from ngsolve import Mesh
-    m = Mesh(str(vol_path))
-    mats = list(m.GetMaterials())
-    bnds = set(m.GetBoundaries())
-    bbbs = list(m.GetBBBoundaries())
+    with TaskManager():
+        m = Mesh(str(vol_path))
+        mats = list(m.GetMaterials())
+        bnds = set(m.GetBoundaries())
+        bbbs = list(m.GetBBBoundaries())
 
-    assert "air" in mats and "kelvin" in mats, mats
-    assert "sym_ht=0_x" in bnds, bnds
-    assert "sym_bn=0_z" in bnds, bnds
-    assert "kelvin_int" in bnds and "kelvin_ext" in bnds
-    assert "GND" in bbbs, bbbs
+        assert "air" in mats and "kelvin" in mats, mats
+        assert "sym_ht=0_x" in bnds, bnds
+        assert "sym_bn=0_z" in bnds, bnds
+        assert "kelvin_int" in bnds and "kelvin_ext" in bnds
+        assert "GND" in bbbs, bbbs
 
-    # Confirm the Kelvin periodic pairs are complete (0 unmatched).
-    # This is the main signal that auto-detect respected the user's
-    # sym_* sidesets and did NOT mislabel flat cut faces as kelvin_ext.
-    assert "Kelvin periodic" in stdout, \
-        "Kelvin periodic diagnostic missing"
-    # Expected format: "Kelvin periodic: N/N pairs (max_dist=X, 0 unmatched)"
-    import re
-    m_pair = re.search(
-        r"Kelvin periodic: (\d+)/(\d+) pairs \(max_dist=([\d.e+-]+), "
-        r"(\d+) unmatched\)", stdout)
-    assert m_pair, f"Kelvin periodic line not found in stdout"
-    n_paired, n_total, max_dist, n_unmatched = (
-        int(m_pair.group(1)), int(m_pair.group(2)),
-        float(m_pair.group(3)), int(m_pair.group(4)))
-    assert n_paired == n_total, (
-        f"Kelvin periodic mismatch: {n_paired}/{n_total} "
-        f"({n_unmatched} unmatched, max_dist={max_dist:.2e}).  "
-        f"Expected 1:1 pairing (copy-mesh produces matching vertex sets).")
-    assert n_unmatched == 0, (
-        f"{n_unmatched} Kelvin vertices unpaired")
+        # Confirm the Kelvin periodic pairs are complete (0 unmatched).
+        # This is the main signal that auto-detect respected the user's
+        # sym_* sidesets and did NOT mislabel flat cut faces as kelvin_ext.
+        assert "Kelvin periodic" in stdout, \
+            "Kelvin periodic diagnostic missing"
+        # Expected format: "Kelvin periodic: N/N pairs (max_dist=X, 0 unmatched)"
+        import re
+        m_pair = re.search(
+            r"Kelvin periodic: (\d+)/(\d+) pairs \(max_dist=([\d.e+-]+), "
+            r"(\d+) unmatched\)", stdout)
+        assert m_pair, f"Kelvin periodic line not found in stdout"
+        n_paired, n_total, max_dist, n_unmatched = (
+            int(m_pair.group(1)), int(m_pair.group(2)),
+            float(m_pair.group(3)), int(m_pair.group(4)))
+        assert n_paired == n_total, (
+            f"Kelvin periodic mismatch: {n_paired}/{n_total} "
+            f"({n_unmatched} unmatched, max_dist={max_dist:.2e}).  "
+            f"Expected 1:1 pairing (copy-mesh produces matching vertex sets).")
+        assert n_unmatched == 0, (
+            f"{n_unmatched} Kelvin vertices unpaired")
 
 
 # Create a 1/8 sphere (x>=0, y>=0, z>=0 octant) air block.
@@ -292,6 +293,7 @@ def test_reduction_eighth_emits_sym_and_kelvin_far(tmp_path):
     assert vol_path.is_file()
 
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     m = Mesh(str(vol_path))
     bnds = set(m.GetBoundaries())
     bbbs = list(m.GetBBBoundaries())

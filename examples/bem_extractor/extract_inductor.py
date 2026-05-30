@@ -44,6 +44,7 @@ def create_circular_loop_mesh(radius, wire_radius, maxh=None, label="coil"):
     """
     from netgen.occ import WorkPlane, Axes, Axis, Pnt, Dir, OCCGeometry
     from ngsolve import Mesh
+    from ngsolve import TaskManager
 
     if maxh is None:
         maxh = wire_radius * 1.5
@@ -60,10 +61,11 @@ def create_circular_loop_mesh(radius, wire_radius, maxh=None, label="coil"):
     torus = circle.Revolve(Axis(p=Pnt(0, 0, 0), d=Dir(0, 0, 1)), 360)
 
     geo = OCCGeometry(torus)
-    ngmesh = geo.GenerateMesh(maxh=maxh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
 
-    mesh = Mesh(ngmesh)
-    return mesh
+        mesh = Mesh(ngmesh)
+        return mesh
 
 
 def analytical_inductance_circular_loop(R, a):

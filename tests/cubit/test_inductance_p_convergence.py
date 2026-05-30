@@ -28,6 +28,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 # NGSolve FIRST, then scipy BEFORE cubit.init() (Cubit pollutes sys.path)
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF, BND
+from ngsolve import TaskManager
 import scipy.sparse  # noqa: F401 — must import before cubit.init()
 
 # Cubit
@@ -134,24 +135,25 @@ for method_name, cmds in coil_methods:
         cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
 
         mesh = Mesh(vol_path)
-        vol = Integrate(CF(1), mesh)
-        v_err = (vol - cad_vol) / cad_vol * 100
+        with TaskManager():
+            vol = Integrate(CF(1), mesh)
+            v_err = (vol - cad_vol) / cad_vol * 100
 
-        try:
-            result = extract_inductance_vol(
-                vol_path, source_label="source", sink_label="sink", fes_order=0)
-            if 'error' in result:
+            try:
+                result = extract_inductance_vol(
+                    vol_path, source_label="source", sink_label="sink", fes_order=0)
+                if 'error' in result:
+                    L_nH = float('nan')
+                    ndof = 0
+                    sys.stderr.write(f"  {method_name} order {order}: {result['error']}\n")
+                else:
+                    L_nH = result['inductance_H'] * 1e9
+                    ndof = result['n_dofs']
+            except Exception as e:
                 L_nH = float('nan')
                 ndof = 0
-                sys.stderr.write(f"  {method_name} order {order}: {result['error']}\n")
-            else:
-                L_nH = result['inductance_H'] * 1e9
-                ndof = result['n_dofs']
-        except Exception as e:
-            L_nH = float('nan')
-            ndof = 0
-            sys.stderr.write(f"  {method_name} order {order}: {e}\n")
+                sys.stderr.write(f"  {method_name} order {order}: {e}\n")
 
-        print(f"  {order:>3} {v_err:>+10.4e}% {L_nH:>10.2f} {ndof:>8}")
+            print(f"  {order:>3} {v_err:>+10.4e}% {L_nH:>10.2f} {ndof:>8}")
 
     print()

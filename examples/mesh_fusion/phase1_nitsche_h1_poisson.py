@@ -59,6 +59,7 @@ from ngsolve import (
     x,
     y,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 
@@ -126,12 +127,13 @@ def solve_baseline(mesh: Mesh, order: int = 2, mu_val: float = 1.0):
     f = LinearForm(fes)
     f += sin(math.pi * x) * sin(math.pi * y) * v * dx
 
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-    return fes, gfu
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        return fes, gfu
 
 
 def l2_error_vs_exact(mesh: Mesh, gfu: GridFunction) -> float:

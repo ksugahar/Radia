@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build/Release'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.csg import CSGeometry, OrthoBrick, Pnt
 import numpy as np
 import radia as rad
@@ -93,118 +94,119 @@ print("-" * 70)
 
 geo = CSGeometry()
 geo.Add(OrthoBrick(Pnt(-0.05, -0.05, -0.05), Pnt(0.05, 0.05, 0.05)))
-mesh = Mesh(geo.GenerateMesh(maxh=0.01))
+with TaskManager():
+    mesh = Mesh(geo.GenerateMesh(maxh=0.01))
 
-print(f"3D Mesh generated:")
-print(f"  Elements: {mesh.ne}")
-print(f"  Vertices: {mesh.nv}")
-print(f"  Domain: [-0.05, 0.05] m = [-50, 50] mm")
+    print(f"3D Mesh generated:")
+    print(f"  Elements: {mesh.ne}")
+    print(f"  Vertices: {mesh.nv}")
+    print(f"  Domain: [-0.05, 0.05] m = [-50, 50] mm")
 
-# ============================================================================
-# Step 4: Evaluate Fields at Test Points
-# ============================================================================
+    # ============================================================================
+    # Step 4: Evaluate Fields at Test Points
+    # ============================================================================
 
-print("\n[Step 4] Field Evaluation at Test Points")
-print("-" * 70)
+    print("\n[Step 4] Field Evaluation at Test Points")
+    print("-" * 70)
 
-test_points = [
-	(0.000, 0.000, 0.000),	# 0m (center)
-	(0.000, 0.000, 0.020),  # 0.020m (above magnet)
-	(0.000, 0.000, 0.040),  # 0.040m (far from magnet)
-]
+    test_points = [
+    	(0.000, 0.000, 0.000),	# 0m (center)
+    	(0.000, 0.000, 0.020),  # 0.020m (above magnet)
+    	(0.000, 0.000, 0.040),  # 0.040m (far from magnet)
+    ]
 
-print("\n" + "=" * 70)
-print("Field Values at Different Points")
-print("=" * 70)
+    print("\n" + "=" * 70)
+    print("Field Values at Different Points")
+    print("=" * 70)
 
-for pt in test_points:
-	pt_m = pt
-	mesh_pt = mesh(*pt)
+    for pt in test_points:
+    	pt_m = pt
+    	mesh_pt = mesh(*pt)
 
-	print(f"\nPoint: {pt} m")
+    	print(f"\nPoint: {pt} m")
 
-	# B field (Tesla)
-	B_val = B_cf(mesh_pt)
-	print(f"  B (flux density):    Bx={B_val[0]:8.6f}, By={B_val[1]:8.6f}, Bz={B_val[2]:8.6f} T")
+    	# B field (Tesla)
+    	B_val = B_cf(mesh_pt)
+    	print(f"  B (flux density):    Bx={B_val[0]:8.6f}, By={B_val[1]:8.6f}, Bz={B_val[2]:8.6f} T")
 
-	# H field (A/m)
-	H_val = H_cf(mesh_pt)
-	print(f"  H (magnetic field):  Hx={H_val[0]:8.2f}, Hy={H_val[1]:8.2f}, Hz={H_val[2]:8.2f} A/m")
+    	# H field (A/m)
+    	H_val = H_cf(mesh_pt)
+    	print(f"  H (magnetic field):  Hx={H_val[0]:8.2f}, Hy={H_val[1]:8.2f}, Hz={H_val[2]:8.2f} A/m")
 
-	# A field (T*m)
-	A_val = A_cf(mesh_pt)
-	print(f"  A (vector potential): Ax={A_val[0]:8.6f}, Ay={A_val[1]:8.6f}, Az={A_val[2]:8.6f} T*m")
+    	# A field (T*m)
+    	A_val = A_cf(mesh_pt)
+    	print(f"  A (vector potential): Ax={A_val[0]:8.6f}, Ay={A_val[1]:8.6f}, Az={A_val[2]:8.6f} T*m")
 
-	# M field (A/m)
-	M_val = M_cf(mesh_pt)
-	print(f"  M (magnetization):   Mx={M_val[0]:8.2f}, My={M_val[1]:8.2f}, Mz={M_val[2]:8.2f} A/m")
+    	# M field (A/m)
+    	M_val = M_cf(mesh_pt)
+    	print(f"  M (magnetization):   Mx={M_val[0]:8.2f}, My={M_val[1]:8.2f}, Mz={M_val[2]:8.2f} A/m")
 
-# ============================================================================
-# Step 5: Compare with Radia Direct Evaluation
-# ============================================================================
+    # ============================================================================
+    # Step 5: Compare with Radia Direct Evaluation
+    # ============================================================================
 
-print("\n" + "=" * 70)
-print("Comparison with Radia Direct Evaluation")
-print("=" * 70)
+    print("\n" + "=" * 70)
+    print("Comparison with Radia Direct Evaluation")
+    print("=" * 70)
 
-pt_m = [0, 0, 0]  # Center point in meters
-mesh_pt = mesh(0, 0, 0)
+    pt_m = [0, 0, 0]  # Center point in meters
+    mesh_pt = mesh(0, 0, 0)
 
-print(f"\nAt center ({pt_m} m):")
+    print(f"\nAt center ({pt_m} m):")
 
-# Radia direct
-B_radia = rad.Fld(magnet, 'b', pt_m)
-H_radia = rad.Fld(magnet, 'h', pt_m)
-A_radia = rad.Fld(magnet, 'a', pt_m)
-M_radia = rad.Fld(magnet, 'm', pt_m)
+    # Radia direct
+    B_radia = rad.Fld(magnet, 'b', pt_m)
+    H_radia = rad.Fld(magnet, 'h', pt_m)
+    A_radia = rad.Fld(magnet, 'a', pt_m)
+    M_radia = rad.Fld(magnet, 'm', pt_m)
 
-# NGSolve CoefficientFunction
-B_ngsolve = B_cf(mesh_pt)
-H_ngsolve = H_cf(mesh_pt)
-A_ngsolve = A_cf(mesh_pt)
-M_ngsolve = M_cf(mesh_pt)
+    # NGSolve CoefficientFunction
+    B_ngsolve = B_cf(mesh_pt)
+    H_ngsolve = H_cf(mesh_pt)
+    A_ngsolve = A_cf(mesh_pt)
+    M_ngsolve = M_cf(mesh_pt)
 
-# Compare
-print(f"\nB field:")
-print(f"  Radia:   Bz = {B_radia[2]:.6f} T")
-print(f"  NGSolve: Bz = {B_ngsolve[2]:.6f} T")
-print(f"  Error:   {abs(B_radia[2] - B_ngsolve[2]):.2e} T")
+    # Compare
+    print(f"\nB field:")
+    print(f"  Radia:   Bz = {B_radia[2]:.6f} T")
+    print(f"  NGSolve: Bz = {B_ngsolve[2]:.6f} T")
+    print(f"  Error:   {abs(B_radia[2] - B_ngsolve[2]):.2e} T")
 
-print(f"\nH field:")
-print(f"  Radia:   Hz = {H_radia[2]:.2f} A/m")
-print(f"  NGSolve: Hz = {H_ngsolve[2]:.2f} A/m")
-print(f"  Error:   {abs(H_radia[2] - H_ngsolve[2]):.2e} A/m")
+    print(f"\nH field:")
+    print(f"  Radia:   Hz = {H_radia[2]:.2f} A/m")
+    print(f"  NGSolve: Hz = {H_ngsolve[2]:.2f} A/m")
+    print(f"  Error:   {abs(H_radia[2] - H_ngsolve[2]):.2e} A/m")
 
-print(f"\nA field:")
-print(f"  Radia:   |A| = {np.linalg.norm(A_radia):.6e} T*m")
-print(f"  NGSolve: |A| = {np.linalg.norm(A_ngsolve):.6e} T*m")
+    print(f"\nA field:")
+    print(f"  Radia:   |A| = {np.linalg.norm(A_radia):.6e} T*m")
+    print(f"  NGSolve: |A| = {np.linalg.norm(A_ngsolve):.6e} T*m")
 
-print(f"\nM field (Magnetization):")
-print(f"  Radia:   Mz = {M_radia[2]:.2f} A/m")
-print(f"  NGSolve: Mz = {M_ngsolve[2]:.2f} A/m")
-print(f"  Error:   {abs(M_radia[2] - M_ngsolve[2]):.2e} A/m")
+    print(f"\nM field (Magnetization):")
+    print(f"  Radia:   Mz = {M_radia[2]:.2f} A/m")
+    print(f"  NGSolve: Mz = {M_ngsolve[2]:.2f} A/m")
+    print(f"  Error:   {abs(M_radia[2] - M_ngsolve[2]):.2e} A/m")
 
-# ============================================================================
-# Summary
-# ============================================================================
+    # ============================================================================
+    # Summary
+    # ============================================================================
 
-print("\n" + "=" * 70)
-print("Summary")
-print("=" * 70)
+    print("\n" + "=" * 70)
+    print("Summary")
+    print("=" * 70)
 
-print("\nNew Unified Interface:")
-print("  rad.RadiaField(radia_obj, field_type)")
-print("\nField types:")
-print("  'b' - Magnetic flux density B (Tesla)")
-print("  'h' - Magnetic field H (A/m)")
-print("  'a' - Vector potential A (T*m)")
-print("  'm' - Magnetization M (A/m)")
+    print("\nNew Unified Interface:")
+    print("  rad.RadiaField(radia_obj, field_type)")
+    print("\nField types:")
+    print("  'b' - Magnetic flux density B (Tesla)")
+    print("  'h' - Magnetic field H (A/m)")
+    print("  'a' - Vector potential A (T*m)")
+    print("  'm' - Magnetization M (A/m)")
 
-print("\nRecommendation:")
-print("  Use the new RadiaField interface for all new code.")
-print("  Legacy interfaces (RadBfield, RadHfield, etc.) remain")
-print("  supported for backward compatibility.")
+    print("\nRecommendation:")
+    print("  Use the new RadiaField interface for all new code.")
+    print("  Legacy interfaces (RadBfield, RadHfield, etc.) remain")
+    print("  supported for backward compatibility.")
 
-print("\n" + "=" * 70)
-print("Complete")
-print("=" * 70)
+    print("\n" + "=" * 70)
+    print("Complete")
+    print("=" * 70)

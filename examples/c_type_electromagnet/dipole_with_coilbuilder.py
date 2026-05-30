@@ -40,6 +40,7 @@ work_dir = os.path.dirname(os.path.abspath(__file__))
 # Import NGSolve BEFORE Cubit
 from ngsolve import Mesh, Integrate, CF, BND, VOL, dx, GridFunction, H1, BilinearForm, LinearForm
 from ngsolve import grad
+from ngsolve import TaskManager
 
 print("=" * 60)
 print("C-TYPE DIPOLE MAGNET WITH COILBUILDER")
@@ -216,50 +217,51 @@ u, v = fes.TnT()
 
 a = BilinearForm(fes)
 a += mu * grad(u) * grad(v) * dx
-a.Assemble()
+with TaskManager():
+    a.Assemble()
 
-f = LinearForm(fes)
-f += mu * Hs * grad(v) * dx
-f.Assemble()
+    f = LinearForm(fes)
+    f += mu * Hs * grad(v) * dx
+    f.Assemble()
 
-phi = GridFunction(fes)
-phi.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
-print(f"  Solved: {fes.ndof} DOFs")
+    phi = GridFunction(fes)
+    phi.vec.data = a.mat.Inverse(fes.FreeDofs()) * f.vec
+    print(f"  Solved: {fes.ndof} DOFs")
 
-# Total H = Hs - grad(phi)
-H_total = Hs - grad(phi)
-B_total = mu * H_total
+    # Total H = Hs - grad(phi)
+    H_total = Hs - grad(phi)
+    B_total = mu * H_total
 
-# ============================================================
-# Step 6: Evaluate field in gap
-# ============================================================
-print("\nStep 6: Field in gap center")
+    # ============================================================
+    # Step 6: Evaluate field in gap
+    # ============================================================
+    print("\nStep 6: Field in gap center")
 
-# Field at gap center (0, 0, 0)
-B_gap = B_total(mesh(0, 0, 0))
-print(f"  B_gap = ({B_gap[0]:.6f}, {B_gap[1]:.6f}, {B_gap[2]:.6f}) T")
-print(f"  |B_gap| = {math.sqrt(sum(b**2 for b in B_gap)):.6f} T")
+    # Field at gap center (0, 0, 0)
+    B_gap = B_total(mesh(0, 0, 0))
+    print(f"  B_gap = ({B_gap[0]:.6f}, {B_gap[1]:.6f}, {B_gap[2]:.6f}) T")
+    print(f"  |B_gap| = {math.sqrt(sum(b**2 for b in B_gap)):.6f} T")
 
-# Expected: B ~ mu0 * NI / gap (rough estimate for C-magnet)
-B_est = mu0 * NI / GAP
-print(f"  Estimate (mu0*NI/gap): {B_est:.6f} T")
+    # Expected: B ~ mu0 * NI / gap (rough estimate for C-magnet)
+    B_est = mu0 * NI / GAP
+    print(f"  Estimate (mu0*NI/gap): {B_est:.6f} T")
 
-# ============================================================
-# Step 7: Export to GMSH for visualization
-# ============================================================
-print("\nStep 7: GMSH visualization")
+    # ============================================================
+    # Step 7: Export to GMSH for visualization
+    # ============================================================
+    print("\nStep 7: GMSH visualization")
 
-from gmsh_post_export import GmshPostExport
+    from gmsh_post_export import GmshPostExport
 
-post = GmshPostExport(mesh)
-post.add_field("|B|", CF(B_total.Norm()), ncomp=1)
-msh_file = os.path.join(work_dir, "dipole_field.msh")
-post.write(msh_file)
+    post = GmshPostExport(mesh)
+    post.add_field("|B|", CF(B_total.Norm()), ncomp=1)
+    msh_file = os.path.join(work_dir, "dipole_field.msh")
+    post.write(msh_file)
 
-print(f"\nTo visualize:")
-print(f"  gmsh {msh_file} {coil_step}")
-print(f"  (Load both files in GMSH to see field + coil geometry)")
+    print(f"\nTo visualize:")
+    print(f"  gmsh {msh_file} {coil_step}")
+    print(f"  (Load both files in GMSH to see field + coil geometry)")
 
-print("\n" + "=" * 60)
-print("DONE")
-print("=" * 60)
+    print("\n" + "=" * 60)
+    print("DONE")
+    print("=" * 60)

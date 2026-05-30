@@ -11,6 +11,7 @@ from pathlib import Path
 
 from netgen.occ import Box, Pnt, OCCGeometry
 from ngsolve import Mesh
+from ngsolve import TaskManager
 
 AX, AY, AZ = 5e-3, 2e-3, 1e-3
 H_COND = 0.20e-3
@@ -27,23 +28,24 @@ def main(view: bool):
     box.maxh = H_COND
     geo = OCCGeometry(box)
 
-    mesh = Mesh(geo.GenerateMesh(maxh=H_COND))
-    print(f"  ne = {mesh.ne}, nv = {mesh.nv}, nedge = {mesh.nedge}, nface = {mesh.nface}")
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=H_COND))
+        print(f"  ne = {mesh.ne}, nv = {mesh.nv}, nedge = {mesh.nedge}, nface = {mesh.nface}")
 
-    mesh.ngmesh.Save(str(VOL_PATH))
-    print(f"  Wrote .vol: {VOL_PATH}")
+        mesh.ngmesh.Save(str(VOL_PATH))
+        print(f"  Wrote .vol: {VOL_PATH}")
 
-    # Convert to gmsh format via NGSolve (ngmesh.Export)
-    try:
-        mesh.ngmesh.Export(str(MSH_PATH), "Gmsh2 Format")
-        print(f"  Wrote .msh: {MSH_PATH}")
-    except Exception as e:
-        print(f"  .msh export failed: {e} — using gmsh.merge fallback in viewer")
+        # Convert to gmsh format via NGSolve (ngmesh.Export)
+        try:
+            mesh.ngmesh.Export(str(MSH_PATH), "Gmsh2 Format")
+            print(f"  Wrote .msh: {MSH_PATH}")
+        except Exception as e:
+            print(f"  .msh export failed: {e} — using gmsh.merge fallback in viewer")
 
-    if view:
-        print("\nLaunching GMSH GUI...")
-        target = MSH_PATH if MSH_PATH.exists() else VOL_PATH
-        subprocess.Popen(["gmsh", str(target)])
+        if view:
+            print("\nLaunching GMSH GUI...")
+            target = MSH_PATH if MSH_PATH.exists() else VOL_PATH
+            subprocess.Popen(["gmsh", str(target)])
 
 
 if __name__ == "__main__":

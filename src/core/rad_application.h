@@ -111,6 +111,8 @@ public:
 	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
 	int m_solve_nonl_iterations;     // Total nonlinear iterations
 	int m_solve_num_threads;         // Number of threads used during solve
+	int m_solve_defl_nplaq;          // Loop-deflation cycles installed (HACApK)
+	double m_solve_defl_alpha;       // Loop-deflation shift alpha actually used (auto-scaled)
 	bool m_solve_stats_valid;        // Whether stats are available
 
 	// Interaction matrix cache for avoiding rebuild on repeated Solve() calls
@@ -137,6 +139,35 @@ public:
 	double m_hacapk_memory_mb;        // H-matrix memory usage [MB]
 	double m_hacapk_dense_memory_mb;  // Dense matrix memory [MB]
 	bool m_hacapk_stats_valid;
+
+	// HACApK loop-mode deflation basis (sparse plaquette/cycle L, CSR-like).
+	// The HACApK MatVec then applies (A + m_hacapk_defl_alpha * L L^T).
+	std::vector<int> m_hacapk_defl_offsets;   // CSR row pointers, size n_plaq+1
+	std::vector<int> m_hacapk_defl_dofs;      // flat DOF indices
+	std::vector<double> m_hacapk_defl_signs;  // flat +/-1 entries
+	double m_hacapk_defl_alpha;
+	void SetHACApKDeflation(const int* offsets, int n_off, const int* dofs,
+	                        const double* signs, int n_nz, double alpha) {
+		m_hacapk_defl_offsets.assign(offsets, offsets + (n_off > 0 ? n_off : 0));
+		m_hacapk_defl_dofs.assign(dofs, dofs + (n_nz > 0 ? n_nz : 0));
+		m_hacapk_defl_signs.assign(signs, signs + (n_nz > 0 ? n_nz : 0));
+		m_hacapk_defl_alpha = alpha;
+	}
+
+	// Auto loop-mode deflation: when enabled, the HACApK solve builds the local
+	// cycle (plaquette) basis from the mesh topology and applies (A + alpha L L^T).
+	bool m_deflate_nullspace;
+	double m_deflate_alpha;
+	void SetDeflateNullspace(bool enable, double alpha) {
+		m_deflate_nullspace = enable;
+		m_deflate_alpha = alpha;
+	}
+
+	// ALPHA-FREE loop-star gauge: when enabled, the HACApK solve restricts to the
+	// star (non-loop) subspace via a sparse basis T, solving T^T A T y = T^T b
+	// (H-matrix unchanged). Field-exact + well-conditioned for the LINEAR regime.
+	bool m_loopstar_gauge;
+	void SetLoopStarGauge(bool enable) { m_loopstar_gauge = enable; }
 
 	// Detailed timing statistics (ELF-compatible)
 	double m_timing_hmatrix_build;   // H-matrix construction time
@@ -185,6 +216,8 @@ public:
 		m_solve_linear_iterations = 0;
 		m_solve_nonl_iterations = 0;
 		m_solve_num_threads = 1;
+		m_solve_defl_nplaq = 0;
+		m_solve_defl_alpha = 0.0;
 		m_solve_stats_valid = false;
 
 		// Interaction matrix cache init
@@ -209,6 +242,10 @@ public:
 		m_hacapk_build_time = 0.0;
 		m_hacapk_memory_mb = 0.0;
 		m_hacapk_dense_memory_mb = 0.0;
+		m_hacapk_defl_alpha = 0.0;
+		m_deflate_nullspace = false;
+		m_deflate_alpha = 1.0;
+		m_loopstar_gauge = false;
 		m_timing_hmatrix_build = 0.0;
 		m_timing_linear_solve = 0.0;
 		m_linear_iterations = 0;
@@ -338,6 +375,7 @@ public:
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 	void ShowInteractMatrix(int InteractElemKey);
 	int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF);
+	int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF);  // Densify actual HACApK ACA+ operator (validation)
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
 	int MakeManualRelax(int InteractElemKey, int MethNo, int IterNumber, double RelaxParam);
 	int MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
