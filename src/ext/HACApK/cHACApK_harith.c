@@ -45,6 +45,22 @@ static inline int leaf_rows(const st_cHACApK_block_node_t *n)
 static inline int leaf_cols(const st_cHACApK_block_node_t *n)
 { return n->leaf_mtx->ndt; }
 
+/* ---------- rk leaf utilities ---------------------------------- *
+ * HACApK rk leaf storage (ltmtx=1):
+ *   a1 = U,  shape ndl x kt, column-major
+ *   a2 = V,  shape ndt x kt, column-major
+ *   matrix represented = U * V^T  (ndl x ndt)
+ * The rank kt is stored in leaf_mtx->kt. */
+
+static inline int leaf_rk_rank(const st_cHACApK_block_node_t *n)
+{ return n->leaf_mtx->kt; }
+
+static inline double *leaf_rk_U(const st_cHACApK_block_node_t *n)
+{ return n->leaf_mtx->a1; }
+
+static inline double *leaf_rk_V(const st_cHACApK_block_node_t *n)
+{ return n->leaf_mtx->a2; }
+
 
 /* ---------- dense-leaf LAPACK primitives ------------------------- */
 
@@ -151,7 +167,7 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
                      st_cHACApK_block_node_t *X);
 
 
-/* C += alpha * A * B  (block-recursive, dense-leaf base case). */
+/* C += alpha * A * B  (block-recursive, leaf-leaf base case dispatches on rk/dense). */
 static int h_addmul(double alpha,
                  const st_cHACApK_block_node_t *A,
                  const st_cHACApK_block_node_t *B,
@@ -159,7 +175,8 @@ static int h_addmul(double alpha,
 {
     if (!A || !B || !C) return CHACAPK_HARITH_ERR_NULL;
 
-    if (leaf_is_rk(A) || leaf_is_rk(B) || leaf_is_rk(C)) {
+    /* C being rk requires ACA recompression -- deferred to Phase 3.5. */
+    if (leaf_is_rk(C)) {
         g_stats.n_lowrank_skip++;
         return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
     }
@@ -176,8 +193,96 @@ static int h_addmul(double alpha,
         return CHACAPK_HARITH_OK;
     }
 
+    /* rk(A) * dense(B) -> dense(C):
+     *   C += alpha * (U_a V_a^T) B  =  (alpha U_a) (V_a^T B)
+     * Cost: O(kt_a * inner * nC) + O(mC * kt_a * nC). */
+    if (leaf_is_rk(A) && leaf_is_dense(B) && leaf_is_dense(C)) {
+        int kt = leaf_rk_rank(A);
+        int mC = leaf_rows(C);
+        int nC = leaf_cols(C);
+        int inner = leaf_cols(A);  /* == leaf_rows(B) */
+        double *W = (double*)malloc(sizeof(double) * (size_t)kt * (size_t)nC);
+        if (!W) return CHACAPK_HARITH_ERR_NULL;
+        /* W = V_a^T B  (kt x nC) */
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    kt, nC, inner, 1.0,
+                    leaf_rk_V(A), inner,
+                    leaf_dense_data(B), inner, 0.0,
+                    W, kt);
+        /* C += alpha * U_a * W */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    mC, nC, kt, alpha,
+                    leaf_rk_U(A), mC,
+                    W, kt, 1.0,
+                    leaf_dense_data(C), mC);
+        free(W);
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* dense(A) * rk(B) -> dense(C):
+     *   C += alpha * A (U_b V_b^T)  =  (alpha A U_b) V_b^T */
+    if (leaf_is_dense(A) && leaf_is_rk(B) && leaf_is_dense(C)) {
+        int kt = leaf_rk_rank(B);
+        int mC = leaf_rows(C);
+        int nC = leaf_cols(C);
+        int inner = leaf_cols(A);  /* == leaf_rows(B) */
+        double *W = (double*)malloc(sizeof(double) * (size_t)mC * (size_t)kt);
+        if (!W) return CHACAPK_HARITH_ERR_NULL;
+        /* W = alpha * A * U_b  (mC x kt) */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    mC, kt, inner, alpha,
+                    leaf_dense_data(A), mC,
+                    leaf_rk_U(B), inner, 0.0,
+                    W, mC);
+        /* C += W * V_b^T */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                    mC, nC, kt, 1.0,
+                    W, mC,
+                    leaf_rk_V(B), nC, 1.0,
+                    leaf_dense_data(C), mC);
+        free(W);
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* rk(A) * rk(B) -> dense(C):
+     *   C += alpha * U_a (V_a^T U_b) V_b^T */
+    if (leaf_is_rk(A) && leaf_is_rk(B) && leaf_is_dense(C)) {
+        int kA = leaf_rk_rank(A);
+        int kB = leaf_rk_rank(B);
+        int mC = leaf_rows(C);
+        int nC = leaf_cols(C);
+        int inner = leaf_cols(A);  /* == leaf_rows(B) */
+        double *M = (double*)malloc(sizeof(double) * (size_t)kA * (size_t)kB);
+        double *X = (double*)malloc(sizeof(double) * (size_t)mC * (size_t)kB);
+        if (!M || !X) { free(M); free(X); return CHACAPK_HARITH_ERR_NULL; }
+        /* M = V_a^T * U_b  (kA x kB) */
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    kA, kB, inner, 1.0,
+                    leaf_rk_V(A), inner,
+                    leaf_rk_U(B), inner, 0.0,
+                    M, kA);
+        /* X = alpha * U_a * M  (mC x kB) */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    mC, kB, kA, alpha,
+                    leaf_rk_U(A), mC,
+                    M, kA, 0.0,
+                    X, mC);
+        /* C += X * V_b^T */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                    mC, nC, kB, 1.0,
+                    X, mC,
+                    leaf_rk_V(B), nC, 1.0,
+                    leaf_dense_data(C), mC);
+        free(M); free(X);
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
     /* Mixed leaf+internal: reserved for Phase 3 (densify the internal one). */
-    if (leaf_is_dense(A) || leaf_is_dense(B) || leaf_is_dense(C)) {
+    if (leaf_is_dense(A) || leaf_is_dense(B) || leaf_is_dense(C)
+        || leaf_is_rk(A) || leaf_is_rk(B) || leaf_is_rk(C)) {
         return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
     }
 
@@ -211,7 +316,8 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
 {
     if (!L || !X) return CHACAPK_HARITH_ERR_NULL;
 
-    if (leaf_is_rk(L) || leaf_is_rk(X)) {
+    /* L is the L factor of LU (unit-lower); never low-rank by construction. */
+    if (leaf_is_rk(L)) {
         g_stats.n_lowrank_skip++;
         return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
     }
@@ -223,7 +329,23 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
         return CHACAPK_HARITH_OK;
     }
 
-    if (leaf_is_dense(L) || leaf_is_dense(X)) {
+    /* L * X = B with X rk (X = U_x V_x^T).  Solve L * Y = X for Y rk.
+     *   Y = L^-1 X = L^-1 (U_x V_x^T) = (L^-1 U_x) V_x^T.
+     * So U_y = L^-1 U_x (cheap dtrsm on the kt-column block U_x), V_y = V_x. */
+    if (leaf_is_dense(L) && leaf_is_rk(X)) {
+        int kt = leaf_rk_rank(X);
+        int m  = leaf_rows(L);  /* == leaf_rows(X) */
+        cblas_dtrsm(CblasColMajor, CblasLeft, CblasLower, CblasNoTrans, CblasUnit,
+                    m, kt, 1.0,
+                    leaf_dense_data(L), m,
+                    leaf_rk_U(X), m);
+        g_stats.n_dense_trsm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* Mixed leaf+internal: L is dense leaf but X is internal, OR L is internal
+     * and X is leaf -- both require densification at the boundary. Phase 3. */
+    if (leaf_is_dense(L) || leaf_is_dense(X) || leaf_is_rk(X)) {
         return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
     }
 
@@ -260,7 +382,8 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
 {
     if (!U || !X) return CHACAPK_HARITH_ERR_NULL;
 
-    if (leaf_is_rk(U) || leaf_is_rk(X)) {
+    /* U is the U factor of LU (non-unit upper); never low-rank by construction. */
+    if (leaf_is_rk(U)) {
         g_stats.n_lowrank_skip++;
         return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
     }
@@ -272,7 +395,22 @@ static int htrsm_run(const st_cHACApK_block_node_t *U,
         return CHACAPK_HARITH_OK;
     }
 
-    if (leaf_is_dense(U) || leaf_is_dense(X)) {
+    /* X * U = B with X rk (X = U_x V_x^T).  Solve Y * U = X for Y rk.
+     *   Y = X U^-1 = U_x (V_x^T U^-1) = U_x (U^-T V_x)^T.
+     * So U_y = U_x, V_y = U^-T V_x. We solve U^T V_y = V_x in place. */
+    if (leaf_is_dense(U) && leaf_is_rk(X)) {
+        int kt = leaf_rk_rank(X);
+        int n  = leaf_cols(U);  /* == leaf_cols(X) (rk's V_x has n rows) */
+        cblas_dtrsm(CblasColMajor, CblasLeft, CblasUpper, CblasTrans, CblasNonUnit,
+                    n, kt, 1.0,
+                    leaf_dense_data(U), n,
+                    leaf_rk_V(X), n);
+        g_stats.n_dense_trsm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* Mixed leaf+internal: Phase 3. */
+    if (leaf_is_dense(U) || leaf_is_dense(X) || leaf_is_rk(X)) {
         return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
     }
 
@@ -309,7 +447,6 @@ static int hmatvec_subtract(
     const double *x, double *y)
 {
     if (!node) return CHACAPK_HARITH_ERR_NULL;
-    if (leaf_is_rk(node)) return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
 
     if (leaf_is_dense(node)) {
         int m = leaf_rows(node), n = leaf_cols(node);
@@ -318,6 +455,30 @@ static int hmatvec_subtract(
         cblas_dgemv(CblasColMajor, CblasNoTrans, m, n,
                     -1.0, leaf_dense_data(node), m,
                     &x[c0], 1, 1.0, &y[r0], 1);
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* rk leaf: y -= U_a (V_a^T x).  Two dgemvs through the kt-rank waist. */
+    if (leaf_is_rk(node)) {
+        int m = leaf_rows(node), n = leaf_cols(node);
+        int kt = leaf_rk_rank(node);
+        int r0 = node->row_cluster->nstrt - 1;
+        int c0 = node->col_cluster->nstrt - 1;
+        /* Stack allocation: kt is small (typically < 50 for ACA tol 1e-4). */
+        double w_stack[256];
+        double *w = (kt <= (int)(sizeof(w_stack)/sizeof(w_stack[0])))
+                    ? w_stack
+                    : (double*)malloc(sizeof(double) * (size_t)kt);
+        if (!w) return CHACAPK_HARITH_ERR_NULL;
+        /* w = V_a^T x  (V_a is n x kt, so transpose) */
+        cblas_dgemv(CblasColMajor, CblasTrans, n, kt,
+                    1.0, leaf_rk_V(node), n,
+                    &x[c0], 1, 0.0, w, 1);
+        /* y -= U_a * w */
+        cblas_dgemv(CblasColMajor, CblasNoTrans, m, kt,
+                    -1.0, leaf_rk_U(node), m,
+                    w, 1, 1.0, &y[r0], 1);
+        if (w != w_stack) free(w);
         return CHACAPK_HARITH_OK;
     }
 
