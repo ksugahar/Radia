@@ -114,6 +114,67 @@ double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
 double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
                                               int kA, int kB, int kC);
 
+/* Phase 4 debug test: mimic Radia's mixed-sibling tree structure.
+ *
+ * Builds a depth=3 tree where the root has 2x2 children but two of them
+ * are internal (TL and BR, each containing 2x2 leaves) and two are
+ * leaves (TR and BL). This matches the structure HACApK produces for
+ * Radia MSC matrices at small leaf_size (e.g., nx=3 hex cube with
+ * leaf_size=10 elements: 10 leaves, 3 internal nodes, depth 3).
+ *
+ * Both root-level children are square sub-blocks (2*nb_small x 2*nb_small),
+ * so the LU partition is well-defined. All leaves are dense, no rk.
+ *
+ * Returns max relative error vs LAPACKE_dgesv on the same matrix.
+ * If this test PASSES while real Radia trees fail, the bug is in
+ * non-uniform leaf sizes (HACApK splits elements asymmetrically:
+ * 13 -> 6+7). If this test FAILS, the bug is in the mixed-sibling
+ * recursion itself. */
+double cHACApK_harith_self_test_mixed_sibling(int nb_small);
+
+/* Phase 4 debug: non-uniform-size variant of mixed_sibling.
+ * Root splits into (n1, n2) where n1 != n2 (asymmetric, mimics HACApK's
+ * element-count splits like 13 -> 6+7). TL = n1 x n1 internal split into
+ * (m1, n1-m1) sub-leaves. BR = n2 x n2 internal split into (m3, n2-m3).
+ * TR / BL leaves are rectangular (n1 x n2 / n2 x n1).
+ *
+ * If uniform mixed_sibling passes but this fails, the bug is in
+ * non-uniform leaf sub-views (Phase 3.6 mixed materialize/distribute
+ * with sibling leaves of different sizes). */
+double cHACApK_harith_self_test_mixed_sibling_nonuniform(
+    int n1, int n2, int m1, int m3);
+
+/* Phase 4 debug: depth=3 asymmetric tree (mimics Radia's nx=3 leaf=10
+ * tree shape exactly: 10 leaves, 3 internal nodes, max depth 3).
+ *
+ *   Root (2x2 internal)
+ *     TL (2x2 internal)
+ *       TL.TL (2x2 internal) -- 4 small leaves at depth 3
+ *       TL.TR, TL.BL, TL.BR -- 3 leaves at depth 2
+ *     TR, BL, BR -- 3 leaves at depth 1
+ *
+ * If mixed_sibling (depth 2) passes but this fails, the bug is in the
+ * deeper recursion with mixed leaf+internal at multiple levels. */
+double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
+
+/* Phase 4 debug: EXACT mimic of Radia nx=3 leaf=10 tree (sizes 108/54
+ * at root, 72/36 at TL, 48/24 at TL.TL). Hardcoded. */
+double cHACApK_harith_self_test_radia_exact(void);
+
+/* Phase 4 debug: same as radia_exact but with adjustable diag_boost
+ * (default 2.0 = mildly diagonally dominant; lower values approach MSC
+ * matrix's weaker dominance to test no-pivot LU stability). */
+double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
+
+/* Phase 4 debug: mixed_sibling test with HACApK row-major leaves, then
+ * convert to internal format before H-LU.  Mimics the EXACT path used
+ * by cHACApK_hlu_run_on_hacapk on real Radia trees, but with synthetic
+ * uniform sizes.  If this fails while plain mixed_sibling passes,
+ * the bug is in cHACApK_convert_leafmtxp_to_internal or its
+ * interaction with H-LU. */
+double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
+
+
 /* Phase 3.5 integration test: depth=2 H-LU with rk off-diagonal leaves.
  * Builds 4x4 leaf grid with dense diagonal + 12 rk off-diagonal leaves of
  * rank rk_rank, runs hlu_decomp + solve, compares to LAPACK dgesv.
