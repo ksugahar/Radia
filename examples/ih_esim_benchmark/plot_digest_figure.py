@@ -44,6 +44,8 @@ VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
 # the persisted "solution" the figure is reproduced from (Data
 # Persistence Policy).  Regenerate with: python plot_digest_figure.py --regen-field
 SIDE_FIELD = SWEEP / "I100_f50k_side_field.json"
+# |Z_s| side-wall field for the maximum-gap case (300 A, 10 kHz, -47.5 %).
+SIDE_FIELD_ZS = SWEEP / "I300_f10k_Zs_side_field.json"
 OUT = HERE / "sweep_heatmap_digest"
 MIN_PT = 9.0
 EMBED_SCALE = 0.46   # \columnwidth (~8.4 cm) of an 18.2 cm render.
@@ -113,6 +115,48 @@ def save_side_field(out_path=SIDE_FIELD):
           f"z span={zs.max()-zs.min():.1f} mm)")
 
 
+def save_side_field_zs(out_path=SIDE_FIELD_ZS):
+    """One-time: extract |Z_s| on the side wall for the max-gap case
+    (300 A / 10 kHz) and persist it (committed)."""
+    perp = SWEEP / "I300_f10k_per_panel.json"
+    if not perp.exists() or not VOL.exists():
+        print(f"ERROR: need {perp} and {VOL} to regenerate the |Z_s| field.")
+        sys.exit(1)
+    from ngsolve import Mesh, BND, TaskManager
+    d = json.load(open(perp))
+    zr = np.asarray(d["esim_per_panel_Z_s_real"])
+    zi = np.asarray(d["esim_per_panel_Z_s_imag"])
+    Zm = np.sqrt(zr ** 2 + zi ** 2)  # |Z_s| in Ohm
+    with TaskManager():
+        mesh = Mesh(str(VOL))
+        labs = list(mesh.GetBoundaries())
+        sibc = {i for i, n in enumerate(labs) if n.lower() == "sibc"}
+        bv = sorted({int(v.nr) for el in mesh.Elements(BND)
+                     if int(el.index) in sibc for v in el.vertices})
+        pts = np.array([list(mesh.ngmesh.Points()[i + 1]) for i in bv])
+    x, y, z = pts.T
+    r = np.sqrt(x ** 2 + y ** 2)
+    side = r > 0.95 * r.max()
+    R_mm = float(r[side].mean()) * 1e3
+    th = np.degrees(np.arctan2(y[side], x[side]))
+    zs_mm = z[side] * 1e3
+    Z_side_mOhm = (Zm[side] * 1e3).tolist()  # mOhm
+    json.dump({
+        "case": "300 A, 10 kHz, per-panel ESIM (max-gap, -47.5 %)",
+        "source_mesh": VOL.name,
+        "note": ("workpiece side wall (r > 0.95 R_max); theta in deg, "
+                 "z in mm, |Z_s| in mOhm, R in mm.  Self-contained so "
+                 "the digest figure draws without the .vol mesh or a "
+                 "re-solve."),
+        "R_mm": R_mm,
+        "theta_deg": th.tolist(),
+        "z_mm": zs_mm.tolist(),
+        "Z_s_mOhm": Z_side_mOhm,
+    }, open(out_path, "w"), indent=1)
+    print(f"Saved {out_path}  ({len(th)} side-wall points, R={R_mm:.1f} mm, "
+          f"|Z_s| range {min(Z_side_mOhm):.2f}--{max(Z_side_mOhm):.2f} mOhm)")
+
+
 def load_side_field(path=SIDE_FIELD):
     """Read the committed side-wall field -- no NGSolve, no mesh, no re-solve."""
     if not path.exists():
@@ -124,9 +168,23 @@ def load_side_field(path=SIDE_FIELD):
             np.asarray(d["H_t"]), float(d["R_mm"]))
 
 
+def load_side_field_zs(path=SIDE_FIELD_ZS):
+    """Read the committed |Z_s| side-wall field (max-gap case)."""
+    if not path.exists():
+        print(f"ERROR: {path} not found.  Regenerate it once with:\n"
+              f"  python {Path(__file__).name} --regen-zs-field")
+        sys.exit(1)
+    d = json.load(open(path))
+    return (np.asarray(d["theta_deg"]), np.asarray(d["z_mm"]),
+            np.asarray(d["Z_s_mOhm"]), float(d["R_mm"]))
+
+
 def main():
     if "--regen-field" in sys.argv:
         save_side_field()
+        return
+    if "--regen-zs-field" in sys.argv:
+        save_side_field_zs()
         return
     # Prefer the dense sweep if available (renders as a log-log contour);
     # otherwise fall back to the original 4x4 grid (rendered as annotated
@@ -156,8 +214,10 @@ def main():
         sys.exit(1)
     print(f"Using {res} (mode={gap_mode})")
     currents, freqs, gap = load_gap(res)
-    # Panel (b) reads the committed side-wall field -- no mesh, no re-solve.
-    th, zs, Ht, R = load_side_field()
+    # Panel (b): |Z_s| on the side wall at the maximum-gap case
+    # (300 A / 10 kHz, -47.5 %).  Reads the committed side-wall field
+    # -- no mesh, no re-solve.
+    th, zs, field, R = load_side_field_zs()
 
     figsize = apply_lab_style(target="paper_double_column", aspect=0.40)
     # Render with inflated fonts so that, after the ~0.44 in-column
@@ -216,19 +276,19 @@ def main():
     cb1.ax.tick_params(labelsize=tick_pt)
     ax1.text(0.5, -0.30, "(a)", transform=ax1.transAxes, ha="center", va="top")
 
-    # ----- (b) |H_t| painted on the 3D cylinder side wall -----
+    # ----- (b) |Z_s| painted on the 3D cylinder side wall (max-gap case)
     # Interpolate the scattered (theta, z) side-wall DOFs onto a regular
     # grid (theta tiled +-360 so the wrap is seamless), map to the
-    # cylinder (x, y, z) and paint |H_t| via plot_surface facecolors.
+    # cylinder (x, y, z) and paint |Z_s| via plot_surface facecolors.
     th_a = np.concatenate([th - 360, th, th + 360])
     z_a = np.concatenate([zs, zs, zs])
-    H_a = np.concatenate([Ht, Ht, Ht])
+    F_a = np.concatenate([field, field, field])
     TH, ZZ = np.meshgrid(np.linspace(-180, 180, 160),
                          np.linspace(zs.min(), zs.max(), 80))
-    Hg = griddata((th_a, z_a), H_a, (TH, ZZ), method="linear")
+    Hg = griddata((th_a, z_a), F_a, (TH, ZZ), method="linear")
     Hg = np.where(np.isnan(Hg),
-                  griddata((th_a, z_a), H_a, (TH, ZZ), method="nearest"), Hg)
-    nrm = Normalize(vmin=Ht.min(), vmax=Ht.max())
+                  griddata((th_a, z_a), F_a, (TH, ZZ), method="nearest"), Hg)
+    nrm = Normalize(vmin=field.min(), vmax=field.max())
     # Cylinder axis along z (upright); TRUE axis-equal box so the
     # workpiece keeps its physical proportions (box aspect = data ranges
     # 2R : 2R : axial-span).  The hot coil band reads as a bright ring.
@@ -248,7 +308,7 @@ def main():
     sm = cm.ScalarMappable(norm=nrm, cmap="magma")
     sm.set_array([])
     cb2 = fig.colorbar(sm, ax=ax2, shrink=0.6, pad=0.04)
-    cb2.set_label(r"$|H_t|$ (A/m)")
+    cb2.set_label(r"$|Z_s|$ (m$\Omega$)")
     cb2.ax.tick_params(labelsize=tick_pt)
     ax2.text2D(0.5, -0.08, "(b)", transform=ax2.transAxes, ha="center",
                va="top")
