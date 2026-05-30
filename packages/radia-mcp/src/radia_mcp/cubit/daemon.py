@@ -2,7 +2,7 @@
 daemon.py — JSON-RPC server exposing a persistent Cubit session.
 
 Runs under Cubit's bundled Python 3.10 (`C:/Program Files/Coreform Cubit
-2025.3/bin/python3/python.exe`), NOT the system Python. This is because
+2025.12/bin/python3/python.exe`), NOT the system Python. This is because
 the `cubit` Python binding is a compiled extension (`_cubit3.pyd`) tied
 to the Cubit ABI + Python 3.10.
 
