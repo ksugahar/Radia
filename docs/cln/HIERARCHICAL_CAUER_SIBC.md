@@ -121,7 +121,7 @@ from a rational ROM at the engineering level.
 
 | Geometry | Reference | Result | Script |
 |---|---|---|---|
-| 2D Cu cylinder ($a\!=\!5$ mm) | exact Bessel | basis 4: 17% wall band, sub-0.01% asymptote | `frequency_domain/circle_cpe_schur_plot.py` |
+| 2D Cu cylinder ($a\!=\!5$ mm) | exact Bessel | basis 4: 17% wall band, sub-0.01% asymptote | `frequency_domain/circle_warburg_plot.py` |
 | 3D Cu sphere | Bessel-like closed form | $K_{\rm SIBC} = 4\pi R^2\sqrt{\sigma/\mu}$ recovered | `frequency_domain/3d_sphere.py` |
 | 3D Cu cuboid | Mellin asymptote ($c_0$, $c_1$, $c_2$) | $K_{\rm SIBC} = 2(ab\!+\!bc\!+\!ca)\sqrt{\sigma/\mu}$ + edge corrections | `frequency_domain/3d_cuboid.py` |
 | 3D cuboid via NGSolve FEM | itself (production) | Hierarchical Cauer extracted from full FEM Y(s) sweep | `frequency_domain/ngsolve_cuboid_Y.py`, `engineering/production_ngsolve_cube_kelvin.py` |

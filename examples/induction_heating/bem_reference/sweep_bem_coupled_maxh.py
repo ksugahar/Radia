@@ -40,6 +40,7 @@ FREQ = 1000.0
 
 def run_one(maxh_wp):
     from ngsolve import Mesh, BND
+    from ngsolve import TaskManager
     from netgen.occ import Cylinder, Pnt, Dir, OCCGeometry, Glue
     from impedance_esim import make_gapped_torus_mesh
     from bem_coupled_solver import CoupledBEMSolver
@@ -56,32 +57,33 @@ def run_one(maxh_wp):
     for f in wp_cyl.faces:
         f.name = "wp"
     mesh_wp = Mesh(OCCGeometry(Glue(wp_cyl.faces)).GenerateMesh(maxh=maxh_wp))
-    mesh_wp.Curve(3)
+    with TaskManager():
+        mesh_wp.Curve(3)
 
-    n_wp = mesh_wp.GetNE(BND)
-    n_coil = mesh_coil.GetNE(BND)
+        n_wp = mesh_wp.GetNE(BND)
+        n_coil = mesh_coil.GetNE(BND)
 
-    t0 = time.perf_counter()
-    solver = CoupledBEMSolver(mesh_coil, mesh_wp)
-    t_asm = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        solver = CoupledBEMSolver(mesh_coil, mesh_wp)
+        t_asm = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
-    r = solver.solve(Z_s=Z_s, omega=omega, max_iter=10, tol=1e-3,
-                     verbose=False)
-    t_solve = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        r = solver.solve(Z_s=Z_s, omega=omega, max_iter=10, tol=1e-3,
+                         verbose=False)
+        t_solve = time.perf_counter() - t0
 
-    return {
-        "maxh_wp": maxh_wp,
-        "n_wp_elems": n_wp,
-        "n_coil_elems": n_coil,
-        "L_air_nH": r["L_air"] * 1e9,
-        "L_total_nH": r["L_total"] * 1e9,
-        "Delta_L_nH": r["Delta_L"] * 1e9,
-        "P_total_W": r["P_total"],
-        "iterations": r["iterations"],
-        "t_assembly_s": round(t_asm, 1),
-        "t_solve_s": round(t_solve, 1),
-    }
+        return {
+            "maxh_wp": maxh_wp,
+            "n_wp_elems": n_wp,
+            "n_coil_elems": n_coil,
+            "L_air_nH": r["L_air"] * 1e9,
+            "L_total_nH": r["L_total"] * 1e9,
+            "Delta_L_nH": r["Delta_L"] * 1e9,
+            "P_total_W": r["P_total"],
+            "iterations": r["iterations"],
+            "t_assembly_s": round(t_asm, 1),
+            "t_solve_s": round(t_solve, 1),
+        }
 
 
 def main():

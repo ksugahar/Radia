@@ -112,8 +112,9 @@ def compare_against_radia_self_inductance(
     t_mesh_0 = time.perf_counter()
     geometry, info = add_kelvin_exterior_domain(
         inner_shapes, offset=kelvin_offset, R_K=R_K, inner_maxh=maxh)
-    with TaskManager():
-        ngmesh = OCCGeometry(geometry).GenerateMesh(maxh=maxh, grading=0.5)
+    # NOTE: Caller MUST be inside `with TaskManager():` per CLAUDE.md
+    # "Caller Wraps, Helper Does NOT" (2026-05-27).
+    ngmesh = OCCGeometry(geometry).GenerateMesh(maxh=maxh, grading=0.5)
     mesh = Mesh(ngmesh)
     mesh.Curve(order + 1)
     t_mesh = time.perf_counter() - t_mesh_0

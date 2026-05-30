@@ -31,6 +31,7 @@ try:
     from netgen.occ import Box, Pnt, OCCGeometry
     from netgen.meshing import MeshingParameters
     from ngsolve import Mesh as NGSolveMesh
+    from ngsolve import TaskManager
     NETGEN_AVAILABLE = True
 except ImportError:
     NETGEN_AVAILABLE = False
@@ -130,30 +131,31 @@ def create_netgen_tet_mesh(center, size, maxh=0.3):
     # Generate mesh - need to wrap in OCCGeometry first
     geo = OCCGeometry(box)
     mp = MeshingParameters(maxh=maxh)
-    netgen_mesh = geo.GenerateMesh(mp)
+    with TaskManager():
+        netgen_mesh = geo.GenerateMesh(mp)
 
-    # Wrap in NGSolve Mesh and use extract_elements for correct indexing
-    ngsolve_mesh = NGSolveMesh(netgen_mesh)
-    elements, _ = extract_elements(ngsolve_mesh)
+        # Wrap in NGSolve Mesh and use extract_elements for correct indexing
+        ngsolve_mesh = NGSolveMesh(netgen_mesh)
+        elements, _ = extract_elements(ngsolve_mesh)
 
-    # Build nodes list from element vertices (deduplicated)
-    nodes_dict = {}
-    tetrahedra = []
-    for el_data in elements:
-        tet_indices = []
-        for v in el_data['vertices']:
-            v_tuple = tuple(v)
-            if v_tuple not in nodes_dict:
-                nodes_dict[v_tuple] = len(nodes_dict)
-            tet_indices.append(nodes_dict[v_tuple])
-        tetrahedra.append(tet_indices)
+        # Build nodes list from element vertices (deduplicated)
+        nodes_dict = {}
+        tetrahedra = []
+        for el_data in elements:
+            tet_indices = []
+            for v in el_data['vertices']:
+                v_tuple = tuple(v)
+                if v_tuple not in nodes_dict:
+                    nodes_dict[v_tuple] = len(nodes_dict)
+                tet_indices.append(nodes_dict[v_tuple])
+            tetrahedra.append(tet_indices)
 
-    # Convert nodes dict to list
-    nodes = [None] * len(nodes_dict)
-    for v, idx in nodes_dict.items():
-        nodes[idx] = list(v)
+        # Convert nodes dict to list
+        nodes = [None] * len(nodes_dict)
+        for v, idx in nodes_dict.items():
+            nodes[idx] = list(v)
 
-    return nodes, tetrahedra
+        return nodes, tetrahedra
 
 
 class TestNetgenMeshImport(unittest.TestCase):

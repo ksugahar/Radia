@@ -67,10 +67,11 @@ def build_mesh_with_iron():
         face.name = 'outer'
 
     geo = OCCGeometry(shape)
-    mesh = geo.GenerateMesh(maxh=0.01)
+    with TaskManager():
+        mesh = geo.GenerateMesh(maxh=0.01)
 
-    from ngsolve import Mesh
-    return Mesh(mesh)
+        from ngsolve import Mesh
+        return Mesh(mesh)
 
 
 def main():
@@ -148,6 +149,7 @@ def main():
     # Step 6: VTK export (optional)
     print("6. Exporting to VTK...")
     from ngsolve import VTKOutput
+    from ngsolve import TaskManager
     vtk_file = os.path.join(os.path.dirname(__file__),
                             'demo_scalar_potential')
     try:

@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../build-msvc/Rel
 import radia as rad
 from netgen.occ import Box, Pnt, OCCGeometry
 from ngsolve import Mesh, VOL
+from ngsolve import TaskManager
 
 # Parameters
 CUBE_SIZE = 1.0
@@ -44,23 +45,24 @@ def create_tetra_mesh():
     box = Box(Pnt(-half, -half, -half), Pnt(half, half, half))
     box.mat('magnetic')
     geo = OCCGeometry(box)
-    mesh = Mesh(geo.GenerateMesh(maxh=MAXH))
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=MAXH))
 
-    # Extract vertices
-    vertices = []
-    for v in mesh.vertices:
-        pt = v.point
-        vertices.append([pt[0], pt[1], pt[2]])
+        # Extract vertices
+        vertices = []
+        for v in mesh.vertices:
+            pt = v.point
+            vertices.append([pt[0], pt[1], pt[2]])
 
-    # Create tetrahedra
-    container = rad.ObjCnt([])
-    for el in mesh.Elements(VOL):
-        v_indices = [v.nr for v in el.vertices]
-        tet_verts = [vertices[i] for i in v_indices]
-        tet = rad.ObjTetrahedron(tet_verts, [0, 0, 0])
-        rad.ObjAddToCnt(container, [tet])
+        # Create tetrahedra
+        container = rad.ObjCnt([])
+        for el in mesh.Elements(VOL):
+            v_indices = [v.nr for v in el.vertices]
+            tet_verts = [vertices[i] for i in v_indices]
+            tet = rad.ObjTetrahedron(tet_verts, [0, 0, 0])
+            rad.ObjAddToCnt(container, [tet])
 
-    return container, len(list(mesh.Elements(VOL)))
+        return container, len(list(mesh.Elements(VOL)))
 
 def run_radia_hacapk(eps):
     """Run Radia HACApK solver"""

@@ -233,29 +233,46 @@ The vectorised `Evaluate` over an IntegrationRule calls `EvaluateStaticH` (or `E
 
 Python-side: `nfs.as_coefficient_function(component='H')` constructs the CF and returns it. NGSolve's `gfu.Set(cf, ...)` then runs the canonical L2 projection.
 
-## 6. HACApK integration (Phase D)
+## 6. Acceleration via NGSolve.bem ML (Phase D) — see `FMM_DESIGN.md`
 
-HACApK is already a dependency for the Radia core MMM/MSC interaction matrix (CLAUDE.md "Policy: Use HACApK Only"). Reusing the same library here is straightforward.
+**Decision (2026-05-26)**: acceleration of the one-shot evaluator goes
+through **NGSolve.bem** Multilevel Expansion (FMM-equivalent), NOT
+HACApK and NOT a Radia-vendored FMM library.  Rationale:
 
-**Block structure**: the "matrix" for equivalence-theorem reconstruction is `K[M, N]` where `K[m, n] = kernel(obs_m, source_n) · dS_n` -- an M-by-N block-structured operator with the 1/R Laplace kernel.
+1. The one-shot evaluator has **no matrix to recompress** — HACApK's
+   strength (ACA+ on a re-used matrix during iterative solve) does
+   not apply here.  HACApK remains the right choice for MMM/MSC
+   interaction matrices (per CLAUDE.md "Use HACApK Only" policy);
+   that is a separate use case.
 
-**Admissibility**: HACApK's ACA+ compression works whenever the source and observation clusters are well-separated relative to their diameters. Equivalence-theorem reconstruction always evaluates obs OUTSIDE the source surface, so most of the matrix is well-separated. The exception is the immediate vicinity of the surface (~1 panel size away) where direct computation is used.
+2. NGSolve.bem 6.2.2603 already ships the full FMM stack:
+   `BiotSavartRegularMLCF`, `BiotSavartSingularMLCF`,
+   `MaxwellSingleLayer/DoubleLayerPotentialOperator(Curl)`,
+   `HelmholtzSingleLayer/DoubleLayerPotentialOperator`, etc.
+   These cover all Phase A + Phase B kernels.
 
-**Configuration** (initial defaults, tune later):
-```python
-nfs.build_hmatrix(
-    aca_tol=1e-4,    # ACA+ compression tolerance
-    leaf_size=10,    # min cluster size
-    eta=2.0,         # admissibility parameter (same as MMM/MSC default)
-)
-```
+3. Adding our own FMM library (ExaFMM-t etc.) into `src/ext/` would
+   duplicate NGSolve.bem and violate CLAUDE.md "Complement NGSolve".
 
-**Expected savings**:
-- Memory: O(N²) → O(N log N) for the M=N case
-- MatVec: O(MN) → O((M+N) log² N)
-- For N=10^5 surface panels, M=10^5 obs points: 10^10 → 10^7 ops → 1000x speedup
+**Break-even**: `N_face × N_obs > 10⁹` (≈5 s direct walltime on 8
+cores).  Today's examples top out at ~10⁶ pairs — direct C++ wins
+below that, so deferring is rational.
 
-**Implementation**: wrap HACApK's `lh_init`, `lh_build_cluster_tree`, `lh_assemble_low_rank` with the equivalence-theorem kernel functor. The functor signature is `(int i_obs, int j_src) -> double` (or `complex<double>` for harmonic).
+**Frequency-dependent FMM path** (per `FMM_DESIGN.md` §3.3): standard
+Helmholtz FMM has the well-known **low-frequency breakdown** at
+`kR ≪ 1` (Greengard-Huang 2002).  Radia's typical low-frequency
+regime (IH 10 kHz, R ≈ 1 m → `kR ~ 10⁻⁵`) falls into the breakdown
+territory.  Mitigation: at low frequency, route through the
+**Laplace ML path** (no breakdown) and add the small imaginary part
+via the direct C++ kernel — the Phase B static-limit test (ω=1 Hz
+matches Phase A to 5e-15) justifies this hybrid scheme.
+Mid- and high-frequency (`kR ≥ 0.01`, WPT MHz and above) use the
+standard Helmholtz / Maxwell ML operators.
+
+**Delivery plan**: see [`FMM_DESIGN.md`](FMM_DESIGN.md) §4 (D1–D5).
+Summary: ~1 week of glue Python around NGSolve.bem primitives, no
+new Radia C++ kernel.  Implementation deferred until a concrete user
+case crosses the break-even.
 
 ## 7. Build integration
 
@@ -266,8 +283,9 @@ nfs.build_hmatrix(
 **`Build.ps1`** changes (Phase C):
 - Add `add_ngsolve_python_module(equivalence_source_ngsolve ...)` targeting `src/lib/ngsolve/equivalence_source_ngsolve.cpp`. This produces `src/radia/equivalence_source_ngsolve.pyd`.
 
-**CMake** for HACApK link (Phase D):
-- Already wired for the main radia module. Just add the new TU.
+**Phase D** acceleration: no Build.ps1 / CMake change required — Phase D
+adds only Python glue around NGSolve.bem (already a runtime
+dependency).  No HACApK link, no FMM library vendor.
 
 **`pyproject.toml` package_data** (Phase C):
 - Add `equivalence_source_ngsolve.pyd` to the manifest so the wheel includes it.

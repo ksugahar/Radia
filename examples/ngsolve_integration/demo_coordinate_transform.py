@@ -112,28 +112,30 @@ for i in range(n_points):
 # Try NGSolve mesh-based evaluation
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.csg import unit_cube
 
     print("\n--- NGSolve Mesh Evaluation ---")
-    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    with TaskManager():
+        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
 
-    # Evaluate at mesh center with different transformations
-    mip = mesh(0.5, 0.5, 0.5)
+        # Evaluate at mesh center with different transformations
+        mip = mesh(0.5, 0.5, 0.5)
 
-    # Global (no transform)
-    B_cf_global = rad.RadiaField(magnet, 'b', units='m')
-    B1 = B_cf_global(mip)
-    print(f"  B at (0.5, 0.5, 0.5) - no transform: {B1}")
+        # Global (no transform)
+        B_cf_global = rad.RadiaField(magnet, 'b', units='m')
+        B1 = B_cf_global(mip)
+        print(f"  B at (0.5, 0.5, 0.5) - no transform: {B1}")
 
-    # With origin shift
-    B_cf_shifted = rad.RadiaField(
-        magnet, 'b', origin=[-0.5, -0.5, -0.5], units='m'
-    )
-    B2 = B_cf_shifted(mip)
-    print(f"  B at (0.5, 0.5, 0.5) - origin=[-0.5,-0.5,-0.5]: {B2}")
-    print("    (Equivalent to evaluating at (0, 0, 0) in magnet frame)")
+        # With origin shift
+        B_cf_shifted = rad.RadiaField(
+            magnet, 'b', origin=[-0.5, -0.5, -0.5], units='m'
+        )
+        B2 = B_cf_shifted(mip)
+        print(f"  B at (0.5, 0.5, 0.5) - origin=[-0.5,-0.5,-0.5]: {B2}")
+        print("    (Equivalent to evaluating at (0, 0, 0) in magnet frame)")
 
-    print("\nNGSolve coordinate transformation test PASSED")
+        print("\nNGSolve coordinate transformation test PASSED")
 
 except ImportError as e:
     print(f"\nNGSolve not available: {e}")

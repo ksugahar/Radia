@@ -15,6 +15,7 @@ import radia as rad
 
 from netgen.occ import Box, Pnt, OCCGeometry
 from ngsolve import Mesh, VOL
+from ngsolve import TaskManager
 
 # Parameters
 CUBE_SIZE = 1.0  # meters
@@ -42,8 +43,9 @@ def create_mesh():
     box = Box(Pnt(-half, -half, -half), Pnt(half, half, half))
     box.mat('magnetic')
     geo = OCCGeometry(box)
-    ngmesh = geo.GenerateMesh(maxh=MAXH)
-    return Mesh(ngmesh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=MAXH)
+        return Mesh(ngmesh)
 
 def create_radia_elements(mesh):
     """Create Radia tetrahedral elements from NGSolve mesh."""

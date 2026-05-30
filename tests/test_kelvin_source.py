@@ -355,7 +355,7 @@ def test_eval_Omega_physical_from_gf():
     the helper must return that linear CF evaluated at r' = Kelvin(r_phys).
     """
     try:
-        from ngsolve import H1, GridFunction, x, y, z
+        from ngsolve import H1, GridFunction, TaskManager, x, y, z
     except Exception as e:
         print(f"  skipping (no NGSolve): {e}")
         return
@@ -368,20 +368,21 @@ def test_eval_Omega_physical_from_gf():
     # Omega_comp(r') = r'_x + 2 r'_y + 3 r'_z  (linear in r')
     fes = H1(mesh, order=2)
     gf = GridFunction(fes)
-    gf.Set(x + 2.0 * y + 3.0 * z)
+    with TaskManager():
+        gf.Set(x + 2.0 * y + 3.0 * z)
 
-    rel_errs = []
-    for r_phys_off in [(1.5, 0, 0), (0, 2.0, 0.5), (-1.0, 1.2, -0.8)]:
-        r_phys = np.array(r_phys_off) + center
-        assert np.linalg.norm(r_phys - center) > R
-        r_prime = kelvin_map_3d(r_phys, center, R)
-        expected = r_prime[0] + 2.0 * r_prime[1] + 3.0 * r_prime[2]
-        got = eval_Omega_physical_from_gf(gf, mesh, r_phys, center, R)
-        rel = abs(got - expected) / max(1.0, abs(expected))
-        rel_errs.append(rel)
-        print(f"  r_phys={r_phys}, r_prime={r_prime}, got={got:.6f}, "
-              f"expected={expected:.6f}, rel={rel:.2e}")
-    assert max(rel_errs) < 1e-3, f"0-form eval rel err {max(rel_errs):.2e}"
+        rel_errs = []
+        for r_phys_off in [(1.5, 0, 0), (0, 2.0, 0.5), (-1.0, 1.2, -0.8)]:
+            r_phys = np.array(r_phys_off) + center
+            assert np.linalg.norm(r_phys - center) > R
+            r_prime = kelvin_map_3d(r_phys, center, R)
+            expected = r_prime[0] + 2.0 * r_prime[1] + 3.0 * r_prime[2]
+            got = eval_Omega_physical_from_gf(gf, mesh, r_phys, center, R)
+            rel = abs(got - expected) / max(1.0, abs(expected))
+            rel_errs.append(rel)
+            print(f"  r_phys={r_phys}, r_prime={r_prime}, got={got:.6f}, "
+                  f"expected={expected:.6f}, rel={rel:.2e}")
+        assert max(rel_errs) < 1e-3, f"0-form eval rel err {max(rel_errs):.2e}"
 
 
 def test_eval_A_physical_from_gf():
@@ -431,6 +432,7 @@ def test_eval_B_physical_from_gf():
     """
     try:
         from ngsolve import VectorH1, GridFunction, CoefficientFunction, x, y, z
+        from ngsolve import TaskManager
     except Exception as e:
         print(f"  skipping (no NGSolve): {e}")
         return

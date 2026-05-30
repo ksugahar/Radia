@@ -95,6 +95,7 @@ def solve_eddy_truncation(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
                           GridFunction, CoefficientFunction, Integrate,
                           curl, x, y, z, dx, ds, InnerProduct,
                           Preconditioner, CGSolver, IfPos)
+    from ngsolve import TaskManager
 
     NU_0 = 1.0 / mu0
 
@@ -145,33 +146,34 @@ def solve_eddy_truncation(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
     prec = Preconditioner(a, "bddc")
 
     print("  Assembling...")
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    print("  Solving (BDDC + CG)...")
-    inv = CGSolver(a.mat, prec.mat, complex=True, maxsteps=2000,
-                    precision=1e-8, printrates=True)
-    gfu.vec.data = inv * f.vec
+        gfu = GridFunction(fes)
+        print("  Solving (BDDC + CG)...")
+        inv = CGSolver(a.mat, prec.mat, complex=True, maxsteps=2000,
+                        precision=1e-8, printrates=True)
+        gfu.vec.data = inv * f.vec
 
-    A_total = gfu + A_ext
-    J = -1j * omega * sigma_cf * A_total
+        A_total = gfu + A_ext
+        J = -1j * omega * sigma_cf * A_total
 
-    r1_x = -7.5e-3; r2_x = 7.5e-3
-    # m_y = (1/2) integral_V (r x J)_y dV = (1/2) integral (z J_x - x J_z) dV
-    # for cuboid 1, shift x by -r1_x = +7.5e-3 (center at -7.5)
-    m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
-    m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
+        r1_x = -7.5e-3; r2_x = 7.5e-3
+        # m_y = (1/2) integral_V (r x J)_y dV = (1/2) integral (z J_x - x J_z) dV
+        # for cuboid 1, shift x by -r1_x = +7.5e-3 (center at -7.5)
+        m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
+        m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
 
-    in_cu1 = IfPos(2.5e-3 - (x - r1_x),
-                   IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
-    in_cu2 = IfPos(2.5e-3 - (x - r2_x),
-                   IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
+        in_cu1 = IfPos(2.5e-3 - (x - r1_x),
+                       IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
+        in_cu2 = IfPos(2.5e-3 - (x - r2_x),
+                       IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
 
-    m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
-    m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
+        m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
+        m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
 
-    return m1_y, m2_y
+        return m1_y, m2_y
 
 
 def main():

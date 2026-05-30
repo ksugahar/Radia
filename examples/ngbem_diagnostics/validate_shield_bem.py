@@ -27,7 +27,7 @@ MU_0 = 4e-7 * np.pi
 def main():
     try:
         from netgen.occ import Box, Pnt, OCCGeometry
-        from ngsolve import Mesh, HDivSurface, BND
+        from ngsolve import Mesh, HDivSurface, BND, TaskManager
     except ImportError:
         print("SKIP: NGSolve/Netgen not available")
         return
@@ -67,8 +67,9 @@ def main():
     block.solids.name = "conductor"
     block.faces.name = "surface"
     geo = OCCGeometry(block)
-    ngmesh = geo.GenerateMesh(maxh=maxh)
-    mesh = Mesh(ngmesh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
+        mesh = Mesh(ngmesh)
 
     n_bnd = sum(1 for _ in mesh.Elements(BND))
     n_vert = mesh.nv

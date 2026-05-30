@@ -118,7 +118,8 @@ def main():
     maxh_wp = R_wp / 4
     ngmesh = geo.GenerateMesh(maxh=maxh_wp)
     mesh_wp = Mesh(ngmesh)
-    mesh_wp.Curve(3)
+    with TaskManager():
+        mesh_wp.Curve(3)
 
     ne_wp = mesh_wp.GetNE(BND)
     nv_wp = mesh_wp.nv

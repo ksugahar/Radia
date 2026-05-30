@@ -435,6 +435,47 @@ How to fix (in order of lab preference):
 Override with `check_legend_overlap=False` only when you have
 manually inspected the figure at the final embed scale.
 """,
+        "no_legend_frame": """\
+[no_legend_frame]
+
+LAB RULE: NO BOX / FRAME AROUND THE LEGEND.
+
+  WRONG:  ax.legend()                                # default frameon=True
+  WRONG:  ax.legend(frameon=True)
+  WRONG:  ax.legend(framealpha=0.9)                  # frame still rendered
+  RIGHT:  ax.legend(frameon=False)
+  RIGHT:  ax.legend(loc=find_best_legend_loc(ax)[0], frameon=False)
+
+Why:
+  - A box around the legend competes visually with the axis frame and
+    the data lines.  In small embed (4-8 cm), the legend box itself
+    becomes a noticeable rectangle that the eye reads as "another panel".
+  - IEEE / IEEJ / Nature / Science figure conventions all expect a
+    frameless legend.  A boxed legend reads as "PowerPoint slide" to
+    journal reviewers.
+  - Removing the frame increases the apparent axes-area fraction (less
+    visual clutter in the plot area).
+  - With direct-endpoint labels (`label_curve_endpoints`) you skip the
+    legend entirely, which is the lab-preferred alternative for
+    time-series / sweep plots (see `no_legend_overlap` rule).
+
+  matplotlib default is `frameon=True` -- you MUST explicitly pass
+  `frameon=False` every time, OR set it once in rcParams:
+      matplotlib.rcParams['legend.frameon'] = False
+
+  `paper_figure_recipe` and `paper_figure(...)` set this in rcParams for
+  you; manual `ax.legend(...)` calls must still pass `frameon=False`.
+
+How emit_paper_figure() detects it:
+  After the figure is built, walk every axes' get_legend() and check
+  legend.get_frame().get_visible() == False.  If ANY legend renders a
+  frame, fail the gate with "legend N on axes M has frameon=True; pass
+  frameon=False" as the message.
+
+Override with `check_legend_frame=False` only for the rare case where
+the legend NEEDS a frame to be readable (e.g. legend placed over a
+busy heatmap and the box prevents data behind it from bleeding through).
+""",
         "margins": """\
 [margins]
 

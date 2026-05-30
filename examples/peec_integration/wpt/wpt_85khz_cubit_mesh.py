@@ -58,6 +58,7 @@ def create_wpt_geometry_cubit():
         return None
 
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     cubit.init(['cubit', '-nojournal', '-batch'])
 
     # ============================================================
@@ -126,55 +127,56 @@ def create_wpt_geometry_cubit():
 
     # Export Tx assembly to NGSolve directly (no Nastran intermediate)
     print("Exporting Tx assembly to NGSolve mesh...")
-    tx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
+    with TaskManager():
+        tx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
-    # ============================================================
-    # Create Rx Assembly (mirror of Tx)
-    # ============================================================
-    print("Creating Rx assembly...")
-    cubit.cmd("reset")
+        # ============================================================
+        # Create Rx Assembly (mirror of Tx)
+        # ============================================================
+        print("Creating Rx assembly...")
+        cubit.cmd("reset")
 
-    # Rx positions (below Tx by air_gap)
-    rx_z_base = -air_gap
+        # Rx positions (below Tx by air_gap)
+        rx_z_base = -air_gap
 
-    # Rx Ferrite core
-    cubit.cmd(f"create cylinder radius {ferrite_r} height {ferrite_thickness}")
-    cubit.cmd(f"volume 1 move 0 0 {rx_z_base - ferrite_z_offset}")
-    cubit.cmd("volume 1 scheme sweep")
-    cubit.cmd(f"volume 1 size {mesh_size_core}")
-    cubit.cmd("mesh volume 1")
-    cubit.cmd("block 1 add hex in volume 1")
-    cubit.cmd("block 1 name 'rx_ferrite'")
+        # Rx Ferrite core
+        cubit.cmd(f"create cylinder radius {ferrite_r} height {ferrite_thickness}")
+        cubit.cmd(f"volume 1 move 0 0 {rx_z_base - ferrite_z_offset}")
+        cubit.cmd("volume 1 scheme sweep")
+        cubit.cmd(f"volume 1 size {mesh_size_core}")
+        cubit.cmd("mesh volume 1")
+        cubit.cmd("block 1 add hex in volume 1")
+        cubit.cmd("block 1 name 'rx_ferrite'")
 
-    # Rx Shield
-    cubit.cmd(f"create cylinder radius {shield_r} height {shield_thickness}")
-    cubit.cmd(f"volume 2 move 0 0 {rx_z_base - shield_z_offset}")
-    cubit.cmd("volume 2 scheme sweep")
-    cubit.cmd(f"volume 2 size {mesh_size_shield}")
-    cubit.cmd("mesh volume 2")
-    cubit.cmd("block 2 add hex in volume 2")
-    cubit.cmd("block 2 name 'rx_shield'")
+        # Rx Shield
+        cubit.cmd(f"create cylinder radius {shield_r} height {shield_thickness}")
+        cubit.cmd(f"volume 2 move 0 0 {rx_z_base - shield_z_offset}")
+        cubit.cmd("volume 2 scheme sweep")
+        cubit.cmd(f"volume 2 size {mesh_size_shield}")
+        cubit.cmd("mesh volume 2")
+        cubit.cmd("block 2 add hex in volume 2")
+        cubit.cmd("block 2 name 'rx_shield'")
 
-    # Rx Coil
-    cubit.cmd(f"create cylinder radius {coil_outer_r} height {coil_thickness}")
-    cubit.cmd(f"create cylinder radius {coil_inner_r} height {coil_thickness + 2}")
-    cubit.cmd("subtract volume 4 from volume 3")
-    cubit.cmd(f"volume 3 move 0 0 {rx_z_base}")
-    cubit.cmd("volume 3 scheme sweep")
-    cubit.cmd(f"volume 3 size {mesh_size_coil}")
-    cubit.cmd("mesh volume 3")
-    cubit.cmd("block 3 add hex in volume 3")
-    cubit.cmd("block 3 name 'rx_coil'")
+        # Rx Coil
+        cubit.cmd(f"create cylinder radius {coil_outer_r} height {coil_thickness}")
+        cubit.cmd(f"create cylinder radius {coil_inner_r} height {coil_thickness + 2}")
+        cubit.cmd("subtract volume 4 from volume 3")
+        cubit.cmd(f"volume 3 move 0 0 {rx_z_base}")
+        cubit.cmd("volume 3 scheme sweep")
+        cubit.cmd(f"volume 3 size {mesh_size_coil}")
+        cubit.cmd("mesh volume 3")
+        cubit.cmd("block 3 add hex in volume 3")
+        cubit.cmd("block 3 name 'rx_coil'")
 
-    # Export Rx assembly to NGSolve directly (no Nastran intermediate)
-    print("Exporting Rx assembly to NGSolve mesh...")
-    rx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
+        # Export Rx assembly to NGSolve directly (no Nastran intermediate)
+        print("Exporting Rx assembly to NGSolve mesh...")
+        rx_mesh = Mesh(extract_curved_mesh(cubit, order=1))
 
-    return {
-        'tx_mesh': tx_mesh,
-        'rx_mesh': rx_mesh,
-        'air_gap': air_gap
-    }
+        return {
+            'tx_mesh': tx_mesh,
+            'rx_mesh': rx_mesh,
+            'air_gap': air_gap
+        }
 
 
 def load_mesh_to_radia(mesh, material_type='conductor'):

@@ -80,10 +80,11 @@ class ScalarBIE_SIBC:
 
         t0 = time.perf_counter()
 
-        # BEM operators (frequency-independent)
-        with TaskManager():
-            DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
-            SL_bf = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
+        # BEM operators (frequency-independent).  Caller MUST be
+        # inside `with TaskManager():` per CLAUDE.md
+        # "Caller Wraps, Helper Does NOT" (2026-05-27).
+        DL_bf = LaplaceDL(u.Trace() * ds) * v.Trace() * ds
+        SL_bf = LaplaceSL(u.Trace() * ds, use_fmm=False) * v.Trace() * ds
 
         # Try COO extraction first (fast), fall back to matvec
         try:

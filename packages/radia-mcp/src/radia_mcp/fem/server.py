@@ -292,7 +292,7 @@ def fem_nonconforming_mesh_coupling(topic: str = "overview") -> str:
 @mcp.tool()
 def fem_equivalence_source(topic: str = "overview") -> str:
     """
-    Equivalence-theorem near-field source (CST Near-Field Source equivalent).
+    Equivalence-theorem near-field source (Schelkunoff/Love -- Stratton-Chu).
 
     Solve an FEM problem with whatever BC is convenient (typically
     Kelvin), then "record" E, H on a closed surface around the source
@@ -301,6 +301,22 @@ def fem_equivalence_source(topic: str = "overview") -> str:
         (b) re-radiate as a source in a downstream simulation
             (ngsolve.bem, Radia rad.Fld, external MoM via Nastran
             Near_Field_Area_*.dat).
+
+    Production: ``radia.equivalence_source.NearFieldSource`` with C++
+    accelerator at ``src/core/rad_equivalence_source.cpp`` (Phase A
+    static, Phase B harmonic with full dyadic Green's function).
+
+    See also:
+        * docs/equivalence_source/USER_GUIDE.md
+        * docs/equivalence_source/CPP_DESIGN.md
+        * docs/equivalence_source/FMM_DESIGN.md (Phase D acceleration)
+        * bem_low_freq("equivalence_source_lf") -- low-frequency rule:
+          Weggler EFIE stabilization does NOT apply here (no matrix
+          to invert); Laplace ML routing is the right tool.
+        * bem_low_freq("weggler") -- the canonical ngsolve.bem LF
+          stabilization (Lucy Weggler's product-space EFIE), for the
+          SEPARATE case when the user computes (E, H) on the surface
+          from a BEM solve instead of an FEM solve.
 
     Distilled from three Sugahara Lab dirs:
         S:\\FEMM\\等価定理の基礎原理\\軸対称\\        (2007-2008 axisym basics)
@@ -314,7 +330,7 @@ def fem_equivalence_source(topic: str = "overview") -> str:
 
     Args:
         topic: One of:
-            "overview"               - CST NFS equivalent + scope (DEFAULT)
+            "overview"               - scope + production module pointers (DEFAULT)
             "schelkunoff_love"       - Stratton-Chu math + static reduction
                                        (the rho_m = mu_0 n.H trap explained)
             "ngsolve_recipe"         - NGSolve extraction pattern

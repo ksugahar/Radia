@@ -224,21 +224,23 @@ def test_periodic_fes_couples_at_order_1():
 def test_periodic_set_then_integrate_ratio():
     """Set(1) on kelvin_int -> Integral(kelvin_ext) ratio = 1.0."""
     from ngsolve import H1, Periodic, GridFunction, Integrate
+    from ngsolve import TaskManager
     mesh = _build_occ_kelvin_mesh()
-    mesh.Curve(2)
-    fp = Periodic(H1(mesh, order=2, dirichlet="GND"))
-    gfu = GridFunction(fp)
-    gfu.vec[:] = 0
-    gfu.Set(1.0, definedon=mesh.Boundaries("kelvin_int"))
-    a_int = float(Integrate(gfu * gfu, mesh,
-                            definedon=mesh.Boundaries("kelvin_int")))
-    a_ext = float(Integrate(gfu * gfu, mesh,
-                            definedon=mesh.Boundaries("kelvin_ext")))
-    assert a_int > 0
-    ratio = a_ext / a_int
-    assert abs(ratio - 1.0) < 1e-3, (
-        f"Periodic Kelvin ratio not 1.0: int={a_int:.4e}, "
-        f"ext={a_ext:.4e}, ratio={ratio:.4f}")
+    with TaskManager():
+        mesh.Curve(2)
+        fp = Periodic(H1(mesh, order=2, dirichlet="GND"))
+        gfu = GridFunction(fp)
+        gfu.vec[:] = 0
+        gfu.Set(1.0, definedon=mesh.Boundaries("kelvin_int"))
+        a_int = float(Integrate(gfu * gfu, mesh,
+                                definedon=mesh.Boundaries("kelvin_int")))
+        a_ext = float(Integrate(gfu * gfu, mesh,
+                                definedon=mesh.Boundaries("kelvin_ext")))
+        assert a_int > 0
+        ratio = a_ext / a_int
+        assert abs(ratio - 1.0) < 1e-3, (
+            f"Periodic Kelvin ratio not 1.0: int={a_int:.4e}, "
+            f"ext={a_ext:.4e}, ratio={ratio:.4f}")
 
 
 if __name__ == "__main__":

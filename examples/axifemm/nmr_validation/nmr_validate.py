@@ -39,6 +39,7 @@ from axifemm_core import (
 def build_nmr_mesh(maxh: float = 0.001):
     """Generate the NMR axisymmetric mesh with NGSolve OCC, return arrays."""
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
 
     dom = MoveTo(0, -0.05).Rectangle(0.07, 0.10).Face()
@@ -53,29 +54,30 @@ def build_nmr_mesh(maxh: float = 0.001):
     mag2.faces.name = "mag2"
 
     shape = Glue([dom, mag1, mag2])
-    mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh))
+    with TaskManager():
+        mesh = Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh))
 
-    # Extract nodes and triangles from netgen mesh
-    ng_mesh = mesh.ngmesh
-    points = np.array([(p.p[0], p.p[1]) for p in ng_mesh.Points()])  # (Nnode, 2): (r, z)
-    nodes = points
+        # Extract nodes and triangles from netgen mesh
+        ng_mesh = mesh.ngmesh
+        points = np.array([(p.p[0], p.p[1]) for p in ng_mesh.Points()])  # (Nnode, 2): (r, z)
+        nodes = points
 
-    triangles = []
-    materials = []  # per-element material name
-    for el in ng_mesh.Elements2D():
-        verts = [v.nr - 1 for v in el.vertices]  # 0-based
-        triangles.append(verts)
-        # material name lookup
-        mat_idx = el.index
-        mat_name = ng_mesh.GetMaterial(mat_idx)
-        materials.append(mat_name)
+        triangles = []
+        materials = []  # per-element material name
+        for el in ng_mesh.Elements2D():
+            verts = [v.nr - 1 for v in el.vertices]  # 0-based
+            triangles.append(verts)
+            # material name lookup
+            mat_idx = el.index
+            mat_name = ng_mesh.GetMaterial(mat_idx)
+            materials.append(mat_name)
 
-    triangles = np.array(triangles)
-    materials = np.array(materials)
+        triangles = np.array(triangles)
+        materials = np.array(materials)
 
-    print(f"  Mesh: {nodes.shape[0]} nodes, {triangles.shape[0]} triangles")
-    print(f"  Materials present: {set(materials)}")
-    return nodes, triangles, materials, mesh
+        print(f"  Mesh: {nodes.shape[0]} nodes, {triangles.shape[0]} triangles")
+        print(f"  Materials present: {set(materials)}")
+        return nodes, triangles, materials, mesh
 
 
 def boundary_node_indices(nodes, tol=1e-6):

@@ -48,59 +48,60 @@ def run():
     for f in wp_cyl.faces:
         f.name = "wp"
     mesh_wp = Mesh(OCCGeometry(Glue(wp_cyl.faces)).GenerateMesh(maxh=R_wp / 3))
-    mesh_wp.Curve(3)
+    with TaskManager():
+        mesh_wp.Curve(3)
 
-    print(f"  Coil: {mesh_coil.GetNE(BND)} elems")
-    print(f"  WP:   {mesh_wp.GetNE(BND)} elems")
+        print(f"  Coil: {mesh_coil.GetNE(BND)} elems")
+        print(f"  WP:   {mesh_wp.GetNE(BND)} elems")
 
-    # --- Coupled solver ---
-    print("[2/3] Assembling coupled solver...")
-    t0 = time.perf_counter()
-    solver = CoupledBEMSolver(mesh_coil, mesh_wp)
-    t_asm = time.perf_counter() - t0
-    print(f"  Coil: {solver.n_J} J DOFs, assembly: {solver.t_coil_assembly:.1f}s")
-    print(f"  WP:   {solver.wp_solver.ndof} phi DOFs, assembly: {solver.wp_solver.t_assembly:.1f}s")
-    print(f"  Total assembly: {t_asm:.1f}s")
+        # --- Coupled solver ---
+        print("[2/3] Assembling coupled solver...")
+        t0 = time.perf_counter()
+        solver = CoupledBEMSolver(mesh_coil, mesh_wp)
+        t_asm = time.perf_counter() - t0
+        print(f"  Coil: {solver.n_J} J DOFs, assembly: {solver.t_coil_assembly:.1f}s")
+        print(f"  WP:   {solver.wp_solver.ndof} phi DOFs, assembly: {solver.wp_solver.t_assembly:.1f}s")
+        print(f"  Total assembly: {t_asm:.1f}s")
 
-    # --- Solve ---
-    print("[3/3] Coupled iteration...")
-    result = solver.solve(Z_s=Z_s, omega=omega, max_iter=10, tol=1e-3)
+        # --- Solve ---
+        print("[3/3] Coupled iteration...")
+        result = solver.solve(Z_s=Z_s, omega=omega, max_iter=10, tol=1e-3)
 
-    print()
-    print("=" * 65)
-    print("Coupled BEM Results")
-    print("-" * 65)
-    print(f"  L_self     = {result['L_self']*1e9:.2f} nH")
-    print(f"  Delta_L    = {result['Delta_L']*1e9:.2f} nH")
-    print(f"  L_total    = {result['L_total']*1e9:.2f} nH")
-    print(f"  P_total    = {result['P_total']:.4e} W")
-    print(f"  H_t_rms    = {result['H_t_rms']:.2f} A/m")
-    print(f"  Iterations = {result['iterations']}")
-    print("-" * 65)
-
-    # --- FEM reference ---
-    print()
-    print("Running FEM-ESIM for comparison...")
-    from fem_esim_3d import run as fem_run
-    r_fem = fem_run(frequency=freq, material="copper", sigma=sigma, approach='hole')
-
-    if r_fem:
         print()
         print("=" * 65)
-        print("Comparison: Coupled BEM vs FEM-ESIM")
-        print("=" * 65)
-        print(f"{'':>15s} {'Coupled BEM':>14s} {'FEM-ESIM':>14s} {'diff':>8s}")
-        print("-" * 55)
-        L_c = result['L_total']
-        L_f = r_fem.get('L', 0)
-        print(f"{'L [nH]':>15s} {L_c*1e9:14.2f} {L_f*1e9:14.2f} "
-              f"{(L_c/L_f-1)*100:+8.1f}%")
-        P_c = result['P_total']
-        P_f = r_fem['P_total']
-        print(f"{'P [W]':>15s} {P_c:14.4e} {P_f:14.4e} "
-              f"{(P_c/P_f-1)*100:+8.1f}%")
-        print(f"{'H_t_rms':>15s} {result['H_t_rms']:14.2f} "
-              f"{r_fem['H_t_rms']:14.2f}")
+        print("Coupled BEM Results")
+        print("-" * 65)
+        print(f"  L_self     = {result['L_self']*1e9:.2f} nH")
+        print(f"  Delta_L    = {result['Delta_L']*1e9:.2f} nH")
+        print(f"  L_total    = {result['L_total']*1e9:.2f} nH")
+        print(f"  P_total    = {result['P_total']:.4e} W")
+        print(f"  H_t_rms    = {result['H_t_rms']:.2f} A/m")
+        print(f"  Iterations = {result['iterations']}")
+        print("-" * 65)
+
+        # --- FEM reference ---
+        print()
+        print("Running FEM-ESIM for comparison...")
+        from fem_esim_3d import run as fem_run
+        r_fem = fem_run(frequency=freq, material="copper", sigma=sigma, approach='hole')
+
+        if r_fem:
+            print()
+            print("=" * 65)
+            print("Comparison: Coupled BEM vs FEM-ESIM")
+            print("=" * 65)
+            print(f"{'':>15s} {'Coupled BEM':>14s} {'FEM-ESIM':>14s} {'diff':>8s}")
+            print("-" * 55)
+            L_c = result['L_total']
+            L_f = r_fem.get('L', 0)
+            print(f"{'L [nH]':>15s} {L_c*1e9:14.2f} {L_f*1e9:14.2f} "
+                  f"{(L_c/L_f-1)*100:+8.1f}%")
+            P_c = result['P_total']
+            P_f = r_fem['P_total']
+            print(f"{'P [W]':>15s} {P_c:14.4e} {P_f:14.4e} "
+                  f"{(P_c/P_f-1)*100:+8.1f}%")
+            print(f"{'H_t_rms':>15s} {result['H_t_rms']:14.2f} "
+                  f"{r_fem['H_t_rms']:14.2f}")
 
 
 if __name__ == "__main__":

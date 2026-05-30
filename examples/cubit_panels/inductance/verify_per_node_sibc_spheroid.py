@@ -56,6 +56,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "src", "radia"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "src", "radia", "panels"))
 
 from ngsolve import Mesh, BND
+from ngsolve import TaskManager
 from netgen.occ import (Sphere, Pnt, OCCGeometry, Glue, Axes, Dir,
                          Vec)
 
@@ -133,8 +134,9 @@ def build_prolate_spheroid_mesh(a, b, maxh):
         f.name = "sibc"
     geo = OCCGeometry(Glue(spheroid.faces))
     mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    mesh.Curve(2)
-    return mesh
+    with TaskManager():
+        mesh.Curve(2)
+        return mesh
 
 
 def uniform_field_phi_inc(mesh, H0):

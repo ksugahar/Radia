@@ -25,6 +25,7 @@ sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ngsolve\Lib\site-packages')
 
 from numpy import pi, sqrt
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 # ============================================================
@@ -176,14 +177,15 @@ def create_team7_geometry(maxh=0.03):
     geo = Glue([plate, coil, hole_air, air])
 
     print(f"  Generating mesh (maxh={maxh*1000:.0f} mm)...")
-    mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=maxh))
-    # Important: Curve order should match FES polynomial order for good convergence
-    # Default to order=1 here; caller can adjust with mesh.Curve(order)
+    with TaskManager():
+        mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=maxh))
+        # Important: Curve order should match FES polynomial order for good convergence
+        # Default to order=1 here; caller can adjust with mesh.Curve(order)
 
-    print(f"  Mesh elements: {mesh.ne}")
-    print(f"  Materials: {mesh.GetMaterials()}")
+        print(f"  Mesh elements: {mesh.ne}")
+        print(f"  Materials: {mesh.GetMaterials()}")
 
-    return mesh
+        return mesh
 
 
 def get_coil_current_density(mesh):

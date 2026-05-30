@@ -40,7 +40,7 @@ $(2/\sqrt{\pi d})\,\mathrm{dawsn}(\sqrt{dt})$ within $1.8\times 10^{-3}$.
 | `engineering/` | PWM transient + NGSolve production + IH workpiece | Engineering applications |
 | `nonlinear_esim/` | ESIM-coupled Karl iteration | Paper 2: nonlinear steel workpiece |
 
-## Canonical reference: cylinder (`frequency_domain/circle_cpe_schur_plot.py`)
+## Canonical reference: cylinder (`frequency_domain/circle_warburg_plot.py`)
 
 The minimal demo. Reproduces digest Fig. 1:
 - Bessel exact $Y_{\rm cyl}(s) = \pi a^2 \sigma \cdot 2I_1(\gamma a)/[\gamma a I_0(\gamma a)]$
@@ -48,8 +48,8 @@ The minimal demo. Reproduces digest Fig. 1:
 - Wall-band peak rel-err $17\%$, sub-$0.01\%$ at DC and along the SIBC asymptote
 
 ```bash
-cd frequency_domain && python circle_cpe_schur_plot.py
-# → circle_cpe_schur.pdf
+cd frequency_domain && python circle_warburg_plot.py
+# → circle_warburg.pdf
 ```
 
 ## Related publications

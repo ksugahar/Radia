@@ -9,6 +9,7 @@ import math
 from netgen.occ import OCCGeometry, WorkPlane
 from ngsolve import Mesh, IntegrationRule
 from ngsolve.fem import ET
+from ngsolve import TaskManager
 
 R = 0.01
 wp = WorkPlane().MoveTo(0, -R).Direction(1, 0).Arc(R, 180).LineTo(0, -R)
@@ -35,16 +36,17 @@ ir = IntegrationRule(ET.TRIG, 4)
 print(f"\n{'Curve':>7s}  midpoint xi-eta  -> physical (r, z)")
 print("-" * 60)
 for order in [0, 1, 2, 3, 4, 5]:
-    mesh.Curve(order)
-    trafo = mesh.GetTrafo(target)
-    samples = {}
-    for ip in ir:
-        xi, eta = float(ip.point[0]), float(ip.point[1])
-        if abs(xi - 0.5) < 0.05 and abs(eta - 0.5) < 0.05:
-            samples["(0.5, 0.5)"] = trafo(ip).point
-        elif abs(xi) < 0.05 and abs(eta - 0.5) < 0.05:
-            samples["(0.0, 0.5)"] = trafo(ip).point
-        elif abs(xi - 0.5) < 0.05 and abs(eta) < 0.05:
-            samples["(0.5, 0.0)"] = trafo(ip).point
-    for k, v in sorted(samples.items()):
-        print(f"  Curve({order})  {k}    -> ({v[0]:.6f}, {v[1]:.6f})")
+    with TaskManager():
+        mesh.Curve(order)
+        trafo = mesh.GetTrafo(target)
+        samples = {}
+        for ip in ir:
+            xi, eta = float(ip.point[0]), float(ip.point[1])
+            if abs(xi - 0.5) < 0.05 and abs(eta - 0.5) < 0.05:
+                samples["(0.5, 0.5)"] = trafo(ip).point
+            elif abs(xi) < 0.05 and abs(eta - 0.5) < 0.05:
+                samples["(0.0, 0.5)"] = trafo(ip).point
+            elif abs(xi - 0.5) < 0.05 and abs(eta) < 0.05:
+                samples["(0.5, 0.0)"] = trafo(ip).point
+        for k, v in sorted(samples.items()):
+            print(f"  Curve({order})  {k}    -> ({v[0]:.6f}, {v[1]:.6f})")

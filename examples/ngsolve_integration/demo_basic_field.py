@@ -66,25 +66,27 @@ print(f"  RadiaField created with units='m'")
 # Import NGSolve for mesh creation
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.csg import unit_cube
 
     # Create a simple mesh for testing
-    mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
+    with TaskManager():
+        mesh = Mesh(unit_cube.GenerateMesh(maxh=0.3))
 
-    # Evaluate field on mesh
-    print("\nEvaluating field on NGSolve mesh...")
+        # Evaluate field on mesh
+        print("\nEvaluating field on NGSolve mesh...")
 
-    # Integrate field magnitude over mesh
-    B_mag = sqrt(B_cf[0]**2 + B_cf[1]**2 + B_cf[2]**2)
-    integral = Integrate(B_mag, mesh)
-    print(f"  Integral of |B| over unit cube: {integral:.6f} T*m^3")
+        # Integrate field magnitude over mesh
+        B_mag = sqrt(B_cf[0]**2 + B_cf[1]**2 + B_cf[2]**2)
+        integral = Integrate(B_mag, mesh)
+        print(f"  Integral of |B| over unit cube: {integral:.6f} T*m^3")
 
-    # Evaluate at mesh center
-    mip = mesh(0.5, 0.5, 0.5)
-    B_at_center = B_cf(mip)
-    print(f"  B at mesh center (0.5, 0.5, 0.5): {B_at_center}")
+        # Evaluate at mesh center
+        mip = mesh(0.5, 0.5, 0.5)
+        B_at_center = B_cf(mip)
+        print(f"  B at mesh center (0.5, 0.5, 0.5): {B_at_center}")
 
-    print("\nNGSolve integration test PASSED")
+        print("\nNGSolve integration test PASSED")
 
 except ImportError as e:
     print(f"\nNGSolve not available: {e}")

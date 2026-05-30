@@ -31,6 +31,7 @@ import math
 from numpy import pi, sqrt
 import numpy as np
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 print("=" * 70)
@@ -248,53 +249,54 @@ A, v = fes.TnT()
 a = BilinearForm(fes)
 a += (1/mu0) * InnerProduct(curl(A), curl(v)) * dx
 a += 1e-10 * InnerProduct(A, v) * dx
-a.Assemble()
+with TaskManager():
+    a.Assemble()
 
-f = LinearForm(fes)
-f += InnerProduct(J0_coil, v) * dx
-f.Assemble()
+    f = LinearForm(fes)
+    f += InnerProduct(J0_coil, v) * dx
+    f.Assemble()
 
-gfA = GridFunction(fes)
-gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    gfA = GridFunction(fes)
+    gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-B = curl(gfA)
+    B = curl(gfA)
 
-# Calculate magnetic energy
-W = 0.5 * Integrate((1/mu0) * InnerProduct(B, B), mesh)
-print(f"  Magnetic energy: {W:.6e} J")
+    # Calculate magnetic energy
+    W = 0.5 * Integrate((1/mu0) * InnerProduct(B, B), mesh)
+    print(f"  Magnetic energy: {W:.6e} J")
 
-# Check B field at coil center
-try:
-    B_center = B(mesh(coil_x0, coil_y0, coil_z0 - 0.05))
-    print(f"  B at (center, below coil): ({B_center[0]*1000:.4f}, {B_center[1]*1000:.4f}, {B_center[2]*1000:.4f}) mT")
-except:
-    print("  Could not evaluate B at center")
+    # Check B field at coil center
+    try:
+        B_center = B(mesh(coil_x0, coil_y0, coil_z0 - 0.05))
+        print(f"  B at (center, below coil): ({B_center[0]*1000:.4f}, {B_center[1]*1000:.4f}, {B_center[2]*1000:.4f}) mT")
+    except:
+        print("  Could not evaluate B at center")
 
-# ============================================================
-# Summary
-# ============================================================
-print("\n" + "=" * 70)
-print("Summary: Coil Current Definition")
-print("=" * 70)
-print(f"""
-コイル電流密度の定義方法:
+    # ============================================================
+    # Summary
+    # ============================================================
+    print("\n" + "=" * 70)
+    print("Summary: Coil Current Definition")
+    print("=" * 70)
+    print(f"""
+    コイル電流密度の定義方法:
 
-1. セグメント法 (Method 1):
-   - コイルを直線部と円弧部に分割
-   - 各セグメントで電流方向を定義
-   - 最も正確だが、複雑
+    1. セグメント法 (Method 1):
+       - コイルを直線部と円弧部に分割
+       - 各セグメントで電流方向を定義
+       - 最も正確だが、複雑
 
-2. 簡略法 (Method 2):
-   - コイル中心からの接線方向
-   - 円形コイルの近似
-   - 簡単だが、不正確
+    2. 簡略法 (Method 2):
+       - コイル中心からの接線方向
+       - 円形コイルの近似
+       - 簡単だが、不正確
 
-実際のコイル電流:
-  J = J0 * (電流方向の単位ベクトル)
-  J0 = I / A = {current} / {coil_area*1e6:.2f} mm^2 = {J0_mag:.2e} A/m^2
+    実際のコイル電流:
+      J = J0 * (電流方向の単位ベクトル)
+      J0 = I / A = {current} / {coil_area*1e6:.2f} mm^2 = {J0_mag:.2e} A/m^2
 
-注意:
-  - コイル領域のマテリアルでJ0を適用
-  - A法: curl(1/mu * curl(A)) = J0
-  - div(J0) = 0 を満たす必要あり（連続の式）
-""")
+    注意:
+      - コイル領域のマテリアルでJ0を適用
+      - A法: curl(1/mu * curl(A)) = J0
+      - div(J0) = 0 を満たす必要あり（連続の式）
+    """)

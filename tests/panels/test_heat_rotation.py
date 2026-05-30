@@ -60,9 +60,10 @@ def synthetic_setup(tmp_path_factory):
 
     fes_q = H1(em_mesh, order=1)
     gf_q_em = GridFunction(fes_q)
-    gf_q_em.Set(ng_x)  # q_em = x
+    with TaskManager():
+        gf_q_em.Set(ng_x)  # q_em = x
 
-    return em_mesh, gf_q_em, wp_mesh
+        return em_mesh, gf_q_em, wp_mesh
 
 
 def test_rotation_zero_matches_identity(synthetic_setup):
@@ -93,6 +94,7 @@ def test_rotation_zero_matches_identity(synthetic_setup):
         # should approximate gf_q_em (which equals x) at the wp
         # surface.  Sample at a known point.
         from ngsolve import H1, GridFunction
+        from ngsolve import TaskManager
         # gf_wp_q is q_cf itself.  Pick the surface vertex closest to (1,0,0).
         best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
         assert best_vnr is not None

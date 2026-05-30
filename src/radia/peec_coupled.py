@@ -204,14 +204,15 @@ class CoupledPEECSolver(PEECCircuitSolver):
             # Solve for induced magnetization
             Solve(container, solver_prec, solver_maxiter, solver_method)
 
-            # Compute A-field at each segment center from magnetized material
-            for i in range(n_seg):
-                center_i = self.seg_centers[i].tolist()
-                A_vec = Fld(mag_container, 'a', center_i)
-                A_vec = np.array(A_vec)
-
-                # Delta_L[i][j] = dot(A, dir_i) * length_i
-                Delta_L[i, j] = np.dot(A_vec, self.seg_directions[i]) * self.seg_lengths[i]
+            # Compute A-field at all segment centers in ONE batched call
+            # (Radia ComputeFieldBatch, TaskManager-parallel internally; the
+            # caller is responsible for the TaskManager context per CLAUDE.md
+            # "Caller Wraps, Helper Does NOT").
+            A_all = np.asarray(Fld(mag_container, 'a', self.seg_centers))
+            # A_all shape: (n_seg, 3)
+            # Delta_L[i][j] = dot(A_i, dir_i) * length_i, vectorized over i
+            Delta_L[:, j] = np.einsum('ij,ij->i', A_all, self.seg_directions) \
+                            * self.seg_lengths
 
             # Clean up background field
             UtiDel(bkg)
@@ -287,8 +288,12 @@ class CoupledPEECSolver(PEECCircuitSolver):
             seg_dir = p2_j - p1_j
             seg_len = np.linalg.norm(seg_dir)
 
-            # Use h_filament at quadrature points for path integration
-            from radia.biot_savart import h_segments
+            # Use h_filament at quadrature points for path integration.
+            # Vectorized across ALL body-mesh vertices in two batched
+            # `h_segments_batch` calls (vertical + horizontal) instead of
+            # 2 * n_vert * 20 individual Python calls (orig was O(n_vert)
+            # sequential).
+            from radia.biot_savart import h_segments_batch
             seg_list = [(tuple(p1_j), tuple(p2_j))]
 
             t_gl, w_gl = np.polynomial.legendre.leggauss(20)
@@ -296,28 +301,45 @@ class CoupledPEECSolver(PEECCircuitSolver):
             w_01 = 0.5 * w_gl
             z_far = 20 * max(np.max(np.abs(node_coords)), seg_len)
 
-            for ip in range(body_mesh.nv):
-                xi, yi, zi = node_coords[ip]
-                rho_xy = math.sqrt(xi * xi + yi * yi)
+            n_vert = body_mesh.nv
+            n_q = len(t_01)
+            xi_arr = node_coords[:, 0]
+            yi_arr = node_coords[:, 1]
+            zi_arr = node_coords[:, 2]
+            rho_xy_arr = np.sqrt(xi_arr * xi_arr + yi_arr * yi_arr)
 
-                # Vertical path: phi(0,0,z)
-                z_quad = z_far - t_01 * (z_far - zi)
-                x_quad_v = np.zeros((len(t_01), 3))
-                x_quad_v[:, 2] = z_quad
-                Hz_v = np.array([h_segments(seg_list, pt)[2]
-                                 for pt in x_quad_v])
-                phi_axis = (z_far - zi) * np.sum(w_01 * Hz_v)
+            # --- Vertical path: phi(0,0,z) for every vertex ---
+            # x_quad_v_all[ip, k, :] = (0, 0, z_far - t_01[k]*(z_far - zi[ip]))
+            z_quad_all = (z_far
+                          - t_01[np.newaxis, :] * (z_far - zi_arr[:, np.newaxis]))
+            x_quad_v_all = np.zeros((n_vert, n_q, 3))
+            x_quad_v_all[..., 2] = z_quad_all
+            x_quad_v_flat = x_quad_v_all.reshape(n_vert * n_q, 3)
+            Hz_v_flat = h_segments_batch(seg_list, x_quad_v_flat)[:, 2]
+            Hz_v_all = Hz_v_flat.reshape(n_vert, n_q)
+            phi_axis_all = (z_far - zi_arr) * np.sum(
+                w_01[np.newaxis, :] * Hz_v_all, axis=1)
 
-                if rho_xy < 1e-12 * z_far:
-                    phi_inc[ip] = phi_axis
-                else:
-                    # Horizontal path
-                    dl = np.array([xi, yi, 0.0])
-                    x_quad_h = np.outer(t_01, dl)
-                    x_quad_h[:, 2] = zi
-                    H_h = np.array([h_segments(seg_list, pt) for pt in x_quad_h])
-                    integrand = np.sum(H_h * dl[np.newaxis, :], axis=1)
-                    phi_inc[ip] = phi_axis - np.sum(w_01 * integrand)
+            # --- Horizontal path: contributes only for off-axis vertices ---
+            off_axis = rho_xy_arr >= 1e-12 * z_far
+            phi_inc[:] = phi_axis_all
+            if np.any(off_axis):
+                idx_off = np.flatnonzero(off_axis)
+                m = idx_off.size
+                dl_off = np.zeros((m, 3))
+                dl_off[:, 0] = xi_arr[idx_off]
+                dl_off[:, 1] = yi_arr[idx_off]
+                # x_quad_h[ip, k, :] = t_01[k] * dl[ip], z = zi[ip]
+                x_quad_h_all = (t_01[np.newaxis, :, np.newaxis]
+                                * dl_off[:, np.newaxis, :])
+                x_quad_h_all[..., 2] = zi_arr[idx_off][:, np.newaxis]
+                x_quad_h_flat = x_quad_h_all.reshape(m * n_q, 3)
+                H_h_flat = h_segments_batch(seg_list, x_quad_h_flat)
+                H_h_all = H_h_flat.reshape(m, n_q, 3)
+                # integrand[ip, k] = H_h[ip, k, :] . dl[ip]
+                integrand = np.einsum('mqd,md->mq', H_h_all, dl_off)
+                phi_inc[idx_off] -= np.sum(w_01[np.newaxis, :] * integrand,
+                                            axis=1)
 
             # Solve BIE
             if abs(Z_s) > 0:

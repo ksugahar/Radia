@@ -27,6 +27,7 @@ For axisymmetric formulation (r >= 0 half-plane):
 import os
 from numpy import *
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 print("="*60)
@@ -266,425 +267,426 @@ a += mu * grad(u) * grad(v) * r_weight * dx
 f = LinearForm(fes)
 f += mu * InnerProduct(grad(v), Hs) * r_weight * dx  # Volume integral only
 
-a.Assemble()
-f.Assemble()
+with TaskManager():
+    a.Assemble()
+    f.Assemble()
 
-print("  System assembled")
+    print("  System assembled")
 
-# ============================================================
-# Solve
-# ============================================================
-print("\nSolving system...")
+    # ============================================================
+    # Solve
+    # ============================================================
+    print("\nSolving system...")
 
-gfu = GridFunction(fes)
+    gfu = GridFunction(fes)
 
-# Use direct solver for accuracy
-gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    # Use direct solver for accuracy
+    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-print("  Solution converged")
+    print("  Solution converged")
 
-# ============================================================
-# Post-processing
-# ============================================================
-print("\nPost-processing...")
+    # ============================================================
+    # Post-processing
+    # ============================================================
+    print("\nPost-processing...")
 
-# Compute perturbation field: H_pert = -grad(phi)
-H_pert = -grad(gfu)
+    # Compute perturbation field: H_pert = -grad(phi)
+    H_pert = -grad(gfu)
 
-# Analytical solutions
-Hz_analytical = -1.0 + 3.0/(mu_r + 2)  # = -0.970588 for mu_r=100
+    # Analytical solutions
+    Hz_analytical = -1.0 + 3.0/(mu_r + 2)  # = -0.970588 for mu_r=100
 
-print("\n" + "="*60)
-print("INTERIOR (magnetic sphere):")
-print("="*60)
-print(f"  Analytical Hz: {Hz_analytical:.6f} A/m")
-print()
+    print("\n" + "="*60)
+    print("INTERIOR (magnetic sphere):")
+    print("="*60)
+    print(f"  Analytical Hz: {Hz_analytical:.6f} A/m")
+    print()
 
-for r_val in [0.1, 0.2, 0.3, 0.4]:
-    try:
-        Hz_val = H_pert[1](mesh(r_val, 0))
-        err = abs(Hz_val - Hz_analytical)/abs(Hz_analytical)*100
-        print(f"  r={r_val}: Hz = {Hz_val:.6f} A/m, error = {err:.4f}%")
-    except Exception as e:
-        print(f"  r={r_val}: Error - {e}")
-
-print()
-print("="*60)
-print("EXTERIOR (air region):")
-print("="*60)
-
-for r_val in [0.6, 0.7, 0.8, 0.9]:
-    Hz_ext_analytical = -(mu_r - 1)/(mu_r + 2) * (sphere_radius/r_val)**3
-    try:
-        Hz_val = H_pert[1](mesh(r_val, 0))
-        err = abs(Hz_val - Hz_ext_analytical)/abs(Hz_ext_analytical)*100
-        print(f"  r={r_val}: Hz = {Hz_val:.6f} A/m (analytical: {Hz_ext_analytical:.6f}), error = {err:.4f}%")
-    except Exception as e:
-        print(f"  r={r_val}: Error - {e}")
-
-# ============================================================
-# Profile Comparisons with Analytical Solution
-# (Perturbation field Hz component along r-axis and z-axis)
-# ============================================================
-print("\nComputing axis profiles (perturbation field Hz)...")
-
-# Sample points along r-axis and z-axis
-profile_range = linspace(-plot_range, plot_range, 221)
-
-# R-axis profile (z=0)
-r_profile = linspace(0.02, kelvin_radius - 0.02, 100)
-Hz_numerical = zeros(len(r_profile))
-Hz_analytical_profile = zeros(len(r_profile))
-
-for i, r_val in enumerate(r_profile):
-    try:
-        mip = mesh(r_val, 0)
-        Hz_numerical[i] = H_pert[1](mip)
-    except:
-        Hz_numerical[i] = nan
-
-    # Analytical solution
-    if r_val < sphere_radius:
-        Hz_analytical_profile[i] = -1.0 + 3.0/(mu_r + 2)
-    else:
-        Hz_analytical_profile[i] = -(mu_r - 1)/(mu_r + 2) * (sphere_radius/r_val)**3
-
-# Z-axis profile (r=0.01, avoiding singularity at r=0)
-z_profile = profile_range
-Hz_pert_numerical_z = zeros(len(z_profile))
-Hz_pert_analytical_z = zeros(len(z_profile))
-
-for i, zval in enumerate(z_profile):
-    r = sqrt(0.01**2 + zval**2)  # Distance from origin
-    if r < kelvin_radius - 0.02:  # Inside mesh domain
+    for r_val in [0.1, 0.2, 0.3, 0.4]:
         try:
-            mip = mesh(0.01, zval)  # Near z-axis
-            Hz_pert_numerical_z[i] = H_pert[1](mip)
+            Hz_val = H_pert[1](mesh(r_val, 0))
+            err = abs(Hz_val - Hz_analytical)/abs(Hz_analytical)*100
+            print(f"  r={r_val}: Hz = {Hz_val:.6f} A/m, error = {err:.4f}%")
+        except Exception as e:
+            print(f"  r={r_val}: Error - {e}")
+
+    print()
+    print("="*60)
+    print("EXTERIOR (air region):")
+    print("="*60)
+
+    for r_val in [0.6, 0.7, 0.8, 0.9]:
+        Hz_ext_analytical = -(mu_r - 1)/(mu_r + 2) * (sphere_radius/r_val)**3
+        try:
+            Hz_val = H_pert[1](mesh(r_val, 0))
+            err = abs(Hz_val - Hz_ext_analytical)/abs(Hz_ext_analytical)*100
+            print(f"  r={r_val}: Hz = {Hz_val:.6f} A/m (analytical: {Hz_ext_analytical:.6f}), error = {err:.4f}%")
+        except Exception as e:
+            print(f"  r={r_val}: Error - {e}")
+
+    # ============================================================
+    # Profile Comparisons with Analytical Solution
+    # (Perturbation field Hz component along r-axis and z-axis)
+    # ============================================================
+    print("\nComputing axis profiles (perturbation field Hz)...")
+
+    # Sample points along r-axis and z-axis
+    profile_range = linspace(-plot_range, plot_range, 221)
+
+    # R-axis profile (z=0)
+    r_profile = linspace(0.02, kelvin_radius - 0.02, 100)
+    Hz_numerical = zeros(len(r_profile))
+    Hz_analytical_profile = zeros(len(r_profile))
+
+    for i, r_val in enumerate(r_profile):
+        try:
+            mip = mesh(r_val, 0)
+            Hz_numerical[i] = H_pert[1](mip)
         except:
-            Hz_pert_numerical_z[i] = nan
-    else:
-        Hz_pert_numerical_z[i] = nan
+            Hz_numerical[i] = nan
 
-    # Analytical solution on z-axis (r_cyl ~= 0)
-    # Derived from perturbation potential: φ = -(mur-1)/(mur+2) * a^3 * H0 * z/r^3
-    # H_z = -∂φ/∂z = (mur-1)/(mur+2) * a^3 * (r^2 - 3z^2)/r⁵
-    # On z-axis (r = |z|): H_z = (mur-1)/(mur+2) * a^3 * (z^2 - 3z^2)/|z|⁵
-    #                          = -2(mur-1)/(mur+2) * a^3 / |z|^3
-    # Wait, this gives negative, but NGSolve shows positive!
-    #
-    # The correct formula (verified against NGSolve):
-    # H_z = +2 * (mur-1)/(mur+2) * (a/|z|)^3 on z-axis (independent of z sign)
-    if r < sphere_radius:
-        Hz_pert_analytical_z[i] = -1.0 + 3.0/(mu_r + 2)
-    else:
-        Hz_pert_analytical_z[i] = 2 * (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3
-
-# Compute error statistics
-valid_idx = ~isnan(Hz_numerical)
-interior_idx = valid_idx & (r_profile < sphere_radius)
-exterior_idx = valid_idx & (r_profile >= sphere_radius)
-
-print(f"\n  Validation results (r-axis, perturbation field Hz):")
-print(f"  " + "-" * 40)
-
-if sum(interior_idx) > 0:
-    interior_error = Hz_numerical[interior_idx] - Hz_analytical_profile[interior_idx]
-    max_err_int = abs(interior_error).max()
-    rms_err_int = sqrt(mean(interior_error**2))
-    rel_err_int = rms_err_int / abs(Hz_analytical_profile[interior_idx][0]) * 100
-    print(f"  Interior (r < {sphere_radius} m):")
-    print(f"    Max error: {max_err_int:.6e} A/m")
-    print(f"    RMS error: {rms_err_int:.6e} A/m ({rel_err_int:.3f}%)")
-
-if sum(exterior_idx) > 0:
-    exterior_error = Hz_numerical[exterior_idx] - Hz_analytical_profile[exterior_idx]
-    max_err_ext = abs(exterior_error).max()
-    rms_err_ext = sqrt(mean(exterior_error**2))
-    print(f"  Exterior (r >= {sphere_radius} m):")
-    print(f"    Max error: {max_err_ext:.6e} A/m")
-    print(f"    RMS error: {rms_err_ext:.6e} A/m")
-
-# ============================================================
-# Analytical Flux Lines in r-z Plane
-# ============================================================
-print("\nComputing analytical flux lines...")
-
-# For analytical solution, compute H_pert in r-z plane
-r_grid_anal = linspace(0.02, plot_range, 101)
-z_grid_anal = linspace(-plot_range, plot_range, 101)
-[rr_anal, zz_anal] = meshgrid(r_grid_anal, z_grid_anal)
-
-Hr_analytical = zeros(rr_anal.shape)
-Hz_analytical_2d = zeros(rr_anal.shape)
-
-for nz in range(len(z_grid_anal)):
-    for nr in range(len(r_grid_anal)):
-        r = sqrt(r_grid_anal[nr]**2 + z_grid_anal[nz]**2)
-        if r < 0.01:  # Avoid singularity at origin
-            r = 0.01
-
-        if r < sphere_radius:
-            # Inside sphere: H_pert = constant in z-direction
-            Hr_analytical[nz, nr] = 0.0
-            Hz_analytical_2d[nz, nr] = -1.0 + 3.0/(mu_r + 2)
+        # Analytical solution
+        if r_val < sphere_radius:
+            Hz_analytical_profile[i] = -1.0 + 3.0/(mu_r + 2)
         else:
-            # Outside sphere: dipole field (verified against NGSolve)
-            # H_pert = C * [2costheta er + sintheta etheta]
-            # where C = +(mur-1)/(mur+2) * (a/r)^3 (POSITIVE coefficient!)
-            # theta is angle from z-axis
-            theta = arctan2(r_grid_anal[nr], z_grid_anal[nz])  # Angle from z-axis
-            C = (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3  # POSITIVE
+            Hz_analytical_profile[i] = -(mu_r - 1)/(mu_r + 2) * (sphere_radius/r_val)**3
 
-            # Spherical components
-            H_r = 2 * C * cos(theta)
-            H_theta = C * sin(theta)
+    # Z-axis profile (r=0.01, avoiding singularity at r=0)
+    z_profile = profile_range
+    Hz_pert_numerical_z = zeros(len(z_profile))
+    Hz_pert_analytical_z = zeros(len(z_profile))
 
-            # Convert to cylindrical (r_cyl, z) coordinates
-            # e_r = sin(theta)·e_{r_cyl} + cos(theta)·e_z
-            # e_theta = cos(theta)·e_{r_cyl} - sin(theta)·e_z
-            Hr_analytical[nz, nr] = H_r * sin(theta) + H_theta * cos(theta)
-            Hz_analytical_2d[nz, nr] = H_r * cos(theta) - H_theta * sin(theta)
-
-# ============================================================
-# Save Results
-# ============================================================
-print("\nSaving results...")
-
-from scipy.io import savemat
-
-# Create 2D grid for visualization (interior domain only)
-r_grid = linspace(0.02, kelvin_radius - 0.02, 101)
-z_grid = linspace(-kelvin_radius + 0.02, kelvin_radius - 0.02, 101)
-[rr, zz] = meshgrid(r_grid, z_grid)
-
-Hr_field = zeros(rr.shape)
-Hz_field = zeros(rr.shape)
-
-for iz in range(len(z_grid)):
-    for ir in range(len(r_grid)):
-        r_dist = sqrt(r_grid[ir]**2 + z_grid[iz]**2)
-        if r_dist < kelvin_radius - 0.02:
+    for i, zval in enumerate(z_profile):
+        r = sqrt(0.01**2 + zval**2)  # Distance from origin
+        if r < kelvin_radius - 0.02:  # Inside mesh domain
             try:
-                mip = mesh(r_grid[ir], z_grid[iz])
-                Hr_field[iz, ir] = H_pert[0](mip)
-                Hz_field[iz, ir] = H_pert[1](mip)
+                mip = mesh(0.01, zval)  # Near z-axis
+                Hz_pert_numerical_z[i] = H_pert[1](mip)
             except:
+                Hz_pert_numerical_z[i] = nan
+        else:
+            Hz_pert_numerical_z[i] = nan
+
+        # Analytical solution on z-axis (r_cyl ~= 0)
+        # Derived from perturbation potential: φ = -(mur-1)/(mur+2) * a^3 * H0 * z/r^3
+        # H_z = -∂φ/∂z = (mur-1)/(mur+2) * a^3 * (r^2 - 3z^2)/r⁵
+        # On z-axis (r = |z|): H_z = (mur-1)/(mur+2) * a^3 * (z^2 - 3z^2)/|z|⁵
+        #                          = -2(mur-1)/(mur+2) * a^3 / |z|^3
+        # Wait, this gives negative, but NGSolve shows positive!
+        #
+        # The correct formula (verified against NGSolve):
+        # H_z = +2 * (mur-1)/(mur+2) * (a/|z|)^3 on z-axis (independent of z sign)
+        if r < sphere_radius:
+            Hz_pert_analytical_z[i] = -1.0 + 3.0/(mu_r + 2)
+        else:
+            Hz_pert_analytical_z[i] = 2 * (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3
+
+    # Compute error statistics
+    valid_idx = ~isnan(Hz_numerical)
+    interior_idx = valid_idx & (r_profile < sphere_radius)
+    exterior_idx = valid_idx & (r_profile >= sphere_radius)
+
+    print(f"\n  Validation results (r-axis, perturbation field Hz):")
+    print(f"  " + "-" * 40)
+
+    if sum(interior_idx) > 0:
+        interior_error = Hz_numerical[interior_idx] - Hz_analytical_profile[interior_idx]
+        max_err_int = abs(interior_error).max()
+        rms_err_int = sqrt(mean(interior_error**2))
+        rel_err_int = rms_err_int / abs(Hz_analytical_profile[interior_idx][0]) * 100
+        print(f"  Interior (r < {sphere_radius} m):")
+        print(f"    Max error: {max_err_int:.6e} A/m")
+        print(f"    RMS error: {rms_err_int:.6e} A/m ({rel_err_int:.3f}%)")
+
+    if sum(exterior_idx) > 0:
+        exterior_error = Hz_numerical[exterior_idx] - Hz_analytical_profile[exterior_idx]
+        max_err_ext = abs(exterior_error).max()
+        rms_err_ext = sqrt(mean(exterior_error**2))
+        print(f"  Exterior (r >= {sphere_radius} m):")
+        print(f"    Max error: {max_err_ext:.6e} A/m")
+        print(f"    RMS error: {rms_err_ext:.6e} A/m")
+
+    # ============================================================
+    # Analytical Flux Lines in r-z Plane
+    # ============================================================
+    print("\nComputing analytical flux lines...")
+
+    # For analytical solution, compute H_pert in r-z plane
+    r_grid_anal = linspace(0.02, plot_range, 101)
+    z_grid_anal = linspace(-plot_range, plot_range, 101)
+    [rr_anal, zz_anal] = meshgrid(r_grid_anal, z_grid_anal)
+
+    Hr_analytical = zeros(rr_anal.shape)
+    Hz_analytical_2d = zeros(rr_anal.shape)
+
+    for nz in range(len(z_grid_anal)):
+        for nr in range(len(r_grid_anal)):
+            r = sqrt(r_grid_anal[nr]**2 + z_grid_anal[nz]**2)
+            if r < 0.01:  # Avoid singularity at origin
+                r = 0.01
+
+            if r < sphere_radius:
+                # Inside sphere: H_pert = constant in z-direction
+                Hr_analytical[nz, nr] = 0.0
+                Hz_analytical_2d[nz, nr] = -1.0 + 3.0/(mu_r + 2)
+            else:
+                # Outside sphere: dipole field (verified against NGSolve)
+                # H_pert = C * [2costheta er + sintheta etheta]
+                # where C = +(mur-1)/(mur+2) * (a/r)^3 (POSITIVE coefficient!)
+                # theta is angle from z-axis
+                theta = arctan2(r_grid_anal[nr], z_grid_anal[nz])  # Angle from z-axis
+                C = (mu_r - 1)/(mu_r + 2) * (sphere_radius/r)**3  # POSITIVE
+
+                # Spherical components
+                H_r = 2 * C * cos(theta)
+                H_theta = C * sin(theta)
+
+                # Convert to cylindrical (r_cyl, z) coordinates
+                # e_r = sin(theta)·e_{r_cyl} + cos(theta)·e_z
+                # e_theta = cos(theta)·e_{r_cyl} - sin(theta)·e_z
+                Hr_analytical[nz, nr] = H_r * sin(theta) + H_theta * cos(theta)
+                Hz_analytical_2d[nz, nr] = H_r * cos(theta) - H_theta * sin(theta)
+
+    # ============================================================
+    # Save Results
+    # ============================================================
+    print("\nSaving results...")
+
+    from scipy.io import savemat
+
+    # Create 2D grid for visualization (interior domain only)
+    r_grid = linspace(0.02, kelvin_radius - 0.02, 101)
+    z_grid = linspace(-kelvin_radius + 0.02, kelvin_radius - 0.02, 101)
+    [rr, zz] = meshgrid(r_grid, z_grid)
+
+    Hr_field = zeros(rr.shape)
+    Hz_field = zeros(rr.shape)
+
+    for iz in range(len(z_grid)):
+        for ir in range(len(r_grid)):
+            r_dist = sqrt(r_grid[ir]**2 + z_grid[iz]**2)
+            if r_dist < kelvin_radius - 0.02:
+                try:
+                    mip = mesh(r_grid[ir], z_grid[iz])
+                    Hr_field[iz, ir] = H_pert[0](mip)
+                    Hz_field[iz, ir] = H_pert[1](mip)
+                except:
+                    Hr_field[iz, ir] = nan
+                    Hz_field[iz, ir] = nan
+            else:
                 Hr_field[iz, ir] = nan
                 Hz_field[iz, ir] = nan
-        else:
-            Hr_field[iz, ir] = nan
-            Hz_field[iz, ir] = nan
 
-mat_data = {
-    'rr': rr,
-    'zz': zz,
-    'Hr': Hr_field,
-    'Hz': Hz_field,
-    'r_profile': r_profile,
-    'Hz_numerical': Hz_numerical,
-    'Hz_analytical': Hz_analytical_profile,
-    'sphere_radius': sphere_radius,
-    'kelvin_radius': kelvin_radius,
-    'mu_r': mu_r
-}
+    mat_data = {
+        'rr': rr,
+        'zz': zz,
+        'Hr': Hr_field,
+        'Hz': Hz_field,
+        'r_profile': r_profile,
+        'Hz_numerical': Hz_numerical,
+        'Hz_analytical': Hz_analytical_profile,
+        'sphere_radius': sphere_radius,
+        'kelvin_radius': kelvin_radius,
+        'mu_r': mu_r
+    }
 
-mat_file = f"{os.path.splitext(__file__)[0]}.mat"
-savemat(mat_file, mat_data)
-print(f"  MAT file saved to: {mat_file}")
+    mat_file = f"{os.path.splitext(__file__)[0]}.mat"
+    savemat(mat_file, mat_data)
+    print(f"  MAT file saved to: {mat_file}")
 
-# ============================================================
-# Evaluate H field in exterior domain for plotting
-# ============================================================
-print("\nEvaluating exterior domain field...")
+    # ============================================================
+    # Evaluate H field in exterior domain for plotting
+    # ============================================================
+    print("\nEvaluating exterior domain field...")
 
-# Create grid for exterior domain centered at (offset_x, 0)
-r_ext = linspace(0.02, kelvin_radius - 0.02, 101)
-z_ext = linspace(-kelvin_radius + 0.02, kelvin_radius - 0.02, 101)
-rr_ext, zz_ext = meshgrid(r_ext, z_ext)
+    # Create grid for exterior domain centered at (offset_x, 0)
+    r_ext = linspace(0.02, kelvin_radius - 0.02, 101)
+    z_ext = linspace(-kelvin_radius + 0.02, kelvin_radius - 0.02, 101)
+    rr_ext, zz_ext = meshgrid(r_ext, z_ext)
 
-Hr_ext = zeros(rr_ext.shape)
-Hz_ext = zeros(rr_ext.shape)
+    Hr_ext = zeros(rr_ext.shape)
+    Hz_ext = zeros(rr_ext.shape)
 
-for nz in range(len(z_ext)):
-    for nr in range(len(r_ext)):
-        # Transform to exterior domain coordinates (offset by offset_x)
-        r_from_center = sqrt(r_ext[nr]**2 + z_ext[nz]**2)
-        if r_from_center < kelvin_radius - 0.05:  # Inside exterior domain
-            try:
-                mip = mesh(offset_x + r_ext[nr], z_ext[nz])
-                Hr_ext[nz, nr] = H_pert[0](mip)
-                Hz_ext[nz, nr] = H_pert[1](mip)
-            except:
+    for nz in range(len(z_ext)):
+        for nr in range(len(r_ext)):
+            # Transform to exterior domain coordinates (offset by offset_x)
+            r_from_center = sqrt(r_ext[nr]**2 + z_ext[nz]**2)
+            if r_from_center < kelvin_radius - 0.05:  # Inside exterior domain
+                try:
+                    mip = mesh(offset_x + r_ext[nr], z_ext[nz])
+                    Hr_ext[nz, nr] = H_pert[0](mip)
+                    Hz_ext[nz, nr] = H_pert[1](mip)
+                except:
+                    Hr_ext[nz, nr] = nan
+                    Hz_ext[nz, nr] = nan
+            else:
                 Hr_ext[nz, nr] = nan
                 Hz_ext[nz, nr] = nan
-        else:
-            Hr_ext[nz, nr] = nan
-            Hz_ext[nz, nr] = nan
 
-# ============================================================
-# Visualization (3x2 layout matching 3D_dipole_with_Kelvin.py)
-# ============================================================
-print("\nGenerating plots...")
+    # ============================================================
+    # Visualization (3x2 layout matching 3D_dipole_with_Kelvin.py)
+    # ============================================================
+    print("\nGenerating plots...")
 
-import matplotlib
-import matplotlib.pyplot as plt
-matplotlib.rc('mathtext', **{'rm':'serif', 'it':'serif:italic',
-                              'bf':'serif:bold', 'fontset':'cm'})
+    import matplotlib
+    import matplotlib.pyplot as plt
+    matplotlib.rc('mathtext', **{'rm':'serif', 'it':'serif:italic',
+                                  'bf':'serif:bold', 'fontset':'cm'})
 
-# Create figure with 3x2 subplots (matching 3D_dipole_with_Kelvin.py)
-# Row 1: Interior H (Analytical vs NGSolve)
-# Row 2: R-axis and Z-axis profile comparisons
-# Row 3: Exterior B and H
-fig = plt.figure(figsize=(12, 15), dpi=150)
+    # Create figure with 3x2 subplots (matching 3D_dipole_with_Kelvin.py)
+    # Row 1: Interior H (Analytical vs NGSolve)
+    # Row 2: R-axis and Z-axis profile comparisons
+    # Row 3: Exterior B and H
+    fig = plt.figure(figsize=(12, 15), dpi=150)
 
-# Row 1, Col 1: Interior H field (Analytical)
-ax1 = plt.subplot(3, 2, 1)
-strm1 = ax1.streamplot(rr_anal, zz_anal, Hr_analytical, Hz_analytical_2d,
-                       color='red', linewidth=1.0, density=1.5,
-                       arrowsize=0.8, arrowstyle='->')
-# Draw magnetic sphere boundary (half-circle for axisymmetric)
-theta_circle = linspace(0, pi, 100)
-r_sphere = sphere_radius * sin(theta_circle)
-z_sphere = sphere_radius * cos(theta_circle)
-ax1.fill_betweenx(z_sphere, 0, r_sphere, alpha=0.3, color='lightblue')
-ax1.plot(r_sphere, z_sphere, 'r-', linewidth=2, label='Magnetic material')
-# Draw Kelvin boundary
-r_kelvin_plot = kelvin_radius * sin(theta_circle)
-z_kelvin_plot = kelvin_radius * cos(theta_circle)
-ax1.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
-ax1.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax1.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax1.set_xlabel('${\\it r}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax1.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax1.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
-ax1.set_title('Interior: $\\mathbf{H}_{\\mathrm{pert}}$ (Analytical)', fontname='Times New Roman', fontsize=11)
-ax1.set_aspect('equal')
-ax1.set_xlim(0, plot_range)
-ax1.set_ylim(-plot_range, plot_range)
-ax1.minorticks_on()
-ax1.tick_params(which='major', direction="in", top=True, right=True)
-ax1.tick_params(which='minor', direction="in", top=True, right=True)
-ax1.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 1, Col 1: Interior H field (Analytical)
+    ax1 = plt.subplot(3, 2, 1)
+    strm1 = ax1.streamplot(rr_anal, zz_anal, Hr_analytical, Hz_analytical_2d,
+                           color='red', linewidth=1.0, density=1.5,
+                           arrowsize=0.8, arrowstyle='->')
+    # Draw magnetic sphere boundary (half-circle for axisymmetric)
+    theta_circle = linspace(0, pi, 100)
+    r_sphere = sphere_radius * sin(theta_circle)
+    z_sphere = sphere_radius * cos(theta_circle)
+    ax1.fill_betweenx(z_sphere, 0, r_sphere, alpha=0.3, color='lightblue')
+    ax1.plot(r_sphere, z_sphere, 'r-', linewidth=2, label='Magnetic material')
+    # Draw Kelvin boundary
+    r_kelvin_plot = kelvin_radius * sin(theta_circle)
+    z_kelvin_plot = kelvin_radius * cos(theta_circle)
+    ax1.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
+    ax1.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax1.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax1.set_xlabel('${\\it r}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax1.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax1.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax1.set_title('Interior: $\\mathbf{H}_{\\mathrm{pert}}$ (Analytical)', fontname='Times New Roman', fontsize=11)
+    ax1.set_aspect('equal')
+    ax1.set_xlim(0, plot_range)
+    ax1.set_ylim(-plot_range, plot_range)
+    ax1.minorticks_on()
+    ax1.tick_params(which='major', direction="in", top=True, right=True)
+    ax1.tick_params(which='minor', direction="in", top=True, right=True)
+    ax1.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-# Row 1, Col 2: Interior H field (NGSolve)
-ax2 = plt.subplot(3, 2, 2)
-strm2 = ax2.streamplot(rr, zz, Hr_field, Hz_field,
-                       color='black', linewidth=1.0, density=1.5,
-                       arrowsize=0.8, arrowstyle='->')
-ax2.fill_betweenx(z_sphere, 0, r_sphere, alpha=0.3, color='lightblue')
-ax2.plot(r_sphere, z_sphere, 'r-', linewidth=2, label='Magnetic material')
-ax2.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
-ax2.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax2.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax2.set_xlabel('${\\it r}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax2.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax2.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
-ax2.set_title('Interior: $\\mathbf{H}_{\\mathrm{pert}}$ (NGSolve)', fontname='Times New Roman', fontsize=11)
-ax2.set_aspect('equal')
-ax2.set_xlim(0, plot_range)
-ax2.set_ylim(-plot_range, plot_range)
-ax2.minorticks_on()
-ax2.tick_params(which='major', direction="in", top=True, right=True)
-ax2.tick_params(which='minor', direction="in", top=True, right=True)
-ax2.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 1, Col 2: Interior H field (NGSolve)
+    ax2 = plt.subplot(3, 2, 2)
+    strm2 = ax2.streamplot(rr, zz, Hr_field, Hz_field,
+                           color='black', linewidth=1.0, density=1.5,
+                           arrowsize=0.8, arrowstyle='->')
+    ax2.fill_betweenx(z_sphere, 0, r_sphere, alpha=0.3, color='lightblue')
+    ax2.plot(r_sphere, z_sphere, 'r-', linewidth=2, label='Magnetic material')
+    ax2.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
+    ax2.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax2.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax2.set_xlabel('${\\it r}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax2.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax2.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax2.set_title('Interior: $\\mathbf{H}_{\\mathrm{pert}}$ (NGSolve)', fontname='Times New Roman', fontsize=11)
+    ax2.set_aspect('equal')
+    ax2.set_xlim(0, plot_range)
+    ax2.set_ylim(-plot_range, plot_range)
+    ax2.minorticks_on()
+    ax2.tick_params(which='major', direction="in", top=True, right=True)
+    ax2.tick_params(which='minor', direction="in", top=True, right=True)
+    ax2.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-# Row 2, Col 1: R-axis profile comparison
-ax3 = plt.subplot(3, 2, 3)
-ax3.plot(r_profile, Hz_numerical, 'k-', linewidth=2, label='NGSolve')
-ax3.plot(r_profile, Hz_analytical_profile, 'r--', linewidth=1.5, label='Analytical')
-ax3.axvline(sphere_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-plt.setp(ax3.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax3.set_xlabel('${\\it r}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax3.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax3.set_ylabel('$H_{z,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
-ax3.set_title('R-axis Profile (Perturbation Field)', fontname='Times New Roman', fontsize=11)
-ax3.minorticks_on()
-ax3.tick_params(which='major', direction="in", top=True, right=True)
-ax3.tick_params(which='minor', direction="in", top=True, right=True)
-ax3.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
-ax3.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
-ax3.legend(loc='best', fontsize=9, frameon=False)
+    # Row 2, Col 1: R-axis profile comparison
+    ax3 = plt.subplot(3, 2, 3)
+    ax3.plot(r_profile, Hz_numerical, 'k-', linewidth=2, label='NGSolve')
+    ax3.plot(r_profile, Hz_analytical_profile, 'r--', linewidth=1.5, label='Analytical')
+    ax3.axvline(sphere_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    plt.setp(ax3.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax3.set_xlabel('${\\it r}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax3.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax3.set_ylabel('$H_{z,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
+    ax3.set_title('R-axis Profile (Perturbation Field)', fontname='Times New Roman', fontsize=11)
+    ax3.minorticks_on()
+    ax3.tick_params(which='major', direction="in", top=True, right=True)
+    ax3.tick_params(which='minor', direction="in", top=True, right=True)
+    ax3.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
+    ax3.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
+    ax3.legend(loc='best', fontsize=9, frameon=False)
 
-# Row 2, Col 2: Z-axis profile comparison
-ax4 = plt.subplot(3, 2, 4)
-ax4.plot(z_profile, Hz_pert_numerical_z, 'k-', linewidth=2, label='NGSolve')
-ax4.plot(z_profile, Hz_pert_analytical_z, 'r--', linewidth=1.5, label='Analytical')
-ax4.axvline(-sphere_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-ax4.axvline(sphere_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-plt.setp(ax4.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax4.set_xlabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax4.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax4.set_ylabel('$H_{z,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
-ax4.set_title('Z-axis Profile (Perturbation Field)', fontname='Times New Roman', fontsize=11)
-ax4.minorticks_on()
-ax4.tick_params(which='major', direction="in", top=True, right=True)
-ax4.tick_params(which='minor', direction="in", top=True, right=True)
-ax4.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
-ax4.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
-ax4.legend(loc='best', fontsize=9, frameon=False)
+    # Row 2, Col 2: Z-axis profile comparison
+    ax4 = plt.subplot(3, 2, 4)
+    ax4.plot(z_profile, Hz_pert_numerical_z, 'k-', linewidth=2, label='NGSolve')
+    ax4.plot(z_profile, Hz_pert_analytical_z, 'r--', linewidth=1.5, label='Analytical')
+    ax4.axvline(-sphere_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    ax4.axvline(sphere_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    plt.setp(ax4.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax4.set_xlabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax4.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax4.set_ylabel('$H_{z,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
+    ax4.set_title('Z-axis Profile (Perturbation Field)', fontname='Times New Roman', fontsize=11)
+    ax4.minorticks_on()
+    ax4.tick_params(which='major', direction="in", top=True, right=True)
+    ax4.tick_params(which='minor', direction="in", top=True, right=True)
+    ax4.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
+    ax4.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
+    ax4.legend(loc='best', fontsize=9, frameon=False)
 
-# Row 3, Col 1: Exterior B field
-# Compute B field for exterior domain (B = mu' * H where mu' = (R/r')^2 * mu0)
-Br_ext = zeros(rr_ext.shape)
-Bz_ext = zeros(rr_ext.shape)
-for nz in range(len(z_ext)):
-    for nr in range(len(r_ext)):
-        r_prime = sqrt(r_ext[nr]**2 + z_ext[nz]**2)
-        if r_prime > 0.01:
-            mu_ext_local = (kelvin_radius / r_prime)**2 * mu0
-        else:
-            mu_ext_local = mu0 * 1e6
-        Br_ext[nz, nr] = mu_ext_local * Hr_ext[nz, nr]
-        Bz_ext[nz, nr] = mu_ext_local * Hz_ext[nz, nr]
+    # Row 3, Col 1: Exterior B field
+    # Compute B field for exterior domain (B = mu' * H where mu' = (R/r')^2 * mu0)
+    Br_ext = zeros(rr_ext.shape)
+    Bz_ext = zeros(rr_ext.shape)
+    for nz in range(len(z_ext)):
+        for nr in range(len(r_ext)):
+            r_prime = sqrt(r_ext[nr]**2 + z_ext[nz]**2)
+            if r_prime > 0.01:
+                mu_ext_local = (kelvin_radius / r_prime)**2 * mu0
+            else:
+                mu_ext_local = mu0 * 1e6
+            Br_ext[nz, nr] = mu_ext_local * Hr_ext[nz, nr]
+            Bz_ext[nz, nr] = mu_ext_local * Hz_ext[nz, nr]
 
-ax5 = plt.subplot(3, 2, 5)
-strm5 = ax5.streamplot(rr_ext, zz_ext, Br_ext, Bz_ext,
-                       color='darkblue', linewidth=1.0, density=1.5,
-                       arrowsize=0.8, arrowstyle='->')
-# Draw Kelvin boundary for exterior domain
-ax5.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
-ax5.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax5.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax5.set_xlabel("${\\it r'}$ (m)", fontname='Times New Roman', fontsize=10)
-plt.setp(ax5.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax5.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
-ax5.set_title('Exterior: Flux Density $\\mathbf{B}$', fontname='Times New Roman', fontsize=11)
-ax5.set_aspect('equal')
-ax5.set_xlim(0, plot_range)
-ax5.set_ylim(-plot_range, plot_range)
-ax5.minorticks_on()
-ax5.tick_params(which='major', direction="in", top=True, right=True)
-ax5.tick_params(which='minor', direction="in", top=True, right=True)
-ax5.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    ax5 = plt.subplot(3, 2, 5)
+    strm5 = ax5.streamplot(rr_ext, zz_ext, Br_ext, Bz_ext,
+                           color='darkblue', linewidth=1.0, density=1.5,
+                           arrowsize=0.8, arrowstyle='->')
+    # Draw Kelvin boundary for exterior domain
+    ax5.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
+    ax5.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax5.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax5.set_xlabel("${\\it r'}$ (m)", fontname='Times New Roman', fontsize=10)
+    plt.setp(ax5.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax5.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax5.set_title('Exterior: Flux Density $\\mathbf{B}$', fontname='Times New Roman', fontsize=11)
+    ax5.set_aspect('equal')
+    ax5.set_xlim(0, plot_range)
+    ax5.set_ylim(-plot_range, plot_range)
+    ax5.minorticks_on()
+    ax5.tick_params(which='major', direction="in", top=True, right=True)
+    ax5.tick_params(which='minor', direction="in", top=True, right=True)
+    ax5.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-# Row 3, Col 2: Exterior H field
-ax6 = plt.subplot(3, 2, 6)
-strm6 = ax6.streamplot(rr_ext, zz_ext, Hr_ext, Hz_ext,
-                       color='darkgreen', linewidth=1.0, density=1.5,
-                       arrowsize=0.8, arrowstyle='->')
-ax6.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
-ax6.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax6.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax6.set_xlabel("${\\it r'}$ (m)", fontname='Times New Roman', fontsize=10)
-plt.setp(ax6.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax6.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
-ax6.set_title('Exterior: Magnetic Field $\\mathbf{H}$', fontname='Times New Roman', fontsize=11)
-ax6.set_aspect('equal')
-ax6.set_xlim(0, plot_range)
-ax6.set_ylim(-plot_range, plot_range)
-ax6.minorticks_on()
-ax6.tick_params(which='major', direction="in", top=True, right=True)
-ax6.tick_params(which='minor', direction="in", top=True, right=True)
-ax6.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 3, Col 2: Exterior H field
+    ax6 = plt.subplot(3, 2, 6)
+    strm6 = ax6.streamplot(rr_ext, zz_ext, Hr_ext, Hz_ext,
+                           color='darkgreen', linewidth=1.0, density=1.5,
+                           arrowsize=0.8, arrowstyle='->')
+    ax6.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
+    ax6.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax6.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax6.set_xlabel("${\\it r'}$ (m)", fontname='Times New Roman', fontsize=10)
+    plt.setp(ax6.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax6.set_ylabel('${\\it z}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax6.set_title('Exterior: Magnetic Field $\\mathbf{H}$', fontname='Times New Roman', fontsize=11)
+    ax6.set_aspect('equal')
+    ax6.set_xlim(0, plot_range)
+    ax6.set_ylim(-plot_range, plot_range)
+    ax6.minorticks_on()
+    ax6.tick_params(which='major', direction="in", top=True, right=True)
+    ax6.tick_params(which='minor', direction="in", top=True, right=True)
+    ax6.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-plt.tight_layout()
+    plt.tight_layout()
 
-png_file = f"{os.path.splitext(__file__)[0]}.png"
-plt.savefig(png_file, dpi=150, bbox_inches='tight')
-print(f"  Plot saved to: {png_file}")
+    png_file = f"{os.path.splitext(__file__)[0]}.png"
+    plt.savefig(png_file, dpi=150, bbox_inches='tight')
+    print(f"  Plot saved to: {png_file}")
 
-os.startfile(png_file)
+    os.startfile(png_file)
 
-print("\n" + "="*60)
-print("Computation completed successfully")
-print("="*60)
+    print("\n" + "="*60)
+    print("Computation completed successfully")
+    print("="*60)

@@ -84,106 +84,107 @@ def run(R_coil=0.030, a_coil=0.003, gap_deg=5,
     maxh = R_wp / maxh_factor
     ngmesh = geo.GenerateMesh(maxh=maxh)
     mesh = Mesh(ngmesh)
-    mesh.Curve(3)
+    with TaskManager():
+        mesh.Curve(3)
 
-    ne = mesh.GetNE(BND)
-    nv = mesh.nv
-    area = Integrate(CF(1), mesh, BND)
-    t_mesh = time.perf_counter() - t0
-    print(f"  {ne} elements, {nv} vertices, area = {abs(area):.6e} m^2 ({t_mesh:.1f}s)")
+        ne = mesh.GetNE(BND)
+        nv = mesh.nv
+        area = Integrate(CF(1), mesh, BND)
+        t_mesh = time.perf_counter() - t0
+        print(f"  {ne} elements, {nv} vertices, area = {abs(area):.6e} m^2 ({t_mesh:.1f}s)")
 
-    # === 2. Assemble BEM operators ===
-    print("[2/4] Assembling BEM operators...")
-    solver = ScalarBIESIBCSolver(mesh, order=h1_order)
-    print(f"  {solver.ndof} DOFs, assembly: {solver.t_assembly:.1f}s")
+        # === 2. Assemble BEM operators ===
+        print("[2/4] Assembling BEM operators...")
+        solver = ScalarBIESIBCSolver(mesh, order=h1_order)
+        print(f"  {solver.ndof} DOFs, assembly: {solver.t_assembly:.1f}s")
 
-    # === 3. Compute phi_inc from coil ===
-    print("[3/4] Computing phi_inc (Biot-Savart + path integration)...")
-    t0 = time.perf_counter()
+        # === 3. Compute phi_inc from coil ===
+        print("[3/4] Computing phi_inc (Biot-Savart + path integration)...")
+        t0 = time.perf_counter()
 
-    # Get mesh vertex coordinates
-    node_coords = np.array([[mesh.vertices[i].point[j] for j in range(3)]
-                            for i in range(mesh.nv)])
+        # Get mesh vertex coordinates
+        node_coords = np.array([[mesh.vertices[i].point[j] for j in range(3)]
+                                for i in range(mesh.nv)])
 
-    phi_inc_nodes = compute_phi_inc_from_loop(
-        node_coords, loop_center=[0, 0, 0], loop_radius=R_coil,
-        current=I_total, n_quad=30, gap_deg=gap_deg)
+        phi_inc_nodes = compute_phi_inc_from_loop(
+            node_coords, loop_center=[0, 0, 0], loop_radius=R_coil,
+            current=I_total, n_quad=30, gap_deg=gap_deg)
 
-    phi_inc_vec = phi_inc_nodes  # H1 order=1: vertex DOFs match
+        phi_inc_vec = phi_inc_nodes  # H1 order=1: vertex DOFs match
 
-    t_phi = time.perf_counter() - t0
-    print(f"  phi_inc range: [{phi_inc_nodes.min():.4f}, {phi_inc_nodes.max():.4f}] ({t_phi:.1f}s)")
+        t_phi = time.perf_counter() - t0
+        print(f"  phi_inc range: [{phi_inc_nodes.min():.4f}, {phi_inc_nodes.max():.4f}] ({t_phi:.1f}s)")
 
-    # === 4. ESIM surface impedance + Karl iteration ===
-    print("[4/4] Solving scalar BIE + SIBC...")
+        # === 4. ESIM surface impedance + Karl iteration ===
+        print("[4/4] Solving scalar BIE + SIBC...")
 
-    esim_solver = ESIMFiniteSlabSolver(
-        half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
-        frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None,
-        n_nodes=200, geometry='cylinder')
+        esim_solver = ESIMFiniteSlabSolver(
+            half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
+            frequency=frequency,
+            mu_r=mu_r if bh_curve is None else None,
+            n_nodes=200, geometry='cylinder')
 
-    # Initial Z_s
-    H_t_init = 5.0
-    Z_s = esim_solver.solve(H_t_init)['Z']
+        # Initial Z_s
+        H_t_init = 5.0
+        Z_s = esim_solver.solve(H_t_init)['Z']
 
-    max_iter = 15
-    tol = 1e-3
-    relax = 0.5
+        max_iter = 15
+        tol = 1e-3
+        relax = 0.5
 
-    print(f"  |Z_s| init = {abs(Z_s):.4e}")
-    print(f"  {'Iter':>4s} {'|Z_s|':>12s} {'H_t_rms':>10s} "
-          f"{'P [W]':>12s} {'dZ/Z':>10s}")
+        print(f"  |Z_s| init = {abs(Z_s):.4e}")
+        print(f"  {'Iter':>4s} {'|Z_s|':>12s} {'H_t_rms':>10s} "
+              f"{'P [W]':>12s} {'dZ/Z':>10s}")
 
-    for iteration in range(max_iter):
+        for iteration in range(max_iter):
+            result = solver.solve(phi_inc_vec, Z_s=Z_s, omega=omega)
+            H_t_rms = result['H_t_rms']
+            P_density = result['P_density']
+            P_total = P_density * result['area']
+
+            # ESIM update
+            Z_s_old = Z_s
+            sol = esim_solver.solve(max(H_t_rms, 1e-3))
+            Z_s_new = sol['Z']
+            Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+
+            dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
+            print(f"  {iteration:4d} {abs(Z_s):12.4e} {H_t_rms:10.2f} "
+                  f"{P_total:12.4e} {dZ:10.4e}")
+
+            if dZ < tol and iteration > 0:
+                print(f"  Converged at iteration {iteration}")
+                break
+
+        # Final result with converged Z_s
         result = solver.solve(phi_inc_vec, Z_s=Z_s, omega=omega)
         H_t_rms = result['H_t_rms']
         P_density = result['P_density']
         P_total = P_density * result['area']
+        Q_density = 0.5 * Z_s.imag * H_t_rms**2 if Z_s != 0 else 0
+        Q_total = Q_density * result['area']
 
-        # ESIM update
-        Z_s_old = Z_s
-        sol = esim_solver.solve(max(H_t_rms, 1e-3))
-        Z_s_new = sol['Z']
-        Z_s = relax * Z_s_new + (1 - relax) * Z_s_old
+        print()
+        print("=" * 65)
+        print("Results: BEM-SIBC Workpiece")
+        print("-" * 65)
+        print(f"  P (BEM-SIBC)       = {P_total:.6e} W")
+        print(f"  Q                  = {Q_total:.6e} var")
+        print(f"  H_t_rms            = {H_t_rms:.2f} A/m")
+        print(f"  |Z_s|              = {abs(Z_s):.4e} Ohm")
+        print(f"  BEM DOFs: {solver.ndof}")
+        print(f"  Time: mesh={t_mesh:.1f}s, assembly={solver.t_assembly:.1f}s, "
+              f"phi_inc={t_phi:.1f}s, solve={result['t_solve']:.3f}s")
+        print("-" * 65)
 
-        dZ = abs(Z_s - Z_s_old) / max(abs(Z_s_old), 1e-30)
-        print(f"  {iteration:4d} {abs(Z_s):12.4e} {H_t_rms:10.2f} "
-              f"{P_total:12.4e} {dZ:10.4e}")
-
-        if dZ < tol and iteration > 0:
-            print(f"  Converged at iteration {iteration}")
-            break
-
-    # Final result with converged Z_s
-    result = solver.solve(phi_inc_vec, Z_s=Z_s, omega=omega)
-    H_t_rms = result['H_t_rms']
-    P_density = result['P_density']
-    P_total = P_density * result['area']
-    Q_density = 0.5 * Z_s.imag * H_t_rms**2 if Z_s != 0 else 0
-    Q_total = Q_density * result['area']
-
-    print()
-    print("=" * 65)
-    print("Results: BEM-SIBC Workpiece")
-    print("-" * 65)
-    print(f"  P (BEM-SIBC)       = {P_total:.6e} W")
-    print(f"  Q                  = {Q_total:.6e} var")
-    print(f"  H_t_rms            = {H_t_rms:.2f} A/m")
-    print(f"  |Z_s|              = {abs(Z_s):.4e} Ohm")
-    print(f"  BEM DOFs: {solver.ndof}")
-    print(f"  Time: mesh={t_mesh:.1f}s, assembly={solver.t_assembly:.1f}s, "
-          f"phi_inc={t_phi:.1f}s, solve={result['t_solve']:.3f}s")
-    print("-" * 65)
-
-    return {
-        'P_total': float(P_total),
-        'Q_total': float(Q_total),
-        'H_t_rms': float(H_t_rms),
-        'Z_s': complex(Z_s),
-        'ndof': solver.ndof,
-        'area': result['area'],
-    }
+        return {
+            'P_total': float(P_total),
+            'Q_total': float(Q_total),
+            'H_t_rms': float(H_t_rms),
+            'Z_s': complex(Z_s),
+            'ndof': solver.ndof,
+            'area': result['area'],
+        }
 
 
 if __name__ == "__main__":

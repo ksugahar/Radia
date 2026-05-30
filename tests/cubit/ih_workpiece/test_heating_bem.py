@@ -25,11 +25,13 @@ def generate_workpiece_vol(vol_path, R_wp=0.010, H_wp=0.020, maxh_factor=4):
     maxh = R_wp / maxh_factor
     ngmesh = geo.GenerateMesh(maxh=maxh)
     mesh = Mesh(ngmesh)
-    mesh.Curve(2)
-    mesh.ngmesh.Save(vol_path)
-    from ngsolve import BND
-    print(f"Saved {vol_path}: {mesh.ne} vol elems, {mesh.GetNE(BND)} surf elems")
-    return vol_path
+    with TaskManager():
+        mesh.Curve(2)
+        mesh.ngmesh.Save(vol_path)
+        from ngsolve import BND
+        from ngsolve import TaskManager
+        print(f"Saved {vol_path}: {mesh.ne} vol elems, {mesh.GetNE(BND)} surf elems")
+        return vol_path
 
 
 def main():

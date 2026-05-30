@@ -41,6 +41,7 @@ from ngsolve import (
     grad, dx, ds, CoefficientFunction, Integrate, x, y, sqrt,
     Conj,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 from scipy.special import iv  # modified Bessel I_n (cp932-safe)
 
@@ -130,35 +131,36 @@ def cfem_solve(mesh, omega):
     a = BilinearForm(fes, symmetric=True)
     a += NU * grad(u) * grad(v) * dx
     a += 1j * omega * SIGMA * u * v * dx
-    a.Assemble()
+    with TaskManager():
+        a.Assemble()
 
-    f = LinearForm(fes)
-    f += J0 * v * dx
-    f.Assemble()
+        f = LinearForm(fes)
+        f += J0 * v * dx
+        f.Assemble()
 
-    A = GridFunction(fes)
-    A.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        A = GridFunction(fes)
+        A.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    # Post-process: Joule loss + magnetic energy as area-averages
-    E_z = -1j * omega * A
-    J_z = SIGMA * E_z              # the eddy current (J0 is the source, but the actual J = -j w sigma A + 0 if E_z accounts for it; double-check)
-    # Wait: -nu*Laplace(A) + j*omega*sigma*A = J0
-    # => the field equation is sigma*E_z = J_z, where E_z = -j*omega*A (since V=0 in 2D).
-    # However J0 is the SOURCE, NOT the eddy current.  The total current is
-    #   J_total = J0 + sigma * E_z = J0 - j w sigma A.
-    # Joule loss per volume = (1/2) sigma |E_z|^2 = (1/2) |J_total - J0|^2 / sigma
-    # In Hiruma's setup with E_z = 1 prescribed at boundary, J0 = sigma * 1 = sigma,
-    # and we want sigma |E_z|^2 / 2.
-    P_cf = 0.5 * SIGMA * (E_z * Conj(E_z))   # CF for Joule loss density [W/m^3]
-    B_x  = grad(A)[1]                         # B = curl(A_z e_z) = (dA/dy, -dA/dx)
-    B_y  = -grad(A)[0]
-    W_cf = (B_x * Conj(B_x) + B_y * Conj(B_y)) / (2 * MU0)
+        # Post-process: Joule loss + magnetic energy as area-averages
+        E_z = -1j * omega * A
+        J_z = SIGMA * E_z              # the eddy current (J0 is the source, but the actual J = -j w sigma A + 0 if E_z accounts for it; double-check)
+        # Wait: -nu*Laplace(A) + j*omega*sigma*A = J0
+        # => the field equation is sigma*E_z = J_z, where E_z = -j*omega*A (since V=0 in 2D).
+        # However J0 is the SOURCE, NOT the eddy current.  The total current is
+        #   J_total = J0 + sigma * E_z = J0 - j w sigma A.
+        # Joule loss per volume = (1/2) sigma |E_z|^2 = (1/2) |J_total - J0|^2 / sigma
+        # In Hiruma's setup with E_z = 1 prescribed at boundary, J0 = sigma * 1 = sigma,
+        # and we want sigma |E_z|^2 / 2.
+        P_cf = 0.5 * SIGMA * (E_z * Conj(E_z))   # CF for Joule loss density [W/m^3]
+        B_x  = grad(A)[1]                         # B = curl(A_z e_z) = (dA/dy, -dA/dx)
+        B_y  = -grad(A)[0]
+        W_cf = (B_x * Conj(B_x) + B_y * Conj(B_y)) / (2 * MU0)
 
-    # Disk area = pi*R^2; .real because the CF includes |.|^2 already (complex but real-valued)
-    area = math.pi * R * R
-    P_avg = Integrate(P_cf, mesh).real / area
-    W_avg = Integrate(W_cf, mesh).real / area
-    return P_avg, W_avg, fes.ndof, {}
+        # Disk area = pi*R^2; .real because the CF includes |.|^2 already (complex but real-valued)
+        area = math.pi * R * R
+        P_avg = Integrate(P_cf, mesh).real / area
+        W_avg = Integrate(W_cf, mesh).real / area
+        return P_avg, W_avg, fes.ndof, {}
 
 
 # =====================================================================

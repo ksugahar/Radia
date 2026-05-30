@@ -56,6 +56,7 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, is_linear=False,
     try:
         from netgen.occ import Box, Pnt, OCCGeometry
         from ngsolve import Mesh
+        from ngsolve import TaskManager
         from netgen_mesh_import import netgen_mesh_to_radia
     except ImportError as e:
         print('[SKIP] Tetrahedra: %s' % e)
@@ -77,38 +78,39 @@ def benchmark_tetrahedra(maxh, solver_type, output_dir, is_linear=False,
     cube_solid.mat('magnetic')
     geo = OCCGeometry(cube_solid)
 
-    ngmesh = geo.GenerateMesh(maxh=maxh)
-    mesh = Mesh(ngmesh)
-    n_elements = mesh.ne
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
+        mesh = Mesh(ngmesh)
+        n_elements = mesh.ne
 
-    cube = netgen_mesh_to_radia(mesh,
-                                 material={'magnetization': [0, 0, 0]},
-                                 units='m',
-                                 material_filter='magnetic',
-                                 verbose=False)
-    t_mesh = time.time() - t_mesh_start
+        cube = netgen_mesh_to_radia(mesh,
+                                     material={'magnetization': [0, 0, 0]},
+                                     units='m',
+                                     material_filter='magnetic',
+                                     verbose=False)
+        t_mesh = time.time() - t_mesh_start
 
-    print('Generated %d tetrahedral elements' % n_elements)
+        print('Generated %d tetrahedral elements' % n_elements)
 
-    # Run benchmark
-    result = run_benchmark(
-        radia_obj=cube,
-        n_elements=n_elements,
-        solver_type=solver_type,
-        output_dir=output_dir,
-        element_type='tetra',
-        mesh_description='maxh=%.2fm' % maxh,
-        t_mesh=t_mesh,
-        is_linear=is_linear,
-        nonl_tol=nonl_tol,
-        bicg_tol=bicg_tol,
-        hmat_eps=hmat_eps,
-        hmat_leaf_size=hmat_leaf_size,
-        hmat_eta=hmat_eta,
-        extra_data={'maxh': maxh}
-    )
+        # Run benchmark
+        result = run_benchmark(
+            radia_obj=cube,
+            n_elements=n_elements,
+            solver_type=solver_type,
+            output_dir=output_dir,
+            element_type='tetra',
+            mesh_description='maxh=%.2fm' % maxh,
+            t_mesh=t_mesh,
+            is_linear=is_linear,
+            nonl_tol=nonl_tol,
+            bicg_tol=bicg_tol,
+            hmat_eps=hmat_eps,
+            hmat_leaf_size=hmat_leaf_size,
+            hmat_eta=hmat_eta,
+            extra_data={'maxh': maxh}
+        )
 
-    return result
+        return result
 
 
 def run_single_benchmark(maxh, solver_type, script_dir, args):

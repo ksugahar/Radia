@@ -170,12 +170,13 @@ def step1b_occ_fallback():
     sphere.bc("nfs_surface")
     sphere.mat("domain")
     geo = OCCGeometry(sphere)
-    ngmesh = geo.GenerateMesh(maxh=0.08)
-    mesh = Mesh(ngmesh)
-    mesh.ngmesh.Save(str(INNER_VOL))
-    print(f"  Wrote {INNER_VOL.name} via OCC  "
-          f"({len(list(mesh.Elements()))} elements)")
-    return True
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=0.08)
+        mesh = Mesh(ngmesh)
+        mesh.ngmesh.Save(str(INNER_VOL))
+        print(f"  Wrote {INNER_VOL.name} via OCC  "
+              f"({len(list(mesh.Elements()))} elements)")
+        return True
 
 
 # ---------------------------------------------------------------------
@@ -381,6 +382,7 @@ def main():
     # CLI to isolate where the error comes from).
     print("\n--- Diagnostic: direct in-process NFS vs CLI NFS ---")
     from ngsolve import BND
+    from ngsolve import TaskManager
     cd, nd, ad = [], [], []
     for el in mesh_inner.Elements(BND):
         verts = [(mesh_inner[v].point[0], mesh_inner[v].point[1],

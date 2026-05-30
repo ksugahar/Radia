@@ -32,6 +32,7 @@ for ext in ['*.png', '*.mat']:
 
 from numpy import pi, sqrt, cos, sin, linspace, zeros, nan, isnan, meshgrid, array, log, mean, arctan2
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 import scipy.io as sio
 import matplotlib
@@ -181,17 +182,18 @@ def solve_A_formulation(mesh, order):
 
     a_form = BilinearForm(fes)
     a_form += nu_cf * grad(u) * grad(v) * dx
-    a_form.Assemble()
+    with TaskManager():
+        a_form.Assemble()
 
-    f = LinearForm(fes)
-    f += J0 * v * dx("wire_plus")
-    f += (-J0) * v * dx("wire_minus")
-    f.Assemble()
+        f = LinearForm(fes)
+        f += J0 * v * dx("wire_plus")
+        f += (-J0) * v * dx("wire_minus")
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        gfu = GridFunction(fes)
+        gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    return fes, gfu, nu_cf
+        return fes, gfu, nu_cf
 
 
 # ============================================================

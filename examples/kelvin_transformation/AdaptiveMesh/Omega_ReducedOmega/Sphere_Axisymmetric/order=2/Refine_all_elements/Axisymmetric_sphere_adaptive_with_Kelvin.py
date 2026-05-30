@@ -375,7 +375,8 @@ print("=" * 60)
 
 geo = create_geometry()
 mesh = Mesh(geo.GenerateMesh(maxh=maxh_initial, grading=0.5))
-mesh.Curve(order)  # Curve the mesh for higher-order elements
+with TaskManager():
+	mesh.Curve(order)  # Curve the mesh for higher-order elements
 
 print(f"\nInitial mesh:")
 print(f"  Elements: {mesh.ne}")
@@ -731,6 +732,7 @@ for iteration in range(max_iterations):
     # Need separate GridFunctions for accurate perturbation field in Reduced region
     # Following 3D_sphere_with_Kelvin.py lines 360-373
     from ngsolve import VOL
+    from ngsolve import TaskManager
     Omega_s = H0 * y  # y is z in axisymmetric
 
     fesOt_energy = H1(mesh, order=fes.globalorder, definedon="magnetic")

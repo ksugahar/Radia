@@ -67,8 +67,9 @@ def create_test_plate_mesh(nx=3, ny=2, width=0.1, height=0.05):
 
     geo = OCCGeometry(rect)
     maxh = min(width / nx, height / ny)
-    ngmesh = geo.GenerateMesh(maxh=maxh)
-    return Mesh(ngmesh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
+        return Mesh(ngmesh)
 
 
 # =====================================================================
@@ -114,6 +115,7 @@ def test_dimensions():
     n_verts = len(list(mesh.vertices))
     n_edges = len(list(mesh.edges))
     from ngsolve import BND
+    from ngsolve import TaskManager
     n_faces = len(list(mesh.Elements(BND)))
 
     print(f"  Mesh: V={n_verts}, E={n_edges}, F={n_faces}")

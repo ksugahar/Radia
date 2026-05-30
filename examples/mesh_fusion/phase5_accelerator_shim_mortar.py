@@ -81,6 +81,7 @@ from ngsolve import (
     x,
     y,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 
@@ -165,11 +166,12 @@ def solve_shim_yoke_nitsche(mesh: Mesh, order: int = 2,
     # Small background source in yoke (mimics residual flux)
     f += 0.1 * vY * dx("yoke")
 
-    a.Assemble()
-    f.Assemble()
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-    return fes, gfu
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        return fes, gfu
 
 
 def field_at_center(mesh: Mesh, gfu) -> float:

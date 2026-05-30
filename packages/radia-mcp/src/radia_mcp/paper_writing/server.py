@@ -44,6 +44,15 @@ from ._em_paper_style import (
 from ._citation_verify import (
     paper_writing_verify_citation,
     paper_writing_citation_workflow_recipe,
+    paper_writing_check_citation_keys_exist,
+)
+from ._undefined_acronyms import (
+    paper_writing_check_undefined_acronyms,
+)
+from ._digest_lints import (
+    paper_writing_check_ref_label_consistency,
+    paper_writing_check_ieee_keywords,
+    paper_writing_check_pdf_unresolved_markers,
 )
 from ._pdf_overlap_detection import (
     paper_writing_detect_text_image_overlap,

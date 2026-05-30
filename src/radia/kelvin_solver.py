@@ -33,13 +33,14 @@ from kelvin_material import make_kelvin_nu_cf, NU_0
 
 
 def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
-    with TaskManager():
-        a_bf.Assemble()
-        f_lf.Assemble()
+    """Assemble and solve.  Caller MUST be inside `with TaskManager():`
+    per CLAUDE.md "Caller Wraps, Helper Does NOT" (2026-05-27).
+    """
+    a_bf.Assemble()
+    f_lf.Assemble()
     gfu = GridFunction(fes)
-    with TaskManager():
-        gfu.vec.data = a_bf.mat.Inverse(
-            fes.FreeDofs(), inverse=inverse) * f_lf.vec
+    gfu.vec.data = a_bf.mat.Inverse(
+        fes.FreeDofs(), inverse=inverse) * f_lf.vec
     return gfu
 
 

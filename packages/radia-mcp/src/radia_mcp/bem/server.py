@@ -92,11 +92,21 @@ def bem_low_freq(topic: str = "problem") -> str:
 
     Args:
         topic: One of:
-            "problem"         - Why LF breakdown happens (DEFAULT)
-            "loop_star"       - Loop-Star decomposition (PEEC native)
-            "calderon"        - Calderon preconditioner (Andriulli 2008)
-            "single_trace"    - Weggler-Hiptmair single-trace (ngsolve.bem)
-            "all"             - Everything
+            "problem"                - Why LF breakdown happens (DEFAULT)
+            "loop_star"              - Loop-Star decomposition (PEEC native)
+            "calderon"               - Calderon preconditioner (Andriulli 2008)
+            "weggler"                - ★ Lucy Weggler's product-space EFIE
+                                        stabilization (ngsolve.bem canonical
+                                        LF fix; HDivSurface × SurfaceL2 with
+                                        κ² V_κ re-scaling).
+            "single_trace"           - Alias for "weggler" (legacy name).
+            "equivalence_source_lf"  - LF for the equivalence-theorem one-
+                                        shot evaluator (NearFieldSource):
+                                        Weggler does NOT directly apply
+                                        (no matrix to invert); Laplace ML
+                                        routing does.  Two-breakdown
+                                        distinction.
+            "all"                    - Everything
     """
     return get_low_freq_knowledge(topic)
 

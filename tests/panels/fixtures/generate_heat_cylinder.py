@@ -20,6 +20,8 @@ to (re)write::
 
 The .vol is the target of ``test_heat_chain_golden.py``.
 """
+from ngsolve import TaskManager
+
 
 from __future__ import annotations
 
@@ -38,9 +40,10 @@ def main():
     cyl.solids.name = "workpiece"
 
     geo = OCCGeometry(cyl)
-    ngm = geo.GenerateMesh(maxh=0.005)
-    ngm.Save(out)
-    print(f"wrote {out}")
+    with TaskManager():
+        ngm = geo.GenerateMesh(maxh=0.005)
+        ngm.Save(out)
+        print(f"wrote {out}")
 
 
 if __name__ == "__main__":

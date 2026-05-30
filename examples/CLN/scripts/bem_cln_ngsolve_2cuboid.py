@@ -136,53 +136,54 @@ def solve_eddy_2cuboid(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
     f = LinearForm(fes)
     f += -1j * omega * sigma_cf * InnerProduct(A_ext, v) * dx("cu")
 
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    # Solve
-    gfu = GridFunction(fes)
-    gfu.Set(A_ext, definedon=mesh.Boundaries("kelvin_outer"))   # boundary condition
+        # Solve
+        gfu = GridFunction(fes)
+        gfu.Set(A_ext, definedon=mesh.Boundaries("kelvin_outer"))   # boundary condition
 
-    # Solve with direct/iterative
-    res = f.vec.CreateVector()
-    res.data = f.vec - a.mat * gfu.vec
+        # Solve with direct/iterative
+        res = f.vec.CreateVector()
+        res.data = f.vec - a.mat * gfu.vec
 
-    inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
-    gfu.vec.data += inv * res
+        inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        gfu.vec.data += inv * res
 
-    # Total A field
-    A_total = gfu + A_ext
+        # Total A field
+        A_total = gfu + A_ext
 
-    # Extract induced magnetic moment via volume integration of (r x J)
-    # For cuboid k centred at r_k: m_k = (1/2) integral_V (r - r_k) x J dV
-    # where J = -j omega sigma A_total in conductor
-    J = -1j * omega * sigma_cf * A_total
+        # Extract induced magnetic moment via volume integration of (r x J)
+        # For cuboid k centred at r_k: m_k = (1/2) integral_V (r - r_k) x J dV
+        # where J = -j omega sigma A_total in conductor
+        J = -1j * omega * sigma_cf * A_total
 
-    # Cuboid centres
-    r1_x, r1_y, r1_z = -7.5e-3, 0, 0
-    r2_x, r2_y, r2_z =  7.5e-3, 0, 0
+        # Cuboid centres
+        r1_x, r1_y, r1_z = -7.5e-3, 0, 0
+        r2_x, r2_y, r2_z =  7.5e-3, 0, 0
 
-    # Magnetic moment of cuboid 1 (only y-component is significant by symmetry)
-    # m_y = (1/2) integral [(z - r_z) J_x - (x - r_x) J_z] dV
-    m1_y_cf = 0.5 * ((z - r1_z) * J[0] - (x - r1_x) * J[2])
-    m2_y_cf = 0.5 * ((z - r2_z) * J[0] - (x - r2_x) * J[2])
+        # Magnetic moment of cuboid 1 (only y-component is significant by symmetry)
+        # m_y = (1/2) integral [(z - r_z) J_x - (x - r_x) J_z] dV
+        m1_y_cf = 0.5 * ((z - r1_z) * J[0] - (x - r1_x) * J[2])
+        m2_y_cf = 0.5 * ((z - r2_z) * J[0] - (x - r2_x) * J[2])
 
-    # Hmm — using cuboid-specific markers would be cleaner.  For now,
-    # integrate over the "cu" material region (both cuboids combined)
-    # and split by spatial position with a CF mask.
-    # Cuboid 1 mask: |x - r1_x| < 3 mm (covers cuboid 1, excludes 2)
-    from ngsolve import IfPos
-    in_cu1 = IfPos(2.5e-3 - (x - r1_x), IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
-    in_cu2 = IfPos(2.5e-3 - (x - r2_x), IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
+        # Hmm — using cuboid-specific markers would be cleaner.  For now,
+        # integrate over the "cu" material region (both cuboids combined)
+        # and split by spatial position with a CF mask.
+        # Cuboid 1 mask: |x - r1_x| < 3 mm (covers cuboid 1, excludes 2)
+        from ngsolve import IfPos
+        in_cu1 = IfPos(2.5e-3 - (x - r1_x), IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
+        in_cu2 = IfPos(2.5e-3 - (x - r2_x), IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
 
-    m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
-    m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
+        m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
+        m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
 
-    # Polarizability: alpha = m_y * mu_0 / B_0_y (volume susceptibility scale)
-    alpha1 = m1_y * mu0 / B0_y
-    alpha2 = m2_y * mu0 / B0_y
+        # Polarizability: alpha = m_y * mu_0 / B_0_y (volume susceptibility scale)
+        alpha1 = m1_y * mu0 / B0_y
+        alpha2 = m2_y * mu0 / B0_y
 
-    return m1_y, m2_y, alpha1, alpha2
+        return m1_y, m2_y, alpha1, alpha2
 
 
 def main():
@@ -193,6 +194,7 @@ def main():
 
     try:
         from ngsolve import Mesh
+        from ngsolve import TaskManager
         print("NGSolve detected.")
     except ImportError:
         print("ERROR: NGSolve not available.  Install with:")

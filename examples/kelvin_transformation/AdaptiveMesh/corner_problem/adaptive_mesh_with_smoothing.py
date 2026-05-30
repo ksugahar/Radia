@@ -11,6 +11,7 @@ This example demonstrates:
 import os
 from numpy import pi, sqrt, cos, sin, linspace, zeros, nan, isnan, meshgrid, array, log
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 print("=" * 60)
@@ -73,16 +74,17 @@ def solve_poisson(mesh, order):
 
     a = BilinearForm(fes)
     a += grad(u) * grad(v) * dx
-    a.Assemble()
+    with TaskManager():
+        a.Assemble()
 
-    f = LinearForm(fes)
-    f += 1 * v * dx
-    f.Assemble()
+        f = LinearForm(fes)
+        f += 1 * v * dx
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    return fes, gfu
+        return fes, gfu
 
 
 # ============================================================

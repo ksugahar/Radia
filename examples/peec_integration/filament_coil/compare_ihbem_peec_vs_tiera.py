@@ -45,6 +45,7 @@ for p in (SRC, SRC_RADIA, PANELS, HERE):
         sys.path.insert(0, p)
 
 from ngsolve import Mesh, Integrate, CF, BND
+from ngsolve import TaskManager
 
 from radia.radia_coil_builder import CoilBuilder
 from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
@@ -113,37 +114,38 @@ def phi_inc_from_bem(coil_mesh, wp_nodes, current):
     print(f"  L_coil = {L_coil*1e9:.2f} nH, "
           f"t_solve = {sol['t_solve']:.1f} s")
 
-    elem_A = Integrate(CF(1), coil_mesh, VOL_or_BND=BND, element_wise=True)
-    elem_Jx = Integrate(gf_J[0], coil_mesh, VOL_or_BND=BND, element_wise=True)
-    elem_Jy = Integrate(gf_J[1], coil_mesh, VOL_or_BND=BND, element_wise=True)
-    elem_Jz = Integrate(gf_J[2], coil_mesh, VOL_or_BND=BND, element_wise=True)
+    with TaskManager():
+        elem_A = Integrate(CF(1), coil_mesh, VOL_or_BND=BND, element_wise=True)
+        elem_Jx = Integrate(gf_J[0], coil_mesh, VOL_or_BND=BND, element_wise=True)
+        elem_Jy = Integrate(gf_J[1], coil_mesh, VOL_or_BND=BND, element_wise=True)
+        elem_Jz = Integrate(gf_J[2], coil_mesh, VOL_or_BND=BND, element_wise=True)
 
-    centroids, areas, Jvecs = [], [], []
-    for el in coil_mesh.Elements(BND):
-        a = abs(elem_A[el.nr])
-        if a < 1e-30:
-            continue
-        j = np.array([elem_Jx[el.nr], elem_Jy[el.nr],
-                      elem_Jz[el.nr]]) / a
-        verts = [coil_mesh.vertices[v.nr].point for v in el.vertices]
-        c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
-        centroids.append(c)
-        areas.append(a)
-        Jvecs.append(j)
+        centroids, areas, Jvecs = [], [], []
+        for el in coil_mesh.Elements(BND):
+            a = abs(elem_A[el.nr])
+            if a < 1e-30:
+                continue
+            j = np.array([elem_Jx[el.nr], elem_Jy[el.nr],
+                          elem_Jz[el.nr]]) / a
+            verts = [coil_mesh.vertices[v.nr].point for v in el.vertices]
+            c = np.mean([(v[0], v[1], v[2]) for v in verts], axis=0)
+            centroids.append(c)
+            areas.append(a)
+            Jvecs.append(j)
 
-    centroids = np.asarray(centroids)
-    areas = np.asarray(areas)
-    Jvecs = np.asarray(Jvecs) * current
+        centroids = np.asarray(centroids)
+        areas = np.asarray(areas)
+        Jvecs = np.asarray(Jvecs) * current
 
-    print(f"  {len(centroids)} source panels, "
-          f"total area {areas.sum()*1e6:.1f} mm^2")
-    print("  integrating phi_inc...")
-    t0 = time.perf_counter()
-    phi = compute_phi_inc_from_surface_J(
-        wp_nodes, centroids, areas, Jvecs, n_quad=20)
-    print(f"  phi range [{phi.min():.4f}, {phi.max():.4f}] "
-          f"({time.perf_counter()-t0:.1f} s)")
-    return phi
+        print(f"  {len(centroids)} source panels, "
+              f"total area {areas.sum()*1e6:.1f} mm^2")
+        print("  integrating phi_inc...")
+        t0 = time.perf_counter()
+        phi = compute_phi_inc_from_surface_J(
+            wp_nodes, centroids, areas, Jvecs, n_quad=20)
+        print(f"  phi range [{phi.min():.4f}, {phi.max():.4f}] "
+              f"({time.perf_counter()-t0:.1f} s)")
+        return phi
 
 
 # ------------------------------------------------------------------
