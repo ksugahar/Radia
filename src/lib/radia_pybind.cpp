@@ -55,6 +55,7 @@ extern "C" {
     double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
     double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
                                                   int kA, int kB, int kC);
+    double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2902,6 +2903,19 @@ PYBIND11_MODULE(_radia_pybind, m) {
         Builds three random rk leaves of given ranks, computes the dense ground
         truth (U_c V_c^T + alpha A B), runs h_addmul, and verifies the result by
         comparing C's new dense reconstruction to the truth. Expected ~1e-13.
+    )pbdoc");
+
+    // -- Phase 3.5 integration test: depth=2 H-LU with rk off-diagonals --
+    m.def("HLUSelfTestRkDeep", [](int n_per_block, int rk_rank) -> double {
+        return cHACApK_harith_self_test_rk_deep(n_per_block, rk_rank);
+    },
+    py::arg("n_per_block") = 30, py::arg("rk_rank") = 5,
+    R"pbdoc(
+        Phase 3.5 integration test: depth=2 H-LU (4x4 leaf grid) with
+        DENSE diagonal leaves and RK off-diagonal leaves of rank rk_rank.
+        Exercises the full Phase 1 + 2 + 3 partial + 3.5 pipeline including
+        rk(A)*rk(B) -> rk(C) trailing updates inside off-diagonal sub-blocks
+        plus ACA recompression. Returns max relative error vs LAPACK dgesv.
     )pbdoc");
 
     m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,

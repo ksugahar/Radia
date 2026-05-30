@@ -114,6 +114,13 @@ double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
 double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
                                               int kA, int kB, int kC);
 
+/* Phase 3.5 integration test: depth=2 H-LU with rk off-diagonal leaves.
+ * Builds 4x4 leaf grid with dense diagonal + 12 rk off-diagonal leaves of
+ * rank rk_rank, runs hlu_decomp + solve, compares to LAPACK dgesv.
+ * Exercises ALL Phase 1-3.5 paths (the rk-rk -> rk via root-level trailing
+ * update inside off-diagonal sub-blocks). */
+double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
+
 #ifdef __cplusplus
 }
 #endif
