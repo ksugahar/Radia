@@ -1453,3 +1453,220 @@ double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank)
     if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
     return rel;
 }
+
+
+/* ---------- depth=2 rk self-test (full Phase 1-3.5 integration) --------- *
+ *
+ * Builds a depth-2 block-tree (4x4 leaf grid) where:
+ *   GLOBAL diagonal leaves (A00, A11, A22, A33) are DENSE
+ *   12 GLOBAL off-diagonal leaves are RK of rank rk_rank
+ *
+ * Exercises through the recursive LU:
+ *   Phase 1: dense LU on diagonal leaves
+ *   Phase 2: recursive H-arith descent into internal nodes
+ *   Phase 3 partial: htrsm with dense L and rk X
+ *                    h_addmul rk*rk -> dense (when target is a diagonal leaf)
+ *                    hmatvec_subtract on rk leaves
+ *   Phase 3.5:       h_addmul rk*rk -> rk + recompression
+ *                    (when target is an off-diagonal leaf inside a sub-block) */
+double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank)
+{
+    if (n_per_block <= 0 || rk_rank <= 0) return -1.0;
+    int nb = n_per_block;
+    int N = 4 * nb;
+    int k = (rk_rank > nb) ? nb : rk_rank;
+
+    unsigned long seed = 333555777UL;
+    #define RND2() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                    (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref) return -2.0;
+    memset(A_full, 0, sizeof(double) * (size_t)N * (size_t)N);
+
+    /* 12 rk factor pairs for off-diagonal leaves. */
+    int n_offdiag = 12;
+    double *U_off = (double*)malloc(sizeof(double) * (size_t)n_offdiag * (size_t)nb * (size_t)k);
+    double *V_off = (double*)malloc(sizeof(double) * (size_t)n_offdiag * (size_t)nb * (size_t)k);
+    int    off_ij[12][2];
+    if (!U_off || !V_off) return -2.0;
+    {
+        int idx = 0;
+        for (int j_grid = 0; j_grid < 4; j_grid++)
+            for (int i_grid = 0; i_grid < 4; i_grid++)
+                if (i_grid != j_grid) {
+                    off_ij[idx][0] = i_grid;
+                    off_ij[idx][1] = j_grid;
+                    idx++;
+                }
+    }
+    for (int idx = 0; idx < n_offdiag*nb*k; idx++) U_off[idx] = RND2();
+    for (int idx = 0; idx < n_offdiag*nb*k; idx++) V_off[idx] = RND2();
+
+    /* Fill A_full off-diag from rk factors. */
+    for (int t = 0; t < n_offdiag; t++) {
+        int i_grid = off_ij[t][0], j_grid = off_ij[t][1];
+        int r0 = i_grid * nb, c0 = j_grid * nb;
+        double *Ut = U_off + (size_t)t * (size_t)nb * (size_t)k;
+        double *Vt = V_off + (size_t)t * (size_t)nb * (size_t)k;
+        for (int jj = 0; jj < nb; jj++) {
+            for (int ii = 0; ii < nb; ii++) {
+                double s = 0.0;
+                for (int p = 0; p < k; p++) s += Ut[ii + p*nb] * Vt[jj + p*nb];
+                A_full[(r0+ii) + (c0+jj)*N] = s;
+            }
+        }
+    }
+    /* Fill A_full diagonal (random dense). */
+    for (int g = 0; g < 4; g++) {
+        int d0 = g * nb;
+        for (int jj = 0; jj < nb; jj++)
+            for (int ii = 0; ii < nb; ii++)
+                A_full[(d0+ii) + (d0+jj)*N] = RND2();
+    }
+    /* Diag-dominate. */
+    for (int i = 0; i < N; i++) {
+        double rs = 0.0;
+        for (int j = 0; j < N; j++) {
+            if (j == i) continue;
+            double v = A_full[i + j*N];
+            rs += (v < 0.0) ? -v : v;
+        }
+        A_full[i + i*N] = rs + (double)N;
+    }
+    for (int j = 0; j < N; j++) b[j] = RND2() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    /* Reference dgesv. */
+    int *ipiv_ref = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ipiv_ref, x_ref, N);
+    free(ipiv_ref);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        free(U_off); free(V_off);
+        return -3.0;
+    }
+
+    /* Cluster tree: root + 2 lvl-1 + 4 lvl-2. */
+    st_cHACApK_cluster_t *clt_root = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt_lvl1[2];
+    st_cHACApK_cluster_t *clt_lvl2[4];
+    clt_root->nstrt = 1; clt_root->nsize = N;
+    for (int g = 0; g < 2; g++) {
+        clt_lvl1[g] = (st_cHACApK_cluster_t*)calloc(1, sizeof(**clt_lvl1));
+        clt_lvl1[g]->nstrt = 1 + g*2*nb;
+        clt_lvl1[g]->nsize = 2*nb;
+    }
+    for (int g = 0; g < 4; g++) {
+        clt_lvl2[g] = (st_cHACApK_cluster_t*)calloc(1, sizeof(**clt_lvl2));
+        clt_lvl2[g]->nstrt = 1 + g*nb;
+        clt_lvl2[g]->nsize = nb;
+    }
+
+    /* Build 16 leaves + 4 lvl-1 internal + 1 root. */
+    st_cHACApK_leafmtx_t    *all_lf[16]; int n_lf = 0;
+    st_cHACApK_block_node_t *all_bn[21]; int n_bn = 0;
+    st_cHACApK_block_node_t *lvl1_nodes[4];
+
+    for (int j_root = 0; j_root < 2; j_root++) {
+        for (int i_root = 0; i_root < 2; i_root++) {
+            st_cHACApK_block_node_t *bn1 = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn1));
+            bn1->row_cluster = clt_lvl1[i_root];
+            bn1->col_cluster = clt_lvl1[j_root];
+            bn1->nrsons = 2; bn1->ncsons = 2;
+            bn1->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*bn1->sons));
+            all_bn[n_bn++] = bn1;
+
+            for (int j_sub = 0; j_sub < 2; j_sub++) {
+                for (int i_sub = 0; i_sub < 2; i_sub++) {
+                    int i_grid = 2*i_root + i_sub;
+                    int j_grid = 2*j_root + j_sub;
+                    st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn));
+                    bn->row_cluster = clt_lvl2[i_grid];
+                    bn->col_cluster = clt_lvl2[j_grid];
+                    st_cHACApK_leafmtx_t *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));
+                    lf->ndl = nb; lf->ndt = nb;
+                    lf->nstrtl = bn->row_cluster->nstrt;
+                    lf->nstrtt = bn->col_cluster->nstrt;
+                    if (i_grid == j_grid) {
+                        lf->ltmtx = 2;
+                        lf->a1 = (double*)malloc(sizeof(double)*(size_t)nb*(size_t)nb);
+                        int r0 = bn->row_cluster->nstrt - 1;
+                        int c0 = bn->col_cluster->nstrt - 1;
+                        for (int jj = 0; jj < nb; jj++)
+                            for (int ii = 0; ii < nb; ii++)
+                                lf->a1[ii + jj*nb] = A_full[(r0+ii) + (c0+jj)*N];
+                        bn->leaf_kind = 2;
+                    } else {
+                        int slot = -1;
+                        for (int t = 0; t < n_offdiag; t++) {
+                            if (off_ij[t][0] == i_grid && off_ij[t][1] == j_grid) { slot = t; break; }
+                        }
+                        lf->ltmtx = 1; lf->kt = k;
+                        lf->a1 = (double*)malloc(sizeof(double)*(size_t)nb*(size_t)k);
+                        lf->a2 = (double*)malloc(sizeof(double)*(size_t)nb*(size_t)k);
+                        memcpy(lf->a1, U_off + (size_t)slot*(size_t)nb*(size_t)k,
+                               sizeof(double)*(size_t)nb*(size_t)k);
+                        memcpy(lf->a2, V_off + (size_t)slot*(size_t)nb*(size_t)k,
+                               sizeof(double)*(size_t)nb*(size_t)k);
+                        bn->leaf_kind = 1;
+                    }
+                    bn->leaf_mtx = lf;
+                    all_lf[n_lf++] = lf;
+                    all_bn[n_bn++] = bn;
+                    bn1->sons[i_sub + j_sub*2] = bn;
+                }
+            }
+            lvl1_nodes[i_root + j_root*2] = bn1;
+        }
+    }
+
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root;
+    root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    for (int idx = 0; idx < 4; idx++) root->sons[idx] = lvl1_nodes[idx];
+    all_bn[n_bn++] = root;
+
+    /* H-LU run. */
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    /* Max rel err. */
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    /* Cleanup. */
+    for (int i = 0; i < n_lf; i++) {
+        free(all_lf[i]->a1);
+        if (all_lf[i]->a2) free(all_lf[i]->a2);
+        free(all_lf[i]);
+    }
+    for (int i = 0; i < n_bn; i++) {
+        if (all_bn[i]->sons) free(all_bn[i]->sons);
+        free(all_bn[i]);
+    }
+    free(clt_root);
+    for (int i = 0; i < 2; i++) free(clt_lvl1[i]);
+    for (int i = 0; i < 4; i++) free(clt_lvl2[i]);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+    free(U_off); free(V_off);
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
