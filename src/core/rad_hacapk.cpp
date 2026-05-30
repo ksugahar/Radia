@@ -778,8 +778,25 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
             dinv[k] = (d > 1e-300) ? 1.0/d : 1.0;
         }
     }
+    // (d) K-DENSE preconditioner state. Populated AFTER any SetDeflation (so the
+    // reduced operator T^T A T includes the antisym slab deflation alpha L L^T).
+    // Build path runs after the deflation setup below; applyMinv prefers K-dense
+    // when ready, else falls back to (b) col-scale Jacobi.
+    std::vector<double>     kdense_lu;     // ns x ns col-major, overwritten with LU
+    std::vector<lapack_int> kdense_ipiv;
+    int                     kdense_n = 0;
+    bool                    kdense_ready = false;
+
     std::vector<double> mf(n), mg(n);
     auto applyMinv = [&](const std::vector<double>& rstar, std::vector<double>& zstar){
+        if (kdense_ready) {
+            // M^-1 r = (T^T A T)^-1 r  via LAPACK dgetrs (forward + backward subst).
+            std::copy(rstar.begin(), rstar.end(), zstar.begin());
+            LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'N', kdense_n, 1,
+                           kdense_lu.data(), kdense_n, kdense_ipiv.data(),
+                           zstar.data(), kdense_n);
+            return;
+        }
         if (!useBlock) { for (int k=0;k<ns;k++) zstar[k] = dinv[k]*rstar[k]; return; }
         applyT(rstar, mf);                                   // full = T r
         int ne = m_interaction->AmOfMainElem;
@@ -820,6 +837,53 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         double alpha = (acnt>0) ? asum/(double)acnt : 1.0;
         SetDeflation(m_added_offsets, m_added_dofs, m_added_coeffs, alpha);
         antisymDefl = true;
+    }
+
+    // (d) K-DENSE preconditioner BUILD: explicit dense T^T A T + LAPACK LU.
+    //   Cost: ns HACApK matvecs (build) + O(ns^3/3) factor (dgetrf). Memory ns^2*8 B.
+    //   Built AFTER SetDeflation so MatVec applies (A + alpha L L^T) -> the LU is
+    //   on the FULL reduced operator including antisym slab deflation.
+    //   Skipped (-> falls back to (b) col-scale Jacobi via applyMinv) when:
+    //     - ns^2 * 8 > KDENSE_BYTES_LIMIT (currently 8 GB; rules out ~20^3)
+    //     - allocation throws (std::bad_alloc)
+    //     - dgetrf returns info != 0 (singular even after deflation, should not happen
+    //       for the symmetric / no-IMA / antisym-deflated reduced operator)
+    //   Optimal at moderate scale: cube 4^3 (n=384) and C-type 6^3 (n=7200) factor in
+    //   under a few seconds; iteration count drops to ~2 (BiCGSTAB direct-solve regime).
+    {
+        const size_t KDENSE_BYTES_LIMIT = (size_t)8 * 1024 * 1024 * 1024;   // 8 GB
+        size_t kdense_bytes = (size_t)ns * (size_t)ns * sizeof(double);
+        if (ns > 0 && kdense_bytes <= KDENSE_BYTES_LIMIT) {
+            bool alloc_ok = true;
+            try {
+                kdense_lu.assign((size_t)ns * (size_t)ns, 0.0);
+                kdense_ipiv.assign((size_t)ns, 0);
+            } catch (std::bad_alloc&) { alloc_ok = false; kdense_lu.clear(); kdense_ipiv.clear(); }
+            if (alloc_ok) {
+                std::vector<double> kd_v(n, 0.0), kd_u(n, 0.0);
+                for (int k = 0; k < ns; k++) {
+                    // kd_v = T[:,k] (sparse): scatter star col k into full-space vector
+                    for (int j = m_star_offsets[k]; j < m_star_offsets[k+1]; j++)
+                        kd_v[m_star_dofs[j]] = m_star_coeffs[j];
+                    MatVec(kd_v, kd_u);                              // kd_u = (A + alpha L L^T) kd_v
+                    // (T^T kd_u) gives column k of T^T A T (col-major: kdense_lu[k2 + k*ns])
+                    for (int k2 = 0; k2 < ns; k2++) {
+                        double s = 0.0;
+                        for (int j = m_star_offsets[k2]; j < m_star_offsets[k2+1]; j++)
+                            s += m_star_coeffs[j] * kd_u[m_star_dofs[j]];
+                        kdense_lu[(size_t)k2 + (size_t)k * (size_t)ns] = s;
+                    }
+                    // un-scatter (restore kd_v to zero for next col -- cheaper than full fill)
+                    for (int j = m_star_offsets[k]; j < m_star_offsets[k+1]; j++)
+                        kd_v[m_star_dofs[j]] = 0.0;
+                }
+                // LAPACK dense LU factorization
+                int info = LAPACKE_dgetrf(LAPACK_COL_MAJOR, ns, ns,
+                                          kdense_lu.data(), ns, kdense_ipiv.data());
+                if (info == 0) { kdense_n = ns; kdense_ready = true; }
+                else { kdense_lu.clear(); kdense_ipiv.clear(); }
+            }
+        }
     }
 
     // right-preconditioned BiCGSTAB on the reduced system T^T A T y = T^T b
