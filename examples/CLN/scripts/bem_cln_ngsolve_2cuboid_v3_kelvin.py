@@ -213,31 +213,32 @@ def solve_eddy_kelvin(geo, freq, kelvin_center=(0.1, 0, 0),
 
     prec = Preconditioner(a, "bddc")
 
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    gfu = GridFunction(fes)
+        gfu = GridFunction(fes)
 
-    inv = CGSolver(a.mat, prec.mat, complex=True, maxsteps=2000, precision=1e-8,
-                   printrates=False)
-    gfu.vec.data = inv * f.vec
+        inv = CGSolver(a.mat, prec.mat, complex=True, maxsteps=2000, precision=1e-8,
+                       printrates=False)
+        gfu.vec.data = inv * f.vec
 
-    A_total = gfu + A_ext
-    J = -1j * omega * sigma_cf * A_total
+        A_total = gfu + A_ext
+        J = -1j * omega * sigma_cf * A_total
 
-    r1_x = -7.5e-3; r2_x = 7.5e-3
-    m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
-    m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
+        r1_x = -7.5e-3; r2_x = 7.5e-3
+        m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
+        m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
 
-    in_cu1 = IfPos(2.5e-3 - (x - r1_x),
-                   IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
-    in_cu2 = IfPos(2.5e-3 - (x - r2_x),
-                   IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
+        in_cu1 = IfPos(2.5e-3 - (x - r1_x),
+                       IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
+        in_cu2 = IfPos(2.5e-3 - (x - r2_x),
+                       IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
 
-    m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
-    m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
+        m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
+        m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
 
-    return m1_y, m2_y
+        return m1_y, m2_y
 
 
 def main():
@@ -246,6 +247,7 @@ def main():
     print()
     try:
         from ngsolve import Mesh
+        from ngsolve import TaskManager
     except ImportError:
         print("NGSolve not available")
         sys.exit(1)

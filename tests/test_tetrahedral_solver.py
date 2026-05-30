@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 import radia as rad
 import numpy as np
 from ngsolve import Mesh
+from ngsolve import TaskManager
 from netgen.occ import Box, OCCGeometry
 from netgen_mesh_import import netgen_mesh_to_radia
 
@@ -94,36 +95,37 @@ def test_tetrahedral_mesh_with_material():
 
     # Create tetrahedral mesh
     geo = OCCGeometry(Box((0, 0, 0), (0.1, 0.1, 0.1)))
-    mesh = Mesh(geo.GenerateMesh(maxh=0.05))
-    print(f"       Mesh: {mesh.ne} tetrahedral elements")
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=0.05))
+        print(f"       Mesh: {mesh.ne} tetrahedral elements")
 
-    # Convert to Radia
-    mag_obj = netgen_mesh_to_radia(
-        mesh,
-        material={'magnetization': [0, 0, 1]},  # Initial M
-        units='m',
-        combine=True,
-        verbose=False
-    )
+        # Convert to Radia
+        mag_obj = netgen_mesh_to_radia(
+            mesh,
+            material={'magnetization': [0, 0, 1]},  # Initial M
+            units='m',
+            combine=True,
+            verbose=False
+        )
 
-    # Apply linear material to all elements
-    members = rad.ObjCntStuf(mag_obj)
-    mat = rad.MatLin([1.1, 1.1], [0, 0, 12000])  # mu_r = 1.1 isotropic
-    for member_id in members:
-        rad.MatApl(member_id, mat)
+        # Apply linear material to all elements
+        members = rad.ObjCntStuf(mag_obj)
+        mat = rad.MatLin([1.1, 1.1], [0, 0, 12000])  # mu_r = 1.1 isotropic
+        for member_id in members:
+            rad.MatApl(member_id, mat)
 
-    # Solve
-    result = rad.Solve(mag_obj, 0.0001, 10000)
+        # Solve
+        result = rad.Solve(mag_obj, 0.0001, 10000)
 
-    print(f"       Solve result: {result}")
-    if len(result) >= 4 and result[3] >= 1:
-        print(f"[PASS] Solve completed: {result[3]:.0f} iterations, convergence={result[0]:.2e}")
-    else:
-        print(f"[PASS] Solve completed: convergence={result[0]:.2e}")
+        print(f"       Solve result: {result}")
+        if len(result) >= 4 and result[3] >= 1:
+            print(f"[PASS] Solve completed: {result[3]:.0f} iterations, convergence={result[0]:.2e}")
+        else:
+            print(f"[PASS] Solve completed: convergence={result[0]:.2e}")
 
-    # Test field
-    H = rad.Fld(mag_obj, 'h', [0.15, 0.05, 0.05])
-    print(f"       H field: [{H[0]:.2f}, {H[1]:.2f}, {H[2]:.2f}] A/m")
+        # Test field
+        H = rad.Fld(mag_obj, 'h', [0.15, 0.05, 0.05])
+        print(f"       H field: [{H[0]:.2f}, {H[1]:.2f}, {H[2]:.2f}] A/m")
 
 
 def test_permanent_magnet_no_solve():

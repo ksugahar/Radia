@@ -41,6 +41,7 @@ print('=' * 70)
 # Check for NGSolve
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.occ import Box, Pnt, OCCGeometry, Glue
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
@@ -179,39 +180,40 @@ def solve_ngsolve_h_formulation():
     f += mu * InnerProduct(grad(v), Hs) * dx
     f += -mu * v * InnerProduct(n, Hsb) * ds('outer')
 
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    # Solve
-    print('Solving...')
-    gfu = GridFunction(fes)
-    c = Preconditioner(a, type='local')
-    solvers.CG(sol=gfu.vec, rhs=f.vec, mat=a.mat, pre=c.mat,
-               tol=1e-10, printrates=False, maxsteps=10000)
+        # Solve
+        print('Solving...')
+        gfu = GridFunction(fes)
+        c = Preconditioner(a, type='local')
+        solvers.CG(sol=gfu.vec, rhs=f.vec, mat=a.mat, pre=c.mat,
+                   tol=1e-10, printrates=False, maxsteps=10000)
 
-    # Compute fields
-    print('Computing fields...')
+        # Compute fields
+        print('Computing fields...')
 
-    # H_pert = -grad(phi)
-    H_pert = -grad(gfu)
+        # H_pert = -grad(phi)
+        H_pert = -grad(gfu)
 
-    # H_total = H_s + H_pert
-    H_total = Hs + H_pert
+        # H_total = H_s + H_pert
+        H_total = Hs + H_pert
 
-    # Magnetization: M = chi * H (in magnetic region), 0 elsewhere
-    chi_dict = {'air_inner': 0, 'air_outer': 0, 'magnetic': CHI}
-    chi_cf = CoefficientFunction([chi_dict[mat] for mat in mesh.GetMaterials()])
-    M_cf = chi_cf * H_total
+        # Magnetization: M = chi * H (in magnetic region), 0 elsewhere
+        chi_dict = {'air_inner': 0, 'air_outer': 0, 'magnetic': CHI}
+        chi_cf = CoefficientFunction([chi_dict[mat] for mat in mesh.GetMaterials()])
+        M_cf = chi_cf * H_total
 
-    # B = mu_0 * (H + M) = mu_0 * H outside, mu_0 * mu_r * H inside
-    B_cf = MU_0 * (H_total + M_cf)
+        # B = mu_0 * (H + M) = mu_0 * H outside, mu_0 * mu_r * H inside
+        B_cf = MU_0 * (H_total + M_cf)
 
-    # Project B onto HDiv for evaluation
-    fes_hdiv = HDiv(mesh, order=2)
-    gfB = GridFunction(fes_hdiv)
-    gfB.Set(B_cf)
+        # Project B onto HDiv for evaluation
+        fes_hdiv = HDiv(mesh, order=2)
+        gfB = GridFunction(fes_hdiv)
+        gfB.Set(B_cf)
 
-    return mesh, H_total, M_cf, gfB
+        return mesh, H_total, M_cf, gfB
 
 
 def extract_magnetic_elements(mesh, M_cf):

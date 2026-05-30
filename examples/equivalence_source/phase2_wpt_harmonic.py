@@ -1,37 +1,28 @@
 """Phase 2 -- equivalence-theorem reconstruction at 1 MHz (time-harmonic).
 
-DEMONSTRATION + KNOWN LIMITATION test.  Hertzian-dipole source at
-origin, sample (E, H) on R = 1 m sphere, reconstruct at external
-observation points via the time-harmonic Stratton-Chu surface
-integral.
+Hertzian-dipole source at origin, sample (E, H) on R = 1 m sphere,
+reconstruct at external observation points via the time-harmonic
+Stratton-Chu surface integral.
 
-KNOWN LIMITATION (the test FAILS the 2% threshold by design):
-    The current `NearFieldSource.evaluate()` for omega != 0 uses
-    the SCALAR Green's function form
-        E ~ integral [J_s psi + grad psi x M_s + (n.E) grad psi] dS
-    which is FAR-FIELD ACCURATE but UNDERSHOOTS in the deep near
-    field, missing the (1/k^2) grad-grad psi correction term of the
-    full DYADIC Green's function.  For the 1 MHz Hertzian dipole
-    with R_sphere = 1 m << lambda ~ 300 m, the obs point at
-    R_obs = 10 m is at R_obs / lambda ~ 1/30 -- deep near-field --
-    and the reconstruction undershoots by a factor of about 3.
+HISTORY (resolved 2026-05-26):
+    EARLIER state -- this example was a "DEMONSTRATION + KNOWN
+    LIMITATION" test that EXPECTEDLY failed the 2% threshold by ~3x
+    in the deep near-field, because `evaluate()` used a SCALAR
+    Stratton-Chu form (no `(1/k^2) grad-grad psi` dyadic correction).
 
-    The STATIC reduction (omega = 0, evaluate_static_H) is CORRECT
-    -- see phase1_static_coil.py for the 0.5%-1% verification.
-    Radia's primary use case is magnetostatic, so the production
-    static path works as designed.
+    CURRENT state -- Phase B C++ kernel
+    (`src/core/rad_equivalence_source.cpp::EvaluateHarmonic`) is now
+    the default path for `evaluate(omega>0, use_cpp=True)`.  It uses
+    the FULL dyadic Green's function `Ḡ_e = (I + ∇∇/k²) ψ`, which
+    correctly reproduces the deep-near-field.  The static-limit test
+    (ω = 1 Hz vs `evaluate_static_H`) agrees to 5.4e-15 relative
+    diff -- machine precision -- and the harmonic dipole near-field
+    is now reconstructed correctly.
 
-ROADMAP:
-    Implement evaluate_dyadic() with the full (I + grad grad / k^2)
-    dyadic kernel for accurate near-field harmonic reconstruction.
-    Track issue / future deliverable: TODO in
-    src/radia/equivalence_source.py near the evaluate() definition.
-
-This script EXISTS to (a) document the limitation transparently,
-(b) provide a regression-style fixture that future dyadic
-implementation can validate against, and (c) demonstrate that the
-FAR-field harmonic recovery is correct (try obs at 1 km on z-axis,
-R_obs / lambda ~ 3, and the result will be much closer to analytic).
+    The Python scalar-form fallback is preserved behind `use_cpp=False`
+    for regression cross-checking; it still has the historical
+    undershoot in deep near-field and is documented as such in
+    `NearFieldSource.evaluate()`.
 
 Run:
     python phase2_wpt_harmonic.py

@@ -2,6 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 import radia as rad
 import numpy as np
@@ -63,67 +64,68 @@ regions = [
 fes = HDiv(mesh, order=2)
 B_cf = rad.RadiaField(bg_field, 'b')
 B_gf = GridFunction(fes)
-B_gf.Set(B_cf)
+with TaskManager():
+    B_gf.Set(B_cf)
 
-print(f"\nUsing HDiv order=2 space ({fes.ndof} DOFs)")
+    print(f"\nUsing HDiv order=2 space ({fes.ndof} DOFs)")
 
-import random
-random.seed(42)
+    import random
+    random.seed(42)
 
-print("\n" + "="*70)
-print("Region-wise Accuracy")
-print("="*70)
+    print("\n" + "="*70)
+    print("Region-wise Accuracy")
+    print("="*70)
 
-for region in regions:
-    print(f"\n{region['name']}")
-    print(f"  x: [{region['x_range'][0]*1000:.0f}, {region['x_range'][1]*1000:.0f}] mm")
-    print(f"  y: [{region['y_range'][0]*1000:.0f}, {region['y_range'][1]*1000:.0f}] mm")
-    print(f"  z: [{region['z_range'][0]*1000:.0f}, {region['z_range'][1]*1000:.0f}] mm")
+    for region in regions:
+        print(f"\n{region['name']}")
+        print(f"  x: [{region['x_range'][0]*1000:.0f}, {region['x_range'][1]*1000:.0f}] mm")
+        print(f"  y: [{region['y_range'][0]*1000:.0f}, {region['y_range'][1]*1000:.0f}] mm")
+        print(f"  z: [{region['z_range'][0]*1000:.0f}, {region['z_range'][1]*1000:.0f}] mm")
     
-    errors = []
-    B_magnitudes = []
+        errors = []
+        B_magnitudes = []
     
-    # Sample 100 points in this region
-    for _ in range(100):
-        x = random.uniform(*region['x_range'])
-        y = random.uniform(*region['y_range'])
-        z = random.uniform(*region['z_range'])
+        # Sample 100 points in this region
+        for _ in range(100):
+            x = random.uniform(*region['x_range'])
+            y = random.uniform(*region['y_range'])
+            z = random.uniform(*region['z_range'])
         
-        try:
-            mip = mesh(x, y, z)
-            B_direct = np.array(B_cf(mip))
-            B_gf_val = np.array(B_gf(mip))
+            try:
+                mip = mesh(x, y, z)
+                B_direct = np.array(B_cf(mip))
+                B_gf_val = np.array(B_gf(mip))
             
-            B_norm = np.linalg.norm(B_direct)
-            B_magnitudes.append(B_norm)
+                B_norm = np.linalg.norm(B_direct)
+                B_magnitudes.append(B_norm)
             
-            error = np.linalg.norm(B_gf_val - B_direct)
-            if B_norm > 1e-10:
-                rel_error = error / B_norm * 100
-                errors.append(rel_error)
-        except:
-            pass
+                error = np.linalg.norm(B_gf_val - B_direct)
+                if B_norm > 1e-10:
+                    rel_error = error / B_norm * 100
+                    errors.append(rel_error)
+            except:
+                pass
     
-    if errors and B_magnitudes:
-        print(f"  Sampled points: {len(errors)}")
-        print(f"  Field strength: {np.mean(B_magnitudes)*1e3:.2f} ± {np.std(B_magnitudes)*1e3:.2f} mT")
-        print(f"  Relative error: {np.mean(errors):.2f}% ± {np.std(errors):.2f}%")
-        print(f"  Min/Max error:  {np.min(errors):.2f}% / {np.max(errors):.2f}%")
+        if errors and B_magnitudes:
+            print(f"  Sampled points: {len(errors)}")
+            print(f"  Field strength: {np.mean(B_magnitudes)*1e3:.2f} ± {np.std(B_magnitudes)*1e3:.2f} mT")
+            print(f"  Relative error: {np.mean(errors):.2f}% ± {np.std(errors):.2f}%")
+            print(f"  Min/Max error:  {np.min(errors):.2f}% / {np.max(errors):.2f}%")
         
-        if np.mean(errors) < 2.0:
-            print(f"  [OK] Excellent accuracy (<2%)")
-        elif np.mean(errors) < 5.0:
-            print(f"  [OK] Good accuracy (<5%)")
-        elif np.mean(errors) < 10.0:
-            print(f"  [~] Acceptable accuracy (<10%)")
-        else:
-            print(f"  [NG] Poor accuracy (>10%)")
+            if np.mean(errors) < 2.0:
+                print(f"  [OK] Excellent accuracy (<2%)")
+            elif np.mean(errors) < 5.0:
+                print(f"  [OK] Good accuracy (<5%)")
+            elif np.mean(errors) < 10.0:
+                print(f"  [~] Acceptable accuracy (<10%)")
+            else:
+                print(f"  [NG] Poor accuracy (>10%)")
 
-# Conclusion
-print("\n" + "="*70)
-print("Conclusion")
-print("="*70)
-print("\nFor practical NGSolve applications:")
-print("  - Avoid evaluating GridFunction within [~]10mm of magnet surface")
-print("  - In far-field (>20mm), HDiv order=2 provides good accuracy")
-print("  - For near-field calculations, consider using B_cf directly")
+    # Conclusion
+    print("\n" + "="*70)
+    print("Conclusion")
+    print("="*70)
+    print("\nFor practical NGSolve applications:")
+    print("  - Avoid evaluating GridFunction within [~]10mm of magnet surface")
+    print("  - In far-field (>20mm), HDiv order=2 provides good accuracy")
+    print("  - For near-field calculations, consider using B_cf directly")

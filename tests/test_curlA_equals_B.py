@@ -110,14 +110,15 @@ for maxh in mesh_sizes:
 
 	# Project A to H(curl) space
 	A_gf = GridFunction(fes_hcurl)
-	A_gf.Set(A_cf)
+	with TaskManager():
+		A_gf.Set(A_cf)
 
-	# Compute curl(A) - result is in H(div)
-	curl_A_gf = curl(A_gf)
+		# Compute curl(A) - result is in H(div)
+		curl_A_gf = curl(A_gf)
 
-	# Project B to H(div) space (CORRECTED!)
-	B_gf = GridFunction(fes_hdiv)
-	B_gf.Set(B_cf)
+		# Project B to H(div) space (CORRECTED!)
+		B_gf = GridFunction(fes_hdiv)
+		B_gf.Set(B_cf)
 
 	# Compute L2 error: ||curl(A) - B||_L2
 	error_vec = curl_A_gf - B_gf
@@ -228,17 +229,18 @@ A_cf = rad.RadiaField(bg_field, 'a')
 B_cf = rad.RadiaField(bg_field, 'b')
 
 A_gf = GridFunction(fes_hcurl)
-A_gf.Set(A_cf)
+with TaskManager():
+    A_gf.Set(A_cf)
 
-curl_A_gf = curl(A_gf)
+    curl_A_gf = curl(A_gf)
 
-B_gf = GridFunction(fes_hdiv)
-B_gf.Set(B_cf)
+    B_gf = GridFunction(fes_hdiv)
+    B_gf.Set(B_cf)
 
-# Compute error field magnitude
-error_vec = curl_A_gf - B_gf
-error_magnitude = GridFunction(fes_h1)
-error_magnitude.Set(sqrt(InnerProduct(error_vec, error_vec)))
+    # Compute error field magnitude
+    error_vec = curl_A_gf - B_gf
+    error_magnitude = GridFunction(fes_h1)
+    error_magnitude.Set(sqrt(InnerProduct(error_vec, error_vec)))
 
 try:
 	# Export fields

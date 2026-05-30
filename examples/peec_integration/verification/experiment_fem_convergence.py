@@ -14,6 +14,7 @@ os.environ['PATH'] = (r'S:\NGSolve\01_GitHub\install_ngsolve\bin;'
 sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ngsolve\Lib\site-packages')
 
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 MU_0 = 4e-7 * np.pi
@@ -63,61 +64,62 @@ shape = Glue([air, coil])
 geo = OCCGeometry(shape)
 ngmesh = geo.GenerateMesh(maxh=maxh)
 mesh = Mesh(ngmesh)
-mesh.Curve(2)
+with TaskManager():
+    mesh.Curve(2)
 
-ne = mesh.ne
-nv = mesh.nv
-materials = mesh.GetMaterials()
-t_mesh = time.time() - t0
-print(f"Mesh: {ne} elements, {nv} vertices ({t_mesh:.1f}s)")
-print(f"Materials: {materials}")
-print()
+    ne = mesh.ne
+    nv = mesh.nv
+    materials = mesh.GetMaterials()
+    t_mesh = time.time() - t0
+    print(f"Mesh: {ne} elements, {nv} vertices ({t_mesh:.1f}s)")
+    print(f"Materials: {materials}")
+    print()
 
-# Solve (same formulation as verify_ngsolve_inductance.py)
-t0 = time.time()
-sigma_reg = 1.0
-freq_reg = 0.01
-omega_reg = 2 * np.pi * freq_reg
+    # Solve (same formulation as verify_ngsolve_inductance.py)
+    t0 = time.time()
+    sigma_reg = 1.0
+    freq_reg = 0.01
+    omega_reg = 2 * np.pi * freq_reg
 
-# Per-material inv_mu
-inv_mu_vals = [1.0 / MU_0] * len(materials)
-inv_mu = CoefficientFunction(inv_mu_vals)
+    # Per-material inv_mu
+    inv_mu_vals = [1.0 / MU_0] * len(materials)
+    inv_mu = CoefficientFunction(inv_mu_vals)
 
-fes = HCurl(mesh, order=order, dirichlet='outer', complex=True, nograds=True)
-A_trial, v_test = fes.TnT()
+    fes = HCurl(mesh, order=order, dirichlet='outer', complex=True, nograds=True)
+    A_trial, v_test = fes.TnT()
 
-r_xy = sqrt(x * x + y * y + 1e-30)
-J_mag = I_COIL / (W_WIRE * H_WIRE)
-J_cf = CoefficientFunction((-J_mag * y / r_xy, J_mag * x / r_xy, 0))
+    r_xy = sqrt(x * x + y * y + 1e-30)
+    J_mag = I_COIL / (W_WIRE * H_WIRE)
+    J_cf = CoefficientFunction((-J_mag * y / r_xy, J_mag * x / r_xy, 0))
 
-a = BilinearForm(fes)
-a += inv_mu * InnerProduct(curl(A_trial), curl(v_test)) * dx
-a += 1j * omega_reg * sigma_reg * InnerProduct(A_trial, v_test) * dx
-a += 1e-12 * InnerProduct(A_trial, v_test) * dx
-a.Assemble()
+    a = BilinearForm(fes)
+    a += inv_mu * InnerProduct(curl(A_trial), curl(v_test)) * dx
+    a += 1j * omega_reg * sigma_reg * InnerProduct(A_trial, v_test) * dx
+    a += 1e-12 * InnerProduct(A_trial, v_test) * dx
+    a.Assemble()
 
-f = LinearForm(fes)
-f += InnerProduct(J_cf, v_test) * dx('coil')
-f.Assemble()
+    f = LinearForm(fes)
+    f += InnerProduct(J_cf, v_test) * dx('coil')
+    f.Assemble()
 
-gfA = GridFunction(fes)
-ndof = fes.ndof
-print(f"DOFs: {ndof}")
-print("Solving...", flush=True)
-gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+    gfA = GridFunction(fes)
+    ndof = fes.ndof
+    print(f"DOFs: {ndof}")
+    print("Solving...", flush=True)
+    gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
 
-# Energy -> inductance
-B = curl(gfA)
-B_conj = Conj(B)
-B_dot_Bconj = B[0] * B_conj[0] + B[1] * B_conj[1] + B[2] * B_conj[2]
-W_stored = 0.25 * Integrate(inv_mu * B_dot_Bconj, mesh).real
-L = 4 * W_stored / I_COIL**2
+    # Energy -> inductance
+    B = curl(gfA)
+    B_conj = Conj(B)
+    B_dot_Bconj = B[0] * B_conj[0] + B[1] * B_conj[1] + B[2] * B_conj[2]
+    W_stored = 0.25 * Integrate(inv_mu * B_dot_Bconj, mesh).real
+    L = 4 * W_stored / I_COIL**2
 
-t_solve = time.time() - t0
-diff_no_int = (L - L_no_int) / L_no_int * 100
-diff_with_int = (L - L_with_int) / L_with_int * 100
+    t_solve = time.time() - t0
+    diff_no_int = (L - L_no_int) / L_no_int * 100
+    diff_with_int = (L - L_with_int) / L_with_int * 100
 
-print(f"W_stored = {W_stored:.6e} J")
-print(f"L = {L * 1e9:.2f} nH ({t_solve:.1f}s)")
-print(f"  vs analytical (no internal):   {diff_no_int:+.1f}%")
-print(f"  vs analytical (with internal): {diff_with_int:+.1f}%")
+    print(f"W_stored = {W_stored:.6e} J")
+    print(f"L = {L * 1e9:.2f} nH ({t_solve:.1f}s)")
+    print(f"  vs analytical (no internal):   {diff_no_int:+.1f}%")
+    print(f"  vs analytical (with internal): {diff_with_int:+.1f}%")

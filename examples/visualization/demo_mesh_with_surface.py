@@ -7,6 +7,8 @@ Key point: When you generate a mesh with Netgen/NGSolve, surface elements
 
 Result: The generated .vol file can be displayed in Netgen GUI without issues.
 """
+from ngsolve import TaskManager
+
 
 import sys
 import os
@@ -31,55 +33,56 @@ def main():
     # Step 2: Generate mesh
     print("\n[2] Generating mesh...")
     mp = MeshingParameters(maxh=0.01)  # 10mm max element size
-    mesh = geo.GenerateMesh(mp)
-    print(f"    Mesh generated:")
-    nv = mesh.nv if hasattr(mesh, 'nv') else len(list(mesh.Points()))
-    ne = mesh.ne if hasattr(mesh, 'ne') else len(list(mesh.Elements3D()))
-    nse = mesh.nse if hasattr(mesh, 'nse') else len(list(mesh.Elements2D()))
-    print(f"      Vertices: {nv}")
-    print(f"      Volume elements: {ne}")
-    print(f"      Surface elements: {nse}")  # <- Automatically created!
+    with TaskManager():
+        mesh = geo.GenerateMesh(mp)
+        print(f"    Mesh generated:")
+        nv = mesh.nv if hasattr(mesh, 'nv') else len(list(mesh.Points()))
+        ne = mesh.ne if hasattr(mesh, 'ne') else len(list(mesh.Elements3D()))
+        nse = mesh.nse if hasattr(mesh, 'nse') else len(list(mesh.Elements2D()))
+        print(f"      Vertices: {nv}")
+        print(f"      Volume elements: {ne}")
+        print(f"      Surface elements: {nse}")  # <- Automatically created!
 
-    # Step 3: Verify surface elements
-    print("\n[3] Verifying surface elements...")
-    if nse > 0:
-        print("    Surface elements present!")
-        print(f"       Count: {nse}")
-        print("       Netgen GUI will display this mesh correctly")
+        # Step 3: Verify surface elements
+        print("\n[3] Verifying surface elements...")
+        if nse > 0:
+            print("    Surface elements present!")
+            print(f"       Count: {nse}")
+            print("       Netgen GUI will display this mesh correctly")
 
-        # Analyze surface element types
-        surf_types = {}
-        for el in mesh.Elements2D():
-            el_type = len(el.vertices)
-            surf_types[el_type] = surf_types.get(el_type, 0) + 1
+            # Analyze surface element types
+            surf_types = {}
+            for el in mesh.Elements2D():
+                el_type = len(el.vertices)
+                surf_types[el_type] = surf_types.get(el_type, 0) + 1
 
-        print("\n    Surface element types:")
-        type_names = {3: 'Triangle', 4: 'Quad'}
-        for el_type, count in sorted(surf_types.items()):
-            name = type_names.get(el_type, f'Unknown({el_type})')
-            print(f"      {name}: {count}")
-    else:
-        print("    ❌ No surface elements (unexpected!)")
+            print("\n    Surface element types:")
+            type_names = {3: 'Triangle', 4: 'Quad'}
+            for el_type, count in sorted(surf_types.items()):
+                name = type_names.get(el_type, f'Unknown({el_type})')
+                print(f"      {name}: {count}")
+        else:
+            print("    ❌ No surface elements (unexpected!)")
 
-    # Step 4: Save to .vol
-    print("\n[4] Saving to .vol file...")
-    vol_file = 'test_mesh_with_surface.vol'
-    mesh.Save(vol_file)
-    print(f"    Saved: {vol_file}")
-    print("    This .vol file includes surface elements")
-    print("    Can be opened in Netgen GUI by double-clicking")
+        # Step 4: Save to .vol
+        print("\n[4] Saving to .vol file...")
+        vol_file = 'test_mesh_with_surface.vol'
+        mesh.Save(vol_file)
+        print(f"    Saved: {vol_file}")
+        print("    This .vol file includes surface elements")
+        print("    Can be opened in Netgen GUI by double-clicking")
 
-    # Step 5: Display in Netgen GUI
-    print("\n[5] Opening in Netgen GUI...")
-    print("    Netgen GUI window will open")
-    StartGUI()
-    mesh.Draw()
+        # Step 5: Display in Netgen GUI
+        print("\n[5] Opening in Netgen GUI...")
+        print("    Netgen GUI window will open")
+        StartGUI()
+        mesh.Draw()
 
-    print("\n[OK] Demonstration complete")
-    print("\nKey takeaway:")
-    print("  When you generate a mesh with Netgen/NGSolve,")
-    print("  surface elements are AUTOMATICALLY created.")
-    print("  You don't need to worry about surface elements.")
+        print("\n[OK] Demonstration complete")
+        print("\nKey takeaway:")
+        print("  When you generate a mesh with Netgen/NGSolve,")
+        print("  surface elements are AUTOMATICALLY created.")
+        print("  You don't need to worry about surface elements.")
 
 
 if __name__ == '__main__':

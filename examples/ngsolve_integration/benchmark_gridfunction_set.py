@@ -154,7 +154,8 @@ for radia_cfg in radia_configs:
 			gf_dense = GridFunction(HCurl(mesh))
 
 			t_start = perf_counter()
-			gf_dense.Set(cf_dense)
+			with TaskManager():
+				gf_dense.Set(cf_dense)
 			t_set_dense = perf_counter() - t_start
 
 			print(f"      Dense:   Set() = {t_set_dense*1000:8.2f} ms  "
@@ -172,7 +173,8 @@ for radia_cfg in radia_configs:
 			gf_hmat = GridFunction(HCurl(mesh))
 
 			t_start = perf_counter()
-			gf_hmat.Set(cf_hmat)
+			with TaskManager():
+				gf_hmat.Set(cf_hmat)
 			t_set_hmat = perf_counter() - t_start
 
 			print(f"      H-matrix: Set() = {t_set_hmat*1000:8.2f} ms  "

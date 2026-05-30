@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-05-29T11:25:27.313727",
+  "hostname": "lab",
+  "benchmark": "ctype_loop_deflation",
+  "problem": {
+    "coil_AT": 20000.0,
+    "alpha": 1.0,
+    "bicgstab_tol": 1e-08,
+    "model": "full (no IMA)"
+  },
+  "results": [
+    {
+      "material": "nonlinear",
+      "density": "6x6x6",
+      "dof": 7200,
+      "elf_bz_mT": -960.7838303519,
+      "off": {
+        "ne": 1200,
+        "dof": 7200,
+        "nl_iter": 0,
+        "lin_iter": 13844,
+        "defl_cycles": 0,
+        "t_solve": 149.80042039998807,
+        "t_hmat": 1.6828164,
+        "peak_mb": 278.4921875,
+        "Bz_mT": -119.16195242499207
+      },
+      "on": {
+        "ne": 1200,
+        "dof": 7200,
+        "nl_iter": 0,
+        "lin_iter": 36810,
+        "defl_cycles": 2676,
+        "t_solve": 415.63917939999374,
+        "t_hmat": 1.7703894,
+        "peak_mb": 279.8828125,
+        "Bz_mT": -108.07638642655724
+      }
+    },
+    {
+      "material": "linear mu=1e+04",
+      "density": "6x6x6",
+      "dof": 7200,
+      "elf_bz_mT": -960.7838303519,
+      "off": {
+        "ne": 1200,
+        "dof": 7200,
+        "nl_iter": 0,
+        "lin_iter": 473,
+        "defl_cycles": 0,
+        "t_solve": 6.740209000010509,
+        "t_hmat": 1.5891813000000001,
+        "peak_mb": 279.8828125,
+        "Bz_mT": -121.59205385031649
+      },
+      "on": {
+        "ne": 1200,
+        "dof": 7200,
+        "nl_iter": 0,
+        "lin_iter": 1011,
+        "defl_cycles": 2676,
+        "t_solve": 13.348133599967696,
+        "t_hmat": 2.3996364000000003,
+        "peak_mb": 279.8828125,
+        "Bz_mT": -121.59628724259844
+      }
+    }
+  ]
+}

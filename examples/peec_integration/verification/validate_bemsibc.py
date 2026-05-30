@@ -335,22 +335,24 @@ def test_dof_comparison():
 
     # FEM-BEM DOF count
     from ngsolve import H1, SurfaceL2
-    fes_h1 = H1(mesh, order=2, complex=True)
-    fes_l2 = SurfaceL2(mesh, order=1, complex=True,
-                         definedon=mesh.Boundaries("surface"))
-    n_fembem = fes_h1.ndof + fes_l2.ndof
-    n_h1_total = fes_h1.ndof
+    from ngsolve import TaskManager
+    with TaskManager():
+        fes_h1 = H1(mesh, order=2, complex=True)
+        fes_l2 = SurfaceL2(mesh, order=1, complex=True,
+                             definedon=mesh.Boundaries("surface"))
+        n_fembem = fes_h1.ndof + fes_l2.ndof
+        n_h1_total = fes_h1.ndof
 
-    # BEM+SIBC DOF count (surface H1 only)
-    surf_dofs = fes_h1.GetDofs(mesh.Boundaries("surface"))
-    n_surf = sum(1 for i in range(fes_h1.ndof) if surf_dofs[i])
-    n_bemsibc = n_surf + fes_l2.ndof
+        # BEM+SIBC DOF count (surface H1 only)
+        surf_dofs = fes_h1.GetDofs(mesh.Boundaries("surface"))
+        n_surf = sum(1 for i in range(fes_h1.ndof) if surf_dofs[i])
+        n_bemsibc = n_surf + fes_l2.ndof
 
-    reduction = (1.0 - n_bemsibc / n_fembem) * 100
-    report("DOF reduction", n_bemsibc < n_fembem,
-           f"FEM-BEM: {n_fembem} ({n_h1_total} H1 + {fes_l2.ndof} L2), "
-           f"BEM+SIBC: {n_bemsibc} ({n_surf} H1_surf + {fes_l2.ndof} L2), "
-           f"reduction: {reduction:.0f}%")
+        reduction = (1.0 - n_bemsibc / n_fembem) * 100
+        report("DOF reduction", n_bemsibc < n_fembem,
+               f"FEM-BEM: {n_fembem} ({n_h1_total} H1 + {fes_l2.ndof} L2), "
+               f"BEM+SIBC: {n_bemsibc} ({n_surf} H1_surf + {fes_l2.ndof} L2), "
+               f"reduction: {reduction:.0f}%")
 
 
 def main():

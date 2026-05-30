@@ -82,6 +82,7 @@ from ngsolve import (
     x,
     y,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 
@@ -103,7 +104,8 @@ def build_annular_interface_mesh(maxh: float = 0.05) -> Mesh:
                     bc="rotor_stator_interface")
     geo.SetMaterial(1, "stator_air")
     geo.SetMaterial(2, "rotor")
-    return Mesh(geo.GenerateMesh(maxh=maxh))
+    with TaskManager():
+        return Mesh(geo.GenerateMesh(maxh=maxh))
 
 
 def build_fourier_basis(K: int) -> list:

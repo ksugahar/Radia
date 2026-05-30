@@ -24,6 +24,8 @@ Requirements:
 Note: For field visualization, use webgui instead.
       netgen.gui is specialized for geometry/mesh, not field data.
 """
+from ngsolve import TaskManager
+
 
 import sys
 import os
@@ -94,20 +96,21 @@ def main():
 
     print("\n[5] Generating mesh...")
     mp = MeshingParameters(maxh=0.005)  # 5mm max element size
-    mesh = geo.GenerateMesh(mp)
-    print(f"    Mesh: {mesh.nv} vertices, {mesh.ne} elements")
+    with TaskManager():
+        mesh = geo.GenerateMesh(mp)
+        print(f"    Mesh: {mesh.nv} vertices, {mesh.ne} elements")
 
-    # Draw mesh in GUI
-    print("\n[6] Displaying mesh in GUI...")
-    mesh.Draw()
+        # Draw mesh in GUI
+        print("\n[6] Displaying mesh in GUI...")
+        mesh.Draw()
 
-    print("\n[OK] Netgen GUI visualization complete")
-    print("\nGUI features:")
-    print("  - 3D rotation with mouse drag")
-    print("  - Zoom with mouse wheel")
-    print("  - Mesh quality visualization")
-    print("  - Face/Edge highlighting")
-    print("\nTo close: Close Netgen GUI window")
+        print("\n[OK] Netgen GUI visualization complete")
+        print("\nGUI features:")
+        print("  - 3D rotation with mouse drag")
+        print("  - Zoom with mouse wheel")
+        print("  - Mesh quality visualization")
+        print("  - Face/Edge highlighting")
+        print("\nTo close: Close Netgen GUI window")
 
 
 if __name__ == '__main__':

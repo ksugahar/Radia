@@ -71,9 +71,10 @@ def create_rotor_vol(filename, order=2):
     geo.Add(rotor.bc("rotor_surface").mat("rotor"))
 
     ng_mesh = geo.GenerateMesh(maxh=0.015)
-    ng_mesh.Curve(order)
-    ng_mesh.Save(filename)
-    return filename
+    with TaskManager():
+        ng_mesh.Curve(order)
+        ng_mesh.Save(filename)
+        return filename
 
 
 def create_animation_msh(rotor_vol, output_msh, n_steps=20,
@@ -123,6 +124,7 @@ def create_animation_msh(rotor_vol, output_msh, n_steps=20,
     # Now read back and get node info for displacement
     # We need node IDs and positions
     from ngsolve import NodeId, VERTEX
+    from ngsolve import TaskManager
     nv = mesh.nv
     node_coords = np.zeros((nv, 3))
     for v in mesh.vertices:

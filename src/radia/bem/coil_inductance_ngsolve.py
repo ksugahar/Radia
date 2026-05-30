@@ -179,8 +179,9 @@ def compute_inductance_source_sink(
         f"LaplaceSL assembly start (dense, n_J={n_J}, "
         f"memory ~{(n_J*n_J*8)/1e9:.1f} GB)")
     jt, jv = fes_J.TnT()
-    with TaskManager():
-        V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
+    # NOTE: Caller MUST be inside `with TaskManager():` per CLAUDE.md
+    # "Caller Wraps, Helper Does NOT" (2026-05-27).
+    V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
     SL = _to_dense(V_op.mat)
     t_assembly = time.perf_counter() - t0
     _log("BEMA", f"LaplaceSL assembled ({t_assembly:.1f}s)")

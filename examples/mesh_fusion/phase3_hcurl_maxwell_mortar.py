@@ -65,6 +65,7 @@ from ngsolve import (
     x,
     y,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 
@@ -154,12 +155,13 @@ def solve_em_nitsche_mortar(mesh: Mesh, order: int = 2,
     f += Jsrc * vC * dx("coil")
     f += Jsrc * vA * dx("air")
 
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-    return fes, gfu
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        return fes, gfu
 
 
 def l2_error(mesh: Mesh, gfu) -> tuple[float, float, float]:

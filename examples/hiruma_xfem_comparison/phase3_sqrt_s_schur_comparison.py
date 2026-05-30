@@ -43,6 +43,7 @@ from ngsolve import (
     grad, dx, CoefficientFunction, Integrate, x, y, sqrt as ng_sqrt,
     Conj, exp as ng_exp,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 from scipy.special import iv
 
@@ -108,20 +109,21 @@ def cfem_Y(mesh, omega, return_diagnostics=False):
     a = BilinearForm(fes, symmetric=True)
     a += NU * grad(u) * grad(v) * dx
     a += 1j * omega * SIGMA * u * v * dx
-    a.Assemble()
-    f = LinearForm(fes)
-    f += J0 * v * dx
-    f.Assemble()
-    A = GridFunction(fes)
-    A.vec.data = a.mat.Inverse(fes.FreeDofs(),
-                                inverse="sparsecholesky") * f.vec
-    # Y = integral of (-j*omega * sigma * A_z) dA (the eddy current piece) ...
-    # Wait — need to be careful about sign convention.
-    # Source J0 = sigma => drives E_z=1 at boundary, so total Y =
-    #    int J_z dA = int(J0 - j w sigma A) dA = sigma*pi R^2 - jw sigma int A dA
-    intA = Integrate(A, mesh)
-    Y    = SIGMA * math.pi * R * R - 1j * omega * SIGMA * intA
-    return Y
+    with TaskManager():
+        a.Assemble()
+        f = LinearForm(fes)
+        f += J0 * v * dx
+        f.Assemble()
+        A = GridFunction(fes)
+        A.vec.data = a.mat.Inverse(fes.FreeDofs(),
+                                    inverse="sparsecholesky") * f.vec
+        # Y = integral of (-j*omega * sigma * A_z) dA (the eddy current piece) ...
+        # Wait — need to be careful about sign convention.
+        # Source J0 = sigma => drives E_z=1 at boundary, so total Y =
+        #    int J_z dA = int(J0 - j w sigma A) dA = sigma*pi R^2 - jw sigma int A dA
+        intA = Integrate(A, mesh)
+        Y    = SIGMA * math.pi * R * R - 1j * omega * SIGMA * intA
+        return Y
 
 
 def xfem_Y(mesh, omega, integration_order=10):

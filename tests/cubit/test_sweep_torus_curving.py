@@ -30,6 +30,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF
+from ngsolve import TaskManager
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
@@ -98,7 +99,8 @@ def check_jacobians(msh_path):
 def volume_from_vol(vol_path, order):
     """Load .vol and integrate volume."""
     mesh = Mesh(vol_path)
-    return Integrate(CF(1), mesh)
+    with TaskManager():
+        return Integrate(CF(1), mesh)
 
 
 # ============================================================

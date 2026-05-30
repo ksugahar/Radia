@@ -54,6 +54,7 @@ def calculate_surface(cub5_file, order):
     for high-order curving. No STEP files or OCC geometry needed.
     """
     from ngsolve import Mesh as NGMesh, Integrate, CF, BND
+    from ngsolve import TaskManager
 
     cubit = _setup_cubit()
     cubit.cmd(f'open "{cub5_file}"')
@@ -94,29 +95,30 @@ def calculate_surface(cub5_file, order):
                 "error": f"radia_export netgen order={order} failed: {e}"}
 
     # Integrate
-    total_area = Integrate(CF(1), mesh, VOL_or_BND=BND)
-    n_bnd_elements = sum(1 for _ in mesh.Elements(BND))
+    with TaskManager():
+        total_area = Integrate(CF(1), mesh, VOL_or_BND=BND)
+        n_bnd_elements = sum(1 for _ in mesh.Elements(BND))
 
-    bnd_areas = []
-    for bnd in mesh.GetBoundaries():
-        try:
-            area = Integrate(CF(1), mesh, definedon=mesh.Boundaries(bnd))
-            bnd_areas.append({"boundary": bnd, "area": area})
-        except Exception:
-            pass
+        bnd_areas = []
+        for bnd in mesh.GetBoundaries():
+            try:
+                area = Integrate(CF(1), mesh, definedon=mesh.Boundaries(bnd))
+                bnd_areas.append({"boundary": bnd, "area": area})
+            except Exception:
+                pass
 
-    if len(results) == 1:
-        results[0]["ngsolve_area"] = total_area
-        results[0]["n_bnd_elements"] = n_bnd_elements
+        if len(results) == 1:
+            results[0]["ngsolve_area"] = total_area
+            results[0]["n_bnd_elements"] = n_bnd_elements
 
-    return {
-        "volumes": results,
-        "cad_total": cad_total,
-        "ngsolve_total": total_area,
-        "n_bnd_elements": n_bnd_elements,
-        "boundaries": bnd_areas,
-        "order": order,
-    }
+        return {
+            "volumes": results,
+            "cad_total": cad_total,
+            "ngsolve_total": total_area,
+            "n_bnd_elements": n_bnd_elements,
+            "boundaries": bnd_areas,
+            "order": order,
+        }
 
 
 def main():

@@ -44,7 +44,7 @@ def build_axi_mesh(R_coil, a_coil, R_wp, H_wp, a_kelvin, z_offset, maxh):
 
     No Cubit needed. Pure OCC geometry.
     """
-    from ngsolve import Mesh
+    from ngsolve import Mesh, TaskManager
     from netgen.occ import (WorkPlane, Axes, MoveTo, Pnt, Dir, Z, X,
                              OCCGeometry, Glue, Vertex, IdentificationType)
 
@@ -205,66 +205,44 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
     bf += nu_cf / r_cf * grad(u) * grad(v) * dx
     lf = LinearForm(fes)
     lf += J0 * v * dx("coil")
-    bf.Assemble()
-    lf.Assemble()
-    gfu = GridFunction(fes)
-    gfu.vec.data = bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * lf.vec
-    t_solve = time.perf_counter() - t0
+    with TaskManager():
+        bf.Assemble()
+        lf.Assemble()
+        gfu = GridFunction(fes)
+        gfu.vec.data = bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * lf.vec
+        t_solve = time.perf_counter() - t0
 
-    # Inductance
-    W = 2 * np.pi * float(Integrate(
-        0.5 * nu_cf / r_cf * grad(gfu) * grad(gfu), mesh))
-    L = 2 * W / I_total**2
+        # Inductance
+        W = 2 * np.pi * float(Integrate(
+            0.5 * nu_cf / r_cf * grad(gfu) * grad(gfu), mesh))
+        L = 2 * W / I_total**2
 
-    # --- ESIM on workpiece surface ---
-    sys.stderr.write("HEATING_ESIM:computing surface impedance\n")
-    sys.stderr.flush()
-    t0 = time.perf_counter()
+        # --- ESIM on workpiece surface ---
+        sys.stderr.write("HEATING_ESIM:computing surface impedance\n")
+        sys.stderr.flush()
+        t0 = time.perf_counter()
 
-    esim_solver = ESIMFiniteSlabSolver(
-        half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
-        frequency=frequency,
-        mu_r=mu_r if bh_curve is None else None, n_nodes=200,
-        geometry=esim_geometry)
+        esim_solver = ESIMFiniteSlabSolver(
+            half_thickness=R_wp, bh_curve=bh_curve, sigma=sigma,
+            frequency=frequency,
+            mu_r=mu_r if bh_curve is None else None, n_nodes=200,
+            geometry=esim_geometry)
 
-    grad_u = grad(gfu)
-    eps = maxh * 0.2
-    n_lat, n_cap = 30, 12
+        grad_u = grad(gfu)
+        eps = maxh * 0.2
+        n_lat, n_cap = 30, 12
 
-    P_total = 0.0
-    Q_total = 0.0
-    panels = []  # per-panel results for distribution
+        P_total = 0.0
+        Q_total = 0.0
+        panels = []  # per-panel results for distribution
 
-    # Lateral surface
-    for j in range(n_lat):
-        z_j = -H_wp / 2 + (j + 0.5) * H_wp / n_lat
-        dA = 2 * np.pi * R_wp * (H_wp / n_lat)
-        try:
-            mip = mesh(R_wp + eps, z_j)
-            H_t = abs(float(grad_u[0](mip)) / (MU_0 * (R_wp + eps)))
-        except:
-            H_t = 0.0
-        sol = esim_solver.solve(max(H_t, 1e-3))
-        P_panel = sol['P_prime'] * dA
-        P_total += P_panel
-        Q_total += sol['Q_prime'] * dA
-        panels.append({
-            "type": "lateral", "z": round(z_j, 6),
-            "H_t": round(H_t, 4),
-            "P_density": round(sol['P_prime'], 6),
-            "P": round(float(P_panel), 10),
-        })
-
-    # Top and bottom caps
-    for sign, label in [(+1, "top"), (-1, "bottom")]:
-        for k in range(n_cap):
-            r_k = (k + 0.5) * R_wp / n_cap
-            if r_k < 1e-6:
-                continue
-            dA = 2 * np.pi * r_k * (R_wp / n_cap)
+        # Lateral surface
+        for j in range(n_lat):
+            z_j = -H_wp / 2 + (j + 0.5) * H_wp / n_lat
+            dA = 2 * np.pi * R_wp * (H_wp / n_lat)
             try:
-                mip = mesh(r_k, sign * (H_wp / 2 + eps))
-                H_t = abs(float(grad_u[1](mip)) / (MU_0 * r_k))
+                mip = mesh(R_wp + eps, z_j)
+                H_t = abs(float(grad_u[0](mip)) / (MU_0 * (R_wp + eps)))
             except:
                 H_t = 0.0
             sol = esim_solver.solve(max(H_t, 1e-3))
@@ -272,30 +250,53 @@ def compute_heating(R_coil, a_coil, R_wp, H_wp,
             P_total += P_panel
             Q_total += sol['Q_prime'] * dA
             panels.append({
-                "type": label, "r": round(r_k, 6),
+                "type": "lateral", "z": round(z_j, 6),
                 "H_t": round(H_t, 4),
                 "P_density": round(sol['P_prime'], 6),
                 "P": round(float(P_panel), 10),
             })
 
-    t_esim = time.perf_counter() - t0
+        # Top and bottom caps
+        for sign, label in [(+1, "top"), (-1, "bottom")]:
+            for k in range(n_cap):
+                r_k = (k + 0.5) * R_wp / n_cap
+                if r_k < 1e-6:
+                    continue
+                dA = 2 * np.pi * r_k * (R_wp / n_cap)
+                try:
+                    mip = mesh(r_k, sign * (H_wp / 2 + eps))
+                    H_t = abs(float(grad_u[1](mip)) / (MU_0 * r_k))
+                except:
+                    H_t = 0.0
+                sol = esim_solver.solve(max(H_t, 1e-3))
+                P_panel = sol['P_prime'] * dA
+                P_total += P_panel
+                Q_total += sol['Q_prime'] * dA
+                panels.append({
+                    "type": label, "r": round(r_k, 6),
+                    "H_t": round(H_t, 4),
+                    "P_density": round(sol['P_prime'], 6),
+                    "P": round(float(P_panel), 10),
+                })
 
-    return {
-        "P_total": float(P_total),
-        "Q_total": float(Q_total),
-        "L_coil": float(L),
-        "delta": float(delta),
-        "n_panels": len(panels),
-        "ndof": fes.ndof,
-        "ne": mesh.ne,
-        "t_mesh": round(t_mesh, 2),
-        "t_solve": round(t_solve, 2),
-        "t_esim": round(t_esim, 2),
-        "frequency": frequency,
-        "sigma": sigma,
-        "material": mat.name,
-        "panels": panels,
-    }
+        t_esim = time.perf_counter() - t0
+
+        return {
+            "P_total": float(P_total),
+            "Q_total": float(Q_total),
+            "L_coil": float(L),
+            "delta": float(delta),
+            "n_panels": len(panels),
+            "ndof": fes.ndof,
+            "ne": mesh.ne,
+            "t_mesh": round(t_mesh, 2),
+            "t_solve": round(t_solve, 2),
+            "t_esim": round(t_esim, 2),
+            "frequency": frequency,
+            "sigma": sigma,
+            "material": mat.name,
+            "panels": panels,
+        }
 
 
 def main():

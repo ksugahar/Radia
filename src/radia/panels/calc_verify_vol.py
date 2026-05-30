@@ -35,18 +35,19 @@ def verify_vol(vol_path):
     cad_mats = cad_ref.get("materials", {})
     materials = []
     for mat in dict.fromkeys(mesh.GetMaterials()):
-        ng_vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
-        entry = {"name": mat, "ng_volume": ng_vol}
-        if mat in cad_mats:
-            cad_v = cad_mats[mat]
-            entry["cad_volume"] = cad_v
-            if cad_v > 0:
-                err = (ng_vol - cad_v) / cad_v * 100
-                entry["error_pct"] = err
-                if abs(err) > 1.0:
-                    warnings.append(
-                        f"Material \"{mat}\": V error {err:+.2e}%")
-        materials.append(entry)
+        with TaskManager():
+            ng_vol = Integrate(CF(1), mesh, definedon=mesh.Materials(mat))
+            entry = {"name": mat, "ng_volume": ng_vol}
+            if mat in cad_mats:
+                cad_v = cad_mats[mat]
+                entry["cad_volume"] = cad_v
+                if cad_v > 0:
+                    err = (ng_vol - cad_v) / cad_v * 100
+                    entry["error_pct"] = err
+                    if abs(err) > 1.0:
+                        warnings.append(
+                            f"Material \"{mat}\": V error {err:+.2e}%")
+            materials.append(entry)
 
     # --- Per-boundary area ---
     cad_bnds = cad_ref.get("boundaries", {})
@@ -79,6 +80,7 @@ def verify_vol(vol_path):
     edges = []
     try:
         from ngsolve import BBND
+        from ngsolve import TaskManager
         try:
             bb_names = list(dict.fromkeys(mesh.GetBBoundaries()))
         except Exception:

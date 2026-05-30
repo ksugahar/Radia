@@ -26,6 +26,7 @@ from netgen.meshing import IdentificationType
 from ngsolve import (
     Mesh, CoefficientFunction, x, y, z, sqrt, IfPos,
 )
+from ngsolve import TaskManager
 from radia.kelvin_material import make_reduced_potential_background_cf
 
 
@@ -63,8 +64,9 @@ def build_test_geo():
                 ext_face = f
     int_face.Identify(ext_face, "periodic", IdentificationType.PERIODIC)
 
-    mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=0.3, grading=0.7))
-    return mesh, R_K, offset
+    with TaskManager():
+        mesh = Mesh(OCCGeometry(geo).GenerateMesh(maxh=0.3, grading=0.7))
+        return mesh, R_K, offset
 
 
 def test_uniform_H():

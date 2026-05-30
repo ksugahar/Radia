@@ -32,6 +32,7 @@ import time
 
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.occ import *
 except ImportError:
     print("NGSolve not available")
@@ -109,92 +110,93 @@ print(f"\n[3a] Measuring GridFunction.Set() with H-matrix...")
 print(f"     (Element-by-element: {mesh.ne} calls, ~{points_per_elem} points/call)")
 
 t0 = time.time()
-gf.Set(cf_standard)
-t_standard = time.time() - t0
+with TaskManager():
+    gf.Set(cf_standard)
+    t_standard = time.time() - t0
 
-print(f"     Time: {t_standard*1000:.1f} ms")
-print(f"     Average per element: {t_standard*1000/mesh.ne:.2f} ms")
+    print(f"     Time: {t_standard*1000:.1f} ms")
+    print(f"     Average per element: {t_standard*1000/mesh.ne:.2f} ms")
 
-print("\n" + "="*70)
-print("MEASUREMENT 2: Single batch evaluation (proposed method)")
-print("="*70)
+    print("\n" + "="*70)
+    print("MEASUREMENT 2: Single batch evaluation (proposed method)")
+    print("="*70)
 
-# Simulate batch evaluation: collect all vertices and evaluate once
-print(f"\n[3b] Simulating batch evaluation...")
-print(f"     (Single batch: 1 call, {mesh.nv} points)")
+    # Simulate batch evaluation: collect all vertices and evaluate once
+    print(f"\n[3b] Simulating batch evaluation...")
+    print(f"     (Single batch: 1 call, {mesh.nv} points)")
 
-# Collect all vertex positions
-points = []
-for v in mesh.vertices:
-    pt = v.point
-    points.append([pt[0], pt[1], pt[2]])
+    # Collect all vertex positions
+    points = []
+    for v in mesh.vertices:
+        pt = v.point
+        points.append([pt[0], pt[1], pt[2]])
 
-# Single batch evaluation
-t0 = time.time()
-points_arr = np.array(points)
-field_values = np.asarray(rad.Fld(magnet, 'b', points_arr))
-t_batch = time.time() - t0
+    # Single batch evaluation
+    t0 = time.time()
+    points_arr = np.array(points)
+    field_values = np.asarray(rad.Fld(magnet, 'b', points_arr))
+    t_batch = time.time() - t0
 
-print(f"     Time: {t_batch*1000:.1f} ms")
-print(f"     Average per point: {t_batch*1e6/len(points):.2f} us")
+    print(f"     Time: {t_batch*1000:.1f} ms")
+    print(f"     Average per point: {t_batch*1e6/len(points):.2f} us")
 
-print("\n" + "="*70)
-print("ANALYSIS")
-print("="*70)
+    print("\n" + "="*70)
+    print("ANALYSIS")
+    print("="*70)
 
-# Calculate actual points evaluated in standard method
-# Each element's integration rule has multiple points
-actual_eval_points = total_points
+    # Calculate actual points evaluated in standard method
+    # Each element's integration rule has multiple points
+    actual_eval_points = total_points
 
-print(f"\nEstimated evaluation points:")
-print(f"  Standard method: ~{actual_eval_points} points")
-print(f"  Batch method:     {len(points)} points (vertices only)")
+    print(f"\nEstimated evaluation points:")
+    print(f"  Standard method: ~{actual_eval_points} points")
+    print(f"  Batch method:     {len(points)} points (vertices only)")
 
-print(f"\nTime comparison:")
-print(f"  Standard (element-by-element): {t_standard*1000:8.1f} ms")
-print(f"  Batch (single call):           {t_batch*1000:8.1f} ms")
+    print(f"\nTime comparison:")
+    print(f"  Standard (element-by-element): {t_standard*1000:8.1f} ms")
+    print(f"  Batch (single call):           {t_batch*1000:8.1f} ms")
 
-speedup = t_standard / t_batch
-print(f"\nObserved speedup: {speedup:.2f}x")
+    speedup = t_standard / t_batch
+    print(f"\nObserved speedup: {speedup:.2f}x")
 
-print(f"\nWhy the speedup is limited:")
-print(f"  - Standard method evaluates ~{actual_eval_points} integration points")
-print(f"  - Batch method evaluates only {len(points)} vertices")
-print(f"  - Not a fair comparison!")
+    print(f"\nWhy the speedup is limited:")
+    print(f"  - Standard method evaluates ~{actual_eval_points} integration points")
+    print(f"  - Batch method evaluates only {len(points)} vertices")
+    print(f"  - Not a fair comparison!")
 
-print(f"\nTrue batch optimization requires:")
-print(f"  1. Collect ALL integration points (~{actual_eval_points})")
-print(f"  2. Evaluate in ONE batch call")
-print(f"  3. Map results back to GridFunction DOFs")
-print(f"  4. This would give true {speedup:.1f}-{speedup*2:.1f}x speedup")
+    print(f"\nTrue batch optimization requires:")
+    print(f"  1. Collect ALL integration points (~{actual_eval_points})")
+    print(f"  2. Evaluate in ONE batch call")
+    print(f"  3. Map results back to GridFunction DOFs")
+    print(f"  4. This would give true {speedup:.1f}-{speedup*2:.1f}x speedup")
 
-print("\n" + "="*70)
-print("CONCLUSION")
-print("="*70)
+    print("\n" + "="*70)
+    print("CONCLUSION")
+    print("="*70)
 
-print(f"""
-Current situation:
-- GridFunction.Set() calls Evaluate() {mesh.ne} times
-- Each call evaluates ~{points_per_elem} points
-- H-matrix overhead dominates for small batches
-- Total time: {t_standard*1000:.1f} ms
+    print(f"""
+    Current situation:
+    - GridFunction.Set() calls Evaluate() {mesh.ne} times
+    - Each call evaluates ~{points_per_elem} points
+    - H-matrix overhead dominates for small batches
+    - Total time: {t_standard*1000:.1f} ms
 
-Optimized approach (requires C++ implementation):
-- Collect all ~{actual_eval_points} integration points
-- Single Fld() call
-- Full H-matrix acceleration
-- Expected time: ~{t_batch*actual_eval_points/len(points):.1f} ms
-- Expected speedup: ~{t_standard/(t_batch*actual_eval_points/len(points)):.1f}x
+    Optimized approach (requires C++ implementation):
+    - Collect all ~{actual_eval_points} integration points
+    - Single Fld() call
+    - Full H-matrix acceleration
+    - Expected time: ~{t_batch*actual_eval_points/len(points):.1f} ms
+    - Expected speedup: ~{t_standard/(t_batch*actual_eval_points/len(points)):.1f}x
 
-Implementation path:
-1. Add PrepareCache() method to RadiaFieldCF (C++)
-2. PrepareCache() collects all mesh integration points
-3. PrepareCache() calls Fld() once
-4. Evaluate() returns cached values
-5. User calls PrepareCache(mesh) before gf.Set(cf)
-""")
+    Implementation path:
+    1. Add PrepareCache() method to RadiaFieldCF (C++)
+    2. PrepareCache() collects all mesh integration points
+    3. PrepareCache() calls Fld() once
+    4. Evaluate() returns cached values
+    5. User calls PrepareCache(mesh) before gf.Set(cf)
+    """)
 
-print("="*70)
+    print("="*70)
 
-rad.UtiDelAll()
+    rad.UtiDelAll()
 

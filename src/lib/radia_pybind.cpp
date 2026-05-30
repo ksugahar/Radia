@@ -815,6 +815,12 @@ py::dict GetSolveStats() {
     if (n >= 8) {
         result["t_hmatrix_build"] = stats[7];
     }
+    if (n >= 9) {
+        result["deflation_cycles"] = static_cast<int>(stats[8]);
+    }
+    if (n >= 10) {
+        result["deflation_alpha"] = stats[9];
+    }
 
     return result;
 }
@@ -872,6 +878,68 @@ py::tuple GetInteractMatrix(int intrc_handle) {
     }
 
     return py::make_tuple(result, dof);
+}
+
+/**
+ * @brief Densify the actual HACApK (ACA+) operator as a numpy array
+ * @param intrc_handle Interaction handle from BuildMatrix
+ * @return Tuple (matrix as 2D numpy array, dof)
+ */
+py::tuple HMatrixDensify(int intrc_handle) {
+    int dof = 0;
+    int err = RadHMatrixDensify(nullptr, &dof, intrc_handle);
+    check_error(err);
+
+    if (dof <= 0) {
+        throw std::runtime_error("HMatrixDensify: no operator (HACApK unavailable or build failed)");
+    }
+
+    std::vector<double> matrix_data(static_cast<size_t>(dof) * dof);
+    err = RadHMatrixDensify(matrix_data.data(), &dof, intrc_handle);
+    check_error(err);
+
+    py::array_t<double> result({dof, dof});
+    auto r = result.mutable_unchecked<2>();
+    for (int i = 0; i < dof; i++) {
+        for (int j = 0; j < dof; j++) {
+            r(i, j) = matrix_data[i * dof + j];  // row-major A[target][source]
+        }
+    }
+
+    return py::make_tuple(result, dof);
+}
+
+/**
+ * @brief Set the HACApK loop-mode deflation basis (sparse plaquette/cycle L).
+ */
+void SetHACApKDeflation(py::array_t<int, py::array::c_style | py::array::forcecast> offsets,
+                        py::array_t<int, py::array::c_style | py::array::forcecast> dofs,
+                        py::array_t<double, py::array::c_style | py::array::forcecast> signs,
+                        double alpha) {
+    int n = 0;
+    int err = RadSetHACApKDeflation(&n,
+                                    offsets.data(), static_cast<int>(offsets.size()),
+                                    dofs.data(), signs.data(), static_cast<int>(dofs.size()),
+                                    alpha);
+    check_error(err);
+}
+
+/**
+ * @brief Enable/disable automatic loop-mode deflation for the HACApK solver.
+ */
+void SetDeflateNullspace(bool enable, double alpha) {
+    int n = 0;
+    int err = RadSetDeflateNullspace(&n, enable ? 1 : 0, alpha);
+    check_error(err);
+}
+
+/**
+ * @brief Enable/disable the ALPHA-FREE loop-star gauge for the HACApK solver.
+ */
+void SetLoopStarGauge(bool enable) {
+    int n = 0;
+    int err = RadSetLoopStarGauge(&n, enable ? 1 : 0);
+    check_error(err);
 }
 
 } // namespace radia_solver
@@ -2697,6 +2765,81 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Tuple (matrix, dof) where matrix is (dof x dof) numpy array
+          )pbdoc");
+
+    m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Densify the actual HACApK (ACA+) system operator.
+
+              Builds the MSC H-matrix for the interaction handle and applies it
+              to unit vectors, returning the dense A = -N + diag(1/chi) in the
+              original DOF ordering. Use to validate the H-matrix against the
+              exact dense matrix (eigenvalues, deflation).
+
+              Args:
+                  intrc_handle: Interaction handle from BuildMatrix()
+              Returns:
+                  Tuple (matrix, dof) where matrix is (dof x dof) numpy array
+          )pbdoc");
+
+    m.def("SetHACApKDeflation", &radia_solver::SetHACApKDeflation,
+          py::arg("offsets"), py::arg("dofs"), py::arg("signs"), py::arg("alpha"),
+          R"pbdoc(
+              Set the loop-mode deflation basis L for the HACApK solver.
+
+              L is a sparse plaquette/cycle basis (CSR-like): for plaquette p,
+              offsets[p]:offsets[p+1] index into (dofs, signs). The HACApK MatVec
+              then applies (A + alpha * L L^T), lifting the near-null (loop) modes
+              so the converged BiCGSTAB solution is loop-free. Pass empty arrays
+              / alpha=0 to disable. L must be in the original DOF ordering.
+          )pbdoc");
+
+    m.def("SetDeflateNullspace", &radia_solver::SetDeflateNullspace,
+          py::arg("enable"), py::arg("alpha") = 0.0,
+          R"pbdoc(
+              Enable/disable AUTOMATIC loop-mode deflation for the HACApK solver.
+
+              When enabled, the HACApK solve (method=2) builds the loop (cycle)
+              basis from the mesh topology -- local short cycles plus, for
+              multiply-connected bodies, the b1 global belt loops -- and applies
+              the matrix-free shift (A + alpha * L L^T), so the converged
+              solution is free of the spurious near-null "loop" modes. No manual
+              basis is needed -- works for any conforming mesh and any topology.
+
+              Args:
+                  enable: True to enable, False to disable.
+                  alpha: shift magnitude. Pass alpha <= 0 (the DEFAULT, 0.0) to
+                      AUTO-SCALE it from the mesh as alpha = mean|N_ii| / d_max
+                      (the self-demagnetization scale over the maximum loop
+                      overlap). Auto-scaling is mesh-robust: a fixed alpha=1 is
+                      fine on a regular cube but over-shoots on irregular meshes
+                      (chamfers, varying connectivity) and worsens conditioning.
+                      Pass a positive alpha only to override the auto value.
+                      The value actually used is reported in
+                      GetSolveStats()['deflation_alpha'].
+          )pbdoc");
+
+    m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,
+          py::arg("enable"),
+          R"pbdoc(
+              Enable/disable the ALPHA-FREE loop-star gauge for the HACApK solver.
+
+              When enabled, the HACApK solve (method=2) restricts to the STAR
+              (non-loop) subspace via a sparse basis T (boundary face DOFs +
+              symmetric internal sigma_A+sigma_B + per-element divergence) and
+              solves the reduced, NON-SINGULAR system T^T A T y = T^T b, with
+              sigma = T y. The H-matrix is UNCHANGED (kept on the original sigma
+              DOFs); each reduced matrix-vector product sandwiches the HACApK
+              MatVec with the sparse T / T^T. This removes the loop null space
+              that makes A ill-conditioned at high permeability, with NO shift
+              parameter (unlike SetDeflateNullspace). Field-exact and
+              well-conditioned for the LINEAR regime (uniform permeability); for
+              strongly non-uniform chi (saturated nonlinear) the loop and star
+              subspaces couple, so use this in the linear regime.
+
+              Args:
+                  enable: True to enable, False to disable.
           )pbdoc");
 
     // ========================================================================
@@ -4658,6 +4801,102 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
             Phase A (omega = 0 only); Phase B will add
             _EquivalenceSourceHarmonic for full dyadic GF.
+        )pbdoc");
+
+    // ========================================================================
+    // Phase B: time-harmonic dyadic Stratton-Chu reconstruction.
+    // Resolves Phase 2 KNOWN_LIMITATION (66% near-field undershoot from
+    // missing (1/k^2) grad-grad psi term).
+    // ========================================================================
+    m.def("_EquivalenceSourceHarmonic",
+        [](py::array_t<double, py::array::c_style | py::array::forcecast> centroids,
+           py::array_t<double, py::array::c_style | py::array::forcecast> normals,
+           py::array_t<double, py::array::c_style | py::array::forcecast> areas,
+           py::array_t<double, py::array::c_style | py::array::forcecast> E_re,
+           py::array_t<double, py::array::c_style | py::array::forcecast> E_im,
+           py::array_t<double, py::array::c_style | py::array::forcecast> H_re,
+           py::array_t<double, py::array::c_style | py::array::forcecast> H_im,
+           py::array_t<double, py::array::c_style | py::array::forcecast> obs,
+           double omega,
+           int n_threads)
+        {
+            auto cb = centroids.unchecked<2>();
+            auto nb = normals.unchecked<2>();
+            auto ab = areas.unchecked<1>();
+            auto er = E_re.unchecked<2>();
+            auto ei = E_im.unchecked<2>();
+            auto hr = H_re.unchecked<2>();
+            auto hi = H_im.unchecked<2>();
+            auto ob = obs.unchecked<2>();
+            const int n_faces = static_cast<int>(cb.shape(0));
+            const int n_obs   = static_cast<int>(ob.shape(0));
+            if (cb.shape(1) != 3 || nb.shape(1) != 3
+                || er.shape(1) != 3 || ei.shape(1) != 3
+                || hr.shape(1) != 3 || hi.shape(1) != 3)
+                throw std::invalid_argument("centroids/normals/E_re/E_im/H_re/H_im must be (N, 3)");
+            if ((int)nb.shape(0) != n_faces || (int)ab.shape(0) != n_faces
+                || (int)er.shape(0) != n_faces || (int)ei.shape(0) != n_faces
+                || (int)hr.shape(0) != n_faces || (int)hi.shape(0) != n_faces)
+                throw std::invalid_argument("all face arrays must share N_faces");
+            if (ob.shape(1) != 3)
+                throw std::invalid_argument("obs must be (N_obs, 3)");
+            if (omega <= 0.0)
+                throw std::invalid_argument("omega must be > 0 for harmonic; use _EquivalenceSourceStaticH for omega = 0");
+
+            py::array_t<double> Eo_re({n_obs, 3});
+            py::array_t<double> Eo_im({n_obs, 3});
+            py::array_t<double> Ho_re({n_obs, 3});
+            py::array_t<double> Ho_im({n_obs, 3});
+
+            {
+                py::gil_scoped_release rel;
+                radia::eqsrc::EvaluateHarmonic(
+                    static_cast<const double*>(centroids.data()),
+                    static_cast<const double*>(normals.data()),
+                    static_cast<const double*>(areas.data()),
+                    static_cast<const double*>(E_re.data()),
+                    static_cast<const double*>(E_im.data()),
+                    static_cast<const double*>(H_re.data()),
+                    static_cast<const double*>(H_im.data()),
+                    n_faces,
+                    static_cast<const double*>(obs.data()),
+                    n_obs, omega,
+                    static_cast<double*>(Eo_re.mutable_data()),
+                    static_cast<double*>(Eo_im.mutable_data()),
+                    static_cast<double*>(Ho_re.mutable_data()),
+                    static_cast<double*>(Ho_im.mutable_data()),
+                    n_threads);
+            }
+            return py::make_tuple(Eo_re, Eo_im, Ho_re, Ho_im);
+        },
+        py::arg("centroids"), py::arg("normals"), py::arg("areas"),
+        py::arg("E_re"), py::arg("E_im"),
+        py::arg("H_re"), py::arg("H_im"),
+        py::arg("obs"), py::arg("omega"),
+        py::arg("n_threads") = 0,
+        R"pbdoc(
+            Equivalence-theorem time-harmonic (E, H) reconstruction at
+            obs points with FULL dyadic Green's function.
+
+            Full Stratton-Chu: includes the (1/k^2) grad-grad-psi term
+            that the scalar form omits.  Resolves the deep-near-field
+            undershoot (Phase 2 KNOWN_LIMITATION).
+
+            Args:
+                centroids: (N_faces, 3) face centroids [m]
+                normals:   (N_faces, 3) OUTWARD unit normals
+                areas:     (N_faces,)   face areas [m^2]
+                E_re,E_im: (N_faces, 3) E phasor at centroid [V/m]
+                H_re,H_im: (N_faces, 3) H phasor at centroid [A/m]
+                obs:       (N_obs, 3)   observation points [m]
+                omega:     angular frequency [rad/s] (> 0; use
+                           _EquivalenceSourceStaticH for omega = 0)
+                n_threads: 0 = TaskManager default
+
+            Returns:
+                (E_re, E_im, H_re, H_im) tuple of (N_obs, 3) arrays.
+
+            Per docs/equivalence_source/CPP_DESIGN.md sec 3.2.
         )pbdoc");
 
     // ========================================================================

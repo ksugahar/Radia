@@ -167,28 +167,29 @@ a_form += nu_cf / r_weight * grad(u) * grad(v) * dx
 f = LinearForm(fes)
 
 print("\nAssembling system...")
-a_form.Assemble()
-f.Assemble()
-print("  System assembled")
+with TaskManager():
+    a_form.Assemble()
+    f.Assemble()
+    print("  System assembled")
 
-# ============================================================
-# Boundary Condition
-# ============================================================
-# u_s = B0 * r^2 / 2 gives uniform Bz = B0
-# On outer boundary (arc at r = R_outer): u = B0 * r^2 / 2 = B0 * x^2 / 2
-# On axis (r = 0): u = 0
+    # ============================================================
+    # Boundary Condition
+    # ============================================================
+    # u_s = B0 * r^2 / 2 gives uniform Bz = B0
+    # On outer boundary (arc at r = R_outer): u = B0 * r^2 / 2 = B0 * x^2 / 2
+    # On axis (r = 0): u = 0
 
-print("\nSetting boundary condition...")
+    print("\nSetting boundary condition...")
 
-gfu = GridFunction(fes)
-# Set u = B0 * x^2 / 2 on outer boundary (u = 0 on axis automatically via x^2)
-gfu.Set(B0 * x**2 / 2, BND)
+    gfu = GridFunction(fes)
+    # Set u = B0 * x^2 / 2 on outer boundary (u = 0 on axis automatically via x^2)
+    gfu.Set(B0 * x**2 / 2, BND)
 
-# Solve using residual method
-res = gfu.vec.CreateVector()
-res.data = f.vec - a_form.mat * gfu.vec
-gfu.vec.data += a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
-print("  Solution converged")
+    # Solve using residual method
+    res = gfu.vec.CreateVector()
+    res.data = f.vec - a_form.mat * gfu.vec
+    gfu.vec.data += a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
+    print("  Solution converged")
 
 # ============================================================
 # Validation

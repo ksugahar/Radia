@@ -111,6 +111,7 @@ def solve_cube_kelvin_freq(mesh, omega, sigma_cu, mu_0, H_ext=1.0,
     from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction,
                           CoefficientFunction, curl, dx, Integrate, Conj,
                           x, y, z)
+    from ngsolve import TaskManager
 
     # Material constants
     nu_cf = mesh.MaterialCF({"cu": 1.0/mu_0, "air": 1.0/mu_0,
@@ -150,26 +151,27 @@ def solve_cube_kelvin_freq(mesh, omega, sigma_cu, mu_0, H_ext=1.0,
 
     print(f"    Assembling... ", end="", flush=True)
     t0 = time.time()
-    a.Assemble()
-    f.Assemble()
-    print(f"{time.time()-t0:.1f}s")
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
+        print(f"{time.time()-t0:.1f}s")
 
-    print(f"    Solving (sparse direct)... ", end="", flush=True)
-    t0 = time.time()
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs(),
-                                  inverse="sparsecholesky") * f.vec
-    print(f"{time.time()-t0:.1f}s")
+        print(f"    Solving (sparse direct)... ", end="", flush=True)
+        t0 = time.time()
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs(),
+                                      inverse="sparsecholesky") * f.vec
+        print(f"{time.time()-t0:.1f}s")
 
-    # Y(omega) extraction
-    # Induced eddy-current power = (1/2) omega Im{integral sigma |A_total|^2}
-    # where A_total = A_ext + A_p (gfu).
-    A_total = A_ext + gfu
-    A_sq = A_total * Conj(A_total)
-    integral_cu = Integrate(A_sq, mesh, definedon=mesh.Materials("cu")).real
-    # Y_eff = (j omega) sigma integral_cu / |H_ext|^2 (heuristic)
-    Y_eff = 1j * omega * sigma_cu * integral_cu / (mu_0**2 * H_ext**2)
-    return Y_eff, gfu
+        # Y(omega) extraction
+        # Induced eddy-current power = (1/2) omega Im{integral sigma |A_total|^2}
+        # where A_total = A_ext + A_p (gfu).
+        A_total = A_ext + gfu
+        A_sq = A_total * Conj(A_total)
+        integral_cu = Integrate(A_sq, mesh, definedon=mesh.Materials("cu")).real
+        # Y_eff = (j omega) sigma integral_cu / |H_ext|^2 (heuristic)
+        Y_eff = 1j * omega * sigma_cu * integral_cu / (mu_0**2 * H_ext**2)
+        return Y_eff, gfu
 
 
 def mellin_cube(s, L, sigma, mu):

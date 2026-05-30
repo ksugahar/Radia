@@ -95,6 +95,7 @@ def build_cuboid_mesh_geometry():
     if not try_ngsolve():
         return None
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     from netgen.occ import OCCGeometry, Box, Sphere, Pnt, Glue
 
     L = 10e-3  # cube side
@@ -120,9 +121,10 @@ def build_cuboid_mesh_geometry():
     geo = OCCGeometry(Glue([cube, air]))
     print(f"Building Netgen mesh (maxh = {L/4*1e3:.1f} mm in cube)...")
     mesh = Mesh(geo.GenerateMesh(maxh=L/4))
-    mesh.Curve(2)
-    print(f"  ne = {mesh.ne}, nedge = {mesh.nedge}")
-    return mesh
+    with TaskManager():
+        mesh.Curve(2)
+        print(f"  ne = {mesh.ne}, nedge = {mesh.nedge}")
+        return mesh
 
 
 def compute_cuboid_Y_FEM(mesh, omega, sigma_cu, mu_0):

@@ -34,7 +34,7 @@ from pathlib import Path
 
 from ngsolve import (
     Mesh, H1, BilinearForm, LinearForm, GridFunction,
-    grad, dx, Integrate, x, y,
+    grad, dx, Integrate, x, y, TaskManager,
 )
 from netgen.geom2d import SplineGeometry
 from scipy.special import iv
@@ -113,15 +113,16 @@ def augmented_cln_krylov(mesh, M_ROM=5):
     u, v_ = fes.TnT()
     a0 = BilinearForm(fes, symmetric=True)
     a0 += NU * grad(u) * grad(v_) * dx
-    a0.Assemble()
     Mm = BilinearForm(fes, symmetric=True)
     Mm += u * v_ * dx
-    Mm.Assemble()
     fL = LinearForm(fes)
     fL += 1.0 * v_ * dx
-    fL.Assemble()
 
-    K0_inv = a0.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+    with TaskManager():
+        a0.Assemble()
+        Mm.Assemble()
+        fL.Assemble()
+        K0_inv = a0.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
     b_const = fL.vec
     b_const_np = np.array(b_const.FV().NumPy())
 

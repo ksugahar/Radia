@@ -364,18 +364,29 @@ The main contributions of this paper are:
 
 ---
 
-## 🚫 NG パターン 10 (journal 特有)
+## 🚫 NG パターン 11 (journal 特有)
 
-1. **Contribution が discussion 調** ("We discuss..." で終わる) — 動詞で宣言
-2. **Abstract に将来形 / 提案形** ("We will show") — 現在形 ("We show")
-3. **fair comparison なし** — 比較対象の条件を揃える (表で明示)
-4. **負の結果を隠す** — 正直に書く方が accept されやすい
-5. **Related work が自己引用だらけ** — 競合他者を 5 件以上
-6. **Figure caption が 1 行** — 図の主張を caption 単独で伝える
-7. **pragmatic な数値なし** — "significantly" だけ → "3.2x (Fig. 7)"
-8. **cover letter で journal への fit が未言及** — "why this journal"
-9. **response letter が箇条書きなし** — reviewer comment を line-by-line で
-10. **supplementary material に本論の main result** — 本文に移す
+1. **Abstract に数式 / 引用** — display math (`\begin{equation}`, `\[...\]`),
+   inline math (`$...$`), `\cite{}` はすべて abstract から除外。
+   理由: (a) 検索エンジン (IEEE Xplore / Scopus / Google Scholar) は abstract
+   をプレーンテキストとして index → math symbols が garble、(b) self-contained
+   原則 (引用なしで主張が独立して読めるべき)。**例外なし** — 創設論文・先行
+   研究・共著者論文を引用したくても abstract には名前で言及し `\cite{}` は
+   本文に移す ([[project-esim-hollaus-coauthor-bib-2026-05-29]] 参照: 共著者
+   への礼儀として abstract に cite したくなる衝動を抑える)。プレーン数値
+   ("18%", "50 kHz") は OK、LaTeX math symbols (`$Z_s$`, `$O(h^3)$`,
+   `$\mathcal{E}$`) は NG。`paper_writing_check_abstract_no_math_no_citation`
+   で機械検証 (display + cite = fail, inline math = warning)。
+2. **Contribution が discussion 調** ("We discuss..." で終わる) — 動詞で宣言
+3. **Abstract に将来形 / 提案形** ("We will show") — 現在形 ("We show")
+4. **fair comparison なし** — 比較対象の条件を揃える (表で明示)
+5. **負の結果を隠す** — 正直に書く方が accept されやすい
+6. **Related work が自己引用だらけ** — 競合他者を 5 件以上
+7. **Figure caption が 1 行** — 図の主張を caption 単独で伝える
+8. **pragmatic な数値なし** — "significantly" だけ → "3.2x (Fig. 7)"
+9. **cover letter で journal への fit が未言及** — "why this journal"
+10. **response letter が箇条書きなし** — reviewer comment を line-by-line で
+11. **supplementary material に本論の main result** — 本文に移す
 
 ---
 
@@ -404,6 +415,8 @@ The main contributions of this paper are:
 - [ ] 単独で論文の主張が分かる
 - [ ] 語数 (EN 200 / JP 400) 以内
 - [ ] 弱気修飾語ゼロ
+- [ ] **数式ゼロ** (display `\begin{equation}` / `\[...\]` / inline `$...$` すべて)
+- [ ] **引用ゼロ** (`\cite{}` / `[N]` 全形式) — 例外なし、共著者・創設論文も本文に移す
 - [ ] 略語は初出で定義 (ただし広く知られた "FFT" 等は例外)
 
 ### Introduction
@@ -632,6 +645,12 @@ A+B→C が揃って初めて Discussion として機能する。
 - `paper_writing_check_subject_verb_distance` — 主述の物理距離
 - `paper_writing_check_paragraph_length` — 段落字数の範囲
 - `paper_writing_check_abstract_background_ratio` — abstract 内 background 比率
+- `paper_writing_check_abstract_no_math_no_citation` — **abstract に数式 (TeX math) や `\cite{}` が混入していないかチェック** (IEEE / Elsevier / Springer / Nature / Science 共通の慣習: abstract は self-contained + 検索エンジン indexing 可能であるべき)。Display math (`\begin{equation}`/`\[...\]`) と `\cite{}` は `status="fail"`、inline math (`$...$`) は `status="warning"`、両方なしなら `status="clean"`。
+- `paper_writing_check_undefined_acronyms(tex_path)` — **略語 (IH, MQS, FEM, BEM, ...) が初出時に full name と並記されているかチェック**。`Full Name (ACRONYM)` または `ACRONYM (Full Name)` パターン (初出の ±80 文字以内)、または Nomenclature / Acronyms / Abbreviations section に listed があれば OK。万人共通の略語 (PDF, USA, CPU, USB, ...) のみ whitelist、研究室 EM 専門用語 (FEM/BEM/MQS/IH) は意図的に whitelist 外 → 必ず spell out 必要。`extra_whitelist="ABC,XYZ"` で institutional 略語追加可。
+- `paper_writing_check_citation_keys_exist(tex_path, bib_path)` — **`\cite{key}` の key が `.bib` の entry に存在するか静的チェック**。`status="fail"` = 引用キーが bib にない (compile 時 `[?]` で render される)、`status="warning"` = bib にあるが cite されていない entry あり (cleanup 推奨)、`status="clean"` = 1-to-1 一致。`\input{}` chain も自動 resolve (`auto_resolve_inputs=True` default)。bibtex compile 前の sanity check として使う。
+- `paper_writing_check_ref_label_consistency(tex_path)` — **`\ref{}` / `\eqref{}` / `\autoref{}` / `\cref{}` / `\pageref{}` の key が `\label{}` に対応するか静的チェック**。`status="fail"` = dangling ref (PDF で `[??]` 表示)、`status="warning"` = orphan label (本文で言及していない figure/eq/table = digest で空間浪費)、`status="clean"` = 1-to-1 一致。digest review の典型指摘 "Fig. 3 is never referenced" を pre-compile で catch。
+- `paper_writing_check_ieee_keywords(tex_path)` — **`\begin{IEEEkeywords}` (IEEEtran) or `\keywords{}` (Elsevier/Springer) の存在 + 個数 (3-7 推奨) + 各 keyword 長 (3-50 chars) チェック**。IEEE Transactions / IGTE / COMPUMAG / CEFC digest は必須セクション。`status="missing"` = block 不在 (即追加必要)、`status="warning"` = 個数 or 長さ問題、`status="clean"` = OK。
+- `paper_writing_check_pdf_unresolved_markers(pdf_path)` — **compile 後 PDF を pymupdf で text 抽出し、`[?]` / `[??]` rendered marker を検出**。上 2 tool (cite key / ref label) は pre-compile 静的 check、本 tool は post-compile の safety net (bibtex 再 run 忘れ等で漏れた未解決参照を catch)。各 marker の page 番号 + ±60 char context を返す。digest 提出直前の最終チェックに最適。
 - `paper_writing_check_tense_consistency` — discussion の 3 部時制
 - `paper_writing_check_figure_caption_showing` — caption が showing vs telling か
 - `paper_writing_check_strong_adjective_budget` — 強調副詞の過剰

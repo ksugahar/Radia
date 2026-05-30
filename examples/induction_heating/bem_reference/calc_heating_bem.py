@@ -192,8 +192,9 @@ def _extract_surface_mesh(vol_mesh, order=2):
         ngmesh_new.Add(se)
 
     mesh = Mesh(ngmesh_new)
-    mesh.Curve(order)
-    return mesh
+    with TaskManager():
+        mesh.Curve(order)
+        return mesh
 
 
 def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
@@ -496,6 +497,7 @@ def compute_heating_bem(vol_file, coil_radius=0.030, coil_current=1.0,
             return np.where(nc_local > 0, arr / nc_local, 0.0)
 
         from ngsolve import sqrt
+        from ngsolve import TaskManager
         H_t_cf = sqrt(H_t_sq_cf)
         P_cf = 0.5 * Re_Zs * H_t_sq_cf
         Q_cf = 0.5 * Im_Zs * H_t_sq_cf

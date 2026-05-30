@@ -136,6 +136,7 @@ void MultipoleThresholds(double, double, double, double); // Maybe to be removed
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
+int HMatrixDensify(int, double*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -148,6 +149,9 @@ void SolveGenNonl( int, double, int, int, int, const char* );
 int BuildMatrix( int, const char* );
 #ifdef RADIA_USE_HACAPK
 void SetHACApKParams( double, int, double );
+void SetHACApKDeflation( const int*, int, const int*, const double*, int, double );
+void SetDeflateNullspace( int, double );
+void SetLoopStarGauge( int );
 void GetHACApKStats( double*, int* );
 #endif
 void GetSolveStats( double*, int* );
@@ -1452,6 +1456,13 @@ int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF)
 
 //-------------------------------------------------------------------------
 
+int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
+{
+	return rad.HMatrixDensify(InteractElemKey, pMatrix, pDOF);
+}
+
+//-------------------------------------------------------------------------
+
 void SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether)
 {
 	rad.SetRelaxSubInterval(InteractElemKey, StartNo, FinNo, RelaxTogether);
@@ -1526,6 +1537,21 @@ void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int Meth
 void SetHACApKParams(double eps, int leaf_size, double eta)
 {
 	rad.SetHACApKParams(eps, leaf_size, eta);
+}
+
+void SetHACApKDeflation(const int* offsets, int n_off, const int* dofs, const double* signs, int n_nz, double alpha)
+{
+	rad.SetHACApKDeflation(offsets, n_off, dofs, signs, n_nz, alpha);
+}
+
+void SetDeflateNullspace(int enable, double alpha)
+{
+	rad.SetDeflateNullspace(enable != 0, alpha);
+}
+
+void SetLoopStarGauge(int enable)
+{
+	rad.SetLoopStarGauge(enable != 0);
 }
 
 void GetHACApKStats(double* dOut, int* nOut)

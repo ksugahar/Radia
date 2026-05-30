@@ -19,7 +19,12 @@
 #include "rad_constants.h"
 #include "rad_poly_analytical.h"
 #include <cmath>
+#include <map>
+#include <set>
+#include <tuple>
+#include <algorithm>
 #include <cstring>
+#include <mkl.h>   // cblas_dgemm + LAPACKE_dsyevd for the antisym-IMA plane-slab null space (SVD-free)
 #include <cstdio>
 #include <iostream>
 #include <chrono>
@@ -190,6 +195,8 @@ RadHACApKBase::RadHACApKBase()
     , m_ndof(0)
     , m_n_elem(0)
     , m_diag_cached(false)
+    , m_defl_alpha(0.0)
+    , m_defl_nplaq(0)
 {
 }
 
@@ -215,6 +222,634 @@ RadHACApKMSCManager::RadHACApKMSCManager(radTInteraction* interaction)
 }
 
 RadHACApKMSCManager::~RadHACApKMSCManager() = default;
+
+void RadHACApKMSCManager::BuildLoopBasis(double alpha) {
+    // Loop (cycle) deflation basis from the element-adjacency graph. The bulk is
+    // the SHORT CYCLES (3- and 4-cycles), which span the contractible part of
+    // the null space. For multiply-connected bodies (first Betti number b1 > 0,
+    // e.g. a closed core / ring) these are completed by b1 global "belt" loops
+    // via a tree-cotree fundamental-cycle GF(2) pass (a belted tree) so the
+    // basis spans the FULL null space for any topology. Adjacency + shared-face
+    // DOF come from coincident face centroids (poly->FaceCenter[f]); DOF of
+    // element e face f is dofOffset(e) + f. General for any conforming mesh;
+    // O(N) for the short cycles (bounded element degree). Installs via SetDeflation.
+    if (!m_interaction || m_n_elem <= 0) { SetDeflation({}, {}, {}, 0.0); return; }
+
+    auto dofOffset = [&](int e) {
+        return m_dof_offset.empty() ? e * GetUniformNFFC() : m_dof_offset[e];
+    };
+
+    // 1. Collect (centroid, dof, elem) for every element face + length scale.
+    struct FaceRec { double c[3]; int dof; int elem; };
+    std::vector<FaceRec> faces;
+    faces.reserve((size_t)m_n_elem * 6);
+    double lo[3] = {1e300, 1e300, 1e300}, hi[3] = {-1e300, -1e300, -1e300};
+    for (int e = 0; e < m_n_elem; e++) {
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(m_interaction->g3dRelaxPtrVect[e]);
+        if (!poly) continue;
+        int nf = poly->AmOfFaces;
+        for (int f = 0; f < nf; f++) {
+            const TVector3d& fc = poly->FaceCenter[f];
+            FaceRec r; r.c[0] = fc.x; r.c[1] = fc.y; r.c[2] = fc.z;
+            r.dof = dofOffset(e) + f; r.elem = e;
+            faces.push_back(r);
+            for (int d = 0; d < 3; d++) { lo[d] = std::min(lo[d], r.c[d]); hi[d] = std::max(hi[d], r.c[d]); }
+        }
+    }
+    double diag = std::sqrt((hi[0]-lo[0])*(hi[0]-lo[0]) + (hi[1]-lo[1])*(hi[1]-lo[1]) + (hi[2]-lo[2])*(hi[2]-lo[2]));
+    double tol = 1.0e-7 * (diag > 0.0 ? diag : 1.0);
+    auto key = [&](const double* c) {
+        return std::make_tuple((long long)std::llround(c[0]/tol),
+                               (long long)std::llround(c[1]/tol),
+                               (long long)std::llround(c[2]/tol));
+    };
+
+    // 2. Group faces by centroid; internal faces (exactly 2) define adjacency.
+    std::map<std::tuple<long long, long long, long long>, std::vector<int>> grp;
+    for (int i = 0; i < (int)faces.size(); i++) grp[key(faces[i].c)].push_back(i);
+    std::vector<std::vector<int>> nbr(m_n_elem);
+    std::map<std::pair<int,int>, std::pair<int,int>> sdof;  // (ea,eb) -> (dofa,dofb)
+    for (auto& kv : grp) {
+        if (kv.second.size() != 2) continue;
+        const FaceRec& A = faces[kv.second[0]];
+        const FaceRec& B = faces[kv.second[1]];
+        if (A.elem == B.elem) continue;
+        nbr[A.elem].push_back(B.elem);
+        nbr[B.elem].push_back(A.elem);
+        sdof[{A.elem, B.elem}] = {A.dof, B.dof};
+        sdof[{B.elem, A.elem}] = {B.dof, A.dof};
+    }
+    for (auto& v : nbr) { std::sort(v.begin(), v.end()); v.erase(std::unique(v.begin(), v.end()), v.end()); }
+    auto isAdj = [&](int a, int b) { return sdof.count({a, b}) > 0; };
+
+    // 2b. Index undirected graph edges (for the GF(2) belt completion, step 4).
+    std::map<std::pair<int,int>, int> eidx;
+    for (auto& kv : sdof) {
+        int a = kv.first.first, b = kv.first.second;
+        if (a < b) eidx.emplace(std::make_pair(a, b), (int)eidx.size());
+    }
+    auto edgeId = [&](int a, int b) {
+        return eidx[std::make_pair(std::min(a, b), std::max(a, b))];
+    };
+
+    // 3. Enumerate short cycles (3 + 4), dedup by sorted node set, build CSR.
+    //    installCycle also records each added cycle's GF(2) edge-vector so the
+    //    belt-loop completion (step 4) can test homological independence.
+    std::set<std::vector<int>> seen;
+    std::vector<int> offs; offs.push_back(0);
+    std::vector<int> cdofs; std::vector<double> csign;
+    std::vector<std::vector<int>> cycleEdges;   // GF(2) edge-vector per cycle
+    auto installCycle = [&](const std::vector<int>& ordered) {
+        int k = (int)ordered.size();
+        std::vector<int> dbuf; std::vector<double> sbuf; std::vector<int> ebuf;
+        for (int t = 0; t < k; t++) {
+            auto it = sdof.find({ordered[t], ordered[(t+1) % k]});
+            if (it == sdof.end()) return;        // not a closed walk: skip
+            // +/-1 (unit density) on the two coincident DOFs of each shared face.
+            // This is the discrete NULL mode of N (zero normal field at every
+            // collocation point: N L ~ 0, verified field-exact in the linear
+            // regime). NOTE: it is NOT charge-neutral (m_e = A_out - A_in != 0)
+            // on distorted hexes, but charge-neutrality is the WRONG requirement
+            // for deflation -- field-nullness (N L = 0) is what matters, and a
+            // 1/area "charge-neutral" reweighting breaks N L = 0 (changes the
+            // field by ~100%, verified). The residual nonlinear B_z drift comes
+            // from a different mechanism (non-uniform chi makes span(L) not
+            // A-invariant), addressed at the solver level, not the basis.
+            dbuf.push_back(it->second.first);  sbuf.push_back(1.0);
+            dbuf.push_back(it->second.second); sbuf.push_back(-1.0);
+            ebuf.push_back(edgeId(ordered[t], ordered[(t+1) % k]));
+        }
+        for (size_t i = 0; i < dbuf.size(); i++) { cdofs.push_back(dbuf[i]); csign.push_back(sbuf[i]); }
+        offs.push_back((int)cdofs.size());
+        std::sort(ebuf.begin(), ebuf.end());
+        cycleEdges.push_back(ebuf);
+    };
+    auto addCycle = [&](std::vector<int> ordered) {
+        std::vector<int> kk = ordered; std::sort(kk.begin(), kk.end());
+        if (seen.count(kk)) return; seen.insert(kk);
+        installCycle(ordered);
+    };
+    for (int e = 0; e < m_n_elem; e++) {
+        const std::vector<int>& Ne = nbr[e];
+        for (size_t ai = 0; ai < Ne.size(); ai++) {
+            int a = Ne[ai];
+            for (size_t bi = ai + 1; bi < Ne.size(); bi++) {
+                int b = Ne[bi];
+                if (isAdj(a, b)) addCycle({e, a, b});                 // 3-cycle
+                for (int d : nbr[a]) {                                // 4-cycle e-a-d-b
+                    if (d == e || d == a || d == b) continue;
+                    if (isAdj(d, b)) addCycle({e, a, d, b});
+                }
+            }
+        }
+    }
+
+    // 4. Belt loops for multiply-connected bodies (first Betti number b1 > 0).
+    //    Short cycles span only the contractible part (boundaries of plaquette
+    //    2-cells). The full null space (= cycle space of the element graph) also
+    //    contains b1 = (E - V + C) - rank(short) global "belt" loops around the
+    //    holes. We complete it with a tree-cotree fundamental-cycle GF(2) pass
+    //    (a belted tree). Each accepted belt loop is a genuine exact null mode
+    //    (a divergence-free circulation). For simply-connected bodies the short
+    //    cycles already span everything, so beltNeeded == 0 and step 4 is a no-op
+    //    (only the cheap GF(2) rank check runs; the installed DOF vectors are
+    //    unchanged from the short-cycle-only path).
+    {
+        // 4a. BFS spanning forest over the active sub-graph (deg >= 1):
+        //     parent/depth (for fundamental-cycle paths) + V_active + #components.
+        std::vector<int> parent(m_n_elem, -1), depth(m_n_elem, -1);
+        int Vp = 0, C = 0;
+        std::vector<int> q;
+        for (int s = 0; s < m_n_elem; s++) {
+            if (!nbr[s].empty()) Vp++;
+            if (depth[s] >= 0 || nbr[s].empty()) continue;
+            C++; depth[s] = 0; q.clear(); q.push_back(s);
+            for (size_t h = 0; h < q.size(); h++) {
+                int u = q[h];
+                for (int v : nbr[u]) if (depth[v] < 0) {
+                    depth[v] = depth[u] + 1; parent[v] = u; q.push_back(v);
+                }
+            }
+        }
+        int E = (int)eidx.size();
+        int b1 = E - Vp + C;   // graph cycle rank = dim ker N
+
+        // 4b. GF(2) basis seeded with short cycles (sparse rows keyed by pivot
+        //     edge); rankShort = dimension of the contractible subspace.
+        std::map<int, std::vector<int>> basis;
+        auto symdiff = [](const std::vector<int>& A, const std::vector<int>& B) {
+            std::vector<int> R; size_t i = 0, j = 0;
+            while (i < A.size() && j < B.size()) {
+                if (A[i] < B[j]) R.push_back(A[i++]);
+                else if (B[j] < A[i]) R.push_back(B[j++]);
+                else { i++; j++; }
+            }
+            while (i < A.size()) R.push_back(A[i++]);
+            while (j < B.size()) R.push_back(B[j++]);
+            return R;
+        };
+        auto reduceRow = [&](std::vector<int> row) {
+            while (!row.empty()) {
+                auto it = basis.find(row[0]);
+                if (it == basis.end()) break;
+                row = symdiff(row, it->second);
+            }
+            return row;
+        };
+        int rankShort = 0;
+        for (auto& ev : cycleEdges) {
+            if (rankShort >= b1) break;   // cycle space saturated: rest are dependent
+            std::vector<int> r = reduceRow(ev);
+            if (!r.empty()) { basis[r[0]] = r; rankShort++; }
+        }
+        int beltNeeded = b1 - rankShort;
+
+        // 4c. complete with cotree fundamental cycles until beltNeeded added.
+        if (beltNeeded > 0) {
+            auto treePath = [&](int a, int b) {
+                std::vector<int> pa, pb; int x = a, y = b;
+                while (depth[x] > depth[y]) { pa.push_back(x); x = parent[x]; }
+                while (depth[y] > depth[x]) { pb.push_back(y); y = parent[y]; }
+                while (x != y) { pa.push_back(x); x = parent[x]; pb.push_back(y); y = parent[y]; }
+                pa.push_back(x);   // LCA
+                for (int i = (int)pb.size() - 1; i >= 0; i--) pa.push_back(pb[i]);
+                return pa;         // ordered walk a -> ... -> b (closes via {a,b})
+            };
+            for (auto& kv : eidx) {
+                if (beltNeeded <= 0) break;
+                int a = kv.first.first, b = kv.first.second;
+                if (depth[a] < 0 || depth[b] < 0) continue;
+                if (parent[a] == b || parent[b] == a) continue;       // tree edge
+                std::vector<int> walk = treePath(a, b);
+                std::vector<int> ev;                                  // fundamental cycle edges
+                for (size_t t = 0; t + 1 < walk.size(); t++) ev.push_back(edgeId(walk[t], walk[t+1]));
+                ev.push_back(edgeId(a, b));
+                std::sort(ev.begin(), ev.end());
+                std::vector<int> r = reduceRow(ev);
+                if (r.empty()) continue;                              // homologically trivial
+                std::vector<int> kk = walk; std::sort(kk.begin(), kk.end());
+                if (!seen.count(kk)) { seen.insert(kk); installCycle(walk); }
+                basis[r[0]] = r; beltNeeded--;
+            }
+        }
+    }
+
+    // 5. Auto-scale the shift strength when alpha <= 0 (recommended default).
+    //    The matrix-free shift moves a loop mode v by alpha * (its L L^T
+    //    eigenvalue), so the WORST-shifted mode is lifted by alpha * lambda_max
+    //    where lambda_max = spectral radius of L L^T. Capping that worst lift at
+    //    the physical eigenvalue scale (~ mean |N_ii|, the self-demagnetization)
+    //    gives  alpha = mean|N_ii| / lambda_max(L L^T).  This is MESH-ROBUST: a
+    //    fixed alpha=1 (fine on a regular cube, where L L^T is near-uniform with
+    //    small lambda_max) over-shoots on an irregular mesh (chamfers, varying
+    //    connectivity) whose overcomplete cycles correlate, giving a large
+    //    lambda_max -- throwing the most-overlapped loops far past the physical
+    //    band and WORSENING conditioning. Using the diagonal d_max instead of
+    //    the true lambda_max underestimates the lift (overlapping cycles make
+    //    lambda_max >> d_max) and over-shoots ~10x; the power iteration below is
+    //    the principled cap. It is also chi-independent and self-regulating:
+    //    where the iron saturates (small chi, large 1/chi) the loop cluster is
+    //    no longer the smallest-eigenvalue bottleneck and a shift of order
+    //    mean|N_ii| << 1/chi barely moves it, so deflation does no harm.
+    double alpha_use = alpha;
+    if (alpha <= 0.0 && (int)offs.size() > 1) {
+        int nplaq = (int)offs.size() - 1;
+        // lambda_max(L L^T) via power iteration (L L^T x: per cycle c=sum sign*x,
+        // then y[dof] += sign*c). Cheap: ~20 matvecs of O(nnz(L)) = O(N).
+        std::vector<double> xv(m_ndof, 0.0), yv(m_ndof, 0.0);
+        // Seed inside range(L) with a VARIED (pseudo-random) pattern: a uniform
+        // seed is annihilated by the balanced +/-1 cycle signs (each cycle's
+        // signs sum to zero, so L L^T * uniform = 0) and the power iteration
+        // would stall at the init value. A deterministic LCG keeps it reproducible.
+        unsigned int rng = 2463534242u;
+        for (int d : cdofs) { rng = rng * 1664525u + 1013904223u;
+                              xv[d] = (double)(rng >> 9) / 8388608.0 - 0.5; }
+        double nrm = 0.0; for (double v : xv) nrm += v * v; nrm = std::sqrt(nrm);
+        if (nrm > 0.0) for (double& v : xv) v /= nrm;
+        double lam_max = 1.0;
+        for (int it = 0; it < 20; it++) {
+            std::fill(yv.begin(), yv.end(), 0.0);
+            for (int p = 0; p < nplaq; p++) {
+                double c = 0.0;
+                for (int k = offs[p]; k < offs[p + 1]; k++) c += csign[k] * xv[cdofs[k]];
+                for (int k = offs[p]; k < offs[p + 1]; k++) yv[cdofs[k]] += csign[k] * c;
+            }
+            double ny = 0.0; for (double v : yv) ny += v * v; ny = std::sqrt(ny);
+            if (ny <= 0.0) break;
+            lam_max = ny;                           // ||L L^T x|| with ||x||=1
+            for (int i = 0; i < m_ndof; i++) xv[i] = yv[i] / ny;
+        }
+        double sumN = 0.0;
+        for (int i = 0; i < m_ndof; i++) sumN += std::fabs(GetInteractionMatrixElement(i, i));
+        double meanN = (m_ndof > 0) ? sumN / (double)m_ndof : 1.0;
+        // CONSERVATIVE safety factor: keep alpha WELL BELOW the over-shift cliff.
+        // meanN/lam_max alone lands ~0.07 on the C-type, which is AT the cliff
+        // (non-reproducible: 3871 vs 9019 iters across runs at 6^3 mu=1e5) and
+        // over the cliff at 10^3 (diverges). The cliff moves DOWN with mesh size
+        // while lam_max(L L^T) stays ~constant, so a formula cannot fully track
+        // it -- this factor is a STOPGAP that lands ~0.0035 (safe at 6^3 and
+        // 10^3: 1.75x and 4x speedup, field-exact). NOTE: auto-alpha is a fragile
+        // convenience and may be retired in favour of an alpha-free cure
+        // (tree-cotree gauge) or default-off; do not treat it as load-bearing.
+        const double DEFL_ALPHA_SAFETY = 0.05;
+        alpha_use = (lam_max > 0.0) ? DEFL_ALPHA_SAFETY * meanN / lam_max : 0.0;
+    }
+    SetDeflation(offs, cdofs, csign, alpha_use);
+}
+
+//=========================================================================
+// Loop-star gauge (ALPHA-FREE): sparse star basis + reduced BiCGSTAB sandwich.
+// Build T (columns span the complement of the loop null space) and solve the
+// reduced non-singular system T^T A T y = T^T b; the H-matrix is UNCHANGED.
+//=========================================================================
+
+int RadHACApKMSCManager::BuildStarBasis() {
+    m_star_offsets.clear(); m_star_dofs.clear(); m_star_coeffs.clear(); m_n_star = 0;
+    if (!m_interaction || m_n_elem <= 0) return 0;
+
+    auto dofOffset = [&](int e) {
+        return m_dof_offset.empty() ? e * GetUniformNFFC() : m_dof_offset[e];
+    };
+
+    // 1. faces (centroid, dof, elem) + length scale (same as BuildLoopBasis).
+    struct FaceRec { double c[3]; int dof; int elem; };
+    std::vector<FaceRec> faces; faces.reserve((size_t)m_n_elem * 6);
+    double lo[3] = {1e300,1e300,1e300}, hi[3] = {-1e300,-1e300,-1e300};
+    for (int e = 0; e < m_n_elem; e++) {
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(m_interaction->g3dRelaxPtrVect[e]);
+        if (!poly) continue;
+        for (int f = 0; f < poly->AmOfFaces; f++) {
+            const TVector3d& fc = poly->FaceCenter[f];
+            FaceRec r; r.c[0]=fc.x; r.c[1]=fc.y; r.c[2]=fc.z; r.dof=dofOffset(e)+f; r.elem=e;
+            faces.push_back(r);
+            for (int d=0; d<3; d++){ lo[d]=std::min(lo[d],r.c[d]); hi[d]=std::max(hi[d],r.c[d]); }
+        }
+    }
+    double diag = std::sqrt((hi[0]-lo[0])*(hi[0]-lo[0])+(hi[1]-lo[1])*(hi[1]-lo[1])+(hi[2]-lo[2])*(hi[2]-lo[2]));
+    double tol = 1.0e-7 * (diag > 0.0 ? diag : 1.0);
+    auto key = [&](const double* c){ return std::make_tuple((long long)std::llround(c[0]/tol),(long long)std::llround(c[1]/tol),(long long)std::llround(c[2]/tol)); };
+
+    // NOTE on IMA: symmetric planes (sign>0) need NO special handling here -- they
+    // double the boundary-face charge (2*sigma, not null), preserving the topological
+    // +-1 loop null structure, and the standard star is field-exact (verified +x:
+    // dB/B ~ 2e-11). ANTISYMMETRIC planes: the topological loops STAY null under IMA
+    // (verified ||N_ima @ loop|| ~ 1e-15), so this standard star is still correct for
+    // the loop part; ker(N_ima) just gains a FEW extra LOCAL modes confined to the
+    // antisymmetric-plane slab. Those are handled separately by
+    // ComputePlaneSlabAddedModes() + a reduced-space deflation in SolveLoopStar (NOT
+    // by changing the star here). So no antisym branch is needed in this function.
+
+    // 2. group by centroid: size-2 = internal (adjacency + shared DOF pair),
+    //    size-1 = boundary face.
+    std::map<std::tuple<long long,long long,long long>, std::vector<int>> grp;
+    for (int i=0; i<(int)faces.size(); i++) grp[key(faces[i].c)].push_back(i);
+    std::vector<std::vector<int>> nbr(m_n_elem);
+    std::map<std::pair<int,int>, std::pair<int,int>> sdof;
+    std::vector<int> boundaryDofs;
+    std::vector<std::pair<int,int>> internalPairs;
+    for (auto& kv : grp) {
+        if (kv.second.size() == 1) { boundaryDofs.push_back(faces[kv.second[0]].dof); continue; }
+        if (kv.second.size() != 2) continue;
+        const FaceRec& A = faces[kv.second[0]]; const FaceRec& B = faces[kv.second[1]];
+        if (A.elem == B.elem) continue;
+        nbr[A.elem].push_back(B.elem); nbr[B.elem].push_back(A.elem);
+        sdof[{A.elem,B.elem}] = {A.dof,B.dof}; sdof[{B.elem,A.elem}] = {B.dof,A.dof};
+        internalPairs.push_back({A.dof, B.dof});
+    }
+    for (auto& v : nbr){ std::sort(v.begin(),v.end()); v.erase(std::unique(v.begin(),v.end()),v.end()); }
+
+    // 3. BFS components -> drop exactly one divergence per connected component
+    //    (the per-component sum of internal divergences vanishes: 1 redundancy).
+    std::vector<int> comp(m_n_elem, -1); int ncomp = 0; std::vector<int> q;
+    for (int s=0; s<m_n_elem; s++){
+        if (comp[s] >= 0 || nbr[s].empty()) continue;
+        q.clear(); q.push_back(s); comp[s]=ncomp;
+        for (size_t h=0; h<q.size(); h++){ int u=q[h]; for(int v: nbr[u]) if(comp[v]<0){ comp[v]=ncomp; q.push_back(v);} }
+        ncomp++;
+    }
+
+    // 4. assemble the sparse star CSR (columns): boundary unit vectors,
+    //    symmetric internal (sigma_A+sigma_B), per-element divergence.
+    m_star_offsets.push_back(0);
+    auto addCol = [&](const std::vector<std::pair<int,double>>& entries){
+        for (auto& e : entries){ m_star_dofs.push_back(e.first); m_star_coeffs.push_back(e.second); }
+        m_star_offsets.push_back((int)m_star_dofs.size());
+    };
+    for (int d : boundaryDofs) addCol({{d, 1.0}});
+    for (auto& p : internalPairs) addCol({{p.first, 1.0},{p.second, 1.0}});
+    std::vector<char> compHasRoot(ncomp > 0 ? ncomp : 1, 0);
+    for (int e=0; e<m_n_elem; e++){
+        if (nbr[e].empty()) continue;
+        if (comp[e] >= 0 && !compHasRoot[comp[e]]) { compHasRoot[comp[e]] = 1; continue; }  // drop 1 / comp
+        std::vector<std::pair<int,double>> col;
+        for (int e2 : nbr[e]){ auto it=sdof.find({e,e2}); if(it==sdof.end()) continue;
+            col.push_back({it->second.first, 1.0}); col.push_back({it->second.second, -1.0}); }
+        if (!col.empty()) addCol(col);
+    }
+    m_n_star = (int)m_star_offsets.size() - 1;
+    return m_n_star;
+}
+
+// True iff the interaction has an ANTISYMMETRIC IMA plane (sign<0). These add a
+// few LOCAL plane-coupled modes to ker(N_ima); ComputePlaneSlabAddedModes finds
+// them and SolveLoopStar deflates them so the gauge is field-exact.
+bool RadHACApKMSCManager::HasAntisymmetricIMAPlane() const {
+    if (!m_interaction) return false;
+    int sym = m_interaction->GetIMASymmetry();
+    return ((sym & radTInteraction::IMA_X) && m_interaction->GetIMASignX() < 0)
+        || ((sym & radTInteraction::IMA_Y) && m_interaction->GetIMASignY() < 0)
+        || ((sym & radTInteraction::IMA_Z) && m_interaction->GetIMASignZ() < 0);
+}
+
+// Antisym-IMA O(N) gauge: the topological star gauges the loops (which stay null
+// under IMA -- verified ||N_ima @ loop|| ~ 1e-15), but ker(N_ima) ALSO contains a
+// few LOCAL "plane-coupled" modes confined to the antisymmetric-plane slab (count
+// = nP-1, nP = #element-faces ON the plane). Find them, SVD-FREE, in two stages:
+//   (1) densify N_ima on the slab (plane-touching elements) via
+//       GetInteractionMatrixElement (IMA-folded), then ker(N_sl) via the Gram
+//       eigendecomposition G = N_sl^T N_sl (LAPACKE_dsyevd, NOT dgesdd) -- the null
+//       gap WIDENS under squaring (s~1e-11 -> lambda~1e-22) so detection is robust.
+//   (2) isolate the PLANE-COUPLED subspace BASIS-INDEPENDENTLY: the intra-slab loops
+//       have ZERO weight on the antisym-plane faces and are ALREADY gauged by the star
+//       T, so deflate only their orthogonal complement within ker(N_sl). Build the
+//       small plane-restriction Gram H = (Q_plane)^T (Q_plane) (m x m, Q_plane = the
+//       plane-face rows of the null basis Q); the eigenvectors of H with NONZERO
+//       eigenvalue are the combos of Q carrying plane weight = K_plane (count nP-1).
+// (The earlier per-vector "plane-weight >= 5%" filter was basis-DEPENDENT -- with a
+//  different but equally valid orthonormal null basis it could drop modes spanning
+//  K_plane; the H-restriction above is basis-independent. Verified in
+//  C:/temp/gram_vs_svd_indexing.py: option B recovers K_plane to angle 0 from BOTH the
+//  SVD and Gram bases, while the per-vector filter misses it.)
+// Cache the kept (orthonormal: Q orthonormal x hvec orthonormal) modes as a sigma-DOF
+// CSR. SolveLoopStar deflates them via SetDeflation(alpha L L^T): robust because they
+// are FEW + ORTHONORMAL, and the T^T(.)T sandwich annihilates any loop-overlap part
+// (T excludes the loops). One-time (cached via m_added_built). Validated field-exact
+// in examples/mmm_eigenvalue_study + ctype_loopstar_test.py ('+x-z').
+int RadHACApKMSCManager::ComputePlaneSlabAddedModes() {
+    if (m_added_built) return m_n_added;
+    m_added_built = true;
+    m_added_offsets.clear(); m_added_dofs.clear(); m_added_coeffs.clear(); m_n_added = 0;
+    if (!m_interaction || m_n_elem <= 0 || !HasAntisymmetricIMAPlane()) return 0;
+
+    int sym = m_interaction->GetIMASymmetry();
+    bool antiX = (sym & radTInteraction::IMA_X) && m_interaction->GetIMASignX() < 0;
+    bool antiY = (sym & radTInteraction::IMA_Y) && m_interaction->GetIMASignY() < 0;
+    bool antiZ = (sym & radTInteraction::IMA_Z) && m_interaction->GetIMASignZ() < 0;
+    auto dofOffset = [&](int e){ return m_dof_offset.empty() ? e * GetUniformNFFC() : m_dof_offset[e]; };
+
+    // length scale for the plane tolerance
+    double lo[3]={1e300,1e300,1e300}, hi[3]={-1e300,-1e300,-1e300};
+    for (int e=0;e<m_n_elem;e++){
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(m_interaction->g3dRelaxPtrVect[e]);
+        if(!poly) continue;
+        for(int f=0; f<poly->AmOfFaces; f++){ const TVector3d& fc=poly->FaceCenter[f];
+            double c[3]={fc.x,fc.y,fc.z}; for(int d=0;d<3;d++){lo[d]=std::min(lo[d],c[d]); hi[d]=std::max(hi[d],c[d]);} }
+    }
+    double diag=std::sqrt((hi[0]-lo[0])*(hi[0]-lo[0])+(hi[1]-lo[1])*(hi[1]-lo[1])+(hi[2]-lo[2])*(hi[2]-lo[2]));
+    double ptol = 1.0e-6 * (diag>0.0?diag:1.0);
+
+    // plane-touching elements + antisym-plane face DOFs (for the plane-weight filter)
+    std::vector<char> isSlab(m_n_elem, 0);
+    std::set<int> planeFaceDofs;
+    for (int e=0;e<m_n_elem;e++){
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(m_interaction->g3dRelaxPtrVect[e]);
+        if(!poly) continue;
+        for(int f=0; f<poly->AmOfFaces; f++){ const TVector3d& fc=poly->FaceCenter[f];
+            if((antiX && std::fabs(fc.x)<ptol) || (antiY && std::fabs(fc.y)<ptol) || (antiZ && std::fabs(fc.z)<ptol)){
+                isSlab[e]=1; planeFaceDofs.insert(dofOffset(e)+f);
+            }
+        }
+    }
+    std::vector<int> slabDofs;
+    for (int e=0;e<m_n_elem;e++){ if(!isSlab[e]) continue;
+        radTPolyhedron* poly=dynamic_cast<radTPolyhedron*>(m_interaction->g3dRelaxPtrVect[e]);
+        int nf = poly? poly->AmOfFaces : 0;
+        for(int f=0;f<nf;f++) slabDofs.push_back(dofOffset(e)+f);
+    }
+    int nsl = (int)slabDofs.size();
+    if (nsl < 1) return 0;
+
+    // densify N_ima on the slab (IMA-folded), column-major for LAPACK
+    std::vector<double> Nslab((size_t)nsl*nsl, 0.0);
+    for (int a=0;a<nsl;a++)
+        for (int b=0;b<nsl;b++)
+            Nslab[(size_t)b*nsl + a] = GetInteractionMatrixElement(slabDofs[a], slabDofs[b]);
+
+    // Stage 1: ker(N_sl) via the Gram eigendecomposition G = N_sl^T N_sl (SPD), SVD-free.
+    // dsyevd returns orthonormal eigenVECTORS as COLUMNS, eigenvalues ASCENDING; the null
+    // space = eigenvectors with lambda < (1e-6*smax)^2 = 1e-12*lmax (same threshold as the
+    // old dgesdd snull=1e-6*smax, squared). Eigvec k component j is G[j + k*nsl] = G(j,k).
+    std::vector<double> G((size_t)nsl*nsl, 0.0);
+    cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans, nsl, nsl, nsl,
+                1.0, Nslab.data(), nsl, Nslab.data(), nsl, 0.0, G.data(), nsl);
+    std::vector<double> evals(nsl);
+    if (LAPACKE_dsyevd(LAPACK_COL_MAJOR, 'V', 'U', nsl, G.data(), nsl, evals.data()) != 0) return 0;
+    double lmax = (nsl>0) ? evals[nsl-1] : 0.0;          // ascending -> last is largest
+    double lnull = 1.0e-12 * (lmax>0.0 ? lmax : 1.0);
+    std::vector<int> nullCols;                           // eigenvector cols spanning ker(N_sl)
+    for (int k=0;k<nsl;k++) if (evals[k] < lnull) nullCols.push_back(k);
+    int m = (int)nullCols.size();
+    if (m < 1) return 0;                                 // Q(j,t) = G[j + nullCols[t]*nsl]
+
+    // Stage 2: isolate K_plane (basis-independent). H = (Q_plane)^T (Q_plane) (m x m),
+    // Q_plane = plane-face rows of Q; eigenvectors of H with NONZERO eigenvalue carry
+    // plane weight = K_plane (intra-slab loops have zero plane weight -> H-kernel, and
+    // are already gauged by the star T). dsyevd again (SVD-free, m x m tiny).
+    std::vector<char> isPlaneRow(nsl, 0);
+    for (int j=0;j<nsl;j++) if (planeFaceDofs.count(slabDofs[j])) isPlaneRow[j]=1;
+    std::vector<double> H((size_t)m*m, 0.0);
+    for (int j=0;j<nsl;j++){
+        if (!isPlaneRow[j]) continue;
+        for (int t2=0;t2<m;t2++){ double q2 = G[(size_t)j + (size_t)nullCols[t2]*nsl];
+            for (int t1=0;t1<m;t1++) H[(size_t)t1 + (size_t)t2*m] += G[(size_t)j + (size_t)nullCols[t1]*nsl]*q2; } }
+    std::vector<double> hvals(m);
+    if (LAPACKE_dsyevd(LAPACK_COL_MAJOR, 'V', 'U', m, H.data(), m, hvals.data()) != 0) return 0;
+    double hmax = (m>0) ? hvals[m-1] : 0.0;
+    double hkeep = 1.0e-9 * (hmax>0.0 ? hmax : 1.0);
+
+    // assemble each kept plane-coupled mode mode_c[j] = sum_t Q(j,t) * hvec_c[t]
+    // (orthonormal). hvec_c component t is H[t + c*m]. Store as a sigma-DOF CSR column.
+    m_added_offsets.push_back(0);
+    std::vector<double> mode(nsl);
+    for (int c=0;c<m;c++){
+        if (hvals[c] <= hkeep) continue;                 // pure intra-slab loop -> skip (gauged by T)
+        for (int j=0;j<nsl;j++){ double acc=0.0;
+            for (int t=0;t<m;t++) acc += G[(size_t)j + (size_t)nullCols[t]*nsl]*H[(size_t)t + (size_t)c*m];
+            mode[j]=acc; }
+        for (int j=0;j<nsl;j++) if (std::fabs(mode[j]) > 1e-14){ m_added_dofs.push_back(slabDofs[j]); m_added_coeffs.push_back(mode[j]); }
+        m_added_offsets.push_back((int)m_added_dofs.size());
+    }
+    m_n_added = (int)m_added_offsets.size() - 1;
+    return m_n_added;
+}
+
+int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector<double>& sigma,
+                                       double tol, int max_iter,
+                                       const std::vector<double>& blockInverse,
+                                       const std::vector<int>& blockOffsets) {
+    if (m_n_star <= 0) { if (BuildStarBasis() <= 0) return -1; }
+    const int n = m_ndof, ns = m_n_star;
+    auto applyT = [&](const std::vector<double>& y, std::vector<double>& s){
+        s.assign(n, 0.0);
+        for (int k=0; k<ns; k++){ double yk=y[k];
+            for(int j=m_star_offsets[k]; j<m_star_offsets[k+1]; j++) s[m_star_dofs[j]] += m_star_coeffs[j]*yk; }
+    };
+    auto applyTt = [&](const std::vector<double>& r, std::vector<double>& y){
+        y.assign(ns, 0.0);
+        for (int k=0; k<ns; k++){ double acc=0.0;
+            for(int j=m_star_offsets[k]; j<m_star_offsets[k+1]; j++) acc += m_star_coeffs[j]*r[m_star_dofs[j]];
+            y[k]=acc; }
+    };
+    std::vector<double> ts(n), tAs(n);
+    auto redMatVec = [&](const std::vector<double>& z, std::vector<double>& out){
+        applyT(z, ts); MatVec(ts, tAs); applyTt(tAs, out);   // out = T^T A T z
+    };
+
+    // Preconditioner M^-1 for the reduced system T^T A T:
+    //  (a) BLOCK-JACOBI SANDWICH  M^-1 = T^T M_bj^-1 T  (when blockInverse/blockOffsets
+    //      supplied). EMPIRICALLY MUCH WORSE than (b) -- linear 50->902, nonlinear
+    //      3023->49141 iters -- because the FULL-A block-diag does NOT match the reduced
+    //      operator T^T A T (see rad_relaxation_methods.cpp ~2972). The caller never
+    //      passes block data; this code path is left for completeness/experimentation.
+    //  (b) CONSERVATIVE COLUMN-SCALE Jacobi  M^-1 = 1/d_k, d_k = sum c_i^2 |A_{i,i}|.
+    //      Robust to sign cancellations between 1/chi diagonal and -N cross-terms.
+    //      (Two stronger variants were prototyped and removed: B6 -- exact bilinear
+    //       d_k = sum_{i,j} c_i c_j A_{i,j} -- diverged on C-type mu_r=1e5 when |d|~0
+    //       was inverted. B7 -- true reduced block-Jacobi grouped by element-owner with
+    //       LAPACK-pivoted block inversion -- slowed convergence on every working case
+    //       (cube 1.77x->1.05x, antisym 49->81) and did not crack the C-type cap. The
+    //       per-element block does not align with the natural block structure of T^T A T,
+    //       which mixes element DOFs through the boundary/sym-internal/divergence star
+    //       columns.  Both rolled back 2026-05-30.)
+    bool useBlock = (!blockOffsets.empty() && !blockInverse.empty() && m_interaction);
+    std::vector<double> dinv(ns, 1.0);
+    if (!useBlock) {
+        bool haveN = (m_diag_cached && (int)m_diag_N.size() == n);
+        std::vector<double> diagA(n);
+        for (int i = 0; i < n; i++){
+            double Nii = haveN ? m_diag_N[i] : GetInteractionMatrixElement(i, i);
+            double ic  = (i < (int)m_inv_chi.size()) ? m_inv_chi[i] : 0.0;
+            diagA[i] = -Nii + ic;
+        }
+        for (int k = 0; k < ns; k++){
+            double d = 0.0;
+            for (int j = m_star_offsets[k]; j < m_star_offsets[k+1]; j++)
+                d += m_star_coeffs[j]*m_star_coeffs[j]*std::fabs(diagA[m_star_dofs[j]]);
+            dinv[k] = (d > 1e-300) ? 1.0/d : 1.0;
+        }
+    }
+    std::vector<double> mf(n), mg(n);
+    auto applyMinv = [&](const std::vector<double>& rstar, std::vector<double>& zstar){
+        if (!useBlock) { for (int k=0;k<ns;k++) zstar[k] = dinv[k]*rstar[k]; return; }
+        applyT(rstar, mf);                                   // full = T r
+        int ne = m_interaction->AmOfMainElem;
+        std::fill(mg.begin(), mg.end(), 0.0);
+        for (int e=0; e<ne; e++){
+            int dof = m_interaction->GetElementDOF(e);
+            int off = m_interaction->GetElementDOFOffset(e);
+            int boff = blockOffsets[e];
+            for (int i=0;i<dof;i++){ double acc=0.0;
+                for (int j=0;j<dof;j++) acc += blockInverse[boff + i*dof + j]*mf[off+j];
+                mg[off+i]=acc; }
+        }
+        applyTt(mg, zstar);                                  // z = T^T M_bj^-1 T r
+    };
+    auto dot = [](const std::vector<double>& a, const std::vector<double>& c){ double s=0; for(size_t i=0;i<a.size();i++) s+=a[i]*c[i]; return s; };
+    auto nrm = [&](const std::vector<double>& a){ return std::sqrt(dot(a,a)); };
+
+    std::vector<double> bred(ns); applyTt(b, bred);
+    double bnorm = nrm(bred);
+    if (bnorm < 1e-300){ sigma.assign(n, 0.0); return 0; }
+
+    // ANTISYM IMA: deflate the few LOCAL plane-coupled null modes (the topological
+    // star already gauges the loops, which stay null under IMA). MatVec then applies
+    // A + alpha L L^T; the T^T(.)T sandwich lifts these modes out of the reduced
+    // null space (loop-overlap part is annihilated by T^T). alpha ~ mean |A_ii| over
+    // the modes' support so they land in the physical band. Robust (FEW + orthonormal).
+    bool antisymDefl = false;
+    if (HasAntisymmetricIMAPlane() && ComputePlaneSlabAddedModes() > 0){
+        double asum=0.0; int acnt=0;
+        bool haveN = (m_diag_cached && (int)m_diag_N.size()==n);
+        for (int k=0;k<m_n_added;k++)
+            for (int j=m_added_offsets[k]; j<m_added_offsets[k+1]; j++){
+                int d=m_added_dofs[j];
+                double Nii = haveN ? m_diag_N[d] : GetInteractionMatrixElement(d,d);
+                double ic  = (d<(int)m_inv_chi.size()) ? m_inv_chi[d] : 0.0;
+                asum += std::fabs(-Nii+ic); acnt++;
+            }
+        double alpha = (acnt>0) ? asum/(double)acnt : 1.0;
+        SetDeflation(m_added_offsets, m_added_dofs, m_added_coeffs, alpha);
+        antisymDefl = true;
+    }
+
+    // right-preconditioned BiCGSTAB on the reduced system T^T A T y = T^T b
+    std::vector<double> y(ns,0.0), r(bred), rhat(bred), v(ns,0.0), p(ns,0.0),
+                        s(ns), t(ns), phat(ns), shat(ns);
+    double rho=1.0, alpha=1.0, omega=1.0;
+    int it = 0;
+    for (; it < max_iter; it++){
+        double rho_new = dot(rhat, r);
+        if (std::fabs(rho_new) < 1e-300) break;
+        double beta = (rho_new/rho)*(alpha/omega);
+        for (int i=0;i<ns;i++) p[i] = r[i] + beta*(p[i]-omega*v[i]);
+        applyMinv(p, phat);
+        redMatVec(phat, v);
+        double rv = dot(rhat, v); if (std::fabs(rv) < 1e-300) break;
+        alpha = rho_new/rv;
+        for (int i=0;i<ns;i++) s[i] = r[i] - alpha*v[i];
+        if (nrm(s)/bnorm < tol){ for(int i=0;i<ns;i++) y[i]+=alpha*phat[i]; it++; break; }
+        applyMinv(s, shat);
+        redMatVec(shat, t);
+        double tt = dot(t,t); if (tt < 1e-300) break;
+        omega = dot(t,s)/tt;
+        for (int i=0;i<ns;i++){ y[i] += alpha*phat[i] + omega*shat[i]; r[i] = s[i] - omega*t[i]; }
+        if (nrm(r)/bnorm < tol){ it++; break; }
+        rho = rho_new;
+    }
+    if (antisymDefl) SetDeflation({}, {}, {}, 0.0);   // clear: deflation was per-solve
+    applyT(y, sigma);
+    return it;
+}
 
 //=========================================================================
 // MSC system-matrix convention: A(i, j) = -N(i, j) + delta_ij / chi_i
@@ -383,12 +1018,16 @@ void RadHACApKMSCManager::PrecomputeGeometry3DOF() {
     m_tetra_face_normals.resize(m_n_elem * 4 * 3);       // 4 faces, 3 coords (outward normals)
     m_tetra_face_areas.resize(m_n_elem * 4);              // 4 faces
 
-    for (int e = 0; e < m_n_elem; e++) {
+    // Parallel per-element fill: each iteration writes to disjoint slices of
+    // the pre-allocated flat arrays (m_tetra_centers, m_tetra_face_vertices,
+    // m_tetra_face_normals, m_tetra_face_areas), so no synchronisation needed.
+    ngcore::ParallelFor(ngcore::IntRange(m_n_elem), [&](size_t e_size) {
+        int e = (int)e_size;
         radTg3dRelax* elem = m_interaction->g3dRelaxPtrVect[e];
-        if (!elem) continue;
+        if (!elem) return;
 
         radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(elem);
-        if (!poly || poly->AmOfFaces != 4) continue;  // Skip non-tetrahedra
+        if (!poly || poly->AmOfFaces != 4) return;  // Skip non-tetrahedra
 
         // Store element center
         int cIdx = e * 3;
@@ -448,7 +1087,7 @@ void RadHACApKMSCManager::PrecomputeGeometry3DOF() {
             m_tetra_face_normals[fnIdx + 1] = n.y;
             m_tetra_face_normals[fnIdx + 2] = n.z;
         }
-    }
+    });
 
     m_geometry_3dof_ready = true;
 }
@@ -737,6 +1376,17 @@ void RadHACApKMSCManager::InitializeInvChi() {
     }
 }
 
+void RadHACApKBase::SetDeflation(const std::vector<int>& plaq_offsets,
+                                 const std::vector<int>& dofs,
+                                 const std::vector<double>& signs,
+                                 double alpha) {
+    m_defl_offsets = plaq_offsets;
+    m_defl_dofs = dofs;
+    m_defl_signs = signs;
+    m_defl_alpha = alpha;
+    m_defl_nplaq = plaq_offsets.empty() ? 0 : (int)plaq_offsets.size() - 1;
+}
+
 void RadHACApKBase::MatVec(const std::vector<double>& x, std::vector<double>& y) {
     if (!m_valid || !m_leafmtxp || !m_control) {
         std::fill(y.begin(), y.end(), 0.0);
@@ -745,6 +1395,20 @@ void RadHACApKBase::MatVec(const std::vector<double>& x, std::vector<double>& y)
 
     int nd = HACApK_leafmtxp_get_nd(m_leafmtxp);
     HACApK_matvec_wrapper(m_leafmtxp, m_control, x.data(), y.data(), nd);
+
+    // Matrix-free loop-mode deflation: y += alpha * L (L^T x).  L L^T acts
+    // only on span(L) = the null (loop) subspace, lifting its eigenvalues
+    // away from zero so the converged solution is loop-free.  O(nnz) = O(N).
+    if (m_defl_nplaq > 0 && m_defl_alpha != 0.0) {
+        for (int p = 0; p < m_defl_nplaq; p++) {
+            double c = 0.0;
+            for (int k = m_defl_offsets[p]; k < m_defl_offsets[p + 1]; k++)
+                c += m_defl_signs[k] * x[m_defl_dofs[k]];
+            c *= m_defl_alpha;
+            for (int k = m_defl_offsets[p]; k < m_defl_offsets[p + 1]; k++)
+                y[m_defl_dofs[k]] += m_defl_signs[k] * c;
+        }
+    }
 }
 
 void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {

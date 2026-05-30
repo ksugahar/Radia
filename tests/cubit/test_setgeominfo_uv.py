@@ -39,6 +39,7 @@ if _fork_path:
     sys.path.insert(0, _fork_path)
 
 from ngsolve import Mesh, Integrate, CF, BND
+from ngsolve import TaskManager
 import cubit
 import radia_cubit_mesh
 
@@ -90,38 +91,39 @@ print("\nStep 2: Export mesh using extract_curved_mesh")
 
 print("  Testing extract_curved_mesh(order=1)...")
 mesh1 = radia_cubit_mesh.extract_curved_mesh(order=1)
-area1 = Integrate(CF(1), mesh1, VOL_or_BND=BND)
-vol1 = Integrate(CF(1), mesh1)
-print(f"    Area: {area1:.6f} (error: {abs(area1-expected_area)/expected_area*100:.4f}%)")
-print(f"    Vol:  {vol1:.6f} (error: {abs(vol1-expected_vol)/expected_vol*100:.4f}%)")
+with TaskManager():
+    area1 = Integrate(CF(1), mesh1, VOL_or_BND=BND)
+    vol1 = Integrate(CF(1), mesh1)
+    print(f"    Area: {area1:.6f} (error: {abs(area1-expected_area)/expected_area*100:.4f}%)")
+    print(f"    Vol:  {vol1:.6f} (error: {abs(vol1-expected_vol)/expected_vol*100:.4f}%)")
 
-print("  Testing extract_curved_mesh(order=2)...")
-try:
-    mesh2 = radia_cubit_mesh.extract_curved_mesh(order=2)
-    area2 = Integrate(CF(1), mesh2, VOL_or_BND=BND)
-    vol2 = Integrate(CF(1), mesh2)
-    print(f"    Area: {area2:.6f} (error: {abs(area2-expected_area)/expected_area*100:.4f}%)")
-    print(f"    Vol:  {vol2:.6f} (error: {abs(vol2-expected_vol)/expected_vol*100:.4f}%)")
-except Exception as e:
-    print(f"    Failed: {e}")
+    print("  Testing extract_curved_mesh(order=2)...")
+    try:
+        mesh2 = radia_cubit_mesh.extract_curved_mesh(order=2)
+        area2 = Integrate(CF(1), mesh2, VOL_or_BND=BND)
+        vol2 = Integrate(CF(1), mesh2)
+        print(f"    Area: {area2:.6f} (error: {abs(area2-expected_area)/expected_area*100:.4f}%)")
+        print(f"    Vol:  {vol2:.6f} (error: {abs(vol2-expected_vol)/expected_vol*100:.4f}%)")
+    except Exception as e:
+        print(f"    Failed: {e}")
 
-print("  Testing extract_curved_mesh(order=3)...")
-try:
-    mesh3 = radia_cubit_mesh.extract_curved_mesh(order=3)
-    area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
-    vol3 = Integrate(CF(1), mesh3)
-    print(f"    Area: {area3:.6f} (error: {abs(area3-expected_area)/expected_area*100:.4f}%)")
-    print(f"    Vol:  {vol3:.6f} (error: {abs(vol3-expected_vol)/expected_vol*100:.4f}%)")
-except Exception as e:
-    print(f"    Failed: {e}")
+    print("  Testing extract_curved_mesh(order=3)...")
+    try:
+        mesh3 = radia_cubit_mesh.extract_curved_mesh(order=3)
+        area3 = Integrate(CF(1), mesh3, VOL_or_BND=BND)
+        vol3 = Integrate(CF(1), mesh3)
+        print(f"    Area: {area3:.6f} (error: {abs(area3-expected_area)/expected_area*100:.4f}%)")
+        print(f"    Vol:  {vol3:.6f} (error: {abs(vol3-expected_vol)/expected_vol*100:.4f}%)")
+    except Exception as e:
+        print(f"    Failed: {e}")
 
-# Cleanup
-os.remove(step_file)
+    # Cleanup
+    os.remove(step_file)
 
-print("\n" + "=" * 60)
-print("Test Complete")
-print("=" * 60)
-print()
-print("Conclusion:")
-print("  extract_curved_mesh() handles SetGeomInfo and mesh.Curve() internally.")
-print("  Higher order gives better geometric accuracy for curved surfaces.")
+    print("\n" + "=" * 60)
+    print("Test Complete")
+    print("=" * 60)
+    print()
+    print("Conclusion:")
+    print("  extract_curved_mesh() handles SetGeomInfo and mesh.Curve() internally.")
+    print("  Higher order gives better geometric accuracy for curved surfaces.")

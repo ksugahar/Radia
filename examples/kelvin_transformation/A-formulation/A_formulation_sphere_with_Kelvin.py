@@ -270,64 +270,65 @@ a_form += nu_cf / r_weight * grad(u) * grad(v) * dx
 f = LinearForm(fes)
 
 print("\nAssembling system...")
-a_form.Assemble()
-f.Assemble()
-print("  System assembled")
+with TaskManager():
+    a_form.Assemble()
+    f.Assemble()
+    print("  System assembled")
 
-# ============================================================
-# Solve with Source Potential BC
-# ============================================================
-print("\nSolving with source potential boundary condition...")
+    # ============================================================
+    # Solve with Source Potential BC
+    # ============================================================
+    print("\nSolving with source potential boundary condition...")
 
-gfu = GridFunction(fes)
+    gfu = GridFunction(fes)
 
-# Set boundary condition: u = u_s on Kelvin boundary (interior side)
-# This imposes the background field at the computational boundary
-# The axis BC u=0 is automatically satisfied
+    # Set boundary condition: u = u_s on Kelvin boundary (interior side)
+    # This imposes the background field at the computational boundary
+    # The axis BC u=0 is automatically satisfied
 
-# For the sphere problem, we need to apply u_s at the outer boundary
-# With Kelvin transformation, the "outer" is at the Kelvin arc
+    # For the sphere problem, we need to apply u_s at the outer boundary
+    # With Kelvin transformation, the "outer" is at the Kelvin arc
 
-# Since kelvin_int is not a Dirichlet boundary, we use a different approach:
-# Solve the reduced potential problem u_r where u = u_s + u_r
-# The equation for u_r in the magnetic region is:
-# -div(nu/r * grad(u_r)) = div((nu_0 - nu)/r * grad(u_s))
+    # Since kelvin_int is not a Dirichlet boundary, we use a different approach:
+    # Solve the reduced potential problem u_r where u = u_s + u_r
+    # The equation for u_r in the magnetic region is:
+    # -div(nu/r * grad(u_r)) = div((nu_0 - nu)/r * grad(u_s))
 
-# For magnetic material:
-# RHS = div((nu_0 - nu_mag)/r * grad(u_s)) = (nu_0 - nu_0/mu_r) * div(1/r * grad(u_s))
-# Since u_s = B0*x^2/2, grad(u_s) = (B0*x, 0) = (B0*r, 0)
-# 1/r * grad(u_s) = (B0, 0)
-# div(B0, 0) = 0
-# So RHS = 0, which means we need source from boundary integral!
+    # For magnetic material:
+    # RHS = div((nu_0 - nu_mag)/r * grad(u_s)) = (nu_0 - nu_0/mu_r) * div(1/r * grad(u_s))
+    # Since u_s = B0*x^2/2, grad(u_s) = (B0*x, 0) = (B0*r, 0)
+    # 1/r * grad(u_s) = (B0, 0)
+    # div(B0, 0) = 0
+    # So RHS = 0, which means we need source from boundary integral!
 
-# Actually, the correct approach for reduced potential is:
-# a(u_r, v) = -a_s(u_s, v) where a_s uses (nu_0 - nu) instead of nu
+    # Actually, the correct approach for reduced potential is:
+    # a(u_r, v) = -a_s(u_s, v) where a_s uses (nu_0 - nu) instead of nu
 
-# Build source term for reduced potential
-# Source coefficient: (nu_0 - nu) in magnetic region only
-nu_diff_list = []
-for mat in mesh.GetMaterials():
-    if "magnetic" in mat.lower():
-        nu_diff_list.append(nu0 - nu0/mu_r)  # nu_0 - nu_mag > 0
-    else:
-        nu_diff_list.append(0.0)  # zero in air regions
+    # Build source term for reduced potential
+    # Source coefficient: (nu_0 - nu) in magnetic region only
+    nu_diff_list = []
+    for mat in mesh.GetMaterials():
+        if "magnetic" in mat.lower():
+            nu_diff_list.append(nu0 - nu0/mu_r)  # nu_0 - nu_mag > 0
+        else:
+            nu_diff_list.append(0.0)  # zero in air regions
 
-nu_diff_cf = CoefficientFunction(nu_diff_list)
+    nu_diff_cf = CoefficientFunction(nu_diff_list)
 
-# grad(u_s) = (B0*x, 0)
-grad_us = CoefficientFunction((B0 * x, 0))
+    # grad(u_s) = (B0*x, 0)
+    grad_us = CoefficientFunction((B0 * x, 0))
 
-# Source term: integral( (nu_0 - nu)/r * grad(u_s) . grad(v) dx )
-f_source = LinearForm(fes)
-f_source += nu_diff_cf / r_weight * InnerProduct(grad_us, grad(v)) * dx("magnetic")
-f_source.Assemble()
+    # Source term: integral( (nu_0 - nu)/r * grad(u_s) . grad(v) dx )
+    f_source = LinearForm(fes)
+    f_source += nu_diff_cf / r_weight * InnerProduct(grad_us, grad(v)) * dx("magnetic")
+    f_source.Assemble()
 
-print(f"  Source term norm: {Norm(f_source.vec):.6e}")
+    print(f"  Source term norm: {Norm(f_source.vec):.6e}")
 
-# Solve using residual method
-res = gfu.vec.CreateVector()
-res.data = f_source.vec - a_form.mat * gfu.vec
-gfu.vec.data += a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
+    # Solve using residual method
+    res = gfu.vec.CreateVector()
+    res.data = f_source.vec - a_form.mat * gfu.vec
+    gfu.vec.data += a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * res
 print("  Solution converged")
 
 # The result gfu is the reduced potential u_r

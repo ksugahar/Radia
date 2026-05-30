@@ -39,6 +39,7 @@ from ngsolve import (
     grad, dx, CoefficientFunction, Integrate, x, y, sqrt as ng_sqrt,
     Conj, exp as ng_exp,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 
@@ -112,33 +113,34 @@ def xfem_solve(mesh, omega, integration_order=10):
     a = BilinearForm(fes, symmetric=True)
     a += (NU * g_ut * g_vt + 1j * omega * SIGMA * u_total * v_total) \
          * dx(bonus_intorder=integration_order)
-    a.Assemble()
+    with TaskManager():
+        a.Assemble()
 
-    f = LinearForm(fes)
-    f += (J0 * v_total) * dx(bonus_intorder=integration_order)
-    f.Assemble()
+        f = LinearForm(fes)
+        f += (J0 * v_total) * dx(bonus_intorder=integration_order)
+        f.Assemble()
 
-    # Solve
-    A = GridFunction(fes)
-    A.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        # Solve
+        A = GridFunction(fes)
+        A.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    # Reconstruct the total A_z field
-    A_std_cmp, A_enr_cmp = A.components
-    Az_total = A_std_cmp + psi * A_enr_cmp
+        # Reconstruct the total A_z field
+        A_std_cmp, A_enr_cmp = A.components
+        Az_total = A_std_cmp + psi * A_enr_cmp
 
-    # Post-process: Joule loss + energy density area-averages
-    E_z   = -1j * omega * Az_total
-    P_cf  = 0.5 * SIGMA * (E_z * Conj(E_z))
-    # B = curl(A_z e_z) = (dA_z/dy, -dA_z/dx, 0)
-    grad_Az = grad(A_std_cmp) + psi * grad(A_enr_cmp) + A_enr_cmp * grad_psi
-    B_x = grad_Az[1]
-    B_y = -grad_Az[0]
-    W_cf = (B_x * Conj(B_x) + B_y * Conj(B_y)) / (2 * MU0)
+        # Post-process: Joule loss + energy density area-averages
+        E_z   = -1j * omega * Az_total
+        P_cf  = 0.5 * SIGMA * (E_z * Conj(E_z))
+        # B = curl(A_z e_z) = (dA_z/dy, -dA_z/dx, 0)
+        grad_Az = grad(A_std_cmp) + psi * grad(A_enr_cmp) + A_enr_cmp * grad_psi
+        B_x = grad_Az[1]
+        B_y = -grad_Az[0]
+        W_cf = (B_x * Conj(B_x) + B_y * Conj(B_y)) / (2 * MU0)
 
-    area  = math.pi * R * R
-    P_avg = Integrate(P_cf, mesh, order=integration_order).real / area
-    W_avg = Integrate(W_cf, mesh, order=integration_order).real / area
-    return P_avg, W_avg, fes.ndof, {}
+        area  = math.pi * R * R
+        P_avg = Integrate(P_cf, mesh, order=integration_order).real / area
+        W_avg = Integrate(W_cf, mesh, order=integration_order).real / area
+        return P_avg, W_avg, fes.ndof, {}
 
 
 # =====================================================================

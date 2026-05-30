@@ -47,6 +47,7 @@ def evaluate_mesh(vol_base, max_order=5):
     """
     setup_paths()
     from ngsolve import Mesh as NGMesh, Integrate, CF, BND, BBND
+    from ngsolve import TaskManager
 
     # === Phase 1: CAD reference values from companion JSON ===
     # Use p=1 companion JSON (all orders share same CAD geometry)
@@ -158,35 +159,36 @@ def evaluate_mesh(vol_base, max_order=5):
             orders.append({"order": p, "error": str(e)})
             continue
 
-        ng_vol = Integrate(CF(1), mesh)
-        ng_area = Integrate(CF(1), mesh, VOL_or_BND=BND)
-        try:
-            ng_length = Integrate(CF(1), mesh, BBND)
-        except Exception:
-            ng_length = 0.0
+        with TaskManager():
+            ng_vol = Integrate(CF(1), mesh)
+            ng_area = Integrate(CF(1), mesh, VOL_or_BND=BND)
+            try:
+                ng_length = Integrate(CF(1), mesh, BBND)
+            except Exception:
+                ng_length = 0.0
 
-        t_elapsed = time.perf_counter() - t0
+            t_elapsed = time.perf_counter() - t0
 
-        vol_err = ((ng_vol - cad_vol_total) / cad_vol_total * 100
-                   if cad_vol_total else 0)
-        area_err = ((ng_area - cad_area_total) / cad_area_total * 100
-                    if cad_area_total else 0)
-        len_err = ((ng_length - cad_length_total) / cad_length_total * 100
-                   if cad_length_total else 0)
+            vol_err = ((ng_vol - cad_vol_total) / cad_vol_total * 100
+                       if cad_vol_total else 0)
+            area_err = ((ng_area - cad_area_total) / cad_area_total * 100
+                        if cad_area_total else 0)
+            len_err = ((ng_length - cad_length_total) / cad_length_total * 100
+                       if cad_length_total else 0)
 
-        _log(f"p={p}: V_err={vol_err:+.2e}%, A_err={area_err:+.2e}%, "
-             f"L_err={len_err:+.2e}%, t={t_elapsed:.2f}s")
+            _log(f"p={p}: V_err={vol_err:+.2e}%, A_err={area_err:+.2e}%, "
+                 f"L_err={len_err:+.2e}%, t={t_elapsed:.2f}s")
 
-        orders.append({
-            "order": p,
-            "ng_volume": ng_vol,
-            "ng_area": ng_area,
-            "ng_length": ng_length,
-            "vol_error_pct": vol_err,
-            "area_error_pct": area_err,
-            "len_error_pct": len_err,
-            "time": t_elapsed,
-        })
+            orders.append({
+                "order": p,
+                "ng_volume": ng_vol,
+                "ng_area": ng_area,
+                "ng_length": ng_length,
+                "vol_error_pct": vol_err,
+                "area_error_pct": area_err,
+                "len_error_pct": len_err,
+                "time": t_elapsed,
+            })
 
     return {
         "cad_vol_total": cad_vol_total,

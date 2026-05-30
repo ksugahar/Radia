@@ -9,6 +9,7 @@ import os, sys
 from numpy import *
 from ngsolve import *
 import ngsolve
+from ngsolve import TaskManager
 
 # Import OCC geometry
 from netgen.occ import *
@@ -212,429 +213,430 @@ a += mu*grad(u)*grad(v)*dx
 f = LinearForm(fes)
 f += mu*InnerProduct(grad(v), Hs)*dx  # 体積積分のみ
 
-a.Assemble()
-f.Assemble()
+with TaskManager():
+    a.Assemble()
+    f.Assemble()
 
-print("  System assembled")
+    print("  System assembled")
 
-# ============================================================
-# Solve
-# ============================================================
-print("\nSolving system...")
+    # ============================================================
+    # Solve
+    # ============================================================
+    print("\nSolving system...")
 
-gfu = GridFunction(fes)
-c = Preconditioner(a, type="local")
+    gfu = GridFunction(fes)
+    c = Preconditioner(a, type="local")
 
-solvers.CG(sol=gfu.vec, rhs=f.vec, mat=a.mat, pre=c.mat, tol=1e-8, printrates=True, maxsteps=10000)
+    solvers.CG(sol=gfu.vec, rhs=f.vec, mat=a.mat, pre=c.mat, tol=1e-8, printrates=True, maxsteps=10000)
 
-print("  Solution converged")
+    print("  Solution converged")
 
-# ============================================================
-# Post-processing
-# ============================================================
-print("\nPost-processing...")
+    # ============================================================
+    # Post-processing
+    # ============================================================
+    print("\nPost-processing...")
 
-# Compute perturbation field: H_pert = -grad(phi)
-H = -grad(gfu)
+    # Compute perturbation field: H_pert = -grad(phi)
+    H = -grad(gfu)
 
-# Analytical coefficients for quadrupole
-# Interior: φ_pert = A r^2 cos2theta, where A = (mu_r-1)/(2(mu_r+1))
-# Exterior: φ = B(a⁴/r^2)cos2theta
-A_coeff = (mu_r - 1.0)/(2.0*(mu_r + 1.0))
-B_coeff = A_coeff  # Same coefficient for continuity
+    # Analytical coefficients for quadrupole
+    # Interior: φ_pert = A r^2 cos2theta, where A = (mu_r-1)/(2(mu_r+1))
+    # Exterior: φ = B(a⁴/r^2)cos2theta
+    A_coeff = (mu_r - 1.0)/(2.0*(mu_r + 1.0))
+    B_coeff = A_coeff  # Same coefficient for continuity
 
-# Evaluate at interior domain on x-axis
-try:
-    x_test = 0.3
-    Hx_origin = H[0](mesh(x_test, 0))
-    print(f"  Field at ({x_test}, 0) (interior): Hx = {Hx_origin:.6f} A/m")
+    # Evaluate at interior domain on x-axis
+    try:
+        x_test = 0.3
+        Hx_origin = H[0](mesh(x_test, 0))
+        print(f"  Field at ({x_test}, 0) (interior): Hx = {Hx_origin:.6f} A/m")
 
-    # Expected analytical value (perturbation field interior, x-component at y=0)
-    # H_r = -2Ar cos2theta, at theta=0: H_x = H_r = -2*A*r*1
-    Hx_analytical = -2.0 * A_coeff * x_test * 1.0  # cos(2*0) = 1
-    print(f"  Analytical (interior): Hx = {Hx_analytical:.6f} A/m")
-    print(f"  Relative error: {abs(Hx_origin - Hx_analytical)/abs(Hx_analytical)*100:.3f}%")
-except:
-    print("  Could not evaluate test point")
+        # Expected analytical value (perturbation field interior, x-component at y=0)
+        # H_r = -2Ar cos2theta, at theta=0: H_x = H_r = -2*A*r*1
+        Hx_analytical = -2.0 * A_coeff * x_test * 1.0  # cos(2*0) = 1
+        print(f"  Analytical (interior): Hx = {Hx_analytical:.6f} A/m")
+        print(f"  Relative error: {abs(Hx_origin - Hx_analytical)/abs(Hx_analytical)*100:.3f}%")
+    except:
+        print("  Could not evaluate test point")
 
-# ============================================================
-# Field Evaluation on Grid (Interior Domain Only)
-# ============================================================
-print("\nEvaluating field on grid...")
+    # ============================================================
+    # Field Evaluation on Grid (Interior Domain Only)
+    # ============================================================
+    print("\nEvaluating field on grid...")
 
-# Grid for plotting (interior domain)
-x = linspace(-plot_range, plot_range, 221)
-y = linspace(-plot_range, plot_range, 221)
-xx, yy = meshgrid(x, y)
+    # Grid for plotting (interior domain)
+    x = linspace(-plot_range, plot_range, 221)
+    y = linspace(-plot_range, plot_range, 221)
+    xx, yy = meshgrid(x, y)
 
-# Initialize arrays
-phi = zeros((len(y), len(x)))
-Hx = zeros((len(y), len(x)))
-Hy = zeros((len(y), len(x)))
+    # Initialize arrays
+    phi = zeros((len(y), len(x)))
+    Hx = zeros((len(y), len(x)))
+    Hy = zeros((len(y), len(x)))
 
-for ny in range(len(y)):
-	for nx in range(len(x)):
-		r = sqrt(x[nx]**2 + y[ny]**2)
-		# Only evaluate in interior domain (x < offset_x/2) and inside mesh
-		if x[nx] < offset_x/2 and r < kelvin_radius - 0.01:
-			try:
-				mip = mesh(x[nx], y[ny])
-				phi[ny, nx] = gfu(mip)
-				Hx[ny, nx] = H[0](mip)
-				Hy[ny, nx] = H[1](mip)
-			except:
-				phi[ny, nx] = nan
-				Hx[ny, nx] = nan
-				Hy[ny, nx] = nan
-		else:
-			phi[ny, nx] = nan
-			Hx[ny, nx] = nan
-			Hy[ny, nx] = nan
+    for ny in range(len(y)):
+    	for nx in range(len(x)):
+    		r = sqrt(x[nx]**2 + y[ny]**2)
+    		# Only evaluate in interior domain (x < offset_x/2) and inside mesh
+    		if x[nx] < offset_x/2 and r < kelvin_radius - 0.01:
+    			try:
+    				mip = mesh(x[nx], y[ny])
+    				phi[ny, nx] = gfu(mip)
+    				Hx[ny, nx] = H[0](mip)
+    				Hy[ny, nx] = H[1](mip)
+    			except:
+    				phi[ny, nx] = nan
+    				Hx[ny, nx] = nan
+    				Hy[ny, nx] = nan
+    		else:
+    			phi[ny, nx] = nan
+    			Hx[ny, nx] = nan
+    			Hy[ny, nx] = nan
 
-# ============================================================
-# Profile Evaluation (Interior Domain) - Quadrupole
-# ============================================================
-print("\nComputing axis profiles (perturbation field)...")
+    # ============================================================
+    # Profile Evaluation (Interior Domain) - Quadrupole
+    # ============================================================
+    print("\nComputing axis profiles (perturbation field)...")
 
-profile_range = linspace(-plot_range, plot_range, 221)
+    profile_range = linspace(-plot_range, plot_range, 221)
 
-# X-axis profile: Hx vs x at y=0 (quadrupole field)
-x_profile = profile_range
-Hx_pert_numerical_x = zeros(len(x_profile))
-Hx_pert_analytical_x = zeros(len(x_profile))
+    # X-axis profile: Hx vs x at y=0 (quadrupole field)
+    x_profile = profile_range
+    Hx_pert_numerical_x = zeros(len(x_profile))
+    Hx_pert_analytical_x = zeros(len(x_profile))
 
-for i, xval in enumerate(x_profile):
-	r = abs(xval)
-	if r < kelvin_radius - 0.01:  # Inside mesh domain
-		try:
-			mip = mesh(xval, 0)
-			Hx_pert_numerical_x[i] = H[0](mip)
-		except:
-			Hx_pert_numerical_x[i] = nan
-	else:
-		Hx_pert_numerical_x[i] = nan
+    for i, xval in enumerate(x_profile):
+    	r = abs(xval)
+    	if r < kelvin_radius - 0.01:  # Inside mesh domain
+    		try:
+    			mip = mesh(xval, 0)
+    			Hx_pert_numerical_x[i] = H[0](mip)
+    		except:
+    			Hx_pert_numerical_x[i] = nan
+    	else:
+    		Hx_pert_numerical_x[i] = nan
 
-	# Analytical solution for H_s = (x, -y) at (x, 0): theta=0 or pi.
-	# Must project H_r, H_theta back to Cartesian (same form as Y-axis
-	# profile below). The earlier shortcut "H_x = H_r" was wrong for
-	# xval < 0 because at theta=pi the radial direction is -x_hat,
-	# which flipped the sign and drove the X-axis RMS error to ~82%.
-	r = abs(xval)
-	theta = arctan2(0, xval)  # theta=0 for xval>0, theta=pi for xval<0
-	if r < circle_radius:
-		# Interior: H_r = -2Ar cos2theta, H_theta = 2Ar sin2theta
-		Hr = -2.0 * A_coeff * r * cos(2*theta)
-		Htheta = 2.0 * A_coeff * r * sin(2*theta)
-	else:
-		# Exterior: H_r = 2B(a^4/r^3) cos2theta, H_theta = -2B(a^4/r^3) sin2theta
-		Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
-		Htheta = -2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
-	Hx_pert_analytical_x[i] = Hr * cos(theta) - Htheta * sin(theta)
+    	# Analytical solution for H_s = (x, -y) at (x, 0): theta=0 or pi.
+    	# Must project H_r, H_theta back to Cartesian (same form as Y-axis
+    	# profile below). The earlier shortcut "H_x = H_r" was wrong for
+    	# xval < 0 because at theta=pi the radial direction is -x_hat,
+    	# which flipped the sign and drove the X-axis RMS error to ~82%.
+    	r = abs(xval)
+    	theta = arctan2(0, xval)  # theta=0 for xval>0, theta=pi for xval<0
+    	if r < circle_radius:
+    		# Interior: H_r = -2Ar cos2theta, H_theta = 2Ar sin2theta
+    		Hr = -2.0 * A_coeff * r * cos(2*theta)
+    		Htheta = 2.0 * A_coeff * r * sin(2*theta)
+    	else:
+    		# Exterior: H_r = 2B(a^4/r^3) cos2theta, H_theta = -2B(a^4/r^3) sin2theta
+    		Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
+    		Htheta = -2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
+    	Hx_pert_analytical_x[i] = Hr * cos(theta) - Htheta * sin(theta)
 
-# Y-axis profile: Hy vs y at x=0 (quadrupole field)
-y_profile = profile_range
-Hy_pert_numerical_y = zeros(len(y_profile))
-Hy_pert_analytical_y = zeros(len(y_profile))
+    # Y-axis profile: Hy vs y at x=0 (quadrupole field)
+    y_profile = profile_range
+    Hy_pert_numerical_y = zeros(len(y_profile))
+    Hy_pert_analytical_y = zeros(len(y_profile))
 
-for i, yval in enumerate(y_profile):
-	r = abs(yval)
-	if r < kelvin_radius - 0.01:  # Inside mesh domain
-		try:
-			mip = mesh(0, yval)
-			Hy_pert_numerical_y[i] = H[1](mip)
-		except:
-			Hy_pert_numerical_y[i] = nan
-	else:
-		Hy_pert_numerical_y[i] = nan
+    for i, yval in enumerate(y_profile):
+    	r = abs(yval)
+    	if r < kelvin_radius - 0.01:  # Inside mesh domain
+    		try:
+    			mip = mesh(0, yval)
+    			Hy_pert_numerical_y[i] = H[1](mip)
+    		except:
+    			Hy_pert_numerical_y[i] = nan
+    	else:
+    		Hy_pert_numerical_y[i] = nan
 
-	# Analytical solution for H_s = (x, -y) at (0, y): theta=pi/2 or -pi/2
-	r = abs(yval)
-	theta = arctan2(yval, 0)  # theta=±pi/2
-	if r < circle_radius:
-		# Interior: H_r = -2Ar cos2theta, H_theta = 2Ar sin2theta
-		# At x=0: H_y = H_r sintheta + H_theta costheta
-		Hr = -2.0 * A_coeff * r * cos(2*theta)
-		Htheta = 2.0 * A_coeff * r * sin(2*theta)
-		Hy_pert_analytical_y[i] = Hr * sin(theta) + Htheta * cos(theta)
-	else:
-		# Exterior: H_r = 2B(a⁴/r^3)cos2theta, H_theta = -2B(a⁴/r^3)sin2theta
-		Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
-		Htheta = -2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
-		Hy_pert_analytical_y[i] = Hr * sin(theta) + Htheta * cos(theta)
+    	# Analytical solution for H_s = (x, -y) at (0, y): theta=pi/2 or -pi/2
+    	r = abs(yval)
+    	theta = arctan2(yval, 0)  # theta=±pi/2
+    	if r < circle_radius:
+    		# Interior: H_r = -2Ar cos2theta, H_theta = 2Ar sin2theta
+    		# At x=0: H_y = H_r sintheta + H_theta costheta
+    		Hr = -2.0 * A_coeff * r * cos(2*theta)
+    		Htheta = 2.0 * A_coeff * r * sin(2*theta)
+    		Hy_pert_analytical_y[i] = Hr * sin(theta) + Htheta * cos(theta)
+    	else:
+    		# Exterior: H_r = 2B(a⁴/r^3)cos2theta, H_theta = -2B(a⁴/r^3)sin2theta
+    		Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
+    		Htheta = -2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
+    		Hy_pert_analytical_y[i] = Hr * sin(theta) + Htheta * cos(theta)
 
-# Error statistics
-valid_idx_x = ~isnan(Hx_pert_numerical_x)
-interior_idx_x = valid_idx_x & (abs(x_profile) < circle_radius)
+    # Error statistics
+    valid_idx_x = ~isnan(Hx_pert_numerical_x)
+    interior_idx_x = valid_idx_x & (abs(x_profile) < circle_radius)
 
-print(f"\n  Validation results (X-axis, perturbation field Hx):")
-print(f"  -" * 30)
+    print(f"\n  Validation results (X-axis, perturbation field Hx):")
+    print(f"  -" * 30)
 
-if sum(interior_idx_x) > 0:
-	interior_error = Hx_pert_numerical_x[interior_idx_x] - Hx_pert_analytical_x[interior_idx_x]
-	max_err_int = max(abs(interior_error))
-	rms_err_int = sqrt(mean(interior_error**2))
-	# Avoid division by zero for interior where analytical might be small
-	interior_max = max(abs(Hx_pert_analytical_x[interior_idx_x]))
-	if interior_max > 0:
-		rel_err_int = rms_err_int / interior_max * 100
-	else:
-		rel_err_int = 0
-	print(f"  Interior (|x| < {circle_radius} m):")
-	print(f"	Max error: {max_err_int:.6e} A/m")
-	print(f"	RMS error: {rms_err_int:.6e} A/m ({rel_err_int:.3f}%)")
+    if sum(interior_idx_x) > 0:
+    	interior_error = Hx_pert_numerical_x[interior_idx_x] - Hx_pert_analytical_x[interior_idx_x]
+    	max_err_int = max(abs(interior_error))
+    	rms_err_int = sqrt(mean(interior_error**2))
+    	# Avoid division by zero for interior where analytical might be small
+    	interior_max = max(abs(Hx_pert_analytical_x[interior_idx_x]))
+    	if interior_max > 0:
+    		rel_err_int = rms_err_int / interior_max * 100
+    	else:
+    		rel_err_int = 0
+    	print(f"  Interior (|x| < {circle_radius} m):")
+    	print(f"	Max error: {max_err_int:.6e} A/m")
+    	print(f"	RMS error: {rms_err_int:.6e} A/m ({rel_err_int:.3f}%)")
 
-# ============================================================
-# Analytical Flux Lines (2D) - Quadrupole
-# ============================================================
-print("\nComputing analytical flux lines...")
+    # ============================================================
+    # Analytical Flux Lines (2D) - Quadrupole
+    # ============================================================
+    print("\nComputing analytical flux lines...")
 
-Hx_analytical = zeros(xx.shape)
-Hy_analytical = zeros(xx.shape)
+    Hx_analytical = zeros(xx.shape)
+    Hy_analytical = zeros(xx.shape)
 
-for ny in range(len(y)):
-	for nx in range(len(x)):
-		r = sqrt(x[nx]**2 + y[ny]**2)
-		if r < 0.01:
-			r = 0.01
-		theta = arctan2(y[ny], x[nx])
+    for ny in range(len(y)):
+    	for nx in range(len(x)):
+    		r = sqrt(x[nx]**2 + y[ny]**2)
+    		if r < 0.01:
+    			r = 0.01
+    		theta = arctan2(y[ny], x[nx])
 
-		if r < circle_radius:
-			# Interior: φ_pert = Ar^2cos2theta
-			# H_r = -∂φ/∂r = -2Ar cos2theta
-			# H_theta = -(1/r)∂φ/∂theta = 2Ar sin2theta
-			Hr = -2.0 * A_coeff * r * cos(2*theta)
-			Htheta = 2.0 * A_coeff * r * sin(2*theta)
-			# Convert to Cartesian
-			Hx_analytical[ny, nx] = Hr * cos(theta) - Htheta * sin(theta)
-			Hy_analytical[ny, nx] = Hr * sin(theta) + Htheta * cos(theta)
-		else:
-			# Exterior: φ = B(a⁴/r^2)cos2theta
-			# H_r = -∂φ/∂r = 2B(a⁴/r^3)cos2theta
-			# H_theta = -(1/r)∂φ/∂theta = 2B(a⁴/r^3)sin2theta
-			Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
-			Htheta = 2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
-			# Convert to Cartesian
-			Hx_analytical[ny, nx] = Hr * cos(theta) - Htheta * sin(theta)
-			Hy_analytical[ny, nx] = Hr * sin(theta) + Htheta * cos(theta)
+    		if r < circle_radius:
+    			# Interior: φ_pert = Ar^2cos2theta
+    			# H_r = -∂φ/∂r = -2Ar cos2theta
+    			# H_theta = -(1/r)∂φ/∂theta = 2Ar sin2theta
+    			Hr = -2.0 * A_coeff * r * cos(2*theta)
+    			Htheta = 2.0 * A_coeff * r * sin(2*theta)
+    			# Convert to Cartesian
+    			Hx_analytical[ny, nx] = Hr * cos(theta) - Htheta * sin(theta)
+    			Hy_analytical[ny, nx] = Hr * sin(theta) + Htheta * cos(theta)
+    		else:
+    			# Exterior: φ = B(a⁴/r^2)cos2theta
+    			# H_r = -∂φ/∂r = 2B(a⁴/r^3)cos2theta
+    			# H_theta = -(1/r)∂φ/∂theta = 2B(a⁴/r^3)sin2theta
+    			Hr = 2.0 * B_coeff * (circle_radius**4 / r**3) * cos(2*theta)
+    			Htheta = 2.0 * B_coeff * (circle_radius**4 / r**3) * sin(2*theta)
+    			# Convert to Cartesian
+    			Hx_analytical[ny, nx] = Hr * cos(theta) - Htheta * sin(theta)
+    			Hy_analytical[ny, nx] = Hr * sin(theta) + Htheta * cos(theta)
 
-# ============================================================
-# Save Results
-# ============================================================
-print("\nSaving results...")
+    # ============================================================
+    # Save Results
+    # ============================================================
+    print("\nSaving results...")
 
-# Save to .mat file (interior domain data saved here, exterior will be added after evaluation)
-from scipy.io import savemat
-mat_data = {
-    'xx': xx,
-    'yy': yy,
-    'Hx_analytical': Hx_analytical,
-    'Hy_analytical': Hy_analytical,
-    'Hx': Hx,
-    'Hy': Hy
-}
+    # Save to .mat file (interior domain data saved here, exterior will be added after evaluation)
+    from scipy.io import savemat
+    mat_data = {
+        'xx': xx,
+        'yy': yy,
+        'Hx_analytical': Hx_analytical,
+        'Hy_analytical': Hy_analytical,
+        'Hx': Hx,
+        'Hy': Hy
+    }
 
-# ============================================================
-# Evaluate Exterior Domain Field
-# ============================================================
-print("\nEvaluating exterior domain field...")
+    # ============================================================
+    # Evaluate Exterior Domain Field
+    # ============================================================
+    print("\nEvaluating exterior domain field...")
 
-# Grid for exterior domain centered at (offset_x, 0)
-x_ext = linspace(offset_x - plot_range, offset_x + plot_range, 221)
-y_ext = linspace(-plot_range, plot_range, 221)
-xx_ext, yy_ext = meshgrid(x_ext, y_ext)
+    # Grid for exterior domain centered at (offset_x, 0)
+    x_ext = linspace(offset_x - plot_range, offset_x + plot_range, 221)
+    y_ext = linspace(-plot_range, plot_range, 221)
+    xx_ext, yy_ext = meshgrid(x_ext, y_ext)
 
-# Evaluate H field in exterior domain
-Hx_ext = zeros(xx_ext.shape)
-Hy_ext = zeros(xx_ext.shape)
+    # Evaluate H field in exterior domain
+    Hx_ext = zeros(xx_ext.shape)
+    Hy_ext = zeros(xx_ext.shape)
 
-for ny in range(len(y_ext)):
-	for nx in range(len(x_ext)):
-		# Check if point is inside exterior domain (r' < R from offset center)
-		r_from_offset = sqrt((x_ext[nx] - offset_x)**2 + y_ext[ny]**2)
-		if r_from_offset < kelvin_radius - 0.05:  # Small margin to avoid boundary
-			try:
-				mip = mesh(x_ext[nx], y_ext[ny])
-				Hx_ext[ny, nx] = H[0](mip)
-				Hy_ext[ny, nx] = H[1](mip)
-			except:
-				Hx_ext[ny, nx] = nan
-				Hy_ext[ny, nx] = nan
-		else:
-			Hx_ext[ny, nx] = nan
-			Hy_ext[ny, nx] = nan
+    for ny in range(len(y_ext)):
+    	for nx in range(len(x_ext)):
+    		# Check if point is inside exterior domain (r' < R from offset center)
+    		r_from_offset = sqrt((x_ext[nx] - offset_x)**2 + y_ext[ny]**2)
+    		if r_from_offset < kelvin_radius - 0.05:  # Small margin to avoid boundary
+    			try:
+    				mip = mesh(x_ext[nx], y_ext[ny])
+    				Hx_ext[ny, nx] = H[0](mip)
+    				Hy_ext[ny, nx] = H[1](mip)
+    			except:
+    				Hx_ext[ny, nx] = nan
+    				Hy_ext[ny, nx] = nan
+    		else:
+    			Hx_ext[ny, nx] = nan
+    			Hy_ext[ny, nx] = nan
 
-# Add exterior domain data to mat_data and save
-mat_data['xx_ext'] = xx_ext
-mat_data['yy_ext'] = yy_ext
-mat_data['Hx_ext'] = Hx_ext
-mat_data['Hy_ext'] = Hy_ext
-mat_file = f"{os.path.splitext(__file__)[0]}.mat"
-savemat(mat_file, mat_data)
-print(f"  MAT file saved to: {mat_file}")
+    # Add exterior domain data to mat_data and save
+    mat_data['xx_ext'] = xx_ext
+    mat_data['yy_ext'] = yy_ext
+    mat_data['Hx_ext'] = Hx_ext
+    mat_data['Hy_ext'] = Hy_ext
+    mat_file = f"{os.path.splitext(__file__)[0]}.mat"
+    savemat(mat_file, mat_data)
+    print(f"  MAT file saved to: {mat_file}")
 
-# ============================================================
-# Visualization
-# ============================================================
-print("\nGenerating plots...")
+    # ============================================================
+    # Visualization
+    # ============================================================
+    print("\nGenerating plots...")
 
-import matplotlib
-import matplotlib.pyplot as plt
-matplotlib.rc('mathtext', **{'rm':'serif', 'it':'serif:italic',
-							  'bf':'serif:bold', 'fontset':'cm'})
+    import matplotlib
+    import matplotlib.pyplot as plt
+    matplotlib.rc('mathtext', **{'rm':'serif', 'it':'serif:italic',
+    							  'bf':'serif:bold', 'fontset':'cm'})
 
-# Create figure with 3x2 subplots
-# Row 1: Analytical H streamline vs NGSolve H streamline
-# Row 2: X-axis and Y-axis profile comparisons
-# Row 3: Exterior B and H (NGSolve)
-fig = plt.figure(figsize=(12, 15), dpi=150)
+    # Create figure with 3x2 subplots
+    # Row 1: Analytical H streamline vs NGSolve H streamline
+    # Row 2: X-axis and Y-axis profile comparisons
+    # Row 3: Exterior B and H (NGSolve)
+    fig = plt.figure(figsize=(12, 15), dpi=150)
 
-# Compute B field for exterior domain (2D: no spatial modulation)
-Bx_ext = mu0 * Hx_ext
-By_ext = mu0 * Hy_ext
+    # Compute B field for exterior domain (2D: no spatial modulation)
+    Bx_ext = mu0 * Hx_ext
+    By_ext = mu0 * Hy_ext
 
-# Row 1, Col 1: Analytical H field streamline
-ax1 = plt.subplot(3, 2, 1)
-strm1 = ax1.streamplot(xx, yy, Hx_analytical, Hy_analytical,
-					   color='red', linewidth=1.0, density=1.5,
-					   arrowsize=0.8, arrowstyle='->')
-circle1 = plt.Circle((0, 0), circle_radius, fill=True, facecolor='lightblue',
-					 alpha=0.3, edgecolor='red', linewidth=2, label='Magnetic material')
-ax1.add_patch(circle1)
-kelvin_boundary1 = plt.Circle((0, 0), kelvin_radius, fill=False,
-							  edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
-ax1.add_patch(kelvin_boundary1)
-ax1.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax1.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax1.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax1.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax1.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
-ax1.set_title('Analytical $\\mathbf{H}_{\\mathrm{pert}}$ Streamline', fontname='Times New Roman', fontsize=11)
-ax1.set_aspect('equal')
-ax1.set_xlim(-plot_range, plot_range)
-ax1.set_ylim(-plot_range, plot_range)
-ax1.minorticks_on()
-ax1.tick_params(which='major', direction="in", top=True, right=True)
-ax1.tick_params(which='minor', direction="in", top=True, right=True)
-ax1.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 1, Col 1: Analytical H field streamline
+    ax1 = plt.subplot(3, 2, 1)
+    strm1 = ax1.streamplot(xx, yy, Hx_analytical, Hy_analytical,
+    					   color='red', linewidth=1.0, density=1.5,
+    					   arrowsize=0.8, arrowstyle='->')
+    circle1 = plt.Circle((0, 0), circle_radius, fill=True, facecolor='lightblue',
+    					 alpha=0.3, edgecolor='red', linewidth=2, label='Magnetic material')
+    ax1.add_patch(circle1)
+    kelvin_boundary1 = plt.Circle((0, 0), kelvin_radius, fill=False,
+    							  edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
+    ax1.add_patch(kelvin_boundary1)
+    ax1.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax1.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax1.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax1.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax1.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax1.set_title('Analytical $\\mathbf{H}_{\\mathrm{pert}}$ Streamline', fontname='Times New Roman', fontsize=11)
+    ax1.set_aspect('equal')
+    ax1.set_xlim(-plot_range, plot_range)
+    ax1.set_ylim(-plot_range, plot_range)
+    ax1.minorticks_on()
+    ax1.tick_params(which='major', direction="in", top=True, right=True)
+    ax1.tick_params(which='minor', direction="in", top=True, right=True)
+    ax1.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-# Row 1, Col 2: NGSolve H field streamline
-ax2 = plt.subplot(3, 2, 2)
-strm2 = ax2.streamplot(xx, yy, Hx, Hy,
-					   color='black', linewidth=1.0, density=1.5,
-					   arrowsize=0.8, arrowstyle='->')
-circle2 = plt.Circle((0, 0), circle_radius, fill=True, facecolor='lightblue',
-					 alpha=0.3, edgecolor='red', linewidth=2, label='Magnetic material')
-ax2.add_patch(circle2)
-kelvin_boundary2 = plt.Circle((0, 0), kelvin_radius, fill=False,
-							  edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
-ax2.add_patch(kelvin_boundary2)
-ax2.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax2.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax2.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax2.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax2.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
-ax2.set_title('NGSolve $\\mathbf{H}_{\\mathrm{pert}}$ Streamline', fontname='Times New Roman', fontsize=11)
-ax2.set_aspect('equal')
-ax2.set_xlim(-plot_range, plot_range)
-ax2.set_ylim(-plot_range, plot_range)
-ax2.minorticks_on()
-ax2.tick_params(which='major', direction="in", top=True, right=True)
-ax2.tick_params(which='minor', direction="in", top=True, right=True)
-ax2.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 1, Col 2: NGSolve H field streamline
+    ax2 = plt.subplot(3, 2, 2)
+    strm2 = ax2.streamplot(xx, yy, Hx, Hy,
+    					   color='black', linewidth=1.0, density=1.5,
+    					   arrowsize=0.8, arrowstyle='->')
+    circle2 = plt.Circle((0, 0), circle_radius, fill=True, facecolor='lightblue',
+    					 alpha=0.3, edgecolor='red', linewidth=2, label='Magnetic material')
+    ax2.add_patch(circle2)
+    kelvin_boundary2 = plt.Circle((0, 0), kelvin_radius, fill=False,
+    							  edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
+    ax2.add_patch(kelvin_boundary2)
+    ax2.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax2.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax2.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax2.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax2.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax2.set_title('NGSolve $\\mathbf{H}_{\\mathrm{pert}}$ Streamline', fontname='Times New Roman', fontsize=11)
+    ax2.set_aspect('equal')
+    ax2.set_xlim(-plot_range, plot_range)
+    ax2.set_ylim(-plot_range, plot_range)
+    ax2.minorticks_on()
+    ax2.tick_params(which='major', direction="in", top=True, right=True)
+    ax2.tick_params(which='minor', direction="in", top=True, right=True)
+    ax2.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-# Apply sign(x) correction for X-axis profile analytical solution only
-Hx_pert_analytical_x_corrected = Hx_pert_analytical_x * sign(x_profile)
-# Handle x=0 case
-Hx_pert_analytical_x_corrected[x_profile == 0] = Hx_pert_analytical_x[x_profile == 0]
+    # Apply sign(x) correction for X-axis profile analytical solution only
+    Hx_pert_analytical_x_corrected = Hx_pert_analytical_x * sign(x_profile)
+    # Handle x=0 case
+    Hx_pert_analytical_x_corrected[x_profile == 0] = Hx_pert_analytical_x[x_profile == 0]
 
-# Row 2, Col 1: X-axis profile comparison (Hx)
-ax3 = plt.subplot(3, 2, 3)
-ax3.plot(x_profile, Hx_pert_numerical_x, 'k-', linewidth=2, label='NGSolve')
-ax3.plot(x_profile, Hx_pert_analytical_x_corrected, 'r--', linewidth=1.5, label='Analytical')
-ax3.axvline(-circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-ax3.axvline(circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-plt.setp(ax3.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax3.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax3.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax3.set_ylabel('$H_{x,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
-ax3.set_title('X-axis Profile ($H_x$ component)', fontname='Times New Roman', fontsize=11)
-ax3.minorticks_on()
-ax3.tick_params(which='major', direction="in", top=True, right=True)
-ax3.tick_params(which='minor', direction="in", top=True, right=True)
-ax3.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
-ax3.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
-ax3.legend(loc='best', fontsize=9, frameon=False)
+    # Row 2, Col 1: X-axis profile comparison (Hx)
+    ax3 = plt.subplot(3, 2, 3)
+    ax3.plot(x_profile, Hx_pert_numerical_x, 'k-', linewidth=2, label='NGSolve')
+    ax3.plot(x_profile, Hx_pert_analytical_x_corrected, 'r--', linewidth=1.5, label='Analytical')
+    ax3.axvline(-circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    ax3.axvline(circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    plt.setp(ax3.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax3.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax3.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax3.set_ylabel('$H_{x,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
+    ax3.set_title('X-axis Profile ($H_x$ component)', fontname='Times New Roman', fontsize=11)
+    ax3.minorticks_on()
+    ax3.tick_params(which='major', direction="in", top=True, right=True)
+    ax3.tick_params(which='minor', direction="in", top=True, right=True)
+    ax3.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
+    ax3.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
+    ax3.legend(loc='best', fontsize=9, frameon=False)
 
-# Row 2, Col 2: Y-axis profile comparison (Hy)
-ax4 = plt.subplot(3, 2, 4)
-ax4.plot(y_profile, Hy_pert_numerical_y, 'k-', linewidth=2, label='NGSolve')
-ax4.plot(y_profile, Hy_pert_analytical_y, 'r--', linewidth=1.5, label='Analytical')
-ax4.axvline(-circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-ax4.axvline(circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
-plt.setp(ax4.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax4.set_xlabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax4.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax4.set_ylabel('$H_{y,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
-ax4.set_title('Y-axis Profile ($H_y$ component)', fontname='Times New Roman', fontsize=11)
-ax4.minorticks_on()
-ax4.tick_params(which='major', direction="in", top=True, right=True)
-ax4.tick_params(which='minor', direction="in", top=True, right=True)
-ax4.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
-ax4.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
-ax4.legend(loc='best', fontsize=9, frameon=False)
+    # Row 2, Col 2: Y-axis profile comparison (Hy)
+    ax4 = plt.subplot(3, 2, 4)
+    ax4.plot(y_profile, Hy_pert_numerical_y, 'k-', linewidth=2, label='NGSolve')
+    ax4.plot(y_profile, Hy_pert_analytical_y, 'r--', linewidth=1.5, label='Analytical')
+    ax4.axvline(-circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    ax4.axvline(circle_radius, color='gray', linestyle=':', linewidth=1, alpha=0.7)
+    plt.setp(ax4.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax4.set_xlabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax4.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax4.set_ylabel('$H_{y,\\mathrm{pert}}$ (A/m)', fontname='Times New Roman', fontsize=10)
+    ax4.set_title('Y-axis Profile ($H_y$ component)', fontname='Times New Roman', fontsize=11)
+    ax4.minorticks_on()
+    ax4.tick_params(which='major', direction="in", top=True, right=True)
+    ax4.tick_params(which='minor', direction="in", top=True, right=True)
+    ax4.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3)
+    ax4.grid(axis='both', which='minor', c='gainsboro', linestyle='--', linewidth=0.1)
+    ax4.legend(loc='best', fontsize=9, frameon=False)
 
-# Row 3, Col 1: Exterior B field
-ax5 = plt.subplot(3, 2, 5)
-strm5 = ax5.streamplot(xx_ext, yy_ext, Bx_ext, By_ext,
-					   color='darkblue', linewidth=1.0, density=1.5,
-					   arrowsize=0.8, arrowstyle='->')
-circle5 = plt.Circle((offset_x, 0), kelvin_radius, fill=False,
-					 edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
-ax5.add_patch(circle5)
-ax5.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax5.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax5.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax5.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax5.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
-ax5.set_title('Exterior: Flux Density $\\mathbf{B}$', fontname='Times New Roman', fontsize=11)
-ax5.set_aspect('equal')
-ax5.set_xlim(offset_x - plot_range, offset_x + plot_range)
-ax5.set_ylim(-plot_range, plot_range)
-ax5.minorticks_on()
-ax5.tick_params(which='major', direction="in", top=True, right=True)
-ax5.tick_params(which='minor', direction="in", top=True, right=True)
-ax5.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 3, Col 1: Exterior B field
+    ax5 = plt.subplot(3, 2, 5)
+    strm5 = ax5.streamplot(xx_ext, yy_ext, Bx_ext, By_ext,
+    					   color='darkblue', linewidth=1.0, density=1.5,
+    					   arrowsize=0.8, arrowstyle='->')
+    circle5 = plt.Circle((offset_x, 0), kelvin_radius, fill=False,
+    					 edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
+    ax5.add_patch(circle5)
+    ax5.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax5.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax5.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax5.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax5.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax5.set_title('Exterior: Flux Density $\\mathbf{B}$', fontname='Times New Roman', fontsize=11)
+    ax5.set_aspect('equal')
+    ax5.set_xlim(offset_x - plot_range, offset_x + plot_range)
+    ax5.set_ylim(-plot_range, plot_range)
+    ax5.minorticks_on()
+    ax5.tick_params(which='major', direction="in", top=True, right=True)
+    ax5.tick_params(which='minor', direction="in", top=True, right=True)
+    ax5.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-# Row 3, Col 2: Exterior H field
-ax6 = plt.subplot(3, 2, 6)
-strm6 = ax6.streamplot(xx_ext, yy_ext, Hx_ext, Hy_ext,
-					   color='darkgreen', linewidth=1.0, density=1.5,
-					   arrowsize=0.8, arrowstyle='->')
-circle6 = plt.Circle((offset_x, 0), kelvin_radius, fill=False,
-					 edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
-ax6.add_patch(circle6)
-ax6.legend(loc='upper right', fontsize=8, frameon=False)
-plt.setp(ax6.get_xticklabels(), fontname='Times New Roman', fontsize=10)
-ax6.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
-plt.setp(ax6.get_yticklabels(), fontname='Times New Roman', fontsize=10)
-ax6.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
-ax6.set_title('Exterior: Magnetic Field $\\mathbf{H}$', fontname='Times New Roman', fontsize=11)
-ax6.set_aspect('equal')
-ax6.set_xlim(offset_x - plot_range, offset_x + plot_range)
-ax6.set_ylim(-plot_range, plot_range)
-ax6.minorticks_on()
-ax6.tick_params(which='major', direction="in", top=True, right=True)
-ax6.tick_params(which='minor', direction="in", top=True, right=True)
-ax6.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
+    # Row 3, Col 2: Exterior H field
+    ax6 = plt.subplot(3, 2, 6)
+    strm6 = ax6.streamplot(xx_ext, yy_ext, Hx_ext, Hy_ext,
+    					   color='darkgreen', linewidth=1.0, density=1.5,
+    					   arrowsize=0.8, arrowstyle='->')
+    circle6 = plt.Circle((offset_x, 0), kelvin_radius, fill=False,
+    					 edgecolor='green', linewidth=1.5, linestyle='--', label='Kelvin boundary')
+    ax6.add_patch(circle6)
+    ax6.legend(loc='upper right', fontsize=8, frameon=False)
+    plt.setp(ax6.get_xticklabels(), fontname='Times New Roman', fontsize=10)
+    ax6.set_xlabel('${\\it x}$ (m)', fontname='Times New Roman', fontsize=10)
+    plt.setp(ax6.get_yticklabels(), fontname='Times New Roman', fontsize=10)
+    ax6.set_ylabel('${\\it y}$ (m)', fontname='Times New Roman', fontsize=10)
+    ax6.set_title('Exterior: Magnetic Field $\\mathbf{H}$', fontname='Times New Roman', fontsize=11)
+    ax6.set_aspect('equal')
+    ax6.set_xlim(offset_x - plot_range, offset_x + plot_range)
+    ax6.set_ylim(-plot_range, plot_range)
+    ax6.minorticks_on()
+    ax6.tick_params(which='major', direction="in", top=True, right=True)
+    ax6.tick_params(which='minor', direction="in", top=True, right=True)
+    ax6.grid(axis='both', which='major', c='gainsboro', linestyle=':', linewidth=0.3, alpha=0.5)
 
-plt.tight_layout()
+    plt.tight_layout()
 
-png_file = f"{os.path.splitext(__file__)[0]}.png"
-plt.savefig(png_file, dpi=150, bbox_inches='tight')
-print(f"  Plot saved to: {png_file}")
+    png_file = f"{os.path.splitext(__file__)[0]}.png"
+    plt.savefig(png_file, dpi=150, bbox_inches='tight')
+    print(f"  Plot saved to: {png_file}")
 
-os.startfile(png_file)
+    os.startfile(png_file)
 
-print("\n" + "="*60)
-print("Computation completed successfully")
-print("="*60)
+    print("\n" + "="*60)
+    print("Computation completed successfully")
+    print("="*60)

@@ -22,6 +22,7 @@ import os
 from numpy import pi, sqrt, cos, sin, linspace, zeros, nan, isnan, meshgrid, array, log, mean, sign
 from scipy.special import ellipk, ellipe
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 from radia.kelvin_source import kelvin_nu_factor_axisym_cf, build_material_cf
 
@@ -192,18 +193,19 @@ def solve_A_formulation(mesh, order):
     # Bilinear form
     a_form = BilinearForm(fes)
     a_form += nu_cf / r_weight * grad(u) * grad(v) * dx
-    a_form.Assemble()
+    with TaskManager():
+        a_form.Assemble()
 
-    # Linear form
-    f = LinearForm(fes)
-    f += J0 * v * dx("coil")
-    f.Assemble()
+        # Linear form
+        f = LinearForm(fes)
+        f += J0 * v * dx("coil")
+        f.Assemble()
 
-    # Solve
-    gfu = GridFunction(fes)
-    gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        # Solve
+        gfu = GridFunction(fes)
+        gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    return fes, gfu, nu_cf, r_weight
+        return fes, gfu, nu_cf, r_weight
 
 
 # ============================================================

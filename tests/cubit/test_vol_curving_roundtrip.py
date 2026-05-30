@@ -29,6 +29,7 @@ if _cubit_path and _cubit_path not in sys.path:
 # Import NGSolve FIRST (DLL conflict avoidance)
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF
+from ngsolve import TaskManager
 
 # Then Cubit
 _plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
@@ -91,17 +92,18 @@ for order in [2, 3]:
 
     # Load from .vol
     mesh_reload = Mesh(vol_path)
-    vol_reload = Integrate(CF(1), mesh_reload)
-    err_reload = (vol_reload - V_EXACT) / V_EXACT * 100
-    curve_order = mesh_reload.GetCurveOrder()
-    print(f"  Loaded:     V={vol_reload:.10e}  err={err_reload:+.6e}%")
-    print(f"  CurveOrder: {curve_order} (expected {order})")
+    with TaskManager():
+        vol_reload = Integrate(CF(1), mesh_reload)
+        err_reload = (vol_reload - V_EXACT) / V_EXACT * 100
+        curve_order = mesh_reload.GetCurveOrder()
+        print(f"  Loaded:     V={vol_reload:.10e}  err={err_reload:+.6e}%")
+        print(f"  CurveOrder: {curve_order} (expected {order})")
 
-    results[order] = {
-        'vol_reload': vol_reload, 'err_reload': err_reload,
-        'has_curved': has_curved,
-        'curve_order': curve_order,
-    }
+        results[order] = {
+            'vol_reload': vol_reload, 'err_reload': err_reload,
+            'has_curved': has_curved,
+            'curve_order': curve_order,
+        }
 
 # ============================================================
 # Summary

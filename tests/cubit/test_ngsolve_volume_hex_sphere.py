@@ -17,6 +17,7 @@ import math
 
 # NGSolve MUST be imported before cubit (DLL conflict avoidance)
 from ngsolve import Mesh as NGMesh, Integrate, CF
+from ngsolve import TaskManager
 
 _test_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(os.path.dirname(_test_dir))
@@ -97,7 +98,8 @@ def test_volume(mesh_type, build_func, mesh_size, orders):
                 # Use order=2 extraction but integrate with order=1
                 # (the linear nodes are identical)
                 mesh = NGMesh(ng_mesh)
-                mesh.Curve(1)  # force linear
+                with TaskManager():
+                    mesh.Curve(1)  # force linear
             else:
                 ng_mesh = extract_curved_mesh(cubit, order=order)
                 mesh = NGMesh(ng_mesh)

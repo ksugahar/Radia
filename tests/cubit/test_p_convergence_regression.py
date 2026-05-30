@@ -27,6 +27,7 @@ import pytest
 # NGSolve import
 try:
     from ngsolve import Mesh, Integrate, CF, BND, BBND
+    from ngsolve import TaskManager
     HAS_NGSOLVE = True
 except ImportError:
     HAS_NGSOLVE = False
@@ -59,13 +60,14 @@ def _load_vol_and_json(subdir, prefix, order):
     with open(json_path, "r") as f:
         cad = json.load(f)
 
-    ng_vol = Integrate(CF(1), mesh)
-    ng_area = Integrate(CF(1), mesh, BND)
+    with TaskManager():
+        ng_vol = Integrate(CF(1), mesh)
+        ng_area = Integrate(CF(1), mesh, BND)
 
-    cad_vol = sum(cad.get("materials", {}).values())
-    cad_area = sum(cad.get("boundaries", {}).values())
+        cad_vol = sum(cad.get("materials", {}).values())
+        cad_area = sum(cad.get("boundaries", {}).values())
 
-    return ng_vol, ng_area, cad_vol, cad_area
+        return ng_vol, ng_area, cad_vol, cad_area
 
 
 # ================================================================

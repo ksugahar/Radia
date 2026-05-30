@@ -135,10 +135,11 @@ def build_mesh_with_iron_core(bore_xy=0.020, outer_xy=0.030,
     shape = Glue([air_region, iron_box])
 
     geo = OCCGeometry(shape)
-    ngmesh = geo.GenerateMesh(maxh=maxh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=maxh)
 
-    from ngsolve import Mesh
-    return Mesh(ngmesh)
+        from ngsolve import Mesh
+        return Mesh(ngmesh)
 
 
 def main():
@@ -258,6 +259,7 @@ def main():
     print()
     print("6. Exporting to VTK...")
     from ngsolve import VTKOutput
+    from ngsolve import TaskManager
     vtk_file = os.path.join(os.path.dirname(__file__),
                             'demo_coil_scalar_potential')
     try:

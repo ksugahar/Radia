@@ -33,12 +33,33 @@ radTFlmLinCur::radTFlmLinCur(const TVector3d& InStartPoint, const TVector3d& InE
 
 	if(LinVect.y==0. && LinVect.z==0.)
 	{
-		TVector3d St0(1.,0.,0.);
-		TVector3d St1(0.,1.,0.);
-		TVector3d St2(0.,0.,1.);
-		TMatrix3d M(St0, St1, St2);
-		TVector3d ZeroVect(0.,0.,0.);
-		NativeRotation = radTrans(M, M, ZeroVect, 1., 1.); // Identity
+		// Wire is exactly parallel to the global x-axis, so the general
+		// Rodrigues path below is unusable: RotAx = LinVectProto x LinVect
+		// is the zero vector (parallel vectors) and SetNativeRotation would
+		// divide by its zero norm.  Handle the two orientations explicitly.
+		if(LinVect.x >= 0.)
+		{
+			// +x (or degenerate zero-length): local +x already maps to the
+			// wire direction, so the rotation is the identity.
+			TVector3d St0(1.,0.,0.);
+			TVector3d St1(0.,1.,0.);
+			TVector3d St2(0.,0.,1.);
+			TMatrix3d M(St0, St1, St2);
+			TVector3d ZeroVect(0.,0.,0.);
+			NativeRotation = radTrans(M, M, ZeroVect, 1., 1.); // Identity
+		}
+		else
+		{
+			// -x: local +x must map to global -x.  Use a 180-deg rotation
+			// about z (any axis perpendicular to x works; the field is
+			// axisymmetric about the wire).  This is a proper rotation
+			// (det=+1), required for TrVectField to map the field back
+			// correctly.  Without this the identity branch would silently
+			// compute the field of a +x wire (wrong far endpoint + wrong
+			// current direction) -- the bug fixed 2026-05-29.
+			const double Pi = 3.141592653589793238;
+			SetNativeRotation(TVector3d(0., 0., 1.), Pi);
+		}
 		return;
 	}
 

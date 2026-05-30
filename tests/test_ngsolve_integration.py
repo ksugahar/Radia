@@ -145,10 +145,12 @@ class TestNGSolveIntegration:
 
         # Create RadiaField (it IS a CoefficientFunction) and project
         B_cf = self.RadiaField(self.magnet, 'b')
-        B_gf.Set(B_cf)
+        from ngsolve import TaskManager
+        with TaskManager():
+            B_gf.Set(B_cf)
 
-        print(f"  FES DOFs: {fes.ndof}")
-        print("  [OK] HDiv GridFunction projection successful")
+            print(f"  FES DOFs: {fes.ndof}")
+            print("  [OK] HDiv GridFunction projection successful")
 
     def test_field_accuracy_far_from_magnet(self):
         """Test 5: Field accuracy at distance > 1 mesh cell from magnet"""
@@ -356,6 +358,7 @@ def run_standalone_test():
         import radia as rad
         from radia import RadiaField
         from ngsolve import Mesh, HDiv, HCurl, VectorH1, GridFunction, CoefficientFunction
+        from ngsolve import TaskManager
         from netgen.csg import CSGeometry, OrthoBrick, Pnt
 
         # Setup for integration tests

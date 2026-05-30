@@ -83,20 +83,22 @@ def test_occ_kelvin_p2_slaves_more_than_p1():
     """
     from ngsolve import H1, Periodic
     mesh = _build_occ_kelvin_mesh()
-    mesh.Curve(2)
-    slaved_at = {}
-    for p in (1, 2):
-        fb = H1(mesh, order=p, dirichlet="GND")
-        fp = Periodic(fb)
-        slaved_at[p] = sum(fb.FreeDofs()) - sum(fp.FreeDofs())
-    assert slaved_at[2] > slaved_at[1] * 2, (
-        f"p=2 should slave > 2x p=1 DOFs (got p1={slaved_at[1]}, "
-        f"p2={slaved_at[2]})")
+    with TaskManager():
+        mesh.Curve(2)
+        slaved_at = {}
+        for p in (1, 2):
+            fb = H1(mesh, order=p, dirichlet="GND")
+            fp = Periodic(fb)
+            slaved_at[p] = sum(fb.FreeDofs()) - sum(fp.FreeDofs())
+        assert slaved_at[2] > slaved_at[1] * 2, (
+            f"p=2 should slave > 2x p=1 DOFs (got p1={slaved_at[1]}, "
+            f"p2={slaved_at[2]})")
 
 
 def test_occ_kelvin_set_then_integrate_ratio():
     """OCC Identify-after-Glue: Set(1) on kelvin_int MUST equal kelvin_ext."""
     from ngsolve import H1, Periodic, GridFunction, Integrate
+    from ngsolve import TaskManager
     mesh = _build_occ_kelvin_mesh()
     mesh.Curve(2)
     fp = Periodic(H1(mesh, order=2, dirichlet="GND"))
