@@ -44,8 +44,11 @@ VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
 # the persisted "solution" the figure is reproduced from (Data
 # Persistence Policy).  Regenerate with: python plot_digest_figure.py --regen-field
 SIDE_FIELD = SWEEP / "I100_f50k_side_field.json"
-# |Z_s| side-wall field for the maximum-gap case (300 A, 10 kHz, -47.5 %).
-SIDE_FIELD_ZS = SWEEP / "I300_f10k_Zs_side_field.json"
+# |Z_s| side-wall field for the dense-grid maximum-gap case
+# (500 A, 10 kHz, -49.8 %, ESIM converged).  Replaces the older
+# 300 A / 10 kHz sparse-grid representative now that the dense
+# (9 x 6) sweep is the canonical data.
+SIDE_FIELD_ZS = SWEEP / "I500_f10k_Zs_side_field.json"
 OUT = HERE / "sweep_heatmap_digest"
 MIN_PT = 9.0
 EMBED_SCALE = 0.46   # \columnwidth (~8.4 cm) of an 18.2 cm render.
@@ -117,8 +120,9 @@ def save_side_field(out_path=SIDE_FIELD):
 
 def save_side_field_zs(out_path=SIDE_FIELD_ZS):
     """One-time: extract |Z_s| on the side wall for the max-gap case
-    (300 A / 10 kHz) and persist it (committed)."""
-    perp = SWEEP / "I300_f10k_per_panel.json"
+    (500 A / 10 kHz, dense-grid, ESIM converged) and persist it
+    (committed)."""
+    perp = SWEEP_DENSE / "I500_f10k_per_panel.json"
     if not perp.exists() or not VOL.exists():
         print(f"ERROR: need {perp} and {VOL} to regenerate the |Z_s| field.")
         sys.exit(1)

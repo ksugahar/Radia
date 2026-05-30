@@ -977,7 +977,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 191.90865278244019
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 500000,
@@ -990,7 +991,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 1,
-      "elapsed_s": 4.989400863647461
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 500000,
@@ -1003,7 +1005,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 210.21284747123718
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 10000,
@@ -1016,7 +1019,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 1,
-      "elapsed_s": 5.529187202453613
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 10000,
@@ -1029,7 +1033,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 206.7213113307953
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 20000,
@@ -1042,7 +1047,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 2,
-      "elapsed_s": 5.372768402099609
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 20000,
@@ -1055,7 +1061,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 158.8296022415161
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 50000,
@@ -1068,7 +1075,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 2,
-      "elapsed_s": 8.344732522964478
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 50000,
@@ -1081,7 +1089,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 145.69865441322327
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 100000,
@@ -1094,7 +1103,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 5.637888193130493
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 100000,
@@ -1107,7 +1117,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 134.03132915496826
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 200000,
@@ -1120,7 +1131,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 1,
-      "elapsed_s": 7.189680576324463
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 200000,
@@ -1133,7 +1145,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 147.2644500732422
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 500000,
@@ -1146,7 +1159,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 1,
-      "elapsed_s": 16.050331115722656
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 500000,
@@ -1159,7 +1173,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 220.97210431098938
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 10000,
@@ -1172,7 +1187,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 3,
-      "elapsed_s": 16.5992271900177
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 10000,
@@ -1185,7 +1201,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 243.88987374305725
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 20000,
@@ -1198,7 +1215,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 2,
-      "elapsed_s": 5.760102987289429
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 20000,
@@ -1211,7 +1229,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 206.90237474441528
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 50000,
@@ -1224,7 +1243,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 1,
-      "elapsed_s": 6.824059724807739
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 50000,
@@ -1237,7 +1257,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 203.31374311447144
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 100000,
@@ -1250,7 +1271,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 6.723158359527588
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 100000,
@@ -1263,7 +1285,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 227.73256611824036
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 200000,
@@ -1276,7 +1299,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 2,
-      "elapsed_s": 6.070098638534546
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 200000,
@@ -1289,7 +1313,8 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 0,
-      "elapsed_s": 236.6850414276123
+      "elapsed_s": -1,
+      "from_cache": true
     },
     {
       "frequency_Hz": 500000,
@@ -1302,7 +1327,189 @@
       "esim_converged": true,
       "esim_anderson_restarts": 0,
       "esim_anderson_clips": 1,
-      "elapsed_s": 6.171234369277954
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 500000,
+      "current_A": 200.0,
+      "per_panel": true,
+      "P_wp_W": 183.59851540441716,
+      "L_total_uH": null,
+      "H_t_rms": 1536.54030066133,
+      "esim_iterations": 26,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 0,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 10000,
+      "current_A": 500.0,
+      "per_panel": false,
+      "P_wp_W": 162.84812660535178,
+      "L_total_uH": null,
+      "H_t_rms": 3334.307964247736,
+      "esim_iterations": 6,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 3,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 10000,
+      "current_A": 500.0,
+      "per_panel": true,
+      "P_wp_W": 81.8249891395888,
+      "L_total_uH": null,
+      "H_t_rms": 1454.196537650883,
+      "esim_iterations": 25,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 0,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 20000,
+      "current_A": 500.0,
+      "per_panel": false,
+      "P_wp_W": 416.73677847897216,
+      "L_total_uH": null,
+      "H_t_rms": 4896.234368987464,
+      "esim_iterations": 6,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 1,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 20000,
+      "current_A": 500.0,
+      "per_panel": true,
+      "P_wp_W": 254.59349323202784,
+      "L_total_uH": null,
+      "H_t_rms": 2320.6199172757774,
+      "esim_iterations": 30,
+      "esim_converged": false,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 0,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 50000,
+      "current_A": 500.0,
+      "per_panel": false,
+      "P_wp_W": 1151.618557882377,
+      "L_total_uH": null,
+      "H_t_rms": 7036.162249459673,
+      "esim_iterations": 6,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 1,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 50000,
+      "current_A": 500.0,
+      "per_panel": true,
+      "P_wp_W": 929.2265504449585,
+      "L_total_uH": null,
+      "H_t_rms": 4081.7676280033816,
+      "esim_iterations": 30,
+      "esim_converged": false,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 0,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 100000,
+      "current_A": 500.0,
+      "per_panel": false,
+      "P_wp_W": 2157.235762536639,
+      "L_total_uH": null,
+      "H_t_rms": 8465.133826544115,
+      "esim_iterations": 6,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 1,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 100000,
+      "current_A": 500.0,
+      "per_panel": true,
+      "P_wp_W": 1942.1448112410415,
+      "L_total_uH": null,
+      "H_t_rms": 5682.464987266945,
+      "esim_iterations": 30,
+      "esim_converged": false,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 0,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 200000,
+      "current_A": 500.0,
+      "per_panel": false,
+      "P_wp_W": 3417.677137545125,
+      "L_total_uH": null,
+      "H_t_rms": 9294.545394463203,
+      "esim_iterations": 12,
+      "esim_converged": true,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 4,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 200000,
+      "current_A": 500.0,
+      "per_panel": true,
+      "P_wp_W": 3258.6855402385654,
+      "L_total_uH": null,
+      "H_t_rms": 7113.031180342486,
+      "esim_iterations": 30,
+      "esim_converged": false,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 0,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 500000,
+      "current_A": 500.0,
+      "per_panel": false,
+      "P_wp_W": 1818.2561128553536,
+      "L_total_uH": null,
+      "H_t_rms": 4835.264132742733,
+      "esim_iterations": 30,
+      "esim_converged": false,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 28,
+      "elapsed_s": -1,
+      "from_cache": true
+    },
+    {
+      "frequency_Hz": 500000,
+      "current_A": 500.0,
+      "per_panel": true,
+      "P_wp_W": 2180.691356869329,
+      "L_total_uH": null,
+      "H_t_rms": 5425.928814816291,
+      "esim_iterations": 30,
+      "esim_converged": false,
+      "esim_anderson_restarts": 0,
+      "esim_anderson_clips": 1,
+      "elapsed_s": 606.4626297950745
     }
   ]
 }
