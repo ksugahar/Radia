@@ -259,6 +259,9 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'multipanel'      - 1x2 / 2x1 / 2x2 layout tactics
         'side_by_side'    - two figures in 8 cm -> each <= 4 cm,
                             font 10 pt, legend 8-9 pt, no overlap
+        'tikz_export'     - MATLAB -> matlab2tikz -> LaTeX TikZ:
+                            preferred over PDF includegraphics for
+                            LaTeX papers (font / math matches body)
     """
     rules = {
         "efficiency": """\
@@ -592,6 +595,84 @@ HOW TO BUILD IT:
 Or use the size/font recipe directly:
   graph_size_for_target('digest_double_column_side_by_side')
   # -> 8 cm wide, font 10 pt, legend 8-9 pt
+""",
+        "tikz_export": """\
+[tikz_export]
+
+MATLAB FIGURE -> TikZ (via matlab2tikz) -> LaTeX paper.
+
+For figures rendered in MATLAB and embedded in an IEEE / IEEJ / IGTE
+LaTeX paper, the lab-preferred export path is TikZ via matlab2tikz,
+NOT saveas('fig.pdf') / exportgraphics('fig.pdf').
+
+WHY TikZ beats PDF here:
+  - axis / tick / legend text INHERITS the paper's LaTeX font
+    (Times New Roman for IEEE/IEEJ).  PDF includegraphics bakes in
+    whatever font MATLAB happened to render with -- never an exact
+    match for body text.
+  - inline math like $\\sigma_{xy}$ in axis labels renders in the
+    paper's MATH font, not MATLAB's LaTeX-interpreter approximation.
+  - fully vector, editable in .tex after export (tweak labels,
+    colors, ticks without re-running MATLAB).
+  - pgfplots scales the figure to \\columnwidth / \\textwidth -- one
+    .tikz file works for both single-column and double-column
+    layouts.
+
+WHEN TO STAY ON PDF (TikZ exceptions):
+  - heatmaps / pcolor / large image overlays (raster, slow in TikZ).
+  - >10000 plot points without cleanfigure pre-processing
+    (LaTeX compile time blows up).
+  - complex 3-D scenes that pgfplots struggles to reproduce.
+  - photographs.
+  -> for these, use exportgraphics PDF or a hybrid (raster the heavy
+     layer, TikZ-overlay the axes/labels).
+
+THE LAB RECIPE (parameterise with the lab profile):
+
+    cleanfigure('targetResolution', 300);   % decimate dense data
+    matlab2tikz('fig/result.tikz', ...
+        'width', '\\figureWidth', ...        % LaTeX-side \\setlength
+        'height', '\\figureHeight', ...      %   to \\columnwidth
+        'parseStrings',  false, ...          % keep your $\\LaTeX$
+        'showInfo',      false, ...
+        'showWarnings',  false, ...
+        'standalone',    false);             % embed; not stand-alone
+
+LaTeX-side prelude (one-time):
+
+    \\usepackage{pgfplots}
+    \\pgfplotsset{compat=1.18}
+    \\newlength\\figureWidth   \\setlength\\figureWidth{\\columnwidth}
+    \\newlength\\figureHeight  \\setlength\\figureHeight{6cm}
+    \\input{fig/result.tikz}
+
+GETTING THE EXACT LAB-PROFILE RECIPE:
+
+    graph_matlab2tikz_recipe(target='paper_single_column')
+        -> ready-to-paste MATLAB recipe sized for IEEE single column
+           (88.9 mm) with the lab's Times New Roman / 10 pt / 0.7 pt
+           axis-linewidth / sparse-ticks defaults baked in.
+
+    graph_matlab2tikz_recipe(target='paper_double_column')
+        -> double-column (181 mm) wide figure.
+
+    graph_matlab2tikz_recipe(target='digest_double_column_side_by_side')
+        -> two-panel-in-8cm digest layout; remember to clip the
+           legend font down to 8-9 pt for 4 cm sub-panels
+           (see `side_by_side` topic).
+
+PRE-FLIGHT one-time install:
+
+    % After git clone https://github.com/matlab2tikz/matlab2tikz
+    addpath(genpath('<install-dir>/matlab2tikz/src'));
+
+CAVEATS:
+  - matlab2tikz currently supports up to MATLAB R2024a-ish; very new
+    graphics objects (e.g. some R2024b chart types) may export as
+    rasterised fallbacks.
+  - For very wide / dense plots, increase
+    cleanfigure(..., 'targetResolution', 600) and tune the
+    'minimumPointsDistance' option.
 """,
     }
     q = (query or "all").strip().lower()
