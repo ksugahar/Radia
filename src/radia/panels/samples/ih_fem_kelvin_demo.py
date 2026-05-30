@@ -117,7 +117,7 @@ if os.path.isfile(os.path.join(_panels_repo, "add_kelvin.py")):
 # have started without that path being injected.
 _cubit_plugin_helpers = os.path.join(
     os.environ.get("CUBIT_PLUGIN_DIR",
-                   r"C:\Program Files\Coreform Cubit 2025.3\bin\plugins"),
+                   r"C:\Program Files\Coreform Cubit 2025.12\bin\plugins"),
     "cubit_helpers")
 if os.path.isdir(_cubit_plugin_helpers) and _cubit_plugin_helpers not in sys.path:
     sys.path.insert(0, _cubit_plugin_helpers)
