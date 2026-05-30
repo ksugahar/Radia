@@ -33,10 +33,11 @@ extern "C" {
 /* Error codes. */
 enum {
   CHACAPK_HARITH_OK = 0,
-  CHACAPK_HARITH_ERR_LOWRANK_LEAF = -1,  /* low-rank leaf not yet handled */
+  CHACAPK_HARITH_ERR_LOWRANK_LEAF = -1,  /* low-rank leaf not yet handled (Phase 2) */
   CHACAPK_HARITH_ERR_LAPACK       = -2,  /* LAPACK info != 0 */
   CHACAPK_HARITH_ERR_TOPOLOGY     = -3,  /* block-tree sons-count mismatch */
-  CHACAPK_HARITH_ERR_NULL         = -4
+  CHACAPK_HARITH_ERR_NULL         = -4,
+  CHACAPK_HARITH_ERR_NEED_RECURSIVE = -5 /* off-diag op needs recursive H-arith (Phase 2) */
 };
 
 /* H-LU FACTORIZATION (in-place).
@@ -77,12 +78,16 @@ typedef struct cHACApK_hlu_stats_t {
 
 const cHACApK_hlu_stats_t *cHACApK_hlu_last_stats(void);
 
-/* Self-test: construct a small synthetic dense matrix split into 2x2
- * dense-leaf blocks, run cHACApK_hlu_decomp + cHACApK_hlu_solve_vec,
- * compare against a reference LAPACKE_dgesv solve. Returns the maximum
- * componentwise error |x_hlu - x_ref| / max|x_ref|. Should be < 1e-10
- * for a well-conditioned random matrix. */
-double cHACApK_harith_self_test(int n_per_block);
+/* Self-test: construct a synthetic dense matrix recursively split into a
+ * (2^depth) x (2^depth) grid of dense leaves, run cHACApK_hlu_decomp +
+ * cHACApK_hlu_solve_vec, compare against a reference LAPACKE_dgesv solve.
+ * Returns the maximum componentwise error |x_hlu - x_ref| / max|x_ref|.
+ * Should be < 1e-10 for a well-conditioned diag-dominant matrix.
+ *
+ * depth = 1: 2x2 block-tree (4 leaves) -- shallow recursion sanity
+ * depth = 2: root has 4 sons, each with 4 sons (16 leaves) -- recursion
+ * depth = 3: 64 leaves (~ realistic HACApK leaf count at moderate scale) */
+double cHACApK_harith_self_test(int depth, int n_per_block);
 
 #ifdef __cplusplus
 }
