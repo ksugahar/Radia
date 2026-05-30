@@ -121,6 +121,53 @@ double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
  * update inside off-diagonal sub-blocks). */
 double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
 
+/* --------- Phase 4: storage-convention conversion + driver --------- *
+ *
+ * HACApK stores dense leaves ROW-MAJOR (a1[col + row*ndt] = M[row, col])
+ * and rk leaves with a1=V, a2=U.  The H-LU code in this file expects
+ * dense COLUMN-MAJOR (a1[row + col*ndl] = M[row, col]) and rk with
+ * a1=U, a2=V.  Use the two helpers below to flip between conventions
+ * IN PLACE on an existing leafmtxp.  Round-trip is identity.
+ *
+ * After convert_to_internal + cHACApK_hlu_decomp, the leaves contain
+ * the in-place LU factors in internal format.  convert_to_hacapk WILL
+ * transpose those factors back to HACApK row-major (so subsequent
+ * HACApK MatVec would compute factor * x instead of A * x).  Caller's
+ * choice. */
+void cHACApK_convert_leafmtxp_to_internal(struct st_cHACApK_leafmtxp_t *lp);
+void cHACApK_convert_leafmtxp_to_hacapk (struct st_cHACApK_leafmtxp_t *lp);
+
+/* Phase 4 driver: run cHACApK_hlu_decomp + solve on a real HACApK tree.
+ *
+ * Inputs:
+ *   leafmtxp_void    : st_cHACApK_leafmtxp_t* (in HACApK format, will be
+ *                      converted to internal format and LU-factored).
+ *                      The cluster-tree root must be preserved at
+ *                      leafmtxp->st_clt_root (true after recent build
+ *                      wrappers; see Phase 4 ground work commit).
+ *   control_void     : st_cHACApK_lcontrol_t* (for lod permutation).
+ *   x_orig, y_orig   : Length-N vectors in ORIGINAL (user) ordering.
+ *                      Caller must precompute y_orig = A * x_orig via
+ *                      HACApK_matvec_wrapper before calling this function.
+ *
+ * Returns max relative error |x_solved - x_orig| / max|x_orig| in the
+ * original ordering. The leafmtxp is left in internal format with LU
+ * factors -- use cHACApK_convert_leafmtxp_to_hacapk to restore if
+ * needed, but the LU OVERWROTE the original A entries so MatVec on
+ * the restored leafmtxp would be meaningless. Re-build the H-matrix
+ * to recover A.
+ *
+ * On internal error (allocation, block-tree build, LU failure), returns
+ * a negative sentinel:
+ *   -1.0     : null pointer
+ *   -2.0     : alloc failure
+ *   -3.0     : block-tree build failure
+ *   -4.0 + rc * 0.001 : hlu_decomp returned rc (e.g., -4.005 = NEED_RECURSIVE)
+ *   -5.0 + rc * 0.001 : hlu_solve_vec returned rc */
+double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
+                                  const double *x_orig, const double *y_orig,
+                                  int nffc);
+
 #ifdef __cplusplus
 }
 #endif

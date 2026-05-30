@@ -176,6 +176,13 @@ public:
     const std::vector<double>& GetDiagonalN() const { return m_diag_N; }
     bool IsDiagonalCached() const { return m_diag_cached; }
 
+    // Phase 4: opaque pointer accessors so external H-LU drivers
+    // (cHACApK_hlu_run_on_hacapk) can reach the HACApK leafmtxp +
+    // control without breaking encapsulation. Read-only; callers must
+    // not free these.
+    void* GetLeafmtxp() const { return m_leafmtxp; }
+    void* GetLcontrol() const { return m_control; }
+
 protected:
     RadHACApKBase();
 
