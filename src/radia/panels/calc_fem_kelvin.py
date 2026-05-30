@@ -1256,6 +1256,13 @@ def solve_fem(vol_file="", fes_order=1,
         "esim_history": history,
         "esim_per_panel": bool(gf_Zs is not None),
         "t_mesh_s": round(t_mesh, 2),
+        # Aggregated per-iteration solve time.  Each iteration's t_solve is
+        # already captured in history[i]['t_solve']; sum into a single
+        # top-level t_solve_s so the panel's _append_standard_summary
+        # (radia_gui_base.py, Result Output Policy 2026-05-30) shows the
+        # solve breakdown alongside t_mesh_s + t_total_s.  Per-iter detail
+        # is still available in esim_history for users who want it.
+        "t_solve_s": round(sum(h.get("t_solve", 0.0) for h in history), 2),
         "t_total_s": round(t_total, 2),
         "frequency": frequency,
         "sigma": sigma,
