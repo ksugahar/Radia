@@ -19,7 +19,15 @@ import sys
 
 def verify_vol(vol_path):
     """Read .vol + companion JSON, compute NGSolve values, return result dict."""
-    from ngsolve import Mesh, Integrate, CF, BND
+    # IMPORTANT: TaskManager must be in the top-of-function import block
+    # (with Mesh / Integrate / CF / BND).  A late `from ngsolve import
+    # TaskManager` further down -- e.g. inside the BBND try-block -- makes
+    # Python treat TaskManager as a local for the WHOLE function, so the
+    # earlier `with TaskManager():` on the materials loop raises
+    # UnboundLocalError ("cannot access local variable 'TaskManager'
+    # where it is not associated with a value").  Reported by keiko
+    # on 100号機 / radia 4.85.1, 2026-05-30.
+    from ngsolve import Mesh, Integrate, CF, BND, TaskManager
 
     json_path = vol_path + ".json"
     if not os.path.exists(json_path):
@@ -80,7 +88,6 @@ def verify_vol(vol_path):
     edges = []
     try:
         from ngsolve import BBND
-        from ngsolve import TaskManager
         try:
             bb_names = list(dict.fromkeys(mesh.GetBBoundaries()))
         except Exception:
