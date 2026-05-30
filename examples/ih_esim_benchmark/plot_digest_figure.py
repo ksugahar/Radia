@@ -295,7 +295,20 @@ def main():
     ax2.plot_surface(R * np.cos(np.radians(TH)), R * np.sin(np.radians(TH)), ZZ,
                      facecolors=cm.magma(nrm(Hg)), rstride=1, cstride=1,
                      linewidth=0, antialiased=False, shade=False)
-    ax2.set_box_aspect((2 * R, 2 * R, zs.max() - zs.min()), zoom=1.35)
+    # Overlay the 1-turn coil torus (R_maj=30 mm, R_min=3 mm centred on
+    # the workpiece mid-plane) so the reader sees where the field source is.
+    R_maj, R_min = 30.0, 3.0
+    Uc, Vc = np.meshgrid(np.linspace(0, 2 * np.pi, 80),
+                         np.linspace(0, 2 * np.pi, 24))
+    Xc = (R_maj + R_min * np.cos(Vc)) * np.cos(Uc)
+    Yc = (R_maj + R_min * np.cos(Vc)) * np.sin(Uc)
+    Zc = R_min * np.sin(Vc)
+    ax2.plot_surface(Xc, Yc, Zc, color="#B87333",  # copper
+                     rstride=1, cstride=1, linewidth=0, antialiased=False,
+                     shade=False, alpha=1.0)
+    # Box aspect must enclose the coil outer radius (R_maj + R_min = 33 mm).
+    ax2.set_box_aspect((2 * (R_maj + R_min), 2 * (R_maj + R_min),
+                        zs.max() - zs.min()), zoom=1.35)
     ax2.view_init(elev=18, azim=-60)
     ax2.grid(False)
     for axp in (ax2.xaxis, ax2.yaxis, ax2.zaxis):
