@@ -153,11 +153,28 @@ jobs:
           # `ImportError: generic_type: type "RadiaField" referenced
           # unknown base type "ngfem::CoefficientFunction"` (the v4.80.0
           # CI failure that motivated this gate).
+          #
+          # 2026-05-30: EXTENDED to main + PR pushes too.  Motivation:
+          # 2026-05-27 the ngsolve install was upgraded (bundled pybind11
+          # 3.0.2 -> 3.1.0a0).  3 main-push CI runs on 2026-05-30
+          # (e7bae1db / 0f8c3528 / a91e0a5b) failed at the `Run basic
+          # tests` step with 0 artifacts (junit XML never written), a
+          # symptom consistent with mixed-ABI .pyd files built from a
+          # ninja .obj cache predating the ngsolve upgrade.  138da784's
+          # CI happened to coincide with a clean rebuild and passed.
+          # User-confirmed hypothesis: "src changes are too large, CI
+          # can't keep up" -- the persistent runner's ninja cache lets
+          # ABI drift survive across pushes when only main-push
+          # incremental builds are used.  Forcing -Rebuild on every push
+          # eliminates the entire stale-.obj class of bugs.  Cost: ~10-15
+          # min extra per main push (full rebuild vs incremental); ~25
+          # min total Build step.  Acceptable trade-off for correctness.
           $isTag = $env:GITHUB_REF -like 'refs/tags/*'
-          $rebuildFlag = @()
+          $rebuildFlag = @('-Rebuild')
           if ($isTag) {
-              Write-Host "Tag push detected ($env:GITHUB_REF) -- adding -Rebuild for clean build"
-              $rebuildFlag = @('-Rebuild')
+              Write-Host "Tag push detected ($env:GITHUB_REF) -- forcing -Rebuild for clean build"
+          } else {
+              Write-Host "Non-tag push -- forcing -Rebuild to defeat ninja #deps 0 stale-.obj bug"
           }
           & "${{ github.workspace }}\Build.ps1" @rebuildFlag *>&1 | Tee-Object -FilePath $buildLog
           $rc = $LASTEXITCODE
@@ -244,7 +261,16 @@ jobs:
           # never enabled the flag.  v4.64.0 main push CI hit the same
           # test_B_accuracy_inside_iron flake (2026-05-20 02:34 JST)
           # so the flag is wired up here.
-          python -m pytest tests/ -v --tb=short --junitxml=test-results.xml `
+          # L0 (2026-05-30): -r aR prints per-test RERUN/FAIL summary
+          # so flaky tests are visible IN the log even when the run
+          # is green via reruns.  L1: Tee pytest stdout to a file so
+          # that a hard crash (no junit XML written, as happened on
+          # commits e7bae1db / 0f8c3528 / a91e0a5b on 2026-05-30 where
+          # the artifact upload step succeeded with 0 files) still
+          # leaves a parseable log for the "Annotate test failures"
+          # step below.
+          python -m pytest tests/ -v --tb=short -r aR `
+            --junitxml=test-results.xml `
             --reruns 2 --reruns-delay 1 `
             --ignore=tests/cubit `
             --ignore=tests/panels `
@@ -254,10 +280,18 @@ jobs:
             --ignore=tests/test_batch_evaluation.py `
             --ignore=tests/test_curlA_equals_B.py `
             --ignore=tests/test_mesh_import.py `
-            --ignore=tests/test_scalar_bie_sibc.py
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Basic tests failed"
-            exit $LASTEXITCODE
+            --ignore=tests/test_scalar_bie_sibc.py `
+            2>&1 | Tee-Object -FilePath pytest-basic-stdout.log
+          $rc = $LASTEXITCODE
+          Write-Host "pytest basic exit=$rc"
+          if ($rc -ne 0) {
+            Write-Host "::error::Basic tests failed (rc=$rc) -- see Annotate step for the test list"
+            # Record the exit code; the Annotate step below re-exits
+            # so that failures surface as ::error annotations BEFORE
+            # the job is marked failed (otherwise GitHub UI shows no
+            # failed-test names without an artifact download).
+            "$rc" | Out-File -Encoding ascii pytest-basic-exit.txt
+            exit $rc
           }
 
       # ----------------------------------------------------------------
@@ -290,16 +324,119 @@ jobs:
           Write-Host "Running motor panel golden tests..."
           # Ensure C:\temp exists for the test fixtures
           New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
+          # L0+L1 (2026-05-30): -r aR + Tee to stdout file, same
+          # pattern as "Run basic tests" above.  See note there.
           python -m pytest tests/panels/test_motor_transient_golden.py `
                             tests/panels/test_motor_lamination_golden.py `
                             tests/panels/test_panel_output_health.py `
                             tests/panels/test_combo_wheel_guard.py `
-            -v --tb=short --junitxml=panel-test-results.xml `
-            --reruns 1 --reruns-delay 1
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Motor panel tests failed"
-            exit $LASTEXITCODE
+            -v --tb=short -r aR `
+            --junitxml=panel-test-results.xml `
+            --reruns 1 --reruns-delay 1 `
+            2>&1 | Tee-Object -FilePath pytest-panel-stdout.log
+          $rc = $LASTEXITCODE
+          Write-Host "pytest panel exit=$rc"
+          if ($rc -ne 0) {
+            Write-Host "::error::Motor panel tests failed (rc=$rc) -- see Annotate step for the test list"
+            "$rc" | Out-File -Encoding ascii pytest-panel-exit.txt
+            exit $rc
           }
+
+      # ----------------------------------------------------------------
+      # L1 (2026-05-30): Surface failed / flaky tests as GitHub
+      # Actions annotations so they show inline in the workflow page
+      # WITHOUT requiring the user to download the test-results.xml
+      # artifact.  Parses both junit XMLs (if present) and the stdout
+      # logs (fallback if pytest crashed before writing the XML, which
+      # was the silent-fail mode on 2026-05-30 commits e7bae1db /
+      # 0f8c3528 / a91e0a5b -- the upload-artifact step succeeded with
+      # 0 files because no XML was ever written).
+      #
+      # Output:
+      #   ::error::tests/foo.py::test_bar -- <message>      (failed)
+      #   ::warning::FLAKY tests/foo.py::test_bar           (passed after rerun)
+      #   ::error::pytest crashed without writing junit XML -- see stdout log
+      # ----------------------------------------------------------------
+      - name: Annotate test failures and reruns
+        if: always()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          $found = $false
+          foreach ($pair in @(
+            @{ xml = 'test-results.xml';       log = 'pytest-basic-stdout.log';  label = 'basic' },
+            @{ xml = 'panel-test-results.xml'; log = 'pytest-panel-stdout.log';  label = 'panel' }
+          )) {
+            $xmlPath = $pair.xml
+            $logPath = $pair.log
+            $label   = $pair.label
+            if (Test-Path $xmlPath) {
+              $found = $true
+              Write-Host "=== Annotating from $xmlPath ($label) ==="
+              try {
+                $xml = [xml](Get-Content $xmlPath -Encoding utf8 -Raw)
+                $fails = 0; $errors = 0; $reruns = 0
+                foreach ($tc in $xml.SelectNodes('//testcase')) {
+                  $cn = $tc.classname; $nm = $tc.name
+                  $f = $tc.SelectSingleNode('failure')
+                  $e = $tc.SelectSingleNode('error')
+                  $r = $tc.SelectNodes('rerun')
+                  if ($f) {
+                    $fails++
+                    $msg = ($f.message -replace "`r?`n", ' ').Substring(0, [Math]::Min(200, $f.message.Length))
+                    Write-Host "::error::[$label FAIL] ${cn}::${nm} -- $msg"
+                  }
+                  if ($e) {
+                    $errors++
+                    $msg = ($e.message -replace "`r?`n", ' ').Substring(0, [Math]::Min(200, $e.message.Length))
+                    Write-Host "::error::[$label ERROR] ${cn}::${nm} -- $msg"
+                  }
+                  if ($r -and $r.Count -gt 0 -and -not $f -and -not $e) {
+                    $reruns++
+                    Write-Host "::warning::[$label FLAKY] ${cn}::${nm} -- passed after $($r.Count) rerun(s)"
+                  }
+                }
+                Write-Host "  $label summary: $fails fail, $errors error, $reruns flaky-but-recovered"
+              } catch {
+                Write-Host "::error::Failed to parse ${xmlPath}: $($_.Exception.Message)"
+              }
+            } elseif (Test-Path $logPath) {
+              # No junit XML -- pytest likely crashed.  Surface the
+              # tail of the stdout log so the failing test is at least
+              # in the workflow log (the LAB worker log is a fallback).
+              Write-Host "::error::[$label] pytest crashed without writing junit XML -- last 30 stdout lines:"
+              Get-Content $logPath -Tail 30 | ForEach-Object { Write-Host "  $_" }
+            }
+          }
+          if (-not $found) {
+            Write-Host "::warning::No junit XML found (test step may have been skipped)"
+          }
+
+      # ----------------------------------------------------------------
+      # L2 (2026-05-30): Archive junit + stdout to a per-SHA folder on
+      # the self-hosted runner.  This makes historical CI data live on
+      # LAB disk (not just GitHub artifact storage), so we can later
+      # `grep` C:\actions-runner\test-history\<sha>\ without hitting
+      # the 60-req/hour unauthenticated GitHub API rate limit.
+      # ----------------------------------------------------------------
+      - name: Archive junit on self-hosted runner
+        if: always() && runner.environment == 'self-hosted'
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        continue-on-error: true
+        run: |
+          $dst = "C:\actions-runner\test-history\${{ github.sha }}_${{ github.run_id }}_${{ github.run_attempt }}"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          foreach ($f in @(
+            'test-results.xml','panel-test-results.xml','mcp-test-results.xml',
+            'pytest-basic-stdout.log','pytest-panel-stdout.log'
+          )) {
+            if (Test-Path $f) {
+              Copy-Item $f -Destination $dst -Force
+              Write-Host "  archived $f"
+            }
+          }
+          Write-Host "Archived under: $dst"
 
       # ----------------------------------------------------------------
       # Upload test results for GitHub Actions summary
@@ -312,6 +449,8 @@ jobs:
           path: |
             test-results.xml
             panel-test-results.xml
+            pytest-basic-stdout.log
+            pytest-panel-stdout.log
           retention-days: 30
 
       # ----------------------------------------------------------------
