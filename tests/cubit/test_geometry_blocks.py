@@ -5,7 +5,7 @@ This module tests that export functions work correctly when blocks contain
 geometry references instead of direct mesh element references.
 
 Run with Cubit Python:
-    "C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" tests/test_geometry_blocks.py
+    "C:/Program Files/Coreform Cubit 2025.12/bin/python3/python.exe" tests/test_geometry_blocks.py
 """
 
 import sys

@@ -6,7 +6,7 @@ mesh elements from blocks that contain geometry (volume, surface, curve, vertex)
 instead of direct mesh element references.
 
 Run with Cubit Python:
-    "C:/Program Files/Coreform Cubit 2025.3/bin/python3/python.exe" tests/test_block_geometry_api.py
+    "C:/Program Files/Coreform Cubit 2025.12/bin/python3/python.exe" tests/test_block_geometry_api.py
 """
 
 import sys
