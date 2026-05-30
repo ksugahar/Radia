@@ -87,6 +87,11 @@ typedef struct st_cHACApK_leafmtxp_t {
   int *lbndl, *lbndt; // vector sizes of each block in row and column
   int *lbndlfs, *lbndtfs; // vector sizes of each MPI process in row and column
   int *lbl2t; // bit vector for recieving data on each MPI process
+  /* Phase 4 / 2026-05-30: keep the cluster-tree root alive after build so
+   * downstream block-tree views (cHACApK_build_block_tree) and H-LU
+   * (cHACApK_hlu_decomp) can access it. Owned by leafmtxp; freed in
+   * HACApK_free_leafmtxp. NULL if cluster tree was not preserved. */
+  struct st_cHACApK_cluster_t *st_clt_root;
 } st_cHACApK_leafmtxp_t;
 
 //*** struct st_cHACApK_lcontrol
