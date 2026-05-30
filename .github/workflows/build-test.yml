@@ -153,11 +153,28 @@ jobs:
           # `ImportError: generic_type: type "RadiaField" referenced
           # unknown base type "ngfem::CoefficientFunction"` (the v4.80.0
           # CI failure that motivated this gate).
+          #
+          # 2026-05-30: EXTENDED to main + PR pushes too.  Motivation:
+          # 2026-05-27 the ngsolve install was upgraded (bundled pybind11
+          # 3.0.2 -> 3.1.0a0).  3 main-push CI runs on 2026-05-30
+          # (e7bae1db / 0f8c3528 / a91e0a5b) failed at the `Run basic
+          # tests` step with 0 artifacts (junit XML never written), a
+          # symptom consistent with mixed-ABI .pyd files built from a
+          # ninja .obj cache predating the ngsolve upgrade.  138da784's
+          # CI happened to coincide with a clean rebuild and passed.
+          # User-confirmed hypothesis: "src changes are too large, CI
+          # can't keep up" -- the persistent runner's ninja cache lets
+          # ABI drift survive across pushes when only main-push
+          # incremental builds are used.  Forcing -Rebuild on every push
+          # eliminates the entire stale-.obj class of bugs.  Cost: ~10-15
+          # min extra per main push (full rebuild vs incremental); ~25
+          # min total Build step.  Acceptable trade-off for correctness.
           $isTag = $env:GITHUB_REF -like 'refs/tags/*'
-          $rebuildFlag = @()
+          $rebuildFlag = @('-Rebuild')
           if ($isTag) {
-              Write-Host "Tag push detected ($env:GITHUB_REF) -- adding -Rebuild for clean build"
-              $rebuildFlag = @('-Rebuild')
+              Write-Host "Tag push detected ($env:GITHUB_REF) -- forcing -Rebuild for clean build"
+          } else {
+              Write-Host "Non-tag push -- forcing -Rebuild to defeat ninja #deps 0 stale-.obj bug"
           }
           & "${{ github.workspace }}\Build.ps1" @rebuildFlag *>&1 | Tee-Object -FilePath $buildLog
           $rc = $LASTEXITCODE
