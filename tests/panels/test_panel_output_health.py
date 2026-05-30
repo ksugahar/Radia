@@ -132,3 +132,90 @@ def test_short_window_engages_scrollbar_no_compression(ih_window):
     assert inner.height() >= inner_hint, (
         f"inner widget compressed: height={inner.height()} < "
         f"sizeHint={inner_hint}")
+
+
+# ---- Result Output Persistence Policy (2026-05-30) -------------------
+# Every Run leaves a <base>_<suffix>.log next to the --output JSON,
+# overwritten on each Run, containing a verbatim copy of the Output
+# window.
+
+
+def test_persist_output_log_writes_log_next_to_json(ih_window, tmp_path):
+    """_persist_output_log writes the Output text to a .log file
+    derived from _last_output_json by swapping .json -> .log."""
+    json_path = str(tmp_path / "model_fem_kelvin.json")
+    ih_window._last_output_json = json_path
+    ih_window._output.clear()
+    ih_window._output.appendPlainText("=== Launching ===")
+    ih_window._output.appendPlainText("--- Result ---")
+    ih_window._output.appendPlainText("  DoF = 31021")
+    ih_window._persist_output_log()
+
+    log_path = str(tmp_path / "model_fem_kelvin.log")
+    assert os.path.isfile(log_path), (
+        f"persist_output_log did not write {log_path}")
+    body = open(log_path, encoding="utf-8").read()
+    assert "=== Launching ===" in body
+    assert "--- Result ---" in body
+    assert "DoF = 31021" in body
+
+
+def test_persist_output_log_overwrites_previous_run(ih_window, tmp_path):
+    """Per user-confirmed policy decision (2026-05-30): the .log is
+    OVERWRITTEN on each Run, not rotated or appended. Calling
+    _persist_output_log twice must leave only the latest content."""
+    json_path = str(tmp_path / "model_peec_bem.json")
+    ih_window._last_output_json = json_path
+    log_path = str(tmp_path / "model_peec_bem.log")
+
+    # First Run
+    ih_window._output.clear()
+    ih_window._output.appendPlainText("OLD_RUN_MARKER")
+    ih_window._persist_output_log()
+    assert "OLD_RUN_MARKER" in open(log_path, encoding="utf-8").read()
+
+    # Second Run
+    ih_window._output.clear()
+    ih_window._output.appendPlainText("NEW_RUN_MARKER")
+    ih_window._persist_output_log()
+
+    body = open(log_path, encoding="utf-8").read()
+    assert "NEW_RUN_MARKER" in body, "second Run did not write its content"
+    assert "OLD_RUN_MARKER" not in body, (
+        "overwrite invariant violated -- old Run content survived")
+
+
+def test_persist_output_log_silent_when_no_output_json(ih_window, tmp_path):
+    """No --output JSON means no log path to derive from. The helper
+    must be a no-op (no exception, no spurious file). This protects
+    panels that legitimately don't pass --output (e.g. some debug
+    paths)."""
+    ih_window._last_output_json = None
+    ih_window._output.clear()
+    ih_window._output.appendPlainText("anything")
+    # Must NOT raise.
+    ih_window._persist_output_log()
+    # And must not have written into tmp_path.
+    assert not list(tmp_path.iterdir()), (
+        f"persist_output_log wrote something despite no JSON path: "
+        f"{list(tmp_path.iterdir())}")
+
+
+def test_persist_output_log_captures_failed_run(ih_window, tmp_path):
+    """The error-return path of _on_finished also persists the log,
+    so a failed Run leaves an audit trail (the failure text is in the
+    Output box at that point)."""
+    json_path = str(tmp_path / "model_omega_reduced.json")
+    ih_window._last_output_json = json_path
+    ih_window._output.clear()
+    ih_window._output.appendPlainText("=== Launching ===")
+    ih_window._output.appendPlainText("Traceback (most recent call last):")
+    ih_window._output.appendPlainText("  RuntimeError: solver diverged")
+    ih_window._output.appendPlainText("*** Process exited with code 1")
+    ih_window._persist_output_log()
+
+    log_path = str(tmp_path / "model_omega_reduced.log")
+    body = open(log_path, encoding="utf-8").read()
+    assert "Traceback" in body
+    assert "solver diverged" in body
+    assert "Process exited with code 1" in body
