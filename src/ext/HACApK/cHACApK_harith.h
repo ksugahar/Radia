@@ -89,6 +89,24 @@ const cHACApK_hlu_stats_t *cHACApK_hlu_last_stats(void);
  * depth = 3: 64 leaves (~ realistic HACApK leaf count at moderate scale) */
 double cHACApK_harith_self_test(int depth, int n_per_block);
 
+/* Rk-aware self-test (Phase 3 partial validation, depth=1 only).
+ *
+ * Builds a 2x2 block-tree with DENSE diagonal leaves (random
+ * diagonally-dominant) and explicit-rank RK off-diagonal leaves
+ * (constructed as U_ij V_ij^T from random U_ij, V_ij of rank rk_rank).
+ *
+ * Exercises the Phase 3 partial paths:
+ *   - htrsm_lln(L=dense, X=rk),  htrsm_run(U=dense, X=rk)
+ *   - h_addmul(rk*rk -> dense) on the trailing update
+ *   - hmatvec_subtract on rk leaves
+ *
+ * Depth >= 2 with rk off-diagonals would also need rk(A)*rk(B) -> rk(C)
+ * in trailing updates, which requires ACA recompression (Phase 3.5).
+ *
+ * Returns max relative error vs LAPACKE_dgesv (should be ~ machine
+ * precision for a well-conditioned diag-dominant matrix). */
+double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
+
 #ifdef __cplusplus
 }
 #endif
