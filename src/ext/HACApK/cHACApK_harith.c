@@ -1927,6 +1927,7 @@ double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
      * to leaf (DOF units). */
     st_cHACApK_block_node_t *root = cHACApK_build_block_tree_nffc(
         lp, lp->st_clt_root, lp->st_clt_root, nffc);
+
     if (!root) {
         free(x_perm); free(y_perm); free(x_solved); free(x_back);
         return -3.0;
@@ -1960,6 +1961,910 @@ double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
 
     cHACApK_free_block_tree(root);
     free(x_perm); free(y_perm); free(x_solved); free(x_back);
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 4 debug: mixed-sibling synthetic test ---------------- *
+ *
+ * Mimics Radia's nx=3 leaf=10 tree shape (10 dense leaves, 3 internal,
+ * depth 3) using uniform leaf sizes so we can isolate the "mixed sibling"
+ * recursion bug from any non-uniform-size effects.
+ *
+ *   N = 4 * nb_small.  Root (2x2 internal) has children:
+ *     sons[0,0] = TL: internal 2x2 with 4 leaves of size nb_small
+ *     sons[1,0] = BL: LEAF of size 2*nb_small (full row range below TL,
+ *                     full col range of TL)
+ *     sons[0,1] = TR: LEAF of size 2*nb_small (transposed)
+ *     sons[1,1] = BR: internal 2x2 with 4 leaves of size nb_small
+ *
+ * Total: 4 + 1 + 1 + 4 = 10 leaves, 3 internal -- exact Radia match.
+ *
+ * If our recursive H-LU fails this test, the mixed-sibling recursion has
+ * a bug. If it passes, the real-Radia bug must come from non-uniform
+ * leaf sizes (HACApK's element-count splits like 13 -> 6 + 7). */
+double cHACApK_harith_self_test_mixed_sibling(int nb_small)
+{
+    if (nb_small <= 0 || nb_small > 64) return -1.0;
+    int N = 4 * nb_small;
+    int half = 2 * nb_small;  /* size of root-level sub-block */
+
+    unsigned long seed = 0xC0FFEEUL;
+    #define RND_MS() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                      (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    /* Allocate */
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref) return -2.0;
+
+    /* Random diag-dominant A. */
+    for (int j = 0; j < N; j++) {
+        double rs = 0.0;
+        for (int i = 0; i < N; i++) {
+            double v = RND_MS();
+            A_full[i + (size_t)j*(size_t)N] = v;
+            if (i != j) rs += (v < 0.0 ? -v : v);
+        }
+        A_full[j + (size_t)j*(size_t)N] = rs + (double)N;
+    }
+    for (int j = 0; j < N; j++) b[j] = RND_MS() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    /* Reference dgesv. */
+    int *ipiv_ref = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ipiv_ref, x_ref, N);
+    free(ipiv_ref);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        return -3.0;
+    }
+
+    /* Build clusters (synthetic: DOF units, nffc=1).
+     * Cluster ranges:
+     *   root: nstrt=1, nsize=N
+     *   clt_TL: nstrt=1, nsize=2*nb
+     *   clt_BR: nstrt=1+2*nb, nsize=2*nb
+     *   clt_small[i] for i=0..3: nstrt = 1 + i*nb, nsize=nb */
+    st_cHACApK_cluster_t *clt_root = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt_TL   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL));
+    st_cHACApK_cluster_t *clt_BR   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR));
+    st_cHACApK_cluster_t *clt_small[4];
+    for (int i = 0; i < 4; i++) {
+        clt_small[i] = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_small[i]));
+        clt_small[i]->nstrt = 1 + i * nb_small;
+        clt_small[i]->nsize = nb_small;
+    }
+    clt_root->nstrt = 1;       clt_root->nsize = N;
+    clt_TL->nstrt   = 1;       clt_TL->nsize   = half;
+    clt_BR->nstrt   = 1 + half;clt_BR->nsize   = half;
+
+    /* Track allocations for cleanup. */
+    st_cHACApK_block_node_t *all_bn[16]; int n_bn = 0;
+    st_cHACApK_leafmtx_t    *all_lf[16]; int n_lf = 0;
+
+    /* Helper macro for building a dense leaf node at (row_clt, col_clt). */
+    #define BUILD_LEAF(out, rclt, cclt)                                            \
+        do {                                                                       \
+            st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)); \
+            st_cHACApK_leafmtx_t    *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));    \
+            bn->row_cluster = (rclt); bn->col_cluster = (cclt);                    \
+            bn->leaf_mtx = lf; bn->leaf_kind = 2;                                  \
+            bn->dof_nrows = (rclt)->nsize; bn->dof_ncols = (cclt)->nsize;          \
+            bn->dof_row_start = (rclt)->nstrt - 1;                                 \
+            bn->dof_col_start = (cclt)->nstrt - 1;                                 \
+            lf->ltmtx = 2; lf->ndl = (rclt)->nsize; lf->ndt = (cclt)->nsize;       \
+            lf->nstrtl = (rclt)->nstrt; lf->nstrtt = (cclt)->nstrt;                \
+            lf->a1 = (double*)malloc(sizeof(double) * (size_t)lf->ndl * (size_t)lf->ndt); \
+            for (int jj = 0; jj < lf->ndt; jj++)                                   \
+                for (int ii = 0; ii < lf->ndl; ii++)                               \
+                    lf->a1[ii + (size_t)jj*(size_t)lf->ndl] =                      \
+                        A_full[((rclt)->nstrt - 1 + ii) +                          \
+                               (size_t)((cclt)->nstrt - 1 + jj)*(size_t)N];        \
+            all_lf[n_lf++] = lf; all_bn[n_bn++] = bn; (out) = bn;                  \
+        } while (0)
+
+    /* Build TL internal (2x2 with 4 small leaves). */
+    st_cHACApK_block_node_t *TL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TL));
+    TL->row_cluster = clt_TL; TL->col_cluster = clt_TL;
+    TL->nrsons = 2; TL->ncsons = 2;
+    TL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TL->sons));
+    TL->dof_nrows = half; TL->dof_ncols = half;
+    TL->dof_row_start = 0; TL->dof_col_start = 0;
+    BUILD_LEAF(TL->sons[0 + 0*2], clt_small[0], clt_small[0]);
+    BUILD_LEAF(TL->sons[1 + 0*2], clt_small[1], clt_small[0]);
+    BUILD_LEAF(TL->sons[0 + 1*2], clt_small[0], clt_small[1]);
+    BUILD_LEAF(TL->sons[1 + 1*2], clt_small[1], clt_small[1]);
+    all_bn[n_bn++] = TL;
+
+    /* Build BR internal (2x2 with 4 small leaves). */
+    st_cHACApK_block_node_t *BR = (st_cHACApK_block_node_t*)calloc(1, sizeof(*BR));
+    BR->row_cluster = clt_BR; BR->col_cluster = clt_BR;
+    BR->nrsons = 2; BR->ncsons = 2;
+    BR->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*BR->sons));
+    BR->dof_nrows = half; BR->dof_ncols = half;
+    BR->dof_row_start = half; BR->dof_col_start = half;
+    BUILD_LEAF(BR->sons[0 + 0*2], clt_small[2], clt_small[2]);
+    BUILD_LEAF(BR->sons[1 + 0*2], clt_small[3], clt_small[2]);
+    BUILD_LEAF(BR->sons[0 + 1*2], clt_small[2], clt_small[3]);
+    BUILD_LEAF(BR->sons[1 + 1*2], clt_small[3], clt_small[3]);
+    all_bn[n_bn++] = BR;
+
+    /* Build BL leaf and TR leaf (at root level). */
+    st_cHACApK_block_node_t *BL = NULL, *TR = NULL;
+    BUILD_LEAF(BL, clt_BR, clt_TL);  /* BL: rows = BR's range, cols = TL's range */
+    BUILD_LEAF(TR, clt_TL, clt_BR);  /* TR: rows = TL's range, cols = BR's range */
+
+    /* Build root. */
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root; root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
+    root->sons[0 + 0*2] = TL;
+    root->sons[1 + 0*2] = BL;
+    root->sons[0 + 1*2] = TR;
+    root->sons[1 + 1*2] = BR;
+    all_bn[n_bn++] = root;
+
+    /* Run H-LU. */
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    /* Max rel err. */
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    /* Cleanup. */
+    for (int i = 0; i < n_lf; i++) { free(all_lf[i]->a1); free(all_lf[i]); }
+    for (int i = 0; i < n_bn; i++) {
+        if (all_bn[i]->sons) free(all_bn[i]->sons);
+        free(all_bn[i]);
+    }
+    free(clt_root); free(clt_TL); free(clt_BR);
+    for (int i = 0; i < 4; i++) free(clt_small[i]);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+
+    #undef BUILD_LEAF
+    #undef RND_MS
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 4 debug: EXACT Radia structure mimic ---------- *
+ *
+ * Mimics the EXACT tree shape + sizes produced by Radia nx=3 leaf=10:
+ *   Root (162) INTERNAL 2x2
+ *   ├─ TL (108) INTERNAL 2x2
+ *   │  ├─ TL.TL (72) INTERNAL 2x2 with 4 sub-leaves (48,48), (24,48), (48,24), (24,24)
+ *   │  ├─ TL.BL leaf (36 x 72)
+ *   │  ├─ TL.TR leaf (72 x 36)
+ *   │  └─ TL.BR leaf (36 x 36)
+ *   ├─ BL leaf (54 x 108)
+ *   ├─ TR leaf (108 x 54)
+ *   └─ BR leaf (54 x 54)
+ *
+ * Total: 10 leaves, 3 internal, depth 3. SAME shape as Radia's tree
+ * with the SAME size asymmetry. */
+double cHACApK_harith_self_test_radia_exact(void)
+{
+    return cHACApK_harith_self_test_radia_exact_diag(2.0);
+}
+
+double cHACApK_harith_self_test_radia_exact_diag(double diag_boost)
+{
+    /* Match Radia exactly. diag_boost = additional diagonal magnitude over
+     * row sum. Default 2.0 = mildly diag-dominant (similar to MSC).
+     * Real Radia MSC has even weaker dominance. */
+    int s_root_TL = 108, s_root_BR = 54;
+    int s_TL_TL = 72, s_TL_BR = 36;
+    int s_TLTL_TL = 48, s_TLTL_BR = 24;
+    int N = s_root_TL + s_root_BR;  /* = 162 */
+
+    unsigned long seed = 0xABCDEF42UL;
+    #define RND_RX() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                      (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref) return -2.0;
+
+    for (int j = 0; j < N; j++) {
+        double rs = 0.0;
+        for (int i = 0; i < N; i++) {
+            double v = RND_RX();
+            A_full[i + (size_t)j*(size_t)N] = v;
+            if (i != j) rs += (v < 0.0 ? -v : v);
+        }
+        A_full[j + (size_t)j*(size_t)N] = rs + diag_boost;
+    }
+    for (int j = 0; j < N; j++) b[j] = RND_RX() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    int *ipiv_ref = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ipiv_ref, x_ref, N);
+    free(ipiv_ref);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        return -3.0;
+    }
+
+    /* Clusters. */
+    st_cHACApK_cluster_t *clt_root     = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt_TL       = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL));
+    st_cHACApK_cluster_t *clt_BR       = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR));
+    st_cHACApK_cluster_t *clt_TL_TL    = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL_TL));
+    st_cHACApK_cluster_t *clt_TL_BR    = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL_BR));
+    st_cHACApK_cluster_t *clt_TLTL_TL  = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TLTL_TL));
+    st_cHACApK_cluster_t *clt_TLTL_BR  = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TLTL_BR));
+    clt_root->nstrt    = 1;                 clt_root->nsize    = N;
+    clt_TL->nstrt      = 1;                 clt_TL->nsize      = s_root_TL;
+    clt_BR->nstrt      = 1 + s_root_TL;     clt_BR->nsize      = s_root_BR;
+    clt_TL_TL->nstrt   = 1;                 clt_TL_TL->nsize   = s_TL_TL;
+    clt_TL_BR->nstrt   = 1 + s_TL_TL;       clt_TL_BR->nsize   = s_TL_BR;
+    clt_TLTL_TL->nstrt = 1;                 clt_TLTL_TL->nsize = s_TLTL_TL;
+    clt_TLTL_BR->nstrt = 1 + s_TLTL_TL;     clt_TLTL_BR->nsize = s_TLTL_BR;
+
+    st_cHACApK_block_node_t *all_bn[24]; int n_bn = 0;
+    st_cHACApK_leafmtx_t    *all_lf[16]; int n_lf = 0;
+
+    #define BUILD_LEAF_RX(out, rclt, cclt)                                         \
+        do {                                                                       \
+            st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)); \
+            st_cHACApK_leafmtx_t    *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));    \
+            bn->row_cluster = (rclt); bn->col_cluster = (cclt);                    \
+            bn->leaf_mtx = lf; bn->leaf_kind = 2;                                  \
+            bn->dof_nrows = (rclt)->nsize; bn->dof_ncols = (cclt)->nsize;          \
+            bn->dof_row_start = (rclt)->nstrt - 1;                                 \
+            bn->dof_col_start = (cclt)->nstrt - 1;                                 \
+            lf->ltmtx = 2; lf->ndl = (rclt)->nsize; lf->ndt = (cclt)->nsize;       \
+            lf->nstrtl = (rclt)->nstrt; lf->nstrtt = (cclt)->nstrt;                \
+            lf->a1 = (double*)malloc(sizeof(double) * (size_t)lf->ndl * (size_t)lf->ndt); \
+            for (int jj = 0; jj < lf->ndt; jj++)                                   \
+                for (int ii = 0; ii < lf->ndl; ii++)                               \
+                    lf->a1[ii + (size_t)jj*(size_t)lf->ndl] =                      \
+                        A_full[((rclt)->nstrt - 1 + ii) +                          \
+                               (size_t)((cclt)->nstrt - 1 + jj)*(size_t)N];        \
+            all_lf[n_lf++] = lf; all_bn[n_bn++] = bn; (out) = bn;                  \
+        } while (0)
+
+    /* TL.TL (depth 2 internal, 72x72 split into 48 + 24). */
+    st_cHACApK_block_node_t *TLTL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TLTL));
+    TLTL->row_cluster = clt_TL_TL; TLTL->col_cluster = clt_TL_TL;
+    TLTL->nrsons = 2; TLTL->ncsons = 2;
+    TLTL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TLTL->sons));
+    TLTL->dof_nrows = s_TL_TL; TLTL->dof_ncols = s_TL_TL;
+    TLTL->dof_row_start = 0; TLTL->dof_col_start = 0;
+    BUILD_LEAF_RX(TLTL->sons[0 + 0*2], clt_TLTL_TL, clt_TLTL_TL);  /* 48x48 */
+    BUILD_LEAF_RX(TLTL->sons[1 + 0*2], clt_TLTL_BR, clt_TLTL_TL);  /* 24x48 */
+    BUILD_LEAF_RX(TLTL->sons[0 + 1*2], clt_TLTL_TL, clt_TLTL_BR);  /* 48x24 */
+    BUILD_LEAF_RX(TLTL->sons[1 + 1*2], clt_TLTL_BR, clt_TLTL_BR);  /* 24x24 */
+    all_bn[n_bn++] = TLTL;
+
+    /* TL (depth 1 internal, 108x108 split into 72 + 36). */
+    st_cHACApK_block_node_t *TL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TL));
+    TL->row_cluster = clt_TL; TL->col_cluster = clt_TL;
+    TL->nrsons = 2; TL->ncsons = 2;
+    TL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TL->sons));
+    TL->dof_nrows = s_root_TL; TL->dof_ncols = s_root_TL;
+    TL->dof_row_start = 0; TL->dof_col_start = 0;
+    TL->sons[0 + 0*2] = TLTL;
+    BUILD_LEAF_RX(TL->sons[1 + 0*2], clt_TL_BR, clt_TL_TL);  /* 36x72 */
+    BUILD_LEAF_RX(TL->sons[0 + 1*2], clt_TL_TL, clt_TL_BR);  /* 72x36 */
+    BUILD_LEAF_RX(TL->sons[1 + 1*2], clt_TL_BR, clt_TL_BR);  /* 36x36 */
+    all_bn[n_bn++] = TL;
+
+    /* Root-level leaves. */
+    st_cHACApK_block_node_t *TR = NULL, *BL = NULL, *BR = NULL;
+    BUILD_LEAF_RX(BL, clt_BR, clt_TL);  /* 54x108 */
+    BUILD_LEAF_RX(TR, clt_TL, clt_BR);  /* 108x54 */
+    BUILD_LEAF_RX(BR, clt_BR, clt_BR);  /* 54x54 */
+
+    /* Root. */
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root; root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
+    root->sons[0 + 0*2] = TL;
+    root->sons[1 + 0*2] = BL;
+    root->sons[0 + 1*2] = TR;
+    root->sons[1 + 1*2] = BR;
+    all_bn[n_bn++] = root;
+
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    for (int i = 0; i < n_lf; i++) { free(all_lf[i]->a1); free(all_lf[i]); }
+    for (int i = 0; i < n_bn; i++) {
+        if (all_bn[i]->sons) free(all_bn[i]->sons);
+        free(all_bn[i]);
+    }
+    free(clt_root); free(clt_TL); free(clt_BR);
+    free(clt_TL_TL); free(clt_TL_BR); free(clt_TLTL_TL); free(clt_TLTL_BR);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+
+    #undef BUILD_LEAF_RX
+    #undef RND_RX
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 4 debug: depth-3 asymmetric test ------------------- *
+ *
+ * Mimics Radia's exact tree shape: 10 leaves, 3 internal, depth 3.
+ * Root: 2x2. TL: 2x2 internal (deep). TL.TL: 2x2 internal (deepest, 4 leaves).
+ * TL.TR/TL.BL/TL.BR: leaves at depth 2. TR/BL/BR at root level: leaves at depth 1.
+ *
+ * N = 4 * nb_tiny (each TL.TL sub-leaf is nb_tiny x nb_tiny). */
+double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny)
+{
+    if (nb_tiny <= 0 || nb_tiny > 32) return -1.0;
+    int N = 4 * nb_tiny;       /* total */
+    int q = nb_tiny;           /* deepest sub-leaf */
+    int half = 2 * q;          /* TL.TL sub-block (=internal at depth 2) */
+    /* TL has size 2*half = 4*q = N/?... wait, TL size = ? Let me think.
+     * If TL.TL = half x half (= 2q x 2q), and TL has 2x2 children where TL.TL
+     * is the (0,0) sub-block, the others (TL.TR, TL.BL, TL.BR) must have
+     * matching sizes for TL to be valid: TL would be (2*half) x (2*half) = 4q x 4q.
+     * Hmm, but then root TL is 4q x 4q, root BR is also some size, and N = TL.size + BR.size = 8q.
+     *
+     * Simpler choice: TL = 2*half, with 4 children all of size half (2q each).
+     * - TL.TL: internal 2x2 (4 sub-leaves of size q each) -- so TL.TL = 2q x 2q.
+     * - TL.TR/TL.BL/TL.BR: leaves of size 2q x 2q.
+     * Then TL = 4q x 4q.
+     *
+     * Root: 4 children of size half_root each. If TL = 4q, root = 8q?
+     * Or simpler: root has TL=4q x 4q, BR=4q x 4q, TR=4q x 4q, BL=4q x 4q.
+     * Then N = 8q.
+     */
+    int qq = q;                 /* deepest sub-leaf (renamed for clarity) */
+    int s2 = 2 * qq;            /* TL.TR/TL.BL/TL.BR leaf size (= half) */
+    int s1 = 2 * s2;            /* TL itself = 2*s2 = 4*qq; root child size */
+    /* root = 2*s1 = 8*qq. So N must be 8*qq. */
+    N = 8 * qq;
+
+    unsigned long seed = 0xBEEFCAFEUL;
+    #define RND_D3() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                      (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref) return -2.0;
+
+    for (int j = 0; j < N; j++) {
+        double rs = 0.0;
+        for (int i = 0; i < N; i++) {
+            double v = RND_D3();
+            A_full[i + (size_t)j*(size_t)N] = v;
+            if (i != j) rs += (v < 0.0 ? -v : v);
+        }
+        A_full[j + (size_t)j*(size_t)N] = rs + (double)N;
+    }
+    for (int j = 0; j < N; j++) b[j] = RND_D3() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    int *ipiv_ref = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ipiv_ref, x_ref, N);
+    free(ipiv_ref);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        return -3.0;
+    }
+
+    /* Cluster tree:
+     *   root: nstrt=1, nsize=N (=8q)
+     *   clt_root_TL: 1..s1 (TL = 4q)
+     *   clt_root_BR: 1+s1..N (BR = 4q)
+     *   Inside TL:
+     *     clt_TL_TL: 1..s2 (= 2q) -- this is INTERNAL, splits further
+     *     clt_TL_TR: 1+s2..s1
+     *     clt_TL_BL: same as TL.TR
+     *     clt_TL_BR: same as TL.TR
+     *   Inside TL.TL: 4 sub-clusters of size q each.
+     */
+    st_cHACApK_cluster_t *clt_root   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt_TL     = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL));   /* root sons[0,0] */
+    st_cHACApK_cluster_t *clt_BR     = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR));   /* root sons[1,1] */
+    st_cHACApK_cluster_t *clt_TLTL   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TLTL)); /* TL sons[0,0], internal */
+    st_cHACApK_cluster_t *clt_TLBR   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TLBR));
+    /* TL.TL sub-clusters (4 small): nstrt = 1, 1+q, 1+2q, ... */
+    st_cHACApK_cluster_t *clt_q[4];
+    for (int i = 0; i < 4; i++) {
+        clt_q[i] = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_q[i]));
+        clt_q[i]->nstrt = 1 + i * qq;
+        clt_q[i]->nsize = qq;
+    }
+    clt_root->nstrt = 1;        clt_root->nsize = N;
+    clt_TL->nstrt   = 1;        clt_TL->nsize   = s1;
+    clt_BR->nstrt   = 1 + s1;   clt_BR->nsize   = s1;
+    clt_TLTL->nstrt = 1;        clt_TLTL->nsize = s2;
+    clt_TLBR->nstrt = 1 + s2;   clt_TLBR->nsize = s2;
+
+    st_cHACApK_block_node_t *all_bn[24]; int n_bn = 0;
+    st_cHACApK_leafmtx_t    *all_lf[16]; int n_lf = 0;
+
+    #define BUILD_LEAF_D3(out, rclt, cclt)                                         \
+        do {                                                                       \
+            st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)); \
+            st_cHACApK_leafmtx_t    *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));    \
+            bn->row_cluster = (rclt); bn->col_cluster = (cclt);                    \
+            bn->leaf_mtx = lf; bn->leaf_kind = 2;                                  \
+            bn->dof_nrows = (rclt)->nsize; bn->dof_ncols = (cclt)->nsize;          \
+            bn->dof_row_start = (rclt)->nstrt - 1;                                 \
+            bn->dof_col_start = (cclt)->nstrt - 1;                                 \
+            lf->ltmtx = 2; lf->ndl = (rclt)->nsize; lf->ndt = (cclt)->nsize;       \
+            lf->nstrtl = (rclt)->nstrt; lf->nstrtt = (cclt)->nstrt;                \
+            lf->a1 = (double*)malloc(sizeof(double) * (size_t)lf->ndl * (size_t)lf->ndt); \
+            for (int jj = 0; jj < lf->ndt; jj++)                                   \
+                for (int ii = 0; ii < lf->ndl; ii++)                               \
+                    lf->a1[ii + (size_t)jj*(size_t)lf->ndl] =                      \
+                        A_full[((rclt)->nstrt - 1 + ii) +                          \
+                               (size_t)((cclt)->nstrt - 1 + jj)*(size_t)N];        \
+            all_lf[n_lf++] = lf; all_bn[n_bn++] = bn; (out) = bn;                  \
+        } while (0)
+
+    /* TL.TL (depth 2 internal): 4 sub-leaves of size q. */
+    st_cHACApK_block_node_t *TLTL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TLTL));
+    TLTL->row_cluster = clt_TLTL; TLTL->col_cluster = clt_TLTL;
+    TLTL->nrsons = 2; TLTL->ncsons = 2;
+    TLTL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TLTL->sons));
+    TLTL->dof_nrows = s2; TLTL->dof_ncols = s2;
+    TLTL->dof_row_start = 0; TLTL->dof_col_start = 0;
+    BUILD_LEAF_D3(TLTL->sons[0 + 0*2], clt_q[0], clt_q[0]);
+    BUILD_LEAF_D3(TLTL->sons[1 + 0*2], clt_q[1], clt_q[0]);
+    BUILD_LEAF_D3(TLTL->sons[0 + 1*2], clt_q[0], clt_q[1]);
+    BUILD_LEAF_D3(TLTL->sons[1 + 1*2], clt_q[1], clt_q[1]);
+    all_bn[n_bn++] = TLTL;
+
+    /* TL (depth 1 internal): TL.TL = TLTL, others are leaves at depth 2. */
+    st_cHACApK_block_node_t *TL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TL));
+    TL->row_cluster = clt_TL; TL->col_cluster = clt_TL;
+    TL->nrsons = 2; TL->ncsons = 2;
+    TL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TL->sons));
+    TL->dof_nrows = s1; TL->dof_ncols = s1;
+    TL->dof_row_start = 0; TL->dof_col_start = 0;
+    TL->sons[0 + 0*2] = TLTL;
+    BUILD_LEAF_D3(TL->sons[1 + 0*2], clt_TLBR, clt_TLTL);  /* TL.BL: row range = TLBR, col range = TLTL */
+    BUILD_LEAF_D3(TL->sons[0 + 1*2], clt_TLTL, clt_TLBR);  /* TL.TR */
+    BUILD_LEAF_D3(TL->sons[1 + 1*2], clt_TLBR, clt_TLBR);  /* TL.BR */
+    all_bn[n_bn++] = TL;
+
+    /* TR / BL / BR (all leaves at root level). */
+    st_cHACApK_block_node_t *TR = NULL, *BL = NULL, *BR = NULL;
+    BUILD_LEAF_D3(BL, clt_BR, clt_TL);
+    BUILD_LEAF_D3(TR, clt_TL, clt_BR);
+    BUILD_LEAF_D3(BR, clt_BR, clt_BR);
+
+    /* Root */
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root; root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
+    root->sons[0 + 0*2] = TL;
+    root->sons[1 + 0*2] = BL;
+    root->sons[0 + 1*2] = TR;
+    root->sons[1 + 1*2] = BR;
+    all_bn[n_bn++] = root;
+
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    for (int i = 0; i < n_lf; i++) { free(all_lf[i]->a1); free(all_lf[i]); }
+    for (int i = 0; i < n_bn; i++) {
+        if (all_bn[i]->sons) free(all_bn[i]->sons);
+        free(all_bn[i]);
+    }
+    free(clt_root); free(clt_TL); free(clt_BR); free(clt_TLTL); free(clt_TLBR);
+    for (int i = 0; i < 4; i++) free(clt_q[i]);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+
+    #undef BUILD_LEAF_D3
+    #undef RND_D3
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 4 debug: conversion-path mixed-sibling test --------- *
+ *
+ * Mimics the EXACT data path used by cHACApK_hlu_run_on_hacapk on real
+ * Radia trees: build dense leaves in HACApK row-major format, then call
+ * the same transpose path used by cHACApK_convert_leafmtxp_to_internal,
+ * then run H-LU.
+ *
+ * Walks the block-tree directly (not a HACApK leafmtxp) since the
+ * synthetic test doesn't have one. */
+static void transpose_dense_leaves_recursive(st_cHACApK_block_node_t *node)
+{
+    if (!node) return;
+    if (leaf_is_dense(node)) {
+        int ndl = node->leaf_mtx->ndl;
+        int ndt = node->leaf_mtx->ndt;
+        double *new_a1 = (double*)malloc(sizeof(double) * (size_t)ndl * (size_t)ndt);
+        if (!new_a1) return;
+        /* HACApK: a1[col + row*ndt] = M[row, col]  ->
+         * internal: new_a1[row + col*ndl] = M[row, col] */
+        for (int row = 0; row < ndl; row++)
+            for (int col = 0; col < ndt; col++)
+                new_a1[row + (size_t)col * (size_t)ndl] =
+                    node->leaf_mtx->a1[col + (size_t)row * (size_t)ndt];
+        free(node->leaf_mtx->a1);
+        node->leaf_mtx->a1 = new_a1;
+        return;
+    }
+    if (leaf_is_rk(node)) {
+        /* rk: swap a1 (V) <-> a2 (U). */
+        double *tmp = node->leaf_mtx->a1;
+        node->leaf_mtx->a1 = node->leaf_mtx->a2;
+        node->leaf_mtx->a2 = tmp;
+        return;
+    }
+    int nsons = node->nrsons * node->ncsons;
+    for (int i = 0; i < nsons; i++) transpose_dense_leaves_recursive(node->sons[i]);
+}
+
+double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small)
+{
+    if (nb_small <= 0 || nb_small > 64) return -1.0;
+    int N = 4 * nb_small;
+    int half = 2 * nb_small;
+
+    unsigned long seed = 0xCAFEBABEUL;
+    #define RND_VC() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                      (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref) return -2.0;
+
+    for (int j = 0; j < N; j++) {
+        double rs = 0.0;
+        for (int i = 0; i < N; i++) {
+            double v = RND_VC();
+            A_full[i + (size_t)j*(size_t)N] = v;
+            if (i != j) rs += (v < 0.0 ? -v : v);
+        }
+        A_full[j + (size_t)j*(size_t)N] = rs + (double)N;
+    }
+    for (int j = 0; j < N; j++) b[j] = RND_VC() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    int *ipiv_ref = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ipiv_ref, x_ref, N);
+    free(ipiv_ref);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        return -3.0;
+    }
+
+    /* Build clusters. */
+    st_cHACApK_cluster_t *clt_root = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt_TL   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL));
+    st_cHACApK_cluster_t *clt_BR   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR));
+    st_cHACApK_cluster_t *clt_small[4];
+    for (int i = 0; i < 4; i++) {
+        clt_small[i] = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_small[i]));
+        clt_small[i]->nstrt = 1 + i * nb_small;
+        clt_small[i]->nsize = nb_small;
+    }
+    clt_root->nstrt = 1;       clt_root->nsize = N;
+    clt_TL->nstrt   = 1;       clt_TL->nsize   = half;
+    clt_BR->nstrt   = 1 + half; clt_BR->nsize   = half;
+
+    st_cHACApK_block_node_t *all_bn[16]; int n_bn = 0;
+    st_cHACApK_leafmtx_t    *all_lf[16]; int n_lf = 0;
+
+    /* Build leaf in HACApK row-major: a1[col + row*ndt] = M[row, col]. */
+    #define BUILD_LEAF_HACAPK(out, rclt, cclt)                                     \
+        do {                                                                       \
+            st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)); \
+            st_cHACApK_leafmtx_t    *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));    \
+            bn->row_cluster = (rclt); bn->col_cluster = (cclt);                    \
+            bn->leaf_mtx = lf; bn->leaf_kind = 2;                                  \
+            bn->dof_nrows = (rclt)->nsize; bn->dof_ncols = (cclt)->nsize;          \
+            bn->dof_row_start = (rclt)->nstrt - 1;                                 \
+            bn->dof_col_start = (cclt)->nstrt - 1;                                 \
+            lf->ltmtx = 2; lf->ndl = (rclt)->nsize; lf->ndt = (cclt)->nsize;       \
+            lf->nstrtl = (rclt)->nstrt; lf->nstrtt = (cclt)->nstrt;                \
+            lf->a1 = (double*)malloc(sizeof(double) * (size_t)lf->ndl * (size_t)lf->ndt); \
+            for (int rr = 0; rr < lf->ndl; rr++)                                   \
+                for (int cc = 0; cc < lf->ndt; cc++)                               \
+                    lf->a1[cc + (size_t)rr*(size_t)lf->ndt] =                      \
+                        A_full[((rclt)->nstrt - 1 + rr) +                          \
+                               (size_t)((cclt)->nstrt - 1 + cc)*(size_t)N];        \
+            all_lf[n_lf++] = lf; all_bn[n_bn++] = bn; (out) = bn;                  \
+        } while (0)
+
+    st_cHACApK_block_node_t *TL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TL));
+    TL->row_cluster = clt_TL; TL->col_cluster = clt_TL;
+    TL->nrsons = 2; TL->ncsons = 2;
+    TL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TL->sons));
+    TL->dof_nrows = half; TL->dof_ncols = half;
+    TL->dof_row_start = 0; TL->dof_col_start = 0;
+    BUILD_LEAF_HACAPK(TL->sons[0 + 0*2], clt_small[0], clt_small[0]);
+    BUILD_LEAF_HACAPK(TL->sons[1 + 0*2], clt_small[1], clt_small[0]);
+    BUILD_LEAF_HACAPK(TL->sons[0 + 1*2], clt_small[0], clt_small[1]);
+    BUILD_LEAF_HACAPK(TL->sons[1 + 1*2], clt_small[1], clt_small[1]);
+    all_bn[n_bn++] = TL;
+
+    st_cHACApK_block_node_t *BR = (st_cHACApK_block_node_t*)calloc(1, sizeof(*BR));
+    BR->row_cluster = clt_BR; BR->col_cluster = clt_BR;
+    BR->nrsons = 2; BR->ncsons = 2;
+    BR->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*BR->sons));
+    BR->dof_nrows = half; BR->dof_ncols = half;
+    BR->dof_row_start = half; BR->dof_col_start = half;
+    BUILD_LEAF_HACAPK(BR->sons[0 + 0*2], clt_small[2], clt_small[2]);
+    BUILD_LEAF_HACAPK(BR->sons[1 + 0*2], clt_small[3], clt_small[2]);
+    BUILD_LEAF_HACAPK(BR->sons[0 + 1*2], clt_small[2], clt_small[3]);
+    BUILD_LEAF_HACAPK(BR->sons[1 + 1*2], clt_small[3], clt_small[3]);
+    all_bn[n_bn++] = BR;
+
+    st_cHACApK_block_node_t *BL = NULL, *TR = NULL;
+    BUILD_LEAF_HACAPK(BL, clt_BR, clt_TL);
+    BUILD_LEAF_HACAPK(TR, clt_TL, clt_BR);
+
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root; root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
+    root->sons[0 + 0*2] = TL;
+    root->sons[1 + 0*2] = BL;
+    root->sons[0 + 1*2] = TR;
+    root->sons[1 + 1*2] = BR;
+    all_bn[n_bn++] = root;
+
+    /* HACApK->internal: walk tree, transpose each dense leaf. */
+    transpose_dense_leaves_recursive(root);
+
+    /* Run H-LU. */
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    for (int i = 0; i < n_lf; i++) { free(all_lf[i]->a1); free(all_lf[i]); }
+    for (int i = 0; i < n_bn; i++) {
+        if (all_bn[i]->sons) free(all_bn[i]->sons);
+        free(all_bn[i]);
+    }
+    free(clt_root); free(clt_TL); free(clt_BR);
+    for (int i = 0; i < 4; i++) free(clt_small[i]);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+
+    #undef BUILD_LEAF_HACAPK
+    #undef RND_VC
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 4 debug: non-uniform mixed-sibling test ------------- *
+ *
+ * Same shape as mixed_sibling but with asymmetric cluster splits.
+ * Reproduces HACApK's element-count split pattern (e.g., 13 -> 6+7). */
+double cHACApK_harith_self_test_mixed_sibling_nonuniform(
+    int n1, int n2, int m1, int m3)
+{
+    if (n1 <= 0 || n2 <= 0 || m1 <= 0 || m3 <= 0) return -1.0;
+    if (m1 >= n1 || m3 >= n2) return -1.0;
+    int N = n1 + n2;
+
+    unsigned long seed = 0xDEADBEEFUL;
+    #define RND_NU() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                      (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref) return -2.0;
+
+    for (int j = 0; j < N; j++) {
+        double rs = 0.0;
+        for (int i = 0; i < N; i++) {
+            double v = RND_NU();
+            A_full[i + (size_t)j*(size_t)N] = v;
+            if (i != j) rs += (v < 0.0 ? -v : v);
+        }
+        A_full[j + (size_t)j*(size_t)N] = rs + (double)N;
+    }
+    for (int j = 0; j < N; j++) b[j] = RND_NU() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    int *ipiv_ref = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ipiv_ref, x_ref, N);
+    free(ipiv_ref);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        return -3.0;
+    }
+
+    /* Build clusters. Each sub-cluster has different sizes. */
+    st_cHACApK_cluster_t *clt_root = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt_TL   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL));
+    st_cHACApK_cluster_t *clt_BR   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR));
+    st_cHACApK_cluster_t *clt_TL_0 = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL_0));
+    st_cHACApK_cluster_t *clt_TL_1 = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_TL_1));
+    st_cHACApK_cluster_t *clt_BR_0 = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR_0));
+    st_cHACApK_cluster_t *clt_BR_1 = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_BR_1));
+
+    clt_root->nstrt = 1;          clt_root->nsize = N;
+    clt_TL->nstrt   = 1;          clt_TL->nsize   = n1;
+    clt_BR->nstrt   = 1 + n1;     clt_BR->nsize   = n2;
+    clt_TL_0->nstrt = 1;          clt_TL_0->nsize = m1;
+    clt_TL_1->nstrt = 1 + m1;     clt_TL_1->nsize = n1 - m1;
+    clt_BR_0->nstrt = 1 + n1;     clt_BR_0->nsize = m3;
+    clt_BR_1->nstrt = 1 + n1 + m3; clt_BR_1->nsize = n2 - m3;
+
+    st_cHACApK_block_node_t *all_bn[16]; int n_bn = 0;
+    st_cHACApK_leafmtx_t    *all_lf[16]; int n_lf = 0;
+
+    #define BUILD_LEAF_NU(out, rclt, cclt)                                         \
+        do {                                                                       \
+            st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn)); \
+            st_cHACApK_leafmtx_t    *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));    \
+            bn->row_cluster = (rclt); bn->col_cluster = (cclt);                    \
+            bn->leaf_mtx = lf; bn->leaf_kind = 2;                                  \
+            bn->dof_nrows = (rclt)->nsize; bn->dof_ncols = (cclt)->nsize;          \
+            bn->dof_row_start = (rclt)->nstrt - 1;                                 \
+            bn->dof_col_start = (cclt)->nstrt - 1;                                 \
+            lf->ltmtx = 2; lf->ndl = (rclt)->nsize; lf->ndt = (cclt)->nsize;       \
+            lf->nstrtl = (rclt)->nstrt; lf->nstrtt = (cclt)->nstrt;                \
+            lf->a1 = (double*)malloc(sizeof(double) * (size_t)lf->ndl * (size_t)lf->ndt); \
+            for (int jj = 0; jj < lf->ndt; jj++)                                   \
+                for (int ii = 0; ii < lf->ndl; ii++)                               \
+                    lf->a1[ii + (size_t)jj*(size_t)lf->ndl] =                      \
+                        A_full[((rclt)->nstrt - 1 + ii) +                          \
+                               (size_t)((cclt)->nstrt - 1 + jj)*(size_t)N];        \
+            all_lf[n_lf++] = lf; all_bn[n_bn++] = bn; (out) = bn;                  \
+        } while (0)
+
+    /* TL internal */
+    st_cHACApK_block_node_t *TL = (st_cHACApK_block_node_t*)calloc(1, sizeof(*TL));
+    TL->row_cluster = clt_TL; TL->col_cluster = clt_TL;
+    TL->nrsons = 2; TL->ncsons = 2;
+    TL->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*TL->sons));
+    TL->dof_nrows = n1; TL->dof_ncols = n1;
+    TL->dof_row_start = 0; TL->dof_col_start = 0;
+    BUILD_LEAF_NU(TL->sons[0 + 0*2], clt_TL_0, clt_TL_0);
+    BUILD_LEAF_NU(TL->sons[1 + 0*2], clt_TL_1, clt_TL_0);
+    BUILD_LEAF_NU(TL->sons[0 + 1*2], clt_TL_0, clt_TL_1);
+    BUILD_LEAF_NU(TL->sons[1 + 1*2], clt_TL_1, clt_TL_1);
+    all_bn[n_bn++] = TL;
+
+    /* BR internal */
+    st_cHACApK_block_node_t *BR = (st_cHACApK_block_node_t*)calloc(1, sizeof(*BR));
+    BR->row_cluster = clt_BR; BR->col_cluster = clt_BR;
+    BR->nrsons = 2; BR->ncsons = 2;
+    BR->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*BR->sons));
+    BR->dof_nrows = n2; BR->dof_ncols = n2;
+    BR->dof_row_start = n1; BR->dof_col_start = n1;
+    BUILD_LEAF_NU(BR->sons[0 + 0*2], clt_BR_0, clt_BR_0);
+    BUILD_LEAF_NU(BR->sons[1 + 0*2], clt_BR_1, clt_BR_0);
+    BUILD_LEAF_NU(BR->sons[0 + 1*2], clt_BR_0, clt_BR_1);
+    BUILD_LEAF_NU(BR->sons[1 + 1*2], clt_BR_1, clt_BR_1);
+    all_bn[n_bn++] = BR;
+
+    /* BL leaf (n2 x n1) and TR leaf (n1 x n2). */
+    st_cHACApK_block_node_t *BL = NULL, *TR = NULL;
+    BUILD_LEAF_NU(BL, clt_BR, clt_TL);
+    BUILD_LEAF_NU(TR, clt_TL, clt_BR);
+
+    /* Root */
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root; root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+    root->dof_nrows = N; root->dof_ncols = N;
+    root->dof_row_start = 0; root->dof_col_start = 0;
+    root->sons[0 + 0*2] = TL;
+    root->sons[1 + 0*2] = BL;
+    root->sons[0 + 1*2] = TR;
+    root->sons[1 + 1*2] = BR;
+    all_bn[n_bn++] = root;
+
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    for (int i = 0; i < n_lf; i++) { free(all_lf[i]->a1); free(all_lf[i]); }
+    for (int i = 0; i < n_bn; i++) {
+        if (all_bn[i]->sons) free(all_bn[i]->sons);
+        free(all_bn[i]);
+    }
+    free(clt_root); free(clt_TL); free(clt_BR);
+    free(clt_TL_0); free(clt_TL_1); free(clt_BR_0); free(clt_BR_1);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+
+    #undef BUILD_LEAF_NU
+    #undef RND_NU
 
     if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
     if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
