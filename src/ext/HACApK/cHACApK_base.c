@@ -37,6 +37,7 @@
 #include "cHACApK_base.h"
 #include "cHACApK_calc_entry_ij.h"
 #include "cHACApK_lib.h"
+#include "cHACApK_pca_cluster.h"   /* PCA cluster split for flat meshes */
 #include "hacapk_log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -1876,7 +1877,8 @@ void cHACApK_generate_cbitree(
           }
         }
 
-        // Find split dimension (largest extent)
+        // Find split dimension (largest extent) -- needed for the BBOX path AND
+        // as fallback if PCA fails (collinear points / dsyev info != 0).
         double zdiff = zlmax[1] - zlmin[1];
         int ncut = 1;
         for (id = 1; id <= ndim; id++) {
@@ -1888,16 +1890,30 @@ void cHACApK_generate_cbitree(
         }
         double zlmid = (zlmax[ncut] + zlmin[ncut]) / 2.0;
 
-        // Partition lod array
-        int nl = 1, nr = cur_nd;
-        while (nl < nr) {
-          while (nl < cur_nd && zgmid_t[ncut][cur_lod[nl]] <= zlmid) nl++;
-          while (nr >= 0 && zgmid_t[ncut][cur_lod[nr]] > zlmid) nr--;
-          if (nl < nr) {
-            int nh = cur_lod[nl];
-            cur_lod[nl] = cur_lod[nr];
-            cur_lod[nr] = nh;
+        // Strategy dispatch: PCA split (better on flat / elongated geometries)
+        // or BBOX midpoint split (historical default, all existing tests rely on it).
+        int nl = -1;  /* will hold the 1-based "first right-side" pointer */
+        if (cHACApK_get_cluster_strategy() == CHACAPK_CLUSTER_PCA) {
+          int n_left = cHACApK_pca_split(zgmid_t, cur_lod, cur_nd, ndim);
+          if (n_left > 0) {
+            nl = n_left + 1;  /* 1-based first right-side index */
           }
+          /* n_left == -1 (covariance singular, dsyev fail, or degenerate split)
+           * -> fall through to BBOX path below */
+        }
+        if (nl < 0) {
+          // BBOX midpoint partition (default / fallback)
+          int nl_bb = 1, nr = cur_nd;
+          while (nl_bb < nr) {
+            while (nl_bb < cur_nd && zgmid_t[ncut][cur_lod[nl_bb]] <= zlmid) nl_bb++;
+            while (nr >= 0 && zgmid_t[ncut][cur_lod[nr]] > zlmid) nr--;
+            if (nl_bb < nr) {
+              int nh = cur_lod[nl_bb];
+              cur_lod[nl_bb] = cur_lod[nr];
+              cur_lod[nr] = nh;
+            }
+          }
+          nl = nl_bb;
         }
 
         // Create parent cluster
