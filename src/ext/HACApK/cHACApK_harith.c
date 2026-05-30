@@ -102,15 +102,233 @@ static void dense_tri_solve_right_upper(
     g_stats.n_dense_trsm++;
 }
 
-/* C -= A * B,  all dense column-major: A is mA x k, B is k x nB, C is mA x nB. */
-static void dense_gemm_subtract(
-    const double *A, int mA,
-    const double *B, int kB, int nB,
-    double *C, int ldC)
+/* ---------- block-recursive H-matrix primitives ------------------ *
+ *
+ * Three primitives, each dispatching on operand leaf_kind:
+ *
+ *   h_addmul(alpha, A, B, C):       C += alpha * A * B
+ *   htrsm_lln(L, X):             solve L * X' = X, L unit-lower (Doolittle)
+ *   htrsm_run(U, X):             solve X' * U = X, U non-unit upper
+ *
+ * Dispatch table:
+ *   - all dense leaves         -> direct BLAS call (base case)
+ *   - all internal nodes       -> block-recursive descent
+ *   - any rk leaf              -> CHACAPK_HARITH_ERR_LOWRANK_LEAF (Phase 3)
+ *   - mixed leaf+internal      -> CHACAPK_HARITH_ERR_NEED_RECURSIVE (Phase 3)
+ *
+ * For build_deep_tree's uniform-split self-test the mixed case cannot occur:
+ * a block-node's children are either all leaves (depth 0 subtree) or all
+ * internal (depth >= 1 subtree). In real HACApK trees the mixed case can
+ * appear at the admissibility boundary; Phase 3 handles it by densifying
+ * the internal operand at the leaf size (still O(leaf^3), bounded).
+ *
+ * Block-recursive descent for h_addmul (sum-over-j):
+ *
+ *   C(i,k) += sum_{j} alpha * A(i,j) * B(j,k)
+ *
+ * For htrsm_lln on block-(s x s) L and block-(s x ncX) X:
+ *
+ *   for j in 0..ncX-1:                   // each column-block of X
+ *     for i in 0..s-1:                   // each row-block of X
+ *       for k in 0..i-1:                 // discharge above-row dependencies
+ *         X(i,j) -= L(i,k) * X(k,j)      // h_addmul with alpha=-1
+ *       solve L(i,i) * X(i,j) = X(i,j)   // recursive htrsm_lln
+ *
+ * htrsm_run is the mirror: walks j (column of X) left-to-right, accumulates
+ * X(i,j) -= X(i,k) * U(k,j) for k < j, then trsm right-upper.
+ */
+
+/* Forward declarations: htrsm_* both call h_addmul; h_addmul is self-recursive. */
+static int h_addmul(double alpha,
+                 const st_cHACApK_block_node_t *A,
+                 const st_cHACApK_block_node_t *B,
+                 st_cHACApK_block_node_t *C);
+
+static int htrsm_lln(const st_cHACApK_block_node_t *L,
+                     st_cHACApK_block_node_t *X);
+
+static int htrsm_run(const st_cHACApK_block_node_t *U,
+                     st_cHACApK_block_node_t *X);
+
+
+/* C += alpha * A * B  (block-recursive, dense-leaf base case). */
+static int h_addmul(double alpha,
+                 const st_cHACApK_block_node_t *A,
+                 const st_cHACApK_block_node_t *B,
+                 st_cHACApK_block_node_t *C)
 {
-    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                mA, nB, kB, -1.0, A, mA, B, kB, 1.0, C, ldC);
-    g_stats.n_dense_gemm++;
+    if (!A || !B || !C) return CHACAPK_HARITH_ERR_NULL;
+
+    if (leaf_is_rk(A) || leaf_is_rk(B) || leaf_is_rk(C)) {
+        g_stats.n_lowrank_skip++;
+        return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+    }
+
+    /* Base case: all dense leaves -> direct dgemm. */
+    if (leaf_is_dense(A) && leaf_is_dense(B) && leaf_is_dense(C)) {
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    leaf_rows(C), leaf_cols(C), leaf_cols(A),
+                    alpha,
+                    leaf_dense_data(A), leaf_rows(A),
+                    leaf_dense_data(B), leaf_rows(B),
+                    1.0, leaf_dense_data(C), leaf_rows(C));
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* Mixed leaf+internal: reserved for Phase 3 (densify the internal one). */
+    if (leaf_is_dense(A) || leaf_is_dense(B) || leaf_is_dense(C)) {
+        return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
+    }
+
+    /* All internal: recurse on C's (i,k), summing over j.
+     * Topology constraint: A and B share a common "inner" dimension. */
+    int nrC = C->nrsons, ncC = C->ncsons;
+    int nmA = A->ncsons;
+    if (nrC != A->nrsons || ncC != B->ncsons || nmA != B->nrsons) {
+        return CHACAPK_HARITH_ERR_TOPOLOGY;
+    }
+    for (int k = 0; k < ncC; k++) {
+        for (int i = 0; i < nrC; i++) {
+            for (int j = 0; j < nmA; j++) {
+                int rc = h_addmul(alpha,
+                               A->sons[i + j * nrC],
+                               B->sons[j + k * nmA],
+                               C->sons[i + k * nrC]);
+                if (rc != CHACAPK_HARITH_OK) return rc;
+            }
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+
+/* Solve L * X' = X  (X overwrites itself).
+ * L is unit-lower (Doolittle: L_diag implicit unit, L_below stored).
+ * X must have the same row partition as L. */
+static int htrsm_lln(const st_cHACApK_block_node_t *L,
+                     st_cHACApK_block_node_t *X)
+{
+    if (!L || !X) return CHACAPK_HARITH_ERR_NULL;
+
+    if (leaf_is_rk(L) || leaf_is_rk(X)) {
+        g_stats.n_lowrank_skip++;
+        return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+    }
+
+    if (leaf_is_dense(L) && leaf_is_dense(X)) {
+        dense_tri_solve_left_lower(
+            leaf_dense_data(L), leaf_rows(L),
+            leaf_dense_data(X), leaf_rows(X), leaf_cols(X));
+        return CHACAPK_HARITH_OK;
+    }
+
+    if (leaf_is_dense(L) || leaf_is_dense(X)) {
+        return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
+    }
+
+    /* All internal. L is square (nrL == ncL = s); X has nrX = s, ncX arbitrary. */
+    int s = L->nrsons;
+    if (L->ncsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
+    if (X->nrsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
+    int ncX = X->ncsons;
+
+    for (int j = 0; j < ncX; j++) {
+        for (int i = 0; i < s; i++) {
+            /* X(i,j) -= L(i,k) * X(k,j) for k = 0..i-1 */
+            for (int k = 0; k < i; k++) {
+                int rc = h_addmul(-1.0,
+                               L->sons[i + k * s],
+                               X->sons[k + j * s],
+                               X->sons[i + j * s]);
+                if (rc != CHACAPK_HARITH_OK) return rc;
+            }
+            /* solve L(i,i) * X(i,j) = X(i,j) */
+            int rc = htrsm_lln(L->sons[i + i * s], X->sons[i + j * s]);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+
+/* Solve X' * U = X  (X overwrites itself).
+ * U is non-unit upper (in-place LU's upper part).
+ * X must have the same column partition as U. */
+static int htrsm_run(const st_cHACApK_block_node_t *U,
+                     st_cHACApK_block_node_t *X)
+{
+    if (!U || !X) return CHACAPK_HARITH_ERR_NULL;
+
+    if (leaf_is_rk(U) || leaf_is_rk(X)) {
+        g_stats.n_lowrank_skip++;
+        return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+    }
+
+    if (leaf_is_dense(U) && leaf_is_dense(X)) {
+        dense_tri_solve_right_upper(
+            leaf_dense_data(U), leaf_rows(U),
+            leaf_dense_data(X), leaf_rows(X), leaf_cols(X));
+        return CHACAPK_HARITH_OK;
+    }
+
+    if (leaf_is_dense(U) || leaf_is_dense(X)) {
+        return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
+    }
+
+    int s = U->nrsons;
+    if (U->ncsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
+    if (X->ncsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
+    int nrX = X->nrsons;
+
+    for (int j = 0; j < s; j++) {
+        for (int i = 0; i < nrX; i++) {
+            /* X(i,j) -= X(i,k) * U(k,j) for k = 0..j-1 */
+            for (int k = 0; k < j; k++) {
+                int rc = h_addmul(-1.0,
+                               X->sons[i + k * nrX],
+                               U->sons[k + j * s],
+                               X->sons[i + j * nrX]);
+                if (rc != CHACAPK_HARITH_OK) return rc;
+            }
+            int rc = htrsm_run(U->sons[j + j * s], X->sons[i + j * nrX]);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
+
+/* Recursive matvec: y -= node * x.
+ * x and y are GLOBAL vectors (length N); node's row/col cluster nstrt offsets
+ * select the active slices. Aliasing x == y is safe iff the node's row and
+ * column clusters do not overlap (true for strictly off-diagonal blocks
+ * during the forward/backward sweeps). */
+static int hmatvec_subtract(
+    const st_cHACApK_block_node_t *node,
+    const double *x, double *y)
+{
+    if (!node) return CHACAPK_HARITH_ERR_NULL;
+    if (leaf_is_rk(node)) return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+
+    if (leaf_is_dense(node)) {
+        int m = leaf_rows(node), n = leaf_cols(node);
+        int r0 = node->row_cluster->nstrt - 1;  /* 1-based -> 0-based */
+        int c0 = node->col_cluster->nstrt - 1;
+        cblas_dgemv(CblasColMajor, CblasNoTrans, m, n,
+                    -1.0, leaf_dense_data(node), m,
+                    &x[c0], 1, 1.0, &y[r0], 1);
+        return CHACAPK_HARITH_OK;
+    }
+
+    int nr = node->nrsons, nc = node->ncsons;
+    for (int j = 0; j < nc; j++) {
+        for (int i = 0; i < nr; i++) {
+            int rc = hmatvec_subtract(node->sons[i + j * nr], x, y);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
 }
 
 
@@ -139,41 +357,29 @@ static int hlu_rec(st_cHACApK_block_node_t *node)
     if (s <= 0 || node->ncsons != s) return CHACAPK_HARITH_ERR_TOPOLOGY;
 
     for (int i = 0; i < s; i++) {
-        /* (1) factor diagonal block A_ii = L_ii U_ii */
+        /* (1) factor diagonal block A_ii = L_ii U_ii (in place). */
         st_cHACApK_block_node_t *Aii = node->sons[i + i * s];
         int rc = hlu_rec(Aii);
         if (rc != CHACAPK_HARITH_OK) return rc;
 
-        /* (2) for k > i: solve U_ik from L_ii U_ik = A_ik   (left-lower-unit) */
+        /* (2) for k > i: solve U_ik from L_ii * U_ik = A_ik (htrsm_lln). */
         for (int k = i + 1; k < s; k++) {
-            st_cHACApK_block_node_t *Aik = node->sons[i + k * s];
-            if (!leaf_is_dense(Aii) || !leaf_is_dense(Aik))
-                return CHACAPK_HARITH_ERR_NEED_RECURSIVE; /* Phase 2: recursive trsm */
-            dense_tri_solve_left_lower(
-                leaf_dense_data(Aii), leaf_rows(Aii),
-                leaf_dense_data(Aik), leaf_rows(Aik), leaf_cols(Aik));
+            int rc2 = htrsm_lln(Aii, node->sons[i + k * s]);
+            if (rc2 != CHACAPK_HARITH_OK) return rc2;
         }
-        /* (3) for j > i: solve L_ji from L_ji U_ii = A_ji   (right-upper-nonunit) */
+        /* (3) for j > i: solve L_ji from L_ji * U_ii = A_ji (htrsm_run). */
         for (int j = i + 1; j < s; j++) {
-            st_cHACApK_block_node_t *Aji = node->sons[j + i * s];
-            if (!leaf_is_dense(Aii) || !leaf_is_dense(Aji))
-                return CHACAPK_HARITH_ERR_NEED_RECURSIVE; /* Phase 2: recursive trsm */
-            dense_tri_solve_right_upper(
-                leaf_dense_data(Aii), leaf_rows(Aii),
-                leaf_dense_data(Aji), leaf_rows(Aji), leaf_cols(Aji));
+            int rc2 = htrsm_run(Aii, node->sons[j + i * s]);
+            if (rc2 != CHACAPK_HARITH_OK) return rc2;
         }
-        /* (4) trailing update: A_jk -= L_ji * U_ik  for j>i, k>i */
+        /* (4) trailing update: A_jk -= L_ji * U_ik for j,k > i (h_addmul). */
         for (int k = i + 1; k < s; k++) {
             for (int j = i + 1; j < s; j++) {
-                st_cHACApK_block_node_t *Ajk = node->sons[j + k * s];
-                st_cHACApK_block_node_t *Lji = node->sons[j + i * s];
-                st_cHACApK_block_node_t *Uik = node->sons[i + k * s];
-                if (!leaf_is_dense(Ajk) || !leaf_is_dense(Lji) || !leaf_is_dense(Uik))
-                    return CHACAPK_HARITH_ERR_NEED_RECURSIVE; /* Phase 2: recursive gemm */
-                dense_gemm_subtract(
-                    leaf_dense_data(Lji), leaf_rows(Lji),
-                    leaf_dense_data(Uik), leaf_rows(Uik), leaf_cols(Uik),
-                    leaf_dense_data(Ajk), leaf_rows(Ajk));
+                int rc2 = h_addmul(-1.0,
+                                node->sons[j + i * s],
+                                node->sons[i + k * s],
+                                node->sons[j + k * s]);
+                if (rc2 != CHACAPK_HARITH_OK) return rc2;
             }
         }
     }
@@ -222,24 +428,20 @@ static int hlu_forward_rec(
     }
 
     /* Internal node: i = 0..s-1
-     *   forward(sons[i+i*s], b)            // solve L_ii y_i = b_i
-     *   for j > i:  b_j -= L_ji * y_i      // update remaining */
+     *   forward(sons[i+i*s], b)            // solve L_ii y_i = b_i (recursive)
+     *   for j > i:  b_j -= L_ji * y_i      // update lower b (hmatvec_subtract)
+     *
+     * Aliasing note: b is both x and y to hmatvec_subtract. Safe because the
+     * off-diagonal block L_ji has row_cluster in the j-range and col_cluster
+     * in the i-range, which are disjoint (j > i). */
     int s = node->nrsons;
     for (int i = 0; i < s; i++) {
         st_cHACApK_block_node_t *Aii = node->sons[i + i * s];
         int rc = hlu_forward_rec(Aii, b);
         if (rc != CHACAPK_HARITH_OK) return rc;
-        int row_i = Aii->row_cluster->nstrt - 1;
-        int n_i = Aii->row_cluster->nsize;
         for (int j = i + 1; j < s; j++) {
-            st_cHACApK_block_node_t *Lji = node->sons[j + i * s];
-            if (!leaf_is_dense(Lji)) return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
-            int row_j = Lji->row_cluster->nstrt - 1;
-            int n_j = leaf_rows(Lji);
-            /* b_j -= L_ji * y_i */
-            cblas_dgemv(CblasColMajor, CblasNoTrans, n_j, n_i,
-                        -1.0, leaf_dense_data(Lji), n_j,
-                        &b[row_i], 1, 1.0, &b[row_j], 1);
+            int rc2 = hmatvec_subtract(node->sons[j + i * s], b, b);
+            if (rc2 != CHACAPK_HARITH_OK) return rc2;
         }
     }
     return CHACAPK_HARITH_OK;
@@ -258,20 +460,18 @@ static int hlu_backward_rec(
                     n, leaf_dense_data(node), n, &x[row0], 1);
         return CHACAPK_HARITH_OK;
     }
+    /* Internal node: i = s-1..0 (reverse order)
+     *   for k > i:  x_i -= U_ik * x_k     // update upper x (hmatvec_subtract)
+     *   backward(sons[i+i*s], x)          // solve U_ii x_i = x_i (recursive)
+     *
+     * Aliasing: U_ik has row_cluster in the i-range, col_cluster in the
+     * k-range, disjoint (k > i). Safe. */
     int s = node->nrsons;
     for (int i = s - 1; i >= 0; i--) {
         st_cHACApK_block_node_t *Aii = node->sons[i + i * s];
-        int row_i = Aii->row_cluster->nstrt - 1;
-        int n_i = Aii->row_cluster->nsize;
-        /* update with upper off-diagonals: x_i -= U_ik * x_k, k > i */
         for (int k = i + 1; k < s; k++) {
-            st_cHACApK_block_node_t *Uik = node->sons[i + k * s];
-            if (!leaf_is_dense(Uik)) return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
-            int col_k = Uik->col_cluster->nstrt - 1;
-            int n_k = Uik->col_cluster->nsize;
-            cblas_dgemv(CblasColMajor, CblasNoTrans, n_i, n_k,
-                        -1.0, leaf_dense_data(Uik), n_i,
-                        &x[col_k], 1, 1.0, &x[row_i], 1);
+            int rc2 = hmatvec_subtract(node->sons[i + k * s], x, x);
+            if (rc2 != CHACAPK_HARITH_OK) return rc2;
         }
         int rc = hlu_backward_rec(Aii, x);
         if (rc != CHACAPK_HARITH_OK) return rc;
