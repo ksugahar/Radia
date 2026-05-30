@@ -226,6 +226,7 @@ set(HACAPK_SOURCES
 	${EXT_DIR}/HACApK/cHACApK_lib.c
 	${EXT_DIR}/HACApK/cHACApK_cpp_impl.c
 	${EXT_DIR}/HACApK/cHACApK_pca_cluster.c  # PCA cluster split for flat meshes (Phase 0.5 of H-LU project)
+	${EXT_DIR}/HACApK/cHACApK_block_tree.c   # Block-tree view on flat leaves (Phase 0.7 of H-LU)
 	${CORE_DIR}/rad_hacapk_parallel.cpp  # C++ TaskManager wrappers for HACApK C code
 )
 
