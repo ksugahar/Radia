@@ -67,8 +67,20 @@ def run_one(freq_hz: float, current_A: float, per_panel: bool,
     if r.returncode != 0:
         print(f"  ERROR ({dt:.0f}s): {r.stderr[-500:]}")
         return {"error": r.stderr[-500:], "elapsed_s": dt}
+    # calc_inductance.py may exit 0 but write {"error": "..."} into the
+    # per-case JSON when an internal exception is caught (e.g. a transient
+    # NAS-share import flicker on S:).  Treat that as an error so the
+    # sweep records the case and moves on rather than crashing on
+    # P_wp_W = None.  Also delete the placeholder JSON so a future restart
+    # re-runs the case rather than re-caching the error.
     with open(out_path) as f:
         d = json.load(f)
+    if "error" in d and d.get("P_wp_W") is None:
+        try:
+            out_path.unlink()
+        except OSError:
+            pass
+        return {"error": str(d["error"])[-500:], "elapsed_s": dt}
     return {
         "P_wp_W": d.get("P_wp_W"),
         "L_total_uH": d.get("L_total_uH"),
@@ -99,25 +111,42 @@ def main():
                 out_path = out_dir / f"{tag}.json"
                 t0 = time.time()
                 print(f"[{len(results)+1:2d}/32] {tag} ... ", end="", flush=True)
+                from_cache = False
                 if out_path.exists():
                     with open(out_path) as f:
                         d = json.load(f)
-                    summary = {
-                        "P_wp_W": d.get("P_wp_W"),
-                        "L_total_uH": d.get("L_total_uH"),
-                        "H_t_rms": d.get("H_t_rms_A_per_m"),
-                        "esim_iterations": d.get("esim_iterations"),
-                        "esim_converged": d.get("esim_converged"),
-                        "esim_anderson_restarts": d.get("esim_anderson_restarts"),
-                        "esim_anderson_clips": d.get("esim_anderson_clips"),
-                        "elapsed_s": -1,
-                        "from_cache": True,
-                    }
-                    print(f"cached, P_wp={summary['P_wp_W']:.3f} W")
+                    if "error" in d and d.get("P_wp_W") is None:
+                        # Stale error-placeholder from a previous
+                        # transient failure -- delete so this case
+                        # re-runs instead of caching the error.
+                        try:
+                            out_path.unlink()
+                        except OSError:
+                            pass
+                        summary = run_one(f_Hz, I_A, per_panel, out_path)
+                    else:
+                        summary = {
+                            "P_wp_W": d.get("P_wp_W"),
+                            "L_total_uH": d.get("L_total_uH"),
+                            "H_t_rms": d.get("H_t_rms_A_per_m"),
+                            "esim_iterations": d.get("esim_iterations"),
+                            "esim_converged": d.get("esim_converged"),
+                            "esim_anderson_restarts": d.get("esim_anderson_restarts"),
+                            "esim_anderson_clips": d.get("esim_anderson_clips"),
+                            "elapsed_s": -1,
+                            "from_cache": True,
+                        }
+                        from_cache = True
                 else:
                     summary = run_one(f_Hz, I_A, per_panel, out_path)
-                    if "error" not in summary:
-                        print(f"P_wp={summary['P_wp_W']:.3f} W "
+                # Single print: cached vs fresh, with P_wp_W=None guard.
+                if "error" not in summary:
+                    pw = summary.get("P_wp_W")
+                    pw_s = f"{pw:.3f} W" if pw is not None else "None"
+                    if from_cache:
+                        print(f"cached, P_wp={pw_s}")
+                    else:
+                        print(f"P_wp={pw_s} "
                               f"({summary['elapsed_s']:.0f}s)")
                 results.append({
                     "frequency_Hz": f_Hz,
