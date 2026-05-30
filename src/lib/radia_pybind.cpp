@@ -56,6 +56,12 @@ extern "C" {
     double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
                                                   int kA, int kB, int kC);
     double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
+    double cHACApK_harith_self_test_mixed_sibling(int nb_small);
+    double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
+    double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
+    double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
+    double cHACApK_harith_self_test_radia_exact(void);
+    double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2941,6 +2947,88 @@ PYBIND11_MODULE(_radia_pybind, m) {
         Builds three random rk leaves of given ranks, computes the dense ground
         truth (U_c V_c^T + alpha A B), runs h_addmul, and verifies the result by
         comparing C's new dense reconstruction to the truth. Expected ~1e-13.
+    )pbdoc");
+
+    m.def("HLUSelfTestRadiaExactDiag", [](double diag_boost) -> double {
+        return cHACApK_harith_self_test_radia_exact_diag(diag_boost);
+    },
+    py::arg("diag_boost") = 2.0,
+    R"pbdoc(
+        Phase 4 debug: Radia-shape with adjustable diag_boost. Sweep low
+        values (1.5, 1.2, 1.05) to find no-pivot LU stability threshold.
+        At boost ~ row_sum (mildly dominant), no-pivot can lose stability.
+    )pbdoc");
+
+    // -- Phase 4 debug: EXACT mimic of Radia nx=3 leaf=10 sizes --
+    m.def("HLUSelfTestRadiaExact", []() -> double {
+        return cHACApK_harith_self_test_radia_exact();
+    },
+    R"pbdoc(
+        Phase 4 debug: hardcoded mimic of Radia nx=3 leaf=10 tree shape
+        + EXACT cluster sizes (108/54 at root, 72/36 at TL, 48/24 at TL.TL).
+        Synthetic random matrix, no permutation, no layout conversion.
+        If this fails, the bug is in the recursive H-LU with rectangular
+        non-uniform leaves. If it passes, the bug is in the permutation
+        or layout conversion path.
+    )pbdoc");
+
+    // -- Phase 4 debug: depth-3 asymmetric (mimics Radia exact shape) --
+    m.def("HLUSelfTestDepth3Asymmetric", [](int nb_tiny) -> double {
+        return cHACApK_harith_self_test_depth3_asymmetric(nb_tiny);
+    },
+    py::arg("nb_tiny") = 3,
+    R"pbdoc(
+        Phase 4 debug: synthetic test mimicking Radia's nx=3 leaf=10 tree
+        shape exactly. 10 leaves, 3 internal nodes, depth 3. Only the
+        TL.TL sub-block goes deep (4 leaves at depth 3); everything else
+        is leaves at depth 1 or 2.
+
+        If mixed_sibling (depth 2) passes but this fails, the bug is in
+        the deeper recursion with mixed leaf+internal across multiple
+        levels.
+    )pbdoc");
+
+    // -- Phase 4 debug: mixed_sibling via HACApK row-major -> convert path --
+    m.def("HLUSelfTestMixedSiblingViaConversion", [](int nb_small) -> double {
+        return cHACApK_harith_self_test_mixed_sibling_via_conversion(nb_small);
+    },
+    py::arg("nb_small") = 5,
+    R"pbdoc(
+        Phase 4 debug: same shape as HLUSelfTestMixedSibling but leaves are
+        built in HACApK row-major format then transposed before H-LU.
+        Isolates the conversion path from the H-LU correctness.
+    )pbdoc");
+
+    // -- Phase 4 debug: non-uniform mixed-sibling test --
+    m.def("HLUSelfTestMixedSiblingNonUniform", [](int n1, int n2, int m1, int m3) -> double {
+        return cHACApK_harith_self_test_mixed_sibling_nonuniform(n1, n2, m1, m3);
+    },
+    py::arg("n1") = 5, py::arg("n2") = 7, py::arg("m1") = 2, py::arg("m3") = 3,
+    R"pbdoc(
+        Phase 4 debug: non-uniform-size mixed-sibling test. Reproduces
+        HACApK's asymmetric element-count splits (13 -> 6+7 etc.) in a
+        synthetic setting. Root splits (n1, n2), TL splits (m1, n1-m1),
+        BR splits (m3, n2-m3). All sub-leaves have different shapes.
+
+        If uniform passes and this fails, the bug is in non-uniform leaf
+        sub-views (sub-view offset calc in Phase 3.6 mixed cases or
+        materialize_node_as_dense).
+    )pbdoc");
+
+    // -- Phase 4 debug: mixed-sibling test (mimics Radia tree shape) --
+    m.def("HLUSelfTestMixedSibling", [](int nb_small) -> double {
+        return cHACApK_harith_self_test_mixed_sibling(nb_small);
+    },
+    py::arg("nb_small") = 5,
+    R"pbdoc(
+        Phase 4 debug: synthetic test that mimics Radia's nx=3 leaf=10 tree
+        shape (10 dense leaves, 3 internal nodes, depth 3) using uniform
+        leaf sizes (nb_small per side). Root has 2x2 children: TL & BR are
+        internal (each containing 2x2 sub-leaves), TR & BL are leaves.
+
+        If this passes while real Radia trees fail, the bug is in
+        non-uniform leaf sizes. If it fails, the bug is in mixed-sibling
+        recursion itself.
     )pbdoc");
 
     // -- Phase 3.5 integration test: depth=2 H-LU with rk off-diagonals --
