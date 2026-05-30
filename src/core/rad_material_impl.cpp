@@ -1061,6 +1061,70 @@ int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* p
 
 //-------------------------------------------------------------------------
 
+#ifdef RADIA_USE_HACAPK
+extern "C" {
+    double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
+                                      const double *x_orig, const double *y_orig,
+                                      int nffc);
+}
+#endif
+
+double radTApplication::HLUTestOnHACApK(int InteractElemKey)
+{
+#ifdef RADIA_USE_HACAPK
+	try
+	{
+		radThg hg;
+		if(!ValidateElemKey(InteractElemKey, hg)) return -1.0;
+		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
+		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return -1.0; }
+
+		int totalDOF = InteractPtr->GetTotalDOF();
+		if (totalDOF <= 0) return -1.0;
+
+		// Build a fresh HACApK MSC manager. The cluster-tree root will be
+		// preserved at m_leafmtxp->st_clt_root (Phase 4 ground work).
+		RadHACApKMSCManager mgr(InteractPtr);
+		RadHACApKParams params;
+		params.aca_eps = m_hacapk_eps;
+		params.leaf_size = m_hacapk_leaf_size;
+		params.eta = m_hacapk_eta;
+		params.print_level = 0;
+		if(!mgr.BuildHMatrix(params)) return -1.0;
+
+		// Generate a deterministic test vector x_orig in user (original) ordering.
+		std::vector<double> x_orig((size_t)totalDOF), y_orig((size_t)totalDOF);
+		unsigned long seed = 13579UL;
+		for (int i = 0; i < totalDOF; i++) {
+			seed = seed * 6364136223846793005UL + 1442695040888963407UL;
+			x_orig[i] = (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
+		}
+
+		// Compute y_orig = A * x_orig via HACApK MatVec (BEFORE convert/LU).
+		mgr.MatVec(x_orig, y_orig);
+
+		// Run H-LU + solve, get max rel err vs x_orig.
+		// nffc = uniform DOF per element. For MSC: tet=3, hex=6, wedge=5.
+		// For a mixed mesh, this single-nffc API is incorrect; for now we
+		// assume uniform hex (6) -- the typical Phase 4 smoke test.
+		int nffc_uniform = 6;
+		return cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(),
+		                                  x_orig.data(), y_orig.data(),
+		                                  nffc_uniform);
+	}
+	catch (...)
+	{
+		Initialize();
+		return -1.0;
+	}
+#else
+	(void)InteractElemKey;
+	return -1.0;
+#endif
+}
+
+//-------------------------------------------------------------------------
+
 void radTApplication::ShowInteractVector(int InteractElemKey, char* FieldVectID)
 {
 	radThg hg;

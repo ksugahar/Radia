@@ -75,6 +75,25 @@ st_cHACApK_block_node_t *cHACApK_build_block_tree(
     st_cHACApK_cluster_t  *root_row_cluster,
     st_cHACApK_cluster_t  *root_col_cluster);
 
+/* Phase 4 variant: cluster ranges in ELEMENT units, leaf positions in
+ * DOF units. nffc = uniform DOF per element (3 tet / 6 hex MSC / etc.).
+ *
+ * HACApK's cHACApK_generate_cbitree builds clusters in element units
+ * (nstrt, nsize count elements). The leafmtxp leaves are filled with
+ * nstrtl/ndl in DOF units (cumulative DOF position of permuted
+ * elements). This variant scales the cluster ranges by nffc to bridge
+ * the two grains.
+ *
+ * Restriction: requires UNIFORM DOF per element. For mixed-element
+ * varDOF cases (tet+hex+wedge), use the cumdof-aware variant (TODO).
+ *
+ * Pass nffc = 1 to recover the cHACApK_build_block_tree behavior. */
+st_cHACApK_block_node_t *cHACApK_build_block_tree_nffc(
+    st_cHACApK_leafmtxp_t *leafmtxp,
+    st_cHACApK_cluster_t  *root_row_cluster,
+    st_cHACApK_cluster_t  *root_col_cluster,
+    int                    nffc);
+
 /* Recursively free the block-tree (the leaves' underlying st_lf[] data
  * is NOT freed -- it belongs to HACApK). */
 void cHACApK_free_block_tree(st_cHACApK_block_node_t *root);
