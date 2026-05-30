@@ -202,7 +202,7 @@ mesh = Mesh(vol_path)
 
 ## Requirements
 
-- Coreform Cubit 2025.3+ with Radia plugin installed (`cubit-plugin-install`)
+- Coreform Cubit 2025.12+ with Radia plugin installed (`cubit-plugin-install`)
 - NGSolve 6.2.2603+ (curvedelements Load, hex/prism curving)
 """
 
@@ -535,7 +535,7 @@ Fix: Use system Python with CUBIT_PATH environment variable.
      System Python with CUBIT_PATH can access BOTH Cubit API and NGSolve.
 
      # Step 1: Set CUBIT_PATH
-     set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.3/bin"
+     set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
 
      # Step 2: Run with system Python (which has NGSolve installed)
      python my_script.py
@@ -583,7 +583,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 **Wrong import order** (causes DLL conflict):
 ```python
 import sys
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+sys.path.append("C:/Program Files/Coreform Cubit 2025.12/bin")
 import cubit                      # Loads Cubit's bundled VTK DLLs
 import ngsolve                    # FAILS - Netgen can't initialize
 ```
