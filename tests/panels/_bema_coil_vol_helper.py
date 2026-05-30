@@ -11,6 +11,8 @@ The labelling logic mirrors the retired _build_bema_coil_mesh() in
 calc_inductance.py: face.name == 'source'/'sink' if present, else the
 two smallest PLANE faces are auto-detected by |y-centroid|.
 """
+from ngsolve import TaskManager
+
 from __future__ import annotations
 
 import os
@@ -78,12 +80,13 @@ def step_to_coil_vol(step_path, vol_path, maxh=0.012,
         else:
             f.name = "body"
 
-    ngmesh = OCCGeometry(Glue(faces)).GenerateMesh(
-        mp=MeshingParameters(maxh=maxh, curvaturesafety=1.0,
-                              segmentsperedge=1))
-    vol_path = os.path.abspath(vol_path)
-    ngmesh.Save(vol_path)
-    return vol_path
+    with TaskManager():
+        ngmesh = OCCGeometry(Glue(faces)).GenerateMesh(
+            mp=MeshingParameters(maxh=maxh, curvaturesafety=1.0,
+                                  segmentsperedge=1))
+        vol_path = os.path.abspath(vol_path)
+        ngmesh.Save(vol_path)
+        return vol_path
 
 
 def coil_vol_for(step_path, *, maxh=0.012, cache_dir=None):

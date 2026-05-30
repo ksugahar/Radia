@@ -95,22 +95,23 @@ def solve_fem_linear(a, sigma, frequency, mu_r, H0, order=4, n_elem=200):
     bf = BilinearForm(fes)
     bf += rho * grad(u) * grad(v) * dx
     bf += (-1j * omega * mu) * u * v * dx
-    bf.Assemble()
+    with TaskManager():
+        bf.Assemble()
 
-    gf = GridFunction(fes)
-    gf.Set(CF(H0), definedon=mesh.Boundaries('surface'))
-    r = -bf.mat * gf.vec
-    gf.vec.data += bf.mat.Inverse(fes.FreeDofs()) * r
+        gf = GridFunction(fes)
+        gf.Set(CF(H0), definedon=mesh.Boundaries('surface'))
+        r = -bf.mat * gf.vec
+        gf.vec.data += bf.mat.Inverse(fes.FreeDofs()) * r
 
-    P = Integrate(0.5 * rho * grad(gf) * Conj(grad(gf)), mesh).real
-    Q = Integrate(0.5 * omega * mu * gf * Conj(gf), mesh).real
-    Z = 2 * (P + 1j * Q) / (H0 ** 2)
+        P = Integrate(0.5 * rho * grad(gf) * Conj(grad(gf)), mesh).real
+        Q = Integrate(0.5 * omega * mu * gf * Conj(gf), mesh).real
+        Z = 2 * (P + 1j * Q) / (H0 ** 2)
 
-    # Sample H(z)
-    z_pts = np.linspace(0, a, 201)
-    H_z = np.array([gf(mesh(z)) for z in z_pts])
+        # Sample H(z)
+        z_pts = np.linspace(0, a, 201)
+        H_z = np.array([gf(mesh(z)) for z in z_pts])
 
-    return {'Z': Z, 'P_prime': P, 'Q_prime': Q, 'H_z': H_z, 'z_pts': z_pts}
+        return {'Z': Z, 'P_prime': P, 'Q_prime': Q, 'H_z': H_z, 'z_pts': z_pts}
 
 
 def solve_fem_nonlinear(a, sigma, frequency, bh_curve, H0,
@@ -122,6 +123,7 @@ def solve_fem_nonlinear(a, sigma, frequency, bh_curve, H0,
     """
     from ngsolve import (H1, L2, GridFunction, BilinearForm,
                          grad, dx, CF, Integrate, Conj, Parameter)
+    from ngsolve import TaskManager
 
     rho = 1.0 / sigma
     omega = 2 * np.pi * frequency

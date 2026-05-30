@@ -25,9 +25,11 @@
 #include <time.h>
 #include <chrono>   // For timing instrumentation
 #include <cstring>  // For std::memcpy
+#include <stdexcept> // For std::runtime_error (loop-star antisym-IMA fail-loud)
 #include <cstdio>   // For fprintf in debug logging
 #include <cstdlib>  // For getenv
 #include <array>    // For std::array in IMA mirror computation
+#include <atomic>   // For std::atomic in parallel early-exit patterns
 
 // Uncomment to enable chi value debugging
 // #define RADIA_DEBUG_CHI
@@ -1064,8 +1066,9 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 	for(iterCount = 0; iterCount < MaxIterNumber; iterCount++)
 	{
 		// Restore all hysteresis states to beginning-of-step reference
-		for(int i = 0; i < n_elem; i++)
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
 			hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
+		});
 
 		// Compute H = H_ext + N*M
 		// N*M = -BaseMatrix*M (since BaseMatrix = -N for MMM)
@@ -1096,9 +1099,8 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 			B_vec[i] = MU_0 * (H_vec[i] + M_vec[i]);
 
 		// Evaluate Forward(B) per element -> M_model, and compute dJ/dB analytically
-		for(int i = 0; i < n_elem; i++)
-		{
-			int offset = IntrctPtr->GetElementDOFOffset(i);
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+			int offset = IntrctPtr->GetElementDOFOffset((int)i);
 			TVector3d B_i(B_vec[offset], B_vec[offset+1], B_vec[offset+2]);
 
 			// Restore to start-of-step reference state before each Forward.
@@ -1124,7 +1126,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 			TMatrix3d dBdH_inv = Matrix3d_inv(dBdH);
 			// dJ/dB = I - mu_0 * dBdH_inv
 			// Store as column-major 3x3 block
-			int blk = i * 9;
+			size_t blk = i * 9;
 			// Column 0: dJ/dB[:, 0]
 			dJdB_blocks[blk + 0] = 1.0 - MU_0 * dBdH_inv.Str0.x;
 			dJdB_blocks[blk + 1] =      - MU_0 * dBdH_inv.Str1.x;
@@ -1137,7 +1139,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 			dJdB_blocks[blk + 6] =      - MU_0 * dBdH_inv.Str0.z;
 			dJdB_blocks[blk + 7] =      - MU_0 * dBdH_inv.Str1.z;
 			dJdB_blocks[blk + 8] = 1.0 - MU_0 * dBdH_inv.Str2.z;
-		}
+		});
 
 		// Compute residual F = M - M_model
 		double F_norm = 0.0;
@@ -1261,13 +1263,12 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 	// The last Newton iteration did RestoreState + Inverse at converged B,
 	// so m_Jk_current is correct. But we must ensure RestoreState + Inverse
 	// is done with the final converged B (not line search trial B).
-	for(int i = 0; i < n_elem; i++)
-	{
-		int offset = IntrctPtr->GetElementDOFOffset(i);
+	ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+		int offset = IntrctPtr->GetElementDOFOffset((int)i);
 		TVector3d M_final(M_vec[offset], M_vec[offset+1], M_vec[offset+2]);
 
 		// Update element magnetization
-		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[(int)i];
 		g3dRelaxPtr->SetM(M_final);
 
 		// Restore state to beginning-of-step, then Forward(B_converged)
@@ -1282,7 +1283,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 		// CommitState: m_Jk_prev = m_Jk_current
 		// This ensures the next Solve() step starts from the correct reference
 		hys_mats[i]->CommitState();
-	}
+	});
 
 	// Recompute final H for all elements
 	{
@@ -1301,13 +1302,12 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 				H_vec[i] -= ctx.BaseMatrix[(size_t)j * dof + i] * Mj;
 		}
 #endif
-		for(int i = 0; i < n_elem; i++)
-		{
-			int offset = IntrctPtr->GetElementDOFOffset(i);
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+			int offset = IntrctPtr->GetElementDOFOffset((int)i);
 			ctx.FlatField[offset+0] = H_vec[offset+0];
 			ctx.FlatField[offset+1] = H_vec[offset+1];
 			ctx.FlatField[offset+2] = H_vec[offset+2];
-		}
+		});
 	}
 
 	// Update RelaxStatusParam
@@ -1354,15 +1354,18 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 	int n_elem = ctx.AmOfMainElem;
 	if(n_elem <= 0 || dof <= 0) return 0;
 
-	// Collect hysteresis material pointers (energy or play)
+	// Collect hysteresis material pointers (energy or play).
+	// Parallel with atomic early-exit flag: each element's dynamic_cast is
+	// independent, but if ANY element fails we abort and return 0.
 	std::vector<radTHysteresisMaterial*> hys_mats(n_elem);
-	for(int i = 0; i < n_elem; i++)
-	{
-		radTg3dRelax* g3d = IntrctPtr->g3dRelaxPtrVect[i];
+	std::atomic<bool> all_hys{true};
+	ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+		radTg3dRelax* g3d = IntrctPtr->g3dRelaxPtrVect[(int)i];
 		radTMaterial* mat = (radTMaterial*)(g3d->MaterHandle.rep);
 		hys_mats[i] = dynamic_cast<radTHysteresisMaterial*>(mat);
-		if(!hys_mats[i]) return 0;
-	}
+		if(!hys_mats[i]) all_hys.store(false, std::memory_order_relaxed);
+	});
+	if(!all_hys.load()) return 0;
 
 	// Build base matrix (geometric interaction matrix N)
 	if(NeedsDenseMatrix())
@@ -1380,10 +1383,9 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 		// Probe H magnitudes: logarithmically spaced from 10 to 100000 A/m
 		double H_probes[] = {10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 50000.0};
 		int n_probes = 7;
-		for(int i = 0; i < n_elem; i++)
-		{
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
 			// Also check at actual H_ext
-			int offset = IntrctPtr->GetElementDOFOffset(i);
+			int offset = IntrctPtr->GetElementDOFOffset((int)i);
 			TVector3d H_ext_i(ctx.FlatExtern[offset], ctx.FlatExtern[offset+1], ctx.FlatExtern[offset+2]);
 
 			// Save state before probing (probes are temporary)
@@ -1392,6 +1394,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 			probe_save.resize(ss);
 			hys_mats[i]->SaveState(probe_save);
 
+			double local_max_chi = 0.0;
 			for(int p = -1; p < n_probes; p++)
 			{
 				TVector3d H_probe;
@@ -1404,24 +1407,26 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 				hys_mats[i]->Inverse(H_probe);  // H -> B (probing for max chi)
 				TMatrix3d dBdH; double chi_d;
 				hys_mats[i]->ComputeJacobian(dBdH, chi_d);
-				if(chi_d > max_chi) max_chi = chi_d;
+				if(chi_d > local_max_chi) local_max_chi = chi_d;
 			}
 			// Restore original state
 			hys_mats[i]->RestoreState(probe_save);
-		}
+
+			// Reduction across threads
+			ngcore::AtomicMax(max_chi, local_max_chi);
+		});
 		alpha = max_chi * 1.5;  // 50% safety margin for hysteresis state variations
 		if(alpha < 10.0) alpha = 10.0;
 	}
 
 	// Save hysteresis states (start-of-step reference)
 	ctx.saved_hys_states.resize(n_elem);
-	for(int i = 0; i < n_elem; i++)
-	{
+	ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
 		int state_size = hys_mats[i]->GetStateSize();
 		ctx.saved_hys_states[i].resize(state_size);
 		// SaveState returns m_Jk_prev as flat TVector3d array
 		hys_mats[i]->SaveState(ctx.saved_hys_states[i]);
-	}
+	});
 
 	// Build LHS = I + alpha * BaseMatrix  (BaseMatrix = -N, so LHS = I - alpha*N)
 	size_t mat_size = (size_t)dof * dof;
@@ -1459,9 +1464,8 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 		for(int i = 0; i < dof; i++) M_norm2 += M_vec[i] * M_vec[i];
 		if(M_norm2 < 1e-30)
 		{
-			for(int i = 0; i < n_elem; i++)
-			{
-				int offset = IntrctPtr->GetElementDOFOffset(i);
+			ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+				int offset = IntrctPtr->GetElementDOFOffset((int)i);
 				TVector3d H_ext_i(ctx.FlatExtern[offset], ctx.FlatExtern[offset+1], ctx.FlatExtern[offset+2]);
 
 				hys_mats[i]->RestoreState(ctx.saved_hys_states[i]);
@@ -1470,7 +1474,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 				M_vec[offset+0] = M_fwd.x;
 				M_vec[offset+1] = M_fwd.y;
 				M_vec[offset+2] = M_fwd.z;
-			}
+			});
 		}
 	}
 
@@ -1488,8 +1492,9 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 	double B_sat = 2.0;
 	{
 		double Js_sum = 0.0;
-		for(int i = 0; i < n_elem; i++)
-			Js_sum = std::max(Js_sum, hys_mats[i]->GetBsaturation());
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+			ngcore::AtomicMax(Js_sum, hys_mats[i]->GetBsaturation());
+		});
 		if(Js_sum > B_sat) B_sat = Js_sum;
 	}
 
@@ -1529,9 +1534,8 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 		// Step 3: B = mu_0 * (H + M), then Forward(B) per element
 		std::vector<double> M_new(dof);
 
-		for(int i = 0; i < n_elem; i++)
-		{
-			int offset = IntrctPtr->GetElementDOFOffset(i);
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+			int offset = IntrctPtr->GetElementDOFOffset((int)i);
 			TVector3d H_i(H_vec[offset], H_vec[offset+1], H_vec[offset+2]);
 			TVector3d M_i(M_vec[offset], M_vec[offset+1], M_vec[offset+2]);
 			TVector3d B_i = MU_0 * (H_i + M_i);
@@ -1544,7 +1548,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 			M_new[offset+0] = M_model.x;
 			M_new[offset+1] = M_model.y;
 			M_new[offset+2] = M_model.z;
-		}
+		});
 
 		// Convergence: ||M_model - M_linear||^2 / ||M_model||^2
 		double sum_dM2 = 0.0, sum_M2 = 0.0;
@@ -1579,15 +1583,14 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 	}
 
 	// Store converged M back to elements and commit hysteresis state
-	for(int i = 0; i < n_elem; i++)
-	{
-		int offset = IntrctPtr->GetElementDOFOffset(i);
+	ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+		int offset = IntrctPtr->GetElementDOFOffset((int)i);
 		TVector3d M_final(M_vec[offset], M_vec[offset+1], M_vec[offset+2]);
 		ctx.FlatMagn[offset+0] = M_final.x;
 		ctx.FlatMagn[offset+1] = M_final.y;
 		ctx.FlatMagn[offset+2] = M_final.z;
 
-		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[i];
+		radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[(int)i];
 		g3dRelaxPtr->SetM(M_final);
 
 		// Final Forward at converged B + CommitState
@@ -1598,7 +1601,7 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 			H_vec[offset+2] + M_final.z);
 		hys_mats[i]->Forward(B_final);
 		hys_mats[i]->CommitState();
-	}
+	});
 
 	// Update field arrays
 #ifdef HAVE_LAPACK
@@ -1607,13 +1610,12 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Hantila(
 		cblas_dgemv(CblasColMajor, CblasNoTrans, dof, dof,
 		            -1.0, ctx.BaseMatrix.data(), dof,
 		            M_vec.data(), 1, 1.0, H_vec.data(), 1);
-		for(int i = 0; i < n_elem; i++)
-		{
-			int offset = IntrctPtr->GetElementDOFOffset(i);
+		ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t i) {
+			int offset = IntrctPtr->GetElementDOFOffset((int)i);
 			ctx.FlatField[offset+0] = H_vec[offset+0];
 			ctx.FlatField[offset+1] = H_vec[offset+1];
 			ctx.FlatField[offset+2] = H_vec[offset+2];
-		}
+		});
 	}
 #endif
 
@@ -2174,14 +2176,18 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 	// CRITICAL: dgesv expects COLUMN-MAJOR format, but BaseMatrix is ROW-MAJOR
 	// Transpose in-place: swap A[i,j] with A[j,i] for i < j
-	for(int i = 0; i < totalDOF; i++)
-	{
-		for(int j = i + 1; j < totalDOF; j++)
+	// Each (i,j) pair is touched exactly once (j>i restriction), so different
+	// outer-i rows never write the same cell -> safe to parallelize over i.
+	ngcore::ParallelForRange(ngcore::IntRange(totalDOF), [&](ngcore::IntRange r) {
+		for (auto i : r)
 		{
-			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-			std::swap(SystemMatrix[(size_t)i * totalDOF + j], SystemMatrix[(size_t)j * totalDOF + i]);
+			for(int j = (int)i + 1; j < totalDOF; j++)
+			{
+				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+				std::swap(SystemMatrix[(size_t)i * totalDOF + j], SystemMatrix[(size_t)j * totalDOF + i]);
+			}
 		}
-	}
+	});
 
 	// dgesv overwrites SystemMatrix with LU factors and RHS with solution
 	{
@@ -2193,14 +2199,17 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	if(info != 0) return -1;  // Singular matrix
 #else
 	// Fallback: transpose to row-major and use SolveLU_Flat
-	for(int i = 0; i < totalDOF; i++)
-	{
-		for(int j = i + 1; j < totalDOF; j++)
+	// Each (i,j) pair touched once (j>i); safe to parallelize over outer i.
+	ngcore::ParallelForRange(ngcore::IntRange(totalDOF), [&](ngcore::IntRange r) {
+		for (auto i : r)
 		{
-			// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
-			std::swap(SystemMatrix[(size_t)i * totalDOF + j], SystemMatrix[(size_t)j * totalDOF + i]);
+			for(int j = (int)i + 1; j < totalDOF; j++)
+			{
+				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
+				std::swap(SystemMatrix[(size_t)i * totalDOF + j], SystemMatrix[(size_t)j * totalDOF + i]);
+			}
 		}
-	}
+	});
 	int ierr = SolveLU_Flat(SystemMatrix, RHS, totalDOF);
 	if(ierr != 0) return -1;
 #endif
@@ -2953,6 +2962,32 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 	// Update H-matrix diagonal with current inv_chi
 	m_hacapk->UpdateDiagonal(inv_chi);
 
+	// ALPHA-FREE loop-star gauge: solve the reduced star-subspace system
+	// T^T A T y = T^T rhs (H-matrix unchanged, sandwiched with the sparse T),
+	// sigma = T y. Field-exact + well-conditioned for the LINEAR regime (the
+	// principled replacement for the fragile alpha-shift deflation). No Newton
+	// line search (linear). Enabled by rad.SetLoopStarGauge(True).
+	if(rad.m_loopstar_gauge)
+	{
+		// SolveLoopStar uses a reduced-DIAGONAL Jacobi preconditioner (no block
+		// data passed). NOTE: the block-Jacobi SANDWICH (T^T M_bj^-1 T) was tried
+		// and is MUCH worse (linear 50->902, nonlinear 3023->49141 iters) because
+		// M_bj^-1, the block-diagonal of the FULL A, does not match the reduced
+		// operator's structure (star variables are not element-blocked). The
+		// diagonal Jacobi is best: LINEAR 2.12x faster than OFF; NONLINEAR
+		// field-exact (slower than OFF's block-Jacobi, accepted -- the value is
+		// the clean loop-free solution, not speed).
+		std::vector<double> sigma_ls(totalDOF);
+		int it_ls = m_hacapk->SolveLoopStar(rhs, sigma_ls, tol, max_iter);
+		if(it_ls < 0) return 0;   // star basis unavailable -> fail loudly
+		for(int i = 0; i < totalDOF; i++) FlatMagn[i] = sigma_ls[i];
+		m_hacapk->MatVec(sigma_ls, v);            // true residual ||rhs - A*sigma||
+		this->Copy(rhs, r, totalDOF);
+		this->Axpy(-1.0, v, r, totalDOF);
+		residual = this->Norm2(r, totalDOF) / (this->Norm2(rhs, totalDOF) + 1.0e-300);
+		return it_ls;
+	}
+
 	// Initial guess
 	for(int i = 0; i < totalDOF; i++)
 	{
@@ -3346,6 +3381,18 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		// NOTE: No longer caching Jacobi preconditioner (FIX 2025-12-27)
 		// We recompute diag_inv = 1/(N_ii - inv_chi[i]) each iteration (ELF-compatible)
 	}
+
+	// Loop-mode deflation: the HACApK MatVec then returns (A + alpha L L^T) x,
+	// lifting the near-null (loop) modes so the converged solution is loop-free.
+	// Auto-build the local cycle basis from mesh topology when enabled via
+	// rad.SetDeflateNullspace(True); otherwise use a manually-supplied basis.
+	if(rad.m_deflate_nullspace)
+		m_hacapk->BuildLoopBasis(rad.m_deflate_alpha);
+	else
+		m_hacapk->SetDeflation(rad.m_hacapk_defl_offsets, rad.m_hacapk_defl_dofs,
+		                       rad.m_hacapk_defl_signs, rad.m_hacapk_defl_alpha);
+	rad.m_solve_defl_nplaq = m_hacapk->GetDeflationCycleCount();  // diagnostic: cycles installed
+	rad.m_solve_defl_alpha = m_hacapk->GetDeflationAlpha();       // diagnostic: shift alpha used (auto)
 
 	// NOTE: 3DOF tetrahedra use PrecomputeFlatInteractMatrix() for fast O(1) access
 	// 6DOF hexahedra use PrecomputeGeometry() + Compute6x6BlockFast()

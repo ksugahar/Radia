@@ -21,6 +21,7 @@ import time
 
 # NGSolve MUST be imported before cubit
 from ngsolve import Mesh as NGMesh, Integrate, CF, BND
+from ngsolve import TaskManager
 
 RADIUS = 0.05
 V_EXACT = (4.0 / 3.0) * math.pi * RADIUS**3
@@ -38,25 +39,26 @@ def demo_occ_path():
     geo = OCCGeometry(Sphere((0, 0, 0), RADIUS))
 
     for maxh, label in [(0.015, "coarse"), (0.008, "fine")]:
-        ng_base = geo.GenerateMesh(maxh=maxh)
-        ne = ng_base.ne
-        print(f"\n  Mesh: {ne} tets (maxh={maxh}, {label})")
-        print(f"  {'p':>3} {'Volume':>14} {'V err':>10} {'Area':>14} {'A err':>10} {'Time':>7}")
-        print(f"  {'-'*60}")
+        with TaskManager():
+            ng_base = geo.GenerateMesh(maxh=maxh)
+            ne = ng_base.ne
+            print(f"\n  Mesh: {ne} tets (maxh={maxh}, {label})")
+            print(f"  {'p':>3} {'Volume':>14} {'V err':>10} {'Area':>14} {'A err':>10} {'Time':>7}")
+            print(f"  {'-'*60}")
 
-        for p in range(1, 6):
-            ng = geo.GenerateMesh(maxh=maxh)
-            t0 = time.perf_counter()
-            if p >= 2:
-                ng.Curve(p)
-            t1 = time.perf_counter()
-            mesh = NGMesh(ng)
-            vol = Integrate(CF(1), mesh)
-            area = Integrate(CF(1), mesh, BND)
-            v_err = (vol - V_EXACT) / V_EXACT * 100
-            a_err = (area - A_EXACT) / A_EXACT * 100
-            print(f"  {p:>3} {vol:>14.8e} {v_err:>+9.5f}% "
-                  f"{area:>14.8e} {a_err:>+9.5f}% {t1-t0:>6.3f}s")
+            for p in range(1, 6):
+                ng = geo.GenerateMesh(maxh=maxh)
+                t0 = time.perf_counter()
+                if p >= 2:
+                    ng.Curve(p)
+                t1 = time.perf_counter()
+                mesh = NGMesh(ng)
+                vol = Integrate(CF(1), mesh)
+                area = Integrate(CF(1), mesh, BND)
+                v_err = (vol - V_EXACT) / V_EXACT * 100
+                a_err = (area - A_EXACT) / A_EXACT * 100
+                print(f"  {p:>3} {vol:>14.8e} {v_err:>+9.5f}% "
+                      f"{area:>14.8e} {a_err:>+9.5f}% {t1-t0:>6.3f}s")
 
 
 def demo_acis_path():

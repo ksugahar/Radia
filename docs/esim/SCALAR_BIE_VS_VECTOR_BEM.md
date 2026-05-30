@@ -188,12 +188,18 @@ domain:
   the workpiece surface.  But the workpiece *interior* mesh and the
   Kelvin exterior consume the bulk of the DOFs.
 
-So path C is mathematically clean (it's how Hollaus et al. did
-ESIM), but it pays a **100x DOF count** for the same surface-side
-accuracy.  Worth it only when the air mesh genuinely needs to
-resolve something the BEM cannot — e.g., a magnetic core or a
-thin-gap structure inside the air.  For pure IH (coil + workpiece
-+ vacuum), it is wasteful.
+So path C is mathematically clean and, like Hollaus et al., it is
+a **volume FEM** that needs an (unbounded) air mesh.  NB the
+potential differs: our path C discretises the vector potential
+**HCurl A** on the Kelvin-transformed exterior, whereas Hollaus
+et al. use a **magnetic scalar potential** ("A Nonlinear Effective
+Surface Impedance in a Magnetic Scalar Potential Formulation",
+IEEE TMag 2025) — closer in spirit to our scalar BIE, but still
+volumetric.  Either way the volume FEM pays a **100x DOF count**
+for the same surface-side accuracy.  Worth it only when the air
+mesh genuinely needs to resolve something the BEM cannot — e.g.,
+a magnetic core or a thin-gap structure inside the air.  For pure
+IH (coil + workpiece + vacuum), it is wasteful.
 
 ### 3.5 Volumetric coil A-V (D): a separate problem
 

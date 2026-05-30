@@ -35,6 +35,7 @@ TARGET_RATIO_OK = 1.01   # within 1%
 
 def build_mesh(R_air, Z_air, maxh_disk, maxh_air):
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
 
     air_box = MoveTo(0, -Z_air).Rectangle(R_air, 2 * Z_air).Face()
@@ -46,7 +47,8 @@ def build_mesh(R_air, Z_air, maxh_disk, maxh_air):
     air_box.edges.Max(Y).name = "top"
     air_box.edges.Min(Y).name = "bot"
     shape = Glue([air_box, disk])
-    return Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_air))
+    with TaskManager():
+        return Mesh(OCCGeometry(shape, dim=2).GenerateMesh(maxh=maxh_air))
 
 
 def extract(mesh):

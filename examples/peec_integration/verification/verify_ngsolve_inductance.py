@@ -41,6 +41,7 @@ os.environ['PATH'] = (r'S:\NGSolve\01_GitHub\install_ngsolve\bin;'
 sys.path.insert(0, r'S:\NGSolve\01_GitHub\install_ngsolve\Lib\site-packages')
 
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 MU_0 = 4e-7 * np.pi
@@ -149,13 +150,14 @@ def create_geometry(include_core=False, include_shield=False,
 
     ngmesh = geo.GenerateMesh(maxh=maxh)
     mesh = Mesh(ngmesh)
-    mesh.Curve(2)
+    with TaskManager():
+        mesh.Curve(2)
 
-    print(f"  Mesh: {mesh.ne} elements, {mesh.nv} vertices "
-          f"(air_r={air_r * 1e3:.0f}mm, maxh={maxh * 1e3:.0f}mm)")
-    print(f"  Materials: {mesh.GetMaterials()}")
+        print(f"  Mesh: {mesh.ne} elements, {mesh.nv} vertices "
+              f"(air_r={air_r * 1e3:.0f}mm, maxh={maxh * 1e3:.0f}mm)")
+        print(f"  Materials: {mesh.GetMaterials()}")
 
-    return mesh
+        return mesh
 
 
 def solve_magnetostatic(mesh, mu_r_core=1.0, order=FEM_ORDER, verbose=True):

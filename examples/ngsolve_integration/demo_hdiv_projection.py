@@ -37,6 +37,7 @@ import numpy as np
 # Check NGSolve availability
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.csg import CSGeometry, OrthoBrick, Pnt
     import radia as rad
     NGSOLVE_AVAILABLE = True
@@ -148,132 +149,133 @@ print(f"  RadiaField created: field_type='{B_cf.field_type}'")
 
 # Project to HDiv GridFunction
 print("  Projecting B field to HDiv GridFunction...")
-B_gf_hdiv.Set(B_cf)
-print("  [OK] HDiv projection complete")
+with TaskManager():
+    B_gf_hdiv.Set(B_cf)
+    print("  [OK] HDiv projection complete")
 
-# ============================================================================
-# Step 5: Compare with Other Function Spaces
-# ============================================================================
-print("\n[Step 5] Comparing function spaces")
-print("-" * 70)
+    # ============================================================================
+    # Step 5: Compare with Other Function Spaces
+    # ============================================================================
+    print("\n[Step 5] Comparing function spaces")
+    print("-" * 70)
 
-# HCurl space (for vector potential A, but can also be used for B)
-fes_hcurl = HCurl(mesh, order=2)
-B_gf_hcurl = GridFunction(fes_hcurl)
-B_gf_hcurl.Set(B_cf)
-print(f"  HCurl space DOFs: {fes_hcurl.ndof}")
+    # HCurl space (for vector potential A, but can also be used for B)
+    fes_hcurl = HCurl(mesh, order=2)
+    B_gf_hcurl = GridFunction(fes_hcurl)
+    B_gf_hcurl.Set(B_cf)
+    print(f"  HCurl space DOFs: {fes_hcurl.ndof}")
 
-# VectorH1 space (continuous vector field)
-fes_vh1 = VectorH1(mesh, order=2)
-B_gf_vh1 = GridFunction(fes_vh1)
-B_gf_vh1.Set(B_cf)
-print(f"  VectorH1 space DOFs: {fes_vh1.ndof}")
+    # VectorH1 space (continuous vector field)
+    fes_vh1 = VectorH1(mesh, order=2)
+    B_gf_vh1 = GridFunction(fes_vh1)
+    B_gf_vh1.Set(B_cf)
+    print(f"  VectorH1 space DOFs: {fes_vh1.ndof}")
 
-# ============================================================================
-# Step 6: Accuracy Comparison at Test Points
-# ============================================================================
-print("\n[Step 6] Accuracy comparison at test points")
-print("-" * 70)
+    # ============================================================================
+    # Step 6: Accuracy Comparison at Test Points
+    # ============================================================================
+    print("\n[Step 6] Accuracy comparison at test points")
+    print("-" * 70)
 
-# Test points (far from magnet surface, > 1 mesh cell)
-test_points = [
-    (0.035, 0.0, 0.0),   # 25mm from magnet center
-    (0.045, 0.0, 0.0),   # 35mm from magnet center
-    (0.055, 0.0, 0.0),   # 45mm from magnet center
-    (0.035, 0.015, 0.0), # Off-axis point
-    (0.035, 0.0, 0.015), # Off-axis point
-]
+    # Test points (far from magnet surface, > 1 mesh cell)
+    test_points = [
+        (0.035, 0.0, 0.0),   # 25mm from magnet center
+        (0.045, 0.0, 0.0),   # 35mm from magnet center
+        (0.055, 0.0, 0.0),   # 45mm from magnet center
+        (0.035, 0.015, 0.0), # Off-axis point
+        (0.035, 0.0, 0.015), # Off-axis point
+    ]
 
-print(f"{'Point (m)':<25s} {'Radia |B|':>12s} {'HDiv |B|':>12s} {'HCurl |B|':>12s} {'VH1 |B|':>12s}")
-print("-" * 75)
+    print(f"{'Point (m)':<25s} {'Radia |B|':>12s} {'HDiv |B|':>12s} {'HCurl |B|':>12s} {'VH1 |B|':>12s}")
+    print("-" * 75)
 
-errors_hdiv = []
-errors_hcurl = []
-errors_vh1 = []
+    errors_hdiv = []
+    errors_hcurl = []
+    errors_vh1 = []
 
-for pt in test_points:
-    # Direct Radia evaluation
-    B_radia = rad.Fld(magnet, 'b', list(pt))
-    B_radia_mag = np.linalg.norm(B_radia)
+    for pt in test_points:
+        # Direct Radia evaluation
+        B_radia = rad.Fld(magnet, 'b', list(pt))
+        B_radia_mag = np.linalg.norm(B_radia)
 
-    # NGSolve GridFunction evaluations
-    mip = mesh(*pt)
-    B_hdiv = B_gf_hdiv(mip)
-    B_hcurl = B_gf_hcurl(mip)
-    B_vh1 = B_gf_vh1(mip)
+        # NGSolve GridFunction evaluations
+        mip = mesh(*pt)
+        B_hdiv = B_gf_hdiv(mip)
+        B_hcurl = B_gf_hcurl(mip)
+        B_vh1 = B_gf_vh1(mip)
 
-    B_hdiv_mag = np.linalg.norm(B_hdiv)
-    B_hcurl_mag = np.linalg.norm(B_hcurl)
-    B_vh1_mag = np.linalg.norm(B_vh1)
+        B_hdiv_mag = np.linalg.norm(B_hdiv)
+        B_hcurl_mag = np.linalg.norm(B_hcurl)
+        B_vh1_mag = np.linalg.norm(B_vh1)
 
-    # Calculate relative errors
-    if B_radia_mag > 1e-6:
-        err_hdiv = abs(B_hdiv_mag - B_radia_mag) / B_radia_mag * 100
-        err_hcurl = abs(B_hcurl_mag - B_radia_mag) / B_radia_mag * 100
-        err_vh1 = abs(B_vh1_mag - B_radia_mag) / B_radia_mag * 100
-    else:
-        err_hdiv = err_hcurl = err_vh1 = 0.0
+        # Calculate relative errors
+        if B_radia_mag > 1e-6:
+            err_hdiv = abs(B_hdiv_mag - B_radia_mag) / B_radia_mag * 100
+            err_hcurl = abs(B_hcurl_mag - B_radia_mag) / B_radia_mag * 100
+            err_vh1 = abs(B_vh1_mag - B_radia_mag) / B_radia_mag * 100
+        else:
+            err_hdiv = err_hcurl = err_vh1 = 0.0
 
-    errors_hdiv.append(err_hdiv)
-    errors_hcurl.append(err_hcurl)
-    errors_vh1.append(err_vh1)
+        errors_hdiv.append(err_hdiv)
+        errors_hcurl.append(err_hcurl)
+        errors_vh1.append(err_vh1)
 
-    pt_str = f"({pt[0]:.3f},{pt[1]:.3f},{pt[2]:.3f})"
-    print(f"{pt_str:<25s} {B_radia_mag:>12.6f} {B_hdiv_mag:>12.6f} {B_hcurl_mag:>12.6f} {B_vh1_mag:>12.6f}")
+        pt_str = f"({pt[0]:.3f},{pt[1]:.3f},{pt[2]:.3f})"
+        print(f"{pt_str:<25s} {B_radia_mag:>12.6f} {B_hdiv_mag:>12.6f} {B_hcurl_mag:>12.6f} {B_vh1_mag:>12.6f}")
 
-print("-" * 75)
-print(f"{'Max error (%)':<25s} {'':<12s} {max(errors_hdiv):>12.3f} {max(errors_hcurl):>12.3f} {max(errors_vh1):>12.3f}")
-print(f"{'Avg error (%)':<25s} {'':<12s} {np.mean(errors_hdiv):>12.3f} {np.mean(errors_hcurl):>12.3f} {np.mean(errors_vh1):>12.3f}")
+    print("-" * 75)
+    print(f"{'Max error (%)':<25s} {'':<12s} {max(errors_hdiv):>12.3f} {max(errors_hcurl):>12.3f} {max(errors_vh1):>12.3f}")
+    print(f"{'Avg error (%)':<25s} {'':<12s} {np.mean(errors_hdiv):>12.3f} {np.mean(errors_hcurl):>12.3f} {np.mean(errors_vh1):>12.3f}")
 
-# ============================================================================
-# Step 7: Export to VTK for Visualization
-# ============================================================================
-print("\n[Step 7] Exporting to VTK")
-print("-" * 70)
+    # ============================================================================
+    # Step 7: Export to VTK for Visualization
+    # ============================================================================
+    print("\n[Step 7] Exporting to VTK")
+    print("-" * 70)
 
-output_dir = os.path.dirname(os.path.abspath(__file__))
-vtk_filename = os.path.join(output_dir, "demo_hdiv_projection")
+    output_dir = os.path.dirname(os.path.abspath(__file__))
+    vtk_filename = os.path.join(output_dir, "demo_hdiv_projection")
 
-# Export HDiv GridFunction
-vtkopts = VTKOutput(
-    mesh,
-    names=["B_hdiv"],
-    coefs=[B_gf_hdiv],
-    filename=vtk_filename
-)
-vtkopts.Do()
+    # Export HDiv GridFunction
+    vtkopts = VTKOutput(
+        mesh,
+        names=["B_hdiv"],
+        coefs=[B_gf_hdiv],
+        filename=vtk_filename
+    )
+    vtkopts.Do()
 
-print(f"  VTK file exported: {vtk_filename}.vtu")
-print("  Open in ParaView to visualize the magnetic field")
+    print(f"  VTK file exported: {vtk_filename}.vtu")
+    print("  Open in ParaView to visualize the magnetic field")
 
-# ============================================================================
-# Summary
-# ============================================================================
-print("\n" + "=" * 70)
-print("SUMMARY: HDiv Function Space Projection")
-print("=" * 70)
-print("""
-Best Practices for NGSolve Integration:
+    # ============================================================================
+    # Summary
+    # ============================================================================
+    print("\n" + "=" * 70)
+    print("SUMMARY: HDiv Function Space Projection")
+    print("=" * 70)
+    print("""
+    Best Practices for NGSolve Integration:
 
-1. Radia always uses meters (compatible with NGSolve SI units)
+    1. Radia always uses meters (compatible with NGSolve SI units)
 
-2. Use HDiv(mesh, order=2) for magnetic flux density B
-   - Preserves div(B) = 0 (no magnetic monopoles)
-   - Normal continuity across element boundaries
-   - Best accuracy for magnetic field
+    2. Use HDiv(mesh, order=2) for magnetic flux density B
+       - Preserves div(B) = 0 (no magnetic monopoles)
+       - Normal continuity across element boundaries
+       - Best accuracy for magnetic field
 
-3. Evaluate GridFunction at distances > 1 mesh cell from magnet surface
-   - Projection interpolation can introduce errors near boundaries
-   - Use CoefficientFunction directly for points near magnet
+    3. Evaluate GridFunction at distances > 1 mesh cell from magnet surface
+       - Projection interpolation can introduce errors near boundaries
+       - Use CoefficientFunction directly for points near magnet
 
-4. For vector potential A, use HCurl space
-   - Preserves curl structure
-   - Natural for A where B = curl(A)
-""")
+    4. For vector potential A, use HCurl space
+       - Preserves curl structure
+       - Natural for A where B = curl(A)
+    """)
 
-print("=" * 70)
-print("[DONE] HDiv projection demo complete")
-print("=" * 70)
+    print("=" * 70)
+    print("[DONE] HDiv projection demo complete")
+    print("=" * 70)
 
-# Cleanup
-rad.UtiDelAll()
+    # Cleanup
+    rad.UtiDelAll()

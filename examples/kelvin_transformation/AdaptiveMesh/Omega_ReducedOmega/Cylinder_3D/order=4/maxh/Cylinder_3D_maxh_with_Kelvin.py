@@ -48,6 +48,7 @@ print(f"Deleted {deleted_count} files.")
 
 from numpy import pi, sqrt, linspace, zeros, nan, isnan, meshgrid, array, log, log10, sin, cos
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 from radia.kelvin_source import kelvin_mu_factor_3d_cf, build_material_cf
 import scipy.io as sio
@@ -773,119 +774,183 @@ iteration = 0
 current_maxh = maxh_initial
 prev_ndof = 0
 
-while True:
-	if prev_ndof >= 1e5:
-		print(f"\n  DOF limit reached ({prev_ndof} >= 1e5), stopping without computing.")
-		break
+with TaskManager():
+	while True:
+		if prev_ndof >= 1e5:
+			print(f"\n  DOF limit reached ({prev_ndof} >= 1e5), stopping without computing.")
+			break
 
-	print(f"\n{'=' * 60}")
-	print(f"Iteration {iteration + 1} (maxh = {current_maxh:.6f})")
+		print(f"\n{'=' * 60}")
+		print(f"Iteration {iteration + 1} (maxh = {current_maxh:.6f})")
+		print("=" * 60)
+
+		# Generate new mesh with current maxh
+		mesh = Mesh(geo.GenerateMesh(maxh=current_maxh, grading=0.5))
+		mesh.Curve(order)
+
+		print(f"  Mesh generated with maxh={current_maxh:.6f}")
+		print(f"  Elements: {mesh.ne}")
+		print(f"  Vertices: {mesh.nv}")
+
+		# Solve
+		fes, gfu, Mu, fields = solve_omega_formulation(mesh, order)
+
+		H_pert_cf = fields['H_pert_cf']
+		B_pert_cf = fields['B_pert_cf']
+		H_total_cf = fields['H_total_cf']
+		B_total_cf = fields['B_total_cf']
+		Hs_cf = fields['Hs_cf']
+		Bs_cf = fields['Bs_cf']
+		mu_kelvin = fields['mu_kelvin']
+
+		# Compute error estimator
+		element_errors = compute_error_estimator(mesh, fes, H_pert_cf, mu0, mu_r)
+		total_error = sqrt(sum(element_errors))
+
+		# Energy calculation
+		Hs = CoefficientFunction((0.0, 0.0, H0))
+		Omega_s = H0 * z
+
+		H_pert_total = grad(gfu) - Hs
+		energy_magnetic = Integrate(0.5 * (mu_r * mu0) * InnerProduct(H_pert_total, H_pert_total) * dx("magnetic"), mesh)
+		energy_air_total = Integrate(0.5 * mu0 * InnerProduct(H_pert_total, H_pert_total) * dx("air_total"), mesh)
+
+		fesOr = H1(mesh, order=order, definedon="air_inner|air_outer")
+		Orr = GridFunction(fesOr)
+		Oxr = GridFunction(fesOr)
+		Orr.Set(gfu, VOL, definedon="air_inner|air_outer")
+		Oxr.Set(Omega_s, BND, mesh.Boundaries("total_reduced"))
+		H_pert_reduced = grad(Orr) - grad(Oxr)
+		energy_air_inner = Integrate(0.5 * mu0 * InnerProduct(H_pert_reduced, H_pert_reduced) * dx("air_inner"), mesh)
+
+		H_pert_kelvin = grad(Orr)
+		energy_air_outer = Integrate(0.5 * mu_kelvin * InnerProduct(H_pert_kelvin, H_pert_kelvin) * dx("air_outer"), mesh)
+
+		energy_magnetic_full = 8 * energy_magnetic
+		energy_air_total_full = 8 * energy_air_total
+		energy_air_inner_full = 8 * energy_air_inner
+		energy_air_outer_full = 8 * energy_air_outer
+
+		energy_1_8 = energy_magnetic + energy_air_total + energy_air_inner + energy_air_outer
+		energy_full = 8 * energy_1_8
+
+		energy_total_region_full = energy_magnetic_full + energy_air_total_full
+		energy_reduced_region_full = energy_air_inner_full + energy_air_outer_full
+
+		region_counts = count_elements_by_region(mesh)
+		ne_magnetic = region_counts.get('magnetic', 0)
+		ne_air_total = region_counts.get('air_total', 0)
+		ne_air_inner = region_counts.get('air_inner', 0)
+		ne_air_outer = region_counts.get('air_outer', 0)
+		ne_total = ne_magnetic + ne_air_total
+		ne_reduced = ne_air_inner + ne_air_outer
+
+		# Record history
+		history['ndof'].append(fes.ndof)
+		history['elements'].append(mesh.ne)
+		history['elements_total'].append(ne_total)
+		history['elements_reduced'].append(ne_reduced)
+		history['elements_magnetic'].append(ne_magnetic)
+		history['elements_air_total'].append(ne_air_total)
+		history['elements_air_inner'].append(ne_air_inner)
+		history['elements_air_outer'].append(ne_air_outer)
+		history['error'].append(total_error)
+		history['energy'].append(energy_full)
+		history['energy_total_region'].append(energy_total_region_full)
+		history['energy_reduced_region'].append(energy_reduced_region_full)
+		history['energy_magnetic'].append(energy_magnetic_full)
+		history['energy_air_total'].append(energy_air_total_full)
+		history['energy_air_inner'].append(energy_air_inner_full)
+		history['energy_air_outer'].append(energy_air_outer_full)
+		history['maxh'].append(current_maxh)
+
+		print(f"  Elements: {mesh.ne} (Total: {ne_total}, Reduced: {ne_reduced})")
+		print(f"    magnetic: {ne_magnetic}, air_total: {ne_air_total}, air_inner: {ne_air_inner}, air_outer: {ne_air_outer}")
+		print(f"  Vertices: {mesh.nv}")
+		print(f"  DOFs: {fes.ndof}")
+		print(f"  Error estimator: {total_error:.6e}")
+		print(f"  Energy (8x1/8): {energy_full:.6e} J")
+
+		output_data = {
+			'mesh': mesh,
+			'gfu': gfu,
+			'B_pert_cf': B_pert_cf,
+			'H_pert_cf': H_pert_cf,
+			'B_total_cf': B_total_cf,
+			'H_total_cf': H_total_cf,
+			'Bs_cf': Bs_cf,
+			'Hs_cf': Hs_cf,
+			'element_errors': element_errors,
+		}
+
+		vtk_file = output_vtk(mesh, iteration, output_data)
+		if vtk_file is not None:
+			print(f"  VTK saved: {vtk_file}")
+
+		save_iteration_mat(iteration + 1, history, mesh.ne, mesh.nv, current_maxh)
+
+		mat_filename = os.path.join(script_dir, os.path.splitext(os.path.basename(__file__))[0] + ".mat")
+		mat_data = {
+			'ndof': array(history['ndof']),
+			'elements': array(history['elements']),
+			'elements_total': array(history['elements_total']),
+			'elements_reduced': array(history['elements_reduced']),
+			'elements_magnetic': array(history['elements_magnetic']),
+			'elements_air_total': array(history['elements_air_total']),
+			'elements_air_inner': array(history['elements_air_inner']),
+			'elements_air_outer': array(history['elements_air_outer']),
+			'error': array(history['error']),
+			'energy': array(history['energy']),
+			'energy_total_region': array(history['energy_total_region']),
+			'energy_reduced_region': array(history['energy_reduced_region']),
+			'energy_magnetic': array(history['energy_magnetic']),
+			'energy_air_total': array(history['energy_air_total']),
+			'energy_air_inner': array(history['energy_air_inner']),
+			'energy_air_outer': array(history['energy_air_outer']),
+			'maxh': array(history['maxh']),
+			'order': order,
+			'dimension': 3,
+			'method': 'maxh',
+			'model_type': '1/8',
+			'geometry': 'cylinder'
+		}
+		sio.savemat(mat_filename, mat_data)
+		print(f"  Main MAT saved: {mat_filename}")
+
+		generate_convergence_plot(iteration + 1, history, output_data, current_maxh)
+
+		if iteration + 1 >= max_iterations:
+			print(f"\n  Iteration limit reached ({iteration + 1} >= {max_iterations}), stopping.")
+			break
+
+		prev_ndof = fes.ndof
+
+		# Reduce maxh for next iteration
+		current_maxh *= maxh_factor
+
+		iteration += 1
+
+
+	# ============================================================
+	# Final Statistics
+	# ============================================================
+	print("\n" + "=" * 60)
+	print("Convergence History")
 	print("=" * 60)
 
-	# Generate new mesh with current maxh
-	mesh = Mesh(geo.GenerateMesh(maxh=current_maxh, grading=0.5))
-	mesh.Curve(order)
+	print(f"\n{'Iter':<6} {'maxh':<10} {'Elements':<10} {'DOFs':<10} {'Error Est':<12} {'E_sum(J)':<12}")
+	print("-" * 70)
+	for i in range(len(history['ndof'])):
+		print(f"{i+1:<6} {history['maxh'][i]:<10.6f} {history['elements'][i]:<10} {history['ndof'][i]:<10} "
+		      f"{history['error'][i]:<12.4e} {history['energy'][i]:<12.4e}")
 
-	print(f"  Mesh generated with maxh={current_maxh:.6f}")
-	print(f"  Elements: {mesh.ne}")
-	print(f"  Vertices: {mesh.nv}")
-
-	# Solve
-	fes, gfu, Mu, fields = solve_omega_formulation(mesh, order)
-
-	H_pert_cf = fields['H_pert_cf']
-	B_pert_cf = fields['B_pert_cf']
-	H_total_cf = fields['H_total_cf']
-	B_total_cf = fields['B_total_cf']
-	Hs_cf = fields['Hs_cf']
-	Bs_cf = fields['Bs_cf']
-	mu_kelvin = fields['mu_kelvin']
-
-	# Compute error estimator
-	element_errors = compute_error_estimator(mesh, fes, H_pert_cf, mu0, mu_r)
-	total_error = sqrt(sum(element_errors))
-
-	# Energy calculation
-	Hs = CoefficientFunction((0.0, 0.0, H0))
-	Omega_s = H0 * z
-
-	H_pert_total = grad(gfu) - Hs
-	energy_magnetic = Integrate(0.5 * (mu_r * mu0) * InnerProduct(H_pert_total, H_pert_total) * dx("magnetic"), mesh)
-	energy_air_total = Integrate(0.5 * mu0 * InnerProduct(H_pert_total, H_pert_total) * dx("air_total"), mesh)
-
-	fesOr = H1(mesh, order=order, definedon="air_inner|air_outer")
-	Orr = GridFunction(fesOr)
-	Oxr = GridFunction(fesOr)
-	Orr.Set(gfu, VOL, definedon="air_inner|air_outer")
-	Oxr.Set(Omega_s, BND, mesh.Boundaries("total_reduced"))
-	H_pert_reduced = grad(Orr) - grad(Oxr)
-	energy_air_inner = Integrate(0.5 * mu0 * InnerProduct(H_pert_reduced, H_pert_reduced) * dx("air_inner"), mesh)
-
-	H_pert_kelvin = grad(Orr)
-	energy_air_outer = Integrate(0.5 * mu_kelvin * InnerProduct(H_pert_kelvin, H_pert_kelvin) * dx("air_outer"), mesh)
-
-	energy_magnetic_full = 8 * energy_magnetic
-	energy_air_total_full = 8 * energy_air_total
-	energy_air_inner_full = 8 * energy_air_inner
-	energy_air_outer_full = 8 * energy_air_outer
-
-	energy_1_8 = energy_magnetic + energy_air_total + energy_air_inner + energy_air_outer
-	energy_full = 8 * energy_1_8
-
-	energy_total_region_full = energy_magnetic_full + energy_air_total_full
-	energy_reduced_region_full = energy_air_inner_full + energy_air_outer_full
-
-	region_counts = count_elements_by_region(mesh)
-	ne_magnetic = region_counts.get('magnetic', 0)
-	ne_air_total = region_counts.get('air_total', 0)
-	ne_air_inner = region_counts.get('air_inner', 0)
-	ne_air_outer = region_counts.get('air_outer', 0)
-	ne_total = ne_magnetic + ne_air_total
-	ne_reduced = ne_air_inner + ne_air_outer
-
-	# Record history
-	history['ndof'].append(fes.ndof)
-	history['elements'].append(mesh.ne)
-	history['elements_total'].append(ne_total)
-	history['elements_reduced'].append(ne_reduced)
-	history['elements_magnetic'].append(ne_magnetic)
-	history['elements_air_total'].append(ne_air_total)
-	history['elements_air_inner'].append(ne_air_inner)
-	history['elements_air_outer'].append(ne_air_outer)
-	history['error'].append(total_error)
-	history['energy'].append(energy_full)
-	history['energy_total_region'].append(energy_total_region_full)
-	history['energy_reduced_region'].append(energy_reduced_region_full)
-	history['energy_magnetic'].append(energy_magnetic_full)
-	history['energy_air_total'].append(energy_air_total_full)
-	history['energy_air_inner'].append(energy_air_inner_full)
-	history['energy_air_outer'].append(energy_air_outer_full)
-	history['maxh'].append(current_maxh)
-
-	print(f"  Elements: {mesh.ne} (Total: {ne_total}, Reduced: {ne_reduced})")
-	print(f"    magnetic: {ne_magnetic}, air_total: {ne_air_total}, air_inner: {ne_air_inner}, air_outer: {ne_air_outer}")
-	print(f"  Vertices: {mesh.nv}")
-	print(f"  DOFs: {fes.ndof}")
-	print(f"  Error estimator: {total_error:.6e}")
-	print(f"  Energy (8x1/8): {energy_full:.6e} J")
-
-	output_data = {
-		'mesh': mesh,
-		'gfu': gfu,
-		'B_pert_cf': B_pert_cf,
-		'H_pert_cf': H_pert_cf,
-		'B_total_cf': B_total_cf,
-		'H_total_cf': H_total_cf,
-		'Bs_cf': Bs_cf,
-		'Hs_cf': Hs_cf,
-		'element_errors': element_errors,
-	}
-
-	vtk_file = output_vtk(mesh, iteration, output_data)
-	if vtk_file is not None:
-		print(f"  VTK saved: {vtk_file}")
-
-	save_iteration_mat(iteration + 1, history, mesh.ne, mesh.nv, current_maxh)
+	print(f"\nInitial -> Final:")
+	print(f"  maxh: {history['maxh'][0]:.6f} -> {history['maxh'][-1]:.6f}")
+	print(f"  Elements: {history['elements'][0]} -> {history['elements'][-1]}")
+	print(f"  DOFs: {history['ndof'][0]} -> {history['ndof'][-1]}")
+	if history['error'][-1] > 0:
+		print(f"  Error: {history['error'][0]:.4e} -> {history['error'][-1]:.4e} "
+		      f"({history['error'][0]/history['error'][-1]:.1f}x reduction)")
 
 	mat_filename = os.path.join(script_dir, os.path.splitext(os.path.basename(__file__))[0] + ".mat")
 	mat_data = {
@@ -913,81 +978,18 @@ while True:
 		'geometry': 'cylinder'
 	}
 	sio.savemat(mat_filename, mat_data)
-	print(f"  Main MAT saved: {mat_filename}")
+	print(f"\nData saved to: {mat_filename}")
 
-	generate_convergence_plot(iteration + 1, history, output_data, current_maxh)
+	print(f"\nFinal Energy Values:")
+	print(f"  Total region (magnetic+air_total): {history['energy_total_region'][-1]:.4e} J")
+	print(f"  Reduced region (air_inner+air_outer): {history['energy_reduced_region'][-1]:.4e} J")
+	print(f"  Sum: {history['energy'][-1]:.4e} J")
+	print(f"  Per-region:")
+	print(f"    magnetic:   {history['energy_magnetic'][-1]:.4e} J")
+	print(f"    air_total:  {history['energy_air_total'][-1]:.4e} J")
+	print(f"    air_inner:  {history['energy_air_inner'][-1]:.4e} J")
+	print(f"    air_outer:  {history['energy_air_outer'][-1]:.4e} J")
 
-	if iteration + 1 >= max_iterations:
-		print(f"\n  Iteration limit reached ({iteration + 1} >= {max_iterations}), stopping.")
-		break
-
-	prev_ndof = fes.ndof
-
-	# Reduce maxh for next iteration
-	current_maxh *= maxh_factor
-
-	iteration += 1
-
-
-# ============================================================
-# Final Statistics
-# ============================================================
-print("\n" + "=" * 60)
-print("Convergence History")
-print("=" * 60)
-
-print(f"\n{'Iter':<6} {'maxh':<10} {'Elements':<10} {'DOFs':<10} {'Error Est':<12} {'E_sum(J)':<12}")
-print("-" * 70)
-for i in range(len(history['ndof'])):
-	print(f"{i+1:<6} {history['maxh'][i]:<10.6f} {history['elements'][i]:<10} {history['ndof'][i]:<10} "
-	      f"{history['error'][i]:<12.4e} {history['energy'][i]:<12.4e}")
-
-print(f"\nInitial -> Final:")
-print(f"  maxh: {history['maxh'][0]:.6f} -> {history['maxh'][-1]:.6f}")
-print(f"  Elements: {history['elements'][0]} -> {history['elements'][-1]}")
-print(f"  DOFs: {history['ndof'][0]} -> {history['ndof'][-1]}")
-if history['error'][-1] > 0:
-	print(f"  Error: {history['error'][0]:.4e} -> {history['error'][-1]:.4e} "
-	      f"({history['error'][0]/history['error'][-1]:.1f}x reduction)")
-
-mat_filename = os.path.join(script_dir, os.path.splitext(os.path.basename(__file__))[0] + ".mat")
-mat_data = {
-	'ndof': array(history['ndof']),
-	'elements': array(history['elements']),
-	'elements_total': array(history['elements_total']),
-	'elements_reduced': array(history['elements_reduced']),
-	'elements_magnetic': array(history['elements_magnetic']),
-	'elements_air_total': array(history['elements_air_total']),
-	'elements_air_inner': array(history['elements_air_inner']),
-	'elements_air_outer': array(history['elements_air_outer']),
-	'error': array(history['error']),
-	'energy': array(history['energy']),
-	'energy_total_region': array(history['energy_total_region']),
-	'energy_reduced_region': array(history['energy_reduced_region']),
-	'energy_magnetic': array(history['energy_magnetic']),
-	'energy_air_total': array(history['energy_air_total']),
-	'energy_air_inner': array(history['energy_air_inner']),
-	'energy_air_outer': array(history['energy_air_outer']),
-	'maxh': array(history['maxh']),
-	'order': order,
-	'dimension': 3,
-	'method': 'maxh',
-	'model_type': '1/8',
-	'geometry': 'cylinder'
-}
-sio.savemat(mat_filename, mat_data)
-print(f"\nData saved to: {mat_filename}")
-
-print(f"\nFinal Energy Values:")
-print(f"  Total region (magnetic+air_total): {history['energy_total_region'][-1]:.4e} J")
-print(f"  Reduced region (air_inner+air_outer): {history['energy_reduced_region'][-1]:.4e} J")
-print(f"  Sum: {history['energy'][-1]:.4e} J")
-print(f"  Per-region:")
-print(f"    magnetic:   {history['energy_magnetic'][-1]:.4e} J")
-print(f"    air_total:  {history['energy_air_total'][-1]:.4e} J")
-print(f"    air_inner:  {history['energy_air_inner'][-1]:.4e} J")
-print(f"    air_outer:  {history['energy_air_outer'][-1]:.4e} J")
-
-print("\n" + "=" * 60)
-print("Computation completed successfully")
-print("=" * 60)
+	print("\n" + "=" * 60)
+	print("Computation completed successfully")
+	print("=" * 60)

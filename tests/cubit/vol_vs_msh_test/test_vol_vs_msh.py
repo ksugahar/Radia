@@ -33,15 +33,16 @@ def ngsolve_vol_integrate(vol_path):
     """Read .vol with NGSolve, return (volume, area, curve_order, nv, ne)."""
     from ngsolve import Mesh, Integrate, CF, BND
     mesh = Mesh(vol_path)
-    vol = Integrate(CF(1), mesh)
-    area = Integrate(CF(1), mesh, BND)
-    return {
-        'volume': vol,
-        'area': area,
-        'curve_order': mesh.GetCurveOrder(),
-        'nv': mesh.nv,
-        'ne': mesh.ne,
-    }
+    with TaskManager():
+        vol = Integrate(CF(1), mesh)
+        area = Integrate(CF(1), mesh, BND)
+        return {
+            'volume': vol,
+            'area': area,
+            'curve_order': mesh.GetCurveOrder(),
+            'nv': mesh.nv,
+            'ne': mesh.ne,
+        }
 
 
 # ================================================================
@@ -51,6 +52,7 @@ def ngsolve_readgmsh_integrate(msh_path):
     """Read .msh with ReadGmsh, return (volume, area, nv, ne)."""
     from netgen.read_gmsh import ReadGmsh
     from ngsolve import Mesh, Integrate, CF, BND
+    from ngsolve import TaskManager
     ng = ReadGmsh(msh_path)
     mesh = Mesh(ng)
     vol = Integrate(CF(1), mesh)

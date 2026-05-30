@@ -22,6 +22,7 @@ Date: 2025-01-04
 import os
 from numpy import *
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 print("=" * 60)
@@ -168,442 +169,443 @@ print("\nGenerating mesh...")
 mesh = Mesh(geo.GenerateMesh(maxh=maxh, grading=0.7))
 
 # Apply curved elements for high-order accuracy
-mesh.Curve(fe_order)
+with TaskManager():
+    mesh.Curve(fe_order)
 
-print(f"  Number of elements: {mesh.ne}")
-print(f"  Number of vertices: {mesh.nv}")
-print(f"  Materials: {mesh.GetMaterials()}")
-print(f"  Boundaries: {mesh.GetBoundaries()}")
-print(f"  Curved elements: order {fe_order}")
+    print(f"  Number of elements: {mesh.ne}")
+    print(f"  Number of vertices: {mesh.nv}")
+    print(f"  Materials: {mesh.GetMaterials()}")
+    print(f"  Boundaries: {mesh.GetBoundaries()}")
+    print(f"  Curved elements: order {fe_order}")
 
-# ============================================================
-# Finite Element Space
-# ============================================================
-print("\nSetting up finite element space...")
+    # ============================================================
+    # Finite Element Space
+    # ============================================================
+    print("\nSetting up finite element space...")
 
-# H1 space with Dirichlet BC at GND (infinity)
-fes_before = H1(mesh, order=fe_order, dirichlet_bbnd="GND")
-fes = Periodic(fes_before)  # Apply periodic BC
+    # H1 space with Dirichlet BC at GND (infinity)
+    fes_before = H1(mesh, order=fe_order, dirichlet_bbnd="GND")
+    fes = Periodic(fes_before)  # Apply periodic BC
 
-# Check if Periodic BC is working
-freedof_before = sum([1 for d in fes_before.FreeDofs() if d])
-freedof_after = sum([1 for d in fes.FreeDofs() if d])
-print(f"  Finite element order: {fe_order}")
-print(f"  Number of DOFs: {fes.ndof}")
-print(f"  FreeDofs: {freedof_before} -> {freedof_after} (diff: {freedof_before - freedof_after})")
+    # Check if Periodic BC is working
+    freedof_before = sum([1 for d in fes_before.FreeDofs() if d])
+    freedof_after = sum([1 for d in fes.FreeDofs() if d])
+    print(f"  Finite element order: {fe_order}")
+    print(f"  Number of DOFs: {fes.ndof}")
+    print(f"  FreeDofs: {freedof_before} -> {freedof_after} (diff: {freedof_before - freedof_after})")
 
-if freedof_before == freedof_after:
-    print("  WARNING: Periodic BC may NOT be working!")
-else:
-    print("  Periodic BC is working (FreeDofs reduced)")
+    if freedof_before == freedof_after:
+        print("  WARNING: Periodic BC may NOT be working!")
+    else:
+        print("  Periodic BC is working (FreeDofs reduced)")
 
-# Trial and test functions
-Omega = fes.TrialFunction()
-psi = fes.TestFunction()
+    # Trial and test functions
+    Omega = fes.TrialFunction()
+    psi = fes.TestFunction()
 
-# Coordinate functions (x = r, y = z)
-r_coord = x  # Radial coordinate
-z_coord = y  # Axial coordinate
+    # Coordinate functions (x = r, y = z)
+    r_coord = x  # Radial coordinate
+    z_coord = y  # Axial coordinate
 
-# ============================================================
-# Material Properties
-# ============================================================
-print("\nSetting up material properties...")
+    # ============================================================
+    # Material Properties
+    # ============================================================
+    print("\nSetting up material properties...")
 
-# Kelvin-transformed permeability (Nagamine CEFC 2026 canonical):
-#   mu_ext = mu_0 * (R/rho')^2, rho' = sqrt(r^2 + (z-z_off)^2)
-# Axisym is the 3D spherical Kelvin in the meridional plane.
-# See examples/kelvin_transformation/CONVENTION.md.
-from radia.kelvin_source import kelvin_mu_factor_axisym_cf, build_material_cf
+    # Kelvin-transformed permeability (Nagamine CEFC 2026 canonical):
+    #   mu_ext = mu_0 * (R/rho')^2, rho' = sqrt(r^2 + (z-z_off)^2)
+    # Axisym is the 3D spherical Kelvin in the meridional plane.
+    # See examples/kelvin_transformation/CONVENTION.md.
+    from radia.kelvin_source import kelvin_mu_factor_axisym_cf, build_material_cf
 
-mu_kelvin_factor = kelvin_mu_factor_axisym_cf(
-    z_offset=offset_z, R=kelvin_radius,
-    r_coord=r_coord, z_coord=z_coord,
-)
-Mu = build_material_cf(
-    mesh, mu0, mu_kelvin_factor,
-    outer_keyword="air_outer",
-    overrides={"magnetic": mu_r * mu0},
-)
-# Keep mu_kelvin alias for post-processing
-mu_kelvin = mu0 * mu_kelvin_factor
+    mu_kelvin_factor = kelvin_mu_factor_axisym_cf(
+        z_offset=offset_z, R=kelvin_radius,
+        r_coord=r_coord, z_coord=z_coord,
+    )
+    Mu = build_material_cf(
+        mesh, mu0, mu_kelvin_factor,
+        outer_keyword="air_outer",
+        overrides={"magnetic": mu_r * mu0},
+    )
+    # Keep mu_kelvin alias for post-processing
+    mu_kelvin = mu0 * mu_kelvin_factor
 
-print(f"  air_inner: mu = mu0")
-print(f"  air_outer: mu = (R/rho')^2 * mu0 [Nagamine CEFC 2026]")
-print(f"  magnetic: mu = {mu_r} * mu0")
+    print(f"  air_inner: mu = mu0")
+    print(f"  air_outer: mu = (R/rho')^2 * mu0 [Nagamine CEFC 2026]")
+    print(f"  magnetic: mu = {mu_r} * mu0")
 
-# ============================================================
-# Weak Form Setup
-# ============================================================
-print("\nSetting up weak form...")
+    # ============================================================
+    # Weak Form Setup
+    # ============================================================
+    print("\nSetting up weak form...")
 
-# Detect which domain we're in
-is_exterior = IfPos(z_coord - offset_z/2, 1.0, 0.0)
+    # Detect which domain we're in
+    is_exterior = IfPos(z_coord - offset_z/2, 1.0, 0.0)
 
-# r-weight for axisymmetric formulation
-r_weight = IfPos(r_coord - 1e-10, r_coord, 1e-10)
+    # r-weight for axisymmetric formulation
+    r_weight = IfPos(r_coord - 1e-10, r_coord, 1e-10)
 
-# Source potential: Omega_s = H0 * z
-Omega_s = H0 * z_coord
+    # Source potential: Omega_s = H0 * z
+    Omega_s = H0 * z_coord
 
-# Source fields
-Hs = CoefficientFunction((0.0, H0))
-Bs = CoefficientFunction((0.0, mu0 * H0))
+    # Source fields
+    Hs = CoefficientFunction((0.0, H0))
+    Bs = CoefficientFunction((0.0, mu0 * H0))
 
-# For Kelvin-transformed exterior domain:
-rho_prime = sqrt(r_coord**2 + (z_coord - offset_z)**2 + 1e-20)
-Hz_exterior = -(rho_prime / kelvin_radius)**2 * H0
-Hs_exterior = CoefficientFunction((0.0, Hz_exterior))
-Bs_exterior = CoefficientFunction((0.0, mu0 * Hz_exterior))
+    # For Kelvin-transformed exterior domain:
+    rho_prime = sqrt(r_coord**2 + (z_coord - offset_z)**2 + 1e-20)
+    Hz_exterior = -(rho_prime / kelvin_radius)**2 * H0
+    Hs_exterior = CoefficientFunction((0.0, Hz_exterior))
+    Bs_exterior = CoefficientFunction((0.0, mu0 * Hz_exterior))
 
-# ===== Bilinear Form =====
-a = BilinearForm(fes)
-a += Mu * grad(Omega) * grad(psi) * r_weight * dx("magnetic")
-a += Mu * grad(Omega) * grad(psi) * r_weight * dx("air_inner")
-a += Mu * grad(Omega) * grad(psi) * r_weight * dx("air_outer")
-a.Assemble()
+    # ===== Bilinear Form =====
+    a = BilinearForm(fes)
+    a += Mu * grad(Omega) * grad(psi) * r_weight * dx("magnetic")
+    a += Mu * grad(Omega) * grad(psi) * r_weight * dx("air_inner")
+    a += Mu * grad(Omega) * grad(psi) * r_weight * dx("air_outer")
+    a.Assemble()
 
-# Dirichlet BC on Total/Reduced interface
-gfOmega = GridFunction(fes)
-gfOmega.Set(Omega_s, BND, mesh.Boundaries("cylinder"))
+    # Dirichlet BC on Total/Reduced interface
+    gfOmega = GridFunction(fes)
+    gfOmega.Set(Omega_s, BND, mesh.Boundaries("cylinder"))
 
-# Linear form
-f = LinearForm(fes)
-f += Mu * grad(gfOmega) * grad(psi) * r_weight * dx("air_inner")
-f.Assemble()
+    # Linear form
+    f = LinearForm(fes)
+    f += Mu * grad(gfOmega) * grad(psi) * r_weight * dx("air_inner")
+    f.Assemble()
 
-# Neumann boundary condition
-normal = specialcf.normal(mesh.dim)
-f += (normal * Bs) * psi * r_weight * ds("cylinder")
-f.Assemble()
+    # Neumann boundary condition
+    normal = specialcf.normal(mesh.dim)
+    f += (normal * Bs) * psi * r_weight * ds("cylinder")
+    f.Assemble()
 
-# ============================================================
-# Solve
-# ============================================================
-print("\nSolving system...")
+    # ============================================================
+    # Solve
+    # ============================================================
+    print("\nSolving system...")
 
-gfOmega.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-gfu = gfOmega
+    gfOmega.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    gfu = gfOmega
 
-print("  Solution converged")
+    print("  Solution converged")
 
-# ============================================================
-# Post-processing
-# ============================================================
-print("\nPost-processing...")
+    # ============================================================
+    # Post-processing
+    # ============================================================
+    print("\nPost-processing...")
 
-fesOt = H1(mesh, order=fe_order, definedon="magnetic")
-fesOr = H1(mesh, order=fe_order, definedon="air_inner|air_outer")
+    fesOt = H1(mesh, order=fe_order, definedon="magnetic")
+    fesOr = H1(mesh, order=fe_order, definedon="air_inner|air_outer")
 
-Ot = GridFunction(fesOt)
-Orr = GridFunction(fesOr)
-Oxr = GridFunction(fesOr)
+    Ot = GridFunction(fesOt)
+    Orr = GridFunction(fesOr)
+    Oxr = GridFunction(fesOr)
 
-Ot.Set(gfu, VOL, definedon="magnetic")
-Orr.Set(gfu, VOL, definedon="air_inner|air_outer")
-Oxr.Set(Omega_s, BND, mesh.Boundaries("cylinder"))
+    Ot.Set(gfu, VOL, definedon="magnetic")
+    Orr.Set(gfu, VOL, definedon="air_inner|air_outer")
+    Oxr.Set(Omega_s, BND, mesh.Boundaries("cylinder"))
 
-# B field computation
-Bt = grad(Ot) * Mu
-Br = (grad(Orr) - grad(Oxr)) * mu0
+    # B field computation
+    Bt = grad(Ot) * Mu
+    Br = (grad(Orr) - grad(Oxr)) * mu0
 
-# Source field Bs is only in Reduced region
-Bs_dict = {
-    "air_inner": Bs,
-    "air_outer": Bs_exterior,
-    "magnetic": CoefficientFunction((0.0, 0.0))
-}
-Bs_cf = CoefficientFunction([Bs_dict[mat] for mat in mesh.GetMaterials()])
+    # Source field Bs is only in Reduced region
+    Bs_dict = {
+        "air_inner": Bs,
+        "air_outer": Bs_exterior,
+        "magnetic": CoefficientFunction((0.0, 0.0))
+    }
+    Bs_cf = CoefficientFunction([Bs_dict[mat] for mat in mesh.GetMaterials()])
 
-# Total B field
-BField = Bt + Br + Bs_cf
+    # Total B field
+    BField = Bt + Br + Bs_cf
 
-# H field: H = B/mu
-HField = BField / Mu
+    # H field: H = B/mu
+    HField = BField / Mu
 
-# ============================================================
-# Perturbation Field Energy Calculation
-# ============================================================
-print("\nCalculating perturbation field energy...")
+    # ============================================================
+    # Perturbation Field Energy Calculation
+    # ============================================================
+    print("\nCalculating perturbation field energy...")
 
-# Perturbation field in Total region: H_pert = grad(Omega) - H_s
-H_pert_total = grad(gfu) - Hs
+    # Perturbation field in Total region: H_pert = grad(Omega) - H_s
+    H_pert_total = grad(gfu) - Hs
 
-# Perturbation field in Reduced region: H_pert = grad(Omega_r)
-# Already defined as grad(Orr) - grad(Oxr) = grad(Omega) - grad(Omega_s)
+    # Perturbation field in Reduced region: H_pert = grad(Omega_r)
+    # Already defined as grad(Orr) - grad(Oxr) = grad(Omega) - grad(Omega_s)
 
-# Energy in magnetic region (Total)
-energy_magnetic = Integrate(
-    0.5 * mu_r * mu0 * InnerProduct(H_pert_total, H_pert_total) * r_weight * 2 * pi * dx("magnetic"),
-    mesh
-)
+    # Energy in magnetic region (Total)
+    energy_magnetic = Integrate(
+        0.5 * mu_r * mu0 * InnerProduct(H_pert_total, H_pert_total) * r_weight * 2 * pi * dx("magnetic"),
+        mesh
+    )
 
-# Energy in air_inner region (Reduced)
-H_pert_air = grad(Orr) - grad(Oxr)
-energy_air_inner = Integrate(
-    0.5 * mu0 * InnerProduct(H_pert_air, H_pert_air) * r_weight * 2 * pi * dx("air_inner"),
-    mesh
-)
+    # Energy in air_inner region (Reduced)
+    H_pert_air = grad(Orr) - grad(Oxr)
+    energy_air_inner = Integrate(
+        0.5 * mu0 * InnerProduct(H_pert_air, H_pert_air) * r_weight * 2 * pi * dx("air_inner"),
+        mesh
+    )
 
-# Energy in air_outer region (Kelvin)
-energy_air_outer = Integrate(
-    0.5 * mu_kelvin * InnerProduct(H_pert_air, H_pert_air) * r_weight * 2 * pi * dx("air_outer"),
-    mesh
-)
+    # Energy in air_outer region (Kelvin)
+    energy_air_outer = Integrate(
+        0.5 * mu_kelvin * InnerProduct(H_pert_air, H_pert_air) * r_weight * 2 * pi * dx("air_outer"),
+        mesh
+    )
 
-energy_total = energy_magnetic + energy_air_inner + energy_air_outer
+    energy_total = energy_magnetic + energy_air_inner + energy_air_outer
 
-print(f"\n  Perturbation Field Energy:")
-print(f"  " + "-" * 40)
-print(f"  W_cylinder (interior): {energy_magnetic:.6e} J")
-print(f"  W_air_inner:           {energy_air_inner:.6e} J")
-print(f"  W_air_outer (Kelvin):  {energy_air_outer:.6e} J")
-print(f"  W_total:               {energy_total:.6e} J")
-print(f"  " + "-" * 40)
-print(f"  Note: No analytical solution for cylinder geometry")
+    print(f"\n  Perturbation Field Energy:")
+    print(f"  " + "-" * 40)
+    print(f"  W_cylinder (interior): {energy_magnetic:.6e} J")
+    print(f"  W_air_inner:           {energy_air_inner:.6e} J")
+    print(f"  W_air_outer (Kelvin):  {energy_air_outer:.6e} J")
+    print(f"  W_total:               {energy_total:.6e} J")
+    print(f"  " + "-" * 40)
+    print(f"  Note: No analytical solution for cylinder geometry")
 
-# ============================================================
-# Results
-# ============================================================
-print("\n" + "=" * 60)
-print("RESULTS")
-print("=" * 60)
+    # ============================================================
+    # Results
+    # ============================================================
+    print("\n" + "=" * 60)
+    print("RESULTS")
+    print("=" * 60)
 
-# Sample points along z-axis (inside cylinder)
-print(f"\nH_z along z-axis (r=0, inside cylinder):")
-for z_val in linspace(-half_height + 0.05, half_height - 0.05, 5):
-    try:
-        mip = mesh(0.01, z_val)  # Small r offset to avoid axis singularity
-        Hz = grad(gfu)[1](mip)
-        print(f"  z={z_val:+.2f}: Hz = {Hz:.6f} A/m")
-    except:
-        pass
-
-# Sample points along r-axis (z=0)
-print(f"\nH_z along r-axis (z=0):")
-for r_val in linspace(0.05, kelvin_radius - 0.1, 8):
-    try:
-        mip = mesh(r_val, 0)
-        if r_val < cylinder_radius:
+    # Sample points along z-axis (inside cylinder)
+    print(f"\nH_z along z-axis (r=0, inside cylinder):")
+    for z_val in linspace(-half_height + 0.05, half_height - 0.05, 5):
+        try:
+            mip = mesh(0.01, z_val)  # Small r offset to avoid axis singularity
             Hz = grad(gfu)[1](mip)
-            region = "cylinder"
-        else:
-            B_val = BField(mip)
-            Hz = B_val[1] / mu0
-            region = "air"
-        print(f"  r={r_val:.2f} ({region}): Hz = {Hz:.6f} A/m")
-    except:
-        pass
+            print(f"  z={z_val:+.2f}: Hz = {Hz:.6f} A/m")
+        except:
+            pass
 
-# ============================================================
-# Visualization
-# ============================================================
-print("\nGenerating plots...")
+    # Sample points along r-axis (z=0)
+    print(f"\nH_z along r-axis (z=0):")
+    for r_val in linspace(0.05, kelvin_radius - 0.1, 8):
+        try:
+            mip = mesh(r_val, 0)
+            if r_val < cylinder_radius:
+                Hz = grad(gfu)[1](mip)
+                region = "cylinder"
+            else:
+                B_val = BField(mip)
+                Hz = B_val[1] / mu0
+                region = "air"
+            print(f"  r={r_val:.2f} ({region}): Hz = {Hz:.6f} A/m")
+        except:
+            pass
 
-import matplotlib
-import matplotlib.pyplot as plt
-matplotlib.rc('mathtext', **{'rm': 'serif', 'it': 'serif:italic',
-                             'bf': 'serif:bold', 'fontset': 'cm'})
+    # ============================================================
+    # Visualization
+    # ============================================================
+    print("\nGenerating plots...")
 
-fig, axes = plt.subplots(2, 3, figsize=(15, 10), dpi=150)
+    import matplotlib
+    import matplotlib.pyplot as plt
+    matplotlib.rc('mathtext', **{'rm': 'serif', 'it': 'serif:italic',
+                                 'bf': 'serif:bold', 'fontset': 'cm'})
 
-# Plot 1: R-axis profile (z=0)
-ax1 = axes[0, 0]
-r_profile = linspace(0.02, kelvin_radius - 0.05, 100)
-Hz_profile = zeros(len(r_profile))
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10), dpi=150)
 
-for i, r_val in enumerate(r_profile):
-    try:
-        mip = mesh(r_val, 0)
-        if r_val < cylinder_radius:
-            Hz_profile[i] = grad(gfu)[1](mip)
-        else:
-            B_val = BField(mip)
-            Hz_profile[i] = B_val[1] / mu0
-    except:
-        Hz_profile[i] = nan
+    # Plot 1: R-axis profile (z=0)
+    ax1 = axes[0, 0]
+    r_profile = linspace(0.02, kelvin_radius - 0.05, 100)
+    Hz_profile = zeros(len(r_profile))
 
-ax1.plot(r_profile, Hz_profile, 'b-', linewidth=2)
-ax1.axvline(cylinder_radius, color='red', linestyle='--', alpha=0.7, label='Cylinder boundary')
-ax1.axhline(H0, color='gray', linestyle=':', alpha=0.7, label=f'$H_0$ = {H0} A/m')
-ax1.set_xlabel('$r$ (m)', fontsize=11)
-ax1.set_ylabel('$H_z$ (A/m)', fontsize=11)
-ax1.set_title('R-axis Profile (z=0)', fontsize=12)
-ax1.legend(loc='best', fontsize=9)
-ax1.grid(True, alpha=0.3)
+    for i, r_val in enumerate(r_profile):
+        try:
+            mip = mesh(r_val, 0)
+            if r_val < cylinder_radius:
+                Hz_profile[i] = grad(gfu)[1](mip)
+            else:
+                B_val = BField(mip)
+                Hz_profile[i] = B_val[1] / mu0
+        except:
+            Hz_profile[i] = nan
 
-# Plot 2: Z-axis profile (r=0.01)
-ax2 = axes[0, 1]
-z_profile = linspace(-kelvin_radius + 0.1, kelvin_radius - 0.1, 100)
-Hz_zaxis = zeros(len(z_profile))
+    ax1.plot(r_profile, Hz_profile, 'b-', linewidth=2)
+    ax1.axvline(cylinder_radius, color='red', linestyle='--', alpha=0.7, label='Cylinder boundary')
+    ax1.axhline(H0, color='gray', linestyle=':', alpha=0.7, label=f'$H_0$ = {H0} A/m')
+    ax1.set_xlabel('$r$ (m)', fontsize=11)
+    ax1.set_ylabel('$H_z$ (A/m)', fontsize=11)
+    ax1.set_title('R-axis Profile (z=0)', fontsize=12)
+    ax1.legend(loc='best', fontsize=9)
+    ax1.grid(True, alpha=0.3)
 
-for i, z_val in enumerate(z_profile):
-    try:
-        mip = mesh(0.02, z_val)
-        r_dist = sqrt(0.02**2 + z_val**2)
-        if abs(z_val) < half_height and 0.02 < cylinder_radius:
-            Hz_zaxis[i] = grad(gfu)[1](mip)
-        else:
-            B_val = BField(mip)
-            Hz_zaxis[i] = B_val[1] / mu0
-    except:
-        Hz_zaxis[i] = nan
+    # Plot 2: Z-axis profile (r=0.01)
+    ax2 = axes[0, 1]
+    z_profile = linspace(-kelvin_radius + 0.1, kelvin_radius - 0.1, 100)
+    Hz_zaxis = zeros(len(z_profile))
 
-ax2.plot(z_profile, Hz_zaxis, 'b-', linewidth=2)
-ax2.axvline(-half_height, color='red', linestyle='--', alpha=0.7)
-ax2.axvline(half_height, color='red', linestyle='--', alpha=0.7, label='Cylinder ends')
-ax2.axhline(H0, color='gray', linestyle=':', alpha=0.7, label=f'$H_0$ = {H0} A/m')
-ax2.set_xlabel('$z$ (m)', fontsize=11)
-ax2.set_ylabel('$H_z$ (A/m)', fontsize=11)
-ax2.set_title('Z-axis Profile (r~=0)', fontsize=12)
-ax2.legend(loc='best', fontsize=9)
-ax2.grid(True, alpha=0.3)
+    for i, z_val in enumerate(z_profile):
+        try:
+            mip = mesh(0.02, z_val)
+            r_dist = sqrt(0.02**2 + z_val**2)
+            if abs(z_val) < half_height and 0.02 < cylinder_radius:
+                Hz_zaxis[i] = grad(gfu)[1](mip)
+            else:
+                B_val = BField(mip)
+                Hz_zaxis[i] = B_val[1] / mu0
+        except:
+            Hz_zaxis[i] = nan
 
-# Plot 3: 2D field visualization
-ax3 = axes[0, 2]
+    ax2.plot(z_profile, Hz_zaxis, 'b-', linewidth=2)
+    ax2.axvline(-half_height, color='red', linestyle='--', alpha=0.7)
+    ax2.axvline(half_height, color='red', linestyle='--', alpha=0.7, label='Cylinder ends')
+    ax2.axhline(H0, color='gray', linestyle=':', alpha=0.7, label=f'$H_0$ = {H0} A/m')
+    ax2.set_xlabel('$z$ (m)', fontsize=11)
+    ax2.set_ylabel('$H_z$ (A/m)', fontsize=11)
+    ax2.set_title('Z-axis Profile (r~=0)', fontsize=12)
+    ax2.legend(loc='best', fontsize=9)
+    ax2.grid(True, alpha=0.3)
 
-r_grid = linspace(0.02, kelvin_radius - 0.05, 40)
-z_grid = linspace(-kelvin_radius + 0.05, kelvin_radius - 0.05, 40)
-[rr, zz] = meshgrid(r_grid, z_grid)
+    # Plot 3: 2D field visualization
+    ax3 = axes[0, 2]
 
-Hr_field = zeros(rr.shape)
-Hz_field = zeros(rr.shape)
+    r_grid = linspace(0.02, kelvin_radius - 0.05, 40)
+    z_grid = linspace(-kelvin_radius + 0.05, kelvin_radius - 0.05, 40)
+    [rr, zz] = meshgrid(r_grid, z_grid)
 
-for iz in range(len(z_grid)):
-    for ir in range(len(r_grid)):
-        r_dist = sqrt(r_grid[ir]**2 + z_grid[iz]**2)
-        in_cylinder = (r_grid[ir] < cylinder_radius) and (abs(z_grid[iz]) < half_height)
-        if r_dist < kelvin_radius - 0.05:
-            try:
-                mip = mesh(r_grid[ir], z_grid[iz])
-                if in_cylinder:
-                    Hr_field[iz, ir] = grad(gfu)[0](mip)
-                    Hz_field[iz, ir] = grad(gfu)[1](mip)
-                else:
-                    B_val = BField(mip)
-                    Hr_field[iz, ir] = B_val[0] / mu0
-                    Hz_field[iz, ir] = B_val[1] / mu0
-            except:
+    Hr_field = zeros(rr.shape)
+    Hz_field = zeros(rr.shape)
+
+    for iz in range(len(z_grid)):
+        for ir in range(len(r_grid)):
+            r_dist = sqrt(r_grid[ir]**2 + z_grid[iz]**2)
+            in_cylinder = (r_grid[ir] < cylinder_radius) and (abs(z_grid[iz]) < half_height)
+            if r_dist < kelvin_radius - 0.05:
+                try:
+                    mip = mesh(r_grid[ir], z_grid[iz])
+                    if in_cylinder:
+                        Hr_field[iz, ir] = grad(gfu)[0](mip)
+                        Hz_field[iz, ir] = grad(gfu)[1](mip)
+                    else:
+                        B_val = BField(mip)
+                        Hr_field[iz, ir] = B_val[0] / mu0
+                        Hz_field[iz, ir] = B_val[1] / mu0
+                except:
+                    Hr_field[iz, ir] = nan
+                    Hz_field[iz, ir] = nan
+            else:
                 Hr_field[iz, ir] = nan
                 Hz_field[iz, ir] = nan
-        else:
-            Hr_field[iz, ir] = nan
-            Hz_field[iz, ir] = nan
 
-strm = ax3.streamplot(rr, zz, Hr_field, Hz_field,
-                      color='black', linewidth=0.8, density=1.5,
-                      arrowsize=0.7, arrowstyle='->')
+    strm = ax3.streamplot(rr, zz, Hr_field, Hz_field,
+                          color='black', linewidth=0.8, density=1.5,
+                          arrowsize=0.7, arrowstyle='->')
 
-# Draw cylinder
-rect = plt.Rectangle((0, -half_height), cylinder_radius, cylinder_height,
-                      fill=True, facecolor='lightblue', edgecolor='red',
-                      linewidth=2, alpha=0.5)
-ax3.add_patch(rect)
+    # Draw cylinder
+    rect = plt.Rectangle((0, -half_height), cylinder_radius, cylinder_height,
+                          fill=True, facecolor='lightblue', edgecolor='red',
+                          linewidth=2, alpha=0.5)
+    ax3.add_patch(rect)
 
-# Draw Kelvin boundary
-theta_circle = linspace(0, pi, 100)
-r_kelvin_plot = kelvin_radius * sin(theta_circle)
-z_kelvin_plot = kelvin_radius * cos(theta_circle)
-ax3.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
+    # Draw Kelvin boundary
+    theta_circle = linspace(0, pi, 100)
+    r_kelvin_plot = kelvin_radius * sin(theta_circle)
+    z_kelvin_plot = kelvin_radius * cos(theta_circle)
+    ax3.plot(r_kelvin_plot, z_kelvin_plot, 'g--', linewidth=1.5, label='Kelvin boundary')
 
-ax3.set_xlabel('$r$ (m)', fontsize=11)
-ax3.set_ylabel('$z$ (m)', fontsize=11)
-ax3.set_title('Total Field $\\mathbf{H}$', fontsize=12)
-ax3.set_aspect('equal')
-ax3.set_xlim(0, kelvin_radius + 0.1)
-ax3.set_ylim(-kelvin_radius - 0.1, kelvin_radius + 0.1)
+    ax3.set_xlabel('$r$ (m)', fontsize=11)
+    ax3.set_ylabel('$z$ (m)', fontsize=11)
+    ax3.set_title('Total Field $\\mathbf{H}$', fontsize=12)
+    ax3.set_aspect('equal')
+    ax3.set_xlim(0, kelvin_radius + 0.1)
+    ax3.set_ylim(-kelvin_radius - 0.1, kelvin_radius + 0.1)
 
-# Plot 4: Bz profile (r-axis)
-ax4 = axes[1, 0]
-Bz_profile = zeros(len(r_profile))
+    # Plot 4: Bz profile (r-axis)
+    ax4 = axes[1, 0]
+    Bz_profile = zeros(len(r_profile))
 
-for i, r_val in enumerate(r_profile):
+    for i, r_val in enumerate(r_profile):
+        try:
+            mip = mesh(r_val, 0)
+            B_val = BField(mip)
+            Bz_profile[i] = B_val[1]
+        except:
+            Bz_profile[i] = nan
+
+    ax4.plot(r_profile, Bz_profile / mu0, 'b-', linewidth=2)
+    ax4.axvline(cylinder_radius, color='red', linestyle='--', alpha=0.7, label='Cylinder boundary')
+    ax4.set_xlabel('$r$ (m)', fontsize=11)
+    ax4.set_ylabel('$B_z / \\mu_0$ (A/m)', fontsize=11)
+    ax4.set_title('$B_z$ Profile (z=0)', fontsize=12)
+    ax4.legend(loc='best', fontsize=9)
+    ax4.grid(True, alpha=0.3)
+
+    # Plot 5: Perturbation field
+    ax5 = axes[1, 1]
+
+    # Perturbation Hz along r-axis
+    Hz_pert_profile = zeros(len(r_profile))
+    for i, r_val in enumerate(r_profile):
+        try:
+            mip = mesh(r_val, 0)
+            if r_val < cylinder_radius:
+                H_pert = grad(gfu)(mip) - array([0, H0])
+                Hz_pert_profile[i] = H_pert[1]
+            else:
+                Hz_pert_profile[i] = (grad(Orr) - grad(Oxr))[1](mip)
+        except:
+            Hz_pert_profile[i] = nan
+
+    ax5.plot(r_profile, Hz_pert_profile, 'b-', linewidth=2)
+    ax5.axvline(cylinder_radius, color='red', linestyle='--', alpha=0.7, label='Cylinder boundary')
+    ax5.axhline(0, color='gray', linestyle=':', alpha=0.5)
+    ax5.set_xlabel('$r$ (m)', fontsize=11)
+    ax5.set_ylabel('$H_{z,pert}$ (A/m)', fontsize=11)
+    ax5.set_title('Perturbation Field $H_{z,pert}$ (z=0)', fontsize=12)
+    ax5.legend(loc='best', fontsize=9)
+    ax5.grid(True, alpha=0.3)
+
+    # Plot 6: Summary info
+    ax6 = axes[1, 2]
+    ax6.axis('off')
+
+    summary_text = f"""
+    Omega-Reduced Omega Method (Axisymmetric) + Kelvin
+    ==================================================
+    Problem: Magnetic Cylinder in Uniform Z-Field
+
+    Parameters:
+      Cylinder radius: {cylinder_radius} m
+      Cylinder height: {cylinder_height} m
+      Kelvin radius: {kelvin_radius} m
+      mu_r = {mu_r}
+      H0 = {H0} A/m
+
+    Mesh:
+      Elements: {mesh.ne}
+      DOFs: {fes.ndof}
+      Order: {fe_order}
+
+    Perturbation Field Energy:
+      W_cylinder: {energy_magnetic:.4e} J
+      W_air:      {energy_air_inner + energy_air_outer:.4e} J
+      W_total:    {energy_total:.4e} J
+
+    Note: No analytical solution exists
+    for cylinder geometry.
+    """
+
+    ax6.text(0.05, 0.95, summary_text, transform=ax6.transAxes,
+             fontsize=10, fontfamily='monospace', verticalalignment='top')
+
+    plt.tight_layout()
+
+    # Save figure
+    png_file = os.path.splitext(__file__)[0] + ".png"
+    plt.savefig(png_file, dpi=150, bbox_inches='tight')
+    print(f"  Plot saved: {png_file}")
+
+    # Open the plot
     try:
-        mip = mesh(r_val, 0)
-        B_val = BField(mip)
-        Bz_profile[i] = B_val[1]
+        os.startfile(png_file)
     except:
-        Bz_profile[i] = nan
+        pass
 
-ax4.plot(r_profile, Bz_profile / mu0, 'b-', linewidth=2)
-ax4.axvline(cylinder_radius, color='red', linestyle='--', alpha=0.7, label='Cylinder boundary')
-ax4.set_xlabel('$r$ (m)', fontsize=11)
-ax4.set_ylabel('$B_z / \\mu_0$ (A/m)', fontsize=11)
-ax4.set_title('$B_z$ Profile (z=0)', fontsize=12)
-ax4.legend(loc='best', fontsize=9)
-ax4.grid(True, alpha=0.3)
-
-# Plot 5: Perturbation field
-ax5 = axes[1, 1]
-
-# Perturbation Hz along r-axis
-Hz_pert_profile = zeros(len(r_profile))
-for i, r_val in enumerate(r_profile):
-    try:
-        mip = mesh(r_val, 0)
-        if r_val < cylinder_radius:
-            H_pert = grad(gfu)(mip) - array([0, H0])
-            Hz_pert_profile[i] = H_pert[1]
-        else:
-            Hz_pert_profile[i] = (grad(Orr) - grad(Oxr))[1](mip)
-    except:
-        Hz_pert_profile[i] = nan
-
-ax5.plot(r_profile, Hz_pert_profile, 'b-', linewidth=2)
-ax5.axvline(cylinder_radius, color='red', linestyle='--', alpha=0.7, label='Cylinder boundary')
-ax5.axhline(0, color='gray', linestyle=':', alpha=0.5)
-ax5.set_xlabel('$r$ (m)', fontsize=11)
-ax5.set_ylabel('$H_{z,pert}$ (A/m)', fontsize=11)
-ax5.set_title('Perturbation Field $H_{z,pert}$ (z=0)', fontsize=12)
-ax5.legend(loc='best', fontsize=9)
-ax5.grid(True, alpha=0.3)
-
-# Plot 6: Summary info
-ax6 = axes[1, 2]
-ax6.axis('off')
-
-summary_text = f"""
-Omega-Reduced Omega Method (Axisymmetric) + Kelvin
-==================================================
-Problem: Magnetic Cylinder in Uniform Z-Field
-
-Parameters:
-  Cylinder radius: {cylinder_radius} m
-  Cylinder height: {cylinder_height} m
-  Kelvin radius: {kelvin_radius} m
-  mu_r = {mu_r}
-  H0 = {H0} A/m
-
-Mesh:
-  Elements: {mesh.ne}
-  DOFs: {fes.ndof}
-  Order: {fe_order}
-
-Perturbation Field Energy:
-  W_cylinder: {energy_magnetic:.4e} J
-  W_air:      {energy_air_inner + energy_air_outer:.4e} J
-  W_total:    {energy_total:.4e} J
-
-Note: No analytical solution exists
-for cylinder geometry.
-"""
-
-ax6.text(0.05, 0.95, summary_text, transform=ax6.transAxes,
-         fontsize=10, fontfamily='monospace', verticalalignment='top')
-
-plt.tight_layout()
-
-# Save figure
-png_file = os.path.splitext(__file__)[0] + ".png"
-plt.savefig(png_file, dpi=150, bbox_inches='tight')
-print(f"  Plot saved: {png_file}")
-
-# Open the plot
-try:
-    os.startfile(png_file)
-except:
-    pass
-
-print("\n" + "=" * 60)
-print("Computation completed")
-print("=" * 60)
+    print("\n" + "=" * 60)
+    print("Computation completed")
+    print("=" * 60)

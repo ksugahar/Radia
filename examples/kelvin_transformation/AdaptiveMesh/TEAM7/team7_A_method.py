@@ -214,115 +214,117 @@ a_static = BilinearForm(fes)
 a_static += inv_mu_cf * InnerProduct(curl(A), curl(v)) * dx
 # Gauge condition (small regularization)
 a_static += 1e-10 * InnerProduct(A, v) * dx
-a_static.Assemble()
+with TaskManager():
+    a_static.Assemble()
 
-f_static = LinearForm(fes)
-f_static += InnerProduct(J0, v) * dx
-f_static.Assemble()
+    f_static = LinearForm(fes)
+    f_static += InnerProduct(J0, v) * dx
+    f_static.Assemble()
 
-gfA_static = GridFunction(fes)
-gfA_static.vec.data = a_static.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f_static.vec
+    gfA_static = GridFunction(fes)
+    gfA_static.vec.data = a_static.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f_static.vec
 
-print("  Static solution computed.")
+    print("  Static solution computed.")
 
-# Compute B = curl(A)
-B_static = curl(gfA_static)
+    # Compute B = curl(A)
+    B_static = curl(gfA_static)
 
-# ============================================================
-# Time-harmonic problem (with eddy currents)
-# curl(1/mu * curl(A)) + j*omega*sigma*A = J0
-# ============================================================
-print("\n5. Solving time-harmonic problem (f = 50 Hz)...")
+    # ============================================================
+    # Time-harmonic problem (with eddy currents)
+    # curl(1/mu * curl(A)) + j*omega*sigma*A = J0
+    # ============================================================
+    print("\n5. Solving time-harmonic problem (f = 50 Hz)...")
 
-# Complex-valued space
-fes_c = HCurl(mesh, order=order, dirichlet="outer", complex=True)
-A_c, v_c = fes_c.TnT()
+    # Complex-valued space
+    fes_c = HCurl(mesh, order=order, dirichlet="outer", complex=True)
+    A_c, v_c = fes_c.TnT()
 
-a_harmonic = BilinearForm(fes_c)
-a_harmonic += inv_mu_cf * InnerProduct(curl(A_c), curl(v_c)) * dx
-a_harmonic += 1j * omega * sigma_cf * InnerProduct(A_c, v_c) * dx
-# Gauge condition
-a_harmonic += 1e-10 * InnerProduct(A_c, v_c) * dx
-a_harmonic.Assemble()
+    a_harmonic = BilinearForm(fes_c)
+    a_harmonic += inv_mu_cf * InnerProduct(curl(A_c), curl(v_c)) * dx
+    a_harmonic += 1j * omega * sigma_cf * InnerProduct(A_c, v_c) * dx
+    # Gauge condition
+    a_harmonic += 1e-10 * InnerProduct(A_c, v_c) * dx
+    a_harmonic.Assemble()
 
-f_harmonic = LinearForm(fes_c)
-f_harmonic += InnerProduct(J0, v_c) * dx
-f_harmonic.Assemble()
+    f_harmonic = LinearForm(fes_c)
+    f_harmonic += InnerProduct(J0, v_c) * dx
+    f_harmonic.Assemble()
 
-gfA_harmonic = GridFunction(fes_c)
-gfA_harmonic.vec.data = a_harmonic.mat.Inverse(fes_c.FreeDofs(), inverse="sparsecholesky") * f_harmonic.vec
+    gfA_harmonic = GridFunction(fes_c)
+    gfA_harmonic.vec.data = a_harmonic.mat.Inverse(fes_c.FreeDofs(), inverse="sparsecholesky") * f_harmonic.vec
 
-print("  Time-harmonic solution computed.")
+    print("  Time-harmonic solution computed.")
 
-# Compute B and J (eddy current)
-B_harmonic = curl(gfA_harmonic)
-J_eddy = -1j * omega * sigma_cf * gfA_harmonic  # Eddy current density
+    # Compute B and J (eddy current)
+    B_harmonic = curl(gfA_harmonic)
+    J_eddy = -1j * omega * sigma_cf * gfA_harmonic  # Eddy current density
 
-# ============================================================
-# Post-processing
-# ============================================================
-print("\n6. Post-processing...")
+    # ============================================================
+    # Post-processing
+    # ============================================================
+    print("\n6. Post-processing...")
 
-# Magnetic energy (static)
-W_static = 0.5 * Integrate(inv_mu_cf * InnerProduct(B_static, B_static), mesh)
-print(f"  Static magnetic energy: {W_static:.6e} J")
+    # Magnetic energy (static)
+    W_static = 0.5 * Integrate(inv_mu_cf * InnerProduct(B_static, B_static), mesh)
+    print(f"  Static magnetic energy: {W_static:.6e} J")
 
-# Magnetic energy (harmonic, time-averaged)
-W_harmonic = 0.25 * Integrate(inv_mu_cf * InnerProduct(B_harmonic, Conj(B_harmonic)), mesh).real
-print(f"  Time-harmonic magnetic energy (avg): {W_harmonic:.6e} J")
+    # Magnetic energy (harmonic, time-averaged)
+    W_harmonic = 0.25 * Integrate(inv_mu_cf * InnerProduct(B_harmonic, Conj(B_harmonic)), mesh).real
+    print(f"  Time-harmonic magnetic energy (avg): {W_harmonic:.6e} J")
 
-# Joule loss (harmonic)
-P_joule = 0.5 * Integrate(InnerProduct(J_eddy, Conj(J_eddy)) / (sigma_cf + 1e-10),
-                          mesh, definedon=mesh.Materials("conductor")).real
-print(f"  Joule loss in conductor: {P_joule:.6e} W")
+    # Joule loss (harmonic)
+    P_joule = 0.5 * Integrate(InnerProduct(J_eddy, Conj(J_eddy)) / (sigma_cf + 1e-10),
+                              mesh, definedon=mesh.Materials("conductor")).real
+    print(f"  Joule loss in conductor: {P_joule:.6e} W")
 
-# Sample B field at specific points (TEAM 7 measurement points)
-# Points along y = 72mm, z = 34mm
-print("\n  B field at measurement line (y=72mm, z=34mm):")
-print(f"  {'x [mm]':>10s} {'Bz [mT]':>12s}")
-print(f"  {'-'*25}")
+    # Sample B field at specific points (TEAM 7 measurement points)
+    # Points along y = 72mm, z = 34mm
+    print("\n  B field at measurement line (y=72mm, z=34mm):")
+    print(f"  {'x [mm]':>10s} {'Bz [mT]':>12s}")
+    print(f"  {'-'*25}")
 
-for x_mm in [0, 18, 36, 54, 72, 90, 108, 126, 144, 162, 180]:
-    pnt = mesh(x_mm * 1e-3, 72e-3, 34e-3)
+    for x_mm in [0, 18, 36, 54, 72, 90, 108, 126, 144, 162, 180]:
+        pnt = mesh(x_mm * 1e-3, 72e-3, 34e-3)
+        try:
+            Bz = B_static(pnt)[2]
+            print(f"  {x_mm:10.0f} {Bz*1000:12.4f}")
+        except:
+            print(f"  {x_mm:10.0f} {'N/A':>12s}")
+
+    # ============================================================
+    # Visualization
+    # ============================================================
+    print("\n7. Visualization setup...")
+
     try:
-        Bz = B_static(pnt)[2]
-        print(f"  {x_mm:10.0f} {Bz*1000:12.4f}")
+        from ngsolve.webgui import Draw
+        from ngsolve import TaskManager
+        # Draw(B_static, mesh, order=2, draw_surf=False, name="B_static")
+        # Draw(Norm(B_harmonic), mesh, order=2, draw_surf=False, name="|B_harmonic|")
+        print("  Use Draw(B_static, mesh) to visualize")
     except:
-        print(f"  {x_mm:10.0f} {'N/A':>12s}")
+        print("  WebGUI not available")
 
-# ============================================================
-# Visualization
-# ============================================================
-print("\n7. Visualization setup...")
+    # ============================================================
+    # Summary
+    # ============================================================
+    print("\n" + "=" * 70)
+    print("Summary: TEAM Problem 7 - A-method")
+    print("=" * 70)
+    print(f"""
+    Problem setup:
+      - Conductor: Aluminum plate (294x294x19 mm) with hole
+      - Coil: Racetrack coil, I = {current} A
+      - Frequency: {freq} Hz
 
-try:
-    from ngsolve.webgui import Draw
-    # Draw(B_static, mesh, order=2, draw_surf=False, name="B_static")
-    # Draw(Norm(B_harmonic), mesh, order=2, draw_surf=False, name="|B_harmonic|")
-    print("  Use Draw(B_static, mesh) to visualize")
-except:
-    print("  WebGUI not available")
+    Results:
+      - Static magnetic energy: {W_static:.6e} J
+      - Time-harmonic energy:   {W_harmonic:.6e} J
+      - Joule loss:             {P_joule:.6e} W
 
-# ============================================================
-# Summary
-# ============================================================
-print("\n" + "=" * 70)
-print("Summary: TEAM Problem 7 - A-method")
-print("=" * 70)
-print(f"""
-Problem setup:
-  - Conductor: Aluminum plate (294x294x19 mm) with hole
-  - Coil: Racetrack coil, I = {current} A
-  - Frequency: {freq} Hz
-
-Results:
-  - Static magnetic energy: {W_static:.6e} J
-  - Time-harmonic energy:   {W_harmonic:.6e} J
-  - Joule loss:             {P_joule:.6e} W
-
-Note:
-  This is a simplified implementation. For accurate TEAM 7 results:
-  - Coil geometry should match exact racetrack shape
-  - Mesh refinement near conductor surface needed
-  - Compare with measurement data at specified points
-""")
+    Note:
+      This is a simplified implementation. For accurate TEAM 7 results:
+      - Coil geometry should match exact racetrack shape
+      - Mesh refinement near conductor surface needed
+      - Compare with measurement data at specified points
+    """)

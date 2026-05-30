@@ -104,34 +104,36 @@ def solve_cube_frequency(mesh, omega, sigma_cu, mu_0, H_ext=1.0,
 
     print(f"  Assembling... ", end="", flush=True)
     t0 = time.time()
-    a.Assemble()
-    f.Assemble()
-    print(f"{time.time()-t0:.1f}s")
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
+        print(f"{time.time()-t0:.1f}s")
 
-    print(f"  Solving (direct LU, problem size ~{fes.ndof})... ",
-          end="", flush=True)
-    t0 = time.time()
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-    print(f"{time.time()-t0:.1f}s")
+        print(f"  Solving (direct LU, problem size ~{fes.ndof})... ",
+              end="", flush=True)
+        t0 = time.time()
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(freedofs=fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        print(f"{time.time()-t0:.1f}s")
 
-    # Compute Y: power dissipation per cycle = 1/2 omega integral sigma |E|^2
-    # E = -j omega A = ...  here gfu is H_perturbation
-    # Actually for this formulation, integral_cube sigma |H_p|^2 = induced eddy
-    from ngsolve import Conj
-    H_p_sq = gfu * Conj(gfu)  # complex |H|^2
-    integral_cu = Integrate(H_p_sq, mesh, definedon=mesh.Materials("cu")).real
-    # Volume of cube
-    V_cu = Integrate(CoefficientFunction(1), mesh,
-                     definedon=mesh.Materials("cu"))
-    print(f"  H_p^2 integral on cube: {integral_cu:.4e}, V_cube = {V_cu:.4e}")
+        # Compute Y: power dissipation per cycle = 1/2 omega integral sigma |E|^2
+        # E = -j omega A = ...  here gfu is H_perturbation
+        # Actually for this formulation, integral_cube sigma |H_p|^2 = induced eddy
+        from ngsolve import Conj
+        from ngsolve import TaskManager
+        H_p_sq = gfu * Conj(gfu)  # complex |H|^2
+        integral_cu = Integrate(H_p_sq, mesh, definedon=mesh.Materials("cu")).real
+        # Volume of cube
+        V_cu = Integrate(CoefficientFunction(1), mesh,
+                         definedon=mesh.Materials("cu"))
+        print(f"  H_p^2 integral on cube: {integral_cu:.4e}, V_cube = {V_cu:.4e}")
 
-    # Approximate Y: imaginary part is reactive, real part is loss
-    # Y ~ (j omega) * sigma * V_eff where V_eff = integral |H_p|^2 / |H_ext|^2
-    # This is a rough scaling -- a more proper extraction would use the full
-    # admittance definition Y = (induced current) / (driving voltage).
-    Y_approx = 1j * omega * sigma_cu * integral_cu / abs(H_ext)**2
-    return Y_approx, gfu
+        # Approximate Y: imaginary part is reactive, real part is loss
+        # Y ~ (j omega) * sigma * V_eff where V_eff = integral |H_p|^2 / |H_ext|^2
+        # This is a rough scaling -- a more proper extraction would use the full
+        # admittance definition Y = (induced current) / (driving voltage).
+        Y_approx = 1j * omega * sigma_cu * integral_cu / abs(H_ext)**2
+        return Y_approx, gfu
 
 
 def mellin_asymptote(s, L, sigma, mu):

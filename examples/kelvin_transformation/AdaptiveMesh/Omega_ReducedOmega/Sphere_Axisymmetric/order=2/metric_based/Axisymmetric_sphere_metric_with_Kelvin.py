@@ -217,8 +217,9 @@ def generate_mesh_with_local_sizes(shape, local_sizes=None, default_maxh=0.3):
         ngmesh = geo.GenerateMesh(mp=mp)
 
     mesh = Mesh(ngmesh)
-    mesh.Curve(order)  # Curve the mesh for higher-order elements
-    return mesh
+    with TaskManager():
+        mesh.Curve(order)  # Curve the mesh for higher-order elements
+        return mesh
 
 
 # ============================================================
@@ -940,6 +941,7 @@ while True:
     # Need separate GridFunctions for accurate perturbation field in Reduced region
     # Following 3D_sphere_with_Kelvin.py lines 360-373
     from ngsolve import VOL
+    from ngsolve import TaskManager
     Omega_s = H0 * y  # y is z in axisymmetric
 
     fesOt_energy = H1(mesh, order=fes.globalorder, definedon="magnetic")

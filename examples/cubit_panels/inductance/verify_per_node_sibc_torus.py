@@ -64,6 +64,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "src", "radia"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "src", "radia", "panels"))
 
 from ngsolve import Mesh, BND
+from ngsolve import TaskManager
 from netgen.occ import (Pnt, Dir, Axes, Axis, OCCGeometry, Glue,
                          WorkPlane)
 
@@ -127,8 +128,9 @@ def build_torus_mesh(R, a, gap_deg, maxh):
         f.name = "sibc"
     geo = OCCGeometry(Glue(torus.faces))
     mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    mesh.Curve(2)
-    return mesh
+    with TaskManager():
+        mesh.Curve(2)
+        return mesh
 
 
 def uniform_field_phi_inc(mesh, H0):

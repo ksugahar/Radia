@@ -98,6 +98,7 @@ def test_assemble_bem_matrices_e2e():
     pytest.importorskip("netgen.occ")
     from ngsolve import (Mesh, BND, H1, BilinearForm, ds, grad,
                          InnerProduct, TaskManager)
+    from ngsolve import TaskManager
     from netgen.occ import Sphere, Pnt, OCCGeometry
     from radia.bem.sibc_hacapk import assemble_bem_matrices
 
@@ -111,44 +112,45 @@ def test_assemble_bem_matrices_e2e():
     u, v = fes.TnT()
     ndof = fes.ndof
     mass_bf = BilinearForm(fes); mass_bf += u.Trace() * v.Trace() * ds
-    mass_bf.Assemble()
-    M_ref = np.zeros((ndof, ndof))
-    for r_, c_, vv in zip(*mass_bf.mat.COO()):
-        M_ref[int(r_), int(c_)] = vv
-    stiff_bf = BilinearForm(fes)
-    stiff_bf += InnerProduct(grad(u).Trace(), grad(v).Trace()) * ds
-    stiff_bf.Assemble()
-    K_ref = np.zeros((ndof, ndof))
-    for r_, c_, vv in zip(*stiff_bf.mat.COO()):
-        K_ref[int(r_), int(c_)] = vv
+    with TaskManager():
+        mass_bf.Assemble()
+        M_ref = np.zeros((ndof, ndof))
+        for r_, c_, vv in zip(*mass_bf.mat.COO()):
+            M_ref[int(r_), int(c_)] = vv
+        stiff_bf = BilinearForm(fes)
+        stiff_bf += InnerProduct(grad(u).Trace(), grad(v).Trace()) * ds
+        stiff_bf.Assemble()
+        K_ref = np.zeros((ndof, ndof))
+        for r_, c_, vv in zip(*stiff_bf.mat.COO()):
+            K_ref[int(r_), int(c_)] = vv
 
-    out = assemble_bem_matrices(mesh,
-                                 regular_quad_degree=11,
-                                 singular_n_q=8)
-    SL = out["SL"]; DL = out["DL"]
-    M = out["M"]; K = out["K"]
-    v_global = out["v_global"]
+        out = assemble_bem_matrices(mesh,
+                                     regular_quad_degree=11,
+                                     singular_n_q=8)
+        SL = out["SL"]; DL = out["DL"]
+        M = out["M"]; K = out["K"]
+        v_global = out["v_global"]
 
-    # M and K are local to extracted vertices; project NGSolve refs to that
-    # ordering.  For a sphere with no inner BND, v_global is all of
-    # mesh.vertices.nr (sorted).
-    M_ref_loc = M_ref[np.ix_(v_global, v_global)]
-    K_ref_loc = K_ref[np.ix_(v_global, v_global)]
+        # M and K are local to extracted vertices; project NGSolve refs to that
+        # ordering.  For a sphere with no inner BND, v_global is all of
+        # mesh.vertices.nr (sorted).
+        M_ref_loc = M_ref[np.ix_(v_global, v_global)]
+        K_ref_loc = K_ref[np.ix_(v_global, v_global)]
 
-    err_M = np.abs(M - M_ref_loc).max()
-    err_K = np.abs(K - K_ref_loc).max()
-    assert err_M < 1e-12, f"mass abs err {err_M:.3e}"
-    assert err_K < 1e-10, f"stiffness abs err {err_K:.3e}"
+        err_M = np.abs(M - M_ref_loc).max()
+        err_K = np.abs(K - K_ref_loc).max()
+        assert err_M < 1e-12, f"mass abs err {err_M:.3e}"
+        assert err_K < 1e-10, f"stiffness abs err {err_K:.3e}"
 
-    # SL/DL self-symmetry of OUR matrices (should be exact within roundoff)
-    assert np.abs(SL - SL.T).max() < 1e-10
-    # DL is generally NOT symmetric.
+        # SL/DL self-symmetry of OUR matrices (should be exact within roundoff)
+        assert np.abs(SL - SL.T).max() < 1e-10
+        # DL is generally NOT symmetric.
 
-    # Surface area sanity check via M
-    ones = np.ones(SL.shape[0])
-    area = ones @ M @ ones
-    assert abs(area - 4 * np.pi) / (4 * np.pi) < 0.05, (
-        f"surface area {area:.3f} vs 4π {4*np.pi:.3f}")
+        # Surface area sanity check via M
+        ones = np.ones(SL.shape[0])
+        area = ones @ M @ ones
+        assert abs(area - 4 * np.pi) / (4 * np.pi) < 0.05, (
+            f"surface area {area:.3f} vs 4π {4*np.pi:.3f}")
 
 
 def test_sl_symmetric():

@@ -59,69 +59,71 @@ def solve_time_harmonic(mesh, freq, order=1, verbose=True):
         print(f"  omega = {omega:.2f} rad/s")
 
     # Important: Curve order should match FES polynomial order for good convergence
-    mesh.Curve(order)
+    with TaskManager():
+        mesh.Curve(order)
 
-    # Get material properties
-    mu, sigma, inv_mu = get_material_properties(mesh)
+        # Get material properties
+        mu, sigma, inv_mu = get_material_properties(mesh)
 
-    # Get source current density
-    J0 = get_coil_current_density(mesh)
+        # Get source current density
+        J0 = get_coil_current_density(mesh)
 
-    # Complex HCurl space
-    fes = HCurl(mesh, order=order, dirichlet="outer", complex=True)
-    A, v = fes.TnT()
+        # Complex HCurl space
+        fes = HCurl(mesh, order=order, dirichlet="outer", complex=True)
+        A, v = fes.TnT()
 
-    if verbose:
-        print(f"  DOFs: {fes.ndof}")
-
-    # Bilinear form:
-    # curl(1/mu * curl(A)) + j*omega*sigma*A = J0
-    # Weak form: <1/mu * curl(A), curl(v)> + <j*omega*sigma*A, v> = <J0, v>
-    a = BilinearForm(fes)
-    a += inv_mu * InnerProduct(curl(A), curl(v)) * dx
-    a += 1j * omega * sigma * InnerProduct(A, v) * dx
-    # Small regularization for gauge (only needed in non-conducting regions)
-    a += 1e-12 * InnerProduct(A, v) * dx
-    a.Assemble()
-
-    # Linear form
-    f = LinearForm(fes)
-    f += InnerProduct(J0, v) * dx
-    f.Assemble()
-
-    # Solve
-    gfA = GridFunction(fes)
-
-    if verbose:
-        print("  Assembling and solving...")
-
-    # Try direct solver for small problems, iterative for large
-    ndof = fes.ndof
-    if ndof < 150000:
         if verbose:
-            print(f"  Using direct solver (ndof={ndof})")
-        try:
-            gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
-        except:
+            print(f"  DOFs: {fes.ndof}")
+
+        # Bilinear form:
+        # curl(1/mu * curl(A)) + j*omega*sigma*A = J0
+        # Weak form: <1/mu * curl(A), curl(v)> + <j*omega*sigma*A, v> = <J0, v>
+        a = BilinearForm(fes)
+        a += inv_mu * InnerProduct(curl(A), curl(v)) * dx
+        a += 1j * omega * sigma * InnerProduct(A, v) * dx
+        # Small regularization for gauge (only needed in non-conducting regions)
+        a += 1e-12 * InnerProduct(A, v) * dx
+        a.Assemble()
+
+        # Linear form
+        f = LinearForm(fes)
+        f += InnerProduct(J0, v) * dx
+        f.Assemble()
+
+        # Solve
+        gfA = GridFunction(fes)
+
+        if verbose:
+            print("  Assembling and solving...")
+
+        # Try direct solver for small problems, iterative for large
+        ndof = fes.ndof
+        if ndof < 150000:
             if verbose:
-                print("  UMFPACK failed, trying pardiso...")
-            gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-    else:
+                print(f"  Using direct solver (ndof={ndof})")
+            try:
+                gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="umfpack") * f.vec
+            except:
+                if verbose:
+                    print("  UMFPACK failed, trying pardiso...")
+                gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        else:
+            if verbose:
+                print(f"  Using iterative solver (ndof={ndof})")
+            from ngsolve.krylovspace import GMResSolver
+            from ngsolve import TaskManager
+            pre = a.mat.CreateSmoother(fes.FreeDofs())
+            solver = GMResSolver(a.mat, pre, maxiter=5000, tol=1e-8, printrates=verbose)
+            gfA.vec.data = solver * f.vec
+
         if verbose:
-            print(f"  Using iterative solver (ndof={ndof})")
-        from ngsolve.krylovspace import GMResSolver
-        pre = a.mat.CreateSmoother(fes.FreeDofs())
-        solver = GMResSolver(a.mat, pre, maxiter=5000, tol=1e-8, printrates=verbose)
-        gfA.vec.data = solver * f.vec
+            print("  Solution completed.")
 
-    if verbose:
-        print("  Solution completed.")
+        # Compute derived quantities
+        B = curl(gfA)
+        J_eddy = -1j * omega * sigma * gfA
 
-    # Compute derived quantities
-    B = curl(gfA)
-    J_eddy = -1j * omega * sigma * gfA
-
-    return gfA, B, J_eddy
+        return gfA, B, J_eddy
 
 
 def compute_measurements(mesh, B, J_eddy, line_params, verbose=True):

@@ -36,6 +36,7 @@ import radia as rad
 
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.occ import Box, Pnt, OCCGeometry
     NGSOLVE_AVAILABLE = True
 except ImportError as e:
@@ -225,45 +226,46 @@ fes_hdiv = HDiv(mesh, order=2)
 gf_B_hdiv = GridFunction(fes_hdiv)
 
 t_start = time.perf_counter()
-gf_B_hdiv.Set(B_cf)
-t_set_hdiv = time.perf_counter() - t_start
+with TaskManager():
+    gf_B_hdiv.Set(B_cf)
+    t_set_hdiv = time.perf_counter() - t_start
 
-print('  HDiv space: %d DOFs' % fes_hdiv.ndof)
-print('  Set() time: %.2f ms' % (t_set_hdiv * 1000))
+    print('  HDiv space: %d DOFs' % fes_hdiv.ndof)
+    print('  Set() time: %.2f ms' % (t_set_hdiv * 1000))
 
-# Verify div(B) = 0
-div_B = div(gf_B_hdiv)
-fes_l2 = L2(mesh, order=1)
-gf_div = GridFunction(fes_l2)
-gf_div.Set(div_B)
+    # Verify div(B) = 0
+    div_B = div(gf_B_hdiv)
+    fes_l2 = L2(mesh, order=1)
+    gf_div = GridFunction(fes_l2)
+    gf_div.Set(div_B)
 
-div_norm = Integrate(sqrt(div_B**2), mesh)
-B_norm = Integrate(sqrt(gf_B_hdiv[0]**2 + gf_B_hdiv[1]**2 + gf_B_hdiv[2]**2), mesh)
+    div_norm = Integrate(sqrt(div_B**2), mesh)
+    B_norm = Integrate(sqrt(gf_B_hdiv[0]**2 + gf_B_hdiv[1]**2 + gf_B_hdiv[2]**2), mesh)
 
-print('  |div(B)|: %.6e' % div_norm)
-print('  |B|: %.6e' % B_norm)
-print('  Relative div(B): %.6e' % (div_norm / B_norm if B_norm > 0 else 0))
+    print('  |div(B)|: %.6e' % div_norm)
+    print('  |B|: %.6e' % B_norm)
+    print('  Relative div(B): %.6e' % (div_norm / B_norm if B_norm > 0 else 0))
 
-# =============================================================================
-# Summary
-# =============================================================================
-print()
-print('=' * 70)
-print('Summary')
-print('=' * 70)
-print()
-print('RadiaField batch evaluation:')
-print('  - Field values match rad.Fld() exactly')
-print('  - GridFunction.Set() works for all field types (b, h, a)')
-print('  - HDiv projection preserves div(B) = 0')
-print()
-print('Note: The current implementation uses sequential point evaluation.')
-print('True batch evaluation (multiple points in single C++ call) would')
-print('provide additional speedup for large meshes.')
-print()
-print('For H-matrix acceleration of the underlying Radia solver,')
-print('see src/ext/HACApK_LH-Cimplm/ (not yet integrated).')
-print()
-print('=' * 70)
+    # =============================================================================
+    # Summary
+    # =============================================================================
+    print()
+    print('=' * 70)
+    print('Summary')
+    print('=' * 70)
+    print()
+    print('RadiaField batch evaluation:')
+    print('  - Field values match rad.Fld() exactly')
+    print('  - GridFunction.Set() works for all field types (b, h, a)')
+    print('  - HDiv projection preserves div(B) = 0')
+    print()
+    print('Note: The current implementation uses sequential point evaluation.')
+    print('True batch evaluation (multiple points in single C++ call) would')
+    print('provide additional speedup for large meshes.')
+    print()
+    print('For H-matrix acceleration of the underlying Radia solver,')
+    print('see src/ext/HACApK_LH-Cimplm/ (not yet integrated).')
+    print()
+    print('=' * 70)
 
-rad.UtiDelAll()
+    rad.UtiDelAll()

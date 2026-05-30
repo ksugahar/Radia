@@ -17,6 +17,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 from bem_inductance import compute_inductance_source_sink, MU_0
 from ngsolve import *
+from ngsolve import TaskManager
 
 
 def make_gapped_torus_mesh(R, a, gap_deg=5, maxh=None):
@@ -57,9 +58,10 @@ def make_gapped_torus_mesh(R, a, gap_deg=5, maxh=None):
         mp=MeshingParameters(maxh=maxh, curvaturesafety=2.0,
                              segmentsperedge=2))
     mesh = Mesh(ngmesh)
-    mesh.Curve(2)
+    with TaskManager():
+        mesh.Curve(2)
 
-    return mesh
+        return mesh
 
 
 if __name__ == "__main__":

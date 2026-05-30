@@ -38,6 +38,7 @@ print('=' * 70)
 try:
     from netgen.occ import Box, Pnt, OCCGeometry
     from ngsolve import Mesh
+    from ngsolve import TaskManager
     NETGEN_AVAILABLE = True
 except ImportError as e:
     print('NGSolve/Netgen not available: %s' % e)
@@ -211,65 +212,66 @@ def create_tetra_solution(test_points):
                      Pnt(CUBE_HALF, CUBE_HALF, CUBE_HALF))
     cube_solid.mat('magnetic')
     geo = OCCGeometry(cube_solid)
-    ngmesh = geo.GenerateMesh(maxh=TETRA_MAXH)
-    mesh = Mesh(ngmesh)
+    with TaskManager():
+        ngmesh = geo.GenerateMesh(maxh=TETRA_MAXH)
+        mesh = Mesh(ngmesh)
 
-    n_elements = mesh.ne
+        n_elements = mesh.ne
 
-    # Import to Radia with initial zero magnetization
-    cube = netgen_mesh_to_radia(mesh,
-                                 material={'magnetization': [0, 0, 0]},
-                                 units='m',
-                                 material_filter='magnetic',
-                                 verbose=False)
+        # Import to Radia with initial zero magnetization
+        cube = netgen_mesh_to_radia(mesh,
+                                     material={'magnetization': [0, 0, 0]},
+                                     units='m',
+                                     material_filter='magnetic',
+                                     verbose=False)
 
-    # Apply linear material
-    mat = rad.MatLin(MU_R)  # relative permeability
-    rad.MatApl(cube, mat)
+        # Apply linear material
+        mat = rad.MatLin(MU_R)  # relative permeability
+        rad.MatApl(cube, mat)
 
-    # External field
-    ext = rad.ObjBckg(lambda p: [0, 0, B_EXT])
-    grp = rad.ObjCnt([cube, ext])
+        # External field
+        ext = rad.ObjBckg(lambda p: [0, 0, B_EXT])
+        grp = rad.ObjCnt([cube, ext])
 
-    # Solve
-    print('  Solving with BiCGSTAB...')
-    t0 = time.time()
-    result = rad.Solve(grp, SOLVER_TOLERANCE, MAX_ITERATIONS, SOLVER_METHOD)
-    t_solve = time.time() - t0
+        # Solve
+        print('  Solving with BiCGSTAB...')
+        t0 = time.time()
+        result = rad.Solve(grp, SOLVER_TOLERANCE, MAX_ITERATIONS, SOLVER_METHOD)
+        t_solve = time.time() - t0
 
-    n_iter = int(result[3]) if result[3] else 0
+        n_iter = int(result[3]) if result[3] else 0
 
-    # Get magnetization
-    all_M = rad.ObjM(cube)
-    M_list = [m[1] for m in all_M]
-    M_avg_z = np.mean([m[2] for m in M_list])
+        # Get magnetization
+        all_M = rad.ObjM(cube)
+        M_list = [m[1] for m in all_M]
+        M_avg_z = np.mean([m[2] for m in M_list])
 
-    print('  Elements: %d' % n_elements)
-    print('  Solve time: %.3f s' % t_solve)
-    print('  Iterations: %d' % n_iter)
-    print('  M_avg_z: %.0f A/m' % M_avg_z)
-    print('  Analytical M_z: %.0f A/m' % M_ANALYTICAL_Z)
-    print('  M error: %.2f%%' % (abs(M_avg_z - M_ANALYTICAL_Z) / M_ANALYTICAL_Z * 100))
+        print('  Elements: %d' % n_elements)
+        print('  Solve time: %.3f s' % t_solve)
+        print('  Iterations: %d' % n_iter)
+        print('  M_avg_z: %.0f A/m' % M_avg_z)
+        print('  Analytical M_z: %.0f A/m' % M_ANALYTICAL_Z)
+        print('  M error: %.2f%%' % (abs(M_avg_z - M_ANALYTICAL_Z) / M_ANALYTICAL_Z * 100))
 
-    # Evaluate field at test points
-    B_values = []
-    for pt in test_points:
-        try:
-            B = rad.Fld(cube, 'b', pt)
-            B_values.append(list(B))
-        except Exception as e:
-            print('  Error at point %s: %s' % (pt, e))
-            B_values.append([np.nan, np.nan, np.nan])
+        # Evaluate field at test points
+        B_values = []
+        for pt in test_points:
+            try:
+                B = rad.Fld(cube, 'b', pt)
+                B_values.append(list(B))
+            except Exception as e:
+                print('  Error at point %s: %s' % (pt, e))
+                B_values.append([np.nan, np.nan, np.nan])
 
-    return {
-        'method': 'tetrahedral (Netgen + ObjTetrahedron)',
-        'n_elements': n_elements,
-        'maxh': TETRA_MAXH,
-        't_solve': t_solve,
-        'iterations': n_iter,
-        'M_avg_z': M_avg_z,
-        'B_values': B_values
-    }
+        return {
+            'method': 'tetrahedral (Netgen + ObjTetrahedron)',
+            'n_elements': n_elements,
+            'maxh': TETRA_MAXH,
+            't_solve': t_solve,
+            'iterations': n_iter,
+            'M_avg_z': M_avg_z,
+            'B_values': B_values
+        }
 
 
 def compare_results(hexa_result, tetra_result, test_points, labels):

@@ -37,6 +37,7 @@ pytest.importorskip(
            "examples/induction_heating/bem_reference/")
 
 from ngsolve import *
+from ngsolve import TaskManager
 from bem_inductance import compute_inductance_source_sink, MU_0
 from esim_cell_problem import ESIMFiniteSlabSolver
 
@@ -63,11 +64,12 @@ def coil_mesh_and_J():
     geo = OCCGeometry(torus_surf)
     ngmesh = geo.GenerateMesh(mp=MeshingParameters(maxh=a, curvaturesafety=2.0))
     mesh = Mesh(ngmesh)
-    mesh.Curve(2)
+    with TaskManager():
+        mesh.Curve(2)
 
-    sol = compute_inductance_source_sink(mesh)
-    assert 'error' not in sol
-    return mesh, sol['gf_J'], sol['L']
+        sol = compute_inductance_source_sink(mesh)
+        assert 'error' not in sol
+        return mesh, sol['gf_J'], sol['L']
 
 
 @pytest.fixture

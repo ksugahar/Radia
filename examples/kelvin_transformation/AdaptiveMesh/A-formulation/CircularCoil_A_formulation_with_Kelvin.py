@@ -255,6 +255,7 @@ def solve_A_formulation(mesh, fe_order):
     gfA = GridFunction(fes)
 
     from ngsolve.krylovspace import CGSolver
+    from ngsolve import TaskManager
     inv = CGSolver(a.mat, c.mat, maxiter=1000, printrates=True, tol=1e-10)
     gfA.vec.data = inv * f.vec
 
@@ -504,100 +505,101 @@ print("=" * 60)
 
 geo = create_geometry()
 mesh = Mesh(geo.GenerateMesh(maxh=maxh_initial, grading=0.3))
-mesh.Curve(order)
+with TaskManager():
+    mesh.Curve(order)
 
-print(f"\nMesh statistics:")
-print(f"  Elements: {mesh.ne}")
-print(f"  Vertices: {mesh.nv}")
-print(f"  Materials: {mesh.GetMaterials()}")
-print(f"  Boundaries: {set(mesh.GetBoundaries())}")
+    print(f"\nMesh statistics:")
+    print(f"  Elements: {mesh.ne}")
+    print(f"  Vertices: {mesh.nv}")
+    print(f"  Materials: {mesh.GetMaterials()}")
+    print(f"  Boundaries: {set(mesh.GetBoundaries())}")
 
-# Count elements by region
-for mat in set(mesh.GetMaterials()):
-    count = sum(1 for el in mesh.Elements(VOL) if el.mat == mat)
-    print(f"    {mat}: {count} elements")
+    # Count elements by region
+    for mat in set(mesh.GetMaterials()):
+        count = sum(1 for el in mesh.Elements(VOL) if el.mat == mat)
+        print(f"    {mat}: {count} elements")
 
-print("\n" + "=" * 60)
-print("Solving A-formulation...")
-print("=" * 60)
+    print("\n" + "=" * 60)
+    print("Solving A-formulation...")
+    print("=" * 60)
 
-fes, gfA, fields = solve_A_formulation(mesh, order)
+    fes, gfA, fields = solve_A_formulation(mesh, order)
 
-print(f"\nSolution computed.")
-print(f"  DOFs: {fes.ndof}")
+    print(f"\nSolution computed.")
+    print(f"  DOFs: {fes.ndof}")
 
-# Compute energy
-B_cf = fields['B_cf']
+    # Compute energy
+    B_cf = fields['B_cf']
 
-# Energy = (1/2) * integral( nu * |B|^2 dx )
-energy_inner = Integrate(0.5 * nu0 * InnerProduct(B_cf, B_cf) * dx("air_inner"), mesh)
+    # Energy = (1/2) * integral( nu * |B|^2 dx )
+    energy_inner = Integrate(0.5 * nu0 * InnerProduct(B_cf, B_cf) * dx("air_inner"), mesh)
 
-# For Kelvin region
-r_prime_sq = (x - offset_x)**2 + y**2 + z**2
-r_prime = sqrt(r_prime_sq + 1e-20)
-nu_kelvin_cf = (r_prime / kelvin_radius)**2 * nu0
-energy_outer = Integrate(0.5 * nu_kelvin_cf * InnerProduct(B_cf, B_cf) * dx("air_outer"), mesh)
+    # For Kelvin region
+    r_prime_sq = (x - offset_x)**2 + y**2 + z**2
+    r_prime = sqrt(r_prime_sq + 1e-20)
+    nu_kelvin_cf = (r_prime / kelvin_radius)**2 * nu0
+    energy_outer = Integrate(0.5 * nu_kelvin_cf * InnerProduct(B_cf, B_cf) * dx("air_outer"), mesh)
 
-energy = energy_inner + energy_outer
-energy_full = 8 * energy  # Full model (8 octants)
+    energy = energy_inner + energy_outer
+    energy_full = 8 * energy  # Full model (8 octants)
 
-print(f"\nMagnetic energy (1/8 model): {energy:.6e} J")
-print(f"  air_inner: {energy_inner:.6e} J")
-print(f"  air_outer: {energy_outer:.6e} J")
-print(f"Magnetic energy (full model): {energy_full:.6e} J")
+    print(f"\nMagnetic energy (1/8 model): {energy:.6e} J")
+    print(f"  air_inner: {energy_inner:.6e} J")
+    print(f"  air_outer: {energy_outer:.6e} J")
+    print(f"Magnetic energy (full model): {energy_full:.6e} J")
 
-# Check Bz on axis
-print("\nBz on z-axis:")
-r_sample = 0.002
-for z_val in [0.001, 0.01, 0.03, 0.05]:
-    try:
-        mip = mesh(r_sample, r_sample, z_val)
-        B_val = B_cf(mip)
-        Bz = B_val[2]
-        print(f"  z={z_val*1000:.0f}mm: Bz = {Bz*1000:.4f} mT")
-    except Exception as e:
-        print(f"  z={z_val*1000:.0f}mm: Error - {e}")
+    # Check Bz on axis
+    print("\nBz on z-axis:")
+    r_sample = 0.002
+    for z_val in [0.001, 0.01, 0.03, 0.05]:
+        try:
+            mip = mesh(r_sample, r_sample, z_val)
+            B_val = B_cf(mip)
+            Bz = B_val[2]
+            print(f"  z={z_val*1000:.0f}mm: Bz = {Bz*1000:.4f} mT")
+        except Exception as e:
+            print(f"  z={z_val*1000:.0f}mm: Error - {e}")
 
-# Analytical reference
-R_avg = (r_coil_inner + r_coil_outer) / 2
-A_coil = (r_coil_outer - r_coil_inner) * coil_height
-I_eff = J0 * A_coil
-Bz_center_ana = mu0 * I_eff * R_avg**2 / (2 * R_avg**3)
-print(f"\nAnalytical Bz at center (thin coil): {Bz_center_ana*1000:.4f} mT")
+    # Analytical reference
+    R_avg = (r_coil_inner + r_coil_outer) / 2
+    A_coil = (r_coil_outer - r_coil_inner) * coil_height
+    I_eff = J0 * A_coil
+    Bz_center_ana = mu0 * I_eff * R_avg**2 / (2 * R_avg**3)
+    print(f"\nAnalytical Bz at center (thin coil): {Bz_center_ana*1000:.4f} mT")
 
-# Output VTK
-print("\n" + "=" * 60)
-print("Saving outputs...")
-print("=" * 60)
+    # Output VTK
+    print("\n" + "=" * 60)
+    print("Saving outputs...")
+    print("=" * 60)
 
-vtk_file = output_vtk(mesh, gfA, fields, "CircularCoil_A_formulation")
-print(f"  VTK saved: {vtk_file}")
+    vtk_file = output_vtk(mesh, gfA, fields, "CircularCoil_A_formulation")
+    print(f"  VTK saved: {vtk_file}")
 
-# Plot results
-z_axis, Bz_numerical, Bz_analytical = plot_results(mesh, gfA, fields)
+    # Plot results
+    z_axis, Bz_numerical, Bz_analytical = plot_results(mesh, gfA, fields)
 
-# Save data to MAT file
-mat_data = {
-    'r_coil_inner': r_coil_inner,
-    'r_coil_outer': r_coil_outer,
-    'coil_height': coil_height,
-    'kelvin_radius': kelvin_radius,
-    'J0': J0,
-    'mu0': mu0,
-    'order': order,
-    'ndof': fes.ndof,
-    'n_elements': mesh.ne,
-    'energy_1_8': energy,
-    'energy_full': energy_full,
-    'z_axis': z_axis,
-    'Bz_numerical': array(Bz_numerical),
-    'Bz_analytical': Bz_analytical
-}
+    # Save data to MAT file
+    mat_data = {
+        'r_coil_inner': r_coil_inner,
+        'r_coil_outer': r_coil_outer,
+        'coil_height': coil_height,
+        'kelvin_radius': kelvin_radius,
+        'J0': J0,
+        'mu0': mu0,
+        'order': order,
+        'ndof': fes.ndof,
+        'n_elements': mesh.ne,
+        'energy_1_8': energy,
+        'energy_full': energy_full,
+        'z_axis': z_axis,
+        'Bz_numerical': array(Bz_numerical),
+        'Bz_analytical': Bz_analytical
+    }
 
-mat_file = os.path.join(script_dir, "CircularCoil_A_formulation.mat")
-sio.savemat(mat_file, mat_data)
-print(f"  MAT saved: {mat_file}")
+    mat_file = os.path.join(script_dir, "CircularCoil_A_formulation.mat")
+    sio.savemat(mat_file, mat_data)
+    print(f"  MAT saved: {mat_file}")
 
-print("\n" + "=" * 60)
-print("Computation completed successfully")
-print("=" * 60)
+    print("\n" + "=" * 60)
+    print("Computation completed successfully")
+    print("=" * 60)

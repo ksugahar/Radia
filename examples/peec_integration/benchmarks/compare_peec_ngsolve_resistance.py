@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia')
 
 try:
     from ngsolve import *
+    from ngsolve import TaskManager
     from netgen.occ import *
     NGSOLVE_AVAILABLE = True
 except ImportError:
@@ -73,9 +74,10 @@ def create_rectangular_loop_geometry(loop_radius, wire_width, wire_height, n_seg
 
     # Generate mesh
     geo = OCCGeometry(torus)
-    mesh = Mesh(geo.GenerateMesh(maxh=wire_width/2))
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=wire_width/2))
 
-    return mesh
+        return mesh
 
 
 def create_simple_torus_mesh(R, a, b, n_major=36, n_minor_a=4, n_minor_b=4):

@@ -37,6 +37,7 @@ from ngsolve import (
     grad, dx, CoefficientFunction, Integrate, x, y, sqrt as ng_sqrt,
     exp as ng_exp,
 )
+from ngsolve import TaskManager
 from netgen.geom2d import SplineGeometry
 
 import matplotlib
@@ -83,17 +84,18 @@ def assemble_cfem(mesh, integration_order=4):
 
     a_K0 = BilinearForm(fes, symmetric=True)
     a_K0 += NU * grad(u) * grad(v) * dx
-    a_K0.Assemble()
+    with TaskManager():
+        a_K0.Assemble()
 
-    a_M = BilinearForm(fes, symmetric=True)
-    a_M += SIGMA * u * v * dx
-    a_M.Assemble()
+        a_M = BilinearForm(fes, symmetric=True)
+        a_M += SIGMA * u * v * dx
+        a_M.Assemble()
 
-    f = LinearForm(fes)
-    f += J0 * v * dx
-    f.Assemble()
+        f = LinearForm(fes)
+        f += J0 * v * dx
+        f.Assemble()
 
-    return a_K0, a_M, f, fes
+        return a_K0, a_M, f, fes
 
 
 def assemble_xfem(mesh, delta_ref, integration_order=10):

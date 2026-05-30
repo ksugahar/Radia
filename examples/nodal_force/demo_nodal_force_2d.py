@@ -114,60 +114,61 @@ def compute_force_fem(maxh_iron, order=3, curve_order=3):
     mesh = Mesh(OCCGeometry(geo, dim=2).GenerateMesh(maxh=R_outer / 5))
 
     # Curve mesh for accurate representation of circular boundaries
-    if curve_order > 1:
-        mesh.Curve(curve_order)
+    with TaskManager():
+        if curve_order > 1:
+            mesh.Curve(curve_order)
 
-    # ============================================================
-    # A-formulation Magnetostatic Solve
-    # ============================================================
-    fes = H1(mesh, order=order, dirichlet="outer")
-    u, v = fes.TnT()
+        # ============================================================
+        # A-formulation Magnetostatic Solve
+        # ============================================================
+        fes = H1(mesh, order=order, dirichlet="outer")
+        u, v = fes.TnT()
 
-    mu_cf = mesh.MaterialCF({"iron": mu0 * mu_r}, default=mu0)
-    nu_cf = 1.0 / mu_cf
+        mu_cf = mesh.MaterialCF({"iron": mu0 * mu_r}, default=mu0)
+        nu_cf = 1.0 / mu_cf
 
-    a = BilinearForm(nu_cf * grad(u) * grad(v) * dx)
-    a.Assemble()
+        a = BilinearForm(nu_cf * grad(u) * grad(v) * dx)
+        a.Assemble()
 
-    f = LinearForm(J_z * v * dx("wire"))
-    f.Assemble()
+        f = LinearForm(J_z * v * dx("wire"))
+        f.Assemble()
 
-    gf_A = GridFunction(fes)
-    gf_A.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        gf_A = GridFunction(fes)
+        gf_A.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
 
-    # B field from A: B = curl(A_z) = (-dA/dy, dA/dx) -- sign irrelevant for MST
-    B = CF((-grad(gf_A)[1], grad(gf_A)[0]))
+        # B field from A: B = curl(A_z) = (-dA/dy, dA/dx) -- sign irrelevant for MST
+        B = CF((-grad(gf_A)[1], grad(gf_A)[0]))
 
-    # ============================================================
-    # Method 2: Maxwell Stress Tensor (point-wise on circle)
-    # ============================================================
-    R_mst = R_cyl + t_egg / 2  # Integration circle in eggshell (air)
-    n_quad = 360
-    theta = np.linspace(0, 2 * pi, n_quad + 1)[:-1]
-    dtheta = 2 * pi / n_quad
+        # ============================================================
+        # Method 2: Maxwell Stress Tensor (point-wise on circle)
+        # ============================================================
+        R_mst = R_cyl + t_egg / 2  # Integration circle in eggshell (air)
+        n_quad = 360
+        theta = np.linspace(0, 2 * pi, n_quad + 1)[:-1]
+        dtheta = 2 * pi / n_quad
 
-    Fx_MST = 0.0
-    for k in range(n_quad):
-        x_q = d + R_mst * np.cos(theta[k])
-        y_q = R_mst * np.sin(theta[k])
-        nx = np.cos(theta[k])
-        ny = np.sin(theta[k])
+        Fx_MST = 0.0
+        for k in range(n_quad):
+            x_q = d + R_mst * np.cos(theta[k])
+            y_q = R_mst * np.sin(theta[k])
+            nx = np.cos(theta[k])
+            ny = np.sin(theta[k])
 
-        mip = mesh(x_q, y_q)
-        Bx_val = B[0](mip)
-        By_val = B[1](mip)
-        Bn = Bx_val * nx + By_val * ny
-        B2 = Bx_val**2 + By_val**2
+            mip = mesh(x_q, y_q)
+            Bx_val = B[0](mip)
+            By_val = B[1](mip)
+            Bn = Bx_val * nx + By_val * ny
+            B2 = Bx_val**2 + By_val**2
 
-        Fx_MST += (1.0 / mu0) * (Bx_val * Bn - 0.5 * B2 * nx) * R_mst * dtheta
+            Fx_MST += (1.0 / mu0) * (Bx_val * Bn - 0.5 * B2 * nx) * R_mst * dtheta
 
-    # ============================================================
-    # Method 3: Nodal Force (Eggshell + Virtual Work)
-    # ============================================================
-    # Blending function: 1 inside iron, smooth transition to 0 in eggshell
-    fes_blend = H1(mesh, order=1)
-    gf_blend = GridFunction(fes_blend)
-    gf_blend.Set(1.0, definedon=mesh.Materials("iron"))
+        # ============================================================
+        # Method 3: Nodal Force (Eggshell + Virtual Work)
+        # ============================================================
+        # Blending function: 1 inside iron, smooth transition to 0 in eggshell
+        fes_blend = H1(mesh, order=1)
+        gf_blend = GridFunction(fes_blend)
+        gf_blend.Set(1.0, definedon=mesh.Materials("iron"))
 
     # Virtual displacement field: V = (blend * delta, 0)
     fes_def = VectorH1(mesh, order=1)

@@ -27,21 +27,22 @@ def test_sphere_pec():
         f.name = "sphere"
     geo = OCCGeometry(Glue(sph.faces))
     mesh = Mesh(geo.GenerateMesh(maxh=R / 3))
-    mesh.Curve(2)
+    with TaskManager():
+        mesh.Curve(2)
 
-    solver = ScalarBIE_SIBC(mesh, order=1)
-    print(f"Assembly: {solver.t_assembly:.1f}s, {solver.ndof} DOFs")
+        solver = ScalarBIE_SIBC(mesh, order=1)
+        print(f"Assembly: {solver.t_assembly:.1f}s, {solver.ndof} DOFs")
 
-    # PEC: Z_s = 0
-    H_inc = CF((0, 0, H0))
-    phi_inc = CF(-H0 * z)
-    result = solver.solve(H_inc, Zs=0, omega=omega, phi_inc_cf=phi_inc)
+        # PEC: Z_s = 0
+        H_inc = CF((0, 0, H0))
+        phi_inc = CF(-H0 * z)
+        result = solver.solve(H_inc, Zs=0, omega=omega, phi_inc_cf=phi_inc)
 
-    H_ana = 1.5 * H0 * math.sqrt(2.0 / 3.0)
-    err = abs(result['H_rms'] / H_ana - 1)
-    print(f"PEC: H_rms = {result['H_rms']:.2f}, analytical = {H_ana:.2f}, "
-          f"error = {err*100:.2f}%")
-    assert err < 0.01, f"PEC error {err*100:.2f}% > 1%"
+        H_ana = 1.5 * H0 * math.sqrt(2.0 / 3.0)
+        err = abs(result['H_rms'] / H_ana - 1)
+        print(f"PEC: H_rms = {result['H_rms']:.2f}, analytical = {H_ana:.2f}, "
+              f"error = {err*100:.2f}%")
+        assert err < 0.01, f"PEC error {err*100:.2f}% > 1%"
 
 
 def test_sphere_sibc_sweep():
@@ -129,6 +130,7 @@ def test_phi_inc_from_H():
 def test_frequency_sweep():
     """Test frequency sweep API."""
     from ngsolve import Mesh, CF, z
+    from ngsolve import TaskManager
     from netgen.occ import Sphere, Pnt, OCCGeometry, Glue
     from scalar_bie_sibc import ScalarBIE_SIBC
 

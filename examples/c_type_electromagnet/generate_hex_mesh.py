@@ -222,107 +222,109 @@ print(f"  Volumes: {cubit.get_volume_count()}")
 # ============================================================
 print("\nStep 4: Export hex mesh to Netgen (for Radia)")
 
-mesh = Mesh(extract_curved_mesh(cubit, order=1))
-ngmesh = mesh.ngmesh
+with TaskManager():
+    mesh = Mesh(extract_curved_mesh(cubit, order=1))
+    ngmesh = mesh.ngmesh
 
-print(f"  Hex elements: {mesh.ne}")
-print(f"  Vertices: {mesh.nv}")
-print(f"  Materials: {mesh.GetMaterials()}")
+    print(f"  Hex elements: {mesh.ne}")
+    print(f"  Vertices: {mesh.nv}")
+    print(f"  Materials: {mesh.GetMaterials()}")
 
-# Scale mesh to meters
-ngmesh.Scale(0.001)
+    # Scale mesh to meters
+    ngmesh.Scale(0.001)
 
-# Save Netgen mesh (.vol)
-vol_file = os.path.join(work_dir, 'yoke.vol')
-ngmesh.Save(vol_file)
-print(f"  Saved: {vol_file}")
+    # Save Netgen mesh (.vol)
+    vol_file = os.path.join(work_dir, 'yoke.vol')
+    ngmesh.Save(vol_file)
+    print(f"  Saved: {vol_file}")
 
-# Save VTK mesh for visualization
-vtk_file = os.path.join(work_dir, 'yoke_mesh')
-mesh_scaled = Mesh(ngmesh)  # Reload mesh after scaling
-vtk = VTKOutput(mesh_scaled, coefs=[], names=[], filename=vtk_file)
-vtk.Do()
-print(f"  Saved: {vtk_file}.vtk")
+    # Save VTK mesh for visualization
+    vtk_file = os.path.join(work_dir, 'yoke_mesh')
+    mesh_scaled = Mesh(ngmesh)  # Reload mesh after scaling
+    vtk = VTKOutput(mesh_scaled, coefs=[], names=[], filename=vtk_file)
+    vtk.Do()
+    print(f"  Saved: {vtk_file}.vtk")
 
-# ============================================================
-# Step 5: Verify hex mesh and bounding box
-# ============================================================
-print("\nStep 5: Verify hex mesh and bounding box")
+    # ============================================================
+    # Step 5: Verify hex mesh and bounding box
+    # ============================================================
+    print("\nStep 5: Verify hex mesh and bounding box")
 
-import numpy as np
+    import numpy as np
 
-# Element type verification
-from ngsolve import VOL
-element_types = {}
-for el in mesh_scaled.Elements(VOL):
-    et = str(el.type)
-    element_types[et] = element_types.get(et, 0) + 1
+    # Element type verification
+    from ngsolve import VOL
+    from ngsolve import TaskManager
+    element_types = {}
+    for el in mesh_scaled.Elements(VOL):
+        et = str(el.type)
+        element_types[et] = element_types.get(et, 0) + 1
 
-for et, count in element_types.items():
-    print(f"  {et}: {count}")
+    for et, count in element_types.items():
+        print(f"  {et}: {count}")
 
-if 'HEX' in str(element_types) or 'HEXAHEDRON' in str(element_types):
-    print("  [OK] Hexahedral mesh confirmed")
-else:
-    print("  [WARNING] No hexahedral elements found!")
+    if 'HEX' in str(element_types) or 'HEXAHEDRON' in str(element_types):
+        print("  [OK] Hexahedral mesh confirmed")
+    else:
+        print("  [WARNING] No hexahedral elements found!")
 
-# Bounding box (meters)
-vertices = []
-for v in mesh_scaled.vertices:
-    pt = v.point
-    vertices.append([pt[0], pt[1], pt[2]])
+    # Bounding box (meters)
+    vertices = []
+    for v in mesh_scaled.vertices:
+        pt = v.point
+        vertices.append([pt[0], pt[1], pt[2]])
 
-vertices = np.array(vertices)
+    vertices = np.array(vertices)
 
-x_min, x_max = vertices[:, 0].min(), vertices[:, 0].max()
-y_min, y_max = vertices[:, 1].min(), vertices[:, 1].max()
-z_min, z_max = vertices[:, 2].min(), vertices[:, 2].max()
+    x_min, x_max = vertices[:, 0].min(), vertices[:, 0].max()
+    y_min, y_max = vertices[:, 1].min(), vertices[:, 1].max()
+    z_min, z_max = vertices[:, 2].min(), vertices[:, 2].max()
 
-print(f"\n  Bounding box (mm):")
-print(f"    X: [{x_min*1000:.1f}, {x_max*1000:.1f}] (size: {(x_max-x_min)*1000:.1f})")
-print(f"    Y: [{y_min*1000:.1f}, {y_max*1000:.1f}] (size: {(y_max-y_min)*1000:.1f})")
-print(f"    Z: [{z_min*1000:.1f}, {z_max*1000:.1f}] (size: {(z_max-z_min)*1000:.1f})")
+    print(f"\n  Bounding box (mm):")
+    print(f"    X: [{x_min*1000:.1f}, {x_max*1000:.1f}] (size: {(x_max-x_min)*1000:.1f})")
+    print(f"    Y: [{y_min*1000:.1f}, {y_max*1000:.1f}] (size: {(y_max-y_min)*1000:.1f})")
+    print(f"    Z: [{z_min*1000:.1f}, {z_max*1000:.1f}] (size: {(z_max-z_min)*1000:.1f})")
 
-# Update mesh variable for interactive mode
-mesh = mesh_scaled
+    # Update mesh variable for interactive mode
+    mesh = mesh_scaled
 
-# ============================================================
-# Summary
-# ============================================================
-print()
-print("=" * 60)
-print("MESH GENERATION COMPLETE")
-print("=" * 60)
-print()
-print("Output files:")
-print(f"  - yoke.cub      : Cubit database (for editing)")
-print(f"  - yoke.vol      : Netgen hex mesh (for Radia)")
-print(f"  - yoke_mesh.vtk : VTK mesh (for ParaView)")
-print(f"  - yoke.step     : STEP geometry (for NGSolve tet mesh)")
-print()
-print("Next steps:")
-print("  Radia:   python solve_radia.py")
-print("  NGSolve: python solve_ngsolve.py")
-print("=" * 60)
+    # ============================================================
+    # Summary
+    # ============================================================
+    print()
+    print("=" * 60)
+    print("MESH GENERATION COMPLETE")
+    print("=" * 60)
+    print()
+    print("Output files:")
+    print(f"  - yoke.cub      : Cubit database (for editing)")
+    print(f"  - yoke.vol      : Netgen hex mesh (for Radia)")
+    print(f"  - yoke_mesh.vtk : VTK mesh (for ParaView)")
+    print(f"  - yoke.step     : STEP geometry (for NGSolve tet mesh)")
+    print()
+    print("Next steps:")
+    print("  Radia:   python solve_radia.py")
+    print("  NGSolve: python solve_ngsolve.py")
+    print("=" * 60)
 
-# ============================================================
-# Interactive mode: Variables available for inspection
-# ============================================================
-# When running with `py -i generate_mesh.py`:
-#   mesh       : NGSolve Mesh object (scaled to meters)
-#   ngmesh     : Netgen mesh object
-#   cubit      : Cubit module (for further inspection)
-#
-# Example commands in interactive mode:
-#   mesh.ne                    # Number of elements
-#   mesh.nv                    # Number of vertices
-#   mesh.GetMaterials()        # Material names
-#   list(mesh.Elements3D())    # List of 3D elements
-#   for el in mesh.Elements3D(): print(el.type)  # Element types
+    # ============================================================
+    # Interactive mode: Variables available for inspection
+    # ============================================================
+    # When running with `py -i generate_mesh.py`:
+    #   mesh       : NGSolve Mesh object (scaled to meters)
+    #   ngmesh     : Netgen mesh object
+    #   cubit      : Cubit module (for further inspection)
+    #
+    # Example commands in interactive mode:
+    #   mesh.ne                    # Number of elements
+    #   mesh.nv                    # Number of vertices
+    #   mesh.GetMaterials()        # Material names
+    #   list(mesh.Elements3D())    # List of 3D elements
+    #   for el in mesh.Elements3D(): print(el.type)  # Element types
 
-print()
-print("Interactive mode (py -i):")
-print("  mesh.ne              # Number of hex elements")
-print("  mesh.nv              # Number of vertices")
-print("  mesh.GetMaterials()  # Material names ['yoke']")
-print("  cubit.get_hex_count()  # Cubit hex count")
+    print()
+    print("Interactive mode (py -i):")
+    print("  mesh.ne              # Number of hex elements")
+    print("  mesh.nv              # Number of vertices")
+    print("  mesh.GetMaterials()  # Material names ['yoke']")
+    print("  cubit.get_hex_count()  # Cubit hex count")

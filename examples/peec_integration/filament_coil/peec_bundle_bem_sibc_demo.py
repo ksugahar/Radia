@@ -86,8 +86,9 @@ def build_wp_surface_mesh(R_wp, H_wp, maxh):
         f.name = "wp_surface"
         f.maxh = maxh
     geo = OCCGeometry(cyl)
-    vol_mesh = Mesh(geo.GenerateMesh(maxh=maxh))
-    return _extract_surface_mesh_filtered(vol_mesh, keep_label="wp")
+    with TaskManager():
+        vol_mesh = Mesh(geo.GenerateMesh(maxh=maxh))
+        return _extract_surface_mesh_filtered(vol_mesh, keep_label="wp")
 
 
 def solve_peec_bundle(paths, dw, dh, sigma, I_port, frequency):
@@ -167,6 +168,7 @@ def main():
     t0 = time.perf_counter()
     wp_mesh = build_wp_surface_mesh(R_wp, H_wp, args.wp_maxh)
     from ngsolve import BND
+    from ngsolve import TaskManager
     print(f"  wp nv={wp_mesh.nv}  ne(BND)={wp_mesh.GetNE(BND)}  "
           f"({time.perf_counter() - t0:.1f}s)")
     from radia.bem_sibc_solver import (ScalarBIESIBCSolver,

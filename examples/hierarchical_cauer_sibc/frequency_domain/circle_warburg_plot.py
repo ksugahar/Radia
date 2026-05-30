@@ -1,4 +1,4 @@
-"""Generate circle_cpe_schur.pdf for the IGTE 2026 digest (Fig. 1).
+"""Generate circle_warburg.pdf for the IGTE 2026 digest (Fig. 1).
 
 Plots |Y(jω)| log-log for a 2D Cu cylinder (a=5 mm), comparing:
 - exact Bessel admittance Y_cyl(s) = π a² σ · 2I_1(γa)/[γa I_0(γa)]
@@ -251,7 +251,7 @@ def main():
               handlelength=2.0, labelspacing=0.25)
 
     fig.tight_layout(pad=0.25)
-    out = Path(__file__).parent / "circle_cpe_schur"
+    out = Path(__file__).parent / "circle_warburg"
     fig.savefig(str(out) + ".pdf")
     fig.savefig(str(out) + ".png", dpi=220)
     print(f"wrote {out}.pdf, {out}.png")

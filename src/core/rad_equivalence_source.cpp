@@ -21,6 +21,7 @@
 #include "rad_equivalence_source.h"
 
 #include <cmath>
+#include <complex>
 #include <cstring>
 #include <vector>
 
@@ -30,8 +31,11 @@ namespace radia { namespace eqsrc {
 
 namespace {
 
-constexpr double INV_FOUR_PI = 1.0 / (4.0 * 3.14159265358979323846);
+constexpr double PI_         = 3.14159265358979323846;
+constexpr double INV_FOUR_PI = 1.0 / (4.0 * PI_);
 constexpr double R_MIN       = 1.0e-15;     // singular-distance guard
+constexpr double MU_0        = 4.0e-7 * PI_;
+constexpr double EPS_0       = 8.8541878128e-12;
 
 // Per-face pre-computed values: centroid + outward normal + area
 // + the two surface-source terms (J_s and n.H).  Hot-loop only needs
@@ -138,6 +142,202 @@ void EvaluateStaticH(
         H_out[j * 3 + 0] = INV_FOUR_PI * Hx_acc;
         H_out[j * 3 + 1] = INV_FOUR_PI * Hy_acc;
         H_out[j * 3 + 2] = INV_FOUR_PI * Hz_acc;
+    });
+}
+
+
+// =====================================================================
+// EvaluateHarmonic -- full Stratton-Chu with DYADIC Green's function
+// =====================================================================
+//
+//   G_bar . v = psi {(h^2+h+1)/h^2 v - (h^2+3h+3)/h^2 (v.R_hat) R_hat}
+//
+//   where h = jkR (complex), psi = exp(-jkR)/(4 pi R).
+//
+//   E(r) = integral {-jw mu_0 G_bar.J_s + grad_psi x M_s - (n.E_s) grad_psi}dS
+//   H(r) = integral {+jw eps_0 G_bar.M_s + grad_psi x J_s - (n.H_s) grad_psi}dS
+//
+//   J_s = n x H_s,  M_s = E_s x n,
+//   (n.E_s) = rho_e/eps_0,  (n.H_s) = rho_m/mu_0.
+//
+// The dyadic Green's function captures the (1/k^2)*grad-grad-psi term that
+// the scalar form omits.  Phase 2 KNOWN_LIMITATION (66% undershoot at
+// R_obs/lambda << 1) is resolved by this kernel.
+//
+
+namespace {
+
+// Per-face cache for the harmonic kernel.
+struct HarmFaceCache {
+    double cx, cy, cz;                      // centroid
+    double nx, ny, nz;                      // outward unit normal
+    double area;
+    std::complex<double> Js[3];             // n x H_s
+    std::complex<double> Ms[3];             // E_s x n
+    std::complex<double> n_dot_E;           // rho_e / eps_0
+    std::complex<double> n_dot_H;           // rho_m / mu_0
+};
+
+void build_harm_cache(
+    const double* centroids, const double* normals,
+    const double* areas,
+    const double* E_re, const double* E_im,
+    const double* H_re, const double* H_im,
+    int n_faces, std::vector<HarmFaceCache>& cache)
+{
+    using C = std::complex<double>;
+    cache.resize(n_faces);
+    for (int t = 0; t < n_faces; ++t) {
+        HarmFaceCache& fc = cache[t];
+        fc.cx = centroids[t*3+0]; fc.cy = centroids[t*3+1]; fc.cz = centroids[t*3+2];
+        fc.nx = normals[t*3+0]; fc.ny = normals[t*3+1]; fc.nz = normals[t*3+2];
+        fc.area = areas[t];
+        const C Ex(E_re[t*3+0], E_im[t*3+0]);
+        const C Ey(E_re[t*3+1], E_im[t*3+1]);
+        const C Ez(E_re[t*3+2], E_im[t*3+2]);
+        const C Hx(H_re[t*3+0], H_im[t*3+0]);
+        const C Hy(H_re[t*3+1], H_im[t*3+1]);
+        const C Hz(H_re[t*3+2], H_im[t*3+2]);
+        // J_s = n x H_s
+        fc.Js[0] = fc.ny * Hz - fc.nz * Hy;
+        fc.Js[1] = fc.nz * Hx - fc.nx * Hz;
+        fc.Js[2] = fc.nx * Hy - fc.ny * Hx;
+        // M_s = E_s x n
+        fc.Ms[0] = Ey * fc.nz - Ez * fc.ny;
+        fc.Ms[1] = Ez * fc.nx - Ex * fc.nz;
+        fc.Ms[2] = Ex * fc.ny - Ey * fc.nx;
+        // n . E_s,  n . H_s
+        fc.n_dot_E = fc.nx * Ex + fc.ny * Ey + fc.nz * Ez;
+        fc.n_dot_H = fc.nx * Hx + fc.ny * Hy + fc.nz * Hz;
+    }
+}
+
+}  // anonymous namespace
+
+
+void EvaluateHarmonic(
+    const double* centroids,
+    const double* normals,
+    const double* areas,
+    const double* E_re, const double* E_im,
+    const double* H_re, const double* H_im,
+    int n_faces,
+    const double* obs,
+    int n_obs,
+    double omega,
+    double* E_re_out, double* E_im_out,
+    double* H_re_out, double* H_im_out,
+    int n_threads)
+{
+    using C = std::complex<double>;
+
+    std::memset(E_re_out, 0, sizeof(double) * 3 * (size_t)n_obs);
+    std::memset(E_im_out, 0, sizeof(double) * 3 * (size_t)n_obs);
+    std::memset(H_re_out, 0, sizeof(double) * 3 * (size_t)n_obs);
+    std::memset(H_im_out, 0, sizeof(double) * 3 * (size_t)n_obs);
+
+    if (n_faces <= 0 || n_obs <= 0) return;
+    if (omega <= 0.0) return;   // caller should use EvaluateStaticH
+
+    std::vector<HarmFaceCache> cache;
+    build_harm_cache(centroids, normals, areas,
+                      E_re, E_im, H_re, H_im, n_faces, cache);
+
+    const double k_w = omega * std::sqrt(MU_0 * EPS_0);   // wave number, real
+    const C jwmu(0.0, omega * MU_0);                       // jw mu_0
+    const C jweps(0.0, omega * EPS_0);                     // jw eps_0
+    const C jk(0.0, k_w);                                  // jk
+
+    int requested_threads = (n_threads > 0)
+        ? n_threads
+        : ngcore::TaskManager::GetMaxThreads();
+    if (requested_threads <= 0) requested_threads = 1;
+    ngcore::RegionTaskManager rtm(requested_threads);
+
+    ngcore::ParallelFor(ngcore::IntRange(n_obs), [&](size_t j_sz) {
+        const int j = static_cast<int>(j_sz);
+        const double ox = obs[j*3+0];
+        const double oy = obs[j*3+1];
+        const double oz = obs[j*3+2];
+        C Ex_acc(0,0), Ey_acc(0,0), Ez_acc(0,0);
+        C Hx_acc(0,0), Hy_acc(0,0), Hz_acc(0,0);
+
+        for (int t = 0; t < n_faces; ++t) {
+            const HarmFaceCache& fc = cache[t];
+            const double Rx = ox - fc.cx;
+            const double Ry = oy - fc.cy;
+            const double Rz = oz - fc.cz;
+            const double R2 = Rx*Rx + Ry*Ry + Rz*Rz;
+            if (R2 < R_MIN * R_MIN) continue;
+            const double R = std::sqrt(R2);
+            const double inv_R = 1.0 / R;
+            // R-hat
+            const double rhx = Rx * inv_R, rhy = Ry * inv_R, rhz = Rz * inv_R;
+            // psi = exp(-jkR) / (4 pi R)
+            const C exp_mjkR = std::exp(C(0.0, -k_w * R));
+            const C psi = exp_mjkR * (INV_FOUR_PI * inv_R);
+            // grad_psi = -(jk + 1/R) psi R_hat
+            const C scal_g = -(jk + inv_R) * psi;
+            const C gx = scal_g * rhx, gy = scal_g * rhy, gz = scal_g * rhz;
+
+            // Dyadic kernel pre-factors (h = jkR)
+            const C h = C(0.0, k_w * R);   // jkR
+            const C h2 = h * h;
+            const C alpha = (h2 + h + 1.0) / h2;   // multiplies v
+            const C beta  = (h2 + 3.0*h + 3.0) / h2;  // multiplies (v.R_hat) R_hat
+            //   G_bar . v = psi (alpha v - beta (v.R_hat) R_hat)
+
+            // ============= E formula =============
+            // E_per_face = [-jw mu_0 G_bar . J_s + grad_psi x M_s - (n.E_s) grad_psi] dS
+            // (1) -jw mu_0 G_bar . J_s
+            const C Jdotr = fc.Js[0]*rhx + fc.Js[1]*rhy + fc.Js[2]*rhz;
+            const C Gx_J = psi * (alpha * fc.Js[0] - beta * Jdotr * rhx);
+            const C Gy_J = psi * (alpha * fc.Js[1] - beta * Jdotr * rhy);
+            const C Gz_J = psi * (alpha * fc.Js[2] - beta * Jdotr * rhz);
+            const C E1x = -jwmu * Gx_J;
+            const C E1y = -jwmu * Gy_J;
+            const C E1z = -jwmu * Gz_J;
+            // (2) grad_psi x M_s
+            const C E2x = gy * fc.Ms[2] - gz * fc.Ms[1];
+            const C E2y = gz * fc.Ms[0] - gx * fc.Ms[2];
+            const C E2z = gx * fc.Ms[1] - gy * fc.Ms[0];
+            // (3) -(n.E_s) grad_psi
+            const C E3x = -fc.n_dot_E * gx;
+            const C E3y = -fc.n_dot_E * gy;
+            const C E3z = -fc.n_dot_E * gz;
+            const double dS = fc.area;
+            Ex_acc += (E1x + E2x + E3x) * dS;
+            Ey_acc += (E1y + E2y + E3y) * dS;
+            Ez_acc += (E1z + E2z + E3z) * dS;
+
+            // ============= H formula =============
+            // H_per_face = [+jw eps_0 G_bar . M_s + grad_psi x J_s - (n.H_s) grad_psi] dS
+            const C Mdotr = fc.Ms[0]*rhx + fc.Ms[1]*rhy + fc.Ms[2]*rhz;
+            const C Gx_M = psi * (alpha * fc.Ms[0] - beta * Mdotr * rhx);
+            const C Gy_M = psi * (alpha * fc.Ms[1] - beta * Mdotr * rhy);
+            const C Gz_M = psi * (alpha * fc.Ms[2] - beta * Mdotr * rhz);
+            const C H1x = jweps * Gx_M;
+            const C H1y = jweps * Gy_M;
+            const C H1z = jweps * Gz_M;
+            // grad_psi x J_s
+            const C H2x = gy * fc.Js[2] - gz * fc.Js[1];
+            const C H2y = gz * fc.Js[0] - gx * fc.Js[2];
+            const C H2z = gx * fc.Js[1] - gy * fc.Js[0];
+            // -(n.H_s) grad_psi
+            const C H3x = -fc.n_dot_H * gx;
+            const C H3y = -fc.n_dot_H * gy;
+            const C H3z = -fc.n_dot_H * gz;
+            Hx_acc += (H1x + H2x + H3x) * dS;
+            Hy_acc += (H1y + H2y + H3y) * dS;
+            Hz_acc += (H1z + H2z + H3z) * dS;
+        }
+
+        E_re_out[j*3+0] = Ex_acc.real();  E_im_out[j*3+0] = Ex_acc.imag();
+        E_re_out[j*3+1] = Ey_acc.real();  E_im_out[j*3+1] = Ey_acc.imag();
+        E_re_out[j*3+2] = Ez_acc.real();  E_im_out[j*3+2] = Ez_acc.imag();
+        H_re_out[j*3+0] = Hx_acc.real();  H_im_out[j*3+0] = Hx_acc.imag();
+        H_re_out[j*3+1] = Hy_acc.real();  H_im_out[j*3+1] = Hy_acc.imag();
+        H_re_out[j*3+2] = Hz_acc.real();  H_im_out[j*3+2] = Hz_acc.imag();
     });
 }
 

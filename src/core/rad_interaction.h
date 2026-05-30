@@ -279,6 +279,7 @@ class radTInteraction : public radTg {
 	std::vector<double> m_hexaTriVertices;        // n_hex * 6 * 2 * 3 * 3: 2 triangles per face, 3 verts, xyz
 	std::vector<double> m_hexaTriSigns;           // n_hex * 6 * 2: sign correction for each triangle
 	std::vector<int> m_hexaElemIndices;           // Maps hex index to element index
+	std::vector<int> m_globalToHexIdx;            // Maps global element index to hex index (-1 if not hex)
 
 	//-------------------------------------------------------------------------
 	// Pre-computed wedge geometry for fast 5x5 block computation
@@ -295,6 +296,7 @@ class radTInteraction : public radTg {
 	std::vector<double> m_wedgeTriSigns;         // n_wedge * 8: sign correction per triangle
 	std::vector<int> m_wedgeTriOffset;           // n_wedge * 5: start index into TriVertices for each face
 	std::vector<int> m_wedgeElemIndices;         // Maps wedge index to element index
+	std::vector<int> m_globalToWedgeIdx;         // Maps global element index to wedge index (-1 if not wedge)
 	static constexpr int WEDGE_MAX_TRIS = 8;    // Max triangles per wedge element
 
 	//-------------------------------------------------------------------------

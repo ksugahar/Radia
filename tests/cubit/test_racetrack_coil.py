@@ -24,6 +24,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF
+from ngsolve import TaskManager
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
@@ -122,8 +123,9 @@ for method_name, commands in racetrack_methods:
         try:
             cubit.cmd(f'radia_export netgen "{vol_path}" order {order} overwrite')
             mesh = Mesh(vol_path)
-            V_ng = Integrate(CF(1), mesh)
-            err_pct = (V_ng - cad_vol) / cad_vol * 100.0
+            with TaskManager():
+                V_ng = Integrate(CF(1), mesh)
+                err_pct = (V_ng - cad_vol) / cad_vol * 100.0
         except Exception as e:
             print(f"  {order:>3}  FAILED: {e}")
             all_passed = False

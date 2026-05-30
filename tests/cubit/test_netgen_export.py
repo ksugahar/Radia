@@ -31,6 +31,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 # Check if NGSolve is available
 try:
 	import ngsolve
+	from ngsolve import TaskManager
 	NGSOLVE_AVAILABLE = True
 	print("NGSolve is available")
 except ImportError:
@@ -252,9 +253,10 @@ def test_ngsolve_integration():
 
 	# Try creating a simple FE space
 	try:
-		fes = ngsolve.H1(mesh, order=1)
-		print(f"  H1 space created with {fes.ndof} DOFs")
-		print("  PASS: NGSolve integration successful")
+		with TaskManager():
+			fes = ngsolve.H1(mesh, order=1)
+			print(f"  H1 space created with {fes.ndof} DOFs")
+			print("  PASS: NGSolve integration successful")
 	except Exception as e:
 		print(f"  FAIL: Could not create H1 space: {e}")
 		return False

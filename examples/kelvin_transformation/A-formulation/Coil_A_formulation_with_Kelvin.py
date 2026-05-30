@@ -231,17 +231,18 @@ f = LinearForm(fes)
 f += J0 * v * dx("coil")
 
 print("\nAssembling system...")
-a_form.Assemble()
-f.Assemble()
-print("  System assembled")
+with TaskManager():
+    a_form.Assemble()
+    f.Assemble()
+    print("  System assembled")
 
-# ============================================================
-# Solve
-# ============================================================
-print("\nSolving system...")
-gfu = GridFunction(fes)
-gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
-print("  Solution converged")
+    # ============================================================
+    # Solve
+    # ============================================================
+    print("\nSolving system...")
+    gfu = GridFunction(fes)
+    gfu.vec.data = a_form.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    print("  Solution converged")
 
 # ============================================================
 # Post-processing

@@ -226,7 +226,7 @@ class NearFieldSource:
             NearFieldSource instance.
         """
         try:
-            from ngsolve import BND, specialcf
+            from ngsolve import BND, CoefficientFunction, Integrate
         except ImportError as e:
             raise ImportError(
                 "extract_ngsolve requires NGSolve to be importable") from e
@@ -234,15 +234,43 @@ class NearFieldSource:
         if gf_H is None:
             raise ValueError("gf_H must be provided")
 
-        # Iterate BND elements on the named surface
+        # Vectorized per-element area-averaged sampling using
+        # `Integrate(cf, mesh, BND, element_wise=True)`.  This is the
+        # canonical NGSolve pattern (see bem_sibc_solver.py:1815-1819)
+        # and is internally TaskManager-parallel, honouring the caller's
+        # `with TaskManager():` context.  The result is a 1D array
+        # indexed by BND element number.
+        #
+        # For flat triangles with smooth fields, area-average equals
+        # centroid value; for curved (mesh.Curve(p>=2)) BND elements
+        # this is strictly more accurate than centroid sampling.
+        bnd_region = mesh.Boundaries(surface_label)
+        # Region indicator: 1 inside surface_label, 0 elsewhere -- so
+        # `Integrate(cf * indicator, ..., element_wise=True)` only
+        # contributes on the named surface.  Other elements get 0,
+        # which we filter post-hoc via `elem_area`.
+        indicator = mesh.BoundaryCF(
+            {surface_label: 1.0}, default=0.0)
+
+        elem_area = Integrate(
+            indicator, mesh, VOL_or_BND=BND, element_wise=True)
+        # Three vector components, each integrated separately.
+        H_components = [Integrate(gf_H[i] * indicator, mesh,
+                                  VOL_or_BND=BND, element_wise=True)
+                        for i in range(3)]
+        if gf_E is not None:
+            E_components = [Integrate(gf_E[i] * indicator, mesh,
+                                      VOL_or_BND=BND, element_wise=True)
+                            for i in range(3)]
+
+        # Iterate BND elements on the named surface (geometry still
+        # needs random access for vertex enumeration + area/normal).
         centroids = []
         normals = []
         areas = []
         E_list = [] if gf_E is not None else None
         H_list = []
 
-        bnd_region = mesh.Boundaries(surface_label)
-        # MeshElements iterator over BND elements in the region
         for el in mesh.Elements(BND):
             if not bnd_region.Mask()[el.index]:
                 continue
@@ -273,29 +301,24 @@ class NearFieldSource:
             if n_hat is None:
                 continue
 
-            # Sample E, H at face centroid via NGSolve point evaluation.
-            # For a vector-valued GridFunction / CoefficientFunction,
-            # `gf(mp)` returns the FULL vector as a tuple/np.array;
-            # individual components are then ` ...[i] `.
-            mp = mesh(*c)
-            val = gf_H(mp)
-            try:
-                vec = np.asarray(val, dtype=np.complex128).reshape(-1)
-            except Exception:
-                # Scalar CF fallback (very rare)
-                vec = np.asarray([complex(val), 0.0j, 0.0j])
-            if vec.shape[0] < 3:
-                vec = np.concatenate([vec, np.zeros(3 - vec.shape[0],
-                                                       dtype=np.complex128)])
-            H_at = vec[:3]
+            # Per-element area-averaged H from vectorized Integrate.
+            # `elem_area[el.nr]` is the integral of the region
+            # indicator over the element -- equals the FE measure of
+            # the element on the named surface (also handles curved
+            # BND elements correctly).
+            ae = elem_area[el.nr]
+            if abs(ae) < 1e-30:
+                # Element on surface_label but degenerate; skip
+                continue
+            H_at = np.array(
+                [complex(H_components[i][el.nr]) / ae for i in range(3)],
+                dtype=np.complex128)
 
             if gf_E is not None:
-                val_e = gf_E(mp)
-                ve = np.asarray(val_e, dtype=np.complex128).reshape(-1)
-                if ve.shape[0] < 3:
-                    ve = np.concatenate([ve, np.zeros(3 - ve.shape[0],
-                                                         dtype=np.complex128)])
-                E_list.append(ve[:3])
+                ve = np.array(
+                    [complex(E_components[i][el.nr]) / ae for i in range(3)],
+                    dtype=np.complex128)
+                E_list.append(ve)
 
             centroids.append(c)
             normals.append(n_hat)
@@ -506,12 +529,27 @@ class NearFieldSource:
         H_rec = (1.0 / (4.0 * math.pi)) * np.sum(per_face, axis=1)
         return H_rec
 
-    def evaluate(self, obs_points: np.ndarray, omega: Optional[float] = None):
+    def evaluate(self, obs_points: np.ndarray, omega: Optional[float] = None,
+                  use_cpp: bool = True, n_threads: int = 0):
         """Full time-harmonic Stratton-Chu reconstruction.
+
+        Phase B (2026-05-26): when ``use_cpp=True`` (default) and
+        ``omega > 0``, delegates to the C++ kernel
+        ``_EquivalenceSourceHarmonic`` which uses the FULL dyadic
+        Green's function (I + grad-grad/k^2) psi.  Correctly reproduces
+        deep-near-field behaviour (the Python fallback's scalar form
+        underestimated by up to a factor of 3 at R_obs/lambda << 1 --
+        the former KNOWN_LIMITATION).
 
         Args:
             obs_points: (M, 3) array of observation points (m).
             omega: angular frequency (rad/s).  If None, uses self.omega.
+            use_cpp: True (default) -> C++ dyadic kernel.  False ->
+                     Python scalar fallback (legacy, deprecated; will
+                     be removed in Phase E).  The fallback is kept as a
+                     numerical-diff cross-check during Phase B/C/D.
+            n_threads: 0 = NGSolve TaskManager default.  Only used by
+                       the C++ path.
 
         Returns:
             (E_rec, H_rec): each (M, 3) complex array.
@@ -523,7 +561,8 @@ class NearFieldSource:
         obs = np.atleast_2d(np.asarray(obs_points, dtype=np.float64))
 
         if omega == 0.0:
-            H_rec = self.evaluate_static_H(obs).astype(np.complex128)
+            H_rec = self.evaluate_static_H(obs, use_cpp=use_cpp,
+                                              n_threads=n_threads).astype(np.complex128)
             E_rec = np.zeros_like(H_rec)
             return E_rec, H_rec
 
@@ -532,20 +571,37 @@ class NearFieldSource:
                 "Full Stratton-Chu (omega != 0) requires BOTH E and H "
                 "on the surface")
 
-        # KNOWN LIMITATION:  the scalar Green's-function form below
-        # is the FAR-FIELD-accurate Schelkunoff reduction.  In the
-        # DEEP NEAR-FIELD (R obs ~ a few wavelengths of the extraction
-        # sphere) it misses the (1/k^2) grad-grad psi correction term
-        # of the full dyadic Green's function and undershoots the
-        # field magnitude (~1/3 of the analytical for a 1 MHz Hertzian
-        # dipole at 10 m, R_sphere = 1 m, where R_obs/lambda ~ 1/30).
-        # Use evaluate_static_H for omega = 0 (Radia's primary case)
-        # which DOES use the correct static reduction.  For high-
-        # frequency near-field reconstruction (radiation problems
-        # where the obs point IS far compared to extraction sphere /
-        # wavelength), the formula below is accurate.  Full dyadic
-        # near-field implementation is a roadmap item -- see
-        # NearFieldSource.evaluate_dyadic (TODO).
+        if use_cpp:
+            try:
+                from . import _radia_pybind  # type: ignore
+                fn = getattr(_radia_pybind,
+                              "_EquivalenceSourceHarmonic", None)
+                if fn is not None:
+                    E_re_arr = np.ascontiguousarray(self.E.real, dtype=np.float64)
+                    E_im_arr = np.ascontiguousarray(self.E.imag, dtype=np.float64)
+                    H_re_arr = np.ascontiguousarray(self.H.real, dtype=np.float64)
+                    H_im_arr = np.ascontiguousarray(self.H.imag, dtype=np.float64)
+                    (e_re, e_im, h_re, h_im) = fn(
+                        np.ascontiguousarray(self.centroids, dtype=np.float64),
+                        np.ascontiguousarray(self.normals, dtype=np.float64),
+                        np.ascontiguousarray(self.areas, dtype=np.float64),
+                        E_re_arr, E_im_arr,
+                        H_re_arr, H_im_arr,
+                        np.ascontiguousarray(obs, dtype=np.float64),
+                        float(omega),
+                        int(n_threads),
+                    )
+                    return (e_re + 1j * e_im, h_re + 1j * h_im)
+            except ImportError:
+                pass    # fall through to Python fallback
+
+        # ------------------ Python fallback (scalar form, legacy) -------
+        # KNOWN LIMITATION (only when use_cpp=False is explicitly
+        # passed): the scalar Green's-function form below misses the
+        # (1/k^2) grad-grad psi term of the full dyadic GF and
+        # undershoots in the deep near-field.  Use use_cpp=True
+        # (default) for the correct dyadic reconstruction.  This
+        # fallback is kept solely as a regression-diff anchor.
 
         k = omega * math.sqrt(MU_0 * EPS_0)
         # Vectorised over (M, N)

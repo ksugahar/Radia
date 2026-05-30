@@ -590,3 +590,187 @@ def paper_writing_verify_citation(
                     "candidate_title.  Or pass a more detailed claim "
                     "(>20 chars) and set search_arxiv_if_no_doi=True."),
     }
+
+
+# ============================================================
+# paper_writing_check_citation_keys_exist  (2026-05-27)
+# Static check: every \cite{key} resolves to a .bib entry.
+# ============================================================
+
+# All cite-family commands.  Captures the keys-list inside {...}.
+_CITE_KEYS_RE = re.compile(
+    r"\\(?:cite|citet|citep|citeyear|citealt|citealp|citeauthor|"
+    r"nocite|fullcite|textcite|parencite|footcite|autocite|"
+    r"citeNP|citeA|citeauthorNP)"
+    r"(?:\[[^\]]*\])?"            # optional [page]
+    r"(?:\[[^\]]*\])?"            # optional second [prenote]
+    r"\{([^\}]+)\}"
+)
+
+
+def _collect_cited_keys(tex_source: str) -> dict[str, list[int]]:
+    """Pull every key out of every \\cite{a,b,c} occurrence.
+
+    Returns dict ``{key: [char_offset_first_seen, ...]}``.
+    A single key may be cited many times; we record only the FIRST
+    offset (used for reporter context).
+    """
+    out: dict[str, list[int]] = {}
+    for m in _CITE_KEYS_RE.finditer(tex_source):
+        keys_blob = m.group(1)
+        for raw in keys_blob.split(","):
+            k = raw.strip()
+            if not k:
+                continue
+            out.setdefault(k, []).append(m.start())
+    return out
+
+
+def paper_writing_check_citation_keys_exist(
+    tex_path: str,
+    bib_path: str,
+    auto_resolve_inputs: bool = True,
+    encoding: str = "utf-8",
+    max_reported: int = 50,
+) -> dict:
+    """Static check: every ``\\cite{key}`` in the .tex resolves to a
+    .bib entry, and vice-versa report unused bib entries.
+
+    This is the cheapest sanity check for the reviewer-pattern
+    "reference [12] does not exist" — bibtex / biber will mark the
+    citation as ``???`` in the rendered PDF, but only LaTeX-compile
+    errors that the author may have ignored.  This MCP tool surfaces
+    them up-front without compiling.
+
+    Args:
+        tex_path: main .tex file (paper entry point).  If the project
+            uses ``\\input{}`` to split content across files, set
+            ``auto_resolve_inputs=True`` (default) to merge the chain
+            before scanning.
+        bib_path: the .bib file referenced by ``\\bibliography{...}``.
+            Lab convention: ``reference.bib`` at project root.
+        auto_resolve_inputs: True (default) inlines ``\\input{}``
+            recursively before scanning ``\\cite{}``.
+        encoding: tex / bib file encoding.  ``"utf-8"`` default;
+            ``"cp932"`` for legacy Japanese tex.
+        max_reported: cap the per-list report length in the response
+            (full lists still under ``all_missing_in_bib`` /
+            ``all_unused_in_tex``).
+
+    Returns:
+        dict with::
+
+            {
+              "tex_path": echoed,
+              "bib_path": echoed,
+              "n_cited_keys": int,           # unique keys cited in tex
+              "n_bib_entries": int,          # unique keys in bib
+              "n_missing_in_bib": int,       # cited but bib doesn't have
+              "n_unused_in_tex": int,        # bib has but never cited
+              "missing_in_bib": [
+                  {"key": "Smith2024",
+                   "n_occurrences": 3,
+                   "first_offset": 12345,
+                   "first_context": "... as shown in \\cite{Smith2024} ..."},
+                  ...
+              ],
+              "unused_in_tex": ["Foo2020", ...],  # alphabetical
+              "all_missing_in_bib": [str, ...],   # alphabetical
+              "all_unused_in_tex": [str, ...],
+              "truncated_missing": bool,
+              "truncated_unused": bool,
+              "status": "clean" | "warning" | "fail",
+              "advice": str,
+            }
+
+    Status logic:
+      * ``fail``:    any key cited in .tex is missing from .bib
+                     (compile-time undefined reference).
+      * ``warning``: every cited key resolves, but the .bib has
+                     unused entries (minor cleanup).
+      * ``clean``:   one-to-one match.
+    """
+    if not os.path.exists(tex_path):
+        return {"error": f"tex_path not found: {tex_path}"}
+    if not os.path.exists(bib_path):
+        return {"error": f"bib_path not found: {bib_path}"}
+
+    # 1. Read tex (with optional \input chain inlining)
+    try:
+        with open(tex_path, encoding=encoding, errors="replace") as fh:
+            src = fh.read()
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"failed to read tex: {e}"}
+
+    if auto_resolve_inputs:
+        try:
+            from ._tex_resolver import resolve_input_chain
+            r = resolve_input_chain(tex_path, encoding=encoding)
+            if r.get("ok"):
+                src = r["merged_tex"]
+        except Exception:
+            # Fall back to single-file scan; not fatal.
+            pass
+
+    cited = _collect_cited_keys(src)
+    bib_entries = _parse_bib_lightweight(bib_path)
+    bib_keys = set(bib_entries.keys())
+
+    missing = sorted(set(cited.keys()) - bib_keys)
+    unused = sorted(bib_keys - set(cited.keys()))
+
+    # Build per-missing-key context snippet
+    missing_records = []
+    for k in missing[:max_reported]:
+        first = cited[k][0]
+        a = max(0, first - 50)
+        b = min(len(src), first + 60)
+        ctx = src[a:b].replace("\n", " ")
+        missing_records.append({
+            "key": k,
+            "n_occurrences": len(cited[k]),
+            "first_offset": first,
+            "first_context": ctx,
+        })
+
+    if missing:
+        status = "fail"
+        advice = (
+            f"{len(missing)} citation key(s) used in .tex but NOT in {os.path.basename(bib_path)}. "
+            "These will render as '[?]' in the PDF and bibtex will emit "
+            "'undefined references'.  Fix by either (a) adding a BibTeX entry "
+            "for each missing key, or (b) correcting the typo in the cite key.  "
+            "See `paper_writing_arxiv_fetch_latex_source` / `paper_writing_verify_citation` "
+            "for help building new entries."
+        )
+    elif unused:
+        status = "warning"
+        advice = (
+            f"All {len(cited)} cited key(s) resolve, but {len(unused)} bib entry(s) "
+            "are never cited.  Optional cleanup: remove unused entries from "
+            f"{os.path.basename(bib_path)} to keep the bibliography lean, OR add "
+            "the missing \\cite{} where the prior work is mentioned."
+        )
+    else:
+        status = "clean"
+        advice = (
+            f"All {len(cited)} cited key(s) resolve to .bib entries with no "
+            "leftover unused entries — bibliography is in sync."
+        )
+
+    return {
+        "tex_path": tex_path,
+        "bib_path": bib_path,
+        "n_cited_keys": len(cited),
+        "n_bib_entries": len(bib_keys),
+        "n_missing_in_bib": len(missing),
+        "n_unused_in_tex": len(unused),
+        "missing_in_bib": missing_records,
+        "unused_in_tex": unused[:max_reported],
+        "all_missing_in_bib": missing,
+        "all_unused_in_tex": unused,
+        "truncated_missing": len(missing) > max_reported,
+        "truncated_unused": len(unused) > max_reported,
+        "status": status,
+        "advice": advice,
+    }

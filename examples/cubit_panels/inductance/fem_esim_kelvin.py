@@ -29,6 +29,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 from ngsolve import *
+from ngsolve import TaskManager
 from netgen.occ import *
 
 MU_0 = 4e-7 * np.pi
@@ -288,50 +289,51 @@ def solve_fem_full(R_coil, a_coil, R_wp, H_wp, sigma, frequency,
 
     print("  Assembling...")
     t0 = time.perf_counter()
-    a_bf.Assemble()
-    f_lf.Assemble()
-    t_asm = time.perf_counter() - t0
+    with TaskManager():
+        a_bf.Assemble()
+        f_lf.Assemble()
+        t_asm = time.perf_counter() - t0
 
-    print("  Solving...")
-    t0 = time.perf_counter()
-    gfu = GridFunction(fes)
-    gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f_lf.vec
-    t_solve = time.perf_counter() - t0
+        print("  Solving...")
+        t0 = time.perf_counter()
+        gfu = GridFunction(fes)
+        gfu.vec.data = a_bf.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f_lf.vec
+        t_solve = time.perf_counter() - t0
 
-    # Post-process: power loss in workpiece
-    # P = 0.5 * sigma * omega^2 * |A_theta|^2 * volume
-    # In 2D axi: P = 2*pi * integral( 0.5 * sigma * omega^2 * |u/r|^2 * r dr dz )
-    #           = 2*pi * integral( 0.5 * sigma * omega^2 * |u|^2 / r dr dz )
-    P_density = 0.5 * sigma_cf * omega**2 * Conj(gfu) * gfu / r_cf
-    P_per_radian = Integrate(P_density, mesh, definedon=mesh.Materials("workpiece")).real
-    P_total = 2 * np.pi * P_per_radian
+        # Post-process: power loss in workpiece
+        # P = 0.5 * sigma * omega^2 * |A_theta|^2 * volume
+        # In 2D axi: P = 2*pi * integral( 0.5 * sigma * omega^2 * |u/r|^2 * r dr dz )
+        #           = 2*pi * integral( 0.5 * sigma * omega^2 * |u|^2 / r dr dz )
+        P_density = 0.5 * sigma_cf * omega**2 * Conj(gfu) * gfu / r_cf
+        P_per_radian = Integrate(P_density, mesh, definedon=mesh.Materials("workpiece")).real
+        P_total = 2 * np.pi * P_per_radian
 
-    # Reactive power (stored magnetic energy rate)
-    # Q = 2*pi * integral( 0.5 * omega * nu * |grad(u)|^2 / r )
-    # Only meaningful for the workpiece region
-    Q_density = 0.5 * omega * sigma_cf * Conj(gfu) * gfu / r_cf
-    Q_per_radian = Integrate(Q_density, mesh, definedon=mesh.Materials("workpiece")).real
-    Q_total = 2 * np.pi * Q_per_radian
+        # Reactive power (stored magnetic energy rate)
+        # Q = 2*pi * integral( 0.5 * omega * nu * |grad(u)|^2 / r )
+        # Only meaningful for the workpiece region
+        Q_density = 0.5 * omega * sigma_cf * Conj(gfu) * gfu / r_cf
+        Q_per_radian = Integrate(Q_density, mesh, definedon=mesh.Materials("workpiece")).real
+        Q_total = 2 * np.pi * Q_per_radian
 
-    # Inductance from stored energy
-    # W_mag = 0.5 * L * I^2 = 2*pi * integral( 0.5 * nu * |grad(u)|^2 / r )
-    W_per_radian = Integrate(
-        0.5 * nu_cf / r_cf * (grad(gfu) * Conj(grad(gfu))),
-        mesh).real
-    W_mag = 2 * np.pi * W_per_radian
-    L = 2 * W_mag / (I_total**2)
+        # Inductance from stored energy
+        # W_mag = 0.5 * L * I^2 = 2*pi * integral( 0.5 * nu * |grad(u)|^2 / r )
+        W_per_radian = Integrate(
+            0.5 * nu_cf / r_cf * (grad(gfu) * Conj(grad(gfu))),
+            mesh).real
+        W_mag = 2 * np.pi * W_per_radian
+        L = 2 * W_mag / (I_total**2)
 
-    return {
-        'mode': 'FEM-full',
-        'P_total': float(P_total),
-        'Q_total': float(Q_total),
-        'L': float(L),
-        'ndof': fes.ndof,
-        'ne': mesh.ne,
-        't_mesh': t_mesh,
-        't_asm': t_asm,
-        't_solve': t_solve,
-    }
+        return {
+            'mode': 'FEM-full',
+            'P_total': float(P_total),
+            'Q_total': float(Q_total),
+            'L': float(L),
+            'ndof': fes.ndof,
+            'ne': mesh.ne,
+            't_mesh': t_mesh,
+            't_asm': t_asm,
+            't_solve': t_solve,
+        }
 
 
 # ============================================================

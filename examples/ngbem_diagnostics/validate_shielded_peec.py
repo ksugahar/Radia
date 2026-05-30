@@ -88,73 +88,74 @@ def test_wire_above_plate():
     plate.solids.name = "conductor"
     plate.faces.name = "surface"
     geo = OCCGeometry(plate)
-    mesh = Mesh(geo.GenerateMesh(maxh=0.02))
+    with TaskManager():
+        mesh = Mesh(geo.GenerateMesh(maxh=0.02))
 
-    n_vol = sum(1 for _ in mesh.Elements())
-    n_bnd = sum(1 for _ in mesh.Elements(BND))
-    print(f"  Shield mesh: {n_vol} vol, {n_bnd} bnd elements")
+        n_vol = sum(1 for _ in mesh.Elements())
+        n_bnd = sum(1 for _ in mesh.Elements(BND))
+        print(f"  Shield mesh: {n_vol} vol, {n_bnd} bnd elements")
 
-    # Assemble shield BEM
-    shield = ShieldBEMSIBC(mesh, sigma_al)
-    shield.assemble(intorder=4)
-    print(f"  Shield assembled: {shield._loop.n_loops} loops, "
-          f"{shield._loop.n_active} active DOFs")
+        # Assemble shield BEM
+        shield = ShieldBEMSIBC(mesh, sigma_al)
+        shield.assemble(intorder=4)
+        print(f"  Shield assembled: {shield._loop.n_loops} loops, "
+              f"{shield._loop.n_active} active DOFs")
 
-    # Wire: 100mm long, 10mm above plate, along x-axis
-    wire_height = 0.01  # 10mm above plate center
-    builder = PEECBuilder()
-    n1 = builder.add_node_at(-0.05, 0, plate_d/2 + wire_height)
-    n2 = builder.add_node_at(0.05, 0, plate_d/2 + wire_height)
-    builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
-    builder.add_port(n1, n2)
-    topo = builder.build_topology()
+        # Wire: 100mm long, 10mm above plate, along x-axis
+        wire_height = 0.01  # 10mm above plate center
+        builder = PEECBuilder()
+        n1 = builder.add_node_at(-0.05, 0, plate_d/2 + wire_height)
+        n2 = builder.add_node_at(0.05, 0, plate_d/2 + wire_height)
+        builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
+        builder.add_port(n1, n2)
+        topo = builder.build_topology()
 
-    # Standard PEEC (no shield)
-    solver_std = PEECCircuitSolver(topo)
+        # Standard PEEC (no shield)
+        solver_std = PEECCircuitSolver(topo)
 
-    # Shielded PEEC
-    solver_shld = ShieldedPEECSolver(topo, shield)
+        # Shielded PEEC
+        solver_shld = ShieldedPEECSolver(topo, shield)
 
-    freqs = [1e3, 10e3, 100e3]
+        freqs = [1e3, 10e3, 100e3]
 
-    print(f"\n  {'freq':>10s}  {'R_std(mOhm)':>12s}  {'R_shld(mOhm)':>13s}  "
-          f"{'L_std(nH)':>10s}  {'L_shld(nH)':>11s}  {'dR/R':>8s}  {'dL/L':>8s}")
-    print("  " + "-" * 90)
+        print(f"\n  {'freq':>10s}  {'R_std(mOhm)':>12s}  {'R_shld(mOhm)':>13s}  "
+              f"{'L_std(nH)':>10s}  {'L_shld(nH)':>11s}  {'dR/R':>8s}  {'dL/L':>8s}")
+        print("  " + "-" * 90)
 
-    all_ok = True
-    for freq in freqs:
-        omega = 2 * np.pi * freq
+        all_ok = True
+        for freq in freqs:
+            omega = 2 * np.pi * freq
 
-        Z_std = solver_std.compute_port_impedance(freq)
-        Z_shld = solver_shld.compute_port_impedance(freq)
+            Z_std = solver_std.compute_port_impedance(freq)
+            Z_shld = solver_shld.compute_port_impedance(freq)
 
-        R_std = Z_std.real * 1e3  # mOhm
-        R_shld = Z_shld.real * 1e3
-        L_std = Z_std.imag / omega * 1e9  # nH
-        L_shld = Z_shld.imag / omega * 1e9
+            R_std = Z_std.real * 1e3  # mOhm
+            R_shld = Z_shld.real * 1e3
+            L_std = Z_std.imag / omega * 1e9  # nH
+            L_shld = Z_shld.imag / omega * 1e9
 
-        dR = (R_shld - R_std) / max(abs(R_std), 1e-12) * 100
-        dL = (L_shld - L_std) / max(abs(L_std), 1e-12) * 100
+            dR = (R_shld - R_std) / max(abs(R_std), 1e-12) * 100
+            dL = (L_shld - L_std) / max(abs(L_std), 1e-12) * 100
 
-        print(f"  {freq:10.0f}  {R_std:12.4f}  {R_shld:13.4f}  "
-              f"{L_std:10.2f}  {L_shld:11.2f}  {dR:7.1f}%  {dL:7.1f}%")
+            print(f"  {freq:10.0f}  {R_std:12.4f}  {R_shld:13.4f}  "
+                  f"{L_std:10.2f}  {L_shld:11.2f}  {dR:7.1f}%  {dL:7.1f}%")
 
-        # Physical checks:
-        # 1. R should increase (eddy current loss added)
-        if R_shld < R_std - 1e-6:
-            print(f"    WARNING: R decreased with shield at {freq:.0f} Hz")
-            all_ok = False
+            # Physical checks:
+            # 1. R should increase (eddy current loss added)
+            if R_shld < R_std - 1e-6:
+                print(f"    WARNING: R decreased with shield at {freq:.0f} Hz")
+                all_ok = False
 
-        # 2. L should decrease (shielding effect)
-        if L_shld > L_std + 1e-3:
-            print(f"    WARNING: L increased with shield at {freq:.0f} Hz")
-            # This might happen at very low frequencies, don't fail
+            # 2. L should decrease (shielding effect)
+            if L_shld > L_std + 1e-3:
+                print(f"    WARNING: L increased with shield at {freq:.0f} Hz")
+                # This might happen at very low frequencies, don't fail
 
-    if all_ok:
-        print("\n  PASS: Wire above plate test - physical trends correct")
-    else:
-        print("\n  WARNING: Some physical checks failed")
-    return all_ok
+        if all_ok:
+            print("\n  PASS: Wire above plate test - physical trends correct")
+        else:
+            print("\n  WARNING: Some physical checks failed")
+        return all_ok
 
 
 def test_fasthenry_shield_block():
@@ -258,6 +259,7 @@ def test_a_scattered_standalone():
 
     try:
         from ngsolve.bem import MaxwellSingleLayerPotentialOperator
+        from ngsolve import TaskManager
     except ImportError:
         print("SKIP: ngsolve.bem not available")
         return True

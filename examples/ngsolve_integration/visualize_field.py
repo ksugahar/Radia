@@ -132,7 +132,8 @@ if args.method in ['gf', 'both']:
 	print("\nCreating GridFunction with interpolation...")
 	fes = VectorH1(mesh, order=2)
 	gfB = GridFunction(fes)
-	gfB.Set(B_cf)
+	with TaskManager():
+		gfB.Set(B_cf)
 	print(f"  FE space: {fes.ndof} DOFs")
 	print(f"  GridFunction interpolation complete")
 

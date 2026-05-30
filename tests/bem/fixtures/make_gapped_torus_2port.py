@@ -34,6 +34,7 @@ from netgen.occ import (
     OCCGeometry, WorkPlane, Axes, Axis, Pnt, Vec, X, Y, Z, Revolve,
 )
 from ngsolve import Mesh
+from ngsolve import TaskManager
 
 
 def make_gapped_torus(R_major: float = 0.030,
@@ -87,7 +88,8 @@ def make_gapped_torus(R_major: float = 0.030,
     solid.name = "coil"
 
     geo = OCCGeometry(solid)
-    return Mesh(geo.GenerateMesh(maxh=maxh))
+    with TaskManager():
+        return Mesh(geo.GenerateMesh(maxh=maxh))
 
 
 def main():

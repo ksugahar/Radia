@@ -245,12 +245,13 @@ def test_high_order_curving():
 		# Convert to NGSolve and curve
 		ngmesh = ngsolve.Mesh(mesh)
 
-		for order in [2, 3, 4]:
-			try:
-				ngmesh.Curve(order)
-				print(f"  mesh.Curve({order}) succeeded!")
-			except Exception as e:
-				print(f"  mesh.Curve({order}) failed: {e}")
+		with ngsolve.TaskManager():
+			for order in [2, 3, 4]:
+				try:
+					ngmesh.Curve(order)
+					print(f"  mesh.Curve({order}) succeeded!")
+				except Exception as e:
+					print(f"  mesh.Curve({order}) failed: {e}")
 
 		print("  PASS: High-order curving test completed")
 		return True

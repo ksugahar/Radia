@@ -121,6 +121,28 @@ public:
     void UpdateDiagonal(const std::vector<double>& inv_chi);
 
     /**
+     * Set the local null-space (loop) deflation basis L for a matrix-free
+     * shift: MatVec then returns (A + alpha * L L^T) x.  L is given as a
+     * sparse list of plaquettes/cycles (each a few (dof, sign) entries),
+     * CSR-like via plaq_offsets.  L L^T acts only on span(L) = the null
+     * (loop) subspace, lifting its eigenvalues away from zero (O(nnz)=O(N)).
+     * Pass empty plaq_offsets / alpha=0 to disable.  L must be in the
+     * ORIGINAL DOF ordering (same ordering as MatVec's x/y).
+     */
+    void SetDeflation(const std::vector<int>& plaq_offsets,
+                      const std::vector<int>& dofs,
+                      const std::vector<double>& signs,
+                      double alpha);
+
+    /** Number of loop (plaquette + belt) cycles in the installed deflation
+     *  basis L (0 if deflation is off). Diagnostic for the belted-tree count. */
+    int GetDeflationCycleCount() const { return m_defl_nplaq; }
+
+    /** The shift strength alpha actually used (after auto-scaling when the
+     *  caller requested alpha <= 0). Diagnostic. */
+    double GetDeflationAlpha() const { return m_defl_alpha; }
+
+    /**
      * Return the kernel's physical +N(i, j) interaction matrix element.
      * For MSC this is the demagnetization tensor contribution (system
      * matrix is -N + diag(1/chi)); for PEEC this is the +L mutual
@@ -201,6 +223,14 @@ protected:
     std::vector<double> m_diag_N;
     bool m_diag_cached;
 
+    // Optional matrix-free loop-mode deflation: MatVec adds alpha * L (L^T x)
+    // with L a sparse loop (plaquette/cycle) basis stored CSR-like.
+    std::vector<int> m_defl_offsets;   // size n_plaq + 1 (CSR row pointers)
+    std::vector<int> m_defl_dofs;      // flat DOF indices
+    std::vector<double> m_defl_signs;  // flat +/-1 entries
+    double m_defl_alpha;
+    int m_defl_nplaq;
+
     RadHACApKStats m_stats;
 
 private:
@@ -234,6 +264,48 @@ public:
     ~RadHACApKMSCManager() override;
 
     radTInteraction* GetInteraction() const { return m_interaction; }
+
+    /**
+     * Build a local loop (cycle) deflation basis from the element-adjacency
+     * graph's short cycles (3- and 4-cycles) and install it via SetDeflation,
+     * so the HACApK MatVec applies (A + alpha L L^T). Adjacency and shared-face
+     * DOF are derived from coincident face centroids (FaceCenter[f]); general
+     * for any conforming hex/tet/wedge mesh. Call after BuildHMatrix.
+     */
+    void BuildLoopBasis(double alpha);
+
+    /**
+     * ALPHA-FREE loop-star gauge. Build a SPARSE "star" basis T (columns =
+     * boundary face DOFs + symmetric internal sigma_A+sigma_B + per-element
+     * divergence) that spans the complement of the loop null space, then solve
+     * the reduced, NON-SINGULAR system T^T A T y = T^T b by unpreconditioned
+     * BiCGSTAB (sigma = T y). The H-matrix is UNCHANGED (kept on the original
+     * sigma DOFs); each reduced MatVec sandwiches the HACApK MatVec with the
+     * sparse T / T^T (O(N)). Field-exact + well-conditioned for LINEAR (uniform
+     * chi); for non-uniform chi the loop/star couple (use only in the linear
+     * regime). Returns the number of BiCGSTAB iterations, or -1 on failure.
+     */
+    int BuildStarBasis();
+    int SolveLoopStar(const std::vector<double>& b, std::vector<double>& sigma,
+                      double tol, int max_iter,
+                      const std::vector<double>& blockInverse = std::vector<double>(),
+                      const std::vector<int>& blockOffsets = std::vector<int>());
+    int GetStarDim() const { return m_n_star; }
+
+    // True iff an ANTISYMMETRIC IMA plane (sign<0) is active. These add a few
+    // LOCAL "plane-coupled" null modes to ker(N_ima) beyond the topological loops;
+    // ComputePlaneSlabAddedModes() finds them and they are deflated in SolveLoopStar.
+    bool HasAntisymmetricIMAPlane() const;
+
+    // Antisym-IMA O(N) gauge correction: the topological star gauges the loops
+    // (which stay null under IMA), but ker(N_ima) ALSO contains a few LOCAL modes
+    // confined to the antisymmetric plane slab (count ~ plane area, decay from the
+    // plane). This finds them: densify N_ima on the plane-touching elements ("slab")
+    // via GetInteractionMatrixElement, local SVD, keep the null modes with weight on
+    // the antisym-plane faces (plane-weight filter), orthonormalize. Returns the
+    // count; caches them as an orthonormal CSR (m_added_*) for SolveLoopStar to
+    // deflate (SetDeflation alpha L L^T -- robust because they are FEW + orthonormal).
+    int ComputePlaneSlabAddedModes();
 
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
 
@@ -272,6 +344,23 @@ private:
     // O(1) DOF-to-element lookup (ELF-style)
     std::vector<int> m_dof_to_elem;   // [dof] -> element index
     std::vector<int> m_dof_to_local;  // [dof] -> local DOF within element
+
+    // Loop-star gauge: SPARSE star basis T stored column-wise (CSR). T maps
+    // star coefficients -> sigma; its columns span the complement of the loop
+    // null space (boundary + symmetric-internal + per-element divergence).
+    std::vector<int> m_star_offsets;    // size m_n_star + 1 (column pointers)
+    std::vector<int> m_star_dofs;       // flat sigma-DOF indices
+    std::vector<double> m_star_coeffs;  // flat T entries
+    int m_n_star = 0;                   // number of star columns
+
+    // Antisym-IMA plane-slab added modes (orthonormal, CSR, sigma-DOF coords),
+    // cached by ComputePlaneSlabAddedModes(). Deflated in SolveLoopStar via
+    // SetDeflation (alpha L L^T). m_added_built guards one-time construction.
+    std::vector<int> m_added_offsets;   // size m_n_added + 1
+    std::vector<int> m_added_dofs;      // flat slab DOF indices
+    std::vector<double> m_added_coeffs; // flat orthonormal mode entries
+    int m_n_added = 0;                  // number of added modes
+    bool m_added_built = false;         // cache guard
 
     // Pre-computed geometry for 3DOF tetrahedra (avoids B_comp overhead)
     std::vector<double> m_tetra_centers;         // [n_elem * 3]

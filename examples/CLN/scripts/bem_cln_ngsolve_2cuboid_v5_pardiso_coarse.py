@@ -46,6 +46,7 @@ def solve_pardiso(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
     from ngsolve import (Mesh, HCurl, BilinearForm, LinearForm,
                           GridFunction, CoefficientFunction, Integrate,
                           curl, x, y, z, dx, InnerProduct, IfPos)
+    from ngsolve import TaskManager
 
     NU_0 = 1.0 / mu0
 
@@ -85,26 +86,27 @@ def solve_pardiso(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
     f += -1j * omega * sigma_cf * InnerProduct(A_ext, v) * dx("cu")
 
     print("  Assembling...")
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    print("  Solving (PARDISO direct)...")
-    gfu = GridFunction(fes)
-    gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
+        print("  Solving (PARDISO direct)...")
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * f.vec
 
-    A_total = gfu + A_ext
-    J = -1j * omega * sigma_cf * A_total
+        A_total = gfu + A_ext
+        J = -1j * omega * sigma_cf * A_total
 
-    r1_x = -7.5e-3; r2_x = 7.5e-3
-    m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
-    m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
-    in_cu1 = IfPos(2.5e-3 - (x - r1_x),
-                   IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
-    in_cu2 = IfPos(2.5e-3 - (x - r2_x),
-                   IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
-    m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
-    m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
-    return m1_y, m2_y
+        r1_x = -7.5e-3; r2_x = 7.5e-3
+        m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
+        m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
+        in_cu1 = IfPos(2.5e-3 - (x - r1_x),
+                       IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
+        in_cu2 = IfPos(2.5e-3 - (x - r2_x),
+                       IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
+        m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
+        m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
+        return m1_y, m2_y
 
 
 def main():

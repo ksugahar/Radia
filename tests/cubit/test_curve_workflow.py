@@ -34,6 +34,7 @@ if _fork_path:
     sys.path.insert(0, _fork_path)
 
 from ngsolve import Mesh, Integrate, CF, BND
+from ngsolve import TaskManager
 import cubit
 import radia_cubit_mesh
 
@@ -100,13 +101,14 @@ for order in [1, 2, 3]:
 
     try:
         mesh = radia_cubit_mesh.extract_curved_mesh(order=order)
-        area = Integrate(CF(1), mesh, VOL_or_BND=BND)
-        vol = Integrate(CF(1), mesh)
+        with TaskManager():
+            area = Integrate(CF(1), mesh, VOL_or_BND=BND)
+            vol = Integrate(CF(1), mesh)
 
-        print(f"  Area: {area:.6f} (error: {abs(area-expected_area)/expected_area*100:.4f}%)")
-        print(f"  Vol:  {vol:.6f} (error: {abs(vol-expected_vol)/expected_vol*100:.4f}%)")
+            print(f"  Area: {area:.6f} (error: {abs(area-expected_area)/expected_area*100:.4f}%)")
+            print(f"  Vol:  {vol:.6f} (error: {abs(vol-expected_vol)/expected_vol*100:.4f}%)")
 
-        results[order] = {'area': area, 'vol': vol}
+            results[order] = {'area': area, 'vol': vol}
     except Exception as e:
         print(f"  Failed: {e}")
         results[order] = {'area': expected_area, 'vol': expected_vol}  # placeholder

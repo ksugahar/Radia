@@ -115,32 +115,33 @@ def solve_eddy_2cuboid_v2(geo, freq, sigma_cu=5.8e7, mu0=4*math.pi*1e-7,
     f = LinearForm(fes)
     f += -1j * omega * sigma_cf * InnerProduct(A_ext, v) * dx("cu")
 
-    a.Assemble()
-    f.Assemble()
+    with TaskManager():
+        a.Assemble()
+        f.Assemble()
 
-    gfu = GridFunction(fes)
-    # A-induced formulation: homogeneous Dirichlet on kelvin_outer
+        gfu = GridFunction(fes)
+        # A-induced formulation: homogeneous Dirichlet on kelvin_outer
 
-    inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
-    gfu.vec.data = inv * f.vec
+        inv = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky")
+        gfu.vec.data = inv * f.vec
 
-    A_total = gfu + A_ext
-    J = -1j * omega * sigma_cf * A_total
+        A_total = gfu + A_ext
+        J = -1j * omega * sigma_cf * A_total
 
-    r1_x = -7.5e-3
-    r2_x =  7.5e-3
-    m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
-    m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
+        r1_x = -7.5e-3
+        r2_x =  7.5e-3
+        m1_y_cf = 0.5 * (z * J[0] - (x - r1_x) * J[2])
+        m2_y_cf = 0.5 * (z * J[0] - (x - r2_x) * J[2])
 
-    in_cu1 = IfPos(2.5e-3 - (x - r1_x),
-                   IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
-    in_cu2 = IfPos(2.5e-3 - (x - r2_x),
-                   IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
+        in_cu1 = IfPos(2.5e-3 - (x - r1_x),
+                       IfPos(2.5e-3 + (x - r1_x), 1, 0), 0)
+        in_cu2 = IfPos(2.5e-3 - (x - r2_x),
+                       IfPos(2.5e-3 + (x - r2_x), 1, 0), 0)
 
-    m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
-    m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
+        m1_y = Integrate(m1_y_cf * in_cu1, mesh, definedon=mesh.Materials("cu"))
+        m2_y = Integrate(m2_y_cf * in_cu2, mesh, definedon=mesh.Materials("cu"))
 
-    return m1_y, m2_y
+        return m1_y, m2_y
 
 
 def main():
@@ -151,6 +152,7 @@ def main():
 
     try:
         from ngsolve import Mesh
+        from ngsolve import TaskManager
     except ImportError:
         print("ERROR: NGSolve not available")
         sys.exit(1)

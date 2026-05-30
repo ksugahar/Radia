@@ -30,6 +30,7 @@ from bem_inductance import compute_inductance_source_sink, MU_0
 from esim_cell_problem import ESIMFiniteSlabSolver
 
 from ngsolve import *
+from ngsolve import TaskManager
 
 
 # ============================================================
@@ -90,8 +91,9 @@ def make_gapped_torus_mesh(R, a, gap_deg=5, maxh=None):
         mp=MeshingParameters(maxh=maxh, curvaturesafety=2.0,
                              segmentsperedge=2))
     mesh = Mesh(ngmesh)
-    mesh.Curve(2)
-    return mesh
+    with TaskManager():
+        mesh.Curve(2)
+        return mesh
 
 
 def make_workpiece_panels(center, radius, height, n_phi=16, n_z=8):
