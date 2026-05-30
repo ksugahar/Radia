@@ -52,6 +52,7 @@ extern "C" {
     void cHACApK_set_cluster_strategy(int strategy);
     int  cHACApK_get_cluster_strategy(void);
     double cHACApK_harith_self_test(int depth, int n_per_block);
+    double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2854,7 +2855,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     },
     "Return the current HACApK cluster strategy (0=BBOX, 1=PCA).");
 
-    // -- H-LU self-test (Phase 1/2 minimal, dense-leaf only) --
+    // -- H-LU self-test (Phase 1/2 dense-leaf) --
     m.def("HLUSelfTest", [](int depth, int n_per_block) -> double {
         return cHACApK_harith_self_test(depth, n_per_block);
     },
@@ -2866,6 +2867,25 @@ PYBIND11_MODULE(_radia_pybind, m) {
         solve on the same matrix. Expected < 1e-10 for diag-dominant random.
         Total matrix size N = (2^depth) * n_per_block; depth=2 means 16 leaves,
         depth=3 means 64 leaves -- the latter exercises deep recursion.
+    )pbdoc");
+
+    // -- H-LU rk-aware self-test (Phase 3 partial: rk off-diag at depth=1) --
+    m.def("HLUSelfTestRk", [](int n_per_block, int rk_rank) -> double {
+        return cHACApK_harith_self_test_rk(n_per_block, rk_rank);
+    },
+    py::arg("n_per_block") = 100, py::arg("rk_rank") = 5,
+    R"pbdoc(
+        Phase 3 partial validation: build a 2x2 block-tree with DENSE diagonal
+        leaves (random diag-dominant) and explicit-rank RK off-diagonal leaves
+        (A_ij = U_ij V_ij^T from random U_ij, V_ij of rank rk_rank), then
+        run cHACApK_hlu_decomp + solve and compare against LAPACK dgesv.
+
+        Exercises the Phase 3 rk paths:
+          - htrsm_lln(L=dense, X=rk),  htrsm_run(U=dense, X=rk)
+          - h_addmul(rk*rk -> dense) on the trailing update
+          - hmatvec_subtract on rk leaves in forward/backward sweeps
+
+        Returns max relative error (should be ~ machine precision).
     )pbdoc");
 
     m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,
