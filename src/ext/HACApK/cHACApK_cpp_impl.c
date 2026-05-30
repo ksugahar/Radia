@@ -423,8 +423,12 @@ int HACApK_build_hmatrix_wrapper(
                leafmtxp->nlf, leafmtxp->nlfkt, leafmtxp->ktmax);
     }
 
-    /* Cleanup temporary arrays */
-    cHACApK_free_st_clt(st_clt);
+    /* Phase 4: keep the cluster-tree root alive for downstream block-tree
+     * builders (cHACApK_build_block_tree -> cHACApK_hlu_decomp). The cluster
+     * tree is owned by leafmtxp from here on, freed in HACApK_free_leafmtxp. */
+    leafmtxp->st_clt_root = st_clt;
+
+    /* Cleanup temporary arrays (st_clt now owned by leafmtxp). */
     free(lodfc);
     for (il = 0; il <= ndim; il++) free(gmid_t[il]);
     free(gmid_t);
@@ -850,8 +854,10 @@ int HACApK_build_hmatrix_varDOF_wrapper(
                leafmtxp->nlf, leafmtxp->nlfkt, leafmtxp->ktmax);
     }
 
-    /* Cleanup */
-    cHACApK_free_st_clt(st_clt);
+    /* Phase 4: keep the cluster-tree root alive (see varDOF analogue above). */
+    leafmtxp->st_clt_root = st_clt;
+
+    /* Cleanup (st_clt now owned by leafmtxp). */
     free(lodfc);
     for (il = 0; il <= ndim; il++) free(gmid_t[il]);
     free(gmid_t);
@@ -1064,7 +1070,14 @@ void* HACApK_alloc_lcontrol(void) {
 }
 
 void HACApK_free_leafmtxp(void *ptr) {
-    if (ptr) free(ptr);
+    if (!ptr) return;
+    st_cHACApK_leafmtxp lp = (st_cHACApK_leafmtxp)ptr;
+    /* Phase 4: free the preserved cluster-tree root if any. */
+    if (lp->st_clt_root) {
+        cHACApK_free_st_clt(lp->st_clt_root);
+        lp->st_clt_root = NULL;
+    }
+    free(ptr);
 }
 
 void HACApK_free_lcontrol(void *ptr) {
