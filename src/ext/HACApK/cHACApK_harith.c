@@ -118,6 +118,154 @@ static void dense_tri_solve_right_upper(
     g_stats.n_dense_trsm++;
 }
 
+/* ---------- rk truncation via SVD recompression ------------------ *
+ *
+ * Given U (m x k_in) and V (n x k_in) defining an m x n matrix M = U V^T,
+ * find U_new (m x k_new) and V_new (n x k_new) with k_new <= k_in such that
+ * U_new V_new^T ~= M.  The truncation is determined by:
+ *   tol_rel: keep singular values sigma_i > tol_rel * sigma_max
+ *   k_max:   hard cap on the new rank
+ *
+ * Algorithm (standard, ~H2Lib's trunc_rkmatrix):
+ *   1. QR of U:  U = Q_U R_U     (Q_U: m x k_in, R_U: k_in x k_in upper)
+ *   2. QR of V:  V = Q_V R_V     (Q_V: n x k_in, R_V: k_in x k_in upper)
+ *   3. S = R_U R_V^T             (k_in x k_in)
+ *   4. SVD: S = Us Sigma Vs^T    (LAPACK returns V^T already)
+ *   5. k_new = #{sigma_i > tol_rel * sigma_max}, capped at k_max
+ *   6. U_new = Q_U Us[:,:k_new] diag(sigma[:k_new])
+ *      V_new = Q_V (Vs^T)[:k_new,:]^T     (= Q_V Vs[:,:k_new])
+ *
+ * Returns CHACAPK_HARITH_OK on success and writes the new rk factors into
+ * *U_new_out, *V_new_out (caller frees), with *k_new_out giving the rank.
+ * On any LAPACK error, returns CHACAPK_HARITH_ERR_LAPACK and the outputs
+ * are left NULL / 0.  Memory: O(m k_in + n k_in + k_in^2) temporary. */
+static int rkleaf_recompress(
+    const double *U, const double *V, int m, int n, int k_in,
+    double tol_rel, int k_max,
+    double **U_new_out, double **V_new_out, int *k_new_out)
+{
+    *U_new_out = NULL;
+    *V_new_out = NULL;
+    *k_new_out = 0;
+    if (k_in <= 0 || m <= 0 || n <= 0) return CHACAPK_HARITH_ERR_NULL;
+
+    /* Workspace copies (LAPACK overwrites inputs). */
+    double *U_work = (double*)malloc(sizeof(double) * (size_t)m * (size_t)k_in);
+    double *V_work = (double*)malloc(sizeof(double) * (size_t)n * (size_t)k_in);
+    double *R_U    = (double*)calloc((size_t)k_in * (size_t)k_in, sizeof(double));
+    double *R_V    = (double*)calloc((size_t)k_in * (size_t)k_in, sizeof(double));
+    double *tau    = (double*)malloc(sizeof(double) * (size_t)k_in);
+    if (!U_work || !V_work || !R_U || !R_V || !tau) {
+        free(U_work); free(V_work); free(R_U); free(R_V); free(tau);
+        return CHACAPK_HARITH_ERR_NULL;
+    }
+    memcpy(U_work, U, sizeof(double) * (size_t)m * (size_t)k_in);
+    memcpy(V_work, V, sizeof(double) * (size_t)n * (size_t)k_in);
+
+    /* QR of U_work -> Q stored implicitly, R in upper triangle. */
+    int info = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, m, k_in, U_work, m, tau);
+    if (info != 0) goto lapack_err;
+    for (int j = 0; j < k_in; j++)
+        for (int i = 0; i <= j; i++) R_U[i + j*k_in] = U_work[i + j*m];
+    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, m, k_in, k_in, U_work, m, tau);
+    if (info != 0) goto lapack_err;
+    /* Now U_work = Q_U (m x k_in). */
+
+    /* QR of V_work. */
+    info = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, n, k_in, V_work, n, tau);
+    if (info != 0) goto lapack_err;
+    for (int j = 0; j < k_in; j++)
+        for (int i = 0; i <= j; i++) R_V[i + j*k_in] = V_work[i + j*n];
+    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, n, k_in, k_in, V_work, n, tau);
+    if (info != 0) goto lapack_err;
+    /* Now V_work = Q_V (n x k_in). */
+
+    free(tau); tau = NULL;
+
+    /* S = R_U R_V^T  (k_in x k_in). */
+    double *S = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_in);
+    if (!S) { free(U_work); free(V_work); free(R_U); free(R_V);
+              return CHACAPK_HARITH_ERR_NULL; }
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                k_in, k_in, k_in, 1.0,
+                R_U, k_in, R_V, k_in, 0.0, S, k_in);
+    free(R_U); free(R_V);
+
+    /* SVD: S = Us Sigma Vs^T. */
+    double *sigma  = (double*)malloc(sizeof(double) * (size_t)k_in);
+    double *Us     = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_in);
+    double *Vt     = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_in);
+    double *superb = (double*)malloc(sizeof(double) * (size_t)(k_in > 1 ? k_in - 1 : 1));
+    if (!sigma || !Us || !Vt || !superb) {
+        free(sigma); free(Us); free(Vt); free(superb);
+        free(S); free(U_work); free(V_work);
+        return CHACAPK_HARITH_ERR_NULL;
+    }
+    info = LAPACKE_dgesvd(LAPACK_COL_MAJOR, 'S', 'S', k_in, k_in, S, k_in,
+                          sigma, Us, k_in, Vt, k_in, superb);
+    free(superb); free(S);
+    if (info != 0) { free(sigma); free(Us); free(Vt);
+                     free(U_work); free(V_work);
+                     return CHACAPK_HARITH_ERR_LAPACK; }
+
+    /* Determine new rank. */
+    int k_new = 0;
+    double sv_max = sigma[0];
+    if (sv_max > 0.0) {
+        double thresh = tol_rel * sv_max;
+        for (int i = 0; i < k_in; i++) {
+            if (sigma[i] > thresh) k_new++;
+            else break;
+        }
+        if (k_new > k_max) k_new = k_max;
+        if (k_new < 1)     k_new = 1;
+    } else {
+        k_new = 1;  /* rank-1 to keep something */
+    }
+
+    /* U_new = Q_U Us[:,:k_new] diag(sigma[:k_new])
+     *       = Q_U (Us scaled by sigma columns)  (m x k_new) */
+    double *U_new = (double*)malloc(sizeof(double) * (size_t)m * (size_t)k_new);
+    double *V_new = (double*)malloc(sizeof(double) * (size_t)n * (size_t)k_new);
+    double *Us_scaled = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_new);
+    if (!U_new || !V_new || !Us_scaled) {
+        free(U_new); free(V_new); free(Us_scaled);
+        free(sigma); free(Us); free(Vt);
+        free(U_work); free(V_work);
+        return CHACAPK_HARITH_ERR_NULL;
+    }
+    for (int j = 0; j < k_new; j++) {
+        double s = sigma[j];
+        for (int i = 0; i < k_in; i++)
+            Us_scaled[i + j*k_in] = Us[i + j*k_in] * s;
+    }
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                m, k_new, k_in, 1.0,
+                U_work, m, Us_scaled, k_in, 0.0, U_new, m);
+    free(Us_scaled);
+
+    /* V_new = Q_V Vs[:,:k_new] = Q_V (Vt[:k_new,:])^T.
+     * Pass Vt with ldb = k_in; CblasTrans + N=k_new accesses only the first
+     * k_new rows of Vt as the "B" matrix (B is logically N x K = k_new x k_in
+     * post-Trans). */
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                n, k_new, k_in, 1.0,
+                V_work, n, Vt, k_in, 0.0, V_new, n);
+
+    free(sigma); free(Us); free(Vt);
+    free(U_work); free(V_work);
+
+    *U_new_out = U_new;
+    *V_new_out = V_new;
+    *k_new_out = k_new;
+    return CHACAPK_HARITH_OK;
+
+lapack_err:
+    free(U_work); free(V_work); free(R_U); free(R_V); free(tau);
+    return CHACAPK_HARITH_ERR_LAPACK;
+}
+
+
 /* ---------- block-recursive H-matrix primitives ------------------ *
  *
  * Three primitives, each dispatching on operand leaf_kind:
@@ -174,12 +322,6 @@ static int h_addmul(double alpha,
                  st_cHACApK_block_node_t *C)
 {
     if (!A || !B || !C) return CHACAPK_HARITH_ERR_NULL;
-
-    /* C being rk requires ACA recompression -- deferred to Phase 3.5. */
-    if (leaf_is_rk(C)) {
-        g_stats.n_lowrank_skip++;
-        return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
-    }
 
     /* Base case: all dense leaves -> direct dgemm. */
     if (leaf_is_dense(A) && leaf_is_dense(B) && leaf_is_dense(C)) {
@@ -280,7 +422,141 @@ static int h_addmul(double alpha,
         return CHACAPK_HARITH_OK;
     }
 
-    /* Mixed leaf+internal: reserved for Phase 3 (densify the internal one). */
+    /* ---- rk(C) cases: increment is rank-k, stack with C's factors then
+     *      recompress via SVD truncation. ----
+     *
+     * Helper for the stack+recompress pattern: given an increment described
+     * by (U_inc, V_inc) of size (m x k_inc, n x k_inc), update C's rk leaf
+     * to represent  U_c_new V_c_new^T = U_c V_c^T + U_inc V_inc^T.
+     *
+     * Each rk(C) case below computes U_inc and V_inc differently, then calls
+     * a common helper to perform the stack-and-recompress. */
+
+    /* ---- rk(A) * rk(B) -> rk(C):
+     *   increment = alpha U_a (V_a^T U_b) V_b^T
+     *   U_inc = alpha * U_a * (V_a^T U_b)   (m x kt_B)
+     *   V_inc = V_b                          (n x kt_B) */
+    if (leaf_is_rk(A) && leaf_is_rk(B) && leaf_is_rk(C)) {
+        int kA = leaf_rk_rank(A), kB = leaf_rk_rank(B), kC = leaf_rk_rank(C);
+        int m = leaf_rows(C), n = leaf_cols(C);
+        int inner = leaf_cols(A);
+        int kw = kC + kB;
+        /* M = V_a^T U_b  (kA x kB) */
+        double *M = (double*)malloc(sizeof(double) * (size_t)kA * (size_t)kB);
+        if (!M) return CHACAPK_HARITH_ERR_NULL;
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    kA, kB, inner, 1.0,
+                    leaf_rk_V(A), inner,
+                    leaf_rk_U(B), inner, 0.0, M, kA);
+        /* U_inc = alpha * U_a * M  (m x kB)  -- built directly inside U_widened */
+        double *U_widened = (double*)malloc(sizeof(double) * (size_t)m * (size_t)kw);
+        double *V_widened = (double*)malloc(sizeof(double) * (size_t)n * (size_t)kw);
+        if (!U_widened || !V_widened) { free(M); free(U_widened); free(V_widened);
+                                         return CHACAPK_HARITH_ERR_NULL; }
+        memcpy(U_widened, leaf_rk_U(C), sizeof(double) * (size_t)m * (size_t)kC);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    m, kB, kA, alpha,
+                    leaf_rk_U(A), m,
+                    M, kA, 0.0,
+                    U_widened + (size_t)m * (size_t)kC, m);
+        free(M);
+        memcpy(V_widened, leaf_rk_V(C), sizeof(double) * (size_t)n * (size_t)kC);
+        memcpy(V_widened + (size_t)n * (size_t)kC, leaf_rk_V(B),
+               sizeof(double) * (size_t)n * (size_t)kB);
+        /* Recompress (tol = 1e-14, no rank cap for self-test fidelity). */
+        double *U_new = NULL, *V_new = NULL; int k_new = 0;
+        int rc = rkleaf_recompress(U_widened, V_widened, m, n, kw,
+                                    1e-14, kw, &U_new, &V_new, &k_new);
+        free(U_widened); free(V_widened);
+        if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
+        free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
+        C->leaf_mtx->a1 = U_new; C->leaf_mtx->a2 = V_new;
+        C->leaf_mtx->kt = k_new;
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* ---- rk(A) * dense(B) -> rk(C):
+     *   increment = alpha (U_a V_a^T) B = (alpha U_a) (B^T V_a)^T
+     *   U_inc = alpha * U_a       (m x kA)
+     *   V_inc = B^T V_a            (n x kA) */
+    if (leaf_is_rk(A) && leaf_is_dense(B) && leaf_is_rk(C)) {
+        int kA = leaf_rk_rank(A), kC = leaf_rk_rank(C);
+        int m = leaf_rows(C), n = leaf_cols(C);
+        int inner = leaf_cols(A);
+        int kw = kC + kA;
+        double *U_widened = (double*)malloc(sizeof(double) * (size_t)m * (size_t)kw);
+        double *V_widened = (double*)malloc(sizeof(double) * (size_t)n * (size_t)kw);
+        if (!U_widened || !V_widened) { free(U_widened); free(V_widened);
+                                         return CHACAPK_HARITH_ERR_NULL; }
+        memcpy(U_widened, leaf_rk_U(C), sizeof(double) * (size_t)m * (size_t)kC);
+        /* U_inc = alpha * U_a placed into the right half of U_widened */
+        double *U_inc_block = U_widened + (size_t)m * (size_t)kC;
+        cblas_dcopy(m * kA, leaf_rk_U(A), 1, U_inc_block, 1);
+        if (alpha != 1.0) cblas_dscal(m * kA, alpha, U_inc_block, 1);
+        /* V_inc = B^T V_a  (n x kA) */
+        memcpy(V_widened, leaf_rk_V(C), sizeof(double) * (size_t)n * (size_t)kC);
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    n, kA, inner, 1.0,
+                    leaf_dense_data(B), inner,
+                    leaf_rk_V(A), inner, 0.0,
+                    V_widened + (size_t)n * (size_t)kC, n);
+        /* Recompress. */
+        double *U_new = NULL, *V_new = NULL; int k_new = 0;
+        int rc = rkleaf_recompress(U_widened, V_widened, m, n, kw,
+                                    1e-14, kw, &U_new, &V_new, &k_new);
+        free(U_widened); free(V_widened);
+        if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
+        free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
+        C->leaf_mtx->a1 = U_new; C->leaf_mtx->a2 = V_new;
+        C->leaf_mtx->kt = k_new;
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* ---- dense(A) * rk(B) -> rk(C):
+     *   increment = alpha A (U_b V_b^T) = (alpha A U_b) V_b^T
+     *   U_inc = alpha * A * U_b   (m x kB)
+     *   V_inc = V_b               (n x kB) */
+    if (leaf_is_dense(A) && leaf_is_rk(B) && leaf_is_rk(C)) {
+        int kB = leaf_rk_rank(B), kC = leaf_rk_rank(C);
+        int m = leaf_rows(C), n = leaf_cols(C);
+        int inner = leaf_cols(A);
+        int kw = kC + kB;
+        double *U_widened = (double*)malloc(sizeof(double) * (size_t)m * (size_t)kw);
+        double *V_widened = (double*)malloc(sizeof(double) * (size_t)n * (size_t)kw);
+        if (!U_widened || !V_widened) { free(U_widened); free(V_widened);
+                                         return CHACAPK_HARITH_ERR_NULL; }
+        memcpy(U_widened, leaf_rk_U(C), sizeof(double) * (size_t)m * (size_t)kC);
+        /* U_inc = alpha * A * U_b  (m x kB)  -- placed into right half of U_widened */
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    m, kB, inner, alpha,
+                    leaf_dense_data(A), m,
+                    leaf_rk_U(B), inner, 0.0,
+                    U_widened + (size_t)m * (size_t)kC, m);
+        memcpy(V_widened, leaf_rk_V(C), sizeof(double) * (size_t)n * (size_t)kC);
+        memcpy(V_widened + (size_t)n * (size_t)kC, leaf_rk_V(B),
+               sizeof(double) * (size_t)n * (size_t)kB);
+        /* Recompress. */
+        double *U_new = NULL, *V_new = NULL; int k_new = 0;
+        int rc = rkleaf_recompress(U_widened, V_widened, m, n, kw,
+                                    1e-14, kw, &U_new, &V_new, &k_new);
+        free(U_widened); free(V_widened);
+        if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
+        free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
+        C->leaf_mtx->a1 = U_new; C->leaf_mtx->a2 = V_new;
+        C->leaf_mtx->kt = k_new;
+        g_stats.n_dense_gemm++;
+        return CHACAPK_HARITH_OK;
+    }
+
+    /* dense(A) * dense(B) -> rk(C): densify-then-truncate path is Phase 3.6+
+     * (requires forming W = U_c V_c^T + alpha A B densely, then SVD truncate). */
+    if (leaf_is_dense(A) && leaf_is_dense(B) && leaf_is_rk(C)) {
+        return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
+    }
+
+    /* Mixed leaf+internal: reserved for Phase 3.6 (densify the internal one). */
     if (leaf_is_dense(A) || leaf_is_dense(B) || leaf_is_dense(C)
         || leaf_is_rk(A) || leaf_is_rk(B) || leaf_is_rk(C)) {
         return CHACAPK_HARITH_ERR_NEED_RECURSIVE;
@@ -846,6 +1122,137 @@ double cHACApK_harith_self_test(int depth, int n_per_block)
 
     if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
     if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 3.5 unit test: h_addmul rk-rk -> rk + recompression ---- *
+ * Direct test of the rk(A) * rk(B) -> rk(C) path. Builds three rk leaves
+ * with explicit random U/V factors of given ranks, computes the dense
+ * ground truth M_truth = U_c V_c^T + alpha * (U_a V_a^T) (U_b V_b^T),
+ * calls h_addmul(alpha, A, B, C), and compares C's new dense reconstruction
+ * U_c_new V_c_new^T against M_truth.
+ *
+ * Returns max element-wise relative error. Expected ~ 1e-13 (rounding from
+ * the QR + SVD recompression). */
+double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
+                                              int kA, int kB, int kC)
+{
+    if (m <= 0 || n <= 0 || inner <= 0) return -1.0;
+    if (kA <= 0 || kB <= 0 || kC <= 0) return -1.0;
+    double alpha = -1.0;
+
+    /* PRNG */
+    unsigned long seed = 99887766UL;
+    #define RND() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                   (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    /* Allocate U/V factors. */
+    double *U_a = (double*)malloc(sizeof(double)*(size_t)m*(size_t)kA);
+    double *V_a = (double*)malloc(sizeof(double)*(size_t)inner*(size_t)kA);
+    double *U_b = (double*)malloc(sizeof(double)*(size_t)inner*(size_t)kB);
+    double *V_b = (double*)malloc(sizeof(double)*(size_t)n*(size_t)kB);
+    double *U_c = (double*)malloc(sizeof(double)*(size_t)m*(size_t)kC);
+    double *V_c = (double*)malloc(sizeof(double)*(size_t)n*(size_t)kC);
+    if (!U_a || !V_a || !U_b || !V_b || !U_c || !V_c) {
+        free(U_a); free(V_a); free(U_b); free(V_b); free(U_c); free(V_c);
+        return -2.0;
+    }
+    for (int i = 0; i < m*kA; i++)     U_a[i] = RND();
+    for (int i = 0; i < inner*kA; i++) V_a[i] = RND();
+    for (int i = 0; i < inner*kB; i++) U_b[i] = RND();
+    for (int i = 0; i < n*kB; i++)     V_b[i] = RND();
+    for (int i = 0; i < m*kC; i++)     U_c[i] = RND();
+    for (int i = 0; i < n*kC; i++)     V_c[i] = RND();
+
+    /* Dense ground truth:
+     *   A_dense = U_a V_a^T              (m x inner)
+     *   B_dense = U_b V_b^T              (inner x n)
+     *   M_truth = U_c V_c^T + alpha A_dense B_dense   (m x n) */
+    double *A_dense = (double*)malloc(sizeof(double)*(size_t)m*(size_t)inner);
+    double *B_dense = (double*)malloc(sizeof(double)*(size_t)inner*(size_t)n);
+    double *M_truth = (double*)malloc(sizeof(double)*(size_t)m*(size_t)n);
+    if (!A_dense || !B_dense || !M_truth) {
+        free(U_a); free(V_a); free(U_b); free(V_b); free(U_c); free(V_c);
+        free(A_dense); free(B_dense); free(M_truth); return -2.0;
+    }
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                m, inner, kA, 1.0, U_a, m, V_a, inner, 0.0, A_dense, m);
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                inner, n, kB, 1.0, U_b, inner, V_b, n, 0.0, B_dense, inner);
+    /* M_truth = U_c V_c^T */
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                m, n, kC, 1.0, U_c, m, V_c, n, 0.0, M_truth, m);
+    /* M_truth += alpha * A_dense * B_dense */
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                m, n, inner, alpha, A_dense, m, B_dense, inner, 1.0, M_truth, m);
+    free(A_dense); free(B_dense);
+
+    /* Build the three leafmtx + block_node wrappers. */
+    st_cHACApK_cluster_t *clt_m  = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_m));
+    st_cHACApK_cluster_t *clt_in = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_in));
+    st_cHACApK_cluster_t *clt_n  = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_n));
+    clt_m->nstrt = 1;  clt_m->nsize = m;
+    clt_in->nstrt = 1; clt_in->nsize = inner;
+    clt_n->nstrt = 1;  clt_n->nsize = n;
+
+    st_cHACApK_leafmtx_t lf_A = {0}, lf_B = {0}, lf_C = {0};
+    lf_A.ltmtx = 1; lf_A.kt = kA; lf_A.ndl = m;     lf_A.ndt = inner;
+    lf_A.a1 = (double*)malloc(sizeof(double)*(size_t)m*(size_t)kA);
+    lf_A.a2 = (double*)malloc(sizeof(double)*(size_t)inner*(size_t)kA);
+    memcpy(lf_A.a1, U_a, sizeof(double)*(size_t)m*(size_t)kA);
+    memcpy(lf_A.a2, V_a, sizeof(double)*(size_t)inner*(size_t)kA);
+
+    lf_B.ltmtx = 1; lf_B.kt = kB; lf_B.ndl = inner; lf_B.ndt = n;
+    lf_B.a1 = (double*)malloc(sizeof(double)*(size_t)inner*(size_t)kB);
+    lf_B.a2 = (double*)malloc(sizeof(double)*(size_t)n*(size_t)kB);
+    memcpy(lf_B.a1, U_b, sizeof(double)*(size_t)inner*(size_t)kB);
+    memcpy(lf_B.a2, V_b, sizeof(double)*(size_t)n*(size_t)kB);
+
+    lf_C.ltmtx = 1; lf_C.kt = kC; lf_C.ndl = m;     lf_C.ndt = n;
+    lf_C.a1 = (double*)malloc(sizeof(double)*(size_t)m*(size_t)kC);
+    lf_C.a2 = (double*)malloc(sizeof(double)*(size_t)n*(size_t)kC);
+    memcpy(lf_C.a1, U_c, sizeof(double)*(size_t)m*(size_t)kC);
+    memcpy(lf_C.a2, V_c, sizeof(double)*(size_t)n*(size_t)kC);
+
+    st_cHACApK_block_node_t bn_A = {0}, bn_B = {0}, bn_C = {0};
+    bn_A.row_cluster = clt_m;  bn_A.col_cluster = clt_in; bn_A.leaf_mtx = &lf_A; bn_A.leaf_kind = 1;
+    bn_B.row_cluster = clt_in; bn_B.col_cluster = clt_n;  bn_B.leaf_mtx = &lf_B; bn_B.leaf_kind = 1;
+    bn_C.row_cluster = clt_m;  bn_C.col_cluster = clt_n;  bn_C.leaf_mtx = &lf_C; bn_C.leaf_kind = 1;
+
+    /* Run the test. */
+    int rc = h_addmul(alpha, &bn_A, &bn_B, &bn_C);
+    if (rc != CHACAPK_HARITH_OK) {
+        free(lf_A.a1); free(lf_A.a2);
+        free(lf_B.a1); free(lf_B.a2);
+        free(lf_C.a1); free(lf_C.a2);
+        free(U_a); free(V_a); free(U_b); free(V_b); free(U_c); free(V_c);
+        free(M_truth); free(clt_m); free(clt_in); free(clt_n);
+        return -4.0 + rc * 0.001;
+    }
+
+    /* Reconstruct M_new from C's updated factors. */
+    int kC_new = lf_C.kt;
+    double *M_new = (double*)malloc(sizeof(double)*(size_t)m*(size_t)n);
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
+                m, n, kC_new, 1.0, lf_C.a1, m, lf_C.a2, n, 0.0, M_new, m);
+
+    /* Max relative error vs M_truth. */
+    double max_truth = 0.0, max_err = 0.0;
+    for (int i = 0; i < m*n; i++) {
+        double t = M_truth[i]; if (t < 0.0) t = -t;
+        if (t > max_truth) max_truth = t;
+        double e = M_truth[i] - M_new[i]; if (e < 0.0) e = -e;
+        if (e > max_err) max_err = e;
+    }
+    double rel = (max_truth > 0.0) ? (max_err / max_truth) : max_err;
+
+    free(M_new); free(M_truth);
+    free(lf_A.a1); free(lf_A.a2);
+    free(lf_B.a1); free(lf_B.a2);
+    free(lf_C.a1); free(lf_C.a2);
+    free(U_a); free(V_a); free(U_b); free(V_b); free(U_c); free(V_c);
+    free(clt_m); free(clt_in); free(clt_n);
     return rel;
 }
 

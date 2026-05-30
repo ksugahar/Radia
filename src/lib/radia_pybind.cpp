@@ -53,6 +53,8 @@ extern "C" {
     int  cHACApK_get_cluster_strategy(void);
     double cHACApK_harith_self_test(int depth, int n_per_block);
     double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank);
+    double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
+                                                  int kA, int kB, int kC);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -2886,6 +2888,20 @@ PYBIND11_MODULE(_radia_pybind, m) {
           - hmatvec_subtract on rk leaves in forward/backward sweeps
 
         Returns max relative error (should be ~ machine precision).
+    )pbdoc");
+
+    // -- Phase 3.5 unit test: h_addmul rk*rk -> rk + recompression --
+    m.def("HLUSelfTestAddmulRkRk", [](int m_, int n_, int inner_,
+                                        int kA, int kB, int kC) -> double {
+        return cHACApK_harith_self_test_addmul_rkrk(m_, n_, inner_, kA, kB, kC);
+    },
+    py::arg("m") = 64, py::arg("n") = 64, py::arg("inner") = 64,
+    py::arg("kA") = 5, py::arg("kB") = 5, py::arg("kC") = 5,
+    R"pbdoc(
+        Phase 3.5 unit test: rk(A) * rk(B) -> rk(C) h_addmul with ACA recompression.
+        Builds three random rk leaves of given ranks, computes the dense ground
+        truth (U_c V_c^T + alpha A B), runs h_addmul, and verifies the result by
+        comparing C's new dense reconstruction to the truth. Expected ~1e-13.
     )pbdoc");
 
     m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,
