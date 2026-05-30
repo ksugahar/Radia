@@ -295,29 +295,27 @@ def main():
     ax2.plot_surface(R * np.cos(np.radians(TH)), R * np.sin(np.radians(TH)), ZZ,
                      facecolors=cm.magma(nrm(Hg)), rstride=1, cstride=1,
                      linewidth=0, antialiased=False, shade=False)
-    # Overlay the 1-turn coil torus (R_maj=30 mm, R_min=3 mm centred on
-    # the workpiece mid-plane) so the reader sees where the field source is.
-    R_maj, R_min = 30.0, 3.0
-    Uc, Vc = np.meshgrid(np.linspace(0, 2 * np.pi, 80),
-                         np.linspace(0, 2 * np.pi, 24))
-    Xc = (R_maj + R_min * np.cos(Vc)) * np.cos(Uc)
-    Yc = (R_maj + R_min * np.cos(Vc)) * np.sin(Uc)
-    Zc = R_min * np.sin(Vc)
-    ax2.plot_surface(Xc, Yc, Zc, color="#B87333",  # copper
-                     rstride=1, cstride=1, linewidth=0, antialiased=False,
-                     shade=False, alpha=1.0)
-    # Box aspect must enclose the coil outer radius (R_maj + R_min = 33 mm).
-    ax2.set_box_aspect((2 * (R_maj + R_min), 2 * (R_maj + R_min),
-                        zs.max() - zs.min()), zoom=1.35)
-    ax2.view_init(elev=18, azim=-60)
-    ax2.grid(False)
-    for axp in (ax2.xaxis, ax2.yaxis, ax2.zaxis):
-        axp.pane.set_visible(False)
-    # No axis tick labels: the cylinder is shown axis-equal, and its
-    # diameter / height are given in the text + caption instead.
-    ax2.set_xticks([])
-    ax2.set_yticks([])
-    ax2.set_zticks([])
+    # Overlay the 1-turn coil as a thin copper centreline ring at
+    # R_maj=30 mm, z=0.  Only the front 180 deg arc is drawn so the part
+    # of the ring behind the workpiece (occluded by the cylinder) is not
+    # visible -- the visible-arc range u in (-150 deg, +30 deg) is the
+    # half facing the camera at the current view_init(elev=14, azim=-60).
+    R_maj = 30.0
+    u_front = np.linspace(-5 * np.pi / 6, np.pi / 6, 200)
+    ax2.plot(R_maj * np.cos(u_front), R_maj * np.sin(u_front),
+             np.zeros_like(u_front),
+             color="#B87333", linewidth=2.5)
+    # Lock the xyz limits BEFORE setting the box aspect, otherwise
+    # matplotlib auto-extends y to the arc's y=-26 mm protrusion and
+    # squashes the cylinder along z (the arc then appears to dangle
+    # below the workpiece rather than thread through its mid-plane).
+    ax2.set_xlim(-R_maj, R_maj)
+    ax2.set_ylim(-R_maj, R_maj)
+    ax2.set_zlim(zs.min(), zs.max())
+    ax2.view_init(elev=14, azim=-60)
+    ax2.set_box_aspect((2 * R_maj, 2 * R_maj, zs.max() - zs.min()),
+                       zoom=1.35)
+    ax2.set_axis_off()
     sm = cm.ScalarMappable(norm=nrm, cmap="magma")
     sm.set_array([])
     cb2 = fig.colorbar(sm, ax=ax2, shrink=0.6, pad=0.04)
