@@ -89,6 +89,7 @@ void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
+double HLUTestOnHACApK(int);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -1368,6 +1369,17 @@ int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey)
 	int result = HMatrixDensify(InteractElemKey, pMatrix, pDOF);
 	if(result == 0) return ioBuffer.OutErrorStatus();
 	return 0;
+}
+
+//-------------------------------------------------------------------------
+
+double CALL RadHLUTestOnHACApK(int InteractElemKey)
+{
+#ifdef HAVE_LAPACK
+	mkl_set_num_threads(1);
+#endif
+	ngcore::RegionTaskManager rtm;
+	return HLUTestOnHACApK(InteractElemKey);
 }
 
 //-------------------------------------------------------------------------

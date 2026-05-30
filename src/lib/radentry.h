@@ -395,6 +395,8 @@ H-matrix against the exact dense matrix (eigenvalues / deflation).
 */
 EXP int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey);
 
+EXP double CALL RadHLUTestOnHACApK(int InteractElemKey);  // Phase 4 H-LU smoke test
+
 // RadPreRelax REMOVED (2026-01-31) - Use RadBuildMatrix instead
 // The new API is: int handle = RadBuildMatrix(obj, image);
 // where image is "+x", "-z", "+x-z", etc. for IMA symmetry
