@@ -1015,6 +1015,15 @@ class AnalysisWindow(QMainWindow):
         panel_log(f"_on_run: working_folder={self.working_folder} vol={vol}")
         panel_log(f"  cmd: {' '.join(cmd)}")
 
+        # Result Output Persistence Policy (2026-05-30): capture the
+        # --output JSON path so _persist_output_log can mirror the
+        # Output window to <base>_<suffix>.log next to it.
+        self._last_output_json = None
+        for i, tok in enumerate(cmd):
+            if tok == "--output" and i + 1 < len(cmd):
+                self._last_output_json = cmd[i + 1]
+                break
+
         self._save_settings()
         self._output.clear()
         # Echo the exact command being launched so the user sees what
@@ -1240,6 +1249,22 @@ class AnalysisWindow(QMainWindow):
                 o(f"    {k:<24}{times[k]:9.2f}")
             o(f"    {'(sum)':<24}{sum(times.values()):9.2f}")
 
+    def _persist_output_log(self):
+        """Mirror the Output window verbatim to <base>_<suffix>.log next
+        to the --output JSON. Result Output Persistence Policy
+        (2026-05-30): every Run leaves a `.log` beside the `.json`,
+        overwritten each Run, regardless of exit code."""
+        if not getattr(self, "_last_output_json", None):
+            return
+        log_path = os.path.splitext(self._last_output_json)[0] + ".log"
+        try:
+            with open(log_path, "w", encoding="utf-8",
+                      errors="replace", newline="") as f:
+                f.write(self._output.toPlainText())
+            panel_log(f"persisted output log: {log_path}")
+        except OSError as e:
+            panel_log(f"failed to write output log {log_path}: {e}")
+
     def _on_finished(self, exit_code, exit_status):
         remaining = self._process.readAllStandardOutput().data()
         if remaining:
@@ -1261,6 +1286,7 @@ class AnalysisWindow(QMainWindow):
             # panel debug log without the user needing to copy/paste.
             tail = "\n".join(stdout_text.splitlines()[-20:])
             panel_log(f"_on_finished: subprocess FAILED, tail:\n{tail}")
+            self._persist_output_log()
             return
 
         # Find .msh in output for GMSH button
@@ -1581,6 +1607,7 @@ class AnalysisWindow(QMainWindow):
             self._output.appendPlainText("")
 
         self._status.showMessage("Done." if exit_code == 0 else "Failed.")
+        self._persist_output_log()
 
     def _open_gmsh(self):
         if not self._last_msh:
