@@ -848,3 +848,201 @@ double cHACApK_harith_self_test(int depth, int n_per_block)
     if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
     return rel;
 }
+
+
+/* ---------- rk-aware self-test (Phase 3 partial validation) ------------- *
+ * Build a depth=1 (2x2) block-tree where:
+ *   A00, A11 are DENSE leaves (random diagonally-dominant)
+ *   A01, A10 are RK leaves of explicit rank rk_rank (A_ij = U_ij V_ij^T)
+ *
+ * Exercises:
+ *   - dense LU on diagonal leaves            (existing)
+ *   - htrsm_lln(L=dense, X=rk)               (Phase 3 partial)
+ *   - htrsm_run(U=dense, X=rk)               (Phase 3 partial)
+ *   - h_addmul(rk*rk -> dense)               (Phase 3 partial)
+ *   - hmatvec_subtract on rk leaves          (Phase 3 partial)
+ *
+ * Depth >= 2 with rk off-diagonals would also exercise
+ * rk(A)*rk(B)->rk(C) in the trailing update, which requires ACA
+ * recompression (Phase 3.5) and is NOT yet implemented. */
+double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank)
+{
+    if (n_per_block <= 0 || rk_rank <= 0) return -1.0;
+    int nb = n_per_block;
+    int N = 2 * nb;
+    int k = (rk_rank > nb) ? nb : rk_rank;
+
+    /* Allocate workspace. */
+    double *A_full = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *A_ref  = (double*)malloc(sizeof(double) * (size_t)N * (size_t)N);
+    double *b      = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_hlu  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *x_ref  = (double*)malloc(sizeof(double) * (size_t)N);
+    double *U01    = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k);
+    double *V01    = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k);
+    double *U10    = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k);
+    double *V10    = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k);
+    if (!A_full || !A_ref || !b || !x_hlu || !x_ref ||
+        !U01 || !V01 || !U10 || !V10) return -2.0;
+
+    /* xorshift PRNG (reproducible). */
+    unsigned long seed = 7654321UL;
+    #define RND() (seed = seed * 6364136223846793005UL + 1442695040888963407UL, \
+                   (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5)
+
+    /* (1) build the rk factors for A01 and A10. */
+    for (int j = 0; j < k; j++)
+        for (int i = 0; i < nb; i++) {
+            U01[i + j*nb] = RND();
+            V01[i + j*nb] = RND();
+            U10[i + j*nb] = RND();
+            V10[i + j*nb] = RND();
+        }
+
+    /* (2) fill A_full.
+     *   - A00, A11: random + boost diag.
+     *   - A01: U01 @ V01^T.
+     *   - A10: U10 @ V10^T.
+     * Column-major A_full of size NxN. */
+    /* A00 random */
+    for (int j = 0; j < nb; j++)
+        for (int i = 0; i < nb; i++)
+            A_full[i + j*N] = RND();
+    /* A11 random */
+    for (int j = 0; j < nb; j++)
+        for (int i = 0; i < nb; i++)
+            A_full[(nb+i) + (nb+j)*N] = RND();
+    /* A01 = U01 V01^T  (rows 0..nb-1, cols nb..2nb-1) */
+    for (int j = 0; j < nb; j++) {
+        for (int i = 0; i < nb; i++) {
+            double s = 0.0;
+            for (int p = 0; p < k; p++)
+                s += U01[i + p*nb] * V01[j + p*nb];
+            A_full[i + (nb+j)*N] = s;
+        }
+    }
+    /* A10 = U10 V10^T  (rows nb..2nb-1, cols 0..nb-1) */
+    for (int j = 0; j < nb; j++) {
+        for (int i = 0; i < nb; i++) {
+            double s = 0.0;
+            for (int p = 0; p < k; p++)
+                s += U10[i + p*nb] * V10[j + p*nb];
+            A_full[(nb+i) + j*N] = s;
+        }
+    }
+    /* Boost diagonal to dominate the row (now that off-diag rk is known). */
+    for (int i = 0; i < N; i++) {
+        double rowsum = 0.0;
+        for (int j = 0; j < N; j++) {
+            if (j == i) continue;
+            double v = A_full[i + j*N];
+            rowsum += (v < 0.0) ? -v : v;
+        }
+        A_full[i + i*N] = rowsum + (double)N;
+    }
+    /* RHS */
+    for (int j = 0; j < N; j++) b[j] = RND() * 10.0;
+    memcpy(A_ref, A_full, sizeof(double) * (size_t)N * (size_t)N);
+
+    /* (3) reference: dgesv on dense A_full */
+    int *ref_ipiv = (int*)malloc(sizeof(int) * (size_t)N);
+    memcpy(x_ref, b, sizeof(double) * (size_t)N);
+    int info = LAPACKE_dgesv(LAPACK_COL_MAJOR, N, 1, A_ref, N, ref_ipiv, x_ref, N);
+    free(ref_ipiv);
+    if (info != 0) {
+        free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+        free(U01); free(V01); free(U10); free(V10);
+        return -3.0;
+    }
+
+    /* (4) build the tree manually:  2x2 root with dense diag + rk off-diag. */
+    st_cHACApK_cluster_t *clt_root = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
+    st_cHACApK_cluster_t *clt0     = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt0));
+    st_cHACApK_cluster_t *clt1     = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt1));
+    clt_root->nstrt = 1;     clt_root->nsize = N;
+    clt0->nstrt     = 1;     clt0->nsize     = nb;
+    clt1->nstrt     = 1+nb;  clt1->nsize     = nb;
+
+    st_cHACApK_block_node_t *root = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root));
+    root->row_cluster = clt_root;
+    root->col_cluster = clt_root;
+    root->nrsons = 2; root->ncsons = 2;
+    root->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*root->sons));
+
+    /* Leaf at (i_son, j_son), i,j in {0,1}. row_cluster = clt0 if i==0 else clt1, etc. */
+    st_cHACApK_block_node_t *nodes[4];
+    st_cHACApK_leafmtx_t    *leaves[4];
+    st_cHACApK_cluster_t    *rclt[2] = {clt0, clt1};
+    st_cHACApK_cluster_t    *cclt[2] = {clt0, clt1};
+    for (int j_son = 0; j_son < 2; j_son++) {
+        for (int i_son = 0; i_son < 2; i_son++) {
+            int idx = i_son + j_son * 2;
+            st_cHACApK_block_node_t *bn = (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn));
+            bn->row_cluster = rclt[i_son];
+            bn->col_cluster = cclt[j_son];
+            st_cHACApK_leafmtx_t *lf = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*lf));
+            lf->ndl = nb; lf->ndt = nb;
+            lf->nstrtl = bn->row_cluster->nstrt;
+            lf->nstrtt = bn->col_cluster->nstrt;
+            if (i_son == j_son) {
+                /* dense diagonal */
+                lf->ltmtx = 2;
+                lf->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)nb);
+                int r0 = bn->row_cluster->nstrt - 1;
+                int c0 = bn->col_cluster->nstrt - 1;
+                for (int jj = 0; jj < nb; jj++)
+                    for (int ii = 0; ii < nb; ii++)
+                        lf->a1[ii + jj*nb] = A_full[(r0+ii) + (c0+jj)*N];
+                bn->leaf_kind = 2;
+            } else {
+                /* rk off-diagonal: a1 = U, a2 = V */
+                lf->ltmtx = 1;
+                lf->kt    = k;
+                lf->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k);
+                lf->a2 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)k);
+                /* identify which rk factors to use */
+                double *Usrc = (i_son == 0 && j_son == 1) ? U01 : U10;
+                double *Vsrc = (i_son == 0 && j_son == 1) ? V01 : V10;
+                memcpy(lf->a1, Usrc, sizeof(double) * (size_t)nb * (size_t)k);
+                memcpy(lf->a2, Vsrc, sizeof(double) * (size_t)nb * (size_t)k);
+                bn->leaf_kind = 1;
+            }
+            bn->leaf_mtx = lf;
+            nodes[idx]   = bn;
+            leaves[idx]  = lf;
+            root->sons[idx] = bn;
+        }
+    }
+
+    /* (5) run H-LU + solve */
+    int rc_dec = cHACApK_hlu_decomp(root);
+    int rc_slv = (rc_dec == CHACAPK_HARITH_OK)
+                  ? cHACApK_hlu_solve_vec(root, b, x_hlu, N)
+                  : -99;
+
+    /* (6) max rel err */
+    double max_ref = 0.0, max_err = 0.0;
+    for (int i = 0; i < N; i++) {
+        double r = (x_ref[i] < 0.0) ? -x_ref[i] : x_ref[i];
+        if (r > max_ref) max_ref = r;
+        double d = x_hlu[i] - x_ref[i]; if (d < 0.0) d = -d;
+        if (d > max_err) max_err = d;
+    }
+    double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
+
+    /* (7) cleanup */
+    for (int i = 0; i < 4; i++) {
+        free(leaves[i]->a1);
+        if (leaves[i]->a2) free(leaves[i]->a2);
+        free(leaves[i]);
+        free(nodes[i]);
+    }
+    free(root->sons); free(root);
+    free(clt_root); free(clt0); free(clt1);
+    free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
+    free(U01); free(V01); free(U10); free(V10);
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
