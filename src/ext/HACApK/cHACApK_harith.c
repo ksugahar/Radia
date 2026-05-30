@@ -148,7 +148,7 @@ static int hlu_rec(st_cHACApK_block_node_t *node)
         for (int k = i + 1; k < s; k++) {
             st_cHACApK_block_node_t *Aik = node->sons[i + k * s];
             if (!leaf_is_dense(Aii) || !leaf_is_dense(Aik))
-                return CHACAPK_HARITH_ERR_LOWRANK_LEAF;   /* Phase 2 fills these in */
+                return CHACAPK_HARITH_ERR_NEED_RECURSIVE; /* Phase 2: recursive trsm */
             dense_tri_solve_left_lower(
                 leaf_dense_data(Aii), leaf_rows(Aii),
                 leaf_dense_data(Aik), leaf_rows(Aik), leaf_cols(Aik));
@@ -157,7 +157,7 @@ static int hlu_rec(st_cHACApK_block_node_t *node)
         for (int j = i + 1; j < s; j++) {
             st_cHACApK_block_node_t *Aji = node->sons[j + i * s];
             if (!leaf_is_dense(Aii) || !leaf_is_dense(Aji))
-                return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+                return CHACAPK_HARITH_ERR_NEED_RECURSIVE; /* Phase 2: recursive trsm */
             dense_tri_solve_right_upper(
                 leaf_dense_data(Aii), leaf_rows(Aii),
                 leaf_dense_data(Aji), leaf_rows(Aji), leaf_cols(Aji));
@@ -169,7 +169,7 @@ static int hlu_rec(st_cHACApK_block_node_t *node)
                 st_cHACApK_block_node_t *Lji = node->sons[j + i * s];
                 st_cHACApK_block_node_t *Uik = node->sons[i + k * s];
                 if (!leaf_is_dense(Ajk) || !leaf_is_dense(Lji) || !leaf_is_dense(Uik))
-                    return CHACAPK_HARITH_ERR_LOWRANK_LEAF;
+                    return CHACAPK_HARITH_ERR_NEED_RECURSIVE; /* Phase 2: recursive gemm */
                 dense_gemm_subtract(
                     leaf_dense_data(Lji), leaf_rows(Lji),
                     leaf_dense_data(Uik), leaf_rows(Uik), leaf_cols(Uik),
@@ -300,11 +300,120 @@ int cHACApK_hlu_solve_vec(
  * Memory: ~ 2*n_total^2 * 8 bytes (one copy for H-LU, one for the reference).
  * For n_per_block=100, n_total=200, memory ~640 KB. Negligible.
  */
-double cHACApK_harith_self_test(int n_per_block)
+/* Helpers for the deep self-test. The tree is built bottom-up: each call
+ * to build_deep_tree creates either a leaf (depth==0) or an internal node
+ * with 4 children that recursively build their own subtrees. The cluster
+ * tree mirrors the block tree exactly (each node points to a cluster with
+ * the same nstrt/nsize). All cluster + leaf + block_node allocations are
+ * registered in two parallel arrays for clean cleanup. */
+typedef struct deep_state_t {
+    /* allocation log for clean cleanup */
+    st_cHACApK_cluster_t  **clt_log;   int n_clt;   int cap_clt;
+    st_cHACApK_leafmtx_t  **lf_log;    int n_lf;    int cap_lf;
+    st_cHACApK_block_node_t **bn_log;  int n_bn;    int cap_bn;
+    /* source data: column-major NxN matrix, N = level0_size * 2^depth */
+    const double *A_full;
+    int N_global;
+} deep_state_t;
+
+static st_cHACApK_cluster_t *log_clt(deep_state_t *s, st_cHACApK_cluster_t *c)
 {
-    if (n_per_block <= 0) return -1.0;
+    if (s->n_clt >= s->cap_clt) {
+        s->cap_clt = s->cap_clt ? 2*s->cap_clt : 64;
+        s->clt_log = (st_cHACApK_cluster_t**)realloc(s->clt_log, sizeof(*s->clt_log)*s->cap_clt);
+    }
+    s->clt_log[s->n_clt++] = c; return c;
+}
+static st_cHACApK_leafmtx_t *log_lf(deep_state_t *s, st_cHACApK_leafmtx_t *l)
+{
+    if (s->n_lf >= s->cap_lf) {
+        s->cap_lf = s->cap_lf ? 2*s->cap_lf : 64;
+        s->lf_log = (st_cHACApK_leafmtx_t**)realloc(s->lf_log, sizeof(*s->lf_log)*s->cap_lf);
+    }
+    s->lf_log[s->n_lf++] = l; return l;
+}
+static st_cHACApK_block_node_t *log_bn(deep_state_t *s, st_cHACApK_block_node_t *b)
+{
+    if (s->n_bn >= s->cap_bn) {
+        s->cap_bn = s->cap_bn ? 2*s->cap_bn : 64;
+        s->bn_log = (st_cHACApK_block_node_t**)realloc(s->bn_log, sizeof(*s->bn_log)*s->cap_bn);
+    }
+    s->bn_log[s->n_bn++] = b; return b;
+}
+
+/* Build the recursive block-tree.
+ *   row_clt, col_clt   already-allocated row/col cluster for this node
+ *   depth              0 = leaf with size = row_clt->nsize x col_clt->nsize
+ *                      >0 = split into 2x2 children
+ * Returns a block_node. */
+static st_cHACApK_block_node_t *build_deep_tree(
+    deep_state_t *s,
+    st_cHACApK_cluster_t *row_clt, st_cHACApK_cluster_t *col_clt,
+    int depth)
+{
+    st_cHACApK_block_node_t *bn =
+        (st_cHACApK_block_node_t*)calloc(1, sizeof(*bn));
+    log_bn(s, bn);
+    bn->row_cluster = row_clt;
+    bn->col_cluster = col_clt;
+
+    if (depth == 0) {
+        int m = row_clt->nsize, n = col_clt->nsize;
+        st_cHACApK_leafmtx_t *L = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L));
+        log_lf(s, L);
+        L->ltmtx = 2; L->ndl = m; L->ndt = n;
+        L->nstrtl = row_clt->nstrt; L->nstrtt = col_clt->nstrt;
+        L->a1 = (double*)malloc(sizeof(double)*(size_t)m*(size_t)n);
+        /* copy from A_full (column-major NxN, with offset (nstrt-1, nstrt-1)) */
+        int r0 = row_clt->nstrt - 1, c0 = col_clt->nstrt - 1, N = s->N_global;
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < m; i++)
+                L->a1[i + j*m] = s->A_full[(r0+i) + (c0+j)*N];
+        bn->leaf_mtx  = L;
+        bn->leaf_kind = 2;
+        return bn;
+    }
+
+    /* internal: split into 2 row x 2 col children */
+    int half_r = row_clt->nsize / 2;
+    int half_c = col_clt->nsize / 2;
+    st_cHACApK_cluster_t *rc[2] = {
+        log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(**rc))),
+        log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(**rc)))
+    };
+    st_cHACApK_cluster_t *cc[2] = {
+        log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(**cc))),
+        log_clt(s, (st_cHACApK_cluster_t*)calloc(1, sizeof(**cc)))
+    };
+    rc[0]->nstrt = row_clt->nstrt;          rc[0]->nsize = half_r;
+    rc[1]->nstrt = row_clt->nstrt + half_r; rc[1]->nsize = row_clt->nsize - half_r;
+    cc[0]->nstrt = col_clt->nstrt;          cc[0]->nsize = half_c;
+    cc[1]->nstrt = col_clt->nstrt + half_c; cc[1]->nsize = col_clt->nsize - half_c;
+
+    bn->nrsons = 2; bn->ncsons = 2;
+    bn->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(*bn->sons));
+    for (int j = 0; j < 2; j++)
+        for (int i = 0; i < 2; i++)
+            bn->sons[i + j*2] = build_deep_tree(s, rc[i], cc[j], depth - 1);
+    return bn;
+}
+
+static void deep_cleanup(deep_state_t *s)
+{
+    for (int i = 0; i < s->n_bn; i++) {
+        if (s->bn_log[i]->sons) free(s->bn_log[i]->sons);
+        free(s->bn_log[i]);
+    }
+    for (int i = 0; i < s->n_lf; i++) { free(s->lf_log[i]->a1); free(s->lf_log[i]); }
+    for (int i = 0; i < s->n_clt; i++) free(s->clt_log[i]);
+    free(s->bn_log); free(s->lf_log); free(s->clt_log);
+}
+
+double cHACApK_harith_self_test(int depth, int n_per_block)
+{
+    if (n_per_block <= 0 || depth < 0 || depth > 10) return -1.0;
     int nb = n_per_block;
-    int N = 2 * nb;
+    int N = (1 << depth) * nb;
 
     /* (1) generate a random diagonally-dominant matrix (so LU without
      * pivoting is stable). Diagonal magnitude ~ N (sum of row magnitudes). */
@@ -342,61 +451,16 @@ double cHACApK_harith_self_test(int n_per_block)
         return -3.0;
     }
 
-    /* (3) construct 4 dense leaves + a 2x2 block-tree root.
-     * Each leaf->a1 points into a separate column-major copy of its block.
-     * Cluster nodes carry only nstrt/nsize (1-based as HACApK convention). */
-    st_cHACApK_cluster_t *clt_top    = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_top));
-    st_cHACApK_cluster_t *clt_bot    = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_bot));
-    st_cHACApK_cluster_t *clt_root   = (st_cHACApK_cluster_t*)calloc(1, sizeof(*clt_root));
-    clt_top->nstrt = 1;       clt_top->nsize = nb;
-    clt_bot->nstrt = nb + 1;  clt_bot->nsize = nb;
-    clt_root->nstrt = 1;      clt_root->nsize = N;
-    clt_root->nnson = 2;
-    clt_root->pc_sons = (st_cHACApK_cluster_t**)calloc(3, sizeof(void*));   /* [0]=unused, [1]=top, [2]=bot */
-    clt_root->pc_sons[1] = clt_top;
-    clt_root->pc_sons[2] = clt_bot;
-
-    /* Build 4 leaves */
-    st_cHACApK_leafmtx_t *L[4];
-    for (int k = 0; k < 4; k++) {
-        L[k] = (st_cHACApK_leafmtx_t*)calloc(1, sizeof(*L[k]));
-        L[k]->ltmtx = 2;
-        L[k]->ndl = nb; L[k]->ndt = nb;
-        L[k]->a1 = (double*)malloc(sizeof(double) * (size_t)nb * (size_t)nb);
-    }
-    /* Block (0,0): rows [0..nb-1], cols [0..nb-1] */
-    L[0]->nstrtl = 1;      L[0]->nstrtt = 1;
-    /* Block (1,0): rows [nb..2nb-1], cols [0..nb-1] */
-    L[1]->nstrtl = nb + 1; L[1]->nstrtt = 1;
-    /* Block (0,1): rows [0..nb-1], cols [nb..2nb-1] */
-    L[2]->nstrtl = 1;      L[2]->nstrtt = nb + 1;
-    /* Block (1,1): rows [nb..2nb-1], cols [nb..2nb-1] */
-    L[3]->nstrtl = nb + 1; L[3]->nstrtt = nb + 1;
-    /* Copy data from A_full into each leaf's a1 (column-major nb x nb) */
-    for (int j = 0; j < nb; j++) {
-        for (int i = 0; i < nb; i++) {
-            L[0]->a1[i + j*nb] = A_full[(0+i) + (0+j)*N];      /* top-left */
-            L[1]->a1[i + j*nb] = A_full[(nb+i) + (0+j)*N];     /* bot-left */
-            L[2]->a1[i + j*nb] = A_full[(0+i) + (nb+j)*N];     /* top-right */
-            L[3]->a1[i + j*nb] = A_full[(nb+i) + (nb+j)*N];    /* bot-right */
-        }
-    }
-
-    /* Build block-tree manually (since we don't have a full HACApK build) */
-    st_cHACApK_block_node_t *root_node = (st_cHACApK_block_node_t*)calloc(1, sizeof(*root_node));
-    root_node->row_cluster = clt_root;
-    root_node->col_cluster = clt_root;
-    root_node->nrsons = 2;
-    root_node->ncsons = 2;
-    root_node->sons = (st_cHACApK_block_node_t**)calloc(4, sizeof(void*));
-    for (int k = 0; k < 4; k++) {
-        st_cHACApK_block_node_t *c = (st_cHACApK_block_node_t*)calloc(1, sizeof(*c));
-        c->row_cluster = (k & 1) ? clt_bot : clt_top;
-        c->col_cluster = (k & 2) ? clt_bot : clt_top;
-        c->leaf_mtx = L[k];
-        c->leaf_kind = 2;
-        root_node->sons[k] = c;
-    }
+    /* (3) build recursive block-tree of depth `depth` via build_deep_tree */
+    deep_state_t st;
+    memset(&st, 0, sizeof(st));
+    st.A_full = A_full;
+    st.N_global = N;
+    st_cHACApK_cluster_t *root_clt =
+        log_clt(&st, (st_cHACApK_cluster_t*)calloc(1, sizeof(*root_clt)));
+    root_clt->nstrt = 1; root_clt->nsize = N;
+    st_cHACApK_block_node_t *root_node =
+        build_deep_tree(&st, root_clt, root_clt, depth);
 
     /* (4) run H-LU + solve */
     int rc_dec = cHACApK_hlu_decomp(root_node);
@@ -415,12 +479,7 @@ double cHACApK_harith_self_test(int n_per_block)
     double rel = (max_ref > 0.0) ? (max_err / max_ref) : max_err;
 
     /* (6) cleanup */
-    for (int k = 0; k < 4; k++) {
-        free(root_node->sons[k]);
-        free(L[k]->a1); free(L[k]);
-    }
-    free(root_node->sons); free(root_node);
-    free(clt_root->pc_sons); free(clt_root); free(clt_top); free(clt_bot);
+    deep_cleanup(&st);
     clear_ipiv_registry();
     free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
 
