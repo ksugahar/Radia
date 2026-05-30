@@ -45,6 +45,13 @@
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
+
+// HACApK PCA cluster strategy setter/getter (C symbols).
+// Forward-declared at file scope so the lambdas in PYBIND11_MODULE can call them.
+extern "C" {
+    void cHACApK_set_cluster_strategy(int strategy);
+    int  cHACApK_get_cluster_strategy(void);
+}
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
 #include "rad_biot_savart_filaments.h" // Fast Biot-Savart H/A from finite-segment filaments
@@ -2819,6 +2826,32 @@ PYBIND11_MODULE(_radia_pybind, m) {
                       The value actually used is reported in
                       GetSolveStats()['deflation_alpha'].
           )pbdoc");
+
+    // -- PCA cluster strategy (HACApK admissibility for flat / elongated meshes) --
+    // (C symbols forward-declared at file scope below the includes; see top of file)
+    m.def("SetClusterStrategy", [](int strategy) {
+        cHACApK_set_cluster_strategy(strategy);
+    },
+    py::arg("strategy"),
+    R"pbdoc(
+        Choose the HACApK cluster-tree split strategy for the H-matrix build.
+
+        Args:
+            strategy: 0 = BBOX (default, historical; axis-aligned bbox-midpoint split),
+                      1 = PCA (split perpendicular to the dominant covariance
+                              eigenvector at the center of mass; handles flat /
+                              elongated meshes -- thin plates, beam-pipe liners,
+                              pancake coils -- much better than BBOX).
+
+        Effect on subsequent ``rad.BuildMatrix`` / ``rad.Solve`` calls. Does NOT
+        retroactively change matrices already built. PCA falls back to BBOX
+        automatically per node when covariance is singular (e.g. collinear).
+    )pbdoc");
+
+    m.def("GetClusterStrategy", []() -> int {
+        return cHACApK_get_cluster_strategy();
+    },
+    "Return the current HACApK cluster strategy (0=BBOX, 1=PCA).");
 
     m.def("SetLoopStarGauge", &radia_solver::SetLoopStarGauge,
           py::arg("enable"),
