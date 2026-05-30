@@ -38,7 +38,7 @@ The plugin is built with **compact_netgen** (static link, no nglib.dll dependenc
 
 ```bash
 cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DCubit_DIR="C:/Program Files/Coreform Cubit 2025.3/cmake" \
+  -DCubit_DIR="C:/Program Files/Coreform Cubit 2025.12/cmake" \
   -DNETGEN_SRC_DIR="C:/netgen_build/netgen_fork" \
   src/cubit_plugin
 

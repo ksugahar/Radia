@@ -319,7 +319,7 @@ All results achieve **Netgen-native accuracy** (<0.003%).
 ### 3.7 Requirements
 
 - NGSolve: Build from `ksugahar/ngsolve` branch `feature/setgeominfo`
-- Coreform Cubit 2025.3+
+- Coreform Cubit 2025.12+
 - `pip install cubit-mesh-export && cubit-plugin-install`
 
 ### 3.8 Examples and Links

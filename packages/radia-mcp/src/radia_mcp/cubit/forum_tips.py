@@ -488,13 +488,13 @@ Source: forum.coreform.com/t/2446 (Numbering After Webcutting)
 ```bash
 # Run a .jou file in batch mode (use CUBIT_PATH or full path)
 "%CUBIT_PATH%\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
-# Or: "C:\\Program Files\\Coreform Cubit 2025.3\\bin\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
+# Or: "C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
 
 # Run a Python script directly
 "%CUBIT_PATH%\\coreform_cubit.exe" -nojournal script.py
 
 # Alternative: Use system Python with CUBIT_PATH for Cubit + NGSolve access
-set CUBIT_PATH="C:\\Program Files\\Coreform Cubit 2025.3\\bin"
+set CUBIT_PATH="C:\\Program Files\\Coreform Cubit 2025.12\\bin"
 python script.py
 ```
 
