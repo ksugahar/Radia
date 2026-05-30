@@ -1773,6 +1773,16 @@ class IHWindow(AnalysisWindow):
         except Exception as e:
             self._output.appendPlainText(f"(IH summary skipped: {e})")
 
+        # Re-persist the .log AFTER the IH-specific summary block.  The
+        # base class's super()._on_finished call wrote a .log that
+        # ended at "--- Result ---" + the generic _append_standard_summary
+        # block.  All the IH-specific lines above (L_coil, P_workpiece,
+        # T_max, file paths, auto-open banner) landed in _output AFTER
+        # that, so they were missing from the .log -- which defeats the
+        # Result Output Persistence Policy's triage purpose.  Overwrite
+        # the .log now so it captures the complete on-screen output.
+        self._persist_output_log()
+
     def _on_run_thermal(self):
         """Switch the method dropdown to Thermal -- explicit-input UX.
 
