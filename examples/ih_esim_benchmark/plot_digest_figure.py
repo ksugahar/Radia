@@ -250,9 +250,6 @@ def main():
         norm = TwoSlopeNorm(vmin=vmin, vcenter=0.0, vmax=vmax)
         cs = ax1.contourf(Fg, Ig, gap, levels=np.arange(-50, 31, 5),
                           cmap="RdYlGn_r", norm=norm, extend="both")
-        cl = ax1.contour(Fg, Ig, gap, levels=[-40, -20, 0, 20], colors="k",
-                         linewidths=0.6)
-        ax1.clabel(cl, fmt="%d", fontsize=tick_pt - 1)
         ax1.scatter(Fg[mask], Ig[mask], c="k", s=4, zorder=5)
         ax1.set_xscale("log"); ax1.set_yscale("log")
         ax1.set_xticks([10, 50, 100, 500])
