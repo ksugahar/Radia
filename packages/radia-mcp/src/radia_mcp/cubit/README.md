@@ -3,7 +3,7 @@
 **43 MCP tools** — the largest subpackage in the radia-mcp wheel.
 Production-grade workflow for Coreform Cubit hex/tet meshing via
 Python (`cubit.cmd`), STEP import, NGSolve `.vol` export, and the
-Sugahara lab's curated Cubit-2025.3 scrape index (787-file local
+Sugahara lab's curated Cubit-2025.12 scrape index (787-file local
 archive + Coreform Discourse + YouTube transcripts).
 
 ## Quick start

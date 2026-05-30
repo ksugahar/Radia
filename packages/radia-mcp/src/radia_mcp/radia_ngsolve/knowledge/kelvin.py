@@ -145,7 +145,7 @@ magnetostatic/electromagnetic problems without artificial truncation.
 ## Cubit Workflow: Offset Spheres (3D with .vol export)
 
 For Cubit-based meshes exported via `radia_export netgen`.
-Verified with NGSolve 6.2.2603, Coreform Cubit 2025.3.
+Verified with NGSolve 6.2.2603, Coreform Cubit 2025.12.
 
 ### Step-by-step procedure
 

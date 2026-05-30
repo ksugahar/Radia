@@ -1131,7 +1131,7 @@ def get_lint_rules() -> str:
 #     list of commands. Cubit stays open; student inspects, closes,
 #     or triggers another round.  Slow loop but zero dev cost.
 #   - Medium (TODO): use Cubit's Python binding
-#     (C:/Program Files/Coreform Cubit 2025.3/bin/python3/) to drive a
+#     (C:/Program Files/Coreform Cubit 2025.12/bin/python3/) to drive a
 #     persistent Cubit process in-process — sub-second command cycles.
 #     Requires binding mode that keeps GUI alive; experimental.
 

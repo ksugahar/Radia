@@ -355,7 +355,7 @@ with `ImportError: initialization failed` on `from netgen import libngpy`.
 
 ```bash
 # Set CUBIT_PATH once (e.g., in your environment or before running)
-set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.3/bin"
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
 python my_script.py
 ```
 
@@ -403,10 +403,10 @@ Set `CUBIT_PATH` to avoid hardcoding the Cubit installation path in scripts:
 
 ```bash
 # Windows
-set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.3/bin"
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
 
 # Linux/Mac
-export CUBIT_PATH="/opt/Coreform-Cubit-2025.3/bin"
+export CUBIT_PATH="/opt/Coreform-Cubit-2025.12/bin"
 ```
 
 **Key benefit**: System Python with `CUBIT_PATH` can access both the Cubit API
@@ -984,7 +984,7 @@ if cubit_path:
 
 Or set the environment variable before running:
 ```bash
-set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.3/bin"
+set CUBIT_PATH="C:/Program Files/Coreform Cubit 2025.12/bin"
 python my_script.py
 ```
 
@@ -1021,7 +1021,7 @@ cubit.init(['cubit', '-nojournal', '-batch'])
 
 ```python
 # WRONG: Cubit first causes DLL conflict
-sys.path.append("C:/Program Files/Coreform Cubit 2025.3/bin")
+sys.path.append("C:/Program Files/Coreform Cubit 2025.12/bin")
 import cubit                      # Loads Cubit's VTK DLLs
 import ngsolve                    # FAILS — Netgen can't initialize
 ```
@@ -1094,7 +1094,7 @@ cmake ...  # netgen sources in-repo (compact_netgen/netgen_src/), no external pa
 Old dynamic-linked ccm is ~238 KB. Check after radia-setup:
 ```python
 import os
-ccm = r"C:\\Program Files\\Coreform Cubit 2025.3\\bin\\plugins\\radia_cubit.ccm"
+ccm = r"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\radia_cubit.ccm"
 print(f"ccm: {os.path.getsize(ccm):,} bytes")  # should be > 400,000
 ```
 
@@ -1299,7 +1299,7 @@ play "export_mesh.py"
 # Execute from command line (use CUBIT_PATH or full path)
 "%CUBIT_PATH%\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
 # Or with full path:
-"C:\\Program Files\\Coreform Cubit 2025.3\\bin\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
+"C:\\Program Files\\Coreform Cubit 2025.12\\bin\\coreform_cubit.exe" -batch -nographics -nojournal workflow.jou
 ```
 
 ## Batch Mode vs GUI Mode
@@ -3969,7 +3969,7 @@ VSCode-restart case, which is the only frequent reload event.
 CUBIT_LICENSE_WARMUP = """
 # Cubit license warmup (radia-mcp >= 0.32.0)
 
-Coreform Cubit 2025.3 authenticates via RLM (Reprise License Manager).
+Coreform Cubit 2025.12 authenticates via RLM (Reprise License Manager).
 The first `coreform_cubit.exe` call after a machine sits idle takes
 **30-60 s** because RLM:
 

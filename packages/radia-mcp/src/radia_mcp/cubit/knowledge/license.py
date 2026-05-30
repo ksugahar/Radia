@@ -134,7 +134,7 @@ session can verify infrastructure state without writing:
          Select-String 'plugin'
 
    Should show
-   ``plugin\\paths=C:/Program Files/Coreform Cubit 2025.3/bin/plugins``.
+   ``plugin\\paths=C:/Program Files/Coreform Cubit 2025.12/bin/plugins``.
 
 4. **Per-user license renewals cache**::
 
