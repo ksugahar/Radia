@@ -96,6 +96,34 @@ void MeshData::extract_nodes(MeshExportInterface *iface)
 // ================================================================
 void MeshData::extract_elements(MeshExportInterface *iface)
 {
+  // SNAPSHOT user-defined blocks BEFORE calling iface->get_block_list.
+  //
+  // BUG (keiko 2026-05-30, 100号機, ih_toymodel 6turn coil loft):
+  //   `radia_export netgen` errors with "ERROR: No block with ID 2 was
+  //   found" AND leaves a phantom block 2 in the Cubit session.
+  //
+  // Cause: MeshExportInterface::get_block_list returns Cubit's internal
+  // block iterator handles, INCLUDING a "default block" that holds the
+  // elements not assigned to any user block.  Just calling
+  // iface->id_from_handle(block) on that handle MATERIALISES the
+  // phantom block in Cubit's database as a real block (id ~ N+1 where N
+  // is the user's max block id).  So:
+  //   1. ExportNetgenCommand calls `parse_cubit_list("block", "all")`
+  //      AFTER extract_elements -- the phantom is already in the list.
+  //   2. The skip check at ExportNetgenCommand:866
+  //      (`if (cubit_block_set.find(bid) == end)`) does NOT fire.
+  //   3. parse_cubit_list("volume", "in block N+1") errors because the
+  //      phantom block has no volume membership.
+  //   4. The phantom block survives the export and pollutes the model.
+  //
+  // Fix: take the user-block snapshot HERE, before the side-effecting
+  // get_block_list/id_from_handle calls run, and only register block_ids
+  // that were user-defined.  Phantom blocks never enter md.block_ids,
+  // so downstream callers (the JSON writer, the FaceDescriptor mapping)
+  // never try to look them up.
+  std::vector<int> user_block_ids = CubitInterface::parse_cubit_list("block", "all");
+  std::set<int> user_block_set(user_block_ids.begin(), user_block_ids.end());
+
   std::vector<BlockHandle> blocks;
   iface->get_block_list(blocks);
 
@@ -111,6 +139,14 @@ void MeshData::extract_elements(MeshExportInterface *iface)
   for (size_t bi = 0; bi < blocks.size(); bi++) {
     BlockHandle block = blocks[bi];
     int bid = iface->id_from_handle(block);
+    // Skip the MeshExportInterface "default block" that holds elements
+    // not assigned to any user-defined Cubit block.  Without this guard,
+    // (a) the phantom id leaks into block_ids, (b) downstream
+    // parse_cubit_list("volume", "in block N") errors, (c) the phantom
+    // block survives the export and pollutes the Cubit model.  See the
+    // comment at the top of this function for the full diagnosis.
+    if (user_block_set.find(bid) == user_block_set.end())
+      continue;
     if (seen_bids.insert(bid).second)
       block_ids.push_back(bid);
 
