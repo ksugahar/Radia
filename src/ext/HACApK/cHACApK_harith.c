@@ -21,6 +21,77 @@
 
 #include "cHACApK_harith.h"
 
+/* ---------- HACApK <-> internal storage convention --------------- *
+ *
+ * HACApK leaf storage convention (from cHACApK_base.c fill_leafmtx):
+ *   ltmtx=1 (rk):  a1 is V of shape (ndt x kt) column-major
+ *                  a2 is U of shape (ndl x kt) column-major
+ *                  matrix M = U V^T = a2 a1^T  (ndl x ndt)
+ *   ltmtx=2 (dense): a1 is M stored ROW-MAJOR with leading dim ndt
+ *                    i.e., a1[col + row*ndt] = M[row, col]
+ *                    Equivalently, a1 is M^T column-major with ldA = ndt.
+ *
+ * Our internal H-LU convention (matches build_deep_tree self-test):
+ *   ltmtx=1 (rk):  a1 is U of shape (ndl x kt) column-major
+ *                  a2 is V of shape (ndt x kt) column-major
+ *                  matrix M = U V^T = a1 a2^T  (ndl x ndt)
+ *   ltmtx=2 (dense): a1 is M column-major with leading dim ndl
+ *                    i.e., a1[row + col*ndl] = M[row, col]
+ *
+ * Conversion is in-place:
+ *   - rk:  swap a1 <-> a2 pointers  (O(1))
+ *   - dense: transpose a1  (O(ndl * ndt) per leaf, requires temp buffer
+ *            for non-square; in-place transpose for square via swap loop) */
+
+void cHACApK_convert_leafmtxp_to_internal(struct st_cHACApK_leafmtxp_t *lp)
+{
+    if (!lp || !lp->st_lf) return;
+    for (int ip = 1; ip <= lp->nlf; ip++) {
+        st_cHACApK_leafmtx_t *lf = lp->st_lf[ip];
+        if (!lf) continue;
+        int ndl = lf->ndl, ndt = lf->ndt;
+        if (lf->ltmtx == 1) {
+            /* rk: swap a1 (V) <-> a2 (U) so my code finds U at a1. */
+            double *tmp = lf->a1; lf->a1 = lf->a2; lf->a2 = tmp;
+        } else if (lf->ltmtx == 2) {
+            /* dense: transpose a1 from HACApK row-major (ldA=ndt) to
+             * internal column-major (ldA=ndl). */
+            double *new_a1 = (double*)malloc(sizeof(double) * (size_t)ndl * (size_t)ndt);
+            if (!new_a1) continue;  /* allocation failure: skip (caller will see wrong results) */
+            for (int row = 0; row < ndl; row++)
+                for (int col = 0; col < ndt; col++)
+                    new_a1[row + (size_t)col * (size_t)ndl] =
+                        lf->a1[col + (size_t)row * (size_t)ndt];
+            free(lf->a1);
+            lf->a1 = new_a1;
+        }
+    }
+}
+
+void cHACApK_convert_leafmtxp_to_hacapk(struct st_cHACApK_leafmtxp_t *lp)
+{
+    if (!lp || !lp->st_lf) return;
+    for (int ip = 1; ip <= lp->nlf; ip++) {
+        st_cHACApK_leafmtx_t *lf = lp->st_lf[ip];
+        if (!lf) continue;
+        int ndl = lf->ndl, ndt = lf->ndt;
+        if (lf->ltmtx == 1) {
+            double *tmp = lf->a1; lf->a1 = lf->a2; lf->a2 = tmp;
+        } else if (lf->ltmtx == 2) {
+            /* transpose internal col-major (ldA=ndl) back to HACApK row-major (ldA=ndt) */
+            double *new_a1 = (double*)malloc(sizeof(double) * (size_t)ndl * (size_t)ndt);
+            if (!new_a1) continue;
+            for (int row = 0; row < ndl; row++)
+                for (int col = 0; col < ndt; col++)
+                    new_a1[col + (size_t)row * (size_t)ndt] =
+                        lf->a1[row + (size_t)col * (size_t)ndl];
+            free(lf->a1);
+            lf->a1 = new_a1;
+        }
+    }
+}
+
+
 /* ---------- module-level stats (single-threaded, single-decomp) ---- */
 static cHACApK_hlu_stats_t g_stats;
 
@@ -1448,6 +1519,98 @@ double cHACApK_harith_self_test_rk(int n_per_block, int rk_rank)
     free(clt_root); free(clt0); free(clt1);
     free(A_full); free(A_ref); free(b); free(x_hlu); free(x_ref);
     free(U01); free(V01); free(U10); free(V10);
+
+    if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
+    if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;
+    return rel;
+}
+
+
+/* ---------- Phase 4 driver: H-LU on a real HACApK tree ----------- *
+ *
+ * The caller has already built a HACApK leafmtxp (in HACApK row-major
+ * dense / V-first rk format) and computed y_orig = A * x_orig in the
+ * user's original ordering. This driver:
+ *
+ *   1. Permutes x_orig, y_orig to HACApK internal ordering via control->lod.
+ *   2. Converts the leafmtxp leaves to internal column-major format.
+ *   3. Builds the block-tree view from leafmtxp + cluster_root.
+ *   4. Runs cHACApK_hlu_decomp.
+ *   5. Solves x_internal = A^-1 y_perm via cHACApK_hlu_solve_vec.
+ *   6. Inverse-permutes x_internal back to original ordering.
+ *   7. Compares against x_orig.
+ *
+ * The leafmtxp leaves now contain the LU factors (in internal layout).
+ * The H-matrix is consumed -- can't be used for further MatVec. */
+double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
+                                  const double *x_orig, const double *y_orig,
+                                  int nffc)
+{
+    if (!leafmtxp_void || !control_void || !x_orig || !y_orig) return -1.0;
+    if (nffc <= 0) return -1.0;
+    st_cHACApK_leafmtxp_t *lp = (st_cHACApK_leafmtxp_t*)leafmtxp_void;
+    st_cHACApK_lcontrol_t *lc = (st_cHACApK_lcontrol_t*)control_void;
+    int nd = lp->nd;
+    if (nd <= 0) return -1.0;
+    if (!lp->st_clt_root) return -1.0;
+    int *lod = lc->lod;
+    if (!lod) return -1.0;
+
+    /* (1) permute x_orig, y_orig to HACApK internal ordering: x_perm[i] = x_orig[lod[i+1]-1]. */
+    double *x_perm = (double*)malloc(sizeof(double) * (size_t)nd);
+    double *y_perm = (double*)malloc(sizeof(double) * (size_t)nd);
+    double *x_solved = (double*)malloc(sizeof(double) * (size_t)nd);
+    double *x_back = (double*)malloc(sizeof(double) * (size_t)nd);
+    if (!x_perm || !y_perm || !x_solved || !x_back) {
+        free(x_perm); free(y_perm); free(x_solved); free(x_back);
+        return -2.0;
+    }
+    for (int i = 0; i < nd; i++) {
+        int j = lod[i + 1] - 1;
+        x_perm[i] = x_orig[j];
+        y_perm[i] = y_orig[j];
+    }
+
+    /* (2) convert HACApK leaves to internal format. */
+    cHACApK_convert_leafmtxp_to_internal(lp);
+
+    /* (3) build block-tree view -- nffc bridges cluster (element units)
+     * to leaf (DOF units). */
+    st_cHACApK_block_node_t *root = cHACApK_build_block_tree_nffc(
+        lp, lp->st_clt_root, lp->st_clt_root, nffc);
+    if (!root) {
+        free(x_perm); free(y_perm); free(x_solved); free(x_back);
+        return -3.0;
+    }
+
+    /* (4) factor. */
+    int rc_dec = cHACApK_hlu_decomp(root);
+    /* (5) solve. */
+    int rc_slv = CHACAPK_HARITH_OK;
+    if (rc_dec == CHACAPK_HARITH_OK) {
+        rc_slv = cHACApK_hlu_solve_vec(root, y_perm, x_solved, nd);
+    }
+
+    double rel = 0.0;
+    if (rc_dec == CHACAPK_HARITH_OK && rc_slv == CHACAPK_HARITH_OK) {
+        /* (6) inverse-permute x_solved back to original ordering. */
+        for (int i = 0; i < nd; i++) {
+            int j = lod[i + 1] - 1;
+            x_back[j] = x_solved[i];
+        }
+        /* (7) compute max rel err. */
+        double max_x = 0.0, max_err = 0.0;
+        for (int i = 0; i < nd; i++) {
+            double xa = (x_orig[i] < 0.0) ? -x_orig[i] : x_orig[i];
+            if (xa > max_x) max_x = xa;
+            double d = x_orig[i] - x_back[i]; if (d < 0.0) d = -d;
+            if (d > max_err) max_err = d;
+        }
+        rel = (max_x > 0.0) ? (max_err / max_x) : max_err;
+    }
+
+    cHACApK_free_block_tree(root);
+    free(x_perm); free(y_perm); free(x_solved); free(x_back);
 
     if (rc_dec != CHACAPK_HARITH_OK) return -4.0 + (double)rc_dec * 0.001;
     if (rc_slv != CHACAPK_HARITH_OK) return -5.0 + (double)rc_slv * 0.001;

@@ -922,6 +922,25 @@ py::tuple HMatrixDensify(int intrc_handle) {
 }
 
 /**
+ * @brief Phase 4: H-LU smoke test on a real Radia HACApK tree.
+ *
+ * Builds a fresh HACApK manager from the interaction handle, computes
+ * y = A * x via MatVec (in HACApK format), converts the leafmtxp to our
+ * internal column-major layout, factors via cHACApK_hlu_decomp, solves
+ * x_solved = A^-1 y, and returns max relative error |x_solved - x| / max|x|.
+ *
+ * Returns:
+ *   < 0    : driver failed (see negative sentinels in cHACApK_hlu_run_on_hacapk)
+ *   ~ 1e-10..1e-15 : success at near-machine precision
+ *   >  1e-3  : the H-matrix had rk leaves whose recompression lost accuracy
+ *              (Phase 3.5 tolerance is 1e-14 default; ACA-truncated leaves
+ *              add to that floor proportional to aca_eps)
+ */
+double HLUTestOnHACApK(int intrc_handle) {
+    return RadHLUTestOnHACApK(intrc_handle);
+}
+
+/**
  * @brief Set the HACApK loop-mode deflation basis (sparse plaquette/cycle L).
  */
 void SetHACApKDeflation(py::array_t<int, py::array::c_style | py::array::forcecast> offsets,
@@ -2793,6 +2812,25 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   intrc_handle: Interaction handle from BuildMatrix()
               Returns:
                   Tuple (matrix, dof) where matrix is (dof x dof) numpy array
+          )pbdoc");
+
+    m.def("HLUTestOnHACApK", &radia_solver::HLUTestOnHACApK,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Phase 4 smoke test: run H-LU on a real Radia HACApK tree.
+
+              Builds a fresh HACApK MSC manager for the given interaction
+              handle, computes y = A * x via MatVec on a deterministic test
+              vector, converts the leafmtxp leaves to internal column-major
+              layout, factors via cHACApK_hlu_decomp, solves x_solved = A^-1 y,
+              and returns the max relative error
+              max|x_solved - x| / max|x| in the original DOF ordering.
+
+              Returns:
+                  float  -- < 0 if internal failure (negative sentinel from
+                            cHACApK_hlu_run_on_hacapk), otherwise the
+                            max-elementwise relative error vs the test vector.
+                            Expected ~ aca_eps + machine-precision rounding.
           )pbdoc");
 
     m.def("SetHACApKDeflation", &radia_solver::SetHACApKDeflation,
