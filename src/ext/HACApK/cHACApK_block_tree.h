@@ -59,6 +59,17 @@ typedef struct st_cHACApK_block_node_t {
   int                   nrsons;          /* 0 if leaf */
   int                   ncsons;          /* 0 if leaf */
   struct st_cHACApK_block_node_t **sons; /* size nrsons*ncsons, col-major */
+  /* Phase 3.6 / Phase 4: DOF-grain dimensions stored alongside the
+   * element-grain cluster pointers. For synthetic tests (cHACApK_build_
+   * block_tree, nffc=1) these equal cluster->nsize / cluster->nstrt-1.
+   * For real HACApK trees (cHACApK_build_block_tree_nffc, nffc > 1)
+   * these are cluster->nsize * nffc / (cluster->nstrt - 1) * nffc.
+   * Used by materialize/add/set helpers and hmatvec_subtract so they
+   * don't have to thread nffc through every recursion. */
+  int                   dof_nrows;       /* DOF count of row_cluster */
+  int                   dof_ncols;       /* DOF count of col_cluster */
+  int                   dof_row_start;   /* 0-based DOF start of row */
+  int                   dof_col_start;   /* 0-based DOF start of col */
 } st_cHACApK_block_node_t;
 
 /* Build the block-tree view for the H-matrix described by leafmtxp,
