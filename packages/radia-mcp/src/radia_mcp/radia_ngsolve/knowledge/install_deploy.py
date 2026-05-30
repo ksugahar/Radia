@@ -116,7 +116,7 @@ cubit-plugin-install --verify-only
 ```
 
 The `--all-users` flag writes the Cubit plugin to
-`C:\\Program Files\\Coreform Cubit 2025.3\\bin\\plugins\\` (admin
+`C:\\Program Files\\Coreform Cubit 2025.12\\bin\\plugins\\` (admin
 privilege required) so all users see the same version.
 
 ============================================================
@@ -144,7 +144,7 @@ cubit-plugin-install --verify-only
 ```
 
 mdx HAS Cubit installed at
-`C:\\Program Files\\Coreform Cubit 2025.3` (Coreform Cubit Learn
+`C:\\Program Files\\Coreform Cubit 2025.12` (Coreform Cubit Learn
 Edition).  `cubit-plugin-install --verify-only` validates 5/5 sha256
 match. Headless smoke test: the `cubit-smoke-test` CLI (shipped with
 cubit-mesh-export >= 0.5.3) runs `coreform_cubit -batch -nographics`
@@ -336,7 +336,7 @@ paths via its own hooks, so the bootstrap is automatic.
 
 The Cubit plugin (`radia_cubit.ccm`, `radia_cubit.ccl`,
 `radia_cubit_mesh.cp312-win_amd64.pyd`, `nglib.dll`, `ngcore.dll`) is
-deployed to `C:\\Program Files\\Coreform Cubit 2025.3\\bin\\` by
+deployed to `C:\\Program Files\\Coreform Cubit 2025.12\\bin\\` by
 `cubit-plugin-install`. This is INDEPENDENT of the Python editable
 install: Cubit reads its plugin directory directly, not via Python's
 import system.
@@ -346,7 +346,7 @@ Two layers:
 | Layer | Location | Used by |
 |-------|----------|---------|
 | Python import | `<package>/cubit_mesh_export/` | `from cubit_mesh_export import ...` |
-| Cubit plugin  | `Coreform Cubit 2025.3\\bin\\plugins\\` (+ ccl in `bin\\`) | Cubit GUI / `coreform_cubit -batch` |
+| Cubit plugin  | `Coreform Cubit 2025.12\\bin\\plugins\\` (+ ccl in `bin\\`) | Cubit GUI / `coreform_cubit -batch` |
 
 Implications:
 
