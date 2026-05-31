@@ -4,7 +4,7 @@ Shared pytest fixtures for the Radia panel test layer.
 The panel tests run real PySide6 widgets headless via the
 ``offscreen`` Qt platform plugin. A single QApplication is created
 session-wide so individual tests can instantiate IHPanel /
-AccelPanel / etc. without leaking widgets across runs.
+EMPanel / etc. without leaking widgets across runs.
 
 Run from the repo root::
 

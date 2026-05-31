@@ -343,13 +343,15 @@ class EMWindow(AnalysisWindow):
                          settings_key="em")
         panel = EMPanel()
         self._set_panel(panel)
-        # Pre-fill the per-panel wp_vol from the constructor arg if the
-        # user opened the window with a .vol path (and didn't already
-        # save one in QSettings).
-        if vol_path and "wp_vol" in panel._widgets \
-                and not panel.val("wp_vol"):
-            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
+        # Restore previous session's widget state FIRST, then let any
+        # explicit constructor-supplied vol_path override the restored
+        # wp_vol.  The previous order (setText before restore) silently
+        # lost the Cubit Solve menu's current .vol path whenever a
+        # different .vol was saved last session, because restore would
+        # overwrite the just-set wp_vol text.  Mirror radia_ih.py:1452.
         self._restore_settings()
+        if vol_path and "wp_vol" in panel._widgets:
+            panel._widgets["wp_vol"].setText(self.display_path(vol_path))
         self._update_run_state()
 
 

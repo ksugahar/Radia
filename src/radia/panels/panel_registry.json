@@ -16,8 +16,14 @@
         {
           "cli": "--coil-step",
           "name": "coil_step",
-          "required": true,
-          "help": "Coil STEP file path"
+          "default": "",
+          "help": "Coil CAD STEP file (required for --coil-solver peec)"
+        },
+        {
+          "cli": "--coil-vol",
+          "name": "coil_vol",
+          "default": "",
+          "help": "Coil pre-meshed surface .vol (required for --coil-solver bem-a; must contain 'source'/'sink' boundary labels)"
         },
         {
           "cli": "--coil-solver",
@@ -27,7 +33,7 @@
             "peec",
             "bem-a"
           ],
-          "help": "peec: PEEC perimeter filaments (fast). bem-a: Weggler EFIE on RWG (accurate)."
+          "help": "peec: PEEC perimeter filaments from STEP (fast). bem-a: Weggler EFIE on RWG, reads pre-meshed .vol."
         },
         {
           "cli": "--peec-n-peri",
@@ -37,11 +43,38 @@
           "help": "PEEC perimeter filament count (peec only)"
         },
         {
+          "cli": "--peec-proximity",
+          "name": "peec_proximity",
+          "default": true,
+          "help": "Use proximity-aware iterative PEEC (default ON; augments the Bessel self-skin Zs_fil with the Leontovich surface dissipation evaluated from the actual Biot-Savart H field at each filament's wire-surface position).  Pass --no-peec-proximity to fall back to the isolated-wire Bessel self-skin only."
+        },
+        {
+          "cli": "--peec-proximity-max-iter",
+          "name": "peec_proximity_max_iter",
+          "type": "int",
+          "default": 60,
+          "help": "Maximum proximity outer iterations.  On the 3-turn pancake at 150 kHz the iteration exhibits a transient hump near iter 30 then settles by iter 50 (relax=0.3).  Default 60 gives ~10 iter margin."
+        },
+        {
+          "cli": "--peec-proximity-tol",
+          "name": "peec_proximity_tol",
+          "type": "float",
+          "default": 0.001,
+          "help": "Proximity outer-iteration convergence tolerance on ||dZ|| / ||Z||."
+        },
+        {
+          "cli": "--peec-proximity-relax",
+          "name": "peec_proximity_relax",
+          "type": "float",
+          "default": 0.3,
+          "help": "Proximity outer-iteration under-relaxation factor (0 < relax <= 1; 0.3 is conservative)."
+        },
+        {
           "cli": "--coil-maxh",
           "name": "coil_maxh",
           "type": "float",
           "default": 0.012,
-          "help": "BEM-A surface mesh maxh [m] (bem-a only)"
+          "help": "DEPRECATED (kept for back-compat); BEM-A now reads pre-meshed --coil-vol instead of re-meshing CAD on-the-fly."
         },
         {
           "cli": "--coil-source-name",
@@ -93,6 +126,18 @@
           "type": "float",
           "default": 1e-10,
           "help": "HACApK GMRES tol for coil (bem-a, future)"
+        },
+        {
+          "cli": "--coil-saddle-solver",
+          "name": "coil_saddle_solver",
+          "default": "auto",
+          "choices": [
+            "auto",
+            "lu",
+            "minres",
+            "gmres"
+          ],
+          "help": "Saddle-point solver for BEM-A: auto (LU < 10000 tris, MINRES above), lu (dense LAPACK, overwrite_a=True), minres (Krylov symmetric indefinite), gmres (generic Krylov). Defaults to auto."
         },
         {
           "cli": "--coil-sigma",
@@ -162,7 +207,7 @@
             "sibc",
             "esim"
           ],
-          "help": "sibc: linear Dowell.  esim: WIP.",
+          "help": "sibc: linear Dowell tanh formula. esim: nonlinear Karl iteration; requires --bh-file.",
           "ja": "インピーダンスモデル",
           "physics": "esim/dowell/sibc"
         },
@@ -179,11 +224,34 @@
           "default": 0.001
         },
         {
+          "cli": "--esim-relax",
+          "name": "esim_relax",
+          "type": "float",
+          "default": 0.5,
+          "help": "Karl under-relaxation (0,1]; 1.0 = full step, 0.5 = half-step (default, matches calc_fem_kelvin).  Lower if Karl oscillates near saturation."
+        },
+        {
+          "cli": "--esim-per-panel",
+          "name": "esim_per_panel",
+          "help": "Per-DOF ESIM Karl iteration (Phase B): the ESIM cell solver is called once per BEM DOF using a per-node H_t extracted from the phi_vec, building a per-node Z_s ndarray instead of a single scalar.  Resolves the spatial saturation pattern; costs N_DOF extra ESIM calls per Karl iter (~5 ms each).  Requires --wp-bem-backend intree-dense."
+        },
+        {
+          "cli": "--esim-anderson-m",
+          "name": "esim_anderson_m",
+          "type": "int",
+          "default": 0,
+          "help": "Anderson-acceleration memory depth for the outer Karl iteration.  0 (default) = plain damped Picard.  3-5 closes the per-DOF dZ_max noise floor when --esim-per-panel is used.  See src/radia/esim_anderson.py."
+        },
+        {
           "cli": "--h1-order",
           "name": "h1_order",
           "type": "int",
           "default": 1,
-          "help": "H1 order (1 only)",
+          "choices": [
+            1,
+            2
+          ],
+          "help": "Workpiece BEM Lagrange basis order (NOT the geometry curving order, which is auto-detected from the .vol's companion .vol.json -- the .vol's curvedelements is fixed at Cubit-export time and a post-load mesh.Curve(p) silently falls back to flat). 1 = P1 hat (flat-friendly default).  2 = Lagrange-P2 (uses curved Tri6 geometry if the .vol has curve order >= 2, otherwise P2 basis on flat Tri3 geometry).",
           "ja": "H1 次数",
           "physics": ""
         },
@@ -256,7 +324,7 @@
           "cli": "--coil-msh-output",
           "name": "coil_msh_output",
           "default": "",
-          "help": "Coil .msh viz output path. PEEC: writes B-on-bbox + sibling _filaments.msh (auto-merged)."
+          "help": "Coil .msh viz output path. PEEC: writes <this>=B-on-bbox + <stem>_filaments.msh (1D polylines + |I|).  open_gmsh.py auto-merges the filament sibling."
         },
         {
           "cli": "--write-summary",
@@ -355,16 +423,16 @@
         {
           "cli": "--solver",
           "name": "solver",
-          "default": "auto",
+          "default": "pardiso",
           "choices": [
-            "auto",
             "pardiso",
             "bddc",
             "iccg",
-            "ams"
+            "ams",
+            "shifted_ams"
           ],
           "ja": "線形ソルバー",
-          "physics": "auto: p=1なら ams, p>=2なら bddc。pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR (p=1専用)"
+          "physics": "pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR"
         },
         {
           "cli": "--impedance-model",
@@ -391,14 +459,26 @@
           "name": "esim_max_iter",
           "type": "int",
           "default": 15,
-          "help": "ESIM Karl iteration max (WIP)."
+          "help": "ESIM Karl iteration max."
         },
         {
           "cli": "--esim-tol",
           "name": "esim_tol",
           "type": "float",
           "default": 0.001,
-          "help": "ESIM Karl iteration tol (WIP)."
+          "help": "ESIM Karl iteration relative tolerance (|dZ_s| / |Z_s|)."
+        },
+        {
+          "cli": "--esim-relax",
+          "name": "esim_relax",
+          "type": "float",
+          "default": 0.5,
+          "help": "Karl under-relaxation (0,1]; 1.0 = full step, 0.5 = half-step (default, matches calc_fem_kelvin).  Lower if Karl oscillates near saturation."
+        },
+        {
+          "cli": "--esim-per-panel",
+          "name": "esim_per_panel",
+          "help": "Per-BND-DOF ESIM Karl (v4.48.0+): one ESIM cell solve per H1 workpiece-boundary DOF using a per-DOF |H_t| from the FEM solution.  Resolves spatial saturation patterns; ~N_bnd_dofs cell-solve cost per Karl iter."
         },
         {
           "cli": "--sibc-bnd",
@@ -427,6 +507,11 @@
           "help": "Optional GMSH .msh output path. When set, the .vol mesh is converted to .msh after solve so the panel's OpenGmsh button can view the geometry.",
           "ja": "GMSH 出力パス",
           "physics": "場の可視化用 .msh v4.1"
+        },
+        {
+          "cli": "--require-kelvin",
+          "name": "require_kelvin",
+          "help": "Fail-fast if the .vol does not have a 'kelvin' material with periodic identification. The IH panel's FEM-full method sets this; without it a typo'd kelvin block name would silently demote the open BC to reg-only gauge truncation. Per CLAUDE.md 'No Fallbacks'."
         }
       ]
     },
@@ -485,7 +570,7 @@
       "ja_name": "加速器電磁石 FEM",
       "ja_description": "Omega-reduced/A 定式化 + Kelvin + BH 非線形 + ヒステリシス",
       "method": "FEM (H1 Omega / HCurl A-field)",
-      "command_builder": "radia_accel.py:AccelPanel._build_command",
+      "command_builder": "radia_em.py:_AccelMagnetPanel.build_command",
       "params": [
         {
           "cli": "--coil-script",
@@ -606,7 +691,7 @@
       "ja_name": "加速器電磁石 MSC",
       "ja_description": "Radia MSC (表面磁荷法) + IMA 対称性 + HACApK",
       "method": "Radia MSC (surface charge, integral equation)",
-      "command_builder": "radia_accel.py:AccelPanel._build_msc_command",
+      "command_builder": "radia_em.py:_MSCPanel.build_command",
       "params": [
         {
           "cli": "--coil-script",
@@ -697,7 +782,7 @@
       "ja_name": "PCB PEEC インピーダンス",
       "ja_description": "FastHenry 入力 → PEEC 行列 → 周波数スイープ → SPICE 出力",
       "method": "PEEC (Loop-Star + MNA)",
-      "command_builder": "radia_pcb.py:PCBPanel._build_command",
+      "command_builder": "radia_pcb.py:PCBPanel.build_command",
       "params": [
         {
           "cli": "--inp",

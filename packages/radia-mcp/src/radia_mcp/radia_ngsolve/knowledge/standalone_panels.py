@@ -89,9 +89,9 @@ identical (both call the same Layer 4 `calc_*.py` subprocess).
 | Launcher       | Window class | Purpose                                                        | Required input             |
 |----------------|--------------|----------------------------------------------------------------|----------------------------|
 | `radia-em`     | `EMWindow`   | Electromagnet: Omega-reduced / A-Phi / MSC / Kelvin Benchmark | `.vol`                     |
-| `radia-ih`     | `IHWindow`   | Induction Heating: 6 methods (PEEC / BEM-A / FEM A-V)         | STEP (PEEC) + `.vol` (BEM/FEM) |
+| `radia-ih`     | `IHWindow`   | Induction Heating + Thermal: PEEC / BEM-A / FEM A-V + q_surf->T post | STEP (PEEC) + `.vol` (BEM/FEM/thermal) |
 | `radia-pcb`    | `PCBWindow`  | PCB / FastHenry impedance sweep                                | FastHenry `.inp`           |
-| `radia-heat`   | `HeatWindow` | Thermal post-processing (q_surf -> T field on workpiece)       | `.vol` + `.sol` (q_surf)   |
+| `radia-motor`  | `MotorWindow`| Motor: transient (Lange-Henrotte-Hameyer) + lamination (Hollaus EM) | `.vol`                  |
 
 All four are top-level PySide6 `QMainWindow` apps.  Launching them
 spawns a single Python process (the Layer 3 panel); when the user
