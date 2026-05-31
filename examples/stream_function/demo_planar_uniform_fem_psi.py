@@ -765,18 +765,30 @@ def main():
 
         ax2 = fig.add_subplot(1, 3, 2)
         if distorted_path is not None:
-            # show the flat chain faint + the distorted wire COLOURED BY z
-            # (the out-of-plane sheet-metal bend = the 3D-printable shape)
-            ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "-",
-                     color="0.7", lw=0.4, label="flat single-stroke")
-            sc = ax2.scatter(distorted_path[:, 0] * 1e3,
-                             distorted_path[:, 1] * 1e3,
-                             c=distorted_path[:, 2] * 1e3, s=1.5,
-                             cmap="coolwarm")
-            fig.colorbar(sc, ax=ax2, fraction=0.045, label="bend z [mm]")
-            zmax = float(np.max(np.abs(distorted_path[:, 2]))) * 1e3
-            ax2.set_title(f"Distorted wire (1 current, max |z|-bend "
-                          f"{zmax:.0f} mm)")
+            # draw the distorted wire as ONE CONTINUOUS LINE coloured by z.
+            # It is still a SINGLE STROKE -- the deformation only displaces
+            # vertices, never splits the path; the green/black markers are the
+            # two terminals (current enters at one, exits at the other, spiral
+            # through every loop via the radial rungs).  Colour = the
+            # out-of-plane sheet-metal bend.
+            from matplotlib.collections import LineCollection
+            P = distorted_path
+            pts = (P[:, :2] * 1e3).reshape(-1, 1, 2)
+            segs = np.concatenate([pts[:-1], pts[1:]], axis=1)
+            zc = P[:, 2] * 1e3
+            lc = LineCollection(segs, cmap="coolwarm", linewidths=0.7)
+            lc.set_array(0.5 * (zc[:-1] + zc[1:]))
+            ax2.add_collection(lc)
+            ax2.plot(P[0, 0] * 1e3, P[0, 1] * 1e3, "go", ms=6,
+                     label="terminal (in)")
+            ax2.plot(P[-1, 0] * 1e3, P[-1, 1] * 1e3, "ks", ms=6,
+                     label="terminal (out)")
+            lim = args.plane_half * 1.05e3
+            ax2.set_xlim(-lim, lim); ax2.set_ylim(-lim, lim)
+            fig.colorbar(lc, ax=ax2, fraction=0.045, label="bend z [mm]")
+            zmax = float(np.max(np.abs(P[:, 2]))) * 1e3
+            ax2.set_title(f"Distorted single-stroke wire (1 current, "
+                          f"max |z| {zmax:.0f} mm)")
             ax2.legend(loc="upper right", fontsize=7)
         else:
             ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "b-", lw=0.5)
