@@ -232,6 +232,38 @@ wire, no bridges) and planar nested families — where there are no
 irreducible inter-lobe bridges.  Match the realisation to the topology:
 nested/helix → single stroke; multi-lobe + high precision → multi-wire.
 
+### Demonstrated: EASY-tier (planar uniform Bz) to the ~200 ppm class
+
+The established iterative pipeline (in
+[`demo_planar_uniform_fem_psi.py`](../../examples/stream_function/demo_planar_uniform_fem_psi.py))
+reaches the few-hundred-ppm class with only a handful of feeds:
+
+```bash
+python demo_planar_uniform_fem_psi.py --regularize h1 --order 3 \
+    --nlevels 30 --n-sample 141 \
+    --compensated-iter 60 --compensated-step 0.05 \
+    --shim-grid 9 --shim-tol-ppm 200
+```
+
+| stage | dense-grid MAE |
+|-------|----------------|
+| continuous-SF ideal (H¹ order 3) | ~95 ppm |
+| single stroke + Path-A | ~1375 ppm |
+| + 9 LS-OMP shim loops (10 feeds) | **183 ppm** |
+
+Why it works here (and not for Gx): uniform Bz has NESTED single-sign
+contours → the single stroke is a clean spiral with NO irreducible
+bridges, only short radial connectors; a finer spiral pitch
+(`--nlevels 30`) shrinks them, Path-A (monotone on FE-direct ψ) folds the
+rest into ψ, and a few overlapping shim loops (LS-OMP, monotone) close the
+residual to the ~200 ppm class.  Note the honest evaluation: the
+`--eval-n` dense grid is used for the ppm figure — the n_target FIT grid
+over-reports because the massively-underdetermined SF solve over-fits it.
+The shim currents are a few × I_w (the small plane loops couple weakly to
+the offset target plane); a Helmholtz-pair-style shim geometry would lower
+them.  The same pipeline is the template for the cylinder via
+ngsolve.bem high-order (future work).
+
 ## Complexity tier framework
 
 A coil's REACHABLE design quality is bounded by its TOPOLOGY:
