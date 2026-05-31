@@ -198,6 +198,40 @@ is a non-smooth stream function that does not contour into a clean
 equal-current coil; it stalls at ~6–8 %.  The correction MUST be realised
 as independent varying currents, which is exactly what OMP does.)
 
+## Can single-stroke reach a 100 ppm-class spec? (No, for Gx)
+
+For a high-precision target (~100 ppm = 0.01 % degradation), single-stroking
+the **Gx multi-lobe** coil is fundamentally infeasible.  There is a
+**resolution paradox** (measured on a dense 925-point eval grid):
+
+| SF resolution | continuous-SF floor (ideal) | single-stroke | degradation |
+|---------------|-----------------------------|---------------|-------------|
+| 24×40, 12 lvl | 3968 ppm | 86 619 ppm  | 82 651 ppm |
+| 36×60, 18 lvl | 996 ppm  | 816 406 ppm | 815 410 ppm |
+| 48×80, 24 lvl | **528 ppm** | 730 873 ppm | 730 344 ppm |
+
+- The **continuous-SF / multi-wire ideal improves with resolution**
+  (3968 → 528 ppm; finer → approaches 100 ppm) — it is the only path to a
+  100 ppm-class coil.
+- The **single stroke gets dramatically WORSE with resolution**
+  (8.7 % → 73-82 %), because a finer design has many more contours
+  (68 → 893) and therefore many more bridges, which come to dominate the
+  field.  The resolution you need for a 100 ppm IDEAL is exactly the
+  resolution at which the single stroke is catastrophic.
+
+Shim compensation (LS-OMP) converges toward the ideal but also overfits the
+fit grid (eval RMS 2-3× the fit RMS), so closing an 80 % single-stroke
+degradation to 100 ppm on a dense grid would need ~as many feeds as a full
+multi-wire coil — i.e. no longer a single stroke.
+
+**Conclusion**: a 100 ppm-class Gx coil MUST be the independent-closed-loop
+(multi-wire) design; single-stroke is intrinsically a ~1-80 % degradation
+technique for multi-lobe topologies.  100 ppm single-stroke IS feasible for
+**EASY-tier** topologies — cylindrical Gz (a smooth helix is naturally one
+wire, no bridges) and planar nested families — where there are no
+irreducible inter-lobe bridges.  Match the realisation to the topology:
+nested/helix → single stroke; multi-lobe + high precision → multi-wire.
+
 ## Complexity tier framework
 
 A coil's REACHABLE design quality is bounded by its TOPOLOGY:
