@@ -237,6 +237,83 @@ def sample_psi_grid(psi_vec, fes, mesh, plane_half, n_sample):
     return psi_grid, g
 
 
+# --------------------------------------------------------------------------
+# Shim-loop compensation of the single-stroke residual (the iterative method
+# that pushes the EASY-tier uniform-Bz single stroke into the ~100-200 ppm
+# class).  Pipeline: high-order FE psi -> clean contours -> single stroke ->
+# Path-A (re-solve FE, monotone) -> a FEW independent shim loops via LS-OMP.
+# --------------------------------------------------------------------------
+def make_plane_shim_loops(plane_half, n_grid, frac=0.92, size_factor=1.6):
+    """A grid of square current loops on the source plane -- the shim
+    correction basis.  ``size_factor`` scales each loop's half-side relative
+    to half the grid spacing: 1.0 = touching, >1 = OVERLAPPING (bigger,
+    stronger field at the target plane -> the LS-OMP shim currents stay
+    small).  Tiny non-overlapping loops are weak at the DSV and force huge
+    shim currents, so the default overlaps.  Returns (5, 3) closed loops at
+    z = 0."""
+    cg = np.linspace(-plane_half * frac, plane_half * frac, n_grid)
+    half = (cg[1] - cg[0]) / 2.0 if n_grid > 1 else plane_half * frac
+    s = half * size_factor
+    loops = []
+    for cx in cg:
+        for cy in cg:
+            loops.append(np.array([
+                [cx - s, cy - s, 0.0], [cx + s, cy - s, 0.0],
+                [cx + s, cy + s, 0.0], [cx - s, cy + s, 0.0],
+                [cx - s, cy - s, 0.0]], dtype=float))
+    return loops
+
+
+def ls_omp_shim(A_fit, B_fit, B_chain_fit, k_max, mae_stop_ppm=0.0,
+               max_current_ratio=None, I_w=1.0):
+    """Order-Recursive / LS-OMP shim selection (monotone).
+
+    Cancels the single-stroke residual ``r = B_fit - B_chain_fit`` with a few
+    independent loops: at each step orthogonalise every candidate column
+    against the current support, add the one whose normalised orthogonal
+    residual reduction is largest, re-solve the whole-support least squares,
+    repeat.
+
+    Stopping (in priority order):
+      - ``mae_stop_ppm`` > 0: stop once the fit-grid MAE (in ppm relative to
+        the target) drops to it -- the design target.
+      - ``max_current_ratio``: stop BEFORE the largest shim current exceeds
+        this multiple of ``I_w`` (guards the overfit blow-up that happens
+        when too many near-collinear loops are added).
+      - else ``k_max`` loops.
+
+    Returns ``(support, I_shim, mae_curve_ppm)``.
+    """
+    r0 = B_fit - B_chain_fit
+    denom = float(np.sum(np.abs(B_fit))) + 1e-30
+    support, I_S, mae_curve = [], np.zeros(0), []
+    for _ in range(int(k_max)):
+        resid = r0 - (A_fit[:, support] @ I_S if support else 0.0)
+        if support:
+            Q, _ = np.linalg.qr(A_fit[:, support])
+            A_perp = A_fit - Q @ (Q.T @ A_fit)
+        else:
+            A_perp = A_fit
+        score = np.abs(A_perp.T @ resid) / (np.linalg.norm(A_perp, axis=0)
+                                            + 1e-30)
+        if support:
+            score[support] = -1.0
+        cand = int(np.argmax(score))
+        trial = support + [cand]
+        I_trial, _, _, _ = np.linalg.lstsq(A_fit[:, trial], r0, rcond=None)
+        # guard against the overfit current blow-up
+        if (max_current_ratio is not None
+                and float(np.max(np.abs(I_trial))) / (abs(I_w) + 1e-30)
+                > max_current_ratio and support):
+            break
+        support, I_S = trial, I_trial
+        mae = 1e6 * float(np.sum(np.abs(r0 - A_fit[:, support] @ I_S))) / denom
+        mae_curve.append(mae)
+        if mae_stop_ppm > 0.0 and mae <= mae_stop_ppm:
+            break
+    return support, I_S, mae_curve
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--plane-half", type=float, default=0.25)
@@ -262,6 +339,22 @@ def main():
     ap.add_argument("--compensated-iter", type=int, default=0,
                     help="Path-A compensated iteration count")
     ap.add_argument("--compensated-step", type=float, default=1.0)
+    # shim-loop compensation + honest dense-grid ppm evaluation
+    ap.add_argument("--shim-loops", type=int, default=0,
+                    help="after the single stroke (+ Path-A), add up to this "
+                         "many independent shim correction loops via LS-OMP "
+                         "to drive the residual into the ~100-200 ppm class. "
+                         "0 = off.")
+    ap.add_argument("--shim-tol-ppm", type=float, default=0.0,
+                    help="stop adding shim loops once the dense-grid MAE drops "
+                         "to this many ppm (e.g. 200). 0 = use --shim-loops.")
+    ap.add_argument("--shim-grid", type=int, default=15,
+                    help="shim-loop basis = shim_grid x shim_grid small square "
+                         "loops tiling the source plane")
+    ap.add_argument("--eval-n", type=int, default=21,
+                    help="dense eval grid (eval_n x eval_n over the target "
+                         "patch) for HONEST ppm reporting (the n_target grid "
+                         "is the fit grid and over-reports accuracy)")
     args = ap.parse_args()
 
     print("=== SF -> planar uniform-Bz coil (H1 FE psi) ===")
@@ -392,6 +485,60 @@ def main():
     obs_axis = np.column_stack([np.zeros_like(zv), np.zeros_like(zv), zv])
     Bz_axis = bz_at(path, I_w, obs_axis)
     print(f"[7] on-axis Bz at z={args.target_z*1e3:.0f}mm: {Bz_axis[20]:.3e} T")
+
+    # ------- [8] HONEST dense-grid evaluation + shim-loop compensation ----
+    # The [6] RMS is on the n_target FIT grid (over-reports -- the SF solve is
+    # massively underdetermined and over-fits those points).  Evaluate the
+    # single-stroke field on a DENSE eval grid for the true degradation, and
+    # optionally compensate the residual with a few LS-OMP shim loops.
+    ge = np.linspace(-args.target_half, args.target_half, args.eval_n)
+    Xe, Ye = np.meshgrid(ge, ge, indexing="ij")
+    eval_obs = np.column_stack([Xe.ravel(), Ye.ravel(),
+                                args.target_z * np.ones(Xe.size)])
+    B_eval = args.B0 * np.ones(eval_obs.shape[0])
+
+    def mae_ppm(field):
+        return 1e6 * float(np.sum(np.abs(field - B_eval))
+                           / (np.sum(np.abs(B_eval)) + 1e-30))
+
+    Bz_eval = I_w * bz_at(path, 1.0, eval_obs)
+    mae0 = mae_ppm(Bz_eval)
+    print(f"[8] HONEST eval ({args.eval_n}x{args.eval_n} dense grid):"
+          f" single-stroke MAE = {mae0:.0f} ppm  (fit-grid RMS {rms*1e3:.1f} mppm"
+          f" over-reports)")
+
+    if args.shim_loops > 0 or args.shim_tol_ppm > 0.0:
+        # fit shims on a moderately dense grid (between fit and eval), then
+        # report on the dense eval grid (no overfit illusion).
+        gf = np.linspace(-args.target_half, args.target_half,
+                         max(11, args.eval_n - 6))
+        Xf, Yf = np.meshgrid(gf, gf, indexing="ij")
+        fit_obs = np.column_stack([Xf.ravel(), Yf.ravel(),
+                                   args.target_z * np.ones(Xf.size)])
+        B_fit = args.B0 * np.ones(fit_obs.shape[0])
+        loops = make_plane_shim_loops(args.plane_half, args.shim_grid)
+        A_fit = np.column_stack([bz_at(lp, 1.0, fit_obs) for lp in loops])
+        A_eval = np.column_stack([bz_at(lp, 1.0, eval_obs) for lp in loops])
+        B_chain_fit = I_w * bz_at(path, 1.0, fit_obs)
+        # cap k_max generously; the real stop is the ppm target or the
+        # current-blow-up guard (keep shim currents <= 10x I_w).
+        k_max = args.shim_loops if args.shim_loops > 0 else 40
+        support, I_shim, mae_curve = ls_omp_shim(
+            A_fit, B_fit, B_chain_fit, k_max,
+            mae_stop_ppm=args.shim_tol_ppm, max_current_ratio=10.0, I_w=I_w)
+        Bz_eval_corr = Bz_eval + A_eval[:, support] @ I_shim
+        stop = (f" (stopped at <= {args.shim_tol_ppm:.0f} ppm)"
+                if args.shim_tol_ppm > 0 else "")
+        print(f"    + {len(support)} LS-OMP shim loops"
+              f" ({len(support)+1} total current feeds){stop}:"
+              f" eval MAE = {mae0:.0f} -> {mae_ppm(Bz_eval_corr):.0f} ppm"
+              f"  (shim |I|/I_w max = "
+              f"{np.max(np.abs(I_shim))/(abs(I_w)+1e-30):.2f})")
+        # convergence curve (fit-grid MAE per added shim)
+        marks = sorted(set([0, 1, 4, 9, len(mae_curve) - 1]))
+        pts = ", ".join(f"+{m+1}:{mae_curve[m]:.0f}p"
+                        for m in marks if 0 <= m < len(mae_curve))
+        print(f"    shim convergence (fit MAE): {pts}")
 
     # ------- plot -------------------------------------------------------
     try:
