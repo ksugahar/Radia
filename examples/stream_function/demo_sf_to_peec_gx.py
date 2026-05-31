@@ -831,6 +831,175 @@ def bz_at(path_3d, current, obs):
     return MU0 * H[:, 2]
 
 
+_INV_4PI = 1.0 / (4.0 * np.pi)
+
+
+def bz_fast(path, current, obs, chunk=4000):
+    """Fully-vectorised Bz from a polyline (broadcast over segments x obs).
+
+    ``bz_at`` -> ``h_segments_batch`` loops over segments in Python (~thousands
+    per call); the sheet-metal Gauss-Newton Jacobian calls the field ~N_dof
+    times per iteration, so that loop is ~100x too slow.  This keeps only the
+    z-component of H, broadcasts (segments x obs), chunks over segments to cap
+    memory, and matches ``bz_at`` to machine precision."""
+    path = np.asarray(path, float)
+    p1, p2 = path[:-1], path[1:]
+    dl = p2 - p1
+    Llen = np.linalg.norm(dl, axis=1)
+    ok = Llen > 1e-30
+    el = np.zeros_like(dl)
+    el[ok] = dl[ok] / Llen[ok, None]
+    obs = np.asarray(obs, float)
+    Bz = np.zeros(len(obs))
+    for s in range(0, len(p1), chunk):
+        e = el[s:s + chunk]
+        aa = p1[s:s + chunk]
+        bb = p2[s:s + chunk]
+        r1 = obs[None, :, :] - aa[:, None, :]
+        r2 = obs[None, :, :] - bb[:, None, :]
+        cz = e[:, None, 0] * r1[:, :, 1] - e[:, None, 1] * r1[:, :, 0]
+        cx = e[:, None, 1] * r1[:, :, 2] - e[:, None, 2] * r1[:, :, 1]
+        cy = e[:, None, 2] * r1[:, :, 0] - e[:, None, 0] * r1[:, :, 2]
+        d = np.sqrt(cx * cx + cy * cy + cz * cz)
+        r1m = np.linalg.norm(r1, axis=2)
+        r2m = np.linalg.norm(r2, axis=2)
+        good = (d > 1e-30) & (r1m > 1e-30) & (r2m > 1e-30)
+        dsafe = np.where(d > 0, d, 1.0)
+        c1 = (r1 * e[:, None, :]).sum(axis=2) / np.where(r1m > 0, r1m, 1.0)
+        c2 = (r2 * e[:, None, :]).sum(axis=2) / np.where(r2m > 0, r2m, 1.0)
+        scale = np.where(good, current * _INV_4PI / dsafe * (c1 - c2), 0.0)
+        Bz += MU0 * (scale * (cz / dsafe)).sum(axis=0)
+    return Bz
+
+
+def _cyl_laplacian(nz, nphi):
+    """Graph Laplacian on the (nz, nphi) grid, phi-periodic, z free; +tiny mass
+    so it is SPD.  Used for the H1 (min-seminorm) psi regularisation."""
+    N = nz * nphi
+    S = np.zeros((N, N))
+
+    def idx(iz, ip):
+        return iz * nphi + (ip % nphi)
+    for iz in range(nz):
+        for ip in range(nphi):
+            c = idx(iz, ip)
+            for jp in (ip - 1, ip + 1):
+                S[c, c] += 1.0
+                S[c, idx(iz, jp)] -= 1.0
+            for jz in (iz - 1, iz + 1):
+                if 0 <= jz < nz:
+                    S[c, c] += 1.0
+                    S[c, idx(jz, ip)] -= 1.0
+    return S + 1e-6 * np.eye(N)
+
+
+def solve_psi_dense(A, B, regularize, alpha_rel, nz, nphi):
+    """psi solve for ``--regularize {tikhonov, h1}`` via a dense interaction
+    matrix.  tikhonov = ridge ``(A^T A + alpha I) psi = A^T B`` (alpha relative
+    to mean diag(A^T A)); h1 = ``min psi^T S psi s.t. A psi = B`` (S = graph
+    Laplacian = smoothest current pattern hitting the target).  See the
+    cylinder Tikhonov study (MCP aca_tsvd single_stroke): for the Gx
+    fingerprint single-stroke, TSVD mode-truncation beats both; these are kept
+    for problem-dependence."""
+    AtA = A.T @ A
+    if regularize == "tikhonov":
+        alpha = alpha_rel * float(np.mean(np.diag(AtA)))
+        return np.linalg.solve(AtA + alpha * np.eye(A.shape[1]), A.T @ B)
+    S = _cyl_laplacian(nz, nphi)
+    SiAt = np.linalg.solve(S, A.T)
+    return SiAt @ np.linalg.solve(A @ SiAt, B)
+
+
+def coil_distort_cyl(chain_phi_z, a, obs_fit, B_fit, obs_eval, B_eval,
+                     comps=("r", "s", "z"), n_grid=6, n_iter=8,
+                     lam_disp_rel=0.1, step=0.8, fd=1.0e-4):
+    """Single-current sheet-metal distortion of a CYLINDER single-stroke chain.
+
+    The cylinder analog of the planar z-lift is a RADIAL bend ``dr`` (out of
+    the cylinder surface); tangential azimuthal ``s = a*dphi`` and axial ``dz``
+    reroute are also available.  ``comps`` subset of ``("r", "s", "z")``.  ONE
+    series current, contour LEVELS fixed.  Smooth (phi, z) control grid
+    (phi-periodic), Gauss-Newton with a displacement-Tikhonov penalty relative
+    to ``mean(diag(JtJ))``.  Returns ``(path_best, I_w, rms0, rms_best,
+    max_disp_mm)`` (rms as fraction, not %)."""
+    comps = tuple(comps)
+    phi0 = np.asarray(chain_phi_z[:, 0], float)
+    z0 = np.asarray(chain_phi_z[:, 1], float)
+    nfc, nzc = n_grid, n_grid
+    dfc = 2.0 * np.pi / nfc
+    zc = np.linspace(z0.min(), z0.max(), nzc)
+    dzc = (zc[1] - zc[0]) if nzc > 1 else 1.0
+    ncg = nfc * nzc
+    ndof = ncg * len(comps)
+
+    def interp_per(C, phi, z):
+        ff = (phi % (2.0 * np.pi)) / dfc
+        i0 = np.floor(ff).astype(int) % nfc
+        i1 = (i0 + 1) % nfc
+        af = ff - np.floor(ff)
+        fz = np.clip((z - zc[0]) / dzc, 0, nzc - 1.001)
+        j0 = fz.astype(int)
+        az = fz - j0
+        return (C[i0, j0] * (1 - af) * (1 - az) + C[i1, j0] * af * (1 - az)
+                + C[i0, j0 + 1] * (1 - af) * az + C[i1, j0 + 1] * af * az)
+
+    def deform(dofs):
+        dr = np.zeros(len(phi0))
+        ds = np.zeros(len(phi0))
+        dzz = np.zeros(len(phi0))
+        for k, ax in enumerate(comps):
+            v = interp_per(dofs[k * ncg:(k + 1) * ncg].reshape(nfc, nzc),
+                           phi0, z0)
+            if ax == "r":
+                dr = v
+            elif ax == "s":
+                ds = v
+            else:
+                dzz = v
+        phi = phi0 + ds / a
+        r = a + dr
+        return np.column_stack([r * np.cos(phi), r * np.sin(phi), z0 + dzz])
+
+    def fitI(Bu):
+        d = float(np.dot(Bu, Bu))
+        return float(np.dot(Bu, B_fit) / d) if d else 0.0
+
+    den_e = float(np.linalg.norm(B_eval)) + 1e-30
+
+    def rms_eval(w, I):
+        return float(np.linalg.norm(I * bz_fast(w, 1.0, obs_eval) - B_eval)
+                     / den_e)
+
+    p0 = deform(np.zeros(ndof))
+    I0 = fitI(bz_fast(p0, 1.0, obs_fit))
+    rms0 = rms_eval(p0, I0)
+    dofs = np.zeros(ndof)
+    best = (rms0, p0.copy(), I0, 0.0)
+    for _ in range(int(n_iter)):
+        w = deform(dofs)
+        Bf = bz_fast(w, 1.0, obs_fit)
+        base = fitI(Bf) * Bf
+        r = B_fit - base
+        J = np.empty((len(obs_fit), ndof))
+        for d in range(ndof):
+            d2 = dofs.copy()
+            d2[d] += fd
+            Bu = bz_fast(deform(d2), 1.0, obs_fit)
+            J[:, d] = (fitI(Bu) * Bu - base) / fd
+        JTJ = J.T @ J
+        md = float(np.mean(np.diag(JTJ))) + 1e-30
+        dofs = dofs + step * np.linalg.solve(
+            JTJ + (0.03 + lam_disp_rel) * md * np.eye(ndof),
+            J.T @ r - lam_disp_rel * md * dofs)
+        w = deform(dofs)
+        Iw = fitI(bz_fast(w, 1.0, obs_fit))
+        m = rms_eval(w, Iw)
+        if m < best[0]:
+            best = (m, w.copy(), Iw, float(np.max(np.abs(dofs))) * 1e3)
+    rms_best, path_best, Iw_best, disp_best = best
+    return path_best, Iw_best, rms0, rms_best, disp_best
+
+
 def shim_compensate(A_full, B_target, Bz_main, k_max, method="ls_omp", tol=0.0):
     """Compensate the single-stroke field ``Bz_main`` with shim correction
     loops drawn from the SF basis (kernel ``A_full``, shape M x N).
@@ -929,8 +1098,8 @@ def main():
                          "up to K independent shim correction loops.  The "
                          "residual r = B_target - I_w*Bz_chain is cancelled by "
                          "loops chosen from the SF basis (default OMP, "
-                         "monotone).  0 = off.  e.g. OMP +3 -> 6.1%, +10 -> "
-                         "3.6%, +20 -> 1.9%; each loop = 1 extra current feed.")
+                         "monotone).  0 = off.  e.g. OMP +3 -> 6.1%%, +10 -> "
+                         "3.6%%, +20 -> 1.9%%; each loop = 1 extra current feed.")
     ap.add_argument("--shim-method", choices=["ls_omp", "omp", "topk"],
                     default="ls_omp",
                     help="ls_omp (default, BEST) = Order-Recursive/LS-OMP: add "
@@ -941,7 +1110,7 @@ def main():
                          "topk = one-shot largest-|dI|.  All monotone.")
     ap.add_argument("--shim-tol", type=float, default=0.0,
                     help="stop adding shim loops once the DSV RMS drops to this "
-                         "(e.g. 0.02 for 2%).  Establishes the feed count "
+                         "(e.g. 0.02 for 2%%).  Establishes the feed count "
                          "needed to hit a field-uniformity spec.  0 = use "
                          "--shim-loops as the fixed budget.")
     ap.add_argument("--freeze-levels", action="store_true",
@@ -962,7 +1131,7 @@ def main():
                          "kuijpers lobe/current-sign ORDER + each contour cut "
                          "chosen to minimise the AZIMUTHAL arc to its chain "
                          "neighbours.  Beats kuijpers on DSV RMS in every "
-                         "tested config (0.093 vs 0.162 at the default; 30-54% "
+                         "tested config (0.093 vs 0.162 at the default; 30-54%% "
                          "lower RMS across nlevels/mesh sweeps); "
                          "kuijpers = Kuijpers 2023 Method-1: per-lobe cut at "
                          "fixed phi, straight AXIAL 'rung' blends (the prior "
@@ -991,6 +1160,44 @@ def main():
     ap.add_argument("--compensated-step", type=float, default=1.0,
                     help="damping factor on the phi update (0 < step <= 1); "
                          "0.5-0.8 may help when full step oscillates.")
+    # psi regularisation (default tsvd = ACA mode-truncation, the BEST for the
+    # Gx single-stroke per the alpha L-curve study; tikhonov/h1 kept for
+    # problem-dependence -- they did NOT beat tsvd here)
+    ap.add_argument("--regularize", choices=["tsvd", "tikhonov", "h1"],
+                    default="tsvd",
+                    help="psi solve: tsvd (default) = ACA+TSVD mode-truncation "
+                         "(best single-stroke for Gx, 8.45%%); tikhonov = ridge "
+                         "(A^T A + alpha I) (dense, alpha via --alpha); h1 = "
+                         "min-seminorm smoothest psi (dense, graph Laplacian). "
+                         "Non-monotonic L-curve: best ridge ties tsvd (~9%%), "
+                         "neither beats it on the cylinder Gx fingerprint.")
+    ap.add_argument("--alpha", type=float, default=1.0e-2,
+                    help="ridge weight RELATIVE to mean diag(A^T A) for "
+                         "--regularize tikhonov (best ~1e-2 on the L-curve)")
+    # single-current sheet-metal (bankin-ho) coil distortion -- the cylinder
+    # analog of the planar --distort: bend the wire RADIALLY (+ tangentially)
+    # with ONE current, levels fixed, to cancel the single-stroke degradation.
+    ap.add_argument("--distort", action="store_true",
+                    help="bend the single-stroke wire in 3D (ONE current, "
+                         "levels fixed) to cancel the single-stroke "
+                         "degradation -- the single-current alternative to "
+                         "separate-feed --shim-loops.  Radial bend = the "
+                         "cylinder analog of the planar out-of-plane lift.")
+    ap.add_argument("--distort-comps", choices=["rsz", "r", "sz"],
+                    default="rsz",
+                    help="deformed axes: rsz = full (best); r = radial only "
+                         "(weak alone, needs big bends); sz = in-surface only "
+                         "(azimuthal+axial reroute, the dominant lever on a "
+                         "cylinder -- opposite of the plane)")
+    ap.add_argument("--distort-grid", type=int, default=6,
+                    help="(phi,z) deformation control grid size per component")
+    ap.add_argument("--distort-iter", type=int, default=8,
+                    help="Gauss-Newton iterations for the distortion")
+    ap.add_argument("--distort-penalty", type=float, default=0.1,
+                    help="displacement-Tikhonov penalty (relative to mean "
+                         "diag(JtJ)): larger = smaller bends, smaller = lower "
+                         "RMS.  On cylinder Gx: ~0.1 -> RMS 8.45%%->2.1%% at "
+                         "~23mm bend, ONE current")
     args = ap.parse_args()
 
     a = 0.15           # cylinder radius [m]
@@ -1019,17 +1226,30 @@ def main():
     def entry(i, j):
         return _loop_Hz(obs_dsv[i], corners_list[j])
 
-    modes = min(M, N) if args.k <= 0 else min(args.k, M, N)
-    res = aca_tsvd(M, N, entry, modes=modes, kmax=min(M, N),
-                   aca_eps=1.0e-8, method=3)
-    k_use = res.modes if args.k <= 0 else min(args.k, res.modes)
-    psi = pseudo_inverse_solve(res, B_target, k_mode=k_use)
+    if args.regularize == "tsvd":
+        modes = min(M, N) if args.k <= 0 else min(args.k, M, N)
+        res = aca_tsvd(M, N, entry, modes=modes, kmax=min(M, N),
+                       aca_eps=1.0e-8, method=3)
+        k_use = res.modes if args.k <= 0 else min(args.k, res.modes)
+        psi = pseudo_inverse_solve(res, B_target, k_mode=k_use)
+        reg_note = (f"ACA+ k_aca = {res.k_aca} (of min(M,N)={min(M, N)}),"
+                    f" TSVD modes used = {k_use}")
+    else:
+        # dense interaction matrix for the ridge / min-seminorm solves
+        A_dense = np.array([[entry(i, j) for j in range(N)]
+                            for i in range(M)])
+        psi = solve_psi_dense(A_dense, B_target, args.regularize, args.alpha,
+                              args.nz, args.nphi)
+        cres = float(np.linalg.norm(A_dense @ psi - B_target)
+                     / (np.linalg.norm(B_target) + 1e-30))
+        reg_note = (f"regularize={args.regularize}"
+                    f"{f' (alpha={args.alpha:g}*mean)' if args.regularize=='tikhonov' else ''},"
+                    f" continuous residual = {cres:.2e}")
     psi_zphi = psi.reshape(args.nz, args.nphi)
 
     print(f"[1] SF design: surface {args.nphi}x{args.nz} -> N={N} basis loops,"
           f" M={M} DSV obs (radius={dsv*1e3:.0f}mm)")
-    print(f"    ACA+ k_aca = {res.k_aca} (of min(M,N)={min(M, N)}),"
-          f" TSVD modes used = {k_use}")
+    print(f"    {reg_note}")
 
     # ------- [2] equal-current contours of psi -------
     polylines, dI, base_levels = contour_polylines_phi_z(
@@ -1184,6 +1404,28 @@ def main():
         pts = ", ".join(f"+{m+1}:{curve[m]*100:.2f}%"
                         for m in marks if 0 <= m < len(curve))
         print(f"    convergence: {pts}")
+
+    # ------- [9] single-current sheet-metal (bankin-ho) coil distortion ----
+    # The single-current alternative to [8]'s separate-feed shims: keep ONE
+    # current and the contour LEVELS fixed, BEND the wire (radial out of the
+    # cylinder surface + tangential reroute) to cancel the single-stroke
+    # degradation.  Manufacturable as one 3D-bent conductor, no extra feeds.
+    distorted_path = None
+    if args.distort:
+        comps = {"rsz": ("r", "s", "z"), "r": ("r",),
+                 "sz": ("s", "z")}[args.distort_comps]
+        obs_eval = make_dsv(dsv, args.ndsv + 2)        # honest denser DSV
+        B_eval = Gx * obs_eval[:, 0]
+        distorted_path, I_w_d, rms0_d, rms_best_d, disp_mm = coil_distort_cyl(
+            chain_phi_z, a, obs_dsv, B_target, obs_eval, B_eval,
+            comps=comps, n_grid=args.distort_grid, n_iter=args.distort_iter,
+            lam_disp_rel=args.distort_penalty)
+        print(f"[9] sheet-metal coil distortion ({args.distort_comps}, "
+              f"1 current, {args.distort_grid}x{args.distort_grid} (phi,z) "
+              f"grid, penalty={args.distort_penalty:g}):")
+        print(f"    dense-DSV RMS {rms0_d:.3e} -> {rms_best_d:.3e}"
+              f"  (SINGLE current I_w = {I_w_d:.4g}, no extra feeds;"
+              f" max bend = {disp_mm:.1f} mm)")
 
     if args.with_peec:
         run_peec_chain(path, I_w)

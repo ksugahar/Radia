@@ -262,6 +262,50 @@ python demo_planar_uniform_fem_psi.py --order 3 --nlevels 16 \
     --distort-penalty 0.1
 ```
 
+#### Cylinder port — `demo_sf_to_peec_gx.py --distort`
+
+The same mechanism ports to a **cylinder** (the Gx fingerprint gradient coil,
+HARD tier).  The cylinder analog of the planar out-of-plane z-lift is a
+**radial bend** `δr` (out of the cylinder surface); azimuthal `s = a·δφ` and
+axial `δz` reroute are also available.  `coil_distort_cyl` runs the same
+Gauss-Newton with a displacement-Tikhonov penalty on a φ-periodic `(φ, z)`
+control grid.
+
+| stage | DSV RMS | note |
+|-------|---------|------|
+| continuous-SF ideal | ~0.4 % | design floor (24×40 grid) |
+| → single-stroke (`field_aware`) | 8.5–9.3 % | hard-tier degradation |
+| → **`--distort` (full r+s+z)** | **1.4 %** | ONE current, ~30 mm bend |
+
+```bash
+python demo_sf_to_peec_gx.py --nphi 24 --nz 40 --nlevels 12 \
+    --distort --distort-comps rsz --distort-penalty 0.1
+```
+
+**Geometry-dependent lever (interesting reversal).**  On the *plane*, the
+out-of-plane lift dominates and in-plane reroute is weak.  On the *cylinder*
+it is the **opposite**: the in-surface reroute (`--distort-comps sz`,
+azimuthal+axial) is the dominant lever and the radial bend alone
+(`--distort-comps r`) is the weakest (and needs the largest displacement,
+~50 mm).  Physical reason: cylinder wires already wrap in 3D, so repositioning
+*along* the surface reshapes the current pattern more effectively than lifting
+*off* it; for an internal DSV a radial move only weakly changes the wire-DSV
+distance.  Full `r+s+z` combines both and wins.  The Gauss-Newton framework
+picks the effective direction automatically — **the optimal sheet-metal
+direction is geometry-dependent**.
+
+**ψ regularisation — `--regularize {tsvd, tikhonov, h1}`.**  The cylinder ψ
+solve also takes a Tikhonov family: `tsvd` (ACA+TSVD mode-truncation,
+default), `tikhonov` (ridge `(AᵀA + αI)ψ = AᵀB`, dense, `--alpha`), `h1`
+(min-seminorm smoothest ψ via a graph Laplacian).  An α L-curve sweep shows
+the relationship is **non-monotonic** (the contour topology jumps with α):
+for the Gx fingerprint single-stroke, **TSVD mode-truncation is the best
+regulariser** (8.45 %); the best ridge α≈1e-2·mean only ties it (8.97 %) and
+H1 is worse (it over-spreads the current → longer connectors).  This is the
+*opposite* ranking from the planar uniform case (where H1 was cleanest) —
+another geometry-dependence.  Practical recipe: pick the regularisation that
+minimises the **single-stroke RMS** (not the smoothest ψ), then distort.
+
 ## Can single-stroke reach a 100 ppm-class spec? (No, for Gx)
 
 For a high-precision target (~100 ppm = 0.01 % degradation), single-stroking
