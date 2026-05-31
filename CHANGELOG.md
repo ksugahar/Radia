@@ -3,6 +3,52 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.87.0 — feat(ih): thermal targets the workpiece solid only (+ 2-file qsurf input)
+
+Released 2026-06-01.
+
+### feat(ih): thermal analysis targets the WORKPIECE SOLID only
+
+`calc_heat.py` and `calc_heat_axisym.py` now REQUIRE a workpiece-only
+volume mesh for the radia-ih Thermal step and reject anything else with
+a clear, actionable error:
+
+- **multi-material** (`>1` volume region, e.g. a coil+workpiece EM mesh)
+  → "thermal analysis targets the WORKPIECE ONLY … has N volume
+  materials […]"
+- **surface-only** (`ne == 0`, a SIBC / PEEC surface mesh) → "needs a
+  VOLUME mesh of the workpiece solid"
+- **wrong dimensionality** (3D calc fed a 2D mesh, or vice versa) →
+  points at the correct script
+
+**Why**: the thermal mesh is, by design, a SEPARATE workpiece solid (the
+EM mesh carries the workpiece as a SIBC-faced hole, WP-HOLE policy).
+The solve previously ran on the WHOLE input mesh with no domain
+restriction, so a coil+workpiece mesh silently diffused heat through the
+coil as if it were steel (keiko 2026-05-31).  This is strict-in-what-we-
+accept per the No-Fallback policy.  The dead `--material-label` flag
+(declared but never used to restrict the domain) is removed.
+
+The HeatPanel also warns on Browse (wp_vol tooltip) when the selected
+.vol carries more than one volume material, so the mismatch is visible
+before a Run round-trip.
+
+Tests: `tests/panels/test_heat_workpiece_only.py` (multi-material
+rejected, single-material accepted).  Also fixes a `from __future__`
+import-ordering SyntaxError in `tests/panels/fixtures/generate_heat_cylinder.py`.
+
+### feat(ih): thermal spatial source = qsurf .sol + workpiece .vol (em .vol auto-fills)
+
+The HeatPanel spatial-q_surf input is now effectively two files — the
+surface heat-density `qsurf .sol` and the workpiece volume `.vol`.
+Picking the `.sol` auto-fills the EM `.vol` field from its companion
+`<stem>_fem.vol` (the pair `calc_fem_kelvin.py` writes), shown in the
+field and overridable.  A user-supplied EM `.vol` is never clobbered; a
+`.sol` with no derivable companion clears a stale auto value so the user
+browses the correct mesh.  The calc script still receives `--em-vol`
+explicitly — the panel auto-fill is a visible UX convenience, not a
+silent fallback (calc-side No-Fallback intact).
+
 ## 4.86.0 — feat: loop-star MSC gauge KEEPS the loops (field-exact, tree-cotree)
 
 Released 2026-05-31.

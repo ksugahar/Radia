@@ -4,14 +4,19 @@ Radia-NGSolve thermal pipeline).
 
 Inputs
 ------
-``--wp-vol``          Workpiece volume mesh (.vol).  Has at least one
-                      volume material region (``--material-label``) and a
+``--wp-vol``          Workpiece volume mesh (.vol).  MUST be a
+                      WORKPIECE-ONLY 3D volume mesh: a single solid with
+                      exactly one volume material region and a
                       heating-side surface label (``--surface-label``).
-                      In Kubota's flow this mesh is SEPARATE from the EM
-                      mesh: the EM .vol carries the workpiece as a hole
-                      with a SIBC face, while this thermal mesh carries
+                      The coil / air / Kelvin regions belong to the EM
+                      mesh, NOT this thermal mesh.  In Kubota's flow this
+                      mesh is SEPARATE from the EM mesh: the EM .vol
+                      carries the workpiece as a hole with a SIBC face
+                      (WP-HOLE policy), while this thermal mesh carries
                       the workpiece as a real solid with the same outer
-                      surface.
+                      surface.  A multi-material (coil+wp) or surface-only
+                      mesh is rejected with a clear error (the thermal
+                      step targets the workpiece solid only).
 
 ``--qsurf-sol``       q_surf [W/m^2] saved by ``calc_fem_kelvin.py``
                       (Phase A) on the EM mesh.  Spatial distribution
@@ -107,7 +112,7 @@ def _resolve_material(name, rho, cp, k):
 # q_surf source: spatial (.sol) or uniform scalar
 # -----------------------------------------------------------------
 
-def _build_qsurf_cf(wp_mesh, surface_region, args):
+def _build_qsurf_cf(wp_mesh, args):
     """Return ``(q_cf, resample_fn)`` describing q_surf on the heating
     face of the workpiece thermal mesh.
 
@@ -127,7 +132,7 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
          project onto wp_mesh's surface vertices.  Re-projectable.
       3. Both omitted : raise (no heat input).
     """
-    from ngsolve import (Mesh, H1, GridFunction, CoefficientFunction)
+    from ngsolve import (Mesh, H1, GridFunction, CoefficientFunction, BND)
 
     if args.q_uniform is not None:
         _log(f"Q_SURF:uniform {args.q_uniform:.4e} W/m^2")
@@ -178,17 +183,12 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
     gf_wp_q = GridFunction(fes_wp_q)
     gf_wp_q.vec[:] = 0
 
+    # Enumerate surface vertices by walking boundary elements (NGSolve
+    # does not expose "vertices on boundary X" directly).  Filter by the
+    # requested boundary label (``el.mat`` is the BND name); an empty
+    # ``surface_label`` means every boundary.
     surf_vertex_nrs = set()
-    for el in wp_mesh.Elements(BND_REGION := __import__("ngsolve").BND):
-        if surface_region is None or el.mat == "":
-            pass  # skip filter check; iterate boundaries directly below
-    # The cleanest enumeration is via mesh.vertices + boundary lookup;
-    # NGSolve does not expose "vertices on boundary X" directly, so
-    # iterate boundary elements and collect their vertices.
-    for el in wp_mesh.Elements(__import__("ngsolve").BND):
-        # Filter by boundary region (CF-region match).  surface_region is
-        # the Region returned by mesh.Boundaries(label); el.mat is the
-        # boundary's name string.
+    for el in wp_mesh.Elements(BND):
         if args.surface_label and el.mat != args.surface_label:
             continue
         for v in el.vertices:
@@ -281,7 +281,7 @@ def _build_qsurf_cf(wp_mesh, surface_region, args):
 def solve_heat(wp_vol,
                material="steel", rho=None, cp=None, k=None,
                h_conv=10.0, t_ext=20.0, t_initial=20.0,
-               surface_label="", material_label=".*",
+               surface_label="",
                q_uniform=None, qsurf_sol="", em_vol="",
                qsurf_order=1,
                dt=0.5, t_end=5.0,
@@ -306,7 +306,41 @@ def solve_heat(wp_vol,
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
 
-    wp_mesh = Mesh(wp_vol).Curve(int(fes_order))
+    wp_mesh = Mesh(wp_vol)
+
+    # --- Workpiece-only volume mesh contract (radia-ih thermal) -------
+    # The thermal step targets the WORKPIECE SOLID only.  The coil /
+    # air / Kelvin regions live on the EM mesh (WP-HOLE policy); this
+    # thermal mesh must be a single workpiece solid.  Fail loud rather
+    # than silently heating the coil (keiko 2026-05-31: a coil+wp .vol
+    # was passed to the thermal step and the coil diffused heat as
+    # 'steel').  Strict-in-what-we-accept per CLAUDE.md No-Fallback.
+    if wp_mesh.dim != 3:
+        return {"error":
+                f"--wp-vol {os.path.basename(wp_vol)} is {wp_mesh.dim}D; "
+                f"calc_heat.py needs a 3D volume mesh of the workpiece "
+                f"solid.  If this is a 2D (r,z) axisymmetric workpiece, "
+                f"use calc_heat_axisym.py.  If it is a surface/SIBC mesh "
+                f"(no solid), that belongs to the EM step -- export the "
+                f"workpiece as a real 3D solid for the thermal step."}
+    if wp_mesh.ne == 0:
+        return {"error":
+                f"--wp-vol {os.path.basename(wp_vol)} has 0 volume "
+                f"elements (it looks like a surface-only / SIBC mesh).  "
+                f"The thermal step needs a VOLUME mesh of the workpiece "
+                f"solid; the SIBC-faced hole surface belongs to the EM "
+                f"step (calc_fem_kelvin)."}
+    _wp_mats = sorted(set(wp_mesh.GetMaterials()))
+    if len(_wp_mats) > 1:
+        return {"error":
+                f"thermal analysis targets the WORKPIECE ONLY, but "
+                f"--wp-vol {os.path.basename(wp_vol)} has {len(_wp_mats)} "
+                f"volume materials {_wp_mats}.  Export a workpiece-only "
+                f"volume mesh (a single solid) for the thermal step -- "
+                f"the coil / air / Kelvin regions belong to the EM mesh, "
+                f"not the thermal mesh."}
+
+    wp_mesh.Curve(int(fes_order))
     _log(f"MESH:loaded {os.path.basename(wp_vol)} "
          f"materials={list(wp_mesh.GetMaterials())} "
          f"boundaries={list(wp_mesh.GetBoundaries())}")
@@ -353,7 +387,7 @@ def solve_heat(wp_vol,
     a_local.surface_label = surface_label_eff
     a_local.rotation_axis = rotation_axis
     surface_region = wp_mesh.Boundaries(surface_label_eff)
-    q_cf, q_resample = _build_qsurf_cf(wp_mesh, surface_region, a_local)
+    q_cf, q_resample = _build_qsurf_cf(wp_mesh, a_local)
 
     # Rotation control: when --rotation-rpm > 0 AND a resampler is
     # available (spatial qsurf only -- uniform is rotation-invariant),
@@ -644,10 +678,6 @@ def main():
                              "workpiece has multiple BND sidesets and "
                              "heating + convection should be restricted "
                              "to a subset.")
-    parser.add_argument("--material-label", default=".*",
-                        help="Volume material regex for the workpiece "
-                             "(default: .* -- all materials).")
-
     # Material thermal properties.
     parser.add_argument("--material", default="steel",
                         choices=list(THERMAL_PRESETS) + ["custom"],
@@ -752,7 +782,6 @@ def main():
             material=args.material, rho=args.rho, cp=args.cp, k=args.k,
             h_conv=args.h_conv, t_ext=args.t_ext, t_initial=args.t_initial,
             surface_label=args.surface_label,
-            material_label=args.material_label,
             q_uniform=args.q_uniform,
             qsurf_sol=args.qsurf_sol,
             em_vol=args.em_vol,
