@@ -470,7 +470,8 @@ class IHPanel(ModePanel):
             default=0)
         imp.currentTextChanged.connect(self._on_impedance_changed)
         imp.setToolTip(
-            "<b>Linear SIBC</b>: Z_s = (1+j) rho/delta * sqrt(mu_r). "
+            "<b>Linear SIBC</b>: Z_s = (1+j) rho/delta (delta includes mu_r; "
+            "standard Leontovich, |Z_s| ~ sqrt(mu_r)). "
             "Ok for Cu/Al, and for steel with a constant mu_r.<br>"
             "<b>ESIM</b>: 1D cell problem solves B-H(H) self-consistently "
             "(Karl iteration). Needed when mu_r varies with H (saturated "
