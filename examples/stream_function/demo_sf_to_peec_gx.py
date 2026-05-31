@@ -736,9 +736,13 @@ def connector_lengths_phi_z(polylines, chain_phi_z, a):
     than tracing an iso-contour.  We flag segments longer than 2x the median
     edge length -- a robust proxy that does not need per-vertex contour
     membership.  Returns ``(max_rung, total_rung, n_rung, azimuthal_total)``
-    in metres.  ``azimuthal_total`` = sum over rungs of ``a*|dphi|``, the
-    field-impact correlator established by the nn_blend negative result
-    (2026-05-31): DSV RMS tracks the azimuthal total, NOT the 3D length.
+    in metres.  ``azimuthal_total`` = sum over rungs of ``a*|dphi|``.  It is
+    a useful DIAGNOSTIC (azimuthal rung content is more harmful than axial),
+    but it is NOT a clean predictor of DSV RMS: field_aware has a LARGER
+    azimuthal total than kuijpers yet a LOWER RMS, because the field impact
+    is the symmetric CANCELLATION of the rung stray fields (current-sign
+    order + placement), not their summed length.  Do not optimise this value
+    directly -- optimise the field (DSV RMS) and use the skill's verify loop.
     """
     path = np.column_stack([
         a * np.cos(chain_phi_z[:, 0]),
@@ -910,6 +914,7 @@ def main():
         best_psi = psi.copy()
         best_polylines = polylines
         best_res_norm = float("inf")
+        first_res_norm = None
         for it in range(args.compensated_iter):
             chain_it = build_chain_from_polylines(polylines)
             path_it = chain_phi_z_to_3d(chain_it, a)
@@ -921,6 +926,8 @@ def main():
             residual = B_target - chain_field_it
             res_norm = float(np.linalg.norm(residual)
                              / (np.linalg.norm(B_target) + 1e-30))
+            if first_res_norm is None:
+                first_res_norm = res_norm
             tag = ""
             if res_norm < best_res_norm:
                 best_res_norm = res_norm
@@ -942,7 +949,8 @@ def main():
         polylines = best_polylines
         psi_zphi = psi.reshape(args.nz, args.nphi)
         print(f"     final: best residual = {best_res_norm:.3e}"
-              f" (baseline was 1.624e-01 at iter 1)")
+              f" (iter-1 baseline was {first_res_norm:.3e},"
+              f" method={args.chain_method})")
 
     chain_phi_z = build_chain_from_polylines(polylines)
     path = chain_phi_z_to_3d(chain_phi_z, a)

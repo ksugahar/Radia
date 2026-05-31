@@ -108,17 +108,18 @@ A coil's REACHABLE design quality is bounded by its TOPOLOGY:
 | EASY   | axisym. / planar uniform  | RMS 2–3 %   | < 1 %        | useful (basis-loop)          |
 |        |   + FE-direct H¹ ψ        | 2 %         | **0.47 %**   | **MONOTONE convergence**     |
 | MEDIUM | cylindrical Gz            | already OK  | redundant    | smooth helix natural         |
-| HARD   | cylindrical Gx fingerprint| 16 % (kuijpers) → **9.3 % (field_aware)** | tier softened | chain method matters         |
+| HARD   | cylindrical Gx fingerprint| 16 % (kuijpers) → **9.3 % (field_aware)** | **8.1 % (field_aware + Path-A)** | chain method matters; Path-A composes |
 | HARDER | shielded / biplanar / 3D  | —           | —            | needs FE-direct or D-path    |
 
 Past EASY needs FE-direct continuous ψ.  **The HARD tier "16 % ceiling"
 was a `kuijpers`-method artifact, not a fundamental bound**: the
 `field_aware` chain (sign-order + azimuthal-min cuts, 2026-05-31) reaches
 9.3 % on the same SF design with no Path-A — so the connection METHOD, not
-just the SF design, gates HARD-tier quality.  Going lower still likely
-needs B-spline SFD (Kuijpers Methods 2/3) or multivalued-potential
-reformulation (Path D in `aca_tsvd(topic=single_stroke)`), or Path-A on
-top of `field_aware`.
+just the SF design, gates HARD-tier quality.  The two best ideas COMPOSE:
+`field_aware` + Path-A (`--compensated-iter 40 --compensated-step 0.3`)
+reaches **8.1 %**, roughly half the old `kuijpers` baseline.  Going lower
+still likely needs B-spline SFD (Kuijpers Methods 2/3) or multivalued-
+potential reformulation (Path D in `aca_tsvd(topic=single_stroke)`).
 
 ## Dead-end variants (do NOT re-try)
 
