@@ -132,6 +132,47 @@ reorder a single stroke to remove them.  The single stroke buys ONE feed
 at the cost of the bridges + ~10× worse field; the multi-wire design buys
 the best field + no bridges at the cost of N feeds.
 
+## Compensating the single-stroke degradation
+
+If you keep the single stroke but want to claw back the field quality the
+bridges cost you, there are two levers:
+
+### Path-A (re-contour, pure single stroke) — capped ~8 %
+
+`--compensated-iter` folds the chain's parasitic field back into the SF
+target and re-solves.  It is the only PURE single-stroke compensation (no
+extra feeds), but it is capped: 9.3 % → 8.1 % (step-sensitive, oscillates,
+best-psi-tracked).  A **pure** single stroke has uniform current and no
+spare degrees of freedom, so it fundamentally cannot fully cancel the
+fixed bridge field — and the Path-A trick of re-contouring is limited by
+the chain being non-smooth in ψ.  (`--freeze-levels` to "smooth" it is a
+NEGATIVE result — it removes the very level-drift that lets the best-psi
+search explore, and finds nothing.)
+
+### Shim loops (hybrid, one-shot, monotone) — tunable to the ideal
+
+`--shim-loops K` keeps the single-stroke main wire and adds **K independent
+shim correction loops**, solved in ONE least-squares pass for the currents
+that best cancel the residual `r = B_target − I_w·Bz_chain`.  No iteration,
+no step tuning, strictly monotone in K:
+
+| shim loops K | feeds | DSV RMS | shim \|I\|/I_w (max) |
+|--------------|-------|---------|----------------------|
+| 0 (pure single stroke) | 1 | 9.3 %  | —     |
+| 3            | 4     | **7.8 %** (beats Path-A) | ~0.00 |
+| 10           | 11    | 5.2 %   | 0.01  |
+| 40           | 41    | 3.0 %   | 0.32  |
+| 80           | 81    | 0.65 %  | (≈ multi-wire ideal) |
+
+The principle: the exact LINEAR compensation of the residual is
+`δI = A⁺ r` — a full independent current distribution (= multi-wire).
+Shim loops realise the K largest-magnitude components of it.  A few shims
+carry tiny currents (< 1 % of I_w) and already beat Path-A; pushing K up
+recovers the full multi-wire accuracy at the cost of more feeds.  This is
+the honest trade-off: **compensating the single-stroke degradation costs
+independent feeds** — there is no free lunch within one uniform-current
+wire.
+
 ## Complexity tier framework
 
 A coil's REACHABLE design quality is bounded by its TOPOLOGY:

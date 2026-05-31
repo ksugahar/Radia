@@ -105,16 +105,34 @@ def make_dsv(dsv, n):
 # [2] psi contour extraction (matplotlib) -> polylines in (phi, z) space.
 #     Each polyline is either closed (start ~ end) or open (cut by the phi seam).
 # --------------------------------------------------------------------------
-def contour_polylines_phi_z(psi_zphi, phi_grid, z_grid, n_levels):
+def contour_polylines_phi_z(psi_zphi, phi_grid, z_grid, n_levels, levels=None):
+    """Extract equal-current iso-contours of psi in (phi, z).
+
+    ``levels=None`` (default): equal-current levels are computed from the
+    CURRENT psi range -- ``lo + (k+0.5)*dI``.  For a Path-A compensated
+    iteration this makes the level VALUES drift every iteration as psi's
+    range changes, which (together with saddle bifurcations) is the
+    topology-jump source that makes naive Path-A oscillate.
+
+    ``levels=<array>`` (frozen-topology Path-A): use the GIVEN level values
+    on every iteration.  Holding the levels fixed lets the contour family
+    deform SMOOTHLY as psi is perturbed, so the chain field becomes a
+    smooth function of the psi update and Path-A can actually contract.
+    Returns ``(polylines, dI, levels_used)``.
+    """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    lo, hi = float(psi_zphi.min()), float(psi_zphi.max())
-    if hi <= lo:
-        return [], 0.0
-    dI = (hi - lo) / n_levels
-    levels = lo + (np.arange(n_levels) + 0.5) * dI
+    if levels is None:
+        lo, hi = float(psi_zphi.min()), float(psi_zphi.max())
+        if hi <= lo:
+            return [], 0.0, np.zeros(0)
+        dI = (hi - lo) / n_levels
+        levels = lo + (np.arange(n_levels) + 0.5) * dI
+    else:
+        levels = np.asarray(levels, dtype=float)
+        dI = float(levels[1] - levels[0]) if len(levels) > 1 else 1.0
 
     phi_ext = np.concatenate([phi_grid, [phi_grid[0] + 2.0 * np.pi]])
     psi_ext = np.column_stack([psi_zphi, psi_zphi[:, :1]])
@@ -127,13 +145,13 @@ def contour_polylines_phi_z(psi_zphi, phi_grid, z_grid, n_levels):
     polylines = []
     allsegs = getattr(cs, "allsegs", None)
     if allsegs is None:
-        return [], dI
+        return [], dI, levels
     for segs_at_level in allsegs:
         for poly in segs_at_level:
             if len(poly) < 3:
                 continue
             polylines.append(np.asarray(poly, dtype=float))
-    return polylines, dI
+    return polylines, dI, levels
 
 
 # --------------------------------------------------------------------------
@@ -836,6 +854,23 @@ def main():
     ap.add_argument("--ndsv", type=int, default=7, help="DSV grid points per axis")
     ap.add_argument("--narc", type=int, default=8,
                     help="segments per single-stroke connection arc")
+    ap.add_argument("--shim-loops", type=int, default=0,
+                    help="compensate the single-stroke field degradation with "
+                         "K independent shim correction loops (one-shot least "
+                         "squares on the SF basis loops that best cancel the "
+                         "residual).  Monotone: more shims -> lower RMS, at K "
+                         "extra current feeds.  0 = off.  e.g. +3 already "
+                         "beats Path-A; +80 reaches the multi-wire ideal.")
+    ap.add_argument("--freeze-levels", action="store_true",
+                    help="NEGATIVE RESULT (2026-05-31): hold the iso-current "
+                         "levels fixed at iter-0 during --compensated-iter.  "
+                         "The intent was a smooth contour family -> contracting "
+                         "Path-A; instead it found NO improvement at any step "
+                         "(0.3-4.0).  The level DRIFT in the default Path-A is "
+                         "not noise -- it is the SEARCH MECHANISM that lets the "
+                         "best-psi tracker stumble onto better chains; freezing "
+                         "it removes the exploration.  Kept as a cautionary "
+                         "flag.")
     ap.add_argument("--chain-method",
                     choices=["field_aware", "kuijpers", "lobe", "greedy",
                              "nn_blend"],
@@ -914,7 +949,7 @@ def main():
           f" TSVD modes used = {k_use}")
 
     # ------- [2] equal-current contours of psi -------
-    polylines, dI = contour_polylines_phi_z(
+    polylines, dI, base_levels = contour_polylines_phi_z(
         psi_zphi, phi_grid, z_grid, args.nlevels)
     n_wire = len(polylines)
     if n_wire == 0:
@@ -978,8 +1013,12 @@ def main():
             delta_phi = pseudo_inverse_solve(res, residual, k_mode=k_use)
             psi = psi + args.compensated_step * delta_phi
             psi_zphi = psi.reshape(args.nz, args.nphi)
-            polylines, dI = contour_polylines_phi_z(
-                psi_zphi, phi_grid, z_grid, args.nlevels)
+            # frozen-topology Path-A: hold the iso-levels fixed at iter-0 so
+            # the contour family deforms SMOOTHLY (no level-value drift /
+            # topology jump), letting the iteration contract.
+            lv = base_levels if args.freeze_levels else None
+            polylines, dI, _ = contour_polylines_phi_z(
+                psi_zphi, phi_grid, z_grid, args.nlevels, levels=lv)
             if not polylines:
                 print("     iter aborted: psi became flat")
                 break
@@ -1029,6 +1068,33 @@ def main():
     print(f"[7] on x-axis: fitted dBz/dx = {G_fit:.4g},"
           f" nonlinearity over DSV = {nonlin:.3e}")
     print(f"    (target Gx = {Gx:.4g}; design Bz = Gx*x in the DSV)")
+
+    # ------- [8] shim-loop compensation of the single-stroke degradation ----
+    # The single-stroke chain's bridges degrade the field (9.3% vs the 0.8%
+    # of independent closed loops).  A PURE single stroke cannot compensate
+    # this (uniform current, no spare DOF); the Path-A re-contour trick is
+    # capped ~8% by chain non-smoothness.  The principled compensation adds a
+    # FEW independent shim loops: solve a one-shot least squares for the
+    # currents of the K SF-basis loops that best cancel the residual
+    # r = B_target - I_w*Bz_chain.  This is monotone (more shims -> better),
+    # needs no step tuning, and trades K extra current feeds for accuracy.
+    if args.shim_loops > 0:
+        K = min(args.shim_loops, N)
+        r = B_target - Bz_dsv                       # residual to cancel
+        dI_full = pseudo_inverse_solve(res, r, k_mode=k_use)
+        sel = np.argsort(np.abs(dI_full))[::-1][:K]
+        A_sel = np.column_stack(
+            [np.array([_loop_Hz(obs_dsv[i], corners_list[j])
+                       for i in range(M)]) for j in sel])
+        I_shim, _, _, _ = np.linalg.lstsq(A_sel, r, rcond=None)
+        Bz_corr = Bz_dsv + A_sel @ I_shim
+        rms_corr = float(np.linalg.norm(Bz_corr - B_target)
+                         / (np.linalg.norm(B_target) + 1e-30))
+        print(f"[8] shim-loop compensation: 1 single-stroke wire"
+              f" + {K} independent shim loops")
+        print(f"    DSV RMS {rms:.3e} -> {rms_corr:.3e}"
+              f" ({K+1} total current feeds; shim |I|/I_w max ="
+              f" {np.max(np.abs(I_shim))/(abs(I_w)+1e-30):.2f})")
 
     if args.with_peec:
         run_peec_chain(path, I_w)
