@@ -1,13 +1,25 @@
-# (ACA+)+TSVD least-norm solver
+# (ACA+)+TSVD least-norm solver — entry point
+
+> **For the full documentation, see [docs/stream_function/](stream_function/README.md)**.
+> That folder has structured sub-docs for theory, single-stroke chain construction,
+> regularisation choices, surface deformation, API reference, benchmarks,
+> NGSolve 6.2.2604+ `ngsolve.bem` integration, and the paper outline.
+>
+> This file is the SHORT entry point; treat it as the README that hasn't been
+> split out yet.  All numbers, all design choices, all dead-ends are documented
+> in detail in `docs/stream_function/`.
 
 Accelerated, **kernel-agnostic** least-norm solver for field-synthesis /
 inverse-source problems -- the numerical core of the *stream function method*
 of coil design, generalised to any Radia source family.
 
+- **Full docs**: [`docs/stream_function/`](stream_function/README.md)
 - Module: [`src/radia/stream_function.py`](../src/radia/stream_function.py)
 - C++ core: `src/core/rad_stream_function.{h,cpp}`
 - Examples: [`examples/stream_function/`](../examples/stream_function/)
 - Tests: `tests/test_stream_function.py`
+- MCP knowledge: `aca_tsvd(topic=session_2026_05_30)` for the full session-log
+  narrative; `aca_tsvd(topic=single_stroke)` for the chain construction detail.
 
 ## 1. Problem
 

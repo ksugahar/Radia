@@ -1,0 +1,42 @@
+{
+  "name": "helmholtz_pair",
+  "reference": "Maxwell (1873) / Helmholtz (classic); analytical baseline",
+  "target_spec": {
+    "name": "helmholtz_pair",
+    "reference": "Maxwell (1873) / Helmholtz (classic); analytical baseline",
+    "target_kind": "uniform_Bz",
+    "target_params": {
+      "B0_T": 0.001,
+      "dsv_radius_m": 0.025,
+      "n_target": 33
+    },
+    "geometry": {
+      "type": "helmholtz_pair",
+      "loop_radius_a_m": 0.1,
+      "loop_separation_m": 0.1,
+      "current_A": 111.21289740893396
+    }
+  },
+  "our_result": {
+    "rms": 0.008932761704293954,
+    "p2p_mean": 0.03305141612945263,
+    "Bz_mean_T": 0.0009999202057683343,
+    "wire_length_m": 25.63302104594561,
+    "n_contours": 36,
+    "current_A": 68.44692236601628
+  },
+  "published_baseline": {
+    "rms": 0.0013317222704104892,
+    "p2p_mean": 0.0052077125996723315,
+    "Bz_mean_T": 0.0009998218216857554,
+    "wire_length_m": 1.2566370614359172,
+    "n_contours": 2,
+    "current_A": 111.21289740893396
+  },
+  "ratio": {
+    "rms": 6.707676144471569,
+    "p2p_mean": 6.3466282934915075,
+    "wire_length_m": 20.398110029204148
+  },
+  "elapsed_s": 1.9613735675811768
+}

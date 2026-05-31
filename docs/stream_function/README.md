@@ -1,0 +1,153 @@
+# Stream Function Method (SFM) coil design — full documentation
+
+This folder is the **canonical documentation** for the Radia stream-function
+coil-design framework: kernel-agnostic (ACA+)+TSVD least-norm solver,
+Kuijpers-style single-stroke chain construction, FE-direct ψ with H1 / σ-
+weighted / inductance / L∞ regularisation, Path-A compensated iteration,
+and Optuna CMA-ES surface-deformation outer loop.
+
+The single-file [`../stream_function.md`](../stream_function.md) is the
+short *entry point*; this folder is the detailed reference.
+
+## Where to start
+
+| You want to … | Read |
+|----------------|------|
+| Understand the SFM and ACA+TSVD math | [theory.md](theory.md) |
+| Connect contours into one wire | [single_stroke.md](single_stroke.md) |
+| Pick a regularisation for your problem | [regularization.md](regularization.md) |
+| Optimise surface geometry too | [deformation.md](deformation.md) |
+| Look up the Python API | [api.md](api.md) |
+| Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
+| Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
+| Cite / publish this work | [paper_outline.md](paper_outline.md) |
+
+## Quick-start (5 lines)
+
+```python
+from radia.stream_function import aca_tsvd, pseudo_inverse_solve, radia_field_kernel
+
+obs = ...                         # (M, 3) observation points
+sources = [radia_obj_1, ...]      # N Radia handles (coils OR magnets)
+
+entry = radia_field_kernel(obs, sources, component=2)   # Bz kernel
+res = aca_tsvd(len(obs), len(sources), entry, modes=20)
+phi = pseudo_inverse_solve(res, B_target, k_mode=10)
+```
+
+Or jump straight to one of the demos in
+[`examples/stream_function/`](../../examples/stream_function/):
+
+```bash
+# Simplest: axisymmetric Gz gradient → single-stroke helix → field
+python examples/stream_function/demo_sf_to_peec_gz.py --with-peec
+
+# Transverse Gx fingerprint, 3 chain methods (greedy, lobe, kuijpers)
+python examples/stream_function/demo_sf_to_peec_gx.py --chain-method kuijpers
+
+# Planar uniform Bz, basis-loop
+python examples/stream_function/demo_planar_uniform_coil.py --compensated-iter 30
+
+# Planar uniform Bz, H1 FE-direct (PATH-A MONOTONE CONVERGENCE)
+python examples/stream_function/demo_planar_uniform_fem_psi.py \
+    --regularize h1 --compensated-iter 100 --compensated-step 0.05
+
+# Advanced: 1/σ regularisation + surface deformation via CMA-ES
+python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
+    --regularize h1 --order 3 --deform --deform-params bump --deform-trials 20
+
+# Regularisation-folded ACA+TSVD: 5-mode sweep via one cached factorisation
+python examples/stream_function/demo_regularized_aca.py --order 2
+
+# Constrained: min ohmic dissipation s.t. RMS <= 2.5% (MRI-shim form)
+python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
+    --regularize h1 --deform --deform-params bump --deform-trials 20 \
+    --minimize-reg --eps-rms 0.025
+
+# Multi-objective NSGA-II: trace the (RMS, energy) Pareto front in one shot
+python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
+    --regularize h1 --deform --deform-params bump --deform-trials 50 \
+    --pareto
+
+# Optimise the regularisation SHAPE (sigma) with the ACA+ base reused
+# across trials: 2.09% -> 0.73% chain RMS, no geometry change
+python examples/stream_function/demo_reg_hyperparam_aca.py --trials 30
+```
+
+## What this is, what it is not
+
+This framework is an **integration of three OSS libraries** —
+`NGSolve` / `ngsolve.bem` (BEM operators + high-order FE basis),
+`HACApK` (kernel-agnostic ACA+ H-matrix), and `Radia` (MMM/MSC
+material kernels + chain construction) — plus SF-coil-design-specific
+glue (contour extraction, single-stroke spiral, Path-A iteration,
+Optuna CMA-ES bilevel deformation).
+
+The **underlying numerical methods are standard**: ACA+ (Bebendorf
+2000), TSVD recompression (Hackbusch 2008 *Hierarchical Matrices*),
+Galerkin BEM, H¹ regularisation, CMA-ES.  We do not claim algorithmic
+novelty for these.
+
+What may be **new** (subject to literature search before publication):
+
+  - The **Path-A compensated iteration** that folds Kuijpers 2023's
+    "deviation = field error" observation back into the SF solve, and
+    its **monotone convergence** on FE-direct ψ (vs oscillation on
+    grid-sampled ψ).
+  - The **integrated open-source pipeline** that lets the same SF
+    design loop run on free-space, material (Radia MMM), or surface-
+    BEM (ngsolve.bem) kernels by replacing the entry callback.
+    See [paper_outline.md](paper_outline.md) "Implementation
+    contribution" for the framing.
+
+## Feature comparison (with related tools)
+
+| Capability                       | Our state                   | Related tool / paper       |
+| -------------------------------- | --------------------------- | -------------------------- |
+| SF inverse design                | ACA+TSVD, kernel-agnostic   | CoilGen (MRI-only OSS)     |
+| Single-stroke connection         | 3 methods, Kuijpers Method-1| Kuijpers 2023 (paper only) |
+| Single-stroke compensation       | Path-A monotone (FE-direct) | Kuijpers 2023 observes; we iterate |
+| Bilevel (inner SF, outer geom)   | Optuna CMA-ES               | Comsol Opt Module (commercial) |
+| Regularisation choices           | 5 (L2/H1/σ/L∞/L_diag)       | Liu-Hennig-Korvink 2012 (H²) |
+| High-order FE ψ                  | H¹ order p (any)            | NGSolve raw                |
+| Material-kernel extension        | callback ready (= TODO demo)| —                          |
+| ngsolve.bem 6.2.2604+ alignment  | callback contract matches   | Joachim Schöberl + Pierre Marchand upstream |
+
+## What's solidly proven vs what's pending validation
+
+**SOLID** (numbers reproducible from the demos):
+
+  - Planar uniform Bz (50 cm plane, target at 10 cm, B0=1 mT):
+    - Basis-loop baseline:   RMS  2.99 %, p2p 9.59 %
+    - + Path-A 100 iter:     RMS  0.58 %, p2p 2.17 %
+    - FE-direct H1 baseline: RMS  2.09 %, p2p 6.81 %
+    - + Path-A (MONOTONE):   RMS  0.47 %, p2p 1.64 %
+    - + bump deform 20 trial: RMS 0.77 %, p2p 3.12 %
+    - + order=3 sweet spot:  RMS **0.51 %**, p2p **1.83 %**
+  - Cylindrical Gx fingerprint (Hard tier):
+    - 3 chain methods benchmarked (greedy / lobe / kuijpers)
+    - kuijpers wins: RMS 16.24 %, 0.97 % x-axis nonlin
+    - Tier-bounded; Path-A stuck.
+  - Cylindrical Gz: smooth helix, trivial single-stroke, done.
+  - HACApK ACA+TSVD on FE-direct matrix: validated equivalent to lstsq.
+
+**PENDING VALIDATION** (industry benchmarks, see `benchmarks.md`):
+
+  - Bilac et al. planar shim — stub
+  - Turner cylindrical Gz analytical — stub
+  - Lemdiasov-Ludwig 2005 target field — stub
+  - CoilGen OSS head-to-head — stub
+  - Shielded coil with Radia MMM iron yoke kernel — stub (material-kernel demo via the callback contract)
+
+## Cross-references
+
+  - MCP knowledge: ``aca_tsvd(topic=session_2026_05_30)``,
+    ``aca_tsvd(topic=single_stroke)`` for the full session-log narrative,
+    and ``aca_tsvd(topic=regularized)`` for the regularisation-folded
+    closed form `ψ = S⁻¹V · W⁻¹ · Σ⁻¹ · UᵀB`.
+  - Memory entries (LAB-private):
+    - ``feedback_single_stroke_chain_orientation_traps``
+    - ``feedback_path_a_naive_picard_negative``
+    - ``feedback_fmm_vs_aca_distinction``
+    - ``feedback_gmsh_gui_invisible_from_background``
+    - ``project_fe_direct_psi_path_a_converges``
