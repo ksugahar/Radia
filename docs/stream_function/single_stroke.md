@@ -99,6 +99,39 @@ nonlin 9.73 %, length 23.99 m, **1040 segments**.
 Confirms the paper's observation "deviation region = field error
 region" — minimising the deviation minimises the field error.
 
+## Avoiding the long bridges entirely: multi-wire
+
+For a multi-lobe coil (Gx fingerprint) the long inter-lobe "rungs" the
+single stroke needs are **structurally irreducible** — one continuous
+wire MUST traverse all four lobes, so it must bridge between them.  Two
+attempts to remove them both FAILED (2026-05-31):
+
+  - **Reorder (boustrophedon / snake)** so consecutive lobes meet at the
+    saddle: did NOT shorten the worst rung (still 291 mm) and made the
+    field WORSE (9.3 % → 19.2 %) — the rung arrangement's symmetric
+    stray-cancellation breaks.
+  - **Cut the chain at the long rungs** into sub-wires: produces OPEN
+    current paths (current can't start/stop mid-air; `div J ≠ 0`), so the
+    Biot-Savart field is unphysical (9.3 % → 21 %).
+
+The only physical way to have NO bridges is for every independent wire to
+be a **closed loop** — i.e. drive each closed contour as its own
+conductor (multiple current feeds).  That is exactly
+[`demo_coil_design_gx.py`](../../examples/stream_function/demo_coil_design_gx.py):
+independent saddle-shaped closed loops, **no bridges, DSV RMS 0.81 %** —
+an order of magnitude better than any single stroke.
+
+| Design | wires / feeds | bridges | DSV RMS |
+|--------|---------------|---------|---------|
+| single-stroke (`demo_sf_to_peec_gx.py`, field_aware) | 1 | yes (irreducible) | 9.3 % |
+| multi-wire (`demo_coil_design_gx.py`, independent loops) | N (one per loop) | **none** | **0.81 %** |
+
+**RULE**: if the wasteful long connections are unacceptable, switch to
+the independent-closed-loop (multi-wire) design — do NOT try to cut or
+reorder a single stroke to remove them.  The single stroke buys ONE feed
+at the cost of the bridges + ~10× worse field; the multi-wire design buys
+the best field + no bridges at the cost of N feeds.
+
 ## Complexity tier framework
 
 A coil's REACHABLE design quality is bounded by its TOPOLOGY:
