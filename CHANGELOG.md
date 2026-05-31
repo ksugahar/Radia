@@ -3,6 +3,39 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.86.0 — feat: loop-star MSC gauge KEEPS the loops (field-exact, tree-cotree)
+
+Released 2026-05-31.
+
+`rad.SetLoopStarGauge(True)` (the HACApK/MSC tree-cotree loop-star solver)
+now **keeps** the loop (null-space) content of the magnetic-surface-charge
+solution instead of dropping it, so the external field matches the direct
+LU / plain-BiCGSTAB / FEM solution to ~1e-10 at every `mu_r`.
+
+**Why**: the old behaviour solved only the reduced star system
+(`sigma = S y_S`) and discarded the loop part.  On the C-type electromagnet
+the topological loops are not exactly externally field-silent *and* the
+sparse star/loop bases are not exactly mutually orthogonal, so the external
+field came out ~0.5% off (`dBz/Bz` = 5.4e-3 at `mu_r`=2) — a real method
+error, not noise.
+
+**Fix** (`RadHACApKMSCManager::SolveLoopStar`): after the reduced star solve,
+recover the full solution by a few **block Gauss-Seidel** sweeps — (i) star
+correction via the K-dense reduced solve, (ii) loop correction
+`A_LL y_L = L^T r` with `A_LL = L^T diag(inv_chi) L` (CG) — each sweep
+targeting the true residual `b - A sigma`.  Converges to the direct solution
+regardless of star/loop basis orthogonality; the loops are kept.
+
+**Verified field-exact** (`Bz` vs plain BiCGSTAB): C-type 6^3 `dBz/Bz`
+4.7e-11…7.3e-10 across `mu_r` 2…1000 (was 5.4e-3…1.3e-5); cube 4^3 ~1e-11
+(GS converges in 1 sweep); antisym IMA `mu_r`=1e5 `'+x'` 1.9e-4 / `'+x-z'`
+7.4e-5 (both PASS, the high-`mu_r` shielding floor).
+
+**Scope**: the star correction uses the K-dense `A_SS` LU (caps ~15^3 /
+8 GB); field-exact keep-loops is validated in that regime.  Linear
+(uniform-`chi`) target.  New diagnostic `rad.GetKeepLoopStats()`.  Larger-`N`
+needs a scalable `A_SS` preconditioner (ILU/H-LU), the next increment.
+
 ## 4.85.3 — fix: linear-SIBC Z_s double-counted mu_r (extra sqrt(mu_r))
 
 Released 2026-05-31.
