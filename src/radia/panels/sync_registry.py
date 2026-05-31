@@ -154,7 +154,7 @@ PANELS = {
         "ja_name": "加速器電磁石 FEM",
         "ja_description": "Omega-reduced/A 定式化 + Kelvin + BH 非線形 + ヒステリシス",
         "method": "FEM (H1 Omega / HCurl A-field)",
-        "command_builder": "radia_accel.py:AccelPanel._build_command",
+        "command_builder": "radia_em.py:_AccelMagnetPanel.build_command",
     },
     "accel_msc": {
         "script": "calc_accel_msc.py",
@@ -162,7 +162,7 @@ PANELS = {
         "ja_name": "加速器電磁石 MSC",
         "ja_description": "Radia MSC (表面磁荷法) + IMA 対称性 + HACApK",
         "method": "Radia MSC (surface charge, integral equation)",
-        "command_builder": "radia_accel.py:AccelPanel._build_msc_command",
+        "command_builder": "radia_em.py:_MSCPanel.build_command",
     },
     "pcb_peec": {
         "script": "calc_pcb_peec.py",
@@ -170,7 +170,7 @@ PANELS = {
         "ja_name": "PCB PEEC インピーダンス",
         "ja_description": "FastHenry 入力 → PEEC 行列 → 周波数スイープ → SPICE 出力",
         "method": "PEEC (Loop-Star + MNA)",
-        "command_builder": "radia_pcb.py:PCBPanel._build_command",
+        "command_builder": "radia_pcb.py:PCBPanel.build_command",
     },
 }
 

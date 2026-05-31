@@ -12,6 +12,13 @@ forgets to display the value" bugs cannot occur by construction.
 > Open-GMSH button, the JSON result file, the cross-machine deploy
 > are all derived from that one function automatically.
 
+> **Before you write File 1**, decide *which* variables from the source
+> example become arguments at all -- that is **Stage 1** of the Panel
+> Design Workflow (CLAUDE.md) and is covered by the
+> **`panel-arg-selection`** skill
+> (`.claude/skills/panel-arg-selection/SKILL.md`).  This recipe assumes
+> the `build_argparser()` surface has already been chosen.
+
 ## The 3-file shape
 
 ```

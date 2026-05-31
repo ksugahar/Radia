@@ -229,7 +229,7 @@ class TestOnVolChangedHook:
 
     def test_analysis_window_default_hook_is_noop(self, qapp):
         """AnalysisWindow.AnalysisWindow's default hook is a no-op so
-        non-IH panels (radia_em, radia_pcb, radia_heat) keep their
+        non-IH panels (radia_em, radia_pcb, radia_motor) keep their
         existing behaviour."""
         from radia_gui_base import AnalysisWindow
         # The base class declares the hook with default no-op semantics.
