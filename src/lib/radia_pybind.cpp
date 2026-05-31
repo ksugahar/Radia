@@ -57,6 +57,11 @@ extern "C" {
                                                   int kA, int kB, int kC);
     double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
     double cHACApK_harith_self_test_mixed_sibling(int nb_small);
+    void cHACApK_hlu_get_timings(double *out_t_decomp, double *out_t_solve,
+                                  long *out_n_dense_lu, long *out_n_dense_gemm);
+    void cHACApK_hlu_set_trunc_tol(double tol);
+    double cHACApK_hlu_get_trunc_tol(void);
+    void cHACApK_hlu_get_materialize_stats(long *out_n_calls, long *out_n_elems);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -2858,6 +2863,48 @@ PYBIND11_MODULE(_radia_pybind, m) {
               position i. Compare A_perm against P A_orig P^T to verify
               the conversion + tree-building is correct.
           )pbdoc");
+
+    m.def("HLUSetTruncTol", [](double tol) { cHACApK_hlu_set_trunc_tol(tol); },
+          py::arg("tol"),
+          R"pbdoc(
+              Set the rk-leaf SVD recompression tolerance for H-LU. KEY
+              speed/accuracy knob: 1e-14 = machine precision (ranks grow,
+              slow); 1e-4 = ACA accuracy (ranks low, intended O(N log^2 N)).
+          )pbdoc");
+    m.def("HLUGetTruncTol", []() { return cHACApK_hlu_get_trunc_tol(); });
+
+    m.def("HLULastTimings", []() -> py::dict {
+        double t_decomp = 0, t_solve = 0; long n_lu = 0, n_gemm = 0;
+        cHACApK_hlu_get_timings(&t_decomp, &t_solve, &n_lu, &n_gemm);
+        py::dict d;
+        d["t_decomp_sec"] = t_decomp;
+        d["t_solve_sec"] = t_solve;
+        d["n_dense_lu"] = n_lu;
+        d["n_dense_gemm"] = n_gemm;
+        return d;
+    },
+    R"pbdoc(
+        Return timing + op counts from the most recent H-LU decomp/solve
+        (cHACApK_hlu_decomp + cHACApK_hlu_solve_vec). Call right after
+        rad.HLUTestOnHACApK() to get the factorization and solve wall times.
+    )pbdoc");
+
+    m.def("HLUMaterializeStats", []() -> py::dict {
+        long n_calls = 0, n_elems = 0;
+        cHACApK_hlu_get_materialize_stats(&n_calls, &n_elems);
+        py::dict d;
+        d["n_calls"] = n_calls;
+        d["n_elems"] = n_elems;
+        return d;
+    },
+    R"pbdoc(
+        Return the Phase 3.6 materialize-fallback profile from the most
+        recent H-LU decomp: n_calls (how many mixed leaf+internal nodes
+        were densified) and n_elems (total densified matrix entries, a
+        proxy for peak scratch memory). Both should be 0 for balanced
+        (power-of-2 element-count) trees; large values indicate the
+        materialize-and-redo path dominating on unbalanced trees.
+    )pbdoc");
 
     m.def("HLUTestOnHACApK", &radia_solver::HLUTestOnHACApK,
           py::arg("intrc_handle"),

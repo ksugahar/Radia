@@ -74,6 +74,7 @@ typedef struct cHACApK_hlu_stats_t {
   long n_dense_gemm;     /* dgemm calls in trailing update   */
   long n_lowrank_skip;   /* low-rank leaves we skipped       */
   double t_decomp_sec;   /* wall time of the most recent decomp */
+  double t_solve_sec;    /* wall time of the most recent solve  */
 } cHACApK_hlu_stats_t;
 
 const cHACApK_hlu_stats_t *cHACApK_hlu_last_stats(void);
