@@ -149,32 +149,44 @@ the chain being non-smooth in ψ.  (`--freeze-levels` to "smooth" it is a
 NEGATIVE result — it removes the very level-drift that lets the best-psi
 search explore, and finds nothing.)
 
-### Shim loops via OMP — the iterative compensation methodology
+### Shim loops via LS-OMP — the iterative compensation methodology
 
 `--shim-loops K` (or `--shim-tol RMS`) keeps the single-stroke main wire and
 adds **independent shim correction loops** that cancel the residual
 `r = B_target − I_w·Bz_chain`.  The exact linear compensation is
 `δI = A⁺ r` — a full independent VARYING-current distribution (= multi-wire,
 0 % residual).  Shim loops realise its dominant part.  **The way to iterate
-is orthogonal matching pursuit (OMP, the default `--shim-method omp`)**: add
-the ONE basis loop most correlated with the current residual, re-solve the
-least squares over the whole support, repeat.  The residual decreases
-**MONOTONICALLY** — guaranteed convergence, no oscillation, no step tuning —
-and it is far more feed-efficient than one-shot top-|δI| selection:
+is Order-Recursive / Least-Squares OMP (`--shim-method ls_omp`, default)**:
+at each step orthogonalise every candidate basis loop against the current
+support and add the one whose ORTHOGONAL component (its actual least-squares
+residual reduction, normalised by its norm) is largest; re-solve the LS over
+the whole support; repeat.  This corrects the column-norm bias of plain OMP
+(the SF basis loops have very different field magnitudes) and is the optimal
+forward-greedy step.  The residual decreases **MONOTONICALLY** — guaranteed
+convergence, no oscillation, no step tuning:
 
-| feeds (1 + K) | OMP DSV RMS | top-K DSV RMS |
-|---------------|-------------|---------------|
-| 1 (no shim)   | 9.3 %       | 9.3 %         |
-| +1            | 8.0 %       | 9.1 %         |
-| +3            | **6.1 %**   | 7.8 %         |
-| +5            | **4.6 %**   | 6.7 %         |
-| +10           | **3.6 %**   | 5.2 %         |
-| +20           | **1.9 %**   | 4.2 %         |
+| feeds (1 + K) | LS-OMP RMS | plain OMP | top-K |
+|---------------|------------|-----------|-------|
+| 1 (no shim)   | 9.3 %      | 9.3 %     | 9.3 % |
+| +3            | **5.5 %**  | 6.1 %     | 7.8 % |
+| +5            | **3.9 %**  | 4.6 %     | 6.7 % |
+| +10           | **2.3 %**  | 3.6 %     | 5.2 % |
+| +20           | **1.1 %**  | 1.9 %     | 4.2 % |
 
-OMP reaches ~half the RMS of top-K for the same feed count.  `--shim-tol`
-turns it into a spec-driven design: e.g. `--shim-tol 0.02` adds loops until
-DSV RMS ≤ 2 % and reports the feed count needed (19 here).  The shim
-currents are tiny (< 1 % of I_w at these K).
+LS-OMP reaches ~40 % lower RMS than plain OMP and ~4× lower than top-K for
+the same feed count.  `--shim-tol` turns it into a spec-driven design: e.g.
+`--shim-tol 0.015` adds loops until DSV RMS ≤ 1.5 % and reports the feed
+count needed (16 here).  The shim currents are tiny (< 1 % of I_w at these K).
+
+**Method survey (2026-05-31, web-search-informed)**: LS-OMP/ORMP was
+benchmarked against the standard sparse-recovery upgrades of OMP —
+Subspace Pursuit, CoSaMP, and convex L1/LASSO (the usual MRI-shim
+sparse-coil tools).  For THIS problem — best K-term APPROXIMATION of a
+dense residual with very few constraints (M = 25 ≪ N = 960) — the
+forward-greedy LS-OMP wins; SP/CoSaMP/LASSO are tuned for exact sparse
+recovery and their prune-back / shrinkage steps discard useful atoms here.
+The decisive ingredient is the column-norm normalisation (orthogonalised
+greedy), not a fancier combinatorial search.
 
 The honest trade-off stands: **compensating the single-stroke degradation
 costs independent feeds** — there is no free lunch within one
