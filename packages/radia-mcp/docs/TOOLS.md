@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **324 tools** across 39 MCP servers.
+Total: **326 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -43,7 +43,7 @@ Total: **324 tools** across 39 MCP servers.
 | [`mcp-server-graph`](#mcp-server-graph) | `radia_mcp.graph` | 7 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
-| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 6 |
+| [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 8 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
 
 ## `mcp-server-cubit`
@@ -702,6 +702,8 @@ Module: `radia_mcp.meta.server`
 
 | Tool | Description |
 |---|---|
+| `bug_patterns_lookup` | Query the learned bug-pattern catalog. |
+| `bug_patterns_stats` | Counts of catalogued bug patterns by severity + topic. |
 | `radia_mcp_by_tag` | Servers tagged with `tag`. |
 | `radia_mcp_get` | Look up one server by short name (e.g. 'optuna', 'ih', 'kelvin'). |
 | `radia_mcp_health` | Probe importability of every radia_mcp.* subpackage. |
