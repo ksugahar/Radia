@@ -166,6 +166,12 @@ double cHACApK_harith_self_test_radia_exact(void);
  * matrix's weaker dominance to test no-pivot LU stability). */
 double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
 
+/* Phase 4 debug: same Radia-exact tree shape but with EXTERNAL matrix.
+ * A_full is 162x162 column-major; b is the RHS (caller provides).
+ * Returns max rel err vs LAPACKE_dgesv on the same matrix. */
+double cHACApK_harith_self_test_radia_exact_with_matrix(
+    const double *A_full, const double *b);
+
 /* Phase 4 debug: mixed_sibling test with HACApK row-major leaves, then
  * convert to internal format before H-LU.  Mimics the EXACT path used
  * by cHACApK_hlu_run_on_hacapk on real Radia trees, but with synthetic
@@ -228,6 +234,30 @@ void cHACApK_convert_leafmtxp_to_hacapk (struct st_cHACApK_leafmtxp_t *lp);
 double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
                                   const double *x_orig, const double *y_orig,
                                   int nffc);
+
+/* Phase 4 debug: materialize the post-convert tree as a dense matrix.
+ * Returns the matrix in PERMUTED ordering (caller can apply lod to
+ * compare with HMatrixDensify which gives original ordering).
+ *
+ * Inputs:
+ *   leafmtxp_void, control_void: HACApK structures (will be converted)
+ *   nffc: uniform DOF per element
+ *
+ * Outputs:
+ *   A_perm_out: caller-allocated [nd * nd] double buffer (column-major,
+ *               stores A_perm = P A_orig P^T in permuted ordering)
+ *   lod_out:    caller-allocated [nd] int buffer (0-based, lod_out[i] =
+ *               original index of permuted position i)
+ *   nd_out:     written with the DOF count
+ *
+ * Returns 0 on success, negative on error.
+ * Note: the leafmtxp is left in INTERNAL layout after this call.
+ *       Cluster tree on leafmtxp is preserved. */
+int cHACApK_hlu_debug_materialize(void *leafmtxp_void, void *control_void,
+                                    int nffc,
+                                    double *A_perm_out,
+                                    int *lod_out,
+                                    int *nd_out);
 
 #ifdef __cplusplus
 }
