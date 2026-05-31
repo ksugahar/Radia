@@ -54,6 +54,19 @@ void cHACApK_hlu_set_parallel(int on) { g_hlu_parallel = on ? 1 : 0; }
 int  cHACApK_hlu_get_parallel(void)   { return g_hlu_parallel; }
 void cHACApK_hlu_set_par_cutoff(long c){ if (c > 0) g_hlu_par_cutoff = c; }
 
+/* ---------- accumulator (lazy recompression, Borm/Kriemann PP18) --- *
+ * Instead of recompressing an rk-leaf on EVERY low-rank update (a QR-QR-SVD
+ * per update), append the increment columns to the leaf's a1/a2 (the rk
+ * representation U V^T stays mathematically EXACT as columns grow, so the
+ * leaf can still be read mid-factorization), and recompress ONCE when the
+ * accumulated rank exceeds g_hlu_accum_cap, plus a final flush pass after
+ * decomp. This cuts the number of truncations (the accumulator idea), at the
+ * cost of higher-rank intermediate ops. g_hlu_accum_cap = 0 disables it
+ * (recompress every update = previous behavior) for A/B comparison. */
+static int g_hlu_accum_cap = 64;
+void cHACApK_hlu_set_accum_cap(int c) { g_hlu_accum_cap = (c < 0) ? 0 : c; }
+int  cHACApK_hlu_get_accum_cap(void)  { return g_hlu_accum_cap; }
+
 /* ---------- HACApK <-> internal storage convention --------------- *
  *
  * HACApK leaf storage convention (from cHACApK_base.c fill_leafmtx):
@@ -791,11 +804,78 @@ static int node_matmat_trans_local(const st_cHACApK_block_node_t *node, double a
     return CHACAPK_HARITH_OK;
 }
 
+/* Accumulator append: grow an rk leaf's factors by the rank-kinc increment
+ * (alpha*Uinc)(Vinc)^T WITHOUT recompressing. U V^T with appended columns is
+ * the exact same matrix plus the increment, so the leaf stays valid to read
+ * mid-factorization; recompression is deferred to rkleaf_flush_one. */
+static int rkleaf_append(st_cHACApK_block_node_t *node, double alpha,
+                         const double *Uinc, int ldU,
+                         const double *Vinc, int ldV, int kinc)
+{
+    if (kinc <= 0) return CHACAPK_HARITH_OK;
+    int m = node->dof_nrows, n = node->dof_ncols;
+    int kc = node->leaf_mtx->kt;
+    int kw = kc + kinc;
+    double *a1n = (double*)malloc(sizeof(double) * (size_t)m * (size_t)kw);
+    double *a2n = (double*)malloc(sizeof(double) * (size_t)n * (size_t)kw);
+    if (!a1n || !a2n) { free(a1n); free(a2n); return CHACAPK_HARITH_ERR_NULL; }
+    if (kc > 0) {
+        memcpy(a1n, node->leaf_mtx->a1, sizeof(double) * (size_t)m * (size_t)kc);
+        memcpy(a2n, node->leaf_mtx->a2, sizeof(double) * (size_t)n * (size_t)kc);
+    }
+    for (int j = 0; j < kinc; j++) {
+        double *dU = a1n + (size_t)(kc + j) * (size_t)m;
+        const double *sU = Uinc + (size_t)j * (size_t)ldU;
+        for (int i = 0; i < m; i++) dU[i] = alpha * sU[i];
+        memcpy(a2n + (size_t)(kc + j) * (size_t)n, Vinc + (size_t)j * (size_t)ldV,
+               sizeof(double) * (size_t)n);
+    }
+    free(node->leaf_mtx->a1); free(node->leaf_mtx->a2);
+    node->leaf_mtx->a1 = a1n; node->leaf_mtx->a2 = a2n; node->leaf_mtx->kt = kw;
+    return CHACAPK_HARITH_OK;
+}
+
+/* Recompress an rk leaf to g_hlu_trunc_tol if forced, or if its accumulated
+ * rank exceeds g_hlu_accum_cap. No-op otherwise (accumulator keeps growing).
+ * g_hlu_accum_cap = 0 -> always recompress (accumulator disabled). */
+static int rkleaf_flush_one(st_cHACApK_block_node_t *node, int force)
+{
+    if (!leaf_is_rk(node)) return CHACAPK_HARITH_OK;
+    int kt = node->leaf_mtx->kt;
+    if (kt <= 0) return CHACAPK_HARITH_OK;
+    if (!force && g_hlu_accum_cap > 0 && kt <= g_hlu_accum_cap)
+        return CHACAPK_HARITH_OK;
+    int m = node->dof_nrows, n = node->dof_ncols;
+    double *Un = NULL, *Vn = NULL; int kn = 0;
+    int rc = rkleaf_recompress(node->leaf_mtx->a1, node->leaf_mtx->a2,
+                               m, n, kt, g_hlu_trunc_tol, kt, &Un, &Vn, &kn);
+    if (rc != CHACAPK_HARITH_OK) { free(Un); free(Vn); return rc; }
+    free(node->leaf_mtx->a1); free(node->leaf_mtx->a2);
+    node->leaf_mtx->a1 = Un; node->leaf_mtx->a2 = Vn; node->leaf_mtx->kt = kn;
+    return CHACAPK_HARITH_OK;
+}
+
+/* Final pass: recompress every rk leaf (force) so the stored L/U factors are
+ * compact for the solve. Called once after hlu_rec. */
+static int flush_tree(st_cHACApK_block_node_t *node)
+{
+    if (!node) return CHACAPK_HARITH_OK;
+    if (leaf_is_rk(node)) return rkleaf_flush_one(node, 1);
+    if (node->sons) {
+        int ns = node->nrsons * node->ncsons;
+        for (int i = 0; i < ns; i++) {
+            int rc = flush_tree(node->sons[i]);
+            if (rc != CHACAPK_HARITH_OK) return rc;
+        }
+    }
+    return CHACAPK_HARITH_OK;
+}
+
 /* C += alpha * U * W^T, where the increment is rank-k: U is (m x k, ld ldU),
  * W is (n x k, ld ldW). Mirrors add_dense_to_node but carries the low-rank
  * factors so an internal C never gets a full m x n densification.
  *   - dense leaf C: GEMM accumulate.
- *   - rk leaf C: stack [U_c | alpha U] / [V_c | W], SVD-recompress.
+ *   - rk leaf C: append increment columns, lazy-recompress (accumulator).
  *   - internal C: recurse, slicing U by rows, W by rows (= product cols). */
 static int add_lowrank_to_node(double alpha, const double *U, int ldU,
                                const double *W, int ldW, int m, int n, int k,
@@ -811,31 +891,12 @@ static int add_lowrank_to_node(double alpha, const double *U, int ldU,
         return CHACAPK_HARITH_OK;
     }
     if (leaf_is_rk(C)) {
-        int kc = leaf_rk_rank(C);
-        int kw = kc + k;
-        double *Uw = (double*)malloc(sizeof(double) * (size_t)m * (size_t)kw);
-        double *Vw = (double*)malloc(sizeof(double) * (size_t)n * (size_t)kw);
-        if (!Uw || !Vw) { free(Uw); free(Vw); return CHACAPK_HARITH_ERR_NULL; }
-        if (kc > 0) memcpy(Uw, leaf_rk_U(C), sizeof(double) * (size_t)m * (size_t)kc);
-        if (kc > 0) memcpy(Vw, leaf_rk_V(C), sizeof(double) * (size_t)n * (size_t)kc);
-        /* right half: alpha*U (m x k) and W (n x k), respecting input ld. */
-        for (int j = 0; j < k; j++) {
-            double *dstU = Uw + (size_t)(kc + j) * (size_t)m;
-            const double *srcU = U + (size_t)j * (size_t)ldU;
-            for (int i = 0; i < m; i++) dstU[i] = alpha * srcU[i];
-            double *dstV = Vw + (size_t)(kc + j) * (size_t)n;
-            const double *srcW = W + (size_t)j * (size_t)ldW;
-            memcpy(dstV, srcW, sizeof(double) * (size_t)n);
-        }
-        double *U_new = NULL, *V_new = NULL; int k_new = 0;
-        int rc = rkleaf_recompress(Uw, Vw, m, n, kw, g_hlu_trunc_tol, kw,
-                                    &U_new, &V_new, &k_new);
-        free(Uw); free(Vw);
-        if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
-        free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
-        C->leaf_mtx->a1 = U_new; C->leaf_mtx->a2 = V_new;
-        C->leaf_mtx->kt = k_new;
-        return CHACAPK_HARITH_OK;
+        if (leaf_rows(C) != m || leaf_cols(C) != n) return CHACAPK_HARITH_ERR_TOPOLOGY;
+        /* Accumulator: append the increment columns (exact), recompress only
+         * when the accumulated rank exceeds the cap (or cap=0 => always). */
+        int rc = rkleaf_append(C, alpha, U, ldU, W, ldW, k);
+        if (rc == CHACAPK_HARITH_OK) rc = rkleaf_flush_one(C, 0);
+        return rc;
     }
     /* internal: recurse with row-slices of U and W. */
     int nr = C->nrsons, nc = C->ncsons;
@@ -1608,6 +1669,10 @@ int cHACApK_hlu_decomp(st_cHACApK_block_node_t *root)
     hlu_decomp_ctx_t ctx = { root, CHACAPK_HARITH_OK };
     if (g_hlu_parallel) chacapk_par_region(hlu_decomp_body, &ctx);
     else                hlu_decomp_body(&ctx);
+    /* Accumulator final flush: compress all rk-leaf L/U factors that grew via
+     * deferred recompression, so the solve uses compact factors. */
+    if (ctx.rc == CHACAPK_HARITH_OK && g_hlu_accum_cap > 0)
+        ctx.rc = flush_tree(root);
     g_stats.t_decomp_sec = (double)(clock() - t0) / (double)CLOCKS_PER_SEC;
     return ctx.rc;
 }
