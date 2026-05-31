@@ -67,6 +67,8 @@ extern "C" {
     int  cHACApK_hlu_get_parallel(void);
     void cHACApK_hlu_set_par_cutoff(long c);
     int  chacapk_max_threads(void);
+    void cHACApK_hlu_set_accum_cap(int c);
+    int  cHACApK_hlu_get_accum_cap(void);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -2922,6 +2924,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "its output blocks. Below this it runs serial (avoids tiny tasks).");
     m.def("HLUMaxThreads", []() { return chacapk_max_threads(); },
           "ngcore TaskManager max threads available to the H-LU.");
+    m.def("HLUSetAccumCap", [](int c) { cHACApK_hlu_set_accum_cap(c); },
+          py::arg("cap"),
+          "Accumulator (lazy recompression) rank cap: an rk leaf accumulates "
+          "low-rank updates by column-append and recompresses only when its "
+          "rank exceeds 'cap' (plus a final flush). cap=0 disables (recompress "
+          "every update = previous behavior). Default 64.");
+    m.def("HLUGetAccumCap", []() { return cHACApK_hlu_get_accum_cap(); });
 
     m.def("HLUMixedBreakdown", []() -> py::dict {
         long a[9] = {0}, l[9] = {0}, r[9] = {0};
