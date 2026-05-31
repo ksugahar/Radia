@@ -149,29 +149,42 @@ the chain being non-smooth in ψ.  (`--freeze-levels` to "smooth" it is a
 NEGATIVE result — it removes the very level-drift that lets the best-psi
 search explore, and finds nothing.)
 
-### Shim loops (hybrid, one-shot, monotone) — tunable to the ideal
+### Shim loops via OMP — the iterative compensation methodology
 
-`--shim-loops K` keeps the single-stroke main wire and adds **K independent
-shim correction loops**, solved in ONE least-squares pass for the currents
-that best cancel the residual `r = B_target − I_w·Bz_chain`.  No iteration,
-no step tuning, strictly monotone in K:
+`--shim-loops K` (or `--shim-tol RMS`) keeps the single-stroke main wire and
+adds **independent shim correction loops** that cancel the residual
+`r = B_target − I_w·Bz_chain`.  The exact linear compensation is
+`δI = A⁺ r` — a full independent VARYING-current distribution (= multi-wire,
+0 % residual).  Shim loops realise its dominant part.  **The way to iterate
+is orthogonal matching pursuit (OMP, the default `--shim-method omp`)**: add
+the ONE basis loop most correlated with the current residual, re-solve the
+least squares over the whole support, repeat.  The residual decreases
+**MONOTONICALLY** — guaranteed convergence, no oscillation, no step tuning —
+and it is far more feed-efficient than one-shot top-|δI| selection:
 
-| shim loops K | feeds | DSV RMS | shim \|I\|/I_w (max) |
-|--------------|-------|---------|----------------------|
-| 0 (pure single stroke) | 1 | 9.3 %  | —     |
-| 3            | 4     | **7.8 %** (beats Path-A) | ~0.00 |
-| 10           | 11    | 5.2 %   | 0.01  |
-| 40           | 41    | 3.0 %   | 0.32  |
-| 80           | 81    | 0.65 %  | (≈ multi-wire ideal) |
+| feeds (1 + K) | OMP DSV RMS | top-K DSV RMS |
+|---------------|-------------|---------------|
+| 1 (no shim)   | 9.3 %       | 9.3 %         |
+| +1            | 8.0 %       | 9.1 %         |
+| +3            | **6.1 %**   | 7.8 %         |
+| +5            | **4.6 %**   | 6.7 %         |
+| +10           | **3.6 %**   | 5.2 %         |
+| +20           | **1.9 %**   | 4.2 %         |
 
-The principle: the exact LINEAR compensation of the residual is
-`δI = A⁺ r` — a full independent current distribution (= multi-wire).
-Shim loops realise the K largest-magnitude components of it.  A few shims
-carry tiny currents (< 1 % of I_w) and already beat Path-A; pushing K up
-recovers the full multi-wire accuracy at the cost of more feeds.  This is
-the honest trade-off: **compensating the single-stroke degradation costs
-independent feeds** — there is no free lunch within one uniform-current
-wire.
+OMP reaches ~half the RMS of top-K for the same feed count.  `--shim-tol`
+turns it into a spec-driven design: e.g. `--shim-tol 0.02` adds loops until
+DSV RMS ≤ 2 % and reports the feed count needed (19 here).  The shim
+currents are tiny (< 1 % of I_w at these K).
+
+The honest trade-off stands: **compensating the single-stroke degradation
+costs independent feeds** — there is no free lunch within one
+uniform-current wire — but OMP makes the iteration MONOTONE and gives the
+minimum feeds for any target accuracy.  (A second equal-current SF coil —
+"patch" the residual with another stream function and single-stroke it —
+does NOT work: the residual is a high-frequency field whose SF correction
+is a non-smooth stream function that does not contour into a clean
+equal-current coil; it stalls at ~6–8 %.  The correction MUST be realised
+as independent varying currents, which is exactly what OMP does.)
 
 ## Complexity tier framework
 
