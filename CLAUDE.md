@@ -2538,6 +2538,40 @@ the thermal step, **temperature reported as mean (volume-averaged
   the physically meaningful integral quantities (total power, total
   energy, mean/max/min of the primary field) to its result dict.
 
+### Bug-Pattern Catalog Policy (2026-05-31)
+
+**POLICY**: The lab keeps a **learned bug-pattern catalog** in
+`packages/radia-mcp/src/radia_mcp/meta/bug_patterns.py`, exposed
+through MCP tools `bug_patterns_lookup(...)` + `bug_patterns_stats()`
+on the `mcp-server-radia-meta` server.  Every bug class that bites
+in a real incident gets one entry with: `id` / `title` / `topics` /
+`severity` / `first_seen` / `last_seen` / `what` / `root_cause` /
+`detection` / `prevention` / `related`.
+
+**Workflow**:
+
+1. **BEFORE writing new code** in an affected area, call
+   `bug_patterns_lookup(topic="<area>")` (panel / release / cubit /
+   cubit-license / build / ngsolve etc.).  Read every entry's
+   `prevention` field; those are the rules to follow.
+2. **WHEN a new bug class fires**, add a new entry to
+   `PATTERNS` in `bug_patterns.py`.  Entry must point at the test /
+   audit / skill that catches the regression, so the pattern isn't
+   just a memory aid -- it's anchored to enforced infrastructure.
+3. **WHEN an existing bug class re-fires**, bump `last_seen` to today's
+   date.  Repeated occurrences are a signal the prevention step isn't
+   strong enough -- consider tightening the static gate.
+
+**Why this exists** (2026-05-31): the session-after-session repeat of
+the same bug classes (TaskManager late-import UnboundLocalError, .log
+truncated by super-then-append, init.py vs pyproject.toml version
+mismatch, phantom block/sideset/nodeset, Cubit 2025.8+ logout-only-
+local) showed that memory entries + skill docs are not enough on
+their own.  Putting the catalog behind an MCP tool means Claude
+encounters it as a first-class capability the moment it picks
+`mcp-server-radia-meta` -- a query is a natural step in the
+diagnosis flow, not a hidden discipline.
+
 ### New-Panel Contract Policy (2026-05-31)
 
 **POLICY**: A new analysis panel (e.g. `radia_electromagnet`,
