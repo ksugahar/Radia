@@ -62,6 +62,8 @@ extern "C" {
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
     double cHACApK_harith_self_test_radia_exact(void);
     double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
+    double cHACApK_harith_self_test_radia_exact_with_matrix(
+        const double *A_full, const double *b);
 }
 #include "rad_hacapk_bem.h"   // HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 #include "rad_bem_galerkin.h" // Fast Galerkin SL/DL assembler
@@ -944,6 +946,33 @@ py::tuple HMatrixDensify(int intrc_handle) {
  */
 double HLUTestOnHACApK(int intrc_handle) {
     return RadHLUTestOnHACApK(intrc_handle);
+}
+
+/**
+ * @brief Phase 4 debug: materialize the post-convert tree as a dense matrix.
+ * Returns (A_perm, lod) where A_perm is in permuted ordering.
+ */
+py::tuple HLUDebugMaterialize(int intrc_handle) {
+    // Pre-query: build manager to get dof count
+    // Use a hack: allocate generous buffer (say up to 10000 dof for diagnostics)
+    int max_dof = 10000;
+    std::vector<double> A_buf((size_t)max_dof * max_dof);
+    std::vector<int> lod_buf(max_dof);
+    int nd = 0;
+    int ok = RadHLUDebugMaterialize(intrc_handle, A_buf.data(), lod_buf.data(), &nd);
+    if (!ok || nd <= 0) {
+        throw std::runtime_error("HLUDebugMaterialize failed");
+    }
+    py::array_t<double> A_result({nd, nd});
+    auto Ar = A_result.mutable_unchecked<2>();
+    // A_buf is column-major nd x nd; convert to row-major for numpy
+    for (int i = 0; i < nd; i++)
+        for (int j = 0; j < nd; j++)
+            Ar(i, j) = A_buf[(size_t)i + (size_t)j * (size_t)nd];
+    py::array_t<int> lod_result(nd);
+    auto lr = lod_result.mutable_unchecked<1>();
+    for (int i = 0; i < nd; i++) lr(i) = lod_buf[i];
+    return py::make_tuple(A_result, lod_result);
 }
 
 /**
@@ -2820,6 +2849,16 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Tuple (matrix, dof) where matrix is (dof x dof) numpy array
           )pbdoc");
 
+    m.def("HLUDebugMaterialize", &radia_solver::HLUDebugMaterialize,
+          py::arg("intrc_handle"),
+          R"pbdoc(
+              Phase 4 debug: materialize the post-convert tree as dense.
+              Returns (A_perm, lod) where A_perm is in HACApK's permuted
+              ordering and lod[i] = 0-based original index of permuted
+              position i. Compare A_perm against P A_orig P^T to verify
+              the conversion + tree-building is correct.
+          )pbdoc");
+
     m.def("HLUTestOnHACApK", &radia_solver::HLUTestOnHACApK,
           py::arg("intrc_handle"),
           R"pbdoc(
@@ -2947,6 +2986,30 @@ PYBIND11_MODULE(_radia_pybind, m) {
         Builds three random rk leaves of given ranks, computes the dense ground
         truth (U_c V_c^T + alpha A B), runs h_addmul, and verifies the result by
         comparing C's new dense reconstruction to the truth. Expected ~1e-13.
+    )pbdoc");
+
+    m.def("HLUSelfTestRadiaExactWithMatrix",
+          [](py::array_t<double, py::array::c_style | py::array::forcecast> A,
+             py::array_t<double, py::array::c_style | py::array::forcecast> b) -> double {
+        if (A.ndim() != 2 || A.shape(0) != 162 || A.shape(1) != 162)
+            throw std::runtime_error("A must be 162x162");
+        if (b.ndim() != 1 || b.shape(0) != 162)
+            throw std::runtime_error("b must be length 162");
+        /* Convert row-major numpy to column-major for the test. */
+        std::vector<double> A_colmajor(162 * 162);
+        auto Ar = A.unchecked<2>();
+        for (int j = 0; j < 162; j++)
+            for (int i = 0; i < 162; i++)
+                A_colmajor[(size_t)i + (size_t)j * 162] = Ar(i, j);
+        return cHACApK_harith_self_test_radia_exact_with_matrix(
+            A_colmajor.data(), b.data());
+    },
+    py::arg("A"), py::arg("b"),
+    R"pbdoc(
+        Phase 4 debug: same Radia tree shape but with caller-provided
+        162x162 matrix A and 162 RHS b. Use to test whether H-LU works
+        on the EXACT real Radia matrix data, isolating the bug from
+        the HACApK build/permutation path.
     )pbdoc");
 
     m.def("HLUSelfTestRadiaExactDiag", [](double diag_boost) -> double {
