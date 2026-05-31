@@ -220,11 +220,19 @@ static int rkleaf_recompress(
     *k_new_out = 0;
     if (k_in <= 0 || m <= 0 || n <= 0) return CHACAPK_HARITH_ERR_NULL;
 
+    /* Economy QR ranks. When the stacked rank k_in exceeds the leaf
+     * dimensions (common after rk-into-rk stacking: kw = kt_c + kt_inc
+     * can exceed min(m,n)), the thin Q has only min(m,k_in) / min(n,k_in)
+     * columns. Using k_in directly would make dorgqr fail with
+     * "Parameter 2 incorrect" (n > m). */
+    int ru = (m < k_in) ? m : k_in;   /* columns of Q_U / rows of R_U */
+    int rv = (n < k_in) ? n : k_in;   /* columns of Q_V / rows of R_V */
+
     /* Workspace copies (LAPACK overwrites inputs). */
     double *U_work = (double*)malloc(sizeof(double) * (size_t)m * (size_t)k_in);
     double *V_work = (double*)malloc(sizeof(double) * (size_t)n * (size_t)k_in);
-    double *R_U    = (double*)calloc((size_t)k_in * (size_t)k_in, sizeof(double));
-    double *R_V    = (double*)calloc((size_t)k_in * (size_t)k_in, sizeof(double));
+    double *R_U    = (double*)calloc((size_t)ru * (size_t)k_in, sizeof(double));
+    double *R_V    = (double*)calloc((size_t)rv * (size_t)k_in, sizeof(double));
     double *tau    = (double*)malloc(sizeof(double) * (size_t)k_in);
     if (!U_work || !V_work || !R_U || !R_V || !tau) {
         free(U_work); free(V_work); free(R_U); free(R_V); free(tau);
@@ -233,72 +241,74 @@ static int rkleaf_recompress(
     memcpy(U_work, U, sizeof(double) * (size_t)m * (size_t)k_in);
     memcpy(V_work, V, sizeof(double) * (size_t)n * (size_t)k_in);
 
-    /* QR of U_work -> Q stored implicitly, R in upper triangle. */
+    /* QR of U_work (m x k_in): ru = min(m,k_in) reflectors, R_U is ru x k_in
+     * upper-trapezoidal in the top-left of U_work. */
     int info = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, m, k_in, U_work, m, tau);
     if (info != 0) goto lapack_err;
     for (int j = 0; j < k_in; j++)
-        for (int i = 0; i <= j; i++) R_U[i + j*k_in] = U_work[i + j*m];
-    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, m, k_in, k_in, U_work, m, tau);
+        for (int i = 0; i <= j && i < ru; i++) R_U[i + j*ru] = U_work[i + j*m];
+    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, m, ru, ru, U_work, m, tau);
     if (info != 0) goto lapack_err;
-    /* Now U_work = Q_U (m x k_in). */
+    /* Now U_work[:, :ru] = Q_U (m x ru). */
 
-    /* QR of V_work. */
+    /* QR of V_work (n x k_in): rv = min(n,k_in) reflectors. */
     info = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, n, k_in, V_work, n, tau);
     if (info != 0) goto lapack_err;
     for (int j = 0; j < k_in; j++)
-        for (int i = 0; i <= j; i++) R_V[i + j*k_in] = V_work[i + j*n];
-    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, n, k_in, k_in, V_work, n, tau);
+        for (int i = 0; i <= j && i < rv; i++) R_V[i + j*rv] = V_work[i + j*n];
+    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, n, rv, rv, V_work, n, tau);
     if (info != 0) goto lapack_err;
-    /* Now V_work = Q_V (n x k_in). */
+    /* Now V_work[:, :rv] = Q_V (n x rv). */
 
     free(tau); tau = NULL;
 
-    /* S = R_U R_V^T  (k_in x k_in). */
-    double *S = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_in);
+    /* S = R_U R_V^T  (ru x rv). */
+    double *S = (double*)malloc(sizeof(double) * (size_t)ru * (size_t)rv);
     if (!S) { free(U_work); free(V_work); free(R_U); free(R_V);
               return CHACAPK_HARITH_ERR_NULL; }
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-                k_in, k_in, k_in, 1.0,
-                R_U, k_in, R_V, k_in, 0.0, S, k_in);
+                ru, rv, k_in, 1.0,
+                R_U, ru, R_V, rv, 0.0, S, ru);
     free(R_U); free(R_V);
 
-    /* SVD: S = Us Sigma Vs^T. */
-    double *sigma  = (double*)malloc(sizeof(double) * (size_t)k_in);
-    double *Us     = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_in);
-    double *Vt     = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_in);
-    double *superb = (double*)malloc(sizeof(double) * (size_t)(k_in > 1 ? k_in - 1 : 1));
+    /* SVD: S = Us Sigma Vt.  p = min(ru, rv). */
+    int p = (ru < rv) ? ru : rv;
+    double *sigma  = (double*)malloc(sizeof(double) * (size_t)p);
+    double *Us     = (double*)malloc(sizeof(double) * (size_t)ru * (size_t)p);
+    double *Vt     = (double*)malloc(sizeof(double) * (size_t)p * (size_t)rv);
+    double *superb = (double*)malloc(sizeof(double) * (size_t)(p > 1 ? p - 1 : 1));
     if (!sigma || !Us || !Vt || !superb) {
         free(sigma); free(Us); free(Vt); free(superb);
         free(S); free(U_work); free(V_work);
         return CHACAPK_HARITH_ERR_NULL;
     }
-    info = LAPACKE_dgesvd(LAPACK_COL_MAJOR, 'S', 'S', k_in, k_in, S, k_in,
-                          sigma, Us, k_in, Vt, k_in, superb);
+    info = LAPACKE_dgesvd(LAPACK_COL_MAJOR, 'S', 'S', ru, rv, S, ru,
+                          sigma, Us, ru, Vt, p, superb);
     free(superb); free(S);
     if (info != 0) { free(sigma); free(Us); free(Vt);
                      free(U_work); free(V_work);
                      return CHACAPK_HARITH_ERR_LAPACK; }
 
-    /* Determine new rank. */
+    /* Determine new rank (bounded by p = min(ru, rv) <= min(m, n)). */
     int k_new = 0;
     double sv_max = sigma[0];
     if (sv_max > 0.0) {
         double thresh = tol_rel * sv_max;
-        for (int i = 0; i < k_in; i++) {
+        for (int i = 0; i < p; i++) {
             if (sigma[i] > thresh) k_new++;
             else break;
         }
         if (k_new > k_max) k_new = k_max;
+        if (k_new > p)     k_new = p;
         if (k_new < 1)     k_new = 1;
     } else {
         k_new = 1;  /* rank-1 to keep something */
     }
 
-    /* U_new = Q_U Us[:,:k_new] diag(sigma[:k_new])
-     *       = Q_U (Us scaled by sigma columns)  (m x k_new) */
+    /* U_new = Q_U Us[:,:k_new] diag(sigma[:k_new])  (m x k_new). */
     double *U_new = (double*)malloc(sizeof(double) * (size_t)m * (size_t)k_new);
     double *V_new = (double*)malloc(sizeof(double) * (size_t)n * (size_t)k_new);
-    double *Us_scaled = (double*)malloc(sizeof(double) * (size_t)k_in * (size_t)k_new);
+    double *Us_scaled = (double*)malloc(sizeof(double) * (size_t)ru * (size_t)k_new);
     if (!U_new || !V_new || !Us_scaled) {
         free(U_new); free(V_new); free(Us_scaled);
         free(sigma); free(Us); free(Vt);
@@ -307,21 +317,21 @@ static int rkleaf_recompress(
     }
     for (int j = 0; j < k_new; j++) {
         double s = sigma[j];
-        for (int i = 0; i < k_in; i++)
-            Us_scaled[i + j*k_in] = Us[i + j*k_in] * s;
+        for (int i = 0; i < ru; i++)
+            Us_scaled[i + j*ru] = Us[i + j*ru] * s;
     }
+    /* U_new = Q_U (m x ru) * Us_scaled (ru x k_new). */
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                m, k_new, k_in, 1.0,
-                U_work, m, Us_scaled, k_in, 0.0, U_new, m);
+                m, k_new, ru, 1.0,
+                U_work, m, Us_scaled, ru, 0.0, U_new, m);
     free(Us_scaled);
 
-    /* V_new = Q_V Vs[:,:k_new] = Q_V (Vt[:k_new,:])^T.
-     * Pass Vt with ldb = k_in; CblasTrans + N=k_new accesses only the first
-     * k_new rows of Vt as the "B" matrix (B is logically N x K = k_new x k_in
-     * post-Trans). */
+    /* V_new = Q_V Vs[:,:k_new], Vs = Vt^T (rv x p).  First k_new columns of
+     * Vs = first k_new rows of Vt.  cblas Trans on Vt (ldb=p) accesses the
+     * first k_new rows (B logically N x K = k_new x rv post-Trans). */
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans,
-                n, k_new, k_in, 1.0,
-                V_work, n, Vt, k_in, 0.0, V_new, n);
+                n, k_new, rv, 1.0,
+                V_work, n, Vt, p, 0.0, V_new, n);
 
     free(sigma); free(Us); free(Vt);
     free(U_work); free(V_work);
