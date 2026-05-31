@@ -62,6 +62,7 @@ extern "C" {
     void cHACApK_hlu_set_trunc_tol(double tol);
     double cHACApK_hlu_get_trunc_tol(void);
     void cHACApK_hlu_get_materialize_stats(long *out_n_calls, long *out_n_elems);
+    void cHACApK_hlu_get_mixed_breakdown(long *out_addmul9, long *out_lln9, long *out_run9);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -2904,6 +2905,30 @@ PYBIND11_MODULE(_radia_pybind, m) {
         proxy for peak scratch memory). Both should be 0 for balanced
         (power-of-2 element-count) trees; large values indicate the
         materialize-and-redo path dominating on unbalanced trees.
+    )pbdoc");
+
+    m.def("HLUMixedBreakdown", []() -> py::dict {
+        long a[9] = {0}, l[9] = {0}, r[9] = {0};
+        cHACApK_hlu_get_mixed_breakdown(a, l, r);
+        auto pack = [](long *v) {
+            py::dict d;  const char *kn[3] = {"internal","rk","dense"};
+            for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++)
+                d[(std::string(kn[i])+"x"+kn[j]).c_str()] = v[i*3+j];
+            return d;
+        };
+        py::dict out;
+        out["addmul"] = pack(a);  /* keyed kindA x kindB */
+        out["lln"] = pack(l);     /* kindL x kindX */
+        out["run"] = pack(r);     /* kindU x kindX */
+        return out;
+    },
+    R"pbdoc(
+        Breakdown of which operand-kind combinations triggered the H-LU
+        materialize fallback in the most recent decomp, for h_addmul / the
+        two htrsm directions. Each value is a count keyed "<kindA>x<kindB>"
+        (kind in {internal, rk, dense}). Tells whether the rk-factored
+        mixed-multiply optimization (rk operand) or sub-view split (dense
+        operand) is the dominant case to optimize.
     )pbdoc");
 
     m.def("HLUTestOnHACApK", &radia_solver::HLUTestOnHACApK,
