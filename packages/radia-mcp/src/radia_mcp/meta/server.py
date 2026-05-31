@@ -15,7 +15,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from . import catalog
+from . import catalog, bug_patterns
 from ..common import register_status_tool
 
 mcp = FastMCP("mcp-server-radia-meta")
@@ -131,6 +131,65 @@ def radia_mcp_health() -> dict:
                             f"{sys.version_info.minor}."
                             f"{sys.version_info.micro}"),
     }
+
+
+# ============================================================
+# Bug-pattern catalog -- learned anti-patterns the lab has hit
+# (call BEFORE writing new code in the affected area).
+# ============================================================
+
+@mcp.tool()
+def bug_patterns_lookup(topic: str = "",
+                        severity: str = "",
+                        recent_days: int = 0) -> dict:
+    """Query the learned bug-pattern catalog.
+
+    USE THIS BEFORE writing new panel / calc_*.py / release / Cubit
+    plugin / license-handling code -- the catalog records every
+    bug class the lab has hit in real incidents, with the prevention
+    rule for each.  Saves repeating the same mistakes.
+
+    Args:
+        topic: substring filter against tags + id + title.
+            Examples: "panel", "release", "cubit-license", "taskmanager".
+            Empty = no filter.
+        severity: "high" | "medium" | "low".  Empty = any.
+        recent_days: only patterns observed within the last N days.
+            0 = no age filter.
+
+    Returns:
+        ``{"matched": N, "patterns": [...]}`` where each entry has
+        ``id`` / ``title`` / ``severity`` / ``what`` / ``root_cause``
+        / ``prevention`` / ``detection`` / ``related``.
+
+    Example use cases:
+      - Before editing radia_<topic>.py: ``bug_patterns_lookup("panel")``
+      - Before tagging a release: ``bug_patterns_lookup("release")``
+      - Before touching Cubit licensing: ``bug_patterns_lookup("cubit-license")``
+      - Weekly digest: ``bug_patterns_lookup(recent_days=14)``
+    """
+    matched = bug_patterns.lookup(
+        topic=topic or None,
+        severity=severity or None,
+        recent_days=recent_days or None,
+    )
+    return {
+        "matched": len(matched),
+        "patterns": matched,
+        "hint": ("Read 'prevention' first; that's the rule to follow.  "
+                 "Check 'detection' to know which test/audit catches "
+                 "the regression if you forget."),
+    }
+
+
+@mcp.tool()
+def bug_patterns_stats() -> dict:
+    """Counts of catalogued bug patterns by severity + topic.
+
+    Quick health check for the bug catalog itself.  Use to see
+    which areas of the codebase have the most learned anti-patterns
+    (= the areas that historically bite the most)."""
+    return bug_patterns.stats()
 
 
 # ============================================================
