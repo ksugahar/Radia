@@ -503,6 +503,26 @@ void RadHACApKMSCManager::BuildLoopBasis(double alpha) {
 // reduced non-singular system T^T A T y = T^T b; the H-matrix is UNCHANGED.
 //=========================================================================
 
+/* Diagnostic counters for the star-basis build (set by BuildStarBasis, read via
+ * RadGetStarBasisStats). Used to localize the low-mu_r loop-star field error to
+ * star-basis imperfection on complex (non-cube) geometry. */
+static int g_sb_ndof = 0, g_sb_nface = 0, g_sb_boundary = 0, g_sb_internal = 0,
+           g_sb_skip_ge3 = 0, g_sb_skip_same = 0, g_sb_nstar = 0, g_sb_ncomp = 0;
+extern "C" void RadGetStarBasisStats(int* out /* len 8 */) {
+    if (!out) return;
+    out[0]=g_sb_ndof; out[1]=g_sb_nface; out[2]=g_sb_boundary; out[3]=g_sb_internal;
+    out[4]=g_sb_skip_ge3; out[5]=g_sb_skip_same; out[6]=g_sb_nstar; out[7]=g_sb_ncomp;
+}
+
+/* Diagnostic for the KEEP-LOOPS block Gauss-Seidel in SolveLoopStar:
+ * [0]=n_loop, [1]=res0 (||b - A sigma_S|| after the initial star solve),
+ * [2]=res_final_rel (||b - A sigma|| / ||b|| after GS), [3]=GS sweeps,
+ * [4]=total CG iterations (loop blocks), [5]=res_final (absolute). */
+static double g_kl_dbg[6] = {0,0,0,0,0,0};
+extern "C" void RadGetKeepLoopStats(double* out /* len 6 */) {
+    if (!out) return; for (int i=0;i<6;i++) out[i]=g_kl_dbg[i];
+}
+
 int RadHACApKMSCManager::BuildStarBasis() {
     m_star_offsets.clear(); m_star_dofs.clear(); m_star_coeffs.clear(); m_n_star = 0;
     if (!m_interaction || m_n_elem <= 0) return 0;
@@ -547,15 +567,20 @@ int RadHACApKMSCManager::BuildStarBasis() {
     std::map<std::pair<int,int>, std::pair<int,int>> sdof;
     std::vector<int> boundaryDofs;
     std::vector<std::pair<int,int>> internalPairs;
+    g_sb_skip_ge3 = 0; g_sb_skip_same = 0;
     for (auto& kv : grp) {
         if (kv.second.size() == 1) { boundaryDofs.push_back(faces[kv.second[0]].dof); continue; }
-        if (kv.second.size() != 2) continue;
+        if (kv.second.size() != 2) { g_sb_skip_ge3++; continue; }
         const FaceRec& A = faces[kv.second[0]]; const FaceRec& B = faces[kv.second[1]];
-        if (A.elem == B.elem) continue;
+        if (A.elem == B.elem) { g_sb_skip_same++; continue; }
         nbr[A.elem].push_back(B.elem); nbr[B.elem].push_back(A.elem);
         sdof[{A.elem,B.elem}] = {A.dof,B.dof}; sdof[{B.elem,A.elem}] = {B.dof,A.dof};
         internalPairs.push_back({A.dof, B.dof});
     }
+    g_sb_nface = (int)faces.size();
+    g_sb_boundary = (int)boundaryDofs.size();
+    g_sb_internal = (int)internalPairs.size();
+    g_sb_ndof = m_ndof;
     for (auto& v : nbr){ std::sort(v.begin(),v.end()); v.erase(std::unique(v.begin(),v.end()),v.end()); }
 
     // 3. BFS components -> drop exactly one divergence per connected component
@@ -587,6 +612,7 @@ int RadHACApKMSCManager::BuildStarBasis() {
         if (!col.empty()) addCol(col);
     }
     m_n_star = (int)m_star_offsets.size() - 1;
+    g_sb_nstar = m_n_star; g_sb_ncomp = ncomp;
     return m_n_star;
 }
 
@@ -729,6 +755,26 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
                                        const std::vector<int>& blockOffsets) {
     if (m_n_star <= 0) { if (BuildStarBasis() <= 0) return -1; }
     const int n = m_ndof, ns = m_n_star;
+
+    // KEEP-LOOPS: cache the topological loop (cycle) basis L for the loop-mode
+    // back-substitution at the end of this routine. The reduced star solve gives
+    // only sigma_S = S y_S (the loop-free part); the physical solution also has a
+    // loop component sigma_L = L y_L which sigma_S drops. Because L = ker(N)
+    // (N L ~ 0) and the star is loop-orthogonal (S^T L ~ 0), the missing part lives
+    // purely in span(L) and is recovered exactly (linear / uniform-chi) by the
+    // block back-substitution below. Build via BuildLoopBasis (alpha=1 skips its
+    // auto-alpha power iteration), copy the cycle CSR out, then CLEAR the deflation
+    // so MatVec stays the clean A during the reduced solve.
+    if (!m_loop_built) {
+        BuildLoopBasis(1.0);
+        m_loop_offsets = m_defl_offsets;
+        m_loop_dofs    = m_defl_dofs;
+        m_loop_coeffs  = m_defl_signs;
+        SetDeflation({}, {}, {}, 0.0);
+        m_n_loop = m_loop_offsets.empty() ? 0 : (int)m_loop_offsets.size() - 1;
+        m_loop_built = true;
+    }
+
     auto applyT = [&](const std::vector<double>& y, std::vector<double>& s){
         s.assign(n, 0.0);
         for (int k=0; k<ns; k++){ double yk=y[k];
@@ -911,7 +957,88 @@ int RadHACApKMSCManager::SolveLoopStar(const std::vector<double>& b, std::vector
         rho = rho_new;
     }
     if (antisymDefl) SetDeflation({}, {}, {}, 0.0);   // clear: deflation was per-solve
-    applyT(y, sigma);
+    applyT(y, sigma);                                 // sigma = sigma_S (loop-free star part)
+
+    // KEEP-LOOPS via block Gauss-Seidel (star <-> loop). The reduced star solve
+    // alone (sigma = S y_S) (i) drops the loop content and (ii) -- because the
+    // sparse star S and the loop basis L are NOT exactly mutually orthogonal
+    // (S^T L != 0, the per-element divergence star columns overlap the cycles) --
+    // leaves the star coordinates slightly off (A_SL != 0 breaks the strict
+    // block-triangular structure). Both show up as a ~0.5% external-field error on
+    // the C-type at low/moderate mu_r. We fix BOTH by a few Gauss-Seidel sweeps on
+    // the full system A sigma = b, alternating:
+    //   (i)  STAR correction:  A_SS d_S = S^T r  via the same K-dense reduced solve
+    //        (applyMinv); sigma += S d_S,
+    //   (ii) LOOP correction:  A_LL y_L = L^T r  with A_LL = L^T diag(inv_chi) L
+    //        (= (1/chi) L^T L for uniform chi, SPD), solved by CG on the matrix-free
+    //        operator z -> L^T( inv_chi . (L z) ); sigma += L y_L.
+    // Each sweep recomputes the true residual r = b - A sigma (one HACApK MatVec),
+    // so convergence is to the DIRECT solution (field-exact, loops kept) regardless
+    // of basis orthogonality. The coupling is weak (~0.5%) so a handful of sweeps
+    // reach tol. This is iterative refinement with the star+loop blocks as a
+    // (cheap, mu_r-robust) preconditioner -- far fewer MatVecs than plain BiCGSTAB.
+    if (m_n_loop > 0) {
+        const int nl = m_n_loop;
+        auto applyL = [&](const std::vector<double>& yL, std::vector<double>& full){
+            std::fill(full.begin(), full.end(), 0.0);
+            for (int p=0; p<nl; p++){ double c=yL[p];
+                for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                    full[m_loop_dofs[k]] += m_loop_coeffs[k]*c; }
+        };
+        auto applyLt = [&](const std::vector<double>& full, std::vector<double>& yL){
+            for (int p=0; p<nl; p++){ double acc=0.0;
+                for (int k=m_loop_offsets[p]; k<m_loop_offsets[p+1]; k++)
+                    acc += m_loop_coeffs[k]*full[m_loop_dofs[k]];
+                yL[p]=acc; }
+        };
+        std::vector<double> lz(n);
+        auto gL = [&](const std::vector<double>& z, std::vector<double>& out){
+            applyL(z, lz);                                  // lz = L z
+            for (int i=0;i<n;i++)
+                lz[i] *= (i<(int)m_inv_chi.size() ? m_inv_chi[i] : 0.0);
+            applyLt(lz, out);                               // out = L^T (inv_chi . L z)
+        };
+        std::vector<double> As(n), r(n), tmp(n), rstar(ns), dyS(ns);
+        std::vector<double> rhsL(nl), yL(nl), rk(nl), pk(nl), Ap(nl);
+        double bn = 0.0; for (int i=0;i<n;i++) bn += b[i]*b[i]; bn = std::sqrt(bn) + 1e-300;
+        const int MAXSWEEP = 50;
+        double res0 = 0.0, resf = 0.0; int sweeps = 0, cg_tot = 0;
+        for (int sw=0; sw<MAXSWEEP; sw++){
+            MatVec(sigma, As); for (int i=0;i<n;i++) r[i] = b[i]-As[i];   // full residual
+            double rn=0.0; for (int i=0;i<n;i++) rn += r[i]*r[i]; rn = std::sqrt(rn);
+            if (sw==0) res0 = rn;
+            resf = rn; sweeps = sw;
+            if (rn <= tol*bn) break;
+            // (i) STAR correction d_S = A_SS^{-1} S^T r ; sigma += S d_S
+            applyTt(r, rstar); applyMinv(rstar, dyS); applyT(dyS, tmp);
+            for (int i=0;i<n;i++) sigma[i] += tmp[i];
+            // (ii) LOOP correction y_L = A_LL^{-1} L^T r2 ; sigma += L y_L (CG)
+            MatVec(sigma, As); for (int i=0;i<n;i++) r[i] = b[i]-As[i];
+            applyLt(r, rhsL);
+            std::fill(yL.begin(), yL.end(), 0.0); rk = rhsL; pk = rhsL;
+            double rsold=0.0; for(int i=0;i<nl;i++) rsold += rk[i]*rk[i];
+            double rhn = std::sqrt(rsold);
+            if (rhn > 1e-300){
+                int cgmax = 2*nl + 50;
+                for (int cgit=0; cgit<cgmax; cgit++){
+                    cg_tot++;
+                    gL(pk, Ap);
+                    double pAp=0.0; for(int i=0;i<nl;i++) pAp += pk[i]*Ap[i];
+                    if (std::fabs(pAp) < 1e-300) break;
+                    double a = rsold/pAp;
+                    for(int i=0;i<nl;i++){ yL[i]+=a*pk[i]; rk[i]-=a*Ap[i]; }
+                    double rsnew=0.0; for(int i=0;i<nl;i++) rsnew += rk[i]*rk[i];
+                    if (std::sqrt(rsnew) <= tol*rhn) break;
+                    double bcg = rsnew/rsold;
+                    for(int i=0;i<nl;i++) pk[i]=rk[i]+bcg*pk[i];
+                    rsold = rsnew;
+                }
+                applyL(yL, tmp); for (int i=0;i<n;i++) sigma[i] += tmp[i];
+            }
+        }
+        g_kl_dbg[0]=(double)nl; g_kl_dbg[1]=res0; g_kl_dbg[2]=resf/bn;
+        g_kl_dbg[3]=(double)sweeps; g_kl_dbg[4]=(double)cg_tot; g_kl_dbg[5]=resf;
+    }
     return it;
 }
 
