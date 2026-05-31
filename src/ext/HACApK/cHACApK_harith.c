@@ -37,6 +37,23 @@ void cHACApK_hlu_set_trunc_tol(double tol)
 }
 double cHACApK_hlu_get_trunc_tol(void) { return g_hlu_trunc_tol; }
 
+/* ---------- block-level parallelism (ngcore TaskManager bridge) ---- *
+ * Defined in cHACApK_harith_par.cpp. The H-LU leaf BLAS are too small for
+ * MKL threading, so we parallelize the independent output blocks of the
+ * recursive h_addmul descent. g_hlu_parallel toggles it (default on);
+ * g_hlu_par_cutoff is the minimum C-block area (rows*cols) below which a
+ * block runs serial to avoid tiny-task overhead. */
+extern int  chacapk_max_threads(void);
+extern void chacapk_par_region(void (*body)(void*), void *ctx);
+extern void chacapk_par_for(int n, void (*body)(int, void*), void *ctx);
+
+static int  g_hlu_parallel   = 1;
+static long g_hlu_par_cutoff = 250000;  /* ~500x500 block */
+
+void cHACApK_hlu_set_parallel(int on) { g_hlu_parallel = on ? 1 : 0; }
+int  cHACApK_hlu_get_parallel(void)   { return g_hlu_parallel; }
+void cHACApK_hlu_set_par_cutoff(long c){ if (c > 0) g_hlu_par_cutoff = c; }
+
 /* ---------- HACApK <-> internal storage convention --------------- *
  *
  * HACApK leaf storage convention (from cHACApK_base.c fill_leafmtx):
@@ -886,6 +903,34 @@ static int htrsm_lln(const st_cHACApK_block_node_t *L,
 static int htrsm_run(const st_cHACApK_block_node_t *U,
                      st_cHACApK_block_node_t *X);
 
+/* Context + body for parallelizing the all-internal h_addmul output blocks.
+ * Each (i,k) output block C(i,k) is independent; the inner j-sum that
+ * accumulates into one C(i,k) stays serial inside the body (no race on a
+ * leaf), so distinct tasks touch distinct C leaves -> race-free. */
+typedef struct {
+    double alpha;
+    const st_cHACApK_block_node_t *A;
+    const st_cHACApK_block_node_t *B;
+    st_cHACApK_block_node_t *C;
+    int nrC, ncC, nmA;
+    int *rc;   /* per-(i,k) return code, size nrC*ncC */
+} addmul_ik_ctx_t;
+
+static void addmul_ik_body(int idx, void *p)
+{
+    addmul_ik_ctx_t *c = (addmul_ik_ctx_t*)p;
+    int i = idx % c->nrC;
+    int k = idx / c->nrC;
+    int rc = CHACAPK_HARITH_OK;
+    for (int j = 0; j < c->nmA && rc == CHACAPK_HARITH_OK; j++) {
+        rc = h_addmul(c->alpha,
+                      c->A->sons[i + j * c->nrC],
+                      c->B->sons[j + k * c->nmA],
+                      c->C->sons[i + k * c->nrC]);
+    }
+    c->rc[idx] = rc;
+}
+
 
 /* C += alpha * A * B  (block-recursive, leaf-leaf base case dispatches on rk/dense). */
 static int h_addmul(double alpha,
@@ -1227,6 +1272,26 @@ static int h_addmul(double alpha,
     if (nrC != A->nrsons || ncC != B->ncsons || nmA != B->nrsons) {
         return CHACAPK_HARITH_ERR_TOPOLOGY;
     }
+
+    /* Block-parallel over the independent output blocks (i,k) when C is large
+     * enough to amortize task overhead. Distinct (i,k) -> distinct C leaves;
+     * the inner j-sum stays serial inside addmul_ik_body -> race-free. ngcore
+     * work-stealing handles the nested recursion. */
+    long blk_area = (long)C->dof_nrows * (long)C->dof_ncols;
+    int n_ik = nrC * ncC;
+    if (g_hlu_parallel && n_ik > 1 && blk_area > g_hlu_par_cutoff) {
+        int *rc = (int*)malloc(sizeof(int) * (size_t)n_ik);
+        if (!rc) return CHACAPK_HARITH_ERR_NULL;
+        for (int t = 0; t < n_ik; t++) rc[t] = CHACAPK_HARITH_OK;
+        addmul_ik_ctx_t ctx = { alpha, A, B, C, nrC, ncC, nmA, rc };
+        chacapk_par_for(n_ik, addmul_ik_body, &ctx);
+        int rc_first = CHACAPK_HARITH_OK;
+        for (int t = 0; t < n_ik; t++)
+            if (rc[t] != CHACAPK_HARITH_OK) { rc_first = rc[t]; break; }
+        free(rc);
+        return rc_first;
+    }
+
     for (int k = 0; k < ncC; k++) {
         for (int i = 0; i < nrC; i++) {
             for (int j = 0; j < nmA; j++) {
@@ -1522,6 +1587,14 @@ static int hlu_rec(st_cHACApK_block_node_t *node)
     return CHACAPK_HARITH_OK;
 }
 
+/* Context to run hlu_rec inside a TaskManager region (C-callable body). */
+typedef struct { st_cHACApK_block_node_t *root; int rc; } hlu_decomp_ctx_t;
+static void hlu_decomp_body(void *p)
+{
+    hlu_decomp_ctx_t *c = (hlu_decomp_ctx_t*)p;
+    c->rc = hlu_rec(c->root);
+}
+
 int cHACApK_hlu_decomp(st_cHACApK_block_node_t *root)
 {
     stats_reset();
@@ -1530,9 +1603,13 @@ int cHACApK_hlu_decomp(st_cHACApK_block_node_t *root)
     g_dbg_materialize_elems = 0;
     for (int i = 0; i < 9; i++) { g_dbg_mixed_addmul[i] = 0; g_dbg_mixed_lln[i] = 0; g_dbg_mixed_run[i] = 0; }
     clock_t t0 = clock();
-    int rc = hlu_rec(root);
+    /* Wrap in a TaskManager region so the block-parallel h_addmul (i,k) loop
+     * actually uses the threadpool. Serial path if parallelism is disabled. */
+    hlu_decomp_ctx_t ctx = { root, CHACAPK_HARITH_OK };
+    if (g_hlu_parallel) chacapk_par_region(hlu_decomp_body, &ctx);
+    else                hlu_decomp_body(&ctx);
     g_stats.t_decomp_sec = (double)(clock() - t0) / (double)CLOCKS_PER_SEC;
-    return rc;
+    return ctx.rc;
 }
 
 /* ---------- solve_vec (post-decomp) ------------------------------- *
