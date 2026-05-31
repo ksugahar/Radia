@@ -43,8 +43,10 @@ from radia._radia_pybind import _stream_aca_tsvd as _cpp_aca_tsvd
 
 __all__ = [
     "StreamTSVD",
+    "RegularizedTSVD",
     "aca_tsvd",
     "pseudo_inverse_solve",
+    "pseudo_inverse_solve_regularized",
     "solve",
     "radia_field_kernel",
 ]
@@ -169,6 +171,170 @@ def pseudo_inverse_solve(result: StreamTSVD, B, k_mode=None) -> np.ndarray:
         c = (U.T @ B) / S
     c = np.where(S > 0.0, c, 0.0)
     return V @ c
+
+
+# --------------------------------------------------------------------------
+# Regularisation-folded ACA+TSVD pseudo-inverse
+# --------------------------------------------------------------------------
+@dataclass
+class RegularizedTSVD:
+    """Folds an SPD stiffness ``S`` into the ACA+TSVD pseudo-inverse.
+
+    Solves the constrained min-norm problem
+
+        min  phi^T S phi    s.t.    A phi = B
+
+    with the closed-form Lagrangian solution
+
+        phi = S^-1 A^T (A S^-1 A^T)^-1 B.
+
+    Substituting the truncated SVD ``A = U Sigma V^T`` (orthonormal V
+    columns from ACA+TSVD) gives the FACTORED form
+
+        phi = (S^-1 V) . W^-1 . Sigma^-1 . U^T B,    W = V^T S^-1 V (k x k).
+
+    The factorisation ``(S^-1 V, W^-1)`` is precomputed once; subsequent
+    ``solve(B)`` calls cost only ``O(k * (M + N))`` floating-point ops
+    (no further sparse / dense solves).  This makes the Path-A
+    compensated iteration's inner solve cheap regardless of the FE
+    DOF count.
+
+    Special case ``S = I``: ``W = V^T V = I_k`` since ACA+TSVD V columns
+    are orthonormal, so ``phi = V Sigma^-1 U^T B`` -- reduces exactly to
+    the standard L2 pseudo-inverse (see ``pseudo_inverse_solve``).
+
+    Parameters
+    ----------
+    base : StreamTSVD
+        ACA+TSVD factorisation of A (M x N, M <= k).
+    Sinv_V : ndarray, shape (N, k)
+        Precomputed ``S^-1 V`` (one k-RHS solve with S).
+    W_inv : ndarray, shape (k, k)
+        Inverse of ``W = V^T Sinv_V``.
+
+    Notes
+    -----
+    For an N x N stiffness ``S`` restricted to free DOFs, the caller
+    must pass ``S_free`` and the matching ``V`` (= base.V on free
+    DOFs).  Padding back to full DOF (e.g. Dirichlet zero on boundary)
+    is the caller's responsibility.
+
+    See ``examples/stream_function/demo_planar_uniform_fem_psi.py`` for
+    the canonical Path-A usage pattern.
+    """
+
+    base: StreamTSVD
+    Sinv_V: np.ndarray         # (N, k)
+    W_inv: np.ndarray          # (k, k)
+
+    @classmethod
+    def from_stiffness(cls, base: "StreamTSVD", S) -> "RegularizedTSVD":
+        """Precompute ``Sinv_V`` and ``W_inv`` from an SPD stiffness ``S``.
+
+        Parameters
+        ----------
+        base : StreamTSVD
+            ACA+TSVD factorisation of the system matrix A.
+        S : ndarray or scipy.sparse matrix, shape (N, N)
+            SPD regularisation matrix (e.g. H1 stiffness on free DOFs).
+            Dense numpy arrays go through ``np.linalg.solve``; scipy
+            sparse matrices go through ``scipy.sparse.linalg.spsolve``
+            column-by-column.
+
+        Returns
+        -------
+        RegularizedTSVD
+            Cached factorisation; pass ``B`` to ``.solve(B)``.
+        """
+        V = base.V                                 # (N, k)
+        if hasattr(S, "tocsc"):
+            # scipy sparse path -- one spsolve per column of V
+            from scipy.sparse.linalg import spsolve
+            S_csc = S.tocsc()
+            k = V.shape[1]
+            Sinv_V = np.empty_like(V)
+            for j in range(k):
+                Sinv_V[:, j] = spsolve(S_csc, V[:, j])
+        else:
+            S_dense = np.asarray(S, dtype=float)
+            if S_dense.shape != (V.shape[0], V.shape[0]):
+                raise ValueError(
+                    f"S shape {S_dense.shape} must be ({V.shape[0]}, "
+                    f"{V.shape[0]}) to match base.V")
+            Sinv_V = np.linalg.solve(S_dense, V)
+        W = V.T @ Sinv_V                            # (k, k)
+        W_inv = np.linalg.inv(W)
+        return cls(base=base, Sinv_V=Sinv_V, W_inv=W_inv)
+
+    def solve(self, B, k_mode=None) -> np.ndarray:
+        """Apply the cached regularised pseudo-inverse to ``B``.
+
+            phi = Sinv_V . W_inv . diag(1/Sigma) . U^T B
+
+        Parameters
+        ----------
+        B : array_like, shape (M,)
+            Target field values.
+        k_mode : int, optional
+            Truncate to first ``k_mode`` SVD modes (re-inverts the k_mode
+            x k_mode top-left block of W since W_inv depends on k).
+            Default = base.modes (use full cached factorisation).
+
+        Returns
+        -------
+        ndarray, shape (N,)
+            ``phi`` satisfying ``A phi = B`` with minimum ``phi^T S phi``.
+        """
+        B = np.asarray(B, dtype=float).ravel()
+        if B.shape[0] != self.base.M:
+            raise ValueError(f"B length {B.shape[0]} != M {self.base.M}")
+        k_full = self.base.modes
+        k = k_full if k_mode is None else int(min(k_mode, k_full))
+        k = max(1, k)
+
+        U = self.base.U[:, :k]                      # (M, k)
+        Sigma = self.base.S[:k]                     # (k,)
+
+        if k == k_full:
+            Sinv_V = self.Sinv_V                    # (N, k_full)
+            W_inv = self.W_inv                      # (k_full, k_full)
+        else:
+            Sinv_V = self.Sinv_V[:, :k]             # (N, k)
+            V_k = self.base.V[:, :k]                # (N, k)
+            W_k = V_k.T @ Sinv_V                    # (k, k)
+            W_inv = np.linalg.inv(W_k)
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            c = (U.T @ B) / Sigma                   # (k,)
+        c = np.where(Sigma > 0.0, c, 0.0)
+        return Sinv_V @ (W_inv @ c)
+
+
+def pseudo_inverse_solve_regularized(result: StreamTSVD, B, S, k_mode=None):
+    """One-shot regularised pseudo-inverse solve.
+
+    Builds ``RegularizedTSVD.from_stiffness(result, S)`` and applies
+    it once.  Use ``RegularizedTSVD`` directly when the same ``S`` is
+    reused across multiple ``B`` (= Path-A compensated iteration).
+
+    Parameters
+    ----------
+    result : StreamTSVD
+        ACA+TSVD factorisation of A.
+    B : array_like, shape (M,)
+        Target field values.
+    S : ndarray or scipy.sparse matrix, shape (N, N)
+        SPD regularisation matrix (e.g. H1 stiffness on free DOFs).
+    k_mode : int, optional
+        Truncate to first ``k_mode`` SVD modes (default = result.modes).
+
+    Returns
+    -------
+    ndarray, shape (N,)
+        ``phi`` satisfying ``A phi = B`` with minimum ``phi^T S phi``.
+    """
+    reg = RegularizedTSVD.from_stiffness(result, S)
+    return reg.solve(B, k_mode=k_mode)
 
 
 def solve(M, N, entry, B, modes=None, k_mode=None,

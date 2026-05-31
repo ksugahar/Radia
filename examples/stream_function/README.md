@@ -52,7 +52,13 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 | `demo_cmaes_magnet_design.py` | The **nonlinear counterpart**: CMA-ES (Optuna `CmaEsSampler`) optimises the magnetization *directions* (angles) of a magnet array for a uniform transverse field. Linear amplitude design -> (ACA+)+TSVD; nonlinear direction design -> CMA-ES (the "+ CMA-ES" half of SA-25-020). Needs `optuna` (optional). |
 | `demo_coil_design_gz.py` | **End-to-end coil design**: cylindrical z-gradient (Gz) coil via the stream function method. Target `Bz=Gz*z` -> azimuthal ring currents (ACA+TSVD) -> stream function `psi(z)` -> equal-current wire rings -> verified on-axis gradient linearity. The axisymmetric Gz problem reduces to a full-ring (1D `psi(z)`) basis. |
 | `demo_sf_to_peec_gz.py` | **Full workflow, loop closed**: SF design -> **single-stroke** (one continuous wire) smooth helix with blended crossovers -> CAD STEP (build123d Spline + Frenet swept solid) -> PEEC (`L`, `R`) -> exact Biot-Savart field -> verify `Bz` vs the design `Gz*z`. `--with-peec` adds the STEP + PEEC stages (needs build123d, in `radia`). |
-| `demo_coil_design_gx.py` | **Transverse gradient (Gx), the 2D case**: a non-axisymmetric target `Bz=Gx*x` gives a genuine 2D surface stream function `psi(phi,z)` (a "fingerprint" pattern) -> marching-squares contour -> wire loops; verified `Bz` matches `Gx*x` to ~0.8% over the DSV. Numpy Biot-Savart kernel (avoids the ObjFlmCur bug); single-stroke connection of the nested fingerprint loops is future work. |
+| `demo_coil_design_gx.py` | **Transverse gradient (Gx), the 2D case**: a non-axisymmetric target `Bz=Gx*x` gives a genuine 2D surface stream function `psi(phi,z)` (a "fingerprint" pattern) -> marching-squares contour -> wire loops; verified `Bz` matches `Gx*x` to ~0.8% over the DSV. Numpy Biot-Savart kernel (avoids the ObjFlmCur bug); each loop is a SEPARATE closed conductor. |
+| `demo_sf_to_peec_gx.py` | **Full workflow for Gx (transverse), loop closed**: SF design -> equal-current contours -> **single-stroke chain** that opens each closed fingerprint loop at its anchor and connects to the next via a cylinder-surface geodesic (= helical arc) -> CAD STEP -> PEEC (`L`, `R`) -> exact Biot-Savart field over the DSV. The Gx companion to `demo_sf_to_peec_gz.py`; the single-stroke chain trades some field accuracy (the connection arcs add stray Bz) for one-piece manufacturability. `--with-peec` adds the STEP + PEEC stages (needs build123d). |
+| `demo_planar_uniform_fem_psi_advanced.py` | **FE-direct psi + advanced regularisation + surface deformation**.  Four research knobs in one demo: (a) `--regularize h1_sigma --sigma-cf EXPR` for 1/σ-weighted H1 (true ohmic dissipation with non-uniform conductivity / forbidden regions); (b) `--regularize inductance_diag` for a lumped self-inductance proxy (full inductance form needs ngsolve.bem MaxwellSL, deferred); (c) `--regularize linf --jmax VAL` for L∞ peak-current capping via scipy SLSQP (experimental, slow); (d) `--deform --deform-params {zoff,bump,zoff+bump} --deform-trials N` for an Optuna CMA-ES outer loop over surface deformation parameters.  Measured improvements vs the flat H1 baseline (RMS 2.09 %, p2p 6.81 %): Gaussian 1/σ -> 1.17 %; 1-param zoff deform (10 trials) -> 1.50 %; 3-param bump deform (20 trials, 22 s) -> **0.77 % (-63 %)**, 4-param zoff+bump (50 trials, 33 s) -> 0.85 %. All combinable with Path-A iteration.  Also (e) `--regularize l2_aca`: routes L2 min-norm through `radia.stream_function.aca_tsvd` (validated identical result to numpy lstsq) and (f) `--order N`: arbitrary H1 polynomial order, with **order=3 found to be the sweet spot** (RMS 0.51 %, p2p 1.83 %) at maxh=0.025.  Non-monotone in p due to the FE / contour / single-stroke discretisation interaction.  Deformation freedom + high order can BACKFIRE when baseline is near-optimal (order=3 + bump -> 0.82 % vs order=3 alone 0.51 %); design rule = turn deformation off when single-shot accuracy is already sub-0.5 %. |
+| `demo_planar_uniform_fem_psi_aca.py` | **FE-direct psi + Radia HACApK (ACA+)+TSVD** -- same H1 matrix as the `_fem_psi.py` demo, but solved via `radia.stream_function.aca_tsvd` (kernel-agnostic ACA+ + Method-3 TSVD).  Wraps the M×N_free matrix as an `entry(i, j) -> float` callback so the same machinery the basis-loop demo uses carries over to the FE-direct setup.  Best RMS 0.67 % at 100 Path-A iters (slightly worse than direct lstsq because of `aca_eps=1e-10` truncation, but the **factorisation is cached and re-used across iterations** at ~1 ms per back-sub).  Validates the `(A)` path: when material kernels (Radia MMM iron yoke, shielded coil) or large M make full-matrix assembly impractical, the same callback contract works -- just point it at an on-demand integrator.  Ready to swap the matrix assembly for the `ngsolve.bem` H-matrix operator (6.2.2604+) when Joachim ships the ACA-based hierarchical compression (currently 2604 exposes FMM only). |
+| `demo_planar_uniform_fem_psi.py` | **psi as DIRECT H1 FE unknown on an NGSolve 2D mesh**, same target as the basis-loop demo below.  ``--regularize h1`` (default) solves ``min psi^T S psi`` s.t. ``A psi = B_target`` for the smoothest psi that hits the target exactly.  Single-shot RMS = 2.09 %.  With ``--compensated-iter 100 --compensated-step 0.05`` the Path-A iteration CONVERGES MONOTONICALLY (iters 40-47 drop 0.62 % -> 0.49 % without backtracking) -> final RMS **0.47 %** (-84 % vs basis-loop), p2p/mean = 1.64 %.  This is the empirical proof that the "naive Picard doesn't converge" finding for the basis-loop case is SPECIFIC to grid-sampled psi -- a continuous FE psi gives a smooth chain-field response and Path A genuinely contracts.  Extends naturally to non-planar OCC surfaces (cylinder, sphere, conformal). |
+| `demo_planar_uniform_coil.py` | **Planar uniform-Bz coil (the easy end of single-stroke complexity)**.  Source = square plane at z=0; target = uniform Bz=B0 over a square region at z=h.  SF produces concentric closed contours; single-stroke = spiral (Kuijpers Method-1 with cut line at +x axis).  Baseline RMS = 2.99 %, peak-to-peak / mean = 9.59 %; with `--compensated-iter 100 --compensated-step 0.05` (Path A best-effort) RMS drops to **0.58 %** (-80 %), p2p/mean = 2.17 % (-77 %).  Validates that Path A IS effective on simpler topologies even though it failed for the Gx fingerprint -- a clean demonstration of the "complexity tier" framing in `radia-mcp aca_tsvd(single_stroke)`. |
+| `view_sf_coil_gx_gmsh.py` | **GMSH visualiser** for the Gx coil.  Three modes: `--mode contours` (default, **recommended**) writes the SF design's CLOSED CONTOUR FILAMENTS only (each fingerprint loop as its own 1D Physical Group, NO connection arcs) -- the true SF output, with the host cylinder as a 2D reference; `--mode chain` writes the lobe-aware single-stroke chain (= what PEEC sees, with 4-quadrant traversal + 3 inter-quadrant geodesic arcs; the same chain `demo_sf_to_peec_gx.py --chain-method lobe` builds); `--mode step` merges the loft-chain STEP from `--with-peec`.  Includes preventive code (`gmsh.initialize(["-noconfig"])` + explicit `General.GraphicsPositionX/Y` + `Width`/`Height`) so the GMSH window can't restore to an off-screen second-monitor coordinate.  Uses pip-gmsh blocking `fltk.run()` (CLAUDE.md GMSH policy). |
 
 ## Running
 
@@ -64,6 +70,10 @@ python demo_cmaes_magnet_design.py        # needs optuna (pip install optuna)
 python demo_coil_design_gz.py             # end-to-end Gz gradient coil design
 python demo_sf_to_peec_gz.py --with-peec  # full SF -> CAD(STEP) -> PEEC -> field
 python demo_coil_design_gx.py             # transverse Gx gradient (2D surface SF)
+python demo_sf_to_peec_gx.py --with-peec  # full Gx SF -> single-stroke -> CAD -> PEEC
+python view_sf_coil_gx_gmsh.py             # SF contour filaments (no connection arcs) -- the real design
+python view_sf_coil_gx_gmsh.py --mode chain # single-stroke chain (with connection arcs) -- what PEEC sees
+python view_sf_coil_gx_gmsh.py --mode step  # the loft-chain STEP file from --with-peec
 ```
 
 Each script is standalone (no Cubit, no panel UI).  `matplotlib` is optional:
@@ -107,10 +117,76 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
   low-rank axisymmetric Gz problem, the transverse target fills the operator's
   rank -- ACA+ reaches `k_aca = min(M,N) = 123` (no compression here; the 2D
   problem is intrinsically richer).  Marching-squares contours `psi` into ~68
-  saddle-shaped wire loops, and the reconstructed `Bz` matches the design
-  `Gx*x` to ~0.8% RMS over the DSV.  Uses a numpy Biot-Savart kernel (the
-  ObjFlmCur tilted-loop path is unreliable for these non-planar loops);
-  single-stroke connection of the nested fingerprint loops is future work.
+  saddle-shaped wire loops driven INDEPENDENTLY (each closed loop is a
+  separate conductor), and the reconstructed `Bz` matches the design `Gx*x`
+  to ~0.8% RMS over the DSV.  Uses a numpy Biot-Savart kernel (the ObjFlmCur
+  tilted-loop path is unreliable for these non-planar loops).
+- **`demo_sf_to_peec_gx.py`** (`--with-peec`): same Gx SF design, then
+  threaded into ONE continuous conductor.  Three single-stroke methods are
+  available via `--chain-method`:
+    - `kuijpers` (default, **recommended**): Kuijpers, Jansen, Lomonova,
+      Compumag 2023 paper [525] Method-1 inspired.  Each lobe gets a fixed
+      cut phi (`+x` lobes at phi=0, `-x` at phi=π).  Every contour is
+      opened at the point closest to its lobe's cut phi, and contours are
+      sorted by the z coordinate of their cut point.  Adjacent contours
+      are connected by ONE straight (phi, z) "rung" at the cut -- the
+      pattern of Fig.4 in the paper.  The paper proves the chain's
+      deviation from the iso-contours is collocated with the field error
+      in the target region, so keeping deviations small AND parallel
+      minimises stray field.
+    - `lobe`: 4-quadrant classification + within-quadrant spiral via
+      greedy NN + 3 inter-quadrant geodesic arcs.  No cut-line discipline.
+    - `greedy`: legacy global nearest-neighbour.  The chain criss-crosses
+      the cylinder, producing the visually "wasted" arcs flagged by the
+      user (「等高線同士を無駄に接続している」).
+  Field comparison at the same SF design (24 phi x 40 z surface, 12 levels):
+
+  | method     | segs | wire len | DSV RMS | x-axis nonlin |
+  |------------|------|----------|---------|---------------|
+  | greedy     | 1350 | 22.65 m  | 21.78 % | 11.40 %       |
+  | lobe       | 1350 | 24.67 m  | 23.98 % |  9.67 %       |
+  | kuijpers   | 1040 | 23.99 m  | 16.24 % |  9.73 %       |
+
+  `kuijpers` gives the lowest DSV RMS (-25 % vs greedy, -32 % vs lobe),
+  matches the best nonlinearity, AND uses 23 % fewer segments because
+  each blend is a single straight rung at fixed phi instead of an 8-
+  segment geodesic helix.  This is the predicted outcome of Kuijpers'
+  proof "deviation region = field error region".
+
+  **Path A compensated iteration** (research): ``--compensated-iter N
+  --compensated-step alpha`` runs N iterations of the fixed-point
+  ``phi += alpha * pseudo_inverse(B_target - I_w * Bz_chain_unit)`` to
+  bake the chain crossover field back into the SF solve.  Each iteration
+  re-uses the cached ACA+TSVD factorisation, so the cost is one
+  back-substitution + one chain rebuild per iter.
+
+  Status: the naive Picard form does NOT converge (chain construction
+  is too nonlinear in phi -- level-set topology jumps each iter).  With
+  ``alpha=0.05`` and ~30 iterations the iteration OSCILLATES around the
+  baseline but occasionally finds slightly better neighbourhoods; the
+  demo tracks the best psi seen and uses it for downstream evaluation.
+  Best observed gain on the Gx baseline: DSV RMS 16.24 % -> 15.28 %
+  (-6 %), x-axis nonlinearity 9.73 % -> 5.99 % (-38 %).  Modest but
+  reproducible.  See ``radia-mcp aca_tsvd(single_stroke)`` topic for
+  the open extensions (Anderson acceleration, frozen-topology, B-spline
+  continuous SFD, multivalued-potential formulation) that may give true
+  convergence.
+  The chain is one physical wire (~22 m); PEEC returns `L ~ 17 uH`,
+  `R ~ 80 mOhm` at 1 kHz (port = chain start to chain end, auto-sized round
+  filament cross-section so adjacent contour wires don't overlap).  The
+  trade-off vs `demo_coil_design_gx.py`: the connection arcs carry the
+  series current too and add stray Bz, so the fitted gradient on the x-axis
+  is ~0.93 of target with ~11% nonlinearity and ~22% RMS over the full DSV
+  -- the price of one-piece manufacturability without symmetric pairing.
+  CAD step exports a **multi-piece loft chain**: circular cross-sections
+  placed densely along the chain with a parallel-transported (twist-free)
+  frame, lofted in short pieces of ~20 sections each (a single OCC loft of
+  the full chain fails because the saddle pattern's cumulative twist
+  defeats `BRepOffsetAPI_ThruSections`).  This is the build123d analogue
+  of "Cubit loft along curve" with a path guide; the result is a Compound
+  of solid spools that together cover the wire, ~590 KB STEP.  Further
+  accuracy = symmetric pairing of +x/-x lobes + CMA-ES connection
+  routing (the "+CMA-ES" half of SA-25-020).
 
 ## References
 

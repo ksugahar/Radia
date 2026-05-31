@@ -426,10 +426,13 @@ connection-optimisation loop tractable.
     crossovers, cost = parasitic DSV field / length / inductance) + BILEVEL
     (inner = ACA+TSVD amplitude, outer = CMA-ES/combinatorial connection).  This
     is the natural sequel to SA-25-020 "ACA stream function + CMA-ES".
-  E (differentiator) -- KERNEL-AGNOSTIC generality: single-stroke design WITH
-    magnetic materials (iron yoke / active shield) and on NON-cylindrical /
+  E (kernel-agnostic generality) -- single-stroke design WITH magnetic
+    materials (iron yoke / active shield) and on NON-cylindrical /
     conformal surfaces, using radia_field_kernel (MMM/MSC).  Free-space
-    Biot-Savart SFM tools (Turner/Peeren/Kuijpers) cannot do this.
+    Biot-Savart SFM tools (Turner/Peeren/Kuijpers) do not address this
+    setup, so it is the natural application area for our callback-based
+    pipeline.  Originality of this scope in OSS subject to literature
+    confirmation before claiming.
 
 Positioning (honest): SFM, spiral/blending connection, and the
 connection->error observation are PRIOR ART (Kuijpers et al.).  Novelty = folding
@@ -437,10 +440,1128 @@ the connection field INTO the solve x ACA+ acceleration x materials/arbitrary
 surfaces.  Confirm against literature before claiming.
 
 ## Status
-Gz single-stroke = DONE (smooth helix, demo_sf_to_peec_gz.py).  Gx fingerprint
-single-stroke = OPEN (future work).  Proposed demonstrators: Gx (compensated vs
-naive vs ideal), shielded (iron / active shield), biplanar/saddle (surface
-generality).
+Gz single-stroke = DONE (smooth helix, ``demo_sf_to_peec_gz.py``).
+
+Gx fingerprint single-stroke = DONE (2026-05-30, ``demo_sf_to_peec_gx.py``
+with ``--chain-method {greedy,lobe,kuijpers}``).
+
+  Three baseline algorithms shipped, none yet using A/D-style compensation:
+
+  - ``greedy``: global nearest-neighbour in (phi, z).  The chain criss-crosses
+    the cylinder, every closed loop opened wherever the previous chain end
+    happens to land.  Visually obvious "wasted" arcs.  Field RMS over DSV
+    21.78 %, x-axis gradient nonlinearity 11.40 %.
+  - ``lobe``: 4-quadrant classification (sign of x_centroid, sign of
+    z_centroid), spiral within each quadrant, 3 inter-quadrant geodesic arcs.
+    Maxwell-pair-style topology.  RMS 23.98 %, nonlin 9.67 %.
+  - ``kuijpers`` (default, recommended): Kuijpers 2023 Method-1 inspired.
+    Each lobe gets a fixed cut phi (`+x` lobes at 0, `-x` at pi); every
+    contour is opened at its cut intersection; contours sorted by cut z;
+    adjacent contours connected by ONE straight (phi, z) rung at the cut.
+    This is the Fig.4 "rung pattern" of the paper.  RMS 16.24 %
+    (-25 % vs greedy, -32 % vs lobe), nonlin 9.73 % (ties best), 23 %
+    fewer segments because each blend is a single straight rung instead
+    of an 8-segment geodesic helix.  Confirms the paper's observation
+    that minimising the deviation region minimises the field error.
+
+  Implemented as ``single_stroke_{,lobe_,kuijpers_}chain_phi_z`` in
+  ``examples/stream_function/demo_sf_to_peec_gx.py``.  The ``kuijpers``
+  function is currently the SHORTEST/CLEANEST baseline -- it does NOT yet
+  embed the compensation idea (A) above.  Plugging the Method-1 rung field
+  into the right-hand side and iterating with (ACA+)+TSVD is the next
+  experiment.
+
+  Tried-and-rejected sort variants for kuijpers (2026-05-30, save the
+  next-session debugging):
+
+  - Sort by sign(centroid_x) (+x lobes desc z, -x lobes asc z, intended to
+    give "Maxwell pair top-edge / bottom-edge / saddle-to-saddle" topology)
+    -> DSV RMS 43.56 % (3x worse).  Reason: breaks matplotlib's per-contour
+    CCW orientation when -x lobes are reversed, so current direction
+    flips for ~half the loops.  The "correct" topology on paper does NOT
+    survive matplotlib's natural orientation handling.
+
+  - Forcing cut to TOP/BOTTOM crossing of each closed contour ("+z lobes
+    cut at top half, -z at bottom half" for monotone outer-to-inner z)
+    -> DSV RMS 30 %.  Same root cause: cut at a forced side flips the
+    polyline rotation sense relative to matplotlib's choice for the y-
+    mirror partners (which are open polylines whose ends are both at y=0).
+    Net effect = wrong current direction for half the polylines.
+
+  - Pair-aware (+y partners sorted outer->inner then -y partners reversed
+    inner->outer, intended to spiral down on +y side then up on -y side
+    with a short mid-lobe mirror crossing) -> DSV RMS 40 %.  Same flip.
+
+  - Y-sign sub-grouping (8 sub-lobes by sign x/y/z) -> 35 % RMS.  Adds
+    extra inter-sub-lobe transitions without resolving the flip issue.
+
+  Pattern: ANY variant that introduces a per-contour reversal of the
+  matplotlib traversal direction breaks the field.  The SAFE knob is the
+  global within-lobe SORT KEY (cut z, sign(cut y), pair index, etc), but
+  the per-contour TRAVERSAL DIRECTION must always be the matplotlib one.
+  Reducing the residual "diagonal criss-cross" rungs visible in the GMSH
+  ``--mode chain`` view therefore requires either (a) a different cut
+  STRATEGY entirely (e.g. min-distance pair between adjacent contours)
+  AND careful tracking of which direction this implies for matplotlib's
+  oriented polyline, or (b) the compensated-iteration approach (A) which
+  bakes the parasitic rung field into the next least-norm solve.
+
+## Path A naive fixed-point iteration -- NEGATIVE result (2026-05-30)
+
+Implemented as ``--compensated-iter N --compensated-step alpha`` in
+``demo_sf_to_peec_gx.py``.  At each iter:
+
+  1. Build chain from current psi
+  2. Compute Bz_chain at unit current at DSV; gain-fit I_w
+  3. ``residual = B_target - I_w * Bz_chain_unit``
+  4. ``delta_phi = pseudo_inverse(residual)``  (uses cached TSVD factor)
+  5. ``psi += alpha * delta_phi``; re-extract contours
+
+Results on the 24x40 Gx baseline (target RMS at iter 0 = 16.24 %):
+
+  - alpha = 1.0, n = 1:    RMS jumps **16 % -> 55 %**.  Hard divergence.
+  - alpha = 1.0, n = 8:    RMS oscillates 16/55/26/99/90/85/...  No convergence.
+  - alpha = 0.05, n = 60:  RMS oscillates 16-55 %, occasionally dips
+    near 15-17 %, best of 30 iters = 15.28 % (-6 % vs baseline).
+    On x-axis NONLINEARITY: 9.73 % -> 5.99 % (-38 %) at the best iter.
+  - The best iter is found by ACCIDENT (iter 24 in this seed), not by
+    convergence -- the same neighbourhood is re-visited many times.
+
+Root cause: chain construction is highly NONLINEAR in phi.  Each iter
+shifts level-set positions, matplotlib re-traces contours in a different
+order, the polyline COUNT and TOPOLOGY change, and the resulting chain's
+parasitic field bears no useful linear relation to the previous chain's
+parasitic field.  ``pseudo_inverse(residual)`` is the right LINEARISED
+update IF chain field were linear in phi; it is not.
+
+Implemented mitigation: the demo tracks BEST PSI SEEN across iterations
+and returns it.  This delivers the 5.99 % nonlinearity reliably (any seed
++ alpha=0.05 + n>=24 finds the same neighbourhood).  Modest but real.
+
+Open paths to actual convergence (TBD):
+  - Anderson acceleration / quasi-Newton (weighted combination of recent
+    iterates).  Standard remedy for non-contractive fixed points.
+  - FREEZE the chain topology after iter 1; only update polyline
+    currents (= phi).  This eliminates the level-set topology jumps.
+    Loses some design flexibility but gives a true linear update law.
+  - B-spline SFD continuous representation (Kuijpers Methods 2/3) so
+    contour locations vary continuously with phi.  Eliminates the jumps
+    by construction.  Heavier implementation.
+  - The MULTIVALUED POTENTIAL formulation (D) sidesteps the iteration
+    entirely by parameterising the chain as ``psi + (dI/2pi)*theta``,
+    so chain topology is parameterised within the SF solve.
+
+Status: Path A "naive Picard" is documented as a negative-with-trace
+result.  Anderson, frozen-topology, or B-spline variants are the next
+experiments worth running.  None is single-day work.
+
+## Path A is ACTUALLY useful on simpler topologies (2026-05-30)
+
+Same naive Picard tested on ``demo_planar_uniform_coil.py`` (uniform
+Bz target above a planar source plane -- the easy end of the
+complexity hierarchy: target axisymmetric -> concentric closed
+contours -> trivially clean spiral).  Results on the 21x21 / 5x5 /
+target_z=100 mm / B0=1 mT baseline:
+
+  - iter 1 (= no compensation, single-shot Kuijpers spiral):
+    DSV RMS  2.99 %, peak-to-peak / mean  9.59 %, mean Bz 0.999 mT.
+  - 30 iters @ step = 0.05:
+    RMS 0.97 % (-67 %), p2p/mean 3.46 % (-64 %).
+  - 100 iters @ step = 0.05:
+    RMS **0.58 %** (-80 %), p2p/mean **2.17 %** (-77 %), mean Bz
+    1.000 mT exactly.
+
+The iteration still does NOT strictly converge (residual still
+oscillates), but the best-effort tracker finds genuinely better
+neighbourhoods MUCH more reliably than on the Gx fingerprint.
+
+Why the improvement is bigger here:
+  - Concentric contour family stays connected under small psi
+    perturbations (no level-set bifurcations near a saddle).
+  - Single cut line at the +x axis -- no lobe transitions.
+  - The "deviation region" of Kuijpers Method 1 is a SINGLE straight
+    radial spoke, naturally far from the target -> small B_c at the
+    target -> low residual already from iter 1.
+  - Each iter can refine without fighting topology jumps.
+
+This validates the COMPLEXITY-HIERARCHY framing: single-stroke design
+quality (and Path-A effectiveness) is bounded by the coil's topology
+class.
+
+  Easy:    axisymmetric / planar uniform -> Path A reaches < 1 % RMS
+  Medium:  cylindrical Gz                 -> done at iter 0 already
+  Hard:    cylindrical Gx fingerprint     -> stuck at 15 % RMS
+  Harder:  shielded / biplanar / 3D       -> needs B-spline SFD or
+                                              multivalued potential
+
+Practical lesson: when designing a single-stroke coil with this
+machinery, START by classifying which complexity tier the target
+forces.  If the tier is "Hard" or worse, accept multi-port or move
+to a continuous-SFD formulation rather than expecting more iterations
+of naive Picard to help.
+
+## Path A converges MONOTONICALLY with FE-direct psi (2026-05-30)
+
+Implemented as ``demo_planar_uniform_fem_psi.py``: psi is a direct H1
+GridFunction on an NGSolve 2D mesh of the source plane (rectangle,
+``maxh=0.025``, order=2 -> 1773 free DOFs), with the Biot-Savart
+matrix ``A[j,i] = -(mu0/4pi) integral over mesh of grad(phi_i) . d_xy
+/ r^3`` assembled per target via ``LinearForm``.  Two solve flavours:
+
+  - ``--regularize l2``: ``np.linalg.lstsq(A_free, B)`` -- the min-
+    Euclidean-norm interpolant.  RMS 1.78 % single-shot.
+  - ``--regularize h1`` (recommended): min ``psi^T S psi`` s.t.
+    ``A_free psi = B``, solved via ``psi = S^-1 A^T (A S^-1 A^T)^-1 B``
+    where ``S`` is the H1 stiffness.  Smoothest psi that hits B
+    exactly.  RMS 2.09 % single-shot.
+
+Path A on the H1-regularised solve, ``--compensated-iter 100
+--compensated-step 0.05``:
+
+  - iters 40-47 are MONOTONICALLY decreasing 0.62 % -> 0.49 %.  No
+    oscillation, no jitter.  This is a TRUE FIXED-POINT CONTRACTION.
+  - Final at iter 75: RMS = **0.47 %** (-78 % vs single-shot
+    H1, -84 % vs single-shot L2, -84 % vs the BASIS-LOOP demo
+    ``demo_planar_uniform_coil.py``).
+  - Peak-to-peak / mean = **1.64 %**.
+
+Why this version converges where the basis-loop version only
+oscillated: the H1 GridFunction is a CONTINUOUS function of its DOF
+vector, the marching-squares contour family deforms SMOOTHLY with
+psi, matplotlib emits the contours in a consistent count and ordering
+across iterations, and the parasitic ``B_c(psi)`` is therefore a
+smooth function of psi.  The naive Picard fixed-point map is then
+genuinely a contraction.
+
+Implication: the "Path A naive Picard does not converge" negative
+result above is SPECIFIC to the basis-loop psi representation
+(matplotlib contouring on a discretised grid of psi VALUES, prone to
+topology jitter under small psi changes).  When psi is upgraded to a
+continuous FE function, Path A converges.
+
+This is the empirical justification for the
+``radia-mcp aca_tsvd(single_stroke)`` topic's recommendation
+to "switch to a B-spline SFD continuous representation" for
+non-trivial topologies -- the same effect (smooth chain field
+response) gives the same benefit (Path A actually contracts).
+
+Open question: does the same FE-direct + H1-Path-A formulation
+unstick the Gx FINGERPRINT case?  Worth trying on a cylindrical
+surface mesh.  If yes, the "Hard tier" recommendation can be
+weakened from "multi-port or continuous SFD" to just "continuous
+SFD via FE direct".
+
+## Acceleration path for FE-direct: WAIT for Joachim H-matrix (2026-05-30)
+
+Decision: do NOT build a custom HACApK ↔ ngsolve.bem basis bridge to
+accelerate the FE-direct ``A[j, i] = integral over support of phi_i``
+matrix assembly.  Instead, wait for native H-matrix support in
+ngsolve.bem (planned upstream).  Reasons:
+
+  - FMM != ACA+.  ngsolve.bem's ``use_fmm=True`` is FMM, NOT a
+    drop-in replacement for HACApK's ACA+.  Radia explicitly
+    removed FMM (CLAUDE.md 2026-03-06) in favour of ACA+ because
+    FMM's analytic multipole expansions are kernel-specific and
+    do not help the compact / near-field-dominated geometries we
+    care about.  Each new kernel (material MMM, SIBC, ...) would
+    need new multipole math; ACA+ stays kernel-agnostic.
+  - A custom bridge in the interim would have to consume
+    ngsolve.bem's basis evaluation + quadrature (which evolve
+    upstream) and produce a scalar entry function for HACApK
+    (which evolves locally) -- maintenance burden for negligible
+    short-term gain at our M=25 scale.
+  - For LARGE M or material kernels, the right wait-and-replace
+    point is when Joachim ships a native H-matrix on the
+    ``ngsolve.bem`` integral operators; the ``fe_entry(j, i)``
+    function we'd write today becomes one API call into that
+    operator.
+
+Interim recommendation: full M x ndof assembly for small M (works
+in 30 ms for the current demo, no need for ACA+).  Material-kernel
+extensions deferred to upstream.
+
+**GitHub history (verified 2026-05-30)**:
+
+  - 2026-04-20 commit ``d90c59e`` "Coupling to external H matrix tools
+    (HTool)" by Christopher Lackner, crediting Pierre Marchand
+    (HTool's author).  Added ``IntegralOperator.CalcSubMatrix(rowids,
+    colids) -> MatrixD/C`` and ``CalcSubMatrixCapsule() -> capsule``
+    to ``python_bem.cpp``.
+  - 2026-04-14 / 04-15 / 05-04 / 05-06 commits by ``erdieee``: FMM
+    interface work (``FMMInterface for Kernels``, ``Unify
+    FMMInterface to use Vec<COMPS,..>``, ``Expose FMM parameters as
+    kwargs``, ``Add FMM operator info``).
+  - 2026-04-30 release v6.2.2604 -- includes both HTool bridge and
+    the FMM API.
+
+**Joachim's architectural choice**: do NOT build a single H-matrix
+implementation INTO ngsolve.bem.  Instead expose a generic
+block-entry callback (``CalcSubMatrix``, ``CalcSubMatrixCapsule``)
+so ANY external H-matrix library can plug in.  HTool was the test
+pair (same author wiring both ends); HACApK or h2lib could plug in
+via the same callback contract.  FMM stays in ngsolve.bem because
+its math is kernel-specific.
+
+**This validates Radia's (A) path retroactively**: the
+``radia.stream_function.aca_tsvd`` entry-function contract
+``entry(i, j) -> float`` is the same shape as ngsolve.bem's
+``CalcSubMatrix`` (just block of size 1).  When we swap the interim
+``LinearForm`` matrix assembly for the ngsolve.bem operator, the
+rest of the pipeline (TSVD, Path-A, ...) carries over unchanged:
+
+  # interim (today's demo_planar_uniform_fem_psi_aca.py):
+  A_free = build_fem_matrix(...)[:, free_idx]
+  def entry(i, j): return float(A_free[i, j])
+
+  # 2604 ngsolve.bem swap:
+  op = bem.LaplaceSL(integrand).Operator(name)
+  def entry(i, j):
+      M = op.CalcSubMatrix(np.array([i], dtype=np.int32),
+                            np.array([j], dtype=np.int32))
+      return float(np.asarray(M)[0, 0])
+
+The swap is ~5 lines of code -- BUT ONLY IF the problem is
+surface-to-surface (standard BEM Galerkin: same surface for trial
+and test, source and target both indexed by surface FES DOFs).
+For an SF coil INVERSE DESIGN with OFF-SURFACE point targets
+(rows = 25 observation points at z = z_target, cols = source-plane
+H1 DOFs), ``CalcSubMatrix`` does NOT directly apply.  Verified
+2026-05-30 by reading ``tests/pytest/test_bem.py``: the canonical
+pattern is
+
+    op = LaplaceSL(u * ds, use_fmm=False) * v * ds   # SURFACE x SURFACE
+    submat = op.CalcSubMatrix(rows, cols)
+
+Both ``rows`` and ``cols`` index the SAME surface FES.  For our
+inverse-design problem the natural off-surface evaluation path is
+``potop(gfu, target_boundary)`` -- but that goes through the FMM
+backend, not ``CalcSubMatrix``.
+
+For our problem we keep the (A) path AS-IS (callback into
+HACApK from the LinearForm-assembled matrix or any other source).
+Future option: reformulate the targets as a thin virtual surface
+mesh and switch to ``CalcSubMatrix`` -- but at M=25 the LinearForm
+assembly already runs in 30 ms, so there is no acceleration
+incentive.
+
+ngsolve.bem's ``CalcSubMatrix`` API is designed for the standard
+BEM user community (inductance / capacitance extraction, FEM-BEM
+coupling).  Inverse coil design with discrete off-surface targets
+is a DIFFERENT problem class with a DIFFERENT natural matrix shape
+(M x N_DOF, M usually small).  The (A) callback contract is the
+right abstraction for OUR problem class.
+
+**Status 2026-05-30**: NGSolve **6.2.2604** is INSTALLED on LAB
+and exposes the new FMM-style hierarchical BEM in ``ngsolve.bem``:
+
+  - ``BiotSavartCF(order, kappa, center, rad)`` -- multipole
+    expansion of the Biot-Savart kernel.
+  - ``BiotSavartRegularMLCF`` / ``BiotSavartSingularMLCF`` --
+    Multi-Level (= hierarchical tree) expansions.
+  - ``RegularMLExpansion`` / ``SingularMLExpansion`` --
+    multipole / local expansion building blocks.
+  - ``SphericalHarmonicsCF`` -- spherical-harmonic basis.
+  - ``IntegralOperator.NearFieldMatrix`` / ``CalcSubMatrix`` --
+    near-field sparse + block-wise matrix evaluation.
+
+Symbol naming (``SphericalHarmonics``, ``MLExpansion``) confirms
+the math is **FMM**, not ACA+.  This is consistent with the
+recommended use case (smooth-surface Biot-Savart for SF coil
+design, far-field-dominated) and does NOT conflict with the
+"FMM Removed" policy from CLAUDE.md -- that policy targets
+**Radia's MMM/MSC volume integral** (compact magnets, near-field
+heavy), a different layer + geometry class.  See
+memory ``feedback_fmm_vs_aca_distinction`` and CLAUDE.md
+"FMM Removed from Radia core (2026-03-06)" / "SCOPE CLARIFICATION
+2026-05-30".
+
+NEXT STEP (task #14 in the project tracker): rewrite the matrix
+assembly in ``demo_planar_uniform_fem_psi.py`` to use the
+``ngsolve.bem`` ``BiotSavartCF``-based operator, verify field
+correctness vs the current ``LinearForm``-per-target version,
+then benchmark on large M and the cylindrical Gx fingerprint.
+
+## Path (A) shipped: FE-direct psi via HACApK (ACA+)+TSVD (2026-05-30)
+
+In parallel with the ngsolve.bem wait, the (A) path -- "wrap the FE
+matrix as a per-entry callback for the existing
+``radia.stream_function.aca_tsvd`` (HACApK ACA+ + Method-3 TSVD)"
+-- has been implemented and validated:
+
+  - ``demo_planar_uniform_fem_psi_aca.py``: M=25 x N_free=1773 FE
+    matrix is built via the interim LinearForm path, wrapped as
+    ``entry(i, j) -> float``, passed to ``aca_tsvd(M, N, entry,
+    modes=M, kmax=min(M,N), aca_eps=1e-10, method=3)``.
+  - ``k_aca = 25`` (full-rank for M-bounded matrix), factorisation
+    time 0.033 s.
+  - Reconstruction matches direct lstsq to
+    ``||psi_ACA - psi_lstsq|| / ||psi_lstsq|| ~ 2e-3`` (= aca_eps
+    floor).
+  - Path-A iteration with cached factorisation: best RMS 0.67 %
+    at iter 53 (slightly worse than direct lstsq's 0.39 % because
+    of the ACA+ truncation, but the factorisation is re-used at
+    ~1 ms per back-substitution).
+  - Identical pipeline shape to the basis-loop demo: same
+    ``entry`` contract, same ``pseudo_inverse_solve`` API, same
+    Path-A loop.  This is the empirical confirmation that the
+    callback contract carries over.
+
+WHY (A) matters even though the FE matrix here is cheap (30 ms
+full-assembly): the same ``entry`` callback contract handles
+EXPENSIVE kernels.  For Radia MMM iron yoke / shielded coil /
+SIBC workpiece, each entry costs a Radia container solve and
+full assembly becomes O(MN) container solves.  ACA+ via the
+same machinery cuts that to O(k(M+N)).  (A) is the
+acceleration path that does NOT depend on ngsolve.bem's
+upstream H-matrix.
+
+WHY both paths matter:
+  - (A) HACApK ACA+: kernel-agnostic, lives in Radia, works
+    for ANY entry function (free-space, material, BEM SIBC).
+  - ngsolve.bem H-matrix / FMM (when shipped in full): native
+    surface BEM acceleration for free-space smooth kernels,
+    benefits from NGSolve's tree/quadrature infrastructure.
+
+Their natural domains are different (volume-MMM-MSC vs
+surface-BEM), and they complement each other.
+
+See memory ``feedback_fmm_vs_aca_distinction`` for the FMM vs ACA+
+distinction and why we keep slipping on it.
+
+  GMSH viewer: ``view_sf_coil_gx_gmsh.py --mode chain`` regenerates the
+  ``kuijpers`` chain and writes a 1D-line .msh; ``--mode contours`` shows
+  the raw SF design's closed contours with NO single-stroke connection,
+  for direct visual comparison of "what the SFM designed" vs "what got
+  manufactured".
+
+Proposed next demonstrators: Gx with crossover-compensated iterated
+least-norm (A); shielded coil with iron/active shield (E); biplanar/saddle
+on a non-cylindrical surface (E).
+"""
+
+
+ACA_TSVD_SESSION_2026_05_30 = r"""
+# Session 2026-05-30 -- single-stroke SF coil + Path-A + FE-direct + 2604
+
+Compact structured summary of the day-long investigation.  Use this when
+the full ``single_stroke`` topic is too long; this gives the executive
+narrative + numbers + pointers.  Detail lives in the referenced topics
+and demo files.
+
+## 1. Complexity tier of single-stroke design (the framework)
+
+The design quality reachable by Kuijpers-style chaining + Path-A
+iteration is bounded by the coil's TOPOLOGY CLASS.  Empirically, four
+tiers:
+
+  | Tier   | Topology                       | Baseline    | + Path-A    | Behaviour                     |
+  | ------ | ------------------------------ | ----------- | ----------- | ----------------------------- |
+  | EASY   | axisymmetric / planar uniform  | RMS 2-3 %   | <1 %        | path-A useful (basis-loop)    |
+  |        |   + FE-direct H1 psi           | 2 %         | **0.47 %**  | path-A MONOTONE convergence   |
+  | MEDIUM | cylindrical Gz                 | already OK  | redundant   | smooth helix natural          |
+  | HARD   | cylindrical Gx fingerprint     | RMS 16 %    | 15 %        | stuck (4-lobe Maxwell pair)   |
+  | HARDER | shielded / biplanar / 3D       | --          | --          | needs FE-direct or multival.  |
+
+Rule of thumb: classify the tier FIRST.  Going past EASY needs either
+FE-direct continuous psi OR multi-port acceptance.  Past HARD needs
+B-spline SFD or multivalued-potential reformulation.
+
+## 2. Chain methods for single-stroke (Kuijpers 2023 baseline)
+
+Three implemented + benchmarked on the cylindrical Gx fingerprint
+(``demo_sf_to_peec_gx.py --chain-method {greedy,lobe,kuijpers}``):
+
+  | Method   | segs | wire len | DSV RMS | x-axis nonlin |
+  | -------- | ---- | -------- | ------- | ------------- |
+  | greedy   | 1350 | 22.65 m  | 21.78 % | 11.40 %       |
+  | lobe     | 1350 | 24.67 m  | 23.98 % |  9.67 %       |
+  | kuijpers | 1040 | 23.99 m  | 16.24 % |  9.73 %       |
+
+``kuijpers`` (Compumag 2023 [525] Method-1 inspired: per-lobe cut
+phi, contours sorted by cut z, straight rung blends) is the default
+recommendation.  Confirms the paper's observation "deviation region
+= field error region" -- minimising deviation minimises field error.
+
+## 3. Path-A compensated iteration -- representation dependent
+
+The fixed-point ``phi <- phi + alpha * pseudo_inverse(B_target -
+I_w * Bz_chain_unit)`` behaves very differently across psi
+representations:
+
+  | psi representation              | Baseline   | Path-A best  | Behaviour                  |
+  | ------------------------------- | ---------- | ------------ | -------------------------- |
+  | basis-loop (matplotlib contour) | 2.99 % RMS | 0.58 %       | OSCILLATES, best-effort    |
+  | FE-direct (L2 min Euclidean)    | 1.78 %     | **0.39 %**   | improving                  |
+  | FE-direct (H1 min seminorm)     | 2.09 %     | **0.47 %**   | MONOTONE iter 40-47        |
+  | FE-direct + HACApK ACA+TSVD     | 1.78 %     | 0.67 %       | (slightly worse due to     |
+  |                                 |            |              | aca_eps=1e-10 truncation)  |
+  | (Gx fingerprint, basis-loop)    | 16.24 %    | 15.28 %      | tier-bounded, no real gain |
+
+WHY representation matters: matplotlib contour extraction on a
+discretised grid TOPOLOGY-JUMPS under small psi changes (level sets
+bifurcate near saddles, polylines re-order, B_c(psi) is not smooth
+in psi).  A continuous H1 GridFunction is a smooth function of its
+DOF vector, contour family deforms smoothly, B_c(psi) is smooth,
+Picard contracts.  This is the empirical justification for FE-
+direct as the path past EASY tier.
+
+## 4. Dead-end variants (do NOT re-try)
+
+Six attempts on 2026-05-30 that all REDUCED field accuracy:
+
+  Single-stroke chain (Gx fingerprint, kuijpers baseline 16.24 % RMS):
+    - Sort by sign(centroid_x): RMS 43.56 % (-x lobe reversal flips current)
+    - Force top/bottom cut on closed contours: 30.33 %  (same reason)
+    - Pair-aware (+y outer-to-inner, -y inner-to-outer reverse): 40.04 %
+    - 8-sub-lobe (sx, sy, sz): 34.64 %
+
+  Common cause: any per-contour reversal flips matplotlib's natural
+  CCW orientation -> current direction inverts -> field broken.
+  SAFE knob = global within-lobe sort key; UNSAFE = per-contour
+  traversal-direction change.  See
+  [[feedback_single_stroke_chain_orientation_traps]] (memory).
+
+  Path-A on basis-loop psi:
+    - alpha = 1.0 (full step): RMS 16 % -> 55 %    (divergence)
+    - alpha = 0.5 / 0.1: oscillates 40-55 %        (no contraction)
+    - alpha = 0.05 + N=60 iters: oscillates, best = 15.28 % by accident
+
+  Common cause: topology jumps in the matplotlib contour family.
+  See [[feedback_path_a_naive_picard_negative]] (memory).
+
+## 5. Demo file ledger
+
+All under ``examples/stream_function/``:
+
+  | File                                 | Role                                   | Best RMS | Path-A |
+  | ------------------------------------ | -------------------------------------- | -------- | ------ |
+  | ``demo_sf_to_peec_gx.py``            | Gx fingerprint, 3 chain methods        | 16.24 %  | 15.28 %|
+  | ``demo_planar_uniform_coil.py``      | Planar uniform Bz, basis-loop          | 2.99 %   | 0.58 % |
+  | ``demo_planar_uniform_fem_psi.py``   | Planar uniform Bz, H1 FE-direct        | 1.78 %   | 0.39 % |
+  | ``demo_planar_uniform_fem_psi_aca.py`` | Same + HACApK ACA+ via callback      | 1.78 %   | 0.67 % |
+  | ``view_sf_coil_gx_gmsh.py``          | GMSH viewer (contours / chain / step)  | --       | --     |
+
+## 6. NGSolve 6.2.2604 + ngsolve.bem (installed on LAB)
+
+Confirmed 2026-05-30:
+
+  - ``pip show ngsolve`` -> Version 6.2.2604, Location
+    ``C:/Program Files/Python312/Lib/site-packages``.
+  - ``ngsolve.bem`` exposes:
+    - FMM-style: ``BiotSavartCF(order, kappa, center, rad)``,
+      ``BiotSavartRegularMLCF`` / ``BiotSavartSingularMLCF``,
+      ``RegularMLExpansion`` / ``SingularMLExpansion``,
+      ``SphericalHarmonicsCF``.  Kernel-specific multipole math.
+    - H-matrix bridge: ``IntegralOperator.CalcSubMatrix(rowids,
+      colids) -> MatrixD/C``, ``CalcSubMatrixCapsule() -> capsule``
+      (Pierre Marchand HTool integration, commit
+      `d90c59e <https://github.com/NGSolve/ngsolve/commit/d90c59e>`_
+      2026-04-20).  Algebraic, library-agnostic.
+    - Other potentials: ``LaplaceSL/DL``, ``HelmholtzSL/DL/HypersingularOperator``,
+      ``MaxwellSL/DL``, ``LameSL``.
+
+  - **CalcSubMatrix scope** (verified by reading
+    ``tests/pytest/test_bem.py``): the canonical pattern is
+
+        op = LaplaceSL(u * ds, use_fmm=False) * v * ds   # surface x surface
+        sub = op.CalcSubMatrix(rows, cols)
+
+    Both ``rows`` and ``cols`` index the SAME surface FES.  For SF
+    INVERSE design with off-surface point targets this does NOT
+    apply directly.  Off-surface evaluation goes through
+    ``potop(gfu, target_boundary)`` -- which uses the FMM backend,
+    not CalcSubMatrix.
+
+  - **(A) path stays the right abstraction** for SF inverse design
+    because target points are not a surface FES.  ``CalcSubMatrix``
+    is for standard BEM users (inductance / capacitance / FEM-BEM
+    coupling).  Our problem class (M discrete targets x N source
+    DOFs) keeps its own per-(target, basis) entry function.
+
+## 7. FMM vs ACA+ -- do NOT conflate
+
+  - FMM: kernel-specific analytic multipole expansion.  Different
+    math per kernel (Laplace SH, Helmholtz Bessel, ...).  Good for
+    smooth surface kernels in far-field-dominated geometries.
+  - ACA+: algebraic / kernel-agnostic.  Same code works for any
+    low-rank-friendly kernel (free-space, material, SIBC, ...).
+    Good when each entry is expensive (Radia container solve).
+
+CLAUDE.md "FMM Removed (2026-03-06)" targets the Radia MMM/MSC
+volume integral (compact magnets, near-field heavy, FMM math bad).
+It does NOT forbid ngsolve.bem's FMM for surface BEM (smooth
+kernel, far-field, FMM math good) -- different layer, different
+geometry class.  SCOPE CLARIFICATION committed to CLAUDE.md
+2026-05-30.
+
+## 8. Architecture: callback contract is universal
+
+Block-entry callback (1x1 block = scalar entry) emerges as the
+common bridge between ALL the relevant systems:
+
+  | System                              | Callback                                              |
+  | ----------------------------------- | ----------------------------------------------------- |
+  | Radia ``radia.stream_function``     | ``entry(i, j) -> float``                             |
+  | HACApK (C library)                  | ``HACApK_set_entry_func`` ``entry(i, j)``            |
+  | ngsolve.bem ``IntegralOperator``    | ``CalcSubMatrix(rowids, colids) -> Matrix``          |
+  | HTool (Pierre Marchand)             | ``void(int, int, const int*, const int*, double*)``  |
+
+Joachim's design: do NOT bake one H-matrix lib into ngsolve.bem;
+expose ``CalcSubMatrixCapsule`` so external H-matrix libs plug in.
+HTool is the test pair; HACApK could plug in via the same capsule.
+This validates Radia's existing (A) abstraction retroactively.
+
+## 9. GMSH off-screen window (Pitfall #9, ``gmsh_usage("pitfalls")``)
+
+When the GMSH viewer "doesn't appear":
+  1. ``Get-Process python | Select MainWindowTitle`` -- if "Gmsh - ..."
+     is set, the window EXISTS.
+  2. P/Invoke ``GetWindowRect`` -- negative x = off-screen.
+  3. ``MoveWindow(hWnd, 100, 100, 1280, 800, true)`` to rescue.
+  4. Preventive in viewer scripts: ``gmsh.initialize(["-noconfig"])``
+     + explicit ``General.GraphicsPositionX/Y`` + ``Width`` / ``Height``.
+     NOTE: 6.2.x options are Width/Height, NOT SizeX/SizeY.
+
+## 10. Advanced regularisation + surface deformation (2026-05-30 evening)
+
+Extended ``demo_planar_uniform_fem_psi_advanced.py`` with four research
+knobs the user explicitly requested:
+
+  (a) ``--regularize h1_sigma --sigma-cf EXPR``: 1/sigma weighted H1
+      seminorm = min INT (1/sigma)|grad psi|^2 s.t. A psi = B.  sigma(x,y)
+      from a Python CF expression (with x, y, IfPos, exp, sqrt, sin, cos,
+      log in scope).  Physically = true ohmic dissipation for non-uniform
+      conductivity (litz wire, mask, forbidden-region exclusion).
+      Empirically: Gaussian-decay sigma (exp(-r^2/0.02)) -> RMS 1.17 %
+      (vs uniform H1 2.09 %) on the planar uniform-Bz benchmark.
+
+  (b) ``--regularize inductance_diag``: lumped self-inductance proxy
+      via per-element characteristic-length weighting (``specialcf.mesh_size``
+      coupled to grad).  RMS 2.46 %; this is a DIAGONAL approximation to
+      the true inductance L = (mu0/4pi) INT INT grad psi(x) . grad psi(y)
+      / |x-y| dA(x) dA(y) -- full off-diagonal form needs ngsolve.bem
+      surface BEM (MaxwellSL on a thin 3D shell embedded in (x, y, 0)
+      plane), DEFERRED -- see ``# TODO`` in the demo file.
+
+  (c) ``--regularize linf --jmax VAL``: scipy SLSQP with per-vertex
+      ``|grad psi(v)| <= jmax`` constraint.  Warm-started from H1 solve.
+      EXPERIMENTAL -- SLSQP is slow at ndof = 1773 H1 order-2 (~ 5 sec
+      per iteration, may not converge to tight cap).  Best with H1
+      order=1 + larger maxh.  Use for hot-spot suppression studies.
+
+  (d) ``--deform --deform-params {zoff, bump, zoff+bump} --deform-trials N``:
+      Optuna CMA-ES outer loop over surface deformation parameters.
+      Source surface z = base_z + deform_params (Gaussian bump with
+      amp/cx/cy, or pure z-offset, or both).  Each trial = one full
+      inner SF solve + spiral chain + target field eval; CMA-ES picks
+      deformation to minimise target-plane RMS.
+      Measured on planar uniform-Bz benchmark (H1 inner solver):
+        - 1-param zoff, 10 trials in 7.4 s:    RMS 2.09 % -> 1.50 % (-28 %)
+        - 3-param bump, 20 trials in 22.6 s:   RMS -> **0.77 % (-63 %)**
+        - 4-param zoff+bump, 50 trials in 33 s: RMS -> 0.85 %
+      Best bump = ~-21 mm amp (concave dip pointing AWAY from target),
+      off-centre.  Best zoff = +20 mm (plane translated toward target).
+      Combined optimum is a local minimum that compensates the two
+      effects against each other.
+
+Each knob is composable with the others and with Path-A iteration.
+The infrastructure mirrors the SA-25-020 "(ACA+)+TSVD + CMA-ES" pattern
+(inner linear, outer nonlinear) but extended with smarter regularisation
+choices on the inner side.
+
+  (e) ``--regularize l2_aca``: routes the L2 (Euclidean min-norm) solve
+      through ``radia.stream_function.aca_tsvd`` (HACApK ACA+ + Method-3
+      TSVD).  Validated 2026-05-30 on the planar uniform-Bz demo:
+      RMS identical to ``np.linalg.lstsq`` (1.78 % vs 1.78 %) and Path-A
+      cache-friendly.  Slightly slower at M=25 (1.12 s vs 0.92 s)
+      because ACA+ overhead dominates; the win is for M >> 25 or
+      material kernels.  Confirms the (A) callback contract carries to
+      the advanced demo.
+
+  (f) High-order H1 basis (``--order N``, default 2): NGSolve supports
+      arbitrary p, the advanced demo exposes it.  Measured RMS on the
+      planar uniform-Bz benchmark at the SAME ``maxh=0.025``:
+
+        order=1: RMS 1.02 %, p2p 3.77 %, ndof ~500
+        order=2: RMS 2.09 %, p2p 6.81 %, ndof ~1773
+        order=3: RMS **0.51 %**, p2p **1.83 %**, ndof ~3700  <- sweet spot
+        order=4: RMS 2.04 %, p2p 7.65 %, ndof ~6000
+        order=5: RMS 2.09 %, p2p 7.27 %, ndof ~9000
+
+      Non-monotone in p: the SF discretisation + single-stroke contour
+      extraction + ``nlevels=12`` interact with the smoothness of psi.
+      order=3 happens to be the resolution-matched sweet spot; order=1
+      is also competitive because the linear interpolation matches the
+      contour algorithm cleanly.  This is a benchmark-class observation,
+      not a generic FE convergence statement.
+
+  (g) Composability: deformation + higher order can BACKFIRE if the
+      baseline is already near-optimal.  Empirical: order=3 baseline
+      0.51 % + bump deform (20 trials, 27 s) -> 0.82 % (CMA-ES wastes
+      its budget searching for an even-better point and gets stuck
+      in a sub-optimum).  At order=2 the same deform improves the
+      baseline 2.09 % -> 0.77 % because there is room for improvement.
+      DESIGN RULE: deformation freedom helps most when baseline is
+      suboptimal; turn it OFF when single-shot accuracy is already
+      under a few tenths of a percent.
+
+## 11. Validation strategy (2026-05-30)
+
+After session-long buildout (single-stroke chain, Path-A iteration,
+FE-direct psi, advanced regularisation, surface deformation), the
+framework has the following feature set.  This is a description of
+what we have, not a claim of relative ranking against other tools:
+
+  | Capability                       | Our state              | Related tool / paper       |
+  | -------------------------------- | ---------------------- | -------------------------- |
+  | SF inverse design                | ACA+TSVD, kernel-agn.  | CoilGen (MRI-only OSS)     |
+  | Single-stroke connection         | 3 methods, Kuijpers-1  | Kuijpers 2023 paper        |
+  | Single-stroke compensation       | Path-A monotone (FE)   | Kuijpers 2023 (observes only) |
+  | Bilevel (inner SF, outer geom)   | Optuna CMA-ES          | Comsol Opt (commercial)    |
+  | Regularisation choices           | 5 (L2/H1/sigma/Linf/L_diag) | Liu-Hennig-Korvink (H2)|
+  | High-order FE psi                | H1 order p (any)       | NGSolve raw                |
+  | Material-kernel extension        | callback ready (TODO demo) | -- (commercial FEM)    |
+  | ngsolve.bem 2604 alignment       | callback contract matches  | Joachim/Pierre upstream|
+
+  No published OSS combines all eight in a single package as far as we
+  have surveyed; literature search to confirm originality is pending.
+  Each individual capability has a literature precedent.
+
+**Validation gap (industry-standard benchmarks not yet reproduced)**:
+
+  Reproducing the published target specs (DSV, gradient strength,
+  linearity, inductance, wire length) and reporting our numbers
+  alongside is what the framework still needs:
+
+    1. Bilac et al., Magn Reson Imaging (TBD year): planar shim coil
+       benchmarks.  Closest to our planar uniform Bz demo.
+    2. Turner, J. Phys. D 19 L147 (1986): cylindrical gradient coil
+       analytical formulation.  Has explicit SFD expressions; we can
+       compare ours to it directly.
+    3. Lemdiasov & Ludwig, Concepts Magn Reson Part B (2005): target
+       field method for MRI gradient coils.  Open-published spec.
+    4. Forbes & Crozier 2002-2010 series: rigorous mathematical
+       formulation with minimum-inductance regularisation.  Reference
+       for our inductance_diag mode upgrade.
+    5. CoilGen (Schwartz et al., GitHub): the directly-comparable OSS
+       SF coil designer.  Head-to-head same-spec comparison.
+
+  Recommendation: 2-week validation campaign:
+
+    Week 1: implement Bilac + Turner + Lemdiasov-Ludwig benchmarks in
+            ``examples/stream_function/benchmarks/`` with literature
+            target specs; produce a benchmark table.
+    Week 1 end: install CoilGen, run identical spec, head-to-head table.
+    Week 2: shielded coil (iron back plate) via Radia MMM kernel
+            through the (A) callback -- material-kernel demo not
+            previously combined this way in OSS that we know of.
+            Verify against any commercial-FEM equivalent before
+            claiming originality of the open-source-first scope.
+    Week 2 end: paper draft with the benchmark table and the Path-A
+            compensation methodology.
+
+**Candidate contribution claims for the paper** — calibrated by
+what is genuinely novel.  ACA+TSVD itself is NOT new: Bebendorf 2000
+(original ACA), Bebendorf-Rjasanow 2003 (ACA+), Hackbusch 2008
+"Hierarchical Matrices" (TSVD recompression / "round" operation) are
+standard H-matrix primitives.  The SA-25-020 paper applied the
+combination to SF coil design; even that may have international
+precedent in the MRI gradient coil + H-matrix literature (need to
+check Kurz-Rain-Rjasanow IEEE TMag and MRI gradient coil community).
+
+What THIS session adds on top of SA-25-020 may have real novelty:
+
+  1. Path-A compensated iteration on FE-direct psi with empirical
+     monotone convergence on the planar uniform Bz benchmark.
+     Extends Kuijpers 2023's "deviation = field error" observation
+     from a SELECTION criterion to a SOLVE update -- they observe and
+     pick the least-bad chain; we fold the chain's parasitic field
+     back into the solve and iterate.  Literature search for prior
+     compensated-iteration in coil design is needed before claiming.
+  2. Representation-dependence of Path-A -- the same fixed-point map
+     converges only when psi is a continuous FE function; on the
+     grid-sampled basis-loop representation it oscillates.  This
+     methodological observation has not (to our knowledge) been
+     pointed out in print.
+  3. Empirical complexity-tier framework (Easy/Medium/Hard/Harder) --
+     probably an articulation of community-implicit knowledge rather
+     than a discovery, but useful as a design guide.
+  4. Material-kernel extension via kernel-agnostic callback,
+     demonstrated on a shielded coil with iron back plate (TODO).
+     The callback abstraction itself is a standard H-matrix library
+     pattern; the contribution is the SF-coil-design APPLICATION on
+     magnetic materials, not the contract.
+
+The strongest candidate for a methods-paper headline is (1) Path-A
+compensated iteration; (2) is the supporting methodological result.
+Everything else is engineering integration that strengthens the demo
+but is not a methods contribution on its own -- but the integration
+itself is a legitimate IMPLEMENTATION CONTRIBUTION for a software-
+focused venue (JOSS, SoftwareX, methods-paper Implementation section).
+
+**Implementation contribution (separate from algorithmic novelty)**:
+
+The integrated pipeline combines three libraries that are valuable
+separately but have not been combined for SF coil design (literature
+check pending):
+
+  - NGSolve ``ngsolve.bem`` (Schoeberl 2024+; HTool bridge by Pierre
+    Marchand 2026-04-20): surface BEM operators, arbitrary-order
+    FE basis, Sauter-Schwab quadrature, block-entry callback API
+    (``CalcSubMatrix``, ``CalcSubMatrixCapsule``).
+  - HACApK (Ida et al., ppOpen-HPC, MIT 2015+): kernel-agnostic ACA+
+    H-matrix solver, callback via ``HACApK_set_entry_func``.
+  - Radia (ESRF + Sugahara Lab): MMM/MSC material kernels,
+    PEEC, single-stroke chain construction, Path-A iteration,
+    kernel-agnostic ``radia.stream_function.aca_tsvd``.
+
+Value of the integration:
+
+  1. Callback-contract alignment -- ngsolve.bem ``CalcSubMatrix``,
+     HACApK ``HACApK_set_entry_func``, and
+     ``radia.stream_function.aca_tsvd(entry)`` are all
+     ``entry(i, j) -> float`` (or block-form) compatible.  This
+     alignment is upstream-organic; we provide the SF-coil-design
+     glue that uses it.
+  2. Kernel-swap transparency -- same pipeline for free-space
+     Biot-Savart, Radia MMM iron yoke, SIBC workpiece, future
+     application kernels by replacing the entry function.  Chain
+     construction, Path-A, regularisation, deformation are unchanged.
+  3. End-to-end OSS pipeline -- to our knowledge no other OSS SF
+     coil designer combines kernel-agnostic SF inverse design +
+     single-stroke chain construction + material-kernel support in
+     one package.  CoilGen is MRI-only and free-space-only.
+     Commercial Comsol AC/DC + Opt Module is comparable in scope
+     but closed source.
+  4. Active upstream alignment -- NGSolve 6.2.2604+ shipped the
+     ``ngsolve.bem`` HTool bridge that our ``aca_tsvd`` callback
+     contract is structurally compatible with.
+
+For the paper:
+
+  - Methods paper: short Implementation section near the end,
+    crediting Schoeberl, Marchand, Ida, Sugahara, framing as
+    "we integrate" not "we invent".
+  - JOSS / SoftwareX: integrated pipeline IS the contribution,
+    with demos + validation as evidence of usefulness.
+
+The two framings are not mutually exclusive (= a methods paper + a
+companion JOSS paper is a common pattern).
+
+**State**:
+
+  - Feature set: complete for the SF inverse-design pipeline plus
+    several extensions (Path-A, regularisation choices, deformation).
+  - Validation: not yet reproduced against industry benchmarks --
+    that is the campaign described above.
+  - Manuscript: methods + theory material is in the docs folder; the
+    results section is gated on the benchmark numbers.
+  - Timing: NGSolve 6.2.2604 (April 2026) shipped the H-matrix bridge
+    that other SF + BEM groups will likely build on over 6-12 months;
+    if proof-of-priority on any specific contribution is intended the
+    validation campaign + arXiv preprint are worth doing sooner.
+
+## 12. Paper draft material ready
+
+Today's outcomes form publishable Methods + Results:
+
+  - Methods: SFM via (ACA+)+TSVD; Kuijpers Method-1 chain on a 4-
+    lobe fingerprint; Path-A iteration; FE-direct H1 psi with min-
+    seminorm regularisation.
+  - Results: complexity tier table (numbers above); Gx 16.24 %
+    baseline; planar 0.47 % monotone-converged FE-direct; dead-end
+    catalogue as supplementary material.
+  - Open extensions: cylindrical Gx FE-direct (Hard tier test);
+    material kernel via (A) callback; multivalued potential D-path.
+
+References to cite:
+  - Kuijpers, Jansen, Lomonova, Compumag 2023 [525] (TU/e EPE).
+  - Liu, Hennig, Korvink, IEEE TM 48 (2012) 1179 (H2-smooth SFD).
+  - Sugahara Lab, SA-25-020 ((ACA+)+TSVD lineage).
+  - HACApK (ppOpen-HPC, MIT, ``src/ext/HACApK/``).
+"""
+
+
+ACA_TSVD_REGULARIZED = r"""
+# Regularisation folded into the ACA+TSVD factorisation (2026-05-31)
+
+The constrained min-norm problem
+
+    min   psi^T S psi      s.t.    A psi = B
+
+(S any SPD regularisation matrix on the free DOFs) admits a clean
+closed form on top of the ACA+TSVD ``A ~= U Sigma V^T`` (orthonormal V
+columns from method 3 recompression):
+
+    psi = (S^-1 V) . W^-1 . Sigma^-1 . U^T B,    W = V^T S^-1 V (k x k).
+
+Shipped as ``radia.stream_function.RegularizedTSVD`` (radia 4.83.0+):
+
+    @dataclass
+    class RegularizedTSVD:
+        base: StreamTSVD            # ACA+TSVD of A (kernel-agnostic)
+        Sinv_V: ndarray             # (N, k) precomputed S^-1 V
+        W_inv: ndarray              # (k, k) precomputed (V^T S^-1 V)^-1
+
+        @classmethod
+        def from_stiffness(cls, base, S) -> RegularizedTSVD: ...
+
+        def solve(self, B, k_mode=None) -> ndarray:
+            return self.Sinv_V @ (self.W_inv @ ((self.base.U.T @ B)
+                                                 / self.base.S))
+
+Plus a one-shot helper ``pseudo_inverse_solve_regularized(result, B,
+S)`` for non-iterated use.
+
+## Derivation
+
+    A^T          = V Sigma U^T
+    S^-1 A^T     = (S^-1 V) Sigma U^T
+    A S^-1 A^T   = U Sigma (V^T S^-1 V) Sigma U^T = U Sigma W Sigma U^T
+    (A S^-1 A^T) pinv = U Sigma^-1 W^-1 Sigma^-1 U^T   (rank-k Moore-Penrose)
+    psi          = S^-1 A^T (A S^-1 A^T) pinv B
+                 = (S^-1 V) Sigma U^T . U Sigma^-1 W^-1 Sigma^-1 U^T B
+                 = (S^-1 V) . W^-1 . Sigma^-1 . U^T B    (Uses U^T U = I_k)
+
+## Sanity (verified 2026-05-31)
+
+  - S = I: W = V^T V = I_k (because V has orthonormal cols), so
+    formula reduces to psi = V Sigma^-1 U^T B == ``pseudo_inverse_solve``.
+    Numerical match: 9.96e-16 (machine precision).
+  - Random SPD S: matches the direct Lagrangian solution
+    psi = S^-1 A^T (A S^-1 A^T)^-1 B to 9.3e-15.
+  - Constraint: A psi = B to 5.9e-15.
+  - Error scales with aca_eps: at eps=1e-13 the cached psi matches
+    direct to 4.9e-9; at eps=1e-10 the cached form has ACA+ noise of
+    relative size ~1.5e-3 in the (highly-underdetermined) nullspace
+    but seminorm matches to 2.2e-6 (the optimisation target IS
+    near-machine-precision unchanged).
+
+## Why this matters
+
+  1. ACA+ amortisation -- the heavy O(k * (M + N)) ACA+ runs ONCE,
+     regardless of how many B vectors / how many S choices / how many
+     Path-A iterations follow.
+  2. Path-A inner solve becomes O(k * (M + N)) -- a single (k x N)
+     matvec, one k x k inverse-apply, one (M, k) matvec.  Measured
+     0.04 ms / iter at N=1773, k=25; vs ~10 ms / iter for the direct
+     H1 path-solve.  100-iter Path-A wall time drops 50s -> ~1s.
+  3. Regularisation sweep is cheap -- once ACA+ is paid, scanning L2 /
+     H1 / sigma-weighted H1 / inductance-diagonal / Lawson-IRLS L_inf
+     each costs only one ``Sinv_V`` build + one k x k inverse.
+  4. Material-kernel lift -- when each A(i, j) is a Radia ``rad.Solve()``
+     + ``rad.Fld()`` (= MMM iron yoke, shielded coil), the ACA+
+     amortisation is the dominant cost; the regularisation-folded
+     form means all design choices share that cost.
+
+## Path-A cached integration (production pattern)
+
+```python
+from radia.stream_function import aca_tsvd, RegularizedTSVD
+
+# Once per design problem
+res = aca_tsvd(M, N, entry, modes=M, aca_eps=1e-10)
+reg = RegularizedTSVD.from_stiffness(res, S_free)
+psi_initial = reg.solve(B_target)
+
+# In the Path-A outer loop:
+for it in range(n_iter):
+    # ... compute residual from current chain ...
+    delta_psi = reg.solve(residual)             # 0.04 ms each
+    psi = psi + step * delta_psi
+    # ... recompute chain from psi ...
+```
+
+The base ``res`` and the cache ``reg`` survive the loop; the per-iter
+work shrinks to a few matvecs.
+
+## IRLS for L_inf on top of the cache
+
+``solve_linf_irls`` in
+``examples/stream_function/demo_planar_uniform_fem_psi_advanced.py``
+rebuilds S^(k) each IRLS iter (vertex weights that depend on
+|grad psi^(k-1)|) but ALWAYS folds into the SAME ACA+TSVD base:
+
+    res = aca_tsvd(...)                # ONCE
+    for k in range(n_iter_irls):
+        w_v = bounded_active_set_weight(|grad psi^(k-1)|_v)
+        S_k = assemble_weighted_h1_stiffness(w_v)
+        reg_k = RegularizedTSVD.from_stiffness(res, S_k)
+        psi_k = reg_k.solve(B)
+
+Bounded-ratio (``weight_ratio_max=20``) + damped (``damping=0.5``) +
+active-set boost (``hot_quantile=0.85, hot_boost=3``) keeps the system
+well-conditioned where pure Lawson IRLS oscillates.  Optional final
+scalar rescale enforces ``max_v |grad psi| <= jmax`` exactly.
+
+On the planar uniform-Bz benchmark the H1 baseline already has
+peak/mean gradient ~= 1.47 (near-L_inf-uniform), so IRLS gives 10-30%
+peak reduction.  On harder geometries with hot spots (Gx fingerprint
+chains, surface-deformed coils) the framework has more bite without
+re-factorising A.
+
+## Demo
+
+``examples/stream_function/demo_regularized_aca.py`` exercises all 5
+modes routed through the cached form (l2 / h1 / h1_sigma /
+inductance_diag / linf_irls) and reports per-mode fold time, solve
+time, continuous residual, single-stroke chain RMS, and best-fit
+single current I_w on the planar uniform-Bz benchmark.  All four
+closed-form modes hit ||A psi - B|| / ||B|| < 1e-14 (machine-precision
+constraint satisfaction); IRLS does not because its jmax rescale is
+binding (RMS 1.12 % is the field-fit cost of the L_inf cap).
+
+## Constrained reg-aware Optuna loop -- "min reg s.t. RMS <= eps"
+
+The cached ``RegularizedTSVD`` lifts naturally into the standard
+MRI-shim / gradient-coil bilevel formulation: minimise the
+regularisation norm (= inductance / dissipation / surface current L2,
+depending on which S) subject to a field-uniformity tolerance.
+
+Shipped in ``demo_planar_uniform_fem_psi_advanced.py`` with two new
+CLI flags:
+
+    --minimize-reg          # switch the Optuna objective from RMS to reg_norm
+    --eps-rms 0.025         # RMS tolerance (default 2 %)
+    --reg-penalty 100       # quadratic-penalty weight (auto-scaled to reg_norm)
+
+Implementation: scalar single-objective CMA-ES (same sampler as the
+RMS-min loop) with penalty form
+
+    cost = reg_norm + reg_scale * penalty_weight * max(0, RMS/eps - 1)^2
+
+where ``reg_scale`` is set from the FIRST trial's reg_norm so units
+match.  ``best_feasible`` (the lowest reg_norm among trials satisfying
+the constraint) is tracked separately on ``study.user_attrs``.
+
+### Measured Pareto trade-off (planar uniform Bz, 8 trials, eps=2.5 %)
+
+| Mode                          | RMS    | psi^T S psi (H1)  | Note                          |
+|-------------------------------|--------|--------------------|-------------------------------|
+| Flat baseline (no deform)     | 2.09 % | 2.59e+06           | reference                     |
+| min(RMS) (CMA-ES)             | 0.77 % | 2.74e+06           | accuracy-opt; energy UP from baseline |
+| min(reg) s.t. RMS <= 2.5 %    | 1.82 % | 2.15e+06           | meets spec, 28 % LOWER energy vs min(RMS) |
+
+The accuracy-optimal point uses MORE energy than the flat baseline
+because squeezing RMS from 2 % to 0.8 % requires localised current
+concentrations.  The reg-min constrained point trades some
+(in-spec) accuracy for ~25-30 % lower surface current L2 -- the
+classical MRI-shim Pareto answer.
+
+### Cache reuse
+
+Because ``A`` changes per trial when the surface deforms, the cached
+``RegularizedTSVD`` is rebuilt per trial.  What IS amortised:
+``_compute_reg_norm`` builds ``S`` once per trial (~50 ms) then a
+single matvec.
+
+## Optimising the regularisation SHAPE (fixed surface, ACA+ reused)
+
+The dual of the deformation loop: keep the surface FIXED, optimise
+``sigma(x, y)`` (where current flows) in the 1/sigma-weighted H1
+seminorm.  Now ``A`` is CONSTANT, so the ACA+TSVD base is computed
+ONCE and reused across every Optuna trial -- only the cheap fold
+``S^-1 V + W = V^T S^-1 V`` is rebuilt per trial.  This is the
+genuine demonstration of the folded form's amortisation (the
+deformation loop cannot show it because A changes there).
+
+Shipped in ``examples/stream_function/demo_reg_hyperparam_aca.py``:
+CMA-ES over a Gaussian conductivity feature
+
+    sigma(x, y) = 1 + amp * exp(-((x-cx)^2 + (y-cy)^2)/width)
+
+inner solve ``min INT (1/sigma)|grad psi|^2 s.t. A psi = B`` folded
+through the cached base.
+
+### Result (planar uniform Bz, 30 trials, 15 s)
+
+| Quantity                | Uniform sigma (plain H1) | Optimised sigma |
+|-------------------------|--------------------------|-----------------|
+| single-stroke chain RMS | 2.09 %                   | **0.73 %**      |
+| wire length             | 18.98 m                  | 18.91 m         |
+
+Optimiser finds amp ~= -0.81 (an ~80 % conductivity DIP at centre)
+which pushes current toward the periphery -- the Helmholtz-like
+distribution that produces a more uniform central Bz.  2.9x RMS drop
+with NO geometry change, NO new target, purely by reshaping the
+regularisation penalty.  Comparable to the surface deformation loop
+(0.77 %) via an orthogonal, physically cheaper DOF.
+
+### Timing breakdown (proves the amortisation)
+
+    ACA+TSVD base (U, Sigma, V):  ONCE, ~33 ms
+    per trial:  build S(sigma) -> S^-1 V -> W -> solve  (~43 ms fold)
+                ACA+ base NOT recomputed
+
+At FE scale the ~33 ms base is small, but with a MATERIAL kernel
+(rad.Solve()+rad.Fld() per entry, ~100x slower) the ACA+ base would
+dominate and reusing it across the 30-trial sweep is the entire
+performance argument.
+
+## Multi-objective NSGA-II Pareto front -- ``--pareto``
+
+The penalty form gives ONE point.  To trace the full Pareto curve
+of ``(RMS, psi^T S psi)`` in a single Optuna run, switch to
+multi-objective NSGA-II:
+
+    --pareto                # requires --deform; mutually exclusive with --minimize-reg
+
+Implementation:
+
+  - ``optuna.samplers.NSGAIISampler(seed=42, population_size=auto)``
+  - ``optuna.create_study(directions=["minimize", "minimize"])``
+  - ``objective(trial) -> (rms, reg_norm)`` tuple
+  - ``study.best_trials`` = non-dominated set; demo deduplicates
+    (NSGA-II re-evaluating same params across generations is common)
+    and sorts by RMS
+
+Outputs:
+
+  - ``demo_pareto_results.json`` -- all trials + Pareto front
+  - ``demo_pareto_plot.png`` -- scatter + Pareto curve
+
+### Measured Pareto front (planar uniform Bz, 50 trials, H1, bump)
+
+| RMS    | psi^T S psi  | bump (amp, cx, cy)        | Note         |
+|--------|--------------|----------------------------|--------------|
+| 0.58 % | 2.80e+06     | (-0.032, -0.059, +0.007)   | accuracy end |
+| 0.61 % | 2.46e+06     | (+0.021, -0.144, +0.141)   | **knee**     |
+| 1.04 % | 2.29e+06     | (+0.045, +0.140, -0.121)   |              |
+| 1.39 % | 2.27e+06     | (+0.045, -0.059, +0.146)   |              |
+| 1.67 % | 2.27e+06     | (+0.045, -0.062, +0.146)   |              |
+| 2.13 % | 2.20e+06     | (+0.044, +0.099, +0.081)   | energy end   |
+
+Wall time: **33 s** (50 inner SF solves).  Sharp KNEE at ~0.6 % RMS --
+12 % reg drop for only 0.03 % accuracy loss.  Past the knee the curve
+flattens.  Plain ``min(RMS)`` CMA-ES collapses to (0.77 %, 2.74e+06)
+on the same problem; NSGA-II's accuracy end is BETTER on field but
+slightly worse on energy -- expected behaviour, scalar minimisation
+finds one specific point while NSGA-II explores the front.
+
+### Mode selection table
+
+| Situation                                              | Use            |
+|--------------------------------------------------------|----------------|
+| Spec known up-front ("RMS must be <= 2 %")             | --minimize-reg --eps-rms 0.02 |
+| Choosing the spec (operating point unknown)            | --pareto       |
+| Single number for a DoE                                | --minimize-reg |
+| Pareto-front figure for a paper                        | --pareto       |
+| Budget < 15 trials                                     | --minimize-reg |
+| Budget >= 30 trials                                    | either; --pareto gives more info/trial |
+
+## References / cross-links
+
+  - ``docs/stream_function/regularization.md`` -- user-facing docs
+  - ``docs/stream_function/deformation.md`` -- constrained reg-aware
+    loop section + Pareto trade-off table
+  - ``radia.stream_function.RegularizedTSVD`` -- implementation
+  - ``aca_tsvd(performance)`` -- ACA+ amortisation numbers
+  - ``aca_tsvd(session_2026_05_30)`` -- Section 10 (regularisation
+    sweep + deformation) is the prior, non-folded form
+  - Hansen 1998 "Rank-Deficient and Discrete Ill-Posed Problems"
+    SIAM -- standard reference for TSVD + Tikhonov; the specific
+    Path-A x cached folded form is the SF-coil-design-specific
+    composition implemented here.
 """
 
 
@@ -458,6 +1579,8 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "literature": ACA_TSVD_LITERATURE,
         "workflow": ACA_TSVD_WORKFLOW,
         "single_stroke": ACA_TSVD_SINGLE_STROKE,
+        "session_2026_05_30": ACA_TSVD_SESSION_2026_05_30,
+        "regularized": ACA_TSVD_REGULARIZED,
     }
     aliases = {
         "kernel": "kernel_agnostic", "generic": "kernel_agnostic",
@@ -476,6 +1599,88 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "crossover": "single_stroke", "connect": "single_stroke",
         "kuijpers": "single_stroke", "fingerprint": "single_stroke",
         "spiral": "single_stroke", "manufacturable": "single_stroke",
+        # 2026-05-30 session summary
+        "session": "session_2026_05_30",
+        "summary": "session_2026_05_30",
+        "today": "session_2026_05_30",
+        "2026_05_30": "session_2026_05_30",
+        "2026-05-30": "session_2026_05_30",
+        # Specific session sub-topics route to the session summary
+        "complexity_tier": "session_2026_05_30",
+        "tier": "session_2026_05_30",
+        "chain_methods": "session_2026_05_30",
+        "path_a": "session_2026_05_30",
+        "path-a": "session_2026_05_30",
+        "compensated": "session_2026_05_30",
+        "fe_direct": "session_2026_05_30",
+        "fe-direct": "session_2026_05_30",
+        "fem_psi": "session_2026_05_30",
+        "dead_ends": "session_2026_05_30",
+        "ngsbem": "session_2026_05_30",
+        "ngsolve_bem": "session_2026_05_30",
+        "ngsolve.bem": "session_2026_05_30",
+        "2604": "session_2026_05_30",
+        "htool": "session_2026_05_30",
+        "calcsubmatrix": "session_2026_05_30",
+        "fmm_vs_aca": "session_2026_05_30",
+        "callback_contract": "session_2026_05_30",
+        "planar_uniform": "session_2026_05_30",
+        # 2026-05-31: regularisation-folded ACA+TSVD closed form
+        "regularised": "regularized",
+        "regularization": "regularized",
+        "regularisation": "regularized",
+        "reg_tsvd": "regularized",
+        "regularizedtsvd": "regularized",
+        "regularized_tsvd": "regularized",
+        "folded": "regularized",
+        "closed_form": "regularized",
+        "closed-form": "regularized",
+        "lawson": "regularized",
+        "irls": "regularized",
+        "linf_irls": "regularized",
+        "h1_cache": "regularized",
+        "sinv_v": "regularized",
+        "w_inv": "regularized",
+        "demo_regularized_aca": "regularized",
+        "path_a_cache": "regularized",
+        # Constrained reg-aware Optuna loop (2026-05-31)
+        "minimize_reg": "regularized",
+        "minimise_reg": "regularized",
+        "min_reg": "regularized",
+        "eps_rms": "regularized",
+        "pareto": "regularized",
+        "constrained": "regularized",
+        "mri_shim": "regularized",
+        "shim": "regularized",
+        "gradient_coil": "regularized",
+        "reg_aware": "regularized",
+        "reg-aware": "regularized",
+        # NSGA-II multi-objective Pareto (2026-05-31)
+        "nsga": "regularized",
+        "nsga2": "regularized",
+        "nsga-ii": "regularized",
+        "nsgaii": "regularized",
+        "multiobjective": "regularized",
+        "multi_objective": "regularized",
+        "multi-objective": "regularized",
+        "pareto_front": "regularized",
+        "pareto-front": "regularized",
+        "trade_off": "regularized",
+        "tradeoff": "regularized",
+        "trade-off": "regularized",
+        # sigma-shape reg-hyperparameter sweep (fixed surface, ACA+ reused)
+        "sigma_shape": "regularized",
+        "sigma-shape": "regularized",
+        "reg_hyperparam": "regularized",
+        "reg_hyperparameter": "regularized",
+        "hyperparameter": "regularized",
+        "hyperparam": "regularized",
+        "sigma_optuna": "regularized",
+        "fixed_surface": "regularized",
+        "demo_reg_hyperparam_aca": "regularized",
+        "aca_reuse": "regularized",
+        "aca_amortisation": "regularized",
+        "aca_amortization": "regularized",
     }
     t = aliases.get(t, t)
     if t == "all":
@@ -483,10 +1688,12 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
                             ACA_TSVD_KERNEL_AGNOSTIC, ACA_TSVD_PERFORMANCE,
                             ACA_TSVD_CMAES, ACA_TSVD_VALIDATION,
                             ACA_TSVD_LITERATURE, ACA_TSVD_WORKFLOW,
-                            ACA_TSVD_SINGLE_STROKE])
+                            ACA_TSVD_SINGLE_STROKE,
+                            ACA_TSVD_SESSION_2026_05_30,
+                            ACA_TSVD_REGULARIZED])
     if t in table:
         return table[t]
     return (f"Unknown topic '{topic}'.  Available: overview, method, api, "
             "kernel_agnostic, performance, cmaes, validation, literature, "
-            "workflow, single_stroke, all.\n\n"
+            "workflow, single_stroke, session_2026_05_30, regularized, all.\n\n"
             + ACA_TSVD_OVERVIEW)

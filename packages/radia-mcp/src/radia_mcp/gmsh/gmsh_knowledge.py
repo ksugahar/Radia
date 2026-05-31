@@ -971,6 +971,81 @@ Use `Merge "file.step"; Merge "field.msh";` in .geo.
 **Problem**: `pip install gmsh` creates gmsh.bat (Python wrapper).
 **Fix**: Radia uses standalone gmsh.exe (`C:\\gmsh.exe`).
 The Python gmsh package is NOT installed.
+
+## 9. GMSH window appears "invisible" -- it's on an off-screen monitor
+
+**Symptom**: After running a viewer script (e.g. `python view_*_gmsh.py` or
+`open_gmsh.py file.msh`), the user reports "GMSHが見えない" / "GMSH is
+invisible" but `tasklist` shows python.exe is running.
+
+**Root cause**: GMSH restores the LAST-USED window position from
+`%APPDATA%/gmsh-options` (or its in-process cache). If the user EVER had
+a second monitor attached at a coordinate like x=-2560, every subsequent
+GMSH launch silently opens at THOSE coordinates -- which now correspond
+to no physical display. The window is real (`IsWindowVisible=True`,
+`IsIconic=False`), just at a coordinate region you can't see.
+
+**Diagnostic** (PowerShell):
+```powershell
+# Step 1: confirm the window exists with title "Gmsh - <file>".
+Get-Process python | Select-Object Id, MainWindowTitle, SessionId
+
+# Step 2: P/Invoke GetWindowRect to inspect coordinates. Negative x = off-screen.
+Add-Type -Namespace W -Name U -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
+public struct RECT { public int L; public int T; public int R; public int B; }
+'@
+$h = (Get-Process python | Where-Object MainWindowTitle -Match Gmsh).MainWindowHandle
+$r = New-Object W.U+RECT; [W.U]::GetWindowRect($h, [ref]$r) | Out-Null
+"$($r.L),$($r.T) - $($r.R),$($r.B)"
+```
+
+**Reactive rescue** (move the existing window onto the primary monitor):
+```powershell
+Add-Type -Namespace W -Name U -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool MoveWindow(System.IntPtr h, int X, int Y, int W, int H, bool R);
+'@
+$h = (Get-Process python | Where-Object MainWindowTitle -Match Gmsh).MainWindowHandle
+[W.U]::MoveWindow($h, 100, 100, 1280, 800, $true)
+```
+
+**Preventive (bake into every viewer script)**: force window geometry
+BEFORE `gmsh.fltk.run()` so the stale saved position can't take effect.
+```python
+import gmsh
+gmsh.initialize(["-noconfig"])  # skip %APPDATA%/gmsh-options stale geom
+gmsh.option.setNumber("General.GraphicsPositionX", 100)
+gmsh.option.setNumber("General.GraphicsPositionY", 100)
+gmsh.option.setNumber("General.GraphicsWidth", 1280)   # NOT GraphicsSizeX
+gmsh.option.setNumber("General.GraphicsHeight", 800)   # NOT GraphicsSizeY
+gmsh.option.setNumber("General.MenuPositionX", 100)
+gmsh.option.setNumber("General.MenuPositionY", 100)
+gmsh.merge(msh_path)
+gmsh.fltk.run()
+gmsh.finalize()
+```
+
+The option names are Width/Height in GMSH 4.x. SizeX/SizeY were never
+valid and raise "Could not set option" immediately; do NOT copy-paste
+that variant from older gmsh tutorials.
+
+**Wrong hypotheses to skip** when triaging "GMSH invisible":
+1. "Claude Code background process lacks GUI access" -- WRONG. The python
+   process IS on Console session 1, MainWindowTitle is set normally.
+2. "Need `gmsh.initialize(sys.argv, run=True)` instead of `gmsh.fltk.run()`"
+   -- that distinction matters ONLY in Cubit's embedded Python, NOT here.
+3. "Use Start-Process to detach the launch" -- detaching does not help
+   when the window restores to off-screen coordinates regardless of
+   process owner.
+
+**ALWAYS check window geometry FIRST** before re-launching, re-coding the
+viewer, or hypothesising about launch paths. Reference incident
+2026-05-30 (third recurrence): user observed Gx fingerprint coil viewer
+producing python.exe with empty stdout; GetWindowRect returned
+(-2560, 497) - (-1166, 1957), MoveWindow rescued it. Documented in
+`memory/feedback_gmsh_gui_invisible_from_background.md`.
 """
 
 

@@ -26,6 +26,7 @@ import pytest
 
 from radia.stream_function import (
     aca_tsvd, pseudo_inverse_solve, radia_field_kernel,
+    RegularizedTSVD, pseudo_inverse_solve_regularized,
 )
 
 # f2py reference (LAB-only network drive).
@@ -207,6 +208,154 @@ def test_aca_tsvd_validates_args():
         aca_tsvd(0, 5, lambda i, j: 0.0, modes=1, kmax=1)
     with pytest.raises(TypeError):
         aca_tsvd(5, 5, 123, modes=1, kmax=1)  # not callable
+
+
+# --------------------------------------------------------------------------
+# RegularizedTSVD -- regularisation-folded pseudo-inverse
+#   phi = (S^-1 V) . W^-1 . diag(1/Sigma) . U^T B,  W = V^T S^-1 V (k x k)
+# Solves  min phi^T S phi  s.t.  A phi = B  with the factorisation cached.
+# --------------------------------------------------------------------------
+def _random_dense_problem(M=12, N=90, seed=0):
+    """A random over-parameterised system + a target in range(A)."""
+    rng = np.random.default_rng(seed)
+    A = rng.standard_normal((M, N)) / np.sqrt(N)
+    B = rng.standard_normal(M)
+    res = aca_tsvd(M, N, lambda i, j: float(A[i, j]),
+                   modes=M, kmax=min(M, N), aca_eps=1.0e-13, method=3)
+    return A, B, res
+
+
+def _spd(N, seed):
+    rng = np.random.default_rng(seed)
+    G = rng.standard_normal((N, N))
+    return G @ G.T + 0.1 * np.eye(N)
+
+
+def test_regularized_identity_matches_standard_pseudo_inverse():
+    """S = I reduces to the plain min-Euclidean-norm pseudo-inverse:
+    W = V^T V = I_k (V columns orthonormal from TSVD), so the formula
+    collapses to phi = V Sigma^-1 U^T B == pseudo_inverse_solve."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    phi_std = pseudo_inverse_solve(res, B)
+    phi_reg = pseudo_inverse_solve_regularized(res, B, np.eye(N))
+    rel = np.linalg.norm(phi_reg - phi_std) / np.linalg.norm(phi_std)
+    assert rel < 1.0e-10
+
+
+def test_regularized_matches_direct_lagrangian_spd():
+    """For arbitrary SPD S the cached form matches the direct Lagrangian
+    solution  phi = S^-1 A^T (A S^-1 A^T)^-1 B  to ACA+ tolerance."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=1)
+    phi_reg = pseudo_inverse_solve_regularized(res, B, S)
+    # Direct reference
+    Sinv_AT = np.linalg.solve(S, A.T)
+    small = A @ Sinv_AT
+    lam = np.linalg.solve(small, B)
+    phi_ref = Sinv_AT @ lam
+    rel = np.linalg.norm(phi_reg - phi_ref) / np.linalg.norm(phi_ref)
+    assert rel < 1.0e-7
+
+
+def test_regularized_satisfies_constraint():
+    """A phi = B holds (the constraint is exact for full-row-rank A)."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=2)
+    phi = pseudo_inverse_solve_regularized(res, B, S)
+    assert np.linalg.norm(A @ phi - B) / np.linalg.norm(B) < 1.0e-7
+
+
+def test_regularized_minimises_S_seminorm():
+    """The regularised solution has the SMALLEST phi^T S phi among all
+    phi satisfying A phi = B.  Check against the standard min-Euclidean
+    solution (which minimises phi^T phi, not phi^T S phi): for a
+    non-identity S the regularised phi^T S phi must be <= the
+    Euclidean one's phi^T S phi."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=3)
+    phi_reg = pseudo_inverse_solve_regularized(res, B, S)
+    phi_l2 = pseudo_inverse_solve(res, B)
+    sn_reg = float(phi_reg @ S @ phi_reg)
+    sn_l2 = float(phi_l2 @ S @ phi_l2)
+    assert sn_reg <= sn_l2 + 1.0e-9
+    # ... and the random-perturbation-in-nullspace test: adding any
+    # nullspace component to phi_reg can only increase phi^T S phi.
+    rng = np.random.default_rng(9)
+    # build a nullspace vector: remove r's component in row(A) = range(A^T).
+    # coeff solves min ||A^T coeff - r||; A (r - A^T coeff) = 0 since
+    # coeff = (A A^T)^-1 A r is the least-squares solution.
+    r = rng.standard_normal(N)
+    coeff, *_ = np.linalg.lstsq(A.T, r, rcond=None)
+    null_vec = r - A.T @ coeff
+    assert np.linalg.norm(A @ null_vec) < 1.0e-8   # genuinely in nullspace
+    sn_perturbed = float((phi_reg + 0.3 * null_vec) @ S @ (phi_reg + 0.3 * null_vec))
+    assert sn_perturbed >= sn_reg - 1.0e-9
+
+
+def test_regularized_cache_reuse_across_B():
+    """RegularizedTSVD.from_stiffness factorises ONCE; .solve(B) reused
+    across many right-hand sides gives the same answer as the one-shot
+    helper (this is the Path-A iteration pattern)."""
+    A, _, res = _random_dense_problem()
+    N, M = A.shape[1], A.shape[0]
+    S = _spd(N, seed=4)
+    reg = RegularizedTSVD.from_stiffness(res, S)
+    rng = np.random.default_rng(5)
+    for _ in range(5):
+        B = rng.standard_normal(M)
+        phi_cached = reg.solve(B)
+        phi_oneshot = pseudo_inverse_solve_regularized(res, B, S)
+        assert np.linalg.norm(phi_cached - phi_oneshot) < 1.0e-12
+
+
+def test_regularized_k_mode_truncation():
+    """Truncating to k_mode < modes re-inverts the k_mode x k_mode block
+    of W (W_inv depends on k).  The truncated solve must still satisfy
+    the projected constraint and reduce to the right rank."""
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=6)
+    reg = RegularizedTSVD.from_stiffness(res, S)
+    k = max(1, res.modes // 2)
+    phi_k = reg.solve(B, k_mode=k)
+    assert phi_k.shape == (N,)
+    # The truncated solve uses only the top-k singular directions; the
+    # residual on the retained directions (U[:, :k]^T (A phi - B)) ~ 0.
+    Uk = res.U[:, :k]
+    proj_res = Uk.T @ (A @ phi_k - B)
+    assert np.linalg.norm(proj_res) / (np.linalg.norm(B) + 1e-30) < 1.0e-6
+
+
+def test_regularized_sparse_S_matches_dense():
+    """The scipy-sparse S path (spsolve column-by-column) matches the
+    dense path bit-for-bit (same S, two representations)."""
+    sparse = pytest.importorskip("scipy.sparse")
+    A, B, res = _random_dense_problem()
+    N = A.shape[1]
+    S = _spd(N, seed=7)
+    phi_dense = pseudo_inverse_solve_regularized(res, B, S)
+    phi_sparse = pseudo_inverse_solve_regularized(res, B, sparse.csr_matrix(S))
+    assert np.linalg.norm(phi_dense - phi_sparse) / np.linalg.norm(phi_dense) < 1.0e-9
+
+
+def test_regularized_validates_B_length():
+    A, _, res = _random_dense_problem()
+    N = A.shape[1]
+    reg = RegularizedTSVD.from_stiffness(res, np.eye(N))
+    with pytest.raises(ValueError):
+        reg.solve(np.zeros(res.M + 1))
+
+
+def test_regularized_validates_S_shape():
+    """from_stiffness rejects an S whose size does not match V's rows."""
+    A, _, res = _random_dense_problem()
+    N = A.shape[1]
+    with pytest.raises(ValueError):
+        RegularizedTSVD.from_stiffness(res, np.eye(N + 3))
 
 
 # --------------------------------------------------------------------------
