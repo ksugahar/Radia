@@ -20,10 +20,9 @@ to (re)write::
 
 The .vol is the target of ``test_heat_chain_golden.py``.
 """
-from ngsolve import TaskManager
-
-
 from __future__ import annotations
+
+from ngsolve import TaskManager
 
 import os
 import sys
