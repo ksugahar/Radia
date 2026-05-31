@@ -442,34 +442,52 @@ surfaces.  Confirm against literature before claiming.
 ## Status
 Gz single-stroke = DONE (smooth helix, ``demo_sf_to_peec_gz.py``).
 
-Gx fingerprint single-stroke = DONE (2026-05-30, ``demo_sf_to_peec_gx.py``
-with ``--chain-method {greedy,lobe,kuijpers}``).
+Gx fingerprint single-stroke = DONE (2026-05-30..31,
+``demo_sf_to_peec_gx.py`` with
+``--chain-method {field_aware,kuijpers,lobe,greedy,nn_blend}``).
 
-  Three baseline algorithms shipped, none yet using A/D-style compensation:
+  USE THE ``single-stroke-chain`` CLAUDE SKILL when joining a new coil's
+  contours -- the connection has no clean closed-form optimum and is a
+  reason-and-verify task (the skill encodes the objective + 5 dead-ends +
+  the build->measure-DSV-RMS->compare->escalate-to-Path-A loop).
 
-  - ``greedy``: global nearest-neighbour in (phi, z).  The chain criss-crosses
-    the cylinder, every closed loop opened wherever the previous chain end
-    happens to land.  Visually obvious "wasted" arcs.  Field RMS over DSV
-    21.78 %, x-axis gradient nonlinearity 11.40 %.
-  - ``lobe``: 4-quadrant classification (sign of x_centroid, sign of
-    z_centroid), spiral within each quadrant, 3 inter-quadrant geodesic arcs.
-    Maxwell-pair-style topology.  RMS 23.98 %, nonlin 9.67 %.
-  - ``kuijpers`` (default, recommended): Kuijpers 2023 Method-1 inspired.
-    Each lobe gets a fixed cut phi (`+x` lobes at 0, `-x` at pi); every
-    contour is opened at its cut intersection; contours sorted by cut z;
-    adjacent contours connected by ONE straight (phi, z) rung at the cut.
-    This is the Fig.4 "rung pattern" of the paper.  RMS 16.24 %
-    (-25 % vs greedy, -32 % vs lobe), nonlin 9.73 % (ties best), 23 %
-    fewer segments because each blend is a single straight rung instead
-    of an 8-segment geodesic helix.  Confirms the paper's observation
-    that minimising the deviation region minimises the field error.
+  Five methods shipped:
 
-  Implemented as ``single_stroke_{,lobe_,kuijpers_}chain_phi_z`` in
-  ``examples/stream_function/demo_sf_to_peec_gx.py``.  The ``kuijpers``
-  function is currently the SHORTEST/CLEANEST baseline -- it does NOT yet
-  embed the compensation idea (A) above.  Plugging the Method-1 rung field
-  into the right-hand side and iterating with (ACA+)+TSVD is the next
-  experiment.
+  - ``field_aware`` (DEFAULT, recommended, 2026-05-31): kuijpers
+    lobe/current-sign ORDER (the dominant factor) + each contour's cut
+    chosen by coordinate descent to minimise the AZIMUTHAL arc to its chain
+    neighbours (axial dz is free, carrying no stray), so the rung stray
+    fields cancel more symmetrically over the DSV.  **DSV RMS 9.29 %,
+    x-nonlin 7.20 %** -- beats kuijpers in EVERY tested config (16.24 % ->
+    9.29 % at default; 30-54 % lower across nlevels 10/12/16 + nphi32/nz48).
+  - ``kuijpers`` (prior best): Kuijpers 2023 Method-1.  Per-lobe fixed cut
+    phi (`+x` at 0, `-x` at pi), one straight axial (phi, z) rung per
+    contour pair (Fig.4 rung pattern).  RMS 16.24 %, nonlin 9.73 %.
+  - ``lobe``: 4-quadrant classification + within-quadrant spiral.
+    RMS 23.98 %, nonlin 9.67 %.
+  - ``greedy``: global nearest-neighbour.  Visually "wasted" arcs.
+    RMS 21.78 %, nonlin 11.40 %.
+  - ``nn_blend``: CAUTIONARY negative result.  Geometric-shortest balanced
+    cut + nearest-neighbour order -> RMS 0.651 (WORST).  Geometry-only NN
+    interleaves the four lobes' alternating current signs (+,-,-,+); the
+    shortest-chord hop keeps bridging opposite-sign contours.
+
+  **KEY FINDING (corrects the earlier framing)**: field impact is NOT
+  predicted by rung length -- geometric OR azimuthal.  nn_blend and
+  field_aware have near-equal azimuthal rung totals (12847 vs 12522 mm)
+  but 8x different RMS.  The dominant lever is the current-sign-respecting
+  ORDER; given that, symmetric cut placement (azimuthal-min) makes the rung
+  stray fields cancel.  No single scalar metric captures it -- hence the
+  skill, and why the winning ``field_aware`` came from reason-about-objective
+  + verify, not a closed formula.
+
+  Implemented as ``single_stroke_field_aware_phi_z`` +
+  ``_kuijpers_lobe_order`` + ``single_stroke_{,lobe_,kuijpers_,nn_blend_}
+  chain_phi_z`` in ``examples/stream_function/demo_sf_to_peec_gx.py``.
+
+  **The HARD-tier "16 % ceiling" was a kuijpers-method ARTIFACT, not a
+  fundamental bound** -- the connection METHOD, not just the SF design,
+  gates HARD quality.  And field_aware COMPOSES with Path-A: see below.
 
   Tried-and-rejected sort variants for kuijpers (2026-05-30, save the
   next-session debugging):
@@ -499,12 +517,17 @@ with ``--chain-method {greedy,lobe,kuijpers}``).
   matplotlib traversal direction breaks the field.  The SAFE knob is the
   global within-lobe SORT KEY (cut z, sign(cut y), pair index, etc), but
   the per-contour TRAVERSAL DIRECTION must always be the matplotlib one.
-  Reducing the residual "diagonal criss-cross" rungs visible in the GMSH
-  ``--mode chain`` view therefore requires either (a) a different cut
-  STRATEGY entirely (e.g. min-distance pair between adjacent contours)
-  AND careful tracking of which direction this implies for matplotlib's
-  oriented polyline, or (b) the compensated-iteration approach (A) which
-  bakes the parasitic rung field into the next least-norm solve.
+
+  5th rejected variant + POSITIVE resolution (2026-05-31): ``nn_blend``
+  tried hypothesis (a) above -- a different cut strategy (min-distance
+  balanced cut between adjacent contours) -- but with GEOMETRIC nearest-
+  neighbour ORDER, which interleaves the lobe current signs -> RMS 0.651
+  (WORST).  Keeping kuijpers' sign-respecting ORDER and applying the
+  azimuthal-min balanced cut (= ``field_aware``) is hypothesis (a) DONE
+  RIGHT: RMS 9.29 %, the new best.  So the residual diagonal rungs ARE
+  reducible by a better cut strategy -- as long as the ORDER preserves the
+  current signs.  Both levers (better connection = field_aware, AND the
+  compensated iteration = Path-A below) compose.
 
 ## Path A naive fixed-point iteration -- NEGATIVE result (2026-05-30)
 
@@ -537,6 +560,16 @@ update IF chain field were linear in phi; it is not.
 Implemented mitigation: the demo tracks BEST PSI SEEN across iterations
 and returns it.  This delivers the 5.99 % nonlinearity reliably (any seed
 + alpha=0.05 + n>=24 finds the same neighbourhood).  Modest but real.
+
+**Path-A COMPOSES with field_aware (2026-05-31)**: re-running Path-A on top
+of the ``field_aware`` chain (not kuijpers) reaches DSV RMS **8.11 %** at
+``--compensated-iter 40 --compensated-step 0.3`` (-13 % on top of
+field_aware's 9.29 %), x-nonlin 7.20 % -> 6.27 % -- roughly HALF the old
+kuijpers baseline (16.24 %).  Path-A is STEP-SENSITIVE: step 0.3 gained,
+0.5/0.8 found nothing (best-psi tracker kept the baseline).  Connection
+method (field_aware) and SF-design absorption (Path-A) are SEPARATE levers
+that compose.  Still oscillatory (best-psi tracking, not true convergence)
+on grid-sampled psi; Path-A converges MONOTONICALLY only on FE-direct psi.
 
 Open paths to actual convergence (TBD):
   - Anderson acceleration / quasi-Newton (weighted combination of recent
@@ -829,7 +862,8 @@ See memory ``feedback_fmm_vs_aca_distinction`` for the FMM vs ACA+
 distinction and why we keep slipping on it.
 
   GMSH viewer: ``view_sf_coil_gx_gmsh.py --mode chain`` regenerates the
-  ``kuijpers`` chain and writes a 1D-line .msh; ``--mode contours`` shows
+  chain (now the ``field_aware`` default) and writes a 1D-line .msh;
+  ``--mode contours`` shows
   the raw SF design's closed contours with NO single-stroke connection,
   for direct visual comparison of "what the SFM designed" vs "what got
   manufactured".
@@ -854,33 +888,42 @@ The design quality reachable by Kuijpers-style chaining + Path-A
 iteration is bounded by the coil's TOPOLOGY CLASS.  Empirically, four
 tiers:
 
-  | Tier   | Topology                       | Baseline    | + Path-A    | Behaviour                     |
+  | Tier   | Topology                       | Baseline    | best so far | Behaviour                     |
   | ------ | ------------------------------ | ----------- | ----------- | ----------------------------- |
   | EASY   | axisymmetric / planar uniform  | RMS 2-3 %   | <1 %        | path-A useful (basis-loop)    |
   |        |   + FE-direct H1 psi           | 2 %         | **0.47 %**  | path-A MONOTONE convergence   |
   | MEDIUM | cylindrical Gz                 | already OK  | redundant   | smooth helix natural          |
-  | HARD   | cylindrical Gx fingerprint     | RMS 16 %    | 15 %        | stuck (4-lobe Maxwell pair)   |
+  | HARD   | cylindrical Gx fingerprint     | 16 % (kuijpers) | **8.1 %** (field_aware + Path-A) | chain method matters; NOT 16%-capped |
   | HARDER | shielded / biplanar / 3D       | --          | --          | needs FE-direct or multival.  |
 
 Rule of thumb: classify the tier FIRST.  Going past EASY needs either
-FE-direct continuous psi OR multi-port acceptance.  Past HARD needs
-B-spline SFD or multivalued-potential reformulation.
+FE-direct continuous psi OR multi-port acceptance.  The HARD "16 % ceiling"
+turned out to be a kuijpers-CHAIN-METHOD artifact, NOT a fundamental bound
+(field_aware 9.3 %, + Path-A 8.1 %); past 8 % likely needs B-spline SFD or
+multivalued-potential reformulation.
 
-## 2. Chain methods for single-stroke (Kuijpers 2023 baseline)
+## 2. Chain methods for single-stroke (2026-05-31: field_aware is best)
 
-Three implemented + benchmarked on the cylindrical Gx fingerprint
-(``demo_sf_to_peec_gx.py --chain-method {greedy,lobe,kuijpers}``):
+Five implemented + benchmarked on the cylindrical Gx fingerprint
+(``demo_sf_to_peec_gx.py --chain-method
+{field_aware,kuijpers,lobe,greedy,nn_blend}``):
 
-  | Method   | segs | wire len | DSV RMS | x-axis nonlin |
-  | -------- | ---- | -------- | ------- | ------------- |
-  | greedy   | 1350 | 22.65 m  | 21.78 % | 11.40 %       |
-  | lobe     | 1350 | 24.67 m  | 23.98 % |  9.67 %       |
-  | kuijpers | 1040 | 23.99 m  | 16.24 % |  9.73 %       |
+  | Method        | DSV RMS  | x-axis nonlin |
+  | ------------- | -------- | ------------- |
+  | field_aware   |  9.29 %  |  7.20 %       |
+  | kuijpers      | 16.24 %  |  9.73 %       |
+  | greedy        | 21.78 %  | 11.40 %       |
+  | lobe          | 23.98 %  |  9.67 %       |
+  | nn_blend      | 65.08 %  | 38.90 %       |
 
-``kuijpers`` (Compumag 2023 [525] Method-1 inspired: per-lobe cut
-phi, contours sorted by cut z, straight rung blends) is the default
-recommendation.  Confirms the paper's observation "deviation region
-= field error region" -- minimising deviation minimises field error.
+``field_aware`` (DEFAULT, 2026-05-31) = kuijpers lobe/current-sign ORDER +
+cuts minimising the AZIMUTHAL arc to chain neighbours.  Beats kuijpers in
+every tested config (30-54 % lower RMS across nlevels/mesh sweeps).  KEY:
+field impact is NOT predicted by rung length (geometric or azimuthal) --
+nn_blend and field_aware have near-equal azimuthal totals but 8x RMS; the
+lever is the sign-respecting ORDER + symmetric cut placement (stray
+cancellation).  No closed-form metric -> use the ``single-stroke-chain``
+SKILL (reason + verify).
 
 ## 3. Path-A compensated iteration -- representation dependent
 
@@ -895,7 +938,8 @@ representations:
   | FE-direct (H1 min seminorm)     | 2.09 %     | **0.47 %**   | MONOTONE iter 40-47        |
   | FE-direct + HACApK ACA+TSVD     | 1.78 %     | 0.67 %       | (slightly worse due to     |
   |                                 |            |              | aca_eps=1e-10 truncation)  |
-  | (Gx fingerprint, basis-loop)    | 16.24 %    | 15.28 %      | tier-bounded, no real gain |
+  | (Gx fingerprint, kuijpers chain)| 16.24 %    | 15.28 %      | oscillates, modest          |
+  | (Gx fingerprint, field_aware)   | 9.29 %     | **8.11 %**   | oscillates but composes (-13%)|
 
 WHY representation matters: matplotlib contour extraction on a
 discretised grid TOPOLOGY-JUMPS under small psi changes (level sets
@@ -905,20 +949,26 @@ DOF vector, contour family deforms smoothly, B_c(psi) is smooth,
 Picard contracts.  This is the empirical justification for FE-
 direct as the path past EASY tier.
 
-## 4. Dead-end variants (do NOT re-try)
+## 4. Dead-end variants (do NOT re-try) + the positive resolution
 
-Six attempts on 2026-05-30 that all REDUCED field accuracy:
-
-  Single-stroke chain (Gx fingerprint, kuijpers baseline 16.24 % RMS):
+Five chain attempts that REDUCED field accuracy (Gx, kuijpers 16.24 % ref):
     - Sort by sign(centroid_x): RMS 43.56 % (-x lobe reversal flips current)
     - Force top/bottom cut on closed contours: 30.33 %  (same reason)
     - Pair-aware (+y outer-to-inner, -y inner-to-outer reverse): 40.04 %
     - 8-sub-lobe (sx, sy, sz): 34.64 %
+    - nn_blend geometric-shortest balanced cut + geometric NN order: 65.08 %
+      (NN interleaves the lobe current signs -- the worst of all)
 
-  Common cause: any per-contour reversal flips matplotlib's natural
-  CCW orientation -> current direction inverts -> field broken.
-  SAFE knob = global within-lobe sort key; UNSAFE = per-contour
-  traversal-direction change.  See
+  Common cause (traps 1-4): per-contour reversal flips matplotlib's CCW
+  orientation -> current inverts.  Trap 5 (nn_blend): geometric ORDER
+  interleaves lobe signs.  SAFE knobs = within-lobe sort key + sign-
+  respecting order; UNSAFE = per-contour reversal OR geometric-NN order.
+
+  POSITIVE RESOLUTION (2026-05-31): ``field_aware`` = kuijpers sign-ORDER +
+  azimuthal-min balanced cut reaches RMS 9.29 % (now DEFAULT), + Path-A
+  8.11 %.  The "16 % HARD ceiling" was a kuijpers-method artifact.  Lesson:
+  optimise the FIELD (DSV RMS), verify, and respect the current-sign order
+  -- not rung length.  Now a ``single-stroke-chain`` Claude skill.  See
   [[feedback_single_stroke_chain_orientation_traps]] (memory).
 
   Path-A on basis-loop psi:
@@ -935,7 +985,7 @@ All under ``examples/stream_function/``:
 
   | File                                 | Role                                   | Best RMS | Path-A |
   | ------------------------------------ | -------------------------------------- | -------- | ------ |
-  | ``demo_sf_to_peec_gx.py``            | Gx fingerprint, 3 chain methods        | 16.24 %  | 15.28 %|
+  | ``demo_sf_to_peec_gx.py``            | Gx fingerprint, 5 chain methods (field_aware default) | 9.29 % | **8.11 %** |
   | ``demo_planar_uniform_coil.py``      | Planar uniform Bz, basis-loop          | 2.99 %   | 0.58 % |
   | ``demo_planar_uniform_fem_psi.py``   | Planar uniform Bz, H1 FE-direct        | 1.78 %   | 0.39 % |
   | ``demo_planar_uniform_fem_psi_aca.py`` | Same + HACApK ACA+ via callback      | 1.78 %   | 0.67 % |
@@ -1265,12 +1315,14 @@ companion JOSS paper is a common pattern).
 
 Today's outcomes form publishable Methods + Results:
 
-  - Methods: SFM via (ACA+)+TSVD; Kuijpers Method-1 chain on a 4-
+  - Methods: SFM via (ACA+)+TSVD; single-stroke chaining (Kuijpers
+    Method-1 + the field_aware sign-order/azimuthal-min cut) on a 4-
     lobe fingerprint; Path-A iteration; FE-direct H1 psi with min-
     seminorm regularisation.
-  - Results: complexity tier table (numbers above); Gx 16.24 %
-    baseline; planar 0.47 % monotone-converged FE-direct; dead-end
-    catalogue as supplementary material.
+  - Results: complexity tier table (numbers above); Gx chain
+    16.24 % (kuijpers) -> 9.29 % (field_aware) -> 8.11 % (+ Path-A);
+    planar 0.47 % monotone-converged FE-direct; dead-end catalogue
+    + the field_aware positive resolution as supplementary material.
   - Open extensions: cylindrical Gx FE-direct (Hard tier test);
     material kernel via (A) callback; multivalued potential D-path.
 
@@ -1599,6 +1651,9 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "crossover": "single_stroke", "connect": "single_stroke",
         "kuijpers": "single_stroke", "fingerprint": "single_stroke",
         "spiral": "single_stroke", "manufacturable": "single_stroke",
+        "field_aware": "single_stroke", "field-aware": "single_stroke",
+        "nn_blend": "single_stroke", "chain": "single_stroke",
+        "rung": "single_stroke", "azimuthal": "single_stroke",
         # 2026-05-30 session summary
         "session": "session_2026_05_30",
         "summary": "session_2026_05_30",
