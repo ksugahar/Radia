@@ -186,6 +186,23 @@ def solve_heat_axisym(wp_vol,
         return {"error":
                 f"--wp-vol is {wp_mesh.dim}D; axisym needs a 2D mesh "
                 f"in the (r, z) plane.  Use calc_heat.py for 3D."}
+    # --- Workpiece-only mesh contract (radia-ih thermal, axisym) ------
+    # The axisym thermal step targets the WORKPIECE (r, z) cross-section
+    # ONLY -- a single region.  Reject an empty mesh or a multi-region
+    # (coil+wp) mesh loudly rather than heating the coil.  See
+    # calc_heat.py for the 3D twin of this guard.
+    if wp_mesh.ne == 0:
+        return {"error":
+                f"--wp-vol {os.path.basename(wp_vol)} has 0 elements; "
+                f"the axisym thermal step needs a 2D (r, z) workpiece "
+                f"mesh."}
+    _wp_mats = sorted(set(wp_mesh.GetMaterials()))
+    if len(_wp_mats) > 1:
+        return {"error":
+                f"axisymmetric thermal analysis targets the WORKPIECE "
+                f"ONLY, but --wp-vol {os.path.basename(wp_vol)} has "
+                f"{len(_wp_mats)} material regions {_wp_mats}.  Use a "
+                f"workpiece-only (r, z) mesh -- a single region."}
     wp_mesh.Curve(int(fes_order))
     _log(f"MESH:loaded {os.path.basename(wp_vol)} "
          f"materials={list(wp_mesh.GetMaterials())} "

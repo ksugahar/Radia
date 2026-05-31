@@ -73,6 +73,70 @@ def _parse_vol_bcnames(vol_path):
     return names
 
 
+def _parse_vol_materials(vol_path):
+    """Return the list of volume-material names in a Netgen .vol.
+
+    Parses the ``materials`` section (same line layout as ``bcnames``)
+    from a Netgen .vol text file.  Used by the heat panel to warn early
+    when the user Browse-selects a multi-material (coil+wp) mesh: the
+    thermal step targets the WORKPIECE SOLID only, so a mesh with more
+    than one volume material is rejected by calc_heat.py at Run time.
+    Reading the text directly avoids the ~1-2 s ngsolve import on every
+    Browse-keystroke.
+
+    Format (Netgen .vol)::
+
+        materials
+        <count>
+        1 first_material
+        2 second_material
+        ...
+
+    Returns an empty list on any parse failure or when the file has no
+    ``materials`` section (older exports) -- the panel then stays silent
+    and lets the calc_heat.py-side guard surface the error at Run.
+    """
+    names = []
+    try:
+        with open(vol_path, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return names
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "materials":
+            try:
+                count = int(lines[i + 1].strip())
+            except (ValueError, IndexError):
+                return []
+            for j in range(count):
+                parts = lines[i + 2 + j].strip().split(None, 1)
+                if len(parts) == 2:
+                    names.append(parts[1])
+            return names
+        i += 1
+    return names
+
+
+def _derive_em_vol_from_qsurf(qsurf_path):
+    """Derive the companion EM .vol from a qsurf .sol path.
+
+    calc_fem_kelvin.py writes ``<stem>_qsurf.sol`` alongside
+    ``<stem>_fem.vol``.  Given the .sol, this returns the sibling .vol
+    ONLY when the convention matches AND the file exists -- otherwise ""
+    (never a silent wrong guess).  Used to auto-fill the em_vol field so
+    the user specifies just the qsurf .sol + the workpiece .vol.
+    """
+    if not qsurf_path:
+        return ""
+    suffix = "_qsurf.sol"
+    if qsurf_path.lower().endswith(suffix):
+        cand = qsurf_path[:-len(suffix)] + "_fem.vol"
+        if os.path.isfile(cand):
+            return cand
+    return ""
+
+
 # ============================================================
 # Constants
 # ============================================================
@@ -169,19 +233,25 @@ class HeatPanel(ModePanel):
         # Spatial-mode inputs.  Visibility toggled by
         # _on_heat_source_changed.
         self._add_section("Spatial q_surf source", key="_sec_spatial")
-        self.add_browse(
+        qs_w = self.add_browse(
             "qsurf_sol", "qsurf .sol:",
             filter_str="NGSolve sol (*.sol);;All (*)")
+        qs_w.setToolTip(
+            "Surface heat-density q_surf [W/m^2] from the IH EM solve "
+            "(calc_fem_kelvin.py).  Picking it AUTO-FILLS the EM .vol "
+            "below from the companion ``<stem>_fem.vol`` -- so you "
+            "normally specify just the qsurf .sol + the workpiece .vol.")
+        qs_w.textChanged.connect(self._on_qsurf_sol_changed)
         em_w = self.add_browse(
             "em_vol", "EM .vol:",
             filter_str="Netgen volume (*.vol);;All (*)")
         em_w.setToolTip(
-            "EM .vol that the qsurf .sol was saved against.  "
-            "REQUIRED -- NGSolve .sol is a coefficient vector only "
-            "(no embedded mesh), so the EM .vol must be supplied "
-            "explicitly.  Typically the ``<stem>_fem.vol`` that "
-            "calc_fem_kelvin.py writes next to ``<stem>_qsurf.sol``.  "
-            "Auto-detection was removed 2026-05-20.")
+            "EM .vol the qsurf .sol is defined on (the .sol is a "
+            "coefficient vector with no embedded mesh, so this is "
+            "REQUIRED).  AUTO-FILLED from the qsurf .sol's companion "
+            "``<stem>_fem.vol`` when you pick the .sol -- override here "
+            "only if your EM mesh is named differently.  The calc script "
+            "still receives --em-vol explicitly (no silent fallback).")
         em_w.textChanged.connect(self._emit_validation)
         self.add_spin("qsurf_order", "qsurf H1 order:", 1, 1, 5)
 
@@ -383,6 +453,27 @@ class HeatPanel(ModePanel):
             return
         if not vol_path or not os.path.isfile(vol_path):
             return
+
+        # Workpiece-only early warning: the Thermal step targets the
+        # WORKPIECE SOLID only.  If the .vol has >1 volume material
+        # (e.g. a coil+workpiece EM mesh), calc_heat.py rejects it at
+        # Run -- flag it now on the wp_vol field so the user sees it on
+        # Browse, not after a Run round-trip.  (wp_vol has no base
+        # tooltip, so clearing to "" on a clean single-material mesh is
+        # safe.)
+        wp_widget = self._widgets.get("wp_vol")
+        if wp_widget is not None:
+            mats = sorted(set(_parse_vol_materials(vol_path)))
+            if len(mats) > 1:
+                wp_widget.setToolTip(
+                    "WARNING: this .vol has {} volume materials {}.  The "
+                    "Thermal step targets the WORKPIECE SOLID only and "
+                    "will reject a multi-material (coil+workpiece) mesh. "
+                    "Export a workpiece-only volume mesh (a single solid) "
+                    "for Thermal.".format(len(mats), mats))
+            else:
+                wp_widget.setToolTip("")
+
         try:
             # Parse .vol text directly so we don't pay the ngsolve
             # import cost (~1-2s) on every keystroke -- the bcnames
@@ -419,6 +510,38 @@ class HeatPanel(ModePanel):
             combo.blockSignals(False)
         # Re-emit validation in case the new selection changes the
         # is_runnable state (unlikely but free).
+        self._emit_validation()
+
+    def _on_qsurf_sol_changed(self, _text):
+        """Auto-fill em_vol from the qsurf .sol's companion
+        ``<stem>_fem.vol`` so the user specifies just qsurf .sol +
+        workpiece .vol.
+
+        Never clobbers a user-supplied em_vol: it only writes when
+        em_vol is empty or still holds the last auto value (tracked in
+        ``self._em_vol_auto``).  When the new .sol has no derivable
+        companion, a stale auto value is CLEARED so the user browses the
+        correct EM .vol (fail-fast, no stale guess).  The calc script
+        still receives --em-vol explicitly (calc-side No-Fallback intact).
+        """
+        em_w = self._widgets.get("em_vol")
+        if em_w is None:
+            return
+        cand = _derive_em_vol_from_qsurf(self.val("qsurf_sol"))
+        cur = self.val("em_vol")
+        prev_auto = getattr(self, "_em_vol_auto", "")
+        if cur in ("", prev_auto):
+            if cand:
+                win = getattr(self, "_analysis_window", None)
+                em_w.setText(win.display_path(cand) if win is not None
+                             else cand)
+                self._em_vol_auto = cand
+            elif cur == prev_auto and prev_auto:
+                # New .sol has no companion AND em_vol still held the old
+                # auto value -> clear the stale path so the user picks the
+                # correct EM .vol rather than silently reusing the wrong one.
+                em_w.setText("")
+                self._em_vol_auto = ""
         self._emit_validation()
 
     def _on_heat_source_changed(self, name):
@@ -563,9 +686,11 @@ class HeatPanel(ModePanel):
             em_vol = self.val("em_vol")
             if not (sol and em_vol):
                 raise ValueError(
-                    "Spatial qsurf mode requires BOTH a qsurf .sol AND "
-                    "its companion EM .vol.  .sol files are coefficient "
-                    "vectors only -- the .vol carries the mesh.")
+                    "Spatial qsurf mode requires a qsurf .sol AND its "
+                    "companion EM .vol.  The EM .vol auto-fills from the "
+                    ".sol's <stem>_fem.vol sibling when present -- if it "
+                    "stayed empty, browse the EM .vol manually (.sol is a "
+                    "coefficient vector with no embedded mesh).")
             cmd += ["--qsurf-sol",  sol,
                     "--em-vol",     em_vol,
                     "--qsurf-order", str(self.val("qsurf_order"))]

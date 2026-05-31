@@ -83,11 +83,9 @@ def test_rotation_zero_matches_identity(synthetic_setup):
 
         args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
                                qsurf_order=1, surface_label="default")
-        # We expose ALL boundary as the "surface_region"; the helper
-        # walks BND vertices to enumerate surf_vertex_nrs.
-        surface_region = wp_mesh.Boundaries(".*")
-        q_cf, resample = calc_heat._build_qsurf_cf(
-            wp_mesh, surface_region, args)
+        # The helper walks BND vertices (filtered by args.surface_label)
+        # to enumerate surf_vertex_nrs.
+        q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
         assert resample is not None
 
         # After initial projection at theta=0, the surface values
@@ -119,9 +117,7 @@ def test_rotation_pi_inverts_x_signed_value(synthetic_setup):
 
         args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
                                qsurf_order=1, surface_label="default")
-        surface_region = wp_mesh.Boundaries(".*")
-        q_cf, resample = calc_heat._build_qsurf_cf(
-            wp_mesh, surface_region, args)
+        q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # Locate the surface vertex nearest to body (+1, 0, 0).
         best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
@@ -150,9 +146,7 @@ def test_rotation_pi_over_2_swaps_x_to_y(synthetic_setup):
 
         args = SimpleNamespace(q_uniform=None, qsurf_sol=sol, em_vol=vol,
                                qsurf_order=1, surface_label="default")
-        surface_region = wp_mesh.Boundaries(".*")
-        q_cf, resample = calc_heat._build_qsurf_cf(
-            wp_mesh, surface_region, args)
+        q_cf, resample = calc_heat._build_qsurf_cf(wp_mesh, args)
 
         # Locate the surface vertex nearest to body (+1, 0, 0).
         best_vnr = _surf_vnr_nearest(wp_mesh, (1.0, 0.0, 0.0))
