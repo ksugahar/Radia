@@ -5,6 +5,23 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## 0.97.0 — SF-coil RegularizedTSVD + single-stroke field_aware + sheet-metal distort + bug-pattern catalog
+
+Released 2026-05-31.
+
+Accumulated `radia_ngsolve` knowledge + meta tooling since 0.96.1, shipped
+alongside `radia` v4.86.0:
+
+- **`aca_tsvd`**: RegularizedTSVD closed form (`ψ = S⁻¹V·W⁻¹·Σ⁻¹·UᵀB`) + Path-A
+  cache + Optuna 3-mode (RMS / constrained / Pareto); single-stroke chain
+  `field_aware` (beats kuijpers: 9.3% vs 16.2%); and the new single-current
+  **sheet-metal coil distortion (bankin-ho)** technique — `--distort` bends one
+  series wire in 3D (control-grid VectorH1-style deformation) to drive a planar
+  uniform-Bz coil from ~12000 ppm to **340–2015 ppm** with ONE current.
+- **`bug_patterns`** (radia-meta): learned bug-pattern catalog + `bug_patterns_lookup`
+  / `bug_patterns_stats` MCP tools (learn-once-from-incidents policy).
+- knowledge cleanup: scrub stale hardcoded `2025.3` / `6.2.2603` paths.
+
 ## 0.93.0 — multi-file .tex resolver + abstract auto-extract + E2E real-paper validation
 
 Released 2026-05-26.

@@ -684,6 +684,61 @@ surface mesh.  If yes, the "Hard tier" recommendation can be
 weakened from "multi-port or continuous SFD" to just "continuous
 SFD via FE direct".
 
+## Single-current sheet-metal coil distortion (bankin-ho) (2026-05-31)
+
+Shim loops (separate feeds) and Path-A (re-contour) both keep the wire
+a FLAT planar pattern.  A THIRD compensation -- ``--distort`` in
+``demo_planar_uniform_fem_psi.py`` -- drops that assumption: keep ONE
+series current and the contour LEVELS fixed, and BEND the single-stroke
+wire in 3D with a smooth low-dimensional deformation field
+
+    d(x, y) -> (delta_x, delta_y, delta_z)
+
+(control-grid bilinear = the discrete realisation of an NGSolve
+VectorH1 mesh deformation; "bankin-ho" / sheet-metal forming, a geometric
+shape optimisation).  Gauss-Newton over the deformation DOFs:
+``(J^T J + (lam + lam_disp) I) delta = J^T r - lam_disp d`` with the
+displacement penalty ``lam_disp`` RELATIVE to ``mean(diag(J^T J))``;
+re-fit the single current each step; track the honest dense-grid MAE
+for "best".
+
+Measured (planar uniform Bz, 33 contours; integrated --distort run,
+flat single-stroke baseline 12290 ppm; baseline is ~12-20k ppm
+depending on the psi representation):
+
+    penalty 1.0  (17 mm bend) -> 2015 ppm   conservative / printable
+    penalty 0.3  (24 mm bend) -> 1025 ppm   balanced (default)
+    penalty 0.1  (31 mm bend) ->  605 ppm   sub-1000, ONE current
+    penalty 0.03 (34 mm bend) ->  340 ppm   aggressive
+
+Convergence is fast + monotone (penalty 0.1: 12290 -> 3656 -> 1060 ->
+687 -> 613 ppm over 6 iters; penalty 0.03 reaches 340 ppm).
+
+Key physics: the OUT-OF-PLANE (z) lift is what lets a SINGLE current
+cancel the parasitic connector field -- lifting a connector toward /
+away from the DSV changes its Bz weight.  In-plane-only (xy) distortion
+merely reroutes the connector current WITHIN the DSV plane and is far
+weaker: an in-plane contour-flow PoC (move each wire normal to itself,
+delta_p = -delta_psi grad psi / |grad psi|^2) plateaued at ~12500 ppm
+in 40 iters, while full-3D Gauss-Newton reaches ~2500 ppm in 5.
+
+This is the single-current ANSWER to the shim trade-off "no free lunch
+within one uniform-current wire": that caveat assumed a FIXED PLANAR
+geometry.  Trading GEOMETRIC DOFs for CURRENT DOFs, one current reaches
+the ~500-2500 ppm class -- one 3D-printed bent conductor, no extra
+supplies.  Separate-feed shims still reach a lower floor (183 ppm at 10
+feeds) but need independent supplies; the two COMPOSE (distort first =
+one part, add a couple of feeds only if the spec demands sub-500 ppm).
+
+Implemented as ``coil_distort_3d`` + CLI ``--distort --distort-comps
+{xyz,xy,z} --distort-penalty L --distort-grid N --distort-iter K
+--distort-fit-n F``.  A fast vectorised ``bz_fast`` (broadcast
+segments x obs, z-component only) replaces the per-segment Python loop
+of ``h_segments_batch`` for the Gauss-Newton Jacobian (the field is
+called ~N_dof times per iter).  Next: port to the cylinder (Gx
+fingerprint) via an ngsolve.bem high-order surface so the contours are
+clean, then sheet-metal-distort the manufactured chain.
+
 ## Acceleration path for FE-direct: WAIT for Joachim H-matrix (2026-05-30)
 
 Decision: do NOT build a custom HACApK ↔ ngsolve.bem basis bridge to
@@ -1654,6 +1709,11 @@ def get_aca_tsvd_knowledge(topic: str = "overview") -> str:
         "field_aware": "single_stroke", "field-aware": "single_stroke",
         "nn_blend": "single_stroke", "chain": "single_stroke",
         "rung": "single_stroke", "azimuthal": "single_stroke",
+        "distort": "single_stroke", "distortion": "single_stroke",
+        "sheet_metal": "single_stroke", "sheet-metal": "single_stroke",
+        "bankin": "single_stroke", "wire_distortion": "single_stroke",
+        "coil_distortion": "single_stroke", "deform_wire": "single_stroke",
+        "mesh_deformation": "single_stroke", "3d_print": "single_stroke",
         # 2026-05-30 session summary
         "session": "session_2026_05_30",
         "summary": "session_2026_05_30",
