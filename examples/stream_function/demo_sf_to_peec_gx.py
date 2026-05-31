@@ -831,6 +831,59 @@ def bz_at(path_3d, current, obs):
     return MU0 * H[:, 2]
 
 
+def shim_compensate(A_full, B_target, Bz_main, k_max, method="omp", tol=0.0):
+    """Compensate the single-stroke field ``Bz_main`` with shim correction
+    loops drawn from the SF basis (kernel ``A_full``, shape M x N).
+
+    The single-stroke degradation r = B_target - Bz_main is a FIXED field
+    that a uniform-current wire cannot cancel; the exact linear correction
+    ``dI = A_full^+ r`` is a full VARYING-current distribution (all N loops).
+    A few shim loops realise its dominant part.  Two selection methods:
+
+      - ``"omp"`` (default, the WAY TO ITERATE): orthogonal matching
+        pursuit -- add the ONE loop most correlated with the current
+        residual, re-solve the least squares over the whole support, repeat.
+        The residual norm decreases MONOTONICALLY (guaranteed convergence,
+        no oscillation), and it reaches a target RMS with far fewer loops
+        than top-K (e.g. K=20: OMP 1.9 % vs top-K 4.2 %).
+      - ``"topk"``: pick the K loops with the largest ``|dI|`` in one shot
+        (cheaper, weaker -- kept for comparison).
+
+    Stops at ``k_max`` loops or when the DSV RMS drops to ``tol`` (if > 0).
+    Returns ``(support, I_shim, rms_curve)``: the selected loop indices, their
+    least-squares currents, and the RMS after each added loop.
+    """
+    r0 = B_target - Bz_main
+    norm_B = float(np.linalg.norm(B_target)) + 1e-30
+    M, N = A_full.shape
+    k_max = int(min(k_max, N))
+
+    if method == "topk":
+        dI, _, _, _ = np.linalg.lstsq(A_full, r0, rcond=None)
+        sel = list(np.argsort(np.abs(dI))[::-1][:k_max])
+        As = A_full[:, sel]
+        I_S, _, _, _ = np.linalg.lstsq(As, r0, rcond=None)
+        rms = float(np.linalg.norm(Bz_main + As @ I_S - B_target) / norm_B)
+        return sel, I_S, [rms]
+
+    # orthogonal matching pursuit
+    support, I_S, rms_curve = [], np.zeros(0), []
+    for _ in range(k_max):
+        resid = r0 - (A_full[:, support] @ I_S if support else np.zeros(M))
+        corr = np.abs(A_full.T @ resid)
+        if support:
+            corr[support] = -1.0
+        j = int(np.argmax(corr))
+        support.append(j)
+        I_S, _, _, _ = np.linalg.lstsq(A_full[:, support], r0, rcond=None)
+        rms = float(np.linalg.norm(Bz_main + A_full[:, support] @ I_S
+                                   - B_target) / norm_B)
+        rms_curve.append(rms)
+        if tol > 0.0 and rms <= tol:
+            break
+    return support, I_S, rms_curve
+
+
 # NOTE on "multi-wire" (avoiding the long inter-lobe bridges): cutting the
 # single-stroke chain at its long rungs is NOT a valid way to do it -- the
 # resulting sub-paths are OPEN current paths (current cannot start/stop in
@@ -856,11 +909,21 @@ def main():
                     help="segments per single-stroke connection arc")
     ap.add_argument("--shim-loops", type=int, default=0,
                     help="compensate the single-stroke field degradation with "
-                         "K independent shim correction loops (one-shot least "
-                         "squares on the SF basis loops that best cancel the "
-                         "residual).  Monotone: more shims -> lower RMS, at K "
-                         "extra current feeds.  0 = off.  e.g. +3 already "
-                         "beats Path-A; +80 reaches the multi-wire ideal.")
+                         "up to K independent shim correction loops.  The "
+                         "residual r = B_target - I_w*Bz_chain is cancelled by "
+                         "loops chosen from the SF basis (default OMP, "
+                         "monotone).  0 = off.  e.g. OMP +3 -> 6.1%, +10 -> "
+                         "3.6%, +20 -> 1.9%; each loop = 1 extra current feed.")
+    ap.add_argument("--shim-method", choices=["omp", "topk"], default="omp",
+                    help="omp (default) = orthogonal matching pursuit: add the "
+                         "loop most correlated with the residual, re-solve, "
+                         "repeat -> MONOTONE convergence, far fewer feeds; "
+                         "topk = one-shot largest-|dI| selection (weaker).")
+    ap.add_argument("--shim-tol", type=float, default=0.0,
+                    help="stop adding shim loops once the DSV RMS drops to this "
+                         "(e.g. 0.02 for 2%).  Establishes the feed count "
+                         "needed to hit a field-uniformity spec.  0 = use "
+                         "--shim-loops as the fixed budget.")
     ap.add_argument("--freeze-levels", action="store_true",
                     help="NEGATIVE RESULT (2026-05-31): hold the iso-current "
                          "levels fixed at iter-0 during --compensated-iter.  "
@@ -1078,23 +1141,29 @@ def main():
     # currents of the K SF-basis loops that best cancel the residual
     # r = B_target - I_w*Bz_chain.  This is monotone (more shims -> better),
     # needs no step tuning, and trades K extra current feeds for accuracy.
-    if args.shim_loops > 0:
-        K = min(args.shim_loops, N)
-        r = B_target - Bz_dsv                       # residual to cancel
-        dI_full = pseudo_inverse_solve(res, r, k_mode=k_use)
-        sel = np.argsort(np.abs(dI_full))[::-1][:K]
-        A_sel = np.column_stack(
-            [np.array([_loop_Hz(obs_dsv[i], corners_list[j])
-                       for i in range(M)]) for j in sel])
-        I_shim, _, _, _ = np.linalg.lstsq(A_sel, r, rcond=None)
-        Bz_corr = Bz_dsv + A_sel @ I_shim
+    if args.shim_loops > 0 or args.shim_tol > 0.0:
+        # full SF-basis kernel A[i, j] = Bz at DSV obs i from basis loop j
+        A_full = np.array([[_loop_Hz(obs_dsv[i], corners_list[j])
+                            for j in range(N)] for i in range(M)])
+        k_max = args.shim_loops if args.shim_loops > 0 else N
+        support, I_shim, curve = shim_compensate(
+            A_full, B_target, Bz_dsv, k_max,
+            method=args.shim_method, tol=args.shim_tol)
+        K = len(support)
+        Bz_corr = Bz_dsv + A_full[:, support] @ I_shim
         rms_corr = float(np.linalg.norm(Bz_corr - B_target)
                          / (np.linalg.norm(B_target) + 1e-30))
-        print(f"[8] shim-loop compensation: 1 single-stroke wire"
-              f" + {K} independent shim loops")
+        print(f"[8] shim compensation ({args.shim_method}, MONOTONE): "
+              f"1 single-stroke wire + {K} shim loops"
+              f"{f' (stopped at RMS<={args.shim_tol:.1e})' if args.shim_tol>0 else ''}")
         print(f"    DSV RMS {rms:.3e} -> {rms_corr:.3e}"
-              f" ({K+1} total current feeds; shim |I|/I_w max ="
+              f" ({K+1} total feeds; shim |I|/I_w max ="
               f" {np.max(np.abs(I_shim))/(abs(I_w)+1e-30):.2f})")
+        # convergence curve (a few sample points)
+        marks = sorted(set([0, 2, 4, 9, 19, len(curve) - 1]))
+        pts = ", ".join(f"+{m+1}:{curve[m]*100:.2f}%"
+                        for m in marks if 0 <= m < len(curve))
+        print(f"    convergence: {pts}")
 
     if args.with_peec:
         run_peec_chain(path, I_w)
