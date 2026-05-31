@@ -21,6 +21,22 @@
 
 #include "cHACApK_harith.h"
 
+/* ---------- module-global recompression tolerance --------------- *
+ *
+ * Relative tolerance for rk-leaf SVD recompression during H-LU. The
+ * KEY speed/accuracy knob: 1e-14 keeps machine-precision (ranks grow
+ * toward full -> H-LU degenerates to dense + SVD overhead, O(N^3+));
+ * 1e-4 (~ACA accuracy) keeps ranks LOW -> the intended O(N log^2 N)
+ * scaling. Set via cHACApK_hlu_set_trunc_tol before a decomp.
+ * Default 1e-14 preserves the high-accuracy synthetic self-tests. */
+static double g_hlu_trunc_tol = 1e-14;
+
+void cHACApK_hlu_set_trunc_tol(double tol)
+{
+    if (tol > 0.0 && tol < 1.0) g_hlu_trunc_tol = tol;
+}
+double cHACApK_hlu_get_trunc_tol(void) { return g_hlu_trunc_tol; }
+
 /* ---------- HACApK <-> internal storage convention --------------- *
  *
  * HACApK leaf storage convention (from cHACApK_base.c fill_leafmtx):
@@ -96,6 +112,24 @@ void cHACApK_convert_leafmtxp_to_hacapk(struct st_cHACApK_leafmtxp_t *lp)
 static cHACApK_hlu_stats_t g_stats;
 
 const cHACApK_hlu_stats_t *cHACApK_hlu_last_stats(void) { return &g_stats; }
+
+/* Flat accessor for pybind (avoids exposing the struct layout). */
+extern long g_dbg_n_materialize, g_dbg_materialize_elems;
+void cHACApK_hlu_get_timings(double *out_t_decomp, double *out_t_solve,
+                              long *out_n_dense_lu, long *out_n_dense_gemm)
+{
+    if (out_t_decomp)   *out_t_decomp   = g_stats.t_decomp_sec;
+    if (out_t_solve)    *out_t_solve    = g_stats.t_solve_sec;
+    if (out_n_dense_lu) *out_n_dense_lu = g_stats.n_dense_lu;
+    if (out_n_dense_gemm) *out_n_dense_gemm = g_stats.n_dense_gemm;
+}
+
+/* Profiling accessor for the mixed-case materialize fallback. */
+void cHACApK_hlu_get_materialize_stats(long *out_n_calls, long *out_n_elems)
+{
+    if (out_n_calls) *out_n_calls = g_dbg_n_materialize;
+    if (out_n_elems) *out_n_elems = g_dbg_materialize_elems;
+}
 
 static void stats_reset(void) { memset(&g_stats, 0, sizeof(g_stats)); }
 
@@ -428,11 +462,17 @@ static int dense_to_rk_truncate(
 /* Materialize a block-tree node as a dense buffer (col-major, leading dim
  * = row_cluster->nsize). Works on dense leaf, rk leaf, or internal node.
  * Returns heap-allocated buffer (caller frees) or NULL on error. */
+/* DEBUG counters (profiling the mixed-case materialize fallback). */
+long g_dbg_n_materialize = 0;
+long g_dbg_materialize_elems = 0;
+
 static double *materialize_node_as_dense(const st_cHACApK_block_node_t *node)
 {
     if (!node) return NULL;
     int m = node->dof_nrows;
     int n = node->dof_ncols;
+    g_dbg_n_materialize++;
+    g_dbg_materialize_elems += (long)m * (long)n;
     double *out = (double*)calloc((size_t)m * (size_t)n, sizeof(double));
     if (!out) return NULL;
 
@@ -516,7 +556,7 @@ static int add_dense_to_node(
         /* SVD-truncate to rk */
         double *U_new = NULL, *V_new = NULL; int k_new = 0;
         int kmin = (m < n) ? m : n;
-        int rc = dense_to_rk_truncate(C_full, m, n, 1e-14, kmin,
+        int rc = dense_to_rk_truncate(C_full, m, n, g_hlu_trunc_tol, kmin,
                                        &U_new, &V_new, &k_new);
         free(C_full);
         if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
@@ -580,7 +620,7 @@ static int set_node_from_dense(
         }
         double *U_new = NULL, *V_new = NULL; int k_new = 0;
         int kmin = (m < n) ? m : n;
-        int rc = dense_to_rk_truncate(D_use, m, n, 1e-14, kmin,
+        int rc = dense_to_rk_truncate(D_use, m, n, g_hlu_trunc_tol, kmin,
                                        &U_new, &V_new, &k_new);
         free(D_packed);
         if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
@@ -809,7 +849,7 @@ static int h_addmul(double alpha,
         /* Recompress (tol = 1e-14, no rank cap for self-test fidelity). */
         double *U_new = NULL, *V_new = NULL; int k_new = 0;
         int rc = rkleaf_recompress(U_widened, V_widened, m, n, kw,
-                                    1e-14, kw, &U_new, &V_new, &k_new);
+                                    g_hlu_trunc_tol, kw, &U_new, &V_new, &k_new);
         free(U_widened); free(V_widened);
         if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
         free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
@@ -847,7 +887,7 @@ static int h_addmul(double alpha,
         /* Recompress. */
         double *U_new = NULL, *V_new = NULL; int k_new = 0;
         int rc = rkleaf_recompress(U_widened, V_widened, m, n, kw,
-                                    1e-14, kw, &U_new, &V_new, &k_new);
+                                    g_hlu_trunc_tol, kw, &U_new, &V_new, &k_new);
         free(U_widened); free(V_widened);
         if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
         free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
@@ -883,7 +923,7 @@ static int h_addmul(double alpha,
         /* Recompress. */
         double *U_new = NULL, *V_new = NULL; int k_new = 0;
         int rc = rkleaf_recompress(U_widened, V_widened, m, n, kw,
-                                    1e-14, kw, &U_new, &V_new, &k_new);
+                                    g_hlu_trunc_tol, kw, &U_new, &V_new, &k_new);
         free(U_widened); free(V_widened);
         if (rc != CHACAPK_HARITH_OK) { free(U_new); free(V_new); return rc; }
         free(C->leaf_mtx->a1); free(C->leaf_mtx->a2);
@@ -1244,6 +1284,8 @@ int cHACApK_hlu_decomp(st_cHACApK_block_node_t *root)
 {
     stats_reset();
     clear_ipiv_registry();
+    g_dbg_n_materialize = 0;
+    g_dbg_materialize_elems = 0;
     clock_t t0 = clock();
     int rc = hlu_rec(root);
     g_stats.t_decomp_sec = (double)(clock() - t0) / (double)CLOCKS_PER_SEC;
@@ -1341,9 +1383,11 @@ int cHACApK_hlu_solve_vec(
 {
     if (!root || !b || !x || n <= 0) return CHACAPK_HARITH_ERR_NULL;
     if (b != x) memcpy(x, b, sizeof(double) * (size_t)n);
+    clock_t t0 = clock();
     int rc = hlu_forward_rec(root, x);
-    if (rc != CHACAPK_HARITH_OK) return rc;
-    return hlu_backward_rec(root, x);
+    if (rc == CHACAPK_HARITH_OK) rc = hlu_backward_rec(root, x);
+    g_stats.t_solve_sec = (double)(clock() - t0) / (double)CLOCKS_PER_SEC;
+    return rc;
 }
 
 /* ---------- self-test: 2x2 dense-leaf block-tree ------------------ *
