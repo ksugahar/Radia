@@ -603,14 +603,31 @@ def single_stroke_nn_blend_phi_z(polylines, a, n_blend=8, cd_passes=4):
     return np.vstack(chain_parts) if chain_parts else np.zeros((0, 2))
 
 
-def _kuijpers_lobe_order(polylines, a):
+def _kuijpers_lobe_order(polylines, a, snake=False):
     """Return contour indices in kuijpers lobe/current-sign order.
 
     4-lobe classification by (sign x, sign z) of the 3D centroid; within a
-    lobe sort by the z of the fixed-phi cut (descending for +z lobes,
-    ascending for -z lobes); lobes traversed (+x+z)(+x-z)(-x-z)(-x+z).  This
-    is the ORDER that respects the Gx coil's alternating current signs (the
-    part of kuijpers that geometry-only NN throws away)."""
+    lobe sort by the z of the fixed-phi cut; lobes traversed
+    (+x+z)(+x-z)(-x-z)(-x+z).  This is the ORDER that respects the Gx coil's
+    alternating current signs (the part of kuijpers that geometry-only NN
+    throws away).
+
+    ``snake=False`` (kuijpers original): +z lobes sorted descending z, -z
+    ascending.  This makes each lobe spiral toward the saddle, so the
+    inter-lobe bridge jumps saddle -> opposite edge (a long ~L/2 axial
+    "wasted" rung).
+
+    ``snake=True`` (boustrophedon): NEGATIVE RESULT (2026-05-31).  The
+    within-lobe sort direction was alternated [(+x+z) top->saddle, (+x-z)
+    saddle->bottom, (-x-z) bottom->saddle, (-x+z) saddle->top] to try to make
+    consecutive lobes MEET at the saddle and so shorten the long inter-lobe
+    bridges.  It did NEITHER: the longest rung stayed 291 mm AND the field
+    got WORSE (DSV RMS 9.29% -> 19.15%).  No polyline is reversed (only the
+    visiting SEQUENCE changes), so it is not an orientation flip -- it is the
+    same lesson again: changing the rung arrangement breaks the symmetric
+    stray-field CANCELLATION that gives the good field, and the long diagonal
+    inter-lobe bridges are STRUCTURALLY irreducible for a single-stroke
+    4-lobe coil.  Kept as a default-False cautionary kwarg; do not enable."""
     n = len(polylines)
     centroids = []
     for poly in polylines:
@@ -628,9 +645,16 @@ def _kuijpers_lobe_order(polylines, a):
         dphi = ((p[:, 0] - cp + np.pi) % (2 * np.pi)) - np.pi
         return float(p[int(np.argmin(np.abs(dphi))), 1])
 
+    # descending-z flag per lobe key
+    if snake:
+        desc_of = {(+1, +1): True, (+1, -1): True,
+                   (-1, -1): False, (-1, +1): False}
+    else:
+        desc_of = {key: (key[1] == +1) for key in lobes}
+
     for key in lobes:
         cp = cut_phi[key]
-        desc = (key[1] == +1)
+        desc = desc_of[key]
         lobes[key].sort(key=(lambda k, _cp=cp: -cut_z(k, _cp)) if desc
                         else (lambda k, _cp=cp: cut_z(k, _cp)))
     order = []
@@ -639,7 +663,8 @@ def _kuijpers_lobe_order(polylines, a):
     return order
 
 
-def single_stroke_field_aware_phi_z(polylines, a, n_blend=8, cd_passes=5):
+def single_stroke_field_aware_phi_z(polylines, a, n_blend=8, cd_passes=5,
+                                    snake=False):
     """Field-aware single-stroke (DEFAULT): kuijpers sign-order + min-AZIMUTHAL
     cuts.  Best DSV RMS we have found -- beats kuijpers in every tested config.
 
@@ -688,7 +713,7 @@ def single_stroke_field_aware_phi_z(polylines, a, n_blend=8, cd_passes=5):
         b = bodies[0]
         return np.vstack([b, b[:1]]) if len(b) else np.zeros((0, 2))
 
-    order = _kuijpers_lobe_order(polylines, a)
+    order = _kuijpers_lobe_order(polylines, a, snake=snake)
 
     def wrap(d):
         return (d + np.pi) % (2.0 * np.pi) - np.pi
@@ -786,6 +811,20 @@ def bz_at(path_3d, current, obs):
     segs = np.stack([path_3d[:-1], path_3d[1:]], axis=1)
     H = h_segments_batch(segs, obs, current=current)
     return MU0 * H[:, 2]
+
+
+# NOTE on "multi-wire" (avoiding the long inter-lobe bridges): cutting the
+# single-stroke chain at its long rungs is NOT a valid way to do it -- the
+# resulting sub-paths are OPEN current paths (current cannot start/stop in
+# mid-air; div J != 0), so their Biot-Savart field is unphysical (measured
+# RMS jumps 9.3% -> 21%).  A physical multi-wire coil needs each independent
+# wire to be a CLOSED loop.  For the Gx fingerprint that is exactly
+# ``demo_coil_design_gx.py``: it drives each saddle-shaped CLOSED loop as an
+# independent conductor (no bridges at all) and reaches ~0.8% DSV RMS -- an
+# order of magnitude better than any single-stroke chain.  So the answer to
+# "avoid the wasteful long connections" is: use the independent-closed-loop
+# design (demo_coil_design_gx.py, multiple current feeds), NOT a cut-up
+# single stroke.
 
 
 def main():
