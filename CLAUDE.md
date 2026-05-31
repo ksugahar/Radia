@@ -503,7 +503,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ### No Fallbacks — Fail Fast, Fail Loud
 
-**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2603+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
+**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2604+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
 
 **Design philosophy**: this is the **fail-fast** principle (Jim Shore, 2004) combined with **"errors should never pass silently"** (PEP 20, Zen of Python) and **"explicit is better than implicit"**. The deeper rationale is *user agency*: a fallback path performs a computation the user did not ask for and cannot inspect. Silent fallback violates the **Principle of Least Astonishment** — the user gets a number, has no way to know which code path produced it, and trusts it. That trust is unrecoverable when the result turns out to be from the wrong path.
 
@@ -615,11 +615,35 @@ remain available for research uses (line-integral back-reaction,
 validation harnesses). See `memory/scattered_robin_rhs_bug.md` for
 the full investigation record.
 
-### FMM (Fast Multipole Method): Removed (2026-03-06)
+### FMM (Fast Multipole Method): Removed from Radia core (2026-03-06)
 
-**ExaFMM-t was removed from the repository**. Do NOT re-implement FMM acceleration.
+**ExaFMM-t was removed from the repository**. Do NOT re-implement FMM
+acceleration in the Radia C++ core (rad_*.cpp).
 
-**Why FMM failed for Radia**:
+**SCOPE CLARIFICATION (2026-05-30)**: This policy targets the
+**Radia MMM/MSC volume integral** (magnetisation-element to
+magnetisation-element interaction inside the Radia core).  It does
+NOT forbid the use of FMM-based libraries at OTHER LAYERS of the
+stack -- specifically:
+
+  - **ngsolve.bem** (NGSolve's BEM module) ships an FMM-style
+    hierarchical Biot-Savart / Laplace / Helmholtz backend
+    (``BiotSavartCF``, ``BiotSavartRegularMLCF``,
+    ``RegularMLExpansion``, ``SphericalHarmonicsCF``,
+    ``IntegralOperator.NearFieldMatrix`` / ``CalcSubMatrix``,
+    NGSolve 6.2.2604+).  This is permitted and recommended for
+    SF coil design on smooth surfaces where Biot-Savart is the
+    natural kernel (free-space, far-field-dominated) -- exactly
+    the geometry class where FMM math works well.
+  - **HACApK ACA+** remains the choice for Radia's own
+    MMM/MSC system matrix (compact magnets, near-field heavy).
+
+The two libraries live at different layers and serve different
+geometry classes; using them in their natural domains is not a
+policy contradiction.
+
+**Why FMM was removed from Radia (the original reasoning, still
+binding for the Radia core / volume MMM-MSC layer)**:
 
 1. **Dipole approximation accuracy is poor for MSC elements**: MSC (surface charge) elements have distributed charge on 4-8 faces. A single dipole m=M*V approximates this poorly at intermediate distances (r ~ 2-5 element sizes). The O((a/r)^2) error is unacceptable for engineering accuracy.
 
@@ -629,7 +653,12 @@ the full investigation record.
 
 4. **HACApK covers all large-scale needs**: H-matrix acceleration (ACA+) provides O(N log N) memory and O(N log^2 N) MatVec for the interaction matrix, which is the actual bottleneck.
 
-**Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body). It is NOT effective for MSC where source distributions are extended (face integrals) and geometries are compact.
+**Lesson**: FMM is effective for point charges/dipoles in unbounded
+space (N-body), and for smooth surface BEM kernels (= what
+ngsolve.bem targets).  It is NOT effective for MSC where source
+distributions are extended (face integrals) and geometries are
+compact (= what Radia's own core targets).  Choose the acceleration
+library by GEOMETRY CLASS, not by reflex.
 
 ### GmshBuilder: Removed (2026-03-13)
 
@@ -1082,7 +1111,7 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 |-----------|---------|-------|
 | **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit panels call via subprocess. |
 | **Coreform Cubit** | 2025.12 | Embedded Python 3.10 + PySide6 (Qt6). No Qt5/PyQt5. Cannot import NGSolve/Radia directly. |
-| **NGSolve** | 6.2.2603+ | curvedelements Load, hex/prism curving, Periodic BC fix |
+| **NGSolve** | 6.2.2604+ | curvedelements Load, hex/prism curving, Periodic BC fix, `ngsolve.bem` FMM-based Biot-Savart (`BiotSavartCF`, `*MLCF`, `MLExpansion`, `SphericalHarmonicsCF`) |
 
 **Cubit panel subprocess constraint**: Cubit embeds Python 3.10; Radia/NGSolve require 3.12. Same-process import is impossible. All computation runs via `subprocess.run([python3.12, calc_*.py])` with JSON output.
 
@@ -1548,12 +1577,14 @@ src/radia/
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2603** or later. Required for curvedelements .vol Load, hex/prism curving, and Periodic BC fix.
+**CRITICAL**: Use NGSolve **6.2.2604** or later. Required for curvedelements .vol Load, hex/prism curving, Periodic BC fix, AND the new `ngsolve.bem` FMM-based hierarchical BEM (`BiotSavartCF`, `BiotSavartRegularMLCF`, `BiotSavartSingularMLCF`, `RegularMLExpansion`, `SingularMLExpansion`, `SphericalHarmonicsCF`, `IntegralOperator.NearFieldMatrix` / `CalcSubMatrix`).
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
-Official PyPI ngsolve **6.2.2603**+ includes: **MKL**, **PARDISO**, Periodic BC fix,
-**curvedelements Save/Load**, **p-version hex/prism curving**.
+Official PyPI ngsolve **6.2.2604**+ includes: **MKL**, **PARDISO**, Periodic BC fix,
+**curvedelements Save/Load**, **p-version hex/prism curving**, and an **FMM-style hierarchical Biot-Savart / Laplace / Helmholtz backend in `ngsolve.bem`**.  The FMM backend is appropriate for SF coil design on smooth surfaces (free-space Biot-Savart on plane / cylinder / sphere); see the "FMM Removed from Radia core (2026-03-06)" policy section for the scope clarification -- Radia's own MMM/MSC volume integral remains on HACApK ACA+ (different geometry class).
+
+Installed on LAB 2026-05-30: `pip show ngsolve` -> `Version: 6.2.2604`, `Location: C:\Program Files\Python312\Lib\site-packages`.  Bump `pyproject.toml` dependency pin to `ngsolve>=6.2.2604` when the FE-direct + ngsolve.bem demo lands.
 
 **Netgen fork is no longer required.** The ksugahar/netgen repository is historical only.
 All curvedelements, CallbackGeometry, and curving features are now in the official release.
@@ -2506,6 +2537,45 @@ the thermal step, **temperature reported as mean (volume-averaged
   A new analysis MUST add its element count, DoF, timing breakdown and
   the physically meaningful integral quantities (total power, total
   energy, mean/max/min of the primary field) to its result dict.
+
+### New-Panel Contract Policy (2026-05-31)
+
+**POLICY**: A new analysis panel (e.g. `radia_electromagnet`,
+`radia_thermal_axisym`, anything not already in the legacy exempt
+set) **MUST** follow the canonical recipe in
+[`docs/panels/ADDING_NEW_PANEL.md`](docs/panels/ADDING_NEW_PANEL.md):
+
+| File | Role |
+|---|---|
+| `src/radia/panels/calc_<topic>.py` | headless CLI: `build_argparser()` + `run(args) -> dict` + `calc_main(run, parser)` |
+| `src/radia/radia_<topic>.py` | PySide6 panel: `ModePanel` subclass with `bind_argparser(build_argparser())` |
+| `tests/panels/test_<topic>_golden.py` | golden-band lock on the canonical sample |
+
+**Why this matters**: the recipe makes argparse the **single source
+of truth** for both panel widgets and CLI flags.  All entire bug
+classes are then impossible by construction:
+
+- "widget silently drops a flag" → impossible (widget IS the argparse arg)
+- "argparse rejects a flag the panel sent" → impossible (same)
+- "open-GMSH button stays disabled" → AnalysisWindow auto-matches on
+  any of `gmsh_file` / `field_gmsh_file` / `msh_output` / `msh_file`
+- ".log not written" → Result Output Persistence Policy fires auto
+- "summary forgets a time" → `_append_standard_summary` matches `t_*_s`
+
+**Enforcement**: `python tools/audit_new_panel_contract.py` is the
+static gate.  It checks 4 calc rules (C1-C6) + 4 panel rules (P1-P4)
+described in `docs/panels/ADDING_NEW_PANEL.md`.  Exit 0 = clean.
+Pre-existing legacy panels are grandfathered in the `LEGACY_*_EXEMPT`
+sets at the top of the audit script — add to those sets ONLY when
+accepting the legacy bug-class risk; remove from them when migrating
+the file to the canonical pattern.
+
+**Output convention**: GMSH `.msh` for visualization + the text `.log`
+file from Persistence Policy.  Do NOT add new bespoke output formats
+unless the analysis genuinely cannot fit those two channels.  The
+result `dict` returned by `run(args)` is what `_append_standard_summary`
+reads to render the panel's Output block; keep the keys aligned with
+the Result Output Policy table (2026-05-29).
 
 ### Result Output Persistence Policy (2026-05-30)
 
