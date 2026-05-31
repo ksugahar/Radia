@@ -799,9 +799,17 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         anderson = AndersonAccelerator(m=int(args.esim_anderson_m),
                                         alpha=float(args.esim_relax))
     else:
-        # Linear SIBC: Dowell tanh formula closed form.
+        # Linear SIBC (standard Leontovich): Z_s = (1+j) * rho/delta.
+        # delta_wp = mat_wp.skin_depth ALREADY includes mu_r
+        # (= sqrt(2*rho/(omega*mu0*mu_r))), so rho/delta_wp already equals
+        # sqrt(omega*mu0*mu_r/(2*sigma)), i.e. the correct Z_s proportional to
+        # sqrt(mu_r) -- matching analytical_formulas.planar_surface_impedance
+        # and COMSOL.  A prior `* math.sqrt(args.mu_r)` here double-counted
+        # mu_r (Z_s came out proportional to mu_r, sqrt(mu_r)x too large for
+        # magnetic workpieces); removed 2026-05-31 after keiko's COMSOL
+        # cross-check.  Cu/Al (mu_r=1) were unaffected.
         rho_wp = 1.0 / args.sigma
-        Z_s_wp = (1.0 + 1j) * rho_wp / delta_wp * math.sqrt(args.mu_r)
+        Z_s_wp = (1.0 + 1j) * rho_wp / delta_wp
         esim_solver = None
         max_iter = 1
 
