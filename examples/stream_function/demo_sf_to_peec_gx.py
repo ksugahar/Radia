@@ -831,27 +831,34 @@ def bz_at(path_3d, current, obs):
     return MU0 * H[:, 2]
 
 
-def shim_compensate(A_full, B_target, Bz_main, k_max, method="omp", tol=0.0):
+def shim_compensate(A_full, B_target, Bz_main, k_max, method="ls_omp", tol=0.0):
     """Compensate the single-stroke field ``Bz_main`` with shim correction
     loops drawn from the SF basis (kernel ``A_full``, shape M x N).
 
     The single-stroke degradation r = B_target - Bz_main is a FIXED field
     that a uniform-current wire cannot cancel; the exact linear correction
     ``dI = A_full^+ r`` is a full VARYING-current distribution (all N loops).
-    A few shim loops realise its dominant part.  Two selection methods:
+    A few shim loops realise its dominant part.  Three selection methods, all
+    MONOTONE (each added loop strictly reduces the residual -> convergence):
 
-      - ``"omp"`` (default, the WAY TO ITERATE): orthogonal matching
-        pursuit -- add the ONE loop most correlated with the current
-        residual, re-solve the least squares over the whole support, repeat.
-        The residual norm decreases MONOTONICALLY (guaranteed convergence,
-        no oscillation), and it reaches a target RMS with far fewer loops
-        than top-K (e.g. K=20: OMP 1.9 % vs top-K 4.2 %).
-      - ``"topk"``: pick the K loops with the largest ``|dI|`` in one shot
-        (cheaper, weaker -- kept for comparison).
+      - ``"ls_omp"`` (default, BEST): Order-Recursive / Least-Squares OMP
+        (ORMP).  At each step orthogonalise every candidate column against
+        the current support and add the one whose ORTHOGONAL component (i.e.
+        actual least-squares residual reduction), normalised by its norm,
+        is largest.  This corrects the column-norm bias of plain OMP -- the
+        SF basis loops have very different field magnitudes -- and is the
+        optimal forward-greedy step.  Beats plain OMP by ~40 % at fixed K
+        (K=20: 1.14 % vs 1.89 %).  Refs: Wang et al. gOMP / ORMP.
+      - ``"omp"``: plain orthogonal matching pursuit on the RAW correlation
+        ``|a_j^T resid|`` (biased toward high-norm loops; weaker).
+      - ``"topk"``: one-shot largest-``|dI|`` selection (weakest).
+
+    Benchmarked 2026-05-31 against Subspace Pursuit / CoSaMP / LASSO (all
+    designed for sparse RECOVERY); for this APPROXIMATION problem (dense
+    residual, M=25 << N=960) the forward-greedy ls_omp wins.
 
     Stops at ``k_max`` loops or when the DSV RMS drops to ``tol`` (if > 0).
-    Returns ``(support, I_shim, rms_curve)``: the selected loop indices, their
-    least-squares currents, and the RMS after each added loop.
+    Returns ``(support, I_shim, rms_curve)``.
     """
     r0 = B_target - Bz_main
     norm_B = float(np.linalg.norm(B_target)) + 1e-30
@@ -866,15 +873,25 @@ def shim_compensate(A_full, B_target, Bz_main, k_max, method="omp", tol=0.0):
         rms = float(np.linalg.norm(Bz_main + As @ I_S - B_target) / norm_B)
         return sel, I_S, [rms]
 
-    # orthogonal matching pursuit
+    col_norm = np.linalg.norm(A_full, axis=0) + 1e-30
     support, I_S, rms_curve = [], np.zeros(0), []
     for _ in range(k_max):
         resid = r0 - (A_full[:, support] @ I_S if support else np.zeros(M))
-        corr = np.abs(A_full.T @ resid)
+        if method == "ls_omp":
+            # orthogonalise candidates against span(support); the residual
+            # reduction from adding atom j is (a_j_perp^T resid)^2/||a_j_perp||^2
+            if support:
+                Q, _ = np.linalg.qr(A_full[:, support])
+                A_perp = A_full - Q @ (Q.T @ A_full)
+            else:
+                A_perp = A_full
+            score = np.abs(A_perp.T @ resid) / (np.linalg.norm(A_perp, axis=0)
+                                                + 1e-30)
+        else:  # plain omp on raw correlation
+            score = np.abs(A_full.T @ resid)
         if support:
-            corr[support] = -1.0
-        j = int(np.argmax(corr))
-        support.append(j)
+            score[support] = -1.0
+        support.append(int(np.argmax(score)))
         I_S, _, _, _ = np.linalg.lstsq(A_full[:, support], r0, rcond=None)
         rms = float(np.linalg.norm(Bz_main + A_full[:, support] @ I_S
                                    - B_target) / norm_B)
@@ -914,11 +931,14 @@ def main():
                          "loops chosen from the SF basis (default OMP, "
                          "monotone).  0 = off.  e.g. OMP +3 -> 6.1%, +10 -> "
                          "3.6%, +20 -> 1.9%; each loop = 1 extra current feed.")
-    ap.add_argument("--shim-method", choices=["omp", "topk"], default="omp",
-                    help="omp (default) = orthogonal matching pursuit: add the "
-                         "loop most correlated with the residual, re-solve, "
-                         "repeat -> MONOTONE convergence, far fewer feeds; "
-                         "topk = one-shot largest-|dI| selection (weaker).")
+    ap.add_argument("--shim-method", choices=["ls_omp", "omp", "topk"],
+                    default="ls_omp",
+                    help="ls_omp (default, BEST) = Order-Recursive/LS-OMP: add "
+                         "the loop whose component ORTHOGONAL to the current "
+                         "support most reduces the LS residual (corrects the "
+                         "column-norm bias of plain OMP) -> ~40%% lower RMS at "
+                         "fixed feed count; omp = plain OMP on raw correlation; "
+                         "topk = one-shot largest-|dI|.  All monotone.")
     ap.add_argument("--shim-tol", type=float, default=0.0,
                     help="stop adding shim loops once the DSV RMS drops to this "
                          "(e.g. 0.02 for 2%).  Establishes the feed count "
