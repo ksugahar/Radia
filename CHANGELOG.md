@@ -3,6 +3,33 @@
 All notable changes to the `radia` package.  Format: each release lists
 **what shipped** + **why** in compact form.  Packaged wheels on PyPI.
 
+## 4.85.3 — fix: linear-SIBC Z_s double-counted mu_r (extra sqrt(mu_r))
+
+Released 2026-05-31.
+
+`calc_inductance.py`'s Linear-SIBC workpiece branch multiplied
+`(1+j)*rho/delta_wp` by an extra `math.sqrt(mu_r)`.  But `delta_wp`
+(`EMMaterial.skin_depth`) already includes mu_r, so the surface impedance
+came out proportional to mu_r instead of the standard Leontovich
+sqrt(mu_r) -- i.e. sqrt(mu_r)x too large for magnetic (mu_r != 1)
+workpieces.  Found via a radia-ih <-> COMSOL cross-validation (COMSOL
+material sigma=5e5, mu_r=1000 gave radia Z_s=1.312 vs the correct 0.04149,
+a factor sqrt(1000)~31.6; P_wp ~1/8).
+
+The fix drops the extra `* math.sqrt(args.mu_r)`; the result now matches
+`analytical_formulas.planar_surface_impedance` exactly and COMSOL.  Scope:
+only mu_r != 1 (magnetic) workpieces in Linear-SIBC mode on the BEM-A /
+PEEC weak-coupling inductance path.  Cu/Al (mu_r=1) were unaffected
+(sqrt(1)=1); the ESIM and FEM paths use a different formula and were
+unaffected.
+
+Also in this release (panel maintenance, 2026-05-31): radia_em QSettings
+restore-order fix (the launcher's .vol now wins over a stale saved
+wp_vol), radia_motor Lamination "global" mode exposes --em-table, the
+panel-cli-diff checker is generator-aware, and stale radia_accel /
+radia_heat references were cleaned (those standalone panels were folded
+into radia_em / radia_ih).
+
 ## 4.78.1 — vol/sol viewer: register via winreg (quote-mangling fix)
 
 Released 2026-05-25.
