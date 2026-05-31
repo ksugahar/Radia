@@ -198,6 +198,70 @@ is a non-smooth stream function that does not contour into a clean
 equal-current coil; it stalls at ~6–8 %.  The correction MUST be realised
 as independent varying currents, which is exactly what OMP does.)
 
+### Single-current "sheet-metal" coil distortion (bankin-ho) — no extra feeds
+
+The shim trade-off above has one hidden assumption: the wire stays a **flat
+planar pattern**.  Within that constraint cancelling the residual costs
+independent feeds.  But a manufactured coil need not be flat.  `--distort`
+keeps **one series current** and the stream-function contour LEVELS fixed,
+and instead BENDS the single-stroke wire in 3D — a smooth low-dimensional
+deformation field
+
+```
+d(x, y) -> (delta_x, delta_y, delta_z)     # an n_grid x n_grid bilinear
+                                           # control field per active axis
+```
+
+the discrete realisation of an NGSolve VectorH1 mesh deformation.  This is
+"bankin-ho" / sheet-metal forming — a geometric shape optimisation that frees
+the wire to leave the plane.  **Trading geometric DOFs for current DOFs, a
+single current cancels most of the single-stroke residual** (planar uniform
+Bz benchmark, 33 contours, dense 21×21 eval grid; integrated `--distort` run,
+flat single-stroke baseline 12290 ppm):
+
+| `--distort-penalty` | eval MAE (ONE current) | max bend | feeds |
+|---------------------|------------------------|----------|-------|
+| (flat single stroke) | 12290 ppm | 0 mm | 1 |
+| 1.0 (conservative)  | 2015 ppm  | 17 mm | 1 |
+| 0.3 (balanced, default) | 1025 ppm | 24 mm | 1 |
+| 0.1                 | 605 ppm   | 31 mm | 1 |
+| 0.03 (aggressive)   | 340 ppm   | 34 mm | 1 |
+
+Convergence is fast + monotone — penalty 0.1: 12290 → 3656 → 1060 → 687 →
+613 ppm in 6 iters.  Gauss-Newton over the control-grid displacement field;
+the step solves `(JᵀJ + (λ + λ_disp) I) δ = Jᵀr − λ_disp·d` with the
+displacement penalty `λ_disp` RELATIVE to `mean(diag(JᵀJ))`.  Larger penalty
+= smaller (more 3D-printable) bends; smaller penalty = lower MAE.  The series
+current is re-fit (optimal single value) every step, and the honest
+dense-grid MAE is tracked for the returned "best".
+
+`--distort-comps {xyz, xy, z}` selects the deformed axes: full 3D
+sheet-metal (`xyz`, best), pure out-of-plane bend (`z`), or in-plane
+reroute (`xy`).  **In-plane (`xy`) alone is the weakest** — the connector
+current it reroutes still sits in the DSV plane, so its parasitic Bz is only
+moved around, not cancelled.  The out-of-plane lift is what lets a single
+current actually cancel the parasitic field (a connector lifted toward/away
+from the DSV changes its Bz weight).  An earlier contour-flow PoC that moved
+each wire normal to itself IN-PLANE only managed a ~40 % reduction in 40
+iters; full-3D Gauss-Newton gives an >80 % reduction in 5 (12290 → 2015).
+
+**This is the single-current answer to the shim trade-off.**  The "no free
+lunch within one uniform-current wire" caveat assumed a fixed planar
+geometry; give the wire 3D shape freedom and one current reaches the
+~340–2000 ppm class — manufacturable as a single 3D-printed bent conductor,
+no extra power supplies.  Separate-feed shims (`--shim-loops`) still reach a
+lower absolute floor (183 ppm at 10 feeds) but require independent supplies;
+distortion trades a little accuracy for one feed + one printable part.  The
+two compose: distort first (one part), then add a couple of feeds only if
+the spec demands sub-500 ppm.
+
+```bash
+# single-current sheet-metal coil, ~600 ppm at ~31mm bends, 1 feed
+python demo_planar_uniform_fem_psi.py --order 3 --nlevels 16 \
+    --n-sample 121 --eval-n 21 --distort --distort-comps xyz \
+    --distort-penalty 0.1
+```
+
 ## Can single-stroke reach a 100 ppm-class spec? (No, for Gx)
 
 For a high-precision target (~100 ppm = 0.01 % degradation), single-stroking

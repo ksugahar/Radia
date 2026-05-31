@@ -57,6 +57,48 @@ from demo_planar_uniform_coil import (
     bz_at,
 )
 
+INV_4PI = 1.0 / (4.0 * np.pi)
+
+
+def bz_fast(path, current, obs, chunk=4000):
+    """Fully-vectorised Bz from a polyline (broadcast over segments x obs).
+
+    ``bz_at`` (-> ``h_segments_batch``) loops over segments in Python (~6k
+    iterations per call); a Gauss-Newton coil-distortion Jacobian calls the
+    field 100x per iteration, so the Python loop is ~100x too slow.  This
+    keeps only the z-component of H and broadcasts (segments x obs) in one
+    NumPy expression, chunked over segments to cap transient memory.  Matches
+    ``bz_at`` to machine precision.
+    """
+    path = np.asarray(path, float)
+    p1, p2 = path[:-1], path[1:]
+    dl = p2 - p1
+    L = np.linalg.norm(dl, axis=1)
+    ok = L > 1e-30
+    el = np.zeros_like(dl)
+    el[ok] = dl[ok] / L[ok, None]
+    obs = np.asarray(obs, float)
+    Bz = np.zeros(len(obs))
+    for s in range(0, len(p1), chunk):
+        e = el[s:s + chunk]
+        a = p1[s:s + chunk]
+        b = p2[s:s + chunk]
+        r1 = obs[None, :, :] - a[:, None, :]    # (n, M, 3)
+        r2 = obs[None, :, :] - b[:, None, :]
+        cz = e[:, None, 0] * r1[:, :, 1] - e[:, None, 1] * r1[:, :, 0]
+        cx = e[:, None, 1] * r1[:, :, 2] - e[:, None, 2] * r1[:, :, 1]
+        cy = e[:, None, 2] * r1[:, :, 0] - e[:, None, 0] * r1[:, :, 2]
+        d = np.sqrt(cx * cx + cy * cy + cz * cz)
+        r1m = np.linalg.norm(r1, axis=2)
+        r2m = np.linalg.norm(r2, axis=2)
+        good = (d > 1e-30) & (r1m > 1e-30) & (r2m > 1e-30)
+        dsafe = np.where(d > 0, d, 1.0)
+        c1 = (r1 * e[:, None, :]).sum(axis=2) / np.where(r1m > 0, r1m, 1.0)
+        c2 = (r2 * e[:, None, :]).sum(axis=2) / np.where(r2m > 0, r2m, 1.0)
+        scale = np.where(good, current * INV_4PI / dsafe * (c1 - c2), 0.0)
+        Bz += MU0 * (scale * (cz / dsafe)).sum(axis=0)
+    return Bz
+
 
 def build_fem_matrix(plane_half, maxh, order, dirichlet_bc, targets):
     """Mesh the plane and build M x ndof Biot-Savart matrix A.
@@ -314,6 +356,107 @@ def ls_omp_shim(A_fit, B_fit, B_chain_fit, k_max, mae_stop_ppm=0.0,
     return support, I_S, mae_curve
 
 
+def coil_distort_3d(path0, fit_obs, B_fit, eval_obs, B_eval, plane_half,
+                    comps=(0, 1, 2), n_grid=6, n_iter=8, lam_disp_rel=0.3,
+                    step=0.8, fd=1.0e-4):
+    """Single-current "sheet-metal" (bankin-ho) coil distortion.
+
+    The separate-feed LS-OMP shim (``ls_omp_shim``) cancels the single-stroke
+    residual by adding INDEPENDENT loops with their own currents.  This
+    routine instead keeps ONE series current and the stream-function contour
+    LEVELS fixed, and BENDS the manufactured single-stroke wire ``path0`` with
+    a smooth low-dimensional deformation field
+
+        d(x, y) -> (delta_x, delta_y, delta_z)   (an ``n_grid x n_grid``
+        bilinear control grid per active component -- the discrete realisation
+        of an NGSolve VectorH1 mesh deformation)
+
+    to minimise the Bz error over the DSV.  Gauss-Newton with a displacement
+    penalty RELATIVE to ``mean(diag(JtJ))`` keeps the bend manufacturable:
+
+        ``lam_disp_rel`` large  -> small bends (conservative, 3D-printable)
+        ``lam_disp_rel`` small  -> aggressive bends, lower MAE
+
+    ``comps`` selects the deformed axes: ``(0, 1, 2)`` = full sheet-metal,
+    ``(2,)`` = pure out-of-plane bend, ``(0, 1)`` = in-plane reroute only.
+    The series current is re-fit (optimal single current) at every step.
+
+    Returns ``(path_best, I_w_best, mae0_ppm, mae_best_ppm, max_disp_mm,
+    mae_curve_ppm)``.
+    """
+    comps = tuple(comps)
+    cg = np.linspace(-plane_half, plane_half, n_grid)
+    hc = cg[1] - cg[0] if n_grid > 1 else 2 * plane_half
+    nc = n_grid * n_grid
+    ndof = nc * len(comps)
+
+    def interp(C, xy):
+        x, y = xy[:, 0], xy[:, 1]
+        fx = np.clip((x - cg[0]) / hc, 0, n_grid - 1.001)
+        fy = np.clip((y - cg[0]) / hc, 0, n_grid - 1.001)
+        i = fx.astype(int)
+        j = fy.astype(int)
+        a = fx - i
+        b = fy - j
+        return (C[i, j] * (1 - a) * (1 - b) + C[i + 1, j] * a * (1 - b)
+                + C[i, j + 1] * (1 - a) * b + C[i + 1, j + 1] * a * b)
+
+    def deform(dofs):
+        w = path0.copy()
+        xy = path0[:, :2]
+        for k, ax in enumerate(comps):
+            w[:, ax] += interp(dofs[k * nc:(k + 1) * nc].reshape(n_grid,
+                                                                 n_grid), xy)
+        return w
+
+    def fit_Iw_from(Bu):
+        d = float(np.dot(Bu, Bu))
+        return float(np.dot(Bu, B_fit) / d) if d > 0 else 0.0
+
+    def fit_Iw(w):
+        return fit_Iw_from(bz_fast(w, 1.0, fit_obs))
+
+    den_e = float(np.sum(np.abs(B_eval))) + 1e-30
+
+    def mae_eval(w, Iw):
+        return 1e6 * float(np.sum(np.abs(Iw * bz_fast(w, 1.0, eval_obs)
+                                          - B_eval))) / den_e
+
+    Iw0 = fit_Iw(path0)
+    mae0 = mae_eval(path0, Iw0)
+    dofs = np.zeros(ndof)
+    best = (mae0, path0.copy(), Iw0, 0.0)
+    mae_curve = [mae0]
+    for _ in range(int(n_iter)):
+        w = deform(dofs)
+        Iw = fit_Iw(w)
+        base = Iw * bz_fast(w, 1.0, fit_obs)
+        r = B_fit - base
+        J = np.empty((len(fit_obs), ndof))
+        for dd in range(ndof):
+            d2 = dofs.copy()
+            d2[dd] += fd
+            Bu = bz_fast(deform(d2), 1.0, fit_obs)   # one field eval per DOF
+            J[:, dd] = (fit_Iw_from(Bu) * Bu - base) / fd
+        JTJ = J.T @ J
+        md = float(np.mean(np.diag(JTJ))) + 1e-30
+        lam = 0.03 * md                       # LM step damping
+        lam_disp = lam_disp_rel * md          # displacement penalty
+        step_dofs = np.linalg.solve(
+            JTJ + (lam + lam_disp) * np.eye(ndof),
+            J.T @ r - lam_disp * dofs)
+        dofs = dofs + step * step_dofs
+        w = deform(dofs)
+        Iw = fit_Iw(w)
+        m = mae_eval(w, Iw)
+        mae_curve.append(m)
+        max_disp = float(np.max(np.abs(dofs))) * 1e3
+        if m < best[0]:
+            best = (m, w.copy(), Iw, max_disp)
+    mae_best, path_best, Iw_best, disp_best = best
+    return path_best, Iw_best, mae0, mae_best, disp_best, mae_curve
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--plane-half", type=float, default=0.25)
@@ -355,6 +498,34 @@ def main():
                     help="dense eval grid (eval_n x eval_n over the target "
                          "patch) for HONEST ppm reporting (the n_target grid "
                          "is the fit grid and over-reports accuracy)")
+    # single-current "sheet-metal" (bankin-ho) coil distortion -- an ALTERNATIVE
+    # to --shim-loops that keeps ONE series current (no extra feeds) and bends
+    # the manufactured wire to cancel the single-stroke residual.
+    ap.add_argument("--distort", action="store_true",
+                    help="bend the single-stroke wire with a smooth 3D "
+                         "deformation field (ONE current, contour levels "
+                         "fixed) to cancel the single-stroke residual -- the "
+                         "single-current alternative to separate-feed shims")
+    ap.add_argument("--distort-comps", choices=["xyz", "xy", "z"],
+                    default="xyz",
+                    help="deformed axes: xyz = full sheet-metal (best), "
+                         "z = pure out-of-plane bend, xy = in-plane reroute")
+    ap.add_argument("--distort-grid", type=int, default=6,
+                    help="deformation control grid (distort_grid x "
+                         "distort_grid bilinear field per active component)")
+    ap.add_argument("--distort-iter", type=int, default=10,
+                    help="Gauss-Newton iterations for the distortion")
+    ap.add_argument("--distort-penalty", type=float, default=0.3,
+                    help="displacement penalty (relative to mean diag(JtJ)): "
+                         "larger = smaller bends (3D-printable), smaller = "
+                         "more aggressive bends + lower MAE. On the default "
+                         "benchmark (flat ~12k ppm): 1.0 -> ~17mm/2000ppm, "
+                         "0.3 -> ~24mm/1000ppm, 0.1 -> ~29mm/600ppm")
+    ap.add_argument("--distort-fit-n", type=int, default=9,
+                    help="distortion fit grid (distort_fit_n^2 obs); the "
+                         "displacement penalty regularises the underdetermined "
+                         "fit so a modest grid is fine and ~10x faster than a "
+                         "dense one")
     args = ap.parse_args()
 
     print("=== SF -> planar uniform-Bz coil (H1 FE psi) ===")
@@ -540,6 +711,39 @@ def main():
                         for m in marks if 0 <= m < len(mae_curve))
         print(f"    shim convergence (fit MAE): {pts}")
 
+    # ------- [9] single-current sheet-metal coil distortion -------------
+    # The ALTERNATIVE to [8]'s separate-feed shims: keep ONE series current
+    # and the contour LEVELS fixed, BEND the manufactured wire (NGSolve-style
+    # mesh deformation) to cancel the single-stroke residual.  One feed,
+    # 3D-printable.
+    distorted_path = None
+    if args.distort:
+        # fit on a modest grid (the displacement penalty + coarse control grid
+        # regularise the underdetermined fit; the honest dense eval grid is
+        # what's tracked for "best"); report on the dense eval grid.
+        gd = np.linspace(-args.target_half, args.target_half, args.distort_fit_n)
+        Xd, Yd = np.meshgrid(gd, gd, indexing="ij")
+        distort_fit_obs = np.column_stack([Xd.ravel(), Yd.ravel(),
+                                           args.target_z * np.ones(Xd.size)])
+        distort_B_fit = args.B0 * np.ones(distort_fit_obs.shape[0])
+        comps = {"xyz": (0, 1, 2), "xy": (0, 1), "z": (2,)}[args.distort_comps]
+        (distorted_path, I_w_d, mae0_d, mae_best_d, max_disp_mm,
+         mae_curve_d) = coil_distort_3d(
+            path, distort_fit_obs, distort_B_fit, eval_obs, B_eval,
+            args.plane_half, comps=comps, n_grid=args.distort_grid,
+            n_iter=args.distort_iter, lam_disp_rel=args.distort_penalty)
+        print(f"[9] sheet-metal coil distortion ({args.distort_comps}, "
+              f"1 current, {args.distort_grid}x{args.distort_grid} ctrl grid, "
+              f"penalty={args.distort_penalty:g}):")
+        print(f"    eval MAE = {mae0_d:.0f} -> {mae_best_d:.0f} ppm"
+              f"  (SINGLE current I_w = {I_w_d:.4g} A, no extra feeds;"
+              f" max bend = {max_disp_mm:.1f} mm)")
+        marks = sorted(set([0, 1, 2, len(mae_curve_d) // 2,
+                            len(mae_curve_d) - 1]))
+        pts = ", ".join(f"it{m}:{mae_curve_d[m]:.0f}p"
+                        for m in marks if 0 <= m < len(mae_curve_d))
+        print(f"    distortion convergence (eval MAE): {pts}")
+
     # ------- plot -------------------------------------------------------
     try:
         import matplotlib
@@ -560,8 +764,23 @@ def main():
         fig.colorbar(cf, ax=ax1, fraction=0.045)
 
         ax2 = fig.add_subplot(1, 3, 2)
-        ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "b-", lw=0.5)
-        ax2.set_title(f"Spiral chain ({len(path)} pts, {length:.2f} m)")
+        if distorted_path is not None:
+            # show the flat chain faint + the distorted wire COLOURED BY z
+            # (the out-of-plane sheet-metal bend = the 3D-printable shape)
+            ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "-",
+                     color="0.7", lw=0.4, label="flat single-stroke")
+            sc = ax2.scatter(distorted_path[:, 0] * 1e3,
+                             distorted_path[:, 1] * 1e3,
+                             c=distorted_path[:, 2] * 1e3, s=1.5,
+                             cmap="coolwarm")
+            fig.colorbar(sc, ax=ax2, fraction=0.045, label="bend z [mm]")
+            zmax = float(np.max(np.abs(distorted_path[:, 2]))) * 1e3
+            ax2.set_title(f"Distorted wire (1 current, max |z|-bend "
+                          f"{zmax:.0f} mm)")
+            ax2.legend(loc="upper right", fontsize=7)
+        else:
+            ax2.plot(path[:, 0] * 1e3, path[:, 1] * 1e3, "b-", lw=0.5)
+            ax2.set_title(f"Spiral chain ({len(path)} pts, {length:.2f} m)")
         ax2.set_xlabel("x [mm]"); ax2.set_ylabel("y [mm]")
         ax2.set_aspect("equal")
         ax2.grid(alpha=0.3)

@@ -11,7 +11,7 @@ All under [`examples/stream_function/`](../../examples/stream_function/).
 | `demo_sf_to_peec_gz.py` | Cylinder, Gz + single-stroke + PEEC + CAD | — | Full pipeline incl. STEP export |
 | `demo_sf_to_peec_gx.py` | Cylinder, Gx + 3 chain methods + PEEC + CAD | 16.24 % (kuijpers) | `--chain-method {greedy, lobe, kuijpers}` |
 | `demo_planar_uniform_coil.py` | Plane source, uniform Bz target | 0.58 % (+ Path-A) | Basis-loop pipeline |
-| `demo_planar_uniform_fem_psi.py` | Plane, FE-direct H¹ ψ + Path-A + LS-OMP shim | **183 ppm** (10 feeds, dense-eval MAE) | `--order 3 --nlevels 30 --shim-tol-ppm 200`; honest `--eval-n` grid |
+| `demo_planar_uniform_fem_psi.py` | Plane, FE-direct H¹ ψ + Path-A + LS-OMP shim + sheet-metal distortion | **183 ppm** (10 feeds) / **605 ppm** (1 current, `--distort`) | `--order 3 --nlevels 30 --shim-tol-ppm 200`; or `--distort` = single-current 3D wire bend (no extra feeds); honest `--eval-n` grid |
 | `demo_planar_uniform_fem_psi_aca.py` | Plane, FE matrix + HACApK ACA+TSVD | 0.67 % (+ Path-A) | Validates ACA+ on FE matrix |
 | `demo_planar_uniform_fem_psi_advanced.py` | Plane, 6 regs + deformation + Optuna (RMS / constrained / Pareto) | 0.58 % NSGA-II Pareto accuracy end | `--regularize {...}`, `--deform`, `--minimize-reg --eps-rms ε`, `--pareto` |
 | `demo_regularized_aca.py` | Plane, 5-mode sweep through cached `RegularizedTSVD` | 1.12 % (linf IRLS) | Single ACA+ factorisation reused across all 5 regularisations |
