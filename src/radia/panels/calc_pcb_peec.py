@@ -48,7 +48,7 @@ def solve_peec(inp_file="", inp_text="",
         freq_min: Minimum frequency [Hz]
         freq_max: Maximum frequency [Hz]
         n_freq: Number of frequency points (log-spaced)
-        solver_method: Radia solver for magnetic coupling (0=LU, 1=BiCGSTAB)
+        solver_method: Radia solver for magnetic coupling (0=LU, 1=BiCGSTAB, 2=HACApK)
         solver_prec: Solver precision
         solver_maxiter: Max solver iterations
         spice_output: Optional SPICE netlist output path

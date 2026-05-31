@@ -573,15 +573,15 @@ class IHPanel(ModePanel):
         self.add_spin("fes_order", "Basis order:", 1, 1, 3)
 
         # ============ Thermal sub-panel (method=Thermal only) ============
-        # HeatPanel from radia_heat.py embedded as a single sub-widget;
+        # HeatPanel from _heat_panel.py embedded as a single sub-widget;
         # all heat-side fields (qsurf .sol, em_vol, wp_vol thermal mesh,
         # material, h_conv / t_ext, time scheme, dt / t_end, probe,
         # rotation_rpm, mesh type 3D vs axisym) live INSIDE this widget
         # and become visible only when method=Thermal.  is_runnable /
         # build_command / wp_vol_path delegate to this sub-panel when
-        # method=Thermal (see below).  Standalone radia_heat.py is
-        # superseded by this integration; kept temporarily as a
-        # deprecated stub that redirects to ``radia-ih`` (radia 4.59.0+).
+        # method=Thermal (see below).  The standalone radia_heat.py
+        # module was removed in radia 4.62.0; this embedded HeatPanel
+        # is the sole home for heat analysis.
         self._add_section("Thermal analysis", key="_sec_thermal")
         from radia._heat_panel import HeatPanel
         from PySide6.QtWidgets import QScrollArea, QFrame
@@ -1476,7 +1476,8 @@ class IHWindow(AnalysisWindow):
         # "Run thermal..." chain button.  Inserted next to Open GMSH
         # in the action row.  Enabled when an IH solve emits a usable
         # qsurf.sol companion (Phase A keys "qsurf_sol" / "msh_file");
-        # click launches radia_heat.py with the EM-side outputs
+        # click switches the Method dropdown to Thermal (the embedded
+        # HeatPanel from _heat_panel.py) with the EM-side outputs
         # pre-filled so the user picks only the workpiece thermal
         # mesh and the thermal parameters.
         self._heat_qsurf_sol = ""
@@ -1810,7 +1811,7 @@ class IHWindow(AnalysisWindow):
         heat = getattr(panel, "_heat_panel", None)
         if heat is None:
             self._output.appendPlainText(
-                "\nThermal sub-panel not available (radia_heat.HeatPanel "
+                "\nThermal sub-panel not available (_heat_panel.HeatPanel "
                 "import failed at startup).")
             return
         # Switch the method dropdown to the most general Thermal

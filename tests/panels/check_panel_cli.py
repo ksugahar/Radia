@@ -157,10 +157,35 @@ def _collect_flag_literals(func_node: ast.FunctionDef) -> Set[str]:
 
 
 def _find_calc_script_target(func_node: ast.FunctionDef) -> str | None:
-    """Find `calc_script("xxx.py")` inside a function body."""
+    """Find `calc_script("xxx.py")` (or module-level `_calc_script("xxx.py")`,
+    used by radia_motor) inside a function body."""
     src = ast.unparse(func_node) if hasattr(ast, "unparse") else ""
     m = _CALC_SCRIPT_RE.search(src)
     return m.group(1) if m else None
+
+
+def _is_build_method(name: str) -> bool:
+    """Method names that assemble a calc_*.py argv list.
+
+    `build_cmd` is radia_motor's hand-rolled tab builder; `build_command`
+    is the ModePanel override; `_build_*_command` is the legacy IH
+    per-method pattern.
+    """
+    return ((name.startswith("_build_") and name.endswith("_command"))
+            or name in ("build_command", "build_cmd"))
+
+
+def _uses_generator(func_node: ast.FunctionDef) -> bool:
+    """True if the method delegates to ModePanel.build_command_from_parser,
+    i.e. it is generator-driven (POLICY 2026-05-30): every bound, non-skipped
+    argparse flag is auto-emitted, so a silent-default is impossible -- the
+    `skip=(...)` set is the intentional-omission marker, not a drift."""
+    for sub in ast.walk(func_node):
+        if (isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Attribute)
+                and sub.func.attr == "build_command_from_parser"):
+            return True
+    return False
 
 
 def scan_panel(path: Path) -> Dict:
@@ -176,19 +201,25 @@ def scan_panel(path: Path) -> Dict:
     var_to_widget_key: Dict[str, str] = {}
     used_vars: Set[str] = set()
 
-    for node in ast.walk(tree):
-        # class method def — both the per-method _build_X_command pattern
-        # (IH with 3 methods) and the simpler overriding build_command
-        # (single-method panels like radia_pcb.py).
-        if (isinstance(node, ast.FunctionDef)
-                and ((node.name.startswith("_build_")
-                      and node.name.endswith("_command"))
-                     or node.name == "build_command")):
-            calc = _find_calc_script_target(node)
-            emits = _collect_flag_literals(node)
-            if calc is not None:
-                methods[node.name] = {"calc": calc, "emits": emits}
+    # Method detection: iterate classes so that same-named methods on
+    # different sub-panel classes do not collide.  radia_em has 4 sub-panels
+    # each with build_command; radia_motor has 2 tabs each with build_cmd.
+    # Keying by Class.method keeps them distinct (a flat node.name dict
+    # collapsed all four EM builders onto the last one).
+    for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+        for fn in cls.body:
+            if not (isinstance(fn, ast.FunctionDef) and _is_build_method(fn.name)):
+                continue
+            calc = _find_calc_script_target(fn)
+            if calc is None:
+                continue
+            methods[f"{cls.name}.{fn.name}"] = {
+                "calc": calc,
+                "emits": _collect_flag_literals(fn),
+                "generator": _uses_generator(fn),
+            }
 
+    for node in ast.walk(tree):
         # widget definitions: self.add_line("key", ...), add_combo, add_spin, add_browse, add_check
         if (isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
@@ -218,6 +249,23 @@ def scan_panel(path: Path) -> Dict:
                 k = _str_const(val.args[0])
                 if k:
                     var_to_widget_key[tgt.id] = k
+            # self._method_combo = self.add_combo("method", ...): a widget
+            # stored on the instance is referenced elsewhere (signals,
+            # .currentText()).  Count its key as read so a mode-selector
+            # combo is not a false orphan (radia_em EMPanel "method").
+            if (isinstance(tgt, ast.Attribute)
+                    and isinstance(tgt.value, ast.Name)
+                    and tgt.value.id == "self"
+                    and isinstance(val, ast.Call)
+                    and isinstance(val.func, ast.Attribute)
+                    and val.func.attr in ("add_line", "add_combo", "add_spin",
+                                           "add_browse", "add_check")
+                    and isinstance(val.func.value, ast.Name)
+                    and val.func.value.id == "self"
+                    and val.args):
+                k = _str_const(val.args[0])
+                if k:
+                    widgets_read.add(k)
 
         # Anything like `foo.method(...)` or `foo.attr` uses var `foo` —
         # if foo is a tracked widget-var, mark its key as read.
@@ -290,8 +338,13 @@ def scan_panel(path: Path) -> Dict:
     # in at least one calc_*.py argparse choices=[] (with the exception
     # of waived values via the ignore-map-value comment).
     map_leaf_values: Dict[str, Set[str]] = {}  # map_name -> {leaf strs}
-    for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
-        for stmt in cls.body:
+    # Scan both module-level and class-level _XXX_MAP dicts: radia_em moved
+    # _FEM_SOLVER_MAP / _MSC_SOLVER_MAP to module scope, radia_ih keeps its
+    # solver maps as class attrs.
+    _map_bodies = [tree.body] + [c.body for c in ast.walk(tree)
+                                 if isinstance(c, ast.ClassDef)]
+    for body in _map_bodies:
+        for stmt in body:
             # Class-level assignment: `_XXX_MAP = {...}` or annotated
             # form `_XXX_MAP: dict = {...}`.
             if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
@@ -367,10 +420,24 @@ def check(panels: List[Path], strict: bool = False) -> int:
                 continue
             emits = minfo["emits"]
             rejects = emits - accepted
+            print(f"  method {mname:40s} -> {calc}")
+
+            if minfo.get("generator"):
+                # build_command_from_parser auto-emits every bound,
+                # non-skipped argparse flag, so silent-default is
+                # impossible -- skip=(...) is the intentional-omission
+                # marker.  Only a stray literal flag in extra=/vol_flag
+                # that the calc rejects is a real bug.
+                print(f"    GENERATOR auto-emit ({len(accepted):2d}) : "
+                      + " ".join(sorted(accepted)))
+                if rejects:
+                    print(f"    REJECT ({len(rejects):2d})      : "
+                          + " ".join(sorted(rejects)))
+                    rc = max(rc, 1)
+                continue
+
             silent_defaults = accepted - emits - pinfo["waivers"]
             overlap = emits & accepted
-
-            print(f"  method {mname:40s} -> {calc}")
             print(f"    OK ({len(overlap):2d})          : "
                   + " ".join(sorted(overlap)))
             if rejects:

@@ -161,7 +161,7 @@ cutting a tag); it's NOT part of the standard release path anymore.
 ============================================================
 
 The standalone PySide6 panels (`radia_ih`, `radia_em`, `radia_pcb`,
-`radia_heat`) are launched by the Cubit Solve menu via
+`radia_motor`) are launched by the Cubit Solve menu via
 `subprocess.Popen([python3.12, ...])`.  Layer 3 of the panel
 architecture runs PySide6 in a SEPARATE Python 3.12 process from
 Cubit's embedded Python 3.10.
