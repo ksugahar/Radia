@@ -282,15 +282,18 @@ public:
     void BuildLoopBasis(double alpha);
 
     /**
-     * ALPHA-FREE loop-star gauge. Build a SPARSE "star" basis T (columns =
-     * boundary face DOFs + symmetric internal sigma_A+sigma_B + per-element
-     * divergence) that spans the complement of the loop null space, then solve
-     * the reduced, NON-SINGULAR system T^T A T y = T^T b by unpreconditioned
-     * BiCGSTAB (sigma = T y). The H-matrix is UNCHANGED (kept on the original
-     * sigma DOFs); each reduced MatVec sandwiches the HACApK MatVec with the
-     * sparse T / T^T (O(N)). Field-exact + well-conditioned for LINEAR (uniform
-     * chi); for non-uniform chi the loop/star couple (use only in the linear
-     * regime). Returns the number of BiCGSTAB iterations, or -1 on failure.
+     * ALPHA-FREE loop-star gauge (tree-cotree split). Build a SPARSE "star" basis
+     * T (columns = boundary face DOFs + symmetric internal sigma_A+sigma_B +
+     * per-element divergence) spanning the complement of the loop null space,
+     * solve the reduced NON-SINGULAR system T^T A T y = T^T b (K-dense LU / BiCGSTAB;
+     * sigma_S = T y), then KEEP the loop content by block Gauss-Seidel iterative
+     * refinement: alternately correct the star block (A_SS d_S = S^T r via the same
+     * reduced solve) and the loop block (A_LL y_L = L^T r, A_LL = L^T diag(inv_chi) L,
+     * by CG), each sweep recomputing r = b - A sigma. This converges to the DIRECT
+     * solution -> FIELD-EXACT with the loops kept, regardless of star/loop basis
+     * orthogonality. The H-matrix is UNCHANGED; each MatVec is sandwiched with the
+     * sparse T / L (O(N)). Linear regime (uniform chi). Returns the reduced-solve
+     * BiCGSTAB iteration count, or -1 on failure.
      */
     int BuildStarBasis();
     int SolveLoopStar(const std::vector<double>& b, std::vector<double>& sigma,
@@ -359,6 +362,20 @@ private:
     std::vector<int> m_star_dofs;       // flat sigma-DOF indices
     std::vector<double> m_star_coeffs;  // flat T entries
     int m_n_star = 0;                   // number of star columns
+
+    // Loop (cycle) basis L for the KEEP-LOOPS back-substitution, stored
+    // column-wise (CSR). Built once from the topological cycle space (the same
+    // construction as BuildLoopBasis, copied out before the deflation shift is
+    // cleared). After the reduced star solve gives sigma_S = S y_S, SolveLoopStar
+    // recovers the loop part sigma_L = L y_L by the block back-substitution
+    // A_LL y_L = L^T (b - A sigma_S),  A_LL = L^T diag(inv_chi) L. Keeping the
+    // loops matches the direct LU/FEM solution; the earlier remove-loops gauge
+    // (sigma = S y_S only) gave a ~0.5% external-field error on the C-type.
+    std::vector<int> m_loop_offsets;    // size m_n_loop + 1 (column pointers)
+    std::vector<int> m_loop_dofs;       // flat sigma-DOF indices
+    std::vector<double> m_loop_coeffs;  // flat L entries (+/-1 per shared face)
+    int m_n_loop = 0;                   // number of loop columns
+    bool m_loop_built = false;          // cache guard
 
     // Antisym-IMA plane-slab added modes (orthonormal, CSR, sigma-DOF coords),
     // cached by ComputePlaneSlabAddedModes(). Deflated in SolveLoopStar via

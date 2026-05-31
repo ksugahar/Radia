@@ -13,13 +13,14 @@ Loop-star support status (2026-05-30):
     and SolveLoopStar deflates them. Validated field-exact on small converging cubes
     (3.4e-10 '-z' 3^3, 3.1e-10 '+x-z' 3^3, 1.2e-9 '-z' 4^3; C:/temp/antisym_cube_svdfree.py).
 
-NOTE on high-mu_r C-type convergence: the reduced-space DIAGONAL-Jacobi preconditioner
-is weak for mu_r=1e5 compact iron, so BOTH '+x' and '+x-z' loop-star may not fully
-converge here (cap near max_iter) -- the field is then only approximately exact
-(~1e-3). This is a PRECONDITIONER limitation (next: block-Jacobi on the reduced
-operator), NOT a gauge/deflation error: on a converging model the gauge is field-exact
-to ~1e-9 (see antisym_cube_svdfree.py). Use a lower mu_r or the full model for a
-cleanly converging loop-star demo.
+NOTE (2026-05-31, updated): the reduced star block A_SS is solved by a K-dense LU
+(direct), and the loop content is KEPT via block Gauss-Seidel iterative refinement,
+so loop-star is FIELD-EXACT (matches plain/LU) at every mu_r -- the reduced-solve
+shows 1 BiCGSTAB iter. At mu_r=1e5 the relative field accuracy floors at ~1e-4 due
+to heavy shielding/near-cancellation (an ACA / eval-point floor), NOT the gauge:
+'+x' dBz/Bz ~ 1.9e-4 (loop-star 1 iter vs plain ~950) and '+x-z' ~ 7.4e-5 (vs plain
+~6000) both PASS << 1e-3. (The earlier "may cap / ~0.5% error" note predates the
+keep-loops block-Gauss-Seidel fix in rad_hacapk.cpp::SolveLoopStar.)
 
 This script exercises BOTH: '+x' (symmetric) and '+x-z' (antisymmetric, SVD-free
 plane-slab deflation).

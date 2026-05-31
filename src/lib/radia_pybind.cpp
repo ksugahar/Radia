@@ -69,6 +69,8 @@ extern "C" {
     int  chacapk_max_threads(void);
     void cHACApK_hlu_set_accum_cap(int c);
     int  cHACApK_hlu_get_accum_cap(void);
+    void RadGetStarBasisStats(int* out);
+    void RadGetKeepLoopStats(double* out);
     double cHACApK_harith_self_test_mixed_sibling_nonuniform(int n1, int n2, int m1, int m3);
     double cHACApK_harith_self_test_mixed_sibling_via_conversion(int nb_small);
     double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
@@ -2931,6 +2933,39 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "rank exceeds 'cap' (plus a final flush). cap=0 disables (recompress "
           "every update = previous behavior). Default 64.");
     m.def("HLUGetAccumCap", []() { return cHACApK_hlu_get_accum_cap(); });
+
+    m.def("GetStarBasisStats", []() -> py::dict {
+        int o[8] = {0};
+        RadGetStarBasisStats(o);
+        py::dict d;
+        d["ndof"] = o[0]; d["nface"] = o[1]; d["boundary"] = o[2];
+        d["internal"] = o[3]; d["skip_ge3"] = o[4]; d["skip_same"] = o[5];
+        d["n_star"] = o[6]; d["ncomp"] = o[7];
+        return d;
+    },
+    R"pbdoc(
+        Diagnostics from the most recent loop-star BuildStarBasis: ndof, nface,
+        boundary-face count, internal-pair count, skip_ge3 (centroids with >=3
+        coincident faces -> non-conforming, silently dropped), skip_same
+        (size-2 same-element), n_star (star dim), ncomp (connected components).
+        Expected n_star = ndof - loop_null_dim; a mismatch (or skip_ge3>0) means
+        the star basis is incomplete on this geometry.
+    )pbdoc");
+
+    m.def("GetKeepLoopStats", []() -> py::dict {
+        double o[6] = {0};
+        RadGetKeepLoopStats(o);
+        py::dict d;
+        d["n_loop"] = o[0]; d["res0"] = o[1]; d["res_final_rel"] = o[2];
+        d["sweeps"] = o[3]; d["cg_iters"] = o[4]; d["res_final"] = o[5];
+        return d;
+    },
+    R"pbdoc(
+        Diagnostics from the most recent SolveLoopStar keep-loops block Gauss-Seidel:
+        n_loop (loop basis dim), res0 (||b - A sigma_S|| after the initial star solve),
+        res_final_rel (||b - A sigma||/||b|| after GS), sweeps (GS sweep count),
+        cg_iters (total loop-block CG iterations), res_final (absolute final residual).
+    )pbdoc");
 
     m.def("HLUMixedBreakdown", []() -> py::dict {
         long a[9] = {0}, l[9] = {0}, r[9] = {0};
