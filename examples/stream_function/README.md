@@ -169,16 +169,24 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
   back-substitution + one chain rebuild per iter.
 
   Status: the naive Picard form does NOT converge (chain construction
-  is too nonlinear in phi -- level-set topology jumps each iter).  With
-  ``alpha=0.05`` and ~30 iterations the iteration OSCILLATES around the
-  baseline but occasionally finds slightly better neighbourhoods; the
-  demo tracks the best psi seen and uses it for downstream evaluation.
-  Best observed gain on the Gx baseline: DSV RMS 16.24 % -> 15.28 %
-  (-6 %), x-axis nonlinearity 9.73 % -> 5.99 % (-38 %).  Modest but
-  reproducible.  See ``radia-mcp aca_tsvd(single_stroke)`` topic for
-  the open extensions (Anderson acceleration, frozen-topology, B-spline
-  continuous SFD, multivalued-potential formulation) that may give true
-  convergence.
+  is too nonlinear in phi -- level-set topology jumps each iter).  The
+  iteration OSCILLATES around the baseline but occasionally finds slightly
+  better neighbourhoods; the demo tracks the best psi seen and uses it for
+  downstream evaluation.  It is step-sensitive (a good ``--compensated-step``
+  helps; a bad one finds no gain).  Best observed, stacked on the
+  ``field_aware`` chain:
+
+  | chain         | + Path-A (step 0.3, 40 iter) | x-nonlin       |
+  |---------------|------------------------------|----------------|
+  | field_aware 9.29 % | **8.11 %** (-13 %)      | 7.20 % -> 6.27 % |
+  | kuijpers 16.24 %   | 15.28 % (-6 %)          | 9.73 % -> 5.99 % |
+
+  So the two best ideas COMPOSE: ``field_aware`` (better connection) plus
+  Path-A (SF design absorbs the residual rung field) reaches 8.11 % DSV RMS,
+  roughly half the old ``kuijpers`` baseline.  See
+  ``radia-mcp aca_tsvd(single_stroke)`` for the open extensions (Anderson
+  acceleration, frozen-topology, B-spline continuous SFD, multivalued-
+  potential formulation) that may give true convergence.
   The chain is one physical wire (~22 m); PEEC returns `L ~ 17 uH`,
   `R ~ 80 mOhm` at 1 kHz (port = chain start to chain end, auto-sized round
   filament cross-section so adjacent contour wires don't overlap).  The
